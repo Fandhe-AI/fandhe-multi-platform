@@ -109,4 +109,4 @@ gh run list --workflow ci.yml --limit 30 --json databaseId,conclusion,createdAt,
 gh run view <run-id> --json jobs --jq '.jobs[]|[.name,.conclusion,.startedAt,.completedAt]|@tsv'
 ```
 
-GitHub ホストランナーへの移行後の実測は未取得（移行前の self-hosted では `ci.yml` 中央値 約 9.8 分・最大 約 25 分、クリティカルパスは `android クロスビルド`）。
+GitHub ホストランナーへの移行後（2026-10、main への push と PR の 2 回）の実測は `ci.yml` 全体 約 18〜20 分。クリティカルパスは `android クロスビルド`（約 17〜19 分）で、`cargo test` 約 3 分・`cargo clippy` 約 2 分。移行前の self-hosted では中央値 約 9.8 分・最大 約 25 分。
