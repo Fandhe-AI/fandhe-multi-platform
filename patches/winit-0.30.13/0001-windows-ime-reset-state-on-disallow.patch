@@ -1,0 +1,131 @@
+From: winit patch <noreply@example.com>
+Subject: [PATCH 1/2] windows: cancel IME composition when IME is disallowed
+
+When an application moves text focus from field A to field B it calls
+`Window::set_ime_allowed(false)` and later `set_ime_allowed(true)`.
+`set_ime_allowed` only flips `ime_allowed` and calls `ImmAssociateContextEx`;
+it never resets `ime_state`. A `WM_IME_COMPOSITION` / `WM_IME_ENDCOMPOSITION`
+that belongs to A and is dispatched after the switch is therefore handled with
+`ime_allowed == true` (B's permission) and is reported as B's
+`Ime::Preedit` / `Ime::Commit` / `Ime::Disabled`. The event vocabulary has no
+field generation, so the application cannot tell the difference.
+
+Reproduction: start a non-empty preedit in A, move focus to B immediately
+(for example with Tab) and watch the `Ime` events B receives.
+
+Fix:
+
+- `set_ime_allowed(false)` cancels the composition in progress with
+  `ImmNotifyIME(NI_COMPOSITIONSTR, CPS_CANCEL)` while `ime_allowed` is still
+  true, so A's `Preedit("")` / `Disabled` are emitted at the moment of the
+  blur request. No lock is held across the call because it re-enters the
+  window procedure.
+- `ime_state` is then reset to `Disabled`, so anything still queued for A is
+  dropped by the existing `ime_allowed && ime_state != Disabled` check in
+  `WM_IME_COMPOSITION`.
+- `WM_IME_ENDCOMPOSITION` no longer emits `Ime::Disabled` when `ime_state`
+  is already `Disabled`, so a late END of A cannot produce a spurious
+  `Disabled` inside B's session.
+
+Trade-offs:
+
+- The uncommitted preedit of A is discarded (same as macOS). Committed text
+  is not lost. `CPS_COMPLETE` (commit A's preedit) is an alternative.
+- Comparing `HIMC` to detect the generation does not work: the same hwnd is
+  re-associated with its default `HIMC` on every enable, so A and B share it.
+- The END guard interacts with the Hangul IME, which sends
+  `WM_IME_COMPOSITION` after `WM_IME_ENDCOMPOSITION`; that path still works
+  because `ime_state` is only `Disabled` once END was handled.
+---
+diff --git a/src/platform_impl/windows/ime.rs b/src/platform_impl/windows/ime.rs
+--- a/src/platform_impl/windows/ime.rs
++++ b/src/platform_impl/windows/ime.rs
+@@ -5,10 +5,10 @@
+ use windows_sys::Win32::Foundation::{POINT, RECT};
+ use windows_sys::Win32::Globalization::HIMC;
+ use windows_sys::Win32::UI::Input::Ime::{
+-    ImmAssociateContextEx, ImmGetCompositionStringW, ImmGetContext, ImmReleaseContext,
++    ImmAssociateContextEx, ImmGetCompositionStringW, ImmGetContext, ImmNotifyIME, ImmReleaseContext,
+     ImmSetCandidateWindow, ImmSetCompositionWindow, ATTR_TARGET_CONVERTED,
+-    ATTR_TARGET_NOTCONVERTED, CANDIDATEFORM, CFS_EXCLUDE, CFS_POINT, COMPOSITIONFORM, GCS_COMPATTR,
+-    GCS_COMPSTR, GCS_CURSORPOS, GCS_RESULTSTR, IACE_CHILDREN, IACE_DEFAULT,
++    ATTR_TARGET_NOTCONVERTED, CANDIDATEFORM, CFS_EXCLUDE, CFS_POINT, COMPOSITIONFORM, CPS_CANCEL, GCS_COMPATTR,
++    GCS_COMPSTR, GCS_CURSORPOS, GCS_RESULTSTR, IACE_CHILDREN, IACE_DEFAULT, NI_COMPOSITIONSTR,
+ };
+ use windows_sys::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_IMMENABLED};
+ 
+@@ -138,6 +138,20 @@
+         }
+     }
+ 
++    /// Cancels any composition in progress on `hwnd`.
++    ///
++    /// The IME reports the cancellation synchronously through `WM_IME_COMPOSITION` /
++    /// `WM_IME_ENDCOMPOSITION`, so callers must not hold the window state lock.
++    pub unsafe fn cancel_composition(hwnd: HWND) {
++        if !unsafe { ImeContext::system_has_ime() } {
++            return;
++        }
++        let ime_context = unsafe { ImeContext::current(hwnd) };
++        if ime_context.himc != 0 {
++            unsafe { ImmNotifyIME(ime_context.himc, NI_COMPOSITIONSTR, CPS_CANCEL, 0) };
++        }
++    }
++
+     pub unsafe fn set_ime_allowed(hwnd: HWND, allowed: bool) {
+         if !unsafe { ImeContext::system_has_ime() } {
+             return;
+diff --git a/src/platform_impl/windows/window.rs b/src/platform_impl/windows/window.rs
+--- a/src/platform_impl/windows/window.rs
++++ b/src/platform_impl/windows/window.rs
+@@ -65,7 +65,7 @@
+ use crate::platform_impl::platform::keyboard::KeyEventBuilder;
+ use crate::platform_impl::platform::monitor::{self, MonitorHandle};
+ use crate::platform_impl::platform::window_state::{
+-    CursorFlags, SavedWindow, WindowFlags, WindowState,
++    CursorFlags, ImeState, SavedWindow, WindowFlags, WindowState,
+ };
+ use crate::platform_impl::platform::{util, Fullscreen, SelectedCursor, WindowId};
+ use crate::window::{
+@@ -923,7 +923,22 @@
+         let window = self.window;
+         let state = self.window_state.clone();
+         self.thread_executor.execute_in_thread(move || unsafe {
+-            state.lock().unwrap().ime_allowed = allowed;
++            if !allowed {
++                // Finish the old field's composition before the permission is dropped, so
++                // late `WM_IME_*` messages cannot be attributed to the next field.
++                // `ImmNotifyIME` re-enters the window procedure, so no lock may be held.
++                let composing = state.lock().unwrap().ime_state != ImeState::Disabled;
++                if composing {
++                    ImeContext::cancel_composition(window);
++                }
++            }
++            {
++                let mut w = state.lock().unwrap();
++                w.ime_allowed = allowed;
++                if !allowed {
++                    w.ime_state = ImeState::Disabled;
++                }
++            }
+             ImeContext::set_ime_allowed(window, allowed);
+         })
+     }
+diff --git a/src/platform_impl/windows/event_loop.rs b/src/platform_impl/windows/event_loop.rs
+--- a/src/platform_impl/windows/event_loop.rs
++++ b/src/platform_impl/windows/event_loop.rs
+@@ -1579,10 +1579,10 @@
+         },
+ 
+         WM_IME_ENDCOMPOSITION => {
+-            let ime_allowed_or_composing = {
+-                let w = userdata.window_state_lock();
+-                w.ime_allowed || w.ime_state != ImeState::Disabled
+-            };
++            // A stale END (state already `Disabled`) must not emit another `Disabled`,
++            // otherwise it would be attributed to the next field's session.
++            let ime_allowed_or_composing =
++                userdata.window_state_lock().ime_state != ImeState::Disabled;
+             if ime_allowed_or_composing {
+                 if userdata.window_state_lock().ime_state == ImeState::Preedit {
+                     // Windows Hangul IME sends WM_IME_COMPOSITION after WM_IME_ENDCOMPOSITION, so

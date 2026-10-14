@@ -1,0 +1,168 @@
+From: winit patch <noreply@example.com>
+Subject: [PATCH 2/2] wayland: discard text-input `done` batches older than the last enable
+
+`set_ime_allowed` synthesises `Enabled` / `Disabled` locally and
+`zwp_text_input_v3.done(serial)` is not checked. A batch the compositor built
+for field A before it processed the `disable` / `enable` pair for field B
+(empty preedit, commit, preedit) is therefore delivered after B's `Enabled`
+and reaches B.
+
+Fix: count every `commit` we send and remember the count of the last commit
+that carried `enable`. A `done` whose serial is older than that (wrapping
+comparison) belongs to the previous field; its pending preedit/commit are
+dropped. Serials equal to or newer than the enable commit, including those
+caused by cursor-rectangle commits, are handled as before. The counters are
+atomics because callers hold the window state lock while the dispatch handler
+takes the text-input lock first.
+
+Trade-off: a Commit that the compositor produced before it processed our
+`disable` is dropped. Input that arrives after a blur request is discarded,
+consistently with the Windows change.
+---
+diff --git a/src/platform_impl/linux/wayland/seat/text_input/mod.rs b/src/platform_impl/linux/wayland/seat/text_input/mod.rs
+--- a/src/platform_impl/linux/wayland/seat/text_input/mod.rs
++++ b/src/platform_impl/linux/wayland/seat/text_input/mod.rs
+@@ -1,4 +1,5 @@
+ use std::ops::Deref;
++use std::sync::atomic::{AtomicU32, Ordering};
+ 
+ use sctk::globals::GlobalData;
+ use sctk::reexports::client::{Connection, Proxy, QueueHandle};
+@@ -74,6 +75,7 @@
+                 if window.ime_allowed() {
+                     text_input.enable();
+                     text_input.set_content_type_by_purpose(window.ime_purpose());
++                    data.count_commit(true);
+                     text_input.commit();
+                     state.events_sink.push_window_event(WindowEvent::Ime(Ime::Enabled), window_id);
+                 }
+@@ -85,6 +87,7 @@
+ 
+                 // Always issue a disable.
+                 text_input.disable();
++                data.count_commit(false);
+                 text_input.commit();
+ 
+                 let window_id = wayland::make_wid(&surface);
+@@ -115,7 +118,15 @@
+                 text_input_data.pending_preedit = None;
+                 text_input_data.pending_commit = text;
+             },
+-            TextInputEvent::Done { .. } => {
++            TextInputEvent::Done { serial } => {
++                // A batch the compositor built before it saw our latest `enable` belongs to the
++                // previous text field; drop it so it cannot leak into the new session.
++                if is_stale_done(serial, data.enable_serial.load(Ordering::Acquire)) {
++                    text_input_data.pending_preedit = None;
++                    text_input_data.pending_commit = None;
++                    return;
++                }
++
+                 let window_id = match text_input_data.surface.as_ref() {
+                     Some(surface) => wayland::make_wid(surface),
+                     None => return,
+@@ -159,6 +170,12 @@
+ 
+ pub trait ZwpTextInputV3Ext {
+     fn set_content_type_by_purpose(&self, purpose: ImePurpose);
++
++    /// Commit while counting it, so `done` serials can be compared with our `enable`.
++    ///
++    /// Lock-free on purpose: callers hold the window state lock, while the dispatch handler
++    /// takes `TextInputData::inner` first and the window lock second.
++    fn commit_counted(&self, is_enable: bool);
+ }
+ 
+ impl ZwpTextInputV3Ext for ZwpTextInputV3 {
+@@ -170,14 +187,61 @@
+         };
+         self.set_content_type(hint, purpose);
+     }
++
++    fn commit_counted(&self, is_enable: bool) {
++        if let Some(data) = self.data::<TextInputData>() {
++            data.count_commit(is_enable);
++        }
++        self.commit();
++    }
+ }
+ 
++/// Whether a `done` with `serial` was produced before the compositor processed our last
++/// `enable` commit (`enable_serial`), using wrapping serial arithmetic.
++fn is_stale_done(serial: u32, enable_serial: u32) -> bool {
++    (enable_serial.wrapping_sub(serial) as i32) > 0
++}
++
++#[cfg(test)]
++mod tests {
++    use super::is_stale_done;
++
++    #[test]
++    fn done_older_than_enable_is_stale() {
++        assert!(is_stale_done(4, 5));
++        assert!(!is_stale_done(5, 5));
++        assert!(!is_stale_done(6, 5));
++        assert!(!is_stale_done(0, 0));
++    }
++
++    #[test]
++    fn serial_wraparound() {
++        assert!(is_stale_done(u32::MAX, 1));
++        assert!(!is_stale_done(1, u32::MAX));
++    }
++}
++
+ /// The Data associated with the text input.
+ #[derive(Default)]
+ pub struct TextInputData {
+     inner: std::sync::Mutex<TextInputDataInner>,
++
++    /// Number of `commit` requests sent on this text input (wrapping).
++    commit_count: AtomicU32,
++
++    /// `commit_count` as of the latest commit that carried `enable`.
++    enable_serial: AtomicU32,
+ }
+ 
++impl TextInputData {
++    fn count_commit(&self, is_enable: bool) {
++        let count = self.commit_count.fetch_add(1, Ordering::AcqRel).wrapping_add(1);
++        if is_enable {
++            self.enable_serial.store(count, Ordering::Release);
++        }
++    }
++}
++
+ #[derive(Default)]
+ pub struct TextInputDataInner {
+     /// The `WlSurface` we're performing input to.
+diff --git a/src/platform_impl/linux/wayland/window/state.rs b/src/platform_impl/linux/wayland/window/state.rs
+--- a/src/platform_impl/linux/wayland/window/state.rs
++++ b/src/platform_impl/linux/wayland/window/state.rs
+@@ -1028,7 +1028,7 @@
+             } else {
+                 text_input.disable();
+             }
+-            text_input.commit();
++            text_input.commit_counted(allowed);
+         }
+ 
+         applied
+@@ -1043,7 +1043,7 @@
+         let (width, height) = (size.width as i32, size.height as i32);
+         for text_input in self.text_inputs.iter() {
+             text_input.set_cursor_rectangle(x, y, width, height);
+-            text_input.commit();
++            text_input.commit_counted(false);
+         }
+     }
+ 
+@@ -1053,7 +1053,7 @@
+ 
+         for text_input in &self.text_inputs {
+             text_input.set_content_type_by_purpose(purpose);
+-            text_input.commit();
++            text_input.commit_counted(false);
+         }
+     }
+ 
