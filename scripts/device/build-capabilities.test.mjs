@@ -92,6 +92,7 @@ test("badUrls: https 以外の url（大文字 scheme・非文字列を含む）
   assert.deepEqual(badUrls({ url: "https://example.com" }), []);
   assert.deepEqual(badUrls({ url: "" }), []);
   assert.deepEqual(badUrls({}), []);
+  assert.deepEqual(badUrls(undefined), []); // platforms.<os> 欠落でも例外にしない
   assert.deepEqual(badUrls({ url: ["https://a.example", "javascript:alert(1)", "http://b.example"] }), [
     "javascript:alert(1)",
     "http://b.example",

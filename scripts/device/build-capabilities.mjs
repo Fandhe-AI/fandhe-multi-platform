@@ -200,7 +200,7 @@ function badUrls(p) {
 
 /** url は単一ソースなら文字列、複数ソース行が 1 機能へ統合された場合は配列になる。 */
 function urls(p) {
-  if (!p.url) return [];
+  if (!p?.url) return [];
   return Array.isArray(p.url) ? p.url : [p.url];
 }
 
