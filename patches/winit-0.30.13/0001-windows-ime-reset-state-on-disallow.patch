@@ -54,7 +54,7 @@ diff --git a/src/platform_impl/windows/ime.rs b/src/platform_impl/windows/ime.rs
  };
  use windows_sys::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_IMMENABLED};
  
-@@ -138,6 +138,20 @@
+@@ -138,6 +138,29 @@
          }
      }
  
@@ -62,12 +62,21 @@ diff --git a/src/platform_impl/windows/ime.rs b/src/platform_impl/windows/ime.rs
 +    ///
 +    /// The IME reports the cancellation synchronously through `WM_IME_COMPOSITION` /
 +    /// `WM_IME_ENDCOMPOSITION`, so callers must not hold the window state lock.
++    ///
++    /// # Safety
++    ///
++    /// `hwnd` must be a valid window handle owned by the calling (window) thread.
 +    pub unsafe fn cancel_composition(hwnd: HWND) {
++        // SAFETY: `system_has_ime` only queries `GetSystemMetrics`; no pointer is involved.
 +        if !unsafe { ImeContext::system_has_ime() } {
 +            return;
 +        }
++        // SAFETY: the caller guarantees `hwnd` is valid and on its owning thread, so
++        // `ImmGetContext` returns that window's HIMC (or 0), released when `ImeContext` drops.
 +        let ime_context = unsafe { ImeContext::current(hwnd) };
 +        if ime_context.himc != 0 {
++            // SAFETY: `himc` is non-zero and alive for the scope of `ime_context`;
++            // CPS_CANCEL takes no buffer, so the null `0` dwValue is valid.
 +            unsafe { ImmNotifyIME(ime_context.himc, NI_COMPOSITIONSTR, CPS_CANCEL, 0) };
 +        }
 +    }
@@ -87,7 +96,7 @@ diff --git a/src/platform_impl/windows/window.rs b/src/platform_impl/windows/win
  };
  use crate::platform_impl::platform::{util, Fullscreen, SelectedCursor, WindowId};
  use crate::window::{
-@@ -923,7 +923,22 @@
+@@ -923,7 +923,24 @@
          let window = self.window;
          let state = self.window_state.clone();
          self.thread_executor.execute_in_thread(move || unsafe {
@@ -98,6 +107,8 @@ diff --git a/src/platform_impl/windows/window.rs b/src/platform_impl/windows/win
 +                // `ImmNotifyIME` re-enters the window procedure, so no lock may be held.
 +                let composing = state.lock().unwrap().ime_state != ImeState::Disabled;
 +                if composing {
++                    // SAFETY: `window` is this Window's own HWND and we are on its
++                    // event-loop thread (`execute_in_thread`); no state lock is held.
 +                    ImeContext::cancel_composition(window);
 +                }
 +            }
