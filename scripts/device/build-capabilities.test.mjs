@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkImplPaths, checkAndroidPermissions, extractImplPaths } from "./build-capabilities.mjs";
+import { checkImplPaths, checkAndroidPermissions, extractImplPaths, badUrls } from "./build-capabilities.mjs";
 
 test("extractImplPaths: 対象拡張子のパスのみ抽出し、関数名・拡張子の取りこぼしをしない", () => {
   const text =
@@ -86,4 +86,16 @@ test("checkAndroidPermissions: コメントアウトは未宣言、属性順が�
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("badUrls: https 以外の url（大文字 scheme・非文字列を含む）だけを返す", () => {
+  assert.deepEqual(badUrls({ url: "https://example.com" }), []);
+  assert.deepEqual(badUrls({ url: "" }), []);
+  assert.deepEqual(badUrls({}), []);
+  assert.deepEqual(badUrls({ url: ["https://a.example", "javascript:alert(1)", "http://b.example"] }), [
+    "javascript:alert(1)",
+    "http://b.example",
+  ]);
+  assert.deepEqual(badUrls({ url: "JAVASCRIPT:alert(1)" }), ["JAVASCRIPT:alert(1)"]);
+  assert.deepEqual(badUrls({ url: [1] }), [1]);
 });
