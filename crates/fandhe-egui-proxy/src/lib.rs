@@ -124,7 +124,15 @@ pub mod paint_command;
 // winit / android-activity / UIKit の型に依存させず `(&str, Option<(usize, usize)>)` の
 // 素の型のみを扱うことで、Android（#796）と iOS（#795）の両ポーリング実装から
 // そのまま共有できるようにしている（`soft_keyboard.rs` モジュール doc 参照）。
-#[cfg(any(target_os = "android", target_os = "ios", test))]
+// iOS は計測専用ビルドでは使い手（`ios_text_input`）が無いため外す（Issue #19）。
+#[cfg(any(
+    target_os = "android",
+    all(
+        target_os = "ios",
+        not(any(feature = "cold-start-probe", feature = "frame-metrics"))
+    ),
+    test
+))]
 pub mod soft_keyboard;
 // TASK-17.2（REQ-17）: TV フォーカスナビゲーションのプラットフォーム統合レイヤ
 // （キー入力ブリッジ・FocusRing 駆動・reveal・ハイライト描画）と検証用サンプル画面。
@@ -146,7 +154,15 @@ pub mod ios;
 // `#[cfg(target_os = "ios")]` でモジュール内側に閉じるが、キュー処理の純関数
 // （`drain_pending`）はホストでも単体テストできるよう `test` cfg でも
 // コンパイル対象にする（`soft_keyboard` モジュールと同じ形、モジュール doc 参照）。
-#[cfg(any(target_os = "ios", test))]
+// 計測専用ビルド（`ios.rs::run` が `TextInputApp` を使わない分岐）では外す（Issue #19）。
+// `soft_keyboard` と `build.rs` の `.m` コンパイルも同じ条件に揃えている。
+#[cfg(any(
+    all(
+        target_os = "ios",
+        not(any(feature = "cold-start-probe", feature = "frame-metrics"))
+    ),
+    test
+))]
 mod ios_text_input;
 #[cfg(target_arch = "wasm32")]
 pub mod web;

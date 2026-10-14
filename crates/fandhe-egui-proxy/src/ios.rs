@@ -121,7 +121,8 @@ pub fn run() -> eframe::Result<()> {
 /// Issue #795: 実描画 App を [`crate::ios_text_input::TextInputApp`] で包み、日本語
 /// ソフトキーボードの変換・確定文字列を egui へ届ける（`ios_text_input.rs` モジュール
 /// doc 参照）。`cold-start-probe`/`frame-metrics`（計測専用ビルド）はこのラッパーを
-/// 経由しない（計測結果への影響を避ける）。
+/// 経由しない（計測結果への影響を避ける）。計測ビルドでは文字入力モジュール自体を
+/// コンパイルしない（`lib.rs` の cfg と `build.rs` 参照、Issue #19）。
 #[cfg(not(any(feature = "cold-start-probe", feature = "frame-metrics")))]
 pub fn run() -> eframe::Result<()> {
     eframe::run_native(
