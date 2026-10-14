@@ -4,8 +4,7 @@
 
 本書は TASK-8.6（`docs/spec/05-tasks.md` L288〜294、前提タスク: TASK-3.1・TASK-8.1、
 推定工数 0.5 日、Issue #212）の成果物であり、REQ-8（`docs/spec/04-requirements.md` L114〜124）
-受け入れ基準 3「watchOS/visionOS 向けの `winit`/`accesskit` 対応が発展途上である制約を、
-REQ-3 の網羅範囲・優先度に反映する」（L121）を満たすために作成しています。
+受け入れ基準 3（L121）を満たすために作成しています。
 
 - **入力**: `docs/architecture/crate-feature-matrix.md`「2. 基盤クレート機能マトリクス
   （更新版）」（`winit`/`accesskit` の行）・「5. watchOS/visionOS 制約セクション」
@@ -140,9 +139,9 @@ SwiftUI＝描画・イベントループ・アクセシビリティ）を**必�
 
 | 基準 | 内容 | 本書での対応 |
 |------|------|-------------|
-| REQ-8 受け入れ基準 3（`04-requirements.md` L121） | watchOS/visionOS 向けの `winit`/`accesskit` 対応が発展途上である制約を、REQ-3 の網羅範囲・優先度に反映する | 本書「3. REQ-3 の網羅範囲への反映」「4. 優先度への反映」で対応（**本書のスコープ**） |
+| REQ-8 受け入れ基準 3（`04-requirements.md` L121） | spec の当該項目を参照 | 本書「3. REQ-3 の網羅範囲への反映」「4. 優先度への反映」で対応（**本書のスコープ**） |
 | REQ-3 受け入れ基準（`04-requirements.md` L57〜62） | SwiftUI バインド方式の採用・型安全なブリッジ層設計・監視ルール策定 | 本書は REQ-3 の既存確定事項（ハイブリッド構成の採用）を追認・強化する位置づけであり、`swiftui-bridge-architecture.md`（ブリッジ層設計）・`docs/operations/upstream-watch-wgpu-libloading.md`（監視ルール）と矛盾しない（本書「3.2」「5」で接続を明示） |
-| `06-roadmap.md` M3 完了基準（「M3」節、L60〜） | watchOS・visionOS それぞれで SwiftUI バインド構成による最小画面がシミュレータ上でクラッシュせず起動する（TASK-3.3 対応） | 本書が確定させる「独自レンダラ系除外・SwiftUI バインド必須化」の方針は M3 完了基準が前提とする実装方式と一致する。本書自体はドキュメントのみでありコード実装は伴わないため、M3 完了基準の充足そのものは TASK-3.3 側が担う |
+| `06-roadmap.md` M3 完了基準（「M3」節、L60〜） | spec の当該項目を参照（TASK-3.3 対応） | 本書が確定させる「独自レンダラ系除外・SwiftUI バインド必須化」の方針は M3 完了基準が前提とする実装方式と一致する。本書自体はドキュメントのみでありコード実装は伴わないため、M3 完了基準の充足そのものは TASK-3.3 側が担う |
 | `06-roadmap.md` M3 リスク項（L116、`wgpu`/`libloading` の対応状況変化で TASK-3.1〜3.4 の前提が変わるリスク） | TASK-3.6 の監視ルールで早期検知を図る（`wgpu`/`libloading` が対象。本書は対象外） | `winit`/`accesskit` 側の早期検知は本書「5. 監視運用との接続」の監視ベースラインが担う（対象クレートが異なるため row を分けて引用） |
 | `06-roadmap.md` リスクと対策表（L258、`wgpu`/`libloading`/`accesskit` の watchOS/visionOS/Android 対応状況悪化） | 「悪化が確認された場合は REQ-3 の網羅範囲（watchOS・visionOS のどちらを優先するか）を見直します」 | 本書「4. 優先度への反映」の再評価トリガーで `winit`/`accesskit` 側にも同様の枠組みを定義し、両 OS 同一優先度を維持する現状判断を記録した |
 
@@ -152,7 +151,7 @@ SwiftUI＝描画・イベントループ・アクセシビリティ）を**必�
 
 | 日付 | 確認者 | `winit` | `accesskit` | 対応状況 | 判断 | 次アクション |
 |------|-------|---------|-------------|---------|------|-------------|
-| 2026-07-31 | Claude Code（初回記録、`crate-feature-matrix.md` 2026-07 調査の引用） | Issue #1497 open。UIKit バックエンド対応「進行中」 | watchOS/visionOS 向け公式アダプタ未確認 | 両クレートとも watchOS/visionOS 対応が発展途上のまま。PoC-7 時点からの判定変更を裏付ける一次情報なし | 独自レンダラ系スタック（`wgpu`/`winit`/`accesskit`）を REQ-3 の網羅範囲から除外し、SwiftUI バインド必須方針を維持 | 次回監視サイクル（M3・M4 期間中、月 1 回）で `winit` Issue #1497 の状態・`accesskit` リリースノートを再確認する |
+| 2026-07-31 | Claude Code（初回記録、`crate-feature-matrix.md` 2026-07 調査の引用） | Issue #1497 open。UIKit バックエンド対応「進行中」 | watchOS/visionOS 向け公式アダプタ未確認 | 両クレートとも watchOS/visionOS 対応が発展途上のまま。PoC-7 時点からの判定変更を裏付ける一次情報なし | 独自レンダラ系スタック（`wgpu`/`winit`/`accesskit`）を REQ-3 の網羅範囲から除外し、SwiftUI バインド必須方針を維持 | 次回監視サイクル（TASK-3.6 の監視運用、月 1 回）で `winit` Issue #1497 の状態・`accesskit` リリースノートを再確認する |
 
 ## 8. スコープ外・要ユーザー報告事項
 
