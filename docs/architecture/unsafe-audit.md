@@ -25,7 +25,7 @@ L104〜113）の受け入れ基準 1「共通コア・最適化レイヤーの�
   `fandhe-device` / `fandhe-egui-proxy` / `fandhe-fonts` / `fandhe-prototype` /
   `fandhe-swiftui-bridge` / `fandhe-web-dom` / `fandhe-winit-ime`）。`fandhe-device` は
   Phase 8（端末機能の型検証、親 #752）の土台で、feature `device` ごと切り離し可能な構成
-  （README.md「Phase 8（端末機能）の切り離し手順」参照）。§4 の一覧表は全クレートを対象とする。
+  （device-feature-removal.md「端末機能（Phase 8）の切り離し手順」参照）。§4 の一覧表は全クレートを対象とする。
   網羅的な現況は `bash scripts/audit/unsafe-audit.sh` の実行結果が正となる。
 - **依存クレート**: `[workspace.dependencies]` はランタイム 18 件（`serde` / `serde_json` /
   `thiserror` / `taffy` / `egui` / `eframe` / `accesskit` / `wgpu` / `ordered-float` / `image` /

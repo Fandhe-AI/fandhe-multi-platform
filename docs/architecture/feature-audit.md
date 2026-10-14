@@ -174,7 +174,7 @@ rustc 1.88.0 固定、6.1 節参照）から選定されたものであり、既
 例外として `device`（Phase 8 / Issue #746、既定 **on**）がある。`fandhe-device`（`ureq` 経由で
 依存を増やす）への optional 依存を切り替える feature で、spec 要件化が否決された
 場合に crate ごと削除して切り離す前提のため、他の feature と異なり既定 off ではなく既定 on
-にしている（切り離し手順は README.md 参照）。wasm32 では `fandhe-device` 自体が
+にしている（切り離し手順は device-feature-removal.md 参照）。wasm32 では `fandhe-device` 自体が
 `target.'cfg(not(target_arch = "wasm32"))'.dependencies` に置かれているため、この feature を
 有効にしても依存は増えない。
 

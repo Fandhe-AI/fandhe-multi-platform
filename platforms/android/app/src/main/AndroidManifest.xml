@@ -22,7 +22,7 @@
   A05（セキュリティ設定ミス）対策: android:debuggable は明記しない
   （release ビルドタイプ側で自動制御される）。permission は Phase 8 の端末機能
   （Issue #750）に限り INTERNET / CAMERA を追加する（spec 要件化が否決された
-  場合は README.md「Phase 8（端末機能）の切り離し手順」に従い本 2 行 + uses-feature 行を
+  場合は docs/architecture/device-feature-removal.mdに従い本 2 行 + uses-feature 行を
   戻す）。android:usesCleartextTraffic は追加しない（HTTP 取得画面 #748 は https のみを
   許可する `UreqHttp` を使う）。それ以外の不要な exported 設定は追加しない。
   カスタム URL scheme（Issue #1218）の intent-filter は `fandhe` scheme 1 つだけで、
