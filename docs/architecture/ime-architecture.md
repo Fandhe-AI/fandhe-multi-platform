@@ -638,7 +638,7 @@ iOS/Android は `Ime::*` 自体が発火しないため、識別子を必要と�
 | プラットフォーム | 付け替え契機 | 根拠 |
 |---|---|---|
 | macOS | blur 未要求（同一フィールド内の入力ソース切替）: `Disabled` 到達、または非空 `Preedit`。blur 要求済み（フィールド間フォーカス遷移）: `Enabled`/`Disabled` 到達まで昇格しない | `set_ime_allowed(false)` は同期的に marked text を破棄し `ime_state` を `Disabled` にする。次の `setMarkedText:` は `ime_state == Disabled` を経由するため必ず `Enabled` を先に発行する。よって blur 要求済みの間は `Enabled`/`Disabled` を待てば十分（`Commit` は必ず非空 `Preedit` が先行する、§4.4 出典）。blur 未要求の入力ソース切替では `Disabled` 自体が届かないことがあるため（S9 の検証結果）非空 `Preedit` も昇格契機に含める |
-| Windows | `Enabled`（`WM_IME_STARTCOMPOSITION`）到達（IMM32 同期配送の範囲。TSF 非同期配送は残存制約、下記参照） | `Enabled` は正当な `Commit` に必ず先行する。`Disabled` 到達前に旧セッションの「空 Preedit → Commit」が届く形（本 Issue の主対象）は IMM32 単独駆動なら正しく旧セッションへ帰属できるが、TSF 経由の通知タイミングを保証する一次情報がない（Issue #696） |
+| Windows | `Enabled`（`WM_IME_STARTCOMPOSITION`）到達（IMM32 同期配送の範囲。TSF 非同期配送は残存制約、下記参照） | `Enabled` は正当な `Commit` に必ず先行する。`Disabled` 到達前に旧セッションの「空 Preedit → Commit」が届く形（本 Issue の主対象）は IMM32 単独駆動なら正しく旧セッションへ帰属できるが、TSF 経由の通知タイミングを保証する一次情報がない（Issue #4） |
 | Linux（X11） | `Disabled`→`Enabled` の同期発火ペア | XIC がフォーカス遷移で破棄・再生成され、新 XIC 生成時に `Enabled` が同期発火する（§4.4 出典） |
 | Web（DOM） | 対象外 | `<input>` 要素ごとに composition が閉じるため、要素（イベント `target`）が帰属根拠になり識別子は不要 |
 | iOS / Android | 対象外 | `Ime::*` 自体が発火しない（commit 型経路のみ、§4.5） |
@@ -662,13 +662,13 @@ Windows にある。Wayland は `zwp_text_input_v3` の `done` ハンドラが `
 `BeginSession` の後に届くと、`Enabled` ゲート単体では「旧フィールドの再サイクル」と
 「新フィールドへの遷移」を区別できない。いずれも
 `ImeSessionTracker` の Enabled ゲートでは判別できず、`armed` ゲートは撤去せず、この
-残存経路に対する多層防御として維持する（残存限界・追跡 Issue #696 は
+残存経路に対する多層防御として維持する（残存限界・追跡 Issue #4 は
 `ime-known-constraints.md` §3.6 に記録する）。
 
 **デッドロック検証**: 正当な `Commit`/`Preedit` が誤って旧セッション判定されて落ちないこと
 （macOS: `Commit` は非空 `Preedit` が必ず先行し `Disabled` も同期発火、Windows: IMM32
 同期配送の範囲では `Commit` に `Enabled` が必ず先行する（TSF 非同期配送は残存制約、
-Issue #696）、Linux: `Disabled`/`Enabled` が同期発火。いずれも正当な新セッションの
+Issue #4）、Linux: `Disabled`/`Enabled` が同期発火。いずれも正当な新セッションの
 イベントは付け替え契機を必ず経由してから届く）。旧セッションがアイドル（未変換のまま
 フォーカス移動）で `Disabled` が届かないケースも、新セッションの `Enabled` で正しく昇格できる
 （`fandhe-winit-ime::session` モジュールのユニットテスト・`tests/focus_transition_session.rs`
@@ -766,7 +766,7 @@ Issue #696）、Linux: `Disabled`/`Enabled` が同期発火。いずれも正当
   `Preedit`/`Commit` より前に届くとは限らず、macOS では `Enabled` 自体が届かないことも
   あるためである（設計根拠として残す。`crates/fandhe-winit-ime/tests/macos_japanese_input.rs`
   の `enabled_event_may_arrive_late_or_be_skipped_before_first_preedit` 参照）。残存限界は
-  `ime-known-constraints.md` §3.6・追跡 Issue #696 を参照。
+  `ime-known-constraints.md` §3.6・追跡 Issue #4 を参照。
 - **`winit` Issue #1497 の進展監視**: `ime-known-constraints.md` §3.13 を参照。
 - **watchOS/visionOS の IME 制約**: `ime-known-constraints.md` §3.12 を参照。
 - **Web `compositionupdate` のカーソル位置非公開**: `ime-known-constraints.md` §3.9 を参照。
