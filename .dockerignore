@@ -1,0 +1,29 @@
+# Docker ビルドコンテキストからの除外設定。
+# .gitignore はコミット除外のみでビルドコンテキスト送信は防げないため、
+# シークレット・巨大成果物・git 履歴をデーモンへ送らないよう別途定義する
+# （security-auditor 指摘: OWASP A05 対応）。
+
+# git 履歴・メタデータ
+.git
+.gitignore
+.gitmodules
+
+# シークレット・環境変数ファイル（.env.example は許可）
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.key
+id_rsa*
+id_ed25519*
+
+# ビルド成果物・キャッシュ（コンテナ側は named volume を使用）
+target/
+dist/
+
+# ローカル作業ファイル
+_/
+.claude/
+.agents/

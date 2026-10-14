@@ -1,0 +1,12 @@
+# rust-toolchain.toml（rustc 1.88.0 + rustfmt/clippy 固定）に rustup のトールチェーンを同期する
+# composite action。ci.yml の fmt / clippy / test / android-env / android-build が共通で使う。
+# GitHub ホストの ubuntu-latest は rustup が導入済みのため、rustup 自体の導入は行わない
+# （`rustup show` が rust-toolchain.toml を読み、未導入のトールチェーンを自動導入する）。
+name: Ensure rust toolchain
+description: rust-toolchain.toml に rustup のトールチェーンを同期する（rustup は runner 導入済み前提）
+runs:
+  using: composite
+  steps:
+    - name: Sync toolchain
+      shell: bash
+      run: rustup show

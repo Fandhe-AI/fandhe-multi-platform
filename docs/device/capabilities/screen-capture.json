@@ -1,0 +1,59 @@
+{
+  "id": "screen-capture",
+  "name": "画面の録画・キャプチャ",
+  "group": "未着手の OS 機能",
+  "order": 75,
+  "priority": 48,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "api": "ReplayKit（`RPScreenRecorder` の `startRecordingWithHandler:` / `stopRecordingWithOutputURL:`、iOS 14 以降。iOS 27 で deprecated だが動作する）",
+      "perm": "不要（マイク不使用のため `NSMicrophoneUsageDescription` は追加しない。初回は OS の録画許可アラート）",
+      "url": "https://developer.apple.com/documentation/replaykit",
+      "note": "実装済み（#1336）。録画範囲は自アプリの画面だけ（他アプリを含む画面全体は Broadcast Upload Extension が要り範囲外）。一時 mp4（マイク音声なし。アプリ音声は ReplayKit の既定で含まれうる）へ書き、バイト数・mime・録画時間だけを Rust へ返す（映像は読み込まない）。録画は 10 秒で自動停止。状態は main queue に閉じ、確定は 1 か所・first-wins、一時ファイルは全経路で削除。同意 UI を閉じた・拒否はキャンセル、録画無効は権限拒否。背景遷移は失敗（書き出し済みでも成功にしない。Inactive のみでは破棄せず 0.5 秒の猶予後に再判定）。利用者が OS 側 UI で正常停止した場合は明示停止と同じ書き出しを試み、動画が得られれば成功（得られなければ失敗。実機確認は #1334）、OS 起因の中断は失敗。ReplayKit 側の占有は結果の確定と分けて管理し、開始 completion・停止処理が済むまで次の開始は busy。シミュレータは Unsupported 固定（嘘の成功を避ける）。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・資源の解放。守らない範囲: 映像の中身、OS 同意 UI の見た目、複数プロセス、プロセス死。将来課題: ReplayKit は iOS 27 で deprecated のため後継 API への移行を検討。実機確認は #1334",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1334）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_screen_capture.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_screen_capture.m + crates/fandhe-egui-proxy/src/device/screen_capture.rs + crates/fandhe-core/src/screens/screen_capture.rs + crates/fandhe-device/src/screen_capture.rs、Issue #1336"
+    },
+    "android": {
+      "status": "done",
+      "api": "`MediaProjection`（Android 14 以降は単一アプリ共有を選べる）",
+      "perm": "`FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_MEDIA_PROJECTION`（API 34+、通常権限）。実行ごとに OS の同意ダイアログ。`RECORD_AUDIO` は不使用",
+      "url": "https://developer.android.com/media/grow/media-projection",
+      "note": "実装済み（#1337）。同意ダイアログ（`createScreenCaptureIntent`）の結果を受け、型 mediaProjection のフォアグラウンドサービスで `MediaProjection` + `MediaRecorder`（H.264 / MP4、音声なし、長辺 1280 以下）へ録画する。一時 mp4（cacheDir の固定名）のバイト数・mime・録画時間だけを Rust へ返し、映像は JNI を越えない。録画は 10 秒で自動停止。状態は main looper に閉じ、確定は 1 か所・first-wins、一時ファイル・recorder・VirtualDisplay・projection・サービスは全経路で解放。同意の拒否・閉じた・開始前の停止はキャンセル、TV 等で同意 UI が無ければ Unsupported。背景遷移・Activity 破棄は失敗（書き出し済みでも成功にしない。同意ダイアログ表示中の onPause は破棄しない）。OS・利用者による停止（通知領域等）は明示停止と同じ書き出しを試み、動画が得られれば成功。0 データでの停止は失敗。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・資源の解放・毎回同意。守らない範囲: 映像の中身、OS 同意 UI の見た目、複数プロセス、プロセス死。既知の天井: Android 14+ の同意画面で他アプリを選ぶと自アプリが背景へ移り中断（失敗）になる／端末のエンコーダが解像度を拒否すれば失敗／Android 15+ で画面ロックにより OS が止めた場合は得られた分を成功として返す。実機確認は #1334",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#1334）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_screen_capture.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/ScreenCaptureHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/ScreenCaptureService.java + crates/fandhe-egui-proxy/src/device/screen_capture.rs + crates/fandhe-core/src/screens/screen_capture.rs + crates/fandhe-device/src/screen_capture.rs、Issue #1337"
+    },
+    "macos": {
+      "status": "done",
+      "api": "ScreenCaptureKit（`SCStream` + `SCRecordingOutput`、macOS 15 以降。それ未満は `Unsupported`）",
+      "perm": "画面収録の許可（TCC）。Info.plist のキーと entitlement は追加しない（実行体はサンドボックス外）",
+      "url": "https://developer.apple.com/documentation/screencapturekit",
+      "note": "実装済み（#1335）。メインディスプレイ全体を一時 mp4（H.264、音声なし）へ直接書き、バイト数・mime・録画時間だけを Rust へ返す（映像は読み込まない）。録画は 10 秒で自動停止。状態は main queue に閉じ、確定は 1 か所・first-wins、一時ファイルと SCStream は全経路で解放。同意中の停止はキャンセル、0 バイトは失敗。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・資源の解放。守らない範囲: 映像の中身、OS 同意 UI の見た目と再確認頻度、複数プロセス、プロセス死。既知の天井: 素の実行体では TCC の許可主体が起動元のターミナルに付くことがある、macOS 15 以降は周期的に再確認される、ヘッドレスでは許可ダイアログを操作できない。Mac 目視は #1334",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#1334）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_screen_capture.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_screen_capture.m + crates/fandhe-egui-proxy/src/device/screen_capture.rs + crates/fandhe-core/src/screens/screen_capture.rs + crates/fandhe-device/src/screen_capture.rs、Issue #1335"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`Windows.Graphics.Capture`",
+      "perm": "要確認（ピッカーは HWND の初期化が必要。package identity の要否は文書に記載なし）",
+      "url": "https://learn.microsoft.com/en-us/windows/apps/develop/media-authoring-processing/screen-capture",
+      "note": "未実装。unpackaged での動作は未検証のため要確認。代替の Win32 手段（Desktop Duplication 等）は未調査。"
+    },
+    "web": {
+      "status": "done",
+      "api": "`navigator.mediaDevices.getDisplayMedia()`（映像のみ・既定の制約）+ `MediaRecorder`",
+      "perm": "ブラウザの共有選択ダイアログ（毎回・ボタン操作の内側で呼ぶ）。secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Screen_Capture_API",
+      "safari": "macOS Safari は対応。iOS Safari は API が無く `Unsupported` を表示（実機は未確認）",
+      "note": "実装済み（#1338）。バイト数・mime・録画時間だけを返し、映像は読み込まない（`Blob.size`）。録画は 10 秒で自動停止し、ブラウザの共有停止は成功として扱う。共有選択を閉じた・拒否した場合はキャンセル。`pagehide` で中断し失敗として扱う。全終了経路でトラック・タイマー・ハンドラを解放。守る範囲: 1 マウント内の順序と世代照合・0 バイト / 0 ミリ秒を成功にしないこと・資源の解放・映像の中身とソース名をログに出さないこと。守らない範囲: 映像の中身、共有選択 UI の見た目、`NotAllowedError` の内訳（利用者のキャンセル・システム拒否・Permissions-Policy をすべてキャンセル扱い）、複数タブ、非表示タブでのタイマー間引き、bfcache からの再開、iOS Safari。既知の天井: 検証エントリでは「停止」ボタンが出ない（mic-record と同じ）。実ブラウザの確認は #1334",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#1334）",
+      "impl": "crates/fandhe-web-dom/src/screen_capture.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/screen_capture.rs + crates/fandhe-device/src/screen_capture.rs、Issue #1338"
+    }
+  },
+  "note": "iOS は ReplayKit、Android は MediaProjection、macOS は ScreenCaptureKit、Windows は Graphics.Capture、Web は getDisplayMedia。全 OS で OS の同意 UI を経由する。camera-capture（既存 id）はカメラ映像、mic-record（既存 id）はマイク音声で、本機能は画面そのものを撮る点が違う。capture-protection（画面キャプチャの防止・検知）とも別機能。今回の範囲: 録画の開始と停止だけを行い、できた映像のバイト数を画面に出す（編集・共有・音声付きは扱わない）。"
+}

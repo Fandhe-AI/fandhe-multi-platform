@@ -1,0 +1,39 @@
+[package]
+name = "fandhe-core"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の共通コア（宣言的 UI DSL・状態管理・AI 型安全 DSL）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+publish = false
+
+[dependencies]
+# TASK-8.3-S4（REQ-8 / M3、Issue #99）: `fandhe-core` 初のランタイム依存。
+# レイアウトプロトコル（`ui::layout`）がサイズ計測・配置の内部実装として使う。
+# 公開 API には taffy の型を露出しない（詳細はワークスペース Cargo.toml のコメント参照）。
+taffy.workspace = true
+# Issue #787 レビュー対応（PR #787）: `screens::storage_note::NoteStorageError` の
+# 型付きエラー定義に使う（coding-rust.md「ライブラリクレート: thiserror 等による
+# 型付きエラー」準拠）。`fandhe-device` には依存しない（二層アーキテクチャ準拠）。
+thiserror.workspace = true
+# TASK-8.4-S17（REQ-8 / M3、Issue #173）: `token::file`（feature `token-file`）が
+# 外部定義ファイル（JSON・DTCG 部分準拠）の読み込み・シリアライズに使う。
+# `serde` derive は使わない（`serde_json::Value` を走査してドメイン型へ手動変換する。
+# ドメイン型に serde 属性を付けず、エラー位置の詳細報告・ネスト深さ/件数上限の
+# 自前制御を可能にするため）。optional + feature gate により既定ビルドでは
+# ビルドグラフに入らない（coding-rust.md の feature 加法性の方針）。
+serde_json = { workspace = true, optional = true }
+# TASK-8.5-S26（REQ-8 / M3、Issue #207）: `ui::text_selection` の grapheme 境界
+# ヘルパー（`prev_grapheme_boundary` 等）が使う。`ui::text_field` の削除・カーソル
+# 移動操作を grapheme cluster 単位へ是正するための必須依存（optional ではない。
+# 既存編集操作の契約修正のため feature gate 不要と判断）。
+unicode-segmentation.workspace = true
+
+[features]
+# 既定 off。外部トークン定義ファイルを読み込まないビルドでは攻撃面（OWASP A05）を
+# 追加しない（security.md）。
+token-file = ["dep:serde_json"]
+
+[dev-dependencies]
+# TASK-13.1-S3: tests/compile_fail.rs（クロージャ環境キャプチャ拒否の compile-fail 検証）が使用する。
+trybuild.workspace = true

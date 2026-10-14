@@ -1,0 +1,47 @@
+{
+  "id": "passkey-signin",
+  "name": "パスキー・サインイン連携",
+  "group": "未着手の OS 機能",
+  "order": 95,
+  "priority": 52,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "AuthenticationServices（`ASAuthorizationPlatformPublicKeyCredentialProvider` で登録・サインイン要求を `ASAuthorizationController` へ渡す）",
+      "perm": "Associated Domains の `webcredentials:<ドメイン>` entitlement + サーバー側 `apple-app-site-association`",
+      "url": "https://developer.apple.com/documentation/authenticationservices/asauthorizationplatformpublickeycredentialprovider",
+      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 対応 iOS 版は要確認（iOS 15 以降と認識）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`androidx.credentials`（Credential Manager の `CreatePublicKeyCredentialRequest` / `GetPublicKeyCredentialOption`）、GMS 依存",
+      "perm": "なし（要確認）。サーバー側の Digital Asset Links（`assetlinks.json`）が要る",
+      "url": "https://developer.android.com/identity/sign-in/credential-manager",
+      "note": "未実装。GMS（Google Play 開発者サービス）依存。API 34 未満は Play services 経由（報告より）。パスキー専用の手順は https://developer.android.com/identity/sign-in/passkeys にもある"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AuthenticationServices（iOS と同じ `ASAuthorizationController`）",
+      "perm": "Associated Domains の `webcredentials:` entitlement（要確認）",
+      "url": "https://developer.apple.com/documentation/authenticationservices/asauthorizationplatformpublickeycredentialprovider",
+      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 macOS の対応版は要確認（macOS 12 以降と認識）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Windows WebAuthn API（`webauthn.h` の `WebAuthNAuthenticatorMakeCredential` / `GetAssertion`）。Win32 で呼べる",
+      "perm": "なし（package identity は要確認。文書は未精査）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/webauthn/",
+      "note": "未実装。Windows Hello 側の公式案内は https://learn.microsoft.com/en-us/windows/security/identity-protection/passkeys/ 。unpackaged での可否は要確認"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Web Authentication（`navigator.credentials.create()` / `get()`）",
+      "perm": "なし（secure context 必須）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API",
+      "note": "未実装。MDN は Baseline（Widely available）表示。リレイングパーティ ID はオリジンのドメインに紐づく",
+      "safari": "全エンジン対応（MDN の Baseline 表示。個別の最小版は未確認）"
+    }
+  },
+  "note": "secure-credential（端末内保存）・biometric-auth（本人確認）との違い: 本機能は OS のパスキー（公開鍵認証）でサーバーにサインインする。今回の範囲: パスキーを登録し、サインイン要求の結果（成功・キャンセル・失敗）を画面に出すだけ。サーバー側の検証は含めない。iOS / macOS は entitlement が要る。"
+}

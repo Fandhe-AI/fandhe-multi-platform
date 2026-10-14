@@ -1,0 +1,52 @@
+{
+  "id": "cloud-kv-sync",
+  "name": "iCloud キー値同期（小容量の設定値）",
+  "group": "未着手の OS 機能",
+  "order": 46,
+  "priority": 119,
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "Foundation（`NSUbiquitousKeyValueStore`）",
+      "perm": "iCloud capability（Key-value storage）＝制限付き entitlement `com.apple.developer.ubiquity-kvstore-identifier`。provisioning profile が必要",
+      "url": "https://developer.apple.com/documentation/foundation/nsubiquitouskeyvaluestore",
+      "note": "未実装。容量は 1 MB（1 キー 64 KB）で、同期の即時性は保証されない。外部変更は `NSUbiquitousKeyValueStoreDidChangeExternallyNotification` で受ける（通知の登録トークンを握り続ける）。有償の Apple Developer Program の App ID に iCloud を有効化した profile が前提。実機は iCloud サインインが必要で、シミュレータでの同期確認は不確実。",
+      "sourceName": [
+        "iCloud キー値同期（小容量の設定値）"
+      ]
+    },
+    "android": {
+      "status": "no",
+      "api": "Auto Backup（`BackupAgent`）/ Block Store（Google Play services）",
+      "perm": "Auto Backup はマニフェスト設定のみ",
+      "url": "https://developer.android.com/identity/data/autobackup",
+      "note": "Auto Backup は一方向のバックアップ・復元で、復元はアプリ再インストールや端末セットアップ時のみ。公式は端末ごとに別のバックアップセットを持つとしており、端末間の継続同期にならない（上限 25 MB）。Block Store は GMS 依存のため前提外。",
+      "detail": "できない（OS 標準でキー値を端末間同期する公開機構が無い。Block Store は GMS 依存、Auto Backup は同期ではない）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Foundation（`NSUbiquitousKeyValueStore`）",
+      "perm": "iCloud capability（Key-value storage）＝制限付き entitlement `com.apple.developer.ubiquity-kvstore-identifier`。.app に `Contents/embedded.provisionprofile` が必要",
+      "url": "https://developer.apple.com/documentation/foundation/nsubiquitouskeyvaluestore",
+      "note": "未実装。素の実行体には provisioning profile を置く場所が無いが、.app で包む形なら `Contents/embedded.provisionprofile` に置ける（Apple Developer Forums の検索結果、https://developer.apple.com/forums/thread/680284 で確認。Apple 公式ドキュメント本文は取得できず未確認）。profile 無しだとコード署名の検証で起動が拒否される。開発用 profile は登録済み端末に限られる。配布は Developer ID 用 profile が要る。"
+    },
+    "windows": {
+      "status": "no",
+      "api": "`Windows.Storage.ApplicationData.RoamingSettings`",
+      "perm": "package identity",
+      "url": "https://learn.microsoft.com/en-us/windows/apps/design/app-settings/store-and-retrieve-app-data",
+      "note": "Microsoft Learn は roaming データ・設定を Windows 11 で非サポートとし、ApplicationData API は packaged app 向けで unpackaged app は使えないとしている。後継として挙げられている Azure App Service は自前サーバー系で前提外。",
+      "detail": "できない（OS 標準のキー値同期が無い。roaming は廃止・identity 前提）"
+    },
+    "web": {
+      "status": "no",
+      "api": "該当する標準ブラウザ API なし（`localStorage` は端末内のみ）",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API",
+      "safari": "該当 API なし",
+      "note": "Web Storage は同一ブラウザ内のみ。ブラウザの同期機能（Chrome Sync 等）はアプリから使える API ではない。CloudKit JS 等は Apple 提供のサービスをウェブ API で呼ぶ形で、OS・ブラウザの端末機能ではないため判定に使わない。",
+      "detail": "できない（端末間でキー値を同期するブラウザ標準 API が無い）"
+    }
+  },
+  "note": "Apple 2 OS は `NSUbiquitousKeyValueStore`（iCloud KVS、制限付き entitlement + provisioning profile が必須）。macOS は素の実行体では profile を置けないが .app 包みなら置ける。Android は Block Store（GMS）・Auto Backup（同期ではない）で no。Windows は roaming 廃止・identity 前提で no。Web は標準 API が無く no。"
+}

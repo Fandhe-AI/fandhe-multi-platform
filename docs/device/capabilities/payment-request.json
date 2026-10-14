@@ -1,0 +1,47 @@
+{
+  "id": "payment-request",
+  "name": "物・サービスの決済（Apple Pay・Google Pay）",
+  "group": "未着手の OS 機能",
+  "order": 100,
+  "priority": 79,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "PassKit `PKPaymentAuthorizationController`（Apple Pay の決済シートを出す）",
+      "perm": "Merchant ID の entitlement `com.apple.developer.in-app-payments`",
+      "url": "https://developer.apple.com/documentation/passkit/pkpaymentauthorizationcontroller",
+      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 決済処理（PSP との連携）は範囲外"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Google Pay API（GMS 依存）",
+      "perm": "記載なし（要確認）",
+      "url": "https://developers.google.com/pay/api/android/overview",
+      "note": "未実装。GMS（Google Play 開発者サービス）依存。決済代行側の設定が要る"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "PassKit `PKPaymentAuthorizationController`（Mac の Apple Pay。提供の実態は要確認）",
+      "perm": "Merchant ID の entitlement（要確認）",
+      "url": "https://developer.apple.com/documentation/passkit/pkpaymentauthorizationcontroller",
+      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。"
+    },
+    "windows": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "OS 標準の決済シートに相当する公開 API は報告で確認できていない"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Payment Request API（`new PaymentRequest(...)`）",
+      "perm": "なし（secure context 必須）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Payment_Request_API",
+      "note": "未実装。MDN は Limited availability 表示。対応エンジンは Chromium と Safari（Apple Pay）と認識、Firefox は非対応と認識（要確認）",
+      "safari": "Apple Pay 経由で対応と認識（要確認）"
+    }
+  },
+  "note": "in-app-purchase（ストア課金）との違い: 本機能は物・サービスの代金を決済する側で、ストア課金の対象外のもの。今回の範囲: テスト環境の固定金額で決済シートを出し、結果（成功・キャンセル・失敗）を画面に出すだけ。実決済はしない。"
+}

@@ -1,0 +1,10 @@
+error[E0609]: no field `mail` on type `&LoginState`
+  --> tests/error_injection/case01_undefined_field.rs:12:11
+   |
+12 |     state.mail.clone()
+   |           ^^^^ unknown field
+   |
+help: a field with a similar name exists
+   |
+12 |     state.email.clone()
+   |           +

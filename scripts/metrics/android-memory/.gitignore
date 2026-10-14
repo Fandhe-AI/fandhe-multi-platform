@@ -1,0 +1,5 @@
+# Gradle プロジェクトのローカル生成物・環境依存ファイル（TASK-5.2 / REQ-5、Issue #237）。
+# platforms/android/.gitignore と同方針。
+.gradle/
+build/
+local.properties

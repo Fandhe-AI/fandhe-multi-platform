@@ -1,0 +1,39 @@
+{
+  "id": "health-data",
+  "name": "ヘルスデータ読み書き",
+  "group": "未着手の OS 機能",
+  "order": 26,
+  "priority": 114,
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "HealthKit（`HKHealthStore`）",
+      "perm": "`NSHealthShareUsageDescription` / `NSHealthUpdateUsageDescription` + HealthKit capability（`com.apple.developer.healthkit` entitlement）",
+      "url": "https://developer.apple.com/documentation/healthkit",
+      "note": "未実装",
+      "sourceName": [
+        "ヘルスデータ読み書き"
+      ]
+    },
+    "android": {
+      "status": "possible",
+      "api": "Health Connect（`androidx.health.connect`）",
+      "perm": "Health Connect 側の個別権限（読み書き対象データ型ごと）",
+      "url": "https://developer.android.com/health-and-fitness/guides/health-connect",
+      "note": "未実装。Android 14 以降は OS 組み込みのため追加インストール不要。Android 13 以下は別アプリ（Health Connect）のインストールが前提",
+      "sourceName": [
+        "健康データ"
+      ]
+    },
+    "macos": {
+      "status": "n-a"
+    },
+    "windows": {
+      "status": "n-a"
+    },
+    "web": {
+      "status": "n-a"
+    }
+  },
+  "note": "`HealthKit` / Android Health Connect。macOS/Windows/Web にはヘルスデータストア相当の標準 API が無い"
+}

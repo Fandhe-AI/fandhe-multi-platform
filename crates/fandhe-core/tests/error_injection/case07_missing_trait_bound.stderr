@@ -1,0 +1,11 @@
+error[E0277]: the trait bound `LoginState: Default` is not satisfied
+  --> tests/error_injection/case07_missing_trait_bound.rs:17:11
+   |
+17 |         ..Default::default()
+   |           ^^^^^^^^^^^^^^^^^^ the trait `Default` is not implemented for `LoginState`
+   |
+help: consider annotating `LoginState` with `#[derive(Default)]`
+   |
+7  + #[derive(Default)]
+8  | struct LoginState {
+   |

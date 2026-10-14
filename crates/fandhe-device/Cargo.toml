@@ -1,0 +1,56 @@
+[package]
+name = "fandhe-device"
+version = "0.1.0"
+edition = "2024"
+description = "Phase 8（端末機能の型検証、Issue #746）: 保存・HTTP・カメラの抽象トレイトと共通実装。fandhe-egui-proxy の feature `device` からのみ参照される切り離し可能なクレート"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }
+# Issue #985: `http::parse_items`（JSON 配列 → 件数上限つき `Vec<String>`）を
+# `fandhe-egui-proxy`（desktop/mobile）と `fandhe-web-dom`（Web）の両方から共有するために
+# 全ターゲットの依存にする。既に workspace で解決済みで新規パッケージは増えない
+# （ルート Cargo.toml の `serde_json` コメント参照）。
+serde_json = { workspace = true }
+
+# wasm32 では ureq の推移依存（getrandom）が解決できないため、HTTP 共通実装
+# （`http::UreqHttp`）自体を非 wasm32 に閉じる（ルート Cargo.toml の `ureq` コメント参照）。
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ureq = { workspace = true }
+
+# Phase 11（Issue #859）: `clipboard::ArboardClipboard`（macOS/Windows/Linux 共通実装）が
+# 使う。`NSPasteboard`/WinRT `Clipboard`/X11 を自前で叩くと本クレートの
+# `#![forbid(unsafe_code)]` を破るため、3 OS を safe API で覆う `arboard` へ委譲する。
+# 既に依存グラフ内で解決済み（eframe → egui-winit が "clipboard" feature で非 optional に
+# 引く 3.6.1。`cargo tree -i arboard` で実査済み）の推移依存を直接依存へ昇格するのみで
+# 新規パッケージは増えない（`cc`/`jni` と同じパターン）。MSRV は 1.71.0 で
+# rust-toolchain.toml 固定の 1.88.0 以下。
+#
+# **デスクトップ 3 OS に限定する**（`cfg(not(target_arch = "wasm32"))` では広すぎる）:
+# arboard は Android/iOS 向けのバックエンドを持たず、`platform::Clipboard` 等が解決できず
+# コンパイルが通らない（`cargo ndk -t arm64-v8a check -p fandhe-egui-proxy` で実測）。
+# モバイルのクリップボードは `fandhe-egui-proxy` 側の FFI 実装（`UIPasteboard` /
+# `ClipboardManager`）が担うため、本クレートからは arboard 自体を持ち込まない。
+[target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
+arboard = { workspace = true }
+
+# Phase 11（Issue #872、#876 codex-review P1 是正）: `file_picker::RfdFilePicker`
+# の macOS 経路のみ。Windows は rfd を使わない（rfd 0.17 の同期 API が COM 初期化
+# 失敗等を `.ok()` で握り潰しキャンセルへ化けさせ、本クレートの
+# 「キャンセルと失敗は別の結果」契約に違反するため）。Windows は PowerShell の
+# `System.Windows.Forms.OpenFileDialog` を子プロセスとして起動し、終了コードで
+# 選択/キャンセル/失敗を区別する（`tts::CommandTts` と同型、`file_picker.rs` 参照）。
+# 対応表（`docs/device/capabilities/file-picker.json`）が Linux を対象外として
+# いるため、Linux はこの依存自体を持ち込まず `Unsupported` を返す。
+[target.'cfg(target_os = "macos")'.dependencies]
+rfd = { workspace = true }
+
+# codex-review P1 是正（PR #1018）: `drag_drop::open_for_type_check` が
+# `O_NONBLOCK`（`OpenOptionsExt::custom_flags`）で開くために使う定数。
+# FIFO で open が無期限に待つのは Unix 全般（macOS に限らず Linux も）なので
+# `cfg(unix)` で持つ。`fandhe-egui-proxy` の Android 分岐で既に直接依存として
+# 使っている 0.2 系と同じで、新規パッケージは増えない。
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

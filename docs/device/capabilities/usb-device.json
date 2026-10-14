@@ -1,0 +1,47 @@
+{
+  "id": "usb-device",
+  "name": "USB・HID 機器",
+  "group": "未着手の OS 機能",
+  "order": 90,
+  "priority": 77,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "no",
+      "api": "なし（iOS には USB 機器を直接制御する公開 API が無い）",
+      "perm": "なし",
+      "url": "",
+      "note": "DriverKit は iPadOS 限定の別物（報告の記述。一次情報は未確認）。要確認。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`UsbManager`（USB ホスト、API 12+）",
+      "perm": "なし。接続ごとにユーザー許可。`uses-feature android.hardware.usb.host`",
+      "url": "https://developer.android.com/develop/connectivity/usb/host",
+      "note": "未実装。OTG 対応端末に限る。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "IOUSBHost / IOHIDManager",
+      "perm": "要確認（サンドボックスの USB entitlement）",
+      "url": "https://developer.apple.com/documentation/iousbhost",
+      "note": "未実装。IOHIDManager の URL は未確認。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 WinUSB（unpackaged の代替）。WinRT `Windows.Devices.Usb` は package identity 必須",
+      "perm": "WinRT 側はマニフェストの device capability `usb` が必須（文書で確認）。WinUSB 側の要件は要確認",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/winusb/",
+      "note": "未実装。`Windows.Devices.Usb` は package identity 必須と文書で確認済み（https://learn.microsoft.com/en-us/uwp/api/windows.devices.usb ）。HID・プリンター・大容量記憶・オーディオクラスは WinRT USB の対象外。unpackaged の Win32 では WinUSB を使う前提だが、機器ドライバーの要件を含め動作は未検証（要確認）。"
+    },
+    "web": {
+      "status": "possible",
+      "api": "WebUSB（`navigator.usb`）/ WebHID（`navigator.hid`）",
+      "perm": "機器ごとに利用者が選ぶ。secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebUSB_API",
+      "safari": "非対応と認識（要確認）。Firefox も非対応と認識",
+      "note": "未実装。WebHID のページ: https://developer.mozilla.org/en-US/docs/Web/API/WebHID_API 。どちらも Chromium のみ。"
+    }
+  },
+  "note": "Android / macOS / Windows / Web に届く。iOS は no。Windows の WinRT API は package identity 必須なので、unpackaged では Win32 の WinUSB に倒す必要がある。gamepad（既存 id）は HID のうちゲームコントローラだけを OS 経由で扱うもので、本機能は任意の機器を直接制御する点が違う。今回の範囲: 接続された USB 機器の一覧（ベンダー ID・製品 ID）を画面に出す（データ転送は扱わない）。"
+}

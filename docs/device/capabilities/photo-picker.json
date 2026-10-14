@@ -1,0 +1,69 @@
+{
+  "id": "photo-picker",
+  "name": "写真選択（既存写真の取り込み）",
+  "group": "未着手の OS 機能",
+  "order": 36,
+  "priority": 28,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "api": "PhotosUI（`PHPickerViewController` + `PHPickerConfiguration`、`selectionLimit = 1`、`filter = .images`）",
+      "perm": "不要（システムのプロセス外ピッカー。選択した項目だけ渡る）。`NSPhotoLibraryUsageDescription` は不要",
+      "url": "https://developer.apple.com/documentation/photokit/phpickerviewcontroller",
+      "note": "実装済み（#1104）。`fandhe_ios_photo_picker.m` が `PHPickerViewController`（`selectionLimit = 1`・`imagesFilter`）を main queue で提示し、`NSItemProvider.loadFileRepresentation` の完了ハンドラの中で一時ファイルのパスを Rust へ渡す（Rust が同期に読み切るのでコピーは作らない）。JPEG / PNG はそのまま、HEIC・GIF・WebP 等は ImageIO で JPEG へ変換した自前の一時ファイルを渡し、成功・失敗のどちらでも削除する。変換できなければ失敗表示（`Internal`）。結果は pull 型 `bridge`（`RequestSlot`）に置き、毎フレームの effect が拾う。契約の 2 段検査（`validate_photo` → `image` での復号確認）は NSItemProvider のキュー上で行い、UI スレッドでは復号しない。キャンセル（空の結果・スワイプ dismiss）は失敗にしない。完了は一度きり（重複通知は Rust 側で先着のみ採用）。守る範囲: 1 プロセス内で要求を出す順序（要求 id と世代の照合）、0 バイト・形式不明・8 MiB 超・復号不能・変換失敗・キャンセルを成功に見せないこと、新しい要求で表示中の画像を消すこと。守らない範囲: 複数プロセスの同時操作、選択後に元ファイルが差し替わること。既知の天井: 表示は 1 画面 1 枚、EXIF の向きは反映しない、Live Photo は静止画のみ。実機（iPhone）での確認は人間確認待ち",
+      "sourceName": [
+        "写真選択（既存写真の取り込み）"
+      ],
+      "implStatus": "実装済み（実機未確認）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_photo_picker.m + crates/fandhe-egui-proxy/src/device/ios.rs（present_photo_picker / fandhe_rust_photo_picker_outcome） + crates/fandhe-egui-proxy/src/device/photo_pick.rs（bridge） + crates/fandhe-egui-proxy/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue #1104",
+      "detail": "できている（未確認）"
+    },
+    "android": {
+      "status": "done",
+      "api": "AndroidX Activity（`ActivityResultContracts.PickVisualMedia` / `ACTION_PICK_IMAGES`）。GMS が無い端末・Android 10 以下は `ACTION_OPEN_DOCUMENT` へ自動フォールバック",
+      "perm": "不要（システムのフォトピッカーは権限なしで選択 URI に一時読み取り権限が付く）。`READ_MEDIA_IMAGES` は追加しない",
+      "url": "https://developer.android.com/training/data-storage/shared/photo-picker",
+      "note": "実装済み（#1104）。`MainActivity` の `registerForActivityResult(PickVisualMedia)`（`ImageOnly`）で提示する。端末が対応していれば `ACTION_PICK_IMAGES`、使えない端末では `ACTION_OPEN_DOCUMENT`（`image/*`）へ自動で切り替わる。依存・権限・マニフェストは追加しない（androidx.activity 1.8.0 導入済み）。JPEG / PNG は `detachFd()` した fd をそのまま Rust へ渡し、それ以外（HEIC・GIF・WebP 等）は Java 側で長辺 4096 画素以下に縮めて JPEG（品質 90）の一時ファイルへ変換して渡す（長辺 16384 超・復号不能・OOM は失敗表示。透明は黒になる。一時ファイルと Bitmap は成功・失敗のどちらでも解放）。結果は JNI `nativeOnPhotoPickerResult` から pull 型 `bridge`（`RequestSlot`）へ置く。要求 id は `RequestTracker` と Rust 側の照合で守り、`android_main` が Activity 再生成のたびに受け皿を捨てる。2 段検査（`validate_photo` → 復号確認）は Java のワーカースレッド上で行う。キャンセルは失敗にしない。守る範囲: 1 プロセス内で要求を出す順序（要求 id と世代の照合）、0 バイト・形式不明・8 MiB 超・復号不能・変換失敗・キャンセルを成功に見せないこと、新しい要求で表示中の画像を消すこと、Activity 再生成で保留中の要求を復元せず破棄すること。守らない範囲: 複数プロセスの同時操作、選択後に元ファイルが差し替わること。既知の天井: 表示は 1 画面 1 枚、EXIF の向きは反映しない。実機（Pixel）での確認は人間確認待ち",
+      "sourceName": [
+        "メディアライブラリアクセス"
+      ],
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java（pickPhoto / requestPhotoPick / deliverPickedPhoto） + crates/fandhe-egui-proxy/src/device/android.rs（request_photo_pick / nativeOnPhotoPickerResult） + crates/fandhe-egui-proxy/src/device/photo_pick.rs（bridge） + crates/fandhe-egui-proxy/src/android.rs（reset_pending_tracking） + crates/fandhe-egui-proxy/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue #1104"
+    },
+    "macos": {
+      "status": "done",
+      "api": "AppKit `NSOpenPanel`（`rfd` 経由。`png` / `jpg` / `jpeg` に絞る）。`PHPickerViewController` は使わない",
+      "perm": "不要（App Sandbox なし）",
+      "url": "https://developer.apple.com/documentation/appkit/nsopenpanel",
+      "note": "実装済み（#1103）。`file-picker` と同じ `rfd` の `NSOpenPanel` を main スレッドで同期に開き、選ばれたパスを `read_picked`（8 MiB 上限）で読む。契約の 2 段検査: 1 段目は `validate_photo`（0 バイト・形式不明は `Internal`、上限超は `InvalidInput`）、2 段目は egui-proxy が `image` で実際に復号し、通ったものだけ画面に実画素で表示する（復号不能は `Internal`、キャンセルは `Cancelled` で失敗にしない）。復号は辺 16384・確保 256 MiB の上限付きで、表示は 1024px 以下へ縮めた複製。守る範囲: 1 プロセス内で要求を出す順序（世代照合）、0 バイト・形式不明・8 MiB 超・復号不能・キャンセル・非対応を成功に見せないこと、新しい要求で表示中の画像を消すこと。守らない範囲: 複数プロセス・複数タブの同時操作、選択後に元ファイルが差し替わること。既知の天井: デスクトップは PNG / JPEG のみ（GIF / WebP は `image` の feature 追加で依存パッケージが増えるため対象外、選ぶと失敗表示）、写真ライブラリ UI（`PHPicker`）は使わない、表示は 1 画面 1 枚。10/7 に Mac 目視済み（JPEG 2048×2048 を選んで表示、ダイアログのキャンセル → 「選択しませんでした」）。画像以外のファイルはダイアログで選べないため、失敗系の目視は単体テストで代替",
+      "detail": "できている（実機）",
+      "implStatus": "実装済み・Mac 目視済み（失敗系は単体テストで代替）",
+      "impl": "crates/fandhe-device/src/photo_picker.rs（RfdPhotoPicker）+ crates/fandhe-egui-proxy/src/device/photo_pick.rs + crates/fandhe-egui-proxy/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue #1103"
+    },
+    "windows": {
+      "status": "done",
+      "api": "WinForms `OpenFileDialog`（PowerShell 子プロセス、`Filter` で `png` / `jpg` / `jpeg` に絞る。`IFileOpenDialog` は使わない）",
+      "perm": "不要。package identity 不要",
+      "url": "https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.openfiledialog",
+      "note": "実装済み（#1103）。`file-picker` と同じ PowerShell 子プロセス経路（終了コードで選択 0 / キャンセル 2 / 失敗それ以外を区別。`rfd` は失敗をキャンセルへ化けさせるため使わない）に、固定定数のフィルタ `Images (*.png;*.jpg;*.jpeg)|...` を渡す（外部入力はスクリプトへ連結しない）。2 段検査と表示は macOS と同じ。守る範囲: 1 プロセス内で要求を出す順序（世代照合）、0 バイト・形式不明・8 MiB 超・復号不能・キャンセル・非対応を成功に見せないこと、新しい要求で表示中の画像を消すこと。守らない範囲: 複数プロセス・複数タブの同時操作、選択後に元ファイルが差し替わること。既知の天井: PNG / JPEG のみ、表示は 1 画面 1 枚。Windows 実機での確認は人間確認待ち（ビルド環境がなく、この PR では Windows 向けのビルド確認も未実施）",
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）",
+      "impl": "crates/fandhe-device/src/photo_picker.rs（RfdPhotoPicker）+ crates/fandhe-device/src/file_picker.rs（windows_pick_command のフィルタ引数）+ crates/fandhe-egui-proxy/src/device/photo_pick.rs + crates/fandhe-egui-proxy/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue #1103"
+    },
+    "web": {
+      "status": "done",
+      "api": "`<input type=\"file\" accept=\"image/*\">` + `createImageBitmap(blob)` で復号確認 + `URL.createObjectURL` で `<img>` へ表示",
+      "perm": "不要（ユーザー操作内で `click()` する必要あり）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/file",
+      "safari": "`<input type=file>` は対応（MDN は Safari デスクトップ・iOS Safari を含め 2015-07 以降 Widely available と記載）。復号確認の `createImageBitmap(Blob)` は Safari 15 以降（それ未満はこのブラウザでは画像を表示できませんと失敗表示になる）",
+      "note": "実装済み（#1103）。`file-picker` の `<input>` 配線を `accept=\"image/*\"` 付きで共有する。契約の 2 段検査: 1 段目は 8 MiB 上限と `validate_photo`、2 段目は判定した形式の MIME（`file.type` は信用しない）で作った Blob を `createImageBitmap` で復号し、通った後にだけ `blob:` URL を作って `<img>` に出す（失敗の経路で URL を作らない）。新しい要求と置き換えのとき前回の URL を `revoke` する。`blob:` 以外のソースは `<img>` にしない。守る範囲: 1 プロセス内で要求を出す順序（世代照合）、0 バイト・形式不明・8 MiB 超・復号不能・キャンセル・非対応を成功に見せないこと、新しい要求で表示中の画像を消すこと。守らない範囲: 複数プロセス・複数タブの同時操作、選択後に元ファイルが差し替わること。既知の天井: `cancel` イベント非対応のブラウザではキャンセルを検知できず選択中のまま残る、表示は 1 ページ 1 枚、HEIC 等は OS / ブラウザが変換しない限り選べても表示に失敗する。ヘッドレス Chrome で確認済み（10/7、`change` / `cancel` を合成）: PNG → 表示、形式不明 → 「画像として読み取れませんでした」、ヘッダーだけの JPEG → 「画像を表示できませんでした」、`cancel` → 「選択しませんでした」。実ブラウザ（Safari・Chrome・Firefox）のダイアログ操作は人間確認待ち",
+      "detail": "できている（実ブラウザ未確認）",
+      "implStatus": "実装済み（実ブラウザ未確認）",
+      "impl": "crates/fandhe-web-dom/src/file_picker.rs（photo_pick_effect）+ crates/fandhe-web-dom/src/dom_tree.rs（convert_image_widget）+ crates/fandhe-web-dom/src/demo.rs（mount_photo_pick_screen）+ crates/fandhe-web-dom/web/index.html（?screen=photo_pick）+ crates/fandhe-core/src/screens/photo_pick.rs、Issue #1103"
+    }
+  },
+  "note": "写真 1 枚の選択は、iOS が `PHPickerViewController`、Android が AndroidX の `PickVisualMedia`（GMS 無しは `ACTION_OPEN_DOCUMENT` へフォールバック）、macOS が `PHPickerViewController`（13+）または `NSOpenPanel`、Windows が `IFileOpenDialog`、Web が `<input type=file>`。全 OS 権限不要で届く。no のセルは無い。写真ライブラリ専用ピッカーが無い Windows / Web はファイル選択で代替。全 OS 実装済み（macOS・Windows・Web は #1103、iOS / Android は #1104。macOS・Windows は `NSOpenPanel` / `OpenFileDialog` を使い、`PHPicker` / `IFileOpenDialog` は採っていない）。今回の範囲: 画像を 1 枚選んで画面に表示するだけ（複数選択・動画・EXIF・保存は扱わない）。キャンセルは失敗にしない",
+  "capture": "captures/photo-picker.png"
+}

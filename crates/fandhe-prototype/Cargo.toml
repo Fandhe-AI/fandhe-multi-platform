@@ -1,0 +1,13 @@
+[package]
+name = "fandhe-prototype"
+version = "0.1.0"
+edition = "2024"
+description = "TASK-2.2（REQ-2 / M3）複数画面プロトタイプアプリの共通コード（比率再計測の母集団）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+publish = false
+
+[dependencies]
+# 共通コアのみに依存する（coding-rust.md の依存方向: 最適化レイヤ → コアの一方向）。
+# 外部依存を追加しないことで REQ-2 の共通コード比率計測に無関係なノイズを増やさない。
+fandhe-core = { path = "../fandhe-core" }

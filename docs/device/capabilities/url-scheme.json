@@ -1,0 +1,65 @@
+{
+  "id": "url-scheme",
+  "name": "カスタム URL scheme",
+  "group": "未着手の OS 機能",
+  "order": 38,
+  "priority": 29,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "api": "UIKit（`UIApplicationDelegate` の `application:openURL:options:` / `UISceneDelegate` の `scene:openURLContexts:`）、起動側は `UIApplication openURL:`",
+      "perm": "Info.plist の `CFBundleURLTypes` 登録。起動側で他アプリの scheme を問い合わせる場合のみ `LSApplicationQueriesSchemes`",
+      "url": "https://developer.apple.com/documentation/xcode/defining-a-custom-url-scheme-for-your-app",
+      "note": "実装済み（Issue #1217）。winit 0.30.13 は delegate を nil で起動するため、didFinishLaunching 通知で `application:openURL:options:` だけを持つ delegate を差し込む（既に delegate がある場合は差し込まず、ウォーム経路はつながらない）。コールドスタート時の URL は通知の `launchOptions` から取り、二重転送を防ぐ。scheme・長さ・制御文字を検査し、弾いたものは件数だけ数える。実機確認は未実施（#1212）",
+      "sourceName": [
+        "カスタム URL scheme"
+      ],
+      "detail": "できている（実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1212）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_url_scheme.m + crates/fandhe-egui-proxy/src/device/apple_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-device/src/url_scheme.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue #1217"
+    },
+    "android": {
+      "status": "done",
+      "detail": "できている（実機確認待ち）",
+      "api": "`<intent-filter>`（`ACTION_VIEW` + `BROWSABLE` + `DEFAULT` + `<data android:scheme>`）。受信は MainActivity の `onCreate` の `getIntent()` / `onNewIntent`、JNI で Rust へ渡す",
+      "perm": "なし（`AndroidManifest.xml` への intent-filter 追加のみ）",
+      "url": "https://developer.android.com/training/app-links/deep-linking",
+      "note": "実装済み（Issue #1218）。MainActivity を `launchMode=\"singleTask\"` にして起動中の URL を `onNewIntent` で受ける（standard だと外部アプリからの ACTION_VIEW ごとに新インスタンスができる）。`onCreate` の `getIntent()` は `savedInstanceState` なし・履歴（Recents）起動でないときだけ届け、二重配送を防ぐ。守らない範囲: プロセス死亡後の復元で前回の URL は再表示しない。起動中に URL を受けると自タスクで MainActivity の上にある外部 Activity（カメラ・SAF・共有シート等）は閉じられ、既存のキャンセル経路で確定する。検査は共通層で行い、弾いたものは件数だけ数える。`autoVerify` / `assetlinks.json` は独自 scheme には不要。実機確認は未実施（#1212 で追う）",
+      "implStatus": "Android 実機確認待ち（#1212）",
+      "impl": "platforms/android/app/src/main/AndroidManifest.xml + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-device/src/url_scheme.rs、Issue #1218"
+    },
+    "macos": {
+      "status": "done",
+      "detail": "できている（Mac 目視待ち）",
+      "api": "AppKit（`NSApplicationDelegate` の `application:openURLs:`、10.13+）。Apple Event（`kAEGetURL`）経由でも受信可",
+      "perm": "Info.plist の `CFBundleURLTypes` 登録（.app 化が前提。entitlement 不要）",
+      "url": "https://developer.apple.com/documentation/appkit/nsapplicationdelegate/application(_:open:)-61n9r",
+      "note": "実装済み（Issue #1215）。Apple Event `kAEGetURL` ハンドラ方式（`application:openURLs:` は使わない。winit 0.30 は application delegate を登録せず、この方式は delegate に触れない）。ハンドラはイベントループ開始前に登録する。scheme は Info.plist 入りの .app が LaunchServices に登録されて初めて有効で、Mac 目視用に `scripts/apple/bundle-macos-url-scheme.sh` で .app 化する。受け取った URL は scheme・長さ・制御文字を検査し、弾いたものは件数だけ数える。Mac 目視は未実施（#1212 で追う）",
+      "implStatus": "Mac 目視待ち（#1212）",
+      "impl": "crates/fandhe-device/src/url_scheme.rs + crates/fandhe-egui-proxy/src/device/apple_url_scheme.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_url_scheme.m + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + scripts/apple/bundle-macos-url-scheme.sh、Issue #1215"
+    },
+    "windows": {
+      "status": "done",
+      "detail": "できている（Windows 実機確認待ち）",
+      "api": "レジストリ登録（`HKCU\\Software\\Classes\\<scheme>` に `URL Protocol` と `shell\\open\\command`）を `windows` crate の Registry API で書く。URL は起動引数（`\"%1\"`）で届く",
+      "perm": "なし（package identity 不要。HKCU への書き込みは管理者権限不要と見込むが、一次情報の記述は HKEY_CLASSES_ROOT のみで HKCU 側は未確認）",
+      "url": "https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/aa767914(v=vs.85)",
+      "note": "実装済み（Issue #1216）。登録先は `HKCU\\Software\\Classes\\fandhe`（既定値 `URL:fandhe Protocol`、値 `URL Protocol`、`shell\\open\\command` の既定値 `\"<exe>\" \"%1\"`）。起動のたびに黙って書かず、型サンプル画面の「登録する」「登録を解除する」ボタンで操作する。URL は起動引数で届き、ちょうど 1 引数・有効な Unicode のものだけを scheme・長さ・制御文字の検査へ回し、引数が割れた場合は拒否として数える。起動済みの場合は名前付き mutex（`Local\\`）で既存インスタンスを見つけ、named pipe（セッション別・`FILE_FLAG_FIRST_PIPE_INSTANCE`・リモート拒否・相手のセッションを照合）で URL を送って新プロセスを終了する。受理は終了コード 0、検査で弾かれたら 2、転送失敗は 1（成功として扱わない）。守る範囲: 1 プロセス内の受信順・不正 URL の非表示・転送失敗を成功にしないこと・pipe の先取り防止。守らない範囲: 同一ユーザー・同一セッションの別プロセスによる pipe の占有や妨害、セッション間の転送、他アプリが同じ scheme を登録した場合の上書き、exe 移動後の自動再登録。Windows 実機確認は未実施（#1212 で追う）",
+      "implStatus": "Windows 実機確認待ち（#1212）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-egui-proxy/src/main.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + crates/fandhe-device/src/url_scheme.rs、Issue #1216"
+    },
+    "web": {
+      "status": "done",
+      "detail": "できている（実ブラウザ未確認）",
+      "api": "`navigator.registerProtocolHandler()`（受信側）。起動側はリンク / `location.href` で独自 scheme へ遷移",
+      "perm": "なし（secure context 必須、ブラウザがユーザー確認を出す場合あり）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Navigator/registerProtocolHandler",
+      "safari": "未対応（Can I use: Safari desktop / iOS とも非対応）。Chrome 13+ / Edge 79+ / Firefox は対応、Chrome for Android は非対応",
+      "note": "実装済み（Issue #1219）。型サンプル画面のボタンから `registerProtocolHandler(\"web+fandhe\", <自オリジン>?screen=url_scheme_show&url=%s)` を呼び、ハンドラ起動で遷移した読み込み時に 1 回だけクエリ `url` を共通コアの検査（`web+fandhe`・長さ・制御文字）へ通す（ポーリングなし）。弾いたものは件数のみ。API が無い環境（Safari・Chrome for Android）は Unsupported 表示、非 secure context と例外は失敗表示で、成功文言は「登録を要求した」までに留める。ヘッドレス Chrome でクエリ引数からの受信を確認済み（登録ダイアログは未確認）。Safari・Firefox の目視は #1212 で追う。守らない範囲: 複数タブ間の受信。scheme は `web+` 接頭辞（小文字 ASCII）か許可リスト（mailto / tel 等）のみで、任意の独自 scheme は登録不可。ハンドラ URL は同一オリジンの https で `%s` を含む。Safari では受け取れず、起動側（ネイティブアプリを開く方向）のみ",
+      "implStatus": "実装済み（実ブラウザ未確認）",
+      "impl": "crates/fandhe-web-dom/src/url_scheme.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/url_scheme_show.rs、Issue #1219"
+    }
+  },
+  "note": "iOS / macOS は `CFBundleURLTypes`（macOS は .app 前提）、Android は intent-filter + JNI、Windows はレジストリ（`HKCU\\Software\\Classes`）+ 起動引数、Web は `registerProtocolHandler`（`web+` 限定・Safari 非対応）。no のセルなし。Windows は package identity 不要の手段があるため possible。今回の範囲: アプリ固有の scheme（`fandhe://`）で起動し、受け取った URL 文字列を画面に表示するだけ（ルーティングは扱わない）。Web は `web+` 接頭辞の scheme のみ。守る範囲: 1 プロセス内の受信順・不正 URL を表示しない・コールドスタート分を落とさない。守らない範囲: ポーリング間隔内に連続した受信は最後の 1 件だけ表示（件数は失われない）・複数プロセス間・表示の一時的な遅れ（`fandhe-device` の `url_scheme` モジュール doc 参照）"
+}

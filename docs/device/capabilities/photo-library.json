@@ -1,0 +1,66 @@
+{
+  "id": "photo-library",
+  "name": "写真ライブラリ保存・アルバム操作",
+  "group": "未着手の OS 機能",
+  "order": 42,
+  "priority": 34,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "api": "Photos（`PHPhotoLibrary.performChanges` + `PHAssetChangeRequest.creationRequestForAsset(from:)` / `creationRequestForAssetFromImage(atFileURL:)`、`PHAssetCollectionChangeRequest` でアルバム、`requestAuthorization(for: .addOnly)`）",
+      "perm": "保存のみなら `NSPhotoLibraryAddUsageDescription`（add-only 権限）。一覧・既存アルバム操作は `NSPhotoLibraryUsageDescription`（read/write 権限）",
+      "url": "https://developer.apple.com/documentation/photokit/phphotolibrary",
+      "note": "実装済み（#1255）。macOS と同じ `.m` を共用する。iOS 14 以降で `requestAuthorizationForAccessLevel:PHAccessLevelAddOnly` のみを要求し、フルアクセスは求めない（Info.plist は `NSPhotoLibraryAddUsageDescription` のみ）。iOS 14 未満は非対応。アプリが生成した PNG 1 枚を `PHAssetCreationRequest` で保存し、`performChanges` が success かつ error なしのときだけ「保存しました」と見せる。結果は保存した/権限拒否（制限・未決定を含む）/非対応/入力不正/失敗を区別し、利用者がキャンセルする UI は無いため Cancelled は無い。入力は Rust 側 `PngImage::new` に一本化（PNG シグネチャ・空・8 MiB 超を弾く）し、通らない画像は OS へ渡さない。Photos の操作は専用 serial queue に集約し、完了後に `request_repaint` で次フレームを起こす。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、完了を 1 回だけ反映。守らない範囲: 複数プロセスの同時保存、保存後の写真 App での編集・削除、iCloud 写真の同期完了、保存中のアプリ終了。アルバム作成・一覧・削除は扱わない。許可ダイアログ・写真 App に入ること・拒否時に成功が出ないことの目視は #1246 で確認する",
+      "sourceName": [
+        "写真ライブラリ保存・アルバム操作"
+      ],
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1246）",
+      "impl": "crates/fandhe-device/src/photo_library.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_photo_library.m + crates/fandhe-egui-proxy/src/device/apple_photo_library.rs + crates/fandhe-egui-proxy/src/device/photo_save.rs + crates/fandhe-core/src/screens/photo_save.rs、Issue #1255"
+    },
+    "android": {
+      "status": "done",
+      "api": "`MediaStore.Images.Media`（`ContentResolver.insert` + `DISPLAY_NAME` / `RELATIVE_PATH` / `IS_PENDING`）",
+      "perm": "自アプリが作った画像の保存は API 29+ で権限不要。API 24〜28 は `WRITE_EXTERNAL_STORAGE`（`maxSdkVersion` で上限付き）。他アプリの画像の一覧は `READ_MEDIA_IMAGES`（Android 13+）/ `READ_EXTERNAL_STORAGE`（〜12）で、Android 14+ は「選択した写真のみ」の部分アクセスがある",
+      "url": "https://developer.android.com/training/data-storage/shared/media",
+      "note": "実装済み（#1256）。API 29+（Android 10+）のみ `MediaStore.Images.Media` へ保存し、API 24〜28 は非対応（Unsupported）。`DISPLAY_NAME`・`MIME_TYPE=image/png`・`RELATIVE_PATH=Pictures`・`IS_PENDING=1` で insert して書き込み、`IS_PENDING=0` の update が 1 行に効いたときだけ成功にする。書き込みか確定に失敗したら insert した行を delete し、delete も失敗したら別のエラー（cleanup）で返す。権限は追加しない。I/O は単一スレッドの直列キューに集約し、Java は `PhotoSaveHelper` に分けて `MainActivity` には呼び出し 1 メソッドだけ足した。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、完了を 1 回だけ反映。守らない範囲: 複数プロセスの同時保存、保存後の編集・削除、Activity 再生成やアプリ終了と重なった保存の表示。アルバムの作成・一覧・削除は扱わない。ギャラリーに入ること・API 28 以下で非対応と出ることの目視は #1246 で確認する",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#1246）",
+      "impl": "crates/fandhe-device/src/photo_library.rs + crates/fandhe-egui-proxy/src/device/android_photo_library.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/PhotoSaveHelper.java + crates/fandhe-egui-proxy/src/device/photo_save.rs + crates/fandhe-core/src/screens/photo_save.rs、Issue #1256",
+      "sourceName": [
+        "メディアライブラリアクセス"
+      ]
+    },
+    "macos": {
+      "status": "done",
+      "api": "Photos（`PHPhotoLibrary.performChanges` + `PHAssetChangeRequest`、`requestAuthorization(for: .addOnly)`）。iOS と同じ API 面",
+      "perm": "`NSPhotoLibraryAddUsageDescription`（保存）/ `NSPhotoLibraryUsageDescription`（一覧）を .app の Info.plist に入れる。App Sandbox なしなので `com.apple.security.personal-information.photos-library` entitlement は不要（Sandbox 時のみ必要。provisioning profile が要る制限付き entitlement ではない）",
+      "url": "https://developer.apple.com/documentation/photokit/phphotolibrary",
+      "note": "実装済み（#1254）。macOS 11 以降で `requestAuthorizationForAccessLevel:PHAccessLevelAddOnly` のみを要求し、フルアクセスは求めない（Info.plist は `NSPhotoLibraryAddUsageDescription` のみ）。macOS 11 未満は非対応。アプリが生成した PNG 1 枚を `PHAssetCreationRequest` で保存し、`performChanges` が success かつ error なしのときだけ「保存しました」と見せる。結果は保存した/権限拒否（制限・未決定を含む）/非対応/入力不正/失敗を区別し、利用者がキャンセルする UI は無いため Cancelled は無い。入力は Rust 側 `PngImage::new` に一本化（PNG シグネチャ・空・8 MiB 超を弾く）し、通らない画像は OS へ渡さない。Photos の操作は専用 serial queue に集約。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、完了を 1 回だけ反映。守らない範囲: 複数プロセスの同時保存、保存後の写真 App での編集・削除、iCloud 写真の同期完了、保存中のアプリ終了。アルバム作成・一覧・削除は扱わない。TCC ダイアログ・写真 App に入ること・拒否時に成功が出ないことの目視は #1246 で確認する",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#1246）",
+      "impl": "crates/fandhe-device/src/photo_library.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_photo_library.m + crates/fandhe-egui-proxy/src/device/apple_photo_library.rs + crates/fandhe-egui-proxy/src/device/photo_save.rs + crates/fandhe-core/src/screens/photo_save.rs、Issue #1254"
+    },
+    "windows": {
+      "status": "done",
+      "api": "Known Folders（`SHGetKnownFolderPath(FOLDERID_Pictures)`）で取得した Pictures フォルダへファイルとして保存。`windows` crate から呼ぶ",
+      "perm": "不要（ユーザープロファイル内のフォルダへの通常のファイル書き込み）。package identity 不要",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/shell/known-folders",
+      "note": "実装済み（#1254）。`SHGetKnownFolderPath(FOLDERID_Pictures)` で解決した Pictures 直下へ `fandhe-photo-<UNIX ミリ秒>.png` を新しい名前で保存する（`create_new` で既存ファイルを上書きしない。衝突時は連番）。書き込みと sync が済んだときだけ「保存しました」と見せ、失敗時は作りかけのファイルを消す。権限拒否（コントロールされたフォルダー アクセス等）は権限拒否、フォルダ解決失敗・書き込み失敗は失敗として区別する。OneDrive 等へリダイレクトされたパスもそのまま使い、同期の完了は守らない範囲。入力は `PngImage::new` に一本化。小さな PNG 1 枚なので UI スレッドで同期に書く（Pictures が遅いネットワーク先なら作業スレッドへ移す）。アルバム（サブフォルダ）の作成・一覧・削除は扱わない。Windows 実機での保存と、コントロールされたフォルダー アクセス有効時の拒否表示の確認は #1246 で行う。x86_64-pc-windows-msvc での確認は未実施",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#1246）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_photo_library.rs + crates/fandhe-egui-proxy/src/device/photo_save.rs + crates/fandhe-device/src/photo_library.rs + crates/fandhe-core/src/screens/photo_save.rs、Issue #1254"
+    },
+    "web": {
+      "status": "no",
+      "api": "なし（ブラウザから端末の写真ライブラリへ直接書き込む API は無い）",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share",
+      "safari": "Web Share API（`navigator.share({ files })`）は Safari 対応だが、共有シートでユーザーが「画像を保存」を選ぶ操作が必要で、アプリからの保存・アルバム操作はできない",
+      "note": "ブラウザにはライブラリへ保存する API が無い。代替は `<a download>` によるダウンロード（保存先はダウンロードフォルダ。iOS Safari では「ファイル」アプリ）か Web Share API。どちらも保存完了をアプリが確認できない",
+      "detail": "できない（ブラウザに写真ライブラリへの書き込み・アルバム操作の API が無い。`<a download>` と共有シートは代替で、保存結果を確認できない）"
+    }
+  },
+  "note": "iOS / macOS は `PHPhotoLibrary`（保存は add-only 権限）、Android は `MediaStore`（API 29+ は権限不要、24〜28 は `WRITE_EXTERNAL_STORAGE`）、Windows は Pictures フォルダへのファイル書き込み（アルバム API 無し）。Web は no（ブラウザに写真ライブラリ API が無い。`<a download>` / Web Share は代替）。アルバム操作・一覧は iOS の read/write 権限と限定アクセス、Android 14 の部分アクセスで重くなるため保存だけに絞るのが現実的。今回の範囲: アプリが生成した画像 1 枚を写真ライブラリ（Windows は Pictures フォルダ）へ保存するだけ（アルバム作成・一覧・削除は扱わない）"
+}

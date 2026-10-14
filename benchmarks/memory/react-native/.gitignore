@@ -1,0 +1,15 @@
+# RN テンプレート標準の除外に加え、本ディレクトリ固有の注記のみを残す（TASK-5.2 / Issue #237 系）。
+# ルート .gitignore の `*.keystore` に加えて、android/app/build.gradle は AGP 既定の
+# debug 署名（~/.android/debug.keystore）を使うため、プロジェクト固有の鍵ファイルは発生しない。
+# gradle wrapper（gradlew* / gradle/wrapper/*）はここでは意図的に追跡対象にする（README.md
+# 「Gradle wrapper を同梱する理由」参照）。
+
+node_modules/
+.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/.kotlin/
+android/local.properties
+*.jsbundle
+.metro-health-check*

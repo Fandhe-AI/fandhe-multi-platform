@@ -1,0 +1,47 @@
+{
+  "id": "barcode-scan",
+  "name": "バーコード・QR 読み取り",
+  "group": "未着手の OS 機能",
+  "order": 103,
+  "priority": 81,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "VisionKit `DataScannerViewController`（カメラ映像からの読み取り）。画像ファイルなら Vision `VNDetectBarcodesRequest`",
+      "perm": "`NSCameraUsageDescription`",
+      "url": "https://developer.apple.com/documentation/visionkit/datascannerviewcontroller",
+      "note": "未実装。DataScanner は対応端末・OS 版が限られる（`isSupported` / `isAvailable`。要確認）。カメラ経路は camera-capture と共有できるかを要確認"
+    },
+    "android": {
+      "status": "possible",
+      "api": "ML Kit Barcode Scanning（bundled / unbundled）。Google code scanner は GMS・権限不要",
+      "perm": "bundled はカメラ権限（要確認）。Google code scanner は不要",
+      "url": "https://developers.google.com/ml-kit/vision/barcode-scanning",
+      "note": "未実装。Google code scanner は GMS（Google Play 開発者サービス）依存"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Vision `VNDetectBarcodesRequest`（画像から検出。カメラ映像は AVFoundation で取得）",
+      "perm": "カメラ映像を使う場合は `NSCameraUsageDescription`",
+      "url": "https://developer.apple.com/documentation/vision/vndetectbarcodesrequest",
+      "note": "未実装。macOS は専用スキャナー UI がなく、画像またはカメラのフレームを渡す方式"
+    },
+    "windows": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "OS 提供のバーコード検出 API は報告で確認できていない（Windows.Devices.PointOfService はバーコードリーダー機器向けでカメラ画像の読み取りではない。要確認）"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Barcode Detection API（`new BarcodeDetector()`）。映像は `getUserMedia`",
+      "perm": "カメラ権限",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Barcode_Detection_API",
+      "note": "未実装。MDN は Limited availability 表示。Chrome 83 で提供済み（macOS・ChromeOS・Android。Android は Google Play services が必要。既存 image-recognition.json の記載）。デスクトップ Windows の Chrome は未確認",
+      "safari": "未対応と認識（要確認）"
+    }
+  },
+  "note": "image-recognition（顔・文字・矩形）との違い: 本機能はバーコード・QR の読み取りに限る（同機能の Web 判定は no だが、バーコード検出だけは Chromium で提供済みなので本機能では possible）。今回の範囲: カメラ映像から QR を読み、中身の文字列を画面に出すだけ。"
+}

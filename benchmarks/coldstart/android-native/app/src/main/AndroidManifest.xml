@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  TASK-5.1（REQ-5 / M4、Issue #236）: コールドスタート計測用ネイティブ比較アプリの
+  Manifest。権限要求なし・cleartext 通信設定なし（security.md「A05 セキュリティ設定
+  ミス」対策、計測フィクスチャであり配布物ではないため最小構成に留める）。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

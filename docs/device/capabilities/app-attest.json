@@ -1,0 +1,46 @@
+{
+  "id": "app-attest",
+  "name": "端末・アプリの真正性証明",
+  "group": "未着手の OS 機能",
+  "order": 98,
+  "priority": 97,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "DeviceCheck `DCAppAttestService`（鍵生成・attestation・assertion）",
+      "perm": "App Attest の entitlement `com.apple.developer.devicecheck.appattest-environment`（要確認）",
+      "url": "https://developer.apple.com/documentation/devicecheck/dcappattestservice",
+      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 サーバーでの検証が別途必須。対応端末・OS 版は要確認"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Play Integrity API（GMS 依存。サーバー検証前提）",
+      "perm": "記載なし（要確認）",
+      "url": "https://developer.android.com/google/play/integrity",
+      "note": "未実装。GMS（Google Play 開発者サービス）依存。Google Play 経由の配布が前提（要確認）。キー属性の証明は https://developer.android.com/privacy-and-security/security-key-attestation にもある"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "DeviceCheck `DCAppAttestService`（macOS での提供は要確認）",
+      "perm": "要確認",
+      "url": "https://developer.apple.com/documentation/devicecheck/dcappattestservice",
+      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 macOS の `isSupported` の実態は要確認"
+    },
+    "windows": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "端末・アプリの真正性証明に相当する OS 提供 API を報告で確認できていない（報告は『限定的』。TPM 証明は用途が異なり要確認）"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "Web に相当する API はない（Digital Credentials API は MDN の URL が 404 で確認できず）"
+    }
+  },
+  "note": "今回の範囲: 鍵を作って attestation の結果（成功・失敗・非対応）を画面に出すだけ。サーバー検証は含めない。Apple は entitlement が要る。"
+}

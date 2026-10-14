@@ -1,0 +1,8 @@
+<!--
+     debug ビルドタイプにのみマージされる manifest。Metro（開発サーバー）への接続には
+     INTERNET 権限が要るが、計測対象の release ビルド（src/main/AndroidManifest.xml）には
+     不要な権限として持たせない（A05 設定ミス対策、TASK-5.2 / Issue #237 系の比較アプリ方針）。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>

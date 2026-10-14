@@ -1,0 +1,54 @@
+{
+  "id": "watch-connectivity",
+  "name": "watch 連携（スマホ ↔ ウォッチのデータ受け渡し）",
+  "group": "未着手の OS 機能",
+  "order": 33,
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "WatchConnectivity（`WCSession`）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/watchconnectivity/wcsession",
+      "note": "未実装。`platforms/apple/FandheWatchApp` は watchOS 単体アプリで、iPhone 側との通信は持たない",
+      "sourceName": [
+        "watch 連携（iPhone ↔ Apple Watch のデータ受け渡し）"
+      ]
+    },
+    "android": {
+      "status": "possible",
+      "api": "Wearable Data Layer API（`com.google.android.gms:play-services-wearable`）",
+      "perm": "なし",
+      "url": "https://developer.android.com/training/wearables/data/data-layer",
+      "note": "未実装。別途 Google Play services SDK 依存の追加が必要",
+      "sourceName": [
+        "watch 連携（スマホ ↔ Wear OS のデータ受け渡し）"
+      ]
+    },
+    "macos": {
+      "status": "n-a",
+      "api": "標準 API なし（WatchConnectivity は iOS ↔ watchOS 間の API で macOS は対象外）",
+      "note": "非該当。Mac から Apple Watch へ直接データを渡す公開 API は無い",
+      "sourceName": [
+        "watch 連携"
+      ]
+    },
+    "windows": {
+      "status": "n-a",
+      "api": "標準 API なし",
+      "note": "非該当。Windows に対応するスマートウォッチ連携の標準 API は無い",
+      "sourceName": [
+        "watch 連携"
+      ]
+    },
+    "web": {
+      "status": "n-a",
+      "api": "標準 API なし",
+      "safari": "非該当",
+      "note": "Web（ブラウザ / PWA）からスマートウォッチへ直接データを渡す標準 API は無い",
+      "sourceName": [
+        "watch 連携"
+      ]
+    }
+  },
+  "note": "iOS `WatchConnectivity`（`WCSession`）/ Android Wearable Data Layer API。`platforms/apple/FandheWatchApp` は watchOS 単体アプリで iPhone 側との通信を持たない。macOS / Windows / Web にはウォッチ連携の標準 API が無い"
+}

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- GameActivity（TASK-9.3-S1 / REQ-9 / M4、Issue #242）は AppCompatActivity のサブクラスで
+     あり、Theme.AppCompat 系（またはその子孫）のテーマを割り当てないと
+     "You need to use a Theme.AppCompat theme (or descendant) with this activity" で
+     起動時に落ちる（AppCompatDelegate の既知の制約）。フルスクリーンのゲーム/描画用途
+     のため NoActionBar 系を選び、タイトルバー・アクションバーは表示しない。 -->
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar" />
+</resources>

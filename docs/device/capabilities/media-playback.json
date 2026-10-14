@@ -1,0 +1,50 @@
+{
+  "id": "media-playback",
+  "name": "音声・動画再生",
+  "group": "未着手の OS 機能",
+  "order": 41,
+  "priority": 36,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "AVFoundation（`AVPlayer` / `AVPlayerItem`、音声のみなら `AVAudioPlayer` でも可）",
+      "perm": "不要（再生のみ）。バックグラウンド再生をするなら `UIBackgroundModes` の `audio` と `AVAudioSession` の `.playback` category",
+      "url": "https://developer.apple.com/documentation/avfoundation/avplayer",
+      "note": "未実装。音声は `AVPlayer` を ObjC で保持し、再生状態・位置を Rust から poll する形で足りる。動画は `AVPlayerLayer`（CALayer）を egui の描画面と別に重ねるか、`AVPlayerItemVideoOutput` でフレームを取り出してテクスチャ化する必要があり、egui 描画との合成方式が新規設計になる。`AVAudioSession` の category を変えたら全終了経路で復元（契約表 9）。KVO / 通知オブザーバーの登録トークンを握り続ける（契約表 1）",
+      "sourceName": [
+        "音声・動画再生"
+      ]
+    },
+    "android": {
+      "status": "possible",
+      "api": "AndroidX Media3（`androidx.media3:media3-exoplayer` の `ExoPlayer`）。GMS 非依存",
+      "perm": "ネットワーク再生は `INTERNET`。ローカルのアプリ内ファイルは不要。バックグラウンド再生はフォアグラウンドサービス / `MediaSessionService` が別途必要",
+      "url": "https://developer.android.com/media/media3/exoplayer/hello-world",
+      "note": "未実装。Media3 の minSdk は 1.9.0 以降 23 のため minSdk 24 で使える（最新 1.11.1 の minSdk 23 は検索結果の要約による。依存追加時に Maven のバージョン別 minSdk を確認）。ExoPlayer の操作は作成スレッド（既定はメインスレッド）で行う必要があり、JNI からは main Looper へ post する。動画は `SurfaceView` / `TextureView` を GameActivity の上に重ねる必要があり、egui 描画面との合成が新規設計。音声のみなら Surface 不要"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AVFoundation（`AVPlayer`。動画表示は AVKit の `AVPlayerView`）",
+      "perm": "不要。App Sandbox なしで追加の entitlement 不要。ネットワーク再生も Sandbox が無いため制限なし",
+      "url": "https://developer.apple.com/documentation/avfoundation/avplayer",
+      "note": "未実装。iOS の音声再生の ObjC をほぼ流用できる。動画を出すなら `AVPlayerView` を egui ウィンドウの NSView に子ビューとして重ねるか、フレーム取り出しでテクスチャ化する（iOS と同じ合成の課題）。音声のみなら表示面の問題は無い"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Media Foundation Media Engine（`IMFMediaEngine`、`IMFMediaEngineClassFactory::CreateInstance`）。`windows` crate から呼ぶ",
+      "perm": "不要。package identity 不要",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/mfmediaengine/nn-mfmediaengine-imfmediaengine",
+      "note": "未実装。`IMFMediaEngine` は Windows 8 以降のデスクトップアプリ向けとドキュメントに明記されており素の exe で使える。`MFStartup` と COM 初期化が要る。映像は `TransferVideoFrame` で DXGI サーフェス / WIC ビットマップへ取り出せるため、egui テクスチャ化の経路がある。MFPlay は非推奨（Microsoft Learn が `MediaPlayer` と `IMFMediaEngine` への置き換えを推奨）なので使わない。WinRT の `MediaPlayer` は package identity 要否を確認できなかったため採らない"
+    },
+    "web": {
+      "status": "possible",
+      "api": "`HTMLMediaElement`（`<audio>` / `<video>`、`play()` / `pause()` / `currentTime`）。wasm から `web-sys` 経由で操作",
+      "perm": "不要。ただし自動再生はブラウザが制限するため、ユーザー操作内で `play()` を呼ぶ",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement",
+      "safari": "対応。MDN は `HTMLMediaElement` を 2015-07 以降 Widely available と記載。ただし自動再生の制限は Safari が特に厳しく、`play()` は Promise を返し拒否されうる。コーデック対応（WebM / Ogg 等）はブラウザごとに異なるため `canPlayType()` で確認",
+      "note": "未実装。`play()` の Promise の拒否（自動再生ブロック）を失敗として返し、成功扱いにしない。動画は `fandhe-web-dom` の DOM 出力に `<video>` 要素を出す方が自然で、`fandhe-egui-proxy` の canvas 描画とは別経路になる。音声のみなら DOM 外の `Audio` オブジェクトで足りる"
+    }
+  },
+  "note": "iOS / macOS は `AVPlayer`、Android は Media3 `ExoPlayer`（GMS 非依存、minSdk 23+）、Windows は `IMFMediaEngine`（MFPlay は非推奨）、Web は `HTMLMediaElement`。全 OS possible で no は無い。音声のみなら表示面が要らず簡単だが、動画は egui の描画面とネイティブ映像面の合成が全 OS で未解決の新規設計になる。今回の範囲: 音声 1 本の再生・一時停止・停止だけ（動画表示・バックグラウンド再生・プレイリストは扱わない）"
+}

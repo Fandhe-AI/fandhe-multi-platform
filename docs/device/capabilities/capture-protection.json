@@ -1,0 +1,47 @@
+{
+  "id": "capture-protection",
+  "name": "画面キャプチャの防止・検知",
+  "group": "未着手の OS 機能",
+  "order": 73,
+  "priority": 85,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "録画・ミラーリングの検知は `UIScreen.isCaptured` / `capturedDidChangeNotification`、スクリーンショットは `userDidTakeScreenshotNotification`。防止の公式 API なし",
+      "perm": "不要",
+      "url": "",
+      "note": "検知のみで防止はできない（公式 API なし）。URL 未確認（iOS 調査で未取得）。画面を隠す実装は `isCaptured` を見て自前で行う"
+    },
+    "android": {
+      "status": "possible",
+      "api": "防止は `FLAG_SECURE`。スクリーンショット検知は `Activity.registerScreenCaptureCallback`（Android 14+）",
+      "perm": "検知のみ `DETECT_SCREEN_CAPTURE`。防止は不要",
+      "url": "https://developer.android.com/security/fraud-prevention/activities",
+      "note": "防止の詳細は上記。検知の URL は https://developer.android.com/about/versions/14/features/screenshot-detection 。`FLAG_SECURE` はウィンドウ単位で、最近使ったアプリの画面にも効く"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "防止は `NSWindow.sharingType = .none`（要確認）。検知の公開 API は確認できず",
+      "perm": "不要（要確認）",
+      "url": "",
+      "note": "未実装。URL 未確認。画面収録の API 側の挙動によっては防止されない場合あり（要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "防止は Win32 `SetWindowDisplayAffinity`（`WDA_EXCLUDEFROMCAPTURE` など）。検知の公開 API は確認できず",
+      "perm": "不要と見込む（package identity の要件記載は未確認、要確認）",
+      "url": "",
+      "note": "未実装。URL 未確認。`WDA_EXCLUDEFROMCAPTURE` は Windows 10 の特定版以降（要確認）"
+    },
+    "web": {
+      "status": "no",
+      "api": "ブラウザに画面キャプチャの防止 API なし",
+      "perm": "-",
+      "url": "",
+      "safari": "非対応",
+      "note": "防止・検知とも標準 API はない（EME の保護コンテンツを除く）"
+    }
+  },
+  "note": "Android は防止（`FLAG_SECURE`）と検知、iOS は検知のみ、デスクトップは防止のみ（macOS・Windows は要確認）。Web は no。screen-capture（別 id）との違い: 本機能は自分の画面を録られないようにする・録られたことを知る側で、録る側ではない。今回の範囲: 保護の ON / OFF を切り替えるスイッチと「撮影・録画を検知しました」の表示を置く。防止できない OS では「検知のみ」と画面に書く"
+}

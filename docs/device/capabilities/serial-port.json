@@ -1,0 +1,47 @@
+{
+  "id": "serial-port",
+  "name": "シリアルポート",
+  "group": "未着手の OS 機能",
+  "order": 91,
+  "priority": 96,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "note": "iOS は MFi 経由のみ（報告の記述）。公開 API は確認できなかった（要確認）。"
+    },
+    "android": {
+      "status": "no",
+      "api": "なし（OS にシリアルポート API が無く、USB serial は USB ホスト API の上でドライバーを自前実装する）",
+      "perm": "なし",
+      "url": "",
+      "note": "usb-device 経由で CDC / FTDI 等を扱う形になるため、本機能としては no。要確認。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "IOKit のシリアル / POSIX（`termios`）",
+      "perm": "要確認（サンドボックスの USB entitlement）",
+      "url": "",
+      "note": "未実装。Apple の公式 URL は報告で未取得（URL 未確認）。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 COM ポート（`CreateFile` / `DCB`）。WinRT `SerialDevice` は package identity 必須",
+      "perm": "WinRT 側はマニフェストの capability `serialCommunication` が必須（文書で確認）。Win32 側の要件は要確認",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/devio/communications-resources",
+      "note": "未実装。`SerialDevice` は package identity 必須と文書で確認済み（https://learn.microsoft.com/en-us/uwp/api/windows.devices.serialcommunication.serialdevice ）。unpackaged では Win32 の COM ポートに倒す前提だが、動作は未検証（要確認）。"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Web Serial API（`navigator.serial`）",
+      "perm": "ポートごとに利用者が選ぶ。secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API",
+      "safari": "非対応と認識（要確認）。Firefox も非対応と認識",
+      "note": "未実装。Chromium のみ。"
+    }
+  },
+  "note": "macOS / Windows / Web に届く。iOS と Android は OS にシリアル API が無く no。usb-device（USB 機器の直接制御）とは、COM ポート・tty として見えるものを扱う点で別。Windows の WinRT API は package identity 必須。今回の範囲: 選んだポートを開いて 1 行を送り、返ってきた 1 行を画面に出す（ボーレート設定の UI・連続受信は扱わない）。"
+}

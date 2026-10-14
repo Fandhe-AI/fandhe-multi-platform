@@ -1,0 +1,46 @@
+{
+  "id": "geocoding-search",
+  "name": "住所検索・ジオコーディング・経路",
+  "group": "未着手の OS 機能",
+  "order": 105,
+  "priority": 98,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "MapKit `MKLocalSearch` / `MKDirections`、CoreLocation `CLGeocoder`",
+      "perm": "現在地を使う場合のみ位置情報の許可",
+      "url": "https://developer.apple.com/documentation/mapkit/mklocalsearch",
+      "note": "未実装。ジオコーディングのレート制限あり（要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`android.location.Geocoder`（API 33 で非同期版追加）。経路は標準 API なし",
+      "perm": "`ACCESS_*_LOCATION`（報告で要確認とされたもの。要確認）",
+      "url": "https://developer.android.com/reference/android/location/Geocoder",
+      "note": "未実装。バックエンドは主に Play services で、実質 GMS 依存（報告より）。端末によっては `isPresent()` が false で空を返す"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "MapKit `MKLocalSearch` / `MKDirections`、CoreLocation `CLGeocoder`（iOS と同じ）",
+      "perm": "現在地を使う場合のみ位置情報の許可",
+      "url": "https://developer.apple.com/documentation/mapkit/mklocalsearch",
+      "note": "未実装"
+    },
+    "windows": {
+      "status": "no",
+      "api": "なし（`Windows.Services.Maps.MapLocationFinder` は Deprecated）",
+      "perm": "",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.services.maps.maplocationfinder",
+      "note": "MapLocationFinder は公式に非推奨で、データ元の Bing Maps for Enterprise も提供終了予定。map-view の Windows（no）と揃える。外部の地図サービスを HTTP で呼ぶ形は OS 機能ではないため対象外"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "ブラウザに住所検索・経路の API はない（Geolocation は位置の取得のみで location に既出）"
+    }
+  },
+  "note": "map-view（地図表示のみ）・location（現在地の取得）との違い: 本機能は住所や地名から座標を引く、または経路を求める。今回の範囲: 固定の住所 1 件を座標に変換して画面に出すだけ（経路は含めない）。"
+}

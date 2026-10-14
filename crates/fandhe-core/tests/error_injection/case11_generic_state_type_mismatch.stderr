@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+  --> tests/error_injection/case11_generic_state_type_mismatch.rs:22:24
+   |
+22 |     render_todo_screen(&login_screen);
+   |     ------------------ ^^^^^^^^^^^^^ expected `&Screen<TodoState>`, found `&Screen<LoginState>`
+   |     |
+   |     arguments to this function are incorrect
+   |
+   = note: expected reference `&Screen<TodoState>`
+              found reference `&Screen<LoginState>`
+note: function defined here
+  --> tests/error_injection/case11_generic_state_type_mismatch.rs:17:4
+   |
+17 | fn render_todo_screen(_screen: &Screen<TodoState>) {}
+   |    ^^^^^^^^^^^^^^^^^^ ---------------------------

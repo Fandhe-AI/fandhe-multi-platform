@@ -1,0 +1,47 @@
+{
+  "id": "game-center",
+  "name": "ゲームのランキング・実績",
+  "group": "未着手の OS 機能",
+  "order": 122,
+  "priority": 101,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "GameKit（`GKLocalPlayer` / `GKLeaderboard` / `GKAchievement`）",
+      "perm": "Game Center capability（要確認）",
+      "url": "https://developer.apple.com/documentation/gamekit",
+      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement・capability の要否は検証できない。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Google Play Games Services v2（ランキング・実績・フレンド）",
+      "perm": "なし（ページに記載なし、要確認）",
+      "url": "https://developer.android.com/games/pgs/overview",
+      "note": "未実装。GMS（Google Play 開発者サービス）依存。Play Console 側でのゲーム登録が前提（要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "GameKit（iOS と同じフレームワーク）",
+      "perm": "Game Center capability（要確認）",
+      "url": "https://developer.apple.com/documentation/gamekit",
+      "note": "未実装。macOS での利用可否の詳細は要確認。Apple Developer Program が現在期限切れで、entitlement・capability の要否は検証できない。"
+    },
+    "windows": {
+      "status": "no",
+      "api": "OS 標準のランキング・実績 API は確認できず",
+      "perm": "",
+      "url": "",
+      "note": "要確認。Xbox のサービスは別系統で、本調査では URL 未確認"
+    },
+    "web": {
+      "status": "no",
+      "api": "ブラウザ標準のランキング・実績 API なし",
+      "perm": "",
+      "url": "",
+      "safari": "対応なし",
+      "note": ""
+    }
+  },
+  "note": "game-center は各プラットフォームのゲーム用ソーシャル基盤。iOS / macOS は GameKit、Android は Play Games Services で、API が別系統のため共通 trait は「ログイン・ランキング送信・実績解除」に絞る必要がある。gamepad（既存 id）との違い: 入力ではなくオンラインの記録。今回の範囲: サインイン状態を画面に出し、固定のスコアをランキングへ送る。"
+}

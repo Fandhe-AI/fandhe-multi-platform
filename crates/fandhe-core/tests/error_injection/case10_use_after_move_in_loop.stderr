@@ -1,0 +1,23 @@
+error[E0382]: use of moved value: `value`
+  --> tests/error_injection/case10_use_after_move_in_loop.rs:24:34
+   |
+20 |     let value = "更新".to_string();
+   |         ----- move occurs because `value` has type `String`, which does not implement the `Copy` trait
+21 |
+22 |     for _ in 0..3 {
+   |     ------------- inside of this loop
+23 |         // `value` は 1 回目のループでムーブ済みのため 2             ...
+24 |         accessor.set(&mut state, value);
+   |                                  ^^^^^ value moved here, in previous iteration of loop
+   |
+help: consider moving the expression out of the loop so it is only moved once
+   |
+22 ~     let mut value = accessor.set(&mut state, value);
+23 ~     for _ in 0..3 {
+24 |         // `value` は 1 回目のループでムーブ済みのため 2 回目以降はコンパイルエラー（`.clone()` が必要）
+25 ~         value;
+   |
+help: consider cloning the value if the performance cost is acceptable
+   |
+24 |         accessor.set(&mut state, value.clone());
+   |                                       ++++++++

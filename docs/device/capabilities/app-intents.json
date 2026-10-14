@@ -1,0 +1,46 @@
+{
+  "id": "app-intents",
+  "name": "Siri・ショートカット・アシスタントへの機能公開",
+  "group": "未着手の OS 機能",
+  "order": 113,
+  "priority": 103,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "App Intents（`AppIntent` / `AppShortcutsProvider`）",
+      "perm": "不要（宣言のみと認識。要確認）",
+      "url": "https://developer.apple.com/documentation/appintents",
+      "note": "未実装。Swift の宣言型で、Rust 側へ橋渡しする経路の設計が要る。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`androidx.appfunctions`（1.0.0-alpha12、2026-09-23 時点）",
+      "perm": "記載なし（要確認）",
+      "url": "https://developer.android.com/ai/appfunctions",
+      "note": "未実装。アルファ版で API が変わる前提。対象 API レベルは要確認。GMS ではなく OS 側に依存する（報告より）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "App Intents（macOS でも提供と認識。要確認）",
+      "perm": "不要と認識（要確認）",
+      "url": "https://developer.apple.com/documentation/appintents",
+      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。"
+    },
+    "windows": {
+      "status": "no",
+      "api": "App Actions（URL 未確認）",
+      "perm": "package identity（要確認）",
+      "url": "",
+      "note": "Windows の App Actions は package 前提と認識するが、一次情報の URL を確認できていない（要確認）"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "Web にアシスタントへ機能を公開する API はない"
+    }
+  },
+  "note": "spotlight-index・share-receive とは別: 本機能は音声・ショートカットから呼ばれる『アクション』を公開する。今回の範囲: 固定のアクション 1 つ（画面に文字列を出す）を公開し、呼び出し時に画面へ反映するだけ。"
+}

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  watchOS 最小アプリの Info.plist（REQ-3 / TASK-3.3-S1、Issue #65）。
+
+  PoC-2（docs/spec/03-poc/watchos-visionos/watchos-app/）には Sources/main.swift のみが
+  存在し Info.plist は含まれないため、本ファイルは PoC-2 実績値ではなく、watchOS スタンド
+  アロンアプリに必要な最小キー（WKApplication・WKWatchOnly 等）のみを新規に書き起こした
+  ものである。デバッグフラグ・ATS 例外・不要な UsageDescription は追加しない（security.md
+  「A05 セキュリティ設定ミス」対策）。
+
+  `.xcodeproj` / SPM 統合（TASK-3.4・Issue #71）でアプリバンドルへ組み込む前提であり、
+  本ファイル単体では watchOS アプリバンドルは生成されない（Package.swift 冒頭コメント参照）。
+
+  CFBundleExecutable / CFBundleInfoDictionaryVersion: project.yml で
+  GENERATE_INFOPLIST_FILE: NO のため本ファイルがそのまま使われる。$(EXECUTABLE_NAME) は
+  Xcode の Info.plist 処理時に自動生成有無に関わらずビルド設定値へ置換されるため、手書き
+  Info.plist でもこのマクロ記法で解決できる（PRODUCT_NAME から導出される EXECUTABLE_NAME は
+  project.yml の PRODUCT_NAME: FandheWatchApp と一致し、CFBundleName とも整合する）。
+  これらのキーを欠くとインストール・起動時に missing-executable / invalid Info.plist
+  エラーになる（CFBundleInfoDictionaryVersion は Apple の
+  Info.plist 必須キーの一つで、値は慣例上固定の 6.0）。
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Fandhe</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.fandhe.watchapp</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>FandheWatchApp</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>WKApplication</key>
+	<true/>
+	<key>WKWatchOnly</key>
+	<true/>
+</dict>
+</plist>

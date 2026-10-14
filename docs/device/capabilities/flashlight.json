@@ -1,0 +1,47 @@
+{
+  "id": "flashlight",
+  "name": "ライト（トーチ）",
+  "group": "未着手の OS 機能",
+  "order": 81,
+  "priority": 71,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "AVFoundation `AVCaptureDevice`（`torchMode` / `setTorchModeOn(level:)`）",
+      "perm": "要確認（カメラデバイスの設定変更を伴う。`NSCameraUsageDescription` の要否は未確認）",
+      "url": "https://developer.apple.com/documentation/avfoundation/avcapturedevice/torchmode-swift.property",
+      "note": "未実装。`hasTorch` で搭載を確認してから使う。iPad など非搭載機あり。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`CameraManager.setTorchMode`",
+      "perm": "`CAMERA` 不要か要確認（報告は未確認）",
+      "url": "https://developer.android.com/reference/android/hardware/camera2/CameraManager",
+      "note": "未実装。リファレンスの存在のみ確認し、メソッド詳細は未取得。"
+    },
+    "macos": {
+      "status": "n-a",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "note": "Mac にライト（トーチ）の概念が無い。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`Windows.Devices.Lights.Lamp`（カメラ横のライト）",
+      "perm": "要確認（package identity の要否は文書に記載なし）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.lights.lamp",
+      "note": "搭載機種のみ。非搭載なら `GetDefaultAsync` が null"
+    },
+    "web": {
+      "status": "possible",
+      "api": "`MediaStreamTrack.applyConstraints({ advanced: [{ torch: true }] })`（ImageCapture と併用）",
+      "perm": "カメラの許可（`getUserMedia`）。secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/ImageCapture",
+      "safari": "非対応と認識（要確認）。Firefox も非対応と認識",
+      "note": "未実装。`torch` 制約は Chromium（主に Android）のみ。"
+    }
+  },
+  "note": "iOS は AVCaptureDevice の torch、Android は CameraManager、Web は MediaStreamTrack の torch 制約。Windows は Lamp（搭載機種のみ）。macOS は搭載機器の概念が無いため n-a。camera-capture（既存 id）は撮影で、本機能は撮影を伴わず光だけを制御する点が違う。今回の範囲: ライトの点灯 / 消灯をボタンで切り替え、点灯状態を画面に出す（明るさ調整・点滅は扱わない）。"
+}

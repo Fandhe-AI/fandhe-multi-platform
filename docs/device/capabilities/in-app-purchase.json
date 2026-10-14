@@ -1,0 +1,62 @@
+{
+  "id": "in-app-purchase",
+  "name": "アプリ内課金・ストア課金",
+  "group": "未着手の OS 機能",
+  "order": 19,
+  "priority": 60,
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "StoreKit（StoreKit 2 / `SKPaymentQueue`）",
+      "perm": "In-App Purchase capability",
+      "url": "https://developer.apple.com/documentation/storekit",
+      "note": "未実装",
+      "sourceName": [
+        "アプリ内課金"
+      ]
+    },
+    "android": {
+      "status": "possible",
+      "api": "Play Billing Library（`com.android.billingclient`）",
+      "perm": "なし（Google Play Console 側の商品設定が必要）",
+      "url": "https://developer.android.com/google/play/billing/integrate",
+      "note": "未実装。別途 SDK 依存の追加が必要",
+      "sourceName": [
+        "アプリ内課金"
+      ]
+    },
+    "macos": {
+      "status": "possible",
+      "api": "StoreKit",
+      "perm": "App Store Connect 側の製品登録（コード側の entitlement は不要）",
+      "url": "https://developer.apple.com/documentation/storekit",
+      "note": "未実装。課金 UI・レシート検証は最小権限（決済に必要な情報のみ）で扱う",
+      "sourceName": [
+        "ストア課金"
+      ]
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT（`Windows.Services.Store.StoreContext`）",
+      "perm": "Microsoft Store 側の製品登録",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.services.store",
+      "note": "未実装。課金 UI・レシート検証は最小権限（決済に必要な情報のみ）で扱う",
+      "sourceName": [
+        "ストア課金"
+      ]
+    },
+    "web": {
+      "status": "possible",
+      "detail": "できそう（部分対応）",
+      "api": "Payment Request API / Digital Goods API",
+      "perm": "secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Payment_Request_API",
+      "safari": "Payment Request API は部分対応（Apple Pay 経由が中心）。Digital Goods API は非対応",
+      "note": "未実装。課金 UI・レシート検証は最小権限（決済に必要な情報のみ）で扱う",
+      "sourceName": [
+        "ストア課金"
+      ]
+    }
+  },
+  "note": "`StoreKit` / Google Play Billing / `StoreKit`（macOS）/ Microsoft Store SDK。Web は `Payment Request API`（部分対応、Apple Pay 経由が中心）/ `Digital Goods API`（非対応）の調査結果は本表 Web 欄にあり（未調査ではない）、ストア課金相当の統一 API は無いが決済自体は部分的に届く見込み"
+}

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- アプリ表示名のみの最小リソース（TASK-11.2-S2 / REQ-11、Issue #226）。
+     AndroidManifest.xml の android:label が参照する。 -->
+<resources>
+    <string name="app_name">Fandhe</string>
+    <!-- ローカル通知（Issue #1006）の通知チャンネル表示名（システム設定 > アプリ >
+         通知 に出る名前）。切り離し時に削除する。 -->
+    <string name="notification_channel_name">通知</string>
+    <!-- ホーム画面ウィジェット（Issue #1067）の一覧表示名・説明。切り離し時に削除する。 -->
+    <string name="home_widget_label">Fandhe テキスト</string>
+    <string name="home_widget_description">アプリで保存した 1 行の文字を表示します。</string>
+    <!-- アプリアイコンのバッジ（Issue #1362）用チャンネル名と通知本文。切り離し時に削除する。 -->
+    <string name="app_badge_channel_name">アイコンのバッジ</string>
+    <string name="app_badge_notification_text">アイコンのバッジ用の通知です。</string>
+</resources>

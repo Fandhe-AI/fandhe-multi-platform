@@ -1,0 +1,47 @@
+{
+  "id": "companion-device",
+  "name": "付属機器のペアリング",
+  "group": "未着手の OS 機能",
+  "order": 93,
+  "priority": 108,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "AccessorySetupKit（iOS 18+）",
+      "perm": "Info.plist の宣言（要確認）",
+      "url": "https://developer.apple.com/documentation/accessorysetupkit",
+      "note": "未実装。Apple 公式表記で iOS / iPadOS のみ。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`CompanionDeviceManager`（API 26+）",
+      "perm": "位置権限は不要。`uses-feature android.software.companion_device_setup`",
+      "url": "https://developer.android.com/develop/connectivity/bluetooth/companion-device-pairing",
+      "note": "未実装。"
+    },
+    "macos": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "note": "AccessorySetupKit は iOS / iPadOS のみ（Apple 公式表記で確認）。"
+    },
+    "windows": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "note": "同等の API は報告で確認できなかった（要確認）。"
+    },
+    "web": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "safari": "同左（API なし）",
+      "note": "ブラウザに付属機器のペアリング API は無い（Web Bluetooth の `requestDevice` は bluetooth-le の範囲）。"
+    }
+  },
+  "note": "iOS 18 以降と Android に届く。bluetooth-le（既存 id）の接続は機器を自分で探すもので、本機能は OS の標準ペアリング UI で機器を選び、位置権限などを避けて接続する点が違う。今回の範囲: 標準のペアリング UI を出して機器 1 台を選び、選んだ機器の名前を画面に出す（以降の通信は bluetooth-le に任せる）。"
+}

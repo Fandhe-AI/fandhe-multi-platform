@@ -1,0 +1,31 @@
+{
+  "id": "ui-widget-catalog",
+  "name": "UI 部品（Widget 拡張: `catalog.rs` の 22 種）",
+  "group": "既存機能の棚卸し",
+  "order": 1,
+  "priority": 15,
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "detail": "できている（一部・未確認）"
+    },
+    "android": {
+      "status": "done",
+      "detail": "できている（一部・未確認）"
+    },
+    "macos": {
+      "status": "done",
+      "detail": "できている（一部・未確認）"
+    },
+    "windows": {
+      "status": "done",
+      "detail": "できている（一部・未確認）"
+    },
+    "web": {
+      "status": "done",
+      "detail": "できている（一部・未確認）",
+      "impl": "crates/fandhe-web-dom/src/dom_tree.rs, crates/fandhe-web-dom/src/mount.rs（Issue #993）"
+    }
+  },
+  "note": "`catalog.rs` の登録 22 種のうち `text`/`text_field`/`button`/`list` の 4 種は `Screen` の便利メソッド経由で既存の `Node::Text`/`TextField`/`Button`/`List`（コアノード、群 A 1 行目）を使うのみで `Node::Widget` を経由しない（本行の対象外）。残り 18 種が `Widget<S>` トレイト経由で `Node::Widget` になる真の Widget 拡張であり、egui 系（iOS/Android/macOS/Windows/Linux）で実描画済みなのは `Checkbox`/`ToggleSwitch`/`Slider`/`RadioButton`（#806）の 4 種のみ（`fandhe-egui-proxy/src/lib.rs` `Node::Widget` 分岐）。`catalog.rs` の `dialog` エントリは `Dialog<S>`（`dialog.rs`）を使うが、実描画済みなのは別型の `DialogWidget<S>`（`dialog_widget.rs`、#739）であり catalog 経由では未配線のため、`dialog` を含む残り 14/18 種は AX ノード公開のみ。Web（`fandhe-web-dom/src/dom_tree.rs` の `convert_input_widget`、Issue #993）は上記 4 種（`Checkbox`/`ToggleSwitch`/`Slider`/`RadioButton`）をネイティブ `<input>`（`checkbox`/`role=\"switch\"`/`range`/`radio`）へマッピングし、`change` イベント経由で `fandhe_core::Widget::apply_value` を呼んで状態へ反映する（`mount.rs` の `attach_change`）。残り 14/18 種（`dialog` 含む）はラベルがあれば `role=\"group\"` + `aria-label` を出す空 `div` プレースホルダのまま（ダミー部品へは置き換えない）。ただし `text`/`text_field`/`button`/`list` の 4 種は `Node::Widget` を経由しないため対象外で、Web でも `p`/`label`+`input`/`button`/`ul` へ正しくマッピングされる（同ファイル参照）。`Widget::children`（`DialogWidget` が開状態のとき返す確認文言・ボタン）はプレースホルダ `div` の子として再帰変換され実際に出力される（ウィジェット本体の属性・イベントフックは未配線のまま）。`native`（`cargo test -p fandhe-web-dom`）と wasm32 クロスビルド・clippy は確認済み。実ブラウザでの操作確認・a11y ツリー確認は wasm-bindgen CLI（0.2.128）と rustc が生成する wasm（0.2.126）のスキーマ版ずれで本セッションの環境では実行できず未確認（#998 と同じ既知の環境問題）。`一部・未確認` はこの残り 14/18 種のプレースホルダ化と、実ブラウザ確認が未了であることを指す"
+}

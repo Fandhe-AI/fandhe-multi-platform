@@ -1,0 +1,47 @@
+{
+  "id": "now-playing-controls",
+  "name": "ロック画面・OS のメディア操作",
+  "group": "未着手の OS 機能",
+  "order": 76,
+  "priority": 62,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "MediaPlayer（`MPNowPlayingInfoCenter` / `MPRemoteCommandCenter`）",
+      "perm": "背景再生なら `UIBackgroundModes` に audio（要確認）",
+      "url": "https://developer.apple.com/documentation/mediaplayer/mpnowplayinginfocenter",
+      "note": "未実装。再生中でなければ OS が情報を表示しないため、media-playback と同時に作る前提。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Media3 `MediaSessionService`",
+      "perm": "`FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_MEDIA_PLAYBACK`",
+      "url": "https://developer.android.com/media/media3/session/background-playback",
+      "note": "未実装。通知とロック画面のコントロールは MediaSession から OS が生成する。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "MediaPlayer（`MPNowPlayingInfoCenter`、macOS 10.12.2+）",
+      "perm": "要確認（macOS 側の権限は未調査）",
+      "url": "https://developer.apple.com/documentation/mediaplayer/mpnowplayinginfocenter",
+      "note": "未実装。iOS と同じ API が macOS にもあることは Apple 公式のプラットフォーム表記で確認。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`SystemMediaTransportControls`（SMTC）",
+      "perm": "要確認（unpackaged の Win32 から使う場合は interop 経由になる見込みで、未確認）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.systemmediatransportcontrols",
+      "note": "未実装。package identity の要否は文書で未確認。"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Media Session API（`navigator.mediaSession`）",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API",
+      "safari": "部分対応と認識（MDN の互換表は未確認）。Chromium も同様に要確認",
+      "note": "未実装。再生中のメディア要素があることが前提。"
+    }
+  },
+  "note": "iOS / macOS は MPNowPlayingInfoCenter、Android は MediaSession、Windows は SMTC、Web は Media Session。media-playback（既存 id）は再生そのものを扱い、本機能は OS 側の操作画面（ロック画面・通知・ハードウェアキー）との連携で、再生が前提になる点が違う。今回の範囲: 再生中の 1 曲のタイトルを OS の再生画面へ出し、OS からの一時停止ボタンを受けて画面に反映する（プレイリスト・アートワークは扱わない）。"
+}

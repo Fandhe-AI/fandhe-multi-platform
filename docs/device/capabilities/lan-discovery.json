@@ -1,0 +1,47 @@
+{
+  "id": "lan-discovery",
+  "name": "LAN のサービス探索（mDNS / Bonjour）",
+  "group": "未着手の OS 機能",
+  "order": 85,
+  "priority": 74,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "Network `NWBrowser`（Bonjour）",
+      "perm": "`NSLocalNetworkUsageDescription`、`NSBonjourServices`（要確認）",
+      "url": "https://developer.apple.com/documentation/network/nwbrowser",
+      "note": "未実装。ローカルネットワーク許可のダイアログが出る。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`NsdManager`",
+      "perm": "`NEARBY_WIFI_DEVICES`（ページ記載。追加権限は対象 API 次第で要確認）",
+      "url": "https://developer.android.com/develop/connectivity/wifi/use-nsd",
+      "note": "未実装。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Network `NWBrowser`",
+      "perm": "要確認（サンドボックスのネットワーク entitlement）",
+      "url": "https://developer.apple.com/documentation/network/nwbrowser",
+      "note": "未実装。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 `DnsServiceBrowse`（Windows 10+）",
+      "perm": "なし（Win32 desktop。unpackaged での動作は未検証）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/windns/nf-windns-dnsservicebrowse",
+      "note": "未実装。WinRT の `Dnssd` は文書に「非対応・将来変更あり」とあり使わない。"
+    },
+    "web": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "safari": "同左（API なし）",
+      "note": "ブラウザから mDNS / DNS-SD を引く API は無い。"
+    }
+  },
+  "note": "iOS / macOS は NWBrowser、Android は NsdManager、Windows は DnsServiceBrowse。Web は公開 API が無く no。http-get（既存 id）は URL を知っている相手への取得で、本機能は相手を見つける側。local-peer-connect（近くの端末との直接通信）とは、探索のみを扱う点で別。今回の範囲: `_http._tcp` のサービスを探索し、見つかった名前とアドレスを一覧に出す（接続・公開は扱わない）。"
+}

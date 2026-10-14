@@ -1,0 +1,46 @@
+{
+  "id": "wallet-pass",
+  "name": "ウォレットへのパス追加",
+  "group": "未着手の OS 機能",
+  "order": 99,
+  "priority": 109,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "PassKit `PKAddPassesViewController`（`.pkpass` を渡して追加画面を出す）",
+      "perm": "`.pkpass` の署名用に Pass Type ID 証明書（要確認）",
+      "url": "https://developer.apple.com/documentation/passkit/pkaddpassesviewcontroller",
+      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 パスの署名はサーバー側で行う"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Google Wallet API（`play-services-pay`。GMS 依存）",
+      "perm": "記載なし（要確認）",
+      "url": "https://developers.google.com/wallet/generic/android",
+      "note": "未実装。GMS（Google Play 開発者サービス）依存。発行者アカウントと JWT 署名がサーバー側に要る"
+    },
+    "macos": {
+      "status": "no",
+      "api": "なし（`PKAddPassesViewController` は iOS・iPadOS・Mac Catalyst・visionOS のみで macOS 版が無い）",
+      "perm": "",
+      "url": "https://developer.apple.com/documentation/passkit/pkaddpassesviewcontroller",
+      "note": "macOS ネイティブでパスを追加する公開 API は無い。Mac Catalyst 経由は本フレームワークの対象外"
+    },
+    "windows": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "Windows にウォレットへパスを追加する公開 API は報告で確認できていない"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "ブラウザの JS API はなく、各ウォレットの『追加』リンクを開くだけ（リンクは通常の遷移で、端末機能の橋渡しではない）"
+    }
+  },
+  "note": "payment-request（決済）とは別: 本機能はチケット・会員証などのパスを保存する。今回の範囲: 固定の署名済みパスを渡して追加画面を出し、追加成功・キャンセルを画面に出すだけ。"
+}

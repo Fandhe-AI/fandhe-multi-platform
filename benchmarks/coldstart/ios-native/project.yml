@@ -1,0 +1,38 @@
+# TASK-5.1（REQ-5 / M4、Issue #236）: iOS コールドスタート計測用ネイティブ SDK 比較アプリ
+# （SwiftUI）の XcodeGen 入力 SSOT。
+#
+# 位置づけ: `platforms/apple/project.yml`（TASK-3.4 系列、FandheWatchApp/FandheVisionApp
+# 用）とは独立した計測専用プロジェクトである。`benchmarks/` 配下に隔離することで
+# ストア提出パイプライン（`platforms/`）を汚さない方針（親issue 計画 §2-2 参照）。
+# `FandheSwiftUIBridge`（Rust コアとの FFI 橋渡し）には依存しない、純粋なネイティブ
+# SwiftUI 実装（比較対象として Rust コアの介在自体を排除する必要があるため）。
+#
+# `.xcodeproj` 本体はコミットしない（`platforms/apple/project.yml` と同じ方針。
+# `scripts/ios/measure-cold-start.sh` が macOS 上で都度 `xcodegen generate` する）。
+#
+# 実行環境について: xcodegen による生成・xcodebuild によるビルドは macOS 限定。
+# 本開発環境（Linux）では生成・ビルドいずれも実行できないため、本ファイルの構造
+# （YAML としての妥当性・ソースパスの実在）までを Linux 側の確認範囲とする。
+name: FandheColdStartNative
+
+options:
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+
+targets:
+  FandheColdStartNative:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Sources
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.coldstart.native
+        PRODUCT_NAME: FandheColdStartNative
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # 実機計測が目的のため既定の ARCHS（arm64 のみ、iOS 実機は arm64 一択）のままでよい
+        # （FandheWatchApp/FandheVisionApp が simulator 向け x86_64 リンク回避のために
+        # 明示固定しているのとは事情が異なり、ここでは Xcode 既定に委ねる）。

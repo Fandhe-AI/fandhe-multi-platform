@@ -1,0 +1,47 @@
+{
+  "id": "eye-dropper",
+  "name": "画面のスポイト（色の取得）",
+  "group": "未着手の OS 機能",
+  "order": 128,
+  "priority": 113,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "no",
+      "api": "画面全体から色を拾う公開 API は無い",
+      "perm": "",
+      "url": "",
+      "note": "要確認。報告では iOS・Android・Windows とも標準 API なし。URL 未確認"
+    },
+    "android": {
+      "status": "no",
+      "api": "画面全体から色を拾う公開 API は無い",
+      "perm": "",
+      "url": "",
+      "note": "要確認。URL 未確認"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AppKit `NSColorSampler`",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/appkit/nscolorsampler",
+      "note": "未実装。画面収録の許可は不要の見込み（要確認）。ユーザーが画面上をクリックして色を選ぶ"
+    },
+    "windows": {
+      "status": "no",
+      "api": "OS 標準のスポイト API は無い",
+      "perm": "",
+      "url": "",
+      "note": "要確認。画面キャプチャ（`Windows.Graphics.Capture`）で自前実装は可能だが、標準機能ではなく範囲外。URL 未確認"
+    },
+    "web": {
+      "status": "possible",
+      "api": "`EyeDropper` API（`new EyeDropper().open()`）",
+      "perm": "なし（ユーザー操作内で呼ぶ）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/EyeDropper_API",
+      "safari": "Safari 非対応（Firefox も非対応と認識、要確認）",
+      "note": "MDN は Limited availability。Chromium 限定"
+    }
+  },
+  "note": "eye-dropper は macOS と Web のみ。ほかは no のため、共通 trait は「この OS では使えない」を返す前提になる。今回の範囲: ボタンを押すとスポイトが起動し、選んだ色を 16 進で画面に出す（macOS と Web）。"
+}

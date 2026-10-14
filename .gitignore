@@ -1,0 +1,76 @@
+/target
+# Cargo.lock は再現可能なビルドのため追跡する（Issue #637）。
+**/*.rs.bk
+
+# TASK-1.2（REQ-1 / M2）: wasm-bindgen の生成物・フォント配置先。
+# scripts/web/build-wasm-proxy.sh が組み立てるたびに再生成される生成物であり、
+# フォントバイナリ（TASK-10.1 以降は crates/fandhe-fonts 同梱資産からのコピー）を
+# 含むためコミットしない。同梱資産自体は crates/fandhe-fonts/assets/ に別途コミット済み。
+crates/fandhe-egui-proxy/web/dist/
+
+# TASK-4.4-S4（REQ-4 / Issue #82）: scripts/web/build-wasm-dom.sh が組み立てる
+# fandhe-web-dom の wasm-bindgen 生成物。ソースからの再生成のみを正とし、
+# 生成物自体はコミットしない（上記 fandhe-egui-proxy/web/dist/ と同方針）。
+crates/fandhe-web-dom/web/dist/
+
+# TASK-3.4-S2（REQ-3 / M3）: scripts/apple/build-bridge-xcframework.sh が生成する
+# XCFramework（staticlib + ヘッダの複製を含む）。ソースからの再生成のみを正とし、
+# 生成物自体はコミットしない（Package.swift が存在確認のうえ条件付きに取り込む）。
+platforms/apple/FandheSwiftUIBridge/Artifacts/
+
+# 署名関連の秘密ファイル（TASK-18.2、docs/environment/apple-developer-setup.md 参照）
+# Apple Developer 証明書・プロビジョニングプロファイル・App Store Connect API キー等は
+# リポジトリへコミットせず、ローカルのキーチェーンまたは CI シークレットストアでのみ管理する。
+*.p12
+*.cer
+*.mobileprovision
+*.provisionprofile
+*.certSigningRequest
+AuthKey_*.p8
+# TASK-11.2-S3（REQ-11 / Issue #227）: Android 開発署名鍵（keystore）本体。
+# 生成手順・取り扱いは docs/operations/android-aab-signing.md 参照。
+*.jks
+*.keystore
+.env
+.env.*
+!.env.example
+
+# 公開リポジトリ化に伴う秘密情報の混入防止（security.md）。秘密鍵・証明書・
+# 端末ごとの署名・サービス設定。*.p12・*.jks・*.keystore は上の行で除外済み。
+*.pem
+*.key
+*.p8
+*.pfx
+google-services.json
+GoogleService-Info.plist
+local.properties
+key.properties
+
+# 公開運用の作業場（ローカルのみ）。AI の作業ツリー・検証記録・計測結果の置き場（public-repo.md）
+/_issue-trees/
+/.claude/issue-trees/
+
+# TASK-3.4-S1（REQ-3 / Issue #71）: `.xcodeproj` は platforms/apple/project.yml（XcodeGen
+# SSOT）から生成する生成物のため追跡しない（マージコンフリクト・署名情報混入の防止）。
+# xcuserdata/ は Xcode が生成物内に書き込むユーザー固有の状態（Team ID・スキーム選択等を
+# 含みうる）で、`.xcodeproj` を仮に手元で追跡していた場合でも常に除外する。
+# local.xcconfig は DEVELOPMENT_TEAM 等の署名情報をローカル注入するための任意ファイル
+# （project.yml からは include しない。存在は各自のローカル環境に閉じる）。
+platforms/apple/*.xcodeproj/
+xcuserdata/
+platforms/apple/local.xcconfig
+
+# TASK-3.3-S5（REQ-3 / Issue #69）: macOS 実ビルド（verify-simulator-launch.sh / Xcode）が
+# SwiftPM パッケージ解決時に各パッケージ直下へ生成する .build/（ビルドキャッシュ）。
+# 生成物のためコミットしない。
+platforms/apple/**/.build/
+
+# TASK-17.2（REQ-17 / Issue #280）: `scripts/android/verify-tv-focus.sh` が出力する
+# 実機検証の一時証跡（スクリーンショット・uiautomator dump・logcat 抜粋）。
+# 生成物自体はコミットしない（ローカル作業用スクラッチ領域、CLAUDE.md の `_/` 慣行）。
+/_/
+
+# 端末機能 対応表の生成物（scripts/device/build-capabilities.mjs）。SSOT は docs/device/capabilities/*.json。
+# 各機能の PR が生成物まで書き換えると並列の PR どうしが必ず競合するため、コミットしない。
+docs/device/capabilities.md
+docs/device/capabilities.html

@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  iOS シミュレータ版アプリバンドル用 Info.plist（REQ-11 / TASK-11.1-S2、Issue #221、
+  親: TASK-11.1 / #219 系列の sub-issue）。
+
+  docs/spec/03-poc/store-submission/pipeline/build-and-sign.sh（PoC-3）で実証済みの
+  ios-app/Info.plist の必須キー（CFBundleExecutable / CFBundleIdentifier /
+  CFBundleName / CFBundlePackageType=APPL / CFBundleVersion /
+  CFBundleShortVersionString / UIDeviceFamily / MinimumOSVersion）を土台とし、
+  `platforms/apple/FandheWatchApp/Resources/Info.plist`（TASK-3.3-S1）の先例に倣って
+  CFBundleInfoDictionaryVersion=6.0 を追加した。bundle id は同ファイルの
+  `com.fandhe.watchapp` 命名慣例に整合させ `com.fandhe.iosapp` とする。
+
+  本ファイルは `scripts/ios/build-simulator-app.sh`（TASK-11.1-S2）が
+  `target/ios-sim/FandheIosApp.app/Info.plist` へそのままコピーして使う。
+  Xcode の `GENERATE_INFOPLIST_FILE` 機構を経由しないため、CFBundleExecutable は
+  `$(EXECUTABLE_NAME)` マクロではなく実行体名 `FandheIosApp` を直接記述する
+  （ビルドスクリプトがバイナリをこの名前で配置する契約、build-simulator-app.sh 参照）。
+
+  デバッグフラグ・ATS 例外は追加しない（security.md「A05 セキュリティ設定ミス」対策）。
+  署名は `scripts/ios/` の ad-hoc 署名（TASK-11.1-S3 / #222）が担う。
+
+  CFBundleURLTypes（Issue #1217）: カスタム URL scheme `fandhe://` を受けるために宣言する
+  （受信側は `crates/fandhe-egui-proxy/ios/fandhe_ios_url_scheme.m`）。起動側
+  （`UIApplication openURL:`）は範囲外のため `LSApplicationQueriesSchemes` は足さない
+  （security.md A05）。
+
+  NSCameraUsageDescription（Phase 8 / Issue #751）: 型サンプル「カメラ撮影」画面
+  （`FANDHE_PROXY_APP=camera_capture`）が `UIImagePickerController`
+  （`crates/fandhe-egui-proxy/ios/fandhe_ios_camera.m`）でカメラを起動するために
+  必須（未設定だと初回起動時に即クラッシュする）。Phase 8 が spec 要件化されず
+  切り離す場合は本キーも削除する（README.md「Phase 8（端末機能）の切り離し手順」）。
+
+  NSLocationWhenInUseUsageDescription（Issue #889）: 型サンプル「位置情報」画面
+  （`FANDHE_PROXY_APP=location_show`）が CoreLocation（`CLLocationManager`、
+  `crates/fandhe-egui-proxy/apple/fandhe_apple_location.m`）で使用中のみ測位する
+  ために必須。常時（Always）権限は要求しないため
+  `NSLocationAlwaysAndWhenInUseUsageDescription` は追加しない（security.md A05）。
+
+  NSFaceIDUsageDescription（Issue #906）: 型サンプル「生体認証」画面
+  （`FANDHE_PROXY_APP=biometric_check`）が LAContext.evaluatePolicy
+  （`crates/fandhe-egui-proxy/src/device/biometric_auth.rs` は macOS/iOS 共通で
+  実 LAContext 経路を有効化している）で Face ID を起動するために必須。未設定だと
+  Face ID 搭載端末で認証操作時にクラッシュしうる（PR #910 codex-review 指摘）。
+
+  NSMicrophoneUsageDescription（Issue #956）: 型サンプル「マイク録音」画面
+  （`FANDHE_PROXY_APP=mic_record`）が `AVAudioRecorder`
+  （`crates/fandhe-egui-proxy/apple/fandhe_apple_mic_record.m` は iOS/macOS 共用）を
+  起動するために必須。未設定だと権限要求時にクラッシュする。型サンプル「音声認識」
+  画面（`FANDHE_PROXY_APP=speech_recognize`）も同じキーを併用する（下記
+  NSSpeechRecognitionUsageDescription 参照）。
+
+  NSSpeechRecognitionUsageDescription（Issue #1025）: 型サンプル「音声認識」画面
+  （`FANDHE_PROXY_APP=speech_recognize`）が `SFSpeechRecognizer.
+  requestAuthorization:`（`crates/fandhe-egui-proxy/apple/
+  fandhe_apple_speech_recognition.m` は iOS/macOS 共用）で音声認識の許可を
+  要求するために必須。未設定だと権限要求時にクラッシュする。
+
+  NSPhotoLibraryAddUsageDescription（Issue #1255）: 型サンプル「写真の保存」画面
+  （`FANDHE_PROXY_APP=photo_save`）が `crates/fandhe-egui-proxy/apple/
+  fandhe_apple_photo_library.m`（iOS/macOS 共用）で add-only 権限を要求するために必須。
+  未設定だと権限要求時にクラッシュする。読み取り用の `NSPhotoLibraryUsageDescription` は
+  追加しない（最小権限、security.md A05）。
+
+  NSBluetoothAlwaysUsageDescription（Issue #1061）: 型サンプル「BLE スキャン」画面
+  （`FANDHE_PROXY_APP=ble_scan`）が CoreBluetooth（`CBCentralManager`、
+  `crates/fandhe-egui-proxy/apple/fandhe_apple_bluetooth_le.m` は iOS/macOS 共用）で
+  周辺機器をスキャンするために必須。未設定だと初期化時にクラッシュする。前景のみで
+  動かすため `UIBackgroundModes` に `bluetooth-central` は追加しない（security.md A05）。
+
+  NSMotionUsageDescription（Issue #1248）: 型サンプル「歩数」画面
+  （`FANDHE_PROXY_APP=pedometer_read`）が `CMPedometer`
+  （`crates/fandhe-egui-proxy/ios/fandhe_ios_pedometer.m`）で歩数を読むために必須。
+  未設定だと権限要求時にクラッシュする。HealthKit は使わない（security.md A05）。
+
+  BGTaskSchedulerPermittedIdentifiers / UIBackgroundModes（Issue #1045）: 型サンプル
+  「バックグラウンド処理」画面（`FANDHE_PROXY_APP=background_task`）が
+  `BGTaskScheduler`（`crates/fandhe-egui-proxy/ios/fandhe_ios_background_task.m`）で
+  `BGAppRefreshTaskRequest` を予約するために必須。識別子
+  `com.fandhe.iosapp.background-task` は `.m` 側の定数
+  `kFandheBackgroundTaskIdentifier` と一致させる（相互参照コメントあり）。
+  `UIBackgroundModes` は `fetch` のみ（不要な `processing`/`audio` 等は追加しない、
+  security.md A05）。
+
+  UIDeviceFamily は PoC-3（[1] = iPhone のみ）から [1, 2] へ拡張する。CLAUDE.md の
+  対象プラットフォーム一覧に iPad が含まれ（REQ-1 対象範囲）、iPad Simulator でも
+  同一バンドルを検証できるようにするための意図的な差分（PoC-3 は iPhone 単体の
+  最小実証に閉じていたための限定であり、本実装では対象範囲を spec 準拠に戻す）。
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Fandhe</string>
+	<key>CFBundleExecutable</key>
+	<string>FandheIosApp</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.fandhe.iosapp</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>FandheIosApp</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.fandhe.iosapp.url-scheme</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fandhe</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+		<integer>2</integer>
+	</array>
+	<!-- UILaunchScreen（空 dict）: Storyboard 無しでも Launch Screen を認識させ、
+	     旧画面サイズ互換モードを回避する（Issue #800）。safe area 外（ステータスバー・
+	     ホームバー背後）に見える黒帯自体は winit 0.30.13 が inner_size を safe area
+	     基準で返す一方、wgpu の CAMetalLayer（drawable）は全画面分あり egui-wgpu が
+	     eframe 既定の clear_color（ほぼ黒）で先にクリアすることが原因のため、
+	     本キーだけでは消えない。`crates/fandhe-egui-proxy/src/ios_text_input.rs` の
+	     `TextInputApp::clear_color` を egui のパネル背景色へ差し替えて解消する。 -->
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>MinimumOSVersion</key>
+	<string>17.0</string>
+	<key>NSCameraUsageDescription</key>
+	<string>型サンプル「カメラ撮影」の動作確認に使います</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>型サンプル「位置情報」の動作確認に使います</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>型サンプル「生体認証」の動作確認に使います</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>型サンプル「マイク録音」「音声認識」の動作確認に使います</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>型サンプル「音声認識」の動作確認に使います</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>型サンプル「BLE スキャン」の動作確認に使います</string>
+	<key>NSMotionUsageDescription</key>
+	<string>型サンプル「歩数」の動作確認に使います</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>型サンプル「写真の保存」の動作確認に使います</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.fandhe.iosapp.background-task</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
+</dict>
+</plist>

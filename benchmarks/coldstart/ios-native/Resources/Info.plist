@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  TASK-5.1（REQ-5 / M4、Issue #236）: iOS コールドスタート計測用ネイティブ比較アプリの
+  Info.plist。`platforms/apple/FandheIosApp/Resources/Info.plist` の必須キー構成を
+  踏襲する（MinimumOSVersion は fandhe 側と同じ 17.0 に揃え、計測条件を対称にする）。
+
+  本アプリは計測専用フィクスチャであり、配布経路（platforms/）には含まれない
+  （project.yml 冒頭コメント参照）。デバッグフラグ・ATS 例外・不要な
+  UsageDescription は追加しない（security.md「A05 セキュリティ設定ミス」対策）。
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>ColdStart Native</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.fandhe.coldstart.native</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>FandheColdStartNative</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+		<integer>2</integer>
+	</array>
+	<key>MinimumOSVersion</key>
+	<string>17.0</string>
+	<key>UILaunchScreen</key>
+	<dict/>
+</dict>
+</plist>

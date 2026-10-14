@@ -1,0 +1,39 @@
+{
+  "id": "nfc",
+  "name": "NFC タグ読み取り",
+  "group": "未着手の OS 機能",
+  "order": 21,
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "CoreNFC（`NFCTagReaderSession`）",
+      "perm": "`NFCReaderUsageDescription` + Near Field Communication Tag Reading capability",
+      "url": "https://developer.apple.com/documentation/corenfc",
+      "note": "未実装",
+      "sourceName": [
+        "NFC タグ読み取り"
+      ]
+    },
+    "android": {
+      "status": "possible",
+      "api": "`NfcAdapter`",
+      "perm": "`<uses-permission android:name=\"android.permission.NFC\" />`",
+      "url": "https://developer.android.com/develop/connectivity/nfc/nfc",
+      "note": "未実装。`uses-feature android:name=\"android.hardware.nfc\"` の要否は端末対応方針次第（`required=\"false\"` 推奨）",
+      "sourceName": [
+        "NFC"
+      ]
+    },
+    "macos": {
+      "status": "n-a"
+    },
+    "windows": {
+      "status": "possible"
+    },
+    "web": {
+      "status": "possible",
+      "detail": "できそう（対応ブラウザ限定）"
+    }
+  },
+  "note": "`CoreNFC` / Android NFC API / Windows `Proximity`。macOS は NFC リーダー用の公開 API が無い（対象外）。Web は Web NFC が Chrome for Android 限定でデスクトップブラウザには無いが、BLE・音声認識と同様「対応ブラウザ限定」で API 自体は存在するため「できない（API 非公開）」ではなく「できそう」に分類する"
+}

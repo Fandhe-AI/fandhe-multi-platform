@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  native-sample アプリの Manifest（TASK-5.2 / REQ-5、Issue #237）。検証専用（README 参照）。
+
+  A05（セキュリティ設定ミス）対策: android:debuggable は明記しない（release ビルドタイプ側で
+  自動制御される）。permission・android:usesCleartextTraffic は追加しない。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="false"
+        android:label="fandhe-metrics-native-sample">
+
+        <activity
+            android:name=".NativeSampleActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

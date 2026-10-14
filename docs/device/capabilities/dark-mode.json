@@ -1,0 +1,71 @@
+{
+  "id": "dark-mode",
+  "name": "ダークモード追従（意味色の解決）",
+  "group": "既存機能の棚卸し",
+  "order": 11,
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "detail": "できている（一部・未確認）",
+      "api": "UIKit（`UITraitCollection.userInterfaceStyle`。本リポジトリは egui の `dark_mode` 経由）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/uikit/uitraitcollection",
+      "note": "実装済み（部分）。`StyledText` の役割色のみトークンのダーク差分へ追従する",
+      "sourceName": [
+        "ダークモード追従",
+        "ダークモード追従（意味色の解決）"
+      ],
+      "implStatus": "実装済み（部分）。`Node::StyledText` の役割色のみ。UI 全体のトークン適用は未配線",
+      "impl": "`crates/fandhe-egui-proxy/src/text_role.rs`（`ui.visuals().dark_mode` で `ThemeVariant` を切り替え）、`crates/fandhe-core/src/token/platform_theme.rs`（`platform_dark_overrides`）、Issue #813（親 #811）"
+    },
+    "android": {
+      "status": "done",
+      "detail": "できている（一部・未確認）",
+      "api": "`Configuration.uiMode`（`UI_MODE_NIGHT_YES`）/ `AppCompatDelegate`",
+      "perm": "なし",
+      "url": "https://developer.android.com/develop/ui/views/theming/darktheme",
+      "note": "実装済み（部分）。`crates/fandhe-egui-proxy/src/text_role.rs` が egui の `dark_mode` を見て `ThemeVariant` を切り替え、`platform_dark_overrides(ThemePlatform::Android)` のダーク差分を適用する（#813、親 #811）。対象は `Node::StyledText` の役割色のみで UI 全体のトークン適用は未配線",
+      "sourceName": [
+        "ダークモード追従",
+        "ダークモード追従（意味色の解決）"
+      ],
+      "implStatus": "実装済み（部分。`StyledText` の役割色のみ）",
+      "impl": "#813（親 #811）"
+    },
+    "macos": {
+      "status": "done",
+      "detail": "できている（一部・未確認）",
+      "api": "AppKit（`NSAppearance` / `NSApp.effectiveAppearance`。本リポジトリは egui の `dark_mode` 経由）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/appkit/nsappearance",
+      "note": "実装済み（部分）。`crates/fandhe-egui-proxy/src/text_role.rs` が `StyledText` の役割色のみトークンのダーク差分へ追従（#813）",
+      "sourceName": [
+        "ダークモード追従"
+      ]
+    },
+    "windows": {
+      "status": "done",
+      "detail": "できている（一部・未確認）",
+      "api": "WinRT（`UISettings.GetColorValue`）/ レジストリ `AppsUseLightTheme`",
+      "perm": "なし",
+      "url": "https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/apply-windows-themes",
+      "note": "実装済み（部分）。macOS と同じく `text_role.rs` 経由で `StyledText` の役割色のみ追従（#813）",
+      "sourceName": [
+        "ダークモード追従"
+      ]
+    },
+    "web": {
+      "status": "done",
+      "detail": "できている（一部・未確認。`RenderMode::Dom` は未配線）",
+      "api": "CSS `prefers-color-scheme` / `matchMedia`",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme",
+      "safari": "対応",
+      "note": "`RenderMode::Canvas`（既定、egui 描画）は `text_role.rs` 経由で `StyledText` の役割色が egui の `dark_mode` に追従する。`fandhe-web-dom` の DOM 出力（`RenderMode::Dom`）はテーマ配線を持たず未対応",
+      "sourceName": [
+        "ダークモード追従"
+      ]
+    }
+  },
+  "note": "`crates/fandhe-egui-proxy/src/text_role.rs` が egui の `ui.visuals().dark_mode` を見て `ThemeVariant` を切り替え、`platform_dark_overrides`（`fandhe-core/src/token/platform_theme.rs`）のダーク差分を適用する（#813、親 #811）。対象は `Node::StyledText` の役割色のみで、UI 全体のトークン適用は未配線。Web は Canvas 描画（既定）ならこの経路に乗るが、`fandhe-web-dom` の DOM 出力はテーマ配線を持たない"
+}

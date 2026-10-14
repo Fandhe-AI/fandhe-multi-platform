@@ -1,0 +1,47 @@
+{
+  "id": "bluetooth-classic",
+  "name": "Bluetooth Classic",
+  "group": "未着手の OS 機能",
+  "order": 89,
+  "priority": 95,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "no",
+      "api": "なし（任意の Bluetooth Classic 機器との SPP 接続に使える公開 API が無い）",
+      "perm": "なし",
+      "url": "",
+      "note": "ExternalAccessory は MFi 認証機器のみ（一般知識。URL 未確認）。要確認。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`BluetoothSocket`（RFCOMM）",
+      "perm": "`BLUETOOTH_CONNECT`（API 31+、既存列挙の記載）",
+      "url": "https://developer.android.com/develop/connectivity/bluetooth/transfer-data",
+      "note": "未実装。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "IOBluetooth（macOS 専用）",
+      "perm": "要確認（サンドボックスの Bluetooth entitlement）",
+      "url": "https://developer.apple.com/documentation/iobluetooth",
+      "note": "未実装。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`Windows.Devices.Bluetooth.Rfcomm`",
+      "perm": "要確認（マニフェストの capability 宣言が必要か、unpackaged の可否は未検証）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.rfcomm",
+      "note": "未実装。"
+    },
+    "web": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "safari": "同左（API なし）",
+      "note": "Web Bluetooth は BLE のみで Classic に届かない。"
+    }
+  },
+  "note": "Android / macOS / Windows は RFCOMM に届く。iOS は MFi 機器に限られ、Web は BLE のみのため no。bluetooth-le（既存 id）は BLE の周辺機器で、本機能は Classic（SPP など）の別規格。今回の範囲: ペアリング済みの機器 1 台へ RFCOMM で接続し、受信したバイト数を画面に出す（探索・ペアリング操作は扱わない）。"
+}

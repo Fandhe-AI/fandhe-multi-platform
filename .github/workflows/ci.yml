@@ -1,0 +1,451 @@
+# fandhe-multi-platform の品質ゲート CI。
+#
+# TASK-1.1（docs/spec/05-tasks.md）: 宣言的 UI DSL 最小実装（cargo workspace の起点）を
+# 見据え、Cargo.toml 追加後にそのまま使える cargo fmt --check / cargo clippy / cargo test
+# のゲートを先行整備する。Fandhe-AI/fandhe-frontend・Fandhe-AI/fandhe-backend の
+# ci.yml（permissions 最小・concurrency 直列化）と同一方針に揃える。全ジョブは GitHub ホストの
+# ubuntu-latest で動く（Issue #1453）。
+#
+# 現状（2026-07 時点）は crates/・Cargo.toml が未追加のため、各ジョブは Checkout 直後の
+# `detect` ステップで Cargo.toml の有無を判定し、無ければ以降のステップを
+# `if: steps.detect.outputs.has_cargo == 'true'` でスキップする（ジョブ自体は success の
+# まま終了し、CI を落とさない）。ジョブ単位の `if:` ではなく各ステップの `if:` で
+# 判定しているのは、`jobs.<id>.if` は Checkout 前（ワークスペース展開前）に評価されるため
+# `hashFiles('Cargo.toml')` が常に空文字となり判定できないため。
+# ジョブ追加・変更時は .claude/rules/ci.md に従う（必須チェック名・集約ジョブ・paths の扱い）。
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # PR は新しい push で古い実行を取り消す。main への push は取り消さない
+  # （マージ直後の main の検証が後続マージで欠落しないようにする）。
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # --------------------------------------------------
+  # 変更検知（重いジョブの要否判定）。
+  # ruleset の必須チェックは個別のジョブ名（cargo test・android クロスビルド等）を参照するため、
+  # workflow 単位の `paths` フィルタは使わない（pending のままマージ不能になる）。
+  # 代わりに本ジョブで「変更ファイルがすべて下記の許可リスト（ビルド・テストに影響しない
+  # ドキュメント・エージェント設定類）に収まるか」を判定し、収まる場合のみ test / android-* を
+  # ジョブ単位で skipped にする（ジョブ単位の skipped は必須チェックを満たす）。
+  # 許可リスト外のパスが 1 つでもあれば heavy=true（安全側）。push（main）では常に heavy=true。
+  # docs/ai/SCHEMA.md は crates が include_str! で取り込むため許可リストに含めない。
+  # --------------------------------------------------
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      heavy: ${{ steps.detect.outputs.heavy }}
+    steps:
+      - name: Checkout
+        # PR は merge コミット（親 2 つ）がチェックアウトされるため、depth 2 で base との差分が取れる。
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: 重いジョブの要否を判定
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          heavy=true
+          if [ "${EVENT_NAME}" = "pull_request" ] && git rev-parse --verify -q 'HEAD^2' >/dev/null; then
+            # --no-renames: リネームを「削除元 + 追加先」の 2 パスとして出す。既定のリネーム検出では
+            # 移動先しか出ず、ビルド対象を docs/ 配下へ移す PR を docs のみの変更と誤判定する。
+            files="$(git diff --no-renames --name-only 'HEAD^1' 'HEAD')"
+            if [ -n "${files}" ]; then
+              others="$(printf '%s\n' "${files}" | grep -v -E '^(\.claude/|\.agents/|docs/(architecture|decisions|environment|operations|ime|tokens|verification)/|skills-lock\.json$|README\.md$|CLAUDE\.md$|AGENTS\.md$|\.github/CODEOWNERS$)' || true)"
+              if [ -z "${others}" ]; then
+                heavy=false
+              fi
+            fi
+          fi
+          echo "heavy=${heavy}" >> "${GITHUB_OUTPUT}"
+          echo "[ci] heavy=${heavy}"
+
+  # --------------------------------------------------
+  # cargo fmt --check（整形差分の検出）
+  # --------------------------------------------------
+  fmt:
+    name: cargo fmt --check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        # actions/checkout v6.0.3（fandhe-frontend/fandhe-backend の ci.yml と同一 SHA に固定）。
+        # docs/spec サブモジュールは fmt/clippy/test に不要なため取得しない（既定で submodules: false）。
+        # persist-credentials: false（security-auditor 指摘、medium）: checkout 後どのステップも
+        # GITHUB_TOKEN を使わないため、既定の .git/config への認証情報永続化を無効化する。
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Cargo.toml の有無を判定
+        id: detect
+        run: |
+          set -euo pipefail
+          if [ -f "Cargo.toml" ]; then
+            echo "has_cargo=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "has_cargo=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Cargo.toml が未追加のため cargo fmt --check をスキップしました（TASK-1.1 完了後に有効化されます）"
+          fi
+
+      # ルート直下の rust-toolchain.toml（rustc 1.88.0 固定）に同期し、
+      # 1.88.0 + rustfmt/clippy component を自動導入する composite action
+      # （GitHub ホスト runner は rustup 導入済み）。
+      - name: Ensure rust toolchain
+        if: steps.detect.outputs.has_cargo == 'true'
+        uses: ./.github/actions/ensure-rust-toolchain
+
+      # 未導入の場合のみ追加する（冪等）。
+      # minimal profile の rustup では rustfmt component が既定で入らないため、
+      # clippy ジョブの Ensure clippy component と同じ流儀で保証する。
+      - name: Ensure rustfmt component
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: |
+          set -euo pipefail
+          rustup component list --installed | grep -q '^rustfmt' || rustup component add rustfmt
+
+      - name: cargo fmt --check
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: cargo fmt --all --check
+
+  # --------------------------------------------------
+  # cargo clippy -- -D warnings（lint ゲート）
+  # --------------------------------------------------
+  clippy:
+    name: cargo clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        # persist-credentials: false（security-auditor 指摘、medium）: checkout 後どのステップも
+        # GITHUB_TOKEN を使わないため、既定の .git/config への認証情報永続化を無効化する。
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Cargo.toml の有無を判定
+        id: detect
+        run: |
+          set -euo pipefail
+          if [ -f "Cargo.toml" ]; then
+            echo "has_cargo=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "has_cargo=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Cargo.toml が未追加のため cargo clippy をスキップしました（TASK-1.1 完了後に有効化されます）"
+          fi
+
+      - name: Ensure rust toolchain
+        if: steps.detect.outputs.has_cargo == 'true'
+        uses: ./.github/actions/ensure-rust-toolchain
+
+      # 未導入の場合のみ追加する（冪等）。
+      - name: Ensure clippy component
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: |
+          set -euo pipefail
+          rustup component list --installed | grep -q '^clippy' || rustup component add clippy
+
+      # --all-features を指定し、feature（プラットフォーム別最適化レイヤ等）が
+      # 増えた際にも既定で全 feature を lint 対象にする
+      # （.claude/rules/coding-rust.md の「feature フラグは加法的」方針）。
+      - name: cargo clippy --workspace --all-targets --all-features
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      # Web（wasm32）向けにだけ cfg で外れるコードの警告（未使用関数・drop_non_drop 等）は
+      # ネイティブの clippy では出ない。#967→#977、#1021 と同じ種類の見逃しが続いたため、
+      # Web 配線の受け入れ条件（`cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown
+      # --all-features -- -D warnings`）を CI でも強制する。fandhe-web-dom は fandhe-core・
+      # fandhe-device に依存するため、この 1 コマンドで Web 経路の 3 クレートを見られる。
+      # ジョブ名は変えない（ruleset の必須チェック「cargo clippy」をそのまま使う）。
+      - name: Ensure wasm32 target
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: |
+          set -euo pipefail
+          rustup target list --installed | grep -q '^wasm32-unknown-unknown$' || rustup target add wasm32-unknown-unknown
+
+      - name: cargo clippy (wasm32, fandhe-web-dom)
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown --all-features -- -D warnings
+
+  # --------------------------------------------------
+  # cargo test（結合テスト・ユニットテスト・doc test）
+  # --------------------------------------------------
+  test:
+    name: cargo test
+    needs: changes
+    if: needs.changes.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    # 使い捨て VM で target が毎回空のため、コールドビルド込みで 45 分取る
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        # persist-credentials: false（security-auditor 指摘、medium）: checkout 後どのステップも
+        # GITHUB_TOKEN を使わないため、既定の .git/config への認証情報永続化を無効化する。
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Cargo.toml の有無を判定
+        id: detect
+        run: |
+          set -euo pipefail
+          if [ -f "Cargo.toml" ]; then
+            echo "has_cargo=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "has_cargo=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Cargo.toml が未追加のため cargo test をスキップしました（TASK-1.1 完了後に有効化されます）"
+          fi
+
+      - name: Ensure rust toolchain
+        if: steps.detect.outputs.has_cargo == 'true'
+        uses: ./.github/actions/ensure-rust-toolchain
+
+      # 親 Issue #630: `fandhe-egui-proxy` の desktop_render テストバイナリは GUI 依存の
+      # 大量 rlib を静的リンクするためメモリ消費が大きく、GNU ld が OOM killer に kill される
+      # 障害が過去に実測された（`ld terminated with signal 9`）。rustc 1.88.0 toolchain 同梱の
+      # rust-lld へリンカを切り替えてリンク時メモリを削減する（Issue #631 / #577）。
+      # scripts/build/lld-rustflags.sh は Linux gnu ホスト限定で動的算出する。
+
+      - name: Linux ホストのリンクを rust-lld 化（desktop_render OOM 対策、Issue #631）
+        if: steps.detect.outputs.has_cargo == 'true' && runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          flags="$(bash scripts/build/lld-rustflags.sh)"
+          echo "RUSTFLAGS=${flags}" >> "${GITHUB_ENV}"
+          # GITHUB_ENV への書き込みはログへ出力されないため、受け入れ条件 1
+          # （lld でリンクされることをログで実測できること）のためにここへ明示する。
+          echo "[ci] 設定した RUSTFLAGS: ${flags}"
+
+      # `-fuse-ld=lld` は lld が見つからない環境では collect2 が GNU ld へ黙って
+      # fallback してリンクが成功してしまう（実測確認済み）。「ビルドが通った」ことは
+      # lld 使用の証拠にならないため、fail-closed で機械検証する。
+      - name: lld が実際にリンクへ使われることを検証
+        if: steps.detect.outputs.has_cargo == 'true' && runner.os == 'Linux'
+        run: bash scripts/build/lld-rustflags.sh --verify-link
+
+      - name: cargo test --workspace --all-features
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: cargo test --workspace --all-features
+
+  # --------------------------------------------------
+  # Android NDK・Gradle 導入（TASK-18.3 / REQ-18）。
+  # scripts/android/setup-android-env.sh は「未導入の場合のみ導入する」冪等セルフヒール
+  # （既存の Ensure rust toolchain composite action / Ensure clippy component と同じ流儀）のため、
+  # 導入ステップと検証ステップを同一ジョブ内で連続実行しても副作用がない。
+  # GitHub ホスト runner は使い捨て VM のため、導入先 ~/.fandhe/android（JDK・SDK・NDK・
+  # Gradle・bundletool で数 GB）を actions/cache で復元する。キーは versions.env と
+  # 導入スクリプトのハッシュで、変更時のみ再取得する（cache miss 時はスクリプトが取得する）。
+  # --------------------------------------------------
+  android-env:
+    name: android NDK/Gradle 導入
+    needs: changes
+    if: needs.changes.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        # persist-credentials: false（他ジョブと同一方針）。
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      # install_rust_targets / install_cargo_ndk（TASK-1.5-S1）は rustup/cargo が
+      # 未導入だと黙って skip する設計のため、他ジョブ（fmt/clippy/test/android-build）と
+      # 同じ流儀で明示的に導入を保証する（そうしないと android-build 側の
+      # --verify-only が「未導入」で失敗するまで欠落に気付けない）。
+      - name: Ensure rust toolchain
+        uses: ./.github/actions/ensure-rust-toolchain
+
+      # 導入先の使い捨て VM 越し復元（キャッシュ未形成・ミス時は次のステップが取得する）。
+      # 保存は main への push かつミス時のみ、このジョブだけが行う（.claude/rules/ci.md「キャッシュ方針」。
+      # PR スコープに数 GB を積むと 10GB 上限で main のキャッシュが追い出されるため）。
+      - name: Android 導入先のキャッシュ復元
+        id: android-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.fandhe/android
+          key: android-env-${{ runner.os }}-${{ hashFiles('scripts/android/versions.env', 'scripts/android/setup-android-env.sh') }}
+
+      - name: Android NDK・Gradle・JDK・cargo-ndk を導入（未導入時のみ）
+        run: bash scripts/android/setup-android-env.sh
+
+      - name: Android 導入先のキャッシュ保存（main への push・ミス時のみ）
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.android-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.fandhe/android
+          key: android-env-${{ runner.os }}-${{ hashFiles('scripts/android/versions.env', 'scripts/android/setup-android-env.sh') }}
+
+      - name: 導入結果を検証（バージョン一致確認）
+        run: bash scripts/android/setup-android-env.sh --verify-only
+
+  # --------------------------------------------------
+  # Android クロスビルド（TASK-1.5-S1 / REQ-1）。
+  # ジョブごとに別 VM のため、android-env と同じキャッシュ復元 + 冪等インストーラで
+  # 前提（NDK・cargo-ndk・rustup Android ターゲット）を満たしてからビルドする。
+  # 対象パッケージは当面 fandhe-core のみ（scripts/android/build-android.sh 参照）。
+  # --------------------------------------------------
+  android-build:
+    name: android クロスビルド
+    runs-on: ubuntu-latest
+    # android-env への needs は持たない（所要時間短縮）。本ジョブは自身で前提を導入するため
+    # android-env の完了を待つ必要がなく、並列実行できる。
+    needs: changes
+    if: needs.changes.outputs.heavy == 'true'
+    # TASK-11.2-S4（Issue #228）: build-aab.sh（cargo-ndk 3 ABI ビルド + 初回 Gradle 実行時の
+    # AGP・依存パッケージ取得を含む bundleRelease）と verify-android-artifacts.sh --aab を含み、
+    # 使い捨て VM では毎回 ~/.gradle が空のため 90 分の上限を取る。
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        # persist-credentials: false（他ジョブと同一方針）。
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Ensure rust toolchain
+        uses: ./.github/actions/ensure-rust-toolchain
+
+      # 導入先の使い捨て VM 越し復元（キャッシュ未形成・ミス時は次のステップが取得する）。保存は android-env ジョブのみ。
+      - name: Android 導入先のキャッシュ復元
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.fandhe/android
+          key: android-env-${{ runner.os }}-${{ hashFiles('scripts/android/versions.env', 'scripts/android/setup-android-env.sh') }}
+
+      - name: Android NDK・Gradle・JDK・cargo-ndk を導入（未導入時のみ）
+        run: bash scripts/android/setup-android-env.sh
+
+      - name: 前提導入の検証
+        run: bash scripts/android/setup-android-env.sh --verify-only
+
+      - name: cargo ndk build（fandhe-core）
+        run: bash scripts/android/build-android.sh
+
+      # TASK-11.2-S4（REQ-11 / M3、Issue #228）: TASK-11.2-S2（#226）でマージ済みの
+      # cargo-ndk 成果物 -> Gradle 統合・未署名 .aab 生成パイプラインを CI へ
+      # 組み込む。keystore シークレットは CI に設定しないため（TASK-11.2-S3 / #227
+      # 未マージ、及び security.md A02 方針）、本ステップは常に未署名の .aab を
+      # 生成する（build-aab.sh 内蔵の「未署名であること」検証を参照）。
+      - name: cargo-ndk 成果物を Gradle 統合し未署名 .aab を生成
+        run: bash scripts/android/build-aab.sh
+
+      # build-aab.sh 自身が生成直後に検証済みだが、独立した事後検証として
+      # verify-android-artifacts.sh --aab を別ステップで実行する（zip 構造・
+      # AndroidManifest.xml 収載・ABI 別 .so 収載。verify-android-artifacts.sh
+      # 冒頭コメント参照）。PR #483 CI 是正（Issue #228 フォローアップ）: fandhe-core は
+      # 直前の build-aab.sh 実行時に fandhe-egui-proxy の依存として release ビルド
+      # 済みだが uplift（target/<triple>/release/libfandhe_core.rlib への配置）は
+      # されない事象を実 CI で確認したため、fingerprint キャッシュに依存せず
+      # 対象成果物を都度作り直す対策を verify-android-artifacts.sh 側に実装した
+      # （同スクリプト冒頭コメント参照）。
+      - name: .aab 成果物の検証
+        run: bash scripts/android/verify-android-artifacts.sh --release --aab
+
+  # --------------------------------------------------
+  # 端末機能 対応表の検査（Issue #852）
+  #
+  # docs/device/capabilities/ 配下（1 機能 1 ファイル + _meta.json）が SSOT。
+  # capabilities.md / capabilities.html は scripts/device/build-capabilities.mjs の生成物で、
+  # 並列の PR どうしの競合を避けるため git に入れない（手元で生成して見る）。
+  # ここではスキーマ違反（必須キー欠落・status の enum 外・id とファイル名の不一致）・
+  # 実装パスの不在・Android 権限宣言の漏れと、生成が例外なく通ることを検査する。
+  # --------------------------------------------------
+  capabilities:
+    name: capabilities 対応表の検査
+    # 本ジョブは PR 側の scripts/device/build-capabilities.mjs を実行するため、
+    # fork PR を除外して untrusted コードの実行経路を断つ（多層防御。ai-review.yml と同一条件）。
+    # 本 workflow は push: branches[main] でも起動し、その際は github.event.pull_request が
+    # 空で条件が偽になるため、pull_request イベントに限定して判定する
+    # （ai-review.yml は pull_request 専用のため素の条件式でよい）。
+    # fork PR でのスキップは ci-complete が result != success を検出して落とすため素通りしない。
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      # node は GitHub ホスト runner のプリインストールを使う。無ければ fail-closed で落とす。
+      - name: node の存在確認
+        run: |
+          set -euo pipefail
+          if ! command -v node >/dev/null; then
+            echo "node が見つかりません。" >&2
+            exit 1
+          fi
+          node --version
+
+      - name: docs/device/capabilities/ を検査
+        run: node scripts/device/build-capabilities.mjs --check
+
+  # --------------------------------------------------
+  # 完遂判定用の集約ジョブ。branch protection / ruleset の required status check には
+  # 本ジョブ（ci-complete）のみを指定すればよく、対象ジョブを増減する際は下記 needs の
+  # 変更のみで追随できる（Fandhe-AI/fandhe-backend の ci-complete と同一方針）。
+  # --------------------------------------------------
+  ci-complete:
+    name: ci-complete
+    runs-on: ubuntu-latest
+    # 失敗・スキップ時にも必ず実行して fail-closed で判定する
+    # （bare needs は skipped も success 扱いになるため、明示的に result を検査する）。
+    if: ${{ always() }}
+    needs: [changes, fmt, clippy, test, android-env, android-build, capabilities]
+    timeout-minutes: 5
+    steps:
+      - name: 完遂判定（全 needs ジョブが success であること）
+        env:
+          RESULT_CHANGES: ${{ needs.changes.result }}
+          HEAVY: ${{ needs.changes.outputs.heavy }}
+          RESULT_FMT: ${{ needs.fmt.result }}
+          RESULT_CLIPPY: ${{ needs.clippy.result }}
+          RESULT_TEST: ${{ needs.test.result }}
+          RESULT_ANDROID_ENV: ${{ needs.android-env.result }}
+          RESULT_ANDROID_BUILD: ${{ needs.android-build.result }}
+          RESULT_CAPABILITIES: ${{ needs.capabilities.result }}
+        run: |
+          set -euo pipefail
+          ok=1
+          # changes ジョブ自体の失敗は heavy が空になり skipped を誤って許容しかねないため先に落とす。
+          if [ "${RESULT_CHANGES}" != "success" ]; then
+            echo "NG: changes = ${RESULT_CHANGES}"
+            ok=0
+          fi
+          for pair in "fmt:${RESULT_FMT}" "clippy:${RESULT_CLIPPY}" "test:${RESULT_TEST}" "android-env:${RESULT_ANDROID_ENV}" "android-build:${RESULT_ANDROID_BUILD}" "capabilities:${RESULT_CAPABILITIES}"; do
+            name="${pair%%:*}"
+            result="${pair#*:}"
+            # test / android-* は changes が heavy=false（ドキュメント類のみの変更）と判定した
+            # 場合に限り skipped を許容する。それ以外の skipped・failure・cancelled は不合格。
+            if [ "${result}" = "skipped" ] && [ "${HEAVY}" = "false" ] \
+              && { [ "${name}" = "test" ] || [ "${name}" = "android-env" ] || [ "${name}" = "android-build" ]; }; then
+              continue
+            fi
+            if [ "${result}" != "success" ]; then
+              echo "NG: ${name} = ${result}"
+              ok=0
+            fi
+          done
+          if [ "${ok}" -ne 1 ]; then
+            echo "一部ジョブが success ではありません" >&2
+            exit 1
+          fi
+          echo "全ジョブ success"

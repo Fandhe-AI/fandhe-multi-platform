@@ -1,0 +1,6 @@
+# Gradle プロジェクトのローカル生成物・環境依存ファイル（TASK-5.1 / REQ-5、Issue #236）。
+# `platforms/android/.gitignore` と同方針（Gradle wrapper 非同梱、android-env.sh 経由の
+# GRADLE_HOME を使う運用のため wrapper 関連ファイルは元々存在しない）。
+.gradle/
+build/
+local.properties

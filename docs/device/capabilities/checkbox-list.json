@@ -1,0 +1,45 @@
+{
+  "id": "checkbox-list",
+  "name": "チェックボックス一覧（Checkbox × List）",
+  "group": "myIme 設定画面が要する機能",
+  "order": 13,
+  "priority": 20,
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "detail": "できている（実機未確認）",
+      "implStatus": "実装済み（実機未確認）",
+      "note": "`Node::List` の各行に `Checkbox` を 1 つ置く（辞書 5 件のオン・オフ）。egui-proxy が実描画を担い、行の変更は `Event::WidgetValueChanged` → `set_widget_value_at` 経由で core 側の setter へ届く（配線自体は既存、Issue #805/#806/#807）。一括操作（すべて選択・すべて解除）と集約テキストを追加。行数は固定 5 で、`Checkbox::bound` が index を持たない `fn` ポインタしか受け取らないため index 付き Checkbox（可変行数）は未提供（スコープ外）。スクロールは `Node::List` に従う（自前のスクロールなし、全画面 `ScrollArea` 化は未着手）。iOS 実機での目視は未確認",
+      "impl": "crates/fandhe-core/src/screens/checkbox_list.rs + crates/fandhe-egui-proxy/src/screens/registry.rs、Issue #1037"
+    },
+    "android": {
+      "status": "done",
+      "detail": "できている（実機未確認）",
+      "implStatus": "実装済み（実機未確認）",
+      "note": "ios と同じ実装・同じ天井（上記参照）。Android 実機での目視は未確認",
+      "impl": "crates/fandhe-core/src/screens/checkbox_list.rs + crates/fandhe-egui-proxy/src/screens/registry.rs、Issue #1037"
+    },
+    "macos": {
+      "status": "done",
+      "detail": "できている",
+      "implStatus": "実装済み（Mac 目視は main 側で実施）",
+      "note": "ios と同じ実装・同じ天井（上記参照）。Mac 目視済み（10/1、チェックの切り替えで集約表示が 3/5→4/5 件に変わる）",
+      "impl": "crates/fandhe-core/src/screens/checkbox_list.rs + crates/fandhe-egui-proxy/src/screens/registry.rs、Issue #1037"
+    },
+    "windows": {
+      "status": "done",
+      "detail": "できている（実機未確認）",
+      "implStatus": "実装済み（実機未確認）",
+      "note": "ios と同じ実装・同じ天井（上記参照）。Windows 実機での目視は未確認",
+      "impl": "crates/fandhe-core/src/screens/checkbox_list.rs + crates/fandhe-egui-proxy/src/screens/registry.rs、Issue #1037"
+    },
+    "web": {
+      "status": "done",
+      "detail": "できている",
+      "implStatus": "実装済み（実ブラウザ未確認）",
+      "note": "`Node::List` は `dom_tree.rs` で `ul > li` へ変換され、子の `Node::Widget` も再帰変換されるため（Issue #993）、`Checkbox` → `<input type=\"checkbox\">` の配線と `change` → `apply_value` の反映がそのまま効く。effect なしの `mount`（`mount_settings_screen` と同じ形）。実ブラウザでの目視（input の切り替え・一括操作・集約反映）は未確認。ヘッドレス Chrome で 1 行の切り替え・すべて選択・すべて解除のいずれも各 input の checked と集約表示が一致することを確認済み（10/1）",
+      "impl": "crates/fandhe-core/src/screens/checkbox_list.rs + crates/fandhe-web-dom/src/demo.rs（mount_checkbox_list_screen）、Issue #1037"
+    }
+  },
+  "capture": "captures/checkbox-list.png"
+}

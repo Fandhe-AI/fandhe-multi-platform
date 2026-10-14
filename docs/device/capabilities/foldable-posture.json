@@ -1,0 +1,44 @@
+{
+  "id": "foldable-posture",
+  "name": "折りたたみの姿勢・ヒンジ",
+  "group": "未着手の OS 機能",
+  "order": 71,
+  "priority": 106,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "unrated",
+      "api": "-",
+      "perm": "-",
+      "url": "",
+      "note": "#1108 で調査中"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Jetpack WindowManager（`WindowInfoTracker` の `FoldingFeature`：折れ目の位置・姿勢 flat / half-opened）",
+      "perm": "不要",
+      "url": "https://developer.android.com/develop/ui/compose/layouts/adaptive/foldables/make-your-app-fold-aware",
+      "note": "未実装。Compose 向けのページ。View / JNI 経由で Rust へ姿勢を渡す。折りたたみ端末でないと実機確認できない"
+    },
+    "macos": {
+      "status": "n-a",
+      "note": "折りたたみ機構がない"
+    },
+    "windows": {
+      "status": "no",
+      "api": "Surface Duo 系のデュアルスクリーン向け API が限定的にあるのみ",
+      "perm": "-",
+      "url": "",
+      "note": "調査では「デュアルスクリーン（限定的）」とのみ（一次情報は未取得、要確認）。現行の主要機種では対象が乏しい。URL 未確認"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Device Posture API（`navigator.devicePosture`、CSS `device-posture`）、Viewport Segments は実験的",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Device_Posture_API",
+      "safari": "非対応",
+      "note": "Chromium のみ（MDN は Experimental / Limited availability）。折りたたみ端末でないと値が変わらない"
+    }
+  },
+  "note": "Android と Web（Chromium）が主。iOS は #1108 で調査中のため unrated。macOS は n-a、Windows は no 寄り。safe-area-insets・screen-orientation（別 id）との違い: 折れ目と姿勢（広げた / 半開き）を扱う。今回の範囲: 姿勢（平ら・半開き・閉じ）とヒンジの位置・向きを表示し、半開きなら画面を上下 2 分割で描く"
+}

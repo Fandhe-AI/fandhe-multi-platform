@@ -1,0 +1,77 @@
+{
+  "id": "bluetooth-le",
+  "name": "BLE 周辺機器接続",
+  "group": "未着手の OS 機能",
+  "order": 20,
+  "priority": 24,
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "api": "CoreBluetooth（`CBCentralManager`）",
+      "perm": "`NSBluetoothAlwaysUsageDescription`",
+      "url": "https://developer.apple.com/documentation/corebluetooth/cbcentralmanager",
+      "note": "実装済み（#1061）。macOS（#1060）と `.m`・Rust 経路を共用し、周辺の BLE 機器を 10 秒スキャンして名前と電波強度を一覧表示する範囲（接続・ペアリング・バックグラウンドスキャンは対象外）。pull 型 `RequestSlot` 経由で `fandhe_core::screens::ble_scan` へ書き戻し、専用シリアルキューだけで動かす（main queue 不使用）。iOS 固有の差分: 背景モード（bluetooth-central）は宣言しない。アプリの背景遷移はスキャンの失敗として扱わず（オーナー判断 10/5）、前景スキャン中に背景へ移っても止めずに期限で通常どおり終了して届いた結果を成功で返す（背景中は OS が広告を間引くため件数が減りうるのは既知の制約。背景遷移と期限到達の前後関係は判定に使わない）。期限は `SCAN_DURATION_MS` を `.m` へ渡す。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・スキャン停止。守らない範囲: 複数プロセスの同時スキャン・OS による広告の間引き。既知の天井: 許可待ちに期限は無い（終了で止まる）・重複通知を抑えるため RSSI は初回観測値・背景スキャンは対象外。iOS 実機での目視（正常系・Bluetooth オフ・権限拒否）は人間担当",
+      "sourceName": [
+        "BLE 周辺機器接続"
+      ],
+      "detail": "できている（未確認、スキャンのみ。接続は対象外）",
+      "implStatus": "実装済み（スキャンのみ。実機目視は人間確認待ち）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_bluetooth_le.m + crates/fandhe-egui-proxy/src/device/apple_bluetooth_le.rs + crates/fandhe-egui-proxy/src/device/bluetooth_le.rs + crates/fandhe-device/src/bluetooth_le.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue #1061"
+    },
+    "android": {
+      "status": "done",
+      "api": "`BluetoothAdapter` / `BluetoothLeScanner`",
+      "perm": "`BLUETOOTH_SCAN`（`neverForLocation`）+ `BLUETOOTH_CONNECT`（ともに API 31+、許可ダイアログは 1 回）+ API 30 以下のみ `BLUETOOTH` / `BLUETOOTH_ADMIN` / `ACCESS_FINE_LOCATION`（`maxSdkVersion=30`）+ `uses-feature android.hardware.bluetooth_le required=false`。広告名は `ScanRecord` から取る（`getName()` は使わない）",
+      "url": "https://developer.android.com/develop/connectivity/bluetooth/permissions",
+      "note": "実装済み（#1062）。範囲は macOS / Windows と同じ（10 秒スキャン・名前と RSSI の一覧、接続・読み書き・ペアリング・バックグラウンドスキャンは対象外）。`BluetoothLeScanner` を `MainActivity` が UI スレッド 1 本に集約して動かし、広告ごとに `nativeOnBleScanResult`、終了時に 1 回 `nativeOnBleScanFinished` で、macOS / Windows と共通の `OBSERVED` / pull 型 `RequestSlot` へ届ける。同一 id 統合・RSSI 降順・上限 50 件は Rust 側 `normalize_scan` に任せる。実行時権限は API 31+ が `BLUETOOTH_SCAN` + `BLUETOOTH_CONNECT`（`isEnabled()` / `getAddress()` 用、両方許可で開始）、30 以下が `ACCESS_FINE_LOCATION` で、非搭載判定は権限要求より先。Bluetooth オフ→`Disabled`・権限拒否→`PermissionDenied`・非搭載→`Unsupported` は純関数 `error_from_android_code` で写し、途中でオフになった場合・失敗時は部分結果を捨てる。API 30 以下で位置情報サービスがオフの場合は 0 台成功に化けるため `Internal` の失敗にする。`onPause` / `onDestroy` でスキャンを止めて中断で確定し（権限ダイアログ待ちは破棄しない）、非前景中に届いた許可は `onResume` まで開始を保留する。期限は Rust 側 `SCAN_DURATION_MS`（10 秒）を JNI 引数で渡し、`startScan` 成功から数える。JNI の no-op スタブは置かない（Rust の `request_ble_scan` を経ないと Java が native を呼ぶ経路が無いため）。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・スキャン停止。守らない範囲: 複数プロセスの同時スキャン・OS による広告の間引き・`neverForLocation` による一部ビーコンの除外・30 秒に 5 回を超えるスキャンの OS 側抑制（画面の Idle ゲートで通常到達しない）。既知の天井: 許可ダイアログの回答待ちに期限は無い・重複通知を抑えるため RSSI は初回観測値。Android 実機での正常系・Bluetooth オフ・権限拒否・許可ダイアログ直後・スキャン中のホーム遷移の確認は人間確認待ち",
+      "sourceName": [
+        "Bluetooth（Classic/BLE）"
+      ],
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/device/bluetooth_le.rs + crates/fandhe-device/src/bluetooth_le.rs、Issue #1062"
+    },
+    "macos": {
+      "status": "done",
+      "api": "CoreBluetooth（`CBCentralManager`）",
+      "perm": "Info.plist `NSBluetoothAlwaysUsageDescription`（entitlement 不要。App Sandbox 無効の素の実行体のため）",
+      "url": "https://developer.apple.com/documentation/corebluetooth",
+      "note": "実装済み（#1060）。「周辺の BLE 機器を 10 秒スキャンし、名前と電波強度を一覧表示する」範囲（接続・読み書き・ペアリング・バックグラウンドスキャンは対象外）。結果が非同期に届くため `BluetoothLe` トレイトは通さず、`biometric_auth`/`speech_recognition` と同型の pull 型 `RequestSlot` 経由で `fandhe_core::screens::ble_scan` へ直接書き戻す。専用シリアルキューだけで動かし（main queue 不使用）、`CBManager` の状態を契約のエラーへ写す（PoweredOff→`Disabled`・Unauthorized→`PermissionDenied`・Unsupported→`Unsupported`）。スキャン途中のオフも失敗にし、部分結果は捨てる。期限は Rust 側 `SCAN_DURATION_MS`（10 秒、SSOT）を `.m` へ渡し、PoweredOn から数えて `stopScan`。終了時（`device::shutdown`）にも止める。結果は必ず `normalize_scan`（同一 id 統合・RSSI 降順・上限 50 件）を通す。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・スキャン停止。守らない範囲: 複数プロセスの同時スキャン・OS による広告の間引き。既知の天井: 許可ダイアログの回答待ちに期限は無い（終了で止まる）・重複通知を抑えるため RSSI は初回観測値。注意: ターミナルから直接起動すると TCC の権限判定がターミナル側に帰属して落ちうるため、確認は `.app` にまとめて `open` で起動する。Mac 目視済み（10/5、周辺 39 台を名前・電波強度の降順で一覧表示。Bluetooth をオフにすると「Bluetooth がオフです」と失敗表示し一覧を出さない）。権限拒否時の表示は未確認",
+      "sourceName": [
+        "Bluetooth"
+      ],
+      "detail": "できている（実機、スキャンのみ。接続は対象外）",
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_bluetooth_le.m + crates/fandhe-egui-proxy/src/device/apple_bluetooth_le.rs + crates/fandhe-egui-proxy/src/device/bluetooth_le.rs + crates/fandhe-device/src/bluetooth_le.rs、Issue #1060"
+    },
+    "windows": {
+      "status": "done",
+      "api": "WinRT（`Windows.Devices.Bluetooth.Advertisement.BluetoothLEAdvertisementWatcher`）",
+      "perm": "unpackaged 実行では宣言不要。可否は Windows の Bluetooth とプライバシー設定に従う",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth",
+      "note": "実装済み（#1060）。範囲は macOS と同じ（10 秒スキャン・名前と RSSI の一覧、接続系は対象外）。`BluetoothAdapter`/ラジオ状態を確認してから `Active` モードの watcher を `std::thread::spawn` のワーカーで動かし、`recv_timeout` で期限（`SCAN_DURATION_MS`）か停止合図を待って `Stop()` する。アダプタ無し・LE 非対応は `Unsupported`、ラジオ Off/Disabled は `Disabled`、`Stopped` の `BluetoothError`（`DisabledByPolicy`/`DisabledByUser`/`ConsentRequired`→`PermissionDenied` など）は純関数 `error_from_bluetooth_error` で写し、部分結果は捨てる。`Received`/`Stopped` ハンドラは全経路で解除する。広告ごとの通知は HashMap に畳んでメモリを抑える。`unsafe`・`RoInitialize` 呼び出し・新規依存パッケージ追加なし（`windows` crate の feature 追加のみ）。既知の天井: パッケージ無しの exe で動く前提・RSSI の -127 は未取得として扱う。ローカルに msvc ツールチェーンが無く `x86_64-pc-windows-gnu` での clippy による型検査のみ実施。Windows 実機での正常系・失敗系（Bluetooth オフ）の確認は人間確認待ち",
+      "sourceName": [
+        "Bluetooth"
+      ],
+      "detail": "できている（未確認、スキャンのみ。接続は対象外）",
+      "implStatus": "実装済み（実機未確認）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_bluetooth_le.rs + crates/fandhe-egui-proxy/src/device/bluetooth_le.rs + crates/fandhe-device/src/bluetooth_le.rs、Issue #1060"
+    },
+    "web": {
+      "status": "done",
+      "api": "Web Bluetooth API",
+      "perm": "`navigator.bluetooth`、secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API",
+      "safari": "非対応（WebKit Standards Positions で明示的に否定的、Web Bluetooth 自体を実装しない方針）",
+      "note": "実装済み（#1063）。`navigator.bluetooth.requestDevice({ acceptAllDevices: true })` で利用者が 1 台を選び、1 件の結果として返す（Chrome 系・secure context のみ。RSSI は取得できず「不明」）。選択ダイアログを閉じると `NotFoundError` をキャンセルとして扱う（失敗にしない）。`navigator.bluetooth` が無い・secure context 外・アダプタ無し（`getAvailability()` が false）は `Unsupported`。id が取れなければ失敗にし、偽の成功にしない。守る範囲: 1 タブ内の要求と完了の順序（世代照合）・嘘の成功の禁止。守らない範囲: Chrome 系以外・複数台選択・選択ダイアログの期限（Web に 10 秒の期限は無く、ボタン文言「スキャン（10 秒）」とずれる既知の制約）・Bluetooth オフと権限拒否の区別（`Other` として表示）。ヘッドレス Chrome 確認（10/5）: 非 secure context では「この環境では BLE スキャンを使えません」（Unsupported）、secure context ではボタン押下で `requestDevice` の選択ダイアログ待ちに入る。選択後の 1 件表示とダイアログを閉じたときのキャンセル表示は実ブラウザで未確認",
+      "sourceName": [
+        "Bluetooth"
+      ],
+      "detail": "できている（Chrome 系・secure context 限定、1 台選択・電波強度は不明）",
+      "implStatus": "実装済み",
+      "impl": "crates/fandhe-web-dom/src/bluetooth_le.rs（ble_scan_effect）+ crates/fandhe-web-dom/src/demo.rs（mount_ble_scan_screen）+ crates/fandhe-web-dom/web/index.html（?screen=ble_scan）、Issue #1063"
+    }
+  },
+  "note": "`CoreBluetooth` / Android Bluetooth API / `CoreBluetooth`（macOS）/ Windows `Bluetooth.GenericAttributeProfile` / Web Bluetooth API（対応ブラウザ限定）。着手順 24（10/4）。今回の範囲: 周辺の BLE 機器を一定時間スキャンし、名前と電波強度を一覧表示するだけ。接続・読み書き・ペアリングは扱わない。Web は Web Bluetooth の `requestDevice` で 1 台選ぶ形で、表示は名前のみ（`requestDevice` の選択結果では電波強度を取得できないため「不明」と表示する。Chrome 系のみ、他ブラウザは `Unsupported`）",
+  "capture": "captures/bluetooth-le.png"
+}

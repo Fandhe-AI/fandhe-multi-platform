@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ホーム画面ウィジェット（Issue #1067）の見た目。RemoteViews が扱える FrameLayout +
+     TextView のみ。切り離し時に削除する。 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#CC202020"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/home_widget_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#FFFFFFFF"
+        android:textSize="16sp" />
+</FrameLayout>

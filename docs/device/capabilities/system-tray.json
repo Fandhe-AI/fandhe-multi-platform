@@ -1,0 +1,52 @@
+{
+  "id": "system-tray",
+  "name": "メニューバー・システムトレイ常駐",
+  "group": "未着手の OS 機能",
+  "order": 29,
+  "priority": 21,
+  "platforms": {
+    "ios": {
+      "status": "n-a"
+    },
+    "android": {
+      "status": "n-a"
+    },
+    "macos": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "api": "AppKit（`NSStatusBar` / `NSStatusItem`）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/appkit/nsstatusbar",
+      "note": "実装済み（#1039）。`NSStatusBar`/`NSStatusItem`/`NSMenu` で画像アイコンではなくテキストタイトル（`TRAY_TITLE`＝\"Fandhe\"）のみを使う最小実装。二重表示の判定は `.m` 側へ問い合わせず Rust 側（`fandhe_device::system_tray::SelectionQueue::is_active`）で完結させる（表示状態の SSOT を Rust 側に一本化）。メニュー選択は `onSelect:` → `fandhe_rust_system_tray_selected` → `SelectionQueue::push`（世代・範囲照合）で橋渡しする。`show`/`hide` いずれもメインスレッド以外から呼ばれた場合は dispatch へ載せ替えず即座に失敗（コード 3）を返す（デッドロック回避）。アプリ終了時（`on_exit`）に `stop_shared_system_tray` が `hide` を呼び、通知領域相当のメニューバーアイコンを残さない。Mac 目視は main 側で実施予定（実機未確認）。Mac 目視済み（10/2、「出す」でメニューバーに出て、メニュー項目の選択が画面に反映され、「消す」でメニューバーから消える）",
+      "sourceName": [
+        "メニューバー・システムトレイ"
+      ],
+      "implStatus": "実装済み（実機未確認）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_system_tray.m + crates/fandhe-egui-proxy/src/device/apple_system_tray.rs + crates/fandhe-egui-proxy/src/device/system_tray.rs、Issue #1039"
+    },
+    "windows": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "api": "Win32（`Shell_NotifyIcon`）",
+      "perm": "なし",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shell_notifyicona",
+      "note": "実装済み（#1039、10/2 に待ち時間切れを無くす方向で是正）。`Shell_NotifyIconW` + 専用スレッドの不可視ウィンドウ（`WS_EX_TOOLWINDOW`、`HWND_MESSAGE` は `SetForegroundWindow`/`TrackPopupMenu` の既知問題のため不採用）+ `TrackPopupMenu` で実装する。`show` は `sync_channel`（rendezvous、期限無し）で専用スレッドの起動完了を待ち、`hide` は `SendMessageW`（同期・期限無し）で後始末を依頼しその戻り値（`NIM_DELETE` の成否）をそのまま結果にする。専用スレッドはトレイ専用でメッセージ処理が短時間に終わり、`TrackPopupMenu` のモーダルループ中も sent message は OS がディスパッチするため、期限無し待ちでも固まらない。選択はアイコン専用スレッドの `WndProc` が `SelectionQueue::push` へ直接積む（FFI を介さない）。ローカルで行ったのは `x86_64-pc-windows-gnu` ターゲットの `cargo clippy -D warnings` の型検査・静的解析のみ。Windows 実機確認は人間確認待ち（device-check-pending）。Explorer 再起動（`TaskbarCreated`）でアイコンを登録し直す",
+      "sourceName": [
+        "システムトレイ"
+      ],
+      "implStatus": "実装済み（実機未確認）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_system_tray.rs + crates/fandhe-egui-proxy/src/device/system_tray.rs、Issue #1039"
+    },
+    "web": {
+      "status": "n-a",
+      "api": "標準 API なし",
+      "safari": "非該当",
+      "note": "Web（ブラウザ / PWA）に対応する標準 API は存在しない",
+      "sourceName": [
+        "メニューバー・システムトレイ"
+      ]
+    }
+  },
+  "note": "macOS `NSStatusBar` / Windows `NotifyIcon` 相当。iOS/Android/Web には常駐トレイの概念が無い",
+  "capture": "captures/system-tray.png"
+}

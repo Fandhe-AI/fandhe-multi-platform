@@ -1,0 +1,151 @@
+<!doctype html>
+<!--
+  TASK-1.2（REQ-1 / M2）検証用の最小ページ。fandhe-egui-proxy の wasm ビルドを
+  canvas へ描画するためだけの検証用ページであり、配布物ではない
+  （scripts/web/build-wasm-proxy.sh が dist/ へ組み立てる一部として使われる）。
+  フォント（fonts/noto-sans-jp-regular.otf）は build-wasm-proxy.sh が
+  crates/fandhe-fonts 同梱資産からビルドのたびにコピーする生成物であり、
+  リポジトリへは dist/ ごとコミットしない（src/web.rs のモジュールコメント参照）。
+
+  TASK-4.1（REQ-4 / M3、条件 4）: canvas 要素に CSS 上の明示サイズが無いと、
+  Safari 26.5 において egui/eframe の ResizeObserver ベース自動リサイズが
+  無限フィードバックループに陥り、canvas.width/height が 2^26（67,108,864）まで
+  異常膨張して描画不能になることを PoC-5（docs/spec/03-poc/web-wasm/README.md
+  発見事項1、emilk/egui #4699「Web canvas resize loop」と同種）で確認済み。
+  対策として #fandhe-proxy-canvas に `style="width:...px;height:...px;"` を
+  インライン属性で明示する（PoC-5 で確認済みの対策そのもの。属性値 480x360 と
+  一致させる）。インライン style で明示するのは、Rust ブートストラップ側の
+  ガード（src/web.rs の ensure_canvas_css_size）が canvas.style()（インライン
+  style のみを反映する CSSStyleDeclaration）経由でしか判定できないため
+  （`<style>` 内・外部スタイルシートのルールは検知できない。
+  docs/architecture/web-canvas-css-sizing.md 参照）。
+  この CSS サイズ明示は「Web に埋め込む canvas は必ず CSS でサイズを明示する」
+  という実装規約（docs/architecture/web-canvas-css-sizing.md）のホストページ側の
+  適用例であり、Rust ブートストラップ側のガードと二重化することで規約違反を防ぐ。
+-->
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>fandhe-egui-proxy（TASK-1.2 検証用）</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #ffffff;
+      }
+      #fandhe-proxy-canvas {
+        display: block;
+      }
+      #fandhe-measure-overlay {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        max-width: 100%;
+        margin: 0;
+        padding: 4px 8px;
+        font-family: monospace;
+        font-size: 11px;
+        white-space: pre-wrap;
+        background: rgba(0, 0, 0, 0.75);
+        color: #0f0;
+        z-index: 1000;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- TASK-4.1（REQ-4 / M3）: Safari の canvas リサイズループ対策。
+         style 属性（インライン）で canvas 属性値（width="480" height="360"）と
+         一致させる CSS ピクセルサイズを明示する（`<style>` ブロックのルールでは
+         なくインライン属性にするのは、src/web.rs の ensure_canvas_css_size が
+         canvas.style() 経由でしか読み取れないため。上記コメント参照）。
+         実際の backing store（canvas.width/height 属性）は devicePixelRatio を
+         乗じて egui/eframe 側が設定する。 -->
+    <canvas
+      id="fandhe-proxy-canvas"
+      width="480"
+      height="360"
+      style="width: 480px; height: 360px"
+    ></canvas>
+    <!--
+      TASK-4.5（REQ-4 / M4、Issue #235）: 実機・実 CDN 配信での TTI / フレームタイム
+      再計測用の計装。`?measure=1` クエリ指定時のみ有効化し（通常の検証用途では
+      無効のまま、計装コストを持ち込まない）、PoC-5（docs/spec/03-poc/web-wasm/
+      scripts/measure-tti-and-size.js）が Puppeteer 経由の外部プロセスから行っていた
+      rAF フック計測をページ内で完結させる。呼び出し元は scripts/web/
+      measure-web-metrics.mjs（chromium の CDP 経由で本ページを開き、
+      window.__fandheMeasure.result を読み取る）。実機（iPhone Safari / Android
+      Chrome）計測時は開発者ツールの JS コンソールで同じ値を読める（画面下部の
+      オーバーレイ表示と合わせて使う）。
+    -->
+    <script>
+      (function () {
+        const params = new URLSearchParams(location.search);
+        if (params.get("measure") !== "1") {
+          return;
+        }
+        const MAX_FRAMES = 120;
+        const state = {
+          startedAt: performance.now(),
+          firstRafAt: null,
+          frameTimes: [],
+          done: false,
+          result: null,
+        };
+        window.__fandheMeasure = state;
+
+        const nativeRaf = window.requestAnimationFrame.bind(window);
+        let lastTs = null;
+        let frameCount = 0;
+
+        function computeResult() {
+          const sorted = [...state.frameTimes].sort((a, b) => a - b);
+          const at = (p) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
+          return {
+            ttiMs: state.firstRafAt !== null ? state.firstRafAt - state.startedAt : null,
+            frameTimeP50Ms: sorted.length > 0 ? at(0.5) : null,
+            frameTimeP95Ms: sorted.length > 0 ? at(0.95) : null,
+            frameTimeMaxMs: sorted.length > 0 ? sorted[sorted.length - 1] : null,
+            sampleCount: sorted.length,
+          };
+        }
+
+        // egui/eframe（wasm 側）が内部で requestAnimationFrame を駆動するため、
+        // グローバルをラップして「起動〜初回 rAF」と以降のフレーム間隔を横取りする
+        // （PoC-5 のページ外 evaluate 計測と等価な値を、ページ内完結で得る）。
+        window.requestAnimationFrame = function (callback) {
+          return nativeRaf((ts) => {
+            if (state.firstRafAt === null) {
+              state.firstRafAt = performance.now();
+            }
+            if (lastTs !== null && frameCount < MAX_FRAMES) {
+              state.frameTimes.push(ts - lastTs);
+              frameCount++;
+            }
+            lastTs = ts;
+            if (frameCount >= MAX_FRAMES && !state.done) {
+              state.done = true;
+              state.result = computeResult();
+              renderOverlay();
+            }
+            callback(ts);
+          });
+        };
+
+        function renderOverlay() {
+          let el = document.getElementById("fandhe-measure-overlay");
+          if (!el) {
+            el = document.createElement("pre");
+            el.id = "fandhe-measure-overlay";
+            document.body.appendChild(el);
+          }
+          el.textContent = JSON.stringify(state.result, null, 1);
+        }
+      })();
+    </script>
+    <script type="module">
+      import init from "./fandhe_egui_proxy.js";
+      await init();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,47 @@
+{
+  "id": "local-peer-connect",
+  "name": "近くの端末との直接通信",
+  "group": "未着手の OS 機能",
+  "order": 86,
+  "priority": 75,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "MultipeerConnectivity（iOS 7+）/ Wi-Fi Aware（`WiFiAware`、iOS 26+）",
+      "perm": "`NSLocalNetworkUsageDescription`、`NSBonjourServices`。Wi-Fi Aware は entitlement（要確認）",
+      "url": "https://developer.apple.com/documentation/multipeerconnectivity",
+      "note": "未実装。Wi-Fi Aware のページ: https://developer.apple.com/documentation/wifiaware 。Wi-Fi Aware は iOS 26 以降のみ（Apple 公式表記で確認）。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Wi-Fi Aware（`WifiAwareManager`、API 26+）/ Nearby Connections（GMS 依存）",
+      "perm": "`NEARBY_WIFI_DEVICES`（API 33+）/ `ACCESS_FINE_LOCATION`（API 32 以下）ほか（要確認）",
+      "url": "https://developer.android.com/develop/connectivity/wifi/wifi-aware",
+      "note": "未実装。Nearby Connections のページ: https://developers.google.com/nearby/connections/overview 。こちらは Play services が要る。iOS との相互接続は不可。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "MultipeerConnectivity（macOS 10.10+）",
+      "perm": "要確認",
+      "url": "https://developer.apple.com/documentation/multipeerconnectivity",
+      "note": "未実装。Apple 公式のプラットフォーム表記で macOS 対応を確認。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`Windows.Devices.WiFiDirect.WiFiDirectDevice`（Wi-Fi Direct）",
+      "perm": "要確認（package identity の要否は文書に記載なし）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.wifidirect.wifidirectdevice",
+      "note": "未実装。iOS との相互接続は不可（他 OS と同じ）"
+    },
+    "web": {
+      "status": "no",
+      "api": "なし（WebRTC は相手探索と信号経路を自前で用意する必要がある）",
+      "perm": "なし",
+      "url": "",
+      "safari": "同左（API なし）",
+      "note": "端末同士を近距離で見つけて直接つなぐ API は無い。WebRTC は別機能として扱う（要確認）。"
+    }
+  },
+  "note": "iOS / macOS は MultipeerConnectivity、Android は Wi-Fi Aware / Nearby Connections。Windows は Wi-Fi Direct（WiFiDirectDevice）。Web は no。OS 間で互換が無いため、同じ OS 同士の接続に限られる点を実装前に確認する。bluetooth-le（既存 id）は周辺機器との接続で、本機能は端末同士の通信。今回の範囲: 同じアプリを動かす近くの端末を探して接続し、文字列 1 つを送り合う（ファイル転送・3 台以上は扱わない）。"
+}

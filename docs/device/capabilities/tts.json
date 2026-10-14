@@ -1,0 +1,80 @@
+{
+  "id": "tts",
+  "name": "読み上げ（TTS、任意テキストの音声合成）",
+  "group": "端末機能の型（Phase 11）",
+  "capture": "captures/tts.png",
+  "order": 30,
+  "priority": 1,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "detail": "できている（実機）",
+      "verified": true,
+      "api": "AVFoundation（`AVSpeechSynthesizer`）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/avfoundation/avspeechsynthesizer",
+      "note": "実装済み（#866）。`AVSpeechSynthesizer` を ObjC + `extern \"C\"` で橋渡し（`fandhe_ios_clipboard.m` と同型）。VoiceOver（スクリーンリーダー）とは別 API で、画面の読み上げではなくアプリが指定した文字列の発話。iPhone 15 で確認済み（2026-09-15: 読み上げ / 発話中の停止 / 空文字のエラー）",
+      "sourceName": [
+        "読み上げ（TTS、任意テキストの音声合成）"
+      ],
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "`crates/fandhe-egui-proxy/ios/fandhe_ios_tts.m` + `crates/fandhe-egui-proxy/src/device/ios.rs`（`IosTts`）、Issue #866"
+    },
+    "android": {
+      "status": "done",
+      "detail": "できている（実機）",
+      "verified": true,
+      "api": "`TextToSpeech`（`android.speech.tts`）",
+      "perm": "なし",
+      "url": "https://developer.android.com/reference/android/speech/tts/TextToSpeech",
+      "note": "実装済み（#866）。`MainActivity.ttsRequest` が `runOnUiThread` で `TextToSpeech` を操作し、非同期初期化（`OnInitListener`）完了を待ってから発話・停止を `nativeOnTtsResult` で Rust 側 mailbox へ返す（初期化未完了時に偽の成功を返さない設計）。TalkBack（スクリーンリーダー、上表の該当行）とは別 API で、画面の読み上げではなくアプリが指定した文字列の発話。再生成中の発話は `onDestroy` が確定させ、新画面には『読み上げました』が出ない既知の天井（#881）。Pixel 10a で確認済み（2026-09-15: 読み上げ / 発話中の停止 / 空文字のエラー）",
+      "sourceName": [
+        "読み上げ（TTS、任意テキストの音声合成）"
+      ],
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "`crates/fandhe-egui-proxy/src/device/android.rs`（`AndroidTts`）+ `platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java`、Issue #866"
+    },
+    "macos": {
+      "status": "done",
+      "detail": "できている",
+      "api": "AVFoundation（`AVSpeechSynthesizer`）/ AppKit（`NSSpeechSynthesizer`、非推奨）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/avfoundation/avspeechsynthesizer",
+      "note": "実装済み（#865）。`AVSpeechSynthesizer` を自前で叩くと `fandhe-device` の `#![forbid(unsafe_code)]` を破るため、OS 同梱コマンド `say`（内部で AVFoundation を使う）を `std::process::Command` で起動する方式にした（`tts` クレート（crates.io）は `Send`/`Sync` 非対応・保守終了気味の依存を引くため不採用、判断根拠は PR 本文参照）。Mac で実アプリを動かし、読み上げ・停止・OS 未対応時のエラー表示（偽の成功を出さないこと）を目視・聴取で確認済み",
+      "sourceName": [
+        "読み上げ（TTS、任意テキストの音声合成）"
+      ],
+      "implStatus": "実装済み",
+      "impl": "`crates/fandhe-device/src/tts.rs`（`CommandTts`）、Issue #865"
+    },
+    "windows": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "api": "WinRT（`Windows.Media.SpeechSynthesis.SpeechSynthesizer`）",
+      "perm": "なし",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.speechsynthesis.speechsynthesizer",
+      "note": "実装済み（#865）。WinRT `SpeechSynthesizer` は直接は使わず、PowerShell 経由の `System.Speech.Synthesis.SpeechSynthesizer`（SAPI）で同じ OS の読み上げ機能を呼ぶ（`arboard` 経由のクリップボードと同型の判断）。テキストはスクリプト文字列へ連結せず環境変数 `FANDHE_TTS_TEXT` で渡す（コマンドインジェクション対策）。Windows 実機での確認は未了",
+      "sourceName": [
+        "読み上げ（TTS、任意テキストの音声合成）"
+      ],
+      "implStatus": "実装済み（実機未確認）",
+      "impl": "`crates/fandhe-device/src/tts.rs`（`CommandTts`）、Issue #865"
+    },
+    "web": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "api": "Web Speech API（`SpeechSynthesis`）",
+      "perm": "なし（Safari はユーザー操作起点でのみ発話）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesis",
+      "safari": "対応（ユーザー操作起点が必要）",
+      "note": "実装済み（#867）。`fandhe-web-dom` の `mount_with_effect` + `tts` モジュールが `window.speechSynthesis` / `SpeechSynthesisUtterance` へ配線する（wasm32 では `fandhe-device` の `Tts` トレイトを通らない）。非対応ブラウザでは Err を返し偽の成功を出さない。スクリーンリーダーへの AX ツリー公開とは別 API。実ブラウザでの確認は未了",
+      "sourceName": [
+        "読み上げ（TTS、任意テキストの音声合成）"
+      ],
+      "implStatus": "実装済み（実ブラウザ未確認）",
+      "impl": "`crates/fandhe-web-dom/src/tts.rs` + `crates/fandhe-web-dom/src/mount.rs`（`mount_with_effect`）、Issue #867"
+    }
+  },
+  "note": "`AVSpeechSynthesizer` / Android `TextToSpeech` / macOS `AVSpeechSynthesizer` / Windows `SpeechSynthesizer` / Web Speech API（`SpeechSynthesis`）。5 OS とも公開 API あり。**画面読み上げ（VoiceOver/TalkBack、群 A）とは別の機能**で、アプリが指定した文字列を発話させる API。群 A の行が iOS で「できない（上流未対応）」なのは accesskit 依存の話であり、本行とは経路が異なる"
+}

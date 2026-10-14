@@ -1,0 +1,508 @@
+[package]
+name = "fandhe-egui-proxy"
+version = "0.1.0"
+edition = "2021"
+description = "TASK-1.2（REQ-1 / M2）検証専用プロキシ。fandhe-core の Screen<S>/Node<S> を egui/eframe で実描画し、要素欠落 0 件を確認するためのクレート（本実装レンダラではない）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+publish = false
+
+# TASK-5.3（REQ-5 / M4、Issue #238）: 固定 60Hz 環境でのフレームレート計測専用アプリ
+# （`src/frame_metrics.rs`）を opt-in で有効化する non-default feature。依存クレートの
+# 追加は行わない加法的（additive）feature（coding-rust.md）。有効化すると `main.rs` /
+# `ios.rs` / `android.rs` のエントリが計測専用ビルドへ切り替わる（既存の `ProxyApp`
+# 経路とは共存しない別ビルド。`frame_metrics.rs` モジュール doc 参照）。
+[features]
+# Phase 8（端末機能の型検証、親 #752 / Issue #746）: `fandhe-device` への依存とレジストリの
+# device 画面行（`screens/registry.rs`、#747〜#749 で追加）を囲う。既定 on
+# （Phase 8 が現行方針のため常時ビルド対象にする）。spec 要件化が否決された場合は
+# 本 feature 定義と下記 optional 依存行、`crates/fandhe-device/` を削除するだけで切り離せる
+# （加法的 feature、coding-rust.md 準拠。手順詳細は README.md 参照）。
+default = ["device"]
+# Issue #750: Android のカメラ実装（`device/android.rs`）が JNI 経由で `MainActivity` を
+# 呼び出すため `dep:jni` を追加する。`jni` は android target 分岐（下記）にのみ optional
+# 依存として置かれており、Android 以外では `device` feature を有効にしても入らない。
+# Issue #898: `windows`/`raw-window-handle` も同じパターンで Windows target 分岐にのみ
+# optional 依存として置く（Windows 以外では `device` feature を有効にしても入らない）。
+# Issue #907: `windows-future`（`IAsyncOperation`/`AsyncOperationCompletedHandler` の
+# 型名）も同じ Windows target 分岐にのみ置く。
+device = ["dep:fandhe-device", "dep:serde_json", "dep:jni", "dep:windows", "dep:raw-window-handle", "dep:windows-future", "dep:ttf-parser"]
+
+frame-metrics = []
+
+# Issue #718（security.md「A05 セキュリティ設定ミス: デバッグフラグを残さない」）:
+# `debug.fandhe.proxy_app` システムプロパティによる表示画面の切替経路（`src/android.rs` の
+# `read_debug_proxy_app_property`）を opt-in 化する non-default feature。既定 off のため
+# ストア提出物（release ビルド）には切替経路自体がコンパイルされず、`adb shell setprop` で
+# 画面を差し替えられない。`scripts/android/verify-tv-focus.sh` はこの feature を明示的に
+# 有効化してクロスビルドするため、開発時の検証手順は影響を受けない。
+# release で表示画面を固定したい場合はビルド時 `FANDHE_PROXY_APP`（`option_env!`、#715）を使う
+# （Android も `android_main` が `screens::selected_app_name` 経由でビルド時指定を解決する）。
+debug-proxy-app = []
+
+# TASK-5.1（REQ-5 / M4、Issue #236 / #593）: iOS 本番エントリ（`src/ios.rs` の `run()`）と
+# デスクトップ native 本番エントリ（`src/main.rs` の `fn main`）に、計測専用の
+# `ColdStartProbe`（`src/cold_start.rs`、`COLD_START_MS=` の stderr 出力）を常駐させないための
+# ゲート。既定 off（coding-rust.md の「feature フラグは加法的」原則）。
+# `scripts/ios/measure-cold-start.sh` はこの feature を明示的に有効化してビルドする
+# ため計測はこの feature の有効化のみで行える一方、ストア配布ビルド（本 feature 無効）には計測用
+# instrumentation・ログ出力が一切残らない（Review 指摘対応）。
+# `frame-metrics` と同時に有効化した場合は `src/ios.rs` / `src/main.rs` の `cfg` 優先順位により
+# `cold-start-probe` 側の経路が優先される（両 feature とも計測専用ビルドであり、
+# 本番ビルドでは通常どちらも無効のため実用上の組み合わせにはならない）。
+cold-start-probe = []
+
+# wasm-bindgen が処理する対象は本 cdylib（`src/lib.rs` の wasm_bindgen(start) を含む）。
+# rlib は `tests/desktop_render.rs`（結合テスト）からの通常の crate 参照に必要。
+[lib]
+name = "fandhe_egui_proxy"
+crate-type = ["cdylib", "rlib"]
+
+# native（デスクトップ相当）実行体。wasm32 向けエントリは src/web.rs（wasm_bindgen(start)）を使うため、
+# 本 bin は wasm32 では no-op になる（main.rs 冒頭のコメント参照）。
+#
+# bin 名をパッケージ名（cdylib の wasm 出力ファイル名の元）とあえて分ける。
+# wasm32-unknown-unknown では bin/cdylib の出力ファイル名が衝突すると
+# （どちらも `fandhe_egui_proxy.wasm` に正規化される）、cargo が後勝ちで
+# 上書きし、wasm-bindgen が bin 側（no-op で実質空）の wasm を誤って処理して
+# `failed to find intrinsics to enable clone_ref function` を起こすことを
+# 実機検証で確認した（TASK-1.2）。
+[[bin]]
+name = "fandhe-egui-proxy-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+# Issue #751: `build.rs` が iOS 向け ObjC 実装（`ios/fandhe_ios_camera.m`）を
+# コンパイルするために使う。build-dependency はホスト（ビルドを実行する環境）で
+# 評価されるため target cfg を付けられず、無条件にここへ置く。iOS 以外の
+# ターゲットでは `build.rs` が起動直後に return する no-op のため、依存自体は
+# 解決されてもコンパイルは発生しない。
+cc = { workspace = true }
+
+[dependencies]
+# 依存方向はプロキシ → fandhe-core の一方向（coding-rust.md 準拠）。
+# 共通コアへ egui 依存を持ち込まない検証用の最適化レイヤという位置づけ。
+fandhe-core = { path = "../fandhe-core" }
+# プロトタイプアプリ（一覧・詳細・設定の 3 画面、TASK-2.2-S5 / #52）を実描画対象にする
+# ための依存。依存方向はここでもプロキシ → 共通コード（fandhe-prototype）の
+# 一方向を維持する（fandhe-prototype 側は本クレートを一切参照しない）。
+fandhe-prototype = { path = "../fandhe-prototype" }
+egui = { workspace = true }
+image = { workspace = true }
+# TASK-9.1-S2（REQ-9 / M3、Issue #215）: ウィジェット → AX ノードマッピング
+# （`src/accessibility.rs`）が使うコア型のみの依存。`accesskit_macos` 等の
+# プラットフォームアダプタは含まないため、TASK-6.2-S1 が絞り込んだ eframe 側
+# "accesskit" feature の有効/無効に関わらず、全ターゲットで常時コンパイル・
+# lint・ユニットテスト対象になる（ワークスペースルート Cargo.toml のコメント参照）。
+accesskit = { workspace = true }
+
+# TASK-6.2-S1（REQ-6、docs/architecture/feature-audit.md 4 節・8 節）: 検証専用プロキシである
+# 本クレートの通常ビルドから accesskit（AT-SPI/UIA/NSAccessibility 連携一式）を外し、
+# TASK-6.3 のメモリ比較計測のベースラインとする。監査は「製品ビルドでは維持」と判定して
+# いるが、テスト（egui_kittest、下記 dev-dependencies）に限って再有効化される構成とする。
+# TASK-9.1-S1（REQ-9 / M3、Issue #214）で macOS 通常ビルドのみ下記 macOS 専用 target 分岐
+# により再有効化した（Linux / Windows / wasm32 / iOS / Android は本ベースラインを維持）。
+#
+# 非 default の crate feature（例: `accesskit = ["eframe/accesskit"]`）として opt-in 経路を
+# 追加する案も検討したが、`--all-features` と Android ターゲットを組み合わせた場合
+# （`android-native-activity` と eframe の `accesskit` feature の同時有効化）で
+# `compile_error!`（本ファイル内 Android 分岐のコメント参照）を誘発する footgun になることを
+# `cargo ndk check --all-features` で実機確認したため見送った（REQ-9 実検証時の再有効化は
+# dev-dependencies の feature 統合、または REQ-9 実装時に改めて設計する）。TASK-9.1-S1 では crate feature
+# 方式ではなく target 依存分岐（下記 macOS 分岐）を採用し、この footgun を回避したまま
+# macOS 限定で accesskit を有効化する（cargo は同一依存の複数 target 分岐の feature を
+# union するため、既存の native 分岐（glow/x11/wayland）と合成される）。
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Issue #1103（写真選択）: デスクトップ / モバイルの 2 段目（復号確認、`device/photo_pick.rs`）で
+# JPEG を復号する。Cargo.lock に既にある `zune-core` / `zune-jpeg` を有効にするだけで新しい
+# パッケージは増えない（gif / webp は `gif`・`image-webp` 等が増えるため採らない）。
+# wasm32 には持ち込まない（Web は `createImageBitmap` で復号する）。
+image = { workspace = true, features = ["jpeg"] }
+# TASK-10.1（REQ-10 / M3、Issue #218）: CJK 対応フォント（Noto Sans JP）の同梱資産。
+# `src/font.rs` の native 版 `install_cjk_font` が既定フォントとして埋め込む。
+# wasm32 のみ除外する（このクレートの他の native/iOS/Android 分岐すべてに必要なため、
+# 個別ターゲット分岐ではなく本クレート全体で 1 箇所にまとめる）。埋め込みは配信サイズを
+# 即座に数 MB 増やし REQ-4（3MB 基準）と衝突するため、Web は現行どおり `fonts/` からの
+# fetch 方式を維持し、コピー元のみ本クレート同梱の資産へ差し替える
+# （`scripts/web/build-wasm-proxy.sh`・`src/web.rs` 参照）。
+fandhe-fonts = { path = "../fandhe-fonts" }
+# Phase 8（Issue #746）: feature `device`（既定 on）でのみ有効化する端末機能クレート。
+# wasm32 では `fandhe-device` の `ureq` 依存が `getrandom` を解決できないため
+# （ルート Cargo.toml の `ureq` コメント参照）、この native 分岐にのみ置く
+# （wasm32 では feature を on にしても依存自体が入らない）。
+fandhe-device = { path = "../fandhe-device", optional = true }
+# Issue #748: `device/http_fetch.rs` が `fandhe_device::http::Http` の応答（JSON 配列）を
+# `Vec<String>` へ変換するために使う。`fandhe-device` と同じく feature `device` に
+# 含め、wasm32 では依存自体を持ち込まない（`ureq` と同じ理由、上記コメント参照）。
+serde_json = { workspace = true, optional = true }
+# CI 失敗の是正（2026-08-24）: wgpu-hal（"vulkan" / "dx12" feature）が推移的に要求する
+# `ordered-float` を rustc 1.88.0（rust-toolchain.toml）で解決可能な 5.4 以下へ固定する
+# ための直接依存。本クレート自身は使用しない（バージョン上限の宣言のみ。理由と
+# 撤去条件はルート Cargo.toml の `ordered-float` コメント参照）。wgpu が入らない wasm32
+# （eframe "glow" のみ）には不要のため、この native 分岐に置く。
+ordered-float = { workspace = true }
+
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")))'.dependencies]
+# glow バックエンド + Linux ネイティブウィンドウ（X11 / Wayland）で
+# デスクトップ相当（macOS/Windows/Linux 共通）の実起動を確認する。
+# iOS / Android はこの分岐から除外し、それぞれ下の `cfg(target_os = "ios")`
+# （wgpu/Metal、TASK-1.3-S1）・`cfg(target_os = "android")`（wgpu/Vulkan、TASK-1.5-S2）
+# 分岐へ切り出す（REQ-1 / M3、docs/architecture/responsibility-boundary.md のバックエンド
+# 選択マトリクスに準拠）。
+#
+# TASK-6.2-S1（REQ-6）: 通常ビルドから "accesskit" を外す。dev-dependencies の
+# egui_kittest（"wgpu" feature）は egui 側の "accesskit" feature を無条件に有効化するため、
+# resolver = "2" の feature 統合により `cargo test` 時は本 target 分岐の eframe にも
+# accesskit 機能が加算される（PR #306 是正の E0027 はテストビルドでのみ再現し得る問題であり、
+# dev-dependencies 側の eframe（下記）で "accesskit" を明示することで解消する。通常
+# ビルド（`cargo build`）には dev-dependencies の feature が統合されないため、本分岐の
+# eframe には "accesskit" を含めない）。
+#
+# TASK-9.1-S1（REQ-9 / M3、Issue #214）・Issue #1001: macOS / Windows は下記
+# `cfg(target_os = "macos")` / `cfg(target_os = "windows")` 分岐で "accesskit" を
+# 再加算する（本分岐自体には含めない。Linux のみ本ベースラインのまま）。
+eframe = { workspace = true, default-features = false, features = ["glow", "x11", "wayland"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# TASK-9.1-S1（REQ-9 / M3、Issue #214）: macOS 通常ビルドで eframe の "accesskit" feature を
+# 有効化し、NSAccessibility（accesskit_macos）まで依存チェーンを成立させる
+# （eframe accesskit → egui/egui-winit accesskit → accesskit_winit →
+# `cfg(target_os = "macos")` で accesskit_macos。レジストリソース実査で確認済み）。
+# cargo は同一依存の複数 target 分岐の feature を union するため、上の
+# `cfg(not(any(wasm32, ios, android)))` 分岐（glow/x11/wayland）と合成され、
+# macOS 実行バイナリのみ glow + accesskit の組み合わせになる（Linux は accesskit なしを維持）。
+# `src/lib.rs` の `Node::Widget` アーム（`cfg(target_os = "macos")`）が
+# `egui::Context::accesskit_node_builder` を呼ぶために必要（S2、Issue #215 実装済み）。
+# eframe 側のイベントループが AX ツリー公開を自動配線するため、本クレート側の追加コードは
+# このアプリ側依存の追加のみで足りる。
+eframe = { workspace = true, default-features = false, features = ["accesskit"] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+# iOS（実機 aarch64-apple-ios・シミュレータ aarch64-apple-ios-sim / x86_64-apple-ios を
+# `target_os = "ios"` で一括捕捉）向けバックエンド分岐（TASK-1.3-S1 / REQ-1 / M3）。
+#
+# TASK-9.2（REQ-9 / M4、Issue #240）: 本分岐が "accesskit" feature を含めない理由は
+# TASK-6.2-S1 のメモリ削減方針だけでなく、含めても意味がないことを確認済みだからでもある。
+# egui-winit（本クレートが使う eframe 0.33.3 系列経由）が要求する accesskit_winit は
+# 0.29.2 に解決され、同バージョンの platform_impl/mod.rs は windows/macos/unix(feature
+# 限定)/android(feature 限定) のみを実装し iOS は null.rs（no-op アダプタ）へ
+# フォールバックする。iOS 向け基本アダプタは accesskit_winit 0.33.0 以降（2026-05-11、
+# accesskit_ios 0.1.0 配線）に存在するが、egui/eframe は最新リリース（0.35.0）でも
+# accesskit_winit を 0.32.0 に固定しており、iOS 対応版へ未到達。詳細な機械的検証・
+# 一次情報は accesskit_winit の上流リリースノートを参照（"accesskit" を有効化しても null アダプタのため挙動は不変。上流 bump 後に
+# 本コメントと合わせて再検討する）。
+# responsibility-boundary.md の設計どおり glow（OpenGL）ではなく wgpu 経由で Metal を
+# 選択する。x11 / wayland は iOS に持ち込まない（feature は加法的・必要最小限、
+# coding-rust.md 準拠）。
+#
+# wgpu の直接依存は eframe の "wgpu" feature（`dep:wgpu` / `dep:egui-wgpu` を有効化するのみで
+# バックエンド機能は含まない）を補うために追加する。`eframe::wgpu::Backends::METAL` を
+# 実際に選択可能にするには wgpu 側の "metal" feature が有効になっている必要があり、
+# eframe はそれを独自の "default" feature（glow/x11/wayland 込みで iOS には不要）経由でしか
+# 弱転送しないため、本クレートから同一バージョンの wgpu へ直接依存し、resolver = "2" の
+# feature 統合で "metal" のみを最小追加する（Cursor Bugbot 指摘、PR #310 是正）。
+#
+# TASK-6.2-S1（REQ-6）: "accesskit" は通常ビルドから外す（native 分岐と同じ理由。
+# dev-dependencies の egui_kittest との feature 統合で `cargo test` 時のみ有効化される）。
+wgpu = { workspace = true }
+eframe = { workspace = true, default-features = false, features = ["wgpu"] }
+#
+# 注: `cargo tree -i x11rb`（iOS ターゲット）で x11rb が現れるが、これは本分岐の
+# feature（x11/wayland を含まない）由来ではなく、egui-winit の依存 arboard が
+# クリップボード実装の unix ゲート（`unix && !macos && !android`）を iOS にも
+# 誤って適用している上流側の挙動。workspace の `resolver = "2"`（ルート Cargo.toml）
+# により本分岐の feature 自体は wasm32/native 分岐と混ざらないことは
+# `cargo tree` で確認済み。arboard 側の解消は TASK-1.3-S3 のスコープとする。
+#
+# 検証範囲: 本分岐（S1）では Linux 上でリンク不要な `cargo check --target aarch64-apple-ios`
+# （および aarch64-apple-ios-sim）と `cargo tree -i wgpu` による依存解決確認までとする。
+# Apple SDK 依存のビルドスクリプトにより Linux 上で check が通らない場合は
+# `cargo metadata` / `cargo tree` による依存解決確認までを検証範囲とし、実ビルド検証は
+# TASK-1.3-S3（#42、macOS 環境）へ引き継ぐ。
+
+[target.'cfg(target_os = "android")'.dependencies]
+# Android（`android-activity` の GameActivity 方式、TASK-9.3-S1 / REQ-9 / M4、Issue #242 で
+# NativeActivity から確定。決定記録: docs/architecture/android-activity-method.md）向け分岐。
+# REQ-1 は「Android = Vulkan」を要求するため glow ではなく wgpu 経由でバックエンドを選択し、
+# `android.rs` 側で `wgpu::Backends::VULKAN` に固定する（Activity 方式の変更はバックエンド
+# 選択に影響しない）。
+#
+# "android-game-activity" は egui-winit 経由で winit の `android-game-activity`
+# feature（`android_activity/game-activity`）を有効化する。GameActivity は
+# `androidx.games:games-activity` AAR・Gradle 依存が必要（platforms/android/app/
+# build.gradle.kts・AndroidManifest.xml 参照）。NativeActivity 方式は #242 で不採用と
+# 確定した（`accesskit_android` が GameActivity 限定のため。REQ-9 / TASK-9.3 系列の
+# 前提条件。決定記録の§2/§3 参照）。
+#
+# android-activity 0.6.1 は同一 workspace 内で "native-activity" / "game-activity" の
+# 同時有効化を拒否するため（features 統合の都合上）、`fandhe-winit-ime` 側も同じ
+# "android-game-activity" へ揃える必要がある（同クレート・同バージョンの Cargo.toml 参照）。
+#
+# TASK-9.3-S2（REQ-9 / M4、Issue #243）: "accesskit" を Android 分岐で有効化する。
+# GameActivity 化（S1・#242）により eframe 0.33.3 の `compile_error!`（
+# `target_os = "android"` かつ `android-native-activity` かつ `accesskit` の組み合わせを
+# 拒否する制約、`eframe-0.33.3/src/lib.rs` 参照）は構造的に回避済みで、
+# "android-game-activity" との併用は許可されている（`cargo ndk check --all-features`
+# で compile_error! 非発火を実機確認）。
+eframe = { workspace = true, default-features = false, features = ["wgpu", "android-game-activity", "accesskit"] }
+# egui-winit の "accesskit" feature は accesskit_winit の `accesskit_android`
+# （Android 専用 optional target 依存、既定 off）までは有効化しないため（ルート
+# Cargo.toml の accesskit_winit コメント参照）、本クレートから同一バージョンの
+# accesskit_winit へ直接依存し、resolver = "2" の feature 統合で `accesskit_android`
+# のみを最小追加する。これにより accesskit_winit の `platform_impl::android`
+# （`InjectingAdapter` 経由で実際に TalkBack へ AX ツリーを公開する実アダプタ）が
+# 選択される（`accesskit_android` feature 非有効時は `platform_impl::null` の
+# no-op アダプタへフォールバックし、accesskit を有効化するだけでは何も公開されない。
+# 検証根拠は上記レポート参照）。
+accesskit_winit = { workspace = true, features = ["accesskit_android"] }
+# wgpu の直接依存は eframe の "wgpu" feature（`dep:wgpu` / `dep:egui-wgpu` を有効化するのみで
+# バックエンド機能は含まない）を補うために追加する。`android.rs` が要求する
+# `Backends::VULKAN` を実際に選択可能にするには wgpu 側の "vulkan" feature が
+# 有効になっている必要があり、eframe はそれを独自の "default" feature
+# （glow/x11/wayland 込みで Android には不要）経由でしか弱転送しないため、
+# 本クレートから同一バージョンの wgpu へ直接依存し、resolver = "2" の feature 統合で
+# "vulkan" のみを最小追加する（Cursor Bugbot 指摘、PR #313 是正。iOS 分岐の
+# "metal" 追加と同じ理由、上記コメント参照）。
+# ルート Cargo.toml の workspace 定義は "metal" のみを既定で有効化しているため、
+# ここで明示的に上書き（additive にマージ）しないと Vulkan HAL がコンパイルに含まれない。
+wgpu = { workspace = true, features = ["vulkan"] }
+# TASK-17.2（REQ-17、Issue #280）: `FANDHE_PROXY_APP` 環境変数は `adb shell am start` から
+# Android アプリプロセスへ到達しない（Android には env var を注入する標準手段がない）ため、
+# `adb shell setprop debug.fandhe.proxy_app tv-focus` で設定できる Android システム
+# プロパティを起動時に読むフォールバックを追加する（`android.rs` 参照）。
+# `__system_property_get`（bionic の `<sys/system_properties.h>`）を直接 FFI 呼び出しする
+# ため JNI は不要。libc は android-activity 等の推移的依存で既にワークスペースへ解決済み
+# （Cargo.lock 実査済み）であり、新規に依存グラフを増やさない。
+libc = "0.2"
+# `NativeOptions.android_app` の型（`winit::platform::android::activity::AndroidApp`）を
+# 参照するために必要。eframe が推移的に要求する winit と同一インスタンスへ
+# 解決される（workspace 一元管理、ルート Cargo.toml のコメント参照）。
+winit = { workspace = true, features = ["android-game-activity"] }
+# Issue #750: `device/android.rs` の `AndroidCamera` が `AndroidApp::vm_as_ptr()` /
+# `activity_as_ptr()` を `jni::JavaVM` へ橋渡しして `MainActivity.requestCameraCapture()` を
+# 呼ぶために使う。`android-activity`（上記）の直接依存として既に 0.22.4 が解決済みのため
+# 新規パッケージは増えない（ルート Cargo.toml の `jni` コメント参照）。
+jni = { workspace = true, optional = true }
+# Issue #1378: `device/android_local_fonts.rs` が `name` テーブルを読む（ルート Cargo.toml 参照）。
+ttf-parser = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# Issue #1001（REQ-9）: Windows 通常ビルドで eframe の "accesskit" feature を有効化し、
+# UI Automation（accesskit_windows）まで依存チェーンを成立させる（eframe accesskit →
+# egui/egui-winit accesskit → accesskit_winit → `cfg(target_os = "windows")` で
+# accesskit_windows。Cargo.lock に既存の accesskit_windows 0.29.2 を使うだけなので
+# 新規パッケージは増えない）。cargo は同一依存の複数 target 分岐の feature を union する
+# ため、上の `cfg(not(any(wasm32, ios, android)))` 分岐（glow/x11/wayland）と合成され、
+# Windows 実行バイナリのみ glow + accesskit の組み合わせになる（macOS 分岐と同じ理由、
+# 上記コメント参照。Linux は accesskit なしを維持）。`src/lib.rs` の合成 AX ノード登録・
+# `text_role.rs` の live region 付与（いずれも `cfg(any(target_os = "macos",
+# target_os = "android", target_os = "windows"))`）が `egui::Context::accesskit_node_builder`
+# を呼ぶために必要。eframe 側のイベントループが AX ツリー公開を自動配線するため、
+# 本クレート側の追加コードはこのアプリ側依存の追加のみで足りる。
+eframe = { workspace = true, default-features = false, features = ["accesskit"] }
+# Issue #898: `device/windows_share.rs` が `IDataTransferManagerInterop::GetForWindow` /
+# `ShowShareUIForWindow`（`Win32_UI_Shell`）でウィンドウ束縛して `DataTransferManager`
+# （`ApplicationModel_DataTransfer`）を呼ぶ。`Foundation` は `TypedEventHandler` /
+# `Uri`、`Win32_Foundation` は `HWND` に必要。feature は加法的（coding-rust.md）で、
+# `device` feature off ではこの依存自体は入らない（下記 optional + `dep:windows`）。
+windows = { workspace = true, optional = true, features = [
+    "ApplicationModel_DataTransfer",
+    "Foundation",
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+    # Issue #907: `device/windows_biometric.rs` が Windows Hello
+    # （`UserConsentVerifier`/`IUserConsentVerifierInterop`）を呼ぶために使う。
+    "Security_Credentials_UI",
+    # Issue #907: `IUserConsentVerifierInterop::RequestVerificationForWindowAsync` が
+    # `unsafe fn` として定義されている場所（`Win32_System_WinRT`）。
+    "Win32_System_WinRT",
+    # Issue #913: `device/windows_text_scale.rs` が `UISettings.TextScaleFactor` を
+    # 読むために使う。ウィンドウ束縛は不要。
+    "UI_ViewManagement",
+    # Issue #923: `device/windows_secure_credential.rs` が `PasswordVault` /
+    # `PasswordCredential` を呼ぶために使う。`Security_Credentials_UI`（#907）が
+    # 含意する feature だが、依存意図を明示するため列挙する。ウィンドウ束縛・unsafe は不要。
+    "Security_Credentials",
+    # Issue #933: `device/windows_gamepad.rs` が `Windows.Gaming.Input.Gamepad` を
+    # 呼ぶために使う。`Gamepad::GetCurrentReading`/`Gamepads` は safe fn としてラップ
+    # 済みのためウィンドウ束縛・unsafe は不要（`windows_text_scale.rs` と同じ判断）。
+    "Gaming_Input",
+    # Issue #955: `device/windows_mic_record.rs` が `MediaCapture`（音声録音）を
+    # 呼ぶために使う。
+    "Media_Capture",
+    # Issue #955: `MediaEncodingProfile::CreateM4a`（AAC エンコード設定）に使う。
+    "Media_MediaProperties",
+    # Issue #955: `InMemoryRandomAccessStream`/`DataReader`（録音先バッファの読み書き）
+    # に使う。
+    "Storage_Streams",
+    # Issue #1004: `device/windows_notification.rs` が `ToastNotificationManager`/
+    # `ToastNotifier`/`ToastNotification` で WinRT Toast を出すために使う。
+    "UI_Notifications",
+    # Issue #1004: Toast のテンプレート XML（`GetTemplateContent` が返す
+    # `XmlDocument`）へ `CreateTextNode`/`AppendChild` で値を差し込むために使う
+    # （XML 文字列を連結しない、security.md A03）。
+    "Data_Xml_Dom",
+    # Issue #1060: `device/windows_bluetooth_le.rs` が
+    # `BluetoothLEAdvertisementWatcher`（`Devices_Bluetooth_Advertisement`）・
+    # `BluetoothAdapter`（`Devices_Bluetooth`）・ラジオ状態（`Devices_Radios`）を呼ぶ。
+    "Devices_Bluetooth",
+    "Devices_Bluetooth_Advertisement",
+    "Devices_Radios",
+    # Issue #1091: `device/windows_haptics.rs` が `VibrationDevice` /
+    # `SimpleHapticsController`（`Devices_Haptics`）と、`SupportedFeedback` が返す
+    # `IVectorView`（`Foundation_Collections`）を呼ぶ。新規パッケージは増えない。
+    "Devices_Haptics",
+    "Foundation_Collections",
+    # Issue #1094: `device/windows_nlp.rs` が `WordsSegmenter` / `WordSegment`
+    # （`Data_Text`）を呼ぶ。新規パッケージは増えない。
+    "Data_Text",
+    # Issue #1402: `device/windows_midi.rs` が `MidiInPort` / `MidiNoteOnMessage`（`Devices_Midi`）と
+    # 抜き差しを受ける `DeviceWatcher`（`Devices_Enumeration`）を呼ぶ。新規パッケージは増えない。
+    "Devices_Midi",
+    "Devices_Enumeration",
+    # Issue #1282: `device/windows_network_status.rs` が `NetworkInformation` /
+    # `ConnectionProfile`（`Networking_Connectivity`）を呼ぶ。新規パッケージは増えない。
+    "Networking_Connectivity",
+    # Issue #1247: `device/windows_pedometer.rs` が `Windows.Devices.Sensors.Pedometer` /
+    # `PedometerReading`（`Devices_Sensors`）を呼ぶ。新規パッケージは増えない。
+    "Devices_Sensors",
+    # Issue #1304: `device/windows_device_info.rs` が `GlobalMemoryStatusEx` /
+    # `GetWindowsDirectoryW` / `OSVERSIONINFOW`（`Win32_System_SystemInformation`）と
+    # `RtlGetVersion`（`Wdk_System_SystemServices`）を呼ぶ。新規パッケージは増えない。
+    "Win32_System_SystemInformation",
+    "Wdk_System_SystemServices",
+    # Issue #1330: `device/windows_audio_devices.rs` が `IMMDeviceEnumerator` / `EnumAudioEndpoints`
+    # （`Win32_Media_Audio`）と `PKEY_Device_FriendlyName`（`Win32_Devices_FunctionDiscovery`）を呼ぶ。
+    # 新規パッケージは増えない。
+    "Win32_Media_Audio",
+    "Win32_Devices_FunctionDiscovery",
+    # Issue #1376: `device/windows_local_fonts.rs` が DirectWrite の `DWriteCreateFactory` /
+    # `IDWriteFontCollection`（`Win32_Graphics_DirectWrite`）を呼ぶ。新規パッケージは増えない。
+    "Win32_Graphics_DirectWrite",
+    # Issue #1341: `device/windows_multi_display.rs` が `EnumDisplayMonitors` /
+    # `GetMonitorInfoW`（`Win32_Graphics_Gdi`）と `GetDpiForMonitor`（`Win32_UI_HiDpi`）を呼ぶ。
+    # 新規パッケージは増えない。
+    "Win32_Graphics_Gdi",
+    "Win32_UI_HiDpi",
+    # Issue #1274: `device/windows_power_state.rs` が `GetSystemPowerStatus` /
+    # `SYSTEM_POWER_STATUS`（`Win32_System_Power`）を呼ぶ。新規パッケージは増えない。
+    "Win32_System_Power",
+    # Issue #1024: `device/windows_speech_recognition.rs` が WinRT
+    # `Windows.Media.SpeechRecognition.SpeechRecognizer` を呼ぶために使う。
+    "Media_SpeechRecognition",
+    # Issue #1251: `device/windows_image_recognition.rs` が `OcrEngine`（`Media_Ocr`）と
+    # `BitmapDecoder` / `SoftwareBitmap` / `BitmapTransform`（`Graphics_Imaging`）を呼ぶ。
+    # 新規パッケージは増えない。
+    "Media_Ocr",
+    "Graphics_Imaging",
+    # Issue #1033: `device/windows_notification.rs` がスタートメニューへ `.lnk`
+    # ショートカットを作って AUMID を登録するために使う。`IShellLinkW`/`ShellLink`
+    # は `Win32_UI_Shell`（上で導入済み）が持つ。
+    # `CoCreateInstance`/`CoInitializeEx`/`CoUninitialize`/`IPersistFile` に使う。
+    "Win32_System_Com",
+    # `PropVariantChangeType`/`PROPVARIANT` 型そのものに使う。
+    "Win32_System_Com_StructuredStorage",
+    # `VT_LPWSTR`（PROPVARIANT の変換先型定数）に使う。
+    "Win32_System_Variant",
+    # `IPropertyStore`（AUMID をショートカットへ書き込む窓口）に使う。
+    "Win32_UI_Shell_PropertiesSystem",
+    # `PKEY_AppUserModel_ID`（windows-rs のメタデータ上はこの namespace に定義される）
+    # に使う。
+    "Win32_Storage_EnhancedStorage",
+    # Issue #1033（PR #1035 レビュー対応）: `ensure_shortcut` が `std::fs::hard_link`
+    # を使わず `MoveFileExW`（置換なし）で一時ファイルを公開するために使う。
+    # `hard_link` はローカル NTFS 限定（`CreateHardLinkW` が非 NTFS・ネットワーク
+    # リダイレクトされた %APPDATA% で失敗する、Cursor Bugbot 指摘）だが、
+    # 同一ディレクトリ内の移動は `MoveFileExW` の方が広く対応するため。
+    "Win32_Storage_FileSystem",
+    # Issue #1039: `device/windows_system_tray.rs` が通知領域アイコン用の
+    # 不可視ウィンドウ・メッセージループ・ポップアップメニューを組み立てるために
+    # 使う（`CreateWindowExW`/`RegisterClassW`/`GetMessageW`/`TrackPopupMenu` 等）。
+    "Win32_UI_WindowsAndMessaging",
+    # `GetModuleHandleW`（`RegisterClassW` の `hInstance` 解決）に使う。
+    "Win32_System_LibraryLoader",
+    # Issue #1044: `device/windows_background_task.rs` が `ITaskService`/
+    # `ITaskFolder`/`ITaskDefinition`/`ITimeTrigger`/`IExecAction` 等（Task
+    # Scheduler 2.0 COM）を呼ぶために使う。`ITaskService::Connect`/
+    # `ITaskFolder::RegisterTaskDefinition` は `Win32_System_Ole` +
+    # `Win32_System_Variant` の両方を要求する（`VARIANT` の空値渡し）。
+    "Win32_System_TaskScheduler",
+    "Win32_System_Ole",
+    # Issue #1216: `device/windows_url_scheme.rs` が URL scheme の登録・解除
+    # （`RegCreateKeyExW`/`RegSetValueExW`/`RegDeleteTreeW`、`Win32_System_Registry`）、
+    # 単一インスタンス判定の名前付き mutex（`CreateMutexW`/`GetCurrentProcessId`、
+    # `Win32_System_Threading`。`SECURITY_ATTRIBUTES` 型のため `Win32_Security`）、
+    # 起動済みインスタンスへの転送の named pipe（`Win32_System_Pipes`、
+    # `OVERLAPPED` 型のため `Win32_System_IO`、`ReadFile`/`WriteFile` は
+    # `Win32_Storage_FileSystem`（上で導入済み））、pipe 相手のセッション照合
+    # （`ProcessIdToSessionId`、`Win32_System_RemoteDesktop`）、引数解析前の生コマンドライン
+    # 取得（`GetCommandLineW`、`Win32_System_Environment`）に使う。新規パッケージは増えない。
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_System_Pipes",
+    "Win32_System_IO",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_Environment",
+    # Issue #1278: `device/windows_screen_wake_lock.rs` が `SetThreadExecutionState`
+    # （画面スリープの抑止）を呼ぶために使う。新規パッケージは増えない。
+    "Win32_System_Power",
+] }
+# Issue #898: `device/windows_share.rs::remember_window` が `eframe::CreationContext`
+# から HWND を取り出すために使う（`raw-window-handle` の `HasWindowHandle` トレイト）。
+raw-window-handle = { workspace = true, optional = true }
+# Issue #907: `device/windows_biometric.rs` が Windows Hello の完了
+# （`IAsyncOperation<UserConsentVerificationResult>`/`AsyncOperationCompletedHandler`）を
+# 受けるために使う（ルート Cargo.toml の `windows-future` コメント参照）。
+windows-future = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# WebGPU（"wgpu" feature）は wasm32 分岐へ追加しない。WebGPU 非公開環境
+# （`navigator.gpu` なし）で自動フォールバックが `panic!`（`unreachable` トラップ）で
+# 失敗することを PoC-5 で確認済み（TASK-4.3 / REQ-4 / 条件 4）。"glow"
+# （WebGL2、`src/web.rs` で `WebGlContextOption::WebGl2` 固定）のみを採用する。
+# 方針の詳細は `docs/architecture/web-rendering-policy.md` を参照。
+#
+# TASK-6.2-S1（REQ-6）: "accesskit" は通常ビルドから外す（native 分岐と同じ理由。
+# dev-dependencies の egui_kittest との feature 統合で `cargo test` 時のみ有効化される）。
+eframe = { workspace = true, default-features = false, features = ["glow"] }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+# coding-rust.md 準拠: workspace 一元管理へ昇格（Issue #875 で fandhe-web-dom 側にも
+# 同じ依存が増えたため、バージョンの単一管理元をルート Cargo.toml へ寄せた）。
+js-sys = { workspace = true }
+web-sys = { workspace = true, features = [
+    "Document",
+    "Window",
+    "HtmlCanvasElement",
+    # TASK-4.1（REQ-4 / M3、条件 4）: `ensure_canvas_css_size`（src/web.rs）が
+    # canvas のインラインスタイル（width/height）を読み書きするために必要。
+    "HtmlElement",
+    "CssStyleDeclaration",
+    "Response",
+    "console",
+] }
+console_error_panic_hook = { workspace = true }
+
+[target.'cfg(not(target_os = "android"))'.dev-dependencies]
+# Issue #1378: `android_local_fonts::family_name` の純関数テストをホストで走らせる。
+ttf-parser = { workspace = true }
+# egui_kittest（AccessKit ベース）で要素欠落 0 件を機械的に検証し、wgpu バックエンドで
+# レンダ画像（PNG エビデンス）も取得する。
+#
+# Android を対象から除外する（TASK-1.5-S2 / REQ-1 / M3）: egui_kittest は
+# ターゲット非依存に `egui/accesskit` feature を有効化するため、"accesskit" を
+# 明示的に無効化している Android の eframe 分岐（上記コメント参照）と衝突し、
+# egui-winit 側で `PlatformOutput::accesskit_update` のフィールド不整合（E0027）を
+# 起こす（`cargo ndk test --lib` で実機確認済み）。Android 側の要素欠落検証は
+# 実機/エミュレータでの検証（TASK-1.6）に委ねる。
+egui_kittest = { workspace = true, features = ["wgpu"] }
+# TASK-6.2-S1（REQ-6、docs/architecture/feature-audit.md 8 節）: 通常ビルドの各 target 分岐
+# （native/iOS/wasm32）からは "accesskit" を外したため、egui_kittest（上記）が無条件に
+# 有効化する egui 側の "accesskit" feature と、eframe（egui-winit 経由）側の accesskit 実装
+# との間で feature 不整合（E0027、PR #306 是正）が再発しないよう、テストビルド時にのみ
+# 統合される dev-dependencies として eframe 側の "accesskit" をここで明示的に有効化し直す
+# （resolver = "2" の feature 統合は `cargo test` 等の対象ビルドにのみ及び、`cargo build` の
+# 通常ビルドには波及しない）。Android は上記と同じ理由でこの target cfg から除外済み。
+eframe = { workspace = true, default-features = false, features = ["accesskit"] }

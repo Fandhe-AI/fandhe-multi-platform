@@ -1,0 +1,44 @@
+{
+  "id": "safe-area-insets",
+  "name": "セーフエリア・ディスプレイ切り欠き",
+  "group": "未着手の OS 機能",
+  "order": 70,
+  "priority": 70,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "UIKit `safeAreaInsets` / `safeAreaLayoutGuide`",
+      "perm": "不要",
+      "url": "",
+      "note": "未実装。URL 未確認（iOS 調査で未取得）。回転・分割表示で変わるため変更の追従が要る。winit/egui が既にインセットを扱っているか要確認"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`WindowInsetsCompat`（`systemBars()` / `displayCutout()`）、`layoutInDisplayCutoutMode`（API 28+）",
+      "perm": "不要",
+      "url": "https://developer.android.com/develop/ui/views/layout/display-cutout",
+      "note": "未実装。edge-to-edge（targetSdk 35+ は既定）前提でインセットを JNI で渡す。API 28 未満に切り欠きの概念なし"
+    },
+    "macos": {
+      "status": "possible",
+      "note": "未実装。切り欠きのある MacBook のフルスクリーン時に効く",
+      "api": "AppKit `NSScreen.safeAreaInsets`（macOS 12+）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/appkit/nsscreen/safeareainsets"
+    },
+    "windows": {
+      "status": "n-a",
+      "note": "セーフエリアの概念がほぼ不要"
+    },
+    "web": {
+      "status": "possible",
+      "api": "CSS `env(safe-area-inset-top/right/bottom/left)`（`viewport-fit=cover` が前提）",
+      "perm": "なし",
+      "url": "",
+      "safari": "対応（iPhone で主に有効）。MDN の互換表では未確認",
+      "note": "URL 未確認（調査では「一般知識」止まり）。iPhone Safari で主に意味がある"
+    }
+  },
+  "note": "iOS / Android / Web と、切り欠きのある MacBook の macOS（NSScreen.safeAreaInsets）が対象。Windows は n-a。fullscreen-immersive（別 id）と併用する。dynamic-type・dark-mode 等との重なりなし。今回の範囲: 4 辺のインセット値を表示し、そのぶんだけ余白を空けたパネルを描く（回転で更新）"
+}

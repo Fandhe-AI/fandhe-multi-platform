@@ -1,0 +1,47 @@
+{
+  "id": "focus-mode-status",
+  "name": "集中モード・おやすみモードの状態",
+  "group": "未着手の OS 機能",
+  "order": 64,
+  "priority": 69,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "Intents `INFocusStatusCenter`（`focusStatus.isFocused`）",
+      "perm": "要確認（Focus Status の許可 `NSFocusStatusUsageDescription` と Capability が要るはず。未確認）",
+      "url": "",
+      "note": "未実装。URL 未確認。調査では iOS 側を取得していない（Android 調査での言及のみ）。他アプリへ共有する設定をユーザーが許可した場合のみ値が来る点を含め要確認"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`NotificationManager.getCurrentInterruptionFilter`（API 23+）と `ACTION_INTERRUPTION_FILTER_CHANGED`",
+      "perm": "要確認（`ACCESS_NOTIFICATION_POLICY` が要るかは不明）",
+      "url": "https://developer.android.com/reference/android/app/NotificationManager",
+      "note": "未実装。メソッド詳細は取得済みだが一次記載の確認度は低い"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Intents `INFocusStatusCenter`（iOS と同じ）",
+      "perm": "要確認",
+      "url": "",
+      "note": "未実装。URL 未確認。macOS での提供有無は要確認"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`Windows.UI.Shell.FocusSessionManager`（`IsFocusActive` と変更イベント。Windows 11 22H2+）",
+      "perm": "要確認（package identity の要否は文書に記載なし）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.ui.shell.focussessionmanager",
+      "note": "未実装。Windows 11 22H2 以降のみ"
+    },
+    "web": {
+      "status": "no",
+      "api": "ブラウザに該当 API なし",
+      "perm": "-",
+      "url": "",
+      "safari": "非対応",
+      "note": "公開 API はない"
+    }
+  },
+  "note": "iOS / macOS は INFocusStatusCenter、Android は割り込みフィルタ。Windows は FocusSessionManager（Windows 11 22H2+）。Web は公開 API が見当たらず no。notification（既存 id）との違い: 通知の送受信ではなく、利用者が集中モード中かの読み取り。今回の範囲: 「集中モード中 / 通常」を表示する。許可されない場合は「取得できません」を出し、通常と偽らない"
+}

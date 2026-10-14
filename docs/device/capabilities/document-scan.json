@@ -1,0 +1,46 @@
+{
+  "id": "document-scan",
+  "name": "書類スキャン",
+  "group": "未着手の OS 機能",
+  "order": 104,
+  "priority": 110,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "VisionKit `VNDocumentCameraViewController`（書類の自動検出・補正の撮影 UI）",
+      "perm": "`NSCameraUsageDescription`",
+      "url": "https://developer.apple.com/documentation/visionkit/vndocumentcameraviewcontroller",
+      "note": "未実装。結果は画像（`VNDocumentCameraScan`）で返る"
+    },
+    "android": {
+      "status": "possible",
+      "api": "ML Kit Document Scanner（GMS 依存）",
+      "perm": "カメラ権限は不要（Play services 側。報告より）",
+      "url": "https://developers.google.com/ml-kit/vision/doc-scanner",
+      "note": "未実装。GMS（Google Play 開発者サービス）依存"
+    },
+    "macos": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "`VNDocumentCameraViewController` は iOS 向けで、macOS 版の標準スキャン UI は報告で確認できていない（要確認）"
+    },
+    "windows": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "標準のスキャン UI に相当する公開 API はない（報告より）"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "標準 API なし。カメラ映像と自前処理は OS の端末機能ではないので判定に使わない"
+    }
+  },
+  "note": "barcode-scan とは別: 本機能は紙の書類を撮影して補正した画像を得る。今回の範囲: スキャン UI を出し、返ってきた 1 ページの画像を画面に表示するだけ。macOS・Windows・Web は no。"
+}

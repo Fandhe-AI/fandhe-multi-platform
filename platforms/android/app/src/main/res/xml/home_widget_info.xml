@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ホーム画面ウィジェット（Issue #1067）の提供情報。定期更新は扱わない契約のため
+     updatePeriodMillis=0。切り離し時に削除する。 -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/home_widget_description"
+    android:initialLayout="@layout/home_widget"
+    android:minHeight="40dp"
+    android:minWidth="110dp"
+    android:resizeMode="horizontal"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

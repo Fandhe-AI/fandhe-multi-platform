@@ -1,0 +1,287 @@
+# REQ-3 / TASK-3.4-S1（Issue #71）: watchOS / visionOS 向け .xcodeproj プロジェクト構成の SSOT。
+#
+# 背景・スコープ:
+# - `FandheWatchApp/` `FandheVisionApp/` は SwiftPM の「型チェック用ビルド単位」として実装済み
+#   （TASK-3.3、Issue #64 系列）だが、SwiftPM 単体ではアプリバンドル（.app・コード署名込み）を
+#   生成できない。実機/シミュレータへインストール可能な成果物化には `.xcodeproj` が必須であり、
+#   本ファイルはその「プロジェクト構成」を宣言的に定義する（親: TASK-3.4 / Issue #70）。
+# - `.xcodeproj`（project.pbxproj）本体は手書きでコミットしない。Linux 開発環境では pbxproj の
+#   正当性検証手段がなく、UUID 管理・フォーマットの破損リスクが高いため、本 YAML を
+#   XcodeGen（https://github.com/yonaskolb/XcodeGen）への入力 SSOT とし、`.xcodeproj` は
+#   macOS 上で `scripts/apple/generate-xcodeproj.sh` により都度生成する生成物として扱う
+#   （`.gitignore` で追跡除外。生成物にコミットするとマージコンフリクト・署名情報混入の
+#   温床になるため — security.md A05）。
+#
+# 現在の設計（親 #70 / TASK-3.4）:
+# - リンク経路: アプリターゲット → `FandheSwiftUIBridge`（SwiftPM パッケージ）→
+#   `CFandheBridge` → `FandheBridgeBinary`（XCFramework）。
+# - `LIBRARY_SEARCH_PATHS` / `OTHER_LDFLAGS` 等の直接リンカ設定は追加しない
+#   （binaryTarget 経由と重複させるとシンボル二重リンクの温床になるため）。
+# - Rust staticlib の再ビルドは `aggregateTargets:`（`packages:` / `targets:` の兄弟。
+#   下記参照）配下の `FandheWatchBridgeBuild` / `FandheVisionBridgeBuild` という
+#   専用ターゲットへ置き、各アプリターゲットの `dependencies:` にターゲット依存として
+#   参照する（`embed: false` / `link: false` を付与し、aggregate ターゲットには
+#   埋め込み・リンク対象となる成果物が存在しないことを明示している）。理由: Xcode は
+#   アプリターゲットの `preBuildScripts` を実行するより前に、そのターゲットが依存する
+#   SwiftPM パッケージグラフ（`FandheSwiftUIBridge` → `FandheBridgeBinary`）を
+#   解決・ビルドしてしまうため、アプリターゲット自身の `preBuildScripts:` に
+#   ビルドスクリプトを直接配線すると常に「1 つ前」の XCFramework がリンクされる。
+#   Xcode はターゲット依存先の完全なビルドを、依存元ターゲット自身のビルド
+#   （パッケージ解決を含む）より先に完了させるため、aggregate ターゲット経由なら
+#   アプリターゲットがパッケージグラフを解決する時点で既に XCFramework が
+#   最新化済みになる（aggregate ターゲットには SwiftPM パッケージへの依存を持たせず、
+#   スクリプト実行のみに限定することで、この順序保証を成立させている）。この順序保証は
+#   Xcode 内部のビルドスケジューリング挙動に依存するため macOS 実ビルドで確認する
+#   （TASK-3.5 / #231・人間担当）。
+#
+# 生成手順: `scripts/apple/generate-xcodeproj.sh`（macOS 上で xcodegen 導入後に実行）を参照。
+# 初回は XCFramework 未生成のため binaryTarget が SwiftPM 依存グラフへ現れない
+# （この初回限りの制約は SwiftPM のマニフェスト評価タイミングに起因し、上記の
+# ターゲット依存による順序保証だけでは解消できない）。
+# `scripts/apple/build-bridge-xcframework.sh` を先に実行してから xcodegen / Xcode を
+# 開くこと（generate-xcodeproj.sh の案内・下記 aggregateTargets の役割分担コメント参照）。
+
+name: Fandhe
+
+options:
+  # bundleIdPrefix は使わず、各ターゲットの settings.PRODUCT_BUNDLE_IDENTIFIER で
+  # 既存 Resources/Info.plist の CFBundleIdentifier と一致する値を明示する（下記参照）。
+  createIntermediateGroups: true
+  # 生成物の `.xcodeproj` に空ディレクトリを持ち込まない（Xcode 既定のプロジェクト構成
+  # のみを SSOT にするための設定。xcuserdata の除外は `.gitignore` 側で別途行っている）。
+  generateEmptyDirectories: false
+
+# FandheSwiftUIBridge をプロジェクト全体で参照可能にするプロジェクトレベルの `packages:`
+# （`targets:` の兄弟。SwiftPM パッケージの実体は
+# `platforms/apple/FandheSwiftUIBridge/Package.swift`、binaryTarget 配線は同ファイル参照）。
+packages:
+  FandheSwiftUIBridge:
+    path: FandheSwiftUIBridge
+
+# アプリターゲットの `preBuildScripts` は
+# Xcode がそのターゲットの SwiftPM パッケージグラフ（`FandheSwiftUIBridge` →
+# `FandheBridgeBinary`）を解決・ビルドした「後」にしか実行されないため、アプリ
+# ターゲット自身に置いたままでは常に 1 つ前の XCFramework をリンクしてしまう。
+# `aggregateTargets:`（XcodeGen の予約セクション。`targets:` とは別の名前空間で、
+# コンパイル成果物を持たないターゲットを定義する）配下のこの 2 ターゲットは
+# SwiftPM パッケージへの依存を一切持たず、Rust staticlib（XCFramework）の再ビルド
+# のみを行う。アプリターゲット側の `dependencies:` にターゲット依存として指定する
+# ことで、Xcode に「アプリターゲットのビルド（パッケージ解決を含む）を開始する前に、
+# この aggregate ターゲットのビルド（＝スクリプト実行）を完了させる」順序を保証させる。
+aggregateTargets:
+  FandheWatchBridgeBuild:
+    buildScripts:
+      - script: |
+          "${SRCROOT}/../../scripts/apple/xcode-prebuild-bridge.sh"
+        name: "Build fandhe-swiftui-bridge (Rust staticlib)"
+        basedOnDependencyAnalysis: false
+    settings:
+      base:
+        # Xcode 15+ の User Script Sandboxing は buildScripts の実行をサンドボックス化し、
+        # サンドボックス外（cargo のビルドキャッシュ・rustup ツールチェーン等、
+        # $HOME 配下や $CARGO_HOME）への書き込みを拒否する。上記 buildScripts
+        # （xcode-prebuild-bridge.sh 経由の cargo 呼び出し）に必須の緩和のため、
+        # 対象 2 つの aggregate ターゲットに限定して無効化する（プロジェクト全体設定には
+        # しない — security.md「A05 セキュリティ設定ミス」準拠）。
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+  FandheVisionBridgeBuild:
+    buildScripts:
+      - script: |
+          "${SRCROOT}/../../scripts/apple/xcode-prebuild-bridge.sh"
+        name: "Build fandhe-swiftui-bridge (Rust staticlib)"
+        basedOnDependencyAnalysis: false
+    settings:
+      base:
+        # FandheWatchBridgeBuild と同じ理由（上記コメント参照）で無効化する。
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+targets:
+  # --- TASK-5.2（REQ-5 / REQ-6 実施後、Issue #237）メモリ増分実機計測専用の 2 ターゲット ---
+  # FandheWatchApp/FandheVisionApp とは異なり FandheSwiftUIBridge へは依存しない
+  # （Rust コアに依存しない「ベースライン」「ネイティブ SDK 比較」という位置づけのため）。
+  # 配布用 FandheIosApp（scripts/ios/build-simulator-app.sh が生成するバンドル）とも
+  # 独立しており、ストア提出パイプラインには接続されない（security.md A05 対策）。
+  FandheMemBaselineApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: FandheMemBaselineApp/Sources/FandheMemBaselineApp
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: FandheMemBaselineApp/Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.metrics.baseline
+        PRODUCT_NAME: FandheMemBaselineApp
+        CODE_SIGN_STYLE: Automatic
+
+  FandheMemNativeApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: FandheMemNativeApp/Sources/FandheMemNativeApp
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: FandheMemNativeApp/Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.metrics.nativesample
+        PRODUCT_NAME: FandheMemNativeApp
+        CODE_SIGN_STYLE: Automatic
+
+  # FandheMemBaselineApp（SwiftUI 版）は FandheMemNativeApp（SwiftUI）の増分計測でのみ
+  # 差し引きに使う。FandheIosApp（fandhe-egui-proxy、winit/UIApplicationMain 経由で
+  # SwiftUI には依存しない）の増分計測では、代わりにこの UIKit 版ベースラインを使う
+  # （SwiftUI ベースラインを egui 系アプリの差し引きに使うと SwiftUI ランタイム分を
+  # 誤って除去してしまうため。PR #497。AppDelegate.swift 参照）。
+  FandheMemBaselineAppRaw:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: FandheMemBaselineAppRaw/Sources/FandheMemBaselineAppRaw
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: FandheMemBaselineAppRaw/Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.metrics.baselineraw
+        PRODUCT_NAME: FandheMemBaselineAppRaw
+        CODE_SIGN_STYLE: Automatic
+
+  # --- TASK-1.4 系（Issue #567）: Personal Team（無料 Apple ID）のプロビジョニング
+  # プロファイル自動生成専用のホストターゲット ---
+  # 配布対象の FandheIosApp 本体（scripts/ios/measure-cold-start.sh 等が
+  # aarch64-apple-ios 向けにビルドする Rust/winit バイナリの手組みバンドル）とは別物。
+  # 無料 Apple ID は wildcard プロファイルを発行できないため、bundle id
+  # com.fandhe.iosapp に対応する明示的なプロファイルを Xcode の
+  # `-allowProvisioningUpdates` に自動生成させる目的だけの、Rust コアにも依存しない
+  # 最小 SwiftUI アプリとして定義する（詳細は Sources 側のドキュメンテーションコメント参照）。
+  FandheIosApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: FandheIosApp/Sources/FandheIosApp
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        # 既存の Resources/Info.plist（scripts/ios/build-simulator-app.sh が参照する
+        # ものと同一ファイル）をそのまま流用する。CFBundleIdentifier は
+        # com.fandhe.iosapp で一致済み。
+        INFOPLIST_FILE: FandheIosApp/Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.iosapp
+        PRODUCT_NAME: FandheIosApp
+        CODE_SIGN_STYLE: Automatic
+
+  FandheWatchApp:
+    type: application
+    # 標準 watchOS アプリ（ペアリング必須の companion 形式ではなく、単体インストール可能な
+    # 現行の standalone 形式）。既存 Info.plist の WKApplication=true / WKWatchOnly=true と
+    # 整合する構成であることを macOS 側の生成確認で必ず確認する（検証ドキュメント参照）。
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: FandheWatchApp/Sources/FandheWatchApp
+    # `FandheWatchBridgeBuild`（aggregateTargets）へのターゲット依存を、SwiftPM パッケージ
+    # 依存より先に記載する（Xcode 側のビルド順序保証の根拠は上記 aggregateTargets: 直前の
+    # コメント参照）。aggregate ターゲットは埋め込み・リンク対象の成果物を持たないため
+    # `embed: false` / `link: false` を明示する。
+    dependencies:
+      - target: FandheWatchBridgeBuild
+        embed: false
+        link: false
+      - package: FandheSwiftUIBridge
+        product: FandheSwiftUIBridge
+    settings:
+      base:
+        # Info.plist は SwiftPM ターゲットからは意図的に未参照（inert）のまま実装されており
+        # （FandheWatchApp/Package.swift のコメント参照）、アプリターゲットの Info.plist
+        # として本ファイルで明示的に配線する。
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: FandheWatchApp/Resources/Info.plist
+        # Info.plist（CFBundleIdentifier）と同一値を明示。GENERATE_INFOPLIST_FILE: NO でも
+        # 署名・ビルド設定は PRODUCT_BUNDLE_IDENTIFIER を参照するため二重管理になる
+        # （将来の一元化は out-of-scope-tracking.md 経由で検討）。
+        # GENERATE_INFOPLIST_FILE: NO のため Info.plist 側に CFBundleExecutable /
+        # CFBundleInfoDictionaryVersion が必須（Info.plist 冒頭コメント参照）。
+        PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.watchapp
+        PRODUCT_NAME: FandheWatchApp
+        # FandheBridge.xcframework は Rust の Apple ターゲット制約（aarch64 のみ、
+        # build-bridge-xcframework.sh 冒頭コメント参照）により arm64 スライスのみを持つ。
+        # 既定 ARCHS（arm64 + x86_64）のままではシミュレータ向けビルドの x86_64 リンクが
+        # 失敗するため、実機・シミュレータとも arm64 に固定する（#69 の起動確認で実測）。
+        ARCHS: arm64
+        # 署名は Xcode 側の Automatic signing に委ねる。DEVELOPMENT_TEAM は本ファイル・
+        # リポジトリのどこにも書かない（security.md「秘密情報の混入防止」・下記 local.xcconfig 参照）。
+        CODE_SIGN_STYLE: Automatic
+
+  FandheVisionApp:
+    type: application
+    platform: visionOS
+    deploymentTarget: "1.0"
+    sources:
+      - path: FandheVisionApp/Sources/FandheVisionApp
+    # FandheWatchApp と同様の理由（`embed: false` / `link: false` の要否含む）で
+    # ターゲット依存を配線する。
+    dependencies:
+      - target: FandheVisionBridgeBuild
+        embed: false
+        link: false
+      - package: FandheSwiftUIBridge
+        product: FandheSwiftUIBridge
+    settings:
+      base:
+        # FandheWatchApp と同様、GENERATE_INFOPLIST_FILE: NO のため Info.plist 側に
+        # CFBundleExecutable / CFBundleInfoDictionaryVersion が必須（Info.plist 冒頭コメント参照）。
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: FandheVisionApp/Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.visionapp
+        PRODUCT_NAME: FandheVisionApp
+        # FandheWatchApp と同じ理由（XCFramework が arm64 のみ）で arm64 に固定する。
+        ARCHS: arm64
+        CODE_SIGN_STYLE: Automatic
+
+  # --- Issue #1065（親 #1064）: ホーム画面ウィジェット（macOS）---
+  # 小さなホストアプリ + WidgetKit 拡張。どちらも FandheSwiftUIBridge（XCFramework）へは
+  # 依存せず、Rust 側は App Group コンテナのファイルへ直接書く
+  # （`crates/fandhe-egui-proxy/src/device/apple_home_widget.rs`）。拡張の Swift ソースは
+  # iOS（#1066）でも共有できる場所に置く。App Group ID は
+  # `$(TeamIdentifierPrefix)com.fandhe.widget`（Team ID は書かない、署名チームは
+  # `DEVELOPMENT_TEAM` を xcodebuild の引数で注入する。`scripts/apple/build-macos-widget-host.sh`）。
+  FandheWidgetHost:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: FandheWidgetHost/Sources/FandheWidgetHost
+    dependencies:
+      - target: FandheTextWidget
+        embed: true
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: FandheWidgetHost/Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.widgethost
+        PRODUCT_NAME: FandheWidgetHost
+        CODE_SIGN_STYLE: Automatic
+
+  FandheTextWidget:
+    type: app-extension
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: FandheTextWidget/Sources/FandheTextWidget
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: FandheTextWidget/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: FandheTextWidget/Resources/FandheTextWidget.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.widgethost.text
+        PRODUCT_NAME: FandheTextWidget
+        CODE_SIGN_STYLE: Automatic
+
+# 署名チーム（DEVELOPMENT_TEAM）注入について:
+# 本ファイルには一切書かない。macOS 上で Xcode の Signing & Capabilities から手動選択するか、
+# `platforms/apple/local.xcconfig`（.gitignore 済み・任意のローカルファイル。本 project.yml
+# からは include しない — 存在しない場合に生成が失敗する構成を避けるため）で各自管理する。

@@ -1,0 +1,47 @@
+{
+  "id": "smart-home",
+  "name": "スマートホーム操作",
+  "group": "未着手の OS 機能",
+  "order": 123,
+  "priority": 112,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "HomeKit / MatterSupport",
+      "perm": "`NSHomeKitUsageDescription`（要確認）、HomeKit capability（要確認）",
+      "url": "https://developer.apple.com/documentation/homekit",
+      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement・capability の要否は検証できない。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Google Home APIs for Android",
+      "perm": "記載なし（要確認）",
+      "url": "",
+      "note": "未実装。URL 未確認（developers.home.google.com/apis/android は取得時 404）。Google Home 側の開発者登録・GMS 依存の見込み（要確認）"
+    },
+    "macos": {
+      "status": "no",
+      "api": "なし（HomeKit は iOS・iPadOS・Mac Catalyst・tvOS・watchOS・visionOS のみで macOS ネイティブ版が無い）",
+      "perm": "",
+      "url": "https://developer.apple.com/documentation/homekit",
+      "note": "macOS ネイティブで HomeKit を使う公開 API は無い。Mac Catalyst 経由は本フレームワークの対象外"
+    },
+    "windows": {
+      "status": "no",
+      "api": "OS 標準のスマートホーム API は確認できず",
+      "perm": "",
+      "url": "",
+      "note": "要確認。URL 未確認"
+    },
+    "web": {
+      "status": "no",
+      "api": "ブラウザ標準のスマートホーム API なし",
+      "perm": "",
+      "url": "",
+      "safari": "対応なし",
+      "note": ""
+    }
+  },
+  "note": "smart-home は照明・錠などのスマート家電を操作する。iOS は HomeKit、Android は Google Home と系統が別で、共通 trait にするには対象機器の操作を「機器一覧の取得・オンオフ」程度に絞る必要がある。実機（Matter / HomeKit 対応機器）が要る。今回の範囲: 登録済み機器の名前一覧を画面に出す（操作は含めない）。"
+}

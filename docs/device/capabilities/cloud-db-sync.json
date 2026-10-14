@@ -1,0 +1,52 @@
+{
+  "id": "cloud-db-sync",
+  "name": "iCloud データベース同期（レコード・ファイル）",
+  "group": "未着手の OS 機能",
+  "order": 47,
+  "priority": 120,
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "CloudKit（`CKContainer` / `CKDatabase`）",
+      "perm": "iCloud capability（CloudKit）＝制限付き entitlement `com.apple.developer.icloud-services`（`CloudKit`）+ `com.apple.developer.icloud-container-identifiers`。provisioning profile が必要。変更通知（`CKSubscription`）には remote notification（`aps-environment`）も要る",
+      "url": "https://developer.apple.com/documentation/cloudkit",
+      "note": "未実装。CloudKit のコンテナ作成と Development / Production のスキーマ運用（CloudKit Console）が要る。サーバーはアプリ側に持たないが、Apple のサービスに依存する。非同期 API が多く completion の一度きり保証が要る。有償の Apple Developer Program が前提。",
+      "sourceName": [
+        "iCloud データベース同期（レコード・ファイル）"
+      ]
+    },
+    "android": {
+      "status": "no",
+      "api": "Google Drive API / Block Store（Google Play services）/ Auto Backup",
+      "perm": "GMS 依存",
+      "url": "https://developer.android.com/identity/data/autobackup",
+      "note": "Auto Backup は上限 25 MB の一方向バックアップ・復元で、端末間同期にならない。Drive API は GMS 依存で前提外。CloudKit Web Services は Apple のサービスを HTTP で呼ぶもので、OS の端末機能ではないため判定に使わない。",
+      "detail": "できない（OS 標準のレコード・ファイル同期の公開機構が無い。Drive / Block Store は GMS 依存、Auto Backup は同期ではない）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "CloudKit（`CKContainer` / `CKDatabase`）",
+      "perm": "制限付き entitlement `com.apple.developer.icloud-services`（`CloudKit`）+ `com.apple.developer.icloud-container-identifiers`。.app に `Contents/embedded.provisionprofile` が必要。変更通知には `com.apple.developer.aps-environment` も要る",
+      "url": "https://developer.apple.com/documentation/cloudkit",
+      "note": "未実装。素の実行体には profile を置けないが、.app 包みなら置ける。profile 無しではコード署名の検証で起動が拒否される。App ID に iCloud（CloudKit + コンテナ）を有効化した Developer ID 用 profile が必要（開発用は登録済み端末のみ）。"
+    },
+    "windows": {
+      "status": "no",
+      "api": "該当 API なし（roaming は廃止・identity 前提）",
+      "perm": "package identity",
+      "url": "https://learn.microsoft.com/en-us/windows/apps/design/app-settings/store-and-retrieve-app-data",
+      "note": "Microsoft Learn は roaming データ・設定を Windows 11 で非サポートとし、後継に Azure App Service を挙げる。これは自前サーバー・BaaS 系で前提外。OneDrive は OS の公開 API ではなく Microsoft Graph の外部サービス。",
+      "detail": "できない（OS 標準のレコード・ファイル同期 API が無い）"
+    },
+    "web": {
+      "status": "no",
+      "api": "該当する標準ブラウザ API なし（IndexedDB・Cache は端末内のみ）",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API",
+      "safari": "該当 API なし",
+      "note": "IndexedDB は同一ブラウザ内のみ。CloudKit JS 等は Apple 提供のサービスをウェブ API で呼ぶ形で、ブラウザの端末機能ではないため判定に使わない。",
+      "detail": "できない（端末間でレコード・ファイルを同期するブラウザ標準 API が無い）"
+    }
+  },
+  "note": "Apple 2 OS は CloudKit（制限付き entitlement + provisioning profile が必須、macOS は .app 包みで profile 同梱可）。Android は Drive / Block Store（GMS）・Auto Backup（同期ではない）で no。Windows は roaming 廃止・identity 前提で no。Web は標準 API が無く no。"
+}

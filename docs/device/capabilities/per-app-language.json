@@ -1,0 +1,43 @@
+{
+  "id": "per-app-language",
+  "name": "アプリ別の言語設定",
+  "group": "未着手の OS 機能",
+  "order": 126,
+  "priority": 102,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "設定アプリの「アプリごとの言語」を `Bundle.main.preferredLocalizations` / `Locale` で読む",
+      "perm": "なし",
+      "url": "",
+      "note": "URL 未確認。アプリ側は Info.plist に対応言語（`CFBundleLocalizations`）を宣言する必要がある。設定画面を開く導線は `UIApplication.openSettingsURLString`（要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`LocaleManager`（API 33+）、`AppCompatDelegate`（API 32 以前は AppCompat 1.6.0+）",
+      "perm": "なし",
+      "url": "https://developer.android.com/guide/topics/resources/app-languages",
+      "note": "未実装。`locales_config.xml` の宣言が要る。API 33 未満は AppCompat 経由で minSdk に応じた分岐が要る（要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "システム設定の「アプリの言語」を `Bundle.main.preferredLocalizations` で読む",
+      "perm": "なし",
+      "url": "",
+      "note": "URL 未確認。macOS での扱いは iOS と同様の見込み（要確認）"
+    },
+    "windows": {
+      "status": "no",
+      "api": "アプリ別の言語設定（`ApplicationLanguages`）はパッケージアプリ前提の見込み",
+      "perm": "package identity が必要な見込み（要確認）",
+      "url": "",
+      "note": "要確認。unpackaged の代替は未確認。URL 未確認"
+    },
+    "web": {
+      "status": "n-a",
+      "note": "言語はブラウザ全体の設定（`navigator.languages`）でアプリ別の概念なし"
+    }
+  },
+  "note": "per-app-language は OS が持つ「このアプリだけ別の言語」設定の読み取り。dynamic-type / dark-mode（既存 id）と同じ「OS 設定の追従」系。今回の範囲: 現在の言語コードを画面に出し、設定アプリへの案内を表示する（言語切替後の再描画は含めない）。"
+}

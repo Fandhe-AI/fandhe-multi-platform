@@ -1,0 +1,16 @@
+error[E0061]: this method takes 3 arguments but 4 arguments were supplied
+  --> tests/error_injection/case06_arity_mismatch.rs:21:29
+   |
+21 |         Screen::new("フォーム").text_field("メモ", get_memo, set_memo, "extra");
+   |                                 ^^^^^^^^^^                             ------- unexpected argument #4 of type `&'static str`
+   |
+note: method defined here
+  --> src/ui/screen.rs
+   |
+   |     pub fn text_field(
+   |            ^^^^^^^^^^
+help: remove the extra argument
+   |
+21 -         Screen::new("フォーム").text_field("メモ", get_memo, set_memo, "extra");
+21 +         Screen::new("フォーム").text_field("メモ", get_memo, set_memo);
+   |

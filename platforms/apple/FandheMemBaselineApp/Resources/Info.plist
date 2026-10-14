@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  iOS メモリ計測ベースラインアプリの Info.plist（TASK-5.2 / REQ-5、Issue #237）。
+  検証専用（Package.swift・project.yml 参照）。
+
+  FandheIosApp/Resources/Info.plist の必須キー構成を踏襲する。MinimumOSVersion は
+  同ファイルと同じ 17.0 に揃える（同一実機・同一 OS での比較を成立させるため）。
+  デバッグフラグ・ATS 例外・不要な UsageDescription は追加しない
+  （security.md「A05 セキュリティ設定ミス」対策）。
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>FandheMemBaseline</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.fandhe.metrics.baseline</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>FandheMemBaselineApp</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+		<integer>2</integer>
+	</array>
+	<key>MinimumOSVersion</key>
+	<string>17.0</string>
+</dict>
+</plist>

@@ -1,0 +1,62 @@
+{
+  "id": "audio-devices",
+  "name": "音声デバイスの列挙・出力先選択",
+  "group": "未着手の OS 機能",
+  "order": 78,
+  "priority": 49,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "api": "`AVAudioSession`（`category` / `availableInputs` / `currentRoute.outputs` の `portName`。読み取りのみ）",
+      "perm": "不要（usage description・privacy manifest の追加なし。`setCategory` / `setActive` を呼ばない）",
+      "url": "https://developer.apple.com/documentation/avfaudio/avaudiosession",
+      "note": "実装済み（#1331）。範囲は接続中の入出力デバイス名の一覧のみ（出力先の選択・切り替え・音量は範囲外）。デバイス ID・種別は取らない・保持しない・ログに出さない。入力は category が入力を許す間（録音中など）だけ取れ、それ以外は「マイク使用中のみ」と表示して推測しない。出力は現在の経路で全候補ではない。0 件は正常な空として扱い、nil・範囲外だけを取得不可とする。守る範囲: 0 件と取得不可の区別・共有セッションへ書き込まないこと・失敗を成功値へ畳まないこと。守らない範囲: 読み取り後の経路変化（再取得まで）・複数プロセス間の一致・同名の区別。画面を開いたとき UI スレッドで同期 1 回だけ読み、「再取得」で読み直す（並行経路なし）。iOS 実機の目視は #1329",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1329）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_audio_devices.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_audio_devices.m + crates/fandhe-egui-proxy/src/device/audio_devices.rs + crates/fandhe-core/src/screens/audio_devices_show.rs + crates/fandhe-device/src/audio_devices.rs、Issue #1331"
+    },
+    "android": {
+      "status": "done",
+      "api": "`AudioManager.getDevices`（`GET_DEVICES_INPUTS` / `GET_DEVICES_OUTPUTS`）+ `AudioDeviceInfo.getProductName`",
+      "perm": "不要（`RECORD_AUDIO` は宣言しない）",
+      "url": "https://developer.android.com/reference/android/media/AudioManager",
+      "note": "実装済み（#1332）。範囲は接続中の入出力デバイス名の一覧のみ（出力先の選択・切り替え・音量は範囲外）。デバイス ID・アドレス（MAC）は取らない・保持しない・ログに出さない。名前は制御文字除去と 128 文字、各方向 64 件まで（超過分は捨てる）。内蔵機器は機種名で並ぶ。守る範囲: 0 件と取得不可の区別・失敗を成功値へ畳まないこと・ID と MAC を取らないこと。守らない範囲: OS 間の名前の表記の一致、読み取り後の接続・取り外しの反映（再取得まで）、複数プロセス間の一致。UI スレッドで同期 1 回だけ読み、保留中の要求を持たない（Activity 再生成で破棄するものが無い）。Android 実機の確認は #1329",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#1329）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_audio_devices.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/AudioDevicesHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/audio_devices.rs + crates/fandhe-core/src/screens/audio_devices_show.rs + crates/fandhe-device/src/audio_devices.rs、Issue #1332"
+    },
+    "macos": {
+      "status": "done",
+      "api": "Core Audio `AudioObjectGetPropertyData`（`kAudioHardwarePropertyDevices` / `kAudioDevicePropertyStreamConfiguration` の input・output scope / `kAudioObjectPropertyName`）",
+      "perm": "不要（I/O を開かないので TCC のマイク確認は掛からない見込み。#1329 で確認）",
+      "url": "https://developer.apple.com/documentation/coreaudio",
+      "note": "実装済み（#1330）。範囲は接続中の入出力デバイス名の一覧のみ（出力先の選択・切り替え・音量は範囲外）。デバイス ID は取らない・保持しない・ログに出さない。名前は制御文字除去と 128 文字、各方向 64 件まで（超過分は捨てる）。守る範囲: 0 件と取得不可の区別・失敗を成功値へ畳まないこと・ID を取らないこと。守らない範囲: OS 間の名前の表記の一致、読み取り後の接続・取り外しの反映（再取得まで）、複数プロセス間の一致。画面を開いたとき UI スレッドで同期 1 回だけ読み、「再取得」で読み直す（並行経路なし）。Mac 実機の目視は #1329",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#1329）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_audio_devices.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_audio_devices.m + crates/fandhe-egui-proxy/src/device/audio_devices.rs + crates/fandhe-core/src/screens/audio_devices_show.rs + crates/fandhe-device/src/audio_devices.rs、Issue #1330"
+    },
+    "windows": {
+      "status": "done",
+      "api": "`IMMDeviceEnumerator::EnumAudioEndpoints`（`DEVICE_STATE_ACTIVE`、capture / render）+ `PKEY_Device_FriendlyName`",
+      "perm": "なし（package identity 不要。マイクのプライバシー設定との関係は #1329 で確認）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/coreaudio/core-audio-apis-in-windows-vista",
+      "note": "実装済み（#1330）。範囲は接続中の入出力デバイス名の一覧のみ（出力先の選択・切り替え・音量は範囲外）。デバイス ID は取らない・保持しない・ログに出さない。名前は制御文字除去と 128 文字、各方向 64 件まで（超過分は捨てる）。守る範囲: 0 件と取得不可の区別・失敗を成功値へ畳まないこと・ID を取らないこと。守らない範囲: OS 間の名前の表記の一致、読み取り後の接続・取り外しの反映（再取得まで）、複数プロセス間の一致。ワーカースレッドで COM（MTA）を初期化して読み、5 秒の期限を過ぎたら失敗として確定する（遅れて届いた結果は捨てる。中断できない COM 呼び出しはプロセス終了で OS が片付ける）。Windows 実機の確認は #1329",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#1329）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_audio_devices.rs + crates/fandhe-egui-proxy/src/device/audio_devices.rs + crates/fandhe-core/src/screens/audio_devices_show.rs + crates/fandhe-device/src/audio_devices.rs、Issue #1330"
+    },
+    "web": {
+      "status": "done",
+      "api": "`navigator.mediaDevices.enumerateDevices()`（`kind` / `label` のみ）。出力の可否は `HTMLMediaElement.prototype.setSinkId` の有無で判定",
+      "perm": "名前はマイク許可後のみ。この画面は許可を求めない。secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/enumerateDevices",
+      "safari": "出力は列挙しないので「取得できません」と出す",
+      "note": "実装済み（#1333）。範囲は入出力デバイス名の一覧のみ（出力先の選択 `selectAudioOutput` / `setSinkId` は範囲外）。`deviceId` / `groupId` は読まない。許可前は名前も件数も出さず「マイクの許可後に表示」。守る範囲: 0 件・取得不可・許可前の区別、失敗を成功値へ畳まないこと、ID を取らないこと、1 マウント内の取得順序。守らない範囲: ブラウザ間の表記の一致、Chrome の「既定」「通信」擬似エントリ、読み取り後の接続・取り外しの反映（`devicechange` 非購読、再取得まで）、複数タブ間の一致、非表示タブで解決しない場合の期限、入力 0 台で許可できない環境の出力表示。実ブラウザの目視は #1329",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#1329）",
+      "impl": "crates/fandhe-web-dom/src/audio_devices.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/audio_devices_show.rs、Issue #1333"
+    }
+  },
+  "note": "iOS は AVAudioSession、Android は AudioManager、macOS は Core Audio、Windows は Core Audio、Web は enumerateDevices。mic-record と media-playback（いずれも既存 id）は録音・再生そのもので、本機能は入出力デバイスの一覧と切り替えを扱う点が違う。今回の範囲: 接続中の入出力デバイス名を一覧で出すだけ（切り替え・音量操作は扱わない）。"
+}

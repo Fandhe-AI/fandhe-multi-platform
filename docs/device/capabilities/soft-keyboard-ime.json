@@ -1,0 +1,51 @@
+{
+  "id": "soft-keyboard-ime",
+  "name": "ソフトキーボード文字入力（IME）",
+  "group": "既存機能の棚卸し",
+  "order": 5,
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "detail": "できている（実機）",
+      "verified": true,
+      "api": "UIKit（`UITextInput`/`UIResponder`）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/uikit/uitextinput",
+      "note": "実装済み・実機確認済み",
+      "sourceName": [
+        "ソフトキーボード文字入力",
+        "ソフトキーボード入力"
+      ],
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "`crates/fandhe-egui-proxy/src/ios_text_input.rs`・`soft_keyboard.rs`、`crates/fandhe-winit-ime`"
+    },
+    "android": {
+      "status": "done",
+      "detail": "できている（実機）",
+      "verified": true,
+      "api": "`GameTextInput`（`android-activity` 経由。`InputConnection`）",
+      "perm": "なし",
+      "url": "https://developer.android.com/games/agdk/game-text-input",
+      "note": "実装済み（#794/#797/#799）。GameActivity 前提の API で、本構成にネイティブに乗る",
+      "sourceName": [
+        "ソフトキーボード入力",
+        "ソフトキーボード入力（`GameTextInput`）"
+      ],
+      "implStatus": "実装済み",
+      "impl": "#794 / #797 / #799"
+    },
+    "macos": {
+      "status": "done",
+      "detail": "できている（未確認）"
+    },
+    "windows": {
+      "status": "done",
+      "detail": "できている（未確認）"
+    },
+    "web": {
+      "status": "done",
+      "detail": "できている（未確認）"
+    }
+  },
+  "note": "PR #799（iOS）・PR #797（Android）、#794 で実機 OK・closed（09-07）"
+}

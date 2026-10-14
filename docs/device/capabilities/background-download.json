@@ -1,0 +1,47 @@
+{
+  "id": "background-download",
+  "name": "OS 管理のバックグラウンドダウンロード",
+  "group": "未着手の OS 機能",
+  "order": 94,
+  "priority": 64,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "`URLSessionConfiguration.background(withIdentifier:)`",
+      "perm": "なし（要確認）",
+      "url": "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/background(withidentifier:)",
+      "note": "未実装。アプリが終了していても OS が転送を続け、完了時に再起動される。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`DownloadManager`",
+      "perm": "`INTERNET`（公開ディレクトリへ保存する場合のみ `WRITE_EXTERNAL_STORAGE`、ページ記載）",
+      "url": "https://developer.android.com/reference/android/app/DownloadManager",
+      "note": "未実装。リファレンスの存在のみ確認。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`URLSessionConfiguration.background(withIdentifier:)`（macOS でも利用可。要確認）",
+      "perm": "なし（サンドボックスのネットワーク entitlement は要確認）",
+      "url": "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/background(withidentifier:)",
+      "note": "未実装。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`Windows.Networking.BackgroundTransfer.BackgroundDownloader`",
+      "perm": "要確認（文書に package identity の要件記載なし。unpackaged の可否は未検証）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.networking.backgroundtransfer.backgrounddownloader",
+      "note": "未実装。"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Background Fetch API",
+      "perm": "service worker が要る。secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Background_Fetch_API",
+      "safari": "非対応と認識（要確認）。Firefox も非対応と認識",
+      "note": "未実装。Chromium のみ。"
+    }
+  },
+  "note": "iOS / macOS は background URLSession、Android は DownloadManager、Windows は BackgroundDownloader、Web は Background Fetch。http-get（既存 id）は前面での GET 1 回で、本機能はアプリが終了しても OS が続ける転送。background-task（既存 id）は短時間の処理で、転送そのものは OS に任せる点が違う。今回の範囲: 固定 URL の小さなファイル 1 つの転送を OS へ依頼し、完了時の保存先とサイズを画面に出す（再開・複数ファイルは扱わない）。"
+}

@@ -1,0 +1,25 @@
+[package]
+name = "baseline-blank"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+publish = false
+description = "TASK-6.3（REQ-6 / Issue #93）メモリ比較計測のベースラインアプリ。PoC-4（docs/spec/03-poc/performance/README.md）の `baseline-blank/blank.swift`（空の NSWindow のみの Cocoa アプリ）の Linux 対応物。winit のみで空ウィンドウを表示し、GL コンテキスト等の描画バックエンドは持たない“ウィンドウ生成のみ”の最小構成とし、fandhe-egui-proxy（glow/wgpu バックエンドを持つ）の RSS 増分計測時に差し引くベースラインとして使う。"
+
+# ワークスペースの Cargo.lock 解決に本アプリの feature 選択が影響しないよう独立パッケージとする
+# （scripts/ 配下は workspace member に含めない方針、既存 scripts/metrics/measure-code-ratio.sh と同様）。
+[workspace]
+
+[dependencies]
+# ワークスペースの eframe が要求する winit（0.30 系）と同一メジャー・マイナーへ揃える。
+# バージョンを分けると OS 側の依存キャッシュ・シンボル解決が別系統になり、
+# 「同一 winit のウィンドウ生成コストのみ」というベースラインの前提が崩れるため。
+#
+# "wayland" feature は本計測環境に wayland-client の pkg-config 定義
+# （wayland-client.pc）が未導入のためビルド不可（本パッケージ単体ビルド時のみ発現。
+# ワークスペース側の fandhe-egui-proxy は resolver = "2" の feature 統合により
+# 同一クレートが既にビルド済みキャッシュへ載っているため顕在化しない差異）。
+# 計測対象の Xvfb 環境は X11 のみのため "x11" のみで実用上十分と判断し、
+# "wayland" は含めない。
+winit = { version = "0.30", default-features = false, features = ["x11"] }

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  デスクトップ相当 macOS 実行体（`fandhe-egui-proxy-desktop`、素の実行体・非バンドル）
+  向けの Info.plist（Phase 11 の拡充ループ、Issue #889）。
+
+  macOS 10.15+ は CFBundleIdentifier + NSLocationUsageDescription を持つ Info.plist が
+  実行体自体に埋め込まれていないと CoreLocation の許可プロンプトを一切出さず
+  authorizationStatus が notDetermined のまま固まる（CoreLocationCLI の既知要件）。
+  `build.rs` が `-sectcreate __TEXT __info_plist` でこのファイルを `[[bin]]` へ
+  埋め込む（テスト実行体・rlib には影響しない）。
+
+  App Sandbox は無効（素の実行体・非 sandbox バンドル）のため
+  entitlement（`com.apple.security.personal-information.location`）は不要
+  （実装計画 §3.2）。権限は使用中のみ（NSLocationUsageDescription）で、
+  Always 系キーは持たない（security.md A05）。
+
+  `NSMicrophoneUsageDescription`（Issue #954）も同じ理由（macOS はこのキーを
+  持つ Info.plist が実行体に埋め込まれていないと `AVCaptureDevice.
+  requestAccessForMediaType:` の許可プロンプトを出さない）で追加している。
+
+  `NSSpeechRecognitionUsageDescription`（Issue #1024）も同じ理由（`Speech`
+  （`SFSpeechRecognizer`）の `requestAuthorization:` の許可プロンプトを出すために
+  必要）で追加している。音声認識はマイクも使うため既存の
+  `NSMicrophoneUsageDescription` を併用する。
+
+  `NSBluetoothAlwaysUsageDescription`（Issue #1060）も同じ理由（CoreBluetooth の
+  `CBCentralManager` を作ると TCC が Bluetooth 許可を判定し、このキーが無いと
+  プロセスが落ちる）で追加している。接続・ペアリングはしない（スキャンのみ）。
+  App Sandbox 無効の素の実行体のため entitlement は不要。
+
+  `NSContactsUsageDescription`（Issue #1220）も同じ理由（`CNContactStore` の
+  `requestAccessForEntityType:` の許可プロンプトを出すために必要）で追加している。
+  `CNContactPicker` だけなら不要と Mac 目視（#1213）で分かった場合は外す。
+  App Sandbox 無効の素の実行体のため entitlement は不要。
+
+  `NSCalendarsWriteOnlyAccessUsageDescription`（Issue #1224）も同じ理由（EventKit の
+  `requestWriteOnlyAccessToEventsWithCompletion:` の許可プロンプトに必要）で追加している。
+  予定を追加するだけなので write-only のみ。Full access 系のキーと旧
+  `NSCalendarsUsageDescription` は足さない（最小権限）。
+
+  `NSPhotoLibraryAddUsageDescription`（Issue #1254）も同じ理由（Photos の
+  `requestAuthorizationForAccessLevel:` の許可プロンプトに必要）で追加している。
+  画像を保存するだけなので add-only のみ。読み取り用の `NSPhotoLibraryUsageDescription`
+  は足さない（最小権限）。
+
+  `CFBundleURLTypes`（Issue #1215、カスタム URL scheme `fandhe://`）はここに入れない。
+  LaunchServices に登録された .app でしか効かず、素の実行体に埋め込んでも scheme は
+  届かないため。Mac 目視用の `scripts/apple/bundle-macos-url-scheme.sh` が、この
+  ファイルをコピーした .app の Info.plist へ `CFBundleURLTypes` と `LSEnvironment` を足す。
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.fandhe.egui-proxy-desktop</string>
+	<key>CFBundleName</key>
+	<string>FandheEguiProxyDesktop</string>
+	<key>NSLocationUsageDescription</key>
+	<string>型サンプル「位置情報」の動作確認に使います</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>型サンプル「マイク録音」の動作確認に使います</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>型サンプル「BLE スキャン」の動作確認に使います</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>型サンプル「音声認識」の動作確認に使います</string>
+	<key>NSContactsUsageDescription</key>
+	<string>型サンプル「連絡先選択」の動作確認に使います</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>型サンプル「予定の追加」の動作確認に使います</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>型サンプル「写真の保存」の動作確認に使います</string>
+</dict>
+</plist>

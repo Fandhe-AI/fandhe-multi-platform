@@ -1,0 +1,43 @@
+{
+  "id": "quick-settings-tile",
+  "name": "クイック設定タイル・コントロール",
+  "group": "未着手の OS 機能",
+  "order": 114,
+  "priority": 104,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "WidgetKit の Control Widget（iOS 18+、`ControlWidget`）",
+      "perm": "Widget Extension の追加。App Group が要る可能性あり（要確認）",
+      "url": "https://developer.apple.com/documentation/swiftui/controlwidget",
+      "note": "未実装。Widget Extension 経由で、home-widget（既存 id）と同じ土台。Apple Developer Program が現在期限切れで、entitlement・capability の要否は検証できない。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`TileService`（API 25+）、マニフェストにサービス登録",
+      "perm": "サービスに `BIND_QUICK_SETTINGS_TILE`",
+      "url": "https://developer.android.com/develop/ui/views/quicksettings-tiles",
+      "note": "未実装。タイル追加はユーザー操作（API 33+ はアプリから追加依頼ダイアログ可、要確認）。タップ時の処理は JNI で Rust へ渡す"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "SwiftUI `ControlWidget`（macOS 26+）",
+      "perm": "Widget Extension の追加（home-widget の macOS と同じ土台）",
+      "url": "https://developer.apple.com/documentation/swiftui/controlwidget",
+      "note": "未実装。macOS 26 以降のみ"
+    },
+    "windows": {
+      "status": "no",
+      "api": "クイック設定に項目を追加する公開 API は調査で見つからず",
+      "perm": "",
+      "url": "",
+      "note": "要確認。報告に Windows の記載なし。URL 未確認"
+    },
+    "web": {
+      "status": "n-a",
+      "note": "ブラウザ・OS のクイック設定に相当する概念なし"
+    }
+  },
+  "note": "quick-settings-tile 相当は OS ごとに「システム UI へ小さな操作を置く」機能。home-widget（既存 id）との違い: ウィジェットは画面上の表示領域、こちらはクイック設定・コントロールセンターに置く 1 操作。今回の範囲: Android のタイルをタップしたらアプリ内のカウンタが 1 増え、画面に値を出す（iOS / macOS は Control Widget で同じことをする）。"
+}

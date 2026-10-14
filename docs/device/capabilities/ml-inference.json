@@ -1,0 +1,54 @@
+{
+  "id": "ml-inference",
+  "name": "機械学習モデル推論",
+  "group": "未着手の OS 機能",
+  "order": 52,
+  "priority": 39,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "Core ML（`MLModel`、`MLMultiArray` / `MLDictionaryFeatureProvider`。ObjC クラス）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/coreml/mlmodel",
+      "note": "未実装。アプリに同梱したコンパイル済み `.mlmodelc` を `+[MLModel modelWithContentsOfURL:error:]` で読み、`predictionFromFeatures:error:` を呼ぶ。ObjC から呼べる想定。`.mlmodel` のコンパイル（`coremlc`）はビルド工程に入る。Vision の `VNCoreMLRequest` は別レイヤ。要確認: ObjC からの `compileModelAtURL` の現行シグネチャ（非同期版への移行有無）は Apple ページを直接確認できていない。モデル同梱が必要で、モデル形式は OS ごとに異なる（Core ML / TFLite / ONNX）",
+      "sourceName": [
+        "機械学習モデル推論"
+      ]
+    },
+    "android": {
+      "status": "possible",
+      "api": "LiteRT（TensorFlow Lite）の同梱版（`com.google.ai.edge.litert:litert`）または ML Kit の bundled カスタムモデル（`com.google.mlkit:image-labeling-custom`）",
+      "perm": "不要",
+      "url": "https://developers.google.com/edge/litert/android",
+      "note": "未実装。LiteRT には Google Play services ランタイム版と同梱版の 2 系統があり（出典: 公式 LiteRT for Android / LiteRT in Google Play services）、同梱版は `com.google.ai.edge.litert:litert`（最新 v2.2.0 は minSdk 23、公式）で GMS 非依存。`.tflite` を `assets/` に置いて JNI リスナー経由の Java から呼ぶ。ML Kit 側は `com.google.mlkit:image-labeling-custom` の bundled で、`.tflite` を assets に置く（GMS 不要、公式）。AICore / Gemini Nano（ML Kit GenAI）は AICore に依存し Pixel・Galaxy 等の一部端末限定、フォアグラウンド限定、アプリごとの推論クォータありのため no 扱い（公式 https://developers.google.com/ml-kit/genai）。未確認: 同梱版 LiteRT / ML Kit の推移依存に GMS クライアントライブラリが含まれるか。実装時に依存ツリーで確認する",
+      "sourceName": [
+        "機械学習（画像・テキスト認識等）"
+      ]
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Core ML（`MLModel`。ObjC クラス）",
+      "perm": "不要（Info.plist 不要。App Sandbox 無効の素の実行体＋.app 包み）",
+      "url": "https://developer.apple.com/documentation/coreml/mlmodel",
+      "note": "未実装。iOS と `.m` を共用できる見込み。`.mlmodelc` は .app の `Contents/Resources` に同梱する。要確認: iOS と同じ（Apple ページの原文を直接確認できていない）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinML（`Windows.AI.MachineLearning.LearningModel` / `LearningModelSession` / `LearningModelBinding`）、後継は Windows App SDK の Windows ML（`Microsoft.Windows.AI.MachineLearning`、ONNX Runtime ベース）",
+      "perm": "不要の想定",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.ai.machinelearning.learningmodel",
+      "note": "未実装。`Windows.AI.MachineLearning` は Windows 10 1809（10.0.17763）以降で、公式チュートリアルが C++/WinRT の Win32 デスクトップアプリから `LearningModel::LoadFromFilePath` で ONNX を読む形を示しており、素の exe から `windows` crate で呼べる見込み。ただし公式は本 API を 2018 年出荷の旧 API と位置づけ、後継の Windows ML（Windows App SDK）へ誘導している（WinAppSDK 同梱ランタイムの配布形態が増える）。後継の unpackaged / package identity 要否は確認できなかった。Copilot+ PC 限定の Windows AI APIs（Phi Silica 等）は使わない。ONNX Runtime を自前で同梱する形は OS 提供 API ではないので判定に使わない"
+    },
+    "web": {
+      "status": "no",
+      "api": "WebNN（`navigator.ml` / `MLContext` / `MLGraphBuilder`）",
+      "perm": "なし",
+      "url": "https://www.w3.org/TR/webnn/",
+      "safari": "未実装（WebNN の提供なし。出典は検索結果の要約で、WebKit の一次情報は未確認）",
+      "note": "W3C 仕様は Candidate Recommendation Draft（2026-09-10 版を確認）。ブラウザ側は Chrome が M147 から M149 で origin trial（Android 除外）との報告を二次情報で確認した（Chrome の一次情報は未確認）。ユーザー環境で既定で使えないため no。代替は wasm + WebGPU 等の自前推論（OS の端末機能ではないので判定に使わない）",
+      "detail": "できない（WebNN は W3C Candidate Recommendation Draft 段階で、Chrome は origin trial。Safari / Firefox 未実装）"
+    }
+  },
+  "note": "iOS / macOS は Core ML、Android は LiteRT 同梱版または ML Kit の bundled カスタムモデル（いずれも GMS 非依存）、Windows は WinML（`Windows.AI.MachineLearning`、後継の Windows ML あり）。Web は WebNN が実験段階のため no。AICore / Gemini Nano は端末限定のため対象にしない。モデル形式が OS ごとに異なり（`.mlmodelc` / `.tflite` / `.onnx`）、同一モデルを共有できない。今回の範囲: 各 OS に同梱した小さな分類モデル 1 つへ固定長の入力を渡し、上位 1 件を表示するだけ（モデルの動的ダウンロード・画像前処理は扱わない）"
+}

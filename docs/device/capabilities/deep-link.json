@@ -1,0 +1,48 @@
+{
+  "id": "deep-link",
+  "name": "ディープリンク（Universal Links / App Links）",
+  "group": "未着手の OS 機能",
+  "order": 39,
+  "priority": 118,
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "Universal Links（`application:continueUserActivity:restorationHandler:` / `scene:continueUserActivity:`、`NSUserActivityTypeBrowsingWeb`）",
+      "perm": "Associated Domains entitlement（`com.apple.developer.associated-domains`、`applinks:<domain>`）。制限付き entitlement のため provisioning profile が必須。ワイルドカード profile 不可",
+      "url": "https://developer.apple.com/documentation/xcode/supporting-universal-links-in-your-app",
+      "note": "未実装。前提: 検証用ドメインに `https://<domain>/.well-known/apple-app-site-association`（拡張子なし JSON、HTTPS）をホスティングし、appID（Team ID + Bundle ID）と paths を載せる。Apple Developer Program の有効な契約と、entitlement 入りの profile が要る。実機でのみ検証可能",
+      "sourceName": [
+        "Universal Links"
+      ]
+    },
+    "android": {
+      "status": "possible",
+      "api": "App Links（`<intent-filter android:autoVerify=\"true\">` + `ACTION_VIEW` / `BROWSABLE` / `DEFAULT` + `<data android:scheme=\"https\" android:host>`）。受信は MainActivity の `getIntent()` / `onNewIntent`、JNI で Rust へ",
+      "perm": "なし（intent-filter のみ。`INTERNET` はアプリ側で既存のはず）",
+      "url": "https://developer.android.com/training/app-links/verify-android-applinks",
+      "note": "未実装。前提: 検証用ドメインに `https://<domain>/.well-known/assetlinks.json` をホスティングし、署名証明書の SHA-256 を載せる（debug / release で鍵が異なるので両方）。autoVerify は API 23+ で minSdk 24 は全域対象。Android 12+ は新しい検証プロセス、Android 15+（targetSdk 35）は定期再検証で変更反映に最大 7 日。`adb shell pm get-app-links` で状態確認可",
+      "sourceName": [
+        "App Links / Deep Link"
+      ]
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Universal Links（`NSApplicationDelegate` の `application:continueUserActivity:restorationHandler:`）",
+      "perm": "Associated Domains entitlement（`com.apple.developer.associated-domains`）。provisioning profile が必須で .app に埋め込む。署名は Team ID 付き",
+      "url": "https://developer.apple.com/documentation/xcode/allowing-apps-and-websites-to-link-to-your-content",
+      "note": "未実装。macOS も Associated Domains による Universal Links 対象（Apple Developer 記載）。前提は iOS と同じ AASA のホスティング。App Sandbox なしの .app でも制限付き entitlement には profile が要る。macOS 側の delegate メソッド名は未確認（調査未了）"
+    },
+    "windows": {
+      "status": "no",
+      "api": "App URI handlers（package manifest の `windows.appUriHandler` + `windows-app-web-link` JSON）",
+      "perm": "package identity（MSIX または sparse package）",
+      "url": "https://learn.microsoft.com/en-us/windows/apps/develop/launch/web-to-app-linking",
+      "note": "公式に「Packaging required」と明記。独自 scheme の起動は url-scheme（レジストリ）で代替可",
+      "detail": "できない（`windows.appUriHandler` は packaged app 必須。前提の素の exe には identity が無く、レジストリ登録では https リンクのドメイン別検証付き横取りができない）"
+    },
+    "web": {
+      "status": "n-a"
+    }
+  },
+  "note": "iOS / macOS は Universal Links（Associated Domains + AASA）、Android は App Links（autoVerify + assetlinks.json）。Windows は `windows.appUriHandler` が package identity 必須のため no。Web は https URL 自体がリンクで、アプリ側で受ける概念が無いため n-a。いずれの OS でも検証用ドメインのホスティング（apple-app-site-association / assetlinks.json）が前提"
+}

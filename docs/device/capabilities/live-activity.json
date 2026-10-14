@@ -1,0 +1,42 @@
+{
+  "id": "live-activity",
+  "name": "ライブアクティビティ",
+  "group": "未着手の OS 機能",
+  "order": 40,
+  "priority": 38,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "ActivityKit（`Activity<Attributes>.request(attributes:content:pushType:)` / `update` / `end`、iOS 16.1+）。表示は Widget Extension の `ActivityConfiguration`（SwiftUI）",
+      "perm": "Info.plist の `NSSupportsLiveActivities` + 別 Widget Extension ターゲット。ローカル開始・更新のみなら `pushType: nil`（リモート更新は Push 通知 entitlement が要るため今回外す）",
+      "url": "https://developer.apple.com/documentation/activitykit",
+      "note": "未実装。Widget Extension の追加が必須で、home-widget.json の macOS（FandheTextWidget）と同様に XcodeGen の SSOT へ iOS 用拡張を足す。`Activity` は Swift のジェネリクス型のため ObjC から直接呼べない見込みで、Swift の薄いシムから `@_cdecl` で `extern \"C\"` を公開する形が要る（この点は Apple 一次情報では確認できていない）。ユーザーがライブアクティビティを無効にしていると `request` が失敗するので、失敗を成功へ畳まない。シミュレータでの実描画確認を想定。実機はアカウント・署名の状態に依存",
+      "sourceName": [
+        "ライブアクティビティ"
+      ]
+    },
+    "android": {
+      "status": "possible",
+      "api": "進行中通知 `NotificationCompat.Builder.setOngoing(true)`。Android 16（API 36）の Live Updates は `Notification.ProgressStyle` + `setRequestPromotedOngoing(true)`",
+      "perm": "`POST_NOTIFICATIONS`（API 33+ は実行時許可）。Live Updates 昇格は `POST_PROMOTED_NOTIFICATIONS`（通常権限、API 36）",
+      "url": "https://developer.android.com/develop/ui/views/notifications/live-update",
+      "note": "未実装。Android に相当機能がある（進行中通知、API 36 で Live Updates）。`ProgressStyle` は API 36 のため compileSdk を 36 へ上げる必要がある（現在 targetSdk 35。targetSdk を据え置いて足りるかは未確認）。API 36 未満は昇格せず通常の進行中通知として表示する分岐が要る（旧版の表示可否は一次情報に記載なし）。端末 OEM が Live Update の適格基準を追加で課す場合がある。GMS は使わない。通知の許可拒否は成功にしない"
+    },
+    "macos": {
+      "status": "no",
+      "api": "なし（ActivityKit は iOS / iPadOS / Mac Catalyst のみ）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/activitykit",
+      "note": "Apple のメタデータで ActivityKit の対応が iOS / iPadOS / Mac Catalyst（16.1+）であることを確認。メニューバー表示は https://www.apple.com/newsroom/2025/06/macos-tahoe-26-makes-the-mac-more-capable-productive-and-intelligent-than-ever/ に記載",
+      "detail": "できない（Mac アプリから Live Activity を起動する公開 API が無い。Mac は近くの iPhone の Live Activity をメニューバーに表示するだけ）"
+    },
+    "windows": {
+      "status": "n-a"
+    },
+    "web": {
+      "status": "n-a"
+    }
+  },
+  "note": "iOS は ActivityKit（Widget Extension 必須、`NSSupportsLiveActivities`、16.1+）、Android は進行中通知 / API 36 の Live Updates（`ProgressStyle`）で相当機能あり。macOS は ActivityKit が Mac 非対応で no（iPhone のものをメニューバーに表示するのみ）。Windows はロック画面・常駐のライブ更新表示に相当する概念を一次情報で確認できず n-a（進捗付きトーストは通知機能の範囲）、Web も同様に標準 API が無く n-a。今回の範囲: 数値 1 つをロック画面 / 通知領域に出し、押すたびに更新して「終了」で消すだけ（リモート更新・複数同時は扱わない）"
+}

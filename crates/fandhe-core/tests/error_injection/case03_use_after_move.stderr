@@ -1,0 +1,20 @@
+error[E0382]: borrow of moved value: `screen`
+  --> tests/error_injection/case03_use_after_move.rs:15:20
+   |
+12 |     let screen: Screen<FormState> = Screen::new("フォーム");
+   |         ------ move occurs because `screen` has type `Screen<FormState>`, which does not implement the `Copy` trait
+13 |     let screen_with_text = screen.text("見出し"); // `screen` はここでムーブされる
+   |                                   -------------- `screen` moved due to this method call
+14 |     // `screen` はすでにムーブ済みのため使用できない
+15 |     println!("{}", screen.title());
+   |                    ^^^^^^ value borrowed here after move
+   |
+note: `Screen::<S>::text` takes ownership of the receiver `self`, which moves `screen`
+  --> src/ui/screen.rs
+   |
+   |     pub fn text(self, s: impl Into<String>) -> Self {
+   |                 ^^^^
+help: you can `clone` the value and consume it, but this might not be your desired behavior
+   |
+13 |     let screen_with_text = screen.clone().text("見出し"); // `screen` はここでムーブされる
+   |                                  ++++++++

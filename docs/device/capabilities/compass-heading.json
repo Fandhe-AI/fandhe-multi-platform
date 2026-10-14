@@ -1,0 +1,59 @@
+{
+  "id": "compass-heading",
+  "name": "方位（コンパス）",
+  "group": "未着手の OS 機能",
+  "order": 54,
+  "priority": 67,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "api": "CoreLocation `CLLocationManager` の `startUpdatingHeading` / `CLHeading.magneticHeading`・`headingAccuracy`（delegate が受けた最新値を UI スレッドから 100 ms ごとに pull）",
+      "perm": "要求しない（磁北のみ。許可の要否は一次情報に記載なし。#1403 で確認）",
+      "url": "https://developer.apple.com/documentation/corelocation/clheading",
+      "note": "実装済み（#1405）。`headingAvailable` が NO（シミュレータ含む）なら `Unsupported`、`kCLErrorDenied` は `PermissionDenied`、`headingAccuracy < 0` と `kCLErrorHeadingFailure` は値なし、3 秒値が届かなければ `NoReading`。磁北のみで真北・偏角・画面回転の補正・較正 UI はしない。精度は 10° 以下を高、30° 以下をおおよそ、超を信頼不可（仮置き）。背景遷移で保持値を捨て、停止後の通知は捨てる。値なし・失敗・非対応を 0° にしない。守る範囲: 嘘の値を出さない・二重に購読しない・停止で購読を解除する。守らない範囲: 磁気の乱れ、端末を立てた姿勢・横向き、OS 間の値の一致、複数プロセス、最大 100 ms + センサー周期の遅れ。既知の天井: 位置情報の許可なしで heading が届くかは実機未確認。届かないと判明したらこの `done` を取り下げる。iOS 実機での確認は #1403",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1403）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_compass.m + crates/fandhe-egui-proxy/src/device/ios_compass.rs、Issue #1405"
+    },
+    "android": {
+      "status": "done",
+      "api": "`TYPE_ROTATION_VECTOR`（無ければ `TYPE_ACCELEROMETER` + `TYPE_MAGNETIC_FIELD`）を `SensorManager.getRotationMatrix(FromVector)` / `getOrientation` で方位化。egui スレッドから同期 JNI で最新値を pull",
+      "perm": "不要",
+      "url": "https://developer.android.com/develop/sensors-and-location/sensors/sensors_position",
+      "note": "実装済み（#1406）。`SENSOR_DELAY_UI` で購読し、`orientation[0]`（磁北のみ。真北・偏角補正・画面回転の補正はしない）を Rust 側で範囲検査してから度へ変換する。センサー無しは `Unsupported`、権限は不要。`onPause` で解除（read は値なし）、`onResume` で再登録、Activity の再生成・破棄では購読を破棄し、新しい Activity の read は失敗として返る。購読ごとにリスナーの世代を分け、旧世代の値は捨てる。受信から 1 秒を超えた値は返さない。値なし・失敗・非対応を 0° にしない。守る範囲: 嘘の値を出さない・二重に登録しない・停止と背景遷移と破棄で解除する。守らない範囲: 偏角、画面回転の補正、磁気の乱れ、背景から戻った直後の値なし、作り直し後の失敗表示、1 秒の古さ閾値による遅れ、複数プロセス。既知の天井: 加速度 + 磁気の合成機の精度。Android 実機での確認は #1403",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#1403）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_compass.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/CompassHelper.java、Issue #1406"
+    },
+    "macos": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "Mac に方位センサーの公開 API は見当たらない（調査では未確認、要確認）。URL 未確認"
+    },
+    "windows": {
+      "status": "done",
+      "api": "`Compass.GetDefault` / `GetCurrentReading`（UI スレッドの同期 pull）・`ReportInterval`",
+      "perm": "不要の見込み（unpackaged での動作は #1403 で確認）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.compass",
+      "note": "実装済み（#1404）。`Compass::GetDefault` が null（搭載センサー無し）なら `Unsupported`、`E_ACCESSDENIED` は `PermissionDenied`、`ReportInterval` は最小値と 100 ms の大きい方。購読中は 100 ms ごとに `GetCurrentReading` を pull し、`HeadingMagneticNorth`（磁北のみ。真北・偏角補正・画面回転の補正はしない）を `0..=360` で検査して範囲外は値なし、3 秒値が届かなければ `NoReading`。値なし・失敗・非対応を 0° にしない。守る範囲: 嘘の値を出さない・二重に購読しない・停止と失敗で購読を解除する。守らない範囲: 偏角、磁気の乱れ、端末を立てた姿勢・横向き、2° 刻み、OS 間の値の一致、複数プロセス、最大 100 ms + センサー周期の遅れ。非搭載機は「取得できません」を出す。既知の天井: パッケージ無しの素の exe から届くか、拒否時の HRESULT は実機未確認。届かないと判明したらこの `done` を取り下げる。Windows 実機での確認は #1403",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#1403）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_compass.rs + crates/fandhe-egui-proxy/src/device/compass.rs + crates/fandhe-core/src/screens/compass_show.rs + crates/fandhe-device/src/compass.rs、Issue #1404"
+    },
+    "web": {
+      "status": "done",
+      "api": "`deviceorientationabsolute` の `alpha`（反時計回りのため `360 - alpha`。Chromium・Firefox）と、Safari の `deviceorientation` の `webkitCompassHeading`",
+      "perm": "secure context 必須。iOS Safari は「開始」押下の同期区間で `DeviceOrientationEvent.requestPermission()`",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/deviceorientationabsolute_event",
+      "safari": "`deviceorientationabsolute` 非対応。`webkitCompassHeading` で代替し、`requestPermission()` を使う。macOS Safari などセンサーの無い環境は値が届かず `NoReading` になる",
+      "note": "実装済み（#1407）。判定: 非 secure context・API 無しは `Unsupported`、`requestPermission` の `denied` / `NotAllowedError` は `PermissionDenied`、それ以外の失敗は `Failed`。`absolute` が偽・`alpha` が null・範囲外は値なしで 0° にせず、3 秒続けば `NoReading`（`performance.now()` で測る）。非表示中は値を捨てる。Safari の精度は `webkitCompassAccuracy` が負なら `Unreliable`、他は不明。守る範囲: 嘘の値を出さない・二重に購読しない・停止と失敗とマウント破棄でリスナーと interval を解除する・古い世代の完了を捨てる。守らない範囲: 偏角（真北）とブラウザ間の基準の違い、画面回転・端末を立てた姿勢、磁気の乱れ、許可ダイアログの応答待ちの期限、Permissions Policy の区別、複数タブ・複数マウント、最大 100 ms + イベント周期の遅れ（受信から 2 秒途絶えた値は捨て、その後 3 秒で NoReading）（非表示中に届いたイベントは捨てる）、wasm canvas 経路（`UnsupportedCompass` のまま）。Generic Sensor の `Magnetometer` は Chromium でもフラグの裏にあるため使わない。実ブラウザでの確認は #1403",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#1403）",
+      "impl": "crates/fandhe-web-dom/src/compass.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/compass_show.rs + crates/fandhe-device/src/compass.rs、Issue #1407"
+    }
+  },
+  "note": "iOS は CoreLocation、Android は磁気 + 加速度のセンサー融合、Windows は Compass（機種依存）、Web は `deviceorientationabsolute`（Chromium・Firefox）/ Safari の `webkitCompassHeading`。macOS は公開 API なしで no。tilt-motion（既存 id）との違い: tilt-motion は重力ベクトル（傾き）で、方位（磁北基準の向き）は含まない。今回の範囲: 現在の方位（度）と 8 方位の文字を 1 画面に表示し、取得できない環境では「取得できません」を出す（地図連動やキャリブレーション UI は扱わない）"
+}

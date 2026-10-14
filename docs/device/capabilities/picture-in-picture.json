@@ -1,0 +1,47 @@
+{
+  "id": "picture-in-picture",
+  "name": "ピクチャ・イン・ピクチャ",
+  "group": "未着手の OS 機能",
+  "order": 72,
+  "priority": 61,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "AVKit `AVPictureInPictureController`（動画再生中の小窓）",
+      "perm": "`UIBackgroundModes` に `audio`（要確認）",
+      "url": "https://developer.apple.com/documentation/avkit/avpictureinpicturecontroller",
+      "note": "未実装。動画（`AVPlayerLayer` / sample buffer）に紐づく。任意の UI は小窓にできない。最低 iOS 版は要確認"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`Activity.enterPictureInPictureMode`（API 26+）、manifest `supportsPictureInPicture`",
+      "perm": "不要（manifest 宣言のみ）",
+      "url": "https://developer.android.com/develop/ui/views/picture-in-picture",
+      "note": "未実装。任意の Activity を小窓にできる。ホーム遷移時の自動突入は `setAutoEnterEnabled`（要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AVKit `AVPictureInPictureController`（動画のみ）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/avkit/avpictureinpicturecontroller",
+      "note": "未実装。動画のみで、任意のウィンドウは対象外。macOS での最低版は要確認"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`AppWindow` の CompactOverlay プレゼンター（常に手前の小窓。動画 PiP とは別）",
+      "perm": "要確認（package identity の要件記載なし）",
+      "url": "https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.appwindow",
+      "note": "OS 標準の動画 PiP は無い。小窓化はアプリのウィンドウをそう設定するだけ（要確認）"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Picture-in-Picture API（`video.requestPictureInPicture()`）、Document Picture-in-Picture（`documentPictureInPicture.requestWindow()`）",
+      "perm": "なし（ユーザー操作の中で呼ぶ必要あり）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Picture-in-Picture_API",
+      "safari": "動画 PiP は対応との認識。Document PiP は非対応（MDN の互換表では未確認）",
+      "note": "動画 PiP は Chromium・Safari 対応、Gecko は独自方式との認識。Document PiP は Chromium のみ。MDN は両方 Limited availability。Document PiP の URL は https://developer.mozilla.org/en-US/docs/Web/API/Document_Picture-in-Picture_API"
+    }
+  },
+  "note": "全 OS に何らかの小窓手段あり。モバイル・macOS は動画中心、Android と Web の Document PiP は任意 UI を小窓にできる。media-playback（既存 id）との違い: 再生そのものではなく再生中の小窓表示。media-cast（別 id）は外部機器への再生で別物。今回の範囲: 動画再生中に小窓へ切り替えるボタンを置き、小窓への出入りを表示する（任意 UI の小窓化は Android / Web のみで扱わない）"
+}

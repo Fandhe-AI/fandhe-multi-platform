@@ -1,0 +1,73 @@
+{
+  "id": "camera-capture",
+  "name": "カメラ撮影",
+  "group": "既存機能の棚卸し",
+  "order": 4,
+  "priority": 14,
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "detail": "できている（実機）",
+      "verified": true,
+      "api": "AVFoundation / UIKit（`UIImagePickerController`）",
+      "perm": "`NSCameraUsageDescription`",
+      "url": "https://developer.apple.com/documentation/uikit/uiimagepickercontroller",
+      "note": "実装済み・実機確認済み",
+      "sourceName": [
+        "カメラ撮影"
+      ],
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "`crates/fandhe-egui-proxy/ios/fandhe_ios_camera.m`、`crates/fandhe-device/src/*`（device 抽象）、Info.plist の `NSCameraUsageDescription`、Issue #751 closed"
+    },
+    "android": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "api": "`Intent(MediaStore.ACTION_IMAGE_CAPTURE)`",
+      "perm": "`<uses-permission android:name=\"android.permission.CAMERA\" />` + `uses-feature android:name=\"android.hardware.camera*\"`（`required=\"false\"`）",
+      "url": "https://developer.android.com/training/camera-deprecated/photobasics",
+      "note": "実装済み（#749/#790）。Intent 経由のため GameActivity から追加コード無しで到達可能。Activity 再生成中の撮影は Java 側が中断決着し、新画面は Idle から始まる。完了の pull 型配送は不要と判断（#881）",
+      "sourceName": [
+        "カメラ撮影（Intent）"
+      ],
+      "implStatus": "実装済み",
+      "impl": "#749 / #790"
+    },
+    "macos": {
+      "status": "done",
+      "detail": "できている（ダミー、未確認）",
+      "api": "AVFoundation（`AVCaptureDevice`）",
+      "perm": "Info.plist `NSCameraUsageDescription` / `NSMicrophoneUsageDescription`、entitlement `com.apple.security.device.camera` / `.audio-input`",
+      "url": "https://developer.apple.com/documentation/avfoundation",
+      "note": "`fandhe-device::camera::DummyCamera` はダミー実装（desktop は実カメラ未接続）",
+      "sourceName": [
+        "カメラ・マイク"
+      ]
+    },
+    "windows": {
+      "status": "done",
+      "detail": "できている（ダミー、未確認）",
+      "api": "WinRT（`Windows.Media.Capture.MediaCapture`）",
+      "perm": "パッケージマニフェスト capability `webcam` / `microphone`",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacapture",
+      "note": "`fandhe-device::camera::DummyCamera` はダミー実装（desktop は実カメラ未接続）",
+      "sourceName": [
+        "カメラ・マイク"
+      ]
+    },
+    "web": {
+      "status": "done",
+      "detail": "できている（実ブラウザ未確認）",
+      "api": "`MediaDevices.getUserMedia` + 非表示 `<video>`/`<canvas>` によるフレーム取得・縮小",
+      "perm": "`navigator.permissions`（`camera`）、secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia",
+      "safari": "対応（iOS Safari 向けに `playsinline` 属性を付与）",
+      "note": "実装済み（Issue #991）。`getUserMedia({video: true})` → 非表示 `<video>` へ `srcObject` を流し込み → フレーム準備後に縮小 `<canvas>` へ描画 → `fandhe_core::screens::camera_capture::thumbnail_from_rgba` でモザイク化。期限はフレーム待ち（5 秒）のみに張り、権限プロンプト中には張らない。`pagehide`・撮影中の `document.hidden` は失敗ではなくキャンセル（`Idle` へ戻す、再開しない）として扱う。新規 wasm-bindgen 依存パッケージは増えない（`HtmlVideoElement`/`HtmlCanvasElement`/`CanvasRenderingContext2d`/`ImageData` の web-sys feature 追加のみ）。ヘッドレス Chrome での正常系・失敗系（許可拒否・カメラ無し・非 secure context）・トラック解放の確認は環境上の `wasm-bindgen`（クレート）/`wasm-bindgen-cli` のバージョン不一致（0.2.126 と 0.2.128）で本セッションでは実施できず未確認。Safari・Firefox・実カメラでの目視も未確認",
+      "sourceName": [
+        "カメラ・マイク"
+      ],
+      "implStatus": "実装済み（実ブラウザ未確認）",
+      "impl": "`crates/fandhe-web-dom/src/camera_capture.rs`（`camera_capture_effect`）+ `crates/fandhe-web-dom/src/demo.rs`（`mount_camera_capture_screen`）、Issue #991"
+    }
+  },
+  "note": "iOS は `UIImagePickerController` + `extern \"C\"`（`fandhe-egui-proxy/src/device/ios.rs`、Issue #751、本表 iOS 欄のとおり実機確認済み）。Android は `AndroidCamera`（Java Intent 経由、Issue #750）、desktop（macOS/Windows）は `DummyCamera`（市松模様画像）に留まる（`device/camera_capture.rs` L160〜）。Web は `fandhe-egui-proxy` の `device` モジュール自体が `cfg(all(feature = \"device\", not(target_arch = \"wasm32\")))`（`lib.rs`）で wasm32 非対象のため、`DummyCamera` を含む撮影経路は使わず、`fandhe-web-dom::camera_capture` が `getUserMedia` を直接呼ぶ独自経路で配線した（Issue #991、本表 Web 欄参照）"
+}

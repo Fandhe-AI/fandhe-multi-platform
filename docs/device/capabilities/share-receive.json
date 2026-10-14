@@ -1,0 +1,47 @@
+{
+  "id": "share-receive",
+  "name": "共有の受け取り",
+  "group": "未着手の OS 機能",
+  "order": 108,
+  "priority": 87,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "Share Extension（アプリ拡張ターゲット）。共有された項目は `NSExtensionItem` で届く",
+      "perm": "拡張ターゲットの追加。アプリ本体へ渡すには App Group（要確認）",
+      "url": "https://developer.apple.com/documentation/foundation/nsextensionitem",
+      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 拡張ターゲットを持つため XcodeGen の設定追加が要る。winit のアプリ本体とは別プロセス"
+    },
+    "android": {
+      "status": "possible",
+      "api": "intent-filter `ACTION_SEND` / `ACTION_SEND_MULTIPLE`",
+      "perm": "なし（Manifest への intent-filter 追加のみ）",
+      "url": "https://developer.android.com/training/sharing/receive",
+      "note": "未実装。受信は url-scheme と同じ onNewIntent 経路を共有できる見込み"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Share Extension（macOS でも同様と認識。要確認）",
+      "perm": "拡張ターゲットの追加（要確認）",
+      "url": "https://developer.apple.com/documentation/foundation/nsextensionitem",
+      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。"
+    },
+    "windows": {
+      "status": "no",
+      "api": "`Windows.ApplicationModel.DataTransfer.ShareTarget`",
+      "perm": "package identity（要確認）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.datatransfer.sharetarget",
+      "note": "Windows の共有ターゲットは UWP の ShareTarget 契約で、package identity が要ると認識。unpackaged での代替が見つからない（要確認）"
+    },
+    "web": {
+      "status": "possible",
+      "api": "manifest `share_target`",
+      "perm": "なし（PWA のインストールが前提）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/share_target",
+      "note": "未実装。MDN は Limited availability 表示。Chromium は対応、Safari・Gecko は非対応と認識（報告より）",
+      "safari": "非対応と認識"
+    }
+  },
+  "note": "share-sheet（送る側）との違い: 本機能は他アプリから共有された内容を受け取る側。今回の範囲: テキスト 1 件の共有を受け取り、その文字列を画面に表示するだけ（画像・ファイルは含めない）。"
+}

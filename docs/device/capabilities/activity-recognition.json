@@ -1,0 +1,40 @@
+{
+  "id": "activity-recognition",
+  "name": "行動認識（歩行・乗車等）",
+  "group": "未着手の OS 機能",
+  "order": 56,
+  "priority": 89,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "CoreMotion `CMMotionActivityManager`（歩行・走行・自動車・静止などの分類）",
+      "perm": "要確認（`NSMotionUsageDescription` と思われるが未確認）",
+      "url": "",
+      "note": "未実装。URL 未確認（iOS 調査の表に載っていない）。既存 pedometer の `CMPedometer` とは別 API。履歴の問い合わせも可能（要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Activity Recognition Transition API（`play-services-location`、GMS 依存）",
+      "perm": "`com.google.android.gms.permission.ACTIVITY_RECOGNITION`（ページ記載）。API 29+ は実行時の `ACTIVITY_RECOGNITION` 許可も要る（要確認）",
+      "url": "https://developer.android.com/develop/sensors-and-location/location/transitions",
+      "note": "未実装。GMS 非搭載端末では使えない。遷移（歩き始め・終わり）の通知が中心で、現在状態の即時取得は別 API（要確認）"
+    },
+    "macos": {
+      "status": "n-a",
+      "note": "デスクトップに行動認識の概念がない"
+    },
+    "windows": {
+      "status": "possible",
+      "note": "搭載機種のみ。非搭載なら `GetDefaultAsync` が null（compass-heading の Windows と同じ扱い）",
+      "api": "`Windows.Devices.Sensors.ActivitySensor`",
+      "perm": "要確認（package identity の要否は文書に記載なし）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.activitysensor"
+    },
+    "web": {
+      "status": "n-a",
+      "note": "ブラウザに行動認識の標準 API はない"
+    }
+  },
+  "note": "iOS は CoreMotion、Android は Play services の遷移 API（GMS 依存）。Windows は ActivitySensor（搭載機種のみ）。macOS・Web は概念がなく n-a。pedometer（既存 id）との違い: pedometer は歩数・距離などの集計値で、行動認識は「歩行 / 走行 / 乗車 / 静止」の分類。今回の範囲: 現在の行動種別と信頼度を 1 行表示し、遷移が起きるたびに履歴へ足す（長期履歴の取得は扱わない）"
+}

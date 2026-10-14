@@ -1,0 +1,6 @@
+# Gradle プロジェクトのローカル生成物・環境依存ファイル（TASK-11.2-S2 / REQ-11、Issue #226）。
+# Gradle wrapper を同梱しない方針（scripts/android/android-env.sh 経由で導入済み
+# Gradle 本体（GRADLE_HOME）を使う）のため wrapper 関連ファイルは元々存在しない。
+.gradle/
+build/
+local.properties

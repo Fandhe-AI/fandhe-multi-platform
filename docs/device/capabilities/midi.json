@@ -1,0 +1,62 @@
+{
+  "id": "midi",
+  "name": "MIDI 入出力",
+  "group": "未着手の OS 機能",
+  "order": 79,
+  "priority": 50,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "api": "CoreMIDI（`MIDIClientCreateWithBlock` + `MIDIInputPortCreateWithProtocol`、UMP の MIDI 1.0）、iOS 14 以降",
+      "perm": "不要の見込み（#1397 で確認）",
+      "url": "https://developer.apple.com/documentation/coremidi",
+      "note": "実装済み（#1399）。範囲・守る範囲 / 守らない範囲は macOS（#1398）と同じ。USB・ペア済み / 他アプリで接続済みの BLE を受ける（ペアリング UI は範囲外）。0 台も成功。iOS 14 未満は失敗。OS コールバックの直後に request_repaint で次フレームを起こす。背景遷移中の受信継続は守らない。iOS 実機の目視は #1397",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1397）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_midi.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_midi.m + crates/fandhe-egui-proxy/src/device/midi.rs + crates/fandhe-core/src/screens/midi_show.rs + crates/fandhe-device/src/midi.rs、Issue #1399"
+    },
+    "android": {
+      "status": "done",
+      "api": "`android.media.midi.MidiManager`（`getDevices` + `openDevice` + `MidiOutputPort.connect`、抜き差しは `DeviceCallback`）",
+      "perm": "不要（`uses-permission` は追加しない）",
+      "url": "https://developer.android.com/reference/android/media/midi/MidiManager",
+      "note": "実装済み（#1400）。範囲は USB 等で `getDevices` に出る MIDI 入力から届いたノートオン / オフを新しい順に一覧へ出すことのみ（出力・SysEx・CC・MIDI 2.0・デバイス名・タイムスタンプ・BLE の接続は範囲外）。接続中の入力が 0 台でも成功で、非搭載（`FEATURE_MIDI` なし）は Unsupported、失敗とは別の表示。値域外・壊れたバイト列は丸めず捨てる。演奏内容と例外メッセージはログに出さない。守る範囲: 1 プロセス内の順序、失敗を成功値へ畳まないこと、停止・Activity 再生成後の通知の破棄（世代で照合）、開いたポートの解放。守らない範囲: `onPause` 後の背景受信の停止制御、抜き差し確定との時間差による入力数表示の一時的な食い違い。並行経路の集約先は Java の制御ロック 1 本（`MidiHelper.lock`）と Rust の 1 ロック（`ROUTER`）。作り直し時は Java の `onDestroy` と Rust の `reset_pending_tracking` で保留を破棄する。実機確認は #1397",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#1397）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_midi.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MidiHelper.java + crates/fandhe-egui-proxy/src/device/midi.rs + crates/fandhe-core/src/screens/midi_show.rs + crates/fandhe-device/src/midi.rs、Issue #1400"
+    },
+    "macos": {
+      "status": "done",
+      "api": "CoreMIDI（`MIDIClientCreateWithBlock` + `MIDIInputPortCreateWithProtocol`、UMP の MIDI 1.0）",
+      "perm": "不要の見込み（#1397 で確認）",
+      "url": "https://developer.apple.com/documentation/coremidi",
+      "note": "実装済み（#1398）。範囲は接続中の MIDI 入力から届いたノートオン / オフを新しい順に一覧へ出すことのみ（出力・SysEx・CC・MIDI 2.0・デバイス名・タイムスタンプ・BLE ペアリングは範囲外）。USB・仮想ソース・ペア済み BLE を受ける（ペアリングは範囲外）。接続中の入力が 0 台でも成功で、失敗とは別の表示。値域外・壊れたバイト列は丸めず捨てる。演奏内容と OSStatus の生値はログに出さない。守る範囲: 1 プロセス内の順序、失敗を成功値へ畳まないこと、停止後の通知を捨てること、未適用 256 件の上限（超過は数えて画面に出す）、画面は直近 100 件。守らない範囲: 複数プロセス間の一致、開始確定の直前に届いた数ミリ秒のノート、背景遷移中の受信継続、抜き差し確定との時間差による入力数表示の一時的な食い違い。並行経路の集約先は `.m` の 1 ロックと、受信スレッドから sink への 1 経路。Mac 実機の目視は #1397",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#1397）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_midi.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_midi.m + crates/fandhe-egui-proxy/src/device/midi.rs + crates/fandhe-core/src/screens/midi_show.rs + crates/fandhe-device/src/midi.rs、Issue #1398"
+    },
+    "windows": {
+      "status": "done",
+      "api": "`Windows.Devices.Midi.MidiInPort`（`FromIdAsync` + `MessageReceived`、抜き差しは `DeviceWatcher`）",
+      "perm": "不要（capability・manifest は宣言しない。unpackaged の可否は #1397 で確認）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.midi?view=winrt-28000",
+      "note": "実装済み（#1402）。範囲は接続中の MIDI 入力から届いたノートオン / オフを新しい順に一覧へ出すことのみ（出力・SysEx・CC・MIDI 2.0・デバイス名・タイムスタンプは範囲外）。接続中の入力が 0 台でも成功で、1 台以上見つかって全部開けないときだけ失敗、一部だけ開けないときは failed で数える。WinRT クラス未登録は Unsupported。値域外は丸めず捨てる。演奏内容・デバイス ID・HRESULT はログに出さない。守る範囲: 1 プロセス内の順序、失敗を成功値へ畳まないこと、停止後に sink を呼ばないこと、全経路でのハンドラ解除と Close。守らない範囲: 他アプリが排他で開いているポート、複数ポート間の厳密な到着順、抜き差し確定との時間差による件数表示の一時的な食い違い。並行経路の集約先は常駐ワーカー 1 本の直列キューと Rust の 1 ロック（ROUTER）。実機確認は #1397",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#1397）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_midi.rs + crates/fandhe-egui-proxy/src/device/midi.rs + crates/fandhe-core/src/screens/midi_show.rs + crates/fandhe-device/src/midi.rs、Issue #1402"
+    },
+    "web": {
+      "status": "done",
+      "api": "Web MIDI API（`navigator.requestMIDIAccess({ sysex: false })` + `MIDIInput.open()` / `onmidimessage` / `MIDIAccess.onstatechange`。`Reflect` で呼ぶ）",
+      "perm": "ブラウザの許可ダイアログ（SysEx は求めない）。secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API",
+      "safari": "非対応の場合「この環境では MIDI 入力を使えません」と表示する。実ブラウザの確認は #1397",
+      "note": "実装済み（#1401）。範囲は macOS（#1398）と同じ。入力 0 台は成功、`open()` 失敗は件数で出す（嘘の成功にしない）。拒否は PermissionDenied、非対応は Unsupported。許可ダイアログ中は期限を張らず、停止で取り消せる（遅れて届いた結果は世代照合で捨てる）。停止・破棄・pagehide でハンドラ解除と close を行う。開始確定前に届いたノートは最大 100 件を保留し、超過分は取りこぼしへ加算する（消去では保留を捨て DroppedBase で累計を返す）。守る範囲: 1 マウント内の順序と世代照合、失敗を成功へ畳まないこと、資源の解放、停止後の通知を捨てること。守らない範囲: 許可ダイアログ放置時の期限、Safari、複数タブ・複数マウント間の一致、open 確定直前の数 ms のノート、背景タブでの受信継続、抜き差し確定との時間差による件数表示の食い違い、egui-proxy の wasm canvas 経路。ポート名・id・演奏内容・例外の message は出さない。実ブラウザ・実機の目視は #1397",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#1397）",
+      "impl": "crates/fandhe-web-dom/src/midi.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/midi_show.rs + crates/fandhe-device/src/midi.rs、Issue #1401"
+    }
+  },
+  "note": "iOS / macOS は CoreMIDI、Android は MidiManager、Windows は Windows.Devices.Midi、Web は Web MIDI。全 OS に公開 API がある。今回の範囲: 接続中の MIDI 入力から届いたノートオン / オフを画面に一覧表示する（出力・SysEx は扱わない）。"
+}

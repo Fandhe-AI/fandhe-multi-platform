@@ -1,0 +1,22 @@
+[package]
+name = "fandhe-fonts"
+version = "0.1.0"
+edition = "2021"
+description = "TASK-10.1（REQ-10 / M3）: CJK 対応フォント（Noto Sans JP）の同梱資産クレート。フォントバイナリを include_bytes! で埋め込み、各プラットフォームレイヤへ配布する"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+publish = false
+
+# フォント資産の埋め込みのみが責務のクレートのため、ランタイム依存はゼロに保つ
+# （coding-rust.md: 依存管理・feature は加法的に設計する方針にも合致する）。
+[dependencies]
+
+[dev-dependencies]
+# グリフ被覆・実ラスタライズ検証（tests/glyph_coverage.rs）は、本クレートが
+# 埋め込むフォントを実際に読み込む先である egui/epaint と同じパーサ経路
+# （ab_glyph -> owned_ttf_parser）で検証する。ttf-parser 単体では「cmap に
+# エントリがある」ことは分かっても、egui 側が実際にラスタライズ可能かは
+# 保証できない（NotoSansJP-Regular.otf は CFF アウトラインであり、
+# owned_ttf_parser は CFF をコア機能として扱うため ab_glyph で問題なく
+# 解釈できることを検証時に確認済み）。
+ab_glyph = { workspace = true }

@@ -1,0 +1,14 @@
+error[E0382]: borrow of moved value: `items`
+  --> tests/error_injection/case12_move_into_closure_then_use.rs:13:22
+   |
+9  |     let items: Vec<String> = vec!["タスク1".to_string(), "タスク2".to_string()];
+   |         ----- move occurs because `items` has type `Vec<String>`, which does not implement the `Copy` trait
+10 |     let closure = move || items.len();
+   |                   ------- ----- variable moved due to use in closure
+   |                   |
+   |                   value moved into closure here
+...
+13 |     println!("{:?}", items);
+   |                      ^^^^^ value borrowed here after move
+   |
+   = note: this error originates in the macro `$crate::format_args_nl` which comes from the expansion of the macro `println` (in Nightly builds, run with -Z macro-backtrace for more info)

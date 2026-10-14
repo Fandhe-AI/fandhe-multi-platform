@@ -1,0 +1,47 @@
+{
+  "id": "wifi-info",
+  "name": "Wi-Fi 情報・スキャン",
+  "group": "未着手の OS 機能",
+  "order": 88,
+  "priority": 76,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "NetworkExtension `NEHotspotNetwork`（現在の接続のみ）",
+      "perm": "Wi-Fi 情報の entitlement と位置情報の許可（要確認）",
+      "url": "https://developer.apple.com/documentation/networkextension/nehotspotnetwork",
+      "note": "未実装。周辺のスキャンは不可（現在の接続の SSID などに限る）。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`WifiManager.startScan`",
+      "perm": "`ACCESS_FINE_LOCATION`、`CHANGE_WIFI_STATE`、`ACCESS_WIFI_STATE`。位置情報サービスが ON であること",
+      "url": "https://developer.android.com/develop/connectivity/wifi/wifi-scan",
+      "note": "未実装。スキャンはスロットリングされる。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "CoreWLAN（macOS 専用）",
+      "perm": "SSID の取得には位置情報の許可が絡む（一般知識。要確認）",
+      "url": "https://developer.apple.com/documentation/corewlan",
+      "note": "未実装。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`Windows.Devices.WiFi.WiFiAdapter`",
+      "perm": "要確認（アダプターへのアクセス許可と位置情報の関係。unpackaged の可否は未検証）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.wifi.wifiadapter",
+      "note": "未実装。"
+    },
+    "web": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "safari": "同左（API なし）",
+      "note": "ブラウザから Wi-Fi 情報を読む API は無い。"
+    }
+  },
+  "note": "iOS は現在の接続の情報のみ、Android / macOS / Windows は周辺のスキャンまで届く。Web は no。location（既存 id）の許可と絡む。network-status（接続の有無・種別）とは、SSID などの詳細を扱う点で別。今回の範囲: 現在接続中の Wi-Fi の名前（SSID）と電波強度を画面に出す（周辺スキャン・接続操作は扱わない）。"
+}

@@ -1,0 +1,38 @@
+{
+  "id": "car-display",
+  "name": "車載ディスプレイ（CarPlay・Android Auto）",
+  "group": "未着手の OS 機能",
+  "order": 124,
+  "priority": 117,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "CarPlay framework",
+      "perm": "CarPlay 用 entitlement（Apple への申請が必要）",
+      "url": "https://developer.apple.com/documentation/carplay",
+      "note": "未実装。アプリの種別（音声・ナビ等）ごとに entitlement が異なる。Apple Developer Program が現在期限切れで、entitlement・capability の要否は検証できない。",
+      "approval": "CarPlay entitlement を Apple へ申請し、承認されること（アプリの種別ごとに別の entitlement）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Car App Library（Android Auto / Automotive OS）",
+      "perm": "記載なし（要確認）",
+      "url": "https://developer.android.com/training/cars",
+      "note": "未実装。テンプレート UI のみで自由描画は不可（要確認）。Play の審査対象のアプリ種別に制限あり（要確認）"
+    },
+    "macos": {
+      "status": "n-a",
+      "note": "車載の概念なし"
+    },
+    "windows": {
+      "status": "n-a",
+      "note": "車載の概念なし"
+    },
+    "web": {
+      "status": "n-a",
+      "note": "車載の概念なし"
+    }
+  },
+  "note": "car-display は車載画面にテンプレート UI を出す。egui 描画は使えず、OS が決めたテンプレートへ Rust から内容を渡す形になる。今回の範囲: 車載画面に固定テキストの 1 画面を出す（シミュレータで確認）。"
+}

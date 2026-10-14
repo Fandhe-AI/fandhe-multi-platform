@@ -1,0 +1,23 @@
+[package]
+name = "fandhe-swiftui-bridge"
+version = "0.1.0"
+edition = "2021"
+description = "Rust コア（fandhe-core）と SwiftUI 描画層を extern \"C\" で接続するプラットフォーム統合レイヤー（REQ-3 / TASK-3.2）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+publish = false
+# `ffi` モジュール（extern "C" エクスポート層、Issue #59）を土台に、設計文書
+# （docs/architecture/swiftui-bridge-architecture.md §3.1）の規定（crate-type・
+# 依存方向・unsafe 境界）に厳密に従う（Issue #60）。
+
+[lib]
+# staticlib: Swift Package Manager / .xcodeproj からのリンク用（PoC-2 実証済み構成）。
+# lib: ホスト（Linux CI）上での `cargo test` 用。
+crate-type = ["staticlib", "lib"]
+
+[dependencies]
+# 依存方向は fandhe-swiftui-bridge → fandhe-core の一方向（coding-rust.md 準拠）。
+fandhe-core = { path = "../fandhe-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

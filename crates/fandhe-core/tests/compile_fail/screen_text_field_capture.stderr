@@ -1,0 +1,20 @@
+error[E0308]: mismatched types
+  --> tests/compile_fail/screen_text_field_capture.rs:18:44
+   |
+18 |         Screen::new("画面").text_field("メモ", |state| format!("{prefix}{}", state.note), set_note);
+   |                             ----------         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected fn pointer, found closure
+   |                             |
+   |                             arguments to this method are incorrect
+   |
+   = note: expected fn pointer `for<'a> fn(&'a CounterState) -> String`
+                 found closure `{closure@$DIR/tests/compile_fail/screen_text_field_capture.rs:18:44: 18:51}`
+note: closures can only be coerced to `fn` types if they do not capture any variables
+  --> tests/compile_fail/screen_text_field_capture.rs:18:62
+   |
+18 |         Screen::new("画面").text_field("メモ", |state| format!("{prefix}{}", state.note), set_note);
+   |                                                                  ^^^^^^ `prefix` captured here
+note: method defined here
+  --> src/ui/screen.rs
+   |
+   |     pub fn text_field(
+   |            ^^^^^^^^^^

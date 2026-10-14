@@ -1,0 +1,47 @@
+# 開発環境整備（REQ-18）: ローカル開発用コンテナ（dev サービス）の定義。
+#
+# CI（.github/workflows、CI runner 必須・.claude/rules/ci.md）はこのファイルを
+# 参照しない。あくまでローカル開発者が make docker-build / make docker-shell 経由で
+# 使うための環境非依存な下地であり、シークレット・認証情報は一切埋め込まない
+# （.claude/rules/security.md）。
+
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # コンテナ内ユーザーの UID/GID をホストへ合わせるためのビルド引数
+      # （Cursor Bugbot 指摘・PR #512 コミット 9d5af38 是正）。HOST_UID/HOST_GID は
+      # bash/zsh の予約変数 UID と衝突しないよう Makefile 側の変数名として選んだもの
+      # （UID をそのまま env var 名にすると `UID=... コマンド` がシェルの
+      # readonly 変数エラーになるため。Makefile の docker-build ターゲット参照）。
+      # 未設定時は 1000（多くの Linux デスクトップの初期ユーザー）にフォールバックする。
+      args:
+        UID: "${HOST_UID:-1000}"
+        GID: "${HOST_GID:-1000}"
+    working_dir: /work
+    volumes:
+      # リポジトリ本体をそのままマウントする（生成物は .gitignore 済みパスに閉じる）。
+      - .:/work
+      # cargo レジストリは named volume でキャッシュし、再ビルドのたびに
+      # 毎回フルダウンロードにならないようにする（Dockerfile 側で
+      # CARGO_HOME/registry を事前作成・chown 済み。Cursor Bugbot 指摘・
+      # PR #512 是正）。
+      #
+      # ビルド成果物（cargo target ディレクトリ）は named volume 化しない。
+      # scripts/web/build-wasm-proxy.sh が `${repo_root}/target/...` を
+      # 決め打ちで参照する（CARGO_TARGET_DIR 非対応）ため、Dockerfile 側でも
+      # CARGO_TARGET_DIR を上書きせず cargo 既定の /work/target のままにしている。
+      # /work/target は bind mount（.:/work）の一部としてホスト側に実体を持ち、
+      # 生成物は /target が .gitignore 済みのため追跡対象にもならない
+      # （Cursor Bugbot 指摘・PR #512 是正）。
+      - cargo-registry:/usr/local/cargo/registry
+    tty: true
+    stdin_open: true
+
+volumes:
+  # 明示名 fandhe-cargo-registry を付け、compose 管理外のプロセスからも
+  # 同一 volume を参照できるようにしておく（実体の named volume 名を
+  # compose のプロジェクト名に依存させない）。
+  cargo-registry:
+    name: fandhe-cargo-registry

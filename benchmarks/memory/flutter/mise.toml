@@ -1,0 +1,4 @@
+[tools]
+# 計測条件（Flutter engine・テンプレート・ビルドツール）を固定するための SDK バージョン
+# ピン留め。README の「前提」節と .metadata の revision（f6ff1529fd）に対応する。
+flutter = "3.38.5-stable"

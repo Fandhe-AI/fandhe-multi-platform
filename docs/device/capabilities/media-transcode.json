@@ -1,0 +1,47 @@
+{
+  "id": "media-transcode",
+  "name": "動画・音声の変換",
+  "group": "未着手の OS 機能",
+  "order": 80,
+  "priority": 51,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "AVFoundation `AVAssetExportSession`",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/avfoundation/avassetexportsession",
+      "note": "未実装。変換元は file-picker / photo-picker で得る想定。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Media3 Transformer（API 23+、`MediaCodec` 基盤）",
+      "perm": "なし",
+      "url": "https://developer.android.com/media/media3/transformer",
+      "note": "未実装。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AVFoundation `AVAssetExportSession`",
+      "perm": "なし（サンドボックスのファイルアクセスは要確認）",
+      "url": "https://developer.apple.com/documentation/avfoundation/avassetexportsession",
+      "note": "未実装。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`Windows.Media.Transcoding.MediaTranscoder`",
+      "perm": "要確認（文書に package identity の要件記載なし。unpackaged の可否は未検証）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.transcoding.mediatranscoder",
+      "note": "未実装。"
+    },
+    "web": {
+      "status": "possible",
+      "api": "WebCodecs API",
+      "perm": "なし。secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API",
+      "safari": "対応状況は MDN の互換表で未確認（要確認）",
+      "note": "未実装。WebCodecs はコーデック単位で、ファイルとしての変換には mux を別途用意する必要がある（要確認）。"
+    }
+  },
+  "note": "iOS / macOS は AVAssetExportSession、Android は Media3 Transformer、Windows は MediaTranscoder、Web は WebCodecs。media-playback（既存 id）は再生で、本機能はファイルを別形式・別解像度へ書き出す点が違う。今回の範囲: 動画 1 本を低解像度へ変換して書き出し、出力ファイルのサイズを画面に出す（進捗・キャンセル・音声のみ変換は扱わない）。"
+}

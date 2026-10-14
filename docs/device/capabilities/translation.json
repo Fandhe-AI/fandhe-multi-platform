@@ -1,0 +1,47 @@
+{
+  "id": "translation",
+  "name": "端末内翻訳",
+  "group": "未着手の OS 機能",
+  "order": 102,
+  "priority": 80,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "Translation フレームワーク（`TranslationSession`。SwiftUI の `translationTask` 経由）",
+      "perm": "なし。言語パックの DL 同意 UI あり（要確認）",
+      "url": "https://developer.apple.com/documentation/translation/translationsession",
+      "note": "未実装。対応 iOS 版は要確認（iOS 18 以降と認識）。SwiftUI 経由でないと UI が出ない制約の有無は要確認"
+    },
+    "android": {
+      "status": "possible",
+      "api": "ML Kit Translation（50 以上の言語、言語パックを DL）",
+      "perm": "`INTERNET`（言語パック取得）",
+      "url": "https://developers.google.com/ml-kit/language/translation",
+      "note": "未実装。ML Kit のため image-recognition / ml-inference / nlp と同じ配布形態（unbundled の GMS 依存可否は要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Translation フレームワーク（macOS 14.4+）",
+      "perm": "なし（要確認）",
+      "url": "https://developer.apple.com/documentation/translation/translationsession",
+      "note": "未実装。iOS 17.4+ と同じフレームワーク"
+    },
+    "windows": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "端末内の翻訳に相当する公開 API は報告で確認できていない（報告に『Windows Translator（制限あり）』とあるが一次情報なし。要確認）"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Translator API（`Translator.create()`）と Language Detector API",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Translator_and_Language_Detector_APIs",
+      "note": "未実装。MDN は Limited availability 表示。Chromium 系のみと認識で、既定で使えるかは要確認",
+      "safari": "非対応と認識（要確認）"
+    }
+  },
+  "note": "nlp（OS 内蔵の言語解析）との違い: 本機能は文章を別の言語へ変換する。今回の範囲: 固定の日本語文を英語へ訳して画面に出すだけ。言語パックの未取得時は『未取得』を出し、成功にしない。"
+}

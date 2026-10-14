@@ -1,0 +1,48 @@
+{
+  "id": "nfc-card-emulation",
+  "name": "NFC カードエミュレーション",
+  "group": "未着手の OS 機能",
+  "order": 92,
+  "priority": 116,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "CoreNFC `CardSession`（iOS 17.4+）",
+      "perm": "地域・entitlement の条件あり（要確認）",
+      "url": "https://developer.apple.com/documentation/corenfc/cardsession",
+      "note": "未実装。一般の開発者が使える条件（対象地域・Apple の許可）が未確認のため、実装前に要確認。macOS 版は無い（Apple 公式表記で iOS / iPadOS / Mac Catalyst のみ）。",
+      "approval": "HCE（`CardSession`）の entitlement を Apple へ申請し、承認されること（対象地域の限定あり）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`HostApduService`（HCE、API 19+）",
+      "perm": "`NFC`、`uses-feature android.hardware.nfc.hce`、サービスに `BIND_NFC_SERVICE`",
+      "url": "https://developer.android.com/develop/connectivity/nfc/hce",
+      "note": "未実装。AID の登録とサービスの宣言が要る。"
+    },
+    "macos": {
+      "status": "n-a",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "note": "Mac に NFC がなく、概念が無い。"
+    },
+    "windows": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "note": "公開 API は確認できなかった（要確認）。"
+    },
+    "web": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "safari": "同左（API なし）",
+      "note": "Web NFC は読み書きのみで、カードの模擬には使えない。"
+    }
+  },
+  "note": "Android は HCE で標準的に使える。iOS は iOS 17.4 以降に API があるが提供条件は未確認。nfc（既存 id）はタグの読み取りで、本機能は端末自身がカードとして読まれる側の別機能。今回の範囲: Android で固定 AID の応答（固定の文字列）を返し、読み取り回数を画面に出す（実カードの模擬・決済は扱わない）。"
+}

@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); case \"$(printf '%s' \"$input\" | tr -d '\"\\\\\\047')\" in *gh*merge*|*merge*gh*) ;; *) exit 0 ;; esac; f=$(mktemp) || exit 2; trap 'rm -f \"$f\"' EXIT; git -C \"$CLAUDE_PROJECT_DIR\" fetch -q origin main && git -C \"$CLAUDE_PROJECT_DIR\" show origin/main:scripts/pr/merge-guard-hook.sh > \"$f\" || { echo 'merge-guard: origin/main の hook を取得できないため deny' >&2; exit 2; }; printf '%s' \"$input\" | bash \"$f\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v rustfmt >/dev/null 2>&1 || exit 0; command -v jq >/dev/null 2>&1 || exit 0; f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in \"$CLAUDE_PROJECT_DIR\"/*.rs) d=$(dirname \"$f\"); e=\"\"; while [ -z \"$e\" ]; do [ -f \"$d/Cargo.toml\" ] && e=$(grep -m 1 -o '^edition *= *\"[0-9]*\"' \"$d/Cargo.toml\" | tr -dc 0-9); [ \"$d\" = \"$CLAUDE_PROJECT_DIR\" ] || [ \"$d\" = / ] && break; d=$(dirname \"$d\"); done; [ -n \"$e\" ] && rustfmt --edition \"$e\" \"$f\" 2>/dev/null || true;; esac"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "id": "call-ui",
+  "name": "通話 UI 統合",
+  "group": "未着手の OS 機能",
+  "order": 48,
+  "priority": 37,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "CallKit（`CXProvider` / `CXProviderDelegate` / `CXCallController`）",
+      "perm": "CallKit 単体では entitlement 不要と見込む（未確認）。PushKit で VoIP push を受ける場合のみ Push Notifications capability + Background Modes の Voice over IP",
+      "url": "https://developer.apple.com/documentation/callkit/cxprovider",
+      "note": "未実装。CXProvider は iOS 10+、アプリで 1 インスタンスを保持（Apple 記載）。`reportNewIncomingCall` で着信 UI、`CXProviderDelegate` で応答 / 終了を受けるため、delegate の結果を Rust へ返す継続配信寄りの経路が要る。通話音声の `AVAudioSession` は CallKit からの activate に合わせる。着信 UI は実機でのみ確認可能",
+      "sourceName": [
+        "通話 UI 統合"
+      ]
+    },
+    "android": {
+      "status": "possible",
+      "api": "Telecom の self-managed `ConnectionService`（`TelecomManager.registerPhoneAccount` + `PhoneAccount.CAPABILITY_SELF_MANAGED`）。Jetpack `androidx.core:core-telecom` は Kotlin 前提",
+      "perm": "`MANAGE_OWN_CALLS`、targetSdk 34+ は `FOREGROUND_SERVICE_PHONE_CALL`。マニフェストに `ConnectionService` サブクラス（`BIND_TELECOM_CONNECTION_SERVICE`）の宣言が必要",
+      "url": "https://developer.android.com/develop/connectivity/telecom",
+      "note": "未実装。GMS 不要。`CAPABILITY_SELF_MANAGED` は API 26+ のため minSdk 24 の端末 24〜25 では未対応を返す分岐が要る（`PhoneAccount` は API 23+）。self-managed では着信 UI（通知 / フルスクリーン）は自アプリが出し、システムは音声ルーティングと他通話との調停を担う。`ConnectionService` は Activity とは別の Service 追加になる点が前提（MainActivity 1 本の方針との整合は要判断）。通話開始から 5 秒以内に通知を出す要件あり"
+    },
+    "macos": {
+      "status": "no",
+      "api": "CallKit（`CXProvider`）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/callkit/cxprovider",
+      "note": "framework 全体のページには macOS 13.0 の表記があるが、`CXProvider` 自体の platforms に macOS は無い。Mac Catalyst 化は前提（素の AppKit 実行体）に合わない",
+      "detail": "できない（`CXProvider` の対応は iOS / iPadOS / Mac Catalyst / visionOS / watchOS のみで、macOS ネイティブは対象外）"
+    },
+    "windows": {
+      "status": "no",
+      "api": "`Windows.ApplicationModel.Calls.VoipCallCoordinator`",
+      "perm": "App capabilities: `voipCall`（`phoneCallHistory` 系も記載）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.calls.voipcallcoordinator",
+      "note": "「identity 必須」は一次情報の明示記述ではなく、capability が manifest 宣言である仕組みからの推定（実機未検証）。デスクトップアプリ向けにリソース予約は不要との記述はあり",
+      "detail": "できない（`voipCall` capability はパッケージマニフェストでの宣言が前提と推定。package identity の無い素の exe では使えない。公式に identity 不要の記述なし）"
+    },
+    "web": {
+      "status": "no",
+      "api": "（着信 UI 相当の API なし。Media Session の `hangup` / `togglemicrophone` アクションは進行中通話の制御のみ）",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaSession/setActionHandler",
+      "safari": "Media Session 自体の対応は MDN で「Limited availability」。`hangup` 等の Safari 対応は未確認",
+      "note": "Web Notifications でのアプリ内通知は通話 UI 統合ではない",
+      "detail": "できない（OS の着信 UI を出す API がブラウザに無い。Media Session は既に再生中のメディアのコントロール用）"
+    }
+  },
+  "note": "iOS は CallKit（`CXProvider`）、Android は self-managed `ConnectionService`（API 26+）。macOS は `CXProvider` が macOS ネイティブ非対応、Windows は `VoipCallCoordinator` が package identity 前提（推定）、Web は着信 UI の API なしのため no。n-a のセルなし（通話 UI 自体はどの OS にも概念あり）。今回の範囲: アプリ内の操作で疑似着信を 1 件出し、応答 / 拒否した結果を表示するだけ（実音声・VoIP push・通話履歴は扱わない）。iOS は CallKit の `reportNewIncomingCall` で OS の着信画面を出す。Android の self-managed `ConnectionService` は OS が着信画面を出さないため、アプリが着信通知（フルスクリーン intent）を出し、応答 / 拒否を `Connection` へ伝える"
+}

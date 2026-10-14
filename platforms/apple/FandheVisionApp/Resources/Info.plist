@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  REQ-3 / TASK-3.3-S3（Issue #67）: visionOS 最小ウィンドウの Info.plist。
+  最小キーのみを含む（デバッグフラグ・ATS 例外・UsageDescription は追加しない、
+  security.md A05「セキュリティ設定ミス」対策）。
+  実際のアプリバンドルへの組み込み（.xcodeproj 統合）は TASK-3.4（Issue #70）のスコープ。
+  本ファイルは SwiftPM ターゲットの Sources/ 配下ではなく Resources/ に置くことで、
+  SwiftPM のターゲットビルドの対象外とする（未処理リソース診断を避けるための配置）。
+
+  CFBundleExecutable / CFBundleInfoDictionaryVersion: project.yml で
+  GENERATE_INFOPLIST_FILE: NO のため本ファイルがそのまま使われる。$(EXECUTABLE_NAME) は
+  Xcode の Info.plist 処理時に自動生成有無に関わらずビルド設定値へ置換されるため、手書き
+  Info.plist でもこのマクロ記法で解決できる（PRODUCT_NAME から導出される EXECUTABLE_NAME は
+  project.yml の PRODUCT_NAME: FandheVisionApp と一致し、CFBundleName とも整合する）。
+  これらのキーを欠くとインストール・起動時に missing-executable / invalid Info.plist
+  エラーになる（CFBundleInfoDictionaryVersion は Apple の
+  Info.plist 必須キーの一つで、値は慣例上固定の 6.0）。
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>Fandhe Vision App</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.fandhe.visionapp</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>FandheVisionApp</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+    </dict>
+</dict>
+</plist>

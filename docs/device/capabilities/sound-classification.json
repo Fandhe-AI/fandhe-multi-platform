@@ -1,0 +1,47 @@
+{
+  "id": "sound-classification",
+  "name": "環境音の分類",
+  "group": "未着手の OS 機能",
+  "order": 84,
+  "priority": 107,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "SoundAnalysis（`SNClassifySoundRequest`）",
+      "perm": "マイク使用時は `NSMicrophoneUsageDescription`（要確認）",
+      "url": "https://developer.apple.com/documentation/soundanalysis",
+      "note": "未実装。OS 内蔵の分類器が使える（iOS 15+）。"
+    },
+    "android": {
+      "status": "no",
+      "api": "なし（OS 内蔵の分類器が無い）",
+      "perm": "なし",
+      "url": "",
+      "note": "YAMNet などは TFLite の自前モデルで、本機能の対象外（ml-inference の範囲）。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "SoundAnalysis（macOS 12+）",
+      "perm": "マイク使用時は TCC のマイク許可（要確認）",
+      "url": "https://developer.apple.com/documentation/soundanalysis",
+      "note": "未実装。"
+    },
+    "windows": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "note": "OS 内蔵の音分類 API は確認できなかった（要確認）。"
+    },
+    "web": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "safari": "同左（API なし）",
+      "note": "ブラウザに音分類 API は無い。"
+    }
+  },
+  "note": "iOS / macOS は SoundAnalysis の内蔵分類器で、Android・Windows・Web は OS 内蔵の分類器が無く no。ml-inference（既存 id）は自前モデルを動かす機能で、本機能は OS が持つ分類器を使う点が違う。今回の範囲: マイク入力を内蔵分類器へ流し、上位 1 件のラベルと信頼度を画面に出す（独自カテゴリ・録音保存は扱わない）。"
+}

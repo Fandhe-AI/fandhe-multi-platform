@@ -1,0 +1,46 @@
+{
+  "id": "web-auth-session",
+  "name": "OAuth 用の Web 認証セッション",
+  "group": "未着手の OS 機能",
+  "order": 96,
+  "priority": 78,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "AuthenticationServices `ASWebAuthenticationSession`（システムのブラウザ UI を出し、コールバック URL を受け取る）",
+      "perm": "コールバック用の URL scheme（Info.plist の `CFBundleURLTypes`）か Universal Link",
+      "url": "https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession",
+      "note": "未実装。表示元の `presentationContextProvider` が要る。キャンセルは専用エラーで届く（キャンセルを失敗として見せない）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Custom Tabs（`androidx.browser` の `CustomTabsIntent`）+ 認可コードの受け取りに intent-filter",
+      "perm": "なし（intent-filter の追加のみ）",
+      "url": "",
+      "note": "未実装。URL 未確認（報告に Custom Tabs の公式 URL がなかった）。コールバック受信は url-scheme と同じ経路。AppAuth 等の第三者ライブラリは今回の範囲外"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AuthenticationServices `ASWebAuthenticationSession`（iOS と同じ）",
+      "perm": "コールバックの URL scheme（.app 化が前提）",
+      "url": "https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession",
+      "note": "未実装。macOS の対応版は要確認"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`Windows.Security.Authentication.Web.WebAuthenticationBroker`（UWP）。後継として `WebAuthenticationCoreManager`（Web Account Manager）",
+      "perm": "package identity の要否は要確認",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.security.authentication.web.webauthenticationbroker",
+      "note": "未実装。WebAuthenticationBroker は UWP 向けで、デスクトップでの可否は要確認。代替はシステムブラウザ + ループバック（`127.0.0.1`）リダイレクトで、これなら unpackaged でも届く見込み（要確認）"
+    },
+    "web": {
+      "status": "n-a",
+      "api": "該当概念なし",
+      "perm": "なし",
+      "url": "",
+      "note": "OAuth は通常のリダイレクトかポップアップ（`window.open`）で行う。専用 API の概念がない"
+    }
+  },
+  "note": "既存 url-scheme / deep-link との違い: それらは URL を受け取る入口で、本機能は認可画面を出して結果の URL を 1 回返す往復を担う。今回の範囲: 固定の認可 URL を開き、返ってきたコールバック URL を画面に表示するだけ（トークン交換は扱わない）。"
+}

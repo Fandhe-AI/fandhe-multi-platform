@@ -1,0 +1,15 @@
+error[E0502]: cannot borrow `store` as mutable because it is also borrowed as immutable
+  --> tests/error_injection/case04_borrow_conflict.rs:23:5
+   |
+21 |       let current = store.state();
+   |                     ----- immutable borrow occurs here
+22 |       // `current` が生存中に `dispatch`（可変借用）を呼び出している
+23 | /     store.dispatch(
+24 | |         &screen,
+25 | |         &Event::ButtonClicked {
+26 | |             label: "increment".into(),
+27 | |         },
+28 | |     );
+   | |_____^ mutable borrow occurs here
+29 |       println!("{}", current.count);
+   |                      ------------- immutable borrow later used here

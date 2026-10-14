@@ -1,0 +1,47 @@
+{
+  "id": "uwb-ranging",
+  "name": "UWB による距離・方向",
+  "group": "未着手の OS 機能",
+  "order": 87,
+  "priority": 94,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "NearbyInteraction（iOS 14+）",
+      "perm": "`NSNearbyInteractionUsageDescription`（要確認）",
+      "url": "https://developer.apple.com/documentation/nearbyinteraction",
+      "note": "未実装。UWB チップ搭載機に限る。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`androidx.core:core-uwb`（Android 12+、対応端末限定）",
+      "perm": "報告に記載なし（`UWB_RANGING` と思われるが未確認）",
+      "url": "https://developer.android.com/develop/connectivity/uwb",
+      "note": "未実装。対応端末が限られる。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "NearbyInteraction（macOS 11+）",
+      "perm": "要確認（対応する Mac の機種は未確認）",
+      "url": "https://developer.apple.com/documentation/nearbyinteraction",
+      "note": "未実装。Apple 公式のプラットフォーム表記で macOS 11 以降を確認。実際に測距できる機種は要確認。"
+    },
+    "windows": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "note": "公開 API は確認できなかった（要確認）。"
+    },
+    "web": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "safari": "同左（API なし）",
+      "note": "ブラウザに UWB の API は無い。"
+    }
+  },
+  "note": "iOS / macOS は NearbyInteraction、Android は Jetpack UWB。対応端末が限られ、Android と iOS 間の相互測距は不可（要確認）。今回の範囲: UWB 対応の端末 2 台で相手までの距離（メートル）を画面に出す（方向・複数台は扱わない）。"
+}

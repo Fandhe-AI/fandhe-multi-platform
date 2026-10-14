@@ -1,0 +1,142 @@
+//! 登録した画面を切り替えて起動するための画面モジュールの置き場。
+//!
+//! `ui::mod.rs` は 600 行超で大半がドキュメンテーションコメントのため、生成 AI に
+//! 全文再出力させると doc 消失・再エクスポート欠落のリスクが高い（Issue #653）。
+//! そのため AI が生成した画面はここへ 1 画面 1 ファイルとして置き、本ファイルには
+//! `pub mod <snake_case>;` を 1 行ずつ追加するだけにとどめる（`ui::mod.rs` には
+//! 手を入れない）。画面ファイルの内部では `ui::{Screen, Node}` と `state` の
+//! 公開 API のみを使う（`docs/ai/SCHEMA.md` の型制約に従う）。
+
+// SCHEMA.md の画面本体例が実際に `screens/` 配下でコンパイルできることを固定化する
+// 参照実装モジュール（PR #668 レビュー指摘）。`examples/`・`tests/` はこのクレートとは
+// 別クレートとしてコンパイルされ公開 API しか参照できないため、`#[cfg(test)]` 限定
+// （＝通常ビルドの公開 API に含まれない）では固定化に使えず `pub mod` にしている。
+// SCHEMA.md の例は画面名 `todo` を使うため、この参照実装モジュールを `mod todo;` にすると
+// AI が同じ名前で実際の画面を生成した際に `pub mod todo;` と二重定義してコンパイル
+// 不能になる。生成対象と衝突しない名前にする（`schema_example_fixture.rs` 参照）。
+/// Phase 11（端末機能の型サンプル「バッジの設定」、Issue #1360）。
+pub mod app_badge_set;
+/// Phase 8（端末機能の型サンプル「カメラ撮影」、Issue #749）。
+pub mod camera_capture;
+pub mod confirm_dialog;
+pub mod list_detail;
+pub mod schema_example_fixture;
+
+/// M7 型サンプル「フォーム」（Issue #728）。
+pub mod form;
+pub mod settings;
+
+/// Phase 8 型サンプル「メモ保存」（Issue #747）。
+pub mod storage_note;
+
+/// Phase 8 型サンプル「HTTP 取得」（Issue #748）。
+pub mod http_fetch;
+
+/// Phase 10 型サンプル「傾きで玉が転がる」（Issue #830）。
+pub mod tilt_ball;
+
+/// Phase 11 型サンプル「クリップボード」（Issue #859）。
+pub mod clipboard_text;
+
+/// Phase 11 型サンプル「読み上げ」（Issue #865）。
+pub mod tts_speak;
+
+/// Phase 11 型サンプル「ファイル選択」（Issue #872）。
+pub mod file_pick;
+
+/// Phase 11 の拡充ループ型サンプル「位置情報」（Issue #888）。
+pub mod location_show;
+
+/// Phase 11 の拡充ループ型サンプル「ジオフェンス」（親 #1056、Issue #1057）。
+pub mod geofence_show;
+
+/// Phase 11 の拡充ループ型サンプル「共有」（Issue #897）。
+pub mod share_text;
+
+/// Phase 11 の拡充ループ型サンプル「生体認証」（Issue #906）。
+pub mod biometric_check;
+
+/// Phase 11 の拡充ループ型サンプル「文字サイズ追従」（Issue #912）。
+pub mod text_scale_preview;
+
+/// Phase 11 の拡充ループ型サンプル「資格情報」（Issue #922）。
+pub mod credential_vault;
+
+/// Phase 11 の拡充ループ型サンプル「ゲームコントローラ」（親 #932、Issue #933）。
+pub mod gamepad_show;
+
+/// Phase 11 の拡充ループ型サンプル「マイク録音」（親 #953、Issue #954）。
+pub mod mic_record;
+
+/// Phase 11 の拡充ループ型サンプル「TSV 読み込み」（親 #979、Issue #980）。
+pub mod tsv_import;
+
+/// Phase 11 の拡充ループ型サンプル「通知」（親 #1003、Issue #1004）。
+pub mod notification_send;
+
+/// Phase 11 の拡充ループ型サンプル「ドラッグ & ドロップ」（親 #1013、Issue #1014）。
+pub mod drag_drop;
+
+/// Phase 11 の拡充ループ型サンプル「音声認識」（親 #1023、Issue #1024）。
+pub mod speech_recognize;
+
+/// Phase 11 の拡充ループ型サンプル「チェックボックス一覧」（親 #1036、Issue #1037）。
+pub mod checkbox_list;
+
+/// Phase 11 の拡充ループ型サンプル「バックグラウンド処理」（親 #1042、Issue #1043）。
+pub mod background_task;
+/// Phase 11 の拡充ループ型サンプル「システムトレイ」（親 #1038、Issue #1039）。
+pub mod system_tray;
+/// Phase 11 の拡充ループ型サンプル「カスタム URL scheme」（親 #1116、Issue #1215）。
+pub mod url_scheme_show;
+
+/// Phase 11 の拡充ループ型サンプル「アクセシビリティ設定の追従」（親 #1132、Issue #1308）。
+pub mod accessibility_prefs_show;
+/// Phase 11 の拡充ループ型サンプル「音声デバイス」（親 #1136、Issue #1330）。
+pub mod audio_devices_show;
+/// Phase 11 の拡充ループ型サンプル「BLE スキャン」（親 #1059、Issue #1060）。
+pub mod ble_scan;
+/// Phase 11 の拡充ループ型サンプル「予定の追加」（親 #1118、Issue #1224）。
+pub mod calendar_add;
+/// Phase 11 の拡充ループ型サンプル「方位（コンパス）」（親 #1154、Issue #1404）。
+pub mod compass_show;
+/// Phase 11 の拡充ループ型サンプル「メール・SMS の作成」（親 #1142、Issue #1384）。
+pub mod compose_mail_sms;
+/// Phase 11 の拡充ループ型サンプル「端末・OS 情報」（親 #1131、Issue #1304）。
+pub mod device_info_show;
+/// Phase 11 の拡充ループ型サンプル「フォルダの変更監視」（親 #1143、Issue #1410）。
+pub mod file_watch_show;
+/// Phase 11 の拡充ループ型サンプル「全画面表示」（親 #1133、Issue #1312）。
+pub mod fullscreen_toggle;
+/// Phase 11 の拡充ループ型サンプル「触覚フィードバック」（親 #1090、Issue #1091）。
+pub mod haptics_tap;
+/// Phase 11 の拡充ループ型サンプル「ホーム画面ウィジェット」（親 #1064、Issue #1065）。
+pub mod home_widget_show;
+/// Phase 11 の拡充ループ型サンプル「画像の文字認識」（親 #1120、Issue #1250）。
+pub mod image_recognize;
+/// Phase 11 の拡充ループ型サンプル「OS 搭載フォント」（親 #1145、Issue #1376）。
+pub mod local_fonts_show;
+/// Phase 11 の拡充ループ型サンプル「MIDI 入力」（親 #1137、Issue #1398）。
+pub mod midi_show;
+/// Phase 11 の拡充ループ型サンプル「複数ディスプレイ」（親 #1134、Issue #1341）。
+pub mod multi_display_show;
+/// Phase 11 の拡充ループ型サンプル「ネットワーク接続状態」（親 #1130、Issue #1282）。
+pub mod network_status_show;
+/// Phase 11 の拡充ループ型サンプル「単語分割」（親 #1093、Issue #1094）。
+pub mod nlp_segment;
+/// Phase 11 の拡充ループ型サンプル「歩数」（親 #1119、Issue #1247）。
+pub mod pedometer_read;
+/// Phase 11 の拡充ループ型サンプル「写真選択」（親 #1101、Issue #1103）。
+pub mod photo_pick;
+/// Phase 11 の拡充ループ型サンプル「写真の保存」（親 #1121、Issue #1254）。
+pub mod photo_save;
+/// Phase 11 の拡充ループ型サンプル「電源状態」（親 #1128、Issue #1274）。
+pub mod power_state_show;
+/// Phase 11 の拡充ループ型サンプル「画面スリープの抑止」（親 #1129、Issue #1278）。
+pub mod wake_lock_toggle;
+
+/// Phase 11 の拡充ループ型サンプル「連絡先選択」（親 #1117、Issue #1220）。
+pub mod contact_pick;
+
+/// Phase 11 の拡充ループ型サンプル「画面の録画・キャプチャ」（親 #1135、Issue #1335）。
+pub mod screen_capture;

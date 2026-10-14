@@ -1,0 +1,44 @@
+[package]
+name = "fandhe-winit-ime"
+version = "0.1.0"
+edition = "2021"
+description = "fandhe-core の IME 境界型（ImeEvent/ImeRequest）と winit（Ime::* イベント / Window::set_ime_*）を接続するプラットフォーム統合レイヤー（REQ-8 / TASK-8.5-S7）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+publish = false
+
+[dependencies]
+# 依存方向は fandhe-winit-ime → fandhe-core の一方向（coding-rust.md 準拠）。
+fandhe-core = { path = "../fandhe-core" }
+# macos_secure_input::EnableSecureEventInputError 等の型付きエラー用（workspace 一元管理）。
+thiserror = { workspace = true }
+# winit は workspace 一元管理（ルート Cargo.toml 参照）。デスクトップ（macOS / Windows /
+# Linux）ターゲットで `cargo check -p fandhe-winit-ime` した際に X11/Wayland backend
+# feature 不足で compile_error にならないよう、加法的に有効化する
+# （workspace 側の `default-features = false` を維持したまま本クレートのみで有効化し、
+# `fandhe-egui-proxy` 等の既存 feature 選択と衝突しない）。
+# "wayland-dlopen" は wayland-client を実行時 dlopen で解決する winit の既定構成
+# （`winit` の `default` feature が採用する組み合わせ）で、ビルド時に
+# `wayland-client.pc`（pkg-config）を要求しない。CI ランナーに
+# Wayland 開発ヘッダが入っていない可能性があるため、静的リンクの素の "wayland"
+# 単独ではなく dlopen 構成を選び、ビルド環境依存を減らす。
+winit = { workspace = true, features = ["x11", "wayland", "wayland-dlopen"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+# Android（`android-activity` の GameActivity 方式、TASK-9.3-S1 / REQ-9 / M4、Issue #242 で
+# NativeActivity から確定。決定記録: docs/architecture/android-activity-method.md）向け分岐。
+# `fandhe-egui-proxy` の Android 分岐（同一クレート・同一バージョン解決）と同じ
+# "android-game-activity" feature を選択し、winit 側で android-activity 0.6.1 の
+# GameActivity バックエンドを有効化する。android-activity 0.6.1 は
+# "native-activity" / "game-activity" の同時有効化を workspace 全体で拒否するため
+# （feature 統合の制約）、workspace 内の全 Android 対象クレートで方式を揃える必要がある。
+# これがないと Android ターゲットの `cargo check` で android-activity の
+# バックエンド feature 未選択エラー（`PointerImpl` 等が見つからない）になる
+# （winit 0.30.13 の android バックエンドソース確認済み）。
+#
+# 本クレート自体の IME 経路（`ImeEvent`/`ImeRequest` 変換、`src/lib.rs`）は winit の
+# `Ime::*` イベントを素通しする設計であり、GameActivity の `GameTextInput` が発火する
+# `InputEvent::TextEvent` は winit 側で未処理（docs/architecture/ime-android-input-connection.md
+# §4.1 で GameActivity + GameTextInput 直接操作方式が別途採用され、本クレートとは独立した
+# 経路として設計されている）。この経路差の解消は本クレートのスコープ外。
+winit = { workspace = true, features = ["android-game-activity"] }

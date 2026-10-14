@@ -1,0 +1,47 @@
+{
+  "id": "app-shortcuts",
+  "name": "アプリショートカット（長押し・ジャンプリスト・Dock メニュー）",
+  "group": "未着手の OS 機能",
+  "order": 106,
+  "priority": 65,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "UIKit `UIApplicationShortcutItem`（ホーム画面の長押しメニュー）",
+      "perm": "Info.plist の `UIApplicationShortcutItems`（静的）",
+      "url": "https://developer.apple.com/documentation/uikit/uiapplicationshortcutitem",
+      "note": "未実装。起動時の項目は launchOptions / `performActionFor` で届く。コールドスタート時の保持が要る"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`ShortcutManager`（静的・動的・ピン留めショートカット）",
+      "perm": "なし",
+      "url": "https://developer.android.com/develop/ui/views/launch/shortcuts",
+      "note": "未実装。起動は intent で届き、url-scheme と同じ経路を共有できる見込み（要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`NSApplicationDelegate.applicationDockMenu(_:)`（Dock メニュー）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/appkit/nsapplicationdelegate/applicationdockmenu(_:)",
+      "note": "未実装。winit が delegate を持つ場合の追加経路は要確認"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 `ICustomDestinationList`（ジャンプリスト）。WinRT `Windows.UI.StartScreen.JumpList` は要件記載なし",
+      "perm": "なし（Win32 desktop 専用表記で package identity の記載なし。実機未検証）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-icustomdestinationlist",
+      "note": "未実装。項目の起動は起動引数で届く"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Web App Manifest の `shortcuts`",
+      "perm": "なし（PWA のインストールが前提）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/shortcuts",
+      "note": "未実装。Chromium 系で対応と認識。MDN の対応表は未確認",
+      "safari": "非対応と認識（要確認）"
+    }
+  },
+  "note": "今回の範囲: アプリ固有のショートカット 1 件を登録し、選ばれたときに起動して項目の識別子を画面に表示するだけ。"
+}

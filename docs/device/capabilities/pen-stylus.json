@@ -1,0 +1,47 @@
+{
+  "id": "pen-stylus",
+  "name": "ペン・筆圧入力",
+  "group": "未着手の OS 機能",
+  "order": 129,
+  "priority": 59,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "UIKit `UITouch`（`force` / `altitudeAngle` / `azimuthAngle`）、PencilKit `PKCanvasView`",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/pencilkit",
+      "note": "未実装。PencilKit は手書き UI 部品で、本機能は筆圧・角度の生データを対象にする。Apple Pencil の実機が要る"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`MotionEvent`（筆圧・傾き・ホバー）、Jetpack Ink",
+      "perm": "なし",
+      "url": "https://developer.android.com/develop/ui/compose/touch-input/stylus-input",
+      "note": "未実装。スタイラス対応端末が要る。ホバーは端末依存（要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AppKit `NSEvent.pressure`（タブレット・トラックパッドの感圧）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/appkit/nsevent/pressure",
+      "note": "未実装。ペンタブレットのイベント全体像は未確認（要確認）。winit が筆圧を届けるかは未調査"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "ポインター入力（ペン）。WM_POINTER 系 API を想定（一般知識、要確認）",
+      "perm": "なし（package identity 要件は要確認）",
+      "url": "",
+      "note": "URL 未確認。ペン API のページは取得できなかった"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Pointer Events（`PointerEvent.pressure` / `tiltX` / `pointerType`）",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent/pressure",
+      "safari": "Safari 対応（MDN は Baseline、詳細は互換表で要確認）",
+      "note": "MDN は Baseline（2020-07 から Widely available）。筆圧のないマウスは 0.5 が返る"
+    }
+  },
+  "note": "pen-stylus は筆圧・傾きの継続入力。keyboard-mouse（既存 id）との違い: 位置とクリックだけでなく、筆圧・角度・ペン / 指の区別を含む。winit が筆圧を届けるかは未調査のため、実装前に確認が要る。今回の範囲: 画面に線を描き、筆圧で太さを変える（筆圧が無い入力は一定の太さ）。"
+}

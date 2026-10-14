@@ -1,0 +1,39 @@
+root = true
+
+# 開発環境整備（REQ-18）: エディタ間の改行コード・インデント・末尾空白の揺れを防ぐ
+# 共通設定。CI・lefthook の fmt チェックとは独立した、エディタ側の下地。
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Rust: cargo fmt 既定（4 スペースインデント）に合わせる（.claude/rules/coding-rust.md）。
+[*.rs]
+indent_style = space
+indent_size = 4
+
+# 設定・データファイル: 2 スペースインデントに統一する。
+[*.{yml,yaml,json,toml}]
+indent_style = space
+indent_size = 2
+
+# Makefile のレシピ行は tab でなければ `make` が
+# "missing separator" エラーになるため、tab を明示する。
+[Makefile]
+indent_style = tab
+
+# Markdown: 行末の 2 スペースを改行として使う記法があるため、
+# 末尾空白除去をここでは無効化する。
+[*.md]
+trim_trailing_whitespace = false
+
+# PowerShell: Windows PowerShell 5.1（Windows 11 同梱の powershell.exe）は BOM の無い
+# .ps1 をシステム ANSI コードページとして読むため、日本語コメントを含むスクリプトが
+# 文字化けしてパースエラーになる（TASK-5.1 / Issue #594 の Windows 計測スクリプト作成時に
+# 実際に発生）。PowerShell 7（pwsh）は BOM 無し UTF-8 を既定とするが、本リポジトリの
+# Windows 計測スクリプトは同梱の 5.1 で実行できることを前提とするため、
+# .ps1 のみ BOM 付き UTF-8 を明示する。
+[*.ps1]
+charset = utf-8-bom

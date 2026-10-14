@@ -1,0 +1,47 @@
+{
+  "id": "user-idle",
+  "name": "無操作時間の検知",
+  "group": "未着手の OS 機能",
+  "order": 61,
+  "priority": 90,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "no",
+      "api": "OS 全体の無操作時間を返す公開 API なし（アプリ内のタッチ監視のみ）",
+      "perm": "-",
+      "url": "",
+      "note": "アプリ内の無操作は自前のタイマーで実装できるが、OS 全体の値は取れない。URL 未確認（調査では「直接相当なし」）"
+    },
+    "android": {
+      "status": "no",
+      "api": "OS 全体の無操作時間を返す公開 API なし（アプリ内のタッチ監視のみ）",
+      "perm": "-",
+      "url": "",
+      "note": "アプリ内の無操作は自前のタイマーで実装できるが、OS 全体の値は取れない。URL 未確認"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`CGEventSource.secondsSinceLastEventType`（入力種別ごとの最終入力からの秒数）",
+      "perm": "要確認（権限の要否は未調査）",
+      "url": "",
+      "note": "未実装。URL 未確認（公式 URL を取得できていない）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 `GetLastInputInfo`（Win32 desktop）",
+      "perm": "不要（package identity の要件記載なし）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getlastinputinfo",
+      "note": "未実装。呼び出したセッション内の入力のみ。unpackaged exe で使える前提と読めるが実機未検証"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Idle Detection API（`IdleDetector`）",
+      "perm": "`idle-detection` 権限（ユーザー許可）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Idle_Detection_API",
+      "safari": "非対応",
+      "note": "Chromium のみ（MDN は Experimental）。画面ロックの検知も含む。secure context 必須"
+    }
+  },
+  "note": "macOS / Windows は OS 全体の無操作時間を取れる。モバイルは OS API がなく no、Web は Chromium のみ。screen-wake-lock（別 id）とは逆向きで、本機能は離席検知。今回の範囲: 最後の操作からの経過秒を 1 秒ごとに表示し、しきい値（既定 30 秒）を超えたら「離席中」と表示する"
+}

@@ -1,0 +1,46 @@
+{
+  "id": "global-hotkey",
+  "name": "グローバルホットキー",
+  "group": "未着手の OS 機能",
+  "order": 111,
+  "priority": 115,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "n-a",
+      "api": "該当概念なし",
+      "perm": "なし",
+      "url": "",
+      "note": "iOS にアプリ外のキー入力を拾う概念はない"
+    },
+    "android": {
+      "status": "n-a",
+      "api": "該当概念なし",
+      "perm": "なし",
+      "url": "",
+      "note": "Android にアプリ外のキー入力を拾う概念はない"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Carbon `RegisterEventHotKey`（Carbon 由来の旧 API）。監視のみなら `NSEvent.addGlobalMonitorForEvents`",
+      "perm": "アクセシビリティ権限は要確認（監視型は必要と認識）",
+      "url": "https://developer.apple.com/documentation/appkit/nsevent/addglobalmonitorforevents(matching:handler:)",
+      "note": "未実装。Sequoia で shift / option のみの修飾は不可になったとフォーラムにある（https://developer.apple.com/forums/thread/763878 ）。公式リファレンスの URL は未確認。並行性・終了処理があるので device-bridge-contracts.md の対象"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 `RegisterHotKey`。`WM_HOTKEY` がスレッドのメッセージキューに届く",
+      "perm": "なし（Win32 desktop 専用表記。実機未検証）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey",
+      "note": "未実装。他アプリと衝突すると登録に失敗する（失敗を成功に畳まない）。専用スレッドに集約する"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "ページが非アクティブなときのキー入力を拾う API はない"
+    }
+  },
+  "note": "今回の範囲: 固定のキー組み合わせ 1 つを登録し、押されるたびに画面のカウントを増やすだけ。デスクトップ専用。"
+}

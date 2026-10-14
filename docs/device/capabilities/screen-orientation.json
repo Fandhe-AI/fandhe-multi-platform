@@ -1,0 +1,43 @@
+{
+  "id": "screen-orientation",
+  "name": "画面向きの取得・固定",
+  "group": "未着手の OS 機能",
+  "order": 69,
+  "priority": 93,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "`supportedInterfaceOrientations`（固定）、`UIWindowScene.interfaceOrientation`（取得）、`requestGeometryUpdate`（iOS 16+）",
+      "perm": "不要",
+      "url": "",
+      "note": "未実装。URL 未確認（iOS 調査で未取得）。iPad で全画面でないときは固定が効かない場合あり（要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "manifest `screenOrientation` / `Activity.setRequestedOrientation`、取得は `Display.getRotation`",
+      "perm": "不要",
+      "url": "",
+      "note": "未実装。URL 未確認（専用ページ未取得）。再生成を避けるには manifest の `configChanges` が要る"
+    },
+    "macos": {
+      "status": "n-a",
+      "note": "デスクトップのウィンドウには向きの固定概念がない"
+    },
+    "windows": {
+      "status": "no",
+      "note": "タブレット機の向きの取得は `DisplayInformation` でできるが、固定はできない（要確認）",
+      "api": "なし（`DisplayInformation` で向きは読めるが、アプリから固定する公開 API は確認できず）",
+      "perm": ""
+    },
+    "web": {
+      "status": "possible",
+      "api": "Screen Orientation API（`screen.orientation.type` / `angle`、`lock()`）",
+      "perm": "なし（`lock()` は全画面時のみなど条件あり、要確認）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Screen_Orientation_API",
+      "safari": "取得は対応。`lock()` は非対応との認識（MDN の互換表では未確認）",
+      "note": "取得は 3 エンジン対応（MDN は 2023-03 から Widely available）。`lock()` は Safari 非対応との認識"
+    }
+  },
+  "note": "モバイルと Web が対象。macOS は n-a、Windows は向きの固定 API が無く no。tilt-motion（既存 id）は `screen.orientation.angle` を回転補正に使うが、向きの固定・通知そのものは本機能の範囲。今回の範囲: 現在の向き（縦・横）と角度を表示し、モバイルでは縦固定 / 横固定 / 解除をボタンで切り替える"
+}

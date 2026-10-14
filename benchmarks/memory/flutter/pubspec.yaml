@@ -1,0 +1,19 @@
+name: flutter_sample
+description: "計測専用フィクスチャ: fandhe sample_screen() 相当の Flutter 最小比較アプリ（#647 S2 / Issue #657）。"
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

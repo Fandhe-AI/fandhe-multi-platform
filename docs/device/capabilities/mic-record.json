@@ -1,0 +1,78 @@
+{
+  "id": "mic-record",
+  "name": "マイク録音",
+  "group": "未着手の OS 機能",
+  "order": 27,
+  "priority": 9,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "api": "AVFoundation（`AVAudioRecorder`/`AVAudioSession`）",
+      "perm": "`NSMicrophoneUsageDescription`",
+      "url": "https://developer.apple.com/documentation/avfoundation/avaudiorecorder",
+      "note": "実装済み（#956）。macOS（#954）と `.m` 実装を共用し、iOS 側は録音直前に `AVAudioSession` category を Record にして `setActive:YES`、完了時（成功・失敗いずれも）に `setActive:NO` する。権限判定は macOS と同じ `AVCaptureDevice` 系 API を共用。天井: バックグラウンド遷移（`UIApplicationDidEnterBackgroundNotification`）で録音中なら破棄してエラー表示（バックグラウンド録音・復帰再開は範囲外）。Control Center・通知センター等でアプリがフォアグラウンドのまま `Inactive` になっただけの成功完了は、0.5 秒の猶予後に実際に `Background` へ進んだ場合のみ破棄する（猶予中に Active へ戻れば成功のまま確定、codex-review #961 P1）。着信等の割り込みからの復帰再開なし、30 秒固定・AAC モノラル固定、シミュレータは Mac のマイクを使う。実機目視は人間確認待ち。共有 AVAudioSession は録音終了時に無条件で `setActive:NO`（他の音声 I/O 中は IsBusy で拒否され影響なし。共有セッションを触る 2 つ目の機能を足すときは所有権の一元管理が要る、PR #961）。実機確認項目: TTS 発話中に録音を停止しても発話が続くこと",
+      "sourceName": [
+        "マイク録音"
+      ],
+      "implStatus": "実装済み（シミュレータ確認のみ・実機目視は人間確認待ち）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_mic_record.m + crates/fandhe-egui-proxy/src/device/apple_mic_record.rs + crates/fandhe-egui-proxy/src/device/mic_record.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue #956"
+    },
+    "android": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "api": "`MediaRecorder`",
+      "perm": "`<uses-permission android:name=\"android.permission.RECORD_AUDIO\" />`",
+      "url": "https://developer.android.com/media/platform/mediarecorder",
+      "note": "実装済み（#957）。`RECORD_AUDIO` の実行時許可（`ActivityResultContracts.RequestPermission`）後、`MediaRecorder`（`AudioSource.MIC`/`OutputFormat.MPEG_4`/`AudioEncoder.AAC`、モノラル・64kbps・44.1kHz）でアプリ専有キャッシュの一時ファイルへ録音し、`setMaxDuration`（30 秒、Rust 側 `MAX_RECORD_MS` と同じ値）で OS 側自動停止する。停止後にバイト列を読み切ってから一時ファイルを削除する（0 バイトは失敗）。権限確認・録音完了が非同期のため `MicRecorder` トレイトは通さず、macOS と同型の pull 型 `RequestSlot` 経由で `fandhe_core::screens::mic_record` へ直接書き戻す。バックグラウンド遷移（`onPause`/`onDestroy`）・Activity 再生成では録音中の要求を破棄して失敗を返し、保留要求を残さない。既知の天井: v1 は 30 秒固定・AAC モノラル固定・録音中の他アプリのオーディオフォーカス奪取や着信からの復帰再開は無し・プロセス死は結果を捨てる。実機確認は未実施（`device-check-pending`）",
+      "sourceName": [
+        "マイク録音"
+      ],
+      "implStatus": "実装済み（実機未確認）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/device/mic_record.rs、Issue #957"
+    },
+    "macos": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "api": "AVFoundation（`AVCaptureDevice`/`AVAudioRecorder`）",
+      "perm": "Info.plist `NSMicrophoneUsageDescription`（entitlement 不要。App Sandbox 無効の素の実行体のため）",
+      "url": "https://developer.apple.com/documentation/avfoundation/avaudiorecorder",
+      "note": "実装済み（#954）。`AVCaptureDevice.authorizationStatusForMediaType:` で既知の権限状態を同期判定し、`notDetermined` のときのみ `requestAccessForMediaType:` で非同期確認する。許可後は一時ファイルへ AAC（`kAudioFormatMPEG4AAC`、モノラル）で `recordForDuration:`（30 秒上限、Rust 側 `MAX_RECORD_MS` と同じ値）録音し、`AVAudioRecorderDelegate` の完了（明示停止・自動停止どちらも同じコールバック）でファイルを読み切ってから削除する。権限確認・録音完了が非同期のため `MicRecorder` トレイトは通さず、`biometric_auth`/`share` と同型の pull 型 `RequestSlot` 経由で `fandhe_core::screens::mic_record` へ直接書き戻す。既知の天井: v1 は 30 秒固定・AAC モノラル固定・録音中の他アプリ割り込み（着信等）からの復帰再開は無し。自動運転セッションはヘッドレス環境（`screencapture` が黒画面を返す・マイク権限ダイアログを操作できない）で実機目視ができず未実施。Mac 実機での目視確認（正常系の再生確認・システム設定でマイクを拒否した状態での失敗系）は人間確認待ち",
+      "sourceName": [
+        "マイク録音"
+      ],
+      "implStatus": "実装済み（実機目視は人間確認待ち）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_mic_record.m + crates/fandhe-egui-proxy/src/device/apple_mic_record.rs + src/device/mic_record.rs + crates/fandhe-device/src/mic_record.rs、Issue #954"
+    },
+    "windows": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "api": "WinRT（`Windows.Media.Capture.MediaCapture`）",
+      "perm": "unpackaged 実行では宣言不要。パッケージ manifest の `microphone` capability は MSIX 化時のみ必要。実際の可否は Windows の「設定 > プライバシーとセキュリティ > マイク」の「デスクトップ アプリにマイクへのアクセスを許可する」に従う",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacapture",
+      "note": "実装済み（#955）。`MediaCapture`（`StreamingCaptureMode::Audio`）で `InMemoryRandomAccessStream` へ `MediaEncodingProfile::CreateM4a`（AAC）録音し、停止後にバイト列を読み出す。`InitializeWithSettingsAsync`/`StartRecordToStreamAsync`/`StopRecordAsync`/`DataReader::LoadAsync` はいずれも `windows-future` の `.get()` で同期待ちし、UI スレッドをブロックしないよう `std::thread::spawn` のワーカー上で呼ぶ（同一フレーム内で `start`→`stop` を呼び切る同期 `drive` は録音時間 0 ms になり必ず失敗するため、macOS と同じ pull 型 `RequestSlot` 経由へ乗せた）。期限は Rust 側ワーカーの `recv_timeout(MAX_RECORD_MS)` で揃える。`unsafe`・`RoInitialize` 呼び出し・新規依存パッケージ追加なし（`windows` crate の feature 追加のみ）。失敗写像は `E_ACCESSDENIED`（`0x80070005`）のみ `PermissionDenied`、それ以外（マイク未搭載・他アプリ使用中を含む）は段階別の `Internal` に畳む既知の天井。ローカルに msvc ツールチェーンが無く `x86_64-pc-windows-gnu` での `cargo check`/`clippy` による型検査のみ実施。Windows 実機での正常系（録音・停止・サイズ確認）・失敗系（プライバシー設定でマイク拒否）の確認は人間確認待ち",
+      "sourceName": [
+        "マイク録音"
+      ],
+      "implStatus": "実装済み（実機未確認）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_mic_record.rs + crates/fandhe-egui-proxy/src/device/mic_record.rs + crates/fandhe-device/src/mic_record.rs、Issue #955"
+    },
+    "web": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "api": "`MediaDevices.getUserMedia` + `MediaRecorder`",
+      "perm": "なし（`getUserMedia` の許可プロンプト）。secure context 必須（https か localhost）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia",
+      "safari": "対応",
+      "note": "実装済み（実ブラウザ未確認）。`navigator.mediaDevices.getUserMedia({audio: true})` でマイクを取得し `MediaRecorder`（`dataavailable`/`onstop`/`onerror`）で録音、`Blob` を`ArrayBuffer` へ読み切ってバイト列化する。期限は `setTimeout`（30 秒、Rust 側 `MAX_RECORD_MS`と同じ値）で OS 側からも自動停止し、Rust 側の `tick` 自動停止と揃える（両者とも`state() === \"recording\"` を確認してから `stop()` するため二重停止は無害）。経過秒数の反映は `rAF` ではなく `setInterval`（1 秒間隔、`Date.now()` の実測差分）を使い、タブ非表示中も自動停止経路が止まらないようにする。mime はブラウザ差があり（Chrome/Firefox は`audio/webm`、Safari は `audio/mp4`）`MediaRecorder.mimeType`/`Blob.type` から解決する。権限確認・録音完了が非同期のため `MicRecorder` トレイトは通さず、`fandhe_core::screens::mic_record` へ直接書き戻す。`pagehide`（bfcache 退避含む）で録音中のセッションを破棄し「録音が中断されました」を返す（再開はしない）。0 バイト・`duration 0`・8 MiB 超は`fandhe_device::mic_record::build_recording` の SSOT で失敗にする。既知の天井: `mount_with_effect`は状態から `Screen` を再構築しないため、Web の検証エントリポイントでは録音中の「停止」ボタンが表示されず、v1 は 30 秒自動停止でのみ正常系を観測する（`take_stop_request` 経路自体は実装済み）。bfcache からの再開なし・`timeslice` 分割やビットレート指定なし。実ブラウザ（Chrome/Safari/Firefox）での目視確認は人間確認待ち",
+      "sourceName": [
+        "カメラ・マイク"
+      ],
+      "implStatus": "実装済み（実ブラウザ未確認）",
+      "impl": "crates/fandhe-web-dom/src/mic_record.rs + crates/fandhe-web-dom/src/mount.rs（mount_with_effect）、Issue #958"
+    }
+  },
+  "note": "`AVAudioRecorder` / `MediaRecorder`（Android）/ `AVAudioRecorder`（macOS）/ Windows `MediaCapture` / Web `MediaRecorder` API",
+  "capture": "captures/mic-record.png"
+}

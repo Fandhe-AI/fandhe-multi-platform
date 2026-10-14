@@ -1,0 +1,47 @@
+{
+  "id": "environment-sensors",
+  "name": "気圧・照度・近接センサー",
+  "group": "未着手の OS 機能",
+  "order": 55,
+  "priority": 88,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "CoreMotion `CMAltimeter`（気圧・相対高度）。近接は `UIDevice.isProximityMonitoringEnabled`",
+      "perm": "要確認（`CMAltimeter` の Info.plist キーは未確認。「位置情報が必要」との出力は誤りと判断）",
+      "url": "https://developer.apple.com/documentation/coremotion/cmaltimeter",
+      "note": "未実装。気圧と近接のみ。照度センサーの公開 API は見当たらない（要確認）。近接は `UIDevice` のページ（https://developer.apple.com/documentation/uikit/uidevice）で要確認"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`SensorManager` の `TYPE_PRESSURE` / `TYPE_LIGHT` / `TYPE_PROXIMITY`（`TYPE_AMBIENT_TEMPERATURE` / `TYPE_RELATIVE_HUMIDITY` も同系）",
+      "perm": "明記なし（不要と思われるが要確認）",
+      "url": "https://developer.android.com/develop/sensors-and-location/sensors/sensors_environment",
+      "note": "未実装。近接は別ページ（…/sensors_position）。センサーの搭載は機種依存で、無い機種は「取得できない」を返す"
+    },
+    "macos": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "Mac の環境光センサー等の公開 API は確認できなかった（要確認）。URL 未確認"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT `Windows.Devices.Sensors.LightSensor`（照度）。気圧は `Barometer`（要確認）",
+      "perm": "要確認（package identity の要否は文書に記載なし）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.lightsensor",
+      "note": "搭載機種のみ。非搭載なら `GetDefault` が null。unpackaged での動作は要確認。近接センサーも `Windows.Devices.Sensors.ProximitySensor` で読める（https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.proximitysensor ）"
+    },
+    "web": {
+      "status": "no",
+      "api": "Generic Sensor の `AmbientLightSensor`（照度のみ）。気圧・近接の API は無し",
+      "perm": "secure context 必須。センサー権限のプロンプトあり（要確認）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Sensor_APIs",
+      "safari": "AmbientLightSensor 非対応",
+      "note": "Generic Sensor の AmbientLightSensor は Chromium でも実験フラグ配下のため no（既存 image-recognition / ml-inference の Web 判定に揃える。要確認）。気圧・近接は Web から取得できない。Chromium のみで、フラグが要るとの認識（要確認）。W3C 草案。気圧・近接は取得不可"
+    }
+  },
+  "note": "iOS は気圧（`CMAltimeter`）と近接、Android は気圧・照度・近接ほか、Windows は照度が中心、Web は照度のみ（Chromium・フラグ配下）。macOS は公開 API なし。tilt-motion / pedometer（既存 id）との違い: 加速度・ジャイロ・歩数ではなく、環境センサー（気圧・照度・近接）。今回の範囲: 取得できたセンサー値（気圧 hPa・照度 lx・近接の近い / 遠い）を種類ごとに並べて表示し、無いセンサーは「取得できません」と出す"
+}

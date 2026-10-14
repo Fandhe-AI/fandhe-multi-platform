@@ -1,0 +1,47 @@
+{
+  "id": "file-association",
+  "name": "ファイルの関連付け",
+  "group": "未着手の OS 機能",
+  "order": 109,
+  "priority": 66,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "Info.plist `CFBundleDocumentTypes`。開く要求は `application(_:open:options:)`",
+      "perm": "Info.plist の宣言",
+      "url": "https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundledocumenttypes",
+      "note": "未実装。ファイルは Files アプリ・共有経由で届く。コールドスタート時の保持が要る（url-scheme と同じ）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "intent-filter `ACTION_VIEW` + `mimeType` / `pathPattern`",
+      "perm": "なし",
+      "url": "https://developer.android.com/training/basics/intents/filters",
+      "note": "未実装。content URI が届くため読み取りは ContentResolver を使う。URL は一般的なインテントフィルタの文書で、報告外のため HTTP 応答のみ確認（内容は未精査）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Info.plist `CFBundleDocumentTypes`。開く要求は `application(_:openURLs:)`",
+      "perm": "Info.plist の宣言（.app 化が前提）",
+      "url": "https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundledocumenttypes",
+      "note": "未実装。.app が LaunchServices に登録されて初めて有効"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "レジストリの ProgID 登録（`HKCU\\Software\\Classes`）。起動引数でパスが届く",
+      "perm": "なし（unpackaged の成立は文書に基づく前提。実機未検証）。MSIX マニフェスト経由は package 必須（要確認）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/shell/fa-intro",
+      "note": "未実装。起動済みの場合は新プロセスが起動するため、既存インスタンスへの転送が別途要る（url-scheme と同じ）"
+    },
+    "web": {
+      "status": "possible",
+      "api": "manifest `file_handlers` + `launchQueue`",
+      "perm": "なし（PWA のインストールが前提）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/file_handlers",
+      "note": "未実装。MDN は experimental / not baseline。Chromium のみ（報告より）",
+      "safari": "非対応と認識"
+    }
+  },
+  "note": "url-scheme / deep-link（URL の受け取り）との違い: 本機能は拡張子・種別でファイルを受け取る。file-picker（利用者が選ぶ）とも別。今回の範囲: 自アプリ固有の拡張子 1 つを登録し、開かれたファイルのパスと先頭数バイトを画面に表示するだけ。"
+}

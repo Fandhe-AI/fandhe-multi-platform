@@ -1,0 +1,47 @@
+{
+  "id": "autofill-otp",
+  "name": "パスワード・ワンタイムコードの自動入力",
+  "group": "未着手の OS 機能",
+  "order": 97,
+  "priority": 86,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "UIKit `UITextContentType`（`.password` / `.username` / `.oneTimeCode`）を入力欄へ設定。SMS のコードはキーボード上の候補に出る",
+      "perm": "パスワード自動入力は Associated Domains の `webcredentials:`（要確認）",
+      "url": "https://developer.apple.com/documentation/uikit/uitextcontenttype",
+      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 アプリが独自描画（egui）の場合、OS の入力欄を持たないため、OS の自動入力候補をどう出すかは未調査・要確認"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`AutofillManager`（API 26+）と `View.setAutofillHints`。SMS ワンタイムコードは SMS User Consent API（GMS 依存）",
+      "perm": "自動入力は権限なし。SMS User Consent は権限名が未確認（要確認）",
+      "url": "https://developer.android.com/identity/autofill",
+      "note": "未実装。SMS User Consent は GMS（Google Play 開発者サービス）依存で https://developers.google.com/identity/sms-retriever/user-consent/overview が一次情報。独自描画の入力欄への自動入力の通し方は未調査"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AppKit のパスワード自動入力（`NSTextContentType`）。詳細は要確認",
+      "perm": "要確認",
+      "url": "https://developer.apple.com/documentation/uikit/uitextcontenttype",
+      "note": "未実装。URL は iOS の UIKit ページで macOS 側は未確認（URL 未確認）。macOS で SMS のコード自動入力は一般的でない"
+    },
+    "windows": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "OS 全体の自動入力に相当する公開 API が報告で確認できていない（要確認）"
+    },
+    "web": {
+      "status": "possible",
+      "api": "`<input autocomplete=\"one-time-code\">`・`username`・`current-password`、および WebOTP API（`navigator.credentials.get({otp})`）",
+      "perm": "なし（WebOTP は secure context 必須、SMS 本文の書式条件あり）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebOTP_API",
+      "note": "未実装。WebOTP は MDN が Limited availability 表示で Chromium 系のみと認識（要確認）。`autocomplete` 属性は HTML の標準で https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/autocomplete",
+      "safari": "WebOTP は非対応と認識（要確認）。`autocomplete=\"one-time-code\"` は Safari に iOS のコード候補機能がある（要確認）"
+    }
+  },
+  "note": "secure-credential（端末内保存）との違い: 本機能は OS の自動入力にコード・パスワードを入れてもらう側。今回の範囲: ワンタイムコード入力欄を 1 つ画面に出し、OS が提案した値が入ることを確認する。独自描画のため入力欄の橋渡し方法が前提となる未調査項目。"
+}

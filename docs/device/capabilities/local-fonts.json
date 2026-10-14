@@ -1,0 +1,62 @@
+{
+  "id": "local-fonts",
+  "name": "OS 搭載フォントの列挙",
+  "group": "未着手の OS 機能",
+  "order": 127,
+  "priority": 58,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "api": "UIKit `UIFont.familyNames`",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/uikit/uifont/familynames",
+      "note": "実装済み（#1377）。範囲はフォントのファミリー名の一覧のみ（選んで描画に使うことは範囲外）。書体名（`fontNames(forFamilyName:)`）・ファイルパス・バイト列は取らない・保持しない。名前はログに出さず画面状態にだけ置く。名前は制御文字除去と 128 文字、整形後の完全一致で重複を除き、コードポイント昇順の先頭 1,000 件まで。OS が 0 件を返したら「0 件」、取れなければ失敗で、失敗を成功値へ畳まない。守る範囲: 0 件と失敗の区別・切り捨ての明示・名前を作り替えないこと。守らない範囲: OS 間の一覧の一致、利用者が別アプリ経由で入れたフォントや未ダウンロードのフォントが載るか（要確認）、読み取り後のフォント追加・削除（再取得まで）、ロケール順、ローカライズ名。「一覧を取得」ボタンを押したとき UI スレッドで同期 1 回だけ読む（並行経路なし）。iOS 実機の確認は #1375",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1375）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_local_fonts.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_local_fonts.m + crates/fandhe-egui-proxy/src/device/local_fonts.rs + crates/fandhe-core/src/screens/local_fonts_show.rs + crates/fandhe-device/src/local_fonts.rs、Issue #1377"
+    },
+    "android": {
+      "status": "done",
+      "api": "`SystemFonts.getAvailableFonts()`（API 29+）+ `Font.getBuffer()` の `name` テーブル（nameID 16 → 1、en-US 優先）",
+      "perm": "不要（`uses-permission` は追加しない）",
+      "url": "https://developer.android.com/reference/android/graphics/fonts/SystemFonts",
+      "note": "実装済み（#1378）。範囲はフォントのファミリー名の一覧のみ（選んで描画に使うことは範囲外）。`Font` に名前の公開 API が無いため、`getBuffer()` のバイト列から `name` テーブルを読む（nameID 16 を優先し無ければ 1、Unicode / Windows の名前のみ、Windows の en-US を優先）。ファイルパス・書体・バイト列は取らない・保持しない。名前はログに出さず画面状態にだけ置く。壊れたフォント・`name` 無し・TTC の index 範囲外はそのフォントだけ捨て、1 件以上あるのに 1 件も名前が取れなければ失敗。名前は制御文字除去と 128 文字、整形後の完全一致で重複を除き、コードポイント昇順の先頭 1,000 件まで（超過は「ほか多数」と出す）。API 29 未満は非対応（0 件の成功にしない）。守る範囲: 0 件と失敗の区別・切り捨ての明示・失敗を成功値へ畳まないこと。守らない範囲: OS 間の一覧の一致、読み取り後のフォント追加・削除（再取得まで）、ロケール順、ローカライズ名。「一覧を取得」ボタンを押したとき UI スレッドで同期 1 回だけ読み、保留中の要求を持たない（Activity 再生成で破棄するものは無い）。実機確認（一覧が出るか・API 28 以下・初回 100 ms 以内か）は #1375",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#1375）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_local_fonts.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/LocalFontsHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/local_fonts.rs + crates/fandhe-core/src/screens/local_fonts_show.rs + crates/fandhe-device/src/local_fonts.rs、Issue #1378"
+    },
+    "macos": {
+      "status": "done",
+      "api": "AppKit `NSFontManager.sharedFontManager.availableFontFamilies`",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/appkit/nsfontmanager/availablefontfamilies",
+      "note": "実装済み（#1376）。範囲はフォントのファミリー名の一覧のみ（選んで描画に使うことは範囲外）。書体（fullName・PostScript 名・スタイル）・ファイルパス・バイト列は取らない・保持しない。名前はログに出さず画面状態にだけ置く。名前は制御文字除去と 128 文字、整形後の完全一致で重複を除き、コードポイント昇順の先頭 1,000 件まで（超過は「ほか多数」と出す）。OS が 0 件を返したら「0 件」、取れなければ失敗で、失敗を成功値へ畳まない。守る範囲: 0 件と失敗の区別・切り捨ての明示・名前を作り替えないこと。守らない範囲: OS 間の一覧の一致、ダウンロード型フォントが載るか、読み取り後のフォント追加・削除（再取得まで）、ロケール順、ローカライズ名。「一覧を取得」ボタンを押したとき UI スレッドで同期 1 回だけ読み、「再取得」で読み直す（起動時には読まない。並行経路なし）。Mac 実機の目視は #1375",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#1375）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_local_fonts.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_local_fonts.m + crates/fandhe-egui-proxy/src/device/local_fonts.rs + crates/fandhe-core/src/screens/local_fonts_show.rs + crates/fandhe-device/src/local_fonts.rs、Issue #1376"
+    },
+    "windows": {
+      "status": "done",
+      "api": "DirectWrite `IDWriteFactory::GetSystemFontCollection` + `IDWriteFontFamily::GetFamilyNames`（`en-us`、無ければ先頭のロケール）",
+      "perm": "不要（unpackaged での動作は #1375 で確認）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/dwrite/nf-dwrite-idwritefactory-getsystemfontcollection",
+      "note": "実装済み（#1376）。範囲はフォントのファミリー名の一覧のみ（選んで描画に使うことは範囲外）。書体・ファイルパス・バイト列は取らない・保持しない。名前はログに出さず画面状態にだけ置く。名前は制御文字除去と 128 文字、整形後の完全一致で重複を除き、コードポイント昇順の先頭 1,000 件まで（超過は「ほか多数」と出す）。ファクトリ・コレクションの失敗は失敗、ファミリー単位の失敗はそのファミリーだけ捨てる。守る範囲: 0 件と失敗の区別・切り捨ての明示・失敗を成功値へ畳まないこと。守らない範囲: OS 間の一覧の一致、ダウンロード型フォントが載るか、読み取り後のフォント追加・削除（再取得まで）、ロケール順、ローカライズ名。ワーカースレッドで読み（`DWriteCreateFactory` は COM 初期化不要）、5 秒の期限を過ぎたら失敗として確定する（遅れて届いた結果は捨てる。中断できない呼び出しはプロセス終了で OS が片付ける）。Windows 実機の確認は #1375",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#1375）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_local_fonts.rs + crates/fandhe-egui-proxy/src/device/local_fonts.rs + crates/fandhe-core/src/screens/local_fonts_show.rs + crates/fandhe-device/src/local_fonts.rs、Issue #1376"
+    },
+    "web": {
+      "status": "done",
+      "api": "`window.queryLocalFonts()` の `family` のみ（`fullName`・`postscriptName`・`style`・`blob()` は使わない）",
+      "perm": "`local-fonts` 権限（ボタン押下時にブラウザの確認ダイアログ）。secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Local_Font_Access_API",
+      "safari": "非対応（`queryLocalFonts` が無ければ非対応表示）。Firefox も含め実ブラウザ確認（#1375）で確かめる",
+      "note": "実装済み（#1379）。Chromium のみ。範囲はフォントのファミリー名の一覧のみ（選んで描画に使うことは範囲外）。整形・重複除去・昇順・上限 1,000 件は macOS / Windows と共通（`families_from`）。起動時には読まず、「一覧を取得」ボタン押下の同期区間で `queryLocalFonts()` を 1 回呼ぶ（transient activation のため）。`FontData` は書体単位なので要素数で 0 件と全件名前なし（失敗）を区別する。許可拒否（`NotAllowedError`）は「許可されませんでした」で失敗とは別、`SecurityError`（permissions policy 等）は非対応。名前と例外 message はログ・console に出さない。守る範囲: 0 件と失敗の区別・切り捨ての明示・許可拒否と失敗の区別・古い世代の完了の破棄・発送記録の解放。守らない範囲: Chromium 以外（非対応表示）、許可ダイアログの応答待ちの期限（設けない）、読み取り後のフォント追加・削除（再取得まで）、複数タブ・複数マウント、ブラウザ間・OS 間の一覧の一致、wasm canvas 経路。実ブラウザ目視は #1375",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#1375）",
+      "impl": "crates/fandhe-web-dom/src/local_fonts.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/local_fonts_show.rs + crates/fandhe-device/src/local_fonts.rs、Issue #1379"
+    }
+  },
+  "note": "local-fonts は端末にあるフォント名の一覧取得。fandhe-fonts（CJK フォントの埋め込み）とは別で、名前の列挙のみが対象。今回の範囲: フォントのファミリー名を一覧で画面に出す（選んで描画に使うことは含めない）。"
+}

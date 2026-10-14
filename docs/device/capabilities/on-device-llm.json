@@ -1,0 +1,47 @@
+{
+  "id": "on-device-llm",
+  "name": "端末内 LLM",
+  "group": "未着手の OS 機能",
+  "order": 101,
+  "priority": 53,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "FoundationModels（`SystemLanguageModel` / `LanguageModelSession`）",
+      "perm": "不要と認識（要確認）",
+      "url": "https://developer.apple.com/documentation/foundationmodels/systemlanguagemodel",
+      "note": "未実装。iOS 26 の API。Apple Intelligence 対応端末に限る（要確認）。利用不可時の状態（`availability`）を成功値に畳まない"
+    },
+    "android": {
+      "status": "possible",
+      "api": "ML Kit GenAI APIs（Gemini Nano。AICore 依存、対応機種限定、フォアグラウンドのみ、クォータあり）",
+      "perm": "記載なし（要確認）",
+      "url": "https://developers.google.com/ml-kit/genai",
+      "note": "未実装。GMS ではなく OS の AICore に依存する（報告より）。対応機種のみで多くの端末では使えない"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "FoundationModels（macOS 26 でも提供と認識。要確認）",
+      "perm": "不要と認識（要確認）",
+      "url": "https://developer.apple.com/documentation/foundationmodels/systemlanguagemodel",
+      "note": "未実装。対応機種・OS 版は要確認"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Windows AI APIs（Windows App SDK の Phi Silica）",
+      "perm": "要確認（Limited Access Feature・package identity の要否は未確認）",
+      "url": "https://learn.microsoft.com/en-us/windows/ai/apis/phi-silica",
+      "note": "未実装。Copilot+ PC の NPU、または対応 GPU の Windows 11 で動くと文書にある。他の端末では使えない。package identity の要否は要確認"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Prompt API（`LanguageModel.create()`、Chrome 148+ でフラグなし）",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Prompt_API",
+      "note": "Chromium のみ。translation の Web（Translator API）と同じ基準で possible。モデルのダウンロードと端末要件あり",
+      "safari": "未実装と認識（要確認）"
+    }
+  },
+  "note": "ml-inference（自前モデルの推論）・nlp（OS 内蔵の言語処理）との違い: 本機能は OS が持つ生成 AI モデルに文章を渡して応答を得る。今回の範囲: 固定プロンプトを渡して応答を画面に出し、モデルが使えない端末では『利用不可』を出すだけ。"
+}

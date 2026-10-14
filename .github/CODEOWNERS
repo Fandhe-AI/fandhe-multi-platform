@@ -1,0 +1,20 @@
+# CODEOWNERS
+#
+# 目的: CI・コンテナ・ビルド入口を定義するファイル自身が PR 差分に含まれる場合、
+# PR 側で検査を緩めれば CI が green になり誤った保証を与えてしまう（自己参照的な
+# 検証）。この経路を塞ぐため、ビルド基盤を左右するパスへの変更には人間のレビューを
+# 必須とする。
+#
+# 所有者は付けていない。パスだけを列挙する。パスは
+# scripts/pr/guarded-merge.sh が「人間がマージする対象（自動マージ停止）」の判定に使う。
+# 本ファイルを消すと全 PR の自動マージが fail-closed で止まる。
+#
+# `/scripts/pr/` と `/.claude/settings.json` は、クライアント側マージガード（guarded-merge.sh と
+# それを強制する PreToolUse hook）自身の変更を PR 内で緩められないようにするため（#949）。
+
+/Dockerfile
+/compose.yaml
+/Makefile
+/.github/
+/scripts/pr/
+/.claude/settings.json

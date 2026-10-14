@@ -1,0 +1,74 @@
+{
+  "id": "tilt-motion",
+  "name": "傾き検出（重力ベクトル）",
+  "group": "既存機能の棚卸し",
+  "order": 8,
+  "priority": 13,
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "detail": "できている（実機）",
+      "verified": true,
+      "api": "CoreMotion（`CMMotionManager.deviceMotion`）",
+      "perm": "不要（`deviceMotion`/加速度・ジャイロ単体は Info.plist キー不要。歩数・活動系のみ別途要）",
+      "url": "https://developer.apple.com/documentation/coremotion/cmmotionmanager",
+      "note": "実装済み・実機確認済み",
+      "sourceName": [
+        "傾き検出（Roll/Pitch）",
+        "傾き検出（Roll/Pitch、`CMMotionManager.deviceMotion`）"
+      ],
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "`crates/fandhe-egui-proxy/ios/fandhe_ios_motion.m`、`crates/fandhe-device/src/motion.rs`、Issue #832 closed（親 #827）"
+    },
+    "android": {
+      "status": "done",
+      "detail": "できている（実機）",
+      "verified": true,
+      "api": "`SensorManager`（`android.hardware`）",
+      "perm": "なし",
+      "url": "https://developer.android.com/develop/sensors-and-location/sensors/sensors_overview",
+      "note": "実装済み（#829/#831/#845）。傾きのみ利用。歩数は `TYPE_STEP_COUNTER` センサー追加で対応可能",
+      "sourceName": [
+        "加速度・ジャイロ・傾き",
+        "加速度・ジャイロ・傾き（`SensorManager`）"
+      ],
+      "implStatus": "実装済み",
+      "impl": "#829 / #831 / #845"
+    },
+    "macos": {
+      "status": "done",
+      "detail": "できている（ダミー、スライダー代替）",
+      "api": "標準 API なし（macOS は CoreMotion 非対応）",
+      "note": "`fandhe-device::motion::DummyMotion` が Phase 10 型サンプルの Mac 向けスライダー代替（#829）。実センサでの取得は不可",
+      "sourceName": [
+        "センサ（傾き）"
+      ]
+    },
+    "windows": {
+      "status": "done",
+      "detail": "できている（ダミー、スライダー代替）",
+      "api": "WinRT（`Windows.Devices.Sensors.Accelerometer` / `Gyrometer`）",
+      "perm": "なし（デバイス非搭載時は API が null を返す）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors",
+      "note": "`fandhe-device::motion::DummyMotion` が Phase 10 型サンプルの Mac 向けスライダー代替。Windows デスクトップ機は加速度センサ非搭載が多く実センサでの取得は機種依存",
+      "sourceName": [
+        "センサ（傾き）"
+      ]
+    },
+    "web": {
+      "status": "done",
+      "detail": "できている（実ブラウザ未確認）",
+      "api": "`DeviceOrientationEvent`（`beta`/`gamma`）",
+      "perm": "iOS 13+ の Safari のみ `requestPermission()`（ユーザー操作起因）が必須。未配線（下記 note 参照）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/deviceorientation_event",
+      "safari": "対応（ただし上記 `requestPermission()` 未配線のため許可ボタンが無く、Safari では「取得できない」表示になる）",
+      "note": "`DeviceOrientationEvent` の `beta`/`gamma`（度）から重力ベクトル相当の傾きへ変換し、`screen.orientation.angle` で画面回転を補正する（`fandhe-egui-proxy::device::tilt::gravity_to_tilt` と同じ回転表）。null（センサ無し環境で 1 回だけ出る）・非有限値・API 不在・非 secure context・3 秒間無応答は「取得できない」（`SensorStatus::Unavailable`）にし、0 の傾きを成功値として出さない。初期表示は「取得しています」（`Waiting`）。`document.hidden`・`pagehide` でリスナーを外し `Waiting` に戻す（最後の値を使い続けない）、`pageshow`・可視化復帰で再登録する。iOS Safari の `requestPermission()`（ユーザー操作起因の許可ボタン）は未配線（out-of-scope-tracking.md 対象）。横持ちでの軸の向きは実機未確認（人間担当）",
+      "sourceName": [
+        "センサ（傾き）"
+      ],
+      "implStatus": "実装済み（実ブラウザ未確認）",
+      "impl": "`crates/fandhe-web-dom/src/tilt.rs`（`tilt_ball_effect`）+ `crates/fandhe-web-dom/src/demo.rs`（`mount_tilt_ball_screen`）+ `crates/fandhe-web-dom/src/dom_tree.rs`（Canvas の円描画）+ `crates/fandhe-core/src/screens/tilt_ball.rs`（`SensorStatus`）、Issue #989"
+    }
+  },
+  "note": "Issue #827（closed）。Android は `SensorManager`（`TYPE_GRAVITY`）→ JNI（#831）、iOS は `CMMotionManager` → `extern \"C\"`（#832）、両方とも実機で確認済み（#827 クローズコメント）。macOS/Windows は `DummyMotion`（`motion.rs`、wasm32 除外 cfg なし＝Web でもコンパイル対象）が画面下部スライダーで値を差し替える代替 UI（`tilt_ball.rs`）。Web は Issue #989 で `DeviceOrientationEvent` を直接配線した（`fandhe-egui-proxy` の `DummyMotion`/`registry.rs` の wasm32 除外は egui 経路専用のままで、Web はこれを経由しない `fandhe-web-dom::tilt` が別経路として実装済み）"
+}

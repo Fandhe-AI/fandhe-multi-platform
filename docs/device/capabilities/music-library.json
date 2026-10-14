@@ -1,0 +1,47 @@
+{
+  "id": "music-library",
+  "name": "音楽ライブラリ",
+  "group": "未着手の OS 機能",
+  "order": 83,
+  "priority": 73,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "MusicKit / MediaPlayer",
+      "perm": "`NSAppleMusicUsageDescription`（要確認）。Apple Music 再生は契約が要る",
+      "url": "https://developer.apple.com/documentation/musickit",
+      "note": "未実装。端末内の曲の列挙と Apple Music の扱いで API が分かれる。詳細は要確認。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`MediaStore.Audio`",
+      "perm": "`READ_MEDIA_AUDIO`（API 33+）/ `READ_EXTERNAL_STORAGE`（それ以前）。要確認",
+      "url": "https://developer.android.com/reference/android/provider/MediaStore",
+      "note": "未実装。photo-library が使う MediaStore と同じ系統。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "MusicKit（macOS 12+）",
+      "perm": "要確認（ライブラリ参照の許可は未調査）",
+      "url": "https://developer.apple.com/documentation/musickit",
+      "note": "未実装。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`KnownFolders.MusicLibrary` の列挙 + `MusicProperties`（タイトル・アーティスト等）",
+      "perm": "要確認（WinRT の KnownFolders は capability 宣言が前提の見込み。photo-library の Windows と同様に Known Folders の Win32 API へ寄せる案もある）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.storage.knownfolders.musiclibrary",
+      "note": "未実装。photo-library の Windows と同じく、OS の音楽ライブラリ管理ではなくフォルダの列挙"
+    },
+    "web": {
+      "status": "no",
+      "api": "なし",
+      "perm": "なし",
+      "url": "",
+      "safari": "同左（API なし）",
+      "note": "ブラウザに端末の音楽ライブラリを読む API は無い。"
+    }
+  },
+  "note": "iOS / macOS は MusicKit、Android は MediaStore。Windows は KnownFolders.MusicLibrary の列挙。Web は公開 API が無く no。media-playback（既存 id）は再生、photo-library（既存 id）は写真で、本機能は曲の一覧とメタデータの取得を扱う。今回の範囲: 端末内の曲のタイトルとアーティストを先頭 20 件だけ一覧表示する（再生・プレイリスト編集は扱わない）。"
+}

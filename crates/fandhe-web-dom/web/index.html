@@ -1,0 +1,152 @@
+<!doctype html>
+<!--
+  TASK-4.4-S4（REQ-4 / Issue #82）検証用ホストページ。
+  fandhe-web-dom の wasm ビルド（demo.rs の mount_sample_screen）を
+  #fandhe-dom-root へマウントし、scripts/web/verify-dom-a11y.sh が
+  Chrome DevTools Protocol（Accessibility.getFullAXTree）でこのページの
+  Accessibility Tree を確認する。fandhe-egui-proxy/web/index.html の体裁
+  （TASK-1.2）を踏襲した検証専用ページであり、配布物ではない。
+
+  lang="ja" / title / meta description は、design（dom-output-architecture.md
+  §4「SSR/SSG 本実装はスコープ外」）の前段として、ホストページ側で満たすべき
+  最低限の SEO メタデータの適用例を示す。ただしこれらはランタイムマウント
+  （このページの経路。JS 必須）の外側にある静的な要素であり、マウントされる
+  DOM コンテンツ自体は to_html（native/SSR 経路）でのみ JS なしにクロール可能
+  になる点に注意。
+-->
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>fandhe-web-dom サンプル画面（TASK-4.4-S4 検証用）</title>
+    <meta
+      name="description"
+      content="fandhe-web-dom の DOM 出力レンダラで構築したサンプル画面（アクセシビリティ・SEO 確認用）"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="fandhe-dom-root"></div>
+    <script type="module">
+      import init, {
+        mount_sample_screen,
+        mount_text_scale_screen,
+        mount_gamepad_screen,
+        mount_network_status_show_screen,
+        mount_mic_record_screen,
+        mount_screen_capture_screen,
+        mount_tsv_import_screen,
+        mount_http_fetch_screen,
+        mount_storage_note_screen,
+        mount_tilt_ball_screen,
+        mount_camera_capture_screen,
+        mount_settings_screen,
+        mount_notification_send_screen,
+        mount_drag_drop_screen,
+        mount_speech_recognize_screen,
+        mount_checkbox_list_screen,
+        mount_background_task_screen,
+        mount_ble_scan_screen,
+        mount_contact_pick_screen,
+        mount_haptics_tap_screen,
+        mount_nlp_segment_screen,
+        mount_photo_pick_screen,
+        mount_url_scheme_show_screen,
+        mount_wake_lock_toggle_screen,
+        mount_compass_show_screen,
+        mount_fullscreen_toggle_screen,
+        mount_power_state_show_screen,
+        mount_device_info_show_screen,
+        mount_audio_devices_show_screen,
+        mount_local_fonts_show_screen,
+        mount_multi_display_show_screen,
+        mount_accessibility_prefs_show_screen,
+        mount_app_badge_set_screen,
+        mount_compose_mail_sms_screen,
+        mount_file_watch_show_screen,
+        mount_midi_show_screen,
+      } from "./fandhe_web_dom.js";
+      await init();
+      // 検証用の画面切替（Issue #915/#936/#958/#981/#985/#987/#989/#991/#993/#1007/#1017/#1027/#1037/#1047/#1063/#1223/#1091/#1094/#1103/#1277/#1307/#1311/#1315/#1344/#1333/#1338/#1363/#1387/#1379/#1414/#1401）。既定（?screen 未指定）は従来どおり sample。
+      const screen = new URLSearchParams(location.search).get("screen");
+      if (screen === "midi_show") {
+        mount_midi_show_screen("fandhe-dom-root");
+      } else if (screen === "file_watch_show") {
+        mount_file_watch_show_screen("fandhe-dom-root");
+      } else if (screen === "compose_mail_sms") {
+        mount_compose_mail_sms_screen("fandhe-dom-root");
+      } else if (screen === "app_badge_set") {
+        mount_app_badge_set_screen("fandhe-dom-root");
+      } else if (screen === "local_fonts_show") {
+        mount_local_fonts_show_screen("fandhe-dom-root");
+      } else if (screen === "audio_devices_show") {
+        mount_audio_devices_show_screen("fandhe-dom-root");
+      } else if (screen === "multi_display_show") {
+        mount_multi_display_show_screen("fandhe-dom-root");
+      } else if (screen === "device_info_show") {
+        mount_device_info_show_screen("fandhe-dom-root");
+      } else if (screen === "fullscreen_toggle") {
+        mount_fullscreen_toggle_screen("fandhe-dom-root");
+      } else if (screen === "compass_show") {
+        mount_compass_show_screen("fandhe-dom-root");
+      } else if (screen === "wake_lock_toggle") {
+        mount_wake_lock_toggle_screen("fandhe-dom-root");
+      } else if (screen === "accessibility_prefs_show") {
+        mount_accessibility_prefs_show_screen("fandhe-dom-root");
+      } else if (screen === "power_state_show") {
+        mount_power_state_show_screen("fandhe-dom-root");
+      } else if (screen === "url_scheme_show") {
+        mount_url_scheme_show_screen("fandhe-dom-root");
+      } else if (screen === "photo_pick") {
+        mount_photo_pick_screen("fandhe-dom-root");
+      } else if (screen === "haptics_tap") {
+        mount_haptics_tap_screen("fandhe-dom-root");
+      } else if (screen === "nlp_segment") {
+        mount_nlp_segment_screen("fandhe-dom-root");
+      } else if (screen === "contact_pick") {
+        mount_contact_pick_screen("fandhe-dom-root");
+      } else if (screen === "ble_scan") {
+        mount_ble_scan_screen("fandhe-dom-root");
+      } else if (screen === "background_task") {
+        mount_background_task_screen("fandhe-dom-root");
+      } else if (screen === "checkbox-list") {
+        mount_checkbox_list_screen("fandhe-dom-root");
+      } else if (screen === "speech_recognize") {
+        mount_speech_recognize_screen("fandhe-dom-root");
+      } else if (screen === "drag_drop") {
+        mount_drag_drop_screen("fandhe-dom-root");
+      } else if (screen === "storage_note") {
+        mount_storage_note_screen("fandhe-dom-root");
+      } else if (screen === "tilt_ball") {
+        mount_tilt_ball_screen("fandhe-dom-root");
+      } else if (screen === "camera_capture") {
+        mount_camera_capture_screen("fandhe-dom-root");
+      } else if (screen === "settings") {
+        mount_settings_screen("fandhe-dom-root");
+      } else if (screen === "text_scale") {
+        mount_text_scale_screen("fandhe-dom-root");
+      } else if (screen === "network_status_show") {
+        mount_network_status_show_screen("fandhe-dom-root");
+      } else if (screen === "gamepad") {
+        mount_gamepad_screen("fandhe-dom-root");
+      } else if (screen === "mic_record") {
+        mount_mic_record_screen("fandhe-dom-root");
+      } else if (screen === "screen_capture") {
+        mount_screen_capture_screen("fandhe-dom-root");
+      } else if (screen === "tsv_import") {
+        mount_tsv_import_screen("fandhe-dom-root");
+      } else if (screen === "http_fetch") {
+        mount_http_fetch_screen("fandhe-dom-root");
+      } else if (screen === "notification_send") {
+        mount_notification_send_screen("fandhe-dom-root");
+      } else {
+        mount_sample_screen("fandhe-dom-root");
+      }
+    </script>
+  </body>
+</html>

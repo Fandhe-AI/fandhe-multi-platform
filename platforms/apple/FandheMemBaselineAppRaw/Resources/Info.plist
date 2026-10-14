@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  iOS メモリ計測「UIKit 版ベースライン」アプリの Info.plist（TASK-5.2 / REQ-5、Issue #237、
+  PR #497）。検証専用（project.yml 参照）。
+
+  FandheMemBaselineApp/Resources/Info.plist と同方針（MinimumOSVersion 17.0 で揃える）。
+  UIApplicationSceneManifest は追加しない（AppDelegate.swift が UIWindow を直接生成する
+  従来型ライフサイクルを使うため。FandheIosApp（winit/UIApplicationMain 経由）と
+  同じライフサイクルに揃える意図。AppDelegate.swift のコメント参照）。
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>FandheMemBaselineRaw</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.fandhe.metrics.baselineraw</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>FandheMemBaselineAppRaw</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+		<integer>2</integer>
+	</array>
+	<key>MinimumOSVersion</key>
+	<string>17.0</string>
+</dict>
+</plist>

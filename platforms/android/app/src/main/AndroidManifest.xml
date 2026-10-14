@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android アプリの Manifest（TASK-11.2-S2 / REQ-11、Issue #226。
+  Activity 方式は TASK-9.3-S1 / REQ-9 / M4、Issue #242 で GameActivity へ変更。
+  決定記録: docs/architecture/android-activity-method.md）。
+
+  GameActivity 方式（NativeActivity から変更。`accesskit_android` が GameActivity
+  限定であるため、REQ-9 の TalkBack 対応（S2/S3）の前提条件。
+  crates/fandhe-egui-proxy/src/android.rs のコメント・Cargo.toml の
+  cfg(target_os = "android") 依存セクション参照）。GameActivity は NativeActivity と
+  異なりサブクラス化が必須のため、最小の Java サブクラス
+  （src/main/java/com/fandhe/androidapp/MainActivity.java）を追加し `hasCode="false"` は
+  撤回した。`android.app.lib_name` は GameActivity でも同じ規約で解決される
+  （developer.android.com/games/agdk/game-activity/get-started 参照、取得日 2026-08-01）ため
+  値・役割は変更しない。cdylib のロード自体は MainActivity.java の static 初期化子が担う
+  （GameActivity は NativeActivity と異なり自動ロードしない）。
+
+  GameActivity は AppCompatActivity のサブクラスであるため、android:theme に
+  Theme.AppCompat 系（res/values/themes.xml の "AppTheme"）を明示する必要がある
+  （未指定だと起動時に AppCompatDelegate が例外を投げる）。
+
+  A05（セキュリティ設定ミス）対策: android:debuggable は明記しない
+  （release ビルドタイプ側で自動制御される）。permission は Phase 8 の端末機能
+  （Issue #750）に限り INTERNET / CAMERA を追加する（spec 要件化が否決された
+  場合は README.md「Phase 8（端末機能）の切り離し手順」に従い本 2 行 + uses-feature 行を
+  戻す）。android:usesCleartextTraffic は追加しない（HTTP 取得画面 #748 は https のみを
+  許可する `UreqHttp` を使う）。それ以外の不要な exported 設定は追加しない。
+  カスタム URL scheme（Issue #1218）の intent-filter は `fandhe` scheme 1 つだけで、
+  http/https・host・path・autoVerify は付けない（受ける範囲の最小化）。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Phase 11（Issue #866）: 読み上げ（TTS）画面が使う。targetSdk 30 以降の
+         パッケージ可視性制限（Android 11+）下では、この queries 宣言が無いと
+         `PackageManager` からのクエリ結果に TTS エンジンのパッケージが含まれず、
+         `TextToSpeech` のコンストラクタがエンジン検索に失敗し得る
+         （developer.android.com/training/package-visibility の TTS_SERVICE
+         Intent action の例、codex-review 指摘）。切り離し時に削除する。 -->
+    <!-- Phase 11（Issue #1026）: 音声認識画面が使う。TTS と同じパッケージ可視性制限
+         （Android 11+）下の対策。この queries 宣言が無いと `SpeechRecognizer.
+         isRecognitionAvailable`/`createSpeechRecognizer` が音声認識サービスの
+         パッケージを見つけられない（developer.android.com/training/package-visibility
+         の例に倣う）。切り離し時に削除する。 -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
+    <!-- Phase 8（Issue #750）: HTTP 取得画面（#748）が使う。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Phase 8（Issue #750）: カメラ撮影画面（#749）が使う。切り離し時に削除する。
+         宣言することでランタイム許可（RequestPermission）が必須になり、権限拒否表示
+         （#749）を実機で検証できる（`ACTION_IMAGE_CAPTURE` 自体は権限宣言なしでも
+         動作するが、検証目的で明示的に要求する）。 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- カメラ非搭載端末（Android TV 等）をストアの自動フィルタから除外しないための
+         明示（切り離し時に削除する）。Google Play は `CAMERA` 権限の宣言単独から
+         `android.hardware.camera` / `android.hardware.camera.autofocus` を暗黙必須と
+         推論するため（camera.any だけでは解除されない）、前面カメラのみ・
+         autofocus 非搭載端末を除外しないよう両方を明示的に required=false にする
+         （codex-review・Cursor Bugbot 指摘、PR #790）。 -->
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+    <!-- Phase 11（Issue #890）: 位置情報画面が使う。位置情報画面は COARSE のみを要求する。
+         `ACCESS_FINE_LOCATION` はジオフェンス（Issue #1058）が半径より良い精度を要るときだけ
+         COARSE と同時に要求する（Android 12 以降は FINE の単独要求不可）。`ACCESS_BACKGROUND_LOCATION` は
+         要求しない（前景のみ、security.md A05）。API 30 以下の BLE スキャン（Issue #1062）も
+         この宣言を使う。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- 位置情報非搭載端末（Android TV 等）をストアの自動フィルタから除外しないための
+         明示（カメラの uses-feature required=false と同じ根拠、切り離し時に削除する）。 -->
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.location.network" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
+    <!-- Phase 11（Issue #908）: 生体認証画面が使う。`androidx.biometric` の
+         `BiometricPrompt`/`BiometricManager` 経由（`DEVICE_CREDENTIAL` は使わず
+         `BIOMETRIC_STRONG` のみ、security.md A01/A05）。切り離し時に削除する。
+         API 24〜27 で必要な `USE_FINGERPRINT` は `androidx.biometric` 自身の
+         manifest merge で補われる想定（アプリ側からは要求しない）。 -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- 指紋非搭載端末（Android TV 等）をストアの自動フィルタから除外しないための
+         明示（カメラ・位置情報の uses-feature required=false と同じ根拠、
+         切り離し時に削除する）。 -->
+    <uses-feature android:name="android.hardware.fingerprint" android:required="false" />
+
+    <!-- Phase 11（Issue #1062）: BLE スキャン画面が使う。API 31 以上は `BLUETOOTH_SCAN`
+         （位置推定には使わないため `neverForLocation`）と `BLUETOOTH_CONNECT`（接続はしないが
+         `BluetoothAdapter.isEnabled()` / `BluetoothDevice.getAddress()` が機種・OS 実装によって
+         要求しうるため宣言する。同じ「付近のデバイス」グループで許可ダイアログは 1 回。
+         広告名は `ScanRecord` から取る）。API 30 以下は `BLUETOOTH`/
+         `BLUETOOTH_ADMIN`/`ACCESS_FINE_LOCATION` が要るため前 2 つは maxSdkVersion=30 で
+         限定する（最小権限、security.md A05。`ACCESS_FINE_LOCATION` はジオフェンスが全 API
+         レベルで使うため上の位置情報の宣言を共用し、ここでは重ねて宣言しない）。切り離し時に削除する。 -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <!-- BLE 非搭載端末（Android TV 等）をストアの自動フィルタから除外しないための明示
+         （カメラ・位置情報の uses-feature required=false と同じ根拠、切り離し時に削除する）。 -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+
+    <!-- Phase 11（Issue #957）: マイク録音画面が使う。`MediaRecorder` 経由の実行時許可
+         （最小権限、`RECORD_AUDIO` のみ。切り離し時に削除する）。 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- マイク非搭載端末（Android TV 等）をストアの自動フィルタから除外しないための
+         明示（カメラ・位置情報・生体認証の uses-feature required=false と同じ根拠、
+         切り離し時に削除する）。 -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <!-- Phase 11（Issue #1006）: ローカル通知画面が使う。Android 13（API 33）以上でのみ
+         実行時許可の対象になる権限で、API 32 以下では宣言しても無視される（システムが
+         自動許可扱いにする）ため minSdk 24 のまま追加できる。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Phase 11（Issue #1249）: 歩数画面が `TYPE_STEP_COUNTER` を読む。API 29 以上でのみ
+         実行時許可の対象（API 28 以下は許可不要）。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+    <!-- Phase 11（Issue #1284）: ネットワーク接続状態画面が `ConnectivityManager` を読む。
+         通常権限で実行時許可は無い。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Phase 11（Issue #1092）: 触覚フィードバック画面が `Vibrator` で振動を要求する。
+         通常権限で実行時許可は無い。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Phase 11（Issue #1337）: 画面録画画面が `MediaProjection` を型 mediaProjection の
+         フォアグラウンドサービスで使う。通常権限 2 つのみ（`RECORD_AUDIO`・`SYSTEM_ALERT_WINDOW`
+         は追加しない。音声は録らない）。実行ごとに OS の同意ダイアログが出る。切り離し時に
+         この 2 行と下の service を削除する。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+    <!-- 資格情報の安全な保存（Issue #924）: `allowBackup="false"` はクラウドバックアップを
+         止めるが、Android 12（API 31）以降の端末間移行（device-to-device transfer）は
+         一部メーカー端末で allowBackup の値に関係なく動作するため、
+         `res/xml/data_extraction_rules.xml` で `fandhe_secure_credential.xml`
+         （EncryptedSharedPreferences の保存ファイル）を cloud-backup・device-transfer
+         両方から除外する（codex-review 指摘、PR #931）。`android:fullBackupContent`
+         （API 23〜30 向けの同等機構）は追加しない。当該機構が対象とするのは
+         allowBackup=true 時のクラウドバックアップのみで、device-to-device transfer は
+         Android 12 以降でのみ存在する機能のため、minSdk 24 の範囲では
+         allowBackup="false" が唯一かつ十分な防御になる。 -->
+    <application
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@android:drawable/sym_def_app_icon"
+        android:label="@string/app_name"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:name="com.fandhe.androidapp.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <!-- Issue #1218: singleTask で MainActivity を常に 1 インスタンスにし、起動中に届いた
+                 fandhe:// の URL を onNewIntent へ確実に渡す（standard だと外部アプリからの
+                 ACTION_VIEW ごとに新インスタンスができ、Rust 側の android_app() が上書きされる）。
+                 影響: 起動中に URL を受けると、自タスクで MainActivity の上にある外部 Activity
+                 （カメラ・SAF・共有シート等）は閉じられ、既存のキャンセル経路で確定する。
+                 切り離し時は launchMode と下の fandhe intent-filter を削除する。 -->
+
+            <!-- cargo-ndk が出力する cdylib のライブラリ名（先頭 "lib"・末尾 ".so" を除いた形）。
+                 crates/fandhe-egui-proxy/Cargo.toml の [lib] name = "fandhe_egui_proxy" と対応。
+                 GameActivity 自体はこの meta-data を自動ロードに使わないが、値は
+                 MainActivity.java の System.loadLibrary 引数と一致させる SSOT として維持する。 -->
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="fandhe_egui_proxy" />
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Issue #1218: カスタム URL scheme。他アプリも同じ scheme を宣言でき任意の data を
+                 明示インテントで送れるため、受け取った URL は Rust 側で検査する（security.md A03/A05）。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="fandhe" />
+            </intent-filter>
+        </activity>
+
+        <!-- Issue #1337: 画面録画の MediaProjection を持つ。自アプリの明示 Intent だけで起動する
+             ため exported=false。切り離し時に削除する。 -->
+        <service
+            android:name="com.fandhe.androidapp.ScreenCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <!-- ホーム画面ウィジェット（Issue #1067）。APPWIDGET_UPDATE は system_server が
+             明示コンポーネント宛てに送るため exported=false でも届く想定（他アプリからの
+             任意 intent を受けない最小公開、security.md A05）。intent-filter はこの 1 つ
+             だけ、新しい権限は追加しない。実機でウィジェット一覧に出ない場合は要再確認
+             （device-check-pending）。切り離し時に削除する。 -->
+        <receiver
+            android:name="com.fandhe.androidapp.HomeWidgetProvider"
+            android:exported="false"
+            android:label="@string/home_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/home_widget_info" />
+        </receiver>
+    </application>
+
+</manifest>

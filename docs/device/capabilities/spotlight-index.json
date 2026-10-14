@@ -1,0 +1,46 @@
+{
+  "id": "spotlight-index",
+  "name": "OS の検索への登録",
+  "group": "未着手の OS 機能",
+  "order": 112,
+  "priority": 82,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "Core Spotlight `CSSearchableIndex`",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/corespotlight/cssearchableindex",
+      "note": "未実装。選ばれたときの起動は `NSUserActivity` / URL で届く（url-scheme と同じ入口が要る）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "AppSearch（`androidx.appsearch` の `AppSearchSession`）",
+      "perm": "記載なし（要確認）",
+      "url": "https://developer.android.com/guide/topics/search/appsearch",
+      "note": "未実装。AppSearch はアプリ内の全文検索が主用途。OS の検索（ランチャー・システム）から見える範囲は要確認"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Core Spotlight `CSSearchableIndex`",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/corespotlight/cssearchableindex",
+      "note": "未実装。macOS の提供範囲は要確認"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Windows Search の拡張（プロパティハンドラ・IFilter・検索コネクタ）",
+      "perm": "登録にインストーラが要る可能性（本文は未確認。要確認）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/search/windows-search",
+      "note": "未実装。ドキュメント本文は未精査。unpackaged での可否は要確認"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "Web に OS 全体の検索・起動連携の API はない"
+    }
+  },
+  "note": "app-intents（機能の公開）とは別: 本機能は保存済みの内容を OS の検索に出す。今回の範囲: 固定のメモ 1 件を登録し、OS の検索から開いたときにその識別子を画面に表示するだけ。"
+}

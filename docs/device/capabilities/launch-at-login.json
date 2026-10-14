@@ -1,0 +1,46 @@
+{
+  "id": "launch-at-login",
+  "name": "ログイン時の自動起動",
+  "group": "未着手の OS 機能",
+  "order": 110,
+  "priority": 99,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "n-a",
+      "api": "該当概念なし",
+      "perm": "なし",
+      "url": "",
+      "note": "iOS にログイン時の自動起動の概念はない"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`BOOT_COMPLETED` ブロードキャスト（`RECEIVE_BOOT_COMPLETED`）",
+      "perm": "`RECEIVE_BOOT_COMPLETED`",
+      "url": "https://developer.android.com/reference/android/content/Intent",
+      "note": "未実装。『ログイン』ではなく端末起動時。起動直後に画面を出す動作は API レベルで制限される（要確認）。background-task の範囲と重なる"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`SMAppService`（macOS 13+。`mainApp.register()`）",
+      "perm": "なし（ユーザーが設定画面で許可）",
+      "url": "https://developer.apple.com/documentation/servicemanagement/smappservice",
+      "note": "未実装。.app 化が前提。ユーザーが設定で無効にできるため状態の取得が要る"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Run キー（`HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`）。WinRT `StartupTask` は package identity 必須",
+      "perm": "Run キーは package identity 不要と認識（要確認）。StartupTask は package identity 必須（文書で確認済み）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys",
+      "note": "未実装。package identity 必須の StartupTask を避けて Run キーを使えば unpackaged でも届く見込み。StartupTask の文書は https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.startuptask 。Run キーの扱いは実機未検証"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "なし",
+      "url": "",
+      "note": "ブラウザからログイン時に起動する公開 API はない"
+    }
+  },
+  "note": "今回の範囲: 自動起動の有効・無効を切り替えるボタンと現在の状態を画面に出すだけ。デスクトップ（macOS・Windows）が主対象。"
+}

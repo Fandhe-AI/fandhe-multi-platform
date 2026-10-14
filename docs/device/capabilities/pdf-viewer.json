@@ -1,0 +1,47 @@
+{
+  "id": "pdf-viewer",
+  "name": "PDF 表示",
+  "group": "未着手の OS 機能",
+  "order": 82,
+  "priority": 72,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "PDFKit（`PDFView` / `PDFDocument`）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/pdfkit",
+      "note": "未実装。ネイティブビューを egui 面へ重ねる設計が要る。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`androidx.pdf`（1.0.0-beta01）",
+      "perm": "なし",
+      "url": "https://developer.android.com/jetpack/androidx/releases/pdf",
+      "note": "未実装。beta 版で、Android 12 + SDK Extension 13 以上が必要（API 28 まで後方互換）。API が変わる可能性があるため要確認。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "PDFKit（macOS 10.4+）",
+      "perm": "なし（サンドボックスのファイルアクセスは要確認）",
+      "url": "https://developer.apple.com/documentation/pdfkit",
+      "note": "未実装。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`Windows.Data.Pdf.PdfDocument`（ページを画像へ描画）",
+      "perm": "要確認（文書に package identity の要件記載なし。unpackaged の可否は未検証）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.data.pdf.pdfdocument",
+      "note": "未実装。ページ画像を得る API で、スクロール・選択などの UI は自前になる。"
+    },
+    "web": {
+      "status": "no",
+      "api": "なし（PDF を直接描く標準 API が無い）",
+      "perm": "なし",
+      "url": "",
+      "safari": "同左（API なし）",
+      "note": "ブラウザ組み込みの PDF 表示は `<iframe>` / `<embed>` で出せるが、制御用の API は無い。pdf.js 等は OS / ブラウザの機能ではないため判定に使わない。"
+    }
+  },
+  "note": "iOS / macOS は PDFKit、Android は androidx.pdf（beta）、Windows は Windows.Data.Pdf。Web は制御できる標準 API が無く no。file-picker（既存 id）で選んだファイルを開く想定。今回の範囲: 同梱の PDF 1 枚の 1 ページ目を表示し、総ページ数を画面に出す（注釈・検索・ページ送りは扱わない）。"
+}

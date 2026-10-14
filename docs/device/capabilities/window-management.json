@@ -1,0 +1,41 @@
+{
+  "id": "window-management",
+  "name": "ウィンドウ管理（位置・サイズ・最前面）",
+  "group": "未着手の OS 機能",
+  "order": 66,
+  "priority": 92,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "n-a",
+      "note": "iPhone にウィンドウ位置・サイズの概念がない。iPadOS のマルチウィンドウ（UIScene）はシステムが配置し、アプリから位置は指定できない"
+    },
+    "android": {
+      "status": "n-a",
+      "note": "マルチウィンドウはシステムが配置し、アプリが位置・サイズを指定する API は一般的でない（要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AppKit `NSWindow`（`setFrame` / `level` / `makeKeyAndOrderFront`）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/appkit/nswindow",
+      "note": "未実装。winit のウィンドウ API でも位置・サイズ・最前面（`WindowLevel`）は扱える（要確認）。位置・サイズの保存と復元はアプリ側"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinAppSDK `AppWindow`（Move / Resize）、Win32 `SetWindowPos`",
+      "perm": "要確認（`AppWindow` は package identity の要件記載なし。Win32 は不要と見込む）",
+      "url": "https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.appwindow",
+      "note": "未実装。Win32 `SetWindowPos` は URL 未取得。winit 経由で足りる可能性あり（要確認）"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Window Management API の一部（`getScreenDetails()` で画面配置を取得し、`window.open` で位置指定）。最前面指定は不可",
+      "perm": "`window-management` 権限（ユーザー許可）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window_Management_API",
+      "safari": "非対応",
+      "note": "Chromium のみ（MDN は Experimental）。現在のウィンドウの移動・サイズ変更は `window.open` で開いた窓に限られる（要確認）。最前面は固定できない"
+    }
+  },
+  "note": "macOS / Windows のデスクトップが主対象。iOS / Android は概念がなく n-a、Web は Chromium の実験 API のみ。multi-display / fullscreen-immersive（別 id）との違い: 本機能は 1 ウィンドウの位置・サイズ・前後関係、前者は画面の列挙、後者は全画面。今回の範囲: ウィンドウの位置・サイズを表示し、ボタンで左上へ移動・既定サイズへ戻す・最前面の ON / OFF を行う（位置の保存・復元は扱わない）"
+}

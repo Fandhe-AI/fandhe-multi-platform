@@ -1,0 +1,9 @@
+// RN 最小比較アプリの Gradle 設定（#647 S1 / Issue #656）。fandhe 側 sample_screen() と
+// 同一画面構成の release APK を計測用にビルドするための単独プロジェクト。S3（#658）で
+// scripts/metrics/android-memory/measure-idle-memory-device.sh から起動される想定。
+pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+plugins { id("com.facebook.react.settings") }
+extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
+rootProject.name = 'com.fandhe.metrics.reactnative'
+include ':app'
+includeBuild('../node_modules/@react-native/gradle-plugin')

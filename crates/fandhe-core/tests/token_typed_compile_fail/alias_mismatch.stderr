@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+  --> tests/token_typed_compile_fail/alias_mismatch.rs:11:21
+   |
+11 |     requires_radius(size_ref);
+   |     --------------- ^^^^^^^^ expected `TypedTokenRef<RadiusKind>`, found `TypedTokenRef<SizeKind>`
+   |     |
+   |     arguments to this function are incorrect
+   |
+   = note: expected struct `TypedTokenRef<RadiusKind>`
+              found struct `TypedTokenRef<SizeKind>`
+note: function defined here
+  --> tests/token_typed_compile_fail/alias_mismatch.rs:7:4
+   |
+7  | fn requires_radius(_token_ref: RadiusTokenRef) {}
+   |    ^^^^^^^^^^^^^^^ --------------------------

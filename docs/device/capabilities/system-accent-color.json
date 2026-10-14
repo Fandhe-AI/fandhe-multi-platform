@@ -1,0 +1,47 @@
+{
+  "id": "system-accent-color",
+  "name": "システムのアクセント色",
+  "group": "未着手の OS 機能",
+  "order": 63,
+  "priority": 68,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "no",
+      "api": "アプリへアクセント色を返す OS 設定 API なし",
+      "perm": "-",
+      "url": "",
+      "note": "iOS にはユーザー設定のシステムアクセント色が無い（Android 調査での記載）。URL 未確認"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Dynamic Color（Android 12+）。View は `DynamicColors`、Compose は `dynamicColorScheme()`",
+      "perm": "なし",
+      "url": "https://developer.android.com/develop/ui/views/theming/dynamic-colors",
+      "note": "未実装。壁紙由来の配色で、Android 11 以前は取れない。Rust 側へは JNI で色を渡す"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`NSColor.controlAccentColor`（変更は通知で追従）",
+      "perm": "不要",
+      "url": "",
+      "note": "未実装。URL 未確認（調査では「一般知識」止まり）。要確認"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT `UISettings.GetColorValue(UIColorType.Accent)`（変更は `ColorValuesChanged`）",
+      "perm": "要確認（package identity の要件記載なし）",
+      "url": "",
+      "note": "未実装。URL 未確認。unpackaged での動作は要確認"
+    },
+    "web": {
+      "status": "possible",
+      "api": "CSS システムカラー `AccentColor`（`accent-color` プロパティとは別）",
+      "perm": "なし",
+      "url": "",
+      "safari": "対応状況は要確認",
+      "note": "URL 未確認。ブラウザやバージョンで対応が分かれる（要確認）。JS から値を読むには要素の計算済みスタイルを使う"
+    }
+  },
+  "note": "Android / macOS / Windows に API あり、iOS は設定が無く no。Web は CSS の `AccentColor`（対応は要確認）。dark-mode（既存 id）との違い: dark-mode は明暗、本機能はアクセント色。今回の範囲: 取得したアクセント色の見本と 16 進値を表示し、変更に追従する。取れない OS は既定色に倒さず「取得できません」を出す"
+}

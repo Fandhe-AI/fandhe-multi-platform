@@ -1,0 +1,47 @@
+{
+  "id": "media-cast",
+  "name": "外部機器への再生（AirPlay・Cast）",
+  "group": "未着手の OS 機能",
+  "order": 77,
+  "priority": 63,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "AVKit `AVRoutePickerView`（AirPlay の出力先選択）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/avkit/avroutepickerview",
+      "note": "未実装。UIKit のビューを egui 面の上へ重ねる設計が要る。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Google Cast SDK（GMS 依存）/ MediaRouter",
+      "perm": "報告に記載なし（要確認）",
+      "url": "https://developers.google.com/cast/docs/android_sender",
+      "note": "未実装。Play services が無い端末では使えない。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AVKit `AVRoutePickerView`（macOS 10.15+）",
+      "perm": "なし（要確認）",
+      "url": "https://developer.apple.com/documentation/avkit/avroutepickerview",
+      "note": "未実装。macOS での AirPlay 送信を実機で確認する必要がある（要確認）。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`Windows.Media.Casting.CastingDevicePicker`（Cast to Device）。旧 `Windows.Media.PlayTo` は Deprecated",
+      "perm": "要確認（一般知識。unpackaged での可否も未確認）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.casting.castingdevicepicker",
+      "note": "未実装。unpackaged での可否は要確認"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Remote Playback API（`HTMLMediaElement.remote`）",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Remote_Playback_API",
+      "safari": "Safari は AirPlay で対応と認識（要確認）。Chromium は Cast。Firefox は限定的",
+      "note": "未実装。メディア要素の再生だけが対象。"
+    }
+  },
+  "note": "iOS / macOS は AirPlay、Android / Chromium は Cast、Windows は CastingDevicePicker、Web は Remote Playback。media-playback（既存 id）は端末内再生で、本機能は出力先を外部機器へ切り替える点が違う。audio-devices（端末側の出力先選択）とも別。今回の範囲: 出力先の選択 UI を出し、選んだ機器へ音声 1 本を送って再生状態を画面に出す（画面ミラーリングは扱わない）。"
+}

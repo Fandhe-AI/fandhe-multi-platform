@@ -1,0 +1,26 @@
+error[E0308]: mismatched types
+  --> tests/compile_fail/screen_list_capture.rs:13:63
+   |
+13 |       let screen: Screen<CounterState> = Screen::new("画面").list(|_state| {
+   |  ____________________________________________________________----_^
+   | |                                                            |
+   | |                                                            arguments to this method are incorrect
+14 | |         extra_labels
+15 | |             .iter()
+16 | |             .map(|label| Node::Text(label.clone()))
+17 | |             .collect()
+18 | |     });
+   | |_____^ expected fn pointer, found closure
+   |
+   = note: expected fn pointer `for<'a> fn(&'a CounterState) -> Vec<Node<CounterState>>`
+                 found closure `{closure@$DIR/tests/compile_fail/screen_list_capture.rs:13:63: 13:71}`
+note: closures can only be coerced to `fn` types if they do not capture any variables
+  --> tests/compile_fail/screen_list_capture.rs:14:9
+   |
+14 |         extra_labels
+   |         ^^^^^^^^^^^^ `extra_labels` captured here
+note: method defined here
+  --> src/ui/screen.rs
+   |
+   |     pub fn list(self, expand: crate::state::ReadFn<S, Vec<Node<S>>>) -> Self {
+   |            ^^^^

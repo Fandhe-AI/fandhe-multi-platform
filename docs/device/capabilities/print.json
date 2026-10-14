@@ -1,0 +1,47 @@
+{
+  "id": "print",
+  "name": "印刷",
+  "group": "未着手の OS 機能",
+  "order": 120,
+  "priority": 57,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "UIKit `UIPrintInteractionController`",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/uikit/uiprintinteractioncontroller",
+      "note": "未実装。印刷対象（PDF / 画像 / 描画）を渡す形。AirPrint 対応プリンタが前提"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`PrintManager`（API 19+）",
+      "perm": "なし",
+      "url": "https://developer.android.com/training/printing",
+      "note": "未実装。印刷アダプタ（`PrintDocumentAdapter`）の実装が要る"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AppKit `NSPrintOperation`",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/appkit/nsprintoperation",
+      "note": "未実装"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 印刷 API（`PrintDlgEx` 等）",
+      "perm": "なし（Win32 desktop 専用、package identity 要件の記載なし。要確認）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/printdocs/printdocs-printing",
+      "note": "未実装。`EnumPrinters` の URL は 404 のため未確認"
+    },
+    "web": {
+      "status": "possible",
+      "api": "`window.print()`",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/print",
+      "safari": "Safari 対応（MDN は全主要ブラウザ対応と記載）",
+      "note": "MDN は Baseline（2023-06 から Widely available）。印刷されるのはページ全体で、描画 Canvas の印刷は CSS 側の調整が要る"
+    }
+  },
+  "note": "print は OS の印刷ダイアログを出す。今回の範囲: 画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷ダイアログに渡す。"
+}

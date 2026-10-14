@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+  --> tests/compile_fail/read_fn_type_annotation_capture.rs:12:41
+   |
+12 |     let f: ReadFn<CounterState, bool> = |state| state.count > threshold;
+   |            --------------------------   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected fn pointer, found closure
+   |            |
+   |            expected due to this
+   |
+   = note: expected fn pointer `for<'a> fn(&'a CounterState) -> bool`
+                 found closure `{closure@$DIR/tests/compile_fail/read_fn_type_annotation_capture.rs:12:41: 12:48}`
+note: closures can only be coerced to `fn` types if they do not capture any variables
+  --> tests/compile_fail/read_fn_type_annotation_capture.rs:12:63
+   |
+12 |     let f: ReadFn<CounterState, bool> = |state| state.count > threshold;
+   |                                                               ^^^^^^^^^ `threshold` captured here

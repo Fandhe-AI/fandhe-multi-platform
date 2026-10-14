@@ -1,0 +1,26 @@
+{
+  "id": "tv-focus",
+  "name": "TV フォーカス操作（十字キー）",
+  "group": "既存機能の棚卸し",
+  "order": 7,
+  "platforms": {
+    "ios": {
+      "status": "n-a"
+    },
+    "android": {
+      "status": "done",
+      "detail": "できている（実機、Android TV 限定）",
+      "verified": true
+    },
+    "macos": {
+      "status": "n-a"
+    },
+    "windows": {
+      "status": "n-a"
+    },
+    "web": {
+      "status": "n-a"
+    }
+  },
+  "note": "Issue #280（closed）・PR #539、実機目視確認済み。`docs/architecture/tv-focus-navigation-architecture.md`。スマホ/タブレット Android では TV 機なので対象外相当（Widget の `interaction_state()` 自体は共通）"
+}

@@ -1,0 +1,268 @@
+{
+  "$comment": "この配下が対応表の SSOT。1 機能 = 1 ファイル（<id>.json）で、本ファイルは共通定義。md と HTML は scripts/device/build-capabilities.mjs が生成する。各機能の order は表示順の保存用で、重複してもよい（同値はファイル名順）。priority は着手順（expand-capability が昇順に消化する。無い機能は後回し判断済みで候補外）、bundle は橋渡し経路の束（並列度の判定に使う）。order・priority・bundle はいずれも計画用メタデータで、生成物へは出さない。",
+  "statusLabels": {
+    "done": "できている",
+    "possible": "できそう",
+    "no": "できない",
+    "n-a": "対象外",
+    "unrated": "対応表 未評価"
+  },
+  "bundleLabels": {
+    "one-shot": "一発呼び出し型",
+    "request-response": "request/response 型",
+    "continuous-push": "継続 push 型",
+    "os-callback": "OS コールバック型"
+  },
+  "statusDefinitions": {
+    "done": "本リポジトリで実装済み",
+    "possible": "公開 API があり、既存の橋渡し経路（Android: JNI リスナー、Apple: `extern \"C\"` + ObjC、デスクトップ: Rust クレート直呼び、Web: ブラウザ API）で届く見込み",
+    "no": "公開 API が無い、または OS 制約により実現不可。理由を根拠欄に書く",
+    "n-a": "その OS に概念が存在しない",
+    "unrated": "#824 の統合時に横断評価の対象としなかった機能。OS 別の列挙にのみ載っていたもの（当該 OS の一次情報はあるが、他 OS との突き合わせは未実施）"
+  },
+  "verifiedDefinitions": {
+    "true": "実装済み・実機での動作確認記録がある（表記: できている（実機））",
+    "false": "実装済みだが実機確認は未了。シミュレータ・Mac 目視まで（表記: できている（未確認））"
+  },
+  "platforms": [
+    "ios",
+    "android",
+    "macos",
+    "windows",
+    "web"
+  ],
+  "platformLabels": {
+    "ios": "iOS",
+    "android": "Android",
+    "macos": "macOS",
+    "windows": "Windows",
+    "web": "Web"
+  },
+  "notes": {
+    "intro": "Phase 9（親 #820）の成果物。iOS / Android / macOS / Windows / Web の端末機能を\n1 枚で見るための対応表であり、どの機能がどの OS で「できている / できそう / できない」かを\n横断で把握するために使う。権限キー・公式ドキュメント URL の一次情報も本表が持つ。",
+    "reading": "セルは状態 + 短い根拠語句のみ。詳細な根拠（ファイルパス・Issue 番号・verification 記録）は\n機能ごとの詳細欄に置く。`対応表 未評価` は #824 の統合時に横断評価の対象としなかった機能で、\nOS 別の列挙にのみ載っていたもの（当該 OS の一次情報はあるが、他 OS との突き合わせは未実施）。",
+    "implementationSteps": "Issue #827（傾きで玉が転がる型）が踏んだ 5 段構えを一般形として示す。「できそう」の行が\n「できている」へ上がるまでに、どこが増えるかの目安になる。\n\n1. 描画プリミティブが不足していれば `PaintCommand` に追加し、全描画バックエンド\n   （`fandhe-egui-proxy` / `fandhe-web-dom`）へ配線する（例: #828 の `PaintCommand::Circle`）\n2. `fandhe-device` に trait + デスクトップ向けダミー実装を追加する（例: #829 の `Motion` trait）\n3. `fandhe-core` に型サンプル画面を追加し、画面レジストリへ登録する。macOS 等センサ非搭載環境は\n   スライダー等の代替入力で値を差し替えられるようにする（例: #830）\n4. プラットフォーム側の実配線: Apple 側は ObjC + `extern \"C\"`（例: #832）、Android 側は OS の\n   リスナー + JNI で最新値を共有状態へ流す（例: #831）\n5. センサのように継続 push で値が更新され続けるものは、カメラ/HTTP のような単発\n   request/response 経路を流用せず、「最新値保持の共有状態」（`Arc<Mutex<...>>` 等）を新設する\n\nこの 5 段のうち何段を新たに踏むかで、「できそう」を「できている」へ上げるコストが読める。\n橋渡し経路の型（`extern \"C\"` / JNI / ブラウザ API）自体は既存パターンの横展開で済む機能もあれば、\n新規の共有状態設計（4〜5 段目）を要する機能もある。",
+    "limitations": "- 「できそう」の判定は公開 API の存在確認までであり、実機での到達性・実装工数は未検証\n- 権限欄の記載は「実装時に必要になる可能性がある」ことの明示に留め、説明文言の確定は各実装時に行う\n- 個体識別子（UDID・シリアル番号等）や Apple Developer の証明書・Team ID はいずれの行にも含まない\n- 権限系（生体認証・課金・Bluetooth・カメラ / マイク等）は実装時に必要最小限のみ要求する\n  （過剰な権限要求を避ける。`.claude/rules/security.md` A05）\n- 着手順の決定は Issue #825、機能ごとの Phase 起票は Issue #826 のスコープであり本表には含めない"
+  },
+  "excluded": [
+    {
+      "reason": "OS の特別な許可・申請が要る",
+      "detail": "Entitlement や Apple / Google への申請、または特権的な権限が要り、通常のアプリが使えない。",
+      "items": [
+        {
+          "name": "VPN・パケット処理",
+          "api": "NetworkExtension / VpnService",
+          "why": "Entitlement とユーザーの VPN 許可が要る。"
+        },
+        {
+          "name": "スクリーンタイム",
+          "api": "FamilyControls",
+          "why": "Apple への Entitlement 申請が要る。"
+        },
+        {
+          "name": "研究用センサー",
+          "api": "SensorKit",
+          "why": "研究目的の Apple 審査が要る。"
+        },
+        {
+          "name": "接触通知",
+          "api": "ExposureNotification",
+          "why": "公的機関のアプリに限定される。"
+        },
+        {
+          "name": "店頭決済リーダー",
+          "api": "ProximityReader",
+          "why": "Apple への Entitlement 申請が要る。"
+        },
+        {
+          "name": "ユーザー補助サービス",
+          "api": "AccessibilityService（Android）",
+          "why": "ユーザーが設定画面で有効にする特権で、Play の審査も厳しい。"
+        },
+        {
+          "name": "利用統計",
+          "api": "UsageStatsManager（Android）",
+          "why": "ユーザーが設定画面で特別なアクセスを許可する必要がある。"
+        }
+      ]
+    },
+    {
+      "reason": "Rust 側のライブラリで足りる",
+      "detail": "OS の API を橋渡しせず、Rust のクレートで実現できる。",
+      "items": [
+        {
+          "name": "TCP・UDP・WebSocket 通信",
+          "api": "Network.framework / OkHttp 等",
+          "why": "Rust のクレートで実現でき、OS 別の橋渡しは要らない。"
+        },
+        {
+          "name": "ローカル SQL データベース",
+          "api": "Room / SwiftData",
+          "why": "SQLite を Rust から直接使える。"
+        }
+      ]
+    },
+    {
+      "reason": "表の列にない OS",
+      "detail": "対応表の列（iOS / Android / macOS / Windows / Web）に無い OS 固有の機能。",
+      "items": [
+        {
+          "name": "XR 空間アプリ",
+          "api": "visionOS / Jetpack XR（Android XR）",
+          "why": "対応表に該当する OS の列が無い。"
+        }
+      ]
+    },
+    {
+      "reason": "本表の機能に含む",
+      "detail": "別の機能として切り出さず、本表にある機能の範囲で扱う。",
+      "items": [
+        {
+          "name": "キー奪取・キー配列",
+          "api": "Keyboard Lock API",
+          "why": "keyboard-mouse に含む。"
+        },
+        {
+          "name": "ポインタロック",
+          "api": "Pointer Lock API",
+          "why": "keyboard-mouse に含む。"
+        },
+        {
+          "name": "起動ウィンドウ制御",
+          "api": "Launch Handler API",
+          "why": "deep-link に含む。"
+        },
+        {
+          "name": "ブラウザ内の排他・容量管理",
+          "api": "Web Locks / Storage API",
+          "why": "local-storage-kv に含む。"
+        },
+        {
+          "name": "Secure Enclave・TPM の鍵操作",
+          "api": "Secure Enclave / TPM",
+          "why": "secure-credential に含む。"
+        },
+        {
+          "name": "security-scoped bookmark",
+          "api": "URL bookmarkData（Apple）",
+          "why": "file-picker に含む。"
+        },
+        {
+          "name": "Presentation API",
+          "api": "Presentation API",
+          "why": "media-cast と multi-display に含む。"
+        },
+        {
+          "name": "WebCodecs",
+          "api": "WebCodecs API",
+          "why": "media-transcode の Web 実装に含む。"
+        }
+      ]
+    },
+    {
+      "reason": "UI 部品・見た目の装飾",
+      "detail": "端末機能ではなく、UI の部品や見た目の領域。",
+      "items": [
+        {
+          "name": "WebView 埋め込み",
+          "api": "WKWebView / WebView2",
+          "why": "UI 部品の領域で、端末機能の対象外。"
+        },
+        {
+          "name": "ネイティブのメニューバー・コンテキストメニュー",
+          "api": "NSMenu / Menu 等",
+          "why": "UI 部品の領域で、描画は DSL 側が担う。"
+        },
+        {
+          "name": "ウィンドウ背景効果",
+          "api": "vibrancy / Mica",
+          "why": "見た目の装飾にとどまる。"
+        }
+      ]
+    },
+    {
+      "reason": "廃止済み・配信や運用の仕組み",
+      "detail": "ハードウェアの廃止、またはストア配信・開発運用の仕組みで、アプリの端末機能ではない。",
+      "items": [
+        {
+          "name": "Touch Bar",
+          "api": "NSTouchBar",
+          "why": "ハードウェアが廃止済み。"
+        },
+        {
+          "name": "Play のアプリ内アップデート",
+          "api": "Play In-App Updates",
+          "why": "配信の仕組みで、端末機能ではない。"
+        },
+        {
+          "name": "自動更新・クラッシュ報告",
+          "api": "Sparkle / Crashlytics 等",
+          "why": "配信・運用の仕組みで、端末機能ではない。"
+        }
+      ]
+    },
+    {
+      "reason": "広告用途",
+      "detail": "広告の計測・配信のための API で、本フレームワークの対象外。",
+      "items": [
+        {
+          "name": "広告トラッキング許可",
+          "api": "AppTrackingTransparency",
+          "why": "広告計測の許可を取る API で、広告用途に限られる。"
+        },
+        {
+          "name": "広告用 API",
+          "api": "Privacy Sandbox",
+          "why": "広告配信・計測の用途に限られる。"
+        }
+      ]
+    },
+    {
+      "reason": "エンジン内部の実装事項",
+      "detail": "利用者に見せる機能ではなく、エンジン側が内部で選ぶ実装の話。",
+      "items": [
+        {
+          "name": "低遅延オーディオ",
+          "api": "Oboe / AAudio",
+          "why": "オーディオ実装の内部事項。"
+        },
+        {
+          "name": "ロケール・タイムゾーン変更",
+          "api": "Locale / TimeZone 変更通知",
+          "why": "変更通知は i18n の内部事項として扱う。アプリの表示言語を OS 設定に合わせる機能は per-app-language で扱う。"
+        }
+      ]
+    },
+    {
+      "reason": "1 つの OS にしかなく需要が低い",
+      "detail": "1 つの OS（または 1 社の製品群）にしか無く、共通の端末機能にする需要も低い。",
+      "items": [
+        {
+          "name": "ヘッドホンの頭部動き",
+          "api": "CMHeadphoneMotionManager",
+          "why": "対応ヘッドホンが前提で、他 OS に相当 API が無い。"
+        },
+        {
+          "name": "SharePlay",
+          "api": "GroupActivities",
+          "why": "FaceTime 連携が前提で、他 OS に相当が無い。"
+        },
+        {
+          "name": "GNSS の生測位データ",
+          "api": "GnssMeasurement（Android）",
+          "why": "他 OS に相当が無く、需要が低い。"
+        },
+        {
+          "name": "Handoff",
+          "api": "NSUserActivity",
+          "why": "Apple 製品間に限られ、需要が低い。"
+        },
+        {
+          "name": "スマートカードリーダー",
+          "api": "CryptoTokenKit / WinSCard",
+          "why": "業務用途に限られ、需要が低い。"
+        }
+      ]
+    }
+  ]
+}

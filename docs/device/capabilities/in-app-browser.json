@@ -1,0 +1,47 @@
+{
+  "id": "in-app-browser",
+  "name": "アプリ内ブラウザ",
+  "group": "未着手の OS 機能",
+  "order": 116,
+  "priority": 100,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "SafariServices `SFSafariViewController`",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/safariservices/sfsafariviewcontroller",
+      "note": "未実装。View Controller の present と閉じた通知の取得が要る"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Custom Tabs（`androidx.browser`）",
+      "perm": "なし",
+      "url": "https://developer.android.com/develop/ui/views/layout/webapps/overview-of-android-custom-tabs",
+      "note": "未実装。Custom Tabs 対応ブラウザが無い端末ではブラウザ起動に落ちる（要確認）"
+    },
+    "macos": {
+      "status": "no",
+      "api": "SFSafariViewController 相当の公開 API は無い見込み",
+      "perm": "",
+      "url": "",
+      "note": "要確認。認証用の ASWebAuthenticationSession はあるが汎用ではない。URL 未確認。WKWebView は UI 部品で本機能の範囲外"
+    },
+    "windows": {
+      "status": "no",
+      "api": "OS 標準のアプリ内ブラウザ UI は無い見込み",
+      "perm": "",
+      "url": "",
+      "note": "要確認。WebView2 は UI 部品で範囲外。URL 未確認"
+    },
+    "web": {
+      "status": "possible",
+      "api": "`window.open()`（ポップアップ / 新規タブ）",
+      "perm": "なし（ポップアップブロッカー対象、ユーザー操作内で呼ぶ）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/open",
+      "safari": "全エンジンで利用可（MDN 本文からは個別確認できず、要確認）",
+      "note": "「アプリ内」ではなく新規タブ / ウィンドウを開くだけ。MDN は Limited availability 表示"
+    }
+  },
+  "note": "in-app-browser は外部ブラウザへ遷移せずアプリ上に Web ページを重ねる。url-scheme / deep-link（既存 id）とは別で、こちらは「開く側」。今回の範囲: URL を渡して iOS は SFSafariViewController、Android は Custom Tabs、Web は新規タブで開く。"
+}

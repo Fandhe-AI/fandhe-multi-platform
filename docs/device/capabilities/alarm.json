@@ -1,0 +1,47 @@
+{
+  "id": "alarm",
+  "name": "アラーム・正確な時刻の予約",
+  "group": "未着手の OS 機能",
+  "order": 121,
+  "priority": 105,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "AlarmKit（iOS 26）",
+      "perm": "AlarmKit の使用説明キー（`NSAlarmKitUsageDescription`、要確認）",
+      "url": "https://developer.apple.com/documentation/alarmkit",
+      "note": "未実装。ページの存在のみ確認、権限・必要な Widget Extension 等は要確認。Apple Developer Program が現在期限切れで、entitlement・capability の要否は検証できない。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`AlarmManager.setExact*`（API 31+ は権限が要る）",
+      "perm": "`SCHEDULE_EXACT_ALARM` または `USE_EXACT_ALARM`（API 31+ target）",
+      "url": "https://developer.android.com/develop/background-work/services/alarms",
+      "note": "未実装。Doze 中の動作・再起動後の再登録（`BOOT_COMPLETED`）に注意。`USE_EXACT_ALARM` は用途が時計・カレンダーアプリに限られ、Play の審査対象（要確認）"
+    },
+    "macos": {
+      "status": "no",
+      "api": "アラーム専用の公開 API は確認できず",
+      "perm": "",
+      "url": "",
+      "note": "要確認。時刻指定の通知は notification（既存 id）で代替でき、画面ロック中に鳴り続ける専用機能とは別。URL 未確認"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`ScheduledToastNotification`（時刻指定のトースト通知）",
+      "perm": "package identity の要否はページに記載なし（要確認）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.ui.notifications.scheduledtoastnotification",
+      "note": "未実装。通知であってアラーム音を鳴らし続ける機能ではない。unpackaged で動くかは未検証（要確認）"
+    },
+    "web": {
+      "status": "no",
+      "api": "起動していないページを指定時刻に起こす標準 API は無い見込み",
+      "perm": "",
+      "url": "",
+      "safari": "対応なし（要確認）",
+      "note": "要確認。Notification Triggers の現状を未確認。URL 未確認"
+    }
+  },
+  "note": "alarm は指定時刻にアプリが閉じていても起こす。notification（既存 id）との違い: 通知は見せるだけ、こちらは正確な時刻・音・スヌーズなど「鳴らす」ことが目的。background-task（既存 id）の定期実行とも別。今回の範囲: 1 分後の時刻を予約し、時刻になったら鳴る / 通知が出ることを確認する。"
+}

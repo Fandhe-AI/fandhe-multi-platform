@@ -1,0 +1,37 @@
+{
+  "id": "open-in-shell",
+  "name": "既定アプリで開く・Finder / Explorer で表示・ゴミ箱",
+  "group": "未着手の OS 機能",
+  "order": 118,
+  "priority": 111,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "n-a",
+      "note": "Finder 表示・ゴミ箱の概念なし。外部アプリの起動は url-scheme / share-sheet（既存 id）の範囲"
+    },
+    "android": {
+      "status": "n-a",
+      "note": "ファイル表示・ゴミ箱の概念なし。外部アプリの起動は Intent で share-sheet（既存 id）の範囲"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AppKit `NSWorkspace`（open / Finder で選択表示 / ゴミ箱へ移動）",
+      "perm": "なし（サンドボックス時のファイルアクセス権は要確認）",
+      "url": "https://developer.apple.com/documentation/appkit/nsworkspace",
+      "note": "未実装。ゴミ箱は `recycle` 系で、メソッド名の詳細は公式本文で未確認（要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 `ShellExecute`（open / explore）。ゴミ箱は `SHFileOperation` / `IFileOperation`（URL 未確認）",
+      "perm": "なし（Win32 desktop 専用、package identity 要件の記載なし。要確認）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew",
+      "note": "未実装。WinRT の `Launcher` も候補（https://learn.microsoft.com/en-us/uwp/api/windows.system.launcher、フォルダ表示 `LaunchFolderPathAsync` あり）。ゴミ箱側は URL 未確認"
+    },
+    "web": {
+      "status": "n-a",
+      "note": "ブラウザはローカルファイルの表示・ゴミ箱を操作できない"
+    }
+  },
+  "note": "open-in-shell はデスクトップ固有。file-picker（既存 id）との違い: 選ぶ側ではなく、決まったパスを OS のアプリで開く・場所を表示する・ゴミ箱へ送る側。今回の範囲: 指定ファイルを既定アプリで開く、ファイルマネージャーで選択表示する、の 2 操作（ゴミ箱は破壊的なので後回し）。"
+}

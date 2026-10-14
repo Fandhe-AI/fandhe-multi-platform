@@ -1,0 +1,47 @@
+{
+  "id": "spell-check",
+  "name": "スペルチェック",
+  "group": "未着手の OS 機能",
+  "order": 125,
+  "priority": 84,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "UIKit `UITextChecker`",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/uikit/uitextchecker",
+      "note": "未実装。言語ごとの辞書が端末に入っているかは要確認"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`SpellCheckerSession`（`android.view.textservice`）",
+      "perm": "なし（要確認）",
+      "url": "https://developer.android.com/reference/android/view/textservice/SpellCheckerSession",
+      "note": "未実装。非推奨かどうかは取得できず要確認。端末にスペルチェッカーが有効であることが前提"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AppKit `NSSpellChecker`",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/appkit/nsspellchecker",
+      "note": "未実装"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 `ISpellChecker`（Windows 8+）",
+      "perm": "なし（Win32 desktop 専用、package identity 要件の記載なし。要確認）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/spellcheck/nn-spellcheck-ispellchecker",
+      "note": "未実装。COM 初期化が要る"
+    },
+    "web": {
+      "status": "no",
+      "api": "スペルチェックを呼び出す JS API は無い（`spellcheck` 属性は入力要素のブラウザ組み込みのみ）",
+      "perm": "",
+      "url": "",
+      "safari": "入力要素の属性のみ",
+      "note": "要確認。公式 URL は未取得"
+    }
+  },
+  "note": "spell-check は誤字の検出と修正候補の取得。nlp（既存 id）との違い: 形態素や意味の解析ではなく、OS が持つ辞書による綴り判定。日本語の扱いは各 OS で異なる（要確認）。今回の範囲: 英語の短い文を渡し、誤っている語と候補を画面に出す。"
+}

@@ -1,0 +1,207 @@
+[package]
+name = "fandhe-web-dom"
+version = "0.1.0"
+edition = "2021"
+description = "TASK-4.4-S2（REQ-4 / M3）: fandhe-core の Screen<S>/Node<S> を標準 HTML 要素の DOM ツリーとして出力する最小レンダラ（アクセシビリティ・SEO 重視画面向け、独自レンダラ（wasm+WebGL2）とのハイブリッド方式の一方）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+publish = false
+
+[lib]
+name = "fandhe_web_dom"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+# 依存方向は本クレート（最適化レイヤ）→ fandhe-core（共通コア）の一方向
+# （coding-rust.md 準拠）。共通コアへ本クレートの依存を持ち込まない。
+fandhe-core = { path = "../fandhe-core" }
+# `location`/`gamepad` モジュールの純関数（native `cargo test` 対象）が
+# `fandhe_device::{location, gamepad}` の検証・正規化ロジック（`is_valid_fix`/
+# `normalize_axis` 等）を共有するため、wasm32 限定ではなく全ターゲットの依存にする
+# （Issue #936。`fandhe-device` は thiserror のみに依存が解決するため新規パッケージは
+# 増えない、下の wasm32 向けコメント参照）。同じ最適化レイヤ同士（本クレート ⇔
+# fandhe-egui-proxy と同様の関係）の依存であり、共通コアとの一方向性は崩さない
+# （coding-rust.md 準拠）。
+fandhe-device = { path = "../fandhe-device" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# 実 DOM 構築（mount.rs）専用。native ビルド（dom_tree.rs / html.rs のみを使う
+# native テスト）ではこの分岐は評価されない。
+wasm-bindgen = { workspace = true }
+# Phase 11（Issue #859）: `navigator.clipboard` の Promise を待つ（`clipboard` モジュール）と、
+# `mount::Applier::apply` が effect 実行中の同期呼び出しをマイクロタスクへ退避するために使う。
+# workspace 既定（0.4）で、egui-proxy の web 分岐が既に引いているため新規パッケージは増えない。
+wasm-bindgen-futures = { workspace = true }
+console_error_panic_hook = { workspace = true }
+# Phase 11（Issue #875）: `file_picker` モジュールが読み取った `ArrayBuffer` のサイズを
+# `ArrayBuffer::byte_length` で確認するために使う（root Cargo.toml のコメント参照。
+# 既に workspace 内で解決済みのため新規パッケージは増えない）。
+js-sys = { workspace = true }
+# `fandhe-device` は wasm32 でも thiserror のみに依存が解決するため新規パッケージは
+# 増えない（`cargo build -p fandhe-device --target wasm32-unknown-unknown` 実査済み。
+# 本体は上の `[dependencies]` へ移動済み、Issue #936）。
+web-sys = { workspace = true, features = [
+    "Document",
+    "Window",
+    "Element",
+    "EventTarget",
+    "HtmlElement",
+    "HtmlInputElement",
+    "Event",
+    "InputEvent",
+    "CompositionEvent",
+    "Node",
+    "Text",
+    "console",
+    # Phase 11（Issue #859）: クリップボード読み書き（`clipboard` モジュール）。
+    "Clipboard",
+    "Navigator",
+    # Phase 11（Issue #867）: 読み上げ（`tts` モジュール、Web Speech API）。
+    "SpeechSynthesis",
+    "SpeechSynthesisUtterance",
+    "SpeechSynthesisErrorEvent",
+    "SpeechSynthesisErrorCode",
+    # Phase 11（Issue #875）: ファイル選択（`file_picker` モジュール、
+    # `<input type="file">` + File API）。
+    "File",
+    "FileList",
+    "Blob",
+    # Issue #1103: 写真選択（`file_picker::read_photo`）。復号確認の `createImageBitmap`
+    # （`ImageBitmap`）、表示用の `blob:` URL（`Url`）、Blob の MIME 指定（`BlobPropertyBag`）。
+    "ImageBitmap",
+    "Url",
+    "BlobPropertyBag",
+    # root の DOM 離脱検知（`mount.rs` の `sweep_mounts`）。
+    "MutationObserver",
+    "MutationObserverInit",
+    # Issue #891: 位置情報（`location` モジュール、Geolocation API）。
+    "Geolocation",
+    "Position",
+    "Coordinates",
+    "PositionError",
+    "PositionOptions",
+    # bfcache 復帰検知（`pageshow`、`location.rs` の再開処理）。
+    "PageTransitionEvent",
+    # Issue #900: 共有（`share` モジュール、Web Share API）。`navigator.share`/
+    # `navigator.canShare` に渡す `ShareData` の構築に使う。
+    "ShareData",
+    # Issue #909: 生体認証（`biometric_auth` モジュール、WebAuthn）。
+    "CredentialsContainer",
+    "PublicKeyCredential",
+    "PublicKeyCredentialCreationOptions",
+    "PublicKeyCredentialRequestOptions",
+    "PublicKeyCredentialRpEntity",
+    "PublicKeyCredentialUserEntity",
+    "PublicKeyCredentialParameters",
+    "PublicKeyCredentialType",
+    "PublicKeyCredentialDescriptor",
+    "AuthenticatorSelectionCriteria",
+    "AuthenticatorAttachment",
+    "UserVerificationRequirement",
+    "CredentialCreationOptions",
+    "CredentialRequestOptions",
+    "AuthenticatorResponse",
+    "AuthenticatorAssertionResponse",
+    "AuthenticatorAttestationResponse",
+    "Storage",
+    "Crypto",
+    # Issue #915: 文字サイズ追従（`text_scale` モジュール）。
+    # `getComputedStyle` の戻り値の型（`get_property_value` で参照する）。
+    "CssStyleDeclaration",
+    # 既定フォントサイズ変更時の再読込（`ResizeObserver` で `document.documentElement`
+    # の高さ変化を検知する）。
+    "ResizeObserver",
+    # Issue #936: ゲームコントローラ（`gamepad` モジュール、Gamepad API）。
+    # `navigator.getGamepads()` の戻り値の要素型・ボタン型・配置種別の判定に使う。
+    "Gamepad",
+    "GamepadButton",
+    "GamepadMappingType",
+    # Issue #958: マイク録音（`mic_record` モジュール、`getUserMedia` + `MediaRecorder`）。
+    "MediaDevices",
+    "MediaStream",
+    "MediaStreamTrack",
+    "MediaStreamConstraints",
+    "MediaRecorder",
+    "BlobEvent",
+    "RecordingState",
+    # Issue #985: HTTP 取得（GET 限定）（`http_fetch` モジュール、Fetch API）。
+    "AbortController",
+    "AbortSignal",
+    "RequestInit",
+    "RequestRedirect",
+    "RequestCredentials",
+    "Response",
+    "Headers",
+    # Issue #995 P1 対応: 本文を `array_buffer()` で一括確保せず `ReadableStream` で
+    # 逐次読み取りながら `MAX_BODY_BYTES` を適用するため（http_fetch.rs 参照）。
+    "ReadableStream",
+    "ReadableStreamDefaultReader",
+    "ReadableStreamReadResult",
+    # Issue #989: 傾き検出（`tilt` モジュール、`DeviceOrientationEvent`）。
+    # `Screen`/`ScreenOrientation` は画面回転（`screen.orientation.angle`）の
+    # 読み取りに使う。
+    "DeviceOrientationEvent",
+    "Screen",
+    "ScreenOrientation",
+    # Issue #991: カメラ撮影（`camera_capture` モジュール、`getUserMedia` + 非表示
+    # `<video>`/`<canvas>` によるフレーム取得・縮小）。`MediaDevices`/`MediaStream`/
+    # `MediaStreamTrack`/`MediaStreamConstraints` は Issue #958 で追加済みのため再掲しない。
+    "HtmlVideoElement",
+    "HtmlMediaElement",
+    "HtmlCanvasElement",
+    "CanvasRenderingContext2d",
+    "ImageData",
+    # Issue #1007: 通知（`notification` モジュール、Web Notifications API）。
+    "Notification",
+    "NotificationOptions",
+    "NotificationPermission",
+    # Issue #1017: ドラッグ & ドロップ受け取り（`drag_drop` モジュール、HTML Drag and
+    # Drop API）。`File`/`FileList`/`Blob` は Issue #875 で追加済みのため再掲しない。
+    "DragEvent",
+    "MouseEvent",
+    "DataTransfer",
+    "DataTransferItem",
+    "DataTransferItemList",
+    "FileSystemEntry",
+    # PR #1020 レビュー対応: Esc によるドラッグ取り消しは `dragend`（ドラッグ元でのみ
+    # 発火）に頼らず `keydown` で検知する（drag_drop.rs モジュール doc 参照）。
+    "KeyboardEvent",
+    # Issue #1027: 音声認識（`speech_recognition` モジュール、Web Speech API）。
+    # `SpeechRecognition::new()` は使わず `Reflect::construct` でコンストラクタを
+    # 構築するため型自体の feature のみが必要（モジュール doc「コンストラクタの取得
+    # 方法」節参照）。
+    "SpeechRecognition",
+    "SpeechRecognitionEvent",
+    "SpeechRecognitionResultList",
+    "SpeechRecognitionResult",
+    "SpeechRecognitionAlternative",
+    # Issue #1047: バックグラウンド処理（`background_task` モジュール、Background
+    # Synchronization API + IndexedDB）。`SyncManager` は web-sys に型が無いため
+    # Reflect 経由で呼ぶ（モジュール doc「非対応判定」節参照）。
+    "ServiceWorkerContainer",
+    "ServiceWorkerRegistration",
+    # codex 指摘 (PR #1051): 既定 scope での register() が既存 Service Worker を
+    # 置き換えてしまうのを避けるため、専用 scope を指定して登録する
+    # （`background_task.rs`「register の scope を専用にする」節参照）。
+    "RegistrationOptions",
+    # PR #1051 Bugbot 対応: `registration.active()` の取得に必要
+    # （`do_schedule` が active になるまで待つため、`background_task.rs`
+    # 「register の戻り値を使う」節参照）。
+    "ServiceWorker",
+    "IdbFactory",
+    "IdbDatabase",
+    "IdbOpenDbRequest",
+    "IdbRequest",
+    "IdbTransaction",
+    "IdbTransactionMode",
+    "IdbObjectStore",
+    "DomStringList",
+    # Issue #1219: カスタム URL scheme（`url_scheme` モジュール）。クエリ `url` の読み取り。
+    "Location",
+    "UrlSearchParams",
+    # Issue #1311: アクセシビリティ設定の追従（`accessibility_prefs` モジュール）。
+    # `window.matchMedia` の戻り値（`media()` / `matches()`）。
+    "MediaQueryList",
+    # 読み取り間隔の計測に単調時計 `performance.now()` を使う（時計巻き戻し対策）。
+    "Performance",
+] }

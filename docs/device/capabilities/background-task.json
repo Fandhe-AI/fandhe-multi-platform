@@ -1,0 +1,77 @@
+{
+  "id": "background-task",
+  "name": "バックグラウンド処理",
+  "group": "未着手の OS 機能",
+  "order": 25,
+  "priority": 22,
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "api": "BackgroundTasks（`BGTaskScheduler` + `BGAppRefreshTaskRequest`）",
+      "perm": "`UIBackgroundModes`=`fetch` + Info.plist の `BGTaskSchedulerPermittedIdentifiers`",
+      "url": "https://developer.apple.com/documentation/backgroundtasks",
+      "note": "実装済み（Issue #1045）。macOS（#1043、`NSBackgroundActivityScheduler`）とは別 API（iOS 専用）。起動完了前（`UIApplicationMain` 呼び出し前）に main thread で launch handler を 1 回だけ登録する契約（`main.rs`）。予約は同一識別子の要求を高々 1 件に置き換え、取り消しはべき等。`BGTaskSchedulerErrorCodeUnavailable`（バックグラウンド更新無効・省電力モード）は `Disabled`、`BGTaskSchedulerErrorCodeNotPermitted`（Info.plist 未宣言）は `PermissionDenied`、シミュレータ・未登録は `Unsupported` へ写像する。発火は新規プロセス（バックグラウンド起動）で届くのが主経路のため、メモリ上の予約状態に関わらず必ず実行結果を保存する。予約状態は世代照合をしない参考値（オーナー承認済み方針、2026-10-02）で、実行記録（last_run）は時刻の新しい方を残す規則で保護する。完了経路と期限切れ経路は互いの保存処理を待たず並行し、先に確定した方だけが `setTaskCompletedWithSuccess:` を呼ぶ。再起動直後の予約状態表示は「未予約」になる仕様（`getPendingTaskRequests` での復元は対象外）。実機 + lldb での即時発火手順: 実機に入れて「予約する」→ Xcode/lldb で一時停止 → `e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWithIdentifier:@\"com.fandhe.iosapp.background-task\"]` → 再開（期限切れの確認は `_simulateExpirationForTaskWithIdentifier:`）。実機未確認（device-check-pending）",
+      "sourceName": [
+        "バックグラウンド処理"
+      ],
+      "implStatus": "実装済み（実機未確認）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_background_task.m + crates/fandhe-egui-proxy/src/device/ios_background_task.rs + crates/fandhe-egui-proxy/src/device/background_task.rs + crates/fandhe-egui-proxy/src/main.rs、Issue #1045"
+    },
+    "android": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "api": "`WorkManager`（`OneTimeWorkRequest`、`enqueueUniqueWork` + `ExistingWorkPolicy.REPLACE` / `cancelUniqueWork`）",
+      "perm": "実行時許可は不要。本リポジトリでは明示的な `uses-permission` 追加は行わない。`androidx.work`（`WAKE_LOCK`/`RECEIVE_BOOT_COMPLETED`/`FOREGROUND_SERVICE` 系、work-runtime 内部の `SystemJobService`/`SystemAlarmService` 用）の manifest merge で入る権限はマージ後 manifest 未確認（Gradle/Android SDK が本環境に無いため。PR 本文に記載）",
+      "url": "https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work",
+      "note": "実装済み（Issue #1046）。範囲は処理 1 件を一意名 `fandhe.background-task` で予約し、OS の都合で最大 1 回実行、実行時刻と結果を保存、次に画面を開いたら表示するところまで。二重予約は `ExistingWorkPolicy.REPLACE`、取り消し（`cancelUniqueWork`）は未予約でもべき等。予約状態は参考値（`WorkManager` へは問い合わせない）: プロセス内に持つ直近の予約時刻と保存済み実行記録を比較するだけで判定する（Windows 実装と同じ形、オーナー判断 10/2、PR #1052）。アプリ再起動後は予約時刻が失われるため、再予約するまでは未予約として表示する（OS 側の予約自体は残り、発火すれば記録される）。記録の書き込みは `BackgroundTaskWorker`（Java）が直接行う（`android_main` 前提の JNI 経路が無い冷えたプロセスでも起動されるため）。`Worker.doWork()` は即座に書いて終わるため `RunResult::Expired` は使わない。実機での即時発火手順: (1) `adb shell dumpsys jobscheduler | grep -A10 com.fandhe.androidapp` で JOB ID を確認、(2) `adb shell cmd jobscheduler run -f com.fandhe.androidapp <JOB_ID>` で発火、(3) 画面に実行時刻が表示されることを確認。必要なら `adb shell setprop log.tag.WM-SystemJobService VERBOSE` でログを増やす。実機確認は未実施（device-check-pending、人間担当）",
+      "sourceName": [
+        "バックグラウンド処理"
+      ],
+      "implStatus": "実装済み（実機未確認）",
+      "impl": "crates/fandhe-device/src/background_task.rs + crates/fandhe-egui-proxy/src/device/android_background_task.rs + crates/fandhe-egui-proxy/src/device/background_task.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/BackgroundTaskWorker.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java、Issue #1046"
+    },
+    "macos": {
+      "status": "done",
+      "detail": "できている",
+      "api": "`NSBackgroundActivityScheduler`（`repeats = NO`）",
+      "perm": "なし（entitlement・Info.plist キー不要）",
+      "url": "https://developer.apple.com/documentation/foundation/nsbackgroundactivityscheduler",
+      "note": "実装済み（Issue #1043）。アプリ起動中（背景・最小化を含む）のみ動き、終了後は実行されない。interval 10 秒 / tolerance 5 秒 / QoS userInitiated で予約するが、実行時刻は保証しない。二重予約は置き換え、取り消しはべき等。読み出し失敗は未実行と区別して表示する。Mac 目視は main 側で実施（本 PR は隔離環境での実装・`cargo test`/`cargo clippy` のみで検証）。Mac 目視済み（10/2、「予約する」から約 10 秒で実行され時刻が表示される。予約直後の取り消しでは実行されず未予約に戻る）",
+      "sourceName": [
+        "バックグラウンド処理"
+      ],
+      "implStatus": "実装済み",
+      "impl": "crates/fandhe-device/src/background_task.rs + crates/fandhe-egui-proxy/src/device/macos_background_task.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_background_task.m + crates/fandhe-egui-proxy/src/device/background_task.rs、Issue #1043"
+    },
+    "windows": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "api": "タスク スケジューラ 2.0（`ITaskService`/`ITimeTrigger`/`IExecAction`、`TASK_TRIGGER_TIME`）",
+      "perm": "なし（現在ユーザー・`TASK_RUNLEVEL_LUA`・管理者権限不要）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/taskschd/task-scheduler-start-page",
+      "note": "実装済み（Issue #1044）。アプリを閉じていても動く。ログオフ中は動かず、予約から 1 日（`EndBoundary`）以内に再ログオンした場合だけその時点で発火する（`StartWhenAvailable`。期限を過ぎるとタスクは削除され発火しない）。`schtasks /run /tn fandhe-egui-proxy.background-task` で即時発火できる。予約から約 10 秒後に 1 回だけ実行し、実行時刻は保証しない。二重予約は置き換え、取り消しはべき等（ベストエフォート。取り消し直前に実行が始まっていた場合は記録に残り得る）。実行後は子プロセスがタスクを削除せず残す（削除直前の置き換えとの TOCTOU を避けるため）。`EndBoundary`（開始+1日）と `DeleteExpiredTaskAfter` が回収する。再起動後の UI 表示は未予約に戻る（OS 側のタスクは残り、発火すれば記録される）。実行記録は厳密な世代照合ではなく「時刻の新しい方を残す」程度の保護のみ（オーナー判断 10/2、`fandhe_device::background_task` の契約緩和）。予約状態の表示は参考値で正確さは保証しない。`BackgroundTaskBuilder`（パッケージ化前提）は使わない（10/1 のオーナー判断）。検証は `x86_64-pc-windows-gnu` での `cargo test`/`cargo clippy` のみで、実機確認は device-check-pending",
+      "sourceName": [
+        "バックグラウンド処理"
+      ],
+      "implStatus": "実装済み（実機未確認）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_background_task.rs + crates/fandhe-egui-proxy/src/device/background_task.rs + crates/fandhe-egui-proxy/src/main.rs + crates/fandhe-egui-proxy/src/device.rs + crates/fandhe-egui-proxy/src/device/windows_notification.rs + crates/fandhe-core/src/screens/background_task.rs、Issue #1044"
+    },
+    "web": {
+      "status": "done",
+      "detail": "できている（Chrome 系・secure context 限定）",
+      "api": "Background Synchronization API（Service Worker の `sync` イベント）",
+      "perm": "secure context 必須、Service Worker 登録が前提",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API",
+      "safari": "非対応（WebKit Standards Positions で否定的。Chrome 系のみ対応）",
+      "note": "実装済み（Issue #1047）。保存先は IndexedDB（ページと Service Worker の両方が読むため、SW から読めない localStorage は使わない）。契約を単純化（オーナー承認済み方針、10/2）: 実行記録は実行した側（SW）が時刻付きで保存し新しい方を残す、予約状態は `sync.getTags()` の tag か自前の「予約した」印をそのまま出す参考値（正確さは保証しない）、取り消しはベストエフォート（Background Sync に取り消し API は無く、IDB の印を削除するのみ。直前に始まった実行は記録に残り得る）。非対応条件は secure context 外・`serviceWorker`/`SyncManager`/`indexedDB` のいずれかが無い環境、保存失敗は `Err`。本 PR は隔離環境での実装・`cargo test`/`cargo clippy`/`wasm-bindgen` ビルドのみで検証（実ブラウザでの目視確認は main 側で実施）。未確認（人間担当）: Safari/Firefox 実機での `Unsupported` 表示、サイト設定でバックグラウンド同期を拒否したときの `PermissionDenied`、タブを閉じた状態での発火",
+      "sourceName": [
+        "バックグラウンド処理"
+      ],
+      "implStatus": "実装済み",
+      "impl": "crates/fandhe-web-dom/src/background_task.rs（background_task_effect）+ crates/fandhe-web-dom/web/background-task-sw.js + crates/fandhe-web-dom/src/demo.rs（mount_background_task_screen）、Issue #1047"
+    }
+  },
+  "note": "`BackgroundTasks` / WorkManager / `NSBackgroundActivityScheduler` / Windows タスク スケジューラ（`ITaskService`）。Web はタブ非表示時の任意処理継続はブラウザ側の省電力制御で著しく制限されるが、対応ブラウザ（Chrome 系）は Service Worker の Background Synchronization API で「接続回復時に一度だけ処理を実行」等の限定用途は届く（一次情報・Safari 対応状況は本表 Web 欄）。BLE・NFC・音声認識と同様「対応ブラウザ限定」で API 自体は存在するため「できない」ではなく「できそう」に分類する",
+  "capture": "captures/background-task.png"
+}

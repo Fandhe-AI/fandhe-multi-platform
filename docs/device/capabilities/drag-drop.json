@@ -1,0 +1,77 @@
+{
+  "id": "drag-drop",
+  "name": "ドラッグ & ドロップ",
+  "group": "未着手の OS 機能",
+  "order": 35,
+  "priority": 18,
+  "note": "iOS `UIDragInteraction` / Android はドラッグ&ドロップ API（`View.startDragAndDrop`）/ macOS `NSDraggingSource` / Windows Win32 OLE（`IDropTarget`）/ Web HTML Drag and Drop API。5 OS とも公開 API あり（列挙 3 本）",
+  "capture": "captures/drag-drop.png",
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）",
+      "api": "UIKit（`UIDragInteraction` / `UIDropInteraction`）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/uikit/drag-and-drop",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_drag_drop.m + crates/fandhe-egui-proxy/src/device/ios_drag_drop.rs + crates/fandhe-egui-proxy/src/device/drop_session.rs + crates/fandhe-egui-proxy/src/device/drag_drop.rs、Issue #1015",
+      "note": "受け取り側のみ。`UIDropInteraction` はウィンドウ全体。フォルダ・8 MiB 超・読めない・32 件超・0 件は失敗、領域外へ出た/取り消しはキャンセルとして扱う。iPhone でのアプリ間ドロップの可否は実機で確認する。実機未確認",
+      "sourceName": [
+        "ドラッグ & ドロップ"
+      ]
+    },
+    "android": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）",
+      "api": "`View.startDragAndDrop` / `OnDragListener`（`DragEvent`）",
+      "perm": "なし",
+      "url": "https://developer.android.com/develop/ui/views/touch-and-input/drag-drop",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-egui-proxy/src/device/drop_session.rs + crates/fandhe-egui-proxy/src/device/drag_drop.rs、Issue #1016",
+      "note": "受け取り側のみ（送り側は対象外）。ドロップ領域は DecorView 全体。フォルダ・8 MiB 超・読めない・32 件超・0 件は失敗、領域外へ出た/ドロップ無しの ACTION_DRAG_ENDED はキャンセルとして扱う。分割画面・デスクトップモードでの他アプリ間ドロップの可否は実機で確認する。実機未確認",
+      "sourceName": [
+        "ドラッグ & ドロップ"
+      ]
+    },
+    "macos": {
+      "status": "done",
+      "detail": "できている",
+      "implStatus": "実装済み",
+      "api": "AppKit（`NSDraggingSource` / `NSDraggingDestination`）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/appkit/drag_and_drop",
+      "impl": "`crates/fandhe-device/src/drag_drop.rs`（`read_dropped`）+ `crates/fandhe-egui-proxy/src/device/drag_drop.rs`（egui `RawInput::hovered_files` / `dropped_files`）、Issue #1014",
+      "note": "受け取り側のみ（送り側は対象外）。winit 経由の `NSDraggingDestination`。フォルダ・8 MiB 超・読めない・32 件超・0 件は失敗として扱う。ウィンドウ全体がドロップ領域 Mac 目視済み（10-01）: Finder から 2 ファイルをまとめてドロップ →「2 件受け取りました」+ 名前・バイト数、フォルダ →「フォルダは受け取れません」、9 MiB →「8 MiB を超えるファイルは受け取れません」の失敗表示。",
+      "sourceName": [
+        "ドラッグ&ドロップ"
+      ]
+    },
+    "windows": {
+      "status": "done",
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）",
+      "api": "Win32 OLE（`IDropTarget` / `IDropSource`）、WinRT は `Windows.ApplicationModel.DataTransfer`",
+      "perm": "なし",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/dnd/drag-and-drop",
+      "impl": "`crates/fandhe-device/src/drag_drop.rs`（`read_dropped`）+ `crates/fandhe-egui-proxy/src/device/drag_drop.rs`（egui `RawInput::hovered_files` / `dropped_files`）、Issue #1014",
+      "note": "winit 既定の OLE `IDropTarget` 経由。`x86_64-pc-windows-gnu` のコンパイル確認まで（実機未確認）",
+      "sourceName": [
+        "ドラッグ&ドロップ"
+      ]
+    },
+    "web": {
+      "status": "done",
+      "detail": "できている",
+      "implStatus": "実装済み（実ブラウザ目視は人間確認待ち）",
+      "api": "HTML Drag and Drop API",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API",
+      "safari": "対応",
+      "impl": "`crates/fandhe-web-dom/src/drag_drop.rs`（`drag_drop_effect`）+ `crates/fandhe-web-dom/src/demo.rs`（`mount_drag_drop_screen`）、Issue #1017",
+      "note": "受け取り側のみ（送り側は対象外）。文書全体がドロップ領域。フォルダは `webkitGetAsEntry` で判別し、判別できない環境でも読み取り失敗として扱う。8 MiB 超・32 件超・0 件は失敗、領域外・Esc はキャンセル。合成イベントでの確認済み経路と、Finder からの実ドラッグ・Safari/Firefox 目視は未確認（人間担当）",
+      "sourceName": [
+        "ドラッグ&ドロップ"
+      ]
+    }
+  }
+}

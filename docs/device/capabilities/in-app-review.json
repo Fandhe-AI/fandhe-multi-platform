@@ -1,0 +1,43 @@
+{
+  "id": "in-app-review",
+  "name": "アプリ内レビュー依頼",
+  "group": "未着手の OS 機能",
+  "order": 115,
+  "priority": 83,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "StoreKit（アプリ内レビュー依頼）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/storekit/requesting-app-store-reviews",
+      "note": "未実装。表示するかは OS が決める（表示回数に上限あり、要確認）。表示されたかは取れない見込み"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Play In-App Review API（Play Core 1.8.0 以上）",
+      "perm": "なし（報告に記載なし、要確認）",
+      "url": "https://developer.android.com/guide/playcore/in-app-review",
+      "note": "未実装。GMS（Google Play 開発者サービス）依存。Play 配信ビルドでのみ検証可能。表示は Google 側のクォータで制限され、表示されたかは取れない"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "StoreKit のレビュー依頼（iOS と同ページ内、macOS 対応の詳細は要確認）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/storekit/requesting-app-store-reviews",
+      "note": "未実装。Mac App Store 配布が前提の見込み（要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`Windows.Services.Store.StoreContext.RequestRateAndReviewAppAsync`",
+      "perm": "Microsoft Store 配布が前提（in-app-purchase の Windows と同じ）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.services.store.storecontext.requestrateandreviewappasync",
+      "note": "未実装。Store 外の配布では使えない"
+    },
+    "web": {
+      "status": "n-a",
+      "note": "Web にアプリ評価の概念なし"
+    }
+  },
+  "note": "in-app-review はストアのレビュー依頼ダイアログを出すだけで、結果は取れない。notification（既存 id）とは無関係。今回の範囲: ボタンを押すと OS のレビュー依頼を 1 回呼び、「呼んだ」と画面に出す（表示可否は検証できない旨を併記）。"
+}

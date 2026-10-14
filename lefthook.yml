@@ -1,0 +1,72 @@
+# 開発環境整備（REQ-18）: Git hooks 設定（Node 依存なし、lefthook 単体で完結させる）。
+#
+# 導入は `make setup`（未導入時は導入方法を案内）または `lefthook install` を各自実行する。
+# .claude/rules/conventional-commits.md の「--no-verify 禁止」を前提に、
+# ローカルでコミット前に気づける範囲の検査に閉じる（CI 側の最終検査を代替するものではない）。
+# フックの追加・変更時は .claude/rules/git-hooks.md の方針（時間予算・CI との役割分担）に従う。
+# clippy・test・ビルドなど重い処理や CI（.github/workflows/ci.yml）と重複する検査はフックに置かず、
+# CI 側に任せる（手元で確認したい場合は make lint / make test を実行する）。
+# CI と重複しても残している検査（rust-fmt-check）は git-hooks.md の「明示的な例外」に理由と計測値を記載している。
+
+pre-commit:
+  parallel: true
+  commands:
+    # cargo fmt はクレートごとの Cargo.toml（edition）を見て整形するため、対象を
+    # 個別ファイルパス（{staged_files}）に絞ると edition 判定がずれて誤検出する
+    # （crates/ 配下は edition 2021 と 2024 が混在している）。
+    # glob で「.rs がステージされている場合のみ」実行を絞り、チェック自体は
+    # workspace 全体を対象にする（cargo fmt --all -- --check）。
+    rust-fmt-check:
+      glob: "*.rs"
+      run: cargo fmt --all -- --check
+      fail_text: "cargo fmt --all で整形してから再度コミットしてください（または make fmt）。"
+
+    # .env 系ファイル（実際の環境変数・シークレットを書く想定）が誤ってステージ
+    # されていないかを検出する（.claude/rules/security.md「秘密情報の混入防止」）。
+    # .env.example はテンプレートとして .gitignore で明示的に許可されているため除外する。
+    forbid-env-files:
+      run: |
+        staged_env_files="$(git diff --cached --name-only --diff-filter=ACMR \
+          | grep -E '(^|/)\.env(\..+)?$' \
+          | grep -v -E '(^|/)\.env\.example$' || true)"
+        if [ -n "${staged_env_files}" ]; then
+          echo "以下の .env 系ファイルがステージされています。シークレットを含む可能性があるためコミットを中止します:" >&2
+          echo "${staged_env_files}" >&2
+          exit 1
+        fi
+        exit 0
+
+commit-msg:
+  commands:
+    # Node 依存（commitlint 等）を持ち込まず、シェルの正規表現のみで
+    # Conventional Commits の subject 形式（.claude/rules/conventional-commits.md）を検査する。
+    # 許可 type: feat|fix|docs|style|refactor|perf|test|build|ci|chore
+    # scope は任意（例: (core)）、破壊的変更を示す "!" も任意。
+    # Merge commit・Revert commit・fixup!/squash! コミット（squash 前提の一時コミット）は
+    # 正規の Conventional Commits 形式を強制しないため許可する。
+    conventional-commit-format:
+      run: |
+        subject="$(head -n 1 "{1}")"
+        case "${subject}" in
+          Merge\ *|Revert\ *|fixup!\ *|squash!\ *)
+            exit 0
+            ;;
+        esac
+        pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([a-zA-Z0-9_.-]+\))?!?: .+'
+        if ! echo "${subject}" | grep -qE "${pattern}"; then
+          echo "コミットメッセージが Conventional Commits 形式ではありません。" >&2
+          echo "" >&2
+          echo "期待する形式: <type>(<scope>): <subject>" >&2
+          echo "  type   : feat|fix|docs|style|refactor|perf|test|build|ci|chore" >&2
+          echo "  scope  : 任意（例: core, android）" >&2
+          echo "  !      : 破壊的変更の場合のみ付与（任意）" >&2
+          echo "" >&2
+          echo "例:" >&2
+          echo "  feat(core): 宣言的 UI DSL の Screen/Node を追加" >&2
+          echo "  fix(android): cargo-ndk のリンクエラーを修正" >&2
+          echo "  chore(skills): スキル定義を更新" >&2
+          echo "" >&2
+          echo "実際のメッセージ: ${subject}" >&2
+          exit 1
+        fi
+        exit 0

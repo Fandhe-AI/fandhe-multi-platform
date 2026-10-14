@@ -1,0 +1,74 @@
+{
+  "id": "keyboard-mouse",
+  "name": "物理キーボード・マウス入力",
+  "group": "既存機能の棚卸し",
+  "order": 10,
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "detail": "できている（一部・未確認）",
+      "api": "UIKit（`UIKeyCommand` / `pressesBegan`。本リポジトリは winit → egui 経由） / UIKit（`UIPointerInteraction`。本リポジトリは winit → egui 経由）",
+      "perm": "不要",
+      "url": [
+        "https://developer.apple.com/documentation/uikit/uikeycommand",
+        "https://developer.apple.com/documentation/uikit/uipointerinteraction"
+      ],
+      "note": "実装済み（部分）。矢印キー・Enter は `egui::Event::Key` として届く（`tv_focus.rs` が同経路を使用）。修飾キー付きショートカットの割り当ては未配線 / 実装済み（部分）。クリック・ホバーは egui の pointer 経路で届く。ポインタ形状のカスタマイズは未配線",
+      "sourceName": [
+        "物理キーボード入力",
+        "マウス・トラックパッド（ポインタ）"
+      ]
+    },
+    "android": {
+      "status": "done",
+      "detail": "できている（一部・実機）",
+      "verified": true,
+      "api": "`KeyEvent`（本リポジトリは `android-activity` → winit → egui 経由） / `MotionEvent`（本リポジトリは winit → egui 経由）",
+      "perm": "なし",
+      "url": [
+        "https://developer.android.com/reference/android/view/KeyEvent",
+        "https://developer.android.com/reference/android/view/MotionEvent"
+      ],
+      "note": "実装済み（部分）。矢印キー・Enter は `egui::Event::Key` として届く（`tv_focus.rs` が同経路で `KEYCODE_DPAD_*` を受ける）。修飾キー付きショートカットの割り当ては未配線 / 実装済み（部分）。タップ・クリックは egui の pointer 経路で届く。ポインタ形状のカスタマイズは未配線",
+      "sourceName": [
+        "物理キーボード入力",
+        "マウス・トラックパッド（ポインタ）"
+      ]
+    },
+    "macos": {
+      "status": "done",
+      "detail": "できている（一部・未確認）",
+      "api": "AppKit（`NSEvent`。本リポジトリは winit → egui 経由）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/appkit/nsevent",
+      "note": "実装済み（部分）。矢印キー・Enter・クリック・ホバーは egui の入力経路で届く。修飾キー付きショートカット・ポインタ形状のカスタマイズは未配線",
+      "sourceName": [
+        "物理キーボード・マウス"
+      ]
+    },
+    "windows": {
+      "status": "done",
+      "detail": "できている（一部・未確認）",
+      "api": "Win32（`WM_KEYDOWN` / `WM_MOUSEMOVE`。本リポジトリは winit → egui 経由）",
+      "perm": "なし",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/inputdev/user-input",
+      "note": "実装済み（部分）。macOS と同じ egui 入力経路。修飾キー付きショートカット・ポインタ形状のカスタマイズは未配線",
+      "sourceName": [
+        "物理キーボード・マウス"
+      ]
+    },
+    "web": {
+      "status": "done",
+      "detail": "できている（一部・未確認）",
+      "api": "`KeyboardEvent` / `PointerEvent`",
+      "perm": "なし",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent",
+      "safari": "対応",
+      "note": "実装済み（部分）。winit → egui の入力経路で矢印キー・クリック・ホバーが届く。修飾キー付きショートカット・ポインタ形状のカスタマイズは未配線",
+      "sourceName": [
+        "物理キーボード・マウス"
+      ]
+    }
+  },
+  "note": "winit → egui の入力経路により矢印キー・Enter・クリック・ホバーは全ターゲットで届く。Android TV リモコンの `KEYCODE_DPAD_*` が `egui::Key::Arrow*` として処理されることは #280（closed）で実機確認済みで、`tv_focus.rs` は同じ `egui::Event::Key` 経路を使うため物理キーボードの矢印キーでもローカル検証できる（同ファイル冒頭コメント）。修飾キー付きショートカットの割り当て・ポインタ形状のカスタマイズは全 OS で未配線"
+}

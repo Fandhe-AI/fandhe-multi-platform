@@ -1,0 +1,265 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/fandhe-core",
+    # Phase 8（端末機能の型検証、親 #752 / Issue #746）: 端末機能（保存・HTTP・カメラ）の
+    # 抽象と共通実装を置くクレート。`fandhe-egui-proxy` の feature `device`（既定 on）から
+    # のみ参照される。spec 要件化が否決された場合は本行と下記 `ureq` 依存を
+    # 削除するだけで切り離せる構成にしている（切り離し手順は README.md 参照）。
+    "crates/fandhe-device",
+    "crates/fandhe-egui-proxy",
+    # TASK-10.1（REQ-10 / M3、Issue #218）: CJK 対応フォント（Noto Sans JP）の
+    # 同梱資産クレート。`fandhe-egui-proxy` の native 分岐からのみ参照される
+    # （wasm32 では埋め込まない、下記コメント・crates/fandhe-fonts/src/lib.rs 参照）。
+    "crates/fandhe-fonts",
+    "crates/fandhe-prototype",
+    "crates/fandhe-swiftui-bridge",
+    "crates/fandhe-web-dom",
+    # TASK-8.5-S7（REQ-8 / M3、Issue #188）: winit の `Ime::*` イベント/`set_ime_*` と
+    # fandhe-core の ImeEvent/ImeRequest を接続するプラットフォーム統合レイヤー。
+    "crates/fandhe-winit-ime",
+]
+
+# 依存クレートは coding-rust.md の規約に従い workspace で一元管理する。
+[workspace.dependencies]
+# Phase 8（Issue #751）: `fandhe-egui-proxy/build.rs` が iOS 向け ObjC 実装
+# （`ios/fandhe_ios_camera.m`）をコンパイルするための build-dependency。
+# 既に workspace 依存グラフ内で解決済み（Cargo.lock 実査済み、1.4.2）の推移依存を
+# 直接依存へ昇格するのみで新規 crate の追加ではない。切り離し手順は README.md
+# 「Phase 8（端末機能）の切り離し手順」参照（Phase 8 撤去時に本行も削除する）。
+cc = "1"
+# Phase 11（Issue #859）: `fandhe-device::clipboard::ArboardClipboard` が使う
+# クリップボード抽象（macOS/Windows/Linux）。eframe → egui-winit が "clipboard" feature で
+# 非 optional に引いているため既に 3.6.1 が解決済みで（`cargo tree -i arboard` 実査済み、
+# 上記 egui/eframe のコメントでも「feature 選択では無効化不可」と記録済み）、直接依存への
+# 昇格で新規パッケージは増えない。`fandhe-device` が `#![forbid(unsafe_code)]` を
+# 維持したまま 3 OS のクリップボードを覆うために必要（各 OS の API を自前で叩くと
+# unsafe が要る）。MSRV 1.71.0 はランナー固定の 1.88.0 以下。
+arboard = "3.6"
+# Phase 11（Issue #872、#876 codex-review P1 是正）: `fandhe-device::file_picker::RfdFilePicker`
+# の macOS 経路（`NSOpenPanel`）のみが使う。`arboard` と同じ判断（safe API で覆い
+# `fandhe-device` の `#![forbid(unsafe_code)]` を維持する）。RustSec advisory-db に
+# `crates/rfd` は無し（2026-09-14 確認）。`default-features = false` で Linux
+# バックエンド（xdg-portal/wayland/gtk3）と `pollster` を引かない（Linux は対応表の
+# 対象外のため `Unsupported` を返す方針）。Windows は rfd を使わず PowerShell の
+# `System.Windows.Forms.OpenFileDialog` を子プロセスで起動する（rfd 0.17 の同期
+# API が Windows で COM 初期化失敗等をキャンセルへ握り潰す既知の制約を避けるため、
+# `crates/fandhe-device/Cargo.toml` の target 分岐・`file_picker.rs` 参照）。
+rfd = { version = "0.17", default-features = false }
+# TASK-4.4-S2 由来 / Phase 11（Issue #875）: `fandhe-egui-proxy` の wasm32 分岐
+# （`web.rs`）が既に直接依存として引いている（0.3、`cargo tree` 実査済み）ため、
+# 直接依存への昇格・`fandhe-web-dom` からの追加参照で新規パッケージは増えない。
+# `fandhe-web-dom::file_picker` が読み取った `ArrayBuffer` のサイズ確認
+# （`ArrayBuffer::byte_length`）に使う。
+js-sys = "0.3"
+# TASK-3.2-S3（REQ-3 / M3）: `fandhe-swiftui-bridge` の codec モジュール
+# （引数・戻り値の JSON シリアライズ・デシリアライズ）が使う一式。
+# egui/eframe/egui_kittest と同様の MSRV ≤ 1.88 フィルタ（設計文書
+# `docs/architecture/swiftui-bridge-architecture.md` §3.4）で選定しており、
+# 解決される serde 1.0 系・serde_json 1.0 系・thiserror 2.0 系はいずれも
+# `rust-version = "1.88"`（またはそれ以下）でランナー（rust-toolchain.toml 固定の
+# 1.88.0）と一致する。
+# TASK-8.4-S17（REQ-8 / M3、Issue #173）: `fandhe-core` も `serde_json`（derive
+# 機能は使わない）を optional dependency として利用する（`token::file`、feature
+# `token-file`、既定 off）。外部トークン定義ファイル（JSON・DTCG 部分準拠）の
+# パーサ自前実装は避け、`serde_json::Value` の走査でドメイン型へ変換する方針
+# （`docs/architecture/design-token-architecture.md` §6）。feature が加法的
+# （coding-rust.md）であるため、既定ビルドでは従来どおり taffy 以外のランタイム
+# 依存を追加しない。
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+# TASK-13.1-S3（REQ-13 / NFR-9）: クロージャ環境キャプチャ拒否の compile-fail 検証用。
+# dev-dependency としてのみ利用し、ランタイム依存は増やさない。
+trybuild = "1"
+
+# Phase 8（Issue #746）: `fandhe-device::http` の共通 `Http` 実装（`UreqHttp`）が使う
+# 同期 HTTP クライアント。選定理由（供給網確認結果）: `default-features = false` +
+# `features = ["rustls"]` で解決される構成は ureq 3.4.0 / rustls 0.23.43 / ring 0.17.14 /
+# webpki-roots 1.0.9（追加 36 crate）で、いずれも `rust-version` が本ワークスペースの
+# rustc 固定（rust-toolchain.toml の 1.88.0）以下、`cargo audit` 勧告 0 件（2026-09-06 時点、
+# advisory-db 1239 件）を確認済み。TLS バックエンドに ring を選ぶ理由は aws-lc-rs（cmake が
+# 必要）を避けるため。`platform-verifier` feature（Android の JNI 経由の証明書検証）は
+# 使わず、`webpki-roots` 同梱ルート証明書を使う（Android 側の JNI 配線が不要になる）。
+# wasm32 では `getrandom` の解決に失敗するため、`fandhe-device` 側で
+# `cfg(not(target_arch = "wasm32"))` に閉じ、`fandhe-egui-proxy` の feature `device` も
+# 同ターゲットには依存自体を持ち込まない（`crates/fandhe-device/Cargo.toml` 参照）。
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+
+# Phase 8（Issue #750）: Android 実装（`fandhe-egui-proxy` の `device::android` モジュール）が
+# `AndroidApp::vm_as_ptr` / `activity_as_ptr` を経由して Java 側（`MainActivity`）を呼び出す
+# ための JNI バインディング。`android-activity 0.6.1`（`Cargo.lock` 実査済み）の直接依存として
+# 既に解決されている 0.22.4 と同一インスタンスへ揃うため、本行を追加しても新規パッケージは
+# 増えない（`cargo build -p fandhe-egui-proxy` 後の `git diff Cargo.lock` で確認済み）。
+jni = "0.22"
+
+# TASK-1.2（REQ-1 / M2）: fandhe-egui-proxy（実描画検証専用プロキシ、本実装レンダラではない）
+# が利用する egui/eframe 系一式。
+# CI ランナーの rustc は 1.88.0 固定（ルートの rust-toolchain.toml 参照）のため、
+# MSRV 1.92 を要求する 0.34 系（egui/eframe/egui_kittest とも 0.34.0〜0.34.3 は
+# rust-version = "1.92"）は解決不能。0.33 系は egui/eframe/egui_kittest とも
+# rust-version = "1.88" でランナーと一致し、RUSTSEC 勧告も未確認のため 0.33 系を使う
+# （PR #306 CI 失敗の是正、TASK-1.2）。0.34 への意図しない解決を防ぐため
+# メジャー未満（0.x）の意味論上は caret 既定の "0.33" で十分（coding-rust.md
+# 「キャレット既定」に合わせ、wasm-bindgen のような `=` 固定はしない）。
+#
+# TASK-6.2-S2（REQ-6 / M3）: TASK-6.1 監査（docs/architecture/feature-audit.md）の
+# 申し送りに従い、default-features を明示的に絞り込む。egui 0.33 系の default は
+# "default_fonts" のみで、fandhe-egui-proxy の font.rs（CJK フォント読込失敗時の
+# 既定フォントへのフォールバック、REQ-10 引き継ぎ中）が依存するため維持する。
+# 一方 `arboard`・`webbrowser`・`icu_*`（icu_properties/icu_normalizer 経由）は
+# egui 側ではなく eframe が egui-winit へ非 optional で固定指定する feature
+# （"clipboard"・"links"）経由で導入されており、egui/eframe の feature 選択では
+# 無効化不可（`cargo tree -i arboard` 等で実測確認済み）。
+# eframe 非依存構成（egui + egui-winit 直接構成）への転換は本 issue のスコープ外
+# と判断した（工数超過・fandhe-egui-proxy は検証専用プロキシのため、TASK-6.3 の
+# メモリ実測結果次第で再検討）。
+# TASK-8.3-S4（REQ-8 / M3、Issue #99）: `fandhe-core` のレイアウトプロトコル
+# （サイズ計測・配置）基盤が使うレイアウトエンジン。REQ-8（`docs/spec/04-requirements.md`
+# L114-124）が taffy を採用基盤として明示している。最新安定 0.12.2 は
+# `rust-version = "1.71"` でランナー（rust-toolchain.toml 固定の 1.88.0）以下のため解決可能。
+# `cargo audit`（ローカル導入 0.22.2）で taffy と推移的依存の RUSTSEC 勧告なしを確認済み
+# （docs/architecture/widget-architecture.md §9 の指示）。taffy の型は `fandhe-core` の
+# 公開 API に露出させず（`ui::layout` 内部実装に閉じる）、キャレット既定で過剰固定しない。
+taffy = "0.12"
+egui = { version = "0.33", default-features = false, features = ["default_fonts"] }
+eframe = { version = "0.33", default-features = false }
+egui_kittest = "0.33"
+# TASK-10.1（REQ-10 / M3、Issue #218）: `fandhe-fonts` の結合テスト
+# （tests/glyph_coverage.rs）が、egui/epaint が実際に使うフォントパーサ・
+# ラスタライザと同一の経路（`ab_glyph` -> `owned_ttf_parser`）で同梱フォントの
+# 解釈・グリフ被覆・実ラスタライズを検証するための dev-dependency。
+# epaint 0.33.0 が推移的に要求するバージョンと同一（`^0.2.32`）に合わせ、
+# resolver = "2" の feature 統合で単一インスタンスに解決させる
+# （crates.io の epaint 0.33.0 依存メタデータで確認済み）。
+ab_glyph = "0.2.32"
+# TASK-9.1-S2（REQ-9 / M3、Issue #215）: `fandhe-egui-proxy::accessibility` が
+# `AccessibilityRole → accesskit::Role` 変換・AX ノード構築に使うコア型一式。
+# egui 0.33 系が推移的に使う accesskit は 0.21.1（Cargo.lock 解決済み）であり、
+# 同一メジャー・マイナー（"0.21"）を指定することで同一インスタンスに解決させる
+# （`cargo tree -i accesskit` で新規の推移依存が増えないことを確認済み）。
+# `accesskit_macos` 等のプラットフォームアダプタは含まないコア型のみの依存であり、
+# TASK-6.2-S1 が絞り込んだ eframe 側の "accesskit" feature 有効化状況とは独立に
+# 全ターゲットでコンパイル可能（cfg で死角にならないマッピング層、モジュール doc 参照）。
+accesskit = "0.21"
+# iOS 向け wgpu（Metal）バックエンド初期化（TASK-1.3-S2 / REQ-1 / M3）。
+# eframe 0.33 系が推移的に使う wgpu は 27.0.1（eframe の Cargo.toml 参照）で、
+# その "wgpu" feature 自体は `dep:wgpu` / `dep:egui-wgpu` のみを有効化し、
+# Metal 等のバックエンド機能は含まない（eframe 側の "default" feature 経由でのみ
+# 有効化される設計で、iOS 分岐は glow 系を含む "default" を有効化したくない）。
+# そこで fandhe-egui-proxy から wgpu を直接（同一バージョン）依存に加え、
+# resolver = "2" の feature 統合により Metal バックエンドのみを最小追加する。
+wgpu = { version = "27", default-features = false, features = ["metal"] }
+# CI 失敗の是正（2026-08-24）: `wgpu-hal` 27 系（wgpu 27.0.1 の推移依存）が "vulkan" / "dx12"
+# feature で要求する `ordered-float`（要求範囲 `>=3, <6.0`）に、rustc 1.90 を MSRV とする
+# 5.5.0（2026-08 公開）が現れた。当時の本リポジトリは `Cargo.lock` を `.gitignore` 対象と
+# しており CI が毎回依存を最新解決するため（Issue #637 で追跡対象へ変更済み。以後は lock 固定で
+# 解決されるが、`cargo update` 時の再発防止として本制約は維持する）、
+# 5.5.0 が採用されて rust-toolchain.toml 固定の rustc 1.88.0 で
+# `error: rustc 1.88.0 is not supported by the following package: ordered-float@5.5.0 requires rustc 1.90`
+# となり全 PR の CI が失敗した。ワークスペースは `resolver = "2"` のため MSRV 対応リゾルバ
+# （`incompatible-rust-versions = "fallback"`）は働かず、旧来どおり最新版を選ぶ。
+# rustc の pin は trybuild の `.stderr` 差分対策として意図的なもの（PR #306）で上げられない
+# ため、`fandhe-egui-proxy` から同一メジャーの `ordered-float` へ直接依存し、上限を
+# 5.5 未満（5.0.0〜5.4.0 は `rust-version = "1.63"`）に明示して単一インスタンスへ
+# 解決させる（wgpu の "metal" / "vulkan" 補完と同じ、直接依存による推移依存の制御パターン）。
+# `default-features = false` で本クレートは feature を一切加算しない（wgpu-hal 側の指定
+# `default-features = false` と同じで、依存グラフへの影響はバージョン上限のみ）。
+# ランナーの rustc を 1.90 以上へ上げた時点で本エントリと `fandhe-egui-proxy` 側の参照は
+# 削除してよい（キャレット既定 coding-rust.md への例外。上限固定は MSRV 互換のため）。
+ordered-float = { version = ">=5.0, <5.5", default-features = false }
+image = { version = "0.25", default-features = false, features = ["png"] }
+# wasm-bindgen CLI（ローカル導入版）と完全一致させる必要があるためキャレットを外す
+# （coding-rust.md の「キャレット既定」の例外。CLI バージョン不一致はビルド時エラーになるため）。
+wasm-bindgen = "=0.2.126"
+wasm-bindgen-futures = "0.4"
+web-sys = "0.3"
+console_error_panic_hook = "0.1"
+# TASK-8.5-S26（REQ-8 / M3、Issue #207）: `fandhe-core` の `ui::text_selection` が
+# grapheme cluster 境界（UAX #29）を判定するために使う。絵文字（肌色修飾子・ZWJ 連結・
+# Regional Indicator 国旗）や結合文字が char（コードポイント）単位の削除・カーソル移動で
+# 分断される不具合（S8/S23 申し送り）の是正に必須で、UAX #29 準拠アルゴリズムの自前実装は
+# 正しさのリスクが大きく不採用（pure Rust・`forbid(unsafe_code)` と両立、MSRV は
+# ランナー固定の 1.88.0 以下）。`cargo audit`（ローカル 0.22.2）で本クレート・推移依存の
+# RUSTSEC 勧告なしを確認済み。キャレット既定でバージョン固定しすぎない（coding-rust.md）。
+unicode-segmentation = "1"
+# Issue #1378（親 #1145、local-fonts の Android 実装）: `Font.getBuffer()` のバイト列から
+# `name` テーブルのファミリー名だけを読む（Android に名前を返す公開 API が無いため）。egui ->
+# ab_glyph -> owned_ttf_parser 経由で既にバイナリへ入っており、直接依存に上げても新規パッケージは
+# 増えない。pure Rust・境界検査付きで、壊れたデータは `None`。RUSTSEC-2026-0192（unmaintained・
+# informational、後継は `skrifa`）を承知で採る。egui が ttf-parser を外したら合わせて移行する。
+ttf-parser = { version = "0.25", default-features = false, features = ["std"] }
+# TASK-1.5-S2（REQ-1 / M3）: Android の `android_main` エントリで
+# `NativeOptions.android_app: Option<winit::platform::android::activity::AndroidApp>`
+# を構築するために必要。eframe 0.33.3 は winit を re-export しないため、
+# 同一インスタンスへ解決されるよう eframe が固定するバージョン（0.30.12）に
+# キャレットで追随させる。
+winit = { version = "0.30", default-features = false }
+# TASK-9.3-S2（REQ-9 / M4、Issue #243）: Android（GameActivity 方式、#242 で確定）向けに
+# TalkBack 等のスクリーンリーダー連携（`accesskit_android`）を成立させるための直接依存。
+# egui-winit 0.33.3 が要求する accesskit_winit は 0.29.1（Cargo.lock 解決済み）であり、
+# 同一メジャー・マイナー（"0.29"）を指定して同一インスタンスに解決させる（coding-rust.md
+# の依存一元管理）。egui-winit 自身の "accesskit" feature は `dep:accesskit_winit` と
+# `egui/accesskit` のみを有効化し、accesskit_winit 側の `accesskit_android`
+# （Android 専用 optional target 依存、既定 off）までは有効化しない
+# （`accesskit_winit-0.29.2/Cargo.toml` の `[target.'cfg(target_os = "android")'.dependencies]`
+# 参照）。そのため本クレートから同一バージョンへ直接依存し、resolver = "2" の feature
+# 統合で `accesskit_android` feature のみを Android target 分岐（fandhe-egui-proxy
+# Cargo.toml 参照）から加算する（wgpu の "vulkan" / "metal" 補完・PR #313 と同一パターン）。
+accesskit_winit = { version = "0.29", default-features = false }
+
+# Phase 11（Issue #898）: `fandhe-egui-proxy::device::windows_share` が Windows の共有シート
+# （WinRT `DataTransferManager` を `IDataTransferManagerInterop` 経由でウィンドウ束縛して呼ぶ）
+# のために使う。`cargo tree --target x86_64-pc-windows-msvc -p fandhe-egui-proxy -e normal`
+# 実査済み: 通常依存には現れないが、Cargo.lock には wgpu 経由の 0.58.0・
+# accesskit_windows 経由の 0.61.3 が既に解決済み（`git diff --stat Cargo.lock` で新規
+# `[[package]]` が増えないことを確認済み）。子プロセス方式（`tts`/`file_picker`/`location`
+# の Windows 実装）は自分のウィンドウを持てず `ShowShareUIForWindow` に渡す HWND が
+# 無いため使えず、FFI・`unsafe` を持てる本クレート側（プラットフォーム最適化レイヤ）から
+# 直接依存する。必要 feature は `windows_share.rs` モジュール doc 参照。
+windows = { version = "0.61", default-features = false }
+# Phase 11（Issue #907）: `device/windows_biometric.rs` が Windows Hello
+# （`UserConsentVerifier::RequestVerificationForWindowAsync` の戻り値）の完了を
+# `IAsyncOperation<T>`/`AsyncOperationCompletedHandler` の型名で受けるために使う。
+# `windows` クレート（上記）0.61.3 はこれらの型を `windows::Foundation` へ
+# 再エクスポートしていない（`windows-future` 側にのみ存在）ため直接依存へ昇格する。
+# Cargo.lock には `windows` 0.61.3 の通常依存として 0.2.1 が既に解決済みのため、
+# `git diff --stat Cargo.lock` で新規 `[[package]]` が増えないことを確認済み
+# （上記 `windows`/`raw-window-handle` と同じ「推移依存の直接依存への昇格」パターン）。
+windows-future = { version = "0.2", default-features = false }
+# Phase 11（Issue #898）: `windows_share::remember_window` が `eframe::CreationContext`
+# （`HasWindowHandle` 実装、eframe 0.33.3 `epi.rs`）から `RawWindowHandle::Win32` を
+# 取り出し HWND を得るために使う。eframe の通常依存として既に 0.6.2 が解決済み
+# （上記 `windows` と同じ「推移依存の直接依存への昇格」パターン、新規パッケージなし）。
+raw-window-handle = { version = "0.6", default-features = false }
+
+# Issue #630 / #632: `fandhe-egui-proxy` のテストバイナリ `desktop_render` は
+# eframe / egui / wgpu / accesskit / wayland 系の大量の rlib を静的リンクするため、
+# dev/test 既定の `debug = 2`（フル debuginfo）ではリンク入力サイズがメモリ集約的になり、
+# CI runner 上で GNU ld が OOM で SIGKILL される flaky 失敗が確認されている
+# （`collect2: fatal error: ld terminated with signal 9 [Killed]`）。
+# `debug = 1`（limited）は型・変数レベル情報を落としつつ行テーブルは保持するため、
+# panic 時のバックトレースにファイル名・行番号は残る（可読性を維持したままリンク負荷を下げる）。
+# `strip = "debuginfo"` はリンク完了後の処理でリンク時メモリ削減に寄与しないため不採用。
+# release プロファイルには影響しない（配布成果物のバイト列は変化しない）。
+[profile.dev]
+debug = 1
+
+# 依存クレート（workspace メンバー以外）はさらに行番号のみ（`line-tables-only`）にする。
+# 上記 `debug = 1` と同じ方向で、静的リンクされる依存（eframe / egui / wgpu / accesskit /
+# wayland 系等）の debuginfo を一段減らし、リンク入力・`target/` の容量・リンク時間を下げる。
+# - 残るもの: panic 位置・バックトレースの file:line・プロファイラの行番号
+#   （依存の変数・型は `debug = 1` の時点で既にデバッガから見えない。追加で削られるのは
+#   行テーブル以外の関数単位の情報）
+# - `"*"` はメンバー以外にだけ効くため、本リポのクレートは従来どおり `debug = 1`
+# - 下記 `[profile.test]` は `dev` を継承し、package 指定も継承される。profile 本体の
+#   `debug = 1` より package 指定が優先されるため、`cargo test` でも依存は行番号のみになり、
+#   `[profile.test.package."*"]` は不要。release・bench（release 継承）は影響しない
+# - 依存のビルドスクリプト・proc-macro（`build-override` 側の既定は debuginfo なし）にも
+#   適用され行番号付きになる（`build-override` より `package."*"` が優先されるため
+#   打ち消せない）。増分は依存本体の削減に比べて小さい
+[profile.dev.package."*"]
+debug = "line-tables-only"
+
+[profile.test]
+debug = 1
