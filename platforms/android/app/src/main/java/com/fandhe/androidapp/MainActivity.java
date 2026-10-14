@@ -154,8 +154,8 @@ public class MainActivity extends GameActivity {
 
     // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
     // （Issue #831、Phase 10 型サンプル「傾けると玉が転がる」の Android 実センサ経路に
-    // 限り追加。Phase 8 の feature `device` 切り離し時に削除する。README「Phase 8
-    // （端末機能）の切り離し手順」参照）。
+    // 限り追加。Phase 8 の feature `device` 切り離し時に削除する。docs/architecture/
+    // device-feature-removal.md 参照）。
     // x, y: 重力センサ（TYPE_GRAVITY、無ければ TYPE_ACCELEROMETER）の生値
     // （SensorEvent#values[0]/[1]、m/s^2）。rotation: 呼び出し時点の画面回転
     // （Surface.ROTATION_*）。Rust 側 `gravity_to_tilt` が画面座標の傾きへ写像する。

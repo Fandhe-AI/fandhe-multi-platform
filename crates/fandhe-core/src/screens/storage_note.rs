@@ -9,7 +9,7 @@
 //! 一方向、coding-rust.md 準拠）ため、本モジュールは [`fandhe_device::storage::Storage`]
 //! と同形の最小トレイト [`NoteStorage`] を独自に定義する。純粋なトレイト定義のみで
 //! I/O を持たないため「端末依存」には当たらず、画面ファイルと一緒に削除できる
-//! （README.md「Phase 8（端末機能）の切り離し手順」の範囲内）。
+//! （docs/architecture/device-feature-removal.mdの範囲内）。
 //!
 //! `fandhe-egui-proxy` 側の `device.rs` が `fandhe_device::storage::FsStorage` を
 //! newtype で [`NoteStorage`] へ橋渡しし、レジストリの `init` 行が渡す状態ファクトリ

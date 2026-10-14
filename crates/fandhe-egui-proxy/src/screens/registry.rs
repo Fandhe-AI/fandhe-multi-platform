@@ -11,7 +11,7 @@
 //! `not(target_arch = "wasm32")` を併せて要る理由は `screens.rs` のマクロ doc を参照
 //! （`device` feature は既定 on で wasm32 でも有効になるが、`fandhe-device` 自体は
 //! wasm32 に依存として存在しないため）。spec 要件化が否決され feature `device`
-//! を削除した場合、この行自体が存在しないものとして扱われる（切り離し手順は README.md 参照）。
+//! を削除した場合、この行自体が存在しないものとして扱われる（切り離し手順は docs/architecture/device-feature-removal.md 参照）。
 //! 状態を端末保存領域から構築する画面（メモ保存等）は `init` 区画（`screens.rs` の
 //! `generated_screens!` doc 参照、Issue #747）を使う。状態駆動 + 端末 I/O 起動を伴う
 //! 画面（HTTP 取得・カメラ撮影等）は `effect` 区画（同 doc 参照、Issue #748/#749）を使う。

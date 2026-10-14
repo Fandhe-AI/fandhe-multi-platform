@@ -5,7 +5,7 @@ members = [
     # Phase 8（端末機能の型検証、親 #752 / Issue #746）: 端末機能（保存・HTTP・カメラ）の
     # 抽象と共通実装を置くクレート。`fandhe-egui-proxy` の feature `device`（既定 on）から
     # のみ参照される。spec 要件化が否決された場合は本行と下記 `ureq` 依存を
-    # 削除するだけで切り離せる構成にしている（切り離し手順は README.md 参照）。
+    # 削除するだけで切り離せる構成にしている（切り離し手順は docs/architecture/device-feature-removal.md 参照）。
     "crates/fandhe-device",
     "crates/fandhe-egui-proxy",
     # TASK-10.1（REQ-10 / M3、Issue #218）: CJK 対応フォント（Noto Sans JP）の
@@ -25,8 +25,8 @@ members = [
 # Phase 8（Issue #751）: `fandhe-egui-proxy/build.rs` が iOS 向け ObjC 実装
 # （`ios/fandhe_ios_camera.m`）をコンパイルするための build-dependency。
 # 既に workspace 依存グラフ内で解決済み（Cargo.lock 実査済み、1.4.2）の推移依存を
-# 直接依存へ昇格するのみで新規 crate の追加ではない。切り離し手順は README.md
-# 「Phase 8（端末機能）の切り離し手順」参照（Phase 8 撤去時に本行も削除する）。
+# 直接依存へ昇格するのみで新規 crate の追加ではない。切り離し手順は
+# docs/architecture/device-feature-removal.md 参照（Phase 8 撤去時に本行も削除する）。
 cc = "1"
 # Phase 11（Issue #859）: `fandhe-device::clipboard::ArboardClipboard` が使う
 # クリップボード抽象（macOS/Windows/Linux）。eframe → egui-winit が "clipboard" feature で

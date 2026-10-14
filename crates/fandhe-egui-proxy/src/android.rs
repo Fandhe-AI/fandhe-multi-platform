@@ -24,7 +24,7 @@
 /// `android_main` が受け取った [`AndroidApp`] を保持し、`device/android.rs`
 /// （Issue #750。`DataDir` 解決・カメラ Intent 中継の JNI 呼び出し）から
 /// 読み出せるようにする（Phase 8 固有ではない汎用の 3 行で、切り離し時は残置してよい。
-/// README.md「Phase 8（端末機能）の切り離し手順」参照）。
+/// docs/architecture/device-feature-removal.md参照）。
 ///
 /// `OnceLock` ではなく `Mutex` にするのは、Manifest の `configChanges` 外の再構成
 /// （例: `uiMode` 変更）で OS が `Activity` を破棄・再生成すると `android_main` が

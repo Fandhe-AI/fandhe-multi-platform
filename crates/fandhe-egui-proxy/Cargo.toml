@@ -17,7 +17,7 @@ publish = false
 # device 画面行（`screens/registry.rs`、#747〜#749 で追加）を囲う。既定 on
 # （Phase 8 が現行方針のため常時ビルド対象にする）。spec 要件化が否決された場合は
 # 本 feature 定義と下記 optional 依存行、`crates/fandhe-device/` を削除するだけで切り離せる
-# （加法的 feature、coding-rust.md 準拠。手順詳細は README.md 参照）。
+# （加法的 feature、coding-rust.md 準拠。手順詳細は docs/architecture/device-feature-removal.md 参照）。
 default = ["device"]
 # Issue #750: Android のカメラ実装（`device/android.rs`）が JNI 経由で `MainActivity` を
 # 呼び出すため `dep:jni` を追加する。`jni` は android target 分岐（下記）にのみ optional

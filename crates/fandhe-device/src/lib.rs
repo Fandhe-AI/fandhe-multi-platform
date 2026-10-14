@@ -8,8 +8,8 @@
 //! トレイトと同期実装の提供のみに責務を限定する）。
 //!
 //! Phase 8 が spec 要件化されなかった場合、本クレートと `fandhe-egui-proxy` 側の
-//! feature `device` を消せば元に戻せる構成にしている。切り離し手順は README.md
-//! 「Phase 8（端末機能）の切り離し手順」を参照。
+//! feature `device` を消せば元に戻せる構成にしている。切り離し手順は
+//! docs/architecture/device-feature-removal.md を参照。
 //!
 //! `#745`（StateStore の apply API + 完了キュー）は本クレートと並列で開発中のため、
 //! worker スレッド → mpsc → apply の配線はここでは行わない。各トレイトは

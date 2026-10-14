@@ -12,7 +12,7 @@ use fandhe_device::http::{Http, UreqHttp};
 use crate::app::CompletionSender;
 
 /// ローカル検証用ダミー API の URL（受入 2: `node scripts/web/serve-brotli.mjs`
-/// 等で 8787 番へ立てる想定、README/PR 本文の手順参照）。文言・URL はダミー。
+/// 等で 8787 番へ立てる想定、docs/operations/http-fetch-device-check.md 参照）。文言・URL はダミー。
 /// 実機テスト（iPhone から Mac の LAN IP へ取得しに行く場合等）ではループバックへ
 /// 到達できないため、ビルド時 `FANDHE_ITEMS_URL` で差し替え可能にする（Issue #660）。
 /// `screens.rs` の `FANDHE_PROXY_APP`（画面切り替え）と同じ `option_env!` 方式を使うのは、

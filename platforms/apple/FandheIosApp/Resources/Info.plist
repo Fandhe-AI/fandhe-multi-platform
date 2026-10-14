@@ -30,7 +30,7 @@
   （`FANDHE_PROXY_APP=camera_capture`）が `UIImagePickerController`
   （`crates/fandhe-egui-proxy/ios/fandhe_ios_camera.m`）でカメラを起動するために
   必須（未設定だと初回起動時に即クラッシュする）。Phase 8 が spec 要件化されず
-  切り離す場合は本キーも削除する（README.md「Phase 8（端末機能）の切り離し手順」）。
+  切り離す場合は本キーも削除する（docs/architecture/device-feature-removal.md）。
 
   NSLocationWhenInUseUsageDescription（Issue #889）: 型サンプル「位置情報」画面
   （`FANDHE_PROXY_APP=location_show`）が CoreLocation（`CLLocationManager`、

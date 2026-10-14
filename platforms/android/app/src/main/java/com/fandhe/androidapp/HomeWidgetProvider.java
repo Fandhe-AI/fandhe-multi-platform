@@ -16,7 +16,7 @@ import android.widget.RemoteViews;
  * `android:process` を指定していないため、アプリ本体と同じプロセスで動く。
  * 反映は OS 側で非同期（契約は `fandhe_device::home_widget::HomeWidget` 参照）。
  *
- * <p>切り離し時に削除する（README.md「Phase 8（端末機能）の切り離し手順」参照）。
+ * <p>切り離し時に削除する（docs/architecture/device-feature-removal.md参照）。
  */
 public class HomeWidgetProvider extends AppWidgetProvider {
     static final String PREFS_NAME = "fandhe_home_widget";
