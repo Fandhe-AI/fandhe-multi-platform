@@ -91,6 +91,10 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewParent;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityManager;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -1740,9 +1744,41 @@ public class MainActivity extends GameActivity {
         deliverUrlIntent(intent);
     }
 
+    /**
+     * a11y 無効時の accesskit イベント送信を親 View で止める（Issue #2）。
+     *
+     * <p>役割: accesskit_android は `send_completed_event` で UI スレッドから
+     * `host.getParent().requestSendAccessibilityEvent` を呼び、結果を `unwrap()` する。a11y
+     * サービスが一時接続して adapter が活性化したまま a11y が OFF に戻ると、Android が
+     * `IllegalStateException("Accessibility off")` を投げ、Rust の panic（SIGABRT）になる。
+     * host（`mSurfaceView`）の親 FrameLayout で、Android 標準の `View.sendAccessibilityEvent`
+     * と同じ `isEnabled()` 確認を行い、無効なら false を返して親への伝播（例外）を断つ。
+     *
+     * <p>守備範囲: UI スレッド直列・1 プロセス内。a11y OFF 中のイベント破棄は Android 標準と
+     * 同じ扱い。upstream の accesskit_android が修正されたら外す。イベント内容はログに出さない。
+     */
+    private void installAccessibilityOffGuard() {
+        ViewParent parent = mSurfaceView != null ? mSurfaceView.getParent() : null;
+        if (!(parent instanceof ViewGroup)) {
+            return;
+        }
+        final AccessibilityManager a11y = getSystemService(AccessibilityManager.class);
+        ((ViewGroup) parent).setAccessibilityDelegate(new View.AccessibilityDelegate() {
+            @Override
+            public boolean onRequestSendAccessibilityEvent(
+                    ViewGroup host, View child, AccessibilityEvent event) {
+                if (a11y != null && !a11y.isEnabled()) {
+                    return false;
+                }
+                return super.onRequestSendAccessibilityEvent(host, child, event);
+            }
+        });
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        installAccessibilityOffGuard();
         fullscreenHelper.register();
 
         // コールドスタートの URL を届ける。二重配送を避けるため、再生成（savedInstanceState
