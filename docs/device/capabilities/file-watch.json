@@ -11,9 +11,9 @@
       "api": "`open(O_EVTONLY)` + Dispatch `DISPATCH_SOURCE_TYPE_VNODE`（ディレクトリの vnode 監視。Swift では `DispatchSource.makeFileSystemObjectSource`）",
       "perm": "不要（アプリのサンドボックス内の作業フォルダ `<Documents>/file-watch`）",
       "url": "https://developer.apple.com/documentation/dispatch/dispatchsource/makefilesystemobjectsource(filedescriptor:eventmask:queue:)",
-      "note": "実装済み（#1412）。範囲・記録の扱いは macOS（#1410）と同じ（アプリ専用の作業フォルダ 1 つの直下の通常ファイルの作成・更新・削除。OS の通知は中身を読まない「変化の合図」で、合図ごとに再走査して差分を記録にする）。監視ルート自体の削除・移動・revoke は「監視が止まりました」と失敗で見せ、それ以外の変化は Changed にする。開始（open・source 作成）に失敗したら失敗で、成功へ畳まない。停止は cancel の完了を待ってから fd を閉じる（drop が戻ると以後コールバックは走らない）。合図の直後に request_repaint で次フレームを起こす。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・停止時の資源解放。守らない範囲: rename なしの既存ファイルの中身だけの書き換え（ディレクトリの vnode に出ない。アプリ自身の更新は rename 経由なので検出できる）、バックグラウンド中の一時停止による遅れ、複数プロセス、同一ミリ秒の変化の順序。iOS 実機の目視は #1409",
+      "note": "実装済み（#1412）。範囲・記録の扱いは macOS（#1410）と同じ（アプリ専用の作業フォルダ 1 つの直下の通常ファイルの作成・更新・削除。OS の通知は中身を読まない「変化の合図」で、合図ごとに再走査して差分を記録にする）。監視ルート自体の削除・移動・revoke は「監視が止まりました」と失敗で見せ、それ以外の変化は Changed にする。開始（open・source 作成）に失敗したら失敗で、成功へ畳まない。停止は cancel の完了を待ってから fd を閉じる（drop が戻ると以後コールバックは走らない）。合図の直後に request_repaint で次フレームを起こす。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・停止時の資源解放。守らない範囲: rename なしの既存ファイルの中身だけの書き換え（ディレクトリの vnode に出ない。アプリ自身の更新は rename 経由なので検出できる）、バックグラウンド中の一時停止による遅れ、複数プロセス、同一ミリ秒の変化の順序。iOS 実機の目視は #38",
       "detail": "できている（iOS 実機確認待ち）",
-      "implStatus": "iOS 実機確認待ち（#1409）",
+      "implStatus": "iOS 実機確認待ち（#38）",
       "impl": "crates/fandhe-egui-proxy/src/device/ios_file_watch.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_file_watch.m + crates/fandhe-egui-proxy/src/device/file_watch.rs + crates/fandhe-core/src/screens/file_watch_show.rs + crates/fandhe-device/src/file_watch.rs、Issue #1412"
     },
     "android": {
@@ -21,9 +21,9 @@
       "api": "inotify（`inotify_init1` + `inotify_add_watch`、非再帰、`CREATE / DELETE / MODIFY / ATTRIB / CLOSE_WRITE / MOVED_* / *_SELF`）を Rust（libc）から直接呼ぶ。`FileObserver` と同じ仕組み",
       "perm": "不要（アプリ内部ストレージの作業フォルダ `<filesDir>/file-watch`）",
       "url": "https://man7.org/linux/man-pages/man7/inotify.7.html",
-      "note": "実装済み（#1413）。範囲・記録の扱いは macOS（#1410）と同じ。あふれ（IN_Q_OVERFLOW）は Changed に畳み、失敗にしない。監視ルートの削除・移動・アンマウント（IN_IGNORED 等）は「監視が止まりました」と失敗で見せる。開始の失敗（inotify の上限を含む）は失敗として返し、成功へ畳まない。停止は eventfd でスレッドを起こし、join してから fd を閉じる。Activity を作り直すと、画面の初期化に伴うドライバの照合で監視が止まる。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・停止時の資源解放。守らない範囲: 複数プロセス、同一ミリ秒の変化の順序、バックグラウンド中の遅れ。Android 実機での確認は #1409",
+      "note": "実装済み（#1413）。範囲・記録の扱いは macOS（#1410）と同じ。あふれ（IN_Q_OVERFLOW）は Changed に畳み、失敗にしない。監視ルートの削除・移動・アンマウント（IN_IGNORED 等）は「監視が止まりました」と失敗で見せる。開始の失敗（inotify の上限を含む）は失敗として返し、成功へ畳まない。停止は eventfd でスレッドを起こし、join してから fd を閉じる。Activity を作り直すと、画面の初期化に伴うドライバの照合で監視が止まる。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・停止時の資源解放。守らない範囲: 複数プロセス、同一ミリ秒の変化の順序、バックグラウンド中の遅れ。Android 実機での確認は #38",
       "detail": "できている（Android 実機確認待ち）",
-      "implStatus": "Android 実機確認待ち（#1409）",
+      "implStatus": "Android 実機確認待ち（#38）",
       "impl": "crates/fandhe-egui-proxy/src/device/android_file_watch.rs + crates/fandhe-egui-proxy/src/device/file_watch.rs + crates/fandhe-core/src/screens/file_watch_show.rs + crates/fandhe-device/src/file_watch.rs、Issue #1413"
     },
     "macos": {
@@ -31,9 +31,9 @@
       "api": "CoreServices `FSEventStreamCreate` + `FSEventStreamSetDispatchQueue`（`kFSEventStreamCreateFlagFileEvents`）",
       "perm": "不要（アプリ専用の作業フォルダ。App Sandbox は使っていない）",
       "url": "https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html",
-      "note": "実装済み（#1410）。範囲はアプリ専用の作業フォルダ 1 つ（`~/.fandhe/file-watch`）の直下の通常ファイルの作成・更新・削除のみ（サブフォルダ・リンク・dot 始まり・非 UTF-8 名は対象外。任意フォルダの監視は #1408）。OS の通知は「変化の合図」として扱い、中身は読まず、合図ごとに再走査して前回との差分を記録にする（あふれ・取りこぼしも合図に畳み、失敗にしない）。走査は名前順の先頭 64 件まで（超過は「ほか多数」と出す）、記録は新しい順に最新 200 件まで（超過は「古い記録は省略」と出す）。利用者の停止は正常で、実行中にフォルダが消えるなど監視が止まったら「監視が止まりました」と失敗で見せる。開始に失敗したら失敗、非対応なら非対応で、成功へ畳まない。守る範囲: 1 プロセス内の順序（開始・停止・再走査は UI スレッドの 1 本に集約）・嘘の成功の禁止・停止時の資源解放（drop が戻ると以後コールバックは走らない）。守らない範囲: 複数プロセス、同一ミリ秒の変化の順序、FSEvents の遅延（0.2 秒）による一時的な表示の食い違い、作成して即削除の検出。「監視を開始」ボタンで始め（起動時には監視しない）、「ファイルを作る / 更新する / 削除する」で作業フォルダを変えて確かめられる。Mac 実機の目視は #1409",
+      "note": "実装済み（#1410）。範囲はアプリ専用の作業フォルダ 1 つ（`~/.fandhe/file-watch`）の直下の通常ファイルの作成・更新・削除のみ（サブフォルダ・リンク・dot 始まり・非 UTF-8 名は対象外。任意フォルダの監視は #37）。OS の通知は「変化の合図」として扱い、中身は読まず、合図ごとに再走査して前回との差分を記録にする（あふれ・取りこぼしも合図に畳み、失敗にしない）。走査は名前順の先頭 64 件まで（超過は「ほか多数」と出す）、記録は新しい順に最新 200 件まで（超過は「古い記録は省略」と出す）。利用者の停止は正常で、実行中にフォルダが消えるなど監視が止まったら「監視が止まりました」と失敗で見せる。開始に失敗したら失敗、非対応なら非対応で、成功へ畳まない。守る範囲: 1 プロセス内の順序（開始・停止・再走査は UI スレッドの 1 本に集約）・嘘の成功の禁止・停止時の資源解放（drop が戻ると以後コールバックは走らない）。守らない範囲: 複数プロセス、同一ミリ秒の変化の順序、FSEvents の遅延（0.2 秒）による一時的な表示の食い違い、作成して即削除の検出。「監視を開始」ボタンで始め（起動時には監視しない）、「ファイルを作る / 更新する / 削除する」で作業フォルダを変えて確かめられる。Mac 実機の目視は #38",
       "detail": "できている（Mac 目視待ち）",
-      "implStatus": "Mac 目視待ち（#1409）",
+      "implStatus": "Mac 目視待ち（#38）",
       "impl": "crates/fandhe-egui-proxy/src/device/macos_file_watch.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_file_watch.m + crates/fandhe-egui-proxy/src/device/file_watch.rs + crates/fandhe-core/src/screens/file_watch_show.rs + crates/fandhe-device/src/file_watch.rs、Issue #1410"
     },
     "windows": {
@@ -41,9 +41,9 @@
       "api": "Win32 `CreateFileW`（`FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED`）+ overlapped の `ReadDirectoryChangesW`（非再帰、`FILE_NAME | DIR_NAME | SIZE | LAST_WRITE`）",
       "perm": "不要（アプリ専用の作業フォルダ `~/.fandhe/file-watch`。Win32 のファイル API で package identity 不要）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-readdirectorychangesw",
-      "note": "実装済み（#1411）。範囲・記録の扱いは macOS（#1410）と同じ（アプリ専用の作業フォルダ 1 つの直下の通常ファイルの作成・更新・削除。OS の通知は中身を読まない「変化の合図」で、合図ごとに再走査して差分を記録にする）。監視 1 件につき専用スレッド 1 本で overlapped I/O を待ち、バッファあふれ（0 バイト完了・`ERROR_NOTIFY_ENUM_DIR`）は取りこぼしの合図として失敗にせず `Changed` に畳む。実行中にフォルダが消えるなど I/O が失敗したら「監視が止まりました」と失敗で見せ、開始に失敗したら失敗で、成功へ畳まない。停止時は発行中の I/O を `CancelIoEx` で取り消し、完了を待ってからバッファとハンドルを解放する（drop が戻ると以後コールバックは走らない）。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・停止時の資源解放。守らない範囲: 複数プロセス、同一ミリ秒の変化の順序、`LAST_WRITE` 通知の遅れによる一時的な表示の食い違い。Windows 実機の目視は #1409",
+      "note": "実装済み（#1411）。範囲・記録の扱いは macOS（#1410）と同じ（アプリ専用の作業フォルダ 1 つの直下の通常ファイルの作成・更新・削除。OS の通知は中身を読まない「変化の合図」で、合図ごとに再走査して差分を記録にする）。監視 1 件につき専用スレッド 1 本で overlapped I/O を待ち、バッファあふれ（0 バイト完了・`ERROR_NOTIFY_ENUM_DIR`）は取りこぼしの合図として失敗にせず `Changed` に畳む。実行中にフォルダが消えるなど I/O が失敗したら「監視が止まりました」と失敗で見せ、開始に失敗したら失敗で、成功へ畳まない。停止時は発行中の I/O を `CancelIoEx` で取り消し、完了を待ってからバッファとハンドルを解放する（drop が戻ると以後コールバックは走らない）。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・停止時の資源解放。守らない範囲: 複数プロセス、同一ミリ秒の変化の順序、`LAST_WRITE` 通知の遅れによる一時的な表示の食い違い。Windows 実機の目視は #38",
       "detail": "できている（Windows 実機確認待ち）",
-      "implStatus": "Windows 実機確認待ち（#1409）",
+      "implStatus": "Windows 実機確認待ち（#38）",
       "impl": "crates/fandhe-egui-proxy/src/device/windows_file_watch.rs + crates/fandhe-egui-proxy/src/device/file_watch.rs + crates/fandhe-core/src/screens/file_watch_show.rs + crates/fandhe-device/src/file_watch.rs、Issue #1411"
     },
     "web": {
@@ -51,10 +51,10 @@
       "api": "`FileSystemObserver`（Reflect で構築）+ OPFS `navigator.storage.getDirectory()` の `file-watch` フォルダ、`observe(dir, { recursive: false })`",
       "perm": "不要（OPFS。許可ダイアログなし）。secure context 必須",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/FileSystemObserver",
-      "safari": "非対応（`FileSystemObserver` が無ければ「この環境ではフォルダの変更を監視できません」と表示）。Firefox・Chrome for Android も含め実ブラウザ確認は #1409",
-      "note": "実装済み（#1414）。Chrome 133+ のデスクトップのみ。範囲はブラウザ内の専用領域（OPFS の `file-watch`）1 つの直下の通常ファイルの作成・更新・削除のみ（dot 始まりは対象外。任意フォルダの監視は #1408）。オブザーバーの通知は「変化の合図」として扱い、`type` 以外は読まず、合図ごとに `entries()` で再走査して前回との差分を記録にする（`unknown`・取りこぼしは Changed に畳み、失敗にしない）。`errored` と走査失敗（フォルダ消失等）は「監視が止まりました」と失敗で見せ、開始（OPFS を開けない・observe の失敗）の失敗や非対応を成功へ畳まない。走査は名前順の先頭 64 件まで、記録は新しい順に最新 200 件まで。「ファイルを作る」は書き込み前の空ファイルが先に見えるため「作成」に続けて「更新」が出ることがある。守る範囲: 1 マウント内の「合図 → 再走査 → 差分」の順序と世代照合・嘘の成功の禁止・停止/破棄時の disconnect と Closure の解放。守らない範囲: Chromium デスクトップ以外、複数タブ・複数マウントが同じ OPFS を書く場合の食い違い、走査の間の「作成して即削除」、名前変更の区別（削除 + 作成で出す）、合図から反映までのタスク順による遅れ。ヘッドレス Chrome 154 で開始・作成・更新・削除・外部書き込み・停止・フォルダ消失・非対応を確認済み。実ブラウザの目視は #1409",
+      "safari": "非対応（`FileSystemObserver` が無ければ「この環境ではフォルダの変更を監視できません」と表示）。Firefox・Chrome for Android も含め実ブラウザ確認は #38",
+      "note": "実装済み（#1414）。Chrome 133+ のデスクトップのみ。範囲はブラウザ内の専用領域（OPFS の `file-watch`）1 つの直下の通常ファイルの作成・更新・削除のみ（dot 始まりは対象外。任意フォルダの監視は #37）。オブザーバーの通知は「変化の合図」として扱い、`type` 以外は読まず、合図ごとに `entries()` で再走査して前回との差分を記録にする（`unknown`・取りこぼしは Changed に畳み、失敗にしない）。`errored` と走査失敗（フォルダ消失等）は「監視が止まりました」と失敗で見せ、開始（OPFS を開けない・observe の失敗）の失敗や非対応を成功へ畳まない。走査は名前順の先頭 64 件まで、記録は新しい順に最新 200 件まで。「ファイルを作る」は書き込み前の空ファイルが先に見えるため「作成」に続けて「更新」が出ることがある。守る範囲: 1 マウント内の「合図 → 再走査 → 差分」の順序と世代照合・嘘の成功の禁止・停止/破棄時の disconnect と Closure の解放。守らない範囲: Chromium デスクトップ以外、複数タブ・複数マウントが同じ OPFS を書く場合の食い違い、走査の間の「作成して即削除」、名前変更の区別（削除 + 作成で出す）、合図から反映までのタスク順による遅れ。ヘッドレス Chrome 154 で開始・作成・更新・削除・外部書き込み・停止・フォルダ消失・非対応を確認済み。実ブラウザの目視は #38",
       "detail": "できている（実ブラウザ確認待ち）",
-      "implStatus": "実ブラウザ確認待ち（#1409）",
+      "implStatus": "実ブラウザ確認待ち（#38）",
       "impl": "crates/fandhe-web-dom/src/file_watch.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/file_watch_show.rs + crates/fandhe-device/src/file_watch.rs、Issue #1414"
     }
   },

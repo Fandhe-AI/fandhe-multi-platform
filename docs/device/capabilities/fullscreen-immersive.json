@@ -11,9 +11,9 @@
       "api": "UIKit `prefersStatusBarHidden`（ステータスバー非表示）、`prefersHomeIndicatorAutoHidden`（ホームインジケータ）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uiviewcontroller/prefersstatusbarhidden",
-      "note": "実装済み（#1313）。winit の ViewController へ `prefersStatusBarHidden` / `prefersHomeIndicatorAutoHidden` を差し込む。VC の希望とステータスバーの実状態の両方が真のときに全画面とし、期限は 3 秒。ホームインジケータは自動で隠れるだけで、触ると出る。 守る範囲: 1 プロセス内で表示が実際の状態に追従すること、失敗・読めない状態を全画面と見せないこと。守らない範囲: 遷移中の一時的な表示ずれ、key window の root が winit の VC でない間（反映せず失敗を返す）、横向きで OS が自動で隠すこと、終了時の後片付け（OS がプロセスごと片付ける）。iOS 実機確認は #1303",
+      "note": "実装済み（#1313）。winit の ViewController へ `prefersStatusBarHidden` / `prefersHomeIndicatorAutoHidden` を差し込む。VC の希望とステータスバーの実状態の両方が真のときに全画面とし、期限は 3 秒。ホームインジケータは自動で隠れるだけで、触ると出る。 守る範囲: 1 プロセス内で表示が実際の状態に追従すること、失敗・読めない状態を全画面と見せないこと。守らない範囲: 遷移中の一時的な表示ずれ、key window の root が winit の VC でない間（反映せず失敗を返す）、横向きで OS が自動で隠すこと、終了時の後片付け（OS がプロセスごと片付ける）。iOS 実機確認は #22",
       "detail": "できている（iOS 実機確認待ち）",
-      "implStatus": "iOS 実機確認待ち（#1303）",
+      "implStatus": "iOS 実機確認待ち（#22）",
       "impl": "crates/fandhe-egui-proxy/src/device/ios_fullscreen_immersive.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_fullscreen_immersive.m + crates/fandhe-egui-proxy/src/device/fullscreen_immersive.rs + crates/fandhe-core/src/screens/fullscreen_toggle.rs + crates/fandhe-device/src/fullscreen_immersive.rs、Issue #1313"
     },
     "android": {
@@ -21,9 +21,9 @@
       "api": "`WindowInsetsControllerCompat`（`hide(systemBars())` と `systemBarsBehavior`）",
       "perm": "不要",
       "url": "https://developer.android.com/develop/ui/views/layout/immersive",
-      "note": "実装済み（#1314）。JNI の `MainActivity.fullscreenSet` が UI スレッドで `hide/show(systemBars())` を呼び（最長 1 秒待ち、期限後は適用しない）、表示は既存の insets リスナーが statusBars / navigationBars の可視を native へ push して読み戻す。再生成時は「読めない」を送り、通常表示から始まる（要求は持ち越さない）。権限・依存の追加なし。 守る範囲: 1 プロセス内で表示が実際のバー状態に追従すること、失敗・読めない状態を全画面と見せないこと、期限後に適用しないこと。守らない範囲: スワイプでバーが一時表示される間の表示ずれ、再生成・背景復帰で全画面を自動再適用しないこと、分割画面等で OS が隠さない場合（期限切れの失敗）、終了時の後片付け（OS が片付ける）。Android 実機確認は #1303",
+      "note": "実装済み（#1314）。JNI の `MainActivity.fullscreenSet` が UI スレッドで `hide/show(systemBars())` を呼び（最長 1 秒待ち、期限後は適用しない）、表示は既存の insets リスナーが statusBars / navigationBars の可視を native へ push して読み戻す。再生成時は「読めない」を送り、通常表示から始まる（要求は持ち越さない）。権限・依存の追加なし。 守る範囲: 1 プロセス内で表示が実際のバー状態に追従すること、失敗・読めない状態を全画面と見せないこと、期限後に適用しないこと。守らない範囲: スワイプでバーが一時表示される間の表示ずれ、再生成・背景復帰で全画面を自動再適用しないこと、分割画面等で OS が隠さない場合（期限切れの失敗）、終了時の後片付け（OS が片付ける）。Android 実機確認は #22",
       "detail": "できている（Android 実機確認待ち）",
-      "implStatus": "Android 実機確認待ち（#1303）",
+      "implStatus": "Android 実機確認待ち（#22）",
       "impl": "crates/fandhe-egui-proxy/src/device/android_fullscreen_immersive.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/FullscreenHelper.java + crates/fandhe-egui-proxy/src/device/fullscreen_immersive.rs + crates/fandhe-core/src/screens/fullscreen_toggle.rs + crates/fandhe-device/src/fullscreen_immersive.rs、Issue #1314"
     },
     "macos": {
@@ -31,9 +31,9 @@
       "api": "`NSWindow.toggleFullScreen`（eframe の `ViewportCommand::Fullscreen` → winit の `set_fullscreen`）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nswindow",
-      "note": "実装済み（#1312）。winit が `toggleFullScreen:` を呼びネイティブ全画面になり、メニューバーと Dock は自動で隠れる。切り替えは非同期なので毎フレーム `viewport().fullscreen` を読み戻して確定し、3 秒で期限切れの失敗にする。FFI・追加依存なし。 守る範囲: 1 プロセス内で表示が実際の状態に追従すること、失敗・非対応・読めない状態を全画面と見せないこと。守らない範囲: 遷移アニメーション中の一時的な表示ずれ、期限切れの後に OS が遅れて切り替えた場合の失敗文言、複数ウィンドウ、終了時の後片付け（OS がウィンドウごと片付ける）。Mac 目視は #1303",
+      "note": "実装済み（#1312）。winit が `toggleFullScreen:` を呼びネイティブ全画面になり、メニューバーと Dock は自動で隠れる。切り替えは非同期なので毎フレーム `viewport().fullscreen` を読み戻して確定し、3 秒で期限切れの失敗にする。FFI・追加依存なし。 守る範囲: 1 プロセス内で表示が実際の状態に追従すること、失敗・非対応・読めない状態を全画面と見せないこと。守らない範囲: 遷移アニメーション中の一時的な表示ずれ、期限切れの後に OS が遅れて切り替えた場合の失敗文言、複数ウィンドウ、終了時の後片付け（OS がウィンドウごと片付ける）。Mac 目視は #22",
       "detail": "できている（Mac 目視待ち）",
-      "implStatus": "Mac 目視待ち（#1303）",
+      "implStatus": "Mac 目視待ち（#22）",
       "impl": "crates/fandhe-egui-proxy/src/device/fullscreen_immersive.rs + crates/fandhe-core/src/screens/fullscreen_toggle.rs + crates/fandhe-device/src/fullscreen_immersive.rs、Issue #1312"
     },
     "windows": {
@@ -41,9 +41,9 @@
       "api": "winit の `set_fullscreen`（eframe の `ViewportCommand::Fullscreen`、枠なし全画面）。`AppWindow` の `SetPresenter(FullScreen)` でも可",
       "perm": "不要（winit の枠なし全画面。package identity 不要）",
       "url": "https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.appwindow",
-      "note": "実装済み（#1312）。winit が枠なしでモニター全体を覆いタスクバーも隠れる想定。毎フレーム `viewport().fullscreen` を読み戻して確定し、3 秒で期限切れの失敗にする。FFI・追加依存なし。 守る範囲: 1 プロセス内で表示が実際の状態に追従すること、失敗・非対応・読めない状態を全画面と見せないこと。守らない範囲: 遷移アニメーション中の一時的な表示ずれ、期限切れの後に OS が遅れて切り替えた場合の失敗文言、複数ウィンドウ、終了時の後片付け（OS がウィンドウごと片付ける）。Windows 実機確認は #1303",
+      "note": "実装済み（#1312）。winit が枠なしでモニター全体を覆いタスクバーも隠れる想定。毎フレーム `viewport().fullscreen` を読み戻して確定し、3 秒で期限切れの失敗にする。FFI・追加依存なし。 守る範囲: 1 プロセス内で表示が実際の状態に追従すること、失敗・非対応・読めない状態を全画面と見せないこと。守らない範囲: 遷移アニメーション中の一時的な表示ずれ、期限切れの後に OS が遅れて切り替えた場合の失敗文言、複数ウィンドウ、終了時の後片付け（OS がウィンドウごと片付ける）。Windows 実機確認は #22",
       "detail": "できている（Windows 実機確認待ち）",
-      "implStatus": "Windows 実機確認待ち（#1303）",
+      "implStatus": "Windows 実機確認待ち（#22）",
       "impl": "crates/fandhe-egui-proxy/src/device/fullscreen_immersive.rs + crates/fandhe-core/src/screens/fullscreen_toggle.rs + crates/fandhe-device/src/fullscreen_immersive.rs、Issue #1312"
     },
     "web": {
@@ -52,9 +52,9 @@
       "perm": "なし（ユーザー操作の中で呼ぶ必要あり）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Fullscreen_API",
       "safari": "iPhone では `<video>` 以外の全画面が非対応との認識（MDN の互換表では未確認）。prefixed API（`webkitRequestFullscreen`）は使わず未対応扱い",
-      "note": "実装済み（#1315）。クリックから同期に `documentElement.requestFullscreen()` / `document.exitFullscreen()` を呼び、`document.fullscreenElement` を読み戻して確定する。`fullscreenchange`（Esc 解除を含む）と `pageshow` で表示を追従させ、`fullscreenerror`・reject は失敗、3 秒で期限切れの失敗にする。API 無し・`fullscreenEnabled` 偽は非対応。 守る範囲: 表示が `fullscreenElement` に追従すること、失敗・非対応・読めない状態を全画面と見せないこと、1 マウント内でリスナーとタイマーを漏らさないこと。守らない範囲: 複数タブ・複数マウント、期限切れの後にブラウザが遅れて切り替えた場合の失敗文言、iframe の allow 無しによる非対応、マウント破棄時に全画面を解くこと、ページ終了時の後片付け（ブラウザが戻す）。実ブラウザ目視は #1303",
+      "note": "実装済み（#1315）。クリックから同期に `documentElement.requestFullscreen()` / `document.exitFullscreen()` を呼び、`document.fullscreenElement` を読み戻して確定する。`fullscreenchange`（Esc 解除を含む）と `pageshow` で表示を追従させ、`fullscreenerror`・reject は失敗、3 秒で期限切れの失敗にする。API 無し・`fullscreenEnabled` 偽は非対応。 守る範囲: 表示が `fullscreenElement` に追従すること、失敗・非対応・読めない状態を全画面と見せないこと、1 マウント内でリスナーとタイマーを漏らさないこと。守らない範囲: 複数タブ・複数マウント、期限切れの後にブラウザが遅れて切り替えた場合の失敗文言、iframe の allow 無しによる非対応、マウント破棄時に全画面を解くこと、ページ終了時の後片付け（ブラウザが戻す）。実ブラウザ目視は #22",
       "detail": "できている（実ブラウザ未確認）",
-      "implStatus": "実装済み（実ブラウザ確認待ち、#1303）",
+      "implStatus": "実装済み（実ブラウザ確認待ち、#22）",
       "impl": "crates/fandhe-web-dom/src/fullscreen_immersive.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/fullscreen_toggle.rs、Issue #1315"
     }
   },

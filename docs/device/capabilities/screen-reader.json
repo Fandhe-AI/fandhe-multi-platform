@@ -24,13 +24,13 @@
       "api": "`accesskit_android`",
       "perm": "なし（機能自体に権限不要）",
       "url": "https://docs.rs/accesskit_android/latest/accesskit_android/",
-      "note": "実装済み（#243、TASK-9.3-S2）。`Cargo.toml` の `cfg(target_os = \"android\")` 分岐で eframe の `accesskit` feature と `accesskit_winit` の `accesskit_android` feature を有効化済み。`crates/fandhe-egui-proxy/src/lib.rs` に Android 向け AX ノード公開処理あり（macOS と同じ `accesskit_node_builder` 経路）。TalkBack 実機読み上げ確認のみ #244（人間担当）で未完了",
+      "note": "実装済み（#243、TASK-9.3-S2）。`Cargo.toml` の `cfg(target_os = \"android\")` 分岐で eframe の `accesskit` feature と `accesskit_winit` の `accesskit_android` feature を有効化済み。`crates/fandhe-egui-proxy/src/lib.rs` に Android 向け AX ノード公開処理あり（macOS と同じ `accesskit_node_builder` 経路）。TalkBack 実機読み上げ確認のみ #39（人間担当）で未完了",
       "sourceName": [
         "スクリーンリーダー",
         "スクリーンリーダー（TalkBack / accesskit）"
       ],
       "implStatus": "実装済み（TalkBack 実機読み上げ確認のみ未完了）",
-      "impl": "#243（TASK-9.3-S2） / #244（実機確認、未完了）"
+      "impl": "#243（TASK-9.3-S2） / #39（実機確認、未完了）"
     },
     "macos": {
       "status": "done",
@@ -55,5 +55,5 @@
       "detail": "できない（既定の `RenderMode::Canvas` は AX ツリー非公開）/ `RenderMode::Dom` は可"
     }
   },
-  "note": "macOS は実機確認済み（記録は非公開）。iOS は `accesskit_winit` の iOS 対応待ちで構造的に未達。Android は実装済みだが TalkBack 実機確認は Issue #244（open）で未了。Windows は Issue #1001 で `cfg(target_os = \"windows\")` 分岐に eframe の `accesskit` feature を追加し実装済み（Cargo.lock 既存の `accesskit_windows` 0.29.2 を使うのみで新規依存なし）。ナレーター実機読み上げ確認は人間担当（msvc 環境・実機がないため未確認）。Web は独自レンダラ（`RenderMode::Canvas`、既定値）だとブラウザ標準の a11y ツリーに要素が公開されない制約があるが（`docs/architecture/web-accessibility-constraints.md` §2）、`fandhe-web-dom` の DOM 出力（`RenderMode::Dom`）は heading/textbox/button/list 等 5 種の意味情報を実測で AX ツリーへ公開済み（同 §3.2、TASK-4.4-S4）。このセルは Canvas 側の制約であり、DOM 出力を選べば画面単位で読み上げ可能"
+  "note": "macOS は実機確認済み（記録は非公開）。iOS は `accesskit_winit` の iOS 対応待ちで構造的に未達。Android は実装済みだが TalkBack 実機確認は Issue #39（open）で未了。Windows は Issue #1001 で `cfg(target_os = \"windows\")` 分岐に eframe の `accesskit` feature を追加し実装済み（Cargo.lock 既存の `accesskit_windows` 0.29.2 を使うのみで新規依存なし）。ナレーター実機読み上げ確認は人間担当（msvc 環境・実機がないため未確認）。Web は独自レンダラ（`RenderMode::Canvas`、既定値）だとブラウザ標準の a11y ツリーに要素が公開されない制約があるが（`docs/architecture/web-accessibility-constraints.md` §2）、`fandhe-web-dom` の DOM 出力（`RenderMode::Dom`）は heading/textbox/button/list 等 5 種の意味情報を実測で AX ツリーへ公開済み（同 §3.2、TASK-4.4-S4）。このセルは Canvas 側の制約であり、DOM 出力を選べば画面単位で読み上げ可能"
 }
