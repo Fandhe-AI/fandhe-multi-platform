@@ -10,6 +10,7 @@
 //! Issue #1216（Windows）: Windows にはアプリ側の宣言で scheme を登録する手段がないため、
 //! 画面の操作でレジストリ登録・解除を行う（`registrable` が立った OS だけボタンを出す。
 //! 要求の受け渡しは `background_task` と同型の `Phase` / 世代番号）。
+//! 登録 UI の状態は 1 系統で、Windows と Web（`fandhe-web-dom`）が共用する。
 //!
 //! 「使えない」と「まだ届いていない」は別の状態（[`UrlSchemeView::Unsupported`] と
 //! [`UrlSchemeView::Waiting`]）で、文言も分ける。弾いた URL は中身を表示せず件数だけ出す。
@@ -77,74 +78,28 @@ pub struct UrlSchemeShowState {
     generation: u64,
     status: String,
     error: String,
-    register: RegisterPhase,
-    register_status: String,
-    register_error: String,
 }
 
-/// scheme ハンドラ登録（Web の `registerProtocolHandler`）の進行状況。
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub enum RegisterPhase {
-    /// 要求なし。
-    #[default]
-    Idle,
-    /// ボタンが押され、effect ドライバの処理待ち。
-    Requested,
+/// 操作が成功したときの種類。Web は確定を検知できないため区別する（成功を装わない）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActionOutcome {
+    /// 登録・解除が完了した（Windows のレジストリ操作）。
+    Done,
+    /// 登録を要求しただけで、確定は検知できない（Web の `registerProtocolHandler`）。
+    AwaitingConfirmation,
 }
 
-/// 登録の失敗種別。「使えない」と「失敗」を分ける（成功を装わない）。
+/// 操作の失敗種別。「使えない」と「失敗」を分ける（成功を装わない）。
 #[derive(Debug, Clone, PartialEq)]
-pub enum RegisterFailure {
-    /// 環境が登録 API を持たない。
+pub enum ActionFailure {
+    /// 環境がその操作を持たない。
     Unsupported,
-    /// 登録を試みたが失敗した（利用者向け固定文言）。
+    /// 試みたが失敗した（利用者向けの完成した文言。そのまま表示する）。
     Failed(String),
 }
 
-/// 登録ボタンの widget id（Web のエントリポイントと、Windows で [`current_screen`] が足す）。
+/// 登録ボタンの widget id（Windows は [`current_screen`]、Web はエントリポイントが使う）。
 pub const REGISTER_BUTTON_ID: crate::WidgetId = crate::WidgetId::from_raw(1);
-
-/// 登録ボタンの押下。`Idle` のときだけ `Requested` にする。
-pub fn request_register(state: &mut UrlSchemeShowState) {
-    if state.register == RegisterPhase::Idle {
-        state.register = RegisterPhase::Requested;
-        state.register_status.clear();
-        state.register_error.clear();
-    }
-}
-
-/// effect ドライバ用。登録要求が出ているか。
-pub fn take_register_request(state: &UrlSchemeShowState) -> bool {
-    state.register == RegisterPhase::Requested
-}
-
-/// 登録結果を反映する。`Requested` でなければ無視する。
-pub fn finish_register(state: &mut UrlSchemeShowState, result: Result<(), RegisterFailure>) {
-    if state.register != RegisterPhase::Requested {
-        return;
-    }
-    state.register = RegisterPhase::Idle;
-    match result {
-        Ok(()) => {
-            state.register_status =
-                "登録を要求しました（ブラウザの確認で許可されると有効になります）".to_string();
-        }
-        Err(RegisterFailure::Unsupported) => {
-            state.register_error = "このブラウザでは登録できません".to_string();
-        }
-        Err(RegisterFailure::Failed(msg)) => state.register_error = msg,
-    }
-}
-
-/// 登録結果（成功側）の文言。
-pub fn register_status_text(state: &UrlSchemeShowState) -> String {
-    state.register_status.clone()
-}
-
-/// 登録結果（失敗側）の文言。
-pub fn register_error_text(state: &UrlSchemeShowState) -> String {
-    state.register_error.clone()
-}
 
 impl UrlSchemeShowState {
     /// 最後に適用したスナップショットの世代番号（effect ドライバが変化検出に使う）。
@@ -208,25 +163,32 @@ pub fn mark_in_flight(state: &mut UrlSchemeShowState) {
 }
 
 /// 操作結果を反映する。世代が違う、または要求が無いときの完了は無視する。
-/// 失敗は `error` にだけ入れ、成功文言を出さない。
+/// 失敗は `error` にだけ入れ、成功文言を出さない。Web と Windows で共用する。
 pub fn finish_action(
     state: &mut UrlSchemeShowState,
     generation: u64,
     action: Action,
-    result: Result<(), String>,
+    result: Result<ActionOutcome, ActionFailure>,
 ) {
     if state.phase == Phase::Idle || state.generation != generation {
         return;
     }
     state.phase = Phase::Idle;
     match result {
-        Ok(()) => {
+        Ok(ActionOutcome::Done) => {
             state.status = match action {
                 Action::Register => "登録しました".to_string(),
                 Action::Unregister => "登録を解除しました".to_string(),
             };
         }
-        Err(message) => state.error = format!("失敗しました: {message}"),
+        Ok(ActionOutcome::AwaitingConfirmation) => {
+            state.status =
+                "登録を要求しました（ブラウザの確認で許可されると有効になります）".to_string();
+        }
+        Err(ActionFailure::Unsupported) => {
+            state.error = "このブラウザでは登録できません".to_string();
+        }
+        Err(ActionFailure::Failed(message)) => state.error = message,
     }
 }
 
@@ -354,22 +316,67 @@ mod tests {
     #[test]
     fn register_flow_is_guarded_and_never_claims_done() {
         let mut s = UrlSchemeShowState::default();
-        finish_register(&mut s, Ok(()));
-        assert_eq!(register_status_text(&s), "");
-        assert!(!take_register_request(&s));
-        request_register(&mut s);
-        assert!(take_register_request(&s));
-        finish_register(&mut s, Ok(()));
-        assert!(!take_register_request(&s));
-        assert!(register_status_text(&s).contains("要求"));
-        assert!(!register_status_text(&s).contains("登録しました"));
-        request_register(&mut s);
-        finish_register(&mut s, Err(RegisterFailure::Unsupported));
-        assert!(register_error_text(&s).contains("できません"));
-        assert_eq!(register_status_text(&s), "");
-        request_register(&mut s);
-        finish_register(&mut s, Err(RegisterFailure::Failed("x".into())));
-        assert_eq!(register_error_text(&s), "x");
+        finish_action(
+            &mut s,
+            0,
+            Action::Register,
+            Ok(ActionOutcome::AwaitingConfirmation),
+        );
+        assert_eq!(registration_text(&s), "");
+        assert!(take_request(&s).is_none());
+        register(&mut s);
+        let req = take_request(&s).expect("要求がある");
+        finish_action(
+            &mut s,
+            req.generation,
+            req.action,
+            Ok(ActionOutcome::AwaitingConfirmation),
+        );
+        assert!(take_request(&s).is_none());
+        assert!(registration_text(&s).contains("要求"));
+        assert!(!registration_text(&s).contains("登録しました"));
+        register(&mut s);
+        let req = take_request(&s).expect("要求がある");
+        finish_action(
+            &mut s,
+            req.generation,
+            req.action,
+            Err(ActionFailure::Unsupported),
+        );
+        assert!(error_text(&s).contains("できません"));
+        assert_eq!(registration_text(&s), "");
+        register(&mut s);
+        let req = take_request(&s).expect("要求がある");
+        finish_action(
+            &mut s,
+            req.generation,
+            req.action,
+            Err(ActionFailure::Failed("x".into())),
+        );
+        assert_eq!(error_text(&s), "x");
+    }
+
+    #[test]
+    fn done_text_follows_action() {
+        let mut s = UrlSchemeShowState::default();
+        register(&mut s);
+        let req = take_request(&s).expect("要求がある");
+        finish_action(
+            &mut s,
+            req.generation,
+            Action::Register,
+            Ok(ActionOutcome::Done),
+        );
+        assert_eq!(registration_text(&s), "登録しました");
+        unregister(&mut s);
+        let req = take_request(&s).expect("要求がある");
+        finish_action(
+            &mut s,
+            req.generation,
+            Action::Unregister,
+            Ok(ActionOutcome::Done),
+        );
+        assert_eq!(registration_text(&s), "登録を解除しました");
     }
 
     #[test]
@@ -402,14 +409,29 @@ mod tests {
         let req = take_request(&state).expect("要求がある");
         mark_in_flight(&mut state);
         assert_eq!(take_request(&state), None);
-        finish_action(&mut state, req.generation + 1, req.action, Ok(()));
+        finish_action(
+            &mut state,
+            req.generation + 1,
+            req.action,
+            Ok(ActionOutcome::Done),
+        );
         assert_eq!(state.phase, Phase::InFlight);
-        finish_action(&mut state, req.generation, req.action, Err("x".into()));
+        finish_action(
+            &mut state,
+            req.generation,
+            req.action,
+            Err(ActionFailure::Failed("x".into())),
+        );
         assert_eq!(state.phase, Phase::Idle);
         assert_eq!(registration_text(&state), "");
-        assert_eq!(error_text(&state), "失敗しました: x");
+        assert_eq!(error_text(&state), "x");
         // 完了後の重複通知は無視する。
-        finish_action(&mut state, req.generation, req.action, Ok(()));
+        finish_action(
+            &mut state,
+            req.generation,
+            req.action,
+            Ok(ActionOutcome::Done),
+        );
         assert_eq!(registration_text(&state), "");
     }
 
