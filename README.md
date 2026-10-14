@@ -80,6 +80,15 @@ sudo apt-get install lefthook
 # その他の方法は https://github.com/evilmartians/lefthook を参照
 ```
 
+Linux ホストで Docker を使わずにビルド・実行する場合（Ubuntu/Debian の例）:
+
+```bash
+# ビルドに必要（リンカと pkg-config）
+sudo apt-get install build-essential pkg-config
+# デスクトップアプリの実行に必要（winit が実行時に dlopen する。ビルドだけなら不要）
+sudo apt-get install libxcursor1 libxi6 libxkbcommon-x11-0
+```
+
 ビルド成果物（`target/`）のリンク負荷と容量を抑えるため、ルート `Cargo.toml` で `dev`・`test` プロファイルの debuginfo を絞っています（本リポのクレートは `debug = 1`、依存クレート〈workspace 外〉は `[profile.dev.package."*"]` で行番号のみ。panic 位置・バックトレースの行番号は残ります）。溜まった古い成果物は `cargo install cargo-sweep` のうえ `cargo sweep --time 14`（14 日以上使われていない成果物を削除）や `cargo sweep --installed`（rustup に現存しないツールチェーンでビルドした成果物を削除）で消せます。
 
 ## 開発コマンド
