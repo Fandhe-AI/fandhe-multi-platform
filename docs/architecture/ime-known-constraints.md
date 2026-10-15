@@ -197,7 +197,7 @@
   `Commit` → 次の `Preedit`）を送出する形は、Enabled ゲートでも判別できない（winit 側の
   実装上の限界、`session` モジュール doc §4.8 参照）。この残存経路は upstream（winit）側で
   `Done` ハンドラが serial/`ime_allowed` を判定するよう修正される必要がある（追跡 Issue
-  **#696**）。
+  **#4**）。
 - **残存限界（Windows）**: winit 0.30.13 の
   `set_ime_allowed`（`src/platform_impl/windows/event_loop.rs`）は `ImmAssociateContextEx`
   を呼ぶだけで `ime_state` をリセットせず、`WM_IME_*` ハンドラ（`ime.rs`）は到着時点の
@@ -212,8 +212,24 @@
   持たないため判別できない）。macOS（`set_ime_allowed(false)` が同期的に `ime_state` を
   `Disabled` へ落とす）・Linux X11（フォーカス遷移で XIC が破棄・再生成される）では
   この経路は発生しない。是正は winit 側（`set_ime_allowed(false)` での `ime_state`
-  リセット・旧コンテキスト由来メッセージの破棄）が必要（追跡 Issue **#696**、Wayland の
+  リセット・旧コンテキスト由来メッセージの破棄）が必要（追跡 Issue **#4**、Wayland の
   残存限界と同一 Issue で扱う）。
+- **対応状況（Windows / Wayland 共通）**: winit 0.30.13 向けパッチを
+  `patches/winit-0.30.13/` に置いた（Issue #4）。
+  - `0001-windows-ime-reset-state-on-disallow.patch`: `set_ime_allowed(false)` で進行中の
+    コンポジションを `ImmNotifyIME(CPS_CANCEL)` で同期的に終わらせ、`ime_state` を
+    `Disabled` へ戻す。blur 時に旧フィールドの未確定文字列は破棄される（確定済みは失われない）。
+  - `0002-wayland-text-input-discard-stale-done.patch`: `commit` 回数を数え、最後の `enable`
+    より古い `serial` の `done` バッチを破棄する。disable 処理前に compositor が作った
+    旧フィールドの `Commit` も破棄される。
+  - 適用手順: winit v0.30.13 の checkout で `git am patches/winit-0.30.13/*.patch`。
+    試すだけなら適用済み checkout を指して
+    `cargo --config 'patch.crates-io.winit.path="<checkout>"' check -p fandhe-winit-ime`。
+  - **未了（人間担当）**: (1) `Fandhe-AI/winit` fork の作成と `[patch.crates-io]` の配線
+    （配線までワークスペースの依存解決は変わらない）、(2) upstream（rust-windowing/winit）への
+    Windows・Wayland 各 1 件の報告（各パッチのコミットメッセージを下書きに使える）、
+    (3) Windows 実機（Microsoft IME / TSF）と Wayland 環境での実機確認。
+    実機で混入が出なくなるまで、上記の残存限界は解除しない。
 
 ### 3.7 Linux（X11・Wayland 共通）: `Enabled`/`Disabled` 発火タイミングが macOS/Windows と逆方向
 
@@ -415,7 +431,7 @@ iOS・Android のインライン preedit 未対応は上流依存の恒久制約
 
 ### 追跡中の Issue
 
-- **Issue #696**: Windows/Wayland の winit 側残存限界（§3.6）。
+- **Issue #4**: Windows/Wayland の winit 側残存限界（§3.6）。
 - **Issue #241**: Android GameActivity 移行（§3.2・§4.2 の解消経路）。
 
 ### 実機検証未了チェックリスト

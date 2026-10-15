@@ -28,13 +28,13 @@
 //! - Windows: `Enabled`（`WM_IME_STARTCOMPOSITION`）が正当な `Commit` に必ず先行する。
 //!   `Disabled` 到達前に旧セッションの「空 Preedit → Commit」が届く形は、
 //!   IMM32 単独駆動（同期配送）の範囲ではこの規則で正しく旧セッションへ
-//!   帰属する。**TSF 経由の非同期配送では区別できない残存制約が残る**（Issue #696、
+//!   帰属する。**TSF 経由の非同期配送では区別できない残存制約が残る**（Issue #4、
 //!   下記「Enabled ゲート」節の Windows 項参照）。
 //! - Linux（X11・Wayland）: `Disabled`/`Enabled` が同期発火するため、`Disabled` の
 //!   直後に昇格させれば十分。Wayland の `zwp_text_input_v3` `done` バッチが `Enabled`
 //!   後に旧セッションの in-flight イベントを送る場合は本状態機械でも判別できない
 //!   （winit 側が `ime_allowed`/`serial` を見ない実装上の限界。残存事項として
-//!   `ime-known-constraints.md` §3.6・追跡 Issue #696 に記録する）。
+//!   `ime-known-constraints.md` §3.6・追跡 Issue #4 に記録する）。
 //! - A→B→C と素早く連続遷移し、B が完全にアイドル（`Disabled`/`Enabled` のいずれも
 //!   一度も観測されない）のまま C の最初の開始信号（`Enabled` または非空 `Preedit`）が
 //!   届く場合、B はネイティブ状態を一度も持たなかったとみなし pending をまとめて
@@ -91,7 +91,7 @@
 //!     （下記参照）で引き続き扱う。**blur 後のフィールド間フォーカス遷移には
 //!     当てはまらない**（blur 済みフィールドで `setMarkedText:` 自体が発火する
 //!     契機がなくなるため）。
-//!   - Windows（残存制約、Issue #696）: `set_ime_allowed` は `ImmAssociateContextEx`
+//!   - Windows（残存制約、Issue #4）: `set_ime_allowed` は `ImmAssociateContextEx`
 //!     の切替のみで `ime_state` をリセットしない。キューに残った旧フィールドの
 //!     `WM_IME_COMPOSITION`/`WM_IME_ENDCOMPOSITION` は `WM_IME_STARTCOMPOSITION`
 //!     （`Enabled`）を伴わずに届きうる。IMM32 単独駆動の範囲
@@ -104,8 +104,9 @@
 //!     `Preedit`/`Commit` が新フィールドへ誤って stamp される。Enabled ゲート単体
 //!     では「旧フィールドの再サイクル」と「新フィールドへの遷移」を区別できない
 //!     構造的な限界であり、是正は winit 側（`set_ime_allowed(false)` での
-//!     `ime_state` リセット）が必要（追跡 Issue #696、
-//!     `ime-known-constraints.md` §3.6 参照）。
+//!     `ime_state` リセット）が必要（追跡 Issue #4、
+//!     `ime-known-constraints.md` §3.6 参照）。winit 側のパッチは
+//!     `patches/winit-0.30.13/`（本クレートの依存解決には未配線）。
 //!   - Linux（X11）: フォーカス遷移で XIC が破棄・再生成され、新 XIC 生成時に
 //!     `Enabled` が送出されるため概ね安全。
 //!   - Linux（Wayland、残存制約）: winit は `set_ime_allowed` 呼び出し時に

@@ -29,6 +29,10 @@ indent_style = tab
 [*.md]
 trim_trailing_whitespace = false
 
+# パッチ: diff の空行文脈（先頭 1 スペースのみの行）を壊さないため無効化する。
+[*.patch]
+trim_trailing_whitespace = false
+
 # PowerShell: Windows PowerShell 5.1（Windows 11 同梱の powershell.exe）は BOM の無い
 # .ps1 をシステム ANSI コードページとして読むため、日本語コメントを含むスクリプトが
 # 文字化けしてパースエラーになる（TASK-5.1 / Issue #594 の Windows 計測スクリプト作成時に

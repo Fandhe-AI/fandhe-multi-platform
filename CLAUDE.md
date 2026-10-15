@@ -60,6 +60,8 @@ fandhe-multi-platform/
 │   ├── web/                     # Web（wasm32）ビルド・検証・性能計測スクリプト
 │   └── windows/                 # Windows ビルド・計測スクリプト（PowerShell）
 │
+├── patches/                     # 依存クレートへの upstream 未取り込みパッチ（winit 0.30.13 向け IME 修正、docs/architecture/ime-known-constraints.md §3.6）
+│
 ├── platforms/
 │   ├── android/                 # Android Gradle プロジェクト（GameActivity ベース）
 │   │   └── app/                 # MainActivity ラッパー + fandhe-egui-proxy cdylib
