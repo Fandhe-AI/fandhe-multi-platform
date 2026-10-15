@@ -210,7 +210,7 @@ fn to_capture_failure(e: DeviceError) -> CaptureFailure {
     }
 }
 
-/// `Camera::capture` を呼び、成功時は [`thumbnail_from_rgba`] でモザイクへ間引く。
+/// `Camera::capture` を呼び、成功時は [`thumbnail_from_rgba`] で長辺 160px の実画素へ縮小する。
 /// 間引きに失敗した場合（`Image` の寸法・バイト長が矛盾する不正データ）は
 /// `CaptureFailure::Other` として扱う（`fandhe-device` 側のガードを信頼しつつ、
 /// 契約違反があっても panic しない防御。coding-rust.md のエラーハンドリング方針）。

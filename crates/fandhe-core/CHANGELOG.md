@@ -5,6 +5,28 @@
 
 ## [Unreleased]
 
+実画素の画像ノード `Node::RgbaImage` を追加し、カメラ撮影のサムネイルを実画素にする（Issue #5）。
+
+### 追加
+
+- `ui::RgbaPixels` / `RGBA_MAX_SIDE`: 検証済み RGBA8 画素列（`new` が長さ不一致・寸法 0・
+  一辺 2048 超を `None` にする。`Debug` は画素を出さない）
+- `Node::RgbaImage { pixels, alt }` と `Screen::rgba_image`。`render_headless` は
+  `[画像 W×H: alt]` を出す
+- `screens::camera_capture::{THUMB_MAX_SIDE, thumbnail_size}`
+
+### 破壊的変更（BREAKING CHANGE）
+
+- 公開 enum `Node` に `RgbaImage` バリアントを追加。`Node` を網羅 match している呼び出し側は
+  コンパイルが壊れる
+- `screens::camera_capture::Thumbnail` の `rows` を `pixels: RgbaPixels` に置き換え、
+  `THUMB_COLS` / `THUMB_ROWS` を削除（輝度モザイクの廃止）
+
+### 移行手順
+
+1. `Node` の網羅 match に `Node::RgbaImage { .. }` 分岐を追加するか、`_` で受ける
+2. `Thumbnail::rows` / `THUMB_COLS` / `THUMB_ROWS` の参照を `Thumbnail::pixels` に置き換える
+
 画面遷移スタック（`ScreenStack`）の戻る操作を `Event` 経由で発火する導線を追加（Issue #726）。
 
 ### 追加

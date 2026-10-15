@@ -304,6 +304,10 @@ fn render_node<S>(
         } => {
             render_virtual_list(ui, path, *len, *item, *item_extent, *axis, state, ctx);
         }
+        Node::RgbaImage { pixels, alt } => {
+            // フォーカス対象にしない非対話の表示（通常描画と同じ実装を使う）。
+            crate::rgba_image::show(ui, pixels, alt, path);
+        }
         Node::TextField { .. } | Node::Widget(_) => {
             // TV サンプル画面（`tv_sample.rs`）は Button/IndexedButton/List/
             // VirtualList/Text のみで構成する（設計文書 §3.1 の v1 スコープ、

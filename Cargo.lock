@@ -1138,6 +1138,7 @@ dependencies = [
  "console_error_panic_hook",
  "fandhe-core",
  "fandhe-device",
+ "image",
  "js-sys",
  "wasm-bindgen",
  "wasm-bindgen-futures",

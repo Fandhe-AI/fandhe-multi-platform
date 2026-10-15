@@ -89,6 +89,7 @@ fn visit_node_for_work(node: &Node<PerfState>, state: &PerfState, out: &mut Vec<
         Node::VirtualList { .. } => {}
         // 本テストは `Node::Widget` を使わない（本ファイルのスコープ外）。
         Node::Widget(_) => {}
+        Node::RgbaImage { .. } => {}
     }
 }
 

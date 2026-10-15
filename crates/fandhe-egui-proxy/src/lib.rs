@@ -110,6 +110,7 @@ pub mod font;
 // Issue #1103: `ImageWidget` の実画素を egui へ届ける 1 枠の保管所（モジュール doc 参照）。
 mod image_store;
 pub mod recyclers;
+mod rgba_image;
 // Issue #715: 生成画面を名前で選ぶレジストリ（モジュール冒頭 doc 参照）。
 pub mod screens;
 // Issue #813（親 #811 の 2/3）: `Node::StyledText` の役割（`TextRole`）を
@@ -612,6 +613,7 @@ fn render_node<S: 'static>(
         } => {
             render_virtual_list(ui, path, *len, *item, *item_extent, *axis, state, ctx);
         }
+        Node::RgbaImage { pixels, alt } => rgba_image::show(ui, pixels, alt, path),
         Node::Widget(widget) => {
             // `Widget<S>` トレイトオブジェクトの実描画配線は、`DialogWidget`（S47、
             // Issue #739）と `Checkbox` / `ToggleSwitch` / `Slider` / `RadioButton`

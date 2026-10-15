@@ -22,6 +22,7 @@
 //! | `Node::Widget(ToggleSwitch)` | `label` + `input type="checkbox" role="switch"`（Issue #993） |
 //! | `Node::Widget(Slider)` | `label` + `input type="range"`（Issue #993） |
 //! | `Node::Widget(RadioButton)` | `label` + `input type="radio"`（Issue #993） |
+//! | `Node::RgbaImage` | `img`（`src` は無圧縮 PNG の data URL、Issue #5） |
 //! | `Node::Widget(ImageWidget)`（ソースが `blob:` で始まるとき） | `img`（Issue #1103）。それ以外は空プレースホルダ |
 
 use fandhe_core::{
@@ -300,6 +301,25 @@ fn convert_node<S: 'static>(
                 .map(|child| DomNode::container("li", vec![convert_node(child, state, collector)]))
                 .collect();
             DomNode::container("ul", items)
+        }
+        Node::RgbaImage { pixels, alt } => {
+            // `src` は自前で作る `data:image/png;base64,` のみ（外部由来の文字列を
+            // 含まない）。`ImageWidget` が外部ソースの `data:` を拒否する方針とは別経路。
+            DomNode {
+                tag: "img".to_string(),
+                attrs: vec![
+                    ("src".to_string(), crate::png_data_url::png_data_url(pixels)),
+                    ("alt".to_string(), alt.clone()),
+                    ("class".to_string(), "fandhe-image".to_string()),
+                    (
+                        "style".to_string(),
+                        "max-width:100%;height:auto".to_string(),
+                    ),
+                ],
+                text: None,
+                children: Vec::new(),
+                event_hook: None,
+            }
         }
         Node::Widget(widget) => {
             // `Checkbox`/`ToggleSwitch`/`Slider`/`RadioButton` はネイティブ `<input>`
@@ -1513,6 +1533,24 @@ mod tests {
         assert_eq!(widget_dom.tag, "div");
         assert!(has_attr(widget_dom, "role", "group"));
         assert!(has_attr(widget_dom, "aria-label", "未対応部品"));
+    }
+
+    /// 実画素の画像ノード（Issue #5）: `img` + PNG の data URL + alt で出る。
+    #[test]
+    fn rgba_image_emits_img_with_png_data_url() {
+        let pixels = fandhe_core::RgbaPixels::new(1, 1, vec![1u8, 2, 3, 4]).unwrap();
+        let screen: Screen<CounterState> = Screen::new("t").rgba_image(pixels, "サムネイル");
+        let dom = build_dom_tree(&screen, &empty_state(), 0);
+        let img = dom
+            .children
+            .iter()
+            .find(|c| c.tag == "img")
+            .expect("img が出る");
+        let src = &img.attrs.iter().find(|(k, _)| k == "src").unwrap().1;
+        assert!(src.starts_with("data:image/png;base64,"), "{src}");
+        assert!(img
+            .attrs
+            .contains(&("alt".to_string(), "サムネイル".to_string())));
     }
 
     /// 写真選択（Issue #1103）: `blob:` のソースだけ `img` を出し、他は出さない。

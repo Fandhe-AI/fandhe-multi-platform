@@ -18,42 +18,52 @@
 //! 型（`Thumbnail` / `CaptureFailure`）へ変換して `CompletionSender` 経由で反映する
 //! （依存方向はプロキシ → コアの一方向、coding-rust.md 準拠）。
 //!
-//! `fandhe-core` の `Screen::image` / `image_bound`（`ui/image.rs`）は識別子（パス・URL の
-//! 不透明文字列）を保持するだけで画素データを運べず、`fandhe-egui-proxy` の
-//! `render_node` も `Node::Widget` を実描画しない（macOS/Android の AX ノード公開のみ、
-//! `lib.rs` 参照）。そのため撮影結果のサムネイルは実画素ではなく、`thumbnail_from_rgba`
-//! が間引いた輝度モザイク（`█`/`░` の行文字列、`Node::Text` として描画）で代替する
-//! （実画素表示に要るフレームワーク変更は Issue #749 コメントで報告、起票はユーザー
-//! 承認後）。状態には生 RGBA を保持しない（最大 64 MiB、`fandhe-device` の
-//! `MAX_IMAGE_BYTES` 参照。UI 状態・ヘッドレス出力の肥大を避ける設計判断）。
+//! 撮影結果のサムネイルは実画素で表示する。`thumbnail_from_rgba` が長辺
+//! [`THUMB_MAX_SIDE`] ピクセルに収まるようブロック平均で縮小し、検証済みの
+//! [`RgbaPixels`] として状態に保持、`current_screen` が `Screen::rgba_image`
+//! （`Node::RgbaImage`）で描画させる（Issue #5。egui-proxy は GPU テクスチャ、
+//! web-dom は `<img src="data:image/png;base64,…">` として出す）。状態には生の RGBA
+//! （最大 64 MiB、`fandhe-device` の `MAX_IMAGE_BYTES` 参照）を持たず、縮小後の
+//! 最大 160x160x4 = 100 KiB に抑える（UI 状態・ヘッドレス出力の肥大を避ける設計判断）。
 
-use crate::ui::{Node, Screen, WidgetId};
+use crate::ui::{RgbaPixels, Screen, WidgetId};
 
-/// サムネイルモザイクの列数（間引き後の固定サイズ）。
-pub const THUMB_COLS: usize = 24;
-/// サムネイルモザイクの行数（間引き後の固定サイズ）。
-pub const THUMB_ROWS: usize = 9;
+/// サムネイルの長辺の上限（ピクセル）。
+pub const THUMB_MAX_SIDE: u32 = 160;
+
+/// 元画像 `width` x `height` を縦横比を保って長辺 [`THUMB_MAX_SIDE`] 以下へ縮小した寸法。
+/// すでに収まる寸法はそのまま返す（冪等。web 側は canvas の寸法決めにも使う）。
+/// 0 を含む入力は `(0, 0)`。
+pub fn thumbnail_size(width: u32, height: u32) -> (u32, u32) {
+    if width == 0 || height == 0 {
+        return (0, 0);
+    }
+    let long = width.max(height);
+    if long <= THUMB_MAX_SIDE {
+        return (width, height);
+    }
+    let scale = |v: u32| ((v as u64 * THUMB_MAX_SIDE as u64 / long as u64) as u32).max(1);
+    (scale(width), scale(height))
+}
 
 /// 「撮影」ボタンの `WidgetId`（`Idle` のときのみ表示）。
 const CAPTURE_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 /// 「撮り直す」ボタンの `WidgetId`（`Captured`/`Failed` のときのみ表示）。
 const RETAKE_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
 
-/// RGBA 画素を間引いた輝度モザイク（`█`/`░` の行文字列）。実画素の代わりに
-/// `Node::Text` として描画する（モジュール冒頭のコメント参照）。
+/// 縮小済みの実画素サムネイル（モジュール冒頭のコメント参照）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Thumbnail {
     /// 元画像の幅（ピクセル、表示文言用）。
     pub width: u32,
     /// 元画像の高さ（ピクセル、表示文言用）。
     pub height: u32,
-    /// 間引き後の行（各行は最大 [`THUMB_COLS`] 文字、`rows.len() <= THUMB_ROWS`）。
-    pub rows: Vec<String>,
+    /// 縮小後の画素（長辺 [`THUMB_MAX_SIDE`] 以下）。
+    pub pixels: RgbaPixels,
 }
 
 /// RGBA（行優先・パディングなし、`fandhe_device::Image` と同じレイアウト）を
-/// [`THUMB_COLS`] x [`THUMB_ROWS`] 以下のセルへブロック平均で間引き、輝度に応じて
-/// `█`（明）/ `░`（暗）へ変換する。
+/// [`thumbnail_size`] の寸法へブロック平均（全チャンネル）で縮小する。
 ///
 /// `width`/`height` が 0、または `rgba.len()` が `width * height * 4`
 /// （`checked_mul` でオーバーフロー検査済み）と一致しない場合は `None`
@@ -69,34 +79,32 @@ pub fn thumbnail_from_rgba(width: u32, height: u32, rgba: &[u8]) -> Option<Thumb
         return None;
     }
 
-    let out_rows = h.min(THUMB_ROWS);
-    let out_cols = w.min(THUMB_COLS);
-    let mut rows = Vec::with_capacity(out_rows);
-    for oy in 0..out_rows {
-        let y0 = oy * h / out_rows;
-        let y1 = ((oy + 1) * h / out_rows).max(y0 + 1).min(h);
-        let mut row = String::with_capacity(out_cols);
-        for ox in 0..out_cols {
-            let x0 = ox * w / out_cols;
-            let x1 = ((ox + 1) * w / out_cols).max(x0 + 1).min(w);
-            let mut sum = 0u64;
-            let mut count = 0u64;
+    let (ow, oh) = thumbnail_size(width, height);
+    let (ow, oh) = (ow as usize, oh as usize);
+    let mut out = Vec::with_capacity(ow * oh * 4);
+    for oy in 0..oh {
+        let y0 = oy * h / oh;
+        let y1 = ((oy + 1) * h / oh).max(y0 + 1).min(h);
+        for ox in 0..ow {
+            let x0 = ox * w / ow;
+            let x1 = ((ox + 1) * w / ow).max(x0 + 1).min(w);
+            let mut sum = [0u64; 4];
             for y in y0..y1 {
                 for x in x0..x1 {
                     let idx = (y * w + x) * 4;
-                    sum += (rgba[idx] as u64 + rgba[idx + 1] as u64 + rgba[idx + 2] as u64) / 3;
-                    count += 1;
+                    for (c, s) in sum.iter_mut().enumerate() {
+                        *s += rgba[idx + c] as u64;
+                    }
                 }
             }
-            let avg = sum / count.max(1);
-            row.push(if avg >= 128 { '█' } else { '░' });
+            let count = ((y1 - y0) * (x1 - x0)) as u64;
+            out.extend(sum.iter().map(|s| (s / count) as u8));
         }
-        rows.push(row);
     }
     Some(Thumbnail {
         width,
         height,
-        rows,
+        pixels: RgbaPixels::new(ow as u32, oh as u32, out)?,
     })
 }
 
@@ -190,10 +198,7 @@ pub fn status_text(state: &CameraCaptureState) -> String {
         // （Codex 指摘 #998）。
         CapturePhase::Idle => "「撮影」を押すと 1 枚撮影します".to_string(),
         CapturePhase::Requested | CapturePhase::Capturing => "撮影中…".to_string(),
-        CapturePhase::Captured(thumb) => format!(
-            "撮影結果（{}×{}、サムネイルはモザイク表示）",
-            thumb.width, thumb.height
-        ),
+        CapturePhase::Captured(thumb) => format!("撮影結果（{}×{}）", thumb.width, thumb.height),
         CapturePhase::Failed(CaptureFailure::PermissionDenied) => {
             "カメラの権限が拒否されています。端末の設定から許可してください".to_string()
         }
@@ -204,24 +209,16 @@ pub fn status_text(state: &CameraCaptureState) -> String {
     }
 }
 
-/// 一覧区画の展開（`Screen::list`）。`Captured` のときのみサムネイル行を `Node::Text`
-/// として返し、それ以外は空（区画自体が現れない）。
-fn expand_thumbnail(state: &CameraCaptureState) -> Vec<Node<CameraCaptureState>> {
-    match &state.phase {
-        CapturePhase::Captured(thumb) => thumb.rows.iter().cloned().map(Node::Text).collect(),
-        _ => Vec::new(),
-    }
-}
-
 /// カメラ撮影画面。`state.phase` に応じてボタンを出し分ける
 /// （`Idle`: 「撮影」、`Captured`/`Failed`: 「撮り直す」、`Requested`/`Capturing`:
 /// ボタンなし＝二重起動を UI 側からも防ぐ）。`crates/fandhe-egui-proxy/src/screens/
 /// registry.rs` の `effect` 区画から `fn(&S) -> Screen<S>` として毎フレーム呼ばれる契約
 /// （`docs/ai/SCHEMA.md` パターン 9）。
 pub fn current_screen(state: &CameraCaptureState) -> Screen<CameraCaptureState> {
-    let screen = Screen::new("カメラ撮影")
-        .dynamic_text(status_text)
-        .list(expand_thumbnail);
+    let mut screen = Screen::new("カメラ撮影").dynamic_text(status_text);
+    if let CapturePhase::Captured(thumb) = &state.phase {
+        screen = screen.rgba_image(thumb.pixels.clone(), "撮影結果のサムネイル");
+    }
     match state.phase {
         CapturePhase::Idle => screen.button(CAPTURE_BUTTON_ID, "撮影", start_capture),
         CapturePhase::Captured(_) | CapturePhase::Failed(_) => {

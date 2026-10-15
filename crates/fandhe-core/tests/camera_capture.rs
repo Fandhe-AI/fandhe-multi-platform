@@ -4,9 +4,9 @@
 //! 実際の描画・イベント配線で成立することを検証する（`tests/confirm_dialog.rs` と同型）。
 
 use fandhe_core::screens::camera_capture::{
-    CameraCaptureState, CaptureFailure, CapturePhase, THUMB_ROWS, Thumbnail, cancel_capture,
+    CameraCaptureState, CaptureFailure, CapturePhase, THUMB_MAX_SIDE, Thumbnail, cancel_capture,
     current_screen, finish_capture, mark_capturing, start_capture, status_text,
-    thumbnail_from_rgba,
+    thumbnail_from_rgba, thumbnail_size,
 };
 use fandhe_core::{click_button, render_headless};
 
@@ -36,21 +36,37 @@ fn thumbnail_from_rgba_rejects_length_mismatch_and_zero_dimension() {
 }
 
 #[test]
-fn thumbnail_from_rgba_alternates_on_checkerboard() {
-    let thumb = thumbnail_from_rgba(16, 8, &checkerboard_rgba(16, 8)).expect("有効な RGBA");
-    assert_eq!(thumb.rows.len(), 8usize.min(THUMB_ROWS));
-    let first_row: Vec<char> = thumb.rows[0].chars().collect();
-    assert_eq!(first_row[0], '█');
-    assert_eq!(first_row[1], '░');
-    assert_eq!(first_row[2], '█');
+fn thumbnail_keeps_small_image_pixels_as_is() {
+    // 長辺が上限以内なら縮小せず、画素がそのまま残る。
+    let rgba = checkerboard_rgba(16, 8);
+    let thumb = thumbnail_from_rgba(16, 8, &rgba).expect("有効な RGBA");
+    assert_eq!((thumb.pixels.width(), thumb.pixels.height()), (16, 8));
+    assert_eq!(thumb.pixels.rgba(), &rgba[..]);
 }
 
 #[test]
-fn thumbnail_from_rgba_caps_rows_at_thumb_rows() {
-    // 縦幅が THUMB_ROWS を超える画像は行数が THUMB_ROWS に収まる（状態肥大防止）。
-    let rgba = vec![0u8; 32 * 40 * 4];
-    let thumb = thumbnail_from_rgba(32, 40, &rgba).expect("有効な RGBA");
-    assert_eq!(thumb.rows.len(), THUMB_ROWS);
+fn thumbnail_size_keeps_aspect_and_caps_long_side() {
+    assert_eq!(thumbnail_size(0, 5), (0, 0));
+    assert_eq!(thumbnail_size(160, 90), (160, 90));
+    assert_eq!(thumbnail_size(1280, 720), (160, 90));
+    assert_eq!(thumbnail_size(720, 1280), (90, 160));
+    // 極端な縦横比でも 1 以上を保つ。
+    assert_eq!(thumbnail_size(4000, 1), (160, 1));
+    // 冪等（web 側は縮小済み canvas を再度通す）。
+    let (w, h) = thumbnail_size(1920, 1080);
+    assert_eq!(thumbnail_size(w, h), (w, h));
+}
+
+#[test]
+fn thumbnail_downscale_averages_pixels() {
+    // 320x160 の列ごと白黒交互 → 2x 縮小で 160x80、各画素は白黒の平均（127 付近）。
+    let rgba = checkerboard_rgba(320, 160);
+    let thumb = thumbnail_from_rgba(320, 160, &rgba).expect("有効な RGBA");
+    assert_eq!((thumb.pixels.width(), thumb.pixels.height()), (160, 80));
+    assert!(thumb.pixels.width().max(thumb.pixels.height()) <= THUMB_MAX_SIDE);
+    let px = &thumb.pixels.rgba()[0..4];
+    assert_eq!(px, &[127, 127, 127, 255]);
+    assert_eq!((thumb.width, thumb.height), (320, 160));
 }
 
 #[test]
@@ -139,12 +155,9 @@ fn finish_capture_success_shows_thumbnail_and_retake_button() {
 
     let screen = current_screen(&state);
     let lines = render_headless(&screen, &state);
-    assert!(
-        lines
-            .iter()
-            .any(|l| l.contains("撮影結果（16×8、サムネイルはモザイク表示）"))
-    );
-    assert!(lines.iter().any(|l| l.contains('█') || l.contains('░')));
+    assert!(lines.iter().any(|l| l.contains("撮影結果（16×8）")));
+    assert!(lines.iter().any(|l| l.starts_with("[画像 16×8:")));
+    assert!(!lines.iter().any(|l| l.contains("モザイク")));
     assert!(lines.contains(&"(撮り直す)".to_string()));
     assert!(!lines.contains(&"(撮影)".to_string()));
 }

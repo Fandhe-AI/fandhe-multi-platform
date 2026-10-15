@@ -100,6 +100,71 @@ pub enum TextRole {
     Error,
 }
 
+/// [`RgbaPixels`] の一辺の上限（ピクセル）。WebGL2 が保証する最小の
+/// `MAX_TEXTURE_SIZE` に合わせ、描画バックエンドでのテクスチャ確保失敗と
+/// 巨大確保による DoS を構築時点で拒否する。
+pub const RGBA_MAX_SIDE: u32 = 2048;
+
+/// 画像ノード [`Node::RgbaImage`] が運ぶ RGBA8 画素列（行優先・パディングなし・
+/// 非乗算アルファ、`fandhe_device::Image` と同じレイアウト）。
+///
+/// 描画バックエンド（`fandhe-egui-proxy` / `fandhe-web-dom`）は長さ不一致で panic する
+/// API（egui の `ColorImage::from_rgba_unmultiplied` 等）へ渡すため、不正な値を
+/// 型の外へ出さないよう検証は [`RgbaPixels::new`] の 1 か所に集約し、フィールドは
+/// 非公開にする。`Arc` なので `Screen` を毎フレーム作り直して `Node` を clone しても
+/// 画素はコピーされない。
+#[derive(Clone, PartialEq, Eq)]
+pub struct RgbaPixels {
+    width: u32,
+    height: u32,
+    rgba: std::sync::Arc<[u8]>,
+}
+
+impl RgbaPixels {
+    /// 検証付きコンストラクタ。寸法が 0、[`RGBA_MAX_SIDE`] 超、または
+    /// `rgba.len() != width * height * 4`（オーバーフローは `None`）の場合は `None`。
+    pub fn new(width: u32, height: u32, rgba: impl Into<std::sync::Arc<[u8]>>) -> Option<Self> {
+        if width == 0 || height == 0 || width > RGBA_MAX_SIDE || height > RGBA_MAX_SIDE {
+            return None;
+        }
+        let rgba = rgba.into();
+        let expected = (width as usize)
+            .checked_mul(height as usize)?
+            .checked_mul(4)?;
+        (rgba.len() == expected).then_some(Self {
+            width,
+            height,
+            rgba,
+        })
+    }
+
+    /// 幅（ピクセル）。
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    /// 高さ（ピクセル）。
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// RGBA8 画素列（長さは常に `width * height * 4`）。
+    pub fn rgba(&self) -> &[u8] {
+        &self.rgba
+    }
+}
+
+impl std::fmt::Debug for RgbaPixels {
+    /// カメラ画像はプライバシー情報のため、寸法とバイト長のみ出す（画素をログへ流さない）。
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RgbaPixels")
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .field("len", &self.rgba.len())
+            .finish()
+    }
+}
+
 /// 画面を構成する 1 要素を表す型。状態型 `S` に対してジェネリックであり、
 /// 異なる状態型のノードを同一 `Screen<S>` に混在させるとコンパイルエラーになる。
 ///
@@ -262,6 +327,15 @@ pub enum Node<S> {
     /// 要求する標準の `Clone` を実装できないため、複製は
     /// [`super::widget::Widget::clone_box`] 経由で行う（下記手動 `Clone` 実装参照）。
     Widget(Box<dyn super::widget::Widget<S>>),
+    /// 実画素（RGBA8）の画像表示（Issue #5）。`Screen::image` / `ImageWidget` が識別子
+    /// 文字列しか持たないのに対し、本バリアントは画素そのものを運ぶ（カメラ撮影の
+    /// サムネイル等）。静的な値で足りる（`Screen` は毎フレーム状態から作り直される）。
+    RgbaImage {
+        /// 検証済みの画素列。
+        pixels: RgbaPixels,
+        /// 代替テキスト（web の `alt`、egui の `alt_text` 等のアクセシビリティ用）。
+        alt: String,
+    },
 }
 
 impl<S> Node<S> {
@@ -327,6 +401,11 @@ impl<S> std::fmt::Debug for Node<S> {
             // （`super::widget::Widget` 参照）、`dyn Widget<S>` はそのまま
             // `{:?}` 整形できる（TASK-8.3-S2、設計文書 §4.1「Debug 手動実装との整合」）。
             Node::Widget(widget) => f.debug_tuple("Widget").field(widget).finish(),
+            Node::RgbaImage { pixels, alt } => f
+                .debug_struct("RgbaImage")
+                .field("pixels", pixels)
+                .field("alt", alt)
+                .finish(),
         }
     }
 }
@@ -385,7 +464,33 @@ impl<S> Clone for Node<S> {
             // ため、オブジェクトセーフな複製メソッド `clone_box` へ委譲する
             // （TASK-8.3-S2、設計文書 §4.1）。
             Node::Widget(widget) => Node::Widget(widget.clone_box()),
+            Node::RgbaImage { pixels, alt } => Node::RgbaImage {
+                pixels: pixels.clone(),
+                alt: alt.clone(),
+            },
         }
+    }
+}
+
+#[cfg(test)]
+mod rgba_tests {
+    use super::{RGBA_MAX_SIDE, RgbaPixels};
+
+    #[test]
+    fn rgba_pixels_validates() {
+        assert!(RgbaPixels::new(2, 1, vec![0u8; 8]).is_some());
+        assert!(RgbaPixels::new(2, 1, vec![0u8; 7]).is_none());
+        assert!(RgbaPixels::new(0, 1, vec![]).is_none());
+        assert!(RgbaPixels::new(1, 0, vec![]).is_none());
+        assert!(RgbaPixels::new(RGBA_MAX_SIDE + 1, 1, vec![0u8; 4]).is_none());
+        assert!(RgbaPixels::new(u32::MAX, u32::MAX, vec![0u8; 4]).is_none());
+    }
+
+    #[test]
+    fn debug_hides_pixels() {
+        let p = RgbaPixels::new(1, 1, vec![9u8, 8, 7, 6]).unwrap();
+        let s = format!("{p:?}");
+        assert!(s.contains("len") && !s.contains('9'), "{s}");
     }
 }
 

@@ -39,6 +39,7 @@ fn main() {
             // （個別ウィジェット実装は S7 以降のスコープ）。到達しないはずの分岐だが、
             // 網羅性のために明示する（Issue #97）。
             fandhe_core::Node::Widget(_) => "Widget".to_string(),
+            fandhe_core::Node::RgbaImage { .. } => "RgbaImage".to_string(),
         };
         println!("- {kind}");
     });

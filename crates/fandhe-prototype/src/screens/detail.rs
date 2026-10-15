@@ -88,6 +88,8 @@ mod tests {
                 // （個別ウィジェット実装は S7 以降のスコープ）。到達しないはずの分岐だが、
                 // 網羅性のために明示する（Issue #97）。
                 Node::Widget(_) => "widget",
+                // 同様に `RgbaImage`（Issue #5）も使わない。
+                Node::RgbaImage { .. } => "rgba_image",
             })
             .collect();
         assert_eq!(labels, vec!["list", "メモ", "一覧へ戻る"]);

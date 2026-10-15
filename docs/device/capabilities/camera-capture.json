@@ -61,7 +61,7 @@
       "perm": "`navigator.permissions`（`camera`）、secure context 必須",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia",
       "safari": "対応（iOS Safari 向けに `playsinline` 属性を付与）",
-      "note": "実装済み（Issue #991）。`getUserMedia({video: true})` → 非表示 `<video>` へ `srcObject` を流し込み → フレーム準備後に縮小 `<canvas>` へ描画 → `fandhe_core::screens::camera_capture::thumbnail_from_rgba` でモザイク化。期限はフレーム待ち（5 秒）のみに張り、権限プロンプト中には張らない。`pagehide`・撮影中の `document.hidden` は失敗ではなくキャンセル（`Idle` へ戻す、再開しない）として扱う。新規 wasm-bindgen 依存パッケージは増えない（`HtmlVideoElement`/`HtmlCanvasElement`/`CanvasRenderingContext2d`/`ImageData` の web-sys feature 追加のみ）。ヘッドレス Chrome での正常系・失敗系（許可拒否・カメラ無し・非 secure context）・トラック解放の確認は環境上の `wasm-bindgen`（クレート）/`wasm-bindgen-cli` のバージョン不一致（0.2.126 と 0.2.128）で本セッションでは実施できず未確認。Safari・Firefox・実カメラでの目視も未確認",
+      "note": "実装済み（Issue #991）。`getUserMedia({video: true})` → 非表示 `<video>` へ `srcObject` を流し込み → フレーム準備後に縮小 `<canvas>` へ描画 → `fandhe_core::screens::camera_capture::thumbnail_from_rgba` で実画素サムネイル（長辺 160px）化し、`<img>`（PNG data URL）で表示。期限はフレーム待ち（5 秒）のみに張り、権限プロンプト中には張らない。`pagehide`・撮影中の `document.hidden` は失敗ではなくキャンセル（`Idle` へ戻す、再開しない）として扱う。新規 wasm-bindgen 依存パッケージは増えない（`HtmlVideoElement`/`HtmlCanvasElement`/`CanvasRenderingContext2d`/`ImageData` の web-sys feature 追加のみ）。ヘッドレス Chrome での正常系・失敗系（許可拒否・カメラ無し・非 secure context）・トラック解放の確認は環境上の `wasm-bindgen`（クレート）/`wasm-bindgen-cli` のバージョン不一致（0.2.126 と 0.2.128）で本セッションでは実施できず未確認。Safari・Firefox・実カメラでの目視も未確認",
       "sourceName": [
         "カメラ・マイク"
       ],

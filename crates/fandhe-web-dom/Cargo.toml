@@ -205,3 +205,7 @@ web-sys = { workspace = true, features = [
     # 読み取り間隔の計測に単調時計 `performance.now()` を使う（時計巻き戻し対策）。
     "Performance",
 ] }
+
+[dev-dependencies]
+# png_data_url の往復テスト用（native テストのみ。lockfile 済みの版で新規パッケージは増えない）。
+image = { workspace = true }

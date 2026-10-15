@@ -8,7 +8,7 @@
 //! Web は `fandhe-device` の `Camera` トレインを通らない（`mic_record.rs`/`location.rs`
 //! と同じ理由。`fandhe-egui-proxy` の feature `device` は wasm32 に依存を持ち込まない設計、
 //! `docs/device/capabilities/camera-capture.json` の web 欄 note 参照）。そのため本モジュール
-//! が DOM レンダラ側の対応実装にあたる。サムネイル化（輝度モザイク変換）の不変条件だけは
+//! が DOM レンダラ側の対応実装にあたる。サムネイル化（実画素へのブロック平均縮小）の不変条件だけは
 //! [`fandhe_core::screens::camera_capture::thumbnail_from_rgba`] を共有する
 //! （検証ロジックの SSOT を 1 箇所に保つ、`mic_record.rs::summary_from_bytes` と同じ方針）。
 //!
@@ -129,8 +129,8 @@ mod web {
     use std::rc::Rc;
 
     use fandhe_core::screens::camera_capture::{
-        cancel_capture, finish_capture, mark_capturing, CameraCaptureState, CapturePhase,
-        THUMB_COLS, THUMB_ROWS,
+        cancel_capture, finish_capture, mark_capturing, thumbnail_size, CameraCaptureState,
+        CapturePhase,
     };
     use js_sys::Reflect;
     use wasm_bindgen::prelude::*;
@@ -146,13 +146,6 @@ mod web {
         POLL_INTERVAL_MS, UNAVAILABLE,
     };
     use crate::mount::Applier;
-
-    /// 縮小キャンバスの幅（`THUMB_COLS` を上回る解像度で描画し、ブロック平均間引きの
-    /// 精度を保つ。手本 `fandhe-core` の間引き自体はセル単位で平均を取るため、
-    /// 出力セル数の整数倍あれば十分、4 倍は既存の目視確認で選んだ値）。
-    const CANVAS_WIDTH: u32 = THUMB_COLS as u32 * 4;
-    /// 縮小キャンバスの高さ（[`CANVAS_WIDTH`] と対）。
-    const CANVAS_HEIGHT: u32 = THUMB_ROWS as u32 * 4;
 
     /// 1 回の撮影セッションぶんの状態。すべての終了経路（成功・失敗・キャンセル・
     /// `pagehide`）が [`release`] を通して解放する（モジュール doc 参照）。
@@ -598,8 +591,13 @@ mod web {
             .map_err(|_| fail())?
             .dyn_into()
             .map_err(|_| fail())?;
-        canvas.set_width(CANVAS_WIDTH);
-        canvas.set_height(CANVAS_HEIGHT);
+        // 縦横比を保った縮小寸法（長辺 THUMB_MAX_SIDE 以下）。映像サイズ未確定（0）は失敗。
+        let (canvas_w, canvas_h) = thumbnail_size(video.video_width(), video.video_height());
+        if canvas_w == 0 || canvas_h == 0 {
+            return Err(fail());
+        }
+        canvas.set_width(canvas_w);
+        canvas.set_height(canvas_h);
 
         let context: CanvasRenderingContext2d = canvas
             .get_context("2d")
@@ -613,13 +611,13 @@ mod web {
                 video,
                 0.0,
                 0.0,
-                CANVAS_WIDTH as f64,
-                CANVAS_HEIGHT as f64,
+                canvas_w as f64,
+                canvas_h as f64,
             )
             .map_err(|_| fail())?;
 
         let image_data = context
-            .get_image_data(0.0, 0.0, CANVAS_WIDTH as f64, CANVAS_HEIGHT as f64)
+            .get_image_data(0.0, 0.0, canvas_w as f64, canvas_h as f64)
             .map_err(|_| fail())?;
 
         thumbnail_from_frame(
@@ -931,6 +929,9 @@ mod tests {
         let thumbnail = thumbnail_from_frame(1280, 720, 4, 4, &rgba).unwrap();
         assert_eq!(thumbnail.width, 1280);
         assert_eq!(thumbnail.height, 720);
-        assert_eq!(thumbnail.rows.len(), 4);
+        assert_eq!(
+            (thumbnail.pixels.width(), thumbnail.pixels.height()),
+            (4, 4)
+        );
     }
 }

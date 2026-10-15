@@ -196,6 +196,9 @@ fn to_snapshot_node<S>(node: &Node<S>, state: &S) -> SnapshotNode {
                 .collect();
             SnapshotNode::List { children }
         }
+        // 実画素の画像（Issue #5）を Swift へ渡すには `SnapshotNode` の拡張とスキーマ世代の
+        // 更新が要るため対象外（別 Issue）。当面は代替テキストだけを `Text` として渡す。
+        Node::RgbaImage { alt, .. } => SnapshotNode::Text { text: alt.clone() },
         Node::Widget(widget) => {
             // `Widget<S>` トレイトオブジェクト本体（`paint()` によるピクセル単位の
             // 描画コマンド）の Swift 向けスナップショット表現の精緻化（専用
