@@ -260,6 +260,7 @@ pub fn render_screen_with_recyclers<S: 'static>(
     // 確定プール集合を空から開始する（`VirtualListRecyclers::begin_frame` 参照。
     // 描画されなくなった `path` のプールをここで解放し、メモリを有界に保つ）。
     recyclers.begin_frame();
+    rgba_image::begin_frame(ui.ctx());
 
     let mut ctx = RenderContext {
         version,

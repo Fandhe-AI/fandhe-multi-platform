@@ -26,7 +26,7 @@
 //! （最大 64 MiB、`fandhe-device` の `MAX_IMAGE_BYTES` 参照）を持たず、縮小後の
 //! 最大 160x160x4 = 100 KiB に抑える（UI 状態・ヘッドレス出力の肥大を避ける設計判断）。
 
-use crate::ui::{RgbaPixels, Screen, WidgetId};
+use crate::ui::{Node, RgbaPixels, Screen, WidgetId};
 
 /// サムネイルの長辺の上限（ピクセル）。
 pub const THUMB_MAX_SIDE: u32 = 160;
@@ -209,16 +209,28 @@ pub fn status_text(state: &CameraCaptureState) -> String {
     }
 }
 
+/// 一覧区画の展開（`Screen::list`）。`Captured` のときのみ実画素ノードを返し、それ以外は空。
+/// 描画ごとに評価されるため、Web の `mount_with_effect`（画面ツリーを初回に 1 度だけ構築）
+/// でも撮影完了後に画像が現れる。
+fn expand_thumbnail(state: &CameraCaptureState) -> Vec<Node<CameraCaptureState>> {
+    match &state.phase {
+        CapturePhase::Captured(thumb) => vec![Node::RgbaImage {
+            pixels: thumb.pixels.clone(),
+            alt: "撮影結果のサムネイル".to_string(),
+        }],
+        _ => Vec::new(),
+    }
+}
+
 /// カメラ撮影画面。`state.phase` に応じてボタンを出し分ける
 /// （`Idle`: 「撮影」、`Captured`/`Failed`: 「撮り直す」、`Requested`/`Capturing`:
 /// ボタンなし＝二重起動を UI 側からも防ぐ）。`crates/fandhe-egui-proxy/src/screens/
 /// registry.rs` の `effect` 区画から `fn(&S) -> Screen<S>` として毎フレーム呼ばれる契約
 /// （`docs/ai/SCHEMA.md` パターン 9）。
 pub fn current_screen(state: &CameraCaptureState) -> Screen<CameraCaptureState> {
-    let mut screen = Screen::new("カメラ撮影").dynamic_text(status_text);
-    if let CapturePhase::Captured(thumb) = &state.phase {
-        screen = screen.rgba_image(thumb.pixels.clone(), "撮影結果のサムネイル");
-    }
+    let screen = Screen::new("カメラ撮影")
+        .dynamic_text(status_text)
+        .list(expand_thumbnail);
     match state.phase {
         CapturePhase::Idle => screen.button(CAPTURE_BUTTON_ID, "撮影", start_capture),
         CapturePhase::Captured(_) | CapturePhase::Failed(_) => {
