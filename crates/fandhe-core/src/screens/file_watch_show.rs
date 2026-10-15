@@ -38,6 +38,7 @@ const CREATE_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
 const UPDATE_BUTTON_ID: WidgetId = WidgetId::from_raw(3);
 const DELETE_BUTTON_ID: WidgetId = WidgetId::from_raw(4);
 const PICK_BUTTON_ID: WidgetId = WidgetId::from_raw(5);
+const RESET_BUTTON_ID: WidgetId = WidgetId::from_raw(6);
 
 /// `VirtualList` の 1 行あたりの固定高さ。
 const ROW_EXTENT: f32 = 24.0;
@@ -59,6 +60,10 @@ pub const UPDATE_LABEL: &str = "更新する";
 pub const DELETE_LABEL: &str = "削除する";
 /// フォルダ選択ボタン。
 pub const PICK_LABEL: &str = "フォルダを選ぶ";
+/// 作業フォルダへ戻すボタン。
+pub const RESET_LABEL: &str = "作業フォルダに戻す";
+/// 作業フォルダへ戻した案内。
+pub const RESET_STATUS: &str = "作業フォルダに戻しました";
 /// 選択完了の接頭辞（`{接頭辞}{フォルダ名}`）。
 pub const PICKED_PREFIX: &str = "選んだフォルダ: ";
 /// 選択取り消しの案内（失敗でも成功でもない）。
@@ -293,6 +298,16 @@ pub fn pick_folder(state: &mut FileWatchShowState) {
     state.status.clear();
 }
 
+/// 作業フォルダへ戻すボタンのハンドラ。`Idle` で選択中でなく、選んだフォルダがあるときだけ受け付ける。
+pub fn reset_pick(state: &mut FileWatchShowState) {
+    if state.phase != WatchPhase::Idle || state.pick.is_some() || state.picked.is_none() {
+        return;
+    }
+    state.picked = None;
+    state.error.clear();
+    state.status = RESET_STATUS.to_string();
+}
+
 /// 未処理のフォルダ選択要求の世代を観測する（状態は変えない）。
 pub fn take_pick(state: &FileWatchShowState) -> Option<u64> {
     state.pick
@@ -428,7 +443,7 @@ pub fn status_text(state: &FileWatchShowState) -> String {
             lines.push(TRUNCATED_TEXT.to_string());
         }
     }
-    if state.picked.is_some() {
+    if state.phase == WatchPhase::Watching && state.picked.is_some() {
         lines.push(OPS_WORK_ONLY_TEXT.to_string());
     }
     if state.dropped > 0 {
@@ -484,6 +499,7 @@ pub fn current_screen(state: &FileWatchShowState) -> Screen<FileWatchShowState> 
         .button(UPDATE_BUTTON_ID, UPDATE_LABEL, update)
         .button(DELETE_BUTTON_ID, DELETE_LABEL, delete)
         .button(PICK_BUTTON_ID, PICK_LABEL, pick_folder)
+        .button(RESET_BUTTON_ID, RESET_LABEL, reset_pick)
         .virtual_list(record_count, record_row, ROW_EXTENT)
 }
 
@@ -684,7 +700,30 @@ mod tests {
         finish_pick(&mut s, 1, Ok(Some(picked())));
         assert_eq!(s.picked, Some(picked()));
         assert!(status_text(&s).contains("選んだフォルダ: docs"));
+        assert!(
+            !status_text(&s).contains(OPS_WORK_ONLY_TEXT),
+            "開始前は出さない"
+        );
+        start(&mut s);
+        finish_start(&mut s, 1, Ok(info()));
         assert!(status_text(&s).contains(OPS_WORK_ONLY_TEXT));
+    }
+
+    #[test]
+    fn reset_pick_returns_to_work_dir_only_when_idle() {
+        let mut s = FileWatchShowState::default();
+        reset_pick(&mut s);
+        assert_eq!(s.status, "", "選択が無ければ何もしない");
+        pick_folder(&mut s);
+        finish_pick(&mut s, 1, Ok(Some(picked())));
+        start(&mut s);
+        finish_start(&mut s, 1, Ok(info()));
+        reset_pick(&mut s);
+        assert!(s.picked.is_some(), "監視中は戻せない");
+        stop(&mut s);
+        reset_pick(&mut s);
+        assert!(s.picked.is_none());
+        assert_eq!(s.status, RESET_STATUS);
     }
 
     #[test]

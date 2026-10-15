@@ -58,5 +58,5 @@
       "impl": "crates/fandhe-web-dom/src/file_watch.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/file_watch_show.rs + crates/fandhe-device/src/file_watch.rs、Issue #1414"
     }
   },
-  "note": "file-watch は変化が OS から継続的に届く継続 push 型。device-bridge-contracts の並行性・世代の項目の対象。local-storage-kv / file-picker（既存 id）との違い: 読み書きや選択ではなく、変更の通知を受ける。今回の範囲: 指定フォルダ内のファイル作成・更新・削除を、画面に新しい順で一覧表示する（デスクトップ・Android・iOS・Web）。デスクトップ（macOS・Windows）は「フォルダを選ぶ」で選んだフォルダも監視できる（#37）。"
+  "note": "file-watch は変化が OS から継続的に届く継続 push 型。device-bridge-contracts の並行性・世代の項目の対象。local-storage-kv / file-picker（既存 id）との違い: 読み書きや選択ではなく、変更の通知を受ける。今回の範囲: 指定フォルダ内のファイル作成・更新・削除を、画面に新しい順で一覧表示する（デスクトップ・Android・iOS・Web）。デスクトップ（macOS・Windows）は「フォルダを選ぶ」で選んだフォルダも監視できる（#37。「作業フォルダに戻す」で戻せる）。"
 }
