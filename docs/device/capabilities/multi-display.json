@@ -7,11 +7,14 @@
   "bundle": "continuous-push",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "外部ディスプレイ接続は `UIScene`（`UIWindowScene` の external display）、旧 `UIScreen.screens`",
-      "perm": "不要",
-      "url": "",
-      "note": "未実装。URL 未確認（iOS 調査で未取得）。AirPlay ミラーリングは別。外部画面へ別描画するには別ウィンドウが要る"
+      "status": "done",
+      "api": "`UIApplication.connectedScenes` の `UIWindowScene.screen`（`bounds` × `scale`）。外部ディスプレイは `UIWindowSceneSessionRoleExternalDisplayNonInteractive` の scene で、window を付けずミラーリングを OS の既定に任せる。主画面は application ロールの scene の画面",
+      "perm": "不要（privacy manifest 不要）",
+      "url": "https://developer.apple.com/documentation/technotes/tn3187-migrating-to-the-uikit-scene-based-life-cycle",
+      "note": "実装済み（#27）。外部画面は scene 経由でしか列挙できない（`UIScreen.screens` は iOS 16 で非推奨）ため、Info.plist に `UIApplicationSceneManifest` を足して scene 形態へ移した（winit 0.30 は scene 非対応で、`ios/fandhe_ios_scene.m` のシムが window を scene へ付ける。winit#4723 が入ったらシムを削除する）。この移行で URL scheme の受信経路も scene 側（`connectionOptions.URLContexts`・`scene:openURLContexts:`）へ変わった。守る範囲: 嘘の値を出さない・scene 0 件を成功にしない・主画面を決められなければ全て false・個体識別子を取らない・1 プロセス内の取得・切断後に最後の一覧を返し続けない・並びを固定する。守らない範囲: OS 間の粒度の一致、反映遅れ（最大 1 秒）、ミラーリングの OS 差（OS が返す scene のとおり）、Stage Manager で app の scene を外部へ移したときの主画面判定、画面名（取れず常に「画面 N」）、複数プロセス、画面の位置・並び。iPhone 実機・外部ディスプレイの確認は #25",
+      "detail": "できている（iPhone 実機確認待ち）",
+      "implStatus": "iPhone 実機確認待ち（#25）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_multi_display.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_multi_display.m + crates/fandhe-egui-proxy/ios/fandhe_ios_scene.m + crates/fandhe-egui-proxy/src/ios_scene.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_url_scheme.m + platforms/apple/FandheIosApp/Resources/Info.plist + crates/fandhe-egui-proxy/src/device/multi_display.rs + crates/fandhe-core/src/screens/multi_display_show.rs + crates/fandhe-device/src/multi_display.rs、Issue #27"
     },
     "android": {
       "status": "done",

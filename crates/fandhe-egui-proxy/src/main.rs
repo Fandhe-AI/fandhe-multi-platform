@@ -234,6 +234,9 @@ fn main() {
 
 #[cfg(target_os = "ios")]
 fn main() -> eframe::Result<()> {
+    // Issue #27: UIScene 化シム（`ios/fandhe_ios_scene.m`）をリンクに残す。本番・計測の全経路をここで覆う。
+    fandhe_egui_proxy::ios_scene::install();
+
     // Issue #1045: `BGTaskScheduler` の launch handler は起動完了前（main thread・
     // `UIApplicationMain` 呼び出し前）に登録する契約（Apple ドキュメント要件、
     // 起動後の登録はできない）。`ios::run()`（内部で `UIApplicationMain` を呼ぶ）
