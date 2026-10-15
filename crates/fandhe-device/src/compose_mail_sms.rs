@@ -1,7 +1,7 @@
 //! メール・SMS の作成画面を OS で開く機能の抽象（Phase 11 の拡充ループ、親 #1142、Issue #1384）。
 //!
-//! 範囲は「宛先・件名・本文を渡して OS の作成画面を開く」ことだけ。添付（#1381）・CC / BCC・
-//! 複数宛先（#1382）は扱わない。検証の SSOT は
+//! 範囲は「宛先・件名・本文を渡して OS の作成画面を開く」ことだけ。メールは To（複数）・CC・BCC を
+//! 渡せる（Issue #33）。添付（#1381）・SMS の複数宛先は扱わない。検証の SSOT は
 //! [`ComposeRequest::mail`] / [`ComposeRequest::sms`]（これ以外では要求を作れない）で、
 //! macOS・Windows・Web が共用する URL の組み立ても [`ComposeRequest::to_url`] に置く。
 //! iOS / Android は URL を使わず OS の作成画面（MessageUI / Intent）へ値を直接渡す。
@@ -22,9 +22,22 @@
 //!
 //! | 状況 | 返す値 |
 //! |---|---|
-//! | 入力不正 | `InvalidInput("compose to" / "compose subject" / "compose body")` |
+//! | 入力不正 | `InvalidInput("compose to" / "compose cc" / "compose bcc" / "compose subject" / "compose body")` |
 //! | 非対応（Linux・Web ほか） | `Unsupported("compose")` |
 //! | 作成画面を出せない（ウィンドウ・NSURL 生成失敗など） | `Internal("compose ...")` |
+//!
+//! # 宛先の配列（To / CC / BCC）
+//!
+//! メールの To は 1〜10 件、CC と BCC は各 0〜10 件。1 件ずつ同じ規則で検査し、1 件でも不正、または
+//! 件数が範囲外なら、そのフィールドのエラー（`compose to` / `compose cc` / `compose bcc`）で拒否する
+//! （黙って切り詰めない）。宛先に `,` `;` `&` `?` `\n` などの区切りは現れないので、区切りによる
+//! 宛先・パラメータ・ヘッダの差し込みは起きない。SMS の宛先は従来どおり 0〜1 件。
+//!
+//! - macOS・Windows・Web: `mailto:{to,to}?cc=..&bcc=..&subject=..&body=..`。宛先は 1 件ずつ
+//!   percent-encode し、リテラルの `,` で連結する（RFC 6068）。CC / BCC が空ならパラメータを出さない
+//! - iOS・Android: URL を組み立てず配列で渡す。FFI / JNI の境界では各リストを `\n` で連結した
+//!   1 本の文字列で渡し、受け側で配列に戻す（`\n` は検証で必ず拒否されるため宛先の中に現れない。
+//!   空文字列は空配列）
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
 //!
@@ -35,7 +48,9 @@
 //! 守らない: 複数プロセスからの同時操作、作成画面を開いた後に利用者が何をしたか
 //! （`HandedOff` では確認できない）、既定のメールアプリ未設定時の OS 側の挙動の差。
 //!
-//! 既知の天井: 宛先は 1 件。Windows の `mailto:` URL は 2083 文字が上限（件名 200・本文 1000 文字
+//! 既知の天井: Windows の旧 Outlook は宛先の `;` 区切りを期待する場合があり、実機で確かめる。
+//! Android の一部メールアプリは `ACTION_SENDTO` の `EXTRA_CC` / `EXTRA_BCC` を無視しうる。
+//! 宛先が増えるほど URL は長くなる。Windows の `mailto:` URL は 2083 文字が上限（件名 200・本文 1000 文字
 //! の上限内でも、日本語は 1 文字 9 バイトに膨らむため超えうる。超えたら OS の失敗として
 //! `Internal` に倒れる）。宛先が空の `sms:?body=...` は RFC 5724 の文法外で、Messages が受けるかは
 //! 実機確認（#1383、Windows は #34）で確かめる。固定タイムアウトは掛けない。宛先・件名・本文・URL はログへ出さない
