@@ -12,6 +12,7 @@ import androidx.lifecycle.Lifecycle;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.UUID;
 
 // メール・SMS 作成画面（Issue #1386、親 #1142）の Android 実装ヘルパー。MainActivity から
 // 生成・委譲される（Rust の `device/android_compose_mail_sms.rs` が `MainActivity.requestCompose` を
@@ -32,7 +33,8 @@ import java.io.IOException;
 //
 // 添付（Issue #32、メールのみ・1 件）: URL では渡せないため `ACTION_SEND` + `EXTRA_STREAM`
 // （`FileProvider` の content URI）にし、`setSelector(ACTION_SENDTO mailto:)` でメールアプリに絞る。
-// 一時ファイルは `getCacheDir()/compose/<検証済みファイル名>` だけ（FileProvider の paths もここに限る）。
+// 一時ファイルは `getCacheDir()/compose/<要求ごとの乱数>/<検証済みファイル名>` だけ（FileProvider の paths は
+// `compose/` 配下に限り、cache-path は配下ディレクトリも許可する）。同名でも URI が毎回異なる。
 // 書き込み前に `compose/` を空にするので残るのは最新 1 件。書き込み失敗と startActivity の例外では
 // その場で消し、HANDED_OFF では受け手が後から読むため残す（次回の添付要求と OS の cacheDir 掃除で消える）。
 // 既知の天井: 受け手がコピーする前に再度添付要求をすると前の添付が読めなくなる（最大 1 件・1 MiB）。
@@ -71,22 +73,37 @@ final class ComposeHelper {
         return joined.isEmpty() ? new String[0] : joined.split("\n");
     }
 
-    // `compose/` の既存ファイルを全部消してから 1 件書く。`name` は Rust 側で `[A-Za-z0-9._-]` に
-    // 検証済みだが、正規化後も `compose/` 直下にあることを確かめる（多重防御）。失敗は null。
-    private File writeAttachment(byte[] data, String name) {
-        File dir = new File(activity.getCacheDir(), "compose");
-        if (!dir.isDirectory() && !dir.mkdirs()) {
-            return null;
-        }
-        File[] old = dir.listFiles();
-        if (old != null) {
-            for (File f : old) {
-                f.delete();
+    private static void deleteRecursive(File f) {
+        File[] children = f.listFiles();
+        if (children != null) {
+            for (File c : children) {
+                deleteRecursive(c);
             }
+        }
+        f.delete();
+    }
+
+    // `compose/` の既存の添付を全部消してから、要求ごとの一意ディレクトリ `compose/<乱数>/` に 1 件書く。
+    // 同名添付でも URI が毎回異なるので、旧 URI の読み取り許可が新しい別の添付を指すことはない。
+    // `name` は Rust 側で `[A-Za-z0-9._-]` に検証済みだが、正規化後も一意ディレクトリ直下にあることを確かめる（多重防御）。失敗は null。
+    private File writeAttachment(byte[] data, String name) {
+        File root = new File(activity.getCacheDir(), "compose");
+        if (root.isDirectory()) {
+            File[] old = root.listFiles();
+            if (old != null) {
+                for (File o : old) {
+                    deleteRecursive(o);
+                }
+            }
+        }
+        File dir = new File(root, UUID.randomUUID().toString());
+        if (!dir.mkdirs()) {
+            return null;
         }
         File f = new File(dir, name);
         try {
             if (!dir.getCanonicalFile().equals(f.getCanonicalFile().getParentFile())) {
+                deleteRecursive(dir);
                 return null;
             }
             // ponytail: UI スレッドでの書き込みは最大 1 MiB。体感できる遅さが出たら作業スレッドへ移す。
@@ -94,7 +111,7 @@ final class ComposeHelper {
                 out.write(data);
             }
         } catch (IOException e) {
-            f.delete();
+            deleteRecursive(dir);
             return null;
         }
         return f;
@@ -124,7 +141,7 @@ final class ComposeHelper {
                 uri = FileProvider.getUriForFile(activity,
                         activity.getPackageName() + ".compose", attFile);
             } catch (IllegalArgumentException e) {
-                attFile.delete();
+                deleteRecursive(attFile.getParentFile());
                 nativeOnComposeResult(id, RESULT_PRESENT_FAILED);
                 return;
             }
@@ -171,7 +188,7 @@ final class ComposeHelper {
             code = RESULT_PRESENT_FAILED;
         }
         if (attFile != null && code != RESULT_HANDED_OFF) {
-            attFile.delete();
+            deleteRecursive(attFile.getParentFile());
         }
         nativeOnComposeResult(id, code);
     }
