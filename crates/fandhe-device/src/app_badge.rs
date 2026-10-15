@@ -7,9 +7,8 @@
 //! # 値
 //!
 //! [`BadgeValue`] は 0〜[`MAX_BADGE`]。**0 は「消す」で番兵ではない**（iOS / Android でも権限
-//! ダイアログを出さない。Windows は進捗 0% と消去を区別せず `TBPF_NOPROGRESS`）。Windows は
-//! 0〜[`MAX_PROGRESS_PERCENT`] だけを受け、超えれば [`BadgeValue::as_progress_percent`] が
-//! 入力不正を返す。範囲検証は OS 型へ変換する前に行う。
+//! ダイアログを出さない。Windows は `SetOverlayIcon` でオーバーレイを外す）。上限を超える値は
+//! [`BadgeValue::new`] が入力不正を返す。範囲検証は OS 型へ変換する前に行う。
 //!
 //! # 結果の三値（契約表 10）
 //!
@@ -24,7 +23,9 @@
 //! # OS ごとの実態
 //!
 //! Android のバッジは無音の通知 1 件に付くドットと長押しメニューの件数で、アイコン上の数字は
-//! 保証しない。Web は PWA としてインストールしたときだけ表示される。
+//! 保証しない。Web は PWA としてインストールしたときだけ表示される。Windows は `SetOverlayIcon` で件数
+//! （0〜[`MAX_BADGE`]）を数字入りアイコンとしてタスクバーボタンに重ねる。タスクバー進捗
+//! （`SetProgressValue`）は本トレイトの範囲外で、`set` は進捗を触らない（併用しない）。
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
 //!
@@ -37,8 +38,6 @@ use crate::DeviceError;
 
 /// バッジ数の上限。
 pub const MAX_BADGE: u32 = 9999;
-/// Windows のタスクバー進捗の上限（%）。
-pub const MAX_PROGRESS_PERCENT: u32 = 100;
 
 /// 検証済みのバッジ値（0〜[`MAX_BADGE`]）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,14 +60,6 @@ impl BadgeValue {
     /// 0（消去）か。
     pub fn is_clear(self) -> bool {
         self.0 == 0
-    }
-
-    /// Windows 用。101 以上は `InvalidInput`。
-    pub fn as_progress_percent(self) -> Result<u32, DeviceError> {
-        if self.0 > MAX_PROGRESS_PERCENT {
-            return Err(DeviceError::InvalidInput("app_badge progress"));
-        }
-        Ok(self.0)
     }
 }
 
@@ -111,22 +102,6 @@ mod tests {
         ));
         assert!(BadgeValue::new(0).unwrap().is_clear());
         assert!(!BadgeValue::new(1).unwrap().is_clear());
-    }
-
-    #[test]
-    fn progress_range() {
-        assert_eq!(
-            BadgeValue::new(0).unwrap().as_progress_percent().unwrap(),
-            0
-        );
-        assert_eq!(
-            BadgeValue::new(100).unwrap().as_progress_percent().unwrap(),
-            100
-        );
-        assert!(matches!(
-            BadgeValue::new(101).unwrap().as_progress_percent(),
-            Err(DeviceError::InvalidInput("app_badge progress"))
-        ));
     }
 
     #[test]

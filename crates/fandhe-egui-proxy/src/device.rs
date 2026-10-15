@@ -129,7 +129,7 @@ pub mod android_screen_wake_lock;
 /// platform_url_scheme` の Android 経路から使われる。
 #[cfg(target_os = "android")]
 pub mod android_url_scheme;
-/// Phase 11（親 #1141、Issue #1360）: アプリアイコンのバッジ・タスクバー進捗の effect ドライバ（macOS /
+/// Phase 11（親 #1141、Issue #1360）: アプリアイコンのバッジ（Windows はタスクバーのオーバーレイ数字）の effect ドライバ（macOS /
 /// Windows は同期、iOS / Android は pull 型 `bridge`（実装は #1361 / #1362 まで `Unsupported` スタブ）、
 /// 他 OS は `UnsupportedAppBadge` 固定。Web は `fandhe-web-dom`）。
 pub mod app_badge;
@@ -529,7 +529,7 @@ pub mod url_scheme;
 /// `cargo test` で検査するため cfg を付けず、WinRT 呼び出しだけをモジュール内に閉じる。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_accessibility_prefs;
-/// Issue #1360: Windows 向けタスクバー進捗実装（`ITaskbarList3`）。`device/app_badge.rs` の windows 経路から呼ばれる。
+/// Issue #1360: Windows 向けタスクバーのオーバーレイアイコン実装（`ITaskbarList3::SetOverlayIcon`）。`device/app_badge.rs` の windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_app_badge;
