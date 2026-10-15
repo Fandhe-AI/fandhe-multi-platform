@@ -38,13 +38,13 @@
     },
     "windows": {
       "status": "done",
-      "api": "`ShellExecuteW` で `mailto:` を開く（Win32 desktop）。SMS は対象外（#31）",
+      "api": "`ShellExecuteW` で `mailto:` / `sms:` を開く（Win32 desktop）",
       "perm": "なし",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew",
-      "note": "結果は `HandedOff`（`> 32`。開いたかは分からない）と `NoHandler`（`SE_ERR_NOASSOC`）。SMS は標準手段が無く `Unsupported`。守る範囲 / 守らない範囲は macOS と同じ。既知の天井: 関連付けが無いと「アプリを選ぶ」が出て `NoHandler` にならないことがある、URL は 2083 文字まで。実機で確認する（#34）",
+      "note": "結果は `HandedOff`（`> 32`。開いたかは分からない）と `NoHandler`（`SE_ERR_NOASSOC`）。`sms:` は OS が同梱せず、ハンドラを登録したアプリ（スマートフォン連携など）がある時だけ開く（無ければ `NoHandler`）。WinRT の `ChatMessageManager` は制限付き capability が要るため採らない。守る範囲 / 守らない範囲は macOS と同じ。既知の天井: 関連付けが無いと「アプリを選ぶ」が出て `NoHandler` にならないことがある、宛先が空の `sms:` をハンドラが受けるか不明、URL は 2083 文字まで。実機で確認する（#34）",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#34）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_compose_mail_sms.rs + crates/fandhe-device/src/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs、Issue #1384"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_compose_mail_sms.rs + crates/fandhe-device/src/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs、Issue #1384、Issue #31"
     },
     "web": {
       "status": "done",

@@ -1,7 +1,7 @@
 //! メール・SMS の作成画面を OS で開く機能の抽象（Phase 11 の拡充ループ、親 #1142、Issue #1384）。
 //!
 //! 範囲は「宛先・件名・本文を渡して OS の作成画面を開く」ことだけ。添付（#1381）・CC / BCC・
-//! 複数宛先（#1382）・Windows の SMS（#1380）は扱わない。検証の SSOT は
+//! 複数宛先（#1382）は扱わない。検証の SSOT は
 //! [`ComposeRequest::mail`] / [`ComposeRequest::sms`]（これ以外では要求を作れない）で、
 //! macOS・Windows・Web が共用する URL の組み立ても [`ComposeRequest::to_url`] に置く。
 //! iOS / Android は URL を使わず OS の作成画面（MessageUI / Intent）へ値を直接渡す。
@@ -23,7 +23,7 @@
 //! | 状況 | 返す値 |
 //! |---|---|
 //! | 入力不正 | `InvalidInput("compose to" / "compose subject" / "compose body")` |
-//! | 非対応（Windows の SMS・Linux・Web ほか） | `Unsupported("compose")` |
+//! | 非対応（Linux・Web ほか） | `Unsupported("compose")` |
 //! | 作成画面を出せない（ウィンドウ・NSURL 生成失敗など） | `Internal("compose ...")` |
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
@@ -38,7 +38,7 @@
 //! 既知の天井: 宛先は 1 件。Windows の `mailto:` URL は 2083 文字が上限（件名 200・本文 1000 文字
 //! の上限内でも、日本語は 1 文字 9 バイトに膨らむため超えうる。超えたら OS の失敗として
 //! `Internal` に倒れる）。宛先が空の `sms:?body=...` は RFC 5724 の文法外で、Messages が受けるかは
-//! 実機確認（#1383）で確かめる。固定タイムアウトは掛けない。宛先・件名・本文・URL はログへ出さない
+//! 実機確認（#1383、Windows は #34）で確かめる。固定タイムアウトは掛けない。宛先・件名・本文・URL はログへ出さない
 //! （security.md A09）。
 
 use crate::DeviceError;
