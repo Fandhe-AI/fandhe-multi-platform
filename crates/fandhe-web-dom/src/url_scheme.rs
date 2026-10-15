@@ -12,7 +12,7 @@
 //!
 //! URL・例外の中身は `console` へ出さない（security.md A09）。
 
-use fandhe_core::screens::url_scheme_show::RegisterFailure;
+use fandhe_core::screens::url_scheme_show::{ActionFailure, ActionOutcome};
 
 /// 登録時に付ける画面指定とクエリ。`%s` はブラウザが URL エンコードして埋める。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -33,17 +33,17 @@ pub(crate) fn classify_register(
     has_fn: bool,
     secure: bool,
     threw: bool,
-) -> Result<(), RegisterFailure> {
+) -> Result<ActionOutcome, ActionFailure> {
     if !secure {
-        return Err(RegisterFailure::Failed(INSECURE.to_string()));
+        return Err(ActionFailure::Failed(INSECURE.to_string()));
     }
     if !has_fn {
-        return Err(RegisterFailure::Unsupported);
+        return Err(ActionFailure::Unsupported);
     }
     if threw {
-        return Err(RegisterFailure::Failed(THREW.to_string()));
+        return Err(ActionFailure::Failed(THREW.to_string()));
     }
-    Ok(())
+    Ok(ActionOutcome::AwaitingConfirmation)
 }
 
 /// 自オリジン + 現在のパスからハンドラ URL を組み立てる（外部入力は混ぜない）。
@@ -84,7 +84,8 @@ mod web {
     use std::sync::Once;
 
     use fandhe_core::screens::url_scheme_show::{
-        apply_snapshot, finish_register, take_register_request, RegisterFailure, UrlSchemeShowState,
+        apply_snapshot, finish_action, mark_in_flight, take_request, Action, ActionFailure,
+        ActionOutcome, UrlSchemeShowState,
     };
     use fandhe_device::url_scheme::{UrlInbox, WEB_SCHEME};
     use js_sys::{Function, Reflect};
@@ -113,7 +114,7 @@ mod web {
         });
     }
 
-    fn try_register() -> Result<(), RegisterFailure> {
+    fn try_register() -> Result<ActionOutcome, ActionFailure> {
         let Some(window) = web_sys::window() else {
             return classify_register(false, false, false);
         };
@@ -158,9 +159,15 @@ mod web {
                 );
             });
         }
-        if take_register_request(state) {
-            let result = try_register();
-            applier.apply(move |s| finish_register(s, result));
+        if let Some(req) = take_request(state) {
+            // 反映前に effect が再実行されても同じ要求を二重に処理しない（Windows と同じ）。
+            applier.apply(mark_in_flight);
+            let result = match req.action {
+                Action::Register => try_register(),
+                // Web に解除 API は無い。届いても成功に畳まない。
+                Action::Unregister => Err(ActionFailure::Unsupported),
+            };
+            applier.apply(move |s| finish_action(s, req.generation, req.action, result));
         }
     }
 }
@@ -176,17 +183,20 @@ mod tests {
     fn classify_covers_four_cases() {
         assert_eq!(
             classify_register(false, true, false),
-            Err(RegisterFailure::Unsupported)
+            Err(ActionFailure::Unsupported)
         );
         assert!(matches!(
             classify_register(false, false, false),
-            Err(RegisterFailure::Failed(_))
+            Err(ActionFailure::Failed(_))
         ));
         assert!(matches!(
             classify_register(true, true, true),
-            Err(RegisterFailure::Failed(_))
+            Err(ActionFailure::Failed(_))
         ));
-        assert_eq!(classify_register(true, true, false), Ok(()));
+        assert_eq!(
+            classify_register(true, true, false),
+            Ok(ActionOutcome::AwaitingConfirmation)
+        );
     }
 
     #[test]

@@ -124,8 +124,7 @@ use fandhe_core::screens::tsv_import::{
 };
 use fandhe_core::screens::tts_speak::{current_screen as current_tts_screen, TtsSpeakState};
 use fandhe_core::screens::url_scheme_show::{
-    register_error_text, register_status_text, request_register, url_scheme_show_screen,
-    UrlSchemeShowState, REGISTER_BUTTON_ID,
+    register, url_scheme_show_screen, UrlSchemeShowState, REGISTER_BUTTON_ID,
 };
 use fandhe_core::screens::wake_lock_toggle::{
     current_screen as current_wake_lock_toggle_screen, turn_off as wake_lock_turn_off,
@@ -884,15 +883,12 @@ pub fn mount_haptics_tap_screen(root_id: &str) -> Result<(), JsValue> {
 
 /// `root_id` が指す要素へ型サンプル「カスタム URL scheme」（親 #1116、Issue #1219）を
 /// マウントする検証専用エントリポイント。登録ボタンは Web だけに必要なためここで足す
-/// （core の画面は他 OS と共用）。クエリ `url` の受信は effect が読み込み時に 1 回行う。
+/// （core の画面と登録 UI の状態は他 OS と共用。結果の文言は core の画面が出す）。クエリ `url` の受信は effect が読み込み時に 1 回行う。
 #[wasm_bindgen]
 pub fn mount_url_scheme_show_screen(root_id: &str) -> Result<(), JsValue> {
     let root = root_element(root_id)?;
 
-    let screen = url_scheme_show_screen()
-        .button(REGISTER_BUTTON_ID, "web+fandhe を登録", request_register)
-        .dynamic_text(register_status_text)
-        .error_text(register_error_text);
+    let screen = url_scheme_show_screen().button(REGISTER_BUTTON_ID, "web+fandhe を登録", register);
     super::mount::mount_with_effect(
         root,
         screen,

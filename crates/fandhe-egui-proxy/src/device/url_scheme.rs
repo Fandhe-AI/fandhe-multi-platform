@@ -35,7 +35,8 @@ use fandhe_core::screens::url_scheme_show::{
 };
 #[cfg(any(target_os = "windows", test))]
 use fandhe_core::screens::url_scheme_show::{
-    finish_action, mark_in_flight, set_registrable, take_request, Action,
+    finish_action, mark_in_flight, set_registrable, take_request, Action, ActionFailure,
+    ActionOutcome,
 };
 #[cfg(any(
     not(any(
@@ -103,7 +104,8 @@ fn drive_registration(
             Action::Register => (reg.register)(),
             Action::Unregister => (reg.unregister)(),
         }
-        .map_err(|e| e.to_string());
+        .map(|()| ActionOutcome::Done)
+        .map_err(|e| ActionFailure::Failed(format!("失敗しました: {e}")));
         let _ = sender.send(Box::new(move |s: &mut UrlSchemeShowState| {
             finish_action(s, request.generation, request.action, result);
         }));
