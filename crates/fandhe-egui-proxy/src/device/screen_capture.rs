@@ -15,7 +15,7 @@
 //! - macOS: `apple_screen_capture.rs` + `apple/fandhe_apple_screen_capture.m`（#1335、実装済み）
 //! - iOS: `apple_screen_capture.rs` + `apple/fandhe_apple_screen_capture.m` の ReplayKit 側（#1336、実装済み）
 //! - Android: `android_screen_capture.rs` + `ScreenCaptureHelper.java` / `ScreenCaptureService.java`（#1337、実装済み）
-//! - Windows: `windows_screen_capture.rs` のスタブ（#1339 は not planned）
+//! - Windows: `windows_screen_capture.rs`（Issue #26、`Windows.Graphics.Capture` + `MediaTranscoder`、実装済み）
 //!
 //! 結果コード表（ネイティブ → [`error_from_code`]）は `.m` ファイル冒頭と同じ。
 
@@ -78,6 +78,31 @@ pub(crate) fn error_from_code(code: i32) -> DeviceError {
         6 => DeviceError::Unsupported("screen_capture"),
         _ => DeviceError::Internal("screen_capture"),
     }
+}
+
+/// Windows の `HRESULT` → [`DeviceError`] の写像。`E_ACCESSDENIED` だけ権限拒否、
+/// それ以外は `stage` の固定ラベルで `Internal` に畳む（生の HRESULT は出さない、
+/// security.md A09）。Windows 限定モジュールから呼ばれるが、ホストの `cargo test` で
+/// 固定するため `cfg` は付けない（`mic_record::error_from_hresult` と同じ方針）。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(crate) fn error_from_hresult(code: i32, stage: &'static str) -> DeviceError {
+    const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
+    if code == E_ACCESSDENIED {
+        DeviceError::PermissionDenied("screen_capture")
+    } else {
+        DeviceError::Internal(stage)
+    }
+}
+
+/// 録画対象のサイズ → H.264 エンコーダへ渡す偶数サイズ。0 以下は `Internal`、
+/// 奇数は 1 つ切り下げる（4:2:0 は幅・高さが偶数でないと受け付けない）。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(crate) fn even_capture_size(width: i32, height: i32) -> Result<(u32, u32), DeviceError> {
+    let (w, h) = (width & !1, height & !1);
+    if w <= 0 || h <= 0 {
+        return Err(DeviceError::Internal("screen_capture size"));
+    }
+    Ok((w as u32, h as u32))
 }
 
 /// OS からの結果 → 状態機械へ渡す形。キャンセルと非対応は失敗文言に畳まない
@@ -318,6 +343,26 @@ pub(crate) fn reset_pending_tracking() {
 mod tests {
     use super::*;
     use fandhe_device::screen_capture::build_capture_result;
+
+    #[test]
+    fn hresult_access_denied_is_permission_denied() {
+        assert!(matches!(
+            error_from_hresult(0x8007_0005_u32 as i32, "x"),
+            DeviceError::PermissionDenied("screen_capture")
+        ));
+        assert!(matches!(
+            error_from_hresult(0x8000_4005_u32 as i32, "stage"),
+            DeviceError::Internal("stage")
+        ));
+    }
+
+    #[test]
+    fn even_size_rounds_down_and_rejects_empty() {
+        assert_eq!(even_capture_size(1921, 1081).unwrap(), (1920, 1080));
+        assert!(even_capture_size(1, 1080).is_err());
+        assert!(even_capture_size(0, 0).is_err());
+        assert!(even_capture_size(-2, 100).is_err());
+    }
 
     #[test]
     fn error_from_code_maps_table() {

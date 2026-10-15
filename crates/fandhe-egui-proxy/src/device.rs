@@ -636,10 +636,9 @@ pub mod windows_photo_library;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_power_state;
-/// Issue #1335: Windows 向け画面録画のスタブ（#1339 は not planned）。`device/screen_capture.rs`
-/// の Windows 経路から使われる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+/// Issue #26: Windows 向け画面録画実装（`Windows.Graphics.Capture` + `MediaTranscoder`）。
+/// `device/screen_capture.rs` の Windows 経路から使われる。
+#[cfg(target_os = "windows")]
 pub mod windows_screen_capture;
 /// Issue #1278: Windows 向け画面スリープ抑止実装（Win32 `SetThreadExecutionState`）。
 /// `device/screen_wake_lock.rs` の Windows 経路から呼ばれる。

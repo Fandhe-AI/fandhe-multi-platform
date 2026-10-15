@@ -1,8 +1,9 @@
 //! Phase 11 の拡充ループ（親 #1135、Issue #1335）: 画面の録画・キャプチャの抽象と契約。
 //!
 //! 録画の開始・停止（macOS の ScreenCaptureKit、iOS の ReplayKit、Android の
-//! MediaProjection、Web の getDisplayMedia）はいずれも OS 側の同意 UI と完了が非同期に届く
-//! ため、`mic_record` と同じ pull 型で扱う。`fandhe-egui-proxy` 側の `RequestSlot` /
+//! MediaProjection、Windows の Graphics.Capture + MediaTranscoder、Web の
+//! getDisplayMedia）はいずれも OS 側の同意 UI と完了が非同期に届くため、`mic_record` と同じ pull 型で扱う。
+//! `fandhe-egui-proxy` 側の `RequestSlot` /
 //! `poll_and_finish` が `fandhe_core::screens::screen_capture` の状態機械へ直接書き戻し、
 //! 本トレイトは「依頼の受理だけを返すエンジン契約」としてのみ存在する。
 //!
@@ -72,7 +73,7 @@ pub trait ScreenCapturer: Send + Sync {
     fn stop(&self, request_id: u64) -> Result<(), DeviceError>;
 }
 
-/// 対応不可の環境（Linux、実装前の OS スタブ）。常に `Unsupported("screen_capture")`。
+/// 対応不可の環境（Linux 等）。常に `Unsupported("screen_capture")`。
 pub struct UnsupportedScreenCapturer;
 
 impl ScreenCapturer for UnsupportedScreenCapturer {
