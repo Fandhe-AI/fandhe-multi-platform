@@ -13,7 +13,7 @@ import androidx.lifecycle.Lifecycle;
 // で契約の結果へ写像する）。
 //
 // 公式 intents-common の「Compose an email / SMS」に従い、どちらも `ACTION_SENDTO`。
-// メールは `mailto:` + EXTRA_EMAIL/SUBJECT/TEXT、SMS は `smsto:`（宛先は fromParts で符号化）+ `sms_body`。
+// メールは `mailto:` + EXTRA_EMAIL/CC/BCC/SUBJECT/TEXT（宛先は `\n` 連結で受け、配列へ戻す）、SMS は `smsto:`（宛先は fromParts で符号化）+ `sms_body`。
 // URL は組み立てず値は extra で渡すので、`&` `?` `#` によるパラメータ注入の経路がない。
 // `<queries>` と `SEND_SMS` は宣言しない: startActivity は package visibility を要さず
 // （ActivityNotFoundException を扱う）、作成画面を開くだけなら送信権限は不要。
@@ -44,12 +44,19 @@ final class ComposeHelper {
     }
 
     // JNI スレッドから呼ばれる。
-    void compose(long id, int kind, String to, String subject, String body) {
+    void compose(long id, int kind, String to, String cc, String bcc, String subject,
+            String body) {
         request.track(id);
-        activity.runOnUiThread(() -> start(id, kind, to, subject, body));
+        activity.runOnUiThread(() -> start(id, kind, to, cc, bcc, subject, body));
     }
 
-    private void start(long id, int kind, String to, String subject, String body) {
+    // `\n` 連結を配列へ戻す。空文字列は空配列（"".split は [""] を返すため）。
+    static String[] split(String joined) {
+        return joined.isEmpty() ? new String[0] : joined.split("\n");
+    }
+
+    private void start(long id, int kind, String to, String cc, String bcc, String subject,
+            String body) {
         // 差し替え済みの旧要求は結果を返さず捨てる。
         if (!request.complete(id)) {
             return;
@@ -62,9 +69,15 @@ final class ComposeHelper {
         Intent intent;
         if (kind == KIND_MAIL) {
             intent = new Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"))
-                    .putExtra(Intent.EXTRA_EMAIL, new String[] {to})
+                    .putExtra(Intent.EXTRA_EMAIL, split(to))
                     .putExtra(Intent.EXTRA_SUBJECT, subject)
                     .putExtra(Intent.EXTRA_TEXT, body);
+            if (!cc.isEmpty()) {
+                intent.putExtra(Intent.EXTRA_CC, split(cc));
+            }
+            if (!bcc.isEmpty()) {
+                intent.putExtra(Intent.EXTRA_BCC, split(bcc));
+            }
         } else if (kind == KIND_SMS) {
             intent = new Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", to, null))
                     .putExtra("sms_body", body);

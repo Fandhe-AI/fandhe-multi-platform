@@ -40,8 +40,13 @@ const NAVIGATE_FAILED: &str = "ブラウザが作成画面への遷移を拒否�
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, DeviceError> {
     match view.target {
-        ComposeTarget::Mail => ComposeRequest::mail(&view.to, &view.subject, &view.body),
-        ComposeTarget::Sms => ComposeRequest::sms(&view.to, &view.body),
+        ComposeTarget::Mail => {
+            ComposeRequest::mail(&view.to, &view.cc, &view.bcc, &view.subject, &view.body)
+        }
+        ComposeTarget::Sms if view.to.len() > 1 => Err(DeviceError::InvalidInput("compose to")),
+        ComposeTarget::Sms => {
+            ComposeRequest::sms(view.to.first().map_or("", String::as_str), &view.body)
+        }
     }
 }
 
@@ -51,6 +56,8 @@ fn invalid_failure(e: DeviceError) -> ComposeFailure {
     ComposeFailure::Invalid(
         match e {
             DeviceError::InvalidInput("compose to") => "宛先",
+            DeviceError::InvalidInput("compose cc") => "CC",
+            DeviceError::InvalidInput("compose bcc") => "BCC",
             DeviceError::InvalidInput("compose subject") => "件名",
             DeviceError::InvalidInput("compose body") => "本文",
             _ => "入力",
@@ -150,9 +157,13 @@ mod tests {
     #[test]
     fn injection_is_invalid_not_url() {
         let mut v = view(compose_mail);
-        v.to = "a@example.invalid?bcc=x@example.invalid".to_string();
+        v.to = vec!["a@example.invalid?bcc=x@example.invalid".to_string()];
         let e = build_request(&v).unwrap_err();
         assert_eq!(invalid_failure(e), ComposeFailure::Invalid("宛先".into()));
+        let mut v = view(compose_mail);
+        v.cc = vec!["a@example.invalid&bcc=x@example.invalid".to_string()];
+        let e = build_request(&v).unwrap_err();
+        assert_eq!(invalid_failure(e), ComposeFailure::Invalid("CC".into()));
         let mut v = view(compose_mail);
         v.subject = "a\r\nBcc: x".to_string();
         let e = build_request(&v).unwrap_err();

@@ -1,7 +1,7 @@
 //! メール・SMS の作成画面を OS で開く機能の抽象（Phase 11 の拡充ループ、親 #1142、Issue #1384）。
 //!
-//! 範囲は「宛先・件名・本文を渡して OS の作成画面を開く」ことだけ。添付（#1381）・CC / BCC・
-//! 複数宛先（#1382）は扱わない。検証の SSOT は
+//! 範囲は「宛先・件名・本文を渡して OS の作成画面を開く」ことだけ。メールは To（複数）・CC・BCC を
+//! 渡せる（Issue #33）。添付（#1381）・SMS の複数宛先は扱わない。検証の SSOT は
 //! [`ComposeRequest::mail`] / [`ComposeRequest::sms`]（これ以外では要求を作れない）で、
 //! macOS・Windows・Web が共用する URL の組み立ても [`ComposeRequest::to_url`] に置く。
 //! iOS / Android は URL を使わず OS の作成画面（MessageUI / Intent）へ値を直接渡す。
@@ -22,9 +22,22 @@
 //!
 //! | 状況 | 返す値 |
 //! |---|---|
-//! | 入力不正 | `InvalidInput("compose to" / "compose subject" / "compose body")` |
+//! | 入力不正 | `InvalidInput("compose to" / "compose cc" / "compose bcc" / "compose subject" / "compose body")` |
 //! | 非対応（Linux・Web ほか） | `Unsupported("compose")` |
 //! | 作成画面を出せない（ウィンドウ・NSURL 生成失敗など） | `Internal("compose ...")` |
+//!
+//! # 宛先の配列（To / CC / BCC）
+//!
+//! メールの To は 1〜10 件、CC と BCC は各 0〜10 件。1 件ずつ同じ規則で検査し、1 件でも不正、または
+//! 件数が範囲外なら、そのフィールドのエラー（`compose to` / `compose cc` / `compose bcc`）で拒否する
+//! （黙って切り詰めない）。宛先に `,` `;` `&` `?` `\n` などの区切りは現れないので、区切りによる
+//! 宛先・パラメータ・ヘッダの差し込みは起きない。SMS の宛先は従来どおり 0〜1 件。
+//!
+//! - macOS・Windows・Web: `mailto:{to,to}?cc=..&bcc=..&subject=..&body=..`。宛先は 1 件ずつ
+//!   percent-encode し、リテラルの `,` で連結する（RFC 6068）。CC / BCC が空ならパラメータを出さない
+//! - iOS・Android: URL を組み立てず配列で渡す。FFI / JNI の境界では各リストを `\n` で連結した
+//!   1 本の文字列で渡し、受け側で配列に戻す（`\n` は検証で必ず拒否されるため宛先の中に現れない。
+//!   空文字列は空配列）
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
 //!
@@ -35,7 +48,9 @@
 //! 守らない: 複数プロセスからの同時操作、作成画面を開いた後に利用者が何をしたか
 //! （`HandedOff` では確認できない）、既定のメールアプリ未設定時の OS 側の挙動の差。
 //!
-//! 既知の天井: 宛先は 1 件。Windows の `mailto:` URL は 2083 文字が上限（件名 200・本文 1000 文字
+//! 既知の天井: Windows の旧 Outlook は宛先の `;` 区切りを期待する場合があり、実機で確かめる。
+//! Android の一部メールアプリは `ACTION_SENDTO` の `EXTRA_CC` / `EXTRA_BCC` を無視しうる。
+//! 宛先が増えるほど URL は長くなる。Windows の `mailto:` URL は 2083 文字が上限（件名 200・本文 1000 文字
 //! の上限内でも、日本語は 1 文字 9 バイトに膨らむため超えうる。超えたら OS の失敗として
 //! `Internal` に倒れる）。宛先が空の `sms:?body=...` は RFC 5724 の文法外で、Messages が受けるかは
 //! 実機確認（#1383、Windows は #34）で確かめる。固定タイムアウトは掛けない。宛先・件名・本文・URL はログへ出さない
@@ -70,17 +85,23 @@ pub enum ComposeOutcome {
 const MAIL_TO_MAX_BYTES: usize = 254;
 const SUBJECT_MAX_CHARS: usize = 200;
 const BODY_MAX_CHARS: usize = 1000;
+/// To / CC / BCC それぞれの上限件数。
+const RECIPIENTS_MAX_PER_FIELD: usize = 10;
 
 /// 検査済みの作成要求。[`ComposeRequest::mail`] / [`ComposeRequest::sms`] 以外では作れない。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComposeRequest {
     kind: ComposeKind,
-    to: String,
+    to: Vec<String>,
+    cc: Vec<String>,
+    bcc: Vec<String>,
     subject: String,
     body: String,
 }
 
 const INVALID_TO: DeviceError = DeviceError::InvalidInput("compose to");
+const INVALID_CC: DeviceError = DeviceError::InvalidInput("compose cc");
+const INVALID_BCC: DeviceError = DeviceError::InvalidInput("compose bcc");
 const INVALID_SUBJECT: DeviceError = DeviceError::InvalidInput("compose subject");
 const INVALID_BODY: DeviceError = DeviceError::InvalidInput("compose body");
 
@@ -95,6 +116,24 @@ fn valid_mail_to(to: &str) -> bool {
         && !to
             .chars()
             .any(|c| c.is_control() || c.is_whitespace() || "<>\",;?&#%".contains(c))
+}
+
+/// 件数が `min..=RECIPIENTS_MAX_PER_FIELD` で、全件が [`valid_mail_to`] を満たす。
+fn valid_recipients<S: AsRef<str>>(list: &[S], min: usize) -> bool {
+    (min..=RECIPIENTS_MAX_PER_FIELD).contains(&list.len())
+        && list.iter().all(|a| valid_mail_to(a.as_ref()))
+}
+
+fn owned<S: AsRef<str>>(list: &[S]) -> Vec<String> {
+    list.iter().map(|s| s.as_ref().to_string()).collect()
+}
+
+/// 宛先を 1 件ずつ encode し、リテラルの `,` で連結する（RFC 6068）。
+fn join_encoded(list: &[String]) -> String {
+    list.iter()
+        .map(|a| percent_encode(a, true))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn valid_sms_to(to: &str) -> bool {
@@ -132,12 +171,24 @@ fn percent_encode(s: &str, keep_at: bool) -> String {
 }
 
 impl ComposeRequest {
-    /// メール要求。宛先は 1 件（`@` がちょうど 1 つ、空白・`< > " , ; ? & # %` と制御文字なし、
-    /// 254 バイト以下）、件名は 200 文字以下・制御文字なし、本文は 1000 文字以下
+    /// メール要求。宛先は To 1〜10 件・CC / BCC 各 0〜10 件で、1 件ごとに `@` がちょうど 1 つ、
+    /// 空白・`< > " , ; ? & # %` と制御文字なし、254 バイト以下。件名は 200 文字以下・制御文字なし、本文は 1000 文字以下
     /// （改行は `\n` / `\r\n` のみ）。trim はしない。
-    pub fn mail(to: &str, subject: &str, body: &str) -> Result<Self, DeviceError> {
-        if !valid_mail_to(to) {
+    pub fn mail<S: AsRef<str>>(
+        to: &[S],
+        cc: &[S],
+        bcc: &[S],
+        subject: &str,
+        body: &str,
+    ) -> Result<Self, DeviceError> {
+        if !valid_recipients(to, 1) {
             return Err(INVALID_TO);
+        }
+        if !valid_recipients(cc, 0) {
+            return Err(INVALID_CC);
+        }
+        if !valid_recipients(bcc, 0) {
+            return Err(INVALID_BCC);
         }
         if !valid_subject(subject) {
             return Err(INVALID_SUBJECT);
@@ -147,7 +198,9 @@ impl ComposeRequest {
         }
         Ok(Self {
             kind: ComposeKind::Mail,
-            to: to.to_string(),
+            to: owned(to),
+            cc: owned(cc),
+            bcc: owned(bcc),
             subject: subject.to_string(),
             body: body.to_string(),
         })
@@ -163,7 +216,13 @@ impl ComposeRequest {
         }
         Ok(Self {
             kind: ComposeKind::Sms,
-            to: to.to_string(),
+            to: if to.is_empty() {
+                Vec::new()
+            } else {
+                vec![to.to_string()]
+            },
+            cc: Vec::new(),
+            bcc: Vec::new(),
             subject: String::new(),
             body: body.to_string(),
         })
@@ -173,9 +232,17 @@ impl ComposeRequest {
     pub fn kind(&self) -> ComposeKind {
         self.kind
     }
-    /// 宛先（SMS は空もありうる）。
-    pub fn to(&self) -> &str {
+    /// 宛先（SMS は 0〜1 件）。
+    pub fn to(&self) -> &[String] {
         &self.to
+    }
+    /// CC（SMS は常に空）。
+    pub fn cc(&self) -> &[String] {
+        &self.cc
+    }
+    /// BCC（SMS は常に空）。
+    pub fn bcc(&self) -> &[String] {
+        &self.bcc
     }
     /// 件名（SMS は空）。
     pub fn subject(&self) -> &str {
@@ -189,16 +256,24 @@ impl ComposeRequest {
     /// `mailto:`（RFC 6068）/ `sms:`（RFC 5724）の URL を組み立てる。macOS・Windows・Web が共用する。
     /// 本文の改行は `\r\n` に正規化してから encode する。
     pub fn to_url(&self) -> String {
-        let to = percent_encode(&self.to, true);
+        let to = join_encoded(&self.to);
         let body = percent_encode(
             &self.body.replace("\r\n", "\n").replace('\n', "\r\n"),
             false,
         );
         match self.kind {
-            ComposeKind::Mail => format!(
-                "mailto:{to}?subject={}&body={body}",
-                percent_encode(&self.subject, false)
-            ),
+            ComposeKind::Mail => {
+                let mut params = String::new();
+                for (name, list) in [("cc", &self.cc), ("bcc", &self.bcc)] {
+                    if !list.is_empty() {
+                        params.push_str(&format!("{name}={}&", join_encoded(list)));
+                    }
+                }
+                format!(
+                    "mailto:{to}?{params}subject={}&body={body}",
+                    percent_encode(&self.subject, false)
+                )
+            }
             ComposeKind::Sms => format!("sms:{to}?body={body}"),
         }
     }
@@ -243,30 +318,68 @@ mod tests {
         ] {
             assert!(
                 matches!(
-                    ComposeRequest::mail(to, "s", "b"),
+                    ComposeRequest::mail(&[to], &[], &[], "s", "b"),
                     Err(DeviceError::InvalidInput("compose to"))
                 ),
                 "{to:?}"
             );
+            assert!(
+                matches!(
+                    ComposeRequest::mail(&["a@b.c"], &[to], &[], "s", "b"),
+                    Err(DeviceError::InvalidInput("compose cc"))
+                ),
+                "cc {to:?}"
+            );
+            assert!(
+                matches!(
+                    ComposeRequest::mail(&["a@b.c"], &[], &[to], "s", "b"),
+                    Err(DeviceError::InvalidInput("compose bcc"))
+                ),
+                "bcc {to:?}"
+            );
         }
         let long = format!("{}@b.c", "a".repeat(MAIL_TO_MAX_BYTES - 3));
-        assert!(ComposeRequest::mail(&long, "s", "b").is_err());
-        assert!(ComposeRequest::mail("a@b.c", "s", "b").is_ok());
+        assert!(ComposeRequest::mail(&[long.as_str()], &[], &[], "s", "b").is_err());
+        assert!(ComposeRequest::mail(&["a@b.c"], &[], &[], "s", "b").is_ok());
+    }
+
+    #[test]
+    fn recipient_counts() {
+        let ten = ["a@b.c"; 10];
+        let eleven = ["a@b.c"; 11];
+        let none: [&str; 0] = [];
+        assert!(ComposeRequest::mail(&ten, &ten, &ten, "s", "b").is_ok());
+        assert!(matches!(
+            ComposeRequest::mail(&none, &none, &none, "s", "b"),
+            Err(DeviceError::InvalidInput("compose to"))
+        ));
+        assert!(matches!(
+            ComposeRequest::mail(&eleven, &none, &none, "s", "b"),
+            Err(DeviceError::InvalidInput("compose to"))
+        ));
+        assert!(matches!(
+            ComposeRequest::mail(&ten, &eleven, &none, "s", "b"),
+            Err(DeviceError::InvalidInput("compose cc"))
+        ));
+        assert!(matches!(
+            ComposeRequest::mail(&ten, &none, &eleven, "s", "b"),
+            Err(DeviceError::InvalidInput("compose bcc"))
+        ));
     }
 
     #[test]
     fn subject_and_body_rejections() {
         for s in ["x\r\nBcc: a@b.c", "x\ny", "x\0"] {
             assert!(matches!(
-                ComposeRequest::mail("a@b.c", s, "b"),
+                ComposeRequest::mail(&["a@b.c"], &[], &[], s, "b"),
                 Err(DeviceError::InvalidInput("compose subject"))
             ));
         }
-        assert!(ComposeRequest::mail("a@b.c", &"あ".repeat(200), "b").is_ok());
-        assert!(ComposeRequest::mail("a@b.c", &"あ".repeat(201), "b").is_err());
+        assert!(ComposeRequest::mail(&["a@b.c"], &[], &[], &"あ".repeat(200), "b").is_ok());
+        assert!(ComposeRequest::mail(&["a@b.c"], &[], &[], &"あ".repeat(201), "b").is_err());
         for b in ["a\rb", "a\0b", "a\u{7}b"] {
             assert!(matches!(
-                ComposeRequest::mail("a@b.c", "s", b),
+                ComposeRequest::mail(&["a@b.c"], &[], &[], "s", b),
                 Err(DeviceError::InvalidInput("compose body"))
             ));
         }
@@ -309,12 +422,23 @@ mod tests {
         assert_eq!(decode(&enc), raw);
         assert!(!enc.contains(['&', '=', '?', '#', ' ', '\n', '+']));
 
-        let req = ComposeRequest::mail("a@b.c", "S&T=1?#日本", "x\ny&z").unwrap();
+        let req = ComposeRequest::mail(&["a@b.c"], &[], &[], "S&T=1?#日本", "x\ny&z").unwrap();
         let url = req.to_url();
         assert!(url.starts_with("mailto:a@b.c?subject="));
         assert_eq!(url.matches('&').count(), 1);
         assert_eq!(url.matches('?').count(), 1);
         assert!(url.contains("body=x%0D%0Ay%26z"));
+        let multi = ComposeRequest::mail(&["a@b.c", "d@e.f"], &["g@h.i"], &["j@k.l"], "s", "b")
+            .unwrap()
+            .to_url();
+        assert_eq!(
+            multi,
+            "mailto:a@b.c,d@e.f?cc=g@h.i&bcc=j@k.l&subject=s&body=b"
+        );
+        assert_eq!(multi.matches('?').count(), 1);
+        assert_eq!(multi.matches('&').count(), 3);
+        let plain = ComposeRequest::mail(&["a@b.c"], &[], &[], "s", "b").unwrap();
+        assert_eq!(plain.to_url(), "mailto:a@b.c?subject=s&body=b");
         let sms = ComposeRequest::sms("", "a&b").unwrap().to_url();
         assert_eq!(sms, "sms:?body=a%26b");
     }
