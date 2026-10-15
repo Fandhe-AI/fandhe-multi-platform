@@ -266,10 +266,13 @@ struct Cleanup {
     pool: Direct3D11CaptureFramePool,
     item: GraphicsCaptureItem,
     closed_token: Option<i64>,
+    /// 失敗経路でもトランスコーダ側の再試行ループを止めるため、破棄時に立てる。
+    stopping: Arc<AtomicBool>,
 }
 
 impl Drop for Cleanup {
     fn drop(&mut self) {
+        self.stopping.store(true, Ordering::SeqCst);
         if let Some(t) = self.closed_token {
             let _ = self.item.RemoveClosed(t);
         }
@@ -302,11 +305,13 @@ fn record(
         },
     )
     .map_err(|e| hr(&e, "screen_capture pool"))?;
+    let stopping = Arc::new(AtomicBool::new(false));
     let mut cleanup = Cleanup {
         session: None,
         pool: pool.clone(),
         item: item.clone(),
         closed_token: None,
+        stopping: stopping.clone(),
     };
     let session = pool
         .CreateCaptureSession(&item)
@@ -321,7 +326,6 @@ fn record(
         }))
         .ok();
 
-    let stopping = Arc::new(AtomicBool::new(false));
     let source = build_source(&pool, &d3d, &ctx, &stopping, w, h)?;
 
     let stream = InMemoryRandomAccessStream::new().map_err(|e| hr(&e, "screen_capture stream"))?;
@@ -357,7 +361,10 @@ fn record(
                 Ok(())
             },
         ))
-        .map_err(|e| hr(&e, "screen_capture transcode"))?;
+        .map_err(|e| {
+            let _ = action.Cancel();
+            hr(&e, "screen_capture transcode")
+        })?;
     bridge::mark_started(request_id);
     let t0 = Instant::now();
 
