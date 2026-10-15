@@ -20,7 +20,7 @@
       "api": "`ACTION_SEND` + `EXTRA_STREAM`（`androidx.core.content.FileProvider` の content URI）+ `setSelector(ACTION_SENDTO mailto:)`",
       "perm": "なし",
       "url": "https://developer.android.com/reference/androidx/core/content/FileProvider",
-      "note": "メールに 1 件だけ。保存先は `cache/compose/` に最新 1 件（書き込み前に既存を消す）。書き込み失敗と `startActivity` の例外では即削除し、`HandedOff` では受け手が後から読むため残す（次回の添付要求と OS の cacheDir 掃除で消える）。FileProvider は exported=false・grantUriPermissions=true で、読み取り権限は Intent 単位のみ。新しい権限は足さない。既知の天井: 受け手がコピーする前に再度添付要求をすると前の添付が読めなくなる（最大 1 件・1 MiB）、一部のメールアプリは selector 経由の `EXTRA_STREAM` を無視しうる。SMS（MMS）は範囲外",
+      "note": "メールに 1 件だけ。保存先は `cache/compose/` 配下の要求ごとのディレクトリ。次回の添付要求時に 10 分より古いものだけを回収し、10 分以内の複数要求では複数件が残る。書き込み失敗と `startActivity` の例外では即削除し、`HandedOff` では受け手が後から読むため残す（10 分を過ぎた後の次回の添付要求と OS の cacheDir 掃除で消える）。FileProvider は exported=false・grantUriPermissions=true で、読み取り権限は Intent 単位のみ。新しい権限は足さない。既知の天井: 受け手が 10 分を超えて読まずに別の添付要求が来ると、その古い添付は読めなくなる（各 1 MiB 以下）、一部のメールアプリは selector 経由の `EXTRA_STREAM` を無視しうる。SMS（MMS）は範囲外",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち",
       "impl": "crates/fandhe-egui-proxy/src/device/android_compose_mail_sms.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/ComposeHelper.java + platforms/android/app/src/main/res/xml/compose_file_paths.xml + crates/fandhe-device/src/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs、Issue #32"
