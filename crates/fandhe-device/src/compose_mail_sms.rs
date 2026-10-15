@@ -49,7 +49,7 @@
 //! 出どころは画面側の固定値で、選択ファイルとの連携は扱わない。`mailto:` は添付を持てないため、
 //! [`ComposeRequest::to_url`] が `Unsupported("compose attachment")` を返し、添付を黙って落として
 //! 開くことはしない。iOS は `addAttachmentData`（一時ファイルなし）、Android は `FileProvider` の
-//! content URI（`cache/compose/` に最新 1 件だけ残す）で渡す。
+//! content URI（`cache/compose/` に要求ごとに残し、10 分超の古いものだけ回収する）で渡す。
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
 //!

@@ -35,9 +35,11 @@ import java.util.UUID;
 // （`FileProvider` の content URI）にし、`setSelector(ACTION_SENDTO mailto:)` でメールアプリに絞る。
 // 一時ファイルは `getCacheDir()/compose/<要求ごとの乱数>/<検証済みファイル名>` だけ（FileProvider の paths は
 // `compose/` 配下に限り、cache-path は配下ディレクトリも許可する）。同名でも URI が毎回異なる。
-// 書き込み前に `compose/` を空にするので残るのは最新 1 件。書き込み失敗と startActivity の例外では
-// その場で消し、HANDED_OFF では受け手が後から読むため残す（次回の添付要求と OS の cacheDir 掃除で消える）。
-// 既知の天井: 受け手がコピーする前に再度添付要求をすると前の添付が読めなくなる（最大 1 件・1 MiB）。
+// 書き込み前に `compose/` のうち 10 分より古い要求ディレクトリだけを回収し、直近の要求の添付は残す
+// （受け手が使用中の前回 URI を壊さない）。書き込み失敗と startActivity の例外では自要求のディレクトリ
+// だけをその場で消し、前回の添付には触れない。HANDED_OFF では受け手が後から読むため残す
+// （次回以降の添付要求の回収と OS の cacheDir 掃除で消える）。
+// 既知の天井: 受け手が 10 分を超えて読まずに別の添付要求が来ると、その古い添付は読めなくなる（各 1 MiB 以下）。
 // 一部のメールアプリは selector 経由の EXTRA_STREAM を無視しうる。読み取り権限は Intent 単位の
 // FLAG_GRANT_READ_URI_PERMISSION だけで渡す。
 // 宛先・件名・本文・添付・例外メッセージはログに出さない。
@@ -83,7 +85,10 @@ final class ComposeHelper {
         f.delete();
     }
 
-    // `compose/` の既存の添付を全部消してから、要求ごとの一意ディレクトリ `compose/<乱数>/` に 1 件書く。
+    // 受け手が読む猶予。これより古い要求ディレクトリだけを回収する（使用中の前回添付を壊さない）。
+    private static final long ATTACHMENT_TTL_MS = 10 * 60 * 1000L;
+
+    // `compose/` のうち猶予を過ぎた要求ディレクトリだけを消してから、要求ごとの一意ディレクトリ `compose/<乱数>/` に 1 件書く。
     // 同名添付でも URI が毎回異なるので、旧 URI の読み取り許可が新しい別の添付を指すことはない。
     // `name` は Rust 側で `[A-Za-z0-9._-]` に検証済みだが、正規化後も一意ディレクトリ直下にあることを確かめる（多重防御）。失敗は null。
     private File writeAttachment(byte[] data, String name) {
@@ -91,8 +96,12 @@ final class ComposeHelper {
         if (root.isDirectory()) {
             File[] old = root.listFiles();
             if (old != null) {
+                long limit = System.currentTimeMillis() - ATTACHMENT_TTL_MS;
                 for (File o : old) {
-                    deleteRecursive(o);
+                    // ディレクトリの更新時刻はファイルシステム上の値（経過時間の計測ではなく回収の目安）。
+                    if (o.lastModified() < limit) {
+                        deleteRecursive(o);
+                    }
                 }
             }
         }

@@ -7,7 +7,7 @@
 //! 写像 → `compose_mail_sms::bridge::deliver` が `SLOT` の id と照合して置く。
 //! 値は `ComposeRequest` の検証を通ったものだけを渡す（URL は組み立てない）。
 //! 添付（Issue #32、メールのみ）は長さ 0 の配列と空文字列が「なし」。ありのとき Java は
-//! `cache/compose/` に最新 1 件だけ書き、`FileProvider` の content URI で `ACTION_SEND` する。
+//! `cache/compose/` に要求ごとのディレクトリで書き（10 分超の古いものだけ回収）、`FileProvider` の content URI で `ACTION_SEND` する。
 //!
 //! 守る範囲: 1 プロセス内の要求順序・NoHandler / 非前景を成功に畳まないこと・Activity 再生成時の
 //! 旧要求の破棄。守らない範囲: 作成画面へ渡した後の送信可否（結果は `HandedOff` までしか言えない）。
