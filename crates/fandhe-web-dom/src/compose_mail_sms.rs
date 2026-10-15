@@ -29,7 +29,7 @@
 use fandhe_core::screens::compose_mail_sms::{
     ComposeFailure, ComposeRequestView, ComposeTarget, CoreOutcome,
 };
-use fandhe_device::compose_mail_sms::ComposeRequest;
+use fandhe_device::compose_mail_sms::{ComposeAttachment, ComposeRequest};
 use fandhe_device::DeviceError;
 
 /// 遷移拒否の固定文言（例外の内容は含めない）。
@@ -41,7 +41,16 @@ const NAVIGATE_FAILED: &str = "ブラウザが作成画面への遷移を拒否�
 fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, DeviceError> {
     match view.target {
         ComposeTarget::Mail => {
-            ComposeRequest::mail(&view.to, &view.cc, &view.bcc, &view.subject, &view.body)
+            let req =
+                ComposeRequest::mail(&view.to, &view.cc, &view.bcc, &view.subject, &view.body)?;
+            match &view.attachment {
+                Some(a) => req.with_attachment(ComposeAttachment::new(
+                    &a.file_name,
+                    &a.mime_type,
+                    &a.data,
+                )?),
+                None => Ok(req),
+            }
         }
         ComposeTarget::Sms if view.to.len() > 1 => Err(DeviceError::InvalidInput("compose to")),
         ComposeTarget::Sms => {
@@ -60,6 +69,7 @@ fn invalid_failure(e: DeviceError) -> ComposeFailure {
             DeviceError::InvalidInput("compose bcc") => "BCC",
             DeviceError::InvalidInput("compose subject") => "件名",
             DeviceError::InvalidInput("compose body") => "本文",
+            DeviceError::InvalidInput("compose attachment") => "添付",
             _ => "入力",
         }
         .to_string(),
@@ -117,9 +127,11 @@ mod web {
             Err(e) => Err(invalid_failure(e)),
             Ok(req) => match web_sys::window() {
                 None => Ok(CoreOutcome::Unsupported),
-                Some(w) => {
-                    outcome_from_navigate(w.location().set_href(&req.to_url()).map_err(|_| ()))
-                }
+                Some(w) => match req.to_url() {
+                    Ok(url) => outcome_from_navigate(w.location().set_href(&url).map_err(|_| ())),
+                    // 添付は mailto: で渡せない。落として開かず非対応にする。
+                    Err(_) => Ok(CoreOutcome::Unsupported),
+                },
             },
         };
         applier.apply(move |s| finish_compose(s, generation, result));
@@ -137,7 +149,7 @@ pub(crate) use web::release_mount;
 mod tests {
     use super::*;
     use fandhe_core::screens::compose_mail_sms::{
-        compose_mail, compose_sms, take_request, ComposeMailSmsState,
+        compose_mail, compose_mail_with_attachment, compose_sms, take_request, ComposeMailSmsState,
     };
 
     fn view(f: fn(&mut ComposeMailSmsState)) -> ComposeRequestView {
@@ -149,9 +161,20 @@ mod tests {
     #[test]
     fn fixed_values_build() {
         let m = build_request(&view(compose_mail)).unwrap();
-        assert!(m.to_url().starts_with("mailto:"));
+        assert!(m.to_url().unwrap().starts_with("mailto:"));
         let s = build_request(&view(compose_sms)).unwrap();
-        assert!(s.to_url().starts_with("sms:"));
+        assert!(s.to_url().unwrap().starts_with("sms:"));
+    }
+
+    #[test]
+    fn attachment_builds_but_has_no_url() {
+        let r = build_request(&view(compose_mail_with_attachment)).unwrap();
+        assert!(r.attachment().is_some());
+        // 遷移せず Unsupported にする根拠（mailto: は添付を持てない）。
+        assert!(matches!(
+            r.to_url(),
+            Err(DeviceError::Unsupported("compose attachment"))
+        ));
     }
 
     #[test]

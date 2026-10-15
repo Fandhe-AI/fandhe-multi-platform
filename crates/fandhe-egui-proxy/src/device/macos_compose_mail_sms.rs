@@ -4,6 +4,7 @@
 //! 明記する。`device/compose_mail_sms.rs` の macOS 経路から呼ばれ、契約は
 //! `fandhe_device::compose_mail_sms`。URL は `ComposeRequest::to_url`（scheme は `mailto:` /
 //! `sms:` 固定）で組み立て済みのものだけを渡す。
+//! 添付付きの要求は URL で渡せないため `to_url` が `Unsupported` を返し、ここで拒否する（Issue #32）。
 //!
 //! 結果コードの写像 [`outcome_from_code`] はホストでもテストできるようモジュールは
 //! `cfg(any(macos, test))`。
@@ -60,7 +61,7 @@ impl fandhe_device::compose_mail_sms::ComposeMailSms for MacComposeMailSms {
         &self,
         req: &fandhe_device::compose_mail_sms::ComposeRequest,
     ) -> Result<ComposeOutcome, DeviceError> {
-        outcome_from_code(ffi::open_url(&req.to_url()))
+        outcome_from_code(ffi::open_url(&req.to_url()?))
     }
 }
 

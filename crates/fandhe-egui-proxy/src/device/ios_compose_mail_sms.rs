@@ -10,7 +10,8 @@
 //! 4（コールバック直後に `request_repaint`）、5（main queue・`@autoreleasepool`）、
 //! 6（Failed・提示失敗・canSend false を成功に畳まない）、10（Cancelled は失敗にしない）。
 //! 守らない範囲: 作成画面を開いた後の利用者の操作、背景遷移中の作成画面の扱い（OS に任せる）。
-//! 宛先・件名・本文はログへ出さない。
+//! 添付（Issue #32）は一時ファイルを作らず `addAttachmentData:` へ NSData で渡す（契約表 9）。
+//! 宛先・件名・本文・添付はログへ出さない。
 
 use fandhe_device::compose_mail_sms::{ComposeKind, ComposeRequest};
 #[cfg(not(target_os = "ios"))]
@@ -38,6 +39,10 @@ unsafe extern "C" {
         bcc: *const std::os::raw::c_char,
         subject: *const std::os::raw::c_char,
         body: *const std::os::raw::c_char,
+        att_data: *const u8,
+        att_len: usize,
+        att_mime: *const std::os::raw::c_char,
+        att_name: *const std::os::raw::c_char,
     ) -> i32;
 }
 
@@ -59,8 +64,19 @@ pub(crate) fn begin_compose(request_id: u64, req: &ComposeRequest) -> Result<(),
     ) else {
         return Err(PRESENT);
     };
-    // SAFETY: 5 つの `CString` は呼び出しが返るまで生存する有効な NUL 終端文字列。`.m` 側は
-    // return 前に `NSString` へコピーするため、所有権は移らず返却後は参照されない。
+    // 添付は一時ファイルを作らず、バイト列・MIME・名前をそのまま渡す（添付なしは長さ 0・NULL）。
+    // MIME と名前は検証で NUL を含まないため通常は失敗しない。
+    let att = req.attachment();
+    let (Ok(att_mime), Ok(att_name)) = (
+        CString::new(att.map_or("", |a| a.mime_type())),
+        CString::new(att.map_or("", |a| a.file_name())),
+    ) else {
+        return Err(PRESENT);
+    };
+    let att_data = att.map_or(&[][..], |a| a.data());
+    // SAFETY: 7 つの `CString` と `att_data` のスライスは呼び出しが返るまで生存する有効な領域
+    // （`att_data` は `att_len` バイト、長さ 0 のとき `.m` は読まない）。`.m` 側は return 前に
+    // `NSString` / `NSData` へコピーするため、所有権は移らず返却後は参照されない。
     let code = unsafe {
         fandhe_ios_compose_mail_sms_present(
             request_id,
@@ -70,6 +86,10 @@ pub(crate) fn begin_compose(request_id: u64, req: &ComposeRequest) -> Result<(),
             bcc.as_ptr(),
             subject.as_ptr(),
             body.as_ptr(),
+            att_data.as_ptr(),
+            att_data.len(),
+            att_mime.as_ptr(),
+            att_name.as_ptr(),
         )
     };
     if code == 0 {

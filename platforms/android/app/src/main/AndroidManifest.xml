@@ -200,6 +200,20 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
+        <!-- Issue #32: メール添付の content URI を渡す FileProvider。exported=false のまま、
+             Intent 単位の一時読み取り許可（grantUriPermissions）だけで受け手に読ませる。公開する
+             パスは `cache/compose/` だけ（res/xml/compose_file_paths.xml）。新しい権限は足さない。
+             切り離し時に削除する。 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.compose"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/compose_file_paths" />
+        </provider>
+
         <!-- ホーム画面ウィジェット（Issue #1067）。APPWIDGET_UPDATE は system_server が
              明示コンポーネント宛てに送るため exported=false でも届く想定（他アプリからの
              任意 intent を受けない最小公開、security.md A05）。intent-filter はこの 1 つ

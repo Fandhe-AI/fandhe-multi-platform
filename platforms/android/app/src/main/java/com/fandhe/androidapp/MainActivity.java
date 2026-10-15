@@ -523,8 +523,9 @@ public class MainActivity extends GameActivity {
     private final ComposeHelper composeHelper = new ComposeHelper(this);
 
     void requestCompose(long requestId, int kind, String to, String cc, String bcc,
-            String subject, String body) {
-        composeHelper.compose(requestId, kind, to, cc, bcc, subject, body);
+            String subject, String body, byte[] attData, String attMime, String attName) {
+        composeHelper.compose(requestId, kind, to, cc, bcc, subject, body, attData, attMime,
+                attName);
     }
 
     // 画面録画（Issue #1337）。実装は `ScreenCaptureHelper` / `ScreenCaptureService`。

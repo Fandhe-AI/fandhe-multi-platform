@@ -32,6 +32,13 @@ pub const SMS_TO: &[&str] = &[];
 /// 固定の SMS 本文。
 pub const SMS_BODY: &str = "テスト & 確認\n2行目";
 
+/// 固定の添付ファイル名（Issue #32。出どころは固定値で、選択ファイルとの連携は扱わない）。
+pub const MAIL_ATTACHMENT_NAME: &str = "fandhe-sample.txt";
+/// 固定の添付の MIME type。
+pub const MAIL_ATTACHMENT_MIME: &str = "text/plain";
+/// 固定の添付の中身（ASCII のみ。charset の問題を避ける）。
+pub const MAIL_ATTACHMENT_DATA: &[u8] = b"fandhe sample attachment\n";
+
 /// 送信待ちに入ったときの案内（送信完了は言わない）。
 pub const QUEUED_STATUS: &str = "送信待ちに入りました（送信の完了は確認できません）";
 /// 下書き保存のときの案内。
@@ -54,6 +61,7 @@ const NOTE_TEXT: &str =
     "固定の宛先・件名・本文で OS の作成画面を開きます（送信は利用者が OS 側で行います）";
 const MAIL_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 const SMS_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
+const ATTACH_BUTTON_ID: WidgetId = WidgetId::from_raw(3);
 
 /// 作成画面の種類（`fandhe_device::compose_mail_sms::ComposeKind` に対応。写像は proxy 側）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,6 +110,17 @@ pub enum ComposeFailure {
     Failed(String),
 }
 
+/// 添付 1 件の未検査の値（検査は proxy 側の `ComposeAttachment::new`）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AttachmentView {
+    /// ファイル名。
+    pub file_name: String,
+    /// MIME type。
+    pub mime_type: String,
+    /// 中身。
+    pub data: Vec<u8>,
+}
+
 /// effect ドライバへ渡す要求。値は未検査で、検査は proxy 側（`ComposeRequest`）が行う。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComposeRequestView {
@@ -119,6 +138,8 @@ pub struct ComposeRequestView {
     pub subject: String,
     /// 本文。
     pub body: String,
+    /// 添付（メールのみ）。
+    pub attachment: Option<AttachmentView>,
 }
 
 /// 画面の状態。
@@ -128,6 +149,8 @@ pub struct ComposeMailSmsState {
     pub phase: ComposePhase,
     /// 直近に押された種類。
     pub target: Option<ComposeTarget>,
+    /// 直近の要求に添付を付けるか（メールのみ）。
+    pub attachment: bool,
     /// 直近の要求の世代番号。
     pub generation: u64,
     /// OS が判定した結果の案内（通常色）。
@@ -142,6 +165,7 @@ fn request(state: &mut ComposeMailSmsState, target: ComposeTarget) {
     }
     state.phase = ComposePhase::Requested;
     state.target = Some(target);
+    state.attachment = false;
     state.generation = state.generation.wrapping_add(1);
     state.status = String::new();
     state.error = String::new();
@@ -150,6 +174,15 @@ fn request(state: &mut ComposeMailSmsState, target: ComposeTarget) {
 /// 「メールを作成」ボタンのハンドラ。`Idle` 以外は二重要求防止のため no-op。
 pub fn compose_mail(state: &mut ComposeMailSmsState) {
     request(state, ComposeTarget::Mail);
+}
+
+/// 「添付付きでメールを作成」ボタンのハンドラ。`Idle` 以外は no-op。
+pub fn compose_mail_with_attachment(state: &mut ComposeMailSmsState) {
+    if state.phase != ComposePhase::Idle {
+        return;
+    }
+    request(state, ComposeTarget::Mail);
+    state.attachment = true;
 }
 
 /// 「SMS を作成」ボタンのハンドラ。`Idle` 以外は no-op。
@@ -182,6 +215,11 @@ pub fn take_request(state: &ComposeMailSmsState) -> Option<ComposeRequestView> {
         bcc,
         subject: subject.to_string(),
         body: body.to_string(),
+        attachment: (state.attachment && target == ComposeTarget::Mail).then(|| AttachmentView {
+            file_name: MAIL_ATTACHMENT_NAME.to_string(),
+            mime_type: MAIL_ATTACHMENT_MIME.to_string(),
+            data: MAIL_ATTACHMENT_DATA.to_vec(),
+        }),
     })
 }
 
@@ -234,6 +272,7 @@ pub fn current_screen(state: &ComposeMailSmsState) -> Screen<ComposeMailSmsState
         .text(format!("CC: {}", MAIL_CC.join(", ")))
         .text(format!("BCC: {}", MAIL_BCC.join(", ")))
         .text(format!("メール件名: {MAIL_SUBJECT}"))
+        .text(format!("添付: {MAIL_ATTACHMENT_NAME}"))
         .dynamic_text(status_text)
         .error_text(error_text);
     if state.phase != ComposePhase::Idle {
@@ -242,6 +281,11 @@ pub fn current_screen(state: &ComposeMailSmsState) -> Screen<ComposeMailSmsState
     screen
         .button(MAIL_BUTTON_ID, "メールを作成", compose_mail)
         .button(SMS_BUTTON_ID, "SMS を作成", compose_sms)
+        .button(
+            ATTACH_BUTTON_ID,
+            "添付付きでメールを作成",
+            compose_mail_with_attachment,
+        )
 }
 
 #[cfg(test)]
@@ -327,6 +371,27 @@ mod tests {
         assert!(take_request(&s).is_none());
         compose_mail(&mut s);
         assert_eq!(s.phase, ComposePhase::Composing);
+    }
+
+    #[test]
+    fn attachment_only_for_attach_button() {
+        let mut s = ComposeMailSmsState::default();
+        compose_mail_with_attachment(&mut s);
+        let a = take_request(&s).unwrap().attachment.unwrap();
+        assert_eq!(a.file_name, MAIL_ATTACHMENT_NAME);
+        assert_eq!(a.data, MAIL_ATTACHMENT_DATA);
+        // 処理中の二重押しは何も変えない。
+        mark_composing(&mut s);
+        compose_mail(&mut s);
+        compose_mail_with_attachment(&mut s);
+        assert!(s.attachment && s.phase == ComposePhase::Composing);
+        let g = s.generation;
+        finish_compose(&mut s, g, Ok(CoreOutcome::HandedOff));
+        compose_mail(&mut s);
+        assert!(take_request(&s).unwrap().attachment.is_none());
+        let mut t = ComposeMailSmsState::default();
+        compose_sms(&mut t);
+        assert!(take_request(&t).unwrap().attachment.is_none());
     }
 
     #[test]
