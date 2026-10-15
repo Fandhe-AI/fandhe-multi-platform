@@ -1,8 +1,10 @@
-//! Windows 向けメール作成画面の実装（Issue #1384）。`ShellExecuteW` で `mailto:` URL を開き、
-//! 既定のメールアプリの作成画面を出す。`device/compose_mail_sms.rs` の Windows 経路から呼ばれ、
+//! Windows 向けメール・SMS 作成画面の実装（Issue #1384・#31）。`ShellExecuteW` で `mailto:` /
+//! `sms:` URL を開き、既定のハンドラの作成画面を出す。`device/compose_mail_sms.rs` の Windows 経路から呼ばれ、
 //! 契約は `fandhe_device::compose_mail_sms`。渡すのは `ComposeRequest::to_url` が組み立てた
-//! `mailto:` URL だけで、scheme は固定。任意の scheme・パス・引数を渡す経路は作らない。
-//! SMS は標準手段が無く OS を呼ばず `Unsupported`（#1380）。
+//! `mailto:` / `sms:` URL の 2 種だけで、scheme は固定。任意の scheme・パス・引数を渡す経路は作らない。
+//! Windows 本体は `sms:` のハンドラを同梱しない。登録したアプリ（スマートフォン連携など）があれば
+//! 開き、無ければ `SE_ERR_NOASSOC` → `NoHandler`。WinRT の `ChatMessageManager` は制限付き
+//! capability とパッケージ ID が要るため採らない（#31）。
 //!
 //! 戻り値の写像は純関数 [`outcome_from_shell`] に置き、ホストでもテストできるよう
 //! モジュールは `cfg(any(windows, test))`。`unsafe` は `ShellExecuteW` の 1 呼び出しに閉じる。
@@ -12,6 +14,9 @@
 //! - 戻り値 `> 32` は「OS が受理した」だけで、メールアプリが開いたかは不明（`HandedOff`）
 //! - `mailto:` の関連付けが無いと、Windows 10 以降は「アプリを選ぶ」を出して `> 32` を返すことが
 //!   ある。`NoHandler` にならない場合があり、実機で確かめる（#1383）
+//! - `sms:` も同じく、関連付けが無くても「アプリを選ぶ」等で `> 32` が返り `NoHandler` にならない
+//!   ことがある。宛先が空の `sms:?body=` をハンドラが受けるかも実機で確かめる（#34）
+//!   （ponytail: 事前に `AssocQueryStringW` で調べれば `NoHandler` を確実にできる。必要になったら足す）
 //! - URL が 2083 文字を超える場合の挙動は OS 依存で、失敗は `Internal` に倒れる
 
 use fandhe_device::compose_mail_sms::ComposeOutcome;
@@ -40,11 +45,6 @@ impl fandhe_device::compose_mail_sms::ComposeMailSms for WindowsComposeMailSms {
         &self,
         req: &fandhe_device::compose_mail_sms::ComposeRequest,
     ) -> Result<ComposeOutcome, DeviceError> {
-        use fandhe_device::compose_mail_sms::ComposeKind;
-
-        if req.kind() == ComposeKind::Sms {
-            return Err(DeviceError::Unsupported("compose sms"));
-        }
         outcome_from_shell(open_url(&req.to_url()))
     }
 }
