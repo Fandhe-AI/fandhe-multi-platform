@@ -39,6 +39,8 @@ fn to_outcome(result: Result<ComposeOutcome, DeviceError>) -> Result<CoreOutcome
         Err(DeviceError::InvalidInput(kind)) => Err(ComposeFailure::Invalid(
             match kind {
                 "compose to" => "宛先",
+                "compose cc" => "CC",
+                "compose bcc" => "BCC",
                 "compose subject" => "件名",
                 "compose body" => "本文",
                 _ => "入力",
@@ -80,8 +82,13 @@ pub(crate) fn outcome_from_android_code(code: i32) -> Result<ComposeOutcome, Dev
 /// 画面の値から検査済みの要求を作る。OS へ渡す唯一の入口（検査の SSOT は `ComposeRequest`）。
 fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, DeviceError> {
     match view.target {
-        ComposeTarget::Mail => ComposeRequest::mail(&view.to, &view.subject, &view.body),
-        ComposeTarget::Sms => ComposeRequest::sms(&view.to, &view.body),
+        ComposeTarget::Mail => {
+            ComposeRequest::mail(&view.to, &view.cc, &view.bcc, &view.subject, &view.body)
+        }
+        ComposeTarget::Sms if view.to.len() > 1 => Err(DeviceError::InvalidInput("compose to")),
+        ComposeTarget::Sms => {
+            ComposeRequest::sms(view.to.first().map_or("", String::as_str), &view.body)
+        }
     }
 }
 
@@ -305,7 +312,9 @@ mod tests {
         let bad = ComposeRequestView {
             generation: 1,
             target: ComposeTarget::Mail,
-            to: "a@b.c&bcc=x@y.z".into(),
+            to: vec!["a@b.c&bcc=x@y.z".into()],
+            cc: Vec::new(),
+            bcc: Vec::new(),
             subject: String::new(),
             body: String::new(),
         };
@@ -313,6 +322,17 @@ mod tests {
             build_request(&bad),
             Err(DeviceError::InvalidInput("compose to"))
         ));
+        let bad_cc = ComposeRequestView {
+            to: vec!["a@b.c".into()],
+            cc: vec!["x@y.z&bcc=q@r.s".into()],
+            ..bad
+        };
+        let err = build_request(&bad_cc).unwrap_err();
+        assert!(matches!(err, DeviceError::InvalidInput("compose cc")));
+        assert_eq!(
+            to_outcome(Err(err)),
+            Err(ComposeFailure::Invalid("CC".into()))
+        );
     }
 
     #[cfg(not(any(target_os = "ios", target_os = "android")))]

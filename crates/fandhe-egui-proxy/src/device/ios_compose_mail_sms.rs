@@ -34,6 +34,8 @@ unsafe extern "C" {
         request_id: u64,
         kind: i32,
         to: *const std::os::raw::c_char,
+        cc: *const std::os::raw::c_char,
+        bcc: *const std::os::raw::c_char,
         subject: *const std::os::raw::c_char,
         body: *const std::os::raw::c_char,
     ) -> i32;
@@ -47,20 +49,25 @@ pub(crate) fn begin_compose(request_id: u64, req: &ComposeRequest) -> Result<(),
     use std::ffi::CString;
     const PRESENT: DeviceError = DeviceError::Internal("compose present");
     // `ComposeRequest` が NUL を含む制御文字を弾いているため通常は失敗しない。
-    let (Ok(to), Ok(subject), Ok(body)) = (
-        CString::new(req.to()),
+    // 各リストは `\n` 連結で渡す（`\n` は検証で拒否される文字で宛先に現れない。`.m` 側で配列へ戻す）。
+    let (Ok(to), Ok(cc), Ok(bcc), Ok(subject), Ok(body)) = (
+        CString::new(req.to().join("\n")),
+        CString::new(req.cc().join("\n")),
+        CString::new(req.bcc().join("\n")),
         CString::new(req.subject()),
         CString::new(req.body()),
     ) else {
         return Err(PRESENT);
     };
-    // SAFETY: 3 つの `CString` は呼び出しが返るまで生存する有効な NUL 終端文字列。`.m` 側は
+    // SAFETY: 5 つの `CString` は呼び出しが返るまで生存する有効な NUL 終端文字列。`.m` 側は
     // return 前に `NSString` へコピーするため、所有権は移らず返却後は参照されない。
     let code = unsafe {
         fandhe_ios_compose_mail_sms_present(
             request_id,
             kind_code(req.kind()),
             to.as_ptr(),
+            cc.as_ptr(),
+            bcc.as_ptr(),
             subject.as_ptr(),
             body.as_ptr(),
         )

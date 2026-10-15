@@ -522,8 +522,9 @@ public class MainActivity extends GameActivity {
     // Rust の `android_compose_mail_sms.rs` が JNI で呼ぶ。
     private final ComposeHelper composeHelper = new ComposeHelper(this);
 
-    void requestCompose(long requestId, int kind, String to, String subject, String body) {
-        composeHelper.compose(requestId, kind, to, subject, body);
+    void requestCompose(long requestId, int kind, String to, String cc, String bcc,
+            String subject, String body) {
+        composeHelper.compose(requestId, kind, to, cc, bcc, subject, body);
     }
 
     // 画面録画（Issue #1337）。実装は `ScreenCaptureHelper` / `ScreenCaptureService`。

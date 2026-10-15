@@ -17,14 +17,18 @@
 
 use crate::{Screen, WidgetId};
 
-/// 固定の宛先（RFC 2606 の予約ドメイン。実在の宛先へ誤送信しない）。
-pub const MAIL_TO: &str = "someone@example.invalid";
+/// 固定の宛先 To（2 件。RFC 2606 の予約ドメイン。実在の宛先へ誤送信しない）。
+pub const MAIL_TO: &[&str] = &["someone@example.invalid", "other@example.invalid"];
+/// 固定の CC（1 件）。
+pub const MAIL_CC: &[&str] = &["cc@example.invalid"];
+/// 固定の BCC（1 件）。
+pub const MAIL_BCC: &[&str] = &["bcc@example.invalid"];
 /// 固定の件名。URL の区切りになる記号と日本語を含め、OS 側で崩れないか目視で確かめる。
 pub const MAIL_SUBJECT: &str = "テスト & 確認 = 1? #2";
 /// 固定のメール本文（改行と記号を含む）。
 pub const MAIL_BODY: &str = "1行目 & 記号 = ? #\n2行目: 日本語";
 /// 固定の SMS 宛先（空。利用者が作成画面で選ぶ）。
-pub const SMS_TO: &str = "";
+pub const SMS_TO: &[&str] = &[];
 /// 固定の SMS 本文。
 pub const SMS_BODY: &str = "テスト & 確認\n2行目";
 
@@ -105,8 +109,12 @@ pub struct ComposeRequestView {
     pub generation: u64,
     /// 種類。
     pub target: ComposeTarget,
-    /// 宛先。
-    pub to: String,
+    /// 宛先（SMS は 0〜1 件）。
+    pub to: Vec<String>,
+    /// CC（SMS は空）。
+    pub cc: Vec<String>,
+    /// BCC（SMS は空）。
+    pub bcc: Vec<String>,
     /// 件名（SMS は空）。
     pub subject: String,
     /// 本文。
@@ -155,14 +163,23 @@ pub fn take_request(state: &ComposeMailSmsState) -> Option<ComposeRequestView> {
         return None;
     }
     let target = state.target?;
-    let (to, subject, body) = match target {
-        ComposeTarget::Mail => (MAIL_TO, MAIL_SUBJECT, MAIL_BODY),
-        ComposeTarget::Sms => (SMS_TO, "", SMS_BODY),
+    let own = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let (to, cc, bcc, subject, body) = match target {
+        ComposeTarget::Mail => (
+            own(MAIL_TO),
+            own(MAIL_CC),
+            own(MAIL_BCC),
+            MAIL_SUBJECT,
+            MAIL_BODY,
+        ),
+        ComposeTarget::Sms => (own(SMS_TO), Vec::new(), Vec::new(), "", SMS_BODY),
     };
     Some(ComposeRequestView {
         generation: state.generation,
         target,
-        to: to.to_string(),
+        to,
+        cc,
+        bcc,
         subject: subject.to_string(),
         body: body.to_string(),
     })
@@ -213,7 +230,9 @@ pub fn error_text(state: &ComposeMailSmsState) -> String {
 pub fn current_screen(state: &ComposeMailSmsState) -> Screen<ComposeMailSmsState> {
     let screen = Screen::new("メール・SMS の作成")
         .text(NOTE_TEXT)
-        .text(format!("メール宛先: {MAIL_TO}"))
+        .text(format!("メール宛先: {}", MAIL_TO.join(", ")))
+        .text(format!("CC: {}", MAIL_CC.join(", ")))
+        .text(format!("BCC: {}", MAIL_BCC.join(", ")))
         .text(format!("メール件名: {MAIL_SUBJECT}"))
         .dynamic_text(status_text)
         .error_text(error_text);
@@ -299,8 +318,8 @@ mod tests {
         compose_sms(&mut s);
         let r = take_request(&s).unwrap();
         assert_eq!(
-            (r.target, r.to.as_str(), r.subject.as_str()),
-            (ComposeTarget::Sms, SMS_TO, "")
+            (r.target, r.to.len(), r.cc.len(), r.subject.as_str()),
+            (ComposeTarget::Sms, 0, 0, "")
         );
         compose_mail(&mut s);
         assert_eq!(s.target, Some(ComposeTarget::Sms));

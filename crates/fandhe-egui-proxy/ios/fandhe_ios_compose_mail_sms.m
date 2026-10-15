@@ -3,7 +3,9 @@
 //
 // C ABI:
 //   int32_t fandhe_ios_compose_mail_sms_present(uint64_t request_id, int32_t kind,
-//       const char *to, const char *subject, const char *body)
+//       const char *to, const char *cc, const char *bcc, const char *subject,
+//       const char *body)
+//     to / cc / bcc は宛先を `\n` で連結した文字列（空文字列 = 宛先なし。SMS の cc / bcc は空）。
 //     kind: 0 = メール、1 = SMS。戻り値: 0 = 受理（結果は後で非同期に届く）、
 //     1 = 受理できない（NULL・不正な UTF-8・未知の kind）。文字列は return 前に
 //     NSString へコピーし、所有権は移らない。
@@ -28,6 +30,17 @@ extern void fandhe_rust_compose_mail_sms_outcome(uint64_t request_id, int32_t co
 
 // delegate の強参照。弱参照のままだと提示直後に解放され完了が届かない。
 static FandheComposeDelegate *g_retainedDelegate = nil;
+
+// `\n` 連結の宛先を配列へ戻す。空文字列・空要素は捨てる。
+static NSArray<NSString *> *FandheSplitRecipients(NSString *joined) {
+    NSMutableArray<NSString *> *out = [NSMutableArray array];
+    for (NSString *s in [joined componentsSeparatedByString:@"\n"]) {
+        if (s.length > 0) {
+            [out addObject:s];
+        }
+    }
+    return out;
+}
 
 @implementation FandheComposeDelegate
 
@@ -72,14 +85,17 @@ static FandheComposeDelegate *g_retainedDelegate = nil;
 @end
 
 int32_t fandhe_ios_compose_mail_sms_present(uint64_t request_id, int32_t kind, const char *to,
+                                            const char *cc, const char *bcc,
                                             const char *subject, const char *body) {
-    if (to == NULL || subject == NULL || body == NULL || (kind != 0 && kind != 1)) {
+    if (to == NULL || cc == NULL || bcc == NULL || subject == NULL || body == NULL || (kind != 0 && kind != 1)) {
         return 1;
     }
     NSString *toS = [NSString stringWithUTF8String:to];
+    NSString *ccS = [NSString stringWithUTF8String:cc];
+    NSString *bccS = [NSString stringWithUTF8String:bcc];
     NSString *subjectS = [NSString stringWithUTF8String:subject];
     NSString *bodyS = [NSString stringWithUTF8String:body];
-    if (toS == nil || subjectS == nil || bodyS == nil) {
+    if (toS == nil || ccS == nil || bccS == nil || subjectS == nil || bodyS == nil) {
         return 1;
     }
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -101,15 +117,18 @@ int32_t fandhe_ios_compose_mail_sms_present(uint64_t request_id, int32_t kind, c
             UIViewController *vc = nil;
             if (mail) {
                 MFMailComposeViewController *m = [MFMailComposeViewController new];
-                [m setToRecipients:@[ toS ]];
+                [m setToRecipients:FandheSplitRecipients(toS)];
+                [m setCcRecipients:FandheSplitRecipients(ccS)];
+                [m setBccRecipients:FandheSplitRecipients(bccS)];
                 [m setSubject:subjectS];
                 [m setMessageBody:bodyS isHTML:NO];
                 m.mailComposeDelegate = delegate;
                 vc = m;
             } else {
                 MFMessageComposeViewController *m = [MFMessageComposeViewController new];
-                if (toS.length > 0) {
-                    m.recipients = @[ toS ];
+                NSArray<NSString *> *to = FandheSplitRecipients(toS);
+                if (to.count > 0) {
+                    m.recipients = to;
                 }
                 m.body = bodyS;
                 m.messageComposeDelegate = delegate;

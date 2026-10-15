@@ -2,7 +2,7 @@
 //! Android 経路（`begin_compose`）から呼ばれる。Java 側 `ComposeHelper` が `ACTION_SENDTO`
 //! （メールは `mailto:`、SMS は `smsto:` + `sms_body`）で OS の作成画面を開く。
 //!
-//! 流れ: `begin_compose` → JNI `MainActivity.requestCompose(id, kind, to, subject, body)` →
+//! 流れ: `begin_compose` → JNI `MainActivity.requestCompose(id, kind, to, cc, bcc, subject, body)` →
 //! Java が `nativeOnComposeResult(id, code)` で返す → `outcome_from_android_code` で契約の結果へ
 //! 写像 → `compose_mail_sms::bridge::deliver` が `SLOT` の id と照合して置く。
 //! 値は `ComposeRequest` の検証を通ったものだけを渡す（URL は組み立てない）。
@@ -47,7 +47,7 @@ pub(crate) fn begin_compose(_request_id: u64, _req: &ComposeRequest) -> Result<(
     Err(DeviceError::Unsupported("compose"))
 }
 
-/// `MainActivity.requestCompose(long, int, String, String, String)` を JNI で呼ぶ。
+/// `MainActivity.requestCompose(long, int, String, String, String, String, String)` を JNI で呼ぶ。
 /// `false` は呼び出し失敗。`unsafe` 2 箇所は `android_app_badge::call_activity` と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
@@ -63,20 +63,25 @@ fn call_activity(id: u64, req: &ComposeRequest) -> bool {
         let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
         // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
         let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        let to = env.new_string(req.to())?;
+        // 各リストは `\n` 連結で渡す（`\n` は検証で拒否される文字で宛先に現れない。Java 側で配列へ戻す）。
+        let to = env.new_string(req.to().join("\n"))?;
+        let cc = env.new_string(req.cc().join("\n"))?;
+        let bcc = env.new_string(req.bcc().join("\n"))?;
         let subject = env.new_string(req.subject())?;
         let body = env.new_string(req.body())?;
         let args = [
             jni::objects::JValue::Long(id as jni::sys::jlong),
             jni::objects::JValue::Int(kind_code(req.kind())),
             jni::objects::JValue::Object(&to),
+            jni::objects::JValue::Object(&cc),
+            jni::objects::JValue::Object(&bcc),
             jni::objects::JValue::Object(&subject),
             jni::objects::JValue::Object(&body),
         ];
         env.call_method(
             &activity,
             jni::jni_str!("requestCompose"),
-            jni::jni_sig!((long, int, java.lang.String, java.lang.String, java.lang.String) -> ()),
+            jni::jni_sig!((long, int, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String) -> ()),
             &args,
         )?;
         Ok(())
@@ -114,7 +119,7 @@ mod tests {
 
     #[test]
     fn stub_never_succeeds() {
-        let req = ComposeRequest::mail("a@b.c", "s", "b").unwrap();
+        let req = ComposeRequest::mail(&["a@b.c"], &[], &[], "s", "b").unwrap();
         assert!(matches!(
             begin_compose(1, &req),
             Err(DeviceError::Unsupported("compose"))
