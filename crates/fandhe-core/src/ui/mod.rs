@@ -501,7 +501,7 @@ pub use layout::{
 };
 pub use list_view::{ListItemSource, ListView, ListViewInput};
 pub use menu::{Menu, MenuHitRegion, MenuInput};
-pub use node::{Axis, Node, TextRole};
+pub use node::{Axis, Node, RGBA_MAX_SIDE, RgbaPixels, TextRole};
 pub use pointer::{PointerDispatcher, PointerEvent, PointerEventKind};
 pub use progress::{ProgressBar, ProgressMode, ProgressWidget, Spinner};
 pub use radio_button::RadioButton;

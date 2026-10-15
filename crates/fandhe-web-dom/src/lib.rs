@@ -101,6 +101,7 @@
 pub mod dom_tree;
 pub mod html;
 pub mod ime;
+mod png_data_url;
 
 #[cfg(target_arch = "wasm32")]
 pub mod mount;

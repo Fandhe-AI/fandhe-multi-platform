@@ -554,6 +554,16 @@ impl<S> Screen<S> {
         self.with_node(Node::Widget(Box::new(Image::fixed(id, source, alt))))
     }
 
+    /// 実画素（RGBA8）の画像ノード [`Node::RgbaImage`] を末尾に追加する（Issue #5）。
+    /// `alt` はアクセシビリティ用の代替テキスト。`pixels` は
+    /// [`super::node::RgbaPixels::new`] で検証済みの値のみ受け付ける。
+    pub fn rgba_image(self, pixels: super::node::RgbaPixels, alt: impl Into<String>) -> Self {
+        self.with_node(Node::RgbaImage {
+            pixels,
+            alt: alt.into(),
+        })
+    }
+
     /// 状態 `S` に束縛されたアセット識別子を持つ画像ウィジェット（[`Image`]）を
     /// 末尾に追加する（TASK-8.3-S34 / REQ-8 / REQ-9 / REQ-13、Issue #129）。`.image()` の
     /// 状態束縛版で、`.label()` と対称の糖衣構文。
@@ -970,6 +980,7 @@ mod tests {
                 // （個別ウィジェット実装は S7 以降のスコープ）。到達しないはずの分岐だが、
                 // 網羅性のために明示する（Issue #97）。
                 Node::Widget(_) => "widget",
+                Node::RgbaImage { .. } => "rgba_image",
             })
             .collect();
         assert_eq!(labels, vec!["text", "text_field", "button", "list"]);
@@ -1100,6 +1111,7 @@ mod tests {
                 // （個別ウィジェット実装は S7 以降のスコープ）。到達しないはずの分岐だが、
                 // 網羅性のために明示する（Issue #97）。
                 Node::Widget(_) => "widget",
+                Node::RgbaImage { .. } => "rgba_image",
             })
             .collect();
         assert_eq!(labels, vec!["text", "text_field", "button", "list"]);

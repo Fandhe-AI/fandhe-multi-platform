@@ -82,6 +82,12 @@ pub fn render_headless<S>(screen: &Screen<S>, state: &S) -> Vec<String> {
             // 子ノードは本クロージャへ後続して渡され Text/TextField/Button の各アームで
             // 処理される（性能経路が必要な呼び出し元は `Screen::visit_windowed` を使う）。
         }
+        Node::RgbaImage { pixels, alt } => out.push(format!(
+            "[画像 {}×{}: {}]",
+            pixels.width(),
+            pixels.height(),
+            alt
+        )),
         Node::Widget(_widget) => {
             // 自身は行を出力しない（`List` / `VirtualList` と同様の no-op）。
             // 子ノード（`DialogWidget::content` 等、`Widget::children(state)` が返す

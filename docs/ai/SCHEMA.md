@@ -51,7 +51,7 @@ fn main() {}
 `Debug` / `Clone` 境界を課さないため）。
 
 ```rust
-use fandhe_core::{Axis, Node, ReadFn, ReadIndexedFn, TextRole, WidgetId, Widget, WriteFn};
+use fandhe_core::{Axis, Node, ReadFn, ReadIndexedFn, RgbaPixels, TextRole, WidgetId, Widget, WriteFn};
 
 // `Node<S>`（node.rs）の実バリアント・実フィールド構成を、全バリアント・全フィールドを
 // 束縛する網羅 match（`_` を使わない）で検証する。フィールドの追加・削除・型変更が
@@ -116,6 +116,11 @@ fn describe<S>(node: &Node<S>) -> &'static str {
             let _: &Box<dyn Widget<S>> = w;
             "Widget"
         }
+        Node::RgbaImage { pixels, alt } => {
+            let _: &RgbaPixels = pixels;
+            let _: &String = alt;
+            "RgbaImage"
+        }
     }
 }
 
@@ -140,6 +145,9 @@ fn main() {
 - `StyledText { role, get }`: 役割 `TextRole`（`Body` / `Error`）付きの動的テキスト。DSL に色は
   書かせず、色への解決はプラットフォームレイヤが担う。エラー文は `.error_text(get)` を使い、
   `Text` に「エラー:」等の接頭辞を付けない
+- `RgbaImage { pixels, alt }`: 実画素（RGBA8）の画像表示。`pixels` は検証済みの `RgbaPixels`
+  （`RgbaPixels::new(width, height, rgba)` が長さ不一致・寸法 0・一辺 2048 超で `None`）、`alt` は
+  代替テキスト。ビルダーは `.rgba_image(pixels, alt)`
 - `List { expand, axis }`: 状態 `S` から子ノード一覧を都度生成する関数ポインタ。子ノードの型は
   `Node<S>` 自身に固定され、ネストした `List` を持てる。`axis` は子要素の配置軸（既定 `Axis::Vertical`）
 - `VirtualList { len, item, item_extent, axis }`: index ベースで項目を遅延展開する `List` の
@@ -341,6 +349,7 @@ assert_eq!(assert_iter(screen.iter()), 2);
   `S: 'static` は不要。`error_text(get)` は `TextRole::Error` を持つ `StyledText` を追加する
   （色は書かない。色解決はプラットフォームレイヤの契約。「エラー:」等の接頭辞を `Text` に
   付けない）
+- `rgba_image(pixels, alt)`: `Node::RgbaImage` の糖衣構文（`S: 'static` 不要）
 - `label` 以降のウィジェット系ビルダーは `Node::Widget(Box<dyn Widget<S>>)` を組み立てる糖衣構文で、
   いずれも `where S: 'static` を要求する。第 1 引数は 2 系統に分かれる
   - `id: WidgetId` を直接取るもの: `label` / `text_input` / `list_view` / `checkbox` /
@@ -1095,17 +1104,13 @@ Java 側の `ActivityResultContracts.TakePicturePreview` が撮影した `Bitmap
 `Camera::capture` を実現する。新規画面が Android 固有の端末実装を要る場合はこの
 `device/android.rs` 配下に閉じ、`fandhe-core` へは持ち込まない。
 
-**画像表示の制約（Issue #749）**: `fandhe-core` の `Screen::image` / `image_bound`
-（`ui/image.rs`）は識別子（パス・URL の不透明文字列）を保持するだけで画素データを運べず、
-`fandhe-egui-proxy` の `render_node` も `ImageWidget` の画素データを実描画しない
-（Checkbox / ToggleSwitch / Slider / RadioButton は egui 標準部品で実描画済み、
-Issue #806。`ImageWidget` は macOS/Android の AX ノード公開のみに留まる）。
-撮影結果等の実画素をそのまま画面に出したい画面は、現状のノード集合
-では実現できないため、輝度モザイク（`█`/`░` の行文字列）等のテキスト代替を使う
-（`camera_capture.rs` の `thumbnail_from_rgba` 参照）。実画素表示にはコア側の画素ペイロード
-を運べるノード・ウィジェットと、プロキシ側の `Node::Widget` 実描画（テクスチャ
-アップロード）の両方が要る、フレームワーク変更（Issue #749 コメント参照、起票は
-ユーザー承認後）。
+**画像表示（Issue #5）**: 撮影結果等の実画素は `Screen::rgba_image(RgbaPixels, alt)`
+（`Node::RgbaImage`）で出す。`Screen::image` / `image_bound`（`ui/image.rs`）は識別子
+（パス・URL の不透明文字列）を保持するだけで画素を運べないため、画素を見せたい画面には使わない。
+状態に生の RGBA を持たせず、`camera_capture.rs` の `thumbnail_from_rgba` のように長辺 160px 程度へ
+縮小してから `RgbaPixels` にする。`fandhe-egui-proxy` は GPU テクスチャ、`fandhe-web-dom` は
+`<img src="data:image/png;base64,…">` で描く。`fandhe-swiftui-bridge` は未対応で、alt を
+`SnapshotNode::Text` として渡す。
 
 iOS 固有の端末実装（Issue #751）は `crates/fandhe-egui-proxy/src/device/ios.rs`（Rust、
 `Camera`/`Storage` トレイトの橋渡し）+ `crates/fandhe-egui-proxy/ios/*.m`（ObjC、UIKit /

@@ -43,6 +43,7 @@ fn sample_screen_includes_text_button_and_list() {
         // `sample_screen()` は `Widget` を使わない（個別ウィジェット実装は
         // Issue #97 のスコープ）。到達しないはずの分岐だが、網羅性のために明示する。
         Node::Widget(_) => {}
+        Node::RgbaImage { .. } => {}
     });
 
     assert_eq!(text_count, 1, "テキスト要素は 1 件のはず");
