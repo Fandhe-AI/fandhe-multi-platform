@@ -16,7 +16,7 @@ use fandhe_core::screens::compose_mail_sms::{
     take_request, ComposeFailure, ComposeMailSmsState, ComposeRequestView, ComposeTarget,
     CoreOutcome,
 };
-use fandhe_device::compose_mail_sms::{ComposeOutcome, ComposeRequest};
+use fandhe_device::compose_mail_sms::{ComposeAttachment, ComposeOutcome, ComposeRequest};
 use fandhe_device::DeviceError;
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
@@ -43,6 +43,7 @@ fn to_outcome(result: Result<ComposeOutcome, DeviceError>) -> Result<CoreOutcome
                 "compose bcc" => "BCC",
                 "compose subject" => "件名",
                 "compose body" => "本文",
+                "compose attachment" => "添付",
                 _ => "入力",
             }
             .to_string(),
@@ -83,7 +84,16 @@ pub(crate) fn outcome_from_android_code(code: i32) -> Result<ComposeOutcome, Dev
 fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, DeviceError> {
     match view.target {
         ComposeTarget::Mail => {
-            ComposeRequest::mail(&view.to, &view.cc, &view.bcc, &view.subject, &view.body)
+            let req =
+                ComposeRequest::mail(&view.to, &view.cc, &view.bcc, &view.subject, &view.body)?;
+            match &view.attachment {
+                Some(a) => req.with_attachment(ComposeAttachment::new(
+                    &a.file_name,
+                    &a.mime_type,
+                    &a.data,
+                )?),
+                None => Ok(req),
+            }
         }
         ComposeTarget::Sms if view.to.len() > 1 => Err(DeviceError::InvalidInput("compose to")),
         ComposeTarget::Sms => {
@@ -317,6 +327,7 @@ mod tests {
             bcc: Vec::new(),
             subject: String::new(),
             body: String::new(),
+            attachment: None,
         };
         assert!(matches!(
             build_request(&bad),
@@ -376,6 +387,29 @@ mod tests {
                 apply(&mut s);
             }
             s
+        }
+
+        /// 実際の `to_url` を通す（URL 経路の OS 実装と同じ。添付は `Unsupported` になる）。
+        struct UrlOnly;
+
+        impl ComposeMailSms for UrlOnly {
+            fn compose(&self, r: &ComposeRequest) -> Result<ComposeOutcome, DeviceError> {
+                r.to_url().map(|_| ComposeOutcome::HandedOff)
+            }
+        }
+
+        #[test]
+        fn attachment_over_url_path_shows_unsupported() {
+            let mut s = ComposeMailSmsState::default();
+            screen::compose_mail_with_attachment(&mut s);
+            let (tx, rx) = std::sync::mpsc::channel();
+            let sender = CompletionSender::new(tx, egui::Context::default());
+            drive(&s, &sender, &UrlOnly);
+            while let Ok(apply) = rx.try_recv() {
+                apply(&mut s);
+            }
+            assert_eq!(s.status, screen::UNSUPPORTED_STATUS);
+            assert!(s.error.is_empty());
         }
 
         #[test]

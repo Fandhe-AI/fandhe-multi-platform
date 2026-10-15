@@ -1,7 +1,8 @@
 //! メール・SMS の作成画面を OS で開く機能の抽象（Phase 11 の拡充ループ、親 #1142、Issue #1384）。
 //!
 //! 範囲は「宛先・件名・本文を渡して OS の作成画面を開く」ことだけ。メールは To（複数）・CC・BCC を
-//! 渡せる（Issue #33）。添付（#1381）・SMS の複数宛先は扱わない。検証の SSOT は
+//! 渡せる（Issue #33）。添付はメールに 1 件だけ（Issue #32、[`ComposeAttachment`]、iOS / Android のみ）で、
+//! SMS の添付・複数宛先は扱わない。検証の SSOT は
 //! [`ComposeRequest::mail`] / [`ComposeRequest::sms`]（これ以外では要求を作れない）で、
 //! macOS・Windows・Web が共用する URL の組み立ても [`ComposeRequest::to_url`] に置く。
 //! iOS / Android は URL を使わず OS の作成画面（MessageUI / Intent）へ値を直接渡す。
@@ -23,7 +24,9 @@
 //! | 状況 | 返す値 |
 //! |---|---|
 //! | 入力不正 | `InvalidInput("compose to" / "compose cc" / "compose bcc" / "compose subject" / "compose body")` |
+//! | 入力不正（添付） | `InvalidInput("compose attachment")` |
 //! | 非対応（Linux・Web ほか） | `Unsupported("compose")` |
+//! | 添付付き要求を macOS・Windows・Web で受けた（URL で添付を渡せない） | `Unsupported("compose attachment")` |
 //! | 作成画面を出せない（ウィンドウ・NSURL 生成失敗など） | `Internal("compose ...")` |
 //!
 //! # 宛先の配列（To / CC / BCC）
@@ -39,13 +42,26 @@
 //!   1 本の文字列で渡し、受け側で配列に戻す（`\n` は検証で必ず拒否されるため宛先の中に現れない。
 //!   空文字列は空配列）
 //!
+//! # 添付（Issue #32）
+//!
+//! 添付はメールに 1 件、ファイル名 `[A-Za-z0-9._-]` 1〜64 バイト（先頭 `.` 不可）・MIME は
+//! `type/subtype` の 1 組（パラメータ不可）・データ 1 バイト〜1 MiB。0 バイトは嘘の成功を避けるため拒否する。
+//! 出どころは画面側の固定値で、選択ファイルとの連携は扱わない。`mailto:` は添付を持てないため、
+//! [`ComposeRequest::to_url`] が `Unsupported("compose attachment")` を返し、添付を黙って落として
+//! 開くことはしない。iOS は `addAttachmentData`（一時ファイルなし）、Android は `FileProvider` の
+//! content URI（`cache/compose/` に最新 1 件だけ残す）で渡す。
+//!
 //! # 守る範囲 / 守らない範囲（契約表 11）
 //!
 //! 守る: 1 プロセス内での要求と完了の順序（世代の照合）、入力不正を OS へ渡さないこと、
 //! 利用者の値による URL への注入（余計なパラメータ・宛先・ヘッダ）の防止、`HandedOff` を
 //! `Queued` や送信済みと見せないこと、`NoHandler` / `Unsupported` を成功に畳まないこと。
 //!
-//! 守らない: 複数プロセスからの同時操作、作成画面を開いた後に利用者が何をしたか
+//! Android の添付の一時ファイルは、書き込み失敗と `startActivity` の例外では即削除し、`HandedOff` では
+//! 受け手が後から読むため残す（次回の添付要求と OS の cacheDir 掃除で消える）。
+//!
+//! 守らない: 複数プロセスからの同時操作、受け手の下書きがコピーする前に再度添付要求をした場合の
+//! 前回の添付の読み出し（最大 1 件・1 MiB が残る）、作成画面を開いた後に利用者が何をしたか
 //! （`HandedOff` では確認できない）、既定のメールアプリ未設定時の OS 側の挙動の差。
 //!
 //! 既知の天井: Windows の旧 Outlook は宛先の `;` 区切りを期待する場合があり、実機で確かめる。
@@ -87,6 +103,68 @@ const SUBJECT_MAX_CHARS: usize = 200;
 const BODY_MAX_CHARS: usize = 1000;
 /// To / CC / BCC それぞれの上限件数。
 const RECIPIENTS_MAX_PER_FIELD: usize = 10;
+const ATTACH_NAME_MAX_BYTES: usize = 64;
+const ATTACH_MIME_MAX_BYTES: usize = 127;
+const ATTACH_DATA_MAX_BYTES: usize = 1024 * 1024;
+
+const INVALID_ATTACHMENT: DeviceError = DeviceError::InvalidInput("compose attachment");
+
+fn valid_attach_name(n: &str) -> bool {
+    (1..=ATTACH_NAME_MAX_BYTES).contains(&n.len())
+        && !n.starts_with('.')
+        && n.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+}
+
+fn valid_mime_part(p: &str) -> bool {
+    let mut b = p.bytes();
+    matches!(b.next(), Some(c) if c.is_ascii_lowercase() || c.is_ascii_digit())
+        && b.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || b".+-".contains(&c))
+}
+
+fn valid_attach_mime(m: &str) -> bool {
+    m.len() <= ATTACH_MIME_MAX_BYTES
+        && m.split_once('/')
+            .is_some_and(|(t, s)| valid_mime_part(t) && valid_mime_part(s))
+}
+
+/// 検査済みの添付 1 件。[`ComposeAttachment::new`] 以外では作れない（検証の SSOT）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComposeAttachment {
+    file_name: String,
+    mime_type: String,
+    data: Vec<u8>,
+}
+
+impl ComposeAttachment {
+    /// 添付を作る。規則はモジュール doc。違反は `InvalidInput("compose attachment")`。
+    pub fn new(file_name: &str, mime_type: &str, data: &[u8]) -> Result<Self, DeviceError> {
+        if !valid_attach_name(file_name)
+            || !valid_attach_mime(mime_type)
+            || data.is_empty()
+            || data.len() > ATTACH_DATA_MAX_BYTES
+        {
+            return Err(INVALID_ATTACHMENT);
+        }
+        Ok(Self {
+            file_name: file_name.to_string(),
+            mime_type: mime_type.to_string(),
+            data: data.to_vec(),
+        })
+    }
+    /// ファイル名。
+    pub fn file_name(&self) -> &str {
+        &self.file_name
+    }
+    /// MIME type。
+    pub fn mime_type(&self) -> &str {
+        &self.mime_type
+    }
+    /// 中身。
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+}
 
 /// 検査済みの作成要求。[`ComposeRequest::mail`] / [`ComposeRequest::sms`] 以外では作れない。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,6 +175,7 @@ pub struct ComposeRequest {
     bcc: Vec<String>,
     subject: String,
     body: String,
+    attachment: Option<ComposeAttachment>,
 }
 
 const INVALID_TO: DeviceError = DeviceError::InvalidInput("compose to");
@@ -203,6 +282,7 @@ impl ComposeRequest {
             bcc: owned(bcc),
             subject: subject.to_string(),
             body: body.to_string(),
+            attachment: None,
         })
     }
 
@@ -225,7 +305,21 @@ impl ComposeRequest {
             bcc: Vec::new(),
             subject: String::new(),
             body: body.to_string(),
+            attachment: None,
         })
+    }
+
+    /// 添付を付ける。SMS の要求には付けられない（`InvalidInput("compose attachment")`）。
+    pub fn with_attachment(mut self, a: ComposeAttachment) -> Result<Self, DeviceError> {
+        if self.kind != ComposeKind::Mail {
+            return Err(INVALID_ATTACHMENT);
+        }
+        self.attachment = Some(a);
+        Ok(self)
+    }
+    /// 添付（メールのみ）。
+    pub fn attachment(&self) -> Option<&ComposeAttachment> {
+        self.attachment.as_ref()
     }
 
     /// 作成画面の種類。
@@ -254,8 +348,12 @@ impl ComposeRequest {
     }
 
     /// `mailto:`（RFC 6068）/ `sms:`（RFC 5724）の URL を組み立てる。macOS・Windows・Web が共用する。
-    /// 本文の改行は `\r\n` に正規化してから encode する。
-    pub fn to_url(&self) -> String {
+    /// 本文の改行は `\r\n` に正規化してから encode する。URL は添付を持てないため、
+    /// 添付付きは `Unsupported("compose attachment")`（添付を黙って落とさない）。
+    pub fn to_url(&self) -> Result<String, DeviceError> {
+        if self.attachment.is_some() {
+            return Err(DeviceError::Unsupported("compose attachment"));
+        }
         let to = join_encoded(&self.to);
         let body = percent_encode(
             &self.body.replace("\r\n", "\n").replace('\n', "\r\n"),
@@ -269,12 +367,12 @@ impl ComposeRequest {
                         params.push_str(&format!("{name}={}&", join_encoded(list)));
                     }
                 }
-                format!(
+                Ok(format!(
                     "mailto:{to}?{params}subject={}&body={body}",
                     percent_encode(&self.subject, false)
-                )
+                ))
             }
-            ComposeKind::Sms => format!("sms:{to}?body={body}"),
+            ComposeKind::Sms => Ok(format!("sms:{to}?body={body}")),
         }
     }
 }
@@ -423,14 +521,15 @@ mod tests {
         assert!(!enc.contains(['&', '=', '?', '#', ' ', '\n', '+']));
 
         let req = ComposeRequest::mail(&["a@b.c"], &[], &[], "S&T=1?#日本", "x\ny&z").unwrap();
-        let url = req.to_url();
+        let url = req.to_url().unwrap();
         assert!(url.starts_with("mailto:a@b.c?subject="));
         assert_eq!(url.matches('&').count(), 1);
         assert_eq!(url.matches('?').count(), 1);
         assert!(url.contains("body=x%0D%0Ay%26z"));
         let multi = ComposeRequest::mail(&["a@b.c", "d@e.f"], &["g@h.i"], &["j@k.l"], "s", "b")
             .unwrap()
-            .to_url();
+            .to_url()
+            .unwrap();
         assert_eq!(
             multi,
             "mailto:a@b.c,d@e.f?cc=g@h.i&bcc=j@k.l&subject=s&body=b"
@@ -438,9 +537,61 @@ mod tests {
         assert_eq!(multi.matches('?').count(), 1);
         assert_eq!(multi.matches('&').count(), 3);
         let plain = ComposeRequest::mail(&["a@b.c"], &[], &[], "s", "b").unwrap();
-        assert_eq!(plain.to_url(), "mailto:a@b.c?subject=s&body=b");
-        let sms = ComposeRequest::sms("", "a&b").unwrap().to_url();
+        assert_eq!(plain.to_url().unwrap(), "mailto:a@b.c?subject=s&body=b");
+        let sms = ComposeRequest::sms("", "a&b").unwrap().to_url().unwrap();
         assert_eq!(sms, "sms:?body=a%26b");
+    }
+
+    #[test]
+    fn attachment_rules() {
+        let long = "a".repeat(65);
+        for n in [
+            "",
+            ".a",
+            "a/b",
+            "a\\b",
+            "a b",
+            "a;b",
+            "a\u{7}b",
+            long.as_str(),
+        ] {
+            assert!(
+                ComposeAttachment::new(n, "text/plain", b"x").is_err(),
+                "{n:?}"
+            );
+        }
+        for m in [
+            "text",
+            "text/plain; x=y",
+            "Text/plain",
+            "text/ plain",
+            "/plain",
+            "text/",
+        ] {
+            assert!(ComposeAttachment::new("a.txt", m, b"x").is_err(), "{m:?}");
+        }
+        assert!(ComposeAttachment::new("a.txt", "text/plain", b"").is_err());
+        let big = vec![0u8; ATTACH_DATA_MAX_BYTES + 1];
+        assert!(ComposeAttachment::new("a.txt", "text/plain", &big).is_err());
+        assert!(
+            ComposeAttachment::new("a.txt", "text/plain", &big[..ATTACH_DATA_MAX_BYTES]).is_ok()
+        );
+        let a = ComposeAttachment::new("a.txt", "text/plain", b"x").unwrap();
+        assert!(
+            ComposeRequest::sms("", "b")
+                .unwrap()
+                .with_attachment(a.clone())
+                .is_err()
+        );
+        let req = ComposeRequest::mail(&["a@b.c"], &[], &[], "s", "b")
+            .unwrap()
+            .with_attachment(a)
+            .unwrap();
+        assert!(req.attachment().is_some());
+        assert!(matches!(
+            req.to_url(),
+            Err(DeviceError::Unsupported("compose attachment"))
+        ));
     }
 
     #[test]

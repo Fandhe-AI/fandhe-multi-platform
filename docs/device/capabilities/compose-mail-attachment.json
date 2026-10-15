@@ -1,0 +1,51 @@
+{
+  "id": "compose-mail-attachment",
+  "name": "メール・SMS への添付",
+  "group": "未着手の OS 機能",
+  "order": 130,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "done",
+      "api": "MessageUI `MFMailComposeViewController addAttachmentData:mimeType:fileName:`",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/messageui/mfmailcomposeviewcontroller/addattachmentdata(_:mimetype:filename:)",
+      "note": "メールに 1 件だけ。NSData を直接渡すので一時ファイルは作らない（バイト列は FFI の return 前にコピー）。到達する結果は compose-mail-sms と同じ。SMS への添付は範囲外（`MFMessageComposeViewController` の `addAttachmentData:typeIdentifier:filename:` と `canSendAttachments` が使える見込みで、後続の候補）。シミュレータは `canSendMail` が false で NoHandler",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_compose_mail_sms.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_compose_mail_sms.m + crates/fandhe-device/src/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs、Issue #32"
+    },
+    "android": {
+      "status": "done",
+      "api": "`ACTION_SEND` + `EXTRA_STREAM`（`androidx.core.content.FileProvider` の content URI）+ `setSelector(ACTION_SENDTO mailto:)`",
+      "perm": "なし",
+      "url": "https://developer.android.com/reference/androidx/core/content/FileProvider",
+      "note": "メールに 1 件だけ。保存先は `cache/compose/` に最新 1 件（書き込み前に既存を消す）。書き込み失敗と `startActivity` の例外では即削除し、`HandedOff` では受け手が後から読むため残す（次回の添付要求と OS の cacheDir 掃除で消える）。FileProvider は exported=false・grantUriPermissions=true で、読み取り権限は Intent 単位のみ。新しい権限は足さない。既知の天井: 受け手がコピーする前に再度添付要求をすると前の添付が読めなくなる（最大 1 件・1 MiB）、一部のメールアプリは selector 経由の `EXTRA_STREAM` を無視しうる。SMS（MMS）は範囲外",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_compose_mail_sms.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/ComposeHelper.java + platforms/android/app/src/main/res/xml/compose_file_paths.xml + crates/fandhe-device/src/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs、Issue #32"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`NSSharingService`（`NSSharingServiceNameComposeEmail`）にファイル URL を渡す",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/appkit/nssharingservice",
+      "note": "未実装（見込み）。`mailto:` は添付を持てないため、添付付き要求は `Unsupported(\"compose attachment\")` を返し、添付を落として開くことはしない"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Simple MAPI `MAPISendMailW`",
+      "perm": "なし",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/mapi/nf-mapi-mapisendmailw",
+      "note": "未実装。新しい Outlook は Simple MAPI に対応しない見込みで要調査。添付付き要求は `Unsupported(\"compose attachment\")` を返す"
+    },
+    "web": {
+      "status": "no",
+      "api": "`mailto:`（RFC 6068）は添付を持てない",
+      "perm": "なし",
+      "url": "https://www.rfc-editor.org/rfc/rfc6068",
+      "note": "添付付き要求は遷移せず `Unsupported` を表示する。Web Share API の files は共有シート（share-sheet）の範囲"
+    }
+  },
+  "note": "compose-mail-sms（Issue #32 で添付だけを分離）の添付版。添付はメールに 1 件、ファイル名 `[A-Za-z0-9._-]` 64 バイト以下・MIME は `type/subtype`・データ 1 バイト〜1 MiB（0 バイトは拒否）。出どころは画面側の固定値（`fandhe-sample.txt`）で、file-picker の選択ファイルとの連携は未対応。macOS・Windows・Web で添付付きの要求を受けたら `Unsupported` を返す（添付を黙って落とさない）。"
+}

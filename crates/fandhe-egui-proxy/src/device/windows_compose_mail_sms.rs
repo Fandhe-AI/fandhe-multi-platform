@@ -2,6 +2,7 @@
 //! `sms:` URL を開き、既定のハンドラの作成画面を出す。`device/compose_mail_sms.rs` の Windows 経路から呼ばれ、
 //! 契約は `fandhe_device::compose_mail_sms`。渡すのは `ComposeRequest::to_url` が組み立てた
 //! `mailto:` / `sms:` URL の 2 種だけで、scheme は固定。任意の scheme・パス・引数を渡す経路は作らない。
+//! 添付付きの要求は URL で渡せないため `to_url` が `Unsupported` を返し、ここで拒否する（Issue #32）。
 //! Windows 本体は `sms:` のハンドラを同梱しない。登録したアプリ（スマートフォン連携など）があれば
 //! 開き、無ければ `SE_ERR_NOASSOC` → `NoHandler`。WinRT の `ChatMessageManager` は制限付き
 //! capability とパッケージ ID が要るため採らない（#31）。
@@ -45,7 +46,7 @@ impl fandhe_device::compose_mail_sms::ComposeMailSms for WindowsComposeMailSms {
         &self,
         req: &fandhe_device::compose_mail_sms::ComposeRequest,
     ) -> Result<ComposeOutcome, DeviceError> {
-        outcome_from_shell(open_url(&req.to_url()))
+        outcome_from_shell(open_url(&req.to_url()?))
     }
 }
 

@@ -4,17 +4,21 @@
 // C ABI:
 //   int32_t fandhe_ios_compose_mail_sms_present(uint64_t request_id, int32_t kind,
 //       const char *to, const char *cc, const char *bcc, const char *subject,
-//       const char *body)
+//       const char *body, const uint8_t *att_data, size_t att_len, const char *att_mime,
+//       const char *att_name)
 //     to / cc / bcc は宛先を `\n` で連結した文字列（空文字列 = 宛先なし。SMS の cc / bcc は空）。
+//     att_* はメールの添付 1 件（Issue #32）。att_len == 0 は添付なし（att_data は NULL 可）。
+//     att_len > 0 で data / mime / name のいずれかが NULL、または SMS に添付があれば 1 を返す。
+//     添付は一時ファイルを作らず `addAttachmentData:` へ NSData で渡す。
 //     kind: 0 = メール、1 = SMS。戻り値: 0 = 受理（結果は後で非同期に届く）、
-//     1 = 受理できない（NULL・不正な UTF-8・未知の kind）。文字列は return 前に
-//     NSString へコピーし、所有権は移らない。
+//     1 = 受理できない（NULL・不正な UTF-8・未知の kind）。文字列・バイト列は return 前に
+//     NSString / NSData へコピーし、所有権は移らない。
 //   extern void fandhe_rust_compose_mail_sms_outcome(uint64_t request_id, int32_t code)
 //     code は `device/compose_mail_sms.rs::outcome_from_ios_code` の表と一致させる
 //     （0 Queued / 1 Saved / 2 Cancelled / 3 失敗 / 4 NoHandler / 5 提示失敗 / 99 未知）。
 //     各依頼につきちょうど 1 回だけ呼ぶ。
 //
-// 宛先・件名・本文・NSError はログへ出さない。
+// 宛先・件名・本文・添付のバイト列と名前・NSError はログへ出さない。
 
 #import <MessageUI/MessageUI.h>
 #import <UIKit/UIKit.h>
@@ -86,8 +90,13 @@ static NSArray<NSString *> *FandheSplitRecipients(NSString *joined) {
 
 int32_t fandhe_ios_compose_mail_sms_present(uint64_t request_id, int32_t kind, const char *to,
                                             const char *cc, const char *bcc,
-                                            const char *subject, const char *body) {
+                                            const char *subject, const char *body,
+                                            const uint8_t *att_data, size_t att_len,
+                                            const char *att_mime, const char *att_name) {
     if (to == NULL || cc == NULL || bcc == NULL || subject == NULL || body == NULL || (kind != 0 && kind != 1)) {
+        return 1;
+    }
+    if (att_len > 0 && (att_data == NULL || att_mime == NULL || att_name == NULL || kind != 0)) {
         return 1;
     }
     NSString *toS = [NSString stringWithUTF8String:to];
@@ -97,6 +106,18 @@ int32_t fandhe_ios_compose_mail_sms_present(uint64_t request_id, int32_t kind, c
     NSString *bodyS = [NSString stringWithUTF8String:body];
     if (toS == nil || ccS == nil || bccS == nil || subjectS == nil || bodyS == nil) {
         return 1;
+    }
+    // return 後は Rust 側の領域が無効になるため、dispatch 前にコピーを取る。
+    NSData *attData = nil;
+    NSString *attMime = nil;
+    NSString *attName = nil;
+    if (att_len > 0) {
+        attData = [NSData dataWithBytes:att_data length:att_len];
+        attMime = [NSString stringWithUTF8String:att_mime];
+        attName = [NSString stringWithUTF8String:att_name];
+        if (attData == nil || attMime == nil || attName == nil) {
+            return 1;
+        }
     }
     dispatch_async(dispatch_get_main_queue(), ^{
         @autoreleasepool {
@@ -122,6 +143,9 @@ int32_t fandhe_ios_compose_mail_sms_present(uint64_t request_id, int32_t kind, c
                 [m setBccRecipients:FandheSplitRecipients(bccS)];
                 [m setSubject:subjectS];
                 [m setMessageBody:bodyS isHTML:NO];
+                if (attData != nil) {
+                    [m addAttachmentData:attData mimeType:attMime fileName:attName];
+                }
                 m.mailComposeDelegate = delegate;
                 vc = m;
             } else {

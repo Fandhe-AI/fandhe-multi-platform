@@ -2,10 +2,12 @@
 //! Android 経路（`begin_compose`）から呼ばれる。Java 側 `ComposeHelper` が `ACTION_SENDTO`
 //! （メールは `mailto:`、SMS は `smsto:` + `sms_body`）で OS の作成画面を開く。
 //!
-//! 流れ: `begin_compose` → JNI `MainActivity.requestCompose(id, kind, to, cc, bcc, subject, body)` →
+//! 流れ: `begin_compose` → JNI `MainActivity.requestCompose(id, kind, to, cc, bcc, subject, body, attData, attMime, attName)` →
 //! Java が `nativeOnComposeResult(id, code)` で返す → `outcome_from_android_code` で契約の結果へ
 //! 写像 → `compose_mail_sms::bridge::deliver` が `SLOT` の id と照合して置く。
 //! 値は `ComposeRequest` の検証を通ったものだけを渡す（URL は組み立てない）。
+//! 添付（Issue #32、メールのみ）は長さ 0 の配列と空文字列が「なし」。ありのとき Java は
+//! `cache/compose/` に最新 1 件だけ書き、`FileProvider` の content URI で `ACTION_SEND` する。
 //!
 //! 守る範囲: 1 プロセス内の要求順序・NoHandler / 非前景を成功に畳まないこと・Activity 再生成時の
 //! 旧要求の破棄。守らない範囲: 作成画面へ渡した後の送信可否（結果は `HandedOff` までしか言えない）。
@@ -47,7 +49,7 @@ pub(crate) fn begin_compose(_request_id: u64, _req: &ComposeRequest) -> Result<(
     Err(DeviceError::Unsupported("compose"))
 }
 
-/// `MainActivity.requestCompose(long, int, String, String, String, String, String)` を JNI で呼ぶ。
+/// `MainActivity.requestCompose(long, int, String×5, byte[], String, String)` を JNI で呼ぶ。
 /// `false` は呼び出し失敗。`unsafe` 2 箇所は `android_app_badge::call_activity` と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
@@ -69,6 +71,10 @@ fn call_activity(id: u64, req: &ComposeRequest) -> bool {
         let bcc = env.new_string(req.bcc().join("\n"))?;
         let subject = env.new_string(req.subject())?;
         let body = env.new_string(req.body())?;
+        let att = req.attachment();
+        let att_data = env.byte_array_from_slice(att.map_or(&[][..], |a| a.data()))?;
+        let att_mime = env.new_string(att.map_or("", |a| a.mime_type()))?;
+        let att_name = env.new_string(att.map_or("", |a| a.file_name()))?;
         let args = [
             jni::objects::JValue::Long(id as jni::sys::jlong),
             jni::objects::JValue::Int(kind_code(req.kind())),
@@ -77,11 +83,14 @@ fn call_activity(id: u64, req: &ComposeRequest) -> bool {
             jni::objects::JValue::Object(&bcc),
             jni::objects::JValue::Object(&subject),
             jni::objects::JValue::Object(&body),
+            jni::objects::JValue::Object(&att_data),
+            jni::objects::JValue::Object(&att_mime),
+            jni::objects::JValue::Object(&att_name),
         ];
         env.call_method(
             &activity,
             jni::jni_str!("requestCompose"),
-            jni::jni_sig!((long, int, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String) -> ()),
+            jni::jni_sig!((long, int, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, byte[], java.lang.String, java.lang.String) -> ()),
             &args,
         )?;
         Ok(())

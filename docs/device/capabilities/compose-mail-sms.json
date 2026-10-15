@@ -58,5 +58,5 @@
       "impl": "crates/fandhe-web-dom/src/compose_mail_sms.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-device/src/compose_mail_sms.rs、Issue #1387、Issue #33"
     }
   },
-  "note": "compose-mail-sms は送信前の作成画面を OS 側で出す。share-sheet（既存 id）との違い: 共有は宛先を選ぶ汎用 UI、こちらは宛先・件名・本文を渡してメール / SMS の作成画面を直接開く。今回の範囲: 宛先（To 複数・CC・BCC）・件名・本文を固定値で渡して作成画面を開き、結果（取れる OS のみ）を画面に出す。"
+  "note": "compose-mail-sms は送信前の作成画面を OS 側で出す。share-sheet（既存 id）との違い: 共有は宛先を選ぶ汎用 UI、こちらは宛先・件名・本文を渡してメール / SMS の作成画面を直接開く。今回の範囲: 宛先（To 複数・CC・BCC）・件名・本文を固定値で渡して作成画面を開き、結果（取れる OS のみ）を画面に出す。添付は compose-mail-attachment（Issue #32）。"
 }
