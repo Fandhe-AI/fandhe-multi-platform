@@ -7,7 +7,8 @@
 //!
 //! - `ios/fandhe_ios_text_input.m`（Issue #795、ソフトキーボード文字入力の `UITextField`
 //!   ブリッジ）は feature に関わらず常にコンパイル・UIKit/Foundation をリンクする
-//!   （`src/ios_text_input.rs` から呼ばれる契約、iOS 向けエントリ `ios.rs` が常に使うため）。
+//!   （`src/ios_text_input.rs` から呼ばれる契約。計測 feature `cold-start-probe`/`frame-metrics`
+//!   有効時は Rust 側が外れるためコンパイルしない、Issue #19）。
 //! - `ios/fandhe_ios_camera.m`（Issue #751、実カメラ実装）は feature `device`
 //!   （既定 on）有効時のみコンパイルし、AVFoundation/CoreGraphics を追加でリンクする
 //!   （`src/device/ios.rs` の `Camera` 実装から呼ばれる契約、無効時はリンクエラーを
@@ -199,11 +200,17 @@ fn main() {
         return;
     }
 
-    println!("cargo:rerun-if-changed=ios/fandhe_ios_text_input.m");
-    cc::Build::new()
-        .file("ios/fandhe_ios_text_input.m")
-        .flag("-fobjc-arc")
-        .compile("fandhe_ios_text_input");
+    // 計測専用ビルドでは `src/ios_text_input.rs`（`#[no_mangle]` の受け口）が `lib.rs` の
+    // cfg で外れるため、呼び出し側の `.m` も同じ条件で外す（Issue #19）。
+    let measure_build = std::env::var("CARGO_FEATURE_COLD_START_PROBE").is_ok()
+        || std::env::var("CARGO_FEATURE_FRAME_METRICS").is_ok();
+    if !measure_build {
+        println!("cargo:rerun-if-changed=ios/fandhe_ios_text_input.m");
+        cc::Build::new()
+            .file("ios/fandhe_ios_text_input.m")
+            .flag("-fobjc-arc")
+            .compile("fandhe_ios_text_input");
+    }
 
     println!("cargo:rustc-link-lib=framework=UIKit");
     println!("cargo:rustc-link-lib=framework=Foundation");
