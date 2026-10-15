@@ -14,7 +14,7 @@
  * 毎回コンフリクトするため。
  *
  * 使い方: node scripts/device/build-capabilities.mjs [--check]
- *   --check を付けると書き込まず、スキーマ・実装パス・Android 権限宣言を検査し、生成が例外なく通るかを
+ *   --check を付けると書き込まず、スキーマ・url の scheme（https のみ）・実装パス・Android 権限宣言を検査し、生成が例外なく通るかを
  *   確かめる（終了コードで通知）。
  */
 import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
@@ -88,6 +88,9 @@ function validate(features, meta) {
         // approval = OS ベンダーへの申請・承認が要るセル。expand-capability はこれを候補から外すため、
         // 「できそう」以外に付いていると意味が通らない。
         errors.push(`${at}: platforms.${os}.approval は status=possible のセルにのみ文字列で書く`);
+      }
+      for (const u of badUrls(p)) {
+        errors.push(`${at}: platforms.${os}.url は https:// で始まる必要がある (${JSON.stringify(u)})`);
       }
     }
   }
@@ -187,9 +190,17 @@ const APPROVAL_MARK = "🔒申請待ち";
 const STATUS_CLASS = { done: "s-done", possible: "s-possible", no: "s-no", "n-a": "s-na", unrated: "s-unrated" };
 const GENERATED = "このファイルは生成物です。編集は `docs/device/capabilities/<id>.json`（共通定義は `_meta.json`）に対して行い、`node scripts/device/build-capabilities.mjs` で再生成してください。キャプチャは画像を埋め込まず相対参照するため、配布時は `captures/` ディレクトリを添えてください。";
 
+/**
+ * 生成 HTML の href と Markdown の自動リンクへそのまま出す url のうち、https:// で始まらないものを返す。
+ * validate() から呼ばれ、javascript: 等の実行系 scheme を生成の入口で止める（許可リスト方式）。
+ */
+function badUrls(p) {
+  return urls(p).filter((u) => typeof u !== "string" || !u.startsWith("https://"));
+}
+
 /** url は単一ソースなら文字列、複数ソース行が 1 機能へ統合された場合は配列になる。 */
 function urls(p) {
-  if (!p.url) return [];
+  if (!p?.url) return [];
   return Array.isArray(p.url) ? p.url : [p.url];
 }
 
@@ -540,4 +551,4 @@ if (invokedAsCli) {
 }
 
 // テスト（scripts/device/build-capabilities.test.mjs）専用のエクスポート。
-export { checkImplPaths, checkAndroidPermissions, extractImplPaths };
+export { checkImplPaths, checkAndroidPermissions, extractImplPaths, badUrls };
