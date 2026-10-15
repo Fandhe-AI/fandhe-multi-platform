@@ -173,6 +173,10 @@ static ACTIVE: Mutex<Option<ActiveWatch>> = Mutex::new(None);
 /// 利用者が選んだフォルダ `(id, 実パス)`。パスはコアの状態へ渡さない。
 type PickedSlot = Mutex<Option<(u64, PathBuf)>>;
 static PICKED: PickedSlot = Mutex::new(None);
+thread_local! {
+    /// `do_pick` 実行中の世代（再入ガード。drive は UI スレッドからのみ呼ばれる）。
+    static PICK_IN_FLIGHT: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
 static NEXT_PICK_ID: AtomicU64 = AtomicU64::new(1);
 
 /// 選択要求を処理して `finish_pick` を送る。`canonicalize` で実在を確かめてから保持する。
@@ -299,8 +303,13 @@ fn drive(
     pick: &dyn Fn() -> Result<Option<PathBuf>, DeviceError>,
 ) {
     // 0. フォルダ選択（UI スレッドで同期。開始より前に処理して、選択後の開始が新しい選択を使う）。
+    // macOS の NSOpenPanel は入れ子 run loop を回すため、ダイアログ表示中に drive が再入しうる。
+    // 処理中の世代は飛ばし、同じ世代でダイアログを二重に開かない（UI スレッド限定の in-flight ガード）。
     if let Some(generation) = take_pick(state) {
-        do_pick(sender, picked, pick, generation);
+        if PICK_IN_FLIGHT.with(|c| c.replace(Some(generation))) != Some(generation) {
+            do_pick(sender, picked, pick, generation);
+            PICK_IN_FLIGHT.with(|c| c.set(None));
+        }
     }
 
     // 1. 照合: 画面が監視中でない / 世代が違う監視は止める。利用者の停止、`Failed` の合図、
@@ -687,6 +696,42 @@ mod tests {
         let d = e.dir.join(name);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn reentrant_drive_opens_pick_dialog_once() {
+        let mut e = Env::new("pickreenter", Fake::default());
+        let d = pick_dir(&e, "chosen");
+        pick_folder(&mut e.state);
+        let calls = std::cell::Cell::new(0);
+        let pick = || {
+            calls.set(calls.get() + 1);
+            // NSOpenPanel の入れ子 run loop による drive 再入を模す。
+            drive(
+                &e.state,
+                &e.sender,
+                &e.active,
+                &e.fake,
+                &|| Ok(e.dir.clone()),
+                &e.picked,
+                &|| panic!("再入でダイアログを開いてはならない"),
+            );
+            Ok(Some(d.clone()))
+        };
+        drive(
+            &e.state,
+            &e.sender,
+            &e.active,
+            &e.fake,
+            &|| Ok(e.dir.clone()),
+            &e.picked,
+            &pick,
+        );
+        assert_eq!(calls.get(), 1);
+        while let Ok(c) = e.rx.try_recv() {
+            c(&mut e.state);
+        }
+        assert_eq!(e.state.picked.as_ref().unwrap().label, "chosen");
     }
 
     #[test]
