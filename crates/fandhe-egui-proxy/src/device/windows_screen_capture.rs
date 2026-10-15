@@ -199,11 +199,18 @@ fn begin_pick(request_id: u64, max: Duration, hwnd: HWND) -> Result<(), DeviceEr
         .PickSingleItemAsync()
         .map_err(|e| hr(&e, "screen_capture pick"))?;
     op.SetCompleted(&AsyncOperationCompletedHandler::new(move |op, status| {
-        let item = match (status, op.ok()) {
-            (AsyncStatus::Completed, Ok(op)) => Some(op.GetResults().ok()),
-            (AsyncStatus::Error, _) => None,
+        let item = match status {
+            // Error でも GetResults が失敗 HRESULT を返すので、同じ経路で分類する（契約表 5・10）。
+            AsyncStatus::Completed | AsyncStatus::Error => {
+                match op.ok().and_then(|op| op.GetResults()) {
+                    Ok(item) => Ok(Some(item)),
+                    // null 選択（ピッカーを閉じた）は成功コード 0 のエラーで届く = キャンセル。
+                    Err(e) if e.code().is_ok() => Ok(None),
+                    Err(e) => Err(hr(&e, "screen_capture pick")),
+                }
+            }
             // Canceled・未知はキャンセル扱い。
-            _ => Some(None),
+            _ => Ok(None),
         };
         on_picked(request_id, max, item);
         Ok(())
@@ -213,8 +220,12 @@ fn begin_pick(request_id: u64, max: Duration, hwnd: HWND) -> Result<(), DeviceEr
     Ok(())
 }
 
-/// `item`: `None` = ピッカーが失敗、`Some(None)` = 閉じた（null）、`Some(Some(_))` = 選択済み。
-fn on_picked(request_id: u64, max: Duration, item: Option<Option<GraphicsCaptureItem>>) {
+/// `item`: `Err` = ピッカーが失敗（HRESULT 分類済み）、`Ok(None)` = 閉じた（null）、`Ok(Some(_))` = 選択済み。
+fn on_picked(
+    request_id: u64,
+    max: Duration,
+    item: Result<Option<GraphicsCaptureItem>, DeviceError>,
+) {
     let (tx, rx) = mpsc::channel::<()>();
     let item = {
         let mut guard = lock_session();
@@ -228,7 +239,7 @@ fn on_picked(request_id: u64, max: Duration, item: Option<Option<GraphicsCapture
             }
         );
         match item {
-            Some(Some(item)) if !stop_requested => {
+            Ok(Some(item)) if !stop_requested => {
                 s.phase = Phase::Recording {
                     stop_tx: tx.clone(),
                 };
@@ -238,8 +249,8 @@ fn on_picked(request_id: u64, max: Duration, item: Option<Option<GraphicsCapture
                 *guard = None;
                 drop(guard);
                 let err = match other {
-                    None => DeviceError::Internal("screen_capture pick"),
-                    Some(_) => DeviceError::Cancelled("screen_capture"),
+                    Err(e) => e,
+                    Ok(_) => DeviceError::Cancelled("screen_capture"),
                 };
                 bridge::deliver(request_id, Err(err));
                 return;
@@ -339,18 +350,50 @@ fn record(
         .and_then(|()| video.SetHeight(h))
         .map_err(|e| hr(&e, "screen_capture profile"))?;
     let transcoder = MediaTranscoder::new().map_err(|e| hr(&e, "screen_capture transcoder"))?;
-    let prepared = transcoder
+    // 準備はソースからサンプルを要求するので、フレームが出るよう先にキャプチャを始める。
+    // 期限の起点もここ。準備待ちの間も停止合図・期限で抜ける（契約表 2・3）。
+    session
+        .StartCapture()
+        .map_err(|e| hr(&e, "screen_capture start"))?;
+    let t0 = Instant::now();
+    let prep_op = transcoder
         .PrepareMediaStreamSourceTranscodeAsync(&source, &stream, &profile)
-        .and_then(|op| op.get())
+        .map_err(|e| hr(&e, "screen_capture prepare"))?;
+    let (prep_tx, prep_rx) = mpsc::channel::<AsyncStatus>();
+    prep_op
+        .SetCompleted(&AsyncOperationCompletedHandler::new(move |_, status| {
+            let _ = prep_tx.send(status);
+            Ok(())
+        }))
+        .map_err(|e| {
+            let _ = prep_op.Cancel();
+            hr(&e, "screen_capture prepare")
+        })?;
+    loop {
+        match prep_rx.recv_timeout(Duration::from_millis(20)) {
+            Ok(_) => break,
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(DeviceError::Internal("screen_capture prepare"));
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+        }
+        if stop_rx.try_recv().is_ok() {
+            let _ = prep_op.Cancel();
+            return Err(DeviceError::Cancelled("screen_capture"));
+        }
+        if t0.elapsed() >= max {
+            let _ = prep_op.Cancel();
+            return Err(DeviceError::Internal("screen_capture prepare timeout"));
+        }
+    }
+    let prepared = prep_op
+        .GetResults()
         .map_err(|e| hr(&e, "screen_capture prepare"))?;
     if !prepared.CanTranscode().unwrap_or(false) {
         return Err(DeviceError::Internal("screen_capture transcode"));
     }
 
     let (done_tx, done_rx) = mpsc::channel::<AsyncStatus>();
-    session
-        .StartCapture()
-        .map_err(|e| hr(&e, "screen_capture start"))?;
     let action = prepared
         .TranscodeAsync()
         .map_err(|e| hr(&e, "screen_capture transcode"))?;
@@ -366,10 +409,9 @@ fn record(
             hr(&e, "screen_capture transcode")
         })?;
     bridge::mark_started(request_id);
-    let t0 = Instant::now();
 
     // 停止合図・期限・`Closed` のどれでも（送信側が全部落ちても）ここで抜ける。
-    let _ = stop_rx.recv_timeout(max);
+    let _ = stop_rx.recv_timeout(max.saturating_sub(t0.elapsed()));
     let elapsed_ms = t0.elapsed().as_millis() as u64;
     stopping.store(true, Ordering::SeqCst);
 
