@@ -97,7 +97,7 @@ pub(crate) fn render(count: u32) -> IconBits {
     for y in 0..SIZE {
         for x in 0..SIZE {
             let (dx, dy) = (x as f32 - c, y as f32 - c);
-            if dx * dx + dy * dy > 7.9 * 7.9 {
+            if dx * dx + dy * dy > 8.0 * 8.0 {
                 continue;
             }
             let (b, g, r) = if white[y][x] {
@@ -242,6 +242,18 @@ mod tests {
                 .map(|i| i % SIZE)
                 .collect();
             let (min, max) = (white.iter().min().unwrap(), white.iter().max().unwrap());
+            // 数字の画素が円の外で欠けない（4 桁の左端で再発した）。
+            let bits: u32 = n
+                .to_string()
+                .bytes()
+                .map(|c| {
+                    DIGITS[usize::from(c - b'0')]
+                        .iter()
+                        .map(|r| r.count_ones())
+                        .sum::<u32>()
+                })
+                .sum();
+            assert_eq!(white.len() as u32, bits, "n={n}");
             assert!((*min as i32 - (SIZE - 1 - *max) as i32).abs() <= 1, "n={n}");
         }
         assert!(render(1).xor != render(7).xor);
