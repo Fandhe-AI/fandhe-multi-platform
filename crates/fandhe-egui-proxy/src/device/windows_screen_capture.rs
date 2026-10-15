@@ -460,6 +460,10 @@ fn record(
             return Err(DeviceError::Internal("screen_capture finish timeout"));
         }
     }
+    // 最初の確認後に進行中だったサンプル生成が失敗していても成功にしない。
+    if let Some(e) = take_fault(&fault) {
+        return Err(e);
+    }
     let bytes = stream.Size().map_err(|e| hr(&e, "screen_capture size"))?;
     drop(cleanup);
     build_capture_result(bytes, "video/mp4".to_string(), elapsed_ms)
@@ -499,13 +503,27 @@ fn build_source(
             MediaStreamSourceSampleRequestedEventArgs,
         >::new(move |_, args| {
             let request = args.ok()?.Request()?;
+            // 握りつぶさずワーカーへ伝える: 失敗を残し、EOS にして停止合図で待機を起こす。
+            let report = |e: &windows::core::Error| {
+                fault
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .get_or_insert(hr(e, "screen_capture sample"));
+                stopping.store(true, Ordering::SeqCst);
+                let _ = stop_tx.send(());
+            };
             let frame = loop {
                 if stopping.load(Ordering::SeqCst) {
                     return Ok(()); // サンプル無し = EOS
                 }
                 match pool.TryGetNextFrame() {
                     Ok(f) => break f,
-                    Err(_) => std::thread::sleep(Duration::from_millis(5)),
+                    // フレーム未到着は null 結果（`Error::empty()` = 成功コード）で届く。再試行。
+                    Err(e) if e.code().is_ok() => std::thread::sleep(Duration::from_millis(5)),
+                    Err(e) => {
+                        report(&e);
+                        return Ok(());
+                    }
                 }
             };
             let frame = FrameGuard(frame);
@@ -524,13 +542,7 @@ fn build_source(
                 request.SetSample(&sample)
             };
             if let Err(e) = produce() {
-                // 握りつぶさずワーカーへ伝える: 失敗を残し、EOS にして停止合図で待機を起こす。
-                fault
-                    .lock()
-                    .unwrap_or_else(|p| p.into_inner())
-                    .get_or_insert(hr(&e, "screen_capture sample"));
-                stopping.store(true, Ordering::SeqCst);
-                let _ = stop_tx.send(());
+                report(&e);
             }
             Ok(())
         }))
