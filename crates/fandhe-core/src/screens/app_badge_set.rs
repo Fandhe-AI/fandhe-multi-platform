@@ -37,12 +37,10 @@ pub const UNSUPPORTED_STATUS: &str = "この環境ではバッジを設定でき
 pub const INVALID_NUMBER_STATUS: &str = "0 以上の整数を入力してください";
 /// 範囲外（件数）の失敗文言。
 pub const OUT_OF_RANGE_MESSAGE: &str = "件数は 0〜9999 で入力してください";
-/// 範囲外（Windows の進捗）の失敗文言。
-pub const OUT_OF_PROGRESS_MESSAGE: &str = "進捗は 0〜100 % で入力してください";
 /// 失敗の接頭辞。
 pub const FAILED_PREFIX: &str = "設定できませんでした: ";
 /// 固定の注記。
-pub const NOTE_TEXT: &str = "件数は 0〜9999、0 で消します。Windows はタスクバー進捗（%）で 0〜100。\
+pub const NOTE_TEXT: &str = "件数は 0〜9999、0 で消します。Windows はタスクバーボタンの右下に数字を重ねます。\
 Android は無音の通知が 1 件増え、ドットと長押しメニューに件数が出ます（アイコン上の数字は保証しません）。\
 Web は PWA としてインストールしたときだけ表示されます。iOS は通知（バッジ）の許可が要ります";
 

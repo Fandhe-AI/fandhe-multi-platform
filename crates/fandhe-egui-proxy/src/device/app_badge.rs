@@ -12,8 +12,7 @@
 //!   `UnsupportedAppBadge` で「非対応」を表示する
 
 use fandhe_core::screens::app_badge_set::{
-    finish_set, mark_setting, take_request, AppBadgeSetState, CoreOutcome, OUT_OF_PROGRESS_MESSAGE,
-    OUT_OF_RANGE_MESSAGE,
+    finish_set, mark_setting, take_request, AppBadgeSetState, CoreOutcome, OUT_OF_RANGE_MESSAGE,
 };
 use fandhe_device::app_badge::{BadgeOutcome, BadgeValue};
 use fandhe_device::DeviceError;
@@ -32,9 +31,6 @@ fn to_outcome(
         Ok(BadgeOutcome::Cancelled) => Ok(CoreOutcome::Cancelled),
         Err(DeviceError::PermissionDenied(_)) => Ok(CoreOutcome::Denied),
         Err(DeviceError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
-        Err(DeviceError::InvalidInput("app_badge progress")) => {
-            Err(OUT_OF_PROGRESS_MESSAGE.to_string())
-        }
         Err(DeviceError::InvalidInput(_)) => Err(OUT_OF_RANGE_MESSAGE.to_string()),
         Err(_) => Err("OS のバッジ設定に失敗しました".to_string()),
     }
@@ -209,10 +205,6 @@ mod tests {
         assert_eq!(
             to_outcome(3, Err(DeviceError::Unsupported("app_badge"))),
             Ok(CoreOutcome::Unsupported)
-        );
-        assert_eq!(
-            to_outcome(300, Err(DeviceError::InvalidInput("app_badge progress"))),
-            Err(OUT_OF_PROGRESS_MESSAGE.to_string())
         );
         assert_eq!(
             to_outcome(30000, Err(DeviceError::InvalidInput("app_badge value"))),
