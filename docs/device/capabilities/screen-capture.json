@@ -37,11 +37,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/apple_screen_capture.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_screen_capture.m + crates/fandhe-egui-proxy/src/device/screen_capture.rs + crates/fandhe-core/src/screens/screen_capture.rs + crates/fandhe-device/src/screen_capture.rs、Issue #1335"
     },
     "windows": {
-      "status": "possible",
-      "api": "`Windows.Graphics.Capture`",
-      "perm": "要確認（ピッカーは HWND の初期化が必要。package identity の要否は文書に記載なし）",
+      "status": "done",
+      "api": "`Windows.Graphics.Capture`（`GraphicsCapturePicker` + `Direct3D11CaptureFramePool`）+ WinRT `MediaStreamSource` / `MediaTranscoder`（H.264 / MP4）",
+      "perm": "不要（ピッカーが毎回の同意 UI。package identity なしの unpackaged 実行での動作は実機確認待ち）",
       "url": "https://learn.microsoft.com/en-us/windows/apps/develop/media-authoring-processing/screen-capture",
-      "note": "未実装。unpackaged での動作は未検証のため要確認。代替の Win32 手段（Desktop Duplication 等）は未調査。"
+      "note": "実装済み（#26）。エンコード経路は WinRT の `MediaStreamSource` + `MediaTranscoder` を採用（Media Foundation の `IMFSinkWriter` は unsafe COM の範囲が数倍になるため不採用）。録画対象は毎回 `GraphicsCapturePicker` で選ばせる（`CreateForMonitor` は使わない）。出力はメモリ上のストリームで一時ファイルを作らず、バイト数・mime・録画時間だけを Rust へ返す（映像は読み込まない）。録画は 10 秒で自動停止。状態は 1 本のロック付き状態で世代照合し、確定は 1 か所・first-wins、D3D11・フレームプール・セッション・`Closed` 登録は全経路で解放。ピッカーを閉じた・ピッカー表示中の停止はキャンセル、`E_ACCESSDENIED` は権限拒否、`IsSupported` が false は Unsupported、書き出し未完了・完了待ちタイムアウト・0 バイトは失敗。対象ウィンドウが閉じた場合は停止として書き出しを閉じ、完了すれば成功。録画時間は単調時計で測る。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・資源の解放・毎回の同意。守らない範囲: 映像の中身、ピッカーの見た目、複数プロセス、プロセス死。既知の天井: ピッカーをプログラムから閉じられない（表示中の停止は完了後に反映）／録画中のサイズ変更に追従しない／エンコーダが解像度を拒否すれば失敗／静止画面ではフレームが少ない。検証範囲: AI 側は windows-gnu 向けの型検査・clippy まで（msvc ビルドと実機は未実施）。実機確認は #24",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#24）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_screen_capture.rs + crates/fandhe-egui-proxy/src/device/screen_capture.rs + crates/fandhe-core/src/screens/screen_capture.rs + crates/fandhe-device/src/screen_capture.rs、Issue #26"
     },
     "web": {
       "status": "done",
