@@ -359,6 +359,10 @@ pub mod ios_image_recognition;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_local_fonts;
+/// Issue #27: iOS 向け複数ディスプレイ実装（`ios/fandhe_ios_multi_display.m`、scene の `UIScreen`）。
+/// `device/multi_display.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_multi_display;
 /// Issue #1283: iOS 向けネットワーク接続状態実装（`apple_network_status` を返す）。
 /// `device/network_status.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -428,9 +432,10 @@ pub mod macos_file_watch;
 pub mod macos_local_fonts;
 /// Issue #1341: macOS 向け複数ディスプレイ実装（`macos/fandhe_macos_multi_display.m` を呼ぶ C ABI
 /// ラッパー）。`device/multi_display.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
-/// テストできるよう cfg は `any(macos, test)`。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+/// テストできるよう cfg は `any(macos, test)`。写像の純関数は iOS 実装（`ios_multi_display`）と
+/// 共用するため iOS でもコンパイルする。
+#[cfg(any(target_os = "macos", target_os = "ios", test))]
+#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 pub mod macos_multi_display;
 /// Issue #1274: macOS 向け電源状態実装（`macos/fandhe_macos_power_state.m` を呼ぶ C ABI ラッパー）。
 /// `device/power_state.rs` の macOS 経路から呼ばれる。写像の純関数をホストでテストできるよう

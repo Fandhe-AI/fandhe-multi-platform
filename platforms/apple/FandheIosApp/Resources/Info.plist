@@ -129,6 +129,37 @@
 	     eframe 既定の clear_color（ほぼ黒）で先にクリアすることが原因のため、
 	     本キーだけでは消えない。`crates/fandhe-egui-proxy/src/ios_text_input.rs` の
 	     `TextInputApp::clear_color` を egui のパネル背景色へ差し替えて解消する。 -->
+	<!-- UIApplicationSceneManifest（Issue #27）: 外部ディスプレイは scene 経由でしか列挙できない
+	     （`UIScreen.screens` は iOS 16 で非推奨）ため scene 形態へ移す。TN3187 により scene 未採用の
+	     アプリはいずれ起動できなくなる。application ロールの scene は winit の window を付けて表示し、
+	     外部ディスプレイ ロールは window を付けずミラーリング・拡張表示を OS の既定に任せる
+	     （`crates/fandhe-egui-proxy/ios/fandhe_ios_scene.m`）。複数 window scene は許可しない。 -->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default</string>
+					<key>UISceneDelegateClassName</key>
+					<string>FandheSceneDelegate</string>
+				</dict>
+			</array>
+			<key>UIWindowSceneSessionRoleExternalDisplayNonInteractive</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>External</string>
+					<key>UISceneDelegateClassName</key>
+					<string>FandheSceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>MinimumOSVersion</key>

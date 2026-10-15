@@ -148,6 +148,9 @@ pub mod tv_sample;
 pub mod frame_metrics;
 #[cfg(target_os = "ios")]
 pub mod ios;
+// Issue #27: UIScene 化シムのリンク用アンカー（`main` から呼ぶ）。
+#[cfg(target_os = "ios")]
+pub mod ios_scene;
 // Issue #795: `ios.rs::run` 専用の `TextInputApp` ラッパー（ソフトキーボードの
 // 文字入力ブリッジ）。`ios.rs` からのみ使う内部モジュールのため非公開にする。
 // FFI 境界（`TextInputApp` 本体・`#[no_mangle]` コールバック）は
