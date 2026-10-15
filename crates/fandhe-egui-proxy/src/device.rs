@@ -559,7 +559,7 @@ pub mod windows_bluetooth_le;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_compass;
-/// Issue #1384: Windows 向けメール作成画面実装（`ShellExecuteW` で `mailto:`）。`device/compose_mail_sms.rs` の windows 経路から呼ばれる。
+/// Issue #1384: Windows 向けメール・SMS 作成画面実装（`ShellExecuteW` で `mailto:` / `sms:`）。`device/compose_mail_sms.rs` の windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_compose_mail_sms;
