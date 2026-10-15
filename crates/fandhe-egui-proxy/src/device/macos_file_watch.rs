@@ -72,7 +72,8 @@ impl FileWatch for MacFileWatch {
     fn start(&self, dir: &Path, on_signal: OnSignal) -> Result<Box<dyn WatchGuard>, DeviceError> {
         const FAILED: DeviceError = DeviceError::Internal("file_watch start");
         let real = std::fs::canonicalize(dir).map_err(|_| FAILED)?;
-        let c_path = CString::new(real.to_string_lossy().into_owned()).map_err(|_| FAILED)?;
+        let c_path = CString::new(std::os::unix::ffi::OsStrExt::as_bytes(real.as_os_str()))
+            .map_err(|_| FAILED)?;
         let id = register(on_signal);
         if !ffi::start(id, &c_path) {
             unregister(id);

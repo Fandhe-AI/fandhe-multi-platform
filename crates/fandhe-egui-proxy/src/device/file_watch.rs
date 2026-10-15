@@ -21,6 +21,14 @@
 //! `pending` と完了の送信だけ。共通コアは `fandhe-device` の型を持てず effect は `&S` しか受け取れない
 //! ため、基準の走査結果は [`ACTIVE`] に置く。停止は guard の drop で、ロックの外で行う。
 //!
+//! # 選んだフォルダ（Issue #37）
+//!
+//! 「フォルダを選ぶ」は `take_pick` で観測し、UI スレッドから `fandhe_device::file_picker::pick_folder`
+//! を同期で呼ぶ（file_pick と同じ。ダイアログを閉じるまでブロックする）。選んだパスは [`PICKED`] に
+//! `id` つきで置き、コアの状態には表示名と `id` だけを渡す。開始時は `state.picked.id` が [`PICKED`] と
+//! 一致するときだけそのパスを監視し、不一致なら開始失敗にする（作業フォルダへ黙って倒さない）。
+//! 選んだフォルダでは `create_dir_all` も確認用の操作もしない（コア側が操作要求を立てない）。
+//!
 //! エラー文言・ログにパス・ファイル名・OS のメッセージを出さない（security.md A09）。
 
 use std::collections::HashMap;
@@ -29,8 +37,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use fandhe_core::screens::file_watch_show::{
-    apply_scan, finish_op, finish_start, mark_failed, take_op, take_start, FileWatchShowState,
-    OpKind, RecordKind, StartInfo, WatchFailure, WatchPhase,
+    apply_scan, finish_op, finish_pick, finish_start, mark_failed, take_op, take_pick, take_start,
+    FileWatchShowState, OpKind, PickedFolder, RecordKind, StartInfo, WatchFailure, WatchPhase,
 };
 #[cfg(not(any(
     target_os = "windows",
@@ -50,6 +58,7 @@ use crate::app::CompletionSender;
 /// 画面へ出す固定の失敗文言（OS の生コード・名前は出さない）。
 const START_FAILED: &str = "監視の開始";
 const OP_FAILED: &str = "ファイルの操作";
+const PICK_FAILED: &str = "フォルダの選択";
 
 /// 作業フォルダの名前（デスクトップは `~/.fandhe/file-watch`）。
 const WORK_DIR_NAME: &str = "file-watch";
@@ -161,6 +170,39 @@ struct ActiveWatch {
 
 static ACTIVE: Mutex<Option<ActiveWatch>> = Mutex::new(None);
 
+/// 利用者が選んだフォルダ `(id, 実パス)`。パスはコアの状態へ渡さない。
+type PickedSlot = Mutex<Option<(u64, PathBuf)>>;
+static PICKED: PickedSlot = Mutex::new(None);
+static NEXT_PICK_ID: AtomicU64 = AtomicU64::new(1);
+
+/// 選択要求を処理して `finish_pick` を送る。`canonicalize` で実在を確かめてから保持する。
+fn do_pick(
+    sender: &Sender,
+    picked: &PickedSlot,
+    pick: &dyn Fn() -> Result<Option<PathBuf>, DeviceError>,
+    generation: u64,
+) {
+    let result = pick()
+        .and_then(|o| match o {
+            None => Ok(None),
+            Some(p) => {
+                let real = std::fs::canonicalize(&p)
+                    .map_err(|_| DeviceError::Internal("file_watch pick"))?;
+                let label = real
+                    .file_name()
+                    .and_then(|n| fandhe_device::device_info::clean_text(&n.to_string_lossy()))
+                    .unwrap_or_else(|| "選んだフォルダ".to_string());
+                let id = NEXT_PICK_ID.fetch_add(1, Ordering::Relaxed);
+                *lock(picked) = Some((id, real));
+                Ok(Some(PickedFolder { id, label }))
+            }
+        })
+        .map_err(|e| to_failure(e, PICK_FAILED));
+    let _ = sender.send(Box::new(move |s: &mut FileWatchShowState| {
+        finish_pick(s, generation, result)
+    }));
+}
+
 /// 作業フォルダを解決して作る。外部入力からパスを組み立てない。
 fn work_dir() -> Result<PathBuf, DeviceError> {
     #[cfg(target_os = "ios")]
@@ -253,7 +295,14 @@ fn drive(
     active: &Mutex<Option<ActiveWatch>>,
     fw: &dyn FileWatch,
     resolve_dir: &dyn Fn() -> Result<PathBuf, DeviceError>,
+    picked: &PickedSlot,
+    pick: &dyn Fn() -> Result<Option<PathBuf>, DeviceError>,
 ) {
+    // 0. フォルダ選択（UI スレッドで同期。開始より前に処理して、選択後の開始が新しい選択を使う）。
+    if let Some(generation) = take_pick(state) {
+        do_pick(sender, picked, pick, generation);
+    }
+
     // 1. 照合: 画面が監視中でない / 世代が違う監視は止める。利用者の停止、`Failed` の合図、
     //    Android の Activity 再生成後の初期 state、古い世代をここ 1 か所で吸収する。
     let stale = {
@@ -272,7 +321,21 @@ fn drive(
     // 2. 開始（完了が届くまでの再実行で二重に起こさない）。
     if let Some(generation) = take_start(state) {
         if lock(active).is_none() {
-            let result = do_start(sender, active, fw, resolve_dir, generation);
+            // 選んだフォルダがあればその実パス（id 不一致は失敗）、無ければ作業フォルダ。
+            let resolve = || match &state.picked {
+                Some(p) => match lock(picked).as_ref() {
+                    Some((id, path)) if *id == p.id => Ok(path.clone()),
+                    _ => Err(DeviceError::Internal("file_watch picked")),
+                },
+                None => resolve_dir(),
+            };
+            let label = state.picked.as_ref().map(|p| p.label.clone());
+            let result = do_start(sender, active, fw, &resolve, generation).map(|mut info| {
+                if let Some(l) = label {
+                    info.folder = l; // 選んだフォルダはフルパスを出さない。
+                }
+                info
+            });
             let _ = sender.send(Box::new(move |s: &mut FileWatchShowState| {
                 finish_start(s, generation, result)
             }));
@@ -337,6 +400,8 @@ pub fn file_watch_show_effect(state: &FileWatchShowState, sender: &Sender) {
         &ACTIVE,
         platform_file_watch().as_ref(),
         &work_dir,
+        &PICKED,
+        &fandhe_device::file_picker::pick_folder,
     );
 }
 
@@ -344,8 +409,8 @@ pub fn file_watch_show_effect(state: &FileWatchShowState, sender: &Sender) {
 mod tests {
     use super::*;
     use fandhe_core::screens::file_watch_show::{
-        create, delete, start, stop, update, FAILED_PREFIX, MONITOR_STOPPED_ERROR,
-        NO_TARGET_STATUS, UNSUPPORTED_STATUS, WATCHING_STATUS,
+        create, delete, pick_folder, start, stop, update, FAILED_PREFIX, MONITOR_STOPPED_ERROR,
+        NO_TARGET_STATUS, PICK_UNSUPPORTED_STATUS, UNSUPPORTED_STATUS, WATCHING_STATUS,
     };
     use std::sync::atomic::AtomicUsize;
     use std::sync::mpsc;
@@ -396,6 +461,9 @@ mod tests {
         state: FileWatchShowState,
         sender: Sender,
         rx: mpsc::Receiver<crate::app::Completion<FileWatchShowState>>,
+        picked: PickedSlot,
+        /// 次の `pick` 呼び出しの結果（テストが差し替える）。
+        pick_result: Mutex<Result<Option<PathBuf>, DeviceError>>,
     }
     impl Env {
         fn new(tag: &str, fake: Fake) -> Self {
@@ -414,13 +482,26 @@ mod tests {
                 state: FileWatchShowState::default(),
                 sender: CompletionSender::new(tx, egui::Context::default()),
                 rx,
+                picked: Mutex::new(None),
+                pick_result: Mutex::new(Ok(None)),
             }
         }
         fn tick(&mut self) {
             let dir = self.dir.clone();
-            drive(&self.state, &self.sender, &self.active, &self.fake, &|| {
-                Ok(dir.clone())
-            });
+            let pr = &self.pick_result;
+            drive(
+                &self.state,
+                &self.sender,
+                &self.active,
+                &self.fake,
+                &|| Ok(dir.clone()),
+                &self.picked,
+                &|| match &*lock(pr) {
+                    Ok(o) => Ok(o.clone()),
+                    Err(DeviceError::Unsupported(n)) => Err(DeviceError::Unsupported(n)),
+                    Err(_) => Err(DeviceError::Internal("x")),
+                },
+            );
             while let Ok(c) = self.rx.try_recv() {
                 c(&mut self.state);
             }
@@ -565,6 +646,8 @@ mod tests {
             &e.active,
             &e.fake,
             &|| Ok(gone.clone()),
+            &e.picked,
+            &|| Ok(None),
         );
         while let Ok(c) = e.rx.try_recv() {
             c(&mut e.state);
@@ -598,6 +681,92 @@ mod tests {
         update(&mut e.state);
         e.tick();
         assert!(e.state.records.iter().any(|r| r.name == "sample-1.txt"));
+    }
+
+    fn pick_dir(e: &Env, name: &str) -> PathBuf {
+        let d = e.dir.join(name);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn picked_folder_is_watched_instead_of_work_dir() {
+        let mut e = Env::new("picked", Fake::default());
+        let d = pick_dir(&e, "chosen");
+        std::fs::write(d.join("a.txt"), "x").unwrap();
+        *lock(&e.pick_result) = Ok(Some(d.clone()));
+        pick_folder(&mut e.state);
+        e.tick();
+        assert_eq!(e.state.picked.as_ref().unwrap().label, "chosen");
+        start(&mut e.state);
+        e.tick();
+        assert_eq!(e.state.phase, WatchPhase::Watching);
+        assert_eq!(e.state.file_count, 1);
+        assert_eq!(e.state.folder, "chosen", "フルパスを出さない");
+        std::fs::write(d.join("b.txt"), "x").unwrap();
+        e.fake.signal(WatchSignal::Changed);
+        e.tick();
+        assert_eq!(e.state.records[0].name, "b.txt");
+        // 選んだフォルダでは操作要求が立たない。
+        create(&mut e.state);
+        e.tick();
+        assert!(!d.join("sample-1.txt").exists());
+    }
+
+    #[test]
+    fn cancelled_pick_keeps_work_dir() {
+        let mut e = Env::new("pickcancel", Fake::default());
+        pick_folder(&mut e.state);
+        e.tick();
+        assert!(e.state.picked.is_none() && e.state.pick.is_none());
+        assert!(e.state.error.is_empty());
+        start(&mut e.state);
+        e.tick();
+        assert_eq!(e.state.phase, WatchPhase::Watching);
+    }
+
+    #[test]
+    fn unsupported_pick_shows_message_and_failure_is_not_success() {
+        let mut e = Env::new("pickunsup", Fake::default());
+        *lock(&e.pick_result) = Err(DeviceError::Unsupported("folder_picker"));
+        pick_folder(&mut e.state);
+        e.tick();
+        assert_eq!(e.state.error, PICK_UNSUPPORTED_STATUS);
+        *lock(&e.pick_result) = Ok(Some(e.dir.join("missing")));
+        pick_folder(&mut e.state);
+        e.tick();
+        assert!(e.state.error.starts_with(FAILED_PREFIX));
+        assert!(e.state.picked.is_none());
+    }
+
+    #[test]
+    fn deleted_picked_folder_fails_start_and_releases_guard() {
+        let mut e = Env::new("pickgone", Fake::default());
+        let d = pick_dir(&e, "gone");
+        *lock(&e.pick_result) = Ok(Some(d.clone()));
+        pick_folder(&mut e.state);
+        e.tick();
+        std::fs::remove_dir_all(&d).unwrap();
+        start(&mut e.state);
+        e.tick();
+        assert_eq!(e.state.phase, WatchPhase::Idle);
+        assert!(e.state.error.starts_with(FAILED_PREFIX));
+        assert!(lock(&e.active).is_none());
+        assert_eq!(e.drops(), e.fake.starts.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn picked_id_mismatch_fails_start() {
+        let mut e = Env::new("pickid", Fake::default());
+        e.state.picked = Some(PickedFolder {
+            id: u64::MAX,
+            label: "x".into(),
+        });
+        start(&mut e.state);
+        e.tick();
+        assert_eq!(e.state.phase, WatchPhase::Idle);
+        assert!(e.state.error.starts_with(FAILED_PREFIX));
+        assert_eq!(e.fake.starts.load(Ordering::SeqCst), 0);
     }
 
     #[test]

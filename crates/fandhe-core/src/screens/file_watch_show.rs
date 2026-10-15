@@ -3,12 +3,15 @@
 //! 新しい順の一覧に出す 1 画面。確認用に「ファイルを作る / 更新する / 削除する」ボタンで作業フォルダを
 //! 自分で変えられる。`FANDHE_PROXY_APP=file_watch_show` で選ばれ、
 //! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
-//! （`screens/mod.rs` の `pub mod file_watch_show;` と対）。任意フォルダの監視は #1408。
+//! （`screens/mod.rs` の `pub mod file_watch_show;` と対）。
+//! 「フォルダを選ぶ」で利用者が選んだフォルダへ監視先を切り替えられる（Issue #37。デスクトップのみ。
+//! 他 OS は「選べません」を出す）。選んだフォルダのパスはドライバが持ち、本状態には表示名と照合用 id だけを
+//! 置く。選んだフォルダは利用者のファイルなので、確認用の作成・更新・削除は受け付けない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の `device/file_watch.rs` が
-//! [`take_start`] / [`take_op`] で要求を観測し、[`finish_start`] / [`apply_scan`] / [`mark_failed`] /
-//! [`finish_op`] で結果を注入する。
+//! [`take_start`] / [`take_op`] / [`take_pick`] で要求を観測し、[`finish_start`] / [`apply_scan`] / [`mark_failed`] /
+//! [`finish_op`] / [`finish_pick`] で結果を注入する。
 //!
 //! **起動時には監視しない**（ボタン起点）。全対象 OS（macOS / Windows / iOS / Android / Web）の
 //! 状態・文言をここで確定済みで、後続 OS の実装（#1411〜#1414）は本画面を触らない。
@@ -23,6 +26,7 @@
 //! Watching --apply_scan(記録を追加)--> Watching
 //! Watching/Starting --「監視を止める」--> Idle（記録は残し「停止中」）
 //! Watching --mark_failed--> Idle + 「監視が止まりました」
+//! Idle --「フォルダを選ぶ」--> pick(gen += 1) --finish_pick--> Idle（picked を差し替え / 取り消しは変えない）
 //! ```
 
 use std::collections::VecDeque;
@@ -33,6 +37,7 @@ const TOGGLE_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 const CREATE_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
 const UPDATE_BUTTON_ID: WidgetId = WidgetId::from_raw(3);
 const DELETE_BUTTON_ID: WidgetId = WidgetId::from_raw(4);
+const PICK_BUTTON_ID: WidgetId = WidgetId::from_raw(5);
 
 /// `VirtualList` の 1 行あたりの固定高さ。
 const ROW_EXTENT: f32 = 24.0;
@@ -52,6 +57,16 @@ pub const CREATE_LABEL: &str = "ファイルを作る";
 pub const UPDATE_LABEL: &str = "更新する";
 /// 削除ボタン。
 pub const DELETE_LABEL: &str = "削除する";
+/// フォルダ選択ボタン。
+pub const PICK_LABEL: &str = "フォルダを選ぶ";
+/// 選択完了の接頭辞（`{接頭辞}{フォルダ名}`）。
+pub const PICKED_PREFIX: &str = "選んだフォルダ: ";
+/// 選択取り消しの案内（失敗でも成功でもない）。
+pub const PICK_CANCELLED_STATUS: &str = "フォルダの選択を取り消しました";
+/// フォルダ選択が使えない環境の失敗文言。
+pub const PICK_UNSUPPORTED_STATUS: &str = "この環境ではフォルダを選べません";
+/// 選んだフォルダでは確認用の操作を使えない旨の案内。
+pub const OPS_WORK_ONLY_TEXT: &str = "確認用の操作は作業フォルダでのみ使えます";
 /// 開始中の案内。
 pub const STARTING_STATUS: &str = "開始中…";
 /// 監視中の案内。
@@ -159,6 +174,15 @@ pub struct StartInfo {
     pub truncated: bool,
 }
 
+/// 利用者が選んだフォルダ（パスは持たない。パスはドライバが `id` で引く）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PickedFolder {
+    /// ドライバが発行した照合用 id。
+    pub id: u64,
+    /// 表示用のフォルダ名（最後の要素）。
+    pub label: String,
+}
+
 /// 画面の状態。
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FileWatchShowState {
@@ -186,11 +210,17 @@ pub struct FileWatchShowState {
     pub status: String,
     /// 失敗理由（`TextRole::Error`）。
     pub error: String,
+    /// 未完了のフォルダ選択要求の世代。
+    pub pick: Option<u64>,
+    /// 直近に立てたフォルダ選択要求の世代。
+    pub pick_generation: u64,
+    /// 選択済みのフォルダ。`Some` の間、監視先は作業フォルダでなくこちら。
+    pub picked: Option<PickedFolder>,
 }
 
 /// 開始ボタンのハンドラ。`Idle` のときだけ受け付け、前回の記録を消す。
 pub fn start(state: &mut FileWatchShowState) {
-    if state.phase != WatchPhase::Idle {
+    if state.phase != WatchPhase::Idle || state.pick.is_some() {
         return;
     }
     state.phase = WatchPhase::Starting;
@@ -226,7 +256,7 @@ pub fn toggle(state: &mut FileWatchShowState) {
 }
 
 fn request_op(state: &mut FileWatchShowState, kind: OpKind) {
-    if state.phase != WatchPhase::Watching || state.op.is_some() {
+    if state.phase != WatchPhase::Watching || state.op.is_some() || state.picked.is_some() {
         return;
     }
     state.op_generation = state.op_generation.wrapping_add(1);
@@ -250,6 +280,44 @@ pub fn update(state: &mut FileWatchShowState) {
 /// 削除ボタンのハンドラ。
 pub fn delete(state: &mut FileWatchShowState) {
     request_op(state, OpKind::Delete);
+}
+
+/// フォルダ選択ボタンのハンドラ。`Idle` で選択中でないときだけ要求を立てる。
+pub fn pick_folder(state: &mut FileWatchShowState) {
+    if state.phase != WatchPhase::Idle || state.pick.is_some() {
+        return;
+    }
+    state.pick_generation = state.pick_generation.wrapping_add(1);
+    state.pick = Some(state.pick_generation);
+    state.error.clear();
+    state.status.clear();
+}
+
+/// 未処理のフォルダ選択要求の世代を観測する（状態は変えない）。
+pub fn take_pick(state: &FileWatchShowState) -> Option<u64> {
+    state.pick
+}
+
+/// フォルダ選択の結果を反映する。世代が一致するときだけ。キャンセル（`Ok(None)`）は
+/// 選択済みのフォルダを変えず、成功の文言も出さない。
+pub fn finish_pick(
+    state: &mut FileWatchShowState,
+    generation: u64,
+    result: Result<Option<PickedFolder>, WatchFailure>,
+) {
+    if state.pick != Some(generation) {
+        return;
+    }
+    state.pick = None;
+    match result {
+        Ok(Some(f)) => {
+            state.status = format!("{PICKED_PREFIX}{}", f.label);
+            state.picked = Some(f);
+        }
+        Ok(None) => state.status = PICK_CANCELLED_STATUS.to_string(),
+        Err(WatchFailure::Unsupported) => state.error = PICK_UNSUPPORTED_STATUS.to_string(),
+        Err(f) => state.error = failure_text(f),
+    }
 }
 
 /// 未処理の開始要求の世代を観測する（状態は変えない）。
@@ -360,6 +428,9 @@ pub fn status_text(state: &FileWatchShowState) -> String {
             lines.push(TRUNCATED_TEXT.to_string());
         }
     }
+    if state.picked.is_some() {
+        lines.push(OPS_WORK_ONLY_TEXT.to_string());
+    }
     if state.dropped > 0 {
         lines.push(DROPPED_TEXT.to_string());
     }
@@ -412,6 +483,7 @@ pub fn current_screen(state: &FileWatchShowState) -> Screen<FileWatchShowState> 
         .button(CREATE_BUTTON_ID, CREATE_LABEL, create)
         .button(UPDATE_BUTTON_ID, UPDATE_LABEL, update)
         .button(DELETE_BUTTON_ID, DELETE_LABEL, delete)
+        .button(PICK_BUTTON_ID, PICK_LABEL, pick_folder)
         .virtual_list(record_count, record_row, ROW_EXTENT)
 }
 
@@ -586,6 +658,72 @@ mod tests {
         assert_eq!(s.phase, WatchPhase::Watching);
     }
 
+    fn picked() -> PickedFolder {
+        PickedFolder {
+            id: 7,
+            label: "docs".into(),
+        }
+    }
+
+    #[test]
+    fn pick_is_ignored_while_busy_and_stale_finish_dropped() {
+        let mut s = watching();
+        pick_folder(&mut s);
+        assert_eq!(take_pick(&s), None, "監視中は選べない");
+        let mut s = FileWatchShowState::default();
+        start(&mut s);
+        pick_folder(&mut s);
+        assert_eq!(take_pick(&s), None, "開始中は選べない");
+        let mut s = FileWatchShowState::default();
+        pick_folder(&mut s);
+        assert_eq!(take_pick(&s), Some(1));
+        start(&mut s);
+        assert_eq!(take_start(&s), None, "選択中は開始しない");
+        finish_pick(&mut s, 99, Ok(Some(picked())));
+        assert!(s.picked.is_none() && s.pick.is_some());
+        finish_pick(&mut s, 1, Ok(Some(picked())));
+        assert_eq!(s.picked, Some(picked()));
+        assert!(status_text(&s).contains("選んだフォルダ: docs"));
+        assert!(status_text(&s).contains(OPS_WORK_ONLY_TEXT));
+    }
+
+    #[test]
+    fn pick_cancel_keeps_previous_and_is_not_success() {
+        let mut s = FileWatchShowState::default();
+        pick_folder(&mut s);
+        finish_pick(&mut s, 1, Ok(Some(picked())));
+        pick_folder(&mut s);
+        finish_pick(&mut s, 2, Ok(None));
+        assert_eq!(s.picked, Some(picked()));
+        assert_eq!(s.status, PICK_CANCELLED_STATUS);
+        assert!(!s.status.contains(PICKED_PREFIX) && s.error.is_empty());
+    }
+
+    #[test]
+    fn pick_failure_texts_are_distinct() {
+        let mut s = FileWatchShowState::default();
+        pick_folder(&mut s);
+        finish_pick(&mut s, 1, Err(WatchFailure::Unsupported));
+        assert_eq!(s.error, PICK_UNSUPPORTED_STATUS);
+        pick_folder(&mut s);
+        finish_pick(&mut s, 2, Err(WatchFailure::Failed("x".into())));
+        assert!(s.error.starts_with(FAILED_PREFIX));
+        assert!(s.picked.is_none());
+    }
+
+    #[test]
+    fn ops_are_refused_on_picked_folder() {
+        let mut s = FileWatchShowState::default();
+        pick_folder(&mut s);
+        finish_pick(&mut s, 1, Ok(Some(picked())));
+        start(&mut s);
+        finish_start(&mut s, 1, Ok(info()));
+        create(&mut s);
+        update(&mut s);
+        delete(&mut s);
+        assert_eq!(take_op(&s), None);
+    }
+
     #[test]
     fn buttons_keep_position_and_label_switches() {
         let mut s = FileWatchShowState::default();
@@ -603,5 +741,7 @@ mod tests {
         let screen = current_screen(&s);
         assert!(click_button(&screen, DELETE_LABEL, &mut s));
         assert_eq!(take_op(&s), None);
+        assert!(click_button(&screen, PICK_LABEL, &mut s));
+        assert_eq!(take_pick(&s), Some(1));
     }
 }
