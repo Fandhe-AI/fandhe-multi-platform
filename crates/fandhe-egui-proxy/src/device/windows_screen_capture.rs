@@ -31,9 +31,12 @@
 //!
 //! - 成功: 明示停止・10 秒の自動停止・対象ウィンドウが閉じた場合。書き出し完了
 //!   （`AsyncStatus::Completed`）を確認し、0 バイト・0 ms は `build_capture_result` で失敗
-//! - キャンセル: ピッカーを閉じた・ピッカー表示中の停止
+//! - キャンセル: ピッカーを閉じた・ピッカー表示中の停止（同意 UI が対象。macOS と同じ）
 //! - 失敗: `E_ACCESSDENIED` は `PermissionDenied`、`IsSupported()` が false は `Unsupported`、
-//!   それ以外（D3D11・変換・トランスコード・完了待ちタイムアウト）は固定ラベルの `Internal`
+//!   それ以外（D3D11・変換・トランスコード・完了待ちタイムアウト）は固定ラベルの `Internal`。
+//!   ピッカー選択後（録画開始済み）の準備中に停止・対象 Closed が来た場合も、映像が 1 本も
+//!   出来ていないので `Cancelled` にせず失敗（`Internal`）にする。trait doc の三値は
+//!   キャンセルを同意 UI の拒否・終了に限り、macOS も開始後の停止は 0 バイト失敗で扱う
 //!
 //! 録画時間は単調時計 `Instant` で測る（契約表 3）。HRESULT の生値・ウィンドウ名・映像の
 //! 中身はログへ出さない（security.md A09）。
@@ -56,7 +59,8 @@ use std::time::{Duration, Instant};
 use windows::core::Interface;
 use windows::Foundation::{TimeSpan, TypedEventHandler};
 use windows::Graphics::Capture::{
-    Direct3D11CaptureFramePool, GraphicsCaptureItem, GraphicsCapturePicker, GraphicsCaptureSession,
+    Direct3D11CaptureFrame, Direct3D11CaptureFramePool, GraphicsCaptureItem, GraphicsCapturePicker,
+    GraphicsCaptureSession,
 };
 use windows::Graphics::DirectX::Direct3D11::{IDirect3DDevice, IDirect3DSurface};
 use windows::Graphics::DirectX::DirectXPixelFormat;
@@ -65,7 +69,8 @@ use windows::Media::Core::{
     VideoStreamDescriptor,
 };
 use windows::Media::MediaProperties::{
-    MediaEncodingProfile, MediaEncodingSubtypes, VideoEncodingProperties, VideoEncodingQuality,
+    AudioEncodingProperties, MediaEncodingProfile, MediaEncodingSubtypes, VideoEncodingProperties,
+    VideoEncodingQuality,
 };
 use windows::Media::Transcoding::MediaTranscoder;
 use windows::Storage::Streams::InMemoryRandomAccessStream;
@@ -271,6 +276,22 @@ fn on_picked(
     }
 }
 
+/// サンプル生成側（`SampleRequested`）で起きたエラーをワーカーへ渡す枠。最初の 1 件だけ残す。
+type Fault = Arc<Mutex<Option<DeviceError>>>;
+
+fn take_fault(fault: &Fault) -> Option<DeviceError> {
+    fault.lock().unwrap_or_else(|e| e.into_inner()).take()
+}
+
+/// 取得したフレームを、どの経路で抜けても必ずプールへ返す（契約表 9）。
+struct FrameGuard(Direct3D11CaptureFrame);
+
+impl Drop for FrameGuard {
+    fn drop(&mut self) {
+        let _ = self.0.Close();
+    }
+}
+
 /// 全終了経路でセッション・プール・`Closed` 登録を解放する（契約表 9）。
 struct Cleanup {
     session: Option<GraphicsCaptureSession>,
@@ -330,17 +351,25 @@ fn record(
     cleanup.session = Some(session.clone());
 
     // 対象ウィンドウが閉じたら停止合図を送る（成功扱いで書き出しを閉じる）。
-    cleanup.closed_token = item
-        .Closed(&TypedEventHandler::new(move |_, _| {
-            let _ = stop_tx.send(());
+    // 登録に失敗したら通知を確保できないので録画しない（確保済みの資源は `cleanup` の Drop が解放）。
+    let closed_tx = stop_tx.clone();
+    cleanup.closed_token = Some(
+        item.Closed(&TypedEventHandler::new(move |_, _| {
+            let _ = closed_tx.send(());
             Ok(())
         }))
-        .ok();
+        .map_err(|e| hr(&e, "screen_capture closed"))?,
+    );
 
-    let source = build_source(&pool, &d3d, &ctx, &stopping, w, h)?;
+    let fault: Fault = Arc::new(Mutex::new(None));
+    let source = build_source(&pool, &d3d, &ctx, &stopping, &fault, stop_tx, (w, h))?;
 
     let stream = InMemoryRandomAccessStream::new().map_err(|e| hr(&e, "screen_capture stream"))?;
     let profile = MediaEncodingProfile::CreateMp4(VideoEncodingQuality::HD720p)
+        .map_err(|e| hr(&e, "screen_capture profile"))?;
+    // ソースは映像のみ。既定の AAC 音声を残すと `CanTranscode` が false になるため外す。
+    profile
+        .SetAudio(None::<&AudioEncodingProperties>)
         .map_err(|e| hr(&e, "screen_capture profile"))?;
     let video = profile
         .Video()
@@ -379,12 +408,16 @@ fn record(
         }
         if stop_rx.try_recv().is_ok() {
             let _ = prep_op.Cancel();
-            return Err(DeviceError::Cancelled("screen_capture"));
+            return Err(take_fault(&fault)
+                .unwrap_or(DeviceError::Internal("screen_capture prepare interrupted")));
         }
         if t0.elapsed() >= max {
             let _ = prep_op.Cancel();
             return Err(DeviceError::Internal("screen_capture prepare timeout"));
         }
+    }
+    if let Some(e) = take_fault(&fault) {
+        return Err(e);
     }
     let prepared = prep_op
         .GetResults()
@@ -415,6 +448,10 @@ fn record(
     let elapsed_ms = t0.elapsed().as_millis() as u64;
     stopping.store(true, Ordering::SeqCst);
 
+    if let Some(e) = take_fault(&fault) {
+        let _ = action.Cancel();
+        return Err(e);
+    }
     match done_rx.recv_timeout(FINISH_GRACE) {
         Ok(AsyncStatus::Completed) => {}
         Ok(_) => return Err(DeviceError::Internal("screen_capture transcode")),
@@ -435,8 +472,9 @@ fn build_source(
     d3d: &ID3D11Device,
     ctx: &ID3D11DeviceContext,
     stopping: &Arc<AtomicBool>,
-    w: u32,
-    h: u32,
+    fault: &Fault,
+    stop_tx: Sender<()>,
+    (w, h): (u32, u32),
 ) -> Result<MediaStreamSource, DeviceError> {
     let err = |e: windows::core::Error| hr(&e, "screen_capture source");
     let subtype = MediaEncodingSubtypes::Bgra8().map_err(err)?;
@@ -447,7 +485,13 @@ fn build_source(
         .SetBufferTime(TimeSpan { Duration: 0 })
         .map_err(err)?;
 
-    let (pool, d3d, ctx, stopping) = (pool.clone(), d3d.clone(), ctx.clone(), stopping.clone());
+    let (pool, d3d, ctx, stopping, fault) = (
+        pool.clone(),
+        d3d.clone(),
+        ctx.clone(),
+        stopping.clone(),
+        fault.clone(),
+    );
     let mut first: Option<i64> = None;
     source
         .SampleRequested(&TypedEventHandler::<
@@ -464,19 +508,30 @@ fn build_source(
                     Err(_) => std::thread::sleep(Duration::from_millis(5)),
                 }
             };
-            // タイムスタンプは最初のフレームとの差（単調）。
-            let now = frame.SystemRelativeTime()?.Duration;
-            let base = *first.get_or_insert(now);
-            // プールへ返した面をエンコーダが読まないよう、自前のテクスチャへコピーする。
-            let surface = copy_frame_surface(&d3d, &ctx, &frame.Surface()?)?;
-            let sample = MediaStreamSample::CreateFromDirect3D11Surface(
-                &surface,
-                TimeSpan {
-                    Duration: now - base,
-                },
-            )?;
-            request.SetSample(&sample)?;
-            let _ = frame.Close();
+            let frame = FrameGuard(frame);
+            let mut produce = || -> windows::core::Result<()> {
+                // タイムスタンプは最初のフレームとの差（単調）。
+                let now = frame.0.SystemRelativeTime()?.Duration;
+                let base = *first.get_or_insert(now);
+                // プールへ返した面をエンコーダが読まないよう、自前のテクスチャへコピーする。
+                let surface = copy_frame_surface(&d3d, &ctx, &frame.0.Surface()?)?;
+                let sample = MediaStreamSample::CreateFromDirect3D11Surface(
+                    &surface,
+                    TimeSpan {
+                        Duration: now - base,
+                    },
+                )?;
+                request.SetSample(&sample)
+            };
+            if let Err(e) = produce() {
+                // 握りつぶさずワーカーへ伝える: 失敗を残し、EOS にして停止合図で待機を起こす。
+                fault
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .get_or_insert(hr(&e, "screen_capture sample"));
+                stopping.store(true, Ordering::SeqCst);
+                let _ = stop_tx.send(());
+            }
             Ok(())
         }))
         .map_err(err)?;
@@ -515,12 +570,11 @@ fn create_devices() -> windows::core::Result<(ID3D11Device, ID3D11DeviceContext,
             .ok_or(windows::core::Error::from_hresult(windows::core::HRESULT(
                 0x8000_4005_u32 as i32,
             )))?;
-    // エンコーダ（別スレッド）と同じデバイスを触るため、スレッド保護を有効にする。
-    if let Ok(mt) = d3d.cast::<ID3D11Multithread>() {
-        // SAFETY: 有効な COM ポインタへの単純な設定呼び出し。
-        #[allow(unsafe_code)]
-        let _ = unsafe { mt.SetMultithreadProtected(true) };
-    }
+    // エンコーダ（別スレッド）と同じデバイスを触るため、即時コンテキストからスレッド保護を
+    // 有効にする。取得できなければ競合しうるので録画しない（呼び出し側で失敗にする）。
+    let mt: ID3D11Multithread = ctx.cast()?;
+    // SAFETY: `mt` は直前に取得した有効な COM ポインタへの単純な設定呼び出し（戻り値は旧設定）。
+    let _ = unsafe { mt.SetMultithreadProtected(true) };
     let dxgi: IDXGIDevice = d3d.cast()?;
     // SAFETY: `dxgi` は直前に取得した有効な `IDXGIDevice`。
     let winrt: IDirect3DDevice = unsafe { CreateDirect3D11DeviceFromDXGIDevice(&dxgi)? }.cast()?;
