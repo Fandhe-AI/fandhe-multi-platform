@@ -133,7 +133,9 @@
 	     （`UIScreen.screens` は iOS 16 で非推奨）ため scene 形態へ移す。TN3187 により scene 未採用の
 	     アプリはいずれ起動できなくなる。application ロールの scene は winit の window を付けて表示し、
 	     外部ディスプレイ ロールは window を付けずミラーリング・拡張表示を OS の既定に任せる
-	     （`crates/fandhe-egui-proxy/ios/fandhe_ios_scene.m`）。複数 window scene は許可しない。 -->
+	     （`crates/fandhe-egui-proxy/ios/fandhe_ios_scene.m`）。複数 window scene は許可しない。
+	     注意: project.yml の SwiftUI 版 FandheIosApp（プロビジョニング専用ホスト）も本ファイルを共用するが、
+	     FandheSceneDelegate を持たないため起動しない前提。起動確認の対象は Rust/winit バンドルのみ。 -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
