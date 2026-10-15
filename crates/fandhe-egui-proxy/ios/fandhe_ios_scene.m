@@ -37,15 +37,34 @@ static UIWindowScene *fandhe_app_scene(void) {
   return nil;
 }
 
+// application の scene より先に可視化された window の待機表（弱参照。main thread のみ）。
+// scene 接続時に付け直す（window 先着・scene 先着のどちらの順序でも接続が完了する）。
+static NSHashTable<UIWindow *> *fandhe_pending_windows(void) {
+  static NSHashTable<UIWindow *> *t;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    t = [NSHashTable weakObjectsHashTable];
+  });
+  return t;
+}
+
+static void fandhe_bind_window(UIWindow *w, UIWindowScene *scene) {
+  [fandhe_pending_windows() removeObject:w];
+  w.windowScene = scene;
+  [w makeKeyAndVisible];
+}
+
 // scene 未接続の window を application の scene へ付けて表示する（冪等）。
+// scene がまだ無ければ待機表へ入れ、`willConnectToSession` で付ける。
 static void fandhe_attach_window(UIWindow *w) {
   if (w.windowScene != nil) {
     return;
   }
   UIWindowScene *scene = fandhe_app_scene();
   if (scene != nil) {
-    w.windowScene = scene;
-    [w makeKeyAndVisible];
+    fandhe_bind_window(w, scene);
+  } else {
+    [fandhe_pending_windows() addObject:w];
   }
 }
 
@@ -68,6 +87,13 @@ static void fandhe_post_urls(NSSet<UIOpenURLContext *> *contexts) {
     if (![scene isKindOfClass:[UIWindowScene class]] ||
         [session.role isEqualToString:UIWindowSceneSessionRoleExternalDisplayNonInteractive]) {
       return;
+    }
+    for (UIWindow *w in fandhe_pending_windows().allObjects) {
+      if (w.windowScene == nil) {
+        fandhe_bind_window(w, (UIWindowScene *)scene);
+      } else {
+        [fandhe_pending_windows() removeObject:w];
+      }
     }
     fandhe_post_urls(options.URLContexts);
   }
