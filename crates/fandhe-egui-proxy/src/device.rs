@@ -529,7 +529,7 @@ pub mod url_scheme;
 /// `cargo test` で検査するため cfg を付けず、WinRT 呼び出しだけをモジュール内に閉じる。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_accessibility_prefs;
-/// Issue #1360: Windows 向けタスクバー進捗実装（`ITaskbarList3`）。`device/app_badge.rs` の windows 経路から呼ばれる。
+/// Issue #1360: Windows 向けタスクバーのオーバーレイアイコン実装（`ITaskbarList3::SetOverlayIcon`）。`device/app_badge.rs` の windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_app_badge;

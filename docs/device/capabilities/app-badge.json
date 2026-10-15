@@ -38,10 +38,10 @@
     },
     "windows": {
       "status": "done",
-      "api": "Win32 `ITaskbarList3`（`SetProgressValue` / `SetProgressState`。オーバーレイアイコンは範囲外）",
+      "api": "Win32 `ITaskbarList3::SetOverlayIcon`（数字を描いた 16x16 の `HICON`。タスクバー進捗は使わない）",
       "perm": "なし（Win32 desktop 専用表記。実機未検証）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-itaskbarlist3",
-      "note": "実装済み（#1360）。成功は「OS へ渡した」までで表示は確かめられない（Submitted）。0 は消去で番兵ではない。値は 0〜9999、範囲検証は OS 型へ変換する前。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・資源の解放。守らない範囲: 設定後に OS や利用者がバッジを消したときの画面表示値との食い違い、アプリ終了時にバッジが残るか消えるか。ボタン押下時に UI スレッドで同期 1 回だけ呼ぶ（並行経路なし）。タスクバー進捗は 0〜100 %で、0 は進捗表示を消す。`TaskbarButtonCreated` 前の呼び出しは範囲外",
+      "note": "実装済み（#1360）。成功は「OS へ渡した」までで表示は確かめられない（Submitted）。0 は消去で番兵ではない。値は 0〜9999、範囲検証は OS 型へ変換する前。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・資源の解放。守らない範囲: 設定後に OS や利用者がバッジを消したときの画面表示値との食い違い、アプリ終了時にバッジが残るか消えるか。ボタン押下時に UI スレッドで同期 1 回だけ呼ぶ（並行経路なし）。件数は数字入りの 16x16 アイコンをタスクバーボタンに重ね、0 はオーバーレイを外す。`HICON` は呼び出しごとに作って即解放する。説明文は「未読 N 件」の固定書式。固定 16 px のため高 DPI ではぼやける。`TaskbarButtonCreated` 前の呼び出しは範囲外",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#28）",
       "impl": "crates/fandhe-egui-proxy/src/device/windows_app_badge.rs + crates/fandhe-egui-proxy/src/device/app_badge.rs + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue #1360"
@@ -58,5 +58,5 @@
       "impl": "crates/fandhe-web-dom/src/app_badge.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue #1363"
     }
   },
-  "note": "notification（通知の送受信）との違い: 本機能はアイコンの数や進捗の更新が主目的（Android だけは通知に付随するバッジで、通知が要る）。今回の範囲: バッジ数（Windows はタスクバー進捗）を固定値に設定し、0 で消すだけ。"
+  "note": "notification（通知の送受信）との違い: 本機能はアイコンの数の更新が主目的（Android だけは通知に付随するバッジで、通知が要る）。今回の範囲: バッジ数（Windows はタスクバーのオーバーレイアイコン）を固定値に設定し、0 で消すだけ。"
 }
