@@ -51,11 +51,18 @@ static NSArray<NSString *> *FandheSplitRecipients(NSString *joined) {
 // 状態を確定（done・強参照解放）してから 1 回だけ結果を届ける。
 - (void)finish:(UIViewController *)controller code:(int32_t)code {
     if (self.done) {
+        // 提示失敗を確定した後に OS 側から完了が届いても、画面だけは残さない。結果は二重に届けない。
+        if (controller.presentingViewController != nil) {
+            [controller dismissViewControllerAnimated:YES completion:nil];
+        }
         return;
     }
     self.done = YES;
     uint64_t rid = self.requestId;
-    g_retainedDelegate = nil;
+    // 後から始まった別の要求の保持を消さない。
+    if (g_retainedDelegate == self) {
+        g_retainedDelegate = nil;
+    }
     [controller dismissViewControllerAnimated:YES completion:nil];
     fandhe_rust_compose_mail_sms_outcome(rid, code);
 }
@@ -129,7 +136,9 @@ int32_t fandhe_ios_compose_mail_sms_present(uint64_t request_id, int32_t kind, c
                 return;
             }
             UIViewController *top = FandheTopmostViewController();
-            if (top == nil || top.view.window == nil) {
+            // 提示中・遷移中の top へは UIKit が提示を捨てて completion も呼ばないため、ここで弾く。
+            if (top == nil || top.view.window == nil || top.presentedViewController != nil ||
+                top.isBeingPresented || top.isBeingDismissed) {
                 fandhe_rust_compose_mail_sms_outcome(request_id, 5);
                 return;
             }
@@ -161,12 +170,15 @@ int32_t fandhe_ios_compose_mail_sms_present(uint64_t request_id, int32_t kind, c
             // スワイプで閉じると delegate が呼ばれず完了が届かないため禁止する。
             vc.modalInPresentation = YES;
             g_retainedDelegate = delegate;
-            [top presentViewController:vc animated:YES completion:nil];
-            if (top.presentedViewController != vc) {
-                g_retainedDelegate = nil;
-                delegate.done = YES;
-                fandhe_rust_compose_mail_sms_outcome(request_id, 5);
-            }
+            // 提示は非同期に確定するため、成否は completion 内で判定する（同期判定すると
+            // 提示成功でも失敗扱いになる）。delegate が先に完了していたら何もしない。
+            [top presentViewController:vc
+                              animated:YES
+                            completion:^{
+                              if (!delegate.done && top.presentedViewController != vc) {
+                                  [delegate finish:nil code:5];
+                              }
+                            }];
         }
     });
     return 0;
