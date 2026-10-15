@@ -18,9 +18,9 @@
 //
 // `FandheIosApp`（SwiftUI 版）は Scene 対応だが、実配布されるアプリ本体は winit
 // （UIApplicationMain ベースの旧来ライフサイクル）製で、Info.plist に
-// `UIApplicationSceneManifest` を持たない（`platforms/apple/FandheIosApp/Resources/
-// Info.plist` 参照）。この構成では `connectedScenes` が空・もしくは目的の window を
-// 含まない場合があるため、`UIApplication.shared.windows`（deprecated だが Scene 非対応
+// `UIApplicationSceneManifest` を宣言し（Issue #27、`ios/fandhe_ios_scene.m` が window を scene へ付ける）、
+// 通常は `connectedScenes` から取れる。scene への接続前や window が scene 外にある間は
+// 空・もしくは目的の window を含まないため、`UIApplication.shared.windows`（deprecated だが Scene 非対応
 // アプリでも確実に動く）へフォールバックする（`fandhe_ios_camera.m` の元コメント参照:
 // このフォールバックが無いとカメラ搭載端末でも rootViewController を取得できず UI を
 // 出せない）。

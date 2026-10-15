@@ -7,9 +7,12 @@
 // Info.plist 側の宣言は `platforms/apple/FandheIosApp/Resources/Info.plist` の
 // `CFBundleURLTypes`。
 //
-// delegate を差し込む理由: winit 0.30.13 の iOS は application delegate を持たず
-// （`UIApplicationMain(argc, argv, nil, nil)`）、シーン無しの旧来ライフサイクルで動く。
-// そのため `application:openURL:options:` を受けるには自前の delegate が要る。
+// 経路は 2 つ。(1) Info.plist の `UIApplicationSceneManifest`（Issue #27）で scene 形態になった今は、
+// `ios/fandhe_ios_scene.m` の scene delegate が受けた URL（`connectionOptions.URLContexts` と
+// `scene:openURLContexts:`）を通知 `FandheSceneOpenURLNotification` で投げ、ここで受ける。
+// (2) 旧来経路: winit 0.30.13 の iOS は application delegate を持たず
+// （`UIApplicationMain(argc, argv, nil, nil)`）、scene 形態でない場合の `application:openURL:options:`
+// を受けるために自前の delegate を差し込む（scene 形態では呼ばれないが害は無い）。
 // `UIApplicationMain` より前は `sharedApplication` が無いので、最も早い
 // `UIApplicationDidFinishLaunchingNotification` で `delegate == nil` のときだけ差し込む。
 // 実装するのは `application:openURL:options:` だけで、UIKit の既定動作は変えない。
@@ -49,6 +52,15 @@ static void fandhe_forward_url(NSURL *url) {
 
 static NSURL *g_launch_url = nil;
 
+// 受けた URL を転送する。起動時に転送済みの同じ URL は 1 回だけ捨てる（二重転送の防止）。
+static void fandhe_handle_open_url(NSURL *url) {
+  NSURL *launched = g_launch_url;
+  g_launch_url = nil;
+  if (launched == nil || ![url isEqual:launched]) {
+    fandhe_forward_url(url);
+  }
+}
+
 @interface FandheUrlSchemeAppDelegate : NSObject <UIApplicationDelegate>
 @end
 
@@ -57,11 +69,7 @@ static NSURL *g_launch_url = nil;
             openURL:(NSURL *)url
             options:(NSDictionary<UIApplicationOpenURLOptionsKey, id> *)options {
   @autoreleasepool {
-    NSURL *launched = g_launch_url;
-    g_launch_url = nil;
-    if (launched == nil || ![url isEqual:launched]) {
-      fandhe_forward_url(url);
-    }
+    fandhe_handle_open_url(url);
   }
   return YES;
 }
@@ -70,19 +78,31 @@ static NSURL *g_launch_url = nil;
 static FandheUrlSchemeAppDelegate *g_delegate = nil;
 static id g_launch_observer = nil;
 static id g_active_observer = nil;
+static id g_scene_observer = nil;
 
 void fandhe_apple_url_scheme_register(void) {
   if (g_delegate != nil) {
     return;
   }
   g_delegate = [[FandheUrlSchemeAppDelegate alloc] init];
+  g_scene_observer = [[NSNotificationCenter defaultCenter]
+      addObserverForName:@"FandheSceneOpenURLNotification"
+                  object:nil
+                   queue:[NSOperationQueue mainQueue]
+              usingBlock:^(NSNotification *note) {
+                @autoreleasepool {
+                  if ([note.object isKindOfClass:[NSURL class]]) {
+                    fandhe_handle_open_url(note.object);
+                  }
+                }
+              }];
   g_launch_observer = [[NSNotificationCenter defaultCenter]
       addObserverForName:UIApplicationDidFinishLaunchingNotification
                   object:nil
                    queue:[NSOperationQueue mainQueue]
               usingBlock:^(NSNotification *note) {
                 @autoreleasepool {
-                  // シーン無しのライフサイクルでは launchOptions が唯一の経路（iOS 26 で deprecated）。
+                  // シーン無しのライフサイクルでは launchOptions が唯一の経路（scene 形態では nil）（iOS 26 で deprecated）。
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
                   id launched = note.userInfo[UIApplicationLaunchOptionsURLKey];

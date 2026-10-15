@@ -169,6 +169,10 @@ targets:
         # 既存の Resources/Info.plist（scripts/ios/build-simulator-app.sh が参照する
         # ものと同一ファイル）をそのまま流用する。CFBundleIdentifier は
         # com.fandhe.iosapp で一致済み。
+        # 注意（Issue #27）: この Info.plist の UIApplicationSceneManifest は
+        # FandheSceneDelegate（Rust バイナリ側の fandhe_ios_scene.m）を指す。本ターゲットの
+        # バイナリには同クラスが無いため、このホストはプロファイル生成専用で、起動しない
+        # （実機・シミュレータで動かすのは Rust/winit バンドルのみ）。
         INFOPLIST_FILE: FandheIosApp/Resources/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.iosapp
         PRODUCT_NAME: FandheIosApp

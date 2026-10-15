@@ -8,6 +8,9 @@
 //! テストできるようモジュールは `cfg(any(macos, test))`。`.m` は main thread 以外では失敗を返す
 //! （`cargo test` のワーカースレッドで実 FFI を呼ぶと `Internal` になる。成功系は #1340 の Mac 目視）。
 //!
+//! `Raw` / `from_raw` / `CAP` は iOS 実装（`ios_multi_display.rs`、Issue #27）と共用する
+//! （`.m` の `FandheScreenRaw` が両 OS で同じレイアウトのため）。
+//!
 //! # 既知の天井
 //!
 //! - 画面数の上限は [`CAP`]。超えたら先頭だけを返さず失敗にする
@@ -19,22 +22,22 @@ use std::ffi::CStr;
 use fandhe_device::multi_display::ScreenInfo;
 
 /// `.m` に渡す出力バッファの画面数上限。
-const CAP: usize = 16;
+pub(super) const CAP: usize = 16;
 
 /// `.m` の `FandheScreenRaw` と同じレイアウト。
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct Raw {
-    width_px: u32,
-    height_px: u32,
-    scale: f64,
-    is_primary: u8,
-    name: [u8; 128],
+pub(super) struct Raw {
+    pub(super) width_px: u32,
+    pub(super) height_px: u32,
+    pub(super) scale: f64,
+    pub(super) is_primary: u8,
+    pub(super) name: [u8; 128],
 }
 
 /// `.m` の生値を契約の値へ写す。名前は NUL 終端の UTF-8 で、不正なら `None`。
 /// 倍率・主画面の正規化は `validate` が行う。
-fn from_raw(rows: &[Raw]) -> Vec<ScreenInfo> {
+pub(super) fn from_raw(rows: &[Raw]) -> Vec<ScreenInfo> {
     rows.iter()
         .map(|r| ScreenInfo {
             width_px: r.width_px,

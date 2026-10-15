@@ -183,6 +183,11 @@
 //! - `ios/fandhe_ios_file_watch.m`（Issue #1412、`open(O_EVTONLY)` + `DISPATCH_SOURCE_TYPE_VNODE` による
 //!   フォルダの変更監視）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/ios_file_watch.rs` から呼ばれる契約）。libdispatch は libSystem 内で追加リンクは無い。
+//! - `ios/fandhe_ios_scene.m`（Issue #27、UIScene 化シム）は **iOS 分岐のみ**で feature・計測ビルドに
+//!   関係なく常にコンパイルする（Info.plist の `UIApplicationSceneManifest` が参照するため）。
+//! - `ios/fandhe_ios_multi_display.m`（Issue #27、scene の `UIScreen` による複数ディスプレイ）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_multi_display.rs`
+//!   から呼ばれる契約）。UIKit は既存のリンクで足りる。
 //! - `ios/fandhe_ios_background_task.m`（Issue #1045、`BackgroundTasks`
 //!   （`BGTaskScheduler`）によるバックグラウンド処理）は **iOS 分岐のみ**で
 //!   feature `device` 有効時にコンパイルする（`src/device/ios_background_task.rs`
@@ -199,6 +204,14 @@ fn main() {
     if target_os != "ios" {
         return;
     }
+
+    // Issue #27: UIScene 化シム。Info.plist の `UIApplicationSceneManifest` はビルド種別に関係なく
+    // 1 つのため、計測ビルド・feature `device` 無効でも常にコンパイルする。
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_scene.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_scene.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_scene");
 
     // 計測専用ビルドでは `src/ios_text_input.rs`（`#[no_mangle]` の受け口）が `lib.rs` の
     // cfg で外れるため、呼び出し側の `.m` も同じ条件で外す（Issue #19）。
@@ -398,6 +411,8 @@ fn main() {
     compile_ios_compass();
     // `ios/fandhe_ios_file_watch.m`（Issue #1412）。iOS 分岐のみ。
     compile_ios_file_watch();
+    // `ios/fandhe_ios_multi_display.m`（Issue #27）。iOS 分岐のみ。
+    compile_ios_multi_display();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_midi.m`（Issue #1398 macOS + #1399 iOS）も共用する。CoreMIDI を使う。
@@ -810,6 +825,16 @@ fn compile_macos_multi_display() {
         .file("macos/fandhe_macos_multi_display.m")
         .flag("-fobjc-arc")
         .compile("fandhe_macos_multi_display");
+}
+
+/// `ios/fandhe_ios_multi_display.m` を `cc` でコンパイルする（Issue #27）。**iOS 分岐のみ**から
+/// 呼ばれる（`src/device/ios_multi_display.rs` が使う）。UIKit は `main` 側の既存リンクで足りる。
+fn compile_ios_multi_display() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_multi_display.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_multi_display.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_multi_display");
 }
 
 /// `macos/fandhe_macos_power_state.m` を `cc` でコンパイルする（Issue #1274）。**macOS 分岐のみ**

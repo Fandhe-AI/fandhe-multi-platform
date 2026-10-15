@@ -10,7 +10,8 @@
 //!
 //! dispatch（[`platform_multi_display`]）は全対象 OS の最終形。Android は
 //! `android_multi_display.rs`（`DisplayManager` を JNI で読む実装）、Web は `fandhe-web-dom` 側（#1344）、
-//! iOS・Linux 等は `UnsupportedMultiDisplay` 固定でダミーの成功へ倒さない。
+//! iOS は `ios_multi_display.rs`（scene の `UIScreen`、Issue #27）、Linux 等は
+//! `UnsupportedMultiDisplay` 固定でダミーの成功へ倒さない。
 
 use std::sync::Mutex;
 use std::time::Instant;
@@ -18,7 +19,12 @@ use std::time::Instant;
 use fandhe_core::screens::multi_display_show::{
     apply_read, MultiDisplayShowState, ReadFailure, ScreenRow,
 };
-#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "android")))]
+#[cfg(not(any(
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "android"
+)))]
 use fandhe_device::multi_display::UnsupportedMultiDisplay;
 use fandhe_device::multi_display::{validate, MultiDisplay, ScreenInfo, READ_INTERVAL};
 use fandhe_device::DeviceError;
@@ -35,11 +41,20 @@ fn platform_multi_display() -> Box<dyn MultiDisplay> {
     {
         super::macos_multi_display::implementation()
     }
+    #[cfg(target_os = "ios")]
+    {
+        super::ios_multi_display::implementation()
+    }
     #[cfg(target_os = "android")]
     {
         super::android_multi_display::implementation()
     }
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "android")))]
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android"
+    )))]
     {
         Box::new(UnsupportedMultiDisplay)
     }
