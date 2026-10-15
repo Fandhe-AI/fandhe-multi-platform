@@ -156,6 +156,9 @@ impl<S> TvFocusController<S> {
     ///    フラグのみ立てて rebuild しない）から意図的に踏襲した非対称性。
     pub fn update(&mut self, ui: &mut egui::Ui, screen: &Screen<S>, store: &mut StateStore<S>) {
         self.recyclers.begin_frame();
+        // 画像キャッシュの掃除。通常描画経路（lib.rs）と同じくフレーム冒頭で行い、
+        // 可視範囲外になった画像の画素・GPU テクスチャを解放する。
+        crate::rgba_image::begin_frame(ui.ctx());
 
         let (direction, decide) = read_navigation_input(ui.ctx());
 
@@ -763,6 +766,32 @@ mod tests {
 
         assert!(handled);
         assert_eq!(store.state().count, 1);
+    }
+
+    /// TV 経路でも `update` 冒頭で画像キャッシュが掃除され、描画されなくなった
+    /// 画像の画素・テクスチャが解放される（codex P1 の再発防止）。
+    #[test]
+    fn update_releases_image_cache_for_images_no_longer_drawn() {
+        let pixels = fandhe_core::RgbaPixels::new(1, 1, vec![255u8; 4]).expect("有効な画素");
+        let with_image: Screen<CounterState> = Screen::new("img").rgba_image(pixels, "a");
+        let without_image = tree();
+        let ctx = egui::Context::default();
+        let mut controller: TvFocusController<CounterState> = TvFocusController::new();
+        let mut store = StateStore::new(CounterState::default());
+        let mut pass = |screen: &Screen<CounterState>| {
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    controller.update(ui, screen, &mut store);
+                });
+            });
+        };
+        pass(&with_image);
+        assert_eq!(crate::rgba_image::cached_len(&ctx), 1);
+        // 画像のない画面へ切り替えて数パス回すと解放される。
+        pass(&without_image);
+        pass(&without_image);
+        pass(&without_image);
+        assert_eq!(crate::rgba_image::cached_len(&ctx), 0);
     }
 
     /// `tree()` ヘルパーが単純なボタン 1 個の画面を構築できることの前提確認
