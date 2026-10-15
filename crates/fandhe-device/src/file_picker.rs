@@ -215,6 +215,18 @@ pub(crate) fn run_windows_pick(
     command: PickCommand,
     max: usize,
 ) -> Result<Option<PickedFile>, DeviceError> {
+    match run_windows_dialog(command)? {
+        Some(path) => read_picked(Path::new(&path), max).map(Some),
+        None => Ok(None),
+    }
+}
+
+/// ダイアログ用 PowerShell を起動し、標準出力のパス文字列を返す共通部
+/// （ファイル選択 [`run_windows_pick`] とフォルダ選択 [`pick_folder`] が共有する）。
+/// 終了コード 0 = 選択（`Some`）、[`WINDOWS_PICK_CANCELLED_EXIT`] = キャンセル（`None`）、
+/// それ以外・空の標準出力 = `Err`。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(crate) fn run_windows_dialog(command: PickCommand) -> Result<Option<String>, DeviceError> {
     let mut cmd = std::process::Command::new(&command.program);
     cmd.args(&command.args);
     #[cfg(windows)]
@@ -238,13 +250,68 @@ pub(crate) fn run_windows_pick(
             let path = String::from_utf8_lossy(&output.stdout)
                 .trim_start_matches('\u{feff}')
                 .to_owned();
-            read_picked(Path::new(&path), max).map(Some)
+            if path.is_empty() {
+                return Err(DeviceError::Internal("file_picker empty path"));
+            }
+            Ok(Some(path))
         }
         Some(WINDOWS_PICK_CANCELLED_EXIT) => Ok(None),
         // 異常終了・シグナル終了（`code()` が `None`）はすべて失敗として扱う。
         // stderr は固定スクリプトが例外メッセージのみを書く経路のため、パス等の
         // 秘匿情報を含まない（security.md A09 と同じ判断、tts と同型）。
         _ => Err(DeviceError::Internal("file_picker dialog failed")),
+    }
+}
+
+/// フォルダ選択用の固定スクリプト（外部入力を連結しない。A03）。
+/// 形は [`WINDOWS_PICK_SCRIPT`] と同じ。`SelectedPath` が空なら何も書かず 0 で終わり、
+/// Rust 側の空出力判定が失敗として拾う。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+const WINDOWS_FOLDER_SCRIPT: &str = r#"
+try {
+    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    Add-Type -AssemblyName System.Windows.Forms
+    $owner = New-Object System.Windows.Forms.Form
+    $owner.TopMost = $true
+    $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+    if ($dialog.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) {
+        [Console]::Out.Write($dialog.SelectedPath)
+        exit 0
+    } else {
+        exit 2
+    }
+} catch {
+    [Console]::Error.Write($_.Exception.Message)
+    exit 1
+}
+"#;
+
+/// Windows のフォルダ選択コマンド。`powershell.exe` は絶対パスで起動する。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(crate) fn windows_folder_command() -> PickCommand {
+    let mut command = windows_pick_command(None);
+    command.args[3] = WINDOWS_FOLDER_SCRIPT.to_string();
+    command
+}
+
+/// フォルダ選択ダイアログを 1 回開く（file-watch の「選んだフォルダ」用、Issue #37）。
+///
+/// 結果は 3 値: 選択 `Ok(Some(path))` / キャンセル `Ok(None)` / 失敗 `Err`。固定タイムアウトは
+/// 掛けない。macOS の `NSOpenPanel` はメインスレッド必須のため、UI スレッドから同期で呼ぶ。
+/// macOS・Windows 以外は `Err(Unsupported)`。返したパスは呼び出し元（egui-proxy のドライバ）が
+/// 保持し、コアの画面状態へは渡さない（表示はフォルダ名のみ）。
+pub fn pick_folder() -> Result<Option<PathBuf>, DeviceError> {
+    #[cfg(target_os = "macos")]
+    {
+        Ok(rfd::FileDialog::new().pick_folder())
+    }
+    #[cfg(target_os = "windows")]
+    {
+        run_windows_dialog(windows_folder_command()).map(|o| o.map(PathBuf::from))
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        Err(DeviceError::Unsupported("folder_picker"))
     }
 }
 
@@ -522,6 +589,59 @@ mod tests {
             matches!(result, Err(DeviceError::Internal(_))),
             "{result:?}"
         );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn run_windows_dialog_maps_exit_codes() {
+        let path = write_temp_file(b"x");
+        let ok = run_windows_dialog(shell_pick_command(&format!(
+            "printf '%s' {}",
+            shell_quote(&path)
+        )))
+        .unwrap();
+        assert_eq!(ok.as_deref(), path.to_str());
+        let _ = std::fs::remove_file(&path);
+        assert!(matches!(
+            run_windows_dialog(shell_pick_command("exit 2")),
+            Ok(None)
+        ));
+        assert!(matches!(
+            run_windows_dialog(shell_pick_command("exit 1")),
+            Err(DeviceError::Internal(_))
+        ));
+        assert!(matches!(
+            run_windows_dialog(shell_pick_command("exit 0")),
+            Err(DeviceError::Internal(_))
+        ));
+        // BOM のみの出力はパスが空なので失敗。
+        assert!(matches!(
+            run_windows_dialog(shell_pick_command("printf '\\357\\273\\277'")),
+            Err(DeviceError::Internal(_))
+        ));
+    }
+
+    #[test]
+    fn windows_folder_command_uses_absolute_powershell_and_folder_script() {
+        let command = windows_folder_command();
+        assert_eq!(
+            command.program.file_name().and_then(|n| n.to_str()),
+            Some("powershell.exe")
+        );
+        assert!(
+            command
+                .args
+                .iter()
+                .any(|a| a.contains("FolderBrowserDialog") && a.contains("exit 2")),
+            "{:?}",
+            command.args
+        );
+    }
+
+    #[test]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    fn pick_folder_is_unsupported_off_desktop() {
+        assert!(matches!(pick_folder(), Err(DeviceError::Unsupported(_))));
     }
 
     /// テスト用の最小限のシェル引用（一時ファイルパスは英数字・`-`・`_`・`/` のみで

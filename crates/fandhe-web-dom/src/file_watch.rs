@@ -142,8 +142,9 @@ mod web {
     use std::collections::{HashMap, HashSet};
 
     use fandhe_core::screens::file_watch_show::{
-        apply_scan, finish_op, finish_start, mark_failed, take_op, take_start, FileWatchShowState,
-        OpKind, OpRequest, StartInfo, WatchFailure, WatchPhase, WEB_FOLDER_LABEL,
+        apply_scan, finish_op, finish_pick, finish_start, mark_failed, take_op, take_pick,
+        take_start, FileWatchShowState, OpKind, OpRequest, StartInfo, WatchFailure, WatchPhase,
+        WEB_FOLDER_LABEL,
     };
     use fandhe_device::file_watch::{
         next_sample_body, next_sample_number, sample_name, FolderScan, WatchSignal,
@@ -595,6 +596,12 @@ mod web {
     /// 画面の effect。照合 → 開始 → 操作の順に、要求を 1 回ずつ発送する。
     pub fn file_watch_show_effect(state: &State, applier: &Applier<State>) {
         let mount = applier.mount_id();
+        // 0. フォルダ選択（Issue #37）。Web は未対応と答えて「選択中」のまま残さない。
+        //    世代照合は finish_pick が持つため、二重に送っても後続は捨てられる。
+        //    `showDirectoryPicker` での実装は後続。
+        if let Some(generation) = take_pick(state) {
+            applier.apply(move |s| finish_pick(s, generation, Err(WatchFailure::Unsupported)));
+        }
         START_STATE.with(|s| {
             s.borrow_mut().insert(
                 mount,
