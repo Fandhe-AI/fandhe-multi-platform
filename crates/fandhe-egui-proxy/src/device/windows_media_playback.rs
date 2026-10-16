@@ -124,6 +124,10 @@ impl Shared {
         if matches!(self.phase, PlaybackPhase::Failed(_)) {
             return Err(DeviceError::InvalidInput("media_playback failed"));
         }
+        // 一時停止がワーカーで未反映の間の Playing は前の再生の残り。再開の PLAYING まで Ready に戻す。
+        if self.intent == Intent::Pause && self.phase == PlaybackPhase::Playing {
+            self.phase = PlaybackPhase::Ready;
+        }
         self.intent = Intent::Play;
         Ok(())
     }
@@ -222,6 +226,16 @@ impl Shared {
             position_ms: self.position_ms,
             duration_ms: self.duration_ms,
         }
+    }
+}
+
+/// 保留中の停止が通知の世代と一致するときだけ取り出す（旧世代の通知では変更しない）。
+fn take_deferred_stop(slot: &mut Option<u64>, gen: u64) -> bool {
+    if *slot == Some(gen) {
+        *slot = None;
+        true
+    } else {
+        false
     }
 }
 
@@ -630,7 +644,8 @@ mod win {
                 Some(Cmd::Event(gen, ev)) => {
                     with_shared(|s| s.on_event(gen, ev));
                     // 読み込み中に受けた停止は、準備完了後に実行する。その間に Play へ変わっていれば何もしない。
-                    if ev == Ev::CanPlay && deferred_stop.take() == Some(gen) {
+                    // 旧世代の CANPLAY では新世代の保留停止を消費しない。
+                    if ev == Ev::CanPlay && take_deferred_stop(&mut deferred_stop, gen) {
                         let still_stop =
                             with_shared(|s| s.check(gen).is_ok() && s.intent == Intent::Stop);
                         if still_stop {
@@ -740,6 +755,33 @@ mod tests {
         assert_eq!(s.phase, PlaybackPhase::Loading);
         s.on_event(g, Ev::CanPlay);
         assert_eq!(s.phase, PlaybackPhase::Ready);
+    }
+
+    #[test]
+    fn play_during_unapplied_pause_drops_stale_playing() {
+        let (mut s, g) = loaded();
+        s.on_event(g, Ev::CanPlay);
+        s.on_play(g).unwrap();
+        s.on_event(g, Ev::Playing);
+        s.on_pause(g).unwrap();
+        s.on_play(g).unwrap();
+        assert_eq!(s.phase, PlaybackPhase::Ready, "前の Playing は残さない");
+        s.on_done(g); // 遅れて Pause が完了しても Paused にしない
+        assert_eq!(s.phase, PlaybackPhase::Ready);
+        s.on_event(g, Ev::Playing);
+        assert_eq!(s.phase, PlaybackPhase::Playing);
+    }
+
+    #[test]
+    fn stale_canplay_keeps_deferred_stop() {
+        let mut d = Some(2u64);
+        assert!(
+            !take_deferred_stop(&mut d, 1),
+            "旧世代の CANPLAY は消費しない"
+        );
+        assert_eq!(d, Some(2));
+        assert!(take_deferred_stop(&mut d, 2));
+        assert_eq!(d, None);
     }
 
     #[test]
