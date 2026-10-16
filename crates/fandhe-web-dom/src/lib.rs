@@ -85,6 +85,8 @@
 //!   純関数（取得結果の写像・取り直し判定・世代照合）のみ `wasm32` gate の外に置く
 //! - [`compass`]: 「方位（コンパス）」画面の Web 経路（親 #1154、Issue #1407）。
 //!   純関数（イベント値 → 方位・許可結果の写像・tick 判定・世代照合）のみ `wasm32` gate の外に置く
+//! - [`ar`]: 「AR 表示」画面の Web 経路（親 #90、Issue #309）。WebXR `immersive-ar` + `dom-overlay`。
+//!   純関数（姿勢 → 状態・失敗の写像・tick 判定）のみ `wasm32` gate の外に置く
 //! - [`fullscreen_immersive`]: 「全画面表示」画面の Web 経路（親 #1133、Issue #1315）。
 //!   純関数（発送判定・到達判定）のみ `wasm32` gate の外に置く
 //!
@@ -254,6 +256,8 @@ pub use mount::{mount, mount_with_effect, Applier, WebEffect};
 
 /// 型サンプル「バッジの設定」の Web 経路（Issue #1363）。[`haptics`] と同じ理由で gate を外す。
 pub mod app_badge;
+/// 型サンプル「AR 表示」の Web 経路（Issue #309）。[`haptics`] と同じ理由で gate を外す。
+pub mod ar;
 /// 型サンプル「方位（コンパス）」の Web 経路（Issue #1407）。[`haptics`] と同じ理由で gate を外す。
 pub mod compass;
 /// 型サンプル「メール・SMS の作成」の Web 経路（Issue #1387）。[`haptics`] と同じ理由で gate を外す。

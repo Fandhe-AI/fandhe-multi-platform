@@ -408,6 +408,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::file_picker::release_mount(id);
         super::network_status::release_mount(id);
         super::compass::release_mount(id);
+        super::ar::release_mount(id);
         super::screen_wake_lock::release_mount(id);
         super::power_state::release_mount(id);
         super::device_info::release_mount(id);
@@ -431,6 +432,16 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
 /// 接続済みであることが前提（未接続の root は DOM 変化のたびに破棄扱いになる）。
 pub(crate) fn is_live(mount_id: u64) -> bool {
     MOUNTS.with(|m| m.borrow().iter().any(|(id, _)| *id == mount_id))
+}
+
+/// マウント先の要素（WebXR の `dom-overlay` の root）。破棄済みなら `None`。
+pub(crate) fn root_of(mount_id: u64) -> Option<Element> {
+    MOUNTS.with(|m| {
+        m.borrow()
+            .iter()
+            .find(|(id, _)| *id == mount_id)
+            .map(|(_, el)| el.clone())
+    })
 }
 
 fn release_replaced_mounts(root: &Element, new_id: u64) {
