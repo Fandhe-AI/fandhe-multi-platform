@@ -20,6 +20,10 @@ use fandhe_core::screens::accessibility_prefs_show::{
 use fandhe_core::screens::app_badge_set::{
     current_screen as current_app_badge_set_screen, AppBadgeSetState,
 };
+use fandhe_core::screens::ar_show::{
+    current_screen as current_ar_screen, stop as ar_stop, ArShowState,
+    STOP_BUTTON_ID as AR_STOP_BUTTON_ID, STOP_LABEL as AR_STOP_LABEL,
+};
 use fandhe_core::screens::audio_devices_show::{
     current_screen as current_audio_devices_screen, AudioDevicesShowState,
 };
@@ -1038,6 +1042,21 @@ pub fn mount_midi_show_screen(root_id: &str) -> Result<(), JsValue> {
         .button(WidgetId::from_raw(2), MIDI_STOP_LABEL, midi_stop)
         .button(WidgetId::from_raw(3), MIDI_CLEAR_LABEL, midi_clear);
     super::mount::mount_with_effect(root, screen, initial_state, super::midi::midi_show_effect)
+}
+
+/// `root_id` が指す要素へ型サンプル「AR 表示」（親 #90、Issue #309）をマウントする検証専用
+/// エントリポイント。`super::ar::ar_show_effect` が WebXR セッションを駆動する。
+///
+/// `mount` は `Screen<S>` を再構築しないため、止められるよう「停止」を最初から足す
+/// （`stop` は冪等のため二重押下は実害にならない）。
+#[wasm_bindgen]
+pub fn mount_ar_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = ArShowState::default();
+    let screen =
+        current_ar_screen(&initial_state).button(AR_STOP_BUTTON_ID, AR_STOP_LABEL, ar_stop);
+    super::mount::mount_with_effect(root, screen, initial_state, super::ar::ar_show_effect)
 }
 
 /// `root_id` が指す要素へ型サンプル「方位（コンパス）」（親 #1154、Issue #1407）を
