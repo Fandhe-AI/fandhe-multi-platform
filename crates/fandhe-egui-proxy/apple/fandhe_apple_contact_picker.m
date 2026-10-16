@@ -17,8 +17,9 @@
 // 権限: `CNContactPicker`（popover）が TCC を要するかは公式文書に明記がないため安全側に倒し、
 // 提示前に `authorizationStatusForEntityType:` を読む（読むだけでは許可ダイアログは出ない）。
 // Denied / Restricted は code 2。NotDetermined は `requestAccessForEntityType:` で許可を求め、
-// 拒否（granted=NO かつ error なし）なら code 2、error ありは権限拒否と断定できないので code 3。それ以外（Authorized と Limited）は提示する。ピッカーだけなら不要と
-// Mac 目視（#1213）で分かった場合は、この判定を外す。
+// 拒否（granted=NO）は error の有無を見ず、認可状態を読み直す。Denied / Restricted なら code 2
+// （初回の拒否は error 付きで返るため）、それ以外で error ありは code 3。それ以外（Authorized と
+// Limited）は提示する。ピッカーだけなら不要と Mac 目視（#1213）で分かった場合は、この判定を外す。
 //
 // スレッド: 提示・static へのアクセスはすべて main queue に限る。許可の completion は任意
 // スレッドで届くため main queue へ戻してから続きを行う。
@@ -241,11 +242,15 @@ static void FandheContactPresentOnMain(uint64_t request_id) {
                             }
                             if (granted) {
                                 FandheContactShow(request_id);
-                            } else if (failed) {
-                                // 通信失敗等は権限拒否ではない。提示失敗（code 3）として通知する。
-                                fandhe_rust_contact_picker_outcome(request_id, 3, NULL);
                             } else {
-                                fandhe_rust_contact_picker_outcome(request_id, 2, NULL);
+                                // 拒否は error 付きでも返る。error ではなく実際の認可状態で判定する。
+                                CNAuthorizationStatus now =
+                                    [CNContactStore authorizationStatusForEntityType:CNEntityTypeContacts];
+                                BOOL denied = now == CNAuthorizationStatusDenied ||
+                                              now == CNAuthorizationStatusRestricted;
+                                // 拒否でない失敗（通信失敗等）は提示失敗（code 3）。error なしは拒否扱い。
+                                fandhe_rust_contact_picker_outcome(request_id,
+                                                                   (denied || !failed) ? 2 : 3, NULL);
                             }
                           });
                         }];
