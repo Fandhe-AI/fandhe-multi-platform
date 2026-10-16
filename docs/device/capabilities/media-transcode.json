@@ -37,11 +37,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/apple_media_transcode.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_media_transcode.m + crates/fandhe-egui-proxy/src/device/media_transcode.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #311"
     },
     "windows": {
-      "status": "possible",
-      "api": "`Windows.Media.Transcoding.MediaTranscoder`",
-      "perm": "要確認（文書に package identity の要件記載なし。unpackaged の可否は未検証）",
+      "status": "done",
+      "api": "`Windows.Media.Transcoding.MediaTranscoder`（`PrepareStreamTranscodeAsync` → `TranscodeAsync`、`MediaEncodingProfile::CreateM4a`。入力は一時 WAV を `FileRandomAccessStream` で開く）",
+      "perm": "不要（文書に package identity の要件記載なし。unpackaged の exe で動くかは #310 で確認）",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.transcoding.mediatranscoder",
-      "note": "未実装。"
+      "note": "実装済み（#312）。範囲は実行時に作った 5 秒・モノラル・48 kHz・PCM 16bit の音声を AAC-LC（m4a）へ 1 回変換することのみ（動画・利用者のファイル・進捗・取り消し・形式の選択・保存は範囲外）。成功は出力を読み直し、0 バイトでない・m4a として解析できる・符号形式が mp4a・長さが入力 ±200 ms の中、をすべて満たすときだけ。失敗は期限切れ・出力が空・解析できない・長さの不一致・非対応を分けて表示する。取り消しと権限は存在しない。入力の一時 WAV と各ストリームは成功・失敗・期限切れの全経路で閉じて消す。Media Feature Pack のない N エディションと Windows 10 1709 未満は非対応（Unsupported）。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、一時ファイルとストリームの解放。守らない範囲: OS ごとの所要時間とビットレートの違い、複数プロセス間。Windows 実機の確認は #310 で行う。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#310）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_media_transcode.rs + crates/fandhe-egui-proxy/src/device/media_transcode.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #312"
     },
     "web": {
       "status": "done",

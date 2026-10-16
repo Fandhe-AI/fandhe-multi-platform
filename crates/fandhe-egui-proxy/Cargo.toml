@@ -461,6 +461,9 @@ windows = { workspace = true, optional = true, features = [
     "Graphics_DirectX_Direct3D11",
     "Media_Core",
     "Media_Transcoding",
+    # Issue #312: `device/windows_media_transcode.rs` が入力の一時 WAV を開く
+    # `FileAccessMode`（`Storage`）に使う。`MediaTranscoder` は上の #26 と共用。新規パッケージは増えない。
+    "Storage",
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Direct3D11",
     "Win32_Graphics_Dxgi",

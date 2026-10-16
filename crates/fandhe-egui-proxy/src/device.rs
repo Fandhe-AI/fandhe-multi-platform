@@ -691,7 +691,7 @@ pub mod windows_local_fonts;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_media_playback;
-/// Issue #311: Windows 向け音声変換のスタブ（windows の子が MediaTranscoder で埋める）。
+/// Issue #312: Windows 向け音声変換の実装（MediaTranscoder）。
 /// `device/media_transcode.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_media_transcode;
