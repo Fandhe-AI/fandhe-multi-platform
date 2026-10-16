@@ -31,6 +31,8 @@ pub mod biometric_auth;
 pub mod bluetooth_le;
 /// Phase 11（端末機能の拡充ループ、親 #1118、Issue #1224）: 予定を 1 件追加する。
 pub mod calendar;
+/// Phase 11（端末機能の拡充ループ、親 #87、Issue #276）: 疑似着信の OS 着信 UI への表示と結果の取得。
+pub mod call_ui;
 pub mod camera;
 /// Phase 11（端末機能の拡充ループ、Issue #859）: クリップボード読み書き。
 pub mod clipboard;

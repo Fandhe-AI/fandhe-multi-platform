@@ -162,6 +162,10 @@ generated_screens! {
     crate::device::midi::midi_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "call_ui_show" => fandhe_core::screens::call_ui_show::current_screen,
+    crate::device::call_ui::call_ui_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "audio_devices_show" => fandhe_core::screens::audio_devices_show::current_screen,
     crate::device::audio_devices::audio_devices_show_effect,
     effect
