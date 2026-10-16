@@ -16,6 +16,8 @@
 // 不能になる。生成対象と衝突しない名前にする（`schema_example_fixture.rs` 参照）。
 /// Phase 11（端末機能の型サンプル「バッジの設定」、Issue #1360）。
 pub mod app_badge_set;
+/// Phase 11 の拡充ループ型サンプル「AR 表示」（親 #90、Issue #307）。
+pub mod ar_show;
 /// Phase 8（端末機能の型サンプル「カメラ撮影」、Issue #749）。
 pub mod camera_capture;
 pub mod confirm_dialog;
