@@ -7,14 +7,17 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "ActivityKit（`Activity<Attributes>.request(attributes:content:pushType:)` / `update` / `end`、iOS 16.1+）。表示は Widget Extension の `ActivityConfiguration`（SwiftUI）",
       "perm": "Info.plist の `NSSupportsLiveActivities` + 別 Widget Extension ターゲット。ローカル開始・更新のみなら `pushType: nil`（リモート更新は Push 通知 entitlement が要るため今回外す）",
       "url": "https://developer.apple.com/documentation/activitykit",
-      "note": "未実装。Widget Extension の追加が必須で、home-widget.json の macOS（FandheTextWidget）と同様に XcodeGen の SSOT へ iOS 用拡張を足す。`Activity` は Swift のジェネリクス型のため ObjC から直接呼べない見込みで、Swift の薄いシムから `@_cdecl` で `extern \"C\"` を公開する形が要る（この点は Apple 一次情報では確認できていない）。ユーザーがライブアクティビティを無効にしていると `request` が失敗するので、失敗を成功へ畳まない。シミュレータでの実描画確認を想定。実機はアカウント・署名の状態に依存",
+      "note": "Swift 薄層（`@_cdecl`）と Widget Extension で実装。`Activity` は Swift 専用 API のため `build.rs` が swiftc で静的ライブラリ化して C ABI で呼ぶ。拡張はシミュレータ向けバンドルにだけ `PlugIns/` として同梱する。実機ビルドは拡張を同梱せず、開始は `Unsupported` を返す（成功に見せない）。理由は実機の署名手順がアプリ 1 つ分しか無いこと。追跡は #293。ユーザーがライブアクティビティを無効にしていると `PermissionDenied`、利用者が閉じた後の更新は `Dismissed`。守る範囲: 1 プロセス内の要求と完了の順序（main actor の直列チェーン）、失敗を成功へ倒さない、`ActivityAuthorizationError` の全種の写像。守らない範囲: プロセス死後の表示の残り（次回起動で片付ける）、利用者が閉じてから次の操作までの表示の食い違い、OS が描画へ反映するまでの時間差、iOS の 8 時間上限",
       "sourceName": [
         "ライブアクティビティ"
-      ]
+      ],
+      "detail": "できている（シミュレータのみ。実機は拡張の署名手順が無く未対応）",
+      "implStatus": "シミュレータ確認済み・実機は拡張の署名手順待ち（#293）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_live_activity.swift + crates/fandhe-egui-proxy/ios/fandhe_live_activity_attributes.swift + crates/fandhe-egui-proxy/src/device/ios_live_activity.rs + crates/fandhe-egui-proxy/src/device/live_activity.rs + crates/fandhe-core/src/screens/live_activity_show.rs + crates/fandhe-device/src/live_activity.rs + platforms/apple/FandheLiveActivity/Sources/FandheLiveActivity/FandheLiveActivityWidget.swift + platforms/apple/project.yml + scripts/ios/build-simulator-app.sh、Issue #295"
     },
     "android": {
       "status": "possible",

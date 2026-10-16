@@ -285,6 +285,25 @@ targets:
         PRODUCT_NAME: FandheTextWidget
         CODE_SIGN_STYLE: Automatic
 
+  # Issue #295: ライブアクティビティの Widget Extension（iOS）。Rust/winit の手組みバンドル
+  # （scripts/ios/build-simulator-app.sh）へ `PlugIns/` として同梱する。アプリ側の
+  # `FandheIosApp` ターゲット（プロファイル生成専用）には依存を足さない。属性型はアプリ側の
+  # 静的ライブラリ（crates/fandhe-egui-proxy/build.rs）と同じファイルを共有する。
+  FandheLiveActivity:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: FandheLiveActivity/Sources/FandheLiveActivity
+      - path: ../../crates/fandhe-egui-proxy/ios/fandhe_live_activity_attributes.swift
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: FandheLiveActivity/Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.iosapp.liveactivity
+        PRODUCT_NAME: FandheLiveActivity
+        CODE_SIGN_STYLE: Automatic
+
 # 署名チーム（DEVELOPMENT_TEAM）注入について:
 # 本ファイルには一切書かない。macOS 上で Xcode の Signing & Capabilities から手動選択するか、
 # `platforms/apple/local.xcconfig`（.gitignore 済み・任意のローカルファイル。本 project.yml

@@ -49,7 +49,8 @@ pub const ENDED_STATUS: &str = "終了しました";
 /// 利用者やシステムが既に閉じていたときの案内（失敗ではない）。
 pub const DISMISSED_STATUS: &str = "閉じられていました";
 /// 非対応のときの案内。
-pub const UNSUPPORTED_MESSAGE: &str = "この環境ではライブアクティビティを使えません";
+pub const UNSUPPORTED_MESSAGE: &str =
+    "この環境ではライブアクティビティを使えません（iOS は拡張を同梱したビルドが必要です）";
 /// 許可がないときの案内。
 pub const DENIED_MESSAGE: &str = "ライブアクティビティが許可されていません";
 /// 値が範囲外のときの案内。

@@ -172,6 +172,41 @@ resolve_built_binary_path() {
 # Apple SDK リンカが必要なため cargo build は macOS 上でのみ成功する。
 # FANDHE_IOS_APP_BINARY 指定時はビルドをスキップし、Linux 上でも
 # バンドル組み立て・.ipa 化ロジック（フェーズ 2 以降）を検証できるようにする。
+# ライブアクティビティの Widget Extension（Issue #295）を XcodeGen + xcodebuild でビルドする。
+# 拡張なしで黙って進めると実行時に Unsupported になるだけで気づきにくいため、道具が無ければ失敗させる。
+live_activity_build_dir="${repo_root}/target/ios-live-activity"
+live_activity_appex="${live_activity_build_dir}/build/Release-iphonesimulator/FandheLiveActivity.appex"
+
+build_live_activity_extension() {
+  local archs
+  case "${target}" in
+    aarch64-apple-ios-sim) archs="arm64" ;;
+    x86_64-apple-ios) archs="x86_64" ;;
+    *)
+      echo "[build-simulator-app] エラー: ライブアクティビティ拡張はシミュレータ向けターゲットのみ対応: ${target}" >&2
+      exit 1
+      ;;
+  esac
+  local tool
+  for tool in xcodegen xcodebuild; do
+    if ! command -v "${tool}" >/dev/null 2>&1; then
+      echo "[build-simulator-app] エラー: ${tool} が見つからない（ライブアクティビティ拡張のビルドに必要）" >&2
+      exit 1
+    fi
+  done
+
+  echo "[build-simulator-app] ライブアクティビティ拡張をビルド（ARCHS=${archs}）"
+  xcodegen generate --spec "${repo_root}/platforms/apple/project.yml" --project "${repo_root}/platforms/apple" >/dev/null
+  rm -rf "${live_activity_build_dir}"
+  xcodebuild -project "${repo_root}/platforms/apple/Fandhe.xcodeproj" -target FandheLiveActivity \
+    -sdk iphonesimulator -configuration Release CODE_SIGNING_ALLOWED=NO "ARCHS=${archs}" \
+    "SYMROOT=${live_activity_build_dir}/build" "OBJROOT=${live_activity_build_dir}/obj" build >/dev/null
+  if [[ ! -d "${live_activity_appex}" ]]; then
+    echo "[build-simulator-app] エラー: 拡張の成果物が見つからない: ${live_activity_appex}" >&2
+    exit 1
+  fi
+}
+
 phase_build() {
   if [[ -n "${injected_binary}" ]]; then
     if [[ ! -f "${injected_binary}" ]]; then
@@ -179,6 +214,7 @@ phase_build() {
       exit 1
     fi
     echo "[build-simulator-app] FANDHE_IOS_APP_BINARY 指定によりビルドをスキップ: ${injected_binary}"
+    echo "[build-simulator-app] ライブアクティビティ拡張なし（構造検証のみ。実行時は Unsupported）"
     return 0
   fi
 
@@ -222,6 +258,8 @@ phase_build() {
     echo "[build-simulator-app] エラー: 期待したビルド成果物が見つからない: ${built_binary}" >&2
     exit 1
   fi
+
+  build_live_activity_extension
 }
 
 # --- フェーズ 2: bundle ----------------------------------------------------
@@ -242,6 +280,15 @@ phase_bundle() {
   cp "${built_binary}" "${app_dir}/${app_name}"
   cp "${info_plist_src}" "${app_dir}/Info.plist"
   cp "${info_plist_src%/*}/PrivacyInfo.xcprivacy" "${app_dir}/PrivacyInfo.xcprivacy"
+
+  if [[ -z "${injected_binary}" ]]; then
+    if [[ ! -d "${live_activity_appex}" ]]; then
+      echo "[build-simulator-app] エラー: ライブアクティビティ拡張が見つからない: ${live_activity_appex}（先に build フェーズを実行してください）" >&2
+      exit 1
+    fi
+    mkdir -p "${app_dir}/PlugIns"
+    cp -R "${live_activity_appex}" "${app_dir}/PlugIns/FandheLiveActivity.appex"
+  fi
 
   # CFBundleExecutable（Info.plist）とバンドル直下の実行体名が一致していることを検証する。
   # 不一致のまま .ipa 化すると、シミュレータが起動時に実行体を解決できず
@@ -284,6 +331,13 @@ phase_sign() {
     echo "[build-simulator-app] エラー: codesign が見つからない（署名は macOS 専用ツールが必要）。" >&2
     echo "[build-simulator-app]       Linux 上で構造検証のみ行う場合は FANDHE_IOS_SKIP_SIGN=1 を指定すること。" >&2
     exit 1
+  fi
+
+  # --deep を使わないため、拡張 → アプリの順に署名する。
+  if [[ -d "${app_dir}/PlugIns/FandheLiveActivity.appex" ]]; then
+    echo "[build-simulator-app] ad-hoc 署名: codesign --sign - --force FandheLiveActivity.appex"
+    codesign --sign - --force "${app_dir}/PlugIns/FandheLiveActivity.appex"
+    codesign --verify --verbose=2 "${app_dir}/PlugIns/FandheLiveActivity.appex"
   fi
 
   echo "[build-simulator-app] ad-hoc 署名: codesign --sign - --force ${app_dir}"
@@ -403,9 +457,26 @@ phase_verify() {
   # 「.ipa 化の過程で署名済みバンドルが壊れずに取り込まれたか」を成果物側から
   # 独立に確認する。署名済みのはずが痕跡が見つからない場合は、未署名扱いで
   # 黙って成功させず exit 1 とする（A08 対策。security.md 参照）。
+  local appex_rel="PlugIns/FandheLiveActivity.appex"
+  if [[ -z "${injected_binary}" ]]; then
+    if [[ ! -f "${app_dir}/${appex_rel}/Info.plist" ]]; then
+      echo "[build-simulator-app] エラー: 拡張の Info.plist が存在しない: ${app_dir}/${appex_rel}/Info.plist" >&2
+      exit 1
+    fi
+    if ! printf '%s\n' "${ipa_listing}" | grep -q "Payload/${app_name}\.app/${appex_rel}/Info\.plist"; then
+      echo "[build-simulator-app] エラー: .ipa 内に ${appex_rel}/Info.plist が見つからない" >&2
+      exit 1
+    fi
+    echo "[build-simulator-app]   - ${appex_rel} 同梱確認 OK"
+  fi
+
   local signed=0
   if [[ "${skip_sign}" != "1" ]]; then
     signed=1
+    if [[ -z "${injected_binary}" ]] && [[ ! -f "${app_dir}/${appex_rel}/_CodeSignature/CodeResources" ]]; then
+      echo "[build-simulator-app] エラー: 拡張の署名が見つからない: ${app_dir}/${appex_rel}/_CodeSignature/CodeResources" >&2
+      exit 1
+    fi
     if [[ ! -f "${app_dir}/_CodeSignature/CodeResources" ]]; then
       echo "[build-simulator-app] エラー: 署名済みのはずが _CodeSignature/CodeResources が見つからない: ${app_dir}/_CodeSignature/CodeResources" >&2
       exit 1

@@ -182,6 +182,8 @@
 	<string>型サンプル「歩数」の動作確認に使います</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>型サンプル「写真の保存」の動作確認に使います</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.fandhe.iosapp.background-task</string>

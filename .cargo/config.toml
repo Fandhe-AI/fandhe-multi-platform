@@ -1,0 +1,5 @@
+# iOS の最小 OS を Info.plist の MinimumOSVersion（17.0）に揃える。未指定だと rustc は 10.0 でリンクし、
+# ライブアクティビティの Swift 薄層（crates/fandhe-egui-proxy/build.rs、Issue #295）が使う
+# `___chkstk_darwin` が実機向けで解決できない。`force = false` なので呼び出し側の指定が優先される。
+[env]
+IPHONEOS_DEPLOYMENT_TARGET = { value = "17.0", force = false }

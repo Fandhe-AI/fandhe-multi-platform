@@ -16,8 +16,8 @@
 //! - 正常終了: [`LiveOutcome::Dismissed`]。`Update` で利用者やシステムが既に閉じたと分かった
 //!   とき。失敗として見せず、再投稿もしない
 //! - 失敗: 許可なし（iOS の `areActivitiesEnabled == false`・Android の通知無効や channel の
-//!   重要度 `NONE`）→ `PermissionDenied("live_activity")`、非対応 → `Unsupported("live_activity")`、
-//!   OS 呼び出しの失敗（拡張の未同梱・背景からの開始を含む）→ `Internal("live_activity <操作>")`。
+//!   重要度 `NONE`）→ `PermissionDenied("live_activity")`、非対応（iOS の拡張の未同梱を含む）→
+//!   `Unsupported("live_activity")`、OS 呼び出しの失敗（背景からの開始を含む）→ `Internal("live_activity <操作>")`。
 //!   成功へ倒さない。OS の生のエラーコード・値はログにも画面にも出さない
 //! - キャンセル（`Cancelled`）は返さない。iOS には許可ダイアログが無く、Android は「拒否」と
 //!   「閉じる」を区別できないため拒否に寄せる

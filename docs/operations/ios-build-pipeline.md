@@ -37,6 +37,7 @@ REQ-11 受け入れ基準「単一コマンドから iOS シミュレータ版 `
 | バンドル組み立て・`.ipa` 化ロジックの構造検証 | 可（`FANDHE_IOS_APP_BINARY` によるスタブ注入） | 可 |
 | `codesign`（ad-hoc 署名） | 不可（`FANDHE_IOS_SKIP_SIGN=1` で構造検証専用にスキップ可能） | 可（既定で実行） |
 | `xcrun simctl install`/`launch` | 不可 | 可 |
+| `xcodegen` / `xcodebuild`（ライブアクティビティ拡張のビルド、Issue #295） | 不可（`FANDHE_IOS_APP_BINARY` 注入時は拡張を同梱せず、実行時は `Unsupported`） | 必須（無ければ build フェーズが失敗する） |
 | `zip` コマンド | 通常なし（python3 `zipfile` へ自動フォールバック） | 標準搭載 |
 
 Linux 環境では `rustup target add aarch64-apple-ios-sim` の上で `cargo check` までは
@@ -174,6 +175,10 @@ exit 1 になる。CLI 経由の場合はこの export を CLI 側が自動で�
   リポジトリへ混入しない。
 
 ## 7. 既知の制約・残課題
+
+- ライブアクティビティの Widget Extension（`FandheLiveActivity.appex`、Issue #295）はシミュレータ向け
+  バンドルにだけ `PlugIns/` として同梱し、拡張 → アプリの順に ad-hoc 署名する。実機向けは拡張の署名手順が
+  無く同梱しないため、開始は `Unsupported` を返す（追跡は #293）。
 
 - 通常は「4.1 macOS 実機での通常実行」の CLI 経由コマンド（Issue #486）を使うこと。
   単体スクリプト直接実行はフェーズ単位のデバッグ・切り分け用途として利用できる。
