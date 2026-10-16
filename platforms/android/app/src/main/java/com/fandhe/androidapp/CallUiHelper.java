@@ -80,7 +80,6 @@ final class CallUiHelper {
 
     private final ComponentActivity activity;
     private final Handler main = new Handler(Looper.getMainLooper());
-    private final RequestTracker permissionRequest = new RequestTracker();
     // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity の
     // フィールド初期化子から本クラスを生成してここで登録する。
     private final ActivityResultLauncher<String> permissionLauncher;
@@ -88,7 +87,7 @@ final class CallUiHelper {
     CallUiHelper(ComponentActivity activity) {
         this.activity = activity;
         this.permissionLauncher = activity.registerForActivityResult(
-                new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
+                new ActivityResultContracts.RequestPermission(), granted -> { });
     }
 
     // ---- 確定（main looper） ----
@@ -157,14 +156,12 @@ final class CallUiHelper {
             if (id != currentId) {
                 return;
             }
-            permissionRequest.take();
             close(DisconnectCause.LOCAL);
         });
     }
 
     // MainActivity.onDestroy から（main）。報告なしで閉じる。
     void onDestroy() {
-        permissionRequest.take();
         close(DisconnectCause.LOCAL);
     }
 
@@ -193,31 +190,17 @@ final class CallUiHelper {
                 finish(id, EVENT_FAILED);
                 return;
             }
-            permissionRequest.track(id);
+            // 許可待ちは Rust 側の報告期限（5 秒）に収まらないため、今回の要求は権限不足で確定し、
+            // ダイアログは次回以降のために出すだけにする（結果は待たない）。
             try {
                 permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
             } catch (RuntimeException e) {
-                permissionRequest.take();
-                finish(id, EVENT_FAILED);
+                // 次回に持ち越すだけなので無視する。
             }
+            finish(id, EVENT_FAILED_PERMISSION);
             return;
         }
         addCall(id);
-    }
-
-    @RequiresApi(Build.VERSION_CODES.O)
-    private void onPermissionResult(boolean granted) {
-        long id = permissionRequest.take();
-        if (id == RequestTracker.NONE || id != currentId) {
-            return;
-        }
-        if (destroyed()) {
-            finish(id, EVENT_FAILED);
-        } else if (!granted) {
-            finish(id, EVENT_FAILED_PERMISSION);
-        } else {
-            addCall(id);
-        }
     }
 
     private PhoneAccountHandle handle() {
