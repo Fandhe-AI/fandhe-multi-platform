@@ -7,7 +7,7 @@
 //! OS 別の置き場:
 //! - macOS: `apple_map_view.rs` + `apple/fandhe_apple_map_view.m`（#273）。コールバック型のため
 //!   pull 型 [`bridge`]（`RequestSlot` の facade）で毎フレーム [`drive_callback`] が結果を反映する
-//! - iOS: 同じ `.m` の iOS 分岐（#274 が埋めるまでは `Unsupported`）
+//! - iOS: 同じ `.m` の iOS 分岐（Issue #274。macOS と実装を共用）
 //! - それ以外: `UnsupportedMapSnapshotter` を同期に呼んで「非対応」を表示する
 //!
 //! 期限（[`SNAPSHOT_DEADLINE`]）は `start` を呼んだ時刻を起点に単調時計で測り、切れたら

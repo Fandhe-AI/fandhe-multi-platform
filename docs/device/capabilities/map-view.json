@@ -7,14 +7,17 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "MapKit（`MKMapSnapshotter` で静止画取得 → 画像として描画。ライブ表示は `MKMapView`）",
       "perm": "不要（現在地表示を重ねる場合のみ CoreLocation の権限が別途必要）",
       "url": "https://developer.apple.com/documentation/mapkit/mkmapsnapshotter",
-      "note": "未実装。egui のフルスクリーン描画にネイティブビュー（`MKMapView`）を重ねる経路が無いため、`MKMapSnapshotter` で `MKMapSnapshotter.Options`（region / size / scale）を渡し、得た `UIImage` を RGBA に変換して画像として描く形にする。ズーム・パンは操作ごとに再取得（ライブ地図ではない）。completion は一度きり・非同期のため request/response 型で扱う。Apple 地図データの帰属表示（Apple Maps ロゴ・法的表記）はスナップショットに含まれないため扱いを要確認",
+      "note": "固定 480x320（1x）の静止画を `MKMapSnapshotter` で 1 枚取得し RGBA に変換して描く（プリセット 3 地点・15 秒の期限・オフラインの事前判定）。守る範囲: 1 プロセス・1 画面の順序、結果は 1 回きり、画像なし・0 寸法・エラー付きを成功にしない、資源の解放、座標をログへ出さない。守らない範囲: タイルの内容と鮮度、Apple 側のレート制限、複数プロセス。iOS 固有: 背景にいる間の取得は期限切れの失敗になり、復帰後に届いた結果は捨てる。既知の天井: オンラインなのに空タイルが返る場合は合図が無い。帰属表示は固定文言のみで、ストア配布の前に HIG・規約を人が確認する",
       "sourceName": [
         "地図表示"
-      ]
+      ],
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#272）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_map_view.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_map_view.m + crates/fandhe-egui-proxy/src/device/map_view.rs + crates/fandhe-core/src/screens/map_view_show.rs + crates/fandhe-device/src/map_view.rs、Issue #274"
     },
     "android": {
       "status": "no",
