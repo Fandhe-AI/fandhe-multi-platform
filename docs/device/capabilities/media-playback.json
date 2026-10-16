@@ -44,12 +44,15 @@
       "note": "未実装。`IMFMediaEngine` は Windows 8 以降のデスクトップアプリ向けとドキュメントに明記されており素の exe で使える。`MFStartup` と COM 初期化が要る。映像は `TransferVideoFrame` で DXGI サーフェス / WIC ビットマップへ取り出せるため、egui テクスチャ化の経路がある。MFPlay は非推奨（Microsoft Learn が `MediaPlayer` と `IMFMediaEngine` への置き換えを推奨）なので使わない。WinRT の `MediaPlayer` は package identity 要否を確認できなかったため採らない"
     },
     "web": {
-      "status": "possible",
-      "api": "`HTMLMediaElement`（`<audio>` / `<video>`、`play()` / `pause()` / `currentTime`）。wasm から `web-sys` 経由で操作",
-      "perm": "不要。ただし自動再生はブラウザが制限するため、ユーザー操作内で `play()` を呼ぶ",
+      "status": "done",
+      "api": "`HTMLMediaElement`（`document.createElement(\"audio\")` を DOM に差し込まずに使う。`Blob` + `URL.createObjectURL` で実行時に作る WAV を渡す。`play()` / `pause()` / `currentTime` / `duration`）",
+      "perm": "不要。自動再生の制限があるので、`play()` はクリックと同じタスクで呼ぶ",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement",
-      "safari": "対応。MDN は `HTMLMediaElement` を 2015-07 以降 Widely available と記載。ただし自動再生の制限は Safari が特に厳しく、`play()` は Promise を返し拒否されうる。コーデック対応（WebM / Ogg 等）はブラウザごとに異なるため `canPlayType()` で確認",
-      "note": "未実装。`play()` の Promise の拒否（自動再生ブロック）を失敗として返し、成功扱いにしない。動画は `fandhe-web-dom` の DOM 出力に `<video>` 要素を出す方が自然で、`fandhe-egui-proxy` の canvas 描画とは別経路になる。音声のみなら DOM 外の `Audio` オブジェクトで足りる"
+      "safari": "対応（`HTMLMediaElement`）。自動再生の制限が厳しく `play()` が拒否されうるので、拒否は「ブロックされた」失敗として出す。実ブラウザでの確認は #266",
+      "note": "実装済み（#271）。範囲は macOS（#267）と同じ（同梱 WAV の再生・一時停止・停止・位置・長さのみ）。`NotAllowedError` はブロック（失敗）、`AbortError` はキャンセル（失敗ではない）、`ended` と `error` は分ける、`pagehide` / hidden で中断して自動では再開しない。守る範囲: 1 マウント内の操作順と世代照合、失敗・ブロック・期限切れを成功へ畳まないこと、object URL・リスナー・タイマーの解放。守らない範囲: 位置表示のポーリング間隔ぶんの遅れ、複数タブ・複数マウント間の一致、他タブの音声との混ざり、egui-proxy の wasm canvas 経路（非対応のまま）",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#266）",
+      "impl": "crates/fandhe-web-dom/src/media_playback.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/media_playback.rs、Issue #271"
     }
   },
   "note": "iOS / macOS は `AVPlayer`、Android は Media3 `ExoPlayer`（GMS 非依存、minSdk 23+）、Windows は `IMFMediaEngine`（MFPlay は非推奨）、Web は `HTMLMediaElement`。全 OS possible で no は無い。音声のみなら表示面が要らず簡単だが、動画は egui の描画面とネイティブ映像面の合成が全 OS で未解決の新規設計になる。今回の範囲: 音声 1 本の再生・一時停止・停止だけ（動画表示・バックグラウンド再生・プレイリストは扱わない） 守備範囲: 1 プロセス内の操作順・嘘の成功の禁止・資源の解放までを守り、位置表示の遅れ・他アプリの音声との混ざり・複数プロセス間は守らない。"
