@@ -14,11 +14,14 @@
       "note": "未実装。印刷対象（PDF / 画像 / 描画）を渡す形。AirPrint 対応プリンタが前提"
     },
     "android": {
-      "status": "possible",
-      "api": "`PrintManager`（API 19+）",
-      "perm": "なし",
+      "status": "done",
+      "api": "`android.print.PrintManager`（API 19+、minSdk 24 で使える）+ `PrintDocumentAdapter`（`PrintedPdfDocument` で 1 ページを描く）",
+      "perm": "不要。`uses-permission` も `<queries>` も追加しない（一時ファイルも作らない）",
       "url": "https://developer.android.com/training/printing",
-      "note": "未実装。印刷アダプタ（`PrintDocumentAdapter`）の実装が要る"
+      "note": "実装済み（#328）。範囲は固定の短い文章を 1 ページ印刷ダイアログへ渡すことのみ。結果は `Submitted`（ジョブを渡した。PDF 保存を含み、紙に出たことは意味しない）・`Cancelled`（取り消しを失敗にしない）・`Unconfirmed`（`onFinish` から 2 秒（単調時計）経っても CREATED）・失敗（FAILED・書き出し失敗・`print()` の例外・非前景・`PrintManager` 取得不可）。利用者が操作するダイアログなので固定の期限は掛けない。ジョブ名は固定で、見出し・本文・例外はログにも OS のキューにも出さない。Activity を作り直したときは保留中の要求を破棄し、旧要求の結果が新しい要求を消費しない。守る範囲: 入力の検査、1 プロセス内の要求順序、取り消しを失敗に畳まないこと、嘘の成功の禁止、資源の解放。守らない範囲: 紙に出たか・2 秒を超えてからの状態変化・プリンタ側の失敗、印刷フレームワークの無い端末（失敗として表示される）。Android 実機の目視は #324",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#324）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_print.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/PrintHelper.java + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_page.rs + crates/fandhe-device/src/print.rs、Issue #328"
     },
     "macos": {
       "status": "done",
