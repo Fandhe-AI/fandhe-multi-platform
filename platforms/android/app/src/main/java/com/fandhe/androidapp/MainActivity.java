@@ -518,6 +518,11 @@ public class MainActivity extends GameActivity {
         mediaPlaybackHelper.shutdown();
     }
 
+    // 音声変換（Issue #314）。実装は `MediaTranscodeHelper`。Rust の `android_media_transcode.rs` がワーカースレッドから同期 JNI で呼ぶ。
+    byte[] mediaTranscode(byte[] pcmLe, int sampleRate, long remainingMs) {
+        return MediaTranscodeHelper.transcode(getCacheDir(), pcmLe, sampleRate, remainingMs);
+    }
+
     // MIDI 入力（Issue #1400）。実装は `MidiHelper`。Rust の `android_midi.rs` が JNI で呼ぶ。
     private final MidiHelper midiHelper = new MidiHelper(this);
 
