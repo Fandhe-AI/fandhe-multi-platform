@@ -1,11 +1,8 @@
-//! macOS 向け音声再生実装（Issue #267。iOS は親 #86 の b-ios が同じ `.m` を使う）。
-//! `device/media_playback.rs::platform_playback` の macOS 経路から呼ばれる。
+//! macOS / iOS 共用の音声再生実装（Issue #267。iOS は #269 が `ios_media_playback` から使う）。
+//! `device/media_playback.rs::platform_playback` の macOS・iOS 経路から呼ばれる。
 //! `apple/fandhe_apple_media_playback.m`（`AVAudioPlayer`、`build.rs` の macOS / iOS 分岐がコンパイル）を
 //! C ABI で呼ぶ薄いラッパーで、世代の採番だけを Rust 側で持つ。戻りコードを契約上のエラーへ写す
 //! 純関数は [`result_from_code`]。`unsafe` は extern 呼び出しに閉じ、再生内容はログに出さない。
-
-// iOS からはまだ呼ばれない（親 #86 の b-ios が `ios_media_playback` から使うときに外す）。
-#![cfg_attr(target_os = "ios", allow(dead_code))]
 
 use std::sync::Arc;
 
@@ -70,6 +67,8 @@ mod imp {
             3 => PlaybackPhase::Paused,
             4 => PlaybackPhase::Ended,
             5 => PlaybackPhase::Failed(PlaybackFailure::Decode),
+            // iOS のみ。背景遷移・割り込みで一時停止した状態（失敗でも終了でもない）。
+            6 => PlaybackPhase::Interrupted,
             _ => PlaybackPhase::Failed(PlaybackFailure::Internal),
         }
     }
@@ -160,6 +159,7 @@ mod imp {
                 phase_from_code(5),
                 PlaybackPhase::Failed(PlaybackFailure::Decode)
             );
+            assert_eq!(phase_from_code(6), PlaybackPhase::Interrupted);
             assert_eq!(
                 phase_from_code(42),
                 PlaybackPhase::Failed(PlaybackFailure::Internal)
