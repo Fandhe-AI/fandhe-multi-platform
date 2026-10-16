@@ -1,4 +1,4 @@
-//! macOS / iOS 向け音声変換実装（Issue #311 macOS、iOS は b-ios の子 issue が `implementation` で返す）。
+//! macOS / iOS 向け音声変換実装（Issue #311 macOS、iOS は #313 で `ios_media_transcode` 経由）。
 //! `device/media_transcode.rs` の macOS 経路から呼ばれ、`apple/fandhe_apple_media_transcode.m`
 //! （`AVAudioFile` で AAC の m4a を書く。`build.rs` が feature `device` 有効時にコンパイル）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。出力は `.m` からコールバックで Rust の `Vec<u8>` へコピーし、
