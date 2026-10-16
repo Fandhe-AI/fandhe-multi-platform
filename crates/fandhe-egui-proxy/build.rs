@@ -182,6 +182,9 @@
 //! - `ios/fandhe_ios_compass.m`（Issue #1405、CoreLocation の heading 購読による方位）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_compass.rs`
 //!   から呼ばれる契約）。CoreLocation は位置情報用にリンク済みで追加リンクは無い。
+//! - `ios/fandhe_ios_ar.m`（Issue #308、ARKit の `ARSession` による追跡状態・位置・水平面の数）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_ar.rs` から呼ばれる契約）。
+//!   ARKit を追加でリンクする。
 //! - `ios/fandhe_ios_file_watch.m`（Issue #1412、`open(O_EVTONLY)` + `DISPATCH_SOURCE_TYPE_VNODE` による
 //!   フォルダの変更監視）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/ios_file_watch.rs` から呼ばれる契約）。libdispatch は libSystem 内で追加リンクは無い。
@@ -423,6 +426,8 @@ fn main() {
     compile_ios_local_fonts();
     // `ios/fandhe_ios_compass.m`（Issue #1405）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_compass();
+    // `ios/fandhe_ios_ar.m`（Issue #308）。iOS 分岐のみ。
+    compile_ios_ar();
     // `ios/fandhe_ios_file_watch.m`（Issue #1412）。iOS 分岐のみ。
     compile_ios_file_watch();
     // `ios/fandhe_ios_multi_display.m`（Issue #27）。iOS 分岐のみ。
@@ -1002,6 +1007,17 @@ fn compile_ios_compass() {
         .file("ios/fandhe_ios_compass.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_compass");
+}
+
+/// `ios/fandhe_ios_ar.m` を `cc` でコンパイルし ARKit をリンクする（Issue #308）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_ar.rs` が使う）。AVFoundation（権限確認）は既存のリンクで足りる。
+fn compile_ios_ar() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_ar.m");
+    println!("cargo:rustc-link-lib=framework=ARKit");
+    cc::Build::new()
+        .file("ios/fandhe_ios_ar.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_ar");
 }
 
 /// `ios/fandhe_ios_call_ui.m` を `cc` でコンパイルし CallKit をリンクする（Issue #277）。**iOS 分岐のみ**

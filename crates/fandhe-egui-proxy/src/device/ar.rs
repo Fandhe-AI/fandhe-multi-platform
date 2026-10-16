@@ -8,8 +8,8 @@
 //! を確定する前に必ず `stop()` する（契約表 3・9）。期限は単調時計（`Instant`）由来のミリ秒だけで測る。
 //! 差分: [`ArSample::AwaitingPermission`]（権限ダイアログ待ち）は期限に数えず、起点を捨てて待つ。
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は `ios_ar.rs`（(b-ios) が ARKit で埋めるまで
-//! `UnsupportedAr` のスタブ）、Web は `fandhe-web-dom` 側（(c)）、他 OS は対象外で `UnsupportedAr` 固定。
+//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は `ios_ar.rs`（ARKit、Issue #308。
+//! 非対応端末は `Unsupported`）、Web は `fandhe-web-dom` 側（(c)）、他 OS は対象外で `UnsupportedAr` 固定。
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -106,14 +106,14 @@ static RESUME_EPOCH: AtomicU64 = AtomicU64::new(0);
 /// 背景中か。背景中は `NoReading` の待機を進めない。
 static BACKGROUND: AtomicBool = AtomicBool::new(false);
 
-/// 背景遷移を記録する。(b-ios) の `.m` 受け口（`DidEnterBackground`）が呼ぶ。(a) では呼び元が無い。
+/// 背景遷移を記録する。`ios_ar.rs` の受け口（`DidEnterBackground` 由来）が呼ぶ。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(target_os = "ios", allow(dead_code))]
 pub(crate) fn note_backgrounded() {
     BACKGROUND.store(true, Ordering::SeqCst);
 }
 
-/// 背景からの復帰を記録する。(b-ios) の前景復帰通知が呼ぶ。復帰回数を先に増やしてから背景フラグを下ろす。
+/// 背景からの復帰を記録する。`ios_ar.rs` の前景復帰の受け口が呼ぶ。復帰回数を先に増やしてから背景フラグを下ろす。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(target_os = "ios", allow(dead_code))]
 pub(crate) fn note_resumed() {
