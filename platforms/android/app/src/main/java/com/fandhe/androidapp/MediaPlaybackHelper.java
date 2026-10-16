@@ -95,8 +95,8 @@ final class MediaPlaybackHelper {
                 mp.setOnErrorListener((p, what, extra) -> {
                     synchronized (lock) {
                         if (valid(gen, p)) {
-                            phase = isDecodeError(what) || isDecodeError(extra)
-                                    ? FAILED_DECODE : FAILED_INTERNAL;
+                            failLocked(isDecodeError(what) || isDecodeError(extra)
+                                    ? FAILED_DECODE : FAILED_INTERNAL);
                         }
                     }
                     return true; // onCompletion を呼ばせない
@@ -140,7 +140,7 @@ final class MediaPlaybackHelper {
                     started = true;
                     phase = PLAYING;
                 } catch (IllegalStateException e) {
-                    phase = FAILED_INTERNAL;
+                    failLocked(FAILED_INTERNAL);
                 }
             } else if (phase != INTERRUPTED) {
                 phase = READY; // 中断は維持する（準備完了でも Ready に戻さない）
@@ -173,8 +173,7 @@ final class MediaPlaybackHelper {
             if (!prepared || (op == OP_PAUSE && phase != PLAYING && phase != LOADING)) return OK;
             stopMp = player;
             rewind = op != OP_PAUSE;
-            // 開始待ちの start は phase が LOADING でなくなるため実行時に捨てられる。
-            phase = rewind ? READY : PAUSED;
+            // phase は main での実処理が成功した後に確定する（期限切れで取り消した場合に実態とずらさない）。
         }
         // MediaPlayer の操作は生成した main へ統一し、完了を待って実結果を返す（契約表 2）。
         // lock は持たずに待つ（main 側が lock を取るため）。
@@ -184,18 +183,24 @@ final class MediaPlaybackHelper {
             synchronized (lock) {
                 if (!valid(gen, mp)) return BAD_GEN;
                 if (phase == FAILED_DECODE || phase == FAILED_INTERNAL) return FAILED;
+                if (!rw && phase != PLAYING && phase != LOADING) return OK; // 待機中に中断・終了済み
                 return stopNow(mp, rw) ? OK : FAILED;
             }
         });
     }
 
-    // main で実行して結果を返す。main 上なら直接、それ以外は完了まで待つ（期限超過は失敗）。
+    // main で実行して結果を返す。main 上なら直接実行する。それ以外は 3 秒待ち、未開始のまま期限が
+    // 切れたら取り消して失敗（以後 Runnable は何もしない）、開始済みなら完了まで待って実結果を返す
+    // （契約表 3。開始と取り消しは state の CAS で排他）。
     private int runOnMain(java.util.concurrent.Callable<Integer> task) {
         try {
             if (Looper.myLooper() == Looper.getMainLooper()) return task.call();
             final int[] out = {FAILED};
+            final java.util.concurrent.atomic.AtomicInteger state =
+                    new java.util.concurrent.atomic.AtomicInteger(0); // 0 未開始 / 1 開始済み / 2 取消
             final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
             handler.post(() -> {
+                if (!state.compareAndSet(0, 1)) return;
                 try {
                     out[0] = task.call();
                 } catch (Exception e) {
@@ -204,7 +209,11 @@ final class MediaPlaybackHelper {
                     done.countDown();
                 }
             });
-            return done.await(3, java.util.concurrent.TimeUnit.SECONDS) ? out[0] : FAILED;
+            if (!done.await(3, java.util.concurrent.TimeUnit.SECONDS)) {
+                if (state.compareAndSet(0, 2)) return FAILED;
+                done.await(); // 開始済み。短い処理なので完了を待つ
+            }
+            return out[0];
         } catch (Exception e) {
             return FAILED;
         }
@@ -219,9 +228,10 @@ final class MediaPlaybackHelper {
                 started = false;
             }
             if (rewind) mp.seekTo(0);
+            phase = rewind ? READY : PAUSED;
             return true;
         } catch (IllegalStateException e) {
-            phase = FAILED_INTERNAL;
+            failLocked(FAILED_INTERNAL);
             return false;
         }
     }
@@ -247,7 +257,7 @@ final class MediaPlaybackHelper {
                         }
                     }
                 } catch (IllegalStateException e) {
-                    phase = FAILED_INTERNAL;
+                    failLocked(FAILED_INTERNAL);
                 }
             }
         });
@@ -317,6 +327,18 @@ final class MediaPlaybackHelper {
 
     // lock の内側。旧 player の release を post し、状態を Idle へ戻す。
     private void releaseLocked() {
+        postRelease();
+        current = 0;
+        phase = IDLE;
+        prepared = false;
+        started = false;
+        pos = -1;
+        wantPlay = false;
+        duration = -1;
+    }
+
+    // lock の内側。現 player の release を main へ post し、player を手放す（資源は ByteArraySource ごと解放）。
+    private void postRelease() {
         MediaPlayer old = player;
         if (old != null) {
             pendingRelease.add(old);
@@ -327,13 +349,15 @@ final class MediaPlaybackHelper {
             });
         }
         player = null;
-        current = 0;
-        phase = IDLE;
-        prepared = false;
+    }
+
+    // lock の内側。失敗世代と phase は保持したまま player を解放する（契約表 9）。
+    // 以後 control は失敗 phase で拒否し、snapshot は位置取得をしない。
+    private void failLocked(int failedPhase) {
+        phase = failedPhase;
         started = false;
-        pos = -1;
         wantPlay = false;
-        duration = -1;
+        postRelease();
     }
 
     private static final class ByteArraySource extends MediaDataSource {
