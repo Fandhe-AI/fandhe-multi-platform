@@ -126,6 +126,8 @@ pub mod local_fonts_show;
 pub mod map_view_show;
 /// Phase 11 の拡充ループ型サンプル「MIDI 入力」（親 #1137、Issue #1398）。
 pub mod midi_show;
+/// Phase 11 の拡充ループ型サンプル「機械学習モデル推論」（親 #89、Issue #289）。
+pub mod ml_infer;
 /// Phase 11 の拡充ループ型サンプル「複数ディスプレイ」（親 #1134、Issue #1341）。
 pub mod multi_display_show;
 /// Phase 11 の拡充ループ型サンプル「ネットワーク接続状態」（親 #1130、Issue #1282）。
