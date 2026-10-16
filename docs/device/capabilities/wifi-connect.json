@@ -11,7 +11,6 @@
       "api": "NetworkExtension `NEHotspotConfigurationManager.apply`",
       "perm": "Hotspot Configuration Entitlement（`com.apple.developer.networking.HotspotConfiguration`）",
       "url": "https://developer.apple.com/documentation/networkextension/nehotspotconfigurationmanager",
-      "approval": "Hotspot Configuration の Entitlement 有効化（要確認）",
       "note": "未実装。Entitlement の付与は capability 追加のみで Apple の個別審査は不要と思われる（要確認）。確認ダイアログが出る。（URL・API は一般知識、WebFetch 未確認、要確認）"
     },
     "android": {

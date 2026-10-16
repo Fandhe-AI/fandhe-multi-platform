@@ -7,11 +7,11 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "no",
       "api": "UIKit `UIDocumentPickerViewController`（外部ドライブ内のファイルを選ぶ）。着脱通知は公開 API なし",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uidocumentpickerviewcontroller",
-      "note": "未実装。USB ストレージ（iPadOS 13+ / iPhone 15+）のファイルは picker 経由のみで、着脱の検知はできない。file-picker と重なる範囲が大きい。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "note": "着脱を検知・列挙する公開 API が無い。外部ストレージのファイルはファイル選択（file-picker）経由でのみ読める。（一般知識、要確認）"
     },
     "android": {
       "status": "possible",
@@ -35,12 +35,12 @@
       "note": "未実装。（URL・API は一般知識、WebFetch 未確認、要確認）"
     },
     "web": {
-      "status": "possible",
+      "status": "no",
       "api": "File System Access API（`showDirectoryPicker`）。着脱の検知は不可",
       "perm": "ユーザーのフォルダ選択",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/showDirectoryPicker",
       "safari": "非対応（showDirectoryPicker）",
-      "note": "未実装。選んだ後のフォルダ読み書きのみ。着脱の通知はない。"
+      "note": "ボリュームの着脱を知らせる API が無い。選んだフォルダの読み書き（file-picker / file-watch の範囲）だけができる。"
     }
   },
   "note": "usb-device は USB 機器の直接制御、file-picker は利用者が選んだファイルの取得で、本機能はストレージボリュームの着脱の検知と列挙。file-watch（フォルダ内の変更）とも別。"
