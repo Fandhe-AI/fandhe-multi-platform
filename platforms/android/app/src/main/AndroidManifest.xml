@@ -162,7 +162,10 @@
             android:name="com.fandhe.androidapp.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:configChanges="orientation|screenSize|keyboardHidden">
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode|fontScale|density|locale|layoutDirection|smallestScreenSize|screenLayout|colorMode">
+            <!-- Issue #73: 表示設定（ダークモード・文字サイズ・言語等）の変更で Activity を作り直すと、
+                 winit が Destroy を無視して古い描画スレッドが残り黒画面・ANR になる。作り直しを避けるため
+                 受け取る設定変更を広げている（根治は #259）。 -->
             <!-- Issue #1218: singleTask で MainActivity を常に 1 インスタンスにし、起動中に届いた
                  fandhe:// の URL を onNewIntent へ確実に渡す（standard だと外部アプリからの
                  ACTION_VIEW ごとに新インスタンスができ、Rust 側の android_app() が上書きされる）。
