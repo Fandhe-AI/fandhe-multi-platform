@@ -118,6 +118,8 @@ pub mod home_widget_show;
 pub mod image_recognize;
 /// Phase 11 の拡充ループ型サンプル「OS 搭載フォント」（親 #1145、Issue #1376）。
 pub mod local_fonts_show;
+/// Phase 11 の拡充ループ型サンプル「地図表示」（親 #85、Issue #273）。
+pub mod map_view_show;
 /// Phase 11 の拡充ループ型サンプル「MIDI 入力」（親 #1137、Issue #1398）。
 pub mod midi_show;
 /// Phase 11 の拡充ループ型サンプル「複数ディスプレイ」（親 #1134、Issue #1341）。
