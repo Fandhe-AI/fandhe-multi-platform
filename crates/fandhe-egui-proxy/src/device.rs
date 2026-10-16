@@ -89,6 +89,11 @@ pub mod android_image_recognition;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_local_fonts;
+/// Issue #267: Android 向け音声再生実装のスタブ（親 #86 の b-android が埋める）。`device/media_playback.rs` の
+/// Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_media_playback;
 /// Issue #1398: Android 向け MIDI 入力実装のスタブ（#1400 が埋める）。`device/midi.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -188,6 +193,10 @@ pub mod apple_location;
 /// `device/map_view.rs` の macOS / iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_map_view;
+/// Issue #267: macOS 向け音声再生実装（`apple/fandhe_apple_media_playback.m` の `AVAudioPlayer` を呼ぶ
+/// C ABI ラッパー）。`device/media_playback.rs` の macOS 経路から呼ばれる。iOS は親 #86 の b-ios が使う。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+pub mod apple_media_playback;
 /// Issue #954（macOS）/ #956（iOS）: iOS / macOS 向けマイク録音実装（`apple/
 /// fandhe_apple_mic_record.m` を呼ぶ C ABI ラッパー）。`device/mic_record.rs` の
 /// iOS/macOS 経路から呼ばれる。
@@ -377,6 +386,11 @@ pub mod ios_image_recognition;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_local_fonts;
+/// Issue #267: iOS 向け音声再生実装のスタブ（親 #86 の b-ios が埋める）。`device/media_playback.rs` の
+/// iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_media_playback;
 /// Issue #27: iOS 向け複数ディスプレイ実装（`ios/fandhe_ios_multi_display.m`、scene の `UIScreen`）。
 /// `device/multi_display.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -470,6 +484,9 @@ pub mod macos_screen_wake_lock;
 /// Phase 11 の拡充ループ（親 #85、Issue #273）: 地図表示の effect ドライバ（macOS / iOS は
 /// pull 型 `bridge`、他 OS は `UnsupportedMapSnapshotter` 固定）。
 pub mod map_view;
+/// Phase 11 の拡充ループ（親 #86、Issue #267）: 音声再生の effect ドライバ（macOS 実装、iOS・Android・Windows は
+/// 親 #86 の子で埋めるスタブ、他 OS は `UnsupportedMediaPlayback` 固定）。
+pub mod media_playback;
 /// Phase 11 の拡充ループ（親 #953、Issue #954・#955・#956・#957）: マイク録音の
 /// effect ドライバ（macOS/iOS/Windows/Android 実装、他 OS は `UnsupportedMicRecorder`
 /// 固定）。
@@ -615,6 +632,11 @@ pub mod windows_image_recognition;
 /// `device/local_fonts.rs` の Windows 経路（ワーカー）から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_local_fonts;
+/// Issue #267: Windows 向け音声再生実装のスタブ（親 #86 の windows が埋める）。`device/media_playback.rs` の
+/// Windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_media_playback;
 /// Issue #955: Windows 向けマイク録音実装（WinRT `MediaCapture` ラッパー）。
 /// `device/mic_record.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -714,6 +736,7 @@ pub fn shutdown() {
     system_tray::stop_shared_system_tray();
     bluetooth_le::stop_shared_scan();
     midi::shutdown();
+    media_playback::shutdown();
 }
 
 fn to_note_storage_error(e: DeviceError) -> NoteStorageError {

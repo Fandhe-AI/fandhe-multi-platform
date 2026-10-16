@@ -24,11 +24,14 @@
       "note": "未実装。Media3 の minSdk は 1.9.0 以降 23 のため minSdk 24 で使える（最新 1.11.1 の minSdk 23 は検索結果の要約による。依存追加時に Maven のバージョン別 minSdk を確認）。ExoPlayer の操作は作成スレッド（既定はメインスレッド）で行う必要があり、JNI からは main Looper へ post する。動画は `SurfaceView` / `TextureView` を GameActivity の上に重ねる必要があり、egui 描画面との合成が新規設計。音声のみなら Surface 不要"
     },
     "macos": {
-      "status": "possible",
-      "api": "AVFoundation（`AVPlayer`。動画表示は AVKit の `AVPlayerView`）",
+      "status": "done",
+      "api": "AVFoundation `AVAudioPlayer`（`initWithData:`。`AVPlayer` は KVO が要るため不採用）",
       "perm": "不要。App Sandbox なしで追加の entitlement 不要。ネットワーク再生も Sandbox が無いため制限なし",
       "url": "https://developer.apple.com/documentation/avfoundation/avplayer",
-      "note": "未実装。iOS の音声再生の ObjC をほぼ流用できる。動画を出すなら `AVPlayerView` を egui ウィンドウの NSView に子ビューとして重ねるか、フレーム取り出しでテクスチャ化する（iOS と同じ合成の課題）。音声のみなら表示面の問題は無い"
+      "note": "実装済み（#267）。範囲は同梱 WAV（実行時に生成する 5 秒の固定音）の再生・一時停止・停止・位置・長さのみ（動画・バックグラウンド再生・シーク・ネットワーク再生は範囲外）。結果は成功（再生中・最後まで再生）、利用者の一時停止・停止（失敗ではない）、失敗（デコード失敗・期限切れ・非対応）を分けて表示する。窓が背面でも再生は続き、終了時に止める。守る範囲: 1 プロセス内の操作順、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: 位置表示のポーリング間隔ぶんの遅れ、他アプリの音声との混ざり（`AVAudioSession` を触らない）、複数プロセス間。Mac 実機の目視は #266 で行う。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#266）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_media_playback.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_media_playback.m + crates/fandhe-egui-proxy/src/device/media_playback.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/media_playback.rs、Issue #267"
     },
     "windows": {
       "status": "possible",
@@ -46,5 +49,5 @@
       "note": "未実装。`play()` の Promise の拒否（自動再生ブロック）を失敗として返し、成功扱いにしない。動画は `fandhe-web-dom` の DOM 出力に `<video>` 要素を出す方が自然で、`fandhe-egui-proxy` の canvas 描画とは別経路になる。音声のみなら DOM 外の `Audio` オブジェクトで足りる"
     }
   },
-  "note": "iOS / macOS は `AVPlayer`、Android は Media3 `ExoPlayer`（GMS 非依存、minSdk 23+）、Windows は `IMFMediaEngine`（MFPlay は非推奨）、Web は `HTMLMediaElement`。全 OS possible で no は無い。音声のみなら表示面が要らず簡単だが、動画は egui の描画面とネイティブ映像面の合成が全 OS で未解決の新規設計になる。今回の範囲: 音声 1 本の再生・一時停止・停止だけ（動画表示・バックグラウンド再生・プレイリストは扱わない）"
+  "note": "iOS / macOS は `AVPlayer`、Android は Media3 `ExoPlayer`（GMS 非依存、minSdk 23+）、Windows は `IMFMediaEngine`（MFPlay は非推奨）、Web は `HTMLMediaElement`。全 OS possible で no は無い。音声のみなら表示面が要らず簡単だが、動画は egui の描画面とネイティブ映像面の合成が全 OS で未解決の新規設計になる。今回の範囲: 音声 1 本の再生・一時停止・停止だけ（動画表示・バックグラウンド再生・プレイリストは扱わない） 守備範囲: 1 プロセス内の操作順・嘘の成功の禁止・資源の解放までを守り、位置表示の遅れ・他アプリの音声との混ざり・複数プロセス間は守らない。"
 }
