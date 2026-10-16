@@ -42,7 +42,7 @@ impl MlInference for AppleMlInference {
         let mut y = 0.0_f64;
         let deadline_ms = u64::try_from(remaining.as_millis()).unwrap_or(u64::MAX);
         // SAFETY: `spec`・`input`・`y` は呼び出しの間生存する領域で、`.m` は呼び出しの間だけ
-        // 参照し保持しない。`input` は 2 要素、`out_y` は 1 要素の書き込み先。
+        // 参照し保持しない（`spec` は `.m` 側でコピーするため、期限切れで戻った後に走る読み込みも安全）。`input` は 2 要素、`out_y` は 1 要素の書き込み先。
         let code = unsafe {
             fandhe_apple_ml_inference_run(
                 spec.as_ptr(),

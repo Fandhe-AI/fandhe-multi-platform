@@ -9,7 +9,7 @@
 // 契約（一発呼び出し型。結果を待つ要求は持たない）:
 //   fandhe_apple_ml_inference_run(const uint8_t *spec, size_t len, const double *input, size_t n,
 //                                 uint64_t deadline_ms, double *out_y) -> int32_t
-//     spec/len   : Core ML の仕様（protobuf）のバイト列。コピーせず呼び出しの間だけ参照する
+//     spec/len   : Core ML の仕様（protobuf）のバイト列。呼び出し内でコピーし、戻った後は参照しない
 //     input/n    : 入力 `x`（double の MultiArray、shape [n]）。呼び出しの間だけ参照する
 //     deadline_ms: モデル読み込みの完了を待つ上限（Rust 側が残り時間から渡す）
 //     out_y      : 成功時に出力 `y` を書く
@@ -36,7 +36,9 @@ int32_t fandhe_apple_ml_inference_run(const uint8_t *spec, size_t len, const dou
                                       size_t n, uint64_t deadline_ms, double *out_y) {
     @autoreleasepool {
         if (@available(macOS 13.0, iOS 16.0, *)) {
-            NSData *data = [NSData dataWithBytesNoCopy:(void *)spec length:len freeWhenDone:NO];
+            // コピーして Rust 側のバッファ寿命から切り離す: 期限切れで先に戻っても、遅れて走る
+            // Core ML の読み込みが解放済みメモリを読まない（NoCopy は use-after-free になる）。
+            NSData *data = [NSData dataWithBytes:spec length:len];
             NSError *assetError = nil;
             // クラス参照を実行時に引く: 配備下限（macOS 11）の端末で `MLModelAsset` のシンボル解決に
             // 失敗して起動時に落ちないようにする（`@available` と併せて OS が古ければ 4 を返す）。
