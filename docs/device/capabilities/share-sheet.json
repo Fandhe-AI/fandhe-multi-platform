@@ -12,12 +12,12 @@
       "api": "UIKit（`UIActivityViewController`）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uiactivityviewcontroller",
-      "note": "実装済み（#899）。iPad は popoverPresentationController の sourceView/sourceRect を設定済み。NoTarget（共有先なし）は判定しない（常にコピー等の標準アクティビティが候補にあるため）。実機未確認",
+      "note": "実装済み（旧#899）。iPad は popoverPresentationController の sourceView/sourceRect を設定済み。NoTarget（共有先なし）は判定しない（常にコピー等の標準アクティビティが候補にあるため）。実機未確認",
       "sourceName": [
         "共有シート"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_share.m + crates/fandhe-egui-proxy/src/device/apple_share.rs、Issue #899"
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_share.m + crates/fandhe-egui-proxy/src/device/apple_share.rs、Issue 旧#899"
     },
     "android": {
       "status": "done",
@@ -25,12 +25,12 @@
       "api": "`Intent.ACTION_SEND`",
       "perm": "なし",
       "url": "https://developer.android.com/training/sharing/send",
-      "note": "実装済み（#899）。Intent.createChooser + IntentSender で選択完了を検出（Shared）。broadcast 未受信は結果不明（Unknown）として通知し、キャンセル・成功のどちらへも畳まない。共有先なし（NoTarget）は判定しない。Activity 再生成を跨ぐと結果を捨てる（既知の天井）。実機未確認",
+      "note": "実装済み（旧#899）。Intent.createChooser + IntentSender で選択完了を検出（Shared）。broadcast 未受信は結果不明（Unknown）として通知し、キャンセル・成功のどちらへも畳まない。共有先なし（NoTarget）は判定しない。Activity 再生成を跨ぐと結果を捨てる（既知の天井）。実機未確認",
       "sourceName": [
         "共有"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs、Issue #899"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs、Issue 旧#899"
     },
     "macos": {
       "status": "done",
@@ -38,12 +38,12 @@
       "api": "AppKit（`NSSharingServicePicker`）",
       "perm": "不要（素の実行体でサンドボックス無効のため entitlement 不要）",
       "url": "https://developer.apple.com/documentation/appkit/nssharingservice",
-      "note": "実装済み（#897）。Mac 目視で正常系（メモへ共有・「共有しました」表示）・キャンセル（「キャンセルしました」表示）・不正 URL（`file://`、失敗表示）を確認済み",
+      "note": "実装済み（旧#897）。Mac 目視で正常系（メモへ共有・「共有しました」表示）・キャンセル（「キャンセルしました」表示）・不正 URL（`file://`、失敗表示）を確認済み",
       "sourceName": [
         "共有"
       ],
       "implStatus": "実装済み",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_share.m + crates/fandhe-egui-proxy/src/device/apple_share.rs、Issue #897"
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_share.m + crates/fandhe-egui-proxy/src/device/apple_share.rs、Issue 旧#897"
     },
     "windows": {
       "status": "done",
@@ -51,12 +51,12 @@
       "api": "WinRT（`Windows.ApplicationModel.DataTransfer.DataTransferManager`）",
       "perm": "なし",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.datatransfer.datatransfermanager",
-      "note": "実装済み（#898）。`tts`/`file_picker`/`location` の PowerShell 子プロセス方式は使わず（子プロセスは `ShowShareUIForWindow` に渡す HWND を持てない）、`IDataTransferManagerInterop::GetForWindow`/`ShowShareUIForWindow` でウィンドウ束縛して呼ぶ。`windows` 0.61 系はワークスペースの依存グラフに既に解決済みのものを直接依存へ昇格した（新規パッケージ無し）。キャンセルは `DataTransferManager` に専用イベントが無いため、共有 UI へのフォーカス喪失 → 復帰後 500ms 未着をキャンセル扱いにするヒューリスティックで代替する（天井）。`NoTarget` は Windows 側に判定手段が無いため返さない。unpackaged 実機での `ShowShareUIForWindow` 到達可否は未検証で、Windows 実機での確認は未了。到達不能と判明した場合は本行の `done` を取り下げる",
+      "note": "実装済み（旧#898）。`tts`/`file_picker`/`location` の PowerShell 子プロセス方式は使わず（子プロセスは `ShowShareUIForWindow` に渡す HWND を持てない）、`IDataTransferManagerInterop::GetForWindow`/`ShowShareUIForWindow` でウィンドウ束縛して呼ぶ。`windows` 0.61 系はワークスペースの依存グラフに既に解決済みのものを直接依存へ昇格した（新規パッケージ無し）。キャンセルは `DataTransferManager` に専用イベントが無いため、共有 UI へのフォーカス喪失 → 復帰後 500ms 未着をキャンセル扱いにするヒューリスティックで代替する（天井）。`NoTarget` は Windows 側に判定手段が無いため返さない。unpackaged 実機での `ShowShareUIForWindow` 到達可否は未検証で、Windows 実機での確認は未了。到達不能と判明した場合は本行の `done` を取り下げる",
       "sourceName": [
         "共有"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_share.rs + crates/fandhe-egui-proxy/src/device/share.rs、Issue #898"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_share.rs + crates/fandhe-egui-proxy/src/device/share.rs、Issue 旧#898"
     },
     "web": {
       "status": "done",
@@ -65,12 +65,12 @@
       "perm": "secure context 必須、ユーザー操作起因の呼び出しが必須",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share",
       "safari": "対応（macOS / iOS Safari とも）",
-      "note": "実装済み（#900）。cargo build --target wasm32-unknown-unknown 通過済み。実ブラウザでの目視確認（正常系・失敗系とも）は自動運転セッションでは未実施・人間確認待ち",
+      "note": "実装済み（旧#900）。cargo build --target wasm32-unknown-unknown 通過済み。実ブラウザでの目視確認（正常系・失敗系とも）は自動運転セッションでは未実施・人間確認待ち",
       "sourceName": [
         "共有"
       ],
       "implStatus": "実装済み（実ブラウザ目視は人間確認待ち）",
-      "impl": "crates/fandhe-web-dom/src/share.rs、Issue #900"
+      "impl": "crates/fandhe-web-dom/src/share.rs、Issue 旧#900"
     }
   },
   "note": "`UIActivityViewController` / `Intent.ACTION_SEND` / `NSSharingServicePicker` / `DataTransferManager` / Web Share API",

@@ -69,5 +69,5 @@
       ]
     }
   },
-  "note": "iOS は `wgpu` → Metal（`ios.rs` で `Backends::METAL` に固定、TASK-1.3-S1）、Android は `wgpu` → Vulkan（`android.rs` で `Backends::VULKAN`、TASK-1.5-S2）で、いずれも #827 の実機動作で描画を確認済み。macOS / Windows / Linux は `eframe` の `glow`（OpenGL）で Metal / Direct3D 12 は選んでいない（`Cargo.toml` の `cfg(not(any(wasm32, ios, android)))` 分岐）。Web は `web.rs` が `WebGlContextOption::WebGl2` に固定（WebGPU は非公開環境で panic するため不採用、`docs/architecture/web-rendering-policy.md`）"
+  "note": "iOS は `wgpu` → Metal（`ios.rs` で `Backends::METAL` に固定、TASK-1.3-S1）、Android は `wgpu` → Vulkan（`android.rs` で `Backends::VULKAN`、TASK-1.5-S2）で、いずれも 旧#827 の実機動作で描画を確認済み。macOS / Windows / Linux は `eframe` の `glow`（OpenGL）で Metal / Direct3D 12 は選んでいない（`Cargo.toml` の `cfg(not(any(wasm32, ios, android)))` 分岐）。Web は `web.rs` が `WebGlContextOption::WebGl2` に固定（WebGPU は非公開環境で panic するため不採用、`docs/architecture/web-rendering-policy.md`）"
 }

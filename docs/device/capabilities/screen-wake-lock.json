@@ -11,40 +11,43 @@
       "api": "UIKit `UIApplication.isIdleTimerDisabled`",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uiapplication/isidletimerdisabled",
-      "note": "実装済み（#1279）。main スレッド専用で読み戻して判定し、冪等。フォアグラウンド復帰で要求が有効なら設定し直す。守る範囲は 1 プロセス内の解除漏れなし・失敗を成功と見せないこと。守らない範囲は背景にいる間は効かないこと・他要因による一時的な食い違い（終了時はプロセス終了で OS が戻す）。実機確認は #17",
-      "detail": "できている（iOS 実機確認待ち）",
-      "implStatus": "iOS 実機確認待ち（#17）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_screen_wake_lock.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_screen_wake_lock.m + crates/fandhe-egui-proxy/src/device/screen_wake_lock.rs + crates/fandhe-core/src/screens/wake_lock_toggle.rs + crates/fandhe-device/src/screen_wake_lock.rs、Issue #1279"
+      "note": "実装済み（旧#1279）。main スレッド専用で読み戻して判定し、冪等。フォアグラウンド復帰で要求が有効なら設定し直す。守る範囲は 1 プロセス内の解除漏れなし・失敗を成功と見せないこと。守らない範囲は背景にいる間は効かないこと・他要因による一時的な食い違い（終了時はプロセス終了で OS が戻す）。実機確認は #17 で済み",
+      "detail": "できている（実機）",
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_screen_wake_lock.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_screen_wake_lock.m + crates/fandhe-egui-proxy/src/device/screen_wake_lock.rs + crates/fandhe-core/src/screens/wake_lock_toggle.rs + crates/fandhe-device/src/screen_wake_lock.rs、Issue 旧#1279",
+      "verified": true
     },
     "android": {
       "status": "done",
       "api": "`FLAG_KEEP_SCREEN_ON`（`Window.addFlags` / レイアウト属性 `keepScreenOn`）",
       "perm": "不要",
       "url": "https://developer.android.com/develop/background-work/background-tasks/awake/screen-on",
-      "note": "実装済み（#1280）。UI スレッドで `addFlags` / `clearFlags` し、読み戻したフラグで判定する。egui スレッドは最長 1 秒待ち、期限切れは失敗にして遅れて適用しない。Activity の作り直しでは要求を捨てる（Rust 側の画面も未要求へ戻る）。守る範囲: 1 プロセス内の順序・失敗を成功と見せないこと・期限後に適用しないこと。守らない範囲: 背景にいる間は効かないこと・他要因との一時的な食い違い（プロセス終了は OS が片付ける）。実機確認は #17",
-      "detail": "できている（Android 実機確認待ち）",
-      "implStatus": "Android 実機確認待ち（#17）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_screen_wake_lock.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/ScreenWakeLockHelper.java + crates/fandhe-egui-proxy/src/device/screen_wake_lock.rs + crates/fandhe-core/src/screens/wake_lock_toggle.rs + crates/fandhe-device/src/screen_wake_lock.rs、Issue #1280"
+      "note": "実装済み（旧#1280）。UI スレッドで `addFlags` / `clearFlags` し、読み戻したフラグで判定する。egui スレッドは最長 1 秒待ち、期限切れは失敗にして遅れて適用しない。Activity の作り直しでは要求を捨てる（Rust 側の画面も未要求へ戻る）。守る範囲: 1 プロセス内の順序・失敗を成功と見せないこと・期限後に適用しないこと。守らない範囲: 背景にいる間は効かないこと・他要因との一時的な食い違い（プロセス終了は OS が片付ける）。実機確認は #17 で済み",
+      "detail": "できている（実機）",
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_screen_wake_lock.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/ScreenWakeLockHelper.java + crates/fandhe-egui-proxy/src/device/screen_wake_lock.rs + crates/fandhe-core/src/screens/wake_lock_toggle.rs + crates/fandhe-device/src/screen_wake_lock.rs、Issue 旧#1280",
+      "verified": true
     },
     "macos": {
       "status": "done",
       "api": "IOKit `IOPMAssertionCreateWithName`（`kIOPMAssertionTypePreventUserIdleDisplaySleep` 等）、`ProcessInfo.beginActivity`",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/iokit/1557134-iopmassertioncreatewithname",
-      "note": "実装済み（#1278）。`IOPMAssertionCreateWithName` で `PreventUserIdleDisplaySleep` のアサーションを取り、ID を `Mutex<Option<u32>>` で持つ（判定と更新は同じロック内）。取得済みでの再取得は FFI を呼ばず（アサーションを漏らさない）、取得失敗は未取得のまま、解放失敗は ID を残して `Internal`（効いているものを隠さない）。「効いている」の表示は ID の保持で決める。守る範囲: 1 プロセス内の解除漏れなし・失敗を成功と見せないこと。守らない範囲: 外部要因（他アプリ・OS）で抑止が外れた場合の追従、蓋閉じ・明示スリープ、終了時の後片付け（プロセス終了で OS が解放する）。Mac 目視は #17",
-      "detail": "できている（Mac 目視待ち）",
-      "implStatus": "Mac 目視待ち（#17）",
-      "impl": "crates/fandhe-egui-proxy/src/device/macos_screen_wake_lock.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_screen_wake_lock.m + crates/fandhe-egui-proxy/src/device/screen_wake_lock.rs + crates/fandhe-core/src/screens/wake_lock_toggle.rs + crates/fandhe-device/src/screen_wake_lock.rs、Issue #1278"
+      "note": "実装済み（旧#1278）。`IOPMAssertionCreateWithName` で `PreventUserIdleDisplaySleep` のアサーションを取り、ID を `Mutex<Option<u32>>` で持つ（判定と更新は同じロック内）。取得済みでの再取得は FFI を呼ばず（アサーションを漏らさない）、取得失敗は未取得のまま、解放失敗は ID を残して `Internal`（効いているものを隠さない）。「効いている」の表示は ID の保持で決める。守る範囲: 1 プロセス内の解除漏れなし・失敗を成功と見せないこと。守らない範囲: 外部要因（他アプリ・OS）で抑止が外れた場合の追従、蓋閉じ・明示スリープ、終了時の後片付け（プロセス終了で OS が解放する）。Mac 目視は #17 で済み",
+      "detail": "できている（実機）",
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_screen_wake_lock.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_screen_wake_lock.m + crates/fandhe-egui-proxy/src/device/screen_wake_lock.rs + crates/fandhe-core/src/screens/wake_lock_toggle.rs + crates/fandhe-device/src/screen_wake_lock.rs、Issue 旧#1278",
+      "verified": true
     },
     "windows": {
       "status": "done",
       "api": "Win32 `SetThreadExecutionState`（Win32 desktop）。WinRT `DisplayRequest` でも可",
       "perm": "不要（package identity の要件は文書に記載なし。要確認）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setthreadexecutionstate",
-      "note": "実装済み（#1278）。`ES_CONTINUOUS | ES_DISPLAY_REQUIRED` で取得し、`ES_CONTINUOUS` のみで解除する（Win32 API のため package identity は使わない）。効果は呼んだスレッドに紐づくため、取得と解除は UI スレッド（effect）からだけ呼び、ワーカースレッドを作らない。読み戻し API が無いので `Mutex<bool>` の自前記録で「効いている」を決め、戻り値 0 は `Internal`（記録は変えない）。守る範囲: 1 プロセス内の解除漏れなし・失敗を成功と見せないこと。守らない範囲: 外部要因で抑止が外れた場合の追従、明示スリープ、終了時の後片付け（スレッド終了で OS がフラグを消す）。WinRT 側は https://learn.microsoft.com/en-us/uwp/api/windows.system.display.displayrequest（要件記載なし）。Windows 実機確認は #17",
+      "note": "実装済み（旧#1278）。`ES_CONTINUOUS | ES_DISPLAY_REQUIRED` で取得し、`ES_CONTINUOUS` のみで解除する（Win32 API のため package identity は使わない）。効果は呼んだスレッドに紐づくため、取得と解除は UI スレッド（effect）からだけ呼び、ワーカースレッドを作らない。読み戻し API が無いので `Mutex<bool>` の自前記録で「効いている」を決め、戻り値 0 は `Internal`（記録は変えない）。守る範囲: 1 プロセス内の解除漏れなし・失敗を成功と見せないこと。守らない範囲: 外部要因で抑止が外れた場合の追従、明示スリープ、終了時の後片付け（スレッド終了で OS がフラグを消す）。WinRT 側は https://learn.microsoft.com/en-us/uwp/api/windows.system.display.displayrequest（要件記載なし）。Windows 実機確認は #17",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#17）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_screen_wake_lock.rs + crates/fandhe-egui-proxy/src/device/screen_wake_lock.rs + crates/fandhe-core/src/screens/wake_lock_toggle.rs + crates/fandhe-device/src/screen_wake_lock.rs、Issue #1278"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_screen_wake_lock.rs + crates/fandhe-egui-proxy/src/device/screen_wake_lock.rs + crates/fandhe-core/src/screens/wake_lock_toggle.rs + crates/fandhe-device/src/screen_wake_lock.rs、Issue 旧#1278"
     },
     "web": {
       "status": "done",
@@ -52,10 +55,10 @@
       "perm": "なし（secure context 必須）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API",
       "safari": "対応（MDN は Baseline 2025。Safari の最低版は未確認）",
-      "note": "実装済み（#1281）。web-sys の WakeLock は不安定 API のため Reflect 経由で呼ぶ。sentinel の `released` を読み戻して判定し、`release` イベントで即反映、可視に戻ったら取り直す。取得後に世代が古いと分かった sentinel は即解放し、マウント破棄でも解放する。非対応・拒否・secure context 外は失敗表示。守る範囲: 1 マウント内で sentinel を漏らさないこと・失敗を成功と見せないこと。守らない範囲: 複数タブ間の表示の食い違い・背景タブで効かないこと（仕様上ブラウザが解放）・取り直しをブラウザが拒む間の追従（取り直し待ちの表示のまま）・ページ終了時の後片付け（ブラウザが解放）。実ブラウザ目視は #17",
+      "note": "実装済み（旧#1281）。web-sys の WakeLock は不安定 API のため Reflect 経由で呼ぶ。sentinel の `released` を読み戻して判定し、`release` イベントで即反映、可視に戻ったら取り直す。取得後に世代が古いと分かった sentinel は即解放し、マウント破棄でも解放する。非対応・拒否・secure context 外は失敗表示。守る範囲: 1 マウント内で sentinel を漏らさないこと・失敗を成功と見せないこと。守らない範囲: 複数タブ間の表示の食い違い・背景タブで効かないこと（仕様上ブラウザが解放）・取り直しをブラウザが拒む間の追従（取り直し待ちの表示のまま）・ページ終了時の後片付け（ブラウザが解放）。実ブラウザ目視は #17",
       "detail": "できている（実ブラウザ未確認）",
       "implStatus": "実装済み（実ブラウザ未確認）",
-      "impl": "crates/fandhe-web-dom/src/screen_wake_lock.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/wake_lock_toggle.rs、Issue #1281"
+      "impl": "crates/fandhe-web-dom/src/screen_wake_lock.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/wake_lock_toggle.rs、Issue 旧#1281"
     }
   },
   "note": "全 OS に公開 API があり、web も Baseline。tilt-motion 等との重なりなし。今回の範囲: スイッチでスリープ抑止を ON / OFF し、現在の状態（抑止中か）を表示する。失敗や非対応環境では成功を装わず「できません」を出す"

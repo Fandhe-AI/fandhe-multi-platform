@@ -26,13 +26,13 @@
       "api": "`GameTextInput`（`android-activity` 経由。`InputConnection`）",
       "perm": "なし",
       "url": "https://developer.android.com/games/agdk/game-text-input",
-      "note": "実装済み（#794/#797/#799）。GameActivity 前提の API で、本構成にネイティブに乗る",
+      "note": "実装済み（旧#794/旧#797/旧#799）。GameActivity 前提の API で、本構成にネイティブに乗る",
       "sourceName": [
         "ソフトキーボード入力",
         "ソフトキーボード入力（`GameTextInput`）"
       ],
       "implStatus": "実装済み",
-      "impl": "#794 / #797 / #799"
+      "impl": "旧#794 / 旧#797 / 旧#799"
     },
     "macos": {
       "status": "done",
@@ -47,5 +47,5 @@
       "detail": "できている（未確認）"
     }
   },
-  "note": "PR #799（iOS）・PR #797（Android）、#794 で実機 OK・closed（09-07）"
+  "note": "PR 旧#799（iOS）・PR 旧#797（Android）、旧#794 で実機 OK・closed（09-07）"
 }

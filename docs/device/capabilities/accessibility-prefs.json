@@ -11,40 +11,42 @@
       "api": "UIKit `UIAccessibility`（`UIAccessibilityIsReduceMotionEnabled` / `UIAccessibilityDarkerSystemColorsEnabled`）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uiaccessibility",
-      "note": "実装済み（#1309）。1 秒間隔で同期に読む（変更通知は購読しない）。2 値を int にビット詰めして返し、main スレッド以外・未定義の値は `Internal`（成功にしない）。コントラストは「コントラストを上げる」設定で近似。守る範囲: 嘘の「オン」「オフ」を出さないこと、1 プロセス内の取得。守らない範囲: 反映の遅れ（最大 1 秒 + 1 フレーム）、OS 間の意味の一致、複数プロセス間の食い違い。実機確認は #21",
-      "detail": "できている（iOS 実機確認待ち）",
-      "implStatus": "iOS 実機確認待ち（#21）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_accessibility_prefs.rs + crates/fandhe-egui-proxy/src/device/apple_accessibility_prefs.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_accessibility_prefs.m + crates/fandhe-egui-proxy/src/device/accessibility_prefs.rs + crates/fandhe-core/src/screens/accessibility_prefs_show.rs + crates/fandhe-device/src/accessibility_prefs.rs、Issue #1309"
+      "note": "実装済み（旧#1309）。1 秒間隔で同期に読む（変更通知は購読しない）。2 値を int にビット詰めして返し、main スレッド以外・未定義の値は `Internal`（成功にしない）。コントラストは「コントラストを上げる」設定で近似。守る範囲: 嘘の「オン」「オフ」を出さないこと、1 プロセス内の取得。守らない範囲: 反映の遅れ（最大 1 秒 + 1 フレーム）、OS 間の意味の一致、複数プロセス間の食い違い。実機確認は #21 で済み",
+      "detail": "できている（実機）",
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_accessibility_prefs.rs + crates/fandhe-egui-proxy/src/device/apple_accessibility_prefs.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_accessibility_prefs.m + crates/fandhe-egui-proxy/src/device/accessibility_prefs.rs + crates/fandhe-core/src/screens/accessibility_prefs_show.rs + crates/fandhe-device/src/accessibility_prefs.rs、Issue 旧#1309",
+      "verified": true
     },
     "android": {
       "status": "done",
       "api": "視差軽減は `Settings.Global.ANIMATOR_DURATION_SCALE`（0 を視差軽減とみなす）、コントラストは `UiModeManager.getContrast`（API 34+）",
       "perm": "不要",
       "url": "https://developer.android.com/reference/android/app/UiModeManager",
-      "note": "実装済み（#1310）。1 秒間隔で同期に読む（変化通知は購読しない）。2 値を int にビット詰めして返し、負値・未定義の値は `Internal`（成功にしない）。API 33 以下のコントラストは公開 API が無いため不明（`None`）。`AccessibilityManager.isHighContrastTextEnabled` は非公開 API のため使わない。守る範囲: 嘘の「オン」「オフ」を出さないこと、1 プロセス内の取得。守らない範囲: 反映の遅れ（最大 1 秒 + 1 フレーム）、OS 間の意味の一致、バッテリーセーバー等の別経路によるアニメ無効化。実機確認は #21",
-      "detail": "できている（Android 実機確認待ち）",
-      "implStatus": "Android 実機確認待ち（#21）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/AccessibilityPrefsHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_accessibility_prefs.rs + crates/fandhe-egui-proxy/src/device/accessibility_prefs.rs + crates/fandhe-core/src/screens/accessibility_prefs_show.rs + crates/fandhe-device/src/accessibility_prefs.rs、Issue #1310"
+      "note": "実装済み（旧#1310）。1 秒間隔で同期に読む（変化通知は購読しない）。2 値を int にビット詰めして返し、負値・未定義の値は `Internal`（成功にしない）。API 33 以下のコントラストは公開 API が無いため不明（`None`）。`AccessibilityManager.isHighContrastTextEnabled` は非公開 API のため使わない。守る範囲: 嘘の「オン」「オフ」を出さないこと、1 プロセス内の取得。守らない範囲: 反映の遅れ（最大 1 秒 + 1 フレーム）、OS 間の意味の一致、バッテリーセーバー等の別経路によるアニメ無効化。実機確認は #21。実機確認で、視差軽減は追従したが、コントラスト等の表示設定を変えると画面が黒くなる不具合が見つかった（#73）。",
+      "detail": "できている（実機確認で不具合あり）",
+      "implStatus": "実装済み（実機確認で不具合あり）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/AccessibilityPrefsHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_accessibility_prefs.rs + crates/fandhe-egui-proxy/src/device/accessibility_prefs.rs + crates/fandhe-core/src/screens/accessibility_prefs_show.rs + crates/fandhe-device/src/accessibility_prefs.rs、Issue 旧#1310"
     },
     "macos": {
       "status": "done",
       "api": "AppKit `NSWorkspace`（`accessibilityDisplayShouldReduceMotion` / `accessibilityDisplayShouldIncreaseContrast` 等）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nsworkspace",
-      "note": "実装済み（#1308）。`NSWorkspace.sharedWorkspace` の `accessibilityDisplayShouldReduceMotion` / `accessibilityDisplayShouldIncreaseContrast` を 1 秒間隔で同期に読む（変化通知は購読しない）。2 値を int にビット詰めして返し、負値・未定義の値は `Internal`（成功にしない）。守る範囲: 嘘の「オン」「オフ」を出さないこと（取得中・不明・失敗・非対応では丸を止めず枠も太くしない）、1 プロセス内の取得、「オン」のあいだ丸を止めること。守らない範囲: 反映の遅れ（最大 1 秒 + 1 フレーム）、OS 間の意味の一致、複数プロセス間の食い違い、別経路によるアニメ無効化。Mac 目視は #21",
-      "detail": "できている（Mac 目視待ち）",
-      "implStatus": "Mac 目視待ち（#21）",
-      "impl": "crates/fandhe-egui-proxy/src/device/apple_accessibility_prefs.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_accessibility_prefs.m + crates/fandhe-core/src/screens/accessibility_prefs_show.rs + crates/fandhe-device/src/accessibility_prefs.rs + crates/fandhe-egui-proxy/src/device/accessibility_prefs.rs、Issue #1308"
+      "note": "実装済み（旧#1308）。`NSWorkspace.sharedWorkspace` の `accessibilityDisplayShouldReduceMotion` / `accessibilityDisplayShouldIncreaseContrast` を 1 秒間隔で同期に読む（変化通知は購読しない）。2 値を int にビット詰めして返し、負値・未定義の値は `Internal`（成功にしない）。守る範囲: 嘘の「オン」「オフ」を出さないこと（取得中・不明・失敗・非対応では丸を止めず枠も太くしない）、1 プロセス内の取得、「オン」のあいだ丸を止めること。守らない範囲: 反映の遅れ（最大 1 秒 + 1 フレーム）、OS 間の意味の一致、複数プロセス間の食い違い、別経路によるアニメ無効化。Mac 目視は #21 で済み",
+      "detail": "できている（実機）",
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_accessibility_prefs.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_accessibility_prefs.m + crates/fandhe-core/src/screens/accessibility_prefs_show.rs + crates/fandhe-device/src/accessibility_prefs.rs + crates/fandhe-egui-proxy/src/device/accessibility_prefs.rs、Issue 旧#1308",
+      "verified": true
     },
     "windows": {
       "status": "done",
       "api": "WinRT `UISettings.AnimationsEnabled`、`AccessibilitySettings.HighContrast`",
       "perm": "要確認（package identity の要件記載なし）",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.ui.viewmanagement.accessibilitysettings?view=winrt-28000",
-      "note": "実装済み（#1308）。`UISettings::AnimationsEnabled`（視差軽減はその否定）と `AccessibilitySettings::HighContrast` を UI スレッドで 1 秒間隔に同期で読む（変化通知は購読しない）。HRESULT は固定ラベルの `Internal` に畳む。コントラストはハイコントラストテーマの有効で近似（単独の「コントラスト増加」設定は無い）。守る範囲: 嘘の「オン」「オフ」を出さないこと（取得中・不明・失敗・非対応では丸を止めず枠も太くしない）、1 プロセス内の取得、「オン」のあいだ丸を止めること。守らない範囲: 反映の遅れ（最大 1 秒 + 1 フレーム）、OS 間の意味の一致、複数プロセス間の食い違い、別経路によるアニメ無効化。既知の天井: パッケージ無しの素の exe での動作は実機未確認。Windows 実機確認は #21",
+      "note": "実装済み（旧#1308）。`UISettings::AnimationsEnabled`（視差軽減はその否定）と `AccessibilitySettings::HighContrast` を UI スレッドで 1 秒間隔に同期で読む（変化通知は購読しない）。HRESULT は固定ラベルの `Internal` に畳む。コントラストはハイコントラストテーマの有効で近似（単独の「コントラスト増加」設定は無い）。守る範囲: 嘘の「オン」「オフ」を出さないこと（取得中・不明・失敗・非対応では丸を止めず枠も太くしない）、1 プロセス内の取得、「オン」のあいだ丸を止めること。守らない範囲: 反映の遅れ（最大 1 秒 + 1 フレーム）、OS 間の意味の一致、複数プロセス間の食い違い、別経路によるアニメ無効化。既知の天井: パッケージ無しの素の exe での動作は実機未確認。Windows 実機確認は #21",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#21）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_accessibility_prefs.rs + crates/fandhe-core/src/screens/accessibility_prefs_show.rs + crates/fandhe-device/src/accessibility_prefs.rs + crates/fandhe-egui-proxy/src/device/accessibility_prefs.rs、Issue #1308"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_accessibility_prefs.rs + crates/fandhe-core/src/screens/accessibility_prefs_show.rs + crates/fandhe-device/src/accessibility_prefs.rs + crates/fandhe-egui-proxy/src/device/accessibility_prefs.rs、Issue 旧#1308"
     },
     "web": {
       "status": "done",
@@ -52,10 +54,10 @@
       "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion",
       "safari": "対応との認識（MDN の互換表では未確認）",
-      "note": "実装済み（#1311）。`matchMedia` で `prefers-reduced-motion: reduce` と `prefers-contrast: more` を 1 秒間隔で読む（`change` は購読しない）。未対応（`media` が `not all`、または肯定クエリと `no-preference` の両方が偽）はその項目を不明にし、丸は動き枠は通常。`no-preference` が真ならオフ。経過時間は `performance.now()` で測り、時計が無いときは毎 tick 読み取る。守る範囲: 嘘の「オン」「オフ」を出さないこと、「オン」のあいだ丸を止めること、マウント破棄時のタイマー解放。守らない範囲: 反映の遅れ（最大 1 秒 + 1 tick。背景タブはさらに遅れる）、複数タブ間の食い違い、`forced-colors` / `prefers-contrast: custom` の扱い、OS 間の意味の一致。実ブラウザ確認は #21",
+      "note": "実装済み（旧#1311）。`matchMedia` で `prefers-reduced-motion: reduce` と `prefers-contrast: more` を 1 秒間隔で読む（`change` は購読しない）。未対応（`media` が `not all`、または肯定クエリと `no-preference` の両方が偽）はその項目を不明にし、丸は動き枠は通常。`no-preference` が真ならオフ。経過時間は `performance.now()` で測り、時計が無いときは毎 tick 読み取る。守る範囲: 嘘の「オン」「オフ」を出さないこと、「オン」のあいだ丸を止めること、マウント破棄時のタイマー解放。守らない範囲: 反映の遅れ（最大 1 秒 + 1 tick。背景タブはさらに遅れる）、複数タブ間の食い違い、`forced-colors` / `prefers-contrast: custom` の扱い、OS 間の意味の一致。実ブラウザ確認は #21",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#21）",
-      "impl": "crates/fandhe-web-dom/src/accessibility_prefs.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/accessibility_prefs_show.rs、Issue #1311"
+      "impl": "crates/fandhe-web-dom/src/accessibility_prefs.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/accessibility_prefs_show.rs、Issue 旧#1311"
     }
   },
   "note": "全 OS に公開 API あり。dark-mode・dynamic-type・screen-reader（既存 id）との違い: それぞれ配色・文字サイズ・読み上げの追従で、本機能は視差軽減・コントラスト増加・太字などの設定の追従。今回の範囲: 視差軽減とコントラスト増加の 2 設定を読み、サンプルのアニメーション（動く丸）を設定に応じて止め、境界線を太くする。設定変更時に即時反映する。「即時反映」は、設定の変更が最大 1 秒 + 1 フレームで反映されることと読み替える（OS の変化通知は購読せず 1 秒間隔で読み直す）"

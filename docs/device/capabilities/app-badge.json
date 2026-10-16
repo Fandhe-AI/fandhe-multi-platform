@@ -11,51 +11,51 @@
       "api": "`UNUserNotificationCenter.setBadgeCount(_:)`（iOS 16+）",
       "perm": "通知の許可（`.badge`）が必要",
       "url": "https://developer.apple.com/documentation/usernotifications/unusernotificationcenter/setbadgecount(_:withcompletionhandler:)",
-      "note": "実装済み（#1361）。0 は許可要求なしで消去、1 以上は `.badge` のみ要求し `badgeSetting` を確認してから設定する。成功は「OS へ渡した」までで表示は確かめられない（Submitted）。許可が未決定のまま閉じたら Cancelled、拒否や `badgeSetting` 無効は PermissionDenied、iOS 16 未満は Unsupported。値は 0〜9999、範囲検証は OS 型へ変換する前。期限は設けない。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・資源の解放。守らない範囲: 設定後に OS や利用者がバッジを消したときの画面表示値との食い違い、アプリ終了時にバッジが残るか消えるか。既知の天井: 通知機能（#1005）で `.alert` だけ先に許可した端末ではバッジ要求のダイアログが再表示されず「許可されていません」になることがある（設定アプリで変更可）",
+      "note": "実装済み（旧#1361）。0 は許可要求なしで消去、1 以上は `.badge` のみ要求し `badgeSetting` を確認してから設定する。成功は「OS へ渡した」までで表示は確かめられない（Submitted）。許可が未決定のまま閉じたら Cancelled、拒否や `badgeSetting` 無効は PermissionDenied、iOS 16 未満は Unsupported。値は 0〜9999、範囲検証は OS 型へ変換する前。期限は設けない。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・資源の解放。守らない範囲: 設定後に OS や利用者がバッジを消したときの画面表示値との食い違い、アプリ終了時にバッジが残るか消えるか。既知の天井: 通知機能（旧#1005）で `.alert` だけ先に許可した端末ではバッジ要求のダイアログが再表示されず「許可されていません」になることがある（設定アプリで変更可）",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#28）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_app_badge.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_app_badge.m + crates/fandhe-egui-proxy/src/device/app_badge.rs + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue #1361"
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_app_badge.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_app_badge.m + crates/fandhe-egui-proxy/src/device/app_badge.rs + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue 旧#1361"
     },
     "android": {
       "status": "done",
       "api": "`NotificationCompat.Builder.setNumber`（API 26+）。タグ付きの固定 ID 通知 1 件、0 で cancel、専用チャンネル `IMPORTANCE_LOW`",
       "perm": "`POST_NOTIFICATIONS`（API 33+）",
       "url": "https://developer.android.com/develop/ui/views/notifications/badges",
-      "note": "実装済み（#1362）。バッジ専用 API はないため無音の通知を 1 件出す（通知が 1 件増える）。表示はドットと長押しメニューの件数で、アイコン上の数字はランチャー依存で保証しない。API 24〜25 は Unsupported。0 は消去で許可を求めない。結果は Submitted までで Cancelled は出さない。Activity 再生成時は保留中の要求を破棄する。守る範囲: 1 プロセス内の要求順序・拒否/通知オフ/チャンネルブロックを成功に畳まないこと。守らない範囲: 通知のスワイプ等で OS 側が消えたときの画面表示値との食い違い",
-      "detail": "できている（Android 実機確認待ち）",
-      "implStatus": "Android 実機確認待ち（#28）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_app_badge.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/AppBadgeHelper.java + crates/fandhe-egui-proxy/src/device/app_badge.rs + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue #1362"
+      "note": "実装済み（旧#1362）。バッジ専用 API はないため無音の通知を 1 件出す（通知が 1 件増える）。表示はドットと長押しメニューの件数で、アイコン上の数字はランチャー依存で保証しない。API 24〜25 は Unsupported。0 は消去で許可を求めない。結果は Submitted までで Cancelled は出さない。Activity 再生成時は保留中の要求を破棄する。守る範囲: 1 プロセス内の要求順序・拒否/通知オフ/チャンネルブロックを成功に畳まないこと。守らない範囲: 通知のスワイプ等で OS 側が消えたときの画面表示値との食い違い。実機確認で、件数の入力欄が描画されず確認できなかった（#74）。",
+      "detail": "できている（実機確認で不具合あり）",
+      "implStatus": "実装済み（実機確認で不具合あり）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_app_badge.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/AppBadgeHelper.java + crates/fandhe-egui-proxy/src/device/app_badge.rs + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue 旧#1362"
     },
     "macos": {
       "status": "done",
       "api": "`NSDockTile.badgeLabel`",
       "perm": "なし",
       "url": "https://developer.apple.com/documentation/appkit/nsdocktile",
-      "note": "実装済み（#1360）。成功は「OS へ渡した」までで表示は確かめられない（Submitted）。0 は消去で番兵ではない。値は 0〜9999、範囲検証は OS 型へ変換する前。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・資源の解放。守らない範囲: 設定後に OS や利用者がバッジを消したときの画面表示値との食い違い、アプリ終了時にバッジが残るか消えるか。ボタン押下時に UI スレッドで同期 1 回だけ呼ぶ（並行経路なし）。未バンドル実行（`cargo run`）で Dock に出るかは Mac 目視で確認する",
-      "detail": "できている（Mac 目視待ち）",
-      "implStatus": "Mac 目視待ち（#28）",
-      "impl": "crates/fandhe-egui-proxy/src/device/macos_app_badge.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_app_badge.m + crates/fandhe-egui-proxy/src/device/app_badge.rs + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue #1360"
+      "note": "実装済み（旧#1360）。成功は「OS へ渡した」までで表示は確かめられない（Submitted）。0 は消去で番兵ではない。値は 0〜9999、範囲検証は OS 型へ変換する前。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・資源の解放。守らない範囲: 設定後に OS や利用者がバッジを消したときの画面表示値との食い違い、アプリ終了時にバッジが残るか消えるか。ボタン押下時に UI スレッドで同期 1 回だけ呼ぶ（並行経路なし）。未バンドル実行（`cargo run`）で Dock に出るかは Mac 目視で確認する。実機確認で、件数の入力欄が描画されず確認できなかった（#74）。",
+      "detail": "できている（実機確認で不具合あり）",
+      "implStatus": "実装済み（実機確認で不具合あり）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_app_badge.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_app_badge.m + crates/fandhe-egui-proxy/src/device/app_badge.rs + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue 旧#1360"
     },
     "windows": {
       "status": "done",
       "api": "Win32 `ITaskbarList3::SetOverlayIcon`（数字を描いた 16x16 の `HICON`。タスクバー進捗は使わない）",
       "perm": "なし（Win32 desktop 専用表記。実機未検証）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-itaskbarlist3",
-      "note": "実装済み（#1360）。成功は「OS へ渡した」までで表示は確かめられない（Submitted）。0 は消去で番兵ではない。値は 0〜9999、範囲検証は OS 型へ変換する前。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・資源の解放。守らない範囲: 設定後に OS や利用者がバッジを消したときの画面表示値との食い違い、アプリ終了時にバッジが残るか消えるか。ボタン押下時に UI スレッドで同期 1 回だけ呼ぶ（並行経路なし）。件数は数字入りの 16x16 アイコンをタスクバーボタンに重ね、0 はオーバーレイを外す。`HICON` は呼び出しごとに作って即解放する。説明文は「未読 N 件」の固定書式。固定 16 px のため高 DPI ではぼやける。`TaskbarButtonCreated` 前の呼び出しは範囲外",
+      "note": "実装済み（旧#1360）。成功は「OS へ渡した」までで表示は確かめられない（Submitted）。0 は消去で番兵ではない。値は 0〜9999、範囲検証は OS 型へ変換する前。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・資源の解放。守らない範囲: 設定後に OS や利用者がバッジを消したときの画面表示値との食い違い、アプリ終了時にバッジが残るか消えるか。ボタン押下時に UI スレッドで同期 1 回だけ呼ぶ（並行経路なし）。件数は数字入りの 16x16 アイコンをタスクバーボタンに重ね、0 はオーバーレイを外す。`HICON` は呼び出しごとに作って即解放する。説明文は「未読 N 件」の固定書式。固定 16 px のため高 DPI ではぼやける。`TaskbarButtonCreated` 前の呼び出しは範囲外",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#28）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_app_badge.rs + crates/fandhe-egui-proxy/src/device/app_badge.rs + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue #1360"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_app_badge.rs + crates/fandhe-egui-proxy/src/device/app_badge.rs + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue 旧#1360"
     },
     "web": {
       "status": "done",
       "api": "`navigator.setAppBadge(n)`（0 で消去。`clearAppBadge` は使わない）",
       "perm": "なし（secure context 必須。UA によっては通知の許可が要り、無ければ `NotAllowedError`）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Badging_API",
-      "note": "実装済み（#1363）。成功は「ブラウザへ渡した」までで、PWA 未インストール時は表示されない（PWA かどうかは推定しない）。UA が 99+ 等へ丸めうる。写像: 10000 以上は API を呼ばず失敗 / `setAppBadge` が無い・`SecurityError` は `Unsupported` / `NotAllowedError` は `Denied` / その他の reject は固定文言の失敗（例外の内容は出さない）。守る範囲: 1 マウント内の要求と完了の順序・嘘の成功の禁止・資源の解放（`release_mount`）。守らない範囲: PWA 未インストール時の無表示・複数タブ間の一致・OS や利用者がバッジを消したときの表示値との食い違い・Promise が解決しない場合の期限・egui canvas 経路",
+      "note": "実装済み（旧#1363）。成功は「ブラウザへ渡した」までで、PWA 未インストール時は表示されない（PWA かどうかは推定しない）。UA が 99+ 等へ丸めうる。写像: 10000 以上は API を呼ばず失敗 / `setAppBadge` が無い・`SecurityError` は `Unsupported` / `NotAllowedError` は `Denied` / その他の reject は固定文言の失敗（例外の内容は出さない）。守る範囲: 1 マウント内の要求と完了の順序・嘘の成功の禁止・資源の解放（`release_mount`）。守らない範囲: PWA 未インストール時の無表示・複数タブ間の一致・OS や利用者がバッジを消したときの表示値との食い違い・Promise が解決しない場合の期限・egui canvas 経路。実機確認で、件数の入力欄が描画されず確認できなかった（#74）。",
       "safari": "Safari の対応状況と許可の扱いは実ブラウザ確認（#28）で確かめる",
-      "detail": "できている（実ブラウザ確認待ち）",
-      "implStatus": "実ブラウザ確認待ち（#28）",
-      "impl": "crates/fandhe-web-dom/src/app_badge.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue #1363"
+      "detail": "できている（実機確認で不具合あり）",
+      "implStatus": "実装済み（実機確認で不具合あり）",
+      "impl": "crates/fandhe-web-dom/src/app_badge.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue 旧#1363"
     }
   },
   "note": "notification（通知の送受信）との違い: 本機能はアイコンの数の更新が主目的（Android だけは通知に付随するバッジで、通知が要る）。今回の範囲: バッジ数（Windows はタスクバーのオーバーレイアイコン）を固定値に設定し、0 で消すだけ。"

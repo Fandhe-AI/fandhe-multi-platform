@@ -15,26 +15,26 @@
       "url": [
         "https://developer.apple.com/documentation/corelocation/cllocationmanager"
       ],
-      "note": "実装済み（#889）。CLLocationManager を ObjC + extern \"C\" で橋渡し、delegate から Rust へ push。iOS 実機は未確認",
+      "note": "実装済み（旧#889）。CLLocationManager を ObjC + extern \"C\" で橋渡し、delegate から Rust へ push。iOS 実機は未確認",
       "sourceName": [
         "位置情報取得（使用中）",
         "位置情報取得（常時）"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_location.m + crates/fandhe-egui-proxy/src/device/apple_location.rs、Issue #889"
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_location.m + crates/fandhe-egui-proxy/src/device/apple_location.rs、Issue 旧#889"
     },
     "android": {
       "status": "done",
       "detail": "できている（未確認）",
       "api": "`LocationManager`（`android.location`、フレームワーク同梱。Play services は使わない）",
-      "perm": "`ACCESS_COARSE_LOCATION` のみ要求（使用中のみ。`ACCESS_BACKGROUND_LOCATION` は要求しない。`ACCESS_FINE_LOCATION` はジオフェンス #1058 の画面だけが要求し、宣言は共有）",
+      "perm": "`ACCESS_COARSE_LOCATION` のみ要求（使用中のみ。`ACCESS_BACKGROUND_LOCATION` は要求しない。`ACCESS_FINE_LOCATION` はジオフェンス 旧#1058 の画面だけが要求し、宣言は共有）",
       "url": "https://developer.android.com/reference/android/location/LocationManager",
-      "note": "実装済み（#890）。provider は API 31 以降 `FUSED_PROVIDER`、それ未満（minSdk 24）は `NETWORK_PROVIDER`（GPS は使わない。FINE 許可時は fused / network が精密な値を返す）。開始要求は Rust 起点（位置情報画面が動いているときにだけ測位・権限ダイアログを出す。傾き（#831）のように常時センサ登録はしない）。`onResume`/`onPause` でセンサ登録・解除する `motionListener` と同型の対で `LocationManager.requestLocationUpdates`/`removeUpdates` を回す。実測位は Java の `LocationListener` から継続的に `nativeOnLocationChanged`/`nativeOnLocationFailure` で `SharedLocation` へ push する（request/response 型の mailbox は使わない）。`hasAccuracy()` が偽のサンプルは `Fix.accuracy_m`「有限・0 以上」の契約を偽装しないため Java 側で捨てる。AOSP で network provider 自体が存在しない場合は `requestLocationUpdates` が `IllegalArgumentException` を送出し、その他の失敗（code 3）として「再試行可能」表示に畳まれる天井がある。固定タイムアウトは実装しない（偽の失敗を作らないため、fix が来るまで「取得中」）。Activity 再生成中も `SharedLocation` はプロセス内 static の pull 型のため、camera/tts（#881/#885）のような sender 取り違えは構造上発生しない。Android 実機は未確認。到達不能と判明した場合は本行の `done` を取り下げる",
+      "note": "実装済み（旧#890）。provider は API 31 以降 `FUSED_PROVIDER`、それ未満（minSdk 24）は `NETWORK_PROVIDER`（GPS は使わない。FINE 許可時は fused / network が精密な値を返す）。開始要求は Rust 起点（位置情報画面が動いているときにだけ測位・権限ダイアログを出す。傾き（旧#831）のように常時センサ登録はしない）。`onResume`/`onPause` でセンサ登録・解除する `motionListener` と同型の対で `LocationManager.requestLocationUpdates`/`removeUpdates` を回す。実測位は Java の `LocationListener` から継続的に `nativeOnLocationChanged`/`nativeOnLocationFailure` で `SharedLocation` へ push する（request/response 型の mailbox は使わない）。`hasAccuracy()` が偽のサンプルは `Fix.accuracy_m`「有限・0 以上」の契約を偽装しないため Java 側で捨てる。AOSP で network provider 自体が存在しない場合は `requestLocationUpdates` が `IllegalArgumentException` を送出し、その他の失敗（code 3）として「再試行可能」表示に畳まれる天井がある。固定タイムアウトは実装しない（偽の失敗を作らないため、fix が来るまで「取得中」）。Activity 再生成中も `SharedLocation` はプロセス内 static の pull 型のため、camera/tts（旧#881/旧#885）のような sender 取り違えは構造上発生しない。Android 実機は未確認。到達不能と判明した場合は本行の `done` を取り下げる",
       "sourceName": [
         "位置情報"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java` + `crates/fandhe-egui-proxy/src/device/android.rs` + `crates/fandhe-egui-proxy/src/device/location.rs`、Issue #890"
+      "impl": "`platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java` + `crates/fandhe-egui-proxy/src/device/android.rs` + `crates/fandhe-egui-proxy/src/device/location.rs`、Issue 旧#890"
     },
     "macos": {
       "status": "done",
@@ -42,12 +42,12 @@
       "api": "CoreLocation（`CLLocationManager`）",
       "perm": "`NSLocationUsageDescription` を build.rs が素の実行体へ埋め込む。素の実行体で App Sandbox 無効のため entitlement は不要",
       "url": "https://developer.apple.com/documentation/corelocation",
-      "note": "実装済み（#889）。Mac 目視で正常系（実座標表示）・失敗系（許可拒否・位置情報サービス OFF）を確認済み",
+      "note": "実装済み（旧#889）。Mac 目視で正常系（実座標表示）・失敗系（許可拒否・位置情報サービス OFF）を確認済み",
       "sourceName": [
         "位置情報"
       ],
       "implStatus": "実装済み",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_location.m + crates/fandhe-egui-proxy/src/device/apple_location.rs、Issue #889"
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_location.m + crates/fandhe-egui-proxy/src/device/apple_location.rs、Issue 旧#889"
     },
     "windows": {
       "status": "done",
@@ -55,12 +55,12 @@
       "api": "WinRT（`Windows.Devices.Geolocation`）",
       "perm": "パッケージマニフェスト capability `location`",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.geolocation",
-      "note": "実装済み（#888）。WinRT `Geolocator` は直接は使わず、PowerShell 経由で `Windows.Devices.Geolocation.Geolocator` を呼ぶ（`tts`/`file_picker` の Windows 経路と同型の判断）。1 回の起動で長命の子プロセスとし、測位結果を 1 行 1 件で標準出力へ流す（成功 `OK <lat> <lon> <acc>`、失敗 `ERR denied|disabled|timeout|failed`）。数値は `InvariantCulture` で整形しロケール依存の小数点カンマを避ける。unpackaged PowerShell から `Geolocator` に到達できるかは未検証で、Windows 実機での確認は未了。到達不能と判明した場合は本行の `done` を取り下げる",
+      "note": "実装済み（旧#888）。WinRT `Geolocator` は直接は使わず、PowerShell 経由で `Windows.Devices.Geolocation.Geolocator` を呼ぶ（`tts`/`file_picker` の Windows 経路と同型の判断）。1 回の起動で長命の子プロセスとし、測位結果を 1 行 1 件で標準出力へ流す（成功 `OK <lat> <lon> <acc>`、失敗 `ERR denied|disabled|timeout|failed`）。数値は `InvariantCulture` で整形しロケール依存の小数点カンマを避ける。unpackaged PowerShell から `Geolocator` に到達できるかは未検証で、Windows 実機での確認は未了。到達不能と判明した場合は本行の `done` を取り下げる",
       "sourceName": [
         "位置情報"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`crates/fandhe-device/src/location.rs`（`CommandLocation`）+ `crates/fandhe-egui-proxy/src/device/location.rs`、Issue #888"
+      "impl": "`crates/fandhe-device/src/location.rs`（`CommandLocation`）+ `crates/fandhe-egui-proxy/src/device/location.rs`、Issue 旧#888"
     },
     "web": {
       "status": "done",
@@ -69,12 +69,12 @@
       "perm": "`navigator.permissions`（`geolocation`）、secure context 必須",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Geolocation_API",
       "safari": "対応（macOS / iOS Safari とも）",
-      "note": "実装済み（#891）。`navigator.geolocation.watchPosition` による継続 push、`clearWatch` による購読解除（再試行時・`pagehide` 時）。`PositionError` の `PERMISSION_DENIED` → 拒否表示、`POSITION_UNAVAILABLE`/`TIMEOUT`/その他 → 再試行可能表示、`navigator.geolocation` 無し・非 secure context・起動失敗 → 使えない表示に対応づけ。Web は OS の位置情報サービス無効を区別する API が無いため「サービスがオフ」表示は出ない。座標・エラー文言は console 等へ一切出力しない。自動運転環境のため実ブラウザでの権限ダイアログ操作は未確認",
+      "note": "実装済み（旧#891）。`navigator.geolocation.watchPosition` による継続 push、`clearWatch` による購読解除（再試行時・`pagehide` 時）。`PositionError` の `PERMISSION_DENIED` → 拒否表示、`POSITION_UNAVAILABLE`/`TIMEOUT`/その他 → 再試行可能表示、`navigator.geolocation` 無し・非 secure context・起動失敗 → 使えない表示に対応づけ。Web は OS の位置情報サービス無効を区別する API が無いため「サービスがオフ」表示は出ない。座標・エラー文言は console 等へ一切出力しない。自動運転環境のため実ブラウザでの権限ダイアログ操作は未確認",
       "sourceName": [
         "位置情報"
       ],
       "implStatus": "実装済み（実ブラウザ未確認）",
-      "impl": "`crates/fandhe-web-dom/src/location.rs` + `crates/fandhe-web-dom/src/mount.rs`（`mount_with_effect`）、Issue #891"
+      "impl": "`crates/fandhe-web-dom/src/location.rs` + `crates/fandhe-web-dom/src/mount.rs`（`mount_with_effect`）、Issue 旧#891"
     }
   },
   "note": "`CLLocationManager` / `FusedLocationProviderClient` 等（`CoreLocation`）/ ブラウザ Geolocation API。5 OS とも公開 API 存在確認済み（列挙 3 本）"

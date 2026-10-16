@@ -13,12 +13,12 @@
       "api": "GameController（`GCController`）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/gamecontroller",
-      "note": "実装済み（#934）。pull 型（通知購読ではなく `read()` のたびに `[GCController controllers]` を読み直す）。`extendedGamepad != nil` の先頭 1 台のみ読み、OS の生値（y 上が正）を Rust 側で画面座標系（y 下が正）へ反転・正規化する。未接続は `Ok(None)`、その他の失敗は `Internal` で型で区別し、全 0 スナップショットへフォールバックしない。TV フォーカス（#280）が受けるリモコンの十字キーとは経路が別。iOS 実機確認は未了（device-check-pending）",
+      "note": "実装済み（旧#934）。pull 型（通知購読ではなく `read()` のたびに `[GCController controllers]` を読み直す）。`extendedGamepad != nil` の先頭 1 台のみ読み、OS の生値（y 上が正）を Rust 側で画面座標系（y 下が正）へ反転・正規化する。未接続は `Ok(None)`、その他の失敗は `Internal` で型で区別し、全 0 スナップショットへフォールバックしない。TV フォーカス（旧#280）が受けるリモコンの十字キーとは経路が別。iOS 実機確認は未了（device-check-pending）",
       "sourceName": [
         "ゲームコントローラ"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_gamepad.m + crates/fandhe-egui-proxy/src/device/apple_gamepad.rs、Issue #934"
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_gamepad.m + crates/fandhe-egui-proxy/src/device/apple_gamepad.rs、Issue 旧#934"
     },
     "android": {
       "status": "done",
@@ -26,12 +26,12 @@
       "api": "`InputDevice`（`SOURCE_GAMEPAD` / `SOURCE_JOYSTICK`）",
       "perm": "なし",
       "url": "https://developer.android.com/develop/ui/views/touch-and-input/game-controllers",
-      "note": "実装済み（#935）。GameActivity/winit がタッチ以外の `MotionEvent` を捨てるため `MainActivity` の `dispatchKeyEvent`/`dispatchGenericMotionEvent` で受け、イベントは一切消費せず（`super.dispatch...` の戻り値をそのまま返す）JNI で Rust へ中継する。TV フォーカス（#280）のリモコン十字キー経路は変えない。接続状態は `InputDevice.getDeviceIds()` の都度再走査（レベルトリガ）で通知し、切断・バックグラウンド移行時は明示的に「無し」を送る。ソース判定・デッドゾーン・値域正規化・状態遷移は Rust 側状態機械（ホストの `cargo test` で検証）。走査で見つかった先頭 1 台のみを追跡し、split pad 機種（Joy-Con 等、1 台がボタン用・ジョイスティック用の 2 つの InputDevice に分かれる）は片側のみが操作対象になる（公開 API に再結合の手段が無いため束ねを実装しない）。実機未確認",
+      "note": "実装済み（旧#935）。GameActivity/winit がタッチ以外の `MotionEvent` を捨てるため `MainActivity` の `dispatchKeyEvent`/`dispatchGenericMotionEvent` で受け、イベントは一切消費せず（`super.dispatch...` の戻り値をそのまま返す）JNI で Rust へ中継する。TV フォーカス（旧#280）のリモコン十字キー経路は変えない。接続状態は `InputDevice.getDeviceIds()` の都度再走査（レベルトリガ）で通知し、切断・バックグラウンド移行時は明示的に「無し」を送る。ソース判定・デッドゾーン・値域正規化・状態遷移は Rust 側状態機械（ホストの `cargo test` で検証）。走査で見つかった先頭 1 台のみを追跡し、split pad 機種（Joy-Con 等、1 台がボタン用・ジョイスティック用の 2 つの InputDevice に分かれる）は片側のみが操作対象になる（公開 API に再結合の手段が無いため束ねを実装しない）。実機未確認",
       "sourceName": [
         "ゲームコントローラ"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_gamepad.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/gamepad.rs、Issue #935"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_gamepad.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/gamepad.rs、Issue 旧#935"
     },
     "macos": {
       "status": "done",
@@ -39,12 +39,12 @@
       "api": "GameController（`GCController`）",
       "perm": "なし",
       "url": "https://developer.apple.com/documentation/gamecontroller",
-      "note": "実装済み（#934）。iOS と同一の `.m`/`.rs`（`apple_gamepad.rs`）を共用。Mac 上で `FANDHE_PROXY_APP=gamepad_show` を起動しコントローラ未接続時の失敗系（クラッシュなし・代替入力へのフォールバック）は確認済みだが、実コントローラでの正常系（接続・スティック・ボタン・切断）は自動運転環境に実機コントローラが無く未確認",
+      "note": "実装済み（旧#934）。iOS と同一の `.m`/`.rs`（`apple_gamepad.rs`）を共用。Mac 上で `FANDHE_PROXY_APP=gamepad_show` を起動しコントローラ未接続時の失敗系（クラッシュなし・代替入力へのフォールバック）は確認済みだが、実コントローラでの正常系（接続・スティック・ボタン・切断）は自動運転環境に実機コントローラが無く未確認",
       "sourceName": [
         "ゲームコントローラ"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_gamepad.m + crates/fandhe-egui-proxy/src/device/apple_gamepad.rs、Issue #934"
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_gamepad.m + crates/fandhe-egui-proxy/src/device/apple_gamepad.rs、Issue 旧#934"
     },
     "windows": {
       "status": "done",
@@ -52,12 +52,12 @@
       "api": "WinRT（`Windows.Gaming.Input.Gamepad`）",
       "perm": "なし",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.gaming.input.gamepad",
-      "note": "実装済み（#933）。`Gamepad::Gamepads().GetAt(0)` で先頭 1 台のみを読み、`GetCurrentReading()` の `GamepadReading` を画面座標系（y 下が正）へ符号反転して正規化する。未接続（`GetAt` の範囲外）は `Ok(None)`、非対応は `Unsupported`、その他の失敗は `Internal` で型で区別し、全 0 スナップショットへフォールバックしない。`GetCurrentReading`/`Gamepads` は safe fn としてラップ済みのため `unsafe`・新規パッケージ無し（feature `Gaming_Input` 追加のみ）。ローカルに msvc が無く `x86_64-pc-windows-gnu` の型検査のみで Windows 実機確認は未了",
+      "note": "実装済み（旧#933）。`Gamepad::Gamepads().GetAt(0)` で先頭 1 台のみを読み、`GetCurrentReading()` の `GamepadReading` を画面座標系（y 下が正）へ符号反転して正規化する。未接続（`GetAt` の範囲外）は `Ok(None)`、非対応は `Unsupported`、その他の失敗は `Internal` で型で区別し、全 0 スナップショットへフォールバックしない。`GetCurrentReading`/`Gamepads` は safe fn としてラップ済みのため `unsafe`・新規パッケージ無し（feature `Gaming_Input` 追加のみ）。ローカルに msvc が無く `x86_64-pc-windows-gnu` の型検査のみで Windows 実機確認は未了",
       "sourceName": [
         "ゲームコントローラ"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-device/src/gamepad.rs + crates/fandhe-egui-proxy/src/device/windows_gamepad.rs + crates/fandhe-egui-proxy/src/device/gamepad.rs、Issue #933"
+      "impl": "crates/fandhe-device/src/gamepad.rs + crates/fandhe-egui-proxy/src/device/windows_gamepad.rs + crates/fandhe-egui-proxy/src/device/gamepad.rs、Issue 旧#933"
     },
     "web": {
       "status": "done",
@@ -66,13 +66,13 @@
       "perm": "secure context 必須",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Gamepad_API",
       "safari": "対応",
-      "note": "実装済み（#936）。`requestAnimationFrame` の自己再スケジュールで毎フレーム `getGamepads()` を pull する（独自タイマー不使用）。`mapping === \"standard\"` のみ対応し、非標準配置は「未接続」に化けさせず「非対応（代替入力）」として区別する。null・`connected=false` で次フレームには速やかに「未接続」へ戻る（古い値を張り付かせない）。Web の `axes` は既に y 下が正のため他 OS と異なり符号反転しない。非 secure context・API 不在は `Unsupported`。DOM 出力のみが対象（wasm egui canvas 経路は対象外）で、盤面 Canvas（`Circle`）は Issue #989（`tilt_ball` の Web 配線）で `Node::Widget` の実 DOM マッピングが入り、本画面でも描画されるようになった（`dom_tree.rs::convert_node` 参照）。代替入力スライダー・チェックボックスは引き続き `Node::Widget` の DOM プレースホルダとして未描画（既存の天井、観測できるのは案内文の `<p>` のみ）。入力値・デバイス名（`Gamepad.id`）は console 等へ出さない",
+      "note": "実装済み（旧#936）。`requestAnimationFrame` の自己再スケジュールで毎フレーム `getGamepads()` を pull する（独自タイマー不使用）。`mapping === \"standard\"` のみ対応し、非標準配置は「未接続」に化けさせず「非対応（代替入力）」として区別する。null・`connected=false` で次フレームには速やかに「未接続」へ戻る（古い値を張り付かせない）。Web の `axes` は既に y 下が正のため他 OS と異なり符号反転しない。非 secure context・API 不在は `Unsupported`。DOM 出力のみが対象（wasm egui canvas 経路は対象外）で、盤面 Canvas（`Circle`）は Issue 旧#989（`tilt_ball` の Web 配線）で `Node::Widget` の実 DOM マッピングが入り、本画面でも描画されるようになった（`dom_tree.rs::convert_node` 参照）。代替入力スライダー・チェックボックスは引き続き `Node::Widget` の DOM プレースホルダとして未描画（既存の天井、観測できるのは案内文の `<p>` のみ）。入力値・デバイス名（`Gamepad.id`）は console 等へ出さない",
       "sourceName": [
         "ゲームコントローラ"
       ],
       "implStatus": "実装済み（実ブラウザ未確認）",
-      "impl": "crates/fandhe-web-dom/src/gamepad.rs + crates/fandhe-web-dom/src/mount.rs（mount_with_effect）、Issue #936"
+      "impl": "crates/fandhe-web-dom/src/gamepad.rs + crates/fandhe-web-dom/src/mount.rs（mount_with_effect）、Issue 旧#936"
     }
   },
-  "note": "`GCController` / Android `InputDevice`（`SOURCE_GAMEPAD`）/ macOS `GCController` / Windows `Windows.Gaming.Input` / Web Gamepad API。TV フォーカス（群 A・#280）が受けるのはリモコンの十字キー （`egui::Key::Arrow*` へ正規化済み）であり、ボタン・アナログスティックの入力は経路が別"
+  "note": "`GCController` / Android `InputDevice`（`SOURCE_GAMEPAD`）/ macOS `GCController` / Windows `Windows.Gaming.Input` / Web Gamepad API。TV フォーカス（群 A・旧#280）が受けるのはリモコンの十字キー （`egui::Key::Arrow*` へ正規化済み）であり、ボタン・アナログスティックの入力は経路が別"
 }

@@ -13,12 +13,12 @@
       "api": "LocalAuthentication（`LAContext`）",
       "perm": "`NSFaceIDUsageDescription`",
       "url": "https://developer.apple.com/documentation/localauthentication",
-      "note": "実装済み（#908）。`LAContext` を macOS と共用、提示 VC 不要のため分岐なし。`NSFaceIDUsageDescription` は #910 で追加済み。実機未確認",
+      "note": "実装済み（旧#908）。`LAContext` を macOS と共用、提示 VC 不要のため分岐なし。`NSFaceIDUsageDescription` は 旧#910 で追加済み。実機未確認",
       "sourceName": [
         "生体認証（Face ID/Touch ID）"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_biometric.m + crates/fandhe-egui-proxy/src/device/apple_biometric.rs + src/device/biometric_auth.rs、Issue #908"
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_biometric.m + crates/fandhe-egui-proxy/src/device/apple_biometric.rs + src/device/biometric_auth.rs、Issue 旧#908"
     },
     "android": {
       "status": "done",
@@ -26,12 +26,12 @@
       "api": "`BiometricPrompt`（`androidx.biometric`）",
       "perm": "`USE_BIOMETRIC`（API 24〜27 の `USE_FINGERPRINT` は `androidx.biometric` の manifest merge で補う）",
       "url": "https://developer.android.com/identity/sign-in/biometric-auth",
-      "note": "実装済み（#908）。`BiometricPrompt` + `BIOMETRIC_STRONG` のみ（`DEVICE_CREDENTIAL` は不使用）。`onAuthenticationFailed`（不一致）は最終結果にせずプロンプト継続。Activity 再生成は `onCreate` で `BiometricPrompt` を再生成して再接続するが、画面状態（`BiometricCheckState`）は `android_main` 再実行のたびに `Idle` へ作り直されるため、再生成前に開始した認証が再接続後に完了しても結果は反映されない。camera/tts（#881/#885、Java 側が既に結果を確定済みなので取りこぼしが起きない設計）とは異なり生体認証は実際に取りこぼすため、`android_main` で `biometric_auth::bridge::reset()` を呼んで保留中の要求を明示的に無効化し、`MainActivity::onCreate` で `cancelAuthentication()` により宛先を失った認証を閉じる（codex-review 指摘、PR #917）。ユーザーは再度ボタンを押せば良い。プロセス死は結果を捨てる（既知の天井）。実機未確認",
+      "note": "実装済み（旧#908）。`BiometricPrompt` + `BIOMETRIC_STRONG` のみ（`DEVICE_CREDENTIAL` は不使用）。`onAuthenticationFailed`（不一致）は最終結果にせずプロンプト継続。Activity 再生成は `onCreate` で `BiometricPrompt` を再生成して再接続するが、画面状態（`BiometricCheckState`）は `android_main` 再実行のたびに `Idle` へ作り直されるため、再生成前に開始した認証が再接続後に完了しても結果は反映されない。camera/tts（旧#881/旧#885、Java 側が既に結果を確定済みなので取りこぼしが起きない設計）とは異なり生体認証は実際に取りこぼすため、`android_main` で `biometric_auth::bridge::reset()` を呼んで保留中の要求を明示的に無効化し、`MainActivity::onCreate` で `cancelAuthentication()` により宛先を失った認証を閉じる（codex-review 指摘、PR 旧#917）。ユーザーは再度ボタンを押せば良い。プロセス死は結果を捨てる（既知の天井）。実機未確認",
       "sourceName": [
         "生体認証"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs、Issue #908"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs、Issue 旧#908"
     },
     "macos": {
       "status": "done",
@@ -39,12 +39,12 @@
       "api": "LocalAuthentication（`LAContext`、Touch ID）",
       "perm": "Info.plist は不要（`LAContext.canEvaluatePolicy` で可否判定）",
       "url": "https://developer.apple.com/documentation/localauthentication",
-      "note": "実装済み（#906）。`LAPolicyDeviceOwnerAuthenticationWithBiometrics` 固定でパスコードへのフォールバックは使わない。結果は認証した/キャンセル/使えない/失敗の 4 値で、`LAError` → 結果の表は Rust 側 `outcome_from_reply` に一本化（ユニットテストで固定）。認証の成否以外（生体データ・識別子）は保持しない。自動運転セッションはヘッドレス環境（`screencapture` が黒画面を返す）で Touch ID 操作・目視確認ができず未実施。Mac 実機での目視確認は人間確認待ち",
+      "note": "実装済み（旧#906）。`LAPolicyDeviceOwnerAuthenticationWithBiometrics` 固定でパスコードへのフォールバックは使わない。結果は認証した/キャンセル/使えない/失敗の 4 値で、`LAError` → 結果の表は Rust 側 `outcome_from_reply` に一本化（ユニットテストで固定）。認証の成否以外（生体データ・識別子）は保持しない。自動運転セッションはヘッドレス環境（`screencapture` が黒画面を返す）で Touch ID 操作・目視確認ができず未実施。Mac 実機での目視確認は人間確認待ち",
       "sourceName": [
         "生体認証"
       ],
       "implStatus": "実装済み（実機目視は人間確認待ち）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_biometric.m + crates/fandhe-egui-proxy/src/device/apple_biometric.rs + src/device/biometric_auth.rs、Issue #906"
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_biometric.m + crates/fandhe-egui-proxy/src/device/apple_biometric.rs + src/device/biometric_auth.rs、Issue 旧#906"
     },
     "windows": {
       "status": "done",
@@ -52,12 +52,12 @@
       "api": "WinRT（`Windows.Security.Credentials.UI.UserConsentVerifier`、Windows Hello）",
       "perm": "なし（`CheckAvailabilityAsync` で可否判定）",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.security.credentials.ui.userconsentverifier",
-      "note": "実装済み（#907）。`IUserConsentVerifierInterop::RequestVerificationForWindowAsync` でメインウィンドウ（`windows_share::window()` の HWND）に束縛して Windows Hello を出し、`IAsyncOperation` の完了ハンドラから pull 型 bridge へ結果を置く（#906 macOS と同型）。`UserConsentVerificationResult` → 4 値の表は `outcome_from_verification` に一本化（ユニットテストで固定）。未知値・`AsyncStatus` の Canceled/Error は失敗側。`CheckAvailabilityAsync` は別途呼ばない（検証結果が可否状態を返すため）。`windows-future` は lock 済み推移依存の昇格で新規パッケージ無し。認証の成否以外は保持しない。ローカルに msvc が無く x86_64-pc-windows-gnu の型検査のみで、unpackaged 実機での到達可否・Windows 実機確認は未了（到達不能と判明した場合は done を取り下げる）。**既知の制約**: `RequestVerificationForWindowAsync` は Windows Hello の統合認証 UI で、利用者が生体ではなく PIN で完了しても同じ成功（`Verified`）を返す（WinRT 側に生体限定のオプションが無いため。参照: https://learn.microsoft.com/en-us/windows/win32/api/userconsentverifierinterop/nf-userconsentverifierinterop-iuserconsentverifierinterop-requestverificationforwindowasync ）。macOS/iOS の生体限定ポリシーと異なり、Windows の「認証した」は PIN を含む端末所有者認証を意味する",
+      "note": "実装済み（旧#907）。`IUserConsentVerifierInterop::RequestVerificationForWindowAsync` でメインウィンドウ（`windows_share::window()` の HWND）に束縛して Windows Hello を出し、`IAsyncOperation` の完了ハンドラから pull 型 bridge へ結果を置く（旧#906 macOS と同型）。`UserConsentVerificationResult` → 4 値の表は `outcome_from_verification` に一本化（ユニットテストで固定）。未知値・`AsyncStatus` の Canceled/Error は失敗側。`CheckAvailabilityAsync` は別途呼ばない（検証結果が可否状態を返すため）。`windows-future` は lock 済み推移依存の昇格で新規パッケージ無し。認証の成否以外は保持しない。ローカルに msvc が無く x86_64-pc-windows-gnu の型検査のみで、unpackaged 実機での到達可否・Windows 実機確認は未了（到達不能と判明した場合は done を取り下げる）。**既知の制約**: `RequestVerificationForWindowAsync` は Windows Hello の統合認証 UI で、利用者が生体ではなく PIN で完了しても同じ成功（`Verified`）を返す（WinRT 側に生体限定のオプションが無いため。参照: https://learn.microsoft.com/en-us/windows/win32/api/userconsentverifierinterop/nf-userconsentverifierinterop-iuserconsentverifierinterop-requestverificationforwindowasync ）。macOS/iOS の生体限定ポリシーと異なり、Windows の「認証した」は PIN を含む端末所有者認証を意味する",
       "sourceName": [
         "生体認証"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_biometric.rs + src/device/biometric_auth.rs、Issue #907"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_biometric.rs + src/device/biometric_auth.rs、Issue 旧#907"
     },
     "web": {
       "status": "done",
@@ -66,12 +66,12 @@
       "perm": "secure context 必須",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API",
       "safari": "対応（Touch ID / Face ID 経由の platform authenticator）",
-      "note": "実装済み（#909）。サーバーを持たないため、platform authenticator が user verification を行ったことを `authenticatorData` の UV フラグで端末ローカルに確認する用途に限る。サーバー検証を伴う本人認証ではない。初回は `navigator.credentials.create`（platform / userVerification required / residentKey preferred）で登録し credential ID のみ `localStorage` に保持、2 回目以降は `get`。公開鍵・署名は保持しない。`NotAllowedError` はキャンセル扱い（credential 消失時もキャンセルに見える天井あり）。wasm32 ビルド通過。ブラウザ目視で「認証する」ボタン描画・secure context/`navigator.credentials` 判定・`create()` 呼び出しまで到達することを確認（自動運転セッションは仮想 authenticator・Touch ID の操作ができないため、実際の認証成立・キャンセル系の目視は人間確認待ち）。**注意**: WebAuthn の UV は PIN 等の生体以外の方式でも成立しうる（Windows Hello を PIN のみで設定した端末等）。macOS の `LAPolicyDeviceOwnerAuthenticationWithBiometrics` 固定とは異なり、Web 経路の「認証した」は生体認証成功を保証しない（ブラウザ側に生体方式を区別する標準 API が無いための既知の天井、`crates/fandhe-web-dom/src/biometric_auth.rs` モジュール doc 参照）",
+      "note": "実装済み（旧#909）。サーバーを持たないため、platform authenticator が user verification を行ったことを `authenticatorData` の UV フラグで端末ローカルに確認する用途に限る。サーバー検証を伴う本人認証ではない。初回は `navigator.credentials.create`（platform / userVerification required / residentKey preferred）で登録し credential ID のみ `localStorage` に保持、2 回目以降は `get`。公開鍵・署名は保持しない。`NotAllowedError` はキャンセル扱い（credential 消失時もキャンセルに見える天井あり）。wasm32 ビルド通過。ブラウザ目視で「認証する」ボタン描画・secure context/`navigator.credentials` 判定・`create()` 呼び出しまで到達することを確認（自動運転セッションは仮想 authenticator・Touch ID の操作ができないため、実際の認証成立・キャンセル系の目視は人間確認待ち）。**注意**: WebAuthn の UV は PIN 等の生体以外の方式でも成立しうる（Windows Hello を PIN のみで設定した端末等）。macOS の `LAPolicyDeviceOwnerAuthenticationWithBiometrics` 固定とは異なり、Web 経路の「認証した」は生体認証成功を保証しない（ブラウザ側に生体方式を区別する標準 API が無いための既知の天井、`crates/fandhe-web-dom/src/biometric_auth.rs` モジュール doc 参照）",
       "sourceName": [
         "生体認証"
       ],
       "implStatus": "実装済み（実ブラウザの実 Touch ID・仮想 authenticator を使った目視は人間確認待ち）",
-      "impl": "crates/fandhe-web-dom/src/biometric_auth.rs、Issue #909"
+      "impl": "crates/fandhe-web-dom/src/biometric_auth.rs、Issue 旧#909"
     }
   },
   "note": "`LocalAuthentication` / `BiometricPrompt` / `LAContext`（macOS）/ Windows Hello（`Windows.Security.Credentials.UI`）/ Web `WebAuthn`"

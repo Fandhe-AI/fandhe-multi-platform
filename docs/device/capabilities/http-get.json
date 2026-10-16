@@ -24,13 +24,13 @@
       "api": "`ureq`（Rust クレート。OS API ではなく `INTERNET` 権限のみ必要）",
       "perm": "`<uses-permission android:name=\"android.permission.INTERNET\" />`",
       "url": "https://developer.android.com/training/basics/network-ops/connecting",
-      "note": "実装済み（#748、`UreqHttp`）。https 限定、`usesCleartextTraffic` は追加しない方針",
+      "note": "実装済み（旧#748、`UreqHttp`）。https 限定、`usesCleartextTraffic` は追加しない方針",
       "sourceName": [
         "HTTP 通信",
         "HTTP 通信（`ureq`、https 限定）"
       ],
       "implStatus": "実装済み",
-      "impl": "#748"
+      "impl": "旧#748"
     },
     "macos": {
       "status": "done",
@@ -47,13 +47,13 @@
       "perm": "なし（別オリジンの場合、取得先が CORS ヘッダを返す必要）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API",
       "safari": "対応",
-      "note": "実装済み（Issue #985）。GET 限定・`redirect: \"error\"`・`credentials: \"omit\"`。本文上限（8 MiB）・タイムアウト（15 秒）・件数上限（100）・JSON 解析は `fandhe_device::http`（`MAX_BODY_BYTES`/`TIMEOUT`/`MAX_ITEMS`/`parse_items`）を desktop 実装と共有する。実ブラウザでの確認は未了",
+      "note": "実装済み（Issue 旧#985）。GET 限定・`redirect: \"error\"`・`credentials: \"omit\"`。本文上限（8 MiB）・タイムアウト（15 秒）・件数上限（100）・JSON 解析は `fandhe_device::http`（`MAX_BODY_BYTES`/`TIMEOUT`/`MAX_ITEMS`/`parse_items`）を desktop 実装と共有する。実ブラウザでの確認は未了",
       "sourceName": [
         "HTTP 取得"
       ],
       "implStatus": "実装済み（実ブラウザ未確認）",
-      "impl": "crates/fandhe-web-dom/src/http_fetch.rs（http_fetch_effect）+ crates/fandhe-web-dom/src/demo.rs（mount_http_fetch_screen）+ crates/fandhe-device/src/http.rs（MAX_BODY_BYTES/TIMEOUT/parse_items 共有）、Issue #985"
+      "impl": "crates/fandhe-web-dom/src/http_fetch.rs（http_fetch_effect）+ crates/fandhe-web-dom/src/demo.rs（mount_http_fetch_screen）+ crates/fandhe-device/src/http.rs（MAX_BODY_BYTES/TIMEOUT/parse_items 共有）、Issue 旧#985"
     }
   },
-  "note": "`fandhe-device::http::UreqHttp`。https 全般 + ループバック/私設 IPv4 の平文 http のみ許可（`http.rs`）。wasm32 では `ureq` が `getrandom` を解決できず `Http` 実装自体が存在しない（`http.rs` 冒頭コメント）。Web は `fandhe-web-dom::http_fetch` がブラウザの `fetch` API 経由で実装済み（Issue #985）"
+  "note": "`fandhe-device::http::UreqHttp`。https 全般 + ループバック/私設 IPv4 の平文 http のみ許可（`http.rs`）。wasm32 では `ureq` が `getrandom` を解決できず `Http` 実装自体が存在しない（`http.rs` 冒頭コメント）。Web は `fandhe-web-dom::http_fetch` がブラウザの `fetch` API 経由で実装済み（Issue 旧#985）"
 }

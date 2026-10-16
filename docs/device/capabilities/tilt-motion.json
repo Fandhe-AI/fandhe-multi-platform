@@ -18,7 +18,7 @@
         "傾き検出（Roll/Pitch、`CMMotionManager.deviceMotion`）"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-egui-proxy/ios/fandhe_ios_motion.m`、`crates/fandhe-device/src/motion.rs`、Issue #832 closed（親 #827）"
+      "impl": "`crates/fandhe-egui-proxy/ios/fandhe_ios_motion.m`、`crates/fandhe-device/src/motion.rs`、Issue 旧#832 closed（親 旧#827）"
     },
     "android": {
       "status": "done",
@@ -27,19 +27,19 @@
       "api": "`SensorManager`（`android.hardware`）",
       "perm": "なし",
       "url": "https://developer.android.com/develop/sensors-and-location/sensors/sensors_overview",
-      "note": "実装済み（#829/#831/#845）。傾きのみ利用。歩数は `TYPE_STEP_COUNTER` センサー追加で対応可能",
+      "note": "実装済み（旧#829/旧#831/旧#845）。傾きのみ利用。歩数は `TYPE_STEP_COUNTER` センサー追加で対応可能",
       "sourceName": [
         "加速度・ジャイロ・傾き",
         "加速度・ジャイロ・傾き（`SensorManager`）"
       ],
       "implStatus": "実装済み",
-      "impl": "#829 / #831 / #845"
+      "impl": "旧#829 / 旧#831 / 旧#845"
     },
     "macos": {
       "status": "done",
       "detail": "できている（ダミー、スライダー代替）",
       "api": "標準 API なし（macOS は CoreMotion 非対応）",
-      "note": "`fandhe-device::motion::DummyMotion` が Phase 10 型サンプルの Mac 向けスライダー代替（#829）。実センサでの取得は不可",
+      "note": "`fandhe-device::motion::DummyMotion` が Phase 10 型サンプルの Mac 向けスライダー代替（旧#829）。実センサでの取得は不可",
       "sourceName": [
         "センサ（傾き）"
       ]
@@ -67,8 +67,8 @@
         "センサ（傾き）"
       ],
       "implStatus": "実装済み（実ブラウザ未確認）",
-      "impl": "`crates/fandhe-web-dom/src/tilt.rs`（`tilt_ball_effect`）+ `crates/fandhe-web-dom/src/demo.rs`（`mount_tilt_ball_screen`）+ `crates/fandhe-web-dom/src/dom_tree.rs`（Canvas の円描画）+ `crates/fandhe-core/src/screens/tilt_ball.rs`（`SensorStatus`）、Issue #989"
+      "impl": "`crates/fandhe-web-dom/src/tilt.rs`（`tilt_ball_effect`）+ `crates/fandhe-web-dom/src/demo.rs`（`mount_tilt_ball_screen`）+ `crates/fandhe-web-dom/src/dom_tree.rs`（Canvas の円描画）+ `crates/fandhe-core/src/screens/tilt_ball.rs`（`SensorStatus`）、Issue 旧#989"
     }
   },
-  "note": "Issue #827（closed）。Android は `SensorManager`（`TYPE_GRAVITY`）→ JNI（#831）、iOS は `CMMotionManager` → `extern \"C\"`（#832）、両方とも実機で確認済み（#827 クローズコメント）。macOS/Windows は `DummyMotion`（`motion.rs`、wasm32 除外 cfg なし＝Web でもコンパイル対象）が画面下部スライダーで値を差し替える代替 UI（`tilt_ball.rs`）。Web は Issue #989 で `DeviceOrientationEvent` を直接配線した（`fandhe-egui-proxy` の `DummyMotion`/`registry.rs` の wasm32 除外は egui 経路専用のままで、Web はこれを経由しない `fandhe-web-dom::tilt` が別経路として実装済み）"
+  "note": "Issue 旧#827（closed）。Android は `SensorManager`（`TYPE_GRAVITY`）→ JNI（旧#831）、iOS は `CMMotionManager` → `extern \"C\"`（旧#832）、両方とも実機で確認済み（旧#827 クローズコメント）。macOS/Windows は `DummyMotion`（`motion.rs`、wasm32 除外 cfg なし＝Web でもコンパイル対象）が画面下部スライダーで値を差し替える代替 UI（`tilt_ball.rs`）。Web は Issue 旧#989 で `DeviceOrientationEvent` を直接配線した（`fandhe-egui-proxy` の `DummyMotion`/`registry.rs` の wasm32 除外は egui 経路専用のままで、Web はこれを経由しない `fandhe-web-dom::tilt` が別経路として実装済み）"
 }

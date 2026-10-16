@@ -21,30 +21,32 @@
       "api": "`DisplayManager.getDisplays()` + `Display.getRealMetrics`（幅・高さ・`density`）+ `Display.getName()`、主画面は `DEFAULT_DISPLAY`",
       "perm": "不要（権限を宣言しない）",
       "url": "https://developer.android.com/reference/android/hardware/display/DisplayManager",
-      "note": "実装済み（#1343）。1 秒の同期 pull で、`DisplayListener`・`Presentation` は使わない。保留中の要求・id・コールバックを持たないので、Activity 再生成で破棄するものは無い。守る範囲: 嘘の値を出さない・主画面を決められなければ全て false・個体識別子を取らない・1 プロセス内の取得・形が不正なら一部だけ返さず失敗にする。守らない範囲: OS 間の粒度の一致、反映遅れ（最大 1 秒）、仮想ディスプレイと `getRealMetrics` の論理サイズが物理パネルと違うこと、複数プロセス、画面の位置・並び。Android 実機確認は #25",
-      "detail": "できている（Android 実機確認待ち）",
-      "implStatus": "Android 実機確認待ち（#25）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_multi_display.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MultiDisplayHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/multi_display.rs + crates/fandhe-core/src/screens/multi_display_show.rs + crates/fandhe-device/src/multi_display.rs、Issue #1343"
+      "note": "実装済み（旧#1343）。1 秒の同期 pull で、`DisplayListener`・`Presentation` は使わない。保留中の要求・id・コールバックを持たないので、Activity 再生成で破棄するものは無い。守る範囲: 嘘の値を出さない・主画面を決められなければ全て false・個体識別子を取らない・1 プロセス内の取得・形が不正なら一部だけ返さず失敗にする。守らない範囲: OS 間の粒度の一致、反映遅れ（最大 1 秒）、仮想ディスプレイと `getRealMetrics` の論理サイズが物理パネルと違うこと、複数プロセス、画面の位置・並び。Android 実機確認は #25 で済み",
+      "detail": "できている（実機）",
+      "implStatus": "実装済み・実機確認済み（外部ディスプレイはシミュレートで確認）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_multi_display.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MultiDisplayHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/multi_display.rs + crates/fandhe-core/src/screens/multi_display_show.rs + crates/fandhe-device/src/multi_display.rs、Issue 旧#1343",
+      "verified": true
     },
     "macos": {
       "status": "done",
       "api": "AppKit `NSScreen.screens`（`frame` × `backingScaleFactor`・`localizedName`、配列の先頭が主画面）",
       "perm": "不要（privacy manifest 不要）",
       "url": "https://developer.apple.com/documentation/appkit/nsscreen",
-      "note": "実装済み（#1341）。画面数が上限（16）を超えたら先頭だけを返さず失敗にする。守る範囲: 嘘の値を出さない・主画面を決められなければ全て false・個体識別子を取らない・1 プロセス内の取得・切断後に最後の一覧を返し続けない。守らない範囲: OS 間の粒度の一致、反映遅れ（最大 1 秒）、ミラーリングの OS 差（OS が有効と認める論理ディスプレイを返す）、複数プロセス、画面の位置・並び。Mac 目視は #25",
-      "detail": "できている（Mac 目視待ち）",
-      "implStatus": "Mac 目視待ち（#25）",
-      "impl": "crates/fandhe-egui-proxy/src/device/macos_multi_display.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_multi_display.m + crates/fandhe-egui-proxy/src/device/multi_display.rs + crates/fandhe-core/src/screens/multi_display_show.rs + crates/fandhe-device/src/multi_display.rs、Issue #1341"
+      "note": "実装済み（旧#1341）。画面数が上限（16）を超えたら先頭だけを返さず失敗にする。守る範囲: 嘘の値を出さない・主画面を決められなければ全て false・個体識別子を取らない・1 プロセス内の取得・切断後に最後の一覧を返し続けない。守らない範囲: OS 間の粒度の一致、反映遅れ（最大 1 秒）、ミラーリングの OS 差（OS が有効と認める論理ディスプレイを返す）、複数プロセス、画面の位置・並び。Mac 目視は #25 で済み",
+      "detail": "できている（実機）",
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_multi_display.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_multi_display.m + crates/fandhe-egui-proxy/src/device/multi_display.rs + crates/fandhe-core/src/screens/multi_display_show.rs + crates/fandhe-device/src/multi_display.rs、Issue 旧#1341",
+      "verified": true
     },
     "windows": {
       "status": "done",
       "api": "Win32 `EnumDisplayMonitors` + `GetMonitorInfoW` + `GetDpiForMonitor`（WinAppSDK `DisplayArea` は使わない）",
       "perm": "なし（package identity 不要）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumdisplaymonitors",
-      "note": "実装済み（#1341）。名前は取れず常に「画面 N」表示。擬似モニターは OS が返すとおり含める。守る範囲: 嘘の値を出さない・主画面を決められなければ全て false・個体識別子を取らない・1 プロセス内の取得・切断後に最後の一覧を返し続けない。守らない範囲: OS 間の粒度の一致、反映遅れ（最大 1 秒）、ミラーリングの OS 差（OS が有効と認める論理ディスプレイを返す）、複数プロセス、画面の位置・並び。Windows 実機の確認は #25",
+      "note": "実装済み（旧#1341）。名前は取れず常に「画面 N」表示。擬似モニターは OS が返すとおり含める。守る範囲: 嘘の値を出さない・主画面を決められなければ全て false・個体識別子を取らない・1 プロセス内の取得・切断後に最後の一覧を返し続けない。守らない範囲: OS 間の粒度の一致、反映遅れ（最大 1 秒）、ミラーリングの OS 差（OS が有効と認める論理ディスプレイを返す）、複数プロセス、画面の位置・並び。Windows 実機の確認は #25",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#25）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_multi_display.rs + crates/fandhe-egui-proxy/src/device/multi_display.rs + crates/fandhe-core/src/screens/multi_display_show.rs + crates/fandhe-device/src/multi_display.rs、Issue #1341"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_multi_display.rs + crates/fandhe-egui-proxy/src/device/multi_display.rs + crates/fandhe-core/src/screens/multi_display_show.rs + crates/fandhe-device/src/multi_display.rs、Issue 旧#1341"
     },
     "web": {
       "status": "done",
@@ -52,10 +54,10 @@
       "perm": "`window-management` 権限（ボタン押下時に許可を求める）。secure context 必須",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window_Management_API",
       "safari": "非対応",
-      "note": "実装済み（#1344）。Chromium のみ（MDN は Experimental）。サイズは CSS px × devicePixelRatio の約。倍率が不明なら一覧全体を失敗にする。守る範囲: 嘘の値を出さない・許可なしを空の一覧にしない・取り消し後に一覧を出し続けない（PermissionStatus が得られる場合）・古い世代の完了を捨てる・1 マウント内でタイマーを漏らさない・個体識別子を取らない。守らない範囲: Chromium 以外（非対応表示）、サイズの丸め（約）、反映遅れ（最大 1 秒＋背景タブの間引き）、許可ダイアログの応答待ちの期限、permissions.query が無い環境での取り消し検知、複数タブ・複数マウント、ミラーリングの扱い、画面の位置・並び、画面ごとの別描画。実ブラウザ目視は #25",
-      "detail": "できている（実ブラウザ確認待ち）",
-      "implStatus": "実ブラウザ確認待ち（#25）",
-      "impl": "crates/fandhe-web-dom/src/multi_display.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/multi_display_show.rs + crates/fandhe-device/src/multi_display.rs、Issue #1344"
+      "note": "実装済み（旧#1344）。Chromium のみ（MDN は Experimental）。サイズは CSS px × devicePixelRatio の約。倍率が不明なら一覧全体を失敗にする。守る範囲: 嘘の値を出さない・許可なしを空の一覧にしない・取り消し後に一覧を出し続けない（PermissionStatus が得られる場合）・古い世代の完了を捨てる・1 マウント内でタイマーを漏らさない・個体識別子を取らない。守らない範囲: Chromium 以外（非対応表示）、サイズの丸め（約）、反映遅れ（最大 1 秒＋背景タブの間引き）、許可ダイアログの応答待ちの期限、permissions.query が無い環境での取り消し検知、複数タブ・複数マウント、ミラーリングの扱い、画面の位置・並び、画面ごとの別描画。実ブラウザ目視は #25",
+      "detail": "できている（Chrome で確認・他ブラウザは未確認）",
+      "implStatus": "実装済み（Chrome で確認済み・Firefox / Safari は未確認）",
+      "impl": "crates/fandhe-web-dom/src/multi_display.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/multi_display_show.rs + crates/fandhe-device/src/multi_display.rs、Issue 旧#1344"
     }
   },
   "note": "全 OS で接続画面の列挙は可能。窓の配置まで行うと window-management と重なる。media-cast（別 id）との違い: 本機能は端末に接続された画面の扱いで、外部機器への再生ではない。今回の範囲: 接続中の画面を一覧にして解像度・倍率・主画面かを表示し、接続・切断で更新する（画面ごとへの別描画は扱わない）"

@@ -10,50 +10,50 @@
       "api": "location の継続取得（CoreLocation）+ Rust 側判定（`GeofenceTracker`）",
       "perm": "location と同じ `NSLocationWhenInUseUsageDescription`（Always は要求しない）",
       "url": "https://developer.apple.com/documentation/corelocation/cllocationmanager",
-      "note": "実装済み（#1058）。OS の領域監視 API は使わず、location の継続取得に乗せて `GeofenceTracker` で Rust 側判定する（オーナー判断 10/4）。守る範囲: 1 件・前景のみ・1 プロセス内の処理順・失敗時は内外を未確定へ戻し偽の「中にいる」を出さない・現在地未取得のときは偽の地点で登録せず要求を保留し、最初の Fix の到着時に登録する・画面に位置の受信からの経過時間を出す。既知の制約: Fix の鮮度は判定しない・境界付近で測位が揺れると出入りが繰り返される（ヒステリシス無し）・精度が半径より悪い Fix は判定に使わない・検知時刻は Fix の観測時刻・背景通知はしない。 iOS 固有: 「正確な位置情報」を OFF にすると精度が半径に届かず登録できない旨を画面に出す。iPhone 実機での確認は未了",
+      "note": "実装済み（旧#1058）。OS の領域監視 API は使わず、location の継続取得に乗せて `GeofenceTracker` で Rust 側判定する（オーナー判断 10/4）。守る範囲: 1 件・前景のみ・1 プロセス内の処理順・失敗時は内外を未確定へ戻し偽の「中にいる」を出さない・現在地未取得のときは偽の地点で登録せず要求を保留し、最初の Fix の到着時に登録する・画面に位置の受信からの経過時間を出す。既知の制約: Fix の鮮度は判定しない・境界付近で測位が揺れると出入りが繰り返される（ヒステリシス無し）・精度が半径より悪い Fix は判定に使わない・検知時刻は Fix の観測時刻・背景通知はしない。 iOS 固有: 「正確な位置情報」を OFF にすると精度が半径に届かず登録できない旨を画面に出す。iPhone 実機での確認は未了",
       "sourceName": [
         "ジオフェンス（領域監視）"
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs` + `crates/fandhe-egui-proxy/apple/fandhe_apple_location.m`、Issue #1058"
+      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs` + `crates/fandhe-egui-proxy/apple/fandhe_apple_location.m`、Issue 旧#1058"
     },
     "android": {
       "status": "done",
       "api": "location の継続取得（`LocationManager`）+ Rust 側判定（`GeofenceTracker`）",
       "perm": "ジオフェンス画面の測位開始で `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION` を同時に要求（COARSE のみ許可済み・位置情報画面が先に測位中でも FINE への昇格を 1 回だけ要求。`ACCESS_BACKGROUND_LOCATION` は要求しない）",
       "url": "https://developer.android.com/reference/android/location/LocationManager",
-      "note": "実装済み（#1058）。OS の領域監視 API は使わず、location の継続取得に乗せて `GeofenceTracker` で Rust 側判定する（オーナー判断 10/4）。守る範囲: 1 件・前景のみ・1 プロセス内の処理順・失敗時は内外を未確定へ戻し偽の「中にいる」を出さない・現在地未取得のときは偽の地点で登録せず要求を保留し、最初の Fix の到着時に登録する・画面に位置の受信からの経過時間を出す。既知の制約: Fix の鮮度は判定しない・境界付近で測位が揺れると出入りが繰り返される（ヒステリシス無し）・精度が半径より悪い Fix は判定に使わない・検知時刻は Fix の観測時刻・背景通知はしない。 Android 固有: 「おおよそ」だけ許可された場合は精度が半径に届かず登録できない旨を画面に出す。API 24〜30 は network provider のみ（GPS は使わない）のため精度が届かず未確定のままになりうる。Android 実機での確認は未了",
+      "note": "実装済み（旧#1058）。OS の領域監視 API は使わず、location の継続取得に乗せて `GeofenceTracker` で Rust 側判定する（オーナー判断 10/4）。守る範囲: 1 件・前景のみ・1 プロセス内の処理順・失敗時は内外を未確定へ戻し偽の「中にいる」を出さない・現在地未取得のときは偽の地点で登録せず要求を保留し、最初の Fix の到着時に登録する・画面に位置の受信からの経過時間を出す。既知の制約: Fix の鮮度は判定しない・境界付近で測位が揺れると出入りが繰り返される（ヒステリシス無し）・精度が半径より悪い Fix は判定に使わない・検知時刻は Fix の観測時刻・背景通知はしない。 Android 固有: 「おおよそ」だけ許可された場合は精度が半径に届かず登録できない旨を画面に出す。API 24〜30 は network provider のみ（GPS は使わない）のため精度が届かず未確定のままになりうる。Android 実機での確認は未了",
       "sourceName": [
         "ジオフェンス"
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs` + `platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java`、Issue #1058"
+      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs` + `platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java`、Issue 旧#1058"
     },
     "macos": {
       "status": "done",
       "detail": "できている（一部・実機。出入りは未確認）",
       "api": "location の継続取得（CoreLocation）+ Rust 側判定（`GeofenceTracker`）",
       "perm": "location と同じ（追加の権限なし）",
-      "note": "実装済み（#1057）。OS の領域監視 API は使わず、location の継続取得に乗せて `GeofenceTracker` で Rust 側判定する（オーナー判断 10/4）。守る範囲: 1 件・前景のみ・1 プロセス内の処理順・失敗時は内外を未確定へ戻し偽の「中にいる」を出さない・現在地未取得のときは偽の地点で登録せず要求を保留し、最初の Fix の到着時に登録する・画面に位置の受信からの経過時間を出す。既知の制約: Fix の鮮度は判定しない（古い Fix が残りうる、オーナー判断 10/4）・ 境界付近で測位が揺れると出入りが繰り返される（ヒステリシス無し）・精度が半径より悪い Fix は判定に使わない・検知時刻は Fix の観測時刻・背景通知はしない。Mac 目視（10/5）: 現在地を半径 1 km で登録すると登録地点・「中にいる」・位置の受信からの経過秒が表示される。出入りは移動が要るため未確認（キャプチャは座標を伏せている）",
+      "note": "実装済み（旧#1057）。OS の領域監視 API は使わず、location の継続取得に乗せて `GeofenceTracker` で Rust 側判定する（オーナー判断 10/4）。守る範囲: 1 件・前景のみ・1 プロセス内の処理順・失敗時は内外を未確定へ戻し偽の「中にいる」を出さない・現在地未取得のときは偽の地点で登録せず要求を保留し、最初の Fix の到着時に登録する・画面に位置の受信からの経過時間を出す。既知の制約: Fix の鮮度は判定しない（古い Fix が残りうる、オーナー判断 10/4）・ 境界付近で測位が揺れると出入りが繰り返される（ヒステリシス無し）・精度が半径より悪い Fix は判定に使わない・検知時刻は Fix の観測時刻・背景通知はしない。Mac 目視（10/5）: 現在地を半径 1 km で登録すると登録地点・「中にいる」・位置の受信からの経過秒が表示される。出入りは移動が要るため未確認（キャプチャは座標を伏せている）",
       "sourceName": [
         "ジオフェンス（領域監視）"
       ],
       "implStatus": "実装済み（登録と内外表示は実機確認済み・出入りは未確認）",
-      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs`、Issue #1057"
+      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs`、Issue 旧#1057"
     },
     "windows": {
       "status": "done",
       "detail": "できている（未確認）",
       "api": "location の継続取得（PowerShell 経由 `Geolocator`）+ Rust 側判定（`GeofenceTracker`）",
       "perm": "location と同じ（追加の権限なし）",
-      "note": "実装済み（#1057）。OS の領域監視 API は使わず、location の継続取得に乗せて `GeofenceTracker` で Rust 側判定する（オーナー判断 10/4）。守る範囲: 1 件・前景のみ・1 プロセス内の処理順・失敗時は内外を未確定へ戻し偽の「中にいる」を出さない・現在地未取得のときは偽の地点で登録せず要求を保留し、最初の Fix の到着時に登録する・画面に位置の受信からの経過時間を出す。既知の制約: Fix の鮮度は判定しない（古い Fix が残りうる、オーナー判断 10/4）・ 境界付近で測位が揺れると出入りが繰り返される（ヒステリシス無し）・精度が半径より悪い Fix は判定に使わない・検知時刻は Fix の観測時刻・背景通知はしない。Windows 実機での確認は未了（location の PowerShell 経路が到達不能と判明した場合は本行の `done` を取り下げる）",
+      "note": "実装済み（旧#1057）。OS の領域監視 API は使わず、location の継続取得に乗せて `GeofenceTracker` で Rust 側判定する（オーナー判断 10/4）。守る範囲: 1 件・前景のみ・1 プロセス内の処理順・失敗時は内外を未確定へ戻し偽の「中にいる」を出さない・現在地未取得のときは偽の地点で登録せず要求を保留し、最初の Fix の到着時に登録する・画面に位置の受信からの経過時間を出す。既知の制約: Fix の鮮度は判定しない（古い Fix が残りうる、オーナー判断 10/4）・ 境界付近で測位が揺れると出入りが繰り返される（ヒステリシス無し）・精度が半径より悪い Fix は判定に使わない・検知時刻は Fix の観測時刻・背景通知はしない。Windows 実機での確認は未了（location の PowerShell 経路が到達不能と判明した場合は本行の `done` を取り下げる）",
       "sourceName": [
         "ジオフェンス（領域監視）"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs`、Issue #1057"
+      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs`、Issue 旧#1057"
     },
     "web": {
       "status": "no",

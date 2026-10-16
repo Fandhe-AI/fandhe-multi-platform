@@ -20,26 +20,26 @@
       "api": "`AppWidgetProvider` + `RemoteViews` + SharedPreferences（`commit()`）+ `AppWidgetManager.updateAppWidget`（Glance は依存が増えるため不使用）",
       "perm": "なし（新規権限なし）。Manifest に `<receiver>`（exported=false、intent-filter は `APPWIDGET_UPDATE` のみ）",
       "url": "https://developer.android.com/develop/ui/views/appwidgets/overview",
-      "note": "実装済み（Issue #1067）。`HomeWidgetProvider`（`updatePeriodMillis=0`）と `MainActivity` の JNI 受け口 2 本（`homeWidgetSetText` / `homeWidgetCurrentText`）を追加。保存は `commit()` の成否を返し、失敗は Err。保存成功なら再描画要求の失敗・ウィジェット 0 個でも Ok（反映は OS 側で非同期）。未保存は null で空文字と区別する。実機確認は未実施（`device-check-pending`）。確認手順: `FANDHE_PROXY_APP=home_widget_show` でビルド → ホーム画面にウィジェット「Fandhe テキスト」を置く（未設定と出る）→ ボタンを押すと文字が変わる → アプリ再起動後も値が読める。receiver の exported=false でウィジェット一覧に出ない場合は要再確認",
+      "note": "実装済み（Issue 旧#1067）。`HomeWidgetProvider`（`updatePeriodMillis=0`）と `MainActivity` の JNI 受け口 2 本（`homeWidgetSetText` / `homeWidgetCurrentText`）を追加。保存は `commit()` の成否を返し、失敗は Err。保存成功なら再描画要求の失敗・ウィジェット 0 個でも Ok（反映は OS 側で非同期）。未保存は null で空文字と区別する。実機確認は未実施（`device-check-pending`）。確認手順: `FANDHE_PROXY_APP=home_widget_show` でビルド → ホーム画面にウィジェット「Fandhe テキスト」を置く（未設定と出る）→ ボタンを押すと文字が変わる → アプリ再起動後も値が読める。receiver の exported=false でウィジェット一覧に出ない場合は要再確認",
       "sourceName": [
         "ホーム画面ウィジェット"
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_home_widget.rs + crates/fandhe-egui-proxy/src/device/home_widget.rs + crates/fandhe-device/src/home_widget.rs + crates/fandhe-core/src/screens/home_widget_show.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/HomeWidgetProvider.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + platforms/android/app/src/main/res/xml/home_widget_info.xml + platforms/android/app/src/main/res/layout/home_widget.xml、Issue #1067"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_home_widget.rs + crates/fandhe-egui-proxy/src/device/home_widget.rs + crates/fandhe-device/src/home_widget.rs + crates/fandhe-core/src/screens/home_widget_show.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/HomeWidgetProvider.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + platforms/android/app/src/main/res/xml/home_widget_info.xml + platforms/android/app/src/main/res/layout/home_widget.xml、Issue 旧#1067"
     },
     "macos": {
       "status": "done",
       "api": "WidgetKit（macOS 14+、`StaticConfiguration`）+ App Group コンテナのファイル + ホストアプリの `WidgetCenter.reloadAllTimelines`",
       "perm": "App Groups entitlement（拡張側、`$(TeamIdentifierPrefix)com.fandhe.widget`）と App Sandbox。拡張の Info.plist（`com.apple.widgetkit-extension`）",
       "url": "https://developer.apple.com/documentation/widgetkit",
-      "note": "実装済み（Issue #1065）。XcodeGen の `FandheWidgetHost`（小さなホストアプリ）と `FandheTextWidget`（拡張）を追加。Rust は App Group コンテナへ原子的に保存し、`open -n -g -b com.fandhe.widgethost` でホストアプリを起こして再描画を要求する。Team ID はリポジトリに書かず環境変数 `FANDHE_DEVELOPMENT_TEAM`（`[A-Z0-9]{10}`）から注入し、無い・形式違いなら Unsupported。保存失敗は Err、ホストアプリ未導入・ウィジェット 0 個でも保存が成功すれば Ok（反映は OS 側で非同期。未導入だと次の OS 更新まで表示が古いまま）。Mac 目視（App Group コンテナへの初回書き込みで macOS 15 以降の確認ダイアログが出るか、拒否時に「保存に失敗しました」になるか）は main 側で実施予定。。Mac 目視済み（10/5、ボタンで保存した文字がデスクトップに置いた WidgetKit ウィジェットへ反映される）。App Group コンテナの確認ダイアログを拒否した場合の表示は未確認",
+      "note": "実装済み（Issue 旧#1065）。XcodeGen の `FandheWidgetHost`（小さなホストアプリ）と `FandheTextWidget`（拡張）を追加。Rust は App Group コンテナへ原子的に保存し、`open -n -g -b com.fandhe.widgethost` でホストアプリを起こして再描画を要求する。Team ID はリポジトリに書かず環境変数 `FANDHE_DEVELOPMENT_TEAM`（`[A-Z0-9]{10}`）から注入し、無い・形式違いなら Unsupported。保存失敗は Err、ホストアプリ未導入・ウィジェット 0 個でも保存が成功すれば Ok（反映は OS 側で非同期。未導入だと次の OS 更新まで表示が古いまま）。Mac 目視（App Group コンテナへの初回書き込みで macOS 15 以降の確認ダイアログが出るか、拒否時に「保存に失敗しました」になるか）は main 側で実施予定。。Mac 目視済み（10/5、ボタンで保存した文字がデスクトップに置いた WidgetKit ウィジェットへ反映される）。App Group コンテナの確認ダイアログを拒否した場合の表示は未確認",
       "sourceName": [
         "ウィジェット"
       ],
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-device/src/home_widget.rs + crates/fandhe-egui-proxy/src/device/apple_home_widget.rs + crates/fandhe-egui-proxy/src/device/home_widget.rs + crates/fandhe-core/src/screens/home_widget_show.rs + platforms/apple/FandheTextWidget/Sources/FandheTextWidget/FandheTextWidget.swift + platforms/apple/FandheWidgetHost/Sources/FandheWidgetHost/main.swift + platforms/apple/project.yml + scripts/apple/build-macos-widget-host.sh、Issue #1065"
+      "impl": "crates/fandhe-device/src/home_widget.rs + crates/fandhe-egui-proxy/src/device/apple_home_widget.rs + crates/fandhe-egui-proxy/src/device/home_widget.rs + crates/fandhe-core/src/screens/home_widget_show.rs + platforms/apple/FandheTextWidget/Sources/FandheTextWidget/FandheTextWidget.swift + platforms/apple/FandheWidgetHost/Sources/FandheWidgetHost/main.swift + platforms/apple/project.yml + scripts/apple/build-macos-widget-host.sh、Issue 旧#1065"
     },
     "windows": {
       "status": "possible",

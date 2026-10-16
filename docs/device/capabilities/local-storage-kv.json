@@ -17,7 +17,7 @@
         "Documents 保存"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-device/src/storage.rs`（`FsStorage`）、Issue #751 closed"
+      "impl": "`crates/fandhe-device/src/storage.rs`（`FsStorage`）、Issue 旧#751 closed"
     },
     "android": {
       "status": "done",
@@ -25,13 +25,13 @@
       "api": "`Context.getFilesDir()`",
       "perm": "なし",
       "url": "https://developer.android.com/training/data-storage/app-specific",
-      "note": "実装済み（#747、`fandhe-device` の `DataDir`）。scoped storage 前提の推奨 API",
+      "note": "実装済み（旧#747、`fandhe-device` の `DataDir`）。scoped storage 前提の推奨 API",
       "sourceName": [
         "内部ストレージ",
         "内部ストレージ（`DataDir`）"
       ],
       "implStatus": "実装済み",
-      "impl": "#747"
+      "impl": "旧#747"
     },
     "macos": {
       "status": "done",
@@ -48,13 +48,13 @@
       "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage",
       "safari": "対応",
-      "note": "実装済み（Issue #987）。`fandhe_core::screens::storage_note::NoteStorage` を `localStorage` で実装。キーは `fandhe.storage.` 接頭辞（`biometric_auth.rs` と同じ `fandhe.` 系名前空間）。容量超過・使用不可（プライベートモード等）は失敗として表示し、成功へ畳まない。実ブラウザでの確認は未了",
+      "note": "実装済み（Issue 旧#987）。`fandhe_core::screens::storage_note::NoteStorage` を `localStorage` で実装。キーは `fandhe.storage.` 接頭辞（`biometric_auth.rs` と同じ `fandhe.` 系名前空間）。容量超過・使用不可（プライベートモード等）は失敗として表示し、成功へ畳まない。実ブラウザでの確認は未了",
       "sourceName": [
         "メモ保存"
       ],
       "implStatus": "実装済み（実ブラウザ未確認）",
-      "impl": "crates/fandhe-web-dom/src/storage_note.rs（LocalNoteStorage）+ crates/fandhe-web-dom/src/demo.rs（mount_storage_note_screen）、Issue #987"
+      "impl": "crates/fandhe-web-dom/src/storage_note.rs（LocalNoteStorage）+ crates/fandhe-web-dom/src/demo.rs（mount_storage_note_screen）、Issue 旧#987"
     }
   },
-  "note": "`fandhe-device::storage::FsStorage`。`DataDir` 配下の固定 key のみ（OS 標準のファイル選択ダイアログではない、群 B 参照）。#752 で desktop 実装、Android/iOS は `DataDir` へサンドボックスパスを渡す配線を `fandhe-egui-proxy/src/device.rs`（`android::data_dir` / `ios::documents_dir`）が持つ。iOS は Issue #751（closed）で実機確認済み（本表 iOS 欄）、Android は実機撮影が #660（open）待ちで未確認。Web は `fandhe-egui-proxy` の `device` モジュール自体が非 wasm32 限定でコンパイル対象外のため（`device.rs` 冒頭コメント）、`FsStorage`（`std::fs`）はそもそもブラウザ保存 API に配線されていない。代わりに `fandhe-web-dom::storage_note` が `localStorage` で `NoteStorage` を直接実装して配線した（Issue #987）"
+  "note": "`fandhe-device::storage::FsStorage`。`DataDir` 配下の固定 key のみ（OS 標準のファイル選択ダイアログではない、群 B 参照）。旧#752 で desktop 実装、Android/iOS は `DataDir` へサンドボックスパスを渡す配線を `fandhe-egui-proxy/src/device.rs`（`android::data_dir` / `ios::documents_dir`）が持つ。iOS は Issue 旧#751（closed）で実機確認済み（本表 iOS 欄）、Android は実機撮影が 旧#660（open）待ちで未確認。Web は `fandhe-egui-proxy` の `device` モジュール自体が非 wasm32 限定でコンパイル対象外のため（`device.rs` 冒頭コメント）、`FsStorage`（`std::fs`）はそもそもブラウザ保存 API に配線されていない。代わりに `fandhe-web-dom::storage_note` が `localStorage` で `NoteStorage` を直接実装して配線した（Issue 旧#987）"
 }

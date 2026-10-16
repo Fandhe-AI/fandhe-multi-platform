@@ -11,36 +11,39 @@
       "api": "EventKit（`EKEventStore`）/ EventKitUI（`EKEventEditViewController`）",
       "perm": "不要（`EKEventEditViewController` はプロセス外で描画され許可を要さない）。usage description は追加しない",
       "url": "https://developer.apple.com/documentation/eventkit/accessing-calendar-using-eventkit-and-eventkitui",
-      "note": "実装済み（#1225）。iOS 17 以降で `EKEventEditViewController` を main queue で出し、件名・開始・終了を初期値に入れる。権限要求・予定の読み取りはしない。入力は Rust 側 `EventDraft::parse` に一本化し、通らない入力は OS へ渡さない。delegate の Saved は保存した、Canceled / Deleted はキャンセル、未知の action と提示失敗は失敗（成功を作らない）。modalInPresentation でスワイプによる取りこぼしを防ぐ。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、完了を 1 回だけ反映。守らない範囲: 保存後のカレンダー App での編集・削除、利用者が編集画面で変えた内容の読み取り（取れない）。#10 で確認する: Saved が保存確定を表すか、既定カレンダーの選ばれ方、閉じ方（ボタン以外で閉じられないか）",
+      "note": "実装済み（旧#1225）。iOS 17 以降で `EKEventEditViewController` を main queue で出し、件名・開始・終了を初期値に入れる。権限要求・予定の読み取りはしない。入力は Rust 側 `EventDraft::parse` に一本化し、通らない入力は OS へ渡さない。delegate の Saved は保存した、Canceled / Deleted はキャンセル、未知の action と提示失敗は失敗（成功を作らない）。modalInPresentation でスワイプによる取りこぼしを防ぐ。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、完了を 1 回だけ反映。守らない範囲: 保存後のカレンダー App での編集・削除、利用者が編集画面で変えた内容の読み取り（取れない）。#10 で確認する: Saved が保存確定を表すか、既定カレンダーの選ばれ方、閉じ方（ボタン以外で閉じられないか）",
       "sourceName": [
         "カレンダー・リマインダー"
       ],
-      "detail": "できている（iOS 実機確認待ち）",
-      "implStatus": "iOS 実機確認待ち（#10）",
-      "impl": "crates/fandhe-device/src/calendar.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_calendar.m + crates/fandhe-egui-proxy/src/device/apple_calendar.rs + crates/fandhe-egui-proxy/src/device/calendar.rs + crates/fandhe-core/src/screens/calendar_add.rs、Issue #1225"
+      "detail": "できている（実機）",
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "crates/fandhe-device/src/calendar.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_calendar.m + crates/fandhe-egui-proxy/src/device/apple_calendar.rs + crates/fandhe-egui-proxy/src/device/calendar.rs + crates/fandhe-core/src/screens/calendar_add.rs、Issue 旧#1225",
+      "verified": true
     },
     "android": {
       "status": "done",
       "api": "`Intent.ACTION_INSERT`（`CalendarContract.Events.CONTENT_URI`）/ `CalendarContract` + `ContentResolver`",
       "perm": "インテント経由の予定追加・表示・編集は権限不要。`ContentResolver` で直接読むなら `READ_CALENDAR`、書き込みは `WRITE_CALENDAR`",
       "url": "https://developer.android.com/identity/providers/calendar-provider",
-      "note": "実装済み（#1226）。`Intent.ACTION_INSERT` でカレンダーアプリの編集画面を開くだけで、権限・`<queries>` は宣言しない（予定ストアには直接触れない）。入力は Rust 側 `EventDraft::parse` に一本化し、通らない入力は OS へ渡さない。編集画面へ渡せたら「OS に渡しただけ」（`HandedToOs`）を返し、保存したとは見せない（編集画面からの戻りは保存の有無を表さないため待たない）。カレンダーアプリが無い端末（`ActivityNotFoundException`）・非前景／破棄中・その他の起動失敗は失敗に倒す。Activity 再生成時は保留要求を復元せず破棄し、旧要求の遅延結果は要求 id の照合で捨てる。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、完了を 1 回だけ反映。守らない範囲: 複数プロセスの同時操作、編集画面で保存されたかの確認、夏時間の存在しない／重なる時刻（OS の正規化に任せる）。既知の天井: 件名 200 文字、端末のローカル時刻のみ、終日・繰り返し・通知は扱わない。編集画面が開くこと・アプリ無効時の失敗表示・背景から起動しないことの目視は #10 で確認する",
-      "detail": "できている（実機確認待ち）",
-      "implStatus": "Android 実機確認待ち（#10）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java（requestCalendarInsert） + crates/fandhe-egui-proxy/src/device/android.rs（request_calendar_insert / nativeOnCalendarResult） + crates/fandhe-egui-proxy/src/device/calendar.rs + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-device/src/calendar.rs + crates/fandhe-core/src/screens/calendar_add.rs、Issue #1226",
+      "note": "実装済み（旧#1226）。`Intent.ACTION_INSERT` でカレンダーアプリの編集画面を開くだけで、権限・`<queries>` は宣言しない（予定ストアには直接触れない）。入力は Rust 側 `EventDraft::parse` に一本化し、通らない入力は OS へ渡さない。編集画面へ渡せたら「OS に渡しただけ」（`HandedToOs`）を返し、保存したとは見せない（編集画面からの戻りは保存の有無を表さないため待たない）。カレンダーアプリが無い端末（`ActivityNotFoundException`）・非前景／破棄中・その他の起動失敗は失敗に倒す。Activity 再生成時は保留要求を復元せず破棄し、旧要求の遅延結果は要求 id の照合で捨てる。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、完了を 1 回だけ反映。守らない範囲: 複数プロセスの同時操作、編集画面で保存されたかの確認、夏時間の存在しない／重なる時刻（OS の正規化に任せる）。既知の天井: 件名 200 文字、端末のローカル時刻のみ、終日・繰り返し・通知は扱わない。編集画面が開くこと・アプリ無効時の失敗表示・背景から起動しないことの目視は #10 で済み",
+      "detail": "できている（実機）",
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java（requestCalendarInsert） + crates/fandhe-egui-proxy/src/device/android.rs（request_calendar_insert / nativeOnCalendarResult） + crates/fandhe-egui-proxy/src/device/calendar.rs + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-device/src/calendar.rs + crates/fandhe-core/src/screens/calendar_add.rs、Issue 旧#1226",
       "sourceName": [
         "連絡先・カレンダー"
-      ]
+      ],
+      "verified": true
     },
     "macos": {
       "status": "done",
       "api": "EventKit（`EKEventStore`）",
       "perm": "`NSCalendarsFullAccessUsageDescription` / `NSCalendarsWriteOnlyAccessUsageDescription`（.app の Info.plist）。TCC の許可ダイアログが出る。App Sandbox なしでは sandbox 用の `com.apple.security.personal-information.calendars` は不要",
       "url": "https://developer.apple.com/documentation/eventkit/accessing-calendar-using-eventkit-and-eventkitui",
-      "note": "実装済み（#1224）。macOS 14 以降で `requestWriteOnlyAccessToEvents` のみを要求し、予定は読まない。macOS 14 未満は非対応（旧 `requestAccess(to:)` と旧キーは使わない）。入力は Rust 側 `EventDraft::parse` に一本化（件名は trim 後 1〜200 文字・NUL なし、日時は `YYYY-MM-DD HH:MM` のローカル時刻、終了は開始以降）し、通らない入力は OS へ渡さない。結果は保存した/OS に渡しただけ/キャンセル/権限拒否/非対応/入力不正/失敗を区別し、保存した以外を「追加しました」と見せない（macOS で到達するのは保存した・権限拒否・非対応・入力不正・失敗）。EventKit の操作は専用 serial queue に集約。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、完了を 1 回だけ反映。守らない範囲: 複数プロセスの同時操作、保存後のカレンダー App での編集・削除、夏時間の存在しない／重なる時刻、保存中のアプリ終了。既知の天井: 件名 200 文字、ローカル時刻のみ、終日・繰り返し・通知は扱わない。TCC ダイアログと実際の保存の目視は #10 で確認する",
-      "detail": "できている（Mac 目視待ち）",
-      "implStatus": "Mac 目視待ち（#10）",
-      "impl": "crates/fandhe-device/src/calendar.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_calendar.m + crates/fandhe-egui-proxy/src/device/apple_calendar.rs + crates/fandhe-egui-proxy/src/device/calendar.rs + crates/fandhe-core/src/screens/calendar_add.rs、Issue #1224"
+      "note": "実装済み（旧#1224）。macOS 14 以降で `requestWriteOnlyAccessToEvents` のみを要求し、予定は読まない。macOS 14 未満は非対応（旧 `requestAccess(to:)` と旧キーは使わない）。入力は Rust 側 `EventDraft::parse` に一本化（件名は trim 後 1〜200 文字・NUL なし、日時は `YYYY-MM-DD HH:MM` のローカル時刻、終了は開始以降）し、通らない入力は OS へ渡さない。結果は保存した/OS に渡しただけ/キャンセル/権限拒否/非対応/入力不正/失敗を区別し、保存した以外を「追加しました」と見せない（macOS で到達するのは保存した・権限拒否・非対応・入力不正・失敗）。EventKit の操作は専用 serial queue に集約。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、完了を 1 回だけ反映。守らない範囲: 複数プロセスの同時操作、保存後のカレンダー App での編集・削除、夏時間の存在しない／重なる時刻、保存中のアプリ終了。既知の天井: 件名 200 文字、ローカル時刻のみ、終日・繰り返し・通知は扱わない。TCC ダイアログと実際の保存の目視は #10 で済み",
+      "detail": "できている（実機）",
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "crates/fandhe-device/src/calendar.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_calendar.m + crates/fandhe-egui-proxy/src/device/apple_calendar.rs + crates/fandhe-egui-proxy/src/device/calendar.rs + crates/fandhe-core/src/screens/calendar_add.rs、Issue 旧#1224",
+      "verified": true
     },
     "windows": {
       "status": "no",
