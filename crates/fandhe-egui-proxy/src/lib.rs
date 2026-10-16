@@ -281,7 +281,9 @@ pub fn render_screen_with_recyclers<S: 'static>(
     // 一覧まで届く（Issue #77）。
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
-        .id_salt("fandhe_screen_root_scroll")
+        // 画面ごとに位置を分ける（共通の id だと、画面を移ったとき前の画面の位置を引き継ぐ）。
+        // ponytail: 見出しで分けるので、同じ見出しの画面どうしは位置を共有する。
+        .id_salt(("fandhe_screen_root_scroll", screen.title()))
         .show(ui, |ui| {
             for (index, node) in screen.iter().enumerate() {
                 render_node(ui, node, state, &[index], &mut ctx);
