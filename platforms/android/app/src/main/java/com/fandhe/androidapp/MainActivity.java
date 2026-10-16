@@ -499,6 +499,25 @@ public class MainActivity extends GameActivity {
         compassHelper.stop();
     }
 
+    // 音声再生（Issue #270）。実装は `MediaPlaybackHelper`。Rust の `android_media_playback.rs` が同期 JNI で呼ぶ。
+    private final MediaPlaybackHelper mediaPlaybackHelper = new MediaPlaybackHelper();
+
+    int mediaPlaybackLoad(long generation, byte[] wav) {
+        return mediaPlaybackHelper.load(generation, wav);
+    }
+
+    int mediaPlaybackControl(long generation, int op) {
+        return mediaPlaybackHelper.control(generation, op);
+    }
+
+    long[] mediaPlaybackSnapshot() {
+        return mediaPlaybackHelper.snapshot();
+    }
+
+    void mediaPlaybackShutdown() {
+        mediaPlaybackHelper.shutdown();
+    }
+
     // MIDI 入力（Issue #1400）。実装は `MidiHelper`。Rust の `android_midi.rs` が JNI で呼ぶ。
     private final MidiHelper midiHelper = new MidiHelper(this);
 
@@ -2204,6 +2223,7 @@ public class MainActivity extends GameActivity {
         super.onResume();
         activityResumed = true;
         compassHelper.onResume();
+        mediaPlaybackHelper.onResume();
         if (sensorManager != null && motionSensor != null) {
             sensorManager.registerListener(
                     motionListener, motionSensor, SensorManager.SENSOR_DELAY_GAME);
@@ -2293,6 +2313,7 @@ public class MainActivity extends GameActivity {
         activityResumed = false;
         screenCaptureHelper.onPause();
         compassHelper.onPause();
+        mediaPlaybackHelper.onPause();
         if (sensorManager != null) {
             sensorManager.unregisterListener(motionListener);
         }
@@ -4491,6 +4512,7 @@ public class MainActivity extends GameActivity {
         super.onDestroy();
         pedometerHelper.onDestroy();
         compassHelper.onDestroy();
+        mediaPlaybackHelper.onDestroy();
         midiHelper.onDestroy();
         screenCaptureHelper.onDestroy();
         screenWakeLockHelper.onDestroy();
