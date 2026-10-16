@@ -41,6 +41,11 @@ pub mod android_audio_devices;
 /// 純関数はホストでテストできるよう cfg を付けない（`android_gamepad.rs` と同じ
 /// 判断）。`device/background_task.rs` の Android 経路から使われる。
 pub mod android_background_task;
+/// Issue #276: Android 向け通話 UI 統合実装のスタブ（#278 が埋める）。`device/call_ui.rs` の
+/// Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_call_ui;
 /// Issue #1404: Android 向け方位実装のスタブ（後続の (b-Android) が埋める）。`device/compass.rs` の android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -249,6 +254,9 @@ pub mod bluetooth_le;
 /// （macOS は EventKit・Android は `Intent.ACTION_INSERT`（#1226）の pull 型 `bridge`、
 /// それ以外は非対応表示）。
 pub mod calendar;
+/// Phase 11 の拡充ループ（親 #87、Issue #276）: 通話 UI 統合の effect ドライバ（iOS・Android は
+/// #277・#278 で埋めるスタブ、他 OS は `UnsupportedCallUi` 固定）。
+pub mod call_ui;
 pub mod camera_capture;
 pub mod clipboard;
 /// Issue #1404（親 #1154）: 方位（コンパス）の effect ドライバ（Windows 実装、iOS・Android は後続の子が実装するまでスタブ、
@@ -322,6 +330,11 @@ pub mod ios_audio_devices;
 /// で host の `cargo test` から状態機械を検証できる（モジュール doc 参照）。
 #[cfg(any(target_os = "ios", test))]
 pub mod ios_background_task;
+/// Issue #276: iOS 向け通話 UI 統合実装のスタブ（#277 が埋める）。`device/call_ui.rs` の
+/// iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_call_ui;
 /// Issue #1405: iOS 向け方位実装（`ios/fandhe_ios_compass.m` を呼ぶ C ABI ラッパー、CoreLocation の heading）。`device/compass.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]

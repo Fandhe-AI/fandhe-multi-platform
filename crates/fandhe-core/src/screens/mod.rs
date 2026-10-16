@@ -98,6 +98,8 @@ pub mod audio_devices_show;
 pub mod ble_scan;
 /// Phase 11 の拡充ループ型サンプル「予定の追加」（親 #1118、Issue #1224）。
 pub mod calendar_add;
+/// Phase 11 の拡充ループ型サンプル「通話 UI 統合」（親 #87、Issue #276）。
+pub mod call_ui_show;
 /// Phase 11 の拡充ループ型サンプル「方位（コンパス）」（親 #1154、Issue #1404）。
 pub mod compass_show;
 /// Phase 11 の拡充ループ型サンプル「メール・SMS の作成」（親 #1142、Issue #1384）。

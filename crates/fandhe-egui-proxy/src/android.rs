@@ -304,6 +304,11 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // （`device::midi::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::midi::reset_pending_tracking();
+    // Issue #276: 通話 UI の記録（処理済み世代）と進行中の通話も破棄する。画面状態は再生成で
+    // generation 0 に戻るため、残すと次の「着信を模擬する」が飲み込まれ、OS 側の着信も残る
+    // （`device::call_ui::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::call_ui::reset_pending_tracking();
 
     let native_options = eframe::NativeOptions {
         android_app: Some(app),
