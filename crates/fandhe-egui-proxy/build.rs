@@ -392,6 +392,8 @@ fn main() {
     compile_apple_nlp();
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も iOS 分岐と共用する。
     compile_apple_image_recognition();
+    // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
+    compile_apple_ml_inference();
 
     // `ios/fandhe_ios_background_task.m`（Issue #1045）は iOS 分岐のみから呼ぶ
     // （`build_macos` からは呼ばない、上記 doc 参照）。
@@ -681,6 +683,20 @@ fn compile_apple_image_recognition() {
         .flag("-fobjc-arc")
         .compile("fandhe_apple_image_recognition");
     println!("cargo:rustc-link-lib=framework=Vision");
+    println!("cargo:rustc-link-lib=framework=Foundation");
+}
+
+/// `apple/fandhe_apple_ml_inference.m` を `cc` でコンパイルし CoreML をリンクする
+/// （Issue #289 macOS、iOS は b-ios が利用、機械学習モデル推論）。
+/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_ml_inference`）と
+/// 同じ OS 集合に保つ。`MLModelAsset`（macOS 13 / iOS 16）は `.m` の `@available` で守る。
+fn compile_apple_ml_inference() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_ml_inference.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_ml_inference.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_ml_inference");
+    println!("cargo:rustc-link-lib=framework=CoreML");
     println!("cargo:rustc-link-lib=framework=Foundation");
 }
 
@@ -1058,6 +1074,8 @@ fn build_macos() {
     compile_apple_nlp();
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も共用する。
     compile_apple_image_recognition();
+    // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
+    compile_apple_ml_inference();
     // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308）。iOS 分岐と共用する。

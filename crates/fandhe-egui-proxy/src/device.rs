@@ -99,6 +99,10 @@ pub mod android_media_playback;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_midi;
+/// Issue #289: Android 向け機械学習推論のスタブ（b-android が NNAPI 実装で埋める）。
+/// `device/ml_inference.rs` の Android 経路から呼ばれる。
+#[cfg(target_os = "android")]
+pub mod android_ml_inference;
 /// Issue #1343: Android 向け複数ディスプレイ実装（`DisplayManager` を JNI で読む）。
 /// `device/multi_display.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -206,6 +210,12 @@ pub mod apple_mic_record;
 /// C ABI ラッパー。iOS は 14 以上、未満は失敗コードを返す）。`device/midi.rs` の Apple 分岐から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_midi;
+/// Issue #289 macOS・b-ios iOS: Core ML 推論実装（`apple/fandhe_apple_ml_inference.m` を呼ぶ
+/// C ABI ラッパー）。`device/ml_inference.rs` の macOS 経路から呼ばれ、iOS は b-ios が使う
+/// （それまで iOS では未使用）。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[cfg_attr(target_os = "ios", allow(dead_code))]
+pub mod apple_ml_inference;
 /// Issue #1282: macOS / iOS 向けネットワーク接続状態（`apple/fandhe_apple_network_status.m` を
 /// 呼ぶ C ABI ラッパー）。`device/network_status.rs` の macOS / iOS 経路から呼ばれる。
 /// 純関数をホストの `cargo test` で検査するため cfg に `test` を含める（FFI 部分は macOS 限定）。
@@ -391,6 +401,10 @@ pub mod ios_local_fonts;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_media_playback;
+/// Issue #289: iOS 向け機械学習推論のスタブ（b-ios が `AppleMlInference` を返す形に替える）。
+/// `device/ml_inference.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_ml_inference;
 /// Issue #27: iOS 向け複数ディスプレイ実装（`ios/fandhe_ios_multi_display.m`、scene の `UIScreen`）。
 /// `device/multi_display.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -494,6 +508,10 @@ pub mod mic_record;
 /// Phase 11 の拡充ループ（親 #1137、Issue #1398）: MIDI 入力の effect ドライバ（macOS・iOS 実装、
 /// Android・Windows は #1400・#1402 で埋めるスタブ、他 OS は `UnsupportedMidiInput` 固定）。
 pub mod midi;
+/// Phase 11 の拡充ループ（親 #89、Issue #289）: 機械学習モデル推論の effect ドライバ（macOS 実装、
+/// iOS / Windows / Android は b-ios・windows・b-android の子 issue が埋めるスタブ、他 OS は
+/// `UnsupportedMlInference` 固定。Web は対象外）。
+pub mod ml_inference;
 /// Phase 11 の拡充ループ（親 #1134、Issue #1341）: 複数ディスプレイの effect ドライバ（macOS / Windows
 /// 実装、Android は #1343 で埋めるスタブ、他 OS は `UnsupportedMultiDisplay` 固定）。
 pub mod multi_display;
@@ -646,6 +664,10 @@ pub mod windows_mic_record;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_midi;
+/// Issue #289: Windows 向け機械学習推論のスタブ（windows の子 issue が WinML 実装で埋める）。
+/// `device/ml_inference.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_ml_inference;
 /// Issue #1341: Windows 向け複数ディスプレイ実装（`EnumDisplayMonitors` / `GetMonitorInfoW` /
 /// `GetDpiForMonitor`）。`device/multi_display.rs` の Windows 経路から呼ばれる。写像の純関数を
 /// ホストでテストできるよう cfg は `any(windows, test)`。

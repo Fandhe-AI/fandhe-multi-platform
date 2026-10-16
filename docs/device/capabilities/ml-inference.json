@@ -27,11 +27,14 @@
       ]
     },
     "macos": {
-      "status": "possible",
-      "api": "Core ML（`MLModel`。ObjC クラス）",
+      "status": "done",
+      "api": "Core ML（`MLModelAsset modelAssetWithSpecificationData:` + `MLModel loadModelAsset:configuration:completionHandler:`。ObjC クラス）",
       "perm": "不要（Info.plist 不要。App Sandbox 無効の素の実行体＋.app 包み）",
       "url": "https://developer.apple.com/documentation/coreml/mlmodel",
-      "note": "未実装。iOS と `.m` を共用できる見込み。`.mlmodelc` は .app の `Contents/Resources` に同梱する。要確認: iOS と同じ（Apple ページの原文を直接確認できていない）"
+      "note": "実装済み（#289）。範囲は固定の線形モデル（y = 2·x0 + 3·x1 + 1）の推論 1 回と期待値（24）の照合のみ。モデルファイルは置かず、実行時に Core ML の仕様をコードで組む（画像前処理・分類モデル・モデルの動的取得・GPU / NPU の選択・取り消しは範囲外）。macOS 13 未満は非対応（Unsupported）。計算ユニットは CPU 固定。結果は成功（期待値と許容差の中で一致）、失敗（OS がモデルを拒否・期限切れ・出力の不一致・非対応）を分けて表示し、「壊れたモデルで試す」は失敗として表示する。取り消しと権限は存在しない。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: OS ごとの所要時間の違い（初回読み込みのキャッシュを含む）、期限後も OS の呼び出しが走り切ること、複数プロセス間。Mac 実機の目視は #288 で行う。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#288）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_ml_inference.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_ml_inference.m + crates/fandhe-egui-proxy/src/device/ml_inference.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-device/src/ml_inference.rs、Issue #289"
     },
     "windows": {
       "status": "possible",
@@ -50,5 +53,5 @@
       "detail": "できない（WebNN は W3C Candidate Recommendation Draft 段階で、Chrome は origin trial。Safari / Firefox 未実装）"
     }
   },
-  "note": "iOS / macOS は Core ML、Android は LiteRT 同梱版または ML Kit の bundled カスタムモデル（いずれも GMS 非依存）、Windows は WinML（`Windows.AI.MachineLearning`、後継の Windows ML あり）。Web は WebNN が実験段階のため no。AICore / Gemini Nano は端末限定のため対象にしない。モデル形式が OS ごとに異なり（`.mlmodelc` / `.tflite` / `.onnx`）、同一モデルを共有できない。今回の範囲: 各 OS に同梱した小さな分類モデル 1 つへ固定長の入力を渡し、上位 1 件を表示するだけ（モデルの動的ダウンロード・画像前処理は扱わない）"
+  "note": "iOS / macOS は Core ML、Android は LiteRT 同梱版または ML Kit の bundled カスタムモデル（いずれも GMS 非依存）、Windows は WinML（`Windows.AI.MachineLearning`、後継の Windows ML あり）。Web は WebNN が実験段階のため no。AICore / Gemini Nano は端末限定のため対象にしない。モデル形式が OS ごとに異なり（`.mlmodelc` / `.tflite` / `.onnx`）、同一モデルを共有できない。今回の範囲: 固定の線形モデルの推論 1 回と期待値の照合（モデルは実行時にコードで組む。分類モデル・モデルの動的ダウンロード・画像前処理は扱わない）"
 }
