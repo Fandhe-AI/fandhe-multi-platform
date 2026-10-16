@@ -112,6 +112,11 @@ impl Shared {
         }
     }
 
+    /// 読み込み中（エンジンが準備前）か。この間の停止は OS へ流さず、準備完了後に確定する。
+    fn is_loading(&self, gen: u64) -> bool {
+        self.check(gen).is_ok() && self.phase == PlaybackPhase::Loading
+    }
+
     /// 意図だけ記録する。`Playing` は `PLAYING` 通知で立てる。
     fn on_play(&mut self, gen: u64) -> Result<(), DeviceError> {
         self.check(gen)?;
@@ -561,12 +566,31 @@ mod win {
         }
     }
 
+    /// 操作をエンジンへ流し、成功なら状態を確定、失敗なら失敗を確定してエンジンを解放する。
+    fn apply(engine: &mut Option<(u64, IMFMediaEngineEx)>, c: &Cmd) {
+        let (Cmd::Play(g) | Cmd::Pause(g) | Cmd::Stop(g)) = *c else {
+            return;
+        };
+        if let Some((eg, e)) = engine.as_ref().filter(|(eg, _)| *eg == g) {
+            let eg = *eg;
+            if drive(e, c).is_ok() {
+                with_shared(|s| s.on_done(eg));
+            } else {
+                with_shared(|s| s.fail(eg, PlaybackFailure::Internal));
+                // 失敗確定時は対象世代のエンジンを Shutdown する（音声が続かない）。
+                release_failed(engine, eg);
+            }
+        }
+    }
+
     fn worker(rx: mpsc::Receiver<Cmd>, tx: mpsc::Sender<Cmd>) {
         // 失敗しても worker は続け、以後の `Load` を `Failed` にする（成功へ倒さない）。
         let com = ComInit::new("media_playback");
         // 外側 None = 未試行。MFStartup は最初の Load で 1 回だけ。
         let mut mf: Option<Option<Mf>> = None;
         let mut engine: Option<(u64, IMFMediaEngineEx)> = None;
+        // 読み込み中に受けた停止の世代。準備完了（CANPLAY）で実行する（準備前のエンジンを操作しない）。
+        let mut deferred_stop: Option<u64> = None;
         loop {
             let playing = engine.is_some() && with_shared(|s| s.intent == Intent::Play);
             let cmd = if playing {
@@ -605,6 +629,14 @@ mod win {
                 }
                 Some(Cmd::Event(gen, ev)) => {
                     with_shared(|s| s.on_event(gen, ev));
+                    // 読み込み中に受けた停止は、準備完了後に実行する。その間に Play へ変わっていれば何もしない。
+                    if ev == Ev::CanPlay && deferred_stop.take() == Some(gen) {
+                        let still_stop =
+                            with_shared(|s| s.check(gen).is_ok() && s.intent == Intent::Stop);
+                        if still_stop {
+                            apply(&mut engine, &Cmd::Stop(gen));
+                        }
+                    }
                     // ERROR 確定後は再生資源を残さない（契約表 9）。
                     if matches!(ev, Ev::Error(_)) {
                         release_failed(&mut engine, gen);
@@ -616,16 +648,11 @@ mod win {
                     }
                 }
                 Some(ref c @ (Cmd::Play(g) | Cmd::Pause(g) | Cmd::Stop(g))) => {
-                    if let Some((eg, e)) = engine.as_ref().filter(|(eg, _)| *eg == g) {
-                        if drive(e, c).is_ok() {
-                            let eg = *eg;
-                            with_shared(|s| s.on_done(eg));
-                        } else {
-                            let eg = *eg;
-                            with_shared(|s| s.fail(eg, PlaybackFailure::Internal));
-                            // 失敗確定時は対象世代のエンジンを Shutdown する（音声が続かない）。
-                            release_failed(&mut engine, eg);
-                        }
+                    if matches!(c, Cmd::Stop(_)) && with_shared(|s| s.is_loading(g)) {
+                        // 準備前のエンジンに Pause / SetCurrentTime を呼ぶと偽の失敗になる（契約表 10）。
+                        deferred_stop = Some(g);
+                    } else {
+                        apply(&mut engine, c);
                     }
                 }
             }
@@ -712,6 +739,20 @@ mod tests {
         s.on_event(g + 1, Ev::Error(3));
         assert_eq!(s.phase, PlaybackPhase::Loading);
         s.on_event(g, Ev::CanPlay);
+        assert_eq!(s.phase, PlaybackPhase::Ready);
+    }
+
+    #[test]
+    fn stop_while_loading_is_deferred_not_failed() {
+        let (mut s, g) = loaded();
+        s.on_play(g).unwrap();
+        s.on_stop(g).unwrap();
+        assert!(s.is_loading(g));
+        s.on_event(g, Ev::Playing);
+        assert_eq!(s.phase, PlaybackPhase::Loading, "停止後の PLAYING は捨てる");
+        s.on_event(g, Ev::CanPlay);
+        assert!(!s.is_loading(g));
+        s.on_done(g);
         assert_eq!(s.phase, PlaybackPhase::Ready);
     }
 

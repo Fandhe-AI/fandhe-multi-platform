@@ -95,6 +95,9 @@ struct SessionInner {
     settle_since: Option<Instant>,
     /// 一時停止・停止を発行した最初の時刻。Loading 中の窓延長に上限（期限）を設ける起点。
     settle_origin: Option<Instant>,
+    /// 一時停止を発行済みで、プレーヤーが反映したか未確認のデバイス世代。反映が遅い実装（Windows の
+    /// ワーカー）で Pause 直後に Play が来ても、同じ世代へ流して位置を保つための記録。
+    pause_pending: Option<u64>,
 }
 
 /// 一時停止・停止の結果（非同期の失敗）を監視し続ける長さ。
@@ -248,10 +251,15 @@ fn handle_command(
             // 期限の起点は同期の load・play より前に取る（その所要時間も期限に含める）。
             let started = Instant::now();
             let snap = pb.snapshot();
+            // 一時停止の反映待ち（snapshot がまだ Playing）でも同じ世代を再開し、再 load で位置を失わない。
+            let pause_in_flight =
+                inner.pause_pending.is_some() && inner.pause_pending == inner.device_gen;
             let reusable = inner.device_gen.is_some_and(|g| {
                 snap.generation == g
-                    && matches!(snap.phase, PlaybackPhase::Ready | PlaybackPhase::Paused)
+                    && (matches!(snap.phase, PlaybackPhase::Ready | PlaybackPhase::Paused)
+                        || (pause_in_flight && snap.phase == PlaybackPhase::Playing))
             });
+            inner.pause_pending = None;
             if !reusable {
                 match pb.load(demo_wav()) {
                     Ok(g) => inner.device_gen = Some(g),
@@ -273,6 +281,7 @@ fn handle_command(
             let Some(g) = inner.device_gen else { return };
             inner.settle_since = Some(Instant::now());
             inner.settle_origin.get_or_insert_with(Instant::now);
+            inner.pause_pending = (command == AudioCommand::Pause).then_some(g);
             let r = if command == AudioCommand::Pause {
                 pb.pause(g)
             } else {
@@ -604,6 +613,42 @@ mod tests {
         stop(&mut h.state);
         assert_eq!(h.drive(D), Some(POLL_INTERVAL));
         assert_eq!(h.state.phase, AudioPhase::Stopped);
+    }
+
+    /// pause の反映が遅い実装（Windows のワーカー）。反映までは snapshot が Playing のまま。
+    struct LatePause(Arc<Fake>);
+    impl MediaPlayback for LatePause {
+        fn load(&self, w: Arc<[u8]>) -> Result<u64, DeviceError> {
+            self.0.load(w)
+        }
+        fn play(&self, g: u64) -> Result<(), DeviceError> {
+            self.0.play(g)
+        }
+        fn pause(&self, _g: u64) -> Result<(), DeviceError> {
+            Ok(())
+        }
+        fn stop(&self, g: u64) -> Result<(), DeviceError> {
+            self.0.stop(g)
+        }
+        fn snapshot(&self) -> PlaybackSnapshot {
+            self.0.snapshot()
+        }
+        fn shutdown(&self) {}
+    }
+
+    #[test]
+    fn play_during_unapplied_pause_resumes_same_generation() {
+        let mut h = H::new(Fake::new(true));
+        h.pb = Arc::new(LatePause(h.fake.clone()));
+        play(&mut h.state);
+        h.drive(D);
+        assert_eq!(h.state.phase, AudioPhase::Playing);
+        pause(&mut h.state);
+        h.drive(D); // pause は未反映（snapshot は Playing）
+        play(&mut h.state);
+        h.drive(D);
+        assert_eq!(h.fake.0.lock().unwrap().loads, 1, "再 load しない");
+        assert_eq!(h.state.phase, AudioPhase::Playing);
     }
 
     #[test]
