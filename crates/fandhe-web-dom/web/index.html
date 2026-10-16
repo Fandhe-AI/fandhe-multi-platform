@@ -59,6 +59,7 @@
         mount_url_scheme_show_screen,
         mount_wake_lock_toggle_screen,
         mount_compass_show_screen,
+        mount_ar_show_screen,
         mount_fullscreen_toggle_screen,
         mount_power_state_show_screen,
         mount_device_info_show_screen,
@@ -95,6 +96,8 @@
         mount_device_info_show_screen("fandhe-dom-root");
       } else if (screen === "fullscreen_toggle") {
         mount_fullscreen_toggle_screen("fandhe-dom-root");
+      } else if (screen === "ar_show") {
+        mount_ar_show_screen("fandhe-dom-root");
       } else if (screen === "compass_show") {
         mount_compass_show_screen("fandhe-dom-root");
       } else if (screen === "wake_lock_toggle") {
