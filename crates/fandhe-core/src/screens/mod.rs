@@ -118,6 +118,8 @@ pub mod haptics_tap;
 pub mod home_widget_show;
 /// Phase 11 の拡充ループ型サンプル「画像の文字認識」（親 #1120、Issue #1250）。
 pub mod image_recognize;
+/// Phase 11 の拡充ループ型サンプル「ライブアクティビティ」（親 #88、Issue #294）。
+pub mod live_activity_show;
 /// Phase 11 の拡充ループ型サンプル「OS 搭載フォント」（親 #1145、Issue #1376）。
 pub mod local_fonts_show;
 /// Phase 11 の拡充ループ型サンプル「地図表示」（親 #85、Issue #273）。
