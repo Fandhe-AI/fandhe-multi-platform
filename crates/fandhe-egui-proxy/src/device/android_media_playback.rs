@@ -16,7 +16,7 @@
 //! # 世代・ライフサイクル
 //!
 //! 世代は本モジュールが `AtomicU64` で採番する（1 から。Activity の作り直しでも戻さない）。
-//! `onPause` で再生中なら中断（Interrupted）、作り直しでは Java 側が release し、Rust 側の
+//! `onPause` で再生中・開始中なら中断（Interrupted。開始中は期限切れより先にドライバが見る）、作り直しでは Java 側が release し、Rust 側の
 //! 保留記録は `device/media_playback.rs::reset_pending_tracking` が捨てる。
 //!
 //! 守る範囲: 世代の照合・失敗を成功値へ畳まないこと・資源の解放。

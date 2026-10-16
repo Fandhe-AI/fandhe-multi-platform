@@ -159,6 +159,16 @@ fn drive(
         if let Some((g, started)) = inner.pending {
             // 期限（単調時計）を過ぎたら、届いている Playing も成功にせず失敗で確定する。
             if g == state.generation && started.elapsed() >= deadline {
+                // 開始中に背景へ回った間はフレームが回らず期限だけが進む。戻った最初のフレームでは
+                // 期限より先に中断を見て、失敗（Timeout）ではなく Interrupted で確定する。
+                let interrupted = inner.device_gen.is_some_and(|dg| {
+                    let snap = pb.snapshot();
+                    snap.generation == dg && snap.phase == PlaybackPhase::Interrupted
+                });
+                if interrupted {
+                    report_snapshot(&mut inner, sender, pb);
+                    return None;
+                }
                 inner.pending = None;
                 let _ = sender.send(Box::new(move |s: &mut AudioPlayState| expire(s, g)));
                 if let Some(dg) = inner.device_gen {
@@ -499,6 +509,21 @@ mod tests {
         h.fake.set_phase(PlaybackPhase::Playing);
         h.drive(d);
         assert_eq!(h.state.phase, AudioPhase::Failed(AudioFailure::Timeout));
+    }
+
+    #[test]
+    fn interrupt_before_deadline_stays_interrupted_after_deadline() {
+        let mut h = H::new(Fake::new(false));
+        play(&mut h.state);
+        let d = Duration::from_millis(20);
+        h.drive(d);
+        assert_eq!(h.state.phase, AudioPhase::Loading);
+        // 背景中はフレームが回らず、その間に期限が過ぎる。
+        h.fake.set_phase(PlaybackPhase::Interrupted);
+        std::thread::sleep(Duration::from_millis(40));
+        assert_eq!(h.drive(d), None);
+        assert_eq!(h.state.phase, AudioPhase::Interrupted);
+        assert_eq!(h.fake.0.lock().unwrap().stops, 0);
     }
 
     #[test]
