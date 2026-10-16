@@ -35,11 +35,13 @@
     },
     "macos": {
       "status": "done",
-      "detail": "できている（未確認）"
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）"
     },
     "windows": {
       "status": "done",
-      "detail": "できている（未確認）"
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）"
     },
     "web": {
       "status": "done",

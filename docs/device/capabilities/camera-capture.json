@@ -41,7 +41,8 @@
       "note": "`fandhe-device::camera::DummyCamera` はダミー実装（desktop は実カメラ未接続）",
       "sourceName": [
         "カメラ・マイク"
-      ]
+      ],
+      "implStatus": "ダミー実装（実機能には未接続）"
     },
     "windows": {
       "status": "done",
@@ -52,7 +53,8 @@
       "note": "`fandhe-device::camera::DummyCamera` はダミー実装（desktop は実カメラ未接続）",
       "sourceName": [
         "カメラ・マイク"
-      ]
+      ],
+      "implStatus": "ダミー実装（実機能には未接続）"
     },
     "web": {
       "status": "done",

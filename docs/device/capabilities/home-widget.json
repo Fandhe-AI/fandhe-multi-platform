@@ -39,7 +39,8 @@
       ],
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-device/src/home_widget.rs + crates/fandhe-egui-proxy/src/device/apple_home_widget.rs + crates/fandhe-egui-proxy/src/device/home_widget.rs + crates/fandhe-core/src/screens/home_widget_show.rs + platforms/apple/FandheTextWidget/Sources/FandheTextWidget/FandheTextWidget.swift + platforms/apple/FandheWidgetHost/Sources/FandheWidgetHost/main.swift + platforms/apple/project.yml + scripts/apple/build-macos-widget-host.sh、Issue 旧#1065"
+      "impl": "crates/fandhe-device/src/home_widget.rs + crates/fandhe-egui-proxy/src/device/apple_home_widget.rs + crates/fandhe-egui-proxy/src/device/home_widget.rs + crates/fandhe-core/src/screens/home_widget_show.rs + platforms/apple/FandheTextWidget/Sources/FandheTextWidget/FandheTextWidget.swift + platforms/apple/FandheWidgetHost/Sources/FandheWidgetHost/main.swift + platforms/apple/project.yml + scripts/apple/build-macos-widget-host.sh、Issue 旧#1065",
+      "verified": true
     },
     "windows": {
       "status": "possible",

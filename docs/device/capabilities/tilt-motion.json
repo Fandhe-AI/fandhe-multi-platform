@@ -32,7 +32,7 @@
         "加速度・ジャイロ・傾き",
         "加速度・ジャイロ・傾き（`SensorManager`）"
       ],
-      "implStatus": "実装済み",
+      "implStatus": "実装済み・実機確認済み",
       "impl": "旧#829 / 旧#831 / 旧#845"
     },
     "macos": {
@@ -42,7 +42,8 @@
       "note": "`fandhe-device::motion::DummyMotion` が Phase 10 型サンプルの Mac 向けスライダー代替（旧#829）。実センサでの取得は不可",
       "sourceName": [
         "センサ（傾き）"
-      ]
+      ],
+      "implStatus": "ダミー実装（実センサーは使わず、スライダーで代替）"
     },
     "windows": {
       "status": "done",
@@ -53,7 +54,8 @@
       "note": "`fandhe-device::motion::DummyMotion` が Phase 10 型サンプルの Mac 向けスライダー代替。Windows デスクトップ機は加速度センサ非搭載が多く実センサでの取得は機種依存",
       "sourceName": [
         "センサ（傾き）"
-      ]
+      ],
+      "implStatus": "ダミー実装（実センサーは使わず、スライダーで代替）"
     },
     "web": {
       "status": "done",

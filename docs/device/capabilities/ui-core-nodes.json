@@ -6,23 +6,28 @@
   "platforms": {
     "ios": {
       "status": "done",
-      "detail": "できている（未確認）"
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）"
     },
     "android": {
       "status": "done",
-      "detail": "できている（未確認）"
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）"
     },
     "macos": {
       "status": "done",
-      "detail": "できている（未確認）"
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）"
     },
     "windows": {
       "status": "done",
-      "detail": "できている（未確認）"
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）"
     },
     "web": {
       "status": "done",
-      "detail": "できている（未確認）"
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）"
     }
   },
   "note": "`crates/fandhe-core/src/ui/node.rs` の `Node` variant。全ターゲットで実マッピング済み（`fandhe-egui-proxy` / `fandhe-web-dom/src/dom_tree.rs`）。macOS は 旧#660 で実機撮影対象だが 旧#660 は open（未実機化）のため実質「未確認」。表記は「macOS のみ実機」ではなく開発機での目視実行を実機扱いとせず統一"
