@@ -17,11 +17,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_media_transcode.rs + crates/fandhe-egui-proxy/src/device/apple_media_transcode.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_media_transcode.m + crates/fandhe-egui-proxy/src/device/media_transcode.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #313"
     },
     "android": {
-      "status": "possible",
-      "api": "Media3 Transformer（API 23+、`MediaCodec` 基盤）",
-      "perm": "なし",
-      "url": "https://developer.android.com/media/media3/transformer",
-      "note": "未実装。"
+      "status": "done",
+      "api": "`android.media.MediaCodec`（AAC-LC エンコーダ）+ `MediaMuxer`（MPEG-4。API 18、minSdk 24 で使える）。Media3 Transformer は不採用（Gradle の新規依存を避け、今回の音声のみの範囲で足りるため）",
+      "perm": "不要。`uses-permission` は追加しない（一時ファイルはアプリの `getCacheDir()`）",
+      "url": "https://developer.android.com/reference/android/media/MediaCodec",
+      "note": "実装済み（#314）。範囲は実行時に作った 5 秒・モノラル・48 kHz・PCM 16bit の音声を AAC-LC（m4a）へ 1 回変換することのみ（動画・利用者のファイル・進捗・取り消し・形式の選択・保存は範囲外）。成功は出力を読み直し、0 バイトでない・m4a として解析できる・符号形式が mp4a・長さが入力 ±200 ms の中、をすべて満たすときだけ（Java は成功を判定しない）。失敗は期限切れ・出力が空・解析できない・長さの不一致を分けて表示する。期限は単調時計で確かめ、過ぎたら OS 側で中断する。取り消しと権限は存在しない。一時ファイル・コーデック・muxer は成功・失敗・期限切れの全経路で解放する。Activity を作り直したときは保留中の要求を Rust 側で破棄し、古い結果が新しい要求を消費しない。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: 端末ごとの所要時間とビットレートの違い、複数プロセス間。Android 実機の目視は #310 で行う。",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#310）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_media_transcode.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MediaTranscodeHelper.java + crates/fandhe-egui-proxy/src/device/media_transcode.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #314"
     },
     "macos": {
       "status": "done",

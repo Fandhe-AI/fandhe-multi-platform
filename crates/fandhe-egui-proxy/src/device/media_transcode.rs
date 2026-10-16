@@ -471,6 +471,21 @@ mod tests {
     }
 
     #[test]
+    fn reset_then_stale_clear_does_not_consume_new_request() {
+        let (sender, _rx) = channel();
+        let imp = fake(|| Ok(good()));
+        let session = Arc::new(Session::default());
+        let old_id = session.slot.begin();
+        session.reset();
+        let mut state = TranscodeState::default();
+        request_transcode(&mut state);
+        drive(&state, &sender, &imp, &session, Duration::from_secs(30));
+        // 古い要求の後始末が、reset 後の新しい要求の記録を消さない。
+        session.slot.clear(old_id);
+        assert!(session.slot.snapshot().is_some());
+    }
+
+    #[test]
     fn fallback_platform_is_unsupported_on_linux() {
         #[cfg(not(any(
             target_os = "macos",
