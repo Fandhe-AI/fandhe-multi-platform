@@ -116,10 +116,12 @@ final class PrintHelper {
             return;
         }
         PrintJob j = job;
-        if (writeFailed || (j != null && j.isFailed())) {
-            finish(id, RESULT_FAILED);
-        } else if (j != null && j.isCancelled()) {
+        // 取り消しを失敗より先に見る（利用者の取り消しを失敗に化けさせない。契約表 10）。
+        // writeFailed は直近の onWrite 試行の結果で、再試行が成功すれば false に戻っている。
+        if (j != null && j.isCancelled()) {
             finish(id, RESULT_CANCELLED);
+        } else if (writeFailed || (j != null && j.isFailed())) {
+            finish(id, RESULT_FAILED);
         } else if (j != null && (j.isQueued() || j.isStarted() || j.isBlocked()
                 || j.isCompleted())) {
             finish(id, RESULT_SUBMITTED);
@@ -185,6 +187,8 @@ final class PrintHelper {
                 callback.onWriteCancelled();
                 return;
             }
+            // 試行ごとに状態を作り直す。
+            writeFailed = false;
             PrintedPdfDocument pdf = new PrintedPdfDocument(activity, attrs);
             try {
                 PdfDocument.Page page = pdf.startPage(0);
