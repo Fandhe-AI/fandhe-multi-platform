@@ -169,7 +169,8 @@ fn child<'a>(data: &'a [u8], kind: &[u8; 4]) -> Result<&'a [u8], DeviceError> {
 
 /// m4a（ISO BMFF）を解析し、符号形式・長さ・サンプル数を取り出す。ブランドは見ない
 /// （OS ごとに違い偽の失敗になるため。符号形式は `stsd` で見る）。範囲外の読みで panic しない。
-/// `moov` が無い（fragmented 等）・`timescale == 0`・`sample_count == 0` は `Internal(UNREADABLE)`。
+/// `moov` が無い（fragmented 等）・`timescale == 0`・`sample_count == 0`・`mdat` が無い、または
+/// `stsz` が示すデータ量が `mdat` に収まらないものは `Internal(UNREADABLE)`。
 pub fn parse_m4a(bytes: &[u8]) -> Result<M4aInfo, DeviceError> {
     let top = boxes(bytes)?;
     if !top.iter().any(|(k, _)| k == b"ftyp") {
@@ -194,8 +195,34 @@ pub fn parse_m4a(bytes: &[u8]) -> Result<M4aInfo, DeviceError> {
         .get(12..16)
         .and_then(|t| t.try_into().ok())
         .ok_or_else(unreadable)?;
-    let sample_count = be32(child(stbl, b"stsz")?, 8).ok_or_else(unreadable)?;
+    let stsz = child(stbl, b"stsz")?;
+    let sample_size = be32(stsz, 4).ok_or_else(unreadable)?;
+    let sample_count = be32(stsz, 8).ok_or_else(unreadable)?;
     if timescale == 0 || sample_count == 0 {
+        return Err(unreadable());
+    }
+    // サンプルが参照するデータ量（固定長なら size * count、可変長なら表の総和）。
+    let sample_bytes = if sample_size != 0 {
+        u64::from(sample_size) * u64::from(sample_count)
+    } else {
+        let table = stsz.get(12..).ok_or_else(unreadable)?;
+        let n = usize::try_from(sample_count).map_err(|_| unreadable())?;
+        if table.len() / 4 < n {
+            return Err(unreadable());
+        }
+        table
+            .chunks_exact(4)
+            .take(n)
+            .map(|c| u64::from(u32::from_be_bytes([c[0], c[1], c[2], c[3]])))
+            .sum()
+    };
+    // 音声データ本体（mdat）が無い・サンプルの参照範囲より小さい出力は成功にしない。
+    let mdat_len: u64 = top
+        .iter()
+        .filter(|(k, _)| k == b"mdat")
+        .map(|(_, b)| b.len() as u64)
+        .sum();
+    if sample_bytes == 0 || sample_bytes > mdat_len {
         return Err(unreadable());
     }
     Ok(M4aInfo {
@@ -231,7 +258,7 @@ pub fn check_m4a(bytes: &[u8], input: Duration) -> Result<Duration, DeviceError>
 }
 
 /// テスト・フェイク実装用に、解析に要る最小の m4a を組む（`ftyp` + `moov/trak/mdia/{mdhd, minf/stbl/{stsd, stsz}}`）。
-/// 実際に再生できる音声ではない。`version1` は `mdhd` を 64bit 形式にする。
+/// 実際に再生できる音声ではない（`mdat` は `samples` バイトの 0）。`version1` は `mdhd` を 64bit 形式にする。
 pub fn minimal_m4a(
     codec: &[u8; 4],
     timescale: u32,
@@ -260,12 +287,14 @@ pub fn minimal_m4a(
     let mut stsd = vec![0, 0, 0, 0, 0, 0, 0, 1];
     stsd.extend_from_slice(&bx(codec, &[0; 8]));
     let mut stsz = vec![0u8; 8];
+    stsz[7] = 1; // 固定長 1 バイト。mdat は samples バイト
     stsz.extend_from_slice(&samples.to_be_bytes());
     let stbl = [bx(b"stsd", &stsd), bx(b"stsz", &stsz)].concat();
     let mdia = [bx(b"mdhd", &mdhd), bx(b"minf", &bx(b"stbl", &stbl))].concat();
     [
         bx(b"ftyp", b"M4A \0\0\0\0M4A "),
         bx(b"moov", &bx(b"trak", &bx(b"mdia", &mdia))),
+        bx(b"mdat", &vec![0; samples as usize]),
     ]
     .concat()
 }
@@ -301,9 +330,10 @@ mod tests {
         large.extend_from_slice(&m[8..ftyp_len]);
         large.extend_from_slice(&m[ftyp_len..]);
         assert!(parse_m4a(&large).is_ok());
-        // 末尾の moov を size == 0（末尾まで）にする。
+        // 末尾の mdat（8 + 235 バイト）を size == 0（末尾まで）にする。
         let mut zero = m.clone();
-        zero[ftyp_len..ftyp_len + 4].copy_from_slice(&0u32.to_be_bytes());
+        let mdat_at = m.len() - (8 + 235);
+        zero[mdat_at..mdat_at + 4].copy_from_slice(&0u32.to_be_bytes());
         assert!(parse_m4a(&zero).is_ok());
     }
 
@@ -334,6 +364,15 @@ mod tests {
         let m = good();
         let ftyp_len = u32::from_be_bytes(m[0..4].try_into().unwrap()) as usize;
         assert!(parse_m4a(&m[..ftyp_len]).is_err());
+        // mdat が無い（moov までで切る）
+        let mdat_at = m.len() - (8 + 235);
+        assert!(parse_m4a(&m[..mdat_at]).is_err());
+        // mdat がサンプルの参照範囲より小さい
+        let mut short = m[..mdat_at].to_vec();
+        short.extend_from_slice(&9u32.to_be_bytes());
+        short.extend_from_slice(b"mdat");
+        short.push(0);
+        assert!(parse_m4a(&short).is_err());
         // ゴミ
         assert!(parse_m4a(&[0xff; 64]).is_err());
     }

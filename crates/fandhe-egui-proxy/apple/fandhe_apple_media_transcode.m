@@ -17,7 +17,8 @@
 //     0 = 成功
 //     1 = 入力不正（n == 0・sample_rate が正でない・n が大きすぎる）
 //     2 = 書き込みの失敗（AVAudioFile の作成・バッファ確保・書き込み）
-//     3 = 読み戻しの失敗（書いた m4a を読めない）
+//     3 = 読み戻しの失敗（書いた m4a を読めない。data == nil）
+//     4 = 出力が 0 バイト（読めたが空。Rust 側は EMPTY に対応付ける）
 //
 // 出力は AAC-LC の m4a。一時ファイル `NSTemporaryDirectory()/fandhe-transcode-<UUID>.m4a` に書き、
 // `AVAudioFile` を解放してファイルを確定させてから読み戻す。**成功・失敗・早期 return の全経路で
@@ -70,8 +71,11 @@ static int32_t fandhe_transcode_write_read(NSURL *url, const int16_t *pcm, size_
             file = nil;
         }
         NSData *data = [NSData dataWithContentsOfURL:url];
-        if (data == nil || data.length == 0) {
+        if (data == nil) {
             return 3;
+        }
+        if (data.length == 0) {
+            return 4;
         }
         on_output(ctx, (const uint8_t *)data.bytes, data.length);
         return 0;

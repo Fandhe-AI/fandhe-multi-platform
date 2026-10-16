@@ -14,7 +14,7 @@
 use std::ffi::c_void;
 use std::time::Duration;
 
-use fandhe_device::media_transcode::{MediaTranscode, EMPTY};
+use fandhe_device::media_transcode::{MediaTranscode, EMPTY, UNREADABLE};
 use fandhe_device::DeviceError;
 
 // SAFETY: `apple/fandhe_apple_media_transcode.m` が定義する C ABI（`build.rs` が macOS / iOS
@@ -76,6 +76,8 @@ impl MediaTranscode for AppleMediaTranscode {
             0 if out.is_empty() => Err(DeviceError::Internal(EMPTY)),
             0 => Ok(out),
             1 => Err(DeviceError::InvalidInput("media_transcode input")),
+            3 => Err(DeviceError::Internal(UNREADABLE)),
+            4 => Err(DeviceError::Internal(EMPTY)),
             _ => Err(DeviceError::Internal("media_transcode")),
         }
     }
