@@ -21,8 +21,8 @@ import java.util.Set;
 //   phase              : 0 Idle / 1 Ready / 2 Playing / 3 Paused / 4 Ended /
 //                        5 Failed(Decode) / 6 Loading / 7 Interrupted / 8 Failed(Internal)
 //
-// スレッド: `MediaPlayer` の生成・操作・解放は main Looper の Handler へ post して行い、
-// JNI 呼び出し側は状態を `lock` の内側で更新して戻る（main への同期待ちは作らない）。
+// スレッド: `MediaPlayer` の生成・操作・解放・位置取得はすべて main Looper 上で行う。
+// play/snapshot は post して戻り、pause/stop は main の完了を（lock 外で）待って実結果を返す。
 // 状態はすべて `lock` 1 本の内側で読み書きし、post した Runnable・リスナーは実行時に
 // 「破棄されていない・世代が一致・player が同一」を照合してから動く。
 //
@@ -52,6 +52,8 @@ final class MediaPlaybackHelper {
     private long current;             // 現世代（0=なし）
     private int phase = IDLE;
     private boolean prepared;
+    private boolean started;          // start() 成功済みで未 pause（lock の内側）
+    private long pos = -1;            // main で更新する位置キャッシュ
     private boolean wantPlay;         // 準備中に来た再生要求
     private boolean foreground = true;
     private boolean destroyed;
@@ -84,7 +86,10 @@ final class MediaPlaybackHelper {
                 mp.setOnPreparedListener(p -> onPrepared(gen, p));
                 mp.setOnCompletionListener(p -> {
                     synchronized (lock) {
-                        if (valid(gen, p)) phase = ENDED;
+                        if (valid(gen, p)) {
+                            phase = ENDED;
+                            started = false;
+                        }
                     }
                 });
                 mp.setOnErrorListener((p, what, extra) -> {
@@ -132,6 +137,7 @@ final class MediaPlaybackHelper {
                 wantPlay = false;
                 try {
                     mp.start();
+                    started = true;
                     phase = PLAYING;
                 } catch (IllegalStateException e) {
                     phase = FAILED_INTERNAL;
@@ -143,6 +149,8 @@ final class MediaPlaybackHelper {
     }
 
     int control(long gen, int op) {
+        MediaPlayer stopMp = null;
+        boolean rewind = false;
         synchronized (lock) {
             if (destroyed) return FAILED;
             if (gen <= 0 || current != gen) return BAD_GEN;
@@ -158,30 +166,59 @@ final class MediaPlaybackHelper {
                     postOp(gen, POST_START);
                     phase = LOADING;
                 }
-            } else if (op == OP_PAUSE) {
-                wantPlay = false;
-                if (prepared && (phase == PLAYING || phase == LOADING)) {
-                    // 失敗を OK で隠さないよう、その場で実行して結果を返す。
-                    // 開始待ちの start は phase が LOADING でなくなるため実行時に捨てられる。
-                    if (!stopNow(false)) return FAILED;
-                    phase = PAUSED;
-                }
-            } else { // stop: 一時停止して先頭へ
-                wantPlay = false;
-                if (prepared) {
-                    if (!stopNow(true)) return FAILED;
-                    phase = READY;
-                }
+                return OK;
             }
-            return OK;
+            wantPlay = false;
+            // pause は再生中・開始待ちのみ、stop は準備済みなら常に対象。
+            if (!prepared || (op == OP_PAUSE && phase != PLAYING && phase != LOADING)) return OK;
+            stopMp = player;
+            rewind = op != OP_PAUSE;
+            // 開始待ちの start は phase が LOADING でなくなるため実行時に捨てられる。
+            phase = rewind ? READY : PAUSED;
+        }
+        // MediaPlayer の操作は生成した main へ統一し、完了を待って実結果を返す（契約表 2）。
+        // lock は持たずに待つ（main 側が lock を取るため）。
+        final MediaPlayer mp = stopMp;
+        final boolean rw = rewind;
+        return runOnMain(() -> {
+            synchronized (lock) {
+                if (!valid(gen, mp)) return BAD_GEN;
+                if (phase == FAILED_DECODE || phase == FAILED_INTERNAL) return FAILED;
+                return stopNow(mp, rw) ? OK : FAILED;
+            }
+        });
+    }
+
+    // main で実行して結果を返す。main 上なら直接、それ以外は完了まで待つ（期限超過は失敗）。
+    private int runOnMain(java.util.concurrent.Callable<Integer> task) {
+        try {
+            if (Looper.myLooper() == Looper.getMainLooper()) return task.call();
+            final int[] out = {FAILED};
+            final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+            handler.post(() -> {
+                try {
+                    out[0] = task.call();
+                } catch (Exception e) {
+                    out[0] = FAILED;
+                } finally {
+                    done.countDown();
+                }
+            });
+            return done.await(3, java.util.concurrent.TimeUnit.SECONDS) ? out[0] : FAILED;
+        } catch (Exception e) {
+            return FAILED;
         }
     }
 
-    // lock の内側で呼ぶ。一時停止（rewind なら先頭へ）。失敗は Failed(Internal) にして false。
-    private boolean stopNow(boolean rewind) {
+    // lock の内側・main 上で呼ぶ。開始済みなら一時停止（Prepared の pause は不正なので開始前は触らない）、
+    // rewind なら先頭へ。失敗は Failed(Internal) にして false。
+    private boolean stopNow(MediaPlayer mp, boolean rewind) {
         try {
-            player.pause();
-            if (rewind) player.seekTo(0);
+            if (started) {
+                mp.pause();
+                started = false;
+            }
+            if (rewind) mp.seekTo(0);
             return true;
         } catch (IllegalStateException e) {
             phase = FAILED_INTERNAL;
@@ -200,10 +237,14 @@ final class MediaPlaybackHelper {
                         // 開始待ちのままのときだけ開始し、成功後に Playing を確定する。
                         if (phase == LOADING) {
                             mp.start();
+                            started = true;
                             phase = PLAYING;
                         }
                     } else {
-                        mp.pause();
+                        if (started) {
+                            mp.pause();
+                            started = false;
+                        }
                     }
                 } catch (IllegalStateException e) {
                     phase = FAILED_INTERNAL;
@@ -215,18 +256,25 @@ final class MediaPlaybackHelper {
     long[] snapshot() {
         synchronized (lock) {
             if (current == 0) return new long[] {0, IDLE, -1, -1};
-            long pos = -1;
             boolean live = phase == READY || phase == PLAYING || phase == PAUSED
                     || phase == ENDED || phase == INTERRUPTED;
-            if (prepared && live && player != null) {
+            // getCurrentPosition は main でだけ呼ぶ。ここではキャッシュを返し、更新を main へ頼む。
+            if (prepared && live && player != null) refreshPos(current, player);
+            return new long[] {current, phase, prepared && live ? pos : -1, prepared ? duration : -1};
+        }
+    }
+
+    private void refreshPos(long gen, MediaPlayer mp) {
+        handler.post(() -> {
+            synchronized (lock) {
+                if (!valid(gen, mp)) return;
                 try {
-                    pos = player.getCurrentPosition();
+                    pos = mp.getCurrentPosition();
                 } catch (IllegalStateException e) {
                     pos = -1;
                 }
             }
-            return new long[] {current, phase, pos, prepared ? duration : -1};
-        }
+        });
     }
 
     void onResume() {
@@ -282,6 +330,8 @@ final class MediaPlaybackHelper {
         current = 0;
         phase = IDLE;
         prepared = false;
+        started = false;
+        pos = -1;
         wantPlay = false;
         duration = -1;
     }
