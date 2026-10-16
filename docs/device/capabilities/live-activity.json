@@ -17,11 +17,14 @@
       ]
     },
     "android": {
-      "status": "possible",
-      "api": "進行中通知 `NotificationCompat.Builder.setOngoing(true)`。Android 16（API 36）の Live Updates は `Notification.ProgressStyle` + `setRequestPromotedOngoing(true)`",
-      "perm": "`POST_NOTIFICATIONS`（API 33+ は実行時許可）。Live Updates 昇格は `POST_PROMOTED_NOTIFICATIONS`（通常権限、API 36）",
+      "status": "done",
+      "api": "進行中通知 `NotificationCompat.Builder.setOngoing(true)` + `setProgress`。タグ付きの固定 ID 通知 1 件、専用チャンネル `IMPORTANCE_LOW`。Live Updates（API 36）は使わない",
+      "perm": "`POST_NOTIFICATIONS`（API 33+ は実行時許可、開始時のみ求める）。`POST_PROMOTED_NOTIFICATIONS` は宣言しない",
       "url": "https://developer.android.com/develop/ui/views/notifications/live-update",
-      "note": "未実装。Android に相当機能がある（進行中通知、API 36 で Live Updates）。`ProgressStyle` は API 36 のため compileSdk を 36 へ上げる必要がある（現在 targetSdk 35。targetSdk を据え置いて足りるかは未確認）。API 36 未満は昇格せず通常の進行中通知として表示する分岐が要る（旧版の表示可否は一次情報に記載なし）。端末 OEM が Live Update の適格基準を追加で課す場合がある。GMS は使わない。通知の許可拒否は成功にしない"
+      "note": "実装済み（Issue #296）。数値 1 つの開始・更新・終了、同時 1 件。API 24〜25 は Unsupported。拒否・通知オフ・チャンネルブロックは PermissionDenied。更新時に通知が無ければ Dismissed（再投稿しない）。終了は冪等で許可を求めない。Cancelled は出さない。再生成時と起動時は保留中の要求を破棄し、通知を閉じる。守る範囲: 1 プロセス内の要求順序・拒否/通知オフを成功に畳まないこと・通知の解放。守らない範囲: 利用者が閉じてから次の操作までの画面表示の食い違い、OEM 独自の表示規則。Live Updates への昇格は範囲外（compileSdk 36 と androidx.core の引き上げが要る）",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#293）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_live_activity.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/LiveActivityHelper.java + crates/fandhe-egui-proxy/src/device/live_activity.rs + crates/fandhe-core/src/screens/live_activity_show.rs + crates/fandhe-device/src/live_activity.rs、Issue #296"
     },
     "macos": {
       "status": "no",
