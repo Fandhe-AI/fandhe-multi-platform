@@ -75,6 +75,8 @@ pub mod location;
 pub mod map_view;
 /// Phase 11（端末機能の拡充ループ、親 #86、Issue #267）: 音声 1 本の再生・一時停止・停止。
 pub mod media_playback;
+/// Phase 11（端末機能の拡充ループ、親 #91、Issue #311）: 音声 1 本の AAC（m4a）への変換と出力の検証。
+pub mod media_transcode;
 /// Phase 11（端末機能の拡充ループ、親 #953、Issue #954）: マイク録音。
 pub mod mic_record;
 /// Phase 11（端末機能の拡充ループ、親 #1137、Issue #1398）: MIDI 入力（ノートオン / オフ）。

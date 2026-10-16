@@ -398,6 +398,8 @@ fn main() {
     compile_apple_image_recognition();
     // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
     compile_apple_ml_inference();
+    // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
+    compile_apple_media_transcode();
 
     // `ios/fandhe_ios_background_task.m`（Issue #1045）は iOS 分岐のみから呼ぶ
     // （`build_macos` からは呼ばない、上記 doc 参照）。
@@ -689,6 +691,20 @@ fn compile_apple_image_recognition() {
         .flag("-fobjc-arc")
         .compile("fandhe_apple_image_recognition");
     println!("cargo:rustc-link-lib=framework=Vision");
+    println!("cargo:rustc-link-lib=framework=Foundation");
+}
+
+/// `apple/fandhe_apple_media_transcode.m` を `cc` でコンパイルし AVFoundation をリンクする
+/// （Issue #311 macOS、iOS は b-ios が利用、音声の AAC 変換）。
+/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_media_transcode`）と
+/// 同じ OS 集合に保つ。
+fn compile_apple_media_transcode() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_media_transcode.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_media_transcode.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_media_transcode");
+    println!("cargo:rustc-link-lib=framework=AVFoundation");
     println!("cargo:rustc-link-lib=framework=Foundation");
 }
 
@@ -1187,6 +1203,8 @@ fn build_macos() {
     compile_apple_image_recognition();
     // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
     compile_apple_ml_inference();
+    // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
+    compile_apple_media_transcode();
     // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308）。iOS 分岐と共用する。

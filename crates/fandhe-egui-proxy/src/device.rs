@@ -99,6 +99,10 @@ pub mod android_local_fonts;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_media_playback;
+/// Issue #311: Android 向け音声変換のスタブ（b-android の子が MediaCodec + MediaMuxer で埋める）。
+/// `device/media_transcode.rs` の Android 経路から呼ばれる。
+#[cfg(target_os = "android")]
+pub mod android_media_transcode;
 /// Issue #1398: Android 向け MIDI 入力実装のスタブ（#1400 が埋める）。`device/midi.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -206,6 +210,12 @@ pub mod apple_map_view;
 /// C ABI ラッパー）。`device/media_playback.rs` の macOS 経路から呼ばれる。iOS は親 #86 の b-ios が使う。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_media_playback;
+/// Issue #311: macOS / iOS 向け音声変換実装（`apple/fandhe_apple_media_transcode.m` の `AVAudioFile` を
+/// 呼ぶ C ABI ラッパー）。`device/media_transcode.rs` の macOS 経路から呼ばれる。iOS は b-ios の子が使う。
+/// `build.rs` のコンパイル条件と同じ OS 集合に保つ（iOS では b-ios の子が使うまで未使用）。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[cfg_attr(target_os = "ios", allow(dead_code))]
+pub mod apple_media_transcode;
 /// Issue #954（macOS）/ #956（iOS）: iOS / macOS 向けマイク録音実装（`apple/
 /// fandhe_apple_mic_record.m` を呼ぶ C ABI ラッパー）。`device/mic_record.rs` の
 /// iOS/macOS 経路から呼ばれる。
@@ -417,6 +427,10 @@ pub mod ios_local_fonts;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_media_playback;
+/// Issue #311: iOS 向け音声変換のスタブ（b-ios の子が `AppleMediaTranscode` を返す形にする）。
+/// `device/media_transcode.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_media_transcode;
 /// Issue #291: iOS 向け機械学習推論（macOS と共用の `AppleMlInference` を返す）。
 /// `device/ml_inference.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -520,6 +534,10 @@ pub mod map_view;
 /// Phase 11 の拡充ループ（親 #86、Issue #267）: 音声再生の effect ドライバ（macOS 実装、iOS・Android・Windows は
 /// 親 #86 の子で埋めるスタブ、他 OS は `UnsupportedMediaPlayback` 固定）。
 pub mod media_playback;
+/// Phase 11 の拡充ループ（親 #91、Issue #311）: 音声変換（AAC）の effect ドライバ（macOS 実装、
+/// iOS / Windows / Android は子 issue が埋めるスタブ、他 OS は `UnsupportedMediaTranscode` 固定。
+/// Web は `fandhe-web-dom`）。
+pub mod media_transcode;
 /// Phase 11 の拡充ループ（親 #953、Issue #954・#955・#956・#957）: マイク録音の
 /// effect ドライバ（macOS/iOS/Windows/Android 実装、他 OS は `UnsupportedMicRecorder`
 /// 固定）。
@@ -674,6 +692,10 @@ pub mod windows_local_fonts;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_media_playback;
+/// Issue #311: Windows 向け音声変換のスタブ（windows の子が MediaTranscoder で埋める）。
+/// `device/media_transcode.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_media_transcode;
 /// Issue #955: Windows 向けマイク録音実装（WinRT `MediaCapture` ラッパー）。
 /// `device/mic_record.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
