@@ -276,6 +276,9 @@ pub mod apple_system_tray;
 /// `main.rs`（登録）から使われる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_url_scheme;
+/// Issue #307（親 #90）: AR 表示の effect ドライバ（iOS は (b-ios) が `ios_ar.rs` を埋めるまでスタブ、
+/// 他 OS は `UnsupportedAr` 固定。Web は `fandhe-web-dom`）。
+pub mod ar;
 /// Phase 11 の拡充ループ（親 #1136、Issue #1330）: 音声デバイス一覧の effect ドライバ（macOS / Windows
 /// 実装、iOS・Android は #1331・#1332 で埋めるスタブ、他 OS は `UnsupportedAudioDevices` 固定）。
 pub mod audio_devices;
@@ -357,6 +360,10 @@ pub mod ios_accessibility_prefs;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_app_badge;
+/// Issue #307: iOS 向け AR 実装のスタブ（(b-ios) が ARKit で埋める）。`device/ar.rs` の ios 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_ar;
 /// Issue #1331: iOS 向け音声デバイス一覧実装（`ios/fandhe_ios_audio_devices.m` を呼ぶ C ABI ラッパー）。
 /// `device/audio_devices.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
