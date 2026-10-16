@@ -115,6 +115,10 @@ impl Shared {
     /// 意図だけ記録する。`Playing` は `PLAYING` 通知で立てる。
     fn on_play(&mut self, gen: u64) -> Result<(), DeviceError> {
         self.check(gen)?;
+        // 失敗確定後の再生要求は受け付けない（失敗を成功へ畳まない）。
+        if matches!(self.phase, PlaybackPhase::Failed(_)) {
+            return Err(DeviceError::InvalidInput("media_playback failed"));
+        }
         self.intent = Intent::Play;
         Ok(())
     }
@@ -154,7 +158,8 @@ impl Shared {
             }
             // 期限切れ・一時停止の後に遅れて届いた PLAYING は捨てる（契約表 3）。
             Ev::Playing => {
-                if self.intent == Intent::Play {
+                // Failed からは遷移しない（遅れて届いた PLAYING が失敗を上書きしない）。
+                if self.intent == Intent::Play && !matches!(self.phase, PlaybackPhase::Failed(_)) {
                     self.phase = PlaybackPhase::Playing;
                 }
             }
@@ -612,6 +617,17 @@ mod tests {
         s.on_pause(g).unwrap();
         s.on_event(g, Ev::Playing);
         assert_eq!(s.phase, PlaybackPhase::Paused);
+    }
+
+    #[test]
+    fn playing_and_play_do_not_override_failed() {
+        let (mut s, g) = loaded();
+        s.on_play(g).unwrap();
+        s.fail(g, PlaybackFailure::Timeout);
+        s.on_event(g, Ev::Playing);
+        assert_eq!(s.phase, PlaybackPhase::Failed(PlaybackFailure::Timeout));
+        assert!(s.on_play(g).is_err());
+        assert_eq!(s.phase, PlaybackPhase::Failed(PlaybackFailure::Timeout));
     }
 
     #[test]
