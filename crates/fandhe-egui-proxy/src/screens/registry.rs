@@ -226,6 +226,11 @@ generated_screens! {
     crate::device::image_recognition::image_recognize_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "ml_infer" => fandhe_core::screens::ml_infer::current_screen,
+    crate::device::ml_inference::ml_infer_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "url_scheme_show" => fandhe_core::screens::url_scheme_show::current_screen,
     crate::device::url_scheme::url_scheme_show_effect,
 }

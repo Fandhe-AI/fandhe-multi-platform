@@ -530,6 +530,18 @@ public class MainActivity extends GameActivity {
         appBadgeHelper.set(requestId, value);
     }
 
+    // ライブアクティビティ（Issue #296）。実装は `LiveActivityHelper`（許可ランチャーを STARTED 前に登録）。
+    // Rust の `android_live_activity.rs` が JNI で呼ぶ。
+    private final LiveActivityHelper liveActivityHelper = new LiveActivityHelper(this);
+
+    void requestLiveActivity(long requestId, int op, int value) {
+        liveActivityHelper.submit(requestId, op, value);
+    }
+
+    void liveActivityDismissAll() {
+        liveActivityHelper.dismissAll();
+    }
+
     // メール・SMS 作成画面（Issue #1386）。実装は `ComposeHelper`。
     // Rust の `android_compose_mail_sms.rs` が JNI で呼ぶ。
     private final ComposeHelper composeHelper = new ComposeHelper(this);
