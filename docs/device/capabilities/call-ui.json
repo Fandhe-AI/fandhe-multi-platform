@@ -7,21 +7,27 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "CallKit（`CXProvider` / `CXProviderDelegate` / `CXCallController`）",
-      "perm": "CallKit 単体では entitlement 不要と見込む（未確認）。PushKit で VoIP push を受ける場合のみ Push Notifications capability + Background Modes の Voice over IP",
+      "perm": "Apple の文書に CallKit 単体の entitlement の記載は無く、Info.plist のキーも追加していない。Background Modes の `voip` は付けていない。`unentitled` が出たら失敗として表示し、実機確認（#275）で判断する",
       "url": "https://developer.apple.com/documentation/callkit/cxprovider",
-      "note": "未実装。CXProvider は iOS 10+、アプリで 1 インスタンスを保持（Apple 記載）。`reportNewIncomingCall` で着信 UI、`CXProviderDelegate` で応答 / 終了を受けるため、delegate の結果を Rust へ返す継続配信寄りの経路が要る。通話音声の `AVAudioSession` は CallKit からの activate に合わせる。着信 UI は実機でのみ確認可能",
+      "note": "実装済み（Issue #277）。`CXProvider` の `reportNewIncomingCall` で OS の着信画面を出し、delegate の結果を main queue から Rust へ返す。受理（completion が error なし）を確認してから Ringing を通知する。拒否・終了・応答なしは失敗にしない。報告エラーは `CXErrorCodeIncomingCallError` の全コードを写像し、おやすみモード・ブロックリスト・制限共有モード・保護された通話・センシティブな参加者は Disallowed、それ以外（unknown・unentitled・UUID 重複・未知のコード）は Failed。取り消しや差し替えの後に遅れて届いた受理は通知せず OS 側で閉じる。通話履歴には残さない。`AVAudioSession` には触れない。守る範囲は 1 プロセス内の順序・嘘の成功の禁止・`CXCall` の解放で、背景での通話継続・プロセス死・複数通話は守らない。審査上の注意として、中国 App Store では CallKit の無効化を求められた経緯がある（2018 年、Guideline 5.0）。ストア提出は範囲外。着信 UI は実機でのみ確認可能（#275）",
       "sourceName": [
         "通話 UI 統合"
-      ]
+      ],
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#275）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_call_ui.m + crates/fandhe-egui-proxy/src/device/ios_call_ui.rs + crates/fandhe-egui-proxy/src/device/call_ui.rs + crates/fandhe-core/src/screens/call_ui_show.rs + crates/fandhe-device/src/call_ui.rs、Issue #277"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "Telecom の self-managed `ConnectionService`（`TelecomManager.registerPhoneAccount` + `PhoneAccount.CAPABILITY_SELF_MANAGED`）。Jetpack `androidx.core:core-telecom` は Kotlin 前提",
-      "perm": "`MANAGE_OWN_CALLS`、targetSdk 34+ は `FOREGROUND_SERVICE_PHONE_CALL`。マニフェストに `ConnectionService` サブクラス（`BIND_TELECOM_CONNECTION_SERVICE`）の宣言が必要",
+      "perm": "`MANAGE_OWN_CALLS`（normal）、`USE_FULL_SCREEN_INTENT`（着信通知の投稿条件）、API 33+ は `POST_NOTIFICATIONS`（実行時許可）。FGS（`FOREGROUND_SERVICE_PHONE_CALL`）は使わない。マニフェストに `BIND_TELECOM_CONNECTION_SERVICE` を要求する `ConnectionService` 宣言と、exported=false の Receiver を置く",
       "url": "https://developer.android.com/develop/connectivity/telecom",
-      "note": "未実装。GMS 不要。`CAPABILITY_SELF_MANAGED` は API 26+ のため minSdk 24 の端末 24〜25 では未対応を返す分岐が要る（`PhoneAccount` は API 23+）。self-managed では着信 UI（通知 / フルスクリーン）は自アプリが出し、システムは音声ルーティングと他通話との調停を担う。`ConnectionService` は Activity とは別の Service 追加になる点が前提（MainActivity 1 本の方針との整合は要判断）。通話開始から 5 秒以内に通知を出す要件あり"
+      "note": "範囲: 疑似着信 1 件・固定の発信者名。音声・VoIP push・発信・履歴は扱わない。API 26+ で動作し、24〜25 と Telecom 機能の無い端末は Unsupported を返す。`CAPABILITY_SELF_MANAGED` は API 37 で非推奨のため、compileSdk を 37 に上げるときに CoreTelecom への移行を見直す。拒否・終了・応答なしは失敗にしない。期限切れ（Unanswered）も取り消しも `DisconnectCause.LOCAL` で閉じ、`MISSED` は区別しない（trait の `end` に理由引数が無いため）。通知の投稿に成功した後にだけ Ringing を返す。守る範囲: 1 プロセス内の順序（Java は main looper 1 本、Rust は `SLOT` 1 本）、嘘の成功の禁止、通知・Connection の解放。守らない範囲: 背景での通話の継続、プロセス死、`PhoneAccount` の登録を残すこと。API 34+ で full-screen intent の許可が切られた場合の挙動は実機で確認する（#275）",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#275）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_call_ui.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/CallUiHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/CallUiConnectionService.java + platforms/android/app/src/main/java/com/fandhe/androidapp/CallUiActionReceiver.java + crates/fandhe-egui-proxy/src/device/call_ui.rs + crates/fandhe-core/src/screens/call_ui_show.rs + crates/fandhe-device/src/call_ui.rs、Issue #278"
     },
     "macos": {
       "status": "no",
