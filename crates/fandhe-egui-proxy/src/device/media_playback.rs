@@ -184,9 +184,21 @@ fn drive(
 
     // Paused / Stopped でも、操作直後は OS 側の失敗が後から確定しうるので失敗だけ拾う。
     // 画面側（apply_update）は Paused / Stopped への Failed を受け付ける。
-    let settling = !active
+    // 読み込み処理中（プレーヤー側が Loading）は操作が未実行のままなので、窓の起点を進め続ける。
+    // 読み込み完了後の SETTLE_WINDOW で、キュー済みの一時停止・停止の失敗を拾う。
+    let awaiting = !active
         && matches!(state.phase, AudioPhase::Paused | AudioPhase::Stopped)
         && state.generation == inner.handled
+        && inner.settle_since.is_some();
+    if awaiting
+        && inner.device_gen.is_some_and(|dg| {
+            let snap = pb.snapshot();
+            snap.generation == dg && snap.phase == PlaybackPhase::Loading
+        })
+    {
+        inner.settle_since = Some(Instant::now());
+    }
+    let settling = awaiting
         && inner
             .settle_since
             .is_some_and(|t| t.elapsed() < SETTLE_WINDOW);

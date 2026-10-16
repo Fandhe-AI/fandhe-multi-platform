@@ -527,6 +527,15 @@ mod win {
         unsafe { (engine.GetCurrentTime(), engine.GetDuration()) }
     }
 
+    /// 対象世代のエンジンがあれば取り出して `Shutdown()` する。
+    fn release_failed(engine: &mut Option<(u64, IMFMediaEngineEx)>, gen: u64) {
+        if engine.as_ref().is_some_and(|(g, _)| *g == gen) {
+            if let Some((_, e)) = engine.take() {
+                shutdown_engine(&e);
+            }
+        }
+    }
+
     fn worker(rx: mpsc::Receiver<Cmd>, tx: mpsc::Sender<Cmd>) {
         // 失敗しても worker は続け、以後の `Load` を `Failed` にする（成功へ倒さない）。
         let com = ComInit::new("media_playback");
@@ -569,7 +578,13 @@ mod win {
                         Err(f) => with_shared(|s| s.fail(gen, f)),
                     }
                 }
-                Some(Cmd::Event(gen, ev)) => with_shared(|s| s.on_event(gen, ev)),
+                Some(Cmd::Event(gen, ev)) => {
+                    with_shared(|s| s.on_event(gen, ev));
+                    // ERROR 確定後は再生資源を残さない（契約表 9）。
+                    if matches!(ev, Ev::Error(_)) {
+                        release_failed(&mut engine, gen);
+                    }
+                }
                 Some(Cmd::Shutdown) => {
                     if let Some((_, old)) = engine.take() {
                         shutdown_engine(&old);
@@ -580,6 +595,8 @@ mod win {
                         if drive(e, c).is_err() {
                             let eg = *eg;
                             with_shared(|s| s.fail(eg, PlaybackFailure::Internal));
+                            // 失敗確定時は対象世代のエンジンを Shutdown する（音声が続かない）。
+                            release_failed(&mut engine, eg);
                         }
                     }
                 }
