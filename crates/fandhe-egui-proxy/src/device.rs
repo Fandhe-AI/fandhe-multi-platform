@@ -211,10 +211,9 @@ pub mod apple_map_view;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_media_playback;
 /// Issue #311: macOS / iOS 向け音声変換実装（`apple/fandhe_apple_media_transcode.m` の `AVAudioFile` を
-/// 呼ぶ C ABI ラッパー）。`device/media_transcode.rs` の macOS 経路から呼ばれる。iOS は b-ios の子が使う。
-/// `build.rs` のコンパイル条件と同じ OS 集合に保つ（iOS では b-ios の子が使うまで未使用）。
+/// 呼ぶ C ABI ラッパー）。`device/media_transcode.rs` の macOS 経路と `ios_media_transcode`（Issue #313）から
+/// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-#[cfg_attr(target_os = "ios", allow(dead_code))]
 pub mod apple_media_transcode;
 /// Issue #954（macOS）/ #956（iOS）: iOS / macOS 向けマイク録音実装（`apple/
 /// fandhe_apple_mic_record.m` を呼ぶ C ABI ラッパー）。`device/mic_record.rs` の
@@ -427,7 +426,7 @@ pub mod ios_local_fonts;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_media_playback;
-/// Issue #311: iOS 向け音声変換のスタブ（b-ios の子が `AppleMediaTranscode` を返す形にする）。
+/// Issue #313: iOS 向け音声変換（macOS と共用の `AppleMediaTranscode` を返す）。
 /// `device/media_transcode.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_media_transcode;
