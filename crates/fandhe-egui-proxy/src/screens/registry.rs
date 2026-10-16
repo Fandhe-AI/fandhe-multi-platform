@@ -90,6 +90,10 @@ generated_screens! {
     crate::device::compose_mail_sms::compose_mail_sms_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "print_page" => fandhe_core::screens::print_page::current_screen,
+    crate::device::print::print_page_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "map_view_show" => fandhe_core::screens::map_view_show::current_screen,
     crate::device::map_view::map_view_show_effect,
     effect

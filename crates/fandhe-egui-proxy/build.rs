@@ -148,6 +148,9 @@
 //! - `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384、`NSWorkspace openURL:` による
 //!   `mailto:` / `sms:` の作成画面表示）は **macOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルする（`src/device/macos_compose_mail_sms.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_print.m`（Issue #325、`NSPrintPanel` + `NSPrintOperation` による印刷
+//!   ダイアログ）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_print.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_device_info.m`（Issue #1304、`NSProcessInfo` + `sysctl` + `NSURL` による
 //!   端末・OS 情報の同期読み取り）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_device_info.rs` から呼ばれる契約）。Foundation は既存のリンクで足りる。
@@ -879,6 +882,16 @@ fn compile_macos_compose_mail_sms() {
         .compile("fandhe_macos_compose_mail_sms");
 }
 
+/// `macos/fandhe_macos_print.m` を `cc` でコンパイルする（Issue #325）。**macOS 分岐のみ**から
+/// 呼ばれる（`src/device/macos_print.rs` が使う）。AppKit は `build_macos` 側の既存リンクで足りる。
+fn compile_macos_print() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_print.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_print.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_print");
+}
+
 /// `macos/fandhe_macos_device_info.m` を `cc` でコンパイルする（Issue #1304）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_device_info.rs` が使う）。Foundation は `build_macos` 側の
 /// 既存リンクで足りるため追加リンクは無い。
@@ -1221,6 +1234,8 @@ fn build_macos() {
     compile_macos_app_badge();
     // `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_compose_mail_sms();
+    // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。AppKit は既存のリンクを使う。
+    compile_macos_print();
     // `macos/fandhe_macos_audio_devices.m`（Issue #1330）も macOS 専用。CoreAudio を使う。
     compile_macos_audio_devices();
     // `apple/fandhe_apple_midi.m`（Issue #1398）。iOS 分岐（#1399）と共用する。CoreMIDI を使う。

@@ -295,6 +295,9 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // Issue #1384: `compose_mail_sms::bridge::SLOT` も同様に破棄する（`device::compose_mail_sms::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::compose_mail_sms::reset_pending_tracking();
+    // Issue #325: `print::bridge::SLOT` も同様に破棄する（Activity 再生成で印刷の保留は復元しない）。
+    #[cfg(feature = "device")]
+    crate::device::print::reset_pending_tracking();
     // Issue #1222: `contact_pick::bridge::SLOT` も同様。連絡先選択の契約は「復元せず破棄」
     // （`fandhe_device::contact_picker` モジュール doc）なので、旧要求の遅延完了を id 不一致で無視させる。
     #[cfg(feature = "device")]
