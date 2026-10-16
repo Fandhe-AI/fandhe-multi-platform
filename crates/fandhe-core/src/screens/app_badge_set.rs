@@ -16,8 +16,6 @@
 
 use crate::{Screen, WidgetId};
 
-/// 数値入力欄の `WidgetId`。
-const INPUT_ID: WidgetId = WidgetId::from_raw(1);
 /// 「設定する」ボタンの `WidgetId`。
 const SET_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
 /// 「消す（0）」ボタンの `WidgetId`。
@@ -186,7 +184,7 @@ fn input_set(state: &mut AppBadgeSetState, v: String) {
 pub fn current_screen(state: &AppBadgeSetState) -> Screen<AppBadgeSetState> {
     let screen = Screen::new("バッジの設定")
         .text(NOTE_TEXT)
-        .text_input(INPUT_ID, "件数（0〜9999）", input_get, input_set)
+        .text_field("件数（0〜9999）", input_get, input_set)
         .dynamic_text(status_text)
         .error_text(error_text);
     if state.phase != BadgePhase::Idle {

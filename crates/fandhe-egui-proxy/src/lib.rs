@@ -1496,6 +1496,27 @@ mod ime_commit_injection_tests {
     }
 }
 
+/// app_badge_set 画面に入力欄が描画されること（#74: `text_input` は未描画だった）の回帰チェック。
+#[cfg(test)]
+mod app_badge_set_input_tests {
+    use egui_kittest::kittest::Queryable;
+    use fandhe_core::screens::app_badge_set::{current_screen, AppBadgeSetState};
+    use fandhe_core::StateStore;
+
+    #[test]
+    fn app_badge_set_renders_text_input() {
+        let mut harness = egui_kittest::Harness::builder().build_ui_state(
+            |ui, store: &mut StateStore<AppBadgeSetState>| {
+                let screen = current_screen(store.state());
+                super::render_screen(ui, &screen, store);
+            },
+            StateStore::new(AppBadgeSetState::default()),
+        );
+        harness.run();
+        harness.get_by_role(egui::accesskit::Role::TextInput);
+    }
+}
+
 /// [`dispatch_back_if_requested`] のフォーカス除外分岐（Issue #726 codex-review 指摘）の
 /// 回帰チェック。`egui_kittest` の既定レンダラ（`LazyRenderer`）は `.render()`（画像化）
 /// を呼ばない限り wgpu アダプタを要求しないため、`tests/screen_stack_render.rs` と異なり
