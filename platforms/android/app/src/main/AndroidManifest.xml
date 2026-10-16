@@ -122,6 +122,12 @@
          自動許可扱いにする）ため minSdk 24 のまま追加できる。切り離し時に削除する。 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Issue #278: 通話 UI 統合が self-managed ConnectionService の登録・着信受付に使う（normal 権限）。
+         USE_FULL_SCREEN_INTENT は着信通知（CallStyle + full-screen intent）の投稿条件のため。
+         FGS 系の権限は使わない。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <!-- Phase 11（Issue #1249）: 歩数画面が `TYPE_STEP_COUNTER` を読む。API 29 以上でのみ
          実行時許可の対象（API 28 以下は許可不要）。切り離し時に削除する。 -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
@@ -233,6 +239,23 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/home_widget_info" />
         </receiver>
+        <!-- Issue #278: 通話 UI 統合の self-managed ConnectionService。intent-filter を持つため
+             exported=true だが、BIND_TELECOM_CONNECTION_SERVICE を要求するので bind できるのは
+             Telecom だけ。切り離し時に削除する。 -->
+        <service
+            android:name="com.fandhe.androidapp.CallUiConnectionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.ConnectionService" />
+            </intent-filter>
+        </service>
+
+        <!-- Issue #278: 着信通知の応答・拒否ボタンの受け口。自アプリの明示 Intent（FLAG_IMMUTABLE）
+             だけが届くため exported=false、intent-filter なし。切り離し時に削除する。 -->
+        <receiver
+            android:name="com.fandhe.androidapp.CallUiActionReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

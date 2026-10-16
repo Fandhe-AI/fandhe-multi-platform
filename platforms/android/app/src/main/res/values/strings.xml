@@ -12,4 +12,8 @@
     <!-- アプリアイコンのバッジ（Issue #1362）用チャンネル名と通知本文。切り離し時に削除する。 -->
     <string name="app_badge_channel_name">アイコンのバッジ</string>
     <string name="app_badge_notification_text">アイコンのバッジ用の通知です。</string>
+    <!-- 通話 UI 統合（Issue #278）の着信チャンネル名・PhoneAccount ラベル・固定の発信者名。切り離し時に削除する。 -->
+    <string name="call_ui_channel_name">着信</string>
+    <string name="call_ui_account_label">Fandhe 通話</string>
+    <string name="call_ui_caller_name">Fandhe テスト着信</string>
 </resources>
