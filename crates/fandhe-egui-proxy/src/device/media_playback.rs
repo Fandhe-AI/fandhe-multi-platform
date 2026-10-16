@@ -91,7 +91,12 @@ struct SessionInner {
     pending: Option<(u64, Instant)>,
     /// 直近に snapshot を画面へ送った時刻（単調時計）。送信は即時再描画を起こすため間引く。
     last_report: Option<Instant>,
+    /// 一時停止・停止を発行した時刻。非同期に確定する操作の失敗を拾うため、しばらく snapshot を監視する。
+    settle_since: Option<Instant>,
 }
+
+/// 一時停止・停止の結果（非同期の失敗）を監視し続ける長さ。
+const SETTLE_WINDOW: Duration = Duration::from_secs(2);
 
 static SESSION: OnceLock<Session> = OnceLock::new();
 
@@ -177,7 +182,24 @@ fn drive(
         }
     }
 
-    if active {
+    // Paused / Stopped でも、操作直後は OS 側の失敗が後から確定しうるので失敗だけ拾う。
+    // 画面側（apply_update）は Paused / Stopped への Failed を受け付ける。
+    let settling = !active
+        && matches!(state.phase, AudioPhase::Paused | AudioPhase::Stopped)
+        && state.generation == inner.handled
+        && inner
+            .settle_since
+            .is_some_and(|t| t.elapsed() < SETTLE_WINDOW);
+    if settling
+        && inner
+            .last_report
+            .is_none_or(|t| t.elapsed() >= POLL_INTERVAL)
+    {
+        inner.last_report = Some(Instant::now());
+        report_snapshot(&mut inner, sender, pb);
+    }
+
+    if active || settling {
         sender.request_repaint_after(POLL_INTERVAL);
         Some(POLL_INTERVAL)
     } else {
@@ -224,6 +246,7 @@ fn handle_command(
             inner.pending = None;
             // プレーヤーが無ければ止める対象も無い（画面側の遷移だけで足りる）。
             let Some(g) = inner.device_gen else { return };
+            inner.settle_since = Some(Instant::now());
             let r = if command == AudioCommand::Pause {
                 pb.pause(g)
             } else {
@@ -539,7 +562,11 @@ mod tests {
         play(&mut h.state);
         h.drive(D);
         pause(&mut h.state);
-        assert_eq!(h.drive(D), None, "Paused では再描画を予約しない");
+        assert_eq!(
+            h.drive(D),
+            Some(POLL_INTERVAL),
+            "操作直後は失敗確定を監視する"
+        );
         assert_eq!(h.state.phase, AudioPhase::Paused);
         play(&mut h.state);
         h.drive(D);
@@ -549,8 +576,22 @@ mod tests {
             "一時停止からは再 load しない"
         );
         stop(&mut h.state);
-        assert_eq!(h.drive(D), None);
+        assert_eq!(h.drive(D), Some(POLL_INTERVAL));
         assert_eq!(h.state.phase, AudioPhase::Stopped);
+    }
+
+    #[test]
+    fn async_pause_failure_reaches_screen() {
+        let mut h = H::new(Fake::new(true));
+        play(&mut h.state);
+        h.drive(D);
+        pause(&mut h.state);
+        h.drive(D);
+        assert_eq!(h.state.phase, AudioPhase::Paused);
+        h.fake
+            .set_phase(PlaybackPhase::Failed(PlaybackFailure::Internal));
+        h.drive(D);
+        assert!(matches!(h.state.phase, AudioPhase::Failed(_)));
     }
 
     #[test]

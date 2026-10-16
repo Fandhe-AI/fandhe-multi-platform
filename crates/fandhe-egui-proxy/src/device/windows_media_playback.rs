@@ -252,6 +252,16 @@ mod win {
         f(&mut SHARED.lock().unwrap_or_else(|e| e.into_inner()))
     }
 
+    /// 状態更新とキュー送信を同じ排他区間で行う（並行呼び出しで意図と OS 操作の順が逆転しない、
+    /// 契約表 2・11）。`mpsc::Sender::send` は待たないのでロック内で呼んでよい。
+    fn with_shared_send(
+        f: impl FnOnce(&mut Shared) -> Result<Cmd, DeviceError>,
+    ) -> Result<(), DeviceError> {
+        let mut s = SHARED.lock().unwrap_or_else(|e| e.into_inner());
+        let cmd = f(&mut s)?;
+        send(cmd)
+    }
+
     enum Cmd {
         Load(u64, Arc<[u8]>),
         Play(u64),
@@ -294,8 +304,12 @@ mod win {
                 self.shutdown();
                 return Err(DeviceError::InvalidInput("media_playback wav"));
             }
-            let gen = with_shared(|s| s.begin_load());
-            if let Err(e) = send(Cmd::Load(gen, wav)) {
+            let mut gen = 0;
+            let r = with_shared_send(|s| {
+                gen = s.begin_load();
+                Ok(Cmd::Load(gen, wav))
+            });
+            if let Err(e) = r {
                 with_shared(|s| s.fail(gen, PlaybackFailure::Internal));
                 return Err(e);
             }
@@ -303,18 +317,15 @@ mod win {
         }
 
         fn play(&self, generation: u64) -> Result<(), DeviceError> {
-            with_shared(|s| s.on_play(generation))?;
-            send(Cmd::Play(generation))
+            with_shared_send(|s| s.on_play(generation).map(|_| Cmd::Play(generation)))
         }
 
         fn pause(&self, generation: u64) -> Result<(), DeviceError> {
-            with_shared(|s| s.on_pause(generation))?;
-            send(Cmd::Pause(generation))
+            with_shared_send(|s| s.on_pause(generation).map(|_| Cmd::Pause(generation)))
         }
 
         fn stop(&self, generation: u64) -> Result<(), DeviceError> {
-            with_shared(|s| s.on_stop(generation))?;
-            send(Cmd::Stop(generation))
+            with_shared_send(|s| s.on_stop(generation).map(|_| Cmd::Stop(generation)))
         }
 
         fn snapshot(&self) -> PlaybackSnapshot {
@@ -322,7 +333,9 @@ mod win {
         }
 
         fn shutdown(&self) {
-            with_shared(|s| s.reset());
+            // reset と Shutdown 送信を同じ排他区間に置く（間に別の load が入らない）。
+            let mut s = SHARED.lock().unwrap_or_else(|e| e.into_inner());
+            s.reset();
             // ワーカー未起動なら片付ける物が無い。送信失敗も同様に無視する。
             if let Some(q) = QUEUE.get().and_then(|q| q.as_ref()) {
                 let _ = q.send(Cmd::Shutdown);
