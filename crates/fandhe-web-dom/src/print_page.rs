@@ -14,7 +14,8 @@
 //! すべて `create_element` + `set_text_content` で組む（`innerHTML` は使わない、OWASP A03）。
 //! 画面上は `display: none`、印刷時はこのブロックだけを出す。`<style>` をブロック内に入れるので、
 //! ブロックが無いとき（ほかの画面で Ctrl+P）は印刷結果に影響せず、ホストページの CSS にも依存しない。
-//! 寿命は次の要求か画面の破棄まで（モバイルは `print()` がすぐ戻り非同期で印刷するため、
+//! ブロックはページ内で常に 1 つ（作成時に既存の同 ID 要素を外す。複数マウントでも二重に出ない）。
+//! 寿命は次の要求か画面の破棄まで（`print()` が例外なら即解放）（モバイルは `print()` がすぐ戻り非同期で印刷するため、
 //! 戻った直後に消すと白紙になる）。
 //!
 //! # 結果の写像
@@ -120,6 +121,10 @@ mod web {
     /// 印刷用ブロックを組んで body へ付ける。失敗時は組みかけを外す。
     fn build_block(doc: &Document, req: &PrintRequest) -> Result<Element, ()> {
         let body = doc.body().ok_or(())?;
+        // 印刷対象はページ内で 1 つ。別マウントが保持するブロックも外す（二重印刷の防止）。
+        while let Some(old) = doc.get_element_by_id(PRINT_BLOCK_ID) {
+            old.remove();
+        }
         let block = doc.create_element("div").map_err(|_| ())?;
         block.set_id(PRINT_BLOCK_ID);
         let built = (|| {
@@ -166,12 +171,18 @@ mod web {
                 Some(w) => match w.document().map(|doc| build_block(&doc, &req)) {
                     None | Some(Err(())) => Err(PrintFailure::Failed(PRINT_FAILED.to_string())),
                     Some(Ok(block)) => {
-                        DISPATCHED.with(|d| {
-                            if let Some(e) = d.borrow_mut().get_mut(&mount_id) {
-                                e.1 = Some(block);
-                            }
-                        });
-                        outcome_from_print(w.print().map_err(|_| ()))
+                        let printed = w.print().map_err(|_| ());
+                        if printed.is_err() {
+                            // 失敗したブロックを残すと通常の Ctrl+P に混ざる。発送済み世代だけ残す。
+                            block.remove();
+                        } else {
+                            DISPATCHED.with(|d| {
+                                if let Some(e) = d.borrow_mut().get_mut(&mount_id) {
+                                    e.1 = Some(block);
+                                }
+                            });
+                        }
+                        outcome_from_print(printed)
                     }
                 },
             },
