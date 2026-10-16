@@ -469,6 +469,11 @@ windows = { workspace = true, optional = true, features = [
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",
     "Win32_System_WinRT_Direct3D11",
+    # Issue #326: `device/windows_print.rs` が `PrintDlgExW`（`Win32_UI_Controls_Dialogs`）と
+    # `StartDocW` / `EndDoc` 等（`Win32_Storage_Xps`）を呼ぶ。GDI は #1341 の feature を共用。
+    # 新規パッケージは増えない。
+    "Win32_UI_Controls_Dialogs",
+    "Win32_Storage_Xps",
 ] }
 # Issue #898: `device/windows_share.rs::remember_window` が `eframe::CreationContext`
 # から HWND を取り出すために使う（`raw-window-handle` の `HasWindowHandle` トレイト）。

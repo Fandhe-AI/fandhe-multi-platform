@@ -761,9 +761,8 @@ pub mod windows_photo_library;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_power_state;
-/// Issue #325: Windows 向け印刷のスタブ（#326 が `PrintDlgExW` + GDI で埋める）。`device/print.rs` の
-/// Windows 経路から呼ばれる。`windows` crate を使う ffi 部分は埋める側がモジュール内側で
-/// `cfg(target_os = "windows")` に閉じる。
+/// Issue #326: Windows 向け印刷実装（`PrintDlgExW` + GDI）。`device/print.rs` の Windows 経路から
+/// 呼ばれる。結果の写像は純関数でホストでもテストできる（ffi 部分は `cfg(target_os = "windows")`）。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_print;

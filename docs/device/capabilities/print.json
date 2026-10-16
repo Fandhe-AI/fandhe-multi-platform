@@ -31,11 +31,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/macos_print.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_print.m + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_page.rs + crates/fandhe-device/src/print.rs、Issue #325"
     },
     "windows": {
-      "status": "possible",
-      "api": "Win32 印刷 API（`PrintDlgEx` 等）",
-      "perm": "なし（Win32 desktop 専用、package identity 要件の記載なし。要確認）",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/printdocs/printdocs-printing",
-      "note": "未実装。`EnumPrinters` の URL は 404 のため未確認"
+      "status": "done",
+      "api": "`PrintDlgExW`（`PD_RETURNDC`）+ GDI（`StartDocW` / `DrawTextW` / `EndDoc`）",
+      "perm": "なし（Win32 desktop API。package identity 不要）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/commdlg/nf-commdlg-printdlgexw",
+      "note": "固定の短い文章を 1 ページ。結果は、`PD_RESULT_PRINT` でジョブを投入したら `Submitted`（PDF 出力を含み、紙に出たことは意味しない）、`PD_RESULT_CANCEL` / `PD_RESULT_APPLY` と `StartDocW` の `ERROR_CANCELLED`（Microsoft Print to PDF の保存先の取り消し）は `Cancelled`、それ以外の失敗は失敗。`Unconfirmed` には到達しない。守る範囲: 入力の検査、取り消しを失敗に畳まないこと、嘘の成功の禁止、DC・グローバルハンドル・フォントの解放。守らない範囲: 紙に出たか・ジョブ投入後のプリンタ側の失敗、OS ごとの書体・余白の差、2 ページ目以降。UI スレッドで同期に呼ぶ。Windows 実機確認は #324",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#324）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_print.rs + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_page.rs + crates/fandhe-device/src/print.rs、Issue #326"
     },
     "web": {
       "status": "possible",
