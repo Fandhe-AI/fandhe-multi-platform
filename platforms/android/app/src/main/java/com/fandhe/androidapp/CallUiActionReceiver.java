@@ -22,7 +22,7 @@ public final class CallUiActionReceiver extends BroadcastReceiver {
                 || c == null) {
             // 現在の通話が別にあるとき（遅れて届いた旧世代の操作）は、現在の通知を消さず捨てる。
             if (CallUiHelper.currentId == RequestTracker.NONE) {
-                CallUiHelper.cancelNotification();
+                CallUiHelper.cancelNotification(context);
             }
             return;
         }

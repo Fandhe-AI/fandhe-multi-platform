@@ -124,11 +124,16 @@ final class CallUiHelper {
     }
 
     static void cancelNotification() {
-        if (appContext == null) {
+        cancelNotification(appContext);
+    }
+
+    /** プロセス死後は appContext が無いので、Receiver の Context でも取り消せるようにする。 */
+    static void cancelNotification(Context ctx) {
+        if (ctx == null) {
             return;
         }
         try {
-            NotificationManagerCompat.from(appContext).cancel(NOTIFICATION_TAG, NOTIFICATION_ID);
+            NotificationManagerCompat.from(ctx).cancel(NOTIFICATION_TAG, NOTIFICATION_ID);
         } catch (RuntimeException e) {
             // 解放の失敗は握りつぶす（呼び出し元の確定を止めない）。
         }
@@ -185,17 +190,14 @@ final class CallUiHelper {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS)
                         != PackageManager.PERMISSION_GRANTED) {
-            // 非前景ではダイアログを出せない。
-            if (!activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
-                finish(id, EVENT_FAILED);
-                return;
-            }
-            // 許可待ちは Rust 側の報告期限（5 秒）に収まらないため、今回の要求は権限不足で確定し、
-            // ダイアログは次回以降のために出すだけにする（結果は待たない）。
-            try {
-                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
-            } catch (RuntimeException e) {
-                // 次回に持ち越すだけなので無視する。
+            // 許可待ちは Rust 側の報告期限（5 秒）に収まらないため、今回の要求は権限不足で確定する。
+            // ダイアログは前景のときだけ、次回以降のために出す（結果は待たない）。
+            if (activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
+                try {
+                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+                } catch (RuntimeException e) {
+                    // 次回に持ち越すだけなので無視する。
+                }
             }
             finish(id, EVENT_FAILED_PERMISSION);
             return;
