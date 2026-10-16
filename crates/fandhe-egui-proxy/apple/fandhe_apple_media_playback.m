@@ -4,7 +4,14 @@
 //
 // `crates/fandhe-egui-proxy/src/device/apple_media_playback.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の macOS / iOS 分岐がコンパイルする（AVFoundation は既存のリンクで足りる）。
-// iOS 固有の部分（背景遷移・割り込み・再描画）は書かない（b-ios が TARGET_OS_IOS 内に足す）。
+// iOS（Issue #269）では TARGET_OS_IOS の内側で次を足す。
+//   - 背景遷移（UIApplicationDidEnterBackgroundNotification）と割り込み開始
+//     （AVAudioSessionInterruptionNotification の Began）で再生中なら pause して Interrupted(6) にする。
+//     バックグラウンド再生はしない。復帰（割り込み Ended・前面復帰）しても勝手に再開しない。
+//     アプリ一時停止由来の遅れた割り込み通知は無視する（復帰後の新しい再生を止めないため）。
+//   - 状態を OS コールバックで変えた直後、g_lock を外してから fandhe_rust_media_playback_changed を
+//     呼ぶ（Rust 側が crate::ios::request_repaint で次フレームを起こす。ロックの入れ子を作らない）。
+//   - AVAudioSession の category は変えない（既定のまま。消音スイッチが入っていると鳴らない）。
 //
 // 契約（戻りコードは固定。NSError の生値・コードは返さない、security.md A09）:
 //   int32_t fandhe_apple_media_playback_load(const uint8_t *bytes, size_t len, uint64_t gen)
@@ -15,7 +22,8 @@
 //     0 = 成功、3 = 世代不一致（player なしを含む）、1 = play が NO。
 //     stop は pause して currentTime を 0 に戻す。
 //   void fandhe_apple_media_playback_snapshot(uint64_t *gen, int32_t *phase, double *pos, double *dur)
-//     phase: 0 = Idle、1 = Ready、2 = Playing、3 = Paused、4 = Ended、5 = Failed(Decode)。
+//     phase: 0 = Idle、1 = Ready、2 = Playing、3 = Paused、4 = Ended、5 = Failed(Decode)、
+//     6 = Interrupted（iOS のみ）。
 //     pos / dur は秒。Rust 側が NaN・負値を未取得へ写す。
 //   void fandhe_apple_media_playback_shutdown(void)  冪等。
 //
@@ -28,8 +36,29 @@
 #import <Foundation/Foundation.h>
 #include <pthread.h>
 #include <stdint.h>
+#import <TargetConditionals.h>
+#if TARGET_OS_IOS
+#import <UIKit/UIKit.h>
+// Rust 側（ios_media_playback.rs）の受け口。引数なし。g_lock を外した後に呼ぶ。
+extern void fandhe_rust_media_playback_changed(void);
+#endif
 
-enum { PHASE_IDLE = 0, PHASE_READY, PHASE_PLAYING, PHASE_PAUSED, PHASE_ENDED, PHASE_FAILED_DECODE };
+enum {
+    PHASE_IDLE = 0,
+    PHASE_READY,
+    PHASE_PLAYING,
+    PHASE_PAUSED,
+    PHASE_ENDED,
+    PHASE_FAILED_DECODE,
+    PHASE_INTERRUPTED
+};
+
+// 状態を OS コールバックで変えた後の再描画通知。g_lock を保持して呼ばない。macOS は何もしない。
+static void fandhe_notify_changed(void) {
+#if TARGET_OS_IOS
+    fandhe_rust_media_playback_changed();
+#endif
+}
 
 @interface FandheAudioDelegate : NSObject <AVAudioPlayerDelegate>
 @property(nonatomic) uint64_t gen;
@@ -56,23 +85,104 @@ static void fandhe_release_locked(void) {
 
 @implementation FandheAudioDelegate
 - (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag {
+    BOOL changed = NO;
     pthread_mutex_lock(&g_lock);
     if (self.gen == g_gen && g_phase == PHASE_PLAYING) {
         g_phase = flag ? PHASE_ENDED : PHASE_FAILED_DECODE;
+        changed = YES;
     }
     pthread_mutex_unlock(&g_lock);
+    if (changed) {
+        fandhe_notify_changed();
+    }
 }
 - (void)audioPlayerDecodeErrorDidOccur:(AVAudioPlayer *)player error:(NSError *)error {
+    BOOL changed = NO;
     pthread_mutex_lock(&g_lock);
     if (self.gen == g_gen) {
         g_phase = PHASE_FAILED_DECODE;
+        changed = YES;
     }
     pthread_mutex_unlock(&g_lock);
+    if (changed) {
+        fandhe_notify_changed();
+    }
 }
 @end
 
+#if TARGET_OS_IOS
+// g_lock を保持して呼ぶ。再生中のときだけ pause して Interrupted にし、変えたら YES。
+// 判定は保持中の参照ではなく g_phase で行う（背景遷移と割り込みの通知が逆順・重複で届いても 2 回目は
+// 何もしない。isPlaying は末尾到達直後に Ended と取り違えるため使わない）。
+static BOOL fandhe_interrupt_locked(void) {
+    if (g_player == nil || g_phase != PHASE_PLAYING) {
+        return NO;
+    }
+    [g_player pause];
+    g_phase = PHASE_INTERRUPTED;
+    return YES;
+}
+
+static void fandhe_interrupt_and_notify(void) {
+    pthread_mutex_lock(&g_lock);
+    BOOL changed = fandhe_interrupt_locked();
+    pthread_mutex_unlock(&g_lock);
+    if (changed) {
+        fandhe_notify_changed();
+    }
+}
+
+// observer のトークンは static で握り続ける（捨てると ARC が解放し購読が消える、契約表 1）。
+static id g_background_observer = nil;
+static id g_interruption_observer = nil;
+
+// 登録は 1 回だけ。通知は main queue で届く。
+static void fandhe_ensure_observers(void) {
+    static dispatch_once_t once_token;
+    dispatch_once(&once_token, ^{
+        NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+        g_background_observer =
+            [center addObserverForName:UIApplicationDidEnterBackgroundNotification
+                                object:nil
+                                 queue:[NSOperationQueue mainQueue]
+                            usingBlock:^(NSNotification *_Nonnull __unused note) {
+                              fandhe_interrupt_and_notify();
+                            }];
+        g_interruption_observer =
+            [center addObserverForName:AVAudioSessionInterruptionNotification
+                                object:nil
+                                 queue:[NSOperationQueue mainQueue]
+                            usingBlock:^(NSNotification *_Nonnull note) {
+                              NSDictionary *info = note.userInfo;
+                              NSUInteger type =
+                                  [info[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue];
+                              // Ended では再開しない（契約）。
+                              if (type != AVAudioSessionInterruptionTypeBegan) {
+                                  return;
+                              }
+                              // アプリ一時停止に由来する遅れた通知は無視する。復帰後の新しい再生を
+                              // 止めうるため。背景遷移の購読が中断を確定済み。
+                              // 最低 deployment target は 17.0 なので Reason キーだけで足りる。
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+                              NSNumber *reason = info[AVAudioSessionInterruptionReasonKey];
+                              if (reason != nil &&
+                                  reason.unsignedIntegerValue ==
+                                      AVAudioSessionInterruptionReasonAppWasSuspended) {
+                                  return;
+                              }
+#pragma clang diagnostic pop
+                              fandhe_interrupt_and_notify();
+                            }];
+    });
+}
+#endif
+
 int32_t fandhe_apple_media_playback_load(const uint8_t *bytes, size_t len, uint64_t gen) {
     @autoreleasepool {
+#if TARGET_OS_IOS
+        fandhe_ensure_observers();
+#endif
         if (bytes == NULL || len == 0 || gen == 0) {
             return 2;
         }
