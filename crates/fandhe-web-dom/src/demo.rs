@@ -83,6 +83,9 @@ use fandhe_core::screens::local_fonts_show::{
 use fandhe_core::screens::location_show::{
     current_screen as current_location_screen, LocationShowState,
 };
+use fandhe_core::screens::media_transcode::{
+    current_screen as current_media_transcode_screen, TranscodeState,
+};
 use fandhe_core::screens::mic_record::{
     current_screen as current_mic_record_screen, MicRecordState,
 };
@@ -1025,6 +1028,21 @@ pub fn mount_audio_play_screen(root_id: &str) -> Result<(), JsValue> {
         screen,
         initial_state,
         super::media_playback::audio_play_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「動画・音声の変換」（親 #91、Issue #315）をマウントする
+/// 検証専用エントリポイント。`super::media_transcode::media_transcode_effect` が WebCodecs を駆動する。
+#[wasm_bindgen]
+pub fn mount_media_transcode_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    let initial_state = TranscodeState::default();
+    let screen = current_media_transcode_screen(&initial_state);
+    super::mount::mount_with_effect(
+        root,
+        screen,
+        initial_state,
+        super::media_transcode::media_transcode_effect,
     )
 }
 
