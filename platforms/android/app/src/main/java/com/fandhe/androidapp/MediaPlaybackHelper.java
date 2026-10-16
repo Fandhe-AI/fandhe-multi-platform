@@ -42,7 +42,7 @@ final class MediaPlaybackHelper {
     private static final int IDLE = 0, READY = 1, PLAYING = 2, PAUSED = 3, ENDED = 4,
             FAILED_DECODE = 5, LOADING = 6, INTERRUPTED = 7, FAILED_INTERNAL = 8;
     private static final int OP_PLAY = 0, OP_PAUSE = 1;
-    private static final int POST_START = 0, POST_PAUSE = 1, POST_STOP = 2;
+    private static final int POST_START = 0, POST_PAUSE = 1;
     // Rust 側と同じ上限。FFI に過大な byte[] を渡さない。
     private static final int MAX_WAV_BYTES = 16 * 1024 * 1024;
 
@@ -78,8 +78,9 @@ final class MediaPlaybackHelper {
     private void create(long gen, byte[] wav) {
         synchronized (lock) {
             if (destroyed || current != gen) return;
-            MediaPlayer mp = new MediaPlayer();
+            MediaPlayer mp = null;
             try {
+                mp = new MediaPlayer();
                 mp.setOnPreparedListener(p -> onPrepared(gen, p));
                 mp.setOnCompletionListener(p -> {
                     synchronized (lock) {
@@ -106,7 +107,7 @@ final class MediaPlaybackHelper {
 
     // 作りかけを即解放する（契約表 9）。
     private void failCreate(MediaPlayer mp) {
-        mp.release();
+        if (mp != null) mp.release();
         phase = FAILED_INTERNAL;
     }
 
@@ -153,23 +154,38 @@ final class MediaPlaybackHelper {
                 } else if (!prepared) {
                     wantPlay = true;
                 } else {
+                    // start の成功までは Loading（開始待ち）に留め、Rust 側の期限判定を維持する。
                     postOp(gen, POST_START);
-                    phase = PLAYING;
+                    phase = LOADING;
                 }
             } else if (op == OP_PAUSE) {
                 wantPlay = false;
-                if (prepared && phase == PLAYING) {
-                    postOp(gen, POST_PAUSE);
+                if (prepared && (phase == PLAYING || phase == LOADING)) {
+                    // 失敗を OK で隠さないよう、その場で実行して結果を返す。
+                    // 開始待ちの start は phase が LOADING でなくなるため実行時に捨てられる。
+                    if (!stopNow(false)) return FAILED;
                     phase = PAUSED;
                 }
             } else { // stop: 一時停止して先頭へ
                 wantPlay = false;
                 if (prepared) {
-                    postOp(gen, POST_STOP);
+                    if (!stopNow(true)) return FAILED;
                     phase = READY;
                 }
             }
             return OK;
+        }
+    }
+
+    // lock の内側で呼ぶ。一時停止（rewind なら先頭へ）。失敗は Failed(Internal) にして false。
+    private boolean stopNow(boolean rewind) {
+        try {
+            player.pause();
+            if (rewind) player.seekTo(0);
+            return true;
+        } catch (IllegalStateException e) {
+            phase = FAILED_INTERNAL;
+            return false;
         }
     }
 
@@ -181,10 +197,13 @@ final class MediaPlaybackHelper {
                 if (!valid(gen, mp)) return;
                 try {
                     if (kind == POST_START) {
-                        mp.start();
+                        // 開始待ちのままのときだけ開始し、成功後に Playing を確定する。
+                        if (phase == LOADING) {
+                            mp.start();
+                            phase = PLAYING;
+                        }
                     } else {
                         mp.pause();
-                        if (kind == POST_STOP) mp.seekTo(0);
                     }
                 } catch (IllegalStateException e) {
                     phase = FAILED_INTERNAL;
@@ -222,7 +241,7 @@ final class MediaPlaybackHelper {
             if (phase == PLAYING) {
                 postOp(current, POST_PAUSE);
                 phase = INTERRUPTED;
-            } else if (phase == LOADING && wantPlay) {
+            } else if (phase == LOADING && (wantPlay || prepared)) {
                 wantPlay = false;
                 phase = INTERRUPTED;
             }
