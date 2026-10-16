@@ -15,6 +15,7 @@
 // static で強参照する（delegate は弱参照で保持されるため）。
 // 嘘の成功を出さない: Ringing は completion が error なしで、かつ現在の通話のときだけ送る。取り消し・差し替え後に
 // 遅れて届いた受理は通知せず OS 側で閉じる。Active の終了要求が失敗したら reportCall で必ず閉じる。
+// 終了要求した旧通話は CallKit の解放確定（completion）まで追跡し、その間の次の報告は 1 件だけ保留して確定後に始める。
 // 通話履歴には残さない（includesCallsInRecents = NO）。AVAudioSession には触れない。
 // 守る範囲: 1 プロセス内の順序、嘘の成功の禁止、CXCall の解放。
 // 守らない範囲: 背景での通話の継続、プロセス死、複数通話、Bluetooth・車載機器の表示。
@@ -36,6 +37,11 @@ typedef NS_ENUM(NSInteger, FandheCallStage) {
 static uint64_t gCurrentId = 0; // 0 = なし
 static NSUUID *gCurrentUUID = nil;
 static FandheCallStage gStage = FandheCallStageReporting;
+// 終了を要求したが CallKit が解放を確定していない旧通話の UUID。確定まで次の報告は gPendingId に保留する
+// （maximumCallsPerCallGroup=1 で新着信が拒否され、旧通話が残るのを防ぐ）。
+static NSUUID *gClosingUUID = nil;
+static uint64_t gPendingId = 0; // 0 = 保留なし
+static void doReport(uint64_t cid);
 
 static CXProvider *gProvider = nil;
 static CXCallController *gController = nil;
@@ -52,10 +58,16 @@ static void clearCurrent(void) {
 @implementation FandheCallDelegate
 
 - (void)providerDidReset:(CXProvider *)provider {
+    uint64_t pending = gPendingId;
+    gPendingId = 0;
+    gClosingUUID = nil;
     if (gCurrentId != 0) {
         uint64_t cid = gCurrentId;
         clearCurrent();
         fandhe_rust_call_ui_event(cid, 6, 0, 0);
+    }
+    if (pending != 0) {
+        fandhe_rust_call_ui_event(pending, 6, 0, 0);
     }
 }
 
@@ -123,10 +135,29 @@ static void ensureProvider(void) {
     });
 }
 
+static void doEnd(uint64_t cid);
+
+// 旧通話の解放が確定したら、保留していた報告を始める。
+static void finishClosing(NSUUID *uuid) {
+    if (gClosingUUID == nil || ![gClosingUUID isEqual:uuid]) {
+        return;
+    }
+    gClosingUUID = nil;
+    uint64_t pending = gPendingId;
+    gPendingId = 0;
+    if (pending != 0) {
+        doReport(pending);
+    }
+}
+
 static void doReport(uint64_t cid) {
     ensureProvider();
-    if (gCurrentUUID != nil) {
-        [gProvider reportCallWithUUID:gCurrentUUID endedAtDate:nil reason:CXCallEndedReasonRemoteEnded];
+    if (gCurrentId != 0) {
+        doEnd(gCurrentId); // 差し替え。旧通話を閉じ、確定まで下で保留する
+    }
+    if (gClosingUUID != nil) {
+        gPendingId = cid;
+        return;
     }
     NSUUID *uuid = [NSUUID UUID];
     gCurrentId = cid;
@@ -153,8 +184,11 @@ static void doReport(uint64_t cid) {
                 } else {
                     // 取り消し・差し替え済み。通知せず OS 側で閉じる。
                     [gProvider reportCallWithUUID:uuid endedAtDate:nil reason:CXCallEndedReasonUnanswered];
+                    finishClosing(uuid);
                 }
-            } else if (current) {
+            } else if (!current) {
+                finishClosing(uuid); // 受理されなかったので解放済み
+            } else {
                 int32_t domain = [error.domain isEqualToString:CXErrorDomainIncomingCall] ? 1 : 0;
                 clearCurrent();
                 fandhe_rust_call_ui_event(cid, 5, domain, (int64_t)error.code);
@@ -164,7 +198,13 @@ static void doReport(uint64_t cid) {
 }
 
 static void doEnd(uint64_t cid) {
-    if (cid == 0 || gCurrentId != cid) {
+    if (cid == 0) {
+        return;
+    }
+    if (gCurrentId != cid) {
+        if (gPendingId == cid) {
+            gPendingId = 0; // 未開始の保留報告の取り消し
+        }
         return;
     }
     ensureProvider();
@@ -173,17 +213,22 @@ static void doEnd(uint64_t cid) {
     clearCurrent();
     switch (stage) {
         case FandheCallStageReporting:
-            // 遅れて届く成功の completion が閉じる。
+            // 遅れて届く completion が閉じ、その時点で保留中の報告を始める。
+            gClosingUUID = uuid;
             break;
         case FandheCallStageRinging:
             [gProvider reportCallWithUUID:uuid endedAtDate:nil reason:CXCallEndedReasonUnanswered];
             break;
         case FandheCallStageActive: {
             CXTransaction *t = [[CXTransaction alloc] initWithAction:[[CXEndCallAction alloc] initWithCallUUID:uuid]];
+            gClosingUUID = uuid;
             [gController requestTransaction:t completion:^(NSError *_Nullable error) {
-                if (error != nil) {
-                    [gProvider reportCallWithUUID:uuid endedAtDate:nil reason:CXCallEndedReasonFailed];
-                }
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (error != nil) {
+                        [gProvider reportCallWithUUID:uuid endedAtDate:nil reason:CXCallEndedReasonFailed];
+                    }
+                    finishClosing(uuid);
+                });
             }];
             break;
         }
