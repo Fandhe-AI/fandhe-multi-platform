@@ -23,6 +23,9 @@ use fandhe_core::screens::app_badge_set::{
 use fandhe_core::screens::audio_devices_show::{
     current_screen as current_audio_devices_screen, AudioDevicesShowState,
 };
+use fandhe_core::screens::audio_play::{
+    current_screen as current_audio_play_screen, AudioPlayState,
+};
 use fandhe_core::screens::background_task::{
     current_screen as current_background_task_screen, BackgroundTaskState,
 };
@@ -1002,6 +1005,22 @@ pub fn mount_file_watch_show_screen(root_id: &str) -> Result<(), JsValue> {
         screen,
         initial_state,
         super::file_watch::file_watch_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「音声の再生」（親 #86、Issue #271）をマウントする
+/// 検証専用エントリポイント。`super::media_playback::audio_play_effect` が `<audio>` を駆動する。
+/// core 画面は 再生 / 一時停止 / 停止 の 3 ボタンを常に出すため、追加のボタンは不要。
+#[wasm_bindgen]
+pub fn mount_audio_play_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    let initial_state = AudioPlayState::default();
+    let screen = current_audio_play_screen(&initial_state);
+    super::mount::mount_with_effect(
+        root,
+        screen,
+        initial_state,
+        super::media_playback::audio_play_effect,
     )
 }
 
