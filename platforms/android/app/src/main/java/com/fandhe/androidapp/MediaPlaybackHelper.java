@@ -55,6 +55,7 @@ final class MediaPlaybackHelper {
     private boolean started;          // start() 成功済みで未 pause（lock の内側）
     private long pos = -1;            // main で更新する位置キャッシュ
     private boolean wantPlay;         // 準備中に来た再生要求
+    private long startSeq;            // 開始待ち（POST_START）の世代。pause/stop で進めて積み残しを無効化する
     private boolean foreground = true;
     private boolean destroyed;
     // release 待ちの旧 player。onDestroy が post 済み Runnable を除去しても漏らさないため（契約表 9）。
@@ -169,8 +170,14 @@ final class MediaPlaybackHelper {
                 return OK;
             }
             wantPlay = false;
+            // 開始待ちが残っていれば main 実行前に無効化する。stop/pause の完了待ちが期限切れで取り消されても
+            // 積み残しの start が後から鳴らさないため（契約表 2・3）。
+            if (prepared && phase == LOADING) {
+                startSeq++;
+                phase = op == OP_PAUSE ? PAUSED : READY;
+            }
             // pause は再生中・開始待ちのみ、stop は準備済みなら常に対象。
-            if (!prepared || (op == OP_PAUSE && phase != PLAYING && phase != LOADING)) return OK;
+            if (!prepared || (op == OP_PAUSE && phase != PLAYING && phase != PAUSED)) return OK;
             stopMp = player;
             rewind = op != OP_PAUSE;
             // phase は main での実処理が成功した後に確定する（期限切れで取り消した場合に実態とずらさない）。
@@ -183,7 +190,7 @@ final class MediaPlaybackHelper {
             synchronized (lock) {
                 if (!valid(gen, mp)) return BAD_GEN;
                 if (phase == FAILED_DECODE || phase == FAILED_INTERNAL) return FAILED;
-                if (!rw && phase != PLAYING && phase != LOADING) return OK; // 待機中に中断・終了済み
+                if (!rw && phase != PLAYING && phase != PAUSED) return OK; // 待機中に中断・終了済み
                 return stopNow(mp, rw) ? OK : FAILED;
             }
         });
@@ -239,13 +246,14 @@ final class MediaPlaybackHelper {
     // lock の内側で呼ぶ。prepared 後なので player は非 null。
     private void postOp(long gen, int kind) {
         MediaPlayer mp = player;
+        final long seq = startSeq;
         handler.post(() -> {
             synchronized (lock) {
                 if (!valid(gen, mp)) return;
                 try {
                     if (kind == POST_START) {
-                        // 開始待ちのままのときだけ開始し、成功後に Playing を確定する。
-                        if (phase == LOADING) {
+                        // 開始待ちのままで世代も一致するときだけ開始し、成功後に Playing を確定する。
+                        if (phase == LOADING && seq == startSeq) {
                             mp.start();
                             started = true;
                             phase = PLAYING;
