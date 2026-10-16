@@ -469,6 +469,11 @@ windows = { workspace = true, optional = true, features = [
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",
     "Win32_System_WinRT_Direct3D11",
+    # Issue #326: `device/windows_print.rs` が `PrintDlgExW`（`Win32_UI_Controls_Dialogs`）と
+    # `StartDocW` / `EndDoc` 等（`Win32_Storage_Xps`）を呼ぶ。GDI は #1341 の feature を共用。
+    # 新規パッケージは増えない。
+    "Win32_UI_Controls_Dialogs",
+    "Win32_Storage_Xps",
     # Issue #268: `device/windows_media_playback.rs` が Media Foundation Media Engine
     # （`IMFMediaEngine*` / `IMFMediaEngineNotify` / `IMFByteStream`）を呼ぶ。mfplat.dll の
     # 自由関数は動的に読み込むため import は増えない。新規パッケージは増えない。
