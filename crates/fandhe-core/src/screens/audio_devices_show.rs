@@ -231,15 +231,14 @@ pub fn error_text(state: &AudioDevicesShowState) -> String {
 
 /// 画面を組み立てる。`Idle` のときのみボタンを出す。
 pub fn current_screen(state: &AudioDevicesShowState) -> Screen<AudioDevicesShowState> {
-    let screen = Screen::new(TITLE)
+    let mut screen = Screen::new(TITLE)
         .dynamic_text(status_text)
-        .dynamic_text(inputs_text)
-        .dynamic_text(outputs_text)
         .error_text(error_text);
-    if state.phase != ReadPhase::Idle {
-        return screen;
+    // 操作を前、長い一覧を最後に置く（窓外へ出てもボタンへ届く。Issue #77）。
+    if state.phase == ReadPhase::Idle {
+        screen = screen.button(READ_BUTTON_ID, READ_LABEL, read);
     }
-    screen.button(READ_BUTTON_ID, READ_LABEL, read)
+    screen.dynamic_text(inputs_text).dynamic_text(outputs_text)
 }
 
 #[cfg(test)]

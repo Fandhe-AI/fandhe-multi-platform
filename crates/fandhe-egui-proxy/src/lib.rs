@@ -275,13 +275,28 @@ pub fn render_screen_with_recyclers<S: 'static>(
     ui.separator();
 
     let state = store.state();
-    for (index, node) in screen.iter().enumerate() {
-        render_node(ui, node, state, &[index], &mut ctx);
-    }
+    // 見出しは固定せず本文と一緒にスクロールさせる（既存の見た目を保つ最小の変更）。
+    // VirtualList を含む画面も包む。VirtualList 側は見えている高さを上限にした内側
+    // スクロールなので、仮想化は有限の viewport で効いたまま、ボタン群を越えて外側で
+    // 一覧まで届く（Issue #77）。
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .id_salt("fandhe_screen_root_scroll")
+        .show(ui, |ui| {
+            for (index, node) in screen.iter().enumerate() {
+                render_node(ui, node, state, &[index], &mut ctx);
+            }
+        });
 
     for event in ctx.pending_events {
         store.dispatch(screen, &event);
     }
+}
+
+/// 縦 `VirtualList` の内側スクロールの高さ上限。外側（画面ルート）スクロールで
+/// 見えている高さを使い、窓が極端に低くても数行分は確保する（Issue #77）。
+fn virtual_list_max_height(ui: &egui::Ui, item_extent: f32) -> f32 {
+    ui.clip_rect().height().max(item_extent * 3.0)
 }
 
 /// OS の戻る操作を検知して `Event::BackRequested` を dispatch する（Issue #726）。
@@ -1112,8 +1127,10 @@ fn render_virtual_list<S: 'static>(
         return;
     }
 
+    let max_height = virtual_list_max_height(ui, item_extent);
     egui::ScrollArea::vertical()
         .id_salt(("fandhe-virtual-list", path.to_vec()))
+        .max_height(max_height)
         // 幅は利用可能領域いっぱいに固定し、高さは総コンテンツが小さい場合に
         // 縮ませる（`[false, true]`）。高さも `false` にすると項目数が少なくても
         // 残りの垂直領域を全占有し、後続の兄弟ノードを不要に圧迫するため
@@ -1328,8 +1345,10 @@ fn render_virtual_list_grid<S: 'static>(
     let columns = columns.max(1);
     let rows = total_len.div_ceil(columns);
 
+    let max_height = virtual_list_max_height(ui, item_extent);
     egui::ScrollArea::vertical()
         .id_salt(("fandhe-virtual-list", path.to_vec()))
+        .max_height(max_height)
         .auto_shrink([false, true])
         .show_viewport(ui, |ui, viewport| {
             // 仮想化の単位は「項目」ではなく「行」（`item_extent` = 行高）。
