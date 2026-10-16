@@ -7,11 +7,14 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "UIKit `UIPrintInteractionController`",
+      "status": "done",
+      "api": "UIKit `UIPrintInteractionController`（`UISimpleTextPrintFormatter`、iPad は `presentFromRect:inView:`）",
       "perm": "なし",
       "url": "https://developer.apple.com/documentation/uikit/uiprintinteractioncontroller",
-      "note": "未実装。印刷対象（PDF / 画像 / 描画）を渡す形。AirPrint 対応プリンタが前提"
+      "note": "実装済み（#327）。固定の短い文章を 1 ページ。結果は `Submitted`（ジョブを渡した。紙に出たことは意味しない）・`Cancelled`・失敗（error あり / 提示不可）で、`isPrintingAvailable == NO` は非対応。`Unconfirmed` には到達しない。守る範囲: 入力の検査、取り消しを失敗に畳まないこと、嘘の成功の禁止、結果を 1 回だけ届けること。守らない範囲: 紙に出たか・ジョブ投入後のプリンタ側の失敗、背景遷移中のシートの扱い（OS に任せる）、OS ごとの書体・余白の差。deploymentTarget 17.0 で API は全域で使え、権限・usage description は不要。実機確認は #324",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#324）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_print.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_print.m + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_page.rs + crates/fandhe-device/src/print.rs、Issue #327"
     },
     "android": {
       "status": "possible",
