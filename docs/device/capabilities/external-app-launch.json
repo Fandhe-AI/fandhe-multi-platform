@@ -1,0 +1,46 @@
+{
+  "id": "external-app-launch",
+  "name": "電話発信・地図など他アプリの起動（tel: / geo:）",
+  "group": "未着手の OS 機能",
+  "order": 143,
+  "priority": 133,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "`UIApplication.open(_:options:)` で `tel:` / `maps:` / `http(s)` 等を開く（`canOpenURL` は `LSApplicationQueriesSchemes` の宣言が必要）",
+      "perm": "`LSApplicationQueriesSchemes`（canOpenURL を使う場合）",
+      "url": "https://developer.apple.com/documentation/uikit/uiapplication/open(_:options:completionhandler:)",
+      "note": "未実装。tel: は電話の無い iPad 等で失敗しうる。発信はユーザー確認の画面が出る。URL 未確認（一般知識、要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`Intent.ACTION_DIAL`（`tel:`）/ `ACTION_VIEW`（`geo:`）+ `startActivity`",
+      "perm": "不要（`ACTION_DIAL` なら `CALL_PHONE` 不要）。Android 11+ は `<queries>` で対象を宣言",
+      "url": "https://developer.android.com/training/package-visibility",
+      "note": "未実装。`ACTION_CALL` は `CALL_PHONE` が要るため対象外。受け手が無いと `ActivityNotFoundException`。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`NSWorkspace.open(_:)` で `tel:`（FaceTime / 連携 iPhone）・`maps:` 等を開く",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/appkit/nsworkspace/open(_:)",
+      "note": "未実装。tel: は連携 iPhone 等が無いと開けない場合がある。URL 未確認（一般知識、要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`ShellExecuteW` または WinRT `Launcher.LaunchUriAsync` で `tel:` / `bingmaps:` 等を開く",
+      "perm": "不要",
+      "url": "https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-default-app",
+      "note": "未実装。tel: は対応アプリ（Phone Link 等）が無いと失敗。open-in-shell と同じ ShellExecute 経路を流用できる見込み。"
+    },
+    "web": {
+      "status": "possible",
+      "api": "`<a href=\"tel:...\">` / `location.href` で `tel:` / `geo:` / `maps:` へ遷移",
+      "perm": "不要",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a#linking_to_telephone_numbers",
+      "note": "未実装。対応アプリが無い環境では何も起きない（検出手段なし）。ユーザー操作起点でないとブロックされる場合がある。"
+    }
+  },
+  "note": "open-in-shell（ファイルを既定アプリで開く）・compose-mail-sms（mailto: / sms:）・url-scheme（自アプリの受信）とは別で、tel: / geo: / maps 等の URL で他アプリを起動する送信側。"
+}

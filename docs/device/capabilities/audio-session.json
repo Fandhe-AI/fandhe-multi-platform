@@ -1,0 +1,47 @@
+{
+  "id": "audio-session",
+  "name": "音声の割り込み・セッション種別",
+  "group": "未着手の OS 機能",
+  "order": 139,
+  "priority": 129,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "`AVAudioSession`（`category` / `setActive` / `interruptionNotification`）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/avfaudio/avaudiosession",
+      "note": "未実装。audio-devices が読むのは経路のみ。本機能は category の設定と割り込み通知（電話・Siri）への応答。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`AudioManager.requestAudioFocus` / `AudioFocusRequest`（`OnAudioFocusChangeListener`）、`AudioAttributes`",
+      "perm": "不要",
+      "url": "https://developer.android.com/media/optimize/audio-focus",
+      "note": "未実装。フォーカス喪失時の一時停止・音量下げ（ducking）を自前で行う。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "macos": {
+      "status": "n-a",
+      "api": "-",
+      "perm": "-",
+      "url": "",
+      "note": "macOS に割り込み型のセッション管理（`AVAudioSession` 相当）はない（iOS のみ）。"
+    },
+    "windows": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "-",
+      "url": "",
+      "note": "音声フォーカスを調停する公開 API はない（セッションごとの音量は Core Audio の `IAudioSessionManager2` で扱えるが割り込み通知とは別）。"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Audio Session API（`navigator.audioSession.type`）",
+      "perm": "不要",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/AudioSession",
+      "safari": "対応（先行実装）",
+      "note": "未実装。実験的な API。Safari が先行（iOS の消音スイッチ・割り込みに対応）。"
+    }
+  },
+  "note": "audio-devices はデバイスの列挙、media-playback は再生そのもので、本機能は再生・録音が他アプリ（電話・ナビ等）と競合するときの調停と、セッション種別の指定。"
+}

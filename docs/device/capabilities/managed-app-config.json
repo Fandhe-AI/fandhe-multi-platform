@@ -1,0 +1,46 @@
+{
+  "id": "managed-app-config",
+  "name": "MDM の管理アプリ設定の読み取り",
+  "group": "未着手の OS 機能",
+  "order": 152,
+  "priority": 142,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "`UserDefaults.standard.dictionary(forKey: \"com.apple.configuration.managed\")`、更新は `UserDefaults.didChangeNotification`",
+      "perm": "不要（MDM 側の配布設定が前提）",
+      "url": "https://developer.apple.com/documentation/foundation/nsuserdefaults",
+      "note": "未実装。MDM 未管理の端末では空。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`RestrictionsManager.getApplicationRestrictions()`（`ACTION_APPLICATION_RESTRICTIONS_CHANGED` で変更検知）。`res/xml` に制限スキーマの宣言が必要",
+      "perm": "不要（MDM / EMM 側の配布が前提）",
+      "url": "https://developer.android.com/work/managed-configurations",
+      "note": "未実装。未管理端末では空。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`UserDefaults` の管理設定ドメイン（構成プロファイルで配布した `com.apple.configuration.managed` 相当）",
+      "perm": "不要（MDM 側の配布が前提）",
+      "url": "",
+      "note": "未実装。macOS での配布経路は構成プロファイルで iOS と異なる可能性。URL 未確認（一般知識、要確認）。"
+    },
+    "windows": {
+      "status": "no",
+      "api": "アプリ設定向けの共通 API なし",
+      "perm": "-",
+      "url": "",
+      "note": "Windows にアプリ単位の管理構成を読む共通 API は無い（Intune はポリシー / レジストリ経由で独自）"
+    },
+    "web": {
+      "status": "n-a",
+      "api": "概念なし",
+      "perm": "-",
+      "url": "",
+      "note": "ブラウザ管理ポリシーは存在するがアプリ設定を読む API は無い"
+    }
+  },
+  "note": "企業の MDM が配布するアプリ設定（Managed App Configuration）を読むだけの機能で、端末管理（Lock Task 等）は対象外。"
+}

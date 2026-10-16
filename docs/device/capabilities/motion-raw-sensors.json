@@ -1,0 +1,47 @@
+{
+  "id": "motion-raw-sensors",
+  "name": "ジャイロ・磁気・線形加速度の生値",
+  "group": "未着手の OS 機能",
+  "order": 147,
+  "priority": 137,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "CoreMotion `CMMotionManager`（`gyroData` / `magnetometerData` / `deviceMotion.userAcceleration`）",
+      "perm": "不要（`NSMotionUsageDescription` は歩数系のみ。要確認）",
+      "url": "https://developer.apple.com/documentation/coremotion/cmmotionmanager",
+      "note": "未実装。サンプリング間隔は `*UpdateInterval` で指定。URL 以外の権限記述は一般知識、要確認。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`SensorManager`（`TYPE_GYROSCOPE` / `TYPE_MAGNETIC_FIELD` / `TYPE_LINEAR_ACCELERATION`）",
+      "perm": "Android 12+ で 200Hz 超は `HIGH_SAMPLING_RATE_SENSORS`",
+      "url": "https://developer.android.com/develop/sensors-and-location/sensors/sensors_motion",
+      "note": "未実装。既定の上限は 200Hz。"
+    },
+    "macos": {
+      "status": "no",
+      "api": "CoreMotion は iOS / watchOS 系のみ（一般知識、要確認）",
+      "perm": "-",
+      "url": "",
+      "note": "macOS は CoreMotion のセンサー API を提供しない（Apple シリコン Mac の内蔵センサーは非公開）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT `Windows.Devices.Sensors.Gyrometer` / `Magnetometer` / `Accelerometer`（線形は生値から重力を引く）",
+      "perm": "不要",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.gyrometer",
+      "note": "未実装。センサー搭載機（2-in-1 等）のみ。デスクトップ PC では `GetDefault` が null。"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Generic Sensor API（`Gyroscope` / `Magnetometer` / `LinearAccelerationSensor`）、`DeviceMotionEvent.rotationRate`",
+      "perm": "Permissions API の `gyroscope` / `magnetometer`。iOS Safari は `DeviceMotionEvent.requestPermission()`",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Sensor_APIs",
+      "safari": "一部対応（DeviceMotionEvent のみ。Generic Sensor は非対応）",
+      "note": "未実装。Magnetometer は Chromium 系のみ。iOS Safari は DeviceMotion のみ。"
+    }
+  },
+  "note": "tilt-motion は重力ベクトル（傾き）、compass-heading は方位で、これは角速度・磁場・線形加速度の生値を継続配信する。"
+}

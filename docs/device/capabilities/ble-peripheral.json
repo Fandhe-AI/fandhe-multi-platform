@@ -1,0 +1,46 @@
+{
+  "id": "ble-peripheral",
+  "name": "BLE の周辺機器役（アドバタイズ・GATT サーバー）",
+  "group": "未着手の OS 機能",
+  "order": 131,
+  "priority": 121,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "CoreBluetooth `CBPeripheralManager`（アドバタイズ・サービス公開）",
+      "perm": "Bluetooth 利用目的の記述（`NSBluetoothAlwaysUsageDescription`）",
+      "url": "https://developer.apple.com/documentation/corebluetooth/cbperipheralmanager",
+      "note": "未実装。バックグラウンドではアドバタイズ内容が制限される（要確認）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`BluetoothLeAdvertiser` + `BluetoothGattServer`",
+      "perm": "`BLUETOOTH_ADVERTISE` / `BLUETOOTH_CONNECT`（API 31+）。API 30 以下は `BLUETOOTH` / `BLUETOOTH_ADMIN`",
+      "url": "https://developer.android.com/develop/connectivity/bluetooth/ble/ble-overview",
+      "note": "未実装。端末によりアドバタイズ非対応がある（`isMultipleAdvertisementSupported`）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "CoreBluetooth `CBPeripheralManager`",
+      "perm": "Bluetooth 利用目的の記述（sandbox 時は Bluetooth Entitlement）",
+      "url": "https://developer.apple.com/documentation/corebluetooth/cbperipheralmanager",
+      "note": "未実装。iOS と同じ API。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT `Windows.Devices.Bluetooth.GenericAttributeProfile.GattServiceProvider` + `BluetoothLEAdvertisementPublisher`",
+      "perm": "Bluetooth 機能の宣言（パッケージ時）。unpackaged は要確認",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattserviceprovider",
+      "note": "未実装。アダプターが周辺機器役に対応している必要がある（`BluetoothAdapter.IsPeripheralRoleSupported`）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "-",
+      "url": "",
+      "note": "Web Bluetooth は中心役（接続する側）のみで、GATT サーバーとしてアドバタイズする API はない。"
+    }
+  },
+  "note": "bluetooth-le は周辺機器を探して接続する中心役（スキャン）だが、本機能は自分が周辺機器になって広告し GATT サーバーを公開する逆の役。"
+}

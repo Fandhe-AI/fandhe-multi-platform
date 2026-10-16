@@ -1,0 +1,46 @@
+{
+  "id": "image-generation",
+  "name": "端末内での画像生成",
+  "group": "未着手の OS 機能",
+  "order": 158,
+  "priority": 148,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "Image Playground（`ImagePlayground` の `ImageCreator`、iOS 18.4+）",
+      "perm": "不要（要確認）",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。Apple Intelligence 対応機種に限る。画像生成用の UI（`imagePlaygroundSheet`）もある"
+    },
+    "android": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "端末内の画像生成を提供する公開 API は確認できず（一般知識、要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Image Playground（`ImagePlayground` の `ImageCreator`）",
+      "perm": "不要（要確認）",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。Apple Intelligence 対応の Mac に限る"
+    },
+    "windows": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "公開された画像生成 API は確認できず（Windows AI APIs の画像系は生成ではなく加工が中心と認識、要確認）"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "ブラウザ標準の画像生成 API はない"
+    }
+  },
+  "note": "on-device-llm は文章を生成する機能で、こちらは端末内モデルで画像を生成する別機能（対応機種が限られる）"
+}

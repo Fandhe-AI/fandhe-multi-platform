@@ -1,0 +1,46 @@
+{
+  "id": "app-progress-attention",
+  "name": "Dock・タスクバーの進捗表示と注意喚起",
+  "group": "未着手の OS 機能",
+  "order": 141,
+  "priority": 131,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "n-a",
+      "api": "-",
+      "perm": "-",
+      "url": "",
+      "note": "iOS にアプリアイコンの進捗表示・バウンスはない。"
+    },
+    "android": {
+      "status": "n-a",
+      "api": "-",
+      "perm": "-",
+      "url": "",
+      "note": "ホーム画面アイコンの進捗・注意喚起の概念はない（通知の進捗表示は notification 側）。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AppKit `NSDockTile.contentView`（進捗の自前描画）、`NSApplication.requestUserAttention`（Dock のバウンス）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/appkit/nsapplication/1428358-requestuserattention",
+      "note": "未実装。進捗バーは contentView を自前で描く。バッジ数は app-badge が扱う。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 `ITaskbarList3::SetProgressState` / `SetProgressValue`、`FlashWindowEx`",
+      "perm": "不要",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-itaskbarlist3",
+      "note": "未実装。app-badge の Windows と同じ `ITaskbarList3`（オーバーレイは app-badge、進捗は本機能）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "-",
+      "url": "",
+      "note": "タブやウィンドウのタスクバー進捗・点滅の標準 API はない（`navigator.setAppBadge` は app-badge で扱う）。"
+    }
+  },
+  "note": "app-badge はアイコンの数字・オーバーレイで、本機能はタスクバー進捗バーと Dock のバウンス・タスクバー点滅（利用者の注意を引く）。notification とも別。"
+}

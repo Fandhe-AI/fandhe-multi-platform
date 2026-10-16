@@ -1,0 +1,46 @@
+{
+  "id": "open-system-settings",
+  "name": "OS の設定画面を開く",
+  "group": "未着手の OS 機能",
+  "order": 138,
+  "priority": 128,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "`UIApplication.openSettingsURLString`（自アプリの設定画面）を `open(_:)` で開く",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/uikit/uiapplication/1623042-opensettingsurlstring",
+      "note": "未実装。開けるのは自アプリの設定のみで、任意の設定ページは公開 API にない。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`Settings.ACTION_APPLICATION_DETAILS_SETTINGS`・`ACTION_WIFI_SETTINGS`・`ACTION_BLUETOOTH_SETTINGS` 等の Intent",
+      "perm": "不要",
+      "url": "https://developer.android.com/reference/android/provider/Settings",
+      "note": "未実装。ほとんどの設定ページを Intent で開ける。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`NSWorkspace.open` で `x-apple.systempreferences:` URL を開く",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/appkit/nsworkspace",
+      "note": "未実装。ペイン ID は非公式で OS バージョンにより変わる（要確認）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`ms-settings:` URI を `Launcher.LaunchUriAsync` / `ShellExecute` で開く",
+      "perm": "不要",
+      "url": "https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app",
+      "note": "未実装。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "-",
+      "url": "",
+      "note": "ブラウザから OS やブラウザの設定画面を開く標準 API はない。"
+    }
+  },
+  "note": "permission 系の許可ダイアログではなく、権限を拒否された後に利用者を OS の設定画面へ導く操作。open-in-shell（URL・ファイルを開く）とは対象が OS 設定で別。"
+}

@@ -83,6 +83,81 @@
           "name": "利用統計",
           "api": "UsageStatsManager（Android）",
           "why": "ユーザーが設定画面で特別なアクセスを許可する必要がある。"
+        },
+        {
+          "name": "トランシーバー型の音声通話",
+          "api": "PushToTalk（iOS）",
+          "why": "Apple への Entitlement 申請が要る。"
+        },
+        {
+          "name": "着信の識別・迷惑 SMS の振り分け",
+          "api": "CallKit の Call Directory / IdentityLookup（iOS）",
+          "why": "OS の拡張として動き、iOS にしか無い。"
+        },
+        {
+          "name": "他アプリの操作・入力の注入",
+          "api": "AXUIElement・CGEventTap（macOS）/ Input Injection（Windows）",
+          "why": "ユーザー補助の許可や restricted capability が要る特権。"
+        },
+        {
+          "name": "金融データ・決済カードの発行",
+          "api": "FinanceKit / SecureElementPass（Apple）",
+          "why": "Apple への Entitlement 申請が要る。"
+        },
+        {
+          "name": "eSIM の追加",
+          "api": "CTCellularPlanProvisioning（iOS）",
+          "why": "通信事業者向けの Entitlement が要る。"
+        },
+        {
+          "name": "独自ブラウザエンジン",
+          "api": "BrowserEngineKit（iOS）",
+          "why": "Apple への Entitlement 申請が要り、地域も限られる。"
+        },
+        {
+          "name": "MFi アクセサリーとの通信",
+          "api": "ExternalAccessory（iOS）",
+          "why": "MFi プログラムへの参加が要る。"
+        },
+        {
+          "name": "SMS の送受信・通話履歴",
+          "api": "Telephony.Sms / CallLog（Android）/ Windows.Devices.Sms",
+          "why": "Play のポリシーや restricted capability で、既定アプリ等に限られる。"
+        },
+        {
+          "name": "他アプリの通知・再生情報の読み取り",
+          "api": "NotificationListenerService（Android）/ UserNotificationListener・GlobalSystemMediaTransportControls（Windows）",
+          "why": "特別な許可や restricted capability が要り、iOS・macOS・Web には無い。"
+        },
+        {
+          "name": "インストール済みアプリの一覧",
+          "api": "QUERY_ALL_PACKAGES（Android）/ Windows.System.Inventory",
+          "why": "Play の制限対象・restricted capability。"
+        },
+        {
+          "name": "既定アプリの役割・電池最適化の除外",
+          "api": "RoleManager / REQUEST_IGNORE_BATTERY_OPTIMIZATIONS（Android）",
+          "why": "Play の審査で用途が限られる。"
+        },
+        {
+          "name": "端末の管理・キオスク",
+          "api": "DevicePolicyManager・Lock Task（Android）/ Windows.Management",
+          "why": "MDM・企業管理の用途に限られる。"
+        },
+        {
+          "name": "音声アシスタントとしての起動",
+          "api": "ConversationalAgent（Windows）",
+          "why": "システムへの統合と申請が要る。"
+        },
+        {
+          "name": "ファミリーセーフティの制限",
+          "api": "Windows.Media.ContentRestrictions",
+          "why": "スクリーンタイムと同じく保護者管理の領域。"
+        },
+        {
+          "name": "モバイルホットスポット・テザリング",
+          "api": "TetheringManager（Android）/ NetworkOperators（Windows）",
+          "why": "特権的な API。"
         }
       ]
     },
@@ -156,6 +231,26 @@
           "name": "WebCodecs",
           "api": "WebCodecs API",
           "why": "media-transcode の Web 実装に含む。"
+        },
+        {
+          "name": "スタート・タスクバーへのピン留め",
+          "api": "SecondaryTile（Windows）/ requestPinShortcut（Android）",
+          "why": "app-shortcuts の範囲で扱う。"
+        },
+        {
+          "name": "Google・Apple アカウントでのサインイン",
+          "api": "Credential Manager の Sign in with Google / Sign in with Apple",
+          "why": "passkey-signin と web-auth-session の組み合わせで扱う。"
+        },
+        {
+          "name": "DRM 付きの再生",
+          "api": "Encrypted Media Extensions / FairPlay / Widevine / PlayReady",
+          "why": "media-playback の延長で、ライセンスサーバーが前提。"
+        },
+        {
+          "name": "手書き文字の認識",
+          "api": "Handwriting Recognition API / ML Kit Digital Ink",
+          "why": "pen-stylus と image-recognition の範囲で扱う。"
         }
       ]
     },
@@ -198,6 +293,26 @@
           "name": "自動更新・クラッシュ報告",
           "api": "Sparkle / Crashlytics 等",
           "why": "配信・運用の仕組みで、端末機能ではない。"
+        },
+        {
+          "name": "軽量起動アプリ",
+          "api": "App Clips（iOS）/ Instant Apps（Android）",
+          "why": "配信の仕組みで、アプリの端末機能ではない。"
+        },
+        {
+          "name": "動作の計測・診断",
+          "api": "MetricKit（Apple）",
+          "why": "運用・計測の仕組みで、クラッシュ報告と同じ扱い。"
+        },
+        {
+          "name": "天気情報",
+          "api": "WeatherKit（Apple）",
+          "why": "端末機能ではなくクラウドの API。"
+        },
+        {
+          "name": "Xbox のサービス連携",
+          "api": "Windows.Gaming.XboxLive",
+          "why": "提携アカウントでないと実行時に失敗する。"
         }
       ]
     },
@@ -261,6 +376,46 @@
           "name": "スマートカードリーダー",
           "api": "CryptoTokenKit / WinSCard",
           "why": "業務用途に限られ、需要が低い。"
+        },
+        {
+          "name": "仮想マシン・ドライバー・システム拡張",
+          "api": "Virtualization / DriverKit / System Extensions（macOS）",
+          "why": "特権を要し、macOS にしか無い。"
+        },
+        {
+          "name": "日記の提案・センシティブな画像の判定・共有コンテンツ",
+          "api": "JournalingSuggestions / SensitiveContentAnalysis / SharedWithYou（Apple）",
+          "why": "Apple にしか無く、共通の機能にする需要が低い。"
+        },
+        {
+          "name": "視線追跡",
+          "api": "GazeInputSourcePreview（Windows）",
+          "why": "アイトラッカーが前提で、Windows にしか無い。"
+        },
+        {
+          "name": "POS 機器",
+          "api": "Windows.Devices.PointOfService",
+          "why": "業務用途に限られ、Windows にしか無い。"
+        },
+        {
+          "name": "3D プリンター",
+          "api": "Windows.Graphics.Printing3D",
+          "why": "Windows にしか無く、需要が低い。"
+        },
+        {
+          "name": "IoT のピン入出力",
+          "api": "Windows.Devices.Gpio / I2c / Spi",
+          "why": "対応ハードが限られる。"
+        },
+        {
+          "name": "作業履歴の端末間引き継ぎ",
+          "api": "UserActivities / RemoteSystems（Windows）",
+          "why": "Handoff と同じ領域で、Windows にしか無い。"
+        },
+        {
+          "name": "Android TV のホームチャンネル・HDMI-CEC",
+          "api": "tvprovider / HdmiControlManager（Android）",
+          "why": "Android TV にしか無い。"
         }
       ]
     }

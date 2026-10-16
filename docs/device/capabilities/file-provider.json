@@ -1,0 +1,46 @@
+{
+  "id": "file-provider",
+  "name": "クラウド保存先として OS のファイル画面に出る",
+  "group": "未着手の OS 機能",
+  "order": 161,
+  "priority": 151,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "File Provider（`NSFileProviderReplicatedExtension`。ファイルアプリに表示）",
+      "perm": "App Extension の追加 + App Group",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。別プロセスの App Extension が要り、単一プロセスの Rust 描画アプリには重い。本リポジトリは未対応のため実装コストが大きい"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`DocumentsProvider`（Storage Access Framework のドキュメントプロバイダー）",
+      "perm": "不要（manifest に provider を宣言）",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。JNI ではなく manifest 宣言の Java/Kotlin クラスが要る"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "File Provider（`NSFileProviderReplicatedExtension`。Finder に表示）",
+      "perm": "App Extension の追加 + App Group",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。別プロセスの App Extension が要る重い機能"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Cloud Files API（Win32 `CfRegisterSyncRoot` / `Windows.Storage.Provider.StorageProviderSyncRootManager`）",
+      "perm": "不要（要確認）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/cfapi/cloud-files-api-portal",
+      "note": "未実装。URL 未確認（一般知識、要確認）。エクスプローラーに同期フォルダとして出る。ドライバ的な実装が要り重い"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "ブラウザから OS のファイル画面へ保存先を出す API はない"
+    }
+  },
+  "note": "自アプリのクラウド保存領域を OS のファイル画面に出す機能で、別プロセスの App Extension 等が要る重い機能（file-picker の選択ダイアログとは別）"
+}

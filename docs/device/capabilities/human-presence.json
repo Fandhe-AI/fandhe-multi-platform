@@ -1,0 +1,46 @@
+{
+  "id": "human-presence",
+  "name": "人の在席・離席の検知",
+  "group": "未着手の OS 機能",
+  "order": 154,
+  "priority": 144,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "在席を返す公開 API は確認できず"
+    },
+    "android": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "在席を返す公開 API は確認できず"
+    },
+    "macos": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "在席を返す公開 API は確認できず（一般知識、要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT `Windows.Devices.Sensors.HumanPresenceSensor`（`GetDefaultAsync` / `ReadingChanged`）",
+      "perm": "要確認（人の在席センサーの capability 宣言が要るはず）",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。対応する機種のセンサー搭載機に限る。センサーが無い機種では取得できない"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "在席を返すブラウザ API はない（Idle Detection は入力ベースで user-idle の領域）"
+    }
+  },
+  "note": "user-idle は入力の無操作時間だが、こちらは近接センサーやカメラで人が端末の前にいるかを物理的に検知する別機能"
+}

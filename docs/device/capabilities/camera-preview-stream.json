@@ -1,0 +1,47 @@
+{
+  "id": "camera-preview-stream",
+  "name": "カメラのライブ映像・フレーム取得（ズーム等の操作を含む）",
+  "group": "未着手の OS 機能",
+  "order": 135,
+  "priority": 125,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "AVFoundation `AVCaptureSession` + `AVCaptureVideoDataOutput`（フレーム）、`AVCaptureDevice.videoZoomFactor`",
+      "perm": "カメラ利用目的の記述（`NSCameraUsageDescription`）",
+      "url": "https://developer.apple.com/documentation/avfoundation/avcapturesession",
+      "note": "未実装。毎フレームを Rust へ渡す経路（コピーか共有バッファか）の設計が要る。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "CameraX（`Preview` / `ImageAnalysis`）、`CameraControl.setZoomRatio`",
+      "perm": "`CAMERA`",
+      "url": "https://developer.android.com/media/camera/camerax",
+      "note": "未実装。CameraX は AndroidX 依存の追加が要る。Camera2 でも可能。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AVFoundation `AVCaptureSession` + `AVCaptureVideoDataOutput`",
+      "perm": "カメラ利用目的の記述、sandbox 時は Camera Entitlement",
+      "url": "https://developer.apple.com/documentation/avfoundation/avcapturesession",
+      "note": "未実装。iOS と同じ API。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT `MediaCapture` + `MediaFrameReader`、`VideoDeviceController`（ズーム等）",
+      "perm": "`webcam` 機能の宣言（パッケージ時）。unpackaged は要確認",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.frames.mediaframereader",
+      "note": "未実装。camera-capture の Windows と同じ `MediaCapture`。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "web": {
+      "status": "possible",
+      "api": "`MediaDevices.getUserMedia` + `<video>` / `MediaStreamTrack.applyConstraints`（`zoom` は対応ブラウザのみ）",
+      "perm": "カメラ許可、secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia",
+      "safari": "getUserMedia は対応、ズーム制約は未対応の見込み（要確認）",
+      "note": "未実装。ズームは Chromium 系のみの見込み（要確認）。"
+    }
+  },
+  "note": "camera-capture は静止画 1 枚を撮る一発の機能で、本機能は映像を流し続けて毎フレームを受け取り、ズーム等も操作する。video-capture（動画ファイルの撮影）とも別。"
+}

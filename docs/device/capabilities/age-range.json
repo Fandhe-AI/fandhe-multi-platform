@@ -1,0 +1,46 @@
+{
+  "id": "age-range",
+  "name": "年齢区分の確認",
+  "group": "未着手の OS 機能",
+  "order": 140,
+  "priority": 130,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "Declared Age Range API（`DeclaredAgeRange` の `AgeRangeService`）",
+      "perm": "Declared Age Range の Entitlement（`com.apple.developer.declared-age-range`）（Xcode の capability で有効化。個別の申請が要るかは要確認）",
+      "url": "https://developer.apple.com/documentation/declaredagerange",
+      "note": "未実装。利用者・保護者が共有を許可した年齢区分のみが返る。対象地域・OS バージョン（iOS 26 系）に制限がある（要確認）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Play Age Signals API（Google Play services、ベータ）",
+      "perm": "Play services が必要（GMS 非搭載端末は不可）。Play Console での利用設定が要る見込み（要確認）",
+      "url": "https://developer.android.com/google/play/age-signals",
+      "note": "未実装。ベータで提供範囲（地域・法令対象）が限定される。URL 未確認。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Declared Age Range API（`DeclaredAgeRange`）",
+      "perm": "Declared Age Range の Entitlement（Xcode の capability で有効化。個別の申請が要るかは要確認）",
+      "url": "https://developer.apple.com/documentation/declaredagerange",
+      "note": "未実装。macOS での提供有無は未確認。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "windows": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "-",
+      "url": "",
+      "note": "年齢区分を返す OS の公開 API はない。"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "-",
+      "url": "",
+      "note": "年齢区分を返すブラウザの標準 API はない。"
+    }
+  },
+  "note": "device-info（機種・OS）や identifier とは無関係で、OS が保持する年齢区分（範囲のみ、生年月日は返らない）を問い合わせる。"
+}

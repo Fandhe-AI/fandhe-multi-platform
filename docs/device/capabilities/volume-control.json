@@ -1,0 +1,46 @@
+{
+  "id": "volume-control",
+  "name": "システム音量・消音状態の取得と変更",
+  "group": "未着手の OS 機能",
+  "order": 133,
+  "priority": 123,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "`AVAudioSession.outputVolume`（取得のみ、KVO 可）。変更は `MPVolumeView` のスライダー経由のみ",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/avfaudio/avaudiosession/1616533-outputvolume",
+      "note": "未実装。アプリから直接の変更 API はなく、取得中心。消音スイッチの状態は公開 API なし。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`AudioManager.getStreamVolume` / `setStreamVolume` / `adjustStreamVolume`（`STREAM_MUSIC` 等）",
+      "perm": "不要（消音モード解除は Do Not Disturb アクセスが要る場合あり）",
+      "url": "https://developer.android.com/reference/android/media/AudioManager",
+      "note": "未実装。`setStreamVolume` は消音モード中の変更で SecurityException になりうる。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "Core Audio `AudioObjectGetPropertyData` / `SetPropertyData`（`kAudioDevicePropertyVolumeScalar` / `kAudioDevicePropertyMute`）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/coreaudio",
+      "note": "未実装。出力デバイスによっては音量プロパティがない（HDMI 等）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Core Audio `IAudioEndpointVolume`（`GetMasterVolumeLevelScalar` / `SetMute`）",
+      "perm": "不要",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/endpointvolume/nn-endpointvolume-iaudioendpointvolume",
+      "note": "未実装。audio-devices の Windows と同じ Core Audio。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "-",
+      "url": "",
+      "note": "ブラウザから OS のシステム音量を読み書きする API はない（`HTMLMediaElement.volume` は要素単位のみ）。"
+    }
+  },
+  "note": "audio-devices は入出力デバイスの列挙で、本機能は音量・消音の値の取得と変更。media-playback の再生中の音量とも別。"
+}
