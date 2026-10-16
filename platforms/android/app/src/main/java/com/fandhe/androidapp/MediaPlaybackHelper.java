@@ -5,6 +5,9 @@ import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Looper;
 
+import java.util.HashSet;
+import java.util.Set;
+
 // 音声再生画面（Issue #270、親 #86 の b-android）の Android 実装ヘルパー。MainActivity から
 // 生成・委譲される（Rust の `device/android_media_playback.rs` が egui スレッドから
 // `MainActivity.mediaPlaybackLoad` / `Control` / `Snapshot` / `Shutdown` を同期 JNI で呼ぶ）。
@@ -52,6 +55,8 @@ final class MediaPlaybackHelper {
     private boolean wantPlay;         // 準備中に来た再生要求
     private boolean foreground = true;
     private boolean destroyed;
+    // release 待ちの旧 player。onDestroy が post 済み Runnable を除去しても漏らさないため（契約表 9）。
+    private final Set<MediaPlayer> pendingRelease = new HashSet<>();
     private long duration = -1;
 
     int load(long gen, byte[] wav) {
@@ -130,8 +135,8 @@ final class MediaPlaybackHelper {
                 } catch (IllegalStateException e) {
                     phase = FAILED_INTERNAL;
                 }
-            } else {
-                phase = READY;
+            } else if (phase != INTERRUPTED) {
+                phase = READY; // 中断は維持する（準備完了でも Ready に戻さない）
             }
         }
     }
@@ -229,6 +234,8 @@ final class MediaPlaybackHelper {
             destroyed = true;
             handler.removeCallbacksAndMessages(null);
             if (player != null) player.release(); // main 上なので直接呼ぶ
+            for (MediaPlayer old : pendingRelease) old.release();
+            pendingRelease.clear();
             player = null;
             current = 0;
         }
@@ -244,7 +251,14 @@ final class MediaPlaybackHelper {
     // lock の内側。旧 player の release を post し、状態を Idle へ戻す。
     private void releaseLocked() {
         MediaPlayer old = player;
-        if (old != null) handler.post(old::release);
+        if (old != null) {
+            pendingRelease.add(old);
+            handler.post(() -> {
+                synchronized (lock) {
+                    if (pendingRelease.remove(old)) old.release();
+                }
+            });
+        }
         player = null;
         current = 0;
         phase = IDLE;
