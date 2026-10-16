@@ -7,11 +7,14 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "UIKit `UIPrintInteractionController`",
+      "status": "done",
+      "api": "UIKit `UIPrintInteractionController`（`UISimpleTextPrintFormatter`、iPad は `presentFromRect:inView:`）",
       "perm": "なし",
       "url": "https://developer.apple.com/documentation/uikit/uiprintinteractioncontroller",
-      "note": "未実装。印刷対象（PDF / 画像 / 描画）を渡す形。AirPrint 対応プリンタが前提"
+      "note": "実装済み（#327）。固定の短い文章を 1 ページ。結果は `Submitted`（ジョブを渡した。紙に出たことは意味しない）・`Cancelled`・失敗（error あり / 提示不可）で、`isPrintingAvailable == NO` は非対応。`Unconfirmed` には到達しない。守る範囲: 入力の検査、取り消しを失敗に畳まないこと、嘘の成功の禁止、結果を 1 回だけ届けること。守らない範囲: 紙に出たか・ジョブ投入後のプリンタ側の失敗、背景遷移中のシートの扱い（OS に任せる）、OS ごとの書体・余白の差。deploymentTarget 17.0 で API は全域で使え、権限・usage description は不要。実機確認は #324",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#324）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_print.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_print.m + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_page.rs + crates/fandhe-device/src/print.rs、Issue #327"
     },
     "android": {
       "status": "done",
@@ -34,19 +37,25 @@
       "impl": "crates/fandhe-egui-proxy/src/device/macos_print.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_print.m + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_page.rs + crates/fandhe-device/src/print.rs、Issue #325"
     },
     "windows": {
-      "status": "possible",
-      "api": "Win32 印刷 API（`PrintDlgEx` 等）",
-      "perm": "なし（Win32 desktop 専用、package identity 要件の記載なし。要確認）",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/printdocs/printdocs-printing",
-      "note": "未実装。`EnumPrinters` の URL は 404 のため未確認"
+      "status": "done",
+      "api": "`PrintDlgExW`（`PD_RETURNDC`）+ GDI（`StartDocW` / `DrawTextW` / `EndDoc`）",
+      "perm": "なし（Win32 desktop API。package identity 不要）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/commdlg/nf-commdlg-printdlgexw",
+      "note": "固定の短い文章を 1 ページ。結果は、`PD_RESULT_PRINT` でジョブを投入したら `Submitted`（PDF 出力を含み、紙に出たことは意味しない）、`PD_RESULT_CANCEL` / `PD_RESULT_APPLY` と `StartDocW` の `ERROR_CANCELLED`（Microsoft Print to PDF の保存先の取り消し）は `Cancelled`、それ以外の失敗は失敗。`Unconfirmed` には到達しない。守る範囲: 入力の検査、取り消しを失敗に畳まないこと、嘘の成功の禁止、DC・グローバルハンドル・フォントの解放。守らない範囲: 紙に出たか・ジョブ投入後のプリンタ側の失敗、OS ごとの書体・余白の差、2 ページ目以降。UI スレッドで同期に呼ぶ。Windows 実機確認は #324",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#324）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_print.rs + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_page.rs + crates/fandhe-device/src/print.rs、Issue #326"
     },
     "web": {
-      "status": "possible",
-      "api": "`window.print()`",
-      "perm": "なし",
+      "status": "done",
+      "api": "`window.print()`。`body` 直下の印刷用ブロックと、ブロック内の `@media print` でそのブロックだけを出す（`web-sys` 経由）",
+      "perm": "不要",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/print",
-      "safari": "Safari 対応（MDN は全主要ブラウザ対応と記載）",
-      "note": "MDN は Baseline（2023-06 から Widely available）。印刷されるのはページ全体で、描画 Canvas の印刷は CSS 側の調整が要る"
+      "safari": "MDN では全主要ブラウザが対応。実ブラウザでの確認は #324",
+      "note": "実装済み（#329）。固定の見出し 1 行と本文数行だけを印刷する。結果は `window.print()` が例外なく戻れば常に `Unconfirmed`（印刷したか・取り消したかをブラウザが返さない）で、`Submitted` / `Cancelled` には到達しない。`window` が無ければ非対応。例外とブロック作成の失敗は固定文言の失敗（例外の message は出さない）。モバイルブラウザは `print()` がすぐ戻るので、ブロックは次の要求か画面の破棄まで残す。守る範囲: 1 マウント内の要求と完了の順序、嘘の成功の禁止、ブロックの解放。守らない範囲: sandbox（`allow-modals` なし）やブラウザ設定で黙って無視される場合、紙に出たか、ブラウザごとの余白・書体・ヘッダーの差、複数タブ、egui-proxy の wasm canvas 経路（非対応のまま）",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#324）",
+      "impl": "crates/fandhe-web-dom/src/print_page.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/print_page.rs + crates/fandhe-device/src/print.rs、Issue #329"
     }
   },
   "note": "print は OS の印刷ダイアログを出す。今回の範囲: 固定の短い文章（見出し 1 行 + 本文数行）を 1 ページとして OS の印刷ダイアログに渡す。複数ページ・画像・PDF・プリンタ選択・進捗・紙に出たかの追跡は扱わない。結果の三値と守る範囲 / 守らない範囲は `fandhe_device::print` のモジュール doc を参照。"

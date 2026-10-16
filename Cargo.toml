@@ -227,6 +227,11 @@ windows = { version = "0.61", default-features = false }
 # `git diff --stat Cargo.lock` で新規 `[[package]]` が増えないことを確認済み
 # （上記 `windows`/`raw-window-handle` と同じ「推移依存の直接依存への昇格」パターン）。
 windows-future = { version = "0.2", default-features = false }
+# Issue #268: `device/windows_media_playback.rs` の `#[windows::core::implement]`
+# （`IMFMediaEngineNotify` の実装）が生成するコードは `::windows_core` を絶対パスで参照するため、
+# 推移依存の `windows-core` を直接依存へ昇格する。Cargo.lock には `windows` の通常依存として
+# 0.61.2 が既に解決済みで、新規 `[[package]]` は増えない（`windows-future` と同じパターン）。
+windows-core = { version = "0.61", default-features = false }
 # Phase 11（Issue #898）: `windows_share::remember_window` が `eframe::CreationContext`
 # （`HasWindowHandle` 実装、eframe 0.33.3 `epi.rs`）から `RawWindowHandle::Win32` を
 # 取り出し HWND を得るために使う。eframe の通常依存として既に 0.6.2 が解決済み

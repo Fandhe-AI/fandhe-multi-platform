@@ -46,10 +46,10 @@ fn to_outcome(result: Result<PrintOutcome, DeviceError>) -> Result<CoreOutcome, 
     }
 }
 
-/// iOS の結果コード表（SSOT。後続の `.m` の結果コードと一致させる）。未知のコードは失敗に倒す。
+/// iOS の結果コード表（SSOT。`ios/fandhe_ios_print.m` の結果コードと一致させる）。未知のコードは失敗に倒す。
 /// 0 = completed かつ error なし / 1 = completed NO かつ error なし（取り消し）/ 2 = error あり /
 /// 3 = 提示不可（main 外）/ 4 = `isPrintingAvailable == NO`。
-#[allow(dead_code)] // b-ios（#327）が結果受け口から使う
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))] // iOS の結果受け口（ios_print.rs）が使う
 pub(crate) fn outcome_from_ios_code(code: i32) -> Result<PrintOutcome, DeviceError> {
     match code {
         0 => Ok(PrintOutcome::Submitted),
