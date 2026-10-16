@@ -226,7 +226,6 @@ generated_screens! {
     crate::device::image_recognition::image_recognize_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "media_transcode" => fandhe_core::screens::media_transcode::current_screen,
     crate::device::media_transcode::media_transcode_effect,
     effect
