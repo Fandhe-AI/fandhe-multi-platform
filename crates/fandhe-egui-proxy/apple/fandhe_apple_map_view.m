@@ -1,5 +1,6 @@
-// Phase 11 の拡充ループ（親 #85）型サンプル「地図表示」: macOS 実装（Issue #273）。
-// iOS 分岐（#else）は #274 が埋めるまでスタブ（常に Unsupported）。
+// Phase 11 の拡充ループ（親 #85）型サンプル「地図表示」: macOS（Issue #273）と iOS（Issue #274）の実装。
+// macOS / iOS は実装本体を共用し、画像型・CGImage の取り出し・scale の指定だけ小さな #if で分ける。
+// それ以外（visionOS 等。build.rs からは呼ばれない）は常に Unsupported のスタブ。
 //
 // `crates/fandhe-egui-proxy/src/device/apple_map_view.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の macOS / iOS 両分岐が feature `device` 有効時に `cc` でコンパイルし、MapKit と
@@ -21,6 +22,10 @@
 // ため、ロックも dispatch_sync も使わない（契約表 11）。各入口は @autoreleasepool で包む
 // （契約表 5）。error が付いた snapshot は画像があっても失敗にする（嘘の成功の禁止）。
 //
+// iOS: 背景にいる間は completion の配送が前景復帰まで遅れる。その場合は Rust 側の 15 秒の期限で
+// 失敗が確定し、復帰後に届いた completion は id 照合で捨てる。scale は 1x（traitCollection）に
+// 固定する（ポイントとピクセルを揃えて余分な画素を取らない。RGBA は常に w x h の context へ描く）。
+//
 // 権限・CoreLocation は使わない。座標・NSError の内容・画素はログへ出さない（NSLog 不使用、
 // security.md A09）。実機での表示確認（タイルが取れるか・上下の向き）は #272（人手）。
 
@@ -30,9 +35,15 @@
 extern void fandhe_rust_map_view_outcome(uint64_t request_id, int32_t code, const uint8_t *rgba,
                                          size_t len, uint32_t w, uint32_t h);
 
-#if TARGET_OS_OSX
+#if TARGET_OS_OSX || TARGET_OS_IOS
 
+#if TARGET_OS_OSX
 #import <AppKit/AppKit.h>
+typedef NSImage FandhePlatformImage;
+#else
+#import <UIKit/UIKit.h>
+typedef UIImage FandhePlatformImage;
+#endif
 #import <CoreGraphics/CoreGraphics.h>
 #import <MapKit/MapKit.h>
 
@@ -55,10 +66,18 @@ static BOOL FandheIsOfflineError(NSError *error) {
     }
 }
 
-// NSImage を w x h の RGBA8 に描く（premultiplied だが地図は不透明で、非乗算アルファと同じ値になる）。
+static CGImageRef FandheCGImageOf(FandhePlatformImage *image) {
+#if TARGET_OS_OSX
+    return [image CGImageForProposedRect:NULL context:nil hints:nil];
+#else
+    return image.CGImage;
+#endif
+}
+
+// スナップショット画像を w x h の RGBA8 に描く（premultiplied だが地図は不透明で、非乗算アルファと同じ値になる）。
 // 失敗は NULL。成功時は呼び出し側が free する。全経路で CG 資源を解放する。
-static uint8_t *FandheRenderRGBA(NSImage *image, uint32_t w, uint32_t h) {
-    CGImageRef cg = [image CGImageForProposedRect:NULL context:nil hints:nil];
+static uint8_t *FandheRenderRGBA(FandhePlatformImage *image, uint32_t w, uint32_t h) {
+    CGImageRef cg = FandheCGImageOf(image);
     if (cg == NULL) {
         return NULL;
     }
@@ -97,7 +116,10 @@ int32_t fandhe_apple_map_view_start(uint64_t request_id, double lat, double lon,
         MKMapSnapshotOptions *options = [[MKMapSnapshotOptions alloc] init];
         options.region = MKCoordinateRegionMakeWithDistance(CLLocationCoordinate2DMake(lat, lon),
                                                             span_m, span_m);
-        options.size = NSMakeSize(w, h);
+        options.size = CGSizeMake(w, h);
+#if TARGET_OS_IOS
+        options.traitCollection = [UITraitCollection traitCollectionWithDisplayScale:1.0];
+#endif
         MKMapSnapshotter *snapshotter = [[MKMapSnapshotter alloc] initWithOptions:options];
         gCurrent = snapshotter;
         gCurrentId = request_id;
@@ -144,7 +166,7 @@ void fandhe_apple_map_view_cancel(uint64_t request_id) {
 
 #else
 
-// iOS は #274 が埋める。それまでは常に非対応を返し、成功を作らない。
+// macOS / iOS 以外（build.rs からは呼ばれない）。常に非対応を返し、成功を作らない。
 int32_t fandhe_apple_map_view_start(uint64_t request_id, double lat, double lon, double span_m,
                                     uint32_t w, uint32_t h) {
     (void)request_id;
