@@ -224,17 +224,19 @@ mod win {
     use std::sync::{mpsc, Mutex, OnceLock};
 
     use windows::core::{implement, s, w, Interface, BSTR, HRESULT};
+    use windows::Win32::Foundation::HANDLE;
     use windows::Win32::Media::MediaFoundation::{
         CLSID_MFMediaEngineClassFactory, IMFAttributes, IMFByteStream, IMFMediaEngineClassFactory,
         IMFMediaEngineEx, IMFMediaEngineNotify, IMFMediaEngineNotify_Impl, MFSTARTUP_FULL,
         MF_MEDIA_ENGINE_AUDIOONLY, MF_MEDIA_ENGINE_CALLBACK, MF_MEDIA_ENGINE_EVENT_CANPLAY,
         MF_MEDIA_ENGINE_EVENT_ENDED, MF_MEDIA_ENGINE_EVENT_ERROR, MF_MEDIA_ENGINE_EVENT_LOADEDDATA,
-        MF_MEDIA_ENGINE_EVENT_PLAYING, MF_VERSION,
+        MF_MEDIA_ENGINE_EVENT_NOTIFYSTABLESTATE, MF_MEDIA_ENGINE_EVENT_PLAYING, MF_VERSION,
     };
     use windows::Win32::System::Com::{CoCreateInstance, IStream, CLSCTX_INPROC_SERVER};
     use windows::Win32::System::LibraryLoader::{
         GetProcAddress, LoadLibraryExW, LOAD_LIBRARY_SEARCH_SYSTEM32,
     };
+    use windows::Win32::System::Threading::SetEvent;
     use windows::Win32::UI::Shell::SHCreateMemStream;
 
     use fandhe_device::media_playback::POLL_INTERVAL;
@@ -362,6 +364,15 @@ mod win {
                 param1: usize,
                 _param2: u32,
             ) -> windows::core::Result<()> {
+                if event == MF_MEDIA_ENGINE_EVENT_NOTIFYSTABLESTATE.0 as u32 {
+                    // param1 は受け手がシグナルすべきイベントハンドル。立てないと Media Engine が
+                    // 安定状態への移行待ちから進めず、停止・解放（Shutdown）が処理されない。
+                    // SAFETY: MF が渡す有効なイベントハンドル。SetEvent は呼び出し中だけ使う。
+                    if param1 != 0 {
+                        unsafe { SetEvent(HANDLE(param1 as *mut c_void)) }?;
+                    }
+                    return Ok(());
+                }
                 let ev = if event == MF_MEDIA_ENGINE_EVENT_CANPLAY.0 as u32
                     || event == MF_MEDIA_ENGINE_EVENT_LOADEDDATA.0 as u32
                 {

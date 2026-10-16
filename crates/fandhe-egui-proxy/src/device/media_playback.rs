@@ -93,6 +93,8 @@ struct SessionInner {
     last_report: Option<Instant>,
     /// 一時停止・停止を発行した時刻。非同期に確定する操作の失敗を拾うため、しばらく snapshot を監視する。
     settle_since: Option<Instant>,
+    /// 一時停止・停止を発行した最初の時刻。Loading 中の窓延長に上限（期限）を設ける起点。
+    settle_origin: Option<Instant>,
 }
 
 /// 一時停止・停止の結果（非同期の失敗）を監視し続ける長さ。
@@ -155,6 +157,7 @@ fn drive(
                 mark_command_taken(s, generation)
             }));
             inner.last_report = None;
+            inner.settle_origin = None;
             handle_command(&mut inner, sender, pb, command, generation);
         }
     }
@@ -195,6 +198,8 @@ fn drive(
             let snap = pb.snapshot();
             snap.generation == dg && snap.phase == PlaybackPhase::Loading
         })
+        // CANPLAY が来ない読み込みで再描画を出し続けないよう、延長は期限までに限る。
+        && inner.settle_origin.is_some_and(|t| t.elapsed() < deadline)
     {
         inner.settle_since = Some(Instant::now());
     }
@@ -259,6 +264,7 @@ fn handle_command(
             // プレーヤーが無ければ止める対象も無い（画面側の遷移だけで足りる）。
             let Some(g) = inner.device_gen else { return };
             inner.settle_since = Some(Instant::now());
+            inner.settle_origin.get_or_insert_with(Instant::now);
             let r = if command == AudioCommand::Pause {
                 pb.pause(g)
             } else {
