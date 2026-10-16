@@ -7,14 +7,17 @@
   "bundle": "one-shot",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "Core ML（`MLModel`、`MLMultiArray` / `MLDictionaryFeatureProvider`。ObjC クラス）",
+      "status": "done",
+      "api": "Core ML（`MLModelAsset modelAssetWithSpecificationData:` + `MLModel loadModelAsset:configuration:completionHandler:`。ObjC クラス）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/coreml/mlmodel",
-      "note": "未実装。アプリに同梱したコンパイル済み `.mlmodelc` を `+[MLModel modelWithContentsOfURL:error:]` で読み、`predictionFromFeatures:error:` を呼ぶ。ObjC から呼べる想定。`.mlmodel` のコンパイル（`coremlc`）はビルド工程に入る。Vision の `VNCoreMLRequest` は別レイヤ。要確認: ObjC からの `compileModelAtURL` の現行シグネチャ（非同期版への移行有無）は Apple ページを直接確認できていない。モデル同梱が必要で、モデル形式は OS ごとに異なる（Core ML / TFLite / ONNX）",
+      "note": "実装済み（#291、macOS と共用の実装）。範囲は固定の線形モデル（y = 2·x0 + 3·x1 + 1）の推論 1 回と期待値（24）の照合のみ。モデルファイルは置かず、実行時に Core ML の仕様をコードで組む（画像前処理・分類モデル・モデルの動的取得・GPU / NPU の選択・取り消しは範囲外）。deploymentTarget が 17.0 のため OS が古い場合の Unsupported は起こらない。計算ユニットは CPU 固定で、背景でも GPU 制約を受けず、背景遷移で中断しない。アプリが中断（suspend）されて期限を過ぎた場合は、復帰時に期限切れの失敗として表示し、成功にはしない。結果は成功（期待値と許容差の中で一致）、失敗（OS がモデルを拒否・期限切れ・出力の不一致）を分けて表示し、「壊れたモデルで試す」は失敗として表示する。取り消しと権限は存在しない。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: OS ごとの所要時間の違い（初回読み込みのキャッシュを含む）、期限後も OS の呼び出しが走り切ること、複数プロセス間。iOS 実機の確認は #288 で行う。",
       "sourceName": [
         "機械学習モデル推論"
-      ]
+      ],
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#288）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_ml_inference.rs + crates/fandhe-egui-proxy/src/device/apple_ml_inference.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_ml_inference.m + crates/fandhe-egui-proxy/src/device/ml_inference.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-device/src/ml_inference.rs、Issue #291"
     },
     "android": {
       "status": "possible",

@@ -216,10 +216,9 @@ pub mod apple_mic_record;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_midi;
 /// Issue #289 macOS・b-ios iOS: Core ML 推論実装（`apple/fandhe_apple_ml_inference.m` を呼ぶ
-/// C ABI ラッパー）。`device/ml_inference.rs` の macOS 経路から呼ばれ、iOS は b-ios が使う
-/// （それまで iOS では未使用）。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
+/// C ABI ラッパー）。`device/ml_inference.rs` の macOS 経路と、iOS 経路（`ios_ml_inference` 経由）から
+/// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-#[cfg_attr(target_os = "ios", allow(dead_code))]
 pub mod apple_ml_inference;
 /// Issue #1282: macOS / iOS 向けネットワーク接続状態（`apple/fandhe_apple_network_status.m` を
 /// 呼ぶ C ABI ラッパー）。`device/network_status.rs` の macOS / iOS 経路から呼ばれる。
@@ -411,7 +410,7 @@ pub mod ios_local_fonts;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_media_playback;
-/// Issue #289: iOS 向け機械学習推論のスタブ（b-ios が `AppleMlInference` を返す形に替える）。
+/// Issue #291: iOS 向け機械学習推論（macOS と共用の `AppleMlInference` を返す）。
 /// `device/ml_inference.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_ml_inference;

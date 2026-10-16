@@ -1,5 +1,5 @@
-//! macOS / iOS 向け機械学習推論実装（Issue #289 macOS、iOS は b-ios が使う）。
-//! `device/ml_inference.rs` の macOS 経路から呼ばれ、`apple/fandhe_apple_ml_inference.m`
+//! macOS / iOS 向け機械学習推論実装（Issue #289 macOS、#291 iOS）。
+//! `device/ml_inference.rs` の macOS 経路と iOS 経路（`ios_ml_inference` 経由）から呼ばれ、`apple/fandhe_apple_ml_inference.m`
 //! （Core ML。`build.rs` が feature `device` 有効時にコンパイル）を `unsafe extern "C"` 1 関数で
 //! 呼ぶ。`unsafe` はこの呼び出し 1 か所に閉じる（coding-rust.md の FFI 例外規定準拠）。
 //! `build.rs` のコンパイル条件・`device.rs` の mod cfg と同じ OS 集合に保つ。
