@@ -105,7 +105,8 @@ final class MediaPlaybackHelper {
                 mp.setDataSource(new ByteArraySource(wav));
                 mp.prepareAsync();
                 player = mp;
-            } catch (RuntimeException e) {
+            } catch (Exception e) {
+                // 検査例外（IOException 等）も含め、全経路で failCreate を通す。
                 failCreate(mp);
             }
         }
