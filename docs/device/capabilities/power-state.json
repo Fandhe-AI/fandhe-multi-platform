@@ -12,7 +12,7 @@
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uidevice",
       "note": "実装済み（旧#1275）。`batteryState` の Unknown は電池不明（0% や電池なしにしない。シミュレータは不明になる）。満充電は OS が Full を返したときだけ。`batteryLevel` の -1.0・NaN・範囲外は残量不明。熱は Nominal/Fair/Serious/Critical を 通常/やや高い/高い/危険 へ写し、範囲外は不明。main スレッド限定（それ以外は内部エラー）。`batteryMonitoringEnabled` は有効化して戻さない。守る範囲: 1 プロセス内の取得・電池不明／0% の区別・失敗を成功値へ畳まないこと。守らない範囲: OS 間の値の一致、変化の反映遅れ（読み取り間隔 1 秒ぶん）、複数プロセス、有効化直後 1 回目の不明。1 秒間隔の pull で、OS の変化通知は購読しない（UI スレッドの同期 1 本のみ、並行経路なし）。iOS 実機の確認は #16。iOS の残量は OS の値が 5% 刻みのため、ステータスバーの表示と最大 4% ずれる。",
-      "detail": "できている（iOS 実機確認待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/ios_power_state.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_power_state.m + crates/fandhe-egui-proxy/src/device/power_state.rs + crates/fandhe-core/src/screens/power_state_show.rs + crates/fandhe-device/src/power_state.rs、Issue 旧#1275",
       "verified": true
@@ -23,7 +23,7 @@
       "perm": "不要（sticky broadcast の読み取りと `PowerManager` の getter に権限は要らず、BATTERY_STATS は宣言しない）",
       "url": "https://developer.android.com/training/monitoring-device-state/battery-monitoring",
       "note": "実装済み（旧#1276）。`EXTRA_PRESENT` が false なら `Battery::Absent`（0% にしない）、sticky intent や extra が無ければ不明。充電状態は CHARGING / DISCHARGING / FULL を写し、NOT_CHARGING（接続中だが充電していない）と UNKNOWN は放電中と偽らず不明。熱は NONE / LIGHT・MODERATE / SEVERE / CRITICAL・EMERGENCY・SHUTDOWN を 通常 / やや高い / 高い / 危険 へ写し、API 28 以下は不明。Activity 準備前や JNI 失敗は `Internal`（成功へ畳まない）。守る範囲: 1 プロセス内の取得・電池なし／不明／0% の区別・失敗を成功値へ畳まないこと。守らない範囲: OS 間の値の一致、変化の反映遅れ（読み取り間隔 1 秒ぶん）、複数プロセス。1 秒間隔の pull で、receiver 登録や熱状態リスナーなど OS の変化通知は購読しない（保留要求なし、並行経路なし）。Android 実機の確認は #16",
-      "detail": "できている（Android 実機確認待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/android_power_state.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/PowerStateHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/power_state.rs + crates/fandhe-core/src/screens/power_state_show.rs + crates/fandhe-device/src/power_state.rs、Issue 旧#1276",
       "verified": true
@@ -34,7 +34,7 @@
       "perm": "不要（entitlement 不要。App Sandbox 無効の素の実行体）",
       "url": "https://developer.apple.com/documentation/iokit/1523839-iopscopypowersourcesinfo",
       "note": "実装済み（旧#1274）。内蔵電池が無ければ `Battery::Absent`（0% にしない）。満充電は `kIOPSIsChargedKey` が true のときだけ。熱は Nominal/Fair/Serious/Critical を 通常/やや高い/高い/危険 へ写し、範囲外は不明。macOS 11 以下の省電力は不明。守る範囲: 1 プロセス内の取得・電池なし／不明／0% の区別・失敗を成功値へ畳まないこと。守らない範囲: OS 間の値の一致、変化の反映遅れ（読み取り間隔 1 秒ぶん）、複数プロセス、スリープ復帰直後の古い値。1 秒間隔の pull で、OS の変化通知は購読しない（UI スレッドの同期 1 本のみ、並行経路なし）。既知の天井: スリープ復帰通知は購読せず 1 秒 pull のみ。Mac 実機の目視は #16",
-      "detail": "できている（Mac 目視待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/macos_power_state.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_power_state.m + crates/fandhe-egui-proxy/src/device/power_state.rs + crates/fandhe-core/src/screens/power_state_show.rs + crates/fandhe-device/src/power_state.rs、Issue 旧#1274",
       "verified": true

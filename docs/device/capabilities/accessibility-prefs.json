@@ -12,7 +12,7 @@
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uiaccessibility",
       "note": "実装済み（旧#1309）。1 秒間隔で同期に読む（変更通知は購読しない）。2 値を int にビット詰めして返し、main スレッド以外・未定義の値は `Internal`（成功にしない）。コントラストは「コントラストを上げる」設定で近似。守る範囲: 嘘の「オン」「オフ」を出さないこと、1 プロセス内の取得。守らない範囲: 反映の遅れ（最大 1 秒 + 1 フレーム）、OS 間の意味の一致、複数プロセス間の食い違い。実機確認は #21",
-      "detail": "できている（iOS 実機確認待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/ios_accessibility_prefs.rs + crates/fandhe-egui-proxy/src/device/apple_accessibility_prefs.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_accessibility_prefs.m + crates/fandhe-egui-proxy/src/device/accessibility_prefs.rs + crates/fandhe-core/src/screens/accessibility_prefs_show.rs + crates/fandhe-device/src/accessibility_prefs.rs、Issue 旧#1309",
       "verified": true
@@ -23,7 +23,7 @@
       "perm": "不要",
       "url": "https://developer.android.com/reference/android/app/UiModeManager",
       "note": "実装済み（旧#1310）。1 秒間隔で同期に読む（変化通知は購読しない）。2 値を int にビット詰めして返し、負値・未定義の値は `Internal`（成功にしない）。API 33 以下のコントラストは公開 API が無いため不明（`None`）。`AccessibilityManager.isHighContrastTextEnabled` は非公開 API のため使わない。守る範囲: 嘘の「オン」「オフ」を出さないこと、1 プロセス内の取得。守らない範囲: 反映の遅れ（最大 1 秒 + 1 フレーム）、OS 間の意味の一致、バッテリーセーバー等の別経路によるアニメ無効化。実機確認は #21。実機確認で、視差軽減は追従したが、コントラスト等の表示設定を変えると画面が黒くなる不具合が見つかった（#73）。",
-      "detail": "できている（Android 実機確認待ち）",
+      "detail": "できている（実機確認で不具合あり）",
       "implStatus": "実装済み（実機確認で不具合あり）",
       "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/AccessibilityPrefsHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_accessibility_prefs.rs + crates/fandhe-egui-proxy/src/device/accessibility_prefs.rs + crates/fandhe-core/src/screens/accessibility_prefs_show.rs + crates/fandhe-device/src/accessibility_prefs.rs、Issue 旧#1310"
     },
@@ -33,7 +33,7 @@
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nsworkspace",
       "note": "実装済み（旧#1308）。`NSWorkspace.sharedWorkspace` の `accessibilityDisplayShouldReduceMotion` / `accessibilityDisplayShouldIncreaseContrast` を 1 秒間隔で同期に読む（変化通知は購読しない）。2 値を int にビット詰めして返し、負値・未定義の値は `Internal`（成功にしない）。守る範囲: 嘘の「オン」「オフ」を出さないこと（取得中・不明・失敗・非対応では丸を止めず枠も太くしない）、1 プロセス内の取得、「オン」のあいだ丸を止めること。守らない範囲: 反映の遅れ（最大 1 秒 + 1 フレーム）、OS 間の意味の一致、複数プロセス間の食い違い、別経路によるアニメ無効化。Mac 目視は #21",
-      "detail": "できている（Mac 目視待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/apple_accessibility_prefs.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_accessibility_prefs.m + crates/fandhe-core/src/screens/accessibility_prefs_show.rs + crates/fandhe-device/src/accessibility_prefs.rs + crates/fandhe-egui-proxy/src/device/accessibility_prefs.rs、Issue 旧#1308",
       "verified": true

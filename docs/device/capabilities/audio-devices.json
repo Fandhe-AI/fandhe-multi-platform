@@ -12,7 +12,7 @@
       "perm": "不要（usage description・privacy manifest の追加なし。`setCategory` / `setActive` を呼ばない）",
       "url": "https://developer.apple.com/documentation/avfaudio/avaudiosession",
       "note": "実装済み（旧#1331）。範囲は接続中の入出力デバイス名の一覧のみ（出力先の選択・切り替え・音量は範囲外）。デバイス ID・種別は取らない・保持しない・ログに出さない。入力は category が入力を許す間（録音中など）だけ取れ、それ以外は「マイク使用中のみ」と表示して推測しない。出力は現在の経路で全候補ではない。0 件は正常な空として扱い、nil・範囲外だけを取得不可とする。守る範囲: 0 件と取得不可の区別・共有セッションへ書き込まないこと・失敗を成功値へ畳まないこと。守らない範囲: 読み取り後の経路変化（再取得まで）・複数プロセス間の一致・同名の区別。画面を開いたとき UI スレッドで同期 1 回だけ読み、「再取得」で読み直す（並行経路なし）。iOS 実機の目視は #23",
-      "detail": "できている（iOS 実機確認待ち）",
+      "detail": "できている（一部・実機）",
       "implStatus": "実装済み（録音していないときの一覧は実機確認済み・録音中は未確認）",
       "impl": "crates/fandhe-egui-proxy/src/device/ios_audio_devices.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_audio_devices.m + crates/fandhe-egui-proxy/src/device/audio_devices.rs + crates/fandhe-core/src/screens/audio_devices_show.rs + crates/fandhe-device/src/audio_devices.rs、Issue 旧#1331"
     },
@@ -22,7 +22,7 @@
       "perm": "不要（`RECORD_AUDIO` は宣言しない）",
       "url": "https://developer.android.com/reference/android/media/AudioManager",
       "note": "実装済み（旧#1332）。範囲は接続中の入出力デバイス名の一覧のみ（出力先の選択・切り替え・音量は範囲外）。デバイス ID・アドレス（MAC）は取らない・保持しない・ログに出さない。名前は制御文字除去と 128 文字、各方向 64 件まで（超過分は捨てる）。内蔵機器は機種名で並ぶ。守る範囲: 0 件と取得不可の区別・失敗を成功値へ畳まないこと・ID と MAC を取らないこと。守らない範囲: OS 間の名前の表記の一致、読み取り後の接続・取り外しの反映（再取得まで）、複数プロセス間の一致。UI スレッドで同期 1 回だけ読み、保留中の要求を持たない（Activity 再生成で破棄するものが無い）。Android 実機の確認は #23",
-      "detail": "できている（Android 実機確認待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/android_audio_devices.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/AudioDevicesHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/audio_devices.rs + crates/fandhe-core/src/screens/audio_devices_show.rs + crates/fandhe-device/src/audio_devices.rs、Issue 旧#1332",
       "verified": true
@@ -33,7 +33,7 @@
       "perm": "不要（I/O を開かないので TCC のマイク確認は掛からない見込み。#23 で確認）",
       "url": "https://developer.apple.com/documentation/coreaudio",
       "note": "実装済み（旧#1330）。範囲は接続中の入出力デバイス名の一覧のみ（出力先の選択・切り替え・音量は範囲外）。デバイス ID は取らない・保持しない・ログに出さない。名前は制御文字除去と 128 文字、各方向 64 件まで（超過分は捨てる）。守る範囲: 0 件と取得不可の区別・失敗を成功値へ畳まないこと・ID を取らないこと。守らない範囲: OS 間の名前の表記の一致、読み取り後の接続・取り外しの反映（再取得まで）、複数プロセス間の一致。画面を開いたとき UI スレッドで同期 1 回だけ読み、「再取得」で読み直す（並行経路なし）。Mac 実機の目視は #23。実機確認で、一覧が長くなると画面がスクロールせずボタンが窓の外へ出る不具合が見つかった（#77）。",
-      "detail": "できている（Mac 目視待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/macos_audio_devices.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_audio_devices.m + crates/fandhe-egui-proxy/src/device/audio_devices.rs + crates/fandhe-core/src/screens/audio_devices_show.rs + crates/fandhe-device/src/audio_devices.rs、Issue 旧#1330",
       "verified": true
@@ -55,7 +55,7 @@
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/enumerateDevices",
       "safari": "出力は列挙しないので「取得できません」と出す",
       "note": "実装済み（旧#1333）。範囲は入出力デバイス名の一覧のみ（出力先の選択 `selectAudioOutput` / `setSinkId` は範囲外）。`deviceId` / `groupId` は読まない。許可前は名前も件数も出さず「マイクの許可後に表示」。守る範囲: 0 件・取得不可・許可前の区別、失敗を成功値へ畳まないこと、ID を取らないこと、1 マウント内の取得順序。守らない範囲: ブラウザ間の表記の一致、Chrome の「既定」「通信」擬似エントリ、読み取り後の接続・取り外しの反映（`devicechange` 非購読、再取得まで）、複数タブ間の一致、非表示タブで解決しない場合の期限、入力 0 台で許可できない環境の出力表示。実ブラウザの目視は #23",
-      "detail": "できている（実ブラウザ確認待ち）",
+      "detail": "できている（Chrome で確認・他ブラウザは未確認）",
       "implStatus": "実装済み（Chrome で確認済み・Firefox / Safari は未確認）",
       "impl": "crates/fandhe-web-dom/src/audio_devices.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/audio_devices_show.rs、Issue 旧#1333"
     }

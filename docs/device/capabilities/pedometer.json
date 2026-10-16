@@ -15,7 +15,7 @@
       "sourceName": [
         "歩数・活動データ"
       ],
-      "detail": "できている（iOS 実機確認待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/ios_pedometer.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_pedometer.m + crates/fandhe-egui-proxy/src/device/pedometer.rs + crates/fandhe-core/src/screens/pedometer_read.rs + crates/fandhe-device/src/pedometer.rs、Issue 旧#1248",
       "verified": true
@@ -26,7 +26,7 @@
       "perm": "`<uses-permission android:name=\"android.permission.ACTIVITY_RECOGNITION\" />` + API 29+ は実行時許可（API 28 以下は許可不要）",
       "url": "https://developer.android.com/develop/sensors-and-location/sensors/sensors_motion",
       "note": "実装済み（旧#1249）。`TYPE_STEP_COUNTER` のリスナーをボタン押下で登録し、最初のイベント（再起動後の累積歩数）を期限（15 秒）付きで待って解除する。Java の結果コードを Rust が失敗種別へ写像する（0=OK、1=Unsupported、2=PermissionDenied、3=中断は NoReading、それ以外・負値は Failed）。センサー非搭載（`getDefaultSensor` が null）は Unsupported で 0 歩にしない。API 29 以上だけ `ACTIVITY_RECOGNITION` を実行時に要求し、28 以下は許可を求めない。onPause では破棄せず（リスナーは期限後の cancel で必ず解除される）、onDestroy（Activity 再生成を含む）では保留中の要求を中断として確定して破棄する。守る範囲: 1 プロセス内の順序・0 歩と未取得の区別・非搭載/拒否/破棄を成功に畳まないこと・リスナーの解除。守らない範囲: センサー遅延による値の鮮度。既知の制約: 許可ダイアログへの応答が 15 秒を超えると「未取得」になる（期限は 1 つだけの契約）。静止中にイベントが来ない端末では期限切れで「未取得」になる。cancel は呼び出しスレッド（Rust ワーカー）で同期的にリスナーを解除してから復帰するため、UI が停滞しても期限後にリスナーは残らない。遅れて届いた値は id 照合で捨てられる。Android 実機での確認は #12",
-      "detail": "できている（Android 実機確認待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み（期限切れは未確認）",
       "impl": "crates/fandhe-egui-proxy/src/device/android_pedometer.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/PedometerHelper.java + crates/fandhe-egui-proxy/src/device/pedometer.rs + crates/fandhe-core/src/screens/pedometer_read.rs + crates/fandhe-device/src/pedometer.rs、Issue 旧#1249",
       "verified": true

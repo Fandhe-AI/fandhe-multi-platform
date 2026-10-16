@@ -15,7 +15,7 @@
       "sourceName": [
         "画像認識（顔・文字・矩形検出等）"
       ],
-      "detail": "できている（未確認）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_image_recognition.m + crates/fandhe-egui-proxy/src/device/ios_image_recognition.rs + crates/fandhe-egui-proxy/src/device/apple_image_recognition.rs + crates/fandhe-egui-proxy/src/device/image_recognition.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_photo_picker.m + crates/fandhe-device/src/image_recognition.rs + crates/fandhe-core/src/screens/image_recognize.rs、Issue 旧#1252",
       "verified": true
@@ -37,7 +37,7 @@
       "perm": "不要（Info.plist 不要・entitlement 不要。画像ファイル入力のため。App Sandbox 無効の素の実行体＋.app 包み）",
       "url": "https://developer.apple.com/documentation/vision/vnrecognizetextrequest",
       "note": "実装済み（旧#1250）。Vision の `VNRecognizeTextRequest`（Accurate・言語補正あり・認識言語 `ja-JP` + `en-US`、revision 3）を C ABI 1 関数で呼び、行をコールバックで Rust の `Vec<String>` へ積んで `normalize_lines` を通す。入力は写真選択（photo-picker）で選んだ 1 枚（`validate_photo` 済み・8 MiB 上限）で、OS を呼ぶ前にヘッダーだけで辺・画素数を検査し、超えたら OCR を呼ばず `InvalidInput`、ヘッダーを読めない画像も失敗にする。OCR はワーカースレッドで実行し UI を止めない。`@autoreleasepool` の内側で同期実行し、`dispatch_sync` は使わない。0 行は「文字なし」の成功、復号不能・`performRequests` の失敗は `Internal`、日本語が使えない（macOS 13 未満等）は `Unsupported(LANGUAGE_UNAVAILABLE)`（失敗として表示し 0 行の成功へ畳まない）。写真選択のキャンセルは失敗にしない。権限・entitlement は不要。`.m` は iOS（旧#1252）と共用でき、`build.rs`・`device.rs` の cfg・dispatch は全対象 OS 分を 旧#1250 で最終形にした（Windows / iOS / Android は `Unsupported` を返すスタブ）。守る範囲: 1 画面・1 プロセス内での要求と完了の順序（世代照合）、嘘の成功の禁止、ワーカーが持つバイト列の解放。守らない範囲: OS ごとの認識結果・行の分け方の違い、処理時間（タイムアウトなし）、実行中の OCR の取り消し（結果は世代照合で捨てる）、複数プロセス。既知の天井: 実際の文字入り画像での認識結果・キャンセル・壊れた画像の目視は未確認（Mac 目視 #13）。",
-      "detail": "できている（Mac 目視待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_image_recognition.m + crates/fandhe-egui-proxy/src/device/apple_image_recognition.rs + crates/fandhe-egui-proxy/src/device/image_recognition.rs + crates/fandhe-device/src/image_recognition.rs + crates/fandhe-core/src/screens/image_recognize.rs、Issue 旧#1250",
       "verified": true

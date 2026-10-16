@@ -12,7 +12,7 @@
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uiviewcontroller/prefersstatusbarhidden",
       "note": "実装済み（旧#1313）。winit の ViewController へ `prefersStatusBarHidden` / `prefersHomeIndicatorAutoHidden` を差し込む。VC の希望とステータスバーの実状態の両方が真のときに全画面とし、期限は 3 秒。ホームインジケータは自動で隠れるだけで、触ると出る。 守る範囲: 1 プロセス内で表示が実際の状態に追従すること、失敗・読めない状態を全画面と見せないこと。守らない範囲: 遷移中の一時的な表示ずれ、key window の root が winit の VC でない間（反映せず失敗を返す）、横向きで OS が自動で隠すこと、終了時の後片付け（OS がプロセスごと片付ける）。iOS 実機確認は #22",
-      "detail": "できている（iOS 実機確認待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/ios_fullscreen_immersive.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_fullscreen_immersive.m + crates/fandhe-egui-proxy/src/device/fullscreen_immersive.rs + crates/fandhe-core/src/screens/fullscreen_toggle.rs + crates/fandhe-device/src/fullscreen_immersive.rs、Issue 旧#1313",
       "verified": true
@@ -23,7 +23,7 @@
       "perm": "不要",
       "url": "https://developer.android.com/develop/ui/views/layout/immersive",
       "note": "実装済み（旧#1314）。JNI の `MainActivity.fullscreenSet` が UI スレッドで `hide/show(systemBars())` を呼び（最長 1 秒待ち、期限後は適用しない）、表示は既存の insets リスナーが statusBars / navigationBars の可視を native へ push して読み戻す。再生成時は「読めない」を送り、通常表示から始まる（要求は持ち越さない）。権限・依存の追加なし。 守る範囲: 1 プロセス内で表示が実際のバー状態に追従すること、失敗・読めない状態を全画面と見せないこと、期限後に適用しないこと。守らない範囲: スワイプでバーが一時表示される間の表示ずれ、再生成・背景復帰で全画面を自動再適用しないこと、分割画面等で OS が隠さない場合（期限切れの失敗）、終了時の後片付け（OS が片付ける）。Android 実機確認は #22",
-      "detail": "できている（Android 実機確認待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/android_fullscreen_immersive.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/FullscreenHelper.java + crates/fandhe-egui-proxy/src/device/fullscreen_immersive.rs + crates/fandhe-core/src/screens/fullscreen_toggle.rs + crates/fandhe-device/src/fullscreen_immersive.rs、Issue 旧#1314",
       "verified": true
@@ -34,7 +34,7 @@
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nswindow",
       "note": "実装済み（旧#1312）。winit が `toggleFullScreen:` を呼びネイティブ全画面になり、メニューバーと Dock は自動で隠れる。切り替えは非同期なので毎フレーム `viewport().fullscreen` を読み戻して確定し、3 秒で期限切れの失敗にする。FFI・追加依存なし。 守る範囲: 1 プロセス内で表示が実際の状態に追従すること、失敗・非対応・読めない状態を全画面と見せないこと。守らない範囲: 遷移アニメーション中の一時的な表示ずれ、期限切れの後に OS が遅れて切り替えた場合の失敗文言、複数ウィンドウ、終了時の後片付け（OS がウィンドウごと片付ける）。Mac 目視は #22",
-      "detail": "できている（Mac 目視待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/fullscreen_immersive.rs + crates/fandhe-core/src/screens/fullscreen_toggle.rs + crates/fandhe-device/src/fullscreen_immersive.rs、Issue 旧#1312",
       "verified": true

@@ -15,14 +15,14 @@
       "sourceName": [
         "カスタム URL scheme"
       ],
-      "detail": "できている（実機確認待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_url_scheme.m + crates/fandhe-egui-proxy/src/device/apple_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-device/src/url_scheme.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue 旧#1217",
       "verified": true
     },
     "android": {
       "status": "done",
-      "detail": "できている（実機確認待ち）",
+      "detail": "できている（実機）",
       "api": "`<intent-filter>`（`ACTION_VIEW` + `BROWSABLE` + `DEFAULT` + `<data android:scheme>`）。受信は MainActivity の `onCreate` の `getIntent()` / `onNewIntent`、JNI で Rust へ渡す",
       "perm": "なし（`AndroidManifest.xml` への intent-filter 追加のみ）",
       "url": "https://developer.android.com/training/app-links/deep-linking",
@@ -33,7 +33,7 @@
     },
     "macos": {
       "status": "done",
-      "detail": "できている（Mac 目視待ち）",
+      "detail": "できている（実機）",
       "api": "AppKit（`NSApplicationDelegate` の `application:openURLs:`、10.13+）。Apple Event（`kAEGetURL`）経由でも受信可",
       "perm": "Info.plist の `CFBundleURLTypes` 登録（.app 化が前提。entitlement 不要）",
       "url": "https://developer.apple.com/documentation/appkit/nsapplicationdelegate/application(_:open:)-61n9r",

@@ -12,7 +12,7 @@
       "perm": "なし",
       "url": "https://developer.apple.com/documentation/messageui",
       "note": "To（複数）/ CC / BCC は `setToRecipients:` / `setCcRecipients:` / `setBccRecipients:` に配列で渡す（Issue #33）。到達する結果は Queued / Saved / Cancelled / NoHandler。`canSendMail` / `canSendText` が false（メール未設定・iPad 等・シミュレータ）なら NoHandler。Queued は送信済みではない。守る範囲: 入力検査、結果の 1 回だけの通知、世代の照合、嘘の成功の禁止。守らない範囲: 作成画面を開いた後の利用者の操作と、背景遷移中の作成画面の扱い（OS に任せる）",
-      "detail": "できている（iOS 実機確認待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/ios_compose_mail_sms.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_compose_mail_sms.m + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-device/src/compose_mail_sms.rs、Issue 旧#1385、Issue #33",
       "verified": true
@@ -23,7 +23,7 @@
       "perm": "なし",
       "url": "https://developer.android.com/guide/components/intents-common",
       "note": "実装済み（旧#1386）。To（複数）/ CC / BCC は `EXTRA_EMAIL` / `EXTRA_CC` / `EXTRA_BCC` の配列で渡す（Issue #33。一部のメールアプリは CC / BCC を無視しうるため実機で確認する）。結果は `HandedOff`（`startActivity` が戻った。送信したかは分からない）と `NoHandler`（`ActivityNotFoundException`）。非前景・破棄中は起動せず失敗。`<queries>` と `SEND_SMS` は宣言しない。Activity 再生成時は保留要求を破棄する。守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止。守らない範囲: 渡した後の送信可否。実機で確認する（#34）",
-      "detail": "できている（Android 実機確認待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/android_compose_mail_sms.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/ComposeHelper.java + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs + crates/fandhe-device/src/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs、Issue 旧#1386、Issue #33",
       "verified": true
@@ -34,7 +34,7 @@
       "perm": "なし",
       "url": "https://developer.apple.com/documentation/appkit/nsworkspace",
       "note": "To（複数）/ CC / BCC は `mailto:` の宛先を `,` 連結、`cc=` / `bcc=` で渡す（Issue #33）。結果は `HandedOff`（OS が URL を受理しただけ。開いたか・送ったかは分からない）と `NoHandler`（`openURL:` が NO）。守る範囲: 入力の検査と URL への注入防止、`HandedOff` を送信待ち・送信済みと見せないこと。守らない範囲: 作成画面を開いた後の利用者の操作、既定アプリ未設定時の OS 側の差。UI スレッドで同期に 1 回呼ぶ。宛先なしの `sms:` を Messages が受けるかは Mac 目視で確認する（#34）",
-      "detail": "できている（Mac 目視待ち）",
+      "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-egui-proxy/src/device/macos_compose_mail_sms.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_compose_mail_sms.m + crates/fandhe-device/src/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs、Issue 旧#1384、Issue #33",
       "verified": true
@@ -56,7 +56,7 @@
       "url": "https://www.rfc-editor.org/rfc/rfc6068",
       "safari": "実ブラウザ確認（#34）で確かめる",
       "note": "実装済み（旧#1387）。To（複数）/ CC / BCC は `mailto:` の `,` 連結と `cc=` / `bcc=` で渡す（Issue #33）。結果は `HandedOff` のみ（遷移を依頼しただけ。ハンドラの有無・送信は取れない）。入力不正は遷移せず失敗、`set_href` の例外は固定文言の失敗。守る範囲: 入力検査と URL への注入防止、`HandedOff` を送信済みと見せないこと、発送記録の解放。守らない範囲: ハンドラの有無、作成画面を開いた後の操作、ブラウザ差によるページ遷移扱い、デスクトップでの `sms:` の無反応、複数タブ、wasm canvas 経路",
-      "detail": "できている（実ブラウザ確認待ち）",
+      "detail": "できている（Chrome で確認・他ブラウザは未確認）",
       "implStatus": "実装済み（Chrome で確認済み・Firefox / Safari は未確認）",
       "impl": "crates/fandhe-web-dom/src/compose_mail_sms.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-device/src/compose_mail_sms.rs、Issue 旧#1387、Issue #33"
     }
