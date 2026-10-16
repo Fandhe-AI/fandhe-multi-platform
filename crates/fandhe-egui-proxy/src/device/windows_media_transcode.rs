@@ -91,6 +91,19 @@ impl Drop for TempWav {
     }
 }
 
+/// `create_new` に成功したときだけガードを作る（作成に失敗した同名の既存ファイルを消さない）。
+/// 作成後の書き込み失敗はガードの Drop が自分のファイルとして消す。
+fn create_temp_wav(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<TempWav> {
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?;
+    let guard = TempWav(path.to_path_buf());
+    f.write_all(bytes)?;
+    Ok(guard)
+}
+
 /// 前回消せなかった一時 WAV を消し直す（消せないものは残す）。
 fn purge_stale() {
     if let Ok(mut v) = STALE.lock() {
@@ -165,16 +178,8 @@ impl MediaTranscode for WindowsMediaTranscode {
             std::process::id(),
             SEQ.fetch_add(1, Ordering::Relaxed)
         ));
-        let wrote = {
-            use std::io::Write;
-            std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&path)
-                .and_then(|mut f| f.write_all(&wav_bytes(pcm, sample_rate)))
-        };
-        let _guard = TempWav(path.clone());
-        wrote.map_err(|_| internal("media_transcode input"))?;
+        let _guard = create_temp_wav(&path, &wav_bytes(pcm, sample_rate))
+            .map_err(|_| internal("media_transcode input"))?;
 
         let open = FileRandomAccessStream::OpenAsync(
             &HSTRING::from(path.as_os_str()),
@@ -316,5 +321,18 @@ mod tests {
             Err(DeviceError::Internal(TIMEOUT)) | Err(DeviceError::Unsupported(_))
         ));
         assert_eq!(leftovers(), 0, "一時ファイルが残っている");
+    }
+
+    /// 同名の既存ファイルがあっても作成失敗で消さない。
+    #[test]
+    fn existing_file_is_not_deleted() {
+        let path = std::env::temp_dir().join(format!(
+            "fandhe-media-transcode-test-{}-existing.wav",
+            std::process::id()
+        ));
+        std::fs::write(&path, b"keep").unwrap();
+        assert!(create_temp_wav(&path, b"x").is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"keep");
+        let _ = std::fs::remove_file(&path);
     }
 }
