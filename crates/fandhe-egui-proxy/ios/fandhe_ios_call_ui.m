@@ -98,9 +98,14 @@ static void clearCurrent(void) {
     // 自分で要求した終了（end）は先に現在の通話を空にしてあるため、ここでは通知しない。
     if (gCurrentId != 0 && [action.callUUID isEqual:gCurrentUUID]) {
         uint64_t cid = gCurrentId;
-        BOOL ringing = (gStage == FandheCallStageRinging);
+        FandheCallStage stage = gStage;
         clearCurrent();
-        fandhe_rust_call_ui_event(cid, ringing ? 3 : 4, 0, 0);
+        // report の completion より先に拒否が届いた場合も、受理（Ringing）を補ってから Declined を送る
+        // （ドライバは Reporting 中の終端を受け付けない。遅れて届く completion は !current で通知しない）。
+        if (stage == FandheCallStageReporting) {
+            fandhe_rust_call_ui_event(cid, 1, 0, 0);
+        }
+        fandhe_rust_call_ui_event(cid, stage == FandheCallStageActive ? 4 : 3, 0, 0);
     }
 }
 
