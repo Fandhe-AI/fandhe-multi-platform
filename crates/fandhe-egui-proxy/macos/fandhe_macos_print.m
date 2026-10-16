@@ -34,8 +34,9 @@ int32_t fandhe_macos_print_text(const char *title, const char *body) {
 
         // 共有設定を汚さないよう複製して使う。
         NSPrintInfo *info = [[NSPrintInfo sharedPrintInfo] copy];
-        info.horizontalPagination = NSPrintingPaginationModeAutomatic;
-        info.verticalPagination = NSPrintingPaginationModeAutomatic;
+        // 0 は自動改ページ。定数名は SDK 世代で異なる（NSAutoPagination は macOS 11 で deprecated）ため使わない。
+        info.horizontalPagination = (NSPrintingPaginationMode)0;
+        info.verticalPagination = (NSPrintingPaginationMode)0;
         info.verticallyCentered = NO;
 
         NSPrintPanel *panel = [NSPrintPanel printPanel];
