@@ -1,0 +1,46 @@
+{
+  "id": "scanner-devices",
+  "name": "接続したスキャナー・カメラ機器からの取り込み",
+  "group": "未着手の OS 機能",
+  "order": 159,
+  "priority": 149,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "ImageCaptureCore `ICDeviceBrowser`（接続したカメラ機器からの取り込み）",
+      "perm": "不要（要確認）",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。iOS で使える範囲（カメラのみでスキャナーは不可の見込み）は未確認"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`android.mtp.MtpDevice`（USB のカメラ機器）。スキャナー向けの標準 API はない",
+      "perm": "USB 機器のアクセス許可（`UsbManager`）",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。スキャナーは対象外の見込み"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "ImageCaptureCore `ICDeviceBrowser` / `ICScannerDevice` / `ICCameraDevice`",
+      "perm": "不要（サンドボックス時は USB 等の entitlement、要確認）",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。スキャナーとカメラの両方を扱える"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT `Windows.Devices.Scanners.ImageScanner`。互換性が要るなら Win32 の WIA（`IWiaDevMgr2`）",
+      "perm": "不要（要確認）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.scanners.imagescanner",
+      "note": "未実装。URL 未確認（一般知識、要確認）。WinRT 側はフラットベッドスキャナー中心"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "接続したスキャナーを扱う標準 API はない（WebUSB は機器ごとの独自実装になる）"
+    }
+  },
+  "note": "document-scan はスマホのカメラで書類を撮る方式だが、こちらは USB やネットワークで接続したフラットベッドスキャナー・カメラ機器から画像を取り込む別機能"
+}

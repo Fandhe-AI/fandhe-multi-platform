@@ -1,0 +1,46 @@
+{
+  "id": "file-preview",
+  "name": "ファイル・動画のプレビューとサムネイル",
+  "group": "未着手の OS 機能",
+  "order": 149,
+  "priority": 139,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "QuickLook `QLPreviewController`（プレビュー表示）、`QLThumbnailGenerator`（サムネイル）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/quicklook/qlpreviewcontroller",
+      "note": "未実装。サンドボックス内のファイルのみ。対応形式は OS 依存。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "動画・画像サムネイルは `ContentResolver.loadThumbnail`（API 29+）/ `ThumbnailUtils`。プレビュー表示は `ACTION_VIEW` で他アプリへ",
+      "perm": "不要（対象ファイルの URI 権限は別）",
+      "url": "https://developer.android.com/reference/android/content/ContentResolver#loadThumbnail(android.net.Uri,%20android.util.Size,%20android.os.CancellationSignal)",
+      "note": "未実装。OS 標準のプレビュー画面は無く、表示は他アプリ委譲。minSdk と API 29 の差に注意。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "QuickLookUI `QLPreviewPanel`、QuickLookThumbnailing `QLThumbnailGenerator`",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/quicklookui/qlpreviewpanel",
+      "note": "未実装。共有パネルは AppKit のレスポンダーチェーン経由で提示する。URL 未確認箇所あり（一般知識、要確認）。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Shell `IThumbnailProvider` / `IShellItemImageFactory::GetImage`（サムネイル）、WinRT `StorageFile.GetThumbnailAsync`",
+      "perm": "不要",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/shell/thumbnail-providers",
+      "note": "未実装。プレビュー表示（Preview Handler）をアプリ内に埋め込むのは複雑。当面はサムネイル中心。"
+    },
+    "web": {
+      "status": "no",
+      "api": "OS 標準プレビューなし（画像・動画のみ canvas で代替）",
+      "perm": "-",
+      "url": "",
+      "note": "任意ファイルの標準プレビュー API は無い。画像は `createImageBitmap`、動画は `<video>` + canvas でフレームを取れるが形式依存"
+    }
+  },
+  "note": "pdf-viewer は PDF の表示、photo-picker は写真の選択で、これは任意ファイルの OS 標準プレビュー表示と動画・ファイルのサムネイル生成。"
+}

@@ -1,0 +1,46 @@
+{
+  "id": "wallpaper-set",
+  "name": "壁紙・ロック画面の設定",
+  "group": "未着手の OS 機能",
+  "order": 155,
+  "priority": 145,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "壁紙を設定する公開 API はない（ユーザーが写真アプリから手動で設定する）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`WallpaperManager.setBitmap` / `setStream`（`FLAG_SYSTEM` / `FLAG_LOCK` でホームとロック画面を選べる）",
+      "perm": "`SET_WALLPAPER`（normal 権限）",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。ロック画面の指定は API 24+"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AppKit `NSWorkspace.setDesktopImageURL(_:for:options:)`（画面ごとに指定）",
+      "perm": "不要（要確認）",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。ロック画面の壁紙は公開 API が見当たらない"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT `UserProfilePersonalizationSettings.TrySetWallpaperImageAsync` / `TrySetLockScreenImageAsync`。非パッケージなら Win32 `SystemParametersInfo(SPI_SETDESKWALLPAPER)`",
+      "perm": "不要（要確認）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.system.userprofile.userprofilepersonalizationsettings",
+      "note": "未実装。URL 未確認（一般知識、要確認）。WinRT 側はパッケージアプリ向けの見込み"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "ブラウザから OS の壁紙を設定する API はない"
+    }
+  },
+  "note": "端末の壁紙・ロック画面を設定する機能で、アプリ内の背景やテーマの話ではない"
+}

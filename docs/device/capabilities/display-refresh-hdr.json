@@ -1,0 +1,47 @@
+{
+  "id": "display-refresh-hdr",
+  "name": "画面のリフレッシュレート・HDR・広色域",
+  "group": "未着手の OS 機能",
+  "order": 144,
+  "priority": 134,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "`UIScreen.maximumFramesPerSecond` / `CADisplayLink`、`UIScreen.currentEDRHeadroom`（EDR）、`UIScreen.traitCollection.displayGamut`",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/uikit/uiscreen/maximumframespersecond",
+      "note": "未実装。ProMotion 端末のみ 120。低電力モードで制限される。URL は fps のみ確認、EDR・色域は一般知識、要確認。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`Display.getRefreshRate()` / `getSupportedModes()`、`Display.getHdrCapabilities()`（API 24+、33+ は `getHdrSizeInfo` 系）、`Configuration.isScreenWideColorGamut`",
+      "perm": "不要",
+      "url": "https://developer.android.com/reference/android/view/Display",
+      "note": "未実装。HDR 取得 API は API レベルで差がある（minSdk 要確認）。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`NSScreen.maximumFramesPerSecond`、`NSScreen.maximumExtendedDynamicRangeColorComponentValue`（EDR）、`NSScreen.colorSpace`",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/appkit/nsscreen/maximumframespersecond",
+      "note": "未実装。可変リフレッシュレート（ProMotion）の現在値は取れない場合がある。URL 未確認（一般知識、要確認）。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`EnumDisplaySettingsW`（`dmDisplayFrequency`）、DXGI `IDXGIOutput6::GetDesc1`（色空間・最大輝度）、WinRT `DisplayInformation.GetAdvancedColorInfo`",
+      "perm": "不要",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.graphics.display.advancedcolorinfo",
+      "note": "未実装。HDR の有効状態はユーザー設定に依存。Rust クレート直呼びで届く見込み（windows クレート）。"
+    },
+    "web": {
+      "status": "possible",
+      "api": "`matchMedia(\"(dynamic-range: high)\")` / `matchMedia(\"(color-gamut: p3)\")`。画面ごとの色深度は Window Management API の `ScreenDetailed`（`colorDepth` 等）。リフレッシュレートは直接取れず、`requestAnimationFrame` の間隔から推定する",
+      "perm": "不要",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/@media/dynamic-range",
+      "safari": "一部対応（dynamic-range / color-gamut。要確認）",
+      "note": "未実装。リフレッシュレートの標準 API は無く推定のみ。Safari の対応状況は要確認。"
+    }
+  },
+  "note": "multi-display は寸法・枚数、これは画面の表示能力（リフレッシュレート・HDR・色域）の取得で、描画ループの内部制御ではなくアプリが知るための API。"
+}

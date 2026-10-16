@@ -1,0 +1,47 @@
+{
+  "id": "memory-pressure",
+  "name": "メモリ逼迫・負荷の通知",
+  "group": "未着手の OS 機能",
+  "order": 146,
+  "priority": 136,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "`UIApplication.didReceiveMemoryWarningNotification`。`DispatchSource.makeMemoryPressureSource`（段階つき）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/uikit/uiapplication/didreceivememorywarningnotification",
+      "note": "未実装。段階つきの Memory Pressure Source は iOS でも使える見込みだが要確認。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`ComponentCallbacks2.onTrimMemory(level)` / `onLowMemory`",
+      "perm": "不要",
+      "url": "https://developer.android.com/reference/android/content/ComponentCallbacks2",
+      "note": "未実装。Activity / Application で受ける。level の段階が細かい。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`DispatchSource.makeMemoryPressureSource`（`.warning` / `.critical`）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/dispatch/dispatchsource/memorypressureevent",
+      "note": "未実装。Rust からは libdispatch の C API を直呼びできる見込み。URL 未確認（一般知識、要確認）。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`CreateMemoryResourceNotification`（`LowMemoryResourceNotification`）+ 待機。UWP は `MemoryManager.AppMemoryUsageLimitChanging`",
+      "perm": "不要",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-creatememoryresourcenotification",
+      "note": "未実装。システム全体の低メモリ通知で、プロセス単位ではない。"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Compute Pressure API（`PressureObserver`、CPU の nominal / fair / serious / critical）。メモリ逼迫の標準通知は無い",
+      "perm": "不要（Permissions Policy `compute-pressure`）",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Compute_Pressure_API",
+      "safari": "非対応",
+      "note": "未実装。メモリではなく CPU 負荷のみ。Chromium 系のみ・要セキュアコンテキスト。"
+    }
+  },
+  "note": "power-state の熱・電池とは別に、メモリ逼迫（と Web の Compute Pressure による CPU 負荷）の通知を扱う。"
+}

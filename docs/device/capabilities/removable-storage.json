@@ -1,0 +1,47 @@
+{
+  "id": "removable-storage",
+  "name": "外部ストレージの着脱",
+  "group": "未着手の OS 機能",
+  "order": 142,
+  "priority": 132,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "UIKit `UIDocumentPickerViewController`（外部ドライブ内のファイルを選ぶ）。着脱通知は公開 API なし",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/uikit/uidocumentpickerviewcontroller",
+      "note": "未実装。USB ストレージ（iPadOS 13+ / iPhone 15+）のファイルは picker 経由のみで、着脱の検知はできない。file-picker と重なる範囲が大きい。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`StorageManager.getStorageVolumes()` / `StorageVolume`、`ACTION_MEDIA_MOUNTED` / `ACTION_MEDIA_EJECT`、`ACTION_OPEN_DOCUMENT_TREE`",
+      "perm": "不要（ファイル読みは SAF 経由）",
+      "url": "https://developer.android.com/reference/android/os/storage/StorageManager",
+      "note": "未実装。ボリュームの列挙と着脱は届くが、読み書きは SAF が前提。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`NSWorkspace.didMountNotification` / `willUnmountNotification` / `didUnmountNotification`、`FileManager.mountedVolumeURLs`",
+      "perm": "不要（sandbox 時は選択ダイアログ経由で読む）",
+      "url": "https://developer.apple.com/documentation/appkit/nsworkspace/didmountnotification",
+      "note": "未実装。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT `Windows.Devices.Enumeration.DeviceWatcher`（`StorageDevice.GetDeviceSelector`）、Win32 `WM_DEVICECHANGE`",
+      "perm": "`removableStorage` 機能の宣言（パッケージ時）。unpackaged は要確認",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.enumeration.devicewatcher",
+      "note": "未実装。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "web": {
+      "status": "possible",
+      "api": "File System Access API（`showDirectoryPicker`）。着脱の検知は不可",
+      "perm": "ユーザーのフォルダ選択",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/showDirectoryPicker",
+      "safari": "非対応（showDirectoryPicker）",
+      "note": "未実装。選んだ後のフォルダ読み書きのみ。着脱の通知はない。"
+    }
+  },
+  "note": "usb-device は USB 機器の直接制御、file-picker は利用者が選んだファイルの取得で、本機能はストレージボリュームの着脱の検知と列挙。file-watch（フォルダ内の変更）とも別。"
+}

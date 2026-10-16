@@ -1,0 +1,47 @@
+{
+  "id": "video-capture",
+  "name": "動画の撮影",
+  "group": "未着手の OS 機能",
+  "order": 136,
+  "priority": 126,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "UIKit `UIImagePickerController`（`mediaTypes = [public.movie]`）",
+      "perm": "カメラ・マイク利用目的の記述",
+      "url": "https://developer.apple.com/documentation/uikit/uiimagepickercontroller",
+      "note": "未実装。camera-capture の iOS と同じ経路で mediaTypes を変える。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`MediaStore.ACTION_VIDEO_CAPTURE`（Intent）",
+      "perm": "Intent 経由なら `CAMERA` 不要（マニフェストに宣言した場合のみ要）",
+      "url": "https://developer.android.com/media/camera/camera-intents",
+      "note": "未実装。保存先 URI（`EXTRA_OUTPUT`）の FileProvider 設計が要る。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AVFoundation `AVCaptureMovieFileOutput`",
+      "perm": "カメラ・マイク利用目的の記述、sandbox 時は Entitlement",
+      "url": "https://developer.apple.com/documentation/avfoundation/avcapturemoviefileoutput",
+      "note": "未実装。標準の撮影 UI はなく自前で組む。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT `MediaCapture.PrepareLowLagRecordToStorageFileAsync`（`MediaEncodingProfile`）",
+      "perm": "`webcam` と `microphone` 機能の宣言",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacapture",
+      "note": "未実装。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "web": {
+      "status": "possible",
+      "api": "`MediaRecorder`（`getUserMedia` の映像・音声）",
+      "perm": "カメラ・マイク許可、secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder",
+      "safari": "対応（mp4 出力）",
+      "note": "未実装。出力コンテナはブラウザ依存（Safari は mp4、Chromium は webm）。"
+    }
+  },
+  "note": "camera-capture は静止画、本機能は動画ファイル。mic-record（音声のみ）・camera-preview-stream（ファイルにしない生フレーム）とも別。"
+}

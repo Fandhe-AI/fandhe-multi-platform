@@ -1,0 +1,46 @@
+{
+  "id": "music-recognition",
+  "name": "流れている曲の聴き取り認識",
+  "group": "未着手の OS 機能",
+  "order": 157,
+  "priority": 147,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "ShazamKit（`SHManagedSession` / `SHSession`）",
+      "perm": "マイク（`NSMicrophoneUsageDescription`）",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。App Services の ShazamKit を開発者ポータルで有効にする必要がある（要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "ShazamKit for Android（Apple 配布の SDK）",
+      "perm": "`RECORD_AUDIO`",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。Apple の開発者トークンが要る。SDK の提供状況は要確認"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "ShazamKit（`SHManagedSession` / `SHSession`）",
+      "perm": "マイク（`NSMicrophoneUsageDescription`）",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。macOS 12+ の見込み"
+    },
+    "windows": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "OS 標準の楽曲認識 API はない"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "ブラウザ標準の楽曲認識 API はない"
+    }
+  },
+  "note": "sound-classification は環境音の種類を分類するが、こちらは音源から特定の楽曲（曲名・アーティスト）を特定する別機能"
+}

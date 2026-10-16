@@ -1,0 +1,47 @@
+{
+  "id": "background-upload",
+  "name": "OS 管理のバックグラウンド送信",
+  "group": "未着手の OS 機能",
+  "order": 137,
+  "priority": 127,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "`URLSessionConfiguration.background(withIdentifier:)` + `uploadTask(with:fromFile:)`",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/1407496-background",
+      "note": "未実装。アップロード元はファイルで渡す必要がある（メモリ上のデータ不可）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "WorkManager の `CoroutineWorker` / `setForeground`（`ForegroundInfo` のデータ同期型）。OS 管理の送信専用 API はない",
+      "perm": "`POST_NOTIFICATIONS`（API 33+、前面サービスの通知）、`FOREGROUND_SERVICE_DATA_SYNC`",
+      "url": "https://developer.android.com/develop/background-work/background-tasks/persistent",
+      "note": "未実装。background-download と違い DownloadManager 相当がなく、アプリのプロセスが処理する。ユーザー起点のデータ転送ジョブ（API 34+ `JobInfo.Builder.setUserInitiated`）も候補。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`URLSessionConfiguration.background(withIdentifier:)`",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/1407496-background",
+      "note": "未実装。iOS と同じ API。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT `Windows.Networking.BackgroundTransfer.BackgroundUploader`",
+      "perm": "`internetClient` 機能の宣言（パッケージ時）。unpackaged は要確認",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.networking.backgroundtransfer.backgrounduploader",
+      "note": "未実装。background-download の Windows と同じ名前空間。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Background Sync API（`SyncManager`）。Background Fetch は取得専用",
+      "perm": "Service Worker の登録",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API",
+      "safari": "非対応",
+      "note": "未実装。Chromium 系のみ。送信の完了保証は弱い。"
+    }
+  },
+  "note": "background-download はダウンロード、本機能は逆向きのアップロード。http-get / background-task（短時間処理）とも別で、転送そのものを OS に任せる点は background-download と同じ。"
+}

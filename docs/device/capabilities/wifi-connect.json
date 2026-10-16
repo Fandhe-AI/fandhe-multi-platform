@@ -1,0 +1,47 @@
+{
+  "id": "wifi-connect",
+  "name": "指定した Wi-Fi への接続",
+  "group": "未着手の OS 機能",
+  "order": 132,
+  "priority": 122,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "NetworkExtension `NEHotspotConfigurationManager.apply`",
+      "perm": "Hotspot Configuration Entitlement（`com.apple.developer.networking.HotspotConfiguration`）",
+      "url": "https://developer.apple.com/documentation/networkextension/nehotspotconfigurationmanager",
+      "approval": "Hotspot Configuration の Entitlement 有効化（要確認）",
+      "note": "未実装。Entitlement の付与は capability 追加のみで Apple の個別審査は不要と思われる（要確認）。確認ダイアログが出る。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`WifiNetworkSuggestion`（API 29+、`WifiManager.addNetworkSuggestions`）／ `WifiNetworkSpecifier`（`ConnectivityManager.requestNetwork`、アプリ限定の接続）",
+      "perm": "`CHANGE_WIFI_STATE`（API 29+ の suggestion は `CHANGE_NETWORK_STATE` も）",
+      "url": "https://developer.android.com/develop/connectivity/wifi/wifi-suggest",
+      "note": "未実装。Suggestion は即時接続を保証せず、OS が選ぶ。Specifier は端末全体でなくアプリのみ。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "CoreWLAN `CWInterface.associate(toNetwork:password:)`",
+      "perm": "位置情報の許可（SSID 取得に必要、要確認）",
+      "url": "https://developer.apple.com/documentation/corewlan/cwinterface",
+      "note": "未実装。wifi-info（macOS は CoreWLAN）と同じ枠組み。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT `WiFiAdapter.ConnectAsync`（`WiFiReconnectionKind`・`PasswordCredential`）",
+      "perm": "`wiFiControl` 機能の宣言（パッケージ時）。unpackaged は要確認",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.wifi.wifiadapter.connectasync",
+      "note": "未実装。wifi-info の Windows と同じ `WiFiAdapter`。（URL・API は一般知識、WebFetch 未確認、要確認）"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API なし",
+      "perm": "-",
+      "url": "",
+      "note": "ブラウザから OS の Wi-Fi 接続を操作する API はない。"
+    }
+  },
+  "note": "wifi-info は現在の接続・周辺スキャンの読み取りで、本機能は SSID とパスワードを指定して接続する書き込み側。network-status（接続状態）とも別。"
+}

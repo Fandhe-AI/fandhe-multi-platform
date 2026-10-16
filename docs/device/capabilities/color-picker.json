@@ -1,0 +1,47 @@
+{
+  "id": "color-picker",
+  "name": "システムの色選択ダイアログ",
+  "group": "未着手の OS 機能",
+  "order": 151,
+  "priority": 141,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "UIKit `UIColorPickerViewController`（iOS 14+）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/uikit/uicolorpickerviewcontroller",
+      "note": "未実装。結果は delegate で受ける。キャンセルは閉じた通知のみ。"
+    },
+    "android": {
+      "status": "no",
+      "api": "OS 標準の色ピッカーなし",
+      "perm": "-",
+      "url": "",
+      "note": "OS 標準の色選択ダイアログは無い（Material の色選択は自前実装・サードパーティ）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AppKit `NSColorPanel.shared`（`NSColorPanelColorDidChangeNotification`）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/appkit/nscolorpanel",
+      "note": "未実装。共有パネルで、選択は連続通知。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 共通ダイアログ `ChooseColorW`",
+      "perm": "不要",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/dlgbox/color-dialog-box",
+      "note": "未実装。従来型の簡易ダイアログ。WinUI の ColorPicker は自前のコントロール。"
+    },
+    "web": {
+      "status": "possible",
+      "api": "`<input type=\"color\">`（ブラウザ標準のカラーピッカー）",
+      "perm": "不要",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/color",
+      "safari": "対応",
+      "note": "未実装。UI はブラウザ依存。アルファは `alpha` 属性（新しめ、要確認）。"
+    }
+  },
+  "note": "eye-dropper は画面から色を拾うスポイト、これは OS 標準の色選択ダイアログ（パレット・スライダー）で色を選ばせる。"
+}

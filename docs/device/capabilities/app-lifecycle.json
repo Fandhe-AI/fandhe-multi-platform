@@ -1,0 +1,47 @@
+{
+  "id": "app-lifecycle",
+  "name": "アプリの前面・背面・凍結の通知",
+  "group": "未着手の OS 機能",
+  "order": 145,
+  "priority": 135,
+  "bundle": "os-callback",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "`UIApplication.didBecomeActiveNotification` / `willResignActive` / `didEnterBackground` / `willEnterForeground`、Scene delegate",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/uikit/app_and_environment/managing_your_app_s_life_cycle",
+      "note": "未実装。Rust 側へは extern \"C\" コールバックで橋渡し。登録トークンの保持に注意（契約表 1）。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`ProcessLifecycleOwner`（androidx.lifecycle）または `Activity.onStart` / `onStop` / `onPause`",
+      "perm": "不要",
+      "url": "https://developer.android.com/guide/components/activities/activity-lifecycle",
+      "note": "未実装。Activity 再生成と背面遷移を区別する必要がある（契約表 1）。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`NSApplication.didBecomeActiveNotification` / `didResignActive` / `didHide` / `didUnhide`、`NSWorkspace` のスリープ通知",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/appkit/nsapplication/didbecomeactivenotification",
+      "note": "未実装。URL 未確認（一般知識、要確認）。sleep-lock-events（候補）との境界は電源・ロックの通知側。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 `WM_ACTIVATEAPP` / `WM_SIZE`（最小化）、winit のウィンドウイベント。UWP/WinUI は `Window.VisibilityChanged`・`Suspending`",
+      "perm": "不要",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-activateapp",
+      "note": "未実装。デスクトップ（アンパッケージ）に凍結の概念は無く、前面・背面のみ。"
+    },
+    "web": {
+      "status": "possible",
+      "api": "Page Visibility API（`visibilitychange`）、Page Lifecycle の `freeze` / `resume`、`pagehide` / `pageshow`",
+      "perm": "不要",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API",
+      "safari": "一部対応（visibilitychange / pagehide は対応、freeze / resume は非対応）",
+      "note": "未実装。`freeze` / `resume` は Chromium 系のみ。bfcache 復帰は `pageshow` の `persisted` で判定。"
+    }
+  },
+  "note": "描画ループ内部の休止判定ではなく、アプリが前面・背面・凍結の状態を知って保存や停止を行うための通知 API。"
+}

@@ -1,0 +1,46 @@
+{
+  "id": "system-sound",
+  "name": "システムの効果音・ビープ",
+  "group": "未着手の OS 機能",
+  "order": 150,
+  "priority": 140,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "AudioToolbox `AudioServicesPlaySystemSound`（`SystemSoundID`）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/audiotoolbox/audioservicesplaysystemsound(_:)",
+      "note": "未実装。消音スイッチに従う。iOS の公開ID は限られる。URL 未確認（一般知識、要確認）。"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`RingtoneManager.getRingtone` + `play()`、`ToneGenerator`（ビープ）、`View.playSoundEffect`",
+      "perm": "不要",
+      "url": "https://developer.android.com/reference/android/media/ToneGenerator",
+      "note": "未実装。音量は通知・ストリームに従う。"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "`NSSound.beep()`、`NSSound(named:)` でシステムサウンド",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/appkit/nssound",
+      "note": "未実装。URL 未確認（一般知識、要確認）。"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 `MessageBeep` / `PlaySoundW`（`SND_ALIAS` でシステムサウンド）",
+      "perm": "不要",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messagebeep",
+      "note": "未実装。ユーザーのサウンド設定に従う。"
+    },
+    "web": {
+      "status": "no",
+      "api": "OS 標準音なし（Web Audio で代替）",
+      "perm": "-",
+      "url": "",
+      "note": "システムサウンドを鳴らす API は無い。Web Audio で自前のビープを合成するのが代替"
+    }
+  },
+  "note": "音声再生（アプリの音源）ではなく、OS 標準の通知音・ビープ・システムサウンドを鳴らす簡易 API。"
+}

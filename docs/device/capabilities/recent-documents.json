@@ -1,0 +1,46 @@
+{
+  "id": "recent-documents",
+  "name": "「最近使った項目」への登録",
+  "group": "未着手の OS 機能",
+  "order": 160,
+  "priority": 150,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "n-a",
+      "api": "該当概念なし",
+      "perm": "-",
+      "url": "",
+      "note": "OS 共通の「最近使った項目」は無い"
+    },
+    "android": {
+      "status": "n-a",
+      "api": "該当概念なし",
+      "perm": "-",
+      "url": "",
+      "note": "OS 共通の「最近使った項目」へ登録する API は無い（SAF の最近一覧はシステム側が管理）"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AppKit `NSDocumentController.noteNewRecentDocumentURL(_:)`",
+      "perm": "不要",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。メニュー・Dock の「最近使った項目」に反映される"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "Win32 `SHAddToRecentDocs`。WinRT なら `StorageApplicationPermissions.MostRecentlyUsedList`",
+      "perm": "不要",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shaddtorecentdocs",
+      "note": "未実装。URL 未確認（一般知識、要確認）。ジャンプリストの「最近」に反映される"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "「最近使った項目」へ登録する標準 API はない"
+    }
+  },
+  "note": "file-picker はファイルを選ぶ機能で、こちらは OS の「最近使った項目」（Dock・ジャンプリスト）に開いたファイルを登録する機能"
+}

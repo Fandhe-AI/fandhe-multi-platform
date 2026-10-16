@@ -1,0 +1,46 @@
+{
+  "id": "radio-control",
+  "name": "無線（Wi-Fi・Bluetooth）の状態取得と切り替え",
+  "group": "未着手の OS 機能",
+  "order": 156,
+  "priority": 146,
+  "bundle": "one-shot",
+  "platforms": {
+    "ios": {
+      "status": "no",
+      "api": "切り替え用の公開 API なし",
+      "perm": "-",
+      "url": "",
+      "note": "無線の切り替えは不可。Bluetooth の状態読み取りは bluetooth-le の `CBCentralManager.state` で足りる"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`BluetoothAdapter.isEnabled` / `WifiManager.isWifiEnabled`（状態の取得）。切り替えは `Settings.Panel.ACTION_INTERNET_CONNECTIVITY` 等の設定パネルへ誘導",
+      "perm": "`BLUETOOTH_CONNECT`（API 31+）",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。`setWifiEnabled` は API 29+ で、`BluetoothAdapter.enable()` は API 33+ で一般アプリから使えない。アプリ自身では切り替えられず、ユーザー操作に委ねる形"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "CoreWLAN `CWInterface.setPower(_:)`（Wi-Fi）。Bluetooth の切り替えは公開 API が見当たらない",
+      "perm": "不要（要確認）",
+      "url": "",
+      "note": "未実装。URL 未確認（一般知識、要確認）。Bluetooth の電源切り替えは未確認"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "WinRT `Windows.Devices.Radios.Radio`（`GetRadiosAsync` / `SetStateAsync`、`RequestAccessAsync`）",
+      "perm": "`radios` デバイス capability",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio",
+      "note": "未実装。URL 未確認（一般知識、要確認）。Wi-Fi・Bluetooth・機内モードの無線を同じ API で扱える"
+    },
+    "web": {
+      "status": "no",
+      "api": "公開 API を確認できず",
+      "perm": "-",
+      "url": "",
+      "note": "ブラウザから無線の状態を取得・切り替える API はない"
+    }
+  },
+  "note": "network-status は接続の有無・種別、wifi-info は SSID・スキャンで、こちらは Wi-Fi・Bluetooth 無線そのものの on/off の取得と切り替え"
+}
