@@ -44,12 +44,15 @@
       "note": "未実装。"
     },
     "web": {
-      "status": "possible",
-      "api": "WebCodecs API",
-      "perm": "なし。secure context 必須",
+      "status": "done",
+      "api": "WebCodecs の `AudioEncoder` / `AudioDecoder`（`isConfigSupported` で `mp4a.40.2` → `opus` の順に選ぶ。`js_sys::Reflect` 経由）",
+      "perm": "不要。secure context 必須",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API",
-      "safari": "対応状況は MDN の互換表で未確認（要確認）",
-      "note": "未実装。WebCodecs はコーデック単位で、ファイルとしての変換には mux を別途用意する必要がある（要確認）。"
+      "safari": "MDN の互換表では Safari 26（iOS 26）から `AudioEncoder` に対応。実ブラウザでの確認は #310 で行う",
+      "note": "実装済み（#315）。範囲は実行時に作った 5 秒・モノラル・48 kHz・PCM 16bit の音声を 1 回変換することのみ（動画・利用者のファイル・進捗・取り消し・形式の選択・保存は範囲外。mux は作らないため出力はコンテナなしの AAC か Opus）。出力のバイト数は符号化チャンクの合計、長さは復号し直したフレーム数 ÷ サンプルレート。成功は出力が 0 バイトでない・復号し直せる・長さが入力 ±200 ms の中、をすべて満たすときだけ。失敗は非対応・期限切れ・出力が空・復号できない・長さの不一致を分けて表示する（例外の message は出さない）。期限は単調時計（`performance.now()`）で測り、過ぎたら codec を閉じて失敗で確定する。`pagehide` で中断し（失敗とは別）、戻っても自動では再開しない。codec・AudioData・タイマー・リスナーは全経路で解放する。守る範囲: 1 マウント内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: ブラウザごとのコーデックの有無・ビットレート、複数タブ・複数マウント間、egui-proxy の wasm canvas 経路（非対応のまま）。Firefox for Android は `AudioEncoder` がないため「この端末では使えません」になる。",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#310）",
+      "impl": "crates/fandhe-web-dom/src/media_transcode.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #315"
     }
   },
   "note": "iOS / macOS は AVAudioFile（AAC-LC）、Android は Media3 Transformer、Windows は MediaTranscoder、Web は WebCodecs。media-playback（既存 id）は再生で、本機能はファイルを別形式・別解像度へ書き出す点が違う。今回の範囲: 実行時に作った 5 秒の音声を AAC へ 1 回変換し、出力を読み直して入力と比べる（Web はコンテナなしの AAC / Opus。動画・利用者が持ち込むファイル・進捗・取り消し・形式の選択・保存は扱わない）。"

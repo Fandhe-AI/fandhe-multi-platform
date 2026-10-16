@@ -423,6 +423,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::file_watch::release_mount(id);
         super::midi::release_mount(id);
         super::media_playback::release_mount(id);
+        super::media_transcode::release_mount(id);
     }
 }
 
