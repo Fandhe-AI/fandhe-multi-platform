@@ -41,8 +41,7 @@
         "ジオフェンス（領域監視）"
       ],
       "implStatus": "実装済み（登録と内外表示は実機確認済み・出入りは未確認）",
-      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs`、Issue 旧#1057",
-      "verified": true
+      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs`、Issue 旧#1057"
     },
     "windows": {
       "status": "done",
