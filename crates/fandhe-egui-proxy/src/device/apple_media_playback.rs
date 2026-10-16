@@ -78,6 +78,8 @@ mod imp {
         #[allow(unsafe_code)]
         fn load(&self, wav: Arc<[u8]>) -> Result<u64, DeviceError> {
             if wav.is_empty() || wav.len() > MAX_WAV_BYTES {
+                // load 契約（呼ぶたびに旧プレーヤーを解放し旧世代を無効化）を失敗経路でも守る。
+                self.shutdown();
                 return Err(DeviceError::InvalidInput("media_playback wav"));
             }
             let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
@@ -168,10 +170,12 @@ mod imp {
         #[test]
         fn load_rejects_invalid_and_stale_generation() {
             let p = super::super::AppleMediaPlayback;
+            let old = p.load(demo_wav()).expect("load");
             assert!(matches!(
                 p.load(Arc::from(Vec::<u8>::new())),
                 Err(DeviceError::InvalidInput("media_playback wav"))
             ));
+            assert!(p.play(old).is_err(), "入力不正の load でも旧世代は無効");
             // デコードできないバイト列は成功にならない。
             assert!(p.load(Arc::from(vec![1u8, 2, 3, 4])).is_err());
             let g = p.load(demo_wav()).expect("load");

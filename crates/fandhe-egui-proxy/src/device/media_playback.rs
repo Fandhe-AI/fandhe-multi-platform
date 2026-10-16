@@ -89,6 +89,8 @@ struct SessionInner {
     device_gen: Option<u64>,
     /// 開始待ちの画面世代と起点（期限判定用）。
     pending: Option<(u64, Instant)>,
+    /// 直近に snapshot を画面へ送った時刻（単調時計）。送信は即時再描画を起こすため間引く。
+    last_report: Option<Instant>,
 }
 
 static SESSION: OnceLock<Session> = OnceLock::new();
@@ -147,6 +149,7 @@ fn drive(
             let _ = sender.send(Box::new(move |s: &mut AudioPlayState| {
                 mark_command_taken(s, generation)
             }));
+            inner.last_report = None;
             handle_command(&mut inner, sender, pb, command, generation);
         }
     }
@@ -164,7 +167,14 @@ fn drive(
                 return None;
             }
         }
-        report_snapshot(&mut inner, sender, pb);
+        // send は即時に再描画を要求するため、POLL_INTERVAL 未満では送らず連鎖を断つ。
+        if inner
+            .last_report
+            .is_none_or(|t| t.elapsed() >= POLL_INTERVAL)
+        {
+            inner.last_report = Some(Instant::now());
+            report_snapshot(&mut inner, sender, pb);
+        }
     }
 
     if active {
@@ -188,6 +198,8 @@ fn handle_command(
     };
     match command {
         AudioCommand::Play => {
+            // 期限の起点は同期の load・play より前に取る（その所要時間も期限に含める）。
+            let started = Instant::now();
             let snap = pb.snapshot();
             let reusable = inner.device_gen.is_some_and(|g| {
                 snap.generation == g
@@ -204,7 +216,7 @@ fn handle_command(
             }
             let Some(g) = inner.device_gen else { return };
             match pb.play(g) {
-                Ok(()) => inner.pending = Some((generation, Instant::now())),
+                Ok(()) => inner.pending = Some((generation, started)),
                 Err(e) => fail(inner, &e),
             }
         }
@@ -380,7 +392,12 @@ mod tests {
                 state: AudioPlayState::default(),
             }
         }
+        /// 間引きを無効にして 1 フレーム進める。
         fn drive(&mut self, d: Duration) -> Option<Duration> {
+            self.session.inner.lock().unwrap().last_report = None;
+            self.drive_throttled(d)
+        }
+        fn drive_throttled(&mut self, d: Duration) -> Option<Duration> {
             let r = drive(&self.state, &self.sender, &self.pb, &self.session, d);
             while let Ok(c) = self.rx.try_recv() {
                 c(&mut self.state);
@@ -400,6 +417,46 @@ mod tests {
         assert_eq!(take_command(&h.state), None);
         // 位置が画面へ届く
         assert_eq!(h.state.position_ms, Some(1000));
+    }
+
+    #[test]
+    fn snapshot_reports_are_throttled() {
+        let mut h = H::new(Fake::new(true));
+        play(&mut h.state);
+        h.drive(D);
+        h.fake.set_phase(PlaybackPhase::Ended);
+        h.drive_throttled(D);
+        assert_eq!(h.state.phase, AudioPhase::Playing, "間隔内は送らない");
+    }
+
+    #[test]
+    fn slow_start_counts_from_before_load() {
+        struct Slow(Arc<Fake>);
+        impl MediaPlayback for Slow {
+            fn load(&self, w: Arc<[u8]>) -> Result<u64, DeviceError> {
+                std::thread::sleep(Duration::from_millis(40));
+                self.0.load(w)
+            }
+            fn play(&self, g: u64) -> Result<(), DeviceError> {
+                self.0.play(g)
+            }
+            fn pause(&self, g: u64) -> Result<(), DeviceError> {
+                self.0.pause(g)
+            }
+            fn stop(&self, g: u64) -> Result<(), DeviceError> {
+                self.0.stop(g)
+            }
+            fn snapshot(&self) -> PlaybackSnapshot {
+                self.0.snapshot()
+            }
+            fn shutdown(&self) {}
+        }
+        let mut h = H::new(Fake::new(true));
+        h.pb = Arc::new(Slow(h.fake.clone()));
+        play(&mut h.state);
+        h.drive(Duration::from_millis(20));
+        assert_eq!(h.state.phase, AudioPhase::Failed(AudioFailure::Timeout));
+        assert_eq!(h.fake.0.lock().unwrap().stops, 1);
     }
 
     #[test]
