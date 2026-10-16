@@ -112,6 +112,9 @@ use fandhe_core::screens::photo_pick::{
 use fandhe_core::screens::power_state_show::{
     current_screen as current_power_state_screen, PowerStateShowState,
 };
+use fandhe_core::screens::print_page::{
+    current_screen as current_print_page_screen, PrintPageState,
+};
 use fandhe_core::screens::screen_capture::{
     current_screen as current_screen_capture_screen, ScreenCaptureState,
 };
@@ -853,6 +856,21 @@ pub fn mount_compose_mail_sms_screen(root_id: &str) -> Result<(), JsValue> {
         current_compose_mail_sms_screen(&initial_state),
         initial_state,
         super::compose_mail_sms::compose_mail_sms_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「印刷」（親 #94、Issue #329）をマウントする
+/// 検証専用エントリポイント。`super::print_page::print_page_effect` が `window.print()` を呼ぶ。
+#[wasm_bindgen]
+pub fn mount_print_page_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = PrintPageState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_print_page_screen(&initial_state),
+        initial_state,
+        super::print_page::print_page_effect,
     )
 }
 
