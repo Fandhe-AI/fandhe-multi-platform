@@ -304,6 +304,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // （`device::midi::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::midi::reset_pending_tracking();
+    // Issue #267: 音声再生も同様。画面状態が generation 0 に戻るため、処理済み世代を捨て再生を止める
+    // （`device::media_playback::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::media_playback::reset_pending_tracking();
 
     let native_options = eframe::NativeOptions {
         android_app: Some(app),

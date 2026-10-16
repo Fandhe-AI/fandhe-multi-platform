@@ -417,6 +417,8 @@ fn main() {
     compile_apple_network_status();
     // `apple/fandhe_apple_midi.m`（Issue #1398 macOS + #1399 iOS）も共用する。CoreMIDI を使う。
     compile_apple_midi();
+    // `apple/fandhe_apple_media_playback.m`（Issue #267）。macOS と iOS（親 #86 の b-ios）で共用する。
+    compile_apple_media_playback();
     // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308 macOS + #1309 iOS）も共用する。
     compile_apple_accessibility_prefs();
     // `apple/fandhe_apple_screen_capture.m`（Issue #1336）の iOS 側（ReplayKit）。
@@ -737,6 +739,17 @@ fn compile_ios_url_scheme() {
         .compile("fandhe_ios_url_scheme");
 }
 
+/// `apple/fandhe_apple_media_playback.m` を `cc` でコンパイルする（Issue #267）。`AVAudioPlayer` を使い、
+/// AVFoundation は既存のリンクで足りる。iOS・macOS 双方の分岐から呼ばれる
+/// （`src/device/apple_media_playback.rs` が使う。iOS は親 #86 の b-ios）。
+fn compile_apple_media_playback() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_media_playback.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_media_playback.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_media_playback");
+}
+
 /// `apple/fandhe_apple_midi.m` を `cc` でコンパイルし CoreMIDI をリンクする（Issue #1398）。
 /// iOS・macOS 双方の分岐から呼ばれる（`src/device/apple_midi.rs` が使う。iOS は Issue #1399）。
 fn compile_apple_midi() {
@@ -1030,6 +1043,8 @@ fn build_macos() {
     compile_macos_audio_devices();
     // `apple/fandhe_apple_midi.m`（Issue #1398）。iOS 分岐（#1399）と共用する。CoreMIDI を使う。
     compile_apple_midi();
+    // `apple/fandhe_apple_media_playback.m`（Issue #267）。iOS 分岐と共用する。AVFoundation は既存のリンクで足りる。
+    compile_apple_media_playback();
     // `macos/fandhe_macos_local_fonts.m`（Issue #1376）も macOS 専用。AppKit は既存のリンクで足りる。
     compile_macos_local_fonts();
     // `macos/fandhe_macos_file_watch.m`（Issue #1410）も macOS 専用。CoreServices を使う。

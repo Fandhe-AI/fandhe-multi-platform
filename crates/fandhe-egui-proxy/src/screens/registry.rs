@@ -154,6 +154,10 @@ generated_screens! {
     crate::device::pedometer::pedometer_read_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "audio_play" => fandhe_core::screens::audio_play::current_screen,
+    crate::device::media_playback::audio_play_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "midi_show" => fandhe_core::screens::midi_show::current_screen,
     crate::device::midi::midi_show_effect,
     effect

@@ -94,6 +94,8 @@ pub mod url_scheme_show;
 pub mod accessibility_prefs_show;
 /// Phase 11 の拡充ループ型サンプル「音声デバイス」（親 #1136、Issue #1330）。
 pub mod audio_devices_show;
+/// Phase 11 の拡充ループ型サンプル「音声の再生」（親 #86、Issue #267）。
+pub mod audio_play;
 /// Phase 11 の拡充ループ型サンプル「BLE スキャン」（親 #1059、Issue #1060）。
 pub mod ble_scan;
 /// Phase 11 の拡充ループ型サンプル「予定の追加」（親 #1118、Issue #1224）。
