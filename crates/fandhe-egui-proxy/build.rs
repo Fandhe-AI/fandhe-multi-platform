@@ -188,6 +188,10 @@
 //! - `ios/fandhe_ios_call_ui.m`（Issue #277、`CXProvider`（CallKit）による疑似着信）は **iOS 分岐のみ**で
 //!   feature `device` 有効時にコンパイルする（`src/device/ios_call_ui.rs` から呼ばれる契約）。
 //!   CallKit を追加でリンクする。
+//! - `ios/fandhe_ios_live_activity.swift` + `ios/fandhe_live_activity_attributes.swift`（Issue #295、
+//!   ActivityKit によるライブアクティビティ）は **iOS 分岐のみ**で feature `device` 有効時に swiftc で
+//!   静的ライブラリ化する（`src/device/ios_live_activity.rs` から呼ばれる契約）。ActivityKit と
+//!   Swift ランタイムの検索パスを追加でリンクする。
 //! - `ios/fandhe_ios_scene.m`（Issue #27、UIScene 化シム）は **iOS 分岐のみ**で feature・計測ビルドに
 //!   関係なく常にコンパイルする（Info.plist の `UIApplicationSceneManifest` が参照するため）。
 //! - `ios/fandhe_ios_multi_display.m`（Issue #27、scene の `UIScreen` による複数ディスプレイ）は
@@ -425,6 +429,8 @@ fn main() {
     compile_ios_multi_display();
     // `ios/fandhe_ios_call_ui.m`（Issue #277）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_call_ui();
+    // `ios/fandhe_ios_live_activity.swift`（Issue #295）。iOS 分岐のみ（macOS は対応表で no）。
+    compile_ios_live_activity();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_midi.m`（Issue #1398 macOS + #1399 iOS）も共用する。CoreMIDI を使う。
@@ -1007,6 +1013,111 @@ fn compile_ios_call_ui() {
         .file("ios/fandhe_ios_call_ui.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_call_ui");
+}
+
+/// ライブアクティビティの Swift 薄層を `swiftc` で静的ライブラリ化してリンクする（Issue #295）。
+/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_live_activity.rs` が使う）。`ActivityKit` の
+/// `Activity<Attributes>` は Swift 専用 API で ObjC から呼べないため、`cc` ではなく swiftc を使う。
+/// Apple ツール（`xcrun`）が無いホスト（Linux の型検査経路。`docs/operations/ios-build-pipeline.md`）
+/// では警告を出して静的ライブラリの生成をスキップする。この場合 `cargo check` は通るが、
+/// リンクはシンボル未解決で失敗するため成功には見えない。`FANDHE_REQUIRE_LIVE_ACTIVITY=1`
+/// （本番・配布ビルド）ではスキップせず panic する。swiftc 自体の失敗は常に panic。
+fn compile_ios_live_activity() {
+    use std::process::Command;
+
+    println!("cargo:rerun-if-env-changed=FANDHE_REQUIRE_LIVE_ACTIVITY");
+    let have_xcrun = Command::new("xcrun")
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success());
+    if !have_xcrun {
+        assert!(
+            std::env::var("FANDHE_REQUIRE_LIVE_ACTIVITY").as_deref() != Ok("1"),
+            "live_activity: xcrun が無い（FANDHE_REQUIRE_LIVE_ACTIVITY=1 のためスキップ不可）"
+        );
+        println!("cargo:warning=live_activity: xcrun が無いため Swift 薄層の生成をスキップ（型検査専用。リンクは失敗する）");
+        return;
+    }
+
+    let target = std::env::var("TARGET").unwrap_or_default();
+    let (sdk, triple, lib_dir) = match target.as_str() {
+        "aarch64-apple-ios-sim" => (
+            "iphonesimulator",
+            "arm64-apple-ios17.0-simulator",
+            "iphonesimulator",
+        ),
+        "aarch64-apple-ios" => ("iphoneos", "arm64-apple-ios17.0", "iphoneos"),
+        "x86_64-apple-ios" => (
+            "iphonesimulator",
+            "x86_64-apple-ios17.0-simulator",
+            "iphonesimulator",
+        ),
+        other => panic!("live_activity: 未対応の iOS ターゲット: {other}"),
+    };
+    let srcs = [
+        "ios/fandhe_live_activity_attributes.swift",
+        "ios/fandhe_ios_live_activity.swift",
+    ];
+    for s in srcs {
+        println!("cargo:rerun-if-changed={s}");
+    }
+
+    let xcrun = |args: &[&str]| -> String {
+        let out = Command::new("xcrun")
+            .args(args)
+            .output()
+            .expect("xcrun を実行できない");
+        assert!(out.status.success(), "xcrun {args:?} が失敗した");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    let sdk_path = xcrun(&["--sdk", sdk, "--show-sdk-path"]);
+    let swiftc = xcrun(&["--sdk", sdk, "--find", "swiftc"]);
+
+    let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR");
+    let lib = format!("{out_dir}/libfandhe_ios_live_activity.a");
+    let out = Command::new("xcrun")
+        .args([
+            "--sdk",
+            sdk,
+            "swiftc",
+            "-parse-as-library",
+            "-emit-library",
+            "-static",
+            "-O",
+        ])
+        .args([
+            "-module-name",
+            "FandheLiveActivityBridge",
+            "-target",
+            triple,
+            "-sdk",
+            &sdk_path,
+        ])
+        .args(["-o", &lib])
+        .args(srcs)
+        .output()
+        .expect("swiftc を実行できない");
+    assert!(
+        out.status.success(),
+        "live_activity: swiftc が失敗した:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    println!("cargo:rustc-link-search=native={out_dir}");
+    println!("cargo:rustc-link-lib=static=fandhe_ios_live_activity");
+    println!("cargo:rustc-link-lib=framework=ActivityKit");
+    // Swift ランタイム（OS 同梱）の検索パスと実行時パス。
+    println!("cargo:rustc-link-search=native={sdk_path}/usr/lib/swift");
+    if let Some(bin) = std::path::Path::new(&swiftc)
+        .parent()
+        .and_then(|p| p.parent())
+    {
+        println!(
+            "cargo:rustc-link-search=native={}/lib/swift/{lib_dir}",
+            bin.display()
+        );
+    }
+    println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift");
 }
 
 /// `ios/fandhe_ios_file_watch.m` を `cc` でコンパイルする（Issue #1412）。**iOS 分岐のみ**
