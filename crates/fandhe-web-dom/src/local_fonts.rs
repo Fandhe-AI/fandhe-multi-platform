@@ -16,7 +16,11 @@
 //! - 非 secure context・`queryLocalFonts` 無しは `Unsupported`。`NotAllowedError` は
 //!   `PermissionDenied`（失敗とは別）、`SecurityError`（permissions policy 等）は `Unsupported`
 //! - `FontData` は書体単位なので件数は `total`（要素数）で数え、同じファミリーの重複は除く。
-//!   要素があるのに名前が 1 件も取れなければ失敗（嘘の 0 件にしない）。0 要素は確定の 0 件
+//!   要素があるのに名前が 1 件も取れなければ失敗（嘘の 0 件にしない）。0 要素は確定の 0 件。
+//!   ただし Chrome は許可をブロックしても reject せず空配列で resolve するため、0 要素のときだけ
+//!   `permissions.query({name: "local-fonts"})` を見て `denied` なら `PermissionDenied`。
+//!   query が無い・名前を受け付けない環境は状態不明として 0 件のまま（追加の await 後の古い世代は
+//!   `finish_read` が捨てる。この確認にも期限は設けない）
 //! - 例外の `message` と名前は画面にも `console` にも出さない（security.md A09）
 //!
 //! # 守る範囲 / 守らない範囲
@@ -48,6 +52,16 @@ pub(crate) fn reading_from_names(
         .map_err(|_| ReadFailure::Failed(READ_FAILED.to_string()))
 }
 
+/// 0 要素で resolve したときの結果。許可状態（`permissions.query` の `state`）が `denied` なら
+/// `PermissionDenied`（Chrome は拒否でも空配列で resolve する）、それ以外・不明は確定の 0 件。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn zero_result(state: Option<&str>) -> Result<LocalFontsReading, ReadFailure> {
+    match state {
+        Some("denied") => Err(ReadFailure::PermissionDenied),
+        _ => reading_from_names(0, vec![]),
+    }
+}
+
 /// 例外の `name` から失敗種別を決める純関数。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn failure_from_name(name: &str) -> ReadFailure {
@@ -69,8 +83,8 @@ mod web {
     use js_sys::{Array, Function, Reflect};
     use wasm_bindgen::prelude::*;
 
-    use super::{failure_from_name, reading_from_names, READ_FAILED};
-    use crate::mount::Applier;
+    use super::{failure_from_name, reading_from_names, zero_result, READ_FAILED};
+    use crate::mount::{query_permission, Applier};
 
     thread_local! {
         /// マウントごとの発送済み世代（同じ世代を二重に読まない）。
@@ -142,7 +156,13 @@ mod web {
                         .iter()
                         .filter_map(|d| get(&d, "family").as_string())
                         .collect();
-                    reading_from_names(arr.length() as usize, names)
+                    if arr.length() == 0 {
+                        let status = query_permission("local-fonts").await;
+                        let state = status.and_then(|s| get(&s, "state").as_string());
+                        zero_result(state.as_deref())
+                    } else {
+                        reading_from_names(arr.length() as usize, names)
+                    }
                 }
                 Ok(_) => Err(ReadFailure::Failed(READ_FAILED.to_string())),
                 Err(e) => Err(failure_of(&e)),
@@ -172,6 +192,22 @@ mod tests {
     fn zero_fonts_is_empty_success() {
         let r = reading_from_names(0, vec![]).unwrap();
         assert!(r.families.is_empty() && !r.truncated);
+    }
+
+    #[test]
+    fn zero_result_denied_is_permission_denied() {
+        assert_eq!(
+            zero_result(Some("denied")),
+            Err(ReadFailure::PermissionDenied)
+        );
+    }
+
+    #[test]
+    fn zero_result_other_states_are_empty_success() {
+        for st in [Some("granted"), Some("prompt"), None] {
+            let r = zero_result(st).unwrap();
+            assert!(r.families.is_empty() && !r.truncated);
+        }
     }
 
     #[test]

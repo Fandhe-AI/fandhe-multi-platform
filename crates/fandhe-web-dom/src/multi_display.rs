@@ -129,11 +129,11 @@ mod web {
         apply_read, finish_request, take_request, MultiDisplayShowState, ReadFailure, ScreenRow,
     };
     use fandhe_device::multi_display::READ_INTERVAL;
-    use js_sys::{Array, Function, Object, Reflect};
+    use js_sys::{Array, Function, Reflect};
     use wasm_bindgen::prelude::*;
 
     use super::{failure_from_name, rows_from_screens, screen_from_raw, READ_FAILED};
-    use crate::mount::{is_live, Applier};
+    use crate::mount::{is_live, query_permission, Applier};
 
     type Rows = Result<Vec<ScreenRow>, ReadFailure>;
     /// `setTimeout` のハンドルと、その発火で呼ばれるクロージャ。
@@ -196,27 +196,6 @@ mod web {
             })
             .collect();
         rows_from_screens(screens)
-    }
-
-    /// 取り消しを追うための `PermissionStatus`。取れない環境では `None`。
-    async fn query_permission() -> Option<JsValue> {
-        let window = web_sys::window()?;
-        let navigator: JsValue = window.navigator().into();
-        let permissions = get(&navigator, "permissions");
-        let query = get(&permissions, "query");
-        if !query.is_function() {
-            return None;
-        }
-        let desc = Object::new();
-        Reflect::set(&desc, &"name".into(), &"window-management".into()).ok()?;
-        let promise = query
-            .unchecked_into::<Function>()
-            .call1(&permissions, &desc)
-            .ok()?
-            .dyn_into::<js_sys::Promise>()
-            .ok()?;
-        let status = wasm_bindgen_futures::JsFuture::from(promise).await.ok()?;
-        status.is_object().then_some(status)
     }
 
     /// `READ_INTERVAL` ごとの読み取り。自己再予約し、世代交代・破棄で止まる。
@@ -342,7 +321,7 @@ mod web {
                     return;
                 }
             };
-            let permission = query_permission().await;
+            let permission = query_permission("window-management").await;
             if !is_current(mount_id, generation) {
                 return;
             }
