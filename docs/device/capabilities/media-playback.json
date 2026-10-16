@@ -40,11 +40,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/apple_media_playback.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_media_playback.m + crates/fandhe-egui-proxy/src/device/media_playback.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/media_playback.rs、Issue #267"
     },
     "windows": {
-      "status": "possible",
-      "api": "Media Foundation Media Engine（`IMFMediaEngine`、`IMFMediaEngineClassFactory::CreateInstance`）。`windows` crate から呼ぶ",
+      "status": "done",
+      "api": "Media Foundation Media Engine（`IMFMediaEngine`、`IMFMediaEngineEx::SetSourceFromByteStream`、`MF_MEDIA_ENGINE_AUDIOONLY`）。mfplat.dll は動的に読み込む",
       "perm": "不要。package identity 不要",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/mfmediaengine/nn-mfmediaengine-imfmediaengine",
-      "note": "未実装。`IMFMediaEngine` は Windows 8 以降のデスクトップアプリ向けとドキュメントに明記されており素の exe で使える。`MFStartup` と COM 初期化が要る。映像は `TransferVideoFrame` で DXGI サーフェス / WIC ビットマップへ取り出せるため、egui テクスチャ化の経路がある。MFPlay は非推奨（Microsoft Learn が `MediaPlayer` と `IMFMediaEngine` への置き換えを推奨）なので使わない。WinRT の `MediaPlayer` は package identity 要否を確認できなかったため採らない"
+      "note": "実装済み（#268）。範囲は同梱 WAV（実行時に生成する 5 秒の固定音）の再生・一時停止・停止・位置・長さのみ（動画・バックグラウンド制御・シーク・ネットワーク再生は範囲外）。結果は成功（再生中・最後まで再生）、利用者の一時停止・停止（失敗ではない）、失敗（デコード失敗・期限切れ・非対応）を分けて表示する。再生終了と MF のエラーは別経路で扱い、再生中の表示は PLAYING 通知が届いてから出す。窓が背面でも再生は続き、終了時に止める。mfplat.dll を動的に読み込むため Media Feature Pack の無い N エディションでも exe は起動し、非対応と表示する。HRESULT・MF のエラーコードはログ・画面へ出さない。守る範囲: 1 プロセス内の操作順、失敗を成功値へ畳まないこと、失敗経路を含むエンジンの解放。守らない範囲: 位置表示のポーリング間隔ぶんの遅れ、他アプリの音声との混ざり、複数プロセス間。並行経路の集約先は専用ワーカー 1 本の直列キューと Rust の 1 ロック。検証は x86_64-pc-windows-gnu の check / clippy まで。audio-only の Media Engine を HWND / DXGI manager 無しで作れる前提を含め、実機確認は #266",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#266）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_media_playback.rs + crates/fandhe-egui-proxy/src/device/media_playback.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/media_playback.rs、Issue #268"
     },
     "web": {
       "status": "done",

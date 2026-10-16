@@ -26,7 +26,7 @@ default = ["device"]
 # optional 依存として置く（Windows 以外では `device` feature を有効にしても入らない）。
 # Issue #907: `windows-future`（`IAsyncOperation`/`AsyncOperationCompletedHandler` の
 # 型名）も同じ Windows target 分岐にのみ置く。
-device = ["dep:fandhe-device", "dep:serde_json", "dep:jni", "dep:windows", "dep:raw-window-handle", "dep:windows-future", "dep:ttf-parser"]
+device = ["dep:fandhe-device", "dep:serde_json", "dep:jni", "dep:windows", "dep:raw-window-handle", "dep:windows-future", "dep:windows-core", "dep:ttf-parser"]
 
 frame-metrics = []
 
@@ -474,6 +474,10 @@ windows = { workspace = true, optional = true, features = [
     # 新規パッケージは増えない。
     "Win32_UI_Controls_Dialogs",
     "Win32_Storage_Xps",
+    # Issue #268: `device/windows_media_playback.rs` が Media Foundation Media Engine
+    # （`IMFMediaEngine*` / `IMFMediaEngineNotify` / `IMFByteStream`）を呼ぶ。mfplat.dll の
+    # 自由関数は動的に読み込むため import は増えない。新規パッケージは増えない。
+    "Win32_Media_MediaFoundation",
 ] }
 # Issue #898: `device/windows_share.rs::remember_window` が `eframe::CreationContext`
 # から HWND を取り出すために使う（`raw-window-handle` の `HasWindowHandle` トレイト）。
@@ -482,6 +486,8 @@ raw-window-handle = { workspace = true, optional = true }
 # （`IAsyncOperation<UserConsentVerificationResult>`/`AsyncOperationCompletedHandler`）を
 # 受けるために使う（ルート Cargo.toml の `windows-future` コメント参照）。
 windows-future = { workspace = true, optional = true }
+# Issue #268: `#[implement]` マクロの生成コードが参照する（ルート Cargo.toml の `windows-core` コメント参照）。
+windows-core = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # WebGPU（"wgpu" feature）は wasm32 分岐へ追加しない。WebGPU 非公開環境

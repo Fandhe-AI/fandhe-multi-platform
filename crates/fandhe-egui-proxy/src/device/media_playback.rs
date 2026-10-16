@@ -8,7 +8,7 @@
 //!
 //! [`platform_playback`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（macOS: `apple_media_playback`、iOS: `ios_media_playback`、
-//! Android: `android_media_playback`、Windows: `windows_media_playback`。後三者は現状スタブで
+//! Android: `android_media_playback`、Windows: `windows_media_playback`。Windows は実装済み、iOS・Android は現状スタブで
 //! `UnsupportedMediaPlayback` を返す）。それ以外は `UnsupportedMediaPlayback` 固定で、ダミーの成功実装へは倒さない。
 //!
 //! # 並行性
@@ -91,7 +91,20 @@ struct SessionInner {
     pending: Option<(u64, Instant)>,
     /// 直近に snapshot を画面へ送った時刻（単調時計）。送信は即時再描画を起こすため間引く。
     last_report: Option<Instant>,
+    /// 一時停止・停止を発行した時刻。非同期に確定する操作の失敗を拾うため、しばらく snapshot を監視する。
+    settle_since: Option<Instant>,
+    /// 一時停止・停止を発行した最初の時刻。Loading 中の窓延長に上限（期限）を設ける起点。
+    settle_origin: Option<Instant>,
+    /// 一時停止を発行済みで、プレーヤーが反映したか未確認のデバイス世代。反映が遅い実装（Windows の
+    /// ワーカー）で Pause 直後に Play が来ても、同じ世代へ流して位置を保つための記録。
+    pause_pending: Option<u64>,
+    /// 一時停止の反映待ちから再開したときの（デバイス世代, 再開要求の通し番号）。プレーヤーの
+    /// `play_progress` の実行済み数がこの番号に届くまで、前の Playing を再開成功とみなさない。
+    resume_gate: Option<(u64, u64)>,
 }
+
+/// 一時停止・停止の結果（非同期の失敗）を監視し続ける長さ。
+const SETTLE_WINDOW: Duration = Duration::from_secs(2);
 
 static SESSION: OnceLock<Session> = OnceLock::new();
 
@@ -150,6 +163,7 @@ fn drive(
                 mark_command_taken(s, generation)
             }));
             inner.last_report = None;
+            inner.settle_origin = None;
             handle_command(&mut inner, sender, pb, command, generation);
         }
     }
@@ -187,7 +201,46 @@ fn drive(
         }
     }
 
-    if active {
+    // Paused / Stopped でも、操作直後は OS 側の失敗が後から確定しうるので失敗だけ拾う。
+    // 画面側（apply_update）は Paused / Stopped への Failed を受け付ける。
+    // 読み込み処理中（プレーヤー側が Loading）は操作が未実行のままなので、窓の起点を進め続ける。
+    // 読み込み完了後の SETTLE_WINDOW で、キュー済みの一時停止・停止の失敗を拾う。
+    let awaiting = !active
+        && matches!(state.phase, AudioPhase::Paused | AudioPhase::Stopped)
+        && state.generation == inner.handled
+        && inner.settle_since.is_some();
+    if awaiting
+        && inner.device_gen.is_some_and(|dg| {
+            let snap = pb.snapshot();
+            // Loading は操作が未実行、Playing は一時停止・停止が worker で未完了（Windows）。
+            snap.generation == dg
+                && matches!(snap.phase, PlaybackPhase::Loading | PlaybackPhase::Playing)
+        })
+        // CANPLAY が来ない読み込みで再描画を出し続けないよう、延長は期限までに限る。
+        && inner.settle_origin.is_some_and(|t| t.elapsed() < deadline)
+    {
+        inner.settle_since = Some(Instant::now());
+    }
+    let settling = awaiting
+        && inner
+            .settle_since
+            .is_some_and(|t| t.elapsed() < SETTLE_WINDOW);
+    // 操作が未完了のうちに届く Playing は旧状態の残りなので画面へ反映しない（失敗だけ拾う）。
+    let in_flight = inner.device_gen.is_some_and(|dg| {
+        let snap = pb.snapshot();
+        snap.generation == dg && snap.phase == PlaybackPhase::Playing
+    });
+    if settling
+        && !in_flight
+        && inner
+            .last_report
+            .is_none_or(|t| t.elapsed() >= POLL_INTERVAL)
+    {
+        inner.last_report = Some(Instant::now());
+        report_snapshot(&mut inner, sender, pb);
+    }
+
+    if active || settling {
         sender.request_repaint_after(POLL_INTERVAL);
         Some(POLL_INTERVAL)
     } else {
@@ -211,10 +264,16 @@ fn handle_command(
             // 期限の起点は同期の load・play より前に取る（その所要時間も期限に含める）。
             let started = Instant::now();
             let snap = pb.snapshot();
+            // 一時停止の反映待ち（snapshot がまだ Playing）でも同じ世代を再開し、再 load で位置を失わない。
+            let pause_in_flight =
+                inner.pause_pending.is_some() && inner.pause_pending == inner.device_gen;
             let reusable = inner.device_gen.is_some_and(|g| {
                 snap.generation == g
-                    && matches!(snap.phase, PlaybackPhase::Ready | PlaybackPhase::Paused)
+                    && (matches!(snap.phase, PlaybackPhase::Ready | PlaybackPhase::Paused)
+                        || (pause_in_flight && snap.phase == PlaybackPhase::Playing))
             });
+            let resuming = pause_in_flight && reusable;
+            inner.pause_pending = None;
             if !reusable {
                 match pb.load(demo_wav()) {
                     Ok(g) => inner.device_gen = Some(g),
@@ -226,7 +285,12 @@ fn handle_command(
             }
             let Some(g) = inner.device_gen else { return };
             match pb.play(g) {
-                Ok(()) => inner.pending = Some((generation, started)),
+                Ok(()) => {
+                    inner.pending = Some((generation, started));
+                    inner.resume_gate = resuming
+                        .then(|| pb.play_progress().map(|(issued, _)| (g, issued)))
+                        .flatten();
+                }
                 Err(e) => fail(inner, &e),
             }
         }
@@ -234,6 +298,10 @@ fn handle_command(
             inner.pending = None;
             // プレーヤーが無ければ止める対象も無い（画面側の遷移だけで足りる）。
             let Some(g) = inner.device_gen else { return };
+            inner.settle_since = Some(Instant::now());
+            inner.settle_origin.get_or_insert_with(Instant::now);
+            inner.pause_pending = (command == AudioCommand::Pause).then_some(g);
+            inner.resume_gate = None;
             let r = if command == AudioCommand::Pause {
                 pb.pause(g)
             } else {
@@ -258,6 +326,14 @@ fn report_snapshot(
         return;
     }
     let generation = inner.handled;
+    if let Some((gg, issued)) = inner.resume_gate {
+        let applied = pb.play_progress().map(|(_, a)| a);
+        if gg != dg || applied.is_none_or(|a| a >= issued) {
+            inner.resume_gate = None;
+        } else if snap.phase == PlaybackPhase::Playing {
+            return;
+        }
+    }
     let phase = match snap.phase {
         PlaybackPhase::Playing => AudioPhase::Playing,
         PlaybackPhase::Ended => AudioPhase::Ended,
@@ -564,7 +640,11 @@ mod tests {
         play(&mut h.state);
         h.drive(D);
         pause(&mut h.state);
-        assert_eq!(h.drive(D), None, "Paused では再描画を予約しない");
+        assert_eq!(
+            h.drive(D),
+            Some(POLL_INTERVAL),
+            "操作直後は失敗確定を監視する"
+        );
         assert_eq!(h.state.phase, AudioPhase::Paused);
         play(&mut h.state);
         h.drive(D);
@@ -574,8 +654,95 @@ mod tests {
             "一時停止からは再 load しない"
         );
         stop(&mut h.state);
-        assert_eq!(h.drive(D), None);
+        assert_eq!(h.drive(D), Some(POLL_INTERVAL));
         assert_eq!(h.state.phase, AudioPhase::Stopped);
+    }
+
+    /// pause の反映が遅い実装（Windows のワーカー）。反映までは snapshot が Playing のまま。
+    struct LatePause(Arc<Fake>, Mutex<(u64, u64)>);
+    impl MediaPlayback for LatePause {
+        fn load(&self, w: Arc<[u8]>) -> Result<u64, DeviceError> {
+            self.0.load(w)
+        }
+        fn play(&self, g: u64) -> Result<(), DeviceError> {
+            let mut p = self.1.lock().unwrap();
+            p.0 += 1;
+            if p.0 == 1 {
+                p.1 += 1; // 初回の再生は即実行
+            }
+            self.0.play(g)
+        }
+        fn play_progress(&self) -> Option<(u64, u64)> {
+            Some(*self.1.lock().unwrap())
+        }
+        fn pause(&self, _g: u64) -> Result<(), DeviceError> {
+            Ok(())
+        }
+        fn stop(&self, g: u64) -> Result<(), DeviceError> {
+            self.0.stop(g)
+        }
+        fn snapshot(&self) -> PlaybackSnapshot {
+            self.0.snapshot()
+        }
+        fn shutdown(&self) {}
+    }
+
+    /// 再開要求の実行を遅らせられる LatePause（Windows のワーカー相当）。
+    fn resumed_during_unapplied_pause() -> (H, Arc<LatePause>) {
+        let mut h = H::new(Fake::new(true));
+        let lp = Arc::new(LatePause(h.fake.clone(), Mutex::new((0, 0))));
+        h.pb = lp.clone();
+        play(&mut h.state);
+        h.drive(D);
+        assert_eq!(h.state.phase, AudioPhase::Playing);
+        // 発行 1・実行 1（初回の再生は実行済み）。
+        lp.0 .0.lock().unwrap().auto_play = false;
+        pause(&mut h.state);
+        h.drive(D); // pause は未反映（snapshot は Playing）
+        play(&mut h.state);
+        (h, lp)
+    }
+
+    #[test]
+    fn play_during_unapplied_pause_waits_for_applied_resume() {
+        let (mut h, lp) = resumed_during_unapplied_pause();
+        let d = Duration::from_secs(5);
+        h.drive(d);
+        assert_eq!(h.fake.0.lock().unwrap().loads, 1, "再 load しない");
+        assert_eq!(
+            h.state.phase,
+            AudioPhase::Loading,
+            "前の Playing は成功にしない"
+        );
+        // ワーカーが Pause・Play・PLAYING を 1 回のポーリング内でまとめて処理（Ready は観測されない）。
+        lp.1.lock().unwrap().1 += 1;
+        h.drive(d);
+        assert_eq!(h.state.phase, AudioPhase::Playing);
+    }
+
+    #[test]
+    fn play_during_unapplied_pause_times_out_without_fresh_playing() {
+        let (mut h, _lp) = resumed_during_unapplied_pause();
+        let d = Duration::from_millis(20);
+        h.drive(d);
+        assert_eq!(h.state.phase, AudioPhase::Loading);
+        std::thread::sleep(Duration::from_millis(40));
+        h.drive(d);
+        assert_eq!(h.state.phase, AudioPhase::Failed(AudioFailure::Timeout));
+    }
+
+    #[test]
+    fn async_pause_failure_reaches_screen() {
+        let mut h = H::new(Fake::new(true));
+        play(&mut h.state);
+        h.drive(D);
+        pause(&mut h.state);
+        h.drive(D);
+        assert_eq!(h.state.phase, AudioPhase::Paused);
+        h.fake
+            .set_phase(PlaybackPhase::Failed(PlaybackFailure::Internal));
+        h.drive(D);
+        assert!(matches!(h.state.phase, AudioPhase::Failed(_)));
     }
 
     #[test]
