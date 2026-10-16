@@ -11,7 +11,7 @@
       "api": "ContactsUI（`CNContactPickerViewController`）/ Contacts（`CNContactStore`）",
       "perm": "ピッカーのみで権限不要（選んだ連絡先だけが渡る）。`NSContactsUsageDescription` は追加していない。認可状態の確認・要求もしない。iOS 18 以降の limited access でもピッカーは全件から選べる",
       "url": "https://developer.apple.com/documentation/contacts/requesting-authorization-to-access-contacts",
-      "note": "実装済み（旧#1221）。`fandhe_apple_contact_picker.m` が `CNContactPickerViewController` を main queue で提示し、選んだ 1 件の表示名（姓名を `NSPersonNameComponentsFormatter` で整形、無ければ会社名）だけを返す。電話・メール・識別子・一覧は扱わない。複数選択になる `didSelectContacts:` は実装しない。キャンセル（ボタン・スワイプ dismiss）は失敗にしない。空白だけの名前は成功にしない。提示先の画面が無い場合は Internal。再要求は保留中のピッカーを閉じて置き換え、古い要求の完了は要求 id の照合で捨てる。完了は一度きり。名前はログに出さない。守る範囲: 1 プロセス内の要求と完了の順序、偽の成功の禁止、ピッカーの強参照の解放。守らない範囲: 複数プロセスの同時操作、OS 側の非同期確定との時間差による一時的な表示の食い違い。実機確認は #9 で行う",
+      "note": "実装済み（旧#1221）。`fandhe_apple_contact_picker.m` が `CNContactPickerViewController` を main queue で提示し、選んだ 1 件の表示名（姓名を `NSPersonNameComponentsFormatter` で整形、無ければ会社名）だけを返す。電話・メール・識別子・一覧は扱わない。複数選択になる `didSelectContacts:` は実装しない。キャンセル（ボタン・スワイプ dismiss）は失敗にしない。空白だけの名前は成功にしない。提示先の画面が無い場合は Internal。再要求は保留中のピッカーを閉じて置き換え、古い要求の完了は要求 id の照合で捨てる。完了は一度きり。名前はログに出さない。守る範囲: 1 プロセス内の要求と完了の順序、偽の成功の禁止、ピッカーの強参照の解放。守らない範囲: 複数プロセスの同時操作、OS 側の非同期確定との時間差による一時的な表示の食い違い。実機確認は #9 で済み",
       "sourceName": [
         "連絡先アクセス"
       ],
@@ -25,7 +25,7 @@
       "api": "`Intent.ACTION_PICK`（`ContactsContract.Contacts.CONTENT_URI`）/ `ContactsContract` + `ContentResolver`",
       "perm": "ピッカー（インテント）経由なら権限不要。`ContentResolver` で直接読むなら `READ_CONTACTS`、書き込みは `WRITE_CONTACTS`",
       "url": "https://developer.android.com/guide/topics/providers/contacts-provider",
-      "note": "実装済み（旧#1222）。`ACTION_PICK` 相当（androidx の `PickContact`）で連絡先アプリを開き、選んだ 1 件の `DISPLAY_NAME` だけを読む。インテント経由で選択した 1 件の読み取り権限が委譲されるため `READ_CONTACTS` は宣言しない（マニフェスト・依存・`queries` の追加なし）。電話・メール・識別子・一覧取得は扱わない。キャンセルは失敗にせず、連絡先アプリ無し・読み取り失敗・名前なし・空白だけの名前は Internal として成功に畳まない（権限拒否は Android では発生しない）。Activity 再生成で保留中の要求は復元せず破棄し、古い要求の完了は要求 id の照合と first-wins で捨てる。再生成前に開いた連絡先アプリの結果が届くまでは、新しい要求を起動せず失敗で返す（旧結果が新しい要求の id を消費しないため）。名前・Uri はログに出さない。守る範囲: 1 プロセス内の要求と完了の順序、偽の成功の禁止。守らない範囲: 複数プロセスの同時操作、再生成直後の一時的な表示の食い違い。実機確認（正常系・キャンセル・連絡先アプリ無し）は #9 で行う",
+      "note": "実装済み（旧#1222）。`ACTION_PICK` 相当（androidx の `PickContact`）で連絡先アプリを開き、選んだ 1 件の `DISPLAY_NAME` だけを読む。インテント経由で選択した 1 件の読み取り権限が委譲されるため `READ_CONTACTS` は宣言しない（マニフェスト・依存・`queries` の追加なし）。電話・メール・識別子・一覧取得は扱わない。キャンセルは失敗にせず、連絡先アプリ無し・読み取り失敗・名前なし・空白だけの名前は Internal として成功に畳まない（権限拒否は Android では発生しない）。Activity 再生成で保留中の要求は復元せず破棄し、古い要求の完了は要求 id の照合と first-wins で捨てる。再生成前に開いた連絡先アプリの結果が届くまでは、新しい要求を起動せず失敗で返す（旧結果が新しい要求の id を消費しないため）。名前・Uri はログに出さない。守る範囲: 1 プロセス内の要求と完了の順序、偽の成功の禁止。守らない範囲: 複数プロセスの同時操作、再生成直後の一時的な表示の食い違い。実機確認（正常系・キャンセル・連絡先アプリ無し）は #9 で確認済み",
       "sourceName": [
         "連絡先・カレンダー"
       ],
@@ -39,7 +39,7 @@
       "api": "ContactsUI（`CNContactPicker`、popover）/ Contacts（`CNContactStore` は認可状態の確認と要求にだけ使う）",
       "perm": "`NSContactsUsageDescription`（埋め込みの Info.plist）。ピッカーだけで TCC が要るかは公式文書に明記がないため、提示前に認可状態を確かめ、未決定なら許可を求める。App Sandbox なしの素の実行体では entitlement は不要",
       "url": "https://developer.apple.com/documentation/contacts/requesting-authorization-to-access-contacts",
-      "note": "実装済み（旧#1220）。選んだ 1 件の表示名（取得済みの givenName・familyName を `NSPersonNameComponentsFormatter` で整形した名前、無ければ会社名。ミドルネーム等は読まない）だけを返し、電話・メール・識別子・一覧取得は扱わない。結果はキャンセル/権限拒否/空名・提示失敗（Internal）/非対応を成功に畳まない。空白だけの名前は成功にしない。再要求は保留中のピッカーを閉じて置き換え、古い要求の完了は要求 id の照合で捨てる。名前はログに出さない。守る範囲: 1 プロセス内の要求と完了の順序、偽の成功の禁止、ピッカーの強参照の解放。守らない範囲: 複数プロセスの同時操作、OS 側の非同期確定との時間差による一時的な表示の食い違い。ピッカーだけなら TCC が不要と分かった場合は権限判定を外す。Mac 目視（正常系・TCC 拒否・キャンセル）は #9 で行う。実機確認で、初回の許可拒否が内部エラーとして表示される不具合が見つかった（#78）。",
+      "note": "実装済み（旧#1220）。選んだ 1 件の表示名（取得済みの givenName・familyName を `NSPersonNameComponentsFormatter` で整形した名前、無ければ会社名。ミドルネーム等は読まない）だけを返し、電話・メール・識別子・一覧取得は扱わない。結果はキャンセル/権限拒否/空名・提示失敗（Internal）/非対応を成功に畳まない。空白だけの名前は成功にしない。再要求は保留中のピッカーを閉じて置き換え、古い要求の完了は要求 id の照合で捨てる。名前はログに出さない。守る範囲: 1 プロセス内の要求と完了の順序、偽の成功の禁止、ピッカーの強参照の解放。守らない範囲: 複数プロセスの同時操作、OS 側の非同期確定との時間差による一時的な表示の食い違い。ピッカーだけなら TCC が不要と分かった場合は権限判定を外す。Mac 目視（正常系・TCC 拒否・キャンセル）は #9 で確認済み。実機確認で、初回の許可拒否が内部エラーとして表示される不具合が見つかった（#78）。",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-device/src/contact_picker.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_contact_picker.m + crates/fandhe-egui-proxy/src/device/apple_contact_picker.rs + crates/fandhe-egui-proxy/src/device/contact_pick.rs + crates/fandhe-core/src/screens/contact_pick.rs、Issue 旧#1220",

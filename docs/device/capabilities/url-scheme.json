@@ -11,7 +11,7 @@
       "api": "UIKit（`UIApplicationDelegate` の `application:openURL:options:` / `UISceneDelegate` の `scene:openURLContexts:`）、起動側は `UIApplication openURL:`",
       "perm": "Info.plist の `CFBundleURLTypes` 登録。起動側で他アプリの scheme を問い合わせる場合のみ `LSApplicationQueriesSchemes`",
       "url": "https://developer.apple.com/documentation/xcode/defining-a-custom-url-scheme-for-your-app",
-      "note": "実装済み（Issue 旧#1217）。winit 0.30.13 は delegate を nil で起動するため、didFinishLaunching 通知で `application:openURL:options:` だけを持つ delegate を差し込む（既に delegate がある場合は差し込まず、ウォーム経路はつながらない）。コールドスタート時の URL は通知の `launchOptions` から取り、二重転送を防ぐ。scheme・長さ・制御文字を検査し、弾いたものは件数だけ数える。実機確認は未実施（#8）",
+      "note": "実装済み（Issue 旧#1217）。winit 0.30.13 は delegate を nil で起動するため、didFinishLaunching 通知で `application:openURL:options:` だけを持つ delegate を差し込む（既に delegate がある場合は差し込まず、ウォーム経路はつながらない）。コールドスタート時の URL は通知の `launchOptions` から取り、二重転送を防ぐ。scheme・長さ・制御文字を検査し、弾いたものは件数だけ数える。実機確認は #8 で済み",
       "sourceName": [
         "カスタム URL scheme"
       ],
@@ -26,7 +26,7 @@
       "api": "`<intent-filter>`（`ACTION_VIEW` + `BROWSABLE` + `DEFAULT` + `<data android:scheme>`）。受信は MainActivity の `onCreate` の `getIntent()` / `onNewIntent`、JNI で Rust へ渡す",
       "perm": "なし（`AndroidManifest.xml` への intent-filter 追加のみ）",
       "url": "https://developer.android.com/training/app-links/deep-linking",
-      "note": "実装済み（Issue 旧#1218）。MainActivity を `launchMode=\"singleTask\"` にして起動中の URL を `onNewIntent` で受ける（standard だと外部アプリからの ACTION_VIEW ごとに新インスタンスができる）。`onCreate` の `getIntent()` は `savedInstanceState` なし・履歴（Recents）起動でないときだけ届け、二重配送を防ぐ。守らない範囲: プロセス死亡後の復元で前回の URL は再表示しない。起動中に URL を受けると自タスクで MainActivity の上にある外部 Activity（カメラ・SAF・共有シート等）は閉じられ、既存のキャンセル経路で確定する。検査は共通層で行い、弾いたものは件数だけ数える。`autoVerify` / `assetlinks.json` は独自 scheme には不要。実機確認は未実施（#8 で追う）",
+      "note": "実装済み（Issue 旧#1218）。MainActivity を `launchMode=\"singleTask\"` にして起動中の URL を `onNewIntent` で受ける（standard だと外部アプリからの ACTION_VIEW ごとに新インスタンスができる）。`onCreate` の `getIntent()` は `savedInstanceState` なし・履歴（Recents）起動でないときだけ届け、二重配送を防ぐ。守らない範囲: プロセス死亡後の復元で前回の URL は再表示しない。起動中に URL を受けると自タスクで MainActivity の上にある外部 Activity（カメラ・SAF・共有シート等）は閉じられ、既存のキャンセル経路で確定する。検査は共通層で行い、弾いたものは件数だけ数える。`autoVerify` / `assetlinks.json` は独自 scheme には不要。実機確認は #8 で済み",
       "implStatus": "実装済み・実機確認済み",
       "impl": "platforms/android/app/src/main/AndroidManifest.xml + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-device/src/url_scheme.rs、Issue 旧#1218",
       "verified": true
@@ -37,7 +37,7 @@
       "api": "AppKit（`NSApplicationDelegate` の `application:openURLs:`、10.13+）。Apple Event（`kAEGetURL`）経由でも受信可",
       "perm": "Info.plist の `CFBundleURLTypes` 登録（.app 化が前提。entitlement 不要）",
       "url": "https://developer.apple.com/documentation/appkit/nsapplicationdelegate/application(_:open:)-61n9r",
-      "note": "実装済み（Issue 旧#1215）。Apple Event `kAEGetURL` ハンドラ方式（`application:openURLs:` は使わない。winit 0.30 は application delegate を登録せず、この方式は delegate に触れない）。ハンドラはイベントループ開始前に登録する。scheme は Info.plist 入りの .app が LaunchServices に登録されて初めて有効で、Mac 目視用に `scripts/apple/bundle-macos-url-scheme.sh` で .app 化する。受け取った URL は scheme・長さ・制御文字を検査し、弾いたものは件数だけ数える。Mac 目視は未実施（#8 で追う）",
+      "note": "実装済み（Issue 旧#1215）。Apple Event `kAEGetURL` ハンドラ方式（`application:openURLs:` は使わない。winit 0.30 は application delegate を登録せず、この方式は delegate に触れない）。ハンドラはイベントループ開始前に登録する。scheme は Info.plist 入りの .app が LaunchServices に登録されて初めて有効で、Mac 目視用に `scripts/apple/bundle-macos-url-scheme.sh` で .app 化する。受け取った URL は scheme・長さ・制御文字を検査し、弾いたものは件数だけ数える。Mac 目視は #8 で済み",
       "implStatus": "実装済み・実機確認済み",
       "impl": "crates/fandhe-device/src/url_scheme.rs + crates/fandhe-egui-proxy/src/device/apple_url_scheme.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_url_scheme.m + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + scripts/apple/bundle-macos-url-scheme.sh、Issue 旧#1215",
       "verified": true
