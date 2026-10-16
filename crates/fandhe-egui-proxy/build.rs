@@ -1018,9 +1018,26 @@ fn compile_ios_call_ui() {
 /// ライブアクティビティの Swift 薄層を `swiftc` で静的ライブラリ化してリンクする（Issue #295）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_live_activity.rs` が使う）。`ActivityKit` の
 /// `Activity<Attributes>` は Swift 専用 API で ObjC から呼べないため、`cc` ではなく swiftc を使う。
-/// 失敗は黙って素通りせず panic する（拡張なしのビルドと取り違えないため）。
+/// Apple ツール（`xcrun`）が無いホスト（Linux の型検査経路。`docs/operations/ios-build-pipeline.md`）
+/// では警告を出して静的ライブラリの生成をスキップする。この場合 `cargo check` は通るが、
+/// リンクはシンボル未解決で失敗するため成功には見えない。`FANDHE_REQUIRE_LIVE_ACTIVITY=1`
+/// （本番・配布ビルド）ではスキップせず panic する。swiftc 自体の失敗は常に panic。
 fn compile_ios_live_activity() {
     use std::process::Command;
+
+    println!("cargo:rerun-if-env-changed=FANDHE_REQUIRE_LIVE_ACTIVITY");
+    let have_xcrun = Command::new("xcrun")
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success());
+    if !have_xcrun {
+        assert!(
+            std::env::var("FANDHE_REQUIRE_LIVE_ACTIVITY").as_deref() != Ok("1"),
+            "live_activity: xcrun が無い（FANDHE_REQUIRE_LIVE_ACTIVITY=1 のためスキップ不可）"
+        );
+        println!("cargo:warning=live_activity: xcrun が無いため Swift 薄層の生成をスキップ（型検査専用。リンクは失敗する）");
+        return;
+    }
 
     let target = std::env::var("TARGET").unwrap_or_default();
     let (sdk, triple, lib_dir) = match target.as_str() {

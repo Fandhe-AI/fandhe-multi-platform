@@ -33,7 +33,7 @@ REQ-11 受け入れ基準「単一コマンドから iOS シミュレータ版 `
 | 項目 | Linux（本開発環境） | macOS（実機検証に必須） |
 |------|---------------------|--------------------------|
 | `cargo build --target aarch64-apple-ios-sim` | 不可（Apple SDK リンカが必要） | 可 |
-| `cargo check --target aarch64-apple-ios-sim` | 可 | 可 |
+| `cargo check --target aarch64-apple-ios-sim` | 可（`xcrun` が無いと live-activity の Swift 薄層生成を警告付きでスキップ。本番は `FANDHE_REQUIRE_LIVE_ACTIVITY=1` で失敗させる） | 可 |
 | バンドル組み立て・`.ipa` 化ロジックの構造検証 | 可（`FANDHE_IOS_APP_BINARY` によるスタブ注入） | 可 |
 | `codesign`（ad-hoc 署名） | 不可（`FANDHE_IOS_SKIP_SIGN=1` で構造検証専用にスキップ可能） | 可（既定で実行） |
 | `xcrun simctl install`/`launch` | 不可 | 可 |

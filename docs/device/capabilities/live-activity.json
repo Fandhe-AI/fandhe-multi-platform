@@ -15,8 +15,8 @@
       "sourceName": [
         "ライブアクティビティ"
       ],
-      "detail": "できている（シミュレータのみ。実機は拡張の署名手順が無く未対応）",
-      "implStatus": "シミュレータ確認済み・実機は拡張の署名手順待ち（#293）",
+      "detail": "できている（実機・シミュレータでの描画は未確認。実機は拡張の署名手順が無く未対応）",
+      "implStatus": "実装済み（シミュレータ・実機とも未確認。実機は拡張の署名手順待ち #293）",
       "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_live_activity.swift + crates/fandhe-egui-proxy/ios/fandhe_live_activity_attributes.swift + crates/fandhe-egui-proxy/src/device/ios_live_activity.rs + crates/fandhe-egui-proxy/src/device/live_activity.rs + crates/fandhe-core/src/screens/live_activity_show.rs + crates/fandhe-device/src/live_activity.rs + platforms/apple/FandheLiveActivity/Sources/FandheLiveActivity/FandheLiveActivityWidget.swift + platforms/apple/project.yml + scripts/ios/build-simulator-app.sh、Issue #295"
     },
     "android": {
