@@ -33,7 +33,7 @@ use crate::app::CompletionSender;
 
 /// 現在のプラットフォームに応じた実装を返す（プロセスで 1 個。macOS の monitor を
 /// 二重に作らないため `OnceLock` で保持する）。
-fn implementation() -> Arc<dyn NetworkStatus> {
+pub(crate) fn implementation() -> Arc<dyn NetworkStatus> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn NetworkStatus>> = OnceLock::new();
     INSTANCE

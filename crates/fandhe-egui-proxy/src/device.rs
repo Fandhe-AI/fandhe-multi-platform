@@ -188,6 +188,11 @@ pub mod apple_image_recognition;
 /// を呼ぶ C ABI ラッパー）。`device/location.rs` の Apple cfg 分岐から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_location;
+/// Issue #273（macOS）/ #274（iOS）: macOS / iOS 向け地図スナップショット実装
+/// （`apple/fandhe_apple_map_view.m` を呼ぶ C ABI ラッパー。iOS は #274 までスタブ）。
+/// `device/map_view.rs` の macOS / iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+pub mod apple_map_view;
 /// Issue #267: macOS 向け音声再生実装（`apple/fandhe_apple_media_playback.m` の `AVAudioPlayer` を呼ぶ
 /// C ABI ラッパー）。`device/media_playback.rs` の macOS 経路から呼ばれる。iOS は親 #86 の b-ios が使う。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -476,6 +481,9 @@ pub mod macos_power_state;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code, unused_imports))]
 pub mod macos_screen_wake_lock;
+/// Phase 11 の拡充ループ（親 #85、Issue #273）: 地図表示の effect ドライバ（macOS / iOS は
+/// pull 型 `bridge`、他 OS は `UnsupportedMapSnapshotter` 固定。iOS は #274 まで非対応）。
+pub mod map_view;
 /// Phase 11 の拡充ループ（親 #86、Issue #267）: 音声再生の effect ドライバ（macOS 実装、iOS・Android・Windows は
 /// 親 #86 の子で埋めるスタブ、他 OS は `UnsupportedMediaPlayback` 固定）。
 pub mod media_playback;

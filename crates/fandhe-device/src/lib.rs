@@ -67,6 +67,8 @@ pub mod image_recognition;
 pub mod local_fonts;
 /// Phase 11（端末機能の拡充ループ、親 #887、Issue #888）: 継続 push 型の位置情報取得。
 pub mod location;
+/// Phase 11（端末機能の拡充ループ、親 #85、Issue #273）: 地図の静止画 1 枚の取得。
+pub mod map_view;
 /// Phase 11（端末機能の拡充ループ、親 #86、Issue #267）: 音声 1 本の再生・一時停止・停止。
 pub mod media_playback;
 /// Phase 11（端末機能の拡充ループ、親 #953、Issue #954）: マイク録音。
