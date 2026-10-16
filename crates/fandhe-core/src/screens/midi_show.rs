@@ -345,8 +345,7 @@ pub fn current_screen(state: &MidiShowState) -> Screen<MidiShowState> {
     let mut screen = Screen::new(TITLE)
         .dynamic_text(status_text)
         .error_text(error_text)
-        .dynamic_text(summary_text)
-        .dynamic_text(events_text);
+        .dynamic_text(summary_text);
     match state.phase {
         MidiPhase::Idle | MidiPhase::Failed(_) => {
             screen = screen.button(START_BUTTON_ID, START_LABEL, start);
@@ -359,7 +358,8 @@ pub fn current_screen(state: &MidiShowState) -> Screen<MidiShowState> {
     if state.total > 0 || !state.events.is_empty() {
         screen = screen.button(CLEAR_BUTTON_ID, CLEAR_LABEL, clear);
     }
-    screen
+    // 操作を前、長い一覧を最後に置く（窓外へ出てもボタンへ届く。Issue #77）。
+    screen.dynamic_text(events_text)
 }
 
 #[cfg(test)]
