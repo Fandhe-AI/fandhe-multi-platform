@@ -22,5 +22,5 @@
       "status": "n-a"
     }
   },
-  "note": "Issue #280（closed）・PR #539、実機目視確認済み。`docs/architecture/tv-focus-navigation-architecture.md`。スマホ/タブレット Android では TV 機なので対象外相当（Widget の `interaction_state()` 自体は共通）"
+  "note": "Issue 旧#280（closed）・PR 旧#539、実機目視確認済み。`docs/architecture/tv-focus-navigation-architecture.md`。スマホ/タブレット Android では TV 機なので対象外相当（Widget の `interaction_state()` 自体は共通）"
 }

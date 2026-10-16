@@ -227,6 +227,14 @@ function tally(os) {
   return { done, rated };
 }
 
+/**
+ * 対象の全 OS で動く機能の数。done が 1 つ以上あり、残りがすべて「できない」か「対象外」の機能を数える。
+ */
+const allOsDone = features.filter((f) => {
+  const ss = platforms.map((os) => f.platforms[os].status);
+  return ss.includes("done") && ss.every((s) => s === "done" || s === "no" || s === "n-a");
+}).length;
+
 // --- Markdown ---------------------------------------------------------------
 
 /** セル内の `|` は表を壊すためエスケープする。改行は 1 行に畳む。 */
@@ -262,7 +270,7 @@ function buildMarkdown() {
     const { done, rated } = tally(os);
     L.push(`| ${md(platformLabels[os])} | ${done} / ${rated} |`);
   }
-  L.push("", `全 ${features.length} 機能。「評価済み」は対象外・未評価を除いた数。`, "");
+  L.push("", `全 ${features.length} 機能。「評価済み」は対象外・未評価を除いた数。対象の全 OS（できない・対象外を除く）で動く機能は ${allOsDone}。`, "");
 
   L.push("## 3. 対応表", "");
   const groups = [...new Set(features.map((f) => f.group))];
@@ -398,7 +406,7 @@ dd { margin:0 0 0 12px; color:var(--mut); overflow-wrap:anywhere; }
 <body>
 <h1>端末機能 対応表（OS × 機能）</h1>
 <p class="lead">${esc(notes.intro)}</p>
-<div class="stats">${summary}<div class="stat"><b>機能数</b><span>${features.length}</span></div></div>
+<div class="stats">${summary}<div class="stat"><b>機能数</b><span>${features.length}</span></div><div class="stat"><b>全 OS で動く</b><span>${allOsDone}</span></div></div>
 <details class="legend"><summary>読み方（状態・実機確認の定義）</summary>
 <dl>
 ${Object.entries(statusLabels).map(([k, v]) =>

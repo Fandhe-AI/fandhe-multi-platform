@@ -16,13 +16,13 @@
         "https://developer.apple.com/documentation/usernotifications/unusernotificationcenter",
         "https://developer.apple.com/documentation/usernotifications"
       ],
-      "note": "ローカル通知は実装済み（#1005）。macOS（#1004、`osascript`）と異なりバンドル化された iOS プロセスからは `UNUserNotificationCenter` を直接使える。権限要求は `UNAuthorizationOptionAlert` のみ（Sound/Badge は求めない）。`Shown` は返さない（`willPresent` で Banner/List の表示オプションを返しても実際にバナーが出るかは利用者の通知設定次第で確かめられないため）。結果は `Submitted`（登録成功）/`Cancelled`（許可が未決定のまま閉じた）/失敗（`PermissionDenied`・`Internal`）の三値。通知タップへの応答（`didReceiveNotificationResponse`）は対象外（タップ時はアプリが開くだけ）。プッシュ通知（APNs）は対象外・未実装。実機未確認",
+      "note": "ローカル通知は実装済み（旧#1005）。macOS（旧#1004、`osascript`）と異なりバンドル化された iOS プロセスからは `UNUserNotificationCenter` を直接使える。権限要求は `UNAuthorizationOptionAlert` のみ（Sound/Badge は求めない）。`Shown` は返さない（`willPresent` で Banner/List の表示オプションを返しても実際にバナーが出るかは利用者の通知設定次第で確かめられないため）。結果は `Submitted`（登録成功）/`Cancelled`（許可が未決定のまま閉じた）/失敗（`PermissionDenied`・`Internal`）の三値。通知タップへの応答（`didReceiveNotificationResponse`）は対象外（タップ時はアプリが開くだけ）。プッシュ通知（APNs）は対象外・未実装。実機未確認",
       "sourceName": [
         "ローカル通知",
         "プッシュ通知（リモート）"
       ],
       "implStatus": "ローカル通知は実装済み（実機未確認）。プッシュ通知（APNs）は未実装",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_notification.m + crates/fandhe-egui-proxy/src/device/ios_notification.rs + crates/fandhe-egui-proxy/src/device/notification.rs、Issue #1005"
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_notification.m + crates/fandhe-egui-proxy/src/device/ios_notification.rs + crates/fandhe-egui-proxy/src/device/notification.rs、Issue 旧#1005"
     },
     "android": {
       "status": "done",
@@ -33,13 +33,13 @@
         "https://developer.android.com/develop/ui/views/notifications/build-notification",
         "https://firebase.google.com/docs/cloud-messaging/android/client"
       ],
-      "note": "ローカル通知は実装済み（#1006）。iOS（#1005）と同じ pull 型 bridge（`device/notification.rs::bridge`、`biometric_auth.rs` が Apple/Android で共有しているのと同型）で `MainActivity.requestNotification(long, String, String)`/`nativeOnNotificationResult` を橋渡しする。API 33 以上のみ `POST_NOTIFICATIONS` の実行時権限ダイアログを要求し（API 32 以下は宣言しても無視される）、権限ダイアログ自体が Activity を pause させるため通知の投稿は `activityResumed` を見ずに行う（背景での投稿も正当な操作）。`ActivityResultContracts.RequestPermission` は「拒否」と「ダイアログを閉じただけ」を区別できないため、iOS にある `Cancelled`（許可未決定のまま閉じた）は Android では出ず、非許可はすべて `PermissionDenied` に倒す（mic-record の Android 実装と同じ制約）。通知チャンネル（`NotificationChannelCompat`、`IMPORTANCE_DEFAULT`）を毎回べき等に作成し、チャンネル単位のブロック・`areNotificationsEnabled() == false`（API 33 未満で通知を設定から切った場合を含む）・`notify()` の `SecurityException`/その他の例外はいずれも `PermissionDenied`/内部エラーへ畳み、成功を偽らない。`Shown` は返さず常に `Submitted`（iOS と同じ理由、実際に表示されるかは OS 通知設定次第で確かめられない）。通知タップへの応答（`contentIntent`/`PendingIntent`）は対象外（iOS の `didReceiveNotificationResponse` と同じスコープ外判断）。プッシュ通知（FCM）は対象外・未実装。実機未確認",
+      "note": "ローカル通知は実装済み（旧#1006）。iOS（旧#1005）と同じ pull 型 bridge（`device/notification.rs::bridge`、`biometric_auth.rs` が Apple/Android で共有しているのと同型）で `MainActivity.requestNotification(long, String, String)`/`nativeOnNotificationResult` を橋渡しする。API 33 以上のみ `POST_NOTIFICATIONS` の実行時権限ダイアログを要求し（API 32 以下は宣言しても無視される）、権限ダイアログ自体が Activity を pause させるため通知の投稿は `activityResumed` を見ずに行う（背景での投稿も正当な操作）。`ActivityResultContracts.RequestPermission` は「拒否」と「ダイアログを閉じただけ」を区別できないため、iOS にある `Cancelled`（許可未決定のまま閉じた）は Android では出ず、非許可はすべて `PermissionDenied` に倒す（mic-record の Android 実装と同じ制約）。通知チャンネル（`NotificationChannelCompat`、`IMPORTANCE_DEFAULT`）を毎回べき等に作成し、チャンネル単位のブロック・`areNotificationsEnabled() == false`（API 33 未満で通知を設定から切った場合を含む）・`notify()` の `SecurityException`/その他の例外はいずれも `PermissionDenied`/内部エラーへ畳み、成功を偽らない。`Shown` は返さず常に `Submitted`（iOS と同じ理由、実際に表示されるかは OS 通知設定次第で確かめられない）。通知タップへの応答（`contentIntent`/`PendingIntent`）は対象外（iOS の `didReceiveNotificationResponse` と同じスコープ外判断）。プッシュ通知（FCM）は対象外・未実装。実機未確認",
       "sourceName": [
         "ローカル通知",
         "プッシュ通知"
       ],
       "implStatus": "ローカル通知は実装済み（実機未確認）。プッシュ通知（FCM）は未実装",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/device/notification.rs、Issue #1006"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/device/notification.rs、Issue 旧#1006"
     },
     "macos": {
       "status": "done",
@@ -47,12 +47,12 @@
       "api": "`/usr/bin/osascript`（`display notification`）",
       "perm": "スクリプトエディタの通知許可（システム設定 > 通知）。本体の entitlement は不要",
       "url": "https://developer.apple.com/documentation/usernotifications",
-      "note": "実装済み（#1004）。バンドル外プロセスから `UNUserNotificationCenter` を呼ぶと例外で落ちるため使わず、`osascript display notification` を子プロセスで起動する代替経路を採る（`crates/fandhe-device/src/notification.rs` モジュール doc 参照）。通知はスクリプトエディタ名義で出る。タイトル・本文は argv には出さず `osascript -` の標準入力へ AppleScript ソースとして渡す（`ps`/プロセス一覧からの通知内容露出を防ぐ、codex 指摘 P1、PR #1008）。文字列リテラルへの埋め込みはバックスラッシュ・二重引用符のエスケープと、改行を `linefeed`/`return` 定数との連結式へ変換する処理で AppleScript 注入・コンパイル失敗の両方を防ぐ（実機で実測済み）。表示されたか・通知設定が無効かは `osascript` から判定できないため常に `Submitted`（`Shown` は返さない、嘘の成功を出さない）。5 秒の期限を掛け、超えたら kill + wait で回収する。Mac 目視済み（10-01）: タイトル・本文を入れて「通知する」で通知センターに表示され、画面は「送信しました（表示されるかは OS の通知設定次第です）」と表示（成功を断言しない）。未確認: 通知をシステム設定でオフにした状態の目視（`osascript` は表示の有無を返さないため、画面は同じ「送信しました（…OS の通知設定次第です）」になる設計）。",
+      "note": "実装済み（旧#1004）。バンドル外プロセスから `UNUserNotificationCenter` を呼ぶと例外で落ちるため使わず、`osascript display notification` を子プロセスで起動する代替経路を採る（`crates/fandhe-device/src/notification.rs` モジュール doc 参照）。通知はスクリプトエディタ名義で出る。タイトル・本文は argv には出さず `osascript -` の標準入力へ AppleScript ソースとして渡す（`ps`/プロセス一覧からの通知内容露出を防ぐ、codex 指摘 P1、PR 旧#1008）。文字列リテラルへの埋め込みはバックスラッシュ・二重引用符のエスケープと、改行を `linefeed`/`return` 定数との連結式へ変換する処理で AppleScript 注入・コンパイル失敗の両方を防ぐ（実機で実測済み）。表示されたか・通知設定が無効かは `osascript` から判定できないため常に `Submitted`（`Shown` は返さない、嘘の成功を出さない）。5 秒の期限を掛け、超えたら kill + wait で回収する。Mac 目視済み（10-01）: タイトル・本文を入れて「通知する」で通知センターに表示され、画面は「送信しました（表示されるかは OS の通知設定次第です）」と表示（成功を断言しない）。未確認: 通知をシステム設定でオフにした状態の目視（`osascript` は表示の有無を返さないため、画面は同じ「送信しました（…OS の通知設定次第です）」になる設計）。",
       "sourceName": [
         "通知"
       ],
       "implStatus": "実装済み",
-      "impl": "crates/fandhe-device/src/notification.rs（OsascriptNotifier）+ crates/fandhe-egui-proxy/src/device/notification.rs、Issue #1004"
+      "impl": "crates/fandhe-device/src/notification.rs（OsascriptNotifier）+ crates/fandhe-egui-proxy/src/device/notification.rs、Issue 旧#1004"
     },
     "windows": {
       "status": "done",
@@ -60,12 +60,12 @@
       "api": "WinRT（`Windows.UI.Notifications`、Toast）+ `IShellLinkW`/`IPropertyStore`/`IPersistFile`（AUMID 登録）",
       "perm": "なし（初回通知時にユーザーのスタートメニューへショートカットを作成）",
       "url": "https://learn.microsoft.com/en-us/windows/apps/design/shell/tiles-and-notifications/adaptive-interactive-toasts",
-      "note": "旧実装は本アプリ固有・未登録の AUMID（`com.fandhe.egui-proxy-desktop`）でのみ `CreateToastNotifierWithId` を試み、未登録のため通常失敗して `Unsupported` を返すだけだった。さらにその前の実装は PowerShell の既知 AUMID を借用しており、全通知が Windows PowerShell 名義で表示され利用者が識別できない構造的な通知元詐称だった（codex 指摘 P1、PR #1008）。10-01 のユーザー判断（Issue #1033）で、ユーザー単位のスタートメニュー（`%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\`）に `.lnk` ショートカットを作り、`System.AppUserModel.ID` へ本アプリ固有 AUMID を設定することで、管理者権限・レジストリ書き込み・他アプリの identity 借用のいずれも無しに AUMID を登録する方式へ切り替えた。初回の通知要求でショートカットが無ければ作る。既にあれば AUMID とリンク先を読み、自分の AUMID で最新なら再利用、リンク先が古ければ作り直して置き換え、AUMID が違う・読めないファイルは触らず `Err` を返す（PR #1035 codex 指摘）。`SetCurrentProcessExplicitAppUserModelID` でプロセスにも同じ AUMID を設定してから（この設定の失敗はショートカット側の AUMID で足りるため無視する）`CreateToastNotifierWithId` で送る。ショートカットの書き出しは一時ファイル経由で、書き出し・AUMID 設定・公開に失敗したら一時ファイルを消して `Err` を返す（嘘の成功は返さない）。作成済みのショートカットは、その後のトースト生成が失敗しても消さない（反映待ちの一時的な失敗で作成と削除を繰り返さないため）。登録直後は OS 側の反映が間に合わずトーストが実際には出ないことがあるが区別できないため、常に `Submitted` を返す（`Shown` は返さない）。他アプリの AUMID は借用しない。`ToastNotificationManager`/`ToastNotification` で `ToastText02` テンプレートへ `CreateTextNode`/`AppendChild` で値を差し込む（XML 文字列を連結しない、A03 対策）自体は変更なし。ローカルで行ったのは `x86_64-pc-windows-gnu` ターゲットの `cargo check`/`cargo clippy -D warnings` の型検査・静的解析のみ。Windows 実機確認は人間確認待ち（device-check-pending）",
+      "note": "旧実装は本アプリ固有・未登録の AUMID（`com.fandhe.egui-proxy-desktop`）でのみ `CreateToastNotifierWithId` を試み、未登録のため通常失敗して `Unsupported` を返すだけだった。さらにその前の実装は PowerShell の既知 AUMID を借用しており、全通知が Windows PowerShell 名義で表示され利用者が識別できない構造的な通知元詐称だった（codex 指摘 P1、PR 旧#1008）。10-01 のユーザー判断（Issue 旧#1033）で、ユーザー単位のスタートメニュー（`%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\`）に `.lnk` ショートカットを作り、`System.AppUserModel.ID` へ本アプリ固有 AUMID を設定することで、管理者権限・レジストリ書き込み・他アプリの identity 借用のいずれも無しに AUMID を登録する方式へ切り替えた。初回の通知要求でショートカットが無ければ作る。既にあれば AUMID とリンク先を読み、自分の AUMID で最新なら再利用、リンク先が古ければ作り直して置き換え、AUMID が違う・読めないファイルは触らず `Err` を返す（PR 旧#1035 codex 指摘）。`SetCurrentProcessExplicitAppUserModelID` でプロセスにも同じ AUMID を設定してから（この設定の失敗はショートカット側の AUMID で足りるため無視する）`CreateToastNotifierWithId` で送る。ショートカットの書き出しは一時ファイル経由で、書き出し・AUMID 設定・公開に失敗したら一時ファイルを消して `Err` を返す（嘘の成功は返さない）。作成済みのショートカットは、その後のトースト生成が失敗しても消さない（反映待ちの一時的な失敗で作成と削除を繰り返さないため）。登録直後は OS 側の反映が間に合わずトーストが実際には出ないことがあるが区別できないため、常に `Submitted` を返す（`Shown` は返さない）。他アプリの AUMID は借用しない。`ToastNotificationManager`/`ToastNotification` で `ToastText02` テンプレートへ `CreateTextNode`/`AppendChild` で値を差し込む（XML 文字列を連結しない、A03 対策）自体は変更なし。ローカルで行ったのは `x86_64-pc-windows-gnu` ターゲットの `cargo check`/`cargo clippy -D warnings` の型検査・静的解析のみ。Windows 実機確認は人間確認待ち（device-check-pending）",
       "sourceName": [
         "通知"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_notification.rs + crates/fandhe-egui-proxy/src/device/notification.rs、Issue #1033"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_notification.rs + crates/fandhe-egui-proxy/src/device/notification.rs、Issue 旧#1033"
     },
     "web": {
       "status": "done",
@@ -74,12 +74,12 @@
       "perm": "`Notification.requestPermission()`。https か localhost（secure context）必須",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Notifications_API",
       "safari": "macOS Safari 16+ 対応。iOS Safari は Web Push（ホーム画面追加後）限定で通常タブ内通知は非対応",
-      "note": "実装済み（#1007）。iOS 実装（#1005）と同じ判断で `Shown` は返さない（`new Notification` の生成成功はブラウザが OS へ渡したことしか表さず、OS の通知設定で抑止され得るため確認手段とみなさない）。結果は `Submitted`（表示依頼成功）/`Cancelled`（権限ダイアログを閉じただけで未決定）/失敗（`PermissionDenied`・`Unsupported`・`Internal`）の三値。`requestPermission()` はクリックの同期チェーン内で呼ぶ（user activation 要件）。secure context 外・`Notification` グローバル未定義・旧 Safari 相当（`requestPermission` がコールバック版のみで Promise を返さない）は `Unsupported`。期限は張らない（権限プロンプトの待ち時間に上限を設けない）。実ブラウザ確認は headless Chrome + Chrome DevTools Protocol で実施済み（許可済み→送信成功、拒否済み→失敗表示、`Notification` 未定義→ Unsupported 表示の 3 経路とも意図どおり）。Safari・Firefox の目視、権限ダイアログを放置してキャンセルする経路は未確認（人間担当）",
+      "note": "実装済み（旧#1007）。iOS 実装（旧#1005）と同じ判断で `Shown` は返さない（`new Notification` の生成成功はブラウザが OS へ渡したことしか表さず、OS の通知設定で抑止され得るため確認手段とみなさない）。結果は `Submitted`（表示依頼成功）/`Cancelled`（権限ダイアログを閉じただけで未決定）/失敗（`PermissionDenied`・`Unsupported`・`Internal`）の三値。`requestPermission()` はクリックの同期チェーン内で呼ぶ（user activation 要件）。secure context 外・`Notification` グローバル未定義・旧 Safari 相当（`requestPermission` がコールバック版のみで Promise を返さない）は `Unsupported`。期限は張らない（権限プロンプトの待ち時間に上限を設けない）。実ブラウザ確認は headless Chrome + Chrome DevTools Protocol で実施済み（許可済み→送信成功、拒否済み→失敗表示、`Notification` 未定義→ Unsupported 表示の 3 経路とも意図どおり）。Safari・Firefox の目視、権限ダイアログを放置してキャンセルする経路は未確認（人間担当）",
       "sourceName": [
         "通知"
       ],
       "implStatus": "実装済み",
-      "impl": "crates/fandhe-web-dom/src/notification.rs（notification_send_effect）+ crates/fandhe-web-dom/src/demo.rs（mount_notification_send_screen）、Issue #1007"
+      "impl": "crates/fandhe-web-dom/src/notification.rs（notification_send_effect）+ crates/fandhe-web-dom/src/demo.rs（mount_notification_send_screen）、Issue 旧#1007"
     }
   }
 }

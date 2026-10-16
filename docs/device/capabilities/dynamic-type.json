@@ -12,13 +12,13 @@
       "api": "UIKit（`UIFont.preferredFont(forTextStyle:)` / `UIContentSizeCategory`）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uifont/preferredfont(fortextstyle:)",
-      "note": "実装済み（#914）。`UIFont.preferredFontForTextStyle:UIFontTextStyleBody` の `pointSize` を既定（Large、17.0）で割った倍率を返す。稼働中の文字サイズ変更（`UIContentSizeCategoryDidChangeNotification`）への追従は見送り（core に読み直し API が無いため。画面を開き直すか再起動で追従、天井として記録）。実機未確認",
+      "note": "実装済み（旧#914）。`UIFont.preferredFontForTextStyle:UIFontTextStyleBody` の `pointSize` を既定（Large、17.0）で割った倍率を返す。稼働中の文字サイズ変更（`UIContentSizeCategoryDidChangeNotification`）への追従は見送り（core に読み直し API が無いため。画面を開き直すか再起動で追従、天井として記録）。実機未確認",
       "sourceName": [
         "Dynamic Type（文字サイズ設定の追従）",
         "Dynamic Type（OS の文字サイズ設定追従）"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_text_scale.m + crates/fandhe-egui-proxy/src/device/ios.rs（`IosTextScale`）+ src/device/text_scale.rs、Issue #914"
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_text_scale.m + crates/fandhe-egui-proxy/src/device/ios.rs（`IosTextScale`）+ src/device/text_scale.rs、Issue 旧#914"
     },
     "android": {
       "status": "done",
@@ -26,12 +26,12 @@
       "api": "`Configuration.fontScale`",
       "perm": "なし",
       "url": "https://developer.android.com/guide/topics/resources/more-resources#Dimension",
-      "note": "実装済み（#914）。`MainActivity.textScaleFactor()` が `getResources().getConfiguration().fontScale` をそのまま返す同期 getter（他機能のような mailbox は不要）。`AndroidManifest.xml` の `configChanges` に `fontScale` を含めていないため、文字サイズ変更時は Activity が再生成され（`onCreate` からの再実行）、画面状態が作り直されて自然に再読みされる（天井として記録: 再生成の一瞬は前の値のまま）。実機未確認",
+      "note": "実装済み（旧#914）。`MainActivity.textScaleFactor()` が `getResources().getConfiguration().fontScale` をそのまま返す同期 getter（他機能のような mailbox は不要）。`AndroidManifest.xml` の `configChanges` に `fontScale` を含めていないため、文字サイズ変更時は Activity が再生成され（`onCreate` からの再実行）、画面状態が作り直されて自然に再読みされる（天井として記録: 再生成の一瞬は前の値のまま）。実機未確認",
       "sourceName": [
         "文字サイズ設定の追従（Android の Dynamic Type 相当）"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs（`AndroidTextScale`）、Issue #914"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs（`AndroidTextScale`）、Issue 旧#914"
     },
     "macos": {
       "status": "no",
@@ -39,12 +39,12 @@
       "api": "AppKit（`NSFont`。OS 設定は「システム設定 → アクセシビリティ → ディスプレイ → テキストサイズ」）",
       "perm": "なし",
       "url": "https://support.apple.com/en-gb/guide/mac-help/mchlbc4c53ca/mac",
-      "note": "候補と根拠（Issue #912 一次情報調査）: (1) アクセシビリティ「テキストサイズ」は第三者アプリが読む・監視する公開 API 無し（Apple サポート https://support.apple.com/en-gb/guide/mac-help/mchlbc4c53ca/mac、対象は「複数のアプリ」で開発者 API の記載なし／Apple Developer Forums #746501 https://developer.apple.com/forums/thread/746501 で Apple 側回答「There is currently no API」）。(2) `NSFont.systemFontSize` は定数（13pt）でアクセシビリティ設定に追従しない（https://developer.apple.com/documentation/appkit/nsfont/systemfontsize）。(3) `NSUserDefaults` の `AppleDisplayScaleFactor` は 10.4 時代の解像度非依存機構の残骸で Lion 以降撤去済み（Resolution Independent UI Release Notes https://developer.apple.com/library/archive/releasenotes/GraphicsImaging/RN-ResolutionIndependentUI、High Resolution Guidelines https://developer.apple.com/library/archive/documentation/GraphicsAnimation/Conceptual/HighResolutionOSX/APIs/APIs.html）。`1.0` を「読めた」と偽らないため `Unsupported` を返す（`crates/fandhe-device/src/text_scale.rs` 参照）",
+      "note": "候補と根拠（Issue 旧#912 一次情報調査）: (1) アクセシビリティ「テキストサイズ」は第三者アプリが読む・監視する公開 API 無し（Apple サポート https://support.apple.com/en-gb/guide/mac-help/mchlbc4c53ca/mac、対象は「複数のアプリ」で開発者 API の記載なし／Apple Developer Forums 旧#746501 https://developer.apple.com/forums/thread/746501 で Apple 側回答「There is currently no API」）。(2) `NSFont.systemFontSize` は定数（13pt）でアクセシビリティ設定に追従しない（https://developer.apple.com/documentation/appkit/nsfont/systemfontsize）。(3) `NSUserDefaults` の `AppleDisplayScaleFactor` は 10.4 時代の解像度非依存機構の残骸で Lion 以降撤去済み（Resolution Independent UI Release Notes https://developer.apple.com/library/archive/releasenotes/GraphicsImaging/RN-ResolutionIndependentUI、High Resolution Guidelines https://developer.apple.com/library/archive/documentation/GraphicsAnimation/Conceptual/HighResolutionOSX/APIs/APIs.html）。`1.0` を「読めた」と偽らないため `Unsupported` を返す（`crates/fandhe-device/src/text_scale.rs` 参照）",
       "sourceName": [
         "文字サイズ設定の追従"
       ],
       "implStatus": "共通層のみ実装（trait・型サンプル・zoom 反映）。OS 値の読み取りは不可",
-      "impl": "crates/fandhe-device/src/text_scale.rs + crates/fandhe-core/src/screens/text_scale_preview.rs + crates/fandhe-egui-proxy/src/device/text_scale.rs、Issue #912"
+      "impl": "crates/fandhe-device/src/text_scale.rs + crates/fandhe-core/src/screens/text_scale_preview.rs + crates/fandhe-egui-proxy/src/device/text_scale.rs、Issue 旧#912"
     },
     "windows": {
       "status": "done",
@@ -52,12 +52,12 @@
       "api": "WinRT（`UISettings.TextScaleFactor`）",
       "perm": "なし",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.ui.viewmanagement.uisettings.textscalefactor",
-      "note": "実装済み（#913）。`UISettings.TextScaleFactor`（1.0〜2.25）を `Unread` 時に 1 回読み、`read_scale` で 0.5〜3.0 に丸めてスライダー初期値へ反映する。`unsafe`・HWND 束縛・新規パッケージ無し（feature `UI_ViewManagement` 追加のみ）。`TextScaleFactorChanged` は未配線（設定変更後の追従は画面再起動で反映）。WinRT 失敗は `DeviceError::Internal` で「失敗」表示にし `1.0` へ化けさせない。ローカルに msvc が無く `x86_64-pc-windows-gnu` の型検査のみで Windows 実機確認は未了（到達不能と判明した場合は `done` を取り下げる）",
+      "note": "実装済み（旧#913）。`UISettings.TextScaleFactor`（1.0〜2.25）を `Unread` 時に 1 回読み、`read_scale` で 0.5〜3.0 に丸めてスライダー初期値へ反映する。`unsafe`・HWND 束縛・新規パッケージ無し（feature `UI_ViewManagement` 追加のみ）。`TextScaleFactorChanged` は未配線（設定変更後の追従は画面再起動で反映）。WinRT 失敗は `DeviceError::Internal` で「失敗」表示にし `1.0` へ化けさせない。ローカルに msvc が無く `x86_64-pc-windows-gnu` の型検査のみで Windows 実機確認は未了（到達不能と判明した場合は `done` を取り下げる）",
       "sourceName": [
         "文字サイズ設定の追従"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_text_scale.rs + crates/fandhe-egui-proxy/src/device/text_scale.rs、Issue #913"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_text_scale.rs + crates/fandhe-egui-proxy/src/device/text_scale.rs、Issue 旧#913"
     },
     "web": {
       "status": "done",
@@ -66,14 +66,14 @@
       "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/text-size-adjust",
       "safari": "対応（既定フォントサイズ設定自体が無いため常に 1.00 倍表示）",
-      "note": "実装済み（#915）。**Canvas（wasm egui 経路）は対象外、DOM 出力のみ**。`getComputedStyle(document.documentElement).fontSize / 16` を倍率として画面へ注入し、テキスト自体は UA 既定（`medium` / `h1 2em`）を継承する rem 相当でブラウザ設定に追従する（`px` 固定なし、回帰テスト `text_scale::tests::dom_output_has_no_pixel_font_size` で固定）。`ResizeObserver` で再読込。読めない環境は `Unavailable`（`1.0` を代用しない）。Rust 側から倍率を再適用しない（二重拡大回避）。スライダーは DOM 側で未描画（`Node::Widget` プレースホルダ、既存の天井）。目視結果は PR 本文",
+      "note": "実装済み（旧#915）。**Canvas（wasm egui 経路）は対象外、DOM 出力のみ**。`getComputedStyle(document.documentElement).fontSize / 16` を倍率として画面へ注入し、テキスト自体は UA 既定（`medium` / `h1 2em`）を継承する rem 相当でブラウザ設定に追従する（`px` 固定なし、回帰テスト `text_scale::tests::dom_output_has_no_pixel_font_size` で固定）。`ResizeObserver` で再読込。読めない環境は `Unavailable`（`1.0` を代用しない）。Rust 側から倍率を再適用しない（二重拡大回避）。スライダーは DOM 側で未描画（`Node::Widget` プレースホルダ、既存の天井）。目視結果は PR 本文",
       "sourceName": [
         "文字サイズ設定の追従"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-web-dom/src/text_scale.rs、Issue #915"
+      "impl": "crates/fandhe-web-dom/src/text_scale.rs、Issue 旧#915"
     }
   },
-  "note": "iOS `UIFont.preferredFont(forTextStyle:)` / Android `Configuration.fontScale` / Windows `UISettings.TextScaleFactor` / Web はブラウザの既定フォントサイズ。macOS にも「システム設定 → アクセシビリティ → ディスプレイ → テキストサイズ」があり複数アプリの文字サイズを変えられるが、iOS の Dynamic Type のような全アプリ共通の text style と追従 API は無く、対応は個別アプリ側の実装依存（Issue #912 で `no` 判定・根拠は macos 欄参照）。共通層（#912）実装済み。OS 別の配線は #913〜#915",
+  "note": "iOS `UIFont.preferredFont(forTextStyle:)` / Android `Configuration.fontScale` / Windows `UISettings.TextScaleFactor` / Web はブラウザの既定フォントサイズ。macOS にも「システム設定 → アクセシビリティ → ディスプレイ → テキストサイズ」があり複数アプリの文字サイズを変えられるが、iOS の Dynamic Type のような全アプリ共通の text style と追従 API は無く、対応は個別アプリ側の実装依存（Issue 旧#912 で `no` 判定・根拠は macos 欄参照）。共通層（旧#912）実装済み。OS 別の配線は 旧#913〜旧#915",
   "capture": "captures/dynamic-type.png"
 }

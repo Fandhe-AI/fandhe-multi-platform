@@ -11,46 +11,46 @@
       "api": "UIKit `UIImpactFeedbackGenerator`（`impactOccurred()`、iOS 10+）。細かい波形は CoreHaptics `CHHapticEngine`",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uiimpactfeedbackgenerator",
-      "note": "実装済み（#1092）。`apple/fandhe_apple_haptics.m`（macOS と共用）の iOS 分岐から `UIImpactFeedbackGenerator`（Light）の `impactOccurred` を C ABI で 1 回呼ぶ。main スレッド上で `@autoreleasepool` の内側から同期に呼び（effect は egui の update = main）、main 以外なら UIKit に触れず `Internal`。呼ぶ前に `CHHapticEngine.capabilitiesForHardware().supportsHaptics` が NO なら `Unsupported`（シミュレータ・触覚非搭載機。呼んだだけで成功にしない）。`Ok` は「要求を渡した」止まりで、サイレント・システム触覚オフ・背景では無反応でも検知できない。守る範囲: 1 プロセス内の順序・非搭載を成功と見せないこと。守らない範囲: 実際に触覚が出たか。iPhone 実機での確認とシミュレータでの `Unsupported` 表示確認は人間確認待ち",
+      "note": "実装済み（旧#1092）。`apple/fandhe_apple_haptics.m`（macOS と共用）の iOS 分岐から `UIImpactFeedbackGenerator`（Light）の `impactOccurred` を C ABI で 1 回呼ぶ。main スレッド上で `@autoreleasepool` の内側から同期に呼び（effect は egui の update = main）、main 以外なら UIKit に触れず `Internal`。呼ぶ前に `CHHapticEngine.capabilitiesForHardware().supportsHaptics` が NO なら `Unsupported`（シミュレータ・触覚非搭載機。呼んだだけで成功にしない）。`Ok` は「要求を渡した」止まりで、サイレント・システム触覚オフ・背景では無反応でも検知できない。守る範囲: 1 プロセス内の順序・非搭載を成功と見せないこと。守らない範囲: 実際に触覚が出たか。iPhone 実機での確認とシミュレータでの `Unsupported` 表示確認は人間確認待ち",
       "sourceName": [
         "触覚フィードバック"
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_haptics.m + crates/fandhe-egui-proxy/src/device/apple_haptics.rs + crates/fandhe-egui-proxy/src/device/haptics.rs + crates/fandhe-core/src/screens/haptics_tap.rs、Issue #1092"
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_haptics.m + crates/fandhe-egui-proxy/src/device/apple_haptics.rs + crates/fandhe-egui-proxy/src/device/haptics.rs + crates/fandhe-core/src/screens/haptics_tap.rs、Issue 旧#1092"
     },
     "android": {
       "status": "done",
       "api": "`Vibrator`（`VibrationEffect.createOneShot` は API 26+、`createPredefined(EFFECT_CLICK)` は API 29+、API 31+ は `VibratorManager.getDefaultVibrator()`）",
       "perm": "`<uses-permission android:name=\"android.permission.VIBRATE\" />`（通常権限、実行時許可なし）",
       "url": "https://developer.android.com/reference/android/os/Vibrator",
-      "note": "実装済み（#1092）。`MainActivity.hapticsTap()`（JNI 署名 `()I`）を egui スレッドから同期で呼ぶ（Java → Rust の native コールバックは無い）。minSdk 24 のため API 31+ は `VibratorManager.getDefaultVibrator()`、それ未満は `VIBRATOR_SERVICE`。`hasVibrator()` が false なら `Unsupported`（成功にしない）、振動は API 26+ が `VibrationEffect.createOneShot(15ms)`、24〜25 は非推奨の `vibrate(15)`（15ms は Web 実装に揃えた）。`SecurityException` 等の `RuntimeException` は `Internal`。`Ok` は「要求を渡した」止まりで、サイレント・システム触覚オフでは無反応でも検知できない。manifest に `VIBRATE`（通常権限）を追加。Pixel 実機での振動確認と、振動子の無い端末（Android TV 等）での `Unsupported` 表示確認は人間確認待ち",
+      "note": "実装済み（旧#1092）。`MainActivity.hapticsTap()`（JNI 署名 `()I`）を egui スレッドから同期で呼ぶ（Java → Rust の native コールバックは無い）。minSdk 24 のため API 31+ は `VibratorManager.getDefaultVibrator()`、それ未満は `VIBRATOR_SERVICE`。`hasVibrator()` が false なら `Unsupported`（成功にしない）、振動は API 26+ が `VibrationEffect.createOneShot(15ms)`、24〜25 は非推奨の `vibrate(15)`（15ms は Web 実装に揃えた）。`SecurityException` 等の `RuntimeException` は `Internal`。`Ok` は「要求を渡した」止まりで、サイレント・システム触覚オフでは無反応でも検知できない。manifest に `VIBRATE`（通常権限）を追加。Pixel 実機での振動確認と、振動子の無い端末（Android TV 等）での `Unsupported` 表示確認は人間確認待ち",
       "sourceName": [
         "バイブレーション"
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java（hapticsTap）+ platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-egui-proxy/src/device/android.rs（AndroidHaptics）+ crates/fandhe-egui-proxy/src/device/haptics.rs + crates/fandhe-core/src/screens/haptics_tap.rs、Issue #1092"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java（hapticsTap）+ platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-egui-proxy/src/device/android.rs（AndroidHaptics）+ crates/fandhe-egui-proxy/src/device/haptics.rs + crates/fandhe-core/src/screens/haptics_tap.rs、Issue 旧#1092"
     },
     "macos": {
       "status": "done",
       "api": "AppKit `NSHapticFeedbackManager.defaultPerformer.perform(_:performanceTime:)`（macOS 10.11+）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nshapticfeedbackmanager",
-      "note": "実装済み（#1091）。`NSHapticFeedbackManager.defaultPerformer` の `perform`（Generic）を ObjC から C ABI で 1 回呼ぶ。`@autoreleasepool` の内側で、performer の取得・判定・実行を main スレッド上で同期に行う（effect は egui の update = main から呼ぶ。main 以外から呼ばれたら AppKit に触れず `Internal`）。performer を取れないときは `Internal`。`perform` は戻り値が無く、Force Touch トラックパッド以外では何も起きずそれを検知できないため、`Ok` は「要求を渡した」止まりで画面も「振動を要求しました」と表示する（`Unsupported` は返さない）。守る範囲: 1 プロセス内で要求を渡す順序・失敗を成功と見せないこと。守らない範囲: 実際に触覚が出たか・連打時の体感（OS 任せ）。Mac 目視（10/6）: ボタン押下で「振動を要求しました」と表示され、Force Touch トラックパッドに弱い触覚が来ることを確認（押し込みのクリック感に紛れて分かりづらい。egui のボタンは指を離したときに反応するため、触覚が出る時点で指が離れかけている可能性がある）。失敗系（performer を取れない）は通常の Mac では再現できず未確認",
+      "note": "実装済み（旧#1091）。`NSHapticFeedbackManager.defaultPerformer` の `perform`（Generic）を ObjC から C ABI で 1 回呼ぶ。`@autoreleasepool` の内側で、performer の取得・判定・実行を main スレッド上で同期に行う（effect は egui の update = main から呼ぶ。main 以外から呼ばれたら AppKit に触れず `Internal`）。performer を取れないときは `Internal`。`perform` は戻り値が無く、Force Touch トラックパッド以外では何も起きずそれを検知できないため、`Ok` は「要求を渡した」止まりで画面も「振動を要求しました」と表示する（`Unsupported` は返さない）。守る範囲: 1 プロセス内で要求を渡す順序・失敗を成功と見せないこと。守らない範囲: 実際に触覚が出たか・連打時の体感（OS 任せ）。Mac 目視（10/6）: ボタン押下で「振動を要求しました」と表示され、Force Touch トラックパッドに弱い触覚が来ることを確認（押し込みのクリック感に紛れて分かりづらい。egui のボタンは指を離したときに反応するため、触覚が出る時点で指が離れかけている可能性がある）。失敗系（performer を取れない）は通常の Mac では再現できず未確認",
       "detail": "できている（実機、触覚は弱く分かりづらい）",
       "implStatus": "実装済み・実機確認済み（失敗系は未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_haptics.m + crates/fandhe-egui-proxy/src/device/apple_haptics.rs + crates/fandhe-egui-proxy/src/device/haptics.rs + crates/fandhe-core/src/screens/haptics_tap.rs、Issue #1091"
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_haptics.m + crates/fandhe-egui-proxy/src/device/apple_haptics.rs + crates/fandhe-egui-proxy/src/device/haptics.rs + crates/fandhe-core/src/screens/haptics_tap.rs、Issue 旧#1091"
     },
     "windows": {
       "status": "done",
       "api": "WinRT `Windows.Devices.Haptics.VibrationDevice`（`RequestAccessAsync` / `SimpleHapticsController`、Windows 10 1703+）、またはゲームパッド振動 `Windows.Gaming.Input.Gamepad.Vibration`（`windows` crate）",
       "perm": "なし（`VibrationDevice` は `RequestAccessAsync` のアクセス状態確認あり）",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.haptics.vibrationdevice",
-      "note": "実装済み（#1091）。`VibrationDevice::RequestAccessAsync` が `Allowed` でなければ `Internal`（成功にしない）、`GetDefaultAsync` が null（振動デバイス無し）なら `Unsupported`、`SimpleHapticsController` の `SupportedFeedback` から Click 波形だけを選び（無ければ `Unsupported`） `SendHapticFeedback`。`.get()` の同期待ちのためワーカースレッドで呼ぶ。守る範囲: 1 プロセス内の順序・非搭載を成功と見せないこと。既知の天井: パッケージ無しの素の exe から `RequestAccessAsync` / `GetDefaultAsync` が届くかは一次情報で未確認（`.get()` に期限なし）。届かないと判明したらこの `done` を取り下げる。Windows 実機での確認（振動デバイス有り・無し）は人間確認待ち",
+      "note": "実装済み（旧#1091）。`VibrationDevice::RequestAccessAsync` が `Allowed` でなければ `Internal`（成功にしない）、`GetDefaultAsync` が null（振動デバイス無し）なら `Unsupported`、`SimpleHapticsController` の `SupportedFeedback` から Click 波形だけを選び（無ければ `Unsupported`） `SendHapticFeedback`。`.get()` の同期待ちのためワーカースレッドで呼ぶ。守る範囲: 1 プロセス内の順序・非搭載を成功と見せないこと。既知の天井: パッケージ無しの素の exe から `RequestAccessAsync` / `GetDefaultAsync` が届くかは一次情報で未確認（`.get()` に期限なし）。届かないと判明したらこの `done` を取り下げる。Windows 実機での確認（振動デバイス有り・無し）は人間確認待ち",
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_haptics.rs + crates/fandhe-egui-proxy/src/device/haptics.rs + crates/fandhe-core/src/screens/haptics_tap.rs、Issue #1091"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_haptics.rs + crates/fandhe-egui-proxy/src/device/haptics.rs + crates/fandhe-core/src/screens/haptics_tap.rs、Issue 旧#1091"
     },
     "web": {
       "status": "done",
@@ -58,10 +58,10 @@
       "perm": "不要（sticky user activation が必要）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Navigator/vibrate",
       "safari": "未対応（caniuse 上 Safari デスクトップ 3.1〜27.1・iOS Safari 3.2〜27.2 とも非対応。Chrome / Edge / Samsung Internet の Android は対応、Firefox デスクトップは 129 以降が非対応、Firefox for Android 157 も非対応）",
-      "note": "実装済み（#1091）。`navigator.vibrate(15)` をボタン押下の同期チェーン内で 1 回呼ぶ。`vibrate` が関数として無い環境（Safari 等）だけ `Unsupported`、`false` が返ったら失敗（成功にしない）。振動子の有無・サイレント設定は検知できないため、`Ok` は「ブラウザへ要求を渡した」止まりで画面も「振動を要求しました」と表示する。守らない範囲: 実際に振動したか。ヘッドレス Chrome で確認済み（10/7）: ボタン押下で「振動を要求しました（実際に振動するかは端末と設定によります）」、`navigator.vibrate` を消した環境 → 「この端末では使えません」（成功にしない）。Android Chrome での体感は人間確認待ち",
+      "note": "実装済み（旧#1091）。`navigator.vibrate(15)` をボタン押下の同期チェーン内で 1 回呼ぶ。`vibrate` が関数として無い環境（Safari 等）だけ `Unsupported`、`false` が返ったら失敗（成功にしない）。振動子の有無・サイレント設定は検知できないため、`Ok` は「ブラウザへ要求を渡した」止まりで画面も「振動を要求しました」と表示する。守らない範囲: 実際に振動したか。ヘッドレス Chrome で確認済み（10/7）: ボタン押下で「振動を要求しました（実際に振動するかは端末と設定によります）」、`navigator.vibrate` を消した環境 → 「この端末では使えません」（成功にしない）。Android Chrome での体感は人間確認待ち",
       "detail": "できている（実ブラウザ未確認）",
       "implStatus": "実装済み（実ブラウザ未確認）",
-      "impl": "crates/fandhe-web-dom/src/haptics.rs（haptics_tap_effect）+ crates/fandhe-web-dom/src/demo.rs（mount_haptics_tap_screen）+ crates/fandhe-web-dom/web/index.html（?screen=haptics_tap）+ crates/fandhe-core/src/screens/haptics_tap.rs、Issue #1091"
+      "impl": "crates/fandhe-web-dom/src/haptics.rs（haptics_tap_effect）+ crates/fandhe-web-dom/src/demo.rs（mount_haptics_tap_screen）+ crates/fandhe-web-dom/web/index.html（?screen=haptics_tap）+ crates/fandhe-core/src/screens/haptics_tap.rs、Issue 旧#1091"
     }
   },
   "note": "iOS は `UIImpactFeedbackGenerator`（CoreHaptics は細かい波形用）、Android は `Vibrator` / `VibrationEffect`（API 26 / 29 / 31 の分岐、`VIBRATE`）、macOS は `NSHapticFeedbackManager`（Force Touch トラックパッドのみ、結果は検知不可）、Windows は `VibrationDevice` / ゲームパッド振動（デバイス無しが多い）、Web は Vibration API（Safari 未対応）。全 OS 一発呼び出しで届く。今回の範囲: ボタンを押すと軽い振動を 1 回鳴らすだけ（パターン・強さの指定なし）。非搭載を判定できる OS（iOS は `CHHapticEngine` の hardware capabilities、Android は `hasVibrator()`、Windows は振動デバイスの有無）では非搭載機を `Unsupported` にし、呼んだだけで成功にしない。macOS（`NSHapticFeedbackManager` に戻り値が無い）と Web（`navigator.vibrate` は振動子の有無を返さない）は実際に振動したかを検知できないため、成功は「OS / ブラウザへ要求を渡した」までとし、この差を trait doc に書く。Web は `navigator.vibrate` が無い環境だけ `Unsupported`",

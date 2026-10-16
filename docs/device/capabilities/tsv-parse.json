@@ -12,48 +12,48 @@
       "detail": "できている（実機未確認）",
       "api": "なし（OS API 不要。ファイル取得は file-picker 行を再利用）",
       "perm": "不要",
-      "note": "実装済み（Issue #980）。TSV の解析自体は `fandhe-core` の純粋関数 `tsv::parse_tsv`（UTF-8 判定・BOM 除去・CRLF/空行処理・列数照合・1 MiB / 1 万行上限）で OS 依存ゼロ。ファイル取得は既存の file-picker 橋渡し（`UIDocumentPickerViewController`）をそのまま再利用し、新しい OS API・権限は追加していない。実機目視は未実施",
+      "note": "実装済み（Issue 旧#980）。TSV の解析自体は `fandhe-core` の純粋関数 `tsv::parse_tsv`（UTF-8 判定・BOM 除去・CRLF/空行処理・列数照合・1 MiB / 1 万行上限）で OS 依存ゼロ。ファイル取得は既存の file-picker 橋渡し（`UIDocumentPickerViewController`）をそのまま再利用し、新しい OS API・権限は追加していない。実機目視は未実施",
       "sourceName": [
         "TSV ファイル選択・解析"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-egui-proxy/src/device/tsv_import.rs + crates/fandhe-egui-proxy/src/device/file_pick.rs（`PickHooks` 共有）、Issue #980"
+      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-egui-proxy/src/device/tsv_import.rs + crates/fandhe-egui-proxy/src/device/file_pick.rs（`PickHooks` 共有）、Issue 旧#980"
     },
     "android": {
       "status": "done",
       "detail": "できている（実機未確認）",
       "api": "なし（OS API 不要。ファイル取得は file-picker 行を再利用）",
       "perm": "なし",
-      "note": "実装済み（Issue #980）。TSV の解析自体は `fandhe-core` の純粋関数 `tsv::parse_tsv` で OS 依存ゼロ。ファイル取得は既存の file-picker 橋渡し（Storage Access Framework）をそのまま再利用し、新しい OS API・権限は追加していない。実機目視は未実施",
+      "note": "実装済み（Issue 旧#980）。TSV の解析自体は `fandhe-core` の純粋関数 `tsv::parse_tsv` で OS 依存ゼロ。ファイル取得は既存の file-picker 橋渡し（Storage Access Framework）をそのまま再利用し、新しい OS API・権限は追加していない。実機目視は未実施",
       "sourceName": [
         "TSV ファイル選択・解析"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-egui-proxy/src/device/tsv_import.rs + crates/fandhe-egui-proxy/src/device/file_pick.rs（`PickHooks` 共有）、Issue #980"
+      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-egui-proxy/src/device/tsv_import.rs + crates/fandhe-egui-proxy/src/device/file_pick.rs（`PickHooks` 共有）、Issue 旧#980"
     },
     "macos": {
       "status": "done",
       "detail": "できている",
       "api": "なし（OS API 不要。ファイル取得は file-picker 行を再利用）",
       "perm": "不要",
-      "note": "実装済み（Issue #980）。TSV の解析自体は `fandhe-core` の純粋関数 `tsv::parse_tsv` で OS 依存ゼロ。ファイル取得は既存の file-picker 橋渡し（`rfd`/`NSOpenPanel`）をそのまま再利用する。Mac で正常系（BOM・CRLF・空行・末尾の空欄を含む 4 行 × 4 列）と失敗系（UTF-8 でない・列数不一致）・キャンセル・前回結果の消去を目視確認済み",
+      "note": "実装済み（Issue 旧#980）。TSV の解析自体は `fandhe-core` の純粋関数 `tsv::parse_tsv` で OS 依存ゼロ。ファイル取得は既存の file-picker 橋渡し（`rfd`/`NSOpenPanel`）をそのまま再利用する。Mac で正常系（BOM・CRLF・空行・末尾の空欄を含む 4 行 × 4 列）と失敗系（UTF-8 でない・列数不一致）・キャンセル・前回結果の消去を目視確認済み",
       "sourceName": [
         "TSV ファイル選択・解析"
       ],
       "implStatus": "実装済み",
-      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-egui-proxy/src/device/tsv_import.rs + crates/fandhe-egui-proxy/src/device/file_pick.rs（`PickHooks` 共有）、Issue #980"
+      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-egui-proxy/src/device/tsv_import.rs + crates/fandhe-egui-proxy/src/device/file_pick.rs（`PickHooks` 共有）、Issue 旧#980"
     },
     "windows": {
       "status": "done",
       "detail": "できている（実機未確認）",
       "api": "なし（OS API 不要。ファイル取得は file-picker 行を再利用）",
       "perm": "不要",
-      "note": "実装済み（Issue #980）。TSV の解析自体は `fandhe-core` の純粋関数 `tsv::parse_tsv` で OS 依存ゼロ。ファイル取得は既存の file-picker 橋渡し（PowerShell `OpenFileDialog`）をそのまま再利用する。Windows 実機は未着手のため未確認",
+      "note": "実装済み（Issue 旧#980）。TSV の解析自体は `fandhe-core` の純粋関数 `tsv::parse_tsv` で OS 依存ゼロ。ファイル取得は既存の file-picker 橋渡し（PowerShell `OpenFileDialog`）をそのまま再利用する。Windows 実機は未着手のため未確認",
       "sourceName": [
         "TSV ファイル選択・解析"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-egui-proxy/src/device/tsv_import.rs + crates/fandhe-egui-proxy/src/device/file_pick.rs（`PickHooks` 共有）、Issue #980"
+      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-egui-proxy/src/device/tsv_import.rs + crates/fandhe-egui-proxy/src/device/file_pick.rs（`PickHooks` 共有）、Issue 旧#980"
     },
     "web": {
       "status": "done",
@@ -62,13 +62,13 @@
       "perm": "なし（ユーザー操作起因の `click()` が必要）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/file",
       "safari": "対応（`<input type=\"file\">` 固定。file-picker 行と同じ）",
-      "note": "実装済み（Issue #981）。TSV の解析自体は `fandhe-core` の純粋関数 `tsv::parse_tsv` で OS 依存ゼロ。ファイル取得は既存の `fandhe-web-dom::file_picker` の `<input type=\"file\">` 配線（Issue #875）をジェネリック化し、`WebPickHooks<S>` 経由で file_pick / tsv_import の 2 画面が共有する形にした。新しい web-sys feature・権限は追加していない。ヘッドレス Chrome で正常系・失敗系（UTF-8 でない・列数不一致）・キャンセル（`cancel` イベント）・サンプル読み込みを確認済み。Safari・Firefox と実ダイアログの操作は未確認",
+      "note": "実装済み（Issue 旧#981）。TSV の解析自体は `fandhe-core` の純粋関数 `tsv::parse_tsv` で OS 依存ゼロ。ファイル取得は既存の `fandhe-web-dom::file_picker` の `<input type=\"file\">` 配線（Issue 旧#875）をジェネリック化し、`WebPickHooks<S>` 経由で file_pick / tsv_import の 2 画面が共有する形にした。新しい web-sys feature・権限は追加していない。ヘッドレス Chrome で正常系・失敗系（UTF-8 でない・列数不一致）・キャンセル（`cancel` イベント）・サンプル読み込みを確認済み。Safari・Firefox と実ダイアログの操作は未確認",
       "sourceName": [
         "TSV ファイル選択・解析"
       ],
       "implStatus": "実装済み（実ブラウザ未確認）",
-      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-web-dom/src/file_picker.rs（tsv_import_effect）+ crates/fandhe-web-dom/src/demo.rs（mount_tsv_import_screen）、Issue #981"
+      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-web-dom/src/file_picker.rs（tsv_import_effect）+ crates/fandhe-web-dom/src/demo.rs（mount_tsv_import_screen）、Issue 旧#981"
     }
   },
-  "note": "`fandhe-core` の純粋関数 `tsv::parse_tsv`（UTF-8 判定・BOM 除去・CRLF/空行処理・列数照合・1 MiB / 1 万行上限）として実装済み（Issue #980）。OS 依存 API を要さないため、この 1 実装のみで全 OS 共通に届く。ファイル取得は既存の file-picker 橋渡しを再利用し、新しい OS API・権限は追加していない"
+  "note": "`fandhe-core` の純粋関数 `tsv::parse_tsv`（UTF-8 判定・BOM 除去・CRLF/空行処理・列数照合・1 MiB / 1 万行上限）として実装済み（Issue 旧#980）。OS 依存 API を要さないため、この 1 実装のみで全 OS 共通に届く。ファイル取得は既存の file-picker 橋渡しを再利用し、新しい OS API・権限は追加していない"
 }

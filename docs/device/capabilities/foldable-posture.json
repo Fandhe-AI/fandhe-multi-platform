@@ -11,7 +11,7 @@
       "api": "-",
       "perm": "-",
       "url": "",
-      "note": "#1108 で調査中"
+      "note": "旧#1108 で調査中"
     },
     "android": {
       "status": "possible",
@@ -40,5 +40,5 @@
       "note": "Chromium のみ（MDN は Experimental / Limited availability）。折りたたみ端末でないと値が変わらない"
     }
   },
-  "note": "Android と Web（Chromium）が主。iOS は #1108 で調査中のため unrated。macOS は n-a、Windows は no 寄り。safe-area-insets・screen-orientation（別 id）との違い: 折れ目と姿勢（広げた / 半開き）を扱う。今回の範囲: 姿勢（平ら・半開き・閉じ）とヒンジの位置・向きを表示し、半開きなら画面を上下 2 分割で描く"
+  "note": "Android と Web（Chromium）が主。iOS は 旧#1108 で調査中のため unrated。macOS は n-a、Windows は no 寄り。safe-area-insets・screen-orientation（別 id）との違い: 折れ目と姿勢（広げた / 半開き）を扱う。今回の範囲: 姿勢（平ら・半開き・閉じ）とヒンジの位置・向きを表示し、半開きなら画面を上下 2 分割で描く"
 }

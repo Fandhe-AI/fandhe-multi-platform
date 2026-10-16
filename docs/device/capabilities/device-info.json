@@ -11,40 +11,43 @@
       "api": "`NSProcessInfo`（`operatingSystemVersion` / `physicalMemory`）、`sysctlbyname(\"hw.machine\")`（機種の型番識別子。シミュレータは環境変数 `SIMULATOR_MODEL_IDENTIFIER`）、空き容量は `NSURLVolumeAvailableCapacityForImportantUsageKey`（ホームのボリューム）",
       "perm": "不要（entitlement・usage description 不要。空き容量 API は required reason API のため privacy manifest に DiskSpace `85F4.1` を宣言）",
       "url": "https://developer.apple.com/documentation/foundation/processinfo",
-      "note": "実装済み（#1305）。機種は `hw.machine` の型番識別子（製品名ではない）で、`iPad` 始まりなら OS 名を iPadOS とする。シミュレータは `hw.machine` がホストの `arm64` になるため環境変数の機種を使う。空き容量は OS の見積りで 0 バイトは有効値、総メモリ 0 は不明。個体識別子（UDID・`identifierForVendor`・シリアル）と端末名は取らない。守る範囲: 1 プロセス内の取得・不明／0 バイト／失敗の区別・失敗を成功値へ畳まないこと・個体識別子を取らないこと。守らない範囲: OS 間の表記や粒度の一致、空き容量の厳密さ、読み取り後の変化の反映（再読込まで）、OS 呼び出しが戻らない場合の期限。ボタン押下時に UI スレッドで同期 1 回だけ読む（OS コールバック・並行経路なし）。iOS 実機の確認は #20",
+      "note": "実装済み（旧#1305）。機種は `hw.machine` の型番識別子（製品名ではない）で、`iPad` 始まりなら OS 名を iPadOS とする。シミュレータは `hw.machine` がホストの `arm64` になるため環境変数の機種を使う。空き容量は OS の見積りで 0 バイトは有効値、総メモリ 0 は不明。個体識別子（UDID・`identifierForVendor`・シリアル）と端末名は取らない。守る範囲: 1 プロセス内の取得・不明／0 バイト／失敗の区別・失敗を成功値へ畳まないこと・個体識別子を取らないこと。守らない範囲: OS 間の表記や粒度の一致、空き容量の厳密さ、読み取り後の変化の反映（再読込まで）、OS 呼び出しが戻らない場合の期限。ボタン押下時に UI スレッドで同期 1 回だけ読む（OS コールバック・並行経路なし）。iOS 実機の確認は #20",
       "detail": "できている（iOS 実機確認待ち）",
-      "implStatus": "iOS 実機確認待ち（#20）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_device_info.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_device_info.m + crates/fandhe-egui-proxy/src/device/device_info.rs + crates/fandhe-core/src/screens/device_info_show.rs + crates/fandhe-device/src/device_info.rs + platforms/apple/FandheIosApp/Resources/PrivacyInfo.xcprivacy、Issue #1305"
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_device_info.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_device_info.m + crates/fandhe-egui-proxy/src/device/device_info.rs + crates/fandhe-core/src/screens/device_info_show.rs + crates/fandhe-device/src/device_info.rs + platforms/apple/FandheIosApp/Resources/PrivacyInfo.xcprivacy、Issue 旧#1305",
+      "verified": true
     },
     "android": {
       "status": "done",
       "api": "`android.os.Build`（`VERSION.RELEASE` / `MANUFACTURER` / `MODEL`）、`ActivityManager.MemoryInfo.totalMem`（メモリ）、`StatFs(Environment.getDataDirectory()).getAvailableBytes()`（空き容量）",
       "perm": "不要（権限を宣言しない。READ_PHONE_STATE 等は足さない）",
       "url": "https://developer.android.com/reference/android/os/Build",
-      "note": "実装済み（#1306）。機種は `MANUFACTURER` + `MODEL`（`unknown` は不明扱い）。メモリはカーネル予約分が引かれるため広告上の RAM 容量より小さい。空き容量はデータ領域の見積りで、0 バイトは有効値。個体識別子（`ANDROID_ID`・シリアル・広告 ID・MAC）と端末名は取らない。守る範囲: 1 プロセス内の取得・不明／0 バイト／失敗の区別・失敗を成功値へ畳まないこと・個体識別子を取らないこと。守らない範囲: OS 間の表記や粒度の一致、空き容量の厳密さ、読み取り後の変化の反映（再読込まで）。ボタン押下時に UI スレッドで同期 1 回だけ読む（保留中の要求・コールバックを持たず、Activity 再生成で破棄するものは無い）。Android 実機の確認は #20",
+      "note": "実装済み（旧#1306）。機種は `MANUFACTURER` + `MODEL`（`unknown` は不明扱い）。メモリはカーネル予約分が引かれるため広告上の RAM 容量より小さい。空き容量はデータ領域の見積りで、0 バイトは有効値。個体識別子（`ANDROID_ID`・シリアル・広告 ID・MAC）と端末名は取らない。守る範囲: 1 プロセス内の取得・不明／0 バイト／失敗の区別・失敗を成功値へ畳まないこと・個体識別子を取らないこと。守らない範囲: OS 間の表記や粒度の一致、空き容量の厳密さ、読み取り後の変化の反映（再読込まで）。ボタン押下時に UI スレッドで同期 1 回だけ読む（保留中の要求・コールバックを持たず、Activity 再生成で破棄するものは無い）。Android 実機の確認は #20",
       "detail": "できている（Android 実機確認待ち）",
-      "implStatus": "Android 実機確認待ち（#20）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_device_info.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/DeviceInfoHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/device_info.rs + crates/fandhe-core/src/screens/device_info_show.rs + crates/fandhe-device/src/device_info.rs、Issue #1306"
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_device_info.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/DeviceInfoHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/device_info.rs + crates/fandhe-core/src/screens/device_info_show.rs + crates/fandhe-device/src/device_info.rs、Issue 旧#1306",
+      "verified": true
     },
     "macos": {
       "status": "done",
       "api": "`NSProcessInfo`（`operatingSystemVersion` / `physicalMemory`）、`sysctlbyname(\"hw.model\")`（機種の型番識別子）、空き容量は `NSURLVolumeAvailableCapacityForImportantUsageKey`（ホームのボリューム）",
       "perm": "不要（entitlement 不要。App Sandbox 無効の素の実行体）",
       "url": "https://developer.apple.com/documentation/foundation/processinfo",
-      "note": "実装済み（#1304）。機種は `hw.model` の型番識別子（製品名ではない）。空き容量は OS の見積りで、0 バイトは有効値。個体識別子（`hw.uuid`・シリアル）は取らない。守る範囲: 1 プロセス内の取得・不明／0 バイト／失敗の区別・失敗を成功値へ畳まないこと・個体識別子を取らないこと。守らない範囲: OS 間の表記や粒度の一致、空き容量の厳密さ、読み取り後の変化の反映（再読込まで）、BIOS が出す仮の文字列の判定、OS 呼び出しが戻らない場合の期限。ボタン押下時に UI スレッドで同期 1 回だけ読む（並行経路なし）。Mac 実機の目視は #20",
+      "note": "実装済み（旧#1304）。機種は `hw.model` の型番識別子（製品名ではない）。空き容量は OS の見積りで、0 バイトは有効値。個体識別子（`hw.uuid`・シリアル）は取らない。守る範囲: 1 プロセス内の取得・不明／0 バイト／失敗の区別・失敗を成功値へ畳まないこと・個体識別子を取らないこと。守らない範囲: OS 間の表記や粒度の一致、空き容量の厳密さ、読み取り後の変化の反映（再読込まで）、BIOS が出す仮の文字列の判定、OS 呼び出しが戻らない場合の期限。ボタン押下時に UI スレッドで同期 1 回だけ読む（並行経路なし）。Mac 実機の目視は #20",
       "detail": "できている（Mac 目視待ち）",
-      "implStatus": "Mac 目視待ち（#20）",
-      "impl": "crates/fandhe-egui-proxy/src/device/macos_device_info.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_device_info.m + crates/fandhe-egui-proxy/src/device/device_info.rs + crates/fandhe-core/src/screens/device_info_show.rs + crates/fandhe-device/src/device_info.rs、Issue #1304"
+      "implStatus": "実装済み・実機確認済み",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_device_info.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_device_info.m + crates/fandhe-egui-proxy/src/device/device_info.rs + crates/fandhe-core/src/screens/device_info_show.rs + crates/fandhe-device/src/device_info.rs、Issue 旧#1304",
+      "verified": true
     },
     "windows": {
       "status": "done",
       "api": "Win32 `RtlGetVersion`（OS の版）、レジストリ `HKLM\\HARDWARE\\DESCRIPTION\\System\\BIOS`（`SystemManufacturer` / `SystemProductName`）、`GlobalMemoryStatusEx`（メモリ）、`GetDiskFreeSpaceExW`（OS のあるドライブの空き容量）",
       "perm": "なし（package identity 不要。HKLM の読み取りのみで管理者権限不要）",
       "url": "https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-rtlgetversion",
-      "note": "実装済み（#1304）。`GetVersionEx` は manifest 次第で値が変わるため使わない。空き容量は呼び出し元が使える空き（見積り）で、0 バイトは有効値。個体識別子（`MachineGuid` 等）は取らない。守る範囲: 1 プロセス内の取得・不明／0 バイト／失敗の区別・失敗を成功値へ畳まないこと・個体識別子を取らないこと。守らない範囲: OS 間の表記や粒度の一致、空き容量の厳密さ、読み取り後の変化の反映（再読込まで）、BIOS が出す仮の文字列の判定、OS 呼び出しが戻らない場合の期限。ボタン押下時に UI スレッドで同期 1 回だけ読む（並行経路なし）。Windows 実機の確認は #20",
+      "note": "実装済み（旧#1304）。`GetVersionEx` は manifest 次第で値が変わるため使わない。空き容量は呼び出し元が使える空き（見積り）で、0 バイトは有効値。個体識別子（`MachineGuid` 等）は取らない。守る範囲: 1 プロセス内の取得・不明／0 バイト／失敗の区別・失敗を成功値へ畳まないこと・個体識別子を取らないこと。守らない範囲: OS 間の表記や粒度の一致、空き容量の厳密さ、読み取り後の変化の反映（再読込まで）、BIOS が出す仮の文字列の判定、OS 呼び出しが戻らない場合の期限。ボタン押下時に UI スレッドで同期 1 回だけ読む（並行経路なし）。Windows 実機の確認は #20",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#20）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_device_info.rs + crates/fandhe-egui-proxy/src/device/device_info.rs + crates/fandhe-core/src/screens/device_info_show.rs + crates/fandhe-device/src/device_info.rs、Issue #1304"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_device_info.rs + crates/fandhe-egui-proxy/src/device/device_info.rs + crates/fandhe-core/src/screens/device_info_show.rs + crates/fandhe-device/src/device_info.rs、Issue 旧#1304"
     },
     "web": {
       "status": "done",
@@ -52,10 +55,10 @@
       "perm": "なし（`deviceMemory` / `userAgentData` は secure context のみ）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/NavigatorUAData/getHighEntropyValues",
       "safari": "`userAgentData`・`deviceMemory` は非対応。OS 名は UA から粗く判定し、版・機種・メモリは不明",
-      "note": "実装済み（#1307）。Web は `DeviceInfo` トレイトを経由しない。空き容量は常に不明（`StorageManager.estimate()` はオリジンへの割当の見積りで端末の空き容量ではないため呼ばない）。Windows の `platformVersion` は 13 以上が Windows 11 を表す符号。`deviceMemory` はブラウザが 2 のべき乗へ丸め上限も付けるため実際の搭載量より小さく出ることがあり、画面の「約」表示は未対応。UA 文字列は表示せず固定の OS 名だけを判定する。個体識別子は取らない。守る範囲: 1 マウント内の取得・不明／0／失敗の区別・失敗を成功値へ畳まないこと・個体識別子を取らないこと。守らない範囲: OS 間・ブラウザ間の粒度の一致、`deviceMemory` の丸めと上限、UA の偽装、複数タブ間の一致、`getHighEntropyValues` が解決しない場合の期限。実ブラウザの目視は #20",
+      "note": "実装済み（旧#1307）。Web は `DeviceInfo` トレイトを経由しない。空き容量は常に不明（`StorageManager.estimate()` はオリジンへの割当の見積りで端末の空き容量ではないため呼ばない）。Windows の `platformVersion` は 13 以上が Windows 11 を表す符号。`deviceMemory` はブラウザが 2 のべき乗へ丸め上限も付けるため実際の搭載量より小さく出ることがあり、画面の「約」表示は未対応。UA 文字列は表示せず固定の OS 名だけを判定する。個体識別子は取らない。守る範囲: 1 マウント内の取得・不明／0／失敗の区別・失敗を成功値へ畳まないこと・個体識別子を取らないこと。守らない範囲: OS 間・ブラウザ間の粒度の一致、`deviceMemory` の丸めと上限、UA の偽装、複数タブ間の一致、`getHighEntropyValues` が解決しない場合の期限。実ブラウザの目視は #20",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#20）",
-      "impl": "crates/fandhe-web-dom/src/device_info.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/device_info_show.rs、Issue #1307"
+      "impl": "crates/fandhe-web-dom/src/device_info.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/device_info_show.rs、Issue 旧#1307"
     }
   },
   "note": "全 OS で OS 版・機種の基本情報は取れる。Web は粒度が粗い。個体識別子（UDID・シリアル・広告 ID）は取らない。tilt-motion 等との重なりなし（storage-capacity・thermal 等は本機能と power-state に統合）。今回の範囲: OS 名と版、機種名、メモリ量、空き容量を一覧表示する。取得できない項目は「不明」を出し、空き容量が OS の見積りであることを画面に書く"

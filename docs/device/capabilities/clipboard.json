@@ -12,12 +12,12 @@
       "api": "UIKit（`UIPasteboard`）/ UIKit（`UIPasteControl`）",
       "perm": "Info.plist キーは不要。ただし iOS 16 以降、他アプリがコピーした内容を `UIPasteboard.general.string` 等でプログラムから読むと実行時に許可アラートが出て、拒否されると読み取れない",
       "url": "https://developer.apple.com/documentation/uikit/uipastecontrol",
-      "note": "実装済み（#859）。`UIPasteboard` を ObjC + `extern \"C\"` で橋渡し。型サンプルは自アプリで書いて自アプリで読む往復のため、iOS 16 以降の許可アラートに阻まれずデモできる。iPhone 15 で確認済み（2026-09-15: 往復 / 他アプリへ / 他アプリから / 空）",
+      "note": "実装済み（旧#859）。`UIPasteboard` を ObjC + `extern \"C\"` で橋渡し。型サンプルは自アプリで書いて自アプリで読む往復のため、iOS 16 以降の許可アラートに阻まれずデモできる。iPhone 15 で確認済み（2026-09-15: 往復 / 他アプリへ / 他アプリから / 空）",
       "sourceName": [
         "クリップボード読み書き"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-egui-proxy/ios/fandhe_ios_clipboard.m` + `crates/fandhe-egui-proxy/src/device/ios.rs`（`IosClipboard`）、Issue #859"
+      "impl": "`crates/fandhe-egui-proxy/ios/fandhe_ios_clipboard.m` + `crates/fandhe-egui-proxy/src/device/ios.rs`（`IosClipboard`）、Issue 旧#859"
     },
     "android": {
       "status": "done",
@@ -26,12 +26,12 @@
       "api": "`ClipboardManager`",
       "perm": "なし",
       "url": "https://developer.android.com/develop/ui/views/user-interaction/copy-paste",
-      "note": "実装済み（#859）。`MainActivity.clipboardRequest` が `runOnUiThread` で `ClipboardManager` を操作し、`nativeOnClipboardResult` で Rust 側 mailbox へ返す（`android_main` は UI スレッドと別のため往復にする）。Pixel 10a で確認済み（2026-09-15: 往復 / 他アプリへ / 他アプリから / 空）",
+      "note": "実装済み（旧#859）。`MainActivity.clipboardRequest` が `runOnUiThread` で `ClipboardManager` を操作し、`nativeOnClipboardResult` で Rust 側 mailbox へ返す（`android_main` は UI スレッドと別のため往復にする）。Pixel 10a で確認済み（2026-09-15: 往復 / 他アプリへ / 他アプリから / 空）",
       "sourceName": [
         "クリップボード"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-egui-proxy/src/device/android.rs`（`AndroidClipboard`）+ `platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java`、Issue #859"
+      "impl": "`crates/fandhe-egui-proxy/src/device/android.rs`（`AndroidClipboard`）+ `platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java`、Issue 旧#859"
     },
     "macos": {
       "status": "done",
@@ -39,12 +39,12 @@
       "api": "AppKit（`NSPasteboard`）",
       "perm": "なし（サンドボックス下でも既定で利用可）",
       "url": "https://developer.apple.com/documentation/appkit/nspasteboard",
-      "note": "実装済み（#859）。`arboard` 経由で `NSPasteboard` を使う（`fandhe-device` の `#![forbid(unsafe_code)]` を維持するため各 OS の API を自前で叩かない）。Mac 上で実アプリを動かし、他アプリとのコピー／貼り付けの相互運用を目視確認済み",
+      "note": "実装済み（旧#859）。`arboard` 経由で `NSPasteboard` を使う（`fandhe-device` の `#![forbid(unsafe_code)]` を維持するため各 OS の API を自前で叩かない）。Mac 上で実アプリを動かし、他アプリとのコピー／貼り付けの相互運用を目視確認済み",
       "sourceName": [
         "クリップボード"
       ],
       "implStatus": "実装済み",
-      "impl": "`crates/fandhe-device/src/clipboard.rs`（`ArboardClipboard`）、Issue #859"
+      "impl": "`crates/fandhe-device/src/clipboard.rs`（`ArboardClipboard`）、Issue 旧#859"
     },
     "windows": {
       "status": "done",
@@ -52,12 +52,12 @@
       "api": "WinRT（`Windows.ApplicationModel.DataTransfer.Clipboard`）",
       "perm": "なし",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.datatransfer.clipboard",
-      "note": "実装済み（#859）。macOS / Linux と同じ `arboard` 経由の共通実装（`ArboardClipboard`）でカバーする。Windows 実機での確認は未了",
+      "note": "実装済み（旧#859）。macOS / Linux と同じ `arboard` 経由の共通実装（`ArboardClipboard`）でカバーする。Windows 実機での確認は未了",
       "sourceName": [
         "クリップボード"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`crates/fandhe-device/src/clipboard.rs`（`ArboardClipboard`）、Issue #859"
+      "impl": "`crates/fandhe-device/src/clipboard.rs`（`ArboardClipboard`）、Issue 旧#859"
     },
     "web": {
       "status": "done",
@@ -66,13 +66,13 @@
       "perm": "secure context 必須、書き込みはユーザー操作起因が必要",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API",
       "safari": "対応（一部読み取り API に制限あり）",
-      "note": "実装済み（#859）。`fandhe-web-dom` の `mount_with_effect` + `clipboard` モジュールが `navigator.clipboard` へ配線する（wasm32 では `fandhe-device` の `Clipboard` トレイトを通らない。`device.rs` の非 wasm32 限定の制約）。secure context（https / localhost）必須で、読み取りはブラウザごとに追加の許可が要る。実ブラウザでの確認は未了",
+      "note": "実装済み（旧#859）。`fandhe-web-dom` の `mount_with_effect` + `clipboard` モジュールが `navigator.clipboard` へ配線する（wasm32 では `fandhe-device` の `Clipboard` トレイトを通らない。`device.rs` の非 wasm32 限定の制約）。secure context（https / localhost）必須で、読み取りはブラウザごとに追加の許可が要る。実ブラウザでの確認は未了",
       "sourceName": [
         "クリップボード"
       ],
       "implStatus": "実装済み（実ブラウザ未確認）",
-      "impl": "`crates/fandhe-web-dom/src/clipboard.rs` + `crates/fandhe-web-dom/src/mount.rs`（`mount_with_effect`）、Issue #859"
+      "impl": "`crates/fandhe-web-dom/src/clipboard.rs` + `crates/fandhe-web-dom/src/mount.rs`（`mount_with_effect`）、Issue 旧#859"
     }
   },
-  "note": "`UIPasteboard` / `ClipboardManager` / `NSPasteboard` / `Clipboard` (WinRT) / Clipboard API。Phase 11 の 1 件目として 5 OS すべてを実装済み（Issue #859）。デスクトップ 3 OS は `arboard` による共通実装 1 本で覆い、iOS / Android は FFI（`extern \"C\"` / JNI）、Web は `fandhe-web-dom` の effect フックで配線する。Windows の `Clipboard` (WinRT) は直接は使わず `arboard` 経由（同じ OS クリップボードを指す）。iOS 16 以降は他アプリ由来コピーの読み取りに実行時許可が要る点に注意（本表 iOS 欄）。実機・実ブラウザの確認は `device-check-pending` で溜めてまとめて確認する運用"
+  "note": "`UIPasteboard` / `ClipboardManager` / `NSPasteboard` / `Clipboard` (WinRT) / Clipboard API。Phase 11 の 1 件目として 5 OS すべてを実装済み（Issue 旧#859）。デスクトップ 3 OS は `arboard` による共通実装 1 本で覆い、iOS / Android は FFI（`extern \"C\"` / JNI）、Web は `fandhe-web-dom` の effect フックで配線する。Windows の `Clipboard` (WinRT) は直接は使わず `arboard` 経由（同じ OS クリップボードを指す）。iOS 16 以降は他アプリ由来コピーの読み取りに実行時許可が要る点に注意（本表 iOS 欄）。実機・実ブラウザの確認は `device-check-pending` で溜めてまとめて確認する運用"
 }
