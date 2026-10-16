@@ -20,11 +20,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_ml_inference.rs + crates/fandhe-egui-proxy/src/device/apple_ml_inference.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_ml_inference.m + crates/fandhe-egui-proxy/src/device/ml_inference.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-device/src/ml_inference.rs、Issue #291"
     },
     "android": {
-      "status": "possible",
-      "api": "LiteRT（TensorFlow Lite）の同梱版（`com.google.ai.edge.litert:litert`）または ML Kit の bundled カスタムモデル（`com.google.mlkit:image-labeling-custom`）",
-      "perm": "不要",
-      "url": "https://developers.google.com/edge/litert/android",
-      "note": "未実装。LiteRT には Google Play services ランタイム版と同梱版の 2 系統があり（出典: 公式 LiteRT for Android / LiteRT in Google Play services）、同梱版は `com.google.ai.edge.litert:litert`（最新 v2.2.0 は minSdk 23、公式）で GMS 非依存。`.tflite` を `assets/` に置いて JNI リスナー経由の Java から呼ぶ。ML Kit 側は `com.google.mlkit:image-labeling-custom` の bundled で、`.tflite` を assets に置く（GMS 不要、公式）。AICore / Gemini Nano（ML Kit GenAI）は AICore に依存し Pixel・Galaxy 等の一部端末限定、フォアグラウンド限定、アプリごとの推論クォータありのため no 扱い（公式 https://developers.google.com/ml-kit/genai）。未確認: 同梱版 LiteRT / ML Kit の推移依存に GMS クライアントライブラリが含まれるか。実装時に依存ツリーで確認する",
+      "status": "done",
+      "api": "NNAPI（`libneuralnetworks.so` を `dlopen`。`ANeuralNetworksModel_*` / `Compilation_*` / `Execution_startCompute` + `Event_wait`、`FULLY_CONNECTED`）",
+      "perm": "不要（権限・Manifest の宣言なし）",
+      "url": "https://developer.android.com/ndk/guides/neuralnetworks",
+      "note": "実装済み（#292）。範囲は固定の線形モデル（y = 2·x0 + 3·x1 + 1）の推論 1 回と期待値（24）の照合のみ。モデルはコードで組む。API 27 以上で動き、24〜26 は Unsupported。NNAPI は Android 15 で非推奨だが動作は続く（公式）。LiteRT 2.x は推移依存に GMS が入るため採らない。将来 NNAPI が削除されたら LiteRT へ移るかを見直す。壊れたモデルは演算の入力数の不一致で OS が拒否し、失敗として表示する。Activity 再生成時は保留中の要求を捨てる。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: OS ごとの所要時間の違い、期限後も OS の呼び出しが走り切ること、複数プロセス間。Android 実機の確認は #288 で行う。",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#288）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_ml_inference.rs + crates/fandhe-egui-proxy/src/device/ml_inference.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-device/src/ml_inference.rs、Issue #292",
       "sourceName": [
         "機械学習（画像・テキスト認識等）"
       ]
