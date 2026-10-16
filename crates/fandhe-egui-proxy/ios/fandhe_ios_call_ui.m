@@ -88,6 +88,11 @@ static void clearCurrent(void) {
 - (void)provider:(CXProvider *)provider performPlayDTMFCallAction:(CXPlayDTMFCallAction *)action { [action fail]; }
 
 - (void)provider:(CXProvider *)provider timedOutPerformingAction:(CXAction *)action {
+    // 古い action（差し替え・終了済みの通話）は捨てる。callUUID を持たない action は現在の通話を終えない。
+    if (![action isKindOfClass:[CXCallAction class]] || gCurrentUUID == nil ||
+        ![((CXCallAction *)action).callUUID isEqual:gCurrentUUID]) {
+        return;
+    }
     if (gCurrentId != 0) {
         uint64_t cid = gCurrentId;
         NSUUID *uuid = gCurrentUUID;
@@ -138,21 +143,23 @@ static void doReport(uint64_t cid) {
     update.supportsDTMF = NO;
 
     [gProvider reportNewIncomingCallWithUUID:uuid update:update completion:^(NSError *_Nullable error) {
-        // delegate queue = main。
-        BOOL current = (gCurrentUUID != nil && [gCurrentUUID isEqual:uuid]);
-        if (error == nil) {
-            if (current) {
-                gStage = FandheCallStageRinging;
-                fandhe_rust_call_ui_event(cid, 1, 0, 0);
-            } else {
-                // 取り消し・差し替え済み。通知せず OS 側で閉じる。
-                [gProvider reportCallWithUUID:uuid endedAtDate:nil reason:CXCallEndedReasonUnanswered];
+        // completion は main queue 固定ではない。状態に触る前に main へ集約し、そこで UUID を照合する。
+        dispatch_async(dispatch_get_main_queue(), ^{
+            BOOL current = (gCurrentUUID != nil && [gCurrentUUID isEqual:uuid]);
+            if (error == nil) {
+                if (current) {
+                    gStage = FandheCallStageRinging;
+                    fandhe_rust_call_ui_event(cid, 1, 0, 0);
+                } else {
+                    // 取り消し・差し替え済み。通知せず OS 側で閉じる。
+                    [gProvider reportCallWithUUID:uuid endedAtDate:nil reason:CXCallEndedReasonUnanswered];
+                }
+            } else if (current) {
+                int32_t domain = [error.domain isEqualToString:CXErrorDomainIncomingCall] ? 1 : 0;
+                clearCurrent();
+                fandhe_rust_call_ui_event(cid, 5, domain, (int64_t)error.code);
             }
-        } else if (current) {
-            int32_t domain = [error.domain isEqualToString:CXErrorDomainIncomingCall] ? 1 : 0;
-            clearCurrent();
-            fandhe_rust_call_ui_event(cid, 5, domain, (int64_t)error.code);
-        }
+        });
     }];
 }
 

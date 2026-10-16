@@ -109,15 +109,14 @@ impl Router {
     }
 
     /// `id` が現在のときだけ sink を呼ぶ（ロックの外で）。終端の通知なら登録を外す。
-    /// 戻り値は sink へ渡したか。
-    pub(crate) fn deliver(&self, id: u64, ev: CallUiEvent) -> bool {
+    /// 戻り値は `None` = 現在の通話でないので捨てた、`Some(b)` = sink へ渡し、`b` は sink の戻り値
+    /// （`false` は受け手の消失）。
+    pub(crate) fn deliver(&self, id: u64, ev: CallUiEvent) -> Option<bool> {
         let sink = {
             let mut g = self.cur.lock().unwrap_or_else(|e| e.into_inner());
-            let Some((cur, sink)) = g.as_ref() else {
-                return false;
-            };
+            let (cur, sink) = g.as_ref()?;
             if *cur != id {
-                return false;
+                return None;
             }
             let sink = sink.clone();
             if matches!(ev, CallUiEvent::Ended { .. } | CallUiEvent::Failed { .. }) {
@@ -125,8 +124,7 @@ impl Router {
             }
             sink
         };
-        sink(ev);
-        true
+        Some(sink(ev))
     }
 }
 
@@ -173,6 +171,15 @@ mod imp {
         }
     }
 
+    /// ネイティブの通話を閉じる（冪等。id 不一致なら `.m` 側で何もしない）。
+    pub(super) fn end_native(call_id: u64) {
+        // SAFETY: 引数は整数だけ。`.m` は main queue へ非同期に渡して即戻る。
+        #[allow(unsafe_code)]
+        unsafe {
+            fandhe_ios_call_ui_end(call_id)
+        };
+    }
+
     pub(super) fn implementation() -> Arc<dyn CallUi> {
         Arc::new(IosCallUi)
     }
@@ -190,7 +197,11 @@ pub(crate) fn implementation() -> std::sync::Arc<dyn fandhe_device::call_ui::Cal
 #[allow(unsafe_code)]
 #[no_mangle]
 extern "C" fn fandhe_rust_call_ui_event(call_id: u64, kind: i32, domain: i32, code: i64) {
-    imp::router().deliver(call_id, event_from(call_id, kind, domain, code));
+    if imp::router().deliver(call_id, event_from(call_id, kind, domain, code)) == Some(false) {
+        // 受け手が消えた。登録を外し、OS の通話を閉じる（Active のまま残さない）。
+        imp::router().clear_if(call_id);
+        imp::end_native(call_id);
+    }
     crate::ios::request_repaint();
 }
 
@@ -254,10 +265,10 @@ mod tests {
         let r = Router::default();
         let (sink, got) = rec();
         r.set(1, sink);
-        assert!(!r.deliver(2, event_from(2, 1, 0, 0)));
-        assert!(r.deliver(1, event_from(1, 1, 0, 0)));
-        assert!(r.deliver(1, event_from(1, 3, 0, 0)));
-        assert!(!r.deliver(1, event_from(1, 2, 0, 0)));
+        assert_eq!(r.deliver(2, event_from(2, 1, 0, 0)), None);
+        assert_eq!(r.deliver(1, event_from(1, 1, 0, 0)), Some(true));
+        assert_eq!(r.deliver(1, event_from(1, 3, 0, 0)), Some(true));
+        assert_eq!(r.deliver(1, event_from(1, 2, 0, 0)), None);
         assert_eq!(got.lock().unwrap().len(), 2);
     }
 
@@ -268,7 +279,7 @@ mod tests {
         r.set(1, sink);
         r.clear_if(2);
         r.clear_if(1);
-        assert!(!r.deliver(1, event_from(1, 1, 0, 0)));
+        assert_eq!(r.deliver(1, event_from(1, 1, 0, 0)), None);
         assert!(got.lock().unwrap().is_empty());
     }
 
@@ -282,6 +293,13 @@ mod tests {
             true
         });
         r.set(1, sink);
-        assert!(r.deliver(1, event_from(1, 1, 0, 0)));
+        assert_eq!(r.deliver(1, event_from(1, 1, 0, 0)), Some(true));
+    }
+
+    #[test]
+    fn router_reports_sink_rejection() {
+        let r = Router::default();
+        r.set(1, Arc::new(|_| false));
+        assert_eq!(r.deliver(1, event_from(1, 1, 0, 0)), Some(false));
     }
 }
