@@ -182,11 +182,16 @@ pub fn mark_command_taken(state: &mut AudioPlayState, generation: u64) {
     }
 }
 
-/// 通知を反映する。世代違い、`Loading` / `Playing` 以外での通知は捨てる。
+/// 通知を反映する。世代違いは捨てる。`Loading` / `Playing` 以外では、一時停止・停止要求の
+/// OS 操作の失敗（`Failed`）だけを `Paused` / `Stopped` でも受け入れる（嘘の成功の防止）。
 pub fn apply_update(state: &mut AudioPlayState, generation: u64, update: AudioUpdate) {
-    if state.generation != generation
-        || !matches!(state.phase, AudioPhase::Loading | AudioPhase::Playing)
-    {
+    if state.generation != generation {
+        return;
+    }
+    let live = matches!(state.phase, AudioPhase::Loading | AudioPhase::Playing);
+    let op_failed = matches!(state.phase, AudioPhase::Paused | AudioPhase::Stopped)
+        && matches!(update, AudioUpdate::Failed(_));
+    if !live && !op_failed {
         return;
     }
     match update {
@@ -284,6 +289,21 @@ mod tests {
             phase,
             position_ms: Some(pos),
             duration_ms: Some(5000),
+        }
+    }
+
+    #[test]
+    fn pause_stop_failure_is_shown() {
+        for stop_it in [false, true] {
+            let mut s = playing();
+            if stop_it {
+                stop(&mut s);
+            } else {
+                pause(&mut s);
+            }
+            let g = s.generation;
+            apply_update(&mut s, g, AudioUpdate::Failed(AudioFailure::Unsupported));
+            assert_eq!(s.phase, AudioPhase::Failed(AudioFailure::Unsupported));
         }
     }
 
