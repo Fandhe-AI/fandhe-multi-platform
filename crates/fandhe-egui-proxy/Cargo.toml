@@ -336,6 +336,9 @@ windows = { workspace = true, optional = true, features = [
     # Issue #955: `InMemoryRandomAccessStream`/`DataReader`（録音先バッファの読み書き）
     # に使う。
     "Storage_Streams",
+    # Issue #290: device/windows_ml_inference.rs が WinML（LearningModel / LearningModelSession /
+    # TensorFloat）を呼ぶ。AI → Foundation のみに依存し新規パッケージは増えない。
+    "AI_MachineLearning",
     # Issue #1004: `device/windows_notification.rs` が `ToastNotificationManager`/
     # `ToastNotifier`/`ToastNotification` で WinRT Toast を出すために使う。
     "UI_Notifications",
