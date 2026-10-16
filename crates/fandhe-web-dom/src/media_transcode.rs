@@ -260,6 +260,21 @@ mod web {
         });
         if hit.is_some() {
             post(applier, after);
+            // 実行中の Closure（codec・タイマーのコールバック）から呼ばれうるため、
+            // 抜けた後（次のマイクロタスク）に pagehide 解除・コールバックと集計の破棄を行う（契約表 3・9）。
+            spawn_local(async move {
+                let done = SESSIONS.with(|m| {
+                    let mut m = m.borrow_mut();
+                    if m.get(&mount).is_some_and(|s| s.gen == g && s.finished) {
+                        m.remove(&mount)
+                    } else {
+                        None
+                    }
+                });
+                if let Some(s) = done {
+                    teardown(s);
+                }
+            });
         }
     }
 
