@@ -130,7 +130,9 @@ mod ffi {
     /// `dc` が有効なプリンタ DC であること。
     #[allow(unsafe_code)]
     unsafe fn select_font(dc: HDC, pt: i32, weight: i32) -> Option<Font> {
+        // SAFETY: 前提により `dc` は有効なプリンタ DC。GetDeviceCaps は値を返すだけでポインタを受け取らない。
         let dpi = unsafe { GetDeviceCaps(Some(dc), LOGPIXELSY) };
+        // SAFETY: 書体名は `w!` の NUL 終端静的文字列で呼び出し中有効。他は値渡しで、戻り値は直後に null 検査する。
         let font = unsafe {
             CreateFontW(
                 -(pt * dpi / 72),
@@ -152,6 +154,7 @@ mod ffi {
         if font.0.is_null() {
             return None;
         }
+        // SAFETY: `dc` は前提により有効、`font` は直前に作成し null 検査済み。旧オブジェクトは `Font` の Drop で戻す。
         let old = unsafe { SelectObject(dc, font.into()) };
         Some(Font { dc, font, old })
     }
@@ -169,6 +172,7 @@ mod ffi {
             right: x + width,
             bottom: i32::MAX / 2,
         };
+        // SAFETY: `buf`・`rect` はこの関数のローカルで呼び出し中有効かつ排他。`dc` は前提により有効でページ開始済み。
         unsafe {
             DrawTextW(
                 dc,
@@ -185,18 +189,24 @@ mod ffi {
     /// `dc` が有効なプリンタ DC で、`StartDocW` 済みであること。
     #[allow(unsafe_code)]
     unsafe fn render(dc: HDC, title: &str, body: &str) -> Result<(), DeviceError> {
+        // SAFETY: 前提により `dc` は有効で StartDocW 済み。ページ開始の成否は戻り値で検査する。
         if unsafe { StartPage(dc) } <= 0 {
             return Err(FAILED);
         }
+        // SAFETY: `dc` は前提により有効。以下の GetDeviceCaps 3 件も値を返すだけ。
         let mx = unsafe { GetDeviceCaps(Some(dc), LOGPIXELSX) } / 2;
+        // SAFETY: 同上。
         let my = unsafe { GetDeviceCaps(Some(dc), LOGPIXELSY) } / 2;
+        // SAFETY: 同上。
         let width = unsafe { GetDeviceCaps(Some(dc), HORZRES) } - 2 * mx;
         let mut y = my;
         for (pt, weight, text) in [
             (18, FW_BOLD.0 as i32, title),
             (12, FW_NORMAL.0 as i32, body),
         ] {
+            // SAFETY: `dc` は有効で、ページは StartPage 済み。`_font` は `dc` が有効なうちにこのスコープで drop される。
             let _font = unsafe { select_font(dc, pt, weight) }.ok_or(FAILED)?;
+            // SAFETY: `dc` は有効でページ開始済み（上の StartPage 成功による）。文字列は呼び出し中借用される。
             let h = unsafe { draw(dc, text, mx, y, width) };
             if h <= 0 {
                 return Err(FAILED);
@@ -204,6 +214,7 @@ mod ffi {
             // 見出しと本文の間に半行ぶん空ける。
             y += h + h / 2;
         }
+        // SAFETY: `dc` は有効で、ページは StartPage 済み・未終了。
         if unsafe { EndPage(dc) } <= 0 {
             return Err(FAILED);
         }
