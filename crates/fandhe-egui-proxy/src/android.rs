@@ -313,6 +313,11 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // （`device::call_ui::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::call_ui::reset_pending_tracking();
+    // Issue #294: ライブアクティビティの保留中の要求も破棄し、表示中の通知を閉じる。再生成後の画面は
+    // Idle から始まるため、残すと次の操作と OS 側の表示が食い違う
+    // （`device::live_activity::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::live_activity::reset_pending_tracking();
 
     let native_options = eframe::NativeOptions {
         android_app: Some(app),
