@@ -21,11 +21,14 @@
       "note": "未実装。印刷アダプタ（`PrintDocumentAdapter`）の実装が要る"
     },
     "macos": {
-      "status": "possible",
-      "api": "AppKit `NSPrintOperation`",
+      "status": "done",
+      "api": "AppKit `NSPrintPanel`（`runModalWithPrintInfo:`）+ `NSPrintOperation`（パネルなしの `runOperation`）",
       "perm": "なし",
       "url": "https://developer.apple.com/documentation/appkit/nsprintoperation",
-      "note": "未実装"
+      "note": "固定の短い文章を 1 ページ。パネルで取り消しを先に確定し、パネルなしの `runOperation` で実行する 2 段構成（1 回の操作だと NO が取り消しか失敗か区別できないため）。結果は `Submitted`（ジョブを渡した。PDF 保存を含み、紙に出たことは意味しない）・`Cancelled`・失敗（`runOperation` が NO）で、macOS は `Unconfirmed` に到達しない。守る範囲: 入力の検査、取り消しを失敗に畳まないこと、嘘の成功の禁止。守らない範囲: 紙に出たか・ジョブ投入後のプリンタ側の失敗、OS ごとの書体・余白の差。UI スレッドで同期に呼ぶ。Mac 目視は #324",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#324）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_print.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_print.m + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_page.rs + crates/fandhe-device/src/print.rs、Issue #325"
     },
     "windows": {
       "status": "possible",
@@ -43,5 +46,5 @@
       "note": "MDN は Baseline（2023-06 から Widely available）。印刷されるのはページ全体で、描画 Canvas の印刷は CSS 側の調整が要る"
     }
   },
-  "note": "print は OS の印刷ダイアログを出す。今回の範囲: 画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷ダイアログに渡す。"
+  "note": "print は OS の印刷ダイアログを出す。今回の範囲: 固定の短い文章（見出し 1 行 + 本文数行）を 1 ページとして OS の印刷ダイアログに渡す。複数ページ・画像・PDF・プリンタ選択・進捗・紙に出たかの追跡は扱わない。結果の三値と守る範囲 / 守らない範囲は `fandhe_device::print` のモジュール doc を参照。"
 }

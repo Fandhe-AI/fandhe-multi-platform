@@ -137,6 +137,11 @@ pub mod android_photo_library;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_power_state;
+/// Issue #325: Android 向け印刷のスタブ（#328 が `PrintHelper` + JNI で埋める）。`device/print.rs` の
+/// Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_print;
 /// Issue #1335: Android 向け画面録画のスタブ（#1337 が埋める）。`device/screen_capture.rs` の
 /// Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
@@ -459,6 +464,11 @@ pub mod ios_pedometer;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_power_state;
+/// Issue #325: iOS 向け印刷のスタブ（#327 が `UIPrintInteractionController` で埋める）。`device/print.rs` の
+/// iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_print;
 /// Issue #1279: iOS 向け画面スリープ抑止実装（`ios/fandhe_ios_screen_wake_lock.m` を呼ぶ C ABI
 /// ラッパー。#1278 のスタブを置き換え）。
 /// `device/screen_wake_lock.rs` の iOS 経路から使われる。
@@ -521,6 +531,12 @@ pub mod macos_multi_display;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_power_state;
+/// Issue #325: macOS 向け印刷実装（`macos/fandhe_macos_print.m` を呼ぶ C ABI ラッパー）。
+/// `device/print.rs` の macOS 経路から呼ばれる。結果コードの写像をホストでテストできるよう
+/// cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_print;
 /// Issue #1278: macOS 向け画面スリープ抑止実装（`macos/fandhe_macos_screen_wake_lock.m` を
 /// 呼ぶ C ABI ラッパー）。`device/screen_wake_lock.rs` の macOS 経路から呼ばれる。状態管理
 /// （`Holder`）はホストのテストで検証できるよう `test` でもコンパイルする。
@@ -577,6 +593,10 @@ pub mod photo_save;
 /// Phase 11 の拡充ループ（親 #1128、Issue #1274）: 電源状態の effect ドライバ（macOS / Windows
 /// ・iOS 実装、Android は #1276 で埋めるスタブ、他 OS は `UnsupportedPowerState` 固定）。
 pub mod power_state;
+/// Phase 11 の拡充ループ（親 #94、Issue #325）: 印刷ダイアログの effect ドライバ（macOS 実装、
+/// Windows / iOS / Android は #326〜#328 が埋めるスタブ、他 OS は `UnsupportedPrint` 固定。
+/// Web は `fandhe-web-dom`）。
+pub mod print;
 /// request/response 型端末機能共通の要求追跡（Issue #943、親 #941）。share /
 /// biometric_auth / file_pick の `bridge` facade から使う。4 OS
 /// （macOS/iOS/Android/Windows）以外では利用者が無いため `dead_code` を許容する。
@@ -741,6 +761,12 @@ pub mod windows_photo_library;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_power_state;
+/// Issue #325: Windows 向け印刷のスタブ（#326 が `PrintDlgExW` + GDI で埋める）。`device/print.rs` の
+/// Windows 経路から呼ばれる。`windows` crate を使う ffi 部分は埋める側がモジュール内側で
+/// `cfg(target_os = "windows")` に閉じる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_print;
 /// Issue #26: Windows 向け画面録画実装（`Windows.Graphics.Capture` + `MediaTranscoder`）。
 /// `device/screen_capture.rs` の Windows 経路から使われる。
 #[cfg(target_os = "windows")]
