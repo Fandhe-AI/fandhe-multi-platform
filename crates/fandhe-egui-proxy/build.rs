@@ -58,6 +58,8 @@
 //! - `ios/fandhe_ios_compose_mail_sms.m`（Issue #1385、MessageUI によるメール・SMS 作成画面）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルし MessageUI をリンクする
 //!   （`src/device/ios_compose_mail_sms.rs` から呼ばれる契約）。
+//! - `apple/fandhe_apple_map_view.m`（Issue #273、`MKMapSnapshotter` による地図の静止画 1 枚の取得。
+//!   iOS 分岐は #274 までスタブ）は `src/device/apple_map_view.rs` から呼ばれる契約。MapKit をリンクする。
 //! - `apple/fandhe_apple_photo_library.m`（Issue #1254、`PHPhotoLibrary` による画像 1 枚の保存）は
 //!   iOS（Issue #1255）・macOS の両ターゲットで feature `device` 有効時にコンパイルする
 //!   （`src/device/apple_photo_library.rs` から呼ばれる契約）。Photos をリンクする。
@@ -366,6 +368,9 @@ fn main() {
     // `apple/fandhe_apple_photo_library.m`（Issue #1254 macOS + #1255 iOS）も macOS 分岐と共用する。
     compile_apple_photo_library();
 
+    // `apple/fandhe_apple_map_view.m`（Issue #273 macOS + #274 iOS）も macOS 分岐と共用する。
+    compile_apple_map_view();
+
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）も macOS 分岐と
     // 共用する（上記 doc 参照）。
     compile_apple_mic_record();
@@ -494,6 +499,19 @@ fn compile_apple_photo_library() {
         .compile("fandhe_apple_photo_library");
 
     println!("cargo:rustc-link-lib=framework=Photos");
+}
+
+/// `apple/fandhe_apple_map_view.m` を `cc` でコンパイルし MapKit / CoreGraphics をリンクする
+/// （Issue #273 macOS・#274 iOS。両分岐から呼ぶ。iOS 分岐の中身は #274 まではスタブ）。
+fn compile_apple_map_view() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_map_view.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_map_view.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_map_view");
+
+    println!("cargo:rustc-link-lib=framework=MapKit");
+    println!("cargo:rustc-link-lib=framework=CoreGraphics");
 }
 
 /// `apple/fandhe_apple_calendar.m` を `cc` でコンパイルし EventKit をリンクする
@@ -990,6 +1008,7 @@ fn build_macos() {
     compile_apple_gamepad();
     compile_apple_calendar(false);
     compile_apple_photo_library();
+    compile_apple_map_view();
 
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）は iOS 分岐と
     // 共用する（上記 doc 参照）。
