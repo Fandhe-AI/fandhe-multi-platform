@@ -40,11 +40,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/apple_ml_inference.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_ml_inference.m + crates/fandhe-egui-proxy/src/device/ml_inference.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-device/src/ml_inference.rs、Issue #289"
     },
     "windows": {
-      "status": "possible",
-      "api": "WinML（`Windows.AI.MachineLearning.LearningModel` / `LearningModelSession` / `LearningModelBinding`）、後継は Windows App SDK の Windows ML（`Microsoft.Windows.AI.MachineLearning`、ONNX Runtime ベース）",
-      "perm": "不要の想定",
+      "status": "done",
+      "api": "WinML（`Windows.AI.MachineLearning` の `LearningModel::LoadFromStream` / `LearningModelSession` / `LearningModelBinding`、CPU 固定、ONNX IR 3・opset 7）",
+      "perm": "不要",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.ai.machinelearning.learningmodel",
-      "note": "未実装。`Windows.AI.MachineLearning` は Windows 10 1809（10.0.17763）以降で、公式チュートリアルが C++/WinRT の Win32 デスクトップアプリから `LearningModel::LoadFromFilePath` で ONNX を読む形を示しており、素の exe から `windows` crate で呼べる見込み。ただし公式は本 API を 2018 年出荷の旧 API と位置づけ、後継の Windows ML（Windows App SDK）へ誘導している（WinAppSDK 同梱ランタイムの配布形態が増える）。後継の unpackaged / package identity 要否は確認できなかった。Copilot+ PC 限定の Windows AI APIs（Phi Silica 等）は使わない。ONNX Runtime を自前で同梱する形は OS 提供 API ではないので判定に使わない"
+      "note": "実装済み（#290）。範囲は固定の線形モデル（y = 2·x0 + 3·x1 + 1）の推論 1 回と期待値（24）の照合のみ。モデルファイルも一時ファイルも置かず、実行時に ONNX をコードで組んでメモリ上のストリームから読む（画像前処理・分類モデル・モデルの動的取得・GPU / NPU の選択・取り消しは範囲外）。Windows 10 1809 未満や WinML の無い環境は非対応（Unsupported）。結果は成功（期待値と許容差の中で一致）、失敗（OS がモデルを拒否・期限切れ・出力の不一致・非対応）を分けて表示し、「壊れたモデルで試す」は失敗として表示する。取り消しと権限は存在しない。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: OS ごとの所要時間の違い、期限後も同期呼び出しが走り切ること、複数プロセス間。後継の Windows App SDK 版は同梱ランタイムの配布形態が増えるため採らない。unpackaged の exe から動くかは #288 で確認する。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#288）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_ml_inference.rs + crates/fandhe-egui-proxy/src/device/ml_inference.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-device/src/ml_inference.rs、Issue #290"
     },
     "web": {
       "status": "no",

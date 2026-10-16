@@ -3,7 +3,7 @@
 //!
 //! 扱う範囲は「固定の線形モデル `y = 2·x0 + 3·x1 + 1` に固定入力 `x = [4, 5]` を渡して
 //! 1 回推論し、出力を期待値（24）と照合する」ことだけ。モデルファイルは置かず、実行時に
-//! バイト列をコードで組む（[`coreml_spec`]。`media_playback::demo_wav` と同じ発想）。
+//! バイト列をコードで組む（[`coreml_spec`] と Windows 用の [`onnx_model`]。`media_playback::demo_wav` と同じ発想）。
 //! 画像の前処理・分類モデル・モデルの動的取得・利用者が持ち込むモデル・GPU / NPU の選択・
 //! 推論の取り消しは扱わない。対象は macOS / iOS（Core ML）、Windows（WinML）、
 //! Android（NNAPI）。Web は対象外。
@@ -108,7 +108,7 @@ pub fn check_output(y: f64, expected: f64) -> Result<f64, DeviceError> {
     }
 }
 
-// --- protobuf の最小エンコーダ（Core ML 仕様の組み立て専用。Windows の onnx_model も再利用する） ---
+// --- protobuf の最小エンコーダ（Core ML 仕様と ONNX モデルの組み立て専用） ---
 
 fn varint(out: &mut Vec<u8>, mut v: u64) {
     while v >= 0x80 {
@@ -171,6 +171,98 @@ pub fn coreml_spec(model: DemoModel) -> Vec<u8> {
         spec.truncate(spec.len() - 8);
     }
     spec
+}
+
+fn packed_f32(values: &[f32]) -> Vec<u8> {
+    values.iter().flat_map(|v| v.to_le_bytes()).collect()
+}
+
+fn message(fields: &[(u64, &[u8])]) -> Vec<u8> {
+    let mut out = Vec::new();
+    for (f, b) in fields {
+        field_bytes(&mut out, *f, b);
+    }
+    out
+}
+
+/// ONNX TensorProto（FLOAT）。dims は 1 要素ずつ varint、float_data は packed。
+fn onnx_tensor(dims: &[i64], data: &[f32]) -> Vec<u8> {
+    let mut t = Vec::new();
+    for d in dims {
+        field_varint(&mut t, 1, *d as u64);
+    }
+    field_varint(&mut t, 2, 1);
+    field_bytes(&mut t, 4, &packed_f32(data));
+    t
+}
+
+/// ONNX ValueInfoProto（FLOAT テンソルの名前と形状）。
+fn onnx_value_info(name: &str, dims: &[u64]) -> Vec<u8> {
+    let mut shape = Vec::new();
+    for d in dims {
+        let mut dim = Vec::new();
+        field_varint(&mut dim, 1, *d);
+        field_bytes(&mut shape, 1, &dim);
+    }
+    let mut tensor_type = Vec::new();
+    field_varint(&mut tensor_type, 1, 1);
+    field_bytes(&mut tensor_type, 2, &shape);
+    let ty = message(&[(1, &tensor_type)]);
+    message(&[(1, name.as_bytes()), (2, &ty)])
+}
+
+/// ONNX NodeProto。`attr` は Constant の value 属性（TensorProto）。
+fn onnx_node(op: &str, inputs: &[&str], outputs: &[&str], attr: Option<&[u8]>) -> Vec<u8> {
+    let mut n = Vec::new();
+    for i in inputs {
+        field_bytes(&mut n, 1, i.as_bytes());
+    }
+    for o in outputs {
+        field_bytes(&mut n, 2, o.as_bytes());
+    }
+    field_bytes(&mut n, 4, op.as_bytes());
+    if let Some(t) = attr {
+        let mut a = Vec::new();
+        field_bytes(&mut a, 1, b"value");
+        field_bytes(&mut a, 5, t);
+        field_varint(&mut a, 20, 4); // AttributeType::TENSOR
+        field_bytes(&mut n, 5, &a);
+    }
+    n
+}
+
+/// 線形モデルの ONNX（Windows の WinML 用）。`Y = MatMul(X, W) + B`、X は `[1,2]`、Y は `[1,1]`。
+///
+/// IR version 3 / opset 7 は Windows 10 1809 の WinML が読める上限。重みは initializer では
+/// なく `Constant` ノードに持たせる（IR 3 の initializer は入力にも並べる必要があり、並べると
+/// WinML の入力特徴に `W` / `B` が現れるため）。graph を最後のフィールドに置くので、`Corrupt`
+/// は末尾を切り詰めると長さが合わず OS が逆シリアライズで必ず拒否する。
+/// 実際に WinML が読めるかは Windows 実機確認待ち（#288）。
+pub fn onnx_model(model: DemoModel) -> Vec<u8> {
+    let w = onnx_tensor(&[2, 1], &WEIGHTS.map(|v| v as f32));
+    let b = onnx_tensor(&[1], &[BIAS as f32]);
+    let mut graph = Vec::new();
+    field_bytes(&mut graph, 1, &onnx_node("Constant", &[], &["W"], Some(&w)));
+    field_bytes(&mut graph, 1, &onnx_node("Constant", &[], &["B"], Some(&b)));
+    field_bytes(
+        &mut graph,
+        1,
+        &onnx_node("MatMul", &["X", "W"], &["XW"], None),
+    );
+    field_bytes(&mut graph, 1, &onnx_node("Add", &["XW", "B"], &["Y"], None));
+    field_bytes(&mut graph, 2, b"linear");
+    field_bytes(&mut graph, 11, &onnx_value_info("X", &[1, 2]));
+    field_bytes(&mut graph, 12, &onnx_value_info("Y", &[1, 1]));
+    let mut opset = Vec::new();
+    field_varint(&mut opset, 2, 7);
+    let mut m = Vec::new();
+    field_varint(&mut m, 1, 3);
+    field_bytes(&mut m, 8, &opset);
+    field_bytes(&mut m, 7, &graph);
+    if model == DemoModel::Corrupt {
+        m.truncate(m.len() - 8);
+    }
+    m
 }
 
 #[cfg(test)]
@@ -242,5 +334,65 @@ mod tests {
             .infer(DemoModel::Valid, DEMO_INPUT, INFER_DEADLINE)
             .unwrap_err();
         assert!(matches!(e, DeviceError::Unsupported("ml_inference")));
+    }
+
+    /// 入力の終端でぴったり終わる protobuf か（tag・varint・length-delimited を辿る）。
+    fn well_formed(mut b: &[u8]) -> bool {
+        fn rd(b: &mut &[u8]) -> Option<u64> {
+            let (mut v, mut sh) = (0u64, 0);
+            loop {
+                let (&x, rest) = b.split_first()?;
+                *b = rest;
+                v |= u64::from(x & 0x7f) << sh;
+                if x & 0x80 == 0 {
+                    return Some(v);
+                }
+                sh += 7;
+            }
+        }
+        while !b.is_empty() {
+            let Some(tag) = rd(&mut b) else { return false };
+            match tag & 7 {
+                0 => {
+                    if rd(&mut b).is_none() {
+                        return false;
+                    }
+                }
+                2 => {
+                    let Some(n) = rd(&mut b) else { return false };
+                    if n as usize > b.len() {
+                        return false;
+                    }
+                    b = &b[n as usize..];
+                }
+                _ => return false,
+            }
+        }
+        true
+    }
+
+    fn contains(h: &[u8], n: &[u8]) -> bool {
+        h.windows(n.len()).any(|w| w == n)
+    }
+
+    #[test]
+    fn onnx_model_structure() {
+        let v = onnx_model(DemoModel::Valid);
+        assert_eq!(&v[..2], [0x08, 0x03]);
+        assert!(contains(&v, &[0x42, 0x02, 0x10, 0x07]));
+        for s in ["Constant", "MatMul", "Add", "X", "W", "B", "Y"] {
+            assert!(contains(&v, s.as_bytes()), "{s}");
+        }
+        let w: Vec<u8> = packed_f32(&[2.0, 3.0]);
+        assert!(contains(&v, &w));
+        assert!(contains(&v, &1.0f32.to_le_bytes()));
+        assert!(well_formed(&v));
+    }
+
+    #[test]
+    fn onnx_corrupt_is_truncated_and_malformed() {
+        let (v, c) = (onnx_model(DemoModel::Valid), onnx_model(DemoModel::Corrupt));
+        assert_eq!(c, v[..v.len() - 8]);
+        assert!(!well_formed(&c));
     }
 }
