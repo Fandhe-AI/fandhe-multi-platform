@@ -42,6 +42,7 @@ static FandheCallStage gStage = FandheCallStageReporting;
 static NSUUID *gClosingUUID = nil;
 static uint64_t gPendingId = 0; // 0 = 保留なし
 static void doReport(uint64_t cid);
+static void finishClosing(NSUUID *uuid);
 
 static CXProvider *gProvider = nil;
 static CXCallController *gController = nil;
@@ -72,8 +73,13 @@ static void clearCurrent(void) {
 }
 
 - (void)provider:(CXProvider *)provider performAnswerCallAction:(CXAnswerCallAction *)action {
-    if (gCurrentId != 0 && [action.callUUID isEqual:gCurrentUUID] && gStage == FandheCallStageRinging) {
+    if (gCurrentId != 0 && [action.callUUID isEqual:gCurrentUUID] && gStage != FandheCallStageActive) {
         [action fulfill];
+        // report の completion より先に answer が届いた場合は、ここで Ringing を補ってから Answered を送る
+        // （遅れて届く completion は stage が Reporting でないので何もしない）。
+        if (gStage == FandheCallStageReporting) {
+            fandhe_rust_call_ui_event(gCurrentId, 1, 0, 0);
+        }
         gStage = FandheCallStageActive;
         fandhe_rust_call_ui_event(gCurrentId, 2, 0, 0);
     } else {
@@ -84,6 +90,11 @@ static void clearCurrent(void) {
 
 - (void)provider:(CXProvider *)provider performEndCallAction:(CXEndCallAction *)action {
     [action fulfill];
+    // 自分で要求した終了（end）の完了。ここで旧通話の解放が確定したので保留中の報告を始める。
+    if (gClosingUUID != nil && [action.callUUID isEqual:gClosingUUID]) {
+        finishClosing(action.callUUID);
+        return;
+    }
     // 自分で要求した終了（end）は先に現在の通話を空にしてあるため、ここでは通知しない。
     if (gCurrentId != 0 && [action.callUUID isEqual:gCurrentUUID]) {
         uint64_t cid = gCurrentId;
@@ -100,6 +111,14 @@ static void clearCurrent(void) {
 - (void)provider:(CXProvider *)provider performPlayDTMFCallAction:(CXPlayDTMFCallAction *)action { [action fail]; }
 
 - (void)provider:(CXProvider *)provider timedOutPerformingAction:(CXAction *)action {
+    // 終了要求した旧通話の action が時間切れなら、OS 側を閉じて保留中の報告へ進む。
+    if (gClosingUUID != nil && [action isKindOfClass:[CXCallAction class]] &&
+        [((CXCallAction *)action).callUUID isEqual:gClosingUUID]) {
+        NSUUID *uuid = gClosingUUID;
+        [provider reportCallWithUUID:uuid endedAtDate:nil reason:CXCallEndedReasonFailed];
+        finishClosing(uuid);
+        return;
+    }
     // 古い action（差し替え・終了済みの通話）は捨てる。callUUID を持たない action は現在の通話を終えない。
     if (![action isKindOfClass:[CXCallAction class]] || gCurrentUUID == nil ||
         ![((CXCallAction *)action).callUUID isEqual:gCurrentUUID]) {
@@ -178,14 +197,14 @@ static void doReport(uint64_t cid) {
         dispatch_async(dispatch_get_main_queue(), ^{
             BOOL current = (gCurrentUUID != nil && [gCurrentUUID isEqual:uuid]);
             if (error == nil) {
-                if (current) {
+                if (current && gStage == FandheCallStageReporting) {
                     gStage = FandheCallStageRinging;
                     fandhe_rust_call_ui_event(cid, 1, 0, 0);
-                } else {
+                } else if (!current) {
                     // 取り消し・差し替え済み。通知せず OS 側で閉じる。
                     [gProvider reportCallWithUUID:uuid endedAtDate:nil reason:CXCallEndedReasonUnanswered];
                     finishClosing(uuid);
-                }
+                } // current かつ応答済み（answer が先着）は何もしない
             } else if (!current) {
                 finishClosing(uuid); // 受理されなかったので解放済み
             } else {
@@ -224,10 +243,12 @@ static void doEnd(uint64_t cid) {
             gClosingUUID = uuid;
             [gController requestTransaction:t completion:^(NSError *_Nullable error) {
                 dispatch_async(dispatch_get_main_queue(), ^{
+                    // 成功時は performEndCallAction（完了）か timedOutPerformingAction が閉じる。
+                    // 要求自体が失敗したときだけここで閉じる。
                     if (error != nil) {
                         [gProvider reportCallWithUUID:uuid endedAtDate:nil reason:CXCallEndedReasonFailed];
+                        finishClosing(uuid);
                     }
-                    finishClosing(uuid);
                 });
             }];
             break;
