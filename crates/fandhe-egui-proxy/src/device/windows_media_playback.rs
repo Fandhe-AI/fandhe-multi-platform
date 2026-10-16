@@ -125,24 +125,38 @@ impl Shared {
 
     fn on_pause(&mut self, gen: u64) -> Result<(), DeviceError> {
         self.check(gen)?;
+        // 意図だけ記録する。`Paused` はワーカーの完了（`on_done`）で立て、完了前の失敗を見逃さない。
         self.intent = Intent::Pause;
-        if self.phase == PlaybackPhase::Playing {
-            self.phase = PlaybackPhase::Paused;
-        }
         Ok(())
     }
 
     fn on_stop(&mut self, gen: u64) -> Result<(), DeviceError> {
         self.check(gen)?;
         self.intent = Intent::Stop;
-        if !matches!(
-            self.phase,
-            PlaybackPhase::Loading | PlaybackPhase::Failed(_)
-        ) {
-            self.phase = PlaybackPhase::Ready;
-            self.position_ms = Some(0);
-        }
         Ok(())
+    }
+
+    /// ワーカーが一時停止・停止の MF 呼び出しに成功した時点で状態を確定する。
+    /// 完了までは `Playing` のままなので、ドライバは失敗の監視を打ち切らない。
+    fn on_done(&mut self, gen: u64) {
+        if self.check(gen).is_err() {
+            return;
+        }
+        match self.intent {
+            Intent::Pause if self.phase == PlaybackPhase::Playing => {
+                self.phase = PlaybackPhase::Paused;
+            }
+            Intent::Stop
+                if !matches!(
+                    self.phase,
+                    PlaybackPhase::Loading | PlaybackPhase::Failed(_)
+                ) =>
+            {
+                self.phase = PlaybackPhase::Ready;
+                self.position_ms = Some(0);
+            }
+            _ => {}
+        }
     }
 
     /// 世代の違う通知は捨てる（契約表 2）。
@@ -603,7 +617,10 @@ mod win {
                 }
                 Some(ref c @ (Cmd::Play(g) | Cmd::Pause(g) | Cmd::Stop(g))) => {
                     if let Some((eg, e)) = engine.as_ref().filter(|(eg, _)| *eg == g) {
-                        if drive(e, c).is_err() {
+                        if drive(e, c).is_ok() {
+                            let eg = *eg;
+                            with_shared(|s| s.on_done(eg));
+                        } else {
                             let eg = *eg;
                             with_shared(|s| s.fail(eg, PlaybackFailure::Internal));
                             // 失敗確定時は対象世代のエンジンを Shutdown する（音声が続かない）。
@@ -656,6 +673,9 @@ mod tests {
         s.on_event(g, Ev::Playing);
         assert_eq!(s.phase, PlaybackPhase::Playing);
         s.on_pause(g).unwrap();
+        // 完了前は Playing のまま（ドライバが失敗監視を続ける根拠）。
+        assert_eq!(s.phase, PlaybackPhase::Playing);
+        s.on_done(g);
         s.on_event(g, Ev::Playing);
         assert_eq!(s.phase, PlaybackPhase::Paused);
     }
@@ -715,6 +735,7 @@ mod tests {
         s.on_event(g, Ev::CanPlay);
         s.on_times(g, 2.5, 5.0);
         s.on_stop(g).unwrap();
+        s.on_done(g);
         assert_eq!(s.position_ms, Some(0));
         assert_eq!(s.phase, PlaybackPhase::Ready);
     }

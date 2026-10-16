@@ -196,7 +196,9 @@ fn drive(
     if awaiting
         && inner.device_gen.is_some_and(|dg| {
             let snap = pb.snapshot();
-            snap.generation == dg && snap.phase == PlaybackPhase::Loading
+            // Loading は操作が未実行、Playing は一時停止・停止が worker で未完了（Windows）。
+            snap.generation == dg
+                && matches!(snap.phase, PlaybackPhase::Loading | PlaybackPhase::Playing)
         })
         // CANPLAY が来ない読み込みで再描画を出し続けないよう、延長は期限までに限る。
         && inner.settle_origin.is_some_and(|t| t.elapsed() < deadline)
@@ -207,7 +209,13 @@ fn drive(
         && inner
             .settle_since
             .is_some_and(|t| t.elapsed() < SETTLE_WINDOW);
+    // 操作が未完了のうちに届く Playing は旧状態の残りなので画面へ反映しない（失敗だけ拾う）。
+    let in_flight = inner.device_gen.is_some_and(|dg| {
+        let snap = pb.snapshot();
+        snap.generation == dg && snap.phase == PlaybackPhase::Playing
+    });
     if settling
+        && !in_flight
         && inner
             .last_report
             .is_none_or(|t| t.elapsed() >= POLL_INTERVAL)
