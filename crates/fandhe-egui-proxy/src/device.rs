@@ -330,8 +330,8 @@ pub mod ios_audio_devices;
 /// で host の `cargo test` から状態機械を検証できる（モジュール doc 参照）。
 #[cfg(any(target_os = "ios", test))]
 pub mod ios_background_task;
-/// Issue #276: iOS 向け通話 UI 統合実装のスタブ（#277 が埋める）。`device/call_ui.rs` の
-/// iOS 経路から呼ばれる。
+/// Issue #277: iOS 向け通話 UI 統合実装（`ios/fandhe_ios_call_ui.m` の CallKit を呼ぶ C ABI ラッパー）。
+/// `device/call_ui.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_call_ui;
