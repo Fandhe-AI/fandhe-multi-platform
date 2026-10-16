@@ -227,6 +227,10 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "media_transcode" => fandhe_core::screens::media_transcode::current_screen,
+    crate::device::media_transcode::media_transcode_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ml_infer" => fandhe_core::screens::ml_infer::current_screen,
     crate::device::ml_inference::ml_infer_effect,
     effect
