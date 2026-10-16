@@ -28,10 +28,10 @@
       "api": "AVFoundation `AVAudioPlayer`（`initWithData:`。`AVPlayer` は KVO が要るため不採用）",
       "perm": "不要。App Sandbox なしで追加の entitlement 不要。ネットワーク再生も Sandbox が無いため制限なし",
       "url": "https://developer.apple.com/documentation/avfoundation/avplayer",
-      "note": "実装済み（旧 #267）。範囲は同梱 WAV（実行時に生成する 5 秒の固定音）の再生・一時停止・停止・位置・長さのみ（動画・バックグラウンド再生・シーク・ネットワーク再生は範囲外）。結果は成功（再生中・最後まで再生）、利用者の一時停止・停止（失敗ではない）、失敗（デコード失敗・期限切れ・非対応）を分けて表示する。窓が背面でも再生は続き、終了時に止める。守る範囲: 1 プロセス内の操作順、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: 位置表示のポーリング間隔ぶんの遅れ、他アプリの音声との混ざり（`AVAudioSession` を触らない）、複数プロセス間。Mac 実機の目視は旧 #266 で行う。",
+      "note": "実装済み（#267）。範囲は同梱 WAV（実行時に生成する 5 秒の固定音）の再生・一時停止・停止・位置・長さのみ（動画・バックグラウンド再生・シーク・ネットワーク再生は範囲外）。結果は成功（再生中・最後まで再生）、利用者の一時停止・停止（失敗ではない）、失敗（デコード失敗・期限切れ・非対応）を分けて表示する。窓が背面でも再生は続き、終了時に止める。守る範囲: 1 プロセス内の操作順、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: 位置表示のポーリング間隔ぶんの遅れ、他アプリの音声との混ざり（`AVAudioSession` を触らない）、複数プロセス間。Mac 実機の目視は #266 で行う。",
       "detail": "できている（Mac 目視待ち）",
-      "implStatus": "Mac 目視待ち（旧 #266）",
-      "impl": "crates/fandhe-egui-proxy/src/device/apple_media_playback.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_media_playback.m + crates/fandhe-egui-proxy/src/device/media_playback.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/media_playback.rs、旧 Issue #267"
+      "implStatus": "Mac 目視待ち（#266）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_media_playback.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_media_playback.m + crates/fandhe-egui-proxy/src/device/media_playback.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/media_playback.rs、Issue #267"
     },
     "windows": {
       "status": "possible",
