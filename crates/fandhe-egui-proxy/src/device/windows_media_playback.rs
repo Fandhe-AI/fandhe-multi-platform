@@ -79,9 +79,14 @@ struct Shared {
     intent: Intent,
     position_ms: Option<u64>,
     duration_ms: Option<u64>,
-    /// 再生要求の発行数と、ワーカーが処理した数（`play_progress` で呼び出し側へ渡す）。
+    /// 再生要求の発行数、ワーカーが `Play()` を呼んだ数、再生開始を確認した数。
+    /// `play_progress` は（発行数, 確認数）を渡す。確認は現世代の新しい `PLAYING` 通知か、
+    /// `Play()` 直前にエンジンが既に再生中（`IsPaused()` が偽）だった場合の実状態の読み取りだけで進める。
+    /// 一時停止が効かず再生が続いていると、`PLAYING` が来ない可能性があるため後者で確定する
+    /// （嘘の成功にも、実際は再生中なのに Timeout にもならない側へ倒す）。
     play_issued: u64,
     play_applied: u64,
+    play_confirmed: u64,
 }
 
 impl Shared {
@@ -95,6 +100,7 @@ impl Shared {
             duration_ms: None,
             play_issued: 0,
             play_applied: 0,
+            play_confirmed: 0,
         }
     }
 
@@ -186,6 +192,8 @@ impl Shared {
                 // Failed からは遷移しない（遅れて届いた PLAYING が失敗を上書きしない）。
                 if self.intent == Intent::Play && !matches!(self.phase, PlaybackPhase::Failed(_)) {
                     self.phase = PlaybackPhase::Playing;
+                    // ワーカーが `Play()` を呼んだ後の通知だけが確認になる（それ以前の古い通知は数えない）。
+                    self.play_confirmed = self.play_applied;
                 }
             }
             Ev::Ended => {
@@ -195,6 +203,18 @@ impl Shared {
                 }
             }
             Ev::Error(code) => self.phase = PlaybackPhase::Failed(failure_from_err(code)),
+        }
+    }
+
+    /// ワーカーが `Play()` を処理した。`already_playing` は呼ぶ前にエンジンが再生中だった場合で、
+    /// この時は `PLAYING` が再度届かないため実状態で確認済みにする。
+    fn on_play_applied(&mut self, gen: u64, already_playing: bool) {
+        self.play_applied += 1;
+        if already_playing && self.check(gen).is_ok() && self.intent == Intent::Play {
+            self.play_confirmed = self.play_applied;
+            if !matches!(self.phase, PlaybackPhase::Failed(_)) {
+                self.phase = PlaybackPhase::Playing;
+            }
         }
     }
 
@@ -370,7 +390,7 @@ mod win {
         }
 
         fn play_progress(&self) -> Option<(u64, u64)> {
-            with_shared(|s| Some((s.play_issued, s.play_applied)))
+            with_shared(|s| Some((s.play_issued, s.play_confirmed)))
         }
 
         fn shutdown(&self) {
@@ -591,20 +611,31 @@ mod win {
         let (Cmd::Play(g) | Cmd::Pause(g) | Cmd::Stop(g)) = *c else {
             return;
         };
+        let mut already_playing = false;
         if let Some((eg, e)) = engine.as_ref().filter(|(eg, _)| *eg == g) {
             let eg = *eg;
+            if matches!(c, Cmd::Play(_)) {
+                already_playing = !is_paused(e);
+            }
             if drive(e, c).is_ok() {
                 with_shared(|s| s.on_done(eg));
             } else {
                 with_shared(|s| s.fail(eg, PlaybackFailure::Internal));
                 // 失敗確定時は対象世代のエンジンを Shutdown する（音声が続かない）。
                 release_failed(engine, eg);
+                already_playing = false;
             }
         }
         if matches!(c, Cmd::Play(_)) {
-            // 対象エンジンの有無に関わらず処理済みとして数える（呼び出し側の待ちを残さない）。
-            with_shared(|s| s.play_applied += 1);
+            // 対象エンジンの有無に関わらず処理済みとして数える（確認は PLAYING か実状態でのみ進む）。
+            with_shared(|s| s.on_play_applied(g, already_playing));
         }
+    }
+
+    #[allow(unsafe_code)]
+    fn is_paused(engine: &IMFMediaEngineEx) -> bool {
+        // SAFETY: 生存中のエンジンの読み取り（ワーカーからのみ）。
+        unsafe { engine.IsPaused() }.as_bool()
     }
 
     fn worker(rx: mpsc::Receiver<Cmd>, tx: mpsc::Sender<Cmd>) {
@@ -768,12 +799,61 @@ mod tests {
     }
 
     #[test]
-    fn play_progress_counts_issued_and_applied() {
+    fn play_progress_counts_issued_and_confirmed() {
         let (mut s, g) = loaded();
         s.on_play(g).unwrap();
         s.on_pause(g).unwrap();
         s.on_play(g).unwrap();
-        assert_eq!((s.play_issued, s.play_applied), (2, 0));
+        assert_eq!((s.play_issued, s.play_confirmed), (2, 0));
+    }
+
+    /// Pause と Play をワーカー処理前に続けて発行しても、新しい PLAYING までは再開を確認しない。
+    #[test]
+    fn resume_is_confirmed_only_by_fresh_playing() {
+        let (mut s, g) = loaded();
+        s.on_event(g, Ev::CanPlay);
+        s.on_play(g).unwrap();
+        s.on_play_applied(g, false);
+        s.on_event(g, Ev::Playing);
+        assert_eq!((s.play_issued, s.play_confirmed), (1, 1));
+        // ワーカー処理前に Pause → Play。意図は Play なので Pause の on_done は Paused にしない。
+        s.on_pause(g).unwrap();
+        s.on_play(g).unwrap();
+        s.on_done(g);
+        assert_eq!(s.phase, PlaybackPhase::Playing);
+        // Play() が戻っただけでは確認済みにならない（ドライバの resume_gate は外れない）。
+        s.on_play_applied(g, false);
+        assert_eq!((s.play_issued, s.play_confirmed), (2, 1));
+        // 新しい PLAYING で確認される。
+        s.on_event(g, Ev::Playing);
+        assert_eq!((s.play_issued, s.play_confirmed), (2, 2));
+    }
+
+    /// PLAYING が来ないと確認されず、ドライバ側の開始期限で Timeout になる。
+    #[test]
+    fn resume_without_playing_stays_unconfirmed() {
+        let (mut s, g) = loaded();
+        s.on_play(g).unwrap();
+        s.on_play_applied(g, false);
+        s.on_event(g, Ev::Playing);
+        s.on_pause(g).unwrap();
+        s.on_play(g).unwrap();
+        s.on_play_applied(g, false);
+        assert!(s.play_confirmed < s.play_issued);
+    }
+
+    /// 一時停止が効かず再生中のまま Play を受けたときは、実状態で確認する。
+    #[test]
+    fn resume_while_still_playing_is_confirmed_by_state() {
+        let (mut s, g) = loaded();
+        s.on_play(g).unwrap();
+        s.on_play_applied(g, false);
+        s.on_event(g, Ev::Playing);
+        s.on_pause(g).unwrap();
+        s.on_play(g).unwrap();
+        s.on_play_applied(g, true);
+        assert_eq!((s.play_issued, s.play_confirmed), (2, 2));
+        assert_eq!(s.phase, PlaybackPhase::Playing);
     }
 
     #[test]
