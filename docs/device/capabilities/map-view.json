@@ -25,11 +25,14 @@
       "detail": "できない（Google Maps SDK が GMS 必須・API キー必須。OS 標準の地図 API は無い）"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "MapKit（`MKMapSnapshotter`）",
       "perm": "不要（現在地表示を重ねる場合のみ CoreLocation の権限が別途必要）",
       "url": "https://developer.apple.com/documentation/mapkit/mkmapsnapshotter",
-      "note": "未実装。iOS と同じ ObjC + `extern \"C\"` 経路（`NSImage` → RGBA）。App Sandbox 無しの素の実行体を Info.plist 入り .app で包む形でも追加の権限は要らない見込み（実機未検証）。iOS 側の橋渡しをほぼ流用できる"
+      "note": "固定 480x320 の静止画を `MKMapSnapshotter` で 1 枚取得し RGBA に変換して描く（プリセット 3 地点・15 秒の期限・オフラインの事前判定）。守る範囲: 1 プロセス・1 画面の順序、結果は 1 回きり、画像なし・0 寸法・エラー付きを成功にしない、資源の解放、座標をログへ出さない。守らない範囲: タイルの内容と鮮度、Apple 側のレート制限、複数プロセス、背景にいる間の取得。既知の天井: オンラインなのに空タイルが返る場合は合図が無い。素の実行体でタイルを取れるかは #272 で確かめる。帰属表示は固定文言のみで、ストア配布の前に HIG・規約を人が確認する",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#272）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_map_view.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_map_view.m + crates/fandhe-egui-proxy/src/device/map_view.rs + crates/fandhe-core/src/screens/map_view_show.rs + crates/fandhe-device/src/map_view.rs、Issue #273"
     },
     "windows": {
       "status": "no",
