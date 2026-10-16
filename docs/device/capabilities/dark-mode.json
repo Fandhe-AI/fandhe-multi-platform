@@ -41,7 +41,8 @@
       "note": "実装済み（部分）。`crates/fandhe-egui-proxy/src/text_role.rs` が `StyledText` の役割色のみトークンのダーク差分へ追従（旧#813）",
       "sourceName": [
         "ダークモード追従"
-      ]
+      ],
+      "implStatus": "一部実装（実機未確認）"
     },
     "windows": {
       "status": "done",
@@ -52,7 +53,8 @@
       "note": "実装済み（部分）。macOS と同じく `text_role.rs` 経由で `StyledText` の役割色のみ追従（旧#813）",
       "sourceName": [
         "ダークモード追従"
-      ]
+      ],
+      "implStatus": "一部実装（実機未確認）"
     },
     "web": {
       "status": "done",
@@ -64,7 +66,8 @@
       "note": "`RenderMode::Canvas`（既定、egui 描画）は `text_role.rs` 経由で `StyledText` の役割色が egui の `dark_mode` に追従する。`fandhe-web-dom` の DOM 出力（`RenderMode::Dom`）はテーマ配線を持たず未対応",
       "sourceName": [
         "ダークモード追従"
-      ]
+      ],
+      "implStatus": "一部実装（実機未確認）"
     }
   },
   "note": "`crates/fandhe-egui-proxy/src/text_role.rs` が egui の `ui.visuals().dark_mode` を見て `ThemeVariant` を切り替え、`platform_dark_overrides`（`fandhe-core/src/token/platform_theme.rs`）のダーク差分を適用する（旧#813、親 旧#811）。対象は `Node::StyledText` の役割色のみで、UI 全体のトークン適用は未配線。Web は Canvas 描画（既定）ならこの経路に乗るが、`fandhe-web-dom` の DOM 出力はテーマ配線を持たない"

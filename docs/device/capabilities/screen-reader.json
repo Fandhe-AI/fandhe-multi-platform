@@ -35,7 +35,8 @@
     "macos": {
       "status": "done",
       "detail": "できている（実機）",
-      "verified": true
+      "verified": true,
+      "implStatus": "実装済み・実機確認済み"
     },
     "windows": {
       "status": "done",

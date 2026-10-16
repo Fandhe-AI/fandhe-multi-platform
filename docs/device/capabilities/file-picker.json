@@ -11,7 +11,7 @@
       "api": "UIKit（`UIDocumentPickerViewController`）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uidocumentpickerviewcontroller",
-      "note": "実装済み（旧#873、案 B）。`asCopy:YES` + `UTTypeData`（フォルダを除外するため `UTTypeItem` ではない）で任意ファイルを選択。読み取り・8 MiB 判定は `fandhe_device::file_picker::read_picked` に一本化し、OS 側（ObjC）は提示とパス通知のみ。iPhone 15 で確認済み（2026-09-15: 選ぶ / キャンセル / 8 MiB 超のエラー / ダークモード切替中・回転中に picker を開いても結果が届く）",
+      "note": "実装済み（旧#873、案 B）。`asCopy:YES` + `UTTypeData`（フォルダを除外するため `UTTypeItem` ではない）で任意ファイルを選択。読み取り・8 MiB 判定は `fandhe_device::file_picker::read_picked` に一本化し、OS 側（ObjC）は提示とパス通知のみ。iOS 実機で確認済み（2026-09-15: 選ぶ / キャンセル / 8 MiB 超のエラー / ダークモード切替中・回転中に picker を開いても結果が届く）",
       "sourceName": [
         "ファイル共有（他アプリからの選択）"
       ],
@@ -27,7 +27,7 @@
       "api": "Storage Access Framework（`Intent.ACTION_OPEN_DOCUMENT` / `ACTION_CREATE_DOCUMENT`）",
       "perm": "なし（scoped storage 前提。全ファイルアクセス権限は使わない）",
       "url": "https://developer.android.com/training/data-storage/shared/documents-files",
-      "note": "実装済み（旧#874、案 B・改訂 2・改訂 4）。`ActivityResultContracts.OpenDocument`（`ACTION_OPEN_DOCUMENT`、`*/*`）で開き、選択後は `ParcelFileDescriptor.detachFd()` で所有権を渡した生 fd と表示名のみを Rust へ渡す（`/proc/self/fd/N` の再 open は pipe 型プロバイダで失敗し得るため使わない）。8 MiB 判定・読み取りは `fandhe_device::file_picker::read_picked_from` に一本化（Java 側に読み取りループを持たない、fd は Rust 側で 1 回だけ close）。`FilePicker` trait は通さず、コアの画面状態機械へプロセス内一意な `request_id` 照合で直接書き戻す（`fandhe-web-dom` と同型。OS へ渡す ID は画面の generation ではなく `request_id`）。**pull 型**（改訂 4）: Rust 側 `bridge` は sender も画面の generation も保持せず、OS からの結果を置くだけ。反映は毎フレームその時点の画面状態から観測して行うため、Activity 再生成で画面・チャンネルが作り直されても sender の引き継ぎ自体が不要（`camera`/`tts` の同型の課題は別 issue 旧#881）。キャンセルは `Ok(None)`。固定タイムアウト無し（OS がコールバックしないケースは `Picking` のまま残る既知の天井）。`camera`/`tts` は 旧#881 で doc 化に決定（Java 側が再生成時に中断決着させるため pull 型へ寄せる利得が無い）。Pixel 10a で確認済み（2026-09-15: 選ぶ / キャンセル / 8 MiB 超のエラー / ダークモード切替中・回転中に picker を開いても結果が届く）",
+      "note": "実装済み（旧#874、案 B・改訂 2・改訂 4）。`ActivityResultContracts.OpenDocument`（`ACTION_OPEN_DOCUMENT`、`*/*`）で開き、選択後は `ParcelFileDescriptor.detachFd()` で所有権を渡した生 fd と表示名のみを Rust へ渡す（`/proc/self/fd/N` の再 open は pipe 型プロバイダで失敗し得るため使わない）。8 MiB 判定・読み取りは `fandhe_device::file_picker::read_picked_from` に一本化（Java 側に読み取りループを持たない、fd は Rust 側で 1 回だけ close）。`FilePicker` trait は通さず、コアの画面状態機械へプロセス内一意な `request_id` 照合で直接書き戻す（`fandhe-web-dom` と同型。OS へ渡す ID は画面の generation ではなく `request_id`）。**pull 型**（改訂 4）: Rust 側 `bridge` は sender も画面の generation も保持せず、OS からの結果を置くだけ。反映は毎フレームその時点の画面状態から観測して行うため、Activity 再生成で画面・チャンネルが作り直されても sender の引き継ぎ自体が不要（`camera`/`tts` の同型の課題は別 issue 旧#881）。キャンセルは `Ok(None)`。固定タイムアウト無し（OS がコールバックしないケースは `Picking` のまま残る既知の天井）。`camera`/`tts` は 旧#881 で doc 化に決定（Java 側が再生成時に中断決着させるため pull 型へ寄せる利得が無い）。Android 実機で確認済み（2026-09-15: 選ぶ / キャンセル / 8 MiB 超のエラー / ダークモード切替中・回転中に picker を開いても結果が届く）",
       "sourceName": [
         "任意ファイル選択・保存"
       ],
@@ -75,6 +75,6 @@
       "impl": "`crates/fandhe-web-dom/src/file_picker.rs` + `crates/fandhe-web-dom/src/mount.rs`（`mount_with_effect`）、Issue 旧#875"
     }
   },
-  "note": "デスクトップ 2 OS は 旧#872 で実装済み（macOS は `rfd`、Windows は PowerShell 子プロセス）。Web は 旧#879 で実装済み（`<input type=\"file\">` 配線）。Android は 旧#878、iOS は 旧#877（いずれも案 B・pull 型 bridge）で実装済み（09-15 に iPhone 15 / Pixel 10a で実機確認済み）。公開 API は 5 OS とも存在確認済み: iOS `UIDocumentPickerViewController`、Android `Intent.ACTION_OPEN_DOCUMENT`（SAF、GameActivity から追加コード無しで到達可能。本表 Android 欄）、macOS `NSOpenPanel`/`NSSavePanel`、Windows `FileOpenPicker`/`IFileOpenDialog`、Web `showOpenFilePicker`（Safari 等 非対応環境は `<input type=\"file\">` へフォールバック。本表 Web 欄）。橋渡し経路はカメラ撮影（iOS `extern \"C\"`・Android Intent）と同型で新規に確立する必要あり",
+  "note": "デスクトップ 2 OS は 旧#872 で実装済み（macOS は `rfd`、Windows は PowerShell 子プロセス）。Web は 旧#879 で実装済み（`<input type=\"file\">` 配線）。Android は 旧#878、iOS は 旧#877（いずれも案 B・pull 型 bridge）で実装済み（09-15 に iOS・Android の実機で確認済み）。公開 API は 5 OS とも存在確認済み: iOS `UIDocumentPickerViewController`、Android `Intent.ACTION_OPEN_DOCUMENT`（SAF、GameActivity から追加コード無しで到達可能。本表 Android 欄）、macOS `NSOpenPanel`/`NSSavePanel`、Windows `FileOpenPicker`/`IFileOpenDialog`、Web `showOpenFilePicker`（Safari 等 非対応環境は `<input type=\"file\">` へフォールバック。本表 Web 欄）。橋渡し経路はカメラ撮影（iOS `extern \"C\"`・Android Intent）と同型で新規に確立する必要あり",
   "capture": "captures/file-picker.png"
 }

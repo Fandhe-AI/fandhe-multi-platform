@@ -42,7 +42,8 @@
       ],
       "detail": "できている（実機、スキャンのみ。接続は対象外）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_bluetooth_le.m + crates/fandhe-egui-proxy/src/device/apple_bluetooth_le.rs + crates/fandhe-egui-proxy/src/device/bluetooth_le.rs + crates/fandhe-device/src/bluetooth_le.rs、Issue 旧#1060"
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_bluetooth_le.m + crates/fandhe-egui-proxy/src/device/apple_bluetooth_le.rs + crates/fandhe-egui-proxy/src/device/bluetooth_le.rs + crates/fandhe-device/src/bluetooth_le.rs、Issue 旧#1060",
+      "verified": true
     },
     "windows": {
       "status": "done",

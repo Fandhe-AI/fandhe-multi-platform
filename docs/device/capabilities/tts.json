@@ -14,7 +14,7 @@
       "api": "AVFoundation（`AVSpeechSynthesizer`）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/avfoundation/avspeechsynthesizer",
-      "note": "実装済み（旧#866）。`AVSpeechSynthesizer` を ObjC + `extern \"C\"` で橋渡し（`fandhe_ios_clipboard.m` と同型）。VoiceOver（スクリーンリーダー）とは別 API で、画面の読み上げではなくアプリが指定した文字列の発話。iPhone 15 で確認済み（2026-09-15: 読み上げ / 発話中の停止 / 空文字のエラー）",
+      "note": "実装済み（旧#866）。`AVSpeechSynthesizer` を ObjC + `extern \"C\"` で橋渡し（`fandhe_ios_clipboard.m` と同型）。VoiceOver（スクリーンリーダー）とは別 API で、画面の読み上げではなくアプリが指定した文字列の発話。iOS 実機で確認済み（2026-09-15: 読み上げ / 発話中の停止 / 空文字のエラー）",
       "sourceName": [
         "読み上げ（TTS、任意テキストの音声合成）"
       ],
@@ -28,7 +28,7 @@
       "api": "`TextToSpeech`（`android.speech.tts`）",
       "perm": "なし",
       "url": "https://developer.android.com/reference/android/speech/tts/TextToSpeech",
-      "note": "実装済み（旧#866）。`MainActivity.ttsRequest` が `runOnUiThread` で `TextToSpeech` を操作し、非同期初期化（`OnInitListener`）完了を待ってから発話・停止を `nativeOnTtsResult` で Rust 側 mailbox へ返す（初期化未完了時に偽の成功を返さない設計）。TalkBack（スクリーンリーダー、上表の該当行）とは別 API で、画面の読み上げではなくアプリが指定した文字列の発話。再生成中の発話は `onDestroy` が確定させ、新画面には『読み上げました』が出ない既知の天井（旧#881）。Pixel 10a で確認済み（2026-09-15: 読み上げ / 発話中の停止 / 空文字のエラー）",
+      "note": "実装済み（旧#866）。`MainActivity.ttsRequest` が `runOnUiThread` で `TextToSpeech` を操作し、非同期初期化（`OnInitListener`）完了を待ってから発話・停止を `nativeOnTtsResult` で Rust 側 mailbox へ返す（初期化未完了時に偽の成功を返さない設計）。TalkBack（スクリーンリーダー、上表の該当行）とは別 API で、画面の読み上げではなくアプリが指定した文字列の発話。再生成中の発話は `onDestroy` が確定させ、新画面には『読み上げました』が出ない既知の天井（旧#881）。Android 実機で確認済み（2026-09-15: 読み上げ / 発話中の停止 / 空文字のエラー）",
       "sourceName": [
         "読み上げ（TTS、任意テキストの音声合成）"
       ],

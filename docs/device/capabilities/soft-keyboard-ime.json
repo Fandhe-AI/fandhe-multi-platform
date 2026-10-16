@@ -31,20 +31,23 @@
         "ソフトキーボード入力",
         "ソフトキーボード入力（`GameTextInput`）"
       ],
-      "implStatus": "実装済み",
+      "implStatus": "実装済み・実機確認済み",
       "impl": "旧#794 / 旧#797 / 旧#799"
     },
     "macos": {
       "status": "done",
-      "detail": "できている（未確認）"
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）"
     },
     "windows": {
       "status": "done",
-      "detail": "できている（未確認）"
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）"
     },
     "web": {
       "status": "done",
-      "detail": "できている（未確認）"
+      "detail": "できている（未確認）",
+      "implStatus": "実装済み（実機未確認）"
     }
   },
   "note": "PR 旧#799（iOS）・PR 旧#797（Android）、旧#794 で実機 OK・closed（09-07）"

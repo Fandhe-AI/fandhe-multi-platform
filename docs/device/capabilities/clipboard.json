@@ -12,7 +12,7 @@
       "api": "UIKit（`UIPasteboard`）/ UIKit（`UIPasteControl`）",
       "perm": "Info.plist キーは不要。ただし iOS 16 以降、他アプリがコピーした内容を `UIPasteboard.general.string` 等でプログラムから読むと実行時に許可アラートが出て、拒否されると読み取れない",
       "url": "https://developer.apple.com/documentation/uikit/uipastecontrol",
-      "note": "実装済み（旧#859）。`UIPasteboard` を ObjC + `extern \"C\"` で橋渡し。型サンプルは自アプリで書いて自アプリで読む往復のため、iOS 16 以降の許可アラートに阻まれずデモできる。iPhone 15 で確認済み（2026-09-15: 往復 / 他アプリへ / 他アプリから / 空）",
+      "note": "実装済み（旧#859）。`UIPasteboard` を ObjC + `extern \"C\"` で橋渡し。型サンプルは自アプリで書いて自アプリで読む往復のため、iOS 16 以降の許可アラートに阻まれずデモできる。iOS 実機で確認済み（2026-09-15: 往復 / 他アプリへ / 他アプリから / 空）",
       "sourceName": [
         "クリップボード読み書き"
       ],
@@ -26,7 +26,7 @@
       "api": "`ClipboardManager`",
       "perm": "なし",
       "url": "https://developer.android.com/develop/ui/views/user-interaction/copy-paste",
-      "note": "実装済み（旧#859）。`MainActivity.clipboardRequest` が `runOnUiThread` で `ClipboardManager` を操作し、`nativeOnClipboardResult` で Rust 側 mailbox へ返す（`android_main` は UI スレッドと別のため往復にする）。Pixel 10a で確認済み（2026-09-15: 往復 / 他アプリへ / 他アプリから / 空）",
+      "note": "実装済み（旧#859）。`MainActivity.clipboardRequest` が `runOnUiThread` で `ClipboardManager` を操作し、`nativeOnClipboardResult` で Rust 側 mailbox へ返す（`android_main` は UI スレッドと別のため往復にする）。Android 実機で確認済み（2026-09-15: 往復 / 他アプリへ / 他アプリから / 空）",
       "sourceName": [
         "クリップボード"
       ],

@@ -40,7 +40,8 @@
       "note": "実装済み（旧#1091）。`NSHapticFeedbackManager.defaultPerformer` の `perform`（Generic）を ObjC から C ABI で 1 回呼ぶ。`@autoreleasepool` の内側で、performer の取得・判定・実行を main スレッド上で同期に行う（effect は egui の update = main から呼ぶ。main 以外から呼ばれたら AppKit に触れず `Internal`）。performer を取れないときは `Internal`。`perform` は戻り値が無く、Force Touch トラックパッド以外では何も起きずそれを検知できないため、`Ok` は「要求を渡した」止まりで画面も「振動を要求しました」と表示する（`Unsupported` は返さない）。守る範囲: 1 プロセス内で要求を渡す順序・失敗を成功と見せないこと。守らない範囲: 実際に触覚が出たか・連打時の体感（OS 任せ）。Mac 目視（10/6）: ボタン押下で「振動を要求しました」と表示され、Force Touch トラックパッドに弱い触覚が来ることを確認（押し込みのクリック感に紛れて分かりづらい。egui のボタンは指を離したときに反応するため、触覚が出る時点で指が離れかけている可能性がある）。失敗系（performer を取れない）は通常の Mac では再現できず未確認",
       "detail": "できている（実機、触覚は弱く分かりづらい）",
       "implStatus": "実装済み・実機確認済み（失敗系は未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_haptics.m + crates/fandhe-egui-proxy/src/device/apple_haptics.rs + crates/fandhe-egui-proxy/src/device/haptics.rs + crates/fandhe-core/src/screens/haptics_tap.rs、Issue 旧#1091"
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_haptics.m + crates/fandhe-egui-proxy/src/device/apple_haptics.rs + crates/fandhe-egui-proxy/src/device/haptics.rs + crates/fandhe-core/src/screens/haptics_tap.rs、Issue 旧#1091",
+      "verified": true
     },
     "windows": {
       "status": "done",
