@@ -76,6 +76,17 @@ struct Session {
 
 static SESSION: std::sync::OnceLock<Session> = std::sync::OnceLock::new();
 
+/// Activity 再生成時（`android_main` の再実行）に、ドライバの処理済み記録を破棄する。
+/// 画面状態は `default()`（世代 0）に戻るため、完了後も残る記録（世代 1）を残すと次の
+/// 「推論する」が発送されず飲み込まれる。古いワーカーの結果は古いアプリのチャネルへ届くので
+/// 新しい画面には適用されない。走っている OS 呼び出しは止めず走り切らせる。
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub(crate) fn reset_pending_tracking() {
+    if let Some(s) = SESSION.get() {
+        *s.inflight.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+}
+
 /// `DeviceError` を画面の失敗種別へ写す。内部識別子・OS コードは画面にもログにも出さず、
 /// 上記以外は固定文言にする（security.md A09）。
 pub(crate) fn to_failure(e: DeviceError) -> InferFailure {
@@ -394,6 +405,21 @@ mod tests {
             n += 1;
         }
         assert_eq!(n, 2);
+    }
+
+    #[test]
+    fn reset_lets_a_fresh_screen_dispatch_again() {
+        let (sender, rx) = channel();
+        let imp = fake(|| Ok(24.0));
+        let session = Session::default();
+        *session.inflight.lock().unwrap() = Some((1, Instant::now()));
+        let mut state = MlInferState::default();
+        request_infer(&mut state, MlModelChoice::Valid);
+        drive(&state, &sender, &imp, &session, Duration::from_secs(30));
+        assert!(rx.try_recv().is_err(), "記録が残ると飲み込まれる");
+        *session.inflight.lock().unwrap() = None;
+        drive(&state, &sender, &imp, &session, Duration::from_secs(30));
+        assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok());
     }
 
     #[test]

@@ -318,6 +318,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // （`device::live_activity::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::live_activity::reset_pending_tracking();
+    // Issue #292: 機械学習推論の処理済み世代も破棄する。画面状態は再生成で generation 0 に戻るため、
+    // 残すと次の「推論する」が飲み込まれる（`device::ml_inference::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::ml_inference::reset_pending_tracking();
 
     let native_options = eframe::NativeOptions {
         android_app: Some(app),
