@@ -185,6 +185,9 @@
 //! - `ios/fandhe_ios_file_watch.m`（Issue #1412、`open(O_EVTONLY)` + `DISPATCH_SOURCE_TYPE_VNODE` による
 //!   フォルダの変更監視）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/ios_file_watch.rs` から呼ばれる契約）。libdispatch は libSystem 内で追加リンクは無い。
+//! - `ios/fandhe_ios_call_ui.m`（Issue #277、`CXProvider`（CallKit）による疑似着信）は **iOS 分岐のみ**で
+//!   feature `device` 有効時にコンパイルする（`src/device/ios_call_ui.rs` から呼ばれる契約）。
+//!   CallKit を追加でリンクする。
 //! - `ios/fandhe_ios_scene.m`（Issue #27、UIScene 化シム）は **iOS 分岐のみ**で feature・計測ビルドに
 //!   関係なく常にコンパイルする（Info.plist の `UIApplicationSceneManifest` が参照するため）。
 //! - `ios/fandhe_ios_multi_display.m`（Issue #27、scene の `UIScreen` による複数ディスプレイ）は
@@ -418,6 +421,8 @@ fn main() {
     compile_ios_file_watch();
     // `ios/fandhe_ios_multi_display.m`（Issue #27）。iOS 分岐のみ。
     compile_ios_multi_display();
+    // `ios/fandhe_ios_call_ui.m`（Issue #277）。iOS 分岐のみ（macOS は対応表で no）。
+    compile_ios_call_ui();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_midi.m`（Issue #1398 macOS + #1399 iOS）も共用する。CoreMIDI を使う。
@@ -975,6 +980,17 @@ fn compile_ios_compass() {
         .file("ios/fandhe_ios_compass.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_compass");
+}
+
+/// `ios/fandhe_ios_call_ui.m` を `cc` でコンパイルし CallKit をリンクする（Issue #277）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_call_ui.rs` が使う）。
+fn compile_ios_call_ui() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_call_ui.m");
+    println!("cargo:rustc-link-lib=framework=CallKit");
+    cc::Build::new()
+        .file("ios/fandhe_ios_call_ui.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_call_ui");
 }
 
 /// `ios/fandhe_ios_file_watch.m` を `cc` でコンパイルする（Issue #1412）。**iOS 分岐のみ**

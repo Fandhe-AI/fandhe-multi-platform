@@ -7,14 +7,17 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "CallKit（`CXProvider` / `CXProviderDelegate` / `CXCallController`）",
-      "perm": "CallKit 単体では entitlement 不要と見込む（未確認）。PushKit で VoIP push を受ける場合のみ Push Notifications capability + Background Modes の Voice over IP",
+      "perm": "Apple の文書に CallKit 単体の entitlement の記載は無く、Info.plist のキーも追加していない。Background Modes の `voip` は付けていない。`unentitled` が出たら失敗として表示し、実機確認（#275）で判断する",
       "url": "https://developer.apple.com/documentation/callkit/cxprovider",
-      "note": "未実装。CXProvider は iOS 10+、アプリで 1 インスタンスを保持（Apple 記載）。`reportNewIncomingCall` で着信 UI、`CXProviderDelegate` で応答 / 終了を受けるため、delegate の結果を Rust へ返す継続配信寄りの経路が要る。通話音声の `AVAudioSession` は CallKit からの activate に合わせる。着信 UI は実機でのみ確認可能",
+      "note": "実装済み（Issue #277）。`CXProvider` の `reportNewIncomingCall` で OS の着信画面を出し、delegate の結果を main queue から Rust へ返す。受理（completion が error なし）を確認してから Ringing を通知する。拒否・終了・応答なしは失敗にしない。報告エラーは `CXErrorCodeIncomingCallError` の全コードを写像し、おやすみモード・ブロックリスト・制限共有モード・保護された通話・センシティブな参加者は Disallowed、それ以外（unknown・unentitled・UUID 重複・未知のコード）は Failed。取り消しや差し替えの後に遅れて届いた受理は通知せず OS 側で閉じる。通話履歴には残さない。`AVAudioSession` には触れない。守る範囲は 1 プロセス内の順序・嘘の成功の禁止・`CXCall` の解放で、背景での通話継続・プロセス死・複数通話は守らない。審査上の注意として、中国 App Store では CallKit の無効化を求められた経緯がある（2018 年、Guideline 5.0）。ストア提出は範囲外。着信 UI は実機でのみ確認可能（#275）",
       "sourceName": [
         "通話 UI 統合"
-      ]
+      ],
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#275）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_call_ui.m + crates/fandhe-egui-proxy/src/device/ios_call_ui.rs + crates/fandhe-egui-proxy/src/device/call_ui.rs + crates/fandhe-core/src/screens/call_ui_show.rs + crates/fandhe-device/src/call_ui.rs、Issue #277"
     },
     "android": {
       "status": "done",
