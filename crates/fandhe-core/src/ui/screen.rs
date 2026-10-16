@@ -322,6 +322,9 @@ impl<S> Screen<S> {
     /// を `Node::Widget` として保持するものであり、`.text_field()` の後継ではない
     /// （両者は共存する）。
     ///
+    /// **egui・web-dom では描画されない**。画面で入力欄が要るなら `.text_field()` を使う
+    /// （扱いは #260）。
+    ///
     /// **未配線**: `render_headless` 等は `Node::Widget` を状態非依存のプレースホルダとして
     /// 扱う契約（[`super::widget::Widget::sync_from_state`] のドキュメンテーションコメント
     /// 参照）を維持する。入力イベント処理・`set` の実配線は未接続。`WidgetCatalog`

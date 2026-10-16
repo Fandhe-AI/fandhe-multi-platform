@@ -286,6 +286,7 @@ fn build_screen_via_impl_trait_builders() -> Screen<()> {
         .text("見出し")
         .text_field("label", get_string, set_string)
         .button(WidgetId::from_raw(1), "label", on_click)
+        // text_input は egui・web-dom で描画されない。入力欄が要る画面は上の text_field を使う（#74 / #260）。
         .text_input(WidgetId::from_raw(2), "label", get_string, set_string)
         .checkbox(WidgetId::from_raw(3), "label", get_bool, set_bool)
         .radio_button(WidgetId::from_raw(4), "label", 0, get_usize, set_usize)
@@ -352,7 +353,8 @@ assert_eq!(assert_iter(screen.iter()), 2);
 - `rgba_image(pixels, alt)`: `Node::RgbaImage` の糖衣構文（`S: 'static` 不要）
 - `label` 以降のウィジェット系ビルダーは `Node::Widget(Box<dyn Widget<S>>)` を組み立てる糖衣構文で、
   いずれも `where S: 'static` を要求する。第 1 引数は 2 系統に分かれる
-  - `id: WidgetId` を直接取るもの: `label` / `text_input` / `list_view` / `checkbox` /
+  - `id: WidgetId` を直接取るもの（`text_input` は egui・web-dom で描画されない。入力欄は `.text_field()` を使う）:
+    `label` / `text_input` / `list_view` / `checkbox` /
     `radio_button` / `toggle_switch` / `slider` / `progress_bar` / `spinner` / `image(_bound)` /
     `icon(_bound)` / `scroll_view` / `dialog` / `menu` / `tabs` / `tooltip`
   - 組み立て済みのコンテナ型を取るもの（`WidgetId` はコンストラクタ側へ渡す）:
