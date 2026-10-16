@@ -77,6 +77,8 @@
 //!   [`location`] と同じ理由で純関数（登録結果の分類・ハンドラ URL）のみ `wasm32` gate の外に置く
 //! - [`network_status`]: 「ネットワーク接続状態」画面の Web 経路（親 #1130、Issue #1285）。
 //!   純関数（`onLine` / `connection.type` → 表示値）のみ `wasm32` gate の外に置く
+//! - [`media_playback`]: 「音声の再生」画面の Web 経路（親 #86、Issue #271）。[`location`] と同じ理由で
+//!   純関数（`play()` 拒否の写像・位置の検証・期限・中断判定）のみ `wasm32` gate の外に置く
 //! - [`accessibility_prefs`]: 「アクセシビリティ設定の追従」画面の Web 経路（親 #1132、Issue #1311）。
 //!   純関数（`matchMedia` の結果 → 設定値・読み取り期限・dt）のみ `wasm32` gate の外に置く
 //! - [`screen_wake_lock`]: 「画面スリープの抑止」画面の Web 経路（親 #1129、Issue #1281）。
@@ -186,6 +188,9 @@ pub mod multi_display;
 /// 純関数（例外の `name` → 結果種別の対応・録音結果の検証・mime の決定）は native
 /// からもテストできるようクレート単位の `wasm32` gate を外す。
 pub mod mic_record;
+
+/// 型サンプル「音声の再生」の Web 経路（Issue #271）。純関数は native からもテストする。
+pub mod media_playback;
 
 /// 型サンプル「画面の録画・キャプチャ」の Web 経路（Issue #1338）。[`location`] と同じ理由で
 /// 純関数（例外の `name` → 結果種別・録画結果の検証）は native からもテストできるよう
