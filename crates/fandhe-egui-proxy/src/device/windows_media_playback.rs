@@ -79,6 +79,9 @@ struct Shared {
     intent: Intent,
     position_ms: Option<u64>,
     duration_ms: Option<u64>,
+    /// 再生要求の発行数と、ワーカーが処理した数（`play_progress` で呼び出し側へ渡す）。
+    play_issued: u64,
+    play_applied: u64,
 }
 
 impl Shared {
@@ -90,6 +93,8 @@ impl Shared {
             intent: Intent::Stop,
             position_ms: None,
             duration_ms: None,
+            play_issued: 0,
+            play_applied: 0,
         }
     }
 
@@ -124,10 +129,7 @@ impl Shared {
         if matches!(self.phase, PlaybackPhase::Failed(_)) {
             return Err(DeviceError::InvalidInput("media_playback failed"));
         }
-        // 一時停止がワーカーで未反映の間の Playing は前の再生の残り。再開の PLAYING まで Ready に戻す。
-        if self.intent == Intent::Pause && self.phase == PlaybackPhase::Playing {
-            self.phase = PlaybackPhase::Ready;
-        }
+        self.play_issued += 1;
         self.intent = Intent::Play;
         Ok(())
     }
@@ -367,6 +369,10 @@ mod win {
             with_shared(|s| s.snapshot())
         }
 
+        fn play_progress(&self) -> Option<(u64, u64)> {
+            with_shared(|s| Some((s.play_issued, s.play_applied)))
+        }
+
         fn shutdown(&self) {
             // reset と Shutdown 送信を同じ排他区間に置く（間に別の load が入らない）。
             let mut s = SHARED.lock().unwrap_or_else(|e| e.into_inner());
@@ -595,6 +601,10 @@ mod win {
                 release_failed(engine, eg);
             }
         }
+        if matches!(c, Cmd::Play(_)) {
+            // 対象エンジンの有無に関わらず処理済みとして数える（呼び出し側の待ちを残さない）。
+            with_shared(|s| s.play_applied += 1);
+        }
     }
 
     fn worker(rx: mpsc::Receiver<Cmd>, tx: mpsc::Sender<Cmd>) {
@@ -758,18 +768,12 @@ mod tests {
     }
 
     #[test]
-    fn play_during_unapplied_pause_drops_stale_playing() {
+    fn play_progress_counts_issued_and_applied() {
         let (mut s, g) = loaded();
-        s.on_event(g, Ev::CanPlay);
         s.on_play(g).unwrap();
-        s.on_event(g, Ev::Playing);
         s.on_pause(g).unwrap();
         s.on_play(g).unwrap();
-        assert_eq!(s.phase, PlaybackPhase::Ready, "前の Playing は残さない");
-        s.on_done(g); // 遅れて Pause が完了しても Paused にしない
-        assert_eq!(s.phase, PlaybackPhase::Ready);
-        s.on_event(g, Ev::Playing);
-        assert_eq!(s.phase, PlaybackPhase::Playing);
+        assert_eq!((s.play_issued, s.play_applied), (2, 0));
     }
 
     #[test]

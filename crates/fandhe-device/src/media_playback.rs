@@ -109,6 +109,12 @@ pub trait MediaPlayback: Send + Sync {
     fn stop(&self, generation: u64) -> Result<(), DeviceError>;
     /// 最新状態。
     fn snapshot(&self) -> PlaybackSnapshot;
+    /// 再生要求の進み具合 `(発行数, 実行済み数)`。`play` を非同期に実行する実装だけが `Some` を返し、
+    /// 呼び出し側は「実行済み数 >= 発行数」になるまで、前の `Playing` を新しい再生要求の成功と
+    /// みなさない。同期で反映する実装は `None`（既定）。
+    fn play_progress(&self) -> Option<(u64, u64)> {
+        None
+    }
     /// アプリ終了時の解放。冪等。
     fn shutdown(&self);
 }
