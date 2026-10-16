@@ -87,7 +87,6 @@ final class CallUiHelper {
 
     CallUiHelper(ComponentActivity activity) {
         this.activity = activity;
-        appContext = activity.getApplicationContext();
         this.permissionLauncher = activity.registerForActivityResult(
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
     }
@@ -181,6 +180,8 @@ final class CallUiHelper {
             nativeOnCallUiEvent(id, EVENT_FAILED);
             return;
         }
+        // コンストラクターは Activity.attach 前に呼ばれうるため、ここ（attach 後・main）で取る。
+        appContext = activity.getApplicationContext();
         // 前の通話はドライバが先に end 済みのため、残っていれば閉じてから差し替える。
         close(DisconnectCause.LOCAL);
         currentId = id;
