@@ -464,8 +464,8 @@ pub mod ios_pedometer;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_power_state;
-/// Issue #325: iOS 向け印刷のスタブ（#327 が `UIPrintInteractionController` で埋める）。`device/print.rs` の
-/// iOS 経路から呼ばれる。
+/// Issue #327: iOS 向け印刷実装（`ios/fandhe_ios_print.m` を呼ぶ C ABI ラッパー、`UIPrintInteractionController`）。
+/// `device/print.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_print;

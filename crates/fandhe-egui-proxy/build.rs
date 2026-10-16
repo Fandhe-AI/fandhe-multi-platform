@@ -58,6 +58,9 @@
 //! - `ios/fandhe_ios_compose_mail_sms.m`（Issue #1385、MessageUI によるメール・SMS 作成画面）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルし MessageUI をリンクする
 //!   （`src/device/ios_compose_mail_sms.rs` から呼ばれる契約）。
+//! - `ios/fandhe_ios_print.m`（Issue #327、`UIPrintInteractionController` による印刷シート）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_print.rs` から
+//!   呼ばれる契約）。UIKit は既存のリンクで足りる。
 //! - `apple/fandhe_apple_map_view.m`（Issue #273、`MKMapSnapshotter` による地図の静止画 1 枚の取得。
 //!   iOS 分岐も同じ実装）は `src/device/apple_map_view.rs` から呼ばれる契約。MapKit をリンクする。
 //! - `apple/fandhe_apple_photo_library.m`（Issue #1254、`PHPhotoLibrary` による画像 1 枚の保存）は
@@ -420,6 +423,8 @@ fn main() {
     compile_ios_power_state();
     // `ios/fandhe_ios_compose_mail_sms.m`（Issue #1385）。iOS 分岐のみ。
     compile_ios_compose_mail_sms();
+    // `ios/fandhe_ios_print.m`（Issue #327）。iOS 分岐のみ。
+    compile_ios_print();
     // `ios/fandhe_ios_device_info.m`（Issue #1305）。iOS 分岐のみ。
     compile_ios_device_info();
     // `ios/fandhe_ios_audio_devices.m`（Issue #1331）。iOS 分岐のみ。
@@ -980,6 +985,18 @@ fn compile_ios_compose_mail_sms() {
         .flag("-fobjc-arc")
         .compile("fandhe_ios_compose_mail_sms");
     println!("cargo:rustc-link-lib=framework=MessageUI");
+}
+
+/// `ios/fandhe_ios_print.m` を `cc` でコンパイルする（Issue #327）。**iOS 分岐のみ**から
+/// 呼ばれる（`src/device/ios_print.rs` が使う）。UIKit はリンク済み。
+fn compile_ios_print() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_print.m");
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_common.h");
+    cc::Build::new()
+        .file("ios/fandhe_ios_print.m")
+        .include("ios")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_print");
 }
 
 /// `ios/fandhe_ios_power_state.m` を `cc` でコンパイルする（Issue #1275）。**iOS 分岐のみ**
