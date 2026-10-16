@@ -213,10 +213,14 @@ int32_t fandhe_apple_calendar_add_event(uint64_t request_id, const char *title,
                   dispatch_async(FandheCalendarQueue(), ^{
                     @autoreleasepool {
                       int32_t code;
-                      if (error != nil) {
-                          code = 4;
-                      } else if (!granted) {
-                          code = 1;
+                      if (!granted) {
+                          // 拒否は error 付きでも返る。error ではなく実際の認可状態で判定する。
+                          // WriteOnly / FullAccess は許可済みなので拒否に含めない。
+                          EKAuthorizationStatus now =
+                              [EKEventStore authorizationStatusForEntityType:EKEntityTypeEvent];
+                          BOOL denied = now == EKAuthorizationStatusDenied ||
+                                        now == EKAuthorizationStatusRestricted;
+                          code = (denied || error == nil) ? 1 : 4;
                       } else {
                           code = FandheSaveEvent([[EKEventStore alloc] init], nsTitle, nsStart, nsEnd);
                       }
