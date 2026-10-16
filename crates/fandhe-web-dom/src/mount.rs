@@ -420,6 +420,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::screen_capture::release_mount(id);
         super::app_badge::release_mount(id);
         super::compose_mail_sms::release_mount(id);
+        super::print_page::release_mount(id);
         super::file_watch::release_mount(id);
         super::midi::release_mount(id);
         super::media_playback::release_mount(id);

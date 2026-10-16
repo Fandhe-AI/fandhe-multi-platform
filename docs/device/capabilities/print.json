@@ -38,12 +38,15 @@
       "note": "未実装。`EnumPrinters` の URL は 404 のため未確認"
     },
     "web": {
-      "status": "possible",
-      "api": "`window.print()`",
-      "perm": "なし",
+      "status": "done",
+      "api": "`window.print()`。`body` 直下の印刷用ブロックと、ブロック内の `@media print` でそのブロックだけを出す（`web-sys` 経由）",
+      "perm": "不要",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/print",
-      "safari": "Safari 対応（MDN は全主要ブラウザ対応と記載）",
-      "note": "MDN は Baseline（2023-06 から Widely available）。印刷されるのはページ全体で、描画 Canvas の印刷は CSS 側の調整が要る"
+      "safari": "MDN では全主要ブラウザが対応。実ブラウザでの確認は #324",
+      "note": "実装済み（#329）。固定の見出し 1 行と本文数行だけを印刷する。結果は `window.print()` が例外なく戻れば常に `Unconfirmed`（印刷したか・取り消したかをブラウザが返さない）で、`Submitted` / `Cancelled` には到達しない。`window` が無ければ非対応。例外とブロック作成の失敗は固定文言の失敗（例外の message は出さない）。モバイルブラウザは `print()` がすぐ戻るので、ブロックは次の要求か画面の破棄まで残す。守る範囲: 1 マウント内の要求と完了の順序、嘘の成功の禁止、ブロックの解放。守らない範囲: sandbox（`allow-modals` なし）やブラウザ設定で黙って無視される場合、紙に出たか、ブラウザごとの余白・書体・ヘッダーの差、複数タブ、egui-proxy の wasm canvas 経路（非対応のまま）",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#324）",
+      "impl": "crates/fandhe-web-dom/src/print_page.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/print_page.rs + crates/fandhe-device/src/print.rs、Issue #329"
     }
   },
   "note": "print は OS の印刷ダイアログを出す。今回の範囲: 固定の短い文章（見出し 1 行 + 本文数行）を 1 ページとして OS の印刷ダイアログに渡す。複数ページ・画像・PDF・プリンタ選択・進捗・紙に出たかの追跡は扱わない。結果の三値と守る範囲 / 守らない範囲は `fandhe_device::print` のモジュール doc を参照。"
