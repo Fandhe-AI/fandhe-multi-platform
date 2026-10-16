@@ -38,6 +38,7 @@ use fandhe_device::media_transcode::{
 };
 use fandhe_device::DeviceError;
 
+use super::request_slot::RequestSlot;
 use crate::app::CompletionSender;
 
 /// WAV のヘッダ長（入力の大きさの表示用）。
@@ -73,13 +74,38 @@ fn platform() -> Arc<dyn MediaTranscode> {
 }
 
 /// ドライバの可変状態。テストが並列で干渉しないよう static から切り出して引数で渡す。
-/// 進行中の要求の `(世代, 受付時刻)`。
-#[derive(Default)]
+///
+/// 要求 1 件の追跡（採番・二重発送防止・破棄）は共通部品 [`RequestSlot`] に任せる。
+/// `poll_and_finish` は通さない: 結果を置く側が OS コールバックではなく本ドライバ自身の
+/// ワーカーで、完了は `CompletionSender` へ直接 push できるため（pull にするとポーリングが増える）。
+/// 変換固有の期限管理（受付時刻と画面の世代）だけを `timing` に残す。
 struct Session {
-    inflight: Mutex<Option<(u64, Instant)>>,
+    slot: RequestSlot<()>,
+    /// 進行中の要求の `(request_id, 画面の世代, 受付時刻)`。
+    timing: Mutex<Option<(u64, u64, Instant)>>,
 }
 
-static SESSION: std::sync::OnceLock<Session> = std::sync::OnceLock::new();
+impl Session {
+    const fn new() -> Self {
+        Self {
+            slot: RequestSlot::new(),
+            timing: Mutex::new(None),
+        }
+    }
+
+    fn reset(&self) {
+        self.slot.reset();
+        *self.timing.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+}
+
+impl Default for Session {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+static SESSION: std::sync::OnceLock<Arc<Session>> = std::sync::OnceLock::new();
 
 /// Activity 再生成時（`android_main` の再実行）に、ドライバの処理済み記録を破棄する。
 /// 画面状態は `default()`（世代 0）に戻るため、完了後も残る記録（世代 1）を残すと次の
@@ -88,7 +114,7 @@ static SESSION: std::sync::OnceLock<Session> = std::sync::OnceLock::new();
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
-        *s.inflight.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        s.reset();
     }
 }
 
@@ -139,25 +165,29 @@ fn drive(
     state: &TranscodeState,
     sender: &CompletionSender<TranscodeState>,
     imp: &Arc<dyn MediaTranscode>,
-    session: &Session,
+    session: &Arc<Session>,
     deadline: Duration,
 ) {
     // 要求の観測と記録は同じロックの内側で行い、二重発送を防ぐ。
     let new_request = {
-        let mut g = session.inflight.lock().unwrap_or_else(|e| e.into_inner());
+        let mut g = session.timing.lock().unwrap_or_else(|e| e.into_inner());
         match take_request(state) {
-            Some(generation) if g.map(|(gen, _)| gen) != Some(generation) => {
+            Some(generation) if session.slot.snapshot().is_none() => {
                 let started = Instant::now();
-                *g = Some((generation, started));
-                Some((generation, started))
+                let request_id = session.slot.begin();
+                *g = Some((request_id, generation, started));
+                Some((request_id, generation, started))
             }
             _ => {
                 // 期限判定: 処理中でセッションの世代が一致するときだけ。
-                if let (Some((gen, started)), TranscodePhase::Running) = (*g, &state.phase) {
+                if let (Some((request_id, gen, started)), TranscodePhase::Running) =
+                    (*g, &state.phase)
+                {
                     if gen == state.generation {
                         let elapsed = started.elapsed();
                         if elapsed >= deadline {
                             *g = None;
+                            session.slot.clear(request_id);
                             let _ = sender.send(Box::new(move |s: &mut TranscodeState| {
                                 finish_transcode(s, gen, Err(TranscodeFailure::Timeout));
                             }));
@@ -170,7 +200,7 @@ fn drive(
             }
         }
     };
-    let Some((generation, started)) = new_request else {
+    let Some((request_id, generation, started)) = new_request else {
         return;
     };
     let _ = sender.send(Box::new(mark_running));
@@ -178,6 +208,7 @@ fn drive(
 
     let worker_sender = sender.clone();
     let worker_imp = imp.clone();
+    let worker_session = session.clone();
     let spawned = std::thread::Builder::new()
         .name("media-transcode".into())
         .spawn(move || {
@@ -189,9 +220,11 @@ fn drive(
                     r => r,
                 };
                 finish_transcode(s, generation, result);
+                worker_session.slot.clear(request_id);
             }));
         });
     if spawned.is_err() {
+        let session = session.clone();
         let _ = sender.send(Box::new(move |s: &mut TranscodeState| {
             // `mark_running` の後に適用されるよう同じキューへ積む。
             finish_transcode(
@@ -199,6 +232,7 @@ fn drive(
                 generation,
                 Err(TranscodeFailure::Failed("変換できませんでした".to_string())),
             );
+            session.slot.clear(request_id);
         }));
     }
 }
@@ -211,7 +245,7 @@ pub fn media_transcode_effect(state: &TranscodeState, sender: &CompletionSender<
         state,
         sender,
         imp,
-        SESSION.get_or_init(Session::default),
+        SESSION.get_or_init(|| Arc::new(Session::default())),
         TRANSCODE_DEADLINE,
     );
 }
@@ -257,7 +291,7 @@ mod tests {
     /// 要求を立てて 1 フレーム回し、届いた完了を `n` 件適用した状態を返す。
     fn run(imp: Arc<dyn MediaTranscode>, n: usize) -> TranscodeState {
         let (sender, rx) = channel();
-        let session = Session::default();
+        let session = Arc::new(Session::default());
         let mut state = TranscodeState::default();
         request_transcode(&mut state);
         drive(&state, &sender, &imp, &session, Duration::from_secs(30));
@@ -282,7 +316,7 @@ mod tests {
             &TranscodeState::default(),
             &sender,
             &fake(|| Ok(good())),
-            &Session::default(),
+            &Arc::new(Session::default()),
             Duration::from_secs(1),
         );
         assert!(rx.try_recv().is_err());
@@ -338,7 +372,7 @@ mod tests {
             &state,
             &sender,
             &imp,
-            &Session::default(),
+            &Arc::new(Session::default()),
             Duration::from_millis(20),
         );
         for _ in 0..2 {
@@ -356,7 +390,7 @@ mod tests {
             &state,
             &sender,
             &fake(|| Ok(good())),
-            &Session::default(),
+            &Arc::new(Session::default()),
             Duration::from_millis(100),
         );
         let first = rx.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -374,7 +408,7 @@ mod tests {
             sleep: Duration::from_millis(300),
         });
         let (sender, rx) = channel();
-        let session = Session::default();
+        let session = Arc::new(Session::default());
         let mut state = TranscodeState::default();
         request_transcode(&mut state);
         let deadline = Duration::from_millis(30);
@@ -407,7 +441,7 @@ mod tests {
     fn double_drive_before_mark_applied_runs_once() {
         let (sender, rx) = channel();
         let imp = fake(|| Ok(good()));
-        let session = Session::default();
+        let session = Arc::new(Session::default());
         let mut state = TranscodeState::default();
         request_transcode(&mut state);
         drive(&state, &sender, &imp, &session, Duration::from_secs(30));
@@ -425,13 +459,13 @@ mod tests {
     fn reset_lets_a_fresh_screen_dispatch_again() {
         let (sender, rx) = channel();
         let imp = fake(|| Ok(good()));
-        let session = Session::default();
-        *session.inflight.lock().unwrap() = Some((1, Instant::now()));
+        let session = Arc::new(Session::default());
+        session.slot.begin();
         let mut state = TranscodeState::default();
         request_transcode(&mut state);
         drive(&state, &sender, &imp, &session, Duration::from_secs(30));
         assert!(rx.try_recv().is_err(), "記録が残ると飲み込まれる");
-        *session.inflight.lock().unwrap() = None;
+        session.reset();
         drive(&state, &sender, &imp, &session, Duration::from_secs(30));
         assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok());
     }
