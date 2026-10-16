@@ -14,8 +14,7 @@
       "note": "実装済み（旧#1331）。範囲は接続中の入出力デバイス名の一覧のみ（出力先の選択・切り替え・音量は範囲外）。デバイス ID・種別は取らない・保持しない・ログに出さない。入力は category が入力を許す間（録音中など）だけ取れ、それ以外は「マイク使用中のみ」と表示して推測しない。出力は現在の経路で全候補ではない。0 件は正常な空として扱い、nil・範囲外だけを取得不可とする。守る範囲: 0 件と取得不可の区別・共有セッションへ書き込まないこと・失敗を成功値へ畳まないこと。守らない範囲: 読み取り後の経路変化（再取得まで）・複数プロセス間の一致・同名の区別。画面を開いたとき UI スレッドで同期 1 回だけ読み、「再取得」で読み直す（並行経路なし）。iOS 実機の目視は #23",
       "detail": "できている（一部・実機）",
       "implStatus": "実装済み（録音していないときの一覧は実機確認済み・録音中は未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_audio_devices.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_audio_devices.m + crates/fandhe-egui-proxy/src/device/audio_devices.rs + crates/fandhe-core/src/screens/audio_devices_show.rs + crates/fandhe-device/src/audio_devices.rs、Issue 旧#1331",
-      "verified": true
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_audio_devices.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_audio_devices.m + crates/fandhe-egui-proxy/src/device/audio_devices.rs + crates/fandhe-core/src/screens/audio_devices_show.rs + crates/fandhe-device/src/audio_devices.rs、Issue 旧#1331"
     },
     "android": {
       "status": "done",
