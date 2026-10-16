@@ -27,7 +27,7 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use fandhe_device::media_playback::wav_bytes;
@@ -65,12 +65,36 @@ fn map_err(e: &windows::core::Error, label: &'static str) -> DeviceError {
     }
 }
 
-/// 入力用の一時 WAV。Drop で必ず消す（全経路）。
+/// `Cancel()` 後に OS 側の完了通知を待つ上限。ハンドルを閉じる前に OS の書き込み・読み込みが
+/// 終わるのを待つ（契約表 3・9）。
+const CANCEL_GRACE: Duration = Duration::from_millis(500);
+
+/// 削除に失敗した一時 WAV。次回の `transcode` 冒頭で再削除する。
+static STALE: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
+/// 入力用の一時 WAV。Drop で必ず消す（全経路）。共有違反で消せなければ短くリトライし、
+/// それでも消せなければ `STALE` に積んで次回に消す。
 struct TempWav(PathBuf);
 
 impl Drop for TempWav {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+        for _ in 0..5 {
+            match std::fs::remove_file(&self.0) {
+                Ok(()) => return,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+                Err(_) => std::thread::sleep(Duration::from_millis(100)),
+            }
+        }
+        if let Ok(mut v) = STALE.lock() {
+            v.push(self.0.clone());
+        }
+    }
+}
+
+/// 前回消せなかった一時 WAV を消し直す（消せないものは残す）。
+fn purge_stale() {
+    if let Ok(mut v) = STALE.lock() {
+        v.retain(|p| std::fs::remove_file(p).is_err() && p.exists());
     }
 }
 
@@ -94,6 +118,8 @@ fn wait(
         Ok(_) => Err(internal(label)),
         Err(mpsc::RecvTimeoutError::Timeout) => {
             cancel();
+            // OS 側の操作が止まるまで待ってから戻る（呼び出し側がハンドルを閉じて消せるように）。
+            let _ = rx.recv_timeout(CANCEL_GRACE);
             Err(internal(TIMEOUT))
         }
         Err(mpsc::RecvTimeoutError::Disconnected) => Err(internal(label)),
@@ -131,6 +157,7 @@ impl MediaTranscode for WindowsMediaTranscode {
     ) -> Result<Vec<u8>, DeviceError> {
         let deadline = Instant::now() + remaining;
         validate_input(pcm, sample_rate)?;
+        purge_stale();
 
         // `create_new` で既存のファイルやリンクを上書きしない。名前は外部入力を含まない。
         let path = std::env::temp_dir().join(format!(
@@ -154,7 +181,16 @@ impl MediaTranscode for WindowsMediaTranscode {
             FileAccessMode::Read,
         )
         .map_err(|e| map_err(&e, "media_transcode input"))?;
-        let input = wait_op(deadline, "media_transcode input", &open)?;
+        let input = match wait_op(deadline, "media_transcode input", &open) {
+            Ok(input) => input,
+            Err(e) => {
+                // 期限切れ・取り消しの直前にオープンが完了していたら、ハンドルを閉じる。
+                if let Ok(s) = open.GetResults() {
+                    let _ = s.Close();
+                }
+                return Err(e);
+            }
+        };
         // 入力を閉じてからでないと Windows ではファイルを消せない（ガードの Drop より先）。
         let result = run(&input, deadline);
         let _ = input.Close();
