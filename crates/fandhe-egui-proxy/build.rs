@@ -59,7 +59,7 @@
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルし MessageUI をリンクする
 //!   （`src/device/ios_compose_mail_sms.rs` から呼ばれる契約）。
 //! - `apple/fandhe_apple_map_view.m`（Issue #273、`MKMapSnapshotter` による地図の静止画 1 枚の取得。
-//!   iOS 分岐は #274 までスタブ）は `src/device/apple_map_view.rs` から呼ばれる契約。MapKit をリンクする。
+//!   iOS 分岐も同じ実装）は `src/device/apple_map_view.rs` から呼ばれる契約。MapKit をリンクする。
 //! - `apple/fandhe_apple_photo_library.m`（Issue #1254、`PHPhotoLibrary` による画像 1 枚の保存）は
 //!   iOS（Issue #1255）・macOS の両ターゲットで feature `device` 有効時にコンパイルする
 //!   （`src/device/apple_photo_library.rs` から呼ばれる契約）。Photos をリンクする。
@@ -507,7 +507,7 @@ fn compile_apple_photo_library() {
 }
 
 /// `apple/fandhe_apple_map_view.m` を `cc` でコンパイルし MapKit / CoreGraphics をリンクする
-/// （Issue #273 macOS・#274 iOS。両分岐から呼ぶ。iOS 分岐の中身は #274 まではスタブ）。
+/// （Issue #273 macOS・#274 iOS。両分岐から呼ぶ）。
 fn compile_apple_map_view() {
     println!("cargo:rerun-if-changed=apple/fandhe_apple_map_view.m");
     cc::Build::new()
