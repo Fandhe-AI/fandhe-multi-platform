@@ -171,14 +171,27 @@ mod web {
                 Some(w) => match w.document().map(|doc| build_block(&doc, &req)) {
                     None | Some(Err(())) => Err(PrintFailure::Failed(PRINT_FAILED.to_string())),
                     Some(Ok(block)) => {
+                        // print() 中の beforeprint/afterprint から同じ root が再マウントされると
+                        // release_mount が走る。呼ぶ前にブロックを記録し、破棄時に解放できるようにする。
+                        DISPATCHED.with(|d| {
+                            if let Some(e) = d.borrow_mut().get_mut(&mount_id) {
+                                e.1 = Some(block.clone());
+                            }
+                        });
                         let printed = w.print().map_err(|_| ());
-                        if printed.is_err() {
-                            // 失敗したブロックを残すと通常の Ctrl+P に混ざる。発送済み世代だけ残す。
+                        // 失敗したブロックを残すと通常の Ctrl+P に混ざる。発送済み世代だけ残す。
+                        // 復帰後にマウントが破棄済み（記録なし）か世代が違えば、このブロックは孤児なので外す。
+                        let keep = printed.is_ok()
+                            && DISPATCHED.with(|d| {
+                                d.borrow().get(&mount_id).map(|e| e.0) == Some(generation)
+                            });
+                        if !keep {
                             block.remove();
-                        } else {
                             DISPATCHED.with(|d| {
                                 if let Some(e) = d.borrow_mut().get_mut(&mount_id) {
-                                    e.1 = Some(block);
+                                    if e.0 == generation {
+                                        e.1 = None;
+                                    }
                                 }
                             });
                         }
