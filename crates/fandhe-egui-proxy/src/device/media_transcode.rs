@@ -183,6 +183,11 @@ fn drive(
         .spawn(move || {
             let result = run_worker(&*worker_imp, started, deadline);
             let _ = worker_sender.send(Box::new(move |s: &mut TranscodeState| {
+                // 完了キューの適用が遅れた場合も期限を守る（UI スレッド停止後の適用）。
+                let result = match result {
+                    Ok(_) if started.elapsed() > deadline => Err(TranscodeFailure::Timeout),
+                    r => r,
+                };
                 finish_transcode(s, generation, result);
             }));
         });
@@ -339,6 +344,26 @@ mod tests {
         for _ in 0..2 {
             rx.recv_timeout(Duration::from_secs(5)).unwrap()(&mut state);
         }
+        assert_eq!(failed(&state), &TranscodeFailure::Timeout);
+    }
+
+    #[test]
+    fn late_apply_past_deadline_is_timeout() {
+        let (sender, rx) = channel();
+        let mut state = TranscodeState::default();
+        request_transcode(&mut state);
+        drive(
+            &state,
+            &sender,
+            &fake(|| Ok(good())),
+            &Session::default(),
+            Duration::from_millis(100),
+        );
+        let first = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let second = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        std::thread::sleep(Duration::from_millis(150));
+        first(&mut state);
+        second(&mut state);
         assert_eq!(failed(&state), &TranscodeFailure::Timeout);
     }
 
