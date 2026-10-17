@@ -22,11 +22,14 @@
       "deferred": "ML Kit GenAI（Gemini Nano）は AICore に依存し、推移依存に Google Play services が入る。beta・対応機種限定。GMS に依存しない方針のため保留"
     },
     "macos": {
-      "status": "possible",
-      "api": "FoundationModels（macOS 26 でも提供と認識。要確認）",
-      "perm": "不要と認識（要確認）",
+      "status": "done",
+      "api": "FoundationModels（`SystemLanguageModel.default.availability` と `LanguageModelSession.respond(to:options:)`。Swift 専用のため Swift 薄層と `@_cdecl` の C ABI で呼ぶ）",
+      "perm": "不要（entitlement・Info.plist の追加なし。`availability` の取得までを、署名・entitlement なしの実行体で確認済み）。Apple Intelligence を設定で有効にする必要がある。`respond` は #338 で確認する",
       "url": "https://developer.apple.com/documentation/foundationmodels/systemlanguagemodel",
-      "note": "未実装。対応機種・OS 版は要確認"
+      "note": "実装済み（#345）。範囲は固定プロンプトを 1 回渡して応答の全文を表示することのみ（ストリーミング・会話履歴・利用者が入力するプロンプト・構造化出力・モデルのダウンロード開始・取り消し・温度の調整は範囲外）。macOS 26 未満は非対応（Unsupported）、設定で無効なときは Disabled、モデル未取得は失敗として出しダウンロードは始めない。応答の上限は 256 トークン、期限は 60 秒（初回のモデル読み込みを含む）。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: OS ごとの所要時間の違い、応答内容の非決定性、期限後も OS 側の生成が走り切ること、複数タブ・複数プロセス。Mac 実機の目視は #338 で行う。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#338）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_on_device_llm.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_on_device_llm.swift + crates/fandhe-egui-proxy/src/device/on_device_llm.rs + crates/fandhe-core/src/screens/on_device_llm.rs + crates/fandhe-device/src/on_device_llm.rs、Issue #345"
     },
     "windows": {
       "status": "possible",

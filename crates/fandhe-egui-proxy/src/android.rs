@@ -325,6 +325,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // 残すと次の「推論する」が飲み込まれる（`device::ml_inference::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::ml_inference::reset_pending_tracking();
+    // Issue #345: 端末内 LLM の処理済み世代も破棄する（理由は ml_inference と同じ。
+    // `device::on_device_llm::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::on_device_llm::reset_pending_tracking();
     // Issue #311: 音声変換の処理済み世代も破棄する（理由は ml_inference と同じ。
     // `device::media_transcode::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

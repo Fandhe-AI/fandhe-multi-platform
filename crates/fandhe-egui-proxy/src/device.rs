@@ -244,6 +244,12 @@ pub mod apple_network_status;
 /// 同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_nlp;
+/// Issue #345 macOS（iOS は b-ios が使う）: 端末内 LLM 実装（`apple/fandhe_apple_on_device_llm.swift` を
+/// 呼ぶ C ABI ラッパー）。`device/on_device_llm.rs` の macOS 経路から呼ばれる。iOS は b-ios が
+/// 使い始めるまで未使用になるため `dead_code` を許す。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[cfg_attr(target_os = "ios", allow(dead_code))]
+pub mod apple_on_device_llm;
 /// Issue #1254（macOS）/ #1255（iOS）: iOS / macOS 向け写真ライブラリ保存実装
 /// （`apple/fandhe_apple_photo_library.m` を呼ぶ C ABI ラッパー。iOS は #1255 までスタブ）。
 /// `device/photo_save.rs` の iOS / macOS 経路から呼ばれる。
@@ -452,6 +458,12 @@ pub mod ios_network_status;
 /// C ABI ラッパー）。`device/notification.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_notification;
+/// Issue #345: iOS 向け端末内 LLM のスタブ（`Unsupported` 固定。b-ios が中身を置き換える）。
+/// `device/on_device_llm.rs` の iOS 経路から呼ばれる。ホストの `cargo test` でスタブを検査するため
+/// cfg に `test` を含める。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_on_device_llm;
 /// Issue #1248: iOS 向け歩数実装（#1247 のスタブを置き換え）。`device/pedometer.rs` の iOS
 /// 経路から呼ばれる。FFI の本体はモジュール内側の `cfg(target_os = "ios")` に閉じ、
 /// 純関数をホストでテストできるよう cfg は `any(ios, test)`。
@@ -578,6 +590,9 @@ pub mod nlp;
 /// Phase 11 の拡充ループ（親 #1003、Issue #1004/#1005）: ローカル通知の effect
 /// ドライバ（macOS/Windows/iOS 実装、Android は #1006）。
 pub mod notification;
+/// Phase 11 の拡充ループ（親 #93、Issue #345）: 端末内 LLM の effect ドライバ（macOS 実装、iOS は
+/// b-ios が埋めるスタブ、他 OS は `UnsupportedOnDeviceLlm` 固定。Web は `fandhe-web-dom` が持つ）。
+pub mod on_device_llm;
 /// Phase 11 の拡充ループ（親 #92、Issue #342）: パスキーの effect ドライバ（Windows はワーカー +
 /// pull 型 bridge、実装は #343 が埋める。他 OS は `UnsupportedPasskey` 固定。Web は `fandhe-web-dom`）。
 pub mod passkey;
