@@ -576,6 +576,14 @@ public class MainActivity extends GameActivity {
                 attName);
     }
 
+    // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
+    // Rust の `android_print.rs` が JNI で呼ぶ。
+    private final PrintHelper printHelper = new PrintHelper(this);
+
+    void requestPrint(long requestId, String title, String body) {
+        printHelper.print(requestId, title, body);
+    }
+
     // 画面録画（Issue #1337）。実装は `ScreenCaptureHelper` / `ScreenCaptureService`。
     // Rust の `android_screen_capture.rs` が JNI で呼ぶ。
     private final ScreenCaptureHelper screenCaptureHelper = new ScreenCaptureHelper(this);
@@ -4545,6 +4553,7 @@ public class MainActivity extends GameActivity {
         midiHelper.onDestroy();
         callUiHelper.onDestroy();
         screenCaptureHelper.onDestroy();
+        printHelper.onDestroy();
         screenWakeLockHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず

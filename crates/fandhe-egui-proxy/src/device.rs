@@ -137,7 +137,7 @@ pub mod android_photo_library;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_power_state;
-/// Issue #325: Android 向け印刷のスタブ（#328 が `PrintHelper` + JNI で埋める）。`device/print.rs` の
+/// Issue #328: Android 向け印刷（`PrintHelper` + JNI）。`device/print.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -609,7 +609,7 @@ pub mod photo_save;
 /// ・iOS 実装、Android は #1276 で埋めるスタブ、他 OS は `UnsupportedPowerState` 固定）。
 pub mod power_state;
 /// Phase 11 の拡充ループ（親 #94、Issue #325）: 印刷ダイアログの effect ドライバ（macOS 実装、
-/// Windows / iOS / Android は #326〜#328 が埋めるスタブ、他 OS は `UnsupportedPrint` 固定。
+/// Android は #328 で実装済み、Windows / iOS は #326・#327 が埋めるスタブ、他 OS は `UnsupportedPrint` 固定。
 /// Web は `fandhe-web-dom`）。
 pub mod print;
 /// request/response 型端末機能共通の要求追跡（Issue #943、親 #941）。share /

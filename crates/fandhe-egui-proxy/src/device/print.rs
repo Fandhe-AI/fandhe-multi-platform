@@ -5,7 +5,7 @@
 //! 契約と守る範囲は `fandhe_device::print` のモジュール doc を参照。
 //!
 //! - iOS / Android: コールバック型のため pull 型 [`bridge`]（`RequestSlot` の facade）で毎フレーム
-//!   `drive_callback` が結果を反映する。後続 issue（#327・#328）が埋めるまで各 OS モジュールの
+//!   `drive_callback` が結果を反映する。Android は #328 で実装済み。iOS は #327 が埋めるまで
 //!   スタブが `Unsupported` を返す。**dispatch はここで最終形にしてあり、後続 issue は OS 別
 //!   モジュールだけを埋める**
 //! - macOS / Windows / それ以外: [`Print`] を UI スレッドで同期に呼ぶ（同期モーダル）。Linux は
@@ -61,10 +61,10 @@ pub(crate) fn outcome_from_ios_code(code: i32) -> Result<PrintOutcome, DeviceErr
     }
 }
 
-/// Android の結果コード表（SSOT。後続の Java `PrintHelper.RESULT_*` と一致させる）。
+/// Android の結果コード表（SSOT。Java `PrintHelper.RESULT_*` と一致させる）。
 /// 0 = QUEUED / STARTED / BLOCKED / COMPLETED / 1 = CANCELED / 2 = 2 秒後も CREATED /
 /// 3 = FAILED・onWrite 失敗 / 4 = `print()` 例外・Activity 無し。
-#[allow(dead_code)] // b-android（#328）が結果受け口から使う
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) fn outcome_from_android_code(code: i32) -> Result<PrintOutcome, DeviceError> {
     match code {
         0 => Ok(PrintOutcome::Submitted),
