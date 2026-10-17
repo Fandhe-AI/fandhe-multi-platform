@@ -12,7 +12,7 @@
       "perm": "Associated Domains の `webcredentials:<ドメイン>` entitlement + サーバー側 `apple-app-site-association`",
       "url": "https://developer.apple.com/documentation/authenticationservices/asauthorizationplatformpublickeycredentialprovider",
       "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 対応 iOS 版は要確認（iOS 15 以降と認識）",
-      "approval": "Associated Domains（webcredentials）の entitlement と有料の開発者登録、ドメインへの apple-app-site-association の配置が要る"
+      "deferred": "RP ID のドメイン（apple-app-site-association の配置先）が未定で、Associated Domains（webcredentials）を載せる有料の開発者登録も期限切れのため保留。ベンダーの個別審査は不要で、両方が揃えば着手できる"
     },
     "android": {
       "status": "possible",
@@ -20,7 +20,7 @@
       "perm": "なし（要確認）。サーバー側の Digital Asset Links（`assetlinks.json`）が要る",
       "url": "https://developer.android.com/identity/sign-in/credential-manager",
       "note": "未実装。GMS（Google Play 開発者サービス）依存。API 34 未満は Play services 経由（報告より）。パスキー専用の手順は https://developer.android.com/identity/sign-in/passkeys にもある",
-      "approval": "Digital Asset Links（ドメインへの assetlinks.json の配置）が要る"
+      "deferred": "RP ID のドメイン（Digital Asset Links の assetlinks.json の配置先）が未定のため保留。ベンダーの個別審査は不要で、ドメインが決まれば着手できる"
     },
     "macos": {
       "status": "possible",
@@ -28,7 +28,7 @@
       "perm": "Associated Domains の `webcredentials:` entitlement（要確認）",
       "url": "https://developer.apple.com/documentation/authenticationservices/asauthorizationplatformpublickeycredentialprovider",
       "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 macOS の対応版は要確認（macOS 12 以降と認識）",
-      "approval": "Associated Domains（webcredentials）の entitlement と有料の開発者登録、ドメインへの apple-app-site-association の配置が要る"
+      "deferred": "RP ID のドメイン（apple-app-site-association の配置先）が未定で、Associated Domains（webcredentials）を載せる有料の開発者登録も期限切れのため保留。ベンダーの個別審査は不要で、両方が揃えば着手できる"
     },
     "windows": {
       "status": "possible",
