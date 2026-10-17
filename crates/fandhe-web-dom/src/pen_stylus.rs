@@ -16,7 +16,7 @@
 //!   1 フレーム 1 回の `apply` でまとめて行う（書き手 1 本。全再構築も 1 フレーム 1 回）
 //! - 筆圧と傾きは `pointerType == "pen"` のときだけ使う。マウス・指は固定値（マウスは 0.5）が
 //!   返るため、値に関わらず None（嘘の成功の禁止）
-//! - 離す・キャンセル・キャプチャ喪失・`blur`・`pagehide`・非表示で接触なしに戻す
+//! - 離す（終点を積んでから終える。筆圧は最後の接触サンプルを使う）・キャンセル・キャプチャ喪失・`blur`・`pagehide`・非表示で接触なしに戻す
 //!
 //! # 守る範囲 / 守らない範囲
 //!
@@ -159,6 +159,8 @@ mod web {
         generation: u64,
         /// 追っている pointerId。
         active: Option<i32>,
+        /// 最後の接触サンプルの筆圧。`pointerup` は pressure=0 を返すため、終点にはこれを使う。
+        last_pressure: f32,
         queue: Vec<Op>,
         /// 予約済みの rAF。
         frame: Option<i32>,
@@ -222,7 +224,7 @@ mod web {
         }
     }
 
-    fn push_sample(e: &mut Entry, ev: &web_sys::PointerEvent) {
+    fn push_sample(e: &mut Entry, ev: &web_sys::PointerEvent, release: bool) {
         let Some(canvas) = e.root.query_selector(".fandhe-canvas").ok().flatten() else {
             return;
         };
@@ -234,9 +236,16 @@ mod web {
         ) else {
             return;
         };
+        if !release {
+            e.last_pressure = ev.pressure();
+        }
         let sample = sample_view(
             &ev.pointer_type(),
-            ev.pressure(),
+            if release {
+                e.last_pressure
+            } else {
+                ev.pressure()
+            },
             ev.tilt_x() as f32,
             ev.tilt_y() as f32,
         );
@@ -266,11 +275,18 @@ mod web {
                 // 失敗しても続ける（キャプチャ無しでもキャンバス内は追える）。
                 let _ = e.root.set_pointer_capture(id);
                 ev.prevent_default();
-                push_sample(e, ev);
+                push_sample(e, ev, false);
             }
             "pointermove" => {
                 if e.active == Some(id) {
-                    push_sample(e, ev);
+                    push_sample(e, ev, false);
+                }
+            }
+            // 離した位置を終点として積んでから終える（末尾の線分を失わない）。
+            "pointerup" => {
+                if e.active == Some(id) {
+                    push_sample(e, ev, true);
+                    finish(e);
                 }
             }
             _ => {
@@ -322,6 +338,7 @@ mod web {
             root,
             generation,
             active: None,
+            last_pressure: 0.0,
             queue: Vec::new(),
             frame: None,
             pointer,
