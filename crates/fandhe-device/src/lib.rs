@@ -94,6 +94,8 @@ pub mod nlp;
 pub mod notification;
 /// Phase 11（端末機能の拡充ループ、親 #93、Issue #345）: 端末内 LLM（固定プロンプトの応答 1 回）。
 pub mod on_device_llm;
+/// Phase 11（端末機能の拡充ループ、親 #92、Issue #342）: パスキーの登録・サインイン要求（サーバー検証なし）。
+pub mod passkey;
 /// Phase 11（端末機能の拡充ループ、親 #1119、Issue #1247）: 歩数（累積歩数を 1 回取得）。
 pub mod pedometer;
 /// Phase 11（端末機能の拡充ループ、親 #1121、Issue #1254）: 画像 1 枚の写真ライブラリ保存。

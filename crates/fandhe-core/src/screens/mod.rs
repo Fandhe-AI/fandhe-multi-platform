@@ -140,6 +140,8 @@ pub mod network_status_show;
 pub mod nlp_segment;
 /// Phase 11 の拡充ループ型サンプル「端末内 LLM」（親 #93、Issue #345）。
 pub mod on_device_llm;
+/// Phase 11 の拡充ループ型サンプル「パスキー・サインイン連携」（親 #92、Issue #342）。
+pub mod passkey_signin;
 /// Phase 11 の拡充ループ型サンプル「歩数」（親 #1119、Issue #1247）。
 pub mod pedometer_read;
 /// Phase 11 の拡充ループ型サンプル「写真選択」（親 #1101、Issue #1103）。
