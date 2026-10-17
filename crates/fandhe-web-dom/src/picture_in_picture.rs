@@ -356,22 +356,13 @@ mod web {
         if let Some(win) = web_sys::window() {
             let a = applier.clone();
             let cb = Closure::<dyn FnMut()>::new(move || {
-                exit_if_ours(id);
+                let a2 = a.clone();
+                // 通常の停止と同じ経路。小窓が開いていれば終了要求を追跡し、閉じたことを確認して
+                // から Exited、拒否・期限切れなら Failed を確定する（契約表 6）。
+                // 開始が飛行中なら完了後の終了を予約する（`do_stop` / `settle`）。
                 a.apply(move |s| {
                     let g = s.generation;
-                    // 開始要求が飛行中なら後から小窓が開く。完了後の終了を予約し、
-                    // 閉じたことを確認してから Exited にする（`settle` / `finish_stop`）。
-                    let in_flight = with(id, |e| {
-                        let f = matches!(&e.pending, Some(p) if p.kind == Kind::Start);
-                        if f {
-                            e.stop_after_start = Some(g);
-                        }
-                        f
-                    })
-                    .unwrap_or(false);
-                    if !in_flight {
-                        apply_update(s, g, PipShowUpdate::Phase(PipShowPhase::Exited));
-                    }
+                    do_stop(&a2, id, g);
                 });
             });
             listen(id, true, win.into(), "pagehide", cb);
