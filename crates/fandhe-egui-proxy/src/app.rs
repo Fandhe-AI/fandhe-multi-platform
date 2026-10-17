@@ -154,6 +154,19 @@ impl<S> CompletionSender<S> {
             .flatten()
     }
 
+    /// キャンバス `id` 上で、このフレームに主ボタンが新しく押されたか（`canvas_pointer` と同じく
+    /// `lib.rs` の `CanvasWidget` 分岐が毎フレーム書く）。1 フレーム内の「離す → 押す」を
+    /// 新しい接触として扱うため（Issue #355）。
+    #[cfg_attr(
+        not(all(feature = "device", not(target_arch = "wasm32"))),
+        allow(dead_code)
+    )]
+    pub(crate) fn canvas_pressed(&self, id: fandhe_core::WidgetId) -> bool {
+        self.ctx
+            .data(|d| d.get_temp::<bool>(canvas_pressed_id(id.raw())))
+            .unwrap_or(false)
+    }
+
     /// 実描画の拡大率を差し替える（`egui::Context::set_zoom_factor` への薄い委譲。
     /// Issue #912「文字サイズ追従」の effect ドライバ
     /// （`device/text_scale.rs::drive`）専用）。
@@ -251,6 +264,12 @@ impl<S> CompletionSender<S> {
 /// [`CompletionSender::canvas_pointer`] が読む）。
 pub(crate) fn canvas_pointer_id(widget_raw: u64) -> egui::Id {
     egui::Id::new(("fandhe_canvas_pointer", widget_raw))
+}
+
+/// `CanvasWidget` の「このフレームに押された」を `ctx.data` に置くときの `egui::Id`
+/// （`lib.rs` が書き、[`CompletionSender::canvas_pressed`] が読む）。
+pub(crate) fn canvas_pressed_id(widget_raw: u64) -> egui::Id {
+    egui::Id::new(("fandhe_canvas_pressed", widget_raw))
 }
 
 /// CompletionSender::text_scale_last_applied / set_text_scale_last_applied が使う
