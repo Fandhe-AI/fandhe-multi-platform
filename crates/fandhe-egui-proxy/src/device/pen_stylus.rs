@@ -113,8 +113,13 @@ fn drive(
     let Some(pos) = pointer else {
         *last = None;
         // 接触前に OS 側の登録（macOS の NSEvent モニタ等、main thread で 1 回）を済ませる。
-        // 最初の押下が未登録のまま通過して種類・筆圧を落とさないため。結果は使わない。
-        let _ = pen.latest();
+        // 最初の押下が未登録のまま通過して種類・筆圧を落とさないため。値は使わないが、
+        // 非対応・登録失敗はここで画面へ出す（押下を待たずに失敗を見せる）。
+        if let Err(e) = pen.latest() {
+            let f = to_failure(&e);
+            let _ = sender.send(Box::new(move |s: &mut PenDrawState| apply_failure(s, f)));
+            return;
+        }
         if state.is_stroking() {
             let _ = sender.send(Box::new(move |s: &mut PenDrawState| {
                 end_stroke(s, generation);
@@ -274,6 +279,15 @@ mod tests {
         apply_all(&rx, &mut s);
         assert_eq!(s.point_count(), 1);
         assert!(!s.is_stroking());
+    }
+
+    #[test]
+    fn idle_frame_surfaces_unsupported_without_pointer() {
+        let (tx, rx) = channel();
+        let mut s = PenDrawState::default();
+        drive(&s, &tx, &Unsupported, None, &mut None);
+        assert_eq!(apply_all(&rx, &mut s), 1);
+        assert_eq!(s.status, PenStatus::Failure(PenFailureView::Unsupported));
     }
 
     #[test]
