@@ -107,6 +107,11 @@ final class PrintHelper {
             job = manager.print("fandhe", new Adapter(id, title, body), null);
         } catch (RuntimeException e) {
             finish(id, RESULT_PRESENT_FAILED);
+            return;
+        }
+        // 印刷ジョブを作れない・ダイアログを開けないと null が返り、adapter の onFinish も来ない。
+        if (job == null) {
+            finish(id, RESULT_PRESENT_FAILED);
         }
     }
 
