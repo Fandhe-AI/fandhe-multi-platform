@@ -106,6 +106,9 @@ use fandhe_core::screens::nlp_segment::{
 use fandhe_core::screens::notification_send::{
     current_screen as current_notification_send_screen, NotificationSendState,
 };
+use fandhe_core::screens::on_device_llm::{
+    current_screen as current_on_device_llm_screen, OnDeviceLlmState,
+};
 use fandhe_core::screens::passkey_signin::{
     current_screen as current_passkey_signin_screen, PasskeySigninState,
 };
@@ -859,6 +862,21 @@ pub fn mount_compose_mail_sms_screen(root_id: &str) -> Result<(), JsValue> {
         current_compose_mail_sms_screen(&initial_state),
         initial_state,
         super::compose_mail_sms::compose_mail_sms_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「端末内 LLM」（親 #93、Issue #347）をマウントする
+/// 検証専用エントリポイント。`super::on_device_llm::on_device_llm_effect` が Prompt API を呼ぶ。
+#[wasm_bindgen]
+pub fn mount_on_device_llm_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = OnDeviceLlmState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_on_device_llm_screen(&initial_state),
+        initial_state,
+        super::on_device_llm::on_device_llm_effect,
     )
 }
 
