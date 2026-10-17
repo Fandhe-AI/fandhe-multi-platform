@@ -21,11 +21,14 @@
       "note": "未実装。スタイラス対応端末が要る。ホバーは端末依存（要確認）"
     },
     "macos": {
-      "status": "possible",
-      "api": "AppKit `NSEvent.pressure`（タブレット・トラックパッドの感圧）",
-      "perm": "なし",
+      "status": "done",
+      "api": "AppKit `NSEvent` の local monitor（マウスイベントの `subtype == NSEventSubtypeTabletPoint` 時の `pressure` / `tilt`、`NSEventTypeTabletProximity`）",
+      "perm": "不要（entitlement 不要。local monitor は自アプリのイベントだけを見る）",
       "url": "https://developer.apple.com/documentation/appkit/nsevent/pressure",
-      "note": "未実装。ペンタブレットのイベント全体像は未確認（要確認）。winit が筆圧を届けるかは未調査"
+      "note": "実装済み（#355）。位置は egui のポインタから、ペンか否か・筆圧・傾きは local monitor から取る（winit は筆圧を届けない）。マウス・トラックパッドは種類=マウスで筆圧・傾きなし（固定値を筆圧にしない）。離す・近接の離脱・アプリの非アクティブ化で接触なしに戻す。守る範囲: 1 プロセス内の順序・嘘の値を出さないこと・離したら消すこと。守らない範囲: 1 フレーム内の複数点、主ポインタ 1 本以外、ホバー・消しゴムの区別、静止したままの筆圧変化（次のフレームまで反映しない）、複数プロセス。未確認: `tilt`（-1..1）の ×90° 換算の妥当性、winit 経由のイベントが local monitor に届く順序。Mac 目視（ペンタブレット）は #354",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#354）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_pen_stylus.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_pen_stylus.m + crates/fandhe-egui-proxy/src/device/pen_stylus.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-device/src/pen_stylus.rs、Issue #355"
     },
     "windows": {
       "status": "possible",
