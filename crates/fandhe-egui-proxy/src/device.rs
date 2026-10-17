@@ -244,11 +244,10 @@ pub mod apple_network_status;
 /// 同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_nlp;
-/// Issue #345 macOS（iOS は b-ios が使う）: 端末内 LLM 実装（`apple/fandhe_apple_on_device_llm.swift` を
-/// 呼ぶ C ABI ラッパー）。`device/on_device_llm.rs` の macOS 経路から呼ばれる。iOS は b-ios が
-/// 使い始めるまで未使用になるため `dead_code` を許す。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
+/// Issue #345 macOS・#346 iOS: 端末内 LLM 実装（`apple/fandhe_apple_on_device_llm.swift` を
+/// 呼ぶ C ABI ラッパー）。`device/on_device_llm.rs` の macOS 経路と、iOS 経路（`ios_on_device_llm` 経由）から
+/// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-#[cfg_attr(target_os = "ios", allow(dead_code))]
 pub mod apple_on_device_llm;
 /// Issue #1254（macOS）/ #1255（iOS）: iOS / macOS 向け写真ライブラリ保存実装
 /// （`apple/fandhe_apple_photo_library.m` を呼ぶ C ABI ラッパー。iOS は #1255 までスタブ）。
@@ -458,11 +457,9 @@ pub mod ios_network_status;
 /// C ABI ラッパー）。`device/notification.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_notification;
-/// Issue #345: iOS 向け端末内 LLM のスタブ（`Unsupported` 固定。b-ios が中身を置き換える）。
-/// `device/on_device_llm.rs` の iOS 経路から呼ばれる。ホストの `cargo test` でスタブを検査するため
-/// cfg に `test` を含める。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+/// Issue #346: iOS 向け端末内 LLM 実装（macOS と共用の `apple_on_device_llm` を返す）。
+/// `device/on_device_llm.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
 pub mod ios_on_device_llm;
 /// Issue #1248: iOS 向け歩数実装（#1247 のスタブを置き換え）。`device/pedometer.rs` の iOS
 /// 経路から呼ばれる。FFI の本体はモジュール内側の `cfg(target_os = "ios")` に閉じ、

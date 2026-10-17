@@ -62,7 +62,7 @@
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_print.rs` から
 //!   呼ばれる契約）。UIKit は既存のリンクで足りる。
 //! - `apple/fandhe_apple_on_device_llm.swift`（Issue #345、FoundationModels による端末内 LLM）は
-//!   **macOS 分岐のみ**（iOS は b-ios が足す）で feature `device` 有効時に swiftc で静的ライブラリ化し、
+//!   **macOS・iOS 両分岐**（iOS は Issue #346）で feature `device` 有効時に swiftc で静的ライブラリ化し、
 //!   FoundationModels を弱リンクする（`src/device/apple_on_device_llm.rs` から呼ばれる契約）。
 //! - `apple/fandhe_apple_map_view.m`（Issue #273、`MKMapSnapshotter` による地図の静止画 1 枚の取得。
 //!   iOS 分岐も同じ実装）は `src/device/apple_map_view.rs` から呼ばれる契約。MapKit をリンクする。
@@ -412,6 +412,8 @@ fn main() {
     compile_apple_ml_inference();
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
+    // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS + #346 iOS）も共用する。
+    compile_apple_on_device_llm(true);
 
     // `ios/fandhe_ios_background_task.m`（Issue #1045）は iOS 分岐のみから呼ぶ
     // （`build_macos` からは呼ばない、上記 doc 参照）。
@@ -739,11 +741,11 @@ fn compile_apple_ml_inference() {
 }
 
 /// 端末内 LLM の Swift 薄層 `apple/fandhe_apple_on_device_llm.swift` を `swiftc` で静的ライブラリ化し、
-/// FoundationModels を弱リンクする（Issue #345 macOS、iOS は b-ios）。`LanguageModelSession` は
+/// FoundationModels を弱リンクする（Issue #345 macOS、Issue #346 iOS）。`LanguageModelSession` は
 /// Swift 専用 API で ObjC から呼べないため `cc` ではなく swiftc を使う。FoundationModels は macOS 26 /
 /// iOS 26 以降のため、実行体の最低 OS（macOS 11.0）より新しく**弱リンク**にする
 /// （`rustc-link-arg-bins` ではなく `rustc-link-arg`: cdylib・テスト実行体にも効かせるため）。
-/// `ios` は iOS の triple 表を使う指定。現状は macOS 分岐（`false`）だけが呼ぶ（iOS 分岐からの呼び出しは b-ios が足す）。
+/// `ios` は iOS の triple 表を使う指定。macOS 分岐（`false`）と iOS 分岐（`true`）の両方から呼ぶ。
 /// Apple ツール（`xcrun`）が無いホストでは警告を出してスキップする（リンクは失敗する）。
 /// `FANDHE_REQUIRE_ON_DEVICE_LLM=1`（本番・配布ビルド）ではスキップせず panic する。swiftc 自体の失敗は常に panic。
 fn compile_apple_on_device_llm(ios: bool) {
@@ -853,6 +855,13 @@ fn compile_apple_on_device_llm(ios: bool) {
         );
     }
     println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift");
+    // Swift の `#available` は `__isPlatformVersionAtLeast`（compiler-rt）を参照する。macOS は rustc が
+    // clang_rt を自動リンクするが iOS は無いため、iOS では明示的にリンクする（Issue #346）。
+    if ios {
+        let resource_dir = xcrun(&["--sdk", sdk, "clang", "--print-resource-dir"]);
+        let rt = if sdk == "iphoneos" { "ios" } else { "iossim" };
+        println!("cargo:rustc-link-arg={resource_dir}/lib/darwin/libclang_rt.{rt}.a");
+    }
 }
 
 /// `apple/fandhe_apple_accessibility_prefs.m` を `cc` でコンパイルする（Issue #1308 macOS、
@@ -1369,7 +1378,7 @@ fn build_macos() {
     compile_apple_image_recognition();
     // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
     compile_apple_ml_inference();
-    // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS。iOS は b-ios が実装時に足す）。
+    // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS。iOS は Issue #346 で `build_ios` からも呼ぶ）。
     compile_apple_on_device_llm(false);
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
