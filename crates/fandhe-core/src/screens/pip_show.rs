@@ -166,8 +166,17 @@ pub fn start(state: &mut PipShowState) {
 }
 
 /// 「小窓をやめる」。`Starting` / `Active` のときだけ受け付ける。失敗ではなく `Exited` へ向かう。
+/// 未発送の `Start` を取り消す場合は OS を介さず直ちに `Exited` にする。
 pub fn stop(state: &mut PipShowState) {
     if !matches!(state.phase, PipShowPhase::Starting | PipShowPhase::Active) {
+        return;
+    }
+    // 未発送の Start を取り消すだけなら OS は何も始めていない。Stop を送ると OS 側が
+    // 何もせず通知も返さず期限切れになるため、待たずに Exited へ進める。
+    if state.phase == PipShowPhase::Starting && state.command == Some(PipCommand::Start) {
+        state.generation = state.generation.wrapping_add(1);
+        state.command = None;
+        state.phase = PipShowPhase::Exited;
         return;
     }
     issue(state, PipCommand::Stop);
@@ -418,5 +427,22 @@ mod tests {
         let mut s = at(PipShowPhase::Starting);
         stop(&mut s);
         assert_eq!(s.phase, PipShowPhase::Stopping);
+    }
+
+    #[test]
+    fn stop_cancels_unsent_start_straight_to_exited() {
+        let mut s = at(PipShowPhase::Ready);
+        start(&mut s);
+        stop(&mut s);
+        assert_eq!(s.phase, PipShowPhase::Exited);
+        assert_eq!(take_command(&s), None);
+        // 発送済みの Start は Stop を送って OS の完了を待つ
+        let mut s = at(PipShowPhase::Ready);
+        start(&mut s);
+        let g = s.generation;
+        mark_command_taken(&mut s, g);
+        stop(&mut s);
+        assert_eq!(s.phase, PipShowPhase::Stopping);
+        assert_eq!(s.command, Some(PipCommand::Stop));
     }
 }
