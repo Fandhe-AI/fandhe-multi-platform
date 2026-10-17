@@ -20,11 +20,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_picture_in_picture.rs + crates/fandhe-egui-proxy/src/device/apple_picture_in_picture.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_picture_in_picture.m + crates/fandhe-egui-proxy/src/device/picture_in_picture.rs + crates/fandhe-core/src/screens/pip_show.rs + crates/fandhe-device/src/picture_in_picture.rs、Issue #365"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`Activity.enterPictureInPictureMode`（API 26+）、manifest `supportsPictureInPicture`",
-      "perm": "不要（manifest 宣言のみ）",
+      "perm": "不要（manifest の `supportsPictureInPicture` 宣言のみ）",
       "url": "https://developer.android.com/develop/ui/views/picture-in-picture",
-      "note": "未実装。Activity ごと小窓になるので egui の画面がそのまま入る（API 26+、`FEATURE_PICTURE_IN_PICTURE` が無い端末は非対応）。ただし小窓の間は winit が描画を止めるため、入る直前の画面が静止して残る（守らない範囲）"
+      "note": "実装済み（#366）。Activity ごと小窓になるので egui の画面がそのまま入る（API 26+、`FEATURE_PICTURE_IN_PICTURE` が無い端末は非対応）。小窓に入る呼び出しが成功を返した時点で「小窓に出ている」とし、小窓から戻った・利用者が閉じた・開始中の取り消しは失敗ではなく「戻った」にする。設定で無効など OS が許さない場合は「小窓にできない」、例外は内部エラーに分ける。小窓に入るときの `onPause` は中断扱いにしない。守る範囲: 1 プロセス内の操作順、世代の照合、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: 小窓の間は winit が描画を止めるため入る直前の画面が静止して残ること、モード変更通知の到着までの表示の遅れ、小窓の位置・大きさ（OS が決める）、複数プロセス。Android 実機の確認は #363 で行う。",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#363）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_picture_in_picture.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/PictureInPictureHelper.java + crates/fandhe-egui-proxy/src/device/picture_in_picture.rs + crates/fandhe-core/src/screens/pip_show.rs + crates/fandhe-device/src/picture_in_picture.rs、Issue #366"
     },
     "macos": {
       "status": "done",
