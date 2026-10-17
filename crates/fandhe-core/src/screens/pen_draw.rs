@@ -161,7 +161,7 @@ fn push_point(s: &mut PenDrawState, x: f32, y: f32, r: f32) {
 }
 
 /// キャンバス上の位置 `pos` と OS のサンプルを注入する。`sample` が `None`（OS が値を返さない）
-/// のときは種類不明・一定の太さで描く。世代の不一致・失敗状態・範囲外の座標は捨てる。
+/// のときは種類不明・一定の太さで描く。世代の不一致・失敗状態・範囲外の座標は捨てる（範囲外は補間の起点も解除する）。
 pub fn apply_sample(
     s: &mut PenDrawState,
     generation: u64,
@@ -173,6 +173,8 @@ pub fn apply_sample(
     }
     let (x, y) = pos;
     if !in_canvas(x, y) {
+        // 範囲外では補間の起点を解除する。再入場時に退出前の点と直線で結ばない。
+        s.last_point = None;
         return;
     }
     let (kind, pressure, altitude) = match sample {
@@ -321,6 +323,17 @@ mod tests {
             pressure: Some(p),
             altitude_deg: Some(45.0),
         })
+    }
+
+    #[test]
+    fn leaving_canvas_breaks_the_line() {
+        let mut s = PenDrawState::default();
+        apply_sample(&mut s, 0, (10.0, 10.0), pen(0.5));
+        apply_sample(&mut s, 0, (-10.0, 10.0), pen(0.5));
+        apply_sample(&mut s, 0, (-10.0, 300.0), pen(0.5));
+        apply_sample(&mut s, 0, (10.0, 300.0), pen(0.5));
+        // 再入場の点だけが加わり、縦線の補間点は出ない。
+        assert_eq!(s.point_count(), 2);
     }
 
     #[test]
