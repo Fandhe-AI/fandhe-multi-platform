@@ -472,8 +472,8 @@ pub mod ios_on_device_llm;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_pedometer;
-/// Issue #355: iOS 向けペン・筆圧入力実装のスタブ（#356 が埋める）。`device/pen_stylus.rs` の
-/// iOS 経路から呼ばれる。
+/// Issue #356: iOS 向けペン・筆圧入力実装（`ios/fandhe_ios_pen_stylus.m` の観測専用
+/// `UIGestureRecognizer` が値を置く C ABI ラッパー）。`device/pen_stylus.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_pen_stylus;

@@ -7,11 +7,14 @@
   "bundle": "continuous-push",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "UIKit `UITouch`（`force` / `altitudeAngle` / `azimuthAngle`）、PencilKit `PKCanvasView`",
-      "perm": "なし",
-      "url": "https://developer.apple.com/documentation/pencilkit",
-      "note": "未実装。PencilKit は手書き UI 部品で、本機能は筆圧・角度の生データを対象にする。Apple Pencil の実機が要る"
+      "status": "done",
+      "api": "UIKit `UITouch`（`type` / `force` / `maximumPossibleForce` / `altitudeAngle`）を観測専用の `UIGestureRecognizer` で読む",
+      "perm": "不要（Info.plist・entitlement の追加なし）",
+      "url": "https://developer.apple.com/documentation/uikit/uitouch/altitudeangle",
+      "note": "実装済み（#356）。位置は egui のポインタから、種類・筆圧・傾きは winit の base view に付けた観測専用 recognizer から取る（winit は種類と altitudeAngle を捨てる）。筆圧と傾きはペンのときだけ出し、指・ポインタは None（固定値を筆圧にしない）。離す・キャンセル・非アクティブ化・背景遷移で接触なしに戻す。守る範囲: 1 プロセス内の順序・嘘の値を出さないこと・離したら消すこと。守らない範囲: 1 フレーム内の複数点、主ポインタ 1 本以外、推定筆圧の後からの更新、方位角・ホバー、複数プロセス。シミュレータでは Apple Pencil を再現できない。実機確認（iPad と Apple Pencil）は #354",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#354）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_pen_stylus.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_pen_stylus.m + crates/fandhe-egui-proxy/src/device/pen_stylus.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-device/src/pen_stylus.rs、Issue #356"
     },
     "android": {
       "status": "possible",

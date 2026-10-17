@@ -194,6 +194,9 @@
 //! - `ios/fandhe_ios_compass.m`（Issue #1405、CoreLocation の heading 購読による方位）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_compass.rs`
 //!   から呼ばれる契約）。CoreLocation は位置情報用にリンク済みで追加リンクは無い。
+//! - `ios/fandhe_ios_pen_stylus.m`（Issue #356、観測専用 `UIGestureRecognizer` による種類・筆圧・傾き）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_pen_stylus.rs` から
+//!   呼ばれる契約）。UIKit は既存のリンクで足りる。
 //! - `ios/fandhe_ios_ar.m`（Issue #308、ARKit の `ARSession` による追跡状態・位置・水平面の数）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_ar.rs` から呼ばれる契約）。
 //!   ARKit を追加でリンクする。
@@ -444,6 +447,8 @@ fn main() {
     compile_ios_local_fonts();
     // `ios/fandhe_ios_compass.m`（Issue #1405）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_compass();
+    // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
+    compile_ios_pen_stylus();
     // `ios/fandhe_ios_ar.m`（Issue #308）。iOS 分岐のみ。
     compile_ios_ar();
     // `ios/fandhe_ios_file_watch.m`（Issue #1412）。iOS 分岐のみ。
@@ -1196,6 +1201,18 @@ fn compile_ios_compass() {
         .file("ios/fandhe_ios_compass.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_compass");
+}
+
+/// `ios/fandhe_ios_pen_stylus.m` を `cc` でコンパイルする（Issue #356）。**iOS 分岐のみ**から
+/// 呼ばれる（`src/device/ios_pen_stylus.rs` が使う）。UIKit は既存のリンクで足りる。
+fn compile_ios_pen_stylus() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_pen_stylus.m");
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_common.h");
+    cc::Build::new()
+        .file("ios/fandhe_ios_pen_stylus.m")
+        .include("ios")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_pen_stylus");
 }
 
 /// `ios/fandhe_ios_ar.m` を `cc` でコンパイルし ARKit をリンクする（Issue #308）。**iOS 分岐のみ**
