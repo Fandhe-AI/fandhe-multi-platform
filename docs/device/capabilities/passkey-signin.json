@@ -38,12 +38,15 @@
       "note": "未実装。Windows Hello 側の公式案内は https://learn.microsoft.com/en-us/windows/security/identity-protection/passkeys/ 。unpackaged での可否は要確認"
     },
     "web": {
-      "status": "possible",
-      "api": "Web Authentication（`navigator.credentials.create()` / `get()`）",
-      "perm": "なし（secure context 必須）",
+      "status": "done",
+      "api": "Web Authentication（`navigator.credentials.create()` で登録、`get()` でサインイン。discoverable credential・本人の検証必須・`allowCredentials` は空）",
+      "perm": "なし（secure context 必須。`localhost` か https で配信する。IP アドレスは RP ID にできない）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API",
-      "note": "未実装。MDN は Baseline（Widely available）表示。リレイングパーティ ID はオリジンのドメインに紐づく",
-      "safari": "全エンジン対応（MDN の Baseline 表示。個別の最小版は未確認）"
+      "note": "サーバー検証なしのデモ。応答は challenge・type・UP/UV/AT・資格情報 ID・署名の有無まで確かめるが、署名と rpIdHash は検証せず、origin と crossOrigin は照合しない。RP ID はページのホスト名（ブラウザが決める）。キャンセル・該当なし・期限切れは `NotAllowedError` で区別できない。MDN は Baseline（Widely available）表示。登録したデモ用パスキーは OS・ブラウザに残る。守る範囲: 1 ページ内の要求の順序・失敗を成功にしないこと。守らない範囲: 複数タブ・署名の正しさ",
+      "safari": "全エンジン対応（MDN の Baseline 表示。個別の最小版は未確認）",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザでの確認は確認用 issue #337 で追う",
+      "impl": "crates/fandhe-web-dom/src/passkey.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/passkey_signin.rs + crates/fandhe-device/src/passkey.rs、Issue #344"
     }
   },
   "note": "secure-credential（端末内保存）・biometric-auth（本人確認）との違い: 本機能は OS のパスキー（公開鍵認証）でサーバーにサインインする。今回の範囲: Windows・Web で、パスキーを登録し、サインイン要求への署名付きの応答（またはキャンセル・失敗）を画面に出すだけ。サーバー検証なしのデモで、署名は検証しないため、サインインの成立は意味しない。iOS / macOS / Android は保留（ドメインと開発者登録が決まってから）。"

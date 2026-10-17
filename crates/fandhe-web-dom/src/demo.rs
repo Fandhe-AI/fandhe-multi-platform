@@ -106,6 +106,9 @@ use fandhe_core::screens::nlp_segment::{
 use fandhe_core::screens::notification_send::{
     current_screen as current_notification_send_screen, NotificationSendState,
 };
+use fandhe_core::screens::passkey_signin::{
+    current_screen as current_passkey_signin_screen, PasskeySigninState,
+};
 use fandhe_core::screens::photo_pick::{
     current_screen as current_photo_pick_screen, PhotoPickState,
 };
@@ -856,6 +859,21 @@ pub fn mount_compose_mail_sms_screen(root_id: &str) -> Result<(), JsValue> {
         current_compose_mail_sms_screen(&initial_state),
         initial_state,
         super::compose_mail_sms::compose_mail_sms_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「パスキー・サインイン連携」（親 #92、Issue #344）をマウントする
+/// 検証専用エントリポイント。`super::passkey::passkey_signin_effect` が WebAuthn を呼ぶ。
+#[wasm_bindgen]
+pub fn mount_passkey_signin_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = PasskeySigninState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_passkey_signin_screen(&initial_state),
+        initial_state,
+        super::passkey::passkey_signin_effect,
     )
 }
 
