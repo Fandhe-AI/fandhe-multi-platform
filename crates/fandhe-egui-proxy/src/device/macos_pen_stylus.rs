@@ -44,7 +44,7 @@ fn tilt_deg(t: f32) -> Option<f32> {
 }
 
 /// `.m` の戻り値と生値を契約の結果へ写す。負のコード・未知のコード・未定義の flags は
-/// 嘘の成功にせず `Internal`。範囲外・非有限の値は `None`。
+/// 嘘の成功にせず `Internal`。非有限の値と範囲外の傾きは `None`、有限の筆圧は 0〜1 に丸める。
 pub(super) fn decode(code: i32, raw: &Raw) -> Result<Option<PenSample>, DeviceError> {
     match code {
         0 => return Ok(None),
@@ -60,10 +60,9 @@ pub(super) fn decode(code: i32, raw: &Raw) -> Result<Option<PenSample>, DeviceEr
         3 => PointerKind::Mouse,
         _ => PointerKind::Unknown,
     };
-    let pressure = (raw.flags & FLAG_PRESSURE != 0
-        && raw.pressure.is_finite()
-        && (0.0..=1.0).contains(&raw.pressure))
-    .then_some(raw.pressure);
+    // 範囲への丸めは `PenSample::new` に任せる（共通の契約）。ここでは非有限だけを未取得にする。
+    let pressure =
+        (raw.flags & FLAG_PRESSURE != 0 && raw.pressure.is_finite()).then_some(raw.pressure);
     let altitude = if raw.flags & FLAG_TILT != 0 {
         tilt_deg(raw.tilt_x)
             .zip(tilt_deg(raw.tilt_y))
@@ -217,7 +216,17 @@ mod tests {
     fn out_of_range_or_nan_values_become_none() {
         let s = decode(1, &raw(1, f32::NAN, 2.0, 0.0, 3)).unwrap().unwrap();
         assert_eq!((s.pressure, s.altitude_deg), (None, None));
-        let s = decode(1, &raw(1, 1.5, f32::NAN, 0.0, 3)).unwrap().unwrap();
+        let s = decode(1, &raw(1, f32::INFINITY, f32::NAN, 0.0, 3))
+            .unwrap()
+            .unwrap();
         assert_eq!((s.pressure, s.altitude_deg), (None, None));
+    }
+
+    #[test]
+    fn finite_out_of_range_pressure_is_clamped() {
+        let s = decode(1, &raw(1, 1.5, 0.0, 0.0, 1)).unwrap().unwrap();
+        assert_eq!(s.pressure, Some(1.0));
+        let s = decode(1, &raw(1, -0.2, 0.0, 0.0, 1)).unwrap().unwrap();
+        assert_eq!(s.pressure, Some(0.0));
     }
 }
