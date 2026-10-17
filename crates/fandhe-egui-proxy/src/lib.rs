@@ -937,10 +937,23 @@ fn render_node<S: 'static>(
                     width: f32::INFINITY,
                     height: f32::INFINITY,
                 });
-                let (rect, _response) = ui.allocate_exact_size(
+                // Issue #355: ペン描画のため drag を拾う（ルートの `ScrollArea` がキャンバス上の
+                // ドラッグでスクロールするのを止める）。押下中の位置（キャンバス左上原点）は
+                // `CompletionSender::canvas_pointer` が effect ドライバへ渡す。
+                let (rect, response) = ui.allocate_exact_size(
                     egui::vec2(measured.width, measured.height),
-                    egui::Sense::hover(),
+                    egui::Sense::drag(),
                 );
+                let pointer = if response.is_pointer_button_down_on() {
+                    response
+                        .interact_pointer_pos()
+                        .map(|p| (p.x - rect.min.x, p.y - rect.min.y))
+                } else {
+                    None
+                };
+                ui.ctx().data_mut(|d| {
+                    d.insert_temp(crate::app::canvas_pointer_id(widget.id().raw()), pointer)
+                });
                 // `paint` は配置矩形の左上 `origin` 分だけ平行移動済みの座標を返す
                 // （`ui/canvas.rs` の `Widget::paint` 契約）。
                 for command in canvas.paint((rect.min.x, rect.min.y), measured) {

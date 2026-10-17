@@ -128,6 +128,11 @@ pub mod android_network_status;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_pedometer;
+/// Issue #355: Android 向けペン・筆圧入力実装のスタブ（#357 が埋める）。`device/pen_stylus.rs` の
+/// Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_pen_stylus;
 /// Issue #1254（骨格）/ #1256（実装）: Android 向け写真ライブラリ保存。#1256 までスタブ。
 /// `device/photo_save.rs` の Android 経路から呼ばれる。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -467,6 +472,11 @@ pub mod ios_on_device_llm;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_pedometer;
+/// Issue #355: iOS 向けペン・筆圧入力実装のスタブ（#356 が埋める）。`device/pen_stylus.rs` の
+/// iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_pen_stylus;
 /// Issue #1275: iOS 向け電源状態実装（`ios/fandhe_ios_power_state.m` を呼ぶ C ABI ラッパー。
 /// #1274 のスタブを置き換え）。`device/power_state.rs` の iOS 経路から呼ばれる。写像の純関数を
 /// ホストでテストできるよう cfg は `any(ios, test)`。
@@ -534,6 +544,12 @@ pub mod macos_local_fonts;
 #[cfg(any(target_os = "macos", target_os = "ios", test))]
 #[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 pub mod macos_multi_display;
+/// Issue #355: macOS 向けペン・筆圧入力実装（`macos/fandhe_macos_pen_stylus.m` の `NSEvent` local
+/// monitor を呼ぶ C ABI ラッパー）。`device/pen_stylus.rs` の macOS 経路から呼ばれる。写像の純関数を
+/// ホストでテストできるよう cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_pen_stylus;
 /// Issue #1274: macOS 向け電源状態実装（`macos/fandhe_macos_power_state.m` を呼ぶ C ABI ラッパー）。
 /// `device/power_state.rs` の macOS 経路から呼ばれる。写像の純関数をホストでテストできるよう
 /// cfg は `any(macos, test)`。
@@ -596,6 +612,10 @@ pub mod passkey;
 /// Phase 11 の拡充ループ（親 #1119、Issue #1247）: 歩数の effect ドライバ（Windows 実装、
 /// iOS・Android は #1248・#1249 で埋めるスタブ、他 OS は `UnsupportedPedometer` 固定）。
 pub mod pedometer;
+/// Phase 11 の拡充ループ（親 #95、Issue #355）: ペン・筆圧入力の effect ドライバ（macOS 実装、
+/// iOS・Android・Windows は #356・#357・#359 で埋めるスタブ、他 OS は `UnsupportedPenStylus` 固定。
+/// Web は `fandhe-web-dom`）。
+pub mod pen_stylus;
 /// Phase 11 の拡充ループ（親 #1101、Issue #1103/#1104）: 写真選択の effect ドライバ（macOS /
 /// Windows は `PhotoPicker` 実装、iOS/Android は pull 型 `bridge`、Linux は
 /// `UnsupportedPhotoPicker` 固定。Web は `fandhe-web-dom`）。選んだ画像は復号を確かめてから
@@ -770,6 +790,11 @@ pub mod windows_passkey;
 /// `device/pedometer.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_pedometer;
+/// Issue #355: Windows 向けペン・筆圧入力実装のスタブ（#359 が埋める）。`device/pen_stylus.rs` の
+/// Windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_pen_stylus;
 /// Issue #1254: Windows 向け写真保存実装（`SHGetKnownFolderPath(FOLDERID_Pictures)` で解決した
 /// フォルダへ `FolderPhotoLibrary` で書く）。`device/photo_save.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

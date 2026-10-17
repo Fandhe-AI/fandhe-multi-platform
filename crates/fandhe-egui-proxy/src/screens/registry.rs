@@ -222,6 +222,10 @@ generated_screens! {
     crate::device::network_status::network_status_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "pen_draw" => fandhe_core::screens::pen_draw::current_screen,
+    crate::device::pen_stylus::pen_draw_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "fullscreen_toggle" => fandhe_core::screens::fullscreen_toggle::current_screen,
     crate::device::fullscreen_immersive::fullscreen_toggle_effect,
     effect

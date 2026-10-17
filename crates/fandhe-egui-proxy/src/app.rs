@@ -140,6 +140,20 @@ impl<S> CompletionSender<S> {
         self.ctx.input(|i| i.pointer.primary_down())
     }
 
+    /// キャンバス `id` 上で主ボタンを押下中のポインタ位置（キャンバス左上原点）。押していなければ
+    /// `None`。`lib.rs` の `CanvasWidget` 分岐が毎フレーム書いた値を `ctx.data` から読むだけの
+    /// 薄い委譲で、effect はフレーム末尾で呼ばれるため同じフレームの値が見える
+    /// （Issue #355 `device/pen_stylus.rs` 専用）。
+    #[cfg_attr(
+        not(all(feature = "device", not(target_arch = "wasm32"))),
+        allow(dead_code)
+    )]
+    pub(crate) fn canvas_pointer(&self, id: fandhe_core::WidgetId) -> Option<(f32, f32)> {
+        self.ctx
+            .data(|d| d.get_temp::<Option<(f32, f32)>>(canvas_pointer_id(id.raw())))
+            .flatten()
+    }
+
     /// 実描画の拡大率を差し替える（`egui::Context::set_zoom_factor` への薄い委譲。
     /// Issue #912「文字サイズ追従」の effect ドライバ
     /// （`device/text_scale.rs::drive`）専用）。
@@ -231,6 +245,12 @@ impl<S> CompletionSender<S> {
             )
         })
     }
+}
+
+/// `CanvasWidget` のポインタ位置を `ctx.data` に置くときの `egui::Id`（`lib.rs` が書き、
+/// [`CompletionSender::canvas_pointer`] が読む）。
+pub(crate) fn canvas_pointer_id(widget_raw: u64) -> egui::Id {
+    egui::Id::new(("fandhe_canvas_pointer", widget_raw))
 }
 
 /// CompletionSender::text_scale_last_applied / set_text_scale_last_applied が使う
