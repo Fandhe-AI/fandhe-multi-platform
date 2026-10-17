@@ -216,8 +216,12 @@ final class PictureInPictureHelper {
             }
             if (call.state.compareAndSet(PENDING, ABANDONED)) {
                 synchronized (lock) {
-                    if (gen == current && (phase == PHASE_STARTING || phase == PHASE_STOPPING)) {
+                    if (gen == current && phase == PHASE_STARTING) {
                         phase = PHASE_FAILED_INTERNAL;
+                    } else if (gen == current && phase == PHASE_STOPPING) {
+                        // 停止が未開始のまま放棄された。小窓は残っているので Active へ戻し、
+                        // 後続の stop / shutdown が解除を再試行できるようにする。
+                        phase = PHASE_ACTIVE;
                     }
                 }
                 return RESULT_FAILED;
@@ -246,12 +250,47 @@ final class PictureInPictureHelper {
         }
     }
 
-    // 冪等。小窓そのものは閉じない（OS が片付ける。閉じるのはドライバの stop）。
+    // 冪等。小窓が残りうる状態（Active / Stopping）なら、世代を消す前に UI キューへ解除を投げ、
+    // 最大 UI_TIMEOUT_MS 待つ。UI 側が遅れても Runnable は残り、後で実行されて小窓を解く
+    // （その間に新しい prepare が来ていたら current != 0 で何もしない）。
     void shutdown() {
+        boolean release;
         synchronized (lock) {
+            release = !destroyed && (phase == PHASE_ACTIVE || phase == PHASE_STOPPING);
             current = 0;
             phase = PHASE_IDLE;
             params = null;
+        }
+        if (!release) {
+            return;
+        }
+        final CountDownLatch done = new CountDownLatch(1);
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    synchronized (lock) {
+                        if (destroyed || current != 0) {
+                            return;
+                        }
+                        try {
+                            if (activity.isInPictureInPictureMode()) {
+                                activity.startActivity(new Intent(activity, MainActivity.class)
+                                        .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
+                            }
+                        } catch (RuntimeException e) {
+                            // 解除できなければ OS 側の片付けに任せる。
+                        }
+                    }
+                } finally {
+                    done.countDown();
+                }
+            }
+        });
+        try {
+            done.await(UI_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
