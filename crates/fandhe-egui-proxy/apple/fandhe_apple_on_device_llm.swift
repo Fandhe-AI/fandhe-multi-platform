@@ -1,4 +1,4 @@
-// 端末内 LLM（FoundationModels）の Swift 薄層（Issue #345）。
+// 端末内 LLM（FoundationModels）の Swift 薄層（Issue #345 macOS、Issue #346 iOS）。
 //
 // `LanguageModelSession` は Swift 専用 API で ObjC から呼べないため、`build.rs` の
 // `compile_apple_on_device_llm` が swiftc で静的ライブラリ化し、Rust の
@@ -7,7 +7,13 @@
 //
 // 契約（戻りコードの意味の SSOT は Rust 側の `match`）:
 //   0 成功 / 1 非対応 / 2 Apple Intelligence が無効 / 3 モデル未取得 / 4 応答拒否 /
-//   5 混雑・回数制限 / 6 期限切れ / 7 その他 / 8 プロンプトが UTF-8 でない
+//   5 混雑・回数制限（前の生成が残っている場合を含む）/ 6 期限切れ / 7 その他 /
+//   8 プロンプトが UTF-8 でない、または長すぎる
+//
+// - プロンプト長の SSOT は Rust の `validate_prompt`。ここの上限（4096 バイト）は Rust の検査を経ない
+//   経路での大量コピーを防ぐ最後の砦で、`Data` へコピーする前に検査する。
+// - 実行中の生成はプロセス内で 1 本に制限する。期限切れで戻っても Task は走り切るまで枠を持つため、
+//   再要求は 5（混雑）になり、Task が積み上がるのは最大 1 本。
 //
 // - ポインタは呼び出しの間だけ参照する。Swift の Task へは持ち込まず、コピーした String だけを渡す。
 // - 呼び出し元のワーカーは `deadline_ms` だけ待つ。期限切れで戻った後に届いた完了は 1 回きりの
@@ -43,6 +49,29 @@ private final class ResultBox: @unchecked Sendable {
     }
 }
 
+/// 実行中の生成を 1 本に制限する枠。判定と更新は同じロックの内側で行う。
+private final class InflightGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var busy = false
+
+    func tryAcquire() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if busy { return false }
+        busy = true
+        return true
+    }
+
+    func release() {
+        lock.lock()
+        defer { lock.unlock() }
+        busy = false
+    }
+}
+
+private let inflightGate = InflightGate()
+private let maxPromptBytes = 4096
+
 #if canImport(FoundationModels)
 @available(macOS 26.0, iOS 26.0, *)
 private func respondImpl(prompt: String, deadlineMs: UInt64, maxTokens: Int32) -> (Int32, String) {
@@ -61,9 +90,16 @@ private func respondImpl(prompt: String, deadlineMs: UInt64, maxTokens: Int32) -
         return (7, "")
     }
 
+    // 利用不可の早期 return では枠を取らない。Task 側の defer が全経路で解放する。
+    guard inflightGate.tryAcquire() else { return (5, "") }
     let box = ResultBox()
     let sem = DispatchSemaphore(value: 0)
     let task = Task.detached {
+        // 枠の解放 → signal の順（結果を届ける前に状態を確定する）。
+        defer {
+            inflightGate.release()
+            sem.signal()
+        }
         do {
             let session = LanguageModelSession()
             let options = GenerationOptions(maximumResponseTokens: Int(maxTokens))
@@ -79,7 +115,6 @@ private func respondImpl(prompt: String, deadlineMs: UInt64, maxTokens: Int32) -
         } catch {
             box.set(code: 7, text: "")
         }
-        sem.signal()
     }
     let waitMs = Int(min(deadlineMs, UInt64(Int32.max)))
     if sem.wait(timeout: .now() + .milliseconds(waitMs)) == .timedOut {
@@ -102,6 +137,7 @@ public func fandhe_apple_on_device_llm_respond(
 ) -> Int32 {
     guard let prompt = prompt, let out = out, let outLen = outLen, len >= 0, cap > 0 else { return 7 }
     outLen.pointee = 0
+    guard len <= maxPromptBytes else { return 8 }
     let data = Data(bytes: prompt, count: len)
     guard let text = String(data: data, encoding: .utf8) else { return 8 }
 

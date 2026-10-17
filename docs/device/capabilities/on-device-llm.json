@@ -7,11 +7,14 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "FoundationModels（`SystemLanguageModel` / `LanguageModelSession`）",
-      "perm": "不要と認識（要確認）",
+      "status": "done",
+      "api": "FoundationModels（`SystemLanguageModel.default.availability` と `LanguageModelSession.respond(to:options:)`。Swift 専用のため Swift 薄層と `@_cdecl` の C ABI で呼ぶ）",
+      "perm": "不要（entitlement・Info.plist の追加なし）。Apple Intelligence を設定で有効にする必要がある。実機の `respond` は #338 で確認する",
       "url": "https://developer.apple.com/documentation/foundationmodels/systemlanguagemodel",
-      "note": "未実装。iOS 26 の API。Apple Intelligence 対応端末に限る（要確認）。利用不可時の状態（`availability`）を成功値に畳まない"
+      "note": "実装済み（#346。macOS と共用の実装）。範囲は macOS と同じ（固定プロンプトを 1 回渡して応答の全文を表示することのみ）。iOS 26 未満は非対応（Unsupported）、設定で無効なときは Disabled、モデル未取得は失敗として出しダウンロードは始めない。背景遷移で rateLimited になったら混雑の失敗として出す。前の生成が残っている間の再押下は混雑の失敗になる。応答の上限は 256 トークン、期限は 60 秒（初回のモデル読み込みを含む）。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: OS ごとの所要時間の違い、応答内容の非決定性、期限後も OS 側の生成が走り切ること、複数タブ・複数プロセス。iOS 実機の確認は #338 で行う。",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#338）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_on_device_llm.rs + crates/fandhe-egui-proxy/src/device/apple_on_device_llm.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_on_device_llm.swift + crates/fandhe-egui-proxy/src/device/on_device_llm.rs + crates/fandhe-core/src/screens/on_device_llm.rs + crates/fandhe-device/src/on_device_llm.rs、Issue #346"
     },
     "android": {
       "status": "possible",

@@ -11,7 +11,7 @@
 //! # OS 別の分担（dispatch は #345 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
 //! - macOS: [`super::apple_on_device_llm::AppleOnDeviceLlm`]（#345）
-//! - iOS: `ios_on_device_llm`（b-ios。FoundationModels）
+//! - iOS: `ios_on_device_llm`（#346。macOS と共用の `AppleOnDeviceLlm`）
 //! - Web: `fandhe-web-dom`（c。Prompt API）
 //! - Android・Windows: 保留・申請待ちのため `UnsupportedOnDeviceLlm` 固定
 //!   （ダミーの成功実装へは倒さない）

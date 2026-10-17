@@ -1,5 +1,5 @@
-//! macOS / iOS 向け端末内 LLM 実装（Issue #345 macOS、iOS は b-ios が使う）。
-//! `device/on_device_llm.rs` の macOS 経路から呼ばれ、`apple/fandhe_apple_on_device_llm.swift`
+//! macOS / iOS 向け端末内 LLM 実装（Issue #345 macOS、Issue #346 iOS）。
+//! `device/on_device_llm.rs` の macOS 経路と iOS 経路（`ios_on_device_llm` 経由）から呼ばれ、`apple/fandhe_apple_on_device_llm.swift`
 //! （FoundationModels。`build.rs` が feature `device` 有効時に swiftc で静的ライブラリ化）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出し 1 か所に閉じる
 //! （coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・`device.rs` の mod cfg と
@@ -96,6 +96,28 @@ mod tests {
             }
             Err(e) => panic!("想定外の失敗: {e:?}"),
         }
+    }
+
+    #[test]
+    #[allow(unsafe_code)]
+    fn swift_entry_rejects_oversized_prompt() {
+        let prompt = vec![b'a'; 4097];
+        let mut buf = vec![0u8; 16];
+        let mut out_len = 0usize;
+        // SAFETY: 各領域は呼び出しの間生存する。上限の guard は availability 判定より前で、
+        // モデルには触れず 8 を返す。
+        let code = unsafe {
+            fandhe_apple_on_device_llm_respond(
+                prompt.as_ptr(),
+                prompt.len(),
+                1000,
+                MAX_RESPONSE_TOKENS,
+                buf.as_mut_ptr(),
+                buf.len(),
+                &mut out_len,
+            )
+        };
+        assert_eq!(code, 8);
     }
 
     #[test]
