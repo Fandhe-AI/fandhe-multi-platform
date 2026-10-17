@@ -116,6 +116,7 @@ use fandhe_core::screens::pen_draw::{current_screen as current_pen_draw_screen, 
 use fandhe_core::screens::photo_pick::{
     current_screen as current_photo_pick_screen, PhotoPickState,
 };
+use fandhe_core::screens::pip_show::{current_screen as current_pip_show_screen, PipShowState};
 use fandhe_core::screens::power_state_show::{
     current_screen as current_power_state_screen, PowerStateShowState,
 };
@@ -1043,6 +1044,22 @@ pub fn mount_fullscreen_toggle_screen(root_id: &str) -> Result<(), JsValue> {
         screen,
         initial_state,
         super::fullscreen_immersive::fullscreen_toggle_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「ピクチャ・イン・ピクチャ」（親 #97、Issue #367）を
+/// マウントする検証専用エントリポイント。`super::picture_in_picture::pip_show_effect` が
+/// Picture-in-Picture API を駆動する（画面がボタンを常時出すため追加ボタンは不要）。
+#[wasm_bindgen]
+pub fn mount_pip_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = PipShowState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_pip_show_screen(&initial_state),
+        initial_state,
+        super::picture_in_picture::pip_show_effect,
     )
 }
 

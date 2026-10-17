@@ -90,6 +90,7 @@
 //!   純関数（pointerType・筆圧・傾きの写像、座標変換、操作列の反映）のみ `wasm32` gate の外に置く
 //! - [`ar`]: 「AR 表示」画面の Web 経路（親 #90、Issue #309）。WebXR `immersive-ar` + `dom-overlay`。
 //!   純関数（姿勢 → 状態・失敗の写像・tick 判定）のみ `wasm32` gate の外に置く
+//! - [`picture_in_picture`]: 「ピクチャ・イン・ピクチャ」画面の Web 経路（親 #97、Issue #367）。
 //! - [`fullscreen_immersive`]: 「全画面表示」画面の Web 経路（親 #1133、Issue #1315）。
 //!   純関数（発送判定・到達判定）のみ `wasm32` gate の外に置く
 //!
@@ -285,6 +286,9 @@ pub mod passkey;
 /// 型サンプル「ペン・筆圧で描く」の Web 経路（Issue #358）。[`haptics`] と同じ理由で純関数は native からも
 /// テストできるよう gate を外す。
 pub mod pen_stylus;
+/// 型サンプル「ピクチャ・イン・ピクチャ」の Web 経路（Issue #367）。[`haptics`] と同じ理由で純関数は native からも
+/// テストできるよう gate を外す。
+pub mod picture_in_picture;
 /// 型サンプル「印刷」の Web 経路（Issue #329）。[`haptics`] と同じ理由で gate を外す。
 pub mod print_page;
 /// 型サンプル「画面スリープの抑止」の Web 経路（Issue #1281）。[`haptics`] と同じ理由で gate を外す。
