@@ -1,0 +1,53 @@
+{
+  "id": "ar-camera-view",
+  "name": "AR のカメラ映像表示",
+  "group": "未着手の OS 機能",
+  "order": 50,
+  "priority": 152,
+  "bundle": "continuous-push",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "ARKit の `ARSCNView` / `ARView`（映像つきの AR ビュー）、または `ARFrame.capturedImage` をテクスチャ化して egui へ描く",
+      "perm": "`NSCameraUsageDescription`。未決定なら `AVCaptureDevice requestAccessForMediaType` で要求する",
+      "url": "https://developer.apple.com/documentation/arkit/arsession",
+      "note": "未実装。カメラ映像を背景に AR を重ねて出すには、ARKit の映像を egui の描画面と合成する必要がある。論点は `ARSCNView` / `ARView` を egui の描画面に重ねるか、映像フレームをテクスチャ化して egui で描くか。後者は 30fps の転送量が課題"
+    },
+    "android": {
+      "status": "no",
+      "api": "ARCore（`com.google.ar.core`）",
+      "perm": "`CAMERA`（加えて Google Play Services for AR が必要）",
+      "url": "https://developers.google.com/ar/develop/java/quickstart",
+      "note": "ARCore は Google Play Services for AR の導入・更新を要求する。GMS 系に依存するため前提に合わない。OS 標準（AOSP）の AR API は無い",
+      "detail": "できない（ARCore が Google Play Services for AR 必須）"
+    },
+    "macos": {
+      "status": "no",
+      "api": "ARKit（macOS では Vision Pro 向け Remote Immersive Space の描画側のみ）",
+      "perm": "-",
+      "url": "https://developer.apple.com/videos/play/wwdc2025/317/",
+      "note": "macOS の ARKit は visionOS 向け Remote Immersive Space 用途で、Mac のカメラ映像に重ねる `ARSession`（iOS 型）は無い。API が存在するため n-a でなく no とした",
+      "detail": "できない（カメラ AR セッションが無い）"
+    },
+    "windows": {
+      "status": "no",
+      "api": "Windows Mixed Reality（`Windows.Perception.Spatial` 等）",
+      "perm": "-",
+      "url": "https://learn.microsoft.com/en-us/windows/whats-new/whats-new-windows-11-version-24h2",
+      "note": "Windows Mixed Reality は Windows 11 24H2 で削除済み（対応は Windows 10 20H2〜Windows 11 23H2）。素の exe から使える一般 PC 向けの AR API は無い",
+      "detail": "できない（Windows Mixed Reality は Windows 11 24H2 で削除済み）"
+    },
+    "web": {
+      "status": "done",
+      "api": "WebXR Device API（`navigator.xr.requestSession('immersive-ar')`）",
+      "perm": "セッション開始時のブラウザ許可。secure context 必須、`xr-spatial-tracking` の Permissions-Policy",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebXR_Device_API",
+      "safari": "非対応（iOS / iPadOS の Safari は WebXR 自体が無く、visionOS の Safari は immersive-vr のみ）",
+      "impl": "crates/fandhe-web-dom/src/ar.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/ar_show.rs + crates/fandhe-device/src/ar.rs、Issue #309",
+      "detail": "できている（ヘッドレス Chrome で非対応表示まで確認・実機は未確認）",
+      "implStatus": "実装済み・ヘッドレス Chrome で非対応表示まで確認。ARCore 対応 Android 端末の Chrome での確認は #306",
+      "note": "`ar` の Web 実装で、WebXR `immersive-ar` のブラウザがカメラ映像を合成している。マウント先の DOM を `dom-overlay` の root にしてカメラ映像へ重ねる。実質 Android Chrome 限定（Safari 非対応）"
+    }
+  },
+  "note": "カメラ映像を背景に AR を重ねて出す。`ar`（追跡の数値だけを出す）から切り出した行。iOS は ARKit の映像と egui の描画面の合成が論点。Web は WebXR `immersive-ar` で実装済み。Android・macOS・Windows は `ar` と同じ理由で no"
+}

@@ -1,6 +1,6 @@
 {
   "id": "ar",
-  "name": "AR 表示",
+  "name": "AR 表示（追跡の数値）",
   "group": "未着手の OS 機能",
   "order": 50,
   "priority": 40,
@@ -58,5 +58,5 @@
       "implStatus": "実装済み・ヘッドレス Chrome で非対応表示まで確認。ARCore 対応 Android 端末の Chrome での確認は #306"
     }
   },
-  "note": "iOS は ARKit（`ARSession`、追跡状態・位置・水平面の数を数値で表示。カメラ映像の描画は範囲外）、Web は WebXR（`immersive-ar`、実質 Android Chrome のみ・Safari 非対応）で届く見込み。Android は ARCore が Google Play Services for AR 必須、macOS は ARKit がカメラ AR セッション無し、Windows は Windows Mixed Reality が 24H2 で削除済みのため no。今回の範囲: iOS の ARKit で追跡状態・位置・水平面の数を表示するだけ（映像・アンカー・3D 物体配置は扱わない）。Web（WebXR）は別 PR"
+  "note": "カメラ映像の表示は `ar-camera-view` に切り出した。iOS は ARKit（`ARSession`、追跡状態・位置・水平面の数を数値で表示。カメラ映像の描画は範囲外）、Web は WebXR（`immersive-ar`、実質 Android Chrome のみ・Safari 非対応）で届く見込み。Android は ARCore が Google Play Services for AR 必須、macOS は ARKit がカメラ AR セッション無し、Windows は Windows Mixed Reality が 24H2 で削除済みのため no。今回の範囲: iOS の ARKit で追跡状態・位置・水平面の数を表示するだけ（映像・アンカー・3D 物体配置は扱わない）。Web（WebXR）は別 PR"
 }

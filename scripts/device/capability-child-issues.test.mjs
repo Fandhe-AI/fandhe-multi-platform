@@ -14,6 +14,10 @@ test("targetOs: possible かつ approval なしだけを返す", () => {
   );
 });
 
+test("targetOs: deferred 付きも除く", () => {
+  assert.deepEqual(targetOs({ ios: { status: "possible" }, android: { status: "possible", deferred: "x" } }), ["ios"]);
+});
+
 test("resolveLayout: windows を分けない場合は a が併合する", () => {
   assert.deepEqual(resolveLayout(["a", "b-ios", "b-android"], T).map((x) => x.os), [["windows"], ["ios"], ["android"]]);
   assert.deepEqual(resolveLayout(["a", "b", "windows"], T).map((x) => x.os), [[], ["ios", "android"], ["windows"]]);

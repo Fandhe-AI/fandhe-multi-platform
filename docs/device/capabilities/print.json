@@ -1,6 +1,6 @@
 {
   "id": "print",
-  "name": "印刷",
+  "name": "印刷（固定の文章）",
   "group": "未着手の OS 機能",
   "order": 120,
   "priority": 57,
@@ -55,5 +55,5 @@
       "impl": "crates/fandhe-web-dom/src/print_page.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/print_page.rs + crates/fandhe-device/src/print.rs、Issue #329"
     }
   },
-  "note": "print は OS の印刷ダイアログを出す。今回の範囲: 固定の短い文章（見出し 1 行 + 本文数行）を 1 ページとして OS の印刷ダイアログに渡す。複数ページ・画像・PDF・プリンタ選択・進捗・紙に出たかの追跡は扱わない。結果の三値と守る範囲 / 守らない範囲は `fandhe_device::print` のモジュール doc を参照。"
+  "note": "画面の内容の印刷は `print-screen` に切り出した。print は OS の印刷ダイアログを出す。今回の範囲: 固定の短い文章（見出し 1 行 + 本文数行）を 1 ページとして OS の印刷ダイアログに渡す。複数ページ・画像・PDF・プリンタ選択・進捗・紙に出たかの追跡は扱わない。結果の三値と守る範囲 / 守らない範囲は `fandhe_device::print` のモジュール doc を参照。"
 }

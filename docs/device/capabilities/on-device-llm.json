@@ -18,7 +18,8 @@
       "api": "ML Kit GenAI APIs（Gemini Nano。AICore 依存、対応機種限定、フォアグラウンドのみ、クォータあり）",
       "perm": "記載なし（要確認）",
       "url": "https://developers.google.com/ml-kit/genai",
-      "note": "未実装。GMS ではなく OS の AICore に依存する（報告より）。対応機種のみで多くの端末では使えない"
+      "note": "未実装。GMS ではなく OS の AICore に依存する（報告より）。対応機種のみで多くの端末では使えない",
+      "deferred": "ML Kit GenAI（Gemini Nano）は AICore に依存し、推移依存に Google Play services が入る。beta・対応機種限定。GMS に依存しない方針のため保留"
     },
     "macos": {
       "status": "possible",
@@ -32,7 +33,8 @@
       "api": "Windows AI APIs（Windows App SDK の Phi Silica）",
       "perm": "要確認（Limited Access Feature・package identity の要否は未確認）",
       "url": "https://learn.microsoft.com/en-us/windows/ai/apis/phi-silica",
-      "note": "未実装。Copilot+ PC の NPU、または対応 GPU の Windows 11 で動くと文書にある。他の端末では使えない。package identity の要否は要確認"
+      "note": "未実装。Copilot+ PC の NPU、または対応 GPU の Windows 11 で動くと文書にある。他の端末では使えない。package identity の要否は要確認",
+      "approval": "Phi Silica は Limited Access Feature の申請と、Windows App SDK・package identity が要る。申請不要の後継が出たら見直す"
     },
     "web": {
       "status": "possible",
