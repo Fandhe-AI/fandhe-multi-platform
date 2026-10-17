@@ -83,6 +83,9 @@ static uint64_t g_gen = 0;
 static int32_t g_phase = PHASE_IDLE;
 // Starting 中に stop が呼ばれた。開始の完了後に必ず止める。
 static BOOL g_stop_after_start = NO;
+// startPictureInPicture を呼んで完了通知（Start / Fail）が未着。失敗確定（FAILED_INTERNAL）後も立ったままにし、
+// shutdown がこれを見て retired 経路へ回す。
+static BOOL g_start_pending = NO;
 static AVSampleBufferDisplayLayer *g_layer = nil;
 static AVPictureInPictureController *g_controller = nil;
 static id g_delegate = nil;
@@ -131,11 +134,12 @@ static void release_all(void) {
     g_controller = nil;
     g_layer = nil;
     id delegate = g_delegate;
-    BOOL was_starting = (g_phase == PHASE_STARTING);
+    BOOL was_starting = g_start_pending;
     g_delegate = nil;
     g_gen = 0;
     g_phase = PHASE_IDLE;
     g_stop_after_start = NO;
+    g_start_pending = NO;
     release_buffers_locked();
     pthread_mutex_unlock(&g_lock);
 
@@ -169,7 +173,10 @@ static void release_all(void) {
         // 解放済みの世代が遅れて開始した。止めて、停止通知で外す。
         stop_now = YES;
     } else if (self.gen == g_gen) {
-        if (g_stop_after_start) {
+        g_start_pending = NO;
+        if (g_phase == PHASE_FAILED_INTERNAL) {
+            // 内部失敗は確定済み。Active へ戻さない（タイマーは止まっている）。小窓は Rust の shutdown が閉じる。
+        } else if (g_stop_after_start) {
             // 開始中のキャンセル。開始の完了後に止める（契約表 3）。
             g_phase = PHASE_STOPPING;
             stop_now = YES;
@@ -186,7 +193,8 @@ static void release_all(void) {
     if (self.retired) {
         [g_retired removeObject:self];
     } else if (self.gen == g_gen) {
-        g_phase = PHASE_EXITED;
+        // 内部失敗は上書きしない。
+        if (g_phase != PHASE_FAILED_INTERNAL) g_phase = PHASE_EXITED;
         g_stop_after_start = NO;
     }
     pthread_mutex_unlock(&g_lock);
@@ -200,7 +208,10 @@ static void release_all(void) {
         [g_retired removeObject:self];
     } else if (self.gen == g_gen) {
         // 開始中に利用者が取り消していたなら失敗ではなく Exited。
-        g_phase = g_stop_after_start ? PHASE_EXITED : PHASE_FAILED_START;
+        g_start_pending = NO;
+        if (g_phase != PHASE_FAILED_INTERNAL) {
+            g_phase = g_stop_after_start ? PHASE_EXITED : PHASE_FAILED_START;
+        }
         g_stop_after_start = NO;
     }
     pthread_mutex_unlock(&g_lock);
@@ -440,6 +451,7 @@ int32_t fandhe_apple_pip_start(uint64_t gen) {
         }
         g_phase = PHASE_STARTING;
         g_stop_after_start = NO;
+        g_start_pending = YES;
         pthread_mutex_unlock(&g_lock);
         [controller startPictureInPicture];
         return RC_OK;
