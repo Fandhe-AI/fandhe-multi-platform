@@ -204,6 +204,10 @@ web-sys = { workspace = true, features = [
     "MediaQueryList",
     # 読み取り間隔の計測に単調時計 `performance.now()` を使う（時計巻き戻し対策）。
     "Performance",
+    # Issue #358: ペン・筆圧入力（`pen_stylus` モジュール、Pointer Events）。
+    # `getBoundingClientRect` の戻り値でキャンバス座標を求める。
+    "PointerEvent",
+    "DomRect",
 ] }
 
 [dev-dependencies]
