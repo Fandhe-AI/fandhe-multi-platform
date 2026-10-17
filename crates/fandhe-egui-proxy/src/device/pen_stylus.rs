@@ -93,7 +93,8 @@ fn to_failure(e: &DeviceError) -> PenFailureView {
     }
 }
 
-/// 直前に送った入力（同じ入力の送信を省くための記憶）。
+/// 直前に送った入力（同じ入力の送信を省くための記憶）。`Some((位置, None))` は「押下中に OS 側が
+/// 接触なしを返し、線を終え済み」を表す（離したときに点を足し直さないため）。
 type Last = Option<((f32, f32), Option<PenSample>)>;
 
 static LAST: Mutex<Last> = Mutex::new(None);
@@ -113,7 +114,8 @@ fn drive(
     }
     let generation = state.generation;
     let Some(pos) = pointer else {
-        let previous = last.take().and_then(|(_, sample)| sample);
+        // 前のフレームまでにこの接触を見ていたか（見ていれば `Some`）と、そのときの値。
+        let seen = last.take();
         // 接触前に OS 側の登録（macOS の NSEvent モニタ等、main thread で 1 回）を済ませる。
         // 最初の押下が未登録のまま通過して種類・筆圧を落とさないため。非対応・登録失敗は
         // ここで画面へ出す（押下を待たずに失敗を見せる）。
@@ -128,12 +130,15 @@ fn drive(
         // このフレームで接触が終わった: 最後の 1 点を描いてから線を終える。1 フレームに収まった
         // 短いタップでも点を落とさない。OS 側は離した時点で値を消すため、前のフレームの値を優先し、
         // 無ければ一定の太さで描く（嘘の筆圧は作らない）。
+        // ただし押下中に OS 側が先に接触なしを返して線を終え済みなら、点を足さない（離れた点が残る）。
         if let Some(pos) = released {
-            let view = previous.or(latest).map(to_view);
-            let _ = sender.send(Box::new(move |s: &mut PenDrawState| {
-                apply_sample(s, generation, pos, view);
-                end_stroke(s, generation);
-            }));
+            if seen.is_none() || state.is_stroking() {
+                let view = seen.and_then(|(_, sample)| sample).or(latest).map(to_view);
+                let _ = sender.send(Box::new(move |s: &mut PenDrawState| {
+                    apply_sample(s, generation, pos, view);
+                    end_stroke(s, generation);
+                }));
+            }
             return;
         }
         if state.is_stroking() {
@@ -149,8 +154,9 @@ fn drive(
             let _ = sender.send(Box::new(move |s: &mut PenDrawState| apply_failure(s, f)));
         }
         Ok(None) => {
-            // 接触なし（キャンセル含む）は最後の値を出し続けず、ストロークを終える。
-            *last = None;
+            // 接触なし（キャンセル含む）は最後の値を出し続けず、ストロークを終える。値は捨てるが、
+            // この接触を見たことは残す（離したフレームで終え済みの線に点を足し直さないため）。
+            *last = Some((pos, None));
             if state.is_stroking() {
                 let _ = sender.send(Box::new(move |s: &mut PenDrawState| {
                     end_stroke(s, generation);
@@ -442,5 +448,47 @@ mod tests {
         apply_all(&rx, &mut s);
         assert!(s.point_count() > before);
         assert!(!s.is_stroking());
+    }
+
+    #[test]
+    fn release_after_os_ended_stroke_adds_no_point() {
+        let (tx, rx) = channel();
+        let mut s = PenDrawState::default();
+        let mut last = None;
+        drive(
+            &s,
+            &tx,
+            &fake(pen_sample),
+            Some((5.0, 5.0)),
+            false,
+            None,
+            &mut last,
+        );
+        apply_all(&rx, &mut s);
+        // 押下中に OS 側が先に接触なしを返した: ここで線を終える。
+        drive(
+            &s,
+            &tx,
+            &fake(|| Ok(None)),
+            Some((9.0, 5.0)),
+            false,
+            None,
+            &mut last,
+        );
+        apply_all(&rx, &mut s);
+        let before = s.point_count();
+        assert!(!s.is_stroking());
+        // 次のフレームで egui が離した位置を報告しても、離れた点を足さない。
+        drive(
+            &s,
+            &tx,
+            &fake(|| Ok(None)),
+            None,
+            false,
+            Some((40.0, 5.0)),
+            &mut last,
+        );
+        apply_all(&rx, &mut s);
+        assert_eq!(s.point_count(), before);
     }
 }
