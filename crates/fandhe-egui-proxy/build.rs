@@ -468,6 +468,8 @@ fn main() {
     compile_apple_midi();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。macOS と iOS（親 #86 の b-ios）で共用する。
     compile_apple_media_playback();
+    // `apple/fandhe_apple_picture_in_picture.m`（Issue #365）。macOS 分岐と共用する。AVKit を使う。
+    compile_apple_picture_in_picture(true);
     // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308 macOS + #1309 iOS）も共用する。
     compile_apple_accessibility_prefs();
     // `apple/fandhe_apple_screen_capture.m`（Issue #1336）の iOS 側（ReplayKit）。
@@ -965,15 +967,20 @@ fn compile_apple_media_playback() {
 }
 
 /// `apple/fandhe_apple_picture_in_picture.m` を `cc` でコンパイルし AVKit・CoreMedia・CoreVideo・
-/// QuartzCore をリンクする（Issue #364）。**macOS 分岐のみ**から呼ばれる（`src/device/
-/// apple_picture_in_picture.rs` が使う。iOS は親 #97 の b-ios が分岐を足す）。macOS 12.0+ の API は
-/// `.m` 側の `@available` で守る（AVKit 自体は 10.15+ にある）。
-fn compile_apple_picture_in_picture() {
+/// QuartzCore をリンクする（Issue #364 macOS + #365 iOS）。iOS・macOS 双方の分岐から呼ばれる（`src/device/
+/// apple_picture_in_picture.rs` が使う）。macOS 12.0+ / iOS 15.0+ の API は `.m` 側の `@available` で守る。
+/// `include_ios_common` が true（iOS）のとき `ios/fandhe_ios_common.h` を `#import` できるようにする。
+fn compile_apple_picture_in_picture(include_ios_common: bool) {
     println!("cargo:rerun-if-changed=apple/fandhe_apple_picture_in_picture.m");
-    cc::Build::new()
+    let mut build = cc::Build::new();
+    build
         .file("apple/fandhe_apple_picture_in_picture.m")
-        .flag("-fobjc-arc")
-        .compile("fandhe_apple_picture_in_picture");
+        .flag("-fobjc-arc");
+    if include_ios_common {
+        println!("cargo:rerun-if-changed=ios/fandhe_ios_common.h");
+        build.include("ios");
+    }
+    build.compile("fandhe_apple_picture_in_picture");
 
     for framework in ["AVKit", "CoreMedia", "CoreVideo", "QuartzCore"] {
         println!("cargo:rustc-link-lib=framework={framework}");
@@ -1456,8 +1463,8 @@ fn build_macos() {
     compile_apple_midi();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。iOS 分岐と共用する。AVFoundation は既存のリンクで足りる。
     compile_apple_media_playback();
-    // `apple/fandhe_apple_picture_in_picture.m`（Issue #364）。macOS 分岐のみ（iOS は親 #97 の b-ios が足す）。AVKit を使う。
-    compile_apple_picture_in_picture();
+    // `apple/fandhe_apple_picture_in_picture.m`（Issue #364 macOS + #365 iOS）。iOS 分岐と共用する。AVKit を使う。
+    compile_apple_picture_in_picture(false);
     // `macos/fandhe_macos_local_fonts.m`（Issue #1376）も macOS 専用。AppKit は既存のリンクで足りる。
     compile_macos_local_fonts();
     // `macos/fandhe_macos_file_watch.m`（Issue #1410）も macOS 専用。CoreServices を使う。

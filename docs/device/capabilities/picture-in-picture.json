@@ -7,14 +7,17 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "AVKit `AVPictureInPictureController`（動画再生中の小窓）",
-      "perm": "`UIBackgroundModes` に `audio`（Apple の文書で PiP に必須。背景での音声再生には使わない）",
+      "perm": "`UIBackgroundModes` に `audio`（Apple の文書で PiP に必須。背景での音声再生には使わない）。`AVAudioSession` は playback + mixWithOthers にして、解放時に元へ戻す",
       "url": [
         "https://developer.apple.com/documentation/avkit/avpictureinpicturecontroller",
         "https://developer.apple.com/documentation/avkit/adopting-picture-in-picture-in-a-custom-player"
       ],
-      "note": "未実装。AVKit の小窓は `AVPlayerLayer` か `AVSampleBufferDisplayLayer` の映像だけが対象で、egui の画面そのものは小窓にできない。sample buffer 経路は iOS 15+（deploymentTarget 17 なので分岐不要）。シミュレータでは非対応になるという報告がある"
+      "note": "実装済み（#365）。macOS と共用の `.m` で、実行時に生成する単色映像（5 色を 1 秒ごとに切り替え）を `AVSampleBufferDisplayLayer` から小窓へ出す「小窓にする」「小窓をやめる」のみ（音声・シーク・自動開始は範囲外）。AVKit の小窓は映像だけが対象で、egui の画面そのものは小窓にできない。sample buffer 経路は iOS 15+（deploymentTarget 17 なので分岐不要）。`isPictureInPictureSupported` が NO の環境（シミュレータで報告あり）は非対応表示にする。小窓中の背景遷移は中断にしない。delegate の通知直後に次フレームを起こす。守る範囲: 1 プロセス内の操作順、失敗を成功値へ畳まないこと、資源と音声セッションの解放。守らない範囲: ポーリング間隔ぶんの表示の遅れ、画面内プレビューと OS 側の映像の色替えの時刻ずれ、小窓の位置・大きさ（OS が決める）、画面回転への追従、複数プロセス。iOS 実機の目視は #363 で行う。",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#363）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_picture_in_picture.rs + crates/fandhe-egui-proxy/src/device/apple_picture_in_picture.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_picture_in_picture.m + crates/fandhe-egui-proxy/src/device/picture_in_picture.rs + crates/fandhe-core/src/screens/pip_show.rs + crates/fandhe-device/src/picture_in_picture.rs、Issue #365"
     },
     "android": {
       "status": "possible",

@@ -1,11 +1,11 @@
-//! macOS 向けピクチャ・イン・ピクチャ実装（Issue #364。iOS は親 #97 の b-ios が cfg を広げて共用する）。
-//! `device/picture_in_picture.rs::platform_pip` の macOS 経路から呼ばれる。
-//! `apple/fandhe_apple_picture_in_picture.m`（AVKit の sample buffer 経路、`build.rs` の macOS 分岐が
+//! macOS・iOS 共用のピクチャ・イン・ピクチャ実装（Issue #364 macOS、#365 iOS）。
+//! `device/picture_in_picture.rs::platform_pip` の macOS・iOS 経路から呼ばれる。
+//! `apple/fandhe_apple_picture_in_picture.m`（AVKit の sample buffer 経路、`build.rs` の macOS・iOS 分岐が
 //! コンパイル）を C ABI で呼ぶ薄いラッパーで、世代の採番だけを Rust 側で持つ。色の表・間隔・寸法は
 //! `fandhe_device::picture_in_picture` の定数を FFI の引数で渡す（SSOT を 1 か所にする）。
 //! 戻りコードを契約上のエラーへ写す純関数は [`result_from_code`]、状態コードは [`phase_from_code`]。
 //! `unsafe` は extern 呼び出しに閉じ、映像の内容はログに出さない。
-//! 呼び出しはすべて egui の update（macOS は main thread）から来る前提で、`.m` は main thread 以外を拒否する。
+//! 呼び出しはすべて egui の update（macOS・iOS とも main thread）から来る前提で、`.m` は main thread 以外を拒否する。
 
 use std::sync::Arc;
 
@@ -18,7 +18,7 @@ pub(crate) fn implementation() -> Arc<dyn PictureInPicture> {
 
 struct ApplePictureInPicture;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod imp {
     use std::sync::atomic::{AtomicU64, Ordering};
 

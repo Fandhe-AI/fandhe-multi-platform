@@ -264,9 +264,9 @@ pub mod apple_on_device_llm;
 /// `device/photo_save.rs` の iOS / macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_photo_library;
-/// Issue #364: macOS 向けピクチャ・イン・ピクチャ実装（`apple/fandhe_apple_picture_in_picture.m` の AVKit を
-/// 呼ぶ C ABI ラッパー）。`device/picture_in_picture.rs` の macOS 経路から呼ばれる。iOS は親 #97 の b-ios が cfg を広げて使う。
-#[cfg(target_os = "macos")]
+/// Issue #364（macOS）/ #365（iOS）: ピクチャ・イン・ピクチャ実装（`apple/fandhe_apple_picture_in_picture.m` の AVKit を
+/// 呼ぶ C ABI ラッパー）。`device/picture_in_picture.rs` の macOS・iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_picture_in_picture;
 /// Issue #1335（macOS）/ #1336（iOS）: macOS 向け ScreenCaptureKit 画面録画（`apple/
 /// fandhe_apple_screen_capture.m` を呼ぶ C ABI ラッパー。iOS は #1336 の ReplayKit）。
@@ -486,7 +486,7 @@ pub mod ios_pedometer;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_pen_stylus;
-/// Issue #364: iOS 向けピクチャ・イン・ピクチャ実装のスタブ（親 #97 の b-ios が埋める）。
+/// Issue #365: iOS 向けピクチャ・イン・ピクチャ実装（macOS と共用の `apple_picture_in_picture` へ委譲）。
 /// `device/picture_in_picture.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]

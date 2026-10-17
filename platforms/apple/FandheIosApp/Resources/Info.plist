@@ -81,8 +81,12 @@
   `BGAppRefreshTaskRequest` を予約するために必須。識別子
   `com.fandhe.iosapp.background-task` は `.m` 側の定数
   `kFandheBackgroundTaskIdentifier` と一致させる（相互参照コメントあり）。
-  `UIBackgroundModes` は `fetch` のみ（不要な `processing`/`audio` 等は追加しない、
+  `UIBackgroundModes` は `fetch` と、PiP 用の `audio` のみ（不要な `processing` 等は追加しない、
   security.md A05）。
+
+  UIBackgroundModes の audio（Issue #365）: 型サンプル「ピクチャ・イン・ピクチャ」画面
+  （`FANDHE_PROXY_APP=pip_show`）が AVKit の sample buffer 経路で小窓を出すために必須
+  （Apple の PiP 採用手順が要求する）。背景での音声再生には使わない（音声は出さない）。
 
   UIDeviceFamily は PoC-3（[1] = iPhone のみ）から [1, 2] へ拡張する。CLAUDE.md の
   対象プラットフォーム一覧に iPad が含まれ（REQ-1 対象範囲）、iPad Simulator でも
@@ -192,6 +196,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
+		<string>audio</string>
 	</array>
 </dict>
 </plist>
