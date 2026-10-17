@@ -112,6 +112,9 @@ fn drive(
     let generation = state.generation;
     let Some(pos) = pointer else {
         *last = None;
+        // 接触前に OS 側の登録（macOS の NSEvent モニタ等、main thread で 1 回）を済ませる。
+        // 最初の押下が未登録のまま通過して種類・筆圧を落とさないため。結果は使わない。
+        let _ = pen.latest();
         if state.is_stroking() {
             let _ = sender.send(Box::new(move |s: &mut PenDrawState| {
                 end_stroke(s, generation);
@@ -123,6 +126,16 @@ fn drive(
         Err(e) => {
             let f = to_failure(&e);
             let _ = sender.send(Box::new(move |s: &mut PenDrawState| apply_failure(s, f)));
+        }
+        Ok(None) => {
+            // 接触なし（キャンセル含む）は最後の値を出し続けず、ストロークを終える。
+            *last = None;
+            if state.is_stroking() {
+                let _ = sender.send(Box::new(move |s: &mut PenDrawState| {
+                    end_stroke(s, generation);
+                }));
+            }
+            sender.request_repaint_after(POLL_INTERVAL);
         }
         Ok(sample) => {
             if *last != Some((pos, sample)) {
@@ -247,6 +260,29 @@ mod tests {
         assert_eq!(s.kind, None);
         drive(&s, &tx, &f, None, &mut last);
         assert_eq!(apply_all(&rx, &mut s), 0);
+    }
+
+    #[test]
+    fn no_contact_ends_stroke_instead_of_drawing_unknown() {
+        let (tx, rx) = channel();
+        let mut s = PenDrawState::default();
+        let mut last = None;
+        drive(&s, &tx, &fake(pen_sample), Some((5.0, 5.0)), &mut last);
+        apply_all(&rx, &mut s);
+        assert_eq!(s.point_count(), 1);
+        drive(&s, &tx, &fake(|| Ok(None)), Some((9.0, 5.0)), &mut last);
+        apply_all(&rx, &mut s);
+        assert_eq!(s.point_count(), 1);
+        assert!(!s.is_stroking());
+    }
+
+    #[test]
+    fn idle_frame_primes_the_os_layer() {
+        let (tx, _rx) = channel();
+        let s = PenDrawState::default();
+        let f = fake(|| Ok(None));
+        drive(&s, &tx, &f, None, &mut None);
+        assert_eq!(f.calls.load(Ordering::SeqCst), 1);
     }
 
     #[test]
