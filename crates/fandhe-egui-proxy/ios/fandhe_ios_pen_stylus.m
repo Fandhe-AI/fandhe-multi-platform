@@ -81,6 +81,7 @@ extern void fandhe_rust_pen_stylus_clear(void);
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesBegan:touches withEvent:event];
     @autoreleasepool {
         if (_tracked == nil) {
             _tracked = touches.anyObject;
@@ -90,6 +91,7 @@ extern void fandhe_rust_pen_stylus_clear(void);
 }
 
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesMoved:touches withEvent:event];
     @autoreleasepool {
         if (_tracked != nil && [touches containsObject:_tracked]) {
             [self report:_tracked];
@@ -99,20 +101,25 @@ extern void fandhe_rust_pen_stylus_clear(void);
 
 - (void)finish:(NSSet<UITouch *> *)touches {
     if (_tracked != nil && [touches containsObject:_tracked]) {
+        // reset の到着に依存せず、その場で追跡と最後のサンプルを捨てる。
+        _tracked = nil;
         fandhe_rust_pen_stylus_clear();
         self.state = UIGestureRecognizerStateFailed;
     }
 }
 
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesEnded:touches withEvent:event];
     @autoreleasepool { [self finish:touches]; }
 }
 
 - (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesCancelled:touches withEvent:event];
     @autoreleasepool { [self finish:touches]; }
 }
 
 - (void)reset {
+    [super reset];
     _tracked = nil;
 }
 
