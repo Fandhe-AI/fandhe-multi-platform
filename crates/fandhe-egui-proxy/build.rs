@@ -813,6 +813,14 @@ fn compile_apple_on_device_llm(ios: bool) {
             "-sdk",
             &sdk_path,
         ])
+        // FoundationModels を強リンクとして autolink させない（macOS 11 等の旧 OS で dyld が
+        // 要求して起動不能になるのを防ぐ。リンク側は下で -weak_framework を明示する）。
+        .args([
+            "-Xfrontend",
+            "-disable-autolink-framework",
+            "-Xfrontend",
+            "FoundationModels",
+        ])
         .args(["-o", &lib])
         .arg("apple/fandhe_apple_on_device_llm.swift")
         .output()
