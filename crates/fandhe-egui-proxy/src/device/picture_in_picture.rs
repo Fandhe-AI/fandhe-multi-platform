@@ -106,6 +106,17 @@ fn reset_session(session: &Session, pip: &Arc<dyn PictureInPicture>) {
     *inner = SessionInner::default();
 }
 
+/// 失敗・期限切れの確定時に、小窓の資源を phase を問わず全部解放し、ドライバの追跡も消す。
+/// 先に `stop` を呼ぶのは、開始済みの小窓を遅れて残さないため（`shutdown` は冪等で再 `prepare` 可能）。
+fn release_resources(inner: &mut SessionInner, pip: &Arc<dyn PictureInPicture>) {
+    if let Some(g) = inner.device_gen.take() {
+        let _ = pip.stop(g);
+    }
+    pip.shutdown();
+    inner.prepared_at = None;
+    inner.last_preview = None;
+}
+
 fn to_failure(e: &DeviceError) -> PipShowFailure {
     match e {
         DeviceError::Unsupported(_) => PipShowFailure::Unsupported,
@@ -188,9 +199,7 @@ fn drive(
             if g == state.generation && started.elapsed() >= deadline {
                 inner.pending = None;
                 let _ = sender.send(Box::new(move |s: &mut PipShowState| expire(s, g)));
-                if let Some(dg) = inner.device_gen {
-                    let _ = pip.stop(dg);
-                }
+                release_resources(&mut inner, pip);
                 return None;
             }
         }
@@ -232,6 +241,7 @@ fn handle_command(
 ) {
     let fail = |inner: &mut SessionInner, e: &DeviceError| {
         inner.pending = None;
+        release_resources(inner, pip);
         send_update(sender, generation, PipShowUpdate::Failed(to_failure(e)));
     };
     // 期限の起点は同期の呼び出しより前に取る（その所要時間も期限に含める）。
@@ -283,6 +293,9 @@ fn report_snapshot(
     }
     if let Some(update) = report_for(&state.phase, snap.phase) {
         inner.pending = None;
+        if matches!(update, PipShowUpdate::Failed(_)) {
+            release_resources(inner, pip);
+        }
         send_update(sender, inner.handled, update);
     }
 }
@@ -564,6 +577,7 @@ mod tests {
         h.drive(Duration::ZERO);
         assert_eq!(h.state.phase, PipShowPhase::Failed(PipShowFailure::Timeout));
         assert_eq!(h.fake.0.lock().unwrap().stops, stops + 1);
+        assert!(h.session.inner.lock().unwrap().device_gen.is_none());
         // 遅れて届く Active は反映しない
         h.fake.set_phase(PipPhase::Active);
         h.drive(D);

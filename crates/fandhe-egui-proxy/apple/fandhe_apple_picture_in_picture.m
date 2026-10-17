@@ -86,6 +86,9 @@ static BOOL g_stop_after_start = NO;
 static AVSampleBufferDisplayLayer *g_layer = nil;
 static AVPictureInPictureController *g_controller = nil;
 static id g_delegate = nil;
+// release_all で外した delegate。controller.delegate は weak のため、停止の完了通知
+// （restoreUserInterface... 等）が届くまで次の release_all まで強参照で延命する。
+static id g_retired_delegate = nil;
 static dispatch_source_t g_timer = nil;
 static CVPixelBufferRef g_buffers[MAX_COLORS];
 static size_t g_buffer_count = 0;
@@ -107,8 +110,8 @@ static void release_buffers_locked(void) {
     }
 }
 
-// 契約表 9: タイマー cancel → stopPictureInPicture → delegate nil → controller nil → layer を
-// flushAndRemoveImage して removeFromSuperlayer → 世代 0。main thread で呼ぶ。
+// 契約表 9: タイマー cancel → stopPictureInPicture（delegate は停止完了まで生かす）→ controller nil →
+// layer を flushAndRemoveImage して removeFromSuperlayer → 世代 0。main thread で呼ぶ。
 static void release_all(void) {
     pthread_mutex_lock(&g_lock);
     dispatch_source_t timer = g_timer;
@@ -117,6 +120,7 @@ static void release_all(void) {
     g_timer = nil;
     g_controller = nil;
     g_layer = nil;
+    id delegate = g_delegate;
     g_delegate = nil;
     g_gen = 0;
     g_phase = PHASE_IDLE;
@@ -125,9 +129,15 @@ static void release_all(void) {
     pthread_mutex_unlock(&g_lock);
 
     if (timer) dispatch_source_cancel(timer);
+    // g_gen = 0 のため、旧 delegate の通知は世代照合で捨てられる。
+    g_retired_delegate = nil;
     if (controller) {
-        controller.delegate = nil;
-        if (controller.isPictureInPictureActive) [controller stopPictureInPicture];
+        if (controller.isPictureInPictureActive) {
+            g_retired_delegate = delegate;
+            [controller stopPictureInPicture];
+        } else {
+            controller.delegate = nil;
+        }
     }
     if (layer) {
         [layer flushAndRemoveImage];
