@@ -63,6 +63,8 @@ final class PictureInPictureHelper {
     private long current;
     private int phase = PHASE_IDLE;
     private PictureInPictureParams params;
+    // 小窓が OS 側に残りうる間 true。phase（操作の成否）とは別に持ち、失敗後も shutdown が解除を再試行できる。
+    private boolean pipMayRemain;
 
     PictureInPictureHelper(Activity activity) {
         this.activity = activity;
@@ -80,6 +82,10 @@ final class PictureInPictureHelper {
                 return RESULT_UNSUPPORTED;
             }
             if (w <= 0 || h <= 0) {
+                return RESULT_FAILED;
+            }
+            if (pipMayRemain) {
+                // 前の小窓の追跡を上書きしない。解除（stop / shutdown / 利用者操作）が済むまで拒否する。
                 return RESULT_FAILED;
             }
             try {
@@ -139,6 +145,7 @@ final class PictureInPictureHelper {
             }
             try {
                 if (activity.enterPictureInPictureMode(params)) {
+                    pipMayRemain = true;
                     phase = PHASE_ACTIVE;
                     return RESULT_OK;
                 }
@@ -193,6 +200,7 @@ final class PictureInPictureHelper {
                     activity.startActivity(new Intent(activity, MainActivity.class)
                             .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
                 } else {
+                    pipMayRemain = false;
                     phase = PHASE_EXITED;
                 }
                 return RESULT_OK;
@@ -250,13 +258,12 @@ final class PictureInPictureHelper {
         }
     }
 
-    // 冪等。小窓が残りうる状態（Active / Stopping）なら、世代を消す前に UI キューへ解除を投げ、
-    // 最大 UI_TIMEOUT_MS 待つ。UI 側が遅れても Runnable は残り、後で実行されて小窓を解く
-    // （その間に新しい prepare が来ていたら current != 0 で何もしない）。
+    // 冪等。小窓が残りうる（pipMayRemain）なら UI キューへ解除を投げ、最大 UI_TIMEOUT_MS 待つ。
+    // UI 側が遅れても Runnable は残り、後で実行されて小窓を解く。解除が済むまで prepare は拒否される。
     void shutdown() {
         boolean release;
         synchronized (lock) {
-            release = !destroyed && (phase == PHASE_ACTIVE || phase == PHASE_STOPPING);
+            release = !destroyed && pipMayRemain;
             current = 0;
             phase = PHASE_IDLE;
             params = null;
@@ -270,16 +277,18 @@ final class PictureInPictureHelper {
             public void run() {
                 try {
                     synchronized (lock) {
-                        if (destroyed || current != 0) {
+                        if (destroyed) {
                             return;
                         }
                         try {
                             if (activity.isInPictureInPictureMode()) {
                                 activity.startActivity(new Intent(activity, MainActivity.class)
                                         .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
+                            } else {
+                                pipMayRemain = false;
                             }
                         } catch (RuntimeException e) {
-                            // 解除できなければ OS 側の片付けに任せる。
+                            // 解除できなければ pipMayRemain を残し、再 shutdown / 利用者操作に委ねる。
                         }
                     }
                 } finally {
@@ -297,7 +306,13 @@ final class PictureInPictureHelper {
     // MainActivity.onPictureInPictureModeChanged（UI スレッド）から。
     void onPictureInPictureModeChanged(boolean inPip) {
         synchronized (lock) {
-            if (destroyed || current == 0) {
+            if (destroyed) {
+                return;
+            }
+            if (!inPip) {
+                pipMayRemain = false;
+            }
+            if (current == 0) {
                 return;
             }
             if (inPip) {
