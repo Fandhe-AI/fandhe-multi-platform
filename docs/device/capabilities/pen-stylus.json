@@ -17,11 +17,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_pen_stylus.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_pen_stylus.m + crates/fandhe-egui-proxy/src/device/pen_stylus.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-device/src/pen_stylus.rs、Issue #356"
     },
     "android": {
-      "status": "possible",
-      "api": "`MotionEvent`（筆圧・傾き・ホバー）、Jetpack Ink",
-      "perm": "なし",
+      "status": "done",
+      "api": "`MotionEvent` を `Activity.dispatchTouchEvent` で観測（消費しない）。`getToolType`・`getPressure`・`AXIS_TILT`（`getMotionRange` で報告の有無を判定）",
+      "perm": "不要（`uses-permission` は追加しない）",
       "url": "https://developer.android.com/develop/ui/compose/touch-input/stylus-input",
-      "note": "未実装。スタイラス対応端末が要る。ホバーは端末依存（要確認）"
+      "note": "実装済み（#357）。位置は egui のポインタから、種類・筆圧・傾きは `PenStylusHelper` が `dispatchTouchEvent` で観測した値から取る（winit は tool type と tilt を捨てる）。筆圧と傾きはペンのときだけ出し、指・マウスは None。傾きを報告しない機器は None（0 を垂直にしない）。離す・キャンセル・`onPause`・`onDestroy` で接触なしに戻す。守る範囲: 1 プロセス内の順序・嘘の値を出さないこと・離したら消すこと。守らない範囲: 主ポインタ 1 本以外、ホバー・消しゴムの区別、履歴サンプル、静止したままの筆圧変化、複数プロセス。未確認: エミュレータでペンを再現できるか。実機確認（スタイラス端末）は #354",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#354）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_pen_stylus.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/PenStylusHelper.java + crates/fandhe-egui-proxy/src/device/pen_stylus.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-device/src/pen_stylus.rs、Issue #357"
     },
     "macos": {
       "status": "done",

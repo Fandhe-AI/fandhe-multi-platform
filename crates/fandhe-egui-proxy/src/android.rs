@@ -848,6 +848,40 @@ extern "system" fn Java_com_fandhe_androidapp_FullscreenHelper_nativeOnFullscree
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeOnPenSample` no-op フォールバック（Issue #357）。
+/// `PenStylusHelper` は画面に関係なくタッチのたびに呼ぶため、スタブが無いと
+/// `UnsatisfiedLinkError` になる。JNI 署名は Java 宣言・`device/android_pen_stylus.rs` の実体と
+/// 3 か所で `(int, float, float, boolean) -> void` に揃える。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
+/// シンボル名は JNI 命名規約上の固定名（`nativeOnMotionChanged` と同じ根拠）。
+#[cfg(not(feature = "device"))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_androidapp_PenStylusHelper_nativeOnPenSample(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _tool_type: i32,
+    _pressure: f32,
+    _tilt_rad: f32,
+    _has_tilt: u8,
+) {
+}
+
+/// `device` feature 無効ビルド向けの `nativeOnPenClear` no-op フォールバック（Issue #357）。
+///
+/// # Safety
+/// `nativeOnPenSample` の no-op と同じ（unsafe 操作なし、固定シンボル名）。
+#[cfg(not(feature = "device"))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_androidapp_PenStylusHelper_nativeOnPenClear(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+) {
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

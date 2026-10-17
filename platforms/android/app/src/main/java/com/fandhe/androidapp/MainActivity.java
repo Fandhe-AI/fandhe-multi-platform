@@ -608,6 +608,9 @@ public class MainActivity extends GameActivity {
         return screenWakeLockHelper.isHeld();
     }
 
+    // ペン・筆圧入力（Issue #357）。実装は `PenStylusHelper`。
+    private final PenStylusHelper penStylusHelper = new PenStylusHelper();
+
     // 全画面表示（Issue #1314）。実装は `FullscreenHelper`。Rust の
     // `android_fullscreen_immersive.rs` が egui スレッドから同期で JNI 呼び出しする。
     private final FullscreenHelper fullscreenHelper = new FullscreenHelper(this);
@@ -2348,6 +2351,7 @@ public class MainActivity extends GameActivity {
         // 再登録しないようにするための可視性フラグ（codex-review P1 指摘、PR #894）。
         // `removeUpdates` より先に false へ落としておく。
         activityResumed = false;
+        penStylusHelper.onPause();
         screenCaptureHelper.onPause();
         compassHelper.onPause();
         mediaPlaybackHelper.onPause();
@@ -2388,6 +2392,15 @@ public class MainActivity extends GameActivity {
         }
         // BLE スキャン（Issue #1062）: バックグラウンド遷移でスキャン中なら止めて中断で確定する。
         abortBleScanIfRunning();
+    }
+
+    // ペン・筆圧の観測（Issue #357）。【契約】イベントは消費しない:
+    // `super.dispatchTouchEvent` の戻り値をそのまま返し、GameActivity → winit → egui の
+    // 既存のタッチ経路を変えない。
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        penStylusHelper.onTouch(event);
+        return super.dispatchTouchEvent(event);
     }
 
     // ゲームコントローラのスティック・トリガ・十字キー軸の中継（Issue #935）。
@@ -4546,6 +4559,7 @@ public class MainActivity extends GameActivity {
         ttsActivityDestroyed = true;
         // 破棄中ウィンドウの insets 報告が新 Activity の状態を潰さないよう、super より前に確定する。
         fullscreenHelper.onDestroy();
+        penStylusHelper.onDestroy();
         super.onDestroy();
         pedometerHelper.onDestroy();
         compassHelper.onDestroy();
