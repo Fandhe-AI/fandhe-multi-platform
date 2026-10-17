@@ -20,7 +20,7 @@
 //! |---|---|
 //! | 認証器なし・secure context 外・OS が古い | `Unsupported("passkey")` |
 //! | challenge 不一致・`type` 違い・JSON 不正・サイズ超過 | `InvalidInput("passkey client data")` |
-//! | UP / UV / AT の欠落・authenticatorData が短い | `InvalidInput("passkey flags")` |
+//! | UP / UV / AT の欠落・authenticatorData が短い・登録で attestedCredentialData が欠ける、または credentialIdLength と長さが合わない | `InvalidInput("passkey flags")` |
 //! | 資格情報 ID が空 | `InvalidInput("passkey credential")` |
 //! | サインイン応答の署名が欠落・空 | `InvalidInput("passkey signature")` |
 //! | 未知のエラー・`InvalidStateError` | `Internal("passkey failed")` |
@@ -32,8 +32,15 @@
 //!
 //! # 期限・ライフサイクル（契約表 1・3）
 //!
-//! Rust 側で独自の期限は掛けない（利用者操作の UI で、OS 側の期限に従う）。Web は `AbortController`、
-//! Windows は `WebAuthNCancelCurrentOperation` で取り消し、取り消し後に届いた応答は世代の照合で捨てる。
+//! Rust 側で独自の期限は掛けない（利用者操作の UI で、OS 側の期限に従う）。Web は `AbortController` で
+//! 取り消し、取り消し後に届いた応答は世代の照合で捨てる。Windows はアプリ側から取り消す契機を持たない
+//! （画面を離れる経路がなく、アプリ終了との重なりは守らない範囲）。OS の UI での取り消しは `NotAllowed` で届く。
+//!
+//! # clientDataJSON の照合の限界
+//!
+//! Windows の OS は clientDataJSON を返さず、アプリが組み立てて渡したものをそのまま使う。
+//! そのため [`check_client_data`] は Windows では循環照合になり、要求の取り違えの検出にならない。
+//! 取り違えは世代照合（`RequestSlot`）で防ぐ。Web は OS が返した値を照合するため検出として働く。
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
 //!
@@ -61,6 +68,10 @@ pub const CLIENT_DATA_MAX_BYTES: usize = 4096;
 
 const FLAGS_OFFSET: usize = 32;
 const AUTH_DATA_MIN: usize = 37;
+/// 登録の authenticatorData の最小長。rpIdHash 32 + flags 1 + signCount 4 + aaguid 16 + credentialIdLength 2。
+const ATTESTED_MIN: usize = 55;
+/// credentialIdLength（big endian u16）の位置。
+const CRED_ID_LEN_OFFSET: usize = 53;
 const FLAG_UP: u8 = 0x01;
 const FLAG_UV: u8 = 0x04;
 const FLAG_AT: u8 = 0x40;
@@ -130,7 +141,7 @@ impl std::fmt::Debug for CredentialId {
 /// 整合確認を通った応答の要約。署名そのものは持たず、長さだけ持つ。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PasskeySummary {
-    /// 応答の RP ID。
+    /// 要求した RP ID（authenticatorData の rpIdHash とは照合していない）。
     pub rp_id: String,
     /// 資格情報 ID。
     pub credential_id: CredentialId,
@@ -147,7 +158,8 @@ pub struct PasskeySummary {
 pub enum PasskeyOutcome {
     /// 登録の応答が返り、整合確認を通った。
     Registered(PasskeySummary),
-    /// サインインの署名付き応答が返り、整合確認を通った。
+    /// サインインの署名付き応答が返り、整合確認を通った。署名と、登録済みの資格情報 ID との照合は
+    /// していないため、**認証の根拠にしてはならない**。
     AssertionReturned(PasskeySummary),
     /// キャンセル・該当なし・期限切れ・同意拒否（区別できない）。
     NotAllowed,
@@ -277,6 +289,18 @@ pub fn verify_response(
     if !flags_ok {
         return Err(DeviceError::InvalidInput("passkey flags"));
     }
+    // 登録は attestedCredentialData が実在し、credentialIdLength が長さと整合することを求める。
+    if op == PasskeyOp::Register {
+        let ad = authenticator_data;
+        let ok = ad.len() >= ATTESTED_MIN && {
+            let l =
+                u16::from_be_bytes([ad[CRED_ID_LEN_OFFSET], ad[CRED_ID_LEN_OFFSET + 1]]) as usize;
+            l > 0 && ad.len() >= ATTESTED_MIN + l
+        };
+        if !ok {
+            return Err(DeviceError::InvalidInput("passkey flags"));
+        }
+    }
     if credential_id.is_empty() {
         return Err(DeviceError::InvalidInput("passkey credential"));
     }
@@ -318,9 +342,37 @@ mod tests {
     }
 
     fn auth(flags: u8) -> Vec<u8> {
-        let mut v = vec![0u8; 37];
+        auth_attested(flags, 1, 1)
+    }
+
+    /// 登録用: attestedCredentialData を持つ authenticatorData（credentialIdLength = `l`）。
+    fn auth_attested(flags: u8, l: u16, body: usize) -> Vec<u8> {
+        let mut v = vec![0u8; 55 + body];
         v[32] = flags;
+        v[53..55].copy_from_slice(&l.to_be_bytes());
         v
+    }
+
+    #[test]
+    fn register_requires_consistent_attested_data() {
+        let c = ch(1);
+        let cd = client_data_json(PasskeyOp::Register, &c, "o");
+        let run = |ad: &[u8]| {
+            verify_response(
+                PasskeyOp::Register,
+                &c,
+                "l",
+                vec![1],
+                cd.as_bytes(),
+                ad,
+                None,
+            )
+        };
+        assert!(run(&auth_attested(0x45, 4, 4)).is_ok());
+        assert!(run(&[0x45; 37]).is_err());
+        assert!(run(&[0x45; 54]).is_err());
+        assert!(run(&auth_attested(0x45, 5, 4)).is_err()); // L が残りより大きい
+        assert!(run(&auth_attested(0x45, 0, 4)).is_err()); // L = 0
     }
 
     #[test]

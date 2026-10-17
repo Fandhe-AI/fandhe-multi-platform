@@ -31,11 +31,14 @@
       "deferred": "RP ID のドメイン（apple-app-site-association の配置先）が未定で、Associated Domains（webcredentials）を載せる有料の開発者登録も期限切れのため保留。ベンダーの個別審査は不要で、両方が揃えば着手できる"
     },
     "windows": {
-      "status": "possible",
-      "api": "Windows WebAuthn API（`webauthn.h` の `WebAuthNAuthenticatorMakeCredential` / `GetAssertion`）。Win32 で呼べる",
-      "perm": "なし（package identity は要確認。文書は未精査）",
+      "status": "done",
+      "api": "Windows WebAuthn API（`webauthn.h` の `WebAuthNAuthenticatorMakeCredential` / `GetAssertion`、API v1 の options 版）。乱数は `CryptographicBuffer::GenerateRandom`",
+      "perm": "なし（Win32 desktop API。package identity の要否は実機で確認、Issue #337）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/webauthn/",
-      "note": "未実装。Windows Hello 側の公式案内は https://learn.microsoft.com/en-us/windows/security/identity-protection/passkeys/ 。unpackaged での可否は要確認"
+      "note": "実装済み（Issue #343）。ワーカースレッドで `MakeCredential` / `GetAssertion` をブロッキング呼び出しし、メインウィンドウ（`windows_share::window()` の HWND）に束縛して Windows Hello を出す。結果は 3 値: キャンセル・該当なし・期限切れは `NotAllowed`、非対応は `Unsupported`、未知のエラーや整合しない応答は失敗（`Internal` / `InvalidInput`）。HRESULT → DOM 例外名の写像は `outcome_from_hresult` 1 か所。守る範囲: 1 プロセス内で同時に 1 要求、古い世代の完了の破棄、応答構造体の全経路での解放、null・長さ 0 を成功に畳まないこと。守らない範囲: 複数プロセスの同時登録、アプリ終了と OS 呼び出しの重なり、署名・rpIdHash の検証（サーバー検証なしのデモ）。OS は clientDataJSON を返さず、渡したものを照合するため循環照合になる。要求の取り違えは世代照合で防ぐ。取り消しの契機は持たない。ローカルに msvc が無く x86_64-pc-windows-gnu の型検査のみ。unpackaged での可否と `localhost` の RP ID が通るかは実機確認（Issue #337）",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#337）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_passkey.rs + crates/fandhe-egui-proxy/src/device/passkey.rs + crates/fandhe-core/src/screens/passkey_signin.rs + crates/fandhe-device/src/passkey.rs、Issue #343"
     },
     "web": {
       "status": "done",

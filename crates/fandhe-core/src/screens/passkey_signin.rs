@@ -35,7 +35,8 @@ pub const MISMATCH_TEXT: &str = "応答が今回の要求と一致しないた�
 /// 失敗の接頭辞。
 pub const FAILED_PREFIX: &str = "失敗しました: ";
 /// 後片付けの案内の接頭辞（RP ID を後ろに付ける）。
-pub const CLEANUP_PREFIX: &str = "登録したデモ用パスキーは OS・ブラウザに残ります。RP ID: ";
+pub const CLEANUP_PREFIX: &str =
+    "登録したデモ用パスキーは OS・ブラウザに残ります。要求した RP ID: ";
 /// 「この画面で登録したものと同じ」の比較結果。
 pub const SAME_TEXT: &str = "この画面で登録したものと同じ資格情報です";
 /// 同上（不一致）。
@@ -83,7 +84,7 @@ impl std::fmt::Debug for CredentialMemo {
 /// 整合確認を通った応答の要約。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreSummary {
-    /// RP ID。
+    /// 要求した RP ID（応答の rpIdHash とは照合していない）。
     pub rp_id: String,
     /// 資格情報 ID。
     pub credential_id: CredentialMemo,
@@ -183,7 +184,7 @@ fn detail_of(s: &CoreSummary, same: &str) -> String {
         .map(|n| format!(" / 署名: {n} バイト"))
         .unwrap_or_default();
     format!(
-        "RP ID: {} / 本人の存在: {} / 本人の検証: {}{sig}\n{same}\n{CLEANUP_PREFIX}{}",
+        "要求した RP ID: {} / 本人の存在: {} / 本人の検証: {}{sig}\n{same}\n{CLEANUP_PREFIX}{}",
         s.rp_id,
         yes_no(s.user_present),
         yes_no(s.user_verified),
@@ -357,6 +358,7 @@ mod tests {
         let g = s.generation;
         finish(&mut s, g, Ok(CoreOutcome::AssertionReturned(summary(1))));
         assert!(s.detail.contains(SAME_TEXT));
+        assert!(s.detail.contains("要求した RP ID: localhost"));
         sign_in(&mut s);
         mark_running(&mut s);
         let g = s.generation;
