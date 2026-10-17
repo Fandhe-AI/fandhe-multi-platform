@@ -750,10 +750,9 @@ pub mod windows_nlp;
 /// `device/notification.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_notification;
-/// Issue #342: Windows 向けパスキー実装の置き場（現状はスタブ、#343 が `webauthn.h` で埋める）。
+/// Issue #343: Windows 向けパスキー実装（`webauthn.h` の MakeCredential / GetAssertion）。
 /// `device/passkey.rs` の Windows 経路から呼ばれる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+#[cfg(target_os = "windows")]
 pub mod windows_passkey;
 /// Issue #1247: Windows 向け歩数実装（WinRT `Pedometer` ラッパー）。
 /// `device/pedometer.rs` の Windows 経路から呼ばれる。

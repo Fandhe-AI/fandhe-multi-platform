@@ -336,6 +336,11 @@ windows = { workspace = true, optional = true, features = [
     # Issue #955: `InMemoryRandomAccessStream`/`DataReader`（録音先バッファの読み書き）
     # に使う。
     "Storage_Streams",
+    # Issue #343: `device/windows_passkey.rs` が `WebAuthNAuthenticatorMakeCredential` /
+    # `GetAssertion`（`Win32_Networking_WindowsWebServices`）と、challenge 用の
+    # `CryptographicBuffer::GenerateRandom`（`Security_Cryptography`）を呼ぶ。新規パッケージは増えない。
+    "Win32_Networking_WindowsWebServices",
+    "Security_Cryptography",
     # Issue #290: device/windows_ml_inference.rs が WinML（LearningModel / LearningModelSession /
     # TensorFloat）を呼ぶ。AI → Foundation のみに依存し新規パッケージは増えない。
     "AI_MachineLearning",
