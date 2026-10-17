@@ -41,12 +41,15 @@
       "note": "URL 未確認。ペン API のページは取得できなかった"
     },
     "web": {
-      "status": "possible",
+      "status": "done",
       "api": "Pointer Events（`PointerEvent.pressure` / `tiltX` / `pointerType`）",
-      "perm": "なし",
+      "perm": "不要（Permissions-Policy・許可ダイアログなし）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent/pressure",
       "safari": "Safari 対応（MDN は Baseline、詳細は互換表で要確認）",
-      "note": "MDN は Baseline（2020-07 から Widely available）。筆圧のないマウスは 0.5 が返る"
+      "note": "実装済み（#358）。root 要素の Pointer Events（down / move / up / cancel / lostpointercapture）を requestAnimationFrame 1 本でまとめて画面へ反映する。筆圧と傾き（tiltX / tiltY から高度角）は pointerType がペンのときだけ出し、マウス・指は None（マウスが返す固定の 0.5 を筆圧にしない）。離す・キャンセル・キャプチャ喪失・blur・pagehide・非表示で接触なしに戻す。PointerEvent が無ければ非対応として出す。守る範囲: 1 マウント内の順序・嘘の値を出さないこと・離したら消すこと・リスナーと rAF の解放。守らない範囲: 主ポインタ 1 本以外、coalesced / predicted events、筆圧を報告しないペンが返す 0.5、傾きを報告しない機器の 0、altitudeAngle / azimuthAngle・ホバー・消しゴム、点の上限 2000、複数タブ、egui-proxy の wasm canvas 経路。実ブラウザとペン実機の確認は #354",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#354）",
+      "impl": "crates/fandhe-web-dom/src/pen_stylus.rs + crates/fandhe-web-dom/src/dom_tree.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-device/src/pen_stylus.rs、Issue #358"
     }
   },
   "note": "pen-stylus は筆圧・傾きの継続入力。keyboard-mouse（既存 id）との違い: 位置とクリックだけでなく、筆圧・角度・ペン / 指の区別を含む。winit が筆圧を届けるかは未調査のため、実装前に確認が要る。今回の範囲: 画面に線を描き、筆圧で太さを変える（筆圧が無い入力は一定の太さ）。"

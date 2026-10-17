@@ -385,7 +385,15 @@ fn convert_node<S: 'static>(
                 .map(|child| convert_node(child, state, collector))
                 .collect();
 
-            if let (false, Some((synced, size, commands))) = (circles.is_empty(), canvas) {
+            // ドラッグを奪うキャンバス（`pen_draw`）は、点が 0 個の初期状態でも描き始める面が要るため
+            // 円が無くてもコンテナを出し、指・ペンのドラッグでページがスクロールしないようにする。
+            let captures_drag = widget
+                .as_any()
+                .and_then(|any| any.downcast_ref::<CanvasWidget<S>>())
+                .is_some_and(|c| c.captures_drag());
+            if let (true, Some((synced, size, commands))) =
+                (captures_drag || !circles.is_empty(), canvas)
+            {
                 let mut attrs = vec![
                     ("class".to_string(), "fandhe-canvas".to_string()),
                     ("role".to_string(), "img".to_string()),
@@ -401,6 +409,9 @@ fn convert_node<S: 'static>(
                     "position:relative;width:{}px;height:{}px",
                     size.width, size.height
                 );
+                if captures_drag {
+                    style.push_str(";touch-action:none");
+                }
                 if let Some(color) = background {
                     style.push_str(&format!(";background-color:{color}"));
                 }
@@ -1116,6 +1127,38 @@ mod tests {
     fn circle_to_dom_node_returns_none_for_non_circle_commands() {
         assert!(circle_to_dom_node(&PaintCommand::Rect).is_none());
         assert!(circle_to_dom_node(&PaintCommand::Text("x".to_string())).is_none());
+    }
+
+    /// drag capture 付きキャンバス（`pen_draw`）は点が 0 個でもコンテナを出し、`touch-action:none` を付ける
+    /// （Issue #358）。drag capture の無い `tilt_ball` の style は変えない。
+    #[test]
+    fn drag_capture_canvas_renders_empty_container_with_touch_action_none() {
+        use fandhe_core::screens::pen_draw::{current_screen, PenDrawState};
+        use fandhe_core::screens::tilt_ball::{tilt_ball_screen, TiltBallState};
+
+        fn canvas_style(node: &DomNode) -> Option<String> {
+            if node
+                .attrs
+                .iter()
+                .any(|(k, v)| k == "class" && v == "fandhe-canvas")
+            {
+                return node
+                    .attrs
+                    .iter()
+                    .find(|(k, _)| k == "style")
+                    .map(|(_, v)| v.clone());
+            }
+            node.children.iter().find_map(canvas_style)
+        }
+
+        let pen = PenDrawState::default();
+        let style = canvas_style(&build_dom_tree(&current_screen(&pen), &pen, 0)).unwrap();
+        assert!(style.contains("width:320px"));
+        assert!(style.contains("touch-action:none"));
+
+        let ball = TiltBallState::default();
+        let style = canvas_style(&build_dom_tree(&tilt_ball_screen(), &ball, 0)).unwrap();
+        assert!(!style.contains("touch-action"));
     }
 
     /// `Node::Widget(CanvasWidget)` が円を実際に描くことを確認する（Issue #989、

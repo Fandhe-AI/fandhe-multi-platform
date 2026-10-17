@@ -86,6 +86,8 @@
 //!   純関数（取得結果の写像・取り直し判定・世代照合）のみ `wasm32` gate の外に置く
 //! - [`compass`]: 「方位（コンパス）」画面の Web 経路（親 #1154、Issue #1407）。
 //!   純関数（イベント値 → 方位・許可結果の写像・tick 判定・世代照合）のみ `wasm32` gate の外に置く
+//! - [`pen_stylus`]: 「ペン・筆圧で描く」画面の Web 経路（親 #95、Issue #358）。
+//!   純関数（pointerType・筆圧・傾きの写像、座標変換、操作列の反映）のみ `wasm32` gate の外に置く
 //! - [`ar`]: 「AR 表示」画面の Web 経路（親 #90、Issue #309）。WebXR `immersive-ar` + `dom-overlay`。
 //!   純関数（姿勢 → 状態・失敗の写像・tick 判定）のみ `wasm32` gate の外に置く
 //! - [`fullscreen_immersive`]: 「全画面表示」画面の Web 経路（親 #1133、Issue #1315）。
@@ -280,6 +282,9 @@ pub mod nlp;
 pub mod on_device_llm;
 /// 型サンプル「パスキー・サインイン連携」の Web 経路（Issue #344）。[`haptics`] と同じ理由で gate を外す。
 pub mod passkey;
+/// 型サンプル「ペン・筆圧で描く」の Web 経路（Issue #358）。[`haptics`] と同じ理由で純関数は native からも
+/// テストできるよう gate を外す。
+pub mod pen_stylus;
 /// 型サンプル「印刷」の Web 経路（Issue #329）。[`haptics`] と同じ理由で gate を外す。
 pub mod print_page;
 /// 型サンプル「画面スリープの抑止」の Web 経路（Issue #1281）。[`haptics`] と同じ理由で gate を外す。
