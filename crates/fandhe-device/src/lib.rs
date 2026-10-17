@@ -98,6 +98,8 @@ pub mod on_device_llm;
 pub mod passkey;
 /// Phase 11（端末機能の拡充ループ、親 #1119、Issue #1247）: 歩数（累積歩数を 1 回取得）。
 pub mod pedometer;
+/// Phase 11（端末機能の拡充ループ、親 #95、Issue #355）: ペン・筆圧入力（種類・筆圧・傾き）。
+pub mod pen_stylus;
 /// Phase 11（端末機能の拡充ループ、親 #1121、Issue #1254）: 画像 1 枚の写真ライブラリ保存。
 pub mod photo_library;
 /// Phase 11（端末機能の拡充ループ）: 写真 1 枚の選択。

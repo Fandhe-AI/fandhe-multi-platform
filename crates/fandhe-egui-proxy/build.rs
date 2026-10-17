@@ -166,6 +166,9 @@
 //! - `macos/fandhe_macos_multi_display.m`（Issue #1341、`NSScreen.screens` による画面一覧の同期読み取り）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_multi_display.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_pen_stylus.m`（Issue #355、`NSEvent` の local monitor によるペンの種類・筆圧・傾き）は
+//!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_pen_stylus.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `apple/fandhe_apple_network_status.m`（Issue #1282、`NWPathMonitor` によるネットワーク接続状態）は
 //!   iOS・macOS 双方の分岐で feature `device` 有効時にコンパイルする
 //!   （Issue #1283。`src/device/apple_network_status.rs` から呼ばれる契約）。Network をリンクする。
@@ -1072,6 +1075,17 @@ fn compile_macos_multi_display() {
         .compile("fandhe_macos_multi_display");
 }
 
+/// `macos/fandhe_macos_pen_stylus.m` を `cc` でコンパイルする（Issue #355）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_pen_stylus.rs` が使う）。AppKit は `build_macos` 側の
+/// 既存リンクで足りるため追加リンクは無い。
+fn compile_macos_pen_stylus() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_pen_stylus.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_pen_stylus.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_pen_stylus");
+}
+
 /// `ios/fandhe_ios_multi_display.m` を `cc` でコンパイルする（Issue #27）。**iOS 分岐のみ**から
 /// 呼ばれる（`src/device/ios_multi_display.rs` が使う）。UIKit は `main` 側の既存リンクで足りる。
 fn compile_ios_multi_display() {
@@ -1433,6 +1447,7 @@ fn build_macos() {
     compile_macos_file_watch();
     // `macos/fandhe_macos_multi_display.m`（Issue #1341）も macOS 専用。
     compile_macos_multi_display();
+    compile_macos_pen_stylus();
     // `macos/fandhe_macos_screen_wake_lock.m`（Issue #1278）も macOS 専用。IOKit を使う。
     compile_macos_screen_wake_lock();
     // `apple/fandhe_apple_screen_capture.m`（Issue #1335）の macOS 側（ScreenCaptureKit）。

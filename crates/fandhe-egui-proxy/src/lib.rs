@@ -937,18 +937,57 @@ fn render_node<S: 'static>(
                     width: f32::INFINITY,
                     height: f32::INFINITY,
                 });
-                let (rect, _response) = ui.allocate_exact_size(
+                // Issue #355: ペン描画キャンバス（`captures_drag`）だけ drag を拾い、ルートの
+                // `ScrollArea` のドラッグスクロールを止める。他画面は hover のまま（スクロール維持）。
+                // 押下中の位置（キャンバス左上原点）は `CompletionSender::canvas_pointer` が渡す。
+                let captures = canvas.captures_drag();
+                let (rect, response) = ui.allocate_exact_size(
                     egui::vec2(measured.width, measured.height),
-                    egui::Sense::hover(),
+                    if captures {
+                        egui::Sense::drag()
+                    } else {
+                        egui::Sense::hover()
+                    },
                 );
+                if captures {
+                    let pointer = if response.is_pointer_button_down_on() {
+                        response
+                            .interact_pointer_pos()
+                            .map(|p| (p.x - rect.min.x, p.y - rect.min.y))
+                    } else {
+                        None
+                    };
+                    // 同じフレームに「離す → 押す」が続いても、新しい接触だと分かるように押下も渡す
+                    // （前のストロークとつながらないようにする）。
+                    let pressed = pointer.is_some() && ui.input(|i| i.pointer.primary_pressed());
+                    // このフレームでキャンバス上の接触が終わった位置。押下から解放までが 1 フレームに
+                    // 収まる短いタップでも、最後の 1 点を描いてから線を終えられるようにする。
+                    let released =
+                        if pointer.is_none() && (response.clicked() || response.drag_stopped()) {
+                            response
+                                .interact_pointer_pos()
+                                .or_else(|| ui.input(|i| i.pointer.latest_pos()))
+                                .map(|p| (p.x - rect.min.x, p.y - rect.min.y))
+                        } else {
+                            None
+                        };
+                    ui.ctx().data_mut(|d| {
+                        d.insert_temp(crate::app::canvas_pointer_id(widget.id().raw()), pointer);
+                        d.insert_temp(crate::app::canvas_pressed_id(widget.id().raw()), pressed);
+                        d.insert_temp(crate::app::canvas_released_id(widget.id().raw()), released);
+                    });
+                }
                 // `paint` は配置矩形の左上 `origin` 分だけ平行移動済みの座標を返す
                 // （`ui/canvas.rs` の `Widget::paint` 契約）。
+                // 端のサンプルで円がキャンバス外へはみ出さないよう、キャンバス矩形と
+                // 既存 clip_rect の交差でクリップした painter で描く。
+                let painter = ui.painter_at(rect.intersect(ui.clip_rect()));
                 for command in canvas.paint((rect.min.x, rect.min.y), measured) {
                     match command {
                         // `StyledRect` はキャンバス全面を暗黙の境界とする契約
                         // （`ui/canvas.rs` の `translate` doc 参照）。
                         PaintCommand::StyledRect { fill } => {
-                            ui.painter().rect_filled(
+                            painter.rect_filled(
                                 rect,
                                 0.0,
                                 egui::Color32::from_rgba_unmultiplied(
@@ -957,7 +996,7 @@ fn render_node<S: 'static>(
                             );
                         }
                         PaintCommand::Circle { .. } => {
-                            crate::paint_command::paint_circle(ui.painter(), &command);
+                            crate::paint_command::paint_circle(&painter, &command);
                         }
                         // `Text`/`Rect`/`StyledText`/`CompositionText` はキャンバス経路で
                         // 使わないため素通しする（`ProgressBar` 等の他ウィジェットが

@@ -162,3 +162,6 @@ pub mod contact_pick;
 
 /// Phase 11 の拡充ループ型サンプル「画面の録画・キャプチャ」（親 #1135、Issue #1335）。
 pub mod screen_capture;
+
+/// Phase 11 の拡充ループ型サンプル「ペン・筆圧で描く」（親 #95、Issue #355）。
+pub mod pen_draw;
