@@ -86,9 +86,10 @@ static BOOL g_stop_after_start = NO;
 static AVSampleBufferDisplayLayer *g_layer = nil;
 static AVPictureInPictureController *g_controller = nil;
 static id g_delegate = nil;
-// release_all で外した delegate。controller.delegate は weak のため、停止の完了通知
-// （restoreUserInterface... 等）が届くまで次の release_all まで強参照で延命する。
-static id g_retired_delegate = nil;
+// release_all で外した delegate（Starting / Active 中だったもの）。controller.delegate は weak のため、
+// 開始・停止の完了通知が届くまで強参照で延命する。各 delegate が controller を保持し、
+// 完了通知（停止・失敗）で配列から外す。複数世代が重なっても全部を追跡する。
+static NSMutableArray *g_retired = nil;
 static dispatch_source_t g_timer = nil;
 static CVPixelBufferRef g_buffers[MAX_COLORS];
 static size_t g_buffer_count = 0;
@@ -110,6 +111,15 @@ static void release_buffers_locked(void) {
     }
 }
 
+API_AVAILABLE(macos(12.0))
+@interface FandhePipDelegate : NSObject <AVPictureInPictureControllerDelegate,
+                                          AVPictureInPictureSampleBufferPlaybackDelegate>
+@property(nonatomic) uint64_t gen;
+// release_all 後（main thread で設定）。完了通知は世代照合ではなくこの印で扱う。
+@property(nonatomic) BOOL retired;
+@property(nonatomic, strong) AVPictureInPictureController *controller;
+@end
+
 // 契約表 9: タイマー cancel → stopPictureInPicture（delegate は停止完了まで生かす）→ controller nil →
 // layer を flushAndRemoveImage して removeFromSuperlayer → 世代 0。main thread で呼ぶ。
 static void release_all(void) {
@@ -121,6 +131,7 @@ static void release_all(void) {
     g_controller = nil;
     g_layer = nil;
     id delegate = g_delegate;
+    BOOL was_starting = (g_phase == PHASE_STARTING);
     g_delegate = nil;
     g_gen = 0;
     g_phase = PHASE_IDLE;
@@ -129,12 +140,16 @@ static void release_all(void) {
     pthread_mutex_unlock(&g_lock);
 
     if (timer) dispatch_source_cancel(timer);
-    // g_gen = 0 のため、旧 delegate の通知は世代照合で捨てられる。
-    g_retired_delegate = nil;
+    // g_gen = 0 のため、旧 delegate の通常通知は世代照合で捨てられる。Starting 中なら retired の
+    // delegate が遅れて届く DidStart で停止し、小窓を残さない。
     if (controller) {
-        if (controller.isPictureInPictureActive) {
-            g_retired_delegate = delegate;
-            [controller stopPictureInPicture];
+        if (controller.isPictureInPictureActive || was_starting) {
+            FandhePipDelegate *d = delegate;
+            d.retired = YES;
+            d.controller = controller;
+            if (!g_retired) g_retired = [NSMutableArray array];
+            [g_retired addObject:d];
+            if (controller.isPictureInPictureActive) [controller stopPictureInPicture];
         } else {
             controller.delegate = nil;
         }
@@ -145,18 +160,15 @@ static void release_all(void) {
     }
 }
 
-API_AVAILABLE(macos(12.0))
-@interface FandhePipDelegate : NSObject <AVPictureInPictureControllerDelegate,
-                                          AVPictureInPictureSampleBufferPlaybackDelegate>
-@property(nonatomic) uint64_t gen;
-@end
-
 @implementation FandhePipDelegate
 
 - (void)pictureInPictureControllerDidStartPictureInPicture:(AVPictureInPictureController *)c {
     BOOL stop_now = NO;
     pthread_mutex_lock(&g_lock);
-    if (self.gen == g_gen) {
+    if (self.retired) {
+        // 解放済みの世代が遅れて開始した。止めて、停止通知で外す。
+        stop_now = YES;
+    } else if (self.gen == g_gen) {
         if (g_stop_after_start) {
             // 開始中のキャンセル。開始の完了後に止める（契約表 3）。
             g_phase = PHASE_STOPPING;
@@ -171,7 +183,9 @@ API_AVAILABLE(macos(12.0))
 
 - (void)pictureInPictureControllerDidStopPictureInPicture:(AVPictureInPictureController *)c {
     pthread_mutex_lock(&g_lock);
-    if (self.gen == g_gen) {
+    if (self.retired) {
+        [g_retired removeObject:self];
+    } else if (self.gen == g_gen) {
         g_phase = PHASE_EXITED;
         g_stop_after_start = NO;
     }
@@ -182,7 +196,9 @@ API_AVAILABLE(macos(12.0))
     failedToStartPictureInPictureWithError:(NSError *)error {
     // error の内容は画面にもログにも出さない（A09）。
     pthread_mutex_lock(&g_lock);
-    if (self.gen == g_gen) {
+    if (self.retired) {
+        [g_retired removeObject:self];
+    } else if (self.gen == g_gen) {
         // 開始中に利用者が取り消していたなら失敗ではなく Exited。
         g_phase = g_stop_after_start ? PHASE_EXITED : PHASE_FAILED_START;
         g_stop_after_start = NO;
