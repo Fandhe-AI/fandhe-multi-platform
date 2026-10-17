@@ -963,12 +963,15 @@ fn render_node<S: 'static>(
                 }
                 // `paint` は配置矩形の左上 `origin` 分だけ平行移動済みの座標を返す
                 // （`ui/canvas.rs` の `Widget::paint` 契約）。
+                // 端のサンプルで円がキャンバス外へはみ出さないよう、キャンバス矩形と
+                // 既存 clip_rect の交差でクリップした painter で描く。
+                let painter = ui.painter_at(rect.intersect(ui.clip_rect()));
                 for command in canvas.paint((rect.min.x, rect.min.y), measured) {
                     match command {
                         // `StyledRect` はキャンバス全面を暗黙の境界とする契約
                         // （`ui/canvas.rs` の `translate` doc 参照）。
                         PaintCommand::StyledRect { fill } => {
-                            ui.painter().rect_filled(
+                            painter.rect_filled(
                                 rect,
                                 0.0,
                                 egui::Color32::from_rgba_unmultiplied(
@@ -977,7 +980,7 @@ fn render_node<S: 'static>(
                             );
                         }
                         PaintCommand::Circle { .. } => {
-                            crate::paint_command::paint_circle(ui.painter(), &command);
+                            crate::paint_command::paint_circle(&painter, &command);
                         }
                         // `Text`/`Rect`/`StyledText`/`CompositionText` はキャンバス経路で
                         // 使わないため素通しする（`ProgressBar` 等の他ウィジェットが
