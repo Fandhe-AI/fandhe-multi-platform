@@ -10,8 +10,8 @@
 //! 離したら `end_stroke` を 1 回だけ送る（画面側の表示値の有無で判定するため繰り返さない）。
 //! 失敗（非対応・読み取り失敗）は画面の状態が `Failure` になった後は何もしない（ループさせない）。
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。macOS は `macos_pen_stylus.rs`、iOS・Android・
-//! Windows は後続の子 issue（#356・#357・#359）が埋めるまでスタブ（`UnsupportedPenStylus`）、
+//! dispatch（[`implementation`]）は全対象 OS の最終形。macOS は `macos_pen_stylus.rs`、iOS は `ios_pen_stylus.rs`（#356）、
+//! Android・Windows は後続の子 issue（#357・#359）が埋めるまでスタブ（`UnsupportedPenStylus`）、
 //! Web は `fandhe-web-dom` 側、Linux は非対応。
 
 use std::sync::{Arc, Mutex};
