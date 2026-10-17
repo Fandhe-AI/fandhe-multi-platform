@@ -265,6 +265,22 @@ static CVPixelBufferRef make_color_buffer(uint8_t r, uint8_t g, uint8_t b, uint3
     return pb;
 }
 
+// フレーム生成・描画レイヤーの回復不能な失敗を内部失敗として確定する（嘘の成功の禁止）。
+// 世代が現在のもので Starting / Active / Stopping のときだけ反映する（Exited や旧世代は触らない）。
+// 以後フレームを流し続けないようタイマーを止める。小窓・資源の解放は Rust ドライバが失敗を見て
+// shutdown / 再 prepare で行う（ここで stop すると DidStop が Exited で上書きするため呼ばない）。
+static void fail_internal(uint64_t gen) {
+    pthread_mutex_lock(&g_lock);
+    dispatch_source_t timer = nil;
+    if (gen == g_gen && (g_phase == PHASE_STARTING || g_phase == PHASE_ACTIVE ||
+                         g_phase == PHASE_STOPPING)) {
+        g_phase = PHASE_FAILED_INTERNAL;
+        timer = g_timer;
+    }
+    pthread_mutex_unlock(&g_lock);
+    if (timer) dispatch_source_cancel(timer);
+}
+
 // 1 フレーム enqueue する（main queue から呼ぶ）。世代が古ければ何もしない。
 static void enqueue_frame(uint64_t gen) {
     pthread_mutex_lock(&g_lock);
@@ -296,7 +312,12 @@ static void enqueue_frame(uint64_t gen) {
         }
         if (layer.status == AVQueuedSampleBufferRenderingStatusFailed) [layer flush];
         if (layer.isReadyForMoreMediaData) [layer enqueueSampleBuffer:sb];
+        // flush で戻らない Failed は回復不能。映像が止まったまま Active を見せ続けない。
+        if (layer.status == AVQueuedSampleBufferRenderingStatusFailed) fail_internal(gen);
         CFRelease(sb);
+    } else {
+        // 生成に失敗したフレームを黙って捨てて Active のままにしない。
+        fail_internal(gen);
     }
     CFRelease(format);
     CVPixelBufferRelease(pb);
