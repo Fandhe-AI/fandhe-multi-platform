@@ -1,12 +1,12 @@
-// Phase 11 の拡充ループ（親 #97）型サンプル「ピクチャ・イン・ピクチャ」: macOS（Issue #364）の実装。
-// iOS（b-ios）と共用する前提で apple/ に置く。macOS 固有の部分は TARGET_OS_OSX で囲む。
+// Phase 11 の拡充ループ（親 #97）型サンプル「ピクチャ・イン・ピクチャ」: macOS（Issue #364）と iOS（Issue #365）の共用実装。
+// macOS 固有の部分は TARGET_OS_OSX、iOS 固有の部分は TARGET_OS_IOS で囲む。
 // 実行時に生成した単色フレーム（RGB の表を interval_ms ごとに切り替え）を AVSampleBufferDisplayLayer へ
-// 流し、AVKit の sample buffer 経路（AVPictureInPictureControllerContentSource、macOS 12.0+）で OS の
+// 流し、AVKit の sample buffer 経路（AVPictureInPictureControllerContentSource、macOS 12.0+ / iOS 15.0+）で OS の
 // 小窓へ出す。素材ファイル・URL・ネットワークは使わない。
 //
 // `crates/fandhe-egui-proxy/src/device/apple_picture_in_picture.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の macOS 分岐がコンパイルし AVKit・CoreMedia・CoreVideo・QuartzCore をリンクする。
-// 12.0+ の API は @available で守る（実行体の最低版は 11.0。12 未満は prepare が非対応 = 1 を返す）。
+// `build.rs` の macOS・iOS 分岐がコンパイルし AVKit・CoreMedia・CoreVideo・QuartzCore をリンクする。
+// 12.0+ / 15.0+ の API は @available で守る（macOS の実行体の最低版は 11.0。12 未満は prepare が非対応 = 1 を返す）。
 //
 // 契約（戻りコードは固定。NSError の生値・説明は返さずログにも出さない、security.md A09）:
 //   0 = 成功、1 = 非対応（macOS 12 未満・isPictureInPictureSupported が NO）、2 = 引数不正、
@@ -31,19 +31,36 @@
 // 呼び出しはすべて egui の update（macOS は main thread）から来る。main への dispatch_sync は使わない
 // （呼び出し元が main のためデッドロックする）。
 // 権限・entitlement・usage description は不要。映像の内容はログへ出力しない。
+//
+// iOS 固有（Issue #365）:
+//   - Info.plist の UIBackgroundModes に audio が必要（AVKit が PiP の条件とする。背景での音声再生には使わない）。
+//   - prepare で AVAudioSession の category / mode / options を保存し playback + mixWithOthers にする。
+//     release_all の全経路で保存値へ復元する。設定に失敗しても prepare は失敗にしない
+//     （isPictureInPicturePossible が NO のままなら snapshot が NotPossible を返し、嘘の成功にならない）。
+//   - delegate が状態を変えた直後、g_lock を外して fandhe_rust_picture_in_picture_changed() で次フレームを起こす。
+//   - 小窓中の背景遷移は中断にしない（AVKit が小窓を維持するため通知は購読しない）。
 
 #import <TargetConditionals.h>
-#if TARGET_OS_OSX
+#if TARGET_OS_OSX || TARGET_OS_IOS
 
 #import <AVFoundation/AVFoundation.h>
 #import <AVKit/AVKit.h>
+#if TARGET_OS_OSX
 #import <AppKit/AppKit.h>
+#else
+#import "fandhe_ios_common.h"
+#endif
 #import <CoreMedia/CoreMedia.h>
 #import <CoreVideo/CoreVideo.h>
 #import <Foundation/Foundation.h>
 #import <QuartzCore/QuartzCore.h>
 #include <pthread.h>
 #include <stdint.h>
+
+#if TARGET_OS_IOS
+// ios_picture_in_picture.rs が定義する再描画の受け口。
+extern void fandhe_rust_picture_in_picture_changed(void);
+#endif
 
 // AVSampleBufferDisplayLayer の enqueue 系は macOS 15 で sampleBufferRenderer 経由へ移行したが、
 // 実行体の最低版は 11.0 のため旧 API を使う（15 未満では新 API が無い）。
@@ -100,6 +117,45 @@ static CMVideoFormatDescriptionRef g_format = NULL;
 static uint32_t g_interval_ms = 0;
 static uint64_t g_tick = 0;
 
+// 状態を OS コールバックで変えた後の再描画通知。g_lock を保持して呼ばない。macOS は何もしない（pull 型で足りる）。
+static void fandhe_notify_changed(void) {
+#if TARGET_OS_IOS
+    fandhe_rust_picture_in_picture_changed();
+#endif
+}
+
+#if TARGET_OS_IOS
+// prepare 前の AVAudioSession を保存し、release_all で復元する（契約表 9）。
+static BOOL g_audio_saved = NO;
+static AVAudioSessionCategory g_saved_category = nil;
+static AVAudioSessionMode g_saved_mode = nil;
+static AVAudioSessionCategoryOptions g_saved_options = 0;
+
+static void audio_session_restore(void) {
+    if (!g_audio_saved) return;
+    g_audio_saved = NO;
+    [[AVAudioSession sharedInstance] setCategory:g_saved_category
+                                            mode:g_saved_mode
+                                         options:g_saved_options
+                                           error:nil];
+    g_saved_category = nil;
+    g_saved_mode = nil;
+}
+
+static void audio_session_apply(void) {
+    AVAudioSession *s = [AVAudioSession sharedInstance];
+    g_saved_category = s.category;
+    g_saved_mode = s.mode;
+    g_saved_options = s.categoryOptions;
+    g_audio_saved = YES;
+    // 音声は出さないので他アプリの音を止めない。失敗は黙殺せず、復元対象として保存済みのまま残す。
+    [s setCategory:AVAudioSessionCategoryPlayback
+              mode:AVAudioSessionModeDefault
+           options:AVAudioSessionCategoryOptionMixWithOthers
+             error:nil];
+}
+#endif
+
 static void release_buffers_locked(void) {
     for (size_t i = 0; i < g_buffer_count; i++) {
         if (g_buffers[i]) {
@@ -114,7 +170,7 @@ static void release_buffers_locked(void) {
     }
 }
 
-API_AVAILABLE(macos(12.0))
+API_AVAILABLE(macos(12.0), ios(15.0))
 @interface FandhePipDelegate : NSObject <AVPictureInPictureControllerDelegate,
                                           AVPictureInPictureSampleBufferPlaybackDelegate>
 @property(nonatomic) uint64_t gen;
@@ -162,6 +218,9 @@ static void release_all(void) {
         [layer flushAndRemoveImage];
         [layer removeFromSuperlayer];
     }
+#if TARGET_OS_IOS
+    audio_session_restore();
+#endif
 }
 
 @implementation FandhePipDelegate
@@ -186,6 +245,7 @@ static void release_all(void) {
     }
     pthread_mutex_unlock(&g_lock);
     if (stop_now) [c stopPictureInPicture];
+    fandhe_notify_changed();
 }
 
 - (void)pictureInPictureControllerDidStopPictureInPicture:(AVPictureInPictureController *)c {
@@ -198,6 +258,7 @@ static void release_all(void) {
         g_stop_after_start = NO;
     }
     pthread_mutex_unlock(&g_lock);
+    fandhe_notify_changed();
 }
 
 - (void)pictureInPictureController:(AVPictureInPictureController *)c
@@ -215,6 +276,7 @@ static void release_all(void) {
         g_stop_after_start = NO;
     }
     pthread_mutex_unlock(&g_lock);
+    fandhe_notify_changed();
 }
 
 - (void)pictureInPictureController:(AVPictureInPictureController *)c
@@ -289,7 +351,10 @@ static void fail_internal(uint64_t gen) {
         timer = g_timer;
     }
     pthread_mutex_unlock(&g_lock);
-    if (timer) dispatch_source_cancel(timer);
+    if (timer) {
+        dispatch_source_cancel(timer);
+        fandhe_notify_changed();
+    }
 }
 
 // 1 フレーム enqueue する（main queue から呼ぶ）。世代が古ければ何もしない。
@@ -340,7 +405,7 @@ int32_t fandhe_apple_pip_prepare(uint64_t gen, const uint8_t *rgb, size_t color_
     @autoreleasepool {
         // 契約: 呼ぶたびに前の資源を先に解放する（失敗経路でも解放済みで返す）。
         release_all();
-        if (@available(macOS 12.0, *)) {
+        if (@available(macOS 12.0, iOS 15.0, *)) {
             if (![AVPictureInPictureController isPictureInPictureSupported]) return RC_UNSUPPORTED;
         } else {
             return RC_UNSUPPORTED;
@@ -350,10 +415,15 @@ int32_t fandhe_apple_pip_prepare(uint64_t gen, const uint8_t *rgb, size_t color_
             height > MAX_DIMENSION) {
             return RC_INVALID;
         }
-        if (@available(macOS 12.0, *)) {
+        if (@available(macOS 12.0, iOS 15.0, *)) {
+#if TARGET_OS_OSX
             NSWindow *window = NSApp.mainWindow ?: NSApp.keyWindow ?: NSApp.windows.firstObject;
             NSView *content = window.contentView;
             if (!content) return RC_INTERNAL;
+#else
+            UIView *content = FandheRootViewController().view;
+            if (!content) return RC_INTERNAL;
+#endif
 
             pthread_mutex_lock(&g_lock);
             BOOL ok = YES;
@@ -383,17 +453,28 @@ int32_t fandhe_apple_pip_prepare(uint64_t gen, const uint8_t *rgb, size_t color_
             pthread_mutex_unlock(&g_lock);
 
             // 窓の右下に固定する（窓のリサイズには追従しない）。操作は受けず、Metal の描画面の上に重ねる。
+#if TARGET_OS_OSX
             content.wantsLayer = YES;
+#endif
             AVSampleBufferDisplayLayer *layer = [[AVSampleBufferDisplayLayer alloc] init];
             layer.videoGravity = AVLayerVideoGravityResizeAspect;
             // layer の y 軸の向きは view の実装で変わる（実機では上原点だった）ので向きを見て下端へ寄せる。
+#if TARGET_OS_OSX
             CGFloat y = content.layer.isGeometryFlipped
                             ? content.bounds.size.height - PREVIEW_H - PREVIEW_MARGIN
                             : PREVIEW_MARGIN;
+#else
+            // UIKit は上原点。下端の safe area の内側へ寄せる。
+            CGFloat y = content.bounds.size.height - PREVIEW_H - PREVIEW_MARGIN -
+                        content.safeAreaInsets.bottom;
+#endif
             layer.frame = CGRectMake(content.bounds.size.width - PREVIEW_W - PREVIEW_MARGIN, y,
                                      PREVIEW_W, PREVIEW_H);
             layer.zPosition = 1000;
             [content.layer addSublayer:layer];
+#if TARGET_OS_IOS
+            audio_session_apply();
+#endif
 
             FandhePipDelegate *delegate = [[FandhePipDelegate alloc] init];
             delegate.gen = gen;
@@ -507,4 +588,4 @@ void fandhe_apple_pip_shutdown(void) {
     }
 }
 
-#endif  // TARGET_OS_OSX
+#endif  // TARGET_OS_OSX || TARGET_OS_IOS
