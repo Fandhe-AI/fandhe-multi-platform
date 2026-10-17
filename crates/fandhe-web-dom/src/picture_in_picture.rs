@@ -115,6 +115,9 @@ mod web {
         /// 発送済みの世代（同じ世代を二度渡さない）。
         started: Option<u64>,
         pending: Option<Pending>,
+        /// 開始要求の飛行中に届いた「小窓をやめる」の世代。開始の完了（成功・失敗・期限切れ）で
+        /// 実際の状態を見てから確定する（契約表 2・3）。
+        stop_after_start: Option<u64>,
         video: Option<HtmlVideoElement>,
         stream: Option<web_sys::MediaStream>,
         interval: Option<(i32, Closure<dyn FnMut()>)>,
@@ -247,10 +250,11 @@ mod web {
         }
     }
 
-    /// 保留中の要求が `kind` なら取り出してタイマーを止める。違えば `None`（二重確定の防止）。
-    fn take_pending(id: u64, kind: Kind) -> Option<u64> {
+    /// 保留中の要求が `kind`（`gen` 指定時は世代も）に一致するなら取り出してタイマーを止める。
+    /// 違えば `None`（二重確定・別の要求の保留の横取りを防ぐ）。
+    fn take_pending(id: u64, kind: Kind, gen: Option<u64>) -> Option<u64> {
         let p = with(id, |e| match &e.pending {
-            Some(p) if p.kind == kind => e.pending.take(),
+            Some(p) if p.kind == kind && gen.is_none_or(|g| g == p.generation) => e.pending.take(),
             _ => None,
         })??;
         if let Some(w) = web_sys::window() {
@@ -272,9 +276,15 @@ mod web {
     /// 保留中の `kind` の要求を確定する。タイマーを止めてから状態を確定する（契約表 2・9）。
     /// 失敗なら映像資源も解放する。
     fn settle(applier: &Applier<State>, id: u64, kind: Kind, update: PipShowUpdate) {
-        let Some(gen) = take_pending(id, kind) else {
+        let Some(gen) = take_pending(id, kind, None) else {
             return;
         };
+        if kind == Kind::Start {
+            if let Some(sg) = with(id, |e| e.stop_after_start.take()).flatten() {
+                let opened = matches!(update, PipShowUpdate::Phase(PipShowPhase::Active));
+                return finish_stop(applier, id, sg, opened);
+            }
+        }
         let failed = matches!(update, PipShowUpdate::Failed(_));
         applier.apply(move |s| apply_update(s, gen, update));
         if failed {
@@ -286,10 +296,17 @@ mod web {
     fn arm(applier: &Applier<State>, id: u64, gen: u64, kind: Kind) -> bool {
         let a = applier.clone();
         let cb = Closure::<dyn FnMut()>::new(move || {
-            let Some(g) = take_pending(id, kind) else {
+            let Some(g) = take_pending(id, kind, Some(gen)) else {
                 return;
             };
-            a.apply(move |s| expire(s, g));
+            // 開始中に停止が来ていたなら、現在の世代は停止側。開始側の世代では状態が動かない。
+            let sg = with(id, |e| e.stop_after_start.take()).flatten();
+            match sg.filter(|_| kind == Kind::Start) {
+                Some(sg) => a.apply(move |s| {
+                    apply_update(s, sg, PipShowUpdate::Failed(PipShowFailure::Timeout))
+                }),
+                None => a.apply(move |s| expire(s, g)),
+            }
             teardown_media(id);
         });
         let handle = web_sys::window().and_then(|w| {
@@ -449,8 +466,9 @@ mod web {
         let on_leave = Closure::<dyn FnMut()>::new(move || {
             // 遷移中でも小窓中でも失敗ではなく「戻った」。保留中の Start / Stop は確定させる。
             for k in [Kind::Start, Kind::Stop] {
-                let _ = take_pending(id, k);
+                let _ = take_pending(id, k, None);
             }
+            with(id, |e| e.stop_after_start = None);
             a.apply(|s| {
                 let g = s.generation;
                 apply_update(s, g, PipShowUpdate::Phase(PipShowPhase::Exited));
@@ -531,6 +549,7 @@ mod web {
         let Some(video) = with(id, |e| e.video.clone()).flatten() else {
             return fail_now(applier, id, gen, rejected());
         };
+        with(id, |e| e.stop_after_start = None);
         if !arm(applier, id, gen, Kind::Start) {
             return fail_now(applier, id, gen, rejected());
         }
@@ -548,11 +567,28 @@ mod web {
 
     fn do_stop(applier: &Applier<State>, id: u64, gen: u64) {
         if !is_ours(id) {
+            // 開始要求が飛行中なら、後から小窓が開く。完了を待ってから確定する（`settle` / 期限切れ）。
+            let start_in_flight = with(id, |e| {
+                let f = matches!(&e.pending, Some(p) if p.kind == Kind::Start);
+                if f {
+                    e.stop_after_start = Some(gen);
+                }
+                f
+            })
+            .unwrap_or(false);
+            if start_in_flight {
+                return;
+            }
             // 既に小窓ではない。何も待たず「戻った」にする。
             applier
                 .apply(move |s| apply_update(s, gen, PipShowUpdate::Phase(PipShowPhase::Exited)));
             return;
         }
+        begin_exit(applier, id, gen);
+    }
+
+    /// 小窓を閉じる要求を出して `Stop` の保留にする。確定は `leavepictureinpicture` か Promise。
+    fn begin_exit(applier: &Applier<State>, id: u64, gen: u64) {
         if !arm(applier, id, gen, Kind::Stop) {
             return fail_now(applier, id, gen, rejected());
         }
@@ -566,6 +602,15 @@ mod web {
                 PipShowUpdate::Failed(failure_from_name(&name_of(&e))),
             ),
         }
+    }
+
+    /// 開始の完了後に、飛行中に届いていた停止（世代 `sg`）を確定する。
+    /// 小窓が開いたなら閉じ、閉じたことを確認してから `Exited` にする。
+    fn finish_stop(applier: &Applier<State>, id: u64, sg: u64, opened: bool) {
+        if opened && is_ours(id) {
+            return begin_exit(applier, id, sg);
+        }
+        applier.apply(move |s| apply_update(s, sg, PipShowUpdate::Phase(PipShowPhase::Exited)));
     }
 
     /// Promise の結果を保留中の `kind` の確定へ流す。イベントが先に確定済みなら `settle` が捨てる。

@@ -23,7 +23,7 @@
 //! 目印、Android では小窓に入る「元の映像」そのもの。世代の違う通知と、遷移中・小窓中以外で届いた
 //! 通知は捨てる。
 
-use crate::{RgbaPixels, Screen, WidgetId};
+use crate::{Node, RgbaPixels, Screen, WidgetId};
 
 const START_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 const STOP_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
@@ -283,13 +283,28 @@ fn preview_pixels(rgb: [u8; 3]) -> Option<RgbaPixels> {
     RgbaPixels::new(PREVIEW_W, PREVIEW_H, rgba)
 }
 
+/// プレビュー画像のノード列（色が無ければ空）。
+fn preview_nodes(state: &PipShowState) -> Vec<Node<PipShowState>> {
+    state
+        .preview_rgb
+        .and_then(preview_pixels)
+        .map(|pixels| {
+            vec![Node::RgbaImage {
+                pixels,
+                alt: PREVIEW_ALT.to_string(),
+            }]
+        })
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
 /// 画面を組み立てる。ボタンは状態によらず 2 つとも出す。
-pub fn current_screen(state: &PipShowState) -> Screen<PipShowState> {
-    let mut screen = Screen::new(TITLE);
-    if let Some(pixels) = state.preview_rgb.and_then(preview_pixels) {
-        screen = screen.rgba_image(pixels, PREVIEW_ALT);
-    }
-    screen
+pub fn current_screen(_state: &PipShowState) -> Screen<PipShowState> {
+    // マウント側は Screen を一度しか組まないため、プレビューは `list` の expand で
+    // 描画のたびに状態から引く（初期状態が `None` でも後の `set_preview` が反映される）。
+    Screen::new(TITLE)
+        .list(preview_nodes)
         .dynamic_text(status_text)
         .error_text(error_text)
         .button(START_BUTTON_ID, START_LABEL, start)
@@ -444,5 +459,14 @@ mod tests {
         stop(&mut s);
         assert_eq!(s.phase, PipShowPhase::Stopping);
         assert_eq!(s.command, Some(PipCommand::Stop));
+    }
+
+    #[test]
+    fn preview_node_follows_state_after_screen_built() {
+        let mut s = PipShowState::default();
+        assert!(preview_nodes(&s).is_empty());
+        prepare(&mut s);
+        set_preview(&mut s, [1, 2, 3]);
+        assert_eq!(preview_nodes(&s).len(), 1);
     }
 }
