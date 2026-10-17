@@ -825,7 +825,14 @@ fn compile_apple_on_device_llm(ios: bool) {
 
     println!("cargo:rustc-link-search=native={out_dir}");
     println!("cargo:rustc-link-lib=static=fandhe_apple_on_device_llm");
-    println!("cargo:rustc-link-arg=-Wl,-weak_framework,FoundationModels");
+    // SDK に FoundationModels がある場合だけ弱リンクする。無い SDK（Xcode 16 等）では Swift 側の
+    // `canImport(FoundationModels)` が不成立で Unsupported 経路になり、リンクすると framework not found になる。
+    if std::path::Path::new(&sdk_path)
+        .join("System/Library/Frameworks/FoundationModels.framework")
+        .exists()
+    {
+        println!("cargo:rustc-link-arg=-Wl,-weak_framework,FoundationModels");
+    }
     // Swift ランタイム（OS 同梱）の検索パスと実行時パス。
     println!("cargo:rustc-link-search=native={sdk_path}/usr/lib/swift");
     if let Some(bin) = std::path::Path::new(&swiftc)
