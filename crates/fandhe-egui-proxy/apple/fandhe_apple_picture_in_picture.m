@@ -131,28 +131,48 @@ static AVAudioSessionCategory g_saved_category = nil;
 static AVAudioSessionMode g_saved_mode = nil;
 static AVAudioSessionCategoryOptions g_saved_options = 0;
 
+static BOOL g_audio_activated = NO;
+
+// 復元に成功したときだけ保存値を捨てる。失敗時は保持し、次の release_all で再試行できる。
 static void audio_session_restore(void) {
     if (!g_audio_saved) return;
+    AVAudioSession *s = [AVAudioSession sharedInstance];
+    if (g_audio_activated) {
+        if (![s setActive:NO
+              withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
+                    error:nil]) {
+            return;
+        }
+        g_audio_activated = NO;
+    }
+    if (![s setCategory:g_saved_category mode:g_saved_mode options:g_saved_options error:nil]) {
+        return;
+    }
     g_audio_saved = NO;
-    [[AVAudioSession sharedInstance] setCategory:g_saved_category
-                                            mode:g_saved_mode
-                                         options:g_saved_options
-                                           error:nil];
     g_saved_category = nil;
     g_saved_mode = nil;
 }
 
-static void audio_session_apply(void) {
+// PiP の可否判定には有効なセッションが要る（sample-buffer 経路には AVPlayer がない）。
+// 失敗は NO を返し、呼び出し側が RC_INTERNAL にする。元の状態は保存済みのまま残す。
+static BOOL audio_session_apply(void) {
     AVAudioSession *s = [AVAudioSession sharedInstance];
-    g_saved_category = s.category;
-    g_saved_mode = s.mode;
-    g_saved_options = s.categoryOptions;
-    g_audio_saved = YES;
-    // 音声は出さないので他アプリの音を止めない。失敗は黙殺せず、復元対象として保存済みのまま残す。
-    [s setCategory:AVAudioSessionCategoryPlayback
-              mode:AVAudioSessionModeDefault
-           options:AVAudioSessionCategoryOptionMixWithOthers
-             error:nil];
+    if (!g_audio_saved) {
+        g_saved_category = s.category;
+        g_saved_mode = s.mode;
+        g_saved_options = s.categoryOptions;
+        g_audio_saved = YES;
+    }
+    // 音声は出さないので他アプリの音を止めない。
+    if (![s setCategory:AVAudioSessionCategoryPlayback
+                   mode:AVAudioSessionModeDefault
+                options:AVAudioSessionCategoryOptionMixWithOthers
+                  error:nil]) {
+        return NO;
+    }
+    if (![s setActive:YES error:nil]) return NO;
+    g_audio_activated = YES;
+    return YES;
 }
 #endif
 
@@ -473,7 +493,11 @@ int32_t fandhe_apple_pip_prepare(uint64_t gen, const uint8_t *rgb, size_t color_
             layer.zPosition = 1000;
             [content.layer addSublayer:layer];
 #if TARGET_OS_IOS
-            audio_session_apply();
+            if (!audio_session_apply()) {
+                [layer removeFromSuperlayer];
+                release_all();
+                return RC_INTERNAL;
+            }
 #endif
 
             FandhePipDelegate *delegate = [[FandhePipDelegate alloc] init];
