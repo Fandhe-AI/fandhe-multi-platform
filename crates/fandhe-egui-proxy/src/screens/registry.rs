@@ -242,6 +242,10 @@ generated_screens! {
     crate::device::ml_inference::ml_infer_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "on_device_llm" => fandhe_core::screens::on_device_llm::current_screen,
+    crate::device::on_device_llm::on_device_llm_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "url_scheme_show" => fandhe_core::screens::url_scheme_show::current_screen,
     crate::device::url_scheme::url_scheme_show_effect,
 }

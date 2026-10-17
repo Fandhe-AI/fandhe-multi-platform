@@ -61,6 +61,9 @@
 //! - `ios/fandhe_ios_print.m`（Issue #327、`UIPrintInteractionController` による印刷シート）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_print.rs` から
 //!   呼ばれる契約）。UIKit は既存のリンクで足りる。
+//! - `apple/fandhe_apple_on_device_llm.swift`（Issue #345、FoundationModels による端末内 LLM）は
+//!   **macOS 分岐のみ**（iOS は b-ios が足す）で feature `device` 有効時に swiftc で静的ライブラリ化し、
+//!   FoundationModels を弱リンクする（`src/device/apple_on_device_llm.rs` から呼ばれる契約）。
 //! - `apple/fandhe_apple_map_view.m`（Issue #273、`MKMapSnapshotter` による地図の静止画 1 枚の取得。
 //!   iOS 分岐も同じ実装）は `src/device/apple_map_view.rs` から呼ばれる契約。MapKit をリンクする。
 //! - `apple/fandhe_apple_photo_library.m`（Issue #1254、`PHPhotoLibrary` による画像 1 枚の保存）は
@@ -735,6 +738,108 @@ fn compile_apple_ml_inference() {
     println!("cargo:rustc-link-lib=framework=Foundation");
 }
 
+/// 端末内 LLM の Swift 薄層 `apple/fandhe_apple_on_device_llm.swift` を `swiftc` で静的ライブラリ化し、
+/// FoundationModels を弱リンクする（Issue #345 macOS、iOS は b-ios）。`LanguageModelSession` は
+/// Swift 専用 API で ObjC から呼べないため `cc` ではなく swiftc を使う。FoundationModels は macOS 26 /
+/// iOS 26 以降のため、実行体の最低 OS（macOS 11.0）より新しく**弱リンク**にする
+/// （`rustc-link-arg-bins` ではなく `rustc-link-arg`: cdylib・テスト実行体にも効かせるため）。
+/// `ios` は iOS の triple 表を使う指定。現状は macOS 分岐（`false`）だけが呼ぶ（iOS 分岐からの呼び出しは b-ios が足す）。
+/// Apple ツール（`xcrun`）が無いホストでは警告を出してスキップする（リンクは失敗する）。
+/// `FANDHE_REQUIRE_ON_DEVICE_LLM=1`（本番・配布ビルド）ではスキップせず panic する。swiftc 自体の失敗は常に panic。
+fn compile_apple_on_device_llm(ios: bool) {
+    use std::process::Command;
+
+    println!("cargo:rerun-if-env-changed=FANDHE_REQUIRE_ON_DEVICE_LLM");
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_on_device_llm.swift");
+    let have_xcrun = Command::new("xcrun")
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success());
+    if !have_xcrun {
+        assert!(
+            std::env::var("FANDHE_REQUIRE_ON_DEVICE_LLM").as_deref() != Ok("1"),
+            "on_device_llm: xcrun が無い（FANDHE_REQUIRE_ON_DEVICE_LLM=1 のためスキップ不可）"
+        );
+        println!("cargo:warning=on_device_llm: xcrun が無いため Swift 薄層の生成をスキップ（型検査専用。リンクは失敗する）");
+        return;
+    }
+
+    let target = std::env::var("TARGET").unwrap_or_default();
+    let (sdk, triple, lib_dir) = match (ios, target.as_str()) {
+        (false, "aarch64-apple-darwin") => ("macosx", "arm64-apple-macos11.0", "macosx"),
+        (false, "x86_64-apple-darwin") => ("macosx", "x86_64-apple-macos11.0", "macosx"),
+        (true, "aarch64-apple-ios-sim") => (
+            "iphonesimulator",
+            "arm64-apple-ios17.0-simulator",
+            "iphonesimulator",
+        ),
+        (true, "aarch64-apple-ios") => ("iphoneos", "arm64-apple-ios17.0", "iphoneos"),
+        (true, "x86_64-apple-ios") => (
+            "iphonesimulator",
+            "x86_64-apple-ios17.0-simulator",
+            "iphonesimulator",
+        ),
+        (_, other) => panic!("on_device_llm: 未対応のターゲット: {other}"),
+    };
+
+    let xcrun = |args: &[&str]| -> String {
+        let out = Command::new("xcrun")
+            .args(args)
+            .output()
+            .expect("xcrun を実行できない");
+        assert!(out.status.success(), "xcrun {args:?} が失敗した");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    let sdk_path = xcrun(&["--sdk", sdk, "--show-sdk-path"]);
+    let swiftc = xcrun(&["--sdk", sdk, "--find", "swiftc"]);
+
+    let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR");
+    let lib = format!("{out_dir}/libfandhe_apple_on_device_llm.a");
+    let out = Command::new("xcrun")
+        .args([
+            "--sdk",
+            sdk,
+            "swiftc",
+            "-parse-as-library",
+            "-emit-library",
+            "-static",
+            "-O",
+        ])
+        .args([
+            "-module-name",
+            "FandheOnDeviceLlmBridge",
+            "-target",
+            triple,
+            "-sdk",
+            &sdk_path,
+        ])
+        .args(["-o", &lib])
+        .arg("apple/fandhe_apple_on_device_llm.swift")
+        .output()
+        .expect("swiftc を実行できない");
+    assert!(
+        out.status.success(),
+        "on_device_llm: swiftc が失敗した:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    println!("cargo:rustc-link-search=native={out_dir}");
+    println!("cargo:rustc-link-lib=static=fandhe_apple_on_device_llm");
+    println!("cargo:rustc-link-arg=-Wl,-weak_framework,FoundationModels");
+    // Swift ランタイム（OS 同梱）の検索パスと実行時パス。
+    println!("cargo:rustc-link-search=native={sdk_path}/usr/lib/swift");
+    if let Some(bin) = std::path::Path::new(&swiftc)
+        .parent()
+        .and_then(|p| p.parent())
+    {
+        println!(
+            "cargo:rustc-link-search=native={}/lib/swift/{lib_dir}",
+            bin.display()
+        );
+    }
+    println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift");
+}
+
 /// `apple/fandhe_apple_accessibility_prefs.m` を `cc` でコンパイルする（Issue #1308 macOS、
 /// #1309 iOS 共用）。AppKit / UIKit は各分岐の既存リンクで足りる。
 fn compile_apple_accessibility_prefs() {
@@ -1249,6 +1354,8 @@ fn build_macos() {
     compile_apple_image_recognition();
     // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
     compile_apple_ml_inference();
+    // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS。iOS は b-ios が実装時に足す）。
+    compile_apple_on_device_llm(false);
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
     // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。
