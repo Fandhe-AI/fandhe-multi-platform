@@ -39,6 +39,9 @@ pub struct CanvasWidget<S> {
     /// 平行移動して返す元データ）。
     cached: Vec<PaintCommand>,
     interaction: InteractionState,
+    /// true のときだけ描画層がキャンバス上のドラッグを捕捉する（ペン描画用）。
+    /// 既定 false では親 `ScrollArea` のドラッグスクロールを妨げない。
+    captures_drag: bool,
 }
 
 impl<S> std::fmt::Debug for CanvasWidget<S> {
@@ -49,6 +52,7 @@ impl<S> std::fmt::Debug for CanvasWidget<S> {
             .field("label", &self.label)
             .field("cached", &self.cached)
             .field("interaction", &self.interaction)
+            .field("captures_drag", &self.captures_drag)
             .finish()
     }
 }
@@ -62,6 +66,7 @@ impl<S> Clone for CanvasWidget<S> {
             paint: self.paint,
             cached: self.cached.clone(),
             interaction: self.interaction,
+            captures_drag: self.captures_drag,
         }
     }
 }
@@ -84,7 +89,19 @@ impl<S> CanvasWidget<S> {
             paint,
             cached: Vec::new(),
             interaction: InteractionState::default(),
+            captures_drag: false,
         }
+    }
+
+    /// キャンバス上のドラッグを描画層で捕捉する（ペン描画画面のみ。親のドラッグスクロールより優先）。
+    pub fn with_drag_capture(mut self) -> Self {
+        self.captures_drag = true;
+        self
+    }
+
+    /// ドラッグを捕捉するか（描画層が `Sense` を決める入力）。
+    pub fn captures_drag(&self) -> bool {
+        self.captures_drag
     }
 }
 

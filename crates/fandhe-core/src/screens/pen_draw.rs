@@ -296,15 +296,18 @@ pub fn current_screen(_s: &PenDrawState) -> Screen<PenDrawState> {
         .dynamic_text(pressure_text)
         .dynamic_text(altitude_text)
         .dynamic_text(status_text)
-        .with_node(Node::Widget(Box::new(CanvasWidget::bound(
-            CANVAS_ID,
-            "描画キャンバス",
-            Measurement {
-                width: CANVAS_SIZE,
-                height: CANVAS_SIZE,
-            },
-            paint,
-        ))))
+        .with_node(Node::Widget(Box::new(
+            CanvasWidget::bound(
+                CANVAS_ID,
+                "描画キャンバス",
+                Measurement {
+                    width: CANVAS_SIZE,
+                    height: CANVAS_SIZE,
+                },
+                paint,
+            )
+            .with_drag_capture(),
+        )))
         .button(CLEAR_BUTTON_ID, CLEAR_LABEL, clear)
 }
 
