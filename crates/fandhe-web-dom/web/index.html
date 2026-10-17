@@ -74,11 +74,14 @@
         mount_audio_play_screen,
         mount_media_transcode_screen,
         mount_print_page_screen,
+        mount_passkey_signin_screen,
       } from "./fandhe_web_dom.js";
       await init();
-      // 検証用の画面切替（Issue #915/#936/#958/#981/#985/#987/#989/#991/#993/#1007/#1017/#1027/#1037/#1047/#1063/#1223/#1091/#1094/#1103/#1277/#1307/#1311/#1315/#1344/#1333/#1338/#1363/#1387/#1379/#1414/#1401/#271/#315/#329）。既定（?screen 未指定）は従来どおり sample。
+      // 検証用の画面切替（Issue #915/#936/#958/#981/#985/#987/#989/#991/#993/#1007/#1017/#1027/#1037/#1047/#1063/#1223/#1091/#1094/#1103/#1277/#1307/#1311/#1315/#1344/#1333/#1338/#1363/#1387/#1379/#1414/#1401/#271/#315/#329/#344）。既定（?screen 未指定）は従来どおり sample。
       const screen = new URLSearchParams(location.search).get("screen");
-      if (screen === "print_page") {
+      if (screen === "passkey_signin") {
+        mount_passkey_signin_screen("fandhe-dom-root");
+      } else if (screen === "print_page") {
         mount_print_page_screen("fandhe-dom-root");
       } else if (screen === "media_transcode") {
         mount_media_transcode_screen("fandhe-dom-root");

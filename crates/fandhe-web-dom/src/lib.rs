@@ -276,6 +276,8 @@ pub mod network_status;
 /// 型サンプル「単語分割」の Web 経路（Issue #1094）。[`haptics`] と同じ理由で純関数は native からも
 /// テストできるようクレート単位の `wasm32` gate を外す。
 pub mod nlp;
+/// 型サンプル「パスキー・サインイン連携」の Web 経路（Issue #344）。[`haptics`] と同じ理由で gate を外す。
+pub mod passkey;
 /// 型サンプル「印刷」の Web 経路（Issue #329）。[`haptics`] と同じ理由で gate を外す。
 pub mod print_page;
 /// 型サンプル「画面スリープの抑止」の Web 経路（Issue #1281）。[`haptics`] と同じ理由で gate を外す。
