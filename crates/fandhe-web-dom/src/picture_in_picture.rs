@@ -259,6 +259,16 @@ mod web {
         Some(p.generation)
     }
 
+    /// 保留中の要求が `kind` かつ世代 `gen` のままか。`await` 再開後に古い世代の完了通知を捨てる判定（契約表 2）。
+    /// 単一スレッドなので、この判定の直後に `settle` しても割り込まれない。
+    fn is_current(id: u64, kind: Kind, gen: u64) -> bool {
+        with(
+            id,
+            |e| matches!(&e.pending, Some(p) if p.kind == kind && p.generation == gen),
+        )
+        .unwrap_or(false)
+    }
+
     /// 保留中の `kind` の要求を確定する。タイマーを止めてから状態を確定する（契約表 2・9）。
     /// 失敗なら映像資源も解放する。
     fn settle(applier: &Applier<State>, id: u64, kind: Kind, update: PipShowUpdate) {
@@ -484,7 +494,7 @@ mod web {
             let a = applier.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let res = JsFuture::from(p).await;
-                if !is_live(id) {
+                if !is_live(id) || !is_current(id, Kind::Prepare, gen) {
                     return;
                 }
                 let upd = match res {
@@ -526,7 +536,7 @@ mod web {
         }
         // transient activation を保つため、ここ（同期）で呼ぶ。
         match call(&video, "requestPictureInPicture") {
-            Ok(r) => watch(applier, id, Kind::Start, r),
+            Ok(r) => watch(applier, id, gen, Kind::Start, r),
             Err(e) => settle(
                 applier,
                 id,
@@ -548,7 +558,7 @@ mod web {
         }
         let doc = document().map(JsValue::from).unwrap_or(JsValue::UNDEFINED);
         match call(&doc, "exitPictureInPicture") {
-            Ok(r) => watch(applier, id, Kind::Stop, r),
+            Ok(r) => watch(applier, id, gen, Kind::Stop, r),
             Err(e) => settle(
                 applier,
                 id,
@@ -559,15 +569,15 @@ mod web {
     }
 
     /// Promise の結果を保留中の `kind` の確定へ流す。イベントが先に確定済みなら `settle` が捨てる。
-    fn watch(applier: &Applier<State>, id: u64, kind: Kind, ret: JsValue) {
+    fn watch(applier: &Applier<State>, id: u64, gen: u64, kind: Kind, ret: JsValue) {
         let Ok(p) = ret.dyn_into::<Promise>() else {
             return;
         };
         let a = applier.clone();
         wasm_bindgen_futures::spawn_local(async move {
             let res = JsFuture::from(p).await;
-            // 再開後も同じマウントかを確かめる（契約表 2）。
-            if !is_live(id) {
+            // 再開後も同じマウント・同じ世代かを確かめる（契約表 2）。
+            if !is_live(id) || !is_current(id, kind, gen) {
                 return;
             }
             let upd = match res {
