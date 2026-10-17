@@ -37,11 +37,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/macos_pen_stylus.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_pen_stylus.m + crates/fandhe-egui-proxy/src/device/pen_stylus.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-device/src/pen_stylus.rs、Issue #355"
     },
     "windows": {
-      "status": "possible",
-      "api": "ポインター入力（ペン）。WM_POINTER 系 API を想定（一般知識、要確認）",
-      "perm": "なし（package identity 要件は要確認）",
-      "url": "",
-      "note": "URL 未確認。ペン API のページは取得できなかった"
+      "status": "done",
+      "api": "`WM_POINTERDOWN`/`WM_POINTERUPDATE` をメインウィンドウの `SetWindowSubclass` で観測（消費しない）。`GetPointerType`・`GetPointerPenInfo`（`pressure`・`tiltX`・`tiltY` とマスク）",
+      "perm": "不要（package identity も不要）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getpointerpeninfo",
+      "note": "実装済み（#359）。位置は egui のポインタから、種類・筆圧・傾きは観測した `WM_POINTER*` から取る（winit は種類と傾きを捨てる）。筆圧と傾きはペンのときだけ出し、マスクが立たない値と片軸だけの傾きは None（0 を垂直にしない）。マウスは `WM_LBUTTON*` から Mouse として扱い、指は Touch で筆圧なし。離す・捕捉喪失・ホバー・非アクティブ化・ウィンドウ破棄で接触なしに戻す。守る範囲: 1 プロセス内の順序・嘘の値を出さないこと・離したら消すこと。守らない範囲: 主ポインタ 1 本以外、ホバー・消しゴムの区別、履歴サンプル、静止したままの筆圧変化、複数ウィンドウ。未確認: ペン対応端末での実測。MSVC ビルドと実機確認は #354",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#354）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_pen_stylus.rs + crates/fandhe-egui-proxy/src/device/pen_stylus.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-device/src/pen_stylus.rs、Issue #359"
     },
     "web": {
       "status": "done",

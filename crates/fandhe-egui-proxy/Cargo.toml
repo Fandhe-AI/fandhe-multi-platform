@@ -428,6 +428,9 @@ windows = { workspace = true, optional = true, features = [
     # 不可視ウィンドウ・メッセージループ・ポップアップメニューを組み立てるために
     # 使う（`CreateWindowExW`/`RegisterClassW`/`GetMessageW`/`TrackPopupMenu` 等）。
     "Win32_UI_WindowsAndMessaging",
+    # Issue #359: `device/windows_pen_stylus.rs` が `GetPointerType` / `GetPointerPenInfo`
+    # （ペンの種類・筆圧・傾き）を呼ぶために使う。
+    "Win32_UI_Input_Pointer",
     # `GetModuleHandleW`（`RegisterClassW` の `hInstance` 解決）に使う。
     "Win32_System_LibraryLoader",
     # Issue #1044: `device/windows_background_task.rs` が `ITaskService`/

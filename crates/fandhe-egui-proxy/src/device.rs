@@ -807,8 +807,8 @@ pub mod windows_passkey;
 /// `device/pedometer.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_pedometer;
-/// Issue #355: Windows 向けペン・筆圧入力実装のスタブ（#359 が埋める）。`device/pen_stylus.rs` の
-/// Windows 経路から呼ばれる。
+/// Issue #359: Windows 向けペン・筆圧入力実装（`SetWindowSubclass` の観測専用サブクラスが
+/// `WM_POINTER*` から値を置く）。`device/pen_stylus.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_pen_stylus;
