@@ -619,6 +619,37 @@ public class MainActivity extends GameActivity {
         return fullscreenHelper.set(on);
     }
 
+    // ピクチャ・イン・ピクチャ（Issue #366）。実装は `PictureInPictureHelper`。Rust の
+    // `android_picture_in_picture.rs` が egui スレッドから同期 JNI で呼ぶ。
+    private final PictureInPictureHelper pictureInPictureHelper = new PictureInPictureHelper(this);
+
+    int pipPrepare(long generation, int w, int h) {
+        return pictureInPictureHelper.prepare(generation, w, h);
+    }
+
+    int pipStart(long generation) {
+        return pictureInPictureHelper.start(generation);
+    }
+
+    int pipStop(long generation) {
+        return pictureInPictureHelper.stop(generation);
+    }
+
+    long[] pipSnapshot() {
+        return pictureInPictureHelper.snapshot();
+    }
+
+    void pipShutdown() {
+        pictureInPictureHelper.shutdown();
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(
+            boolean isInPictureInPictureMode, android.content.res.Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+        pictureInPictureHelper.onPictureInPictureModeChanged(isInPictureInPictureMode);
+    }
+
     // 通知チャンネル ID（`postNotification`/`onCreate` から参照）。
     private static final String NOTIFICATION_CHANNEL_ID = "fandhe_default";
 
@@ -4564,6 +4595,7 @@ public class MainActivity extends GameActivity {
         pedometerHelper.onDestroy();
         compassHelper.onDestroy();
         mediaPlaybackHelper.onDestroy();
+        pictureInPictureHelper.onDestroy();
         midiHelper.onDestroy();
         callUiHelper.onDestroy();
         screenCaptureHelper.onDestroy();
