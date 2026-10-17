@@ -8,8 +8,13 @@
     "ios": {
       "status": "possible",
       "api": "StoreKit（StoreKit 2 / `SKPaymentQueue`）",
-      "perm": "In-App Purchase capability",
-      "url": "https://developer.apple.com/documentation/storekit",
+      "perm": "In-App Purchase capability（有料の Apple Developer Program のみ。無料登録では不可）",
+      "url": [
+        "https://developer.apple.com/documentation/storekit",
+        "https://developer.apple.com/documentation/storekit/testing-in-app-purchases-with-sandbox",
+        "https://developer.apple.com/documentation/xcode/setting-up-storekit-testing-in-xcode"
+      ],
+      "deferred": "StoreKit の動作確認には、App Store Connect の商品登録と Sandbox（有効な Apple Developer Program と Paid Applications Agreement が前提）か、Xcode の scheme から起動して StoreKit Configuration を効かせるローカル環境が要る。開発者登録が期限切れで、iOS アプリは Xcode の scheme から起動しない手組みのバンドルのため保留。ベンダーの個別審査は不要で、開発者登録と商品登録が揃えば着手できる",
       "note": "未実装",
       "sourceName": [
         "アプリ内課金"
@@ -17,10 +22,14 @@
     },
     "android": {
       "status": "possible",
-      "api": "Play Billing Library（`com.android.billingclient`）",
+      "api": "Play Billing Library 9.1.0（`com.android.billingclient:billing`）",
       "perm": "なし（Google Play Console 側の商品設定が必要）",
-      "url": "https://developer.android.com/google/play/billing/integrate",
-      "note": "未実装。別途 SDK 依存の追加が必要",
+      "url": [
+        "https://developer.android.com/google/play/billing/integrate",
+        "https://developer.android.com/google/play/billing/test"
+      ],
+      "deferred": "推移依存に Google Play services（play-services-base・basement・location・tasks）と datatransport が入る。GMS に依存しない方針のため保留。確認には Play Console へのアプリ・商品の登録とライセンステスターも要る",
+      "note": "未実装",
       "sourceName": [
         "アプリ内課金"
       ]
@@ -28,8 +37,12 @@
     "macos": {
       "status": "possible",
       "api": "StoreKit",
-      "perm": "App Store Connect 側の製品登録（コード側の entitlement は不要）",
-      "url": "https://developer.apple.com/documentation/storekit",
+      "perm": "In-App Purchase capability（有料の Apple Developer Program のみ。Developer ID・無料登録では不可）",
+      "url": [
+        "https://developer.apple.com/documentation/storekit",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-macos"
+      ],
+      "deferred": "StoreKit の動作確認には、App Store Connect の商品登録と Sandbox（有効な Apple Developer Program と Paid Applications Agreement が前提）か、Xcode の scheme から起動して StoreKit Configuration を効かせるローカル環境が要る。開発者登録が期限切れで、デスクトップ版は Xcode の scheme から起動しない素の実行体のため保留。ベンダーの個別審査は不要で、開発者登録と商品登録が揃えば着手できる",
       "note": "未実装。課金 UI・レシート検証は最小権限（決済に必要な情報のみ）で扱う",
       "sourceName": [
         "ストア課金"
@@ -38,25 +51,29 @@
     "windows": {
       "status": "possible",
       "api": "WinRT（`Windows.Services.Store.StoreContext`）",
-      "perm": "Microsoft Store 側の製品登録",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.services.store",
+      "perm": "Partner Center のアカウント・MSIX（package identity）・Store の認証",
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.services.store",
+        "https://learn.microsoft.com/en-us/windows/uwp/monetize/in-app-purchases-and-trials"
+      ],
+      "approval": "Windows.Services.Store の課金は、MSIX にしたアプリを Partner Center へ提出して Store の認証（Microsoft の審査）を通し、Store から入れた版の license で確かめる必要がある（テスト用のシミュレータなし）。前提の素の exe には package identity も無い",
       "note": "未実装。課金 UI・レシート検証は最小権限（決済に必要な情報のみ）で扱う",
       "sourceName": [
         "ストア課金"
       ]
     },
     "web": {
-      "status": "possible",
-      "detail": "できそう（部分対応）",
-      "api": "Payment Request API / Digital Goods API",
-      "perm": "secure context 必須",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Payment_Request_API",
-      "safari": "Payment Request API は部分対応（Apple Pay 経由が中心）。Digital Goods API は非対応",
-      "note": "未実装。課金 UI・レシート検証は最小権限（決済に必要な情報のみ）で扱う",
+      "status": "no",
+      "detail": "できない（ブラウザにストア課金の API が無い。Digital Goods API は Android の Trusted Web Activity の中だけ）",
+      "api": "なし（Digital Goods API は Trusted Web Activity 限定）",
+      "perm": "-",
+      "url": "https://developer.chrome.com/docs/android/trusted-web-activity/receive-payments-play-billing",
+      "safari": "対応なし",
+      "note": "Payment Request API は一般の決済で、`payment-request` の行で扱う",
       "sourceName": [
         "ストア課金"
       ]
     }
   },
-  "note": "`StoreKit` / Google Play Billing / `StoreKit`（macOS）/ Microsoft Store SDK。Web は `Payment Request API`（部分対応、Apple Pay 経由が中心）/ `Digital Goods API`（非対応）の調査結果は本表 Web 欄にあり（未調査ではない）、ストア課金相当の統一 API は無いが決済自体は部分的に届く見込み"
+  "note": "StoreKit / Google Play Billing / Microsoft Store の課金は、どれも AI 側だけでは購入の動作を確かめられない（商品登録・有料の開発者登録・GMS 依存・Store の認証のいずれかが要る）。iOS・macOS・Android は保留、Windows は申請待ち、Web はストア課金の API が無いため no。条件が揃ったら保留・申請待ちの一覧から見直す。範囲（再開時の案）: 固定の非消耗型の商品を 1 つ取得して表示し、購入シートの結果（購入済み・キャンセル・保留・失敗）を出す。レシートのサーバー検証は持たない"
 }
