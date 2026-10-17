@@ -311,6 +311,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // （`device::media_playback::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::media_playback::reset_pending_tracking();
+    // Issue #364: ピクチャ・イン・ピクチャも同様。処理済み世代を捨て、小窓を止める
+    // （`device::picture_in_picture::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::picture_in_picture::reset_pending_tracking();
     // Issue #276: 通話 UI の記録（処理済み世代）と進行中の通話も破棄する。画面状態は再生成で
     // generation 0 に戻るため、残すと次の「着信を模擬する」が飲み込まれ、OS 側の着信も残る
     // （`device::call_ui::reset_pending_tracking` doc 参照）。

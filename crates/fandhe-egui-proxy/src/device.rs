@@ -137,6 +137,11 @@ pub mod android_pen_stylus;
 /// `device/photo_save.rs` の Android 経路から呼ばれる。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_photo_library;
+/// Issue #364: Android 向けピクチャ・イン・ピクチャ実装のスタブ（親 #97 の b-android が埋める）。
+/// `device/picture_in_picture.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_picture_in_picture;
 /// Issue #1274: Android 向け電源状態実装のスタブ（#1276 が埋める）。`device/power_state.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -259,6 +264,10 @@ pub mod apple_on_device_llm;
 /// `device/photo_save.rs` の iOS / macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_photo_library;
+/// Issue #364: macOS 向けピクチャ・イン・ピクチャ実装（`apple/fandhe_apple_picture_in_picture.m` の AVKit を
+/// 呼ぶ C ABI ラッパー）。`device/picture_in_picture.rs` の macOS 経路から呼ばれる。iOS は親 #97 の b-ios が cfg を広げて使う。
+#[cfg(target_os = "macos")]
+pub mod apple_picture_in_picture;
 /// Issue #1335（macOS）/ #1336（iOS）: macOS 向け ScreenCaptureKit 画面録画（`apple/
 /// fandhe_apple_screen_capture.m` を呼ぶ C ABI ラッパー。iOS は #1336 の ReplayKit）。
 /// `device/screen_capture.rs` の macOS / iOS 経路から呼ばれる。
@@ -477,6 +486,11 @@ pub mod ios_pedometer;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_pen_stylus;
+/// Issue #364: iOS 向けピクチャ・イン・ピクチャ実装のスタブ（親 #97 の b-ios が埋める）。
+/// `device/picture_in_picture.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_picture_in_picture;
 /// Issue #1275: iOS 向け電源状態実装（`ios/fandhe_ios_power_state.m` を呼ぶ C ABI ラッパー。
 /// #1274 のスタブを置き換え）。`device/power_state.rs` の iOS 経路から呼ばれる。写像の純関数を
 /// ホストでテストできるよう cfg は `any(ios, test)`。
@@ -625,6 +639,9 @@ pub mod photo_pick;
 /// iOS / Android は pull 型 `bridge`、Windows は Pictures フォルダへ同期書き込み、
 /// Linux は `UnsupportedPhotoLibrary` 固定。iOS / Android は兄弟 issue #1255 / #1256 まで非対応）。
 pub mod photo_save;
+/// Phase 11 の拡充ループ（親 #97、Issue #364）: ピクチャ・イン・ピクチャの effect ドライバ（macOS 実装、
+/// iOS・Android は子 issue が埋めるスタブ、他 OS は `UnsupportedPictureInPicture` 固定）。
+pub mod picture_in_picture;
 /// Phase 11 の拡充ループ（親 #1128、Issue #1274）: 電源状態の effect ドライバ（macOS / Windows
 /// ・iOS 実装、Android は #1276 で埋めるスタブ、他 OS は `UnsupportedPowerState` 固定）。
 pub mod power_state;
@@ -868,6 +885,7 @@ pub fn shutdown() {
     bluetooth_le::stop_shared_scan();
     midi::shutdown();
     media_playback::shutdown();
+    picture_in_picture::shutdown();
 }
 
 fn to_note_storage_error(e: DeviceError) -> NoteStorageError {
