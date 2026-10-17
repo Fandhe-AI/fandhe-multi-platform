@@ -40,12 +40,15 @@
       "approval": "Phi Silica は Limited Access Feature の申請と、Windows App SDK・package identity が要る。申請不要の後継が出たら見直す"
     },
     "web": {
-      "status": "possible",
-      "api": "Prompt API（`LanguageModel.create()`、Chrome 148+ でフラグなし）",
-      "perm": "なし",
+      "status": "done",
+      "api": "Prompt API（`LanguageModel.availability()` / `create()` / `prompt()` / `destroy()`、Chrome 148+ でフラグなし。web-sys に型が無いため `js_sys::Reflect` で呼ぶ）",
+      "perm": "不要（安全なコンテキストに限る。Permissions-Policy `language-model` の既定は self）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Prompt_API",
-      "note": "Chromium のみ。translation の Web（Translator API）と同じ基準で possible。モデルのダウンロードと端末要件あり",
-      "safari": "未実装と認識（要確認）"
+      "note": "実装済み（#347）。範囲は固定プロンプトを 1 回渡して応答の全文を表示することのみ（ストリーミング・会話履歴・利用者が入力するプロンプト・モデルのダウンロード開始・取り消しは範囲外）。`availability()` が `available` 以外のときは `create()` を呼ばず失敗として出し、ダウンロードは始めない。期限は 60 秒（`performance.now()` 起点）、`pagehide` で中断し自動では再開しない。すべての経路で `destroy()` する。応答の長さの上限は API に無いため画面側で 400 文字に切る。Chromium デスクトップのみで端末要件あり。守る範囲: 1 マウント内の要求と完了の順序、失敗を成功値へ畳まないこと、セッション・タイマー・リスナーの解放。守らない範囲: ブラウザごとのモデル差、応答の非決定性、複数タブ、egui-proxy の wasm canvas 経路。実ブラウザの確認は #338 で行う。",
+      "safari": "Safari・Firefox は非対応（MDN の standards position は negative）。実ブラウザでの確認は #338",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#338）",
+      "impl": "crates/fandhe-web-dom/src/on_device_llm.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/on_device_llm.rs + crates/fandhe-device/src/on_device_llm.rs、Issue #347"
     }
   },
   "note": "ml-inference（自前モデルの推論）・nlp（OS 内蔵の言語処理）との違い: 本機能は OS が持つ生成 AI モデルに文章を渡して応答を得る。今回の範囲: 固定プロンプトを渡して応答を画面に出し、モデルが使えない端末では『利用不可』を出すだけ。"
