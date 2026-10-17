@@ -14,6 +14,7 @@
 //!   prefixed API（`webkitSetPresentationMode`）と Document PiP は使わない
 //! - `requestPictureInPicture` は利用者のクリックから同期に連なる effect 内で呼ぶ
 //!   （`await` 後だと transient activation を失う）。Promise は待つだけ
+//! - 準備完了は `play()` の成功で確定する（`loadedmetadata` では確定しない）
 //! - 状態は `enterpictureinpicture` / `leavepictureinpicture` を真実とし、Promise の解決も同じ
 //!   確定経路（保留中の要求 1 件を一度だけ確定）を通す。`leave` は失敗ではなく `Exited`
 //! - 非対応（`pictureInPictureEnabled` が真でない・`requestPictureInPicture` / `captureStream` が無い）は
@@ -351,9 +352,21 @@ mod web {
             let a = applier.clone();
             let cb = Closure::<dyn FnMut()>::new(move || {
                 exit_if_ours(id);
-                a.apply(|s| {
+                a.apply(move |s| {
                     let g = s.generation;
-                    apply_update(s, g, PipShowUpdate::Phase(PipShowPhase::Exited));
+                    // 開始要求が飛行中なら後から小窓が開く。完了後の終了を予約し、
+                    // 閉じたことを確認してから Exited にする（`settle` / `finish_stop`）。
+                    let in_flight = with(id, |e| {
+                        let f = matches!(&e.pending, Some(p) if p.kind == Kind::Start);
+                        if f {
+                            e.stop_after_start = Some(g);
+                        }
+                        f
+                    })
+                    .unwrap_or(false);
+                    if !in_flight {
+                        apply_update(s, g, PipShowUpdate::Phase(PipShowPhase::Exited));
+                    }
                 });
             });
             listen(id, true, win.into(), "pagehide", cb);
@@ -443,16 +456,6 @@ mod web {
 
         let et: EventTarget = video.clone().into();
         let a = applier.clone();
-        let on_meta = Closure::<dyn FnMut()>::new(move || {
-            settle(
-                &a,
-                id,
-                Kind::Prepare,
-                PipShowUpdate::Phase(PipShowPhase::Ready),
-            )
-        });
-        listen(id, false, et.clone(), "loadedmetadata", on_meta);
-        let a = applier.clone();
         let on_enter = Closure::<dyn FnMut()>::new(move || {
             settle(
                 &a,
@@ -507,7 +510,8 @@ mod web {
             }
         }
 
-        // loadedmetadata が来ない環境向けに play() の解決でも Ready にする（二重確定は take_pending が防ぐ）。
+        // 準備完了は play() の成功で確定する（loadedmetadata では確定しない。確定後に play が
+        // reject されても Ready・ストリーム・タイマーが残るのを防ぐ）。
         if let Ok(p) = video.play() {
             let a = applier.clone();
             wasm_bindgen_futures::spawn_local(async move {
