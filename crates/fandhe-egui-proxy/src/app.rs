@@ -154,6 +154,18 @@ impl<S> CompletionSender<S> {
             .flatten()
     }
 
+    /// キャンバス `id` 上で、このフレームに接触が終わった位置（キャンバス左上原点）。押下から解放までが
+    /// 1 フレームに収まった短いタップも含む。終わっていなければ `None`（Issue #355）。
+    #[cfg_attr(
+        not(all(feature = "device", not(target_arch = "wasm32"))),
+        allow(dead_code)
+    )]
+    pub(crate) fn canvas_released(&self, id: fandhe_core::WidgetId) -> Option<(f32, f32)> {
+        self.ctx
+            .data(|d| d.get_temp::<Option<(f32, f32)>>(canvas_released_id(id.raw())))
+            .flatten()
+    }
+
     /// キャンバス `id` 上で、このフレームに主ボタンが新しく押されたか（`canvas_pointer` と同じく
     /// `lib.rs` の `CanvasWidget` 分岐が毎フレーム書く）。1 フレーム内の「離す → 押す」を
     /// 新しい接触として扱うため（Issue #355）。
@@ -270,6 +282,12 @@ pub(crate) fn canvas_pointer_id(widget_raw: u64) -> egui::Id {
 /// （`lib.rs` が書き、[`CompletionSender::canvas_pressed`] が読む）。
 pub(crate) fn canvas_pressed_id(widget_raw: u64) -> egui::Id {
     egui::Id::new(("fandhe_canvas_pressed", widget_raw))
+}
+
+/// `CanvasWidget` の「このフレームに接触が終わった位置」を `ctx.data` に置くときの `egui::Id`
+/// （`lib.rs` が書き、[`CompletionSender::canvas_released`] が読む）。
+pub(crate) fn canvas_released_id(widget_raw: u64) -> egui::Id {
+    egui::Id::new(("fandhe_canvas_released", widget_raw))
 }
 
 /// CompletionSender::text_scale_last_applied / set_text_scale_last_applied が使う

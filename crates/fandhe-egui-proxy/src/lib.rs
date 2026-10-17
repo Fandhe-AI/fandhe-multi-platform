@@ -960,9 +960,21 @@ fn render_node<S: 'static>(
                     // 同じフレームに「離す → 押す」が続いても、新しい接触だと分かるように押下も渡す
                     // （前のストロークとつながらないようにする）。
                     let pressed = pointer.is_some() && ui.input(|i| i.pointer.primary_pressed());
+                    // このフレームでキャンバス上の接触が終わった位置。押下から解放までが 1 フレームに
+                    // 収まる短いタップでも、最後の 1 点を描いてから線を終えられるようにする。
+                    let released =
+                        if pointer.is_none() && (response.clicked() || response.drag_stopped()) {
+                            response
+                                .interact_pointer_pos()
+                                .or_else(|| ui.input(|i| i.pointer.latest_pos()))
+                                .map(|p| (p.x - rect.min.x, p.y - rect.min.y))
+                        } else {
+                            None
+                        };
                     ui.ctx().data_mut(|d| {
                         d.insert_temp(crate::app::canvas_pointer_id(widget.id().raw()), pointer);
                         d.insert_temp(crate::app::canvas_pressed_id(widget.id().raw()), pressed);
+                        d.insert_temp(crate::app::canvas_released_id(widget.id().raw()), released);
                     });
                 }
                 // `paint` は配置矩形の左上 `origin` 分だけ平行移動済みの座標を返す

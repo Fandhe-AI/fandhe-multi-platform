@@ -105,6 +105,7 @@ fn drive(
     pen: &dyn PenStylus,
     pointer: Option<(f32, f32)>,
     new_contact: bool,
+    released: Option<(f32, f32)>,
     last: &mut Last,
 ) {
     if matches!(state.status, PenStatus::Failure(_)) {
@@ -112,13 +113,27 @@ fn drive(
     }
     let generation = state.generation;
     let Some(pos) = pointer else {
-        *last = None;
+        let previous = last.take().and_then(|(_, sample)| sample);
         // 接触前に OS 側の登録（macOS の NSEvent モニタ等、main thread で 1 回）を済ませる。
-        // 最初の押下が未登録のまま通過して種類・筆圧を落とさないため。値は使わないが、
-        // 非対応・登録失敗はここで画面へ出す（押下を待たずに失敗を見せる）。
-        if let Err(e) = pen.latest() {
-            let f = to_failure(&e);
-            let _ = sender.send(Box::new(move |s: &mut PenDrawState| apply_failure(s, f)));
+        // 最初の押下が未登録のまま通過して種類・筆圧を落とさないため。非対応・登録失敗は
+        // ここで画面へ出す（押下を待たずに失敗を見せる）。
+        let latest = match pen.latest() {
+            Ok(sample) => sample,
+            Err(e) => {
+                let f = to_failure(&e);
+                let _ = sender.send(Box::new(move |s: &mut PenDrawState| apply_failure(s, f)));
+                return;
+            }
+        };
+        // このフレームで接触が終わった: 最後の 1 点を描いてから線を終える。1 フレームに収まった
+        // 短いタップでも点を落とさない。OS 側は離した時点で値を消すため、前のフレームの値を優先し、
+        // 無ければ一定の太さで描く（嘘の筆圧は作らない）。
+        if let Some(pos) = released {
+            let view = previous.or(latest).map(to_view);
+            let _ = sender.send(Box::new(move |s: &mut PenDrawState| {
+                apply_sample(s, generation, pos, view);
+                end_stroke(s, generation);
+            }));
             return;
         }
         if state.is_stroking() {
@@ -168,6 +183,7 @@ fn drive(
 pub fn pen_draw_effect(state: &PenDrawState, sender: &CompletionSender<PenDrawState>) {
     let pointer = sender.canvas_pointer(fandhe_core::screens::pen_draw::CANVAS_ID);
     let pressed = sender.canvas_pressed(fandhe_core::screens::pen_draw::CANVAS_ID);
+    let released = sender.canvas_released(fandhe_core::screens::pen_draw::CANVAS_ID);
     let mut last = LAST.lock().unwrap_or_else(|p| p.into_inner());
     drive(
         state,
@@ -175,6 +191,7 @@ pub fn pen_draw_effect(state: &PenDrawState, sender: &CompletionSender<PenDrawSt
         implementation().as_ref(),
         pointer,
         pressed,
+        released,
         &mut last,
     );
 }
@@ -234,11 +251,27 @@ mod tests {
         let (tx, rx) = channel();
         let mut s = PenDrawState::default();
         let mut last = None;
-        drive(&s, &tx, &Unsupported, Some((5.0, 5.0)), false, &mut last);
+        drive(
+            &s,
+            &tx,
+            &Unsupported,
+            Some((5.0, 5.0)),
+            false,
+            None,
+            &mut last,
+        );
         assert_eq!(apply_all(&rx, &mut s), 1);
         assert_eq!(s.status, PenStatus::Failure(PenFailureView::Unsupported));
         // 失敗後は何も送らない。描画も受け付けない。
-        drive(&s, &tx, &Unsupported, Some((6.0, 6.0)), false, &mut last);
+        drive(
+            &s,
+            &tx,
+            &Unsupported,
+            Some((6.0, 6.0)),
+            false,
+            None,
+            &mut last,
+        );
         assert_eq!(apply_all(&rx, &mut s), 0);
         assert_eq!(s.point_count(), 0);
     }
@@ -248,7 +281,7 @@ mod tests {
         let (tx, rx) = channel();
         let mut s = PenDrawState::default();
         let f = fake(|| Err(DeviceError::Internal("pen_stylus")));
-        drive(&s, &tx, &f, Some((5.0, 5.0)), false, &mut None);
+        drive(&s, &tx, &f, Some((5.0, 5.0)), false, None, &mut None);
         apply_all(&rx, &mut s);
         assert_eq!(s.status, PenStatus::Failure(PenFailureView::Failed));
     }
@@ -259,12 +292,12 @@ mod tests {
         let mut s = PenDrawState::default();
         let f = fake(pen_sample);
         let mut last = None;
-        drive(&s, &tx, &f, Some((5.0, 5.0)), false, &mut last);
+        drive(&s, &tx, &f, Some((5.0, 5.0)), false, None, &mut last);
         assert_eq!(apply_all(&rx, &mut s), 1);
         assert_eq!(s.point_count(), 1);
-        drive(&s, &tx, &f, Some((5.0, 5.0)), false, &mut last);
+        drive(&s, &tx, &f, Some((5.0, 5.0)), false, None, &mut last);
         assert_eq!(apply_all(&rx, &mut s), 0);
-        drive(&s, &tx, &f, Some((9.0, 5.0)), false, &mut last);
+        drive(&s, &tx, &f, Some((9.0, 5.0)), false, None, &mut last);
         assert_eq!(apply_all(&rx, &mut s), 1);
     }
 
@@ -274,13 +307,13 @@ mod tests {
         let mut s = PenDrawState::default();
         let f = fake(pen_sample);
         let mut last = None;
-        drive(&s, &tx, &f, Some((5.0, 5.0)), false, &mut last);
+        drive(&s, &tx, &f, Some((5.0, 5.0)), false, None, &mut last);
         apply_all(&rx, &mut s);
         assert!(s.is_stroking());
-        drive(&s, &tx, &f, None, false, &mut last);
+        drive(&s, &tx, &f, None, false, None, &mut last);
         assert_eq!(apply_all(&rx, &mut s), 1);
         assert_eq!(s.kind, None);
-        drive(&s, &tx, &f, None, false, &mut last);
+        drive(&s, &tx, &f, None, false, None, &mut last);
         assert_eq!(apply_all(&rx, &mut s), 0);
     }
 
@@ -295,6 +328,7 @@ mod tests {
             &fake(pen_sample),
             Some((5.0, 5.0)),
             false,
+            None,
             &mut last,
         );
         apply_all(&rx, &mut s);
@@ -305,6 +339,7 @@ mod tests {
             &fake(|| Ok(None)),
             Some((9.0, 5.0)),
             false,
+            None,
             &mut last,
         );
         apply_all(&rx, &mut s);
@@ -316,7 +351,7 @@ mod tests {
     fn idle_frame_surfaces_unsupported_without_pointer() {
         let (tx, rx) = channel();
         let mut s = PenDrawState::default();
-        drive(&s, &tx, &Unsupported, None, false, &mut None);
+        drive(&s, &tx, &Unsupported, None, false, None, &mut None);
         assert_eq!(apply_all(&rx, &mut s), 1);
         assert_eq!(s.status, PenStatus::Failure(PenFailureView::Unsupported));
     }
@@ -326,7 +361,7 @@ mod tests {
         let (tx, _rx) = channel();
         let s = PenDrawState::default();
         let f = fake(|| Ok(None));
-        drive(&s, &tx, &f, None, false, &mut None);
+        drive(&s, &tx, &f, None, false, None, &mut None);
         assert_eq!(f.calls.load(Ordering::SeqCst), 1);
     }
 
@@ -335,7 +370,7 @@ mod tests {
         let (tx, rx) = channel();
         let mut s = PenDrawState::default();
         let f = fake(pen_sample);
-        drive(&s, &tx, &f, Some((5.0, 5.0)), false, &mut None);
+        drive(&s, &tx, &f, Some((5.0, 5.0)), false, None, &mut None);
         // 完了が反映される前にクリアされた場合、古い世代の完了は捨てられる。
         clear(&mut s);
         apply_all(&rx, &mut s);
@@ -348,13 +383,64 @@ mod tests {
         let mut s = PenDrawState::default();
         let f = fake(pen_sample);
         let mut last = None;
-        drive(&s, &tx, &f, Some((5.0, 5.0)), false, &mut last);
+        drive(&s, &tx, &f, Some((5.0, 5.0)), false, None, &mut last);
         apply_all(&rx, &mut s);
         assert!(s.is_stroking());
         // 同じフレームに離して別の位置を押した: 前の点から補間せず、新しい点 1 つだけになる。
-        drive(&s, &tx, &f, Some((60.0, 5.0)), true, &mut last);
+        drive(&s, &tx, &f, Some((60.0, 5.0)), true, None, &mut last);
         assert_eq!(apply_all(&rx, &mut s), 2);
         assert_eq!(s.point_count(), 2);
         assert!(s.is_stroking());
+    }
+
+    #[test]
+    fn tap_within_one_frame_draws_one_point() {
+        let (tx, rx) = channel();
+        let mut s = PenDrawState::default();
+        // 押下から解放までが 1 フレームに収まった: 押下中の位置は無く、離した位置だけが届く。
+        // OS 側は離した時点で値を消しているので、一定の太さの点 1 つを描いて線を終える。
+        drive(
+            &s,
+            &tx,
+            &fake(|| Ok(None)),
+            None,
+            false,
+            Some((5.0, 5.0)),
+            &mut None,
+        );
+        apply_all(&rx, &mut s);
+        assert_eq!(s.point_count(), 1);
+        assert!(!s.is_stroking());
+    }
+
+    #[test]
+    fn release_draws_last_point_with_previous_sample() {
+        let (tx, rx) = channel();
+        let mut s = PenDrawState::default();
+        let mut last = None;
+        drive(
+            &s,
+            &tx,
+            &fake(pen_sample),
+            Some((5.0, 5.0)),
+            false,
+            None,
+            &mut last,
+        );
+        apply_all(&rx, &mut s);
+        let before = s.point_count();
+        // 離したフレーム: OS 側の値は消えているが、前のフレームの値で最後の点を描く。
+        drive(
+            &s,
+            &tx,
+            &fake(|| Ok(None)),
+            None,
+            false,
+            Some((9.0, 5.0)),
+            &mut last,
+        );
+        apply_all(&rx, &mut s);
+        assert!(s.point_count() > before);
+        assert!(!s.is_stroking());
     }
 }
