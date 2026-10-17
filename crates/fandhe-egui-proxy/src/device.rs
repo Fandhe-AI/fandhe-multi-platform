@@ -578,6 +578,9 @@ pub mod nlp;
 /// Phase 11 の拡充ループ（親 #1003、Issue #1004/#1005）: ローカル通知の effect
 /// ドライバ（macOS/Windows/iOS 実装、Android は #1006）。
 pub mod notification;
+/// Phase 11 の拡充ループ（親 #92、Issue #342）: パスキーの effect ドライバ（Windows はワーカー +
+/// pull 型 bridge、実装は #343 が埋める。他 OS は `UnsupportedPasskey` 固定。Web は `fandhe-web-dom`）。
+pub mod passkey;
 /// Phase 11 の拡充ループ（親 #1119、Issue #1247）: 歩数の effect ドライバ（Windows 実装、
 /// iOS・Android は #1248・#1249 で埋めるスタブ、他 OS は `UnsupportedPedometer` 固定）。
 pub mod pedometer;
@@ -747,6 +750,11 @@ pub mod windows_nlp;
 /// `device/notification.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_notification;
+/// Issue #342: Windows 向けパスキー実装の置き場（現状はスタブ、#343 が `webauthn.h` で埋める）。
+/// `device/passkey.rs` の Windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_passkey;
 /// Issue #1247: Windows 向け歩数実装（WinRT `Pedometer` ラッパー）。
 /// `device/pedometer.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
