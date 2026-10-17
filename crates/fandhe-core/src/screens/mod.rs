@@ -138,6 +138,8 @@ pub mod multi_display_show;
 pub mod network_status_show;
 /// Phase 11 の拡充ループ型サンプル「単語分割」（親 #1093、Issue #1094）。
 pub mod nlp_segment;
+/// Phase 11 の拡充ループ型サンプル「パスキー・サインイン連携」（親 #92、Issue #342）。
+pub mod passkey_signin;
 /// Phase 11 の拡充ループ型サンプル「歩数」（親 #1119、Issue #1247）。
 pub mod pedometer_read;
 /// Phase 11 の拡充ループ型サンプル「写真選択」（親 #1101、Issue #1103）。
