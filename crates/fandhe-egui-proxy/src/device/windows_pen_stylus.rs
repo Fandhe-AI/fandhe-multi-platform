@@ -41,7 +41,7 @@ const WM_POINTERLEAVE: u32 = 0x024A;
 const WM_POINTERCAPTURECHANGED: u32 = 0x024C;
 const MK_LBUTTON: usize = 0x0001;
 const POINTER_FLAG_INCONTACT: u32 = 0x0004;
-const POINTER_FLAG_PRIMARY: u32 = 0x0010;
+const POINTER_FLAG_PRIMARY: u32 = 0x2000;
 const PT_TOUCH: i32 = 2;
 const PT_PEN: i32 = 3;
 const PT_MOUSE: i32 = 4;
@@ -83,7 +83,14 @@ fn classify(msg: u32, wparam: usize, from_pointer: bool) -> Action {
                 Action::ReadPointer((wparam & 0xFFFF) as u32)
             }
         }
-        WM_POINTERUP | WM_POINTERCAPTURECHANGED | WM_POINTERLEAVE => Action::Clear,
+        // 主ポインタ以外の終了・離脱で、接触中の主ポインタの値を消さない
+        WM_POINTERUP | WM_POINTERCAPTURECHANGED | WM_POINTERLEAVE => {
+            if (wparam >> 16) as u32 & POINTER_FLAG_PRIMARY == 0 {
+                Action::Ignore
+            } else {
+                Action::Clear
+            }
+        }
         WM_LBUTTONDOWN if !from_pointer => Action::Mouse,
         WM_MOUSEMOVE if !from_pointer && wparam & MK_LBUTTON != 0 => Action::Mouse,
         WM_LBUTTONUP | WM_CAPTURECHANGED | WM_KILLFOCUS => Action::Clear,
@@ -114,6 +121,21 @@ fn sample_from_pen(mask: u32, pressure: u32, tilt_x: i32, tilt_y: i32) -> PenSam
     PenSample::new(PointerKind::Pen, pressure, altitude)
 }
 
+/// OS の読み取り結果から置く値を決める。`ty` は `GetPointerType`、`pen` は `GetPointerPenInfo`
+/// （`penMask, pressure, tiltX, tiltY`）の成功値で、`None` は呼び出しの失敗。失敗は成功値へ畳まず `Err`。
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+fn resolve_sample(
+    ty: Option<i32>,
+    pen: impl FnOnce() -> Option<(u32, u32, i32, i32)>,
+) -> Result<PenSample, ()> {
+    let kind = kind_from_pointer_type(ty.ok_or(())?);
+    if kind != PointerKind::Pen {
+        return Ok(PenSample::new(kind, None, None));
+    }
+    let (mask, pressure, tx, ty) = pen().ok_or(())?;
+    Ok(sample_from_pen(mask, pressure, tx, ty))
+}
+
 #[cfg(target_os = "windows")]
 mod imp {
     use super::*;
@@ -142,6 +164,8 @@ mod imp {
         assert!(WM_POINTERUP == wm::WM_POINTERUP);
         assert!(WM_POINTERLEAVE == wm::WM_POINTERLEAVE);
         assert!(WM_POINTERCAPTURECHANGED == wm::WM_POINTERCAPTURECHANGED);
+        assert!(POINTER_FLAG_PRIMARY == wm::POINTER_MESSAGE_FLAG_PRIMARY);
+        assert!(POINTER_FLAG_INCONTACT == wm::POINTER_MESSAGE_FLAG_INCONTACT);
         assert!(PT_PEN == wm::PT_PEN.0);
         assert!(PT_TOUCH == wm::PT_TOUCH.0);
         assert!(PT_MOUSE == wm::PT_MOUSE.0);
@@ -182,28 +206,34 @@ mod imp {
         Ok(())
     }
 
-    /// 主ポインタの種類・筆圧・傾きを読んで置く。読めなければ嘘の値を出さず接触なしにする。
+    /// 読み取り失敗を保持する。`latest()` が `Internal` で返し、嘘の成功へ畳まない。
+    static FAILED: AtomicBool = AtomicBool::new(false);
+
+    /// 主ポインタの種類・筆圧・傾きを読んで置く。読めなければ `FAILED` を立てて接触なしにする。
     #[allow(unsafe_code)]
     fn read_pointer(id: u32) {
         let mut ty = wm::POINTER_INPUT_TYPE::default();
         // SAFETY: `id` は現在のメッセージのポインタ ID、出力先はローカル変数。
-        if unsafe { GetPointerType(id, &mut ty) }.is_err() {
-            pen().clear();
-            return;
+        let ty = unsafe { GetPointerType(id, &mut ty) }
+            .is_ok()
+            .then_some(ty.0);
+        let r = resolve_sample(ty, || {
+            let mut info = POINTER_PEN_INFO::default();
+            // SAFETY: 同上。出力先はローカルの `POINTER_PEN_INFO`。
+            unsafe { GetPointerPenInfo(id, &mut info) }
+                .is_ok()
+                .then_some((info.penMask, info.pressure, info.tiltX, info.tiltY))
+        });
+        match r {
+            Ok(sample) => {
+                FAILED.store(false, Ordering::Release);
+                pen().set(sample);
+            }
+            Err(()) => {
+                pen().clear();
+                FAILED.store(true, Ordering::Release);
+            }
         }
-        let kind = kind_from_pointer_type(ty.0);
-        if kind != PointerKind::Pen {
-            pen().set(PenSample::new(kind, None, None));
-            return;
-        }
-        let mut info = POINTER_PEN_INFO::default();
-        // SAFETY: 同上。出力先はローカルの `POINTER_PEN_INFO`。
-        let sample = if unsafe { GetPointerPenInfo(id, &mut info) }.is_ok() {
-            sample_from_pen(info.penMask, info.pressure, info.tiltX, info.tiltY)
-        } else {
-            PenSample::new(PointerKind::Pen, None, None)
-        };
-        pen().set(sample);
     }
 
     /// 観測専用のサブクラスプロシージャ。常に `DefSubclassProc` へ流し、メッセージを消費しない。
@@ -221,9 +251,16 @@ mod imp {
             && (unsafe { wm::GetMessageExtraInfo() }.0 & 0xFFFF_FF00) == MOUSE_FROM_POINTER_SIGNATURE;
         match classify(msg, wparam.0, from_pointer) {
             Action::ReadPointer(id) => read_pointer(id),
-            Action::Mouse => pen().set(PenSample::new(PointerKind::Mouse, None, None)),
-            Action::Clear => pen().clear(),
+            Action::Mouse => {
+                FAILED.store(false, Ordering::Release);
+                pen().set(PenSample::new(PointerKind::Mouse, None, None))
+            }
+            Action::Clear => {
+                FAILED.store(false, Ordering::Release);
+                pen().clear()
+            }
             Action::Destroy => {
+                FAILED.store(false, Ordering::Release);
                 pen().clear();
                 INSTALLED.store(false, Ordering::Release);
                 // SAFETY: 付けたときと同じ HWND・ID。`WM_NCDESTROY` の処理中に外すのは公式の手順。
@@ -240,6 +277,9 @@ mod imp {
     impl PenStylus for WindowsPenStylus {
         fn latest(&self) -> Result<Option<PenSample>, DeviceError> {
             ensure_installed()?;
+            if FAILED.load(Ordering::Acquire) {
+                return Err(DeviceError::Internal("pen_stylus"));
+            }
             pen().latest()
         }
     }
@@ -311,9 +351,40 @@ mod tests {
             ),
             Action::Ignore
         );
+        // 非主ポインタ（FIRSTBUTTON 0x10 のみ）は読まない
+        assert_eq!(
+            classify(
+                WM_POINTERUPDATE,
+                ptr_wparam(7, 0x0010 | POINTER_FLAG_INCONTACT),
+                false
+            ),
+            Action::Ignore
+        );
+        assert_eq!(
+            classify(
+                WM_POINTERUPDATE,
+                ptr_wparam(7, (0x2000 | 0x0002) as u32),
+                false
+            ),
+            Action::Clear
+        );
         for m in [WM_POINTERUP, WM_POINTERCAPTURECHANGED, WM_POINTERLEAVE] {
-            assert_eq!(classify(m, 0, false), Action::Clear);
+            assert_eq!(
+                classify(m, ptr_wparam(7, POINTER_FLAG_PRIMARY), false),
+                Action::Clear
+            );
+            assert_eq!(classify(m, ptr_wparam(8, 0), false), Action::Ignore);
         }
+    }
+
+    #[test]
+    fn api_failures_are_errors() {
+        assert!(resolve_sample(None, || None).is_err());
+        assert!(resolve_sample(Some(PT_PEN), || None).is_err());
+        let ok = resolve_sample(Some(PT_PEN), || Some((PEN_MASK_PRESSURE, 512, 0, 0))).unwrap();
+        assert_eq!(ok.pressure, Some(0.5));
+        let touch = resolve_sample(Some(PT_TOUCH), || None).unwrap();
+        assert_eq!(touch.kind, PointerKind::Touch);
     }
 
     #[test]
