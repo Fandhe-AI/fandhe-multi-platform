@@ -282,6 +282,11 @@ mod web {
         };
         if kind == Kind::Start {
             if let Some(sg) = with(id, |e| e.stop_after_start.take()).flatten() {
+                // 開始失敗は Exited へ畳まず、停止側の現行世代へ Failed のまま届けて資源を解放する。
+                if matches!(update, PipShowUpdate::Failed(_)) {
+                    applier.apply(move |s| apply_update(s, sg, update));
+                    return teardown_media(id);
+                }
                 let opened = matches!(update, PipShowUpdate::Phase(PipShowPhase::Active));
                 return finish_stop(applier, id, sg, opened);
             }
