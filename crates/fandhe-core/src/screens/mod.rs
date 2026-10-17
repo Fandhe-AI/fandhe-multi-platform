@@ -148,6 +148,8 @@ pub mod pedometer_read;
 pub mod photo_pick;
 /// Phase 11 の拡充ループ型サンプル「写真の保存」（親 #1121、Issue #1254）。
 pub mod photo_save;
+/// Phase 11 の拡充ループ型サンプル「ピクチャ・イン・ピクチャ」（親 #97、Issue #364）。
+pub mod pip_show;
 /// Phase 11 の拡充ループ型サンプル「電源状態」（親 #1128、Issue #1274）。
 pub mod power_state_show;
 /// Phase 11 の拡充ループ型サンプル「印刷」（親 #94、Issue #325）。

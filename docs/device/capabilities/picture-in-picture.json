@@ -24,11 +24,14 @@
       "note": "未実装。Activity ごと小窓になるので egui の画面がそのまま入る（API 26+、`FEATURE_PICTURE_IN_PICTURE` が無い端末は非対応）。ただし小窓の間は winit が描画を止めるため、入る直前の画面が静止して残る（守らない範囲）"
     },
     "macos": {
-      "status": "possible",
-      "api": "AVKit `AVPictureInPictureController`（動画のみ）",
+      "status": "done",
+      "api": "AVKit `AVPictureInPictureController`（sample buffer 経路、`AVSampleBufferDisplayLayer`、macOS 12.0+）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/avkit/avpictureinpicturecontroller",
-      "note": "未実装。sample buffer 経路（`initWithSampleBufferDisplayLayer:playbackDelegate:`）は macOS 12.0+。実行体の最低版は 11.0 のため 12 未満は非対応にする。AppKit のアプリで sample buffer 経路が動くかは実装時に確かめる"
+      "note": "実装済み（#364）。範囲は実行時に生成する単色映像（5 色を 1 秒ごとに切り替え）を `AVSampleBufferDisplayLayer` から小窓へ出す「小窓にする」「小窓をやめる」のみ（音声・シーク・自動開始・Document PiP は範囲外）。sample buffer 経路は macOS 12.0+ で、実行体の最低版は 11.0 のため 12 未満と `isPictureInPictureSupported` が NO の環境は非対応にする。AppKit のアプリでも準備中から「小窓にできる」へ進むことは確認済み。結果は小窓中、小窓から戻った（失敗ではない。OS 側の閉じる操作と開始中のキャンセルを含む）、失敗（小窓にできない・期限切れ）、非対応を分けて表示する。窓が背面・最小化でも小窓は続き、終了時に止める。守る範囲: 1 プロセス内の操作順、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: ポーリング間隔ぶんの表示の遅れ、画面内プレビューと OS 側の映像の色替えの時刻ずれ、小窓の位置・大きさ（OS が決める）、複数窓・複数プロセス。Mac 実機の目視は #363 で行う。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#363）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_picture_in_picture.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_picture_in_picture.m + crates/fandhe-egui-proxy/src/device/picture_in_picture.rs + crates/fandhe-core/src/screens/pip_show.rs + crates/fandhe-device/src/picture_in_picture.rs、Issue #364"
     },
     "windows": {
       "status": "possible",
@@ -50,5 +53,5 @@
       "note": "動画 PiP は Chrome 69・Safari 13.1・Firefox 153 から（MDN の互換データ。Firefox Android は非対応）。Document PiP は Chromium のみで扱わない。Document PiP の URL は https://developer.mozilla.org/en-US/docs/Web/API/Document_Picture-in-Picture_API"
     }
   },
-  "note": "media-playback（既存 id）との違い: 再生そのものではなく、再生中の映像の小窓表示。media-cast（別 id）は外部機器への再生で別物。今回の範囲: 実行時に生成する単色の映像（5 色を 1 秒ごとに切り替え。ネットワーク・バイナリ素材なし）を小窓へ出すボタンと戻すボタンを置き、小窓への出入りと失敗を表示する。Android は Activity ごと小窓にする。Document PiP・任意 UI の小窓化・自動開始は扱わない。Windows は Windows App SDK が前提のため保留"
+  "note": "media-playback（既存 id）との違い: 再生そのものではなく、再生中の映像の小窓表示。media-cast（別 id）は外部機器への再生で別物。今回の範囲: 実行時に生成する単色の映像（5 色を 1 秒ごとに切り替え。ネットワーク・バイナリ素材なし）を小窓へ出すボタンと戻すボタンを置き、小窓への出入りと失敗を表示する。Android は Activity ごと小窓にする。Document PiP・任意 UI の小窓化・自動開始は扱わない。Windows は Windows App SDK が前提のため保留。守備範囲: 1 プロセス内の操作順・嘘の成功の禁止・資源の解放までを守り、表示の遅れ・小窓の位置と大きさ・複数窓や複数プロセスは守らない"
 }
