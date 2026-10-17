@@ -1,0 +1,46 @@
+{
+  "id": "print-screen",
+  "name": "画面の内容の印刷",
+  "group": "未着手の OS 機能",
+  "order": 120,
+  "priority": 154,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "UIKit `UIPrintInteractionController`（`UISimpleTextPrintFormatter`、iPad は `presentFromRect:inView:`）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/uikit/uiprintinteractioncontroller",
+      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の描画内容を印刷用に取り出す方法が論点"
+    },
+    "android": {
+      "status": "possible",
+      "api": "`PrintManager`（API 19+）",
+      "perm": "なし",
+      "url": "https://developer.android.com/training/printing",
+      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の描画内容を印刷用に取り出す方法が論点"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AppKit `NSPrintPanel`（`runModalWithPrintInfo:`）+ `NSPrintOperation`（パネルなしの `runOperation`）",
+      "perm": "なし",
+      "url": "https://developer.apple.com/documentation/appkit/nsprintoperation",
+      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の描画内容を印刷用に取り出す方法が論点"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`PrintDlgExW`（`PD_RETURNDC`）+ GDI（`StartDocW` / `DrawTextW` / `EndDoc`）",
+      "perm": "なし（Win32 desktop API。package identity 不要）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/commdlg/nf-commdlg-printdlgexw",
+      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の描画内容を印刷用に取り出す方法が論点"
+    },
+    "web": {
+      "status": "possible",
+      "api": "`window.print()`。`body` 直下の印刷用ブロックと、ブロック内の `@media print` でそのブロックだけを出す（`web-sys` 経由）",
+      "perm": "不要",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/print",
+      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の描画内容を印刷用に取り出す方法が論点"
+    }
+  },
+  "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。`print`（固定の文章）から切り出した行。画面の描画内容を印刷用に取り出す方法が論点"
+}

@@ -12,7 +12,7 @@
  *
  * gh の失敗は例外で止める（取得失敗を「該当なし」と取り違えて余計な起票をしないため）。
  *
- * 守る範囲: layout が対象 OS（status が possible かつ approval なし）を漏れなく・重複なく覆うこと・
+ * 守る範囲: layout が対象 OS（status が possible かつ approval・deferred なし）を漏れなく・重複なく覆うこと・
  * 親と確認用 issue がそれぞれ open で 1 件に定まること・1 層につき open な子は 1 件（目印で再利用し、
  * 紐付けが欠けていれば付け直す）・既存の子の層と担当 OS が今回の layout と一致すること（書き込み前に照合）・
  * 追加条件は担当 OS の分だけを入れること。
@@ -34,9 +34,9 @@ const LAYER_DESC = {
   windows: "Windows 側の実装",
 };
 
-/** JSON の platforms から対象 OS（possible かつ approval なし）を取る。 */
+/** JSON の platforms から対象 OS（possible かつ approval・deferred なし）を取る。 */
 export function targetOs(platforms) {
-  return Object.entries(platforms).filter(([, p]) => p.status === "possible" && !p.approval).map(([k]) => k);
+  return Object.entries(platforms).filter(([, p]) => p.status === "possible" && !p.approval && !p.deferred).map(([k]) => k);
 }
 
 /** layout を検証し、層ごとの担当 OS を返す。漏れ・重複・対象外 OS を含む層は例外。 */
@@ -153,7 +153,7 @@ export function bodyOf({ id, layer, os, parent, check, dep }) {
     "## 受け入れ条件",
     "",
     os.length
-      ? `- [ ] \`possible\` かつ \`approval\` なしだった ${cells} だけを \`done\` にし、\`impl\` に実装パスを入れる。他の OS のセル（申請待ちを含む）は触らない`
+      ? `- [ ] \`possible\` かつ \`approval\`・\`deferred\` なしだった ${cells} だけを \`done\` にし、\`impl\` に実装パスを入れる。他の OS のセル（申請待ち・保留を含む）は触らない`
       : "- [ ] 対応表のセルは変えない（この層は共通コアと全対象 OS の骨格だけを置く）",
     "- [ ] `node scripts/device/build-capabilities.mjs --check` が通る（生成物はコミットしない）",
     `- [ ] 人手の確認（Mac 目視・実機）は完了条件に含めない。確認用 issue #${check} で追う`,

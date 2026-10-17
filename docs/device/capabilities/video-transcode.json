@@ -1,0 +1,46 @@
+{
+  "id": "video-transcode",
+  "name": "動画の変換",
+  "group": "未着手の OS 機能",
+  "order": 80,
+  "priority": 153,
+  "bundle": "request-response",
+  "platforms": {
+    "ios": {
+      "status": "possible",
+      "api": "AVFoundation `AVAssetExportSession`（`AVAssetExportPreset640x480` など低解像度のプリセット）",
+      "perm": "不要（一時ファイルはアプリのサンドボックス内）",
+      "url": "https://developer.apple.com/documentation/avfoundation/avassetexportsession",
+      "note": "未実装。動画 1 本を低解像度の mp4 へ書き出す。素材の動画をネットワークなしで用意する方法が論点"
+    },
+    "android": {
+      "status": "possible",
+      "api": "Media3 Transformer（`androidx.media3.transformer`。解像度は `Presentation.createForHeight` 等）",
+      "perm": "不要（一時ファイルはアプリの `getCacheDir()`）",
+      "url": "https://developer.android.com/media/media3/transformer",
+      "note": "未実装。動画 1 本を低解像度へ書き出す。Gradle の依存追加が要る。素材の動画をネットワークなしで用意する方法が論点"
+    },
+    "macos": {
+      "status": "possible",
+      "api": "AVFoundation `AVAssetExportSession`（低解像度のプリセット）",
+      "perm": "不要（App Sandbox 無効の素の実行体）",
+      "url": "https://developer.apple.com/documentation/avfoundation/avassetexportsession",
+      "note": "未実装。動画 1 本を低解像度の mp4 へ書き出す。素材の動画をネットワークなしで用意する方法が論点"
+    },
+    "windows": {
+      "status": "possible",
+      "api": "`Windows.Media.Transcoding.MediaTranscoder`（`MediaEncodingProfile::CreateMp4` + `VideoEncodingProperties` の解像度指定）",
+      "perm": "不要（文書に package identity の要件記載なし。unpackaged の exe で動くかは #310 で確認）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.transcoding.mediatranscoder",
+      "note": "未実装。動画 1 本を低解像度へ書き出す。素材の動画をネットワークなしで用意する方法が論点"
+    },
+    "web": {
+      "status": "possible",
+      "api": "WebCodecs の `VideoEncoder` / `VideoDecoder`（`isConfigSupported` で対応を確かめる。mux は別途要る）",
+      "perm": "不要。secure context 必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API",
+      "note": "未実装。動画 1 本を低解像度へ再符号化する。コンテナへの書き出し（mux）をどうするかと、素材の動画をネットワークなしで用意する方法が論点"
+    }
+  },
+  "note": "動画 1 本を低解像度へ書き出す。`media-transcode`（音声の変換）から切り出した行。iOS / macOS は AVAssetExportSession、Android は Media3 Transformer、Windows は MediaTranscoder、Web は WebCodecs。素材の動画をネットワークなしで用意する方法が論点"
+}

@@ -88,6 +88,9 @@ function validate(features, meta) {
         // approval = OS ベンダーへの申請・承認が要るセル。expand-capability はこれを候補から外すため、
         // 「できそう」以外に付いていると意味が通らない。
         errors.push(`${at}: platforms.${os}.approval は status=possible のセルにのみ文字列で書く`);
+      } else if (p.deferred !== undefined && (typeof p.deferred !== "string" || !p.deferred || p.status !== "possible" || p.approval !== undefined)) {
+        // deferred = 依存・提供状況などの都合で実装を止めているセル。approval とは同時に付けない。
+        errors.push(`${at}: platforms.${os}.deferred は status=possible のセルにのみ文字列で書き、approval と併用しない`);
       }
       for (const u of badUrls(p)) {
         errors.push(`${at}: platforms.${os}.url は https:// で始まる必要がある (${JSON.stringify(u)})`);
@@ -187,6 +190,7 @@ const excludedCount = excluded.reduce((n, c) => n + c.items.length, 0);
 
 /** 状態 → バッジの CSS クラス。凡例（生成時）とセル描画（ブラウザ側）で同じ対応表を使う。 */
 const APPROVAL_MARK = "🔒申請待ち";
+const DEFERRED_MARK = "⏸保留";
 const STATUS_CLASS = { done: "s-done", possible: "s-possible", no: "s-no", "n-a": "s-na", unrated: "s-unrated" };
 const GENERATED = "このファイルは生成物です。編集は `docs/device/capabilities/<id>.json`（共通定義は `_meta.json`）に対して行い、`node scripts/device/build-capabilities.mjs` で再生成してください。キャプチャは画像を埋め込まず相対参照するため、配布時は `captures/` ディレクトリを添えてください。";
 
@@ -207,12 +211,17 @@ function urls(p) {
 /** 表示用の状態ラベル。detail（元セルの原文）があればそちらを優先して情報を落とさない。 */
 function cellText(p) {
   const t = p.detail ?? statusLabels[p.status] ?? p.status;
-  return p.approval ? `${t}（${APPROVAL_MARK}）` : t;
+  const mark = p.approval ? APPROVAL_MARK : p.deferred ? DEFERRED_MARK : null;
+  return mark ? `${t}（${mark}）` : t;
 }
 
 /** 申請待ちのセル（approval あり）の一覧。申請できる状態になったときの見直し対象。 */
 const approvals = features.flatMap((f) =>
   platforms.filter((o) => f.platforms[o].approval).map((o) => ({ f, os: o, text: f.platforms[o].approval })));
+
+/** 保留のセル（deferred あり）の一覧。依存・提供状況が変わったときの見直し対象。 */
+const deferreds = features.flatMap((f) =>
+  platforms.filter((o) => f.platforms[o].deferred).map((o) => ({ f, os: o, text: f.platforms[o].deferred })));
 
 /** 「できている」の集計。分母は対象外・未評価を除いた、その OS で評価済みの機能数。 */
 function tally(os) {
@@ -300,7 +309,7 @@ function buildMarkdown() {
     L.push("| --- | --- | --- | --- | --- | --- |");
     for (const os of platforms) {
       const p = f.platforms[os];
-      const notesCol = [p.approval ? `申請: ${p.approval}` : null, p.implStatus ? `実態: ${p.implStatus}` : null, p.note,
+      const notesCol = [p.approval ? `申請: ${p.approval}` : null, p.deferred ? `保留: ${p.deferred}` : null, p.implStatus ? `実態: ${p.implStatus}` : null, p.note,
         p.safari ? `Safari: ${p.safari}` : null, p.impl ? `根拠: ${p.impl}` : null]
         .filter(Boolean).join(" / ");
       L.push(
@@ -330,6 +339,13 @@ function buildMarkdown() {
     L.push(`OS ベンダーへの申請・承認が要るため、実装を見送っているセル（表では「${APPROVAL_MARK}」）。expand-capability の候補から外れる。申請できる状態になったら、この一覧から見直す。`, "");
     L.push("| 機能 | OS | 要る申請 |", "| --- | --- | --- |");
     for (const a of approvals) L.push(`| ${md(a.f.name)} | ${md(platformLabels[a.os])} | ${md(a.text)} |`);
+    L.push("");
+  }
+  if (deferreds.length) {
+    L.push(`## 9. 保留（${deferreds.length} 件）`, "");
+    L.push(`OS に機能はあるが、依存（GMS 等）・提供状況（beta・機種限定）などの都合で実装を止めているセル（表では「${DEFERRED_MARK}」）。\`no\`（OS に機能が無い・使えない）とは区別する。expand-capability の候補から外れる。条件が変わったら、この一覧から見直す。`, "");
+    L.push("| 機能 | OS | 保留の理由 |", "| --- | --- | --- |");
+    for (const a of deferreds) L.push(`| ${md(a.f.name)} | ${md(platformLabels[a.os])} | ${md(a.text)} |`);
     L.push("");
   }
   return `${L.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n`;
@@ -437,6 +453,12 @@ ${approvals.length ? `<details class="legend" id="approval"><summary>申請待�
 ${approvals.map((x) => `<tr><td>${esc(x.f.name)}</td><td>${esc(platformLabels[x.os])}</td><td>${esc(x.text)}</td></tr>`).join("\n")}
 </tbody></table>
 </details>` : ""}
+${deferreds.length ? `<details class="legend" id="deferred"><summary>保留（${deferreds.length} 件）</summary>
+<p>OS に機能はあるが、依存（GMS 等）・提供状況（beta・機種限定）などの都合で実装を止めているセル（表では「${DEFERRED_MARK}」）。no（OS に機能が無い・使えない）とは区別する。expand-capability の候補から外れる。条件が変わったら、この一覧から見直す。</p>
+<table><thead><tr><th>機能</th><th>OS</th><th>保留の理由</th></tr></thead><tbody>
+${deferreds.map((x) => `<tr><td>${esc(x.f.name)}</td><td>${esc(platformLabels[x.os])}</td><td>${esc(x.text)}</td></tr>`).join("\n")}
+</tbody></table>
+</details>` : ""}
 <div class="bar">
   <label>検索 <input type="search" id="q" placeholder="機能名・API・備考"></label>
   <label>区分 <select id="g"><option value="">すべて</option></select></label>
@@ -454,6 +476,7 @@ const D = JSON.parse(document.getElementById('data').textContent);
 const { platforms: OS, platformLabels: PL, statusLabels: SL, features: F } = D;
 const CLS = ${JSON.stringify(STATUS_CLASS)};
 const AM = ${JSON.stringify(APPROVAL_MARK)};
+const DM = ${JSON.stringify(DEFERRED_MARK)};
 const el = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
@@ -475,8 +498,8 @@ function cell(p) {
   // url は単一なら文字列、複数ソースが統合された機能では配列
   const links = (p.url ? (Array.isArray(p.url) ? p.url : [p.url]) : [])
     .map((u) => '<a href="' + esc(u) + '" rel="noreferrer">' + esc(u) + '</a>').join('<br>');
-  const ap = p.approval ? '<span class="d" title="' + esc(p.approval) + '">' + AM + '</span>' : '';
-  const rows = [['申請', esc(p.approval)], ['実態', esc(p.implStatus)], ['API', esc(p.api)], ['権限', esc(p.perm)],
+  const ap = p.approval ? '<span class="d" title="' + esc(p.approval) + '">' + AM + '</span>' : p.deferred ? '<span class="d" title="' + esc(p.deferred) + '">' + DM + '</span>' : '';
+  const rows = [['申請', esc(p.approval)], ['保留', esc(p.deferred)], ['実態', esc(p.implStatus)], ['API', esc(p.api)], ['権限', esc(p.perm)],
     ['ドキュメント', links], ['備考', esc(p.note)], ['Safari', esc(p.safari)], ['根拠', esc(p.impl)]]
     .filter(([, v]) => v);
   const more = rows.length

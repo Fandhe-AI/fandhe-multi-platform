@@ -1,6 +1,6 @@
 {
   "id": "media-transcode",
-  "name": "動画・音声の変換",
+  "name": "音声の変換",
   "group": "未着手の OS 機能",
   "order": 80,
   "priority": 51,
@@ -58,5 +58,5 @@
       "impl": "crates/fandhe-web-dom/src/media_transcode.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #315"
     }
   },
-  "note": "iOS / macOS は AVAudioFile（AAC-LC）、Android は Media3 Transformer、Windows は MediaTranscoder、Web は WebCodecs。media-playback（既存 id）は再生で、本機能はファイルを別形式・別解像度へ書き出す点が違う。今回の範囲: 実行時に作った 5 秒の音声を AAC へ 1 回変換し、出力を読み直して入力と比べる（Web はコンテナなしの AAC / Opus。動画・利用者が持ち込むファイル・進捗・取り消し・形式の選択・保存は扱わない）。"
+  "note": "動画の変換は `video-transcode` に切り出した。iOS / macOS は AVAudioFile（AAC-LC）、Android は Media3 Transformer、Windows は MediaTranscoder、Web は WebCodecs。media-playback（既存 id）は再生で、本機能はファイルを別形式・別解像度へ書き出す点が違う。今回の範囲: 実行時に作った 5 秒の音声を AAC へ 1 回変換し、出力を読み直して入力と比べる（Web はコンテナなしの AAC / Opus。動画・利用者が持ち込むファイル・進捗・取り消し・形式の選択・保存は扱わない）。"
 }
