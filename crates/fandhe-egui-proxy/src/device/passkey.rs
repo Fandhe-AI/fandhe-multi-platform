@@ -6,7 +6,7 @@
 //!
 //! - Windows: OS の UI はブロッキングのため、ワーカースレッドで [`Passkey::run`] を呼び、結果を
 //!   pull 型 [`bridge`]（`RequestSlot` の facade）で毎フレーム反映する。実装は
-//!   `windows_passkey::implementation()`（#343 が埋める。**dispatch はここで最終形にしてあり、
+//!   `windows_passkey::implementation()`（#343 で実装済み。**dispatch はここで最終形にしてあり、
 //!   後続 issue は OS 別モジュールだけを埋める**）
 //! - macOS / Linux / iOS / Android: 対応表で保留または非対応のため、同期で `UnsupportedPasskey`
 //!   を呼び「使えない」を表示する。Web は `fandhe-web-dom`（#344）
