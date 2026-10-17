@@ -31,6 +31,9 @@
 //!   feature `device` 有効時のみコンパイルする（`src/device/ios.rs` の `present_photo_picker`/
 //!   `fandhe_rust_photo_picker_outcome` から呼ばれる契約）。PhotosUI と、JPEG 変換用の
 //!   ImageIO を追加でリンクする。
+//! - `apple/fandhe_apple_picture_in_picture.m`（Issue #364、AVKit の sample buffer 経路による
+//!   ピクチャ・イン・ピクチャ）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/
+//!   apple_picture_in_picture.rs` から呼ばれる契約）。AVKit・CoreMedia・CoreVideo・QuartzCore をリンクする。
 //! - `apple/fandhe_apple_location.m`（Issue #889、`CLLocationManager` による位置情報）は
 //!   iOS・macOS の両ターゲットで feature `device` 有効時のみコンパイルする
 //!   （`src/device/apple_location.rs` から呼ばれる契約）。CoreLocation をリンクする。
@@ -961,6 +964,22 @@ fn compile_apple_media_playback() {
         .compile("fandhe_apple_media_playback");
 }
 
+/// `apple/fandhe_apple_picture_in_picture.m` を `cc` でコンパイルし AVKit・CoreMedia・CoreVideo・
+/// QuartzCore をリンクする（Issue #364）。**macOS 分岐のみ**から呼ばれる（`src/device/
+/// apple_picture_in_picture.rs` が使う。iOS は親 #97 の b-ios が分岐を足す）。macOS 12.0+ の API は
+/// `.m` 側の `@available` で守る（AVKit 自体は 10.15+ にある）。
+fn compile_apple_picture_in_picture() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_picture_in_picture.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_picture_in_picture.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_picture_in_picture");
+
+    for framework in ["AVKit", "CoreMedia", "CoreVideo", "QuartzCore"] {
+        println!("cargo:rustc-link-lib=framework={framework}");
+    }
+}
+
 /// `apple/fandhe_apple_midi.m` を `cc` でコンパイルし CoreMIDI をリンクする（Issue #1398）。
 /// iOS・macOS 双方の分岐から呼ばれる（`src/device/apple_midi.rs` が使う。iOS は Issue #1399）。
 fn compile_apple_midi() {
@@ -1437,6 +1456,8 @@ fn build_macos() {
     compile_apple_midi();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。iOS 分岐と共用する。AVFoundation は既存のリンクで足りる。
     compile_apple_media_playback();
+    // `apple/fandhe_apple_picture_in_picture.m`（Issue #364）。macOS 分岐のみ（iOS は親 #97 の b-ios が足す）。AVKit を使う。
+    compile_apple_picture_in_picture();
     // `macos/fandhe_macos_local_fonts.m`（Issue #1376）も macOS 専用。AppKit は既存のリンクで足りる。
     compile_macos_local_fonts();
     // `macos/fandhe_macos_file_watch.m`（Issue #1410）も macOS 専用。CoreServices を使う。

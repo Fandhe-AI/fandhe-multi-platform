@@ -311,6 +311,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // （`device::media_playback::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::media_playback::reset_pending_tracking();
+    // Issue #364: ピクチャ・イン・ピクチャも同様。処理済み世代を捨て、小窓を止める
+    // （`device::picture_in_picture::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::picture_in_picture::reset_pending_tracking();
     // Issue #276: 通話 UI の記録（処理済み世代）と進行中の通話も破棄する。画面状態は再生成で
     // generation 0 に戻るため、残すと次の「着信を模擬する」が飲み込まれ、OS 側の着信も残る
     // （`device::call_ui::reset_pending_tracking` doc 参照）。
@@ -845,6 +849,40 @@ extern "system" fn Java_com_fandhe_androidapp_FullscreenHelper_nativeOnFullscree
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     _state: i32,
+) {
+}
+
+/// `device` feature 無効ビルド向けの `nativeOnPenSample` no-op フォールバック（Issue #357）。
+/// `PenStylusHelper` は画面に関係なくタッチのたびに呼ぶため、スタブが無いと
+/// `UnsatisfiedLinkError` になる。JNI 署名は Java 宣言・`device/android_pen_stylus.rs` の実体と
+/// 3 か所で `(int, float, float, boolean) -> void` に揃える。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
+/// シンボル名は JNI 命名規約上の固定名（`nativeOnMotionChanged` と同じ根拠）。
+#[cfg(not(feature = "device"))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_androidapp_PenStylusHelper_nativeOnPenSample(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _tool_type: i32,
+    _pressure: f32,
+    _tilt_rad: f32,
+    _has_tilt: u8,
+) {
+}
+
+/// `device` feature 無効ビルド向けの `nativeOnPenClear` no-op フォールバック（Issue #357）。
+///
+/// # Safety
+/// `nativeOnPenSample` の no-op と同じ（unsafe 操作なし、固定シンボル名）。
+#[cfg(not(feature = "device"))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_androidapp_PenStylusHelper_nativeOnPenClear(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
 ) {
 }
 
