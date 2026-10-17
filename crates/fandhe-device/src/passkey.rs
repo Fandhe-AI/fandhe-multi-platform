@@ -22,6 +22,7 @@
 //! | challenge 不一致・`type` 違い・JSON 不正・サイズ超過 | `InvalidInput("passkey client data")` |
 //! | UP / UV / AT の欠落・authenticatorData が短い | `InvalidInput("passkey flags")` |
 //! | 資格情報 ID が空 | `InvalidInput("passkey credential")` |
+//! | サインイン応答の署名が欠落・空 | `InvalidInput("passkey signature")` |
 //! | 未知のエラー・`InvalidStateError` | `Internal("passkey failed")` |
 //!
 //! # 三値の報告先（契約表 10）
@@ -279,6 +280,10 @@ pub fn verify_response(
     if credential_id.is_empty() {
         return Err(DeviceError::InvalidInput("passkey credential"));
     }
+    // サインインは署名が本体。欠落・空を成功にしない（暗号学的検証は行わない）。
+    if op == PasskeyOp::SignIn && signature.is_none_or(<[u8]>::is_empty) {
+        return Err(DeviceError::InvalidInput("passkey signature"));
+    }
     Ok(PasskeySummary {
         rp_id: rp_id.to_string(),
         credential_id: CredentialId::from_bytes(credential_id),
@@ -438,6 +443,22 @@ mod tests {
         assert!(run(PasskeyOp::Register, 0x44).is_err()); // UP 欠落
         assert!(run(PasskeyOp::SignIn, 0x05).is_ok());
         assert!(run(PasskeyOp::SignIn, 0x01).is_err());
+        let cd = client_data_json(PasskeyOp::SignIn, &c, "o");
+        for sig in [None, Some(&[][..])] {
+            let r = verify_response(
+                PasskeyOp::SignIn,
+                &c,
+                "l",
+                vec![1],
+                cd.as_bytes(),
+                &auth(0x05),
+                sig,
+            );
+            assert!(matches!(
+                r,
+                Err(DeviceError::InvalidInput("passkey signature"))
+            ));
+        }
         let cd = client_data_json(PasskeyOp::Register, &c, "o");
         let empty = verify_response(
             PasskeyOp::Register,
