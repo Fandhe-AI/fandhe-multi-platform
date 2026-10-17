@@ -417,6 +417,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::multi_display::release_mount(id);
         super::accessibility_prefs::release_mount(id);
         super::fullscreen_immersive::release_mount(id);
+        super::picture_in_picture::release_mount(id);
         super::screen_capture::release_mount(id);
         super::app_badge::release_mount(id);
         super::compose_mail_sms::release_mount(id);
