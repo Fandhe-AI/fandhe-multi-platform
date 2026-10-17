@@ -26,8 +26,9 @@
   （`UIApplication openURL:`）は範囲外のため `LSApplicationQueriesSchemes` は足さない
   （security.md A05）。
 
-  NSCameraUsageDescription（Phase 8 / Issue #751）: 型サンプル「カメラ撮影」画面
-  （`FANDHE_PROXY_APP=camera_capture`）が `UIImagePickerController`
+  NSCameraUsageDescription（Phase 8 / Issue #751、AR 表示は Issue #308）: 型サンプル「カメラ撮影」画面
+  （`FANDHE_PROXY_APP=camera_capture`）と「AR 表示」画面（`FANDHE_PROXY_APP=ar_show`、
+  `crates/fandhe-egui-proxy/ios/fandhe_ios_ar.m`）が `UIImagePickerController`
   （`crates/fandhe-egui-proxy/ios/fandhe_ios_camera.m`）でカメラを起動するために
   必須（未設定だと初回起動時に即クラッシュする）。Phase 8 が spec 要件化されず
   切り離す場合は本キーも削除する（docs/architecture/device-feature-removal.md）。
@@ -167,7 +168,7 @@
 	<key>MinimumOSVersion</key>
 	<string>17.0</string>
 	<key>NSCameraUsageDescription</key>
-	<string>型サンプル「カメラ撮影」の動作確認に使います</string>
+	<string>型サンプル「カメラ撮影」「AR 表示」の動作確認に使います</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>型サンプル「位置情報」の動作確認に使います</string>
 	<key>NSFaceIDUsageDescription</key>
