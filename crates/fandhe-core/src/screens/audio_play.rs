@@ -17,6 +17,11 @@
 //! Loading --期限切れ expire--> Failed(Timeout)
 //! ```
 //!
+//! **OS のメディア操作（Issue #381、now-playing-controls）**: `Playing` / `Paused` の間だけ、
+//! 曲名と再生状態が OS の「再生中」表示へ渡る（`Loading` は保留、それ以外は消える）。OS から来た
+//! 再生・一時停止は [`apply_os_command`] で `Paused` / `Playing` への遷移として反映し、失敗にはしない。
+//! 渡した結果は [`OsMediaStatus`]、最後に受けた操作は [`OsCommandSeen`] で表示する（全 OS 分をここで確定済み）。
+//!
 //! 利用者の一時停止・停止は失敗ではない。`Interrupted`（OS による中断）も失敗ではなく、復帰しても
 //! 自動では再開しない。世代の違う通知と、`Loading` / `Playing` 以外で届いた通知は捨てる。
 
@@ -56,6 +61,22 @@ pub const UNSUPPORTED_STATUS: &str = "この環境では音声を再生できま
 pub const FAILED_PREFIX: &str = "失敗しました: ";
 /// 位置・長さが未取得のときの表示。
 pub const UNKNOWN_TIME: &str = "--:--";
+/// OS のメディア操作の表示の接頭辞。
+pub const OS_MEDIA_PREFIX: &str = "OS のメディア操作: ";
+/// OS へ渡していない（未表示・取り下げ後）。
+pub const OS_MEDIA_OFF: &str = "渡していません";
+/// OS へ渡した（Apple は結果が返らないため「表示中」とは言わない）。
+pub const OS_MEDIA_SENT: &str = "OS へ渡しました";
+/// この環境では使えない。
+pub const OS_MEDIA_UNSUPPORTED: &str = "この環境では使えません";
+/// 渡せなかった。
+pub const OS_MEDIA_FAILED: &str = "渡せませんでした";
+/// 最後に OS から受けた操作の接頭辞。
+pub const OS_COMMAND_PREFIX: &str = "最後に OS から受けた操作: ";
+/// OS から再生を受けた。
+pub const OS_COMMAND_PLAY: &str = "再生";
+/// OS から一時停止を受けた。
+pub const OS_COMMAND_PAUSE: &str = "一時停止";
 
 /// 画面側の進行状態。
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -119,6 +140,40 @@ pub enum AudioUpdate {
     Failed(AudioFailure),
 }
 
+/// OS のメディア操作へ渡した結果（`fandhe_device` の型から写す責務は effect 側）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OsMediaStatus {
+    /// 渡していない。
+    #[default]
+    Off,
+    /// OS へ渡した。
+    Sent,
+    /// 非対応。
+    Unsupported,
+    /// 渡せなかった（OS の生コードは入れない）。
+    Failed,
+}
+
+/// OS から届いた操作（effect が `fandhe_device` の型から写す）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OsCommand {
+    /// 再生。
+    Play,
+    /// 一時停止。
+    Pause,
+    /// 再生と一時停止の切り替え。
+    Toggle,
+}
+
+/// 画面が受け付けて反映した OS の操作（`Toggle` は解決後の値）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OsCommandSeen {
+    /// 再生を受けた。
+    Play,
+    /// 一時停止を受けた。
+    Pause,
+}
+
 /// 画面の状態。
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct AudioPlayState {
@@ -132,6 +187,10 @@ pub struct AudioPlayState {
     pub position_ms: Option<u64>,
     /// 長さ（ミリ秒）。
     pub duration_ms: Option<u64>,
+    /// OS のメディア操作へ渡した結果。
+    pub os_media: OsMediaStatus,
+    /// 最後に OS から受けて反映した操作。
+    pub last_os_command: Option<OsCommandSeen>,
 }
 
 fn issue(state: &mut AudioPlayState, command: AudioCommand) {
@@ -221,6 +280,61 @@ pub fn expire(state: &mut AudioPlayState, generation: u64) {
     }
 }
 
+/// OS から届いた操作を反映する。`Toggle` は `Playing` なら一時停止、`Paused` なら再生に解決する。
+/// 再生は `Paused` からだけ受ける（停止・終了後に遅れて届いた操作で再開しない）。
+/// 一時停止は失敗ではなく `Paused`（`error_text` は空のまま）。
+pub fn apply_os_command(state: &mut AudioPlayState, cmd: OsCommand) {
+    let resolved = match (cmd, &state.phase) {
+        (OsCommand::Toggle, AudioPhase::Playing) | (OsCommand::Pause, AudioPhase::Playing) => {
+            OsCommandSeen::Pause
+        }
+        (OsCommand::Toggle, AudioPhase::Paused) | (OsCommand::Play, AudioPhase::Paused) => {
+            OsCommandSeen::Play
+        }
+        _ => return,
+    };
+    match resolved {
+        OsCommandSeen::Play => play(state),
+        OsCommandSeen::Pause => pause(state),
+    }
+    state.last_os_command = Some(resolved);
+}
+
+/// OS のメディア操作へ渡した結果を記録する。
+pub fn set_os_media_status(state: &mut AudioPlayState, status: OsMediaStatus) {
+    state.os_media = status;
+}
+
+/// 取り下げ後に `Sent` を `Off` へ戻す。`Unsupported` / `Failed` の表示は残す（嘘の成功の防止）。
+pub fn os_media_cleared(state: &mut AudioPlayState) {
+    if state.os_media == OsMediaStatus::Sent {
+        state.os_media = OsMediaStatus::Off;
+    }
+}
+
+/// OS のメディア操作の表示。`Playing` / `Paused` のときだけ出す（それ以外は空）。
+pub fn os_media_text(state: &AudioPlayState) -> String {
+    if !matches!(state.phase, AudioPhase::Playing | AudioPhase::Paused) {
+        return String::new();
+    }
+    let body = match state.os_media {
+        OsMediaStatus::Off => OS_MEDIA_OFF,
+        OsMediaStatus::Sent => OS_MEDIA_SENT,
+        OsMediaStatus::Unsupported => OS_MEDIA_UNSUPPORTED,
+        OsMediaStatus::Failed => OS_MEDIA_FAILED,
+    };
+    format!("{OS_MEDIA_PREFIX}{body}")
+}
+
+/// 最後に OS から受けた操作の表示。未受信なら空。
+pub fn os_command_text(state: &AudioPlayState) -> String {
+    match state.last_os_command {
+        None => String::new(),
+        Some(OsCommandSeen::Play) => format!("{OS_COMMAND_PREFIX}{OS_COMMAND_PLAY}"),
+        Some(OsCommandSeen::Pause) => format!("{OS_COMMAND_PREFIX}{OS_COMMAND_PAUSE}"),
+    }
+}
+
 /// 案内文言（通常色）。失敗は [`error_text`] 側。
 pub fn status_text(state: &AudioPlayState) -> String {
     match state.phase {
@@ -267,6 +381,8 @@ pub fn current_screen(_state: &AudioPlayState) -> Screen<AudioPlayState> {
         .dynamic_text(status_text)
         .error_text(error_text)
         .dynamic_text(position_text)
+        .dynamic_text(os_media_text)
+        .dynamic_text(os_command_text)
         .button(PLAY_BUTTON_ID, PLAY_LABEL, play)
         .button(PAUSE_BUTTON_ID, PAUSE_LABEL, pause)
         .button(STOP_BUTTON_ID, STOP_LABEL, stop)
@@ -401,6 +517,92 @@ mod tests {
         assert_eq!(position_text(&s), "1:05 / --:--");
         s.duration_ms = Some(5_000);
         assert_eq!(position_text(&s), "1:05 / 0:05");
+    }
+
+    #[test]
+    fn os_toggle_resolves_by_phase() {
+        let mut s = playing();
+        apply_os_command(&mut s, OsCommand::Toggle);
+        assert_eq!(s.phase, AudioPhase::Paused);
+        assert_eq!(s.last_os_command, Some(OsCommandSeen::Pause));
+        apply_os_command(&mut s, OsCommand::Toggle);
+        assert_eq!(s.phase, AudioPhase::Loading);
+        assert_eq!(s.last_os_command, Some(OsCommandSeen::Play));
+    }
+
+    #[test]
+    fn os_pause_is_not_a_failure() {
+        let mut s = playing();
+        apply_os_command(&mut s, OsCommand::Pause);
+        assert_eq!(s.phase, AudioPhase::Paused);
+        assert_eq!(error_text(&s), "");
+        assert_eq!(status_text(&s), PAUSED_STATUS);
+    }
+
+    #[test]
+    fn os_commands_are_ignored_outside_playing_paused() {
+        let ended = {
+            let mut s = playing();
+            let g = s.generation;
+            apply_update(&mut s, g, snap(AudioPhase::Ended, 5000));
+            s
+        };
+        let stopped = {
+            let mut s = playing();
+            stop(&mut s);
+            s
+        };
+        let failed = {
+            let mut s = playing();
+            let g = s.generation;
+            apply_update(&mut s, g, AudioUpdate::Failed(AudioFailure::Unsupported));
+            s
+        };
+        for base in [AudioPlayState::default(), ended, stopped, failed] {
+            for cmd in [OsCommand::Play, OsCommand::Pause, OsCommand::Toggle] {
+                let mut s = base.clone();
+                apply_os_command(&mut s, cmd);
+                assert_eq!(s, base, "{cmd:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn os_media_cleared_keeps_unsupported_and_failed() {
+        let mut s = AudioPlayState::default();
+        for keep in [OsMediaStatus::Unsupported, OsMediaStatus::Failed] {
+            set_os_media_status(&mut s, keep);
+            os_media_cleared(&mut s);
+            assert_eq!(s.os_media, keep);
+        }
+        set_os_media_status(&mut s, OsMediaStatus::Sent);
+        os_media_cleared(&mut s);
+        assert_eq!(s.os_media, OsMediaStatus::Off);
+    }
+
+    #[test]
+    fn os_texts() {
+        let mut s = playing();
+        assert_eq!(
+            os_media_text(&s),
+            format!("{OS_MEDIA_PREFIX}{OS_MEDIA_OFF}")
+        );
+        for (st, body) in [
+            (OsMediaStatus::Sent, OS_MEDIA_SENT),
+            (OsMediaStatus::Unsupported, OS_MEDIA_UNSUPPORTED),
+            (OsMediaStatus::Failed, OS_MEDIA_FAILED),
+        ] {
+            set_os_media_status(&mut s, st);
+            assert_eq!(os_media_text(&s), format!("{OS_MEDIA_PREFIX}{body}"));
+        }
+        assert_eq!(os_command_text(&s), "");
+        apply_os_command(&mut s, OsCommand::Pause);
+        assert_eq!(
+            os_command_text(&s),
+            format!("{OS_COMMAND_PREFIX}{OS_COMMAND_PAUSE}")
+        );
+        stop(&mut s);
+        assert_eq!(os_media_text(&s), "");
     }
 
     #[test]

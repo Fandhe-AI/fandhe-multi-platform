@@ -418,6 +418,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::accessibility_prefs::release_mount(id);
         super::fullscreen_immersive::release_mount(id);
         super::picture_in_picture::release_mount(id);
+        super::media_cast::release_mount(id);
         super::screen_capture::release_mount(id);
         super::app_badge::release_mount(id);
         super::compose_mail_sms::release_mount(id);
@@ -426,6 +427,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::file_watch::release_mount(id);
         super::midi::release_mount(id);
         super::media_playback::release_mount(id);
+        super::now_playing::release_mount(id);
         super::media_transcode::release_mount(id);
         super::on_device_llm::release_mount(id);
         super::pen_stylus::release_mount(id);

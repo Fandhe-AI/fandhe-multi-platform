@@ -31,6 +31,9 @@
 //!   feature `device` 有効時のみコンパイルする（`src/device/ios.rs` の `present_photo_picker`/
 //!   `fandhe_rust_photo_picker_outcome` から呼ばれる契約）。PhotosUI と、JPEG 変換用の
 //!   ImageIO を追加でリンクする。
+//! - `apple/fandhe_apple_now_playing.m`（Issue #381 macOS、iOS の中身は #382。MediaPlayer の `MPNowPlayingInfoCenter` /
+//!   `MPRemoteCommandCenter` による OS の「再生中」表示とメディアキー。`src/device/apple_now_playing.rs` から呼ばれる契約）。
+//!   MediaPlayer をリンクする。
 //! - `apple/fandhe_apple_picture_in_picture.m`（Issue #364、AVKit の sample buffer 経路による
 //!   ピクチャ・イン・ピクチャ）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/
 //!   apple_picture_in_picture.rs` から呼ばれる契約）。AVKit・CoreMedia・CoreVideo・QuartzCore をリンクする。
@@ -473,6 +476,8 @@ fn main() {
     compile_apple_media_playback();
     // `apple/fandhe_apple_picture_in_picture.m`（Issue #365）。macOS 分岐と共用する。AVKit を使う。
     compile_apple_picture_in_picture(true);
+    // `apple/fandhe_apple_now_playing.m`（Issue #381 macOS + #382 iOS）。macOS 分岐と共用する。MediaPlayer を使う。
+    compile_apple_now_playing();
     // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308 macOS + #1309 iOS）も共用する。
     compile_apple_accessibility_prefs();
     // `apple/fandhe_apple_screen_capture.m`（Issue #1336）の iOS 側（ReplayKit）。
@@ -990,6 +995,19 @@ fn compile_apple_picture_in_picture(include_ios_common: bool) {
     }
 }
 
+/// `apple/fandhe_apple_now_playing.m` を `cc` でコンパイルし MediaPlayer をリンクする（Issue #381 macOS）。
+/// macOS・iOS 双方の分岐から呼ばれる（`src/device/apple_now_playing.rs` が使う）。iOS 側の中身は #382 が埋める
+/// （`.m` の iOS 部分は空。ここで一緒にコンパイル・リンクしておけば、埋めるときに build.rs を触らずに済む）。
+fn compile_apple_now_playing() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_now_playing.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_now_playing.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_now_playing");
+
+    println!("cargo:rustc-link-lib=framework=MediaPlayer");
+}
+
 /// `apple/fandhe_apple_media_cast.m` を `cc` でコンパイルし AVKit・AVFoundation・CoreAudio をリンクする
 /// （Issue #386）。**macOS 分岐のみ**から呼ばれる（`src/device/apple_media_cast.rs` が使う）。
 fn compile_apple_media_cast() {
@@ -1483,6 +1501,8 @@ fn build_macos() {
     compile_apple_media_playback();
     // `apple/fandhe_apple_picture_in_picture.m`（Issue #364 macOS + #365 iOS）。iOS 分岐と共用する。AVKit を使う。
     compile_apple_picture_in_picture(false);
+    // `apple/fandhe_apple_now_playing.m`（Issue #381）。iOS 分岐と共用する。MediaPlayer を使う。
+    compile_apple_now_playing();
     // `macos/fandhe_macos_local_fonts.m`（Issue #1376）も macOS 専用。AppKit は既存のリンクで足りる。
     compile_macos_local_fonts();
     // `macos/fandhe_macos_file_watch.m`（Issue #1410）も macOS 専用。CoreServices を使う。
