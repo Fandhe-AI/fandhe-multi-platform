@@ -142,31 +142,36 @@ final class NowPlayingHelper {
     // egui スレッドから呼ぶ（冪等）。Rust 側は先に操作の受け口を閉じている。最長 APPLY_TIMEOUT_MS
     // （呼び出し開始起点・単調時計）で戻る。
     void clear() {
+        final MediaSession target;
         synchronized (lock) {
             desired = null;
             if (session == null) {
                 return;
             }
+            target = session;
         }
         final Call call = new Call();
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                if (call.state.compareAndSet(PENDING, STARTED)) {
-                    try {
-                        synchronized (lock) {
+                // 放棄（await のタイムアウト）後でも解放は必ず行う。取り下げの意思は確定済みのため。
+                // ただし対象は clear 時点の session かつ desired なしのときだけ。後続の publish が
+                // 同じ session を再利用して desired を入れたあと、遅れて走った release が壊さない。
+                call.state.compareAndSet(PENDING, STARTED);
+                try {
+                    synchronized (lock) {
+                        if (session == target && desired == null) {
                             release();
                         }
-                    } finally {
-                        call.finished.countDown();
                     }
+                } finally {
+                    call.finished.countDown();
                 }
             }
         });
         // 期限つきで待つ。UI スレッドが終了処理（GameActivity の onPause/onDestroy）でネイティブ側の
-        // 完了を待っているとき、無期限に待つと相互待ちになる。未開始なら放棄し（後から走る release が
-        // 新しい publish の session を壊さない）、残りの session は desired なしで保留され、次の
-        // publish の再利用か onDestroy が片付ける。開始済みは完了まで待つ。
+        // 完了を待っているとき、無期限に待つと相互待ちになる。タイムアウトしても Runnable は
+        // UI スレッドが空いた時点で上の条件つきで解放する。開始済みは完了まで待つ。
         await(call);
     }
 
