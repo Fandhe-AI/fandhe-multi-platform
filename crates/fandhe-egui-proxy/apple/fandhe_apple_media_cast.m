@@ -3,7 +3,7 @@
 //
 // 方式（案 A）: 実行時に生成した WAV を AVAudioPlayer（numberOfLoops = -1）でループ再生し、窓の右下に
 // AVRoutePickerView（player = nil。システムの出力先を切り替える OS のボタン）を重ねる。
-// 経路の状態は snapshot のたびに Core Audio の既定出力デバイスの transport type を読んで決める
+// 経路の状態は（macOS では）snapshot のたびに Core Audio の既定出力デバイスの transport type を読んで決める
 // （kAudioDeviceTransportTypeAirPlay なら Connected、名前は kAudioObjectPropertyName）。Core Audio の
 // リスナーは登録しない（250ms の pull で足りる。登録トークンの解放漏れの類型を避ける、契約表 1）。
 // 名前は OS が返した値だけを使い、読めなければ NotReported（接続中とは言わない、契約表 6）。
@@ -11,19 +11,19 @@
 // 既定出力の切り替えに追従するか（Mac 目視 #379 で確かめる。駄目なら AVPlayer 経路へ切り替える）。
 //
 // `crates/fandhe-egui-proxy/src/device/apple_media_cast.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の macOS 分岐がコンパイルし AVKit・AVFoundation・CoreAudio をリンクする。
+// `build.rs` の macOS・iOS 双方の分岐がコンパイルし、AVKit・AVFoundation（macOS はさらに CoreAudio）をリンクする。
 //
 // 契約（戻りコードは固定。NSError の生値・説明は返さずログにも出さない、security.md A09）:
-//   0 = 成功、1 = 非対応（macOS 10.15 未満）、2 = 引数不正（NULL・0 バイト・上限超え）、
+//   0 = 成功、1 = 非対応（macOS 10.15 / iOS 13 未満）、2 = 引数不正（NULL・0 バイト・上限超え）、
 //   3 = 内部（WAV を解釈できない・窓・再生を作れない）、4 = main thread 以外から呼ばれた、6 = 世代不一致。
 //   int32_t fandhe_apple_cast_prepare(uint64_t gen, const uint8_t *wav, size_t len)
 //     gen は Rust が採番する 0 以外の世代。wav は同期でコピーしポインタを保持しない。前の資源を先に解放し、
 //     失敗しても作りかけを解放した状態で返す。
 //   int32_t fandhe_apple_cast_play(uint64_t gen)   0 / 3 / 4 / 6。
-//   int32_t fandhe_apple_cast_stop(uint64_t gen)   0 / 4 / 6。再生中でなければ何もせず 0。
+//   int32_t fandhe_apple_cast_stop(uint64_t gen)   0 / 4 / 6。再生中・Interrupted なら止めて Stopped にする。それ以外は何もせず 0。
 //   void fandhe_apple_cast_snapshot(uint64_t *gen, int32_t *playback, int32_t *route,
 //                                   char *name, size_t name_cap)
-//     playback: 0 = Idle、1 = Ready、2 = Playing、3 = Stopped、4 = 内部失敗。
+//     playback: 0 = Idle、1 = Ready、2 = Playing、3 = Stopped、4 = 内部失敗、5 = Interrupted（iOS のみ）。
 //     route: 0 = Local、1 = Choosing、2 = Connected、3 = Disconnected、4 = NotReported。
 //     name: route が Connected のとき NUL 終端の UTF-8（取れなければ空）。それ以外は空。
 //   void fandhe_apple_cast_release(void)  冪等。
@@ -33,7 +33,8 @@
 //     （iOS では AVAudioSession 全体の経路が切り替わる）。
 //   - prepare で AVAudioSession の category / mode / options / routeSharingPolicy を一度だけ保存し、
 //     playback + longFormAudio にする。setActive:YES は play の直前（開いただけで他アプリの音を止めない）。
-//     release_all の末尾で setActive:NO（他アプリへ通知）と保存値の復元を行う。失敗時は保存値を残し次の release で再試行する。
+//     release_all の末尾で setActive:NO（他アプリへ通知）と保存値の復元を行う。無効化と復元は互いに独立に試し、
+//     どちらかが失敗したら保存値を残して次の release で再試行する。
 //   - 背景遷移（UIApplicationDidEnterBackgroundNotification）と割り込み開始（Began。AppWasSuspended 理由は無視）で
 //     再生中なら pause して playback 5 = Interrupted にする。勝手に再開しない。通知は dispatch_once で一度だけ購読し、
 //     トークンは static で持ち続ける（契約表 1）。判断は実際の状態（g_playback）で行うので重複・逆順でも二重に動かない。
@@ -117,25 +118,27 @@ static AVAudioSessionMode g_saved_mode = nil;
 static AVAudioSessionCategoryOptions g_saved_options = 0;
 static AVAudioSessionRouteSharingPolicy g_saved_policy = AVAudioSessionRouteSharingPolicyDefault;
 
-// 復元に成功したときだけ保存値を捨てる。失敗時は保持し、次の release で再試行する。
+// 無効化（setActive:NO）の成否に関わらず category 等の復元を試す。他の音声が動いていると無効化は Busy で
+// 失敗するが、復元まで飛ばすとアプリ全体が playback + longFormAudio のまま残るため（契約表 9）。
+// 両方に成功したときだけ保存値を捨てる。どちらかが失敗したら保持し、次の release で再試行する。
 static void audio_session_restore(void) {
     pthread_mutex_lock(&g_audio_lock);
     if (g_audio_saved) {
         AVAudioSession *s = [AVAudioSession sharedInstance];
-        BOOL ok = YES;
+        BOOL deactivated = NO;
         // prepareToPlay 等の暗黙の有効化も解くため、g_audio_active に関わらず無効化する。
         if ([s setActive:NO
               withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
                     error:nil]) {
             g_audio_active = NO;
-        } else {
-            ok = NO;
+            deactivated = YES;
         }
-        if (ok && [s setCategory:g_saved_category
-                              mode:g_saved_mode
-                routeSharingPolicy:g_saved_policy
-                           options:g_saved_options
-                             error:nil]) {
+        BOOL restored = [s setCategory:g_saved_category
+                                  mode:g_saved_mode
+                    routeSharingPolicy:g_saved_policy
+                               options:g_saved_options
+                                 error:nil];
+        if (deactivated && restored) {
             g_audio_saved = NO;
             g_saved_category = nil;
             g_saved_mode = nil;
@@ -303,7 +306,11 @@ static void ensure_observers(void) {
                                                object:nil
                                                 queue:main
                                            usingBlock:^(NSNotification *_Nonnull __unused n) {
-                                             notify_changed();
+                                             // release 後（未準備）は再描画を起こさない。
+                                             pthread_mutex_lock(&g_lock);
+                                             BOOL prepared = g_gen != 0;
+                                             pthread_mutex_unlock(&g_lock);
+                                             if (prepared) notify_changed();
                                            }];
     });
 }
@@ -452,7 +459,8 @@ int32_t fandhe_apple_cast_stop(uint64_t gen) {
     if (!pthread_main_np()) return RC_NOT_MAIN;
     pthread_mutex_lock(&g_lock);
     AVAudioPlayer *player = (gen != 0 && gen == g_gen) ? g_player : nil;
-    BOOL playing = g_playback == PB_PLAYING;
+    // Interrupted（pause 済み）も止める。止めずに 0 を返すと停止できたように見える嘘の成功になる。
+    BOOL playing = g_playback == PB_PLAYING || g_playback == PB_INTERRUPTED;
     if (player && playing) g_playback = PB_STOPPED;
     if (player) g_disconnected = NO;
     pthread_mutex_unlock(&g_lock);

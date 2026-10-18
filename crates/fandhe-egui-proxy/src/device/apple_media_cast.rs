@@ -1,7 +1,7 @@
 //! macOS / iOS 共用の外部機器への再生実装（Issue #386 macOS、#387 iOS）。
 //! `device/media_cast.rs::platform_cast` の macOS 経路と、`ios_media_cast` 経由の iOS 経路から呼ばれる。
-//! `apple/fandhe_apple_media_cast.m`（`AVRoutePickerView` + `AVAudioPlayer` + Core Audio の読み取り、
-//! `build.rs` の macOS 分岐がコンパイル）を C ABI で呼ぶ薄いラッパーで、世代の採番だけを Rust 側で持つ。
+//! `apple/fandhe_apple_media_cast.m`（`AVRoutePickerView` + `AVAudioPlayer`。経路の読み取りは macOS が Core Audio、
+//! iOS が `AVAudioSession`。`build.rs` の macOS・iOS 双方の分岐がコンパイル）を C ABI で呼ぶ薄いラッパーで、世代の採番だけを Rust 側で持つ。
 //! 戻りコードを契約上のエラーへ写す純関数は [`result_from_code`]、状態コードは [`playback_from_code`] /
 //! [`route_from_code`]。`unsafe` は extern 呼び出しに閉じ、出力先の名前はログに出さず
 //! `fandhe_device::device_info::clean_text` を通す。
