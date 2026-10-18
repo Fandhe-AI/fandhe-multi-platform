@@ -143,13 +143,21 @@ fn drive_request(
 }
 
 /// 列挙待ちか。モジュールが存在する macOS（とテスト）でのみ Apple 側の判定を参照し、他 OS は常に false。
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 fn enumeration_pending() -> bool {
-    super::apple_background_download::enumeration_pending()
+    #[cfg(any(target_os = "macos", test))]
+    if super::apple_background_download::enumeration_pending() {
+        return true;
+    }
+    #[cfg(any(target_os = "windows", test))]
+    if super::windows_background_download::enumeration_pending() {
+        return true;
+    }
+    false
 }
 
-/// 列挙待ちか（Apple 側モジュールが無い OS では常に false）。
-#[cfg(not(any(target_os = "macos", test)))]
+/// 列挙待ちか（再接続モジュールが無い OS では常に false）。
+#[cfg(not(any(target_os = "macos", target_os = "windows", test)))]
 fn enumeration_pending() -> bool {
     false
 }

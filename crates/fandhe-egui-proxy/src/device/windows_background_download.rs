@@ -152,6 +152,17 @@ fn download_path(local_app_data: Option<OsString>) -> Result<PathBuf, DeviceErro
     Ok(base.join(DIR_NAME).join(FILE_NAME))
 }
 
+/// 起動時の再接続（ジョブ列挙）がワーカーで終わったか。終わるまで画面側は継続ポーリングする
+/// （ワーカーから再描画を起こせないため。契約表 4）。
+#[cfg(any(target_os = "windows", test))]
+static ENUMERATED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 列挙待ちか。画面ドライバ（`background_download.rs`）が `drive_poll` の継続判定と開始要求の保留に使う。
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn enumeration_pending() -> bool {
+    cfg!(target_os = "windows") && !ENUMERATED.load(std::sync::atomic::Ordering::Acquire)
+}
+
 /// Windows の実装を返す。ワーカーを 1 本立てる。BITS を使えない環境では各メソッドが `Unsupported`。
 #[cfg(target_os = "windows")]
 pub(crate) fn implementation() -> Arc<dyn BackgroundDownload> {
@@ -305,6 +316,7 @@ mod worker {
     //! BITS を駆動するワーカーと、それを包む `BackgroundDownload` 実装。
 
     use std::path::Path;
+    use std::sync::atomic::Ordering;
     use std::sync::mpsc::{self, RecvTimeoutError, Sender};
     use std::sync::{Arc, Mutex, PoisonError};
     use std::time::Duration;
@@ -318,8 +330,8 @@ mod worker {
     };
 
     use super::{
-        com, download_path, error_status, map_hresult, running, JobState, FAILED_CANCEL,
-        FAILED_OTHER, FAILED_SAVE, FAILED_START, JOB_NAME, SIZE_UNKNOWN,
+        com, download_path, error_status, map_hresult, running, JobState, ENUMERATED,
+        FAILED_CANCEL, FAILED_OTHER, FAILED_SAVE, FAILED_START, JOB_NAME, SIZE_UNKNOWN,
     };
 
     /// 追跡中のジョブをポーリングする間隔。
@@ -332,20 +344,35 @@ mod worker {
         Cancel(Reply),
     }
 
+    /// ワーカーと `status()` が共有する状態。
+    struct Shared {
+        status: DownloadStatus,
+        /// BITS を使えない（初期化失敗）。初期化が終わるまでは `false`。
+        unsupported: bool,
+    }
+
     pub(super) struct WindowsBackgroundDownload {
         tx: Mutex<Sender<Cmd>>,
-        shared: Arc<Mutex<DownloadStatus>>,
+        shared: Arc<Mutex<Shared>>,
     }
 
     impl WindowsBackgroundDownload {
         pub(super) fn spawn() -> Self {
             let (tx, rx) = mpsc::channel();
-            let shared = Arc::new(Mutex::new(DownloadStatus::Idle));
+            let shared = Arc::new(Mutex::new(Shared {
+                status: DownloadStatus::Idle,
+                unsupported: false,
+            }));
             let s = Arc::clone(&shared);
             // 起動に失敗しても `tx` の送信が失敗するだけで、各メソッドは `Internal` を返す。
-            let _ = std::thread::Builder::new()
+            // 列挙は終わらないので、画面が継続ポーリングしないよう終了済みにする。
+            if std::thread::Builder::new()
                 .name("fandhe-background-download".into())
-                .spawn(move || run(rx, s));
+                .spawn(move || run(rx, s))
+                .is_err()
+            {
+                ENUMERATED.store(true, Ordering::Release);
+            }
             Self {
                 tx: Mutex::new(tx),
                 shared,
@@ -374,11 +401,11 @@ mod worker {
             self.call(Cmd::Cancel)
         }
         fn status(&self) -> Result<DownloadStatus, DeviceError> {
-            Ok(self
-                .shared
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .clone())
+            let g = self.shared.lock().unwrap_or_else(PoisonError::into_inner);
+            if g.unsupported {
+                return Err(DeviceError::Unsupported("background download"));
+            }
+            Ok(g.status.clone())
         }
     }
 
@@ -386,18 +413,27 @@ mod worker {
         /// `None` は BITS を使えない環境（各操作が `Unsupported`）。
         mgr: Option<IBackgroundCopyManager>,
         tracked: Option<IBackgroundCopyJob>,
-        shared: Arc<Mutex<DownloadStatus>>,
+        /// 取り消しに失敗して BITS に残っている追跡外のジョブ。次のポーリングと `cancel` で再試行する。
+        stale: Vec<IBackgroundCopyJob>,
+        shared: Arc<Mutex<Shared>>,
     }
 
-    fn run(rx: mpsc::Receiver<Cmd>, shared: Arc<Mutex<DownloadStatus>>) {
+    fn run(rx: mpsc::Receiver<Cmd>, shared: Arc<Mutex<Shared>>) {
         // COM のガードはジョブより後に解放する（先に宣言し、`w` を先に drop する）。
         let com_guard = super::super::windows_notification::ComInit::new("background download");
         let mut w = Worker {
             mgr: com_guard.is_ok().then(|| com::manager().ok()).flatten(),
             tracked: None,
+            stale: Vec::new(),
             shared,
         };
         w.reconnect();
+        // 初期化結果は列挙の完了より先に公開する（完了を見た画面が Idle を見ないように）。
+        w.shared
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .unsupported = w.mgr.is_none();
+        ENUMERATED.store(true, Ordering::Release);
         loop {
             let cmd = if w.tracked.is_some() {
                 match rx.recv_timeout(POLL_INTERVAL) {
@@ -432,7 +468,25 @@ mod worker {
 
     impl Worker {
         fn set(&self, s: DownloadStatus) {
-            *self.shared.lock().unwrap_or_else(PoisonError::into_inner) = s;
+            self.shared
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .status = s;
+        }
+
+        /// ジョブを取り消す。BITS から消えた（取り消し済み・終端・不在）なら `true`。
+        /// それ以外の失敗は `false` で、呼び出し側が追跡か `stale` に残して再試行する（契約表 9）。
+        fn release(job: &IBackgroundCopyJob) -> bool {
+            match com::cancel(job) {
+                Ok(()) => true,
+                Err(e) => matches!(e.code().0, BG_E_INVALID_STATE | BG_E_NOT_FOUND),
+            }
+        }
+
+        /// 取り消せなかった追跡外ジョブを再試行する。残りがあれば `false`。
+        fn drain_stale(&mut self) -> bool {
+            self.stale.retain(|j| !Self::release(j));
+            self.stale.is_empty()
         }
 
         fn failed(&self, msg: &str) {
@@ -461,8 +515,8 @@ mod worker {
                     }
                     self.set(running(0, SIZE_UNKNOWN));
                     self.tracked = Some(job);
-                } else {
-                    let _ = com::cancel(&job);
+                } else if !Self::release(&job) {
+                    self.stale.push(job);
                 }
             }
             self.poll();
@@ -470,7 +524,8 @@ mod worker {
 
         fn start(&mut self, url: &str) -> Result<(), DeviceError> {
             let result = self.start_inner(url);
-            if result.is_err() {
+            // 旧ジョブが追跡に残っている（転送継続中の）経路では Failed を書かない。
+            if result.is_err() && self.tracked.is_none() {
                 self.failed(FAILED_START);
             }
             result
@@ -506,6 +561,12 @@ mod worker {
         }
 
         fn cancel(&mut self) -> Result<(), DeviceError> {
+            if self.mgr.is_none() {
+                return Err(DeviceError::Unsupported("background download"));
+            }
+            if !self.drain_stale() {
+                return Err(DeviceError::Internal("background download"));
+            }
             if let Some(job) = self.tracked.take() {
                 if let Err(e) = com::cancel(&job) {
                     // ジョブが既に無い・終端なら取り消し済みと同じ。それ以外は止まっていない。
@@ -526,6 +587,7 @@ mod worker {
 
         /// 追跡中のジョブを 1 回読み、状態を更新する。終端に達したら追跡を外す。
         fn poll(&mut self) {
+            self.drain_stale();
             let Some(job) = self.tracked.clone() else {
                 return;
             };
@@ -550,9 +612,11 @@ mod worker {
                 JobState::Transferred => self.finish_transferred(&job),
                 JobState::Error => {
                     let status = error_status(com::error_code(&job));
-                    let _ = com::cancel(&job);
-                    self.tracked = None;
-                    self.set(status);
+                    // 取り消せなければ追跡を残し、次のポーリングで再試行する。
+                    if Self::release(&job) {
+                        self.tracked = None;
+                        self.set(status);
+                    }
                 }
                 // 外部から取り消された。成功にしない。
                 JobState::Dead => {
@@ -563,9 +627,10 @@ mod worker {
         }
 
         fn finish_failed(&mut self, job: &IBackgroundCopyJob, msg: &str) {
-            let _ = com::cancel(job);
-            self.tracked = None;
-            self.failed(msg);
+            if Self::release(job) {
+                self.tracked = None;
+                self.failed(msg);
+            }
         }
 
         fn finish_transferred(&mut self, job: &IBackgroundCopyJob) {
