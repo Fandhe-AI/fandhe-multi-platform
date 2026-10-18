@@ -123,14 +123,13 @@ static void audio_session_restore(void) {
     if (g_audio_saved) {
         AVAudioSession *s = [AVAudioSession sharedInstance];
         BOOL ok = YES;
-        if (g_audio_active) {
-            if ([s setActive:NO
-                  withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
-                        error:nil]) {
-                g_audio_active = NO;
-            } else {
-                ok = NO;
-            }
+        // prepareToPlay 等の暗黙の有効化も解くため、g_audio_active に関わらず無効化する。
+        if ([s setActive:NO
+              withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
+                    error:nil]) {
+            g_audio_active = NO;
+        } else {
+            ok = NO;
         }
         if (ok && [s setCategory:g_saved_category
                               mode:g_saved_mode
@@ -374,7 +373,12 @@ int32_t fandhe_apple_cast_prepare(uint64_t gen, const uint8_t *wav, size_t len) 
             NSData *data = [NSData dataWithBytes:wav length:len];
             NSError *error = nil;
             AVAudioPlayer *player = [[AVAudioPlayer alloc] initWithData:data error:&error];
+#if TARGET_OS_IOS
+            // iOS の prepareToPlay は音声セッションを暗黙に有効化し他アプリの音を止めるため、play まで遅延する。
+            if (!player) {
+#else
             if (!player || ![player prepareToPlay]) {
+#endif
 #if TARGET_OS_IOS
                 audio_session_restore();
 #endif
