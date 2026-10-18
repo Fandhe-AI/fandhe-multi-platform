@@ -29,6 +29,8 @@
 // DidEnterBackground / WillEnterForeground 通知で main が更新するアトミックフラグで判定する。
 // 背景のときだけ Rust を呼ばず CommandFailed を返す（背景で受けた操作に成功を返さない。
 // 前景へ戻ると media-playback が中断扱いにし、ドライバが取り下げるので溜まった操作では再開しない）。
+// 前景復帰直後で、ドライバがまだ中断を見て取り下げていない間の操作も、再生側（fandhe_apple_media_playback.m）の
+// phase が Interrupted なら CommandFailed を返す（後で捨てる操作に成功を返さない）。
 // Inactive（コントロールセンター・通知センターを開いた間、着信など）は前景として扱い、そこからの操作は受け付ける
 // （「前景だけ」の決定は背景を拒否する意味。Inactive を拒否するとコントロールセンターの操作が全部失敗する）。
 // handler は Rust の `fandhe_rust_now_playing_command(int32_t code)`（1 = Play、2 = Pause、3 = Toggle）を呼ぶだけで、
@@ -73,6 +75,10 @@ static void fandhe_set_enabled(MPRemoteCommand *cmd, BOOL enabled) {
 // アプリが背景か（Inactive は前景扱い）。handler は OS のスレッドで呼ばれ得るため UIApplication を直接読まず、
 // main で更新したこのフラグを読む（Main Thread Checker 違反を避ける）。
 static _Atomic bool g_background = false;
+
+// fandhe_apple_media_playback.m の状態取得（同じ静的ライブラリ内）。phase 6 = Interrupted。
+extern void fandhe_apple_media_playback_snapshot(uint64_t *gen, int32_t *phase, double *pos, double *dur);
+static const int32_t kPlaybackPhaseInterrupted = 6;
 #endif
 
 static void fandhe_register(MPRemoteCommand *cmd, int32_t code) {
@@ -81,6 +87,15 @@ static void fandhe_register(MPRemoteCommand *cmd, int32_t code) {
         (void)event;
 #if TARGET_OS_IOS
         if (atomic_load(&g_background)) {
+            return MPRemoteCommandHandlerStatusCommandFailed;
+        }
+        // 前景復帰の直後は、ドライバが中断を見て取り下げる前に操作が届き得る（WillEnterForeground で
+        // g_background は先に false になる）。再生側が中断済みなら、後で捨てる操作に成功を返さない。
+        uint64_t gen = 0;
+        int32_t phase = 0;
+        double pos = 0, dur = 0;
+        fandhe_apple_media_playback_snapshot(&gen, &phase, &pos, &dur);
+        if (phase == kPlaybackPhaseInterrupted) {
             return MPRemoteCommandHandlerStatusCommandFailed;
         }
 #endif
