@@ -128,24 +128,21 @@ fn sync(
         }
     };
 
-    // 再開要求（Play・一時停止からの Toggle）を送ったらそこで取り出しを止め、後続は次の
-    // Loading 明けまで残す（Loading 中の apply_os_command に後続を捨てさせない）。
-    let mut playing_now = playing;
+    // 状態を変える操作（再生・一時停止・Toggle）は 1 フレームに 1 件だけ送る。続けて送ると
+    // 同じ drain で連続適用され、途中の Pause が後続の Play で上書きされて消える。
+    // 後続は次フレーム以降（再開の確定待ちなら Loading 明け）まで共有状態に残す。
+    // 状態を変えない操作（再生中の Play・一時停止中の Pause）は読み飛ばして続ける。
     while let Some(cmd) = cmds.take() {
-        let resumes = match cmd {
-            OsMediaCommand::Play | OsMediaCommand::Toggle => !playing_now,
-            OsMediaCommand::Pause => false,
+        let changes = match cmd {
+            OsMediaCommand::Play => !playing,
+            OsMediaCommand::Pause => playing,
+            OsMediaCommand::Toggle => true,
         };
-        match cmd {
-            OsMediaCommand::Pause => playing_now = false,
-            OsMediaCommand::Toggle if playing_now => playing_now = false,
-            _ => {}
-        }
         let cmd = to_screen_command(cmd);
         let _ = sender.send(Box::new(move |s: &mut AudioPlayState| {
             apply_os_command(s, cmd)
         }));
-        if resumes {
+        if changes {
             break;
         }
     }
@@ -368,6 +365,20 @@ mod tests {
         );
         h.frame();
         assert_eq!(h.state.phase, AudioPhase::Paused);
+    }
+
+    #[test]
+    fn pause_then_play_in_one_batch_is_applied_one_per_frame() {
+        let mut h = H::new();
+        h.frame();
+        h.cmds.push(OsMediaCommand::Pause);
+        h.cmds.push(OsMediaCommand::Play);
+        h.frame();
+        // Pause だけが適用され、Play は次フレームまで残る。
+        assert_eq!(h.state.phase, AudioPhase::Paused);
+        assert_eq!(h.state.last_os_command, Some(OsCommandSeen::Pause));
+        h.frame();
+        assert_eq!(h.state.last_os_command, Some(OsCommandSeen::Play));
     }
 
     #[test]
