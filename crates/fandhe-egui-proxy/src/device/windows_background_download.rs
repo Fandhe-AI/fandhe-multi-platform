@@ -157,6 +157,15 @@ fn download_path(local_app_data: Option<OsString>) -> Result<PathBuf, DeviceErro
 #[cfg(any(target_os = "windows", test))]
 static ENUMERATED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// 列挙の結果を反映する。失敗中は待ち（`pending`）を保ち、既存ジョブを把握できてから完了にする。
+/// 開始要求が既存の転送を取り消して置き換えるのを防ぐ（契約表 2・4）。
+#[cfg(any(target_os = "windows", test))]
+fn mark_enumerated(enum_failed: bool) {
+    if !enum_failed {
+        ENUMERATED.store(true, std::sync::atomic::Ordering::Release);
+    }
+}
+
 /// 列挙待ちか。画面ドライバ（`background_download.rs`）が `drive_poll` の継続判定と開始要求の保留に使う。
 #[cfg(any(target_os = "windows", test))]
 pub(crate) fn enumeration_pending() -> bool {
@@ -331,8 +340,8 @@ mod worker {
     };
 
     use super::{
-        com, download_path, error_status, map_hresult, running, JobState, ENUMERATED,
-        FAILED_CANCEL, FAILED_OTHER, FAILED_SAVE, FAILED_START, JOB_NAME, SIZE_UNKNOWN,
+        com, download_path, error_status, map_hresult, mark_enumerated, running, JobState,
+        ENUMERATED, FAILED_CANCEL, FAILED_OTHER, FAILED_SAVE, FAILED_START, JOB_NAME, SIZE_UNKNOWN,
     };
 
     /// 追跡中のジョブをポーリングする間隔。
@@ -437,7 +446,7 @@ mod worker {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .unsupported = w.mgr.is_none();
-        ENUMERATED.store(true, Ordering::Release);
+        mark_enumerated(w.enum_failed);
         loop {
             let cmd = if w.tracked.is_some() || !w.stale.is_empty() || w.enum_failed {
                 match rx.recv_timeout(POLL_INTERVAL) {
@@ -461,6 +470,8 @@ mod worker {
                 None => {}
             }
             w.poll();
+            // 列挙の再試行が成功したらここで完了にする。
+            mark_enumerated(w.enum_failed);
         }
         drop(w);
         drop(com_guard);
@@ -704,6 +715,16 @@ mod worker {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn 列挙失敗中は列挙完了にしない() {
+        use std::sync::atomic::Ordering;
+        super::ENUMERATED.store(false, Ordering::Release);
+        super::mark_enumerated(true);
+        assert!(!super::ENUMERATED.load(Ordering::Acquire));
+        super::mark_enumerated(false);
+        assert!(super::ENUMERATED.load(Ordering::Acquire));
+    }
+
     use super::*;
 
     #[test]
