@@ -17,11 +17,14 @@
       "note": "未実装。転送は OS の別プロセスが行い、アプリが suspend・終了されても続く。ただし利用者がマルチタスク画面から終了すると取り消される。完了時は `handleEventsForBackgroundURLSession` で受ける"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`DownloadManager`",
-      "perm": "`INTERNET`（宣言済み）。アプリ専用の外部領域へ保存するので保存の権限は要らない。ローカルの確認用サーバー（127.0.0.1・localhost）にだけ平文を許す network security config を置く",
+      "perm": "`INTERNET`（宣言済み）。アプリ専用の外部領域（`getExternalFilesDir`）へ保存するので保存の権限は要らない。ローカルの確認用サーバー（127.0.0.1・localhost）にだけ平文を許す network security config を置く",
       "url": "https://developer.android.com/reference/android/app/DownloadManager",
-      "note": "未実装。GMS に依存しない。`Request` は http と https だけを受け付け、`remove` は途中まで落としたファイルも消す"
+      "note": "実装済み（#392）。固定 URL の小さなファイル 1 つを `DownloadManager` に依頼し、待機・転送中・完了（サイズ）・取り消し・失敗を出す。pull 型の同期 JNI で、ダウンロード id は `SharedPreferences` に保存し、状態は OS の行から読む。結果は取り消し・行が消えた転送（取り消し扱い）と、HTTP エラー・0 バイト・保存失敗・接続失敗（失敗）を分ける。保存先はアプリ専用の外部領域の固定名 1 ファイルで、開始と取り消しで消す。転送の持ち主は OS なので Activity の作り直しでは取り消さない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、開始失敗と取り消しでファイルと id を残さない。守らない範囲: 再起動後の完了・失敗表示は失われる、リダイレクト先を再検証できない、`check_url` が通す私設 IPv4 への平文は OS 側で失敗し「HTTP 400」と出ることがある、接続できない間は転送中のままになりうる、複数プロセス。実機での正常系・サーバー停止・取り消し・アプリ終了後も続くか（`adb reverse tcp:8787 tcp:8787`）は #380 で確かめる",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#380）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_background_download.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/BackgroundDownloadHelper.java + platforms/android/app/src/main/res/xml/network_security_config.xml + crates/fandhe-egui-proxy/src/device/background_download.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-device/src/background_download.rs、Issue #392"
     },
     "macos": {
       "status": "done",
