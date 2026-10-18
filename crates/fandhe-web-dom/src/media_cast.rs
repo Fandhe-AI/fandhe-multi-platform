@@ -89,6 +89,41 @@ pub(crate) fn play_failure(name: Option<&str>) -> Option<CastShowFailure> {
     }
 }
 
+/// ピッカー（`prompt()`）の保留と要求 id。再生・経路更新では解除せず、完了でだけ解除する。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+#[derive(Debug, Default)]
+pub(crate) struct PickerSlot {
+    seq: u64,
+    pending: Option<u64>,
+}
+
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+impl PickerSlot {
+    /// 保留中でなければ新しい要求 id を割り当てる。保留中は `None`（`prompt()` を再発行しない）。
+    pub(crate) fn begin(&mut self) -> Option<u64> {
+        if self.pending.is_some() {
+            return None;
+        }
+        self.seq += 1;
+        self.pending = Some(self.seq);
+        Some(self.seq)
+    }
+
+    /// 現在の要求の完了なら解除して `true`。古い要求の結果は `false`（捨てる）。
+    pub(crate) fn finish(&mut self, rid: u64) -> bool {
+        if self.pending == Some(rid) {
+            self.pending = None;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn is_pending(&self) -> bool {
+        self.pending.is_some()
+    }
+}
+
 /// 起点から期限以上経ったか（`performance.now()` の単調時計、ミリ秒）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn is_late(started_ms: f64, now_ms: f64, deadline: Duration) -> bool {
@@ -119,7 +154,8 @@ mod web {
     use web_sys::{Blob, BlobPropertyBag, EventTarget, HtmlMediaElement, Url};
 
     use super::{
-        is_late, play_failure, prompt_outcome, route_from_state, PromptOutcome, FAILED_CAST,
+        is_late, play_failure, prompt_outcome, route_from_state, PickerSlot, PromptOutcome,
+        FAILED_CAST,
     };
     use crate::mount::{is_live, Applier};
 
@@ -139,6 +175,9 @@ mod web {
         id: u64,
         /// effect が最後に見た画面の世代。
         gen: u64,
+        /// ピッカー（`prompt()`）の保留中の要求 id。再生・経路更新では解除せず、
+        /// ピッカーの完了（選択・拒否・キャンセル）でだけ解除する。
+        picker: PickerSlot,
         /// 再生開始の確定待ち（世代, 起点 `performance.now()`）。
         pending: Option<(u64, f64)>,
         start_timer: Option<Timer>,
@@ -227,11 +266,17 @@ mod web {
         }
     }
 
+    /// 実際の `remote.state` から経路を決める。ピッカー保留中は `Local` を `Choosing` に保つ。
+    fn current_route(s: &Session) -> CastShowRoute {
+        match route_from_state(&remote_state(&s.remote)) {
+            CastShowRoute::Local if s.picker.is_pending() => CastShowRoute::Choosing,
+            r => r,
+        }
+    }
+
     /// 保持フラグではなく実際の `remote.state` を読んで経路を戻す（契約表 1）。
     fn post_current_route(applier: &Applier<State>, mount: u64) {
-        if let Some((g, r)) = with(mount, |s| {
-            (s.gen, route_from_state(&remote_state(&s.remote)))
-        }) {
+        if let Some((g, r)) = with(mount, |s| (s.gen, current_route(s))) {
             post_update(applier, g, CastShowUpdate::Route(r));
         }
     }
@@ -390,6 +435,7 @@ mod web {
             url: String::new(),
             id: gen,
             gen,
+            picker: PickerSlot::default(),
             pending: None,
             start_timer: None,
             connecting_since: None,
@@ -526,7 +572,7 @@ mod web {
                     let route = with(mount, |s| {
                         s.pending = None;
                         clear_timer(s.start_timer.take());
-                        route_from_state(&remote_state(&s.remote))
+                        current_route(s)
                     });
                     if let Some(route) = route {
                         a.apply(move |st| {
@@ -578,8 +624,15 @@ mod web {
     }
 
     fn do_show_picker(applier: &Applier<State>, mount: u64, g: u64) {
-        let Some((remote, sid)) = with(mount, |s| (s.remote.clone(), s.id)) else {
+        // 保留中のピッカーがあれば再発行せず、Choosing を保つ（prompt() の二重呼び出し防止）。
+        let started = with(mount, |s| {
+            s.picker.begin().map(|rid| (s.remote.clone(), s.id, rid))
+        });
+        let Some(started) = started else {
             return post_update(applier, g, CastShowUpdate::Failed(fixed_failure()));
+        };
+        let Some((remote, sid, rid)) = started else {
+            return post_update(applier, g, CastShowUpdate::Route(CastShowRoute::Choosing));
         };
         // await の後では transient activation を失うため、ここ（同期）で呼ぶ。
         let ret = get(&remote, "prompt")
@@ -589,16 +642,17 @@ mod web {
         post_update(applier, g, CastShowUpdate::Route(CastShowRoute::Choosing));
         let promise = match ret {
             Ok(p) => p.dyn_into::<Promise>().ok(),
-            Err(e) => return after_prompt(applier, mount, sid, Err(e)),
+            Err(e) => return after_prompt(applier, mount, (sid, rid), Err(e)),
         };
         let Some(p) = promise else {
+            with(mount, |s| s.picker.finish(rid));
             return post_current_route(applier, mount);
         };
         let a = applier.clone();
         spawn_local(async move {
             let r = JsFuture::from(p).await.map(|_| ());
             if is_live(mount) {
-                after_prompt(&a, mount, sid, r);
+                after_prompt(&a, mount, (sid, rid), r);
             }
         });
     }
@@ -612,9 +666,16 @@ mod web {
 
     /// 選択結果を現在の状態へ確定させる。再生操作で世代が進んでいても、`Choosing` のままなら回収する。
     /// 停止・中断中は core が `Failed` を受けないため、ここで直接失敗へ移して `Choosing` を残さない。
-    /// 要求時のセッション `sid` が現存しなければ結果を捨てる（再準備後の新セッションを触らない）。
-    fn after_prompt(applier: &Applier<State>, mount: u64, sid: u64, r: Result<(), JsValue>) {
-        if with(mount, |s| s.id) != Some(sid) {
+    /// 要求時のセッション `sid` と要求 id `rid` が現在の保留と一致しなければ結果を捨てる
+    /// （再準備後の新セッション・古い要求の結果を触らない）。一致したときだけ保留を解除する。
+    fn after_prompt(
+        applier: &Applier<State>,
+        mount: u64,
+        (sid, rid): (u64, u64),
+        r: Result<(), JsValue>,
+    ) {
+        let mine = with(mount, |s| s.id == sid && s.picker.finish(rid));
+        if mine != Some(true) {
             return;
         }
         let outcome = match r {
@@ -740,6 +801,21 @@ mod tests {
             play_failure(Some("X")),
             Some(CastShowFailure::Failed(FAILED_CAST.to_string()))
         );
+    }
+
+    #[test]
+    fn picker_slot_blocks_reissue_and_drops_stale() {
+        let mut p = PickerSlot::default();
+        let a = p.begin().expect("first");
+        // 保留中（再生成功を挟んでも）は再発行しない。
+        assert!(p.begin().is_none());
+        assert!(p.is_pending());
+        assert!(!p.finish(a + 1));
+        assert!(p.finish(a));
+        assert!(!p.is_pending());
+        let b = p.begin().expect("after finish");
+        assert_ne!(a, b);
+        assert!(!p.finish(a));
     }
 
     #[test]
