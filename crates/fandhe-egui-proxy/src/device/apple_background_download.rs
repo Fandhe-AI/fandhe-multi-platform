@@ -227,7 +227,8 @@ static SHARED: Mutex<Inner> = Mutex::new(Inner::new());
 /// 画面側は継続ポーリングする（macOS は OS コールバックから再描画を起こせない、契約表 4）。
 static ENUMERATED: AtomicBool = AtomicBool::new(false);
 
-/// 列挙待ちか。macOS の画面ドライバが `drive_poll` の継続判定に足す。
+/// 列挙待ちか。macOS の画面ドライバが `drive_poll` の継続判定に足す（iOS は OS コールバックから再描画を起こせるため未使用）。
+#[cfg_attr(target_os = "ios", allow(dead_code))]
 pub(crate) fn enumeration_pending() -> bool {
     cfg!(target_os = "macos") && !ENUMERATED.load(Ordering::Acquire)
 }

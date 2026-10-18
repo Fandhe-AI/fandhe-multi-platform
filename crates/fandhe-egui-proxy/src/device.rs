@@ -187,11 +187,9 @@ pub mod app_badge;
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
 pub mod apple_accessibility_prefs;
 /// Issue #390（macOS）/ #391（iOS）: バックグラウンドダウンロード実装（`apple/fandhe_apple_background_download.m` の
-/// background `NSURLSession` を呼ぶ C ABI ラッパー）。`device/background_download.rs` の macOS 経路から呼ばれる。
+/// background `NSURLSession` を呼ぶ C ABI ラッパー）。`device/background_download.rs` の macOS / iOS 経路から呼ばれる。
 /// 状態遷移の純ロジックをホストの `cargo test` で検査するため cfg に `test` を含める。
-/// iOS は b-ios が委譲するまで未使用。
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
-#[cfg_attr(target_os = "ios", allow(dead_code))]
 pub mod apple_background_download;
 /// Issue #906: iOS / macOS 向け生体認証実装（`apple/fandhe_apple_biometric.m` を呼ぶ
 /// C ABI ラッパー）。`device/biometric_auth.rs` の macOS/iOS 経路から呼ばれる。
