@@ -22,7 +22,8 @@
 //!
 //! handler は取り下げ（`clear`）では null に戻さず、マウント破棄（[`release_mount`]）で外す。null に戻すと
 //! ブラウザの既定動作が `<audio>` を直接再生・一時停止し、画面は Stopped なのに鳴る食い違いが起きるため。
-//! 取り下げ後・背景（`Interrupted`）で届いた操作は未 arm で push されず、何も起きない。
+//! 取り下げ後・背景（`Interrupted`、および一時停止中の `document.hidden`）で届いた操作は push されず、
+//! 積まれていても effect で捨てる。
 //! 背景遷移は `media_playback` が `Interrupted` にし、そのあとの effect で本モジュールが取り下げる。
 //!
 //! # 守る範囲 / 守らない範囲
@@ -152,11 +153,19 @@ mod web {
         })
     }
 
-    /// handler の中身は push だけ。積めたときだけ effect を起こす（契約表 11）。
+    /// 背景（`document.hidden`）か。一時停止中は `media_playback::interrupt` が何もしないため、
+    /// 背景での再生開始はここで防ぐ（前景だけで扱う契約）。
+    fn is_hidden() -> bool {
+        web_sys::window()
+            .and_then(|w| w.document())
+            .is_some_and(|d| d.hidden())
+    }
+
+    /// handler の中身は push だけ。積めたときだけ effect を起こす（契約表 11）。背景で届いた操作は捨てる。
     fn handler(cmds: &SharedOsCommand, cmd: OsMediaCommand, applier: &Applier<State>) -> Handler {
         let (cmds, applier) = (cmds.clone(), applier.clone());
         Closure::new(move |_: JsValue| {
-            if cmds.push(cmd) {
+            if !is_hidden() && cmds.push(cmd) {
                 applier.apply(|_| {});
             }
         })
@@ -255,7 +264,12 @@ mod web {
                 handlers: None,
             });
             // 状態を変える操作は 1 回の effect で 1 件だけ返す（変えない操作は読み飛ばす）。
+            let hidden = is_hidden();
             while let Some(cmd) = e.cmds.take() {
+                // 背景では取り出して捨てる（積まれた後に hidden になった操作でも再生しない）。
+                if hidden {
+                    continue;
+                }
                 if changes_state(cmd, playing) {
                     let cmd = to_screen_command(cmd);
                     applier.apply(move |s| apply_os_command(s, cmd));
