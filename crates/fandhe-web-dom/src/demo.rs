@@ -40,6 +40,7 @@ use fandhe_core::screens::ble_scan::{current_screen as current_ble_scan_screen, 
 use fandhe_core::screens::camera_capture::{
     current_screen as current_camera_capture_screen, CameraCaptureState,
 };
+use fandhe_core::screens::cast_show::{current_screen as current_cast_show_screen, CastShowState};
 use fandhe_core::screens::checkbox_list::{checkbox_list_screen, CheckboxListState};
 use fandhe_core::screens::clipboard_text::{
     current_screen as current_clipboard_screen, ClipboardTextState,
@@ -1060,6 +1061,22 @@ pub fn mount_pip_show_screen(root_id: &str) -> Result<(), JsValue> {
         current_pip_show_screen(&initial_state),
         initial_state,
         super::picture_in_picture::pip_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「外部機器への再生」（親 #99、Issue #389）を
+/// マウントする検証専用エントリポイント。`super::media_cast::cast_show_effect` が
+/// Remote Playback API を駆動する（画面がボタンを常時出すため追加ボタンは不要）。
+#[wasm_bindgen]
+pub fn mount_cast_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = CastShowState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_cast_show_screen(&initial_state),
+        initial_state,
+        super::media_cast::cast_show_effect,
     )
 }
 
