@@ -1,30 +1,41 @@
-//! iOS 向けバックグラウンドダウンロードのスタブ（Issue #390。親 #100 の b-ios #391 が埋める）。
-//! `device/background_download.rs::implementation` の iOS 経路から呼ばれ、現状は `Unsupported`
-//! （成功を装わない）。`apple_background_download`（macOS と共用の background `NSURLSession`、`build.rs`
-//! は iOS 分岐でも `.m` をコンパイル済み）へ委譲するのが b-ios の仕事で、dispatch・`build.rs`・
-//! `device.rs` の `pub mod` 列は触らずに済む。
+//! iOS 向けバックグラウンドダウンロード実装（Issue #391。親 #100 の b-ios）。
+//! `device/background_download.rs::implementation` の iOS 経路から呼ばれ、macOS と共用の
+//! `apple_background_download`（`apple/fandhe_apple_background_download.m`、background `NSURLSession`）を返す。
+//! session を作れなければ `Unsupported`（成功を装うダミーにはしない）。Linux ホストの `cargo test` では
+//! 共用実装が無いため、関数と import は iOS 限定にしている。
 //!
-//! # b-ios への申し送り
+//! # iOS 固有の挙動
 //!
-//! - `Info.plist` に `NSAllowsLocalNetworking` が要る。`scripts/ios/verify-device-launch.sh` の
-//!   `plutil -insert` と衝突しうるので、キーの有無を見てから足す
-//! - アプリが再起動・バックグラウンド起動されたら `handleEventsForBackgroundURLSession` で
-//!   同じ identifier の session へ再接続する。[`register`] は `UIApplicationMain` より前に呼ばれる
-//! - 完了通知で `crate::ios::request_repaint` を呼び次フレームを起こす（契約表 4）
-//! - 利用者がマルチタスク画面から終了すると転送は取り消される（OS の挙動。doc に書く）
+//! - 転送は OS の別プロセスが行い、アプリが suspend されても続く。OS が転送完了でアプリを背景起動すると、
+//!   `ios/fandhe_ios_url_scheme.m` の application delegate が
+//!   `application:handleEventsForBackgroundURLSession:completionHandler:` を受け、`.m` の
+//!   `fandhe_apple_bgdl_handle_events` へ転送する。そこで同じ identifier の session を作り直して
+//!   保留中のイベントを delegate へ配らせ、配り終えたら completion handler を 1 回だけ呼ぶ。
+//! - 利用者がマルチタスク画面から終了すると OS が転送を取り消す（アプリ側では防げない）。
+//! - `UIBackgroundModes` は足さない（background session に不要。security.md A05）。
+//!
+//! # 再描画（契約表 4）
+//!
+//! OS コールバックが状態を変えた直後、`apple_background_download` の `imp::repaint()` が
+//! `crate::ios::request_repaint` を呼び次フレームを起こす（入力が無いと egui が描画せず表示が止まるため）。
+//!
+//! # 守る範囲と守らない範囲（契約表 11）
+//!
+//! 守る: 1 プロセス内の順序、世代による古い通知の破棄、嘘の成功の禁止、背景起動の完了通知を 1 回だけ返すこと。
+//! 守らない: 起動直後の再接続（非同期）を待たない開始（その間の開始は前の転送の置き換えになる）、
+//! 背景で失敗した理由と前回の完了表示（再起動で失われる）、複数プロセス。
 
-#[cfg(any(target_os = "ios", test))]
+#[cfg(target_os = "ios")]
 use std::sync::Arc;
 
-#[cfg(any(target_os = "ios", test))]
+#[cfg(target_os = "ios")]
 use fandhe_device::background_download::{BackgroundDownload, UnsupportedBackgroundDownload};
 
-/// iOS の実装を返す。b-ios が差し替えるまでは `Unsupported`。
-#[cfg(any(target_os = "ios", test))]
+/// iOS の実装を返す（macOS と共用）。session を作れなければ `Unsupported`。
+#[cfg(target_os = "ios")]
 pub(crate) fn implementation() -> Arc<dyn BackgroundDownload> {
-    Arc::new(UnsupportedBackgroundDownload)
+    match super::apple_background_download::instance() {
+        Some(d) => d,
+        None => Arc::new(UnsupportedBackgroundDownload),
+    }
 }
-
-/// `main()` が `UIApplicationMain` より前に呼ぶ登録口。b-ios が中身を埋める。
-#[cfg(any(target_os = "ios", test))]
-pub fn register() {}

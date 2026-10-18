@@ -1,6 +1,6 @@
 // Phase 11 の拡充ループ（親 #100）: OS 管理のバックグラウンドダウンロードを Apple（macOS / iOS）へ
-// 橋渡しする（Issue #390 macOS、iOS は b-ios #391）。background `NSURLSession` は iOS と macOS で
-// 同一 API のため 1 ファイルを共用する（Foundation のみ、UIKit / AppKit 非依存）。
+// 橋渡しする（Issue #390 macOS、#391 iOS）。background `NSURLSession` は iOS と macOS で
+// 同一 API のため 1 ファイルを共用する。iOS だけ背景起動の受け口（`TARGET_OS_IOS` の区画）を持つ。
 //
 // `crates/fandhe-egui-proxy/src/device/apple_background_download.rs` から C ABI 経由で呼ばれ、
 // delegate の通知は同ファイルの `fandhe_rust_bgdl_*`（`#[no_mangle]`）へ返す。`build.rs` が `cc` で
@@ -26,9 +26,19 @@
 //     // 0 = 成功（保存先が無いのも成功）/ 3 = 保存先を消せない / 4 = deadline_ms 内に OS task への取り消しを
 //     // 終えられなかった。世代 1 以上 upto_gen 以下の task だけ取り消す。task の列挙 completion が
 //     // `[task cancel]` を呼び終えるまで待ってから戻る（戻った時点で取り消し依頼が OS に渡っている）
+//   void fandhe_apple_bgdl_handle_events(NSString *identifier, void (^handler)(void));   // iOS のみ
+//     // main thread から呼ぶ（`ios/fandhe_ios_url_scheme.m` の application delegate が
+//     // `application:handleEventsForBackgroundURLSession:completionHandler:` から転送する）。identifier が
+//     // 違えば handler を即呼ぶ。一致すれば session を作り直し（冪等）、OS が保留中のイベントを配り終えた
+//     // `URLSessionDidFinishEventsForBackgroundURLSession:` で handler を main thread から 1 回だけ呼ぶ
+//     // （前の handler が残っていれば先にそれを呼ぶ）
 //   delegate → Rust の終了コード: 0 = 完了 / 1 = 取り消し / 2 = 接続系 / 3 = 保存失敗 / 4 = その他
 #import <Foundation/Foundation.h>
 #import <stdbool.h>
+#import <TargetConditionals.h>
+#if TARGET_OS_IOS
+#import <UIKit/UIKit.h>
+#endif
 
 extern void fandhe_rust_bgdl_progress(uint64_t gen, uint64_t received, int64_t total);
 extern bool fandhe_rust_bgdl_accept(uint64_t gen, int32_t http_status, uint64_t bytes, const char *final_url);
@@ -143,6 +153,25 @@ static int32_t remove_dest(void) {
         });
     }
 }
+
+#if TARGET_OS_IOS
+// 背景起動の completion handler。main thread だけが触る。
+static void (^g_events_handler)(void) = nil;
+
+// OS が保留中のイベントを配り終えた。delegate queue 上で呼ばれるので main へ非同期に移して handler を呼ぶ
+// （main への `dispatch_sync` はしない、契約表 11）。UI の更新は Rust 側が `request_repaint` で行う。
+- (void)URLSessionDidFinishEventsForBackgroundURLSession:(NSURLSession *)session {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @autoreleasepool {
+            void (^handler)(void) = g_events_handler;
+            g_events_handler = nil;
+            if (handler != nil) {
+                handler();
+            }
+        }
+    });
+}
+#endif
 
 // 失敗・取り消しの通知。成功（error == nil）は上の didFinishDownloadingToURL で報告済み。
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
@@ -262,3 +291,31 @@ int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen, uint64_t deadline_ms) {
         return code;
     }
 }
+
+#if TARGET_OS_IOS
+void fandhe_apple_bgdl_handle_events(NSString *identifier, void (^handler)(void)) {
+    @autoreleasepool {
+        if (handler == nil) {
+            return;
+        }
+        if (![identifier isEqualToString:kSessionId]) {
+            handler();  // 自分の session ではない。保持せず即返す。
+            return;
+        }
+        // 各 handler を必ず 1 回だけ呼ぶ。前のものが残っていれば先に呼んでから差し替える。
+        void (^previous)(void) = g_events_handler;
+        g_events_handler = [handler copy];
+        if (previous != nil) {
+            previous();
+        }
+        // session を作り直す（`dispatch_once` で冪等）。作れなければ配るイベントは無いので handler を返す。
+        if (fandhe_apple_bgdl_init() != 0) {
+            void (^h)(void) = g_events_handler;
+            g_events_handler = nil;
+            if (h != nil) {
+                h();
+            }
+        }
+    }
+}
+#endif

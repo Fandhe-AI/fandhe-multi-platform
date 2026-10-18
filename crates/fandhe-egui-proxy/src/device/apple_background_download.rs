@@ -1,5 +1,5 @@
-//! macOS・iOS 共用のバックグラウンドダウンロード実装（Issue #390 macOS、iOS は b-ios #391）。
-//! `device/background_download.rs::implementation` の macOS 経路から呼ばれる。
+//! macOS・iOS 共用のバックグラウンドダウンロード実装（Issue #390 macOS、#391 iOS）。
+//! `device/background_download.rs::implementation` の macOS 経路と、`ios_background_download` から呼ばれる。
 //! `apple/fandhe_apple_background_download.m`（background `NSURLSession`。`build.rs` の macOS・iOS 分岐が
 //! コンパイル）を C ABI で呼ぶ薄いラッパーで、転送の世代と状態は本モジュールの `Mutex<Inner>` が持つ。
 //! `.m` の delegate（直列キュー）が [`fandhe_rust_bgdl_progress`] 等を呼び、Rust 側が世代を照合して
@@ -270,7 +270,6 @@ mod imp {
 
     /// session を作って再接続を始め、実装を返す。session を作れなければ `None`（呼び出し側が
     /// `Unsupported` に倒す。ダミーの成功実装にはしない）。
-    #[cfg_attr(target_os = "ios", allow(dead_code))]
     pub(super) fn init() -> Option<Arc<dyn BackgroundDownload>> {
         // SAFETY: 引数なし。`.m` 側は `dispatch_once` で 1 回だけ session を作る。
         #[allow(unsafe_code)]
@@ -423,8 +422,8 @@ mod imp {
     }
 }
 
-/// macOS の実装。session を作れなければ `None`。
-#[cfg(target_os = "macos")]
+/// macOS・iOS の実装。session を作れなければ `None`。
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub(crate) fn instance(
 ) -> Option<std::sync::Arc<dyn fandhe_device::background_download::BackgroundDownload>> {
     use fandhe_device::background_download::BackgroundDownload;
