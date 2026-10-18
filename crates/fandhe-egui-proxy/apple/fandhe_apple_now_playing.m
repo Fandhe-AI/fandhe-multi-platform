@@ -150,6 +150,9 @@ int32_t fandhe_apple_now_playing_publish(const uint8_t *title, size_t len, int32
         if (name == nil) {
             return 2;
         }
+        // OS の状態（登録・enabled・表示）を変える前に世代を進める。main 以外の clear が、この publish の
+        // 実行中に要求されても捨てられないようにする（要求後に始まった publish だけが古い clear を無効にする）。
+        atomic_fetch_add(&g_epoch, 1);
         fandhe_register_all();
         NSMutableDictionary *info = [NSMutableDictionary dictionary];
         info[MPMediaItemPropertyTitle] = name;
@@ -161,9 +164,6 @@ int32_t fandhe_apple_now_playing_publish(const uint8_t *title, size_t len, int32
         if (pos_ms >= 0) {
             info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @((double)pos_ms / 1000.0);
         }
-        // OS の状態を変える前に世代を進める。main 以外の clear が、この publish の実行中に要求されても
-        // 捨てられないようにする（要求後に始まった publish だけが古い clear を無効にする）。
-        atomic_fetch_add(&g_epoch, 1);
         MPNowPlayingInfoCenter *center = [MPNowPlayingInfoCenter defaultCenter];
         center.nowPlayingInfo = info;
 #if TARGET_OS_OSX
