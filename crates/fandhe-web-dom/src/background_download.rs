@@ -383,11 +383,14 @@ mod web {
             }
         }
 
-        if let Some(old) = current_id(&cache).await? {
-            drop_generation(&cache, &old).await.map_err(internal)?;
-        }
+        // 先に current を新 id へ差し替えてから旧世代を消す。逆順だと、旧 id が current の間に
+        // SW が旧本文を書き戻し、誰からも参照されない本文が残る（取り消しと同じ順序）。
+        let old = current_id(&cache).await?;
         let id = new_id();
         write_current(&cache, &id).await.map_err(internal)?;
+        if let Some(old) = &old {
+            drop_generation(&cache, old).await.map_err(internal)?;
+        }
 
         let opts = Object::new();
         let _ = Reflect::set(&opts, &"title".into(), &"ダウンロード".into());
