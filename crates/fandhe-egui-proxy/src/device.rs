@@ -122,7 +122,7 @@ pub mod android_multi_display;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_network_status;
-/// Issue #381: Android 向けロック画面・OS のメディア操作実装のスタブ（#383 が埋める）。
+/// Issue #383: Android 向けロック画面・OS のメディア操作実装（`MediaSession` + `Notification.MediaStyle` を JNI で操作）。
 /// `device/now_playing.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]

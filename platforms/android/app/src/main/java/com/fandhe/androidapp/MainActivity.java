@@ -608,6 +608,18 @@ public class MainActivity extends GameActivity {
         return screenWakeLockHelper.isHeld();
     }
 
+    // ロック画面・OS のメディア操作（Issue #383）。実装は `NowPlayingHelper`。Rust の
+    // `android_now_playing.rs` が egui スレッドから同期で JNI 呼び出しする。
+    private final NowPlayingHelper nowPlayingHelper = new NowPlayingHelper(this);
+
+    int nowPlayingPublish(String title, boolean playing, long positionMs, long durationMs) {
+        return nowPlayingHelper.publish(title, playing, positionMs, durationMs);
+    }
+
+    void nowPlayingClear() {
+        nowPlayingHelper.clear();
+    }
+
     // ペン・筆圧入力（Issue #357）。実装は `PenStylusHelper`。
     private final PenStylusHelper penStylusHelper = new PenStylusHelper();
 
@@ -2295,6 +2307,7 @@ public class MainActivity extends GameActivity {
         activityResumed = true;
         compassHelper.onResume();
         mediaPlaybackHelper.onResume();
+        nowPlayingHelper.onResume();
         if (sensorManager != null && motionSensor != null) {
             sensorManager.registerListener(
                     motionListener, motionSensor, SensorManager.SENSOR_DELAY_GAME);
@@ -2386,6 +2399,7 @@ public class MainActivity extends GameActivity {
         screenCaptureHelper.onPause();
         compassHelper.onPause();
         mediaPlaybackHelper.onPause();
+        nowPlayingHelper.onPause();
         if (sensorManager != null) {
             sensorManager.unregisterListener(motionListener);
         }
@@ -4601,6 +4615,7 @@ public class MainActivity extends GameActivity {
         screenCaptureHelper.onDestroy();
         printHelper.onDestroy();
         screenWakeLockHelper.onDestroy();
+        nowPlayingHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず
         // 直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。
