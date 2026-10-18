@@ -287,6 +287,12 @@ mod com {
         unsafe { job.Complete() }
     }
 
+    /// 一時停止中のジョブを再開する。
+    pub(super) fn resume(job: &IBackgroundCopyJob) -> WinResult<()> {
+        // SAFETY: `job` は有効な COM ポインタ。
+        unsafe { job.Resume() }
+    }
+
     /// ジョブを取り消す（BITS の一時ファイルも消える）。
     pub(super) fn cancel(job: &IBackgroundCopyJob) -> WinResult<()> {
         // SAFETY: `job` は有効な COM ポインタ。
@@ -440,14 +446,19 @@ mod worker {
                 return;
             };
             for job in jobs {
+                let raw = com::observe(&job).ok().map(|(s, _, _)| s);
                 let live = self.tracked.is_none()
-                    && com::observe(&job).is_ok_and(|(s, _, _)| {
+                    && raw.is_some_and(|s| {
                         matches!(
                             JobState::from_raw(s),
                             JobState::Active | JobState::Transferred
                         )
                     });
                 if live {
+                    // 一時停止(3)のまま拾うと動かないので再開する。失敗しても追跡は続ける。
+                    if raw == Some(3) {
+                        let _ = com::resume(&job);
+                    }
                     self.set(running(0, SIZE_UNKNOWN));
                     self.tracked = Some(job);
                 } else {
@@ -473,7 +484,14 @@ mod worker {
             let path = local_app_data()?;
             // 置き換え: 前の転送と前回のファイルを消してから始める。
             if let Some(old) = self.tracked.take() {
-                let _ = com::cancel(&old);
+                if let Err(e) = com::cancel(&old) {
+                    // 止まっていない旧ジョブが同じ保存先へ書き続けるので、追跡を戻して失敗にする。
+                    let code = e.code().0;
+                    if code != BG_E_INVALID_STATE && code != BG_E_NOT_FOUND {
+                        self.tracked = Some(old);
+                        return Err(map_hresult(code));
+                    }
+                }
             }
             remove_file(&path)?;
             if let Some(dir) = path.parent() {
@@ -511,9 +529,15 @@ mod worker {
             let Some(job) = self.tracked.clone() else {
                 return;
             };
-            let Ok((raw, received, total)) = com::observe(&job) else {
-                self.finish_failed(&job, FAILED_OTHER);
-                return;
+            let (raw, received, total) = match com::observe(&job) {
+                Ok(v) => v,
+                // ジョブが消えていれば失敗。BITS の再起動などの一時的な RPC エラーは次回に再試行する。
+                Err(e) if e.code().0 == BG_E_NOT_FOUND => {
+                    self.tracked = None;
+                    self.failed(FAILED_OTHER);
+                    return;
+                }
+                Err(_) => return,
             };
             match JobState::from_raw(raw) {
                 JobState::Active => self.set(running(received, total)),
