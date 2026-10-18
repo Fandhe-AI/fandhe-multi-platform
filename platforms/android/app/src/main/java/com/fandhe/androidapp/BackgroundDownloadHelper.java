@@ -79,10 +79,10 @@ final class BackgroundDownloadHelper {
                 if (f == null) return FAILED;
                 long old = prefs().getLong(KEY_ID, -1L);
                 if (old >= 0) {
-                    // 旧 id を先に消してから転送を破棄する。以降の失敗経路で消えた id が残り
-                    // status() が「利用者が消した（Cancelled）」と誤判定しないようにする。
-                    if (!prefs().edit().remove(KEY_ID).commit()) return FAILED;
+                    // 転送の破棄が成功してから旧 id を消す。remove が例外で失敗したときは id を保持し、
+                    // status() の照会と cancel() の再試行で OS の転送を追えるようにする。
                     dm.remove(old);
+                    if (!prefs().edit().remove(KEY_ID).commit()) return FAILED;
                 }
                 // 残っていると DownloadManager が別名で保存するため、必ず消す。
                 if (f.exists() && !f.delete()) return FAILED;
