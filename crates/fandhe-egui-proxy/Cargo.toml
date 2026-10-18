@@ -494,6 +494,9 @@ windows = { workspace = true, optional = true, features = [
     # （`IMFMediaEngine*` / `IMFMediaEngineNotify` / `IMFByteStream`）を呼ぶ。mfplat.dll の
     # 自由関数は動的に読み込むため import は増えない。新規パッケージは増えない。
     "Win32_Media_MediaFoundation",
+    # Issue #394: `device/windows_background_download.rs` が BITS（`IBackgroundCopyManager` /
+    # `IBackgroundCopyJob`）を呼ぶ。新規パッケージは増えない。
+    "Win32_Networking_BackgroundIntelligentTransferService",
 ] }
 # Issue #898: `device/windows_share.rs::remember_window` が `eframe::CreationContext`
 # から HWND を取り出すために使う（`raw-window-handle` の `HasWindowHandle` トレイト）。

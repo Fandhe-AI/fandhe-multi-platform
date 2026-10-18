@@ -40,14 +40,17 @@
       "note": "実装済み（#390）。固定 URL の小さなファイル 1 つを OS に依頼し、待機・転送中・完了（サイズ）・取り消し・失敗を出す。結果は取り消し（失敗にしない）と HTTP エラー・0 バイト・許可外のリダイレクト先（失敗）を分ける。守る範囲: 1 プロセス内の順序、世代による古い通知の破棄、嘘の成功の禁止、大きさの上限 8 MiB（超えたら失敗）、開始時に前の世代を止めること。守らない範囲: 背景で失敗した理由と前回の完了表示は再起動で失われる、接続できない間は OS が待ち続け転送中のままになりうる、複数プロセス。アプリ終了後も転送が続くかは #380 の Mac 目視で確かめる"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "BITS（`IBackgroundCopyManager`。`BackgroundDownloader` は package identity が要るため使わない）",
       "perm": "なし（BITS は package identity 不要）。サーバーは HEAD でサイズを返し、GET で Content-Range に対応する必要がある",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/bits/about-bits",
         "https://learn.microsoft.com/en-us/windows/apps/develop/networking/background-transfers"
       ],
-      "note": "未実装。開始したユーザーがログオンしている間はアプリが終了しても続く。`Complete()` を呼ぶまでファイルは使えない。`BackgroundDownloader` は「Background transfers require package identity; unpackaged apps cannot use this API.」（Microsoft の文書）"
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#380）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_background_download.rs + crates/fandhe-egui-proxy/src/device/background_download.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-device/src/background_download.rs、Issue #394",
+      "note": "実装済み（#394）。専用ワーカー 1 本が BITS のジョブを持ち、500ms ごとに状態を読む。保存先は `%LOCALAPPDATA%` 配下の固定名 1 ファイルで、リダイレクトは BITS 側で拒否する。開始したユーザーがログオンしている間はアプリが終了しても続き、再起動後は表示名で自分のジョブを拾い直す。`Complete()` を呼ぶまでファイルは使えない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止。守らない範囲: 背景で失敗した理由は再起動で失われる、接続できない間は BITS が再試行を続け転送中のままになりうる、ログオフ中は止まる、複数プロセス。127.0.0.1 の確認用サーバーで BITS が動くか、アプリ終了後も続くかは #380 の Windows 実機確認で確かめる。`BackgroundDownloader` は「Background transfers require package identity; unpackaged apps cannot use this API.」（Microsoft の文書）"
     },
     "web": {
       "status": "done",
