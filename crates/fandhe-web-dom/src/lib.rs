@@ -198,6 +198,9 @@ pub mod mic_record;
 /// 型サンプル「音声の再生」の Web 経路（Issue #271）。純関数は native からもテストする。
 pub mod media_playback;
 
+/// 型サンプル「ロック画面・OS のメディア操作」の Web 経路（Issue #384）。純関数は native からもテストする。
+pub mod now_playing;
+
 /// 型サンプル「動画・音声の変換」の Web 経路（Issue #315）。純関数は native からもテストする。
 pub mod media_transcode;
 
