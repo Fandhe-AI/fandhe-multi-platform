@@ -30,22 +30,66 @@ use fandhe_device::DeviceError;
 const CMD_PLAY: i32 = 0;
 const CMD_PAUSE: i32 = 1;
 
-/// 操作を受け入れる session id（0 = なし）。取り下げ・失敗で 0 に戻し、publish 成功で Java が
-/// 返した id を入れる。操作の通知は id が一致したときだけ push するので、取り下げ前の session の
-/// 遅延した操作は、再 arm 済みの新しい再生に効かない。
+/// 操作を受け入れる session id と、publish の結果を受け取る前に届いた失敗通知の id。
+/// 判定と更新は必ず同じロックの内側で行う（結果の受理と失敗通知の順序を一意にする）。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
-static ACCEPTED_SESSION: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+#[derive(Default)]
+struct SessionState {
+    /// 操作を受け入れる session id（0 = なし）。取り下げ・失敗で 0 に戻す。
+    accepted: i64,
+    /// 受け入れ前（publish の戻りを処理する前）に失敗通知が届いた id。受理時に照合して捨てる。
+    early_failed: Vec<i64>,
+}
 
-/// publish の戻り値（SSOT は Java 側 `NowPlayingHelper`）を結果へ写す純関数。負（失敗・期限切れ）と
-/// 0（id なし）は `Internal`、正は成功で受け入れる id を更新する。
+#[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
+impl SessionState {
+    /// publish の戻りを受理する。失敗通知が先に届いていた id は受け入れず `false`。
+    fn accept(&mut self, id: i64) -> bool {
+        let failed = self.early_failed.contains(&id);
+        self.early_failed.clear();
+        self.accepted = if failed { 0 } else { id };
+        !failed
+    }
+
+    /// 失敗通知を受ける。現在の session なら受付を止めて `true`、未受理の id は覚えて `false`。
+    fn fail(&mut self, id: i64) -> bool {
+        if id == self.accepted {
+            self.accepted = 0;
+            true
+        } else {
+            // 古い世代の id も入るが、受理時の照合と clear でしか使わない。
+            if self.early_failed.len() >= 8 {
+                self.early_failed.remove(0);
+            }
+            self.early_failed.push(id);
+            false
+        }
+    }
+}
+
+#[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
+static STATE: std::sync::Mutex<SessionState> = std::sync::Mutex::new(SessionState {
+    accepted: 0,
+    early_failed: Vec::new(),
+});
+
+#[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
+fn state() -> std::sync::MutexGuard<'static, SessionState> {
+    STATE.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// publish の戻り値（SSOT は Java 側 `NowPlayingHelper`）を結果へ写す。負（失敗・期限切れ）と
+/// 0（id なし）は `Internal`、正は成功で受け入れる id を更新する。受理時に、この publish の間に届いた
+/// 失敗通知（受け取り前の同 id、および解放済みの古い session の通知）を整理する。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
 fn decode_result(code: i64) -> Result<(), DeviceError> {
-    use std::sync::atomic::Ordering::SeqCst;
-    if code > 0 {
-        ACCEPTED_SESSION.store(code, SeqCst);
+    let mut st = state();
+    if code > 0 && st.accept(code) {
+        // 解放済みの古い session の失敗通知が立てた印は、新しい session に持ち越さない。
+        super::now_playing::clear_os_failure();
         Ok(())
     } else {
-        ACCEPTED_SESSION.store(0, SeqCst);
+        st.accepted = 0;
         Err(DeviceError::Internal("now_playing"))
     }
 }
@@ -131,13 +175,13 @@ impl NowPlaying for AndroidNowPlaying {
 
     fn clear(&self) {
         // 先に受け入れ id を捨てる（Java の解放前に届く遅延した操作も止める）。
-        ACCEPTED_SESSION.store(0, std::sync::atomic::Ordering::SeqCst);
+        state().accepted = 0;
         // 冪等。失敗は無視する（Java 側は Activity 破棄時に自分で解放する）。
         let _ = call_activity(None);
     }
 
     fn shutdown(&self) {
-        ACCEPTED_SESSION.store(0, std::sync::atomic::Ordering::SeqCst);
+        state().accepted = 0;
         let _ = call_activity(None);
     }
 }
@@ -174,7 +218,7 @@ extern "system" fn Java_com_fandhe_androidapp_NowPlayingHelper_nativeOnNowPlayin
     code: jni::sys::jint,
     session_id: jni::sys::jlong,
 ) {
-    if session_id != ACCEPTED_SESSION.load(std::sync::atomic::Ordering::SeqCst) {
+    if session_id != state().accepted {
         return;
     }
     if let Some(cmd) = decode_command(code) {
@@ -198,12 +242,11 @@ extern "system" fn Java_com_fandhe_androidapp_NowPlayingHelper_nativeOnNowPlayin
     _class: jni::objects::JClass<'caller>,
     session_id: jni::sys::jlong,
 ) {
-    use std::sync::atomic::Ordering::SeqCst;
-    if ACCEPTED_SESSION
-        .compare_exchange(session_id, 0, SeqCst, SeqCst)
-        .is_ok()
-    {
+    // 判定と印は同じロックの内側（decode_result の受理と順序付ける）。
+    let mut st = state();
+    if st.fail(session_id) {
         super::now_playing::mark_os_failure();
+        drop(st);
         crate::android::request_repaint();
     }
 }
@@ -213,22 +256,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn decode_result_ok_only_for_positive_id() {
-        assert!(decode_result(7).is_ok());
-        assert_eq!(
-            ACCEPTED_SESSION.load(std::sync::atomic::Ordering::SeqCst),
-            7
-        );
-        for c in [0, -1, -2, i64::MIN] {
-            assert!(matches!(
-                decode_result(c),
-                Err(DeviceError::Internal("now_playing"))
-            ));
-            assert_eq!(
-                ACCEPTED_SESSION.load(std::sync::atomic::Ordering::SeqCst),
-                0
-            );
-        }
+    fn accept_rejects_id_whose_failure_arrived_first() {
+        let mut st = SessionState::default();
+        assert!(!st.fail(7)); // 受理前の失敗通知
+        assert!(!st.accept(7));
+        assert_eq!(st.accepted, 0);
+        assert!(st.accept(8)); // 別 id は通常どおり
+        assert_eq!(st.accepted, 8);
+        assert!(!st.fail(7)); // 古い世代の通知は無視
+        assert_eq!(st.accepted, 8);
+        assert!(st.fail(8));
+        assert_eq!(st.accepted, 0);
     }
 
     #[test]

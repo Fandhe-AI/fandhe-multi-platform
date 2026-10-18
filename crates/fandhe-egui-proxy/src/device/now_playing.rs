@@ -203,6 +203,14 @@ pub(crate) fn mark_os_failure() {
         .store(true, Ordering::SeqCst);
 }
 
+/// `mark_os_failure` の印を捨てる（解放済みの古い session の通知を新しい session に持ち越さない）。
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub(crate) fn clear_os_failure() {
+    if let Some(s) = SESSION.get() {
+        s.os_failed.store(false, Ordering::SeqCst);
+    }
+}
+
 /// Activity 再生成時に記録を捨てて表示を取り下げる（画面状態は `default()` に戻るため、残すと
 /// 次の再生で表示が出ない）。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
