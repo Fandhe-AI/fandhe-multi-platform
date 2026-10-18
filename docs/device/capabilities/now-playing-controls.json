@@ -9,39 +9,45 @@
     "ios": {
       "status": "possible",
       "api": "MediaPlayer（`MPNowPlayingInfoCenter` / `MPRemoteCommandCenter`）",
-      "perm": "背景再生なら `UIBackgroundModes` に audio（要確認）",
+      "perm": "なし（前景で再生している間だけ出す。背景再生と `UIBackgroundModes` の audio は使わない）",
       "url": "https://developer.apple.com/documentation/mediaplayer/mpnowplayinginfocenter",
-      "note": "未実装。再生中でなければ OS が情報を表示しないため、media-playback と同時に作る前提。"
+      "note": "未実装。前景だけで扱い、ロック画面は範囲外（media-playback は背景に回ると止める契約のため）。既定の `soloAmbient` のままコントロールセンターの「再生中」に出るかは実機で確かめる"
     },
     "android": {
       "status": "possible",
-      "api": "Media3 `MediaSessionService`",
-      "perm": "`FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_MEDIA_PLAYBACK`",
-      "url": "https://developer.android.com/media/media3/session/background-playback",
-      "note": "未実装。通知とロック画面のコントロールは MediaSession から OS が生成する。"
+      "api": "`android.media.session.MediaSession` + `Notification.MediaStyle`（Media3 は不採用）",
+      "perm": "なし（foreground service は使わない。POST_NOTIFICATIONS は宣言済みで、media session の通知は実行時の許可の対象外）",
+      "url": [
+        "https://developer.android.com/media/implement/surfaces/mobile",
+        "https://developer.android.com/develop/ui/views/notifications/notification-permission"
+      ],
+      "note": "未実装。前景だけで扱い、通知シェードのプレーヤーとヘッドセットのボタンを受ける。ロック画面と背景再生（foreground service の mediaPlayback）は範囲外"
     },
     "macos": {
       "status": "possible",
       "api": "MediaPlayer（`MPNowPlayingInfoCenter`、macOS 10.12.2+）",
-      "perm": "要確認（macOS 側の権限は未調査）",
+      "perm": "なし",
       "url": "https://developer.apple.com/documentation/mediaplayer/mpnowplayinginfocenter",
-      "note": "未実装。iOS と同じ API が macOS にもあることは Apple 公式のプラットフォーム表記で確認。"
+      "note": "未実装。macOS では audio session から再生状態を判定できないため、再生の開始・停止のたびに `playbackState` を設定する（SDK ヘッダの注記）。バンドルを持たない実行体で出る名前は実機で確かめる"
     },
     "windows": {
       "status": "possible",
-      "api": "`SystemMediaTransportControls`（SMTC）",
-      "perm": "要確認（unpackaged の Win32 から使う場合は interop 経由になる見込みで、未確認）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.systemmediatransportcontrols",
-      "note": "未実装。package identity の要否は文書で未確認。"
+      "api": "`SystemMediaTransportControls`（`ISystemMediaTransportControlsInterop::GetForWindow` で Win32 の窓から取得）",
+      "perm": "なし（文書に package identity の要件は無い。unpackaged で出る名前は実機で確かめる）",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/systemmediatransportcontrolsinterop/nf-systemmediatransportcontrolsinterop-isystemmediatransportcontrolsinterop-getforwindow",
+        "https://learn.microsoft.com/en-us/windows/apps/develop/media-playback/system-media-transport-controls"
+      ],
+      "note": "未実装。`ButtonPressed` は UI スレッド以外で届く"
     },
     "web": {
       "status": "possible",
       "api": "Media Session API（`navigator.mediaSession`）",
       "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API",
-      "safari": "部分対応と認識（MDN の互換表は未確認）。Chromium も同様に要確認",
-      "note": "未実装。再生中のメディア要素があることが前提。"
+      "safari": "Safari 15 から対応（iOS も 15）。Chrome 73・Chrome Android 57・Firefox 82。Firefox Android は API はあるが OS の操作 UI が無い（MDN の互換データ）",
+      "note": "未実装。web-sys の `MediaSession` は unstable API のため Reflect で呼ぶ。短いメディアには通知を出さないブラウザがある"
     }
   },
-  "note": "iOS / macOS は MPNowPlayingInfoCenter、Android は MediaSession、Windows は SMTC、Web は Media Session。media-playback（既存 id）は再生そのものを扱い、本機能は OS 側の操作画面（ロック画面・通知・ハードウェアキー）との連携で、再生が前提になる点が違う。今回の範囲: 再生中の 1 曲のタイトルを OS の再生画面へ出し、OS からの一時停止ボタンを受けて画面に反映する（プレイリスト・アートワークは扱わない）。"
+  "note": "iOS / macOS は MPNowPlayingInfoCenter、Android は framework の MediaSession、Windows は SMTC、Web は Media Session。media-playback（既存 id）は再生そのものを扱い、本機能は OS 側の操作画面（コントロールセンター・通知・メディアキー）との連携。今回の範囲: media-playback の画面で再生・一時停止している間だけ、曲名と再生中かどうかを OS へ渡し、OS からの再生・一時停止を画面に反映する。前景だけで扱い、iOS・Android のロック画面（背景再生）・アートワーク・前後の曲・シークは扱わない"
 }
