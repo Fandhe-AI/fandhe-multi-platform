@@ -19,7 +19,9 @@
 //     main 以外から呼ばれたら main へ dispatch_async する。要求後に publish が成功していたら（世代が進んだら）
 //     古い clear は捨てる（新しい表示を消さない）。
 //   void fandhe_apple_now_playing_shutdown(void)  clear と同じ。
-// iOS の handler はアプリが Active でないとき Rust を呼ばず CommandFailed を返す（背景で受けた操作に成功を返さない。
+// iOS の handler は OS のスレッドで呼ばれ得るため、UIApplication は読まず、
+// DidBecomeActive / WillResignActive 通知で main が更新するアトミックフラグで判定する。
+// アプリが Active でないとき Rust を呼ばず CommandFailed を返す（背景で受けた操作に成功を返さない。
 // 前景へ戻ると media-playback が中断扱いにし、ドライバが取り下げるので溜まった操作では再開しない）。
 // handler は Rust の `fandhe_rust_now_playing_command(int32_t code)`（1 = Play、2 = Pause、3 = Toggle）を呼ぶだけで、
 // 戻り値 非 0（受け付けた）なら Success、0（受付停止中）なら CommandFailed を OS へ返す。画面の状態には触れない。
@@ -37,6 +39,7 @@
 #endif
 #import <MediaPlayer/MediaPlayer.h>
 #include <stdatomic.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 // Rust 側（apple_now_playing.rs）が公開する受け口。非 0 = 受け付けた。
@@ -48,12 +51,18 @@ static NSMutableArray<NSArray *> *g_targets = nil;
 // publish 成功ごとに進む世代（main thread だけが書く）。main 以外からの clear が後続の publish を消さないために使う。
 static _Atomic uint64_t g_epoch = 0;
 
+#if TARGET_OS_IOS
+// アプリが Active か。handler は OS のスレッドで呼ばれ得るため UIApplication を直接読まず、
+// main で更新したこのフラグを読む（Main Thread Checker 違反を避ける）。
+static _Atomic bool g_active = false;
+#endif
+
 static void fandhe_register(MPRemoteCommand *cmd, int32_t code) {
     cmd.enabled = YES;
     id token = [cmd addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *event) {
         (void)event;
 #if TARGET_OS_IOS
-        if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) {
+        if (!atomic_load(&g_active)) {
             return MPRemoteCommandHandlerStatusCommandFailed;
         }
 #endif
@@ -68,6 +77,17 @@ static void fandhe_register_all(void) {
         return;
     }
     g_targets = [NSMutableArray array];
+#if TARGET_OS_IOS
+    // main thread（publish 経由）でのみ到達する。初期値を読んだ後は通知で追従する。
+    atomic_store(&g_active, [UIApplication sharedApplication].applicationState == UIApplicationStateActive);
+    NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+    [nc addObserverForName:UIApplicationDidBecomeActiveNotification object:nil
+                     queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification *n) { (void)n; atomic_store(&g_active, true); }];
+    [nc addObserverForName:UIApplicationWillResignActiveNotification object:nil
+                     queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification *n) { (void)n; atomic_store(&g_active, false); }];
+#endif
     MPRemoteCommandCenter *c = [MPRemoteCommandCenter sharedCommandCenter];
     fandhe_register(c.playCommand, 1);
     fandhe_register(c.pauseCommand, 2);
