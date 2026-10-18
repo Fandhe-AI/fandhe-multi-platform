@@ -21,7 +21,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 // 再生・一時停止は `nativeOnNowPlayingCommand` で Rust の `SharedOsCommand` へ返す。
 //
 // コード表（SSOT はここ。Rust 側 `decode_result` / `decode_command` が同じ値で写像する）:
-//   publish の戻り: 0 OK / 1 FAILED / 2 TIMEOUT
+//   publish の戻り（long）: 負は失敗（-1 FAILED / -2 TIMEOUT）、0 以上は成功で現在の session の id（1 始まり）。
+//   操作の通知は session id を添える。Rust は取り下げのたびに受け入れる id を捨て、publish 成功で
+//   返った id だけを受け入れるため、取り下げ前の session の遅延した操作は新しい再生に効かない。
 //   操作: 0 PLAY / 1 PAUSE（メディアキーのトグルは MediaSession の既定処理が PlaybackState を見て
 //   PLAY / PAUSE に振り分けるため、Toggle のコードは持たない）
 //
@@ -39,9 +41,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 // シェード表示（session は有効でヘッドセットは効く）、API 24〜32 の通知ボタン、背景中の操作、
 // 複数プロセス。曲名・例外メッセージはログに出さない。
 final class NowPlayingHelper {
-    static final int RESULT_OK = 0;
-    static final int RESULT_FAILED = 1;
-    static final int RESULT_TIMEOUT = 2;
+    static final long RESULT_FAILED = -1;
+    static final long RESULT_TIMEOUT = -2;
 
     private static final int CMD_PLAY = 0;
     private static final int CMD_PAUSE = 1;
@@ -55,12 +56,12 @@ final class NowPlayingHelper {
     private static final String CHANNEL_ID = "fandhe_now_playing";
     private static final int NOTIFICATION_ID = 1;
 
-    private static native void nativeOnNowPlayingCommand(int code);
+    private static native void nativeOnNowPlayingCommand(int code, long sessionId);
 
     private static final class Call {
         final AtomicInteger state = new AtomicInteger(PENDING);
         final CountDownLatch finished = new CountDownLatch(1);
-        volatile int code = RESULT_FAILED;
+        volatile long code = RESULT_FAILED;
     }
 
     // publish の内容。onResume で出し直すために持つ。
@@ -81,6 +82,7 @@ final class NowPlayingHelper {
     // session ごとに作る。自分が現在の session のときだけ操作を通す（古い session の遅延を止める）。
     private final class Callback extends MediaSession.Callback {
         MediaSession mine;
+        long id;
 
         @Override
         public void onPlay() {
@@ -101,6 +103,8 @@ final class NowPlayingHelper {
     private Desired desired;
     // desired / session が変わるたびに進める。タイムアウト後の後片付けが後続の変更を壊さないための照合用。
     private long generation;
+    private long nextSessionId;
+    private long sessionId;
 
     NowPlayingHelper(Activity activity) {
         this.activity = activity;
@@ -114,11 +118,11 @@ final class NowPlayingHelper {
             }
         }
         // Rust の Mutex と入れ子にしないよう `lock` の外で呼ぶ。
-        nativeOnNowPlayingCommand(code);
+        nativeOnNowPlayingCommand(code, cb.id);
     }
 
     // egui スレッドから呼ぶ。
-    int publish(String title, boolean playing, long positionMs, long durationMs) {
+    long publish(String title, boolean playing, long positionMs, long durationMs) {
         if (title == null || title.isEmpty()) {
             return RESULT_FAILED;
         }
@@ -142,7 +146,7 @@ final class NowPlayingHelper {
                 }
             }
         });
-        int code = await(call);
+        long code = await(call);
         if (code == RESULT_TIMEOUT) {
             // 放棄した publish が失敗として確定する。Rust は commands を disarm し同じ状態で再試行しない
             // ため、以前の session と表示を残さない。世代が進んでいなければ（後続の publish・clear が
@@ -165,7 +169,7 @@ final class NowPlayingHelper {
         }
     }
 
-    private static int await(Call call) {
+    private static long await(Call call) {
         boolean interrupted = false;
         try {
             try {
@@ -195,7 +199,7 @@ final class NowPlayingHelper {
     }
 
     // `lock` を保持した UI スレッドから呼ぶ。
-    private int applyPublish(Desired d) {
+    private long applyPublish(Desired d) {
         if (destroyed || activity.isDestroyed()) {
             return RESULT_FAILED;
         }
@@ -204,13 +208,20 @@ final class NowPlayingHelper {
                 Callback cb = new Callback();
                 MediaSession s = new MediaSession(activity, TAG);
                 cb.mine = s;
+                cb.id = ++nextSessionId;
+                sessionId = cb.id;
                 session = s; // setCallback 失敗時も catch の release で解放できるよう先に保持する
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                    // API 24-25 ではこのフラグが無いとメディアキー・OS の操作が届かない（26+ は非推奨で無害）。
+                    s.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS
+                            | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+                }
                 s.setCallback(cb, new Handler(Looper.getMainLooper()));
             }
             desired = d;
             generation++;
             show(d);
-            return RESULT_OK;
+            return sessionId;
         } catch (RuntimeException e) {
             release();
             return RESULT_FAILED;

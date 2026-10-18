@@ -26,18 +26,26 @@ use std::sync::Arc;
 use fandhe_device::now_playing::{NowPlaying, OsMediaCommand};
 use fandhe_device::DeviceError;
 
-/// publish の結果コード（SSOT は Java 側 `NowPlayingHelper.RESULT_*`）。0 以外はすべて失敗。
-const RESULT_OK: i32 = 0;
 /// 操作コード（SSOT は Java 側 `NowPlayingHelper.CMD_*`）。
 const CMD_PLAY: i32 = 0;
 const CMD_PAUSE: i32 = 1;
 
-/// 結果コードを契約の結果へ写す純関数。0 以外と未知の値はすべて `Internal`。
+/// 操作を受け入れる session id（0 = なし）。取り下げ・失敗で 0 に戻し、publish 成功で Java が
+/// 返した id を入れる。操作の通知は id が一致したときだけ push するので、取り下げ前の session の
+/// 遅延した操作は、再 arm 済みの新しい再生に効かない。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
-fn decode_result(code: i32) -> Result<(), DeviceError> {
-    if code == RESULT_OK {
+static ACCEPTED_SESSION: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
+/// publish の戻り値（SSOT は Java 側 `NowPlayingHelper`）を結果へ写す純関数。負（失敗・期限切れ）と
+/// 0（id なし）は `Internal`、正は成功で受け入れる id を更新する。
+#[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
+fn decode_result(code: i64) -> Result<(), DeviceError> {
+    use std::sync::atomic::Ordering::SeqCst;
+    if code > 0 {
+        ACCEPTED_SESSION.store(code, SeqCst);
         Ok(())
     } else {
+        ACCEPTED_SESSION.store(0, SeqCst);
         Err(DeviceError::Internal("now_playing"))
     }
 }
@@ -63,17 +71,17 @@ fn to_jni_ms(v: Option<u64>) -> i64 {
 struct AndroidNowPlaying;
 
 /// `MainActivity.nowPlayingPublish(String, boolean, long, long)`（`Some`）または
-/// `nowPlayingClear()`（`None`）を JNI で呼ぶ。`publish` の戻りは結果コード、`clear` は 0。
+/// `nowPlayingClear()`（`None`）を JNI で呼ぶ。`publish` の戻りは session id（負は失敗）、`clear` は 0。
 /// `None` は呼び出し失敗。`unsafe` 2 箇所は `android_screen_wake_lock.rs::call_activity` と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-fn call_activity(publish: Option<(bool, i64, i64)>) -> Option<i32> {
+fn call_activity(publish: Option<(bool, i64, i64)>) -> Option<i64> {
     use super::android::JniCallFailed;
     let app = crate::android::android_app()?;
     // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
     // `app` は本呼び出しの間生存する。
     let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<i32, JniCallFailed> {
+    vm.attach_current_thread(|env: &mut jni::Env| -> Result<i64, JniCallFailed> {
         let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
         // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
         let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
@@ -84,7 +92,7 @@ fn call_activity(publish: Option<(bool, i64, i64)>) -> Option<i32> {
                     .call_method(
                         &activity,
                         jni::jni_str!("nowPlayingPublish"),
-                        jni::jni_sig!((java.lang.String, boolean, long, long) -> int),
+                        jni::jni_sig!((java.lang.String, boolean, long, long) -> long),
                         &[
                             jni::objects::JValue::Object(&title),
                             jni::objects::JValue::Bool(playing),
@@ -92,7 +100,7 @@ fn call_activity(publish: Option<(bool, i64, i64)>) -> Option<i32> {
                             jni::objects::JValue::Long(duration),
                         ],
                     )?
-                    .i()?)
+                    .j()?)
             }
             None => {
                 env.call_method(
@@ -122,11 +130,14 @@ impl NowPlaying for AndroidNowPlaying {
     }
 
     fn clear(&self) {
+        // 先に受け入れ id を捨てる（Java の解放前に届く遅延した操作も止める）。
+        ACCEPTED_SESSION.store(0, std::sync::atomic::Ordering::SeqCst);
         // 冪等。失敗は無視する（Java 側は Activity 破棄時に自分で解放する）。
         let _ = call_activity(None);
     }
 
     fn shutdown(&self) {
+        ACCEPTED_SESSION.store(0, std::sync::atomic::Ordering::SeqCst);
         let _ = call_activity(None);
     }
 }
@@ -161,7 +172,11 @@ extern "system" fn Java_com_fandhe_androidapp_NowPlayingHelper_nativeOnNowPlayin
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     code: jni::sys::jint,
+    session_id: jni::sys::jlong,
 ) {
+    if session_id != ACCEPTED_SESSION.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
     if let Some(cmd) = decode_command(code) {
         super::now_playing::commands().push(cmd);
         // 入力が無いと egui が描画せず操作が画面へ届かないため次フレームを起こす。
@@ -174,13 +189,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn decode_result_ok_only_for_zero() {
-        assert!(decode_result(0).is_ok());
-        for c in [1, 2, -1, 99] {
+    fn decode_result_ok_only_for_positive_id() {
+        assert!(decode_result(7).is_ok());
+        assert_eq!(
+            ACCEPTED_SESSION.load(std::sync::atomic::Ordering::SeqCst),
+            7
+        );
+        for c in [0, -1, -2, i64::MIN] {
             assert!(matches!(
                 decode_result(c),
                 Err(DeviceError::Internal("now_playing"))
             ));
+            assert_eq!(
+                ACCEPTED_SESSION.load(std::sync::atomic::Ordering::SeqCst),
+                0
+            );
         }
     }
 

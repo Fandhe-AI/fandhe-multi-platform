@@ -612,7 +612,7 @@ public class MainActivity extends GameActivity {
     // `android_now_playing.rs` が egui スレッドから同期で JNI 呼び出しする。
     private final NowPlayingHelper nowPlayingHelper = new NowPlayingHelper(this);
 
-    int nowPlayingPublish(String title, boolean playing, long positionMs, long durationMs) {
+    long nowPlayingPublish(String title, boolean playing, long positionMs, long durationMs) {
         return nowPlayingHelper.publish(title, playing, positionMs, durationMs);
     }
 
