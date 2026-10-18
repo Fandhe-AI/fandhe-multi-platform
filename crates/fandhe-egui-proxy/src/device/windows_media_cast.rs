@@ -115,6 +115,8 @@ struct Shared {
     conn_seq: u64,
     /// 再生開始の通知前に停止を要求した（`Paused` を `Stopped` へ確定する印）。
     pending_stop: bool,
+    /// 接続状態 4（再接続中）で `Connecting` へ戻した印。0・3 で `Disconnected` へ戻す許可に使う。
+    reconnecting: bool,
 }
 
 impl Shared {
@@ -128,6 +130,7 @@ impl Shared {
             intent: Intent::Stop,
             conn_seq: 0,
             pending_stop: false,
+            reconnecting: false,
         }
     }
 
@@ -140,6 +143,7 @@ impl Shared {
         self.intent = Intent::Stop;
         self.conn_seq = 0;
         self.pending_stop = false;
+        self.reconnecting = false;
     }
 
     /// 新しい準備を始める。0 バイトと上限超は拒み、旧世代も無効にする。
@@ -166,6 +170,10 @@ impl Shared {
         self.check(gen)?;
         if matches!(self.playback, CastPlayback::Failed(_)) {
             return Err(DeviceError::InvalidInput("media_cast failed"));
+        }
+        // 前回の停止結果を持ち越さない（今回の Playing 通知前に Stopped と確定されるのを防ぐ）。
+        if self.playback == CastPlayback::Stopped {
+            self.playback = CastPlayback::Ready;
         }
         self.intent = Intent::Play;
         self.pending_stop = false;
@@ -247,6 +255,7 @@ impl Shared {
                     return;
                 }
                 self.conn_seq = seq;
+                self.reconnecting = false;
                 self.route = RouteState::Connecting;
                 self.name = clean_text(&raw);
             }
@@ -260,14 +269,19 @@ impl Shared {
                 let connected = matches!(self.route, RouteState::Connected { .. });
                 match s {
                     1 | 2 if connected || self.route == RouteState::Connecting => {
+                        self.reconnecting = false;
                         self.route = RouteState::Connected {
                             name: self.name.clone(),
                         };
                     }
                     4 if connected || self.route == RouteState::Disconnected => {
+                        self.reconnecting = true;
                         self.route = RouteState::Connecting;
                     }
-                    0 | 3 if connected => self.route = RouteState::Disconnected,
+                    0 | 3 if connected || self.reconnecting => {
+                        self.reconnecting = false;
+                        self.route = RouteState::Disconnected;
+                    }
                     _ => {}
                 }
             }
@@ -283,6 +297,10 @@ impl Shared {
                     return;
                 }
                 if let Some(f) = failure_from_start_status(code) {
+                    // Connected / Rendering が完了通知より先に届いていても、開始失敗を確定する。
+                    if matches!(self.route, RouteState::Connected { .. }) {
+                        self.route = RouteState::Connecting;
+                    }
                     self.fail_connecting(f);
                 }
             }
@@ -836,6 +854,40 @@ mod tests {
         let g = s.begin_prepare(10).unwrap();
         s.on_event(g, Ev::Opened);
         (s, g)
+    }
+
+    #[test]
+    fn replay_after_stop_clears_stale_stopped() {
+        let (mut s, g) = ready();
+        s.on_play(g).unwrap();
+        s.on_event(g, Ev::Playing);
+        s.on_stop(g).unwrap();
+        s.on_event(g, Ev::Paused);
+        assert_eq!(s.playback, CastPlayback::Stopped);
+        s.on_play(g).unwrap();
+        assert_eq!(s.playback, CastPlayback::Ready);
+    }
+
+    #[test]
+    fn reconnect_flicker_returns_to_disconnected() {
+        let (mut s, g) = ready();
+        s.on_event(g, Ev::Selected(1, "x".into()));
+        s.on_event(g, Ev::ConnState(1, 1));
+        s.on_event(g, Ev::ConnState(1, 0));
+        s.on_event(g, Ev::ConnState(1, 4));
+        assert_eq!(s.route, RouteState::Connecting);
+        s.on_event(g, Ev::ConnState(1, 0));
+        assert_eq!(s.route, RouteState::Disconnected);
+    }
+
+    #[test]
+    fn start_failure_after_early_connected_is_applied() {
+        let (mut s, g) = ready();
+        s.on_event(g, Ev::Selected(1, "x".into()));
+        s.on_event(g, Ev::ConnState(1, 1));
+        s.on_event(g, Ev::StartResult(1, 3));
+        assert_eq!(s.route, RouteState::Local);
+        assert_eq!(s.playback, CastPlayback::Failed(CastFailure::Blocked));
     }
 
     #[test]

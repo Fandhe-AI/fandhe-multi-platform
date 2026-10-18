@@ -160,7 +160,7 @@ fn updates_for(screen: &CastShowState, snap: &CastSnapshot) -> (Vec<CastShowUpda
             Some(CastShowUpdate::Playback(S::Interrupted))
         }
         (
-            S::Preparing | S::Ready | S::Starting | S::Playing | S::Stopping,
+            S::Preparing | S::Ready | S::Starting | S::Playing | S::Stopping | S::Stopped,
             CastPlayback::Failed(f),
         ) => Some(CastShowUpdate::Failed(snapshot_failure(f))),
         _ => None,
