@@ -1,9 +1,7 @@
-// Phase 11 の拡充ループ（親 #98）型サンプル「ロック画面・OS のメディア操作」: macOS（Issue #381）の実装。
-// iOS（#382）は b-ios が `#if TARGET_OS_IOS` の中を埋める（現状は空。build.rs は iOS 分岐でもこのファイルをコンパイルし
-// MediaPlayer をリンクするので、埋めるときに build.rs・device.rs は触らなくてよい）。
+// Phase 11 の拡充ループ（親 #98）型サンプル「ロック画面・OS のメディア操作」: macOS（Issue #381）・iOS（Issue #382）の共用実装。
 //
 // MediaPlayer の `MPNowPlayingInfoCenter`（曲名・長さ・位置・再生速度）と `MPRemoteCommandCenter`
-// （再生・一時停止・切り替え）で、OS の「再生中」表示（macOS はコントロールセンターとメディアキー）へ渡す。
+// （再生・一時停止・切り替え）で、OS の「再生中」表示（macOS はコントロールセンターとメディアキー、iOS はコントロールセンター）へ渡す。
 //
 // `crates/fandhe-egui-proxy/src/device/apple_now_playing.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の macOS・iOS 分岐がコンパイルし MediaPlayer をリンクする。権限・entitlement・usage description は不要。
@@ -16,8 +14,13 @@
 //     初回だけ play / pause / togglePlayPause に handler を登録し、トークンを握る。
 //     次の曲・前の曲・シーク・スキップ・再生速度は enabled = NO にする（効かない操作 UI を出さない）。
 //     macOS は playbackState を毎回設定する（audio session から再生状態を判定できないため。SDK ヘッダの注記）。
+//     iOS は playbackState が無く、playbackRate で表す。`AVAudioSession` の category は変えない（前景のみ）。
 //   void fandhe_apple_now_playing_clear(void)   冪等。removeTarget: で全トークンを外し、表示を取り下げる。
+//     main 以外から呼ばれたら main へ dispatch_async する。要求後に publish が成功していたら（世代が進んだら）
+//     古い clear は捨てる（新しい表示を消さない）。
 //   void fandhe_apple_now_playing_shutdown(void)  clear と同じ。
+// iOS の handler はアプリが Active でないとき Rust を呼ばず CommandFailed を返す（背景で受けた操作に成功を返さない。
+// 前景へ戻ると media-playback が中断扱いにし、ドライバが取り下げるので溜まった操作では再開しない）。
 // handler は Rust の `fandhe_rust_now_playing_command(int32_t code)`（1 = Play、2 = Pause、3 = Toggle）を呼ぶだけで、
 // 戻り値 非 0（受け付けた）なら Success、0（受付停止中）なら CommandFailed を OS へ返す。画面の状態には触れない。
 //
@@ -26,10 +29,14 @@
 // 曲名・位置はログへ出力しない。
 
 #import <TargetConditionals.h>
-#if TARGET_OS_OSX
+#if TARGET_OS_OSX || TARGET_OS_IOS
 
 #import <Foundation/Foundation.h>
+#if TARGET_OS_IOS
+#import <UIKit/UIKit.h>
+#endif
 #import <MediaPlayer/MediaPlayer.h>
+#include <stdatomic.h>
 #include <stdint.h>
 
 // Rust 側（apple_now_playing.rs）が公開する受け口。非 0 = 受け付けた。
@@ -38,10 +45,18 @@ extern int32_t fandhe_rust_now_playing_command(int32_t code);
 // 登録済みの (MPRemoteCommand, token) の対。
 static NSMutableArray<NSArray *> *g_targets = nil;
 
+// publish 成功ごとに進む世代（main thread だけが書く）。main 以外からの clear が後続の publish を消さないために使う。
+static _Atomic uint64_t g_epoch = 0;
+
 static void fandhe_register(MPRemoteCommand *cmd, int32_t code) {
     cmd.enabled = YES;
     id token = [cmd addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *event) {
         (void)event;
+#if TARGET_OS_IOS
+        if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) {
+            return MPRemoteCommandHandlerStatusCommandFailed;
+        }
+#endif
         return fandhe_rust_now_playing_command(code) != 0 ? MPRemoteCommandHandlerStatusSuccess
                                                           : MPRemoteCommandHandlerStatusCommandFailed;
     }];
@@ -96,13 +111,17 @@ int32_t fandhe_apple_now_playing_publish(const uint8_t *title, size_t len, int32
         }
         MPNowPlayingInfoCenter *center = [MPNowPlayingInfoCenter defaultCenter];
         center.nowPlayingInfo = info;
+#if TARGET_OS_OSX
         center.playbackState = playing ? MPNowPlayingPlaybackStatePlaying
                                        : MPNowPlayingPlaybackStatePaused;
+#endif
     }
+    atomic_fetch_add(&g_epoch, 1);
     return 0;
 }
 
-void fandhe_apple_now_playing_clear(void) {
+// main thread 上で取り下げを実行する。
+static void fandhe_clear_on_main(void) {
     if (g_targets == nil) {
         return;  // 何も渡していない（冪等。OS の表示にも触れない）
     }
@@ -113,12 +132,28 @@ void fandhe_apple_now_playing_clear(void) {
         g_targets = nil;
         MPNowPlayingInfoCenter *center = [MPNowPlayingInfoCenter defaultCenter];
         center.nowPlayingInfo = nil;
+#if TARGET_OS_OSX
         center.playbackState = MPNowPlayingPlaybackStateStopped;
+#endif
     }
+}
+
+void fandhe_apple_now_playing_clear(void) {
+    if ([NSThread isMainThread]) {
+        fandhe_clear_on_main();
+        return;
+    }
+    // dispatch_sync は使わない（main がロックを持つとデッドロックする）。
+    uint64_t requested = atomic_load(&g_epoch);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (atomic_load(&g_epoch) == requested) {
+            fandhe_clear_on_main();
+        }
+    });
 }
 
 void fandhe_apple_now_playing_shutdown(void) {
     fandhe_apple_now_playing_clear();
 }
 
-#endif  // TARGET_OS_OSX
+#endif  // TARGET_OS_OSX || TARGET_OS_IOS

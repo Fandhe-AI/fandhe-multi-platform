@@ -9,7 +9,7 @@
 //!
 //! [`platform_now_playing`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（macOS: `apple_now_playing`、iOS: `ios_now_playing`（#382）、
-//! Android: `android_now_playing`（#383）、Windows: `windows_now_playing`（#385）。macOS 以外は現状スタブで
+//! Android: `android_now_playing`（#383）、Windows: `windows_now_playing`（#385）。Android・Windows は現状スタブで
 //! `UnsupportedNowPlaying` を返す）。それ以外は `UnsupportedNowPlaying` 固定で、ダミーの成功実装へは倒さない。
 //!
 //! # 並行性

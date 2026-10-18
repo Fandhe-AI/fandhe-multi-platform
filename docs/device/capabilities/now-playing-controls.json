@@ -7,11 +7,14 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "MediaPlayer（`MPNowPlayingInfoCenter` / `MPRemoteCommandCenter`）",
       "perm": "なし（前景で再生している間だけ出す。背景再生と `UIBackgroundModes` の audio は使わない）",
       "url": "https://developer.apple.com/documentation/mediaplayer/mpnowplayinginfocenter",
-      "note": "未実装。前景だけで扱い、ロック画面は範囲外（media-playback は背景に回ると止める契約のため）。既定の `soloAmbient` のままコントロールセンターの「再生中」に出るかは実機で確かめる"
+      "note": "実装済み（#382）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を iOS の「再生中」表示（コントロールセンター）へ渡し、OS 側の再生・一時停止を画面へ返すこと（次の曲・前の曲・シーク・アートワーク・ロック画面・背景再生は範囲外で、効かない操作は無効にして出さない）。アプリが前景でない間に届いた操作は画面へ渡さず拒否する。OS からの操作を受けた直後に次フレームを起こす。Apple は表示の確定が返らないため「表示中」とは言わない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、登録の解放。守らない範囲: ポーリング間隔ぶんの反映の遅れ、背景に回った間にコントロールセンターへ残る一時停止中の表示、PiP との `AVAudioSession` の取り合い（PiP の `mixWithOthers` と同時に使うと「再生中」に出ない可能性）、複数プロセス。既定の `soloAmbient` のまま「再生中」に出るかは #378 の実機で確かめる",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#378）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_now_playing.rs + crates/fandhe-egui-proxy/src/device/apple_now_playing.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_now_playing.m + crates/fandhe-egui-proxy/src/device/now_playing.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #382"
     },
     "android": {
       "status": "possible",

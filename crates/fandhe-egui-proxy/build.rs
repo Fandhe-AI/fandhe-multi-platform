@@ -31,7 +31,7 @@
 //!   feature `device` 有効時のみコンパイルする（`src/device/ios.rs` の `present_photo_picker`/
 //!   `fandhe_rust_photo_picker_outcome` から呼ばれる契約）。PhotosUI と、JPEG 変換用の
 //!   ImageIO を追加でリンクする。
-//! - `apple/fandhe_apple_now_playing.m`（Issue #381 macOS、iOS の中身は #382。MediaPlayer の `MPNowPlayingInfoCenter` /
+//! - `apple/fandhe_apple_now_playing.m`（Issue #381 macOS・#382 iOS。MediaPlayer の `MPNowPlayingInfoCenter` /
 //!   `MPRemoteCommandCenter` による OS の「再生中」表示とメディアキー。`src/device/apple_now_playing.rs` から呼ばれる契約）。
 //!   MediaPlayer をリンクする。
 //! - `apple/fandhe_apple_picture_in_picture.m`（Issue #364、AVKit の sample buffer 経路による
@@ -996,8 +996,7 @@ fn compile_apple_picture_in_picture(include_ios_common: bool) {
 }
 
 /// `apple/fandhe_apple_now_playing.m` を `cc` でコンパイルし MediaPlayer をリンクする（Issue #381 macOS）。
-/// macOS・iOS 双方の分岐から呼ばれる（`src/device/apple_now_playing.rs` が使う）。iOS 側の中身は #382 が埋める
-/// （`.m` の iOS 部分は空。ここで一緒にコンパイル・リンクしておけば、埋めるときに build.rs を触らずに済む）。
+/// macOS・iOS 双方の分岐から呼ばれる（`src/device/apple_now_playing.rs` が使う）。iOS（#382）も同じ `.m` を使う。
 fn compile_apple_now_playing() {
     println!("cargo:rerun-if-changed=apple/fandhe_apple_now_playing.m");
     cc::Build::new()

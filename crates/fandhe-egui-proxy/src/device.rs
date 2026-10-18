@@ -263,11 +263,11 @@ pub mod apple_network_status;
 /// 同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_nlp;
-/// Issue #381（macOS）: ロック画面・OS のメディア操作実装（`apple/fandhe_apple_now_playing.m` の
-/// MediaPlayer を呼ぶ C ABI ラッパー）。`device/now_playing.rs` の macOS 経路から呼ばれる。
-/// iOS（#382）が埋めるときは cfg を `ios` まで広げる。写像の純関数をホストでテストできるよう `test` でもコンパイルする。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+/// Issue #381（macOS）・#382（iOS）: ロック画面・OS のメディア操作実装（`apple/fandhe_apple_now_playing.m` の
+/// MediaPlayer を呼ぶ C ABI ラッパー）。`device/now_playing.rs` の macOS 経路と、iOS 経路（`ios_now_playing` 経由）から呼ばれる。
+/// 写像の純関数をホストでテストできるよう `test` でもコンパイルする。
+#[cfg(any(target_os = "macos", target_os = "ios", test))]
+#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 pub mod apple_now_playing;
 /// Issue #345 macOS・#346 iOS: 端末内 LLM 実装（`apple/fandhe_apple_on_device_llm.swift` を
 /// 呼ぶ C ABI ラッパー）。`device/on_device_llm.rs` の macOS 経路と、iOS 経路（`ios_on_device_llm` 経由）から
@@ -490,7 +490,7 @@ pub mod ios_network_status;
 /// C ABI ラッパー）。`device/notification.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_notification;
-/// Issue #381: iOS 向けロック画面・OS のメディア操作実装のスタブ（#382 が埋める）。
+/// Issue #382: iOS 向けロック画面・OS のメディア操作実装（macOS と共用の `apple_now_playing` を返す）。
 /// `device/now_playing.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
