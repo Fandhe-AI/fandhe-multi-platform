@@ -69,16 +69,17 @@ enum Ev {
     Paused,
     /// `MediaFailed`（写像済み）。
     MediaFailed(CastFailure),
-    /// ピッカーで出力先が選ばれた（`FriendlyName` の生文字列）。
-    Selected(String),
+    /// ピッカーで出力先が選ばれた（接続の連番, `FriendlyName` の生文字列）。
+    Selected(u64, String),
     /// ピッカーが閉じた。
     Dismissed,
     /// `CastingConnection.StateChanged`（`CastingConnectionState` の値）。
     ConnState(i32),
     /// `CastingConnection.ErrorOccurred`（`CastingConnectionErrorStatus` の値）。
     ConnError(i32),
-    /// `RequestStartCastingAsync` の完了（`CastingConnectionErrorStatus` の値）。
-    StartResult(i32),
+    /// `RequestStartCastingAsync` の完了（接続の連番, `CastingConnectionErrorStatus` の値）。
+    /// 連番が現在の接続と違えば、入れ替え前の旧接続の完了なので捨てる。
+    StartResult(u64, i32),
 }
 
 /// `CastingConnectionErrorStatus` を契約の失敗へ写す。0（Succeeded）は `None`。写像はここ 1 か所。
@@ -109,6 +110,8 @@ struct Shared {
     route: RouteState,
     name: Option<String>,
     intent: Intent,
+    /// 現在の接続の連番（`Selected` で進む）。0 は接続なし。世代と違い 1 世代の中で接続を入れ替えるたびに進む。
+    conn_seq: u64,
 }
 
 impl Shared {
@@ -120,6 +123,7 @@ impl Shared {
             route: RouteState::Local,
             name: None,
             intent: Intent::Stop,
+            conn_seq: 0,
         }
     }
 
@@ -130,6 +134,7 @@ impl Shared {
         self.route = RouteState::Local;
         self.name = None;
         self.intent = Intent::Stop;
+        self.conn_seq = 0;
     }
 
     /// 新しい準備を始める。0 バイトと上限超は拒み、旧世代も無効にする。
@@ -171,6 +176,7 @@ impl Shared {
     }
 
     /// ピッカーを出す前の確認。`Choosing` は `Show` の前に立てる（閉じた通知が先に届いても戻せる）。
+    /// `Local` のときだけ立てる。接続中・接続済み・切断のまま閉じられても `Local` へ戻さない（嘘の状態にしない）。
     fn on_picker_shown(&mut self, gen: u64) -> Result<(), DeviceError> {
         self.check(gen)?;
         if !matches!(
@@ -179,7 +185,9 @@ impl Shared {
         ) {
             return Err(DeviceError::Internal("media_cast not ready"));
         }
-        self.route = RouteState::Choosing;
+        if self.route == RouteState::Local {
+            self.route = RouteState::Choosing;
+        }
         Ok(())
     }
 
@@ -221,7 +229,11 @@ impl Shared {
                 }
             }
             // 閉じた通知が先に届いても、後続の選択で `Connecting` へ進める。
-            Ev::Selected(raw) => {
+            Ev::Selected(seq, raw) => {
+                if seq <= self.conn_seq {
+                    return;
+                }
+                self.conn_seq = seq;
                 self.route = RouteState::Connecting;
                 self.name = clean_text(&raw);
             }
@@ -252,7 +264,10 @@ impl Shared {
                 RouteState::Connected { .. } => self.route = RouteState::Disconnected,
                 _ => {}
             },
-            Ev::StartResult(code) => {
+            Ev::StartResult(seq, code) => {
+                if seq != self.conn_seq {
+                    return;
+                }
                 if let Some(f) = failure_from_start_status(code) {
                     self.fail_connecting(f);
                 }
@@ -629,6 +644,7 @@ mod win {
     fn connect(
         res: &mut Res,
         device: &CastingDevice,
+        seq: u64,
         tx: &mpsc::Sender<Cmd>,
     ) -> windows::core::Result<()> {
         if let Some(old) = res.conn.take() {
@@ -686,11 +702,9 @@ mod win {
                 ),
                 _ => CastingConnectionErrorStatus::Unknown.0,
             };
-            post(&t, gen, Ev::StartResult(code));
+            post(&t, gen, Ev::StartResult(seq, code));
             Ok(())
         }));
-        // ponytail: 接続の入れ替え中に古い開始の完了が遅れて届くと新しい接続を失敗にし得る。
-        // 実機で問題なら接続ごとの連番を足す。
         if let Err(e) = set {
             close_conn(c);
             return Err(e);
@@ -707,6 +721,8 @@ mod win {
         // 失敗しても worker は続け、以後の `Prepare` を `Failed` にする（成功へ倒さない）。
         let com = ComInit::new("media_cast");
         let mut res: Option<Res> = None;
+        // 接続ごとの連番（ワーカー 1 本なので競合しない）。`release` を挟んでも戻さない。
+        let mut conn_seq: u64 = 0;
         while let Ok(cmd) = rx.recv() {
             match cmd {
                 Cmd::Prepare(gen, wav) => {
@@ -749,6 +765,8 @@ mod win {
                 }
                 Cmd::Selected(gen, device) => {
                     // 世代が違えば捨てる。一致すれば `Connecting` へ進めてから接続を始める。
+                    conn_seq += 1;
+                    let seq = conn_seq;
                     let name = device
                         .FriendlyName()
                         .map(|n| n.to_string())
@@ -756,18 +774,18 @@ mod win {
                     let current = with_shared(|s| {
                         let ok = s.check(gen).is_ok();
                         if ok {
-                            s.on_event(gen, Ev::Selected(name));
+                            s.on_event(gen, Ev::Selected(seq, name));
                         }
                         ok
                     });
                     if current {
                         // 資源が無い（準備失敗直後等）場合も 6 = Unknown として失敗を確定する。
                         let ok = match res.as_mut().filter(|r| r.gen == gen) {
-                            Some(r) => connect(r, &device, &tx).is_ok(),
+                            Some(r) => connect(r, &device, seq, &tx).is_ok(),
                             None => false,
                         };
                         if !ok {
-                            with_shared(|s| s.on_event(gen, Ev::StartResult(6)));
+                            with_shared(|s| s.on_event(gen, Ev::StartResult(seq, 6)));
                         }
                     }
                 }
@@ -877,14 +895,14 @@ mod tests {
     fn dismissed_order_does_not_undo_connecting() {
         let (mut s, g) = ready();
         s.on_picker_shown(g).unwrap();
-        s.on_event(g, Ev::Selected("TV".into()));
+        s.on_event(g, Ev::Selected(1, "TV".into()));
         s.on_event(g, Ev::Dismissed);
         assert_eq!(s.route, RouteState::Connecting);
         // 逆順（Dismissed -> Selected）でも Connecting に進む。
         let (mut s, g) = ready();
         s.on_picker_shown(g).unwrap();
         s.on_event(g, Ev::Dismissed);
-        s.on_event(g, Ev::Selected("TV".into()));
+        s.on_event(g, Ev::Selected(1, "TV".into()));
         assert_eq!(s.route, RouteState::Connecting);
     }
 
@@ -893,7 +911,7 @@ mod tests {
         let (mut s, g) = ready();
         s.on_event(g, Ev::ConnState(1));
         assert_eq!(s.route, RouteState::Local);
-        s.on_event(g, Ev::Selected(" Living\u{0}Room\n".into()));
+        s.on_event(g, Ev::Selected(1, " Living\u{0}Room\n".into()));
         assert_eq!(s.route, RouteState::Connecting);
         s.on_event(g, Ev::ConnState(2));
         assert_eq!(
@@ -903,7 +921,7 @@ mod tests {
             }
         );
         let (mut s, g) = ready();
-        s.on_event(g, Ev::Selected("\u{1}".into()));
+        s.on_event(g, Ev::Selected(1, "\u{1}".into()));
         s.on_event(g, Ev::ConnState(1));
         assert_eq!(s.route, RouteState::Connected { name: None });
     }
@@ -926,27 +944,27 @@ mod tests {
     #[test]
     fn start_failure_while_connecting_fails_once() {
         let (mut s, g) = ready();
-        s.on_event(g, Ev::Selected("TV".into()));
-        s.on_event(g, Ev::StartResult(3));
+        s.on_event(g, Ev::Selected(1, "TV".into()));
+        s.on_event(g, Ev::StartResult(1, 3));
         assert_eq!(s.playback, CastPlayback::Failed(CastFailure::Blocked));
         assert_eq!(s.route, RouteState::Local);
         // 成功コードは状態を変えない。
         let (mut s, g) = ready();
-        s.on_event(g, Ev::Selected("TV".into()));
-        s.on_event(g, Ev::StartResult(0));
+        s.on_event(g, Ev::Selected(1, "TV".into()));
+        s.on_event(g, Ev::StartResult(1, 0));
         assert_eq!(s.route, RouteState::Connecting);
     }
 
     #[test]
     fn error_after_connected_is_disconnect() {
         let (mut s, g) = ready();
-        s.on_event(g, Ev::Selected("TV".into()));
+        s.on_event(g, Ev::Selected(1, "TV".into()));
         s.on_event(g, Ev::ConnState(1));
         s.on_event(g, Ev::ConnError(2));
         assert_eq!(s.route, RouteState::Disconnected);
         assert_eq!(s.playback, CastPlayback::Ready);
         let (mut s, g) = ready();
-        s.on_event(g, Ev::Selected("TV".into()));
+        s.on_event(g, Ev::Selected(1, "TV".into()));
         s.on_event(g, Ev::ConnState(1));
         s.on_event(g, Ev::ConnState(0));
         assert_eq!(s.route, RouteState::Disconnected);
@@ -957,11 +975,62 @@ mod tests {
         let (mut s, g) = ready();
         s.reset();
         s.on_event(g, Ev::Playing);
-        s.on_event(g, Ev::Selected("TV".into()));
+        s.on_event(g, Ev::Selected(1, "TV".into()));
         s.on_event(g, Ev::ConnState(1));
         let snap = s.snapshot();
         assert_eq!(snap.playback, CastPlayback::Idle);
         assert_eq!(snap.route, RouteState::Local);
         assert_eq!(snap.picker, PickerKind::App);
+    }
+
+    #[test]
+    fn dismissed_keeps_route_when_already_connecting_or_connected() {
+        let (mut s, g) = ready();
+        s.on_event(g, Ev::Selected(1, "TV".into()));
+        s.on_picker_shown(g).unwrap();
+        assert_eq!(s.route, RouteState::Connecting);
+        s.on_event(g, Ev::Dismissed);
+        assert_eq!(s.route, RouteState::Connecting);
+        s.on_event(g, Ev::ConnState(1));
+        s.on_picker_shown(g).unwrap();
+        s.on_event(g, Ev::Dismissed);
+        assert_eq!(
+            s.route,
+            RouteState::Connected {
+                name: Some("TV".into())
+            }
+        );
+        // 以後の ConnState も無視されない。
+        s.on_event(g, Ev::ConnState(0));
+        assert_eq!(s.route, RouteState::Disconnected);
+        s.on_picker_shown(g).unwrap();
+        s.on_event(g, Ev::Dismissed);
+        assert_eq!(s.route, RouteState::Disconnected);
+    }
+
+    #[test]
+    fn stale_start_result_does_not_fail_new_connection() {
+        let (mut s, g) = ready();
+        s.on_event(g, Ev::Selected(1, "A".into()));
+        s.on_event(g, Ev::Selected(2, "B".into()));
+        // 旧接続（連番 1）の完了通知は捨てる。
+        s.on_event(g, Ev::StartResult(1, 6));
+        assert_eq!(s.route, RouteState::Connecting);
+        assert_eq!(s.playback, CastPlayback::Ready);
+        // 現在の接続の失敗は確定する。
+        s.on_event(g, Ev::StartResult(2, 6));
+        assert_eq!(s.route, RouteState::Local);
+        assert_eq!(s.playback, CastPlayback::Failed(CastFailure::Os));
+    }
+
+    #[test]
+    fn stale_selected_is_dropped() {
+        let (mut s, g) = ready();
+        s.on_event(g, Ev::Selected(2, "B".into()));
+        s.on_event(g, Ev::Selected(1, "A".into()));
+        assert_eq!(s.name.as_deref(), Some("B"));
+        // reset 後は連番も戻り、旧連番の完了は新しい接続に効かない。
+        s.reset();
+        assert_eq!(s.conn_seq, 0);
     }
 }
