@@ -91,6 +91,8 @@
 //! - [`ar`]: 「AR 表示」画面の Web 経路（親 #90、Issue #309）。WebXR `immersive-ar` + `dom-overlay`。
 //!   純関数（姿勢 → 状態・失敗の写像・tick 判定）のみ `wasm32` gate の外に置く
 //! - [`picture_in_picture`]: 「ピクチャ・イン・ピクチャ」画面の Web 経路（親 #97、Issue #367）。
+//! - [`media_cast`]: 「外部機器への再生」画面の Web 経路（親 #99、Issue #389）。
+//!   純関数（経路・失敗の写像・期限判定）のみ `wasm32` gate の外に置く
 //! - [`fullscreen_immersive`]: 「全画面表示」画面の Web 経路（親 #1133、Issue #1315）。
 //!   純関数（発送判定・到達判定）のみ `wasm32` gate の外に置く
 //!
@@ -277,6 +279,9 @@ pub mod fullscreen_immersive;
 /// 型サンプル「触覚フィードバック」の Web 経路（Issue #1091）。[`location`] と同じ理由で
 /// 純関数は native からもテストできるようクレート単位の `wasm32` gate を外す。
 pub mod haptics;
+/// 型サンプル「外部機器への再生」の Web 経路（Issue #389）。[`haptics`] と同じ理由で純関数は native からも
+/// テストできるよう gate を外す。
+pub mod media_cast;
 /// 型サンプル「ネットワーク接続状態」の Web 経路（Issue #1285）。[`haptics`] と同じ理由で gate を外す。
 pub mod network_status;
 /// 型サンプル「単語分割」の Web 経路（Issue #1094）。[`haptics`] と同じ理由で純関数は native からも
