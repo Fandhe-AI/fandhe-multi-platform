@@ -127,6 +127,13 @@ pub(crate) fn status_from(
     }
 }
 
+/// 開始失敗時に `current` を消してよいか。マウントが生きていて、current が自分の世代のときだけ。
+/// 旧マウントの遅れた失敗が、再マウント後の新世代（取り消し済みを含む）の current を消さないための判定。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn should_drop_failed_start(live: bool, current: Option<&str>, my_id: &str) -> bool {
+    live && current == Some(my_id)
+}
+
 /// `DeviceError` を画面へ渡す文言へ変換する（`fandhe-egui-proxy` の同名関数と同じ文言）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn to_message(e: DeviceError) -> String {
@@ -413,8 +420,14 @@ mod web {
         let requests = Array::of1(&JsValue::from_str(&abs));
         let args = [JsValue::from_str(&id), requests.into(), opts.into()];
         if let Err(e) = call(&bf, "fetch", &args).await {
-            // 失敗した開始の世代を残さない（契約表 9）。
-            let _ = cache_delete(&cache, KEY_CURRENT).await;
+            // 失敗した開始の世代を残さない（契約表 9）。await の間に再マウント・取り消しで
+            // current が別世代へ進んでいたら触らない（契約表 2）。Cache API に CAS が無いため
+            // 確認と削除の間に 1 await 分の窓が残る。
+            // ponytail: 窓を閉じるなら Web Locks で start/cancel を直列化する。
+            let cur = current_id(&cache).await.ok().flatten();
+            if should_drop_failed_start(live(mount_id), cur.as_deref(), &id) {
+                let _ = cache_delete(&cache, KEY_CURRENT).await;
+            }
             return Err(error_from_name(js_error_name(&e).as_deref()));
         }
         Ok(())
@@ -617,6 +630,17 @@ mod tests {
             final_url: "http://127.0.0.1:8787/items.json".into(),
             reason: String::new(),
         }
+    }
+
+    #[test]
+    fn failed_start_keeps_other_generation_current() {
+        // 自世代が current で生きているときだけ消す
+        assert!(should_drop_failed_start(true, Some("a"), "a"));
+        // 再マウント + 取り消しで current が新世代へ進んでいたら消さない
+        assert!(!should_drop_failed_start(true, Some("b"), "a"));
+        assert!(!should_drop_failed_start(true, None, "a"));
+        // 破棄済みマウントは触らない
+        assert!(!should_drop_failed_start(false, Some("a"), "a"));
     }
 
     #[test]
