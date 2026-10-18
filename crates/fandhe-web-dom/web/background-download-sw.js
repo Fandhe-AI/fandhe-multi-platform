@@ -31,6 +31,16 @@ function putJson(cache, key, value) {
   return cache.put(key, new Response(JSON.stringify(value)));
 }
 
+// 結果を書いた後で `current` を再確認し、書く間に世代が差し替わっていたら自分の世代の
+// 結果・本文を消す（ページが drop_generation を終えた後に旧結果が復活して残るのを防ぐ）。
+async function putResult(cache, id, value) {
+  await putJson(cache, resultKey(id), value);
+  if ((await currentId(cache)) !== id) {
+    await cache.delete(resultKey(id));
+    await cache.delete(fileKey(id));
+  }
+}
+
 // 完了結果を書く。2xx かつ 1 バイト以上のときだけ本文を保存する。
 async function onSuccess(reg) {
   const cache = await caches.open(CACHE_NAME);
@@ -57,13 +67,13 @@ async function onSuccess(reg) {
     await cache.delete(fileKey(reg.id));
     return;
   }
-  await putJson(cache, resultKey(reg.id), result);
+  await putResult(cache, reg.id, result);
 }
 
 async function onFail(reg) {
   const cache = await caches.open(CACHE_NAME);
   if ((await currentId(cache)) !== reg.id) return;
-  await putJson(cache, resultKey(reg.id), {
+  await putResult(cache, reg.id, {
     id: reg.id,
     kind: "failed",
     reason: reg.failureReason,
@@ -76,7 +86,7 @@ async function onAbort(reg) {
   const cache = await caches.open(CACHE_NAME);
   if ((await currentId(cache)) !== reg.id) return;
   await cache.delete(fileKey(reg.id));
-  await putJson(cache, resultKey(reg.id), { id: reg.id, kind: "cancelled" });
+  await putResult(cache, reg.id, { id: reg.id, kind: "cancelled" });
 }
 
 self.addEventListener("backgroundfetchsuccess", (event) => {

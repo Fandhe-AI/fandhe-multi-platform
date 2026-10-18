@@ -354,7 +354,13 @@ mod web {
             .map_err(internal)
     }
 
-    async fn do_start(w: Window) -> Result<(), DeviceError> {
+    /// 破棄済みマウントの操作は副作用（current 差し替え・転送の開始・abort）を起こさず戻る。
+    /// 旧画面の継続が、同じ root へ再マウントした新転送を壊さないための確認（AGENTS.md の順序規約）。
+    fn live(mount_id: u64) -> bool {
+        crate::mount::is_live(mount_id)
+    }
+
+    async fn do_start(w: Window, mount_id: u64) -> Result<(), DeviceError> {
         if !is_supported(&w) {
             return Err(DeviceError::Unsupported("background download"));
         }
@@ -374,6 +380,9 @@ mod web {
         crate::background_task::wait_until_active(&w, &reg).await?;
         let reg: JsValue = reg.into();
 
+        if !live(mount_id) {
+            return Ok(());
+        }
         // 進行中なら何もしない（二重開始を作らない）。
         if let Some(id) = current_id(&cache).await? {
             if let Some(f) = find_fetch(&reg, &id).await.map_err(internal)? {
@@ -386,10 +395,16 @@ mod web {
         // 先に current を新 id へ差し替えてから旧世代を消す。逆順だと、旧 id が current の間に
         // SW が旧本文を書き戻し、誰からも参照されない本文が残る（取り消しと同じ順序）。
         let old = current_id(&cache).await?;
+        if !live(mount_id) {
+            return Ok(());
+        }
         let id = new_id();
         write_current(&cache, &id).await.map_err(internal)?;
         if let Some(old) = &old {
             drop_generation(&cache, old).await.map_err(internal)?;
+        }
+        if !live(mount_id) {
+            return Ok(());
         }
 
         let opts = Object::new();
@@ -405,12 +420,15 @@ mod web {
         Ok(())
     }
 
-    async fn do_cancel(w: Window) -> Result<(), DeviceError> {
+    async fn do_cancel(w: Window, mount_id: u64) -> Result<(), DeviceError> {
         if !is_supported(&w) {
             return Err(DeviceError::Unsupported("background download"));
         }
         let cache = open_cache(&w).await.map_err(internal)?;
         let old = current_id(&cache).await?;
+        if !live(mount_id) {
+            return Ok(());
+        }
         // 先に abort する。失敗したら current を変えずに Err を返し、表示と実転送を食い違わせない。
         // abort 後の古い完了は、続く世代差し替えで id 不一致になり捨てられる。
         if let (Some(old), Some(reg)) =
@@ -419,6 +437,9 @@ mod web {
             if let Some(f) = find_fetch(&reg, &old).await.map_err(internal)? {
                 call(&f, "abort", &[]).await.map_err(internal)?;
             }
+        }
+        if !live(mount_id) {
+            return Ok(());
         }
         let id = new_id();
         write_current(&cache, &id).await.map_err(internal)?;
@@ -521,8 +542,8 @@ mod web {
             };
             wasm_bindgen_futures::spawn_local(async move {
                 let result = match action {
-                    Action::Start => do_start(w.clone()).await,
-                    Action::Cancel => do_cancel(w.clone()).await,
+                    Action::Start => do_start(w.clone(), mount_id).await,
+                    Action::Cancel => do_cancel(w.clone(), mount_id).await,
                 };
                 // 完了の確定と直後の状態を 1 回の apply で反映する（古い view が 1 フレーム
                 // 出て二重開始できる窓を作らない）。
