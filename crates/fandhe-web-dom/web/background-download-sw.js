@@ -48,10 +48,12 @@ async function onSuccess(reg) {
       await cache.put(KEY_FILE, new Response(blob));
     }
   }
-  await putJson(cache, KEY_RESULT, result);
+  // 取り消しの「cancelled」記録を古い結果で上書きしないよう、書く直前に再確認する。
   if ((await currentId(cache)) !== reg.id) {
     await cache.delete(KEY_FILE);
+    return;
   }
+  await putJson(cache, KEY_RESULT, result);
 }
 
 async function onFail(reg) {

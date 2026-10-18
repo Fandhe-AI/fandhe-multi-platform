@@ -391,14 +391,15 @@ mod web {
         }
         let cache = open_cache(&w).await.map_err(internal)?;
         let old = current_id(&cache).await?;
-        // 先に世代を差し替える。飛行中の古い完了は id 不一致で捨てられる。
-        let id = new_id();
-        write_current(&cache, &id).await.map_err(internal)?;
+        // 先に abort する。失敗したら current を変えずに Err を返し、表示と実転送を食い違わせない。
+        // abort 後の古い完了は、続く世代差し替えで id 不一致になり捨てられる。
         if let (Some(old), Some(reg)) = (old, find_registration(&w).await.map_err(internal)?) {
             if let Some(f) = find_fetch(&reg, &old).await.map_err(internal)? {
                 call(&f, "abort", &[]).await.map_err(internal)?;
             }
         }
+        let id = new_id();
+        write_current(&cache, &id).await.map_err(internal)?;
         cache_delete(&cache, FILE_NAME).await.map_err(internal)?;
         let rec = json(&[
             ("id", JsValue::from_str(&id)),
@@ -429,7 +430,12 @@ mod web {
                 }
             }
         }
-        Ok(status_from(&id, running, record.as_ref(), file_bytes))
+        let status = status_from(&id, running, record.as_ref(), file_bytes);
+        // 失敗で確定したのに本文が残る場合（許可外の最終 URL 等）は解放する。
+        if matches!(status, DownloadStatus::Failed(_)) && file_bytes.is_some() {
+            cache_delete(&cache, FILE_NAME).await.map_err(internal)?;
+        }
+        Ok(status)
     }
 
     /// 保留中のタイマーを 1 本に保つ（古いものは止めてから closure を drop する）。
