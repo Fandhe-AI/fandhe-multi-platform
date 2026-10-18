@@ -21,6 +21,7 @@
 // ホストの `cargo test`（Linux 等）では FFI 部分が存在せず純ロジックだけが使われる。
 #![cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use fandhe_device::background_download::{completion_status, DownloadStatus};
@@ -33,6 +34,7 @@ const FAILED_NETWORK: &str = "接続できませんでした";
 const FAILED_SAVE: &str = "ファイルを保存できませんでした";
 const FAILED_OTHER: &str = "ダウンロードに失敗しました";
 const FAILED_START: &str = "開始できませんでした";
+const FAILED_CANCEL: &str = "保存したファイルを削除できませんでした";
 
 /// 転送の共有状態。
 #[derive(Debug)]
@@ -80,6 +82,11 @@ impl Inner {
         self.current = None;
         self.touched = true;
         self.status = DownloadStatus::Cancelled;
+    }
+
+    /// 取り消し時に保存先を消せなかった。嘘の「取り消しました」にせず失敗として見せる。
+    fn cancel_failed(&mut self) {
+        self.status = DownloadStatus::Failed(FAILED_CANCEL.to_string());
     }
 
     /// `.m` への開始依頼が失敗した。現在の世代のときだけ確定する。
@@ -166,6 +173,15 @@ fn start_error(code: i32) -> DeviceError {
 
 static SHARED: Mutex<Inner> = Mutex::new(Inner::new());
 
+/// 起動時の走行中 task の列挙（`getAllTasks`）が終わったか。非同期に再接続が届くため、終わるまで
+/// 画面側は継続ポーリングする（macOS は OS コールバックから再描画を起こせない、契約表 4）。
+static ENUMERATED: AtomicBool = AtomicBool::new(false);
+
+/// 列挙待ちか。macOS の画面ドライバが `drive_poll` の継続判定に足す。
+pub(crate) fn enumeration_pending() -> bool {
+    cfg!(target_os = "macos") && !ENUMERATED.load(Ordering::Acquire)
+}
+
 fn lock() -> Result<std::sync::MutexGuard<'static, Inner>, DeviceError> {
     SHARED
         .lock()
@@ -196,6 +212,9 @@ mod imp {
         // SAFETY: 引数なし。`.m` 側は `dispatch_once` で 1 回だけ session を作る。
         #[allow(unsafe_code)]
         let code = unsafe { fandhe_apple_bgdl_init() };
+        if code != 0 {
+            ENUMERATED.store(true, Ordering::Release); // 列挙は来ない。ポーリングを止める。
+        }
         (code == 0).then(|| Arc::new(AppleBackgroundDownload) as Arc<dyn BackgroundDownload>)
     }
 
@@ -232,13 +251,22 @@ mod imp {
         #[allow(unsafe_code)]
         fn cancel(&self) -> Result<(), DeviceError> {
             // 取り消し対象は呼び出し時点までに採番した世代。直後の `start` の新 task は巻き込まない。
+            // 再接続通知より前でも前プロセスの task（世代は起動時刻以下）を止められるよう先に種を入れる。
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(1, |d| d.as_millis() as u64);
             let upto = {
                 let mut g = lock()?;
+                g.seed_once(now_ms);
                 g.cancel();
                 g.next_gen
             };
-            // SAFETY: 値渡しのみ。`.m` は世代 `upto` 以下の task を取り消し、保存先のファイルを消す（冪等）。
-            unsafe { fandhe_apple_bgdl_cancel(upto) };
+            // SAFETY: 値渡しのみ。`.m` は世代 `upto` 以下の task を取り消し、保存先のファイルを消す。
+            let code = unsafe { fandhe_apple_bgdl_cancel(upto) };
+            if code != 0 {
+                lock()?.cancel_failed();
+                return Err(DeviceError::Internal("background download"));
+            }
             Ok(())
         }
 
@@ -305,6 +333,14 @@ mod imp {
         if let Ok(mut s) = SHARED.lock() {
             s.reconnect(gen);
         }
+        repaint();
+    }
+
+    /// 起動時の列挙が終わった。
+    #[allow(unsafe_code)]
+    #[no_mangle]
+    extern "C" fn fandhe_rust_bgdl_enumerated() {
+        ENUMERATED.store(true, Ordering::Release);
         repaint();
     }
 
@@ -447,6 +483,16 @@ mod tests {
         assert_eq!(i.begin(), 1_001);
         i.seed_once(5); // 採番済みなら無視
         assert_eq!(i.begin(), 1_002);
+    }
+
+    #[test]
+    fn cancel_failure_is_not_reported_as_cancelled() {
+        let mut i = Inner::new();
+        running(&mut i);
+        i.cancel();
+        i.cancel_failed();
+        assert!(matches!(i.status, DownloadStatus::Failed(_)));
+        assert_eq!(i.current, None);
     }
 
     #[test]

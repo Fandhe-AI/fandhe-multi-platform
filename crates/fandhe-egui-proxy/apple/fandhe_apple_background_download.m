@@ -22,7 +22,7 @@
 // 契約:
 //   int32_t fandhe_apple_bgdl_init(void);            // 0 = 成功 / 1 = session を作れない
 //   int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen); // 0 / 1 = session なし / 2 = URL 不正
-//   int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen); // 常に 0（冪等）。世代 upto_gen 以下の task だけ取り消す
+//   int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen); // 0 = 成功（保存先が無いのも成功）/ 3 = 保存先を消せない。世代 1 以上 upto_gen 以下の task だけ取り消す
 //   delegate → Rust の終了コード: 0 = 完了 / 1 = 取り消し / 2 = 接続系 / 3 = 保存失敗 / 4 = その他
 #import <Foundation/Foundation.h>
 #import <stdbool.h>
@@ -31,6 +31,7 @@ extern void fandhe_rust_bgdl_progress(uint64_t gen, uint64_t received, int64_t t
 extern bool fandhe_rust_bgdl_accept(uint64_t gen, int32_t http_status, uint64_t bytes, const char *final_url);
 extern bool fandhe_rust_bgdl_finished(uint64_t gen, int32_t code, uint64_t bytes);
 extern void fandhe_rust_bgdl_reconnected(uint64_t gen);
+extern void fandhe_rust_bgdl_enumerated(void);
 
 static NSString *const kSessionId = @"com.fandhe.egui-proxy.background-download";
 // `fandhe_device::background_download::FILE_NAME` と一致させる。
@@ -58,11 +59,19 @@ static NSURL *dest_url(void) {
     return [dir URLByAppendingPathComponent:kFileName];
 }
 
-static void remove_dest(void) {
+// 保存先を消す。存在しないのは冪等な成功（0）、それ以外の削除エラーは 3（保存先が残り得る）。
+static int32_t remove_dest(void) {
     NSURL *dest = dest_url();
-    if (dest != nil) {
-        [[NSFileManager defaultManager] removeItemAtURL:dest error:nil];
+    if (dest == nil) {
+        return 0;
     }
+    NSError *err = nil;
+    if ([[NSFileManager defaultManager] removeItemAtURL:dest error:&err]) {
+        return 0;
+    }
+    BOOL missing = [err.domain isEqualToString:NSCocoaErrorDomain] &&
+                   (err.code == NSFileNoSuchFileError || err.code == NSFileReadNoSuchFileError);
+    return missing ? 0 : 3;
 }
 
 @interface FandheBgdlDelegate : NSObject <NSURLSessionDownloadDelegate>
@@ -106,7 +115,8 @@ static void remove_dest(void) {
         bool adopted = fandhe_rust_bgdl_finished(gen, moved ? 0 : 3, moved ? bytes : 0);
         if (moved && !adopted) {
             // 移す間に取り消し・置き換えされた。嘘の成功を残さないよう保存先を消す。
-            remove_dest();
+            // 取り消し側も cancel で消すので、ここでの失敗は無視する。
+            (void)remove_dest();
         }
     }
 }
@@ -148,6 +158,7 @@ int32_t fandhe_apple_bgdl_init(void) {
                         fandhe_rust_bgdl_reconnected(task_gen(task));
                     }
                 }
+                fandhe_rust_bgdl_enumerated();
             }];
         });
         return g_session != nil ? 0 : 1;
@@ -168,12 +179,12 @@ int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen) {
         // 後から作られた新しい task（gen 以上）を巻き込まないよう世代で絞る。
         [g_session getAllTasksWithCompletionHandler:^(NSArray<__kindof NSURLSessionTask *> *tasks) {
             for (NSURLSessionTask *task in tasks) {
-                if (task_gen(task) < gen) {
+                if (task_gen(task) > 0 && task_gen(task) < gen) {
                     [task cancel];
                 }
             }
         }];
-        remove_dest();
+        (void)remove_dest();  // 失敗しても、受け入れ時に移す前に再度消す。
         NSURLSessionDownloadTask *task = [g_session downloadTaskWithURL:nsurl];
         task.taskDescription = [NSString stringWithFormat:@"%llu", (unsigned long long)gen];
         [task resume];
@@ -186,13 +197,12 @@ int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen) {
         if (g_session != nil) {
             [g_session getAllTasksWithCompletionHandler:^(NSArray<__kindof NSURLSessionTask *> *tasks) {
                 for (NSURLSessionTask *task in tasks) {
-                    if (task_gen(task) <= upto_gen) {
+                    if (task_gen(task) > 0 && task_gen(task) <= upto_gen) {
                         [task cancel];
                     }
                 }
             }];
         }
-        remove_dest();
-        return 0;
+        return remove_dest();
     }
 }

@@ -136,7 +136,10 @@ fn drive_poll(
     dl: &dyn BackgroundDownload,
 ) {
     let view = to_view(dl.status());
-    let keep_polling = matches!(view, DownloadView::Running { .. }) || state.phase != Phase::Idle;
+    // macOS は起動時の再接続（非同期）が終わるまで続ける。OS コールバックから再描画を起こせないため。
+    let keep_polling = matches!(view, DownloadView::Running { .. })
+        || state.phase != Phase::Idle
+        || super::apple_background_download::enumeration_pending();
     if view != state.view {
         let _ = sender.send(Box::new(move |s: &mut BackgroundDownloadState| {
             apply_snapshot(s, view);
