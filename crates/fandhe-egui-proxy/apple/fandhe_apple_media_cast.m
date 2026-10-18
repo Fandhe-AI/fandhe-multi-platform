@@ -185,11 +185,13 @@ int32_t fandhe_apple_cast_prepare(uint64_t gen, const uint8_t *wav, size_t len) 
             FandheCastPickerDelegate *delegate = [[FandheCastPickerDelegate alloc] init];
             delegate.gen = gen;
             picker.delegate = delegate;
-            // 窓の右下に固定する（窓のリサイズには追従しない）。flipped かどうかで下端の y が変わる。
+            // 窓の右下に固定し、リサイズでは左端・上端の余白を伸縮させて右下に追従させる。flipped かどうかで下端の y が変わる。
             CGFloat y = content.isFlipped ? content.bounds.size.height - PICKER_SIZE - PICKER_MARGIN
                                           : PICKER_MARGIN;
             picker.frame = NSMakeRect(content.bounds.size.width - PICKER_SIZE - PICKER_MARGIN, y,
                                       PICKER_SIZE, PICKER_SIZE);
+            picker.autoresizingMask = content.isFlipped ? (NSViewMinXMargin | NSViewMinYMargin)
+                                                        : (NSViewMinXMargin | NSViewMaxYMargin);
             [content addSubview:picker];
 
             pthread_mutex_lock(&g_lock);
@@ -213,7 +215,10 @@ int32_t fandhe_apple_cast_play(uint64_t gen) {
     if (!player) return RC_STALE;
     BOOL ok = [player play];
     pthread_mutex_lock(&g_lock);
-    if (gen == g_gen) g_playback = ok ? PB_PLAYING : PB_FAILED;
+    if (gen == g_gen) {
+        g_playback = ok ? PB_PLAYING : PB_FAILED;
+        g_disconnected = NO;  // 新しい再生開始で切断表示を解く
+    }
     pthread_mutex_unlock(&g_lock);
     return ok ? RC_OK : RC_INTERNAL;
 }
@@ -224,6 +229,7 @@ int32_t fandhe_apple_cast_stop(uint64_t gen) {
     AVAudioPlayer *player = (gen != 0 && gen == g_gen) ? g_player : nil;
     BOOL playing = g_playback == PB_PLAYING;
     if (player && playing) g_playback = PB_STOPPED;
+    if (player) g_disconnected = NO;
     pthread_mutex_unlock(&g_lock);
     if (!player) return RC_STALE;
     if (playing) {

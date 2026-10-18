@@ -207,6 +207,11 @@ fn drive(
         }
     }
 
+    // 未発送の再生を画面側で取り消すと、要求なしで世代だけが進む。追跡を現在の世代へ揃える。
+    if take_command(state).is_none() && state.generation != inner.handled {
+        inner.handled = state.generation;
+    }
+
     // 期限（単調時計）を過ぎたら、届いている結果も成功にせず失敗で確定し、遅れて始まる再生を止める。
     if state.generation == inner.handled {
         let transitioning = matches!(
@@ -646,5 +651,18 @@ mod tests {
         h.state.command = c.map(|(c, _)| c);
         h.step();
         assert_eq!(h.fake.0.lock().unwrap().gen, 1);
+    }
+
+    #[test]
+    fn cancelled_unsent_play_keeps_tracking_current_generation() {
+        let mut h = H::new(Fake::new(true));
+        h.open_ready();
+        play(&mut h.state);
+        stop(&mut h.state);
+        h.step();
+        assert_eq!(h.session.inner.lock().unwrap().handled, h.state.generation);
+        show_picker(&mut h.state);
+        h.step();
+        assert_eq!(h.state.command, None);
     }
 }

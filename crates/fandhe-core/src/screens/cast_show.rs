@@ -246,7 +246,7 @@ pub fn stop(state: &mut CastShowState) {
 }
 
 /// 「出力先を選ぶ」。[`PickerView::Native`] は要求を出さない（OS のボタンから選ぶ案内を出す）。
-/// 準備済みのときだけ要求を出し、選択中・接続中の二重押下は無視する。失敗（`Unsupported` 以外）からは準備をやり直す。
+/// 準備済みのときだけ要求を出す（`Starting` 中は再生開始の期限追跡を壊さないため無視する）。選択中・接続中の二重押下は無視する。失敗（`Unsupported` 以外）からは準備をやり直す。
 pub fn show_picker(state: &mut CastShowState) {
     if state.picker == Some(PickerView::Native) {
         return;
@@ -259,7 +259,6 @@ pub fn show_picker(state: &mut CastShowState) {
     }
     match state.playback {
         CastShowPlayback::Ready
-        | CastShowPlayback::Starting
         | CastShowPlayback::Playing
         | CastShowPlayback::Stopped
         | CastShowPlayback::Interrupted => issue(state, CastCommand::ShowPicker),
@@ -548,6 +547,16 @@ mod tests {
         let mut s = at(CastShowPlayback::Ready);
         show_picker(&mut s);
         assert_eq!(s.command, Some(CastCommand::ShowPicker));
+    }
+
+    #[test]
+    fn picker_during_starting_is_ignored() {
+        let mut s = at(CastShowPlayback::Ready);
+        play(&mut s);
+        let g = s.generation;
+        show_picker(&mut s);
+        assert_eq!(s.generation, g);
+        assert_eq!(s.command, Some(CastCommand::Play));
     }
 
     #[test]
