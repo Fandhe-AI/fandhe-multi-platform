@@ -4605,6 +4605,8 @@ public class MainActivity extends GameActivity {
         // 破棄中ウィンドウの insets 報告が新 Activity の状態を潰さないよう、super より前に確定する。
         fullscreenHelper.onDestroy();
         penStylusHelper.onDestroy();
+        // UI キューを待つネイティブ終了処理（clear）が super.onDestroy() の後ろで詰まらないよう先に解放する。
+        nowPlayingHelper.onDestroy();
         super.onDestroy();
         pedometerHelper.onDestroy();
         compassHelper.onDestroy();
@@ -4615,7 +4617,6 @@ public class MainActivity extends GameActivity {
         screenCaptureHelper.onDestroy();
         printHelper.onDestroy();
         screenWakeLockHelper.onDestroy();
-        nowPlayingHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず
         // 直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。

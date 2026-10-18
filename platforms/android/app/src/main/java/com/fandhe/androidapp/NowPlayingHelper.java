@@ -139,7 +139,8 @@ final class NowPlayingHelper {
         return await(call);
     }
 
-    // egui スレッドから呼ぶ（冪等）。Rust 側は先に操作の受け口を閉じている。
+    // egui スレッドから呼ぶ（冪等）。Rust 側は先に操作の受け口を閉じている。最長 APPLY_TIMEOUT_MS
+    // （呼び出し開始起点・単調時計）で戻る。
     void clear() {
         synchronized (lock) {
             desired = null;
@@ -147,32 +148,26 @@ final class NowPlayingHelper {
                 return;
             }
         }
-        final CountDownLatch done = new CountDownLatch(1);
+        final Call call = new Call();
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                try {
-                    synchronized (lock) {
-                        release();
+                if (call.state.compareAndSet(PENDING, STARTED)) {
+                    try {
+                        synchronized (lock) {
+                            release();
+                        }
+                    } finally {
+                        call.finished.countDown();
                     }
-                } finally {
-                    done.countDown();
                 }
             }
         });
-        // 解放は放棄しない。契約上「取り下げを済ませてから戻る」ため完了まで待ち、割り込みは後で復元する。
-        boolean interrupted = false;
-        while (true) {
-            try {
-                done.await();
-                break;
-            } catch (InterruptedException e) {
-                interrupted = true;
-            }
-        }
-        if (interrupted) {
-            Thread.currentThread().interrupt();
-        }
+        // 期限つきで待つ。UI スレッドが終了処理（GameActivity の onPause/onDestroy）でネイティブ側の
+        // 完了を待っているとき、無期限に待つと相互待ちになる。未開始なら放棄し（後から走る release が
+        // 新しい publish の session を壊さない）、残りの session は desired なしで保留され、次の
+        // publish の再利用か onDestroy が片付ける。開始済みは完了まで待つ。
+        await(call);
     }
 
     private static int await(Call call) {
