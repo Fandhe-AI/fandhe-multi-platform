@@ -135,6 +135,8 @@ mod web {
         el: HtmlMediaElement,
         remote: JsValue,
         url: String,
+        /// 準備要求の世代。セッションの識別子として不変（ピッカー結果の照合に使う）。
+        id: u64,
         /// effect が最後に見た画面の世代。
         gen: u64,
         /// 再生開始の確定待ち（世代, 起点 `performance.now()`）。
@@ -386,6 +388,7 @@ mod web {
             el,
             remote,
             url: String::new(),
+            id: gen,
             gen,
             pending: None,
             start_timer: None,
@@ -541,14 +544,24 @@ mod web {
     }
 
     fn reject_play(applier: &Applier<State>, mount: u64, g: u64, e: &JsValue) {
-        let Some(f) = play_failure(err_name(e).as_deref()) else {
-            return;
-        };
-        with(mount, |s| {
-            s.pending = None;
-            clear_timer(s.start_timer.take());
-        });
-        post_update(applier, g, CastShowUpdate::Failed(f));
+        let mine = with(mount, |s| {
+            let mine = s.pending.map(|p| p.0) == Some(g);
+            if mine {
+                s.pending = None;
+                clear_timer(s.start_timer.take());
+            }
+            mine
+        }) == Some(true);
+        match play_failure(err_name(e).as_deref()) {
+            Some(f) => post_update(applier, g, CastShowUpdate::Failed(f)),
+            // AbortError: 開始中に利用者・OS が止めた。失敗にせず停止として確定する。
+            None if mine => post_update(
+                applier,
+                g,
+                CastShowUpdate::Playback(CastShowPlayback::Stopped),
+            ),
+            None => {}
+        }
     }
 
     fn do_stop(applier: &Applier<State>, mount: u64, g: u64) {
@@ -565,7 +578,7 @@ mod web {
     }
 
     fn do_show_picker(applier: &Applier<State>, mount: u64, g: u64) {
-        let Some(remote) = with(mount, |s| s.remote.clone()) else {
+        let Some((remote, sid)) = with(mount, |s| (s.remote.clone(), s.id)) else {
             return post_update(applier, g, CastShowUpdate::Failed(fixed_failure()));
         };
         // await の後では transient activation を失うため、ここ（同期）で呼ぶ。
@@ -576,7 +589,7 @@ mod web {
         post_update(applier, g, CastShowUpdate::Route(CastShowRoute::Choosing));
         let promise = match ret {
             Ok(p) => p.dyn_into::<Promise>().ok(),
-            Err(e) => return after_prompt(applier, mount, Err(e)),
+            Err(e) => return after_prompt(applier, mount, sid, Err(e)),
         };
         let Some(p) = promise else {
             return post_current_route(applier, mount);
@@ -585,14 +598,18 @@ mod web {
         spawn_local(async move {
             let r = JsFuture::from(p).await.map(|_| ());
             if is_live(mount) {
-                after_prompt(&a, mount, r);
+                after_prompt(&a, mount, sid, r);
             }
         });
     }
 
     /// 選択結果を現在の状態へ確定させる。再生操作で世代が進んでいても、`Choosing` のままなら回収する。
     /// 停止・中断中は core が `Failed` を受けないため、ここで直接失敗へ移して `Choosing` を残さない。
-    fn after_prompt(applier: &Applier<State>, mount: u64, r: Result<(), JsValue>) {
+    /// 要求時のセッション `sid` が現存しなければ結果を捨てる（再準備後の新セッションを触らない）。
+    fn after_prompt(applier: &Applier<State>, mount: u64, sid: u64, r: Result<(), JsValue>) {
+        if with(mount, |s| s.id) != Some(sid) {
+            return;
+        }
         let outcome = match r {
             Ok(()) => return post_current_route(applier, mount),
             Err(e) => prompt_outcome(err_name(&e).as_deref()),
