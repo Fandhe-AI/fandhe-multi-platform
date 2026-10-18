@@ -217,6 +217,9 @@ pub(crate) fn clear_os_failure() {
 pub(crate) fn reset_pending_tracking() {
     commands().disarm();
     platform_now_playing().clear();
+    // Java 側の session id は新しい Activity で 1 から採番し直すため、失敗済み id の記録も捨てる。
+    #[cfg(target_os = "android")]
+    super::android_now_playing::reset_session_state();
     if let Some(s) = SESSION.get() {
         *s.shown.lock().unwrap_or_else(|p| p.into_inner()) = None;
         s.os_failed.store(false, Ordering::SeqCst);

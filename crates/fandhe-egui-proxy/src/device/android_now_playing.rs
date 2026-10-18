@@ -15,6 +15,10 @@
 //! Activity 再生成: Java の `onDestroy` が session を解放し、新インスタンスの
 //! `reset_pending_tracking` が `disarm` → `clear` する。旧インスタンスの操作は新しい再生に効かない。
 //!
+//! 受付の状態は [`SessionState`] 1 つ（`STATE` のロック 1 本）に集約する。失敗した id は二度と受理せず、
+//! 操作の照合から投入までは同じロックの内側で行う。ロック順は STATE → 保留キューの一方向で、
+//! JNI 呼び出し中は STATE を持たない。
+//!
 //! 守る範囲: 1 プロセス内の操作順、取り下げ後の古い操作で再開しないこと、嘘の成功の禁止、
 //! session と通知の解放。守らない範囲: 通知を消した後の再表示、通知を切った端末でのシェード表示、
 //! API 24〜32 の通知ボタン、背景中の操作、UI スレッドが塞がっている間の取り下げの遅れ、複数プロセス。
@@ -23,54 +27,76 @@
 
 use std::sync::Arc;
 
-use fandhe_device::now_playing::{NowPlaying, OsMediaCommand};
+use fandhe_device::now_playing::{NowPlaying, OsMediaCommand, SharedOsCommand};
 use fandhe_device::DeviceError;
 
 /// 操作コード（SSOT は Java 側 `NowPlayingHelper.CMD_*`）。
 const CMD_PLAY: i32 = 0;
 const CMD_PAUSE: i32 = 1;
 
-/// 操作を受け入れる session id と、publish の結果を受け取る前に届いた失敗通知の id。
-/// 判定と更新は必ず同じロックの内側で行う（結果の受理と失敗通知の順序を一意にする）。
+/// 操作を受け入れる session id と、失敗を確認した id の上限。
+/// 判定と更新は必ず同じロックの内側で行う（結果の受理・失敗通知・操作の投入の順序を一意にする）。
+/// 状態を変える出来事は `accept`（publish の戻り）・`fail`（Java の失敗通知）・`route`（OS の操作）・
+/// `reset`（Activity 再生成）・clear / shutdown（`accepted` を 0 へ）だけ。
+/// JNI 呼び出し（`call_activity`）の間はこのロックを持たない（UI スレッドの待ちと入れ子にしない）。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
 #[derive(Default)]
 struct SessionState {
     /// 操作を受け入れる session id（0 = なし）。取り下げ・失敗で 0 に戻す。
     accepted: i64,
-    /// 受け入れ前（publish の戻りを処理する前）に失敗通知が届いた id。受理時に照合して捨てる。
-    early_failed: Vec<i64>,
+    /// 失敗を確認した session id の最大値。Java の session id は 1 つの Activity 内で単調増加し、
+    /// 解放した id は再利用されないので、これ以下の id は二度と受理しない（更新 publish が
+    /// 解放済みの同じ id を返しても、受理済みの失敗を取り消せない）。Activity 再生成で `reset`。
+    failed_upto: i64,
 }
 
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
 impl SessionState {
-    /// publish の戻りを受理する。失敗通知が先に届いていた id は受け入れず `false`。
-    fn accept(&mut self, id: i64) -> bool {
-        let failed = self.early_failed.contains(&id);
-        self.early_failed.clear();
-        self.accepted = if failed { 0 } else { id };
-        !failed
+    /// publish の戻りを受理する。失敗済みの id は受け入れず `false`。別の session へ替わるときは、
+    /// 替わる前の session の操作（照合は旧 id で通った）が新しい受付に残らないよう保留を捨てる。
+    fn accept(&mut self, id: i64, cmds: &SharedOsCommand) -> bool {
+        if id <= self.failed_upto {
+            self.accepted = 0;
+            return false;
+        }
+        if self.accepted != 0 && self.accepted != id {
+            cmds.disarm();
+            cmds.arm();
+        }
+        self.accepted = id;
+        true
     }
 
-    /// 失敗通知を受ける。現在の session なら受付を止めて `true`、未受理の id は覚えて `false`。
+    /// 失敗通知を受ける。id を失敗済みとして記録し、現在の session だった場合だけ受付を止めて `true`。
     fn fail(&mut self, id: i64) -> bool {
+        if id <= 0 {
+            return false;
+        }
+        self.failed_upto = self.failed_upto.max(id);
         if id == self.accepted {
             self.accepted = 0;
             true
         } else {
-            // 古い世代の id も入るが、受理時の照合と clear でしか使わない。
-            if self.early_failed.len() >= 8 {
-                self.early_failed.remove(0);
-            }
-            self.early_failed.push(id);
             false
         }
+    }
+
+    /// OS の操作を、現在の session のものだけ保留へ置く。照合から投入までを呼び出し側が
+    /// ロックを握ったまま行うので、clear と次の publish はこの間に割り込めない。
+    fn route(&self, session_id: i64, cmd: OsMediaCommand, cmds: &SharedOsCommand) -> bool {
+        session_id == self.accepted && cmds.push(cmd)
+    }
+
+    /// Activity 再生成で Java 側の id 採番が 1 から始まり直すため、記録を捨てる。
+    fn reset(&mut self) {
+        *self = Self::default();
     }
 }
 
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
 static STATE: std::sync::Mutex<SessionState> = std::sync::Mutex::new(SessionState {
     accepted: 0,
-    early_failed: Vec::new(),
+    failed_upto: 0,
 });
 
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
@@ -78,14 +104,19 @@ fn state() -> std::sync::MutexGuard<'static, SessionState> {
     STATE.lock().unwrap_or_else(|p| p.into_inner())
 }
 
+/// Activity 再生成（`device::now_playing::reset_pending_tracking`）で受付の記録を捨てる。
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub(crate) fn reset_session_state() {
+    state().reset();
+}
+
 /// publish の戻り値（SSOT は Java 側 `NowPlayingHelper`）を結果へ写す。負（失敗・期限切れ）と
-/// 0（id なし）は `Internal`、正は成功で受け入れる id を更新する。受理時に、この publish の間に届いた
-/// 失敗通知（受け取り前の同 id、および解放済みの古い session の通知）を整理する。
+/// 0（id なし）は `Internal`、正は成功で受け入れる id を更新する。受理できたときは、この publish の間に
+/// 立った失敗の印（解放済みの古い session のもの）を新しい session に持ち越さない。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
 fn decode_result(code: i64) -> Result<(), DeviceError> {
     let mut st = state();
-    if code > 0 && st.accept(code) {
-        // 解放済みの古い session の失敗通知が立てた印は、新しい session に持ち越さない。
+    if code > 0 && st.accept(code, super::now_playing::commands()) {
         super::now_playing::clear_os_failure();
         Ok(())
     } else {
@@ -218,11 +249,12 @@ extern "system" fn Java_com_fandhe_androidapp_NowPlayingHelper_nativeOnNowPlayin
     code: jni::sys::jint,
     session_id: jni::sys::jlong,
 ) {
-    if session_id != state().accepted {
+    let Some(cmd) = decode_command(code) else {
         return;
-    }
-    if let Some(cmd) = decode_command(code) {
-        super::now_playing::commands().push(cmd);
+    };
+    // 照合と投入は同じロックの内側（`SessionState::route`）。
+    let pushed = state().route(session_id, cmd, super::now_playing::commands());
+    if pushed {
         // 入力が無いと egui が描画せず操作が画面へ届かないため次フレームを起こす。
         crate::android::request_repaint();
     }
@@ -255,18 +287,93 @@ extern "system" fn Java_com_fandhe_androidapp_NowPlayingHelper_nativeOnNowPlayin
 mod tests {
     use super::*;
 
+    fn armed() -> SharedOsCommand {
+        let c = SharedOsCommand::new();
+        c.arm();
+        c
+    }
+
     #[test]
     fn accept_rejects_id_whose_failure_arrived_first() {
+        let c = armed();
         let mut st = SessionState::default();
         assert!(!st.fail(7)); // 受理前の失敗通知
-        assert!(!st.accept(7));
+        assert!(!st.accept(7, &c));
         assert_eq!(st.accepted, 0);
-        assert!(st.accept(8)); // 別 id は通常どおり
+        assert!(st.accept(8, &c)); // 別 id は通常どおり
         assert_eq!(st.accepted, 8);
-        assert!(!st.fail(7)); // 古い世代の通知は無視
+        assert!(!st.fail(7)); // 古い世代の通知は現在の session を止めない
         assert_eq!(st.accepted, 8);
         assert!(st.fail(8));
         assert_eq!(st.accepted, 0);
+    }
+
+    #[test]
+    fn failed_accepted_id_is_never_accepted_again() {
+        // 指摘の再現: accept(7) → fail(7) → accept(7)（更新 publish が解放済みの同じ id を返す）。
+        let c = armed();
+        let mut st = SessionState::default();
+        assert!(st.accept(7, &c));
+        assert!(st.fail(7));
+        assert!(!st.accept(7, &c));
+        assert_eq!(st.accepted, 0);
+        assert!(!st.accept(3, &c)); // 失敗した最大 id 以下は拒否
+        assert!(st.accept(8, &c));
+    }
+
+    #[test]
+    fn fail_ignores_non_positive_id() {
+        let mut st = SessionState::default();
+        assert!(!st.fail(0));
+        assert!(!st.fail(-1));
+        assert!(st.accept(1, &armed()));
+    }
+
+    #[test]
+    fn route_requires_accepted_id() {
+        let c = armed();
+        let mut st = SessionState::default();
+        assert!(!st.route(7, OsMediaCommand::Play, &c)); // 未受理
+        st.accept(7, &c);
+        assert!(st.route(7, OsMediaCommand::Play, &c));
+        assert!(!st.route(6, OsMediaCommand::Pause, &c)); // 別 session
+        assert_eq!(c.take(), Some(OsMediaCommand::Play));
+        assert_eq!(c.take(), None);
+        st.fail(7);
+        assert!(!st.route(7, OsMediaCommand::Play, &c)); // 失敗後
+    }
+
+    #[test]
+    fn old_session_command_does_not_enter_newly_armed_queue() {
+        // 旧 session 7 の操作が照合を通った後、次の session 8 の受理までの間に入った分を捨てる。
+        let c = armed();
+        let mut st = SessionState::default();
+        st.accept(7, &c);
+        assert!(st.route(7, OsMediaCommand::Play, &c)); // 新しい publish の arm 後に届いた旧操作
+        assert!(st.accept(8, &c));
+        assert_eq!(c.take(), None);
+        assert!(st.route(8, OsMediaCommand::Pause, &c)); // 新 session の操作は受ける
+        assert_eq!(c.take(), Some(OsMediaCommand::Pause));
+    }
+
+    #[test]
+    fn same_session_update_keeps_pending_commands() {
+        let c = armed();
+        let mut st = SessionState::default();
+        st.accept(7, &c);
+        assert!(st.route(7, OsMediaCommand::Play, &c));
+        assert!(st.accept(7, &c)); // 更新 publish は同じ id
+        assert_eq!(c.take(), Some(OsMediaCommand::Play));
+    }
+
+    #[test]
+    fn reset_restarts_id_numbering() {
+        let c = armed();
+        let mut st = SessionState::default();
+        st.accept(1, &c);
+        st.fail(1);
+        st.reset();
+        assert!(st.accept(1, &c)); // 新しい Activity は id 1 から採番し直す
     }
 
     #[test]
