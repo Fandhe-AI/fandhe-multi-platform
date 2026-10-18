@@ -15,12 +15,15 @@
 //     次の曲・前の曲・シーク・スキップ・再生速度は enabled = NO にする（効かない操作 UI を出さない）。
 //     macOS は playbackState を毎回設定する（audio session から再生状態を判定できないため。SDK ヘッダの注記）。
 //     iOS は playbackState が無く、playbackRate で表す。`AVAudioSession` の category は変えない（前景のみ）。
-//   void fandhe_apple_now_playing_clear(void)   冪等。removeTarget: で全トークンを外し、表示を取り下げる。
+//   void fandhe_apple_now_playing_clear(void)   冪等。removeTarget: で全トークンを外し、publish が変えた
+//     remote command の enabled を元の値へ戻し、表示を取り下げる（MPRemoteCommandCenter はプロセス共有のため、
+//     PiP など同じプロセスの他の機能に enabled の変更を残さない）。
 //     main thread から呼ばれたときだけ、登録の解放を済ませてから戻る（契約表 9）。macOS の終了処理（on_exit）は
 //     main thread から呼ぶのでこの経路になる。
 //     main 以外から呼ばれたら main へ dispatch_async して即座に戻る。この場合は解放の完了を待たない
 //     （守らない範囲。dispatch_sync はロックの内側から呼ばれるとデッドロックするため使わない）。
-//     要求後に publish が成功していたら（世代が進んだら）古い clear は捨てる（新しい表示を消さない）。
+//     要求後に publish が始まっていたら（世代が進んだら）古い clear は捨てる（新しい表示を消さない）。
+//     世代は publish が OS の状態を変える前に進めるので、publish 実行中に main 以外から来た clear は捨てられない。
 //   void fandhe_apple_now_playing_shutdown(void)  clear と同じ（main 以外からの扱いも同じ）。
 // iOS の handler は OS のスレッドで呼ばれ得るため、UIApplication は読まず、
 // DidEnterBackground / WillEnterForeground 通知で main が更新するアトミックフラグで判定する。
@@ -53,8 +56,18 @@ extern int32_t fandhe_rust_now_playing_command(int32_t code);
 // 登録済みの (MPRemoteCommand, token) の対。
 static NSMutableArray<NSArray *> *g_targets = nil;
 
-// publish 成功ごとに進む世代（main thread だけが書く）。main 以外からの clear が後続の publish を消さないために使う。
+// publish が OS の状態を変える前に進む世代（main thread だけが書く）。main 以外からの clear が後続の publish を消さないために使う。
 static _Atomic uint64_t g_epoch = 0;
+
+// publish が enabled を変える前の値。(MPRemoteCommand, NSNumber(BOOL)) の対。
+// 未保存（nil）のときだけ保存し、clear で戻したら捨てる（register_all の再入で上書きしない）。
+static NSMutableArray<NSArray *> *g_prev_enabled = nil;
+
+// enabled を変える前に元の値を保存してから変更する。
+static void fandhe_set_enabled(MPRemoteCommand *cmd, BOOL enabled) {
+    [g_prev_enabled addObject:@[ cmd, @(cmd.enabled) ]];
+    cmd.enabled = enabled;
+}
 
 #if TARGET_OS_IOS
 // アプリが背景か（Inactive は前景扱い）。handler は OS のスレッドで呼ばれ得るため UIApplication を直接読まず、
@@ -63,7 +76,7 @@ static _Atomic bool g_background = false;
 #endif
 
 static void fandhe_register(MPRemoteCommand *cmd, int32_t code) {
-    cmd.enabled = YES;
+    fandhe_set_enabled(cmd, YES);
     id token = [cmd addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *event) {
         (void)event;
 #if TARGET_OS_IOS
@@ -82,10 +95,14 @@ static void fandhe_register_all(void) {
         return;
     }
     g_targets = [NSMutableArray array];
+    if (g_prev_enabled == nil) {
+        g_prev_enabled = [NSMutableArray array];
+    }
 #if TARGET_OS_IOS
     // main thread（publish 経由）でのみ到達する。通知オブザーバーはプロセスで一度だけ登録する
-    // （clear 後の再登録で増やさない。登録トークンはプロセス存続中 static で握り続け、
-    // 背景遷移の購読が解放されて g_background が固定されるのを防ぐ。契約表 類型 1）。
+    // （clear 後の再登録で増やさない）。block 版のオブザーバーは通知センターが保持するため、
+    // トークンを握らなくても購読は残る。トークンは static に置いたままにして、
+    // 将来 removeObserver: で外せるようにしてある（現状は外さない）。
     static dispatch_once_t once;
     static id s_bg_token = nil;
     static id s_fg_token = nil;
@@ -100,20 +117,22 @@ static void fandhe_register_all(void) {
                          queue:[NSOperationQueue mainQueue]
                     usingBlock:^(NSNotification *n) { (void)n; atomic_store(&g_background, false); }];
     });
+    (void)s_bg_token;  // 書き込みのみで読まれないことによる警告を抑える
+    (void)s_fg_token;
 #endif
     MPRemoteCommandCenter *c = [MPRemoteCommandCenter sharedCommandCenter];
     fandhe_register(c.playCommand, 1);
     fandhe_register(c.pauseCommand, 2);
     fandhe_register(c.togglePlayPauseCommand, 3);
     // 効かない操作を OS の UI に出さない。
-    c.nextTrackCommand.enabled = NO;
-    c.previousTrackCommand.enabled = NO;
-    c.seekForwardCommand.enabled = NO;
-    c.seekBackwardCommand.enabled = NO;
-    c.skipForwardCommand.enabled = NO;
-    c.skipBackwardCommand.enabled = NO;
-    c.changePlaybackPositionCommand.enabled = NO;
-    c.changePlaybackRateCommand.enabled = NO;
+    fandhe_set_enabled(c.nextTrackCommand, NO);
+    fandhe_set_enabled(c.previousTrackCommand, NO);
+    fandhe_set_enabled(c.seekForwardCommand, NO);
+    fandhe_set_enabled(c.seekBackwardCommand, NO);
+    fandhe_set_enabled(c.skipForwardCommand, NO);
+    fandhe_set_enabled(c.skipBackwardCommand, NO);
+    fandhe_set_enabled(c.changePlaybackPositionCommand, NO);
+    fandhe_set_enabled(c.changePlaybackRateCommand, NO);
 }
 
 int32_t fandhe_apple_now_playing_publish(const uint8_t *title, size_t len, int32_t playing,
@@ -142,6 +161,9 @@ int32_t fandhe_apple_now_playing_publish(const uint8_t *title, size_t len, int32
         if (pos_ms >= 0) {
             info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @((double)pos_ms / 1000.0);
         }
+        // OS の状態を変える前に世代を進める。main 以外の clear が、この publish の実行中に要求されても
+        // 捨てられないようにする（要求後に始まった publish だけが古い clear を無効にする）。
+        atomic_fetch_add(&g_epoch, 1);
         MPNowPlayingInfoCenter *center = [MPNowPlayingInfoCenter defaultCenter];
         center.nowPlayingInfo = info;
 #if TARGET_OS_OSX
@@ -149,7 +171,6 @@ int32_t fandhe_apple_now_playing_publish(const uint8_t *title, size_t len, int32
                                        : MPNowPlayingPlaybackStatePaused;
 #endif
     }
-    atomic_fetch_add(&g_epoch, 1);
     return 0;
 }
 
@@ -163,6 +184,11 @@ static void fandhe_clear_on_main(void) {
             [(MPRemoteCommand *)pair[0] removeTarget:pair[1]];
         }
         g_targets = nil;
+        // 保存しておいた元の値へ戻す（play / pause / toggle を enabled のまま残さない）。
+        for (NSArray *pair in g_prev_enabled) {
+            ((MPRemoteCommand *)pair[0]).enabled = [pair[1] boolValue];
+        }
+        g_prev_enabled = nil;
         MPNowPlayingInfoCenter *center = [MPNowPlayingInfoCenter defaultCenter];
         center.nowPlayingInfo = nil;
 #if TARGET_OS_OSX
