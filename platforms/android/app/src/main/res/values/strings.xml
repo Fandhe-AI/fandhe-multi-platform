@@ -15,6 +15,7 @@
     <string name="live_activity_channel_name">ライブアクティビティ</string>
     <string name="live_activity_notification_title">ライブアクティビティ</string>
     <string name="live_activity_notification_prefix">現在の値: </string>
+    <string name="now_playing_channel_name">再生中</string>
     <!-- 通話 UI 統合（Issue #278）の着信チャンネル名・PhoneAccount ラベル・固定の発信者名。切り離し時に削除する。 -->
     <string name="call_ui_channel_name">着信</string>
     <string name="call_ui_account_label">Fandhe 通話</string>

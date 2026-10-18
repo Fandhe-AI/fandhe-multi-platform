@@ -9,8 +9,8 @@
 //!
 //! [`platform_now_playing`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（macOS: `apple_now_playing`、iOS: `ios_now_playing`（#382）、
-//! Android: `android_now_playing`（#383）、Windows: `windows_now_playing`（#385）。macOS 以外は現状スタブで
-//! `UnsupportedNowPlaying` を返す）。それ以外は `UnsupportedNowPlaying` 固定で、ダミーの成功実装へは倒さない。
+//! Android: `android_now_playing`（#383、実装済み）、Windows: `windows_now_playing`（#385）。
+//! macOS・Android 以外は現状スタブで `UnsupportedNowPlaying` を返す）。それ以外は `UnsupportedNowPlaying` 固定で、ダミーの成功実装へは倒さない。
 //!
 //! # 並行性
 //!
@@ -18,6 +18,7 @@
 //! 画面へ `Completion` で返す。取り下げでは **`take` より先に** `disarm` するので、停止を確定した後に
 //! 届いた古い操作では再開しない。`Loading`（再開の確定待ち）の間は操作を取り出さず残す。
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
@@ -83,6 +84,9 @@ pub(crate) fn commands() -> &'static SharedOsCommand {
 struct Session {
     /// OS へ渡している状態（`Some(playing)`）。`publish` の失敗でも記録し、毎フレーム呼び直さない。
     shown: Mutex<Option<bool>>,
+    /// OS 側が publish 成功後に session を失った（Android のライフサイクル処理の失敗）。
+    /// 次の同期で操作の受付を止め、画面を `Failed` にする。
+    os_failed: AtomicBool,
 }
 
 static SESSION: OnceLock<Session> = OnceLock::new();
@@ -118,6 +122,7 @@ fn sync(
         // 再開の確定待ち。OS の表示も保留中の操作もそのまま残す。
         AudioPhase::Loading => return,
         _ => {
+            session.os_failed.store(false, Ordering::SeqCst);
             if shown.take().is_some() {
                 // 先に受付を止めて保留中の操作を捨て、停止後の古い操作で再開させない。
                 cmds.disarm();
@@ -127,6 +132,15 @@ fn sync(
             return;
         }
     };
+
+    // OS 側で session を失った。受付を止めて失敗を画面へ返す。`shown` は残すので同じ状態では
+    // 呼び直さず、再生・一時停止が切り替わった次の同期で再 publish する。
+    if session.os_failed.swap(false, Ordering::SeqCst) {
+        cmds.disarm();
+        let _ = sender.send(Box::new(|s: &mut AudioPlayState| {
+            set_os_media_status(s, OsMediaStatus::Failed)
+        }));
+    }
 
     // 状態を変える操作（再生・一時停止・Toggle）は 1 フレームに 1 件だけ送る。続けて送ると
     // 同じ drain で連続適用され、途中の Pause が後続の Play で上書きされて消える。
@@ -180,14 +194,35 @@ pub(super) fn sync_audio_play(state: &AudioPlayState, sender: &CompletionSender<
     );
 }
 
+/// OS 側の層（Android の JNI）から、publish 成功後に session を失ったことを伝える。
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub(crate) fn mark_os_failure() {
+    SESSION
+        .get_or_init(Session::default)
+        .os_failed
+        .store(true, Ordering::SeqCst);
+}
+
+/// `mark_os_failure` の印を捨てる（解放済みの古い session の通知を新しい session に持ち越さない）。
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub(crate) fn clear_os_failure() {
+    if let Some(s) = SESSION.get() {
+        s.os_failed.store(false, Ordering::SeqCst);
+    }
+}
+
 /// Activity 再生成時に記録を捨てて表示を取り下げる（画面状態は `default()` に戻るため、残すと
 /// 次の再生で表示が出ない）。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) fn reset_pending_tracking() {
     commands().disarm();
     platform_now_playing().clear();
+    // Java 側の session id は新しい Activity で 1 から採番し直すため、失敗済み id の記録も捨てる。
+    #[cfg(target_os = "android")]
+    super::android_now_playing::reset_session_state();
     if let Some(s) = SESSION.get() {
         *s.shown.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        s.os_failed.store(false, Ordering::SeqCst);
     }
 }
 
@@ -285,6 +320,20 @@ mod tests {
         assert_eq!(h.state.phase, AudioPhase::Paused);
         h.frame();
         assert_eq!(*h.fake.publishes.lock().unwrap(), vec![true, false]);
+    }
+
+    #[test]
+    fn os_failure_after_publish_marks_failed_and_republishes_on_next_change() {
+        let mut h = H::new();
+        h.frame();
+        assert_eq!(h.state.os_media, OsMediaStatus::Sent);
+        h.session.os_failed.store(true, Ordering::SeqCst);
+        h.frame();
+        assert_eq!(h.state.os_media, OsMediaStatus::Failed);
+        assert_eq!(*h.fake.publishes.lock().unwrap(), vec![true]);
+        // 受付は止まっている。
+        h.cmds.push(OsMediaCommand::Pause);
+        assert!(h.cmds.take().is_none());
     }
 
     #[test]
