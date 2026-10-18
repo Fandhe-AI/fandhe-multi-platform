@@ -55,6 +55,14 @@ impl Inner {
         }
     }
 
+    /// 世代の初期値を起動時刻（ミリ秒）にする。OS の task の世代表記は再起動後も残るため、
+    /// 前プロセスの世代と衝突しない採番にする。採番済みなら何もしない（時刻は種であり経過時間の計測ではない）。
+    fn seed_once(&mut self, now_ms: u64) {
+        if self.next_gen == 0 {
+            self.next_gen = now_ms;
+        }
+    }
+
     /// 新しい転送を始める（置き換え）。世代を返す。
     fn begin(&mut self) -> u64 {
         self.next_gen += 1;
@@ -176,7 +184,7 @@ mod imp {
     unsafe extern "C" {
         fn fandhe_apple_bgdl_init() -> i32;
         fn fandhe_apple_bgdl_start(url: *const c_char, gen: u64) -> i32;
-        fn fandhe_apple_bgdl_cancel() -> i32;
+        fn fandhe_apple_bgdl_cancel(upto_gen: u64) -> i32;
     }
 
     pub(super) struct AppleBackgroundDownload;
@@ -197,7 +205,14 @@ mod imp {
             check_url(url)?;
             let c_url = CString::new(url)
                 .map_err(|_| DeviceError::InvalidInput("background download url"))?;
-            let gen = lock()?.begin();
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(1, |d| d.as_millis() as u64);
+            let gen = {
+                let mut g = lock()?;
+                g.seed_once(now_ms);
+                g.begin()
+            };
             // SAFETY: `c_url` は呼び出し中生きており、`.m` は同期でコピーしてポインタを保持しない。
             // ロックは外してから呼ぶ（delegate が同じロックを取るため）。
             let code = unsafe { fandhe_apple_bgdl_start(c_url.as_ptr(), gen) };
@@ -216,9 +231,14 @@ mod imp {
 
         #[allow(unsafe_code)]
         fn cancel(&self) -> Result<(), DeviceError> {
-            lock()?.cancel();
-            // SAFETY: 引数なし。`.m` は全 task を取り消し、保存先のファイルを消す（冪等）。
-            unsafe { fandhe_apple_bgdl_cancel() };
+            // 取り消し対象は呼び出し時点までに採番した世代。直後の `start` の新 task は巻き込まない。
+            let upto = {
+                let mut g = lock()?;
+                g.cancel();
+                g.next_gen
+            };
+            // SAFETY: 値渡しのみ。`.m` は世代 `upto` 以下の task を取り消し、保存先のファイルを消す（冪等）。
+            unsafe { fandhe_apple_bgdl_cancel(upto) };
             Ok(())
         }
 
@@ -418,6 +438,15 @@ mod tests {
         assert_eq!(j.current, None);
         assert_eq!(j.status, DownloadStatus::Cancelled);
         assert_eq!(j.begin(), 10);
+    }
+
+    #[test]
+    fn seed_once_avoids_previous_process_generations() {
+        let mut i = Inner::new();
+        i.seed_once(1_000);
+        assert_eq!(i.begin(), 1_001);
+        i.seed_once(5); // 採番済みなら無視
+        assert_eq!(i.begin(), 1_002);
     }
 
     #[test]

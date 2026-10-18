@@ -22,7 +22,7 @@
 // 契約:
 //   int32_t fandhe_apple_bgdl_init(void);            // 0 = 成功 / 1 = session を作れない
 //   int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen); // 0 / 1 = session なし / 2 = URL 不正
-//   int32_t fandhe_apple_bgdl_cancel(void);          // 常に 0（冪等）
+//   int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen); // 常に 0（冪等）。世代 upto_gen 以下の task だけ取り消す
 //   delegate → Rust の終了コード: 0 = 完了 / 1 = 取り消し / 2 = 接続系 / 3 = 保存失敗 / 4 = その他
 #import <Foundation/Foundation.h>
 #import <stdbool.h>
@@ -164,10 +164,11 @@ int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen) {
         if (nsurl == nil) {
             return 2;
         }
-        // 置き換え: 前の転送を止める。新しい task（世代 gen）は残す。
+        // 置き換え: 前の転送（世代 gen 未満）を止める。完了ブロックは非同期に走るので、
+        // 後から作られた新しい task（gen 以上）を巻き込まないよう世代で絞る。
         [g_session getAllTasksWithCompletionHandler:^(NSArray<__kindof NSURLSessionTask *> *tasks) {
             for (NSURLSessionTask *task in tasks) {
-                if (task_gen(task) != gen) {
+                if (task_gen(task) < gen) {
                     [task cancel];
                 }
             }
@@ -180,12 +181,14 @@ int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen) {
     }
 }
 
-int32_t fandhe_apple_bgdl_cancel(void) {
+int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen) {
     @autoreleasepool {
         if (g_session != nil) {
             [g_session getAllTasksWithCompletionHandler:^(NSArray<__kindof NSURLSessionTask *> *tasks) {
                 for (NSURLSessionTask *task in tasks) {
-                    [task cancel];
+                    if (task_gen(task) <= upto_gen) {
+                        [task cancel];
+                    }
                 }
             }];
         }
