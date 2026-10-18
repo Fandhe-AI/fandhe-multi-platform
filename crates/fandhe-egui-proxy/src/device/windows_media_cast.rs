@@ -161,11 +161,13 @@ impl Shared {
         Ok(())
     }
 
-    /// 戻り値は OS へ停止を流すべきか（再生中でなければ何もしない。`Stopped` は Paused の通知で立てる）。
+    /// 戻り値は OS へ停止を流すべきか。再生中か、`play` 済みで Playing 通知が未達（キュー内の
+    /// `Cmd::Play` が後で鳴らしうる）なら流す。Stop は冪等。`Stopped` は Paused の通知で立てる。
     fn on_stop(&mut self, gen: u64) -> Result<bool, DeviceError> {
         self.check(gen)?;
+        let was_play = self.intent == Intent::Play;
         self.intent = Intent::Stop;
-        Ok(self.playback == CastPlayback::Playing)
+        Ok(was_play || self.playback == CastPlayback::Playing)
     }
 
     /// ピッカーを出す前の確認。`Choosing` は `Show` の前に立てる（閉じた通知が先に届いても戻せる）。
@@ -759,11 +761,13 @@ mod win {
                         ok
                     });
                     if current {
-                        if let Some(r) = res.as_mut().filter(|r| r.gen == gen) {
-                            if connect(r, &device, &tx).is_err() {
-                                // 6 = Unknown（OS の失敗）として確定する。
-                                with_shared(|s| s.on_event(gen, Ev::StartResult(6)));
-                            }
+                        // 資源が無い（準備失敗直後等）場合も 6 = Unknown として失敗を確定する。
+                        let ok = match res.as_mut().filter(|r| r.gen == gen) {
+                            Some(r) => connect(r, &device, &tx).is_ok(),
+                            None => false,
+                        };
+                        if !ok {
+                            with_shared(|s| s.on_event(gen, Ev::StartResult(6)));
                         }
                     }
                 }
@@ -823,6 +827,11 @@ mod tests {
         assert_eq!(s.playback, CastPlayback::Ready);
         s.on_play(g).unwrap();
         assert_eq!(s.playback, CastPlayback::Ready);
+        // Playing 通知前の stop も OS へ流す（キュー内の Play が鳴らし続けないように）。
+        assert!(s.on_stop(g).unwrap());
+        s.on_event(g, Ev::Playing);
+        assert_eq!(s.playback, CastPlayback::Ready);
+        s.on_play(g).unwrap();
         s.on_event(g, Ev::Playing);
         assert_eq!(s.playback, CastPlayback::Playing);
         assert!(s.on_stop(g).unwrap());
