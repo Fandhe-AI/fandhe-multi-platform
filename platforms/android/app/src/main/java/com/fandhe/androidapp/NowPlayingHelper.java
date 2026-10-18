@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 // 守る範囲: 1 プロセス内の操作順、取り下げ後の古い操作で再開しないこと、嘘の成功の禁止、
 // session と通知の解放。守らない範囲: 通知を消した後の再表示、アプリの通知を切った端末での
 // シェード表示（session は有効でヘッドセットは効く）、API 24〜32 の通知ボタン、背景中の操作、
-// UI スレッドが塞がっている間の取り下げの遅れ、複数プロセス。曲名・例外メッセージはログに出さない。
+// 複数プロセス。曲名・例外メッセージはログに出さない。
 final class NowPlayingHelper {
     static final int RESULT_OK = 0;
     static final int RESULT_FAILED = 1;
@@ -99,6 +99,8 @@ final class NowPlayingHelper {
     private boolean foreground = true;
     private MediaSession session;
     private Desired desired;
+    // desired / session が変わるたびに進める。タイムアウト後の後片付けが後続の変更を壊さないための照合用。
+    private long generation;
 
     NowPlayingHelper(Activity activity) {
         this.activity = activity;
@@ -122,6 +124,10 @@ final class NowPlayingHelper {
         }
         final Desired d = new Desired(title, playing, positionMs, durationMs);
         final Call call = new Call();
+        final long startGen;
+        synchronized (lock) {
+            startGen = generation;
+        }
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -136,43 +142,27 @@ final class NowPlayingHelper {
                 }
             }
         });
-        return await(call);
-    }
-
-    // egui スレッドから呼ぶ（冪等）。Rust 側は先に操作の受け口を閉じている。最長 APPLY_TIMEOUT_MS
-    // （呼び出し開始起点・単調時計）で戻る。
-    void clear() {
-        final MediaSession target;
-        synchronized (lock) {
-            desired = null;
-            if (session == null) {
-                return;
-            }
-            target = session;
-        }
-        final Call call = new Call();
-        activity.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                // 放棄（await のタイムアウト）後でも解放は必ず行う。取り下げの意思は確定済みのため。
-                // ただし対象は clear 時点の session かつ desired なしのときだけ。後続の publish が
-                // 同じ session を再利用して desired を入れたあと、遅れて走った release が壊さない。
-                call.state.compareAndSet(PENDING, STARTED);
-                try {
-                    synchronized (lock) {
-                        if (session == target && desired == null) {
-                            release();
-                        }
-                    }
-                } finally {
-                    call.finished.countDown();
+        int code = await(call);
+        if (code == RESULT_TIMEOUT) {
+            // 放棄した publish が失敗として確定する。Rust は commands を disarm し同じ状態で再試行しない
+            // ため、以前の session と表示を残さない。世代が進んでいなければ（後続の publish・clear が
+            // 何も変えていなければ）その場で取り下げる。進んでいれば後続の結果を壊さない。
+            synchronized (lock) {
+                if (generation == startGen) {
+                    release();
                 }
             }
-        });
-        // 期限つきで待つ。UI スレッドが終了処理（GameActivity の onPause/onDestroy）でネイティブ側の
-        // 完了を待っているとき、無期限に待つと相互待ちになる。タイムアウトしても Runnable は
-        // UI スレッドが空いた時点で上の条件つきで解放する。開始済みは完了まで待つ。
-        await(call);
+        }
+        return code;
+    }
+
+    // egui スレッドから呼ぶ（冪等）。Rust 側は先に操作の受け口を閉じている。UI キューを経由せず、
+    // 呼び出しスレッドで `lock` の内側から直接解放して戻る（MediaSession.release と通知の cancel は
+    // Binder 呼び出しでスレッドを選ばない）。UI スレッドが塞がっていても、戻った時点で取り下げ済み。
+    void clear() {
+        synchronized (lock) {
+            release();
+        }
     }
 
     private static int await(Call call) {
@@ -218,6 +208,7 @@ final class NowPlayingHelper {
                 s.setCallback(cb, new Handler(Looper.getMainLooper()));
             }
             desired = d;
+            generation++;
             show(d);
             return RESULT_OK;
         } catch (RuntimeException e) {
@@ -296,6 +287,7 @@ final class NowPlayingHelper {
     // `lock` を保持した UI スレッドから呼ぶ。冪等。
     private void release() {
         desired = null;
+        generation++;
         MediaSession s = session;
         session = null;
         cancelNotification();
