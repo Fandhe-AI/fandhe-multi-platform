@@ -28,7 +28,7 @@
 //     （`apple_url_scheme.rs`）が公開する `extern "C"` 関数。URL を UTF-8 で渡す。
 //     文字列が取れなかったときは (NULL, 0)。ポインタは呼び出し中だけ有効。
 //
-// スレッド契約: 通知は mainQueue で受け、UIKit も delegate を main thread から呼ぶ。
+// スレッド契約: 起動通知は queue:nil で投稿スレッド（main）の同期実行、他は mainQueue で受け、UIKit も delegate を main thread から呼ぶ。
 // 中身は `@autoreleasepool` で囲み、`g_launch_url` は main thread だけが触る
 // （`device-bridge-contracts.md`「5. FFI 境界」）。
 //
@@ -112,7 +112,10 @@ void fandhe_apple_url_scheme_register(void) {
   g_launch_observer = [[NSNotificationCenter defaultCenter]
       addObserverForName:UIApplicationDidFinishLaunchingNotification
                   object:nil
-                   queue:[NSOperationQueue mainQueue]
+                   // queue:nil は投稿スレッド（main）で同期実行される。mainQueue 指定だと次の run loop へ
+                   // 回り、同じ起動ターンで届く handleEventsForBackgroundURLSession（relaunch）に
+                   // delegate が間に合わない（Issue #391）。
+                   queue:nil
               usingBlock:^(NSNotification *note) {
                 @autoreleasepool {
                   // シーン無しのライフサイクルでは launchOptions が唯一の経路（scene 形態では nil）（iOS 26 で deprecated）。
