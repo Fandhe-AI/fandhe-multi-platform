@@ -1,5 +1,5 @@
-//! macOS 向け外部機器への再生実装（Issue #386。iOS は親 #99 の b-ios が cfg を広げて共用する）。
-//! `device/media_cast.rs::platform_cast` の macOS 経路から呼ばれる。
+//! macOS / iOS 共用の外部機器への再生実装（Issue #386 macOS、#387 iOS）。
+//! `device/media_cast.rs::platform_cast` の macOS 経路と、`ios_media_cast` 経由の iOS 経路から呼ばれる。
 //! `apple/fandhe_apple_media_cast.m`（`AVRoutePickerView` + `AVAudioPlayer` + Core Audio の読み取り、
 //! `build.rs` の macOS 分岐がコンパイル）を C ABI で呼ぶ薄いラッパーで、世代の採番だけを Rust 側で持つ。
 //! 戻りコードを契約上のエラーへ写す純関数は [`result_from_code`]、状態コードは [`playback_from_code`] /
@@ -67,6 +67,7 @@ fn playback_from_code(code: i32) -> CastPlayback {
         1 => CastPlayback::Ready,
         2 => CastPlayback::Playing,
         3 => CastPlayback::Stopped,
+        5 => CastPlayback::Interrupted,
         _ => CastPlayback::Failed(CastFailure::Internal),
     }
 }
@@ -179,6 +180,7 @@ mod tests {
     fn playback_unknown_code_fails() {
         assert_eq!(playback_from_code(2), CastPlayback::Playing);
         assert_eq!(playback_from_code(3), CastPlayback::Stopped);
+        assert_eq!(playback_from_code(5), CastPlayback::Interrupted);
         assert_eq!(
             playback_from_code(4),
             CastPlayback::Failed(CastFailure::Internal)
