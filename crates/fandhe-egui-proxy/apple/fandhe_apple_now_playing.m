@@ -84,16 +84,19 @@ static void fandhe_register_all(void) {
     g_targets = [NSMutableArray array];
 #if TARGET_OS_IOS
     // main thread（publish 経由）でのみ到達する。通知オブザーバーはプロセスで一度だけ登録する
-    // （clear 後の再登録で増やさない。ブロックはフラグを書くだけで、残っても害がないためトークンは握らない）。
+    // （clear 後の再登録で増やさない。登録トークンはプロセス存続中 static で握り続け、
+    // 背景遷移の購読が解放されて g_background が固定されるのを防ぐ。契約表 類型 1）。
     static dispatch_once_t once;
+    static id s_bg_token = nil;
+    static id s_fg_token = nil;
     dispatch_once(&once, ^{
         atomic_store(&g_background,
                      [UIApplication sharedApplication].applicationState == UIApplicationStateBackground);
         NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-        [nc addObserverForName:UIApplicationDidEnterBackgroundNotification object:nil
+        s_bg_token = [nc addObserverForName:UIApplicationDidEnterBackgroundNotification object:nil
                          queue:[NSOperationQueue mainQueue]
                     usingBlock:^(NSNotification *n) { (void)n; atomic_store(&g_background, true); }];
-        [nc addObserverForName:UIApplicationWillEnterForegroundNotification object:nil
+        s_fg_token = [nc addObserverForName:UIApplicationWillEnterForegroundNotification object:nil
                          queue:[NSOperationQueue mainQueue]
                     usingBlock:^(NSNotification *n) { (void)n; atomic_store(&g_background, false); }];
     });
