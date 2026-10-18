@@ -178,6 +178,10 @@ generated_screens! {
     crate::device::picture_in_picture::pip_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "cast_show" => fandhe_core::screens::cast_show::current_screen,
+    crate::device::media_cast::cast_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "midi_show" => fandhe_core::screens::midi_show::current_screen,
     crate::device::midi::midi_show_effect,
     effect
