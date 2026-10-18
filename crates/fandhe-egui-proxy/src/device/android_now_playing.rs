@@ -184,6 +184,30 @@ extern "system" fn Java_com_fandhe_androidapp_NowPlayingHelper_nativeOnNowPlayin
     }
 }
 
+/// `NowPlayingHelper.nativeOnNowPlayingFailed`（Java 側）から呼ばれる JNI エクスポート。publish 成功後の
+/// onPause / onResume で session を失ったとき、現在の session の通知だけ受け、操作の受付を止めて
+/// ドライバへ失敗を伝える（画面は次フレームで `Failed` になる）。根拠は上の JNI エクスポートと同じ。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` の根拠は上と同じ。
+#[cfg(target_os = "android")]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_androidapp_NowPlayingHelper_nativeOnNowPlayingFailed<'caller>(
+    _env: jni::EnvUnowned<'caller>,
+    _class: jni::objects::JClass<'caller>,
+    session_id: jni::sys::jlong,
+) {
+    use std::sync::atomic::Ordering::SeqCst;
+    if ACCEPTED_SESSION
+        .compare_exchange(session_id, 0, SeqCst, SeqCst)
+        .is_ok()
+    {
+        super::now_playing::mark_os_failure();
+        crate::android::request_repaint();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -58,6 +58,10 @@ final class NowPlayingHelper {
 
     private static native void nativeOnNowPlayingCommand(int code, long sessionId);
 
+    // publish 成功後のライフサイクル処理（onPause / onResume）で session を失って解放したことを
+    // Rust へ知らせる。Rust は受け入れ id を捨て、画面の状態を失敗にして、次の状態変化で再 publish する。
+    private static native void nativeOnNowPlayingFailed(long sessionId);
+
     private static final class Call {
         final AtomicInteger state = new AtomicInteger(PENDING);
         final CountDownLatch finished = new CountDownLatch(1);
@@ -325,31 +329,41 @@ final class NowPlayingHelper {
 
     // `MainActivity.onPause`（UI スレッド）から呼ぶ。
     void onPause() {
+        long failedId = 0;
         synchronized (lock) {
             foreground = false;
             if (session != null) {
                 try {
                     session.setActive(false);
+                    cancelNotification();
                 } catch (RuntimeException e) {
+                    failedId = sessionId;
                     release();
-                    return;
                 }
-                cancelNotification();
             }
+        }
+        // Rust 側の処理と `lock` を入れ子にしないよう外で通知する。
+        if (failedId > 0) {
+            nativeOnNowPlayingFailed(failedId);
         }
     }
 
     // `MainActivity.onResume`（UI スレッド）から呼ぶ。
     void onResume() {
+        long failedId = 0;
         synchronized (lock) {
             foreground = true;
             if (session != null && desired != null && !destroyed) {
                 try {
                     show(desired);
                 } catch (RuntimeException e) {
+                    failedId = sessionId;
                     release();
                 }
             }
+        }
+        if (failedId > 0) {
+            nativeOnNowPlayingFailed(failedId);
         }
     }
 
