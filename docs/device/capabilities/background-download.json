@@ -7,14 +7,17 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "`URLSessionConfiguration.background(withIdentifier:)`",
       "perm": "なし（ローカルの確認用サーバーへつなぐため、Info.plist に `NSAllowsLocalNetworking` を置く）",
       "url": [
         "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/background(withidentifier:)",
         "https://developer.apple.com/documentation/foundation/downloading-files-in-the-background"
       ],
-      "note": "未実装。転送は OS の別プロセスが行い、アプリが suspend・終了されても続く。ただし利用者がマルチタスク画面から終了すると取り消される。完了時は `handleEventsForBackgroundURLSession` で受ける"
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#380）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_background_download.rs + crates/fandhe-egui-proxy/src/device/apple_background_download.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_background_download.m + crates/fandhe-egui-proxy/ios/fandhe_ios_url_scheme.m + crates/fandhe-egui-proxy/src/device/background_download.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-device/src/background_download.rs、Issue #391",
+      "note": "実装済み（#391）。macOS と共用の background `NSURLSession`。転送は OS の別プロセスが行い、アプリが suspend されても続く。OS が完了でアプリを背景起動したときは `handleEventsForBackgroundURLSession` を application delegate が受け、同じ identifier の session を作り直して、イベントを配り終えてから completion handler を 1 回だけ返す。守る範囲: 1 プロセス内の順序、世代による古い通知の破棄、嘘の成功の禁止、背景起動の完了通知を 1 回だけ返すこと。守らない範囲: 利用者がマルチタスク画面から終了すると OS が転送を取り消す、背景で失敗した理由と前回の完了表示は再起動で失われる、起動直後の再接続（非同期）を待たずに開始を受け付けるのでその間の開始は前の転送の置き換えになる（列挙待ちは macOS のみ）、複数プロセス。実機での背景完了・再起動後の再接続は未確認（#380）"
     },
     "android": {
       "status": "possible",
@@ -31,7 +34,7 @@
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#380）",
       "impl": "crates/fandhe-egui-proxy/src/device/apple_background_download.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_background_download.m + crates/fandhe-egui-proxy/src/device/background_download.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-device/src/background_download.rs、Issue #390",
-      "note": "実装済み（#390）。固定 URL の小さなファイル 1 つを OS に依頼し、待機・転送中・完了（サイズ）・取り消し・失敗を出す。結果は取り消し（失敗にしない）と HTTP エラー・0 バイト・許可外のリダイレクト先（失敗）を分ける。守る範囲: 1 プロセス内の順序、世代による古い通知の破棄、嘘の成功の禁止。守らない範囲: 背景で失敗した理由と前回の完了表示は再起動で失われる、接続できない間は OS が待ち続け転送中のままになりうる、複数プロセス。アプリ終了後も転送が続くかは #380 の Mac 目視で確かめる"
+      "note": "実装済み（#390）。固定 URL の小さなファイル 1 つを OS に依頼し、待機・転送中・完了（サイズ）・取り消し・失敗を出す。結果は取り消し（失敗にしない）と HTTP エラー・0 バイト・許可外のリダイレクト先（失敗）を分ける。守る範囲: 1 プロセス内の順序、世代による古い通知の破棄、嘘の成功の禁止、大きさの上限 8 MiB（超えたら失敗）、開始時に前の世代を止めること。守らない範囲: 背景で失敗した理由と前回の完了表示は再起動で失われる、接続できない間は OS が待ち続け転送中のままになりうる、複数プロセス。アプリ終了後も転送が続くかは #380 の Mac 目視で確かめる"
     },
     "windows": {
       "status": "possible",

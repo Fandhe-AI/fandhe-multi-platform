@@ -1,6 +1,6 @@
 // Phase 11 の拡充ループ（親 #100）: OS 管理のバックグラウンドダウンロードを Apple（macOS / iOS）へ
-// 橋渡しする（Issue #390 macOS、iOS は b-ios #391）。background `NSURLSession` は iOS と macOS で
-// 同一 API のため 1 ファイルを共用する（Foundation のみ、UIKit / AppKit 非依存）。
+// 橋渡しする（Issue #390 macOS、#391 iOS）。background `NSURLSession` は iOS と macOS で
+// 同一 API のため 1 ファイルを共用する。iOS だけ背景起動の受け口（`TARGET_OS_IOS` の区画）を持つ。
 //
 // `crates/fandhe-egui-proxy/src/device/apple_background_download.rs` から C ABI 経由で呼ばれ、
 // delegate の通知は同ファイルの `fandhe_rust_bgdl_*`（`#[no_mangle]`）へ返す。`build.rs` が `cc` で
@@ -21,16 +21,28 @@
 //
 // 契約:
 //   int32_t fandhe_apple_bgdl_init(void);            // 0 = 成功 / 1 = session を作れない
-//   int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen); // 0 / 1 = session なし / 2 = URL 不正
+//   int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen, uint64_t deadline_ms);
+//     // 0 / 1 = session なし / 2 = URL 不正 / 3 = 保存先を消せない / 4 = deadline_ms 内に前の世代の取り消しを終えられない
 //   int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen, uint64_t deadline_ms);
 //     // 0 = 成功（保存先が無いのも成功）/ 3 = 保存先を消せない / 4 = deadline_ms 内に OS task への取り消しを
 //     // 終えられなかった。世代 1 以上 upto_gen 以下の task だけ取り消す。task の列挙 completion が
 //     // `[task cancel]` を呼び終えるまで待ってから戻る（戻った時点で取り消し依頼が OS に渡っている）
+//   void fandhe_apple_bgdl_handle_events(NSString *identifier, void (^handler)(void));   // iOS のみ
+//     // main thread から呼ぶ（`ios/fandhe_ios_url_scheme.m` の application delegate が
+//     // `application:handleEventsForBackgroundURLSession:completionHandler:` から転送する）。identifier が
+//     // 違えば handler を即呼ぶ。一致すれば session を作り直し（冪等）、OS が保留中のイベントを配り終えた
+//     // `URLSessionDidFinishEventsForBackgroundURLSession:` で handler を main thread から 1 回だけ呼ぶ
+//     // （前の handler が残っていれば先にそれを呼ぶ）
 //   delegate → Rust の終了コード: 0 = 完了 / 1 = 取り消し / 2 = 接続系 / 3 = 保存失敗 / 4 = その他
 #import <Foundation/Foundation.h>
 #import <stdbool.h>
+#import <TargetConditionals.h>
+#if TARGET_OS_IOS
+#import <UIKit/UIKit.h>
+#endif
 
-extern void fandhe_rust_bgdl_progress(uint64_t gen, uint64_t received, int64_t total);
+// 戻り値 false は「この task を止めよ」（大きさの上限超過。Rust が Failed を確定済み）。
+extern bool fandhe_rust_bgdl_progress(uint64_t gen, uint64_t received, int64_t total);
 extern bool fandhe_rust_bgdl_accept(uint64_t gen, int32_t http_status, uint64_t bytes, const char *final_url);
 extern bool fandhe_rust_bgdl_finished(uint64_t gen, int32_t code, uint64_t bytes);
 extern void fandhe_rust_bgdl_reconnected(uint64_t gen);
@@ -93,6 +105,24 @@ static int32_t remove_dest(void) {
     return missing ? 0 : 3;
 }
 
+// 世代 1 以上 upto_gen 以下の task を取り消し、`[task cancel]` を呼び終えるまで待つ。期限切れなら true。
+// `getAllTasks` の completion は非同期（delegate queue 上）。呼び出しは Rust のワーカースレッドで、
+// main queue への待ち合わせは無い。completion は file queue と Rust の `OP`・`SHARED` ロックを取らない
+// ので、待ちは詰まらず期限内に解ける（契約表 3・11）。`DISPATCH_TIME_NOW` 基点は mach の単調時計。
+static bool cancel_tasks_upto(uint64_t upto_gen, uint64_t deadline_ms) {
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    [g_session getAllTasksWithCompletionHandler:^(NSArray<__kindof NSURLSessionTask *> *tasks) {
+        for (NSURLSessionTask *task in tasks) {
+            if (task_gen(task) > 0 && task_gen(task) <= upto_gen) {
+                [task cancel];
+            }
+        }
+        dispatch_semaphore_signal(done);
+    }];
+    dispatch_time_t limit = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(deadline_ms * NSEC_PER_MSEC));
+    return dispatch_semaphore_wait(done, limit) != 0;
+}
+
 @interface FandheBgdlDelegate : NSObject <NSURLSessionDownloadDelegate>
 @end
 
@@ -105,7 +135,10 @@ static int32_t remove_dest(void) {
     totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite {
     @autoreleasepool {
         int64_t total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : -1;
-        fandhe_rust_bgdl_progress(task_gen(task), (uint64_t)totalBytesWritten, total);
+        if (!fandhe_rust_bgdl_progress(task_gen(task), (uint64_t)totalBytesWritten, total)) {
+            // 後から届く NSURLErrorCancelled は世代の不一致で捨てられ、表示は失敗のまま残る（契約表 10）。
+            [task cancel];
+        }
     }
 }
 
@@ -143,6 +176,25 @@ static int32_t remove_dest(void) {
         });
     }
 }
+
+#if TARGET_OS_IOS
+// 背景起動の completion handler。main thread だけが触る。
+static void (^g_events_handler)(void) = nil;
+
+// OS が保留中のイベントを配り終えた。delegate queue 上で呼ばれるので main へ非同期に移して handler を呼ぶ
+// （main への `dispatch_sync` はしない、契約表 11）。UI の更新は Rust 側が `request_repaint` で行う。
+- (void)URLSessionDidFinishEventsForBackgroundURLSession:(NSURLSession *)session {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @autoreleasepool {
+            void (^handler)(void) = g_events_handler;
+            g_events_handler = nil;
+            if (handler != nil) {
+                handler();
+            }
+        }
+    });
+}
+#endif
 
 // 失敗・取り消しの通知。成功（error == nil）は上の didFinishDownloadingToURL で報告済み。
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
@@ -188,7 +240,7 @@ int32_t fandhe_apple_bgdl_init(void) {
     }
 }
 
-int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen) {
+int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen, uint64_t deadline_ms) {
     @autoreleasepool {
         if (g_session == nil) {
             return 1;
@@ -197,6 +249,12 @@ int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen) {
         NSURL *nsurl = str != nil ? [NSURL URLWithString:str] : nil;
         if (nsurl == nil) {
             return 2;
+        }
+        // 置き換え: 前の転送（世代 gen 未満）を、保存先の削除より前に止める（削除に失敗しても前の転送を
+        // 残さない、#407）。OS への依頼が終わるまで期限つきで待ち、終わらなければ新しい task は作らない。
+        // 世代で絞るので、後から作る新しい task（gen 以上）は巻き込まない。
+        if (cancel_tasks_upto(gen - 1, deadline_ms)) {
+            return 4;
         }
         // 前回の保存済みファイルを消す。消せなければ転送を始めず 3 を返す（古いファイルを残したまま
         // 後続の失敗で成功に見せないため）。
@@ -208,15 +266,6 @@ int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen) {
         if (removed != 0) {
             return 3;
         }
-        // 置き換え: 前の転送（世代 gen 未満）を止める。完了ブロックは非同期に走るので、
-        // 後から作られた新しい task（gen 以上）を巻き込まないよう世代で絞る。
-        [g_session getAllTasksWithCompletionHandler:^(NSArray<__kindof NSURLSessionTask *> *tasks) {
-            for (NSURLSessionTask *task in tasks) {
-                if (task_gen(task) > 0 && task_gen(task) < gen) {
-                    [task cancel];
-                }
-            }
-        }];
         NSURLSessionDownloadTask *task = [g_session downloadTaskWithURL:nsurl];
         task.taskDescription = [NSString stringWithFormat:@"%llu", (unsigned long long)gen];
         [task resume];
@@ -226,28 +275,9 @@ int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen) {
 
 int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen, uint64_t deadline_ms) {
     @autoreleasepool {
-        bool timed_out = false;
-        if (g_session != nil) {
-            // `getAllTasks` の completion は非同期（session の delegate queue で走る）。待たずに戻ると、
-            // 列挙の前にプロセスが終わったとき `[task cancel]` が一度も呼ばれず、OS 管理の転送が
-            // 残る。そのため呼び出しスレッドで `[task cancel]` の完了まで待つ（契約表 3）。
-            // 呼び出し元は Rust のワーカースレッドで、main queue への待ち合わせは無い。completion は
-            // delegate queue 上で走り、file queue と Rust の `OP` ロックは取らない（delegate queue が
-            // file queue の `dispatch_sync` で塞がっていても file queue は空くので、待ちは詰まらず
-            // 期限内に解ける）。
-            dispatch_semaphore_t done = dispatch_semaphore_create(0);
-            [g_session getAllTasksWithCompletionHandler:^(NSArray<__kindof NSURLSessionTask *> *tasks) {
-                for (NSURLSessionTask *task in tasks) {
-                    if (task_gen(task) > 0 && task_gen(task) <= upto_gen) {
-                        [task cancel];
-                    }
-                }
-                dispatch_semaphore_signal(done);
-            }];
-            // `DISPATCH_TIME_NOW` 基点は mach の単調時計（壁時計の変更に影響されない）。
-            dispatch_time_t limit = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(deadline_ms * NSEC_PER_MSEC));
-            timed_out = dispatch_semaphore_wait(done, limit) != 0;
-        }
+        // 待たずに戻ると、列挙の前にプロセスが終わったとき `[task cancel]` が一度も呼ばれず OS 管理の転送が
+        // 残る。そのため `[task cancel]` の完了まで期限つきで待つ（契約表 3）。
+        bool timed_out = g_session != nil && cancel_tasks_upto(upto_gen, deadline_ms);
         // 取り消し以降に start された新しい世代があれば、その保存済みファイルは消さない。
         // 期限切れでも保存先の削除は行う（嘘の成功を残さない）。結果は失敗として返す。
         __block int32_t code = 0;
@@ -262,3 +292,31 @@ int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen, uint64_t deadline_ms) {
         return code;
     }
 }
+
+#if TARGET_OS_IOS
+void fandhe_apple_bgdl_handle_events(NSString *identifier, void (^handler)(void)) {
+    @autoreleasepool {
+        if (handler == nil) {
+            return;
+        }
+        if (![identifier isEqualToString:kSessionId]) {
+            handler();  // 自分の session ではない。保持せず即返す。
+            return;
+        }
+        // 各 handler を必ず 1 回だけ呼ぶ。前のものが残っていれば先に呼んでから差し替える。
+        void (^previous)(void) = g_events_handler;
+        g_events_handler = [handler copy];
+        if (previous != nil) {
+            previous();
+        }
+        // session を作り直す（`dispatch_once` で冪等）。作れなければ配るイベントは無いので handler を返す。
+        if (fandhe_apple_bgdl_init() != 0) {
+            void (^h)(void) = g_events_handler;
+            g_events_handler = nil;
+            if (h != nil) {
+                h();
+            }
+        }
+    }
+}
+#endif

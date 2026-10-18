@@ -18,8 +18,15 @@
   `$(EXECUTABLE_NAME)` マクロではなく実行体名 `FandheIosApp` を直接記述する
   （ビルドスクリプトがバイナリをこの名前で配置する契約、build-simulator-app.sh 参照）。
 
-  デバッグフラグ・ATS 例外は追加しない（security.md「A05 セキュリティ設定ミス」対策）。
+  デバッグフラグは追加しない（security.md「A05 セキュリティ設定ミス」対策）。ATS 例外は
+  `NSAppTransportSecurity` → `NSAllowsLocalNetworking`（Issue #391）だけを置く（下記）。
   署名は `scripts/ios/` の ad-hoc 署名（TASK-11.1-S3 / #222）が担う。
+
+  NSAppTransportSecurity → NSAllowsLocalNetworking（Issue #391）: 型サンプル「バックグラウンド
+  ダウンロード」の background `NSURLSession` の確認先が、ローカルの確認用サーバー
+  （`http://127.0.0.1:8787`）への平文 http だから。ローカルネットワーク宛てだけを許し、
+  `NSAllowsArbitraryLoads` は足さない（security.md A02・A05）。`UIBackgroundModes` は足さない
+  （background session の転送と背景起動には不要）。
 
   CFBundleURLTypes（Issue #1217）: カスタム URL scheme `fandhe://` を受けるために宣言する
   （受信側は `crates/fandhe-egui-proxy/ios/fandhe_ios_url_scheme.m`）。起動側
@@ -193,6 +200,11 @@
 	<array>
 		<string>com.fandhe.iosapp.background-task</string>
 	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

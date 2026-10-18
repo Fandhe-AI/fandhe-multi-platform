@@ -993,12 +993,11 @@ phase_bundle() {
       fail "FANDHE_ITEMS_URL に許容されない形式が含まれています（値はログへ出力しません）。"
     fi
     log "FANDHE_ITEMS_URL 指定を検出しました。LAN 限定の ATS 例外を Info.plist へ追加します。"
-    # `-insert` は既存キーがあると失敗する（リポジトリ側 plist に同キーが入ったら
-    # `-replace` へ切り替える）。
-    plutil -insert NSAppTransportSecurity -xml \
+    # リポジトリ側 plist に同キーが入っている（Issue #391）ので `-replace`（`-insert` は既存キーで失敗する）。
+    plutil -replace NSAppTransportSecurity -xml \
       '<dict><key>NSAllowsLocalNetworking</key><true/></dict>' \
       "${app_dir}/Info.plist" \
-      || fail "Info.plist への NSAppTransportSecurity 差し込みに失敗しました（既にキーがある場合は -replace へ変更してください）。"
+      || fail "Info.plist への NSAppTransportSecurity 差し替えに失敗しました。"
     plutil -insert NSLocalNetworkUsageDescription -string \
       '型サンプル「HTTP 取得」の実機確認で Mac 上のダミー API へ接続します' \
       "${app_dir}/Info.plist" \
