@@ -160,10 +160,17 @@ final class NowPlayingHelper {
                 }
             }
         });
-        // 解放は放棄しない（必ず実行される）。待ちだけ期限で切る。
-        try {
-            done.await(APPLY_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
+        // 解放は放棄しない。契約上「取り下げを済ませてから戻る」ため完了まで待ち、割り込みは後で復元する。
+        boolean interrupted = false;
+        while (true) {
+            try {
+                done.await();
+                break;
+            } catch (InterruptedException e) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) {
             Thread.currentThread().interrupt();
         }
     }
@@ -207,8 +214,8 @@ final class NowPlayingHelper {
                 Callback cb = new Callback();
                 MediaSession s = new MediaSession(activity, TAG);
                 cb.mine = s;
+                session = s; // setCallback 失敗時も catch の release で解放できるよう先に保持する
                 s.setCallback(cb, new Handler(Looper.getMainLooper()));
-                session = s;
             }
             desired = d;
             show(d);
@@ -241,7 +248,16 @@ final class NowPlayingHelper {
         postNotification(d);
     }
 
+    // 通知の失敗では session を落とさない（ヘッドセット操作は通知なしでも効く。表示は守る範囲外）。
     private void postNotification(Desired d) {
+        try {
+            postNotificationUnchecked(d);
+        } catch (RuntimeException e) {
+            // 握りつぶす。
+        }
+    }
+
+    private void postNotificationUnchecked(Desired d) {
         NotificationManager nm = activity.getSystemService(NotificationManager.class);
         if (nm == null) {
             return;
@@ -284,12 +300,21 @@ final class NowPlayingHelper {
         session = null;
         cancelNotification();
         if (s != null) {
+            // 途中の例外で release を飛ばさない。
             try {
                 s.setCallback(null);
+            } catch (RuntimeException e) {
+                // 続行
+            }
+            try {
                 s.setActive(false);
+            } catch (RuntimeException e) {
+                // 続行
+            }
+            try {
                 s.release();
             } catch (RuntimeException e) {
-                // 解放中の例外でも参照は捨てた。
+                // 参照は捨てた。
             }
         }
     }
