@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 // 再生・一時停止は `nativeOnNowPlayingCommand` で Rust の `SharedOsCommand` へ返す。
 //
 // コード表（SSOT はここ。Rust 側 `decode_result` / `decode_command` が同じ値で写像する）:
-//   publish の戻り（long）: 負は失敗（-1 FAILED / -2 TIMEOUT）、0 以上は成功で現在の session の id（1 始まり）。
+//   publish の戻り（long）: 負は失敗（-1 FAILED / -2 TIMEOUT）、正は成功で現在の session の id（1 始まり）。0 は返さない。
 //   操作の通知は session id を添える。Rust は取り下げのたびに受け入れる id を捨て、publish 成功で
 //   返った id だけを受け入れるため、取り下げ前の session の遅延した操作は新しい再生に効かない。
 //   操作: 0 PLAY / 1 PAUSE（メディアキーのトグルは MediaSession の既定処理が PlaybackState を見て
@@ -276,10 +276,11 @@ final class NowPlayingHelper {
         } else {
             b = new Notification.Builder(activity);
         }
-        // contentIntent は付けない（exported な入口を増やさない）。
+        // contentIntent は付けない（exported な入口を増やさない）。ongoing にもしない。プロセスが
+        // 異常終了すると通知は残り、利用者が消せなくなるため（次回起動の取り下げまで残る）。
         b.setSmallIcon(android.R.drawable.ic_media_play)
                 .setContentTitle(d.title)
-                .setOngoing(d.playing)
+                .setOngoing(false)
                 .setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()));
         nm.notify(TAG, NOTIFICATION_ID, b.build());
     }
@@ -291,7 +292,7 @@ final class NowPlayingHelper {
                 nm.cancel(TAG, NOTIFICATION_ID);
             }
         } catch (RuntimeException e) {
-            // 取り下げの失敗は握りつぶす（残りは OS が通知ごと片付ける）。
+            // 取り下げの失敗は握りつぶす（残った通知は次回起動時の取り下げで消える）。
         }
     }
 
