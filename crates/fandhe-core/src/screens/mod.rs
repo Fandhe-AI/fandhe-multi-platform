@@ -87,6 +87,9 @@ pub mod checkbox_list;
 
 /// Phase 11 の拡充ループ型サンプル「バックグラウンド処理」（親 #1042、Issue #1043）。
 pub mod background_task;
+
+/// Phase 11 の拡充ループ型サンプル「バックグラウンドダウンロード」（親 #100、Issue #390）。
+pub mod background_download;
 /// Phase 11 の拡充ループ型サンプル「システムトレイ」（親 #1038、Issue #1039）。
 pub mod system_tray;
 /// Phase 11 の拡充ループ型サンプル「カスタム URL scheme」（親 #1116、Issue #1215）。

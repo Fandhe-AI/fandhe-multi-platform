@@ -396,6 +396,11 @@ windows = { workspace = true, optional = true, features = [
     # 新規パッケージは増えない。
     "Win32_Graphics_Gdi",
     "Win32_UI_HiDpi",
+    # Issue #388: `device/windows_media_cast.rs` が `CastingDevicePicker` / `CastingConnection`
+    # （`Media_Casting`）と `MediaPlayer::GetAsCastingSource`（`Media_Playback`）を呼ぶ。
+    # 新規パッケージは増えない（Cargo.lock は不変）。
+    "Media_Casting",
+    "Media_Playback",
     # Issue #1274: `device/windows_power_state.rs` が `GetSystemPowerStatus` /
     # `SYSTEM_POWER_STATUS`（`Win32_System_Power`）を呼ぶ。新規パッケージは増えない。
     "Win32_System_Power",

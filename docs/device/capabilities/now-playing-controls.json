@@ -17,14 +17,17 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_now_playing.rs + crates/fandhe-egui-proxy/src/device/apple_now_playing.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_now_playing.m + crates/fandhe-egui-proxy/src/device/now_playing.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #382"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`android.media.session.MediaSession` + `Notification.MediaStyle`（Media3 は不採用）",
       "perm": "なし（foreground service は使わない。POST_NOTIFICATIONS は宣言済みで、media session の通知は実行時の許可の対象外）",
       "url": [
         "https://developer.android.com/media/implement/surfaces/mobile",
         "https://developer.android.com/develop/ui/views/notifications/notification-permission"
       ],
-      "note": "未実装。前景だけで扱い、通知シェードのプレーヤーとヘッドセットのボタンを受ける。ロック画面と背景再生（foreground service の mediaPlayback）は範囲外"
+      "note": "実装済み（#383）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を通知シェードのプレーヤーとヘッドセットのボタンへ渡し、OS 側の再生・一時停止を画面へ返すこと（前の曲・次の曲・シーク・アートワークは範囲外で、効かない操作は出さない）。前景だけで扱い、背景に回すと取り下げ、前面へ戻ると出し直す。ロック画面と背景再生（foreground service の mediaPlayback）は範囲外。結果の意味は「OS へ渡した」で、表示中とは言わない。OS からの一時停止は失敗ではなく一時停止中への遷移。停止・失敗で取り下げ、取り下げ後に届いた古い操作では再開しない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止（期限切れ・例外は失敗）、session と通知の解放。守らない範囲: 利用者が通知を消したあと次の切り替えまで出ないこと、アプリの通知を切っているとシェードに出ないこと（session は有効でヘッドセットは効く）、API 24〜32 では通知にボタンが無くヘッドセットだけになること、背景中の操作は捨てること、UI スレッドが 1 秒以上塞がっている間の取り下げの遅れ、PiP との取り合い、複数プロセス",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#378）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_now_playing.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/NowPlayingHelper.java + crates/fandhe-egui-proxy/src/device/now_playing.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #383"
     },
     "macos": {
       "status": "done",

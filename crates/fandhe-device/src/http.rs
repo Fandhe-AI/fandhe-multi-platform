@@ -85,12 +85,28 @@ impl Default for UreqHttp {
     }
 }
 
+/// 取得先 URL の検証（security.md A02・A03）。許可するのは `https://`（ホストが空でないもの）と、
+/// ループバック・RFC 1918 私設 IPv4 宛ての `http://`（実機テストで Mac の LAN IP から取得するため、
+/// Issue #660）のみ。ASCII の空白・制御文字を含む URL は拒否する。エラーに URL 全体は含めない（A09）。
+/// `UreqHttp::get` と `background_download`（OS 管理の転送、Issue #390）が共有し、wasm32 でも使える。
+pub fn check_url(url: &str) -> Result<(), DeviceError> {
+    let ok = !url
+        .bytes()
+        .any(|b| b.is_ascii_whitespace() || b.is_ascii_control())
+        && match extract_host(url) {
+            Some(_) if url.starts_with("https://") => true,
+            Some(host) if url.starts_with("http://") => is_local_plain_http_host(host),
+            _ => false,
+        };
+    if ok {
+        Ok(())
+    } else {
+        Err(DeviceError::Http("unsupported scheme or host".to_string()))
+    }
+}
+
 /// `url` の authority 部分（ユーザー情報・ポートを除いたホスト名）を取り出す。
 /// スキームを含まない・authority が空等の不正な形式は `None`。
-///
-/// wasm32 では唯一の呼び出し元 `UreqHttp` ごと存在しないため未使用になる。
-/// 上の `UreqHttp` 系と同じ `cfg` に揃える。
-#[cfg(not(target_arch = "wasm32"))]
 fn extract_host(url: &str) -> Option<&str> {
     let rest = url
         .strip_prefix("http://")
@@ -107,10 +123,6 @@ fn extract_host(url: &str) -> Option<&str> {
 }
 
 /// ループバックホスト（ローカル検証専用サーバー）かどうかを判定する。
-///
-/// wasm32 では唯一の呼び出し元 `UreqHttp` ごと存在しないため未使用になる。
-/// 上の `UreqHttp` 系と同じ `cfg` に揃える。
-#[cfg(not(target_arch = "wasm32"))]
 fn is_loopback_host(host: &str) -> bool {
     host == "127.0.0.1" || host == "::1" || host.eq_ignore_ascii_case("localhost")
 }
@@ -120,10 +132,6 @@ fn is_loopback_host(host: &str) -> bool {
 /// iPhone/Android 実機から Mac の LAN IP へ平文 http で取得しに行くケースを
 /// 許可するため（Issue #660）。ホスト名（`.local` 含む）・公開 IP・IPv6 の
 /// 私設アドレスは対象外（`Ipv4Addr` の parse に失敗し `false` になる）。
-///
-/// wasm32 では唯一の呼び出し元 `UreqHttp` ごと存在しないため未使用になる。
-/// 上の `UreqHttp` 系と同じ `cfg` に揃える。
-#[cfg(not(target_arch = "wasm32"))]
 fn is_local_plain_http_host(host: &str) -> bool {
     is_loopback_host(host)
         || host
@@ -134,23 +142,7 @@ fn is_local_plain_http_host(host: &str) -> bool {
 #[cfg(not(target_arch = "wasm32"))]
 impl Http for UreqHttp {
     fn get(&self, url: &str) -> Result<Vec<u8>, DeviceError> {
-        // スキーム制限（A03 インジェクション対策・security.md A02 通信は TLS 前提）:
-        // 通常の取得は https のみを許可する。平文 http はループバックと私設 IPv4
-        // リテラル宛てに限り例外的に許可し（実機テストで Mac の LAN IP から取得する
-        // ため、Issue #660）、それ以外への平文送信（例: http://example.com/、
-        // ホスト名 .local、公開 IP）は拒否する。エラーメッセージに URL 全体は
-        // 含めない（A09 ログ方針）。
-        let allowed = match extract_host(url) {
-            Some(host) if url.starts_with("https://") => {
-                let _ = host;
-                true
-            }
-            Some(host) if url.starts_with("http://") => is_local_plain_http_host(host),
-            _ => false,
-        };
-        if !allowed {
-            return Err(DeviceError::Http("unsupported scheme or host".to_string()));
-        }
+        check_url(url)?;
         let mut response = self
             .agent
             .get(url)
@@ -306,6 +298,36 @@ mod tests {
 /// `parse_items` は wasm32 の `fandhe-web-dom::http_fetch` 実装からも呼ばれるため、
 /// desktop 限定の `mod tests`（`UreqHttp` を使う）とは別に全ターゲットで通す
 /// （Issue #985）。
+#[cfg(test)]
+mod check_url_tests {
+    use super::*;
+
+    #[test]
+    fn allows_https_loopback_and_private_http() {
+        for u in [
+            "https://example.com/a",
+            "http://127.0.0.1:8787/items.json",
+            "http://localhost/x",
+            "http://192.168.0.5/x",
+        ] {
+            assert!(check_url(u).is_ok(), "{u}");
+        }
+    }
+
+    #[test]
+    fn rejects_public_http_other_schemes_empty_host_and_whitespace() {
+        for u in [
+            "http://example.com/",
+            "ftp://127.0.0.1/",
+            "https:///x",
+            "http://127.0.0.1/a b",
+            "https://example.com/\n",
+        ] {
+            assert!(check_url(u).is_err(), "{u}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod parse_items_tests {
     use super::*;

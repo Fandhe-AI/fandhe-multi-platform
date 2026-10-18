@@ -318,7 +318,7 @@ pub fn apply_update(state: &mut CastShowState, generation: u64, update: CastShow
         CastShowUpdate::Failed(f) => {
             if matches!(
                 state.playback,
-                P::Preparing | P::Ready | P::Starting | P::Playing | P::Stopping
+                P::Preparing | P::Ready | P::Starting | P::Playing | P::Stopping | P::Stopped
             ) {
                 state.playback = P::Failed(f);
                 state.route = CastShowRoute::Local;

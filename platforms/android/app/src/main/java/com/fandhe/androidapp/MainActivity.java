@@ -608,6 +608,18 @@ public class MainActivity extends GameActivity {
         return screenWakeLockHelper.isHeld();
     }
 
+    // ロック画面・OS のメディア操作（Issue #383）。実装は `NowPlayingHelper`。Rust の
+    // `android_now_playing.rs` が egui スレッドから同期で JNI 呼び出しする。
+    private final NowPlayingHelper nowPlayingHelper = new NowPlayingHelper(this);
+
+    long nowPlayingPublish(String title, boolean playing, long positionMs, long durationMs) {
+        return nowPlayingHelper.publish(title, playing, positionMs, durationMs);
+    }
+
+    void nowPlayingClear() {
+        nowPlayingHelper.clear();
+    }
+
     // ペン・筆圧入力（Issue #357）。実装は `PenStylusHelper`。
     private final PenStylusHelper penStylusHelper = new PenStylusHelper();
 
@@ -2295,6 +2307,7 @@ public class MainActivity extends GameActivity {
         activityResumed = true;
         compassHelper.onResume();
         mediaPlaybackHelper.onResume();
+        nowPlayingHelper.onResume();
         if (sensorManager != null && motionSensor != null) {
             sensorManager.registerListener(
                     motionListener, motionSensor, SensorManager.SENSOR_DELAY_GAME);
@@ -2386,6 +2399,7 @@ public class MainActivity extends GameActivity {
         screenCaptureHelper.onPause();
         compassHelper.onPause();
         mediaPlaybackHelper.onPause();
+        nowPlayingHelper.onPause();
         if (sensorManager != null) {
             sensorManager.unregisterListener(motionListener);
         }
@@ -4591,6 +4605,8 @@ public class MainActivity extends GameActivity {
         // 破棄中ウィンドウの insets 報告が新 Activity の状態を潰さないよう、super より前に確定する。
         fullscreenHelper.onDestroy();
         penStylusHelper.onDestroy();
+        // UI キューを待つネイティブ終了処理（clear）が super.onDestroy() の後ろで詰まらないよう先に解放する。
+        nowPlayingHelper.onDestroy();
         super.onDestroy();
         pedometerHelper.onDestroy();
         compassHelper.onDestroy();

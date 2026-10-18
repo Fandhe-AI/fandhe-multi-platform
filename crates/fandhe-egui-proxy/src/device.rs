@@ -36,6 +36,11 @@ pub mod android_app_badge;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_audio_devices;
+/// Issue #390: Android 向けバックグラウンドダウンロードのスタブ（b-android #392 が埋める）。
+/// `device/background_download.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_background_download;
 /// Issue #1046: Android 向けバックグラウンド処理実装（`WorkManager`/
 /// `OneTimeWorkRequest` を呼ぶ Java 側 `MainActivity` の JNI 受け口）。状態変換の
 /// 純関数はホストでテストできるよう cfg を付けない（`android_gamepad.rs` と同じ
@@ -122,7 +127,7 @@ pub mod android_multi_display;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_network_status;
-/// Issue #381: Android 向けロック画面・OS のメディア操作実装のスタブ（#383 が埋める）。
+/// Issue #383: Android 向けロック画面・OS のメディア操作実装（`MediaSession` + `Notification.MediaStyle` を JNI で操作）。
 /// `device/now_playing.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -181,6 +186,13 @@ pub mod app_badge;
 /// 純関数をホストの `cargo test` で検査するため cfg に `test` を含める。
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
 pub mod apple_accessibility_prefs;
+/// Issue #390（macOS）/ #391（iOS）: バックグラウンドダウンロード実装（`apple/fandhe_apple_background_download.m` の
+/// background `NSURLSession` を呼ぶ C ABI ラッパー）。`device/background_download.rs` の macOS 経路から呼ばれる。
+/// 状態遷移の純ロジックをホストの `cargo test` で検査するため cfg に `test` を含める。
+/// iOS は b-ios が委譲するまで未使用。
+#[cfg(any(target_os = "ios", target_os = "macos", test))]
+#[cfg_attr(target_os = "ios", allow(dead_code))]
+pub mod apple_background_download;
 /// Issue #906: iOS / macOS 向け生体認証実装（`apple/fandhe_apple_biometric.m` を呼ぶ
 /// C ABI ラッパー）。`device/biometric_auth.rs` の macOS/iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -320,6 +332,9 @@ pub mod ar;
 /// Phase 11 の拡充ループ（親 #1136、Issue #1330）: 音声デバイス一覧の effect ドライバ（macOS / Windows
 /// 実装、iOS・Android は #1331・#1332 で埋めるスタブ、他 OS は `UnsupportedAudioDevices` 固定）。
 pub mod audio_devices;
+/// Phase 11 の拡充ループ（親 #100、Issue #390）: OS 管理のバックグラウンドダウンロードの effect ドライバ
+/// （macOS 実装、iOS・Android・Windows は子 issue が埋めるスタブ、他 OS は `Unsupported` 固定）。
+pub mod background_download;
 /// Phase 11 の拡充ループ（親 #1042、Issue #1043）: バックグラウンド処理の effect
 /// ドライバ（macOS 実装、他 OS は兄弟 issue #1044〜#1047）。
 pub mod background_task;
@@ -407,6 +422,11 @@ pub mod ios_ar;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_audio_devices;
+/// Issue #390: iOS 向けバックグラウンドダウンロードのスタブ（b-ios #391 が埋める）。
+/// `device/background_download.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_background_download;
 /// Issue #1045: iOS 向けバックグラウンド処理実装（`ios/
 /// fandhe_ios_background_task.m` を呼ぶ C ABI ラッパー）。`device/
 /// background_task.rs` の iOS 経路から呼ばれる。モジュール自体は `cfg(any(ios, test))`
@@ -737,6 +757,11 @@ pub mod windows_app_badge;
 /// `device/audio_devices.rs` の Windows 経路（ワーカー）から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_audio_devices;
+/// Issue #390: Windows 向けバックグラウンドダウンロードのスタブ（windows #394 が埋める）。
+/// `device/background_download.rs` の Windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_background_download;
 /// Issue #1044: Windows 向けバックグラウンド処理実装（Task Scheduler 2.0 COM
 /// `ITaskService` ラッパー）。`device/background_task.rs` の Windows 経路から
 /// 呼ばれる。HRESULT 写像・引数解析・時刻整形等の純関数はホストの `cargo test`
@@ -789,7 +814,7 @@ pub mod windows_image_recognition;
 /// `device/local_fonts.rs` の Windows 経路（ワーカー）から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_local_fonts;
-/// Issue #386: Windows 向け外部機器への再生（windows 子が埋めるスタブ）。`device/media_cast.rs` の Windows 経路から呼ばれる。
+/// Issue #388: Windows 向け外部機器への再生（`CastingDevicePicker` + `MediaPlayer`）。`device/media_cast.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_media_cast;

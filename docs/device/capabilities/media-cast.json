@@ -38,14 +38,17 @@
       "impl": "crates/fandhe-egui-proxy/src/device/apple_media_cast.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_media_cast.m + crates/fandhe-egui-proxy/src/device/media_cast.rs + crates/fandhe-core/src/screens/cast_show.rs + crates/fandhe-device/src/media_cast.rs、Issue #386"
     },
     "windows": {
-      "status": "possible",
-      "api": "`Windows.Media.Casting.CastingDevicePicker`（Cast to Device）。旧 `Windows.Media.PlayTo` は Deprecated",
-      "perm": "なし（デスクトップアプリは `IInitializeWithWindow` で owner window を関連付ける。package identity の要否は文書に記載が無く未確認）",
+      "status": "done",
+      "api": "`Windows.Media.Casting.CastingDevicePicker` + `CastingConnection` + `MediaPlayer.GetAsCastingSource`（`MediaSource::CreateFromStream` でメモリ上の WAV をループ再生）。旧 `Windows.Media.PlayTo` は Deprecated",
+      "perm": "不要（`IInitializeWithWindow` で owner window を関連付ける。package identity の要否は実機で確認）",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.casting.castingdevicepicker",
         "https://learn.microsoft.com/en-us/windows/apps/develop/media-playback/media-casting"
       ],
-      "note": "未実装。対象は Miracast・DLNA・Bluetooth。素の exe で接続できなければ保留へ移す"
+      "note": "実装済み（#388）。実行時に生成した音をループ再生し、アプリのボタンから OS のピッカーを出す。対象は Miracast・DLNA・Bluetooth。出力先の名前と接続状態は画面にだけ出す（ログ・保存・ID の取得はしない）。ピッカーを閉じたときは失敗にしない。守る範囲: 1 プロセス内の操作順・失敗を成功にしないこと・資源の解放。守らない範囲: 約 250ms の反映遅れ、複数窓・複数プロセス、受信機側の品質、出力先なしの能動的な検出、ピッカーが窓の位置に追従しないこと。未確認（Windows 実機 #379）: 素の exe から DLNA・Miracast・Bluetooth へ接続できるか、メモリ上の WAV を受信機が受けるか、接続をワーカーで行う方式、ピッカーの表示位置。素の exe で接続できなければ保留へ移す",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#379）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_media_cast.rs + crates/fandhe-egui-proxy/src/device/media_cast.rs + crates/fandhe-core/src/screens/cast_show.rs + crates/fandhe-device/src/media_cast.rs、Issue #388"
     },
     "web": {
       "status": "done",

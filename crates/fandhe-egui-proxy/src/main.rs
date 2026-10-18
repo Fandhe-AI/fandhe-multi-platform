@@ -246,6 +246,11 @@ fn main() -> eframe::Result<()> {
     #[cfg(feature = "device")]
     fandhe_egui_proxy::device::ios_background_task::register();
 
+    // Issue #390: バックグラウンドダウンロードの登録口（現状は no-op のスタブ。b-ios #391 が
+    // `handleEventsForBackgroundURLSession` の受け口を埋める）。起動完了前に呼ぶ契約に揃える。
+    #[cfg(feature = "device")]
+    fandhe_egui_proxy::device::ios_background_download::register();
+
     // Issue #1217: カスタム URL scheme の observer も `UIApplicationMain` より前に登録する。
     // `UIApplicationDidFinishLaunchingNotification` に間に合わないと、コールドスタートの
     // URL と delegate の差し込みを取り逃がす（`ios/fandhe_ios_url_scheme.m` 参照）。
