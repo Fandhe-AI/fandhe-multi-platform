@@ -15,6 +15,7 @@
  */
 import http from "node:http";
 import { readFile, realpath } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { brotliCompressSync, constants as zlibConstants } from "node:zlib";
 
@@ -92,13 +93,20 @@ const server = http.createServer(async (req, res) => {
 
     res.setHeader("Content-Type", MIME_TYPES[ext] ?? "application/octet-stream");
     res.setHeader("Accept-Ranges", "bytes");
+    // 選んだ表現（br / identity）の内容から強い ETag を作る。If-Range の照合に使う。
+    const etag = `"${createHash("sha256").update(data).digest("hex").slice(0, 32)}"`;
+    res.setHeader("ETag", etag);
 
     // 単一 Range（`bytes=a-b` / `a-` / `-n`）。BITS（background-download、Issue #394）が
     // 転送前に HEAD でサイズを取り、Range で GET する。Range の値は数値として検証し、
     // 応答にそのまま出さない（A03）。HEAD は Range を無視して 200 を返す（GET のみ対象）。
     const rangeHeader = req.headers.range;
     // 複数 Range（`a-b,c-d`）は未対応として無視し、全体を 200 で返す（RFC 7233）。
-    if (req.method === "GET" && rangeHeader !== undefined && !rangeHeader.includes(",")) {
+    // If-Range は現在の ETag と完全一致するときだけ Range を適用する。不一致・日時形式
+    // （Last-Modified は出さないため照合不能）は Range を無視して全体を 200 で返す。
+    const ifRange = req.headers["if-range"];
+    const rangeApplies = ifRange === undefined || ifRange === etag;
+    if (req.method === "GET" && rangeHeader !== undefined && rangeApplies && !rangeHeader.includes(",")) {
       const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
       let start;
       let end;
