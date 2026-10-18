@@ -1,5 +1,5 @@
-//! macOS 向けロック画面・OS のメディア操作実装（Issue #381、親 #98、契約は `fandhe_device::now_playing`）。
-//! `device/now_playing.rs::platform_now_playing` の macOS 経路から呼ばれる。
+//! macOS・iOS 共用のロック画面・OS のメディア操作実装（Issue #381、親 #98、契約は `fandhe_device::now_playing`）。
+//! `device/now_playing.rs::platform_now_playing` の macOS・iOS 経路（`ios_now_playing`）から呼ばれる。
 //! `apple/fandhe_apple_now_playing.m`（MediaPlayer の `MPNowPlayingInfoCenter` / `MPRemoteCommandCenter`、
 //! `build.rs` の macOS・iOS 分岐がコンパイル）を C ABI で呼ぶ薄いラッパー。曲名は
 //! `fandhe_device::now_playing::DEMO_TITLE` を長さ付き UTF-8 の引数で渡し、`.m` が同期でコピーする
@@ -11,24 +11,24 @@
 //!
 //! 結果は `.m` の戻りコードを [`result_from_code`] で固定の種別へ写す。Apple は表示の確定が返らないので
 //! `Ok` は「OS へ渡した」までを意味する。`unsafe` は extern 呼び出しと `#[no_mangle]` の受け口に閉じ、
-//! 曲名・位置・OS の生エラーはログに出さない。iOS（#382）が埋めるときは cfg を広げ、`request_repaint` を足す
-//! （入力が無いと egui が止まる。契約表 4）。
+//! 曲名・位置・OS の生エラーはログに出さない。iOS（#382）は handler が結果を共有状態へ入れた直後に
+//! `crate::ios::request_repaint` で次フレームを起こす（入力が無いと egui が止まる。契約表 4）。
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 use std::sync::Arc;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 use fandhe_device::now_playing::NowPlaying;
 use fandhe_device::now_playing::OsMediaCommand;
 use fandhe_device::DeviceError;
 
 /// 現在の OS 向け実装を返す。
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub(crate) fn implementation() -> Arc<dyn NowPlaying> {
     Arc::new(AppleNowPlaying)
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 struct AppleNowPlaying;
 
 /// `.m` の戻りコードを契約へ写す純関数。OS の生値は見ず固定の種別へ畳む。
@@ -50,7 +50,7 @@ fn command_from_code(code: i32) -> Option<OsMediaCommand> {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod imp {
     use super::*;
     use fandhe_device::now_playing::{NowPlayingInfo, DEMO_TITLE};
@@ -115,10 +115,13 @@ mod imp {
     #[allow(unsafe_code)]
     #[no_mangle]
     pub extern "C" fn fandhe_rust_now_playing_command(code: i32) -> i32 {
-        match command_from_code(code) {
+        let accepted = match command_from_code(code) {
             Some(cmd) => i32::from(super::super::now_playing::commands().push(cmd)),
             None => 0,
-        }
+        };
+        #[cfg(target_os = "ios")]
+        crate::ios::request_repaint();
+        accepted
     }
 }
 
