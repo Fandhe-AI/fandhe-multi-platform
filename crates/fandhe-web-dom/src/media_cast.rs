@@ -603,6 +603,13 @@ mod web {
         });
     }
 
+    /// 要求が現存するセッションの結果を反映してよい経路か。ピッカー保留中に再生が先に成功すると
+    /// 経路が `Choosing` から `Local` へ戻るため、`Local` でも拒否（出力先なし・非対応音源）を捨てない。
+    /// 接続系の経路（`Connecting` / `Connected` 等）では別の確定が優先なので触らない。
+    fn picker_open(r: &CastShowRoute) -> bool {
+        matches!(r, CastShowRoute::Choosing | CastShowRoute::Local)
+    }
+
     /// 選択結果を現在の状態へ確定させる。再生操作で世代が進んでいても、`Choosing` のままなら回収する。
     /// 停止・中断中は core が `Failed` を受けないため、ここで直接失敗へ移して `Choosing` を残さない。
     /// 要求時のセッション `sid` が現存しなければ結果を捨てる（再準備後の新セッションを触らない）。
@@ -617,12 +624,12 @@ mod web {
         match outcome {
             PromptOutcome::Cancel => post_current_route(applier, mount),
             PromptOutcome::NoDevices => post(applier, |s| {
-                if s.route == CastShowRoute::Choosing {
+                if picker_open(&s.route) {
                     s.route = CastShowRoute::NoDevices;
                 }
             }),
             PromptOutcome::Failed(f) => post(applier, move |s| {
-                if s.route != CastShowRoute::Choosing {
+                if !picker_open(&s.route) {
                     return;
                 }
                 let g = s.generation;
