@@ -73,10 +73,11 @@ enum Ev {
     Selected(u64, String),
     /// ピッカーが閉じた。
     Dismissed,
-    /// `CastingConnection.StateChanged`（`CastingConnectionState` の値）。
-    ConnState(i32),
-    /// `CastingConnection.ErrorOccurred`（`CastingConnectionErrorStatus` の値）。
-    ConnError(i32),
+    /// `CastingConnection.StateChanged`（接続の連番, `CastingConnectionState` の値）。
+    /// 連番が現在の接続と違えば入れ替え前の旧接続の通知なので捨てる。
+    ConnState(u64, i32),
+    /// `CastingConnection.ErrorOccurred`（接続の連番, `CastingConnectionErrorStatus` の値）。
+    ConnError(u64, i32),
     /// `RequestStartCastingAsync` の完了（接続の連番, `CastingConnectionErrorStatus` の値）。
     /// 連番が現在の接続と違えば、入れ替え前の旧接続の完了なので捨てる。
     StartResult(u64, i32),
@@ -112,6 +113,8 @@ struct Shared {
     intent: Intent,
     /// 現在の接続の連番（`Selected` で進む）。0 は接続なし。世代と違い 1 世代の中で接続を入れ替えるたびに進む。
     conn_seq: u64,
+    /// 再生開始の通知前に停止を要求した（`Paused` を `Stopped` へ確定する印）。
+    pending_stop: bool,
 }
 
 impl Shared {
@@ -124,6 +127,7 @@ impl Shared {
             name: None,
             intent: Intent::Stop,
             conn_seq: 0,
+            pending_stop: false,
         }
     }
 
@@ -135,6 +139,7 @@ impl Shared {
         self.name = None;
         self.intent = Intent::Stop;
         self.conn_seq = 0;
+        self.pending_stop = false;
     }
 
     /// 新しい準備を始める。0 バイトと上限超は拒み、旧世代も無効にする。
@@ -163,6 +168,7 @@ impl Shared {
             return Err(DeviceError::InvalidInput("media_cast failed"));
         }
         self.intent = Intent::Play;
+        self.pending_stop = false;
         Ok(())
     }
 
@@ -172,7 +178,10 @@ impl Shared {
         self.check(gen)?;
         let was_play = self.intent == Intent::Play;
         self.intent = Intent::Stop;
-        Ok(was_play || self.playback == CastPlayback::Playing)
+        let flush = was_play || self.playback == CastPlayback::Playing;
+        // Playing 通知より前の停止でも、後から届く Paused で Stopped を確定する。
+        self.pending_stop = flush && self.playback != CastPlayback::Playing;
+        Ok(flush)
     }
 
     /// ピッカーを出す前の確認。`Choosing` は `Show` の前に立てる（閉じた通知が先に届いても戻せる）。
@@ -219,8 +228,12 @@ impl Shared {
                 }
             }
             Ev::Paused => {
-                if self.intent == Intent::Stop && self.playback == CastPlayback::Playing {
+                if self.intent == Intent::Stop
+                    && (self.playback == CastPlayback::Playing
+                        || (self.pending_stop && self.playback == CastPlayback::Ready))
+                {
                     self.playback = CastPlayback::Stopped;
+                    self.pending_stop = false;
                 }
             }
             Ev::MediaFailed(f) => {
@@ -242,7 +255,8 @@ impl Shared {
                     self.route = RouteState::Local;
                 }
             }
-            Ev::ConnState(s) => {
+            Ev::ConnState(seq, _) | Ev::ConnError(seq, _) if seq != self.conn_seq => {}
+            Ev::ConnState(_, s) => {
                 let connected = matches!(self.route, RouteState::Connected { .. });
                 match s {
                     1 | 2 if connected || self.route == RouteState::Connecting => {
@@ -257,7 +271,7 @@ impl Shared {
                     _ => {}
                 }
             }
-            Ev::ConnError(code) => match self.route {
+            Ev::ConnError(_, code) => match self.route {
                 RouteState::Connecting => {
                     self.fail_connecting(failure_from_start_status(code).unwrap_or(CastFailure::Os))
                 }
@@ -309,7 +323,7 @@ mod win {
     use windows::Storage::Streams::{DataWriter, InMemoryRandomAccessStream};
     use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::Shell::IInitializeWithWindow;
-    use windows_future::{AsyncOperationCompletedHandler, AsyncStatus};
+    use windows_future::{AsyncOperationCompletedHandler, AsyncStatus, IAsyncOperation};
 
     use fandhe_device::media_cast::MediaCast;
 
@@ -529,6 +543,8 @@ mod win {
         conn: CastingConnection,
         state: i64,
         error: i64,
+        /// 完了ハンドラが走る前に drop されてキャンセルされないよう保持する。
+        _op: Option<IAsyncOperation<CastingConnectionErrorStatus>>,
     }
 
     /// ハンドラからキューへ通知を戻す。
@@ -541,6 +557,8 @@ mod win {
         let writer = DataWriter::CreateDataWriter(&stream)?;
         writer.WriteBytes(wav)?;
         writer.StoreAsync()?.get()?;
+        // drop で stream が閉じられないよう切り離す。
+        writer.DetachStream()?;
         stream.Seek(0)?;
         let source = MediaSource::CreateFromStream(&stream, &HSTRING::from("audio/wav"))?;
         let player = MediaPlayer::new()?;
@@ -657,7 +675,7 @@ mod win {
             move |c: Ref<'_, CastingConnection>, _| {
                 if let Some(c) = c.as_ref() {
                     if let Ok(s) = c.State() {
-                        post(&t, gen, Ev::ConnState(s.0));
+                        post(&t, gen, Ev::ConnState(seq, s.0));
                     }
                 }
                 Ok(())
@@ -670,7 +688,7 @@ mod win {
                     .as_ref()
                     .and_then(|a| a.ErrorStatus().ok())
                     .map_or(CastingConnectionErrorStatus::Unknown.0, |s| s.0);
-                post(&t, gen, Ev::ConnError(code));
+                post(&t, gen, Ev::ConnError(seq, code));
                 Ok(())
             },
         )) {
@@ -681,7 +699,12 @@ mod win {
                 return Err(e);
             }
         };
-        let c = Conn { conn, state, error };
+        let mut c = Conn {
+            conn,
+            state,
+            error,
+            _op: None,
+        };
         let op = match res
             .player
             .GetAsCastingSource()
@@ -709,6 +732,7 @@ mod win {
             close_conn(c);
             return Err(e);
         }
+        c._op = Some(op);
         res.conn = Some(c);
         Ok(())
     }
@@ -833,7 +857,7 @@ mod tests {
         assert!(s.on_play(g).is_err() && s.on_stop(g).is_err() && s.on_picker_shown(g).is_err());
         s.on_event(g, Ev::Opened);
         s.on_event(g, Ev::Playing);
-        s.on_event(g, Ev::ConnState(1));
+        s.on_event(g, Ev::ConnState(1, 1));
         assert_eq!(s.snapshot().playback, CastPlayback::Idle);
         assert_eq!(s.snapshot().generation, g2);
     }
@@ -909,11 +933,11 @@ mod tests {
     #[test]
     fn connected_only_after_os_state_and_name_is_cleaned() {
         let (mut s, g) = ready();
-        s.on_event(g, Ev::ConnState(1));
+        s.on_event(g, Ev::ConnState(1, 1));
         assert_eq!(s.route, RouteState::Local);
         s.on_event(g, Ev::Selected(1, " Living\u{0}Room\n".into()));
         assert_eq!(s.route, RouteState::Connecting);
-        s.on_event(g, Ev::ConnState(2));
+        s.on_event(g, Ev::ConnState(1, 2));
         assert_eq!(
             s.route,
             RouteState::Connected {
@@ -922,7 +946,7 @@ mod tests {
         );
         let (mut s, g) = ready();
         s.on_event(g, Ev::Selected(1, "\u{1}".into()));
-        s.on_event(g, Ev::ConnState(1));
+        s.on_event(g, Ev::ConnState(1, 1));
         assert_eq!(s.route, RouteState::Connected { name: None });
     }
 
@@ -959,14 +983,14 @@ mod tests {
     fn error_after_connected_is_disconnect() {
         let (mut s, g) = ready();
         s.on_event(g, Ev::Selected(1, "TV".into()));
-        s.on_event(g, Ev::ConnState(1));
-        s.on_event(g, Ev::ConnError(2));
+        s.on_event(g, Ev::ConnState(1, 1));
+        s.on_event(g, Ev::ConnError(1, 2));
         assert_eq!(s.route, RouteState::Disconnected);
         assert_eq!(s.playback, CastPlayback::Ready);
         let (mut s, g) = ready();
         s.on_event(g, Ev::Selected(1, "TV".into()));
-        s.on_event(g, Ev::ConnState(1));
-        s.on_event(g, Ev::ConnState(0));
+        s.on_event(g, Ev::ConnState(1, 1));
+        s.on_event(g, Ev::ConnState(1, 0));
         assert_eq!(s.route, RouteState::Disconnected);
     }
 
@@ -976,7 +1000,7 @@ mod tests {
         s.reset();
         s.on_event(g, Ev::Playing);
         s.on_event(g, Ev::Selected(1, "TV".into()));
-        s.on_event(g, Ev::ConnState(1));
+        s.on_event(g, Ev::ConnState(1, 1));
         let snap = s.snapshot();
         assert_eq!(snap.playback, CastPlayback::Idle);
         assert_eq!(snap.route, RouteState::Local);
@@ -991,7 +1015,7 @@ mod tests {
         assert_eq!(s.route, RouteState::Connecting);
         s.on_event(g, Ev::Dismissed);
         assert_eq!(s.route, RouteState::Connecting);
-        s.on_event(g, Ev::ConnState(1));
+        s.on_event(g, Ev::ConnState(1, 1));
         s.on_picker_shown(g).unwrap();
         s.on_event(g, Ev::Dismissed);
         assert_eq!(
@@ -1001,7 +1025,7 @@ mod tests {
             }
         );
         // 以後の ConnState も無視されない。
-        s.on_event(g, Ev::ConnState(0));
+        s.on_event(g, Ev::ConnState(1, 0));
         assert_eq!(s.route, RouteState::Disconnected);
         s.on_picker_shown(g).unwrap();
         s.on_event(g, Ev::Dismissed);
@@ -1021,6 +1045,35 @@ mod tests {
         s.on_event(g, Ev::StartResult(2, 6));
         assert_eq!(s.route, RouteState::Local);
         assert_eq!(s.playback, CastPlayback::Failed(CastFailure::Os));
+    }
+
+    #[test]
+    fn stale_conn_notices_are_dropped_after_switch() {
+        let (mut s, g) = ready();
+        s.on_event(g, Ev::Selected(1, "A".into()));
+        s.on_event(g, Ev::Selected(2, "B".into()));
+        s.on_event(g, Ev::ConnState(1, 1));
+        assert_eq!(s.route, RouteState::Connecting);
+        s.on_event(g, Ev::ConnError(1, 2));
+        assert_eq!(s.route, RouteState::Connecting);
+        assert_eq!(s.playback, CastPlayback::Ready);
+        s.on_event(g, Ev::ConnState(2, 1));
+        assert_eq!(
+            s.route,
+            RouteState::Connected {
+                name: Some("B".into())
+            }
+        );
+    }
+
+    #[test]
+    fn stop_before_playing_notice_still_reaches_stopped() {
+        let (mut s, g) = ready();
+        s.on_play(g).unwrap();
+        assert!(s.on_stop(g).unwrap());
+        s.on_event(g, Ev::Playing);
+        s.on_event(g, Ev::Paused);
+        assert_eq!(s.playback, CastPlayback::Stopped);
     }
 
     #[test]
