@@ -238,9 +238,9 @@ pub mod apple_location;
 /// `device/map_view.rs` の macOS / iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_map_view;
-/// Issue #386（macOS。iOS は b-ios）: 外部機器への再生（`apple/fandhe_apple_media_cast.m` の AVKit・AVFoundation を
-/// 呼ぶ C ABI ラッパー）。`device/media_cast.rs` の macOS 経路から呼ばれる。
-#[cfg(target_os = "macos")]
+/// Issue #386（macOS）/ #387（iOS）: 外部機器への再生（`apple/fandhe_apple_media_cast.m` の AVKit・AVFoundation を
+/// 呼ぶ C ABI ラッパー）。`device/media_cast.rs` の macOS 経路と `ios_media_cast` 経由の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_media_cast;
 /// Issue #267: macOS 向け音声再生実装（`apple/fandhe_apple_media_playback.m` の `AVAudioPlayer` を呼ぶ
 /// C ABI ラッパー）。`device/media_playback.rs` の macOS 経路から呼ばれる。iOS は親 #86 の b-ios が使う。
@@ -480,7 +480,7 @@ pub mod ios_live_activity;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_local_fonts;
-/// Issue #386: iOS 向け外部機器への再生（b-ios が埋めるスタブ。`device/media_cast.rs` の iOS 経路から呼ばれる）。
+/// Issue #387: iOS 向け外部機器への再生（macOS と共用の `apple_media_cast` へ委譲。`device/media_cast.rs` の iOS 経路から呼ばれる）。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_media_cast;

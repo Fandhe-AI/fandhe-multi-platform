@@ -34,22 +34,28 @@
       "impl": "crates/fandhe-egui-proxy/src/device/apple_now_playing.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_now_playing.m + crates/fandhe-egui-proxy/src/device/now_playing.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #381"
     },
     "windows": {
-      "status": "possible",
-      "api": "`SystemMediaTransportControls`（`ISystemMediaTransportControlsInterop::GetForWindow` で Win32 の窓から取得）",
-      "perm": "なし（文書に package identity の要件は無い。unpackaged で出る名前は実機で確かめる）",
+      "status": "done",
+      "api": "`SystemMediaTransportControls`（`ISystemMediaTransportControlsInterop::GetForWindow` で Win32 の窓から取得。`ButtonPressed`・`IsPlayEnabled` / `IsPauseEnabled`・`DisplayUpdater` の Type=Music と Title・`PlaybackStatus` を使う）",
+      "perm": "なし（package identity なし・unpackaged のまま。出る名前は #378 で確かめる）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/systemmediatransportcontrolsinterop/nf-systemmediatransportcontrolsinterop-isystemmediatransportcontrolsinterop-getforwindow",
         "https://learn.microsoft.com/en-us/windows/apps/develop/media-playback/system-media-transport-controls"
       ],
-      "note": "未実装。`ButtonPressed` は UI スレッド以外で届く"
+      "note": "実装済み（#385）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を SMTC（フライアウト・メディアキー）へ渡し、OS 側の再生・一時停止を画面へ返すこと（Stop・前後の曲・シーク・アートワーク・タイムラインは範囲外で、再生・一時停止以外は有効にしない）。`ButtonPressed` は UI 以外のスレッドで届くため、handler は `push` するだけにして画面の状態には触れない。メディアキーは OS が `PlaybackStatus` から Play / Pause に振り分けて届けるので Toggle は来ない。取得・登録・更新のどこかで失敗したら登録を解放して `Failed` を返し、成功とは言わない。OS からの一時停止は失敗ではなく一時停止中への遷移。停止・失敗で取り下げ、取り下げ後に届いた古い操作では再開しない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、登録の解放。守らない範囲: ポーリング間隔（約 250ms）ぶんの反映の遅れ、窓を最小化している間の遅れ、複数プロセス・複数窓、unpackaged で出るアプリ名、ロック画面に出るか（#378 で確かめる）",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#378）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_now_playing.rs + crates/fandhe-egui-proxy/src/device/now_playing.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #385"
     },
     "web": {
-      "status": "possible",
+      "status": "done",
       "api": "Media Session API（`navigator.mediaSession`）",
       "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API",
       "safari": "Safari 15 から対応（iOS も 15）。Chrome 73・Chrome Android 57・Firefox 82。Firefox Android は API はあるが OS の操作 UI が無い（MDN の互換データ）",
-      "note": "未実装。web-sys の `MediaSession` は unstable API のため Reflect で呼ぶ。短いメディアには通知を出さないブラウザがある"
+      "note": "実装済み（#384）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を Media Session（`navigator.mediaSession`）へ渡し、ブラウザ・OS のメディアキーや通知からの再生・一時停止を画面へ返すこと（前後の曲・シーク・位置表示・アートワークは範囲外で、`play` / `pause` の 2 つだけ登録する）。web-sys の `MediaSession` は unstable API のため Reflect で呼ぶ。結果は OS へ渡した／この環境では使えない／渡せなかったを分け、Firefox Android のように操作 UI が無い環境でも「渡しました」までしか言わない。OS からの一時停止は失敗ではなく一時停止中への遷移。停止・失敗・背景遷移で曲名を取り下げるが、handler は取り下げでは null に戻さない（戻すとブラウザの既定動作が `<audio>` を直接動かし、画面は停止なのに鳴る食い違いが出るため）。受付は armed で止め、取り下げ後に届いた古い操作では再開しない。handler はマウント破棄で外す。守る範囲: 1 マウント内の操作順、嘘の成功の禁止、登録の解放。守らない範囲: 複数タブ・複数マウント、Chrome が短いメディア（素材は 5 秒）に通知を出さない場合があること、`Loading` に入る前の既定動作、egui-proxy の wasm canvas 経路。実ブラウザの確認は #378",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#378）",
+      "impl": "crates/fandhe-web-dom/src/now_playing.rs + crates/fandhe-web-dom/src/media_playback.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #384"
     }
   },
   "note": "iOS / macOS は MPNowPlayingInfoCenter、Android は framework の MediaSession、Windows は SMTC、Web は Media Session。media-playback（既存 id）は再生そのものを扱い、本機能は OS 側の操作画面（コントロールセンター・通知・メディアキー）との連携。今回の範囲: media-playback の画面で再生・一時停止している間だけ、曲名と再生中かどうかを OS へ渡し、OS からの再生・一時停止を画面に反映する。前景だけで扱い、iOS・Android のロック画面（背景再生）・アートワーク・前後の曲・シークは扱わない。守備範囲: 1 プロセス内の操作順・嘘の成功の禁止・登録の解放までを守り、反映の遅れ・PiP との取り合い・複数プロセスは守らない"
