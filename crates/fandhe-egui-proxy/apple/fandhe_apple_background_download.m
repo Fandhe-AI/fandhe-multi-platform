@@ -22,7 +22,10 @@
 // 契約:
 //   int32_t fandhe_apple_bgdl_init(void);            // 0 = 成功 / 1 = session を作れない
 //   int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen); // 0 / 1 = session なし / 2 = URL 不正
-//   int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen); // 0 = 成功（保存先が無いのも成功）/ 3 = 保存先を消せない。世代 1 以上 upto_gen 以下の task だけ取り消す
+//   int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen, uint64_t deadline_ms);
+//     // 0 = 成功（保存先が無いのも成功）/ 3 = 保存先を消せない / 4 = deadline_ms 内に OS task への取り消しを
+//     // 終えられなかった。世代 1 以上 upto_gen 以下の task だけ取り消す。task の列挙 completion が
+//     // `[task cancel]` を呼び終えるまで待ってから戻る（戻った時点で取り消し依頼が OS に渡っている）
 //   delegate → Rust の終了コード: 0 = 完了 / 1 = 取り消し / 2 = 接続系 / 3 = 保存失敗 / 4 = その他
 #import <Foundation/Foundation.h>
 #import <stdbool.h>
@@ -221,24 +224,41 @@ int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen) {
     }
 }
 
-int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen) {
+int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen, uint64_t deadline_ms) {
     @autoreleasepool {
+        bool timed_out = false;
         if (g_session != nil) {
+            // `getAllTasks` の completion は非同期（session の delegate queue で走る）。待たずに戻ると、
+            // 列挙の前にプロセスが終わったとき `[task cancel]` が一度も呼ばれず、OS 管理の転送が
+            // 残る。そのため呼び出しスレッドで `[task cancel]` の完了まで待つ（契約表 3）。
+            // 呼び出し元は Rust のワーカースレッドで、main queue への待ち合わせは無い。completion は
+            // delegate queue 上で走り、file queue と Rust の `OP` ロックは取らない（delegate queue が
+            // file queue の `dispatch_sync` で塞がっていても file queue は空くので、待ちは詰まらず
+            // 期限内に解ける）。
+            dispatch_semaphore_t done = dispatch_semaphore_create(0);
             [g_session getAllTasksWithCompletionHandler:^(NSArray<__kindof NSURLSessionTask *> *tasks) {
                 for (NSURLSessionTask *task in tasks) {
                     if (task_gen(task) > 0 && task_gen(task) <= upto_gen) {
                         [task cancel];
                     }
                 }
+                dispatch_semaphore_signal(done);
             }];
+            // `DISPATCH_TIME_NOW` 基点は mach の単調時計（壁時計の変更に影響されない）。
+            dispatch_time_t limit = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(deadline_ms * NSEC_PER_MSEC));
+            timed_out = dispatch_semaphore_wait(done, limit) != 0;
         }
         // 取り消し以降に start された新しい世代があれば、その保存済みファイルは消さない。
+        // 期限切れでも保存先の削除は行う（嘘の成功を残さない）。結果は失敗として返す。
         __block int32_t code = 0;
         dispatch_sync(file_queue(), ^{
             if (g_latest_gen <= upto_gen) {
                 code = remove_dest();
             }
         });
+        if (code == 0 && timed_out) {
+            code = 4;
+        }
         return code;
     }
 }

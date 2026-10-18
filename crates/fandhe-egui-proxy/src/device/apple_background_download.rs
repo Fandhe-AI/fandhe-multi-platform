@@ -36,6 +36,21 @@ const FAILED_SAVE: &str = "ファイルを保存できませんでした";
 const FAILED_OTHER: &str = "ダウンロードに失敗しました";
 const FAILED_START: &str = "開始できませんでした";
 const FAILED_CANCEL: &str = "保存したファイルを削除できませんでした";
+const FAILED_CANCEL_TIMEOUT: &str = "取り消しを OS に伝えられませんでした";
+
+/// `.m` が OS task への取り消し依頼（`[task cancel]`）を終えるまで待つ期限。他の端末機能の
+/// 開始・報告の期限（5 秒）に揃える。`.m` は単調時計（`dispatch_time(DISPATCH_TIME_NOW, ..)`）で測る。
+#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
+const CANCEL_DEADLINE_MS: u64 = 5_000;
+
+/// `.m` の取り消しコードが期限切れ（4）のときの失敗文言。他は保存先の削除失敗。
+fn cancel_failure_message(code: i32) -> &'static str {
+    if code == 4 {
+        FAILED_CANCEL_TIMEOUT
+    } else {
+        FAILED_CANCEL
+    }
+}
 
 /// 転送の共有状態。
 #[derive(Debug)]
@@ -85,9 +100,10 @@ impl Inner {
         self.status = DownloadStatus::Cancelled;
     }
 
-    /// 取り消し時に保存先を消せなかった。嘘の「取り消しました」にせず失敗として見せる。
-    fn cancel_failed(&mut self) {
-        self.status = DownloadStatus::Failed(FAILED_CANCEL.to_string());
+    /// 取り消しを完遂できなかった（保存先を消せない・OS への依頼が期限内に終わらない）。
+    /// 嘘の「取り消しました」にせず失敗として見せる。
+    fn cancel_failed(&mut self, message: &str) {
+        self.status = DownloadStatus::Failed(message.to_string());
     }
 
     /// `.m` への開始依頼が失敗した。現在の世代のときだけ確定する。
@@ -233,7 +249,7 @@ mod imp {
     unsafe extern "C" {
         fn fandhe_apple_bgdl_init() -> i32;
         fn fandhe_apple_bgdl_start(url: *const c_char, gen: u64) -> i32;
-        fn fandhe_apple_bgdl_cancel(upto_gen: u64) -> i32;
+        fn fandhe_apple_bgdl_cancel(upto_gen: u64, deadline_ms: u64) -> i32;
     }
 
     pub(super) struct AppleBackgroundDownload;
@@ -243,7 +259,8 @@ mod imp {
     /// `cancel` が割り込んで、取り消し済みなのに転送が始まる順序逆転を防ぐ。
     /// ロック順は常に `OP` → `SHARED`。OS コールバック（`fandhe_rust_bgdl_*`）は `SHARED` しか
     /// 取らず `OP` を取らない。`.m` は main queue へ `dispatch_sync` しない（file queue のみ）ので
-    /// デッドロックしない。`status` も `OP` を取らない（進捗ポーリングを止めない）。
+    /// デッドロックしない。`cancel` は `OP` を持ったまま `.m` の列挙 completion（delegate queue）を期限つきで
+    /// 待つが、その completion は `OP` も `SHARED` も取らない。`status` も `OP` を取らない（進捗ポーリングを止めない）。
     static OP: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn op_lock() -> Result<std::sync::MutexGuard<'static, ()>, DeviceError> {
@@ -309,10 +326,11 @@ mod imp {
                 g.cancel();
                 g.next_gen
             };
-            // SAFETY: 値渡しのみ。`.m` は世代 `upto` 以下の task を取り消し、保存先のファイルを消す。
-            let code = unsafe { fandhe_apple_bgdl_cancel(upto) };
+            // SAFETY: 値渡しのみ。`.m` は世代 `upto` 以下の task への `[task cancel]` が終わる
+            // （または期限）まで待ち、保存先のファイルを消す。`SHARED` は外してある（delegate が取るため）。
+            let code = unsafe { fandhe_apple_bgdl_cancel(upto, CANCEL_DEADLINE_MS) };
             if code != 0 {
-                lock()?.cancel_failed();
+                lock()?.cancel_failed(cancel_failure_message(code));
                 return Err(DeviceError::Internal("background download"));
             }
             Ok(())
@@ -577,9 +595,22 @@ mod tests {
         let mut i = Inner::new();
         running(&mut i);
         i.cancel();
-        i.cancel_failed();
-        assert!(matches!(i.status, DownloadStatus::Failed(_)));
+        i.cancel_failed(cancel_failure_message(3));
+        assert_eq!(i.status, DownloadStatus::Failed(FAILED_CANCEL.to_string()));
         assert_eq!(i.current, None);
+    }
+
+    #[test]
+    fn cancel_deadline_is_failure_with_its_own_message() {
+        let mut i = Inner::new();
+        running(&mut i);
+        i.cancel();
+        i.cancel_failed(cancel_failure_message(4));
+        assert_eq!(
+            i.status,
+            DownloadStatus::Failed(FAILED_CANCEL_TIMEOUT.to_string())
+        );
+        assert_ne!(cancel_failure_message(4), cancel_failure_message(3));
     }
 
     #[test]
