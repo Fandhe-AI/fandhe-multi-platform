@@ -620,6 +620,22 @@ public class MainActivity extends GameActivity {
         nowPlayingHelper.clear();
     }
 
+    // OS 管理のバックグラウンドダウンロード（Issue #392）。実装は `BackgroundDownloadHelper`。Rust の
+    // `android_background_download.rs` が同期 JNI で呼ぶ（コールバックは無い）。
+    private final BackgroundDownloadHelper backgroundDownloadHelper = new BackgroundDownloadHelper(this);
+
+    int backgroundDownloadStart(String url) {
+        return backgroundDownloadHelper.start(url);
+    }
+
+    int backgroundDownloadCancel() {
+        return backgroundDownloadHelper.cancel();
+    }
+
+    long[] backgroundDownloadStatus() {
+        return backgroundDownloadHelper.status();
+    }
+
     // ペン・筆圧入力（Issue #357）。実装は `PenStylusHelper`。
     private final PenStylusHelper penStylusHelper = new PenStylusHelper();
 

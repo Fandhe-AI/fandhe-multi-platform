@@ -36,7 +36,7 @@ pub mod android_app_badge;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_audio_devices;
-/// Issue #390: Android 向けバックグラウンドダウンロードのスタブ（b-android #392 が埋める）。
+/// Issue #392: Android 向けバックグラウンドダウンロード実装（`DownloadManager` を同期 JNI で呼ぶ）。
 /// `device/background_download.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]

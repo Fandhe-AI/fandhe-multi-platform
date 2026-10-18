@@ -25,6 +25,10 @@
   場合は docs/architecture/device-feature-removal.mdに従い本 2 行 + uses-feature 行を
   戻す）。android:usesCleartextTraffic は追加しない（HTTP 取得画面 #748 は https のみを
   許可する `UreqHttp` を使う）。それ以外の不要な exported 設定は追加しない。
+  バックグラウンドダウンロード（Issue #392）: usesCleartextTraffic は足さず、
+  network_security_config.xml で 127.0.0.1 と localhost にだけ平文を許す（`adb reverse` で
+  確認用サーバーへつなぐため。base-config は平文禁止）。DownloadManager は OS の通信で
+  この設定が効く。http-get の `UreqHttp` は rustls で対象外。
   カスタム URL scheme（Issue #1218）の intent-filter は `fandhe` scheme 1 つだけで、
   http/https・host・path・autoVerify は付けない（受ける範囲の最小化）。
 -->
@@ -162,6 +166,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@android:drawable/sym_def_app_icon"
         android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/AppTheme">
 
         <activity
