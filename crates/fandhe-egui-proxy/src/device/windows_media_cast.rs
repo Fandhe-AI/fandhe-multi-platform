@@ -807,16 +807,16 @@ mod win {
                 }
                 Cmd::Stop(gen) => {
                     if let Some(r) = res.as_ref().filter(|r| r.gen == gen) {
-                        // 失敗を握りつぶさない（再生が続く・先頭に戻らないのに停止成功と見せない）。
+                        // 停止の成否は Pause のみで決める（失敗を成功に見せない）。
+                        // 先頭へのシークは契約外で、キャスト受信側が非対応でも停止は成立済みのため、
+                        // 失敗しても `fail` せず Stopped のまま確定する。
                         if r.player.Pause().is_err() {
                             fail(gen, CastFailure::Os);
-                        } else if r
-                            .player
-                            .PlaybackSession()
-                            .and_then(|session| session.SetPosition(TimeSpan { Duration: 0 }))
-                            .is_err()
-                        {
-                            fail(gen, CastFailure::Os);
+                        } else {
+                            let _ = r
+                                .player
+                                .PlaybackSession()
+                                .and_then(|session| session.SetPosition(TimeSpan { Duration: 0 }));
                         }
                     }
                 }
