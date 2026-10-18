@@ -7,8 +7,10 @@
 //!
 //! - 前景だけで扱う。`UIBackgroundModes` と `AVAudioSession` の category は変えない（既定の `soloAmbient` のまま
 //!   コントロールセンターに出るかは実機で確認する。#378）。
-//! - アプリが Active でない間に届いた OS の操作は、Rust へ渡さず拒否する（背景で受けた操作に成功を返さない）。
-//! - main 以外から呼ばれた `clear` / `shutdown` は main へ非同期に回す。後から publish が成功していたら古い取り下げは捨てる。
+//! - 背景（`DidEnterBackground`〜`WillEnterForeground`）の間に届いた OS の操作は、Rust へ渡さず拒否する（背景で受けた操作に成功を返さない）。
+//!   Inactive（コントロールセンター・通知センターを開いた間）は前景として扱い、そこからの操作は受け付ける。
+//! - main thread からの `clear` / `shutdown` は登録の解放を済ませてから戻る。main 以外から呼ばれた場合は main へ非同期に回して
+//!   即座に戻り、解放の完了は待たない（守らない範囲）。後から publish が成功していたら古い取り下げは捨てる。
 //!
 //! # 再描画（契約表 4）
 //!

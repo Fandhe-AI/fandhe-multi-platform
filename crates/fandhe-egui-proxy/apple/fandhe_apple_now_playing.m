@@ -16,13 +16,18 @@
 //     macOS は playbackState を毎回設定する（audio session から再生状態を判定できないため。SDK ヘッダの注記）。
 //     iOS は playbackState が無く、playbackRate で表す。`AVAudioSession` の category は変えない（前景のみ）。
 //   void fandhe_apple_now_playing_clear(void)   冪等。removeTarget: で全トークンを外し、表示を取り下げる。
-//     main 以外から呼ばれたら main へ dispatch_async する。要求後に publish が成功していたら（世代が進んだら）
-//     古い clear は捨てる（新しい表示を消さない）。
-//   void fandhe_apple_now_playing_shutdown(void)  clear と同じ。
+//     main thread から呼ばれたときだけ、登録の解放を済ませてから戻る（契約表 9）。macOS の終了処理（on_exit）は
+//     main thread から呼ぶのでこの経路になる。
+//     main 以外から呼ばれたら main へ dispatch_async して即座に戻る。この場合は解放の完了を待たない
+//     （守らない範囲。dispatch_sync はロックの内側から呼ばれるとデッドロックするため使わない）。
+//     要求後に publish が成功していたら（世代が進んだら）古い clear は捨てる（新しい表示を消さない）。
+//   void fandhe_apple_now_playing_shutdown(void)  clear と同じ（main 以外からの扱いも同じ）。
 // iOS の handler は OS のスレッドで呼ばれ得るため、UIApplication は読まず、
-// DidBecomeActive / WillResignActive 通知で main が更新するアトミックフラグで判定する。
-// アプリが Active でないとき Rust を呼ばず CommandFailed を返す（背景で受けた操作に成功を返さない。
+// DidEnterBackground / WillEnterForeground 通知で main が更新するアトミックフラグで判定する。
+// 背景のときだけ Rust を呼ばず CommandFailed を返す（背景で受けた操作に成功を返さない。
 // 前景へ戻ると media-playback が中断扱いにし、ドライバが取り下げるので溜まった操作では再開しない）。
+// Inactive（コントロールセンター・通知センターを開いた間、着信など）は前景として扱い、そこからの操作は受け付ける
+// （「前景だけ」の決定は背景を拒否する意味。Inactive を拒否するとコントロールセンターの操作が全部失敗する）。
 // handler は Rust の `fandhe_rust_now_playing_command(int32_t code)`（1 = Play、2 = Pause、3 = Toggle）を呼ぶだけで、
 // 戻り値 非 0（受け付けた）なら Success、0（受付停止中）なら CommandFailed を OS へ返す。画面の状態には触れない。
 //
@@ -52,9 +57,9 @@ static NSMutableArray<NSArray *> *g_targets = nil;
 static _Atomic uint64_t g_epoch = 0;
 
 #if TARGET_OS_IOS
-// アプリが Active か。handler は OS のスレッドで呼ばれ得るため UIApplication を直接読まず、
+// アプリが背景か（Inactive は前景扱い）。handler は OS のスレッドで呼ばれ得るため UIApplication を直接読まず、
 // main で更新したこのフラグを読む（Main Thread Checker 違反を避ける）。
-static _Atomic bool g_active = false;
+static _Atomic bool g_background = false;
 #endif
 
 static void fandhe_register(MPRemoteCommand *cmd, int32_t code) {
@@ -62,7 +67,7 @@ static void fandhe_register(MPRemoteCommand *cmd, int32_t code) {
     id token = [cmd addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *event) {
         (void)event;
 #if TARGET_OS_IOS
-        if (!atomic_load(&g_active)) {
+        if (atomic_load(&g_background)) {
             return MPRemoteCommandHandlerStatusCommandFailed;
         }
 #endif
@@ -78,15 +83,20 @@ static void fandhe_register_all(void) {
     }
     g_targets = [NSMutableArray array];
 #if TARGET_OS_IOS
-    // main thread（publish 経由）でのみ到達する。初期値を読んだ後は通知で追従する。
-    atomic_store(&g_active, [UIApplication sharedApplication].applicationState == UIApplicationStateActive);
-    NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-    [nc addObserverForName:UIApplicationDidBecomeActiveNotification object:nil
-                     queue:[NSOperationQueue mainQueue]
-                usingBlock:^(NSNotification *n) { (void)n; atomic_store(&g_active, true); }];
-    [nc addObserverForName:UIApplicationWillResignActiveNotification object:nil
-                     queue:[NSOperationQueue mainQueue]
-                usingBlock:^(NSNotification *n) { (void)n; atomic_store(&g_active, false); }];
+    // main thread（publish 経由）でのみ到達する。通知オブザーバーはプロセスで一度だけ登録する
+    // （clear 後の再登録で増やさない。ブロックはフラグを書くだけで、残っても害がないためトークンは握らない）。
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        atomic_store(&g_background,
+                     [UIApplication sharedApplication].applicationState == UIApplicationStateBackground);
+        NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+        [nc addObserverForName:UIApplicationDidEnterBackgroundNotification object:nil
+                         queue:[NSOperationQueue mainQueue]
+                    usingBlock:^(NSNotification *n) { (void)n; atomic_store(&g_background, true); }];
+        [nc addObserverForName:UIApplicationWillEnterForegroundNotification object:nil
+                         queue:[NSOperationQueue mainQueue]
+                    usingBlock:^(NSNotification *n) { (void)n; atomic_store(&g_background, false); }];
+    });
 #endif
     MPRemoteCommandCenter *c = [MPRemoteCommandCenter sharedCommandCenter];
     fandhe_register(c.playCommand, 1);
