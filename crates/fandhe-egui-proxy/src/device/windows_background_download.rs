@@ -198,13 +198,14 @@ mod com {
         unsafe { CoCreateInstance(&BackgroundCopyManager, None, CLSCTX_LOCAL_SERVER) }
     }
 
-    /// ジョブを作って転送を始める。途中で失敗したらそのジョブを取り消してから返す（契約表 9）。
+    /// ジョブを作って転送を始める。設定に失敗したら、取り消しのためジョブも返す
+    /// （呼び出し側が取り消し、失敗したら保持して再試行する。契約表 9）。
     pub(super) fn start(
         mgr: &IBackgroundCopyManager,
         name: &str,
         url: &str,
         path: &Path,
-    ) -> WinResult<IBackgroundCopyJob> {
+    ) -> Result<IBackgroundCopyJob, (windows::core::Error, Option<IBackgroundCopyJob>)> {
         let mut id = GUID::zeroed();
         let mut job: Option<IBackgroundCopyJob> = None;
         // SAFETY: `id` と `job` は呼び出しの間生きている出力先。`HSTRING` は呼び出し中有効。
@@ -214,9 +215,10 @@ mod com {
                 BG_JOB_TYPE_DOWNLOAD,
                 &mut id,
                 &mut job,
-            )?
+            )
+            .map_err(|e| (e, None))?
         };
-        let job = job.ok_or_else(|| windows::core::Error::from(E_POINTER))?;
+        let job = job.ok_or_else(|| (windows::core::Error::from(E_POINTER), None))?;
         let configure = || -> WinResult<()> {
             // SAFETY: `job` は有効な COM ポインタ。`cast` は QueryInterface。
             unsafe {
@@ -228,11 +230,10 @@ mod com {
                 job.Resume()
             }
         };
-        if let Err(e) = configure() {
-            let _ = cancel(&job);
-            return Err(e);
+        match configure() {
+            Ok(()) => Ok(job),
+            Err(e) => Err((e, Some(job))),
         }
-        Ok(job)
     }
 
     /// 現在ユーザーのジョブのうち、表示名が `name` のもの。
@@ -415,6 +416,8 @@ mod worker {
         tracked: Option<IBackgroundCopyJob>,
         /// 取り消しに失敗して BITS に残っている追跡外のジョブ。次のポーリングと `cancel` で再試行する。
         stale: Vec<IBackgroundCopyJob>,
+        /// 直近の再接続の列挙に失敗した。既存ジョブを把握できるまで開始・取り消しを成功にしない。
+        enum_failed: bool,
         shared: Arc<Mutex<Shared>>,
     }
 
@@ -425,6 +428,7 @@ mod worker {
             mgr: com_guard.is_ok().then(|| com::manager().ok()).flatten(),
             tracked: None,
             stale: Vec::new(),
+            enum_failed: false,
             shared,
         };
         w.reconnect();
@@ -435,7 +439,7 @@ mod worker {
             .unsupported = w.mgr.is_none();
         ENUMERATED.store(true, Ordering::Release);
         loop {
-            let cmd = if w.tracked.is_some() {
+            let cmd = if w.tracked.is_some() || !w.stale.is_empty() || w.enum_failed {
                 match rx.recv_timeout(POLL_INTERVAL) {
                     Ok(c) => Some(c),
                     Err(RecvTimeoutError::Timeout) => None,
@@ -495,10 +499,18 @@ mod worker {
 
         /// 起動時に自分のジョブを拾う。未終端か転送済みの 1 件を追跡し、残りは取り消す。
         fn reconnect(&mut self) {
+            self.scan();
+            self.poll();
+        }
+
+        /// 列挙の再試行。成功するまで `enum_failed` を保つ。
+        fn scan(&mut self) {
             let Some(mgr) = &self.mgr else { return };
             let Ok(jobs) = com::find(mgr, JOB_NAME) else {
+                self.enum_failed = true;
                 return;
             };
+            self.enum_failed = false;
             for job in jobs {
                 let raw = com::observe(&job).ok().map(|(s, _, _)| s);
                 let live = self.tracked.is_none()
@@ -519,7 +531,17 @@ mod worker {
                     self.stale.push(job);
                 }
             }
-            self.poll();
+        }
+
+        /// 既存ジョブを把握できていて、取り消せなかった旧ジョブも残っていなければ `Ok`。
+        fn ensure_settled(&mut self) -> Result<(), DeviceError> {
+            if self.enum_failed {
+                self.scan();
+            }
+            if self.enum_failed || !self.drain_stale() {
+                return Err(DeviceError::Internal("background download"));
+            }
+            Ok(())
         }
 
         fn start(&mut self, url: &str) -> Result<(), DeviceError> {
@@ -536,6 +558,8 @@ mod worker {
                 .mgr
                 .clone()
                 .ok_or(DeviceError::Unsupported("background download"))?;
+            // 取り消せない旧ジョブや未把握のジョブが残ると同名・同保存先が二重になるので開始しない。
+            self.ensure_settled()?;
             let path = local_app_data()?;
             // 置き換え: 前の転送と前回のファイルを消してから始める。
             if let Some(old) = self.tracked.take() {
@@ -552,8 +576,17 @@ mod worker {
             if let Some(dir) = path.parent() {
                 std::fs::create_dir_all(dir)?;
             }
-            let job =
-                com::start(&mgr, JOB_NAME, url, &path).map_err(|e| map_hresult(e.code().0))?;
+            let job = match com::start(&mgr, JOB_NAME, url, &path) {
+                Ok(j) => j,
+                Err((e, leftover)) => {
+                    if let Some(j) = leftover {
+                        if !Self::release(&j) {
+                            self.stale.push(j);
+                        }
+                    }
+                    return Err(map_hresult(e.code().0));
+                }
+            };
             self.tracked = Some(job);
             // 結果を返す前に状態を確定する（契約表 2）。
             self.set(running(0, SIZE_UNKNOWN));
@@ -564,9 +597,7 @@ mod worker {
             if self.mgr.is_none() {
                 return Err(DeviceError::Unsupported("background download"));
             }
-            if !self.drain_stale() {
-                return Err(DeviceError::Internal("background download"));
-            }
+            self.ensure_settled()?;
             if let Some(job) = self.tracked.take() {
                 if let Err(e) = com::cancel(&job) {
                     // ジョブが既に無い・終端なら取り消し済みと同じ。それ以外は止まっていない。
@@ -587,6 +618,9 @@ mod worker {
 
         /// 追跡中のジョブを 1 回読み、状態を更新する。終端に達したら追跡を外す。
         fn poll(&mut self) {
+            if self.enum_failed {
+                self.scan();
+            }
             self.drain_stale();
             let Some(job) = self.tracked.clone() else {
                 return;
