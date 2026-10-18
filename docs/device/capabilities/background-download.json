@@ -24,11 +24,14 @@
       "note": "未実装。GMS に依存しない。`Request` は http と https だけを受け付け、`remove` は途中まで落としたファイルも消す"
     },
     "macos": {
-      "status": "possible",
-      "api": "`URLSessionConfiguration.background(withIdentifier:)`（macOS でも利用可。要確認）",
+      "status": "done",
+      "api": "`URLSessionConfiguration.background(withIdentifier:)`（`NSURLSession` の background session）",
       "perm": "なし（App Sandbox は使わない素の実行体。ローカルの確認用サーバーへつなぐため `NSAllowsLocalNetworking` を置く）",
       "url": "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/background(withidentifier:)",
-      "note": "未実装。iOS と同じ API。アプリ終了後も続くかは文書上 iOS にしか書かれておらず、実機で確かめる"
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#380）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_background_download.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_background_download.m + crates/fandhe-egui-proxy/src/device/background_download.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-device/src/background_download.rs、Issue #390",
+      "note": "実装済み（#390）。固定 URL の小さなファイル 1 つを OS に依頼し、待機・転送中・完了（サイズ）・取り消し・失敗を出す。結果は取り消し（失敗にしない）と HTTP エラー・0 バイト・許可外のリダイレクト先（失敗）を分ける。守る範囲: 1 プロセス内の順序、世代による古い通知の破棄、嘘の成功の禁止。守らない範囲: 背景で失敗した理由と前回の完了表示は再起動で失われる、接続できない間は OS が待ち続け転送中のままになりうる、複数プロセス。アプリ終了後も転送が続くかは #380 の Mac 目視で確かめる"
     },
     "windows": {
       "status": "possible",
@@ -49,5 +52,5 @@
       "note": "未実装。実験的な機能。進捗と取り消しはブラウザの UI にも出る"
     }
   },
-  "note": "iOS / macOS は background URLSession、Android は DownloadManager、Windows は BITS、Web は Background Fetch。http-get（既存 id）は前面での GET 1 回で、本機能はアプリが終了しても OS が続ける転送。background-task（既存 id）は短時間の処理で、転送そのものは OS に任せる点が違う。今回の範囲: 固定 URL の小さなファイル 1 つの転送を OS へ依頼し、待機・転送中（受信バイト数）・完了（サイズ）・取り消し・失敗を画面に出す。保存先はアプリのキャッシュに固定名で 1 ファイル（画面に絶対パスは出さない）。確認はローカルのサーバーで行い、外部 URL は既定値に入れない。再開・複数ファイル・一時停止は扱わない"
+  "note": "iOS / macOS は background URLSession、Android は DownloadManager、Windows は BITS、Web は Background Fetch。http-get（既存 id）は前面での GET 1 回で、本機能はアプリが終了しても OS が続ける転送。background-task（既存 id）は短時間の処理で、転送そのものは OS に任せる点が違う。今回の範囲: 固定 URL の小さなファイル 1 つの転送を OS へ依頼し、待機・転送中（受信バイト数）・完了（サイズ）・取り消し・失敗を画面に出す。保存先はアプリのキャッシュに固定名で 1 ファイル（画面に絶対パスは出さない）。確認はローカルのサーバーで行い、外部 URL は既定値に入れない。再開・複数ファイル・一時停止は扱わない。守る範囲は 1 プロセス内の順序と嘘の成功の禁止で、再起動後の結果の保持と複数プロセスは守らない"
 }

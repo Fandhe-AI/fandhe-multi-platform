@@ -44,6 +44,11 @@
   画像を保存するだけなので add-only のみ。読み取り用の `NSPhotoLibraryUsageDescription`
   は足さない（最小権限）。
 
+  `NSAppTransportSecurity` → `NSAllowsLocalNetworking`（Issue #390）も追加している。background
+  `NSURLSession` のダウンロード確認先が、ローカルの確認用サーバー（`http://127.0.0.1:8787`）への
+  平文 http だから。ローカルネットワーク宛てだけを許し、`NSAllowsArbitraryLoads` は足さない
+  （security.md A02・A05）。
+
   `CFBundleURLTypes`（Issue #1215、カスタム URL scheme `fandhe://`）はここに入れない。
   LaunchServices に登録された .app でしか効かず、素の実行体に埋め込んでも scheme は
   届かないため。Mac 目視用の `scripts/apple/bundle-macos-url-scheme.sh` が、この
@@ -69,5 +74,10 @@
 	<string>型サンプル「予定の追加」の動作確認に使います</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>型サンプル「写真の保存」の動作確認に使います</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
