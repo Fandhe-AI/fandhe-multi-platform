@@ -128,11 +128,26 @@ fn sync(
         }
     };
 
+    // 再開要求（Play・一時停止からの Toggle）を送ったらそこで取り出しを止め、後続は次の
+    // Loading 明けまで残す（Loading 中の apply_os_command に後続を捨てさせない）。
+    let mut playing_now = playing;
     while let Some(cmd) = cmds.take() {
+        let resumes = match cmd {
+            OsMediaCommand::Play | OsMediaCommand::Toggle => !playing_now,
+            OsMediaCommand::Pause => false,
+        };
+        match cmd {
+            OsMediaCommand::Pause => playing_now = false,
+            OsMediaCommand::Toggle if playing_now => playing_now = false,
+            _ => {}
+        }
         let cmd = to_screen_command(cmd);
         let _ = sender.send(Box::new(move |s: &mut AudioPlayState| {
             apply_os_command(s, cmd)
         }));
+        if resumes {
+            break;
+        }
     }
 
     if *shown != Some(playing) {
@@ -312,6 +327,33 @@ mod tests {
         play(&mut h.state);
         h.cmds.push(OsMediaCommand::Pause);
         h.frame();
+        assert_eq!(h.cmds.take(), Some(OsMediaCommand::Pause));
+        h.cmds.push(OsMediaCommand::Pause);
+        let g = h.state.generation;
+        apply_update(
+            &mut h.state,
+            g,
+            AudioUpdate::Snapshot {
+                phase: AudioPhase::Playing,
+                position_ms: Some(0),
+                duration_ms: Some(5000),
+            },
+        );
+        h.frame();
+        assert_eq!(h.state.phase, AudioPhase::Paused);
+    }
+
+    #[test]
+    fn play_then_pause_in_one_batch_keeps_pause_after_loading() {
+        let mut h = H::new();
+        h.frame();
+        h.cmds.push(OsMediaCommand::Pause);
+        h.frame();
+        assert_eq!(h.state.phase, AudioPhase::Paused);
+        h.cmds.push(OsMediaCommand::Play);
+        h.cmds.push(OsMediaCommand::Pause);
+        h.frame();
+        assert_eq!(h.state.phase, AudioPhase::Loading);
         assert_eq!(h.cmds.take(), Some(OsMediaCommand::Pause));
         h.cmds.push(OsMediaCommand::Pause);
         let g = h.state.generation;

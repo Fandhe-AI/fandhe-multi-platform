@@ -132,16 +132,16 @@ impl SharedOsCommand {
         g.pending.clear();
     }
 
-    /// armed のときだけ到着順（FIFO）で保留する。戻り値は受け付けたかどうか。
-    /// 上限を超えた分は捨てる（Toggle 2 回のような連続操作を潰さないため、上書きはしない）。
+    /// armed で、かつ保留の上限内のときだけ到着順（FIFO）で保留する。戻り値は保留したかどうか。
+    /// 上限で捨てた分は false を返す（OS へ成功を返さない。上書きはしない）。
     pub fn push(&self, cmd: OsMediaCommand) -> bool {
         let mut g = self.lock();
-        if g.armed {
-            if g.pending.len() < MAX_PENDING {
-                g.pending.push_back(cmd);
-            }
+        if g.armed && g.pending.len() < MAX_PENDING {
+            g.pending.push_back(cmd);
+            true
+        } else {
+            false
         }
-        g.armed
     }
 
     /// 保留中の操作を古い順に 1 件取り出す。呼び出し側は空になるまで繰り返す。
@@ -170,6 +170,16 @@ mod tests {
         assert_eq!(c.take(), Some(OsMediaCommand::Play));
         assert_eq!(c.take(), Some(OsMediaCommand::Pause));
         assert_eq!(c.take(), None);
+    }
+
+    #[test]
+    fn push_over_limit_returns_false() {
+        let c = SharedOsCommand::new();
+        c.arm();
+        for _ in 0..MAX_PENDING {
+            assert!(c.push(OsMediaCommand::Toggle));
+        }
+        assert!(!c.push(OsMediaCommand::Toggle));
     }
 
     #[test]
