@@ -2,9 +2,10 @@
 // 完了・失敗・取り消しの 3 イベントだけを扱い、結果を Cache Storage に書く。ページ側
 // （crates/fandhe-web-dom/src/background_download.rs）が同じ key を読んで状態を決める。
 //
-// キャッシュ名・key・結果の形はページ側と一致させること。世代は `current` の id で照合し、
-// 書いた後でもう一度 `current` を読んで食い違えば本文を消す（取り消し・置き換えと競合しても
-// 古い世代の完了が残らない）。`fetch` ハンドラは持たない（他画面の通信に介入しない）。
+// キャッシュ名・key・結果の形はページ側と一致させること。本文と結果は世代別の key
+// （`<key>/<id>`）に書き、現世代の key には触れない（遅れて再開した古い世代が、取り消し・
+// 置き換え後の本文や cancelled 記録を上書き・削除できない）。書いた後で `current` を読み
+// 直して食い違えば、自分の世代の key だけを消す。`fetch` ハンドラは持たない（他画面の通信に介入しない）。
 // 合否の判定は Rust 側の `completion_status` が行う（SSOT）。ここでは観測値を記録するだけ。
 // `importScripts`・外部 CDN は使わない（security.md A08）。
 
@@ -22,6 +23,9 @@ async function currentId(cache) {
     return null;
   }
 }
+
+const fileKey = (id) => `${KEY_FILE}/${id}`;
+const resultKey = (id) => `${KEY_RESULT}/${id}`;
 
 function putJson(cache, key, value) {
   return cache.put(key, new Response(JSON.stringify(value)));
@@ -45,21 +49,21 @@ async function onSuccess(reg) {
     });
     delete result.reason;
     if (response.status >= 200 && response.status < 300 && blob.size > 0) {
-      await cache.put(KEY_FILE, new Response(blob));
+      await cache.put(fileKey(reg.id), new Response(blob));
     }
   }
   // 取り消しの「cancelled」記録を古い結果で上書きしないよう、書く直前に再確認する。
   if ((await currentId(cache)) !== reg.id) {
-    await cache.delete(KEY_FILE);
+    await cache.delete(fileKey(reg.id));
     return;
   }
-  await putJson(cache, KEY_RESULT, result);
+  await putJson(cache, resultKey(reg.id), result);
 }
 
 async function onFail(reg) {
   const cache = await caches.open(CACHE_NAME);
   if ((await currentId(cache)) !== reg.id) return;
-  await putJson(cache, KEY_RESULT, {
+  await putJson(cache, resultKey(reg.id), {
     id: reg.id,
     kind: "failed",
     reason: reg.failureReason,
@@ -71,8 +75,8 @@ async function onFail(reg) {
 async function onAbort(reg) {
   const cache = await caches.open(CACHE_NAME);
   if ((await currentId(cache)) !== reg.id) return;
-  await cache.delete(KEY_FILE);
-  await putJson(cache, KEY_RESULT, { id: reg.id, kind: "cancelled" });
+  await cache.delete(fileKey(reg.id));
+  await putJson(cache, resultKey(reg.id), { id: reg.id, kind: "cancelled" });
 }
 
 self.addEventListener("backgroundfetchsuccess", (event) => {

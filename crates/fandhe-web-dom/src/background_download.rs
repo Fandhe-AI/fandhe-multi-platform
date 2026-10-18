@@ -16,7 +16,7 @@
 //! - `current`: 今の世代の fetch id（ページが書く。開始・取り消しのたびに変える）
 //! - `result`: その世代の結果 `{id, kind, status, bytes, url, reason}`（SW が書く。
 //!   取り消しはページが書く）
-//! - `FILE_NAME`: 2xx かつ 1 バイト以上の本文（SW が書く）
+//! - `FILE_NAME`: 2xx かつ 1 バイト以上の本文（SW が書く。key は世代別の `FILE_NAME/<id>`、結果も `-result/<id>`）
 //!
 //! SW の URL・scope は `background_task` と重ならない専用名にし、既存の SW を置き換えない。
 //! `register()` の戻り値をそのまま使い、`container.ready()` は使わない
@@ -301,6 +301,22 @@ mod web {
         get(&v, "id").as_string().map(Some).ok_or(internal(()))
     }
 
+    /// 世代別の key。SW とページが同じ世代の key だけを触るため、古い世代の遅れた書き込みが
+    /// 現世代の本文・結果を壊さない（契約表 2）。SW 側（background-download-sw.js）と一致させる。
+    fn result_key(id: &str) -> String {
+        format!("{KEY_RESULT}/{id}")
+    }
+
+    fn file_key(id: &str) -> String {
+        format!("{FILE_NAME}/{id}")
+    }
+
+    /// 旧世代の本文と結果を消す。
+    async fn drop_generation(cache: &JsValue, id: &str) -> Result<(), JsValue> {
+        cache_delete(cache, &file_key(id)).await?;
+        cache_delete(cache, &result_key(id)).await
+    }
+
     fn new_id() -> String {
         format!("fandhe-background-download-{}", js_sys::Date::now() as u64)
     }
@@ -367,9 +383,10 @@ mod web {
             }
         }
 
+        if let Some(old) = current_id(&cache).await? {
+            drop_generation(&cache, &old).await.map_err(internal)?;
+        }
         let id = new_id();
-        cache_delete(&cache, FILE_NAME).await.map_err(internal)?;
-        cache_delete(&cache, KEY_RESULT).await.map_err(internal)?;
         write_current(&cache, &id).await.map_err(internal)?;
 
         let opts = Object::new();
@@ -393,19 +410,25 @@ mod web {
         let old = current_id(&cache).await?;
         // 先に abort する。失敗したら current を変えずに Err を返し、表示と実転送を食い違わせない。
         // abort 後の古い完了は、続く世代差し替えで id 不一致になり捨てられる。
-        if let (Some(old), Some(reg)) = (old, find_registration(&w).await.map_err(internal)?) {
+        if let (Some(old), Some(reg)) =
+            (old.clone(), find_registration(&w).await.map_err(internal)?)
+        {
             if let Some(f) = find_fetch(&reg, &old).await.map_err(internal)? {
                 call(&f, "abort", &[]).await.map_err(internal)?;
             }
         }
         let id = new_id();
         write_current(&cache, &id).await.map_err(internal)?;
-        cache_delete(&cache, FILE_NAME).await.map_err(internal)?;
+        if let Some(old) = &old {
+            drop_generation(&cache, old).await.map_err(internal)?;
+        }
         let rec = json(&[
             ("id", JsValue::from_str(&id)),
             ("kind", JsValue::from_str("cancelled")),
         ]);
-        cache_put(&cache, KEY_RESULT, &rec).await.map_err(internal)
+        cache_put(&cache, &result_key(&id), &rec)
+            .await
+            .map_err(internal)
     }
 
     async fn do_status(w: &Window) -> Result<DownloadStatus, DeviceError> {
@@ -416,11 +439,14 @@ mod web {
         let Some(id) = current_id(&cache).await? else {
             return Ok(DownloadStatus::Idle);
         };
-        let record = match cache_text(&cache, KEY_RESULT).await.map_err(internal)? {
+        let record = match cache_text(&cache, &result_key(&id))
+            .await
+            .map_err(internal)?
+        {
             Some(t) => Some(parse_record(&t)?),
             None => None,
         };
-        let file_bytes = cache_len(&cache, FILE_NAME).await.map_err(internal)?;
+        let file_bytes = cache_len(&cache, &file_key(&id)).await.map_err(internal)?;
         let mut running = None;
         if record.as_ref().is_none_or(|r| r.id != id) {
             if let Some(reg) = find_registration(w).await.map_err(internal)? {
@@ -433,7 +459,9 @@ mod web {
         let status = status_from(&id, running, record.as_ref(), file_bytes);
         // 失敗で確定したのに本文が残る場合（許可外の最終 URL 等）は解放する。
         if matches!(status, DownloadStatus::Failed(_)) && file_bytes.is_some() {
-            cache_delete(&cache, FILE_NAME).await.map_err(internal)?;
+            cache_delete(&cache, &file_key(&id))
+                .await
+                .map_err(internal)?;
         }
         Ok(status)
     }
