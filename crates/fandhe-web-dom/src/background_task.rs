@@ -616,7 +616,7 @@ mod web {
     /// `container.ready()` は別の登録を返し得るため使わず、同じ `registration` を
     /// 短い間隔でポーリングする（有限回数で諦め `Internal` を返す — 無限待ちで
     /// `do_schedule` が終わらなくならないようにする）。
-    async fn wait_until_active(
+    pub(crate) async fn wait_until_active(
         window: &Window,
         registration: &ServiceWorkerRegistration,
     ) -> Result<(), DeviceError> {
@@ -870,6 +870,9 @@ mod web {
 
 #[cfg(target_arch = "wasm32")]
 pub use web::background_task_effect;
+/// `background_download` が登録の activation 待ちを再利用する（Issue #393）。
+#[cfg(target_arch = "wasm32")]
+pub(crate) use web::wait_until_active;
 
 #[cfg(test)]
 mod tests {

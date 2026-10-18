@@ -30,6 +30,9 @@ use fandhe_core::screens::audio_devices_show::{
 use fandhe_core::screens::audio_play::{
     current_screen as current_audio_play_screen, AudioPlayState,
 };
+use fandhe_core::screens::background_download::{
+    current_screen as current_background_download_screen, BackgroundDownloadState,
+};
 use fandhe_core::screens::background_task::{
     current_screen as current_background_task_screen, BackgroundTaskState,
 };
@@ -850,6 +853,22 @@ pub fn mount_background_task_screen(root_id: &str) -> Result<(), JsValue> {
         current_background_task_screen(&initial_state),
         initial_state,
         super::background_task::background_task_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「バックグラウンドダウンロード」（親 #100、Issue #393）を
+/// マウントする検証専用エントリポイント。`super::background_download::background_download_effect`
+/// が Background Fetch（`web/background-download-sw.js`）への依頼・取り消し・ポーリングを行う。
+#[wasm_bindgen]
+pub fn mount_background_download_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = BackgroundDownloadState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_background_download_screen(&initial_state),
+        initial_state,
+        super::background_download::background_download_effect,
     )
 }
 

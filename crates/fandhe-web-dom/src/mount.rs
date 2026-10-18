@@ -431,6 +431,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::media_transcode::release_mount(id);
         super::on_device_llm::release_mount(id);
         super::pen_stylus::release_mount(id);
+        super::background_download::release_mount(id);
     }
 }
 

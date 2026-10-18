@@ -50,12 +50,15 @@
       "note": "未実装。開始したユーザーがログオンしている間はアプリが終了しても続く。`Complete()` を呼ぶまでファイルは使えない。`BackgroundDownloader` は「Background transfers require package identity; unpackaged apps cannot use this API.」（Microsoft の文書）"
     },
     "web": {
-      "status": "possible",
+      "status": "done",
       "api": "Background Fetch API",
       "perm": "専用の service worker が要る。secure context 必須（localhost は secure context）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Background_Fetch_API",
       "safari": "非対応（Chrome 74 以降のみ。Firefox も非対応）",
-      "note": "未実装。実験的な機能。進捗と取り消しはブラウザの UI にも出る"
+      "note": "実装済み（#393）。専用の Service Worker と専用 scope で `backgroundFetch.fetch` を呼び、同一オリジンの小さなファイル 1 つを依頼する。結果と本文は Cache Storage に置き、取り消し（失敗にしない）・HTTP エラー・0 バイト・保存ファイル欠落・許可外の最終 URL（失敗）を分ける。守る範囲: 1 マウント内の順序、世代による古い完了の破棄、嘘の成功の禁止。守らない範囲: 複数タブ、再起動後の完了理由の正確さ、ブラウザ UI から取り消したときの反映の時間差。タブを閉じても続くか、Firefox・Safari の非対応表示、シークレットは #380 の目視で確かめる。進捗と取り消しはブラウザの UI にも出る",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#380）",
+      "impl": "crates/fandhe-web-dom/src/background_download.rs + crates/fandhe-web-dom/web/background-download-sw.js + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-device/src/background_download.rs、Issue #393"
     }
   },
   "note": "iOS / macOS は background URLSession、Android は DownloadManager、Windows は BITS、Web は Background Fetch。http-get（既存 id）は前面での GET 1 回で、本機能はアプリが終了しても OS が続ける転送。background-task（既存 id）は短時間の処理で、転送そのものは OS に任せる点が違う。今回の範囲: 固定 URL の小さなファイル 1 つの転送を OS へ依頼し、待機・転送中（受信バイト数）・完了（サイズ）・取り消し・失敗を画面に出す。保存先はアプリのキャッシュに固定名で 1 ファイル（画面に絶対パスは出さない）。確認はローカルのサーバーで行い、外部 URL は既定値に入れない。再開・複数ファイル・一時停止は扱わない。守る範囲は 1 プロセス内の順序と嘘の成功の禁止で、再起動後の結果の保持と複数プロセスは守らない"
