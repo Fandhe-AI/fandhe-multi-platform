@@ -39,6 +39,22 @@ static NSString *const kFileName = @"background-download";
 
 static NSURLSession *g_session = nil;
 
+// 保存先ファイルの操作（start の事前削除・完了時の移動・cancel の削除）を直列化するキュー。
+// 判定（世代の照合）と削除を同じキューの内側で行い、cancel が並行する start の新しい保存済み
+// ファイルを消さないようにする（契約表 2・11）。ここから Rust のロックは取らない向きのみ（逆向きは
+// Rust がロックを外してから呼ぶ）。
+static dispatch_queue_t g_file_q = nil;
+// 最後に start された世代。file queue 上でのみ読み書きする。
+static uint64_t g_latest_gen = 0;
+
+static dispatch_queue_t file_queue(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        g_file_q = dispatch_queue_create("fandhe.bgdl.file", DISPATCH_QUEUE_SERIAL);
+    });
+    return g_file_q;
+}
+
 static uint64_t task_gen(NSURLSessionTask *task) {
     return (uint64_t)[task.taskDescription longLongValue];
 }
@@ -103,21 +119,25 @@ static int32_t remove_dest(void) {
         NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:location.path error:nil];
         uint64_t bytes = (uint64_t)[attrs fileSize];
         NSString *finalUrl = task.currentRequest.URL.absoluteString ?: @"";
-        if (!fandhe_rust_bgdl_accept(gen, status, bytes, finalUrl.UTF8String)) {
-            return;  // 拒否（4xx・0 バイト・許可外のリダイレクト先・古い世代）。一時ファイルは OS が捨てる。
-        }
-        NSURL *dest = dest_url();
-        BOOL moved = NO;
-        if (dest != nil) {
-            [[NSFileManager defaultManager] removeItemAtURL:dest error:nil];
-            moved = [[NSFileManager defaultManager] moveItemAtURL:location toURL:dest error:nil];
-        }
-        bool adopted = fandhe_rust_bgdl_finished(gen, moved ? 0 : 3, moved ? bytes : 0);
-        if (moved && !adopted) {
-            // 移す間に取り消し・置き換えされた。嘘の成功を残さないよう保存先を消す。
-            // 取り消し側も cancel で消すので、ここでの失敗は無視する。
-            (void)remove_dest();
-        }
+        // 受け入れ判定・移動・完了通知を file queue 内で一括で行い、cancel / start と直列化する。
+        dispatch_sync(file_queue(), ^{
+            if (gen < g_latest_gen ||
+                !fandhe_rust_bgdl_accept(gen, status, bytes, finalUrl.UTF8String)) {
+                return;  // 拒否（4xx・0 バイト・許可外のリダイレクト先・古い世代）。一時ファイルは OS が捨てる。
+            }
+            NSURL *dest = dest_url();
+            BOOL moved = NO;
+            if (dest != nil) {
+                [[NSFileManager defaultManager] removeItemAtURL:dest error:nil];
+                moved = [[NSFileManager defaultManager] moveItemAtURL:location toURL:dest error:nil];
+            }
+            bool adopted = fandhe_rust_bgdl_finished(gen, moved ? 0 : 3, moved ? bytes : 0);
+            if (moved && !adopted) {
+                // 移す間に取り消し・置き換えされた。嘘の成功を残さないよう保存先を消す。
+                // 同じキュー内で、より新しい start が無いことは上の照合で確認済み。
+                (void)remove_dest();
+            }
+        });
     }
 }
 
@@ -177,7 +197,12 @@ int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen) {
         }
         // 前回の保存済みファイルを消す。消せなければ転送を始めず 3 を返す（古いファイルを残したまま
         // 後続の失敗で成功に見せないため）。
-        if (remove_dest() != 0) {
+        __block int32_t removed = 0;
+        dispatch_sync(file_queue(), ^{
+            g_latest_gen = gen;
+            removed = remove_dest();
+        });
+        if (removed != 0) {
             return 3;
         }
         // 置き換え: 前の転送（世代 gen 未満）を止める。完了ブロックは非同期に走るので、
@@ -207,6 +232,13 @@ int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen) {
                 }
             }];
         }
-        return remove_dest();
+        // 取り消し以降に start された新しい世代があれば、その保存済みファイルは消さない。
+        __block int32_t code = 0;
+        dispatch_sync(file_queue(), ^{
+            if (g_latest_gen <= upto_gen) {
+                code = remove_dest();
+            }
+        });
+        return code;
     }
 }
