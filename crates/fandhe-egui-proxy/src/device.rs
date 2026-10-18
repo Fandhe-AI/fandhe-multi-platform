@@ -789,7 +789,7 @@ pub mod windows_image_recognition;
 /// `device/local_fonts.rs` の Windows 経路（ワーカー）から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_local_fonts;
-/// Issue #386: Windows 向け外部機器への再生（windows 子が埋めるスタブ）。`device/media_cast.rs` の Windows 経路から呼ばれる。
+/// Issue #388: Windows 向け外部機器への再生（`CastingDevicePicker` + `MediaPlayer`）。`device/media_cast.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_media_cast;
