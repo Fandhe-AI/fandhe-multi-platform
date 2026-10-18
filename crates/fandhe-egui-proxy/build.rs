@@ -37,9 +37,9 @@
 //! - `apple/fandhe_apple_picture_in_picture.m`（Issue #364、AVKit の sample buffer 経路による
 //!   ピクチャ・イン・ピクチャ）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/
 //!   apple_picture_in_picture.rs` から呼ばれる契約）。AVKit・CoreMedia・CoreVideo・QuartzCore をリンクする。
-//! - `apple/fandhe_apple_media_cast.m`（Issue #386、`AVRoutePickerView` と `AVAudioPlayer` による外部機器への再生）は
-//!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/apple_media_cast.rs` から呼ばれる契約）。
-//!   AVKit・AVFoundation・CoreAudio をリンクする。
+//! - `apple/fandhe_apple_media_cast.m`（Issue #386 macOS + #387 iOS、`AVRoutePickerView` と `AVAudioPlayer` による
+//!   外部機器への再生）は macOS・iOS 双方の分岐で feature `device` 有効時にコンパイルする（`src/device/apple_media_cast.rs`
+//!   から呼ばれる契約）。AVKit・AVFoundation をリンクし、CoreAudio は macOS のみ。
 //! - `apple/fandhe_apple_location.m`（Issue #889、`CLLocationManager` による位置情報）は
 //!   iOS・macOS の両ターゲットで feature `device` 有効時のみコンパイルする
 //!   （`src/device/apple_location.rs` から呼ばれる契約）。CoreLocation をリンクする。
@@ -476,6 +476,8 @@ fn main() {
     compile_apple_media_playback();
     // `apple/fandhe_apple_picture_in_picture.m`（Issue #365）。macOS 分岐と共用する。AVKit を使う。
     compile_apple_picture_in_picture(true);
+    // `apple/fandhe_apple_media_cast.m`（Issue #387）。macOS 分岐と共用する。AVKit を使う。
+    compile_apple_media_cast(true);
     // `apple/fandhe_apple_now_playing.m`（Issue #381 macOS + #382 iOS）。macOS 分岐と共用する。MediaPlayer を使う。
     compile_apple_now_playing();
     // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308 macOS + #1309 iOS）も共用する。
@@ -1008,14 +1010,25 @@ fn compile_apple_now_playing() {
 }
 
 /// `apple/fandhe_apple_media_cast.m` を `cc` でコンパイルし AVKit・AVFoundation・CoreAudio をリンクする
-/// （Issue #386）。**macOS 分岐のみ**から呼ばれる（`src/device/apple_media_cast.rs` が使う）。
-fn compile_apple_media_cast() {
+/// （Issue #386 macOS + #387 iOS）。macOS・iOS 双方の分岐から呼ばれる（`src/device/apple_media_cast.rs` が使う）。
+/// CoreAudio は macOS のみ。`ios` が true のとき `ios/fandhe_ios_common.h` を `#import` できるようにする。
+fn compile_apple_media_cast(ios: bool) {
     println!("cargo:rerun-if-changed=apple/fandhe_apple_media_cast.m");
-    cc::Build::new()
+    let mut build = cc::Build::new();
+    build
         .file("apple/fandhe_apple_media_cast.m")
-        .flag("-fobjc-arc")
-        .compile("fandhe_apple_media_cast");
-    for framework in ["AVKit", "AVFoundation", "CoreAudio"] {
+        .flag("-fobjc-arc");
+    if ios {
+        println!("cargo:rerun-if-changed=ios/fandhe_ios_common.h");
+        build.include("ios");
+    }
+    build.compile("fandhe_apple_media_cast");
+    let frameworks: &[&str] = if ios {
+        &["AVKit", "AVFoundation"]
+    } else {
+        &["AVKit", "AVFoundation", "CoreAudio"]
+    };
+    for framework in frameworks {
         println!("cargo:rustc-link-lib=framework={framework}");
     }
 }
@@ -1492,8 +1505,8 @@ fn build_macos() {
     compile_macos_print();
     // `macos/fandhe_macos_audio_devices.m`（Issue #1330）も macOS 専用。CoreAudio を使う。
     compile_macos_audio_devices();
-    // `apple/fandhe_apple_media_cast.m`（Issue #386）。macOS 分岐のみ（iOS は b-ios）。AVKit・CoreAudio を使う。
-    compile_apple_media_cast();
+    // `apple/fandhe_apple_media_cast.m`（Issue #386 macOS + #387 iOS）。iOS 分岐と共用する。AVKit・CoreAudio を使う。
+    compile_apple_media_cast(false);
     // `apple/fandhe_apple_midi.m`（Issue #1398）。iOS 分岐（#1399）と共用する。CoreMIDI を使う。
     compile_apple_midi();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。iOS 分岐と共用する。AVFoundation は既存のリンクで足りる。
