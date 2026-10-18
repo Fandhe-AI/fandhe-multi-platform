@@ -186,7 +186,7 @@ pub fn format_status(view: &DownloadView) -> String {
             received,
             total: Some(total),
         } if *total > 0 => {
-            let percent = (received.min(total) * 100 / total).min(100);
+            let percent = (u128::from(*received.min(total)) * 100 / u128::from(*total)).min(100);
             format!("転送中 {received} / {total} バイト（{percent}%）")
         }
         DownloadView::Running { received, .. } => format!("転送中 {received} バイト"),
@@ -298,6 +298,7 @@ mod tests {
         assert_eq!(r(20, None), "転送中 20 バイト");
         assert_eq!(r(20, Some(0)), "転送中 20 バイト");
         assert_eq!(r(50, Some(40)), "転送中 50 / 40 バイト（100%）");
+        assert!(r(u64::MAX, Some(u64::MAX)).ends_with("（100%）"));
         assert!(
             format_status(&DownloadView::Completed { bytes: 40 }).starts_with("完了: 40 バイト")
         );

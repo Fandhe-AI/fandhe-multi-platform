@@ -446,6 +446,7 @@ mod tests {
     fn start_codes_map_to_contract_errors() {
         assert!(matches!(start_error(1), DeviceError::Unsupported(_)));
         assert!(matches!(start_error(2), DeviceError::InvalidInput(_)));
+        assert!(matches!(start_error(3), DeviceError::Internal(_))); // 保存済みファイルの削除失敗
         assert!(matches!(start_error(7), DeviceError::Internal(_)));
     }
 

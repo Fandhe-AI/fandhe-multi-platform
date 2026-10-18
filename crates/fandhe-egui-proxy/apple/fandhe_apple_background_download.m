@@ -175,6 +175,11 @@ int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen) {
         if (nsurl == nil) {
             return 2;
         }
+        // 前回の保存済みファイルを消す。消せなければ転送を始めず 3 を返す（古いファイルを残したまま
+        // 後続の失敗で成功に見せないため）。
+        if (remove_dest() != 0) {
+            return 3;
+        }
         // 置き換え: 前の転送（世代 gen 未満）を止める。完了ブロックは非同期に走るので、
         // 後から作られた新しい task（gen 以上）を巻き込まないよう世代で絞る。
         [g_session getAllTasksWithCompletionHandler:^(NSArray<__kindof NSURLSessionTask *> *tasks) {
@@ -184,7 +189,6 @@ int32_t fandhe_apple_bgdl_start(const char *url, uint64_t gen) {
                 }
             }
         }];
-        (void)remove_dest();  // 失敗しても、受け入れ時に移す前に再度消す。
         NSURLSessionDownloadTask *task = [g_session downloadTaskWithURL:nsurl];
         task.taskDescription = [NSString stringWithFormat:@"%llu", (unsigned long long)gen];
         [task resume];
