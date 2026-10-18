@@ -16,7 +16,8 @@
 //!
 //! 起動時に `.m` が同じ identifier の session から走行中の task を拾い、[`Inner::reconnect`] で
 //! `Running` に戻す。まだ `start`/`cancel` していない場合だけ反映する（後から来た再接続通知で、
-//! 利用者の操作を巻き戻さない）。背景で完了・失敗した結果は再起動で失われ `Idle` になる（守らない範囲）。
+//! 利用者の操作を巻き戻さない）。列挙（非同期）より先に既存 task の進捗・完了・失敗通知が届く場合は
+//! [`Inner::adopt_preexisting`] で引き受け、完了した一時ファイルの保存と失敗の通知を落とさない。
 
 // ホストの `cargo test`（Linux 等）では FFI 部分が存在せず純ロジックだけが使われる。
 #![cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
@@ -97,7 +98,23 @@ impl Inner {
         }
     }
 
+    /// 再接続の列挙より先に届いた既存 task の通知を取りこぼさない。操作前（`touched` が偽）で何も
+    /// 追っていないときだけ、通知の世代を現在の転送として引き受ける。以後は利用者の操作と同様に
+    /// 扱い（`touched`）、他の古い task の通知で結果を上書きしない。
+    fn adopt_preexisting(&mut self, gen: u64) {
+        if gen > 0 && !self.touched && self.current.is_none() {
+            self.next_gen = self.next_gen.max(gen);
+            self.current = Some(gen);
+            self.touched = true;
+            self.status = DownloadStatus::Running {
+                received: 0,
+                total: None,
+            };
+        }
+    }
+
     fn progress(&mut self, gen: u64, received: u64, total: i64) {
+        self.adopt_preexisting(gen);
         if self.current == Some(gen) {
             self.status = DownloadStatus::Running {
                 received,
@@ -109,6 +126,7 @@ impl Inner {
     /// 一時ファイルを保存先へ移してよいか。HTTP の状態・サイズ・最終 URL を確かめ、
     /// 拒否したらここで `Failed` を確定する（`.m` は一時ファイルを捨てる）。
     fn accept(&mut self, gen: u64, http_status: i32, bytes: u64, final_url: &str) -> bool {
+        self.adopt_preexisting(gen);
         if self.current != Some(gen) {
             return false;
         }
@@ -129,6 +147,7 @@ impl Inner {
 
     /// 転送の終了通知。現在の世代のときだけ反映し、反映したら `true`。
     fn finish(&mut self, gen: u64, code: i32, bytes: u64) -> bool {
+        self.adopt_preexisting(gen);
         if self.current != Some(gen) {
             return false;
         }
@@ -475,6 +494,27 @@ mod tests {
         assert_eq!(j.current, None);
         assert_eq!(j.status, DownloadStatus::Cancelled);
         assert_eq!(j.begin(), 10);
+    }
+
+    #[test]
+    fn completion_before_reconnect_is_adopted() {
+        let mut i = Inner::new();
+        assert!(i.accept(7, 200, 40, "http://127.0.0.1:8787/items.json"));
+        assert!(i.finish(7, 0, 40));
+        assert_eq!(i.status, DownloadStatus::Completed { bytes: 40 });
+        i.reconnect(7); // 遅れて届いた再接続で結果を巻き戻さない
+        assert_eq!(i.status, DownloadStatus::Completed { bytes: 40 });
+        assert_eq!(i.begin(), 8);
+
+        let mut j = Inner::new();
+        assert!(j.finish(9, 2, 0));
+        assert!(matches!(j.status, DownloadStatus::Failed(_)));
+
+        // 操作後は引き受けない。
+        let mut k = Inner::new();
+        k.cancel();
+        assert!(!k.finish(3, 0, 40));
+        assert_eq!(k.status, DownloadStatus::Cancelled);
     }
 
     #[test]
