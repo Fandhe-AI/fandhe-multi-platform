@@ -25,7 +25,7 @@
 //! 守る: 1 マウント内の操作順と世代照合、失敗・ブロック・期限切れを成功へ畳まないこと、object URL・
 //! リスナー・タイマーの解放、中断後に勝手に再開しないこと。
 //! 守らない: 位置表示のポーリング間隔ぶんの遅れ、複数タブ・複数マウント間の一致、他タブの音声との混ざり、
-//! egui-proxy の wasm canvas 経路。例外の `message` は画面にも console にも出さない（security.md A09）。
+//! egui-proxy の wasm canvas 経路。OS のメディア操作への連携は `now_playing` が担う。例外の `message` は画面にも console にも出さない（security.md A09）。
 
 use fandhe_core::screens::audio_play::{AudioFailure, AudioPhase, AudioUpdate};
 use fandhe_device::media_playback::{secs_to_ms, START_DEADLINE};
@@ -512,6 +512,8 @@ mod web {
             let p = SESSIONS.with(|m| m.borrow_mut().get_mut(&mount).and_then(|s| s.poll.take()));
             clear_timer(p, true);
         }
+        // 4. OS のメディア操作（Media Session）へ同期する。
+        crate::now_playing::sync(state, applier);
     }
 }
 

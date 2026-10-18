@@ -44,12 +44,15 @@
       "note": "未実装。`ButtonPressed` は UI スレッド以外で届く"
     },
     "web": {
-      "status": "possible",
+      "status": "done",
       "api": "Media Session API（`navigator.mediaSession`）",
       "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API",
       "safari": "Safari 15 から対応（iOS も 15）。Chrome 73・Chrome Android 57・Firefox 82。Firefox Android は API はあるが OS の操作 UI が無い（MDN の互換データ）",
-      "note": "未実装。web-sys の `MediaSession` は unstable API のため Reflect で呼ぶ。短いメディアには通知を出さないブラウザがある"
+      "note": "実装済み（#384）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を Media Session（`navigator.mediaSession`）へ渡し、ブラウザ・OS のメディアキーや通知からの再生・一時停止を画面へ返すこと（前後の曲・シーク・位置表示・アートワークは範囲外で、`play` / `pause` の 2 つだけ登録する）。web-sys の `MediaSession` は unstable API のため Reflect で呼ぶ。結果は OS へ渡した／この環境では使えない／渡せなかったを分け、Firefox Android のように操作 UI が無い環境でも「渡しました」までしか言わない。OS からの一時停止は失敗ではなく一時停止中への遷移。停止・失敗・背景遷移で曲名を取り下げるが、handler は取り下げでは null に戻さない（戻すとブラウザの既定動作が `<audio>` を直接動かし、画面は停止なのに鳴る食い違いが出るため）。受付は armed で止め、取り下げ後に届いた古い操作では再開しない。handler はマウント破棄で外す。守る範囲: 1 マウント内の操作順、嘘の成功の禁止、登録の解放。守らない範囲: 複数タブ・複数マウント、Chrome が短いメディア（素材は 5 秒）に通知を出さない場合があること、`Loading` に入る前の既定動作、egui-proxy の wasm canvas 経路。実ブラウザの確認は #378",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#378）",
+      "impl": "crates/fandhe-web-dom/src/now_playing.rs + crates/fandhe-web-dom/src/media_playback.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #384"
     }
   },
   "note": "iOS / macOS は MPNowPlayingInfoCenter、Android は framework の MediaSession、Windows は SMTC、Web は Media Session。media-playback（既存 id）は再生そのものを扱い、本機能は OS 側の操作画面（コントロールセンター・通知・メディアキー）との連携。今回の範囲: media-playback の画面で再生・一時停止している間だけ、曲名と再生中かどうかを OS へ渡し、OS からの再生・一時停止を画面に反映する。前景だけで扱い、iOS・Android のロック画面（背景再生）・アートワーク・前後の曲・シークは扱わない。守備範囲: 1 プロセス内の操作順・嘘の成功の禁止・登録の解放までを守り、反映の遅れ・PiP との取り合い・複数プロセスは守らない"
