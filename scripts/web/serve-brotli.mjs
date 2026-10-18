@@ -80,6 +80,39 @@ const server = http.createServer(async (req, res) => {
     const acceptsBr = (req.headers["accept-encoding"] ?? "").includes("br");
 
     res.setHeader("Content-Type", MIME_TYPES[ext] ?? "application/octet-stream");
+    res.setHeader("Accept-Ranges", "bytes");
+
+    // 単一 Range（`bytes=a-b` / `a-` / `-n`）。BITS（background-download、Issue #394）が
+    // 転送前に HEAD でサイズを取り、Range で GET する。Range の値は数値として検証し、
+    // 応答にそのまま出さない（A03）。Range ありのときは brotli をかけない（バイト位置を保つ）。
+    const rangeHeader = req.headers.range;
+    if (rangeHeader !== undefined) {
+      const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+      let start;
+      let end;
+      if (m && (m[1] !== "" || m[2] !== "")) {
+        if (m[1] === "") {
+          // 末尾 n バイト
+          const n = Number.parseInt(m[2], 10);
+          start = Math.max(data.length - n, 0);
+          end = data.length - 1;
+        } else {
+          start = Number.parseInt(m[1], 10);
+          end = m[2] === "" ? data.length - 1 : Math.min(Number.parseInt(m[2], 10), data.length - 1);
+        }
+      }
+      if (start === undefined || start >= data.length || start > end) {
+        res.setHeader("Content-Range", `bytes */${data.length}`);
+        res.writeHead(416);
+        res.end();
+        return;
+      }
+      res.setHeader("Content-Range", `bytes ${start}-${end}/${data.length}`);
+      res.setHeader("Content-Length", String(end - start + 1));
+      res.writeHead(206);
+      res.end(data.subarray(start, end + 1));
+      return;
+    }
 
     if (acceptsBr && BROTLI_EXTENSIONS.has(ext)) {
       let compressed = brotliCache.get(realCandidate);
