@@ -39,7 +39,9 @@
 //! 受信機の品質や遅延、出力先の名前、egui-proxy の wasm canvas 経路、
 //! `prompt()` が選択を待たず解決するブラウザでの `Choosing` 表示の長さ。
 
-use fandhe_core::screens::cast_show::{CastShowFailure, CastShowRoute};
+use fandhe_core::screens::cast_show::{
+    apply_update, CastShowFailure, CastShowPlayback, CastShowRoute, CastShowState, CastShowUpdate,
+};
 use std::time::Duration;
 
 /// 失敗の固定文言（`fandhe-egui-proxy` のドライバと同じ。例外の `message` は使わない）。
@@ -124,6 +126,22 @@ impl PickerSlot {
     }
 }
 
+/// 失敗を確定する。core の `apply_update` は停止・中断中の `Failed` を受けないため、
+/// 停止・中断後に届いた音源エラーもここで直接 `Failed` へ移す（表示と `drop_session` の起点を残す）。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn settle_failed(s: &mut CastShowState, g: u64, f: CastShowFailure) {
+    apply_update(s, g, CastShowUpdate::Failed(f.clone()));
+    if s.generation == g
+        && matches!(
+            s.playback,
+            CastShowPlayback::Stopped | CastShowPlayback::Interrupted
+        )
+    {
+        s.playback = CastShowPlayback::Failed(f);
+        s.route = CastShowRoute::Local;
+    }
+}
+
 /// 起点から期限以上経ったか（`performance.now()` の単調時計、ミリ秒）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn is_late(started_ms: f64, now_ms: f64, deadline: Duration) -> bool {
@@ -154,8 +172,8 @@ mod web {
     use web_sys::{Blob, BlobPropertyBag, EventTarget, HtmlMediaElement, Url};
 
     use super::{
-        is_late, play_failure, prompt_outcome, route_from_state, PickerSlot, PromptOutcome,
-        FAILED_CAST,
+        is_late, play_failure, prompt_outcome, route_from_state, settle_failed, PickerSlot,
+        PromptOutcome, FAILED_CAST,
     };
     use crate::mount::{is_live, Applier};
 
@@ -377,7 +395,7 @@ mod web {
         let a = applier.clone();
         listen(&mut listeners, et, "error", move || {
             if let Some(g) = with(mount, |s| s.gen) {
-                post_update(&a, g, CastShowUpdate::Failed(fixed_failure()));
+                post(&a, move |s| settle_failed(s, g, fixed_failure()));
             }
         });
         let rt: Option<EventTarget> = remote.clone().dyn_into().ok();
@@ -694,11 +712,7 @@ mod web {
                     return;
                 }
                 let g = s.generation;
-                apply_update(s, g, CastShowUpdate::Failed(f.clone()));
-                if !matches!(s.playback, CastShowPlayback::Failed(_)) {
-                    s.playback = CastShowPlayback::Failed(f);
-                    s.route = CastShowRoute::Local;
-                }
+                settle_failed(s, g, f);
             }),
         }
     }
@@ -816,6 +830,27 @@ mod tests {
         let b = p.begin().expect("after finish");
         assert_ne!(a, b);
         assert!(!p.finish(a));
+    }
+
+    #[test]
+    fn audio_error_after_stop_or_interrupt_fails() {
+        for p in [CastShowPlayback::Stopped, CastShowPlayback::Interrupted] {
+            let mut s = CastShowState {
+                playback: p,
+                generation: 3,
+                ..Default::default()
+            };
+            settle_failed(&mut s, 3, CastShowFailure::Failed(FAILED_CAST.to_string()));
+            assert!(matches!(s.playback, CastShowPlayback::Failed(_)));
+            // 世代違いは捨てる。
+            let mut s = CastShowState {
+                playback: CastShowPlayback::Stopped,
+                generation: 4,
+                ..Default::default()
+            };
+            settle_failed(&mut s, 3, CastShowFailure::Failed(FAILED_CAST.to_string()));
+            assert_eq!(s.playback, CastShowPlayback::Stopped);
+        }
     }
 
     #[test]
