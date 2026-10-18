@@ -73,6 +73,8 @@
 //! - [`background_task`]: 「バックグラウンド処理」画面の Web 経路（親 #1042、
 //!   Issue #1047）。[`location`] と同じ理由で純関数（予約状態の判定・例外の `name` →
 //!   結果種別の対応・実行記録の読み取り結果の写像）のみ `wasm32` gate の外に置く
+//! - [`background_download`]: 「バックグラウンドダウンロード」画面の Web 経路（親 #100、Issue #393）。
+//!   純関数（状態の判定・失敗の写像・表示値への変換）のみ `wasm32` gate の外に置く
 //! - [`url_scheme`]: 「カスタム URL scheme」画面の Web 経路（親 #1116、Issue #1219）。
 //!   [`location`] と同じ理由で純関数（登録結果の分類・ハンドラ URL）のみ `wasm32` gate の外に置く
 //! - [`network_status`]: 「ネットワーク接続状態」画面の Web 経路（親 #1130、Issue #1285）。
@@ -246,6 +248,9 @@ pub mod notification;
 /// できるようクレート単位の `wasm32` gate を外す。
 pub mod speech_recognition;
 
+/// 型サンプル「バックグラウンドダウンロード」の Web 経路（Issue #393）。[`background_task`] と同じ理由で
+/// 純関数は native からもテストできるよう gate を外す。
+pub mod background_download;
 /// 型サンプル「バックグラウンド処理」の Web 経路（親 #1042、Issue #1047）。
 /// [`location`] と同じ理由で純関数（予約状態の判定・例外の `name` → 結果種別の
 /// 対応・実行記録の読み取り結果の写像）は native からもテストできるようクレート

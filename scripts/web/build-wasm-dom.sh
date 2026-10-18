@@ -38,5 +38,7 @@ cp "${crate_dir}/web/items.json" "${dist_dir}/items.json"
 # Issue #1047: Service Worker はページと同じディレクトリ（scope）へ置く必要があるため
 # dist_dir 直下へ cp する（background_task.rs::web::SW_URL の相対参照先）。
 cp "${crate_dir}/web/background-task-sw.js" "${dist_dir}/background-task-sw.js"
+# Issue #393: Background Fetch 用の専用 Service Worker（background_download.rs::web::SW_URL）。
+cp "${crate_dir}/web/background-download-sw.js" "${dist_dir}/background-download-sw.js"
 
 echo "[build-wasm-dom] 完了: ${dist_dir}"
