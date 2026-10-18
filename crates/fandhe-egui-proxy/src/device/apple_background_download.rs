@@ -201,6 +201,17 @@ pub(crate) fn enumeration_pending() -> bool {
     cfg!(target_os = "macos") && !ENUMERATED.load(Ordering::Acquire)
 }
 
+/// macOS で OS コールバックから egui を起こす closure。画面ドライバ（`background_download.rs`）が
+/// effect の初回に 1 度だけ登録する（`Context` は `Send + Sync` で、どのスレッドからでも起こせる）。
+#[cfg(target_os = "macos")]
+static WAKE: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> = std::sync::OnceLock::new();
+
+/// 起床 closure を登録する（2 回目以降は無視）。
+#[cfg(target_os = "macos")]
+pub(crate) fn set_wake(wake: impl Fn() + Send + Sync + 'static) {
+    let _ = WAKE.set(Box::new(wake));
+}
+
 fn lock() -> Result<std::sync::MutexGuard<'static, Inner>, DeviceError> {
     SHARED
         .lock()
@@ -363,11 +374,16 @@ mod imp {
         repaint();
     }
 
-    /// iOS では OS コールバックが状態を変えた直後に次フレームを起こす（契約表 4。入力が無いと
-    /// egui が描画せず表示が止まる）。macOS は画面側のポーリング予約で足りるので何もしない。
+    /// OS コールバックが状態を変えた直後に次フレームを起こす（契約表 4。入力が無いと egui が
+    /// 描画せず表示が止まる）。iOS は `ios::request_repaint`、macOS は画面ドライバが登録した
+    /// 起床 closure（[`super::set_wake`]）を呼ぶ。列挙後に届く完了・失敗でも idle 画面が残らない。
     fn repaint() {
         #[cfg(target_os = "ios")]
         crate::ios::request_repaint();
+        #[cfg(target_os = "macos")]
+        if let Some(wake) = super::WAKE.get() {
+            wake();
+        }
     }
 }
 

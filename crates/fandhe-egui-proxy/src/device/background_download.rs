@@ -103,12 +103,22 @@ fn implementation() -> Arc<dyn BackgroundDownload> {
 }
 
 /// 要求 1 件を処理して別スレッドで OS を呼び、完了を送る。要求が無ければ `false`。
+///
+/// `enumerating` が真の間は開始要求を渡さない（`false`）。`phase` が `Requested` のまま残るので
+/// ボタンは出ず、`drive_poll` が列挙の完了までポーリングを続ける。起動時に走行中の転送を再接続する
+/// 前に開始すると、既存の転送を置き換えてしまうため。開始の前には `status()` を SSOT として見て、
+/// 転送中なら `start` を呼ばない。完了は `finish_action` と最新の転送状態を 1 つの closure で反映し、
+/// 古い `view` が 1 フレーム描画されて二重開始できてしまう窓を作らない。
 fn drive_request(
     state: &BackgroundDownloadState,
     sender: &CompletionSender<BackgroundDownloadState>,
     dl: Arc<dyn BackgroundDownload>,
     url: &'static str,
+    enumerating: bool,
 ) -> bool {
+    if enumerating && matches!(state.phase, Phase::Requested(Action::Start)) {
+        return false;
+    }
     let Some(request) = take_request(state) else {
         return false;
     };
@@ -118,12 +128,15 @@ fn drive_request(
     let sender = sender.clone();
     std::thread::spawn(move || {
         let result = match action {
+            Action::Start if matches!(dl.status(), Ok(DownloadStatus::Running { .. })) => Ok(()),
             Action::Start => dl.start(url),
             Action::Cancel => dl.cancel(),
         }
         .map_err(to_message);
+        let view = to_view(dl.status());
         let _ = sender.send(Box::new(move |s: &mut BackgroundDownloadState| {
             finish_action(s, generation, result);
+            apply_snapshot(s, view);
         }));
     });
     true
@@ -168,7 +181,21 @@ pub fn background_download_effect(
     sender: &CompletionSender<BackgroundDownloadState>,
 ) {
     let dl = implementation();
-    if drive_request(state, sender, dl.clone(), DOWNLOAD_URL) {
+    #[cfg(target_os = "macos")]
+    {
+        // OS コールバック（列挙後の完了・失敗の引き受け）から egui を起こす経路。
+        let wake = sender.clone();
+        super::apple_background_download::set_wake(move || {
+            wake.request_repaint_after(Duration::ZERO);
+        });
+    }
+    if drive_request(
+        state,
+        sender,
+        dl.clone(),
+        DOWNLOAD_URL,
+        enumeration_pending(),
+    ) {
         // 次フレームで進行を観測する。
         sender.request_repaint_after(POLL_INTERVAL);
         return;
@@ -181,6 +208,7 @@ mod tests {
     use super::*;
     use fandhe_core::screens::background_download::{cancel, start};
     use fandhe_device::http::check_url;
+    use std::sync::atomic::Ordering;
     use std::sync::Mutex;
 
     fn sender_with_channel() -> (
@@ -218,6 +246,93 @@ mod tests {
         }
     }
 
+    /// `start` の呼び出し回数を数えるモック。
+    #[derive(Default)]
+    struct Counting {
+        starts: std::sync::atomic::AtomicUsize,
+        status: Mutex<Option<DownloadStatus>>,
+    }
+
+    impl BackgroundDownload for Counting {
+        fn start(&self, _url: &str) -> Result<(), DeviceError> {
+            self.starts.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        fn cancel(&self) -> Result<(), DeviceError> {
+            Ok(())
+        }
+        fn status(&self) -> Result<DownloadStatus, DeviceError> {
+            if self.starts.load(Ordering::SeqCst) > 0 {
+                return Ok(DownloadStatus::Running {
+                    received: 0,
+                    total: Some(10),
+                });
+            }
+            Ok(self
+                .status
+                .lock()
+                .expect("lock")
+                .clone()
+                .unwrap_or(DownloadStatus::Idle))
+        }
+    }
+
+    #[test]
+    fn start_is_held_while_enumerating() {
+        let (sender, rx) = sender_with_channel();
+        let mut state = BackgroundDownloadState::default();
+        start(&mut state);
+        let dl = Arc::new(Counting::default());
+        assert!(!drive_request(&state, &sender, dl.clone(), "u", true));
+        assert!(rx.try_recv().is_err());
+        assert_eq!(state.phase, Phase::Requested(Action::Start));
+        assert_eq!(dl.starts.load(Ordering::SeqCst), 0);
+        // 取り消しは列挙待ちでも通る。
+        let mut state = BackgroundDownloadState::default();
+        cancel(&mut state);
+        assert!(drive_request(&state, &sender, dl, "u", true));
+    }
+
+    #[test]
+    fn running_download_is_not_restarted() {
+        let (sender, rx) = sender_with_channel();
+        let mut state = BackgroundDownloadState::default();
+        start(&mut state);
+        let dl = Arc::new(Counting {
+            status: Mutex::new(Some(DownloadStatus::Running {
+                received: 1,
+                total: None,
+            })),
+            ..Default::default()
+        });
+        assert!(drive_request(&state, &sender, dl.clone(), "u", false));
+        rx.recv().expect("in flight")(&mut state);
+        rx.recv().expect("finish")(&mut state);
+        assert_eq!(dl.starts.load(Ordering::SeqCst), 0);
+        assert_eq!(state.error, "");
+    }
+
+    #[test]
+    fn finish_sets_idle_phase_and_fresh_view_together() {
+        let (sender, rx) = sender_with_channel();
+        let mut state = BackgroundDownloadState::default();
+        start(&mut state);
+        // start 後だけ Running になるモック（start 前の status は Idle）。
+        let dl = Arc::new(Counting::default());
+        assert!(drive_request(&state, &sender, dl.clone(), "u", false));
+        rx.recv().expect("in flight")(&mut state);
+        rx.recv().expect("finish")(&mut state);
+        assert_eq!(dl.starts.load(Ordering::SeqCst), 1);
+        assert_eq!(state.phase, Phase::Idle);
+        assert_eq!(
+            state.view,
+            DownloadView::Running {
+                received: 0,
+                total: Some(10)
+            }
+        );
+    }
+
     #[test]
     fn default_url_passes_check_url() {
         assert!(check_url(DOWNLOAD_URL).is_ok());
@@ -231,7 +346,8 @@ mod tests {
             &state,
             &sender,
             Arc::new(Mock::default()),
-            "u"
+            "u",
+            false
         ));
         assert!(rx.try_recv().is_err());
     }
@@ -245,7 +361,7 @@ mod tests {
             unsupported: true,
             ..Default::default()
         });
-        assert!(drive_request(&state, &sender, dl, "u"));
+        assert!(drive_request(&state, &sender, dl, "u", false));
         rx.recv().expect("in flight")(&mut state);
         rx.recv().expect("finish")(&mut state);
         assert_eq!(state.error, format!("失敗しました: {UNSUPPORTED}"));
@@ -261,7 +377,8 @@ mod tests {
             &state,
             &sender,
             Arc::new(Mock::default()),
-            "u"
+            "u",
+            false
         ));
         rx.recv().expect("in flight")(&mut state);
         rx.recv().expect("finish")(&mut state);
