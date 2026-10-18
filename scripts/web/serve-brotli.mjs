@@ -86,7 +86,8 @@ const server = http.createServer(async (req, res) => {
     // 転送前に HEAD でサイズを取り、Range で GET する。Range の値は数値として検証し、
     // 応答にそのまま出さない（A03）。Range ありのときは brotli をかけない（バイト位置を保つ）。
     const rangeHeader = req.headers.range;
-    if (rangeHeader !== undefined) {
+    // 複数 Range（`a-b,c-d`）は未対応として無視し、全体を 200 で返す（RFC 7233）。
+    if (rangeHeader !== undefined && !rangeHeader.includes(",")) {
       const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
       let start;
       let end;

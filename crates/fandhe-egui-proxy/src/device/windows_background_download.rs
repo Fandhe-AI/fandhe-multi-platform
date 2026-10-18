@@ -540,7 +540,13 @@ mod worker {
                 Err(_) => return,
             };
             match JobState::from_raw(raw) {
-                JobState::Active => self.set(running(received, total)),
+                JobState::Active => {
+                    // 外部要因で一時停止(3)されたジョブは進まないので再開する。失敗しても次回に再試行する。
+                    if raw == 3 {
+                        let _ = com::resume(&job);
+                    }
+                    self.set(running(received, total));
+                }
                 JobState::Transferred => self.finish_transferred(&job),
                 JobState::Error => {
                     let status = error_status(com::error_code(&job));
@@ -570,6 +576,10 @@ mod worker {
                     .map(|m| m.len())
             });
             let Some(bytes) = size else {
+                // Complete 済みでサイズ取得だけ失敗した場合も、確定済みファイルを残さない。
+                if let Ok(p) = local_app_data() {
+                    let _ = remove_file(&p);
+                }
                 self.finish_failed(job, FAILED_SAVE);
                 return;
             };
