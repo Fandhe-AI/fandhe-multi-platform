@@ -25,11 +25,14 @@
       "note": "未実装。androidx.mediarouter 単体は GMS 非依存だが、Google Cast 機器に対応するなら Cast SDK を使うよう案内されている"
     },
     "macos": {
-      "status": "possible",
-      "api": "AVKit `AVRoutePickerView`（macOS 10.15+）",
-      "perm": "なし（要確認）",
+      "status": "done",
+      "api": "AVKit `AVRoutePickerView`（macOS 10.15+、`player` は nil）+ `AVAudioPlayer`（ループ再生）+ Core Audio の既定出力デバイスの transport type",
+      "perm": "不要",
       "url": "https://developer.apple.com/documentation/avkit/avroutepickerview",
-      "note": "未実装。`AVRoutePickerView` の `player` は macOS 専用で AVPlayer 単位。選ばれた AirPlay の出力先の名前を返す公開 API は SDK に見当たらないため、名前・接続状態が読めなければ「不明」と表示し、接続中とは言わない（出力先の選択 UI と再生までを範囲にする）"
+      "note": "実装済み（#386）。実行時に生成した音をループ再生し、窓の右下に OS の出力先ボタンを重ねる。出力先の名前は、既定出力が AirPlay のときに Core Audio が返した値だけを画面に出す（ログ・保存はしない）。読めなければ「OS の表示で確認してください」と出し、接続中とは言わない（NotReported）。守る範囲: 1 プロセス内の操作順・失敗を成功にしないこと・資源の解放。守らない範囲: OS の UI で切り替えた反映の約 250ms の遅れ、複数プロセス、受信機側の品質。未確認: player が nil のときにシステムの出力が切り替わるか、AVAudioPlayer が既定出力の切り替えに追従するか（Mac 目視 #379。駄目なら AVPlayer 経路へ切り替える）",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#379）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_media_cast.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_media_cast.m + crates/fandhe-egui-proxy/src/device/media_cast.rs + crates/fandhe-core/src/screens/cast_show.rs + crates/fandhe-device/src/media_cast.rs、Issue #386"
     },
     "windows": {
       "status": "possible",
