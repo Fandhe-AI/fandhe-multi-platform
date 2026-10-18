@@ -34,14 +34,17 @@
       "impl": "crates/fandhe-egui-proxy/src/device/apple_now_playing.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_now_playing.m + crates/fandhe-egui-proxy/src/device/now_playing.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #381"
     },
     "windows": {
-      "status": "possible",
-      "api": "`SystemMediaTransportControls`（`ISystemMediaTransportControlsInterop::GetForWindow` で Win32 の窓から取得）",
-      "perm": "なし（文書に package identity の要件は無い。unpackaged で出る名前は実機で確かめる）",
+      "status": "done",
+      "api": "`SystemMediaTransportControls`（`ISystemMediaTransportControlsInterop::GetForWindow` で Win32 の窓から取得。`ButtonPressed`・`IsPlayEnabled` / `IsPauseEnabled`・`DisplayUpdater` の Type=Music と Title・`PlaybackStatus` を使う）",
+      "perm": "なし（package identity なし・unpackaged のまま。出る名前は #378 で確かめる）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/systemmediatransportcontrolsinterop/nf-systemmediatransportcontrolsinterop-isystemmediatransportcontrolsinterop-getforwindow",
         "https://learn.microsoft.com/en-us/windows/apps/develop/media-playback/system-media-transport-controls"
       ],
-      "note": "未実装。`ButtonPressed` は UI スレッド以外で届く"
+      "note": "実装済み（#385）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を SMTC（フライアウト・メディアキー）へ渡し、OS 側の再生・一時停止を画面へ返すこと（Stop・前後の曲・シーク・アートワーク・タイムラインは範囲外で、再生・一時停止以外は有効にしない）。`ButtonPressed` は UI 以外のスレッドで届くため、handler は `push` するだけにして画面の状態には触れない。メディアキーは OS が `PlaybackStatus` から Play / Pause に振り分けて届けるので Toggle は来ない。取得・登録・更新のどこかで失敗したら登録を解放して `Failed` を返し、成功とは言わない。OS からの一時停止は失敗ではなく一時停止中への遷移。停止・失敗で取り下げ、取り下げ後に届いた古い操作では再開しない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、登録の解放。守らない範囲: ポーリング間隔（約 250ms）ぶんの反映の遅れ、窓を最小化している間の遅れ、複数プロセス・複数窓、unpackaged で出るアプリ名、ロック画面に出るか（#378 で確かめる）",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#378）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_now_playing.rs + crates/fandhe-egui-proxy/src/device/now_playing.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #385"
     },
     "web": {
       "status": "done",
