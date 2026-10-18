@@ -524,8 +524,10 @@ mod worker {
             self.enum_failed = false;
             for job in jobs {
                 let raw = com::observe(&job).ok().map(|(s, _, _)| s);
+                // 観測失敗（GetState / GetProgress のエラー）は終端と区別する。取り消さずに追跡し、
+                // 以降のポーリングで再観測する（NOT_FOUND なら poll が失敗に確定する。契約表 1・6）。
                 let live = self.tracked.is_none()
-                    && raw.is_some_and(|s| {
+                    && raw.is_none_or(|s| {
                         matches!(
                             JobState::from_raw(s),
                             JobState::Active | JobState::Transferred

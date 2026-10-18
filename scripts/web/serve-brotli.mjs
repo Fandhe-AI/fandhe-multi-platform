@@ -75,19 +75,30 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const data = await readFile(realCandidate);
+    const raw = await readFile(realCandidate);
     const ext = path.extname(realCandidate);
     const acceptsBr = (req.headers["accept-encoding"] ?? "").includes("br");
+
+    // 先に表現（br / identity）を選び、Range は選んだ同じバイト列に適用する。
+    let data = raw;
+    if (acceptsBr && BROTLI_EXTENSIONS.has(ext)) {
+      data = brotliCache.get(realCandidate);
+      if (!data) {
+        data = compress(raw);
+        brotliCache.set(realCandidate, data);
+      }
+      res.setHeader("Content-Encoding", "br");
+    }
 
     res.setHeader("Content-Type", MIME_TYPES[ext] ?? "application/octet-stream");
     res.setHeader("Accept-Ranges", "bytes");
 
     // 単一 Range（`bytes=a-b` / `a-` / `-n`）。BITS（background-download、Issue #394）が
     // 転送前に HEAD でサイズを取り、Range で GET する。Range の値は数値として検証し、
-    // 応答にそのまま出さない（A03）。Range ありのときは brotli をかけない（バイト位置を保つ）。
+    // 応答にそのまま出さない（A03）。HEAD は Range を無視して 200 を返す（GET のみ対象）。
     const rangeHeader = req.headers.range;
     // 複数 Range（`a-b,c-d`）は未対応として無視し、全体を 200 で返す（RFC 7233）。
-    if (rangeHeader !== undefined && !rangeHeader.includes(",")) {
+    if (req.method === "GET" && rangeHeader !== undefined && !rangeHeader.includes(",")) {
       const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
       let start;
       let end;
@@ -115,21 +126,9 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (acceptsBr && BROTLI_EXTENSIONS.has(ext)) {
-      let compressed = brotliCache.get(realCandidate);
-      if (!compressed) {
-        compressed = compress(data);
-        brotliCache.set(realCandidate, compressed);
-      }
-      res.setHeader("Content-Encoding", "br");
-      res.setHeader("Content-Length", String(compressed.length));
-      res.writeHead(200);
-      res.end(compressed);
-    } else {
-      res.setHeader("Content-Length", String(data.length));
-      res.writeHead(200);
-      res.end(data);
-    }
+    res.setHeader("Content-Length", String(data.length));
+    res.writeHead(200);
+    res.end(data);
   } catch (err) {
     res.writeHead(500);
     res.end(String(err));
