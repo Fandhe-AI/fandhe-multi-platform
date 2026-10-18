@@ -129,6 +129,18 @@ fn drive_request(
     true
 }
 
+/// 列挙待ちか。モジュールが存在する macOS（とテスト）でのみ Apple 側の判定を参照し、他 OS は常に false。
+#[cfg(any(target_os = "macos", test))]
+fn enumeration_pending() -> bool {
+    super::apple_background_download::enumeration_pending()
+}
+
+/// 列挙待ちか（Apple 側モジュールが無い OS では常に false）。
+#[cfg(not(any(target_os = "macos", test)))]
+fn enumeration_pending() -> bool {
+    false
+}
+
 /// ポーリング 1 回分。差があるときだけ送り、転送中・処理中は次回を予約する。
 fn drive_poll(
     state: &BackgroundDownloadState,
@@ -139,7 +151,7 @@ fn drive_poll(
     // macOS は起動時の再接続（非同期）が終わるまで続ける。OS コールバックから再描画を起こせないため。
     let keep_polling = matches!(view, DownloadView::Running { .. })
         || state.phase != Phase::Idle
-        || super::apple_background_download::enumeration_pending();
+        || enumeration_pending();
     if view != state.view {
         let _ = sender.send(Box::new(move |s: &mut BackgroundDownloadState| {
             apply_snapshot(s, view);
