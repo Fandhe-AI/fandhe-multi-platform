@@ -128,7 +128,7 @@ fn sync(
         }
     };
 
-    if let Some(cmd) = cmds.take() {
+    while let Some(cmd) = cmds.take() {
         let cmd = to_screen_command(cmd);
         let _ = sender.send(Box::new(move |s: &mut AudioPlayState| {
             apply_os_command(s, cmd)

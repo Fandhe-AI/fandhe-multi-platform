@@ -28,6 +28,7 @@
 //! 守らない: ポーリング間隔ぶんの反映の遅れ、macOS で窓を最小化している間の遅れ、PiP との
 //! `AVAudioSession` の取り合い、複数タブ・複数プロセス、`publish` と同じフレームに届いた操作の取りこぼし。
 
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::DeviceError;
@@ -97,8 +98,11 @@ impl NowPlaying for UnsupportedNowPlaying {
 #[derive(Debug, Default)]
 struct Inner {
     armed: bool,
-    pending: Option<OsMediaCommand>,
+    pending: VecDeque<OsMediaCommand>,
 }
+
+/// 保留できる操作の上限。再開の確定待ちが長引いても無限に溜めない。
+const MAX_PENDING: usize = 64;
 
 /// OS 側のコールバックが操作を置く共有状態。判定と更新は同じ Mutex の内側で行う。
 #[derive(Debug, Clone, Default)]
@@ -125,21 +129,24 @@ impl SharedOsCommand {
     pub fn disarm(&self) {
         let mut g = self.lock();
         g.armed = false;
-        g.pending = None;
+        g.pending.clear();
     }
 
-    /// armed のときだけ最新値で上書きして受け付ける。戻り値は受け付けたかどうか。
+    /// armed のときだけ到着順（FIFO）で保留する。戻り値は受け付けたかどうか。
+    /// 上限を超えた分は捨てる（Toggle 2 回のような連続操作を潰さないため、上書きはしない）。
     pub fn push(&self, cmd: OsMediaCommand) -> bool {
         let mut g = self.lock();
         if g.armed {
-            g.pending = Some(cmd);
+            if g.pending.len() < MAX_PENDING {
+                g.pending.push_back(cmd);
+            }
         }
         g.armed
     }
 
-    /// 保留中の操作を取り出す。
+    /// 保留中の操作を古い順に 1 件取り出す。呼び出し側は空になるまで繰り返す。
     pub fn take(&self) -> Option<OsMediaCommand> {
-        self.lock().pending.take()
+        self.lock().pending.pop_front()
     }
 }
 
@@ -155,12 +162,24 @@ mod tests {
     }
 
     #[test]
-    fn latest_push_wins() {
+    fn pushes_are_fifo() {
         let c = SharedOsCommand::new();
         c.arm();
         assert!(c.push(OsMediaCommand::Play));
         assert!(c.push(OsMediaCommand::Pause));
+        assert_eq!(c.take(), Some(OsMediaCommand::Play));
         assert_eq!(c.take(), Some(OsMediaCommand::Pause));
+        assert_eq!(c.take(), None);
+    }
+
+    #[test]
+    fn two_toggles_both_kept() {
+        let c = SharedOsCommand::new();
+        c.arm();
+        c.push(OsMediaCommand::Toggle);
+        c.push(OsMediaCommand::Toggle);
+        assert_eq!(c.take(), Some(OsMediaCommand::Toggle));
+        assert_eq!(c.take(), Some(OsMediaCommand::Toggle));
         assert_eq!(c.take(), None);
     }
 
