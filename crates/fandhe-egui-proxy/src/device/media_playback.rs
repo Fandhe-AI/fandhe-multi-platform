@@ -366,6 +366,8 @@ pub fn audio_play_effect(state: &AudioPlayState, sender: &CompletionSender<Audio
         SESSION.get_or_init(Session::default),
         START_DEADLINE,
     );
+    // OS のメディア操作（Issue #381）。再生・一時停止の間だけ曲名と状態を OS へ渡し、OS の操作を返す。
+    super::now_playing::sync_audio_play(state, sender);
 }
 
 /// アプリ終了時にプレーヤーを解放する（`device::shutdown` から呼ばれる）。

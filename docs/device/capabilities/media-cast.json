@@ -48,12 +48,15 @@
       "note": "未実装。対象は Miracast・DLNA・Bluetooth。素の exe で接続できなければ保留へ移す"
     },
     "web": {
-      "status": "possible",
+      "status": "done",
       "api": "Remote Playback API（`HTMLMediaElement.remote`）",
       "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Remote_Playback_API",
       "safari": "Safari 13.1 から対応（iOS は mirror）。Chrome 121・Chrome Android 56。Firefox は非対応。機器の名前は仕様でページに明かさない",
-      "note": "未実装。Cast Web Sender SDK（外部スクリプト）と Presentation API は使わない。実行時に生成した音声（blob: URL）が送れない場合は「この音源は送れない」と表示する"
+      "note": "実装済み（#389）。実行時に生成した WAV を blob: URL でループ再生し、アプリのボタンから prompt() で出力先ピッカーを出す。prompt() の NotAllowedError は利用者が閉じたキャンセルとして失敗にせず実際の remote.state から経路を戻し、NotFoundError は「出力先が見つかりません」、NotSupportedError は「この音源は送れません」と出す。出力先の名前は仕様上渡されないため常に出さない。非対応（Firefox）は非対応表示。期限は再生 5 秒・接続 15 秒（単調時計）、pagehide で中断する。守る範囲: 1 マウント内の操作順・失敗を成功にしないこと・資源の解放。守らない範囲: 複数タブ、受信機側で再開した再生の反映、受信機の品質。未確認: 実ブラウザ・実受信機（Chrome の Cast 機器、Safari の AirPlay）で blob: の WAV が送れるか、prompt() が解決する時機、disableRemotePlayback で切断されるか（#379）",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#379）",
+      "impl": "crates/fandhe-web-dom/src/media_cast.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/cast_show.rs + crates/fandhe-device/src/media_cast.rs、Issue #389"
     }
   },
   "note": "iOS / macOS は AirPlay（AVRoutePickerView）、Windows は CastingDevicePicker、Web は Remote Playback。Android は Cast SDK が GMS 前提のため保留。media-playback（既存 id）は端末内再生で、本機能は出力先を外部機器へ切り替える点が違う。audio-devices（端末側の出力先選択）とも別。今回の範囲: 実行時に生成した音声をループ再生し、OS の出力先選択 UI を出して、選ばれた出力先の名前（OS が教えるときだけ）と接続状態を出す。画面ミラーリング・動画・アプリからの切断は扱わない。成功経路の確認には実機の受信機が要る"

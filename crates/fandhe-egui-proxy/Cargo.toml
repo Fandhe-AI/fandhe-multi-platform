@@ -333,6 +333,9 @@ windows = { workspace = true, optional = true, features = [
     "Media_Capture",
     # Issue #955: `MediaEncodingProfile::CreateM4a`（AAC エンコード設定）に使う。
     "Media_MediaProperties",
+    # Issue #381: `device/windows_now_playing.rs`（#385）が `SystemMediaTransportControls`（`Media`）を呼ぶ。
+    # 依存は `Foundation` のみで新規パッケージは増えない。
+    "Media",
     # Issue #955: `InMemoryRandomAccessStream`/`DataReader`（録音先バッファの読み書き）
     # に使う。
     "Storage_Streams",
