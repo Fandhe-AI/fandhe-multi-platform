@@ -188,7 +188,10 @@ impl Shared {
         self.intent = Intent::Stop;
         let flush = was_play || self.playback == CastPlayback::Playing;
         // Playing 通知より前の停止でも、後から届く Paused で Stopped を確定する。
-        self.pending_stop = flush && self.playback != CastPlayback::Playing;
+        // 重複した停止で印を消さない（解除は Paused での確定か新しい再生要求のとき）。
+        if flush && self.playback != CastPlayback::Playing {
+            self.pending_stop = true;
+        }
         Ok(flush)
     }
 
@@ -286,6 +289,11 @@ impl Shared {
                 }
             }
             Ev::ConnError(_, code) => match self.route {
+                // OS の再接続中は失敗にせず、再接続経路（ConnState 0/3）と同じく切断扱いにする。
+                RouteState::Connecting if self.reconnecting => {
+                    self.reconnecting = false;
+                    self.route = RouteState::Disconnected;
+                }
                 RouteState::Connecting => {
                     self.fail_connecting(failure_from_start_status(code).unwrap_or(CastFailure::Os))
                 }
@@ -799,9 +807,16 @@ mod win {
                 }
                 Cmd::Stop(gen) => {
                     if let Some(r) = res.as_ref().filter(|r| r.gen == gen) {
-                        let _ = r.player.Pause();
-                        if let Ok(session) = r.player.PlaybackSession() {
-                            let _ = session.SetPosition(TimeSpan { Duration: 0 });
+                        // 失敗を握りつぶさない（再生が続く・先頭に戻らないのに停止成功と見せない）。
+                        if r.player.Pause().is_err() {
+                            fail(gen, CastFailure::Os);
+                        } else if r
+                            .player
+                            .PlaybackSession()
+                            .and_then(|session| session.SetPosition(TimeSpan { Duration: 0 }))
+                            .is_err()
+                        {
+                            fail(gen, CastFailure::Os);
                         }
                     }
                 }
@@ -854,6 +869,27 @@ mod tests {
         let g = s.begin_prepare(10).unwrap();
         s.on_event(g, Ev::Opened);
         (s, g)
+    }
+
+    #[test]
+    fn duplicate_stop_keeps_pending_stop() {
+        let (mut s, g) = ready();
+        s.on_play(g).unwrap();
+        s.on_stop(g).unwrap();
+        s.on_stop(g).unwrap();
+        s.on_event(g, Ev::Paused);
+        assert_eq!(s.playback, CastPlayback::Stopped);
+    }
+
+    #[test]
+    fn conn_error_while_reconnecting_is_not_failure() {
+        let (mut s, g) = ready();
+        s.on_event(g, Ev::Selected(1, "x".into()));
+        s.on_event(g, Ev::ConnState(1, 1));
+        s.on_event(g, Ev::ConnState(1, 4));
+        s.on_event(g, Ev::ConnError(1, 2));
+        assert_eq!(s.route, RouteState::Disconnected);
+        assert_eq!(s.playback, CastPlayback::Ready);
     }
 
     #[test]
