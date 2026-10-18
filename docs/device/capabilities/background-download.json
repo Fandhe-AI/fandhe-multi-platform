@@ -34,7 +34,7 @@
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#380）",
       "impl": "crates/fandhe-egui-proxy/src/device/apple_background_download.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_background_download.m + crates/fandhe-egui-proxy/src/device/background_download.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-device/src/background_download.rs、Issue #390",
-      "note": "実装済み（#390）。固定 URL の小さなファイル 1 つを OS に依頼し、待機・転送中・完了（サイズ）・取り消し・失敗を出す。結果は取り消し（失敗にしない）と HTTP エラー・0 バイト・許可外のリダイレクト先（失敗）を分ける。守る範囲: 1 プロセス内の順序、世代による古い通知の破棄、嘘の成功の禁止。守らない範囲: 背景で失敗した理由と前回の完了表示は再起動で失われる、接続できない間は OS が待ち続け転送中のままになりうる、複数プロセス。アプリ終了後も転送が続くかは #380 の Mac 目視で確かめる"
+      "note": "実装済み（#390）。固定 URL の小さなファイル 1 つを OS に依頼し、待機・転送中・完了（サイズ）・取り消し・失敗を出す。結果は取り消し（失敗にしない）と HTTP エラー・0 バイト・許可外のリダイレクト先（失敗）を分ける。守る範囲: 1 プロセス内の順序、世代による古い通知の破棄、嘘の成功の禁止、大きさの上限 8 MiB（超えたら失敗）、開始時に前の世代を止めること。守らない範囲: 背景で失敗した理由と前回の完了表示は再起動で失われる、接続できない間は OS が待ち続け転送中のままになりうる、複数プロセス。アプリ終了後も転送が続くかは #380 の Mac 目視で確かめる"
     },
     "windows": {
       "status": "possible",

@@ -26,7 +26,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use fandhe_device::background_download::{completion_status, DownloadStatus};
-use fandhe_device::http::check_url;
+use fandhe_device::http::{check_url, MAX_BODY_BYTES};
 use fandhe_device::DeviceError;
 
 /// 失敗の固定文言（URL・パス・OS の生の文言を含めない、A09）。
@@ -35,6 +35,7 @@ const FAILED_NETWORK: &str = "接続できませんでした";
 const FAILED_SAVE: &str = "ファイルを保存できませんでした";
 const FAILED_OTHER: &str = "ダウンロードに失敗しました";
 const FAILED_START: &str = "開始できませんでした";
+const FAILED_TOO_LARGE: &str = "ファイルが大きすぎます";
 const FAILED_CANCEL: &str = "保存したファイルを削除できませんでした";
 const FAILED_CANCEL_TIMEOUT: &str = "取り消しを OS に伝えられませんでした";
 
@@ -129,14 +130,22 @@ impl Inner {
         }
     }
 
-    fn progress(&mut self, gen: u64, received: u64, total: i64) {
+    /// 受信進捗。`false` は「この task を止めよ」（大きさが `MAX_BODY_BYTES` を超えた）。
+    /// 超過は取り消しではなく失敗として確定し、後から届く取り消し通知は世代の不一致で捨てられる。
+    fn progress(&mut self, gen: u64, received: u64, total: i64) -> bool {
         self.adopt_preexisting(gen);
         if self.current == Some(gen) {
+            if received > MAX_BODY_BYTES || u64::try_from(total).is_ok_and(|t| t > MAX_BODY_BYTES) {
+                self.current = None;
+                self.status = DownloadStatus::Failed(FAILED_TOO_LARGE.to_string());
+                return false;
+            }
             self.status = DownloadStatus::Running {
                 received,
                 total: u64::try_from(total).ok().filter(|t| *t > 0),
             };
         }
+        true
     }
 
     /// 一時ファイルを保存先へ移してよいか。HTTP の状態・サイズ・最終 URL を確かめ、
@@ -148,6 +157,9 @@ impl Inner {
         }
         let verdict = if check_url(final_url).is_err() {
             DownloadStatus::Failed(FAILED_REDIRECT.to_string())
+        } else if bytes > MAX_BODY_BYTES {
+            // 進捗の通知なしで完了した場合の備え。
+            DownloadStatus::Failed(FAILED_TOO_LARGE.to_string())
         } else {
             completion_status(u16::try_from(http_status).ok(), bytes)
         };
@@ -248,7 +260,7 @@ mod imp {
     #[allow(unsafe_code)]
     unsafe extern "C" {
         fn fandhe_apple_bgdl_init() -> i32;
-        fn fandhe_apple_bgdl_start(url: *const c_char, gen: u64) -> i32;
+        fn fandhe_apple_bgdl_start(url: *const c_char, gen: u64, deadline_ms: u64) -> i32;
         fn fandhe_apple_bgdl_cancel(upto_gen: u64, deadline_ms: u64) -> i32;
     }
 
@@ -296,8 +308,9 @@ mod imp {
                 g.begin()
             };
             // SAFETY: `c_url` は呼び出し中生きており、`.m` は同期でコピーしてポインタを保持しない。
-            // `SHARED` は外してから呼ぶ（delegate が取るため）。`OP` は `.m` の完了まで保持する。
-            let code = unsafe { fandhe_apple_bgdl_start(c_url.as_ptr(), gen) };
+            // `SHARED` は外してから呼ぶ（delegate が取るため）。`OP` は `.m` の完了まで保持する。`.m` は前の世代の
+            // 取り消しを期限つきで待つが、その completion は delegate queue 上で `OP`・`SHARED`・file queue を取らない。
+            let code = unsafe { fandhe_apple_bgdl_start(c_url.as_ptr(), gen, CANCEL_DEADLINE_MS) };
             if code == 0 {
                 return Ok(());
             }
@@ -340,14 +353,16 @@ mod imp {
         }
     }
 
-    /// 受信進捗。`total` が負なら総バイト数は不明。
+    /// 受信進捗。`total` が負なら総バイト数は不明。戻り値 `false` なら `.m` が task を取り消す。
     #[allow(unsafe_code)]
     #[no_mangle]
-    extern "C" fn fandhe_rust_bgdl_progress(gen: u64, received: u64, total: i64) {
-        if let Ok(mut s) = SHARED.lock() {
-            s.progress(gen, received, total);
-        }
+    extern "C" fn fandhe_rust_bgdl_progress(gen: u64, received: u64, total: i64) -> bool {
+        let keep = SHARED
+            .lock()
+            .map(|mut s| s.progress(gen, received, total))
+            .unwrap_or(true);
         repaint();
+        keep
     }
 
     /// 一時ファイルを保存先へ移してよいかの判定（delegate 内で同期に呼ばれる）。
@@ -517,6 +532,7 @@ mod tests {
         assert!(matches!(start_error(1), DeviceError::Unsupported(_)));
         assert!(matches!(start_error(2), DeviceError::InvalidInput(_)));
         assert!(matches!(start_error(3), DeviceError::Internal(_))); // 保存済みファイルの削除失敗
+        assert!(matches!(start_error(4), DeviceError::Internal(_))); // 前の世代の取り消しが期限切れ
         assert!(matches!(start_error(7), DeviceError::Internal(_)));
     }
 
@@ -610,6 +626,56 @@ mod tests {
             DownloadStatus::Failed(FAILED_CANCEL_TIMEOUT.to_string())
         );
         assert_ne!(cancel_failure_message(4), cancel_failure_message(3));
+    }
+
+    #[test]
+    fn progress_over_limit_fails_and_requests_cancel() {
+        let mut i = Inner::new();
+        let gen = running(&mut i);
+        assert!(i.progress(gen, MAX_BODY_BYTES, -1));
+        assert!(!i.progress(gen, MAX_BODY_BYTES + 1, -1));
+        assert_eq!(
+            i.status,
+            DownloadStatus::Failed(FAILED_TOO_LARGE.to_string())
+        );
+        // 取り消し通知で Cancelled に上書きされない。
+        assert!(!i.finish(gen, 1, 0));
+        assert!(matches!(i.status, DownloadStatus::Failed(_)));
+    }
+
+    #[test]
+    fn progress_total_over_limit_fails_early() {
+        let mut i = Inner::new();
+        let gen = running(&mut i);
+        assert!(!i.progress(gen, 1, MAX_BODY_BYTES as i64 + 1));
+        assert!(matches!(i.status, DownloadStatus::Failed(_)));
+    }
+
+    #[test]
+    fn progress_stale_generation_does_not_fail_current() {
+        let mut i = Inner::new();
+        let old = running(&mut i);
+        let new = running(&mut i);
+        assert!(i.progress(old, MAX_BODY_BYTES + 1, -1));
+        assert!(i.progress(new, 5, 10));
+        assert_eq!(
+            i.status,
+            DownloadStatus::Running {
+                received: 5,
+                total: Some(10)
+            }
+        );
+    }
+
+    #[test]
+    fn accept_rejects_oversized_completion() {
+        let mut i = Inner::new();
+        let gen = running(&mut i);
+        assert!(!i.accept(gen, 200, MAX_BODY_BYTES + 1, "http://127.0.0.1/x"));
+        assert_eq!(
+            i.status,
+            DownloadStatus::Failed(FAILED_TOO_LARGE.to_string())
+        );
     }
 
     #[test]
