@@ -156,11 +156,14 @@ impl Inner {
         true
     }
 
-    /// 起動時の再接続。操作前で何も追っていないときだけ `Running` に戻す。
+    /// 起動時の再接続。操作前で何も追っていないときだけ `Running` に戻す。引き受けた時点で
+    /// 利用者の操作と同じ扱い（`touched`）にし、その転送が終わった後に古い task の通知を
+    /// `adopt_preexisting` が再び引き受けて結果を上書きしないようにする。
     fn reconnect(&mut self, gen: u64) {
         self.next_gen = self.next_gen.max(gen);
         if !self.touched && self.current.is_none() {
             self.current = Some(gen);
+            self.touched = true;
             self.status = DownloadStatus::Running {
                 received: 0,
                 total: None,
@@ -235,6 +238,19 @@ mod imp {
 
     pub(super) struct AppleBackgroundDownload;
 
+    /// `start` / `cancel` を丸ごと直列化する操作ロック（契約表 11）。状態更新（`SHARED`）から
+    /// `.m` の呼び出しまでを 1 つの区間にし、`start` が `begin` した後・`.m` の開始前に別スレッドの
+    /// `cancel` が割り込んで、取り消し済みなのに転送が始まる順序逆転を防ぐ。
+    /// ロック順は常に `OP` → `SHARED`。OS コールバック（`fandhe_rust_bgdl_*`）は `SHARED` しか
+    /// 取らず `OP` を取らない。`.m` は main queue へ `dispatch_sync` しない（file queue のみ）ので
+    /// デッドロックしない。`status` も `OP` を取らない（進捗ポーリングを止めない）。
+    static OP: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn op_lock() -> Result<std::sync::MutexGuard<'static, ()>, DeviceError> {
+        OP.lock()
+            .map_err(|_| DeviceError::Internal("background download"))
+    }
+
     /// session を作って再接続を始め、実装を返す。session を作れなければ `None`（呼び出し側が
     /// `Unsupported` に倒す。ダミーの成功実装にはしない）。
     #[cfg_attr(target_os = "ios", allow(dead_code))]
@@ -257,13 +273,14 @@ mod imp {
             let now_ms = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(1, |d| d.as_millis() as u64);
+            let _op = op_lock()?;
             let gen = {
                 let mut g = lock()?;
                 g.seed_once(now_ms);
                 g.begin()
             };
             // SAFETY: `c_url` は呼び出し中生きており、`.m` は同期でコピーしてポインタを保持しない。
-            // ロックは外してから呼ぶ（delegate が同じロックを取るため）。
+            // `SHARED` は外してから呼ぶ（delegate が取るため）。`OP` は `.m` の完了まで保持する。
             let code = unsafe { fandhe_apple_bgdl_start(c_url.as_ptr(), gen) };
             if code == 0 {
                 return Ok(());
@@ -282,6 +299,7 @@ mod imp {
         fn cancel(&self) -> Result<(), DeviceError> {
             // 取り消し対象は呼び出し時点までに採番した世代。直後の `start` の新 task は巻き込まない。
             // 再接続通知より前でも前プロセスの task（世代は起動時刻以下）を止められるよう先に種を入れる。
+            let _op = op_lock()?;
             let now_ms = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(1, |d| d.as_millis() as u64);
@@ -510,6 +528,18 @@ mod tests {
         assert_eq!(j.current, None);
         assert_eq!(j.status, DownloadStatus::Cancelled);
         assert_eq!(j.begin(), 10);
+    }
+
+    #[test]
+    fn finished_reconnected_transfer_is_not_overwritten_by_stale_notification() {
+        let mut i = Inner::new();
+        i.reconnect(7);
+        assert!(i.finish(7, 0, 40));
+        assert_eq!(i.status, DownloadStatus::Completed { bytes: 40 });
+        // 終わった後に届いた古い task（世代 6）の取り消し通知を引き受けない。
+        assert!(!i.finish(6, 1, 0));
+        assert_eq!(i.current, None);
+        assert_eq!(i.status, DownloadStatus::Completed { bytes: 40 });
     }
 
     #[test]
