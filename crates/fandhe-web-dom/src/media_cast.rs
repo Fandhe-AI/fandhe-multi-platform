@@ -322,7 +322,8 @@ mod web {
         let a = applier.clone();
         listen(&mut listeners, et.clone(), "pause", move || {
             // 受信機・OS の UI から止められたときに「再生中」を出し続けない。重複は core が捨てる。
-            if let Some(g) = with(mount, |s| s.gen) {
+            // 開始の確定待ち中の pause は通常の停止にしない（期限切れ・play() の結果が確定させる）。
+            if let Some(g) = with(mount, |s| s.pending.is_none().then_some(s.gen)).flatten() {
                 post_update(&a, g, CastShowUpdate::Playback(CastShowPlayback::Stopped));
             }
         });
@@ -571,11 +572,12 @@ mod web {
         let ret = get(&remote, "prompt")
             .dyn_into::<Function>()
             .and_then(|f| f.call0(&remote));
+        // Choosing を先に積む（同期失敗の結果も後続の post が受けられるように）。
+        post_update(applier, g, CastShowUpdate::Route(CastShowRoute::Choosing));
         let promise = match ret {
             Ok(p) => p.dyn_into::<Promise>().ok(),
-            Err(e) => return after_prompt(applier, mount, g, Err(e)),
+            Err(e) => return after_prompt(applier, mount, Err(e)),
         };
-        post_update(applier, g, CastShowUpdate::Route(CastShowRoute::Choosing));
         let Some(p) = promise else {
             return post_current_route(applier, mount);
         };
@@ -583,21 +585,36 @@ mod web {
         spawn_local(async move {
             let r = JsFuture::from(p).await.map(|_| ());
             if is_live(mount) {
-                after_prompt(&a, mount, g, r);
+                after_prompt(&a, mount, r);
             }
         });
     }
 
-    fn after_prompt(applier: &Applier<State>, mount: u64, g: u64, r: Result<(), JsValue>) {
-        match r {
-            Ok(()) => post_current_route(applier, mount),
-            Err(e) => match prompt_outcome(err_name(&e).as_deref()) {
-                PromptOutcome::Cancel => post_current_route(applier, mount),
-                PromptOutcome::NoDevices => {
-                    post_update(applier, g, CastShowUpdate::Route(CastShowRoute::NoDevices))
+    /// 選択結果を現在の状態へ確定させる。再生操作で世代が進んでいても、`Choosing` のままなら回収する。
+    /// 停止・中断中は core が `Failed` を受けないため、ここで直接失敗へ移して `Choosing` を残さない。
+    fn after_prompt(applier: &Applier<State>, mount: u64, r: Result<(), JsValue>) {
+        let outcome = match r {
+            Ok(()) => return post_current_route(applier, mount),
+            Err(e) => prompt_outcome(err_name(&e).as_deref()),
+        };
+        match outcome {
+            PromptOutcome::Cancel => post_current_route(applier, mount),
+            PromptOutcome::NoDevices => post(applier, |s| {
+                if s.route == CastShowRoute::Choosing {
+                    s.route = CastShowRoute::NoDevices;
                 }
-                PromptOutcome::Failed(f) => post_update(applier, g, CastShowUpdate::Failed(f)),
-            },
+            }),
+            PromptOutcome::Failed(f) => post(applier, move |s| {
+                if s.route != CastShowRoute::Choosing {
+                    return;
+                }
+                let g = s.generation;
+                apply_update(s, g, CastShowUpdate::Failed(f.clone()));
+                if !matches!(s.playback, CastShowPlayback::Failed(_)) {
+                    s.playback = CastShowPlayback::Failed(f);
+                    s.route = CastShowRoute::Local;
+                }
+            }),
         }
     }
 
