@@ -7,11 +7,14 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "AVKit `AVRoutePickerView`（AirPlay の出力先選択）",
-      "perm": "なし",
+      "status": "done",
+      "api": "AVKit `AVRoutePickerView`（AirPlay の出力先選択）+ `AVAudioPlayer`（ループ再生）+ `AVAudioSession.currentRoute`（`AVAudioSessionPortAirPlay` の `portName`）",
+      "perm": "不要。`AVAudioSession` を playback + longFormAudio にし、解放時に元へ戻す。`UIBackgroundModes` は追加しない（既存の `audio` は背景で鳴らすことに使わない）",
       "url": "https://developer.apple.com/documentation/avkit/avroutepickerview",
-      "note": "未実装。UIKit のビューを egui 面の上へ重ねる設計が要る。"
+      "note": "実装済み（#387）。実行時に生成した音をループ再生し、右下に OS の出力先ボタンを重ねる。背景遷移・割り込みで止めて中断表示にし、勝手に再開しない。出力先の名前は AirPlay 出力のときだけ画面に出す（ログ・保存はしない）。守る範囲: 1 プロセス内の操作順・失敗を成功にしないこと・資源と音声セッションの解放。守らない範囲: PiP 等の他画面との AVAudioSession の同時利用、OS の UI で切り替えた反映のポーリング間隔ぶんの遅れ、複数プロセス、受信機側の品質。未確認: AVAudioPlayer の音がそのまま AirPlay へ流れるか、シミュレータのピッカーに機器が出るか（実機確認 #379）",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#379）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_media_cast.rs + crates/fandhe-egui-proxy/src/device/apple_media_cast.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_media_cast.m + crates/fandhe-egui-proxy/src/device/media_cast.rs + crates/fandhe-core/src/screens/cast_show.rs + crates/fandhe-device/src/media_cast.rs、Issue #387"
     },
     "android": {
       "status": "possible",
