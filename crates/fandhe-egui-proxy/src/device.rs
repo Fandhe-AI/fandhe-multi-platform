@@ -122,6 +122,11 @@ pub mod android_multi_display;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_network_status;
+/// Issue #381: Android 向けロック画面・OS のメディア操作実装のスタブ（#383 が埋める）。
+/// `device/now_playing.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_now_playing;
 /// Issue #1247: Android 向け歩数実装のスタブ（#1249 が埋める）。`device/pedometer.rs` の
 /// Android 経路から呼ばれる。JNI の本体はモジュール内側の `cfg(target_os = "android")` に閉じ、
 /// 純関数をホストでテストできるよう cfg は `any(android, test)`。
@@ -258,6 +263,12 @@ pub mod apple_network_status;
 /// 同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_nlp;
+/// Issue #381（macOS）: ロック画面・OS のメディア操作実装（`apple/fandhe_apple_now_playing.m` の
+/// MediaPlayer を呼ぶ C ABI ラッパー）。`device/now_playing.rs` の macOS 経路から呼ばれる。
+/// iOS（#382）が埋めるときは cfg を `ios` まで広げる。写像の純関数をホストでテストできるよう `test` でもコンパイルする。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod apple_now_playing;
 /// Issue #345 macOS・#346 iOS: 端末内 LLM 実装（`apple/fandhe_apple_on_device_llm.swift` を
 /// 呼ぶ C ABI ラッパー）。`device/on_device_llm.rs` の macOS 経路と、iOS 経路（`ios_on_device_llm` 経由）から
 /// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
@@ -479,6 +490,11 @@ pub mod ios_network_status;
 /// C ABI ラッパー）。`device/notification.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_notification;
+/// Issue #381: iOS 向けロック画面・OS のメディア操作実装のスタブ（#382 が埋める）。
+/// `device/now_playing.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_now_playing;
 /// Issue #346: iOS 向け端末内 LLM 実装（macOS と共用の `apple_on_device_llm` を返す）。
 /// `device/on_device_llm.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -628,6 +644,10 @@ pub mod nlp;
 /// Phase 11 の拡充ループ（親 #1003、Issue #1004/#1005）: ローカル通知の effect
 /// ドライバ（macOS/Windows/iOS 実装、Android は #1006）。
 pub mod notification;
+/// Phase 11 の拡充ループ（親 #98、Issue #381）: ロック画面・OS のメディア操作の effect ドライバ（macOS 実装、
+/// iOS・Android・Windows は #382・#383・#385 で埋めるスタブ、他 OS は `UnsupportedNowPlaying` 固定。
+/// Web は #384 で `fandhe-web-dom`）。`media_playback` の `audio_play` 画面から呼ばれる。
+pub mod now_playing;
 /// Phase 11 の拡充ループ（親 #93、Issue #345）: 端末内 LLM の effect ドライバ（macOS 実装、iOS は
 /// b-ios が埋めるスタブ、他 OS は `UnsupportedOnDeviceLlm` 固定。Web は `fandhe-web-dom` が持つ）。
 pub mod on_device_llm;
@@ -814,6 +834,11 @@ pub mod windows_nlp;
 /// `device/notification.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_notification;
+/// Issue #381: Windows 向けロック画面・OS のメディア操作実装のスタブ（#385 が埋める）。
+/// `device/now_playing.rs` の Windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_now_playing;
 /// Issue #343: Windows 向けパスキー実装（`webauthn.h` の MakeCredential / GetAssertion）。
 /// `device/passkey.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -900,6 +925,7 @@ pub fn shutdown() {
     bluetooth_le::stop_shared_scan();
     midi::shutdown();
     media_playback::shutdown();
+    now_playing::shutdown();
     picture_in_picture::shutdown();
     media_cast::shutdown();
 }
