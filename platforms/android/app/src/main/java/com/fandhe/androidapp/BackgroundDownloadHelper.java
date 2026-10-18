@@ -78,14 +78,19 @@ final class BackgroundDownloadHelper {
                 File f = file();
                 if (f == null) return FAILED;
                 long old = prefs().getLong(KEY_ID, -1L);
-                if (old >= 0) dm.remove(old);
+                if (old >= 0) {
+                    // 旧 id を先に消してから転送を破棄する。以降の失敗経路で消えた id が残り
+                    // status() が「利用者が消した（Cancelled）」と誤判定しないようにする。
+                    if (!prefs().edit().remove(KEY_ID).commit()) return FAILED;
+                    dm.remove(old);
+                }
                 // 残っていると DownloadManager が別名で保存するため、必ず消す。
                 if (f.exists() && !f.delete()) return FAILED;
                 DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
                 req.setDestinationInExternalFilesDir(context, null, FILE_NAME);
                 long id = dm.enqueue(req);
                 if (!prefs().edit().putLong(KEY_ID, id).commit()) {
-                    dm.remove(id); // id を追えない転送を残さない
+                    dm.remove(id); // id を追えない転送を残さない（KEY_ID は上で消去済みか未設定）
                     return FAILED;
                 }
                 return OK;

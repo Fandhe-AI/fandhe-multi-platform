@@ -29,7 +29,7 @@
 //!
 //! 守る範囲: 1 プロセス内の開始・取り消し・状態の順序、嘘の成功の禁止（0 バイト・HTTP エラー・
 //! 行が消えた転送を成功にしない）、開始失敗と取り消しでファイルと id を残さない。
-//! 守らない範囲: 再起動後の完了・失敗表示（`Idle` になる）、リダイレクト先の再検証（OS が追う）、
+//! 守らない範囲: 再起動後に一度も転送中を観測しないまま終わった転送の完了・失敗表示（`Idle` になる。転送中を観測すれば追跡中として記録し終端状態も表示する）、リダイレクト先の再検証（OS が追う）、
 //! `check_url` が通す私設 IPv4 への平文（network security config は 127.0.0.1 と localhost だけ許すので
 //! OS 側の失敗になり、「HTTP 400」と出ることがある）、接続できない間の転送中表示（PAUSED）、
 //! 複数プロセス、ポーリング間隔ぶんの遅れ。URL・パス・OS の生の文言は出さない（A09）。
@@ -130,6 +130,17 @@ fn failure_status(reason: i64) -> DownloadStatus {
     }
 }
 
+/// 転送中を観測したら追跡中（`Started`）として記録する。再起動後に再接続した転送の
+/// 完了・失敗を、以後の `decide` で `Idle` に落とさず表示するため。
+#[cfg(any(target_os = "android", test))]
+fn adopt(raw: Raw, local: Local) -> Local {
+    if raw.kind == Kind::Running && local == Local::Untouched {
+        Local::Started
+    } else {
+        local
+    }
+}
+
 /// OS の状態と直近の操作から表示する状態を決める純関数。
 #[cfg(any(target_os = "android", test))]
 fn decide(raw: Raw, local: Local) -> DownloadStatus {
@@ -227,7 +238,7 @@ impl BackgroundDownload for AndroidBackgroundDownload {
     fn status(&self) -> Result<DownloadStatus, fandhe_device::DeviceError> {
         use fandhe_device::DeviceError;
         use jni::objects::JLongArray;
-        let local = self.local.lock().unwrap_or_else(|e| e.into_inner());
+        let mut local = self.local.lock().unwrap_or_else(|e| e.into_inner());
         let values = call_activity(|env, a| {
             let ret = env.call_method(
                 a,
@@ -253,6 +264,7 @@ impl BackgroundDownload for AndroidBackgroundDownload {
             .as_ref()
             .and_then(|v| decode(v))
             .ok_or(DeviceError::Internal("状態を読めませんでした"))?;
+        *local = adopt(raw, *local);
         Ok(decide(raw, *local))
     }
 }
@@ -359,6 +371,24 @@ mod tests {
         assert_eq!(
             decide(raw(Failed, 0, 404), Started),
             DownloadStatus::Failed("HTTP 404".into())
+        );
+    }
+
+    #[test]
+    fn adopt_tracks_running_after_restart() {
+        let l = adopt(raw(Kind::Running, 1, 0), Local::Untouched);
+        assert_eq!(l, Local::Started);
+        assert_eq!(
+            decide(raw(Kind::Success, 7, 0), l),
+            DownloadStatus::Completed { bytes: 7 }
+        );
+        assert_eq!(
+            adopt(raw(Kind::Running, 1, 0), Local::Cancelled),
+            Local::Cancelled
+        );
+        assert_eq!(
+            adopt(raw(Kind::Success, 1, 0), Local::Untouched),
+            Local::Untouched
         );
     }
 
