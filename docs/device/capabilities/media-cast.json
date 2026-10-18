@@ -16,32 +16,39 @@
     "android": {
       "status": "possible",
       "api": "Google Cast SDK（GMS 依存）/ MediaRouter",
-      "perm": "報告に記載なし（要確認）",
-      "url": "https://developers.google.com/cast/docs/android_sender",
-      "note": "未実装。Play services が無い端末では使えない。"
+      "perm": "Cast SDK（Google Play services）",
+      "url": [
+        "https://developers.google.com/cast/docs/android_sender",
+        "https://developer.android.com/media/routing/mediarouter"
+      ],
+      "deferred": "Google Cast への送出には Cast SDK（play-services-cast-framework）が要り、推移依存に Google Play services（base・basement・tasks・flags）と datatransport が入る。GMS に依存しない方針のため保留。受信機は URL から音源を取りに行くため、実行時に生成した音声を送るにはアプリ内の HTTP 配信も要る。Default Media Receiver ならアプリの登録・ベンダーの審査は不要",
+      "note": "未実装。androidx.mediarouter 単体は GMS 非依存だが、Google Cast 機器に対応するなら Cast SDK を使うよう案内されている"
     },
     "macos": {
       "status": "possible",
       "api": "AVKit `AVRoutePickerView`（macOS 10.15+）",
       "perm": "なし（要確認）",
       "url": "https://developer.apple.com/documentation/avkit/avroutepickerview",
-      "note": "未実装。macOS での AirPlay 送信を実機で確認する必要がある（要確認）。"
+      "note": "未実装。`AVRoutePickerView` の `player` は macOS 専用で AVPlayer 単位。選ばれた AirPlay の出力先の名前を返す公開 API は SDK に見当たらないため、名前・接続状態が読めなければ「不明」と表示し、接続中とは言わない（出力先の選択 UI と再生までを範囲にする）"
     },
     "windows": {
       "status": "possible",
       "api": "`Windows.Media.Casting.CastingDevicePicker`（Cast to Device）。旧 `Windows.Media.PlayTo` は Deprecated",
-      "perm": "要確認（一般知識。unpackaged での可否も未確認）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.casting.castingdevicepicker",
-      "note": "未実装。unpackaged での可否は要確認"
+      "perm": "なし（デスクトップアプリは `IInitializeWithWindow` で owner window を関連付ける。package identity の要否は文書に記載が無く未確認）",
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.casting.castingdevicepicker",
+        "https://learn.microsoft.com/en-us/windows/apps/develop/media-playback/media-casting"
+      ],
+      "note": "未実装。対象は Miracast・DLNA・Bluetooth。素の exe で接続できなければ保留へ移す"
     },
     "web": {
       "status": "possible",
       "api": "Remote Playback API（`HTMLMediaElement.remote`）",
       "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Remote_Playback_API",
-      "safari": "Safari は AirPlay で対応と認識（要確認）。Chromium は Cast。Firefox は限定的",
-      "note": "未実装。メディア要素の再生だけが対象。"
+      "safari": "Safari 13.1 から対応（iOS は mirror）。Chrome 121・Chrome Android 56。Firefox は非対応。機器の名前は仕様でページに明かさない",
+      "note": "未実装。Cast Web Sender SDK（外部スクリプト）と Presentation API は使わない。実行時に生成した音声（blob: URL）が送れない場合は「この音源は送れない」と表示する"
     }
   },
-  "note": "iOS / macOS は AirPlay、Android / Chromium は Cast、Windows は CastingDevicePicker、Web は Remote Playback。media-playback（既存 id）は端末内再生で、本機能は出力先を外部機器へ切り替える点が違う。audio-devices（端末側の出力先選択）とも別。今回の範囲: 出力先の選択 UI を出し、選んだ機器へ音声 1 本を送って再生状態を画面に出す（画面ミラーリングは扱わない）。"
+  "note": "iOS / macOS は AirPlay（AVRoutePickerView）、Windows は CastingDevicePicker、Web は Remote Playback。Android は Cast SDK が GMS 前提のため保留。media-playback（既存 id）は端末内再生で、本機能は出力先を外部機器へ切り替える点が違う。audio-devices（端末側の出力先選択）とも別。今回の範囲: 実行時に生成した音声をループ再生し、OS の出力先選択 UI を出して、選ばれた出力先の名前（OS が教えるときだけ）と接続状態を出す。画面ミラーリング・動画・アプリからの切断は扱わない。成功経路の確認には実機の受信機が要る"
 }
