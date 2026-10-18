@@ -24,11 +24,14 @@
       "note": "未実装。前景だけで扱い、通知シェードのプレーヤーとヘッドセットのボタンを受ける。ロック画面と背景再生（foreground service の mediaPlayback）は範囲外"
     },
     "macos": {
-      "status": "possible",
-      "api": "MediaPlayer（`MPNowPlayingInfoCenter`、macOS 10.12.2+）",
+      "status": "done",
+      "api": "MediaPlayer（`MPNowPlayingInfoCenter` / `MPRemoteCommandCenter`、macOS 10.12.2+）",
       "perm": "なし",
       "url": "https://developer.apple.com/documentation/mediaplayer/mpnowplayinginfocenter",
-      "note": "未実装。macOS では audio session から再生状態を判定できないため、再生の開始・停止のたびに `playbackState` を設定する（SDK ヘッダの注記）。バンドルを持たない実行体で出る名前は実機で確かめる"
+      "note": "実装済み（#381）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を OS の「再生中」表示（コントロールセンター）へ渡し、メディアキー・OS 側の再生・一時停止を画面へ返すこと（次の曲・前の曲・シーク・アートワークは範囲外で、効かない操作は無効にして出さない）。macOS では audio session から再生状態を判定できないため、`playbackState` を毎回設定する（SDK ヘッダの注記）。結果は OS へ渡した／この環境では使えない／渡せなかったを分けて表示し、Apple は表示の確定が返らないため「表示中」とは言わない。OS からの一時停止は失敗ではなく一時停止中への遷移。停止・失敗で取り下げ、取り下げ後に届いた古い操作では再開しない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、登録の解放。守らない範囲: ポーリング間隔（約 250ms）ぶんの反映の遅れ、窓を最小化している間の遅れ、PiP との `AVAudioSession` の取り合い、複数プロセス。バンドルを持たない実行体で出る名前は #378 で確かめる",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#378）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_now_playing.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_now_playing.m + crates/fandhe-egui-proxy/src/device/now_playing.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #381"
     },
     "windows": {
       "status": "possible",
@@ -49,5 +52,5 @@
       "note": "未実装。web-sys の `MediaSession` は unstable API のため Reflect で呼ぶ。短いメディアには通知を出さないブラウザがある"
     }
   },
-  "note": "iOS / macOS は MPNowPlayingInfoCenter、Android は framework の MediaSession、Windows は SMTC、Web は Media Session。media-playback（既存 id）は再生そのものを扱い、本機能は OS 側の操作画面（コントロールセンター・通知・メディアキー）との連携。今回の範囲: media-playback の画面で再生・一時停止している間だけ、曲名と再生中かどうかを OS へ渡し、OS からの再生・一時停止を画面に反映する。前景だけで扱い、iOS・Android のロック画面（背景再生）・アートワーク・前後の曲・シークは扱わない"
+  "note": "iOS / macOS は MPNowPlayingInfoCenter、Android は framework の MediaSession、Windows は SMTC、Web は Media Session。media-playback（既存 id）は再生そのものを扱い、本機能は OS 側の操作画面（コントロールセンター・通知・メディアキー）との連携。今回の範囲: media-playback の画面で再生・一時停止している間だけ、曲名と再生中かどうかを OS へ渡し、OS からの再生・一時停止を画面に反映する。前景だけで扱い、iOS・Android のロック画面（背景再生）・アートワーク・前後の曲・シークは扱わない。守備範囲: 1 プロセス内の操作順・嘘の成功の禁止・登録の解放までを守り、反映の遅れ・PiP との取り合い・複数プロセスは守らない"
 }
