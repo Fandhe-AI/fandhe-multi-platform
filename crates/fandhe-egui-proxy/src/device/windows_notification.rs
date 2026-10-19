@@ -330,6 +330,24 @@ fn inspect_shortcut(path: &Path, exe: &Path) -> Result<Existing, DeviceError> {
     })
 }
 
+/// `&str` を VT_LPWSTR の PROPVARIANT にする。`PROPVARIANT::from(&str)` は VT_BSTR になり、
+/// プロパティストアの正規型（`System.AppUserModel.ID`・`System.Title` は VT_LPWSTR）と合わないため変換する。
+/// `write_shortcut` と `windows_app_shortcuts`（ジャンプリストの表示名）が使う。失敗は `feature` ラベルの
+/// `DeviceError::Internal` に写す。
+#[allow(unsafe_code)]
+pub(super) fn lpwstr_variant(
+    value: &str,
+    feature: &'static str,
+) -> Result<PROPVARIANT, DeviceError> {
+    let bstr_variant = PROPVARIANT::from(value);
+    let mut out = PROPVARIANT::default();
+    // SAFETY: `bstr_variant`/`out` はどちらも有効な PROPVARIANT
+    // （前者は `From<&str>`、後者は `Default` によるゼロ初期化）。
+    unsafe { PropVariantChangeType(&mut out, &bstr_variant, PROPVAR_CHANGE_FLAGS(0), VT_LPWSTR) }
+        .map_err(|_| DeviceError::Internal(feature))?;
+    Ok(out)
+}
+
 /// [`ensure_shortcut`] の本体。COM 経由で `.lnk` を 1 本書き出す。
 #[allow(unsafe_code)]
 fn write_shortcut(path: &Path, exe: &Path) -> Result<(), DeviceError> {
@@ -344,24 +362,10 @@ fn write_shortcut(path: &Path, exe: &Path) -> Result<(), DeviceError> {
         .map_err(|_| DeviceError::Internal("notification shortcut"))?;
 
     // `System.AppUserModel.ID`（PKEY_AppUserModel_ID）の正規型は VT_LPWSTR。
-    // `PROPVARIANT::from(&str)` は VT_BSTR になるため `PropVariantChangeType` で
-    // 変換してから書き込む。
     let store: IPropertyStore = link
         .cast()
         .map_err(|_| DeviceError::Internal("notification shortcut"))?;
-    let bstr_variant = PROPVARIANT::from(APP_AUMID);
-    let mut lpwstr_variant = PROPVARIANT::default();
-    // SAFETY: `bstr_variant`/`lpwstr_variant` はどちらも有効な PROPVARIANT
-    // （前者は `From<&str>`、後者は `Default` によるゼロ初期化）。
-    unsafe {
-        PropVariantChangeType(
-            &mut lpwstr_variant,
-            &bstr_variant,
-            PROPVAR_CHANGE_FLAGS(0),
-            VT_LPWSTR,
-        )
-    }
-    .map_err(|_| DeviceError::Internal("notification shortcut"))?;
+    let lpwstr_variant = lpwstr_variant(APP_AUMID, "notification shortcut")?;
     // SAFETY: `store` は上で取得した有効な COM ポインタ、`PKEY_AppUserModel_ID` は
     // 定数、`lpwstr_variant` は直前に変換した有効な PROPVARIANT。
     unsafe { store.SetValue(&PKEY_AppUserModel_ID, &lpwstr_variant) }
