@@ -72,7 +72,12 @@ pub fn is_file_launch(args: &[OsString]) -> bool {
 /// 絶対パス・`"` なし・拡張子一致のものだけを返す。Windows のファイル名に `"` は入らないので、
 /// 引数解析で変形されたパスは `"` を含み、ここで弾かれる（`launch_unaltered` の代わり）。
 pub fn checked_path(p: &str) -> Option<&Path> {
-    if validate_windows_path(p).is_err() || p.contains('"') {
+    // ドライブ指定（先頭 2 文字）より後ろの `:` は NTFS の代替データストリーム（`a.md:x.txt`）で、
+    // 拡張子検査を迂回するため弾く。
+    if validate_windows_path(p).is_err()
+        || p.contains('"')
+        || p.get(2..).is_none_or(|r| r.contains(':'))
+    {
         return None;
     }
     // ホストの `Path` は `\` を区切りとみなさないため、名前は自前で切り出す（全 OS で同じ判定）。
@@ -275,6 +280,9 @@ mod tests {
             "a.txt",
             "C:\\a\"b.txt",
             "C:\\a\u{7}.txt",
+            "C:\\a.md:x.txt",
+            "C:/a.md:x.txt",
+            "C:\\a.txt:s",
         ] {
             assert!(checked_path(bad).is_none(), "{bad}");
         }
