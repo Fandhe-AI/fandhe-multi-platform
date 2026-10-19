@@ -38,12 +38,15 @@
       "note": "搭載機種のみ。非搭載なら `GetDefaultAsync` が null"
     },
     "web": {
-      "status": "possible",
-      "api": "`MediaStreamTrack.applyConstraints({ advanced: [{ torch: true }] })`（ImageCapture と併用）",
+      "status": "done",
+      "api": "`getUserMedia`（`facingMode: environment`）→ `getCapabilities().torch` を確かめる → `applyConstraints({ advanced: [{ torch: true }] })`。`getSettings().torch` を 1 秒ごとに読み戻す。消灯は `track.stop()`",
       "perm": "カメラの許可（`getUserMedia`）。secure context 必須",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/ImageCapture",
-      "safari": "非対応と認識（要確認）。Firefox も非対応と認識",
-      "note": "未実装。`torch` 制約は Chromium（主に Android）のみ。"
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints#torch",
+      "safari": "MDN の互換データに `torch` の項目が無い。実行時に `getCapabilities` で判定し、無ければ「使えません」と出す。Safari・Firefox は非対応の見込み（要確認）",
+      "note": "実装済み（#462）。背景（hidden / `pagehide`）と破棄で消灯し、点け直さない。守る範囲: トラックを漏らさない、非対応・拒否・secure context の外を成功と見せない。守らない範囲: 外からの消灯への追従は 1 秒 + 1 フレーム、複数タブ、ページ終了時の後片付け（ブラウザが解放）。実ブラウザの確認は #456",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "Android Chrome 確認待ち（#456）",
+      "impl": "crates/fandhe-web-dom/src/flashlight.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/flashlight_toggle.rs + crates/fandhe-device/src/flashlight.rs、Issue #462"
     }
   },
   "note": "iOS は AVCaptureDevice の torch、Android は CameraManager、Web は MediaStreamTrack の torch 制約。Windows は Lamp（搭載機種のみ）。macOS は搭載機器の概念が無いため n-a。camera-capture（既存 id）は撮影で、本機能は撮影を伴わず光だけを制御する点が違う。今回の範囲: ライトの点灯 / 消灯をボタンで切り替え、点灯状態を画面に出す（明るさ調整・点滅は扱わない）。アプリを背景へ回す（Web は hidden、Windows は最小化）・破棄すると自分から消灯し、戻っても点け直さない。守らない範囲: 外部からの点け消しへの追従は 1 秒 + 1 フレーム遅れる、Windows の AvailabilityChanged は購読しない、プロセス終了時の後片付けは OS に任せる、熱による減光、Web の複数タブ。"

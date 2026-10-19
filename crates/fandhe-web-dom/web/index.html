@@ -66,6 +66,7 @@
         mount_photo_pick_screen,
         mount_url_scheme_show_screen,
         mount_wake_lock_toggle_screen,
+        mount_flashlight_toggle_screen,
         mount_compass_show_screen,
         mount_pen_draw_screen,
         mount_ar_show_screen,
@@ -134,6 +135,8 @@
         mount_compass_show_screen("fandhe-dom-root");
       } else if (screen === "wake_lock_toggle") {
         mount_wake_lock_toggle_screen("fandhe-dom-root");
+      } else if (screen === "flashlight_toggle") {
+        mount_flashlight_toggle_screen("fandhe-dom-root");
       } else if (screen === "accessibility_prefs_show") {
         mount_accessibility_prefs_show_screen("fandhe-dom-root");
       } else if (screen === "safe_area_insets_show") {
