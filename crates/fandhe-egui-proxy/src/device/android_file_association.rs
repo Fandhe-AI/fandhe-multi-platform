@@ -127,7 +127,7 @@ extern "system" fn Java_com_fandhe_androidapp_FileAssociationHelper_nativeAccept
         ))
     });
     // JNI 失敗時は拒否（false）。
-    outcome.into_outcome().ok().unwrap_or(false).into()
+    matches!(outcome.into_outcome(), jni::Outcome::Ok(true)).into()
 }
 
 /// Android 向け `FileAssociation` 実装。`snapshot` は static 受け口の読み出しで常に成功する。
