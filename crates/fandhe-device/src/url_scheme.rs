@@ -26,8 +26,8 @@
 //! # 各 OS の届き方（同じ契約で扱う）
 //!
 //! - macOS（Issue #1215）: Apple Event `kAEGetURL`。イベントループ開始前にハンドラを登録する。
-//!   winit 0.30 は application delegate を登録しないが、Apple Event ハンドラ方式は
-//!   delegate に触れないため将来 delegate を入れても衝突しない
+//!   winit 0.30 は自前の application delegate を登録し、差し替えると panic する。Apple Event
+//!   ハンドラ方式は delegate に触れないため、その delegate と衝突しない
 //! - iOS: シーン無しの delegate の `application:openURL:options:` と、起動通知の `launchOptions`
 //! - Android: `getIntent()` と `onNewIntent`（再配送）
 //! - Windows: 起動引数。起動済みなら既存インスタンスへ転送してから [`UrlInbox::receive_bytes`]
