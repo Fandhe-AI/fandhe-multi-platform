@@ -4618,6 +4618,12 @@ public class MainActivity extends GameActivity {
         return FocusModeStatusHelper.read(getApplicationContext());
     }
 
+    // Rust 側（`AndroidAppShortcuts::call_install`、JNI 署名 `(Ljava/lang/String;Ljava/lang/String;)I`）
+    // からワーカースレッドで呼ばれる同期メソッド（Issue #426）。結果コードは `AppShortcutsHelper` を参照。
+    private int appShortcutsInstall(String label, String url) {
+        return AppShortcutsHelper.install(getApplicationContext(), label, url);
+    }
+
     // `TextToSpeech` はプロセス内リソース（音声エンジンへの接続）を持つため、
     // Activity 破棄時に明示的に手放す（Issue #866）。保留中の要求（`INITIALIZING`
     // 中に Activity が破棄されたケース）は `onInit` が届かなくなるため、ここで
