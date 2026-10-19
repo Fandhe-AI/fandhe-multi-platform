@@ -18,7 +18,8 @@
 //! （#460・#461・#459）が埋めるスタブ、それ以外は `UnsupportedFlashlight` 固定。Web は
 //! `fandhe-web-dom` 側（#462）。
 //!
-//! Windows は最小化を検知したら、ワーカーで `set_on(false)` を直列に実行する。最小化中は
+//! Windows は最小化を検知したら（専用ウォッチャースレッドが HWND の `IsIconic` を定期確認する。
+//! 描画フレームに依存しない）、ワーカーで `set_on(false)` を直列に実行する。最小化中は
 //! eframe が次フレームを描かないため、状態経由（次フレームの `take_request`）にすると消灯が
 //! 復帰まで遅れる。ワーカーは常に 1 本（`WIN`）。点灯処理中（Requested / Applying）に最小化を
 //! 観測したら保留として記録し、その点灯ワーカーが終わった直後に同じスレッドで消灯する。
@@ -108,7 +109,7 @@ static WIN: Mutex<WinSync> = Mutex::new(WinSync {
     pending: false,
 });
 
-/// 最後に観測した最小化状態。最小化中はフレームが止まるため、ワーカーが読む。
+/// 最後に観測した最小化状態（ウォッチャーが `IsIconic` で更新し、ワーカーが読む）。
 #[cfg(target_os = "windows")]
 static MINIMIZED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -352,33 +353,80 @@ pub fn flashlight_toggle_effect(
     drive(state, sender, implementation(), Instant::now(), &mut timing);
     #[cfg(target_os = "windows")]
     {
-        let minimized = sender.minimized();
-        MINIMIZED.store(minimized, Ordering::Release);
-        if should_turn_off_on_minimize(state, minimized) {
-            // 走行中のワーカー（`drive` が発送した点灯を含む）があれば、その終了時に消灯させる。
-            let mut w = win_lock();
-            if w.active {
-                w.pending = true;
-            } else {
-                w.active = true;
-                drop(w);
-                let worker_sender = sender.clone();
-                let light = implementation();
-                let spawned = std::thread::Builder::new()
-                    .name("flashlight-minimize-off".to_string())
-                    .spawn(move || minimize_off(light.as_ref(), &worker_sender));
-                if spawned.is_err() {
-                    win_lock().active = false;
-                    let _ = sender.send(Box::new(|s: &mut FlashlightToggleState| {
-                        if s.phase == FlashlightPhase::Idle {
-                            apply_read(s, Err(FlashlightFailure::Failed(String::new())));
-                        }
-                    }));
-                    // 次の再描画で再試行する（`active` は解放済み）。
-                    sender.request_repaint_after(READ_INTERVAL);
-                }
+        // 最小化の検知はフレームに依存させない（最小化中は eframe が描画を止め、この関数が呼ばれない）。
+        CONFIRMED_OFF.store(!should_turn_off_on_minimize(state, true), Ordering::Release);
+        start_minimize_watcher(sender);
+    }
+}
+
+/// 最小化消灯ワーカーの起動を試みる。走行中のワーカーがあれば保留として記録して `true`、
+/// 新規に起動できても `true`、起動に失敗したら `false`（呼び出し側が次回再試行する）。
+#[cfg(target_os = "windows")]
+fn request_minimize_off(sender: &CompletionSender<FlashlightToggleState>) -> bool {
+    let mut w = win_lock();
+    if w.active {
+        w.pending = true;
+        return true;
+    }
+    w.active = true;
+    drop(w);
+    let worker_sender = sender.clone();
+    let light = implementation();
+    let spawned = std::thread::Builder::new()
+        .name("flashlight-minimize-off".to_string())
+        .spawn(move || minimize_off(light.as_ref(), &worker_sender));
+    if spawned.is_err() {
+        win_lock().active = false;
+        let _ = sender.send(Box::new(|s: &mut FlashlightToggleState| {
+            if s.phase == FlashlightPhase::Idle {
+                apply_read(s, Err(FlashlightFailure::Failed(String::new())));
             }
-        }
+        }));
+        return false;
+    }
+    true
+}
+
+/// 最後のフレームで消灯を確認できていたか。ウォッチャーが最小化の立ち上がりで消灯を省く判定に使う
+/// （[`should_turn_off_on_minimize`] と同じ条件。最小化中はフレームが止まるため静的に持つ）。
+#[cfg(target_os = "windows")]
+static CONFIRMED_OFF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 最小化ウォッチャー（プロセスに 1 本）を起動する。HWND の `IsIconic` を `READ_INTERVAL` 未満の
+/// 間隔でポーリングするため、eframe の描画停止に左右されない。最小化の立ち上がりごとに
+/// [`request_minimize_off`] を呼ぶ（以降の再試行は消灯ワーカー自身が `MINIMIZED` を見て行う）。
+/// ウィンドウ未取得なら何もせず、次フレームで再度試みる。
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+fn start_minimize_watcher(sender: &CompletionSender<FlashlightToggleState>) {
+    use windows::Win32::UI::WindowsAndMessaging::IsIconic;
+    static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if super::windows_share::window().is_none() || STARTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let sender = sender.clone();
+    let spawned = std::thread::Builder::new()
+        .name("flashlight-minimize-watch".to_string())
+        .spawn(move || {
+            let mut was_minimized = false;
+            loop {
+                if let Some(hwnd) = super::windows_share::window() {
+                    // SAFETY: `hwnd` は `remember_window` が控えたメインウィンドウで、プロセス生存中は有効。
+                    // `IsIconic` は無効な HWND でも FALSE を返すだけで副作用がない。
+                    let minimized = unsafe { IsIconic(hwnd) }.as_bool();
+                    MINIMIZED.store(minimized, Ordering::Release);
+                    if minimized && !was_minimized && !CONFIRMED_OFF.load(Ordering::Acquire) {
+                        // 起動に失敗したら立ち上がりを消費せず、次の周期で再試行する。
+                        was_minimized = request_minimize_off(&sender);
+                    } else {
+                        was_minimized = minimized;
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        });
+    if spawned.is_err() {
+        STARTED.store(false, Ordering::Release);
     }
 }
 
