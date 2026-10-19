@@ -172,7 +172,7 @@ pub mod android_power_state;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_print;
-/// Issue #444: Android 向けセーフエリア実装のスタブ（b-android が中身を埋める）。
+/// Issue #446: Android 向けセーフエリア実装（既存の insets リスナーの値を pull で読む）。
 /// `device/safe_area_insets.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
