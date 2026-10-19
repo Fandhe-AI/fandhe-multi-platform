@@ -9,7 +9,8 @@
 //     0 = 要求どおりの状態（冪等）、1 = ライト無し（シミュレータ・非搭載機）、
 //     2 = 失敗（main 以外・背景中の点灯要求・過熱等で使用不可・lock / 設定の失敗）。
 //   fandhe_ios_flashlight_read(void) -> int32_t
-//     1 = 点灯、0 = 消灯、-1 = ライト無し、-3 = 失敗（main 以外。呼び出し元が `Internal` へ写す）。
+//     1 = 点灯、0 = 消灯、-1 = ライト無し、-3 = 失敗（main 以外、または背景遷移での消灯に失敗して
+//     まだ光っている間。呼び出し元が `Internal` へ写す）。
 //     点灯は `isTorchActive`（実際に光っているか）で読み戻す。
 //
 // スレッド: egui の update = main から同期で呼ばれる。main 以外は `dispatch_sync` で main を
@@ -19,7 +20,8 @@
 // 背景: 初回の呼び出しで `UIApplicationDidEnterBackgroundNotification` の observer を 1 回だけ
 // 登録し、点灯中なら消灯して Rust へ再描画を通知する。前景に戻っても点け直さない。
 // 登録トークンは static の strong 参照で握り続ける（ARC で解放させない）。
-// 背景中の点灯要求は拒否する。
+// 背景中の点灯要求は拒否する。背景遷移での消灯に失敗したら失敗状態を保持し、read が -3 を返す。
+// set / read の呼び出しごとに消灯を再試行し、消えた（または成功した）時点で状態を解除する。
 //
 // ログは出さない（NSError を出さない。security.md A09）。プロセス終了時の消灯は OS に任せる。
 
@@ -31,6 +33,8 @@
 extern void fandhe_rust_flashlight_changed(void);
 
 static id fandhe_flashlight_observer = nil;
+// 背景遷移での消灯に失敗し、まだ光っている状態。main でのみ読み書きする。
+static BOOL fandhe_flashlight_off_failed = NO;
 
 // torch を持つ既定のカメラデバイス。無ければ nil。
 static AVCaptureDevice *fandhe_flashlight_device(void) {
@@ -57,6 +61,16 @@ static BOOL fandhe_flashlight_apply(AVCaptureDevice *d, BOOL on) {
     return ok;
 }
 
+// 消灯失敗の保持を解消する。既に消えていれば解除、光っていれば消灯を再試行する。
+static void fandhe_flashlight_retry_off(AVCaptureDevice *d) {
+    if (!fandhe_flashlight_off_failed) {
+        return;
+    }
+    if (!d.isTorchActive || fandhe_flashlight_apply(d, NO)) {
+        fandhe_flashlight_off_failed = NO;
+    }
+}
+
 static void fandhe_flashlight_ensure_observer(void) {
     if (fandhe_flashlight_observer != nil) {
         return;
@@ -69,7 +83,9 @@ static void fandhe_flashlight_ensure_observer(void) {
                     @autoreleasepool {
                         AVCaptureDevice *d = fandhe_flashlight_device();
                         if (d != nil && d.isTorchActive) {
-                            fandhe_flashlight_apply(d, NO);
+                            if (!fandhe_flashlight_apply(d, NO)) {
+                                fandhe_flashlight_off_failed = YES;
+                            }
                         }
                     }
                     fandhe_rust_flashlight_changed();
@@ -86,6 +102,7 @@ int32_t fandhe_ios_flashlight_set(int32_t on) {
             return 1;
         }
         fandhe_flashlight_ensure_observer();
+        fandhe_flashlight_retry_off(d);
         BOOL want = (on != 0);
         if (want && UIApplication.sharedApplication.applicationState == UIApplicationStateBackground) {
             return 2;
@@ -110,6 +127,10 @@ int32_t fandhe_ios_flashlight_read(void) {
             return -1;
         }
         fandhe_flashlight_ensure_observer();
+        fandhe_flashlight_retry_off(d);
+        if (fandhe_flashlight_off_failed) {
+            return -3;
+        }
         return d.isTorchActive ? 1 : 0;
     }
 }
