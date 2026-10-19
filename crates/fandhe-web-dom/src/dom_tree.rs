@@ -391,9 +391,18 @@ fn convert_node<S: 'static>(
                 .as_any()
                 .and_then(|any| any.downcast_ref::<CanvasWidget<S>>())
                 .is_some_and(|c| c.captures_drag());
-            if let (true, Some((synced, size, commands))) =
-                (captures_drag || !circles.is_empty(), canvas)
-            {
+            // 円が無くても `StyledRect` の背景（`system_accent_color_show` の色見本）は
+            // コンテナの背景色で描く。さもないと Web では見本が空のプレースホルダになる。
+            let background = canvas.as_ref().and_then(|(_, _, commands)| {
+                commands.iter().find_map(|c| match c {
+                    PaintCommand::StyledRect { fill } => Some(fill.to_hex()),
+                    _ => None,
+                })
+            });
+            if let (true, Some((synced, size, _))) = (
+                captures_drag || !circles.is_empty() || background.is_some(),
+                canvas,
+            ) {
                 let mut attrs = vec![
                     ("class".to_string(), "fandhe-canvas".to_string()),
                     ("role".to_string(), "img".to_string()),
@@ -401,10 +410,6 @@ fn convert_node<S: 'static>(
                 if let Some(label) = synced.accessibility_label() {
                     attrs.push(("aria-label".to_string(), label));
                 }
-                let background = commands.iter().find_map(|c| match c {
-                    PaintCommand::StyledRect { fill } => Some(fill.to_hex()),
-                    _ => None,
-                });
                 let mut style = format!(
                     "position:relative;width:{}px;height:{}px",
                     size.width, size.height
@@ -1159,6 +1164,39 @@ mod tests {
         let ball = TiltBallState::default();
         let style = canvas_style(&build_dom_tree(&tilt_ball_screen(), &ball, 0)).unwrap();
         assert!(!style.contains("touch-action"));
+    }
+
+    /// `StyledRect` だけの Canvas（`system_accent_color_show`）が背景色付きで出ること。
+    /// 読めていない状態では見本を描かない（嘘の成功を出さない）。
+    #[test]
+    fn styled_rect_only_canvas_renders_background() {
+        use fandhe_core::screens::system_accent_color_show::{
+            apply_read, system_accent_color_show_web_screen, Rgb, SystemAccentColorShowState,
+        };
+
+        let mut state = SystemAccentColorShowState::default();
+        let html = crate::html::to_html(&build_dom_tree(
+            &system_accent_color_show_web_screen(),
+            &state,
+            0,
+        ));
+        assert!(!html.contains("background-color"));
+
+        apply_read(
+            &mut state,
+            Ok(Rgb {
+                r: 10,
+                g: 132,
+                b: 255,
+            }),
+        );
+        let html = crate::html::to_html(&build_dom_tree(
+            &system_accent_color_show_web_screen(),
+            &state,
+            0,
+        ));
+        assert!(html.contains("fandhe-canvas"));
+        assert!(html.contains("background-color:#0a84ffff"));
     }
 
     /// `Node::Widget(CanvasWidget)` が円を実際に描くことを確認する（Issue #989、

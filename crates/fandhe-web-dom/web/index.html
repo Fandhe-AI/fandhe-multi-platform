@@ -71,6 +71,7 @@
         mount_local_fonts_show_screen,
         mount_multi_display_show_screen,
         mount_accessibility_prefs_show_screen,
+        mount_system_accent_color_show_screen,
         mount_app_badge_set_screen,
         mount_compose_mail_sms_screen,
         mount_file_watch_show_screen,
@@ -82,7 +83,7 @@
         mount_on_device_llm_screen,
       } from "./fandhe_web_dom.js";
       await init();
-      // 検証用の画面切替（Issue #915/#936/#958/#981/#985/#987/#989/#991/#993/#1007/#1017/#1027/#1037/#1047/#1063/#1223/#1091/#1094/#1103/#1277/#1307/#1311/#1315/#1344/#1333/#1338/#1363/#1387/#1379/#1414/#1401/#271/#315/#329/#344/#347/#367/#389/#393）。既定（?screen 未指定）は従来どおり sample。
+      // 検証用の画面切替（Issue #915/#936/#958/#981/#985/#987/#989/#991/#993/#1007/#1017/#1027/#1037/#1047/#1063/#1223/#1091/#1094/#1103/#1277/#1307/#1311/#423/#1315/#1344/#1333/#1338/#1363/#1387/#1379/#1414/#1401/#271/#315/#329/#344/#347/#367/#389/#393）。既定（?screen 未指定）は従来どおり sample。
       const screen = new URLSearchParams(location.search).get("screen");
       if (screen === "on_device_llm") {
         mount_on_device_llm_screen("fandhe-dom-root");
@@ -126,6 +127,8 @@
         mount_wake_lock_toggle_screen("fandhe-dom-root");
       } else if (screen === "accessibility_prefs_show") {
         mount_accessibility_prefs_show_screen("fandhe-dom-root");
+      } else if (screen === "system_accent_color_show") {
+        mount_system_accent_color_show_screen("fandhe-dom-root");
       } else if (screen === "power_state_show") {
         mount_power_state_show_screen("fandhe-dom-root");
       } else if (screen === "url_scheme_show") {
