@@ -4606,6 +4606,12 @@ public class MainActivity extends GameActivity {
         return AccessibilityPrefsHelper.read(getApplicationContext());
     }
 
+    // Rust 側（`AndroidAccentColor::call_read`、JNI 署名 `()I`）から 1 秒間隔で呼ばれる
+    // 同期メソッド（Issue #422）。結果コードの意味は `SystemAccentColorHelper` を参照。
+    private int systemAccentColorRead() {
+        return SystemAccentColorHelper.read(getApplicationContext());
+    }
+
     // `TextToSpeech` はプロセス内リソース（音声エンジンへの接続）を持つため、
     // Activity 破棄時に明示的に手放す（Issue #866）。保留中の要求（`INITIALIZING`
     // 中に Activity が破棄されたケース）は `onInit` が届かなくなるため、ここで
