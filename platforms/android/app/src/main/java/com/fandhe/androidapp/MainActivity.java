@@ -613,6 +613,30 @@ public class MainActivity extends GameActivity {
         return screenWakeLockHelper.isHeld();
     }
 
+    // ライト（トーチ）（Issue #461）。実装は `FlashlightHelper`。Rust の `android_flashlight.rs` が
+    // egui スレッドから同期で JNI 呼び出しする。
+    private final FlashlightHelper flashlightHelper = new FlashlightHelper(this);
+
+    int flashlightSet(boolean on) {
+        return flashlightHelper.set(on);
+    }
+
+    int flashlightRead() {
+        return flashlightHelper.read();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        flashlightHelper.onStart();
+    }
+
+    @Override
+    protected void onStop() {
+        flashlightHelper.onStop();
+        super.onStop();
+    }
+
     // ロック画面・OS のメディア操作（Issue #383）。実装は `NowPlayingHelper`。Rust の
     // `android_now_playing.rs` が egui スレッドから同期で JNI 呼び出しする。
     private final NowPlayingHelper nowPlayingHelper = new NowPlayingHelper(this);
@@ -4656,6 +4680,7 @@ public class MainActivity extends GameActivity {
         screenCaptureHelper.onDestroy();
         printHelper.onDestroy();
         screenWakeLockHelper.onDestroy();
+        flashlightHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず
         // 直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。
