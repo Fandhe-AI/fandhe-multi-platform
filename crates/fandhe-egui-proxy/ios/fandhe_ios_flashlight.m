@@ -11,7 +11,8 @@
 //   fandhe_ios_flashlight_read(void) -> int32_t
 //     1 = 点灯、0 = 消灯、-1 = ライト無し、-3 = 失敗（main 以外、または背景遷移での消灯に失敗して
 //     まだ光っている間。呼び出し元が `Internal` へ写す）。
-//     点灯は `isTorchActive`（実際に光っているか）で読み戻す。
+//     点灯は `isTorchActive`（実際に光っているか）で読み戻す。消灯の実行・再試行は torchMode が
+//     Off かどうかを基準にする（過熱で消えても torchMode が On のまま残るため）。
 //
 // スレッド: egui の update = main から同期で呼ばれる。main 以外は `dispatch_sync` で main を
 // 待たず（デッドロック回避、契約表 11）失敗を返す。set と背景遷移の observer はどちらも
@@ -66,7 +67,7 @@ static void fandhe_flashlight_retry_off(AVCaptureDevice *d) {
     if (!fandhe_flashlight_off_failed) {
         return;
     }
-    if (!d.isTorchActive || fandhe_flashlight_apply(d, NO)) {
+    if (d.torchMode == AVCaptureTorchModeOff || fandhe_flashlight_apply(d, NO)) {
         fandhe_flashlight_off_failed = NO;
     }
 }
@@ -82,7 +83,7 @@ static void fandhe_flashlight_ensure_observer(void) {
                 usingBlock:^(NSNotification *_Nonnull note __unused) {
                     @autoreleasepool {
                         AVCaptureDevice *d = fandhe_flashlight_device();
-                        if (d != nil && d.isTorchActive) {
+                        if (d != nil && d.torchMode != AVCaptureTorchModeOff) {
                             if (!fandhe_flashlight_apply(d, NO)) {
                                 fandhe_flashlight_off_failed = YES;
                             }
@@ -102,18 +103,32 @@ int32_t fandhe_ios_flashlight_set(int32_t on) {
             return 1;
         }
         fandhe_flashlight_ensure_observer();
-        fandhe_flashlight_retry_off(d);
         BOOL want = (on != 0);
-        if (want && UIApplication.sharedApplication.applicationState == UIApplicationStateBackground) {
+        if (!want) {
+            // 消灯は発光状態（isTorchActive）ではなく設定（torchMode）を基準にする。
+            // 過熱で消えても torchMode が On のままなら Off へ書き、再点灯経路を断つ。
+            fandhe_flashlight_retry_off(d);
+            if (d.torchMode == AVCaptureTorchModeOff) {
+                return 0;
+            }
+            return fandhe_flashlight_apply(d, NO) ? 0 : 2;
+        }
+        if (UIApplication.sharedApplication.applicationState == UIApplicationStateBackground) {
             return 2;
         }
-        if (want == d.isTorchActive) {
+        if (d.torchMode == AVCaptureTorchModeOn && d.isTorchActive) {
+            fandhe_flashlight_off_failed = NO;
             return 0;
         }
-        if (want && !d.isTorchAvailable) {
+        if (!d.isTorchAvailable) {
             return 2;
         }
-        return fandhe_flashlight_apply(d, want) ? 0 : 2;
+        if (!fandhe_flashlight_apply(d, YES)) {
+            return 2;
+        }
+        // 点灯が確定した要求なので、古い消灯失敗の保持は解除する（read の再試行で消さない）。
+        fandhe_flashlight_off_failed = NO;
+        return 0;
     }
 }
 
