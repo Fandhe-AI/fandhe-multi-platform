@@ -713,6 +713,32 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnUrlSchemeRece
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeOnFileOpened` no-op フォールバック（Issue #418）。
+/// `FileAssociationHelper` は feature を知らず `ACTION_VIEW` の `content:` で必ず呼ぶため、
+/// スタブが無いと `UnsatisfiedLinkError` になる。detach 済みの fd は `OwnedFd` で包んで drop し
+/// close する（漏らさない）。引数の並びは Java 宣言・`device/android_file_association.rs` と一致させる。
+///
+/// # Safety
+/// `fd >= 0` は Java 側 `detachFd()` 済みの有効な fd で、他に渡さないため二重 close は無い。
+/// `#[no_mangle]` は JNI 命名規約上の固定シンボル名（`nativeOnMotionChanged` と同じ根拠）。
+#[cfg(not(feature = "device"))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_androidapp_FileAssociationHelper_nativeOnFileOpened(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _code: i32,
+    _name: *mut core::ffi::c_void,
+    _mime: *mut core::ffi::c_void,
+    fd: i32,
+) {
+    use std::os::fd::{FromRawFd, OwnedFd};
+    if fd >= 0 {
+        // SAFETY: 上の Safety 節のとおり。
+        drop(unsafe { OwnedFd::from_raw_fd(fd) });
+    }
+}
+
 // `nativeOnLocationChanged`/`nativeOnLocationFailure`（Issue #890）は上記
 // `nativeOnMotionChanged` と異なり feature 無効ビルド向けの no-op フォールバックを
 // 追加しない。`motionListener` は `onResume` で無条件にセンサ登録するため Java 側は

@@ -64,7 +64,7 @@ pub mod android_compose_mail_sms;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_device_info;
-/// Issue #416: Android 向けファイルの関連付け受信のスタブ（b-android が埋める）。
+/// Issue #418: Android 向けファイルの関連付け受信（`FileAssociationHelper` との JNI 橋渡し）。
 /// `device/file_association.rs::platform` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]

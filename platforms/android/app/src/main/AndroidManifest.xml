@@ -209,6 +209,17 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="fandhe" />
             </intent-filter>
+
+            <!-- Issue #418: ファイルの関連付け（text/plain）。値の正は
+                 `fandhe_device::file_association::MIME`。受けるのは `content:` だけ（`file:` は
+                 Java 側で拒否に数える）。BROWSABLE・pathPattern・新しい権限は付けず、既定アプリは
+                 奪わない。上の fandhe の filter と混ぜない（data の組み合わせが変わるため）。
+                 切り離し時はこの intent-filter と FileAssociationHelper を削除する。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <!-- Issue #1337: 画面録画の MediaProjection を持つ。自アプリの明示 Intent だけで起動する

@@ -1848,7 +1848,11 @@ public class MainActivity extends GameActivity {
 
     // `ACTION_VIEW` のときだけ URL を Rust へ渡す（MAIN/LAUNCHER 起動は拒否件数に混ぜない）。
     // null の data もそのまま渡し、Rust 側が拒否として数える。
-    private static void deliverUrlIntent(Intent intent) {
+    // `content:` / `file:` の VIEW はファイルの関連付け（Issue #418、FileAssociationHelper）へ。
+    private void deliverUrlIntent(Intent intent) {
+        if (FileAssociationHelper.offer(this, intent)) {
+            return;
+        }
         if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) {
             return;
         }

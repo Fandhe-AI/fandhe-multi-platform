@@ -17,11 +17,14 @@
       "note": "実装済み（#417）。Files アプリ・共有から `.txt` を渡すと、名前・サイズ・先頭 16 バイト・受信時刻を出す。既定アプリは奪わない（`LSHandlerRank=Alternate`）。通知の observer は `UIApplicationMain` 前に登録し、コールドスタート分も落とさない。OS が渡す `Documents/Inbox/` のコピーは読んだ後に必ず削除する（Inbox 直下以外は消さない）。ファイル URL は url-scheme 側で無視する。守る範囲: 1 プロセス内の受信順、不正入力の非表示、コールドスタート分、Inbox コピーの削除。守らない範囲: 1 回で複数件届いたときは最後の 1 件だけ表示する、open-in-place（security-scoped URL）、main thread での同期読み取り、複数プロセス、scene 形態でない旧経路"
     },
     "android": {
-      "status": "possible",
-      "api": "intent-filter `ACTION_VIEW` + `mimeType` / `pathPattern`",
-      "perm": "なし",
-      "url": "https://developer.android.com/training/basics/intents/filters",
-      "note": "未実装。content URI が届くため読み取りは ContentResolver を使う。URL は一般的なインテントフィルタの文書で、報告外のため HTTP 応答のみ確認（内容は未精査）"
+      "status": "done",
+      "api": "intent-filter `ACTION_VIEW` + `DEFAULT` + `mimeType=text/plain`（`pathPattern` は外す。`content:` だけ受け、`ContentResolver.openFileDescriptor` で読む）",
+      "perm": "なし（新しい権限なし）",
+      "url": "https://developer.android.com/guide/components/intents-filters",
+      "detail": "できている（実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#414）",
+      "impl": "crates/fandhe-device/src/file_association.rs + crates/fandhe-egui-proxy/src/device/android_file_association.rs + crates/fandhe-egui-proxy/src/device/file_association.rs + crates/fandhe-core/src/screens/file_association_show.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/FileAssociationHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml、Issue #418",
+      "note": "実装済み（#418）。Files などから `.txt` / `text/plain` を渡すと、名前・サイズ・先頭 16 バイト・受信時刻を出す。既定アプリは奪わない。受けるのは `content:` だけ。`file:` と名前が取れないものは件数だけ数え、読めない・8 MiB 超・フォルダは失敗として理由を出す。守る範囲: 1 プロセス内の受信順（単一スレッドの直列キュー）、コールドスタートと warm 起動（`singleTask` の `onNewIntent`）、Activity が作り直されても二重に配送しないこと。守らない範囲: プロセスが死んだ後の再表示、送り手が読み取り許可を付けていない URI（「読めませんでした」になる）、ポーリング間隔の間に続けて届いたときは最後の 1 件だけ表示すること、複数プロセス"
     },
     "macos": {
       "status": "done",
