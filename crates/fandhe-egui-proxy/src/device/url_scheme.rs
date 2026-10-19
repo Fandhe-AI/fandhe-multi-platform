@@ -149,6 +149,7 @@ pub fn url_scheme_show_effect(
     #[cfg(target_os = "windows")]
     drive_registration(state, sender, &super::windows_url_scheme::SYSTEM_REGISTRAR);
     drive(state, sender, platform_url_scheme());
+    super::app_shortcuts::drive_app_shortcuts(state, sender);
 }
 
 #[cfg(test)]

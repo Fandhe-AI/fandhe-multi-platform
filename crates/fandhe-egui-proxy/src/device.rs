@@ -31,6 +31,11 @@ pub mod android_accessibility_prefs;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_app_badge;
+/// Issue #424: Android 向けアプリショートカット実装（スタブ。兄弟 issue が中身を埋める）。
+/// `device/app_shortcuts.rs` の android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_app_shortcuts;
 /// Issue #1330: Android 向け音声デバイス一覧実装のスタブ（#1332 が埋める）。`device/audio_devices.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -201,6 +206,10 @@ pub mod android_url_scheme;
 /// Windows は同期、iOS / Android は pull 型 `bridge`（実装は #1361 / #1362 まで `Unsupported` スタブ）、
 /// 他 OS は `UnsupportedAppBadge` 固定。Web は `fandhe-web-dom`）。
 pub mod app_badge;
+/// Issue #424（親 #101）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録ドライバ。
+/// `device/url_scheme.rs::url_scheme_show_effect` から呼ばれる。実装は macOS（Dock メニュー）、
+/// iOS・Android・Windows は兄弟 issue までスタブ、他 OS は `UnsupportedAppShortcuts` 固定。
+pub mod app_shortcuts;
 /// Issue #1308: macOS / iOS 向けアクセシビリティ設定（`apple/fandhe_apple_accessibility_prefs.m` を
 /// 呼ぶ C ABI ラッパー）。`device/accessibility_prefs.rs` の macOS / iOS 経路から呼ばれる。
 /// 純関数をホストの `cargo test` で検査するため cfg に `test` を含める。
@@ -443,6 +452,11 @@ pub mod ios_accessibility_prefs;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_app_badge;
+/// Issue #424: iOS 向けアプリショートカット実装（スタブ。兄弟 issue が中身を埋める）。
+/// `device/app_shortcuts.rs` の ios 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_app_shortcuts;
 /// Issue #307: iOS 向け AR 実装のスタブ（(b-ios) が ARKit で埋める）。`device/ar.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -603,6 +617,12 @@ pub mod location;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_app_badge;
+/// Issue #424: macOS 向けアプリショートカット実装（`macos/fandhe_macos_app_shortcuts.m` の Dock メニューを呼ぶ
+/// C ABI ラッパー）。`device/app_shortcuts.rs` の macOS 経路から呼ばれる。結果コードの写像をホストで
+/// テストできるよう cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_app_shortcuts;
 /// Issue #1330: macOS 向け音声デバイス一覧実装（`macos/fandhe_macos_audio_devices.m` を呼ぶ C ABI
 /// ラッパー）。`device/audio_devices.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
 /// テストできるよう cfg は `any(macos, test)`。
@@ -806,6 +826,11 @@ pub mod windows_accessibility_prefs;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_app_badge;
+/// Issue #424: Windows 向けアプリショートカット実装（スタブ。兄弟 issue が中身を埋める）。
+/// `device/app_shortcuts.rs` の windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_app_shortcuts;
 /// Issue #1330: Windows 向け音声デバイス一覧実装（MMDevice `IMMDeviceEnumerator`）。
 /// `device/audio_devices.rs` の Windows 経路（ワーカー）から呼ばれる。
 #[cfg(target_os = "windows")]

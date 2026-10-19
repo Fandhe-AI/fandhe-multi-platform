@@ -143,6 +143,9 @@
 //!   画面スリープの抑止）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_screen_wake_lock.rs` から呼ばれる契約）。IOKit・CoreFoundation を
 //!   追加でリンクする。
+//! - `macos/fandhe_macos_app_shortcuts.m`（Issue #424、Dock メニュー。`class_addMethod` で delegate に
+//!   `applicationDockMenu:` を足す）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_app_shortcuts.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `ios/fandhe_ios_url_scheme.m`（Issue #1217、delegate の `application:openURL:options:` と
 //!   起動通知の `launchOptions` によるカスタム URL scheme 受信）は **iOS 分岐のみ**で
 //!   feature `device` 有効時にコンパイルする（`src/device/apple_url_scheme.rs` から呼ばれる
@@ -964,6 +967,16 @@ fn compile_macos_url_scheme() {
         .compile("fandhe_macos_url_scheme");
 }
 
+/// `macos/fandhe_macos_app_shortcuts.m` を `cc` でコンパイルする（Issue #424）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_app_shortcuts.rs` が使う）。AppKit・objc runtime は既存のリンクで足りる。
+fn compile_macos_app_shortcuts() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_app_shortcuts.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_app_shortcuts.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_app_shortcuts");
+}
+
 /// `macos/fandhe_macos_screen_wake_lock.m` を `cc` でコンパイルし IOKit をリンクする
 /// （Issue #1278）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_screen_wake_lock.rs` が使う）。
 fn compile_macos_screen_wake_lock() {
@@ -1567,6 +1580,8 @@ fn build_macos() {
     compile_macos_background_task();
     // `macos/fandhe_macos_url_scheme.m`（Issue #1215）も macOS 専用。
     compile_macos_url_scheme();
+    // `macos/fandhe_macos_app_shortcuts.m`（Issue #424）も macOS 専用。AppKit は既存のリンクを使う。
+    compile_macos_app_shortcuts();
     // `macos/fandhe_macos_power_state.m`（Issue #1274）も macOS 専用。
     compile_macos_power_state();
     // `macos/fandhe_macos_device_info.m`（Issue #1304）も macOS 専用。

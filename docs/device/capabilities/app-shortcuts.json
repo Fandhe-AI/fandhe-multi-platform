@@ -21,11 +21,14 @@
       "note": "未実装。起動は intent で届き、url-scheme と同じ経路を共有できる見込み（要確認）"
     },
     "macos": {
-      "status": "possible",
-      "api": "`NSApplicationDelegate.applicationDockMenu(_:)`（Dock メニュー）",
+      "status": "done",
+      "api": "`NSApplicationDelegate.applicationDockMenu(_:)`。winit 0.30.13 の `WinitApplicationDelegate` へ `class_addMethod` で足す",
       "perm": "なし",
       "url": "https://developer.apple.com/documentation/appkit/nsapplicationdelegate/applicationdockmenu(_:)",
-      "note": "未実装。winit が delegate を持つ場合の追加経路は要確認"
+      "note": "起動中のみ Dock の右クリックに「デモを開く」が出る。選ぶと `fandhe://shortcut/open-demo` が url-scheme の受け口に入る。winit は delegate を登録しており差し替えると panic するため、メソッドを足す方式にした。守らない範囲: 他アプリから同じ URL が来た場合と区別しない、終了中は出ない、メソッドが既にある場合は失敗として扱う",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#413）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_app_shortcuts.m + crates/fandhe-egui-proxy/src/device/macos_app_shortcuts.rs + crates/fandhe-egui-proxy/src/device/app_shortcuts.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + crates/fandhe-device/src/app_shortcuts.rs、Issue #424"
     },
     "windows": {
       "status": "possible",
