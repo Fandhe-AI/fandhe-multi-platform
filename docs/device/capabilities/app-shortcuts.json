@@ -37,11 +37,14 @@
       "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_app_shortcuts.m + crates/fandhe-egui-proxy/src/device/macos_app_shortcuts.rs + crates/fandhe-egui-proxy/src/device/app_shortcuts.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + crates/fandhe-device/src/app_shortcuts.rs、Issue #424"
     },
     "windows": {
-      "status": "possible",
-      "api": "Win32 `ICustomDestinationList`（ジャンプリスト）。WinRT `Windows.UI.StartScreen.JumpList` は要件記載なし",
-      "perm": "なし（Win32 desktop 専用表記で package identity の記載なし。実機未検証）",
+      "status": "done",
+      "api": "Win32 `ICustomDestinationList`（`AddUserTasks` に `IShellLink` 1 件、表示名は `PKEY_Title`、引数は `\"fandhe://shortcut/open-demo\"`）。AUMID は明示しない（`SetAppID` なし）。WinRT `JumpList` は不採用",
+      "perm": "なし（unpackaged の desktop app。package identity 不要と見込む、実機未検証）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-icustomdestinationlist",
-      "note": "未実装。項目の起動は起動引数で届く"
+      "note": "画面を一度開くと、タスクバーのジャンプリストに「デモを開く」が出る。選ぶと exe が引数 `\"fandhe://shortcut/open-demo\"` で起動し、url-scheme の転送経路（起動中なら pipe、未起動ならコールドスタート）で画面に 2 行目が出る。守る範囲: 1 プロセス 1 回の登録、COM の失敗を成功にしないこと、途中失敗時の `AbortList`、HRESULT をエラー文言へ出さないこと。守らない範囲: 画面を開くまで項目が出ない、終了後もタスクが残る、exe を動かすと古いパスが残り次に画面を開くと置き換わる、他アプリから同じ URL が来た場合と区別しない、通知（`windows_notification`）が途中で明示の AUMID を付けたプロセスではジャンプリストが出なくなることがある（#413 で確かめる）、MTA で動くことは未検証（推測）、解除ボタン・複数項目・項目の書き換え",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#413）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_app_shortcuts.rs + crates/fandhe-egui-proxy/src/device/windows_notification.rs + crates/fandhe-egui-proxy/src/device/windows_url_scheme.rs + crates/fandhe-egui-proxy/src/device/app_shortcuts.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + crates/fandhe-device/src/app_shortcuts.rs、Issue #428"
     },
     "web": {
       "status": "done",
