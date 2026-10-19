@@ -44,11 +44,14 @@
       "note": "未実装。項目の起動は起動引数で届く"
     },
     "web": {
-      "status": "possible",
-      "api": "Web App Manifest の `shortcuts`",
-      "perm": "なし（PWA のインストールが前提）",
+      "status": "done",
+      "api": "Web App Manifest の `shortcuts`。`url` は url-scheme の受け口（`?screen=url_scheme_show&url=web%2Bfandhe%3A%2F%2Fshortcut%2Fopen-demo`）に向ける",
+      "perm": "なし（PWA のインストールが前提。secure context）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/shortcuts",
-      "note": "未実装。Chromium 系で対応と認識。MDN の対応表は未確認",
+      "note": "インストール済み PWA のアイコンの右クリック・長押しに「デモを開く」が出て、選ぶと `web+fandhe://shortcut/open-demo` が url-scheme の受け口に入り、画面に 2 行目が出る。表示状態は「宣言済み」。対応ブラウザは Chrome / Edge と見込むが MDN の対応表は未確認（要確認）。守る範囲: 1 プロセス内の受信、不正な URL を出さないこと、非 secure と manifest 欠落で成功を出さないこと。守らない範囲: 未インストールの PWA や Firefox・Safari で項目が出なくても「宣言済み」と表示されること、同じ URL を他ページから開いた場合と区別しないこと、項目の動的な書き換え、複数タブ・複数ウィンドウ",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#413）",
+      "impl": "crates/fandhe-web-dom/src/url_scheme.rs + crates/fandhe-web-dom/web/manifest.webmanifest + crates/fandhe-web-dom/src/demo.rs + scripts/web/build-wasm-dom.sh + crates/fandhe-core/src/screens/url_scheme_show.rs + crates/fandhe-device/src/app_shortcuts.rs、Issue #427",
       "safari": "非対応と認識（要確認）"
     }
   },

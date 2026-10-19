@@ -13,5 +13,11 @@
       "action": "./?screen=file_association_show",
       "accept": { "text/plain": [".txt"] }
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "デモを開く",
+      "url": "./?screen=url_scheme_show&url=web%2Bfandhe%3A%2F%2Fshortcut%2Fopen-demo"
+    }
   ]
 }
