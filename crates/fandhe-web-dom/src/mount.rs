@@ -416,6 +416,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::local_fonts::release_mount(id);
         super::multi_display::release_mount(id);
         super::accessibility_prefs::release_mount(id);
+        super::system_accent_color::release_mount(id);
         super::fullscreen_immersive::release_mount(id);
         super::picture_in_picture::release_mount(id);
         super::media_cast::release_mount(id);

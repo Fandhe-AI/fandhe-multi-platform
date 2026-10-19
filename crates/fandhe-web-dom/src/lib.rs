@@ -84,6 +84,8 @@
 //!   純関数（`play()` 拒否の写像・位置の検証・期限・中断判定）のみ `wasm32` gate の外に置く
 //! - [`accessibility_prefs`]: 「アクセシビリティ設定の追従」画面の Web 経路（親 #1132、Issue #1311）。
 //!   純関数（`matchMedia` の結果 → 設定値・読み取り期限・dt）のみ `wasm32` gate の外に置く
+//! - [`system_accent_color`]: 「システムのアクセント色」画面の Web 経路（親 #103、Issue #423）。
+//!   純関数（計算済み色の解析・非対応判定）のみ `wasm32` gate の外に置く
 //! - [`screen_wake_lock`]: 「画面スリープの抑止」画面の Web 経路（親 #1129、Issue #1281）。
 //!   純関数（取得結果の写像・取り直し判定・世代照合）のみ `wasm32` gate の外に置く
 //! - [`compass`]: 「方位（コンパス）」画面の Web 経路（親 #1154、Issue #1407）。
@@ -193,6 +195,9 @@ pub mod midi;
 /// 純関数（生値 → 画面一覧・例外の `name` → 失敗種別）は native からもテストできるよう
 /// クレート単位の `wasm32` gate を外す。
 pub mod multi_display;
+/// 型サンプル「システムのアクセント色」の Web 経路（Issue #423）。[`accessibility_prefs`] と同じ理由で
+/// 純関数は native からもテストできるようクレート単位の `wasm32` gate を外す。
+pub mod system_accent_color;
 
 /// 型サンプル「マイク録音」の Web 経路（Issue #958）。[`location`] と同じ理由で
 /// 純関数（例外の `name` → 結果種別の対応・録音結果の検証・mime の決定）は native

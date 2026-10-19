@@ -138,6 +138,9 @@ use fandhe_core::screens::speech_recognize::{
     current_screen as current_speech_recognize_screen, SpeechRecognizeState,
 };
 use fandhe_core::screens::storage_note::{storage_note_screen, StorageNoteState};
+use fandhe_core::screens::system_accent_color_show::{
+    system_accent_color_show_web_screen, SystemAccentColorShowState,
+};
 use fandhe_core::screens::text_scale_preview::{
     current_screen as current_text_scale_screen, TextScalePreviewState,
 };
@@ -546,6 +549,24 @@ pub fn mount_accessibility_prefs_show_screen(root_id: &str) -> Result<(), JsValu
         current_accessibility_prefs_screen(&initial_state),
         initial_state,
         super::accessibility_prefs::accessibility_prefs_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「システムのアクセント色」（Issue #423）をマウントする
+/// 検証専用エントリポイント。`super::system_accent_color::system_accent_color_show_effect` を
+/// effect として渡すため、CSS `AccentColor` の 1 秒ごとの読み直しが動く。
+/// 画面は「ブラウザが返した色」の注記付き（`system_accent_color_show_web_screen`）。
+///
+/// 呼び出し元が渡す `root_id` の要素が見つからない場合はエラーを返す。
+#[wasm_bindgen]
+pub fn mount_system_accent_color_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    super::mount::mount_with_effect(
+        root,
+        system_accent_color_show_web_screen(),
+        SystemAccentColorShowState::default(),
+        super::system_accent_color::system_accent_color_show_effect,
     )
 }
 

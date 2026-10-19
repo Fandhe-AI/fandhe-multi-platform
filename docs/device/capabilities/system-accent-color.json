@@ -44,13 +44,16 @@
       "impl": "crates/fandhe-egui-proxy/src/device/windows_system_accent_color.rs + crates/fandhe-egui-proxy/src/device/system_accent_color.rs + crates/fandhe-core/src/screens/system_accent_color_show.rs + crates/fandhe-device/src/system_accent_color.rs、Issue #421"
     },
     "web": {
-      "status": "possible",
-      "api": "CSS システムカラー `AccentColor`（`accent-color` プロパティとは別）",
+      "status": "done",
+      "api": "CSS システムカラー `AccentColor` を非表示の要素の `color` に指定し、`getComputedStyle` で読む（1 秒間隔で読み直し、購読はしない。`accent-color` プロパティとは別）",
       "perm": "なし",
-      "url": "",
-      "safari": "対応状況は要確認",
-      "note": "URL 未確認。ブラウザやバージョンで対応が分かれる（要確認）。JS から値を読むには要素の計算済みスタイルを使う"
+      "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/system-color",
+      "safari": "16.5+。ただし OS の設定に関係なく固定値（青）を返す",
+      "note": "Firefox 103+ も固定値。Chrome 149+ は、インストール済み Web アプリかつ最初のプロファイル以外では固定値。Chrome Android は非対応で「取得できません」を出す。画面には「ブラウザが返した色」と注記する。守る範囲: 非対応・解析不能を既定色や継承色に倒さない、破棄時にタイマーと探り用要素を解放する。守らない範囲: 固定値（青）を本物と区別しない、反映は最大 1 秒 + 1 フレーム、複数タブ間の食い違い、forced-colors / color-scheme による値の違い。実ブラウザ確認は #415",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#415）",
+      "impl": "crates/fandhe-web-dom/src/system_accent_color.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/dom_tree.rs + crates/fandhe-core/src/screens/system_accent_color_show.rs、Issue #423"
     }
   },
-  "note": "Android / macOS / Windows に API あり、iOS は設定が無く no。Web は CSS の `AccentColor`（対応は要確認）。dark-mode（既存 id）との違い: dark-mode は明暗、本機能はアクセント色。今回の範囲: 取得したアクセント色の見本と 16 進値を表示し、変更に追従する（最大 1 秒 + 1 フレーム）。取れない OS は既定色に倒さず「取得できません」を出す"
+  "note": "Android / macOS / Windows に API あり、iOS は設定が無く no。Web は CSS の `AccentColor`（多くのブラウザは固定値を返す）。dark-mode（既存 id）との違い: dark-mode は明暗、本機能はアクセント色。今回の範囲: 取得したアクセント色の見本と 16 進値を表示し、変更に追従する（最大 1 秒 + 1 フレーム）。取れない OS は既定色に倒さず「取得できません」を出す"
 }
