@@ -7,11 +7,14 @@
   "bundle": "continuous-push",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "UIKit `safeAreaInsets` / `safeAreaLayoutGuide`",
+      "status": "done",
+      "api": "UIKit key window の `UIView.safeAreaInsets`（`UIWindow`。1 秒間隔で読み直し、通知は購読しない）",
       "perm": "不要",
-      "url": "",
-      "note": "未実装。URL 未確認（iOS 調査で未取得）。回転・分割表示で変わるため変更の追従が要る。winit/egui が既にインセットを扱っているか要確認"
+      "url": "https://developer.apple.com/documentation/uikit/uiview/safeareainsets",
+      "note": "実装済み（#445）。回転・分割表示は 1 秒間隔の読み直しで追従する。window が取れないときは 0 を出さず「失敗」を出す。守る範囲: 嘘の 0 を出さない、1 プロセス内の取得。守らない範囲: 反映は最大 1 秒 + 1 フレーム、key window のみ、起動直後の一時的な失敗表示",
+      "detail": "できている（実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#442）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_safe_area_insets.m + crates/fandhe-egui-proxy/src/device/ios_safe_area_insets.rs + crates/fandhe-egui-proxy/src/device/safe_area_insets.rs + crates/fandhe-core/src/screens/safe_area_insets_show.rs + crates/fandhe-device/src/safe_area_insets.rs、Issue #445"
     },
     "android": {
       "status": "possible",

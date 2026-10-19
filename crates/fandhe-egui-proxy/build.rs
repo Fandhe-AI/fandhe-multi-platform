@@ -206,6 +206,9 @@
 //! - `ios/fandhe_ios_device_info.m`（Issue #1305、`NSProcessInfo` と `sysctl` による端末・OS 情報）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_device_info.rs`
 //!   から呼ばれる契約）。Foundation は既存のリンクで足りる。
+//! - `ios/fandhe_ios_safe_area_insets.m`（Issue #445、key window の `safeAreaInsets` の同期読み取り）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_safe_area_insets.rs`
+//!   から呼ばれる契約）。UIKit は既存のリンクで足りる。
 //! - `ios/fandhe_ios_audio_devices.m`（Issue #1331、`AVAudioSession` の読み取りによる音声デバイス一覧）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_audio_devices.rs`
 //!   から呼ばれる契約）。AVFoundation は既存のリンクで足りる。
@@ -462,6 +465,8 @@ fn main() {
     compile_ios_print();
     // `ios/fandhe_ios_device_info.m`（Issue #1305）。iOS 分岐のみ。
     compile_ios_device_info();
+    // `ios/fandhe_ios_safe_area_insets.m`（Issue #445）。iOS 分岐のみ。
+    compile_ios_safe_area_insets();
     // `ios/fandhe_ios_audio_devices.m`（Issue #1331）。iOS 分岐のみ。
     compile_ios_audio_devices();
     // `ios/fandhe_ios_local_fonts.m`（Issue #1377）。iOS 分岐のみ。
@@ -1299,6 +1304,18 @@ fn compile_ios_device_info() {
         .file("ios/fandhe_ios_device_info.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_device_info");
+}
+
+/// `ios/fandhe_ios_safe_area_insets.m` を `cc` でコンパイルする（Issue #445）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_safe_area_insets.rs` が使う）。UIKit はリンク済み。
+fn compile_ios_safe_area_insets() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_safe_area_insets.m");
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_common.h");
+    cc::Build::new()
+        .file("ios/fandhe_ios_safe_area_insets.m")
+        .include("ios")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_safe_area_insets");
 }
 
 /// `ios/fandhe_ios_audio_devices.m` を `cc` でコンパイルする（Issue #1331）。**iOS 分岐のみ**
