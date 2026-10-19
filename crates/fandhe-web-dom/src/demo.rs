@@ -62,6 +62,9 @@ use fandhe_core::screens::device_info_show::{
     current_screen as current_device_info_screen, DeviceInfoShowState,
 };
 use fandhe_core::screens::drag_drop::{current_screen as current_drag_drop_screen, DragDropState};
+use fandhe_core::screens::file_association_show::{
+    file_association_show_screen, FileAssociationShowState,
+};
 use fandhe_core::screens::file_pick::{current_screen as current_file_pick_screen, FilePickState};
 use fandhe_core::screens::file_watch_show::{
     current_screen as current_file_watch_screen, stop as file_watch_stop, FileWatchShowState,
@@ -567,6 +570,24 @@ pub fn mount_system_accent_color_show_screen(root_id: &str) -> Result<(), JsValu
         system_accent_color_show_web_screen(),
         SystemAccentColorShowState::default(),
         super::system_accent_color::system_accent_color_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「ファイルの関連付け」（Issue #419）をマウントする検証専用
+/// エントリポイント。`super::file_association::file_association_show_effect` を effect として渡すため、
+/// インストール済み PWA から `.txt` を開くと `launchQueue` 経由で受信結果が出る。
+/// Web は登録操作が不要（manifest の `file_handlers` のみ）なので登録ボタンは足さない。
+///
+/// 呼び出し元が渡す `root_id` の要素が見つからない場合はエラーを返す。
+#[wasm_bindgen]
+pub fn mount_file_association_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    super::mount::mount_with_effect(
+        root,
+        file_association_show_screen(),
+        FileAssociationShowState::default(),
+        super::file_association::file_association_show_effect,
     )
 }
 

@@ -86,6 +86,8 @@
 //!   純関数（`matchMedia` の結果 → 設定値・読み取り期限・dt）のみ `wasm32` gate の外に置く
 //! - [`system_accent_color`]: 「システムのアクセント色」画面の Web 経路（親 #103、Issue #423）。
 //!   純関数（計算済み色の解析・非対応判定）のみ `wasm32` gate の外に置く
+//! - [`file_association`]: 「ファイルの関連付け」画面の Web 経路（親 #102、Issue #419）。
+//!   純関数（ハンドルの検査・サイズ検査・失敗種別の写像）のみ `wasm32` gate の外に置く
 //! - [`screen_wake_lock`]: 「画面スリープの抑止」画面の Web 経路（親 #1129、Issue #1281）。
 //!   純関数（取得結果の写像・取り直し判定・世代照合）のみ `wasm32` gate の外に置く
 //! - [`compass`]: 「方位（コンパス）」画面の Web 経路（親 #1154、Issue #1407）。
@@ -179,6 +181,9 @@ pub mod audio_devices;
 /// 純関数（ブラウザの生値 → 表示用の読み取り結果）は native からもテストできるよう
 /// クレート単位の `wasm32` gate を外す。
 pub mod device_info;
+/// 型サンプル「ファイルの関連付け」の Web 経路（Issue #419）。[`accessibility_prefs`] と同じ理由で
+/// 純関数は native からもテストできるようクレート単位の `wasm32` gate を外す。
+pub mod file_association;
 /// 型サンプル「フォルダの変更監視」の Web 経路（Issue #1414）。[`location`] と同じ理由で
 /// 純関数（一覧の生値 → 走査結果・`type` → 合図・差分 → 記録）は native からもテストできるよう
 /// クレート単位の `wasm32` gate を外す。
