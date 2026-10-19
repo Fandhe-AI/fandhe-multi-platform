@@ -79,6 +79,11 @@ pub mod android_file_association;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_file_watch;
+/// Issue #458: Android 向けライト（トーチ）実装のスタブ（#461 が埋める）。
+/// `device/flashlight.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_flashlight;
 /// Issue #439: Android 向け集中モードの状態実装（`FocusModeStatusHelper` との JNI 橋渡し）。
 /// `device/focus_mode_status.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -416,6 +421,10 @@ pub mod file_pick;
 /// Phase 11 の拡充ループ（親 #1143、Issue #1410）: フォルダの変更監視の effect ドライバ（macOS 実装、
 /// Windows・iOS・Android は #1411〜#1413 で埋めるスタブ、他 OS は `UnsupportedFileWatch` 固定）。
 pub mod file_watch;
+/// Phase 11 の拡充ループ（親 #106、Issue #458）: ライト（トーチ）の effect ドライバ
+/// （iOS・Android・Windows は #460・#461・#459 で埋めるスタブ、他 OS は `UnsupportedFlashlight`
+/// 固定。Web は `fandhe-web-dom`）。
+pub mod flashlight;
 /// Phase 11 の拡充ループ（親 #104、Issue #438）: 集中モードの状態の effect ドライバ（Windows 実装、
 /// Android は JNI 実装、他 OS は `UnsupportedFocusStatus` 固定）。
 pub mod focus_mode_status;
@@ -509,6 +518,11 @@ pub mod ios_file_association;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_file_watch;
+/// Issue #458: iOS 向けライト（トーチ）実装のスタブ（#460 が埋める）。
+/// `device/flashlight.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_flashlight;
 /// Issue #1313: iOS 向け全画面表示実装（`ios/fandhe_ios_fullscreen_immersive.m` を呼ぶ
 /// C ABI ラッパー）。
 /// `device/fullscreen_immersive.rs` の iOS 経路から呼ばれる。
@@ -881,6 +895,11 @@ pub mod windows_file_association;
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_file_watch;
+/// Issue #458: Windows 向けライト（トーチ）実装のスタブ（#459 が埋める）。
+/// `device/flashlight.rs` の Windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_flashlight;
 /// Issue #438: Windows 向け集中モードの状態実装（WinRT `FocusSessionManager`）。
 /// `device/focus_mode_status.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
