@@ -21,11 +21,14 @@
       "note": "未実装。content URI が届くため読み取りは ContentResolver を使う。URL は一般的なインテントフィルタの文書で、報告外のため HTTP 応答のみ確認（内容は未精査）"
     },
     "macos": {
-      "status": "possible",
-      "api": "Info.plist `CFBundleDocumentTypes`。開く要求は `application(_:openURLs:)`",
-      "perm": "Info.plist の宣言（.app 化が前提）",
+      "status": "done",
+      "api": "Apple Event `kAEOpenDocuments`（winit の app delegate を差し替えない）+ Info.plist `CFBundleDocumentTypes`（`public.plain-text`、`LSHandlerRank=Alternate`）",
+      "perm": "Info.plist の宣言（.app 化が前提。bundle スクリプトが足す）",
       "url": "https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundledocumenttypes",
-      "note": "未実装。.app が LaunchServices に登録されて初めて有効"
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#414）",
+      "impl": "crates/fandhe-device/src/file_association.rs + crates/fandhe-egui-proxy/src/device/apple_file_association.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_file_association.m + crates/fandhe-egui-proxy/src/device/file_association.rs + crates/fandhe-core/src/screens/file_association_show.rs + scripts/apple/bundle-macos-url-scheme.sh、Issue #416",
+      "note": "実装済み（#416）。.txt を「このアプリケーションで開く」で渡すと、名前・サイズ・先頭 16 バイト・受信時刻を出す。既定アプリは奪わない（`LSHandlerRank=Alternate`）。ハンドラはイベントループ開始前に登録し、起動時の分も取りこぼさない。.app が LaunchServices に登録されて初めて有効で、Mac 目視用に `scripts/apple/bundle-macos-url-scheme.sh --screen file_association_show` で .app 化する。拡張子・名前の検査を通らないものは件数だけ数え、読めない・8 MiB 超・フォルダは失敗として理由を出す。守る範囲: 1 プロセス内の受信順、不正入力の非表示、コールドスタート分を落とさないこと。守らない範囲: 1 回の odoc で複数件届いたときは最後の 1 件だけ表示する、素の実行体（.app 化していないもの）には届かない、遅いボリュームでの main thread 同期読み取り、複数プロセス"
     },
     "windows": {
       "status": "possible",
@@ -43,5 +46,5 @@
       "safari": "非対応と認識"
     }
   },
-  "note": "url-scheme / deep-link（URL の受け取り）との違い: 本機能は拡張子・種別でファイルを受け取る。file-picker（利用者が選ぶ）とも別。今回の範囲: 自アプリ固有の拡張子 1 つを登録し、開かれたファイルのパスと先頭数バイトを画面に表示するだけ。"
+  "note": "url-scheme / deep-link（URL の受け取り）との違い: 本機能は拡張子・種別でファイルを受け取る。file-picker（利用者が選ぶ）とも別。今回の範囲: 拡張子 `.txt`（`text/plain`）1 つだけを、既定アプリを奪わない順位で登録し、開かれたファイルの名前・サイズ・先頭 16 バイトを画面に表示するだけ（中身は解釈しない）。守らない範囲: 複数プロセス・複数タブ、Windows の UserChoice や他アプリによる上書き、Web の未インストール PWA や Chromium 以外のブラウザ。"
 }

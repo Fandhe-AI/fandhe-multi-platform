@@ -90,6 +90,8 @@ pub mod background_task;
 
 /// Phase 11 の拡充ループ型サンプル「バックグラウンドダウンロード」（親 #100、Issue #390）。
 pub mod background_download;
+/// Phase 11 の拡充ループ型サンプル「ファイルの関連付け」（親 #102、Issue #416）。
+pub mod file_association_show;
 /// Phase 11 の拡充ループ型サンプル「システムトレイ」（親 #1038、Issue #1039）。
 pub mod system_tray;
 /// Phase 11 の拡充ループ型サンプル「カスタム URL scheme」（親 #1116、Issue #1215）。

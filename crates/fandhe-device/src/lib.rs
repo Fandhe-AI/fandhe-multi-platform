@@ -50,6 +50,8 @@ pub mod contact_picker;
 pub mod device_info;
 /// Phase 11（端末機能の拡充ループ、親 #1013、Issue #1014）: ドラッグ & ドロップ受け取り。
 pub mod drag_drop;
+/// Phase 11（端末機能の拡充ループ、親 #102、Issue #416）: ファイルの関連付け（OS から渡されたファイルを開く）。
+pub mod file_association;
 /// Phase 11（端末機能の拡充ループ、Issue #872）: ファイル選択ダイアログ。
 pub mod file_picker;
 /// Phase 11 の拡充ループ（親 #1143、Issue #1410）: 作業フォルダ直下のファイルの作成・更新・削除の監視。
