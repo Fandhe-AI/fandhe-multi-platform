@@ -110,6 +110,8 @@ pub mod now_playing;
 pub mod on_device_llm;
 /// Phase 11（端末機能の拡充ループ、親 #92、Issue #342）: パスキーの登録・サインイン要求（サーバー検証なし）。
 pub mod passkey;
+/// Phase 11（端末機能の拡充ループ、親 #107、Issue #469）: 埋め込み PDF の 1 ページ目の画像化と総ページ数。
+pub mod pdf_viewer;
 /// Phase 11（端末機能の拡充ループ、親 #1119、Issue #1247）: 歩数（累積歩数を 1 回取得）。
 pub mod pedometer;
 /// Phase 11（端末機能の拡充ループ、親 #95、Issue #355）: ペン・筆圧入力（種類・筆圧・傾き）。

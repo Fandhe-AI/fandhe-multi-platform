@@ -21,11 +21,14 @@
       "note": "未実装。beta 版で、Android 12 + SDK Extension 13 以上が必要（API 28 まで後方互換）。API が変わる可能性があるため要確認。"
     },
     "macos": {
-      "status": "possible",
-      "api": "PDFKit（macOS 10.4+）",
-      "perm": "なし（サンドボックスのファイルアクセスは要確認）",
-      "url": "https://developer.apple.com/documentation/pdfkit",
-      "note": "未実装。"
+      "status": "done",
+      "api": "CoreGraphics `CGPDFDocument` / `CGContextDrawPDFPage`（macOS 10.0+。PDFKit は使わない）",
+      "perm": "なし（メモリ上のバイト列だけを読む）",
+      "url": "https://developer.apple.com/documentation/coregraphics/cgpdfdocument",
+      "note": "実装済み（#469）。埋め込みのサンプル PDF（3 ページ、コードで生成）の 1 ページ目を長辺 1024px 以内の RGBA に描き、総ページ数と一緒に出す。成功は寸法・長さ・ページ数の検査を通ったものだけ。壊れている・暗号化・0 ページ・寸法不正・期限切れ（10 秒）は失敗として区別する。取り消しの操作と権限は無いので、キャンセル・権限拒否の失敗系は無い。守らない範囲: 任意の PDF・`/Rotate`・ボックスの違い、暗号化 PDF の実 API での確認、期限後も OS 側の描画が走り切ること、色の正確さ・所要時間。Mac 目視は #468。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#468）",
+      "impl": "`crates/fandhe-egui-proxy/src/device/apple_pdf_viewer.rs` + `crates/fandhe-egui-proxy/apple/fandhe_apple_pdf_viewer.m` + `crates/fandhe-egui-proxy/src/device/pdf_viewer.rs` + `crates/fandhe-core/src/screens/pdf_first_page.rs` + `crates/fandhe-device/src/pdf_viewer.rs`、Issue #469"
     },
     "windows": {
       "status": "possible",
@@ -43,5 +46,5 @@
       "note": "ブラウザ組み込みの PDF 表示は `<iframe>` / `<embed>` で出せるが、制御用の API は無い。pdf.js 等は OS / ブラウザの機能ではないため判定に使わない。"
     }
   },
-  "note": "iOS / macOS は PDFKit、Android は androidx.pdf（beta）、Windows は Windows.Data.Pdf。Web は制御できる標準 API が無く no。file-picker（既存 id）で選んだファイルを開く想定。今回の範囲: 同梱の PDF 1 枚の 1 ページ目を表示し、総ページ数を画面に出す（注釈・検索・ページ送りは扱わない）。"
+  "note": "iOS / macOS は PDFKit または CoreGraphics、Android は androidx.pdf（beta）または PdfRenderer、Windows は Windows.Data.Pdf。Web は制御できる標準 API が無く no。今回の範囲: アプリに埋め込んだ 3 ページのサンプル PDF（コードで生成）の 1 ページ目を長辺 1024px 以内の画像にして出し、総ページ数を画面に出す（利用者のファイル・注釈・検索・ページ送りは扱わない）。守らない範囲: 任意の PDF の描画の正確さ、暗号化 PDF の実 API での確認、色の正確さ、所要時間。"
 }

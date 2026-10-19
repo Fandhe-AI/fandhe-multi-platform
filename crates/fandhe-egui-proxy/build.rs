@@ -445,6 +445,8 @@ fn main() {
     compile_apple_ml_inference();
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
+    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + b-ios iOS）も共用する。
+    compile_apple_pdf_viewer();
     // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS + #346 iOS）も共用する。
     compile_apple_on_device_llm(true);
 
@@ -757,6 +759,19 @@ fn compile_apple_image_recognition() {
         .compile("fandhe_apple_image_recognition");
     println!("cargo:rustc-link-lib=framework=Vision");
     println!("cargo:rustc-link-lib=framework=Foundation");
+}
+
+/// `apple/fandhe_apple_pdf_viewer.m` を `cc` でコンパイルし CoreGraphics をリンクする
+/// （Issue #469 macOS、iOS は親 #107 の b-ios が利用、PDF の 1 ページ目の画像化）。
+/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_pdf_viewer`）と
+/// 同じ OS 集合に保つ。
+fn compile_apple_pdf_viewer() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_pdf_viewer.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_pdf_viewer.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_pdf_viewer");
+    println!("cargo:rustc-link-lib=framework=CoreGraphics");
 }
 
 /// `apple/fandhe_apple_media_transcode.m` を `cc` でコンパイルし AVFoundation をリンクする
@@ -1572,6 +1587,8 @@ fn build_macos() {
     compile_apple_on_device_llm(false);
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
+    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + b-ios iOS）も共用する。
+    compile_apple_pdf_viewer();
     // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308）。iOS 分岐と共用する。

@@ -274,6 +274,10 @@ generated_screens! {
     crate::device::media_transcode::media_transcode_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "pdf_first_page" => fandhe_core::screens::pdf_first_page::current_screen,
+    crate::device::pdf_viewer::pdf_first_page_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ml_infer" => fandhe_core::screens::ml_infer::current_screen,
     crate::device::ml_inference::ml_infer_effect,
     effect

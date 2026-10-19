@@ -152,6 +152,10 @@ pub mod android_network_status;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_now_playing;
+/// Issue #469: Android 向け PDF 表示のスタブ（親 #107 の b-android が `PdfRenderer` で埋める）。
+/// `device/pdf_viewer.rs` の Android 経路から呼ばれる。
+#[cfg(target_os = "android")]
+pub mod android_pdf_viewer;
 /// Issue #1247: Android 向け歩数実装のスタブ（#1249 が埋める）。`device/pedometer.rs` の
 /// Android 経路から呼ばれる。JNI の本体はモジュール内側の `cfg(target_os = "android")` に閉じ、
 /// 純関数をホストでテストできるよう cfg は `any(android, test)`。
@@ -324,6 +328,12 @@ pub mod apple_now_playing;
 /// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_on_device_llm;
+/// Issue #469: macOS / iOS 向け PDF 表示実装（`apple/fandhe_apple_pdf_viewer.m` の CoreGraphics を
+/// 呼ぶ C ABI ラッパー）。`device/pdf_viewer.rs` の macOS 経路と `ios_pdf_viewer`（親 #107 の b-ios）から
+/// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[cfg_attr(target_os = "ios", allow(dead_code))]
+pub mod apple_pdf_viewer;
 /// Issue #1254（macOS）/ #1255（iOS）: iOS / macOS 向け写真ライブラリ保存実装
 /// （`apple/fandhe_apple_photo_library.m` を呼ぶ C ABI ラッパー。iOS は #1255 までスタブ）。
 /// `device/photo_save.rs` の iOS / macOS 経路から呼ばれる。
@@ -581,6 +591,10 @@ pub mod ios_now_playing;
 /// `device/on_device_llm.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_on_device_llm;
+/// Issue #469: iOS 向け PDF 表示のスタブ（親 #107 の b-ios が macOS と共用の `ApplePdfPageRenderer` を返す形へ差し替える）。
+/// `device/pdf_viewer.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_pdf_viewer;
 /// Issue #1248: iOS 向け歩数実装（#1247 のスタブを置き換え）。`device/pedometer.rs` の iOS
 /// 経路から呼ばれる。FFI の本体はモジュール内側の `cfg(target_os = "ios")` に閉じ、
 /// 純関数をホストでテストできるよう cfg は `any(ios, test)`。
@@ -755,6 +769,9 @@ pub mod on_device_llm;
 /// Phase 11 の拡充ループ（親 #92、Issue #342）: パスキーの effect ドライバ（Windows はワーカー +
 /// pull 型 bridge、実装は #343 が埋める。他 OS は `UnsupportedPasskey` 固定。Web は `fandhe-web-dom`）。
 pub mod passkey;
+/// Phase 11 の拡充ループ（親 #107、Issue #469）: PDF 表示（1 ページ目の画像化）の effect ドライバ
+/// （macOS 実装、iOS / Windows / Android は子 issue が埋めるスタブ、他 OS は `UnsupportedPdfPageRenderer` 固定）。
+pub mod pdf_viewer;
 /// Phase 11 の拡充ループ（親 #1119、Issue #1247）: 歩数の effect ドライバ（Windows 実装、
 /// iOS・Android は #1248・#1249 で埋めるスタブ、他 OS は `UnsupportedPedometer` 固定）。
 pub mod pedometer;
@@ -974,6 +991,10 @@ pub mod windows_now_playing;
 /// `device/passkey.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_passkey;
+/// Issue #469: Windows 向け PDF 表示のスタブ（親 #107 の windows の子が `Windows.Data.Pdf` で埋める）。
+/// `device/pdf_viewer.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_pdf_viewer;
 /// Issue #1247: Windows 向け歩数実装（WinRT `Pedometer` ラッパー）。
 /// `device/pedometer.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
