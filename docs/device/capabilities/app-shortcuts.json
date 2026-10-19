@@ -17,11 +17,14 @@
       "impl": "platforms/apple/FandheIosApp/Resources/Info.plist + crates/fandhe-egui-proxy/ios/fandhe_ios_scene.m + crates/fandhe-egui-proxy/ios/fandhe_ios_url_scheme.m + crates/fandhe-egui-proxy/src/device/apple_url_scheme.rs + crates/fandhe-egui-proxy/src/device/ios_app_shortcuts.rs + crates/fandhe-egui-proxy/src/device/app_shortcuts.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + crates/fandhe-device/src/app_shortcuts.rs、Issue #425"
     },
     "android": {
-      "status": "possible",
-      "api": "`ShortcutManager`（静的・動的・ピン留めショートカット）",
+      "status": "done",
+      "api": "`ShortcutManager.setDynamicShortcuts`（API 25+、明示 intent の `ACTION_VIEW` に `SINGLE_TOP` と `CLEAR_TOP`）。静的ショートカットは `CLEAR_TASK` 固定で MainActivity を作り直すため不採用（#259）",
       "perm": "なし",
       "url": "https://developer.android.com/develop/ui/views/launch/shortcuts",
-      "note": "未実装。起動は intent で届き、url-scheme と同じ経路を共有できる見込み（要確認）"
+      "note": "実装済み（#426）。画面を一度開いたときに 1 回だけ登録し、選ぶと `fandhe://shortcut/open-demo` が既存の url-scheme 経路（`onNewIntent` / `onCreate`）で受け口に入る。API 24 は非対応。守らない範囲: 画面を開くまで出ない、他アプリからの同じ URL と区別しない、ランチャーごとの表示差、失敗後にプロセス内で再試行しない",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#413）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_app_shortcuts.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/AppShortcutsHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/app_shortcuts.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + crates/fandhe-device/src/app_shortcuts.rs、Issue #426"
     },
     "macos": {
       "status": "done",
