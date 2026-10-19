@@ -52,9 +52,14 @@ final class FileAssociationHelper {
     static final int CODE_UNREADABLE = 2;
     static final int CODE_FOLDER = 3;
 
-    // 受信順を保つ配送役。待ち行列は有界で、溢れた分は UNREADABLE で確定する。
+    // 受信順を保つ配送役。実処理の待ちは MAX_PENDING 件まで。溢れた要求は処理を持たない
+    // 失敗通知として同じキューの末尾に積み、先行要求より先に結果が届かないようにする。
     private static final ExecutorService EXECUTOR =
-            new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(32));
+            new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+    private static final int MAX_PENDING = 32;
+    private static final AtomicInteger PENDING = new AtomicInteger();
+    // 末尾が溢れ通知のとき、連続する溢れ要求は 1 件の通知にまとめる（キューの肥大を防ぐ）。
+    private static boolean tailIsOverflow;
 
     // ContentProvider 呼び出し（getType・query・openFileDescriptor・読み取り）全体の期限。
     // 期限の起点は配送役が worker を起動した時点（単調時計）。
@@ -126,12 +131,23 @@ final class FileAssociationHelper {
         return true;
     }
 
-    private static void submit(Runnable r) {
-        try {
-            EXECUTOR.execute(r);
-        } catch (RejectedExecutionException e) {
-            nativeOnFileOpened(CODE_UNREADABLE, null, null, -1);
+    private static synchronized void submit(Runnable r) {
+        if (PENDING.get() >= MAX_PENDING) {
+            if (!tailIsOverflow) {
+                tailIsOverflow = true;
+                EXECUTOR.execute(() -> nativeOnFileOpened(CODE_UNREADABLE, null, null, -1));
+            }
+            return;
         }
+        tailIsOverflow = false;
+        PENDING.incrementAndGet();
+        EXECUTOR.execute(() -> {
+            try {
+                r.run();
+            } finally {
+                PENDING.decrementAndGet();
+            }
+        });
     }
 
     /** 配送役。worker に全処理を任せ、期限内の結果だけを順に Rust へ渡す。 */
@@ -244,6 +260,9 @@ final class FileAssociationHelper {
                     }
                     int n = in.read(buf, 0, (int) Math.min(buf.length, READ_LIMIT_BYTES - total));
                     if (n < 0) {
+                        // reliable pipe の書き側が closeWithError した場合も EOF になるため、
+                        // 途中切れを成功にしないよう provider のエラーを例外へ変換する。
+                        pfd.checkError();
                         break;
                     }
                     out.write(buf, 0, n);
