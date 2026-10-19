@@ -136,33 +136,41 @@ fn win_end_set() -> bool {
     again
 }
 
+/// 最小化消灯の結果を状態へ反映する。読み戻した値をそのまま `apply_read` に渡すので、
+/// `Unsupported`・読み取り失敗は成功値で上書きされない。消灯失敗かつ消灯未確認なら失敗を表示する。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn apply_minimize_off(
+    s: &mut FlashlightToggleState,
+    set_ok: bool,
+    read: Result<Option<bool>, FlashlightFailure>,
+) {
+    let still_on = !set_ok && read != Ok(Some(false));
+    apply_read(s, read);
+    if still_on {
+        s.error = format!(
+            "{}{}",
+            fandhe_core::screens::flashlight_toggle::FAILED_PREFIX,
+            fandhe_core::screens::flashlight_toggle::READ_FAILED
+        );
+    }
+}
+
 /// 最小化中の消灯（実行権を保持して呼ぶ）。失敗は読み戻した値つきで状態へ通知し、
 /// 最小化が続く間は `READ_INTERVAL` ごとに再試行する。終わったら実行権を手放す。
 #[cfg(target_os = "windows")]
 fn minimize_off(light: &dyn Flashlight, sender: &CompletionSender<FlashlightToggleState>) {
     loop {
-        if light.set_on(false).is_ok() {
-            let _ = sender.send(Box::new(|s: &mut FlashlightToggleState| {
-                if s.phase == FlashlightPhase::Idle {
-                    apply_read(s, Ok(Some(false)));
-                }
-            }));
-            break;
-        }
+        // 成功時も読み戻した値を通知する（Lamp 未保持の成功で確定済みの Unsupported を消さない）。
+        let set_ok = light.set_on(false).is_ok();
         let read = light.is_on().map_err(to_failure);
         let _ = sender.send(Box::new(move |s: &mut FlashlightToggleState| {
             if s.phase == FlashlightPhase::Idle {
-                let still_on = read != Ok(Some(false));
-                apply_read(s, read.clone());
-                if still_on {
-                    s.error = format!(
-                        "{}{}",
-                        fandhe_core::screens::flashlight_toggle::FAILED_PREFIX,
-                        fandhe_core::screens::flashlight_toggle::READ_FAILED
-                    );
-                }
+                apply_minimize_off(s, set_ok, read.clone());
             }
         }));
+        if set_ok {
+            break;
+        }
         sender.request_repaint_after(READ_INTERVAL);
         std::thread::sleep(READ_INTERVAL);
         if !MINIMIZED.load(Ordering::Acquire) {
@@ -474,6 +482,15 @@ mod tests {
             }
             n
         }
+    }
+
+    #[test]
+    fn minimize_off_keeps_unsupported_after_success() {
+        let mut s = FlashlightToggleState::default();
+        apply_read(&mut s, Err(FlashlightFailure::Unsupported));
+        apply_minimize_off(&mut s, true, Err(FlashlightFailure::Unsupported));
+        assert!(s.unsupported);
+        assert_eq!(s.on, None);
     }
 
     #[test]
