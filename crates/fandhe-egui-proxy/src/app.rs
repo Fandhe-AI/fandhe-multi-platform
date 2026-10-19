@@ -126,6 +126,13 @@ impl<S> CompletionSender<S> {
         self.ctx.input(|i| i.raw.focused)
     }
 
+    /// ウィンドウが最小化されているか（`egui::ViewportInfo::minimized` への薄い委譲）。
+    /// `device/flashlight.rs` の Windows 最小化検知専用（最小化したらライトを消す）。
+    #[cfg_attr(not(all(target_os = "windows", feature = "device")), allow(dead_code))]
+    pub(crate) fn minimized(&self) -> bool {
+        self.ctx.input(|i| i.viewport().minimized == Some(true))
+    }
+
     /// ポインタの主ボタン（左クリック/タップ）がこのフレームで押下中か
     /// （`egui::PointerState::primary_down` への薄い委譲）。Issue #912「文字サイズ追従」の
     /// effect ドライバ（`device/text_scale.rs::drive`）専用。スライダーのドラッグ中は

@@ -364,6 +364,8 @@ windows = { workspace = true, optional = true, features = [
     # `SimpleHapticsController`（`Devices_Haptics`）と、`SupportedFeedback` が返す
     # `IVectorView`（`Foundation_Collections`）を呼ぶ。新規パッケージは増えない。
     "Devices_Haptics",
+    # Issue #459: `device/windows_flashlight.rs` が `Lamp`（`Devices_Lights`）を呼ぶ。新規パッケージは増えない。
+    "Devices_Lights",
     "Foundation_Collections",
     # Issue #1094: `device/windows_nlp.rs` が `WordsSegmenter` / `WordSegment`
     # （`Data_Text`）を呼ぶ。新規パッケージは増えない。

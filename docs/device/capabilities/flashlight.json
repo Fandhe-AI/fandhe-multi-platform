@@ -28,11 +28,14 @@
       "note": "Mac にライト（トーチ）の概念が無い。"
     },
     "windows": {
-      "status": "possible",
-      "api": "`Windows.Devices.Lights.Lamp`（カメラ横のライト）",
-      "perm": "要確認（package identity の要否は文書に記載なし）",
+      "status": "done",
+      "api": "`Windows.Devices.Lights.Lamp`（`GetDefaultAsync` / `IsEnabled` / `SetIsEnabled` / `Close`）",
+      "perm": "不要（capability の記載なし（Lamp class と Camera-independent Flashlight の文書）。unpackaged で動くかは実機で確認）",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.lights.lamp",
-      "note": "搭載機種のみ。非搭載なら `GetDefaultAsync` が null"
+      "note": "実装済み。点灯のときだけワーカーで `GetDefaultAsync` を呼んで `Lamp` を保持し、消灯で `Close` して手放す。null（非搭載）は `Unsupported`。消灯に失敗したら保持を続け、`IsEnabled` の実値を出す。最小化したら自分から消灯し、戻っても点け直さない。守らない範囲: `AvailabilityChanged` の購読、最初の点灯要求までは搭載の有無が分からず「消灯しています」と出ること、終了時の後片付け（OS に任せる）、`GetDefaultAsync` の期限。参考: https://learn.microsoft.com/en-us/windows/uwp/audio-video-camera/camera-independent-flashlight 。既知の天井: パッケージ無しの素の exe から届くかは実機未確認で、届かないと判明したらこの `done` を取り下げる。Windows 実機での確認は #456",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#456）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_flashlight.rs + crates/fandhe-egui-proxy/src/device/flashlight.rs + crates/fandhe-core/src/screens/flashlight_toggle.rs + crates/fandhe-device/src/flashlight.rs、Issue #459"
     },
     "web": {
       "status": "possible",

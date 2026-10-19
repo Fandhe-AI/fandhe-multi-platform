@@ -16,14 +16,20 @@
 //!
 //! dispatch（[`implementation`]）は全対象 OS の最終形。iOS・Android・Windows は後続の子
 //! （#460・#461・#459）が埋めるスタブ、それ以外は `UnsupportedFlashlight` 固定。Web は
-//! `fandhe-web-dom` 側（#462）。Windows の最小化での消灯は #459 の担当。
+//! `fandhe-web-dom` 側（#462）。
+//!
+//! Windows は最小化を検知したら（`Idle` かつ点灯中のとき）自分から `turn_off` を送り、通常の
+//! `Requested` → ワーカー → 確認の経路で消灯する。戻っても点け直さない。消灯に失敗して
+//! 最小化が続く間は、1 秒の pull に合わせて再試行するだけ。
 
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "windows")]
+use fandhe_core::screens::flashlight_toggle::turn_off;
 use fandhe_core::screens::flashlight_toggle::{
     apply_read, confirm_target, finish, mark_applying, mark_confirming, take_request,
-    FlashlightFailure, FlashlightToggleState,
+    FlashlightFailure, FlashlightPhase, FlashlightToggleState,
 };
 #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "windows")))]
 use fandhe_device::flashlight::UnsupportedFlashlight;
@@ -226,11 +232,23 @@ fn drive(
     }));
 }
 
+/// 最小化中に点いたままなら消灯を要求すべきか。`Idle` 以外は進行中の要求があるので待つ。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn should_turn_off_on_minimize(state: &FlashlightToggleState, minimized: bool) -> bool {
+    minimized && state.phase == FlashlightPhase::Idle && state.on == Some(true)
+}
+
 /// `registry.rs` の `effect` 区画から `flashlight_toggle` 画面用に配線される effect ドライバ。
 pub fn flashlight_toggle_effect(
     state: &FlashlightToggleState,
     sender: &CompletionSender<FlashlightToggleState>,
 ) {
+    #[cfg(target_os = "windows")]
+    if should_turn_off_on_minimize(state, sender.minimized()) {
+        // 経路は 1 本のまま: 次のフレームから通常の消灯要求として処理される。
+        let _ = sender.send(Box::new(turn_off));
+        return;
+    }
     let mut timing = TIMING
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -469,6 +487,31 @@ mod tests {
         h.frame(&light, 1000);
         assert_eq!(h.state.on, None);
         assert!(error_text(&h.state).starts_with(FAILED_PREFIX));
+    }
+
+    #[test]
+    fn minimize_turns_off_only_when_idle_and_on() {
+        let st = |phase, on| FlashlightToggleState {
+            phase,
+            on,
+            ..FlashlightToggleState::default()
+        };
+        let idle_on = st(FlashlightPhase::Idle, Some(true));
+        assert!(should_turn_off_on_minimize(&idle_on, true));
+        assert!(!should_turn_off_on_minimize(&idle_on, false));
+        for phase in [
+            FlashlightPhase::Requested,
+            FlashlightPhase::Applying,
+            FlashlightPhase::Confirming,
+        ] {
+            assert!(!should_turn_off_on_minimize(&st(phase, Some(true)), true));
+        }
+        for on in [Some(false), None] {
+            assert!(!should_turn_off_on_minimize(
+                &st(FlashlightPhase::Idle, on),
+                true
+            ));
+        }
     }
 
     #[test]
