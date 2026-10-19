@@ -74,7 +74,7 @@ pub mod android_file_association;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_file_watch;
-/// Issue #438: Android 向け集中モードの状態実装のスタブ（b-android が埋める）。
+/// Issue #439: Android 向け集中モードの状態実装（`FocusModeStatusHelper` との JNI 橋渡し）。
 /// `device/focus_mode_status.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -403,7 +403,7 @@ pub mod file_pick;
 /// Windows・iOS・Android は #1411〜#1413 で埋めるスタブ、他 OS は `UnsupportedFileWatch` 固定）。
 pub mod file_watch;
 /// Phase 11 の拡充ループ（親 #104、Issue #438）: 集中モードの状態の effect ドライバ（Windows 実装、
-/// Android は JNI 実装（スタブ）、他 OS は `UnsupportedFocusStatus` 固定）。
+/// Android は JNI 実装、他 OS は `UnsupportedFocusStatus` 固定）。
 pub mod focus_mode_status;
 /// Phase 11 の拡充ループ（親 #1133、Issue #1312）: 全画面表示の effect ドライバ（macOS/Windows は
 /// eframe の viewport コマンド、iOS/Android は #1313/#1314 で埋めるスタブ、他 OS は
