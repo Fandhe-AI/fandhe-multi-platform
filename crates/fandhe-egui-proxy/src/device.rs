@@ -152,9 +152,10 @@ pub mod android_network_status;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_now_playing;
-/// Issue #469: Android 向け PDF 表示のスタブ（親 #107 の b-android が `PdfRenderer` で埋める）。
-/// `device/pdf_viewer.rs` の Android 経路から呼ばれる。
-#[cfg(target_os = "android")]
+/// Issue #472: Android 向け PDF 表示の実装（`PdfRenderer`）。
+/// `device/pdf_viewer.rs` の Android 経路から呼ばれる。応答の解読をホストでテストするため test でも載せる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_pdf_viewer;
 /// Issue #1247: Android 向け歩数実装のスタブ（#1249 が埋める）。`device/pedometer.rs` の
 /// Android 経路から呼ばれる。JNI の本体はモジュール内側の `cfg(target_os = "android")` に閉じ、
