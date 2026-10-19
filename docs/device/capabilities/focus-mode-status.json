@@ -8,10 +8,15 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "Intents `INFocusStatusCenter`（`focusStatus.isFocused`）",
-      "perm": "要確認（Focus Status の許可 `NSFocusStatusUsageDescription` と Capability が要るはず。未確認）",
-      "url": "",
-      "note": "未実装。URL 未確認。調査では iOS 側を取得していない（Android 調査での言及のみ）。他アプリへ共有する設定をユーザーが許可した場合のみ値が来る点を含め要確認"
+      "api": "Intents `INFocusStatusCenter`（`focusStatus.isFocused`。iOS 15+。アプリ内に変更通知は無く、変更は Intents Extension の `INShareFocusStatusIntent` で受ける）",
+      "perm": "`NSFocusStatusUsageDescription` と `requestAuthorizationWithCompletionHandler:` による許可、Communication Notifications capability（`com.apple.developer.usernotifications.communication`。provisioning profile が要り、有料の Apple Developer Program のみ。無料登録では不可）",
+      "url": [
+        "https://developer.apple.com/documentation/intents/infocusstatuscenter",
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/nsfocusstatususagedescription",
+        "https://developer.apple.com/documentation/usernotifications/handling-communication-notifications-and-focus-status-updates"
+      ],
+      "note": "未実装。未許可・capability なしでは `isFocused` が nil になる",
+      "deferred": "Communication Notifications capability は有料の Apple Developer Program でしか provisioning profile に載らない。開発者登録が期限切れのため保留。ベンダーの個別審査は不要で、登録を再開すれば着手できる"
     },
     "android": {
       "status": "possible",
@@ -22,10 +27,13 @@
     },
     "macos": {
       "status": "possible",
-      "api": "Intents `INFocusStatusCenter`（iOS と同じ）",
-      "perm": "要確認",
-      "url": "",
-      "note": "未実装。URL 未確認。macOS での提供有無は要確認"
+      "api": "Intents `INFocusStatusCenter`（macOS 12.0+。実行体の最低版 11.0 から `@available` で分岐する）",
+      "perm": "iOS と同じ（許可と Communication Notifications capability。有料の Apple Developer Program のみ）",
+      "url": [
+        "https://developer.apple.com/documentation/intents/infocusstatuscenter"
+      ],
+      "note": "未実装",
+      "deferred": "Communication Notifications capability は有料の Apple Developer Program でしか provisioning profile に載らない（制限付き entitlement のため profile なしでは起動を拒否される）。開発者登録が期限切れのため保留。ベンダーの個別審査は不要で、登録を再開すれば着手できる"
     },
     "windows": {
       "status": "possible",
