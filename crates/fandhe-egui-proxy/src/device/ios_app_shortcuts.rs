@@ -1,30 +1,52 @@
-//! iOS 向けアプリショートカット実装のスタブ（Issue #424、親 #101）。常に `Unsupported` を返す。
+//! iOS 向けアプリショートカット実装（Issue #425、親 #101）。
 //! `device/app_shortcuts.rs::platform` の iOS 経路から呼ばれ、契約は
 //! `fandhe_device::app_shortcuts`。
 //!
-//! 兄弟 issue（b-ios）がこのファイルの中身だけを埋める。シグネチャと dispatch
-//! （`device/app_shortcuts.rs`）は変えない。
-//! 埋める側の申し送り: `Registration::Declared` を返す。Info.plist の
-//! `UIApplicationShortcutItems`（静的）と、scene delegate / `application:performActionForShortcutItem:`
-//! の 2 経路から、`fandhe_core::screens::url_scheme_show::SHORTCUT_URL` を `UrlInbox` へ渡す。
+//! 登録は Info.plist の `UIApplicationShortcutItems`（静的）だけで、OS がインストール時に行う。
+//! 受信は scene delegate（`ios/fandhe_ios_scene.m`）→ 通知 → `apple_url_scheme` の `UrlInbox`
+//! で、新しい受け口は持たない。表示されたかはアプリから確かめられないため `Declared` を返し、
+//! `Installed` は返さない（嘘の成功を避ける）。
+//! 守らない範囲: 他アプリが同じ URL を送った場合との区別、表示数の上限（OS 次第）、
+//! 項目の動的な書き換え。
 
-use fandhe_device::app_shortcuts::{AppShortcuts, UnsupportedAppShortcuts};
+use fandhe_device::app_shortcuts::{AppShortcuts, Registration};
+use fandhe_device::DeviceError;
 
-/// iOS の実装を返す（b-ios が実体に差し替える）。
+struct IosAppShortcuts;
+
+impl AppShortcuts for IosAppShortcuts {
+    fn install(&self) -> Result<Registration, DeviceError> {
+        Ok(Registration::Declared)
+    }
+}
+
+/// iOS の実装を返す。
 pub(crate) fn implementation() -> &'static dyn AppShortcuts {
-    &UnsupportedAppShortcuts
+    &IosAppShortcuts
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::DeviceError;
+    use fandhe_core::screens::url_scheme_show::{SHORTCUT_TITLE, SHORTCUT_URL};
 
     #[test]
-    fn stub_is_unsupported() {
+    fn install_is_declared_only() {
         assert!(matches!(
             implementation().install(),
-            Err(DeviceError::Unsupported(_))
+            Ok(Registration::Declared)
         ));
+    }
+
+    /// Info.plist の静的項目が画面の定数とずれていないこと。
+    #[test]
+    fn info_plist_matches_screen_constants() {
+        let plist = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../platforms/apple/FandheIosApp/Resources/Info.plist"
+        ));
+        assert!(plist.contains("<key>UIApplicationShortcutItems</key>"));
+        assert!(plist.contains(&format!("<string>{SHORTCUT_URL}</string>")));
+        assert!(plist.contains(&format!("<string>{SHORTCUT_TITLE}</string>")));
     }
 }

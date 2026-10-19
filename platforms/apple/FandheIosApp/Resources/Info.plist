@@ -33,6 +33,14 @@
   （`UIApplication openURL:`）は範囲外のため `LSApplicationQueriesSchemes` は足さない
   （security.md A05）。
 
+  UIApplicationShortcutItems（Issue #425）: 型サンプル「URL scheme 受信」画面
+  （`FANDHE_PROXY_APP=url_scheme_show`）のホーム画面長押しメニュー項目を静的に宣言する。
+  登録はインストール時に OS が行い、表示できたかはアプリから確かめられないため、画面には
+  「宣言済み」と出す。type は URL としてそのまま `UrlInbox` へ渡す（受信側は
+  `crates/fandhe-egui-proxy/ios/fandhe_ios_scene.m`）。type・title は
+  `crates/fandhe-core/src/screens/url_scheme_show.rs` の `SHORTCUT_URL`・`SHORTCUT_TITLE` と
+  揃え、ホストのテスト（`device/ios_app_shortcuts.rs`）で照合する。アイコンは付けない。
+
   CFBundleDocumentTypes・LSSupportsOpeningDocumentsInPlace（Issue #417）: 型サンプル「ファイルの
   関連付け」が `.txt`（`public.plain-text`）を受けるために宣言する。`LSHandlerRank=Alternate` で
   既定アプリを奪わない。`LSSupportsOpeningDocumentsInPlace=false` のため OS が `Documents/Inbox/`
@@ -152,6 +160,15 @@
 	<string>1</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>デモを開く</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>fandhe://shortcut/open-demo</string>
+		</dict>
+	</array>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>
