@@ -325,11 +325,12 @@ fn drive(
     }));
 }
 
-/// 最小化中に消灯を要求すべきか。確実に消えている（`Idle` で点灯でない）とき以外は要求する。
+/// 最小化中に消灯を要求すべきか。消灯を確認できている（`Idle` で `Some(false)`）とき以外は要求する。
+/// `None`（読み取り不能）は消灯の確認ではないため、Lamp を保持したまま点灯している場合に備えて試行する。
 /// 進行中の点灯（Requested / Applying / Confirming）は結果が点灯になりうるため。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 fn should_turn_off_on_minimize(state: &FlashlightToggleState, minimized: bool) -> bool {
-    minimized && !(state.phase == FlashlightPhase::Idle && state.on != Some(true))
+    minimized && !(state.phase == FlashlightPhase::Idle && state.on == Some(false))
 }
 
 /// `registry.rs` の `effect` 区画から `flashlight_toggle` 画面用に配線される effect ドライバ。
@@ -608,7 +609,7 @@ mod tests {
     }
 
     #[test]
-    fn minimize_turns_off_unless_idle_and_not_on() {
+    fn minimize_turns_off_unless_idle_and_confirmed_off() {
         let st = |phase, on| FlashlightToggleState {
             phase,
             on,
@@ -625,12 +626,15 @@ mod tests {
             assert!(should_turn_off_on_minimize(&st(phase, Some(false)), true));
             assert!(!should_turn_off_on_minimize(&st(phase, Some(false)), false));
         }
-        for on in [Some(false), None] {
-            assert!(!should_turn_off_on_minimize(
-                &st(FlashlightPhase::Idle, on),
-                true
-            ));
-        }
+        assert!(!should_turn_off_on_minimize(
+            &st(FlashlightPhase::Idle, Some(false)),
+            true
+        ));
+        // 読み取り不能（None）でも最小化時は消灯を試みる
+        assert!(should_turn_off_on_minimize(
+            &st(FlashlightPhase::Idle, None),
+            true
+        ));
     }
 
     #[test]
