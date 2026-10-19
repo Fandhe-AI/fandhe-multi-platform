@@ -18,15 +18,18 @@
 //! （#460・#461・#459）が埋めるスタブ、それ以外は `UnsupportedFlashlight` 固定。Web は
 //! `fandhe-web-dom` 側（#462）。
 //!
-//! Windows は最小化を検知したら（`Idle` かつ点灯中のとき）自分から `turn_off` を送り、通常の
-//! `Requested` → ワーカー → 確認の経路で消灯する。戻っても点け直さない。消灯に失敗して
-//! 最小化が続く間は、`READ_INTERVAL` 以上の間隔を空けて再試行するだけ。
+//! Windows は最小化を検知したら（`Idle` かつ点灯中のとき）、その同じフレームでワーカーを
+//! 起こして `set_on(false)` を実行する。最小化中は eframe が次フレームを描かないため、
+//! 状態経由（`turn_off` → 次フレームの `take_request`）にすると消灯が復帰まで遅れる。
+//! 戻っても点け直さない。ワーカーは同時に 1 本まで（`MINIMIZE_OFF_BUSY`）で、消灯に失敗して
+//! 最小化が続く間は `READ_INTERVAL` 以上の間隔を空けて再試行するだけ。結果は `Idle` のときだけ
+//! 状態へ反映する（利用者の要求が走っていれば、そちらの確定を優先する）。
 
+#[cfg(target_os = "windows")]
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-#[cfg(target_os = "windows")]
-use fandhe_core::screens::flashlight_toggle::turn_off;
 use fandhe_core::screens::flashlight_toggle::{
     apply_read, confirm_target, finish, mark_applying, mark_confirming, take_request,
     FlashlightFailure, FlashlightPhase, FlashlightToggleState,
@@ -95,6 +98,10 @@ static TIMING: Mutex<Timing> = Mutex::new(Timing {
     confirm: None,
     last_minimize_off: None,
 });
+
+/// 最小化時の消灯ワーカーが走行中か（二重起動の防止）。
+#[cfg(target_os = "windows")]
+static MINIMIZE_OFF_BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// `set_on` を呼んで結果を送る。Windows ではワーカー、他の OS では UI スレッドから呼ばれる。
 fn run_set(
@@ -257,10 +264,28 @@ pub fn flashlight_toggle_effect(
             .last_minimize_off
             .is_none_or(|prev| now.saturating_duration_since(prev) >= READ_INTERVAL);
         // 失敗後に毎フレーム再送しないよう、間隔内は通常経路（pull の予約つき）へ落とす。
-        if retry_due && should_turn_off_on_minimize(state, sender.minimized()) {
+        if retry_due
+            && should_turn_off_on_minimize(state, sender.minimized())
+            && !MINIMIZE_OFF_BUSY.swap(true, Ordering::AcqRel)
+        {
             timing.last_minimize_off = Some(now);
-            // 経路は 1 本のまま: 次のフレームから通常の消灯要求として処理される。
-            let _ = sender.send(Box::new(turn_off));
+            let worker_sender = sender.clone();
+            let light = implementation();
+            let spawned = std::thread::Builder::new()
+                .name("flashlight-minimize-off".to_string())
+                .spawn(move || {
+                    if light.set_on(false).is_ok() {
+                        let _ = worker_sender.send(Box::new(|s: &mut FlashlightToggleState| {
+                            if s.phase == FlashlightPhase::Idle {
+                                apply_read(s, Ok(Some(false)));
+                            }
+                        }));
+                    }
+                    MINIMIZE_OFF_BUSY.store(false, Ordering::Release);
+                });
+            if spawned.is_err() {
+                MINIMIZE_OFF_BUSY.store(false, Ordering::Release);
+            }
             return;
         }
     }
