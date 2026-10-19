@@ -31,7 +31,7 @@ pub mod android_accessibility_prefs;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_app_badge;
-/// Issue #424: Android 向けアプリショートカット実装（スタブ。兄弟 issue が中身を埋める）。
+/// Issue #426: Android 向けアプリショートカット実装（`ShortcutManager` の動的ショートカット）。
 /// `device/app_shortcuts.rs` の android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
