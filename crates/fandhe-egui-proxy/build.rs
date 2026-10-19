@@ -34,6 +34,9 @@
 //! - `apple/fandhe_apple_background_download.m`（Issue #390、background `NSURLSession` による OS 管理の
 //!   バックグラウンドダウンロード）は macOS・iOS の両分岐で feature `device` 有効時にコンパイルする
 //!   （`src/device/apple_background_download.rs` から呼ばれる契約）。Foundation のみで追加のリンクは不要。
+//! - `apple/fandhe_apple_file_association.m`（Issue #416、Apple Event `kAEOpenDocuments` によるファイルの
+//!   関連付け受信）は macOS・iOS の両分岐で feature `device` 有効時にコンパイルする（`src/device/
+//!   apple_file_association.rs` から呼ばれる契約。iOS 側の中身は b-ios が書く）。追加のリンクは不要。
 //! - `apple/fandhe_apple_now_playing.m`（Issue #381 macOS・#382 iOS。MediaPlayer の `MPNowPlayingInfoCenter` /
 //!   `MPRemoteCommandCenter` による OS の「再生中」表示とメディアキー。`src/device/apple_now_playing.rs` から呼ばれる契約）。
 //!   MediaPlayer をリンクする。
@@ -481,6 +484,8 @@ fn main() {
     compile_apple_picture_in_picture(true);
     // `apple/fandhe_apple_background_download.m`（Issue #390）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_background_download();
+    // `apple/fandhe_apple_file_association.m`（Issue #416）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
+    compile_apple_file_association();
     // `apple/fandhe_apple_media_cast.m`（Issue #387）。macOS 分岐と共用する。AVKit を使う。
     compile_apple_media_cast(true);
     // `apple/fandhe_apple_now_playing.m`（Issue #381 macOS + #382 iOS）。macOS 分岐と共用する。MediaPlayer を使う。
@@ -978,6 +983,17 @@ fn compile_apple_background_download() {
         .file("apple/fandhe_apple_background_download.m")
         .flag("-fobjc-arc")
         .compile("fandhe_apple_background_download");
+}
+
+/// `apple/fandhe_apple_file_association.m` を `cc` でコンパイルする（Issue #416）。macOS・iOS 双方の
+/// 分岐から呼ばれる（`src/device/apple_file_association.rs` が使う）。AppKit・CoreServices は macOS 分岐で
+/// 既にリンク済み。iOS では中身が空（b-ios が書く）。
+fn compile_apple_file_association() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_file_association.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_file_association.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_file_association");
 }
 
 /// `apple/fandhe_apple_media_playback.m` を `cc` でコンパイルする（Issue #267）。`AVAudioPlayer` を使い、
@@ -1530,6 +1546,8 @@ fn build_macos() {
     compile_apple_picture_in_picture(false);
     // `apple/fandhe_apple_background_download.m`（Issue #390）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_background_download();
+    // `apple/fandhe_apple_file_association.m`（Issue #416）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
+    compile_apple_file_association();
     // `apple/fandhe_apple_now_playing.m`（Issue #381）。iOS 分岐と共用する。MediaPlayer を使う。
     compile_apple_now_playing();
     // `macos/fandhe_macos_local_fonts.m`（Issue #1376）も macOS 専用。AppKit は既存のリンクで足りる。

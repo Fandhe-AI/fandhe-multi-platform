@@ -316,6 +316,13 @@ mod tests {
         assert!(registered_names().contains(&"url_scheme_show"));
     }
 
+    /// `effect` 区画（Issue #416）で登録した file_association_show 画面が現れることを検証する。
+    #[test]
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    fn file_association_show_is_registered() {
+        assert!(registered_names().contains(&"file_association_show"));
+    }
+
     /// `effect` 区画（Issue #1065）で登録した home_widget_show 画面が現れることを検証する。
     #[test]
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]

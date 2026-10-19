@@ -64,6 +64,11 @@ pub mod android_compose_mail_sms;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_device_info;
+/// Issue #416: Android 向けファイルの関連付け受信のスタブ（b-android が埋める）。
+/// `device/file_association.rs::platform` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_file_association;
 /// Issue #1410: Android 向けフォルダ変更監視実装のスタブ（#1413 が埋める）。`device/file_watch.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -207,6 +212,12 @@ pub mod apple_calendar;
 /// 呼ぶ C ABI ラッパー）。`device/contact_pick.rs` の Apple 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_contact_picker;
+/// Issue #416: macOS / iOS 向けファイルの関連付け受信（`apple/fandhe_apple_file_association.m` の
+/// Apple Event `kAEOpenDocuments` ハンドラから呼ばれる C ABI ラッパー）。`device/file_association.rs::platform` の
+/// macOS 経路と `main.rs`（登録）から使われる。iOS は b-ios が埋めるまで受け口だけがある。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[cfg_attr(target_os = "ios", allow(dead_code))]
+pub mod apple_file_association;
 /// Issue #934: iOS / macOS 共通のゲームコントローラ実装（`apple/
 /// fandhe_apple_gamepad.m` を呼ぶ C ABI ラッパー）。`device/gamepad.rs` の
 /// Apple cfg 分岐から呼ばれる。
@@ -374,6 +385,9 @@ pub mod drag_drop;
 /// 入力元だが、ロジック自体はホストの `cargo test` から検証できるよう cfg で
 /// ゲートしない（`android_gamepad.rs` と同じ判断）。
 pub mod drop_session;
+/// Phase 11 の拡充ループ（親 #102、Issue #416）: ファイルの関連付けの effect ドライバ
+/// （macOS 実装、iOS・Android・Windows は子 issue が埋めるスタブ、他 OS は `Unsupported` 固定）。
+pub mod file_association;
 pub mod file_pick;
 /// Phase 11 の拡充ループ（親 #1143、Issue #1410）: フォルダの変更監視の effect ドライバ（macOS 実装、
 /// Windows・iOS・Android は #1411〜#1413 で埋めるスタブ、他 OS は `UnsupportedFileWatch` 固定）。
@@ -454,6 +468,11 @@ pub mod ios_device_info;
 /// 呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_drag_drop;
+/// Issue #416: iOS 向けファイルの関連付け受信のスタブ（b-ios が埋める）。
+/// `device/file_association.rs::platform` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_file_association;
 /// Issue #1410: iOS 向けフォルダ変更監視実装のスタブ（#1412 が埋める）。`device/file_watch.rs` の
 /// iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -792,6 +811,11 @@ pub mod windows_compose_mail_sms;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_device_info;
+/// Issue #416: Windows 向けファイルの関連付け受信のスタブ（windows の子が埋める）。
+/// `device/file_association.rs` の Windows 経路と `main.rs` から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_file_association;
 /// Issue #1410: Windows 向けフォルダ変更監視実装のスタブ（#1411 が埋める）。`device/file_watch.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

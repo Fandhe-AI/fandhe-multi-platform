@@ -26,6 +26,10 @@
 //! 起動済みインスタンスへの転送（`device::windows_url_scheme::win::startup`）を、通常の画面起動より
 //! 前に行う。URL 起動で `FANDHE_PROXY_APP` が未設定なら `url_scheme_show` 画面を既定にする。
 //!
+//! Issue #416: macOS ターゲット（feature `device` 有効時）では、同じく `run_native` より前に
+//! `device::apple_file_association::register` でファイルを開く Apple Event（odoc）のハンドラを登録する。
+//! Windows ターゲットでは起動引数がファイルなら `file_association_show` 画面を既定にする。
+//!
 //! Issue #1044: Windows ターゲット（feature `device` 有効時）では、通常の画面
 //! 起動より前に `device::windows_background_task::parse_scheduled_args` で
 //! コマンドライン引数を見る。Windows タスク スケジューラが専用引数付きで本 exe を
@@ -137,11 +141,26 @@ fn main() -> eframe::Result<()> {
     #[cfg(not(all(target_os = "windows", feature = "device")))]
     let url_launch = false;
 
+    // Issue #416: ファイルの関連付け（Windows）。起動引数がファイルなら `file_association_show` を
+    // 既定にする（レジストリのコマンドは環境変数を渡せないため）。スタブの間は常に `false`。
+    #[cfg(all(target_os = "windows", feature = "device"))]
+    let file_launch = {
+        let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+        fandhe_egui_proxy::device::windows_file_association::is_file_launch(&args)
+    };
+    #[cfg(not(all(target_os = "windows", feature = "device")))]
+    let file_launch = false;
+
     // Issue #1215: カスタム URL scheme の Apple Event ハンドラはイベントループ開始前
     // （`run_native` より前）に main thread で登録する。起動時の URL を取りこぼさないため
     // （`device/apple_url_scheme.rs`・`macos/fandhe_macos_url_scheme.m` 参照）。
     #[cfg(all(target_os = "macos", feature = "device"))]
     fandhe_egui_proxy::device::apple_url_scheme::register();
+
+    // Issue #416: ファイルの関連付け（odoc）の Apple Event ハンドラも同じ理由で登録する
+    // （`device/apple_file_association.rs`・`apple/fandhe_apple_file_association.m` 参照）。
+    #[cfg(all(target_os = "macos", feature = "device"))]
+    fandhe_egui_proxy::device::apple_file_association::register();
 
     // TASK-2.3（#54）計測マーカー: 以下は描画対象切替ロジック（TASK-2.2-S5 / #52）。
     // 描画対象の名前解決。固定文字列との等値比較のみに使い、パス・コマンド・クエリへは
@@ -151,7 +170,8 @@ fn main() -> eframe::Result<()> {
         .ok()
         .filter(|value| !value.is_empty())
         // Issue #1216: レジストリのコマンドは環境変数を渡せないため、URL 起動の既定は型サンプル画面。
-        .or_else(|| url_launch.then(|| "url_scheme_show".to_string()));
+        .or_else(|| url_launch.then(|| "url_scheme_show".to_string()))
+        .or_else(|| file_launch.then(|| "file_association_show".to_string()));
     // プロトタイプアプリ（TASK-2.2-S5 / #52）への描画対象切替。
     let use_prototype = requested_app.as_deref() == Some("prototype");
     // TASK-17.2（REQ-17）: TV フォーカスナビゲーション検証用アプリへの描画対象切替。
