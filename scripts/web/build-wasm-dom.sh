@@ -40,5 +40,10 @@ cp "${crate_dir}/web/items.json" "${dist_dir}/items.json"
 cp "${crate_dir}/web/background-task-sw.js" "${dist_dir}/background-task-sw.js"
 # Issue #393: Background Fetch 用の専用 Service Worker（background_download.rs::web::SW_URL）。
 cp "${crate_dir}/web/background-download-sw.js" "${dist_dir}/background-download-sw.js"
+# Issue #419: PWA の manifest（file_handlers）とアイコン。インストール可能にしないと
+# ファイルの関連付け（?screen=file_association_show）は届かない。
+cp "${crate_dir}/web/manifest.webmanifest" "${dist_dir}/manifest.webmanifest"
+cp "${crate_dir}/web/icon-192.png" "${dist_dir}/icon-192.png"
+cp "${crate_dir}/web/icon-512.png" "${dist_dir}/icon-512.png"
 
 echo "[build-wasm-dom] 完了: ${dist_dir}"
