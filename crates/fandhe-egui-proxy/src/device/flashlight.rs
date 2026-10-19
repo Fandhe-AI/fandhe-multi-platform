@@ -169,10 +169,17 @@ fn drive(
                 confirm.last_poll = Some(now);
                 let generation = req.generation;
                 let outcome = match light.is_on() {
-                    Ok(Some(v)) if v == req.on => Some((Ok(()), Some(v))),
                     Err(e) => Some((Err(to_failure(e)), None)),
-                    // 期限を過ぎても要求どおりにならない。`finish` が失敗に畳む。
-                    Ok(other) if timed_out => Some((Ok(()), other)),
+                    // 期限判定を一致判定より先に行う。期限後に届いた点灯は成功にせず、
+                    // 読み戻した値だけ状態表示へ反映する（契約表 3）。
+                    Ok(other) if timed_out => Some((
+                        Err(FlashlightFailure::Failed(
+                            fandhe_core::screens::flashlight_toggle::NOT_CONFIRMED_REASON
+                                .to_string(),
+                        )),
+                        other,
+                    )),
+                    Ok(Some(v)) if v == req.on => Some((Ok(()), Some(v))),
                     Ok(_) => None,
                 };
                 if let Some((result, read)) = outcome {
@@ -369,6 +376,22 @@ mod tests {
         let late = Fake::new(ok, &[Rd::Val(Some(true))]);
         h.frame(&late, 3000);
         assert_eq!(h.state.on, Some(true));
+        assert_eq!(error_text(&h.state), expected);
+    }
+
+    #[test]
+    fn match_on_first_poll_after_deadline_is_failure() {
+        let mut h = Harness::new();
+        let light = Fake::new(ok, &[Rd::Val(Some(false)), Rd::Val(Some(true))]);
+        turn_on(&mut h.state);
+        h.frame(&light, 0);
+        h.frame(&light, 10);
+        assert_eq!(h.state.phase, FlashlightPhase::Confirming);
+        // 期限後の最初の確認で点灯が見えても成功にしない。
+        h.frame(&light, 1100);
+        assert_eq!(h.state.phase, FlashlightPhase::Idle);
+        assert_eq!(h.state.on, Some(true));
+        let expected = format!("{FAILED_PREFIX}{NOT_CONFIRMED_REASON}");
         assert_eq!(error_text(&h.state), expected);
     }
 
