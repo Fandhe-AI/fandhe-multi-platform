@@ -12,7 +12,9 @@
 //!   前提で、そのクラスへメソッドを足す。既にある場合は上書きせず失敗として返す
 //! - 実機の目視（AppKit が Dock 右クリックのたびに selector を引くか）は #413
 
-use fandhe_device::app_shortcuts::{AppShortcuts, Registration};
+#[cfg(target_os = "macos")]
+use fandhe_device::app_shortcuts::AppShortcuts;
+use fandhe_device::app_shortcuts::Registration;
 use fandhe_device::DeviceError;
 
 /// `.m` の戻り値を契約上の結果へ写像する（SSOT）。
