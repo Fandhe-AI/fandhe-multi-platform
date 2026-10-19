@@ -448,7 +448,7 @@ fn main() {
     compile_apple_ml_inference();
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
-    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + b-ios iOS）も共用する。
+    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
     compile_apple_pdf_viewer();
     // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS + #346 iOS）も共用する。
     compile_apple_on_device_llm(true);
@@ -1602,7 +1602,7 @@ fn build_macos() {
     compile_apple_on_device_llm(false);
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
-    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + b-ios iOS）も共用する。
+    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
     compile_apple_pdf_viewer();
     // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。
     compile_apple_network_status();

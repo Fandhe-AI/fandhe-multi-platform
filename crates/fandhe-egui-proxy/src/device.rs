@@ -329,10 +329,9 @@ pub mod apple_now_playing;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_on_device_llm;
 /// Issue #469: macOS / iOS 向け PDF 表示実装（`apple/fandhe_apple_pdf_viewer.m` の CoreGraphics を
-/// 呼ぶ C ABI ラッパー）。`device/pdf_viewer.rs` の macOS 経路と `ios_pdf_viewer`（親 #107 の b-ios）から
+/// 呼ぶ C ABI ラッパー）。`device/pdf_viewer.rs` の macOS 経路と `ios_pdf_viewer`（#471）から
 /// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-#[cfg_attr(target_os = "ios", allow(dead_code))]
 pub mod apple_pdf_viewer;
 /// Issue #1254（macOS）/ #1255（iOS）: iOS / macOS 向け写真ライブラリ保存実装
 /// （`apple/fandhe_apple_photo_library.m` を呼ぶ C ABI ラッパー。iOS は #1255 までスタブ）。
@@ -591,7 +590,7 @@ pub mod ios_now_playing;
 /// `device/on_device_llm.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_on_device_llm;
-/// Issue #469: iOS 向け PDF 表示のスタブ（親 #107 の b-ios が macOS と共用の `ApplePdfPageRenderer` を返す形へ差し替える）。
+/// Issue #471: iOS 向け PDF 表示実装（macOS と共用の `ApplePdfPageRenderer` を返す）。
 /// `device/pdf_viewer.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_pdf_viewer;
