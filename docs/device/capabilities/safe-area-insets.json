@@ -17,11 +17,14 @@
       "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_safe_area_insets.m + crates/fandhe-egui-proxy/src/device/ios_safe_area_insets.rs + crates/fandhe-egui-proxy/src/device/safe_area_insets.rs + crates/fandhe-core/src/screens/safe_area_insets_show.rs + crates/fandhe-device/src/safe_area_insets.rs、Issue #445"
     },
     "android": {
-      "status": "possible",
-      "api": "`WindowInsetsCompat`（`systemBars()` / `displayCutout()`）、`layoutInDisplayCutoutMode`（API 28+）",
+      "status": "done",
+      "api": "`WindowInsetsCompat`（`systemBars()` / `displayCutout()`）、`layoutInDisplayCutoutMode`（API 28+）。既存の `OnApplyWindowInsetsListener` が受けた値を 1 秒間隔で読み直す",
       "perm": "不要",
       "url": "https://developer.android.com/develop/ui/views/layout/display-cutout",
-      "note": "未実装。edge-to-edge（targetSdk 35+ は既定）前提でインセットを JNI で渡す。API 28 未満に切り欠きの概念なし"
+      "note": "実装済み（#446）。受信前は 0 を出さず読み取り中。API 28 未満は切り欠き分が 0。守らない範囲: 反映は最大 1 秒 + 1 フレーム、Activity 再生成の直後に前の値が 1 回残り得る、zoom が 1 でないときのずれ",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#442）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_safe_area_insets.rs + crates/fandhe-egui-proxy/src/android.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/safe_area_insets.rs + crates/fandhe-core/src/screens/safe_area_insets_show.rs + crates/fandhe-device/src/safe_area_insets.rs、Issue #446"
     },
     "macos": {
       "status": "done",
