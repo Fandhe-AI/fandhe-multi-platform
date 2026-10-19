@@ -21,11 +21,14 @@
       "note": "未実装。edge-to-edge（targetSdk 35+ は既定）前提でインセットを JNI で渡す。API 28 未満に切り欠きの概念なし"
     },
     "macos": {
-      "status": "possible",
-      "note": "未実装。切り欠きのある MacBook のフルスクリーン時に効く",
-      "api": "AppKit `NSScreen.safeAreaInsets`（macOS 12+）",
+      "status": "done",
+      "api": "AppKit 窓の `contentView.safeAreaInsets`（`NSView`、macOS 11+。key window を 1 秒間隔で読み直し、通知は購読しない）",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/appkit/nsscreen/safeareainsets"
+      "url": "https://developer.apple.com/documentation/appkit/nsview/safeareainsets",
+      "note": "OS の全画面（`toggleFullScreen`）は中身をセーフエリアの内側へ自動で置くため、窓表示でも全画面でも普段は 0。窓が取れないときは 0 を出さず「取得できません／失敗」を出す。守らない範囲: 反映は最大 1 秒 + 1 フレーム、複数窓では key window のみ、`NSScreen.safeAreaInsets`（画面についての値）は使わない",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#442）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_safe_area_insets.m + crates/fandhe-egui-proxy/src/device/macos_safe_area_insets.rs + crates/fandhe-egui-proxy/src/device/safe_area_insets.rs + crates/fandhe-core/src/screens/safe_area_insets_show.rs + crates/fandhe-device/src/safe_area_insets.rs、Issue #444"
     },
     "windows": {
       "status": "n-a",
@@ -40,5 +43,5 @@
       "note": "URL 未確認（調査では「一般知識」止まり）。iPhone Safari で主に意味がある"
     }
   },
-  "note": "iOS / Android / Web と、切り欠きのある MacBook の macOS（NSScreen.safeAreaInsets）が対象。Windows は n-a。fullscreen-immersive（別 id）と併用する。dynamic-type・dark-mode 等との重なりなし。今回の範囲: 4 辺のインセット値を表示し、そのぶんだけ余白を空けたパネルを描く（回転で更新）"
+  "note": "iOS / Android / Web と、macOS（窓の contentView.safeAreaInsets。切り欠きのある MacBook で非 0 になりうる）が対象。Windows は n-a。fullscreen-immersive（別 id）と併用する。dynamic-type・dark-mode 等との重なりなし。今回の範囲: 4 辺のインセット値を表示し、そのぶんだけ余白を空けたパネルを描く（回転で更新）。守らない範囲: 反映は最大 1 秒 + 1 フレーム、OS ごとに見る値が違う（iOS は key window、Android はシステムバーと切り欠きの合計、macOS は窓の中身で普段は 0、Web は viewport の env()）"
 }

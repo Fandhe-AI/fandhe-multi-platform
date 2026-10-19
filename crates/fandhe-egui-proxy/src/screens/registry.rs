@@ -226,6 +226,10 @@ generated_screens! {
     crate::device::system_accent_color::system_accent_color_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "safe_area_insets_show" => fandhe_core::screens::safe_area_insets_show::current_screen,
+    crate::device::safe_area_insets::safe_area_insets_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "focus_mode_status_show" => fandhe_core::screens::focus_mode_status_show::current_screen,
     crate::device::focus_mode_status::focus_mode_status_show_effect,
     effect

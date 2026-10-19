@@ -998,6 +998,22 @@ fn render_node<S: 'static>(
                         PaintCommand::Circle { .. } => {
                             crate::paint_command::paint_circle(&painter, &command);
                         }
+                        // `InsetRect` は辺からの距離（セーフエリアの内側、Issue #444）。
+                        PaintCommand::InsetRect {
+                            left,
+                            top,
+                            right,
+                            bottom,
+                            fill,
+                        } => {
+                            painter.rect_filled(
+                                crate::paint_command::inset_rect(rect, left, top, right, bottom),
+                                0.0,
+                                egui::Color32::from_rgba_unmultiplied(
+                                    fill.r, fill.g, fill.b, fill.a,
+                                ),
+                            );
+                        }
                         // `Text`/`Rect`/`StyledText`/`CompositionText` はキャンバス経路で
                         // 使わないため素通しする（`ProgressBar` 等の他ウィジェットが
                         // 生成する値のため、ここへは通常届かない）。

@@ -108,8 +108,9 @@ impl<S> CompletionSender<S> {
 
     /// `egui::Context` の複製を返す。全画面表示（`device/fullscreen_immersive.rs`）が
     /// `ViewportCommand::Fullscreen` の送信と `viewport().fullscreen` の読み戻しに使う専用の口で、
+    /// セーフエリア（`device/safe_area_insets.rs`）が Android の px→dp 換算に使う。
     /// 他の機能での流用はしない（ctx を丸ごと渡す口になるため）。
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn egui_context(&self) -> egui::Context {
         self.ctx.clone()
     }

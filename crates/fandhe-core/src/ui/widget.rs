@@ -75,7 +75,7 @@ pub struct Measurement {
 /// 生成可能な列とする（wgpu 等の具体描画 API には依存しない）。
 ///
 /// `StyledRect` / `StyledText`（TASK-8.4-S14、#170）・`CompositionText`
-/// （TASK-8.5-S5、#186）・`Circle`（#828）は既存バリアントを温存した加法的追加であり、
+/// （TASK-8.5-S5、#186）・`Circle`（#828）・`InsetRect`（#444）は既存バリアントを温存した加法的追加であり、
 /// いずれも解決済み・合成済みの具体値のみを運ぶ（`crate::token::TokenRef` 等の未解決参照は
 /// 保持しない）。本クレート内で `PaintCommand` を網羅 match する箇所は
 /// `style_tokens::style_paint_commands` のみで、同関数はワイルドカード腕
@@ -142,6 +142,23 @@ pub enum PaintCommand {
         center: (f32, f32),
         /// 半径（論理ピクセル相当）。
         radius: f32,
+        /// 解決済みの塗り色。
+        fill: crate::token::ColorValue,
+    },
+    /// キャンバス全面から 4 辺を引いた矩形の塗り（セーフエリアの内側、Issue #444）。
+    ///
+    /// 各値はキャンバス矩形の対応する辺からの距離（論理ピクセル相当）で、位置を持たない
+    /// ため平行移動の対象外。egui-proxy は `paint_command::inset_rect` で矩形を求める
+    /// （`fandhe-web-dom` の描画は兄弟 issue、`fandhe-swiftui-bridge` は対象外）。
+    InsetRect {
+        /// 左辺からの距離。
+        left: f32,
+        /// 上辺からの距離。
+        top: f32,
+        /// 右辺からの距離。
+        right: f32,
+        /// 下辺からの距離。
+        bottom: f32,
         /// 解決済みの塗り色。
         fill: crate::token::ColorValue,
     },
