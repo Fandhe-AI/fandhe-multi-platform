@@ -8,7 +8,7 @@
 //!
 //! # dispatch
 //!
-//! [`platform`] は全 OS 分の最終形。iOS・Android・Windows は兄弟 issue が各 OS のモジュールの
+//! [`platform`] は全 OS 分の最終形。Android・Windows は兄弟 issue（iOS は #425 で実装済み） が各 OS のモジュールの
 //! 中身だけを埋める。ここの分岐・[`ON_WORKER`] は変えない。
 //!
 //! # スレッド

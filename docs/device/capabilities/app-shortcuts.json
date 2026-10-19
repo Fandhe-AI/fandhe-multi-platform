@@ -7,11 +7,14 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "UIKit `UIApplicationShortcutItem`（ホーム画面の長押しメニュー）",
-      "perm": "Info.plist の `UIApplicationShortcutItems`（静的）",
+      "status": "done",
+      "api": "`UIApplicationShortcutItem`（Info.plist の静的項目）。受け取りは scene 形態の `windowScene:performActionForShortcutItem:completionHandler:`（起動中）と `UISceneConnectionOptions.shortcutItem`（未起動から）で、通知を経由して url-scheme の受け口へ入る。`launchOptions` と `application:performActionForShortcutItem:` は scene 形態では使わない",
+      "perm": "なし（静的項目を Info.plist の `UIApplicationShortcutItems` に宣言）",
       "url": "https://developer.apple.com/documentation/uikit/uiapplicationshortcutitem",
-      "note": "未実装。起動時の項目は launchOptions / `performActionFor` で届く。コールドスタート時の保持が要る"
+      "note": "ホーム画面のアイコン長押しに「デモを開く」が出て、選ぶと `fandhe://shortcut/open-demo` が url-scheme の受け口に入り、画面に 2 行目が出る。表示できたかは確かめられないので「宣言済み」と出す。守る範囲: 1 プロセス内の受信順、未起動から起動したときの分を落とさないこと、completion を 1 回だけ呼ぶこと、嘘の成功を出さないこと。守らない範囲: 他アプリから同じ URL が来た場合と区別しないこと、項目の動的な書き換え、ポーリング間隔ぶんの表示遅れ",
+      "detail": "できている（実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#413）",
+      "impl": "platforms/apple/FandheIosApp/Resources/Info.plist + crates/fandhe-egui-proxy/ios/fandhe_ios_scene.m + crates/fandhe-egui-proxy/ios/fandhe_ios_url_scheme.m + crates/fandhe-egui-proxy/src/device/apple_url_scheme.rs + crates/fandhe-egui-proxy/src/device/ios_app_shortcuts.rs + crates/fandhe-egui-proxy/src/device/app_shortcuts.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + crates/fandhe-device/src/app_shortcuts.rs、Issue #425"
     },
     "android": {
       "status": "possible",
