@@ -43,5 +43,5 @@
       "note": "未実装。`torch` 制約は Chromium（主に Android）のみ。"
     }
   },
-  "note": "iOS は AVCaptureDevice の torch、Android は CameraManager、Web は MediaStreamTrack の torch 制約。Windows は Lamp（搭載機種のみ）。macOS は搭載機器の概念が無いため n-a。camera-capture（既存 id）は撮影で、本機能は撮影を伴わず光だけを制御する点が違う。今回の範囲: ライトの点灯 / 消灯をボタンで切り替え、点灯状態を画面に出す（明るさ調整・点滅は扱わない）。"
+  "note": "iOS は AVCaptureDevice の torch、Android は CameraManager、Web は MediaStreamTrack の torch 制約。Windows は Lamp（搭載機種のみ）。macOS は搭載機器の概念が無いため n-a。camera-capture（既存 id）は撮影で、本機能は撮影を伴わず光だけを制御する点が違う。今回の範囲: ライトの点灯 / 消灯をボタンで切り替え、点灯状態を画面に出す（明るさ調整・点滅は扱わない）。アプリを背景へ回す（Web は hidden、Windows は最小化）・破棄すると自分から消灯し、戻っても点け直さない。守らない範囲: 外部からの点け消しへの追従は 1 秒 + 1 フレーム遅れる、Windows の AvailabilityChanged は購読しない、プロセス終了時の後片付けは OS に任せる、熱による減光、Web の複数タブ。"
 }

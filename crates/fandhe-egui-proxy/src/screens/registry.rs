@@ -258,6 +258,10 @@ generated_screens! {
     crate::device::screen_wake_lock::wake_lock_toggle_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "flashlight_toggle" => fandhe_core::screens::flashlight_toggle::current_screen,
+    crate::device::flashlight::flashlight_toggle_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nlp_segment" => fandhe_core::screens::nlp_segment::current_screen,
     crate::device::nlp::nlp_segment_effect,
     effect
