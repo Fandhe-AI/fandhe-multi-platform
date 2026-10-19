@@ -9,7 +9,7 @@
 //!
 //! dispatch（[`implementation`]）は全対象 OS の最終形。macOS は `macos_system_accent_color.rs`、
 //! Windows は `windows_system_accent_color.rs`、Android は `android_system_accent_color.rs`
-//! （#422 が埋めるスタブ）。Web は `fandhe-web-dom` 側（#423）。
+//! （JNI の同期 pull）。Web は `fandhe-web-dom` 側（#423）。
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
