@@ -20,7 +20,7 @@
 //!
 //! Windows は最小化を検知したら（`Idle` かつ点灯中のとき）自分から `turn_off` を送り、通常の
 //! `Requested` → ワーカー → 確認の経路で消灯する。戻っても点け直さない。消灯に失敗して
-//! 最小化が続く間は、1 秒の pull に合わせて再試行するだけ。
+//! 最小化が続く間は、`READ_INTERVAL` 以上の間隔を空けて再試行するだけ。
 
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -85,11 +85,15 @@ struct Confirm {
 struct Timing {
     last_read: Option<Instant>,
     confirm: Option<Confirm>,
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+    /// 最小化中の消灯要求を最後に送った時刻。失敗後の再送を `READ_INTERVAL` に間引く。
+    last_minimize_off: Option<Instant>,
 }
 
 static TIMING: Mutex<Timing> = Mutex::new(Timing {
     last_read: None,
     confirm: None,
+    last_minimize_off: None,
 });
 
 /// `set_on` を呼んで結果を送る。Windows ではワーカー、他の OS では UI スレッドから呼ばれる。
@@ -243,15 +247,23 @@ pub fn flashlight_toggle_effect(
     state: &FlashlightToggleState,
     sender: &CompletionSender<FlashlightToggleState>,
 ) {
-    #[cfg(target_os = "windows")]
-    if should_turn_off_on_minimize(state, sender.minimized()) {
-        // 経路は 1 本のまま: 次のフレームから通常の消灯要求として処理される。
-        let _ = sender.send(Box::new(turn_off));
-        return;
-    }
     let mut timing = TIMING
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
+    #[cfg(target_os = "windows")]
+    {
+        let now = Instant::now();
+        let retry_due = timing
+            .last_minimize_off
+            .is_none_or(|prev| now.saturating_duration_since(prev) >= READ_INTERVAL);
+        // 失敗後に毎フレーム再送しないよう、間隔内は通常経路（pull の予約つき）へ落とす。
+        if retry_due && should_turn_off_on_minimize(state, sender.minimized()) {
+            timing.last_minimize_off = Some(now);
+            // 経路は 1 本のまま: 次のフレームから通常の消灯要求として処理される。
+            let _ = sender.send(Box::new(turn_off));
+            return;
+        }
+    }
     drive(state, sender, implementation(), Instant::now(), &mut timing);
 }
 
