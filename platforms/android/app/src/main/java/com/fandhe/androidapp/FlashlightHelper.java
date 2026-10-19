@@ -17,7 +17,8 @@ import android.os.Looper;
 // `setTorchMode` は呼び出しスレッドを問わないため UI スレッドへは post しない
 // （GameActivity の onPause/onStop との相互待ちと、期限後に遅れて適用される経路を作らない）。
 // 点灯状態は OS から読み戻す: main Looper で届く TorchCallback の値を `cached` に保持し、
-// 最初のコールバックまでは READ_UNKNOWN（Rust 側は「まだ分からない」）。
+// 最初のコールバックまでだけ READ_UNKNOWN（Rust 側は「まだ分からない」）。
+// トーチが使えない通知（onTorchModeUnavailable）は READ_FAILED（Rust 側で Internal）。
 //
 // ライフサイクル: `onStop` で自分が点けた分を消灯し、背景中の点灯要求は拒否する。前面へ戻っても
 // 点け直さない。`onDestroy` で消灯とコールバック解除を済ませ、以後は全要求を拒否する。
@@ -94,7 +95,8 @@ final class FlashlightHelper {
                 public void onTorchModeUnavailable(String id) {
                     synchronized (lock) {
                         if (target.equals(id)) {
-                            cached = READ_UNKNOWN;
+                            // 使用中・過熱などで使えない状態。「まだ分からない」とは区別して失敗にする。
+                            cached = READ_FAILED;
                         }
                     }
                 }
@@ -175,15 +177,15 @@ final class FlashlightHelper {
         }
     }
 
-    // `lock` を保持して呼ぶ。失敗しても状態だけ整える。
+    // `lock` を保持して呼ぶ。消灯に失敗したら所有状態を保持し、後続の経路（onDestroy 等）で再試行する。
     private void turnOffIfOwned() {
         if (requestedOn && manager != null && cameraId != null) {
             try {
                 manager.setTorchMode(cameraId, false);
+                requestedOn = false;
             } catch (CameraAccessException | RuntimeException e) {
-                // 握りつぶす。
+                // requestedOn を残す。
             }
         }
-        requestedOn = false;
     }
 }
