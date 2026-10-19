@@ -217,6 +217,11 @@ final class FileAssociationHelper {
         } catch (RuntimeException e) {
             // 名前なしとして続行する。
         }
+        if (name == null) {
+            // 名前なしはファイルを開く前に拒否する。読み取りの成否で UNREADABLE に化けると
+            // 拒否が数えられず、直前の latest が置き換わってしまう。
+            return new Result(CODE_REJECTED, null, null, -1);
+        }
         ParcelFileDescriptor pfd;
         try {
             pfd = resolver.openFileDescriptor(uri, "r");
