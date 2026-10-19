@@ -86,6 +86,8 @@
 //!   純関数（`matchMedia` の結果 → 設定値・読み取り期限・dt）のみ `wasm32` gate の外に置く
 //! - [`system_accent_color`]: 「システムのアクセント色」画面の Web 経路（親 #103、Issue #423）。
 //!   純関数（計算済み色の解析・非対応判定）のみ `wasm32` gate の外に置く
+//! - [`safe_area_insets`]: 「セーフエリア」画面の Web 経路（親 #105、Issue #447）。
+//!   純関数（計算済み長さの解析・非対応判定・値域検査）のみ `wasm32` gate の外に置く
 //! - [`file_association`]: 「ファイルの関連付け」画面の Web 経路（親 #102、Issue #419）。
 //!   純関数（ハンドルの検査・サイズ検査・失敗種別の写像）のみ `wasm32` gate の外に置く
 //! - [`screen_wake_lock`]: 「画面スリープの抑止」画面の Web 経路（親 #1129、Issue #1281）。
@@ -200,6 +202,9 @@ pub mod midi;
 /// 純関数（生値 → 画面一覧・例外の `name` → 失敗種別）は native からもテストできるよう
 /// クレート単位の `wasm32` gate を外す。
 pub mod multi_display;
+/// 型サンプル「セーフエリア」の Web 経路（Issue #447）。[`system_accent_color`] と同じ理由で
+/// 純関数は native からもテストできるようクレート単位の `wasm32` gate を外す。
+pub mod safe_area_insets;
 /// 型サンプル「システムのアクセント色」の Web 経路（Issue #423）。[`accessibility_prefs`] と同じ理由で
 /// 純関数は native からもテストできるようクレート単位の `wasm32` gate を外す。
 pub mod system_accent_color;

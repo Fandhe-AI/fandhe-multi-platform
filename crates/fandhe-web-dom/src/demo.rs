@@ -130,6 +130,9 @@ use fandhe_core::screens::power_state_show::{
 use fandhe_core::screens::print_page::{
     current_screen as current_print_page_screen, PrintPageState,
 };
+use fandhe_core::screens::safe_area_insets_show::{
+    safe_area_insets_show_web_screen, SafeAreaInsetsShowState,
+};
 use fandhe_core::screens::screen_capture::{
     current_screen as current_screen_capture_screen, ScreenCaptureState,
 };
@@ -570,6 +573,23 @@ pub fn mount_system_accent_color_show_screen(root_id: &str) -> Result<(), JsValu
         system_accent_color_show_web_screen(),
         SystemAccentColorShowState::default(),
         super::system_accent_color::system_accent_color_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「セーフエリア」（Issue #447）をマウントする検証専用
+/// エントリポイント。`super::safe_area_insets::safe_area_insets_show_effect` を effect として渡すため、
+/// CSS `env(safe-area-inset-*)` の 1 秒ごとの読み直しが動く。
+///
+/// 呼び出し元が渡す `root_id` の要素が見つからない場合はエラーを返す。
+#[wasm_bindgen]
+pub fn mount_safe_area_insets_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    super::mount::mount_with_effect(
+        root,
+        safe_area_insets_show_web_screen(),
+        SafeAreaInsetsShowState::default(),
+        super::safe_area_insets::safe_area_insets_show_effect,
     )
 }
 

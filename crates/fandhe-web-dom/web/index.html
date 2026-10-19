@@ -18,6 +18,7 @@
   <head>
     <meta charset="utf-8" />
     <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>fandhe-web-dom サンプル画面（TASK-4.4-S4 検証用）</title>
     <meta
       name="description"
@@ -28,6 +29,11 @@
       body {
         margin: 0;
         padding: 0;
+      }
+      /* viewport-fit=cover で描画が安全領域まで広がるため、全画面で内容を内側へ寄せる */
+      body {
+        padding: env(safe-area-inset-top) env(safe-area-inset-right)
+          env(safe-area-inset-bottom) env(safe-area-inset-left);
       }
     </style>
   </head>
@@ -73,6 +79,7 @@
         mount_multi_display_show_screen,
         mount_accessibility_prefs_show_screen,
         mount_system_accent_color_show_screen,
+        mount_safe_area_insets_show_screen,
         mount_file_association_show_screen,
         mount_app_badge_set_screen,
         mount_compose_mail_sms_screen,
@@ -129,6 +136,8 @@
         mount_wake_lock_toggle_screen("fandhe-dom-root");
       } else if (screen === "accessibility_prefs_show") {
         mount_accessibility_prefs_show_screen("fandhe-dom-root");
+      } else if (screen === "safe_area_insets_show") {
+        mount_safe_area_insets_show_screen("fandhe-dom-root");
       } else if (screen === "system_accent_color_show") {
         mount_system_accent_color_show_screen("fandhe-dom-root");
       } else if (screen === "file_association_show") {
