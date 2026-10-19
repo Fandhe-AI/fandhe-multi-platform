@@ -1,7 +1,7 @@
 // Phase 11 の拡充ループ（親 #1116）型サンプル「カスタム URL scheme」: macOS 実装
 // （Issue #1215）。`NSAppleEventManager` の `kAEGetURL` ハンドラで URL を受ける。
-// winit 0.30 は application delegate を登録しないが、この方式は delegate に触れないため
-// 将来 delegate を入れても衝突しない。macOS 専用のため `apple/*.m` ではなく `macos/` に置く
+// winit 0.30 は自前の application delegate を登録し、差し替えると panic する。この方式は
+// delegate に触れないため、その delegate と衝突しない。macOS 専用のため `apple/*.m` ではなく `macos/` に置く
 // （`fandhe_macos_background_task.m` と同じ判断）。
 //
 // `crates/fandhe-egui-proxy/src/device/apple_url_scheme.rs` から C ABI 経由で呼ばれる。
