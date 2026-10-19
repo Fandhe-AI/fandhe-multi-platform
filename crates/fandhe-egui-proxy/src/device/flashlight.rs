@@ -14,8 +14,8 @@
 //! 3. `Idle`: `READ_INTERVAL` ごとに `is_on` を pull して反映（外部の点け消しへの追従）。
 //!    送信を省く分岐でも次回の再描画を必ず予約する（契約表 4）
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS・Android・Windows は後続の子
-//! （#460・#461・#459）が埋めるスタブ、それ以外は `UnsupportedFlashlight` 固定。Web は
+//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は AVFoundation の torch 実装（#460）、Android・Windows は後続の子
+//! （#461・#459）が埋めるスタブ、それ以外は `UnsupportedFlashlight` 固定。Web は
 //! `fandhe-web-dom` 側（#462）。Windows の最小化での消灯は #459 の担当。
 
 use std::sync::{Arc, Mutex, OnceLock};

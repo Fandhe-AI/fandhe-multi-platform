@@ -528,7 +528,7 @@ pub mod ios_file_association;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_file_watch;
-/// Issue #458: iOS 向けライト（トーチ）実装のスタブ（#460 が埋める）。
+/// Issue #460: iOS 向けライト（トーチ）実装（`ios/fandhe_ios_flashlight.m` を呼ぶ C ABI ラッパー）。
 /// `device/flashlight.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
