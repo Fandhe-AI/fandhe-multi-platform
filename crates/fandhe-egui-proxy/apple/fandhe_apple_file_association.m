@@ -110,7 +110,7 @@ void fandhe_apple_file_association_register(void) {
 // 受ける。URL scheme の URL は `ios/fandhe_ios_url_scheme.m` が受け、ファイル URL はそちらで除外する。
 // `LSSupportsOpeningDocumentsInPlace=false` のため OS は `Documents/Inbox/` へコピーして渡す。
 // Rust 側が呼び出しの中で読み切った後、そのコピーを受理・拒否・失敗を問わず削除する
-// （Inbox 直下のファイルだけ。それ以外は消さない）。パス・名前はログへ出さない。
+// （Inbox 直下の通常ファイルだけ。ディレクトリ・シンボリックリンク・それ以外は消さない）。パス・名前はログへ出さない。
 
 extern void fandhe_rust_file_association_received(const uint8_t *ptr, size_t len);
 
@@ -125,7 +125,18 @@ static void fandhe_remove_if_in_inbox(NSURL *url) {
   }
   NSString *inbox = [[docs URLByAppendingPathComponent:@"Inbox"] URLByResolvingSymlinksInPath].path;
   NSString *parent = [[url URLByDeletingLastPathComponent] URLByResolvingSymlinksInPath].path;
-  if (inbox != nil && [inbox isEqualToString:parent]) {
+  if (inbox == nil || ![inbox isEqualToString:parent]) {
+    return;
+  }
+  // リンクを追わず種類を見る。通常ファイル以外（ディレクトリ・シンボリックリンク等）は
+  // 中身ごと消えるため削除しない。
+  NSNumber *regular = nil;
+  NSNumber *symlink = nil;
+  if (![url getResourceValue:&regular forKey:NSURLIsRegularFileKey error:nil] ||
+      ![url getResourceValue:&symlink forKey:NSURLIsSymbolicLinkKey error:nil]) {
+    return;
+  }
+  if (regular.boolValue && !symlink.boolValue) {
     [[NSFileManager defaultManager] removeItemAtURL:url error:nil];
   }
 }
