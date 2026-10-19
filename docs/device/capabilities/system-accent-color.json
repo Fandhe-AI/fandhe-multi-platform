@@ -21,18 +21,24 @@
       "note": "未実装。壁紙由来の配色で、Android 11 以前は取れない。Rust 側へは JNI で色を渡す"
     },
     "macos": {
-      "status": "possible",
-      "api": "`NSColor.controlAccentColor`（変更は通知で追従）",
+      "status": "done",
+      "api": "AppKit `NSColor.controlAccentColor`（`NSApp.effectiveAppearance` の下で sRGB に変換。1 秒間隔の読み直しで追従し、`NSSystemColorsDidChangeNotification` は購読しない）",
       "perm": "不要",
-      "url": "",
-      "note": "未実装。URL 未確認（調査では「一般知識」止まり）。要確認"
+      "url": "https://developer.apple.com/documentation/appkit/nscolor/controlaccentcolor",
+      "note": "main スレッドで同期に読み、失敗・非対応では既定色を出さず「取得できません」を出す。守らない範囲: 「マルチカラー」設定で返る青を本物と区別しない、反映は最大 1 秒 + 1 フレーム",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#415）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_system_accent_color.m + crates/fandhe-egui-proxy/src/device/macos_system_accent_color.rs + crates/fandhe-egui-proxy/src/device/system_accent_color.rs + crates/fandhe-core/src/screens/system_accent_color_show.rs + crates/fandhe-device/src/system_accent_color.rs、Issue #421"
     },
     "windows": {
-      "status": "possible",
-      "api": "WinRT `UISettings.GetColorValue(UIColorType.Accent)`（変更は `ColorValuesChanged`）",
-      "perm": "要確認（package identity の要件記載なし）",
-      "url": "",
-      "note": "未実装。URL 未確認。unpackaged での動作は要確認"
+      "status": "done",
+      "api": "WinRT `UISettings.GetColorValue(UIColorType.Accent)`（1 秒間隔の読み直し。`ColorValuesChanged` は購読しない）",
+      "perm": "不要（公式の Win32 例に package identity の要件なし。unpackaged の実機は #415）",
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.ui.viewmanagement.uicolortype",
+      "note": "アルファは捨てる。失敗・非対応では既定色を出さず「取得できません」を出す。unpackaged exe での動作は実機未確認",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#415）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_system_accent_color.rs + crates/fandhe-egui-proxy/src/device/system_accent_color.rs + crates/fandhe-core/src/screens/system_accent_color_show.rs + crates/fandhe-device/src/system_accent_color.rs、Issue #421"
     },
     "web": {
       "status": "possible",
@@ -43,5 +49,5 @@
       "note": "URL 未確認。ブラウザやバージョンで対応が分かれる（要確認）。JS から値を読むには要素の計算済みスタイルを使う"
     }
   },
-  "note": "Android / macOS / Windows に API あり、iOS は設定が無く no。Web は CSS の `AccentColor`（対応は要確認）。dark-mode（既存 id）との違い: dark-mode は明暗、本機能はアクセント色。今回の範囲: 取得したアクセント色の見本と 16 進値を表示し、変更に追従する。取れない OS は既定色に倒さず「取得できません」を出す"
+  "note": "Android / macOS / Windows に API あり、iOS は設定が無く no。Web は CSS の `AccentColor`（対応は要確認）。dark-mode（既存 id）との違い: dark-mode は明暗、本機能はアクセント色。今回の範囲: 取得したアクセント色の見本と 16 進値を表示し、変更に追従する（最大 1 秒 + 1 フレーム）。取れない OS は既定色に倒さず「取得できません」を出す"
 }
