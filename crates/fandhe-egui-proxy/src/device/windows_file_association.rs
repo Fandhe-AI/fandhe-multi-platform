@@ -70,7 +70,7 @@ pub fn is_file_launch(args: &[OsString]) -> bool {
 }
 
 /// 絶対パス・`"` なし・拡張子一致のものだけを返す。Windows のファイル名に `"` は入らないので、
-/// 引数解析で変形されたパスは `"` を含み、ここで弾かれる（`launch_unaltered` の代わり）。
+/// 解析後に `"` が残るパスはここで弾く。`"` が消費されて変形した起動は、受信前に生コマンドライン照合（`launch_unaltered_after`）で拒否する。
 pub fn checked_path(p: &str) -> Option<&Path> {
     // ドライブ指定（先頭 2 文字）より後ろの `:` は NTFS の代替データストリーム（`a.md:x.txt`）で、
     // 拡張子検査を迂回するため弾く。

@@ -94,12 +94,23 @@ pub fn parse_url_args(args: &[OsString]) -> Option<Option<String>> {
 /// 生コマンドライン `raw` が「`<exe> "<arg>"`」そのままで、引数解析が `arg` を変形していないか。
 /// `"` や引用符直前の `\` を含む URL は解析で値が変わり、再構成した `"<arg>"` と一致しなくなる。
 pub fn launch_unaltered(raw: &str, arg: &str) -> bool {
+    launch_unaltered_after(raw, "", arg)
+}
+
+/// [`launch_unaltered`] の、引数の前に目印 `flag`（例: `--fandhe-open-file`）が付く版。
+/// 期待形は「`<exe> <flag> "<arg>"`」（`flag` が空なら「`<exe> "<arg>"`」）。
+pub fn launch_unaltered_after(raw: &str, flag: &str, arg: &str) -> bool {
     let raw = raw.trim_start();
     let tail = match raw.strip_prefix('"') {
         Some(r) => r.split_once('"').map(|(_, t)| t),
         None => raw.split_once(char::is_whitespace).map(|(_, t)| t),
     };
-    tail.is_some_and(|t| t.trim() == format!("\"{arg}\""))
+    let want = if flag.is_empty() {
+        format!("\"{arg}\"")
+    } else {
+        format!("{flag} \"{arg}\"")
+    };
+    tail.is_some_and(|t| t.trim() == want)
 }
 
 /// pipe の種別バイト: URL。
@@ -208,9 +219,9 @@ pub mod win {
     use windows::Win32::System::Threading::{CreateMutexW, GetCurrentProcessId};
 
     use super::{
-        exit_code, frame, launch_unaltered, map_registry_error, parse_url_args, pipe_name,
-        register_command, split_frame, Forward, FORWARD_DEADLINE_MS, INBOX, KIND_FILE, KIND_URL,
-        MAX_FRAME_BODY, MUTEX_NAME, REG_KEY,
+        exit_code, frame, launch_unaltered, launch_unaltered_after, map_registry_error,
+        parse_url_args, pipe_name, register_command, split_frame, Forward, FORWARD_DEADLINE_MS,
+        INBOX, KIND_FILE, KIND_URL, MAX_FRAME_BODY, MUTEX_NAME, REG_KEY,
     };
     use crate::device::windows_file_association as wfa;
 
@@ -256,6 +267,18 @@ pub mod win {
         launch_unaltered(&raw, url)
     }
 
+    /// ファイル起動のパスが生コマンドラインと一致するか（`"` の消費などの変形を拒否。取得不能は拒否）。
+    fn raw_unaltered_file(path: &str) -> bool {
+        // SAFETY: 引数なしで、プロセス存続中有効な NUL 終端文字列へのポインタを返す。
+        let p = unsafe { GetCommandLineW() };
+        if p.is_null() {
+            return false;
+        }
+        // SAFETY: `p` は上記のとおり NUL 終端の有効な UTF-16 列。
+        let raw = String::from_utf16_lossy(unsafe { p.as_wide() });
+        launch_unaltered_after(&raw, wfa::OPEN_FLAG, path)
+    }
+
     /// 種別付きの起動（URL かファイル）。`None` 側のペイロードは不正な起動。
     #[derive(Clone, Copy, PartialEq)]
     enum Kind {
@@ -279,7 +302,8 @@ pub mod win {
         // URL 起動でなければファイル起動かを見る（目印の引数があるときだけ）。
         let parsed = match parse_url_args(args) {
             Some(p) => Some((Kind::Url, p.filter(|u| raw_unaltered(u)))),
-            None => wfa::parse_file_args(args).map(|p| (Kind::File, p)),
+            None => wfa::parse_file_args(args)
+                .map(|p| (Kind::File, p.filter(|f| raw_unaltered_file(f)))),
         };
         let name = wide(MUTEX_NAME);
         // SAFETY: `name` は NUL 終端で呼び出し中有効。属性は既定（None）。
@@ -607,6 +631,22 @@ mod tests {
         let mut w: Vec<u16> = "fandhe://".encode_utf16().collect();
         w.push(0xD800);
         assert_eq!(parse_url_args(&[OsString::from_wide(&w)]), Some(None));
+    }
+
+    #[test]
+    fn launch_unaltered_after_rejects_consumed_quote() {
+        let f = "--fandhe-open-file";
+        assert!(launch_unaltered_after(
+            "\"app.exe\" --fandhe-open-file \"C:/ab.txt\"",
+            f,
+            "C:/ab.txt"
+        ));
+        // `"C:/a"b.txt` は解析で `C:/ab.txt` になるが、生コマンドラインとは一致しない。
+        assert!(!launch_unaltered_after(
+            "\"app.exe\" --fandhe-open-file \"C:/a\"b.txt\"",
+            f,
+            "C:/ab.txt"
+        ));
     }
 
     #[test]
