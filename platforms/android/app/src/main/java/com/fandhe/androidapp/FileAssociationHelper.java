@@ -7,6 +7,9 @@ import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
+import android.system.Os;
+import android.system.OsConstants;
+import android.system.StructPollfd;
 
 import android.database.Cursor;
 
@@ -15,11 +18,14 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 // ファイルの関連付け（Issue #418）の Java 側ヘルパー。`MainActivity.deliverUrlIntent`
 // （`onCreate` の `getIntent()` / `onNewIntent`）が `offer` を呼び、`ACTION_VIEW` の
@@ -34,8 +40,9 @@ import java.util.concurrent.TimeUnit;
 // I/O は単一の直列キューに集約し UI スレッドを止めない。Activity は握らない（ApplicationContext
 // の ContentResolver のみ）ため再生成で参照が切れず、`onDestroy` でも止めない。
 // `takePersistableUriPermission` は呼ばない（送り手が付けた一時許可の範囲だけで読む）。
-// 読み取りは期限つき（10 秒）で別スレッドから一時ファイルへ写し、止まった送り手が直列キューを
-// 塞がないようにする。期限切れは UNREADABLE に確定する。
+// ContentProvider 呼び出し全体（getType・query・open・読み取り）を有界の worker プール（同時 4）で
+// 行い、配送役（直列キュー）は期限（10 秒）まで待って結果を順に渡す。止まった送り手は配送を塞がず、
+// 期限切れは UNREADABLE に確定する。読みは poll で待ち、期限後は worker 自身が fd・一時ファイルを解放する。
 // 守る範囲: 1 プロセス内の受信順、結果コードの嘘の成功の禁止。
 // 守らない範囲: プロセス死後の再表示、読み取り許可の無い URI（UNREADABLE になる）、複数プロセス。
 // URI・名前・例外メッセージ・中身はログへ出さない（security.md A09）。
@@ -45,20 +52,50 @@ final class FileAssociationHelper {
     static final int CODE_UNREADABLE = 2;
     static final int CODE_FOLDER = 3;
 
-    private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
+    // 受信順を保つ配送役。待ち行列は有界で、溢れた分は UNREADABLE で確定する。
+    private static final ExecutorService EXECUTOR =
+            new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(32));
 
-    // 送り手の ContentProvider が書き込み端を閉じない等で読み取りが止まっても、直列キュー
-    // （EXECUTOR）を塞がないための期限と上限。期限の起点は `open` の開始（単調時計）。
-    // 上限は Rust 側 `MAX_FILE_BYTES`（8 MiB）+ 1 で、超過の判定（拒否）は Rust 側に任せる。
+    // ContentProvider 呼び出し（getType・query・openFileDescriptor・読み取り）全体の期限。
+    // 期限の起点は配送役が worker を起動した時点（単調時計）。
     private static final long READ_TIMEOUT_MS = 10_000L;
+    // 上限は Rust 側 `MAX_FILE_BYTES`（8 MiB）+ 1 で、超過の判定（拒否）は Rust 側に任せる。
     private static final long READ_LIMIT_BYTES = 8L * 1024 * 1024 + 1;
-    // 止まった読み取りは閉じても解除されないことがあるため、専用の daemon スレッドで行い
-    // EXECUTOR とは切り離す（止まったスレッドは残るが後続の配送は進む）。
-    private static final ExecutorService READER = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "fandhe-file-assoc-read");
-        t.setDaemon(true);
-        return t;
-    });
+    private static final int POLL_SLICE_MS = 100;
+    // provider の呼び出しは中断できないため、止まった worker は戻るまで残る。同時数を 4 に
+    // 絞り（SynchronousQueue で待機もさせない）、満杯なら UNREADABLE にして蓄積を防ぐ。
+    private static final ExecutorService READER = new ThreadPoolExecutor(0, 4, 30L, TimeUnit.SECONDS,
+            new SynchronousQueue<>(), r -> {
+                Thread t = new Thread(r, "fandhe-file-assoc-read");
+                t.setDaemon(true);
+                return t;
+            });
+
+    /** worker の結果。配送役が受け取るか、期限切れ後に worker 自身が破棄する。 */
+    private static final class Result {
+        final int code;
+        final String name;
+        final String mime;
+        final int fd;
+
+        Result(int code, String name, String mime, int fd) {
+            this.code = code;
+            this.name = name;
+            this.mime = mime;
+            this.fd = fd;
+        }
+    }
+
+    private static final int RUNNING = 0;
+    private static final int DONE = 1;
+    private static final int ABANDONED = 2;
+
+    /** 配送役と worker の受け渡し。状態の遷移は CAS で一度きり。 */
+    private static final class Job {
+        final AtomicInteger state = new AtomicInteger(RUNNING);
+        volatile Result result;
+        final CountDownLatch latch = new CountDownLatch(1);
+    }
 
     private FileAssociationHelper() {}
 
@@ -76,7 +113,7 @@ final class FileAssociationHelper {
         String scheme = uri == null ? null : uri.getScheme();
         if ("file".equals(scheme)) {
             // 受信順を保つため同期では送らず、同じキューに積む。
-            EXECUTOR.execute(() -> nativeOnFileOpened(CODE_REJECTED, null, null, -1));
+            submit(() -> nativeOnFileOpened(CODE_REJECTED, null, null, -1));
             return true;
         }
         if (!"content".equals(scheme)) {
@@ -85,25 +122,72 @@ final class FileAssociationHelper {
         final ContentResolver resolver = context.getApplicationContext().getContentResolver();
         final String intentType = intent.getType();
         final File cacheDir = context.getApplicationContext().getCacheDir();
-        EXECUTOR.execute(() -> open(resolver, cacheDir, uri, intentType));
+        submit(() -> dispatch(resolver, cacheDir, uri, intentType));
         return true;
     }
 
-    private static void open(ContentResolver resolver, File cacheDir, Uri uri, String intentType) {
+    private static void submit(Runnable r) {
+        try {
+            EXECUTOR.execute(r);
+        } catch (RejectedExecutionException e) {
+            nativeOnFileOpened(CODE_UNREADABLE, null, null, -1);
+        }
+    }
+
+    /** 配送役。worker に全処理を任せ、期限内の結果だけを順に Rust へ渡す。 */
+    private static void dispatch(ContentResolver resolver, File cacheDir, Uri uri, String intentType) {
+        final Job job = new Job();
         final long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(READ_TIMEOUT_MS);
+        try {
+            READER.execute(() -> work(job, resolver, cacheDir, uri, intentType, deadline));
+        } catch (RejectedExecutionException e) {
+            nativeOnFileOpened(CODE_UNREADABLE, null, null, -1);
+            return;
+        }
+        try {
+            job.latch.await(Math.max(0L, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        if (job.state.compareAndSet(RUNNING, ABANDONED)) {
+            // 期限切れ。以後の後始末（fd・一時ファイル）は worker が行う。
+            nativeOnFileOpened(CODE_UNREADABLE, null, null, -1);
+            return;
+        }
+        Result r = job.result;
+        nativeOnFileOpened(r.code, r.name, r.mime, r.fd);
+    }
+
+    private static void work(Job job, ContentResolver resolver, File cacheDir, Uri uri, String intentType,
+            long deadline) {
+        Result r;
+        try {
+            r = open(job, resolver, cacheDir, uri, intentType, deadline);
+        } catch (Throwable t) {
+            r = new Result(CODE_UNREADABLE, null, null, -1);
+        }
+        job.result = r;
+        if (job.state.compareAndSet(RUNNING, DONE)) {
+            job.latch.countDown();
+        } else if (r.fd >= 0) {
+            // 期限切れ後に完了した結果。fd の所有者がいないので閉じる。
+            closeQuietly(ParcelFileDescriptor.adoptFd(r.fd));
+        }
+    }
+
+    private static Result open(Job job, ContentResolver resolver, File cacheDir, Uri uri, String intentType,
+            long deadline) {
         String mime = intentType;
         try {
             String type = resolver.getType(uri);
             if (DocumentsContract.Document.MIME_TYPE_DIR.equals(type)) {
-                nativeOnFileOpened(CODE_FOLDER, null, null, -1);
-                return;
+                return new Result(CODE_FOLDER, null, null, -1);
             }
             if (type != null) {
                 mime = type;
             }
         } catch (RuntimeException e) {
-            nativeOnFileOpened(CODE_UNREADABLE, null, null, -1);
-            return;
+            return new Result(CODE_UNREADABLE, null, null, -1);
         }
         // 名前は DISPLAY_NAME だけ（末尾パスへの fallback はしない。取れなければ Rust 側が拒否に数える）。
         String name = null;
@@ -121,39 +205,43 @@ final class FileAssociationHelper {
         try {
             pfd = resolver.openFileDescriptor(uri, "r");
         } catch (Exception e) {
-            nativeOnFileOpened(CODE_UNREADABLE, null, null, -1);
-            return;
+            return new Result(CODE_UNREADABLE, null, null, -1);
         }
         if (pfd == null) {
-            nativeOnFileOpened(CODE_UNREADABLE, null, null, -1);
-            return;
+            return new Result(CODE_UNREADABLE, null, null, -1);
         }
-        // 読み取りは期限つきで一時ファイルへ写し、その fd（通常ファイル）を Rust へ渡す。
-        // 期限切れの結果は成功として受け取らず UNREADABLE に確定する。
-        int fd = copyWithDeadline(pfd, cacheDir, deadline);
+        int fd = copyWithDeadline(job, pfd, cacheDir, deadline);
         if (fd < 0) {
-            nativeOnFileOpened(CODE_UNREADABLE, null, null, -1);
-            return;
+            return new Result(CODE_UNREADABLE, null, null, -1);
         }
         // detach 済みの fd の所有は Rust 側へ移る（Java 側は close しない）。
-        nativeOnFileOpened(CODE_FILE, name, mime, fd);
+        return new Result(CODE_FILE, name, mime, fd);
     }
 
-    /** `pfd` を `READ_LIMIT_BYTES` まで一時ファイルへ写し、読み取り専用 fd を detach して返す。失敗・期限切れは -1。 */
-    private static int copyWithDeadline(ParcelFileDescriptor pfd, File cacheDir, long deadline) {
-        final File tmp;
+    /**
+     * `pfd` を `READ_LIMIT_BYTES` まで一時ファイルへ写し、読み取り専用 fd を detach して返す。
+     * 失敗・期限切れは -1。読みは poll で待つ非ブロッキング方式で、期限・破棄を見たら自分で終了して
+     * fd と一時ファイルを解放する。
+     */
+    private static int copyWithDeadline(Job job, ParcelFileDescriptor pfd, File cacheDir, long deadline) {
+        File tmp = null;
         try {
             tmp = File.createTempFile("fa-", ".tmp", cacheDir);
-        } catch (Exception e) {
-            closeQuietly(pfd);
-            return -1;
-        }
-        Future<Boolean> job = READER.submit((Callable<Boolean>) () -> {
             try (InputStream in = new FileInputStream(pfd.getFileDescriptor());
                     OutputStream out = new FileOutputStream(tmp)) {
+                StructPollfd[] pfds = {new StructPollfd()};
+                pfds[0].fd = pfd.getFileDescriptor();
+                pfds[0].events = (short) OsConstants.POLLIN;
                 byte[] buf = new byte[16 * 1024];
                 long total = 0;
                 while (total < READ_LIMIT_BYTES) {
+                    if (job.state.get() == ABANDONED || System.nanoTime() - deadline >= 0) {
+                        return -1;
+                    }
+                    pfds[0].revents = 0;
+                    if (Os.poll(pfds, POLL_SLICE_MS) == 0) {
+                        continue;
+                    }
                     int n = in.read(buf, 0, (int) Math.min(buf.length, READ_LIMIT_BYTES - total));
                     if (n < 0) {
                         break;
@@ -161,27 +249,19 @@ final class FileAssociationHelper {
                     out.write(buf, 0, n);
                     total += n;
                 }
-                return Boolean.TRUE;
-            } finally {
-                closeQuietly(pfd);
             }
-        });
-        try {
-            boolean ok = job.get(Math.max(0L, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
-            if (ok) {
-                // unlink しても開いた fd は読める。以後 Java 側にファイル名は残らない。
-                try (ParcelFileDescriptor out = ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY)) {
-                    return out.detachFd();
-                }
+            // unlink しても開いた fd は読める。以後 Java 側にファイル名は残らない。
+            try (ParcelFileDescriptor ro = ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY)) {
+                return ro.detachFd();
             }
         } catch (Exception e) {
-            // 期限切れ・読み取り失敗・割り込み。止まった読み取りの後始末は下で行う。
-            job.cancel(true);
-            closeQuietly(pfd);
+            return -1;
         } finally {
-            tmp.delete();
+            closeQuietly(pfd);
+            if (tmp != null) {
+                tmp.delete();
+            }
         }
-        return -1;
     }
 
     private static void closeQuietly(ParcelFileDescriptor pfd) {
