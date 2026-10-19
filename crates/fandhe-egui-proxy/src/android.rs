@@ -567,6 +567,26 @@ static INSET_LEFT: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::
 static INSET_TOP: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
 static INSET_RIGHT: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
 static INSET_BOTTOM: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+/// insets を 1 回でも受け取ったか。初期値 0 と「本当に 0」を区別するための印
+/// （`device/android_safe_area_insets.rs` が未受信を 0 にしないために読む。Issue #446）。
+static INSET_RECEIVED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 受信済みなら insets を物理 px の `[top, right, bottom, left]` で返し、未受信なら `None`。
+/// `device/android_safe_area_insets.rs` から UI スレッドで呼ばれる。
+// ponytail: 4 本の atomic を別々に読むため組は 1 回混ざり得る。組が要るなら `Mutex<Option<[i32; 4]>>` へ。
+#[cfg(feature = "device")]
+pub(crate) fn window_insets_px() -> Option<[i32; 4]> {
+    use std::sync::atomic::Ordering;
+    if !INSET_RECEIVED.load(Ordering::Acquire) {
+        return None;
+    }
+    Some([
+        INSET_TOP.load(Ordering::Relaxed),
+        INSET_RIGHT.load(Ordering::Relaxed),
+        INSET_BOTTOM.load(Ordering::Relaxed),
+        INSET_LEFT.load(Ordering::Relaxed),
+    ])
+}
 
 /// `MainActivity.nativeOnWindowInsetsChanged`（Java 側）から呼ばれる JNI エクスポート関数。
 /// シンボル名はパッケージ名 `com.fandhe.androidapp` とクラス名 `MainActivity` に
@@ -598,6 +618,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnWindowInsetsC
     INSET_TOP.store(top, Ordering::Relaxed);
     INSET_RIGHT.store(right, Ordering::Relaxed);
     INSET_BOTTOM.store(bottom, Ordering::Relaxed);
+    INSET_RECEIVED.store(true, Ordering::Release);
 }
 
 /// [`INSET_LEFT`] 等の static 4 本（Java 側リスナーが JNI 経由で書き込む物理 px）を読み、
