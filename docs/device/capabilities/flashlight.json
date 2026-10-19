@@ -7,11 +7,14 @@
   "bundle": "one-shot",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "AVFoundation `AVCaptureDevice`（`torchMode` / `setTorchModeOn(level:)`）",
-      "perm": "要確認（カメラデバイスの設定変更を伴う。`NSCameraUsageDescription` の要否は未確認）",
+      "status": "done",
+      "api": "`AVCaptureDevice` の `setTorchModeOnWithLevel:error:` / `torchMode = Off`（`lockForConfiguration` の内側）。読み戻しは `isTorchActive`",
+      "perm": "なし（カメラの許可ダイアログは出さない想定で Info.plist の追加も無い。要否は実機で確認する、#456）",
       "url": "https://developer.apple.com/documentation/avfoundation/avcapturedevice/torchmode-swift.property",
-      "note": "未実装。`hasTorch` で搭載を確認してから使う。iPad など非搭載機あり。"
+      "note": "`hasTorch` が無い機種（一部の iPad・シミュレータ）は非対応として出す。アプリを背景へ回すと自分から消灯し、戻っても点け直さない。背景中の点灯要求は拒否する。守る範囲: 1 プロセス内の main 直列の順序、背景中の点灯拒否、lock 後の確実な unlock、嘘の成功を出さないこと。守らない範囲: 外部からの点け消しへの追従は 1 秒 + 1 フレーム遅れること、熱による減光、プロセス終了時の後片付け（OS に任せる）",
+      "detail": "できている（実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#456）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_flashlight.m + crates/fandhe-egui-proxy/src/device/ios_flashlight.rs + crates/fandhe-egui-proxy/src/device/flashlight.rs + crates/fandhe-core/src/screens/flashlight_toggle.rs + crates/fandhe-device/src/flashlight.rs、Issue #460"
     },
     "android": {
       "status": "possible",
