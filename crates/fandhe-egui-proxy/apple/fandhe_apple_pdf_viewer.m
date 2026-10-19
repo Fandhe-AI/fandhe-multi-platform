@@ -1,5 +1,5 @@
 // Phase 11 の拡充ループ（親 #107）型サンプル「PDF 表示」: macOS（Issue #469）の実装。
-// iOS は b-ios が同じ実装を共用する（CoreGraphics は iOS にもあり、`#if` 分岐は要らない）。
+// iOS（#471）も同じ実装を共用する（CoreGraphics は iOS にもあり、`#if` 分岐は要らない）。
 //
 // `crates/fandhe-egui-proxy/src/device/apple_pdf_viewer.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の macOS / iOS 両分岐が feature `device` 有効時に `cc` でコンパイルし、
