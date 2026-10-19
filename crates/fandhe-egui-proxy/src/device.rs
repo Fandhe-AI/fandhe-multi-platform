@@ -74,6 +74,11 @@ pub mod android_file_association;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_file_watch;
+/// Issue #438: Android 向け集中モードの状態実装のスタブ（b-android が埋める）。
+/// `device/focus_mode_status.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_focus_mode_status;
 /// Issue #1314: Android 向け全画面表示実装（`FullscreenHelper` との JNI 橋渡し）。
 /// `device/fullscreen_immersive.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -397,6 +402,9 @@ pub mod file_pick;
 /// Phase 11 の拡充ループ（親 #1143、Issue #1410）: フォルダの変更監視の effect ドライバ（macOS 実装、
 /// Windows・iOS・Android は #1411〜#1413 で埋めるスタブ、他 OS は `UnsupportedFileWatch` 固定）。
 pub mod file_watch;
+/// Phase 11 の拡充ループ（親 #104、Issue #438）: 集中モードの状態の effect ドライバ（Windows 実装、
+/// Android は JNI 実装（スタブ）、他 OS は `UnsupportedFocusStatus` 固定）。
+pub mod focus_mode_status;
 /// Phase 11 の拡充ループ（親 #1133、Issue #1312）: 全画面表示の effect ドライバ（macOS/Windows は
 /// eframe の viewport コマンド、iOS/Android は #1313/#1314 で埋めるスタブ、他 OS は
 /// `UnsupportedFullscreen` 固定。Web は `fandhe-web-dom`）。
@@ -831,6 +839,10 @@ pub mod windows_file_association;
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_file_watch;
+/// Issue #438: Windows 向け集中モードの状態実装（WinRT `FocusSessionManager`）。
+/// `device/focus_mode_status.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_focus_mode_status;
 /// Issue #933: Windows 向けゲームコントローラ実装（WinRT `Windows.Gaming.Input.Gamepad`
 /// ラッパー）。`device/gamepad.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

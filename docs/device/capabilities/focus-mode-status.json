@@ -36,11 +36,14 @@
       "deferred": "Communication Notifications capability は有料の Apple Developer Program でしか provisioning profile に載らない（制限付き entitlement のため profile なしでは起動を拒否される）。開発者登録が期限切れのため保留。ベンダーの個別審査は不要で、登録を再開すれば着手できる"
     },
     "windows": {
-      "status": "possible",
-      "api": "`Windows.UI.Shell.FocusSessionManager`（`IsFocusActive` と変更イベント。Windows 11 22H2+）",
-      "perm": "要確認（package identity の要否は文書に記載なし）",
+      "status": "done",
+      "api": "`FocusSessionManager.IsSupported()` と `GetDefault().IsFocusActive()` を 1 秒間隔で読み直す（`IsFocusActiveChanged` は購読しない）。文書上は device family 10.0.23504.0・UniversalApiContract v15 以降で、古い OS は実行時に Unsupported",
+      "perm": "読み取りに制限の記載なし（Limited Access Feature は `TryStartFocusSession` / `DeactivateFocus` のみ）。unpackaged exe での動作は #435 で確認",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.ui.shell.focussessionmanager",
-      "note": "未実装。Windows 11 22H2 以降のみ"
+      "note": "「応答不可」だけのオンは見ない。失敗・非対応で「オフ」と出さない",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#435）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_focus_mode_status.rs + crates/fandhe-egui-proxy/src/device/focus_mode_status.rs + crates/fandhe-core/src/screens/focus_mode_status_show.rs + crates/fandhe-device/src/focus_mode_status.rs、Issue #438"
     },
     "web": {
       "status": "no",
@@ -51,5 +54,5 @@
       "note": "公開 API はない"
     }
   },
-  "note": "iOS / macOS は INFocusStatusCenter、Android は割り込みフィルタ。Windows は FocusSessionManager（Windows 11 22H2+）。Web は公開 API が見当たらず no。notification（既存 id）との違い: 通知の送受信ではなく、利用者が集中モード中かの読み取り。今回の範囲: 「集中モード中 / 通常」を表示する。許可されない場合は「取得できません」を出し、通常と偽らない"
+  "note": "iOS / macOS は INFocusStatusCenter、Android は割り込みフィルタ。Windows は FocusSessionManager（Windows 11 22H2+）。Web は公開 API が見当たらず no。notification（既存 id）との違い: 通知の送受信ではなく、利用者が集中モード中かの読み取り。今回の範囲: 「集中モード中 / 通常」を表示する。許可されない場合は「取得できません」を出し、通常と偽らない。反映は最大 1 秒 + 1 フレーム。Android はおやすみモード（割り込みフィルタ）、Windows は Focus セッションを見る。守らない範囲: フィルタの種類の区別、複数プロセス間の食い違い、OS の変更通知の購読"
 }

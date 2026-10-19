@@ -119,6 +119,8 @@ pub mod compose_mail_sms;
 pub mod device_info_show;
 /// Phase 11 の拡充ループ型サンプル「フォルダの変更監視」（親 #1143、Issue #1410）。
 pub mod file_watch_show;
+/// Phase 11 の拡充ループ型サンプル「集中モードの状態」（親 #104、Issue #438）。
+pub mod focus_mode_status_show;
 /// Phase 11 の拡充ループ型サンプル「全画面表示」（親 #1133、Issue #1312）。
 pub mod fullscreen_toggle;
 /// Phase 11 の拡充ループ型サンプル「触覚フィードバック」（親 #1090、Issue #1091）。
