@@ -10,9 +10,28 @@
 //!   クエリ `url` を読む（ポーリング不要）。検査を通ったものだけ表示し、弾いたものは件数のみ
 //! - `Ok` は「登録を要求した」まで。ブラウザの確認結果は検知できない
 //!
+//! - ショートカット: manifest の `shortcuts`（`web/manifest.webmanifest`）で宣言し、`url` を上記の
+//!   受け口（`?screen=url_scheme_show&url=`）へ向ける。新しい受信経路は持たない。項目が出たかは
+//!   検知できないため `Installed` にはせず、読み込み時に 1 回 `Declared` / `Unsupported` / `Failed` を注入する。
+//!   守らない範囲: 未インストール PWA・Firefox / Safari での非表示、他ページからの同一 URL との区別
+//!
 //! URL・例外の中身は `console` へ出さない（security.md A09）。
 
-use fandhe_core::screens::url_scheme_show::{ActionFailure, ActionOutcome};
+use fandhe_core::screens::url_scheme_show::{ActionFailure, ActionOutcome, ShortcutStatus};
+
+/// ショートカット宣言の状態を画面区分へ写す純関数。
+/// 表示は検知できないので成功側は `Declared` 止まり。非 secure は PWA を入れられず、
+/// manifest 欠落は構成の不備なので、どちらも成功にしない。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn classify_shortcut(secure: bool, has_manifest: bool) -> ShortcutStatus {
+    if !secure {
+        ShortcutStatus::Unsupported
+    } else if !has_manifest {
+        ShortcutStatus::Failed
+    } else {
+        ShortcutStatus::Declared
+    }
+}
 
 /// 登録時に付ける画面指定とクエリ。`%s` はブラウザが URL エンコードして埋める。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -84,14 +103,14 @@ mod web {
     use std::sync::Once;
 
     use fandhe_core::screens::url_scheme_show::{
-        apply_snapshot, finish_action, mark_in_flight, take_request, Action, ActionFailure,
-        ActionOutcome, UrlSchemeShowState,
+        apply_shortcut_status, apply_snapshot, finish_action, mark_in_flight, take_request, Action,
+        ActionFailure, ActionOutcome, ShortcutStatus, UrlSchemeShowState,
     };
     use fandhe_device::url_scheme::{UrlInbox, WEB_SCHEME};
     use js_sys::{Function, Reflect};
     use wasm_bindgen::JsValue;
 
-    use super::{classify_register, handler_url};
+    use super::{classify_register, classify_shortcut, handler_url};
     use crate::mount::Applier;
 
     static INBOX: UrlInbox = UrlInbox::new();
@@ -147,6 +166,19 @@ mod web {
         applier: &Applier<UrlSchemeShowState>,
     ) {
         ingest_query();
+        if state.shortcut_status() == ShortcutStatus::Unread {
+            let (secure, has_manifest) = web_sys::window()
+                .map(|w| {
+                    let has = w
+                        .document()
+                        .and_then(|d| d.query_selector("link[rel=manifest]").ok().flatten())
+                        .is_some();
+                    (w.is_secure_context(), has)
+                })
+                .unwrap_or((false, false));
+            let st = classify_shortcut(secure, has_manifest);
+            applier.apply(move |s| apply_shortcut_status(s, st));
+        }
         let snap = INBOX.snapshot();
         // seq 0 は「url 無し」。Unread のままにせず Waiting を一度だけ流す。
         if state.seq() != Some(snap.seq) {
@@ -213,5 +245,32 @@ mod tests {
     fn handler_url_has_placeholder_and_screen() {
         let u = handler_url("https://a.example", "/app/");
         assert_eq!(u, "https://a.example/app/?screen=url_scheme_show&url=%s");
+    }
+
+    #[test]
+    fn classify_shortcut_never_claims_without_prerequisites() {
+        assert_eq!(classify_shortcut(false, true), ShortcutStatus::Unsupported);
+        assert_eq!(classify_shortcut(true, false), ShortcutStatus::Failed);
+        assert_eq!(classify_shortcut(true, true), ShortcutStatus::Declared);
+    }
+
+    #[test]
+    fn manifest_shortcut_matches_core_constants() {
+        use fandhe_core::screens::url_scheme_show::{SHORTCUT_TITLE, WEB_SHORTCUT_URL};
+        let m = include_str!("../web/manifest.webmanifest");
+        assert!(m.contains(&format!("\"name\": \"{SHORTCUT_TITLE}\"")));
+        let url = m
+            .lines()
+            .find_map(|l| l.trim().strip_prefix("\"url\": \""))
+            .and_then(|l| l.strip_suffix('"'))
+            .expect("shortcuts.url");
+        let q = &url[url.find('?').unwrap()..];
+        let raw = query_param_bytes(q, "url").unwrap();
+        assert_eq!(raw, WEB_SHORTCUT_URL.as_bytes());
+        fandhe_device::url_scheme::validate_url(
+            std::str::from_utf8(&raw).unwrap(),
+            fandhe_device::url_scheme::WEB_SCHEME,
+        )
+        .unwrap();
     }
 }
