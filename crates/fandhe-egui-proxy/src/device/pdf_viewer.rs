@@ -10,7 +10,7 @@
 //! # OS 別の分担（dispatch は #469 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
 //! - macOS: [`super::apple_pdf_viewer::ApplePdfPageRenderer`]（#469）
-//! - iOS: `ios_pdf_viewer`（b-ios。macOS と共用の `ApplePdfPageRenderer` を返す）
+//! - iOS: `ios_pdf_viewer`（Issue #471。macOS と共用の `ApplePdfPageRenderer` を返す）
 //! - Windows: `windows_pdf_viewer`（windows の子。`Windows.Data.Pdf`）
 //! - Android: `android_pdf_viewer`（b-android。`PdfRenderer`）
 //! - それ以外（Linux）: `UnsupportedPdfPageRenderer` 固定（ダミーの成功実装へは倒さない）
