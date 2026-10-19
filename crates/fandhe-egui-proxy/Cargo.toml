@@ -497,6 +497,9 @@ windows = { workspace = true, optional = true, features = [
     # Issue #394: `device/windows_background_download.rs` が BITS（`IBackgroundCopyManager` /
     # `IBackgroundCopyJob`）を呼ぶ。新規パッケージは増えない。
     "Win32_Networking_BackgroundIntelligentTransferService",
+    # Issue #438: `device/windows_focus_mode_status.rs` が `FocusSessionManager`（`UI_Shell`）を読む。
+    # 新規パッケージは増えない（Cargo.lock は不変）。
+    "UI_Shell",
 ] }
 # Issue #898: `device/windows_share.rs::remember_window` が `eframe::CreationContext`
 # から HWND を取り出すために使う（`raw-window-handle` の `HasWindowHandle` トレイト）。
