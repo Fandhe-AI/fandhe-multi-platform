@@ -161,6 +161,8 @@ pub mod pip_show;
 pub mod power_state_show;
 /// Phase 11 の拡充ループ型サンプル「印刷」（親 #94、Issue #325）。
 pub mod print_page;
+/// Phase 11 の拡充ループ型サンプル「システムのアクセント色」（親 #103、Issue #421）。
+pub mod system_accent_color_show;
 /// Phase 11 の拡充ループ型サンプル「画面スリープの抑止」（親 #1129、Issue #1278）。
 pub mod wake_lock_toggle;
 

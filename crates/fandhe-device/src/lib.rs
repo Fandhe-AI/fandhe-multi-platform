@@ -129,6 +129,8 @@ pub mod share;
 /// Phase 11（端末機能の拡充ループ、親 #1023、Issue #1024）: 音声認識。
 pub mod speech_recognition;
 pub mod storage;
+/// Phase 11（端末機能の拡充ループ、親 #103、Issue #421）: システムのアクセント色。
+pub mod system_accent_color;
 /// Phase 11（端末機能の拡充ループ、親 #1038、Issue #1039）: システムトレイ
 /// （メニューバー / 通知領域アイコン）。
 pub mod system_tray;

@@ -175,6 +175,9 @@
 //! - `macos/fandhe_macos_device_info.m`（Issue #1304、`NSProcessInfo` + `sysctl` + `NSURL` による
 //!   端末・OS 情報の同期読み取り）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_device_info.rs` から呼ばれる契約）。Foundation は既存のリンクで足りる。
+//! - `macos/fandhe_macos_system_accent_color.m`（Issue #421、`NSColor.controlAccentColor` の同期読み取り）は
+//!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_system_accent_color.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_multi_display.m`（Issue #1341、`NSScreen.screens` による画面一覧の同期読み取り）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_multi_display.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -1153,6 +1156,16 @@ fn compile_macos_device_info() {
         .compile("fandhe_macos_device_info");
 }
 
+/// `macos/fandhe_macos_system_accent_color.m` を `cc` でコンパイルする（Issue #421）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_system_accent_color.rs` が使う）。AppKit は既存のリンクで足りる。
+fn compile_macos_system_accent_color() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_system_accent_color.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_system_accent_color.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_system_accent_color");
+}
+
 /// `macos/fandhe_macos_multi_display.m` を `cc` でコンパイルする（Issue #1341）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_multi_display.rs` が使う）。AppKit は `build_macos` 側の
 /// 既存リンクで足りるため追加リンクは無い。
@@ -1528,6 +1541,8 @@ fn build_macos() {
     compile_macos_power_state();
     // `macos/fandhe_macos_device_info.m`（Issue #1304）も macOS 専用。
     compile_macos_device_info();
+    // `macos/fandhe_macos_system_accent_color.m`（Issue #421）も macOS 専用。AppKit は既存のリンクを使う。
+    compile_macos_system_accent_color();
     // `macos/fandhe_macos_app_badge.m`（Issue #1360）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_app_badge();
     // `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384）も macOS 専用。AppKit は既存のリンクを使う。

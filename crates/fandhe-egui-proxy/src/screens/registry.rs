@@ -222,6 +222,10 @@ generated_screens! {
     crate::device::accessibility_prefs::accessibility_prefs_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "system_accent_color_show" => fandhe_core::screens::system_accent_color_show::current_screen,
+    crate::device::system_accent_color::system_accent_color_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "compass_show" => fandhe_core::screens::compass_show::current_screen,
     crate::device::compass::compass_show_effect,
     effect

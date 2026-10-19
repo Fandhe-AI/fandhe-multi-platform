@@ -177,6 +177,11 @@ pub mod android_screen_capture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_wake_lock;
+/// Issue #421: Android 向けシステムのアクセント色実装のスタブ（#422 が埋める）。
+/// `device/system_accent_color.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_system_accent_color;
 /// Issue #1218: Android 向けカスタム URL scheme 受信実装（Java 側 `MainActivity` の
 /// `onCreate` / `onNewIntent` から JNI で呼ばれる）。`device/url_scheme.rs::
 /// platform_url_scheme` の Android 経路から使われる。
@@ -643,6 +648,10 @@ pub mod macos_print;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code, unused_imports))]
 pub mod macos_screen_wake_lock;
+/// Issue #421: macOS 向けシステムのアクセント色実装（`macos/fandhe_macos_system_accent_color.m` を
+/// 呼ぶ C ABI ラッパー）。`device/system_accent_color.rs` の macOS 経路から呼ばれる。
+#[cfg(target_os = "macos")]
+pub mod macos_system_accent_color;
 /// Phase 11 の拡充ループ（親 #85、Issue #273）: 地図表示の effect ドライバ（macOS / iOS は
 /// pull 型 `bridge`、他 OS は `UnsupportedMapSnapshotter` 固定）。
 pub mod map_view;
@@ -747,6 +756,9 @@ pub mod share;
 /// Phase 11 の拡充ループ（親 #1023、Issue #1024・#1025）: 音声認識の effect ドライバ
 /// （macOS/iOS/Windows/Android 実装、Android/Web は兄弟 issue）。
 pub mod speech_recognition;
+/// Phase 11 の拡充ループ（親 #103、Issue #421）: システムのアクセント色の effect ドライバ
+/// （macOS / Windows 実装、Android は #422 が埋めるスタブ、他 OS は `UnsupportedAccentColor` 固定）。
+pub mod system_accent_color;
 /// Phase 11 の拡充ループ（親 #1038、Issue #1039）: システムトレイの effect
 /// ドライバ（macOS/Windows 実装、他 OS は `UnsupportedSystemTray` 固定）。
 pub mod system_tray;
@@ -934,6 +946,10 @@ pub mod windows_share;
 /// `device/speech_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_speech_recognition;
+/// Issue #421: Windows 向けシステムのアクセント色実装（WinRT `UISettings.GetColorValue`）。
+/// `device/system_accent_color.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_system_accent_color;
 /// Issue #1039: Windows 向けシステムトレイ実装（`Shell_NotifyIconW` + 隠しウィンドウ
 /// + `TrackPopupMenu` ラッパー）。`device/system_tray.rs::platform_tray` の Windows
 /// 経路から呼ばれる。
