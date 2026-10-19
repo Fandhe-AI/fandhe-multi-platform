@@ -371,7 +371,11 @@ fn convert_node<S: 'static>(
             });
             let circles: Vec<DomNode> = canvas
                 .iter()
-                .flat_map(|(_, _, commands)| commands.iter().filter_map(circle_to_dom_node))
+                .flat_map(|(_, size, commands)| {
+                    commands.iter().filter_map(|c| {
+                        circle_to_dom_node(c).or_else(|| inset_rect_to_dom_node(c, *size))
+                    })
+                })
                 .collect();
 
             // ただし `Widget::children` （既定は空、`DialogWidget` は開状態のとき
@@ -682,10 +686,99 @@ pub fn circle_to_dom_node(command: &PaintCommand) -> Option<DomNode> {
     })
 }
 
+/// `PaintCommand::InsetRect`（#444、Issue #447）を、キャンバス `size` の各辺から内側へ寄せた
+/// 絶対配置の `div` へ変換する。反転する軸は egui 側（`paint_command::inset_rect`）と同じく
+/// 大きさ 0 に潰す。`InsetRect` 以外は `None`。`Node::Widget` の canvas 分岐が円と並べて呼ぶ。
+pub fn inset_rect_to_dom_node(command: &PaintCommand, size: Measurement) -> Option<DomNode> {
+    let PaintCommand::InsetRect {
+        left,
+        top,
+        right,
+        bottom,
+        fill,
+    } = command
+    else {
+        return None;
+    };
+    let w = (size.width - left - right).max(0.0);
+    let h = (size.height - top - bottom).max(0.0);
+    Some(DomNode {
+        tag: "div".to_string(),
+        attrs: vec![
+            ("class".to_string(), "fandhe-inset-rect".to_string()),
+            (
+                "style".to_string(),
+                format!(
+                    "position:absolute;left:{left}px;top:{top}px;width:{w}px;height:{h}px;background-color:{};",
+                    fill.to_hex()
+                ),
+            ),
+        ],
+        text: None,
+        children: Vec::new(),
+        event_hook: None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use fandhe_core::sample_screen;
+
+    #[test]
+    fn inset_rect_to_dom_node_places_and_collapses() {
+        use fandhe_core::token::ColorValue;
+        let size = Measurement {
+            width: 240.0,
+            height: 200.0,
+        };
+        let cmd = |l, t, r, b| PaintCommand::InsetRect {
+            left: l,
+            top: t,
+            right: r,
+            bottom: b,
+            fill: ColorValue::rgb(1, 2, 3),
+        };
+        let style = |n: DomNode| n.attrs.into_iter().find(|(k, _)| k == "style").unwrap().1;
+        let s = style(inset_rect_to_dom_node(&cmd(10.0, 20.0, 30.0, 40.0), size).unwrap());
+        assert!(
+            s.contains("left:10px;top:20px;width:200px;height:140px;"),
+            "{s}"
+        );
+        let s = style(inset_rect_to_dom_node(&cmd(200.0, 0.0, 100.0, 300.0), size).unwrap());
+        assert!(s.contains("width:0px;height:0px;"), "{s}");
+        assert!(inset_rect_to_dom_node(&PaintCommand::Rect, size).is_none());
+    }
+
+    /// `safe_area_insets_show`: 読めたときだけ canvas と InsetRect が出る（嘘の成功を出さない）。
+    #[test]
+    fn safe_area_insets_canvas_only_when_read() {
+        use fandhe_core::screens::safe_area_insets_show::{
+            apply_read, safe_area_insets_show_web_screen, Insets, ReadFailure,
+            SafeAreaInsetsShowState,
+        };
+        let html = |s: &SafeAreaInsetsShowState| {
+            crate::html::to_html(&build_dom_tree(&safe_area_insets_show_web_screen(), s, 0))
+        };
+        let mut state = SafeAreaInsetsShowState::default();
+        assert!(!html(&state).contains("fandhe-inset-rect"));
+        apply_read(&mut state, Err(ReadFailure::Unsupported));
+        assert!(!html(&state).contains("fandhe-inset-rect"));
+        apply_read(&mut state, Err(ReadFailure::Failed("x".into())));
+        assert!(!html(&state).contains("fandhe-inset-rect"));
+        apply_read(
+            &mut state,
+            Ok(Some(Insets {
+                top: 47.0,
+                right: 0.0,
+                bottom: 34.0,
+                left: 5.0,
+            })),
+        );
+        let h = html(&state);
+        assert!(h.contains("fandhe-canvas") && h.contains("fandhe-inset-rect"));
+        assert!(h.contains("left:5px;top:47px;"), "{h}");
+    }
     use fandhe_core::WidgetId;
 
     struct CounterState {

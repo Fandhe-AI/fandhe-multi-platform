@@ -149,7 +149,7 @@ pub enum PaintCommand {
     ///
     /// 各値はキャンバス矩形の対応する辺からの距離（論理ピクセル相当）で、位置を持たない
     /// ため平行移動の対象外。egui-proxy は `paint_command::inset_rect` で矩形を求める
-    /// （`fandhe-web-dom` の描画は兄弟 issue、`fandhe-swiftui-bridge` は対象外）。
+    /// （`fandhe-web-dom` は `dom_tree::inset_rect_to_dom_node`、`fandhe-swiftui-bridge` は対象外）。
     InsetRect {
         /// 左辺からの距離。
         left: f32,

@@ -41,12 +41,15 @@
       "note": "セーフエリアの概念がほぼ不要"
     },
     "web": {
-      "status": "possible",
-      "api": "CSS `env(safe-area-inset-top/right/bottom/left)`（`viewport-fit=cover` が前提）",
-      "perm": "なし",
-      "url": "",
-      "safari": "対応（iPhone で主に有効）。MDN の互換表では未確認",
-      "note": "URL 未確認（調査では「一般知識」止まり）。iPhone Safari で主に意味がある"
+      "status": "done",
+      "api": "CSS `env(safe-area-inset-top/right/bottom/left)` を非表示の要素の `padding` に指定し、`getComputedStyle` で読む（1 秒間隔で読み直し、購読はしない。`viewport-fit=cover` が前提）",
+      "perm": "不要",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/env",
+      "safari": "対応（MDN では Baseline Widely available、2020 年 1 月以降）。値が 0 でなくなるのは主に iPhone Safari",
+      "note": "実装済み（#447）。`env()` を解さない環境は「取得できません」を出し、0 にしない。解析できない値・値域外は「失敗」。守る範囲: 非対応・解析不能を 0 に倒さない、破棄時にタイマーと探り用要素を解放する。守らない範囲: 反映は最大 1 秒 + 1 フレーム（背景タブではさらに遅れる）、viewport の `env()` を見る、zoom が 1 でないときのずれ。実ブラウザの確認は #442",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "iPhone Safari 確認待ち（#442）",
+      "impl": "crates/fandhe-web-dom/src/safe_area_insets.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/dom_tree.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/safe_area_insets_show.rs + crates/fandhe-device/src/safe_area_insets.rs、Issue #447"
     }
   },
   "note": "iOS / Android / Web と、macOS（窓の contentView.safeAreaInsets。切り欠きのある MacBook で非 0 になりうる）が対象。Windows は n-a。fullscreen-immersive（別 id）と併用する。dynamic-type・dark-mode 等との重なりなし。今回の範囲: 4 辺のインセット値を表示し、そのぶんだけ余白を空けたパネルを描く（回転で更新）。守らない範囲: 反映は最大 1 秒 + 1 フレーム、OS ごとに見る値が違う（iOS は key window、Android はシステムバーと切り欠きの合計、macOS は窓の中身で普段は 0、Web は viewport の env()）"
