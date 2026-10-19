@@ -1,4 +1,4 @@
-//! macOS / iOS 向け PDF 表示実装（Issue #469 macOS、iOS は親 #107 の b-ios が共用）。
+//! macOS / iOS 向け PDF 表示実装（Issue #469 macOS、iOS は #471 で共用）。
 //! `device/pdf_viewer.rs` の macOS 経路（と `ios_pdf_viewer`）から呼ばれ、CoreGraphics 実装
 //! （`apple/fandhe_apple_pdf_viewer.m`、`build.rs` が feature `device` 有効時のみコンパイル・
 //! リンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこのモジュールの extern 宣言と
