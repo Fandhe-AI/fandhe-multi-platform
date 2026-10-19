@@ -18,10 +18,11 @@
     },
     "android": {
       "status": "possible",
-      "api": "intent-filter `ACTION_VIEW` + `mimeType` / `pathPattern`",
+      "api": "intent-filter `ACTION_VIEW` + `mimeType`（`content:` URI には `pathPattern` が効かないため mimeType だけ）",
       "perm": "なし",
-      "url": "https://developer.android.com/training/basics/intents/filters",
-      "note": "未実装。content URI が届くため読み取りは ContentResolver を使う。URL は一般的なインテントフィルタの文書で、報告外のため HTTP 応答のみ確認（内容は未精査）"
+      "url": "https://developer.android.com/guide/components/intents-filters",
+      "note": "未実装。content URI が届くため読み取りは ContentResolver を使う。未マージの実装は PR #436",
+      "deferred": "送り手の ContentProvider が読み取りを止めると、Java の read を中断できず fd・一時ファイル・スレッドが回収できない（資源の漏れは守らない範囲にできない）。回収できる読み取りの設計が決まるまで保留（#451）"
     },
     "macos": {
       "status": "done",
