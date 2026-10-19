@@ -5,6 +5,9 @@
 //! と、起動通知の `launchOptions`（コールドスタート）から
 //! [`fandhe_rust_url_scheme_received`] が呼ばれる（いずれも `build.rs` がコンパイルする）。
 //!
+//! iOS は scene 形態のため URL・ホーム画面ショートカット（Issue #425）とも
+//! `ios/fandhe_ios_scene.m` の通知経由で届く。
+//!
 //! 受け口 [`INBOX`] はプロセス全体の static で、UI ができる前（コールドスタート）に
 //! 届いた URL もここに溜まる。検査・保持は共通側の `fandhe_device::url_scheme::UrlInbox`
 //! に任せ、本モジュールは FFI の橋渡し（`unsafe` 2 箇所）だけを持つ。
@@ -57,6 +60,9 @@ extern "C" fn fandhe_rust_url_scheme_received(ptr: *const u8, len: usize) {
         Some(unsafe { std::slice::from_raw_parts(ptr, len) })
     };
     let _ = INBOX.receive_bytes(bytes, SCHEME, now_ms());
+    // iOS は入力がないと egui が描画しないため、受信直後に次フレームを起こす（契約表 4）。
+    #[cfg(target_os = "ios")]
+    crate::ios::request_repaint();
 }
 
 /// macOS / iOS 向け `UrlScheme` 実装。`snapshot` は static 受け口の読み出しで常に成功する。

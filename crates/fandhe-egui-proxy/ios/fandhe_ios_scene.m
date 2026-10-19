@@ -14,6 +14,10 @@
 //   - URL: scene 形態では `application:openURL:options:` が呼ばれず scene 側へ届くため、
 //     通知 `FandheSceneOpenURLNotification`（object = NSURL）へ流す。受信側は
 //     `fandhe_ios_url_scheme.m`（本ファイルは feature `device` に依存しない）。
+//   - ホーム画面のショートカット（Issue #425）: 未起動からの起動は `connectionOptions.shortcutItem`、
+//     起動中は `windowScene:performActionForShortcutItem:completionHandler:` で届く。type は
+//     Info.plist の固定 URL なので、そのまま URL として同じ通知へ流す（検査は Rust 側 `UrlInbox`）。
+//     scene 形態では `application:performActionForShortcutItem:` は使わない。
 //
 // `build.rs` が feature・計測ビルドに関係なく常にコンパイルする（Info.plist は 1 つのため）。
 // `src/ios_scene.rs` の `install()` が `fandhe_ios_scene_install()` を呼んで、リンカが
@@ -75,6 +79,17 @@ static void fandhe_post_urls(NSSet<UIOpenURLContext *> *contexts) {
   }
 }
 
+// ショートカットの type を URL として通知へ流す。URL にできなければ何も送らず NO。
+static BOOL fandhe_post_shortcut(UIApplicationShortcutItem *item) {
+  NSURL *url = [NSURL URLWithString:item.type];
+  if (url == nil) {
+    return NO;
+  }
+  [[NSNotificationCenter defaultCenter] postNotificationName:FandheSceneOpenURLNotification
+                                                      object:url];
+  return YES;
+}
+
 @interface FandheSceneDelegate : UIResponder <UIWindowSceneDelegate>
 @property(nonatomic, strong) UIWindow *window;
 @end
@@ -96,6 +111,23 @@ static void fandhe_post_urls(NSSet<UIOpenURLContext *> *contexts) {
       }
     }
     fandhe_post_urls(options.URLContexts);
+    // 未起動からの起動では performActionForShortcutItem は呼ばれずここにだけ入るため、二重には届かない。
+    if (options.shortcutItem != nil) {
+      fandhe_post_shortcut(options.shortcutItem);
+    }
+  }
+}
+
+// 起動中にショートカットが選ばれた。completion は必ず 1 回だけ呼ぶ。
+- (void)windowScene:(UIWindowScene *)windowScene
+    performActionForShortcutItem:(UIApplicationShortcutItem *)shortcutItem
+               completionHandler:(void (^)(BOOL succeeded))completionHandler {
+  BOOL ok = NO;
+  @autoreleasepool {
+    ok = fandhe_post_shortcut(shortcutItem);
+  }
+  if (completionHandler != nil) {
+    completionHandler(ok);
   }
 }
 

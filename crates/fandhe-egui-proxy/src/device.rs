@@ -208,7 +208,7 @@ pub mod android_url_scheme;
 pub mod app_badge;
 /// Issue #424（親 #101）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録ドライバ。
 /// `device/url_scheme.rs::url_scheme_show_effect` から呼ばれる。実装は macOS（Dock メニュー）、
-/// iOS・Android・Windows は兄弟 issue までスタブ、他 OS は `UnsupportedAppShortcuts` 固定。
+/// iOS は Info.plist の静的宣言（`Declared`、#425）、Android・Windows は兄弟 issue までスタブ、他 OS は `UnsupportedAppShortcuts` 固定。
 pub mod app_shortcuts;
 /// Issue #1308: macOS / iOS 向けアクセシビリティ設定（`apple/fandhe_apple_accessibility_prefs.m` を
 /// 呼ぶ C ABI ラッパー）。`device/accessibility_prefs.rs` の macOS / iOS 経路から呼ばれる。
@@ -452,7 +452,7 @@ pub mod ios_accessibility_prefs;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_app_badge;
-/// Issue #424: iOS 向けアプリショートカット実装（スタブ。兄弟 issue が中身を埋める）。
+/// Issue #425: iOS 向けアプリショートカット実装（Info.plist の静的宣言。`Declared` を返す）。
 /// `device/app_shortcuts.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
