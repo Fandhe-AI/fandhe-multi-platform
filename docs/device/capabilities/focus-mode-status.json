@@ -19,11 +19,14 @@
       "deferred": "Communication Notifications capability は有料の Apple Developer Program でしか provisioning profile に載らない。開発者登録が期限切れのため保留。ベンダーの個別審査は不要で、登録を再開すれば着手できる"
     },
     "android": {
-      "status": "possible",
-      "api": "`NotificationManager.getCurrentInterruptionFilter`（API 23+）と `ACTION_INTERRUPTION_FILTER_CHANGED`",
-      "perm": "要確認（`ACCESS_NOTIFICATION_POLICY` が要るかは不明）",
+      "status": "done",
+      "api": "`NotificationManager.getCurrentInterruptionFilter()`（API 23+）を 1 秒間隔で読み直す。`ACTION_INTERRUPTION_FILTER_CHANGED` は購読しない",
+      "perm": "不要（読み取りのみ。`ACCESS_NOTIFICATION_POLICY` は変更系だけが要る）。許可なしでの動作は #435 で確認",
       "url": "https://developer.android.com/reference/android/app/NotificationManager",
-      "note": "未実装。メソッド詳細は取得済みだが一次記載の確認度は低い"
+      "note": "PRIORITY / NONE / ALARMS をオンとみなす。UNKNOWN・失敗で「オフ」と出さない。守らない範囲: フィルタ種類の区別・反映遅れ最大 1 秒 + 1 フレーム",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#435）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_focus_mode_status.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/FocusModeStatusHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/focus_mode_status.rs + crates/fandhe-core/src/screens/focus_mode_status_show.rs + crates/fandhe-device/src/focus_mode_status.rs、Issue #439"
     },
     "macos": {
       "status": "possible",
