@@ -17,7 +17,8 @@
 //!    （`GetCommandLineW`）が [`launch_unaltered`] を満たさない起動は拒否として数える
 //!    （`fandhe://a"b` が `fandhe://ab` として通るのを防ぐ）
 //! 3. **起動済みの場合の転送**（[`win::startup`]）: 名前付き mutex で既存インスタンスを見つけ、
-//!    named pipe で URL を送って新プロセスを終了する。サーバーは受理なら 1、拒否なら 0 を 1 バイトで
+//!    named pipe で URL を送って新プロセスを終了する。pipe は先頭 1 バイトの種別（`U`=URL、
+//!    `F`=ファイル。Issue #420 で `windows_file_association` が相乗り）で多重化する。サーバーは受理なら 1、拒否なら 0 を 1 バイトで
 //!    返す。転送に失敗したら終了コード 1（[`exit_code`]）で、成功として扱わない
 //!
 //! # 守る範囲と守らない範囲（`AGENTS.md`「端末機能の並行性は守備範囲で判定する」）
@@ -33,7 +34,8 @@
 use std::ffi::OsString;
 use std::path::Path;
 
-use fandhe_device::url_scheme::{InboxSnapshot, UrlInbox, UrlScheme};
+use fandhe_device::file_association::MAX_PATH_BYTES;
+use fandhe_device::url_scheme::{InboxSnapshot, UrlInbox, UrlScheme, MAX_URL_BYTES};
 use fandhe_device::DeviceError;
 
 /// 受信した URL の受け口（プロセス全体で 1 つ）。UI ができる前のコールドスタート分もここに溜まる。
@@ -100,14 +102,32 @@ pub fn launch_unaltered(raw: &str, arg: &str) -> bool {
     tail.is_some_and(|t| t.trim() == format!("\"{arg}\""))
 }
 
-/// pipe へ実際に書く本文。`None`・上限超過は不正を示す 1 バイト（0xFF は不正な UTF-8 のため
-/// サーバーで拒否として数えられる）に置き換える。長大な URL を同期 pipe へ全量書くと、
-/// 受信バッファ（4096 バイト）を超えた分でサーバーの読み取りと相互待ちになり得るため転送しない。
-pub fn forward_bytes(payload: Option<&str>, max: usize) -> &[u8] {
+/// pipe の種別バイト: URL。
+pub const KIND_URL: u8 = b'U';
+/// pipe の種別バイト: ファイル（`windows_file_association`）。
+pub const KIND_FILE: u8 = b'F';
+/// 種別を除いた本文の上限（URL・パスのうち大きい方）。
+pub const MAX_FRAME_BODY: usize = if MAX_URL_BYTES > MAX_PATH_BYTES {
+    MAX_URL_BYTES
+} else {
+    MAX_PATH_BYTES
+};
+
+/// pipe へ実際に書くフレーム（先頭に種別、後ろに本文）。`None`・上限超過の本文は不正を示す
+/// 1 バイト（0xFF は不正な UTF-8 のためサーバーで拒否として数えられる）に置き換える。長大な本文を
+/// 同期 pipe へ全量書くと、受信バッファを超えた分でサーバーの読み取りと相互待ちになり得るため転送しない。
+pub fn frame(kind: u8, payload: Option<&str>, max: usize) -> Vec<u8> {
+    let mut v = vec![kind];
     match payload {
-        Some(s) if s.len() <= max => s.as_bytes(),
-        _ => &[0xFF],
+        Some(s) if s.len() <= max => v.extend_from_slice(s.as_bytes()),
+        _ => v.push(0xFF),
     }
+    v
+}
+
+/// フレームを種別と本文に分ける。空なら `None`（種別なし）。
+pub fn split_frame(buf: &[u8]) -> Option<(u8, &[u8])> {
+    buf.split_first().map(|(k, rest)| (*k, rest))
 }
 
 /// レジストリへ書く `shell\open\command` の値。`"` を含む exe パスは引数注入になりうるため拒否する。
@@ -120,11 +140,14 @@ pub fn register_command(exe: &Path) -> Result<String, DeviceError> {
 }
 
 /// レジストリ操作の Win32 エラーコードを契約上のエラー種別へ写す（全呼び出しで共通）。
-pub fn map_registry_error(code: u32) -> DeviceError {
+pub fn map_registry_error(code: u32, feature: &'static str) -> DeviceError {
     const ERROR_ACCESS_DENIED: u32 = 5;
     match code {
-        ERROR_ACCESS_DENIED => DeviceError::PermissionDenied("url_scheme"),
-        _ => DeviceError::Internal("url_scheme register"),
+        ERROR_ACCESS_DENIED => DeviceError::PermissionDenied(feature),
+        _ => DeviceError::Internal(match feature {
+            "url_scheme" => "url_scheme register",
+            _ => "file_association register",
+        }),
     }
 }
 
@@ -161,7 +184,7 @@ pub mod win {
     use std::os::windows::io::AsRawHandle;
     use std::time::{Duration, Instant};
 
-    use fandhe_device::url_scheme::{MAX_URL_BYTES, SCHEME};
+    use fandhe_device::url_scheme::SCHEME;
     use fandhe_device::DeviceError;
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{
@@ -179,21 +202,23 @@ pub mod win {
     };
     use windows::Win32::System::Registry::{
         RegCloseKey, RegCreateKeyExW, RegDeleteTreeW, RegSetValueExW, HKEY, HKEY_CURRENT_USER,
-        KEY_WRITE, REG_OPTION_NON_VOLATILE, REG_SZ,
+        KEY_WRITE, REG_OPTION_NON_VOLATILE, REG_SZ, REG_VALUE_TYPE,
     };
     use windows::Win32::System::RemoteDesktop::ProcessIdToSessionId;
     use windows::Win32::System::Threading::{CreateMutexW, GetCurrentProcessId};
 
     use super::{
-        exit_code, forward_bytes, launch_unaltered, map_registry_error, parse_url_args, pipe_name,
-        register_command, Forward, FORWARD_DEADLINE_MS, INBOX, MUTEX_NAME, REG_KEY,
+        exit_code, frame, launch_unaltered, map_registry_error, parse_url_args, pipe_name,
+        register_command, split_frame, Forward, FORWARD_DEADLINE_MS, INBOX, KIND_FILE, KIND_URL,
+        MAX_FRAME_BODY, MUTEX_NAME, REG_KEY,
     };
+    use crate::device::windows_file_association as wfa;
 
-    fn wide(s: &str) -> Vec<u16> {
+    pub(crate) fn wide(s: &str) -> Vec<u16> {
         s.encode_utf16().chain(std::iter::once(0)).collect()
     }
 
-    fn now_ms() -> u64 {
+    pub(crate) fn now_ms() -> u64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
@@ -231,10 +256,31 @@ pub mod win {
         launch_unaltered(&raw, url)
     }
 
+    /// 種別付きの起動（URL かファイル）。`None` 側のペイロードは不正な起動。
+    #[derive(Clone, Copy, PartialEq)]
+    enum Kind {
+        Url,
+        File,
+    }
+
+    fn receive_kind(kind: Kind, payload: Option<&str>) {
+        match kind {
+            Kind::Url => receive_local(payload),
+            Kind::File => {
+                // 拒否は件数に反映済み（パスをログに出さない）。
+                let _ = wfa::receive(payload);
+            }
+        }
+    }
+
     /// 起動直後に呼ぶ。既存インスタンスへ転送して終えるべきなら終了コードを返す
     /// （呼び出し側が `exit` する）。自分が受ける側なら `None`。
     pub fn startup(args: &[OsString]) -> Option<i32> {
-        let parsed = parse_url_args(args).map(|p| p.filter(|u| raw_unaltered(u)));
+        // URL 起動でなければファイル起動かを見る（目印の引数があるときだけ）。
+        let parsed = match parse_url_args(args) {
+            Some(p) => Some((Kind::Url, p.filter(|u| raw_unaltered(u)))),
+            None => wfa::parse_file_args(args).map(|p| (Kind::File, p)),
+        };
         let name = wide(MUTEX_NAME);
         // SAFETY: `name` は NUL 終端で呼び出し中有効。属性は既定（None）。
         let created = unsafe { CreateMutexW(None, false, PCWSTR(name.as_ptr())) };
@@ -242,8 +288,8 @@ pub mod win {
         let already = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
         let Ok(mutex) = created else {
             // 調停できない場合は自分が受ける側として続行する（実際に受けているので嘘の成功にならない）。
-            if let Some(p) = &parsed {
-                receive_local(p.as_deref());
+            if let Some((k, p)) = &parsed {
+                receive_kind(*k, p.as_deref());
             }
             return None;
         };
@@ -255,11 +301,12 @@ pub mod win {
                 let _ = CloseHandle(mutex);
             }
             // 既存インスタンスあり。URL 起動でなければ従来どおり別ウィンドウで続行する。
-            return parsed.map(|p| {
-                let result = forward(p.as_deref());
+            return parsed.map(|(k, p)| {
+                let byte = if k == Kind::Url { KIND_URL } else { KIND_FILE };
+                let result = forward(byte, p.as_deref());
                 if result == Forward::Failed {
-                    // URL を含めない固定文言のみ。
-                    eprintln!("[fandhe-egui-proxy] 起動済みインスタンスへの URL 転送に失敗した。");
+                    // URL・パスを含めない固定文言のみ。
+                    eprintln!("[fandhe-egui-proxy] 起動済みインスタンスへの転送に失敗した。");
                 }
                 exit_code(result)
             });
@@ -267,8 +314,8 @@ pub mod win {
         // 最初のインスタンス。mutex ハンドルはプロセス終了（OS が解放）まで保持する。
         // 起動引数の記録は serve の spawn より前に済ませる（後から pipe で届く URL を
         // 古い起動 URL で上書きしないため）。
-        if let Some(p) = &parsed {
-            receive_local(p.as_deref());
+        if let Some((k, p)) = &parsed {
+            receive_kind(*k, p.as_deref());
         }
         let _ = std::thread::Builder::new()
             .name("fandhe-url-scheme-pipe".into())
@@ -276,8 +323,8 @@ pub mod win {
         None
     }
 
-    /// 既存インスタンスの pipe へ URL を送り、応答を待つ。`payload` が `None` なら不正を示す 1 バイトを送る。
-    fn forward(payload: Option<&str>) -> Forward {
+    /// 既存インスタンスの pipe へ種別付きで送り、応答を待つ。`payload` が `None` なら不正を示す 1 バイトを送る。
+    fn forward(kind: u8, payload: Option<&str>) -> Forward {
         let Some(session) = own_session() else {
             return Forward::Failed;
         };
@@ -312,8 +359,8 @@ pub mod win {
         if got.is_err() || session_of(server_pid) != Some(session) {
             return Forward::Failed;
         }
-        let bytes = forward_bytes(payload, MAX_URL_BYTES);
-        match file.write(bytes) {
+        let bytes = frame(kind, payload, MAX_FRAME_BODY);
+        match file.write(&bytes) {
             Ok(n) if n == bytes.len() => {}
             _ => return Forward::Failed,
         }
@@ -381,8 +428,8 @@ pub mod win {
     }
 
     fn handle_connection(pipe: HANDLE) {
-        // 上限 + 1 バイトまで読む。超過分は検査で弾かれる。
-        let mut buf = vec![0u8; MAX_URL_BYTES + 1];
+        // 種別 1 バイト + 上限 + 1 バイトまで読む。超過分は検査で弾かれる。
+        let mut buf = vec![0u8; 1 + MAX_FRAME_BODY + 1];
         let mut read = 0u32;
         // SAFETY: `pipe` は有効な接続済みハンドル。`buf` と `read` は呼び出し中有効。
         let res = unsafe { ReadFile(pipe, Some(&mut buf), Some(&mut read), None) };
@@ -396,9 +443,14 @@ pub mod win {
             }
             Err(_) => return,
         };
-        let accepted = INBOX
-            .receive_bytes((n > 0).then(|| &buf[..n]), SCHEME, now_ms())
-            .is_ok();
+        // 種別なし・不明な種別は URL の拒否として数える。
+        let accepted = match split_frame(&buf[..n]) {
+            Some((KIND_FILE, body)) => wfa::receive(std::str::from_utf8(body).ok()),
+            Some((KIND_URL, body)) => INBOX
+                .receive_bytes((!body.is_empty()).then_some(body), SCHEME, now_ms())
+                .is_ok(),
+            _ => INBOX.receive_bytes(None, SCHEME, now_ms()).is_ok(),
+        };
         // 同期 I/O（`OVERLAPPED` なし）の `WriteFile` は書き込みバイト数の受け取り先が必須。
         let mut written = 0u32;
         // SAFETY: `pipe` は有効。応答は 1 バイトで、書き込み中有効なスライス。`written` も有効。
@@ -409,7 +461,7 @@ pub mod win {
     }
 
     /// 開いたレジストリキーを全経路で閉じる。
-    struct KeyGuard(HKEY);
+    pub(crate) struct KeyGuard(HKEY);
     impl Drop for KeyGuard {
         fn drop(&mut self) {
             // SAFETY: `self.0` は `RegCreateKeyExW` が返した有効なキー。1 度だけ閉じる。
@@ -419,7 +471,7 @@ pub mod win {
         }
     }
 
-    fn open_key(subkey: &str) -> Result<KeyGuard, DeviceError> {
+    pub(crate) fn open_key(subkey: &str, feature: &'static str) -> Result<KeyGuard, DeviceError> {
         let sub = wide(subkey);
         let mut key = HKEY::default();
         // SAFETY: `sub` は NUL 終端で呼び出し中有効。`key` は書き込み先として有効。
@@ -437,23 +489,38 @@ pub mod win {
             )
         };
         if err != ERROR_SUCCESS {
-            return Err(map_registry_error(err.0));
+            return Err(map_registry_error(err.0, feature));
         }
         Ok(KeyGuard(key))
     }
 
-    fn set_str(key: &KeyGuard, name: Option<&str>, value: &str) -> Result<(), DeviceError> {
+    /// UTF-16 + NUL 終端のバイト列（`REG_SZ` の値）。
+    pub(crate) fn utf16_bytes(value: &str) -> Vec<u8> {
+        wide(value).iter().flat_map(|u| u.to_le_bytes()).collect()
+    }
+
+    /// 値を書く。`name` が `None` なら既定値。`REG_NONE` は空の `data` を渡す。
+    pub(crate) fn set_value(
+        key: &KeyGuard,
+        name: Option<&str>,
+        ty: REG_VALUE_TYPE,
+        data: &[u8],
+        feature: &'static str,
+    ) -> Result<(), DeviceError> {
         let wname = name.map(wide);
-        let data: Vec<u8> = wide(value).iter().flat_map(|u| u.to_le_bytes()).collect();
         let pname = wname
             .as_ref()
             .map_or(PCWSTR::null(), |w| PCWSTR(w.as_ptr()));
         // SAFETY: `pname` は null（既定値）または NUL 終端で呼び出し中有効。`data` も同様。
-        let err = unsafe { RegSetValueExW(key.0, pname, None, REG_SZ, Some(&data)) };
+        let err = unsafe { RegSetValueExW(key.0, pname, None, ty, Some(data)) };
         if err != ERROR_SUCCESS {
-            return Err(map_registry_error(err.0));
+            return Err(map_registry_error(err.0, feature));
         }
         Ok(())
+    }
+
+    fn set_str(key: &KeyGuard, name: Option<&str>, value: &str) -> Result<(), DeviceError> {
+        set_value(key, name, REG_SZ, &utf16_bytes(value), "url_scheme")
     }
 
     /// 現在の exe を `fandhe://` の起動先として登録する。途中で失敗したら `Err`（巻き戻しはしない）。
@@ -463,10 +530,10 @@ pub mod win {
         let exe =
             std::env::current_exe().map_err(|_| DeviceError::Internal("url_scheme register"))?;
         let command = register_command(&exe)?;
-        let root = open_key(REG_KEY)?;
+        let root = open_key(REG_KEY, "url_scheme")?;
         set_str(&root, None, "URL:fandhe Protocol")?;
         set_str(&root, Some("URL Protocol"), "")?;
-        let cmd = open_key(&format!("{REG_KEY}\\shell\\open\\command"))?;
+        let cmd = open_key(&format!("{REG_KEY}\\shell\\open\\command"), "url_scheme")?;
         set_str(&cmd, None, &command)
     }
 
@@ -478,7 +545,7 @@ pub mod win {
         if err == ERROR_SUCCESS || err == ERROR_FILE_NOT_FOUND {
             Ok(())
         } else {
-            Err(map_registry_error(err.0))
+            Err(map_registry_error(err.0, "url_scheme"))
         }
     }
 
@@ -491,9 +558,15 @@ pub mod win {
         fn forward_round_trip_accept_and_reject() {
             std::thread::spawn(serve);
             std::thread::sleep(Duration::from_millis(300));
-            assert_eq!(forward(Some("fandhe://hello")), Forward::Accepted);
-            assert_eq!(forward(Some("https://x")), Forward::Rejected);
-            assert_eq!(forward(None), Forward::Rejected);
+            assert_eq!(forward(KIND_URL, Some("fandhe://hello")), Forward::Accepted);
+            assert_eq!(forward(KIND_URL, Some("https://x")), Forward::Rejected);
+            assert_eq!(forward(KIND_URL, None), Forward::Rejected);
+            // ファイルの拒否は別の受け口に数えられ、URL 側の件数は変わらない。
+            assert_eq!(forward(KIND_FILE, Some("C:\\a.md")), Forward::Rejected);
+            assert_eq!(
+                forward(KIND_FILE, Some("\\\\server\\s\\a.txt")),
+                Forward::Rejected
+            );
             let snap = INBOX.snapshot();
             assert_eq!(snap.last.map(|r| r.url).as_deref(), Some("fandhe://hello"));
             assert_eq!(snap.rejected, 2);
@@ -548,11 +621,20 @@ mod tests {
     }
 
     #[test]
-    fn forward_bytes_replaces_oversize_and_none() {
-        assert_eq!(forward_bytes(Some("fandhe://a"), 2048), b"fandhe://a");
-        assert_eq!(forward_bytes(Some(&"a".repeat(2049)), 2048), &[0xFF]);
-        assert_eq!(forward_bytes(Some(&"a".repeat(16000)), 2048), &[0xFF]);
-        assert_eq!(forward_bytes(None, 2048), &[0xFF]);
+    fn frame_prefixes_kind_and_replaces_oversize_and_none() {
+        assert_eq!(frame(KIND_URL, Some("fandhe://a"), 2048), b"Ufandhe://a");
+        assert_eq!(frame(KIND_FILE, Some("C:\\a.txt"), 2048), b"FC:\\a.txt");
+        assert_eq!(frame(KIND_URL, Some(&"a".repeat(2049)), 2048), [b'U', 0xFF]);
+        assert_eq!(frame(KIND_FILE, None, 2048), [b'F', 0xFF]);
+        assert_eq!(MAX_FRAME_BODY, 2048);
+    }
+
+    #[test]
+    fn split_frame_separates_kind() {
+        assert_eq!(split_frame(b""), None);
+        assert_eq!(split_frame(b"U"), Some((b'U', &b""[..])));
+        assert_eq!(split_frame(b"Fab"), Some((b'F', &b"ab"[..])));
+        assert_eq!(split_frame(b"Zab"), Some((b'Z', &b"ab"[..])));
     }
 
     #[test]
@@ -571,12 +653,16 @@ mod tests {
         assert_eq!(exit_code(Forward::Rejected), 2);
         assert_eq!(exit_code(Forward::Failed), 1);
         assert!(matches!(
-            map_registry_error(5),
+            map_registry_error(5, "url_scheme"),
             DeviceError::PermissionDenied("url_scheme")
         ));
         assert!(matches!(
-            map_registry_error(2),
+            map_registry_error(2, "url_scheme"),
             DeviceError::Internal("url_scheme register")
+        ));
+        assert!(matches!(
+            map_registry_error(5, "file_association"),
+            DeviceError::PermissionDenied("file_association")
         ));
     }
 }

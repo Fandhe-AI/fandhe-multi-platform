@@ -143,7 +143,7 @@ fn main() -> eframe::Result<()> {
     let url_launch = false;
 
     // Issue #416: ファイルの関連付け（Windows）。起動引数がファイルなら `file_association_show` を
-    // 既定にする（レジストリのコマンドは環境変数を渡せないため）。スタブの間は常に `false`。
+    // 既定にする（レジストリのコマンドは環境変数を渡せないため）。転送した起動は `startup` の中で終了済みなので、`true` になるのは自分が受ける側のときだけ。
     #[cfg(all(target_os = "windows", feature = "device"))]
     let file_launch = {
         let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
