@@ -33,6 +33,12 @@
   （`UIApplication openURL:`）は範囲外のため `LSApplicationQueriesSchemes` は足さない
   （security.md A05）。
 
+  CFBundleDocumentTypes・LSSupportsOpeningDocumentsInPlace（Issue #417）: 型サンプル「ファイルの
+  関連付け」が `.txt`（`public.plain-text`）を受けるために宣言する。`LSHandlerRank=Alternate` で
+  既定アプリを奪わない。`LSSupportsOpeningDocumentsInPlace=false` のため OS が `Documents/Inbox/`
+  へコピーして渡し、受信側（`crates/fandhe-egui-proxy/apple/fandhe_apple_file_association.m`）が
+  読んだ後にそのコピーを消す。`UIFileSharingEnabled` は足さない（Documents を Files に公開しない）。
+
   NSCameraUsageDescription（Phase 8 / Issue #751、AR 表示は Issue #308）: 型サンプル「カメラ撮影」画面
   （`FANDHE_PROXY_APP=camera_capture`）と「AR 表示」画面（`FANDHE_PROXY_APP=ar_show`、
   `crates/fandhe-egui-proxy/ios/fandhe_ios_ar.m`）が `UIImagePickerController`
@@ -104,6 +110,21 @@
 <dict>
 	<key>CFBundleDisplayName</key>
 	<string>Fandhe</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Plain Text</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.plain-text</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleExecutable</key>
 	<string>FandheIosApp</string>
 	<key>CFBundleIdentifier</key>
@@ -129,6 +150,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>

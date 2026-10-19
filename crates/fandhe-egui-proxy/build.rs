@@ -36,7 +36,7 @@
 //!   （`src/device/apple_background_download.rs` から呼ばれる契約）。Foundation のみで追加のリンクは不要。
 //! - `apple/fandhe_apple_file_association.m`（Issue #416、Apple Event `kAEOpenDocuments` によるファイルの
 //!   関連付け受信）は macOS・iOS の両分岐で feature `device` 有効時にコンパイルする（`src/device/
-//!   apple_file_association.rs` から呼ばれる契約。iOS 側の中身は b-ios が書く）。追加のリンクは不要。
+//!   apple_file_association.rs` から呼ばれる契約。iOS 側は Issue #417 で実装済み）。追加のリンクは不要。
 //! - `apple/fandhe_apple_now_playing.m`（Issue #381 macOS・#382 iOS。MediaPlayer の `MPNowPlayingInfoCenter` /
 //!   `MPRemoteCommandCenter` による OS の「再生中」表示とメディアキー。`src/device/apple_now_playing.rs` から呼ばれる契約）。
 //!   MediaPlayer をリンクする。
@@ -990,7 +990,7 @@ fn compile_apple_background_download() {
 
 /// `apple/fandhe_apple_file_association.m` を `cc` でコンパイルする（Issue #416）。macOS・iOS 双方の
 /// 分岐から呼ばれる（`src/device/apple_file_association.rs` が使う）。AppKit・CoreServices は macOS 分岐で
-/// 既にリンク済み。iOS では中身が空（b-ios が書く）。
+/// 既にリンク済み。iOS は scene 通知を購読する（Issue #417）。
 fn compile_apple_file_association() {
     println!("cargo:rerun-if-changed=apple/fandhe_apple_file_association.m");
     cc::Build::new()
