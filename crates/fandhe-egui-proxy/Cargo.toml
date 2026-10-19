@@ -414,6 +414,9 @@ windows = { workspace = true, optional = true, features = [
     # 新規パッケージは増えない。
     "Media_Ocr",
     "Graphics_Imaging",
+    # Issue #470: `device/windows_pdf_viewer.rs` が `PdfDocument` / `PdfPage` /
+    # `PdfPageRenderOptions`（`Data_Pdf`）を呼ぶ。新規パッケージは増えない。
+    "Data_Pdf",
     # Issue #1033: `device/windows_notification.rs` がスタートメニューへ `.lnk`
     # ショートカットを作って AUMID を登録するために使う。`IShellLinkW`/`ShellLink`
     # は `Win32_UI_Shell`（上で導入済み）が持つ。
