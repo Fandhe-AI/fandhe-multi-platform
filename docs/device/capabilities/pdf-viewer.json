@@ -31,11 +31,17 @@
       "impl": "`crates/fandhe-egui-proxy/src/device/apple_pdf_viewer.rs` + `crates/fandhe-egui-proxy/apple/fandhe_apple_pdf_viewer.m` + `crates/fandhe-egui-proxy/src/device/pdf_viewer.rs` + `crates/fandhe-core/src/screens/pdf_first_page.rs` + `crates/fandhe-device/src/pdf_viewer.rs`、Issue #469"
     },
     "windows": {
-      "status": "possible",
-      "api": "`Windows.Data.Pdf.PdfDocument`（ページを画像へ描画）",
-      "perm": "要確認（文書に package identity の要件記載なし。unpackaged の可否は未検証）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.data.pdf.pdfdocument",
-      "note": "未実装。ページ画像を得る API で、スクロール・選択などの UI は自前になる。"
+      "status": "done",
+      "api": "WinRT `Windows.Data.Pdf`（`PdfDocument.LoadFromStreamAsync` → `PdfPage.RenderWithOptionsToStreamAsync`）→ `BitmapDecoder` で RGBA に復号（Windows 10 10240+）",
+      "perm": "なし（宣言は不要）。ただし Microsoft の「APIs that require package identity」に PdfDocument / PdfPage / PdfPageRenderOptions が載っている。unpackaged の exe で動くかは実機で確認（#468）。動かなければ「この端末では使えない」と出し、セルを deferred に戻す",
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.data.pdf.pdfdocument",
+        "https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/winrt-api-desktop-app-support"
+      ],
+      "note": "実装済み（#470）。埋め込みのサンプル PDF（3 ページ、コードで生成）の 1 ページ目を長辺 1024px 以内の RGBA に描き、総ページ数と一緒に出す。成功は寸法・長さ・ページ数の検査を通ったものだけ。壊れている・暗号化・0 ページ・寸法不正・期限切れ（10 秒）は失敗として区別し、アクティベーション失敗は「非対応」にする。取り消しの操作と権限は無いので、キャンセル・権限拒否の失敗系は無い。守らない範囲: 任意の PDF、HRESULT の写像の正確さ、unpackaged の exe で動くか、ハイコントラスト、期限後も OS 側の描画が走り切ること、色の正確さ・所要時間。Windows 実機確認は #468。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#468）",
+      "impl": "`crates/fandhe-egui-proxy/src/device/windows_pdf_viewer.rs` + `crates/fandhe-egui-proxy/src/device/pdf_viewer.rs` + `crates/fandhe-core/src/screens/pdf_first_page.rs` + `crates/fandhe-device/src/pdf_viewer.rs`、Issue #470"
     },
     "web": {
       "status": "no",
