@@ -518,6 +518,11 @@ public class MainActivity extends GameActivity {
         mediaPlaybackHelper.shutdown();
     }
 
+    // PDF 表示（Issue #472）。実装は PdfPageHelper。Rust の android_pdf_viewer.rs がワーカーから同期 JNI で呼ぶ（署名 ([BI)[B）。
+    byte[] pdfRenderFirstPage(byte[] pdf, int maxSide) {
+        return PdfPageHelper.renderFirstPage(getCacheDir(), pdf, maxSide);
+    }
+
     // 音声変換（Issue #314）。実装は `MediaTranscodeHelper`。Rust の `android_media_transcode.rs` がワーカースレッドから同期 JNI で呼ぶ。
     byte[] mediaTranscode(byte[] pcmLe, int sampleRate, long remainingMs) {
         return MediaTranscodeHelper.transcode(getCacheDir(), pcmLe, sampleRate, remainingMs);
