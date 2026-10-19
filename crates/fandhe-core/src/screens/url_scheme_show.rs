@@ -18,6 +18,29 @@
 use crate::screens::background_task::format_utc;
 use crate::{Screen, WidgetId};
 
+/// アプリショートカットの表示名（OS に登録する文言の SSOT。Issue #424）。
+pub const SHORTCUT_TITLE: &str = "デモを開く";
+/// ショートカットが開く URL（ネイティブ。受信は既存の `UrlInbox` が行う）。
+pub const SHORTCUT_URL: &str = "fandhe://shortcut/open-demo";
+/// ショートカットが開く URL（Web。`registerProtocolHandler` が `web+` 接頭辞を要するため）。
+pub const WEB_SHORTCUT_URL: &str = "web+fandhe://shortcut/open-demo";
+
+/// ショートカット登録の表示区分（effect ドライバが一度だけ注入する）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ShortcutStatus {
+    /// まだ登録を試みていない。
+    #[default]
+    Unread,
+    /// 宣言ファイルで OS に任せた（表示されたかは確かめられない）。
+    Declared,
+    /// OS の登録 API が成功を返した。
+    Installed,
+    /// この環境では登録できない（失敗ではない）。
+    Unsupported,
+    /// 登録を試みて失敗した。
+    Failed,
+}
+
 /// 受信状態の表示区分。
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum UrlSchemeView {
@@ -78,6 +101,7 @@ pub struct UrlSchemeShowState {
     generation: u64,
     status: String,
     error: String,
+    shortcut: ShortcutStatus,
 }
 
 /// 操作が成功したときの種類。Web は確定を検知できないため区別する（成功を装わない）。
@@ -116,6 +140,18 @@ impl UrlSchemeShowState {
     /// 非対応として確定済みか（effect ドライバが一度だけ送るために使う）。
     pub fn is_unsupported(&self) -> bool {
         self.view == UrlSchemeView::Unsupported
+    }
+}
+
+/// ショートカット登録の結果を反映する（effect ドライバが一度だけ送る）。
+pub fn apply_shortcut_status(state: &mut UrlSchemeShowState, status: ShortcutStatus) {
+    state.shortcut = status;
+}
+
+impl UrlSchemeShowState {
+    /// 反映済みのショートカット登録結果（`Unread` なら未送信）。
+    pub fn shortcut_status(&self) -> ShortcutStatus {
+        self.shortcut
     }
 }
 
@@ -261,6 +297,36 @@ pub fn rejected_text(state: &UrlSchemeShowState) -> String {
     format!("検査で弾いた件数: {}", state.rejected)
 }
 
+/// ショートカット登録の結果文言（未登録試行なら空）。
+pub fn shortcut_status_text(state: &UrlSchemeShowState) -> String {
+    match state.shortcut {
+        ShortcutStatus::Unread => "",
+        ShortcutStatus::Declared => "ショートカット: 宣言済み（表示は OS 次第）",
+        ShortcutStatus::Installed => "ショートカット: 登録しました",
+        ShortcutStatus::Unsupported => "ショートカット: この環境では使えません",
+        ShortcutStatus::Failed => "ショートカット: 登録できませんでした",
+    }
+    .to_string()
+}
+
+/// 最後に受けた URL がショートカットのものと一致するときだけ出す文言。
+/// 他アプリも同じ URL を送れるため「選ばれました」とは書かない。
+/// 一致は scheme 部（最初の `:` まで）のみ大文字小文字を区別せず、残りは完全一致。
+pub fn shortcut_text(state: &UrlSchemeShowState) -> String {
+    let UrlSchemeView::Received { url, .. } = &state.view else {
+        return String::new();
+    };
+    let same = |expected: &str| match (url.split_once(':'), expected.split_once(':')) {
+        (Some((a, rest)), Some((b, exp_rest))) => a.eq_ignore_ascii_case(b) && rest == exp_rest,
+        _ => false,
+    };
+    if same(SHORTCUT_URL) || same(WEB_SHORTCUT_URL) {
+        format!("最後に受けた URL はショートカット『{SHORTCUT_TITLE}』のものです")
+    } else {
+        String::new()
+    }
+}
+
 /// 「登録を解除する」ボタンの id。
 const UNREGISTER_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
 
@@ -272,6 +338,8 @@ pub fn url_scheme_show_screen() -> Screen<UrlSchemeShowState> {
         .dynamic_text(time_text)
         .dynamic_text(rejected_text)
         .dynamic_text(registration_text)
+        .dynamic_text(shortcut_status_text)
+        .dynamic_text(shortcut_text)
         .error_text(error_text)
 }
 
@@ -291,6 +359,57 @@ pub fn current_screen(state: &UrlSchemeShowState) -> Screen<UrlSchemeShowState> 
 mod tests {
     use super::*;
     use crate::render_headless;
+
+    #[test]
+    fn shortcut_texts_are_empty_when_unread() {
+        let s = UrlSchemeShowState::default();
+        assert_eq!(shortcut_status_text(&s), "");
+        assert_eq!(shortcut_text(&s), "");
+    }
+
+    #[test]
+    fn shortcut_status_texts_differ_and_failures_never_claim_installed() {
+        let text = |st| {
+            let mut s = UrlSchemeShowState::default();
+            apply_shortcut_status(&mut s, st);
+            shortcut_status_text(&s)
+        };
+        let all = [
+            text(ShortcutStatus::Declared),
+            text(ShortcutStatus::Installed),
+            text(ShortcutStatus::Unsupported),
+            text(ShortcutStatus::Failed),
+        ];
+        for i in 0..all.len() {
+            for j in 0..i {
+                assert_ne!(all[i], all[j]);
+            }
+        }
+        assert!(!text(ShortcutStatus::Failed).contains("登録しました"));
+        assert!(!text(ShortcutStatus::Unsupported).contains("登録しました"));
+    }
+
+    #[test]
+    fn shortcut_text_matches_exact_url_only() {
+        let with = |url: &str| {
+            let mut s = UrlSchemeShowState::default();
+            apply_snapshot(&mut s, 1, Some((url.to_string(), 0)), 0);
+            shortcut_text(&s)
+        };
+        assert!(!with("FANDHE://shortcut/open-demo").is_empty());
+        assert!(!with(WEB_SHORTCUT_URL).is_empty());
+        assert!(with("fandhe://shortcut/open-demo2").is_empty());
+        assert!(with("fandhe://shortcut/Open-demo").is_empty());
+        assert!(with("fandhe://other").is_empty());
+    }
+
+    #[test]
+    fn shortcut_line_renders() {
+        let mut s = UrlSchemeShowState::default();
+        apply_shortcut_status(&mut s, ShortcutStatus::Installed);
+        let joined = render_headless(&url_scheme_show_screen(), &s).join("\n");
+        assert!(joined.contains("ショートカット: 登録しました"));
+    }
 
     #[test]
     fn unsupported_and_waiting_have_different_text() {

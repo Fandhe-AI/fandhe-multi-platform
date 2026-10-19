@@ -458,6 +458,9 @@ windows = { workspace = true, optional = true, features = [
     # （`ProcessIdToSessionId`、`Win32_System_RemoteDesktop`）、引数解析前の生コマンドライン
     # 取得（`GetCommandLineW`、`Win32_System_Environment`）に使う。新規パッケージは増えない。
     "Win32_System_Registry",
+    # Issue #424: `device/windows_app_shortcuts.rs`（ジャンプリスト `ICustomDestinationList`）が使う。
+    # 親の設計で (a) に割り当て、後続の子が Cargo.toml を触らずに済むようにする。新規パッケージは増えない。
+    "Win32_UI_Shell_Common",
     "Win32_System_Threading",
     "Win32_Security",
     "Win32_System_Pipes",
