@@ -14,11 +14,14 @@
       "note": "未実装。`hasTorch` で搭載を確認してから使う。iPad など非搭載機あり。"
     },
     "android": {
-      "status": "possible",
-      "api": "`CameraManager.setTorchMode`",
-      "perm": "`CAMERA` 不要か要確認（報告は未確認）",
+      "status": "done",
+      "api": "`CameraManager.setTorchMode` と `registerTorchCallback`（main Looper）",
+      "perm": "なし（`CAMERA` の実行時許可は不要）",
       "url": "https://developer.android.com/reference/android/hardware/camera2/CameraManager",
-      "note": "未実装。リファレンスの存在のみ確認し、メソッド詳細は未取得。"
+      "note": "フラッシュ搭載カメラが無ければ非対応。最初のコールバック前は分からない状態になる。`onStop` で自分が点けた分を消し、戻っても点け直さない。背景中の点灯要求は拒否する。守らない範囲: 外部からの点け消しへの追従は 1 秒 + 1 フレーム遅れる、他アプリのカメラ使用中は分からない状態として出す、熱による減光、プロセス終了時の後片付けは OS に任せる。",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#456）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_flashlight.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/FlashlightHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/flashlight.rs + crates/fandhe-core/src/screens/flashlight_toggle.rs + crates/fandhe-device/src/flashlight.rs、Issue #461"
     },
     "macos": {
       "status": "n-a",
