@@ -43,5 +43,5 @@
       "note": "URL 未確認（調査では「一般知識」止まり）。iPhone Safari で主に意味がある"
     }
   },
-  "note": "iOS / Android / Web と、切り欠きのある MacBook の macOS（NSScreen.safeAreaInsets）が対象。Windows は n-a。fullscreen-immersive（別 id）と併用する。dynamic-type・dark-mode 等との重なりなし。今回の範囲: 4 辺のインセット値を表示し、そのぶんだけ余白を空けたパネルを描く（回転で更新）。守らない範囲: 反映は最大 1 秒 + 1 フレーム、OS ごとに見る値が違う（iOS は key window、Android はシステムバーと切り欠きの合計、macOS は窓の中身で普段は 0、Web は viewport の env()）"
+  "note": "iOS / Android / Web と、macOS（窓の contentView.safeAreaInsets。切り欠きのある MacBook で非 0 になりうる）が対象。Windows は n-a。fullscreen-immersive（別 id）と併用する。dynamic-type・dark-mode 等との重なりなし。今回の範囲: 4 辺のインセット値を表示し、そのぶんだけ余白を空けたパネルを描く（回転で更新）。守らない範囲: 反映は最大 1 秒 + 1 フレーム、OS ごとに見る値が違う（iOS は key window、Android はシステムバーと切り欠きの合計、macOS は窓の中身で普段は 0、Web は viewport の env()）"
 }
