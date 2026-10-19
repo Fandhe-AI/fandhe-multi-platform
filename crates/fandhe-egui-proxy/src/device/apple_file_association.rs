@@ -1,8 +1,8 @@
 //! macOS / iOS 向けファイルの関連付け受信（Issue #416。親 #102 の a・b-ios）。
 //! `device/file_association.rs::platform` の macOS 分岐と `main.rs`（登録）から使われる。
 //! macOS は `apple/fandhe_apple_file_association.m` が登録する Apple Event `kAEOpenDocuments`
-//! ハンドラから [`fandhe_rust_file_association_received`] が呼ばれる。iOS 側の `.m` は
-//! b-ios が同じファイルの `TARGET_OS_IOS` 分岐に書く（同じ C ABI 関数を呼ぶ）。
+//! ハンドラから [`fandhe_rust_file_association_received`] が呼ばれる。iOS（Issue #417）は同じ `.m` の
+//! `TARGET_OS_IOS` 分岐が scene の通知（`FandheSceneOpenURLNotification`）から同じ関数を呼ぶ。
 //!
 //! 受け口 [`INBOX`] はプロセス全体の static で、UI ができる前（コールドスタート）に届いた
 //! ファイルもここに溜まる。検査・読み取り・保持は共通側の
@@ -10,12 +10,12 @@
 //! （`unsafe` 3 箇所）だけを持つ。パス・名前・中身はログへ出さない。
 
 use fandhe_device::file_association::FileInbox;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 use fandhe_device::file_association::{FileAssociation, FileSnapshot};
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 use fandhe_device::DeviceError;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 // SAFETY: `apple/fandhe_apple_file_association.m` が定義する C ABI（`build.rs` がコンパイル・
 // リンクする）。契約は `.m` ファイル冒頭コメントに集約する。
 #[allow(unsafe_code)]
@@ -29,7 +29,7 @@ static INBOX: FileInbox = FileInbox::new();
 
 /// 受信ハンドラを登録する。イベントループ開始前（`run_native` より前）に main thread から
 /// 呼ぶ。起動時のファイルに間に合わせるため `.m` 側が起動通知も使う。
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 #[allow(unsafe_code)]
 pub fn register() {
     // SAFETY: 引数なしの C 関数。main thread から呼ぶ契約は呼び出し元（`main`）が守る。
@@ -61,13 +61,16 @@ extern "C" fn fandhe_rust_file_association_received(ptr: *const u8, len: usize) 
         Some(std::path::Path::new(std::ffi::OsStr::from_bytes(bytes)))
     };
     INBOX.receive_path(path, now_ms());
+    // 入力がないと egui は描画しないため、結果が入った直後に次フレームを起こす（契約表 4）。
+    #[cfg(target_os = "ios")]
+    crate::ios::request_repaint();
 }
 
-/// macOS 向け `FileAssociation` 実装。`snapshot` は static 受け口の読み出しで常に成功する。
-#[cfg(target_os = "macos")]
+/// macOS / iOS 向け `FileAssociation` 実装。`snapshot` は static 受け口の読み出しで常に成功する。
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub(crate) struct AppleFileAssociation;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 impl FileAssociation for AppleFileAssociation {
     fn snapshot(&self) -> Result<FileSnapshot, DeviceError> {
         Ok(INBOX.snapshot())

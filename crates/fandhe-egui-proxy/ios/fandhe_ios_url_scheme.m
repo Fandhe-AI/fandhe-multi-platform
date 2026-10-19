@@ -7,6 +7,8 @@
 // Info.plist 側の宣言は `platforms/apple/FandheIosApp/Resources/Info.plist` の
 // `CFBundleURLTypes`。
 //
+// ファイル URL（`file://`）は `apple/fandhe_apple_file_association.m` が受けるため、ここでは無視する。
+//
 // 経路は 2 つ。(1) Info.plist の `UIApplicationSceneManifest`（Issue #27）で scene 形態になった今は、
 // `ios/fandhe_ios_scene.m` の scene delegate が受けた URL（`connectionOptions.URLContexts` と
 // `scene:openURLContexts:`）を通知 `FandheSceneOpenURLNotification` で投げ、ここで受ける。
@@ -58,6 +60,10 @@ static NSURL *g_launch_url = nil;
 
 // 受けた URL を転送する。起動時に転送済みの同じ URL は 1 回だけ捨てる（二重転送の防止）。
 static void fandhe_handle_open_url(NSURL *url) {
+  // ファイル URL は `apple/fandhe_apple_file_association.m` が受ける（scheme 不一致の拒否に数えない）。
+  if (url.isFileURL) {
+    return;
+  }
   NSURL *launched = g_launch_url;
   g_launch_url = nil;
   if (launched == nil || ![url isEqual:launched]) {

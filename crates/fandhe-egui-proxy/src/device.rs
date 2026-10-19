@@ -473,10 +473,9 @@ pub mod ios_device_info;
 /// 呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_drag_drop;
-/// Issue #416: iOS 向けファイルの関連付け受信のスタブ（b-ios が埋める）。
+/// Issue #417: iOS 向けファイルの関連付け受信（macOS と共用の `apple_file_association` を返す）。
 /// `device/file_association.rs::platform` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+#[cfg(target_os = "ios")]
 pub mod ios_file_association;
 /// Issue #1410: iOS 向けフォルダ変更監視実装のスタブ（#1412 が埋める）。`device/file_watch.rs` の
 /// iOS 経路から呼ばれる。

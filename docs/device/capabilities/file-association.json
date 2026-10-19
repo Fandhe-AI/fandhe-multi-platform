@@ -7,11 +7,14 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "Info.plist `CFBundleDocumentTypes`。開く要求は `application(_:open:options:)`",
-      "perm": "Info.plist の宣言",
+      "status": "done",
+      "api": "Info.plist `CFBundleDocumentTypes`（`public.plain-text`、`LSHandlerRank=Alternate`）+ `LSSupportsOpeningDocumentsInPlace=false`。受信は scene delegate の `scene:openURLContexts:` / `connectionOptions.URLContexts`（通知経由）",
+      "perm": "Info.plist の宣言のみ（新たな権限なし）",
       "url": "https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundledocumenttypes",
-      "note": "未実装。ファイルは Files アプリ・共有経由で届く。コールドスタート時の保持が要る（url-scheme と同じ）"
+      "detail": "できている（実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#414）",
+      "impl": "crates/fandhe-device/src/file_association.rs + crates/fandhe-egui-proxy/src/device/apple_file_association.rs + crates/fandhe-egui-proxy/src/device/ios_file_association.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_file_association.m + crates/fandhe-egui-proxy/ios/fandhe_ios_url_scheme.m + crates/fandhe-egui-proxy/src/device/file_association.rs + crates/fandhe-core/src/screens/file_association_show.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue #417",
+      "note": "実装済み（#417）。Files アプリ・共有から `.txt` を渡すと、名前・サイズ・先頭 16 バイト・受信時刻を出す。既定アプリは奪わない（`LSHandlerRank=Alternate`）。通知の observer は `UIApplicationMain` 前に登録し、コールドスタート分も落とさない。OS が渡す `Documents/Inbox/` のコピーは読んだ後に必ず削除する（Inbox 直下以外は消さない）。ファイル URL は url-scheme 側で無視する。守る範囲: 1 プロセス内の受信順、不正入力の非表示、コールドスタート分、Inbox コピーの削除。守らない範囲: 1 回で複数件届いたときは最後の 1 件だけ表示する、open-in-place（security-scoped URL）、main thread での同期読み取り、複数プロセス、scene 形態でない旧経路"
     },
     "android": {
       "status": "possible",

@@ -28,6 +28,7 @@
 //!
 //! Issue #416: macOS ターゲット（feature `device` 有効時）では、同じく `run_native` より前に
 //! `device::apple_file_association::register` でファイルを開く Apple Event（odoc）のハンドラを登録する。
+//! iOS では `UIApplicationMain` より前に同関数で scene 通知の observer を登録する（Issue #417）。
 //! Windows ターゲットでは起動引数がファイルなら `file_association_show` 画面を既定にする。
 //!
 //! Issue #1044: Windows ターゲット（feature `device` 有効時）では、通常の画面
@@ -271,6 +272,10 @@ fn main() -> eframe::Result<()> {
     // URL と delegate の差し込みを取り逃がす（`ios/fandhe_ios_url_scheme.m` 参照）。
     #[cfg(feature = "device")]
     fandhe_egui_proxy::device::apple_url_scheme::register();
+
+    // Issue #417: ファイルの関連付けも同じ位置で登録する（コールドスタートの通知に間に合わせる）。
+    #[cfg(feature = "device")]
+    fandhe_egui_proxy::device::apple_file_association::register();
 
     // iOS の実エントリは ios.rs（wgpu/Metal バックエンド初期化、TASK-1.3-S2）。
     fandhe_egui_proxy::ios::run()
