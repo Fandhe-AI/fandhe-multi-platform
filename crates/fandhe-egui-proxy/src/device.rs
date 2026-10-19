@@ -172,7 +172,7 @@ pub mod android_screen_capture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_wake_lock;
-/// Issue #421: Android 向けシステムのアクセント色実装のスタブ（#422 が埋める）。
+/// Issue #421: Android 向けシステムのアクセント色実装（JNI の同期 pull）。
 /// `device/system_accent_color.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -738,7 +738,7 @@ pub mod share;
 /// （macOS/iOS/Windows/Android 実装、Android/Web は兄弟 issue）。
 pub mod speech_recognition;
 /// Phase 11 の拡充ループ（親 #103、Issue #421）: システムのアクセント色の effect ドライバ
-/// （macOS / Windows 実装、Android は #422 が埋めるスタブ、他 OS は `UnsupportedAccentColor` 固定）。
+/// （macOS / Windows 実装、Android は JNI 実装、他 OS は `UnsupportedAccentColor` 固定）。
 pub mod system_accent_color;
 /// Phase 11 の拡充ループ（親 #1038、Issue #1039）: システムトレイの effect
 /// ドライバ（macOS/Windows 実装、他 OS は `UnsupportedSystemTray` 固定）。

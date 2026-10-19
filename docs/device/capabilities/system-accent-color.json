@@ -14,11 +14,14 @@
       "note": "iOS にはユーザー設定のシステムアクセント色が無い（Android 調査での記載）。URL 未確認"
     },
     "android": {
-      "status": "possible",
-      "api": "Dynamic Color（Android 12+）。View は `DynamicColors`、Compose は `dynamicColorScheme()`",
-      "perm": "なし",
+      "status": "done",
+      "api": "`Resources.getColor(android.R.color.system_accent1_500)`（Android 12 / API 31+。1 秒間隔で読み直し、変化通知は購読しない）",
+      "perm": "不要",
       "url": "https://developer.android.com/develop/ui/views/theming/dynamic-colors",
-      "note": "未実装。壁紙由来の配色で、Android 11 以前は取れない。Rust 側へは JNI で色を渡す"
+      "note": "API 30 以下は既定色に倒さず「取得できません（非対応）」を出す。リファレンス: https://developer.android.com/reference/android/R.color#system_accent1_500 。守らない範囲: AOSP の既定値を本物と区別しない、反映は最大 1 秒 + 1 フレーム、壁紙変更後の反映は実機未確認（#415）",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#415）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_system_accent_color.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/SystemAccentColorHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/system_accent_color.rs + crates/fandhe-core/src/screens/system_accent_color_show.rs + crates/fandhe-device/src/system_accent_color.rs、Issue #422"
     },
     "macos": {
       "status": "done",
