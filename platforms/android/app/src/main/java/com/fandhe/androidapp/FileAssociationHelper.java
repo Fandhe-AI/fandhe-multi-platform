@@ -106,6 +106,9 @@ final class FileAssociationHelper {
 
     static native void nativeOnFileOpened(int code, String name, String mime, int fd);
 
+    /** 共通層 `fandhe_device::file_association::accepts` の判定。読み取り前に拒否を確定するために使う。 */
+    static native boolean nativeAccepts(String name, String mime);
+
     /**
      * `ACTION_VIEW` で scheme が `content` / `file` の intent だけを引き受けて true を返す。
      * それ以外（`fandhe://` や MAIN 起動）は false で、呼び出し元が url-scheme へ流す。
@@ -217,9 +220,9 @@ final class FileAssociationHelper {
         } catch (RuntimeException e) {
             // 名前なしとして続行する。
         }
-        if (name == null) {
-            // 名前なしはファイルを開く前に拒否する。読み取りの成否で UNREADABLE に化けると
-            // 拒否が数えられず、直前の latest が置き換わってしまう。
+        if (name == null || !nativeAccepts(name, mime)) {
+            // 名前なし・受理されない名前や MIME はファイルを開く前に拒否する。読み取りの成否で
+            // UNREADABLE に化けると拒否が数えられず、直前の latest が置き換わってしまう。
             return new Result(CODE_REJECTED, null, null, -1);
         }
         ParcelFileDescriptor pfd;

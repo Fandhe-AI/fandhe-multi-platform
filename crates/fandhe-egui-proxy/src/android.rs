@@ -713,6 +713,20 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnUrlSchemeRece
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeAccepts` no-op（常に true で読み取りへ進め、
+/// 後続の `nativeOnFileOpened` no-op が fd を閉じる）。引数は Java 宣言・実体と一致させる。
+#[cfg(not(feature = "device"))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_androidapp_FileAssociationHelper_nativeAccepts(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _name: *mut core::ffi::c_void,
+    _mime: *mut core::ffi::c_void,
+) -> u8 {
+    1
+}
+
 /// `device` feature 無効ビルド向けの `nativeOnFileOpened` no-op フォールバック（Issue #418）。
 /// `FileAssociationHelper` は feature を知らず `ACTION_VIEW` の `content:` で必ず呼ぶため、
 /// スタブが無いと `UnsatisfiedLinkError` になる。detach 済みの fd は `OwnedFd` で包んで drop し

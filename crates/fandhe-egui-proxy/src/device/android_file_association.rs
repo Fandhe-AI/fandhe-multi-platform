@@ -103,6 +103,33 @@ extern "system" fn Java_com_fandhe_androidapp_FileAssociationHelper_nativeOnFile
     let _ = outcome.into_outcome();
 }
 
+/// `FileAssociationHelper.nativeAccepts` の実体。読み取り前に共通層 `accepts` で受理可否を返す。
+/// 失敗（文字列の取得失敗）は名前・MIME なし扱いで、拒否側に倒す。
+#[cfg(target_os = "android")]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_androidapp_FileAssociationHelper_nativeAccepts<'caller>(
+    mut unowned_env: jni::EnvUnowned<'caller>,
+    _class: jni::objects::JClass<'caller>,
+    name: jni::objects::JString<'caller>,
+    mime: jni::objects::JString<'caller>,
+) -> jni::sys::jboolean {
+    let outcome = unowned_env.with_env(|env| -> Result<bool, jni::errors::Error> {
+        let name = (!name.is_null())
+            .then(|| name.try_to_string(env).ok())
+            .flatten();
+        let mime = (!mime.is_null())
+            .then(|| mime.try_to_string(env).ok())
+            .flatten();
+        Ok(fandhe_device::file_association::accepts(
+            name.as_deref(),
+            mime.as_deref(),
+        ))
+    });
+    // JNI 失敗時は拒否（false）。
+    outcome.into_outcome().ok().unwrap_or(false).into()
+}
+
 /// Android 向け `FileAssociation` 実装。`snapshot` は static 受け口の読み出しで常に成功する。
 struct AndroidFileAssociation;
 
