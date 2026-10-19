@@ -106,6 +106,7 @@ impl<S> CanvasWidget<S> {
 }
 
 /// `command` を `(dx, dy)` だけ平行移動する。`Circle` の中心座標のみが位置を持ち、
+/// `InsetRect` は辺からの距離で位置を持たないため同じく素通しする。
 /// それ以外のバリアントはキャンバスの配置矩形全体を暗黙の境界とする契約
 /// （`StyledRect` 等、既存ウィジェットの `PaintCommand` の使われ方と同じ）ため素通しする。
 fn translate(command: PaintCommand, dx: f32, dy: f32) -> PaintCommand {

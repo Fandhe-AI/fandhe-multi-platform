@@ -38,10 +38,29 @@ pub fn paint_circle(painter: &Painter, command: &PaintCommand) {
     }
 }
 
+/// `PaintCommand::InsetRect` の矩形を求める。`outer` の 4 辺から指定距離だけ内側へ寄せ、
+/// 距離が大きすぎて反転する軸は幅・高さ 0 に潰す（min > max にしない、Issue #444）。
+pub fn inset_rect(outer: egui::Rect, left: f32, top: f32, right: f32, bottom: f32) -> egui::Rect {
+    let min = outer.min + egui::vec2(left, top);
+    let max = outer.max - egui::vec2(right, bottom);
+    egui::Rect::from_min_max(min, egui::pos2(max.x.max(min.x), max.y.max(min.y)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use fandhe_core::token::ColorValue;
+
+    #[test]
+    fn inset_rect_moves_edges_and_collapses_when_over() {
+        let outer = egui::Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(100.0, 50.0));
+        let r = inset_rect(outer, 1.0, 2.0, 3.0, 4.0);
+        assert_eq!(r.min, egui::pos2(11.0, 12.0));
+        assert_eq!(r.max, egui::pos2(107.0, 56.0));
+        let c = inset_rect(outer, 80.0, 0.0, 80.0, 60.0);
+        assert_eq!(c.width(), 0.0);
+        assert_eq!(c.height(), 0.0);
+    }
 
     #[test]
     fn circle_shape_converts_center_radius_and_color() {
