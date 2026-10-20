@@ -4355,6 +4355,13 @@ public class MainActivity extends GameActivity {
         return AudioDevicesHelper.list(getApplicationContext());
     }
 
+    // Rust 側（`device/android_usb_device.rs`、Issue #507）から JNI 経由で egui スレッドが
+    // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
+    // `UsbDeviceHelper` 冒頭を参照。失敗は null、USB ホスト非搭載は空文字。
+    private String usbDeviceList() {
+        return UsbDeviceHelper.list(getApplicationContext());
+    }
+
     // Rust 側（`device/android_local_fonts.rs`、Issue #1378）から JNI 経由で egui スレッドが
     // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()[Ljava/lang/Object;`）。詰め方は
     // `LocalFontsHelper` 冒頭を参照。API 29 未満は長さ 0、失敗は null。
