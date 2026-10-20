@@ -19,8 +19,8 @@
 //             2 = 位置情報の許可なし / 3 = Wi-Fi の電源がオフ / 4 = 位置情報サービスがオフ /
 //             5 = 内部失敗（引数不正・main thread からの呼び出しを含む）。
 //             0 以外のとき out_* は書き換えない。
-//     成功時、*has_current は接続中なら 1。current は接続中のときだけ書く。nearby へ `cap` 件を
-//     上限に生の値を書き、*nearby_len に件数を入れる。正規化（SSID ごとの集約・並べ替え・上位 5 件・
+//     成功時、*has_current は接続中なら 1。current は接続中のときだけ書く。nearby へ SSID ごとに最強の 1 件へ畳み
+//     強い順に `cap` 件を上限に書き、*nearby_len に件数を入れる。正規化（並べ替え・上位 5 件・
 //     値域の検証）は Rust 側で行う。ssid_len = -1 は SSID 無し（nil・32 バイト超）。rssi は OS の
 //     値のまま（0 は未取得）。
 //
@@ -95,6 +95,11 @@ static void FandheFillNet(FandheWifiNet *out, NSData *ssidData, NSInteger rssi) 
     out->rssi = (int32_t)rssi;
 }
 
+// 比較用の強さ。契約の値域（-126..=-1 dBm）外は最弱。
+static NSInteger FandheRank(NSInteger rssi) {
+    return (rssi >= -126 && rssi <= -1) ? rssi : NSIntegerMin;
+}
+
 int32_t fandhe_macos_wifi_info_read(FandheWifiNet *current, int32_t *has_current,
                                     FandheWifiNet *nearby, size_t cap, size_t *nearby_len) {
     if (current == NULL || has_current == NULL || nearby == NULL || nearby_len == NULL) {
@@ -143,14 +148,24 @@ int32_t fandhe_macos_wifi_info_read(FandheWifiNet *current, int32_t *has_current
             *has_current = 0;
         }
 
-        // OS が持つ直近のスキャン結果。強い順に並べて cap 件まで書く（自分からはスキャンしない）。
-        // ponytail: cap を超えた分は弱いものから捨てる。Rust 側は上位 5 件しか使わないため十分。
-        NSArray<CWNetwork *> *sorted = [iface.cachedScanResults.allObjects
+        // OS が持つ直近のスキャン結果。cap で切る前に SSID（生バイト）ごとへ最強の 1 件に畳み、
+        // 強い順に並べる（自分からはスキャンしない）。同一 SSID の多数の AP が上限を埋めて、別 SSID が
+        // 落ちるのを防ぐ。rssi 0（未取得）などの範囲外は最弱として扱う。
+        NSMutableDictionary<id, CWNetwork *> *best = [NSMutableDictionary new];
+        for (CWNetwork *net in iface.cachedScanResults) {
+            id key = net.ssidData ?: (id)[NSNull null];
+            CWNetwork *old = best[key];
+            if (old == nil || FandheRank(net.rssiValue) > FandheRank(old.rssiValue)) {
+                best[key] = net;
+            }
+        }
+        NSArray<CWNetwork *> *sorted = [best.allValues
             sortedArrayUsingComparator:^NSComparisonResult(CWNetwork *a, CWNetwork *b) {
-                if (a.rssiValue == b.rssiValue) {
+                NSInteger ra = FandheRank(a.rssiValue), rb = FandheRank(b.rssiValue);
+                if (ra == rb) {
                     return NSOrderedSame;
                 }
-                return a.rssiValue > b.rssiValue ? NSOrderedAscending : NSOrderedDescending;
+                return ra > rb ? NSOrderedAscending : NSOrderedDescending;
             }];
         size_t n = 0;
         for (CWNetwork *net in sorted) {

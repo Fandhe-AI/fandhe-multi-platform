@@ -60,7 +60,12 @@ pub const READ_FAILED: &str = "wifi_info read";
 /// Wi-Fi の名前。位置を推定できるため `Debug` は伏せ字、`Display` は実装しない。
 /// 生成経路は [`Ssid::from_bytes`] のみ。
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Ssid(String);
+pub struct Ssid {
+    /// 同一性判定用の生の文字列（整形しない。`home` と ` home ` は別の SSID）。
+    raw: String,
+    /// 表示用（制御文字・前後の空白を除いたもの）。
+    shown: String,
+}
 
 impl std::fmt::Debug for Ssid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -72,12 +77,16 @@ impl Ssid {
     /// OS の生バイトから作る。UTF-8 でない・制御文字を除くと空なら `None`。
     pub fn from_bytes(raw: &[u8]) -> Option<Ssid> {
         let s = std::str::from_utf8(raw).ok()?;
-        clean_text(s).map(Ssid)
+        let shown = clean_text(s)?;
+        Some(Ssid {
+            raw: s.to_string(),
+            shown,
+        })
     }
 
     /// 表示用の文字列。画面への受け渡し以外で使わない。
     pub fn expose(&self) -> &str {
-        &self.0
+        &self.shown
     }
 }
 
@@ -222,6 +231,12 @@ mod tests {
                 Some("e".into())
             ]
         );
+    }
+
+    #[test]
+    fn nearby_keeps_ssids_differing_only_by_padding() {
+        let out = normalize_nearby([net(Some("home"), Some(-50)), net(Some(" home "), Some(-60))]);
+        assert_eq!(out.len(), 2);
     }
 
     #[test]
