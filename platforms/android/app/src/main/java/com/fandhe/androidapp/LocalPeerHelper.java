@@ -470,9 +470,13 @@ final class LocalPeerHelper {
         inflight.put(msgId, new Outgoing(session, peer, reply, retries));
         try {
             ((DiscoverySession) session).sendMessage(peer, msgId, payload);
-        } catch (RuntimeException e) {
-            // 送れなかった分は窓終了時の結果に任せる（成功が無ければ相手なし）。
+        } catch (SecurityException e) {
+            // API 呼び出し自体の例外は「相手なし」の成功にせず、失敗として確定する。
             inflight.remove(msgId);
+            finish(id, CODE_PERMISSION);
+        } catch (RuntimeException e) {
+            inflight.remove(msgId);
+            finish(id, CODE_OTHER);
         }
     }
 
