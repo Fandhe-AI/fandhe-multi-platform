@@ -221,6 +221,10 @@ pub mod android_system_accent_color;
 /// platform_url_scheme` の Android 経路から使われる。
 #[cfg(target_os = "android")]
 pub mod android_url_scheme;
+/// Issue #505: Android 向け USB 機器一覧実装のスタブ（#507 が埋める）。`device/usb_device.rs` の
+/// Android 経路から呼ばれる。
+#[cfg(target_os = "android")]
+pub mod android_usb_device;
 /// Issue #514: Android 向け Wi-Fi 情報のスタブ（b-android 子が `WifiManager` で埋める）。
 /// `device/wifi_info.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -755,6 +759,12 @@ pub mod macos_screen_wake_lock;
 /// 呼ぶ C ABI ラッパー）。`device/system_accent_color.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_system_accent_color;
+/// Issue #505: macOS 向け USB 機器一覧実装（`macos/fandhe_macos_usb_device.m` の IOKit 列挙を呼ぶ
+/// C ABI ラッパー）。`device/usb_device.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
+/// テストできるよう cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_usb_device;
 /// Issue #514: macOS 向け Wi-Fi 情報実装（`macos/fandhe_macos_wifi_info.m` の CoreWLAN と CoreLocation の
 /// 許可判定を呼ぶ C ABI ラッパー）。`device/wifi_info.rs` の macOS 経路から呼ばれる。写像の純関数を
 /// ホストでテストするため test でも載せる。
@@ -892,6 +902,10 @@ pub mod tts;
 /// Phase 11 の拡充ループ（親 #1116、Issue #1215）: カスタム URL scheme 受信の effect
 /// ドライバ（macOS 実装、他 OS は `UnsupportedUrlScheme` 固定）。
 pub mod url_scheme;
+/// Phase 11 の拡充ループ（親 #112、Issue #505）: USB 機器一覧の effect ドライバ（macOS 実装、
+/// Windows・Android は #506・#507 で埋めるスタブ、他 OS は `UnsupportedUsbDevices` 固定。Web は
+/// `fandhe-web-dom`）。
+pub mod usb_device;
 /// Phase 11 の拡充ループ（親 #111、Issue #514）: Wi-Fi 情報の effect ドライバ（macOS 実装、Windows・Android は
 /// 後続の子 Issue が埋めるスタブ、iOS（deferred）・他 OS は `UnsupportedWifiInfo` 固定。Web は対象外）。
 pub mod wifi_info;
@@ -1116,6 +1130,10 @@ pub mod windows_text_scale;
 /// モジュール内に閉じる（`windows_background_task` と同じ方針）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_url_scheme;
+/// Issue #505: Windows 向け USB 機器一覧実装のスタブ（#506 が埋める）。`device/usb_device.rs` の
+/// Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_usb_device;
 /// Issue #514: Windows 向け Wi-Fi 情報のスタブ（windows 子が `wlanapi` で埋める）。
 /// `device/wifi_info.rs` の Windows 経路から呼ばれる。写像の純関数をホストでテストできるよう
 /// cfg は `any(windows, test)`。
