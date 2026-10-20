@@ -282,9 +282,8 @@ pub mod apple_home_widget;
 pub mod apple_image_recognition;
 /// Issue #486 macOS: LAN のサービス探索実装（`apple/fandhe_apple_lan_discovery.m` を呼ぶ C ABI ラッパー）。
 /// `device/lan_discovery.rs` の macOS 経路と、b-ios が委譲する `ios_lan_discovery` から呼ばれる。
-/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。iOS は `ios_lan_discovery` が委譲するまで未使用。
+/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-#[cfg_attr(target_os = "ios", allow(dead_code))]
 pub mod apple_lan_discovery;
 /// Issue #889: iOS / macOS 共通の CoreLocation 実装（`apple/fandhe_apple_location.m`
 /// を呼ぶ C ABI ラッパー）。`device/location.rs` の Apple cfg 分岐から呼ばれる。
@@ -556,7 +555,7 @@ pub mod ios_fullscreen_immersive;
 /// Issue #1252: iOS 向け文字認識（PHPicker + Vision）の effect ドライバ。
 #[cfg(target_os = "ios")]
 pub mod ios_image_recognition;
-/// Issue #486: iOS 向け LAN のサービス探索のスタブ（親 #109 の b-ios が `apple_lan_discovery` への委譲で埋める）。
+/// Issue #488: iOS 向け LAN のサービス探索（`apple_lan_discovery` へ委譲する）。
 /// `device/lan_discovery.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_lan_discovery;

@@ -96,6 +96,12 @@
   （`crates/fandhe-egui-proxy/ios/fandhe_ios_pedometer.m`）で歩数を読むために必須。
   未設定だと権限要求時にクラッシュする。HealthKit は使わない（security.md A05）。
 
+  NSLocalNetworkUsageDescription / NSBonjourServices（Issue #488）: 型サンプル「LAN のサービス探索」
+  （`FANDHE_PROXY_APP=lan_discover`）が `nw_browser`
+  （`crates/fandhe-egui-proxy/apple/fandhe_apple_lan_discovery.m` は iOS/macOS 共用）で
+  Bonjour を探索するために必須。未宣言だと探索が失敗する。種別は `_http._tcp` だけを宣言し
+  （最小権限、security.md A05）、multicast entitlement は足さない。探索のみで接続・公開はしない。
+
   BGTaskSchedulerPermittedIdentifiers / UIBackgroundModes（Issue #1045）: 型サンプル
   「バックグラウンド処理」画面（`FANDHE_PROXY_APP=background_task`）が
   `BGTaskScheduler`（`crates/fandhe-egui-proxy/ios/fandhe_ios_background_task.m`）で
@@ -234,6 +240,12 @@
 	<string>型サンプル「歩数」の動作確認に使います</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>型サンプル「写真の保存」の動作確認に使います</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>型サンプル「LAN のサービス探索」の動作確認に使います</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_http._tcp</string>
+	</array>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>

@@ -25,6 +25,8 @@
 //     エラー種別への写像）は Rust 側 `fandhe_device::lan_discovery::decode_code` に一本化する。
 //     1 要求につき finished は高々 1 回（`FandheLanClose` が唯一の発火点）。
 //
+// iOS: 初回の許可待ち（PolicyDenied を伴う waiting）は、ready へ移った時点で denied を解除する。
+//
 // スレッド: 専用のシリアルキューだけで動かし、main queue は使わない（main 側が取るロックとの
 // デッドロックを避ける、`device-bridge-contracts.md` 11 節）。dns_sd の各 `DNSServiceRef` も
 // `DNSServiceSetDispatchQueue` で同じキューに載せ、作成・解放もこのキューで行う（セッション状態は
@@ -302,6 +304,11 @@ int32_t fandhe_apple_lan_start(uint64_t request_id, uint64_t duration_ms) {
                     return;
                 }
                 session.waiting = (state == nw_browser_state_waiting);
+                if (state == nw_browser_state_ready) {
+                    // iOS の初回は許可ダイアログの回答前に PolicyDenied を伴う waiting になり、許可後に
+                    // ready へ移る。窓の中で許可されたなら「許可なし」を取り消す（偽の失敗を防ぐ）。
+                    session.denied = NO;
+                }
                 if (state == nw_browser_state_failed) {
                     session.failed = YES;
                 }
