@@ -181,8 +181,8 @@ final class WifiInfoHelper {
             }
             // API 31 以降は非推奨だが、位置情報の許可があれば SSID が得られる（#510 で実機確認）。
             WifiInfo info = wm.getConnectionInfo();
-            boolean connected = info != null && info.getNetworkId() != -1
-                    && !WifiManager.UNKNOWN_SSID.equals(info.getSSID());
+            boolean connected = info != null && info.getNetworkId() != -1;
+            // SSID が非公開（"<unknown ssid>"）でも接続は接続。unquote が null を返し ssid=None になる。
             String currentSsid = connected ? unquote(info.getSSID()) : null;
             int currentRssi = connected ? info.getRssi() : 0;
 
