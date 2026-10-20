@@ -410,6 +410,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::compass::release_mount(id);
         super::ar::release_mount(id);
         super::screen_wake_lock::release_mount(id);
+        super::flashlight::release_mount(id);
         super::power_state::release_mount(id);
         super::device_info::release_mount(id);
         super::audio_devices::release_mount(id);

@@ -945,7 +945,7 @@ pub mod windows_file_association;
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_file_watch;
-/// Issue #458: Windows 向けライト（トーチ）実装のスタブ（#459 が埋める）。
+/// Issue #459: Windows 向けライト（トーチ）実装（`Lamp`）。
 /// `device/flashlight.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
