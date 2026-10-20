@@ -161,18 +161,9 @@ static BOOL FandhePeerLooksValid(MCPeerID *peer) {
     });
 }
 
+// browse の lostPeer は無視する。招待中・承認後・接続中の進行は MCSession の状態（didChangeState）だけで
+// 判断し、広告の消失で target を外さない（外すと後続の Connected / didReceiveData が捨てられる）。
 - (void)browser:(MCNearbyServiceBrowser *)browser lostPeer:(MCPeerID *)peerID {
-    uint64_t rid = self.requestId;
-    dispatch_async(FandhePeerQueue(), ^{
-      @autoreleasepool {
-          // 招待中（送信前）の相手が消えたら target を外し、再広告された foundPeer で再招待できるようにする。
-          // 接続済み（sent）や受信済みの相手は交換を続けるため外さない。
-          FandhePeerSession *s = FandhePeerCurrent(rid);
-          if (s == self && s.target != nil && [peerID isEqual:s.target] && !s.sent && !s.received) {
-              s.target = nil;
-          }
-      }
-    });
 }
 
 - (void)browser:(MCNearbyServiceBrowser *)browser didNotStartBrowsingForPeers:(NSError *)error {
@@ -235,9 +226,13 @@ static BOOL FandhePeerLooksValid(MCPeerID *peer) {
                   FandhePeerClose(rid, 4); // 送れないのに成功扱いにしない
               }
           } else if (state == MCSessionStateNotConnected && !s.received) {
-              // 受け取る前に切れた（招待の拒否・失敗を含む）。次の相手を待つ。
-              s.target = nil;
-              s.sent = NO;
+              if (s.sent) {
+                  // 接続が成立し送信まで済んだのに、受け取る前に切れた。相手なしの成功にせず失敗で確定する。
+                  FandhePeerClose(rid, 4);
+              } else {
+                  // 接続成立前に切れた（招待の拒否・失敗を含む）。次の相手を待つ。
+                  s.target = nil;
+              }
           }
       }
     });
