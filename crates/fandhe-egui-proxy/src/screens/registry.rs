@@ -286,6 +286,10 @@ generated_screens! {
     crate::device::pdf_viewer::pdf_first_page_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "usb_device_show" => fandhe_core::screens::usb_device_show::current_screen,
+    crate::device::usb_device::usb_device_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "music_library_list" => fandhe_core::screens::music_library_list::current_screen,
     crate::device::music_library::music_library_list_effect,
     effect

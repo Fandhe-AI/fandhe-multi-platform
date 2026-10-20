@@ -225,6 +225,10 @@ pub mod android_system_accent_color;
 /// platform_url_scheme` の Android 経路から使われる。
 #[cfg(target_os = "android")]
 pub mod android_url_scheme;
+/// Issue #505: Android 向け USB 機器一覧実装のスタブ（#507 が埋める）。`device/usb_device.rs` の
+/// Android 経路から呼ばれる。
+#[cfg(target_os = "android")]
+pub mod android_usb_device;
 /// Phase 11（親 #1141、Issue #1360）: アプリアイコンのバッジ（Windows はタスクバーのオーバーレイ数字）の effect ドライバ（macOS /
 /// Windows は同期、iOS / Android は pull 型 `bridge`（実装は #1361 / #1362 まで `Unsupported` スタブ）、
 /// 他 OS は `UnsupportedAppBadge` 固定。Web は `fandhe-web-dom`）。
@@ -767,6 +771,12 @@ pub mod macos_screen_wake_lock;
 /// 呼ぶ C ABI ラッパー）。`device/system_accent_color.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_system_accent_color;
+/// Issue #505: macOS 向け USB 機器一覧実装（`macos/fandhe_macos_usb_device.m` の IOKit 列挙を呼ぶ
+/// C ABI ラッパー）。`device/usb_device.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
+/// テストできるよう cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_usb_device;
 /// Phase 11 の拡充ループ（親 #85、Issue #273）: 地図表示の effect ドライバ（macOS / iOS は
 /// pull 型 `bridge`、他 OS は `UnsupportedMapSnapshotter` 固定）。
 pub mod map_view;
@@ -898,6 +908,10 @@ pub mod tts;
 /// Phase 11 の拡充ループ（親 #1116、Issue #1215）: カスタム URL scheme 受信の effect
 /// ドライバ（macOS 実装、他 OS は `UnsupportedUrlScheme` 固定）。
 pub mod url_scheme;
+/// Phase 11 の拡充ループ（親 #112、Issue #505）: USB 機器一覧の effect ドライバ（macOS 実装、
+/// Windows・Android は #506・#507 で埋めるスタブ、他 OS は `UnsupportedUsbDevices` 固定。Web は
+/// `fandhe-web-dom`）。
+pub mod usb_device;
 /// Issue #1308: Windows 向けアクセシビリティ設定実装（WinRT `UISettings` / `AccessibilitySettings`）。
 /// `device/accessibility_prefs.rs` の Windows 経路から呼ばれる。写像の純関数はホストの
 /// `cargo test` で検査するため cfg を付けず、WinRT 呼び出しだけをモジュール内に閉じる。
@@ -1119,6 +1133,10 @@ pub mod windows_text_scale;
 /// モジュール内に閉じる（`windows_background_task` と同じ方針）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_url_scheme;
+/// Issue #505: Windows 向け USB 機器一覧実装のスタブ（#506 が埋める）。`device/usb_device.rs` の
+/// Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_usb_device;
 
 use fandhe_core::screens::storage_note::{NoteStorage, NoteStorageError, StorageNoteState};
 use fandhe_device::{storage::Storage, DeviceError};
