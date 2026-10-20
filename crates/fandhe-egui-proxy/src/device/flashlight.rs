@@ -151,13 +151,14 @@ fn apply_minimize_off(
         s.error = format!(
             "{}{}",
             fandhe_core::screens::flashlight_toggle::FAILED_PREFIX,
-            fandhe_core::screens::flashlight_toggle::READ_FAILED
+            fandhe_core::screens::flashlight_toggle::OFF_FAILED
         );
     }
 }
 
-/// 最小化消灯の結果（消灯 `set_on` の成否, 読み戻した値）。
-type DeferredOff = (bool, Result<Option<bool>, FlashlightFailure>);
+/// 最小化消灯の結果（保留時点の要求世代, 消灯 `set_on` の成否, 読み戻した値）。
+/// 世代が変わった（新しい要求が始まった）結果は古いので適用時に捨てる（契約表 2）。
+type DeferredOff = (u64, bool, Result<Option<bool>, FlashlightFailure>);
 
 /// 点灯の確認待ち（Idle 以外）に届いた最小化消灯の結果の保留枠（最新のみ）。
 /// 捨てると、消灯失敗が点灯成功の裏で表示されなくなる（契約表 2）。
@@ -174,7 +175,7 @@ fn apply_or_defer_minimize_off(
     if s.phase == FlashlightPhase::Idle {
         apply_minimize_off(s, set_ok, read);
     } else {
-        *DEFERRED_OFF.lock().unwrap_or_else(|p| p.into_inner()) = Some((set_ok, read));
+        *DEFERRED_OFF.lock().unwrap_or_else(|p| p.into_inner()) = Some((s.generation, set_ok, read));
     }
 }
 
@@ -337,9 +338,12 @@ fn drive(
 
     // 確認待ち中に届いた最小化消灯の結果を、要求完了（Idle）後の最初のフレームで反映する。
     #[cfg(target_os = "windows")]
-    if let Some((set_ok, read)) = take_deferred_off() {
+    if let Some((generation, set_ok, read)) = take_deferred_off() {
         let _ = sender.send(Box::new(move |s: &mut FlashlightToggleState| {
-            apply_minimize_off(s, set_ok, read.clone())
+            // 適用時点（UI 状態の内側）で世代を照合し、新しい要求が始まっていたら捨てる。
+            if s.generation == generation && s.phase == FlashlightPhase::Idle {
+                apply_minimize_off(s, set_ok, read.clone())
+            }
         }));
     }
 
@@ -581,7 +585,8 @@ mod tests {
         // 点灯が確認されて成功で完了した後、保留分を反映すると失敗が表示される。
         finish(&mut s, g, Ok(()), Some(true));
         assert_eq!(s.error, "");
-        let (ok, read) = take_deferred_off().expect("保留されている");
+        let (gen, ok, read) = take_deferred_off().expect("保留されている");
+        assert_eq!(gen, g);
         apply_minimize_off(&mut s, ok, read);
         assert!(s
             .error

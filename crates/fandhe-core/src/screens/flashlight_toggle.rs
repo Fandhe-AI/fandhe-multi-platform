@@ -51,6 +51,9 @@ pub const FAILED_PREFIX: &str = "できませんでした: ";
 pub const NOT_CONFIRMED_REASON: &str = "点灯を確かめられませんでした";
 /// 定期読み取りが失敗したときの固定文言。
 pub const READ_FAILED: &str = "状態を読み取れませんでした";
+/// 最小化時の消灯操作が失敗したときの固定文言。読み取り成功では消さず、消灯を読み戻せたときか
+/// 次の明示操作の完了まで保持する。
+pub const OFF_FAILED: &str = "消灯できませんでした";
 /// 注記。
 pub const NOTE: &str =
     "他のアプリがカメラを使っている間は点けられません。アプリを背景へ回すと消えます";
@@ -205,7 +208,10 @@ pub fn apply_read(
         Ok(v) => {
             state.on = v;
             state.unsupported = false;
-            if state.error == format!("{FAILED_PREFIX}{READ_FAILED}") {
+            let off_failed = format!("{FAILED_PREFIX}{OFF_FAILED}");
+            if state.error == format!("{FAILED_PREFIX}{READ_FAILED}")
+                || (state.error == off_failed && v == Some(false))
+            {
                 state.error = String::new();
             }
         }
@@ -216,7 +222,10 @@ pub fn apply_read(
         Err(FlashlightFailure::Failed(_)) => {
             // 前回の値を出し続けない。
             state.on = None;
-            state.error = format!("{FAILED_PREFIX}{READ_FAILED}");
+            // 消灯失敗の表示は読み取り失敗で上書きしない。
+            if state.error != format!("{FAILED_PREFIX}{OFF_FAILED}") {
+                state.error = format!("{FAILED_PREFIX}{READ_FAILED}");
+            }
         }
     }
 }
