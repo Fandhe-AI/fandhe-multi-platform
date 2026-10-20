@@ -14,16 +14,26 @@
 //! 3. `Idle`: `READ_INTERVAL` ごとに `is_on` を pull して反映（外部の点け消しへの追従）。
 //!    送信を省く分岐でも次回の再描画を必ず予約する（契約表 4）
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は AVFoundation の torch 実装（#460）、Android・Windows は後続の子
-//! （#461・#459）が埋めるスタブ、それ以外は `UnsupportedFlashlight` 固定。Web は
-//! `fandhe-web-dom` 側（#462）。Windows の最小化での消灯は #459 の担当。
+//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は AVFoundation の torch 実装（#460）、Android は #461、Windows は
+//! #459（本実装）。それ以外は `UnsupportedFlashlight` 固定。Web は
+//! `fandhe-web-dom` 側（#462）。
+//!
+//! Windows は最小化を検知したら（専用ウォッチャースレッドが HWND の `IsIconic` を定期確認する。
+//! 描画フレームに依存しない）、ワーカーで `set_on(false)` を直列に実行する。最小化中は
+//! eframe が次フレームを描かないため、状態経由（次フレームの `take_request`）にすると消灯が
+//! 復帰まで遅れる。ワーカーは常に 1 本（`WIN`）。点灯処理中（Requested / Applying）に最小化を
+//! 観測したら保留として記録し、その点灯ワーカーが終わった直後に同じスレッドで消灯する。
+//! 消灯に失敗したら読み戻した値と失敗を状態へ通知し、最小化が続く間は `READ_INTERVAL` ごとに
+//! ワーカー自身が再試行する（フレームに依存しない）。戻っても点け直さない。
 
+#[cfg(target_os = "windows")]
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use fandhe_core::screens::flashlight_toggle::{
     apply_read, confirm_target, finish, mark_applying, mark_confirming, take_request,
-    FlashlightFailure, FlashlightToggleState,
+    FlashlightFailure, FlashlightPhase, FlashlightToggleState,
 };
 #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "windows")))]
 use fandhe_device::flashlight::UnsupportedFlashlight;
@@ -86,6 +96,127 @@ static TIMING: Mutex<Timing> = Mutex::new(Timing {
     confirm: None,
 });
 
+/// Windows のライト操作ワーカーの直列化状態（`active`: 走行中、`pending`: 走行中に最小化を観測）。
+#[cfg(target_os = "windows")]
+struct WinSync {
+    active: bool,
+    pending: bool,
+}
+
+#[cfg(target_os = "windows")]
+static WIN: Mutex<WinSync> = Mutex::new(WinSync {
+    active: false,
+    pending: false,
+});
+
+/// 最後に観測した最小化状態（ウォッチャーが `IsIconic` で更新し、ワーカーが読む）。
+#[cfg(target_os = "windows")]
+static MINIMIZED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(target_os = "windows")]
+fn win_lock() -> std::sync::MutexGuard<'static, WinSync> {
+    WIN.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// ワーカーの実行権を取る。走行中なら `false`（呼び出し側は次フレームで再試行する）。
+#[cfg(target_os = "windows")]
+fn win_begin() -> bool {
+    let mut w = win_lock();
+    !std::mem::replace(&mut w.active, true)
+}
+
+/// 点灯ワーカーの終了処理。走行中に最小化を観測していたなら `true`（実行権は保持したまま、
+/// 呼び出し側が消灯する）。判定と `active` の解放は同じロック内で行う。
+#[cfg(target_os = "windows")]
+fn win_end_set() -> bool {
+    let mut w = win_lock();
+    let again = std::mem::take(&mut w.pending) || MINIMIZED.load(Ordering::Acquire);
+    if !again {
+        w.active = false;
+    }
+    again
+}
+
+/// 最小化消灯の結果を状態へ反映する。読み戻した値をそのまま `apply_read` に渡すので、
+/// `Unsupported`・読み取り失敗は成功値で上書きされない。消灯失敗かつ消灯未確認なら失敗を表示する。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn apply_minimize_off(
+    s: &mut FlashlightToggleState,
+    set_ok: bool,
+    read: Result<Option<bool>, FlashlightFailure>,
+) {
+    let still_on = !set_ok && read != Ok(Some(false));
+    apply_read(s, read);
+    if still_on {
+        s.error = format!(
+            "{}{}",
+            fandhe_core::screens::flashlight_toggle::FAILED_PREFIX,
+            fandhe_core::screens::flashlight_toggle::OFF_FAILED
+        );
+    }
+}
+
+/// 最小化消灯の結果（保留時点の要求世代, 消灯 `set_on` の成否, 読み戻した値）。
+/// 世代が変わった（新しい要求が始まった）結果は古いので適用時に捨てる（契約表 2）。
+type DeferredOff = (u64, bool, Result<Option<bool>, FlashlightFailure>);
+
+/// 点灯の確認待ち（Idle 以外）に届いた最小化消灯の結果の保留枠（最新のみ）。
+/// 捨てると、消灯失敗が点灯成功の裏で表示されなくなる（契約表 2）。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+static DEFERRED_OFF: Mutex<Option<DeferredOff>> = Mutex::new(None);
+
+/// Idle なら即反映し、進行中の要求があれば保留する（要求完了後に [`take_deferred_off`] で反映）。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn apply_or_defer_minimize_off(
+    s: &mut FlashlightToggleState,
+    set_ok: bool,
+    read: Result<Option<bool>, FlashlightFailure>,
+) {
+    if s.phase == FlashlightPhase::Idle {
+        apply_minimize_off(s, set_ok, read);
+    } else {
+        *DEFERRED_OFF.lock().unwrap_or_else(|p| p.into_inner()) =
+            Some((s.generation, set_ok, read));
+    }
+}
+
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn take_deferred_off() -> Option<DeferredOff> {
+    DEFERRED_OFF
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .take()
+}
+
+/// 最小化中の消灯（実行権を保持して呼ぶ）。失敗は読み戻した値つきで状態へ通知し、
+/// 最小化が続く間は `READ_INTERVAL` ごとに再試行する。終わったら実行権を手放す。
+#[cfg(target_os = "windows")]
+fn minimize_off(light: &dyn Flashlight, sender: &CompletionSender<FlashlightToggleState>) {
+    loop {
+        // 成功時も読み戻した値を通知する（Lamp 未保持の成功で確定済みの Unsupported を消さない）。
+        // 消灯を発行する時点の世代を確定し、適用時に照合する（古い消灯結果を新しい要求へ適用しない）。
+        let issued = LATEST_GEN.load(Ordering::Acquire);
+        let set_ok = light.set_on(false).is_ok();
+        let read = light.is_on().map_err(to_failure);
+        let _ = sender.send(Box::new(move |s: &mut FlashlightToggleState| {
+            if s.generation == issued {
+                apply_or_defer_minimize_off(s, set_ok, read.clone());
+            }
+        }));
+        if set_ok {
+            break;
+        }
+        sender.request_repaint_after(READ_INTERVAL);
+        std::thread::sleep(READ_INTERVAL);
+        if !MINIMIZED.load(Ordering::Acquire) {
+            break;
+        }
+    }
+    let mut w = win_lock();
+    w.active = false;
+    w.pending = false;
+}
+
 /// `set_on` を呼んで結果を送る。Windows ではワーカー、他の OS では UI スレッドから呼ばれる。
 fn run_set(
     light: &dyn Flashlight,
@@ -119,6 +250,13 @@ fn drive(
     timing: &mut Timing,
 ) {
     if let Some(req) = take_request(state) {
+        // Windows は最小化消灯ワーカーが走行中なら発送を見送り、次フレームで再試行する。
+        #[cfg(target_os = "windows")]
+        if !win_begin() {
+            // 古い `MINIMIZED`（周期更新）で要求を捨てない。復帰後の操作を落とさず、次フレームで再試行する。
+            sender.request_repaint_after(CONFIRM_POLL);
+            return;
+        }
         // 次のフレームから `take_request` が `None` になり、二重に OS へ渡さない。
         let _ = sender.send(Box::new(mark_applying));
         #[cfg(target_os = "windows")]
@@ -133,9 +271,14 @@ fn drive(
                         &worker_sender,
                         req.generation,
                         req.on,
-                    )
+                    );
+                    // 点灯処理中に最小化されていたら、同じスレッドで直列に消灯する。
+                    if win_end_set() {
+                        minimize_off(worker_light.as_ref(), &worker_sender);
+                    }
                 });
             if spawned.is_err() {
+                win_lock().active = false;
                 let failure = FlashlightFailure::Failed(
                     DeviceError::Internal("flashlight worker").to_string(),
                 );
@@ -199,6 +342,17 @@ fn drive(
         return;
     }
 
+    // 確認待ち中に届いた最小化消灯の結果を、要求完了（Idle）後の最初のフレームで反映する。
+    #[cfg(target_os = "windows")]
+    if let Some((generation, set_ok, read)) = take_deferred_off() {
+        let _ = sender.send(Box::new(move |s: &mut FlashlightToggleState| {
+            // 適用時点（UI 状態の内側）で世代を照合し、新しい要求が始まっていたら捨てる。
+            if s.generation == generation && s.phase == FlashlightPhase::Idle {
+                apply_minimize_off(s, set_ok, read.clone())
+            }
+        }));
+    }
+
     let due = timing
         .last_read
         .is_none_or(|prev| now.saturating_duration_since(prev) >= READ_INTERVAL);
@@ -226,6 +380,14 @@ fn drive(
     }));
 }
 
+/// 最小化中に消灯を要求すべきか。消灯を確認できている（`Idle` で `Some(false)`）とき以外は要求する。
+/// `None`（読み取り不能）は消灯の確認ではないため、Lamp を保持したまま点灯している場合に備えて試行する。
+/// 進行中の点灯（Requested / Applying / Confirming）は結果が点灯になりうるため。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn should_turn_off_on_minimize(state: &FlashlightToggleState, minimized: bool) -> bool {
+    minimized && !(state.phase == FlashlightPhase::Idle && state.on == Some(false))
+}
+
 /// `registry.rs` の `effect` 区画から `flashlight_toggle` 画面用に配線される effect ドライバ。
 pub fn flashlight_toggle_effect(
     state: &FlashlightToggleState,
@@ -234,7 +396,92 @@ pub fn flashlight_toggle_effect(
     let mut timing = TIMING
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
+    // 世代と消灯確認済みの判定は、ワーカーを起動する `drive` より前に公開する
+    // （後だと新世代のワーカー起動直後の最小化消灯が旧世代を取得し、失敗通知が捨てられる）。
+    // 最小化の検知はフレームに依存させない（最小化中は eframe が描画を止め、この関数が呼ばれない）。
+    #[cfg(target_os = "windows")]
+    {
+        LATEST_GEN.store(state.generation, Ordering::Release);
+        CONFIRMED_OFF.store(!should_turn_off_on_minimize(state, true), Ordering::Release);
+    }
     drive(state, sender, implementation(), Instant::now(), &mut timing);
+    #[cfg(target_os = "windows")]
+    start_minimize_watcher(sender);
+}
+
+/// effect が最後に観測した要求世代（消灯発行時の世代確定に使う）。
+#[cfg(target_os = "windows")]
+static LATEST_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// 最小化消灯ワーカーの起動を試みる。走行中のワーカーがあれば保留として記録して `true`、
+/// 新規に起動できても `true`、起動に失敗したら `false`（呼び出し側が次回再試行する）。
+#[cfg(target_os = "windows")]
+fn request_minimize_off(sender: &CompletionSender<FlashlightToggleState>) -> bool {
+    let mut w = win_lock();
+    if w.active {
+        w.pending = true;
+        return true;
+    }
+    w.active = true;
+    drop(w);
+    let worker_sender = sender.clone();
+    let light = implementation();
+    let spawned = std::thread::Builder::new()
+        .name("flashlight-minimize-off".to_string())
+        .spawn(move || minimize_off(light.as_ref(), &worker_sender));
+    if spawned.is_err() {
+        win_lock().active = false;
+        let _ = sender.send(Box::new(|s: &mut FlashlightToggleState| {
+            if s.phase == FlashlightPhase::Idle {
+                apply_read(s, Err(FlashlightFailure::Failed(String::new())));
+            }
+        }));
+        return false;
+    }
+    true
+}
+
+/// 最後のフレームで消灯を確認できていたか。ウォッチャーが最小化の立ち上がりで消灯を省く判定に使う
+/// （[`should_turn_off_on_minimize`] と同じ条件。最小化中はフレームが止まるため静的に持つ）。
+#[cfg(target_os = "windows")]
+static CONFIRMED_OFF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 最小化ウォッチャー（プロセスに 1 本）を起動する。HWND の `IsIconic` を `READ_INTERVAL` 未満の
+/// 間隔でポーリングするため、eframe の描画停止に左右されない。最小化の立ち上がりごとに
+/// [`request_minimize_off`] を呼ぶ（以降の再試行は消灯ワーカー自身が `MINIMIZED` を見て行う）。
+/// ウィンドウ未取得なら何もせず、次フレームで再度試みる。
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+fn start_minimize_watcher(sender: &CompletionSender<FlashlightToggleState>) {
+    use windows::Win32::UI::WindowsAndMessaging::IsIconic;
+    static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if super::windows_share::window().is_none() || STARTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let sender = sender.clone();
+    let spawned = std::thread::Builder::new()
+        .name("flashlight-minimize-watch".to_string())
+        .spawn(move || {
+            let mut was_minimized = false;
+            loop {
+                if let Some(hwnd) = super::windows_share::window() {
+                    // SAFETY: `hwnd` は `remember_window` が控えたメインウィンドウで、プロセス生存中は有効。
+                    // `IsIconic` は無効な HWND でも FALSE を返すだけで副作用がない。
+                    let minimized = unsafe { IsIconic(hwnd) }.as_bool();
+                    MINIMIZED.store(minimized, Ordering::Release);
+                    if minimized && !was_minimized && !CONFIRMED_OFF.load(Ordering::Acquire) {
+                        // 起動に失敗したら立ち上がりを消費せず、次の周期で再試行する。
+                        was_minimized = request_minimize_off(&sender);
+                    } else {
+                        was_minimized = minimized;
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        });
+    if spawned.is_err() {
+        STARTED.store(false, Ordering::Release);
+    }
 }
 
 #[cfg(all(test, not(target_os = "windows")))]
@@ -337,6 +584,37 @@ mod tests {
             }
             n
         }
+    }
+
+    #[test]
+    fn minimize_off_failure_during_confirming_is_deferred_and_shown() {
+        let mut s = FlashlightToggleState::default();
+        fandhe_core::screens::flashlight_toggle::turn_on(&mut s);
+        mark_applying(&mut s);
+        let g = s.generation;
+        mark_confirming(&mut s, g);
+        // 点灯の確認待ち中に、消灯失敗（まだ点灯のまま）が届く。
+        apply_or_defer_minimize_off(&mut s, false, Ok(Some(true)));
+        assert_eq!(s.error, "");
+        // 点灯が確認されて成功で完了した後、保留分を反映すると失敗が表示される。
+        finish(&mut s, g, Ok(()), Some(true));
+        assert_eq!(s.error, "");
+        let (gen, ok, read) = take_deferred_off().expect("保留されている");
+        assert_eq!(gen, g);
+        apply_minimize_off(&mut s, ok, read);
+        assert!(s
+            .error
+            .starts_with(fandhe_core::screens::flashlight_toggle::FAILED_PREFIX));
+        assert!(take_deferred_off().is_none());
+    }
+
+    #[test]
+    fn minimize_off_keeps_unsupported_after_success() {
+        let mut s = FlashlightToggleState::default();
+        apply_read(&mut s, Err(FlashlightFailure::Unsupported));
+        apply_minimize_off(&mut s, true, Err(FlashlightFailure::Unsupported));
+        assert!(s.unsupported);
+        assert_eq!(s.on, None);
     }
 
     #[test]
@@ -469,6 +747,35 @@ mod tests {
         h.frame(&light, 1000);
         assert_eq!(h.state.on, None);
         assert!(error_text(&h.state).starts_with(FAILED_PREFIX));
+    }
+
+    #[test]
+    fn minimize_turns_off_unless_idle_and_confirmed_off() {
+        let st = |phase, on| FlashlightToggleState {
+            phase,
+            on,
+            ..FlashlightToggleState::default()
+        };
+        let idle_on = st(FlashlightPhase::Idle, Some(true));
+        assert!(should_turn_off_on_minimize(&idle_on, true));
+        assert!(!should_turn_off_on_minimize(&idle_on, false));
+        for phase in [
+            FlashlightPhase::Requested,
+            FlashlightPhase::Applying,
+            FlashlightPhase::Confirming,
+        ] {
+            assert!(should_turn_off_on_minimize(&st(phase, Some(false)), true));
+            assert!(!should_turn_off_on_minimize(&st(phase, Some(false)), false));
+        }
+        assert!(!should_turn_off_on_minimize(
+            &st(FlashlightPhase::Idle, Some(false)),
+            true
+        ));
+        // 読み取り不能（None）でも最小化時は消灯を試みる
+        assert!(should_turn_off_on_minimize(
+            &st(FlashlightPhase::Idle, None),
+            true
+        ));
     }
 
     #[test]
