@@ -301,10 +301,9 @@ pub mod apple_image_recognition;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_lan_discovery;
 /// Issue #511 macOS: 近くの端末との直接通信実装（`apple/fandhe_apple_local_peer.m` を呼ぶ C ABI ラッパー）。
-/// `device/local_peer.rs` の macOS 経路と、b-ios が委譲する `ios_local_peer` から呼ばれる。
-/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。iOS は b-ios が委譲するまで未使用。
+/// `device/local_peer.rs` の macOS 経路と、`ios_local_peer`（Issue #512）の委譲から呼ばれる。
+/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-#[cfg_attr(target_os = "ios", allow(dead_code))]
 pub mod apple_local_peer;
 /// Issue #889: iOS / macOS 共通の CoreLocation 実装（`apple/fandhe_apple_location.m`
 /// を呼ぶ C ABI ラッパー）。`device/location.rs` の Apple cfg 分岐から呼ばれる。
@@ -590,7 +589,7 @@ pub mod ios_live_activity;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_local_fonts;
-/// Issue #511: iOS 向け近くの端末との直接通信のスタブ（親 #110、b-ios が `apple_local_peer` への委譲で埋める）。
+/// Issue #512: iOS 向け近くの端末との直接通信（親 #110、`apple_local_peer` へ委譲する）。
 /// `device/local_peer.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_local_peer;
@@ -1152,7 +1151,7 @@ pub mod windows_url_scheme;
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_usb_device;
-/// Issue #514: Windows 向け Wi-Fi 情報のスタブ（windows 子が `wlanapi` で埋める）。
+/// Issue #515: Windows 向け Wi-Fi 情報実装（`wlanapi`）。
 /// `device/wifi_info.rs` の Windows 経路から呼ばれる。写像の純関数をホストでテストできるよう
 /// cfg は `any(windows, test)`。
 #[cfg(any(target_os = "windows", test))]
