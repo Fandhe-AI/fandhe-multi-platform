@@ -4,6 +4,7 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -62,6 +63,8 @@ final class LanDiscoveryHelper {
     private NsdManager.ResolveListener resolving;
     private int forwarded;
     private Runnable closer;
+    // API 31 以下は Wi-Fi が mDNS 応答を捨てるため探索の間だけ保持する（空リストの嘘の成功を防ぐ）。
+    private WifiManager.MulticastLock multicastLock;
 
     LanDiscoveryHelper(ComponentActivity activity) {
         this.activity = activity;
@@ -90,8 +93,9 @@ final class LanDiscoveryHelper {
     }
 
     private void finish(long id, int code) {
-        stopQuietly();
+        // 旧 id の遅延通知が現行要求の資源を止めないよう、照合が通ったときだけ解放する。
         if (request.complete(id)) {
+            stopQuietly();
             nativeOnLanFinished(id, code);
         }
     }
@@ -116,6 +120,7 @@ final class LanDiscoveryHelper {
         }
         request.track(id);
         forwarded = 0;
+        acquireMulticastLock();
         discovery = new NsdManager.DiscoveryListener() {
             @Override
             public void onDiscoveryStarted(String serviceType) {
@@ -248,7 +253,22 @@ final class LanDiscoveryHelper {
         return chosen == null ? null : chosen.getHostAddress();
     }
 
-    // タイマー・探索・解決を解放する。何度呼んでも安全。
+    private void acquireMulticastLock() {
+        try {
+            WifiManager wifi = (WifiManager) activity.getApplicationContext()
+                    .getSystemService(Context.WIFI_SERVICE);
+            if (wifi != null) {
+                multicastLock = wifi.createMulticastLock("fandhe-lan-discovery");
+                multicastLock.setReferenceCounted(false);
+                multicastLock.acquire();
+            }
+        } catch (RuntimeException e) {
+            // 取得できない端末（Wi-Fi なし等）でも探索は続ける。
+            multicastLock = null;
+        }
+    }
+
+    // タイマー・探索・解決・マルチキャストロックを解放する。何度呼んでも安全。
     private void stopQuietly() {
         if (closer != null) {
             handler.removeCallbacks(closer);
@@ -274,5 +294,15 @@ final class LanDiscoveryHelper {
         discovery = null;
         resolving = null;
         resolveQueue.clear();
+        if (multicastLock != null) {
+            try {
+                if (multicastLock.isHeld()) {
+                    multicastLock.release();
+                }
+            } catch (RuntimeException e) {
+                // 解放済みは無視する。
+            }
+            multicastLock = null;
+        }
     }
 }
