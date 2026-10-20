@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #112、Issue #505）: 接続中の USB 機器の一覧（ベンダー ID・製品 ID・
 //! 製品名）を 1 回読む契約。`fandhe-egui-proxy` の `device/usb_device.rs` が起動時と「再取得」
-//! ボタン押下時に [`UsbDevices::list`] を 1 回だけ呼び、各 OS 実装（macOS: IOKit、Windows: #506、
+//! ボタン押下時に [`UsbDevices::list`] を 1 回だけ呼び、各 OS 実装（macOS: IOKit、Windows: SetupAPI（#506）、
 //! Android: #507）が本トレイトを実装する。Web は `fandhe-web-dom` 側（#508）で WebUSB / WebHID を
 //! 使い、本トレイトは経由しない。
 //!
@@ -83,9 +83,42 @@ pub fn normalize(entries: impl IntoIterator<Item = UsbDeviceEntry>) -> Vec<UsbDe
         .collect()
 }
 
+/// SetupAPI の hardware ID（`USB\\VID_05AC&PID_024F&REV_0100` の形）から VID/PID を取り出す。
+/// 大文字小文字を区別せず、`VID_` / `PID_` の直後 4 桁の 16 進を読む。どちらかが無い・桁不足・
+/// 16 進でないときは `None`。Windows 実装が呼ぶ純関数で、OS 非依存のためここに置く（ホストで試験する）。
+pub fn parse_hardware_id(id: &str) -> Option<(u16, u16)> {
+    fn field(id: &str, key: &str) -> Option<u16> {
+        let upper = id.to_ascii_uppercase();
+        let rest = &upper[upper.find(key)? + key.len()..];
+        let hex = rest.get(..4)?;
+        hex.bytes()
+            .all(|b| b.is_ascii_hexdigit())
+            .then(|| u16::from_str_radix(hex, 16).ok())
+            .flatten()
+    }
+    Some((field(id, "VID_")?, field(id, "PID_")?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_hardware_id_cases() {
+        assert_eq!(
+            parse_hardware_id("USB\\VID_05AC&PID_024F&REV_0100"),
+            Some((0x05AC, 0x024F))
+        );
+        assert_eq!(
+            parse_hardware_id("usb\\vid_05ac&pid_024f"),
+            Some((0x05AC, 0x024F))
+        );
+        assert_eq!(parse_hardware_id("USB\\VID_05AC&REV_0100"), None);
+        assert_eq!(parse_hardware_id("USB\\VID_05A&PID_024F"), None);
+        assert_eq!(parse_hardware_id("USB\\VID_05AG&PID_024F"), None);
+        assert_eq!(parse_hardware_id("USB\\VID_é"), None);
+        assert_eq!(parse_hardware_id(""), None);
+    }
 
     fn e(v: u16, name: Option<&str>) -> UsbDeviceEntry {
         UsbDeviceEntry {

@@ -132,6 +132,9 @@
 //! - `apple/fandhe_apple_lan_discovery.m`（Issue #486、`nw_browser` と dns_sd による LAN のサービス探索）は
 //!   **iOS・macOS 双方**で feature `device` 有効時にコンパイルする（`src/device/apple_lan_discovery.rs`
 //!   から呼ばれる契約）。Network をリンクする。
+//! - `apple/fandhe_apple_local_peer.m`（Issue #511、MultipeerConnectivity による近くの端末との直接通信）は
+//!   **iOS・macOS 双方**で feature `device` 有効時にコンパイルする（`src/device/apple_local_peer.rs`
+//!   から呼ばれる契約。iOS は b-ios が委譲する）。MultipeerConnectivity をリンクする。
 //! - `macos/fandhe_macos_background_task.m`（Issue #1043、`NSBackgroundActivityScheduler`
 //!   によるバックグラウンド処理）は **macOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルする（`src/device/macos_background_task.rs` の `MacBackgroundTask`
@@ -455,6 +458,9 @@ fn main() {
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
+    // `apple/fandhe_apple_local_peer.m`（Issue #511 macOS）。macOS・iOS 両分岐から呼ぶ
+    // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
+    compile_apple_local_peer();
 
     // `apple/fandhe_apple_haptics.m`（Issue #1091 macOS + #1092 iOS）も macOS 分岐と
     // 共用する（上記 doc 参照）。
@@ -995,6 +1001,18 @@ fn compile_apple_lan_discovery() {
         .compile("fandhe_apple_lan_discovery");
 
     println!("cargo:rustc-link-lib=framework=Network");
+}
+
+/// `apple/fandhe_apple_local_peer.m` を `cc` でコンパイルし MultipeerConnectivity をリンクする
+/// （Issue #511 macOS・親 #110 の b-ios で iOS も共用）。
+fn compile_apple_local_peer() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_local_peer.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_local_peer.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_local_peer");
+
+    println!("cargo:rustc-link-lib=framework=MultipeerConnectivity");
 }
 
 /// `macos/fandhe_macos_background_task.m` を `cc` でコンパイルする（Issue #1043）。
@@ -1669,6 +1687,9 @@ fn build_macos() {
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
+    // `apple/fandhe_apple_local_peer.m`（Issue #511 macOS）。macOS・iOS 両分岐から呼ぶ
+    // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
+    compile_apple_local_peer();
     // `apple/fandhe_apple_haptics.m`（Issue #1091 macOS + #1092 iOS）も iOS 分岐と共用する。
     compile_apple_haptics(true);
     // `apple/fandhe_apple_nlp.m`（Issue #1094 macOS + #1095 iOS）も macOS 分岐と共用する。
