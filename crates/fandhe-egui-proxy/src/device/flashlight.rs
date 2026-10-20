@@ -253,17 +253,8 @@ fn drive(
         // Windows は最小化消灯ワーカーが走行中なら発送を見送り、次フレームで再試行する。
         #[cfg(target_os = "windows")]
         if !win_begin() {
-            if MINIMIZED.load(Ordering::Acquire) {
-                // 最小化中に未発送の点灯要求を復帰後へ持ち越さない（背景遷移で消灯し、戻っても点け直さない）。
-                let generation = req.generation;
-                let _ = sender.send(Box::new(move |s: &mut FlashlightToggleState| {
-                    if s.phase == FlashlightPhase::Requested && s.generation == generation {
-                        s.phase = FlashlightPhase::Idle;
-                    }
-                }));
-            } else {
-                sender.request_repaint_after(CONFIRM_POLL);
-            }
+            // 古い `MINIMIZED`（周期更新）で要求を捨てない。復帰後の操作を落とさず、次フレームで再試行する。
+            sender.request_repaint_after(CONFIRM_POLL);
             return;
         }
         // 次のフレームから `take_request` が `None` になり、二重に OS へ渡さない。
@@ -405,14 +396,17 @@ pub fn flashlight_toggle_effect(
     let mut timing = TIMING
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    drive(state, sender, implementation(), Instant::now(), &mut timing);
+    // 世代と消灯確認済みの判定は、ワーカーを起動する `drive` より前に公開する
+    // （後だと新世代のワーカー起動直後の最小化消灯が旧世代を取得し、失敗通知が捨てられる）。
+    // 最小化の検知はフレームに依存させない（最小化中は eframe が描画を止め、この関数が呼ばれない）。
     #[cfg(target_os = "windows")]
     {
-        // 最小化の検知はフレームに依存させない（最小化中は eframe が描画を止め、この関数が呼ばれない）。
         LATEST_GEN.store(state.generation, Ordering::Release);
         CONFIRMED_OFF.store(!should_turn_off_on_minimize(state, true), Ordering::Release);
-        start_minimize_watcher(sender);
     }
+    drive(state, sender, implementation(), Instant::now(), &mut timing);
+    #[cfg(target_os = "windows")]
+    start_minimize_watcher(sender);
 }
 
 /// effect が最後に観測した要求世代（消灯発行時の世代確定に使う）。
