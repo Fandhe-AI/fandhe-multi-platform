@@ -200,7 +200,7 @@ final class LanDiscoveryHelper {
     }
 
     // 停止失敗は停止完了ではない。同じ listener で再停止し、未登録（例外）なら止まっているとみなす。
-    // 再停止も失敗し続けたら stopping を保持したまま、保留中の要求を失敗として確定する。
+    // 再停止も失敗し続けたら停止済みとして諦め、stopping を解いて保留中の開始を走らせる。
     private void stopFailed(NsdManager.DiscoveryListener who) {
         if (stopping != who) {
             return;
@@ -217,10 +217,10 @@ final class LanDiscoveryHelper {
             stopped(who);
             return;
         }
-        long id = request.current();
-        if (pendingLaunch != null && id != RequestTracker.NONE) {
-            finish(id, CODE_OTHER);
-        }
+        // 上限到達: これ以上待っても回復しないため停止済みとして扱い、stopping を解いて次の開始を通す。
+        // 旧 listener が OS 側に残る可能性はあるが、同 type の再開で ALREADY_ACTIVE になれば
+        // onStartDiscoveryFailed で CODE_OTHER になるだけで、探索が恒久的に塞がることはない。
+        stopped(who);
     }
 
     // 窓が閉じた。開始できていなければコード 6、未接続なら 0 件の嘘の成功を避けてコード 2。
