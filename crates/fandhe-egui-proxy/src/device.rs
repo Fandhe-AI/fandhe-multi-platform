@@ -1152,7 +1152,7 @@ pub mod windows_url_scheme;
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_usb_device;
-/// Issue #514: Windows 向け Wi-Fi 情報のスタブ（windows 子が `wlanapi` で埋める）。
+/// Issue #515: Windows 向け Wi-Fi 情報実装（`wlanapi`）。
 /// `device/wifi_info.rs` の Windows 経路から呼ばれる。写像の純関数をホストでテストできるよう
 /// cfg は `any(windows, test)`。
 #[cfg(any(target_os = "windows", test))]
