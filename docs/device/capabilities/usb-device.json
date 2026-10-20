@@ -38,12 +38,15 @@
       "note": "未実装。`Windows.Devices.Usb` は package identity 必須と文書で確認済み（https://learn.microsoft.com/en-us/uwp/api/windows.devices.usb ）。HID・プリンター・大容量記憶・オーディオクラスは WinRT USB の対象外。unpackaged の Win32 では WinUSB を使う前提だが、機器ドライバーの要件を含め動作は未検証（要確認）。"
     },
     "web": {
-      "status": "possible",
-      "api": "WebUSB（`navigator.usb`）/ WebHID（`navigator.hid`）",
-      "perm": "機器ごとに利用者が選ぶ。secure context 必須",
+      "status": "done",
+      "api": "`navigator.usb.requestDevice({ filters: [] })`（1 台）/ `navigator.hid.requestDevice({ filters: [] })`（`HIDDevice` の配列）。`vendorId` / `productId` / `productName` だけを読む",
+      "perm": "機器ごとに利用者が選ぶ。secure context 必須。Permissions Policy の `usb` / `hid` で禁止されると失敗になる",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebUSB_API",
-      "safari": "非対応と認識（要確認）。Firefox も非対応と認識",
-      "note": "未実装。WebHID のページ: https://developer.mozilla.org/en-US/docs/Web/API/WebHID_API 。どちらも Chromium のみ。"
+      "safari": "非対応と認識（要確認）。Firefox も非対応と認識。実行時に API の有無を判定し、無ければ「取得できません」と出す",
+      "note": "実装済み（#508）。利用者が選んだ機器のベンダー ID・製品 ID・製品名だけを出す。ダイアログを閉じた場合はキャンセルで、WebHID の空配列も同じ扱い（0 件の成功にしない）。守る範囲: キャンセルを失敗に見せない、非対応・拒否を成功に見せない、シリアルなどの識別子を取らない。守らない範囲: 選ばれた機器だけを出す（`getDevices` は使わない）、抜き差しへの追従、選択ダイアログの期限、Chromium 系以外、保護クラスの扱い（Chrome 任せ）。WebHID: https://developer.mozilla.org/en-US/docs/Web/API/WebHID_API 。実ブラウザの確認は #504。",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "Chrome 確認待ち（#504）",
+      "impl": "crates/fandhe-web-dom/src/usb_device.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/usb_device_show.rs + crates/fandhe-device/src/usb_device.rs、Issue #508"
     }
   },
   "note": "Android / macOS / Windows / Web に届く。iOS は no。Windows の WinRT API は package identity 必須なので、unpackaged では Win32 の WinUSB に倒す必要がある。gamepad（既存 id）は HID のうちゲームコントローラだけを OS 経由で扱うもので、本機能は任意の機器を直接制御する点が違う。今回の範囲: 接続された USB 機器の一覧（ベンダー ID・製品 ID・製品名）を 1 回読み、「再取得」で読み直す（機器は開かない・データ転送は扱わない・抜き差しには追従しない・シリアルや locationID は取らない・製品名は画面にだけ出す）。守らない範囲: 抜き差しの反映（再取得まで）、OS 間の名前の表記と粒度の一致、ハブや内蔵 USB 機器を含めるか（OS 任せ）、Bluetooth HID、Web は選ばれた 1 台だけ、同期呼び出しが戻らない場合の期限。"

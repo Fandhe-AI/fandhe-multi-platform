@@ -92,6 +92,8 @@
 //!   純関数（ハンドルの検査・サイズ検査・失敗種別の写像）のみ `wasm32` gate の外に置く
 //! - [`screen_wake_lock`]: 「画面スリープの抑止」画面の Web 経路（親 #1129、Issue #1281）。
 //!   純関数（取得結果の写像・取り直し判定・世代照合）のみ `wasm32` gate の外に置く
+//! - [`usb_device`]: 「USB・HID 機器」画面の Web 経路（親 #112、Issue #508）。
+//!   純関数（失敗種別の写像・ID の値域検査・行への写像）のみ `wasm32` gate の外に置く
 //! - [`flashlight`]: 「ライト（トーチ）」画面の Web 経路（親 #106、Issue #462）。
 //!   純関数（失敗種別の写像・読み戻し・確認ループの判定）のみ `wasm32` gate の外に置く
 //! - [`compass`]: 「方位（コンパス）」画面の Web 経路（親 #1154、Issue #1407）。
@@ -327,3 +329,5 @@ pub mod print_page;
 pub mod screen_wake_lock;
 /// 型サンプル「カスタム URL scheme」の Web 経路（Issue #1219）。[`haptics`] と同じ理由で gate を外す。
 pub mod url_scheme;
+/// 型サンプル「USB・HID 機器」の Web 経路（Issue #508）。[`haptics`] と同じ理由で gate を外す。
+pub mod usb_device;
