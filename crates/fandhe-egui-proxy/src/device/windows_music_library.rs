@@ -105,8 +105,11 @@ where
             if entries.len() >= remaining.saturating_add(1) {
                 break;
             }
-            if let Ok(e) = e {
-                entries.push(e);
+            match e {
+                Ok(e) => entries.push(e),
+                // root の列挙途中の失敗（接続断など）は部分結果を成功にせず Failed にする。
+                // 配下ディレクトリの失敗は呼び出し側が読み飛ばす。
+                Err(_) => return Err(MusicLibraryFailure::Failed),
             }
         }
         entries.sort_by_key(|e| e.file_name());
