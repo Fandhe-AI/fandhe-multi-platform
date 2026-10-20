@@ -11,12 +11,15 @@
 //! 2. Win32 `DnsServiceBrowse`（`_http._tcp.local`、全インタフェース）を開始する。結果は OS の
 //!    スレッドプールから [`on_browse`] へ届き、同じ応答に含まれる PTR / SRV / A / AAAA を
 //!    `fandhe_device::lan_discovery::link_dns_records` で結んで `OBSERVED` へ足す
-//! 3. 呼び出しの開始を起点に単調時計で `duration` 待つ（停止合図なら中断として `Internal`）
-//! 4. **全経路で** `DnsServiceBrowseCancel` を呼ぶ。`clear_if_current` してから `finish` を呼ぶ
+//! 3. 呼び出しの開始を起点に単調時計で `duration` 待つ（停止・置換なら中断として `Internal`、
+//!    OS の失敗通知ならそのエラー）
+//! 4. **全経路で** `DnsServiceBrowseCancel` を呼んでから `finish` を一度だけ呼ぶ
+//!
+//! 開始・置換・停止・失敗通知は 1 本の専用ワーカー（`mpsc` + 専用スレッド）へ順に流す。
 //!
 //! コールバックの context は request_id（整数）、QueryName は `'static` で、キャンセル後に
 //! 遅れて届くコールバックでも解放済みメモリを触らない。レコードリストはコールバックで必ず
-//! `DnsFree` する。OS 側のエラー通知は `finish(Err)` にし、部分結果は捨てられる。
+//! `DnsFree` する。OS 側のエラー通知はワーカー経由で `finish(Err)` にし、部分結果は捨てられる。
 //!
 //! # 守らない範囲と既知の天井
 //!
@@ -51,68 +54,107 @@ const TYPE_PTR: u16 = 12;
 const TYPE_AAAA: u16 = 28;
 const TYPE_SRV: u16 = 33;
 
-struct Session {
-    request_id: u64,
-    stop_tx: mpsc::Sender<()>,
+/// 専用ワーカーへの指令。開始・置換・停止・OS の失敗通知をすべてこの 1 本の列に流し、
+/// 到着順に処理する（取り消し済みの要求は OS の探索を開始しない）。
+enum Cmd {
+    Start { request_id: u64, deadline: Instant },
+    Stop,
+    Failed { request_id: u64, err: DeviceError },
 }
 
-/// 現在進行中のセッション（プロセス static、1 度に 1 つ）。
-static SESSION: Mutex<Option<Session>> = Mutex::new(None);
+/// ワーカーへの送信口（初回の `present` で専用スレッドを起動する）。
+static TX: Mutex<Option<mpsc::Sender<Cmd>>> = Mutex::new(None);
 
 /// `_http._tcp.local` の NUL 終端 UTF-16。OS へ渡す QueryName は `'static` を保つ。
 static QUERY: OnceLock<Vec<u16>> = OnceLock::new();
 
-fn lock_session() -> std::sync::MutexGuard<'static, Option<Session>> {
-    SESSION.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn clear_if_current(request_id: u64) {
-    let mut session = lock_session();
-    if session.as_ref().is_some_and(|s| s.request_id == request_id) {
-        *session = None;
+fn send(cmd: Cmd) -> Result<(), DeviceError> {
+    let mut tx = TX.lock().unwrap_or_else(|e| e.into_inner());
+    if tx.is_none() {
+        let (t, rx) = mpsc::channel();
+        std::thread::Builder::new()
+            .name("lan-discovery".into())
+            .spawn(move || worker(rx))
+            .map_err(|_| DeviceError::Internal("lan_discovery present"))?;
+        *tx = Some(t);
     }
-}
-
-/// `device/lan_discovery.rs::drive_callback` から呼ばれる。ワーカーを起動して即座に返る。
-/// 進行中のセッションがあれば停止を送って置き換える（古い結果は request_id 照合で捨てる）。
-pub(crate) fn present(request_id: u64, duration: Duration) -> Result<(), DeviceError> {
-    // 期限の起点は呼び出しの開始（単調時計）。
-    let deadline = Instant::now() + duration;
-    let (stop_tx, stop_rx) = mpsc::channel();
-    {
-        let mut session = lock_session();
-        if let Some(old) = session.replace(Session {
-            request_id,
-            stop_tx,
-        }) {
-            let _ = old.stop_tx.send(());
-        }
-    }
-    let spawned = std::thread::Builder::new().spawn(move || {
-        let result = run_browse(request_id, deadline, &stop_rx);
-        // 届ける前に状態を確定する（自分の request_id のときだけ解除）。
-        clear_if_current(request_id);
-        finish(request_id, result);
-    });
-    if spawned.is_err() {
-        clear_if_current(request_id);
+    let sent = tx.as_ref().is_some_and(|t| t.send(cmd).is_ok());
+    if !sent {
+        *tx = None;
         return Err(DeviceError::Internal("lan_discovery present"));
     }
     Ok(())
 }
 
-/// アプリ終了時に進行中のセッションへ停止を送る（ロックを外してから送る）。
+fn interrupted() -> DeviceError {
+    DeviceError::Internal("lan_discovery interrupted")
+}
+
+/// `device/lan_discovery.rs::drive_callback` から呼ばれる。指令を積んで即座に返る。
+/// 進行中の探索があればワーカーが停止して置き換える（古い結果は request_id 照合で捨てる）。
+pub(crate) fn present(request_id: u64, duration: Duration) -> Result<(), DeviceError> {
+    // 期限の起点は呼び出しの開始（単調時計）。
+    let deadline = Instant::now() + duration;
+    send(Cmd::Start {
+        request_id,
+        deadline,
+    })
+}
+
+/// アプリ終了時に進行中の探索へ停止を送る。
 pub(crate) fn stop_shared() {
-    let session = lock_session().take();
-    if let Some(s) = session {
-        let _ = s.stop_tx.send(());
+    let _ = send(Cmd::Stop);
+}
+
+/// 専用ワーカー。開始前に溜まった指令を畳み、最後が Start のものだけを開始する。
+fn worker(rx: mpsc::Receiver<Cmd>) {
+    let mut next: Option<(u64, Instant)> = None;
+    loop {
+        let mut cur = match next.take() {
+            Some(c) => Some(c),
+            None => match rx.recv() {
+                Ok(Cmd::Start {
+                    request_id,
+                    deadline,
+                }) => Some((request_id, deadline)),
+                Ok(_) => continue,
+                Err(_) => return,
+            },
+        };
+        // 取り消し済み・置換済みの要求は開始せず中断で確定する。
+        while let Ok(c) = rx.try_recv() {
+            match c {
+                Cmd::Start {
+                    request_id,
+                    deadline,
+                } => {
+                    if let Some((old, _)) = cur.replace((request_id, deadline)) {
+                        finish(old, Err(interrupted()));
+                    }
+                }
+                Cmd::Stop => {
+                    if let Some((old, _)) = cur.take() {
+                        finish(old, Err(interrupted()));
+                    }
+                }
+                Cmd::Failed { .. } => {}
+            }
+        }
+        if let Some((id, deadline)) = cur {
+            let result = run_browse(id, deadline, &rx, &mut next);
+            // Cancel 済み。結果は状態確定後に一度だけ届ける。
+            finish(id, result);
+        }
     }
 }
 
+/// 1 要求ぶんの探索。待機中に Start が届いたら `next` へ置いて中断する。
+/// 戻る前に必ず `DnsServiceBrowseCancel` を済ませる。
 fn run_browse(
     request_id: u64,
     deadline: Instant,
-    stop_rx: &mpsc::Receiver<()>,
+    rx: &mpsc::Receiver<Cmd>,
+    next: &mut Option<(u64, Instant)>,
 ) -> Result<(), DeviceError> {
     // 未接続だけ Disabled。読めなかったときは探索へ進む（未接続に畳まない）。
     if matches!(WindowsNetworkStatus.read(), Ok(NetworkSnapshot::Offline)) {
@@ -147,9 +189,24 @@ fn run_browse(
         return Err(error_from_dns_status(ret as u32));
     }
 
-    let result = match stop_rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-        Err(mpsc::RecvTimeoutError::Timeout) => Ok(()),
-        _ => Err(DeviceError::Internal("lan_discovery interrupted")),
+    // 期限・停止・置換・OS の失敗通知のどれかまで待つ。
+    let result = loop {
+        match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Err(mpsc::RecvTimeoutError::Timeout) => break Ok(()),
+            Err(_) | Ok(Cmd::Stop) => break Err(interrupted()),
+            Ok(Cmd::Start {
+                request_id: n,
+                deadline: d,
+            }) => {
+                *next = Some((n, d));
+                break Err(interrupted());
+            }
+            Ok(Cmd::Failed {
+                request_id: id,
+                err,
+            }) if id == request_id => break Err(err),
+            Ok(Cmd::Failed { .. }) => {}
+        }
     };
     // SAFETY: `cancel` は成功した `DnsServiceBrowse` が初期化したハンドルで、まだ生存している。
     #[allow(unsafe_code)]
@@ -191,7 +248,11 @@ unsafe extern "system" fn on_browse(status: u32, context: *const c_void, rec: *c
             OBSERVED.observe(request_id, s);
         }
     } else if status != ERROR_CANCELLED.0 {
-        finish(request_id, Err(error_from_dns_status(status)));
+        // 失敗はワーカーへ通知し、Cancel と状態確定の後に finish させる。
+        let _ = send(Cmd::Failed {
+            request_id,
+            err: error_from_dns_status(status),
+        });
     }
     if !rec.is_null() {
         // SAFETY: コールバックが受けた所有権を `DnsFreeRecordList` で 1 回だけ返す。
