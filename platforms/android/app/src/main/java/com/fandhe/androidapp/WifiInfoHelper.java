@@ -169,14 +169,18 @@ final class WifiInfoHelper {
 
     @SuppressWarnings({"deprecation", "MissingPermission"})
     private void readNow(long id) {
-        if (!LocationManagerCompat.isLocationEnabled(
-                (android.location.LocationManager)
-                        activity.getSystemService(Context.LOCATION_SERVICE))) {
-            finishIf(id, RESULT_LOCATION_OFF);
-            return;
-        }
-        WifiManager wm = wifi();
         try {
+            android.location.LocationManager lm = (android.location.LocationManager)
+                    activity.getSystemService(Context.LOCATION_SERVICE);
+            if (lm == null) {
+                finishIf(id, RESULT_UNSUPPORTED); // 位置情報サービスが無い端末。
+                return;
+            }
+            if (!LocationManagerCompat.isLocationEnabled(lm)) {
+                finishIf(id, RESULT_LOCATION_OFF);
+                return;
+            }
+            WifiManager wm = wifi();
             if (!wm.isWifiEnabled()) {
                 finishIf(id, RESULT_RADIO_OFF);
                 return;
