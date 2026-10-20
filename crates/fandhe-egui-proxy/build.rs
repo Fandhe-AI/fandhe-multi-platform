@@ -190,6 +190,9 @@
 //! - `macos/fandhe_macos_music_library.m`（Issue #482、iTunesLibrary `ITLibrary` による曲のタイトルと
 //!   アーティストの先頭 20 件の読み取り）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルし
 //!   iTunesLibrary をリンクする（`src/device/macos_music_library.rs` から呼ばれる契約）。
+//! - `macos/fandhe_macos_wifi_info.m`（Issue #514、CoreWLAN `CWWiFiClient` による現在の接続・直近のスキャン結果の
+//!   読み取りと、CoreLocation の許可判定）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルし
+//!   CoreWLAN をリンクする（`src/device/macos_wifi_info.rs` から呼ばれる契約）。
 //! - `macos/fandhe_macos_usb_device.m`（Issue #505、IOKit `IOUSBHostDevice` による USB 機器の
 //!   ベンダー ID・製品 ID・製品名の読み取り）は **macOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルし IOKit をリンクする（`src/device/macos_usb_device.rs` から呼ばれる契約）。
@@ -1194,6 +1197,18 @@ fn compile_macos_local_fonts() {
         .compile("fandhe_macos_local_fonts");
 }
 
+/// `macos/fandhe_macos_wifi_info.m` を `cc` でコンパイルし CoreWLAN をリンクする（Issue #514）。
+/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_wifi_info.rs` が使う）。CoreLocation は
+/// `compile_apple_location` でリンク済み。
+fn compile_macos_wifi_info() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_wifi_info.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_wifi_info.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_wifi_info");
+    println!("cargo:rustc-link-lib=framework=CoreWLAN");
+}
+
 /// `macos/fandhe_macos_music_library.m` を `cc` でコンパイルし iTunesLibrary をリンクする（Issue #482）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_music_library.rs` が使う）。
 fn compile_macos_music_library() {
@@ -1716,6 +1731,8 @@ fn build_macos() {
     compile_macos_multi_display();
     // `macos/fandhe_macos_music_library.m`（Issue #482）も macOS 専用。iTunesLibrary を使う。
     compile_macos_music_library();
+    // `macos/fandhe_macos_wifi_info.m`（Issue #514）も macOS 専用。CoreWLAN を使う。
+    compile_macos_wifi_info();
     // `macos/fandhe_macos_usb_device.m`（Issue #505）も macOS 専用。IOKit を使う。
     compile_macos_usb_device();
     compile_macos_pen_stylus();
