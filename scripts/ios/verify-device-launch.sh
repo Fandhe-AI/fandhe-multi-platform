@@ -73,7 +73,7 @@
 #                                  `option_env!("FANDHE_ITEMS_URL")`）、`.app` の
 #                                  Info.plist に LAN 限定の ATS 例外
 #                                  （NSAllowsLocalNetworking）と
-#                                  NSLocalNetworkUsageDescription を差し込む
+#                                  NSLocalNetworkUsageDescription を差し替える
 #                                  （Issue #660）。ストア提出パイプライン
 #                                  （scripts/build/）はこの経路を通らない。
 #                                  ビルド後は unset すること。
@@ -998,10 +998,11 @@ phase_bundle() {
       '<dict><key>NSAllowsLocalNetworking</key><true/></dict>' \
       "${app_dir}/Info.plist" \
       || fail "Info.plist への NSAppTransportSecurity 差し替えに失敗しました。"
-    plutil -insert NSLocalNetworkUsageDescription -string \
+    # 同じく Issue #488 で plist に入ったため `-replace`。
+    plutil -replace NSLocalNetworkUsageDescription -string \
       '型サンプル「HTTP 取得」の実機確認で Mac 上のダミー API へ接続します' \
       "${app_dir}/Info.plist" \
-      || fail "Info.plist への NSLocalNetworkUsageDescription 差し込みに失敗しました。"
+      || fail "Info.plist への NSLocalNetworkUsageDescription 差し替えに失敗しました。"
   fi
 
   cp "${profile_path}" "${app_dir}/embedded.mobileprovision"

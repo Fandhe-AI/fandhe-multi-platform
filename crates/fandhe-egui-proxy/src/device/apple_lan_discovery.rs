@@ -1,4 +1,4 @@
-//! macOS / iOS 向け LAN のサービス探索実装（Issue #486 macOS。iOS は親 #109 の b-ios）。
+//! macOS / iOS 向け LAN のサービス探索実装（Issue #486 macOS。iOS は #488）。
 //! `device/lan_discovery.rs` の macOS 経路（iOS は `ios_lan_discovery` の委譲）から呼ばれ、
 //! `apple/fandhe_apple_lan_discovery.m`（`nw_browser` による発見と dns_sd による解決、`build.rs` が
 //! iOS / macOS の feature `device` 有効時にコンパイル・リンクする）を `unsafe extern "C"` 2 関数
