@@ -38,6 +38,10 @@ const SERVICE_NOT_ACTIVE: u32 = 1062;
 const INVALID_STATE: u32 = 5023;
 /// `dot11_radio_state_on`。
 const RADIO_ON: i32 = 1;
+/// 受け入れるインターフェース数の上限。超える値は壊れたヘッダーとみなす。
+const MAX_INTERFACES: usize = 64;
+/// `dot11_radio_state_off`（ソフト・ハードどちらかが明示的にオフ）。0 は unknown で、オフではない。
+const RADIO_STATE_OFF: i32 = 2;
 /// SSID の最大バイト数（IEEE 802.11）。
 const SSID_MAX: usize = 32;
 
@@ -57,9 +61,14 @@ fn open_error(code: u32) -> DeviceError {
     }
 }
 
-/// `(ソフト, ハード)` の電源状態が 1 つも両方オンでなければ true。空（判定不能）は false。
+/// `(ソフト, ハード)` の電源状態で、明示的にオフの PHY が 1 つ以上あり、かつ両方オンの PHY が
+/// 無いときだけ true。unknown（0）だけ・空は判定不能として false（偽の失敗を避ける）。
 fn radio_off(states: &[(i32, i32)]) -> bool {
-    !states.is_empty() && !states.iter().any(|&(s, h)| s == RADIO_ON && h == RADIO_ON)
+    let on = states.iter().any(|&(s, h)| s == RADIO_ON && h == RADIO_ON);
+    let off = states
+        .iter()
+        .any(|&(s, h)| s == RADIO_STATE_OFF || h == RADIO_STATE_OFF);
+    off && !on
 }
 
 /// 生の SSID 長・バイト列・dBm から 1 件を作る。長さの検証をスライスより先に行う。
@@ -105,7 +114,10 @@ mod ffi {
         WLAN_INTF_OPCODE, WLAN_RADIO_STATE,
     };
 
-    use super::{bss_items_fit, classify, net_from_parts, open_error, radio_off, INVALID_STATE};
+    use super::{
+        bss_items_fit, classify, net_from_parts, open_error, radio_off, INVALID_STATE,
+        MAX_INTERFACES,
+    };
 
     /// Windows の `WifiInfo` 実装を返す。
     pub(crate) fn implementation() -> Arc<dyn WifiInfo> {
@@ -191,10 +203,15 @@ mod ffi {
         if list.is_null() {
             return Err(u32::MAX);
         }
+        // SAFETY: ヘッダーの `dwNumberOfItems` は常に有効。
+        let n = unsafe { (*list).dwNumberOfItems } as usize;
+        // `WLAN_INTERFACE_INFO_LIST` はバイト長を持たないので、件数の上限で守る。
+        if n > MAX_INTERFACES {
+            return Err(u32::MAX);
+        }
         // SAFETY: wlanapi が `dwNumberOfItems` 件分の `WLAN_INTERFACE_INFO` を連続して確保した領域。
-        // `_mem` が生きている間だけ読み、`Copy` の値として複写する。
+        // 件数は上で `MAX_INTERFACES` 以下に検証済み。`_mem` が生きている間だけ読み、`Copy` の値として複写する。
         let infos = unsafe {
-            let n = (*list).dwNumberOfItems as usize;
             std::slice::from_raw_parts(
                 std::ptr::addr_of!((*list).InterfaceInfo) as *const WLAN_INTERFACE_INFO,
                 n,
@@ -318,9 +335,13 @@ mod tests {
 
     #[test]
     fn radio_states() {
-        assert!(radio_off(&[(0, 1), (1, 0)]));
-        assert!(radio_off(&[(0, 0)]));
+        assert!(radio_off(&[(2, 1), (1, 2)]));
+        assert!(!radio_off(&[(0, 1), (1, 0)]));
+        assert!(!radio_off(&[(0, 0)]));
+        assert!(radio_off(&[(2, 1), (0, 0)]));
+        assert!(radio_off(&[(1, 2)]));
         assert!(!radio_off(&[(0, 0), (1, 1)]));
+        assert!(!radio_off(&[(2, 2), (1, 1)]));
         assert!(!radio_off(&[]));
     }
 
