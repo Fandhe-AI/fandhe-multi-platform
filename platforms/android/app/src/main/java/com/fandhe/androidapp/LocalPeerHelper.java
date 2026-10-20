@@ -238,8 +238,8 @@ final class LocalPeerHelper {
     }
 
     // 閉じる時点で未開始（許可待ちのまま等）ならコード 6、開始済みなら 0（利用不可になっていれば 2）。
-    // 送信が成功したのに有効な受信が 0 件なら、片方向のまま終わったとして 6（Internal）にする。
-    // 相手を見ていない／送信が一度も成功していないときだけ 0（相手なし）。
+    // 相手を見て送信を試みた（sends > 0）のに有効な受信が無いなら、送信の成否・再送の尽き方によらず 6（Internal）。
+    // 相手を一度も見ていないとき（sends == 0）だけ 0（相手なし）。受信済みは 0。
     private void scheduleCloser(final long id) {
         closer = () -> {
             // 窓満了後に許可ダイアログの結果を待ち続けず、次の start が通常の判定を通るようにする。
@@ -250,7 +250,7 @@ final class LocalPeerHelper {
             } else if (!available()) {
                 code = CODE_DISABLED;
             } else {
-                code = (sendOk > 0 && !accepted) ? CODE_OTHER : CODE_OK;
+                code = (sends > 0 && !accepted) ? CODE_OTHER : CODE_OK;
             }
             finish(id, code);
         };
