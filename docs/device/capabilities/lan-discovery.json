@@ -31,11 +31,14 @@
       "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_lan_discovery.m + crates/fandhe-egui-proxy/src/device/apple_lan_discovery.rs + crates/fandhe-egui-proxy/src/device/lan_discovery.rs + crates/fandhe-device/src/lan_discovery.rs + crates/fandhe-core/src/screens/lan_discover.rs、Issue #486"
     },
     "windows": {
-      "status": "possible",
-      "api": "Win32 `DnsServiceBrowse`（Windows 10+）",
-      "perm": "なし（Win32 desktop。unpackaged での動作は未検証）",
+      "status": "done",
+      "api": "Win32 `DnsServiceBrowse` で `_http._tcp.local` を探し、同じ応答に含まれる SRV / A / AAAA で名前・IP 1 件（IPv4 優先）・ポートを組み立てる（Windows 10+）",
+      "perm": "宣言は不要（Win32 desktop）。unpackaged の実機は未確認。ファイアウォールが UDP 5353 を塞ぐ環境では 0 件",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/windns/nf-windns-dnsservicebrowse",
-      "note": "未実装。WinRT の `Dnssd` は文書に「非対応・将来変更あり」とあり使わない。"
+      "note": "実装済み（#487）。「同じネットワークの `_http._tcp` を 10 秒探し、名前・IP 1 件・ポートを一覧表示する」範囲（接続・公開・任意の種別は対象外）。専用ワーカーで窓の間待ち、コールバックの結果を request_id 照合つきの `OBSERVED` へ足す。窓は Rust 側 `BROWSE_DURATION_MS`（10 秒、SSOT）を呼び出しの開始から単調時計で測り、全経路で `DnsServiceBrowseCancel` する。未接続（`NetworkStatus` が Offline）→`Disabled`・DNS ステータス 5→`PermissionDenied`・50/120→`Unsupported`・その他→`Internal`、0 件は成功。失敗時は部分結果を捨て、未解決のサービスは名前だけの成功行で返す。守らない範囲: 結合は 1 回の応答内のみ（`DnsServiceResolve` は未実装）・窓の間に公開をやめたサービスが残ること・IP は 1 件のみ・ファイアウォールによる 0 件・複数プロセスの同時探索。WinRT の `Dnssd` は文書に「非対応・将来変更あり」とあり使わない。Windows 実機確認は #481 で行う",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#481）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_lan_discovery.rs + crates/fandhe-egui-proxy/src/device/lan_discovery.rs + crates/fandhe-device/src/lan_discovery.rs + crates/fandhe-egui-proxy/Cargo.toml、Issue #487"
     },
     "web": {
       "status": "no",
