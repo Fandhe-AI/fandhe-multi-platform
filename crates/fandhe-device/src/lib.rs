@@ -154,6 +154,8 @@ pub mod text_scale;
 pub mod tts;
 /// Phase 11（端末機能の拡充ループ、親 #1116、Issue #1215）: カスタム URL scheme の受信。
 pub mod url_scheme;
+/// Phase 11（端末機能の拡充ループ、親 #112、Issue #505）: USB 機器の一覧（ベンダー ID・製品 ID・製品名）。
+pub mod usb_device;
 
 use std::path::PathBuf;
 

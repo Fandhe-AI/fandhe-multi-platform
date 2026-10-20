@@ -96,6 +96,8 @@ pub mod file_association_show;
 pub mod system_tray;
 /// Phase 11 の拡充ループ型サンプル「カスタム URL scheme」（親 #1116、Issue #1215）。
 pub mod url_scheme_show;
+/// Phase 11 の拡充ループ型サンプル「USB 機器」（親 #112、Issue #505）。
+pub mod usb_device_show;
 
 /// Phase 11 の拡充ループ型サンプル「アクセシビリティ設定の追従」（親 #1132、Issue #1308）。
 pub mod accessibility_prefs_show;
