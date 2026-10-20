@@ -31,11 +31,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/macos_usb_device.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_usb_device.m + crates/fandhe-egui-proxy/src/device/usb_device.rs + crates/fandhe-core/src/screens/usb_device_show.rs + crates/fandhe-device/src/usb_device.rs、Issue #505"
     },
     "windows": {
-      "status": "possible",
-      "api": "Win32 WinUSB（unpackaged の代替）。WinRT `Windows.Devices.Usb` は package identity 必須",
-      "perm": "WinRT 側はマニフェストの device capability `usb` が必須（文書で確認）。WinUSB 側の要件は要確認",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/api/winusb/",
-      "note": "未実装。`Windows.Devices.Usb` は package identity 必須と文書で確認済み（https://learn.microsoft.com/en-us/uwp/api/windows.devices.usb ）。HID・プリンター・大容量記憶・オーディオクラスは WinRT USB の対象外。unpackaged の Win32 では WinUSB を使う前提だが、機器ドライバーの要件を含め動作は未検証（要確認）。"
+      "status": "done",
+      "api": "Win32 SetupAPI。`SetupDiGetClassDevsW`（`GUID_DEVINTERFACE_USB_DEVICE`、`DIGCF_PRESENT | DIGCF_DEVICEINTERFACE`）で列挙し、`SPDRP_HARDWAREID` から VID/PID を、`DEVPKEY_Device_BusReportedDeviceDesc` から製品名を読む",
+      "perm": "なし。機器を開かず列挙だけで、unpackaged の Win32 なら宣言は不要の見込み（推測。#504 の実機で確認する）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetclassdevsw",
+      "note": "実装済み（#506）。macOS と同じ範囲（先頭 64 件、「再取得」、0 件は成功、非対応と失敗の区別、シリアル・インスタンス ID は読まない）。WinRT `Windows.Devices.Usb` は package identity 必須のため使わず、WinUSB は機器を開くため範囲外。守らない範囲: 抜き差しの反映（再取得まで）、ハブや複合機器の扱い（OS 任せ）、Bluetooth HID、iProduct を持たない機器の名前（汎用名へは倒さず名前なし）、OS 呼び出しが戻らない場合の期限。型検査は x86_64-pc-windows-gnu のみ。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#504）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_usb_device.rs + crates/fandhe-egui-proxy/src/device/usb_device.rs + crates/fandhe-device/src/usb_device.rs + crates/fandhe-egui-proxy/Cargo.toml、Issue #506"
     },
     "web": {
       "status": "possible",
@@ -46,5 +49,5 @@
       "note": "未実装。WebHID のページ: https://developer.mozilla.org/en-US/docs/Web/API/WebHID_API 。どちらも Chromium のみ。"
     }
   },
-  "note": "Android / macOS / Windows / Web に届く。iOS は no。Windows の WinRT API は package identity 必須なので、unpackaged では Win32 の WinUSB に倒す必要がある。gamepad（既存 id）は HID のうちゲームコントローラだけを OS 経由で扱うもので、本機能は任意の機器を直接制御する点が違う。今回の範囲: 接続された USB 機器の一覧（ベンダー ID・製品 ID・製品名）を 1 回読み、「再取得」で読み直す（機器は開かない・データ転送は扱わない・抜き差しには追従しない・シリアルや locationID は取らない・製品名は画面にだけ出す）。守らない範囲: 抜き差しの反映（再取得まで）、OS 間の名前の表記と粒度の一致、ハブや内蔵 USB 機器を含めるか（OS 任せ）、Bluetooth HID、Web は選ばれた 1 台だけ、同期呼び出しが戻らない場合の期限。"
+  "note": "Android / macOS / Windows / Web に届く。iOS は no。Windows の WinRT API は package identity 必須なので、unpackaged では Win32 の SetupAPI で列挙する（WinUSB は機器を開くため使わない）。gamepad（既存 id）は HID のうちゲームコントローラだけを OS 経由で扱うもので、本機能は任意の機器を直接制御する点が違う。今回の範囲: 接続された USB 機器の一覧（ベンダー ID・製品 ID・製品名）を 1 回読み、「再取得」で読み直す（機器は開かない・データ転送は扱わない・抜き差しには追従しない・シリアルや locationID は取らない・製品名は画面にだけ出す）。守らない範囲: 抜き差しの反映（再取得まで）、OS 間の名前の表記と粒度の一致、ハブや内蔵 USB 機器を含めるか（OS 任せ）、Bluetooth HID、Web は選ばれた 1 台だけ、同期呼び出しが戻らない場合の期限。"
 }
