@@ -107,7 +107,7 @@ final class LanDiscoveryHelper {
         }
     }
 
-    private void start(final long id, long deadline) {
+    private void start(final long id, final long deadline) {
         // 再要求は置き換え。旧 id は通知せず捨てる（Rust 側は新しい世代へ移っている）。
         request.take();
         stopQuietly();
@@ -163,6 +163,12 @@ final class LanDiscoveryHelper {
         closer = () -> close(id);
         handler.postAtTime(closer, deadline);
         Runnable launch = () -> {
+            // 期限切れ（UI キュー遅延・旧探索の停止待ち）なら探索窓を実行できていないので、
+            // 空一覧の成功にせず失敗として確定する。開始直前の 1 か所で両経路を覆う。
+            if (SystemClock.uptimeMillis() >= deadline) {
+                finish(id, CODE_OTHER);
+                return;
+            }
             launched = true;
             try {
                 nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, listener);
