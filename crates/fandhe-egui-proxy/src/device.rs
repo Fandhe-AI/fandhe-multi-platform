@@ -230,8 +230,8 @@ pub mod android_url_scheme;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_usb_device;
-/// Issue #514: Android 向け Wi-Fi 情報のスタブ（b-android 子が `WifiManager` で埋める）。
-/// `device/wifi_info.rs` の Android 経路から呼ばれる。
+/// Issue #516: Android 向け Wi-Fi 情報・スキャン実装（`WifiManager`、JNI 経由の pull 型 bridge）。
+/// `device/wifi_info.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でもコンパイルする。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_wifi_info;

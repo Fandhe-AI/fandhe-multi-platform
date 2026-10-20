@@ -496,6 +496,18 @@ public class MainActivity extends GameActivity {
         musicLibraryHelper.cancel(requestId);
     }
 
+    // Wi-Fi 情報画面（Issue #516）。実装は `WifiInfoHelper`（許可ランチャーを STARTED 前に登録）。
+    // Rust の `android_wifi_info.rs` が JNI で呼ぶ。
+    private final WifiInfoHelper wifiInfoHelper = new WifiInfoHelper(this);
+
+    void requestWifiInfo(long requestId) {
+        wifiInfoHelper.read(requestId);
+    }
+
+    void cancelWifiInfo(long requestId) {
+        wifiInfoHelper.cancel(requestId);
+    }
+
     // 方位（Issue #1406）。実装は `CompassHelper`。Rust の `android_compass.rs` が同期 JNI で呼ぶ。
     private final CompassHelper compassHelper = new CompassHelper(this);
 
@@ -4701,6 +4713,7 @@ public class MainActivity extends GameActivity {
         pedometerHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
         musicLibraryHelper.onDestroy();
+        wifiInfoHelper.onDestroy();
         compassHelper.onDestroy();
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();

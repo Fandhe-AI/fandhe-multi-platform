@@ -165,6 +165,23 @@ mod tests {
     }
 
     #[test]
+    fn many_aps_of_one_ssid_do_not_hide_others() {
+        let mut raw: Vec<_> = (0..64).map(|_| net(Some("A"), Some(-40))).collect();
+        raw.extend(["B", "C", "D", "E"].map(|s| net(Some(s), Some(-50))));
+        assert_eq!(normalize_nearby(raw).len(), 5);
+    }
+
+    #[test]
+    fn many_control_only_ssids_collapse_before_cap() {
+        // 制御文字のみの名前は `None` へ変換され 1 件に集約される。後続の通常 SSID を隠さない。
+        let mut raw: Vec<_> = (0..64u8)
+            .map(|i| net(Some(&format!("\u{1}{}", char::from(i % 2))), Some(-40)))
+            .collect();
+        raw.extend(["B", "C", "D", "E"].map(|s| net(Some(s), Some(-50))));
+        assert_eq!(normalize_nearby(raw).len(), 5);
+    }
+
+    #[test]
     fn unsupported_is_error_not_empty_success() {
         assert!(matches!(
             UnsupportedWifiInfo.read(),
