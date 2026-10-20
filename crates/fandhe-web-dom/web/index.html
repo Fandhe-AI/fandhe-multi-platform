@@ -60,6 +60,7 @@
         mount_background_task_screen,
         mount_background_download_screen,
         mount_ble_scan_screen,
+        mount_usb_device_show_screen,
         mount_contact_pick_screen,
         mount_haptics_tap_screen,
         mount_nlp_segment_screen,
@@ -157,6 +158,8 @@
         mount_nlp_segment_screen("fandhe-dom-root");
       } else if (screen === "contact_pick") {
         mount_contact_pick_screen("fandhe-dom-root");
+      } else if (screen === "usb_device_show") {
+        mount_usb_device_show_screen("fandhe-dom-root");
       } else if (screen === "ble_scan") {
         mount_ble_scan_screen("fandhe-dom-root");
       } else if (screen === "background_download") {

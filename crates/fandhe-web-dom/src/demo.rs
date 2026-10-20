@@ -164,6 +164,9 @@ use fandhe_core::screens::tts_speak::{current_screen as current_tts_screen, TtsS
 use fandhe_core::screens::url_scheme_show::{
     register, url_scheme_show_screen, UrlSchemeShowState, REGISTER_BUTTON_ID,
 };
+use fandhe_core::screens::usb_device_show::{
+    current_screen as current_usb_device_show_screen, UsbDeviceShowState,
+};
 use fandhe_core::screens::wake_lock_toggle::{
     current_screen as current_wake_lock_toggle_screen, turn_off as wake_lock_turn_off,
     WakeLockToggleState, OFF_BUTTON_ID as WAKE_LOCK_OFF_BUTTON_ID,
@@ -355,6 +358,21 @@ pub fn mount_ble_scan_screen(root_id: &str) -> Result<(), JsValue> {
         current_ble_scan_screen(&initial_state),
         initial_state,
         super::bluetooth_le::ble_scan_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「USB・HID 機器」（親 #112、Issue #508）をマウントする検証専用
+/// エントリポイント。`super::usb_device::usb_device_show_effect` が WebUSB / WebHID の
+/// `requestDevice` を駆動する。初期状態は要求なし（2 つの選択ボタンから始まる）。
+#[wasm_bindgen]
+pub fn mount_usb_device_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    let initial_state = UsbDeviceShowState::browser_picker();
+    super::mount::mount_with_effect(
+        root,
+        current_usb_device_show_screen(&initial_state),
+        initial_state,
+        super::usb_device::usb_device_show_effect,
     )
 }
 
