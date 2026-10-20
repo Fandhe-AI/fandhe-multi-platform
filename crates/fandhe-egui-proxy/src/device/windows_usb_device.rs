@@ -26,6 +26,7 @@ use fandhe_device::usb_device::{
     normalize, parse_hardware_id, UsbDeviceEntry, UsbDevices, MAX_DEVICES,
 };
 use fandhe_device::DeviceError;
+use windows::core::HRESULT;
 use windows::core::PCWSTR;
 use windows::Win32::Devices::DeviceAndDriverInstallation::{
     SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInfo, SetupDiGetClassDevsW,
@@ -36,7 +37,7 @@ use windows::Win32::Devices::Properties::{
     DEVPKEY_Device_BusReportedDeviceDesc, DEVPROPTYPE, DEVPROP_TYPE_STRING,
 };
 use windows::Win32::Devices::Usb::GUID_DEVINTERFACE_USB_DEVICE;
-use windows::Win32::Foundation::ERROR_NO_MORE_ITEMS;
+use windows::Win32::Foundation::{ERROR_INVALID_DATA, ERROR_NO_MORE_ITEMS};
 
 /// Windows の `UsbDevices` 実装を返す。
 pub(crate) fn implementation() -> Box<dyn UsbDevices> {
@@ -66,18 +67,29 @@ fn utf16_until_nul(bytes: &[u8]) -> Option<String> {
     String::from_utf16(&units).ok()
 }
 
-/// 1 件の VID/PID。取れない・解析できない項目は `None`（捨てる）。
+/// hardware ID 取得失敗の分類。プロパティが無い（`ERROR_INVALID_DATA`）のは想定内で機器を飛ばし、
+/// それ以外（アクセス拒否等）は一覧を不完全にするため `Internal` として伝播する。
+fn classify_registry_error(code: HRESULT) -> Result<Option<(u16, u16)>, DeviceError> {
+    if code == ERROR_INVALID_DATA.to_hresult() {
+        Ok(None)
+    } else {
+        Err(DeviceError::Internal("usb_device list"))
+    }
+}
+
+/// 1 件の VID/PID。プロパティ無し・解析不能は `Ok(None)`（捨てる）、想定外の OS エラーは `Err`。
 #[allow(unsafe_code)]
-fn vid_pid(set: HDEVINFO, data: &SP_DEVINFO_DATA) -> Option<(u16, u16)> {
+fn vid_pid(set: HDEVINFO, data: &SP_DEVINFO_DATA) -> Result<Option<(u16, u16)>, DeviceError> {
     let mut buf = [0u8; 1024];
     // SAFETY: `set` は有効なハンドル、`data` は `cbSize` 初期化済みで列挙が埋めたもの。
     // バッファは slice で長さを OS に伝える。
-    unsafe {
+    if let Err(e) = unsafe {
         SetupDiGetDeviceRegistryPropertyW(set, data, SPDRP_HARDWAREID, None, Some(&mut buf), None)
+    } {
+        return classify_registry_error(e.code());
     }
-    .ok()?;
     // REG_MULTI_SZ の先頭の文字列だけを使う。
-    parse_hardware_id(&utf16_until_nul(&buf)?)
+    Ok(utf16_until_nul(&buf).and_then(|s| parse_hardware_id(&s)))
 }
 
 /// 機器が報告する製品名。型違い・失敗・不正な UTF-16 は `None`。
@@ -134,7 +146,7 @@ impl UsbDevices for WindowsUsbDevices {
                 Err(_) => return Err(fail()),
             }
             index += 1;
-            if let Some((vendor_id, product_id)) = vid_pid(set.0, &data) {
+            if let Some((vendor_id, product_id)) = vid_pid(set.0, &data)? {
                 out.push(UsbDeviceEntry {
                     vendor_id,
                     product_id,
@@ -143,5 +155,20 @@ impl UsbDevices for WindowsUsbDevices {
             }
         }
         Ok(normalize(out))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::Foundation::ERROR_ACCESS_DENIED;
+
+    #[test]
+    fn 取得失敗は握りつぶさず_プロパティ無しだけ飛ばす() {
+        assert!(matches!(
+            classify_registry_error(ERROR_INVALID_DATA.to_hresult()),
+            Ok(None)
+        ));
+        assert!(classify_registry_error(ERROR_ACCESS_DENIED.to_hresult()).is_err());
     }
 }
