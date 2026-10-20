@@ -1,27 +1,21 @@
-//! iOS 向け近くの端末との直接通信のスタブ（Issue #511 の a。b-ios が埋める）。
+//! iOS 向け近くの端末との直接通信（Issue #512。親 #110 の b-ios）。
 //!
-//! 呼び出し元: `device/local_peer.rs` の iOS 経路が `present` を呼ぶ。現状は `Unsupported` を
-//! 返すだけで、`present` が失敗すると dispatch が同期失敗として確定する（成功を偽装しない）。
+//! 呼び出し元: `device/local_peer.rs` の iOS 経路が `present` を呼ぶ。実体は macOS と共用の
+//! `apple_local_peer`（MultipeerConnectivity の `.m`）へ委譲するだけで、結果の通知
+//! （`crate::ios::request_repaint` を含む）・窓の計時・エラー写像・背景遷移の中断
+//! （`DidEnterBackground` で `Internal` 確定）は委譲先の `.m` が担う。
 //! 契約の SSOT は `fandhe_device::local_peer`。
-//!
-//! b-ios が埋める範囲（このファイルの中身だけ。dispatch・画面・fallback 行には触らない）:
-//! - `apple_local_peer::present` への委譲（macOS と共用の MultipeerConnectivity `.m`）
-//! - Info.plist の `NSBonjourServices`（`_fandhe-p2p._tcp` と `_fandhe-p2p._udp`）と
-//!   `NSLocalNetworkUsageDescription`
-//! - 背景遷移したら `Internal` で確定する中断処理
-//! - `device.rs` の `apple_local_peer` にある `cfg_attr(ios, allow(dead_code))` を外す
 
 use std::time::Duration;
 
-use fandhe_device::local_peer::{LocalPeer, UnsupportedLocalPeer};
 use fandhe_device::DeviceError;
 
-/// 交換を依頼する。b-ios が実装するまでは `Unsupported`。
+/// 交換を依頼する。完了は `device/local_peer.rs` の `Pending` へ届く。
 pub(crate) fn present(
-    _request_id: u64,
-    _own_name: &str,
-    _outgoing: &str,
-    _window: Duration,
+    request_id: u64,
+    own_name: &str,
+    outgoing: &str,
+    window: Duration,
 ) -> Result<(), DeviceError> {
-    UnsupportedLocalPeer.exchange("").map(|_| ())
+    super::apple_local_peer::present(request_id, own_name, outgoing, window)
 }

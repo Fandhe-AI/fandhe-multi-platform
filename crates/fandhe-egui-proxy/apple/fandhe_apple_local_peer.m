@@ -1,6 +1,6 @@
 // Phase 11 の拡充ループ（親 #110）型サンプル「近くの端末との直接通信」: macOS（Issue #511）の実装。
-// iOS（b-ios）も同じファイルを共用する。Foundation と MultipeerConnectivity だけを使い、
-// AppKit / UIKit は使わない。
+// iOS（Issue #512）も同じファイルを共用する。共通部分は Foundation と MultipeerConnectivity だけを使い、
+// UIKit は `#if TARGET_OS_IPHONE` の背景遷移の購読にだけ使う（AppKit は使わない）。
 //
 // `crates/fandhe-egui-proxy/src/device/apple_local_peer.rs` から C ABI 経由で呼ばれる。
 // `build.rs` が iOS / macOS の feature `device` 有効時に `cc` でコンパイルし、MultipeerConnectivity を
@@ -34,6 +34,12 @@
 // 呼ばれうるため、受け口はすべて専用キューへ `dispatch_async` して、現在の request_id か確かめる。
 // MPC の delegate は weak なので、セッション全体を global 変数が強参照で持つ（同 1 節）。
 //
+// iOS の背景遷移（Issue #512）: iOS は背景で MPC が止まる。何もしないと窓切れが「相手なし」
+// （code 0 の成功）に化けるため、`UIApplicationDidEnterBackgroundNotification` で現在のセッションを
+// 確定する（未受信は 4、受信済みで猶予中なら 0）。背景のまま開始された場合も 4 で確定する。
+// Inactive（ローカルネットワーク許可ダイアログ等）は購読しない。拾うと正常な許可を中断扱いにする
+// （`device-bridge-contracts.md` 1 節）。購読トークンは static で強参照する（ARC で即解放しない）。
+//
 // 【推測】macOS で許可を拒否したときの `didNotStart*` のエラーコードは未確認。PolicyDenied(-65570) を
 // 許可なし、NSNetServicesMissingRequiredConfigurationError(-72008) を未宣言として写し、分からない
 // コードは 4 に倒す。確認は #509。
@@ -41,6 +47,10 @@
 
 #import <Foundation/Foundation.h>
 #import <MultipeerConnectivity/MultipeerConnectivity.h>
+#import <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+#import <UIKit/UIKit.h>
+#endif
 
 extern bool fandhe_rust_local_peer_offer(uint64_t request_id, const char *peer_name, const uint8_t *bytes, size_t len);
 extern void fandhe_rust_local_peer_finished(uint64_t request_id, int32_t code);
@@ -128,6 +138,42 @@ static int32_t FandhePeerCodeForError(NSError *error) {
     }
     return 4;
 }
+
+#if TARGET_OS_IPHONE
+static id g_peer_bg_observer = nil;
+static id g_peer_fg_observer = nil;
+static BOOL g_peer_in_background = NO; // 専用キュー上でのみ読み書きする
+
+// 背景遷移の購読を一度だけ張る。ブロックは専用キューへ dispatch_async するだけ（ロックなし・main 待ちなし）。
+static void FandhePeerEnsureLifecycleObservers(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+      g_peer_bg_observer = [nc addObserverForName:UIApplicationDidEnterBackgroundNotification
+                                           object:nil
+                                            queue:nil
+                                       usingBlock:^(NSNotification *__unused note) {
+                                         dispatch_async(FandhePeerQueue(), ^{
+                                           @autoreleasepool {
+                                               g_peer_in_background = YES;
+                                               FandhePeerSession *s = g_peer_session;
+                                               if (s != nil) {
+                                                   FandhePeerClose(s.requestId, s.received ? 0 : 4);
+                                               }
+                                           }
+                                         });
+                                       }];
+      g_peer_fg_observer = [nc addObserverForName:UIApplicationWillEnterForegroundNotification
+                                           object:nil
+                                            queue:nil
+                                       usingBlock:^(NSNotification *__unused note) {
+                                         dispatch_async(FandhePeerQueue(), ^{
+                                           g_peer_in_background = NO;
+                                         });
+                                       }];
+    });
+}
+#endif
 
 // 相手の表示名が自分のアプリの形（"fandhe-" + 8 文字）かの前段チェック。厳密な検証は Rust 側 offer が行う。
 static BOOL FandhePeerLooksValid(MCPeerID *peer) {
@@ -292,6 +338,9 @@ int32_t fandhe_apple_local_peer_start(uint64_t request_id, const char *own_name,
     if (own == nil) {
         return 1;
     }
+#if TARGET_OS_IPHONE
+    FandhePeerEnsureLifecycleObservers();
+#endif
     // 窓の起点はこの呼び出し（dispatch_time も systemUptime も単調時計）。
     dispatch_time_t deadline = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(window_ms * NSEC_PER_MSEC));
     NSTimeInterval deadlineUptime = [NSProcessInfo processInfo].systemUptime + (NSTimeInterval)window_ms / 1000.0;
@@ -306,6 +355,12 @@ int32_t fandhe_apple_local_peer_start(uint64_t request_id, const char *own_name,
           s.outgoing = out;
           s.deadlineUptime = deadlineUptime;
           g_peer_session = s; // 以降の失敗は Close が teardown する
+#if TARGET_OS_IPHONE
+          if (g_peer_in_background) {
+              FandhePeerClose(request_id, 4); // 背景では MPC が動かない。相手なしの成功にしない
+              return;
+          }
+#endif
 
           s.selfPeer = [[MCPeerID alloc] initWithDisplayName:own];
           s.session = [[MCSession alloc] initWithPeer:s.selfPeer securityIdentity:nil encryptionPreference:MCEncryptionRequired];
