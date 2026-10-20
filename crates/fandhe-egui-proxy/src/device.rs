@@ -146,9 +146,10 @@ pub mod android_ml_inference;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_multi_display;
-/// Issue #482: Android 向け音楽ライブラリ実装のスタブ（#485 が埋める）。`device/music_library.rs` の
-/// Android 経路から呼ばれる。
-#[cfg(target_os = "android")]
+/// Issue #485: Android 向け音楽ライブラリ実装（`MediaStore.Audio.Media` を JNI 経由で読む）。
+/// `device/music_library.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でも載せる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_music_library;
 /// Issue #1284: Android 向けネットワーク接続状態実装（`ConnectivityManager` を JNI で読む）。
 /// `device/network_status.rs` の Android 経路から呼ばれる。
