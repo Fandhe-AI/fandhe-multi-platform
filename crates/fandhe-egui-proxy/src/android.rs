@@ -256,6 +256,9 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // Activity 再生成をまたいで残る旧要求の保留をここで捨てる。
     #[cfg(feature = "device")]
     crate::device::lan_discovery::reset_pending_tracking();
+    // Issue #511: `local_peer::bridge::SLOT` / `PENDING` も同じ理由でプロセス static のため捨てる。
+    #[cfg(feature = "device")]
+    crate::device::local_peer::reset_pending_tracking();
     // Issue #1006: `notification::bridge::SLOT` も同じ理由でプロセス static のため
     // Activity 再生成をまたいで残る。新しい画面 `NotificationSendState::default()`
     // （`Idle`）を構築する前にここで捨て、再生成前に開始した権限確認が後から完了

@@ -163,6 +163,8 @@ pub mod passkey_signin;
 pub mod pdf_first_page;
 /// Phase 11 の拡充ループ型サンプル「歩数」（親 #1119、Issue #1247）。
 pub mod pedometer_read;
+/// Phase 11 の拡充ループ型サンプル「近くの端末との直接通信」（親 #110、Issue #511）。
+pub mod peer_connect;
 /// Phase 11 の拡充ループ型サンプル「写真選択」（親 #1101、Issue #1103）。
 pub mod photo_pick;
 /// Phase 11 の拡充ループ型サンプル「写真の保存」（親 #1121、Issue #1254）。

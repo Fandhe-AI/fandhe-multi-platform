@@ -21,11 +21,14 @@
       "note": "未実装。Nearby Connections のページ: https://developers.google.com/nearby/connections/overview 。こちらは Play services が要る。iOS との相互接続は不可。"
     },
     "macos": {
-      "status": "possible",
-      "api": "MultipeerConnectivity（macOS 10.10+）",
-      "perm": "要確認",
+      "status": "done",
+      "api": "MultipeerConnectivity（`MCNearbyServiceAdvertiser` / `MCNearbyServiceBrowser` / `MCSession`、暗号化必須）",
+      "perm": "サンドボックスなし・entitlement 不要。macOS 15 以降のローカルネットワーク許可は【推測】（ターミナルからの起動は自動で許可される見込み。拒否時のエラーコードも未確認で、分からないコードは `Internal` に倒す）",
       "url": "https://developer.apple.com/documentation/multipeerconnectivity",
-      "note": "未実装。Apple 公式のプラットフォーム表記で macOS 対応を確認。"
+      "note": "実装済み（#511）。「同じアプリを開いた近くの 2 台が 30 秒の窓で互いを見つけ、固定文字列（`hello from <OS> #<4 桁>`、200 バイト以内）を 1 回ずつ送り合い、相手の表示名（`fandhe-` + 乱数 8 桁）と受信文字列を出す」範囲（3 台以上・ファイル転送・継続チャット・異なる OS 同士は対象外）。結果が非同期に届くため `LocalPeer` トレイトは通さず、`lan_discovery` と同型の pull 型 `RequestSlot` 経由で `fandhe_core::screens::peer_connect` へ直接書き戻す。専用シリアルキューだけで動かし（main queue 不使用）、delegate は強参照で持つ。招待は表示名のバイト順で片側だけが行う（`should_invite`）。窓は Rust 側 `EXCHANGE_WINDOW_MS`（30 秒、SSOT）を `.m` へ渡し、呼び出しを起点に単調時計で閉じる。相手なしは `Ok(None)` の成功、許可なし→`PermissionDenied`・使えない→`Disabled`・失敗→`Internal`、`Cancelled` は返さない。相手の名前は固定形式、受信データは UTF-8・200 バイト以内・制御文字除去を通ったものだけを受け付け、長すぎる入力は切り詰めず捨てる。守らない範囲: 3 台以上のときの相手の選び方・自分の文字列が届いた保証・窓の端での非対称・同じ種別を名乗る別インスタンスの文字列（相手は認証しない）・背景遷移中の取りこぼし・複数プロセスの同時交換・トークン一致時の `Ok(None)`。Mac 目視（2 プロセス・同じ Mac で互いを見つけられるか、.app でないバイナリで動くか）は #509 で行う",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#509）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_local_peer.m + crates/fandhe-egui-proxy/src/device/apple_local_peer.rs + crates/fandhe-egui-proxy/src/device/local_peer.rs + crates/fandhe-device/src/local_peer.rs + crates/fandhe-core/src/screens/peer_connect.rs、Issue #511"
     },
     "windows": {
       "status": "possible",
@@ -44,5 +47,5 @@
       "note": "端末同士を近距離で見つけて直接つなぐ API は無い。WebRTC は別機能として扱う（要確認）。"
     }
   },
-  "note": "iOS / macOS は MultipeerConnectivity、Android は Wi-Fi Aware / Nearby Connections。Windows は Wi-Fi Direct（WiFiDirectDevice）。Web は no。OS 間で互換が無いため、同じ OS 同士の接続に限られる点を実装前に確認する。bluetooth-le（既存 id）は周辺機器との接続で、本機能は端末同士の通信。今回の範囲: 同じアプリを動かす近くの端末を探して接続し、文字列 1 つを送り合う（ファイル転送・3 台以上は扱わない）。"
+  "note": "iOS / macOS は MultipeerConnectivity、Android は Wi-Fi Aware / Nearby Connections。Windows は Wi-Fi Direct（WiFiDirectDevice）。Web は no。OS 間で互換が無いため、同じ OS 同士の接続に限られる点を実装前に確認する。bluetooth-le（既存 id）は周辺機器との接続で、本機能は端末同士の通信。今回の範囲: 同じアプリを動かす近くの端末を探して接続し、文字列 1 つを送り合う（ファイル転送・3 台以上は扱わない）。（macOS は #511 で実装。同じアプリの 2 台が 30 秒の窓で互いを見つけ、200 バイト以内の固定文字列を 1 回ずつ送り合う。守らない範囲は `fandhe_device::local_peer` のモジュール doc。iOS・Android は子 issue が実装する）"
 }
