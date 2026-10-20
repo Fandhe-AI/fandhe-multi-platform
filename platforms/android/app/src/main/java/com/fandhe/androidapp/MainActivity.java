@@ -680,6 +680,14 @@ public class MainActivity extends GameActivity {
         lanDiscoveryHelper.request(requestId, durationMs);
     }
 
+    // 近くの端末との直接通信（Issue #513）。実装は `LocalPeerHelper`（許可ランチャーを STARTED 前に登録）。
+    // Rust の `android_local_peer.rs` が JNI で呼ぶ。
+    private final LocalPeerHelper localPeerHelper = new LocalPeerHelper(this);
+
+    void requestLocalPeer(long requestId, String ownName, String outgoing, int windowMs) {
+        localPeerHelper.request(requestId, ownName, outgoing, windowMs);
+    }
+
     // OS 管理のバックグラウンドダウンロード（Issue #392）。実装は `BackgroundDownloadHelper`。Rust の
     // `android_background_download.rs` が同期 JNI で呼ぶ（コールバックは無い）。
     private final BackgroundDownloadHelper backgroundDownloadHelper = new BackgroundDownloadHelper(this);
@@ -2382,6 +2390,7 @@ public class MainActivity extends GameActivity {
         super.onResume();
         activityResumed = true;
         compassHelper.onResume();
+        localPeerHelper.onResume();
         mediaPlaybackHelper.onResume();
         nowPlayingHelper.onResume();
         if (sensorManager != null && motionSensor != null) {
@@ -2474,6 +2483,7 @@ public class MainActivity extends GameActivity {
         penStylusHelper.onPause();
         screenCaptureHelper.onPause();
         lanDiscoveryHelper.onPause();
+        localPeerHelper.onPause();
         compassHelper.onPause();
         mediaPlaybackHelper.onPause();
         nowPlayingHelper.onPause();
@@ -4712,6 +4722,7 @@ public class MainActivity extends GameActivity {
         super.onDestroy();
         pedometerHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
+        localPeerHelper.onDestroy();
         musicLibraryHelper.onDestroy();
         wifiInfoHelper.onDestroy();
         compassHelper.onDestroy();
