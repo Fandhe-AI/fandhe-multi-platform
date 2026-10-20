@@ -146,8 +146,6 @@ pub fn music_library_list_effect(
 /// 要素数が奇数・UTF-8 として不正・組の数が `count` と食い違う場合は `Failed`
 /// （不正な項目を捨てると組がずれて曲名とアーティストが入れ替わるため、捨てずに失敗にする）。
 #[cfg(any(target_os = "macos", target_os = "ios", test))]
-// iOS は #484 が使い始めるまでスタブで未使用（そのとき本 allow を macos 限定から外す）。
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn tracks_from_nul_buffer(
     buf: &[u8],
     count: u32,
