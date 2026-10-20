@@ -20,11 +20,14 @@
       "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_music_library.m + crates/fandhe-egui-proxy/src/device/ios_music_library.rs + crates/fandhe-egui-proxy/src/device/music_library.rs + crates/fandhe-core/src/screens/music_library_list.rs + crates/fandhe-device/src/music_library.rs、Issue #484"
     },
     "android": {
-      "status": "possible",
-      "api": "`MediaStore.Audio`",
-      "perm": "`READ_MEDIA_AUDIO`（API 33+）/ `READ_EXTERNAL_STORAGE`（それ以前）。要確認",
+      "status": "done",
+      "api": "`ContentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI)` の `TITLE` / `ARTIST`（`IS_MUSIC != 0`、並び順の指定なし）",
+      "perm": "`READ_MEDIA_AUDIO`（API 33+）/ `READ_EXTERNAL_STORAGE`（`maxSdkVersion=32`）を実行時に要求する",
       "url": "https://developer.android.com/reference/android/provider/MediaStore",
-      "note": "未実装。photo-library が使う MediaStore と同じ系統。"
+      "note": "実装済み（#485）。「曲の一覧を読む」で曲のタイトルとアーティストを OS の返す順に先頭 20 件だけ表示する。0 曲は成功として別に出し、非対応・拒否・失敗・Activity 破棄による中断・期限切れ（30 秒、許可ダイアログへの応答を含む）は失敗として出す。アーティストが `<unknown>` のときは未設定として扱う。守らない範囲: 並び順、読み取り後の変化、期限後も OS 側の処理が走り切ること。",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#480）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_music_library.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MusicLibraryHelper.java + crates/fandhe-egui-proxy/src/device/music_library.rs + crates/fandhe-core/src/screens/music_library_list.rs + crates/fandhe-device/src/music_library.rs、Issue #485"
     },
     "macos": {
       "status": "done",
