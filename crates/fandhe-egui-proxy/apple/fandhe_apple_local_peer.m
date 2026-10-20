@@ -24,7 +24,7 @@
 //   bool fandhe_rust_local_peer_offer(request_id, peer_name, bytes, len)
 //   void fandhe_rust_local_peer_finished(request_id, code)
 //     Rust 側が公開する `extern "C"` 関数。offer が true を返したら受け取り成功（窓を閉じる）、
-//     false なら不正・古い入力として捨てて待ち続ける。code: 0 成功（相手なしを含む）/ 1 許可なし /
+//     false なら不正・古い入力として相手を切り、窓の残りで次の相手を待つ。code: 0 成功（相手なしを含む）/ 1 許可なし /
 //     2 今は使えない / 3 非対応 / 4 中断・失敗（接続後に受信できず期限切れを含む） / 5 サービス種別が未宣言。意味づけは Rust 側
 //     `fandhe_device::local_peer::decode_code` に一本化する。1 要求につき finished は高々 1 回
 //     （`FandhePeerClose` が唯一の発火点）。
@@ -207,10 +207,20 @@ static void FandhePeerEnsureLifecycleObservers(void) {
 }
 #endif
 
-// 相手の表示名が自分のアプリの形（"fandhe-" + 8 文字）かの前段チェック。厳密な検証は Rust 側 offer が行う。
+// 相手の表示名が "fandhe-" + 小文字 hex 8 桁かの検査。SSOT は Rust 側 `is_valid_peer_name`
+// （`fandhe_device::local_peer`）で、ここはそれと同じ形に揃えた前段チェック。厳密な検証は Rust 側 offer も行う。
 static BOOL FandhePeerLooksValid(MCPeerID *peer) {
     NSString *n = peer.displayName;
-    return n.length == 15 && [n hasPrefix:@"fandhe-"];
+    if (n.length != 15 || ![n hasPrefix:@"fandhe-"]) {
+        return NO;
+    }
+    for (NSUInteger i = 7; i < 15; i++) {
+        unichar c = [n characterAtIndex:i];
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) {
+            return NO;
+        }
+    }
+    return YES;
 }
 
 @implementation FandhePeerSession
@@ -333,8 +343,14 @@ static BOOL FandhePeerLooksValid(MCPeerID *peer) {
                     FandhePeerClose(rid, 0);
                 }
               });
+          } else {
+              // 不正・古い入力。対象を固定したままだと近傍の相手が窓を占有できるため、切って次の相手を待つ。
+              // sent も戻し、次の正規の相手と改めて交換できるようにする。専用キュー上なので世代照合済み。
+              MCPeerID *bad = s.target;
+              s.target = nil;
+              s.sent = NO;
+              [s.session cancelConnectPeer:bad];
           }
-          // false は不正・古い入力。捨てて待ち続ける。
       }
     });
 }
