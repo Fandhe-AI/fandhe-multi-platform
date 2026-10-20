@@ -70,6 +70,10 @@ use fandhe_core::screens::file_watch_show::{
     current_screen as current_file_watch_screen, stop as file_watch_stop, FileWatchShowState,
     STOP_LABEL as FILE_WATCH_STOP_LABEL,
 };
+use fandhe_core::screens::flashlight_toggle::{
+    current_screen as current_flashlight_toggle_screen, FlashlightToggleState,
+    WEB_NOTE as FLASHLIGHT_WEB_NOTE,
+};
 use fandhe_core::screens::fullscreen_toggle::{
     current_screen as current_fullscreen_toggle_screen, exit as fullscreen_exit,
     FullscreenToggleState, EXIT_BUTTON_ID as FULLSCREEN_EXIT_BUTTON_ID,
@@ -1102,6 +1106,22 @@ pub fn mount_wake_lock_toggle_screen(root_id: &str) -> Result<(), JsValue> {
         screen,
         initial_state,
         super::screen_wake_lock::wake_lock_toggle_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「ライト（トーチ）」（親 #106、Issue #462）を
+/// マウントする検証専用エントリポイント。`super::flashlight::flashlight_toggle_effect` が
+/// `getUserMedia` + `torch` 制約を駆動する。`Idle` の画面は点灯・消灯の両ボタンを持つため足さない。
+#[wasm_bindgen]
+pub fn mount_flashlight_toggle_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    let initial_state = FlashlightToggleState::default();
+    let screen = current_flashlight_toggle_screen(&initial_state).text(FLASHLIGHT_WEB_NOTE);
+    super::mount::mount_with_effect(
+        root,
+        screen,
+        initial_state,
+        super::flashlight::flashlight_toggle_effect,
     )
 }
 
