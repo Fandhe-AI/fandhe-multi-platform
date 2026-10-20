@@ -316,6 +316,8 @@ mod web {
         }) else {
             return aborted();
         };
+        // 再点灯時に旧ストリームを残さない（getSettings 失敗・torch 喪失後の上書きリーク防止）。
+        drop_track(id);
         let fail = |e: Option<&JsValue>| {
             let name = e.and_then(err_name);
             let f = failure_from_capture(failure_from_error_name(name.as_deref()));
@@ -340,18 +342,25 @@ mod web {
             stop_stream(&stream);
             return aborted();
         }
+        // applyConstraints の await 前に登録し、背景遷移・破棄の停止対象に入れる（契約表 1・9）。
+        if with(id, |e| e.stream = Some(stream.clone())).is_none() {
+            stop_stream(&stream);
+            return aborted();
+        }
         let Ok(track) = stream
             .get_video_tracks()
             .get(0)
             .dyn_into::<MediaStreamTrack>()
         else {
             stop_stream(&stream);
+            drop_track(id);
             mark_unsupported(id);
             return (Err(FlashlightFailure::Unsupported), Some(false));
         };
         let torch = call0(&track, "getCapabilities").and_then(|c| get(&c, "torch").as_bool());
         if let Err(f) = capability_outcome(torch) {
             stop_stream(&stream);
+            drop_track(id);
             mark_unsupported(id);
             return (Err(f), Some(false));
         }
@@ -361,16 +370,15 @@ mod web {
         };
         if !applied {
             stop_stream(&stream);
+            drop_track(id);
             return failed_set();
         }
         if !still_current(id, start) {
             stop_stream(&stream);
+            drop_track(id);
             return aborted();
         }
-        with(id, |e| {
-            e.track = Some(track);
-            e.stream = Some(stream);
-        });
+        with(id, |e| e.track = Some(track));
 
         applier.apply(move |s| mark_confirming(s, generation));
         let began = now();
