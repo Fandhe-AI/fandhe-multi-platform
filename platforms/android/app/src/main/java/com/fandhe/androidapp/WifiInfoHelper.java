@@ -14,6 +14,7 @@ import androidx.core.location.LocationManagerCompat;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -187,16 +188,29 @@ final class WifiInfoHelper {
             int currentRssi = connected ? info.getRssi() : 0;
 
             List<ScanResult> scans = wm.getScanResults();
-            List<ScanResult> sorted = scans == null
-                    ? new ArrayList<>() : new ArrayList<>(scans);
-            Collections.sort(sorted, (a, b) -> Integer.compare(b.level, a.level));
+            // 件数上限で切る前に SSID ごとの最強 dBm へ集約する（同一 SSID の複数 AP が枠を
+            // 占有して別 SSID が欠落するのを防ぐ）。範囲外の dBm は Rust 側で None になるため
+            // 比較では最弱として扱い、有効な値を隠さない。最終の整形・上位 5 件は Rust 側。
+            // ponytail: 上限は異なる SSID 数に対する値。64 超でも強い順なので上位 5 件は不変。
+            Map<String, Integer> best = new HashMap<>();
+            if (scans != null) {
+                for (ScanResult r : scans) {
+                    String s = (r.SSID == null || r.SSID.isEmpty()) ? null : r.SSID;
+                    Integer cur = best.get(s);
+                    if (cur == null || effective(r.level) > effective(cur)) {
+                        best.put(s, r.level);
+                    }
+                }
+            }
+            List<Map.Entry<String, Integer>> sorted = new ArrayList<>(best.entrySet());
+            Collections.sort(sorted, (x, y) ->
+                    Integer.compare(effective(y.getValue()), effective(x.getValue())));
             int n = Math.min(sorted.size(), NEARBY_CAP);
             String[] ssids = new String[n];
             int[] rssis = new int[n];
             for (int i = 0; i < n; i++) {
-                String s = sorted.get(i).SSID;
-                ssids[i] = (s == null || s.isEmpty()) ? null : s;
-                rssis[i] = sorted.get(i).level;
+                ssids[i] = sorted.get(i).getKey();
+                rssis[i] = sorted.get(i).getValue();
             }
             finishIf(id, RESULT_OK, connected, currentSsid, currentRssi, ssids, rssis);
         } catch (SecurityException e) {
@@ -204,6 +218,11 @@ final class WifiInfoHelper {
         } catch (RuntimeException e) {
             finishIf(id, RESULT_FAILED); // SSID を含みうるため内容はログに出さない。
         }
+    }
+
+    // 契約の値域（-126..=-1）外は最弱として比較する。
+    private static int effective(int dbm) {
+        return (dbm >= -126 && dbm <= -1) ? dbm : Integer.MIN_VALUE;
     }
 
     // `getSSID()` はダブルクォートで囲まれた UTF-8 文字列、または囲みなしの 16 進表記を返す。

@@ -165,6 +165,13 @@ mod tests {
     }
 
     #[test]
+    fn many_aps_of_one_ssid_do_not_hide_others() {
+        let mut raw: Vec<_> = (0..64).map(|_| net(Some("A"), Some(-40))).collect();
+        raw.extend(["B", "C", "D", "E"].map(|s| net(Some(s), Some(-50))));
+        assert_eq!(normalize_nearby(raw).len(), 5);
+    }
+
+    #[test]
     fn unsupported_is_error_not_empty_success() {
         assert!(matches!(
             UnsupportedWifiInfo.read(),
