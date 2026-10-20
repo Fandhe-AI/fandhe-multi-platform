@@ -110,6 +110,33 @@ pub(crate) fn confirm_step(
     (read == Some(want)).then_some((Ok(()), read))
 }
 
+/// 対応可否が未判定のまま消灯を求められたときの固定文言。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+const SUPPORT_UNKNOWN: &str = "ライトの対応を確認できていません";
+
+/// 消灯要求の結果。非対応は `Unsupported`、torch 対応が未確認（点灯に成功した実績なし）なら
+/// 失敗にして、正常な消灯と見せない（契約表 6 の嘘の成功の禁止）。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn turn_off_outcome(unsupported: bool, verified: bool) -> Confirmed {
+    if unsupported {
+        (Err(FlashlightFailure::Unsupported), None)
+    } else if !verified {
+        (
+            Err(FlashlightFailure::Failed(SUPPORT_UNKNOWN.to_string())),
+            Some(false),
+        )
+    } else {
+        (Ok(()), Some(false))
+    }
+}
+
+/// 確認ループが失敗で終わり、トラックを停止した後の結果。実際に消灯しているので読み戻し値を
+/// `Some(false)` に揃える（古い `Some(true)` を画面へ渡さない。契約表 2）。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn settle_stopped(outcome: Confirmed) -> Confirmed {
+    (outcome.0, Some(false))
+}
+
 #[cfg(target_arch = "wasm32")]
 pub use web::flashlight_toggle_effect;
 
@@ -133,8 +160,8 @@ mod web {
     use web_sys::{MediaStream, MediaStreamTrack};
 
     use super::{
-        capability_outcome, confirm_step, failure_from_capture, read_state, Confirmed,
-        HIDDEN_REASON, SET_FAILED,
+        capability_outcome, confirm_step, failure_from_capture, read_state, settle_stopped,
+        turn_off_outcome, Confirmed, HIDDEN_REASON, SET_FAILED,
     };
     use crate::camera_capture::failure_from_error_name;
     use crate::mount::{is_live, Applier};
@@ -156,6 +183,8 @@ mod web {
         busy: bool,
         /// 非対応と判明している。tick が `Unsupported` を返し続ける。
         unsupported: bool,
+        /// torch 対応を確認できた（capabilities で true を見た）。未確認のまま消灯成功を返さない。
+        verified: bool,
         /// 最後に画面へ送った読み取り結果（同じ値を送り続けて再描画しないため）。
         last: Option<ReadResult>,
         interval: Option<(i32, Closure<dyn FnMut()>)>,
@@ -364,6 +393,7 @@ mod web {
             mark_unsupported(id);
             return (Err(f), Some(false));
         }
+        with(id, |e| e.verified = true);
         let applied = match call_promise(&track, "applyConstraints", &torch_constraints()) {
             Ok(p) => JsFuture::from(p).await.is_ok(),
             Err(_) => false,
@@ -393,23 +423,21 @@ mod web {
         };
         if outcome.0.is_err() {
             drop_track(id);
+            return settle_stopped(outcome);
         }
         outcome
     }
 
     /// 消灯。何も持っていなくても `Ok`（冪等）。非対応と判明済みなら `Unsupported`（嘘の成功の禁止）。
     fn turn_off(id: u64) -> Confirmed {
-        let unsupported = with(id, |e| {
+        let (unsupported, verified) = with(id, |e| {
             e.desired = false;
             e.epoch += 1;
-            e.unsupported
+            (e.unsupported, e.verified)
         })
-        .unwrap_or(false);
+        .unwrap_or((false, false));
         drop_track(id);
-        if unsupported {
-            return (Err(FlashlightFailure::Unsupported), None);
-        }
-        (Ok(()), Some(false))
+        turn_off_outcome(unsupported, verified)
     }
 
     /// 背景へ回った・ページを離れる。消灯して戻っても点け直さず、表示を消灯へ揃える。
@@ -603,6 +631,25 @@ mod tests {
         assert_eq!(read_state(true, false, Some(true)), Ok(Some(true)));
         assert_eq!(read_state(true, false, Some(false)), Ok(Some(false)));
         assert_eq!(read_state(true, false, None), Err(failed(READ_ERROR)));
+    }
+
+    #[test]
+    fn turn_off_never_fakes_success() {
+        assert_eq!(
+            turn_off_outcome(true, false).0,
+            Err(FlashlightFailure::Unsupported)
+        );
+        assert_eq!(
+            turn_off_outcome(false, false).0,
+            Err(failed(SUPPORT_UNKNOWN))
+        );
+        assert_eq!(turn_off_outcome(false, true), (Ok(()), Some(false)));
+    }
+
+    #[test]
+    fn stopped_failure_reads_off() {
+        let late = (Err(failed(NOT_CONFIRMED_REASON)), Some(true));
+        assert_eq!(settle_stopped(late).1, Some(false));
     }
 
     #[test]
