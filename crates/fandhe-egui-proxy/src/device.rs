@@ -1005,9 +1005,11 @@ pub mod windows_ml_inference;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_multi_display;
-/// Issue #482: Windows 向け音楽ライブラリ実装のスタブ（#483 が埋める）。`device/music_library.rs` の
-/// Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
+/// Issue #483: Windows 向け音楽ライブラリ実装（Music フォルダの走査 + プロパティストア）。
+/// `device/music_library.rs` の Windows 経路から呼ばれる。走査の純関数をホストの `cargo test` で
+/// 検査するため cfg は `any(windows, test)`。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_music_library;
 /// Issue #1282: Windows 向けネットワーク接続状態実装（WinRT `NetworkInformation` ラッパー）。
 /// `device/network_status.rs` の Windows 経路から呼ばれる。写像の純関数はホストの

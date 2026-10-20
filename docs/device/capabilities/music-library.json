@@ -31,11 +31,17 @@
       "impl": "crates/fandhe-egui-proxy/src/device/macos_music_library.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_music_library.m + crates/fandhe-egui-proxy/src/device/music_library.rs + crates/fandhe-core/src/screens/music_library_list.rs + crates/fandhe-device/src/music_library.rs、Issue #482"
     },
     "windows": {
-      "status": "possible",
-      "api": "`KnownFolders.MusicLibrary` の列挙 + `MusicProperties`（タイトル・アーティスト等）",
-      "perm": "要確認（WinRT の KnownFolders は capability 宣言が前提の見込み。photo-library の Windows と同様に Known Folders の Win32 API へ寄せる案もある）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.storage.knownfolders.musiclibrary",
-      "note": "未実装。photo-library の Windows と同じく、OS の音楽ライブラリ管理ではなくフォルダの列挙"
+      "status": "done",
+      "api": "Win32 `SHGetKnownFolderPath(FOLDERID_Music)` + `std::fs` によるファイルの列挙 + `SHGetPropertyStoreFromParsingName` の `PKEY_Title` / `PKEY_Music_Artist`",
+      "perm": "不要（package identity 不要）。WinRT の `KnownFolders.MusicLibrary` は capability `musicLibrary` が要り、unpackaged の exe では宣言できないので使わない",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid",
+        "https://learn.microsoft.com/en-us/windows/win32/properties/props-system-music-artist"
+      ],
+      "note": "実装済み（#483）。Music フォルダをパスの名前順の深さ優先で、深さ 8・5000 エントリまで見る。対象の拡張子は mp3・m4a・aac・flac・wav・wma・ogg・opus。クラウドのプレースホルダ（オフライン・再呼び出し属性）は開かずに飛ばす。先頭 20 件だけ表示し、期限は 30 秒。0 曲は成功として別に出し、フォルダが無い・読めないときは失敗として出す。守らない範囲: 深さ 8・5000 エントリより先、タグの無いファイルの補完、期限後も OS 側の処理が走り切ること。Windows 実機確認は #480。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#480）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_music_library.rs + crates/fandhe-egui-proxy/src/device/windows_photo_library.rs + crates/fandhe-egui-proxy/src/device/music_library.rs、Issue #483"
     },
     "web": {
       "status": "no",
