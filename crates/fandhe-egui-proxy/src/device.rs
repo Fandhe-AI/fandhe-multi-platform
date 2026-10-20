@@ -590,8 +590,8 @@ pub mod ios_ml_inference;
 /// `device/multi_display.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_multi_display;
-/// Issue #482: iOS 向け音楽ライブラリ実装のスタブ（#484 が埋める）。`device/music_library.rs` の
-/// iOS 経路から呼ばれる。
+/// Issue #484: iOS 向け音楽ライブラリ実装（`ios/fandhe_ios_music_library.m` の MediaPlayer を呼ぶ
+/// C ABI ラッパー）。`device/music_library.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_music_library;
 /// Issue #1283: iOS 向けネットワーク接続状態実装（`apple_network_status` を返す）。
@@ -776,8 +776,8 @@ pub mod ml_inference;
 /// Phase 11 の拡充ループ（親 #1134、Issue #1341）: 複数ディスプレイの effect ドライバ（macOS / Windows
 /// 実装、Android は #1343 で埋めるスタブ、他 OS は `UnsupportedMultiDisplay` 固定）。
 pub mod multi_display;
-/// Phase 11 の拡充ループ（親 #108、Issue #482）: 音楽ライブラリの effect ドライバ（macOS 実装、
-/// Windows・iOS・Android は #483・#484・#485 で埋めるスタブ、他 OS は `UnsupportedMusicLibrary` 固定。
+/// Phase 11 の拡充ループ（親 #108、Issue #482）: 音楽ライブラリの effect ドライバ（macOS・iOS 実装、
+/// Windows・Android は #483・#485 の担当、他 OS は `UnsupportedMusicLibrary` 固定。
 /// Web は対象外）。
 pub mod music_library;
 /// Phase 11 の拡充ループ（親 #1130、Issue #1282）: ネットワーク接続状態の effect ドライバ
