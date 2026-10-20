@@ -162,6 +162,17 @@ static BOOL FandhePeerLooksValid(MCPeerID *peer) {
 }
 
 - (void)browser:(MCNearbyServiceBrowser *)browser lostPeer:(MCPeerID *)peerID {
+    uint64_t rid = self.requestId;
+    dispatch_async(FandhePeerQueue(), ^{
+      @autoreleasepool {
+          // 招待中（送信前）の相手が消えたら target を外し、再広告された foundPeer で再招待できるようにする。
+          // 接続済み（sent）や受信済みの相手は交換を続けるため外さない。
+          FandhePeerSession *s = FandhePeerCurrent(rid);
+          if (s == self && s.target != nil && [peerID isEqual:s.target] && !s.sent && !s.received) {
+              s.target = nil;
+          }
+      }
+    });
 }
 
 - (void)browser:(MCNearbyServiceBrowser *)browser didNotStartBrowsingForPeers:(NSError *)error {

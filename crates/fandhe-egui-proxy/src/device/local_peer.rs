@@ -139,6 +139,7 @@ impl Pending {
 /// iOS / macOS / Android 共通の受信バッファ（OS 側コールバックが書く）。
 pub(crate) static PENDING: Pending = Pending::new();
 
+#[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
 /// OS 側の完了通知。バッファを確定して [`bridge`] へ置く（古い要求は捨てる）。
 pub(crate) fn finish(request_id: u64, result: Result<(), DeviceError>) {
     if let Some(r) = PENDING.finish(request_id, result) {
@@ -146,6 +147,7 @@ pub(crate) fn finish(request_id: u64, result: Result<(), DeviceError>) {
     }
 }
 
+#[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
 /// OS からのコールバックとの橋渡し（pull 型、`RequestSlot` の facade）。
 pub(crate) mod bridge {
     use fandhe_core::screens::peer_connect::{PeerError, PeerRow};
