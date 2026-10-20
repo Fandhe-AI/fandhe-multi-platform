@@ -187,6 +187,9 @@
 //! - `macos/fandhe_macos_system_accent_color.m`（Issue #421、`NSColor.controlAccentColor` の同期読み取り）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_system_accent_color.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_music_library.m`（Issue #482、iTunesLibrary `ITLibrary` による曲のタイトルと
+//!   アーティストの先頭 20 件の読み取り）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルし
+//!   iTunesLibrary をリンクする（`src/device/macos_music_library.rs` から呼ばれる契約）。
 //! - `macos/fandhe_macos_multi_display.m`（Issue #1341、`NSScreen.screens` による画面一覧の同期読み取り）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_multi_display.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -1183,6 +1186,17 @@ fn compile_macos_local_fonts() {
         .compile("fandhe_macos_local_fonts");
 }
 
+/// `macos/fandhe_macos_music_library.m` を `cc` でコンパイルし iTunesLibrary をリンクする（Issue #482）。
+/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_music_library.rs` が使う）。
+fn compile_macos_music_library() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_music_library.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_music_library.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_music_library");
+    println!("cargo:rustc-link-lib=framework=iTunesLibrary");
+}
+
 /// `macos/fandhe_macos_compose_mail_sms.m` を `cc` でコンパイルする（Issue #1384）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_compose_mail_sms.rs` が使う）。AppKit は `build_macos` 側の
 /// 既存リンクで足りるため追加リンクは無い。
@@ -1671,6 +1685,8 @@ fn build_macos() {
     compile_macos_file_watch();
     // `macos/fandhe_macos_multi_display.m`（Issue #1341）も macOS 専用。
     compile_macos_multi_display();
+    // `macos/fandhe_macos_music_library.m`（Issue #482）も macOS 専用。iTunesLibrary を使う。
+    compile_macos_music_library();
     compile_macos_pen_stylus();
     // `macos/fandhe_macos_screen_wake_lock.m`（Issue #1278）も macOS 専用。IOKit を使う。
     compile_macos_screen_wake_lock();

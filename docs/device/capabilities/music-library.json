@@ -21,11 +21,14 @@
       "note": "未実装。photo-library が使う MediaStore と同じ系統。"
     },
     "macos": {
-      "status": "possible",
-      "api": "MusicKit（macOS 12+）",
-      "perm": "要確認（ライブラリ参照の許可は未調査）",
-      "url": "https://developer.apple.com/documentation/musickit",
-      "note": "未実装。"
+      "status": "done",
+      "api": "iTunesLibrary `ITLibrary`（macOS 10.13+）。`MPMediaQuery` は macOS で使えず、MusicKit の `MusicLibraryRequest` は macOS 14+ かつ Swift 専用のため使わない",
+      "perm": "`NSAppleMusicUsageDescription`（無いと OS がプロセスを終了させる）。コード署名が必須（ad-hoc 署名で通るかは #480 で確認）。App Sandbox のときだけ `com.apple.security.assets.music.read-only`（本リポジトリは sandbox なしで不要）",
+      "url": "https://developer.apple.com/documentation/ituneslibrary/itlibrary",
+      "note": "実装済み（#482）。「曲の一覧を読む」で曲のタイトルとアーティストを OS の返す順に先頭 20 件だけ表示する。0 曲は成功として別に出し、非対応・拒否・期限切れ（30 秒）・失敗は区別して失敗として出す。ad-hoc 署名で `ITLibrary` が nil になれば「この端末では使えません」と出る（拒否と署名不足は区別しない）。その場合は後で `deferred` に戻す。守らない範囲: iCloud ミュージック・Apple Music 由来の曲が載るか、読み取り後の変化。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#480）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_music_library.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_music_library.m + crates/fandhe-egui-proxy/src/device/music_library.rs + crates/fandhe-core/src/screens/music_library_list.rs + crates/fandhe-device/src/music_library.rs、Issue #482"
     },
     "windows": {
       "status": "possible",
@@ -43,5 +46,5 @@
       "note": "ブラウザに端末の音楽ライブラリを読む API は無い。"
     }
   },
-  "note": "iOS / macOS は MusicKit、Android は MediaStore。Windows は KnownFolders.MusicLibrary の列挙。Web は公開 API が無く no。media-playback（既存 id）は再生、photo-library（既存 id）は写真で、本機能は曲の一覧とメタデータの取得を扱う。今回の範囲: 端末内の曲のタイトルとアーティストを先頭 20 件だけ一覧表示する（再生・プレイリスト編集は扱わない）。"
+  "note": "iOS は MediaPlayer、macOS は iTunesLibrary、Android は MediaStore.Audio.Media、Windows は `SHGetKnownFolderPath(FOLDERID_Music)` とファイル列挙・プロパティストア。Web は公開 API が無く no。media-playback（既存 id）は再生、photo-library（既存 id）は写真で、本機能は曲の一覧とメタデータの取得を扱う。今回の範囲: 端末内の曲のタイトルとアーティストを OS の返す順で先頭 20 件だけ一覧表示する（再生・プレイリスト編集・アートワーク・総件数は扱わない）。期限は 30 秒（許可ダイアログへの応答を含む）。守らない範囲: OS ごとの並び順の一致、Windows の深さ 8・5000 エントリを超えた先とクラウドのプレースホルダ・タグの無いファイルの補完、iCloud ミュージック・Apple Music 由来の曲が載るか、読み取り後の変化と複数プロセス、期限後も OS 側の処理が走り切ること、macOS での拒否と署名不足の区別。"
 }
