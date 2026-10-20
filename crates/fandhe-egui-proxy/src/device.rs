@@ -225,9 +225,10 @@ pub mod android_system_accent_color;
 /// platform_url_scheme` の Android 経路から使われる。
 #[cfg(target_os = "android")]
 pub mod android_url_scheme;
-/// Issue #505: Android 向け USB 機器一覧実装のスタブ（#507 が埋める）。`device/usb_device.rs` の
-/// Android 経路から呼ばれる。
-#[cfg(target_os = "android")]
+/// Issue #507: Android 向け USB 機器一覧実装（`UsbManager`）。`device/usb_device.rs` の
+/// Android 経路から呼ばれる。純関数をホストでテストするため test でもコンパイルする。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_usb_device;
 /// Issue #514: Android 向け Wi-Fi 情報のスタブ（b-android 子が `WifiManager` で埋める）。
 /// `device/wifi_info.rs` の Android 経路から呼ばれる。
