@@ -210,6 +210,9 @@ mod web {
         let _ = Reflect::set(o, &JsValue::from_str(key), v);
     }
 
+    /// カメラ取得（許可ダイアログ込み）を待つ上限（ミリ秒）。超えたら busy を解く。
+    const GET_USER_MEDIA_TIMEOUT_MS: i32 = 30_000;
+
     fn now() -> f64 {
         web_sys::window()
             .and_then(|w| w.performance())
@@ -365,14 +368,29 @@ mod web {
             (Err(f), Some(false))
         };
 
+        // 許可ダイアログが保留のままでも busy を解くため期限を付ける。期限後に届いたストリームは停止する（契約表 3）。
         let stream: MediaStream = match call_promise(&md, "getUserMedia", &video_constraints()) {
-            Ok(p) => match JsFuture::from(p).await {
-                Ok(v) => match v.dyn_into() {
-                    Ok(s) => s,
-                    Err(_) => return fail(None),
-                },
-                Err(e) => return fail(Some(&e)),
-            },
+            Ok(p) => {
+                let limit = timeout_promise(GET_USER_MEDIA_TIMEOUT_MS);
+                match JsFuture::from(Promise::race(&Array::of2(&p, &limit))).await {
+                    Ok(v) => match v.dyn_into() {
+                        Ok(s) => s,
+                        Err(_) => return fail(None),
+                    },
+                    // 期限切れは reject 値が undefined（DOMException ではない）。
+                    Err(e) if e.is_undefined() => {
+                        wasm_bindgen_futures::spawn_local(async move {
+                            if let Ok(v) = JsFuture::from(p).await {
+                                if let Ok(s) = v.dyn_into::<MediaStream>() {
+                                    stop_stream(&s);
+                                }
+                            }
+                        });
+                        return failed_set();
+                    }
+                    Err(e) => return fail(Some(&e)),
+                }
+            }
             Err(e) => return fail(Some(&e)),
         };
         // await 再開後の再確認。古い結果で取れたストリームは即停止する（契約表 2・9）。
@@ -431,14 +449,15 @@ mod web {
         with(id, |e| e.track = Some(track));
 
         applier.apply(move |s| mark_confirming(s, generation));
+        // 読み取り→判定→sleep の順。点灯済みなら遅い apply でも待たずに確定する。
         let outcome = loop {
-            sleep_ms(CONFIRM_POLL.as_millis() as i32).await;
             if !still_current(id, start) {
                 break aborted();
             }
             if let Some(done) = confirm_step((now() - began).max(0.0), read_current(id), true) {
                 break done;
             }
+            sleep_ms(CONFIRM_POLL.as_millis() as i32).await;
         };
         if outcome.0.is_err() {
             drop_track(id);
