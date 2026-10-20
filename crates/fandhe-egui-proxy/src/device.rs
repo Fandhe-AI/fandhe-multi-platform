@@ -79,7 +79,7 @@ pub mod android_file_association;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_file_watch;
-/// Issue #458: Android 向けライト（トーチ）実装のスタブ（#461 が埋める）。
+/// Issue #461: Android 向けライト（トーチ）実装（`FlashlightHelper` との JNI 橋渡し）。
 /// `device/flashlight.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
