@@ -25,7 +25,7 @@
 //   void fandhe_rust_local_peer_finished(request_id, code)
 //     Rust 側が公開する `extern "C"` 関数。offer が true を返したら受け取り成功（窓を閉じる）、
 //     false なら不正・古い入力として捨てて待ち続ける。code: 0 成功（相手なしを含む）/ 1 許可なし /
-//     2 今は使えない / 3 非対応 / 4 中断・失敗 / 5 サービス種別が未宣言。意味づけは Rust 側
+//     2 今は使えない / 3 非対応 / 4 中断・失敗（接続後に受信できず期限切れを含む） / 5 サービス種別が未宣言。意味づけは Rust 側
 //     `fandhe_device::local_peer::decode_code` に一本化する。1 要求につき finished は高々 1 回
 //     （`FandhePeerClose` が唯一の発火点）。
 //
@@ -323,7 +323,10 @@ int32_t fandhe_apple_local_peer_start(uint64_t request_id, const char *own_name,
 
           dispatch_after(deadline, FandhePeerQueue(), ^{
             @autoreleasepool {
-                FandhePeerClose(request_id, 0);
+                // 接続・送信まで済んだのに受け取れず期限切れなら失敗（相手なしの成功にしない）。
+                // 未接続のまま期限切れ（相手が見つからない）だけ 0。
+                FandhePeerSession *cur = FandhePeerCurrent(request_id);
+                FandhePeerClose(request_id, (cur != nil && cur.sent && !cur.received) ? 4 : 0);
             }
           });
       }
