@@ -30,9 +30,10 @@
     "windows": {
       "status": "possible",
       "api": "`Windows.Devices.WiFiDirect.WiFiDirectDevice`（Wi-Fi Direct）",
-      "perm": "要確認（package identity の要否は文書に記載なし）",
+      "perm": "Proximity capability が要る（文書に記載）。unpackaged での可否は未確認",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.wifidirect.wifidirectdevice",
-      "note": "未実装。iOS との相互接続は不可（他 OS と同じ）"
+      "note": "未実装。iOS との相互接続は不可（他 OS と同じ）",
+      "deferred": "Wi-Fi Direct は Proximity capability が要り、package identity なし（unpackaged）での可否が未確認。検証に Wi-Fi Direct 対応 PC が 2 台要る。どちらかが揃えば着手できる"
     },
     "web": {
       "status": "no",

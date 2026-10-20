@@ -9,9 +9,13 @@
     "ios": {
       "status": "possible",
       "api": "NetworkExtension `NEHotspotNetwork`（現在の接続のみ）",
-      "perm": "Wi-Fi 情報の entitlement と位置情報の許可（要確認）",
-      "url": "https://developer.apple.com/documentation/networkextension/nehotspotnetwork",
-      "note": "未実装。周辺のスキャンは不可（現在の接続の SSID などに限る）。"
+      "perm": "Access Wi-Fi Information entitlement（`com.apple.developer.networking.wifi-info`。有料の Apple Developer Program のみ。無料登録では不可）と、正確な位置情報の許可など",
+      "url": [
+        "https://developer.apple.com/documentation/networkextension/nehotspotnetwork",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-ios"
+      ],
+      "note": "未実装。周辺のスキャンは不可（現在の接続の SSID などに限る）。",
+      "deferred": "Access Wi-Fi Information entitlement は有料の Apple Developer Program でしか使えない。開発者登録が期限切れのため保留。ベンダーの個別審査は不要で、登録を再開すれば着手できる"
     },
     "android": {
       "status": "possible",
@@ -43,5 +47,5 @@
       "note": "ブラウザから Wi-Fi 情報を読む API は無い。"
     }
   },
-  "note": "iOS は現在の接続の情報のみ、Android / macOS / Windows は周辺のスキャンまで届く。Web は no。location（既存 id）の許可と絡む。network-status（接続の有無・種別）とは、SSID などの詳細を扱う点で別。今回の範囲: 現在接続中の Wi-Fi の名前（SSID）と電波強度を画面に出す（周辺スキャン・接続操作は扱わない）。"
+  "note": "iOS は現在の接続の情報のみ、Android / macOS / Windows は周辺のスキャンまで届く。Web は no。location（既存 id）の許可と絡む。network-status（接続の有無・種別）とは、SSID などの詳細を扱う点で別。今回の範囲: 現在接続中の Wi-Fi の名前（SSID）と電波強度、OS が持っている直近の周辺スキャン結果の上位数件を画面に出す（自分からスキャンを起こす操作・接続操作・BSSID は扱わない）。"
 }
