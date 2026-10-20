@@ -37,6 +37,8 @@
 // iOS の背景遷移（Issue #512）: iOS は背景で MPC が止まる。何もしないと窓切れが「相手なし」
 // （code 0 の成功）に化けるため、`UIApplicationDidEnterBackgroundNotification` で現在のセッションを
 // 確定する（未受信は 4、受信済みで猶予中なら 0）。背景のまま開始された場合も 4 で確定する。
+// 購読前から背景だった場合は通知が来ないため、初回購読時に main へ非同期で現在状態を読みに行く
+// （待たない。読み終えるまで専用キューを suspend し、開始処理が古い NO を見ないようにする）。
 // Inactive（ローカルネットワーク許可ダイアログ等）は購読しない。拾うと正常な許可を中断扱いにする
 // （`device-bridge-contracts.md` 1 節）。購読トークンは static で強参照する（ARC で即解放しない）。
 //
@@ -148,6 +150,14 @@ static BOOL g_peer_in_background = NO; // 専用キュー上でのみ読み書�
 static void FandhePeerEnsureLifecycleObservers(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
+      // 購読前に既に背景だった場合は通知が来ない。現在状態を main で読み、反映が済むまで専用キューを止める。
+      // 止めている間キューは何も実行していないので、main からの書き込みは専用キュー上の更新と競合しない。
+      dispatch_queue_t q = FandhePeerQueue();
+      dispatch_suspend(q);
+      dispatch_async(dispatch_get_main_queue(), ^{
+        g_peer_in_background = [UIApplication sharedApplication].applicationState == UIApplicationStateBackground;
+        dispatch_resume(q);
+      });
       NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
       g_peer_bg_observer = [nc addObserverForName:UIApplicationDidEnterBackgroundNotification
                                            object:nil
