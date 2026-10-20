@@ -93,7 +93,22 @@ where
 {
     fn walk(&mut self, dir: &Path, depth: usize) -> Result<(), MusicLibraryFailure> {
         let rd = fs::read_dir(dir).map_err(|_| MusicLibraryFailure::Failed)?;
-        let mut entries: Vec<fs::DirEntry> = rd.filter_map(Result::ok).collect();
+        // 列挙中にも期限と残り件数を見る（大量ファイルの全件確保・ソートを避ける）。
+        // 残り件数ぶんで打ち切るため、巨大ディレクトリでは先頭側の列挙順が名前順にならない
+        // （どのみち上限超過で truncated 扱いのため許容）。
+        let remaining = self.max_entries.saturating_sub(self.seen);
+        let mut entries: Vec<fs::DirEntry> = Vec::new();
+        for e in rd {
+            if Instant::now() >= self.deadline {
+                return Err(MusicLibraryFailure::Timeout);
+            }
+            if entries.len() >= remaining.saturating_add(1) {
+                break;
+            }
+            if let Ok(e) = e {
+                entries.push(e);
+            }
+        }
         entries.sort_by_key(|e| e.file_name());
         for entry in entries {
             if self.stop {
