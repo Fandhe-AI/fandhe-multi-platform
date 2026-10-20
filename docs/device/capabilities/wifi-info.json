@@ -35,11 +35,17 @@
       "impl": "crates/fandhe-egui-proxy/src/device/macos_wifi_info.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_wifi_info.m + crates/fandhe-egui-proxy/src/device/wifi_info.rs + crates/fandhe-core/src/screens/wifi_info_show.rs + crates/fandhe-device/src/wifi_info.rs、Issue #514"
     },
     "windows": {
-      "status": "possible",
-      "api": "`Windows.Devices.WiFi.WiFiAdapter`",
-      "perm": "要確認（アダプターへのアクセス許可と位置情報の関係。unpackaged の可否は未検証）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.wifi.wifiadapter",
-      "note": "未実装。"
+      "status": "done",
+      "api": "Win32 wlanapi。`WlanEnumInterfaces`・`WlanQueryInterface`（`current_connection`・`rssi`・`radio_state`）・`WlanGetNetworkBssList`（OS のキャッシュ。`WlanScan` は呼ばない）",
+      "perm": "位置情報の同意（Windows 11 24H2 以降。未同意だと wlanapi が `ERROR_ACCESS_DENIED`。初回は OS のダイアログが出て、押し直しが要る）。unpackaged で宣言は不要の見込み（推測。#510 で確認する）",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/",
+        "https://learn.microsoft.com/en-us/windows/win32/nativewifi/wi-fi-access-location-changes"
+      ],
+      "note": "実装済み（#515）。読むのは OS のキャッシュで、自分からスキャンしない。Wi-Fi の電源オフは判定して失敗にする。位置情報サービスのオフとアプリ拒否は区別できず、どちらも許可なしとして出る。複数アダプターでは 1 つだけ読む。BSSID は読まない。型検査は x86_64-pc-windows-gnu のみ。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#510）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_wifi_info.rs + crates/fandhe-egui-proxy/src/device/wifi_info.rs + crates/fandhe-device/src/wifi_info.rs + crates/fandhe-egui-proxy/Cargo.toml、Issue #515"
     },
     "web": {
       "status": "no",
