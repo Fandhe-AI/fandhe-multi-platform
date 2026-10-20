@@ -151,6 +151,17 @@
          明示（カメラ・位置情報の uses-feature required=false と同じ根拠、切り離し時に削除する）。 -->
     <uses-feature android:name="android.hardware.wifi" android:required="false" />
 
+    <!-- 近くの端末との直接通信（local-peer-connect、Issue #513）: Wi-Fi Aware のメッセージのみ（データパスは
+         使わない）。NEARBY_WIFI_DEVICES は API 33+ の実行時許可（位置情報は導かない）、API 32 以下は
+         宣言済みの ACCESS_FINE_LOCATION を使う。非搭載端末をストアの自動フィルタから除外しないため
+         uses-feature は required=false。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-feature android:name="android.hardware.wifi.aware" android:required="false" />
+
     <!-- USB・HID 機器一覧（Issue #507）。USB ホスト非搭載端末（OTG 非対応機・Android TV 等）を
          ストアの自動フィルタから除外しないための明示（カメラ・位置情報の uses-feature
          required=false と同じ根拠、切り離し時に削除する）。機器は開かないので権限は足さない。 -->

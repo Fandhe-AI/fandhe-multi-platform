@@ -14,11 +14,14 @@
       "note": "未実装。Wi-Fi Aware のページ: https://developer.apple.com/documentation/wifiaware 。Wi-Fi Aware は iOS 26 以降のみ（Apple 公式表記で確認）。"
     },
     "android": {
-      "status": "possible",
-      "api": "Wi-Fi Aware（`WifiAwareManager`、API 26+）/ Nearby Connections（GMS 依存）",
-      "perm": "`NEARBY_WIFI_DEVICES`（API 33+）/ `ACCESS_FINE_LOCATION`（API 32 以下）ほか（要確認）",
+      "status": "done",
+      "api": "Wi-Fi Aware（`WifiAwareManager` の attach・publish・subscribe と `sendMessage` / `onMessageReceived`。メッセージのみでデータパスは使わない、API 26+）",
+      "perm": "`NEARBY_WIFI_DEVICES`（`neverForLocation`、API 33+ の実行時許可）/ `ACCESS_FINE_LOCATION`（API 26〜32）/ `ACCESS_WIFI_STATE`・`CHANGE_WIFI_STATE`（通常権限）",
       "url": "https://developer.android.com/develop/connectivity/wifi/wifi-aware",
-      "note": "未実装。Nearby Connections のページ: https://developers.google.com/nearby/connections/overview 。こちらは Play services が要る。iOS との相互接続は不可。"
+      "note": "実装済み（#513）。「同じアプリを開いた近くの Android 2 台が 30 秒の窓で互いを見つけ、固定文字列（200 バイト以内）を 1 回ずつ送り合い、相手の表示名（`fandhe-` + 乱数 8 桁）と受信文字列を出す」範囲（3 台以上・ファイル転送・継続チャット・異なる OS 同士・Nearby Connections・データパスは対象外）。同じサービス名で publish と subscribe を同時に行い、発見した相手と受信した相手へ「表示名 + 文字列」を 1 通送る。受信の検証は Rust の `PENDING.offer` に一本化。Java は main Handler 1 本で、窓は JNI 受付時点から単調時計で測る。許可の確認は非搭載判定の後。相手なしは `Ok(None)` の成功、許可なし→`PermissionDenied`・Wi-Fi Aware 利用不可→`Disabled`・非搭載→`Unsupported`・失敗や中断→`Internal`、`Cancelled` は返さない。守らない範囲: コア doc のとおり（3 台以上の選び方・自分の文字列が届いた保証・同じ種別を名乗る別インスタンスの文字列など）。API 32 以下で位置情報サービスがオフのときの挙動は未確認。実機 2 台の確認は #509 で行う",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#509）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_local_peer.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/LocalPeerHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/local_peer.rs + crates/fandhe-device/src/local_peer.rs + crates/fandhe-core/src/screens/peer_connect.rs、Issue #513"
     },
     "macos": {
       "status": "done",

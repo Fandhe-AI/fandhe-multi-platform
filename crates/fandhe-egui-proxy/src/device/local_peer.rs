@@ -92,8 +92,6 @@ impl Pending {
 
     /// 相手の名前と受信データを足す。現在の要求で、まだ受け取っておらず、名前とデータの検証を
     /// 通ったときだけ保存して `true`。`false` のとき OS 側は待ち続けてよい（不正な入力は捨てる）。
-    // Android は b-android の JNI が呼ぶまで未使用（そのとき外す）。
-    #[cfg_attr(target_os = "android", allow(dead_code))]
     pub(crate) fn offer(&self, request_id: u64, peer_name: &str, bytes: &[u8]) -> bool {
         if !is_valid_peer_name(peer_name) {
             return false;
