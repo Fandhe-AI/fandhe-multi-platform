@@ -38,7 +38,8 @@
 // （code 0 の成功）に化けるため、`UIApplicationDidEnterBackgroundNotification` で現在のセッションを
 // 確定する（未受信は 4、受信済みで猶予中なら 0）。背景のまま開始された場合も 4 で確定する。
 // 購読前から背景だった場合は通知が来ないため、初回購読時に main へ非同期で現在状態を読みに行く
-// （待たない。読み終えるまで専用キューを suspend し、開始処理が古い NO を見ないようにする）。
+// （待たない。専用キューは止めず、読み終えるまで開始処理だけ保留して古い NO を見ないようにする。
+// stop は保留中の開始処理を捨てるので、同期停止は main に依存しない）。
 // Inactive（ローカルネットワーク許可ダイアログ等）は購読しない。拾うと正常な許可を中断扱いにする
 // （`device-bridge-contracts.md` 1 節）。購読トークンは static で強参照する（ARC で即解放しない）。
 //
@@ -145,18 +146,33 @@ static int32_t FandhePeerCodeForError(NSError *error) {
 static id g_peer_bg_observer = nil;
 static id g_peer_fg_observer = nil;
 static BOOL g_peer_in_background = NO; // 専用キュー上でのみ読み書きする
+static BOOL g_peer_state_known = NO;   // 背景状態が確定したか（専用キュー上でのみ）
+static NSMutableArray<dispatch_block_t> *g_peer_pending = nil; // 確定待ちの開始処理（専用キュー上でのみ）
+
+// 背景状態が確定した時点で、保留中の開始処理を順に流す。専用キュー上で呼ぶ。
+static void FandhePeerStateKnown(void) {
+    g_peer_state_known = YES;
+    NSArray<dispatch_block_t> *p = g_peer_pending;
+    g_peer_pending = nil;
+    for (dispatch_block_t b in p) {
+        b();
+    }
+}
 
 // 背景遷移の購読を一度だけ張る。ブロックは専用キューへ dispatch_async するだけ（ロックなし・main 待ちなし）。
 static void FandhePeerEnsureLifecycleObservers(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-      // 購読前に既に背景だった場合は通知が来ない。現在状態を main で読み、反映が済むまで専用キューを止める。
-      // 止めている間キューは何も実行していないので、main からの書き込みは専用キュー上の更新と競合しない。
-      dispatch_queue_t q = FandhePeerQueue();
-      dispatch_suspend(q);
+      // 購読前に既に背景だった場合は通知が来ない。現在状態を main で読み、専用キューへ戻して確定する。
+      // 通知が先に届いて確定済みなら、古い読み取り値で上書きしない。
       dispatch_async(dispatch_get_main_queue(), ^{
-        g_peer_in_background = [UIApplication sharedApplication].applicationState == UIApplicationStateBackground;
-        dispatch_resume(q);
+        BOOL bg = [UIApplication sharedApplication].applicationState == UIApplicationStateBackground;
+        dispatch_async(FandhePeerQueue(), ^{
+          if (!g_peer_state_known) {
+              g_peer_in_background = bg;
+              FandhePeerStateKnown();
+          }
+        });
       });
       NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
       g_peer_bg_observer = [nc addObserverForName:UIApplicationDidEnterBackgroundNotification
@@ -166,6 +182,9 @@ static void FandhePeerEnsureLifecycleObservers(void) {
                                          dispatch_async(FandhePeerQueue(), ^{
                                            @autoreleasepool {
                                                g_peer_in_background = YES;
+                                               if (!g_peer_state_known) {
+                                                   FandhePeerStateKnown();
+                                               }
                                                FandhePeerSession *s = g_peer_session;
                                                if (s != nil) {
                                                    FandhePeerClose(s.requestId, s.received ? 0 : 4);
@@ -179,6 +198,9 @@ static void FandhePeerEnsureLifecycleObservers(void) {
                                        usingBlock:^(NSNotification *__unused note) {
                                          dispatch_async(FandhePeerQueue(), ^{
                                            g_peer_in_background = NO;
+                                           if (!g_peer_state_known) {
+                                               FandhePeerStateKnown();
+                                           }
                                          });
                                        }];
     });
@@ -354,7 +376,7 @@ int32_t fandhe_apple_local_peer_start(uint64_t request_id, const char *own_name,
     // 窓の起点はこの呼び出し（dispatch_time も systemUptime も単調時計）。
     dispatch_time_t deadline = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(window_ms * NSEC_PER_MSEC));
     NSTimeInterval deadlineUptime = [NSProcessInfo processInfo].systemUptime + (NSTimeInterval)window_ms / 1000.0;
-    dispatch_async(FandhePeerQueue(), ^{
+    dispatch_block_t work = ^{
       @autoreleasepool {
           // 進行中のセッションは置き換える（コールバックなし）。
           FandhePeerTeardown();
@@ -395,6 +417,19 @@ int32_t fandhe_apple_local_peer_start(uint64_t request_id, const char *own_name,
             }
           });
       }
+    };
+    dispatch_async(FandhePeerQueue(), ^{
+#if TARGET_OS_IPHONE
+      if (!g_peer_state_known) {
+          // 背景状態の確定待ち。stop が来れば g_peer_pending ごと捨てる。
+          if (g_peer_pending == nil) {
+              g_peer_pending = [NSMutableArray array];
+          }
+          [g_peer_pending addObject:work];
+          return;
+      }
+#endif
+      work();
     });
     return 0;
 }
@@ -402,6 +437,9 @@ int32_t fandhe_apple_local_peer_start(uint64_t request_id, const char *own_name,
 void fandhe_apple_local_peer_stop(void) {
     dispatch_sync(FandhePeerQueue(), ^{
       @autoreleasepool {
+#if TARGET_OS_IPHONE
+          g_peer_pending = nil; // 未投入の開始処理も無効化する
+#endif
           FandhePeerTeardown();
       }
     });
