@@ -68,8 +68,10 @@ int32_t fandhe_macos_music_library_list(uint64_t timeout_ms, uint8_t *buf, size_
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             @autoreleasepool {
                 NSError *err = nil;
+                // 遅延読み込み（LazyLoadData）は使わない: 初期化時に全データを読むので、
+                // reloadData 前の空一覧を 0 曲の成功として返す嘘の成功を避ける。
                 ITLibrary *lib = [ITLibrary libraryWithAPIVersion:@"1.1"
-                                                          options:ITLibInitOptionLazyLoadData
+                                                          options:ITLibInitOptionNone
                                                             error:&err];
                 if (lib == nil) {
                     code = 1;

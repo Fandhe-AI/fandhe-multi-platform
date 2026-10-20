@@ -62,12 +62,23 @@ pub const FAILED_PREFIX: &str = "読めませんでした: ";
 pub type TrackRow = (Option<String>, Option<String>);
 
 /// 読み取れた一覧。
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+///
+/// `Debug` は曲名・アーティストを出さない（件数と切り捨て有無のみ。ログ・panic 経由の漏えい防止）。
+#[derive(Clone, PartialEq, Eq, Default)]
 pub struct TrackListing {
     /// 表示する行（OS の返す順の先頭 20 件まで）。
     pub rows: Vec<TrackRow>,
     /// 20 件を超えて切り捨てたか。
     pub truncated: bool,
+}
+
+impl std::fmt::Debug for TrackListing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TrackListing")
+            .field("rows", &self.rows.len())
+            .field("truncated", &self.truncated)
+            .finish()
+    }
 }
 
 /// 操作の進行状態。
@@ -223,6 +234,16 @@ pub fn current_screen(_state: &MusicLibraryListState) -> Screen<MusicLibraryList
 mod tests {
     use super::*;
     use crate::click_button;
+
+    #[test]
+    fn debug_output_hides_track_text() {
+        let state = MusicLibraryListState {
+            listing: Some(listing(2, false)),
+            ..Default::default()
+        };
+        let out = format!("{state:?}");
+        assert!(!out.contains("T0") && !out.contains("A1"), "{out}");
+    }
 
     fn listing(n: usize, truncated: bool) -> TrackListing {
         TrackListing {
