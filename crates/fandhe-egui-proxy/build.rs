@@ -129,6 +129,9 @@
 //! - `apple/fandhe_apple_bluetooth_le.m`（Issue #1060、CoreBluetooth による BLE スキャン）は
 //!   **iOS・macOS 双方**で feature `device` 有効時にコンパイルする（`src/device/
 //!   apple_bluetooth_le.rs` から呼ばれる契約。iOS は #1061）。CoreBluetooth をリンクする。
+//! - `apple/fandhe_apple_lan_discovery.m`（Issue #486、`nw_browser` と dns_sd による LAN のサービス探索）は
+//!   **iOS・macOS 双方**で feature `device` 有効時にコンパイルする（`src/device/apple_lan_discovery.rs`
+//!   から呼ばれる契約）。Network をリンクする。
 //! - `macos/fandhe_macos_background_task.m`（Issue #1043、`NSBackgroundActivityScheduler`
 //!   によるバックグラウンド処理）は **macOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルする（`src/device/macos_background_task.rs` の `MacBackgroundTask`
@@ -437,6 +440,9 @@ fn main() {
     // `apple/fandhe_apple_bluetooth_le.m`（Issue #1060 macOS + #1061 iOS）も macOS 分岐と
     // 共用する（上記 doc 参照）。
     compile_apple_bluetooth_le();
+    // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
+    // （b-ios は build.rs を触らずに済む）。Network をリンクする。
+    compile_apple_lan_discovery();
 
     // `apple/fandhe_apple_haptics.m`（Issue #1091 macOS + #1092 iOS）も macOS 分岐と
     // 共用する（上記 doc 参照）。
@@ -963,6 +969,18 @@ fn compile_apple_bluetooth_le() {
         .compile("fandhe_apple_bluetooth_le");
 
     println!("cargo:rustc-link-lib=framework=CoreBluetooth");
+}
+
+/// `apple/fandhe_apple_lan_discovery.m` を `cc` でコンパイルし Network をリンクする
+/// （Issue #486 macOS・親 #109 の b-ios で iOS も共用）。dns_sd は libSystem に含まれる。
+fn compile_apple_lan_discovery() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_lan_discovery.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_lan_discovery.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_lan_discovery");
+
+    println!("cargo:rustc-link-lib=framework=Network");
 }
 
 /// `macos/fandhe_macos_background_task.m` を `cc` でコンパイルする（Issue #1043）。
@@ -1590,6 +1608,9 @@ fn build_macos() {
     compile_apple_system_tray();
     // `apple/fandhe_apple_bluetooth_le.m`（Issue #1060 macOS + #1061 iOS）も共用する。
     compile_apple_bluetooth_le();
+    // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
+    // （b-ios は build.rs を触らずに済む）。Network をリンクする。
+    compile_apple_lan_discovery();
     // `apple/fandhe_apple_haptics.m`（Issue #1091 macOS + #1092 iOS）も iOS 分岐と共用する。
     compile_apple_haptics(true);
     // `apple/fandhe_apple_nlp.m`（Issue #1094 macOS + #1095 iOS）も macOS 分岐と共用する。
