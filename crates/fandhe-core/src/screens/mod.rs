@@ -145,6 +145,8 @@ pub mod midi_show;
 pub mod ml_infer;
 /// Phase 11 の拡充ループ型サンプル「複数ディスプレイ」（親 #1134、Issue #1341）。
 pub mod multi_display_show;
+/// Phase 11 の拡充ループ型サンプル「音楽ライブラリ」（親 #108、Issue #482）。
+pub mod music_library_list;
 /// Phase 11 の拡充ループ型サンプル「ネットワーク接続状態」（親 #1130、Issue #1282）。
 pub mod network_status_show;
 /// Phase 11 の拡充ループ型サンプル「単語分割」（親 #1093、Issue #1094）。

@@ -278,6 +278,10 @@ generated_screens! {
     crate::device::pdf_viewer::pdf_first_page_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "music_library_list" => fandhe_core::screens::music_library_list::current_screen,
+    crate::device::music_library::music_library_list_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ml_infer" => fandhe_core::screens::ml_infer::current_screen,
     crate::device::ml_inference::ml_infer_effect,
     effect

@@ -142,6 +142,10 @@ pub mod android_ml_inference;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_multi_display;
+/// Issue #482: Android 向け音楽ライブラリ実装のスタブ（#485 が埋める）。`device/music_library.rs` の
+/// Android 経路から呼ばれる。
+#[cfg(target_os = "android")]
+pub mod android_music_library;
 /// Issue #1284: Android 向けネットワーク接続状態実装（`ConnectivityManager` を JNI で読む）。
 /// `device/network_status.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -573,6 +577,10 @@ pub mod ios_ml_inference;
 /// `device/multi_display.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_multi_display;
+/// Issue #482: iOS 向け音楽ライブラリ実装のスタブ（#484 が埋める）。`device/music_library.rs` の
+/// iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_music_library;
 /// Issue #1283: iOS 向けネットワーク接続状態実装（`apple_network_status` を返す）。
 /// `device/network_status.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -689,6 +697,10 @@ pub mod macos_local_fonts;
 #[cfg(any(target_os = "macos", target_os = "ios", test))]
 #[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 pub mod macos_multi_display;
+/// Issue #482: macOS 向け音楽ライブラリ実装（`macos/fandhe_macos_music_library.m` の `ITLibrary` を
+/// 呼ぶ C ABI ラッパー）。`device/music_library.rs` の macOS 経路から呼ばれる。
+#[cfg(target_os = "macos")]
+pub mod macos_music_library;
 /// Issue #355: macOS 向けペン・筆圧入力実装（`macos/fandhe_macos_pen_stylus.m` の `NSEvent` local
 /// monitor を呼ぶ C ABI ラッパー）。`device/pen_stylus.rs` の macOS 経路から呼ばれる。写像の純関数を
 /// ホストでテストできるよう cfg は `any(macos, test)`。
@@ -748,6 +760,10 @@ pub mod ml_inference;
 /// Phase 11 の拡充ループ（親 #1134、Issue #1341）: 複数ディスプレイの effect ドライバ（macOS / Windows
 /// 実装、Android は #1343 で埋めるスタブ、他 OS は `UnsupportedMultiDisplay` 固定）。
 pub mod multi_display;
+/// Phase 11 の拡充ループ（親 #108、Issue #482）: 音楽ライブラリの effect ドライバ（macOS 実装、
+/// Windows・iOS・Android は #483・#484・#485 で埋めるスタブ、他 OS は `UnsupportedMusicLibrary` 固定。
+/// Web は対象外）。
+pub mod music_library;
 /// Phase 11 の拡充ループ（親 #1130、Issue #1282）: ネットワーク接続状態の effect ドライバ
 /// （Windows / macOS / iOS 実装、Android は #1284、他 OS は
 /// `UnsupportedNetworkStatus` 固定。Web は `fandhe-web-dom`）。
@@ -969,6 +985,10 @@ pub mod windows_ml_inference;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_multi_display;
+/// Issue #482: Windows 向け音楽ライブラリ実装のスタブ（#483 が埋める）。`device/music_library.rs` の
+/// Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_music_library;
 /// Issue #1282: Windows 向けネットワーク接続状態実装（WinRT `NetworkInformation` ラッパー）。
 /// `device/network_status.rs` の Windows 経路から呼ばれる。写像の純関数はホストの
 /// `cargo test` で検査するため cfg を付けず、WinRT 呼び出しだけをモジュール内に閉じる。
