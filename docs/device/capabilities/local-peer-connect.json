@@ -7,11 +7,14 @@
   "bundle": "continuous-push",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "MultipeerConnectivity（iOS 7+）/ Wi-Fi Aware（`WiFiAware`、iOS 26+）",
-      "perm": "`NSLocalNetworkUsageDescription`、`NSBonjourServices`。Wi-Fi Aware は entitlement（要確認）",
+      "status": "done",
+      "api": "MultipeerConnectivity（`MCNearbyServiceAdvertiser` / `MCNearbyServiceBrowser` / `MCSession`、暗号化必須。macOS と同じ `.m` を共用）",
+      "perm": "Info.plist の `NSLocalNetworkUsageDescription` と `NSBonjourServices`（`_fandhe-p2p._tcp` / `_fandhe-p2p._udp`）。初回の交換でローカルネットワーク許可のダイアログが出る。entitlement 不要",
       "url": "https://developer.apple.com/documentation/multipeerconnectivity",
-      "note": "未実装。Wi-Fi Aware のページ: https://developer.apple.com/documentation/wifiaware 。Wi-Fi Aware は iOS 26 以降のみ（Apple 公式表記で確認）。"
+      "note": "実装済み（#512）。範囲・写像・守らない範囲は macOS（#511）と同じ。Wi-Fi Aware（iOS 26+）は未使用。iOS 固有: 背景へ回すと交換を `Internal` で確定する（受信済みなら成功）。背景のまま開始しても `Internal`。Inactive（許可ダイアログ等）では中断しない。【推測】許可を拒否したとき MPC が `didNotStart*` を出さず、見つからないまま窓が閉じて「相手なし」になる可能性がある。シミュレータでの MPC の動作も未確認。実機確認は #509",
+      "detail": "できている（実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#509）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_local_peer.rs + crates/fandhe-egui-proxy/src/device/apple_local_peer.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_local_peer.m + crates/fandhe-egui-proxy/src/device/local_peer.rs + crates/fandhe-device/src/local_peer.rs + crates/fandhe-core/src/screens/peer_connect.rs、Issue #512"
     },
     "android": {
       "status": "done",
@@ -50,5 +53,5 @@
       "note": "端末同士を近距離で見つけて直接つなぐ API は無い。WebRTC は別機能として扱う（要確認）。"
     }
   },
-  "note": "iOS / macOS は MultipeerConnectivity、Android は Wi-Fi Aware / Nearby Connections。Windows は Wi-Fi Direct（WiFiDirectDevice）。Web は no。OS 間で互換が無いため、同じ OS 同士の接続に限られる点を実装前に確認する。bluetooth-le（既存 id）は周辺機器との接続で、本機能は端末同士の通信。今回の範囲: 同じアプリを動かす近くの端末を探して接続し、文字列 1 つを送り合う（ファイル転送・3 台以上は扱わない）。（macOS は #511 で実装。同じアプリの 2 台が 30 秒の窓で互いを見つけ、200 バイト以内の固定文字列を 1 回ずつ送り合う。守らない範囲は `fandhe_device::local_peer` のモジュール doc。iOS・Android は子 issue が実装する）"
+  "note": "iOS / macOS は MultipeerConnectivity、Android は Wi-Fi Aware / Nearby Connections。Windows は Wi-Fi Direct（WiFiDirectDevice）。Web は no。OS 間で互換が無いため、同じ OS 同士の接続に限られる点を実装前に確認する。bluetooth-le（既存 id）は周辺機器との接続で、本機能は端末同士の通信。今回の範囲: 同じアプリを動かす近くの端末を探して接続し、文字列 1 つを送り合う（ファイル転送・3 台以上は扱わない）。（macOS は #511 で実装。同じアプリの 2 台が 30 秒の窓で互いを見つけ、200 バイト以内の固定文字列を 1 回ずつ送り合う。守らない範囲は `fandhe_device::local_peer` のモジュール doc。iOS は #512 で実装（macOS と同じ `.m`）。Android は子 issue が実装する）"
 }

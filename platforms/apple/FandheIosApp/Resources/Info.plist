@@ -108,6 +108,13 @@
   Bonjour を探索するために必須。未宣言だと探索が失敗する。種別は `_http._tcp` だけを宣言し
   （最小権限、security.md A05）、multicast entitlement は足さない。探索のみで接続・公開はしない。
 
+  NSBonjourServices の `_fandhe-p2p`（Issue #512）: 型サンプル「近くの端末との直接通信」
+  （`FANDHE_PROXY_APP=peer_connect`）が MultipeerConnectivity
+  （`crates/fandhe-egui-proxy/apple/fandhe_apple_local_peer.m` は iOS/macOS 共用）で
+  advertise・browse するために必須。未宣言だと `didNotStart*` が -72008（code 5）になる。
+  種別は `fandhe_device::local_peer::SERVICE_TYPE` と一致させる。最小権限（security.md A05）とし、
+  multicast entitlement は足さない。
+
   BGTaskSchedulerPermittedIdentifiers / UIBackgroundModes（Issue #1045）: 型サンプル
   「バックグラウンド処理」画面（`FANDHE_PROXY_APP=background_task`）が
   `BGTaskScheduler`（`crates/fandhe-egui-proxy/ios/fandhe_ios_background_task.m`）で
@@ -249,10 +256,12 @@
 	<key>NSAppleMusicUsageDescription</key>
 	<string>型サンプル「音楽ライブラリ」の動作確認に使います</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>型サンプル「LAN のサービス探索」の動作確認に使います</string>
+	<string>型サンプル「LAN のサービス探索」「近くの端末との直接通信」の動作確認に使います</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_http._tcp</string>
+		<string>_fandhe-p2p._tcp</string>
+		<string>_fandhe-p2p._udp</string>
 	</array>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
