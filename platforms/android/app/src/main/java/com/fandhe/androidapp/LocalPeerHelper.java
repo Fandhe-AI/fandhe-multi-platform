@@ -30,6 +30,7 @@ import androidx.lifecycle.Lifecycle;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -58,6 +59,20 @@ import java.util.Map;
 // 表示名・受信文字列・peerHandle はログへ出さない。
 // 守らない範囲: コア doc のとおり。加えて API 32 以下で位置情報サービスがオフのときの挙動は未確認。
 final class LocalPeerHelper {
+    private static final class Outgoing {
+        final Object session;
+        final PeerHandle peer;
+        final boolean reply;
+        final int retries;
+
+        Outgoing(Object session, PeerHandle peer, boolean reply, int retries) {
+            this.session = session;
+            this.peer = peer;
+            this.reply = reply;
+            this.retries = retries;
+        }
+    }
+
     private static final int CODE_OK = 0;
     private static final int CODE_PERMISSION = 1;
     private static final int CODE_DISABLED = 2;
@@ -73,6 +88,10 @@ final class LocalPeerHelper {
     private static final int MAX_TEXT_BYTES = 200;
     // ponytail: 洪水対策で 1 窓の送信数に上限を置く。3 台以上の選び方は守らない範囲。
     private static final int MAX_SENDS = 8;
+    // 受理後の返信の上限。発見起点の送信（MAX_SENDS）と枠を分け、返信が枯渇しないようにする。
+    private static final int MAX_REPLIES = 8;
+    // 非同期の送信失敗（onMessageSendFailed）を同じ相手へ再送する回数の上限（1 通あたり）。
+    private static final int MAX_RETRIES = 3;
 
     private static native boolean nativeOnLocalPeerMessage(long id, String name, byte[] text);
 
@@ -94,6 +113,9 @@ final class LocalPeerHelper {
     private boolean launched;
     private boolean accepted;
     private int sends;
+    private int replies;
+    // 送信中のメッセージ（messageId → 送信先と試行回数）。失敗通知から再送するために持つ。
+    private final Map<Integer, Outgoing> inflight = new HashMap<>();
     private int sendOk;
     private int nextMsgId;
     private byte[] payload;
@@ -216,8 +238,22 @@ final class LocalPeerHelper {
     }
 
     // 閉じる時点で未開始（許可待ちのまま等）ならコード 6、開始済みなら 0（利用不可になっていれば 2）。
+    // 送信が成功したのに有効な受信が 0 件なら、片方向のまま終わったとして 6（Internal）にする。
+    // 相手を見ていない／送信が一度も成功していないときだけ 0（相手なし）。
     private void scheduleCloser(final long id) {
-        closer = () -> finish(id, launched ? (available() ? CODE_OK : CODE_DISABLED) : CODE_OTHER);
+        closer = () -> {
+            // 窓満了後に許可ダイアログの結果を待ち続けず、次の start が通常の判定を通るようにする。
+            permissionPending = false;
+            int code;
+            if (!launched) {
+                code = CODE_OTHER;
+            } else if (!available()) {
+                code = CODE_DISABLED;
+            } else {
+                code = (sendOk > 0 && !accepted) ? CODE_OTHER : CODE_OK;
+            }
+            finish(id, code);
+        };
         handler.postAtTime(closer, deadline);
     }
 
@@ -355,7 +391,12 @@ final class LocalPeerHelper {
 
                         @Override
                         public void onMessageSendSucceeded(int messageId) {
-                            sent(id);
+                            sent(id, messageId);
+                        }
+
+                        @Override
+                        public void onMessageSendFailed(int messageId) {
+                            resend(id, messageId);
                         }
                     }, handler);
             session.subscribe(new SubscribeConfig.Builder().setServiceName(SERVICE_NAME)
@@ -384,7 +425,7 @@ final class LocalPeerHelper {
                         @Override
                         public void onServiceDiscovered(PeerHandle peer, byte[] info,
                                 List<byte[]> filter) {
-                            send(id, subscribeSession, peer);
+                            send(id, subscribeSession, peer, false, 0);
                         }
 
                         @Override
@@ -394,7 +435,12 @@ final class LocalPeerHelper {
 
                         @Override
                         public void onMessageSendSucceeded(int messageId) {
-                            sent(id);
+                            sent(id, messageId);
+                        }
+
+                        @Override
+                        public void onMessageSendFailed(int messageId) {
+                            resend(id, messageId);
                         }
                     }, handler);
         } catch (SecurityException e) {
@@ -405,15 +451,37 @@ final class LocalPeerHelper {
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
-    private void send(long id, Object session, PeerHandle peer) {
-        if (request.current() != id || session == null || sends >= MAX_SENDS) {
+    private void send(long id, Object session, PeerHandle peer, boolean reply, int retries) {
+        if (request.current() != id || session == null || payload == null) {
             return;
         }
-        sends++;
+        // 再送（retries > 0）は上限を消費しない。発見起点と返信は別枠。
+        if (retries == 0) {
+            if (reply ? replies >= MAX_REPLIES : sends >= MAX_SENDS) {
+                return;
+            }
+            if (reply) {
+                replies++;
+            } else {
+                sends++;
+            }
+        }
+        int msgId = nextMsgId++;
+        inflight.put(msgId, new Outgoing(session, peer, reply, retries));
         try {
-            ((DiscoverySession) session).sendMessage(peer, nextMsgId++, payload);
+            ((DiscoverySession) session).sendMessage(peer, msgId, payload);
         } catch (RuntimeException e) {
-            // 送れなかった分は窓終了時の結果に任せる（受理済みなら返る）。
+            // 送れなかった分は窓終了時の結果に任せる（成功が無ければ相手なし）。
+            inflight.remove(msgId);
+        }
+    }
+
+    // 非同期の送信失敗。同じ相手へ上限つきで再送する（失敗通知が来ない限り何もしない）。
+    @RequiresApi(Build.VERSION_CODES.O)
+    private void resend(long id, int messageId) {
+        Outgoing o = inflight.remove(messageId);
+        if (o != null && o.retries < MAX_RETRIES) {
+            send(id, o.session, o.peer, o.reply, o.retries + 1);
         }
     }
 
@@ -427,13 +495,14 @@ final class LocalPeerHelper {
         byte[] text = Arrays.copyOfRange(message, NAME_BYTES, message.length);
         if (nativeOnLocalPeerMessage(id, name, text)) {
             accepted = true;
-            send(id, session, peer);
+            send(id, session, peer, true, 0);
             maybeDone(id);
         }
     }
 
-    private void sent(long id) {
+    private void sent(long id, int messageId) {
         if (request.current() == id) {
+            inflight.remove(messageId);
             sendOk++;
             maybeDone(id);
         }
@@ -469,19 +538,30 @@ final class LocalPeerHelper {
         launched = false;
         accepted = false;
         sends = 0;
+        replies = 0;
         sendOk = 0;
+        inflight.clear();
         payload = null;
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
     private void closeAware() {
+        // 1 つの close の例外で後続の解放が飛ばないよう、個別に囲む。
         try {
             if (publishSession != null) {
                 ((DiscoverySession) publishSession).close();
             }
+        } catch (RuntimeException e) {
+            // 閉じ済みは無視する。
+        }
+        try {
             if (subscribeSession != null) {
                 ((DiscoverySession) subscribeSession).close();
             }
+        } catch (RuntimeException e) {
+            // 閉じ済みは無視する。
+        }
+        try {
             if (awareSession != null) {
                 ((WifiAwareSession) awareSession).close();
             }
