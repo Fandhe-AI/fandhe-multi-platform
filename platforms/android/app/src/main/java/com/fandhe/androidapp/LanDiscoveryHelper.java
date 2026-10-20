@@ -63,6 +63,9 @@ final class LanDiscoveryHelper {
     // 有効扱いのため、この間は discoverServices を呼ばず pendingLaunch に保留する。
     private NsdManager.DiscoveryListener stopping;
     private Runnable pendingLaunch;
+    // discoverServices を実際に呼んだか。保留のまま期限を迎えた要求を成功にしないために持つ。
+    private boolean launched;
+    private int stopRetries;
     private final ArrayDeque<NsdServiceInfo> resolveQueue = new ArrayDeque<>();
     private NsdManager.ResolveListener resolving;
     private int forwarded;
@@ -124,6 +127,7 @@ final class LanDiscoveryHelper {
         }
         request.track(id);
         forwarded = 0;
+        launched = false;
         acquireMulticastLock();
         discovery = new NsdManager.DiscoveryListener() {
             @Override
@@ -151,7 +155,7 @@ final class LanDiscoveryHelper {
 
             @Override
             public void onStopDiscoveryFailed(String serviceType, int errorCode) {
-                handler.post(() -> stopped(this));
+                handler.post(() -> stopFailed(this));
             }
         };
         final NsdManager.DiscoveryListener listener = discovery;
@@ -159,6 +163,7 @@ final class LanDiscoveryHelper {
         closer = () -> close(id);
         handler.postAtTime(closer, deadline);
         Runnable launch = () -> {
+            launched = true;
             try {
                 nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, listener);
             } catch (SecurityException e) {
@@ -180,6 +185,7 @@ final class LanDiscoveryHelper {
             return;
         }
         stopping = null;
+        stopRetries = 0;
         Runnable launch = pendingLaunch;
         pendingLaunch = null;
         if (launch != null) {
@@ -187,8 +193,36 @@ final class LanDiscoveryHelper {
         }
     }
 
-    // 窓が閉じた。未接続なら 0 件の嘘の成功を避けてコード 2。
+    // 停止失敗は停止完了ではない。同じ listener で再停止し、未登録（例外）なら止まっているとみなす。
+    // 再停止も失敗し続けたら stopping を保持したまま、保留中の要求を失敗として確定する。
+    private void stopFailed(NsdManager.DiscoveryListener who) {
+        if (stopping != who) {
+            return;
+        }
+        NsdManager nsd = (NsdManager) activity.getSystemService(Context.NSD_SERVICE);
+        if (nsd != null && stopRetries < 3) {
+            stopRetries++;
+            try {
+                nsd.stopServiceDiscovery(who);
+                return;
+            } catch (RuntimeException e) {
+                // 未登録 = すでに止まっている。
+            }
+            stopped(who);
+            return;
+        }
+        long id = request.current();
+        if (pendingLaunch != null && id != RequestTracker.NONE) {
+            finish(id, CODE_OTHER);
+        }
+    }
+
+    // 窓が閉じた。開始できていなければコード 6、未接続なら 0 件の嘘の成功を避けてコード 2。
     private void close(long id) {
+        if (!launched) {
+            finish(id, CODE_OTHER);
+            return;
+        }
         finish(id, connected() ? CODE_OK : CODE_DISCONNECTED);
     }
 
