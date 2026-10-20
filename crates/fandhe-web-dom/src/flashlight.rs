@@ -161,7 +161,7 @@ mod web {
 
     use super::{
         capability_outcome, confirm_step, failure_from_capture, read_state, settle_stopped,
-        turn_off_outcome, Confirmed, HIDDEN_REASON, SET_FAILED,
+        turn_off_outcome, Confirmed, CONFIRM_TIMEOUT_MS, HIDDEN_REASON, SET_FAILED,
     };
     use crate::camera_capture::failure_from_error_name;
     use crate::mount::{is_live, Applier};
@@ -231,6 +231,15 @@ mod web {
             }
         });
         let _ = JsFuture::from(promise).await;
+    }
+
+    /// `ms` 後に reject する Promise。`Promise.race` で保留の Promise に期限を付ける。
+    fn timeout_promise(ms: i32) -> Promise {
+        Promise::new(&mut |_resolve, reject| {
+            if let Some(w) = web_sys::window() {
+                let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(&reject, ms);
+            }
+        })
     }
 
     /// `navigator.mediaDevices`。secure context 外・非対応では `None`（型に現れない実態を検証する、A03）。
@@ -393,9 +402,20 @@ mod web {
             mark_unsupported(id);
             return (Err(f), Some(false));
         }
-        with(id, |e| e.verified = true);
+        // 対応を確認できたので、前の試行で立てた非対応を解く（tick・消灯結果と揃える。契約表 2）。
+        with(id, |e| {
+            e.verified = true;
+            e.unsupported = false;
+        });
+        // 期限の起点は適用の開始前。Promise の待機も期限に含め、保留のままでも busy を解く（契約表 3）。
+        let began = now();
         let applied = match call_promise(&track, "applyConstraints", &torch_constraints()) {
-            Ok(p) => JsFuture::from(p).await.is_ok(),
+            Ok(p) => {
+                let limit = timeout_promise(CONFIRM_TIMEOUT_MS as i32);
+                JsFuture::from(Promise::race(&Array::of2(&p, &limit)))
+                    .await
+                    .is_ok()
+            }
             Err(_) => false,
         };
         if !applied {
@@ -411,7 +431,6 @@ mod web {
         with(id, |e| e.track = Some(track));
 
         applier.apply(move |s| mark_confirming(s, generation));
-        let began = now();
         let outcome = loop {
             sleep_ms(CONFIRM_POLL.as_millis() as i32).await;
             if !still_current(id, start) {
