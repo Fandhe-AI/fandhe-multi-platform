@@ -397,13 +397,18 @@ mod web {
         outcome
     }
 
-    /// 消灯。何も持っていなくても `Ok`（冪等）。
+    /// 消灯。何も持っていなくても `Ok`（冪等）。非対応と判明済みなら `Unsupported`（嘘の成功の禁止）。
     fn turn_off(id: u64) -> Confirmed {
-        with(id, |e| {
+        let unsupported = with(id, |e| {
             e.desired = false;
             e.epoch += 1;
-        });
+            e.unsupported
+        })
+        .unwrap_or(false);
         drop_track(id);
+        if unsupported {
+            return (Err(FlashlightFailure::Unsupported), None);
+        }
         (Ok(()), Some(false))
     }
 
