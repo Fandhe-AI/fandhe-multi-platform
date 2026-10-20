@@ -31,6 +31,7 @@ import androidx.lifecycle.Lifecycle;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 // 近くの端末との直接通信（Issue #513、親 #110、Wi-Fi Aware のメッセージのみ）の Android 実装ヘルパー。
 // MainActivity から生成・委譲される（Rust の `device/android_local_peer.rs` が
@@ -81,7 +82,7 @@ final class LocalPeerHelper {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final RequestTracker request = new RequestTracker();
     // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
-    private final ActivityResultLauncher<String> permissionLauncher;
+    private final ActivityResultLauncher<String[]> permissionLauncher;
 
     // 以下は main looper 専用。Aware の型は API 26 未満でクラス解決しないよう Object で持つ。
     private boolean permissionPending;
@@ -104,7 +105,7 @@ final class LocalPeerHelper {
     LocalPeerHelper(ComponentActivity activity) {
         this.activity = activity;
         this.permissionLauncher = activity.registerForActivityResult(
-                new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
+                new ActivityResultContracts.RequestMultiplePermissions(), this::onPermissionResult);
     }
 
     // JNI スレッドから呼ばれる。
@@ -156,7 +157,17 @@ final class LocalPeerHelper {
                 && activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED);
     }
 
-    private static String permission() {
+    // API 33 以降は NEARBY_WIFI_DEVICES。API 32 以下は FINE が要るが、Android 12 系では FINE の単独要求が
+    // 無視される端末があるため COARSE と同時に要求する（MainActivity の位置情報許可と同じ、契約表 7 節）。
+    private static String[] permissions() {
+        return Build.VERSION.SDK_INT >= 33
+                ? new String[] {Manifest.permission.NEARBY_WIFI_DEVICES}
+                : new String[] {Manifest.permission.ACCESS_COARSE_LOCATION,
+                        Manifest.permission.ACCESS_FINE_LOCATION};
+    }
+
+    // 利用に必要な許可（API 33 以降は NEARBY、以前は FINE）。
+    private static String required() {
         return Build.VERSION.SDK_INT >= 33
                 ? Manifest.permission.NEARBY_WIFI_DEVICES
                 : Manifest.permission.ACCESS_FINE_LOCATION;
@@ -190,11 +201,11 @@ final class LocalPeerHelper {
         request.track(id);
         // 期限は許可待ちの間も進める。過ぎていれば即時に走る。
         scheduleCloser(id);
-        if (ContextCompat.checkSelfPermission(activity, permission())
+        if (ContextCompat.checkSelfPermission(activity, required())
                 != PackageManager.PERMISSION_GRANTED) {
             permissionPending = true;
             try {
-                permissionLauncher.launch(permission());
+                permissionLauncher.launch(permissions());
             } catch (RuntimeException e) {
                 permissionPending = false;
                 finish(id, CODE_OTHER);
@@ -223,13 +234,14 @@ final class LocalPeerHelper {
         return m != null && m.isAvailable();
     }
 
-    private void onPermissionResult(Boolean granted) {
+    private void onPermissionResult(Map<String, Boolean> result) {
         permissionPending = false;
         long id = request.current();
         if (id == RequestTracker.NONE) {
             return;
         }
-        if (!Boolean.TRUE.equals(granted)) {
+        // 取消（空 Map）は拒否扱い。必要な許可（FINE / NEARBY）の結果で判定する。
+        if (!Boolean.TRUE.equals(result.get(required()))) {
             finish(id, CODE_PERMISSION);
         } else if (activity.isFinishing() || activity.isDestroyed()) {
             finish(id, CODE_INTERRUPTED);
@@ -267,10 +279,6 @@ final class LocalPeerHelper {
             finish(id, CODE_OTHER);
             return;
         }
-        if (NAME_BYTES + text.length > mgr.getCharacteristics().getMaxServiceSpecificInfoLength()) {
-            finish(id, CODE_UNSUPPORTED);
-            return;
-        }
         payload = new byte[NAME_BYTES + text.length];
         System.arraycopy(name, 0, payload, 0, NAME_BYTES);
         System.arraycopy(text, 0, payload, NAME_BYTES, text.length);
@@ -286,8 +294,13 @@ final class LocalPeerHelper {
         ContextCompat.registerReceiver(activity, receiver,
                 new IntentFilter(WifiAwareManager.ACTION_WIFI_AWARE_STATE_CHANGED),
                 ContextCompat.RECEIVER_NOT_EXPORTED);
-        if (!mgr.isAvailable()) {
+        // Wi-Fi オフ等では getCharacteristics() が null を返すため、利用可能性の確認より後に参照する。
+        if (!mgr.isAvailable() || mgr.getCharacteristics() == null) {
             finish(id, CODE_DISABLED);
+            return;
+        }
+        if (NAME_BYTES + text.length > mgr.getCharacteristics().getMaxServiceSpecificInfoLength()) {
+            finish(id, CODE_UNSUPPORTED);
             return;
         }
         mgr.attach(new AttachCallback() {
@@ -330,6 +343,12 @@ final class LocalPeerHelper {
                         }
 
                         @Override
+                        public void onSessionTerminated() {
+                            // OS による探索終了。窓の途中なら嘘の成功にせず失敗で確定する。
+                            finish(id, CODE_OTHER);
+                        }
+
+                        @Override
                         public void onMessageReceived(PeerHandle peer, byte[] message) {
                             received(id, publishSession, peer, message);
                         }
@@ -353,6 +372,12 @@ final class LocalPeerHelper {
 
                         @Override
                         public void onSessionConfigFailed() {
+                            finish(id, CODE_OTHER);
+                        }
+
+                        @Override
+                        public void onSessionTerminated() {
+                            // OS による探索終了。窓の途中なら嘘の成功にせず失敗で確定する。
                             finish(id, CODE_OTHER);
                         }
 
