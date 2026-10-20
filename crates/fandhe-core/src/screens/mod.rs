@@ -177,6 +177,8 @@ pub mod safe_area_insets_show;
 pub mod system_accent_color_show;
 /// Phase 11 の拡充ループ型サンプル「画面スリープの抑止」（親 #1129、Issue #1278）。
 pub mod wake_lock_toggle;
+/// Phase 11 の拡充ループ型サンプル「Wi-Fi 情報」（親 #111、Issue #514）。
+pub mod wifi_info_show;
 
 /// Phase 11 の拡充ループ型サンプル「連絡先選択」（親 #1117、Issue #1220）。
 pub mod contact_pick;

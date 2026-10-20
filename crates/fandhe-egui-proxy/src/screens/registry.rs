@@ -286,6 +286,10 @@ generated_screens! {
     crate::device::music_library::music_library_list_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "wifi_info_show" => fandhe_core::screens::wifi_info_show::current_screen,
+    crate::device::wifi_info::wifi_info_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ml_infer" => fandhe_core::screens::ml_infer::current_screen,
     crate::device::ml_inference::ml_infer_effect,
     effect

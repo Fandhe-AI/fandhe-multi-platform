@@ -10,6 +10,9 @@
   `build.rs` が `-sectcreate __TEXT __info_plist` でこのファイルを `[[bin]]` へ
   埋め込む（テスト実行体・rlib には影響しない）。
 
+  Wi-Fi の SSID 取得（型サンプル「Wi-Fi 情報」、Issue #514）にも同じキーを使う
+  （macOS 14 以降は SSID に位置情報の許可が要る）。
+
   App Sandbox は無効（素の実行体・非 sandbox バンドル）のため
   entitlement（`com.apple.security.personal-information.location`）は不要
   （実装計画 §3.2）。権限は使用中のみ（NSLocationUsageDescription）で、
@@ -66,7 +69,7 @@
 	<key>CFBundleName</key>
 	<string>FandheEguiProxyDesktop</string>
 	<key>NSLocationUsageDescription</key>
-	<string>型サンプル「位置情報」の動作確認に使います</string>
+	<string>型サンプル「位置情報」「Wi-Fi 情報」の動作確認に使います</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>型サンプル「マイク録音」の動作確認に使います</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>

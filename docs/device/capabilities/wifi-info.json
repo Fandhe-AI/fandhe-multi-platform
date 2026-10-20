@@ -25,11 +25,14 @@
       "note": "未実装。スキャンはスロットリングされる。"
     },
     "macos": {
-      "status": "possible",
-      "api": "CoreWLAN（macOS 専用）",
-      "perm": "SSID の取得には位置情報の許可が絡む（一般知識。要確認）",
+      "status": "done",
+      "api": "CoreWLAN `CWWiFiClient` の `interface`（`ssidData`・`rssiValue`・`powerOn`・`cachedScanResults`）と CoreLocation の許可判定",
+      "perm": "位置情報の許可（`requestAlwaysAuthorization`、既存の `NSLocationUsageDescription`）。macOS 14 以降は SSID に必要",
       "url": "https://developer.apple.com/documentation/corewlan",
-      "note": "未実装。"
+      "note": "実装済み（#514）。読む前に位置情報サービス・許可・Wi-Fi の電源を判定し、空の一覧を成功にしない。許可があっても SSID が nil なら「非公開」と出す。素の実行体で nil の場合は #510 で `.app` 化して確かめる。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#510）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_wifi_info.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_wifi_info.m + crates/fandhe-egui-proxy/src/device/wifi_info.rs + crates/fandhe-core/src/screens/wifi_info_show.rs + crates/fandhe-device/src/wifi_info.rs、Issue #514"
     },
     "windows": {
       "status": "possible",
@@ -47,5 +50,5 @@
       "note": "ブラウザから Wi-Fi 情報を読む API は無い。"
     }
   },
-  "note": "iOS は現在の接続の情報のみ、Android / macOS / Windows は周辺のスキャンまで届く。Web は no。location（既存 id）の許可と絡む。network-status（接続の有無・種別）とは、SSID などの詳細を扱う点で別。今回の範囲: 現在接続中の Wi-Fi の名前（SSID）と電波強度、OS が持っている直近の周辺スキャン結果の上位数件を画面に出す（自分からスキャンを起こす操作・接続操作・BSSID は扱わない）。"
+  "note": "iOS は現在の接続の情報のみ、Android / macOS / Windows は周辺のスキャンまで届く。Web は no。location（既存 id）の許可と絡む。network-status（接続の有無・種別）とは、SSID などの詳細を扱う点で別。今回の範囲: 現在接続中の Wi-Fi の名前（SSID）と電波強度、OS が持っている直近の周辺スキャン結果の上位数件を画面に出す（自分からスキャンを起こす操作・接続操作・BSSID は扱わない）。守らない範囲: スキャン結果の鮮度と dBm の揺れ、読んだ後の変化、許可ダイアログの応答待ちの期限、Windows で初回の許可ダイアログの後に押し直しが要ること、OS 呼び出しが戻らない場合、非 UTF-8 の SSID（「非公開」と同じ表示）、複数プロセスから同時に読んだときの差。"
 }
