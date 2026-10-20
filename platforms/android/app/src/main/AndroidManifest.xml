@@ -136,6 +136,12 @@
          実行時許可の対象（API 28 以下は許可不要）。切り離し時に削除する。 -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
+    <!-- Issue #485: 音楽ライブラリ画面が `MediaStore.Audio` を読む。API 33 以上は `READ_MEDIA_AUDIO`、
+         API 32 以下は `READ_EXTERNAL_STORAGE`（最小権限のため maxSdkVersion で限定）。
+         切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+
     <!-- Phase 11（Issue #1284）: ネットワーク接続状態画面が `ConnectivityManager` を読む。
          通常権限で実行時許可は無い。切り離し時に削除する。 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

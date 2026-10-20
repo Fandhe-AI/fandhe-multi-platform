@@ -484,6 +484,18 @@ public class MainActivity extends GameActivity {
         pedometerHelper.cancel(requestId);
     }
 
+    // 音楽ライブラリ画面（Issue #485）。実装は `MusicLibraryHelper`（許可ランチャーを STARTED 前に登録）。
+    // Rust の `android_music_library.rs` が JNI で呼ぶ。
+    private final MusicLibraryHelper musicLibraryHelper = new MusicLibraryHelper(this);
+
+    void requestMusicLibraryList(long requestId) {
+        musicLibraryHelper.read(requestId);
+    }
+
+    void cancelMusicLibraryList(long requestId) {
+        musicLibraryHelper.cancel(requestId);
+    }
+
     // 方位（Issue #1406）。実装は `CompassHelper`。Rust の `android_compass.rs` が同期 JNI で呼ぶ。
     private final CompassHelper compassHelper = new CompassHelper(this);
 
@@ -4681,6 +4693,7 @@ public class MainActivity extends GameActivity {
         super.onDestroy();
         pedometerHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
+        musicLibraryHelper.onDestroy();
         compassHelper.onDestroy();
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();

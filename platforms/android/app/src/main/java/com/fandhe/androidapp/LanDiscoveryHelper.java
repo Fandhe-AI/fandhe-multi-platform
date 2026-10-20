@@ -48,6 +48,7 @@ final class LanDiscoveryHelper {
     // ponytail: 応答の洪水対策の上限。超えた分は捨てる。上限に当たる環境が出たら入れ替え方を検討する。
     private static final int MAX_FORWARDED = 256;
     private static final int MAX_RESOLVE_QUEUE = 64;
+    private static final int STOP_EXHAUSTED = 4;
 
     private static native void nativeOnLanService(long id, String name, String addr, int port);
 
@@ -200,27 +201,33 @@ final class LanDiscoveryHelper {
     }
 
     // 停止失敗は停止完了ではない。同じ listener で再停止し、未登録（例外）なら止まっているとみなす。
-    // 再停止も失敗し続けたら停止済みとして諦め、stopping を解いて保留中の開始を走らせる。
+    // 上限に達しても停止完了とはみなさず stopping を保持する（旧 listener が OS 側に残り得るため）。
+    // 保持した listener は onPause / onDestroy / 次の開始前の stopQuietly が再度 stop を試みて回収する。
     private void stopFailed(NsdManager.DiscoveryListener who) {
         if (stopping != who) {
             return;
         }
-        NsdManager nsd = (NsdManager) activity.getSystemService(Context.NSD_SERVICE);
-        if (nsd != null && stopRetries < 3) {
+        if (stopRetries < 3) {
             stopRetries++;
-            try {
-                nsd.stopServiceDiscovery(who);
-                return;
-            } catch (RuntimeException e) {
-                // 未登録 = すでに止まっている。
-            }
-            stopped(who);
+            retryStop(who);
             return;
         }
-        // 上限到達: これ以上待っても回復しないため停止済みとして扱い、stopping を解いて次の開始を通す。
-        // 旧 listener が OS 側に残る可能性はあるが、同 type の再開で ALREADY_ACTIVE になれば
-        // onStartDiscoveryFailed で CODE_OTHER になるだけで、探索が恒久的に塞がることはない。
-        stopped(who);
+        // 上限到達: 回収待ちの印（STOP_EXHAUSTED）だけ付けて stopping を保持する。
+        // 保留中の開始は期限で CODE_OTHER になる。
+        stopRetries = STOP_EXHAUSTED;
+    }
+
+    private void retryStop(NsdManager.DiscoveryListener who) {
+        NsdManager nsd = (NsdManager) activity.getSystemService(Context.NSD_SERVICE);
+        if (nsd == null) {
+            return;
+        }
+        try {
+            nsd.stopServiceDiscovery(who);
+        } catch (RuntimeException e) {
+            // 未登録 = すでに止まっている。
+            stopped(who);
+        }
     }
 
     // 窓が閉じた。開始できていなければコード 6、未接続なら 0 件の嘘の成功を避けてコード 2。
@@ -337,6 +344,11 @@ final class LanDiscoveryHelper {
         if (closer != null) {
             handler.removeCallbacks(closer);
             closer = null;
+        }
+        // 停止を確認できず上限で止まった listener は捨てずに再停止して回収する（成功通知で stopped が解く）。
+        if (stopping != null && stopRetries == STOP_EXHAUSTED) {
+            stopRetries = 0;
+            retryStop(stopping);
         }
         NsdManager nsd = (NsdManager) activity.getSystemService(Context.NSD_SERVICE);
         if (nsd != null) {
