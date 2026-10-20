@@ -93,7 +93,8 @@ int32_t fandhe_ios_music_library_list(uint64_t timeout_ms, uint8_t *buf, size_t 
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             @autoreleasepool {
                 NSArray<MPMediaItem *> *items = [MPMediaQuery songsQuery].items;
-                if (items != nil) {
+                // 許可済みで曲がないとき `items` は nil を返す。0 曲の成功として扱う（失敗に畳まない）。
+                {
                     for (MPMediaItem *item in items) {
                         if (rows.count == FANDHE_TRACK_MAX) {
                             overflow = YES;
@@ -102,8 +103,8 @@ int32_t fandhe_ios_music_library_list(uint64_t timeout_ms, uint8_t *buf, size_t 
                         [rows addObject:@[ FandheCleanField(item.title),
                                            FandheCleanField(item.artist) ]];
                     }
-                    code = 0;
                 }
+                code = 0;
             }
             atomic_store(&g_in_flight, false);
             dispatch_semaphore_signal(sem);
