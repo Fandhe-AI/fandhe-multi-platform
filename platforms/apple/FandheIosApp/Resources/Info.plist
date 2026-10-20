@@ -96,6 +96,12 @@
   （`crates/fandhe-egui-proxy/ios/fandhe_ios_pedometer.m`）で歩数を読むために必須。
   未設定だと権限要求時にクラッシュする。HealthKit は使わない（security.md A05）。
 
+  NSAppleMusicUsageDescription（Issue #484）: 型サンプル「音楽ライブラリ」画面
+  （`FANDHE_PROXY_APP=music_library_list`）が MediaPlayer の `MPMediaLibrary.
+  requestAuthorization:` と `MPMediaQuery`（`crates/fandhe-egui-proxy/ios/
+  fandhe_ios_music_library.m`）で曲のタイトルとアーティストを読むために必須。
+  未設定だと許可要求時にクラッシュする。entitlement は不要で、MusicKit は使わない（security.md A05）。
+
   NSLocalNetworkUsageDescription / NSBonjourServices（Issue #488）: 型サンプル「LAN のサービス探索」
   （`FANDHE_PROXY_APP=lan_discover`）が `nw_browser`
   （`crates/fandhe-egui-proxy/apple/fandhe_apple_lan_discovery.m` は iOS/macOS 共用）で
@@ -240,6 +246,8 @@
 	<string>型サンプル「歩数」の動作確認に使います</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>型サンプル「写真の保存」の動作確認に使います</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>型サンプル「音楽ライブラリ」の動作確認に使います</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>型サンプル「LAN のサービス探索」の動作確認に使います</string>
 	<key>NSBonjourServices</key>

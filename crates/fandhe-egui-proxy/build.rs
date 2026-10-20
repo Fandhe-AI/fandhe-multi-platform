@@ -202,6 +202,9 @@
 //! - `ios/fandhe_ios_pedometer.m`（Issue #1248、`CMPedometer` による歩数の 1 回取得）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_pedometer.rs`
 //!   から呼ばれる契約）。CoreMotion は motion 用にリンク済みで追加リンクは無い。
+//! - `ios/fandhe_ios_music_library.m`（Issue #484、MediaPlayer `MPMediaQuery` による曲のタイトルとアーティスト）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_music_library.rs`
+//!   から呼ばれる契約）。MediaPlayer は Now Playing 用にリンク済みで追加リンクは無い。
 //! - `ios/fandhe_ios_screen_wake_lock.m`（Issue #1279、`UIApplication.idleTimerDisabled` による
 //!   画面スリープの抑止）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/ios_screen_wake_lock.rs` から呼ばれる契約）。UIKit は既存のリンクで足りる。
@@ -488,6 +491,8 @@ fn main() {
     compile_ios_audio_devices();
     // `ios/fandhe_ios_local_fonts.m`（Issue #1377）。iOS 分岐のみ。
     compile_ios_local_fonts();
+    // `ios/fandhe_ios_music_library.m`（Issue #484）。iOS 分岐のみ。
+    compile_ios_music_library();
     // `ios/fandhe_ios_compass.m`（Issue #1405）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_compass();
     // `ios/fandhe_ios_flashlight.m`（Issue #460）。iOS 分岐のみ（macOS は対応表で n-a）。
@@ -1302,6 +1307,16 @@ fn compile_ios_pedometer() {
         .file("ios/fandhe_ios_pedometer.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_pedometer");
+}
+
+/// `ios/fandhe_ios_music_library.m` を `cc` でコンパイルする（Issue #484）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_music_library.rs` が使う）。MediaPlayer はリンク済みで追加リンクは無い。
+fn compile_ios_music_library() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_music_library.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_music_library.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_music_library");
 }
 
 /// `ios/fandhe_ios_screen_wake_lock.m` を `cc` でコンパイルする（Issue #1279）。**iOS 分岐のみ**
