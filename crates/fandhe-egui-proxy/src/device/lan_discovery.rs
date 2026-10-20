@@ -22,7 +22,7 @@
 //! 自分のモジュールの中身だけを埋め、本ファイルの dispatch には触らない。
 //! - macOS・iOS: `apple_lan_discovery`（`nw_browser` と dns_sd。iOS は `ios_lan_discovery` が委譲）
 //! - Android: `android_lan_discovery`（スタブ。b-android が埋める）
-//! - Windows: `windows_lan_discovery`（スタブ。windows の子が埋める）
+//! - Windows: `windows_lan_discovery`（Win32 `DnsServiceBrowse`。ワーカーが窓の間待つ）
 //!
 //! # 期限・終了
 //!
@@ -125,10 +125,10 @@ impl Observer {
     /// サービス 1 件を足す。現在の要求のときだけ。同名の合流規則は `normalize_services` を
     /// 再利用する（規則を二重に書かない）。
     ///
-    /// 呼び出し元は現状 Apple の `apple_lan_discovery` だけ。Windows・Android の子が使い始めたら
+    /// 呼び出し元は現状 Apple の `apple_lan_discovery` と Windows の `windows_lan_discovery`。Android の子が使い始めたら
     /// この `allow` の対象から外す。
     #[cfg_attr(
-        not(any(target_os = "ios", target_os = "macos", test)),
+        not(any(target_os = "ios", target_os = "macos", target_os = "windows", test)),
         allow(dead_code)
     )]
     pub(crate) fn observe(&self, request_id: u64, service: LanService) {
