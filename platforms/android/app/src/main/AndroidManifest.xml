@@ -145,6 +145,11 @@
     <!-- Phase 11（Issue #1284）: ネットワーク接続状態画面が `ConnectivityManager` を読む。
          通常権限で実行時許可は無い。切り離し時に削除する。 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- LAN サービス探索（lan-discovery）: API 31 以下で mDNS 応答を受けるための MulticastLock 用 -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- Wi-Fi 非搭載端末（Android TV の Ethernet 専用機等）をストアの自動フィルタから除外しないための
+         明示（カメラ・位置情報の uses-feature required=false と同じ根拠、切り離し時に削除する）。 -->
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
 
     <!-- Phase 11（Issue #1092）: 触覚フィードバック画面が `Vibrator` で振動を要求する。
          通常権限で実行時許可は無い。切り離し時に削除する。 -->
