@@ -75,6 +75,8 @@ pub mod home_widget;
 pub mod http;
 /// Phase 11（端末機能の拡充ループ、親 #1120、Issue #1250）: 画像内の文字認識（OCR）。
 pub mod image_recognition;
+/// Phase 11（端末機能の拡充ループ、親 #109、Issue #486）: LAN のサービス探索（mDNS / Bonjour、`_http._tcp` を固定窓で 1 回探す）。
+pub mod lan_discovery;
 /// Phase 11（端末機能の拡充ループ、親 #88、Issue #294）: 数値 1 つのライブ表示（ライブアクティビティ・進行中通知）の開始・更新・終了。
 pub mod live_activity;
 /// Phase 11（端末機能の拡充ループ、親 #1145、Issue #1376）: OS 搭載フォントのファミリー名の一覧。
@@ -98,6 +100,8 @@ pub mod ml_inference;
 pub mod motion;
 /// Phase 11（端末機能の拡充ループ、親 #1134、Issue #1341）: 複数ディスプレイ・外部ディスプレイの一覧。
 pub mod multi_display;
+/// Phase 11（端末機能の拡充ループ、親 #108、Issue #482）: 音楽ライブラリ（曲のタイトルとアーティストの先頭 20 件）。
+pub mod music_library;
 /// Phase 11（端末機能の拡充ループ、親 #1130、Issue #1282）: ネットワーク接続状態（有無・種別・従量制）。
 pub mod network_status;
 /// Phase 11（端末機能の拡充ループ）: 単語分割。

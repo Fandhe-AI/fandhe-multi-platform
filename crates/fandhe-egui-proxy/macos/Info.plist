@@ -44,6 +44,11 @@
   画像を保存するだけなので add-only のみ。読み取り用の `NSPhotoLibraryUsageDescription`
   は足さない（最小権限）。
 
+  `NSAppleMusicUsageDescription`（Issue #482）も同じ理由（iTunesLibrary の `ITLibrary` で曲の
+  タイトルとアーティストを読む初回アクセスで TCC が音楽ライブラリの許可を判定し、このキーが無いと
+  OS がプロセスを終了させる）で追加している。読み取りのみ。App Sandbox 無効の素の実行体のため
+  `com.apple.security.assets.music.read-only` の entitlement は不要。
+
   `NSAppTransportSecurity` → `NSAllowsLocalNetworking`（Issue #390）も追加している。background
   `NSURLSession` のダウンロード確認先が、ローカルの確認用サーバー（`http://127.0.0.1:8787`）への
   平文 http だから。ローカルネットワーク宛てだけを許し、`NSAllowsArbitraryLoads` は足さない
@@ -74,6 +79,8 @@
 	<string>型サンプル「予定の追加」の動作確認に使います</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>型サンプル「写真の保存」の動作確認に使います</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>型サンプル「音楽ライブラリ」の動作確認に使います</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

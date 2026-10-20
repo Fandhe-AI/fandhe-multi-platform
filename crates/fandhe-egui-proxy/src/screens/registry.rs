@@ -158,6 +158,10 @@ generated_screens! {
     crate::device::bluetooth_le::ble_scan_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "lan_discover" => fandhe_core::screens::lan_discover::current_screen,
+    crate::device::lan_discovery::lan_discover_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "haptics_tap" => fandhe_core::screens::haptics_tap::current_screen,
     crate::device::haptics::haptics_tap_effect,
     effect
@@ -276,6 +280,10 @@ generated_screens! {
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pdf_first_page" => fandhe_core::screens::pdf_first_page::current_screen,
     crate::device::pdf_viewer::pdf_first_page_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "music_library_list" => fandhe_core::screens::music_library_list::current_screen,
+    crate::device::music_library::music_library_list_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ml_infer" => fandhe_core::screens::ml_infer::current_screen,
