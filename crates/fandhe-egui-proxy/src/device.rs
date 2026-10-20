@@ -123,6 +123,10 @@ pub mod android_live_activity;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_local_fonts;
+/// Issue #511: Android 向け近くの端末との直接通信のスタブ（親 #110、b-android が埋める）。
+/// `device/local_peer.rs` の Android 経路から呼ばれる。
+#[cfg(target_os = "android")]
+pub mod android_local_peer;
 /// Issue #267: Android 向け音声再生実装のスタブ（親 #86 の b-android が埋める）。`device/media_playback.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -286,6 +290,12 @@ pub mod apple_image_recognition;
 /// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_lan_discovery;
+/// Issue #511 macOS: 近くの端末との直接通信実装（`apple/fandhe_apple_local_peer.m` を呼ぶ C ABI ラッパー）。
+/// `device/local_peer.rs` の macOS 経路と、b-ios が委譲する `ios_local_peer` から呼ばれる。
+/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。iOS は b-ios が委譲するまで未使用。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[cfg_attr(target_os = "ios", allow(dead_code))]
+pub mod apple_local_peer;
 /// Issue #889: iOS / macOS 共通の CoreLocation 実装（`apple/fandhe_apple_location.m`
 /// を呼ぶ C ABI ラッパー）。`device/location.rs` の Apple cfg 分岐から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -570,6 +580,10 @@ pub mod ios_live_activity;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_local_fonts;
+/// Issue #511: iOS 向け近くの端末との直接通信のスタブ（親 #110、b-ios が `apple_local_peer` への委譲で埋める）。
+/// `device/local_peer.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_local_peer;
 /// Issue #387: iOS 向け外部機器への再生（macOS と共用の `apple_media_cast` へ委譲。`device/media_cast.rs` の iOS 経路から呼ばれる）。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -664,6 +678,9 @@ pub mod live_activity;
 /// Phase 11 の拡充ループ（親 #1145、Issue #1376）: OS 搭載フォント一覧の effect ドライバ（macOS / Windows
 /// 実装、iOS・Android は #1377・#1378 で埋めるスタブ、他 OS は `UnsupportedLocalFonts` 固定）。
 pub mod local_fonts;
+/// Phase 11 の拡充ループ（親 #110、Issue #511）: 近くの端末との直接通信の effect ドライバ
+/// （macOS 実装、iOS / Android は子 issue が埋めるスタブ、他 OS は `UnsupportedLocalPeer` 固定）。
+pub mod local_peer;
 /// Phase 11 の拡充ループ（親 #887、Issue #888）: 位置情報の effect ドライバ（Windows のみ実装）。
 pub mod location;
 /// Issue #1360: macOS 向けバッジ設定実装（`macos/fandhe_macos_app_badge.m` を呼ぶ C ABI ラッパー）。`device/app_badge.rs` の macos 経路から呼ばれる。
@@ -1123,6 +1140,7 @@ pub fn shutdown() {
     system_tray::stop_shared_system_tray();
     bluetooth_le::stop_shared_scan();
     lan_discovery::stop_shared_discovery();
+    local_peer::stop_shared_exchange();
     midi::shutdown();
     media_playback::shutdown();
     now_playing::shutdown();
