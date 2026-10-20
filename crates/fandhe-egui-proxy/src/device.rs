@@ -109,6 +109,10 @@ pub mod android_home_widget;
 /// `device/image_recognition.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_image_recognition;
+/// Issue #486: Android 向け LAN のサービス探索のスタブ（親 #109 の b-android が `NsdManager` で埋める）。
+/// `device/lan_discovery.rs` の Android 経路から呼ばれる。
+#[cfg(target_os = "android")]
+pub mod android_lan_discovery;
 /// Issue #294: Android 向けライブアクティビティ（進行中通知）実装のスタブ（b-android が埋める）。
 /// `device/live_activity.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -272,6 +276,12 @@ pub mod apple_home_widget;
 /// macOS 経路と `ios_image_recognition` から呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_image_recognition;
+/// Issue #486 macOS: LAN のサービス探索実装（`apple/fandhe_apple_lan_discovery.m` を呼ぶ C ABI ラッパー）。
+/// `device/lan_discovery.rs` の macOS 経路と、b-ios が委譲する `ios_lan_discovery` から呼ばれる。
+/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。iOS は `ios_lan_discovery` が委譲するまで未使用。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[cfg_attr(target_os = "ios", allow(dead_code))]
+pub mod apple_lan_discovery;
 /// Issue #889: iOS / macOS 共通の CoreLocation 実装（`apple/fandhe_apple_location.m`
 /// を呼ぶ C ABI ラッパー）。`device/location.rs` の Apple cfg 分岐から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -542,6 +552,10 @@ pub mod ios_fullscreen_immersive;
 /// Issue #1252: iOS 向け文字認識（PHPicker + Vision）の effect ドライバ。
 #[cfg(target_os = "ios")]
 pub mod ios_image_recognition;
+/// Issue #486: iOS 向け LAN のサービス探索のスタブ（親 #109 の b-ios が `apple_lan_discovery` への委譲で埋める）。
+/// `device/lan_discovery.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_lan_discovery;
 /// Issue #294: iOS 向けライブアクティビティ（ActivityKit）実装のスタブ（b-ios が埋める）。
 /// `device/live_activity.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -633,6 +647,9 @@ pub mod ios_safe_area_insets;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_wake_lock;
+/// Phase 11 の拡充ループ（親 #109、Issue #486）: LAN のサービス探索の effect ドライバ
+/// （macOS 実装、iOS / Android / Windows は子 issue が埋めるスタブ、他 OS は `UnsupportedLanDiscovery` 固定。Web は対象外）。
+pub mod lan_discovery;
 /// Phase 11 の拡充ループ（親 #88、Issue #294）: ライブアクティビティの effect ドライバ（iOS・Android は
 /// b 層が埋めるスタブ、他 OS は `UnsupportedLiveActivity` 固定）。
 pub mod live_activity;
@@ -933,6 +950,10 @@ pub mod windows_haptics;
 /// `device/image_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_image_recognition;
+/// Issue #486: Windows 向け LAN のサービス探索のスタブ（親 #109 の windows の子が `DnsServiceBrowse` で埋める）。
+/// `device/lan_discovery.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_lan_discovery;
 /// Issue #1376: Windows 向け OS 搭載フォント一覧実装（DirectWrite のシステムフォントコレクション）。
 /// `device/local_fonts.rs` の Windows 経路（ワーカー）から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -1079,6 +1100,7 @@ pub fn shutdown() {
     location::stop_shared_location();
     system_tray::stop_shared_system_tray();
     bluetooth_le::stop_shared_scan();
+    lan_discovery::stop_shared_discovery();
     midi::shutdown();
     media_playback::shutdown();
     now_playing::shutdown();

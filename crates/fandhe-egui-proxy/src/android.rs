@@ -252,6 +252,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // （`speech_recognition`/`notification` と同じ理由）。
     #[cfg(feature = "device")]
     crate::device::bluetooth_le::reset_pending_tracking();
+    // Issue #486: `lan_discovery::bridge::SLOT` / `OBSERVED` も同じ理由でプロセス static のため、
+    // Activity 再生成をまたいで残る旧要求の保留をここで捨てる。
+    #[cfg(feature = "device")]
+    crate::device::lan_discovery::reset_pending_tracking();
     // Issue #1006: `notification::bridge::SLOT` も同じ理由でプロセス static のため
     // Activity 再生成をまたいで残る。新しい画面 `NotificationSendState::default()`
     // （`Idle`）を構築する前にここで捨て、再生成前に開始した権限確認が後から完了

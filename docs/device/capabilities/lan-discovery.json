@@ -21,11 +21,14 @@
       "note": "未実装。"
     },
     "macos": {
-      "status": "possible",
-      "api": "Network `NWBrowser`",
-      "perm": "要確認（サンドボックスのネットワーク entitlement）",
+      "status": "done",
+      "api": "Network `nw_browser`（`NWBrowser`）で `_http._tcp` を発見し、dns_sd の `DNSServiceResolve` / `DNSServiceGetAddrInfo` で解決（NWBrowser は endpoint しか返さない）",
+      "perm": "サンドボックスなし・entitlement 不要。macOS 15 以降はローカルネットワークの許可がかかる（ターミナルからの起動は自動で許可）",
       "url": "https://developer.apple.com/documentation/network/nwbrowser",
-      "note": "未実装。"
+      "note": "実装済み（#486）。「同じネットワークの `_http._tcp` を 10 秒探し、名前・IP 1 件・ポートを一覧表示する」範囲（接続・公開・任意の種別は対象外）。結果が非同期に届くため `LanDiscovery` トレイトは通さず、`bluetooth_le` と同型の pull 型 `RequestSlot` 経由で `fandhe_core::screens::lan_discover` へ直接書き戻す。専用シリアルキューだけで動かし（main queue 不使用）、dns_sd の参照も同じキューで作成・解放する。窓は Rust 側 `BROWSE_DURATION_MS`（10 秒、SSOT）を `.m` へ渡し、呼び出しを起点に単調時計で閉じる。許可なし（PolicyDenied）→`PermissionDenied`・未接続→`Disabled`・失敗→`Internal`、0 件は成功。失敗時は部分結果を捨て、未解決のサービスは名前だけの成功行で返す。結果は `normalize_services`（同名統合・名前昇順・上限 50 件）を通す。守らない範囲: 窓の間に公開をやめたサービスが残ること・窓内に解決が済まないこと・IP は 1 件のみ・ファイアウォールによる 0 件・複数プロセスの同時探索。Mac 目視は #481 で行う。【推測】Wi-Fi を切ったとき `nw_browser` が waiting になるかは未確認のため `NWPathMonitor` の判定を併用する",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#481）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_lan_discovery.m + crates/fandhe-egui-proxy/src/device/apple_lan_discovery.rs + crates/fandhe-egui-proxy/src/device/lan_discovery.rs + crates/fandhe-device/src/lan_discovery.rs + crates/fandhe-core/src/screens/lan_discover.rs、Issue #486"
     },
     "windows": {
       "status": "possible",
@@ -43,5 +46,5 @@
       "note": "ブラウザから mDNS / DNS-SD を引く API は無い。"
     }
   },
-  "note": "iOS / macOS は NWBrowser、Android は NsdManager、Windows は DnsServiceBrowse。Web は公開 API が無く no。http-get（既存 id）は URL を知っている相手への取得で、本機能は相手を見つける側。local-peer-connect（近くの端末との直接通信）とは、探索のみを扱う点で別。今回の範囲: `_http._tcp` のサービスを探索し、見つかった名前とアドレスを一覧に出す（接続・公開は扱わない）。"
+  "note": "iOS / macOS は NWBrowser、Android は NsdManager、Windows は DnsServiceBrowse。Web は公開 API が無く no。http-get（既存 id）は URL を知っている相手への取得で、本機能は相手を見つける側。local-peer-connect（近くの端末との直接通信）とは、探索のみを扱う点で別。今回の範囲: `_http._tcp` のサービスを 10 秒の固定窓で 1 回探索し（最大 50 件）、見つかった名前・IP 1 件・ポートを一覧に出す（接続・公開は扱わない）。守らない範囲: 窓の間に公開をやめたサービスが残ること・窓内に解決が済まないこと・IP を 1 件しか出さないこと・iOS で許可ダイアログの回答前に窓が閉じると「許可なし」と出ること・ファイアウォールやネットワーク設定による 0 件・複数プロセスの同時探索。"
 }
