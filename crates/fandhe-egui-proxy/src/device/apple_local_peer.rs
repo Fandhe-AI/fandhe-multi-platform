@@ -1,4 +1,4 @@
-//! macOS / iOS 向け近くの端末との直接通信の実装（Issue #511 macOS。iOS は b-ios が委譲する）。
+//! macOS / iOS 向け近くの端末との直接通信の実装（Issue #511 macOS。iOS は Issue #512 で委譲する）。
 //! `device/local_peer.rs` の macOS 経路（iOS は `ios_local_peer` の委譲）から呼ばれ、
 //! `apple/fandhe_apple_local_peer.m`（MultipeerConnectivity、`build.rs` が iOS / macOS の
 //! feature `device` 有効時にコンパイル・リンクする）を `unsafe extern "C"` 2 関数
