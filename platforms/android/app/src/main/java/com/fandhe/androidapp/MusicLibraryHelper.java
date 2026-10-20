@@ -118,6 +118,11 @@ final class MusicLibraryHelper {
             if (id <= cancelledId) {
                 return;
             }
+            // 差し替え前の旧クエリを取り消す（signal を B が上書きする前に止める）。
+            if (signal != null) {
+                signal.cancel();
+                signal = null;
+            }
             request.track(id);
         }
         checkPermissionAndQuery(id);
