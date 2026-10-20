@@ -656,7 +656,7 @@ pub mod ios_safe_area_insets;
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_wake_lock;
 /// Phase 11 の拡充ループ（親 #109、Issue #486）: LAN のサービス探索の effect ドライバ
-/// （macOS 実装、iOS / Android / Windows は子 issue が埋めるスタブ、他 OS は `UnsupportedLanDiscovery` 固定。Web は対象外）。
+/// （macOS 実装、iOS / Android は子 issue が埋めるスタブ、Windows は `DnsServiceBrowse`、他 OS は `UnsupportedLanDiscovery` 固定。Web は対象外）。
 pub mod lan_discovery;
 /// Phase 11 の拡充ループ（親 #88、Issue #294）: ライブアクティビティの effect ドライバ（iOS・Android は
 /// b 層が埋めるスタブ、他 OS は `UnsupportedLiveActivity` 固定）。
@@ -966,7 +966,7 @@ pub mod windows_haptics;
 /// `device/image_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_image_recognition;
-/// Issue #486: Windows 向け LAN のサービス探索のスタブ（親 #109 の windows の子が `DnsServiceBrowse` で埋める）。
+/// Issue #487: Windows 向け LAN のサービス探索（Win32 `DnsServiceBrowse`。親 #109 の windows の子）。
 /// `device/lan_discovery.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_lan_discovery;

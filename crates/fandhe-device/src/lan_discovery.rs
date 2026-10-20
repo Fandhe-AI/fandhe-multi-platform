@@ -132,7 +132,7 @@ pub fn clamp_name(mut name: String) -> String {
 }
 
 /// Apple・Android 実装の完了コード → 契約のエラー（SSOT。OS 側で二重に写像しない）。
-/// Windows は独自のステータスを windows の子が別に写す。
+/// Windows の DNS ステータスは [`error_from_dns_status`] が写す。
 ///
 /// | code | 意味 | 写像 |
 /// |---|---|---|
@@ -154,6 +154,97 @@ pub fn decode_code(code: i32) -> Result<(), DeviceError> {
         5 => Err(DeviceError::Internal("lan_discovery not declared")),
         _ => Err(DeviceError::Internal("lan_discovery outcome")),
     }
+}
+
+/// Windows `DnsServiceBrowse` のコールバックが渡すステータス → 契約のエラー。
+/// 5（`ERROR_ACCESS_DENIED`）→ 許可なし、50 / 120（`ERROR_NOT_SUPPORTED` /
+/// `ERROR_CALL_NOT_IMPLEMENTED`）→ 非対応、それ以外 → 内部エラー。数値は画面・ログへ出さない。
+pub fn error_from_dns_status(status: u32) -> DeviceError {
+    const F: &str = "lan_discovery";
+    match status {
+        5 => DeviceError::PermissionDenied(F),
+        50 | 120 => DeviceError::Unsupported(F),
+        _ => DeviceError::Internal("lan_discovery dns status"),
+    }
+}
+
+/// Windows の DNS レコード 1 件（PTR / SRV / A / AAAA）を OS 型から切り離してコピーしたもの。
+/// 生ポインタの走査（`windows_lan_discovery`）と結合規則（[`link_dns_records`]）を分け、
+/// 結合をホストの `cargo test` で検査できるようにする。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DnsRecord {
+    /// サービスのインスタンス名（`<name>._http._tcp.local`）。
+    Ptr { instance: String },
+    /// インスタンス `owner` の接続先ホストとポート。
+    Srv {
+        owner: String,
+        target: String,
+        port: u16,
+    },
+    /// ホスト `owner` のアドレス。
+    Addr { owner: String, ip: IpAddr },
+}
+
+/// DNS 名の照合キー（ASCII の大文字小文字と末尾の `.` を無視する）。
+fn dns_key(name: &str) -> String {
+    name.trim_end_matches('.').to_ascii_lowercase()
+}
+
+/// `<instance>._http._tcp.local[.]` から表示名を取り出す。接尾辞が違えば全体を名前にする。
+/// 空なら `None`。
+pub fn instance_name(full: &str) -> Option<String> {
+    let full = full.trim_end_matches('.');
+    let suffix = format!(".{SERVICE_TYPE}.local");
+    let name = match full.len().checked_sub(suffix.len()) {
+        Some(i) if full.is_char_boundary(i) && full[i..].eq_ignore_ascii_case(&suffix) => {
+            &full[..i]
+        }
+        _ => full,
+    };
+    (!name.is_empty()).then(|| clamp_name(name.to_string()))
+}
+
+/// 1 回のコールバックに含まれるレコードを [`LanService`] に結ぶ（PTR → SRV → A / AAAA）。
+/// アドレスは IPv4 優先で 1 件。結べなかった項目は `addr` / `port` を `None` にした成功行で返す。
+pub fn link_dns_records(records: &[DnsRecord]) -> Vec<LanService> {
+    let mut out = Vec::new();
+    for r in records {
+        let DnsRecord::Ptr { instance } = r else {
+            continue;
+        };
+        let Some(name) = instance_name(instance) else {
+            continue;
+        };
+        let key = dns_key(instance);
+        let srv = records.iter().find_map(|r| match r {
+            DnsRecord::Srv {
+                owner,
+                target,
+                port,
+            } if dns_key(owner) == key => Some((dns_key(target), *port)),
+            _ => None,
+        });
+        let addr = srv.as_ref().and_then(|(target, _)| {
+            let mut found: Option<IpAddr> = None;
+            for r in records {
+                if let DnsRecord::Addr { owner, ip } = r {
+                    if dns_key(owner) == *target {
+                        if ip.is_ipv4() {
+                            return Some(*ip);
+                        }
+                        found = found.or(Some(*ip));
+                    }
+                }
+            }
+            found
+        });
+        out.push(LanService {
+            name,
+            addr,
+            port: srv.and_then(|(_, p)| port_from(p)),
+        });
+    }
+    out
 }
 
 #[cfg(test)]
@@ -232,5 +323,68 @@ mod tests {
             UnsupportedLanDiscovery.browse(),
             Err(DeviceError::Unsupported("lan_discovery"))
         ));
+    }
+
+    fn ptr(i: &str) -> DnsRecord {
+        DnsRecord::Ptr { instance: i.into() }
+    }
+    fn srv(o: &str, t: &str, p: u16) -> DnsRecord {
+        DnsRecord::Srv {
+            owner: o.into(),
+            target: t.into(),
+            port: p,
+        }
+    }
+    fn addr(o: &str, ip: &str) -> DnsRecord {
+        DnsRecord::Addr {
+            owner: o.into(),
+            ip: parse_addr(ip).unwrap(),
+        }
+    }
+
+    #[test]
+    fn links_ptr_srv_addr_preferring_ipv4_case_and_dot_insensitive() {
+        let out = link_dns_records(&[
+            ptr("My Box._http._tcp.local"),
+            srv("my box._HTTP._tcp.local.", "Host.local.", 8080),
+            addr("host.local", "fe80::1"),
+            addr("HOST.local.", "192.168.0.5"),
+        ]);
+        assert_eq!(out, vec![svc("My Box", Some("192.168.0.5"), Some(8080))]);
+    }
+
+    #[test]
+    fn unresolved_service_is_name_only_row() {
+        let out = link_dns_records(&[ptr("a._http._tcp.local")]);
+        assert_eq!(out, vec![svc("a", None, None)]);
+        let out = link_dns_records(&[ptr("a._http._tcp.local"), srv("a._http._tcp.local", "h", 0)]);
+        assert_eq!(out, vec![svc("a", None, None)]);
+        assert!(link_dns_records(&[]).is_empty());
+    }
+
+    #[test]
+    fn instance_name_strips_suffix_and_drops_empty() {
+        assert_eq!(instance_name("x._http._tcp.local.").as_deref(), Some("x"));
+        assert_eq!(instance_name("x._HTTP._TCP.LOCAL").as_deref(), Some("x"));
+        assert_eq!(instance_name("other").as_deref(), Some("other"));
+        assert_eq!(instance_name("._http._tcp.local"), None);
+        assert_eq!(instance_name(""), None);
+    }
+
+    #[test]
+    fn dns_status_table() {
+        assert!(matches!(
+            error_from_dns_status(5),
+            DeviceError::PermissionDenied(_)
+        ));
+        for c in [50, 120] {
+            assert!(matches!(
+                error_from_dns_status(c),
+                DeviceError::Unsupported(_)
+            ));
+        }
+        for c in [1, 1223, 9506] {
+            assert!(matches!(error_from_dns_status(c), DeviceError::Internal(_)));
+        }
     }
 }
