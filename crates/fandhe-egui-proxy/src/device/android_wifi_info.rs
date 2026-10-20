@@ -35,7 +35,7 @@ use super::request_slot::{RequestSlot, POLL_INTERVAL};
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Java が送る周辺の最大件数。SSID ごとの集約と上位 5 件への絞り込みは `normalize_nearby` が行う。
-const NEARBY_CAP: usize = 64;
+const NEARBY_CAP: usize = 4096;
 
 /// 契約の失敗種別（`DeviceError` は `Clone` でないため slot 用に写した形）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

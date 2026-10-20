@@ -44,8 +44,9 @@ final class WifiInfoHelper {
     static final int RESULT_LOCATION_OFF = 4;
     static final int RESULT_FAILED = 5;
 
-    // Rust 側 `NEARBY_CAP` と同じ。
-    private static final int NEARBY_CAP = 64;
+    // Rust 側 `NEARBY_CAP` と同じ。JNI 配列の異常な肥大を防ぐ番兵で、上位 5 件の選別には効かない
+    // （変換・集約後の上位 5 件は Rust 側が決める）。
+    private static final int NEARBY_CAP = 4096;
 
     private static native void nativeOnWifiInfoResult(
             long requestId, int code, boolean connected, String currentSsid, int currentRssi,
@@ -191,7 +192,7 @@ final class WifiInfoHelper {
             // 件数上限で切る前に SSID ごとの最強 dBm へ集約する（同一 SSID の複数 AP が枠を
             // 占有して別 SSID が欠落するのを防ぐ）。範囲外の dBm は Rust 側で None になるため
             // 比較では最弱として扱い、有効な値を隠さない。最終の整形・上位 5 件は Rust 側。
-            // ponytail: 上限は異なる SSID 数に対する値。64 超でも強い順なので上位 5 件は不変。
+            // ponytail: 上限は番兵のみ（通常の端末では届かない）。上位 5 件は Rust 側で決める。
             Map<String, Integer> best = new HashMap<>();
             if (scans != null) {
                 for (ScanResult r : scans) {
