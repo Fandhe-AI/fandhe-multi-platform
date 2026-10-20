@@ -221,6 +221,9 @@
 //! - `ios/fandhe_ios_compass.m`（Issue #1405、CoreLocation の heading 購読による方位）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_compass.rs`
 //!   から呼ばれる契約）。CoreLocation は位置情報用にリンク済みで追加リンクは無い。
+//! - `ios/fandhe_ios_flashlight.m`（Issue #460、AVFoundation の torch によるライト）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_flashlight.rs`
+//!   から呼ばれる契約）。AVFoundation はカメラ用にリンク済みで追加リンクは無い。
 //! - `ios/fandhe_ios_pen_stylus.m`（Issue #356、観測専用 `UIGestureRecognizer` による種類・筆圧・傾き）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_pen_stylus.rs` から
 //!   呼ばれる契約）。UIKit は既存のリンクで足りる。
@@ -445,7 +448,7 @@ fn main() {
     compile_apple_ml_inference();
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
-    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + b-ios iOS）も共用する。
+    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
     compile_apple_pdf_viewer();
     // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS + #346 iOS）も共用する。
     compile_apple_on_device_llm(true);
@@ -478,6 +481,8 @@ fn main() {
     compile_ios_local_fonts();
     // `ios/fandhe_ios_compass.m`（Issue #1405）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_compass();
+    // `ios/fandhe_ios_flashlight.m`（Issue #460）。iOS 分岐のみ（macOS は対応表で n-a）。
+    compile_ios_flashlight();
     // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
     compile_ios_pen_stylus();
     // `ios/fandhe_ios_ar.m`（Issue #308）。iOS 分岐のみ。
@@ -1377,6 +1382,16 @@ fn compile_ios_compass() {
         .compile("fandhe_ios_compass");
 }
 
+/// `ios/fandhe_ios_flashlight.m` を `cc` でコンパイルする（Issue #460）。**iOS 分岐のみ**から
+/// 呼ばれる（`src/device/ios_flashlight.rs` が使う）。AVFoundation は camera 用にリンク済み。
+fn compile_ios_flashlight() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_flashlight.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_flashlight.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_flashlight");
+}
+
 /// `ios/fandhe_ios_pen_stylus.m` を `cc` でコンパイルする（Issue #356）。**iOS 分岐のみ**から
 /// 呼ばれる（`src/device/ios_pen_stylus.rs` が使う）。UIKit は既存のリンクで足りる。
 fn compile_ios_pen_stylus() {
@@ -1587,7 +1602,7 @@ fn build_macos() {
     compile_apple_on_device_llm(false);
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
-    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + b-ios iOS）も共用する。
+    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
     compile_apple_pdf_viewer();
     // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。
     compile_apple_network_status();

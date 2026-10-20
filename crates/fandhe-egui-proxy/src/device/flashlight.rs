@@ -14,8 +14,8 @@
 //! 3. `Idle`: `READ_INTERVAL` ごとに `is_on` を pull して反映（外部の点け消しへの追従）。
 //!    送信を省く分岐でも次回の再描画を必ず予約する（契約表 4）
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS・Android・Windows は後続の子
-//! （#460・#461・#459）が埋めるスタブ、それ以外は `UnsupportedFlashlight` 固定。Web は
+//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は AVFoundation の torch 実装（#460）、Android は #461、Windows は
+//! #459（本実装）。それ以外は `UnsupportedFlashlight` 固定。Web は
 //! `fandhe-web-dom` 側（#462）。
 //!
 //! Windows は最小化を検知したら（専用ウォッチャースレッドが HWND の `IsIconic` を定期確認する。
@@ -156,6 +156,36 @@ fn apply_minimize_off(
     }
 }
 
+/// 最小化消灯の結果（消灯 `set_on` の成否, 読み戻した値）。
+type DeferredOff = (bool, Result<Option<bool>, FlashlightFailure>);
+
+/// 点灯の確認待ち（Idle 以外）に届いた最小化消灯の結果の保留枠（最新のみ）。
+/// 捨てると、消灯失敗が点灯成功の裏で表示されなくなる（契約表 2）。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+static DEFERRED_OFF: Mutex<Option<DeferredOff>> = Mutex::new(None);
+
+/// Idle なら即反映し、進行中の要求があれば保留する（要求完了後に [`take_deferred_off`] で反映）。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn apply_or_defer_minimize_off(
+    s: &mut FlashlightToggleState,
+    set_ok: bool,
+    read: Result<Option<bool>, FlashlightFailure>,
+) {
+    if s.phase == FlashlightPhase::Idle {
+        apply_minimize_off(s, set_ok, read);
+    } else {
+        *DEFERRED_OFF.lock().unwrap_or_else(|p| p.into_inner()) = Some((set_ok, read));
+    }
+}
+
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn take_deferred_off() -> Option<DeferredOff> {
+    DEFERRED_OFF
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .take()
+}
+
 /// 最小化中の消灯（実行権を保持して呼ぶ）。失敗は読み戻した値つきで状態へ通知し、
 /// 最小化が続く間は `READ_INTERVAL` ごとに再試行する。終わったら実行権を手放す。
 #[cfg(target_os = "windows")]
@@ -165,9 +195,7 @@ fn minimize_off(light: &dyn Flashlight, sender: &CompletionSender<FlashlightTogg
         let set_ok = light.set_on(false).is_ok();
         let read = light.is_on().map_err(to_failure);
         let _ = sender.send(Box::new(move |s: &mut FlashlightToggleState| {
-            if s.phase == FlashlightPhase::Idle {
-                apply_minimize_off(s, set_ok, read.clone());
-            }
+            apply_or_defer_minimize_off(s, set_ok, read.clone());
         }));
         if set_ok {
             break;
@@ -305,6 +333,14 @@ fn drive(
     if state.phase != fandhe_core::screens::flashlight_toggle::FlashlightPhase::Idle {
         // Applying（Windows ワーカー実行中）。完了通知が再描画を起こす。
         return;
+    }
+
+    // 確認待ち中に届いた最小化消灯の結果を、要求完了（Idle）後の最初のフレームで反映する。
+    #[cfg(target_os = "windows")]
+    if let Some((set_ok, read)) = take_deferred_off() {
+        let _ = sender.send(Box::new(move |s: &mut FlashlightToggleState| {
+            apply_minimize_off(s, set_ok, read.clone())
+        }));
     }
 
     let due = timing
@@ -530,6 +566,27 @@ mod tests {
             }
             n
         }
+    }
+
+    #[test]
+    fn minimize_off_failure_during_confirming_is_deferred_and_shown() {
+        let mut s = FlashlightToggleState::default();
+        fandhe_core::screens::flashlight_toggle::turn_on(&mut s);
+        mark_applying(&mut s);
+        let g = s.generation;
+        mark_confirming(&mut s, g);
+        // 点灯の確認待ち中に、消灯失敗（まだ点灯のまま）が届く。
+        apply_or_defer_minimize_off(&mut s, false, Ok(Some(true)));
+        assert_eq!(s.error, "");
+        // 点灯が確認されて成功で完了した後、保留分を反映すると失敗が表示される。
+        finish(&mut s, g, Ok(()), Some(true));
+        assert_eq!(s.error, "");
+        let (ok, read) = take_deferred_off().expect("保留されている");
+        apply_minimize_off(&mut s, ok, read);
+        assert!(s
+            .error
+            .starts_with(fandhe_core::screens::flashlight_toggle::FAILED_PREFIX));
+        assert!(take_deferred_off().is_none());
     }
 
     #[test]

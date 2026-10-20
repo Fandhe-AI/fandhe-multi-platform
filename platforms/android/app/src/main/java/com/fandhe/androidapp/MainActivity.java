@@ -518,6 +518,11 @@ public class MainActivity extends GameActivity {
         mediaPlaybackHelper.shutdown();
     }
 
+    // PDF 表示（Issue #472）。実装は PdfPageHelper。Rust の android_pdf_viewer.rs がワーカーから同期 JNI で呼ぶ（署名 ([BI)[B）。
+    byte[] pdfRenderFirstPage(byte[] pdf, int maxSide) {
+        return PdfPageHelper.renderFirstPage(getCacheDir(), pdf, maxSide);
+    }
+
     // 音声変換（Issue #314）。実装は `MediaTranscodeHelper`。Rust の `android_media_transcode.rs` がワーカースレッドから同期 JNI で呼ぶ。
     byte[] mediaTranscode(byte[] pcmLe, int sampleRate, long remainingMs) {
         return MediaTranscodeHelper.transcode(getCacheDir(), pcmLe, sampleRate, remainingMs);
@@ -606,6 +611,30 @@ public class MainActivity extends GameActivity {
 
     boolean screenWakeLockIsHeld() {
         return screenWakeLockHelper.isHeld();
+    }
+
+    // ライト（トーチ）（Issue #461）。実装は `FlashlightHelper`。Rust の `android_flashlight.rs` が
+    // egui スレッドから同期で JNI 呼び出しする。
+    private final FlashlightHelper flashlightHelper = new FlashlightHelper(this);
+
+    int flashlightSet(boolean on) {
+        return flashlightHelper.set(on);
+    }
+
+    int flashlightRead() {
+        return flashlightHelper.read();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        flashlightHelper.onStart();
+    }
+
+    @Override
+    protected void onStop() {
+        flashlightHelper.onStop();
+        super.onStop();
     }
 
     // ロック画面・OS のメディア操作（Issue #383）。実装は `NowPlayingHelper`。Rust の
@@ -4651,6 +4680,7 @@ public class MainActivity extends GameActivity {
         screenCaptureHelper.onDestroy();
         printHelper.onDestroy();
         screenWakeLockHelper.onDestroy();
+        flashlightHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず
         // 直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。
