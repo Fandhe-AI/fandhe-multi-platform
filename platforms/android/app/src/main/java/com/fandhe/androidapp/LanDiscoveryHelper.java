@@ -59,6 +59,10 @@ final class LanDiscoveryHelper {
 
     // 以下は main looper 専用。
     private NsdManager.DiscoveryListener discovery;
+    // stopServiceDiscovery 済みで onDiscoveryStopped 待ちの listener。届くまで同 type の探索は
+    // 有効扱いのため、この間は discoverServices を呼ばず pendingLaunch に保留する。
+    private NsdManager.DiscoveryListener stopping;
+    private Runnable pendingLaunch;
     private final ArrayDeque<NsdServiceInfo> resolveQueue = new ArrayDeque<>();
     private NsdManager.ResolveListener resolving;
     private int forwarded;
@@ -137,6 +141,7 @@ final class LanDiscoveryHelper {
 
             @Override
             public void onDiscoveryStopped(String serviceType) {
+                handler.post(() -> stopped(this));
             }
 
             @Override
@@ -146,22 +151,40 @@ final class LanDiscoveryHelper {
 
             @Override
             public void onStopDiscoveryFailed(String serviceType, int errorCode) {
+                handler.post(() -> stopped(this));
             }
         };
-        try {
-            nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discovery);
-        } catch (SecurityException e) {
-            discovery = null;
-            finish(id, CODE_PERMISSION);
-            return;
-        } catch (RuntimeException e) {
-            discovery = null;
-            finish(id, CODE_OTHER);
+        final NsdManager.DiscoveryListener listener = discovery;
+        // 期限は保留中も進める。過ぎていれば即時に走る。
+        closer = () -> close(id);
+        handler.postAtTime(closer, deadline);
+        Runnable launch = () -> {
+            try {
+                nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, listener);
+            } catch (SecurityException e) {
+                finish(id, CODE_PERMISSION);
+            } catch (RuntimeException e) {
+                finish(id, CODE_OTHER);
+            }
+        };
+        if (stopping != null) {
+            pendingLaunch = launch;
+        } else {
+            launch.run();
+        }
+    }
+
+    // 旧探索の停止が確定した。保留中の開始があれば今走らせる。
+    private void stopped(NsdManager.DiscoveryListener who) {
+        if (stopping != who) {
             return;
         }
-        closer = () -> close(id);
-        // 期限が過ぎていれば即時に走る。
-        handler.postAtTime(closer, deadline);
+        stopping = null;
+        Runnable launch = pendingLaunch;
+        pendingLaunch = null;
+        if (launch != null) {
+            launch.run();
+        }
     }
 
     // 窓が閉じた。未接続なら 0 件の嘘の成功を避けてコード 2。
@@ -270,6 +293,7 @@ final class LanDiscoveryHelper {
 
     // タイマー・探索・解決・マルチキャストロックを解放する。何度呼んでも安全。
     private void stopQuietly() {
+        pendingLaunch = null;
         if (closer != null) {
             handler.removeCallbacks(closer);
             closer = null;
@@ -279,8 +303,10 @@ final class LanDiscoveryHelper {
             if (discovery != null) {
                 try {
                     nsd.stopServiceDiscovery(discovery);
+                    // listener は onDiscoveryStopped まで捨てず、次の開始を直列化する。
+                    stopping = discovery;
                 } catch (RuntimeException e) {
-                    // 未開始・停止済みは無視する。
+                    // 未登録（探索が有効でない）なら待つものはない。
                 }
             }
             if (resolving != null && Build.VERSION.SDK_INT >= 34) {
