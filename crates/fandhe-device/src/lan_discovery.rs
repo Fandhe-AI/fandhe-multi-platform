@@ -131,6 +131,17 @@ pub fn clamp_name(mut name: String) -> String {
     name
 }
 
+/// Android（`NsdManager`）の生値を契約の形へそろえる。名前が無い・空なら `None`（行にしない）。
+/// アドレスは IPv6 のスコープ（`%wlan0`）を落としてから検証し、ポートは範囲外・0 を `None` にする。
+pub fn service_from_raw(name: Option<String>, addr: Option<&str>, port: i32) -> Option<LanService> {
+    let name = name.filter(|n| !n.is_empty()).map(clamp_name)?;
+    Some(LanService {
+        name,
+        addr: addr.and_then(|a| parse_addr(a.split('%').next().unwrap_or(""))),
+        port: u16::try_from(port).ok().and_then(port_from),
+    })
+}
+
 /// Apple・Android 実装の完了コード → 契約のエラー（SSOT。OS 側で二重に写像しない）。
 /// Windows の DNS ステータスは [`error_from_dns_status`] が写す。
 ///
@@ -142,6 +153,7 @@ pub fn clamp_name(mut name: String) -> String {
 /// | 3 | 非対応 | `Unsupported` |
 /// | 4 | 中断 | `Internal` |
 /// | 5 | 種別が未宣言（NoAuth） | `Internal` |
+/// | 6 | その他（Android の開始失敗など） | `Internal` |
 /// | それ以外 | 未知 | `Internal` |
 pub fn decode_code(code: i32) -> Result<(), DeviceError> {
     const F: &str = "lan_discovery";
@@ -314,6 +326,21 @@ mod tests {
         assert!(matches!(decode_code(3), Err(DeviceError::Unsupported(_))));
         for c in [4, 5, 99, -1] {
             assert!(matches!(decode_code(c), Err(DeviceError::Internal(_))));
+        }
+    }
+
+    #[test]
+    fn service_from_raw_normalizes_android_values() {
+        assert!(service_from_raw(None, None, 80).is_none());
+        assert!(service_from_raw(Some(String::new()), None, 80).is_none());
+        let s = service_from_raw(Some("a".into()), Some("fe80::1%wlan0"), 80).unwrap();
+        assert_eq!(s.addr, parse_addr("fe80::1"));
+        assert_eq!(s.port, Some(80));
+        let s = service_from_raw(Some("a".into()), Some("bad"), 0).unwrap();
+        assert_eq!((s.addr, s.port), (None, None));
+        for p in [-1, 65536] {
+            let s = service_from_raw(Some("a".into()), None, p).unwrap();
+            assert_eq!(s.port, None);
         }
     }
 

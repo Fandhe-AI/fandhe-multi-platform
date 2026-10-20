@@ -2711,7 +2711,8 @@ pub(crate) fn request_ble_scan(request_id: u64, duration_ms: i32) -> bool {
 
 /// JNI の文字列を、UTF-16 単位数が `max_units` 以内のときだけ Rust の `String` へ複製する
 /// （null・超過・読み取り失敗は `None`。OS 由来でも信頼境界の外として複製前に弾く）。
-fn read_ble_string(
+/// `android_lan_discovery` の JNI 入口からも使う。
+pub(crate) fn read_ble_string(
     env: &mut jni::Env,
     value: &jni::objects::JString,
     max_units: i32,

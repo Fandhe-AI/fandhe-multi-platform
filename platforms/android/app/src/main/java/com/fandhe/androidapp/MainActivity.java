@@ -649,6 +649,13 @@ public class MainActivity extends GameActivity {
         nowPlayingHelper.clear();
     }
 
+    // LAN のサービス探索（Issue #489）。実装は `LanDiscoveryHelper`。Rust の `android_lan_discovery.rs` が JNI で呼ぶ。
+    private final LanDiscoveryHelper lanDiscoveryHelper = new LanDiscoveryHelper(this);
+
+    void requestLanDiscovery(long requestId, int durationMs) {
+        lanDiscoveryHelper.request(requestId, durationMs);
+    }
+
     // OS 管理のバックグラウンドダウンロード（Issue #392）。実装は `BackgroundDownloadHelper`。Rust の
     // `android_background_download.rs` が同期 JNI で呼ぶ（コールバックは無い）。
     private final BackgroundDownloadHelper backgroundDownloadHelper = new BackgroundDownloadHelper(this);
@@ -2442,6 +2449,7 @@ public class MainActivity extends GameActivity {
         activityResumed = false;
         penStylusHelper.onPause();
         screenCaptureHelper.onPause();
+        lanDiscoveryHelper.onPause();
         compassHelper.onPause();
         mediaPlaybackHelper.onPause();
         nowPlayingHelper.onPause();
@@ -4672,6 +4680,7 @@ public class MainActivity extends GameActivity {
         nowPlayingHelper.onDestroy();
         super.onDestroy();
         pedometerHelper.onDestroy();
+        lanDiscoveryHelper.onDestroy();
         compassHelper.onDestroy();
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();

@@ -109,7 +109,7 @@ pub mod android_home_widget;
 /// `device/image_recognition.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_image_recognition;
-/// Issue #486: Android 向け LAN のサービス探索のスタブ（親 #109 の b-android が `NsdManager` で埋める）。
+/// Issue #489: Android 向け LAN のサービス探索（`NsdManager`。Java 側は `LanDiscoveryHelper`、親 #109 の b-android）。
 /// `device/lan_discovery.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_lan_discovery;
