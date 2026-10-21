@@ -17,11 +17,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_spotlight_index.rs + crates/fandhe-egui-proxy/src/device/apple_spotlight_index.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_spotlight_index.m + crates/fandhe-egui-proxy/ios/fandhe_ios_scene.m + crates/fandhe-egui-proxy/src/device/spotlight_index.rs + crates/fandhe-core/src/screens/spotlight_index.rs + crates/fandhe-device/src/spotlight_index.rs、Issue #561"
     },
     "android": {
-      "status": "possible",
-      "api": "AppSearch（`androidx.appsearch` の `AppSearchSession`、platform storage。API 31 以上）",
-      "perm": "不要",
-      "url": "https://developer.android.com/guide/topics/search/appsearch",
-      "note": "未実装。platform storage の索引は OS の AppSearch サービスが持つ。登録・全削除まで扱い、ランチャー・システム検索に実際に出るか・タップで起動されるかは OEM 次第（守らない範囲）。API 31 未満は非対応"
+      "status": "done",
+      "api": "framework の `android.app.appsearch`（`AppSearchManager` / `AppSearchSession`、platform storage。API 31 以上）。登録は `setSchema`（`setSchemaTypeDisplayedBySystem` で system UI への表示を許可）+ `put`、全削除は namespace を絞った `remove`",
+      "perm": "不要（`uses-permission` の追加なし）",
+      "url": "https://developer.android.com/reference/android/app/appsearch/AppSearchManager",
+      "note": "固定のメモ 1 件の登録と自ドメイン（`com.fandhe.demo.spotlight`）の全削除まで（Issue #562）。API 31 未満は非対応。期限は 10 秒で Rust のドライバだけが持ち、Activity の再生成では Rust 側の保留を破棄する。受信経路は無い。守らない範囲: ランチャー・システム検索に実際に出るか・タップで起動されるか（OEM 次第）・反映の時間差・期限切れ後に OS 側で済んでいた場合の食い違い",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#555）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_spotlight_index.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/SpotlightIndexHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/spotlight_index.rs + crates/fandhe-core/src/screens/spotlight_index.rs + crates/fandhe-device/src/spotlight_index.rs、Issue #562"
     },
     "macos": {
       "status": "done",

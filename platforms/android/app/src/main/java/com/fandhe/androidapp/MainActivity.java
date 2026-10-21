@@ -563,6 +563,15 @@ public class MainActivity extends GameActivity {
         return MediaTranscodeHelper.transcode(getCacheDir(), pcmLe, sampleRate, remainingMs);
     }
 
+    // OS の検索への登録（Issue #562）。実装は `SpotlightIndexHelper`。Rust の `android_spotlight_index.rs` がワーカースレッドから同期 JNI で呼ぶ。
+    int spotlightIndex(String domain, String id, String title, String text, long remainingMs) {
+        return SpotlightIndexHelper.index(getApplicationContext(), domain, id, title, text, remainingMs);
+    }
+
+    int spotlightRemoveAll(String domain, long remainingMs) {
+        return SpotlightIndexHelper.removeAll(getApplicationContext(), domain, remainingMs);
+    }
+
     // MIDI 入力（Issue #1400）。実装は `MidiHelper`。Rust の `android_midi.rs` が JNI で呼ぶ。
     private final MidiHelper midiHelper = new MidiHelper(this);
 

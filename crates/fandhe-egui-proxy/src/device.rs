@@ -215,9 +215,11 @@ pub mod android_screen_capture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_wake_lock;
-/// Issue #562（b-android で埋めるスタブ）: Android 向け OS の検索への登録（AppSearch、API 31+）。
-/// `device/spotlight_index.rs` の Android 経路から呼ばれる。
-#[cfg(target_os = "android")]
+/// Issue #562: Android 向け OS の検索への登録実装（AppSearch、API 31+、Java は `MainActivity`）。
+/// `device/spotlight_index.rs` の Android 経路から呼ばれる。結果コード写像をホストでテストするため
+/// test でもコンパイルする。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_spotlight_index;
 /// Issue #421: Android 向けシステムのアクセント色実装（JNI の同期 pull）。
 /// `device/system_accent_color.rs` の Android 経路から呼ばれる。
@@ -721,8 +723,8 @@ pub mod ios_safe_area_insets;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_wake_lock;
-/// Issue #561（b-ios で埋めるスタブ）: iOS 向け OS の検索への登録。`device/spotlight_index.rs` の
-/// iOS 経路から呼ばれる。
+/// Issue #561: iOS 向け OS の検索への登録実装（macOS と共用の `apple_spotlight_index` へ委譲）。
+/// `device/spotlight_index.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_spotlight_index;
 /// Issue #536: iOS 向け端末内翻訳実装（macOS と共用の `AppleTextTranslator` を返す）。`device/translation.rs` の iOS 経路から呼ばれる。
@@ -970,8 +972,8 @@ pub mod share;
 /// Phase 11 の拡充ループ（親 #1023、Issue #1024・#1025）: 音声認識の effect ドライバ
 /// （macOS/iOS/Windows/Android 実装、Android/Web は兄弟 issue）。
 pub mod speech_recognition;
-/// Phase 11 の拡充ループ（親 #117、Issue #560）: OS の検索への登録の effect ドライバ（macOS 実装、
-/// iOS・Android は #561・#562 で埋めるスタブ、他 OS は `UnsupportedSpotlightIndex` 固定）。
+/// Phase 11 の拡充ループ（親 #117、Issue #560）: OS の検索への登録の effect ドライバ（macOS・iOS・
+/// Android 実装、他 OS は `UnsupportedSpotlightIndex` 固定）。
 pub mod spotlight_index;
 /// Phase 11 の拡充ループ（親 #103、Issue #421）: システムのアクセント色の effect ドライバ
 /// （macOS / Windows 実装、Android は JNI 実装、他 OS は `UnsupportedAccentColor` 固定）。
