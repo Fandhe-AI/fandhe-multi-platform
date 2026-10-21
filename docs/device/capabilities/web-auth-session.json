@@ -21,11 +21,14 @@
       "note": "未実装。URL 未確認（報告に Custom Tabs の公式 URL がなかった）。コールバック受信は url-scheme と同じ経路。AppAuth 等の第三者ライブラリは今回の範囲外"
     },
     "macos": {
-      "status": "possible",
-      "api": "AuthenticationServices `ASWebAuthenticationSession`（iOS と同じ）",
-      "perm": "コールバックの URL scheme（.app 化が前提）",
+      "status": "done",
+      "api": "AuthenticationServices `ASWebAuthenticationSession`（macOS 10.15+、`prefersEphemeralWebBrowserSession` で Cookie を残さず、key window を表示先にする）",
+      "perm": "不要の見込み（セッション内で `fandhe` scheme を捕まえる。.app でない実行体で動くかは #528 の Mac 目視で確認）",
       "url": "https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession",
-      "note": "未実装。macOS の対応版は要確認"
+      "note": "アプリ内のデモ認可ページ（127.0.0.1）を開き、返ったコールバック URL を state・パス・code/error の形式まで検査して伏せ字で表示する。PKCE は S256 の値を作るだけでトークン交換はしない。結果は返却・キャンセル・期限切れ（300 秒）の三値で、不一致の URL は失敗として扱う。守らない範囲: 既定ブラウザの UI の差・複数プロセス・プロセス死後のコールバック・トークン交換",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#528）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_web_auth_session.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_web_auth_session.m + crates/fandhe-egui-proxy/src/device/web_auth_session.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-device/src/web_auth_session.rs、Issue #530"
     },
     "windows": {
       "status": "possible",
