@@ -171,8 +171,8 @@ fn drive(
     // 期限判定: 単調時計。確定後に届く結果は照合で捨てられる。
     let started = *session.started.lock().unwrap_or_else(|e| e.into_inner());
     if let (Some(started), Some((request_id, None))) = (started, slot.snapshot()) {
-        if started.elapsed() >= deadline {
-            slot.clear(request_id);
+        // 判定と除去を原子的に行う。false は deliver が先に着地済み（成功を消さず後続に任せる）。
+        if started.elapsed() >= deadline && slot.clear_if_pending(request_id) {
             let _ = sender.send(Box::new(move |s: &mut TranslationState| {
                 finish_translate(s, generation, Err(TranslateFailure::Timeout));
             }));
