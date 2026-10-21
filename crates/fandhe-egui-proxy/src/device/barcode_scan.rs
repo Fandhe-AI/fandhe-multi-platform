@@ -52,7 +52,6 @@ use crate::app::CompletionSender;
 /// `DeviceError` を画面の失敗種別へ写す。内部識別子・パス・読み取った中身は利用者向け文言へ
 /// 出さず、上記以外は固定文言にする（security.md A09）。
 #[cfg(any(test, target_os = "macos", target_os = "ios"))]
-#[cfg_attr(target_os = "ios", allow(dead_code))] // #558 が使う
 pub(crate) fn to_failure(e: DeviceError) -> ScanFailure {
     match e {
         DeviceError::Unsupported(_) => ScanFailure::Unsupported,
