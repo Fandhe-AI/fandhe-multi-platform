@@ -98,6 +98,10 @@ generated_screens! {
     crate::device::payment_request::payment_request_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "web_auth_session_demo" => fandhe_core::screens::web_auth_session_demo::current_screen,
+    crate::device::web_auth_session::web_auth_session_demo_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "print_page" => fandhe_core::screens::print_page::current_screen,
     crate::device::print::print_page_effect,
     effect
