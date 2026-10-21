@@ -7,11 +7,14 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "Vision `VNDetectBarcodesRequest`（写真選択で選んだ画像から検出）",
-      "perm": "不要（画像入力。写真選択は PHPicker で権限不要）",
+      "perm": "不要（Info.plist・entitlement の追加なし。画像入力。写真選択は PHPicker で権限不要）",
       "url": "https://developer.apple.com/documentation/vision/vndetectbarcodesrequest",
-      "note": "未実装。カメラ映像からのライブ読み取り（VisionKit `DataScannerViewController`、iOS 16 以上・A12 以上）は今回の範囲外"
+      "note": "写真選択（PHPicker）で選んだ画像 1 枚を `VNDetectBarcodesRequest`（全形式）で読み、中身の文字列を一覧表示する。PHPicker の受け口は id の `1 << 62` の目印で文字認識・通常の写真選択と共有し、`validate_photo` → ヘッダー検査 → Vision の順に OS コールバックスレッドで同期に読み、結果を `RequestSlot` に置いて `request_repaint` で次フレームを起こす。0 件は成功（「コードは見つかりませんでした」）、キャンセルは失敗にしない、復号不能は失敗。権限拒否の失敗系は無い。守る範囲は 1 画面・1 プロセス内の順序（世代照合）と嘘の成功の禁止、守らない範囲は OS ごとの検出結果の違い・処理時間・実行中の取り消し・保留中の要求の復元。中身はログに出さず、URL でも開かない。カメラ映像からのライブ読み取りは範囲外。確認は #554",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#554）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_barcode_scan.m + crates/fandhe-egui-proxy/src/device/ios_barcode_scan.rs + crates/fandhe-egui-proxy/src/device/apple_barcode_scan.rs + crates/fandhe-egui-proxy/src/device/barcode_scan.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_photo_picker.m + crates/fandhe-device/src/barcode_scan.rs + crates/fandhe-core/src/screens/barcode_scan.rs、Issue #558"
     },
     "android": {
       "status": "no",

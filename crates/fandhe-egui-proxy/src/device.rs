@@ -270,9 +270,8 @@ pub mod apple_accessibility_prefs;
 pub mod apple_background_download;
 /// Issue #557 macOS・#558 iOS: バーコード・QR 読み取り実装（`apple/fandhe_apple_barcode_scan.m` を
 /// 呼ぶ C ABI ラッパー）。`device/barcode_scan.rs` の macOS 経路と `ios_barcode_scan` から呼ばれる。
-/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。iOS は #558 までスタブが使わないため dead_code を許す。
+/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-#[cfg_attr(target_os = "ios", allow(dead_code))]
 pub mod apple_barcode_scan;
 /// Issue #906: iOS / macOS 向け生体認証実装（`apple/fandhe_apple_biometric.m` を呼ぶ
 /// C ABI ラッパー）。`device/biometric_auth.rs` の macOS/iOS 経路から呼ばれる。
