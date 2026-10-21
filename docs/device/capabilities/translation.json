@@ -17,11 +17,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_translation.rs + crates/fandhe-egui-proxy/src/device/apple_translation.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_translation.swift + crates/fandhe-egui-proxy/src/device/translation.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-device/src/translation.rs、Issue #536"
     },
     "android": {
-      "status": "possible",
-      "api": "ML Kit Translation（50 以上の言語、言語パックを DL）",
-      "perm": "`INTERNET`（言語パック取得）",
-      "url": "https://developers.google.com/ml-kit/language/translation",
-      "note": "未実装。ML Kit のため image-recognition / ml-inference / nlp と同じ配布形態（unbundled の GMS 依存可否は要確認）"
+      "status": "done",
+      "api": "android.view.translation（API 31 以上。`TranslationManager.getOnDeviceTranslationCapabilities` で言語の状態を確かめ、端末内に入っている組だけ `createOnDeviceTranslator` → `Translator.translate` で訳す。全経路で `destroy()`）",
+      "perm": "不要（`uses-permission` の追加なし）。言語パックのダウンロードは始めない",
+      "url": "https://developer.android.com/reference/android/view/translation/TranslationManager",
+      "note": "実装済み（#537）。固定の日本語文を ja → en に 1 回訳す。API 31 未満・翻訳サービスなしは Unsupported、言語の組み合わせ非対応は失敗、言語パック未導入・取得中も失敗として出し、ダウンロードは始めない。端末によって翻訳サービスの有無が違う。期限は 30 秒（Rust のドライバだけが持つ）。Activity 再生成で保留中の要求を中断扱いで破棄する。守る範囲は 1 プロセス内の順序・嘘の成功の禁止・資源の解放で、期限後も OS 側の翻訳が走り切ることは守らない。Android 実機の確認は #529 で行う",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#529）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_translation.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/TranslationHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/translation.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-device/src/translation.rs、Issue #537"
     },
     "macos": {
       "status": "done",

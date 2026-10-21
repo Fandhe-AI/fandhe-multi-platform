@@ -220,9 +220,11 @@ pub mod android_screen_wake_lock;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_system_accent_color;
-/// Issue #535: Android 向け端末内翻訳のスタブ（実体は #537）。`device/translation.rs` の Android
-/// 経路から呼ばれる。
-#[cfg(target_os = "android")]
+/// Issue #537（親 #115）: Android 向け端末内翻訳実装（`android.view.translation`）。
+/// `device/translation.rs` の Android 経路から呼ばれる。JNI の本体はモジュール内側の
+/// `cfg(target_os = "android")` に閉じ、純関数をホストでテストできるよう cfg は `any(android, test)`。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_translation;
 /// Issue #1218: Android 向けカスタム URL scheme 受信実装（Java 側 `MainActivity` の
 /// `onCreate` / `onNewIntent` から JNI で呼ばれる）。`device/url_scheme.rs::
@@ -941,7 +943,7 @@ pub mod system_tray;
 pub mod text_scale;
 pub mod tilt;
 /// Phase 11 の拡充ループ（親 #115、Issue #535）: 端末内翻訳の effect ドライバ（macOS 実装、
-/// iOS・Android は #536・#537 が埋めるスタブ、他 OS は `UnsupportedTextTranslator` 固定。Web は
+/// iOS・Android も実装済み（#536・#537）、他 OS は `UnsupportedTextTranslator` 固定。Web は
 /// `fandhe-web-dom` が持つ）。
 pub mod translation;
 /// Phase 11 の拡充ループ型サンプル「TSV 読み込み」（親 #979、Issue #980）: `device/
