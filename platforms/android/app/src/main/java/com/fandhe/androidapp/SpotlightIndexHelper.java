@@ -71,7 +71,12 @@ final class SpotlightIndexHelper {
                     .addProperty(stringProp("title"))
                     .addProperty(stringProp("text"))
                     .build();
-            session.setSchema(new SetSchemaRequest.Builder().addSchemas(schema).build(),
+            // システム UI への表示は既定でも許されるが、この機能の目的なので明示する。
+            SetSchemaRequest req = new SetSchemaRequest.Builder()
+                    .addSchemas(schema)
+                    .setSchemaTypeDisplayedBySystem(TYPE, true)
+                    .build();
+            session.setSchema(req,
                     EXECUTOR, EXECUTOR, schemaResult -> {
                         // 非同期コールバック内の例外も失敗で確定し session を閉じる（run の try は届かない）。
                         try {
@@ -150,7 +155,13 @@ final class SpotlightIndexHelper {
                             f.complete(FAILED);
                             return;
                         }
-                        AppSearchSession session = r.getResultValue();
+                        AppSearchSession session;
+                        try {
+                            session = r.getResultValue();
+                        } catch (RuntimeException e) {
+                            f.complete(FAILED);
+                            return;
+                        }
                         try {
                             op.start(session, f);
                         } catch (RuntimeException e) {

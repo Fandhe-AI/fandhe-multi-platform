@@ -18,7 +18,7 @@
     },
     "android": {
       "status": "done",
-      "api": "framework の `android.app.appsearch`（`AppSearchManager` / `AppSearchSession`、platform storage。API 31 以上）。登録は `setSchema` + `put`、全削除は namespace を絞った `remove`",
+      "api": "framework の `android.app.appsearch`（`AppSearchManager` / `AppSearchSession`、platform storage。API 31 以上）。登録は `setSchema`（`setSchemaTypeDisplayedBySystem` で system UI への表示を許可）+ `put`、全削除は namespace を絞った `remove`",
       "perm": "不要（`uses-permission` の追加なし）",
       "url": "https://developer.android.com/reference/android/app/appsearch/AppSearchManager",
       "note": "固定のメモ 1 件の登録と自ドメイン（`com.fandhe.demo.spotlight`）の全削除まで（Issue #562）。API 31 未満は非対応。期限は 10 秒で Rust のドライバだけが持ち、Activity の再生成では Rust 側の保留を破棄する。受信経路は無い。守らない範囲: ランチャー・システム検索に実際に出るか・タップで起動されるか（OEM 次第）・反映の時間差・期限切れ後に OS 側で済んでいた場合の食い違い",
