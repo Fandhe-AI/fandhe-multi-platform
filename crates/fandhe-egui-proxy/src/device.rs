@@ -854,6 +854,9 @@ pub mod on_device_llm;
 /// Phase 11 の拡充ループ（親 #92、Issue #342）: パスキーの effect ドライバ（Windows はワーカー +
 /// pull 型 bridge、実装は #343 が埋める。他 OS は `UnsupportedPasskey` 固定。Web は `fandhe-web-dom`）。
 pub mod passkey;
+/// Phase 11 の拡充ループ（親 #114、Issue #541）: 決済シートの effect ドライバ（全ネイティブで
+/// `UnsupportedPaymentSheet` 固定の同期経路が最終形。Web は `fandhe-web-dom`）。
+pub mod payment_request;
 /// Phase 11 の拡充ループ（親 #107、Issue #469）: PDF 表示（1 ページ目の画像化）の effect ドライバ
 /// （macOS 実装、iOS / Windows / Android は子 issue が埋めるスタブ、他 OS は `UnsupportedPdfPageRenderer` 固定）。
 pub mod pdf_viewer;

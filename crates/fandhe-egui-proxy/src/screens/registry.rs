@@ -94,6 +94,10 @@ generated_screens! {
     crate::device::passkey::passkey_signin_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "payment_request" => fandhe_core::screens::payment_request::current_screen,
+    crate::device::payment_request::payment_request_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "web_auth_session_demo" => fandhe_core::screens::web_auth_session_demo::current_screen,
     crate::device::web_auth_session::web_auth_session_demo_effect,
     effect
