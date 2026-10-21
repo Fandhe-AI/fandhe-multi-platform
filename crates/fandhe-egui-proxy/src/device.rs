@@ -230,6 +230,10 @@ pub mod android_url_scheme;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_usb_device;
+/// Issue #530: Android 向け Web 認証セッション実装のスタブ（#534 が埋める）。`device/web_auth_session.rs` の
+/// Android 経路から呼ばれる。
+#[cfg(target_os = "android")]
+pub mod android_web_auth_session;
 /// Issue #516: Android 向け Wi-Fi 情報・スキャン実装（`WifiManager`、JNI 経由の pull 型 bridge）。
 /// `device/wifi_info.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でもコンパイルする。
 #[cfg(any(target_os = "android", test))]
@@ -678,6 +682,10 @@ pub mod ios_safe_area_insets;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_wake_lock;
+/// Issue #530: iOS 向け Web 認証セッション実装のスタブ（#532 が埋める）。`device/web_auth_session.rs` の
+/// iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_web_auth_session;
 /// Phase 11 の拡充ループ（親 #109、Issue #486）: LAN のサービス探索の effect ドライバ
 /// （macOS 実装、iOS / Android は子 issue が埋めるスタブ、Windows は `DnsServiceBrowse`、他 OS は `UnsupportedLanDiscovery` 固定。Web は対象外）。
 pub mod lan_discovery;
@@ -782,6 +790,12 @@ pub mod macos_system_accent_color;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_usb_device;
+/// Issue #530: macOS 向け Web 認証セッション実装（`macos/fandhe_macos_web_auth_session.m` の
+/// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の macOS 経路から呼ばれる。
+/// 写像の純関数をホストでテストできるよう cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_web_auth_session;
 /// Issue #514: macOS 向け Wi-Fi 情報実装（`macos/fandhe_macos_wifi_info.m` の CoreWLAN と CoreLocation の
 /// 許可判定を呼ぶ C ABI ラッパー）。`device/wifi_info.rs` の macOS 経路から呼ばれる。写像の純関数を
 /// ホストでテストするため test でも載せる。
@@ -923,6 +937,9 @@ pub mod url_scheme;
 /// Windows・Android は #506・#507 で埋めるスタブ、他 OS は `UnsupportedUsbDevices` 固定。Web は
 /// `fandhe-web-dom`）。
 pub mod usb_device;
+/// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS 実装、
+/// Windows・iOS・Android は #531・#532・#534 が埋めるスタブ、他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
+pub mod web_auth_session;
 /// Phase 11 の拡充ループ（親 #111、Issue #514）: Wi-Fi 情報の effect ドライバ（macOS 実装、Windows・Android は
 /// 後続の子 Issue が埋めるスタブ、iOS（deferred）・他 OS は `UnsupportedWifiInfo` 固定。Web は対象外）。
 pub mod wifi_info;
@@ -1151,6 +1168,10 @@ pub mod windows_url_scheme;
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_usb_device;
+/// Issue #530: Windows 向け Web 認証セッション実装のスタブ（#531 が埋める）。`device/web_auth_session.rs` の
+/// Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_web_auth_session;
 /// Issue #515: Windows 向け Wi-Fi 情報実装（`wlanapi`）。
 /// `device/wifi_info.rs` の Windows 経路から呼ばれる。写像の純関数をホストでテストできるよう
 /// cfg は `any(windows, test)`。
@@ -1184,6 +1205,7 @@ pub fn shutdown() {
     now_playing::shutdown();
     picture_in_picture::shutdown();
     media_cast::shutdown();
+    web_auth_session::shutdown();
 }
 
 fn to_note_storage_error(e: DeviceError) -> NoteStorageError {
