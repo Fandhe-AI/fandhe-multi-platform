@@ -158,6 +158,11 @@ final class TranslationHelper {
             nativeOnTranslationResult(id, RESULT_INTERRUPTED, null);
             return;
         }
+        // request() で弾いているが、Lint の NewApi はこのメソッド内のガードしか見ないため重ねる。
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            finish(id, RESULT_UNSUPPORTED, null);
+            return;
+        }
         try {
             startOnS(id, text, source, target);
         } catch (RuntimeException e) {
@@ -265,7 +270,9 @@ final class TranslationHelper {
                     .setTranslationRequestValues(
                             Collections.singletonList(TranslationRequestValue.forText(text)))
                     .build();
-            translator.translate(req, s, executor, response -> onResponse(id, response));
+            // 応答も呼び出しスレッドで直接受ける。破棄時に shutdownNow した executor へ post されると
+            // RejectedExecutionException が binder スレッドで投げられ、プロセスが落ちるため。
+            translator.translate(req, s, Runnable::run, response -> onResponse(id, response));
         } catch (RuntimeException e) {
             finish(id, RESULT_FAILED, null);
         }
