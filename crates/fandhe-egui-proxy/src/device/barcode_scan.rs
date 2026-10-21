@@ -12,7 +12,7 @@
 //! # OS 別の分担（dispatch は #557 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
 //! - macOS: [`super::apple_barcode_scan::AppleBarcodeReader`]（#557）
-//! - iOS: `ios_barcode_scan::drive`（#558。PHPicker + Vision。現状は `Unsupported` のスタブ）
+//! - iOS: `ios_barcode_scan::drive`（#558。PHPicker + Vision。macOS と同じ `.m` で読む）
 //! - それ以外（Windows・Android・Linux）: 対応表で `no` / 対象外。写真選択を開かず `Unsupported`
 //!   で完了させる（ダミーの成功実装へは倒さない）
 //!
