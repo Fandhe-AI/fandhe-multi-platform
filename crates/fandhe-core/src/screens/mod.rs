@@ -133,6 +133,8 @@ pub mod haptics_tap;
 pub mod home_widget_show;
 /// Phase 11 の拡充ループ型サンプル「画像の文字認識」（親 #1120、Issue #1250）。
 pub mod image_recognize;
+/// Phase 11 の拡充ループ型サンプル「アプリ内レビュー依頼」（Issue #563）。
+pub mod in_app_review;
 /// Phase 11 の拡充ループ型サンプル「LAN のサービス探索」（親 #109、Issue #486）。
 pub mod lan_discover;
 /// Phase 11 の拡充ループ型サンプル「ライブアクティビティ」（親 #88、Issue #294）。

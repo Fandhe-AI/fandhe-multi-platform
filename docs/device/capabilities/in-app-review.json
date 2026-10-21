@@ -25,14 +25,17 @@
       "deferred": "Play In-App Review（`com.google.android.play:review`）は推移依存に Google Play services（`play-services-basement`・`play-services-tasks`）が入る。GMS に依存しない方針のため保留（in-app-purchase・payment-request と同じ）。確かめるには Play ストアから入れた版（内部テストトラック等）も要る"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "StoreKit `SKStoreReviewController requestReview`（macOS 10.14 以上、15.0 で非推奨。後継は `RequestReviewAction`）",
       "perm": "なし",
       "url": [
         "https://developer.apple.com/documentation/storekit/requestreviewaction",
         "https://developer.apple.com/documentation/storekit/skstorereviewcontroller"
       ],
-      "note": "未実装。表示・投稿されたかは返らない。未バンドル実行で表示されるかは Mac 目視で確かめる"
+      "note": "実装済み（#563）。ボタン押下ごとに UI スレッドで同期に 1 回呼ぶ。成功は「依頼を渡した」までで、表示・投稿は返らない（Requested）。Cancelled は無い。守る範囲: 押下 1 回につき呼び出し 1 回・嘘の成功の禁止・失敗を握りつぶさない。守らない範囲: ダイアログの表示有無、年 3 回などの上限による無反応、利用者が投稿したか。未バンドル実行での表示は Mac 目視（#556）で確かめる。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#556）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_in_app_review.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_in_app_review.m + crates/fandhe-egui-proxy/src/device/in_app_review.rs + crates/fandhe-core/src/screens/in_app_review.rs + crates/fandhe-device/src/in_app_review.rs、Issue #563"
     },
     "windows": {
       "status": "possible",
