@@ -594,8 +594,10 @@ pub mod ios_fullscreen_immersive;
 /// Issue #1252: iOS 向け文字認識（PHPicker + Vision）の effect ドライバ。
 #[cfg(target_os = "ios")]
 pub mod ios_image_recognition;
-/// Issue #563: iOS 向けアプリ内レビュー依頼のスタブ（b-ios が埋める）。`device/in_app_review.rs` の ios 経路から呼ばれる。
-#[cfg(target_os = "ios")]
+/// Issue #564: iOS 向けアプリ内レビュー依頼実装（`ios/fandhe_ios_in_app_review.m` を呼ぶ C ABI ラッパー）。
+/// `device/in_app_review.rs` の ios 経路から呼ばれる。結果コードの写像をホストでテストできるよう cfg は `any(ios, test)`。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_in_app_review;
 /// Issue #488: iOS 向け LAN のサービス探索（`apple_lan_discovery` へ委譲する）。
 /// `device/lan_discovery.rs` の iOS 経路から呼ばれる。

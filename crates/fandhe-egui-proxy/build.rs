@@ -182,6 +182,8 @@
 //! - `macos/fandhe_macos_app_badge.m`（Issue #1360、`NSDockTile.badgeLabel` によるバッジ設定）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/macos_app_badge.rs`
 //!   から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `ios/fandhe_ios_in_app_review.m`（Issue #564、`SKStoreReviewController requestReviewInScene:` による
+//!   アプリ内レビュー依頼。`src/device/ios_in_app_review.rs` から呼ばれる契約）。StoreKit を追加でリンクする。
 //! - `macos/fandhe_macos_in_app_review.m`（Issue #563、`SKStoreReviewController requestReview` による
 //!   レビュー依頼）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_in_app_review.rs` から呼ばれる契約）。StoreKit を追加でリンクする。
@@ -538,6 +540,8 @@ fn main() {
     compile_ios_live_activity();
     // `ios/fandhe_ios_web_auth_session.m`（Issue #532）。iOS 分岐のみ。
     compile_ios_web_auth_session();
+    // `ios/fandhe_ios_in_app_review.m`（Issue #564）。iOS 分岐のみ。StoreKit をリンクする。
+    compile_ios_in_app_review();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_midi.m`（Issue #1398 macOS + #1399 iOS）も共用する。CoreMIDI を使う。
@@ -1280,6 +1284,17 @@ fn compile_macos_in_app_review() {
         .file("macos/fandhe_macos_in_app_review.m")
         .flag("-fobjc-arc")
         .compile("fandhe_macos_in_app_review");
+}
+
+/// `ios/fandhe_ios_in_app_review.m` を `cc` でコンパイルする（Issue #564）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_in_app_review.rs` が使う）。StoreKit を追加でリンクする。
+fn compile_ios_in_app_review() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_in_app_review.m");
+    println!("cargo:rustc-link-lib=framework=StoreKit");
+    cc::Build::new()
+        .file("ios/fandhe_ios_in_app_review.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_in_app_review");
 }
 
 /// `macos/fandhe_macos_local_fonts.m` を `cc` でコンパイルする（Issue #1376）。**macOS 分岐のみ**

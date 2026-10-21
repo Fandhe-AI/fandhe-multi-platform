@@ -2,7 +2,7 @@
 //! 1 回呼ぶ契約。`fandhe-egui-proxy` の `device/in_app_review.rs` が「レビューを依頼する」ボタン
 //! 押下時に [`InAppReview::request`] を UI スレッドから同期で呼ぶ。macOS（`SKStoreReviewController
 //! requestReview`、10.14 以上・15.0 で非推奨）が実装し、iOS（`requestReviewInScene:`、14 以上・
-//! 18.0 で非推奨）は後続（b-ios）。Android（GMS 依存）と Windows（package identity 前提の見込み）は
+//! 18.0 で非推奨）も実装する。Android（GMS 依存）と Windows（package identity 前提の見込み）は
 //! 保留、Web は対象外。
 //!
 //! # 結果（契約表 10）
