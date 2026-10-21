@@ -8,17 +8,20 @@
 //
 // 契約（一発呼び出し型。結果を待つ要求は持たない）:
 //   fandhe_apple_barcode_scan_read(const uint8_t *bytes, size_t len, void *ctx,
-//                                  void (*on_payload)(void *ctx, const char *utf8)) -> int32_t
+//                                  void (*on_payload)(void *ctx, const uint8_t *utf8, size_t utf8_len)) -> int32_t
 //     bytes/len : JPEG / PNG 等のバイト列（形式・8 MiB 上限・辺の上限は Rust 側で検査済み）。
 //                 復号は Vision（ImageIO）に任せる。コピーせず呼び出しの間だけ参照する
 //     on_payload: 読み取った中身を Vision が返した順に 1 件ずつ同期で呼ぶ。`ctx` と `utf8` は
-//                 呼び出しの間だけ有効。この関数は `ctx` / `utf8` を保持しない
+//                 呼び出しの間だけ有効。この関数は `ctx` / `utf8` を保持しない。`utf8` は NUL 終端に
+//                 頼らず `utf8_len`（UTF-8 のバイト長）で読む（中身に NUL を含んでも欠落させない。
+//                 `utf8_len` が 0 のとき `utf8` は NULL になりうる）
 //     0 = 成功（0 件も成功 = コードなし）
 //     1 = 失敗（復号できない・`performRequests` の失敗・UTF-8 変換の失敗。呼び出し元が
 //         `Internal` へ畳む）
 //
 // 形式は絞らない（symbologies は既定の全形式）。`payloadStringValue` が nil の値（文字列に
-// できないバイナリ等）は飛ばす。既知の上限: 中身に NUL を含む値は `UTF8String` の NUL で切れる。
+// できないバイナリ等）は飛ばす。中身に NUL を含む値も長さ付きで
+// そのまま渡す。
 // 空の値の除去は Rust 側の `normalize_payloads` が行う（契約の SSOT は
 // `fandhe_device::barcode_scan`）。
 //
@@ -33,7 +36,8 @@
 #import <Vision/Vision.h>
 
 int32_t fandhe_apple_barcode_scan_read(const uint8_t *bytes, size_t len, void *ctx,
-                                       void (*on_payload)(void *ctx, const char *utf8)) {
+                                       void (*on_payload)(void *ctx, const uint8_t *utf8,
+                                                          size_t utf8_len)) {
     @autoreleasepool {
         NSData *data = [NSData dataWithBytesNoCopy:(void *)bytes length:len freeWhenDone:NO];
         VNDetectBarcodesRequest *request = [[VNDetectBarcodesRequest alloc] init];
@@ -48,11 +52,11 @@ int32_t fandhe_apple_barcode_scan_read(const uint8_t *bytes, size_t len, void *c
             if (payload == nil) {
                 continue;
             }
-            const char *utf8 = [payload UTF8String];
-            if (utf8 == NULL) {
+            NSData *utf8 = [payload dataUsingEncoding:NSUTF8StringEncoding];
+            if (utf8 == nil) {
                 return 1;
             }
-            on_payload(ctx, utf8);
+            on_payload(ctx, (const uint8_t *)utf8.bytes, (size_t)utf8.length);
         }
         return 0;
     }

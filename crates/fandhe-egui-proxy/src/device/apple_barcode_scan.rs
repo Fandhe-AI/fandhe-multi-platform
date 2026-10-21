@@ -10,7 +10,7 @@
 //! 復号・OS 呼び出しの失敗は `Internal`（0 件の成功へ畳まない）。呼び出しはブロックするため、
 //! 呼び出し元はワーカーで呼ぶ。
 
-use std::ffi::{c_char, c_void, CStr};
+use std::ffi::c_void;
 
 use fandhe_device::barcode_scan::{normalize_payloads, BarcodeReader};
 use fandhe_device::photo_picker::PickedPhoto;
@@ -24,18 +24,25 @@ unsafe extern "C" {
         bytes: *const u8,
         len: usize,
         ctx: *mut c_void,
-        on_payload: extern "C" fn(*mut c_void, *const c_char),
+        on_payload: extern "C" fn(*mut c_void, *const u8, usize),
     ) -> i32;
 }
 
 /// `.m` から同期に呼ばれ、中身を `ctx`（`&mut Vec<String>`）へ積む。panic しない処理だけにする
 /// （unwind を FFI 越しに伝えない）。
 #[allow(unsafe_code)]
-extern "C" fn push_payload(ctx: *mut c_void, payload: *const c_char) {
+extern "C" fn push_payload(ctx: *mut c_void, payload: *const u8, len: usize) {
     // SAFETY: `ctx` は `read` が渡した `&mut Vec<String>` で、`.m` は呼び出しの間だけ
-    // 同期に使い保持しない。`payload` は NUL 終端の UTF-8 で、このコールバックの間だけ有効。
-    let (out, payload) = unsafe { (&mut *(ctx as *mut Vec<String>), CStr::from_ptr(payload)) };
-    out.push(payload.to_string_lossy().into_owned());
+    // 同期に使い保持しない。`payload` は `len` バイトの UTF-8 で、このコールバックの間だけ有効
+    // （NUL を含みうるため NUL 終端には頼らない）。`len == 0` のとき `payload` は NULL でありうるので
+    // スライスを作らない。
+    let out = unsafe { &mut *(ctx as *mut Vec<String>) };
+    let bytes: &[u8] = if len == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(payload, len) }
+    };
+    out.push(String::from_utf8_lossy(bytes).into_owned());
 }
 
 /// Vision の `VNDetectBarcodesRequest`（全形式）で読む実装。
@@ -66,6 +73,16 @@ impl BarcodeReader for AppleBarcodeReader {
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn push_payload_keeps_embedded_nul() {
+        let mut out: Vec<String> = Vec::new();
+        let ctx = &mut out as *mut Vec<String> as *mut c_void;
+        let a = b"a\0b";
+        push_payload(ctx, a.as_ptr(), a.len());
+        push_payload(ctx, std::ptr::null(), 0);
+        assert_eq!(out, vec!["a\0b".to_string(), String::new()]);
+    }
     use fandhe_device::photo_picker::validate_photo;
 
     fn png_bytes(img: image::RgbaImage) -> Vec<u8> {
