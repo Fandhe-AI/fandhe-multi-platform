@@ -7,11 +7,14 @@
   "bundle": "one-shot",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "Core Spotlight `CSSearchableIndex`",
+      "status": "done",
+      "api": "Core Spotlight `CSSearchableIndex`（登録・自ドメインの削除。macOS と共用）と scene の `scene:continueUserActivity:`・`connectionOptions.userActivities`（検索から開かれたときの受信）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/corespotlight/cssearchableindex",
-      "note": "未実装。選ばれたときの起動は `NSUserActivity` / URL で届く（url-scheme と同じ入口が要る）"
+      "note": "固定のメモ 1 件の登録と自ドメイン（`com.fandhe.demo.spotlight`）の全削除、検索から開かれたときの項目 id の表示まで。期限は 10 秒で、背景遷移で期限を過ぎたら期限切れで確定する。守らない範囲: Spotlight に実際に出るか（設定次第）・反映の時間差・期限切れ後に OS 側で済んでいた場合の表示の食い違い・他アプリが同じ URL を送った場合との区別。受信は scene の通知経由で、未起動からの起動と起動中の両方で届くかは実機確認（#555）",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#555）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_spotlight_index.rs + crates/fandhe-egui-proxy/src/device/apple_spotlight_index.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_spotlight_index.m + crates/fandhe-egui-proxy/ios/fandhe_ios_scene.m + crates/fandhe-egui-proxy/src/device/spotlight_index.rs + crates/fandhe-core/src/screens/spotlight_index.rs + crates/fandhe-device/src/spotlight_index.rs、Issue #561"
     },
     "android": {
       "status": "possible",

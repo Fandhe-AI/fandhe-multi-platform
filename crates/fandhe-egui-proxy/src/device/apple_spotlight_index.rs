@@ -4,13 +4,10 @@
 //! 種類・期限・守る範囲）の SSOT は `fandhe_device::spotlight_index`。
 //!
 //! macOS は `.app` バンドルでないプロセス（`cargo run` の素の実行）では Core Spotlight が使えないため
-//! 失敗（`Internal`）を返し、成功を装わない。開かれたときの受信は [`register`]（macOS 専用）が
-//! `NSApp.delegate` へ `continueUserActivity` を足し、`apple_url_scheme` の受け口へ流す。
+//! 失敗（`Internal`）を返し、成功を装わない。開かれたときの受信は [`register`] が足す。macOS は
+//! `NSApp.delegate` へ `continueUserActivity` を足し、iOS は scene の通知を受ける
+//! （`ios_spotlight_index` 参照）。どちらも `apple_url_scheme` の受け口へ流す。
 //! 識別子・題名・本文・OS のエラー文はログへ出さない。
-
-// iOS は #561 が `ios_spotlight_index` から使うまで未使用。解除は #561 がこの行を消して行う
-// （`device.rs` の `pub mod` 列は後続の子が触らないため、ここに置く）。
-#![cfg_attr(target_os = "ios", allow(dead_code))]
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -40,7 +37,6 @@ unsafe extern "C" {
         domain_len: usize,
         timeout_ms: i64,
     ) -> i32;
-    #[cfg(target_os = "macos")]
     fn fandhe_apple_spotlight_register(prefix: *const u8, prefix_len: usize);
 }
 
@@ -106,9 +102,8 @@ pub(crate) fn implementation() -> Arc<dyn SpotlightIndex> {
     Arc::new(AppleSpotlightIndex)
 }
 
-/// 検索結果から開かれたときの受信を登録する（macOS 専用）。main thread から、`run_native` より前に
-/// 呼ぶ。URL の接頭辞は画面側の `URL_PREFIX`。冪等。
-#[cfg(target_os = "macos")]
+/// 検索結果から開かれたときの受信を登録する。main thread から呼ぶ（macOS は `run_native` より前、
+/// iOS は `UIApplicationMain` より前）。URL の接頭辞は画面側の `URL_PREFIX`。冪等。
 #[allow(unsafe_code)]
 pub fn register() {
     let prefix = fandhe_core::screens::spotlight_index::URL_PREFIX;

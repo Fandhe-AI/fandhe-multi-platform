@@ -283,6 +283,12 @@ fn main() -> eframe::Result<()> {
     #[cfg(feature = "device")]
     fandhe_egui_proxy::device::apple_file_association::register();
 
+    // Issue #561: OS の検索から開かれたときの受信も `UIApplicationMain` より前に登録する。
+    // 未起動からの起動は `willConnectToSession` にだけ届くため、observer が後だと取りこぼす
+    // （`apple/fandhe_apple_spotlight_index.m`・`ios/fandhe_ios_scene.m` 参照）。
+    #[cfg(feature = "device")]
+    fandhe_egui_proxy::device::apple_spotlight_index::register();
+
     // iOS の実エントリは ios.rs（wgpu/Metal バックエンド初期化、TASK-1.3-S2）。
     fandhe_egui_proxy::ios::run()
 }

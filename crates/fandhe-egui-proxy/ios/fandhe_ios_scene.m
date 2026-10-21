@@ -18,6 +18,11 @@
 //     起動中は `windowScene:performActionForShortcutItem:completionHandler:` で届く。type は
 //     Info.plist の固定 URL なので、そのまま URL として同じ通知へ流す（検査は Rust 側 `UrlInbox`）。
 //     scene 形態では `application:performActionForShortcutItem:` は使わない。
+//   - 検索結果からの継続（Issue #561）: 未起動からの起動は `connectionOptions.userActivities`、
+//     起動中は `scene:continueUserActivity:` で届く（どちらか一方にだけ入るので二重には届かない）。
+//     `NSUserActivity` を通知 `FandheSceneContinueUserActivityNotification` へそのまま流す。
+//     種類の判定（Core Spotlight）は受信側 `apple/fandhe_apple_spotlight_index.m` が行う
+//     （本ファイルは feature `device` に依存せず CoreSpotlight をリンクしないため）。
 //
 // `build.rs` が feature・計測ビルドに関係なく常にコンパイルする（Info.plist は 1 つのため）。
 // `src/ios_scene.rs` の `install()` が `fandhe_ios_scene_install()` を呼んで、リンカが
@@ -29,6 +34,8 @@
 #import <UIKit/UIKit.h>
 
 NSString *const FandheSceneOpenURLNotification = @"FandheSceneOpenURLNotification";
+NSString *const FandheSceneContinueUserActivityNotification =
+    @"FandheSceneContinueUserActivityNotification";
 
 // application ロールの scene を返す（無ければ nil）。
 static UIWindowScene *fandhe_app_scene(void) {
@@ -90,6 +97,12 @@ static BOOL fandhe_post_shortcut(UIApplicationShortcutItem *item) {
   return YES;
 }
 
+static void fandhe_post_activity(NSUserActivity *activity) {
+  [[NSNotificationCenter defaultCenter]
+      postNotificationName:FandheSceneContinueUserActivityNotification
+                    object:activity];
+}
+
 @interface FandheSceneDelegate : UIResponder <UIWindowSceneDelegate>
 @property(nonatomic, strong) UIWindow *window;
 @end
@@ -115,6 +128,17 @@ static BOOL fandhe_post_shortcut(UIApplicationShortcutItem *item) {
     if (options.shortcutItem != nil) {
       fandhe_post_shortcut(options.shortcutItem);
     }
+    // 未起動からの起動では continueUserActivity は呼ばれずここにだけ入る。
+    for (NSUserActivity *a in options.userActivities) {
+      fandhe_post_activity(a);
+    }
+  }
+}
+
+// 起動中に検索結果などから activity が継続された。
+- (void)scene:(UIScene *)scene continueUserActivity:(NSUserActivity *)userActivity {
+  @autoreleasepool {
+    fandhe_post_activity(userActivity);
   }
 }
 
