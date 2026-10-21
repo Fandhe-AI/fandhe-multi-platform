@@ -91,6 +91,7 @@
         mount_media_transcode_screen,
         mount_print_page_screen,
         mount_passkey_signin_screen,
+        mount_payment_request_screen,
         mount_on_device_llm_screen,
       } from "./fandhe_web_dom.js";
       await init();
@@ -100,6 +101,8 @@
         mount_on_device_llm_screen("fandhe-dom-root");
       } else if (screen === "passkey_signin") {
         mount_passkey_signin_screen("fandhe-dom-root");
+      } else if (screen === "payment_request") {
+        mount_payment_request_screen("fandhe-dom-root");
       } else if (screen === "print_page") {
         mount_print_page_screen("fandhe-dom-root");
       } else if (screen === "media_transcode") {

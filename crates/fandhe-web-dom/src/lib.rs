@@ -317,6 +317,8 @@ pub mod nlp;
 pub mod on_device_llm;
 /// 型サンプル「パスキー・サインイン連携」の Web 経路（Issue #344）。[`haptics`] と同じ理由で gate を外す。
 pub mod passkey;
+/// 型サンプル「物・サービスの決済」の Web 経路（Issue #542）。[`haptics`] と同じ理由で gate を外す。
+pub mod payment_request;
 /// 型サンプル「ペン・筆圧で描く」の Web 経路（Issue #358）。[`haptics`] と同じ理由で純関数は native からも
 /// テストできるよう gate を外す。
 pub mod pen_stylus;
