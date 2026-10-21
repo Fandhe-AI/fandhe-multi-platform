@@ -48,6 +48,17 @@ extern void fandhe_rust_url_scheme_received(const uint8_t *ptr, size_t len);
 extern void fandhe_apple_bgdl_handle_events(NSString *identifier, void (^handler)(void));
 
 static void fandhe_forward_url(NSURL *url) {
+  // `fandhe://web-auth/*` は Web 認証セッション（`fandhe_ios_web_auth_session.m`）の専用経路。
+  // セッション内のコールバックは ASWebAuthenticationSession が横取りするため openURL には来ず、
+  // ここへ来るのはセッションの外（Safari 等）から開かれた場合だけで信頼しない。受信箱へ入れると
+  // code・state が url-scheme 画面に出るため、拒否件数にも数えず捨てる（Issue #532）。
+  // nil への caseInsensitiveCompare は 0（NSOrderedSame）を返すため、scheme・host の nil を先に除外する
+  // （`fandhe:` のようなホスト無し URL は通常どおり受信箱へ転送する）。
+  if (url.scheme != nil && url.host != nil &&
+      [url.scheme caseInsensitiveCompare:@"fandhe"] == NSOrderedSame &&
+      [url.host caseInsensitiveCompare:@"web-auth"] == NSOrderedSame) {
+    return;
+  }
   NSData *data = [url.absoluteString dataUsingEncoding:NSUTF8StringEncoding];
   if (data == nil || data.length == 0) {
     fandhe_rust_url_scheme_received(NULL, 0);

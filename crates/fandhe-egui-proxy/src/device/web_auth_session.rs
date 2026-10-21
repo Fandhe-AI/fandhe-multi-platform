@@ -172,8 +172,8 @@ pub(crate) mod bridge {
 
     /// OS 層（macOS / iOS / Android の完了）の受け口。Windows のループバックは
     /// [`complete_loopback`] を使う。現在の要求でない `request_id`・取り消し／期限で確定済みの要求の完了は捨てる。
-    // iOS・Android は #532・#534 が埋めるまで未使用。Windows・Linux はループバックの受け口だけを使う。
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    // Android は #534 が埋めるまで未使用。Windows・Linux はループバックの受け口だけを使う。
+    #[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
     pub(crate) fn complete_from_os(request_id: u64, result: Result<RawResult, WebAuthFailure>) {
         conclude_with(
             Some(request_id),

@@ -7,11 +7,14 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "AuthenticationServices `ASWebAuthenticationSession`（システムのブラウザ UI を出し、コールバック URL を受け取る）",
-      "perm": "コールバック用の URL scheme（Info.plist の `CFBundleURLTypes`）か Universal Link",
+      "status": "done",
+      "api": "AuthenticationServices `ASWebAuthenticationSession`（iOS 17+、`prefersEphemeralWebBrowserSession` で Cookie を残さず、前面の scene の key window を表示先にする）",
+      "perm": "不要（セッション内で `fandhe` scheme を捕まえる。Info.plist の追加なし）",
       "url": "https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession",
-      "note": "未実装。表示元の `presentationContextProvider` が要る。キャンセルは専用エラーで届く（キャンセルを失敗として見せない）"
+      "note": "アプリ内のデモ認可ページ（127.0.0.1）を開き、返ったコールバック URL を state・パス・code/error の形式まで検査して伏せ字で表示する。PKCE は S256 の値を作るだけでトークン交換はしない。結果は返却・キャンセル・期限切れ（300 秒）の三値で、不一致の URL は失敗として扱う。セッション外（Safari 等）から届いた `fandhe://web-auth/*` は url-scheme の受信箱へ流さず捨てる。守らない範囲: 背景遷移中は認可ページが読めないこと・システムブラウザの UI の差・複数プロセス・プロセス死後のコールバック・トークン交換",
+      "detail": "できている（実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#528）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_web_auth_session.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_web_auth_session.m + crates/fandhe-egui-proxy/src/device/web_auth_session.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-device/src/web_auth_session.rs、Issue #532"
     },
     "android": {
       "status": "done",
