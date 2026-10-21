@@ -741,6 +741,8 @@ extern "C" fn fandhe_rust_photo_picker_outcome(
     // 同じ PHPicker の受け口を写真選択と文字認識（#1252）で共有し、id のタグで振り分ける。
     if crate::device::ios_image_recognition::owns(request_id) {
         crate::device::ios_image_recognition::deliver(request_id, result);
+    } else if crate::device::ios_barcode_scan::owns(request_id) {
+        crate::device::ios_barcode_scan::deliver(request_id, result);
     } else {
         crate::device::photo_pick::bridge::deliver(request_id, result);
     }
