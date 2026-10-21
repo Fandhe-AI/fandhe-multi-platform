@@ -235,8 +235,9 @@ pub mod android_url_scheme;
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_usb_device;
 /// Issue #534: Android 向け Web 認証セッション実装（Custom Tabs、Java 側 `WebAuthSessionHelper`）。
-/// `device/web_auth_session.rs` の Android 経路から呼ばれる。
-#[cfg(target_os = "android")]
+/// `device/web_auth_session.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でもコンパイルする。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_web_auth_session;
 /// Issue #516: Android 向け Wi-Fi 情報・スキャン実装（`WifiManager`、JNI 経由の pull 型 bridge）。
 /// `device/wifi_info.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でもコンパイルする。
