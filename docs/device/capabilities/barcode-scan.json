@@ -45,11 +45,14 @@
       "note": "OS 提供のバーコード検出 API は報告で確認できていない（Windows.Devices.PointOfService はバーコードリーダー機器向けでカメラ画像の読み取りではない。要確認）"
     },
     "web": {
-      "status": "possible",
+      "status": "done",
       "api": "Barcode Detection API（`BarcodeDetector.detect()`）。写真選択の画像を `createImageBitmap` で渡す",
       "perm": "不要（画像入力）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Barcode_Detection_API",
-      "note": "未実装。`BarcodeDetector` が無い・`getSupportedFormats()` が空のブラウザは実行時判定で非対応と表示する。対応は Chrome の macOS・ChromeOS・Android（Android はブラウザ側が Google Play services を要する）。Windows・Linux のデスクトップ Chrome と Firefox は非対応",
+      "note": "写真選択で選んだ画像 1 枚を `createImageBitmap` → `BarcodeDetector.detect()` で読み、中身の文字列を一覧表示する。0 件は成功（「コードは見つかりませんでした」）、写真選択のキャンセルは失敗にしない、復号不能は失敗。`BarcodeDetector` が無いブラウザは写真選択を開かず、`getSupportedFormats()` が空なら選択後に、非対応と表示する。バイト数・辺・画素数は復号前に検査する。守る範囲は 1 画面内の順序（世代照合）と嘘の成功の禁止・`ImageBitmap` の解放、守らない範囲はブラウザごとの検出結果の違い・処理時間・実行中の取り消し・複数タブ。中身はログに出さず、URL でも開かない。実ブラウザ確認は #554。対応は Chrome の macOS・ChromeOS・Android（Android はブラウザ側が Google Play services を要する）。Windows・Linux のデスクトップ Chrome と Firefox は非対応",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザでの確認は確認用 issue #554 で追う",
+      "impl": "crates/fandhe-web-dom/src/barcode_scan.rs + crates/fandhe-web-dom/src/file_picker.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/barcode_scan.rs + crates/fandhe-device/src/barcode_scan.rs、Issue #559",
       "safari": "非対応（実行時判定で非対応と表示）"
     }
   },

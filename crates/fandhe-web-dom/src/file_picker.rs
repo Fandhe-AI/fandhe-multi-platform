@@ -152,9 +152,9 @@ fn release(mount_id: u64) {
 /// 選択された `File` の名前と内容（`ArrayBuffer`）。バイト列の解釈
 /// （要約に潰すか `Vec<u8>` として解析へ渡すか）は画面ごとに異なるため、
 /// ここでは持たない（モジュール doc「`file_pick`/`tsv_import` が共有する理由」節参照）。
-struct Picked {
-    name: String,
-    buffer: js_sys::ArrayBuffer,
+pub(crate) struct Picked {
+    pub(crate) name: String,
+    pub(crate) buffer: js_sys::ArrayBuffer,
 }
 
 /// `File` の内容を読み切り、上限を超えていないか確認する。
@@ -162,7 +162,7 @@ struct Picked {
 /// `array_buffer()` を選ぶ理由: `FileReader` のイベントベース API より `Closure` が
 /// 2 本（`onload`/`onerror`）少なく、リークの面が小さい。読めることの確認と
 /// サイズの確定を兼ねる（モジュール doc 参照）。
-async fn read(file: File) -> Result<Picked, String> {
+pub(crate) async fn read(file: File) -> Result<Picked, String> {
     // 読む前の事前判定（TOCTOU 対策ではなく、巨大ファイルの `ArrayBuffer` 確保を
     // 避けるための最適化、モジュール doc 参照）。
     if file.size() as usize > MAX_FILE_BYTES {
@@ -188,23 +188,23 @@ async fn read(file: File) -> Result<Picked, String> {
 /// （`fandhe-egui-proxy` の `device/file_pick.rs::PickHooks<S>` と同じ設計、
 /// モジュール doc参照）。すべて `fn` ポインタ（クロージャ環境キャプチャ不可）のため
 /// `Copy`（`derive` は `S: Copy` を要求してしまうため手実装）。
-struct WebPickHooks<S, R> {
+pub(crate) struct WebPickHooks<S, R> {
     /// `<input>` の `accept` 属性（`None` なら付けない。写真選択は `image/*`）。
-    accept: Option<&'static str>,
+    pub(crate) accept: Option<&'static str>,
     /// 未発送の要求があれば世代番号を返す（画面の `take_request` 相当）。
-    take_request: fn(&S) -> Option<u64>,
+    pub(crate) take_request: fn(&S) -> Option<u64>,
     /// `Requested` → `Picking` へ進める（画面の `mark_picking` 相当）。
-    mark_picking: fn(&mut S),
+    pub(crate) mark_picking: fn(&mut S),
     /// `change` で得た `File` を、画面へ渡す形 `R` へ非同期に変換する
     /// （`file_pick`/`tsv_import` は [`read_boxed`]、写真選択は [`read_photo_boxed`]）。
     /// 第 1 引数は [`Applier::mount_id`]（マウントごとの資源を持つ変換だけが使う）。
-    convert: fn(u64, File) -> ConvertFuture<R>,
+    pub(crate) convert: fn(u64, File) -> ConvertFuture<R>,
     /// 完了を反映する（画面の `finish_pick`/`finish_import` 相当）。
-    finish: fn(&mut S, u64, Result<Option<R>, String>),
+    pub(crate) finish: fn(&mut S, u64, Result<Option<R>, String>),
 }
 
 /// [`WebPickHooks::convert`] の戻り値（`wasm32` は単一スレッドのため `Send` 不要）。
-type ConvertFuture<R> = Pin<Box<dyn Future<Output = Result<R, String>>>>;
+pub(crate) type ConvertFuture<R> = Pin<Box<dyn Future<Output = Result<R, String>>>>;
 
 impl<S, R> Clone for WebPickHooks<S, R> {
     fn clone(&self) -> Self {
@@ -234,7 +234,11 @@ fn fail<S: 'static, R: 'static>(
 /// 呼ぶだけ、モジュール doc 参照）。
 ///
 /// 要求が無ければ何もしない（`mount.rs` モジュール doc の「effect フック」節の契約）。
-fn drive<S: 'static, R: 'static>(state: &S, applier: &Applier<S>, hooks: WebPickHooks<S, R>) {
+pub(crate) fn drive<S: 'static, R: 'static>(
+    state: &S,
+    applier: &Applier<S>,
+    hooks: WebPickHooks<S, R>,
+) {
     let Some(generation) = (hooks.take_request)(state) else {
         return;
     };

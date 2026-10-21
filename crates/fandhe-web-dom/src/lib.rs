@@ -22,6 +22,8 @@
 //! - [`tts`]: `wasm32` 専用。「読み上げ」画面の Web 経路（Issue #867）
 //! - [`file_picker`]: `wasm32` 専用。「ファイル選択」画面の Web 経路（Issue #875）。
 //!   「TSV 読み込み」画面（Issue #981）とも `<input type="file">` 配線を共有する
+//! - [`barcode_scan`]: 「バーコード・QR 読み取り」画面の Web 経路（Issue #559）。写真選択の配線は
+//!   [`file_picker`] と共有する
 //! - [`location`]: 「位置情報」画面の Web 経路（Issue #891）。純関数（コード → 失敗種別の
 //!   対応・再試行検知）は native からもテストするため、他 4 モジュールと異なり
 //!   クレート全体を `wasm32` へ gate しない（内側の `web` サブモジュールのみ gate する）
@@ -294,6 +296,9 @@ pub use mount::{mount, mount_with_effect, Applier, WebEffect};
 pub mod app_badge;
 /// 型サンプル「AR 表示」の Web 経路（Issue #309）。[`haptics`] と同じ理由で gate を外す。
 pub mod ar;
+/// 型サンプル「バーコード・QR 読み取り」の Web 経路（Issue #559）。[`haptics`] と同じ理由で純関数は native からも
+/// テストできるよう gate を外す（wasm 部は内側の `cfg`）。
+pub mod barcode_scan;
 /// 型サンプル「方位（コンパス）」の Web 経路（Issue #1407）。[`haptics`] と同じ理由で gate を外す。
 pub mod compass;
 /// 型サンプル「メール・SMS の作成」の Web 経路（Issue #1387）。[`haptics`] と同じ理由で gate を外す。
