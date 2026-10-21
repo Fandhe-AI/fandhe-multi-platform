@@ -36,8 +36,12 @@ use std::sync::Arc;
 #[cfg(any(test, not(target_os = "ios")))]
 use fandhe_core::screens::barcode_scan::{finish_scan, mark_scanning, take_request};
 use fandhe_core::screens::barcode_scan::{BarcodeScanState, ScanFailure};
-#[cfg(any(test, target_os = "macos"))]
+#[cfg(any(test, target_os = "macos", target_os = "ios"))]
 use fandhe_device::barcode_scan::BarcodeReader;
+#[cfg(any(test, target_os = "ios"))]
+use fandhe_device::file_picker::PickedFile;
+#[cfg(any(test, target_os = "ios"))]
+use fandhe_device::photo_picker::validate_photo;
 #[cfg(any(test, target_os = "macos"))]
 use fandhe_device::photo_picker::PhotoPicker;
 #[cfg(any(test, target_os = "macos", target_os = "ios"))]
@@ -55,6 +59,41 @@ pub(crate) fn to_failure(e: DeviceError) -> ScanFailure {
         DeviceError::InvalidInput(_) => ScanFailure::InvalidInput,
         _ => ScanFailure::Failed("コードを読み取れませんでした".to_string()),
     }
+}
+
+/// iOS で barcode 要求の PHPicker 呼び出しに立てる目印（`1 << 62`）。写真選択の id・
+/// 文字認識の目印（`1 << 63`）と区別し、`ios.rs` の同じ受け口を共有する。
+#[cfg(any(test, target_os = "ios"))]
+pub(crate) const IOS_PICKER_TAG: u64 = 1 << 62;
+
+/// 文字認識の目印。`ios_image_recognition::PICKER_TAG` と同じ値（そちらは iOS 専用で
+/// ホストのテストから参照できないため写す）。
+#[cfg(any(test, target_os = "ios"))]
+const OCR_PICKER_TAG: u64 = 1 << 63;
+
+/// `id` が barcode 要求の PHPicker 呼び出しか。振り分け順に頼らず、OCR の目印が立った id は除く。
+/// `RequestSlot` の採番は 1 から始まり 2^62 には届かない。
+#[cfg(any(test, target_os = "ios"))]
+pub(crate) fn owns_picker_id(id: u64) -> bool {
+    id & OCR_PICKER_TAG == 0 && id & IOS_PICKER_TAG != 0
+}
+
+/// PHPicker の結果を検査して読む純粋関数（iOS 経路）。キャンセルは `Ok(None)`（失敗にしない）、
+/// 0 件は成功、それ以外の失敗は `to_failure` で固定文言へ写す。バイト列は戻り時に解放される。
+/// ホストのテストで検証できるよう `ios_barcode_scan` から分離。
+#[cfg(any(test, target_os = "ios"))]
+pub(crate) fn scan_picked(
+    result: Result<Option<PickedFile>, DeviceError>,
+    reader: &dyn BarcodeReader,
+) -> Result<Option<Vec<String>>, ScanFailure> {
+    let file = match result {
+        Ok(Some(file)) => file,
+        Ok(None) | Err(DeviceError::Cancelled(_)) => return Ok(None),
+        Err(e) => return Err(to_failure(e)),
+    };
+    let photo = validate_photo(file.bytes).map_err(to_failure)?;
+    super::image_recognition::precheck(&photo).map_err(to_failure)?;
+    reader.read(&photo).map(Some).map_err(to_failure)
 }
 
 /// `registry.rs` の `effect` 区画から `barcode_scan` 画面用に配線される effect ドライバ。
@@ -328,5 +367,91 @@ mod tests {
             state.status,
             fandhe_core::screens::barcode_scan::SCANNING_STATUS
         );
+    }
+
+    #[test]
+    fn owns_picker_id_is_exclusive_with_ocr_and_plain_ids() {
+        assert!(owns_picker_id(IOS_PICKER_TAG | 1));
+        assert!(owns_picker_id(IOS_PICKER_TAG | 12345));
+        for id in [1u64, 2, u32::MAX as u64] {
+            assert!(!owns_picker_id(id));
+        }
+        assert!(!owns_picker_id((1 << 63) | 1));
+        assert!(!owns_picker_id((1 << 63) | IOS_PICKER_TAG | 1));
+    }
+
+    fn picked(photo: PickedPhoto) -> Result<Option<PickedFile>, DeviceError> {
+        Ok(Some(PickedFile {
+            name: "a".into(),
+            bytes: photo.bytes,
+        }))
+    }
+
+    fn scan_run(
+        input: Result<Option<PickedFile>, DeviceError>,
+        result: fn() -> Result<Vec<String>, DeviceError>,
+    ) -> (Result<Option<Vec<String>>, ScanFailure>, bool) {
+        let called = Arc::new(AtomicBool::new(false));
+        let out = scan_picked(
+            input,
+            &FakeReader {
+                result,
+                called: called.clone(),
+            },
+        );
+        (out, called.load(Ordering::SeqCst))
+    }
+
+    #[test]
+    fn scan_picked_success_and_zero_codes() {
+        let (o, c) = scan_run(picked(png_with_size(10, 10)), || Ok(vec!["a".into()]));
+        assert!(c);
+        assert_eq!(o, Ok(Some(vec!["a".to_string()])));
+        let (o, _) = scan_run(picked(png_with_size(10, 10)), || Ok(vec![]));
+        assert_eq!(o, Ok(Some(vec![])));
+    }
+
+    #[test]
+    fn scan_picked_cancel_skips_reader() {
+        for input in [Ok(None), Err(DeviceError::Cancelled("x"))] {
+            let (o, c) = scan_run(input, || Ok(vec![]));
+            assert_eq!(o, Ok(None));
+            assert!(!c);
+        }
+    }
+
+    #[test]
+    fn scan_picked_invalid_inputs_skip_reader() {
+        let (o, c) = scan_run(Err(DeviceError::Internal("x")), || Ok(vec![]));
+        assert!(matches!(o, Err(ScanFailure::Failed(_))));
+        assert!(!c);
+        let big = png_with_size(1, fandhe_device::photo_picker::MAX_PHOTO_SIDE + 1);
+        let (o, c) = scan_run(picked(big), || Ok(vec!["x".into()]));
+        assert_eq!(o, Err(ScanFailure::InvalidInput));
+        assert!(!c);
+        // IHDR を欠く PNG と形式不明のバイト列は成功にしない。
+        for bytes in [
+            vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A],
+            vec![1, 2, 3, 4],
+        ] {
+            let input = Ok(Some(PickedFile {
+                name: "a".into(),
+                bytes,
+            }));
+            let (o, c) = scan_run(input, || Ok(vec!["x".into()]));
+            assert!(matches!(o, Err(ScanFailure::Failed(_))), "{o:?}");
+            assert!(!c);
+        }
+    }
+
+    #[test]
+    fn scan_picked_reader_failure_hides_internal_id() {
+        let (o, _) = scan_run(picked(png_with_size(10, 10)), || {
+            Err(DeviceError::Internal("secret-id"))
+        });
+        match o {
+            Err(ScanFailure::Failed(m)) => assert!(!m.contains("secret-id")),
+            other => panic!("{other:?}"),
+        }
     }
 }
