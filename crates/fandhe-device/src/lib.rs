@@ -148,6 +148,8 @@ pub mod secure_credential;
 pub mod share;
 /// Phase 11（端末機能の拡充ループ、親 #1023、Issue #1024）: 音声認識。
 pub mod speech_recognition;
+/// Phase 11（端末機能の拡充ループ、親 #117、Issue #560）: OS の検索への登録（固定のメモ 1 件の登録と全削除）。
+pub mod spotlight_index;
 pub mod storage;
 /// Phase 11（端末機能の拡充ループ、親 #103、Issue #421）: システムのアクセント色。
 pub mod system_accent_color;

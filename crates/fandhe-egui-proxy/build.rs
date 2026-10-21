@@ -86,6 +86,10 @@
 //!   **macOS・iOS 両分岐**（iOS の実体は #536）で feature `device` 有効時に swiftc で静的ライブラリ化し、
 //!   Translation を弱リンクする（`src/device/apple_translation.rs` から呼ばれる契約）。
 //!   swiftc 呼び出しは `compile_apple_swift` を on-device-llm と共用する。
+//! - `apple/fandhe_apple_spotlight_index.m`（Issue #560、Core Spotlight による OS の検索への登録と、
+//!   macOS の `continueUserActivity` 受信）は **macOS・iOS 両分岐**（iOS の実体は #561）で
+//!   feature `device` 有効時にコンパイルし CoreSpotlight をリンクする
+//!   （`src/device/apple_spotlight_index.rs` から呼ばれる契約）。
 //! - `apple/fandhe_apple_map_view.m`（Issue #273、`MKMapSnapshotter` による地図の静止画 1 枚の取得。
 //!   iOS 分岐も同じ実装）は `src/device/apple_map_view.rs` から呼ばれる契約。MapKit をリンクする。
 //! - `apple/fandhe_apple_photo_library.m`（Issue #1254、`PHPhotoLibrary` による画像 1 枚の保存）は
@@ -491,6 +495,8 @@ fn main() {
     compile_apple_on_device_llm(true);
     // `apple/fandhe_apple_translation.swift`（Issue #535 macOS + #536 iOS）も共用する。
     compile_apple_translation(true);
+    // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
+    compile_apple_spotlight_index();
 
     // `ios/fandhe_ios_background_task.m`（Issue #1045）は iOS 分岐のみから呼ぶ
     // （`build_macos` からは呼ばない、上記 doc 参照）。
@@ -619,6 +625,18 @@ fn compile_apple_contact_picker() {
 
     println!("cargo:rustc-link-lib=framework=Contacts");
     println!("cargo:rustc-link-lib=framework=ContactsUI");
+}
+
+/// `apple/fandhe_apple_spotlight_index.m` を `cc` でコンパイルし CoreSpotlight をリンクする
+/// （Issue #560 macOS・#561 iOS。両分岐から呼ぶ）。
+fn compile_apple_spotlight_index() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_spotlight_index.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_spotlight_index.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_spotlight_index");
+
+    println!("cargo:rustc-link-lib=framework=CoreSpotlight");
 }
 
 /// `apple/fandhe_apple_photo_library.m` を `cc` でコンパイルし Photos をリンクする
@@ -1803,6 +1821,8 @@ fn build_macos() {
     // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS。iOS は Issue #346 で `build_ios` からも呼ぶ）。
     compile_apple_on_device_llm(false);
     compile_apple_translation(false);
+    // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
+    compile_apple_spotlight_index();
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
     // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。

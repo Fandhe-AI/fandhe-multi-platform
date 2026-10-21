@@ -352,6 +352,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // `device::translation::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::translation::reset_pending_tracking();
+    // Issue #560: OS の検索への登録の処理済み世代も破棄する（理由は translation と同じ。
+    // `device::spotlight_index::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::spotlight_index::reset_pending_tracking();
     // Issue #311: 音声変換の処理済み世代も破棄する（理由は ml_inference と同じ。
     // `device::media_transcode::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

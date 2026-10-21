@@ -21,11 +21,14 @@
       "note": "未実装。platform storage の索引は OS の AppSearch サービスが持つ。登録・全削除まで扱い、ランチャー・システム検索に実際に出るか・タップで起動されるかは OEM 次第（守らない範囲）。API 31 未満は非対応"
     },
     "macos": {
-      "status": "possible",
-      "api": "Core Spotlight `CSSearchableIndex`",
+      "status": "done",
+      "api": "Core Spotlight `CSSearchableIndex`（登録・自ドメインの削除）と `application:continueUserActivity:restorationHandler:`（検索から開かれたときの受信）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/corespotlight/cssearchableindex",
-      "note": "未実装。macOS の提供範囲は要確認"
+      "note": "固定のメモ 1 件の登録と自ドメイン（`com.fandhe.demo.spotlight`）の全削除、検索から開かれたときの項目 id の表示まで。`.app` バンドルでない実行では Core Spotlight が使えず失敗を表示する。期限は 10 秒。守らない範囲: Spotlight に実際に出るか（設定次第）・反映の時間差・期限切れ後に OS 側で済んでいた場合の表示の食い違い・他アプリが同じ URL を送った場合との区別。受信は winit の delegate へ `class_addMethod` で足しており、配送されるかは Mac 目視で確認（#555）",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#555）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_spotlight_index.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_spotlight_index.m + crates/fandhe-egui-proxy/src/device/spotlight_index.rs + crates/fandhe-core/src/screens/spotlight_index.rs + crates/fandhe-device/src/spotlight_index.rs、Issue #560"
     },
     "windows": {
       "status": "no",

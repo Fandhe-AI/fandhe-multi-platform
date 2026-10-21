@@ -58,7 +58,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// 現在の OS の実装（macOS は Apple Event、iOS は delegate、Android は Intent、Windows は起動引数、
 /// 他は `Unsupported` 固定）。
-fn platform_url_scheme() -> &'static dyn UrlScheme {
+pub(super) fn platform_url_scheme() -> &'static dyn UrlScheme {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
         &super::apple_url_scheme::AppleUrlScheme
