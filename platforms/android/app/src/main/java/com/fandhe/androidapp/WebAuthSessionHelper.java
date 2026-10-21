@@ -141,6 +141,9 @@ final class WebAuthSessionHelper {
         Uri data = intent.getData();
         String cbState = data == null ? null : data.getQueryParameter("state");
         if (currentState == null || !currentState.equals(cbState)) {
+            // 旧コールバックでの前面復帰に続く onResume が、現在の要求をキャンセル扱いにしないよう離脱記録を消す。
+            // launchedId / currentState は維持し、現在の要求は自分のコールバックを待ち続ける。
+            leftId = RequestTracker.NONE;
             return true;
         }
         long id = request.take();
