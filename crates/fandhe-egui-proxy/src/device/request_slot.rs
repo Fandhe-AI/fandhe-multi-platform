@@ -96,6 +96,21 @@ impl<O> RequestSlot<O> {
         }
     }
 
+    /// 期限切れの確定用。`request_id` が現在の要求で、かつ結果が未着のときだけ消して `true`。
+    /// 判定と除去を同じロック内で行い、`snapshot` 後に `deliver` が着地した結果を消さない
+    /// （`false` なら呼び出し側は失敗を確定せず、後続の `poll_and_finish` に任せる）。
+    pub(crate) fn clear_if_pending(&self, request_id: u64) -> bool {
+        let mut pending = self.lock();
+        if pending
+            .as_ref()
+            .is_some_and(|p| p.request_id == request_id && p.ready.is_none())
+        {
+            *pending = None;
+            return true;
+        }
+        false
+    }
+
     /// 照合なしで丸ごと捨てる。Android の Activity 再生成直後に呼ぶ想定
     /// （`biometric_auth::reset_pending_tracking` の唯一の呼び出し元、PR #917 の
     /// codex-review 指摘由来）。share / file_pick は呼ばない（既存挙動を変えない）。
@@ -223,6 +238,19 @@ mod tests {
             None,
             "無視された deliver は新しい要求を作らない"
         );
+    }
+
+    #[test]
+    fn clear_if_pending_keeps_delivered_result() {
+        let slot = RequestSlot::<u8>::new();
+        let id = slot.begin();
+        assert!(!slot.clear_if_pending(id + 1));
+        assert!(slot.deliver(id, 7));
+        assert!(!slot.clear_if_pending(id));
+        assert_eq!(slot.snapshot(), Some((id, Some(7))));
+        let id2 = slot.begin();
+        assert!(slot.clear_if_pending(id2));
+        assert_eq!(slot.snapshot(), None);
     }
 
     static POLL_SLOT: RequestSlot<u8> = RequestSlot::new();
