@@ -12,6 +12,7 @@ import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SetSchemaRequest;
 import android.content.Context;
 import android.os.Build;
+import android.os.SystemClock;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
@@ -21,6 +22,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 // OS の検索への登録（Issue #562、親 #117 の b-android）の Android 実装ヘルパー。
 // Rust の `device/android_spotlight_index.rs` がドライバのワーカースレッドから
@@ -35,17 +37,26 @@ import java.util.concurrent.TimeoutException;
 //
 // 期限: Rust のドライバだけが期限を持つ。ここでは `remainingMs` を超えて待たない（`Future.get`）。
 // 期限切れで先に戻っても、後から届いた終端で session を閉じる。
+// 順序: 単一スレッドの EXECUTOR はコールバック単位の直列化で、要求全体の順序は保証しない。
+// そこで (1) 期限切れで戻るときは `cancelled` を立て、まだ発送していない OS 書き込み
+// （setSchema 後の put・remove）を行わずに終端させる、(2) 次の要求は前の要求の終端
+// （`inFlight`）を期限内で待ってから始める。発送済みの書き込みは取り消せない
+// （AppSearch に取り消し API は無い）ので、その完了を待つことで後続の更新が巻き戻されないようにする。
 // ライフサイクル: 要求ごとの状態を持たず `applicationContext` だけを使う。Activity が破棄されても
 // `remainingMs` 以内に戻り、古い結果は Rust のドライバが要求 id の不一致で捨てる。
 //
-// 守る範囲: 失敗を成功に畳まないこと・全終端での session 解放・待ちの上限。
+// 守る範囲: 失敗を成功に畳まないこと・全終端での session 解放・待ちの上限・
+// 1 プロセス内での要求どうしの順序（前の要求の OS 書き込みが後の要求を追い越さない）。
 // 守らない範囲: ランチャー・システム検索に出るか（OEM 次第）・反映の時間差・
-// 期限後に OS 側で済んでいた場合との食い違い（AppSearch に取り消し API は無い）。
+// 期限後に OS 側で済んでいた場合との食い違い。
 // id・題名・本文・例外メッセージはログに出さない。他パッケージへの公開は設定しない。
 final class SpotlightIndexHelper {
     private static final int OK = 0, UNSUPPORTED = 1, TIMEOUT = 2, FAILED = 3;
     private static final String TYPE = "FandheMemo";
     private static final Executor EXECUTOR = Executors.newSingleThreadExecutor();
+    private static final Object LOCK = new Object();
+    /** 直近に始めた要求の終端。次の要求はこれが完了してから始める（LOCK の内側で読み書き）。 */
+    private static CompletableFuture<Integer> inFlight;
 
     private SpotlightIndexHelper() {}
 
@@ -66,7 +77,7 @@ final class SpotlightIndexHelper {
     @RequiresApi(Build.VERSION_CODES.S)
     private static int indexS(
             Context ctx, String domain, String id, String title, String text, long remainingMs) {
-        return run(ctx, domain, remainingMs, (session, f) -> {
+        return run(ctx, domain, remainingMs, (session, f, cancelled) -> {
             AppSearchSchema schema = new AppSearchSchema.Builder(TYPE)
                     .addProperty(stringProp("title"))
                     .addProperty(stringProp("text"))
@@ -82,6 +93,11 @@ final class SpotlightIndexHelper {
                         try {
                             if (!schemaResult.isSuccess()) {
                                 finish(session, f, FAILED);
+                                return;
+                            }
+                            // 期限切れ後は未発送の書き込みを行わない（後続の全削除を巻き戻さないため）。
+                            if (cancelled.get()) {
+                                finish(session, f, TIMEOUT);
                                 return;
                             }
                             GenericDocument doc = new GenericDocument.Builder<>(domain, id, TYPE)
@@ -109,7 +125,7 @@ final class SpotlightIndexHelper {
 
     @RequiresApi(Build.VERSION_CODES.S)
     private static int removeAllS(Context ctx, String domain, long remainingMs) {
-        return run(ctx, domain, remainingMs, (session, f) -> {
+        return run(ctx, domain, remainingMs, (session, f, cancelled) -> {
             // クエリは定数（空 = 全件）。namespace で自ドメインに絞る。入力から組み立てない。
             SearchSpec spec = new SearchSpec.Builder()
                     .addFilterNamespaces(domain)
@@ -139,15 +155,45 @@ final class SpotlightIndexHelper {
 
     @RequiresApi(Build.VERSION_CODES.S)
     private interface Op {
-        void start(AppSearchSession session, CompletableFuture<Integer> f);
+        /** `cancelled` が立っていたら、まだ発送していない OS 書き込みを行わず `finish(TIMEOUT)` する。 */
+        void start(AppSearchSession session, CompletableFuture<Integer> f, AtomicBoolean cancelled);
     }
 
-    /** session を開いて `op` を走らせ、`remainingMs` を上限に結果コードを待つ。 */
+    /**
+     * 前の要求の終端を待ってから session を開いて `op` を走らせ、`remainingMs` を上限に結果コードを待つ。
+     * 期限は呼び出しの開始を起点に単調時計で測る。
+     */
     @RequiresApi(Build.VERSION_CODES.S)
     private static int run(Context ctx, String domain, long remainingMs, Op op) {
+        final long deadline = SystemClock.elapsedRealtime() + remainingMs;
         AppSearchManager mgr = ctx.getSystemService(AppSearchManager.class);
         if (mgr == null) return UNSUPPORTED;
+
+        // 前の要求（期限切れで戻ったが OS 書き込みが未終端のもの）を追い越さない。
+        CompletableFuture<Integer> prev;
+        synchronized (LOCK) {
+            prev = inFlight;
+        }
+        if (prev != null && !prev.isDone()) {
+            try {
+                prev.get(remainingMs, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                return TIMEOUT;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return FAILED;
+            } catch (Exception ignored) {
+                // 終端には達している。結果は前の要求のものなので見ない。
+            }
+        }
+        long left = deadline - SystemClock.elapsedRealtime();
+        if (left <= 0) return TIMEOUT;
+
         CompletableFuture<Integer> f = new CompletableFuture<>();
+        AtomicBoolean cancelled = new AtomicBoolean(false);
+        synchronized (LOCK) {
+            inFlight = f;
+        }
         try {
             mgr.createSearchSession(new AppSearchManager.SearchContext.Builder(domain).build(),
                     EXECUTOR, r -> {
@@ -162,19 +208,28 @@ final class SpotlightIndexHelper {
                             f.complete(FAILED);
                             return;
                         }
+                        if (cancelled.get()) {
+                            finish(session, f, TIMEOUT);
+                            return;
+                        }
                         try {
-                            op.start(session, f);
+                            op.start(session, f, cancelled);
                         } catch (RuntimeException e) {
                             finish(session, f, FAILED);
                         }
                     });
-            return f.get(remainingMs, TimeUnit.MILLISECONDS);
+            return f.get(left, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
+            // 未発送の書き込みを止める。発送済みの分は f の終端まで次の要求が待つ。
+            cancelled.set(true);
             return TIMEOUT;
         } catch (InterruptedException e) {
+            cancelled.set(true);
             Thread.currentThread().interrupt();
             return FAILED;
         } catch (Exception e) {
+            // createSearchSession 自体の失敗。終端を確定して次の要求を待たせない。
+            f.complete(FAILED);
             return FAILED;
         }
     }
