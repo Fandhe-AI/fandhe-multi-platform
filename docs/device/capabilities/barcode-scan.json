@@ -8,24 +8,28 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "VisionKit `DataScannerViewController`（カメラ映像からの読み取り）。画像ファイルなら Vision `VNDetectBarcodesRequest`",
-      "perm": "`NSCameraUsageDescription`",
-      "url": "https://developer.apple.com/documentation/visionkit/datascannerviewcontroller",
-      "note": "未実装。DataScanner は対応端末・OS 版が限られる（`isSupported` / `isAvailable`。要確認）。カメラ経路は camera-capture と共有できるかを要確認"
+      "api": "Vision `VNDetectBarcodesRequest`（写真選択で選んだ画像から検出）",
+      "perm": "不要（画像入力。写真選択は PHPicker で権限不要）",
+      "url": "https://developer.apple.com/documentation/vision/vndetectbarcodesrequest",
+      "note": "未実装。カメラ映像からのライブ読み取り（VisionKit `DataScannerViewController`、iOS 16 以上・A12 以上）は今回の範囲外"
     },
     "android": {
-      "status": "possible",
-      "api": "ML Kit Barcode Scanning（bundled / unbundled）。Google code scanner は GMS・権限不要",
-      "perm": "bundled はカメラ権限（要確認）。Google code scanner は不要",
-      "url": "https://developers.google.com/ml-kit/vision/barcode-scanning",
-      "note": "未実装。Google code scanner は GMS（Google Play 開発者サービス）依存"
+      "status": "no",
+      "api": "ML Kit Barcode Scanning（`com.google.mlkit:barcode-scanning`）/ Google code scanner（`play-services-code-scanner`）",
+      "perm": "不要（画像入力）",
+      "url": [
+        "https://dl.google.com/android/maven2/com/google/mlkit/barcode-scanning/17.3.0/barcode-scanning-17.3.0.pom",
+        "https://dl.google.com/android/maven2/com/google/android/gms/play-services-code-scanner/16.1.0/play-services-code-scanner-16.1.0.pom"
+      ],
+      "note": "ML Kit の bundled 版（17.3.0）も POM が `play-services-basement` / `play-services-mlkit-barcode-scanning` を直接依存に持ち、Google code scanner（16.1.0）は `play-services-base` / `basement` / `tasks` に依存する。GMS に依存しない方針に合わないため見送る（image-recognition の Android と同じ判断）。AOSP に画像のバーコード検出の公開 API はない。ZXing 等の同梱 OSS は OS の端末機能ではないので判定に使わない",
+      "detail": "できない（OS 標準のバーコード検出 API が無く、ML Kit・Google code scanner は GMS 依存。同梱 OSS は OS 機能ではない）"
     },
     "macos": {
       "status": "possible",
-      "api": "Vision `VNDetectBarcodesRequest`（画像から検出。カメラ映像は AVFoundation で取得）",
-      "perm": "カメラ映像を使う場合は `NSCameraUsageDescription`",
+      "api": "Vision `VNDetectBarcodesRequest`（写真選択で選んだ画像から検出）",
+      "perm": "不要（画像入力）",
       "url": "https://developer.apple.com/documentation/vision/vndetectbarcodesrequest",
-      "note": "未実装。macOS は専用スキャナー UI がなく、画像またはカメラのフレームを渡す方式"
+      "note": "未実装。macOS は専用スキャナー UI がない。カメラ映像からの読み取りは今回の範囲外"
     },
     "windows": {
       "status": "no",
@@ -36,12 +40,12 @@
     },
     "web": {
       "status": "possible",
-      "api": "Barcode Detection API（`new BarcodeDetector()`）。映像は `getUserMedia`",
-      "perm": "カメラ権限",
+      "api": "Barcode Detection API（`BarcodeDetector.detect()`）。写真選択の画像を `createImageBitmap` で渡す",
+      "perm": "不要（画像入力）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Barcode_Detection_API",
-      "note": "未実装。MDN は Limited availability 表示。Chrome 83 で提供済み（macOS・ChromeOS・Android。Android は Google Play services が必要。既存 image-recognition.json の記載）。デスクトップ Windows の Chrome は未確認",
-      "safari": "未対応と認識（要確認）"
+      "note": "未実装。`BarcodeDetector` が無い・`getSupportedFormats()` が空のブラウザは実行時判定で非対応と表示する。対応は Chrome の macOS・ChromeOS・Android（Android はブラウザ側が Google Play services を要する）。Windows・Linux のデスクトップ Chrome と Firefox は非対応",
+      "safari": "非対応（実行時判定で非対応と表示）"
     }
   },
-  "note": "image-recognition（顔・文字・矩形）との違い: 本機能はバーコード・QR の読み取りに限る（同機能の Web 判定は no だが、バーコード検出だけは Chromium で提供済みなので本機能では possible）。今回の範囲: カメラ映像から QR を読み、中身の文字列を画面に出すだけ。"
+  "note": "image-recognition（顔・文字・矩形）との違い: 本機能はバーコード・QR の読み取りに限る（同機能の Web 判定は no だが、バーコード検出だけは Chromium で提供済みなので本機能では possible）。今回の範囲: 写真選択で選んだ画像 1 枚のバーコード・QR を読み、中身の文字列を画面に出すだけ（カメラのライブ読み取り・位置枠・形式の絞り込みは扱わない。読んだ中身は URL でも自動で開かない）。"
 }
