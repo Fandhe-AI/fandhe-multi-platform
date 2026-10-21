@@ -484,6 +484,17 @@ public class MainActivity extends GameActivity {
         pedometerHelper.cancel(requestId);
     }
 
+    // 端末内翻訳（Issue #537）。実装は `TranslationHelper`。Rust の `android_translation.rs` が JNI で呼ぶ。
+    private final TranslationHelper translationHelper = new TranslationHelper(this);
+
+    void requestTranslation(long requestId, String text, String source, String target) {
+        translationHelper.request(requestId, text, source, target);
+    }
+
+    void cancelTranslation(long requestId) {
+        translationHelper.cancel(requestId);
+    }
+
     // 音楽ライブラリ画面（Issue #485）。実装は `MusicLibraryHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_music_library.rs` が JNI で呼ぶ。
     private final MusicLibraryHelper musicLibraryHelper = new MusicLibraryHelper(this);
@@ -4751,6 +4762,7 @@ public class MainActivity extends GameActivity {
         nowPlayingHelper.onDestroy();
         super.onDestroy();
         pedometerHelper.onDestroy();
+        translationHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();
         musicLibraryHelper.onDestroy();
