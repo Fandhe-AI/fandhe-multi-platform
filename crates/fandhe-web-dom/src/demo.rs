@@ -36,6 +36,9 @@ use fandhe_core::screens::background_download::{
 use fandhe_core::screens::background_task::{
     current_screen as current_background_task_screen, BackgroundTaskState,
 };
+use fandhe_core::screens::barcode_scan::{
+    current_screen as current_barcode_scan_screen, BarcodeScanState,
+};
 use fandhe_core::screens::biometric_check::{
     current_screen as current_biometric_screen, BiometricCheckState,
 };
@@ -298,6 +301,21 @@ pub fn mount_photo_pick_screen(root_id: &str) -> Result<(), JsValue> {
         current_photo_pick_screen(&initial_state),
         initial_state,
         super::file_picker::photo_pick_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「バーコード・QR 読み取り」（Issue #559）をマウントする
+/// 検証専用エントリポイント。`super::barcode_scan::barcode_scan_effect` を effect として渡す。
+#[wasm_bindgen]
+pub fn mount_barcode_scan_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = BarcodeScanState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_barcode_scan_screen(&initial_state),
+        initial_state,
+        super::barcode_scan::barcode_scan_effect,
     )
 }
 
