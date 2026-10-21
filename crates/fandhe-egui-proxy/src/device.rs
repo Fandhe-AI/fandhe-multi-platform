@@ -411,9 +411,8 @@ pub mod apple_speech_recognition;
 pub mod apple_system_tray;
 /// Issue #535 macOS・#536 iOS: 端末内翻訳実装（`apple/fandhe_apple_translation.swift` を呼ぶ
 /// C ABI ラッパー）。`device/translation.rs` の macOS 経路と、iOS 経路（#536 で `ios_translation`
-/// 経由）から呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。iOS は #536 が使うまで未使用。
+/// 経由）から呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-#[cfg_attr(target_os = "ios", allow(dead_code))]
 pub mod apple_translation;
 /// Issue #1215・#1217: macOS / iOS 向けカスタム URL scheme 受信（`macos/fandhe_macos_url_scheme.m`
 /// の Apple Event ハンドラ、`ios/fandhe_ios_url_scheme.m` の delegate から呼ばれる C ABI
@@ -692,7 +691,7 @@ pub mod ios_safe_area_insets;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_wake_lock;
-/// Issue #535: iOS 向け端末内翻訳のスタブ（実体は #536）。`device/translation.rs` の iOS 経路から呼ばれる。
+/// Issue #536: iOS 向け端末内翻訳実装（macOS と共用の `AppleTextTranslator` を返す）。`device/translation.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_translation;
 /// Issue #530: iOS 向け Web 認証セッション実装のスタブ（#532 が埋める）。`device/web_auth_session.rs` の
