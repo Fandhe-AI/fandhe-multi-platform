@@ -17,11 +17,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_web_auth_session.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_web_auth_session.m + crates/fandhe-egui-proxy/src/device/web_auth_session.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-device/src/web_auth_session.rs、Issue #532"
     },
     "android": {
-      "status": "possible",
-      "api": "Custom Tabs（`androidx.browser` の `CustomTabsIntent`）+ 認可コードの受け取りに intent-filter",
-      "perm": "なし（intent-filter の追加のみ）",
-      "url": "",
-      "note": "未実装。URL 未確認（報告に Custom Tabs の公式 URL がなかった）。コールバック受信は url-scheme と同じ経路。AppAuth 等の第三者ライブラリは今回の範囲外"
+      "status": "done",
+      "api": "Custom Tabs（`androidx.browser` 1.8.0 の `CustomTabsIntent.launchUrl`）、開けなければ `ACTION_VIEW`。コールバックは既存の `fandhe` intent-filter と `singleTask` の `onNewIntent`。乱数は `SecureRandom`、SHA-256 は `MessageDigest`",
+      "perm": "なし（manifest 変更なし。既存の `fandhe` intent-filter を使う。`<queries>` 不要）",
+      "url": "https://developer.chrome.com/docs/android/custom-tabs",
+      "note": "アプリ内のデモ認可ページ（127.0.0.1）を Custom Tabs で開き、返ったコールバック URL を state・パス・code/error の形式まで検査して伏せ字で表示する。PKCE は S256 の値を作るだけでトークン交換はしない。結果は返却・キャンセル（コールバックなしでアプリへ戻った）・期限切れ（300 秒）の三値で、不一致の URL は失敗として扱う。`web-auth` の URL は url-scheme の受信箱へ流さない。ブラウザが無ければ `NoBrowser`。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・Activity 再生成時の旧要求の破棄。守らない範囲: Custom Tab が取り消し・期限切れ後も残ること・既定ブラウザの UI の差・複数プロセス・プロセス死後のコールバック・他アプリによる `fandhe` scheme の横取り（PKCE で緩和）・トークン交換",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#528）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_web_auth_session.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/WebAuthSessionHelper.java + crates/fandhe-egui-proxy/src/device/web_auth_session.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-device/src/web_auth_session.rs、Issue #534"
     },
     "macos": {
       "status": "done",
