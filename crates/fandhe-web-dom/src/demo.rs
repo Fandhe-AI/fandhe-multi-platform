@@ -160,6 +160,9 @@ use fandhe_core::screens::text_scale_preview::{
 use fandhe_core::screens::tilt_ball::{
     current_screen as current_tilt_ball_screen, SensorStatus, TiltBallState,
 };
+use fandhe_core::screens::translation::{
+    current_screen as current_translation_screen, TranslationState,
+};
 use fandhe_core::screens::tsv_import::{
     current_screen as current_tsv_import_screen, TsvImportState,
 };
@@ -986,6 +989,21 @@ pub fn mount_on_device_llm_screen(root_id: &str) -> Result<(), JsValue> {
         current_on_device_llm_screen(&initial_state),
         initial_state,
         super::on_device_llm::on_device_llm_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「端末内翻訳」（親 #115、Issue #539）をマウントする
+/// 検証専用エントリポイント。`super::translation::translation_effect` が Translator API を呼ぶ。
+#[wasm_bindgen]
+pub fn mount_translation_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = TranslationState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_translation_screen(&initial_state),
+        initial_state,
+        super::translation::translation_effect,
     )
 }
 

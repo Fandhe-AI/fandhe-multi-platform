@@ -329,6 +329,8 @@ pub mod picture_in_picture;
 pub mod print_page;
 /// 型サンプル「画面スリープの抑止」の Web 経路（Issue #1281）。[`haptics`] と同じ理由で gate を外す。
 pub mod screen_wake_lock;
+/// 型サンプル「端末内翻訳」の Web 経路（Issue #539）。[`haptics`] と同じ理由で gate を外す。
+pub mod translation;
 /// 型サンプル「カスタム URL scheme」の Web 経路（Issue #1219）。[`haptics`] と同じ理由で gate を外す。
 pub mod url_scheme;
 /// 型サンプル「USB・HID 機器」の Web 経路（Issue #508）。[`haptics`] と同じ理由で gate を外す。
