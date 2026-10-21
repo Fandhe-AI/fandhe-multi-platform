@@ -19,8 +19,9 @@
 //! # 期限（契約表 3）
 //!
 //! 期限は本ドライバだけが持つ。起点は要求を観測した時の `Instant`（単調時計）。毎フレーム、
-//! 処理中でセッションの世代が一致するとき `elapsed >= deadline` なら `Timeout` を確定して
-//! セッションを空にし、まだなら `request_repaint_after` で次の判定を予約する。確定後に
+//! 処理中で結果が未着のとき `elapsed >= deadline` なら `Timeout` を確定してスロットを空にし、
+//! まだなら `poll_and_finish` の再描画予約（`POLL_INTERVAL`）で次の判定に回る。要求の追跡は
+//! `request_slot::RequestSlot`（pull 型）。確定後に
 //! ワーカーが返す結果は画面側の世代・状態照合（`finish_translate`）で捨てられる。ワーカー自身も
 //! 期限超過を `Timeout` にし、期限後に届いた成功を成功として扱わない。
 
@@ -37,6 +38,7 @@ use fandhe_device::translation::{
 };
 use fandhe_device::DeviceError;
 
+use super::request_slot::{poll_and_finish, RequestSlot, POLL_INTERVAL};
 use crate::app::CompletionSender;
 
 const FAILED_MESSAGE: &str = "翻訳できませんでした";
@@ -61,23 +63,34 @@ fn platform() -> Arc<dyn TextTranslator> {
     }
 }
 
-/// ドライバの可変状態。テストが並列で干渉しないよう static から切り出して引数で渡す。
-/// 進行中の要求の `(世代, 受付時刻)`。
-#[derive(Default)]
+/// ドライバの可変状態。要求の追跡（二重発送防止・完了照合・再生成時の破棄）は
+/// [`RequestSlot`] に任せ、ここは翻訳固有の期限の起点だけを持つ。テストが並列で干渉しない
+/// よう static から切り出して引数で渡す（`poll_and_finish` が `'static` を要るためスロットは leak）。
 struct Session {
-    inflight: Mutex<Option<(u64, Instant)>>,
+    slot: &'static RequestSlot<Result<String, TranslateFailure>>,
+    /// 進行中の要求を観測した時刻（単調時計）。
+    started: Mutex<Option<Instant>>,
+}
+
+impl Default for Session {
+    fn default() -> Self {
+        Self {
+            slot: Box::leak(Box::new(RequestSlot::new())),
+            started: Mutex::new(None),
+        }
+    }
 }
 
 static SESSION: std::sync::OnceLock<Session> = std::sync::OnceLock::new();
 
-/// Activity 再生成時（`android_main` の再実行）に、ドライバの処理済み記録を破棄する。
-/// 画面状態は `default()`（世代 0）に戻るため、完了後も残る記録（世代 1）を残すと次の
-/// 「英語に訳す」が発送されず飲み込まれる。古いワーカーの結果は古いアプリのチャネルへ届くので
-/// 新しい画面には適用されない。走っている OS 呼び出しは止めず走り切らせる。
+/// Activity 再生成時（`android_main` の再実行）に、保留中の要求を破棄する。
+/// 画面状態は `default()`（世代 0）に戻るため、保留が残ると次の「英語に訳す」が発送されず
+/// 飲み込まれる。古いワーカーの結果は照合で捨てられる。走っている OS 呼び出しは止めず走り切らせる。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
-        *s.inflight.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        s.slot.reset();
+        *s.started.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }
 
@@ -116,7 +129,7 @@ fn run_worker(
     check_result(result.map_err(to_failure)?).map_err(to_failure)
 }
 
-/// 1 フレームぶんの処理。要求の発送と期限判定を行う。
+/// 1 フレームぶんの処理。要求の発送・期限判定・完了の画面反映を行う。
 fn drive(
     state: &TranslationState,
     sender: &CompletionSender<TranslationState>,
@@ -124,60 +137,57 @@ fn drive(
     session: &Session,
     deadline: Duration,
 ) {
-    // 要求の観測と記録は同じロックの内側で行い、二重発送を防ぐ。
-    let new_request = {
-        let mut g = session.inflight.lock().unwrap_or_else(|e| e.into_inner());
-        match take_request(state) {
-            Some((generation, target)) if g.map(|(gen, _)| gen) != Some(generation) => {
-                let started = Instant::now();
-                *g = Some((generation, started));
-                Some((generation, target, started))
-            }
-            _ => {
-                // 期限判定: 処理中でセッションの世代が一致するときだけ。
-                if let (Some((gen, started)), TranslatePhase::Running) = (*g, &state.phase) {
-                    if gen == state.generation {
-                        let elapsed = started.elapsed();
-                        if elapsed >= deadline {
-                            *g = None;
-                            let _ = sender.send(Box::new(move |s: &mut TranslationState| {
-                                finish_translate(s, gen, Err(TranslateFailure::Timeout));
-                            }));
-                        } else {
-                            sender.request_repaint_after(deadline - elapsed);
-                        }
-                    }
-                }
-                None
-            }
+    let slot = session.slot;
+    if let Some((_, target)) = take_request(state) {
+        // 保留ありは発送済み（`mark_running` の適用待ち）。二重に発送しない。
+        if slot.snapshot().is_some() {
+            return;
         }
-    };
-    let Some((generation, target, started)) = new_request else {
-        return;
-    };
-    let _ = sender.send(Box::new(mark_running));
-    sender.request_repaint_after(deadline);
+        let request_id = slot.begin();
+        let started = Instant::now();
+        *session.started.lock().unwrap_or_else(|e| e.into_inner()) = Some(started);
+        let _ = sender.send(Box::new(mark_running));
+        sender.request_repaint_after(POLL_INTERVAL);
 
-    let worker_sender = sender.clone();
-    let worker_imp = imp.clone();
-    let spawned = std::thread::Builder::new()
-        .name("translation".into())
-        .spawn(move || {
-            let result = run_worker(&*worker_imp, target, started, deadline);
-            let _ = worker_sender.send(Box::new(move |s: &mut TranslationState| {
-                finish_translate(s, generation, result);
-            }));
-        });
-    if spawned.is_err() {
-        let _ = sender.send(Box::new(move |s: &mut TranslationState| {
-            // `mark_running` の後に適用されるよう同じキューへ積む。
-            finish_translate(
-                s,
-                generation,
+        let worker_imp = imp.clone();
+        let spawned = std::thread::Builder::new()
+            .name("translation".into())
+            .spawn(move || {
+                let result = run_worker(&*worker_imp, target, started, deadline);
+                slot.deliver(request_id, result);
+            });
+        if spawned.is_err() {
+            slot.deliver(
+                request_id,
                 Err(TranslateFailure::Failed(FAILED_MESSAGE.to_string())),
             );
-        }));
+        }
+        return;
     }
+    if state.phase != TranslatePhase::Running {
+        return;
+    }
+    let generation = state.generation;
+    // 期限判定: 単調時計。確定後に届く結果は照合で捨てられる。
+    let started = *session.started.lock().unwrap_or_else(|e| e.into_inner());
+    if let (Some(started), Some((request_id, None))) = (started, slot.snapshot()) {
+        if started.elapsed() >= deadline {
+            slot.clear(request_id);
+            let _ = sender.send(Box::new(move |s: &mut TranslationState| {
+                finish_translate(s, generation, Err(TranslateFailure::Timeout));
+            }));
+            return;
+        }
+    }
+    poll_and_finish(
+        slot,
+        sender,
+        |_| {},
+        move |s: &mut TranslationState, result| {
+            finish_translate(s, generation, result);
+            true
+        },
+    );
 }
 
 /// `registry.rs` の `effect` 区画から `translation` 画面用に配線される effect ドライバ。
@@ -239,17 +249,46 @@ mod tests {
         fake_with(result, Duration::ZERO)
     }
 
-    /// 要求を立てて 1 フレーム回し、届いた完了を `n` 件適用した状態を返す。
-    fn run(imp: Arc<dyn TextTranslator>, n: usize) -> TranslationState {
+    /// フレームを回して届いた完了を適用する。`Running` を抜けるか 5 秒で打ち切る。
+    fn pump(
+        state: &mut TranslationState,
+        sender: &CompletionSender<TranslationState>,
+        rx: &Rx,
+        imp: &Arc<dyn TextTranslator>,
+        session: &Session,
+        deadline: Duration,
+    ) {
+        let end = Instant::now() + Duration::from_secs(5);
+        loop {
+            drive(state, sender, imp, session, deadline);
+            while let Ok(c) = rx.try_recv() {
+                c(state);
+            }
+            if !matches!(
+                state.phase,
+                TranslatePhase::Requested | TranslatePhase::Running
+            ) || Instant::now() > end
+            {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    /// 要求を立ててフレームを回し、完了まで適用した状態を返す。
+    fn run(imp: Arc<dyn TextTranslator>) -> TranslationState {
         let (sender, rx) = channel();
         let session = Session::default();
         let mut state = TranslationState::default();
         request_translate(&mut state, TargetLang::English);
-        drive(&state, &sender, &imp, &session, Duration::from_secs(30));
-        for _ in 0..n {
-            let c = rx.recv_timeout(Duration::from_secs(5)).expect("完了が届く");
-            c(&mut state);
-        }
+        pump(
+            &mut state,
+            &sender,
+            &rx,
+            &imp,
+            &session,
+            Duration::from_secs(30),
+        );
         state
     }
 
@@ -276,7 +315,7 @@ mod tests {
 
     #[test]
     fn success_shows_translation() {
-        let s = run(fake(|| Ok("Nice weather today.".into())), 2);
+        let s = run(fake(|| Ok("Nice weather today.".into())));
         assert_eq!(
             s.phase,
             TranslatePhase::Done {
@@ -292,16 +331,14 @@ mod tests {
         let (sender, rx) = channel();
         let mut state = TranslationState::default();
         request_translate(&mut state, TargetLang::Unsupported);
-        drive(
-            &state,
+        pump(
+            &mut state,
             &sender,
+            &rx,
             &imp,
             &Session::default(),
             Duration::from_secs(30),
         );
-        for _ in 0..2 {
-            rx.recv_timeout(Duration::from_secs(5)).unwrap()(&mut state);
-        }
         assert_eq!(*f.seen.lock().unwrap(), vec!["zz".to_string()]);
     }
 
@@ -343,7 +380,7 @@ mod tests {
             ),
         ];
         for (f, expect) in cases {
-            let s = run(fake(f), 2);
+            let s = run(fake(f));
             assert_eq!(failed(&s), &expect);
         }
     }
@@ -354,14 +391,14 @@ mod tests {
             (|| Ok(String::new())) as fn() -> Result<String, DeviceError>,
             || Ok("  \n".into()),
         ] {
-            let s = run(fake(f), 2);
+            let s = run(fake(f));
             assert_eq!(failed(&s), &TranslateFailure::Empty);
         }
     }
 
     #[test]
     fn internal_ids_never_reach_screen_text() {
-        let s = run(fake(|| Err(DeviceError::Internal("secret os detail"))), 2);
+        let s = run(fake(|| Err(DeviceError::Internal("secret os detail"))));
         let text = fandhe_core::screens::translation::error_text(&s);
         assert!(
             !text.contains("secret") && !text.contains("translation "),
@@ -375,16 +412,14 @@ mod tests {
         let (sender, rx) = channel();
         let mut state = TranslationState::default();
         request_translate(&mut state, TargetLang::English);
-        drive(
-            &state,
+        pump(
+            &mut state,
             &sender,
+            &rx,
             &imp,
             &Session::default(),
             Duration::from_millis(20),
         );
-        for _ in 0..2 {
-            rx.recv_timeout(Duration::from_secs(5)).unwrap()(&mut state);
-        }
         assert_eq!(failed(&state), &TranslateFailure::Timeout);
     }
 
@@ -397,15 +432,12 @@ mod tests {
         let mut state = TranslationState::default();
         request_translate(&mut state, TargetLang::English);
         let deadline = Duration::from_millis(30);
-        drive(&state, &sender, &imp, &session, deadline);
-        // mark_running を適用
-        rx.recv_timeout(Duration::from_secs(5)).unwrap()(&mut state);
-        std::thread::sleep(Duration::from_millis(60));
-        drive(&state, &sender, &imp, &session, deadline);
-        rx.recv_timeout(Duration::from_secs(5)).unwrap()(&mut state);
+        pump(&mut state, &sender, &rx, &imp, &session, deadline);
         assert_eq!(failed(&state), &TranslateFailure::Timeout);
-        // 遅れて届いたワーカーの結果は無視される
-        rx.recv_timeout(Duration::from_secs(5)).unwrap()(&mut state);
+        // 遅れて届いたワーカーの結果は無視される（スロットは空・追加の完了なし）
+        std::thread::sleep(Duration::from_millis(350));
+        drive(&state, &sender, &imp, &session, deadline);
+        assert!(rx.try_recv().is_err());
         assert_eq!(failed(&state), &TranslateFailure::Timeout);
     }
 
@@ -427,13 +459,12 @@ mod tests {
         request_translate(&mut state, TargetLang::English);
         drive(&state, &sender, &imp, &session, Duration::from_secs(30));
         drive(&state, &sender, &imp, &session, Duration::from_secs(30));
-        std::thread::sleep(Duration::from_millis(100));
-        // mark_running 1 + finish 1
+        // mark_running 1 件のみ（2 回目は発送されない）
         let mut n = 0;
         while rx.try_recv().is_ok() {
             n += 1;
         }
-        assert_eq!(n, 2);
+        assert_eq!(n, 1);
     }
 
     #[test]
@@ -441,19 +472,19 @@ mod tests {
         let (sender, rx) = channel();
         let imp = fake(|| Ok("Hi".into()));
         let session = Session::default();
-        *session.inflight.lock().unwrap() = Some((1, Instant::now()));
+        session.slot.begin();
         let mut state = TranslationState::default();
         request_translate(&mut state, TargetLang::English);
         drive(&state, &sender, &imp, &session, Duration::from_secs(30));
         assert!(rx.try_recv().is_err(), "記録が残ると飲み込まれる");
-        *session.inflight.lock().unwrap() = None;
+        session.slot.reset();
         drive(&state, &sender, &imp, &session, Duration::from_secs(30));
         assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok());
     }
 
     #[test]
     fn unsupported_impl_is_unsupported() {
-        let s = run(Arc::new(UnsupportedTextTranslator), 2);
+        let s = run(Arc::new(UnsupportedTextTranslator));
         assert_eq!(failed(&s), &TranslateFailure::Unsupported);
     }
 
