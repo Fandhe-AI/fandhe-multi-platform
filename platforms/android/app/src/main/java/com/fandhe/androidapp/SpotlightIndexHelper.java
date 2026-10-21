@@ -170,16 +170,23 @@ final class SpotlightIndexHelper {
         if (mgr == null) return UNSUPPORTED;
 
         // 前の要求（期限切れで戻ったが OS 書き込みが未終端のもの）を追い越さない。
+        // 前要求の取得と自要求の登録を同じロック区間で行い、要求を 1 本の鎖にする。
+        CompletableFuture<Integer> f = new CompletableFuture<>();
+        AtomicBoolean cancelled = new AtomicBoolean(false);
         CompletableFuture<Integer> prev;
         synchronized (LOCK) {
             prev = inFlight;
+            inFlight = f;
         }
         if (prev != null && !prev.isDone()) {
             try {
                 prev.get(remainingMs, TimeUnit.MILLISECONDS);
             } catch (TimeoutException e) {
+                // 自分は何も発送していない。終端は前要求の終端の後にして、後続に追い越させない。
+                prev.whenComplete((x, t) -> f.complete(TIMEOUT));
                 return TIMEOUT;
             } catch (InterruptedException e) {
+                prev.whenComplete((x, t) -> f.complete(FAILED));
                 Thread.currentThread().interrupt();
                 return FAILED;
             } catch (Exception ignored) {
@@ -187,13 +194,11 @@ final class SpotlightIndexHelper {
             }
         }
         long left = deadline - SystemClock.elapsedRealtime();
-        if (left <= 0) return TIMEOUT;
-
-        CompletableFuture<Integer> f = new CompletableFuture<>();
-        AtomicBoolean cancelled = new AtomicBoolean(false);
-        synchronized (LOCK) {
-            inFlight = f;
+        if (left <= 0) {
+            f.complete(TIMEOUT);
+            return TIMEOUT;
         }
+
         try {
             mgr.createSearchSession(new AppSearchManager.SearchContext.Builder(domain).build(),
                     EXECUTOR, r -> {
