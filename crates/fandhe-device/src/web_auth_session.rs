@@ -20,6 +20,8 @@
 //!   （成功に畳まない）、ブラウザなしは `NoBrowser`、非対応 OS は `Unsupported`
 //! - **期限**: [`SESSION_TIMEOUT`] を呼び出し開始から単調時計（`Instant`）で測る。期限切れで戻る
 //!   前に `cancel` とサーバー停止を済ませ、期限後に届いた完了は捨てる
+//! - **ループバックの検査**: state 照合を通らない `/callback` はセッションを確定せず 404 を返し、
+//!   待ち受けを続ける（別ページからの要求で認可を妨害されない）
 //! - **同時 1 件**: 要求は 1 件ずつ処理する。二重の開始は無視する
 //! - **ログに出さない**: URL・state・code・verifier を `Debug` とログに出さない
 //!
@@ -349,8 +351,10 @@ mod server {
     const MAX_REQUEST: usize = 8 * 1024;
     const READ_DEADLINE: Duration = Duration::from_secs(2);
 
-    /// ループバックの完了通知。生の URL を受ける。
-    pub type LoopbackTx = Box<dyn Fn(String) + Send + 'static>;
+    /// ループバックの完了通知。生の URL を受け、セッションを確定したら `true` を返す。
+    /// `false`（state 照合を通らない等）なら 404 を返して待ち続ける（別ページから
+    /// `/callback` を叩かれて認可を妨害されないため）。
+    pub type LoopbackTx = Box<dyn Fn(String) -> bool + Send + 'static>;
 
     /// アプリ内のデモ認可ページ（127.0.0.1 のみ待ち受け）。
     ///
@@ -546,15 +550,12 @@ X-Frame-Options: DENY\r\nConnection: close\r\n\r\n{body}",
                 }
             }
             "/callback" => match &ctx.loopback_tx {
-                Some(tx) => {
-                    tx(format!("http://127.0.0.1:{}{target}", ctx.port));
-                    respond(
-                        &mut s,
-                        "200 OK",
-                        "<!doctype html><meta charset=\"utf-8\"><title>完了</title><p>アプリに戻ってください。</p>",
-                    );
-                }
-                None => respond(&mut s, "404 Not Found", ""),
+                Some(tx) if tx(format!("http://127.0.0.1:{}{target}", ctx.port)) => respond(
+                    &mut s,
+                    "200 OK",
+                    "<!doctype html><meta charset=\"utf-8\"><title>完了</title><p>アプリに戻ってください。</p>",
+                ),
+                _ => respond(&mut s, "404 Not Found", ""),
             },
             _ => respond(&mut s, "404 Not Found", ""),
         }
@@ -801,6 +802,7 @@ mod tests {
                 None,
                 Some(Box::new(move |u| {
                     let _ = tx.send(u);
+                    true
                 })),
             )
             .unwrap();
@@ -818,6 +820,25 @@ mod tests {
             );
             s.stop();
             assert!(TcpStream::connect(("127.0.0.1", p)).is_err());
+        }
+
+        #[test]
+        fn loopback_rejected_callback_is_404_and_keeps_waiting() {
+            let n = std::sync::atomic::AtomicUsize::new(0);
+            let s = DemoAuthServer::start(
+                OK_STATE,
+                "chal",
+                "code",
+                None,
+                Some(Box::new(move |_| {
+                    n.fetch_add(1, std::sync::atomic::Ordering::SeqCst) >= 1
+                })),
+            )
+            .unwrap();
+            let p = s.port();
+            let host = format!("127.0.0.1:{p}");
+            assert!(get(p, "/callback?x", &host).starts_with("HTTP/1.1 404"));
+            assert!(get(p, "/callback?x", &host).starts_with("HTTP/1.1 200"));
         }
 
         #[test]
