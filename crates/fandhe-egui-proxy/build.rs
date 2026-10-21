@@ -182,6 +182,9 @@
 //! - `macos/fandhe_macos_app_badge.m`（Issue #1360、`NSDockTile.badgeLabel` によるバッジ設定）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/macos_app_badge.rs`
 //!   から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_in_app_review.m`（Issue #563、`SKStoreReviewController requestReview` による
+//!   レビュー依頼）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_in_app_review.rs` から呼ばれる契約）。StoreKit を追加でリンクする。
 //! - `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384、`NSWorkspace openURL:` による
 //!   `mailto:` / `sms:` の作成画面表示）は **macOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルする（`src/device/macos_compose_mail_sms.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -1284,6 +1287,17 @@ fn compile_macos_app_badge() {
         .compile("fandhe_macos_app_badge");
 }
 
+/// `macos/fandhe_macos_in_app_review.m` を `cc` でコンパイルする（Issue #563）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_in_app_review.rs` が使う）。StoreKit を追加でリンクする。
+fn compile_macos_in_app_review() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_in_app_review.m");
+    println!("cargo:rustc-link-lib=framework=StoreKit");
+    cc::Build::new()
+        .file("macos/fandhe_macos_in_app_review.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_in_app_review");
+}
+
 /// `macos/fandhe_macos_local_fonts.m` を `cc` でコンパイルする（Issue #1376）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_local_fonts.rs` が使う）。AppKit は `compile_apple_share(true)` が
 /// 既にリンクしているため追加リンクは無い。
@@ -1831,6 +1845,8 @@ fn build_macos() {
     compile_macos_safe_area_insets();
     // `macos/fandhe_macos_app_badge.m`（Issue #1360）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_app_badge();
+    // `macos/fandhe_macos_in_app_review.m`（Issue #563）も macOS 専用。StoreKit をリンクする。
+    compile_macos_in_app_review();
     // `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_compose_mail_sms();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。AppKit は既存のリンクを使う。

@@ -517,6 +517,9 @@ pub mod http_fetch;
 /// （macOS 実装、Windows / iOS / Android は #1251〜#1253 が埋めるスタブ、他 OS は
 /// `UnsupportedTextRecognizer` 固定。Web は対象外）。
 pub mod image_recognition;
+/// Phase 11 の拡充ループ（Issue #563）: アプリ内レビュー依頼の effect ドライバ（macOS 実装、iOS は b-ios が埋める
+/// スタブ、Android・Windows は保留で `UnsupportedInAppReview` 固定、Web は対象外）。
+pub mod in_app_review;
 #[cfg(target_os = "ios")]
 pub mod ios;
 /// Issue #1308: iOS 向けアクセシビリティ設定実装（#1309。`AppleAccessibilityPrefs` を返す）。
@@ -602,6 +605,9 @@ pub mod ios_fullscreen_immersive;
 /// Issue #1252: iOS 向け文字認識（PHPicker + Vision）の effect ドライバ。
 #[cfg(target_os = "ios")]
 pub mod ios_image_recognition;
+/// Issue #563: iOS 向けアプリ内レビュー依頼のスタブ（b-ios が埋める）。`device/in_app_review.rs` の ios 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_in_app_review;
 /// Issue #488: iOS 向け LAN のサービス探索（`apple_lan_discovery` へ委譲する）。
 /// `device/lan_discovery.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -761,6 +767,11 @@ pub mod macos_device_info;
 /// C ABI ラッパー）。`device/file_watch.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_file_watch;
+/// Issue #563: macOS 向けアプリ内レビュー依頼実装（`macos/fandhe_macos_in_app_review.m` を呼ぶ C ABI ラッパー）。
+/// `device/in_app_review.rs` の macos 経路から呼ばれる。結果コードの写像をホストでテストできるよう cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_in_app_review;
 /// Issue #1376: macOS 向け OS 搭載フォント一覧実装（`macos/fandhe_macos_local_fonts.m` を呼ぶ C ABI
 /// ラッパー）。`device/local_fonts.rs` の macOS 経路から呼ばれる。バッファ解釈の純関数をホストで
 /// テストできるよう cfg は `any(macos, test)`。
