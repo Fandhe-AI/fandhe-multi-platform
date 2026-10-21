@@ -3,8 +3,9 @@
 //
 // `crates/fandhe-egui-proxy/src/device/apple_spotlight_index.rs` から C ABI 経由で呼ばれる。
 // `build.rs` が feature `device` 有効時に `cc` コンパイルし CoreSpotlight をリンクする。
-// 登録・削除（CoreSpotlight）は iOS と共用する。受信（`TARGET_OS_OSX` 部）は macOS 専用で、
-// iOS の受信は scene 側（`ios/fandhe_ios_scene.m`、#561）が担う。
+// 登録・削除（CoreSpotlight）は iOS と共用する。受信は OS ごとに別部で、macOS は `NSApp.delegate`
+// への差し込み、iOS（#561）は scene（`ios/fandhe_ios_scene.m`）が投げる通知
+// `FandheSceneContinueUserActivityNotification`（object = NSUserActivity）の observer。
 //
 // 契約（登録・削除。任意スレッド＝ワーカーから呼ぶ。文字列は UTF-8 のポインタと長さで、呼び出し中だけ有効）:
 //   int32_t fandhe_apple_spotlight_index(id, id_len, title, title_len, text, text_len,
@@ -15,8 +16,10 @@
 //   時間切れ後に OS の完了が遅れて届いても、semaphore を signal するだけで無害（block が retain する）。
 //   OS のエラー文は返さない（ログにも出さない）。
 //
-// 契約（受信。macOS のみ。main thread から呼ぶ冪等な関数）:
+// 契約（受信。main thread から呼ぶ冪等な関数。iOS は `UIApplicationMain` より前に呼ぶ）:
 //   void fandhe_apple_spotlight_register(prefix, prefix_len);
+//   iOS: 上記の通知の observer を 1 回だけ足す。`CSSearchableItemActionType` 以外は無視する。
+//   以下は macOS:
 //   `NSApp.delegate` のクラスへ `application:continueUserActivity:restorationHandler:` を足す。
 //   winit は `run_native` の内側で delegate を設定するため、delegate が無ければ
 //   WillFinishLaunching（delegate 設定後・継続アクティビティの配送前）で足す。既にメソッドが
@@ -201,6 +204,58 @@ void fandhe_apple_spotlight_register(const uint8_t *prefix, size_t prefix_len) {
                                                       fandhe_try_install();
                                                     }];
     }
+  }
+}
+
+#elif TARGET_OS_IOS
+
+extern void fandhe_rust_url_scheme_received(const uint8_t *ptr, size_t len);
+
+static NSString *g_prefix = nil;
+static BOOL g_observing = NO;
+
+// scene が投げた activity のうち検索結果からの継続だけを URL にして Rust へ渡す。
+static void fandhe_handle_activity(id obj) {
+  @autoreleasepool {
+    if (![obj isKindOfClass:[NSUserActivity class]]) {
+      return;
+    }
+    NSUserActivity *activity = (NSUserActivity *)obj;
+    if (![activity.activityType isEqualToString:CSSearchableItemActionType]) {
+      return;
+    }
+    id ident = activity.userInfo[CSSearchableItemActivityIdentifier];
+    if (![ident isKindOfClass:[NSString class]] || g_prefix == nil) {
+      return;
+    }
+    NSData *url = [[g_prefix stringByAppendingString:(NSString *)ident]
+        dataUsingEncoding:NSUTF8StringEncoding];
+    if (url == nil) {
+      return;
+    }
+    fandhe_rust_url_scheme_received((const uint8_t *)url.bytes, (size_t)url.length);
+  }
+}
+
+void fandhe_apple_spotlight_register(const uint8_t *prefix, size_t prefix_len) {
+  @autoreleasepool {
+    NSString *p = fandhe_str(prefix, prefix_len);
+    if (p == nil || ![NSThread isMainThread]) {
+      return;
+    }
+    g_prefix = p;
+    if (g_observing) {
+      return;
+    }
+    g_observing = YES;
+    // scene は main thread で通知を投げる。queue:nil で投げた thread のまま同期に処理する。
+    [[NSNotificationCenter defaultCenter]
+        addObserverForName:@"FandheSceneContinueUserActivityNotification"
+                    object:nil
+                     queue:nil
+                usingBlock:^(NSNotification *n) {
+                  fandhe_handle_activity(n.object);
+                }];
   }
 }
 
