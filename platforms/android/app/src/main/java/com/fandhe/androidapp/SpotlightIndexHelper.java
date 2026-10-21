@@ -73,26 +73,31 @@ final class SpotlightIndexHelper {
                     .build();
             session.setSchema(new SetSchemaRequest.Builder().addSchemas(schema).build(),
                     EXECUTOR, EXECUTOR, schemaResult -> {
-                        if (!schemaResult.isSuccess()) {
-                            finish(session, f, FAILED);
-                            return;
-                        }
-                        GenericDocument doc = new GenericDocument.Builder<>(domain, id, TYPE)
-                                .setPropertyString("title", title)
-                                .setPropertyString("text", text)
-                                .build();
-                        session.put(new PutDocumentsRequest.Builder().addGenericDocuments(doc).build(),
-                                EXECUTOR, new BatchResultCallback<String, Void>() {
-                                    @Override
-                                    public void onResult(@NonNull AppSearchBatchResult<String, Void> r) {
-                                        finish(session, f, r.isSuccess() ? OK : FAILED);
-                                    }
+                        // 非同期コールバック内の例外も失敗で確定し session を閉じる（run の try は届かない）。
+                        try {
+                            if (!schemaResult.isSuccess()) {
+                                finish(session, f, FAILED);
+                                return;
+                            }
+                            GenericDocument doc = new GenericDocument.Builder<>(domain, id, TYPE)
+                                    .setPropertyString("title", title)
+                                    .setPropertyString("text", text)
+                                    .build();
+                            session.put(new PutDocumentsRequest.Builder().addGenericDocuments(doc).build(),
+                                    EXECUTOR, new BatchResultCallback<String, Void>() {
+                                        @Override
+                                        public void onResult(@NonNull AppSearchBatchResult<String, Void> r) {
+                                            finish(session, f, r.isSuccess() ? OK : FAILED);
+                                        }
 
-                                    @Override
-                                    public void onSystemError(@NonNull Throwable t) {
-                                        finish(session, f, FAILED);
-                                    }
-                                });
+                                        @Override
+                                        public void onSystemError(@NonNull Throwable t) {
+                                            finish(session, f, FAILED);
+                                        }
+                                    });
+                        } catch (RuntimeException e) {
+                            finish(session, f, FAILED);
+                        }
                     });
         });
     }
@@ -107,7 +112,12 @@ final class SpotlightIndexHelper {
                     .build();
             session.remove("", spec, EXECUTOR, r -> {
                 // 消すものが無い（NOT_FOUND）だけは成功。それ以外の失敗は成功に畳まない。
-                boolean ok = r.isSuccess() || r.getResultCode() == AppSearchResult.RESULT_NOT_FOUND;
+                boolean ok;
+                try {
+                    ok = r.isSuccess() || r.getResultCode() == AppSearchResult.RESULT_NOT_FOUND;
+                } catch (RuntimeException e) {
+                    ok = false;
+                }
                 finish(session, f, ok ? OK : FAILED);
             });
         });
