@@ -21,11 +21,14 @@
       "note": "未実装。ML Kit のため image-recognition / ml-inference / nlp と同じ配布形態（unbundled の GMS 依存可否は要確認）"
     },
     "macos": {
-      "status": "possible",
-      "api": "Translation フレームワーク（macOS 14.4+）",
-      "perm": "なし（要確認）",
+      "status": "done",
+      "api": "Translation フレームワーク（macOS 26 以上。`LanguageAvailability.status(from:to:)` と `TranslationSession(installedSource:target:)`。SwiftUI はホストしない。Swift 専用のため Swift 薄層と `@_cdecl` の C ABI で呼ぶ）",
+      "perm": "不要（entitlement・Info.plist の追加なし）。翻訳言語（ja・en）をシステム設定で入れておく必要がある",
       "url": "https://developer.apple.com/documentation/translation/translationsession",
-      "note": "未実装。iOS 17.4+ と同じフレームワーク"
+      "note": "固定の日本語文を ja → en に 1 回訳す（元言語は必須で自動判定しない）。macOS 26 未満は Unsupported。言語パックが未導入・取得中なら失敗として出し、ダウンロードは始めない。期限は 30 秒（Rust のドライバだけが持つ）。守る範囲は 1 プロセス内の順序・嘘の成功の禁止・資源の解放で、期限後も OS 側の翻訳が走り切ることは守らない。Mac の目視は #529 で行う",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#529）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_translation.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_translation.swift + crates/fandhe-egui-proxy/src/device/translation.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-device/src/translation.rs、Issue #535"
     },
     "windows": {
       "status": "no",

@@ -79,6 +79,10 @@
 //! - `apple/fandhe_apple_on_device_llm.swift`（Issue #345、FoundationModels による端末内 LLM）は
 //!   **macOS・iOS 両分岐**（iOS は Issue #346）で feature `device` 有効時に swiftc で静的ライブラリ化し、
 //!   FoundationModels を弱リンクする（`src/device/apple_on_device_llm.rs` から呼ばれる契約）。
+//! - `apple/fandhe_apple_translation.swift`（Issue #535、Translation による端末内翻訳）は
+//!   **macOS・iOS 両分岐**（iOS の実体は #536）で feature `device` 有効時に swiftc で静的ライブラリ化し、
+//!   Translation を弱リンクする（`src/device/apple_translation.rs` から呼ばれる契約）。
+//!   swiftc 呼び出しは `compile_apple_swift` を on-device-llm と共用する。
 //! - `apple/fandhe_apple_map_view.m`（Issue #273、`MKMapSnapshotter` による地図の静止画 1 枚の取得。
 //!   iOS 分岐も同じ実装）は `src/device/apple_map_view.rs` から呼ばれる契約。MapKit をリンクする。
 //! - `apple/fandhe_apple_photo_library.m`（Issue #1254、`PHPhotoLibrary` による画像 1 枚の保存）は
@@ -476,6 +480,8 @@ fn main() {
     compile_apple_pdf_viewer();
     // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS + #346 iOS）も共用する。
     compile_apple_on_device_llm(true);
+    // `apple/fandhe_apple_translation.swift`（Issue #535 macOS + #536 iOS）も共用する。
+    compile_apple_translation(true);
 
     // `ios/fandhe_ios_background_task.m`（Issue #1045）は iOS 分岐のみから呼ぶ
     // （`build_macos` からは呼ばない、上記 doc 参照）。
@@ -833,29 +839,79 @@ fn compile_apple_ml_inference() {
     println!("cargo:rustc-link-lib=framework=Foundation");
 }
 
-/// 端末内 LLM の Swift 薄層 `apple/fandhe_apple_on_device_llm.swift` を `swiftc` で静的ライブラリ化し、
-/// FoundationModels を弱リンクする（Issue #345 macOS、Issue #346 iOS）。`LanguageModelSession` は
-/// Swift 専用 API で ObjC から呼べないため `cc` ではなく swiftc を使う。FoundationModels は macOS 26 /
+/// Swift 薄層 1 本ぶんのビルド指定（`compile_apple_swift` への入力）。
+struct SwiftLib {
+    /// `apple/` 配下の Swift ソース（`crates/fandhe-egui-proxy` からの相対パス）。
+    src: &'static str,
+    /// 静的ライブラリ名（`lib` 接頭辞と `.a` を除く）。
+    lib: &'static str,
+    /// Swift のモジュール名。
+    module: &'static str,
+    /// 弱リンクする framework 名（強リンクの autolink は抑止する）。
+    framework: &'static str,
+    /// 本番・配布ビルドでスキップを禁じる環境変数名。
+    require_env: &'static str,
+    /// panic・警告の接頭辞。
+    tag: &'static str,
+}
+
+/// 端末内 LLM の Swift 薄層 `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS、Issue #346 iOS）。
+/// FoundationModels を弱リンクする。macOS 分岐（`false`）と iOS 分岐（`true`）の両方から呼ぶ。
+fn compile_apple_on_device_llm(ios: bool) {
+    compile_apple_swift(
+        &SwiftLib {
+            src: "apple/fandhe_apple_on_device_llm.swift",
+            lib: "fandhe_apple_on_device_llm",
+            module: "FandheOnDeviceLlmBridge",
+            framework: "FoundationModels",
+            require_env: "FANDHE_REQUIRE_ON_DEVICE_LLM",
+            tag: "on_device_llm",
+        },
+        ios,
+    );
+}
+
+/// 端末内翻訳の Swift 薄層 `apple/fandhe_apple_translation.swift`（Issue #535 macOS、iOS は #536）。
+/// Translation を弱リンクする。macOS 分岐（`false`）と iOS 分岐（`true`）の両方から呼ぶ。
+fn compile_apple_translation(ios: bool) {
+    compile_apple_swift(
+        &SwiftLib {
+            src: "apple/fandhe_apple_translation.swift",
+            lib: "fandhe_apple_translation",
+            module: "FandheTranslationBridge",
+            framework: "Translation",
+            require_env: "FANDHE_REQUIRE_TRANSLATION",
+            tag: "translation",
+        },
+        ios,
+    );
+}
+
+/// Swift 薄層を `swiftc` で静的ライブラリ化し、framework を弱リンクする共通部分。`LanguageModelSession`
+/// 等は Swift 専用 API で ObjC から呼べないため `cc` ではなく swiftc を使う。framework は macOS 26 /
 /// iOS 26 以降のため、実行体の最低 OS（macOS 11.0）より新しく**弱リンク**にする
 /// （`rustc-link-arg-bins` ではなく `rustc-link-arg`: cdylib・テスト実行体にも効かせるため）。
-/// `ios` は iOS の triple 表を使う指定。macOS 分岐（`false`）と iOS 分岐（`true`）の両方から呼ぶ。
+/// `ios` は iOS の triple 表を使う指定。
 /// Apple ツール（`xcrun`）が無いホストでは警告を出してスキップする（リンクは失敗する）。
-/// `FANDHE_REQUIRE_ON_DEVICE_LLM=1`（本番・配布ビルド）ではスキップせず panic する。swiftc 自体の失敗は常に panic。
-fn compile_apple_on_device_llm(ios: bool) {
+/// `spec.require_env`=1（本番・配布ビルド）ではスキップせず panic する。swiftc 自体の失敗は常に panic。
+fn compile_apple_swift(spec: &SwiftLib, ios: bool) {
     use std::process::Command;
 
-    println!("cargo:rerun-if-env-changed=FANDHE_REQUIRE_ON_DEVICE_LLM");
-    println!("cargo:rerun-if-changed=apple/fandhe_apple_on_device_llm.swift");
+    let tag = spec.tag;
+    let framework = spec.framework;
+    println!("cargo:rerun-if-env-changed={}", spec.require_env);
+    println!("cargo:rerun-if-changed={}", spec.src);
     let have_xcrun = Command::new("xcrun")
         .arg("--version")
         .output()
         .is_ok_and(|o| o.status.success());
     if !have_xcrun {
         assert!(
-            std::env::var("FANDHE_REQUIRE_ON_DEVICE_LLM").as_deref() != Ok("1"),
-            "on_device_llm: xcrun が無い（FANDHE_REQUIRE_ON_DEVICE_LLM=1 のためスキップ不可）"
+            std::env::var(spec.require_env).as_deref() != Ok("1"),
+            "{tag}: xcrun が無い（{}=1 のためスキップ不可）",
+            spec.require_env
         );
-        println!("cargo:warning=on_device_llm: xcrun が無いため Swift 薄層の生成をスキップ（型検査専用。リンクは失敗する）");
+        println!("cargo:warning={tag}: xcrun が無いため Swift 薄層の生成をスキップ（型検査専用。リンクは失敗する）");
         return;
     }
 
@@ -874,7 +930,7 @@ fn compile_apple_on_device_llm(ios: bool) {
             "x86_64-apple-ios17.0-simulator",
             "iphonesimulator",
         ),
-        (_, other) => panic!("on_device_llm: 未対応のターゲット: {other}"),
+        (_, other) => panic!("{tag}: 未対応のターゲット: {other}"),
     };
 
     let xcrun = |args: &[&str]| -> String {
@@ -889,7 +945,7 @@ fn compile_apple_on_device_llm(ios: bool) {
     let swiftc = xcrun(&["--sdk", sdk, "--find", "swiftc"]);
 
     let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR");
-    let lib = format!("{out_dir}/libfandhe_apple_on_device_llm.a");
+    let lib = format!("{out_dir}/lib{}.a", spec.lib);
     let out = Command::new("xcrun")
         .args([
             "--sdk",
@@ -902,39 +958,39 @@ fn compile_apple_on_device_llm(ios: bool) {
         ])
         .args([
             "-module-name",
-            "FandheOnDeviceLlmBridge",
+            spec.module,
             "-target",
             triple,
             "-sdk",
             &sdk_path,
         ])
-        // FoundationModels を強リンクとして autolink させない（macOS 11 等の旧 OS で dyld が
+        // framework を強リンクとして autolink させない（macOS 11 等の旧 OS で dyld が
         // 要求して起動不能になるのを防ぐ。リンク側は下で -weak_framework を明示する）。
         .args([
             "-Xfrontend",
             "-disable-autolink-framework",
             "-Xfrontend",
-            "FoundationModels",
+            framework,
         ])
         .args(["-o", &lib])
-        .arg("apple/fandhe_apple_on_device_llm.swift")
+        .arg(spec.src)
         .output()
         .expect("swiftc を実行できない");
     assert!(
         out.status.success(),
-        "on_device_llm: swiftc が失敗した:\n{}",
+        "{tag}: swiftc が失敗した:\n{}",
         String::from_utf8_lossy(&out.stderr)
     );
 
     println!("cargo:rustc-link-search=native={out_dir}");
-    println!("cargo:rustc-link-lib=static=fandhe_apple_on_device_llm");
-    // SDK に FoundationModels がある場合だけ弱リンクする。無い SDK（Xcode 16 等）では Swift 側の
-    // `canImport(FoundationModels)` が不成立で Unsupported 経路になり、リンクすると framework not found になる。
+    println!("cargo:rustc-link-lib=static={}", spec.lib);
+    // SDK に framework がある場合だけ弱リンクする。無い SDK（Xcode 16 等）では Swift 側の
+    // `canImport` が不成立で Unsupported 経路になり、リンクすると framework not found になる。
     if std::path::Path::new(&sdk_path)
-        .join("System/Library/Frameworks/FoundationModels.framework")
+        .join(format!("System/Library/Frameworks/{framework}.framework"))
         .exists()
     {
-        println!("cargo:rustc-link-arg=-Wl,-weak_framework,FoundationModels");
+        println!("cargo:rustc-link-arg=-Wl,-weak_framework,{framework}");
     }
     // Swift ランタイム（OS 同梱）の検索パスと実行時パス。
     println!("cargo:rustc-link-search=native={sdk_path}/usr/lib/swift");
@@ -1700,6 +1756,7 @@ fn build_macos() {
     compile_apple_ml_inference();
     // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS。iOS は Issue #346 で `build_ios` からも呼ぶ）。
     compile_apple_on_device_llm(false);
+    compile_apple_translation(false);
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
     // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。

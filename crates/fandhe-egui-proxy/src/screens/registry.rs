@@ -306,6 +306,10 @@ generated_screens! {
     crate::device::on_device_llm::on_device_llm_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "translation" => fandhe_core::screens::translation::current_screen,
+    crate::device::translation::translation_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "url_scheme_show" => fandhe_core::screens::url_scheme_show::current_screen,
     crate::device::url_scheme::url_scheme_show_effect,
     effect
