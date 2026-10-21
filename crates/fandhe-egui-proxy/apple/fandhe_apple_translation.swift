@@ -1,4 +1,4 @@
-// 端末内翻訳（Translation フレームワーク）の Swift 薄層（Issue #535 macOS、iOS は #536 が差し替える）。
+// 端末内翻訳（Translation フレームワーク）の Swift 薄層（Issue #535 macOS・#536 iOS）。
 //
 // `TranslationSession` は Swift 専用 API で ObjC から呼べないため、`build.rs` の
 // `compile_apple_translation` が swiftc で静的ライブラリ化し、Rust の

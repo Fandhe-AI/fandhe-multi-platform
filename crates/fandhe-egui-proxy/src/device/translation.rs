@@ -11,7 +11,7 @@
 //! # OS 別の分担（dispatch は #535 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
 //! - macOS: [`super::apple_translation::AppleTextTranslator`]（#535）
-//! - iOS: `ios_translation`（#536。macOS と共用の `AppleTextTranslator` へ差し替える）
+//! - iOS: `ios_translation`（#536。macOS と共用の `AppleTextTranslator` を返す）
 //! - Android: `android_translation`（#537。`android.view.translation`）
 //! - Web: `fandhe-web-dom`（#539。Translator API）
 //! - Windows・Linux: `UnsupportedTextTranslator` 固定（ダミーの成功実装へは倒さない）
