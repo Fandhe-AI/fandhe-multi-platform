@@ -25,11 +25,14 @@
       "detail": "できない（OS 標準のバーコード検出 API が無く、ML Kit・Google code scanner は GMS 依存。同梱 OSS は OS 機能ではない）"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "Vision `VNDetectBarcodesRequest`（写真選択で選んだ画像から検出）",
-      "perm": "不要（画像入力）",
+      "perm": "不要（Info.plist・entitlement の追加なし。画像入力）",
       "url": "https://developer.apple.com/documentation/vision/vndetectbarcodesrequest",
-      "note": "未実装。macOS は専用スキャナー UI がない。カメラ映像からの読み取りは今回の範囲外"
+      "note": "写真選択で選んだ画像 1 枚を `VNDetectBarcodesRequest`（全形式）で読み、中身の文字列を一覧表示する。0 件は成功（「コードは見つかりませんでした」）、写真選択のキャンセルは失敗にしない、復号不能は失敗。権限拒否の失敗系は無い。辺・画素数は OS を呼ぶ前に検査する。守る範囲は 1 画面・1 プロセス内の順序（世代照合）と嘘の成功の禁止、守らない範囲は OS ごとの検出結果の違い・処理時間・実行中の取り消し。中身はログに出さず、URL でも開かない。カメラ映像からの読み取りは対象外。目視は #554",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#554）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_barcode_scan.m + crates/fandhe-egui-proxy/src/device/apple_barcode_scan.rs + crates/fandhe-egui-proxy/src/device/barcode_scan.rs + crates/fandhe-device/src/barcode_scan.rs + crates/fandhe-core/src/screens/barcode_scan.rs、Issue #557"
     },
     "windows": {
       "status": "no",

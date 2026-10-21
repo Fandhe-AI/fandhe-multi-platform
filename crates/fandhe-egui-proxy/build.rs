@@ -186,6 +186,8 @@
 //! - `macos/fandhe_macos_app_badge.m`（Issue #1360、`NSDockTile.badgeLabel` によるバッジ設定）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/macos_app_badge.rs`
 //!   から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `ios/fandhe_ios_in_app_review.m`（Issue #564、`SKStoreReviewController requestReviewInScene:` による
+//!   アプリ内レビュー依頼。`src/device/ios_in_app_review.rs` から呼ばれる契約）。StoreKit を追加でリンクする。
 //! - `macos/fandhe_macos_in_app_review.m`（Issue #563、`SKStoreReviewController requestReview` による
 //!   レビュー依頼）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_in_app_review.rs` から呼ばれる契約）。StoreKit を追加でリンクする。
@@ -485,6 +487,8 @@ fn main() {
     compile_apple_nlp();
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も iOS 分岐と共用する。
     compile_apple_image_recognition();
+    // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
+    compile_apple_barcode_scan();
     // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
     compile_apple_ml_inference();
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
@@ -544,6 +548,8 @@ fn main() {
     compile_ios_live_activity();
     // `ios/fandhe_ios_web_auth_session.m`（Issue #532）。iOS 分岐のみ。
     compile_ios_web_auth_session();
+    // `ios/fandhe_ios_in_app_review.m`（Issue #564）。iOS 分岐のみ。StoreKit をリンクする。
+    compile_ios_in_app_review();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_midi.m`（Issue #1398 macOS + #1399 iOS）も共用する。CoreMIDI を使う。
@@ -810,6 +816,20 @@ fn compile_apple_nlp() {
         .flag("-fobjc-arc")
         .compile("fandhe_apple_nlp");
     println!("cargo:rustc-link-lib=framework=NaturalLanguage");
+    println!("cargo:rustc-link-lib=framework=Foundation");
+}
+
+/// `apple/fandhe_apple_barcode_scan.m` を `cc` でコンパイルし Vision をリンクする
+/// （Issue #557 macOS、iOS は #558 が利用、バーコード・QR 読み取り）。
+/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_barcode_scan`）と
+/// 同じ OS 集合に保つ。
+fn compile_apple_barcode_scan() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_barcode_scan.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_barcode_scan.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_barcode_scan");
+    println!("cargo:rustc-link-lib=framework=Vision");
     println!("cargo:rustc-link-lib=framework=Foundation");
 }
 
@@ -1298,6 +1318,17 @@ fn compile_macos_in_app_review() {
         .file("macos/fandhe_macos_in_app_review.m")
         .flag("-fobjc-arc")
         .compile("fandhe_macos_in_app_review");
+}
+
+/// `ios/fandhe_ios_in_app_review.m` を `cc` でコンパイルする（Issue #564）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_in_app_review.rs` が使う）。StoreKit を追加でリンクする。
+fn compile_ios_in_app_review() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_in_app_review.m");
+    println!("cargo:rustc-link-lib=framework=StoreKit");
+    cc::Build::new()
+        .file("ios/fandhe_ios_in_app_review.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_in_app_review");
 }
 
 /// `macos/fandhe_macos_local_fonts.m` を `cc` でコンパイルする（Issue #1376）。**macOS 分岐のみ**
@@ -1816,6 +1847,8 @@ fn build_macos() {
     compile_apple_nlp();
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も共用する。
     compile_apple_image_recognition();
+    // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
+    compile_apple_barcode_scan();
     // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
     compile_apple_ml_inference();
     // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS。iOS は Issue #346 で `build_ios` からも呼ぶ）。

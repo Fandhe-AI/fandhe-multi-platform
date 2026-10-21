@@ -282,6 +282,10 @@ generated_screens! {
     crate::device::nlp::nlp_segment_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "barcode_scan" => fandhe_core::screens::barcode_scan::current_screen,
+    crate::device::barcode_scan::barcode_scan_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "in_app_review" => fandhe_core::screens::in_app_review::current_screen,
     crate::device::in_app_review::in_app_review_effect,
     effect

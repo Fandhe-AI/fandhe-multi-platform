@@ -5,8 +5,8 @@
 //! モジュール doc を参照。
 //!
 //! review API は completion を持たない同期呼び出しなので全 OS とも UI スレッドで同期に呼び、
-//! `RequestSlot` と bridge は持たない。**dispatch はここで最終形**（macOS 実装、iOS は b-ios が埋める
-//! スタブ、それ以外は `UnsupportedInAppReview`）。Android・Windows は保留で fallback に落ち、
+//! `RequestSlot` と bridge は持たない。**dispatch はここで最終形**（macOS・iOS 実装、
+//! それ以外は `UnsupportedInAppReview`）。Android・Windows は保留で fallback に落ち、
 //! 他の OS へ判断を広げない。
 
 use fandhe_core::screens::in_app_review::{

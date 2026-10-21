@@ -84,7 +84,7 @@ pub(crate) fn to_failure(e: DeviceError) -> RecognizeFailure {
 /// OS を呼ぶ前にヘッダーだけで辺・画素数を検査する（デスクトップ・iOS 共通。圧縮爆弾対策）。
 /// 上限超過は `InvalidInput`、ヘッダーを読めない画像は `Internal`（切り詰めて成功にしない）。
 #[cfg(any(test, not(target_os = "android")))]
-fn precheck(photo: &PickedPhoto) -> Result<(), DeviceError> {
+pub(crate) fn precheck(photo: &PickedPhoto) -> Result<(), DeviceError> {
     match image_dimensions(photo) {
         Some((w, h)) if dimensions_within_limits(w, h) => Ok(()),
         Some(_) => Err(DeviceError::InvalidInput("image_recognition size")),

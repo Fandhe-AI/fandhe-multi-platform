@@ -7,14 +7,17 @@
   "bundle": "one-shot",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "StoreKit `SKStoreReviewController requestReviewInScene:`（iOS 14 以上、18.0 で非推奨。後継は `RequestReviewAction`）",
       "perm": "なし",
       "url": [
         "https://developer.apple.com/documentation/storekit/requestreviewaction",
         "https://developer.apple.com/documentation/storekit/skstorereviewcontroller"
       ],
-      "note": "未実装。開発署名のビルドでは常に表示され、TestFlight では表示されず、本番は 365 日に 3 回まで。表示・投稿されたかは返らない。entitlement は不要"
+      "note": "実装済み（#564）。ボタン押下ごとに、前面（ForegroundActive）にある application role の UIWindowScene を渡して UI スレッドで同期に 1 回呼ぶ。成功は「依頼を渡した」までで、表示・投稿は返らない（Requested）。前面の scene が無いときは失敗（Internal）。Cancelled は無い。守る範囲: 押下 1 回につき呼び出し 1 回・嘘の成功の禁止・失敗を握りつぶさない。守らない範囲: ダイアログの表示有無、利用者が投稿したか。開発署名のビルドでは常に表示され、TestFlight では表示されず、本番は 365 日に 3 回まで。entitlement は不要",
+      "detail": "できている（実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#556）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_in_app_review.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_in_app_review.m + crates/fandhe-egui-proxy/src/device/in_app_review.rs + crates/fandhe-core/src/screens/in_app_review.rs + crates/fandhe-device/src/in_app_review.rs、Issue #564"
     },
     "android": {
       "status": "possible",
