@@ -23,6 +23,8 @@ import java.security.SecureRandom;
 // （code・state を別画面に出さない）。コールバックなしで戻った（onPause 後の onResume）はキャンセル。
 // 期限（300 秒）は Rust 側の単調時計だけが持ち、ここには持たない。
 //
+// コールバックは開始 URL の state と一致する現在の要求にだけ確定する（不一致は破棄）。
+//
 // 結果コードの SSOT は KIND_*（Rust 側の写像と同じ値）。
 // ライフサイクル: 状態はインスタンスフィールド。再生成後の新インスタンスは NONE から始まり、
 // Rust 側 `reset_pending_tracking()` と対で旧要求を捨てる。旧要求の遅延結果は id 照合で捨てる。
@@ -46,6 +48,8 @@ final class WebAuthSessionHelper {
     // 起動を OS に渡した要求 / 起動後に onPause を挟んだ要求。どちらも this のロックで守る。
     private long launchedId = RequestTracker.NONE;
     private long leftId = RequestTracker.NONE;
+    // 現在の要求の開始 URL に含まれる state。コールバックの所属照合に使う（this のロックで守る）。
+    private String currentState = null;
 
     WebAuthSessionHelper(ComponentActivity activity) {
         this.activity = activity;
@@ -55,6 +59,7 @@ final class WebAuthSessionHelper {
     void start(long id, String url) {
         synchronized (this) {
             request.track(id);
+            currentState = Uri.parse(url).getQueryParameter("state");
             launchedId = RequestTracker.NONE;
             leftId = RequestTracker.NONE;
         }
@@ -132,9 +137,16 @@ final class WebAuthSessionHelper {
         if (!isCallback(intent)) {
             return false;
         }
+        // 旧要求のタブから届いたコールバックは、現在の追跡情報を消さずに捨てる（state で所属を照合）。
+        Uri data = intent.getData();
+        String cbState = data == null ? null : data.getQueryParameter("state");
+        if (currentState == null || !currentState.equals(cbState)) {
+            return true;
+        }
         long id = request.take();
         launchedId = RequestTracker.NONE;
         leftId = RequestTracker.NONE;
+        currentState = null;
         if (id != RequestTracker.NONE) {
             nativeOnWebAuthSessionResult(id, KIND_URL, intent.getDataString());
         }
