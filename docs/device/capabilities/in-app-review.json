@@ -8,36 +8,44 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "StoreKit（アプリ内レビュー依頼）",
+      "api": "StoreKit `SKStoreReviewController requestReviewInScene:`（iOS 14 以上、18.0 で非推奨。後継は `RequestReviewAction`）",
       "perm": "なし",
-      "url": "https://developer.apple.com/documentation/storekit/requesting-app-store-reviews",
-      "note": "未実装。表示するかは OS が決める（表示回数に上限あり、要確認）。表示されたかは取れない見込み"
+      "url": [
+        "https://developer.apple.com/documentation/storekit/requestreviewaction",
+        "https://developer.apple.com/documentation/storekit/skstorereviewcontroller"
+      ],
+      "note": "未実装。開発署名のビルドでは常に表示され、TestFlight では表示されず、本番は 365 日に 3 回まで。表示・投稿されたかは返らない。entitlement は不要"
     },
     "android": {
       "status": "possible",
       "api": "Play In-App Review API（Play Core 1.8.0 以上）",
       "perm": "なし（報告に記載なし、要確認）",
       "url": "https://developer.android.com/guide/playcore/in-app-review",
-      "note": "未実装。GMS（Google Play 開発者サービス）依存。Play 配信ビルドでのみ検証可能。表示は Google 側のクォータで制限され、表示されたかは取れない"
+      "note": "未実装。GMS（Google Play 開発者サービス）依存。Play 配信ビルドでのみ検証可能。表示は Google 側のクォータで制限され、表示されたかは取れない",
+      "deferred": "Play In-App Review（`com.google.android.play:review`）は推移依存に Google Play services（`play-services-basement`・`play-services-tasks`）が入る。GMS に依存しない方針のため保留（in-app-purchase・payment-request と同じ）。確かめるには Play ストアから入れた版（内部テストトラック等）も要る"
     },
     "macos": {
       "status": "possible",
-      "api": "StoreKit のレビュー依頼（iOS と同ページ内、macOS 対応の詳細は要確認）",
+      "api": "StoreKit `SKStoreReviewController requestReview`（macOS 10.14 以上、15.0 で非推奨。後継は `RequestReviewAction`）",
       "perm": "なし",
-      "url": "https://developer.apple.com/documentation/storekit/requesting-app-store-reviews",
-      "note": "未実装。Mac App Store 配布が前提の見込み（要確認）"
+      "url": [
+        "https://developer.apple.com/documentation/storekit/requestreviewaction",
+        "https://developer.apple.com/documentation/storekit/skstorereviewcontroller"
+      ],
+      "note": "未実装。表示・投稿されたかは返らない。未バンドル実行で表示されるかは Mac 目視で確かめる"
     },
     "windows": {
       "status": "possible",
       "api": "`Windows.Services.Store.StoreContext.RequestRateAndReviewAppAsync`",
       "perm": "Microsoft Store 配布が前提（in-app-purchase の Windows と同じ）",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.services.store.storecontext.requestrateandreviewappasync",
-      "note": "未実装。Store 外の配布では使えない"
+      "note": "未実装。Store 外の配布では使えない",
+      "deferred": "`StoreContext.RequestRateAndReviewAppAsync` は Store の製品に関連付いた package identity（MSIX と Partner Center の関連付け）が前提の見込み（素の exe での可否は要確認）。デスクトップアプリでは `IInitializeWithWindow` も要る。MSIX 化を決めたら着手できる"
     },
     "web": {
       "status": "n-a",
       "note": "Web にアプリ評価の概念なし"
     }
   },
-  "note": "in-app-review はストアのレビュー依頼ダイアログを出すだけで、結果は取れない。notification（既存 id）とは無関係。今回の範囲: ボタンを押すと OS のレビュー依頼を 1 回呼び、「呼んだ」と画面に出す（表示可否は検証できない旨を併記）。"
+  "note": "in-app-review はストアのレビュー依頼ダイアログを出すだけで、結果は取れない。notification（既存 id）とは無関係。今回の範囲: iOS・macOS でボタンを押すと OS のレビュー依頼を 1 回呼び、「依頼を出した」とだけ画面に出す（表示可否は検証できない旨を併記）。Android・Windows は保留。"
 }

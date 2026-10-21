@@ -15,10 +15,10 @@
     },
     "android": {
       "status": "possible",
-      "api": "AppSearch（`androidx.appsearch` の `AppSearchSession`）",
-      "perm": "記載なし（要確認）",
+      "api": "AppSearch（`androidx.appsearch` の `AppSearchSession`、platform storage。API 31 以上）",
+      "perm": "不要",
       "url": "https://developer.android.com/guide/topics/search/appsearch",
-      "note": "未実装。AppSearch はアプリ内の全文検索が主用途。OS の検索（ランチャー・システム）から見える範囲は要確認"
+      "note": "未実装。platform storage の索引は OS の AppSearch サービスが持つ。登録・全削除まで扱い、ランチャー・システム検索に実際に出るか・タップで起動されるかは OEM 次第（守らない範囲）。API 31 未満は非対応"
     },
     "macos": {
       "status": "possible",
@@ -28,11 +28,12 @@
       "note": "未実装。macOS の提供範囲は要確認"
     },
     "windows": {
-      "status": "possible",
-      "api": "Windows Search の拡張（プロパティハンドラ・IFilter・検索コネクタ）",
-      "perm": "登録にインストーラが要る可能性（本文は未確認。要確認）",
+      "status": "no",
+      "api": "公開 API なし（Windows Search の拡張はプロパティハンドラ・IFilter・検索コネクタ）",
+      "perm": "なし",
       "url": "https://learn.microsoft.com/en-us/windows/win32/search/windows-search",
-      "note": "未実装。ドキュメント本文は未精査。unpackaged での可否は要確認"
+      "note": "Windows Search の拡張はファイルの種類・データストア単位の COM 登録（HKLM・インストーラ前提）で、アプリの項目を 1 件ずつ検索に出す API ではない。unpackaged で同じことをする公開 API は確認できない。インデックス対象フォルダへのファイル作成やスタートメニューへの `.lnk` 配置は項目の登録に当たらない",
+      "detail": "できない（アプリの項目を OS の検索に登録する公開 API が無い）"
     },
     "web": {
       "status": "no",
@@ -42,5 +43,5 @@
       "note": "Web に OS 全体の検索・起動連携の API はない"
     }
   },
-  "note": "app-intents（機能の公開）とは別: 本機能は保存済みの内容を OS の検索に出す。今回の範囲: 固定のメモ 1 件を登録し、OS の検索から開いたときにその識別子を画面に表示するだけ。"
+  "note": "app-intents（機能の公開）とは別: 本機能は保存済みの内容を OS の検索に出す。今回の範囲: 固定のメモ 1 件の登録と自ドメインの全削除、OS の検索から開いたときにその識別子を画面に表示する（Android は受信経路なし）。"
 }
