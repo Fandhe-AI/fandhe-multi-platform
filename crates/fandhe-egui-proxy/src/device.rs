@@ -215,9 +215,11 @@ pub mod android_screen_capture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_wake_lock;
-/// Issue #562（b-android で埋めるスタブ）: Android 向け OS の検索への登録（AppSearch、API 31+）。
-/// `device/spotlight_index.rs` の Android 経路から呼ばれる。
-#[cfg(target_os = "android")]
+/// Issue #562: Android 向け OS の検索への登録実装（AppSearch、API 31+、Java は `MainActivity`）。
+/// `device/spotlight_index.rs` の Android 経路から呼ばれる。結果コード写像をホストでテストするため
+/// test でもコンパイルする。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_spotlight_index;
 /// Issue #421: Android 向けシステムのアクセント色実装（JNI の同期 pull）。
 /// `device/system_accent_color.rs` の Android 経路から呼ばれる。
