@@ -123,6 +123,9 @@ use fandhe_core::screens::on_device_llm::{
 use fandhe_core::screens::passkey_signin::{
     current_screen as current_passkey_signin_screen, PasskeySigninState,
 };
+use fandhe_core::screens::payment_request::{
+    current_screen as current_payment_request_screen, PaymentRequestState,
+};
 use fandhe_core::screens::pen_draw::{current_screen as current_pen_draw_screen, PenDrawState};
 use fandhe_core::screens::photo_pick::{
     current_screen as current_photo_pick_screen, PhotoPickState,
@@ -998,6 +1001,21 @@ pub fn mount_passkey_signin_screen(root_id: &str) -> Result<(), JsValue> {
         current_passkey_signin_screen(&initial_state),
         initial_state,
         super::passkey::passkey_signin_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「物・サービスの決済」（親 #114、Issue #542）をマウントする
+/// 検証専用エントリポイント。`super::payment_request::payment_request_effect` が Payment Request API を呼ぶ。
+#[wasm_bindgen]
+pub fn mount_payment_request_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = PaymentRequestState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_payment_request_screen(&initial_state),
+        initial_state,
+        super::payment_request::payment_request_effect,
     )
 }
 
