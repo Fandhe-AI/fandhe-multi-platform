@@ -24,7 +24,7 @@ use fandhe_device::compose_mail_sms::ComposeOutcome;
 use fandhe_device::DeviceError;
 
 /// `SE_ERR_NOASSOC`（関連付けが無い）。
-const SE_ERR_NOASSOC: isize = 31;
+pub(crate) const SE_ERR_NOASSOC: isize = 31;
 
 /// `ShellExecuteW` の戻り値 → 結果の写像（SSOT）。公式の表のとおり `> 32` が成功、
 /// 31 が関連付け無し、それ以外（0〜32 の他のエラー値）は失敗。
@@ -51,9 +51,10 @@ impl fandhe_device::compose_mail_sms::ComposeMailSms for WindowsComposeMailSms {
 }
 
 /// `ShellExecuteW` を呼んで戻り値を返す。UI（STA）スレッドから呼ぶ。
+/// `windows_web_auth_session` も既定ブラウザを開くために使う。
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
-fn open_url(url: &str) -> isize {
+pub(crate) fn open_url(url: &str) -> isize {
     use windows::core::{w, HSTRING, PCWSTR};
     use windows::Win32::UI::Shell::ShellExecuteW;
     use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;

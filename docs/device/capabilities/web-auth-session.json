@@ -31,11 +31,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/macos_web_auth_session.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_web_auth_session.m + crates/fandhe-egui-proxy/src/device/web_auth_session.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-device/src/web_auth_session.rs、Issue #530"
     },
     "windows": {
-      "status": "possible",
-      "api": "`Windows.Security.Authentication.Web.WebAuthenticationBroker`（UWP）。後継として `WebAuthenticationCoreManager`（Web Account Manager）",
-      "perm": "package identity の要否は要確認",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.security.authentication.web.webauthenticationbroker",
-      "note": "未実装。WebAuthenticationBroker は UWP 向けで、デスクトップでの可否は要確認。代替はシステムブラウザ + ループバック（`127.0.0.1`）リダイレクトで、これなら unpackaged でも届く見込み（要確認）"
+      "status": "done",
+      "api": "`ShellExecuteW` で既定ブラウザを開き、`127.0.0.1` の一時ポートでコールバックを受ける（RFC 8252 §7.3）。乱数は `BCryptGenRandom`、SHA-256 は `BCryptHash`",
+      "perm": "なし（package identity 不要。WebAuthenticationBroker はデスクトップ非対応のため使わない）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew",
+      "note": "アプリ内のデモ認可ページ（127.0.0.1）を既定ブラウザで開き、ループバックに届いたコールバックを state・パス・code/error の形式まで検査して伏せ字で表示する。state 照合を通らない `/callback` は確定せず 404 を返して待ち続ける。PKCE は S256 の値を作るだけでトークン交換はしない。結果は返却・キャンセル・期限切れ（300 秒）の三値で、取り消しはサーバー停止のみ。`ShellExecuteW` の `> 32` は OS が受理しただけを意味する。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・資源の解放。守らない範囲: ブラウザのタブが残ること・既定ブラウザの UI の差・複数プロセス・プロセス死後のコールバック・トークン交換",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#528）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_web_auth_session.rs + crates/fandhe-egui-proxy/src/device/web_auth_session.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-device/src/web_auth_session.rs、Issue #531"
     },
     "web": {
       "status": "n-a",

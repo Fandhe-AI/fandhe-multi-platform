@@ -170,8 +170,10 @@ pub(crate) mod bridge {
         }
     }
 
-    /// OS 層（macOS / iOS / Android の完了、Windows のループバック）の唯一の受け口。
-    /// 現在の要求でない `request_id`・取り消し／期限で確定済みの要求の完了は捨てる。
+    /// OS 層（macOS / iOS / Android の完了）の受け口。Windows のループバックは
+    /// [`complete_loopback`] を使う。現在の要求でない `request_id`・取り消し／期限で確定済みの要求の完了は捨てる。
+    // iOS・Android は #532・#534 が埋めるまで未使用。Windows・Linux はループバックの受け口だけを使う。
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub(crate) fn complete_from_os(request_id: u64, result: Result<RawResult, WebAuthFailure>) {
         conclude_with(
             Some(request_id),
@@ -191,6 +193,27 @@ pub(crate) mod bridge {
             },
             None,
         );
+    }
+
+    /// Windows のループバック（`DemoAuthServer` のスレッド）の受け口。`verify_callback` を通った
+    /// URL だけで確定する。通らないもの・現在の要求でないもの・確定済みのものは `false`
+    /// （サーバーが 404 を返して待ち続ける）。判定と確定は同じロックの内側で行う。
+    pub(crate) fn complete_loopback(request_id: u64, url: String) -> bool {
+        let mut accepted = false;
+        conclude_with(
+            Some(request_id),
+            |a| {
+                let cb = verify_callback(&url, &a.req).ok()?;
+                accepted = true;
+                Some(Ok(if a.started.elapsed() >= SESSION_TIMEOUT {
+                    WebAuthOutcome::TimedOut
+                } else {
+                    WebAuthOutcome::Returned(cb)
+                }))
+            },
+            None,
+        );
+        accepted
     }
 
     /// 終了時の後片付け。進行中の 1 件があれば取り消し、OS のセッションとサーバーを閉じる。
@@ -224,11 +247,7 @@ fn setup(imp: &dyn WebAuthSession, request_id: u64) -> Result<bridge::Active, We
     let kind = imp.redirect_kind();
     let custom = format!("{SCHEME}://{CALLBACK_PATH}");
     let tx: Option<fandhe_device::web_auth_session::LoopbackTx> = (kind == RedirectKind::Loopback)
-        .then(|| {
-            Box::new(move |u: String| {
-                bridge::complete_from_os(request_id, Ok(bridge::RawResult::Url(u)))
-            }) as _
-        });
+        .then(|| Box::new(move |u: String| bridge::complete_loopback(request_id, u)) as _);
     let server = DemoAuthServer::start(
         &state.to_hex(),
         &pkce.challenge,
@@ -343,6 +362,7 @@ mod tests {
         started: AtomicBool,
         cancelled: AtomicBool,
         fail_start: AtomicBool,
+        loopback: AtomicBool,
     }
 
     impl Fake {
@@ -351,13 +371,18 @@ mod tests {
                 started: AtomicBool::new(false),
                 cancelled: AtomicBool::new(false),
                 fail_start: AtomicBool::new(false),
+                loopback: AtomicBool::new(false),
             }
         }
     }
 
     impl WebAuthSession for Fake {
         fn redirect_kind(&self) -> RedirectKind {
-            RedirectKind::CustomScheme
+            if self.loopback.load(Ordering::SeqCst) {
+                RedirectKind::Loopback
+            } else {
+                RedirectKind::CustomScheme
+            }
         }
         fn fill_random(&self, buf: &mut [u8]) -> Result<(), WebAuthFailure> {
             let n = buf.len() as u8;
@@ -471,6 +496,37 @@ mod tests {
         h.frame(&fake);
         assert_eq!(h.state.error, screen::INVALID_CALLBACK_TEXT);
         assert!(h.state.status.is_empty());
+    }
+
+    fn http_get(port: u16, target: &str) -> String {
+        use std::io::{Read, Write};
+        let mut c = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        write!(c, "GET {target} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n").unwrap();
+        let mut out = String::new();
+        let _ = c.read_to_string(&mut out);
+        out
+    }
+
+    #[test]
+    fn loopback_rejects_bad_state_and_keeps_waiting() {
+        let _g = serial();
+        let (mut h, fake) = (Harness::new(), Fake::new());
+        fake.loopback.store(true, Ordering::SeqCst);
+        screen::start(&mut h.state);
+        h.frame(&fake);
+        let (port, hex) = {
+            let g = bridge::lock();
+            let a = g.as_ref().unwrap();
+            (a.server.as_ref().unwrap().port(), a.req.state.to_hex())
+        };
+        let bad = format!("/callback?state={}&code=x", "0".repeat(32));
+        assert!(http_get(port, &bad).starts_with("HTTP/1.1 404"));
+        assert!(bridge::lock().is_some());
+        let good = format!("/callback?state={hex}&code=abc123");
+        assert!(http_get(port, &good).starts_with("HTTP/1.1 200"));
+        assert!(bridge::lock().is_none());
+        h.frame(&fake);
+        assert_eq!(h.state.status, screen::RETURNED_CODE_STATUS);
     }
 
     #[test]
