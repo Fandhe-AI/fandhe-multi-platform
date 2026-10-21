@@ -193,6 +193,9 @@
 //! - `macos/fandhe_macos_music_library.m`（Issue #482、iTunesLibrary `ITLibrary` による曲のタイトルと
 //!   アーティストの先頭 20 件の読み取り）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルし
 //!   iTunesLibrary をリンクする（`src/device/macos_music_library.rs` から呼ばれる契約）。
+//! - `macos/fandhe_macos_web_auth_session.m`（Issue #530、AuthenticationServices `ASWebAuthenticationSession` による
+//!   OAuth 用の Web 認証セッション）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルし
+//!   AuthenticationServices をリンクする（`src/device/macos_web_auth_session.rs` から呼ばれる契約）。
 //! - `macos/fandhe_macos_wifi_info.m`（Issue #514、CoreWLAN `CWWiFiClient` による現在の接続・直近のスキャン結果の
 //!   読み取りと、CoreLocation の許可判定）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルし
 //!   CoreWLAN をリンクする（`src/device/macos_wifi_info.rs` から呼ばれる契約）。
@@ -1238,6 +1241,17 @@ fn compile_macos_music_library() {
     println!("cargo:rustc-link-lib=framework=iTunesLibrary");
 }
 
+/// `macos/fandhe_macos_web_auth_session.m` を `cc` でコンパイルし AuthenticationServices をリンクする（Issue #530）。
+/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_web_auth_session.rs` が使う）。
+fn compile_macos_web_auth_session() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_web_auth_session.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_web_auth_session.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_web_auth_session");
+    println!("cargo:rustc-link-lib=framework=AuthenticationServices");
+}
+
 /// `macos/fandhe_macos_usb_device.m` を `cc` でコンパイルし IOKit をリンクする（Issue #505）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_usb_device.rs` が使う）。
 fn compile_macos_usb_device() {
@@ -1752,6 +1766,8 @@ fn build_macos() {
     compile_macos_multi_display();
     // `macos/fandhe_macos_music_library.m`（Issue #482）も macOS 専用。iTunesLibrary を使う。
     compile_macos_music_library();
+    // `macos/fandhe_macos_web_auth_session.m`（Issue #530）も macOS 専用。AuthenticationServices を使う。
+    compile_macos_web_auth_session();
     // `macos/fandhe_macos_wifi_info.m`（Issue #514）も macOS 専用。CoreWLAN を使う。
     compile_macos_wifi_info();
     // `macos/fandhe_macos_usb_device.m`（Issue #505）も macOS 専用。IOKit を使う。
