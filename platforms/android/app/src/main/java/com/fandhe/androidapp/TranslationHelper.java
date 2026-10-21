@@ -181,7 +181,19 @@ final class TranslationHelper {
                 new TranslationSpec(ULocale.forLanguageTag(source), TranslationSpec.DATA_FORMAT_TEXT),
                 new TranslationSpec(ULocale.forLanguageTag(target), TranslationSpec.DATA_FORMAT_TEXT))
                 .build();
-        tm.createOnDeviceTranslator(ctx, executor, translator -> onTranslator(id, text, translator));
+        createTranslator(tm, ctx, id, text, true);
+    }
+
+    // 生成コールバックは呼び出しスレッドで直接実行する（Runnable::run）。executor へ post すると、
+    // 破棄時の shutdownNow で未実行コールバックが除去されたり reject されたりして、生成済みの
+    // Translator が destroy() されないまま漏れるため。所有権は onTranslator が全経路で決める。
+    // API 31 は同一 TranslationContext の Translator をキャッシュして返すため、破棄済みを掴んだら
+    // 1 回だけ取り直す（retry）。
+    @RequiresApi(Build.VERSION_CODES.S)
+    private void createTranslator(
+            TranslationManager tm, TranslationContext ctx, long id, String text, boolean retry) {
+        tm.createOnDeviceTranslator(ctx, Runnable::run, translator -> onTranslator(
+                id, text, translator, retry ? () -> createTranslator(tm, ctx, id, text, false) : null));
     }
 
     // 翻訳サービスの状態を結果コードに写す。RESULT_OK なら端末内に言語パックがある。
@@ -214,11 +226,24 @@ final class TranslationHelper {
         return result;
     }
 
-    // Translator 生成のコールバック（executor 上）。
+    // Translator 生成のコールバック（フレームワークの呼び出しスレッド）。
     @RequiresApi(Build.VERSION_CODES.S)
-    private void onTranslator(long id, String text, Translator translator) {
+    private void onTranslator(long id, String text, Translator translator, Runnable retry) {
         if (translator == null) {
             finish(id, RESULT_FAILED, null);
+            return;
+        }
+        if (translator.isDestroyed()) {
+            // キャッシュされた破棄済みインスタンス。取り直せなければ失敗にする。
+            if (retry != null) {
+                try {
+                    retry.run();
+                } catch (RuntimeException e) {
+                    finish(id, RESULT_FAILED, null);
+                }
+            } else {
+                finish(id, RESULT_FAILED, null);
+            }
             return;
         }
         CancellationSignal s;
