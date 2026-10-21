@@ -4,6 +4,9 @@
 // `compile_apple_translation` が swiftc で静的ライブラリ化し、Rust の
 // `device/apple_translation.rs` が `@_cdecl` の C ABI 1 関数だけを呼ぶ。macOS と iOS で共用し、
 // OS の分岐は `TARGET_OS` ではなく `canImport` と `#available` で行う。
+// 26 専用 API（`TranslationSession(installedSource:target:)`）は旧 SDK（Xcode 16 は Swift 6.1 以下）に
+// 無く `#available` では型検査を除外できないため、`compiler(>=6.2)`（Xcode 26 以降）でも囲み、
+// 旧 SDK では 1（非対応）経路にする。
 //
 // 契約（戻りコードの意味の SSOT は Rust 側の `match`）:
 //   0 成功 / 1 非対応 / 2 言語の組み合わせ非対応 / 3 言語パック未導入・取得中 / 4 期限切れ /
@@ -26,7 +29,7 @@
 // - 原文・訳文・エラーの内容はログへ出さない。
 
 import Foundation
-#if canImport(Translation)
+#if canImport(Translation) && compiler(>=6.2)
 import Translation
 #endif
 
@@ -56,7 +59,7 @@ private final class ResultBox: @unchecked Sendable {
 private let maxTextBytes = 4096
 private let maxTagBytes = 64
 
-#if canImport(Translation)
+#if canImport(Translation) && compiler(>=6.2)
 /// 取り消しと開始を排他にする箱（セッション登録前に取り消されたら、登録時に即 `cancel()` する）。
 @available(macOS 26.0, iOS 26.0, *)
 private final class SessionHolder: @unchecked Sendable {
@@ -155,7 +158,7 @@ public func fandhe_apple_translation_translate(
         let d = String(data: Data(bytes: dst, count: dstLen), encoding: .utf8)
     else { return 6 }
 
-    #if canImport(Translation)
+    #if canImport(Translation) && compiler(>=6.2)
     guard #available(macOS 26.0, iOS 26.0, *) else { return 1 }
     let (code, translated) = translateImpl(text: t, source: s, target: d, deadlineMs: deadlineMs)
     if code != 0 { return code }
