@@ -616,6 +616,26 @@ public class MainActivity extends GameActivity {
                 attName);
     }
 
+    // OAuth 用 Web 認証セッション（Issue #534）。実装は `WebAuthSessionHelper`。
+    // Rust の `android_web_auth_session.rs` が JNI で呼ぶ。
+    private final WebAuthSessionHelper webAuthSessionHelper = new WebAuthSessionHelper(this);
+
+    void requestWebAuthStart(long requestId, String url) {
+        webAuthSessionHelper.start(requestId, url);
+    }
+
+    void requestWebAuthCancel(long requestId) {
+        webAuthSessionHelper.cancel(requestId);
+    }
+
+    byte[] webAuthRandom(int len) {
+        return WebAuthSessionHelper.random(len);
+    }
+
+    byte[] webAuthSha256(byte[] data) {
+        return WebAuthSessionHelper.sha256(data);
+    }
+
     // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
     // Rust の `android_print.rs` が JNI で呼ぶ。
     private final PrintHelper printHelper = new PrintHelper(this);
@@ -1931,6 +1951,10 @@ public class MainActivity extends GameActivity {
         if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) {
             return;
         }
+        // Web 認証のコールバック（code・state を含む）は url-scheme 受信箱へ流さない（Issue #534）。
+        if (WebAuthSessionHelper.isCallback(intent)) {
+            return;
+        }
         nativeOnUrlSchemeReceived(intent.getDataString());
     }
 
@@ -1939,6 +1963,10 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        // Web 認証のコールバックはここで確定し、setIntent で code を含む intent を残さない（Issue #534）。
+        if (webAuthSessionHelper.onNewIntent(intent)) {
+            return;
+        }
         setIntent(intent);
         deliverUrlIntent(intent);
     }
@@ -2400,6 +2428,7 @@ public class MainActivity extends GameActivity {
     protected void onResume() {
         super.onResume();
         activityResumed = true;
+        webAuthSessionHelper.onResume();
         compassHelper.onResume();
         localPeerHelper.onResume();
         mediaPlaybackHelper.onResume();
@@ -2492,6 +2521,7 @@ public class MainActivity extends GameActivity {
         // `removeUpdates` より先に false へ落としておく。
         activityResumed = false;
         penStylusHelper.onPause();
+        webAuthSessionHelper.onPause();
         screenCaptureHelper.onPause();
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();

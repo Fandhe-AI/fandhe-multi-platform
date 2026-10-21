@@ -302,6 +302,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // Issue #1384: `compose_mail_sms::bridge::SLOT` も同様に破棄する（`device::compose_mail_sms::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::compose_mail_sms::reset_pending_tracking();
+    // Issue #534: `web_auth_session::bridge` の `ACTIVE`（デモサーバー）と `SLOT` も同様に破棄する。
+    // 残ると次の要求が開けなくなる（`device::android_web_auth_session::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::android_web_auth_session::reset_pending_tracking();
     // Issue #325: `print::bridge::SLOT` も同様に破棄する（Activity 再生成で印刷の保留は復元しない）。
     #[cfg(feature = "device")]
     crate::device::print::reset_pending_tracking();

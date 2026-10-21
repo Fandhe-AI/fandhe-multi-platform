@@ -44,12 +44,15 @@
       "note": "端末内の翻訳に相当する公開 API は報告で確認できていない（報告に『Windows Translator（制限あり）』とあるが一次情報なし。要確認）"
     },
     "web": {
-      "status": "possible",
-      "api": "Translator API（`Translator.create()`）と Language Detector API",
-      "perm": "なし",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Translator_and_Language_Detector_APIs",
-      "note": "未実装。MDN は Limited availability 表示。Chromium 系のみと認識で、既定で使えるかは要確認",
-      "safari": "非対応と認識（要確認）"
+      "status": "done",
+      "api": "Translator API（`Translator.availability()` / `Translator.create()` / `translate()` / `destroy()`）。Chrome 138+ / Edge 148+ のデスクトップで flag 不要。Language Detector API は使わない（元言語は ja 固定）",
+      "perm": "なし（secure context 必須）",
+      "url": "https://developer.chrome.com/docs/ai/translator-api",
+      "note": "固定の日本語文を ja → en に 1 回訳す。`available` のときだけ `create()` し、`downloadable` / `downloading` は未取得として失敗にする（ダウンロードを始めない）。期限は 30 秒（`performance.now()` が起点）。`pagehide` は中断。全経路で `destroy()`。Android 版 Chrome・Safari・Firefox は `Translator` が無く使えない。守る範囲は 1 マウント内の順序・嘘の成功の禁止・資源の解放で、ブラウザごとの訳文の差・所要時間・期限後もブラウザ側の処理が走り切ること・複数タブ・egui-proxy の wasm canvas 経路は守らない。実ブラウザの確認は #529 で行う",
+      "safari": "非対応（`Translator` が無いので Unsupported）",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザでの確認は確認用 issue #529 で追う",
+      "impl": "crates/fandhe-web-dom/src/translation.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-device/src/translation.rs、Issue #539"
     }
   },
   "note": "nlp（OS 内蔵の言語解析）との違い: 本機能は文章を別の言語へ変換する。今回の範囲: 固定の日本語文を英語へ訳して画面に出すだけ。言語パックの未取得時は『未取得』を出し、成功にしない。"

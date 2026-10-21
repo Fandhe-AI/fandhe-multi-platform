@@ -186,4 +186,8 @@ dependencies {
     // Phase 11、Issue #1046）が androidx.work を直接 import するため明示依存にする
     // （バージョン選定根拠は versions.env の WORK_RUNTIME_VERSION コメント参照）。
     implementation("androidx.work:work-runtime:${androidVersion("WORK_RUNTIME_VERSION")}")
+    // WebAuthSessionHelper の Custom Tabs（`CustomTabsIntent`、Issue #534）が
+    // androidx.browser を直接 import するため明示依存にする
+    // （バージョン選定根拠は versions.env の ANDROIDX_BROWSER_VERSION コメント参照）。
+    implementation("androidx.browser:browser:${androidVersion("ANDROIDX_BROWSER_VERSION")}")
 }
