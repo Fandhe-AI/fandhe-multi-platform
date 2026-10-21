@@ -11,7 +11,7 @@
 //                                        domain, domain_len, timeout_ms);
 //   int32_t fandhe_apple_spotlight_remove_all(domain, domain_len, timeout_ms);
 //   戻り値: 0=成功 / -2=引数不正 / -4=非対応（索引が使えない） / -5=失敗（.app でない実行など）
-//           / -6=時間切れ / -7=OS が失敗を返した
+//           / -6=時間切れ / -7=OS が失敗を返した・受け口を足せなかった（macOS の登録）
 //   時間切れ後に OS の完了が遅れて届いても、semaphore を signal するだけで無害（block が retain する）。
 //   OS のエラー文は返さない（ログにも出さない）。
 //
@@ -29,6 +29,12 @@
 #if TARGET_OS_OSX
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
+#import <stdatomic.h>
+
+// 受け口を足せなかった（delegate に同名メソッドが既にあった）とき true。登録しても開かれた識別子を
+// 受け取れないので、登録を失敗で返して成功を装わない（契約表 6）。main スレッドが書き、
+// 登録のワーカーが読むため atomic にする（main へ dispatch_sync しない。契約表 11）。
+static atomic_bool g_install_failed = false;
 #endif
 
 static NSString *fandhe_str(const uint8_t *p, size_t len) {
@@ -66,6 +72,11 @@ int32_t fandhe_apple_spotlight_index(const uint8_t *id, size_t id_len, const uin
     if ([NSBundle mainBundle].bundleIdentifier == nil) {
       return -5;
     }
+#if TARGET_OS_OSX
+    if (atomic_load(&g_install_failed)) {
+      return -7;
+    }
+#endif
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
     CSSearchableItemAttributeSet *attrs =
@@ -159,8 +170,10 @@ static void fandhe_try_install(void) {
   struct objc_method_description d =
       protocol_getMethodDescription(@protocol(NSApplicationDelegate), sel, NO, YES);
   const char *types = d.types != NULL ? d.types : "c@:@@@?";
-  // 既にメソッドがあれば上書きしない（NO が返るだけ）。
-  class_addMethod([NSApp.delegate class], sel, (IMP)fandhe_continue_user_activity, types);
+  // 既にメソッドがあれば上書きしない。足せなければ登録を失敗で返す（g_install_failed）。
+  if (!class_addMethod([NSApp.delegate class], sel, (IMP)fandhe_continue_user_activity, types)) {
+    atomic_store(&g_install_failed, true);
+  }
   g_installed = YES;
 }
 

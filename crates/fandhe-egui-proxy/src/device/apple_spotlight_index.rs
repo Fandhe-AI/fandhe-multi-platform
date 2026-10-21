@@ -8,6 +8,10 @@
 //! `NSApp.delegate` へ `continueUserActivity` を足し、`apple_url_scheme` の受け口へ流す。
 //! 識別子・題名・本文・OS のエラー文はログへ出さない。
 
+// iOS は #561 が `ios_spotlight_index` から使うまで未使用。解除は #561 がこの行を消して行う
+// （`device.rs` の `pub mod` 列は後続の子が触らないため、ここに置く）。
+#![cfg_attr(target_os = "ios", allow(dead_code))]
+
 use std::sync::Arc;
 use std::time::Duration;
 

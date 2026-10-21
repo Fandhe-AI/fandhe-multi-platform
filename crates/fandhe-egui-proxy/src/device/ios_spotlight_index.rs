@@ -3,7 +3,7 @@
 //!
 //! #561 が埋める範囲: `apple_spotlight_index::implementation()` への差し替え、
 //! `ios/fandhe_ios_scene.m` の `continueUserActivity`（`fandhe_rust_url_scheme_received` へ
-//! `fandhe://spotlight/<id>` を渡す）、`device.rs` の `apple_spotlight_index` の `allow(dead_code)` 解除。
+//! `fandhe://spotlight/<id>` を渡す）、`apple_spotlight_index.rs` 先頭の `allow(dead_code)` の解除。
 //! dispatch・画面・文言は触らない。
 
 use std::sync::Arc;

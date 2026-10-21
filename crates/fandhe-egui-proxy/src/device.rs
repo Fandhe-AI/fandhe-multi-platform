@@ -413,9 +413,8 @@ pub mod apple_share;
 pub mod apple_speech_recognition;
 /// Issue #560（macOS）・#561（iOS）: OS の検索（Core Spotlight）への登録実装（`apple/
 /// fandhe_apple_spotlight_index.m` を呼ぶ C ABI ラッパー）。`device/spotlight_index.rs` の macOS 経路と、
-/// iOS 経路（#561 で `ios_spotlight_index` 経由）から呼ばれる。iOS は #561 までスタブのため未使用。
+/// iOS 経路（#561 で `ios_spotlight_index` 経由）から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-#[cfg_attr(target_os = "ios", allow(dead_code))]
 pub mod apple_spotlight_index;
 /// Issue #1039: macOS 向けシステムトレイ実装（`apple/fandhe_apple_system_tray.m` を
 /// 呼ぶ C ABI ラッパー）。`device/system_tray.rs::platform_tray` の macOS 経路から
