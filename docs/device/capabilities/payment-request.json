@@ -10,22 +10,36 @@
       "status": "possible",
       "api": "PassKit `PKPaymentAuthorizationController`（Apple Pay の決済シートを出す）",
       "perm": "Merchant ID の entitlement `com.apple.developer.in-app-payments`",
-      "url": "https://developer.apple.com/documentation/passkit/pkpaymentauthorizationcontroller",
-      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 決済処理（PSP との連携）は範囲外"
+      "url": [
+        "https://developer.apple.com/documentation/passkit/pkpaymentauthorizationcontroller",
+        "https://developer.apple.com/documentation/passkit/setting-up-apple-pay",
+        "https://developer.apple.com/apple-pay/sandbox-testing/"
+      ],
+      "note": "未実装。決済処理（PSP との連携）は範囲外",
+      "deferred": "Apple Pay の検証には Merchant ID の登録と entitlement `com.apple.developer.in-app-payments`（有効な Apple Developer Program が前提）と Sandbox テスターが要る。開発者登録が期限切れで、アプリも手組みのバンドルのため保留。ベンダーの個別審査は不要で、開発者登録が揃えば着手できる"
     },
     "android": {
       "status": "possible",
       "api": "Google Pay API（GMS 依存）",
-      "perm": "記載なし（要確認）",
-      "url": "https://developers.google.com/pay/api/android/overview",
-      "note": "未実装。GMS（Google Play 開発者サービス）依存。決済代行側の設定が要る"
+      "perm": "実行時の権限なし。manifest に `com.google.android.gms.wallet.api.enabled` の meta-data が要る（要確認）",
+      "url": [
+        "https://developers.google.com/pay/api/android/guides/setup",
+        "https://developers.google.com/pay/api/android/guides/test-and-deploy/integration-checklist"
+      ],
+      "note": "未実装",
+      "deferred": "Google Pay API は GMS（`play-services-wallet`）に依存する。GMS に依存しない方針のため保留（in-app-purchase・media-cast・on-device-llm と同じ）。TEST 環境ならダミーのカードで確かめられ、本番は Google の承認が要る"
     },
     "macos": {
       "status": "possible",
       "api": "PassKit `PKPaymentAuthorizationController`（Mac の Apple Pay。提供の実態は要確認）",
       "perm": "Merchant ID の entitlement（要確認）",
-      "url": "https://developer.apple.com/documentation/passkit/pkpaymentauthorizationcontroller",
-      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。"
+      "url": [
+        "https://developer.apple.com/documentation/passkit/pkpaymentauthorizationcontroller",
+        "https://developer.apple.com/documentation/passkit/setting-up-apple-pay",
+        "https://developer.apple.com/apple-pay/sandbox-testing/"
+      ],
+      "note": "未実装",
+      "deferred": "Apple Pay の検証には Merchant ID の登録と entitlement `com.apple.developer.in-app-payments`（有効な Apple Developer Program が前提）と Sandbox テスターが要る。開発者登録が期限切れで、アプリも手組みのバンドルのため保留。ベンダーの個別審査は不要で、開発者登録が揃えば着手できる。macOS は加えて、素の実行体には制限付き entitlement を載せる provisioning profile を置けず .app 化が要る"
     },
     "windows": {
       "status": "no",
@@ -36,12 +50,15 @@
     },
     "web": {
       "status": "possible",
-      "api": "Payment Request API（`new PaymentRequest(...)`）",
+      "api": "Payment Request API（`new PaymentRequest(...)`）。支払い方法は Google Pay（`https://google.com/pay`、`environment: \"TEST\"`）",
       "perm": "なし（secure context 必須）",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Payment_Request_API",
-      "note": "未実装。MDN は Limited availability 表示。対応エンジンは Chromium と Safari（Apple Pay）と認識、Firefox は非対応と認識（要確認）",
-      "safari": "Apple Pay 経由で対応と認識（要確認）"
+      "url": [
+        "https://developer.mozilla.org/en-US/docs/Web/API/Payment_Request_API",
+        "https://developers.google.com/pay/api/web/guides/paymentrequest/tutorial"
+      ],
+      "note": "未実装。Chrome で Google Pay（TEST）の決済シートを出す。成功まで通すには Google アカウントでのログインが要る。`basic-card` は Chrome 96 で非推奨。Firefox は `PaymentRequest` が無く使えない",
+      "safari": "Apple Pay（`https://apple.com/apple-pay`）は加盟店の検証（Merchant Identity 証明書・ドメイン検証・サーバー）が要るため保留。Google Pay を指定した要求は使えないと返す"
     }
   },
-  "note": "in-app-purchase（ストア課金）との違い: 本機能は物・サービスの代金を決済する側で、ストア課金の対象外のもの。今回の範囲: テスト環境の固定金額で決済シートを出し、結果（成功・キャンセル・失敗）を画面に出すだけ。実決済はしない。"
+  "note": "in-app-purchase（ストア課金）との違い: 本機能は物・サービスの代金を決済する側で、ストア課金の対象外のもの。今回の範囲: Web（Chrome の Google Pay、TEST 環境）で固定金額の決済シートを出し、結果（テストで承認・キャンセル・失敗・使えない）を画面に出すだけ。実決済はしない（本番環境の設定を型に持たず、merchantId なし・gateway は Google のサンプル値 `example`、返ったトークンは読まずに捨てる）。iOS・macOS・Android は保留（開発者登録・GMS の都合）。守る範囲: 1 マウント内の要求と完了の順序、嘘の成功の禁止、課金できるトークンを作らないこと。守らない範囲: 利用者の取り消しとアプリの中断（API がどちらも AbortError で返す）の区別、複数タブ"
 }
