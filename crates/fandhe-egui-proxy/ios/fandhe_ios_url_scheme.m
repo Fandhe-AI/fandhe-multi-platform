@@ -52,7 +52,10 @@ static void fandhe_forward_url(NSURL *url) {
   // セッション内のコールバックは ASWebAuthenticationSession が横取りするため openURL には来ず、
   // ここへ来るのはセッションの外（Safari 等）から開かれた場合だけで信頼しない。受信箱へ入れると
   // code・state が url-scheme 画面に出るため、拒否件数にも数えず捨てる（Issue #532）。
-  if ([url.scheme caseInsensitiveCompare:@"fandhe"] == NSOrderedSame &&
+  // nil への caseInsensitiveCompare は 0（NSOrderedSame）を返すため、scheme・host の nil を先に除外する
+  // （`fandhe:` のようなホスト無し URL は通常どおり受信箱へ転送する）。
+  if (url.scheme != nil && url.host != nil &&
+      [url.scheme caseInsensitiveCompare:@"fandhe"] == NSOrderedSame &&
       [url.host caseInsensitiveCompare:@"web-auth"] == NSOrderedSame) {
     return;
   }
