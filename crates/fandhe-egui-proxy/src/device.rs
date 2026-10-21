@@ -264,6 +264,12 @@ pub mod apple_accessibility_prefs;
 /// 状態遷移の純ロジックをホストの `cargo test` で検査するため cfg に `test` を含める。
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
 pub mod apple_background_download;
+/// Issue #557 macOS・#558 iOS: バーコード・QR 読み取り実装（`apple/fandhe_apple_barcode_scan.m` を
+/// 呼ぶ C ABI ラッパー）。`device/barcode_scan.rs` の macOS 経路と `ios_barcode_scan` から呼ばれる。
+/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。iOS は #558 までスタブが使わないため dead_code を許す。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[cfg_attr(target_os = "ios", allow(dead_code))]
+pub mod apple_barcode_scan;
 /// Issue #906: iOS / macOS 向け生体認証実装（`apple/fandhe_apple_biometric.m` を呼ぶ
 /// C ABI ラッパー）。`device/biometric_auth.rs` の macOS/iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -435,6 +441,8 @@ pub mod background_download;
 /// Phase 11 の拡充ループ（親 #1042、Issue #1043）: バックグラウンド処理の effect
 /// ドライバ（macOS 実装、他 OS は兄弟 issue #1044〜#1047）。
 pub mod background_task;
+/// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取りの effect ドライバ。
+pub mod barcode_scan;
 /// Phase 11 の拡充ループ（親 #905、Issue #906/#907/#908）: 生体認証の effect ドライバ
 /// （macOS/iOS/Android/Windows 実装）。
 pub mod biometric_auth;
@@ -545,6 +553,9 @@ pub mod ios_background_download;
 /// で host の `cargo test` から状態機械を検証できる（モジュール doc 参照）。
 #[cfg(any(target_os = "ios", test))]
 pub mod ios_background_task;
+/// Issue #557: iOS 向けバーコード・QR 読み取りの骨格（実装は #558）。
+#[cfg(target_os = "ios")]
+pub mod ios_barcode_scan;
 /// Issue #277: iOS 向け通話 UI 統合実装（`ios/fandhe_ios_call_ui.m` の CallKit を呼ぶ C ABI ラッパー）。
 /// `device/call_ui.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]

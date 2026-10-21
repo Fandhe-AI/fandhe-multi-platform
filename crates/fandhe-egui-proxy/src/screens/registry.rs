@@ -282,6 +282,10 @@ generated_screens! {
     crate::device::nlp::nlp_segment_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "barcode_scan" => fandhe_core::screens::barcode_scan::current_screen,
+    crate::device::barcode_scan::barcode_scan_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "image_recognize" => fandhe_core::screens::image_recognize::current_screen,
     crate::device::image_recognition::image_recognize_effect,
     effect

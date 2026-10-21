@@ -478,6 +478,8 @@ fn main() {
     compile_apple_nlp();
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も iOS 分岐と共用する。
     compile_apple_image_recognition();
+    // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
+    compile_apple_barcode_scan();
     // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
     compile_apple_ml_inference();
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
@@ -789,6 +791,20 @@ fn compile_apple_nlp() {
         .flag("-fobjc-arc")
         .compile("fandhe_apple_nlp");
     println!("cargo:rustc-link-lib=framework=NaturalLanguage");
+    println!("cargo:rustc-link-lib=framework=Foundation");
+}
+
+/// `apple/fandhe_apple_barcode_scan.m` を `cc` でコンパイルし Vision をリンクする
+/// （Issue #557 macOS、iOS は #558 が利用、バーコード・QR 読み取り）。
+/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_barcode_scan`）と
+/// 同じ OS 集合に保つ。
+fn compile_apple_barcode_scan() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_barcode_scan.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_barcode_scan.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_barcode_scan");
+    println!("cargo:rustc-link-lib=framework=Vision");
     println!("cargo:rustc-link-lib=framework=Foundation");
 }
 
@@ -1784,6 +1800,8 @@ fn build_macos() {
     compile_apple_nlp();
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も共用する。
     compile_apple_image_recognition();
+    // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
+    compile_apple_barcode_scan();
     // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
     compile_apple_ml_inference();
     // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS。iOS は Issue #346 で `build_ios` からも呼ぶ）。

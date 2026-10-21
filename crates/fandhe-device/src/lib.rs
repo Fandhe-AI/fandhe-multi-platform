@@ -31,6 +31,8 @@ pub mod audio_devices;
 pub mod background_download;
 /// Phase 11（端末機能の拡充ループ、親 #1042、Issue #1043）: バックグラウンド処理。
 pub mod background_task;
+/// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取り。
+pub mod barcode_scan;
 /// Phase 11（端末機能の拡充ループ、親 #905、Issue #906）: 生体認証。
 pub mod biometric_auth;
 /// Phase 11（端末機能の拡充ループ）: Bluetooth LE の周辺機器スキャン。
