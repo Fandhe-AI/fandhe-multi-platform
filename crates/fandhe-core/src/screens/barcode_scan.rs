@@ -6,8 +6,8 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは本モジュール外
 //! （`fandhe-egui-proxy` の `device/barcode_scan.rs`）が [`take_request`] で要求を観測し、
-//! [`mark_scanning`]・[`finish_scan`] で状態を進める。全対象 OS（macOS / iOS / Web）
-//! ※対象 OS はこの 3 つ。同じ UI・文言を使うため、OS 別の子 issue はこのファイルを触らない。
+//! [`mark_scanning`]・[`finish_scan`] で状態を進める。全対象 OS（macOS / iOS / Web）で
+//! 同じ UI・文言を使うため、OS 別の子 issue はこのファイルを触らない。
 //!
 //! # 成功・キャンセル・失敗を混同しない
 //!
