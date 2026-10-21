@@ -76,6 +76,9 @@
 //! - `ios/fandhe_ios_print.m`（Issue #327、`UIPrintInteractionController` による印刷シート）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_print.rs` から
 //!   呼ばれる契約）。UIKit は既存のリンクで足りる。
+//! - `ios/fandhe_ios_web_auth_session.m`（Issue #532、AuthenticationServices `ASWebAuthenticationSession` による
+//!   OAuth 用の Web 認証セッション）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルし
+//!   AuthenticationServices をリンクする（`src/device/ios_web_auth_session.rs` から呼ばれる契約）。
 //! - `apple/fandhe_apple_on_device_llm.swift`（Issue #345、FoundationModels による端末内 LLM）は
 //!   **macOS・iOS 両分岐**（iOS は Issue #346）で feature `device` 有効時に swiftc で静的ライブラリ化し、
 //!   FoundationModels を弱リンクする（`src/device/apple_on_device_llm.rs` から呼ばれる契約）。
@@ -530,6 +533,8 @@ fn main() {
     compile_ios_call_ui();
     // `ios/fandhe_ios_live_activity.swift`（Issue #295）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_live_activity();
+    // `ios/fandhe_ios_web_auth_session.m`（Issue #532）。iOS 分岐のみ。
+    compile_ios_web_auth_session();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_midi.m`（Issue #1398 macOS + #1399 iOS）も共用する。CoreMIDI を使う。
@@ -1469,6 +1474,19 @@ fn compile_ios_compose_mail_sms() {
         .flag("-fobjc-arc")
         .compile("fandhe_ios_compose_mail_sms");
     println!("cargo:rustc-link-lib=framework=MessageUI");
+}
+
+/// `ios/fandhe_ios_web_auth_session.m` を `cc` でコンパイルし AuthenticationServices をリンクする（Issue #532）。
+/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_web_auth_session.rs` が使う）。
+fn compile_ios_web_auth_session() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_web_auth_session.m");
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_common.h");
+    cc::Build::new()
+        .file("ios/fandhe_ios_web_auth_session.m")
+        .include("ios")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_web_auth_session");
+    println!("cargo:rustc-link-lib=framework=AuthenticationServices");
 }
 
 /// `ios/fandhe_ios_print.m` を `cc` でコンパイルする（Issue #327）。**iOS 分岐のみ**から
