@@ -215,6 +215,10 @@ pub mod android_screen_capture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_wake_lock;
+/// Issue #562（b-android で埋めるスタブ）: Android 向け OS の検索への登録（AppSearch、API 31+）。
+/// `device/spotlight_index.rs` の Android 経路から呼ばれる。
+#[cfg(target_os = "android")]
+pub mod android_spotlight_index;
 /// Issue #421: Android 向けシステムのアクセント色実装（JNI の同期 pull）。
 /// `device/system_accent_color.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -407,6 +411,12 @@ pub mod apple_share;
 /// speech_recognition.rs` の iOS/macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_speech_recognition;
+/// Issue #560（macOS）・#561（iOS）: OS の検索（Core Spotlight）への登録実装（`apple/
+/// fandhe_apple_spotlight_index.m` を呼ぶ C ABI ラッパー）。`device/spotlight_index.rs` の macOS 経路と、
+/// iOS 経路（#561 で `ios_spotlight_index` 経由）から呼ばれる。iOS は #561 までスタブのため未使用。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[cfg_attr(target_os = "ios", allow(dead_code))]
+pub mod apple_spotlight_index;
 /// Issue #1039: macOS 向けシステムトレイ実装（`apple/fandhe_apple_system_tray.m` を
 /// 呼ぶ C ABI ラッパー）。`device/system_tray.rs::platform_tray` の macOS 経路から
 /// 呼ばれる（iOS は対応表 `system-tray.json` で `n-a` のため対象外）。
@@ -694,6 +704,10 @@ pub mod ios_safe_area_insets;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_wake_lock;
+/// Issue #561（b-ios で埋めるスタブ）: iOS 向け OS の検索への登録。`device/spotlight_index.rs` の
+/// iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_spotlight_index;
 /// Issue #536: iOS 向け端末内翻訳実装（macOS と共用の `AppleTextTranslator` を返す）。`device/translation.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_translation;
@@ -934,6 +948,9 @@ pub mod share;
 /// Phase 11 の拡充ループ（親 #1023、Issue #1024・#1025）: 音声認識の effect ドライバ
 /// （macOS/iOS/Windows/Android 実装、Android/Web は兄弟 issue）。
 pub mod speech_recognition;
+/// Phase 11 の拡充ループ（親 #117、Issue #560）: OS の検索への登録の effect ドライバ（macOS 実装、
+/// iOS・Android は #561・#562 で埋めるスタブ、他 OS は `UnsupportedSpotlightIndex` 固定）。
+pub mod spotlight_index;
 /// Phase 11 の拡充ループ（親 #103、Issue #421）: システムのアクセント色の effect ドライバ
 /// （macOS / Windows 実装、Android は JNI 実装、他 OS は `UnsupportedAccentColor` 固定）。
 pub mod system_accent_color;

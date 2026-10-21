@@ -159,6 +159,11 @@ fn main() -> eframe::Result<()> {
     #[cfg(all(target_os = "macos", feature = "device"))]
     fandhe_egui_proxy::device::apple_url_scheme::register();
 
+    // Issue #560: OS の検索から開かれたときの受信（`continueUserActivity`）を登録する
+    // （`device/apple_spotlight_index.rs`・`apple/fandhe_apple_spotlight_index.m` 参照）。
+    #[cfg(all(target_os = "macos", feature = "device"))]
+    fandhe_egui_proxy::device::apple_spotlight_index::register();
+
     // Issue #416: ファイルの関連付け（odoc）の Apple Event ハンドラも同じ理由で登録する
     // （`device/apple_file_association.rs`・`apple/fandhe_apple_file_association.m` 参照）。
     #[cfg(all(target_os = "macos", feature = "device"))]
