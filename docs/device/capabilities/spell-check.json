@@ -24,7 +24,7 @@
         "https://developer.android.com/reference/android/view/textservice/TextServicesManager",
         "https://developer.android.com/reference/android/view/textservice/SpellCheckerSession"
       ],
-      "note": "実装済み（#580）。`getSuggestions` は非推奨のため使わない。API 30 以下は session が null でも「無効」と「辞書なし」を区別できず非対応、API 31 以上は `isSpellCheckerEnabled` が false なら非対応・有効なのに session が null なら失敗表示（`LANGUAGE_UNAVAILABLE`）。期限は 10 秒（Rust のドライバだけが持ち、切れたら session を閉じる）。Activity が作り直されたら保留中の要求を中断扱いで破棄する。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・session の解放・入力と誤り語のログ非出力。守らない範囲: 期限後も OS 側の検査が走り切ること、返す言語は要求した言語で OS が選んだ subtype ではないこと、スペルチェッカーの実装（OEM・キーボードアプリ）による結果の違い。Android 実機の確認は #574 で行う。",
+      "note": "実装済み（#580）。`getSuggestions` は非推奨のため使わない。API 30 以下は session が null でも「無効」と「辞書なし」を区別できず非対応、API 31 以上は `isSpellCheckerEnabled` が false なら非対応・有効なのに session が null なら失敗表示（`LANGUAGE_UNAVAILABLE`）。期限は 10 秒（Rust のドライバだけが持ち、切れたら session を閉じる）。Activity が作り直されたら保留中の要求を中断扱いで破棄する。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・session の解放・入力と誤り語のログ非出力。守らない範囲: 期限後も OS 側の検査が走り切ること、返す言語は session の subtype 一覧から推定した値（完全一致 → 同じ主言語の先頭）で OS 内部の選択そのものではないこと、スペルチェッカーの実装（OEM・キーボードアプリ）による結果の違い。Android 実機の確認は #574 で行う。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#574）",
       "impl": "crates/fandhe-egui-proxy/src/device/android_spell_check.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/SpellCheckHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/spell_check.rs + crates/fandhe-core/src/screens/spell_check.rs + crates/fandhe-device/src/spell_check.rs、Issue #580"

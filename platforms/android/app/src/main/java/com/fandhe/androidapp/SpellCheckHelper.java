@@ -48,7 +48,7 @@ final class SpellCheckHelper {
     // ranges: 誤り 1 件につき (UTF-16 開始位置, UTF-16 長さ, 候補数) の 3 値を平らに並べたもの。
     // suggestions: 全候補を誤りの順に平らに並べたもの。
     private static native void nativeOnSpellCheckResult(
-            long requestId, int code, int[] ranges, String[] suggestions);
+            long requestId, int code, int[] ranges, String[] suggestions, String language);
 
     private final ComponentActivity activity;
     private final RequestTracker request = new RequestTracker();
@@ -81,7 +81,7 @@ final class SpellCheckHelper {
             }
         }
         if (h == null || !h.post(() -> start(id, text, language, limit))) {
-            nativeOnSpellCheckResult(id, RESULT_INTERRUPTED, null, null);
+            nativeOnSpellCheckResult(id, RESULT_INTERRUPTED, null, null, null);
         }
     }
 
@@ -114,7 +114,7 @@ final class SpellCheckHelper {
         }
         close(s);
         if (id != RequestTracker.NONE) {
-            nativeOnSpellCheckResult(id, RESULT_INTERRUPTED, null, null);
+            nativeOnSpellCheckResult(id, RESULT_INTERRUPTED, null, null, null);
         }
         if (t != null) {
             t.quitSafely();
@@ -155,26 +155,27 @@ final class SpellCheckHelper {
         }
         close(stale);
         if (destroyed) {
-            nativeOnSpellCheckResult(id, RESULT_INTERRUPTED, null, null);
+            nativeOnSpellCheckResult(id, RESULT_INTERRUPTED, null, null, null);
             return;
         }
         try {
             TextServicesManager tsm = (TextServicesManager)
                     activity.getSystemService(Context.TEXT_SERVICES_MANAGER_SERVICE);
             if (tsm == null) {
-                finish(id, RESULT_UNSUPPORTED, null, null);
+                finish(id, RESULT_UNSUPPORTED, null, null, null);
                 return;
             }
             boolean api31 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !isUsableOnS(tsm)) {
-                finish(id, RESULT_UNSUPPORTED, null, null);
+                finish(id, RESULT_UNSUPPORTED, null, null, null);
                 return;
             }
             // 利用者の言語設定ではなく、要求した言語の subtype を使わせる。
+            Listener listener = new Listener(id, language);
             SpellCheckerSession s = tsm.newSpellCheckerSession(
-                    null, Locale.forLanguageTag(language), new Listener(id), false);
+                    null, Locale.forLanguageTag(language), listener, false);
             if (s == null) {
-                finish(id, api31 ? RESULT_LANGUAGE_UNAVAILABLE : RESULT_UNSUPPORTED, null, null);
+                finish(id, api31 ? RESULT_LANGUAGE_UNAVAILABLE : RESULT_UNSUPPORTED, null, null, null);
                 return;
             }
             boolean current;
@@ -189,9 +190,10 @@ final class SpellCheckHelper {
                 close(s);
                 return;
             }
+            listener.actualLanguage = resolveActualLanguage(s, language);
             s.getSentenceSuggestions(new TextInfo[] {new TextInfo(text)}, limit);
         } catch (RuntimeException e) {
-            finish(id, RESULT_FAILED, null, null);
+            finish(id, RESULT_FAILED, null, null, null);
         }
     }
 
@@ -203,9 +205,12 @@ final class SpellCheckHelper {
 
     private final class Listener implements SpellCheckerSession.SpellCheckerSessionListener {
         private final long id;
+        // 実際に検査へ使う言語（session 生成後、検査開始前に設定する）。
+        volatile String actualLanguage;
 
-        Listener(long id) {
+        Listener(long id, String requested) {
             this.id = id;
+            this.actualLanguage = requested;
         }
 
         @Override
@@ -217,7 +222,7 @@ final class SpellCheckHelper {
         public void onGetSentenceSuggestions(SentenceSuggestionsInfo[] results) {
             try {
                 if (results == null) {
-                    finish(id, RESULT_FAILED, null, null);
+                    finish(id, RESULT_FAILED, null, null, null);
                     return;
                 }
                 List<Integer> ranges = new ArrayList<>();
@@ -232,11 +237,50 @@ final class SpellCheckHelper {
                 for (int i = 0; i < r.length; i++) {
                     r[i] = ranges.get(i);
                 }
-                finish(id, RESULT_OK, r, words.toArray(new String[0]));
+                finish(id, RESULT_OK, r, words.toArray(new String[0]), actualLanguage);
             } catch (RuntimeException e) {
-                finish(id, RESULT_FAILED, null, null);
+                finish(id, RESULT_FAILED, null, null, null);
             }
         }
+    }
+
+    // session が実際に使う subtype の言語タグを推定する。OS は同じ主言語の別 subtype を選びうるため、
+    // 要求をそのまま返さない。完全一致 → 同じ主言語の先頭の順（OS の選択規則と同じ）。subtype が
+    // 列挙されない（言語非依存のチェッカー）・取得できない場合は要求した言語を返す。
+    private static String resolveActualLanguage(SpellCheckerSession s, String requested) {
+        try {
+            android.view.textservice.SpellCheckerInfo info = s.getSpellChecker();
+            if (info == null) {
+                return requested;
+            }
+            String want = normalizeTag(requested);
+            String primary = want.split("-")[0];
+            String sameLanguage = null;
+            for (int i = 0; i < info.getSubtypeCount(); i++) {
+                android.view.textservice.SpellCheckerSubtype st = info.getSubtypeAt(i);
+                String tag = st.getLanguageTag();
+                if (tag == null || tag.isEmpty()) {
+                    tag = st.getLocale() == null ? "" : st.getLocale().replace('_', '-');
+                }
+                if (tag.isEmpty()) {
+                    continue;
+                }
+                String n = normalizeTag(tag);
+                if (n.equals(want)) {
+                    return tag;
+                }
+                if (sameLanguage == null && n.split("-")[0].equals(primary)) {
+                    sameLanguage = tag;
+                }
+            }
+            return sameLanguage != null ? sameLanguage : requested;
+        } catch (RuntimeException e) {
+            return requested;
+        }
+    }
+
+    private static String normalizeTag(String tag) {
+        return tag.replace('_', '-').toLowerCase(Locale.ROOT);
     }
 
     // 綴りの誤りだけを取り出す（辞書にある語・文法の誤りだけのものは除く）。
@@ -271,7 +315,7 @@ final class SpellCheckHelper {
 
     // この id が保留中の要求なら 1 回だけ確定し、session を解放する。取り出しと解放対象の取得は
     // cancel と同じ lock 内で不可分に行い、native 通知は lock の外で行う（first-wins）。
-    private void finish(long id, int code, int[] ranges, String[] suggestions) {
+    private void finish(long id, int code, int[] ranges, String[] suggestions, String language) {
         SpellCheckerSession s;
         synchronized (lock) {
             if (!request.complete(id)) {
@@ -281,6 +325,6 @@ final class SpellCheckHelper {
             session = null;
         }
         close(s);
-        nativeOnSpellCheckResult(id, code, ranges, suggestions);
+        nativeOnSpellCheckResult(id, code, ranges, suggestions, language);
     }
 }

@@ -5,7 +5,7 @@
 //!
 //! 流れ: `SpellChecker::check`（ドライバのワーカースレッド）→ [`RequestSlot::begin`] で id 採番 →
 //! JNI `MainActivity.requestSpellCheck(id, text, language, limit)` → Java が結果コード・誤りの位置・候補を
-//! `nativeOnSpellCheckResult` で返す → [`decode`] で契約の結果へ写像 → ワーカーが周期的に slot を見て
+//! `nativeOnSpellCheckResult` で返す（実際に検査へ使う言語を含む） → [`decode`] で契約の結果へ写像 → ワーカーが周期的に slot を見て
 //! 受け取る。期限は引数 `remaining`（ドライバが 10 秒を渡す）だけで、切れたら `cancelSpellCheck(id)` で
 //! session を閉じて `Internal(TIMEOUT)`。
 //!
@@ -26,7 +26,7 @@
 //! feature `device` 無効ビルドではその経路に到達しない（translation と同じ）。
 //!
 //! JNI 署名（Java・Rust で一致させる）: `requestSpellCheck(JLjava/lang/String;Ljava/lang/String;I)V`、
-//! `cancelSpellCheck(J)V`、`native nativeOnSpellCheckResult(long, int, int[], String[])`。
+//! `cancelSpellCheck(J)V`、`native nativeOnSpellCheckResult(long, int, int[], String[], String)`。
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -49,10 +49,10 @@ const RESULT_INTERRUPTED: i32 = 3;
 const RESULT_FAILED: i32 = 4;
 
 type Outcome = Result<SpellReport, DeviceError>;
-/// slot に置く生の結果（結果コード, ranges, 候補）。ranges は誤り 1 件につき
+/// slot に置く生の結果（結果コード, ranges, 候補, 実際に使った言語）。ranges は誤り 1 件につき
 /// `utf16_start, utf16_len, 候補数` の 3 値を平らに並べたもの、候補は全件を平らに並べたもの。
 /// `DeviceError` は `Clone` でないため、写像は受け取る側で行う。
-type Raw = (i32, Vec<i32>, Vec<String>);
+type Raw = (i32, Vec<i32>, Vec<String>, Option<String>);
 
 /// ranges と候補の平らな並びを [`RawIssue`] へ戻す。長さが 3 の倍数でない・負の値・候補数の合計が
 /// 候補の総数と一致しない場合は `None`（嘘の成功にしない）。
@@ -80,9 +80,14 @@ fn decode_issues(ranges: &[i32], suggestions: Vec<String>) -> Option<Vec<RawIssu
     Some(out)
 }
 
-/// Java の結果を契約の結果へ写像する。`language` は要求したタグをそのまま返す。
-fn decode(text: &str, language: &str, raw: Raw) -> Outcome {
-    let (code, ranges, suggestions) = raw;
+/// Java の結果を契約の結果へ写像する。`requested` は Java が実使用言語を返さなかった場合だけ使う。
+/// 報告する言語は同じ主言語の別 subtype が選ばれた場合に備え、Java が返した実使用言語を優先する。
+fn decode(text: &str, requested: &str, raw: Raw) -> Outcome {
+    let (code, ranges, suggestions, actual) = raw;
+    let language = actual
+        .as_deref()
+        .filter(|l| !l.is_empty() && !l.contains('\0'))
+        .unwrap_or(requested);
     match code {
         RESULT_OK => {
             let issues =
@@ -231,6 +236,7 @@ extern "system" fn Java_com_fandhe_androidapp_SpellCheckHelper_nativeOnSpellChec
     code: jni::sys::jint,
     ranges: jni::objects::JIntArray<'caller>,
     suggestions: jni::objects::JObjectArray<'caller>,
+    language: jni::objects::JString<'caller>,
 ) {
     let outcome = unowned_env.with_env(|env| -> Result<(), jni::errors::Error> {
         let mut flat = Vec::new();
@@ -252,12 +258,20 @@ extern "system" fn Java_com_fandhe_androidapp_SpellCheckHelper_nativeOnSpellChec
                 words.push(one);
             }
         }
-        SLOT.deliver(request_id as u64, (code, flat, words));
+        let actual = if language.is_null() {
+            None
+        } else {
+            Some(language.try_to_string(env)?)
+        };
+        SLOT.deliver(request_id as u64, (code, flat, words, actual));
         Ok(())
     });
     if !matches!(outcome.into_outcome(), jni::Outcome::Ok(_)) {
         // JNI 例外などで結果を読めなかった。要求を放置せず失敗で確定する。
-        SLOT.deliver(request_id as u64, (RESULT_FAILED, Vec::new(), Vec::new()));
+        SLOT.deliver(
+            request_id as u64,
+            (RESULT_FAILED, Vec::new(), Vec::new(), None),
+        );
     }
 }
 
@@ -291,12 +305,13 @@ mod tests {
             RESULT_OK,
             ranges,
             sugg.iter().map(|s| s.to_string()).collect(),
+            None,
         )
     }
 
     #[test]
     fn decode_maps_codes() {
-        let empty = |c| (c, vec![], vec![]);
+        let empty = |c| (c, vec![], vec![], None);
         assert!(matches!(
             decode("a", "en-US", empty(RESULT_UNSUPPORTED)),
             Err(DeviceError::Unsupported("spell_check"))
@@ -335,6 +350,24 @@ mod tests {
     }
 
     #[test]
+    fn decode_uses_actual_language_for_same_primary_fallback() {
+        // en-GB を要求したが端末に en-US の subtype しかない場合、実使用言語を報告する。
+        let mut raw = ok_raw(vec![], &[]);
+        raw.3 = Some("en-US".to_string());
+        assert_eq!(decode("hello", "en-GB", raw).unwrap().language, "en-US");
+        // 実使用言語が無い・空なら要求した言語。
+        let mut raw = ok_raw(vec![], &[]);
+        raw.3 = Some(String::new());
+        assert_eq!(decode("hello", "en-GB", raw).unwrap().language, "en-GB");
+        assert_eq!(
+            decode("hello", "en-GB", ok_raw(vec![], &[]))
+                .unwrap()
+                .language,
+            "en-GB"
+        );
+    }
+
+    #[test]
     fn decode_issues_rejects_malformed() {
         let s = |n: usize| vec!["x".to_string(); n];
         assert!(decode_issues(&[0, 1], s(0)).is_none());
@@ -367,7 +400,7 @@ mod tests {
             move |id| {
                 let s = s.clone();
                 std::thread::spawn(move || {
-                    s.deliver(id, (RESULT_OK, vec![], vec![]));
+                    s.deliver(id, (RESULT_OK, vec![], vec![], None));
                 });
                 true
             },
@@ -409,7 +442,7 @@ mod tests {
             Duration::from_millis(10),
             |id| {
                 std::thread::sleep(Duration::from_millis(20));
-                assert!(slot.deliver(id, (RESULT_OK, vec![], vec![])));
+                assert!(slot.deliver(id, (RESULT_OK, vec![], vec![], None)));
                 true
             },
             |_| cancelled.set(cancelled.get() + 1),
@@ -434,7 +467,7 @@ mod tests {
             &slot,
             Duration::from_millis(150),
             |id| {
-                assert!(!slot.deliver(id + 100, (RESULT_OK, vec![], vec![])));
+                assert!(!slot.deliver(id + 100, (RESULT_OK, vec![], vec![], None)));
                 true
             },
             |_| {},
