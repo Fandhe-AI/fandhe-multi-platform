@@ -688,6 +688,30 @@ public class MainActivity extends GameActivity {
         return screenWakeLockHelper.isHeld();
     }
 
+    // 画面キャプチャの防止・検知（Issue #584）。実装は `CaptureProtectionHelper`。Rust の
+    // `android_capture_protection.rs` が egui スレッドから JNI 呼び出しする。
+    private final CaptureProtectionHelper captureProtectionHelper = new CaptureProtectionHelper(this);
+
+    int captureProtectionSet(boolean on) {
+        return captureProtectionHelper.set(on);
+    }
+
+    int captureProtectionIsProtected() {
+        return captureProtectionHelper.isProtected();
+    }
+
+    int captureProtectionSupport() {
+        return captureProtectionHelper.support();
+    }
+
+    int captureProtectionRecording() {
+        return captureProtectionHelper.recording();
+    }
+
+    long captureProtectionScreenshotCount() {
+        return captureProtectionHelper.screenshotCount();
+    }
+
     // ライト（トーチ）（Issue #461）。実装は `FlashlightHelper`。Rust の `android_flashlight.rs` が
     // egui スレッドから同期で JNI 呼び出しする。
     private final FlashlightHelper flashlightHelper = new FlashlightHelper(this);
@@ -704,11 +728,13 @@ public class MainActivity extends GameActivity {
     protected void onStart() {
         super.onStart();
         flashlightHelper.onStart();
+        captureProtectionHelper.onStart();
     }
 
     @Override
     protected void onStop() {
         flashlightHelper.onStop();
+        captureProtectionHelper.onStop();
         super.onStop();
     }
 
@@ -2025,6 +2051,7 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        captureProtectionHelper.onCreate();
         installAccessibilityOffGuard();
         fullscreenHelper.register();
 
@@ -4796,6 +4823,7 @@ public class MainActivity extends GameActivity {
         screenCaptureHelper.onDestroy();
         printHelper.onDestroy();
         screenWakeLockHelper.onDestroy();
+        captureProtectionHelper.onDestroy();
         flashlightHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず

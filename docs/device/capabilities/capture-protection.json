@@ -20,7 +20,7 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_capture_protection.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_capture_protection.m + crates/fandhe-egui-proxy/src/device/capture_protection.rs + crates/fandhe-core/src/screens/capture_protection_show.rs + crates/fandhe-device/src/capture_protection.rs、Issue #583"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "防止は `FLAG_SECURE`。スクリーンショット検知は `Activity.registerScreenCaptureCallback`（API 34+）、録画検知は `WindowManager.addScreenRecordingCallback`（API 35+）",
       "perm": "検知のみ `DETECT_SCREEN_CAPTURE`（34+）・`DETECT_SCREEN_RECORDING`（35+）、いずれも install-time。防止は不要",
       "url": [
@@ -28,7 +28,10 @@
         "https://developer.android.com/about/versions/14/features/screenshot-detection",
         "https://developer.android.com/about/versions/15/features"
       ],
-      "note": "`FLAG_SECURE` はウィンドウ単位で、最近使ったアプリの画面にも効く（全 API レベル）。検知は API 34 未満・35 未満で非対応になる。adb・計装のスクリーンショットは検知されない。検知のたびに OS が通知を出す"
+      "note": "`FLAG_SECURE` はウィンドウ単位で、最近使ったアプリの画面にも効く（全 API レベル）。検知は API 34 未満・35 未満で非対応になる。adb・計装のスクリーンショットは検知されない。検知のたびに OS が通知を出す。実装済み（#584）: 防止は `FLAG_SECURE` の付け外しと Window 属性の読み戻しで表示し、Activity が作り直されても要求を引き継いで掛け直す。API 34 未満・35 未満・権限なしでは検知を画面に「非対応」と出し、背景にいる間の録画状態は「読み取れません」と出す。スクリーンショットの回数は単調増加で再生成でも戻さない。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・期限後に適用しないこと・コールバックの登録と解除の対応。守らない範囲: 背景中のスクリーンショット、外部カメラでの撮影、掛ける前に始まっていた録画、保護中にスクリーンショット通知が届くかの OS 依存（#575 で記録）",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#575）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_capture_protection.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/CaptureProtectionHelper.java + crates/fandhe-egui-proxy/src/device/capture_protection.rs + crates/fandhe-core/src/screens/capture_protection_show.rs + crates/fandhe-device/src/capture_protection.rs、Issue #584"
     },
     "macos": {
       "status": "no",
