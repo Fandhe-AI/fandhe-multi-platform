@@ -27,6 +27,16 @@
 //     だけで `UIControlEventEditingChanged` は発火しない（UIKit の仕様、ユーザー操作・
 //     `sendActions:for:` 明示呼び出し以外ではこのイベントは飛ばない）ため、
 //     `fandhe_ios_text_input_changed` は呼ばれない。
+//   - `int32_t fandhe_ios_text_input_set_one_time_code_hint(int32_t on)`（Issue #586、
+//     autofill-otp。呼び出し元は `src/device/ios_autofill_otp.rs`）: `on != 0` で入力欄に
+//     `textContentType = oneTimeCode` と数字キーボードを設定し、`on == 0` で `nil` と
+//     `UIKeyboardTypeDefault`（生成直後の既定値）へ戻す。希望状態はファイル static に保持し、
+//     入力欄の生成時にも反映する（未生成でも成功）。first responder なら `reloadInputViews` で
+//     キーボードを差し替える。冪等。戻りコード: 0 = 成功、2 = main スレッド以外
+//     （UIKit に触れず `dispatch_sync` もしない）、3 = `on != 0` なのに入力欄の橋渡し
+//     （`install`）が未完でヒントが効かない（成功を偽らず、希望状態も変えない）。守らない範囲: ヒントは
+//     プロセス内で残り、OTP 画面を離れても自動では戻らない。コードの値はこの経路を通らず、
+//     ログにも出さない。
 
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
@@ -37,6 +47,23 @@ extern void fandhe_ios_text_input_changed(const char *_Nullable text_utf8, long 
 extern void fandhe_ios_text_input_backspace(void);
 extern void fandhe_ios_text_input_return(void);
 extern void fandhe_ios_text_input_reset(void);
+
+// ワンタイムコード用ヒントの希望状態と、橋渡しの差し込み済みフラグ。
+// いずれも main スレッドでのみ読み書きする。
+static BOOL g_oneTimeCodeHint = NO;
+static BOOL g_installed = NO;
+
+// 希望状態を入力欄へ反映する。`NO` のときは生成直後の既定値を入れ直すだけなので、
+// OTP を使わない日本語入力画面の挙動は変わらない。
+static void FandheApplyContentHint(UITextField *field) {
+    if (g_oneTimeCodeHint) {
+        field.textContentType = UITextContentTypeOneTimeCode;
+        field.keyboardType = UIKeyboardTypeNumberPad;
+    } else {
+        field.textContentType = nil;
+        field.keyboardType = UIKeyboardTypeDefault;
+    }
+}
 
 // ゼロサイズの `UITextField`。UIKit の `UITextInput`（marked text 含む）実装一式を
 // そのまま first responder として使い、変換中文字列を `markedTextRange` から読む。
@@ -62,6 +89,7 @@ extern void fandhe_ios_text_input_reset(void);
         self.hidden = NO;
         self.alpha = 0;
         self.delegate = self;
+        FandheApplyContentHint(self);
         [self addTarget:self
                       action:@selector(fandheTextChanged)
             forControlEvents:UIControlEventEditingChanged];
@@ -142,8 +170,7 @@ static BOOL fandhe_resign_first_responder(id self, SEL __unused _cmd) {
 }
 
 void fandhe_ios_text_input_install(void) {
-    static BOOL installed = NO;
-    if (installed) {
+    if (g_installed) {
         return;
     }
     Class viewClass = objc_getClass("WinitUIView");
@@ -152,7 +179,7 @@ void fandhe_ios_text_input_install(void) {
         // 呼び出し元（`ios_text_input.rs`）は次フレームの `update` で再試行する。
         return;
     }
-    installed = YES;
+    g_installed = YES;
 
     SEL becomeSel = @selector(becomeFirstResponder);
     SEL resignSel = @selector(resignFirstResponder);
@@ -165,5 +192,26 @@ void fandhe_ios_text_input_install(void) {
 void fandhe_ios_text_input_clear(void) {
     if (g_activeField != nil) {
         g_activeField.text = @"";
+    }
+}
+
+int32_t fandhe_ios_text_input_set_one_time_code_hint(int32_t on) {
+    if (![NSThread isMainThread]) {
+        return 2;
+    }
+    @autoreleasepool {
+        // 失敗を返す経路では希望状態を変えない（失敗と出たのに後から生成された入力欄へ
+        // ヒントが効く、という報告と状態の食い違いを作らない）。
+        if (on != 0 && !g_installed) {
+            return 3;
+        }
+        g_oneTimeCodeHint = (on != 0);
+        if (g_activeField != nil) {
+            FandheApplyContentHint(g_activeField);
+            if ([g_activeField isFirstResponder]) {
+                [g_activeField reloadInputViews];
+            }
+        }
+        return 0;
     }
 }
