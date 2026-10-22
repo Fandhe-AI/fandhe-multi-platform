@@ -154,6 +154,8 @@ pub mod secure_credential;
 pub mod share;
 /// Phase 11（端末機能の拡充ループ、親 #1023、Issue #1024）: 音声認識。
 pub mod speech_recognition;
+/// Phase 11（端末機能の拡充ループ、親 #119、Issue #578）: スペルチェック（入力文の誤り語と修正候補）。
+pub mod spell_check;
 /// Phase 11（端末機能の拡充ループ、親 #117、Issue #560）: OS の検索への登録（固定のメモ 1 件の登録と全削除）。
 pub mod spotlight_index;
 pub mod storage;

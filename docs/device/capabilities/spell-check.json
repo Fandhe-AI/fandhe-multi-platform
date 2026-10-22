@@ -24,11 +24,14 @@
       "note": "未実装。`getSuggestions` は API 16 で非推奨のため `getSentenceSuggestions` を使う（`newSpellCheckerSession` は非推奨でない）。`newSpellCheckerSession` は有効なスペルチェッカーが無い・指定言語の subtype が無いなどで null を返す。`isSpellCheckerEnabled` は API 31 のため minSdk 24 では分岐する。Looper のあるスレッドで呼ぶ。エラーのコールバックが無く、結果が来ない場合は期限で打ち切る"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "AppKit `NSSpellChecker`",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nsspellchecker",
-      "note": "未実装。呼び出しごとに document tag を取り、`closeSpellDocumentWithTag:` で全経路解放する。言語は `availableLanguages` から選んで明示し、`setLanguage:` は呼ばない（共有状態を変えない）。`guessesForWord:` は 10.6 で非推奨のため使わない"
+      "note": "実装済み（#578）。呼び出しごとに document tag を取り、`closeSpellDocumentWithTag:` で全経路解放する。言語は `availableLanguages` から選んで明示し（無ければ失敗表示）、`setLanguage:` は呼ばない（共有状態を変えない）。`guessesForWord:` は 10.6 で非推奨のため使わない。呼び出しは main queue に集約し、期限切れの後は Rust のバッファへ書かない。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・document tag の解放・入力と誤り語のログ非出力。守らない範囲: 期限後も OS 側の検査が走り切ること、利用者が OS に学習させた語による結果の違い。正常系・失敗系の目視は Mac 目視（#574）で確かめる。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#574）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_spell_check.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_spell_check.m + crates/fandhe-egui-proxy/src/device/spell_check.rs + crates/fandhe-core/src/screens/spell_check.rs + crates/fandhe-device/src/spell_check.rs、Issue #578"
     },
     "windows": {
       "status": "possible",

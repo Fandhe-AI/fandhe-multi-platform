@@ -330,6 +330,10 @@ generated_screens! {
     crate::device::translation::translation_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "spell_check" => fandhe_core::screens::spell_check::current_screen,
+    crate::device::spell_check::spell_check_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "spotlight_index" => fandhe_core::screens::spotlight_index::current_screen,
     crate::device::spotlight_index::spotlight_index_effect,
     effect
