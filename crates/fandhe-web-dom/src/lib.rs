@@ -296,6 +296,9 @@ pub use mount::{mount, mount_with_effect, Applier, WebEffect};
 pub mod app_badge;
 /// 型サンプル「AR 表示」の Web 経路（Issue #309）。[`haptics`] と同じ理由で gate を外す。
 pub mod ar;
+/// 型サンプル「パスワード・ワンタイムコードの自動入力」の Web 経路（Issue #587）。[`haptics`] と同じ理由で純関数は
+/// native からもテストできるよう gate を外す（wasm 部は内側の `cfg`）。
+pub mod autofill_otp;
 /// 型サンプル「バーコード・QR 読み取り」の Web 経路（Issue #559）。[`haptics`] と同じ理由で純関数は native からも
 /// テストできるよう gate を外す（wasm 部は内側の `cfg`）。
 pub mod barcode_scan;
