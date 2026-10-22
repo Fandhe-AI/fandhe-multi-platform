@@ -166,7 +166,7 @@ final class SpellCheckHelper {
                 return;
             }
             boolean api31 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !isUsableOnS(tsm)) {
+            if (api31 && !isUsableOnS(tsm)) {
                 finish(id, RESULT_UNSUPPORTED, null, null, null);
                 return;
             }
@@ -221,7 +221,9 @@ final class SpellCheckHelper {
         @Override
         public void onGetSentenceSuggestions(SentenceSuggestionsInfo[] results) {
             try {
-                if (results == null) {
+                // 渡した TextInfo は 1 件なので、空配列は「検査されなかった」を表す（IME がスペルチェックを
+                // 抑止中のとき SDK は空配列を返す）。誤り 0 件の成功にしない。
+                if (results == null || results.length == 0) {
                     finish(id, RESULT_FAILED, null, null, null);
                     return;
                 }
