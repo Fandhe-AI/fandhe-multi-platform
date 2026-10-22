@@ -173,9 +173,10 @@ mod tests {
 
     #[test]
     fn support_is_detect_only_and_prevent_is_unsupported() {
-        assert!(!IOS_SUPPORT.prevent);
-        assert!(IOS_SUPPORT.detect_recording);
-        assert!(IOS_SUPPORT.detect_screenshot);
+        // 定数の検証はコンパイル時に行う（clippy::assertions_on_constants 回避）
+        const _: () = assert!(!IOS_SUPPORT.prevent);
+        const _: () = assert!(IOS_SUPPORT.detect_recording);
+        const _: () = assert!(IOS_SUPPORT.detect_screenshot);
         assert!(matches!(
             set_protected_result(),
             Err(DeviceError::Unsupported(_))
