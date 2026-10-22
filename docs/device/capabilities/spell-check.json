@@ -37,11 +37,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/macos_spell_check.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_spell_check.m + crates/fandhe-egui-proxy/src/device/spell_check.rs + crates/fandhe-core/src/screens/spell_check.rs + crates/fandhe-device/src/spell_check.rs、Issue #578"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "`ISpellCheckerFactory` / `ISpellChecker`（spellcheck.h、Windows 8+）",
       "perm": "不要（desktop apps / UWP apps 対応と Learn に明記、package identity 不要）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/spellcheck/nn-spellcheck-ispellchecker",
-      "note": "未実装。out-of-proc で RPC 待ちが起きるためワーカー + 期限で呼ぶ。返る文字列は `CoTaskMemFree` で解放する。`windows` crate の feature `Win32_Globalization` を足す。重複語（`CORRECTIVE_ACTION_DELETE`）は範囲外"
+      "note": "実装済み（#581）。ワーカーで MTA を初期化し、`SupportedLanguages` で辞書の有無を確かめてから `CreateSpellChecker` を呼ぶ（無い言語は失敗表示で、誤り 0 件にしない）。OS が返す文字列は RAII ガードで `CoTaskMemFree` を 1 回だけ呼ぶ。重複語（`CORRECTIVE_ACTION_DELETE`）は扱わず、端末のユーザー辞書（`Add` / `Ignore` / `AutoCorrect`）は変えない。誤りごとに期限を確かめる。守らない範囲は、期限切れ後に走り始めた `Check` / `Suggest` が走り切ること、利用者が OS に学習させた語による結果の違い。正常系・失敗系の確認は Windows 実機確認（#574）で行う。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#574）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_spell_check.rs + crates/fandhe-egui-proxy/src/device/spell_check.rs + crates/fandhe-core/src/screens/spell_check.rs + crates/fandhe-device/src/spell_check.rs、Issue #581"
     },
     "web": {
       "status": "no",

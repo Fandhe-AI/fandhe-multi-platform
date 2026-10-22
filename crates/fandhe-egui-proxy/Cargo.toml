@@ -523,6 +523,10 @@ windows = { workspace = true, optional = true, features = [
     # Issue #531: `device/windows_web_auth_session.rs` が `BCryptGenRandom` / `BCryptHash` を呼ぶ。
     # 新規パッケージは増えない（Cargo.lock は不変）。
     "Win32_Security_Cryptography",
+    # Issue #581: `device/windows_spell_check.rs` が `ISpellCheckerFactory` / `ISpellChecker` /
+    # `IEnumSpellingError`（`Win32_Globalization`）を呼ぶ。新規パッケージは増えない（Cargo.lock は不変）。
+    # `IEnumString`・`CoCreateInstance`・`CoTaskMemFree` は導入済みの `Win32_System_Com` で足りる。
+    "Win32_Globalization",
 ] }
 # Issue #898: `device/windows_share.rs::remember_window` が `eframe::CreationContext`
 # から HWND を取り出すために使う（`raw-window-handle` の `HasWindowHandle` トレイト）。
