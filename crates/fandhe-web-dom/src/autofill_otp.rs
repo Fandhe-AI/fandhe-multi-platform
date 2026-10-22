@@ -45,7 +45,8 @@
 
 #[cfg(any(test, target_arch = "wasm32"))]
 use fandhe_core::screens::otp_input::{
-    CoreWaitFailure, CoreWaitOutcome, HintPhase, CODE_FIELD_LABEL,
+    CoreWaitFailure, CoreWaitOutcome, HintPhase, CODE_FIELD_LABEL, RETRY_BUTTON_LABEL,
+    WAIT_BUTTON_LABEL,
 };
 #[cfg(any(test, target_arch = "wasm32"))]
 use fandhe_device::autofill_otp::{should_fill, OtpCode, WaitOutcome, WEBOTP_TIMEOUT_MS};
@@ -71,6 +72,35 @@ fn wants_hint_attrs(phase: HintPhase) -> bool {
 #[cfg(any(test, target_arch = "wasm32"))]
 fn is_code_label(text: &str) -> bool {
     text == CODE_FIELD_LABEL
+}
+
+/// 「SMS を待つ」ボタンを見せてよいか。非対応環境では出さない（押せて何も起きない状態を作らない）。
+#[cfg(any(test, target_arch = "wasm32"))]
+fn show_wait_button(can_wait: bool) -> bool {
+    can_wait
+}
+
+/// 「もう一度伝える」ボタンを見せてよいか。ヒントが失敗したときだけ出す。
+#[cfg(any(test, target_arch = "wasm32"))]
+fn show_retry_button(phase: HintPhase) -> bool {
+    phase == HintPhase::Failed
+}
+
+/// `<button>` の文言から、表示を制御する対象の種別を引く。
+#[cfg(any(test, target_arch = "wasm32"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ButtonKind {
+    Wait,
+    Retry,
+}
+
+#[cfg(any(test, target_arch = "wasm32"))]
+fn button_kind(text: &str) -> Option<ButtonKind> {
+    match text {
+        WAIT_BUTTON_LABEL => Some(ButtonKind::Wait),
+        RETRY_BUTTON_LABEL => Some(ButtonKind::Retry),
+        _ => None,
+    }
 }
 
 /// WebOTP を使える環境か（3 条件すべて必要）。
@@ -244,6 +274,29 @@ mod web {
         None
     }
 
+    /// 操作ボタンの `hidden` を状態に合わせて付け直す。全再構築のたびに作り直されるため毎回呼ぶ。
+    /// `hidden` 属性は `childList` のみ監視の `MutationObserver` に拾われず、`apply` も呼ばないので再描画しない。
+    fn sync_button_visibility(root: &Element, can_wait: bool, hint: HintPhase) {
+        let Ok(buttons) = root.query_selector_all("button") else {
+            return;
+        };
+        for i in 0..buttons.length() {
+            let Some(b) = buttons.item(i).and_then(|n| n.dyn_into::<Element>().ok()) else {
+                continue;
+            };
+            let show = match button_kind(&b.text_content().unwrap_or_default()) {
+                Some(ButtonKind::Wait) => show_wait_button(can_wait),
+                Some(ButtonKind::Retry) => show_retry_button(hint),
+                None => continue,
+            };
+            if show {
+                let _ = b.remove_attribute("hidden");
+            } else {
+                let _ = b.set_attribute("hidden", "");
+            }
+        }
+    }
+
     fn set_hint_attrs(input: &Element) -> bool {
         input
             .set_attribute("autocomplete", AUTOCOMPLETE_VALUE)
@@ -317,6 +370,7 @@ mod web {
 
         // 2. SMS 待ち受けを使えるか（変わったときだけ反映してループを避ける）。
         let can_wait = supported(&window);
+        sync_button_visibility(&root, can_wait, state.hint);
         if state.sms_wait_available != can_wait {
             applier.apply(move |s| set_sms_wait_available(s, can_wait));
         }
@@ -419,8 +473,10 @@ mod web {
                 }
             }),
             None => {
-                // 期限を張れないなら待ち続けない。
+                // 期限を張れないなら待ち続けない。取り消しの AbortError が中立の Cancelled に
+                // 化けないよう、ここで失敗として確定させ、後から届く完了は世代照合で捨てる。
                 ctrl.abort();
+                return fail(applier);
             }
         }
 
@@ -553,6 +609,41 @@ mod tests {
     fn is_code_label_matches_core_label() {
         assert!(is_code_label(CODE_FIELD_LABEL));
         assert!(!is_code_label("別の欄"));
+    }
+
+    #[test]
+    fn buttons_visibility_follows_state() {
+        assert!(show_wait_button(true));
+        assert!(!show_wait_button(false));
+        assert!(show_retry_button(HintPhase::Failed));
+        for p in [
+            HintPhase::Requested,
+            HintPhase::Applying,
+            HintPhase::Applied,
+            HintPhase::Unsupported,
+        ] {
+            assert!(!show_retry_button(p));
+        }
+    }
+
+    #[test]
+    fn button_kind_matches_core_labels() {
+        assert_eq!(button_kind(WAIT_BUTTON_LABEL), Some(ButtonKind::Wait));
+        assert_eq!(button_kind(RETRY_BUTTON_LABEL), Some(ButtonKind::Retry));
+        assert_eq!(button_kind("別のボタン"), None);
+    }
+
+    #[test]
+    fn timer_failure_is_failed_not_cancelled() {
+        // 期限タイマーを張れない分岐は fail() で Failed を確定させる。取り消し由来の AbortError は中立になる。
+        assert_eq!(
+            to_core_wait(wait_outcome_from_dom_error("AbortError"), ""),
+            Ok(CoreWaitOutcome::Cancelled)
+        );
+        assert_eq!(
+            to_core_wait(Err(DeviceError::Internal("autofill_otp webotp")), ""),
+            Err(CoreWaitFailure::Failed)
+        );
     }
 
     #[test]

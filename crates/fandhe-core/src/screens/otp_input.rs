@@ -5,8 +5,8 @@
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。ヒントの OS 呼び出しは effect ドライバ
 //! （`device/autofill_otp.rs`）が [`take_hint_request`] で観測して行い、[`finish_hint`] で結果を注入する。
 //! Web の WebOTP 待ち受け（「SMS を待つ」）は `fandhe-web-dom`（c、#587）が [`take_wait_request`] /
-//! [`finish_wait`] で同じ形に乗せる。全 OS 分の状態・定数・文言は (a) で確定し、後続の OS 別 PR は
-//! 本ファイルに触れない。
+//! [`finish_wait`] で同じ形に乗せる。全 OS 分の状態・定数・文言は (a) で確定している。Web は
+//! 起動後に対応可否が決まるため、[`current_screen`] ではなく固定画面 [`fixed_screen`] を使う。
 //!
 //! # 結果を混同しない理由
 //!
@@ -242,8 +242,13 @@ pub fn set_sms_wait_available(state: &mut OtpInputState, available: bool) {
 }
 
 /// 「SMS を待つ」ボタンのハンドラ。使える環境で `Idle` のときだけ受け付ける（二重押し防止）。
+/// 使えない環境で押されたら黙って無視せず、非対応の案内を error に出す。
 pub fn start_wait(state: &mut OtpInputState) {
-    if !state.sms_wait_available || state.wait != WaitPhase::Idle {
+    if !state.sms_wait_available {
+        state.error = WAIT_UNSUPPORTED_STATUS.to_string();
+        return;
+    }
+    if state.wait != WaitPhase::Idle {
         return;
     }
     state.wait = WaitPhase::Requested;
@@ -358,6 +363,7 @@ mod tests {
         let mut s = OtpInputState::default();
         start_wait(&mut s);
         retry_hint(&mut s);
+        assert_eq!(s.error, WAIT_UNSUPPORTED_STATUS);
         assert_eq!(s.wait, WaitPhase::Idle);
         assert_eq!(s.hint, HintPhase::Requested);
         assert_eq!(s.hint_generation, 0);
@@ -431,6 +437,7 @@ mod tests {
         let mut s = OtpInputState::default();
         start_wait(&mut s);
         assert_eq!(s.wait, WaitPhase::Idle);
+        assert_eq!(s.error, WAIT_UNSUPPORTED_STATUS);
         set_sms_wait_available(&mut s, true);
         start_wait(&mut s);
         assert_eq!((s.wait, s.wait_generation), (WaitPhase::Requested, 1));
