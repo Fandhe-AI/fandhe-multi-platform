@@ -14,14 +14,17 @@
       "note": "未実装。`UITextChecker.availableLanguages` で言語の辞書を確かめてから呼ぶ（辞書が無い言語を「誤り 0 件」にしない）。クラスが `NS_SWIFT_UI_ACTOR` のため main スレッドで呼ぶ。iOS 3.2+"
     },
     "android": {
-      "status": "possible",
-      "api": "`TextServicesManager.newSpellCheckerSession` + `SpellCheckerSession.getSentenceSuggestions`（API 16）",
+      "status": "done",
+      "api": "`TextServicesManager.newSpellCheckerSession`（`referToSpellCheckerLanguageSettings=false`）+ `SpellCheckerSession.getSentenceSuggestions`（API 16）。専用 HandlerThread で呼び、全経路で `cancel()`・`close()`",
       "perm": "不要（`<queries>` も不要。現在のスペルチェッカーはパッケージ可視性の対象外と SDK に明記）",
       "url": [
         "https://developer.android.com/reference/android/view/textservice/TextServicesManager",
         "https://developer.android.com/reference/android/view/textservice/SpellCheckerSession"
       ],
-      "note": "未実装。`getSuggestions` は API 16 で非推奨のため `getSentenceSuggestions` を使う（`newSpellCheckerSession` は非推奨でない）。`newSpellCheckerSession` は有効なスペルチェッカーが無い・指定言語の subtype が無いなどで null を返す。`isSpellCheckerEnabled` は API 31 のため minSdk 24 では分岐する。Looper のあるスレッドで呼ぶ。エラーのコールバックが無く、結果が来ない場合は期限で打ち切る"
+      "note": "実装済み（#580）。`getSuggestions` は非推奨のため使わない。API 30 以下は session が null でも「無効」と「辞書なし」を区別できず非対応、API 31 以上は `isSpellCheckerEnabled` が false なら非対応・有効なのに session が null なら失敗表示（`LANGUAGE_UNAVAILABLE`）。期限は 10 秒（Rust のドライバだけが持ち、切れたら session を閉じる）。Activity が作り直されたら保留中の要求を中断扱いで破棄する。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・session の解放・入力と誤り語のログ非出力。守らない範囲: 期限後も OS 側の検査が走り切ること、返す言語は要求した言語で OS が選んだ subtype ではないこと、スペルチェッカーの実装（OEM・キーボードアプリ）による結果の違い。Android 実機の確認は #574 で行う。",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#574）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_spell_check.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/SpellCheckHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/spell_check.rs + crates/fandhe-core/src/screens/spell_check.rs + crates/fandhe-device/src/spell_check.rs、Issue #580"
     },
     "macos": {
       "status": "done",

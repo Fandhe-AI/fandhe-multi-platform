@@ -495,6 +495,17 @@ public class MainActivity extends GameActivity {
         translationHelper.cancel(requestId);
     }
 
+    // スペルチェック（Issue #580）。実装は `SpellCheckHelper`。Rust の `android_spell_check.rs` が JNI で呼ぶ。
+    private final SpellCheckHelper spellCheckHelper = new SpellCheckHelper(this);
+
+    void requestSpellCheck(long requestId, String text, String language, int suggestionsLimit) {
+        spellCheckHelper.request(requestId, text, language, suggestionsLimit);
+    }
+
+    void cancelSpellCheck(long requestId) {
+        spellCheckHelper.cancel(requestId);
+    }
+
     // 音楽ライブラリ画面（Issue #485）。実装は `MusicLibraryHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_music_library.rs` が JNI で呼ぶ。
     private final MusicLibraryHelper musicLibraryHelper = new MusicLibraryHelper(this);
@@ -4772,6 +4783,7 @@ public class MainActivity extends GameActivity {
         super.onDestroy();
         pedometerHelper.onDestroy();
         translationHelper.onDestroy();
+        spellCheckHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();
         musicLibraryHelper.onDestroy();
