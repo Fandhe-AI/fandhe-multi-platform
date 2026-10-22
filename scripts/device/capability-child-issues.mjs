@@ -85,22 +85,26 @@ const OS_EXTRA = {
   ios: (chk) => [
     "iOS シミュレータ向けビルドが通る",
     "PR に `device-check-pending` を付ける",
-    `iOS のセルの \`implStatus\` を「iOS 実機確認待ち（#${chk}）」にする`,
+    `iOS のセルは \`detail\` を「できている（iOS 実機確認待ち）」、\`implStatus\` を「iOS 実機確認待ち（#${chk}）」にする`,
     "OS コールバックが結果を入れた直後に `crate::ios::request_repaint` で次フレームを起こす",
   ],
   android: (chk) => [
     "Android のビルド（cargo-ndk + Gradle）が通る",
     "PR に `device-check-pending` を付ける",
-    `Android のセルの \`implStatus\` を「Android 実機確認待ち（#${chk}）」にする`,
+    `Android のセルは \`detail\` を「できている（Android 実機確認待ち）」、\`implStatus\` を「Android 実機確認待ち（#${chk}）」にする`,
     "Java は機能ごとのヘルパークラスに分け、`MainActivity` への追記は呼び出し・登録の最小限に留める",
     "Activity 再生成時は保留中の要求を Rust 側と揃えて破棄し、旧結果が新しい要求の id を消費しない",
   ],
   windows: (chk) => [
     "Windows ターゲットのビルドが通る",
     "PR に `device-check-pending` を付ける",
-    `Windows のセルの \`implStatus\` を「Windows 実機確認待ち（#${chk}）」にする`,
+    `Windows のセルは \`detail\` を「できている（Windows 実機確認待ち）」、\`implStatus\` を「Windows 実機確認待ち（#${chk}）」にする`,
   ],
-  web: () => ["wasm32 ビルドが通る", "ヘッドレス Chrome で確認できる範囲を確認する"],
+  web: (chk) => [
+    "wasm32 ビルドが通る",
+    "ヘッドレス Chrome で確認できる範囲を確認する",
+    `Web のセルは \`detail\` を「できている（実ブラウザ確認待ち）」、\`implStatus\` を「実ブラウザ確認待ち（#${chk}）」にする`,
+  ],
 };
 
 /** 層の追加条件と、担当 OS それぞれの追加条件。担当外の OS の条件は入れない。 */

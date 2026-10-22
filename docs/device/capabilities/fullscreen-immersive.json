@@ -56,7 +56,7 @@
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Fullscreen_API",
       "safari": "iPhone では `<video>` 以外の全画面が非対応との認識（MDN の互換表では未確認）。prefixed API（`webkitRequestFullscreen`）は使わず未対応扱い",
       "note": "実装済み（旧#1315）。クリックから同期に `documentElement.requestFullscreen()` / `document.exitFullscreen()` を呼び、`document.fullscreenElement` を読み戻して確定する。`fullscreenchange`（Esc 解除を含む）と `pageshow` で表示を追従させ、`fullscreenerror`・reject は失敗、3 秒で期限切れの失敗にする。API 無し・`fullscreenEnabled` 偽は非対応。 守る範囲: 表示が `fullscreenElement` に追従すること、失敗・非対応・読めない状態を全画面と見せないこと、1 マウント内でリスナーとタイマーを漏らさないこと。守らない範囲: 複数タブ・複数マウント、期限切れの後にブラウザが遅れて切り替えた場合の失敗文言、iframe の allow 無しによる非対応、マウント破棄時に全画面を解くこと、ページ終了時の後片付け（ブラウザが戻す）。実ブラウザ目視は #22",
-      "detail": "できている（実ブラウザ未確認）",
+      "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実装済み（実ブラウザ確認待ち、#22）",
       "impl": "crates/fandhe-web-dom/src/fullscreen_immersive.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/fullscreen_toggle.rs、Issue 旧#1315"
     }

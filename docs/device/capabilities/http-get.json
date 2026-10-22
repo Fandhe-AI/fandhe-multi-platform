@@ -44,7 +44,7 @@
     },
     "web": {
       "status": "done",
-      "detail": "できている（実ブラウザ未確認）",
+      "detail": "できている（実ブラウザ確認待ち）",
       "api": "`fetch`（Fetch API）+ `AbortController`",
       "perm": "なし（別オリジンの場合、取得先が CORS ヘッダを返す必要）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API",

@@ -54,7 +54,7 @@
     },
     "web": {
       "status": "done",
-      "detail": "できている（実ブラウザ未確認）",
+      "detail": "できている（実ブラウザ確認待ち）",
       "api": "`navigator.registerProtocolHandler()`（受信側）。起動側はリンク / `location.href` で独自 scheme へ遷移",
       "perm": "なし（secure context 必須、ブラウザがユーザー確認を出す場合あり）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Navigator/registerProtocolHandler",

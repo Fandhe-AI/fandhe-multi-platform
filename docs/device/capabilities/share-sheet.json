@@ -60,7 +60,7 @@
     },
     "web": {
       "status": "done",
-      "detail": "できている",
+      "detail": "できている（実ブラウザ確認待ち）",
       "api": "Web Share API（`navigator.share`）",
       "perm": "secure context 必須、ユーザー操作起因の呼び出しが必須",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share",

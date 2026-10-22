@@ -15,7 +15,7 @@
         "https://developer.apple.com/documentation/mediaplayer/mpmedialibrary"
       ],
       "note": "実装済み（#484）。「曲の一覧を読む」で曲のタイトルとアーティストを OS の返す順に先頭 20 件だけ表示する。0 曲は成功として別に出し、非対応・拒否・期限切れ（30 秒、許可ダイアログへの応答を含む）・失敗は区別して失敗として出す。守らない範囲: iCloud ミュージック・Apple Music 由来の曲が載るか、読み取り後の変化、期限後も OS 側の処理が走り切ること。シミュレータはライブラリが空のため「0 曲」になる見込み（【推測】、#480 で確認）。",
-      "detail": "できている（実機確認待ち）",
+      "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#480）",
       "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_music_library.m + crates/fandhe-egui-proxy/src/device/ios_music_library.rs + crates/fandhe-egui-proxy/src/device/music_library.rs + crates/fandhe-core/src/screens/music_library_list.rs + crates/fandhe-device/src/music_library.rs、Issue #484"
     },

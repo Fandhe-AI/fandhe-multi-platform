@@ -161,9 +161,10 @@ Windows がプロセス間転送・レジストリ等で 2h を明らかに超�
   実装パスを入れる」「他の OS のセル（申請待ちを含む）は触らない」「`--check` が通る」
 - (b)(c) は本文に **`dependsOn: #<(a) の番号>`** を明記する（implement-issue-tree が読む）
 - **子より先に Step 7 の確認用 issue を起票**し、その番号を下の `implStatus` と `dependsOn` に使う。
-- (a) には失敗系テストを受け入れ条件に含める。macOS のセルは `detail` を「できている（Mac 目視待ち）」、
-  `implStatus` を「Mac 目視待ち（#<確認用 issue>）」とし、表のセルで目視前だと分かるようにする。
-  目視が済んだら確認用 issue 側で両方を書き直す
+- (a) には失敗系テストを受け入れ条件に含める
+- 実装した OS のセルは、人手の確認が済むまで表のセルで確認前だと分かるようにする。`detail` を「できている（<待ち>）」、
+  `implStatus` を「<待ち>（#<確認用 issue>）」とする。<待ち> は macOS が「Mac 目視待ち」、iOS・Android・Windows が
+  「<OS> 実機確認待ち」、Web が「実ブラウザ確認待ち」。確認が済んだら確認用 issue 側で両方を書き直す
 - 人手の確認が済まないと着手できない子があれば、その子の本文に `dependsOn: #<確認用 issue>` を書く
   （implement-issue-tree はツリー外の open な issue に依存する子だけを `blocked` で飛ばし、残りを進める）
 

@@ -56,7 +56,7 @@
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Network_Information_API",
       "safari": "`navigator.onLine` は対応。`navigator.connection` は非対応との認識（MDN の互換表では未確認）",
       "note": "実装済み（旧#1285）。`navigator.onLine` と `navigator.connection.type` を `READ_INTERVAL`（1 秒）ごとの `setInterval` で読み直す（`online` / `offline` イベントは購読しない）。`onLine=false` は接続なし、`type=\"none\"` は矛盾するので接続ありにせず不明。種別は Chromium の一部環境だけで、Safari / Firefox / デスクトップ Chrome では「不明」。従量制を示す API は無く常に「不明」。タイマーはマウント破棄時に `clearInterval` と closure 解放を行い、登録に失敗したら失敗表示にする。守る範囲: 嘘の「接続あり」を出さないこと、1 マウント 1 タイマーの解放。守らない範囲: インターネット到達性（`onLine` は経路の有無のみ）、反映遅れ（最大 1 秒。背景タブはブラウザの間引きでさらに遅れる）、複数タブ間の食い違い。実ブラウザの目視は #18",
-      "detail": "できている（実ブラウザ未確認）",
+      "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実装済み（実ブラウザ未確認）",
       "impl": "crates/fandhe-web-dom/src/network_status.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/network_status_show.rs、Issue 旧#1285"
     }

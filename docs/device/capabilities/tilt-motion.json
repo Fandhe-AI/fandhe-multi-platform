@@ -59,7 +59,7 @@
     },
     "web": {
       "status": "done",
-      "detail": "できている（実ブラウザ未確認）",
+      "detail": "できている（実ブラウザ確認待ち）",
       "api": "`DeviceOrientationEvent`（`beta`/`gamma`）",
       "perm": "iOS 13+ の Safari のみ `requestPermission()`（ユーザー操作起因）が必須。未配線（下記 note 参照）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/deviceorientation_event",

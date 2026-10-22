@@ -36,7 +36,7 @@ test("bodyOf: 目印・dependsOn・層ごとの追加条件が入る", () => {
   assert.ok(a.startsWith("<!-- capability-child: x/a -->"));
   assert.ok(!a.includes("dependsOn"));
   const b = bodyOf({ ...base, layer: "b-ios", os: ["ios"], dep: "#10" });
-  assert.ok(b.includes("dependsOn: #10") && b.includes("iOS 実機確認待ち（#2）"));
+  assert.ok(b.includes("dependsOn: #10") && b.includes("できている（iOS 実機確認待ち）") && b.includes("iOS 実機確認待ち（#2）"));
 });
 
 test("bodyOf: 追加条件は担当 OS の分だけ入る（対象外の macOS を書き換えさせない）", () => {
@@ -44,6 +44,7 @@ test("bodyOf: 追加条件は担当 OS の分だけ入る（対象外の macOS �
   const merged = bodyOf({ ...base, layer: "a", os: ["windows", "web"] });
   assert.ok(!merged.includes("Mac 目視待ち"));
   assert.ok(merged.includes("Windows 実機確認待ち（#2）") && merged.includes("wasm32 ビルドが通る"));
+  assert.ok(merged.includes("できている（実ブラウザ確認待ち）") && merged.includes("実ブラウザ確認待ち（#2）"));
   assert.ok(merged.includes("全対象 OS の骨格を先に置く"));
   const mac = bodyOf({ ...base, layer: "a", os: ["macos"] });
   assert.ok(mac.includes("Mac 目視待ち（#2）") && !mac.includes("Windows 実機確認待ち"));

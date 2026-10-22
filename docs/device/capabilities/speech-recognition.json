@@ -10,7 +10,7 @@
   "platforms": {
     "ios": {
       "status": "done",
-      "detail": "できている（未確認）",
+      "detail": "できている（iOS 実機確認待ち）",
       "api": "Speech（`SFSpeechRecognizer`）+ AVFoundation（`AVAudioEngine`/`AVAudioSession`）",
       "perm": "`NSSpeechRecognitionUsageDescription` + `NSMicrophoneUsageDescription`",
       "url": "https://developer.apple.com/documentation/speech/sfspeechrecognizer",
@@ -62,7 +62,7 @@
     },
     "web": {
       "status": "done",
-      "detail": "できている",
+      "detail": "できている（実ブラウザ確認待ち）",
       "api": "Web Speech API（`SpeechRecognition` / `webkitSpeechRecognition`）",
       "perm": "なし（マイクの許可プロンプト）。secure context 必須（https か localhost）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition",

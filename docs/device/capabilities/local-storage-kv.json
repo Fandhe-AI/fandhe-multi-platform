@@ -45,7 +45,7 @@
     },
     "web": {
       "status": "done",
-      "detail": "できている（実ブラウザ未確認）",
+      "detail": "できている（実ブラウザ確認待ち）",
       "api": "`localStorage`（Web Storage API）",
       "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage",
