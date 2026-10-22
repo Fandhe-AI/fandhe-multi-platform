@@ -123,6 +123,7 @@ use fandhe_core::screens::notification_send::{
 use fandhe_core::screens::on_device_llm::{
     current_screen as current_on_device_llm_screen, OnDeviceLlmState,
 };
+use fandhe_core::screens::otp_input::{fixed_screen as fixed_otp_input_screen, OtpInputState};
 use fandhe_core::screens::passkey_signin::{
     current_screen as current_passkey_signin_screen, PasskeySigninState,
 };
@@ -316,6 +317,21 @@ pub fn mount_barcode_scan_screen(root_id: &str) -> Result<(), JsValue> {
         current_barcode_scan_screen(&initial_state),
         initial_state,
         super::barcode_scan::barcode_scan_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「パスワード・ワンタイムコードの自動入力」（Issue #587）を
+/// マウントする検証専用エントリポイント。`super::autofill_otp::otp_input_effect` を effect として渡す。
+#[wasm_bindgen]
+pub fn mount_otp_input_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = OtpInputState::default();
+    super::mount::mount_with_effect(
+        root,
+        fixed_otp_input_screen(),
+        initial_state,
+        super::autofill_otp::otp_input_effect,
     )
 }
 

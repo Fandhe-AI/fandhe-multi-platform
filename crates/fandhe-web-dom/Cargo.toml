@@ -56,6 +56,7 @@ web-sys = { workspace = true, features = [
     # Phase 11（Issue #859）: クリップボード読み書き（`clipboard` モジュール）。
     "Clipboard",
     "Navigator",
+    "NodeList",
     # Phase 11（Issue #867）: 読み上げ（`tts` モジュール、Web Speech API）。
     "SpeechSynthesis",
     "SpeechSynthesisUtterance",
