@@ -55,6 +55,9 @@ final class SpellCheckHelper {
     private final Object lock = new Object();
     // 取り消し済みの最大 id（lock の内側）。cancel が start より先に走っても古い要求を開始しない。
     private long cancelledId = RequestTracker.NONE;
+    // 開始済みの最大 id（lock の内側）。JNI スレッドからの投入が前後して古い要求が後から start に
+    // 届いても、新しい要求の session と追跡を上書きしない（id は Rust の SLOT が単調増加で振る）。
+    private long startedId = RequestTracker.NONE;
     // 保留中の要求が持つ session（lock の内側）。
     private SpellCheckerSession session;
     private HandlerThread thread;
@@ -141,7 +144,7 @@ final class SpellCheckHelper {
     private void start(long id, String text, String language, int limit) {
         SpellCheckerSession stale;
         synchronized (lock) {
-            if (id <= cancelledId) {
+            if (id <= cancelledId || id <= startedId) {
                 return;
             }
             if (destroyed) {
@@ -150,6 +153,7 @@ final class SpellCheckHelper {
                 // 差し替えられた直前の要求の session が残っていれば、ここで解放する。
                 stale = session;
                 session = null;
+                startedId = id;
                 request.track(id);
             }
         }
