@@ -254,6 +254,10 @@ generated_screens! {
     crate::device::compass::compass_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "activity_recognition_show" => fandhe_core::screens::activity_recognition_show::current_screen,
+    crate::device::activity_recognition::activity_recognition_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ar_show" => fandhe_core::screens::ar_show::current_screen,
     crate::device::ar::ar_show_effect,
     effect

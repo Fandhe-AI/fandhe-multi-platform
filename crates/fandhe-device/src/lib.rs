@@ -19,6 +19,8 @@
 
 /// Phase 11（端末機能の拡充ループ、親 #1132、Issue #1308）: アクセシビリティ設定（視差軽減・コントラスト）。
 pub mod accessibility_prefs;
+/// Phase 11（端末機能の拡充ループ、親 #124、Issue #613）: 行動認識（歩行・走行・乗り物など）。
+pub mod activity_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #1141、Issue #1360）: アプリアイコンのバッジ（Windows はタスクバーのオーバーレイ数字）。
 pub mod app_badge;
 /// Phase 11（端末機能の拡充ループ、親 #101、Issue #424）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録。
