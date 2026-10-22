@@ -1,15 +1,20 @@
-# CI ランナー（.claude/rules/ci.md）の rustc を 1.88.0 に固定する。
+# CI（.claude/rules/ci.md）とローカルの rustc を 1.99.1 に固定する。
 #
-# 背景（PR #306 CI 是正）: ランナーの `stable` は初回導入時点の 1.88.0 のまま自動更新されず
-# （ci.md の「グローバル状態を汚す処理を書かない」方針により CI 側からは明示的な更新をしない）、
-# 一方でローカル開発環境の `stable` は 1.96 系まで進んでいた。このバージョン差が
-# trybuild（`crates/fandhe-core/tests/compile_fail/`・`error_injection/`）の
-# コンパイルエラーメッセージ差分として顕在化し、rustc 1.88 でのみ 4 件の `.stderr` 不一致が
-# 発生していた（`.stderr` は 1.88 の出力へ合わせて更新済み）。
+# 背景（PR #306 CI 是正）: 当初はランナーの `stable` が初回導入時点の 1.88.0 のまま
+# 自動更新されない一方、ローカルの `stable` が先へ進み、このバージョン差が
+# trybuild（`crates/fandhe-core/tests/compile_fail/`・`error_injection/`・
+# `token_typed_compile_fail/`）のコンパイルエラーメッセージ差分（`.stderr` 不一致）として
+# 顕在化したため、版を固定して CI とローカルを揃えた。
 #
-# 本ファイルにより `.github/workflows/ci.yml` の `rustup show` と、ローカルの `cargo` 実行が
-# 同一バージョンへ揃うため、以後のバージョン差起因の flaky を防ぐ
-# （ci.yml のコメント「rust-toolchain.toml は TASK-1.1 側で追加予定」に対応）。
+# 版を上げた理由: cargo 同梱 tar の欠陥（CVE-2026-33056、1.94.1 で修正）と
+# サードパーティレジストリのキャッシュ上書き（CVE-2026-5223、1.96.0 で修正）を含む
+# 1.88.0 を使い続けないため。
+#
+# 版を上げる手順: 本ファイルの `channel` を変え、`TRYBUILD=overwrite cargo test -p fandhe-core
+# --test compile_fail --test error_injection --test token_typed_compile_fail` で `.stderr` を
+# 再生成し、差分が診断文言の変化だけであることを確認する。Dockerfile のベースイメージタグも
+# 同じ版に揃える。CI は `.github/actions/ensure-rust-toolchain` が本ファイルの版を
+# `rustup toolchain install` で導入する。
 [toolchain]
-channel = "1.88.0"
+channel = "1.99.1"
 components = ["rustfmt", "clippy"]

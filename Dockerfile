@@ -6,10 +6,10 @@
 # 前提とし、Apple 系（iOS/watchOS/visionOS/macOS）は Xcode 依存のため Docker 化しない
 # （scripts/apple/・scripts/ios/ 配下スクリプトはホスト macOS 上での実行が前提）。
 #
-# rust-toolchain.toml が channel = "1.88.0" を固定しているため、ベースイメージのタグも
+# rust-toolchain.toml が channel = "1.99.1" を固定しているため、ベースイメージのタグも
 # 同一バージョンに固定する（ズレるとコンテナ内で rustup が別バージョンの取得を試み、
 # CI ランナー（.claude/rules/ci.md）との再現性が崩れるため）。
-FROM rust:1.88.0-slim-bookworm
+FROM rust:1.99.1-slim-bookworm
 
 # 公式 rust イメージは CARGO_HOME=/usr/local/cargo・RUSTUP_HOME=/usr/local/rustup を
 # 既定で設定済み。CARGO_TARGET_DIR は明示的に上書きしない（cargo 既定の

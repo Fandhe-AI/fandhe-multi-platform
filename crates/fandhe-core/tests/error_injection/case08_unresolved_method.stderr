@@ -1,4 +1,4 @@
-error[E0599]: no method named `with_text_field` found for struct `Screen` in the current scope
+error[E0599]: no method named `with_text_field` found for struct `Screen<S>` in the current scope
   --> tests/error_injection/case08_unresolved_method.rs:22:29
    |
 22 |         Screen::new("ログイン").with_text_field("メールアドレス", get_email, set_email);
