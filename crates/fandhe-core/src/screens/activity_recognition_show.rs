@@ -184,10 +184,8 @@ pub fn apply_poll(
                 return;
             }
             s.last_seq = Some(r.seq);
-            let changed = match s.view {
-                ActivityView::Live(prev) => prev.kind != r.kind,
-                _ => true,
-            };
+            // 履歴の最後の種別と比べる。`Waiting` を挟んでも同じ種別なら足さない。
+            let changed = s.history.last().map(|h| h.kind) != Some(r.kind);
             s.view = ActivityView::Live(r);
             if changed {
                 s.history.push(HistoryEntry {
@@ -340,6 +338,18 @@ mod tests {
         apply_poll(&mut s, 1, r(ActivityKindView::Running, 5), 2);
         assert_eq!(s.history.len(), 1);
         assert!(matches!(s.view, ActivityView::Live(x) if x.kind == ActivityKindView::Walking));
+    }
+
+    #[test]
+    fn waiting_between_same_kind_does_not_duplicate_history() {
+        let mut s = started();
+        apply_poll(&mut s, 1, r(ActivityKindView::Walking, 1), 1);
+        apply_poll(&mut s, 1, ActivityPollView::Waiting, 2);
+        apply_poll(&mut s, 1, r(ActivityKindView::Walking, 2), 3);
+        assert_eq!(s.history.len(), 1);
+        apply_poll(&mut s, 1, ActivityPollView::Waiting, 4);
+        apply_poll(&mut s, 1, r(ActivityKindView::Running, 3), 5);
+        assert_eq!(s.history.len(), 2);
     }
 
     #[test]

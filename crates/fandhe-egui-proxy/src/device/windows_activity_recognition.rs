@@ -61,6 +61,13 @@ fn confidence_from_raw(raw: i32) -> Option<Confidence> {
     }
 }
 
+/// HRESULT 0（S_OK + null の Reading）か。値なしの通知で、失敗ではない
+/// （`GetCurrentReadingAsync` と `ReadingChanged` で同じ判定にそろえる）。
+#[cfg(any(target_os = "windows", test))]
+fn is_null_reading(code: i32) -> bool {
+    code == 0
+}
+
 /// 失敗 HRESULT を契約の失敗へ写す。0（S_OK + null）は搭載センサー無し。
 fn failure_from_hresult(code: i32) -> ActivityFailure {
     match code {
@@ -439,6 +446,8 @@ mod imp {
                 // ドライバが停止・失敗表示へつなぐ（古い行動を出し続けない）。
                 match args.ok().and_then(|a| a.Reading()) {
                     Ok(reading) => deliver(epoch, &reading, false),
+                    // null の Reading は値なしの通知。無視して購読を続ける。
+                    Err(e) if is_null_reading(e.code().0) => {}
                     Err(e) => {
                         lock().fail(epoch, failure_from_hresult(e.code().0));
                     }
@@ -466,7 +475,7 @@ mod imp {
         let fail_and_stop = {
             let sensor = sensor.clone();
             move |code: i32| {
-                if code == 0 {
+                if is_null_reading(code) {
                     return;
                 }
                 if lock().fail(epoch, failure_from_hresult(code)) {
@@ -521,6 +530,14 @@ mod tests {
         assert_eq!(kind_from_raw(7), Some(ActivityKind::Cycling));
         assert_eq!(kind_from_raw(8), None);
         assert_eq!(kind_from_raw(-1), None);
+    }
+
+    #[test]
+    fn null_reading_is_not_a_failure() {
+        // ReadingChanged の null Reading（HRESULT 0）は無視して購読を続ける対象。
+        assert!(is_null_reading(0));
+        assert!(!is_null_reading(E_ACCESSDENIED));
+        assert!(!is_null_reading(-1));
     }
 
     #[test]
