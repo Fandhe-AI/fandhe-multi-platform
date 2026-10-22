@@ -254,8 +254,13 @@ fn result_nodes(state: &SpellCheckState) -> Vec<Node<SpellCheckState>> {
     }
 }
 
+/// 言語行。検査完了後は実際に使った辞書の言語（結果の `language`）を示し、
+/// 完了前・失敗時は要求した言語を示す。
 fn language_line(state: &SpellCheckState) -> String {
-    format!("言語: {}", state.language.tag())
+    match &state.phase {
+        SpellPhase::Done(v) => format!("言語: {}", v.language),
+        _ => format!("言語: {}", state.language.tag()),
+    }
 }
 
 /// 画面を組み立てる。ボタンは処理中以外のときだけ出す。
@@ -381,6 +386,19 @@ mod tests {
         set_input(&mut s, "changed".into());
         assert_eq!(s.input, DEFAULT_INPUT);
         assert_eq!(s.phase, SpellPhase::Running);
+    }
+
+    #[test]
+    fn language_line_shows_actual_language_when_done() {
+        let mut s = running();
+        assert_eq!(language_line(&s), "言語: en-US");
+        let mut v = view(0, false);
+        v.language = "en_GB".into();
+        finish_check(&mut s, 1, Ok(v));
+        assert_eq!(language_line(&s), "言語: en_GB");
+        let mut f = running();
+        finish_check(&mut f, 1, Err(SpellFailure::Timeout));
+        assert_eq!(language_line(&f), "言語: en-US");
     }
 
     #[test]
