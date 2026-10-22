@@ -123,7 +123,7 @@ use fandhe_core::screens::notification_send::{
 use fandhe_core::screens::on_device_llm::{
     current_screen as current_on_device_llm_screen, OnDeviceLlmState,
 };
-use fandhe_core::screens::otp_input::{current_screen as current_otp_input_screen, OtpInputState};
+use fandhe_core::screens::otp_input::{fixed_screen as fixed_otp_input_screen, OtpInputState};
 use fandhe_core::screens::passkey_signin::{
     current_screen as current_passkey_signin_screen, PasskeySigninState,
 };
@@ -329,7 +329,7 @@ pub fn mount_otp_input_screen(root_id: &str) -> Result<(), JsValue> {
     let initial_state = OtpInputState::default();
     super::mount::mount_with_effect(
         root,
-        current_otp_input_screen(&initial_state),
+        fixed_otp_input_screen(),
         initial_state,
         super::autofill_otp::otp_input_effect,
     )

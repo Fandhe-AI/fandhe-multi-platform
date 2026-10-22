@@ -331,9 +331,37 @@ pub fn current_screen(state: &OtpInputState) -> Screen<OtpInputState> {
     screen
 }
 
+/// 操作ボタンを常に含む固定の画面（Web 向け）。
+///
+/// Web の描画は Screen を一度だけ組んで固定し、状態だけを差し替えて再描画する。
+/// [`current_screen`] は `sms_wait_available` が立ってからでないと「SMS を待つ」を含めないため、
+/// 起動後に対応可否が確定する Web では到達できない。ここではボタンを最初から含め、
+/// 使えるかどうかは各ハンドラ（[`start_wait`] / [`retry_hint`]）が状態を見て判断する。
+pub fn fixed_screen() -> Screen<OtpInputState> {
+    Screen::new(TITLE)
+        .text(NOTE_TEXT)
+        .text_field(CODE_FIELD_LABEL, code_text, set_code)
+        .dynamic_text(status_text)
+        .error_text(error_text)
+        .button(WAIT_BUTTON_ID, WAIT_BUTTON_LABEL, start_wait)
+        .button(RETRY_BUTTON_ID, RETRY_BUTTON_LABEL, retry_hint)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fixed_screen_has_both_buttons_and_handlers_gate() {
+        let screen = fixed_screen();
+        assert_eq!(screen.title(), TITLE);
+        let mut s = OtpInputState::default();
+        start_wait(&mut s);
+        retry_hint(&mut s);
+        assert_eq!(s.wait, WaitPhase::Idle);
+        assert_eq!(s.hint, HintPhase::Requested);
+        assert_eq!(s.hint_generation, 0);
+    }
 
     fn applying() -> OtpInputState {
         let mut s = OtpInputState::default();
