@@ -428,6 +428,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::compose_mail_sms::release_mount(id);
         super::print_page::release_mount(id);
         super::passkey::release_mount(id);
+        super::autofill_otp::release_mount(id);
         super::payment_request::release_mount(id);
         super::file_watch::release_mount(id);
         super::midi::release_mount(id);

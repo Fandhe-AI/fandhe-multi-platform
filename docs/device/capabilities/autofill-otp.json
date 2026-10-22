@@ -43,12 +43,15 @@
       "note": "OS 全体の自動入力に相当する公開 API が報告で確認できていない（要確認）"
     },
     "web": {
-      "status": "possible",
+      "status": "done",
       "api": "`<input autocomplete=\"one-time-code\">`・`username`・`current-password`、および WebOTP API（`navigator.credentials.get({otp})`）",
       "perm": "なし（WebOTP は secure context 必須、SMS 本文の書式条件あり）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebOTP_API",
-      "note": "未実装。`autocomplete=\"one-time-code\"`（+ `inputmode=\"numeric\"`）を本物の `<input>` に付ける。WebOTP は Chromium 系のみで Baseline ではなく、secure context 必須、SMS 最終行は `@<domain> #<code>` の書式。`autocomplete` 属性は HTML の標準 https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/autocomplete",
-      "safari": "WebOTP は非対応。`autocomplete=\"one-time-code\"` で iOS のコード候補が出る"
+      "note": "本物の `<input>` に描画のたびに `autocomplete=\"one-time-code\"` と `inputmode=\"numeric\"` を付ける。Chromium 系は「SMS を待つ」で WebOTP を最大 120 秒まで待ち、入力欄が空のときだけコードを入れる。取り消しと期限切れは中立の案内、非対応と失敗は error 側に出す。WebOTP は Chromium 系のみで Baseline ではなく、secure context 必須、SMS 最終行は `@<domain> #<code>` の書式。`autocomplete` 属性は HTML の標準 https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/autocomplete 。守る範囲: 世代照合、`AbortController` と `clearTimeout` の解放、`pagehide` と画面破棄での取り消し、コードを入力どおりに扱いログへ出さないこと。守らない範囲: 候補が出るか、再構築直後の一瞬に属性が無いこと、複数タブ",
+      "safari": "WebOTP は非対応。`autocomplete=\"one-time-code\"` で iOS のコード候補が出る",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#576）",
+      "impl": "crates/fandhe-web-dom/src/autofill_otp.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/otp_input.rs + crates/fandhe-device/src/autofill_otp.rs、Issue #587"
     }
   },
   "note": "secure-credential（端末内保存）との違い: 本機能は OS の自動入力にコードを入れてもらう側。範囲: ワンタイムコードの入力欄 1 つ。パスワード・ユーザー名・domain-bound code は範囲外。Web は WebOTP（Chromium）を含む。独自描画の橋渡し方針: iOS はソフトキーボード入力の隠し UITextField（FandheTextField）、Web は fandhe-web-dom が出す本物の `<input>` に OS 向けのヒントを付ける。Android・macOS は入力欄の橋渡しそのものが設計課題のため保留（deferred）。DSL の入力欄には種別の属性を足さず、画面単位でヒントを掛ける。"
