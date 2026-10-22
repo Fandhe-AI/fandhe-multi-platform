@@ -560,7 +560,9 @@ pub mod ios_ar;
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_audio_devices;
 /// Issue #585: iOS 向けワンタイムコード自動入力の骨格（実装は #586）。
-#[cfg(target_os = "ios")]
+/// `device/autofill_otp.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_autofill_otp;
 /// Issue #390: iOS 向けバックグラウンドダウンロードのスタブ（b-ios #391 が埋める）。
 /// `device/background_download.rs` の iOS 経路から呼ばれる。

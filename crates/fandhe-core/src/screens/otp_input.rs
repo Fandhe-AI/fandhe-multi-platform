@@ -43,7 +43,7 @@ pub const HINT_FAILED_STATUS: &str = "OS に伝えられませんでした";
 pub const WAIT_BUTTON_LABEL: &str = "SMS を待つ";
 /// 「もう一度伝える」ボタンのラベル。
 pub const RETRY_BUTTON_LABEL: &str = "もう一度伝える";
-/// SMS 待ち受け中の案内。
+/// SMS 待ち受け中の案内。秒数は `fandhe_device::autofill_otp::WEBOTP_TIMEOUT_MS` と揃える（コアは device に依存できないため直書き）。
 pub const WAITING_STATUS: &str = "SMS を待っています（最大 120 秒）";
 /// コードを入れた案内（値は出さない）。
 pub const RECEIVED_STATUS: &str = "SMS からコードを受け取り、入力欄に入れました";

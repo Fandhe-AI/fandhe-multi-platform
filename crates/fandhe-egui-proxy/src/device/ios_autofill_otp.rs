@@ -8,8 +8,9 @@
 //! - 生成時と setter 呼び出し時に反映し、first responder なら `reloadInputViews` する
 //! - main queue と `@autoreleasepool` で包む
 //! - OTP 以外の画面（日本語入力）の挙動を変えない
-//! - cfg を `any(ios, test)` へ広げる必要が出ても、閉じるのは本ファイルの中。dispatch・画面・
-//!   fallback 行・`device.rs` の `pub mod` 列は触らない
+//! - `device.rs` の mod 宣言は (a) で `any(ios, test)` にしてあり、ホストのテストからも本ファイルを読める。
+//!   C ABI の宣言など iOS 専用の項目は本ファイルの中で `#[cfg(target_os = "ios")]` を付けて閉じる。
+//!   dispatch・画面・fallback 行・`device.rs` の `pub mod` 列は触らない
 
 use fandhe_device::autofill_otp::{AutofillOtp, UnsupportedAutofillOtp};
 
