@@ -8,17 +8,25 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "CoreMotion `CMAltimeter`（気圧・相対高度）。近接は `UIDevice.isProximityMonitoringEnabled`",
-      "perm": "要確認（`CMAltimeter` の Info.plist キーは未確認。「位置情報が必要」との出力は誤りと判断）",
-      "url": "https://developer.apple.com/documentation/coremotion/cmaltimeter",
-      "note": "未実装。気圧と近接のみ。照度センサーの公開 API は見当たらない（要確認）。近接は `UIDevice` のページ（https://developer.apple.com/documentation/uikit/uidevice）で要確認"
+      "api": "CoreMotion `CMAltimeter` の relative altitude の更新に含まれる `pressure`（kPa）。近接は `UIDevice.isProximityMonitoringEnabled` / `proximityState` / `proximityStateDidChangeNotification`",
+      "perm": "気圧は `NSMotionUsageDescription` が必須（無いと API を呼んだ時点で落ちる）。拒否は `CMAltimeter.authorizationStatus`（iOS 11+）で読む。近接は権限不要",
+      "url": [
+        "https://developer.apple.com/documentation/coremotion/cmaltimeter",
+        "https://developer.apple.com/documentation/coremotion/cmaltitudedata/pressure",
+        "https://developer.apple.com/documentation/uikit/uidevice/isproximitymonitoringenabled"
+      ],
+      "note": "未実装。気圧と近接の 2 種で done にする。照度は公開 API が無い（SensorKit の `ambientLightSensor` は承認済みの研究用 entitlement が要るため対象外）。照度は「この OS では取得できません」と出し、端末にセンサーが無い場合の表示とは区別する。近接は有効にすると画面が消える（実機で確認予定）。iPad など近接センサーの無い端末では、有効にしても NO のまま。気圧の配信周期は公式文書に記載が無く、実機で確かめる"
     },
     "android": {
       "status": "possible",
-      "api": "`SensorManager` の `TYPE_PRESSURE` / `TYPE_LIGHT` / `TYPE_PROXIMITY`（`TYPE_AMBIENT_TEMPERATURE` / `TYPE_RELATIVE_HUMIDITY` も同系）",
-      "perm": "明記なし（不要と思われるが要確認）",
-      "url": "https://developer.android.com/develop/sensors-and-location/sensors/sensors_environment",
-      "note": "未実装。近接は別ページ（…/sensors_position）。センサーの搭載は機種依存で、無い機種は「取得できない」を返す"
+      "api": "`SensorManager` の `TYPE_PRESSURE` / `TYPE_LIGHT` / `TYPE_PROXIMITY`",
+      "perm": "不要（`HIGH_SAMPLING_RATE_SENSORS` は 200 Hz を超える motion / position センサーにだけ要る）",
+      "url": [
+        "https://developer.android.com/develop/sensors-and-location/sensors/sensors_environment",
+        "https://developer.android.com/develop/sensors-and-location/sensors/sensors_position",
+        "https://source.android.com/docs/core/interaction/sensors/sensor-types"
+      ],
+      "note": "未実装。気圧・照度・近接の 3 種で done にする。報告モードは気圧が continuous、照度・近接が on-change（AOSP の sensor-types）。on-change は値が変わらない限り event が出ない。近接は 2 値しか返さない機種がある。Android 9 以降はバックグラウンドで event が届かない。画面下の近接センサーは点滅しうる。センサーの搭載は機種依存で、無い機種は「取得できない」を返す。温度・湿度（`TYPE_AMBIENT_TEMPERATURE` / `TYPE_RELATIVE_HUMIDITY`）は範囲外"
     },
     "macos": {
       "status": "no",
@@ -29,10 +37,14 @@
     },
     "windows": {
       "status": "possible",
-      "api": "WinRT `Windows.Devices.Sensors.LightSensor`（照度）。気圧は `Barometer`（要確認）",
-      "perm": "要確認（package identity の要否は文書に記載なし）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.lightsensor",
-      "note": "搭載機種のみ。非搭載なら `GetDefault` が null。unpackaged での動作は要確認。近接センサーも `Windows.Devices.Sensors.ProximitySensor` で読める（https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.proximitysensor ）"
+      "api": "WinRT `Windows.Devices.Sensors` の `Barometer`（`StationPressureInHectopascals`）・`LightSensor`（`IlluminanceInLux`）・`ProximitySensor`（`GetDefault` は無く、`GetDeviceSelector` + `FromId` で取り、`IsDetected` を読む）",
+      "perm": "要確認（パッケージ無しの exe で読めるかは実機待ち。宣言する capability は無い）",
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.barometer",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.lightsensor",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.proximitysensor"
+      ],
+      "note": "搭載機種のみ。非搭載なら `GetDefault` が null。近接は列挙（`FindAllAsync`）が非同期で、UI スレッドを止めないよう作業スレッドで行う。気圧・照度・近接の 3 種で done にする"
     },
     "web": {
       "status": "no",
@@ -43,5 +55,5 @@
       "note": "Generic Sensor の AmbientLightSensor は Chromium でも実験フラグ配下のため no（既存 image-recognition / ml-inference の Web 判定に揃える。要確認）。気圧・近接は Web から取得できない。Chromium のみで、フラグが要るとの認識（要確認）。W3C 草案。気圧・近接は取得不可"
     }
   },
-  "note": "iOS は気圧（`CMAltimeter`）と近接、Android は気圧・照度・近接ほか、Windows は照度が中心、Web は照度のみ（Chromium・フラグ配下）。macOS は公開 API なし。tilt-motion / pedometer（既存 id）との違い: 加速度・ジャイロ・歩数ではなく、環境センサー（気圧・照度・近接）。今回の範囲: 取得できたセンサー値（気圧 hPa・照度 lx・近接の近い / 遠い）を種類ごとに並べて表示し、無いセンサーは「取得できません」と出す"
+  "note": "1 行（1 つの id）のまま、OS ごとに取れる種類で done にする。iOS は気圧と近接の 2 種（照度は公開 API が無く対象外）、Android と Windows は気圧・照度・近接の 3 種。取れない種類は「この OS では取得できません」、端末に無い種類は「この端末にはセンサーがありません」と区別して出し、どちらにも数値を出さない。macOS は公開 API なし、Web は照度のみ（Chromium・フラグ配下）で対象外。温度・湿度・高度は範囲外。tilt-motion / pedometer（既存 id）との違い: 加速度・ジャイロ・歩数ではなく、環境センサー（気圧・照度・近接）。今回の範囲: 取得できたセンサー値（気圧 hPa・照度 lx・近接の近い / 遠い）を種類ごとに並べて表示する。守る範囲: 嘘の値を出さないこと（0・前回値・範囲外の値を出さない）、OS に API が無いことと端末に無いことを取り違えないこと、種類ごとに購読を二重にしないこと、停止・失敗・背景遷移・破棄で解除すること、古い世代の値を捨てること。守らない範囲: 絶対精度（気圧の較正・海面気圧への補正・照度のセンサー位置の影響）、on-change のセンサーが次の event まで値を出さない遅れ、近接の距離（cm）、OS 間で値がそろうこと、iOS の近接で画面が消えること（OS の仕様）、複数プロセス、Windows を最小化している間"
 }
