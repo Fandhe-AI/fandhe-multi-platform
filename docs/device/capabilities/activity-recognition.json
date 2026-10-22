@@ -9,32 +9,43 @@
     "ios": {
       "status": "possible",
       "api": "CoreMotion `CMMotionActivityManager`（歩行・走行・自動車・静止などの分類）",
-      "perm": "要確認（`NSMotionUsageDescription` と思われるが未確認）",
-      "url": "",
-      "note": "未実装。URL 未確認（iOS 調査の表に載っていない）。既存 pedometer の `CMPedometer` とは別 API。履歴の問い合わせも可能（要確認）"
+      "perm": "`NSMotionUsageDescription`（pedometer で宣言済み）。初回利用時に「モーションとフィットネス」の許可ダイアログが出る。拒否は `authorizationStatus` で読む",
+      "url": [
+        "https://developer.apple.com/documentation/coremotion/cmmotionactivitymanager",
+        "https://developer.apple.com/documentation/coremotion/cmmotionactivity",
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/nsmotionusagedescription"
+      ],
+      "note": "未実装。既存 pedometer の `CMPedometer` とは別 API。ライブ更新は開始直後に現在の行動が 1 件届き、以後は状態が変わるたびに届く。アプリが suspend 中は届かない。分類のフラグは排他でなく、同時に立つことがある（信号待ちの車内は静止と乗り物）。全フラグが NO のときは「判定なし」にまとめる。過去 7 日の問い合わせも可能だが今回の範囲外。シミュレータでは `isActivityAvailable` が NO で非対応になる"
     },
     "android": {
       "status": "possible",
       "api": "Activity Recognition Transition API（`play-services-location`、GMS 依存）",
-      "perm": "`com.google.android.gms.permission.ACTIVITY_RECOGNITION`（ページ記載）。API 29+ は実行時の `ACTIVITY_RECOGNITION` 許可も要る（要確認）",
-      "url": "https://developer.android.com/develop/sensors-and-location/location/transitions",
-      "note": "未実装。GMS 非搭載端末では使えない。遷移（歩き始め・終わり）の通知が中心で、現在状態の即時取得は別 API（要確認）"
+      "perm": "API 29+ は実行時の `android.permission.ACTIVITY_RECOGNITION`。API 28 以下は GMS 側の `com.google.android.gms.permission.ACTIVITY_RECOGNITION`",
+      "url": [
+        "https://developer.android.com/develop/sensors-and-location/location/transitions",
+        "https://android-developers.googleblog.com/2019/11/privacy-protections-for-physical.html"
+      ],
+      "note": "未実装。Activity Recognition は Google Play services（`play-services-location`）だけが提供する。AOSP の `ActivityRecognitionHardware` は `@hide` で `LOCATION_HARDWARE` 権限を要し、一般のアプリは使えない。`ACTIVITY_RECOGNITION` 権限は歩数センサー等と共通の実行時許可で、分類 API ではない。GMS 非搭載端末では使えない",
+      "deferred": "GMS に依存しない方針のため保留（in-app-review・payment-request と同じ）。Play services だけが提供するランタイム機能で、方針が変われば着手できる"
     },
     "macos": {
       "status": "n-a",
-      "note": "デスクトップに行動認識の概念がない"
+      "note": "デスクトップに行動認識の概念がない。`CMMotionActivityManager` は SDK で `API_UNAVAILABLE(macos)`"
     },
     "windows": {
       "status": "possible",
-      "note": "搭載機種のみ。非搭載なら `GetDefaultAsync` が null（compass-heading の Windows と同じ扱い）",
+      "note": "搭載機種のみ。非搭載なら `GetDefaultAsync` が null で、`Unsupported` とする（compass-heading の Windows と同じ扱い）。行動認識センサーを持つ PC はほとんど無く、多くの機種で非対応表示になる。正常系は実機未確認の天井として残す",
       "api": "`Windows.Devices.Sensors.ActivitySensor`",
-      "perm": "要確認（package identity の要否は文書に記載なし）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.activitysensor"
+      "perm": "クラスの要件に app capability `activity`。素の exe（Medium IL）では不要の見込みだが、実機未確認（pedometer と同じ）",
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.activitysensor",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.activitysensor.getdefaultasync"
+      ]
     },
     "web": {
       "status": "n-a",
       "note": "ブラウザに行動認識の標準 API はない"
     }
   },
-  "note": "iOS は CoreMotion、Android は Play services の遷移 API（GMS 依存）。Windows は ActivitySensor（搭載機種のみ）。macOS・Web は概念がなく n-a。pedometer（既存 id）との違い: pedometer は歩数・距離などの集計値で、行動認識は「歩行 / 走行 / 乗車 / 静止」の分類。今回の範囲: 現在の行動種別と信頼度を 1 行表示し、遷移が起きるたびに履歴へ足す（長期履歴の取得は扱わない）"
+  "note": "iOS は CoreMotion、Android は Play services の遷移 API が唯一の提供元で GMS に依存しないため保留（deferred）。Windows は ActivitySensor（搭載機種のみ）。macOS・Web は概念がなく n-a。pedometer（既存 id）との違い: pedometer は歩数・距離などの集計値で、行動認識は「歩行 / 走行 / 自転車 / 乗り物 / 静止」の分類。今回の範囲: 現在の行動種別と確度を 1 行表示し、種別が変わるたびに画面内の履歴へ足す（上限 20 件）。背景での受信と過去の履歴の取得は扱わない。守る範囲: 1 プロセス内の開始・停止・受信の順序（世代照合）、嘘の値を出さないこと（非搭載・拒否・未取得・判定なしを「静止」等へ畳まない）、二重に購読しないこと、停止・背景遷移・失敗の全経路で購読とリスナーを解除すること。守らない範囲: OS 間で分類が一致すること、判定の遅れ（OS 側の推定に数秒〜数十秒かかる）、250 ms 以内の多重の遷移、Windows の `Idle` / `Fidgeting` の区別、背景中の行動、過去の履歴、複数プロセス"
 }

@@ -9,23 +9,30 @@
     "ios": {
       "status": "possible",
       "api": "Share Extension（アプリ拡張ターゲット）。共有された項目は `NSExtensionItem` で届く",
-      "perm": "拡張ターゲットの追加。アプリ本体へ渡すには App Group（要確認）",
-      "url": "https://developer.apple.com/documentation/foundation/nsextensionitem",
-      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 拡張ターゲットを持つため XcodeGen の設定追加が要る。winit のアプリ本体とは別プロセス"
+      "perm": "Share Extension ターゲット + App Groups（アプリ本体と拡張の両ターゲット）",
+      "url": [
+        "https://developer.apple.com/documentation/foundation/nsextensionitem",
+        "https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/ExtensionScenarios.html"
+      ],
+      "note": "未実装。拡張はアプリ本体と別プロセスで、直接通信できない。共有された内容を本体へ渡す公式の経路は App Group の共有コンテナだけ。拡張から本体を開く `NSExtensionContext.open` は Today と iMessage の拡張にしか許されていない。「拡張の画面内で完結」は本体（共通コア画面）へ届かず、フレームワークの機能にならない",
+      "deferred": "App Group が要り、有料の Apple Developer Program の登録が前提。登録が期限切れのため保留。ベンダーの個別審査は不要で、登録を再開すれば着手できる"
     },
     "android": {
       "status": "possible",
-      "api": "intent-filter `ACTION_SEND` / `ACTION_SEND_MULTIPLE`",
+      "api": "`ACTION_SEND` + `mimeType=\"text/plain\"` の intent-filter。`EXTRA_TEXT` のみ読む（`EXTRA_STREAM` は読まない）",
       "perm": "なし（Manifest への intent-filter 追加のみ）",
       "url": "https://developer.android.com/training/sharing/receive",
-      "note": "未実装。受信は url-scheme と同じ onNewIntent 経路を共有できる見込み"
+      "note": "未実装。受信は url-scheme と同じ `onCreate` / `onNewIntent` 経路を共有する。`ACTION_SEND_MULTIPLE`・画像・ファイルは扱わない（file-association が保留中の理由と同じ問題を持ち込まない）"
     },
     "macos": {
       "status": "possible",
-      "api": "Share Extension（macOS でも同様と認識。要確認）",
-      "perm": "拡張ターゲットの追加（要確認）",
-      "url": "https://developer.apple.com/documentation/foundation/nsextensionitem",
-      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。"
+      "api": "Info.plist `NSServices`（サービスメニュー）+ `NSApplication.servicesProvider`。Share Extension は使わない",
+      "perm": "Info.plist の宣言のみ（.app 化が前提。entitlement・拡張ターゲット・App Group は不要）",
+      "url": [
+        "https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/properties.html",
+        "https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/providing.html"
+      ],
+      "note": "未実装。共有メニューではなくサービスメニューで受ける。本体プロセスが直接受けるため拡張ターゲットは要らない。.app 化していない素の実行体には届かない。サービスメニューへの反映が OS 側で遅れることがある"
     },
     "windows": {
       "status": "no",
@@ -36,12 +43,12 @@
     },
     "web": {
       "status": "possible",
-      "api": "manifest `share_target`",
+      "api": "manifest `share_target`（`method: GET`、Service Worker 不要）",
       "perm": "なし（PWA のインストールが前提）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/share_target",
-      "note": "未実装。MDN は Limited availability 表示。Chromium は対応、Safari・Gecko は非対応と認識（報告より）",
+      "note": "未実装。MDN は Limited availability 表示。Chromium は対応、Safari・Gecko は非対応と認識（報告より）。インストール済みの PWA のみ。GET はクエリを置き換えるため、画面の選択はパラメーター名で行う。本文が URL に載るので、配信サーバーのアクセスログに残りうる。`share_target` には機能検出 API が無く、このブラウザが共有先になれるかは JS から判定できない",
       "safari": "非対応と認識"
     }
   },
-  "note": "share-sheet（送る側）との違い: 本機能は他アプリから共有された内容を受け取る側。今回の範囲: テキスト 1 件の共有を受け取り、その文字列を画面に表示するだけ（画像・ファイルは含めない）。"
+  "note": "share-sheet（送る側）との違い: 本機能は他アプリから共有された内容を受け取る側。範囲: 共有されたテキスト 1 件（URL もテキストとして扱う）を受け取り、検査を通ったものを最新 1 件だけ保持して画面に表示する。上限は 16 KiB で、超えたものは途中で切らず拒否する。空・不正な UTF-8・NUL や制御文字（タブ・LF・CR 以外）を含むものも拒否し、件数だけ数える。画像・ファイル・複数件・件名は扱わない。受け取った文字列は表示するだけで、リンクとして開かない。起動中と未起動（コールドスタート）の両方から受ける。守る範囲: 1 プロセス内の受信順、不正入力の非表示、コールドスタート分を落とさないこと、判定と更新を同じ排他の内側で行うこと、嘘の成功の禁止、本文をログ・エラー文に出さないこと。守らない範囲: ポーリング間隔内に連続して届いた分は最後の 1 件だけ表示、複数プロセス・複数タブ、Android のプロセス死亡後の再表示、Web の未インストール PWA と Chromium 以外、Web の GET で本文が URL に載ること、macOS の素の実行体、サービスメニューへの反映の遅れ。iOS は App Group が揃うまで保留（deferred）。"
 }
