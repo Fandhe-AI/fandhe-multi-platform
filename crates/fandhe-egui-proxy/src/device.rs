@@ -56,7 +56,7 @@ pub mod android_background_task;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_call_ui;
-/// Issue #582: Android 向け画面キャプチャの防止・検知のスタブ（#584 が埋める）。
+/// Issue #584: Android 向け画面キャプチャの防止・検知（`CaptureProtectionHelper.java` を JNI で呼ぶ）。
 /// `device/capture_protection.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -482,7 +482,7 @@ pub mod calendar;
 pub mod call_ui;
 pub mod camera_capture;
 /// Phase 11 の拡充ループ（親 #120、Issue #582）: 画面キャプチャの防止・検知の effect ドライバ
-/// （Windows 実装、iOS は #583・Android は #584 で埋めるスタブ、他 OS は
+/// （Windows は防止のみ、iOS は検知のみ（#583）、Android は防止・検知（#584）、他 OS は
 /// `UnsupportedCaptureProtection` 固定）。
 pub mod capture_protection;
 pub mod clipboard;
@@ -597,7 +597,7 @@ pub mod ios_barcode_scan;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_call_ui;
-/// Issue #582: iOS 向け画面キャプチャの防止・検知のスタブ（#583 が埋める）。
+/// Issue #583: iOS 向け画面キャプチャの検知（`ios/fandhe_ios_capture_protection.m` を呼ぶ）。
 /// `device/capture_protection.rs` の iOS 経路から使われる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
