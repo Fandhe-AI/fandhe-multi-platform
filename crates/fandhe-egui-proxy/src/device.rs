@@ -56,6 +56,11 @@ pub mod android_background_task;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_call_ui;
+/// Issue #582: Android 向け画面キャプチャの防止・検知のスタブ（#584 が埋める）。
+/// `device/capture_protection.rs` の Android 経路から使われる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_capture_protection;
 /// Issue #1404: Android 向け方位実装のスタブ（後続の (b-Android) が埋める）。`device/compass.rs` の android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -467,6 +472,10 @@ pub mod calendar;
 /// #277・#278 で埋めるスタブ、他 OS は `UnsupportedCallUi` 固定）。
 pub mod call_ui;
 pub mod camera_capture;
+/// Phase 11 の拡充ループ（親 #120、Issue #582）: 画面キャプチャの防止・検知の effect ドライバ
+/// （Windows 実装、iOS は #583・Android は #584 で埋めるスタブ、他 OS は
+/// `UnsupportedCaptureProtection` 固定）。
+pub mod capture_protection;
 pub mod clipboard;
 /// Issue #1404（親 #1154）: 方位（コンパス）の effect ドライバ（Windows 実装、iOS・Android は後続の子が実装するまでスタブ、
 /// 他 OS は `UnsupportedCompass` 固定。Web は `fandhe-web-dom`）。
@@ -574,6 +583,11 @@ pub mod ios_barcode_scan;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_call_ui;
+/// Issue #582: iOS 向け画面キャプチャの防止・検知のスタブ（#583 が埋める）。
+/// `device/capture_protection.rs` の iOS 経路から使われる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_capture_protection;
 /// Issue #1405: iOS 向け方位実装（`ios/fandhe_ios_compass.m` を呼ぶ C ABI ラッパー、CoreLocation の heading）。`device/compass.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -1046,6 +1060,10 @@ pub mod windows_biometric;
 /// ラッパー）。`device/bluetooth_le.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_bluetooth_le;
+/// Issue #582: Windows 向け画面キャプチャの防止実装（`SetWindowDisplayAffinity`）。
+/// `device/capture_protection.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_capture_protection;
 /// Issue #1404: Windows 向け方位実装（WinRT `Compass` の pull）。`device/compass.rs` の windows 経路から呼ばれる。
 /// 写像の純関数をホストでテストできるよう cfg は `any(windows, test)`。
 #[cfg(any(target_os = "windows", test))]

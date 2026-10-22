@@ -336,4 +336,8 @@ generated_screens! {
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_association_show" => fandhe_core::screens::file_association_show::current_screen,
     crate::device::file_association::file_association_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "capture_protection_show" => fandhe_core::screens::capture_protection_show::current_screen,
+    crate::device::capture_protection::capture_protection_show_effect,
 }

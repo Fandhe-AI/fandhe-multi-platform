@@ -38,11 +38,14 @@
       "note": "Apple 公式が `.none` を「macOS はもう使っていない旧定数。キャプチャから隠す用途に使うな」と明記している。ScreenCaptureKit 系の録画で写るという報告もある。読み戻しが `.none` でも実際には写るため、できているとすると嘘の成功になる"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "防止は `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`（Windows 10 2004+）、読み戻しは `GetWindowDisplayAffinity`。2004 より前は黒塗りになる",
       "perm": "不要と見込む（package identity の要件の記載はない）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity",
-      "note": "防止のみ。自分のプロセスのトップレベルウィンドウが対象で、DWM が合成しているときだけ効く。DRM ではなく、写真での撮影は防げない。他者の録画を知る公開 API は確認できず"
+      "note": "防止のみ。自分のプロセスのトップレベルウィンドウが対象で、DWM が合成しているときだけ効く。DRM ではなく、写真での撮影は防げない。他者の録画を知る公開 API は確認できず。実装済み（#582）: 掛ける / 外すは `SetWindowDisplayAffinity`、表示は `GetWindowDisplayAffinity` の読み戻しが保護のときだけ「保護中」にする（未知の値・読み戻し失敗は保護中にしない）。2004 より前の黒塗り（`WDA_MONITOR`）も保護中と表示する。録画・スクリーンショットは画面に「非対応」と出す。守る範囲: 1 プロセス内の順序・嘘の成功の禁止。守らない範囲: 複数ウィンドウ、掛ける前に始まっていた録画の撮影済みフレーム、外部カメラでの撮影、終了時の後片付け（ウィンドウと一緒に属性が消える）",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#575）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_capture_protection.rs + crates/fandhe-egui-proxy/src/device/capture_protection.rs + crates/fandhe-core/src/screens/capture_protection_show.rs + crates/fandhe-device/src/capture_protection.rs、Issue #582"
     },
     "web": {
       "status": "no",
