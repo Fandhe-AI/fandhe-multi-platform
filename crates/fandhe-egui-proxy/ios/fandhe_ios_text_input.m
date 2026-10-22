@@ -34,7 +34,7 @@
 //     入力欄の生成時にも反映する（未生成でも成功）。first responder なら `reloadInputViews` で
 //     キーボードを差し替える。冪等。戻りコード: 0 = 成功、2 = main スレッド以外
 //     （UIKit に触れず `dispatch_sync` もしない）、3 = `on != 0` なのに入力欄の橋渡し
-//     （`install`）が未完でヒントが効かない（成功を偽らない）。守らない範囲: ヒントは
+//     （`install`）が未完でヒントが効かない（成功を偽らず、希望状態も変えない）。守らない範囲: ヒントは
 //     プロセス内で残り、OTP 画面を離れても自動では戻らない。コードの値はこの経路を通らず、
 //     ログにも出さない。
 
@@ -200,10 +200,12 @@ int32_t fandhe_ios_text_input_set_one_time_code_hint(int32_t on) {
         return 2;
     }
     @autoreleasepool {
-        g_oneTimeCodeHint = (on != 0);
+        // 失敗を返す経路では希望状態を変えない（失敗と出たのに後から生成された入力欄へ
+        // ヒントが効く、という報告と状態の食い違いを作らない）。
         if (on != 0 && !g_installed) {
             return 3;
         }
+        g_oneTimeCodeHint = (on != 0);
         if (g_activeField != nil) {
             FandheApplyContentHint(g_activeField);
             if ([g_activeField isFirstResponder]) {
