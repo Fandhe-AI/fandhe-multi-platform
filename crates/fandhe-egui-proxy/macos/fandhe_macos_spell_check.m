@@ -8,13 +8,15 @@
 // `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
 //
 // スレッド: `NSSpellChecker` のスレッド安全性を明記した一次情報を確認できていないため、安全側として
-// 呼び出しを main queue に集約する。呼び出し元は Rust のワーカースレッド（main では呼ばない）。
-//   - 結果は block が所有するヒープ上のオブジェクト（FandheSpellJob、ARC）に集める。Rust のバッファ
-//     へは、待ちが成功した（block が走り終えた）後にワーカー側が写す。期限切れの後に block が走っても
-//     Rust のバッファには触れない（use-after-free を防ぐ）。
-//   - 未開始と取り消しは atomic の状態値で排他にする。期限切れ時に未開始なら取り消し（block は何もしない）、
-//     開始済みなら block は走り切る（OS の状態は変えず、document tag も block 内で閉じる）。
-//   - ロックを持ったまま待たない。
+// 呼び出しを main queue に集約する。ただし main を長く占有しないよう、処理を「1 ステップ = 誤り 1 件の
+// 検出と候補取得」に刻み、ステップごとに main queue へ dispatch_async し直す。ステップの間は main が解放される。
+// 呼び出し元は Rust のワーカースレッド（main では呼ばない）。
+//   - 期限はワーカー側の semaphore 待ち（単調時計）で管理する。期限切れで状態を CANCELLED にし、
+//     次のステップは何もせず後片付け（document tag を閉じる）だけして終わる。以降 main を占有しない。
+//     1 回の OS 呼び出し自体の途中中断はできない（その 1 件分は待つ）。
+//   - 結果は job（ヒープ、ARC）に集める。Rust のバッファへは、待ちが成功した後にワーカー側が写す。
+//     期限切れ後に届く結果は捨て、Rust のバッファには触れない（use-after-free を防ぐ）。
+//   - 完了と取り消しは atomic の状態値で排他にする。ロックを持ったまま待たない。
 //
 // 契約（戻り値 int32_t: 0 = 成功、それ以外は FANDHE_SPELL_RC_*）:
 //   fandhe_macos_spell_languages(buf, cap, out_len, out_count, timeout_ms)
@@ -49,51 +51,74 @@
 
 // 候補 1 件の最大バイト数。これを超える候補は捨てる（異常に長い候補への保険）。
 #define FANDHE_SPELL_SUGGESTION_MAX 256
-// 開始済みの block の完了を待つ上限（ミリ秒）。通常は一瞬で終わる。
-#define FANDHE_SPELL_STARTED_GRACE_MS 5000
 
-enum { JOB_PENDING = 0, JOB_STARTED = 1, JOB_CANCELLED = 2 };
+enum { JOB_RUNNING = 0, JOB_FINISHED = 1, JOB_CANCELLED = 2 };
 
 // main queue で走る処理と待つ側が共有する、ヒープ上の作業記録。
-@interface FandheSpellJob : NSObject
+@interface FandheSpellJob : NSObject {
+   @public
+    atomic_int state;
+}
 @property(nonatomic, strong) NSMutableData *data;
 @property(nonatomic, assign) int32_t rc;
 @property(nonatomic, assign) uint32_t count;
 @property(nonatomic, assign) int32_t truncated;
+// 全終了経路（完了・取り消し）で main 上で 1 回だけ呼ぶ後片付け。
+@property(nonatomic, copy) void (^cleanup)(void);
 @end
 
 @implementation FandheSpellJob
 @end
 
-// work を main queue で実行して完了を待つ。timeout_ms 以内に開始できなければ取り消して RC_TIMEOUT。
-// 成功（RC_OK 以外も含め block が走り終えた）なら job の内容が有効。
+// step を main queue で刻んで実行し、完了を待つ。step は 1 回の呼び出しで短く終わり、
+// 全体が完了したら YES を返す（NO なら main へ再投入される）。
+// timeout_ms 以内に完了しなければ取り消して RC_TIMEOUT。block が走り終えた場合のみ job の内容が有効。
+static void fandhe_spell_step_on_main(FandheSpellJob *job, dispatch_semaphore_t done,
+                                      BOOL (^step)(FandheSpellJob *)) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (atomic_load(&job->state) != JOB_RUNNING) {
+            if (job.cleanup != nil) {
+                job.cleanup();
+            }
+            return;  // 期限切れで取り消し済み。後片付けだけして終わる。
+        }
+        if (step(job)) {
+            if (job.cleanup != nil) {
+                job.cleanup();
+            }
+            int expected = JOB_RUNNING;
+            if (atomic_compare_exchange_strong(&job->state, &expected, JOB_FINISHED)) {
+                dispatch_semaphore_signal(done);
+            }
+        } else {
+            fandhe_spell_step_on_main(job, done, step);
+        }
+    });
+}
+
 static int32_t fandhe_spell_run_on_main(int32_t timeout_ms, FandheSpellJob *job,
-                                        void (^work)(FandheSpellJob *)) {
+                                        BOOL (^step)(FandheSpellJob *)) {
     if (pthread_main_np() != 0) {
-        // すでに main 上なら待たずに直接呼ぶ。
-        work(job);
+        // すでに main 上なら待たずに直接刻まず最後まで呼ぶ。
+        while (!step(job)) {
+        }
+        if (job.cleanup != nil) {
+            job.cleanup();
+        }
         return job.rc;
     }
-    __block atomic_int state = JOB_PENDING;
     dispatch_semaphore_t done = dispatch_semaphore_create(0);
-    dispatch_async(dispatch_get_main_queue(), ^{
-        int expected = JOB_PENDING;
-        if (!atomic_compare_exchange_strong(&state, &expected, JOB_STARTED)) {
-            return;  // 期限切れで取り消し済み。何もしない。
-        }
-        work(job);
-        dispatch_semaphore_signal(done);
-    });
+    fandhe_spell_step_on_main(job, done, step);
     int64_t ms = timeout_ms > 0 ? timeout_ms : 0;
     if (dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, ms * NSEC_PER_MSEC)) == 0) {
         return job.rc;
     }
-    int expected = JOB_PENDING;
-    if (atomic_compare_exchange_strong(&state, &expected, JOB_CANCELLED)) {
+    int expected = JOB_RUNNING;
+    if (atomic_compare_exchange_strong(&job->state, &expected, JOB_CANCELLED)) {
         return FANDHE_SPELL_RC_TIMEOUT;
     }
-    // 開始済み: 走り切るのを短く待つ。間に合わなければ結果を捨てて期限切れにする。
-    if (dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, (int64_t)FANDHE_SPELL_STARTED_GRACE_MS * NSEC_PER_MSEC)) == 0) {
+    // 取り消す直前に完了していた場合は、その結果を採る。
+    if (dispatch_semaphore_wait(done, DISPATCH_TIME_NOW) == 0) {
         return job.rc;
     }
     return FANDHE_SPELL_RC_TIMEOUT;
@@ -129,16 +154,16 @@ int32_t fandhe_macos_spell_languages(uint8_t *buf, size_t cap, size_t *out_len, 
     @autoreleasepool {
         FandheSpellJob *job = [FandheSpellJob new];
         job.data = [NSMutableData data];
-        int32_t rc = fandhe_spell_run_on_main(timeout_ms, job, ^(FandheSpellJob *j) {
+        int32_t rc = fandhe_spell_run_on_main(timeout_ms, job, ^BOOL(FandheSpellJob *j) {
             NSSpellChecker *sc = [NSSpellChecker sharedSpellChecker];
             if (sc == nil) {
                 j.rc = FANDHE_SPELL_RC_NO_CHECKER;
-                return;
+                return YES;
             }
             NSArray<NSString *> *langs = sc.availableLanguages;
             if (langs == nil) {
                 j.rc = FANDHE_SPELL_RC_FAILED;
-                return;
+                return YES;
             }
             for (NSString *l in langs) {
                 const char *u = l.UTF8String;
@@ -149,6 +174,7 @@ int32_t fandhe_macos_spell_languages(uint8_t *buf, size_t cap, size_t *out_len, 
                 j.count += 1;
             }
             j.rc = FANDHE_SPELL_RC_OK;
+            return YES;
         });
         if (rc != FANDHE_SPELL_RC_OK) {
             return rc;
@@ -177,64 +203,79 @@ int32_t fandhe_macos_spell_check(const uint8_t *text, size_t text_len, const uin
         }
         FandheSpellJob *job = [FandheSpellJob new];
         job.data = [NSMutableData data];
-        int32_t rc = fandhe_spell_run_on_main(timeout_ms, job, ^(FandheSpellJob *j) {
+        // ステップ間で持ち回る状態（main 上でのみ触る）。
+        __block NSInteger tag = 0;
+        __block BOOL tagOpen = NO;
+        __block NSUInteger pos = 0;
+        NSUInteger total = str.length;
+        job.cleanup = ^{
+            if (tagOpen) {
+                [[NSSpellChecker sharedSpellChecker] closeSpellDocumentWithTag:tag];
+                tagOpen = NO;
+            }
+        };
+        int32_t rc = fandhe_spell_run_on_main(timeout_ms, job, ^BOOL(FandheSpellJob *j) {
             NSSpellChecker *sc = [NSSpellChecker sharedSpellChecker];
             if (sc == nil) {
                 j.rc = FANDHE_SPELL_RC_NO_CHECKER;
-                return;
+                return YES;
             }
-            // 呼び出しごとに document tag を取り、全経路で閉じる。
-            NSInteger tag = [NSSpellChecker uniqueSpellDocumentTag];
-            int32_t result = FANDHE_SPELL_RC_OK;
-            NSUInteger pos = 0;
-            NSUInteger total = str.length;
-            while (pos < total) {
-                NSInteger words = 0;
-                NSRange r = [sc checkSpellingOfString:str
-                                           startingAt:(NSInteger)pos
-                                             language:language
-                                                 wrap:NO
-                               inSpellDocumentWithTag:tag
-                                            wordCount:&words];
-                if (r.location == NSNotFound) {
-                    break;
-                }
-                // 長さ 0・後退・範囲外は異常（無限ループ防止）。
-                if (r.length == 0 || r.location < pos || r.location + r.length > total) {
-                    result = FANDHE_SPELL_RC_RANGE;
-                    break;
-                }
-                if (j.count >= max_issues) {
-                    j.truncated = 1;
-                    break;
-                }
-                NSArray<NSString *> *guesses = [sc guessesForWordRange:r
-                                                              inString:str
-                                                              language:language
-                                                inSpellDocumentWithTag:tag];
-                NSMutableData *sugg = [NSMutableData data];
-                uint32_t n = 0;
-                for (NSString *g in guesses) {
-                    if (n >= max_suggestions) {
-                        break;
-                    }
-                    const char *u = g.UTF8String;
-                    size_t ulen = u != NULL ? strlen(u) : 0;
-                    if (ulen == 0 || ulen > FANDHE_SPELL_SUGGESTION_MAX) {
-                        continue;
-                    }
-                    [sugg appendBytes:u length:ulen + 1];
-                    n += 1;
-                }
-                fandhe_spell_append_u32(j.data, (uint32_t)r.location);
-                fandhe_spell_append_u32(j.data, (uint32_t)r.length);
-                fandhe_spell_append_u32(j.data, n);
-                [j.data appendData:sugg];
-                j.count += 1;
-                pos = r.location + r.length;
+            if (!tagOpen) {
+                // 呼び出しごとに document tag を取り、全経路（cleanup）で閉じる。
+                tag = [NSSpellChecker uniqueSpellDocumentTag];
+                tagOpen = YES;
             }
-            [sc closeSpellDocumentWithTag:tag];
-            j.rc = result;
+            if (pos >= total) {
+                j.rc = FANDHE_SPELL_RC_OK;
+                return YES;
+            }
+            // 1 ステップ = 誤り 1 件の検出と候補取得。
+            NSInteger words = 0;
+            NSRange r = [sc checkSpellingOfString:str
+                                       startingAt:(NSInteger)pos
+                                         language:language
+                                             wrap:NO
+                           inSpellDocumentWithTag:tag
+                                        wordCount:&words];
+            if (r.location == NSNotFound) {
+                j.rc = FANDHE_SPELL_RC_OK;
+                return YES;
+            }
+            // 長さ 0・後退・範囲外は異常（無限ループ防止）。
+            if (r.length == 0 || r.location < pos || r.location + r.length > total) {
+                j.rc = FANDHE_SPELL_RC_RANGE;
+                return YES;
+            }
+            if (j.count >= max_issues) {
+                j.truncated = 1;
+                j.rc = FANDHE_SPELL_RC_OK;
+                return YES;
+            }
+            NSArray<NSString *> *guesses = [sc guessesForWordRange:r
+                                                          inString:str
+                                                          language:language
+                                            inSpellDocumentWithTag:tag];
+            NSMutableData *sugg = [NSMutableData data];
+            uint32_t n = 0;
+            for (NSString *g in guesses) {
+                if (n >= max_suggestions) {
+                    break;
+                }
+                const char *u = g.UTF8String;
+                size_t ulen = u != NULL ? strlen(u) : 0;
+                if (ulen == 0 || ulen > FANDHE_SPELL_SUGGESTION_MAX) {
+                    continue;
+                }
+                [sugg appendBytes:u length:ulen + 1];
+                n += 1;
+            }
+            fandhe_spell_append_u32(j.data, (uint32_t)r.location);
+            fandhe_spell_append_u32(j.data, (uint32_t)r.length);
+            fandhe_spell_append_u32(j.data, n);
+            [j.data appendData:sugg];
+            j.count += 1;
+            pos = r.location + r.length;
+            return NO;
         });
         if (rc != FANDHE_SPELL_RC_OK) {
             return rc;
