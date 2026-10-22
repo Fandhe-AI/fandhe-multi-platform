@@ -450,6 +450,10 @@ pub mod ar;
 /// Phase 11 の拡充ループ（親 #1136、Issue #1330）: 音声デバイス一覧の effect ドライバ（macOS / Windows
 /// 実装、iOS・Android は #1331・#1332 で埋めるスタブ、他 OS は `UnsupportedAudioDevices` 固定）。
 pub mod audio_devices;
+/// Phase 11 の拡充ループ（親 #121、Issue #585）: ワンタイムコード入力の effect ドライバ（iOS は b-ios（#586）が
+/// `ios_autofill_otp.rs` を埋めるまでスタブ、Android・macOS は保留、Windows は非対応で `UnsupportedAutofillOtp` 固定。
+/// Web は `fandhe-web-dom` が担う）。
+pub mod autofill_otp;
 /// Phase 11 の拡充ループ（親 #100、Issue #390）: OS 管理のバックグラウンドダウンロードの effect ドライバ
 /// （macOS 実装、iOS・Android・Windows は子 issue が埋めるスタブ、他 OS は `Unsupported` 固定）。
 pub mod background_download;
@@ -564,6 +568,11 @@ pub mod ios_ar;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_audio_devices;
+/// Issue #585: iOS 向けワンタイムコード自動入力の骨格（実装は #586）。
+/// `device/autofill_otp.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_autofill_otp;
 /// Issue #390: iOS 向けバックグラウンドダウンロードのスタブ（b-ios #391 が埋める）。
 /// `device/background_download.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]

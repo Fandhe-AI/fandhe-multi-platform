@@ -286,6 +286,10 @@ generated_screens! {
     crate::device::barcode_scan::barcode_scan_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "otp_input" => fandhe_core::screens::otp_input::current_screen,
+    crate::device::autofill_otp::autofill_otp_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "in_app_review" => fandhe_core::screens::in_app_review::current_screen,
     crate::device::in_app_review::in_app_review_effect,
     effect

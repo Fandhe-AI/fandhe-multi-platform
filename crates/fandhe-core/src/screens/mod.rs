@@ -165,6 +165,8 @@ pub mod network_status_show;
 pub mod nlp_segment;
 /// Phase 11 の拡充ループ型サンプル「端末内 LLM」（親 #93、Issue #345）。
 pub mod on_device_llm;
+/// Phase 11 の拡充ループ型サンプル「ワンタイムコードの入力」（親 #121、Issue #585）。
+pub mod otp_input;
 /// Phase 11 の拡充ループ型サンプル「パスキー・サインイン連携」（親 #92、Issue #342）。
 pub mod passkey_signin;
 /// Phase 11 の拡充ループ型サンプル「物・サービスの決済」（親 #114、Issue #541）。
