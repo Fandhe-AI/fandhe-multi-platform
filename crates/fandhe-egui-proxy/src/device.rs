@@ -215,6 +215,11 @@ pub mod android_screen_capture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_wake_lock;
+/// Issue #578: Android 向けスペルチェック実装のスタブ（実体は #580 が埋める）。`device/spell_check.rs` の
+/// Android 経路から呼ばれる。#580 がホストテストを足すときに cfg 行を触らずに済むよう `test` でもコンパイルする。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_spell_check;
 /// Issue #562: Android 向け OS の検索への登録実装（AppSearch、API 31+、Java は `MainActivity`）。
 /// `device/spotlight_index.rs` の Android 経路から呼ばれる。結果コード写像をホストでテストするため
 /// test でもコンパイルする。
@@ -723,6 +728,11 @@ pub mod ios_safe_area_insets;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_wake_lock;
+/// Issue #578: iOS 向けスペルチェック実装のスタブ（実体は #579 が埋める）。`device/spell_check.rs` の
+/// iOS 経路から呼ばれる。#579 がホストテストを足すときに cfg 行を触らずに済むよう `test` でもコンパイルする。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_spell_check;
 /// Issue #561: iOS 向け OS の検索への登録実装（macOS と共用の `apple_spotlight_index` へ委譲）。
 /// `device/spotlight_index.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -833,6 +843,12 @@ pub mod macos_safe_area_insets;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code, unused_imports))]
 pub mod macos_screen_wake_lock;
+/// Issue #578: macOS 向けスペルチェック実装（`macos/fandhe_macos_spell_check.m` の `NSSpellChecker` を呼ぶ
+/// C ABI ラッパー）。`device/spell_check.rs` の macOS 経路から呼ばれる。戻り値コードの写像をホストで
+/// テストできるよう cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_spell_check;
 /// Issue #421: macOS 向けシステムのアクセント色実装（`macos/fandhe_macos_system_accent_color.m` を
 /// 呼ぶ C ABI ラッパー）。`device/system_accent_color.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -972,6 +988,10 @@ pub mod share;
 /// Phase 11 の拡充ループ（親 #1023、Issue #1024・#1025）: 音声認識の effect ドライバ
 /// （macOS/iOS/Windows/Android 実装、Android/Web は兄弟 issue）。
 pub mod speech_recognition;
+/// Phase 11 の拡充ループ（親 #119、Issue #578）: スペルチェックの effect ドライバ（macOS 実装、
+/// iOS・Android・Windows は #579・#580・#581 が埋めるスタブ、他 OS は `UnsupportedSpellChecker` 固定。
+/// Web は呼べる API が無く対象外）。
+pub mod spell_check;
 /// Phase 11 の拡充ループ（親 #117、Issue #560）: OS の検索への登録の effect ドライバ（macOS・iOS・
 /// Android 実装、他 OS は `UnsupportedSpotlightIndex` 固定）。
 pub mod spotlight_index;
@@ -1207,6 +1227,11 @@ pub mod windows_share;
 /// `device/speech_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_speech_recognition;
+/// Issue #578: Windows 向けスペルチェック実装のスタブ（実体は #581 が埋める）。`device/spell_check.rs` の
+/// Windows 経路から呼ばれる。#581 がホストテストを足すときに cfg 行を触らずに済むよう `test` でもコンパイルする。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_spell_check;
 /// Issue #421: Windows 向けシステムのアクセント色実装（WinRT `UISettings.GetColorValue`）。
 /// `device/system_accent_color.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
