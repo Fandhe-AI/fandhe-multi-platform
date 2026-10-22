@@ -133,10 +133,21 @@ impl State {
         true
     }
 
-    /// 現在の世代のときだけ失敗を確定する。
-    fn fail(&mut self, epoch: u64, f: ActivityFailure) {
+    /// 無効なサンプルを受けたとき、現在の世代なら保持中の最新値を捨てる（`ActivityPoll` の契約は
+    /// 「無効なサンプルを捨てた後」は `Waiting`。以前の値を返し続けない）。
+    fn discard(&mut self, epoch: u64) {
+        if self.is_current(epoch) {
+            self.latest = None;
+        }
+    }
+
+    /// 現在の世代のときだけ失敗を確定する。確定したら `true`。
+    fn fail(&mut self, epoch: u64, f: ActivityFailure) -> bool {
         if self.is_current(epoch) {
             self.failure = Some((epoch, f));
+            true
+        } else {
+            false
         }
     }
 
@@ -269,15 +280,29 @@ mod imp {
         }
     }
 
-    /// 1 件の読みを写像して現在の世代なら共有状態へ入れる。範囲外はサンプルごと捨てる。
+    /// 1 件の読みを写像して現在の世代なら共有状態へ入れる。範囲外はサンプルごと捨て、保持中の
+    /// 最新値も消す（契約表 6）。プロパティ取得の失敗は契約上の失敗として確定する。
     fn deliver(epoch: u64, reading: &ActivitySensorReading) {
-        let kind = reading.Activity().ok().and_then(|a| kind_from_raw(a.0));
-        let conf = reading
-            .Confidence()
-            .ok()
-            .and_then(|c| confidence_from_raw(c.0));
-        if let (Some(kind), Some(conf)) = (kind, conf) {
-            lock().store(epoch, kind, conf);
+        let activity = match reading.Activity() {
+            Ok(a) => a.0,
+            Err(e) => {
+                lock().fail(epoch, failure_from_hresult(e.code().0));
+                return;
+            }
+        };
+        let confidence = match reading.Confidence() {
+            Ok(c) => c.0,
+            Err(e) => {
+                lock().fail(epoch, failure_from_hresult(e.code().0));
+                return;
+            }
+        };
+        let mut st = lock();
+        match (kind_from_raw(activity), confidence_from_raw(confidence)) {
+            (Some(kind), Some(conf)) => {
+                st.store(epoch, kind, conf);
+            }
+            _ => st.discard(epoch),
         }
     }
 
@@ -348,13 +373,26 @@ mod imp {
                 return None;
             }
         };
-        let mut any = false;
-        if let Ok(supported) = sensor.SupportedActivities() {
-            for a in supported {
-                if kind_from_raw(a.0).is_some() && subs.Append(a).is_ok() {
-                    any = true;
-                }
+        let supported = match sensor.SupportedActivities() {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = subs.Clear();
+                lock().fail(epoch, failure_from_hresult(e.code().0));
+                return None;
             }
+        };
+        let mut any = false;
+        for a in supported {
+            if kind_from_raw(a.0).is_none() {
+                continue;
+            }
+            // 一部だけ登録できた不完全な購読を成功扱いにしない。追加済みの分を外して失敗を確定する。
+            if let Err(e) = subs.Append(a) {
+                let _ = subs.Clear();
+                lock().fail(epoch, failure_from_hresult(e.code().0));
+                return None;
+            }
+            any = true;
         }
         if !any {
             let _ = subs.Clear();
@@ -388,18 +426,42 @@ mod imp {
             return None;
         }
 
-        // 初期値。ワーカーは待たない。null や失敗は値なしのまま（期限は driver が持つ）。
-        if let Ok(op) = sensor.GetCurrentReadingAsync() {
-            let _ = op.SetCompleted(&AsyncOperationCompletedHandler::new(move |op, status| {
-                if status == AsyncStatus::Completed {
-                    if let Ok(op) = op.ok() {
-                        if let Ok(reading) = op.GetResults() {
-                            deliver(epoch, &reading);
-                        }
-                    }
+        // 初期値。ワーカーは待たない。null（HRESULT 0）は値なしのまま、それ以外の失敗は元の
+        // HRESULT を契約上の失敗へ写して現在の世代に確定し、購読を止める（契約表 5）。
+        let fail_and_stop = {
+            let sensor = sensor.clone();
+            move |code: i32| {
+                if code == 0 {
+                    return;
                 }
-                Ok(())
-            }));
+                if lock().fail(epoch, failure_from_hresult(code)) {
+                    unsubscribe(&sensor, token);
+                }
+            }
+        };
+        match sensor.GetCurrentReadingAsync() {
+            Ok(op) => {
+                let on_fail = fail_and_stop.clone();
+                let set =
+                    op.SetCompleted(&AsyncOperationCompletedHandler::new(move |op, status| {
+                        match (op.ok(), status) {
+                            (Ok(op), AsyncStatus::Completed) => match op.GetResults() {
+                                Ok(reading) => deliver(epoch, &reading),
+                                Err(e) => on_fail(e.code().0),
+                            },
+                            (Ok(op), AsyncStatus::Error) => on_fail(async_failure_code(
+                                true,
+                                op.GetResults().err().map(|e| e.code().0),
+                            )),
+                            _ => on_fail(async_failure_code(false, None)),
+                        }
+                        Ok(())
+                    }));
+                if let Err(e) = set {
+                    fail_and_stop(e.code().0);
+                }
+            }
+            Err(e) => fail_and_stop(e.code().0),
         }
         Some((sensor, token))
     }
@@ -496,6 +558,18 @@ mod tests {
             Ok(ActivityPoll::Reading(r)) => assert!(r.seq > first),
             other => panic!("unexpected {other:?}"),
         }
+    }
+
+    #[test]
+    fn invalid_sample_clears_latest() {
+        let mut s = State::default();
+        let e = s.begin();
+        s.store(e, ActivityKind::Walking, Confidence::High);
+        // 古い世代の無効サンプルは最新値を消さない。
+        s.discard(e + 1);
+        assert!(matches!(s.poll(), Ok(ActivityPoll::Reading(_))));
+        s.discard(e);
+        assert_eq!(s.poll(), Ok(ActivityPoll::Waiting));
     }
 
     #[test]
