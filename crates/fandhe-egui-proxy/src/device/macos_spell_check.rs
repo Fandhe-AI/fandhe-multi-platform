@@ -29,11 +29,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 #[cfg(target_os = "macos")]
+use fandhe_device::spell_check::LANGUAGE_UNAVAILABLE;
+#[cfg(any(target_os = "macos", test))]
+use fandhe_device::spell_check::TIMEOUT;
+#[cfg(target_os = "macos")]
 use fandhe_device::spell_check::{
     build_report, resolve_language, SpellChecker, SpellReport, MAX_ISSUES, MAX_SUGGESTIONS,
 };
-#[cfg(any(target_os = "macos", test))]
-use fandhe_device::spell_check::{LANGUAGE_UNAVAILABLE, TIMEOUT};
 #[cfg(any(target_os = "macos", test))]
 use fandhe_device::DeviceError;
 

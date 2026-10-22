@@ -150,8 +150,19 @@ pub fn get_input(state: &SpellCheckState) -> String {
 }
 
 /// 入力欄の入力を反映する（`Screen::text_field` の setter）。
+/// 処理中は検査対象の文を変えないため無視する（次の描画で入力欄は元の値に戻る）。
+/// 完了済みの結果（成功・失敗）は別の文に対応して見えるため、編集した時点で消して `Idle` へ戻す。
 pub fn set_input(state: &mut SpellCheckState, value: String) {
+    if is_busy(state) {
+        return;
+    }
+    if state.input == value {
+        return;
+    }
     state.input = value;
+    if matches!(state.phase, SpellPhase::Done(_) | SpellPhase::Failed(_)) {
+        state.phase = SpellPhase::Idle;
+    }
 }
 
 /// 要求を立てる。処理中（`Requested` / `Running`）は no-op。前回の結果は消す。
@@ -336,6 +347,40 @@ mod tests {
         let mut idle = SpellCheckState::default();
         finish_check(&mut idle, 0, Ok(view(0, false)));
         assert_eq!(idle.phase, SpellPhase::Idle);
+    }
+
+    #[test]
+    fn edit_clears_finished_result() {
+        let mut s = running();
+        finish_check(&mut s, 1, Ok(view(0, false)));
+        assert_eq!(status_text(&s), NO_ISSUES_MESSAGE);
+        set_input(&mut s, "a typo wrold".into());
+        assert_eq!(s.phase, SpellPhase::Idle);
+        assert_eq!(status_text(&s), "");
+        let mut f = running();
+        finish_check(&mut f, 1, Err(SpellFailure::Timeout));
+        set_input(&mut f, "other".into());
+        assert_eq!(f.phase, SpellPhase::Idle);
+    }
+
+    #[test]
+    fn same_value_edit_keeps_result() {
+        let mut s = running();
+        finish_check(&mut s, 1, Ok(view(1, false)));
+        set_input(&mut s, DEFAULT_INPUT.into());
+        assert!(matches!(s.phase, SpellPhase::Done(_)));
+    }
+
+    #[test]
+    fn edit_ignored_while_busy() {
+        let mut s = SpellCheckState::default();
+        request_check(&mut s, LanguageChoice::English);
+        set_input(&mut s, "changed".into());
+        assert_eq!(s.input, DEFAULT_INPUT);
+        mark_running(&mut s);
+        set_input(&mut s, "changed".into());
+        assert_eq!(s.input, DEFAULT_INPUT);
+        assert_eq!(s.phase, SpellPhase::Running);
     }
 
     #[test]
