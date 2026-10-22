@@ -473,10 +473,10 @@ mod server {
         /// 停止して listener を閉じる。自スレッド（ループバックの完了通知経由）からは join しない。
         pub fn stop(&mut self) {
             self.stop.store(true, Ordering::SeqCst);
-            if let Some(h) = self.thread.take() {
-                if h.thread().id() != std::thread::current().id() {
-                    let _ = h.join();
-                }
+            if let Some(h) = self.thread.take()
+                && h.thread().id() != std::thread::current().id()
+            {
+                let _ = h.join();
             }
         }
     }

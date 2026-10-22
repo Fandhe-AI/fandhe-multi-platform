@@ -100,10 +100,10 @@ pub fn cancel_delete(state: &mut ConfirmDialogState) {
 /// 確認パネル「削除」ボタンのハンドラ。`pending` が有効な index を指す場合のみ
 /// 該当メモを削除する（範囲外・未確定は無視、panic しない）。
 pub fn confirm_delete(state: &mut ConfirmDialogState) {
-    if let Some(index) = state.pending.take() {
-        if index < state.memos.len() {
-            state.memos.remove(index);
-        }
+    if let Some(index) = state.pending.take()
+        && index < state.memos.len()
+    {
+        state.memos.remove(index);
     }
 }
 

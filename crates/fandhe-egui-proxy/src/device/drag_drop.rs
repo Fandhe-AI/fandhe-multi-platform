@@ -115,7 +115,7 @@ impl ReaderSlot {
     /// 上限未満なら枠を 1 つ確保する。上限に達していれば `None`。
     fn acquire() -> Option<Self> {
         ACTIVE_READERS
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
                 (n < MAX_READERS).then_some(n + 1)
             })
             .ok()

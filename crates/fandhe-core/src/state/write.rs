@@ -150,6 +150,9 @@ mod tests {
         // WriteAccessor の Clone/Copy が S に不要な境界を課していない証拠になる。
         let accessor: WriteAccessor<CounterState, i32> = WriteAccessor::new(write_count);
         let copied = accessor;
+        // Copy 型への明示的な `clone` は clippy が咎めるが、ここは Clone 実装そのものを
+        // 呼び出せることの検証のため意図的に残す。
+        #[allow(clippy::clone_on_copy)]
         let cloned = Clone::clone(&accessor);
 
         let mut state = CounterState {

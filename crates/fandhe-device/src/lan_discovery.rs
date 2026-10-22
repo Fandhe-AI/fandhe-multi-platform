@@ -239,13 +239,13 @@ pub fn link_dns_records(records: &[DnsRecord]) -> Vec<LanService> {
         let addr = srv.as_ref().and_then(|(target, _)| {
             let mut found: Option<IpAddr> = None;
             for r in records {
-                if let DnsRecord::Addr { owner, ip } = r {
-                    if dns_key(owner) == *target {
-                        if ip.is_ipv4() {
-                            return Some(*ip);
-                        }
-                        found = found.or(Some(*ip));
+                if let DnsRecord::Addr { owner, ip } = r
+                    && dns_key(owner) == *target
+                {
+                    if ip.is_ipv4() {
+                        return Some(*ip);
                     }
+                    found = found.or(Some(*ip));
                 }
             }
             found

@@ -20,7 +20,7 @@
 //! `TRYBUILD=overwrite cargo test -p fandhe-core --test token_typed_compile_fail`
 //! で生成し、型不一致の診断（E0308 系）が含まれることを確認したうえでコミット
 //! 対象に含める（診断文言は rustc バージョンに依存するため、`rust-toolchain.toml`
-//! が固定する 1.88.0 と CI 環境の toolchain が一致することを前提とする）。
+//! が固定する 1.99.1 と CI 環境の toolchain が一致することを前提とする）。
 #[test]
 fn typed_token_ref_category_mismatch_is_rejected_at_compile_time() {
     let cases = trybuild::TestCases::new();

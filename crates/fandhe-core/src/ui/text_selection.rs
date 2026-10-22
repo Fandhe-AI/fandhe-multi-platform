@@ -336,8 +336,7 @@ pub fn prev_grapheme_boundary(text: &str, char_offset: CharOffset) -> CharOffset
     // `grapheme_indices` は各クラスタの開始 byte offset を昇順で返す。
     // `byte_offset` 未満の最後の境界（= 1 個前のクラスタの開始）を探す。
     text.grapheme_indices(true)
-        .filter(|(start, _)| *start < byte_offset)
-        .next_back()
+        .rfind(|(start, _)| *start < byte_offset)
         .map(|(start, _)| char_offset_from_byte(text, start))
         .unwrap_or(0)
 }

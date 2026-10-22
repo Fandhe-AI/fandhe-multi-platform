@@ -6,6 +6,6 @@ error[E0277]: the trait bound `LoginState: Default` is not satisfied
    |
 help: consider annotating `LoginState` with `#[derive(Default)]`
    |
-7  + #[derive(Default)]
-8  | struct LoginState {
+ 7 + #[derive(Default)]
+ 8 | struct LoginState {
    |

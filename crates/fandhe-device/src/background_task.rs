@@ -207,12 +207,11 @@ pub fn write_record_if_newer(
     // 保存層の読み出しエラー（一時的な I/O 失敗等）は既存の新しい記録を確認できない
     // ため `Err` で返す。上書きして回復するのは、読めたが形式が壊れている場合だけ
     // （PR #1053 codex 指摘）。
-    if let Some(bytes) = storage.read(RECORD_KEY)? {
-        if let Ok(existing) = decode_record(&bytes) {
-            if existing.ran_at_unix_ms > record.ran_at_unix_ms {
-                return Ok(());
-            }
-        }
+    if let Some(bytes) = storage.read(RECORD_KEY)?
+        && let Ok(existing) = decode_record(&bytes)
+        && existing.ran_at_unix_ms > record.ran_at_unix_ms
+    {
+        return Ok(());
     }
     write_record(storage, record)
 }

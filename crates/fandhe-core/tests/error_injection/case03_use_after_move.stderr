@@ -9,7 +9,7 @@ error[E0382]: borrow of moved value: `screen`
 15 |     println!("{}", screen.title());
    |                    ^^^^^^ value borrowed here after move
    |
-note: `Screen::<S>::text` takes ownership of the receiver `self`, which moves `screen`
+note: `fandhe_core::Screen::<S>::text` takes ownership of the receiver `self`, which moves `screen`
   --> src/ui/screen.rs
    |
    |     pub fn text(self, s: impl Into<String>) -> Self {

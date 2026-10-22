@@ -11,5 +11,5 @@ error[E0308]: mismatched types
 note: function defined here
   --> tests/token_typed_compile_fail/type_param_mismatch.rs:5:4
    |
-5  | fn requires_color(_token_ref: ColorTokenRef) {}
+ 5 | fn requires_color(_token_ref: ColorTokenRef) {}
    |    ^^^^^^^^^^^^^^ -------------------------

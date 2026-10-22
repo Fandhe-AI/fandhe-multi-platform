@@ -104,8 +104,8 @@ jobs:
             echo "::notice::Cargo.toml が未追加のため cargo fmt --check をスキップしました（TASK-1.1 完了後に有効化されます）"
           fi
 
-      # ルート直下の rust-toolchain.toml（rustc 1.88.0 固定）に同期し、
-      # 1.88.0 + rustfmt/clippy component を自動導入する composite action
+      # ルート直下の rust-toolchain.toml（rustc 1.99.1 固定）に同期し、
+      # 1.99.1 + rustfmt/clippy component を自動導入する composite action
       # （GitHub ホスト runner は rustup 導入済み）。
       - name: Ensure rust toolchain
         if: steps.detect.outputs.has_cargo == 'true'
@@ -219,7 +219,7 @@ jobs:
 
       # 親 Issue #630: `fandhe-egui-proxy` の desktop_render テストバイナリは GUI 依存の
       # 大量 rlib を静的リンクするためメモリ消費が大きく、GNU ld が OOM killer に kill される
-      # 障害が過去に実測された（`ld terminated with signal 9`）。rustc 1.88.0 toolchain 同梱の
+      # 障害が過去に実測された（`ld terminated with signal 9`）。rustc 1.99.1 toolchain 同梱の
       # rust-lld へリンカを切り替えてリンク時メモリを削減する（Issue #631 / #577）。
       # scripts/build/lld-rustflags.sh は Linux gnu ホスト限定で動的算出する。
 

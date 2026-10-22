@@ -158,7 +158,7 @@ pub(crate) fn tracks_from_nul_buffer(
         [rest @ .., 0] => rest.split(|b| *b == 0).collect(),
         _ => return Err(fail),
     };
-    if parts.len() % 2 != 0 || parts.len() / 2 != count as usize {
+    if !parts.len().is_multiple_of(2) || parts.len() / 2 != count as usize {
         return Err(fail);
     }
     let mut rows = Vec::with_capacity(count as usize);
