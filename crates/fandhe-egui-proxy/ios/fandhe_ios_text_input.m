@@ -48,8 +48,6 @@ extern void fandhe_ios_text_input_backspace(void);
 extern void fandhe_ios_text_input_return(void);
 extern void fandhe_ios_text_input_reset(void);
 
-// ゼロサイズの `UITextField`。UIKit の `UITextInput`（marked text 含む）実装一式を
-// そのまま first responder として使い、変換中文字列を `markedTextRange` から読む。
 // ワンタイムコード用ヒントの希望状態と、橋渡しの差し込み済みフラグ。
 // いずれも main スレッドでのみ読み書きする。
 static BOOL g_oneTimeCodeHint = NO;
@@ -67,6 +65,8 @@ static void FandheApplyContentHint(UITextField *field) {
     }
 }
 
+// ゼロサイズの `UITextField`。UIKit の `UITextInput`（marked text 含む）実装一式を
+// そのまま first responder として使い、変換中文字列を `markedTextRange` から読む。
 @interface FandheTextField : UITextField <UITextFieldDelegate>
 @end
 
