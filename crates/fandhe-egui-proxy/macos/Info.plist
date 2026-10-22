@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
+  `NSServices`（共有の受け取り、Issue #606）はここに入れない。サービスメニューは LaunchServices に
+  登録された `.app` でしか効かないため（`CFBundleURLTypes` と同じ理由）、`scripts/apple/
+  bundle-macos-url-scheme.sh` が `.app` 化の際に足す。配布用のキーは増やさない。
+
   デスクトップ相当 macOS 実行体（`fandhe-egui-proxy-desktop`、素の実行体・非バンドル）
   向けの Info.plist（Phase 11 の拡充ループ、Issue #889）。
 

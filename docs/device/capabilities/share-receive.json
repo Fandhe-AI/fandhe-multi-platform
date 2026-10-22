@@ -25,14 +25,17 @@
       "note": "未実装。受信は url-scheme と同じ `onCreate` / `onNewIntent` 経路を共有する。`ACTION_SEND_MULTIPLE`・画像・ファイルは扱わない（file-association が保留中の理由と同じ問題を持ち込まない）"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
+      "detail": "できている（Mac 目視待ち）",
       "api": "Info.plist `NSServices`（サービスメニュー）+ `NSApplication.servicesProvider`。Share Extension は使わない",
       "perm": "Info.plist の宣言のみ（.app 化が前提。entitlement・拡張ターゲット・App Group は不要）",
       "url": [
         "https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/properties.html",
         "https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/providing.html"
       ],
-      "note": "未実装。共有メニューではなくサービスメニューで受ける。本体プロセスが直接受けるため拡張ターゲットは要らない。.app 化していない素の実行体には届かない。サービスメニューへの反映が OS 側で遅れることがある"
+      "note": "実装済み（#606）。共有メニューではなくサービスメニューで受ける。本体プロセスが直接受けるため拡張ターゲットは要らない。.app 化していない素の実行体には届かない。サービスメニューへの反映が OS 側で遅れることがある。守る範囲は 1 プロセス内の受信順・不正入力（空・16 KiB 超・制御文字・不正な UTF-8）を表示しないこと・嘘の成功の禁止、守らない範囲は連続受信時に最後の 1 件だけ表示されること・複数プロセス・OS 側の登録反映の遅れ。未起動からの起動で届くかは Mac 目視（#601）で確かめ、届かなければ守らない範囲へ移す",
+      "implStatus": "Mac 目視待ち（#601）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_share_receive.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_share_receive.m + crates/fandhe-egui-proxy/src/device/share_receive.rs + crates/fandhe-core/src/screens/share_receive_show.rs + crates/fandhe-device/src/share_receive.rs + scripts/apple/bundle-macos-url-scheme.sh、Issue #606"
     },
     "windows": {
       "status": "no",

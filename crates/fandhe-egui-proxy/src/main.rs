@@ -22,6 +22,9 @@
 //! `run_native` より前に `device::apple_url_scheme::register` で URL scheme の
 //! Apple Event ハンドラを登録する（起動時に届く URL を取りこぼさないため）。
 //!
+//! Issue #606: macOS ターゲット（feature `device` 有効時）では、同じく `run_native` より前に
+//! `device::macos_share_receive::register` でサービスメニュー受信の provider を登録する。
+//!
 //! Issue #1216: Windows ターゲット（feature `device` 有効時）では、URL scheme 起動の判定と
 //! 起動済みインスタンスへの転送（`device::windows_url_scheme::win::startup`）を、通常の画面起動より
 //! 前に行う。URL 起動で `FANDHE_PROXY_APP` が未設定なら `url_scheme_show` 画面を既定にする。
@@ -158,6 +161,11 @@ fn main() -> eframe::Result<()> {
     // （`device/apple_url_scheme.rs`・`macos/fandhe_macos_url_scheme.m` 参照）。
     #[cfg(all(target_os = "macos", feature = "device"))]
     fandhe_egui_proxy::device::apple_url_scheme::register();
+
+    // Issue #606: 共有の受け取り（サービスメニュー）の provider も同じ位置で登録する
+    // （`device/macos_share_receive.rs`・`macos/fandhe_macos_share_receive.m` 参照）。
+    #[cfg(all(target_os = "macos", feature = "device"))]
+    fandhe_egui_proxy::device::macos_share_receive::register();
 
     // Issue #560: OS の検索から開かれたときの受信（`continueUserActivity`）を登録する
     // （`device/apple_spotlight_index.rs`・`apple/fandhe_apple_spotlight_index.m` 参照）。

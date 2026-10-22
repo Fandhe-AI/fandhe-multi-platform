@@ -32,6 +32,24 @@
 #   起動済み / コールドスタートの両方で、名前・サイズ・先頭 16 バイトが出る
 #   失敗系:         フォルダ名を x.txt にしたもの・読み取り権限のない .txt・8 MiB 超の .txt は
 #                   「開けませんでした」と理由が出る（成功にならない）。.md は届かない
+#
+# Issue #606（親 #122）: 共有の受け取り（share_receive_show）の Mac 目視にも同じ .app を使う。
+# NSServices（サービスメニュー「Fandhe で受け取る」、NSSendTypes は public.utf8-plain-text）を
+# 常に足し、--screen share_receive_show で起動する画面を選ぶ。メニュー項目名は
+# crates/fandhe-core/src/screens/share_receive_show.rs の SERVICE_MENU_TITLE と一致させる。
+# NSPortName は NSApp.servicesProvider が登録するポート名と一致させる必要があるため、
+# CFBundleName を実行体名へ揃えて両方に同じ値を使う（どちらの規則でも一致する）。
+#
+# 共有の受け取りの Mac 目視（人手確認は #601）:
+#   --screen share_receive_show で作り、テキストエディットで文字を選び、
+#   メニューの「サービス」から「Fandhe で受け取る」を選ぶ（右クリックのサービスでも可）
+#   起動中:         本文・文字数・受信時刻が出る
+#   コールドスタート: アプリを終了した状態から送る（届くかは目視で確かめる。届かなければ
+#                   対応表の「守らない範囲」へ移す）
+#   失敗系:         16 KiB 超を送ると「検査で弾いた件数」だけ増え、本文は出ない。
+#                   素の cargo run ではサービスに出ず、画面は「まだ受け取っていません」のまま
+#   サービスに出ないとき: 一度ログアウト/ログインするか、/System/Library/CoreServices/pbs -flush
+#                   でサービスのキャッシュを捨てる（反映が遅れることがある）
 set -euo pipefail
 
 if [ "$(uname)" != "Darwin" ]; then
@@ -52,8 +70,8 @@ while [ $# -gt 0 ]; do
 done
 # 画面名は許可リストで照合する（plist の JSON へ未検証の文字列を入れない。A03）。
 case "$screen" in
-  url_scheme_show|file_association_show) ;;
-  *) echo "未対応の画面名です: --screen は url_scheme_show か file_association_show" >&2; exit 2 ;;
+  url_scheme_show|file_association_show|share_receive_show) ;;
+  *) echo "未対応の画面名です: --screen は url_scheme_show / file_association_show / share_receive_show" >&2; exit 2 ;;
 esac
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -69,11 +87,17 @@ cp "$root/target/debug/$exe" "$app/Contents/MacOS/$exe"
 cp "$root/crates/fandhe-egui-proxy/macos/Info.plist" "$plist"
 
 plutil -insert CFBundleExecutable -string "$exe" "$plist"
+# NSServices の NSPortName と servicesProvider のポート名を一致させるため、名前を実行体名に揃える。
+plutil -replace CFBundleName -string "$exe" "$plist"
 plutil -insert CFBundlePackageType -string APPL "$plist"
 plutil -insert CFBundleURLTypes -json \
   '[{"CFBundleURLName":"com.fandhe.egui-proxy-desktop.url","CFBundleURLSchemes":["fandhe"]}]' "$plist"
 plutil -insert CFBundleDocumentTypes -json \
   '[{"CFBundleTypeName":"Plain Text","CFBundleTypeRole":"Viewer","LSHandlerRank":"Alternate","LSItemContentTypes":["public.plain-text"]}]' "$plist"
+# サービスメニュー（Issue #606）。NSMenuItem.default は SERVICE_MENU_TITLE、NSMessage は
+# macos/fandhe_macos_share_receive.m の receiveSharedText:userData:error: と対。
+plutil -insert NSServices -json \
+  "[{\"NSMenuItem\":{\"default\":\"Fandhe で受け取る\"},\"NSMessage\":\"receiveSharedText\",\"NSPortName\":\"$exe\",\"NSSendTypes\":[\"public.utf8-plain-text\"]}]" "$plist"
 # $screen は上の許可リストを通った固定の識別子だけ。
 plutil -insert LSEnvironment -json "{\"FANDHE_PROXY_APP\":\"$screen\"}" "$plist"
 plutil -lint "$plist"
