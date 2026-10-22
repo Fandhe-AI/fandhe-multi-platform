@@ -182,6 +182,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
+    <!-- Phase 11（Issue #584）: 画面キャプチャの検知（スクリーンショットは API 34+、録画は API 35+）。
+         どちらも install-time の通常権限で実行時の許可は出ない。古い API では宣言が無視される。
+         防止（FLAG_SECURE）に権限は要らない。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
+    <uses-permission android:name="android.permission.DETECT_SCREEN_RECORDING" />
+
     <!-- 資格情報の安全な保存（Issue #924）: `allowBackup="false"` はクラウドバックアップを
          止めるが、Android 12（API 31）以降の端末間移行（device-to-device transfer）は
          一部メーカー端末で allowBackup の値に関係なく動作するため、
