@@ -258,6 +258,9 @@
 //! - `ios/fandhe_ios_local_fonts.m`（Issue #1377、UIKit `UIFont.familyNames` によるフォントのファミリー名）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_local_fonts.rs`
 //!   から呼ばれる契約）。UIKit は既存のリンクで足りる。
+//! - `ios/fandhe_ios_spell_check.m`（Issue #579、UIKit `UITextChecker` によるスペルチェック）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_spell_check.rs`
+//!   から呼ばれる契約）。UIKit は既存のリンクで足りる。
 //! - `ios/fandhe_ios_compass.m`（Issue #1405、CoreLocation の heading 購読による方位）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_compass.rs`
 //!   から呼ばれる契約）。CoreLocation は位置情報用にリンク済みで追加リンクは無い。
@@ -514,6 +517,8 @@ fn main() {
 
     // `ios/fandhe_ios_pedometer.m`（Issue #1248）。macOS は対応表で `no` のため iOS 分岐のみ。
     compile_ios_pedometer();
+    // `ios/fandhe_ios_spell_check.m`（Issue #579）。iOS 分岐のみ。
+    compile_ios_spell_check();
     compile_ios_screen_wake_lock();
     // `ios/fandhe_ios_fullscreen_immersive.m`（Issue #1313）。iOS 分岐のみ。
     compile_ios_fullscreen_immersive();
@@ -1506,6 +1511,16 @@ fn compile_ios_pedometer() {
         .file("ios/fandhe_ios_pedometer.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_pedometer");
+}
+
+/// `ios/fandhe_ios_spell_check.m` を `cc` でコンパイルする（Issue #579）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_spell_check.rs` が使う）。UIKit はリンク済みで追加リンクは無い。
+fn compile_ios_spell_check() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_spell_check.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_spell_check.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_spell_check");
 }
 
 /// `ios/fandhe_ios_music_library.m` を `cc` でコンパイルする（Issue #484）。**iOS 分岐のみ**
