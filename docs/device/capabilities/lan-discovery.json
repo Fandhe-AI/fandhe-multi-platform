@@ -12,7 +12,7 @@
       "perm": "Info.plist の `NSLocalNetworkUsageDescription` と `NSBonjourServices`（`_http._tcp`）。初回の探索でローカルネットワーク許可のダイアログが出る",
       "url": "https://developer.apple.com/documentation/network/nwbrowser",
       "note": "実装済み（#488）。範囲・写像・守らない範囲は macOS（#486）と同じ（`_http._tcp` を 10 秒探し、名前・IP 1 件・ポートを一覧表示。許可なし→`PermissionDenied`・未接続→`Disabled`・失敗→`Internal`、0 件は成功）。iOS 固有: 許可前は waiting（PolicyDenied）で、窓の中で許可されれば ready へ移り成功として扱う。ダイアログに答える前に窓が閉じると「許可なし」になる。窓の途中で背景へ回したときの取りこぼしは守らない範囲（表示の食い違いだけで、資源は解放する）。【推測】許可後に ready へ移る順序と、シミュレータが許可ダイアログを出さないことは未確認。実機確認は #481",
-      "detail": "できている（実機確認待ち）",
+      "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#481）",
       "impl": "crates/fandhe-egui-proxy/src/device/ios_lan_discovery.rs + crates/fandhe-egui-proxy/src/device/apple_lan_discovery.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_lan_discovery.m + crates/fandhe-egui-proxy/src/device/lan_discovery.rs + crates/fandhe-device/src/lan_discovery.rs + crates/fandhe-core/src/screens/lan_discover.rs、Issue #488"
     },

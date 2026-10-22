@@ -56,7 +56,7 @@
       "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Segmenter",
       "safari": "`Intl.Segmenter` は対応（MDN: 2024 年 4 月から主要ブラウザ全てで利用可の Baseline 2024）。Chrome 組み込み AI の `LanguageDetector` / `Translator` は Safari・Firefox 非対応（Chrome の公式 docs による）",
       "note": "実装済み（旧#1094）。`js_sys::Reflect` で `Intl.Segmenter` が関数として実在するかを確かめ、無ければ入力に関わらず `Unsupported`。有れば `validate_input` → 空入力は API を呼ばず `Ok(vec![])` → `new Intl.Segmenter(undefined, {granularity: \"word\"})` の `segment` を反復し、`isWordLike` が真のものだけ `normalize_words` へ通す。構築・`segment`・反復の例外は `Internal` 相当の失敗にし、空リストの成功へ畳まない（例外の中身は console へ出さない）。守らない範囲: ブラウザ間の分割結果の一致。ヘッドレス Chrome で確認済み（10/7）: 「今日は良い天気です。Hello, world!」→ 7 語で句読点・記号を除外、空入力 → 0 語、`Intl.Segmenter` を消した環境 → 「この端末では使えません」（成功にしない）。Safari・Firefox の目視は未確認",
-      "detail": "できている（実ブラウザ未確認）",
+      "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実装済み（実ブラウザ未確認）",
       "impl": "crates/fandhe-web-dom/src/nlp.rs（nlp_segment_effect）+ crates/fandhe-web-dom/src/demo.rs（mount_nlp_segment_screen）+ crates/fandhe-web-dom/web/index.html（?screen=nlp_segment）+ crates/fandhe-core/src/screens/nlp_segment.rs、Issue 旧#1094"
     }

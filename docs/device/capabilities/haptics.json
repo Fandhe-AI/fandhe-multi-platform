@@ -60,7 +60,7 @@
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Navigator/vibrate",
       "safari": "未対応（caniuse 上 Safari デスクトップ 3.1〜27.1・iOS Safari 3.2〜27.2 とも非対応。Chrome / Edge / Samsung Internet の Android は対応、Firefox デスクトップは 129 以降が非対応、Firefox for Android 157 も非対応）",
       "note": "実装済み（旧#1091）。`navigator.vibrate(15)` をボタン押下の同期チェーン内で 1 回呼ぶ。`vibrate` が関数として無い環境（Safari 等）だけ `Unsupported`、`false` が返ったら失敗（成功にしない）。振動子の有無・サイレント設定は検知できないため、`Ok` は「ブラウザへ要求を渡した」止まりで画面も「振動を要求しました」と表示する。守らない範囲: 実際に振動したか。ヘッドレス Chrome で確認済み（10/7）: ボタン押下で「振動を要求しました（実際に振動するかは端末と設定によります）」、`navigator.vibrate` を消した環境 → 「この端末では使えません」（成功にしない）。Android Chrome での体感は人間確認待ち",
-      "detail": "できている（実ブラウザ未確認）",
+      "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実装済み（実ブラウザ未確認）",
       "impl": "crates/fandhe-web-dom/src/haptics.rs（haptics_tap_effect）+ crates/fandhe-web-dom/src/demo.rs（mount_haptics_tap_screen）+ crates/fandhe-web-dom/web/index.html（?screen=haptics_tap）+ crates/fandhe-core/src/screens/haptics_tap.rs、Issue 旧#1091"
     }

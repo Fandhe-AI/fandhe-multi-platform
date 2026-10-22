@@ -57,7 +57,7 @@
     },
     "web": {
       "status": "done",
-      "detail": "できている（実ブラウザ未確認）",
+      "detail": "できている（実ブラウザ確認待ち）",
       "api": "なし（OS API 不要。ファイル取得は file-picker 行の `<input type=\"file\">` を再利用）",
       "perm": "なし（ユーザー操作起因の `click()` が必要）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/file",

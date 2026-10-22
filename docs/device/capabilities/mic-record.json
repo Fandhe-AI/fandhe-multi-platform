@@ -8,7 +8,7 @@
   "platforms": {
     "ios": {
       "status": "done",
-      "detail": "できている（未確認）",
+      "detail": "できている（iOS 実機確認待ち）",
       "api": "AVFoundation（`AVAudioRecorder`/`AVAudioSession`）",
       "perm": "`NSMicrophoneUsageDescription`",
       "url": "https://developer.apple.com/documentation/avfoundation/avaudiorecorder",
@@ -34,7 +34,7 @@
     },
     "macos": {
       "status": "done",
-      "detail": "できている（未確認）",
+      "detail": "できている（Mac 目視待ち）",
       "api": "AVFoundation（`AVCaptureDevice`/`AVAudioRecorder`）",
       "perm": "Info.plist `NSMicrophoneUsageDescription`（entitlement 不要。App Sandbox 無効の素の実行体のため）",
       "url": "https://developer.apple.com/documentation/avfoundation/avaudiorecorder",

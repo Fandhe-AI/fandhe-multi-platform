@@ -56,7 +56,7 @@
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API",
       "safari": "対応（MDN は Baseline 2025。Safari の最低版は未確認）",
       "note": "実装済み（旧#1281）。web-sys の WakeLock は不安定 API のため Reflect 経由で呼ぶ。sentinel の `released` を読み戻して判定し、`release` イベントで即反映、可視に戻ったら取り直す。取得後に世代が古いと分かった sentinel は即解放し、マウント破棄でも解放する。非対応・拒否・secure context 外は失敗表示。守る範囲: 1 マウント内で sentinel を漏らさないこと・失敗を成功と見せないこと。守らない範囲: 複数タブ間の表示の食い違い・背景タブで効かないこと（仕様上ブラウザが解放）・取り直しをブラウザが拒む間の追従（取り直し待ちの表示のまま）・ページ終了時の後片付け（ブラウザが解放）。実ブラウザ目視は #17",
-      "detail": "できている（実ブラウザ未確認）",
+      "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実装済み（実ブラウザ未確認）",
       "impl": "crates/fandhe-web-dom/src/screen_wake_lock.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/wake_lock_toggle.rs、Issue 旧#1281"
     }

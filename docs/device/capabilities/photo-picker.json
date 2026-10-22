@@ -59,7 +59,7 @@
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/file",
       "safari": "`<input type=file>` は対応（MDN は Safari デスクトップ・iOS Safari を含め 2015-07 以降 Widely available と記載）。復号確認の `createImageBitmap(Blob)` は Safari 15 以降（それ未満はこのブラウザでは画像を表示できませんと失敗表示になる）",
       "note": "実装済み（旧#1103）。`file-picker` の `<input>` 配線を `accept=\"image/*\"` 付きで共有する。契約の 2 段検査: 1 段目は 8 MiB 上限と `validate_photo`、2 段目は判定した形式の MIME（`file.type` は信用しない）で作った Blob を `createImageBitmap` で復号し、通った後にだけ `blob:` URL を作って `<img>` に出す（失敗の経路で URL を作らない）。新しい要求と置き換えのとき前回の URL を `revoke` する。`blob:` 以外のソースは `<img>` にしない。守る範囲: 1 プロセス内で要求を出す順序（世代照合）、0 バイト・形式不明・8 MiB 超・復号不能・キャンセル・非対応を成功に見せないこと、新しい要求で表示中の画像を消すこと。守らない範囲: 複数プロセス・複数タブの同時操作、選択後に元ファイルが差し替わること。既知の天井: `cancel` イベント非対応のブラウザではキャンセルを検知できず選択中のまま残る、表示は 1 ページ 1 枚、HEIC 等は OS / ブラウザが変換しない限り選べても表示に失敗する。ヘッドレス Chrome で確認済み（10/7、`change` / `cancel` を合成）: PNG → 表示、形式不明 → 「画像として読み取れませんでした」、ヘッダーだけの JPEG → 「画像を表示できませんでした」、`cancel` → 「選択しませんでした」。実ブラウザ（Safari・Chrome・Firefox）のダイアログ操作は人間確認待ち",
-      "detail": "できている（実ブラウザ未確認）",
+      "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実装済み（実ブラウザ未確認）",
       "impl": "crates/fandhe-web-dom/src/file_picker.rs（photo_pick_effect）+ crates/fandhe-web-dom/src/dom_tree.rs（convert_image_widget）+ crates/fandhe-web-dom/src/demo.rs（mount_photo_pick_screen）+ crates/fandhe-web-dom/web/index.html（?screen=photo_pick）+ crates/fandhe-core/src/screens/photo_pick.rs、Issue 旧#1103"
     }

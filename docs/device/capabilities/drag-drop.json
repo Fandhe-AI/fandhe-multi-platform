@@ -61,7 +61,7 @@
     },
     "web": {
       "status": "done",
-      "detail": "できている",
+      "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実装済み（実ブラウザ目視は人間確認待ち）",
       "api": "HTML Drag and Drop API",
       "perm": "なし",
