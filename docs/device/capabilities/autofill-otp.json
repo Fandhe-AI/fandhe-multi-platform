@@ -8,24 +8,32 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "UIKit `UITextContentType`（`.password` / `.username` / `.oneTimeCode`）を入力欄へ設定。SMS のコードはキーボード上の候補に出る",
-      "perm": "パスワード自動入力は Associated Domains の `webcredentials:`（要確認）",
-      "url": "https://developer.apple.com/documentation/uikit/uitextcontenttype",
-      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 アプリが独自描画（egui）の場合、OS の入力欄を持たないため、OS の自動入力候補をどう出すかは未調査・要確認"
+      "api": "`UITextContentType.oneTimeCode` を、ソフトキーボード入力の隠し UITextField（FandheTextField）に設定",
+      "perm": "なし（通常の SMS コード）。domain-bound code・パスワードの保存提案は Associated Domains が要り範囲外",
+      "url": [
+        "https://developer.apple.com/documentation/security/enabling-password-autofill-on-a-text-input-view",
+        "https://developer.apple.com/documentation/security/one-time-codes"
+      ],
+      "note": "未実装。ソフトキーボード入力の経路が本物の `UITextField` を first responder にしているため、その `textContentType` を設定すればキーボード上に OS の候補が出る見込み。通常の SMS コードは entitlement 不要（One-time codes の記述）。`inputView` で独自キーボードを出すと候補 UI が出ない点に注意"
     },
     "android": {
       "status": "possible",
-      "api": "`AutofillManager`（API 26+）と `View.setAutofillHints`。SMS ワンタイムコードは SMS User Consent API（GMS 依存）",
-      "perm": "自動入力は権限なし。SMS User Consent は権限名が未確認（要確認）",
-      "url": "https://developer.android.com/identity/autofill",
-      "note": "未実装。SMS User Consent は GMS（Google Play 開発者サービス）依存で https://developers.google.com/identity/sms-retriever/user-consent/overview が一次情報。独自描画の入力欄への自動入力の通し方は未調査"
+      "api": "`AutofillManager`（API 26+）の仮想ビュー経路（`onProvideAutofillVirtualStructure`・hint `smsOTPCode`）",
+      "perm": "なし",
+      "url": [
+        "https://developer.android.com/identity/autofill/autofill-optimize",
+        "https://developer.android.com/reference/android/view/autofill/AutofillManager"
+      ],
+      "note": "未実装。描画面を自動入力フレームワークへ仮想ビューとして公開する設計が要る。SMS User Consent / SMS Retriever は GMS 依存のため採らない（https://developers.google.com/identity/sms-retriever/user-consent/overview）",
+      "deferred": "GameActivity の描画面を自動入力へ仮想ビューとして公開する設計が要る。`createSurfaceView()` の差し替えは全画面の IME・a11y に効くため、別の設計 issue で決めるまで保留。SMS User Consent / SMS Retriever は GMS 依存のため採らない"
     },
     "macos": {
       "status": "possible",
-      "api": "AppKit のパスワード自動入力（`NSTextContentType`）。詳細は要確認",
-      "perm": "要確認",
-      "url": "https://developer.apple.com/documentation/uikit/uitextcontenttype",
-      "note": "未実装。URL は iOS の UIKit ページで macOS 側は未確認（URL 未確認）。macOS で SMS のコード自動入力は一般的でない"
+      "api": "AppKit `NSTextContent.contentType = .oneTimeCode`",
+      "perm": "なし（通常の SMS コード）",
+      "url": "https://developer.apple.com/documentation/appkit/nstextcontenttype",
+      "note": "未実装。macOS で SMS のコード自動入力は一般的でない",
+      "deferred": "winit の `NSView` は `NSTextContent` を採用せず、`contentType` を設定できる入力欄が無い。隠し `NSTextField` を使う方式はデスクトップのキー入力・IME の経路の作り直しになるため保留"
     },
     "windows": {
       "status": "no",
@@ -39,9 +47,9 @@
       "api": "`<input autocomplete=\"one-time-code\">`・`username`・`current-password`、および WebOTP API（`navigator.credentials.get({otp})`）",
       "perm": "なし（WebOTP は secure context 必須、SMS 本文の書式条件あり）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebOTP_API",
-      "note": "未実装。WebOTP は MDN が Limited availability 表示で Chromium 系のみと認識（要確認）。`autocomplete` 属性は HTML の標準で https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/autocomplete",
-      "safari": "WebOTP は非対応と認識（要確認）。`autocomplete=\"one-time-code\"` は Safari に iOS のコード候補機能がある（要確認）"
+      "note": "未実装。`autocomplete=\"one-time-code\"`（+ `inputmode=\"numeric\"`）を本物の `<input>` に付ける。WebOTP は Chromium 系のみで Baseline ではなく、secure context 必須、SMS 最終行は `@<domain> #<code>` の書式。`autocomplete` 属性は HTML の標準 https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/autocomplete",
+      "safari": "WebOTP は非対応。`autocomplete=\"one-time-code\"` で iOS のコード候補が出る"
     }
   },
-  "note": "secure-credential（端末内保存）との違い: 本機能は OS の自動入力にコード・パスワードを入れてもらう側。今回の範囲: ワンタイムコード入力欄を 1 つ画面に出し、OS が提案した値が入ることを確認する。独自描画のため入力欄の橋渡し方法が前提となる未調査項目。"
+  "note": "secure-credential（端末内保存）との違い: 本機能は OS の自動入力にコードを入れてもらう側。範囲: ワンタイムコードの入力欄 1 つ。パスワード・ユーザー名・domain-bound code は範囲外。Web は WebOTP（Chromium）を含む。独自描画の橋渡し方針: iOS はソフトキーボード入力の隠し UITextField（FandheTextField）、Web は fandhe-web-dom が出す本物の `<input>` に OS 向けのヒントを付ける。Android・macOS は入力欄の橋渡しそのものが設計課題のため保留（deferred）。DSL の入力欄には種別の属性を足さず、画面単位でヒントを掛ける。"
 }
