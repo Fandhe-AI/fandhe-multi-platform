@@ -30,17 +30,12 @@ pub struct SensitiveInputTracker {
 
 /// `ImePurpose` はコアの `Copy` 型だが `Default` を実装しないため、
 /// 未初期化状態を明示するラッパー（既定は「機微でない」＝ `Normal` 相当）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum ImePurposeState {
+    #[default]
     Normal,
     Password,
     Terminal,
-}
-
-impl Default for ImePurposeState {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 impl From<ImePurpose> for ImePurposeState {

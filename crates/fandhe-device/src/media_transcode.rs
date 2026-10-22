@@ -211,7 +211,9 @@ pub fn parse_m4a(bytes: &[u8]) -> Result<M4aInfo, DeviceError> {
             return Err(unreadable());
         }
         table
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .take(n)
             .map(|c| u64::from(u32::from_be_bytes([c[0], c[1], c[2], c[3]])))
             .sum()

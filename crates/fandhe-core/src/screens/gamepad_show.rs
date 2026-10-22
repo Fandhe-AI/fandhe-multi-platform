@@ -51,20 +51,15 @@ const ALT_BUTTON_LABEL: &str = "代替ボタン";
 const ALT_STICK_EPSILON: f32 = 0.02;
 
 /// 画面が表示しうる接続状態（モジュール doc の 3 分岐）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GamepadView {
     /// 実コントローラを読めている。
     Connected,
     /// 実装は対応しているが接続中のコントローラが無い（代替入力が効く）。
+    #[default]
     DisconnectedAlt,
     /// このプラットフォームでは未対応（代替入力が効く）。
     UnsupportedAlt,
-}
-
-impl Default for GamepadView {
-    fn default() -> Self {
-        Self::DisconnectedAlt
-    }
 }
 
 /// 「ゲームコントローラ」画面の状態。

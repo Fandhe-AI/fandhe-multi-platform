@@ -162,11 +162,13 @@ fn hex_digit(b: u8) -> Option<u8> {
 /// 非 ASCII 入力（マルチバイト UTF-8）でも文字境界を分断しない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn decode_hex(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 {
+    if !s.len().is_multiple_of(2) {
         return None;
     }
     s.as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|chunk| Some((hex_digit(chunk[0])? << 4) | hex_digit(chunk[1])?))
         .collect()
 }

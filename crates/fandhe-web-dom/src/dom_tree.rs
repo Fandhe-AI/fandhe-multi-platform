@@ -579,10 +579,13 @@ fn convert_input_widget<S: 'static>(
             attrs,
             WidgetValueKind::Number,
         )
-    } else if let Some(radio) = synced
-        .as_any()
-        .and_then(|any| any.downcast_ref::<RadioButton<S>>())
-    {
+    } else {
+        // 上の `is_checkbox`/`is_toggle`/`is_slider`/`is_radio` のいずれかが `true` で
+        // 型判定した直後のため `?` が `None` を返すことはない（`as_any` は
+        // `sync_from_state` 前後で型が変わらない、モジュール doc「未配線の契約」節参照）。
+        let radio = synced
+            .as_any()
+            .and_then(|any| any.downcast_ref::<RadioButton<S>>())?;
         // `name` はグループ内で共通にする（codex レビュー指摘 #999: 未設定だと各選択肢が
         // 独立したラジオボタン扱いになり、矢印キーでの選択肢移動・Tab での単一巡回が
         // 壊れる）。同一グループの全 `RadioButton<S>` は同じ `get`（グループの現在選択値
@@ -617,11 +620,6 @@ fn convert_input_widget<S: 'static>(
             attrs,
             WidgetValueKind::Index(radio.value()),
         )
-    } else {
-        // 上の `is_checkbox`/`is_toggle`/`is_slider`/`is_radio` のいずれかが `true` で
-        // 型判定した直後のため到達しない（`as_any` は `sync_from_state` 前後で型が
-        // 変わらない、モジュール doc「未配線の契約」節参照）。
-        return None;
     };
 
     if disabled {

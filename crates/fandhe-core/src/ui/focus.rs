@@ -113,10 +113,10 @@ impl ObservedCache {
     /// 上限超過時は最も古い記録を 1 件破棄する。
     fn record(&mut self, id: WidgetId, path: &[usize]) {
         if !self.paths.contains_key(&id) {
-            if self.order.len() >= OBSERVED_CACHE_CAPACITY {
-                if let Some(evicted) = self.order.pop_front() {
-                    self.paths.remove(&evicted);
-                }
+            if self.order.len() >= OBSERVED_CACHE_CAPACITY
+                && let Some(evicted) = self.order.pop_front()
+            {
+                self.paths.remove(&evicted);
             }
             self.order.push_back(id);
         }
@@ -269,14 +269,13 @@ impl FocusRing {
 
         // 2. 前回の path を 1 回だけ解決し、id が一致すればそのまま採用する
         //    （O(path の深さ) のみの主経路）。
-        if let Some(node) = resolve_node_at(screen, &entry.path, state) {
-            if let Some(id) = focusable_id(&node) {
-                if id == entry.id {
-                    self.observed.record(id, &entry.path);
-                    self.set_current(Some(entry));
-                    return;
-                }
-            }
+        if let Some(node) = resolve_node_at(screen, &entry.path, state)
+            && let Some(id) = focusable_id(&node)
+            && id == entry.id
+        {
+            self.observed.record(id, &entry.path);
+            self.set_current(Some(entry));
+            return;
         }
 
         // 3. id 不一致（または path 範囲外・非葉ノード）を検知した場合の三段探索。
@@ -284,17 +283,16 @@ impl FocusRing {
 
         // 第 1 段: 観測キャッシュ照会（verify-on-use）。
         if let Some(cached_path) = self.observed.lookup(target) {
-            if let Some(node) = resolve_node_at(screen, &cached_path, state) {
-                if let Some(id) = focusable_id(&node) {
-                    if id == target {
-                        self.observed.record(id, &cached_path);
-                        self.set_current(Some(FocusEntry {
-                            path: cached_path,
-                            id,
-                        }));
-                        return;
-                    }
-                }
+            if let Some(node) = resolve_node_at(screen, &cached_path, state)
+                && let Some(id) = focusable_id(&node)
+                && id == target
+            {
+                self.observed.record(id, &cached_path);
+                self.set_current(Some(FocusEntry {
+                    path: cached_path,
+                    id,
+                }));
+                return;
             }
             // 記録が古く不一致だった場合は捨てて第 2 段へ進む（外れても正しさに
             // 影響しない、設計文書 §4.4「観測キャッシュと再捕捉保証の層別化」）。
@@ -353,13 +351,12 @@ impl FocusRing {
         // いずれかで即座に無効化する（`SearchCursor` ドキュメントの reset 条件）。
         // 以降のコンテナ単位のマッチングは `container_prefix` の一致のみで
         // 判定すればよい。
-        if let Some(cursor) = &self.search_cursor {
-            if cursor.direction != direction
+        if let Some(cursor) = &self.search_cursor
+            && (cursor.direction != direction
                 || cursor.anchor_id != anchor_id
-                || cursor.anchor_path != path
-            {
-                self.search_cursor = None;
-            }
+                || cursor.anchor_path != path)
+        {
+            self.search_cursor = None;
         }
 
         // `t` は「直近祖先コンテナ」の深さを表す。`t == 0` はトップレベル
@@ -734,17 +731,17 @@ fn find_candidate_in_container<S>(
             // 行内に候補なしとして扱う（設計文書 §4.4「Axis::Grid の解決」）。
             return ContainerSearch::Exhausted;
         }
-        if let Some(window) = &window_bound {
-            if idx_usize < window.start || idx_usize >= window.end {
-                // 探索窓の外: 「まだ先に候補がいるかもしれない」ため、コンテナの
-                // 端到達（Exhausted）とは区別し WindowBounded を返す
-                // （Cursor Bugbot High 指摘対応）。未検証のこの index を次回の
-                // 再開位置として呼び出し元（`FocusRing::search_cursor`）へ渡す
-                // （codex-review 9 巡目 P1 対応、`SearchCursor` ドキュメント参照）。
-                return ContainerSearch::WindowBounded {
-                    next_index: idx_usize,
-                };
-            }
+        if let Some(window) = &window_bound
+            && (idx_usize < window.start || idx_usize >= window.end)
+        {
+            // 探索窓の外: 「まだ先に候補がいるかもしれない」ため、コンテナの
+            // 端到達（Exhausted）とは区別し WindowBounded を返す
+            // （Cursor Bugbot High 指摘対応）。未検証のこの index を次回の
+            // 再開位置として呼び出し元（`FocusRing::search_cursor`）へ渡す
+            // （codex-review 9 巡目 P1 対応、`SearchCursor` ドキュメント参照）。
+            return ContainerSearch::WindowBounded {
+                next_index: idx_usize,
+            };
         }
 
         let mut path = container_prefix.to_vec();

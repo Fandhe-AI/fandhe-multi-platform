@@ -150,10 +150,10 @@ pub fn finish(state: &mut SpotlightIndexState, generation: u64, result: Result<(
 /// （それ以外の URL・不正な id は表示を変えない）。
 pub fn apply_opened(state: &mut SpotlightIndexState, seq: u64, url: Option<String>) {
     state.inbox_seq = Some(seq);
-    if let Some(id) = url.as_deref().and_then(|u| u.strip_prefix(URL_PREFIX)) {
-        if is_valid_id(id) {
-            state.opened = Some(id.to_string());
-        }
+    if let Some(id) = url.as_deref().and_then(|u| u.strip_prefix(URL_PREFIX))
+        && is_valid_id(id)
+    {
+        state.opened = Some(id.to_string());
     }
 }
 

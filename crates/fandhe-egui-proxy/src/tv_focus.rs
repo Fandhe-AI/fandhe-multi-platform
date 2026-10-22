@@ -339,7 +339,7 @@ fn render_focusable_button<S>(
 
     let mut button = egui::Button::new(label);
     if is_focused {
-        button = button.stroke(egui::Stroke::new(3.0, egui::Color32::YELLOW));
+        button = button.stroke(egui::Stroke::new(3.0_f32, egui::Color32::YELLOW));
     }
     let response = ui.add(button);
 

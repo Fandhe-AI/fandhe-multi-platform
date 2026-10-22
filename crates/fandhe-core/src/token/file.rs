@@ -455,14 +455,15 @@ fn parse_token_definition(
         .ok_or_else(|| parse_error(path, format!("未知の $type です: {type_str}")))?;
     let value = required_field(obj, "$value", path)?;
 
-    if let Some(s) = value.as_str() {
-        if s.starts_with('{') && s.ends_with('}') {
-            let reference = parse_token_reference(s)?;
-            return Ok(TokenDefinition::Reference {
-                category,
-                reference,
-            });
-        }
+    if let Some(s) = value.as_str()
+        && s.starts_with('{')
+        && s.ends_with('}')
+    {
+        let reference = parse_token_reference(s)?;
+        return Ok(TokenDefinition::Reference {
+            category,
+            reference,
+        });
     }
 
     let token_value = decode_value_for_category(category, value, path)?;
@@ -771,10 +772,10 @@ fn insert_definition(
     };
 
     if rest.is_empty() {
-        if let Some(Value::Object(child)) = node.get(head) {
-            if !child.is_empty() {
-                return Err(prefix_conflict_error(full_path));
-            }
+        if let Some(Value::Object(child)) = node.get(head)
+            && !child.is_empty()
+        {
+            return Err(prefix_conflict_error(full_path));
         }
         let leaf = serialize_definition(definition, full_path)?;
         node.insert(head.clone(), leaf);

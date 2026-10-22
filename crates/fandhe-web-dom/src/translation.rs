@@ -282,7 +282,7 @@ mod web {
             ("targetLanguage", tag.into()),
         ]);
 
-        let status = wait(call(&ctor, "availability", &[opts.clone()]))
+        let status = wait(call(&ctor, "availability", std::slice::from_ref(&opts)))
             .await
             .map_err(js_fail)?;
         alive(mount, g)?;

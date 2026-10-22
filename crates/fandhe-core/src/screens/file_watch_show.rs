@@ -538,7 +538,7 @@ mod tests {
         stop(&mut s);
         assert_eq!(s.phase, WatchPhase::Idle);
         assert_eq!(s.records.len(), 1);
-        assert_eq!(status_text(&s), format!("{STOPPED_STATUS}"));
+        assert_eq!(status_text(&s), STOPPED_STATUS.to_string());
         assert_eq!(s.error, "");
         start(&mut s);
         assert_eq!(take_start(&s), Some(2));

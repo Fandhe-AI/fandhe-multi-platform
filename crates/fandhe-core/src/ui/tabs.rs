@@ -334,14 +334,14 @@ impl<S: 'static> Widget<S> for Tabs<S> {
         );
         commands.push(PaintCommand::Rect);
 
-        if let Some(index) = self.cached_selected {
-            if let Some(content) = self.items[index].content.as_ref() {
-                // コンテンツはタブバー分を除いたコンテンツ領域の寸法でクランプする
-                // （`content_area_size` 参照。バー分の拡大を子へ波及させない、
-                // `Dialog::paint` が scrim 分を子へ伝播させない判断と同型）。
-                let content_size = self.content_area_size(size);
-                commands.extend(content.paint(origin, content_size));
-            }
+        if let Some(index) = self.cached_selected
+            && let Some(content) = self.items[index].content.as_ref()
+        {
+            // コンテンツはタブバー分を除いたコンテンツ領域の寸法でクランプする
+            // （`content_area_size` 参照。バー分の拡大を子へ波及させない、
+            // `Dialog::paint` が scrim 分を子へ伝播させない判断と同型）。
+            let content_size = self.content_area_size(size);
+            commands.extend(content.paint(origin, content_size));
         }
 
         commands

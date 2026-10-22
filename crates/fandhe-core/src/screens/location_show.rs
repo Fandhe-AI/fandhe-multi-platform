@@ -34,9 +34,10 @@ const RETRY_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 
 /// 画面が表示しうる状態。「未取得」と「(0, 0) に取得できた」を型で区別する契約
 /// （`fandhe_device::location::Location::last_fix` の doc と対応）。
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum LocationView {
     /// まだ測位できていない。
+    #[default]
     Waiting,
     /// 測位できた。
     Fixed { lat: f64, lon: f64, accuracy_m: f64 },
@@ -48,12 +49,6 @@ pub enum LocationView {
     Unavailable,
     /// タイムアウト・その他の失敗（再試行の余地がある）。
     Retryable,
-}
-
-impl Default for LocationView {
-    fn default() -> Self {
-        Self::Waiting
-    }
 }
 
 /// 位置情報画面の状態。

@@ -398,7 +398,7 @@ mod web {
             ("data", Int16Array::from(&pcm[..]).into()),
         ]);
         let audio = construct(&global("AudioData"), &data).map_err(js_fail)?;
-        let enc_res = call(&enc, "encode", &[audio.clone()]);
+        let enc_res = call(&enc, "encode", std::slice::from_ref(&audio));
         let _ = call(&audio, "close", &[]);
         enc_res.map_err(js_fail)?;
         wait(call(&enc, "flush", &[])).await.map_err(js_fail)?;
@@ -444,7 +444,7 @@ mod web {
         let decoded = async {
             call(&dec, "configure", &[config])?;
             for c in &chunks {
-                call(&dec, "decode", &[c.clone()])?;
+                call(&dec, "decode", std::slice::from_ref(c))?;
             }
             wait(call(&dec, "flush", &[])).await
         }

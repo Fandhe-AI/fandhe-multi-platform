@@ -283,7 +283,7 @@ mod web {
         };
         let opts = obj(&[("expectedInputs", langs()), ("expectedOutputs", langs())]);
 
-        let status = wait(call(&lm_ctor, "availability", &[opts.clone()]))
+        let status = wait(call(&lm_ctor, "availability", std::slice::from_ref(&opts)))
             .await
             .map_err(js_fail)?;
         alive(mount, g)?;

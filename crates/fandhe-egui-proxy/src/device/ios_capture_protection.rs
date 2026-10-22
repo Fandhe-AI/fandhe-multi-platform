@@ -65,7 +65,7 @@ fn screenshot_count(registered: bool, count: u64) -> Option<u64> {
 
 /// 回数を 1 増やす。上限で飽和し、単調増加を保つ。
 fn bump(counter: &AtomicU64) {
-    let _ = counter.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
+    let _ = counter.try_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
         Some(v.saturating_add(1))
     });
 }
