@@ -229,11 +229,13 @@ final class SpellCheckHelper {
                 }
                 List<Integer> ranges = new ArrayList<>();
                 List<String> words = new ArrayList<>();
+                // 欠けた要素（null）は検査結果が届いていないので、捨てずに失敗で確定する。
+                // 誤り 0 件の成功にするのは、全要素を読めたときだけ。
                 for (SentenceSuggestionsInfo info : results) {
-                    if (info == null) {
-                        continue;
+                    if (info == null || !collect(info, ranges, words)) {
+                        finish(id, RESULT_FAILED, null, null, null);
+                        return;
                     }
-                    collect(info, ranges, words);
                 }
                 int[] r = new int[ranges.size()];
                 for (int i = 0; i < r.length; i++) {
@@ -285,14 +287,15 @@ final class SpellCheckHelper {
         return tag.replace('_', '-').toLowerCase(Locale.ROOT);
     }
 
-    // 綴りの誤りだけを取り出す（辞書にある語・文法の誤りだけのものは除く）。
-    private static void collect(SentenceSuggestionsInfo info, List<Integer> ranges, List<String> words) {
+    // 綴りの誤りだけを取り出す（辞書にある語・文法の誤りだけのものは除く）。語ごとの結果が欠けて
+    // いたら false を返し、呼び出し側が失敗で確定する（欠けた語を「誤りなし」に畳まない）。
+    private static boolean collect(SentenceSuggestionsInfo info, List<Integer> ranges, List<String> words) {
         // 候補数の上限。Rust 側が MAX_SUGGESTIONS で整形するため、ここでは過大な配列を避ける目安のみ。
         final int cap = 16;
         for (int i = 0; i < info.getSuggestionsCount(); i++) {
             SuggestionsInfo si = info.getSuggestionsInfoAt(i);
             if (si == null) {
-                continue;
+                return false;
             }
             int attrs = si.getSuggestionsAttributes();
             boolean typo = (attrs & SuggestionsInfo.RESULT_ATTR_LOOKS_LIKE_TYPO) != 0;
@@ -313,6 +316,7 @@ final class SpellCheckHelper {
             ranges.add(info.getLengthAt(i));
             ranges.add(added);
         }
+        return true;
     }
 
     // この id が保留中の要求なら 1 回だけ確定し、session を解放する。取り出しと解放対象の取得は
