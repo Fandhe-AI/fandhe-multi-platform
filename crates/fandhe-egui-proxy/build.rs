@@ -188,6 +188,8 @@
 //!   から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `ios/fandhe_ios_in_app_review.m`（Issue #564、`SKStoreReviewController requestReviewInScene:` による
 //!   アプリ内レビュー依頼。`src/device/ios_in_app_review.rs` から呼ばれる契約）。StoreKit を追加でリンクする。
+//! - `ios/fandhe_ios_capture_protection.m`（Issue #583、`sceneCaptureState` とスクリーンショット通知による
+//!   画面キャプチャの検知。`src/device/ios_capture_protection.rs` から呼ばれる契約）。追加のリンクは無い。
 //! - `macos/fandhe_macos_in_app_review.m`（Issue #563、`SKStoreReviewController requestReview` による
 //!   レビュー依頼）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_in_app_review.rs` から呼ばれる契約）。StoreKit を追加でリンクする。
@@ -550,6 +552,8 @@ fn main() {
     compile_ios_web_auth_session();
     // `ios/fandhe_ios_in_app_review.m`（Issue #564）。iOS 分岐のみ。StoreKit をリンクする。
     compile_ios_in_app_review();
+    // `ios/fandhe_ios_capture_protection.m`（Issue #583）。iOS 分岐のみ（macOS は対応表で no）。
+    compile_ios_capture_protection();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_midi.m`（Issue #1398 macOS + #1399 iOS）も共用する。CoreMIDI を使う。
@@ -1329,6 +1333,16 @@ fn compile_ios_in_app_review() {
         .file("ios/fandhe_ios_in_app_review.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_in_app_review");
+}
+
+/// `ios/fandhe_ios_capture_protection.m` を `cc` でコンパイルする（Issue #583）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_capture_protection.rs` が使う）。UIKit はリンク済みで追加リンクは無い。
+fn compile_ios_capture_protection() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_capture_protection.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_capture_protection.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_capture_protection");
 }
 
 /// `macos/fandhe_macos_local_fonts.m` を `cc` でコンパイルする（Issue #1376）。**macOS 分岐のみ**
