@@ -94,6 +94,9 @@ struct State {
     failure: Option<(u64, ActivityFailure)>,
     /// 次に振る受信番号（購読し直しても巻き戻さない）。
     next_seq: u64,
+    /// この世代で `ReadingChanged` の通知を受け取り済みか。遅れて完了した初期値
+    /// （`GetCurrentReadingAsync`）が新しい通知を上書きしないための判定。
+    changed_seen: bool,
 }
 
 impl State {
@@ -103,6 +106,7 @@ impl State {
         self.active = true;
         self.latest = None;
         self.failure = None;
+        self.changed_seen = false;
         self.epoch
     }
 
@@ -112,6 +116,7 @@ impl State {
         self.active = false;
         self.latest = None;
         self.failure = None;
+        self.changed_seen = false;
     }
 
     /// 世代が現在で購読中か。
@@ -119,11 +124,24 @@ impl State {
         self.active && self.epoch == epoch
     }
 
-    /// 現在の世代かつ購読中のときだけ最新値を入れる。入れたら `true`。
+    /// 変更通知の値。現在の世代かつ購読中のときだけ最新値を入れる。入れたら `true`。
     fn store(&mut self, epoch: u64, kind: ActivityKind, confidence: Confidence) -> bool {
         if !self.is_current(epoch) {
             return false;
         }
+        self.changed_seen = true;
+        self.put(kind, confidence)
+    }
+
+    /// 初期値。変更通知を受信済みなら古い値として捨てる（判定と更新を同じロックで行う）。
+    fn store_initial(&mut self, epoch: u64, kind: ActivityKind, confidence: Confidence) -> bool {
+        if !self.is_current(epoch) || self.changed_seen {
+            return false;
+        }
+        self.put(kind, confidence)
+    }
+
+    fn put(&mut self, kind: ActivityKind, confidence: Confidence) -> bool {
         self.next_seq += 1;
         self.latest = Some(ActivityReading {
             kind,
@@ -137,6 +155,14 @@ impl State {
     /// 「無効なサンプルを捨てた後」は `Waiting`。以前の値を返し続けない）。
     fn discard(&mut self, epoch: u64) {
         if self.is_current(epoch) {
+            self.changed_seen = true;
+            self.latest = None;
+        }
+    }
+
+    /// 初期値の無効サンプル。変更通知を受信済みなら何もしない。
+    fn discard_initial(&mut self, epoch: u64) {
+        if self.is_current(epoch) && !self.changed_seen {
             self.latest = None;
         }
     }
@@ -189,6 +215,7 @@ mod imp {
         latest: None,
         failure: None,
         next_seq: 0,
+        changed_seen: false,
     });
 
     fn lock() -> MutexGuard<'static, State> {
@@ -282,7 +309,7 @@ mod imp {
 
     /// 1 件の読みを写像して現在の世代なら共有状態へ入れる。範囲外はサンプルごと捨て、保持中の
     /// 最新値も消す（契約表 6）。プロパティ取得の失敗は契約上の失敗として確定する。
-    fn deliver(epoch: u64, reading: &ActivitySensorReading) {
+    fn deliver(epoch: u64, reading: &ActivitySensorReading, initial: bool) {
         let activity = match reading.Activity() {
             Ok(a) => a.0,
             Err(e) => {
@@ -300,8 +327,13 @@ mod imp {
         let mut st = lock();
         match (kind_from_raw(activity), confidence_from_raw(confidence)) {
             (Some(kind), Some(conf)) => {
-                st.store(epoch, kind, conf);
+                if initial {
+                    st.store_initial(epoch, kind, conf);
+                } else {
+                    st.store(epoch, kind, conf);
+                }
             }
+            _ if initial => st.discard_initial(epoch),
             _ => st.discard(epoch),
         }
     }
@@ -403,9 +435,12 @@ mod imp {
         let token = sensor.ReadingChanged(&TypedEventHandler::new(
             move |_: Ref<'_, ActivitySensor>,
                   args: Ref<'_, ActivitySensorReadingChangedEventArgs>| {
-                if let Ok(args) = args.ok() {
-                    if let Ok(reading) = args.Reading() {
-                        deliver(epoch, &reading);
+                // 読み取りの失敗を握りつぶさない。失敗を確定すると `read` が `Err` を返し、
+                // ドライバが停止・失敗表示へつなぐ（古い行動を出し続けない）。
+                match args.ok().and_then(|a| a.Reading()) {
+                    Ok(reading) => deliver(epoch, &reading, false),
+                    Err(e) => {
+                        lock().fail(epoch, failure_from_hresult(e.code().0));
                     }
                 }
                 Ok(())
@@ -446,7 +481,7 @@ mod imp {
                     op.SetCompleted(&AsyncOperationCompletedHandler::new(move |op, status| {
                         match (op.ok(), status) {
                             (Ok(op), AsyncStatus::Completed) => match op.GetResults() {
-                                Ok(reading) => deliver(epoch, &reading),
+                                Ok(reading) => deliver(epoch, &reading, true),
                                 Err(e) => on_fail(e.code().0),
                             },
                             (Ok(op), AsyncStatus::Error) => on_fail(async_failure_code(
@@ -558,6 +593,24 @@ mod tests {
             Ok(ActivityPoll::Reading(r)) => assert!(r.seq > first),
             other => panic!("unexpected {other:?}"),
         }
+    }
+
+    #[test]
+    fn late_initial_does_not_override_change_notification() {
+        let mut s = State::default();
+        let e = s.begin();
+        assert!(s.store(e, ActivityKind::Running, Confidence::High));
+        // 遅れて完了した初期値（歩行）は捨てる。
+        assert!(!s.store_initial(e, ActivityKind::Walking, Confidence::High));
+        s.discard_initial(e);
+        match s.poll() {
+            Ok(ActivityPoll::Reading(r)) => assert_eq!(r.kind, ActivityKind::Running),
+            other => panic!("unexpected {other:?}"),
+        }
+        // 通知が先に無ければ初期値は入る。
+        s.end();
+        let e = s.begin();
+        assert!(s.store_initial(e, ActivityKind::Walking, Confidence::High));
     }
 
     #[test]
