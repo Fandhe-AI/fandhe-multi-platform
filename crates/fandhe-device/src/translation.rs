@@ -89,7 +89,7 @@ impl TextTranslator for UnsupportedTextTranslator {
 
 /// BCP 47 の構文だけを見る（主タグは ASCII 英字 2〜3 文字、続くサブタグは 1〜8 文字の英数字）。
 /// 言語が実在・対応かどうかは OS に判定させる。
-fn valid_lang_tag(tag: &str) -> bool {
+pub(crate) fn valid_lang_tag(tag: &str) -> bool {
     if tag.len() > MAX_LANG_TAG_BYTES {
         return false;
     }

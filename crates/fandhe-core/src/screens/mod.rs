@@ -189,6 +189,8 @@ pub mod power_state_show;
 pub mod print_page;
 /// Phase 11 の拡充ループ型サンプル「セーフエリア」（親 #105、Issue #444）。
 pub mod safe_area_insets_show;
+/// Phase 11 の拡充ループ型サンプル「スペルチェック」（親 #119、Issue #578）。
+pub mod spell_check;
 /// Phase 11 の拡充ループ型サンプル「システムのアクセント色」（親 #103、Issue #421）。
 pub mod system_accent_color_show;
 /// Phase 11 の拡充ループ型サンプル「端末内翻訳」（親 #115、Issue #535）。

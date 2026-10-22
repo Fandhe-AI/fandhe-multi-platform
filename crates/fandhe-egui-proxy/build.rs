@@ -177,6 +177,9 @@
 //! - `macos/fandhe_macos_local_fonts.m`（Issue #1376、`NSFontManager` によるフォントのファミリー名の
 //!   同期読み取り）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_local_fonts.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_spell_check.m`（Issue #578、`NSSpellChecker` による入力文のスペルチェック）は
+//!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_spell_check.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_file_watch.m`（Issue #1410、CoreServices の FSEventStream によるフォルダの
 //!   変更監視）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_file_watch.rs` から呼ばれる契約）。CoreServices をリンクする。
@@ -1342,6 +1345,17 @@ fn compile_macos_local_fonts() {
         .compile("fandhe_macos_local_fonts");
 }
 
+/// `macos/fandhe_macos_spell_check.m` を `cc` でコンパイルする（Issue #578）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_spell_check.rs` が使う）。AppKit は `compile_apple_share(true)` が
+/// 既にリンクしているため追加リンクは無い。
+fn compile_macos_spell_check() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_spell_check.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_spell_check.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_spell_check");
+}
+
 /// `macos/fandhe_macos_wifi_info.m` を `cc` でコンパイルし CoreWLAN をリンクする（Issue #514）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_wifi_info.rs` が使う）。CoreLocation は
 /// `compile_apple_location` でリンク済み。
@@ -1904,6 +1918,8 @@ fn build_macos() {
     compile_apple_now_playing();
     // `macos/fandhe_macos_local_fonts.m`（Issue #1376）も macOS 専用。AppKit は既存のリンクで足りる。
     compile_macos_local_fonts();
+    // `macos/fandhe_macos_spell_check.m`（Issue #578）も macOS 専用。AppKit は既存のリンクで足りる。
+    compile_macos_spell_check();
     // `macos/fandhe_macos_file_watch.m`（Issue #1410）も macOS 専用。CoreServices を使う。
     compile_macos_file_watch();
     // `macos/fandhe_macos_multi_display.m`（Issue #1341）も macOS 専用。
