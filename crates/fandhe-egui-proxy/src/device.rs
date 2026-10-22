@@ -56,7 +56,7 @@ pub mod android_background_task;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_call_ui;
-/// Issue #582: Android 向け画面キャプチャの防止・検知のスタブ（#584 が埋める）。
+/// Issue #584: Android 向け画面キャプチャの防止・検知（`CaptureProtectionHelper.java` を JNI で呼ぶ）。
 /// `device/capture_protection.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -220,8 +220,8 @@ pub mod android_screen_capture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_wake_lock;
-/// Issue #578: Android 向けスペルチェック実装のスタブ（実体は #580 が埋める）。`device/spell_check.rs` の
-/// Android 経路から呼ばれる。#580 がホストテストを足すときに cfg 行を触らずに済むよう `test` でもコンパイルする。
+/// Issue #580: Android 向けスペルチェック実装（`SpellCheckHelper.java` を JNI で呼ぶ）。`device/spell_check.rs` の
+/// Android 経路から呼ばれる。ホストテストのため `test` でもコンパイルする。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_spell_check;
@@ -482,7 +482,7 @@ pub mod calendar;
 pub mod call_ui;
 pub mod camera_capture;
 /// Phase 11 の拡充ループ（親 #120、Issue #582）: 画面キャプチャの防止・検知の effect ドライバ
-/// （Windows 実装、iOS は #583・Android は #584 で埋めるスタブ、他 OS は
+/// （Windows は防止のみ、iOS は検知のみ（#583）、Android は防止・検知（#584）、他 OS は
 /// `UnsupportedCaptureProtection` 固定）。
 pub mod capture_protection;
 pub mod clipboard;
@@ -597,7 +597,7 @@ pub mod ios_barcode_scan;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_call_ui;
-/// Issue #582: iOS 向け画面キャプチャの防止・検知のスタブ（#583 が埋める）。
+/// Issue #583: iOS 向け画面キャプチャの検知（`ios/fandhe_ios_capture_protection.m` を呼ぶ）。
 /// `device/capture_protection.rs` の iOS 経路から使われる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -751,8 +751,8 @@ pub mod ios_safe_area_insets;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_wake_lock;
-/// Issue #578: iOS 向けスペルチェック実装のスタブ（実体は #579 が埋める）。`device/spell_check.rs` の
-/// iOS 経路から呼ばれる。#579 がホストテストを足すときに cfg 行を触らずに済むよう `test` でもコンパイルする。
+/// Issue #579: iOS 向けスペルチェック実装（`ios/fandhe_ios_spell_check.m` の `UITextChecker` を呼ぶ）。`device/spell_check.rs` の
+/// iOS 経路から呼ばれる。ホストテストのため `test` でもコンパイルする。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_spell_check;
@@ -1012,7 +1012,7 @@ pub mod share;
 /// （macOS/iOS/Windows/Android 実装、Android/Web は兄弟 issue）。
 pub mod speech_recognition;
 /// Phase 11 の拡充ループ（親 #119、Issue #578）: スペルチェックの effect ドライバ（macOS 実装、
-/// iOS・Android・Windows は #579・#580・#581 が埋めるスタブ、他 OS は `UnsupportedSpellChecker` 固定。
+/// iOS（#579）・Android（#580）・Windows（#581）も実装済み、他 OS は `UnsupportedSpellChecker` 固定。
 /// Web は呼べる API が無く対象外）。
 pub mod spell_check;
 /// Phase 11 の拡充ループ（親 #117、Issue #560）: OS の検索への登録の effect ドライバ（macOS・iOS・
@@ -1254,8 +1254,8 @@ pub mod windows_share;
 /// `device/speech_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_speech_recognition;
-/// Issue #578: Windows 向けスペルチェック実装のスタブ（実体は #581 が埋める）。`device/spell_check.rs` の
-/// Windows 経路から呼ばれる。#581 がホストテストを足すときに cfg 行を触らずに済むよう `test` でもコンパイルする。
+/// Issue #581: Windows 向けスペルチェック実装（`ISpellChecker` を COM で呼ぶ）。`device/spell_check.rs` の
+/// Windows 経路から呼ばれる。ホストテストのため `test` でもコンパイルする。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_spell_check;

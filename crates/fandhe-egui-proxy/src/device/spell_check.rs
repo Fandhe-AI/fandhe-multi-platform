@@ -76,8 +76,8 @@ fn platform() -> Arc<dyn SpellChecker> {
 /// NUL 終端の UTF-8 で並べる。ちょうど `count` 件で過不足なく終わらない・途中で切れている・
 /// 不正な UTF-8 を含む場合は `None`（嘘の成功にしない）。
 #[cfg(any(target_os = "macos", target_os = "ios", test))]
-// iOS は #579 が使い始めるまでスタブのため未使用になる。
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+// macOS（#578）と iOS（#579）が使う。ホストのテストでは呼び出し元が無く未使用になる。
+#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 pub(super) fn parse_apple_issue_buffer(
     buf: &[u8],
     count: usize,
@@ -112,8 +112,8 @@ pub(super) fn parse_apple_issue_buffer(
 /// Apple（macOS・iOS）の `.m` が返す利用可能な言語の一覧（NUL 区切りの UTF-8）を解釈する。
 /// 件数が `count` と合わない・不正な UTF-8 を含む場合は `None`。
 #[cfg(any(target_os = "macos", target_os = "ios", test))]
-// iOS は #579 が使い始めるまでスタブのため未使用になる。
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+// macOS（#578）と iOS（#579）が使う。ホストのテストでは呼び出し元が無く未使用になる。
+#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 pub(super) fn languages_from_nul_buffer(buf: &[u8], count: usize) -> Option<Vec<String>> {
     let names: Vec<String> = buf
         .split(|&b| b == 0)

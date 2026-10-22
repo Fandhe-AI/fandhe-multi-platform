@@ -15,9 +15,9 @@
 //!
 //! # 対応 OS と後続
 //!
-//! Windows: `windows_capture_protection`（防止のみ）。iOS（#583）: `ios_capture_protection`、
-//! Android（#584）: `android_capture_protection`（いずれも現状は `Unsupported` を返すスタブ）。
-//! dispatch・共通コア画面は本 PR で最終形にしてある。macOS は対応表が `no`（公式が旧定数として
+//! Windows: `windows_capture_protection`（防止のみ）。iOS（#583）: `ios_capture_protection`（検知のみ）、
+//! Android（#584）: `android_capture_protection`（防止と、API 34 以上でスクショ・35 以上で録画の検知）。
+//! dispatch・共通コア画面は (a)（#582）で最終形にした。macOS は対応表が `no`（公式が旧定数として
 //! 用途を否定）で、Linux などとともに `UnsupportedCaptureProtection` 固定。
 
 use std::sync::{Arc, Mutex};
