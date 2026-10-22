@@ -7,14 +7,17 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "`UITextContentType.oneTimeCode` を、ソフトキーボード入力の隠し UITextField（FandheTextField）に設定",
       "perm": "なし（通常の SMS コード）。domain-bound code・パスワードの保存提案は Associated Domains が要り範囲外",
       "url": [
         "https://developer.apple.com/documentation/security/enabling-password-autofill-on-a-text-input-view",
         "https://developer.apple.com/documentation/security/one-time-codes"
       ],
-      "note": "未実装。ソフトキーボード入力の経路が本物の `UITextField` を first responder にしているため、その `textContentType` を設定すればキーボード上に OS の候補が出る見込み。通常の SMS コードは entitlement 不要（One-time codes の記述）。`inputView` で独自キーボードを出すと候補 UI が出ない点に注意"
+      "note": "ソフトキーボード入力の隠し `UITextField`（`FandheTextField`）に `textContentType = oneTimeCode` と数字キーボードを設定する。入力欄の生成前は希望状態を保持して生成時に反映し、first responder なら `reloadInputViews` でキーボードを差し替える。`on = false` で `nil` と既定のキーボードへ戻すため、日本語入力画面の挙動は変わらない。main スレッド以外と入力欄の橋渡し未完は失敗にし、計測ビルドは非対応。守る範囲は嘘の成功の禁止と main 以外で UIKit に触れないこと、守らない範囲は候補が出るか（OS と SMS 次第）・domain-bound code とパスワード保存・同じプロセスの別画面へヒントが残ること。コードの値はログに出さない。確認は #576",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#576）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_text_input.m + crates/fandhe-egui-proxy/src/device/ios_autofill_otp.rs + crates/fandhe-egui-proxy/src/device/autofill_otp.rs + crates/fandhe-device/src/autofill_otp.rs + crates/fandhe-core/src/screens/otp_input.rs、Issue #586"
     },
     "android": {
       "status": "possible",
