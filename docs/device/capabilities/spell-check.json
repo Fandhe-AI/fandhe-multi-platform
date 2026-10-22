@@ -9,39 +9,42 @@
     "ios": {
       "status": "possible",
       "api": "UIKit `UITextChecker`",
-      "perm": "なし",
+      "perm": "不要（Info.plist・entitlement 不要）",
       "url": "https://developer.apple.com/documentation/uikit/uitextchecker",
-      "note": "未実装。言語ごとの辞書が端末に入っているかは要確認"
+      "note": "未実装。`UITextChecker.availableLanguages` で言語の辞書を確かめてから呼ぶ（辞書が無い言語を「誤り 0 件」にしない）。クラスが `NS_SWIFT_UI_ACTOR` のため main スレッドで呼ぶ。iOS 3.2+"
     },
     "android": {
       "status": "possible",
-      "api": "`SpellCheckerSession`（`android.view.textservice`）",
-      "perm": "なし（要確認）",
-      "url": "https://developer.android.com/reference/android/view/textservice/SpellCheckerSession",
-      "note": "未実装。非推奨かどうかは取得できず要確認。端末にスペルチェッカーが有効であることが前提"
+      "api": "`TextServicesManager.newSpellCheckerSession` + `SpellCheckerSession.getSentenceSuggestions`（API 16）",
+      "perm": "不要（`<queries>` も不要。現在のスペルチェッカーはパッケージ可視性の対象外と SDK に明記）",
+      "url": [
+        "https://developer.android.com/reference/android/view/textservice/TextServicesManager",
+        "https://developer.android.com/reference/android/view/textservice/SpellCheckerSession"
+      ],
+      "note": "未実装。`getSuggestions` は API 16 で非推奨のため `getSentenceSuggestions` を使う（`newSpellCheckerSession` は非推奨でない）。`newSpellCheckerSession` は有効なスペルチェッカーが無い・指定言語の subtype が無いなどで null を返す。`isSpellCheckerEnabled` は API 31 のため minSdk 24 では分岐する。Looper のあるスレッドで呼ぶ。エラーのコールバックが無く、結果が来ない場合は期限で打ち切る"
     },
     "macos": {
       "status": "possible",
       "api": "AppKit `NSSpellChecker`",
-      "perm": "なし",
+      "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nsspellchecker",
-      "note": "未実装"
+      "note": "未実装。呼び出しごとに document tag を取り、`closeSpellDocumentWithTag:` で全経路解放する。言語は `availableLanguages` から選んで明示し、`setLanguage:` は呼ばない（共有状態を変えない）。`guessesForWord:` は 10.6 で非推奨のため使わない"
     },
     "windows": {
       "status": "possible",
-      "api": "Win32 `ISpellChecker`（Windows 8+）",
-      "perm": "なし（Win32 desktop 専用、package identity 要件の記載なし。要確認）",
+      "api": "`ISpellCheckerFactory` / `ISpellChecker`（spellcheck.h、Windows 8+）",
+      "perm": "不要（desktop apps / UWP apps 対応と Learn に明記、package identity 不要）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/spellcheck/nn-spellcheck-ispellchecker",
-      "note": "未実装。COM 初期化が要る"
+      "note": "未実装。out-of-proc で RPC 待ちが起きるためワーカー + 期限で呼ぶ。返る文字列は `CoTaskMemFree` で解放する。`windows` crate の feature `Win32_Globalization` を足す。重複語（`CORRECTIVE_ACTION_DELETE`）は範囲外"
     },
     "web": {
       "status": "no",
       "api": "スペルチェックを呼び出す JS API は無い（`spellcheck` 属性は入力要素のブラウザ組み込みのみ）",
       "perm": "",
-      "url": "",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/spellcheck",
       "safari": "入力要素の属性のみ",
-      "note": "要確認。公式 URL は未取得"
+      "note": "ページの JS からスペルチェックの結果を取る API は無い（`spellcheck` 属性は入力要素のブラウザ組み込みの下線のみ）"
     }
   },
-  "note": "spell-check は誤字の検出と修正候補の取得。nlp（既存 id）との違い: 形態素や意味の解析ではなく、OS が持つ辞書による綴り判定。日本語の扱いは各 OS で異なる（要確認）。今回の範囲: 英語の短い文を渡し、誤っている語と候補を画面に出す。"
+  "note": "spell-check は誤字の検出と修正候補の取得。nlp（既存 id）との違い: 形態素や意味の解析ではなく、OS が持つ辞書による綴り判定。範囲: 入力した短い文（上限 1,000 文字）を、BCP 47 で指定した言語の OS 辞書で 1 回検査し、誤り語の位置・語・修正候補（最大 5 件）を一覧する。言語は完全一致 → 同じ主言語の先頭の順で解決し、辞書が無ければ失敗表示にする（「誤り 0 件」にしない）。日本語は対象外（辞書が無ければ失敗表示）。文法チェック、自動修正の適用、学習・無視語（端末のユーザー辞書を書き換える）、入力中のリアルタイム検査、辞書のダウンロードは扱わない。守る範囲: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、資源の解放、入力・誤り語のログ非出力。守らない範囲: OS 間での検出結果・候補の一致、利用者が OS に学習させた語による結果の違い、Windows の重複語検出、期限後も OS 側の検査が走り切ること、Android API 30 以下での「スペルチェッカー無効」と「言語未導入」の区別。"
 }

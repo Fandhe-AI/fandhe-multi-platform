@@ -8,31 +8,41 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "録画・ミラーリングの検知は `UIScreen.isCaptured` / `capturedDidChangeNotification`、スクリーンショットは `userDidTakeScreenshotNotification`。防止の公式 API なし",
-      "perm": "不要",
-      "url": "",
-      "note": "検知のみで防止はできない（公式 API なし）。URL 未確認（iOS 調査で未取得）。画面を隠す実装は `isCaptured` を見て自前で行う"
+      "api": "録画・ミラーリングは `UITraitCollection.sceneCaptureState`（iOS 17+）、スクリーンショットは `UIApplicationUserDidTakeScreenshotNotification`（撮影の後に通知）。防止の公式 API なし",
+      "perm": "不要（公式に権限の記載なし）",
+      "url": [
+        "https://developer.apple.com/documentation/uikit/uitraitcollection/scenecapturestate",
+        "https://developer.apple.com/documentation/uikit/uiapplication/userdidtakescreenshotnotification"
+      ],
+      "note": "検知のみで防止はできない。`UIScreen.isCaptured` は iOS 27 で非推奨（後継は `sceneCaptureState`）のため使わない"
     },
     "android": {
       "status": "possible",
-      "api": "防止は `FLAG_SECURE`。スクリーンショット検知は `Activity.registerScreenCaptureCallback`（Android 14+）",
-      "perm": "検知のみ `DETECT_SCREEN_CAPTURE`。防止は不要",
-      "url": "https://developer.android.com/security/fraud-prevention/activities",
-      "note": "防止の詳細は上記。検知の URL は https://developer.android.com/about/versions/14/features/screenshot-detection 。`FLAG_SECURE` はウィンドウ単位で、最近使ったアプリの画面にも効く"
+      "api": "防止は `FLAG_SECURE`。スクリーンショット検知は `Activity.registerScreenCaptureCallback`（API 34+）、録画検知は `WindowManager.addScreenRecordingCallback`（API 35+）",
+      "perm": "検知のみ `DETECT_SCREEN_CAPTURE`（34+）・`DETECT_SCREEN_RECORDING`（35+）、いずれも install-time。防止は不要",
+      "url": [
+        "https://developer.android.com/security/fraud-prevention/activities",
+        "https://developer.android.com/about/versions/14/features/screenshot-detection",
+        "https://developer.android.com/about/versions/15/features"
+      ],
+      "note": "`FLAG_SECURE` はウィンドウ単位で、最近使ったアプリの画面にも効く（全 API レベル）。検知は API 34 未満・35 未満で非対応になる。adb・計装のスクリーンショットは検知されない。検知のたびに OS が通知を出す"
     },
     "macos": {
-      "status": "possible",
-      "api": "防止は `NSWindow.sharingType = .none`（要確認）。検知の公開 API は確認できず",
-      "perm": "不要（要確認）",
-      "url": "",
-      "note": "未実装。URL 未確認。画面収録の API 側の挙動によっては防止されない場合あり（要確認）"
+      "status": "no",
+      "api": "`NSWindow.sharingType = .none` は Apple が旧定数としており、キャプチャ除外には使えない。検知の公開 API も確認できず",
+      "perm": "-",
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nswindow/sharingtype-swift.enum/none",
+        "https://developer.apple.com/forums/thread/808016"
+      ],
+      "note": "Apple 公式が `.none` を「macOS はもう使っていない旧定数。キャプチャから隠す用途に使うな」と明記している。ScreenCaptureKit 系の録画で写るという報告もある。読み戻しが `.none` でも実際には写るため、できているとすると嘘の成功になる"
     },
     "windows": {
       "status": "possible",
-      "api": "防止は Win32 `SetWindowDisplayAffinity`（`WDA_EXCLUDEFROMCAPTURE` など）。検知の公開 API は確認できず",
-      "perm": "不要と見込む（package identity の要件記載は未確認、要確認）",
-      "url": "",
-      "note": "未実装。URL 未確認。`WDA_EXCLUDEFROMCAPTURE` は Windows 10 の特定版以降（要確認）"
+      "api": "防止は `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`（Windows 10 2004+）、読み戻しは `GetWindowDisplayAffinity`。2004 より前は黒塗りになる",
+      "perm": "不要と見込む（package identity の要件の記載はない）",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity",
+      "note": "防止のみ。自分のプロセスのトップレベルウィンドウが対象で、DWM が合成しているときだけ効く。DRM ではなく、写真での撮影は防げない。他者の録画を知る公開 API は確認できず"
     },
     "web": {
       "status": "no",
@@ -43,5 +53,5 @@
       "note": "防止・検知とも標準 API はない（EME の保護コンテンツを除く）"
     }
   },
-  "note": "Android は防止（`FLAG_SECURE`）と検知、iOS は検知のみ、デスクトップは防止のみ（macOS・Windows は要確認）。Web は no。screen-capture（別 id）との違い: 本機能は自分の画面を録られないようにする・録られたことを知る側で、録る側ではない。今回の範囲: 保護の ON / OFF を切り替えるスイッチと「撮影・録画を検知しました」の表示を置く。防止できない OS では「検知のみ」と画面に書く"
+  "note": "Android は防止（`FLAG_SECURE`）+ 検知、iOS は検知のみ、Windows は防止のみ、macOS は no（公式が旧定数として用途を否定）、Web は no。screen-capture（別 id）との違い: 本機能は自分の画面を録られないようにする・録られたことを知る側で、録る側ではない。範囲: 防止の ON / OFF（実際の状態を読み戻して表示）、録画・ミラーリング中かの状態、スクリーンショットの検知（回数）。OS の公開 API があり実際に効く項目がすべて効けば、その OS を done にする。効かない項目は画面に「非対応」と出し、防止できない OS では「検知のみ」と書く。守る範囲: 1 プロセス内の設定と検知の順序、嘘の成功の禁止（読み戻しが実際の写り方と一致しない場合は成功にしない）、コールバックの登録・解除の対応、資源の解放。守らない範囲: 他プロセスによる録画の検知、写真など画面外での撮影、OS 側の非同期な確定との短い時間差、検知通知の到着遅延。"
 }
