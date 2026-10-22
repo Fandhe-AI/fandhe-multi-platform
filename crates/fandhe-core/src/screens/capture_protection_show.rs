@@ -75,6 +75,8 @@ pub const FAILED_PREFIX: &str = "できませんでした: ";
 pub const NOT_PROTECTED_REASON: &str = "保護が効いていることを確かめられませんでした";
 /// 外したと返ったのに保護が残っていたときの理由。
 pub const STILL_PROTECTED_REASON: &str = "保護が残っています";
+/// 解除後に保護状態を読み戻せず、解除を確認できなかったときの失敗理由。
+pub const UNVERIFIED_REASON: &str = "解除を確認できません";
 
 /// 操作の進行状態。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -192,7 +194,7 @@ pub fn mark_applying(state: &mut CaptureProtectionShowState) {
 /// 結果を反映する。`Idle` / `Requested` で届いた完了、世代が一致しない完了は捨てる。
 ///
 /// `protected` は完了直後に読み戻した値で、常に反映する。`Ok` でも読み戻しが要求と食い違えば
-/// 失敗にする（嘘の成功の禁止）。失敗時の `desired` は読み戻した保護状態に合わせる。
+/// 失敗にする（嘘の成功の禁止）。解除でも読み戻せない（`None`）場合は確認不能として失敗にする。失敗時の `desired` は読み戻した保護状態に合わせる。
 pub fn finish(
     state: &mut CaptureProtectionShowState,
     generation: u64,
@@ -212,6 +214,9 @@ pub fn finish(
         }
         (Ok(()), false) if protected == Some(true) => {
             Err(CaptureFailure::Failed(STILL_PROTECTED_REASON.to_string()))
+        }
+        (Ok(()), false) if protected.is_none() => {
+            Err(CaptureFailure::Failed(UNVERIFIED_REASON.to_string()))
         }
         (other, _) => other,
     };
@@ -382,6 +387,14 @@ mod tests {
             assert_ne!(protection_text(&s), PROTECTED_STATUS);
             assert!(!s.desired);
         }
+    }
+
+    #[test]
+    fn off_ok_but_unreadable_is_failure_not_success() {
+        let mut s = applying(false);
+        finish(&mut s, 1, Ok(()), None);
+        assert_eq!(s.error, format!("{FAILED_PREFIX}{UNVERIFIED_REASON}"));
+        assert!(!s.desired);
     }
 
     #[test]
