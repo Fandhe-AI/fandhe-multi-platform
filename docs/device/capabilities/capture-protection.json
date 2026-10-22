@@ -7,14 +7,17 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "録画・ミラーリングは `UITraitCollection.sceneCaptureState`（iOS 17+）、スクリーンショットは `UIApplicationUserDidTakeScreenshotNotification`（撮影の後に通知）。防止の公式 API なし",
       "perm": "不要（公式に権限の記載なし）",
       "url": [
         "https://developer.apple.com/documentation/uikit/uitraitcollection/scenecapturestate",
         "https://developer.apple.com/documentation/uikit/uiapplication/userdidtakescreenshotnotification"
       ],
-      "note": "検知のみで防止はできない。`UIScreen.isCaptured` は iOS 27 で非推奨（後継は `sceneCaptureState`）のため使わない"
+      "note": "検知のみで防止はできない。`UIScreen.isCaptured` は iOS 27 で非推奨（後継は `sceneCaptureState`）のため使わない。実装済み（#583）: 防止は画面に「防げません」と出し、`set_protected` は on / off とも未対応を返す。録画は `sceneCaptureState` を pull で読み、背景中・scene なしは不明として扱う（false にしない）。スクリーンショットは通知の回数で数え、通知のあと再描画する。守る範囲: 防げない状態を保護中と見せない、読めない値を false にしない、回数を落とさない、observer の 1 回登録。守らない範囲: 状態変化から次の pull までの最大 1 秒の遅れ、複数 scene・外部ディスプレイの差、observer 登録前のスクリーンショット、通知の到着遅延、外部カメラでの撮影、終了時の observer 解除（OS が片付ける）",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#575）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_capture_protection.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_capture_protection.m + crates/fandhe-egui-proxy/src/device/capture_protection.rs + crates/fandhe-core/src/screens/capture_protection_show.rs + crates/fandhe-device/src/capture_protection.rs、Issue #583"
     },
     "android": {
       "status": "possible",
