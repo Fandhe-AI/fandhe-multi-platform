@@ -43,7 +43,7 @@ use fandhe_device::spell_check::{
 #[cfg(any(target_os = "ios", test))]
 use fandhe_device::DeviceError;
 
-// `.m` の FANDHE_SPELL_RC_*。
+// `.m` の FANDHE_IOS_SPELL_RC_*。
 #[cfg(any(target_os = "ios", test))]
 const RC_INVALID_INPUT: i32 = 2;
 #[cfg(any(target_os = "ios", test))]
@@ -74,7 +74,7 @@ fn timeout_ms(remaining: Duration) -> i32 {
 
 #[cfg(target_os = "ios")]
 mod ffi {
-    // SAFETY: `macos/fandhe_ios_spell_check.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
+    // SAFETY: `ios/fandhe_ios_spell_check.m`（`build.rs` が iOS 分岐で feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     extern "C" {
