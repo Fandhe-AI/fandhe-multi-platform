@@ -7,11 +7,14 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "UIKit `UITextChecker`",
       "perm": "不要（Info.plist・entitlement 不要）",
       "url": "https://developer.apple.com/documentation/uikit/uitextchecker",
-      "note": "未実装。`UITextChecker.availableLanguages` で言語の辞書を確かめてから呼ぶ（辞書が無い言語を「誤り 0 件」にしない）。クラスが `NS_SWIFT_UI_ACTOR` のため main スレッドで呼ぶ。iOS 3.2+"
+      "note": "実装済み（#579）。`UITextChecker.availableLanguages` で言語の辞書を確かめ、無ければ失敗表示にする（「誤り 0 件」にしない）。クラスが `NS_SWIFT_UI_ACTOR` のため呼び出しを main queue に集約し、誤り 1 件ずつに刻んで main を長く占有しない。期限切れの後は Rust のバッファへ書かない。`learnWord:`・`ignoreWord:` は呼ばず、端末のユーザー辞書を変えない。iOS 3.2+。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・UITextChecker の解放・入力と誤り語のログ非出力。守らない範囲: 期限後も OS 側の検査が走り切ること、利用者が OS に学習させた語による結果の違い。正常系・失敗系の確認は iOS 実機確認（#574）で行う。",
+  "detail": "できている（iOS 実機確認待ち）",
+  "implStatus": "iOS 実機確認待ち（#574）",
+  "impl": "crates/fandhe-egui-proxy/src/device/ios_spell_check.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_spell_check.m + crates/fandhe-egui-proxy/src/device/spell_check.rs + crates/fandhe-core/src/screens/spell_check.rs + crates/fandhe-device/src/spell_check.rs、Issue #579"
     },
     "android": {
       "status": "possible",
