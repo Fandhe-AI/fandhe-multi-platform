@@ -58,11 +58,12 @@ type Raw = (i32, Vec<i32>, Vec<String>, Option<String>);
 /// ranges と候補の平らな並びを [`RawIssue`] へ戻す。長さが 3 の倍数でない・負の値・候補数の合計が
 /// 候補の総数と一致しない場合は `None`（嘘の成功にしない）。
 fn decode_issues(ranges: &[i32], suggestions: Vec<String>) -> Option<Vec<RawIssue>> {
-    if ranges.len() % 3 != 0 || ranges.iter().any(|v| *v < 0) {
+    if !ranges.len().is_multiple_of(3) || ranges.iter().any(|v| *v < 0) {
         return None;
     }
+    let (chunks, _) = ranges.as_chunks::<3>();
     let mut total = 0usize;
-    for chunk in ranges.chunks_exact(3) {
+    for chunk in chunks {
         total = total.checked_add(usize::try_from(chunk[2]).ok()?)?;
     }
     if total != suggestions.len() {
@@ -70,7 +71,7 @@ fn decode_issues(ranges: &[i32], suggestions: Vec<String>) -> Option<Vec<RawIssu
     }
     let mut it = suggestions.into_iter();
     let mut out = Vec::with_capacity(ranges.len() / 3);
-    for chunk in ranges.chunks_exact(3) {
+    for chunk in chunks {
         let n = usize::try_from(chunk[2]).ok()?;
         out.push(RawIssue {
             utf16_start: usize::try_from(chunk[0]).ok()?,
