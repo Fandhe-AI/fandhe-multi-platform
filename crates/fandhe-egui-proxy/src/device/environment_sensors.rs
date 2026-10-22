@@ -122,17 +122,17 @@ static RESUME_EPOCH: AtomicU64 = AtomicU64::new(0);
 /// 背景中か。背景中は `NoReading` の待機を進めない。
 static BACKGROUND: AtomicBool = AtomicBool::new(false);
 
-/// 背景遷移を記録する。b-ios（#610）が `ios_environment_sensors.rs` の `DidEnterBackground` から呼ぶ。
-/// (a) の時点では呼ぶ側が無い。
-#[cfg(any(target_os = "ios", test))]
+/// 背景遷移を記録する。各 OS の実装（iOS #610 の `DidEnterBackground`、Android #611 の `onPause`、
+/// Windows #612 の最小化）が自分のモジュールから呼ぶ。(a) の時点では呼ぶ側が無い。
+#[cfg(any(target_os = "ios", target_os = "android", target_os = "windows", test))]
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn note_backgrounded() {
     BACKGROUND.store(true, Ordering::SeqCst);
 }
 
-/// 背景からの復帰を記録する。b-ios（#610）が前景復帰通知から呼ぶ。
+/// 背景からの復帰を記録する。各 OS の実装が前景復帰（iOS の復帰通知・Android の `onResume`・Windows の復元）から呼ぶ。
 /// 復帰回数を先に増やしてから背景フラグを下ろす（フラグが下りた時点で起点の引き直しが見える）。
-#[cfg(any(target_os = "ios", test))]
+#[cfg(any(target_os = "ios", target_os = "android", target_os = "windows", test))]
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn note_resumed() {
     RESUME_EPOCH.fetch_add(1, Ordering::SeqCst);
