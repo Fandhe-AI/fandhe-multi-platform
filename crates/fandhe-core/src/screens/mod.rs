@@ -119,6 +119,8 @@ pub mod audio_play;
 pub mod barcode_scan;
 /// Phase 11 の拡充ループ型サンプル「BLE スキャン」（親 #1059、Issue #1060）。
 pub mod ble_scan;
+/// Phase 11 の拡充ループ型サンプル「Bluetooth Classic」（親 #130、Issue #659）。
+pub mod bluetooth_classic_show;
 /// Phase 11 の拡充ループ型サンプル「予定の追加」（親 #1118、Issue #1224）。
 pub mod calendar_add;
 /// Phase 11 の拡充ループ型サンプル「通話 UI 統合」（親 #87、Issue #276）。

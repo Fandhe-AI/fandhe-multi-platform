@@ -21,11 +21,14 @@
       "note": "未実装。Bluetooth がオフのとき `getBondedDevices` は空を返すため、先に状態を見て `Disabled` にする。`neverForLocation` が Classic の検索結果に影響するかは公式に記載がなく、確認用 issue で見る。"
     },
     "macos": {
-      "status": "possible",
-      "api": "IOBluetooth `IOBluetoothDevice.pairedDevices` + `IOBluetoothDeviceInquiry`（delegate、`inquiryLength`）。電源は `IOBluetoothHostController.powerState`",
-      "perm": "Info.plist `NSBluetoothAlwaysUsageDescription`（bluetooth-le で埋め込み済み、文言のみ直す）。サンドボックスなしのため entitlement 不要。IOBluetooth への TCC 適用は公式に記載がなく、Mac 目視で確認する",
+      "status": "done",
+      "api": "IOBluetooth `IOBluetoothDevice.pairedDevices`（一覧）+ `IOBluetoothDeviceInquiry`（検索。main queue、delegate、`inquiryLength`、`updateNewDeviceNames`）。電源は `IOBluetoothHostController.powerState`、権限の判定は `CBManager.authorization`",
+      "perm": "Info.plist `NSBluetoothAlwaysUsageDescription`（bluetooth-le で埋め込み済み。文言を「BLE スキャン」「Bluetooth Classic」の動作確認に直した）。サンドボックスなしのため entitlement は不要。IOBluetooth への TCC 適用は公式に記載がなく、Mac 目視（#650）で確認する",
       "url": "https://developer.apple.com/documentation/iobluetooth/iobluetoothdeviceinquiry",
-      "note": "未実装。連続の inquiry は OS が throttle する（公式記載）。"
+      "note": "実装済み（#659）。画面を開くとペアリング済み機器を読み、「検索（12 秒）」で周辺の機器を固定窓で 1 回検索する。名前・種別（major class）・ペアリング済みか・電波強度（検索で取れたときだけ）を先頭 50 件まで出し、アドレスは画面にもログにも出さない。0 件は成功として別に出し、Bluetooth オフ・権限拒否・非対応・中断は区別して失敗として出す（失敗では部分結果を捨てる）。連続の inquiry は OS が throttle する（公式記載）ため、中断として完了した場合は内部エラーと出す。【推測】`CBManager.authorization` を IOBluetooth の許可判定の代わりに使えるか、`pairedDevices` が nil になる条件、LE だけのペアリング機器が `pairedDevices` に混ざるかは、#650 の Mac 目視で確認する。守らない範囲: 検索結果のペアリング済み機器が窓の時点で圏内にあること、窓内で名前が解決しきれないこと、電波強度が取れない機器があること、OS による inquiry の間引き、他アプリが同時に検索している場合の結果の違い、発見可能モードでない機器が出ないこと。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#650）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_bluetooth_classic.m + crates/fandhe-egui-proxy/src/device/macos_bluetooth_classic.rs + crates/fandhe-egui-proxy/src/device/bluetooth_classic.rs + crates/fandhe-core/src/screens/bluetooth_classic_show.rs + crates/fandhe-device/src/bluetooth_classic.rs、Issue #659"
     },
     "windows": {
       "status": "possible",
