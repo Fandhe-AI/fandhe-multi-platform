@@ -345,8 +345,10 @@ static BOOL TokenIsPeer(NSArray<NINearbyObject *> *objects) {
             }
             gMcPeer = peerID;
             MCSession *s = gMcSession;
-            StopDiscovery();
+            // 招待を送ってから停止する。先に停止すると browser が招待を届けられない。
+            // 失敗・タイムアウト・キャンセルは Teardown 経由で StopDiscovery と gMcPeer の復元に至る。
             [browser invitePeer:peerID toSession:s withContext:nil timeout:kInviteTimeout];
+            StopDiscovery();
         }
     });
 }
