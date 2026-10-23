@@ -8,24 +8,36 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "DeviceCheck `DCAppAttestService`（鍵生成・attestation・assertion）",
-      "perm": "App Attest の entitlement `com.apple.developer.devicecheck.appattest-environment`（要確認）",
-      "url": "https://developer.apple.com/documentation/devicecheck/dcappattestservice",
-      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 サーバーでの検証が別途必須。対応端末・OS 版は要確認"
+      "api": "DeviceCheck `DCAppAttestService`（鍵生成・attestation・assertion）。能力判定は `isSupported`",
+      "perm": "App Attest の capability（有料の Apple Developer Program 限定）。開発中は entitlement `com.apple.developer.devicecheck.appattest-environment` を省くと sandbox を使う",
+      "url": [
+        "https://developer.apple.com/documentation/devicecheck/dcappattestservice",
+        "https://developer.apple.com/documentation/devicecheck/establishing-your-app-s-integrity",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.devicecheck.appattest-environment",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-ios/"
+      ],
+      "note": "未実装。App Attest の capability は有料の Apple Developer Program だけで、無料の Personal Team の一覧に無い。Developer サイトに登録した App ID も要る。シミュレータでは使えない。エラーは `DCError`（`featureUnsupported`・`invalidInput`・`invalidKey`・`serverUnavailable`・`unknownSystemFailure`）で、`serverUnavailable` だけ同じ鍵・同じ hash での再試行が公式の指示。attestation は改ざんされたアプリが結果を偽れるため、サーバーで検証する前提",
+      "deferred": "App Attest の capability が有料の Apple Developer Program 限定で、登録が期限切れのため保留。ベンダーの個別審査は不要で、登録を再開すれば着手できる。entitlement を省いた無料の Personal Team で attestation が通るかは公式情報になく未確認"
     },
     "android": {
       "status": "possible",
-      "api": "Play Integrity API（GMS 依存。サーバー検証前提）",
-      "perm": "記載なし（要確認）",
-      "url": "https://developer.android.com/google/play/integrity",
-      "note": "未実装。GMS（Google Play 開発者サービス）依存。Google Play 経由の配布が前提（要確認）。キー属性の証明は https://developer.android.com/privacy-and-security/security-key-attestation にもある"
+      "api": "Key Attestation（`AndroidKeyStore` の `KeyGenParameterSpec.Builder.setAttestationChallenge` で鍵を作り、`KeyStore.getCertificateChain` で証明書チェーンを取る。API 24+、GMS 不要）",
+      "perm": "なし",
+      "url": [
+        "https://developer.android.com/privacy-and-security/security-key-attestation",
+        "https://developer.android.com/reference/android/security/keystore/KeyGenParameterSpec.Builder#setAttestationChallenge(byte[])"
+      ],
+      "note": "未実装。minSdk 24 から全域で使え、API レベルの分岐は要らない。challenge は最大 128 バイト。安全なハードウェアが無い・証明に非対応の端末では、失敗ではなく信頼できない証明書を根とするチェーンが返る。公式は同じ端末上での検証を禁じ、信頼できる別のサーバーで根・失効・アプリ id を確かめる前提。Play Integrity（`com.google.android.play:integrity`）は採らない: 推移依存に `play-services-basement`・`play-services-tasks` を持ち（POM で確認）GMS に依存しない方針に合わない、Google Cloud プロジェクトが要る、判定の復号をクライアントでできない、Play 経由の配布が前提（Play 以外は `UNLICENSED`）。Key Attestation は「鍵が端末のどこにあり、どのアプリが作ったか」の証明で、Play Integrity の「Play から入れた正規アプリか」とは粒度が違う"
     },
     "macos": {
-      "status": "possible",
-      "api": "DeviceCheck `DCAppAttestService`（macOS での提供は要確認）",
-      "perm": "要確認",
-      "url": "https://developer.apple.com/documentation/devicecheck/dcappattestservice",
-      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 macOS の `isSupported` の実態は要確認"
+      "status": "no",
+      "api": "なし（`DCAppAttestService` の API は macOS 11+ にあるが、Mac で `isSupported` が `false`。Mac Catalyst と Apple silicon 上の iOS アプリも同じ）",
+      "perm": "なし",
+      "url": [
+        "https://developer.apple.com/documentation/devicecheck/dcappattestservice/issupported",
+        "https://developer.apple.com/documentation/devicecheck/dcappattestservice"
+      ],
+      "note": "公式文書に Mac では `isSupported` が `false` とあり、API が存在しても使えない。"
     },
     "windows": {
       "status": "no",
@@ -42,5 +54,5 @@
       "note": "Web に相当する API はない（Digital Credentials API は MDN の URL が 404 で確認できず）"
     }
   },
-  "note": "今回の範囲: 鍵を作って attestation の結果（成功・失敗・非対応）を画面に出すだけ。サーバー検証は含めない。Apple は entitlement が要る。"
+  "note": "今回の範囲: 呼び出し側が渡した challenge（最大 128 バイト）で鍵を作り、OS が出した証明データ（Android は X.509 証明書チェーン）を中身を解釈せずに返し、取得できた・失敗・非対応を画面に出す。画面は件数とバイト数だけを出し、証明データ・challenge・鍵名は出さない。鍵は 1 回の要求で作って消す。Android のみ実装対象で、iOS は有料の開発者登録が切れているため保留（deferred）、macOS は `isSupported` が false のため no、Windows・Web は no。守る範囲: 1 プロセス内の要求と完了の順序、失敗・0 件・非対応を成功にしないこと、鍵エントリの解放、秘密値をログ・画面に出さないこと。守らない範囲: 取得できた証明の信頼性（ソフトウェア実装の証明や根が Google でないチェーンでも「取得」と出る。判断はサーバーの責務）、証明データの検証（端末上では行わない）、assertion・鍵の持ち越し、OS ごとの所要時間の差、期限後も OS の鍵生成が走り切ること、複数プロセス。"
 }

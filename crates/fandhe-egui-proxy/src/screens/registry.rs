@@ -122,6 +122,10 @@ generated_screens! {
     crate::device::secure_credential::credential_vault_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "serial_port_show" => fandhe_core::screens::serial_port_show::current_screen,
+    crate::device::serial_port::serial_port_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "gamepad_show" => fandhe_core::screens::gamepad_show::current_screen,
     crate::device::gamepad::gamepad_show_effect,
     effect

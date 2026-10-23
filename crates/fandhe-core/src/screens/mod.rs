@@ -223,6 +223,8 @@ pub mod screen_brightness_show;
 pub mod screen_capture;
 /// Phase 11 の拡充ループ型サンプル「画面の向き」（親 #128、Issue #655）。
 pub mod screen_orientation_show;
+/// Phase 11 の拡充ループ型サンプル「シリアルポート」（親 #131、Issue #670）。
+pub mod serial_port_show;
 
 /// Phase 11 の拡充ループ型サンプル「ペン・筆圧で描く」（親 #95、Issue #355）。
 pub mod pen_draw;
