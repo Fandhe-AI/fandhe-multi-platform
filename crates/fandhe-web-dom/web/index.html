@@ -82,6 +82,7 @@
         mount_audio_devices_show_screen,
         mount_local_fonts_show_screen,
         mount_multi_display_show_screen,
+        mount_window_management_show_screen,
         mount_accessibility_prefs_show_screen,
         mount_system_accent_color_show_screen,
         mount_safe_area_insets_show_screen,
@@ -134,6 +135,8 @@
         mount_audio_devices_show_screen("fandhe-dom-root");
       } else if (screen === "multi_display_show") {
         mount_multi_display_show_screen("fandhe-dom-root");
+      } else if (screen === "window_management_show") {
+        mount_window_management_show_screen("fandhe-dom-root");
       } else if (screen === "device_info_show") {
         mount_device_info_show_screen("fandhe-dom-root");
       } else if (screen === "cast_show") {
