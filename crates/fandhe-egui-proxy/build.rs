@@ -175,6 +175,9 @@
 //!   `NSProcessInfo` による電源状態の同期読み取り）は **macOS 分岐のみ**で feature `device`
 //!   有効時にコンパイルする（`src/device/macos_power_state.rs` から呼ばれる契約）。IOKit を
 //!   追加でリンクする。
+//! - `macos/fandhe_macos_user_idle.m`（Issue #631、CoreGraphics `CGEventSourceSecondsSinceLastEventType`
+//!   による無操作時間の同期読み取り）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_user_idle.rs` から呼ばれる契約）。CoreGraphics を追加でリンクする。
 //! - `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308、`NSWorkspace` / `UIAccessibility` による
 //!   視差軽減・コントラスト増加の同期読み取り）は iOS・macOS 双方の分岐で feature `device` 有効時に
 //!   コンパイルする（`src/device/apple_accessibility_prefs.rs` から呼ばれる契約）。
@@ -1540,6 +1543,17 @@ fn compile_macos_power_state() {
     println!("cargo:rustc-link-lib=framework=IOKit");
 }
 
+/// `macos/fandhe_macos_user_idle.m` を `cc` でコンパイルする（Issue #631）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_user_idle.rs` が使う）。CoreGraphics を追加でリンクする。
+fn compile_macos_user_idle() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_user_idle.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_user_idle.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_user_idle");
+    println!("cargo:rustc-link-lib=framework=CoreGraphics");
+}
+
 /// `ios/fandhe_ios_pedometer.m` を `cc` でコンパイルする（Issue #1248）。**iOS 分岐のみ**
 /// から呼ばれる（`src/device/ios_pedometer.rs` が使う）。CoreMotion は motion 用に
 /// 既にリンク済みのため追加リンクは無い。
@@ -1962,6 +1976,8 @@ fn build_macos() {
     compile_macos_app_shortcuts();
     // `macos/fandhe_macos_power_state.m`（Issue #1274）も macOS 専用。
     compile_macos_power_state();
+    // `macos/fandhe_macos_user_idle.m`（Issue #631）も macOS 専用。
+    compile_macos_user_idle();
     // `macos/fandhe_macos_device_info.m`（Issue #1304）も macOS 専用。
     compile_macos_device_info();
     // `macos/fandhe_macos_system_accent_color.m`（Issue #421）も macOS 専用。AppKit は既存のリンクを使う。

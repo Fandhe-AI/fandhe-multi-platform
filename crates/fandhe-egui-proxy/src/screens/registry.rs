@@ -234,6 +234,10 @@ generated_screens! {
     crate::device::power_state::power_state_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "user_idle_show" => fandhe_core::screens::user_idle_show::current_screen,
+    crate::device::user_idle::user_idle_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "accessibility_prefs_show" => fandhe_core::screens::accessibility_prefs_show::current_screen,
     crate::device::accessibility_prefs::accessibility_prefs_show_effect,
     effect

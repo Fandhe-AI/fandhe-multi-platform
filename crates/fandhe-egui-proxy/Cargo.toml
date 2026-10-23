@@ -412,6 +412,10 @@ windows = { workspace = true, optional = true, features = [
     # Issue #1274: `device/windows_power_state.rs` が `GetSystemPowerStatus` /
     # `SYSTEM_POWER_STATUS`（`Win32_System_Power`）を呼ぶ。新規パッケージは増えない。
     "Win32_System_Power",
+    # Issue #631: `device/windows_user_idle.rs` が `GetLastInputInfo` / `LASTINPUTINFO`
+    # （`Win32_UI_Input_KeyboardAndMouse`）を呼ぶ。`GetTickCount` は導入済みの
+    # `Win32_System_SystemInformation`。新規パッケージは増えない。
+    "Win32_UI_Input_KeyboardAndMouse",
     # Issue #1024: `device/windows_speech_recognition.rs` が WinRT
     # `Windows.Media.SpeechRecognition.SpeechRecognizer` を呼ぶために使う。
     "Media_SpeechRecognition",
