@@ -6,8 +6,8 @@
 //! モジュール doc を参照。
 //!
 //! - iOS（b-ios）/ Android（b-android）: コールバック型のため pull 型 [`bridge`]（`RequestSlot`
-//!   の facade）で毎フレーム `drive_callback` が結果を反映する。後続 issue が埋めるまで
-//!   各 OS モジュールのスタブが `Unsupported` を返す。**dispatch はここで最終形にしてあり、
+//!   の facade）で毎フレーム `drive_callback` が結果を反映する。各 OS モジュールが実装済み。
+//!   **dispatch はここで最終形にしてあり、
 //!   後続 issue は OS 別モジュールだけを埋める**
 //! - macOS / Windows / それ以外: [`ComposeMailSms`] を UI スレッドで同期に呼ぶ。Linux は
 //!   `UnsupportedComposeMailSms` で「非対応」を表示する

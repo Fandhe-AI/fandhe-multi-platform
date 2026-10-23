@@ -5,8 +5,8 @@
 //! と同型）。契約と守る範囲は `fandhe_device::app_badge` のモジュール doc を参照。
 //!
 //! - iOS（#1361）/ Android（#1362）: コールバック型のため pull 型 [`bridge`]（`RequestSlot`
-//!   の facade）で毎フレーム `drive_callback` が結果を反映する。後続 issue が埋めるまで
-//!   各 OS モジュールのスタブが `Unsupported` を返す。**dispatch はここで最終形にしてあり、
+//!   の facade）で毎フレーム `drive_callback` が結果を反映する。各 OS モジュールが実装済み。
+//!   **dispatch はここで最終形にしてあり、
 //!   後続 issue は OS 別モジュールだけを埋める**
 //! - macOS / Windows / それ以外: [`AppBadge`] を UI スレッドで同期に呼ぶ。Linux は
 //!   `UnsupportedAppBadge` で「非対応」を表示する

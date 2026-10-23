@@ -17,9 +17,9 @@
 //!
 //! # 実装のある OS
 //!
-//! [`platform`] が全 OS の最終形。macOS は `apple_file_association`（Issue #416）、iOS・Android・
-//! Windows は各 `*_file_association.rs` のスタブ（`Unsupported`）が返る。後続の子 issue は
-//! 自分の OS のモジュールだけを埋め、本ファイルの振り分けには触れない。
+//! [`platform`] が全 OS の最終形。macOS は `apple_file_association`（Issue #416）、iOS・Windows は
+//! 各 `*_file_association.rs` の実装、Android は `android_file_association.rs` のスタブ
+//! （`Unsupported`）が返る。
 //!
 //! # 登録・解除（Windows のみ）
 //!

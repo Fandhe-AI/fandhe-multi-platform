@@ -6,8 +6,7 @@
 //! # OS 実装の差し込み口
 //!
 //! [`implementation`] は全対象 OS の最終形。macOS は `apple_background_download`（本 issue）、iOS・Android・
-//! Windows は各 `*_background_download.rs` のスタブ（`Unsupported`）が返る。後続の子 issue は自分の OS の
-//! モジュールだけを埋め、本ファイルと `device.rs` の `pub mod` 列には触れない。
+//! Windows は各 `*_background_download.rs` の実装が返る。
 //!
 //! # ポーリング
 //!

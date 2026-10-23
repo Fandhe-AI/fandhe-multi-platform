@@ -8,8 +8,7 @@
 //!
 //! [`platform_pip`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（macOS: `apple_picture_in_picture`、iOS: `ios_picture_in_picture`、
-//! Android: `android_picture_in_picture`。macOS は実装済み、iOS・Android は現状スタブで
-//! `UnsupportedPictureInPicture` を返す）。それ以外（Windows は保留、Linux）は
+//! Android: `android_picture_in_picture`。いずれも実装済み）。それ以外（Windows は保留、Linux）は
 //! `UnsupportedPictureInPicture` 固定で、ダミーの成功実装へは倒さない。
 //!
 //! # 並行性

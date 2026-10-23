@@ -13,8 +13,8 @@
 //! macOS / Windows は eframe の `ViewportCommand::Fullscreen`（winit の `set_fullscreen`）で
 //! 足りるため、FFI・新規依存・`unsafe` は無い（[`ViewportFullscreen`]）。macOS はネイティブ全画面で
 //! メニューバーと Dock が、Windows は枠なし全画面でタスクバーが隠れる。
-//! iOS（#1313）/ Android（#1314）は OS 別モジュールのスタブ（`Unsupported`）を返す。
-//! dispatch（[`implementation`]）は全 OS の最終形で、後続の子は OS 別モジュールの中身だけを置き換える。
+//! iOS（#1313）/ Android（#1314）は OS 別モジュールの実装を返す。
+//! dispatch（[`implementation`]）は全 OS の最終形。
 //! 他の OS（Linux 等）は `UnsupportedFullscreen` 固定。
 //!
 //! # スレッド・再描画

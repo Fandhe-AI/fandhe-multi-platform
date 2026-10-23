@@ -29,7 +29,7 @@ use fandhe_device::DeviceError;
 use super::request_slot::{poll_and_finish, RequestSlot, POLL_INTERVAL};
 use crate::app::CompletionSender;
 
-/// OS ごとの実装を 1 つだけ持つ（iOS・Android は b 層が埋めるまでスタブで非対応）。
+/// OS ごとの実装を 1 つだけ持つ（iOS・Android は各 OS 実装、他 OS は非対応）。
 fn platform_live_activity() -> &'static Arc<dyn LiveActivity> {
     static INSTANCE: OnceLock<Arc<dyn LiveActivity>> = OnceLock::new();
     INSTANCE.get_or_init(|| {

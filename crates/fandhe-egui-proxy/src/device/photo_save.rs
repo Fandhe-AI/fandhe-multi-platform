@@ -7,7 +7,7 @@
 //!
 //! - macOS（#1254）/ iOS（#1255）/ Android（#1256）: コールバック型のため pull 型 [`bridge`]
 //!   （`RequestSlot` の facade）で毎フレーム [`drive_callback`] が結果を反映する。
-//!   Android は #1256 が埋めるまでスタブが `Unsupported` を返す
+//!   Android は API 28 以下のみ `Unsupported` を返す
 //! - Windows（#1254）/ それ以外: [`PhotoLibrary`] を同期に呼ぶ。Windows は Pictures フォルダへ
 //!   書き、Linux は `UnsupportedPhotoLibrary` で「非対応」を表示する
 
