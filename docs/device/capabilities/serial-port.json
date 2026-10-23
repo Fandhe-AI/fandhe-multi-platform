@@ -4,14 +4,14 @@
   "group": "未着手の OS 機能",
   "order": 91,
   "priority": 96,
-  "bundle": "continuous-push",
+  "bundle": "request-response",
   "platforms": {
     "ios": {
       "status": "no",
       "api": "なし",
       "perm": "なし",
       "url": "",
-      "note": "iOS は MFi 経由のみ（報告の記述）。公開 API は確認できなかった（要確認）。"
+      "note": "iOS は公開 API でシリアルポートを直接扱えない。MFi アクセサリーとの通信は対応表の対象外（`excluded` の「MFi アクセサリーとの通信」、ExternalAccessory 経由）を参照。"
     },
     "android": {
       "status": "no",
@@ -22,26 +22,26 @@
     },
     "macos": {
       "status": "possible",
-      "api": "IOKit のシリアル / POSIX（`termios`）",
-      "perm": "要確認（サンドボックスの USB entitlement）",
-      "url": "",
-      "note": "未実装。Apple の公式 URL は報告で未取得（URL 未確認）。"
+      "api": "IOKit `IOServiceMatching(kIOSerialBSDServiceValue)` + `kIOCalloutDeviceKey`（`/dev/cu.*`）で一覧。POSIX `open(O_NONBLOCK)` + `ioctl(TIOCEXCL)` + `termios`（`cfmakeraw`・`cfsetspeed`・`tcsetattr`・`tcflush`）+ `poll` / `read` / `write` で往復",
+      "perm": "サンドボックスなしで動かすため entitlement 不要の見込み（推測、Mac 目視で見る）。サンドボックス時は `com.apple.security.device.serial`（旧 Entitlement Key Reference にのみ記載、現行文書には無い）。USB entitlement ではない。TCC の許可ダイアログは無い見込み（推測）",
+      "url": "https://developer.apple.com/library/archive/documentation/DeviceDrivers/Conceptual/WorkingWSerial/WWSerial_SerialDevs/SerialDevices.html",
+      "note": "未実装。上記 Apple 文書（アーカイブ、エラー処理は自前で書く前提）の手順に沿う。一覧は callout（`/dev/cu.*`）だけで、擬似端末（pty）と `/dev/tty.*`（dialin）は対象外。"
     },
     "windows": {
       "status": "possible",
-      "api": "Win32 COM ポート（`CreateFile` / `DCB`）。WinRT `SerialDevice` は package identity 必須",
-      "perm": "WinRT 側はマニフェストの capability `serialCommunication` が必須（文書で確認）。Win32 側の要件は要確認",
+      "api": "Win32 `GetCommPorts` で一覧 + `CreateFileW` + `SetCommState`（DCB）+ `SetCommTimeouts` + `PurgeComm` + `WriteFile` / `ReadFile`。WinRT `SerialDevice` は package identity 必須のため使わない",
+      "perm": "unpackaged の Win32 のため manifest・capability の宣言は不要の見込み（推測、Windows 実機確認で見る）。`GetCommPorts` は Windows 10 1803 以降。WinRT `SerialDevice` を使う場合はマニフェストの capability `serialCommunication` が必須（文書で確認）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/devio/communications-resources",
-      "note": "未実装。`SerialDevice` は package identity 必須と文書で確認済み（https://learn.microsoft.com/en-us/uwp/api/windows.devices.serialcommunication.serialdevice ）。unpackaged では Win32 の COM ポートに倒す前提だが、動作は未検証（要確認）。"
+      "note": "未実装。`GetCommPorts` は `ERROR_FILE_NOT_FOUND` を 0 件として扱う。表示は `COM<n>` のみ（フレンドリー名は SetupAPI が要り範囲外）。`SerialDevice` は package identity 必須と文書で確認済み（https://learn.microsoft.com/en-us/uwp/api/windows.devices.serialcommunication.serialdevice ）。依存は既存の `windows` クレートに feature `Win32_Devices_Communication` を足すだけ。"
     },
     "web": {
       "status": "possible",
       "api": "Web Serial API（`navigator.serial`）",
-      "perm": "ポートごとに利用者が選ぶ。secure context 必須",
+      "perm": "ポートごとに利用者が `requestPort()` のダイアログで選ぶ（user activation が必要）。secure context 必須。Permissions Policy `serial` で禁止されると `SecurityError`",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API",
-      "safari": "非対応と認識（要確認）。Firefox も非対応と認識",
-      "note": "未実装。Chromium のみ。"
+      "safari": "Safari 非対応。Firefox は 151 以降で対応、Firefox Android は非対応（MDN browser-compat-data）。Firefox の許可の前提条件は未確認（要確認）",
+      "note": "未実装。対応ブラウザ: Chrome / Edge / Opera 89 以降、Chrome Android 148 以降（138〜147 は Bluetooth RFCOMM のポートのみ）、Firefox 151 以降。許可済みポートの `getPorts()` による黙った列挙と connect / disconnect イベントは使わない。"
     }
   },
-  "note": "macOS / Windows / Web に届く。iOS と Android は OS にシリアル API が無く no。usb-device（USB 機器の直接制御）とは、COM ポート・tty として見えるものを扱う点で別。Windows の WinRT API は package identity 必須。今回の範囲: 選んだポートを開いて 1 行を送り、返ってきた 1 行を画面に出す（ボーレート設定の UI・連続受信は扱わない）。"
+  "note": "macOS / Windows / Web に届く。iOS と Android は OS にシリアル API が無く no。usb-device（USB 機器の直接制御）とは、COM ポート・tty として見えるものを扱う点で別。Windows の WinRT API は package identity 必須。今回の範囲: ポートの一覧を出し（macOS / Windows は OS の列挙、Web は利用者がブラウザのダイアログで 1 つ選ぶ）、選んだポートを固定設定（9600 bps・8N1・フロー制御なし）で開いて固定の 1 行 `fandhe\\n` を送り、LF までの 1 行を受け取って画面に出し、毎回閉じる。全体の期限は 3 秒（開く〜受信、単調時計）。守る範囲: 1 プロセス（Web は 1 マウント）内の要求と完了の順序（古い request_id の結果は捨てる）、失敗（期限切れ・使用中・抜去・権限拒否・非対応・行が長すぎる・送信の途中切れ）を成功に見せないこと、期限後に届いた行を成功にしないこと、全経路でポートを閉じること（macOS は変更前の termios を戻す）、送信前に受信バッファを捨てること、0 件の一覧は成功とし Web のダイアログを閉じた場合はキャンセルとすること、ポート名・送受信の中身・OS のエラー値の生値をログに出さないこと。守らない範囲: 抜き差しの反映（再取得まで）、ボーレート・パリティ・フロー制御の変更 UI、連続受信、バイナリの往復、任意文字列の送信、送受信中の中断ボタン、改行で返さない機器への対応（期限切れになる）、他プロセスとの同時オープンの解決（使用中として失敗にするだけ）、macOS の擬似端末と `/dev/tty.*`、Web の許可済みポートの列挙・選択ダイアログの期限・Chromium 系と Firefox 以外、受信した行の文字コード（不正な UTF-8 は置換文字）、複数タブ・複数プロセス間の一致。"
 }
