@@ -19,5 +19,10 @@
       "name": "デモを開く",
       "url": "./?screen=url_scheme_show&url=web%2Bfandhe%3A%2F%2Fshortcut%2Fopen-demo"
     }
-  ]
+  ],
+  "share_target": {
+    "action": "./",
+    "method": "GET",
+    "params": { "text": "share_text", "url": "share_url" }
+  }
 }

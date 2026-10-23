@@ -79,6 +79,8 @@
 //!   純関数（状態の判定・失敗の写像・表示値への変換）のみ `wasm32` gate の外に置く
 //! - [`url_scheme`]: 「カスタム URL scheme」画面の Web 経路（親 #1116、Issue #1219）。
 //!   [`location`] と同じ理由で純関数（登録結果の分類・ハンドラ URL）のみ `wasm32` gate の外に置く
+//! - [`share_receive`]: 「共有の受け取り」画面の Web 経路（親 #122、Issue #608）。
+//!   [`location`] と同じ理由で純関数（クエリから共有テキストを選ぶ処理・戻し先 URL）のみ `wasm32` gate の外に置く
 //! - [`network_status`]: 「ネットワーク接続状態」画面の Web 経路（親 #1130、Issue #1285）。
 //!   純関数（`onLine` / `connection.type` → 表示値）のみ `wasm32` gate の外に置く
 //! - [`media_transcode`]: 「動画・音声の変換」画面の Web 経路（親 #91、Issue #315）。WebCodecs を Reflect で呼ぶ。
@@ -337,6 +339,8 @@ pub mod picture_in_picture;
 pub mod print_page;
 /// 型サンプル「画面スリープの抑止」の Web 経路（Issue #1281）。[`haptics`] と同じ理由で gate を外す。
 pub mod screen_wake_lock;
+/// 型サンプル「共有の受け取り」の Web 経路（Issue #608）。[`haptics`] と同じ理由で gate を外す。
+pub mod share_receive;
 /// 型サンプル「端末内翻訳」の Web 経路（Issue #539）。[`haptics`] と同じ理由で gate を外す。
 pub mod translation;
 /// 型サンプル「カスタム URL scheme」の Web 経路（Issue #1219）。[`haptics`] と同じ理由で gate を外す。
