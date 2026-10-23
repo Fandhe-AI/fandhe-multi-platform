@@ -58,6 +58,12 @@ pub const FAILED_PREFIX: &str = "できませんでした: ";
 pub const NOT_APPLIED_REASON: &str = "上書きが効いていません";
 /// 解除が成功を返したのに上書きが残っているときの理由。
 pub const NOT_CLEARED_REASON: &str = "上書きを解除できていません";
+/// 操作は成功を返したが、読み戻しに失敗して結果を確認できないときの理由。
+pub const READBACK_FAILED_REASON: &str = "結果を確認できませんでした";
+/// 読み戻した明るさが要求と食い違うときの理由。
+pub const LEVEL_MISMATCH_REASON: &str = "要求した明るさになっていません";
+/// 要求値と読み戻し値の許容誤差（OS 側の量子化・丸めを吸収する）。
+pub const LEVEL_TOLERANCE: f32 = 0.05;
 /// 初回の読み取り中の案内。
 pub const READING_STATUS: &str = "読み取り中…";
 /// スライダーのラベル。
@@ -262,6 +268,15 @@ pub fn finish(
         (Ok(()), Ok(r), Some(BrightnessCommand::Set(_))) if !r.overriding => {
             Some(BrightnessFailure::Failed(NOT_APPLIED_REASON.to_string()))
         }
+        (Ok(()), Ok(r), Some(BrightnessCommand::Set(v)))
+            if r.level
+                .is_some_and(|l| !l.is_finite() || (l - v).abs() > LEVEL_TOLERANCE) =>
+        {
+            Some(BrightnessFailure::Failed(LEVEL_MISMATCH_REASON.to_string()))
+        }
+        (Ok(()), Err(e), _) if *e != BrightnessFailure::Unsupported => Some(
+            BrightnessFailure::Failed(READBACK_FAILED_REASON.to_string()),
+        ),
         (Ok(()), Ok(r), Some(BrightnessCommand::Clear)) if r.overriding => {
             Some(BrightnessFailure::Failed(NOT_CLEARED_REASON.to_string()))
         }
@@ -272,7 +287,8 @@ pub fn finish(
     match reading {
         Ok(r) => state.read = ReadState::Read(r),
         Err(BrightnessFailure::Unsupported) => state.read = ReadState::Unsupported,
-        Err(_) => {}
+        // 読み戻せないときは古い「上書き中」を残さず、読み取り失敗として扱う。
+        Err(_) => state.read = ReadState::Failed,
     }
 
     match failure {
@@ -312,7 +328,8 @@ pub fn apply_read(
                 state.desired = false;
             }
             state.read = ReadState::Read(r);
-            let idle = state.pending.is_none() && !state.applying && !r.overriding;
+            // 上書き中でも、保留・処理中の操作が無ければ OS の値へスライダーを揃える。
+            let idle = state.pending.is_none() && !state.applying;
             // 非有限値は信頼しない。
             if let Some(l) = r.level.filter(|l| idle && l.is_finite()) {
                 state.slider_value = round_level(l);
@@ -521,6 +538,44 @@ mod tests {
         finish(&mut s, g, Ok(()), Ok(read(Some(0.9), true)));
         assert!(error_text(&s).contains(NOT_CLEARED_REASON));
         assert!(status_text(&s).starts_with(OVERRIDING_PREFIX));
+    }
+
+    #[test]
+    fn ok_with_readback_error_is_failure() {
+        let mut s = ready();
+        set_slider(&mut s, 0.9);
+        let g = s.generation();
+        mark_applying(&mut s, g);
+        finish(&mut s, g, Ok(()), Ok(read(Some(0.9), true)));
+        clear(&mut s);
+        let g = s.generation();
+        mark_applying(&mut s, g);
+        finish(&mut s, g, Ok(()), Err(failed("x")));
+        assert!(error_text(&s).contains(READBACK_FAILED_REASON));
+        assert!(!status_text(&s).starts_with(OVERRIDING_PREFIX));
+        assert_eq!(s.slider_value(), 0.9);
+
+        let mut s = ready();
+        set_slider(&mut s, 0.9);
+        let g = s.generation();
+        mark_applying(&mut s, g);
+        finish(&mut s, g, Ok(()), Err(failed("x")));
+        assert_eq!(s.slider_value(), 0.6);
+        assert!(error_text(&s).contains(READBACK_FAILED_REASON));
+        assert!(!wants_read(&s));
+    }
+
+    #[test]
+    fn ok_with_mismatched_level_is_failure_and_pull_syncs() {
+        let mut s = ready();
+        set_slider(&mut s, 0.9);
+        let g = s.generation();
+        mark_applying(&mut s, g);
+        finish(&mut s, g, Ok(()), Ok(read(Some(0.3), true)));
+        assert!(error_text(&s).contains(LEVEL_MISMATCH_REASON));
+        assert_eq!(s.slider_value(), 0.6);
+        apply_read(&mut s, Ok(read(Some(0.3), true)));
+        assert_eq!(s.slider_value(), 0.3);
     }
 
     #[test]
