@@ -546,6 +546,22 @@ public class MainActivity extends GameActivity {
         compassHelper.stop();
     }
 
+    // 気圧・照度・近接（Issue #611）。実装は `EnvironmentSensorsHelper`。Rust の
+    // `android_environment_sensors.rs` が同期 JNI で呼ぶ。
+    private final EnvironmentSensorsHelper environmentSensorsHelper = new EnvironmentSensorsHelper(this);
+
+    int environmentSensorsStart(int kind) {
+        return environmentSensorsHelper.start(kind);
+    }
+
+    long[] environmentSensorsRead(int kind) {
+        return environmentSensorsHelper.read(kind);
+    }
+
+    void environmentSensorsStop(int kind) {
+        environmentSensorsHelper.stop(kind);
+    }
+
     // 音声再生（Issue #270）。実装は `MediaPlaybackHelper`。Rust の `android_media_playback.rs` が同期 JNI で呼ぶ。
     private final MediaPlaybackHelper mediaPlaybackHelper = new MediaPlaybackHelper();
 
@@ -2480,6 +2496,7 @@ public class MainActivity extends GameActivity {
         activityResumed = true;
         webAuthSessionHelper.onResume();
         compassHelper.onResume();
+        environmentSensorsHelper.onResume();
         localPeerHelper.onResume();
         mediaPlaybackHelper.onResume();
         nowPlayingHelper.onResume();
@@ -2576,6 +2593,7 @@ public class MainActivity extends GameActivity {
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
         compassHelper.onPause();
+        environmentSensorsHelper.onPause();
         mediaPlaybackHelper.onPause();
         nowPlayingHelper.onPause();
         if (sensorManager != null) {
@@ -4819,6 +4837,7 @@ public class MainActivity extends GameActivity {
         musicLibraryHelper.onDestroy();
         wifiInfoHelper.onDestroy();
         compassHelper.onDestroy();
+        environmentSensorsHelper.onDestroy();
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
         midiHelper.onDestroy();
