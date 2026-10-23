@@ -790,6 +790,19 @@ public class MainActivity extends GameActivity {
         lanDiscoveryHelper.request(requestId, durationMs);
     }
 
+    // Bluetooth Classic（Issue #661）。実装は `BluetoothClassicHelper`（許可ランチャーを STARTED 前に登録）。
+    // Rust の `android_bluetooth_classic.rs` が JNI で呼ぶ。
+    private final BluetoothClassicHelper bluetoothClassicHelper = new BluetoothClassicHelper(this);
+
+    void requestBluetoothClassic(long requestId, int durationMs) {
+        bluetoothClassicHelper.request(requestId, durationMs);
+    }
+
+    // ペアリング済み一覧（シグネチャ `()Ljava/lang/String;`）。詰め方は `BluetoothClassicHelper.paired` 冒頭を参照。
+    private String bluetoothClassicPaired() {
+        return BluetoothClassicHelper.paired(getApplicationContext());
+    }
+
     // 近くの端末との直接通信（Issue #513）。実装は `LocalPeerHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_local_peer.rs` が JNI で呼ぶ。
     private final LocalPeerHelper localPeerHelper = new LocalPeerHelper(this);
@@ -2515,6 +2528,7 @@ public class MainActivity extends GameActivity {
         compassHelper.onResume();
         environmentSensorsHelper.onResume();
         localPeerHelper.onResume();
+        bluetoothClassicHelper.onResume();
         mediaPlaybackHelper.onResume();
         nowPlayingHelper.onResume();
         if (sensorManager != null && motionSensor != null) {
@@ -2609,6 +2623,7 @@ public class MainActivity extends GameActivity {
         screenCaptureHelper.onPause();
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
+        bluetoothClassicHelper.onPause();
         compassHelper.onPause();
         environmentSensorsHelper.onPause();
         mediaPlaybackHelper.onPause();
@@ -4851,6 +4866,7 @@ public class MainActivity extends GameActivity {
         spellCheckHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();
+        bluetoothClassicHelper.onDestroy();
         musicLibraryHelper.onDestroy();
         wifiInfoHelper.onDestroy();
         compassHelper.onDestroy();
