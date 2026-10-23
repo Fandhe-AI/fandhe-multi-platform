@@ -48,8 +48,9 @@ use crate::app::CompletionSender;
 /// 平常時に外部変化を読み直す間隔。
 const IDLE_REFRESH: Duration = Duration::from_secs(1);
 
-/// egui の viewport 情報に無い 2 つの読み取り（OS 別実装）。
+/// egui の viewport 情報に無い 2 つの読み取り（OS 別実装）。Windows は #637 が実装するまで使われない。
 #[cfg(any(target_os = "macos", target_os = "windows", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) trait NativeReads: Send + Sync {
     /// ウィンドウが最前面か。読めなければ `None`。
     fn always_on_top(&self) -> Option<bool>;
@@ -66,6 +67,7 @@ pub(crate) struct ViewportWindowManager<R: NativeReads> {
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn frame_from_rect(r: egui::Rect) -> WindowFrame {
     WindowFrame {
         x: f64::from(r.min.x),
