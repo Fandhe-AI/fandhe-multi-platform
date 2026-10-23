@@ -307,14 +307,6 @@ pub fn apply_read(
     adopt_reading(state, result);
 }
 
-/// 表示中のエラーが `reason` の失敗によるものなら消す（復元の再試行が成功したときに driver が呼ぶ）。
-/// 別の失敗の文言は消さない。
-pub fn clear_failure_reason(state: &mut ScreenOrientationShowState, reason: &str) {
-    if state.error == format!("{FAILED_PREFIX}{reason}") {
-        state.error.clear();
-    }
-}
-
 /// 表示中の失敗が `from` ならば `to` へ差し替える（別の失敗は触らない）。
 /// 復元成功は固定要求の成功ではないので、復元失敗の表示を元の失敗へ戻す用途に使う。
 pub fn replace_failure_reason(state: &mut ScreenOrientationShowState, from: &str, to: &str) {
