@@ -775,7 +775,7 @@ pub mod ios_print;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_safe_area_insets;
-/// Issue #633: iOS 向け画面輝度実装（#634 が埋めるスタブ）。
+/// Issue #634: iOS 向け画面輝度実装（`ios/fandhe_ios_screen_brightness.m` の `UIScreen` を呼ぶ C ABI ラッパー）。
 /// `device/screen_brightness.rs` の iOS 経路から使われる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -1042,7 +1042,7 @@ pub(crate) mod request_slot;
 /// （macOS・iOS / Android 実装、他 OS は `UnsupportedSafeArea` 固定）。
 pub mod safe_area_insets;
 /// Phase 11 の拡充ループ（親 #126、Issue #633）: 画面輝度の effect ドライバ
-/// （iOS・Android は後続の子 #634・#635 が埋めるスタブ、他 OS は `UnsupportedScreenBrightness` 固定）。
+/// （iOS は #634 で実装済み、Android は後続の子 #635 が埋めるスタブ、他 OS は `UnsupportedScreenBrightness` 固定）。
 pub mod screen_brightness;
 /// Phase 11 の拡充ループ（親 #1135、Issue #1335）: 画面の録画・キャプチャの effect ドライバ
 /// （macOS 実装、iOS・Android 実装、他 OS は

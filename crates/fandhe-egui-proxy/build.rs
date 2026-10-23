@@ -251,6 +251,9 @@
 //! - `ios/fandhe_ios_screen_wake_lock.m`（Issue #1279、`UIApplication.idleTimerDisabled` による
 //!   画面スリープの抑止）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/ios_screen_wake_lock.rs` から呼ばれる契約）。UIKit は既存のリンクで足りる。
+//! - `ios/fandhe_ios_screen_brightness.m`（Issue #634、`UIScreen.brightness` による画面輝度の
+//!   前面中だけの上書き）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/ios_screen_brightness.rs` から呼ばれる契約）。UIKit は既存のリンクで足りる。
 //! - `ios/fandhe_ios_fullscreen_immersive.m`（Issue #1313、winit の ViewController へ
 //!   `prefersStatusBarHidden` を差し込む全画面表示）は **iOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルする（`src/device/ios_fullscreen_immersive.rs` から呼ばれる契約）。UIKit と objc
@@ -538,6 +541,8 @@ fn main() {
     // `ios/fandhe_ios_spell_check.m`（Issue #579）。iOS 分岐のみ。
     compile_ios_spell_check();
     compile_ios_screen_wake_lock();
+    // `ios/fandhe_ios_screen_brightness.m`（Issue #634）。iOS 分岐のみ。
+    compile_ios_screen_brightness();
     // `ios/fandhe_ios_fullscreen_immersive.m`（Issue #1313）。iOS 分岐のみ。
     compile_ios_fullscreen_immersive();
     // `ios/fandhe_ios_power_state.m`（Issue #1275）。iOS 分岐のみ。
@@ -1606,6 +1611,16 @@ fn compile_ios_screen_wake_lock() {
         .file("ios/fandhe_ios_screen_wake_lock.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_screen_wake_lock");
+}
+
+/// `ios/fandhe_ios_screen_brightness.m` を `cc` でコンパイルする（Issue #634）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_screen_brightness.rs` が使う）。UIKit はリンク済み。
+fn compile_ios_screen_brightness() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_screen_brightness.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_screen_brightness.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_screen_brightness");
 }
 
 /// `ios/fandhe_ios_fullscreen_immersive.m` を `cc` でコンパイルする（Issue #1313）。**iOS 分岐のみ**
