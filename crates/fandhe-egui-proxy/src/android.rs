@@ -784,7 +784,8 @@ extern "system" fn Java_com_fandhe_androidapp_ShareReceiveHelper_nativeOnShareRe
 /// （Issue #611）。`EnvironmentSensorsHelper.onPause` / `onResume` は feature を知らず
 /// `MainActivity` のライフサイクルから無条件に呼ぶため、スタブが無いと feature 無効ビルドで
 /// `UnsatisfiedLinkError` になる。署名は Java 宣言・`device/android_environment_sensors.rs` の
-/// 実体と 3 か所で一致させる（`(boolean) -> void`、`(Z)V`）。
+/// 実体と 3 か所で一致させる（`(boolean) -> void`、`(Z)V`）。引数は `jni::sys::jboolean`（= `u8`）と
+/// ABI が同じ `u8` で受ける。`jni` は feature `device` の optional 依存なので、この無効時の関数からは参照できない。
 ///
 /// # Safety
 /// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
@@ -795,7 +796,7 @@ extern "system" fn Java_com_fandhe_androidapp_ShareReceiveHelper_nativeOnShareRe
 extern "system" fn Java_com_fandhe_androidapp_EnvironmentSensorsHelper_nativeOnForegroundChanged(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
-    _foreground: jni::sys::jboolean,
+    _foreground: u8,
 ) {
 }
 
