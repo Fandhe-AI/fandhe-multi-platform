@@ -25,6 +25,7 @@
 //
 // 世代: 購読ごとに manager を作り直し、handler が捕捉した epoch をロック内で現在値と照合して旧購読分を捨てる。
 // seq はプロセス内で単調増加させ、stop・再開始・復帰で巻き戻さない。
+// stop は背景・前景の observer と専用 queue も解除・解放し、再開始で登録し直す。
 // 背景遷移: 保持値を捨て、購読を解除する（suspend 中は届かないため）。復帰で張り直す。
 // 許可ダイアログ表示中のアプリは Inactive で Background にならない。observer は
 // DidEnterBackground / WillEnterForeground だけを見るため、許可の応答との到着順に依存しない。
@@ -71,8 +72,8 @@ static BOOL IsDenied(CMAuthorizationStatus s) {
 }
 
 // ロックの外で呼ぶ。manager の live 更新と probe query を張る。epoch は張った時点の世代。
-static void Subscribe(CMMotionActivityManager *m, uint64_t epoch) {
-    [m startActivityUpdatesToQueue:gQueue
+static void Subscribe(CMMotionActivityManager *m, NSOperationQueue *queue, uint64_t epoch) {
+    [m startActivityUpdatesToQueue:queue
                        withHandler:^(CMMotionActivity *_Nullable a) {
         os_unfair_lock_lock(&gLock);
         if (!gActive || gBackground || epoch != gEpoch) { // 旧購読・背景中の通知は捨てる
@@ -92,6 +93,7 @@ static void Subscribe(CMMotionActivityManager *m, uint64_t epoch) {
             gConfidence = (int32_t)a.confidence;
             gSeq += 1;
             gHasValue = YES;
+            gFailure = 0; // 実サンプルが届いた以上、遅れて届いた probe の失敗は無効
         }
         os_unfair_lock_unlock(&gLock);
         fandhe_rust_activity_recognition_changed();
@@ -99,13 +101,17 @@ static void Subscribe(CMMotionActivityManager *m, uint64_t epoch) {
     NSDate *now = [NSDate date];
     [m queryActivityStartingFromDate:[now dateByAddingTimeInterval:-kProbeSeconds]
                               toDate:now
-                             toQueue:gQueue
+                             toQueue:queue
                          withHandler:^(NSArray<CMMotionActivity *> *_Nullable acts, NSError *_Nullable error) {
         if (error == nil) {
             return;
         }
         os_unfair_lock_lock(&gLock);
         if (!gActive || gBackground || epoch != gEpoch) {
+            os_unfair_lock_unlock(&gLock);
+            return;
+        }
+        if (gHasValue) { // live 値が既にある。遅れて届いた probe の失敗では動作中の購読を落とさない
             os_unfair_lock_unlock(&gLock);
             return;
         }
@@ -133,7 +139,12 @@ int32_t fandhe_ios_activity_recognition_start(void) {
         if (IsDenied([CMMotionActivityManager authorizationStatus])) {
             return 2;
         }
-        if (gBackgroundToken == nil) {
+        os_unfair_lock_lock(&gLock);
+        if (gActive) {
+            os_unfair_lock_unlock(&gLock);
+            return 0;
+        }
+        if (gBackgroundToken == nil) { // stop で解除済み。再開始で登録し直す
             gQueue = [[NSOperationQueue alloc] init];
             gQueue.maxConcurrentOperationCount = 1;
             gBackgroundToken = [NSNotificationCenter.defaultCenter
@@ -143,6 +154,10 @@ int32_t fandhe_ios_activity_recognition_start(void) {
                         usingBlock:^(NSNotification *__unused note) {
                 @autoreleasepool {
                     os_unfair_lock_lock(&gLock);
+                    if (!gActive) { // 解除と到着が入れ替わった通知は捨てる
+                        os_unfair_lock_unlock(&gLock);
+                        return;
+                    }
                     gBackground = YES;
                     gHasValue = NO;
                     gEpoch += 1;
@@ -159,30 +174,26 @@ int32_t fandhe_ios_activity_recognition_start(void) {
                              queue:nil
                         usingBlock:^(NSNotification *__unused note) {
                 @autoreleasepool {
-                    CMMotionActivityManager *m = nil;
-                    uint64_t epoch = 0;
                     os_unfair_lock_lock(&gLock);
+                    if (!gActive) {
+                        os_unfair_lock_unlock(&gLock);
+                        return;
+                    }
                     gBackground = NO;
                     gHasValue = NO;
                     gFailure = 0;
-                    if (gActive) {
-                        gEpoch += 1;
-                        epoch = gEpoch;
-                        m = [[CMMotionActivityManager alloc] init];
-                        gManager = m;
-                    }
+                    gEpoch += 1;
+                    uint64_t epoch = gEpoch;
+                    NSOperationQueue *q = gQueue;
+                    CMMotionActivityManager *m = [[CMMotionActivityManager alloc] init];
+                    gManager = m;
                     os_unfair_lock_unlock(&gLock);
-                    if (m != nil) {
-                        Subscribe(m, epoch);
+                    if (q != nil) {
+                        Subscribe(m, q, epoch);
                     }
                     fandhe_rust_activity_recognition_resumed();
                 }
             }];
-        }
-        os_unfair_lock_lock(&gLock);
-        if (gActive) {
-            os_unfair_lock_unlock(&gLock);
-            return 0;
         }
         gEpoch += 1;
         uint64_t epoch = gEpoch;
@@ -191,13 +202,14 @@ int32_t fandhe_ios_activity_recognition_start(void) {
         gBackground = UIApplication.sharedApplication.applicationState == UIApplicationStateBackground;
         gActive = YES;
         CMMotionActivityManager *m = nil;
+        NSOperationQueue *q = gQueue;
         if (!gBackground) { // 背景中は張らず、復帰時に張る
             m = [[CMMotionActivityManager alloc] init];
             gManager = m;
         }
         os_unfair_lock_unlock(&gLock);
         if (m != nil) {
-            Subscribe(m, epoch);
+            Subscribe(m, q, epoch);
         }
     }
     return 0;
@@ -241,7 +253,19 @@ void fandhe_ios_activity_recognition_stop(void) {
         gActive = NO;
         gHasValue = NO;
         gFailure = 0;
+        // ライフサイクル通知の購読と専用 queue を解放する。再開始で登録し直す
+        id bg = gBackgroundToken;
+        id fg = gForegroundToken;
+        gBackgroundToken = nil;
+        gForegroundToken = nil;
+        gQueue = nil;
         os_unfair_lock_unlock(&gLock);
+        if (bg != nil) {
+            [NSNotificationCenter.defaultCenter removeObserver:bg];
+        }
+        if (fg != nil) {
+            [NSNotificationCenter.defaultCenter removeObserver:fg];
+        }
         if (old == nil) {
             return;
         }
