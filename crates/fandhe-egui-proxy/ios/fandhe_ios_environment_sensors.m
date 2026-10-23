@@ -36,6 +36,8 @@
 // CMAltimeter 更新を止め、近接の observer を外して proximityMonitoringEnabled を有効化前の値へ戻す。
 // 希望状態（gPressureActive / gProximityActive）は残し、前景復帰で希望されている購読だけを再開する
 // （気圧は新しい世代で、近接は再有効化と observer の再登録）。背景中の通知は gBackground でも拒否する。
+// 失敗の保持（gPressureFailure）は購読の世代に属する。新しい世代の開始・背景遷移・停止で 0 に戻し、
+// handler は世代照合の後でのみ書く。
 // 許可ダイアログは Inactive になるだけで背景へは遷移しないので、ダイアログの応答が背景フラグと競合して
 // 正常な許可を中断扱いにすることはない。
 //
@@ -99,6 +101,7 @@ static void RegisterLifecycleObservers(void) {
                     os_unfair_lock_lock(&gLock);
                     gBackground = YES;
                     gPressureHasValue = NO;
+                    gPressureFailure = 0; // 背景前の失敗を復帰後の購読へ持ち越さない
                     gProximityHasValue = NO;
                     CMAltimeter *old = gAltimeter;
                     gAltimeter = nil;
@@ -169,6 +172,7 @@ static void BeginAltimeter(void) {
     CMAltimeter *alt = [[CMAltimeter alloc] init];
     gAltimeter = alt;
     gPressureHasValue = NO;
+    gPressureFailure = 0; // 新しい世代は未失敗から始める（旧世代の失敗を残さない）
     gPressureSince = NSProcessInfo.processInfo.systemUptime;
     NSOperationQueue *queue = gPressureQueue;
     os_unfair_lock_unlock(&gLock);
