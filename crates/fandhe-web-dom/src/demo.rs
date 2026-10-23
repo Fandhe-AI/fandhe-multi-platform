@@ -178,6 +178,10 @@ use fandhe_core::screens::url_scheme_show::{
 use fandhe_core::screens::usb_device_show::{
     current_screen as current_usb_device_show_screen, UsbDeviceShowState,
 };
+use fandhe_core::screens::user_idle_show::{
+    current_screen as current_user_idle_show_screen,
+    web_initial_state as user_idle_web_initial_state,
+};
 use fandhe_core::screens::wake_lock_toggle::{
     current_screen as current_wake_lock_toggle_screen, turn_off as wake_lock_turn_off,
     WakeLockToggleState, OFF_BUTTON_ID as WAKE_LOCK_OFF_BUTTON_ID,
@@ -414,6 +418,21 @@ pub fn mount_usb_device_show_screen(root_id: &str) -> Result<(), JsValue> {
         current_usb_device_show_screen(&initial_state),
         initial_state,
         super::usb_device::usb_device_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「無操作時間の検知」（親 #125、Issue #632）をマウントする検証専用
+/// エントリポイント。`super::user_idle::user_idle_show_effect` が Idle Detection API を駆動する。
+/// 許可ボタンは固定 Screen のため全状態で表示され、`request_watch` が再要求を担う。
+#[wasm_bindgen]
+pub fn mount_user_idle_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    let initial_state = user_idle_web_initial_state();
+    super::mount::mount_with_effect(
+        root,
+        current_user_idle_show_screen(&initial_state),
+        initial_state,
+        super::user_idle::user_idle_show_effect,
     )
 }
 
