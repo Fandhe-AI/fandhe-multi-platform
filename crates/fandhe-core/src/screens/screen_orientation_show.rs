@@ -307,6 +307,14 @@ pub fn apply_read(
     adopt_reading(state, result);
 }
 
+/// 表示中のエラーが `reason` の失敗によるものなら消す（復元の再試行が成功したときに driver が呼ぶ）。
+/// 別の失敗の文言は消さない。
+pub fn clear_failure_reason(state: &mut ScreenOrientationShowState, reason: &str) {
+    if state.error == format!("{FAILED_PREFIX}{reason}") {
+        state.error.clear();
+    }
+}
+
 /// driver が OS を読み直すべきか。非対応・失敗では偽（失敗状態で再描画し続けない）。
 pub fn wants_read(state: &ScreenOrientationShowState) -> bool {
     matches!(state.read, ReadState::Unread | ReadState::Read(_))

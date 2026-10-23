@@ -22,9 +22,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use fandhe_core::screens::screen_orientation_show::{
-    apply_read, finish, lock_satisfied, mark_applying, take_request, wants_read,
-    Orientation as CoreOrientation, OrientationFailure, Reading, ScreenOrientationShowState,
-    NOT_LOCKED_REASON, NOT_UNLOCKED_REASON,
+    apply_read, clear_failure_reason, finish, lock_satisfied, mark_applying, take_request,
+    wants_read, Orientation as CoreOrientation, OrientationFailure, Reading,
+    ScreenOrientationShowState, NOT_LOCKED_REASON, NOT_UNLOCKED_REASON,
 };
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use fandhe_device::screen_orientation::UnsupportedScreenOrientation;
@@ -168,6 +168,15 @@ fn drive(
     if let Some(prev) = d.pending_restore {
         if imp.request_lock(prev).is_ok() {
             d.pending_restore = None;
+            // 復元できたので「元に戻せません」の表示を消し、読み戻した値を画面へ反映する。
+            let reading = read_core(imp);
+            let _ = sender.send(Box::new(move |s: &mut ScreenOrientationShowState| {
+                clear_failure_reason(s, RESTORE_FAILED_REASON);
+                if let Ok(r) = reading {
+                    apply_read(s, Ok(r));
+                }
+            }));
+            sender.request_repaint_after(Duration::ZERO);
         } else {
             sender.request_repaint_after(request_slot::POLL_INTERVAL);
         }
@@ -250,6 +259,12 @@ fn start_request(
         }));
     };
 
+    // 未復元の固定が残っているうちは、満たされて見えても成功にしない
+    // （残留ロックは復元で打ち消されるため）。OS の状態も重ねて変えない。
+    if d.pending_restore.is_some() {
+        send_finish(Err(failed_restore()), before);
+        return;
+    }
     // 同じ固定の再依頼は OS を呼ばずに成功にする（読み戻しで既に満たされているときだけ）。
     if before
         .as_ref()
@@ -260,11 +275,6 @@ fn start_request(
     }
     if !imp.can_lock() {
         send_finish(Err(OrientationFailure::Unsupported), before);
-        return;
-    }
-    // 未復元の固定が残っているうちは、OS の状態を重ねて変えない。
-    if d.pending_restore.is_some() {
-        send_finish(Err(failed_restore()), before);
         return;
     }
     // 直前値が読めないと、期限切れで戻す先が分からず元の固定を失う。OS を変えず読み取り失敗で終える。
@@ -604,6 +614,28 @@ mod tests {
         drive(&s, &tx, &fake, t0 + CONFIRM_TIMEOUT, VP, &mut d);
         assert_eq!(d.pending_restore, None);
         assert_eq!(fake.calls().last(), Some(&None));
+        // 復元に成功したら、画面の「元に戻せません」表示も消える。
+        apply_all(&rx, &mut s);
+        assert!(!error_text(&s).contains(RESTORE_FAILED_REASON));
+    }
+
+    #[test]
+    fn satisfied_lock_is_not_success_while_restore_pending() {
+        let _g = guard();
+        let (tx, rx) = sender_with_channel();
+        let fake = Fake::new();
+        let mut d = Driver::default();
+        let mut s = ready(&tx, &rx, &fake, &mut d);
+        // OS に横固定が残っている状態で、復元が未完了。
+        *fake.orientation.lock().unwrap() = Orientation::Landscape;
+        *fake.lock.lock().unwrap() = Some(Orientation::Landscape);
+        d.pending_restore = Some(None);
+        *fake.fail_request.lock().unwrap() = Some(DeviceError::Internal("x"));
+        lock_landscape(&mut s);
+        drive(&s, &tx, &fake, Instant::now(), VP, &mut d);
+        apply_all(&rx, &mut s);
+        assert!(error_text(&s).contains(RESTORE_FAILED_REASON));
+        assert_eq!(d.pending_restore, Some(None));
     }
 
     #[test]
