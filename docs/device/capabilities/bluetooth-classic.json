@@ -15,24 +15,24 @@
     },
     "android": {
       "status": "possible",
-      "api": "`BluetoothSocket`（RFCOMM）",
-      "perm": "`BLUETOOTH_CONNECT`（API 31+、既存列挙の記載）",
-      "url": "https://developer.android.com/develop/connectivity/bluetooth/transfer-data",
-      "note": "未実装。"
+      "api": "`BluetoothAdapter.getBondedDevices` + `startDiscovery`（`ACTION_FOUND` / `ACTION_DISCOVERY_FINISHED`、約 12 秒の inquiry）/ `cancelDiscovery`。`getType` で LE だけの機器を除く",
+      "perm": "API 31+ は検索に `BLUETOOTH_SCAN`（`neverForLocation`）、名前・種別・一覧に `BLUETOOTH_CONNECT`。API 30 以下は `BLUETOOTH` / `BLUETOOTH_ADMIN`（maxSdkVersion=30）+ `ACCESS_FINE_LOCATION`。いずれも bluetooth-le で宣言済み",
+      "url": "https://developer.android.com/develop/connectivity/bluetooth/bt-permissions",
+      "note": "未実装。Bluetooth がオフのとき `getBondedDevices` は空を返すため、先に状態を見て `Disabled` にする。`neverForLocation` が Classic の検索結果に影響するかは公式に記載がなく、確認用 issue で見る。"
     },
     "macos": {
       "status": "possible",
-      "api": "IOBluetooth（macOS 専用）",
-      "perm": "要確認（サンドボックスの Bluetooth entitlement）",
-      "url": "https://developer.apple.com/documentation/iobluetooth",
-      "note": "未実装。"
+      "api": "IOBluetooth `IOBluetoothDevice.pairedDevices` + `IOBluetoothDeviceInquiry`（delegate、`inquiryLength`）。電源は `IOBluetoothHostController.powerState`",
+      "perm": "Info.plist `NSBluetoothAlwaysUsageDescription`（bluetooth-le で埋め込み済み、文言のみ直す）。サンドボックスなしのため entitlement 不要。IOBluetooth への TCC 適用は公式に記載がなく、Mac 目視で確認する",
+      "url": "https://developer.apple.com/documentation/iobluetooth/iobluetoothdeviceinquiry",
+      "note": "未実装。連続の inquiry は OS が throttle する（公式記載）。"
     },
     "windows": {
       "status": "possible",
-      "api": "`Windows.Devices.Bluetooth.Rfcomm`",
-      "perm": "要確認（マニフェストの capability 宣言が必要か、unpackaged の可否は未検証）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.rfcomm",
-      "note": "未実装。"
+      "api": "Win32 `BluetoothFindFirstDevice`（`BLUETOOTH_DEVICE_SEARCH_PARAMS`、`fIssueInquiry`・`cTimeoutMultiplier`。LE は返さない）。電源は WinRT `BluetoothAdapter` + `Radio`。WinRT `DeviceWatcher` 経路は capability `bluetooth` の要否が unpackaged で未記載のため不採用",
+      "perm": "宣言不要（Win32 desktop）。電波強度は取れない",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/bluetoothapis/nf-bluetoothapis-bluetoothfindfirstdevice",
+      "note": "未実装。同期の inquiry は途中で止められない。"
     },
     "web": {
       "status": "no",
@@ -43,5 +43,5 @@
       "note": "Web Bluetooth は BLE のみで Classic に届かない。"
     }
   },
-  "note": "Android / macOS / Windows は RFCOMM に届く。iOS は MFi 機器に限られ、Web は BLE のみのため no。bluetooth-le（既存 id）は BLE の周辺機器で、本機能は Classic（SPP など）の別規格。今回の範囲: ペアリング済みの機器 1 台へ RFCOMM で接続し、受信したバイト数を画面に出す（探索・ペアリング操作は扱わない）。"
+  "note": "Android / macOS / Windows は Classic の機器一覧と検索に届く。iOS は MFi 機器に限られ、Web は BLE のみのため no。bluetooth-le（既存 id）は BLE の周辺機器で、本機能は Classic（BR/EDR）の別規格。LE だけの機器は bluetooth-le の範囲で、本機能の結果から外す。今回の範囲: ペアリング済み機器の一覧と、周辺の Classic 機器を 12 秒の固定窓で 1 回検索し、名前・種別・ペアリング済みか・電波強度（取れる OS のみ）を一覧に出す。接続（RFCOMM / SPP）・ペアリング操作・Bluetooth の ON 操作は範囲外。機器のアドレスは画面にもログにも出さない。守る範囲: 1 プロセス内の要求と完了の順序、失敗（オフ・権限拒否・非対応）を成功と見せないこと、検索の停止と資源の解放。守らない範囲: 検索結果のペアリング済み機器が窓の時点で圏内にあること、窓内で名前が解決しきれないこと、電波強度が取れない OS・機器があること、OS による inquiry の間引き、他アプリが同時に検索している場合の結果の違い、発見可能モードでない機器が出ないこと。"
 }
