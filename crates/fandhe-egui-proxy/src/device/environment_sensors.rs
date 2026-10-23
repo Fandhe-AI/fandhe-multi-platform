@@ -15,7 +15,7 @@
 //! 判定と状態更新は `DRIVER` のロックの内側で行い、経路はこのドライバ 1 本に集約する（契約表 2・11）。
 //!
 //! dispatch（[`implementation`]）は全対象 OS の最終形。iOS・Android・Windows は
-//! `ios_environment_sensors.rs` 等のスタブ（後続 #610・#611・#612 が実体を入れる）、
+//! `ios_environment_sensors.rs` 等の各 OS 実装（#610・#611・#612）、
 //! macOS・Linux は `UnsupportedEnvironmentSensors` 固定。Web は対応表で `no` のため配線しない。
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -123,9 +123,8 @@ static RESUME_EPOCH: AtomicU64 = AtomicU64::new(0);
 static BACKGROUND: AtomicBool = AtomicBool::new(false);
 
 /// 背景遷移を記録する。各 OS の実装（iOS #610 の `DidEnterBackground`、Android #611 の `onPause`、
-/// Windows #612 の最小化）が自分のモジュールから呼ぶ。(a) の時点では呼ぶ側が無い。
+/// Windows #612 の最小化）が自分のモジュールから呼ぶ。
 #[cfg(any(target_os = "ios", target_os = "android", target_os = "windows", test))]
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn note_backgrounded() {
     BACKGROUND.store(true, Ordering::SeqCst);
 }
@@ -133,7 +132,6 @@ pub(crate) fn note_backgrounded() {
 /// 背景からの復帰を記録する。各 OS の実装が前景復帰（iOS の復帰通知・Android の `onResume`・Windows の復元）から呼ぶ。
 /// 復帰回数を先に増やしてから背景フラグを下ろす（フラグが下りた時点で起点の引き直しが見える）。
 #[cfg(any(target_os = "ios", target_os = "android", target_os = "windows", test))]
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn note_resumed() {
     RESUME_EPOCH.fetch_add(1, Ordering::SeqCst);
     BACKGROUND.store(false, Ordering::SeqCst);
