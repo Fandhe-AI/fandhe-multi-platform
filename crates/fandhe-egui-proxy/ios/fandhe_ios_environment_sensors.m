@@ -32,8 +32,10 @@
 // stop が main 以外なら状態をすぐ捨て、復元を `dispatch_async` で main へ送る（`dispatch_sync` は使わない。
 // 契約表 11）。送ったブロックは世代を照合し、その間に再開されていれば何もしない。
 //
-// ライフサイクル（気圧・近接共用。observer は 1 回だけ登録）: 背景遷移で両方の保持値を捨て、背景中の通知は
-// gBackground で拒否する。購読そのものは外さない（compass と同じ。値だけ捨てて復帰後の新規サンプルを待つ）。
+// ライフサイクル（気圧・近接共用。observer は 1 回だけ登録）: 背景遷移で両方の保持値を捨て、気圧の
+// CMAltimeter 更新を止め、近接の observer を外して proximityMonitoringEnabled を有効化前の値へ戻す。
+// 希望状態（gPressureActive / gProximityActive）は残し、前景復帰で希望されている購読だけを再開する
+// （気圧は新しい世代で、近接は再有効化と observer の再登録）。背景中の通知は gBackground でも拒否する。
 // 許可ダイアログは Inactive になるだけで背景へは遷移しないので、ダイアログの応答が背景フラグと競合して
 // 正常な許可を中断扱いにすることはない。
 //
@@ -79,7 +81,12 @@ static BOOL gProximityNear = NO;
 static BOOL gProximitySavedEnabled = NO;
 static id gProximityToken = nil; // main でのみ触る（非 nil は「復元が未了」も表す）
 
+static void BeginAltimeter(void);
+static void InstallProximityObserver(void);
+
 // 背景・前景の observer を 1 回だけ登録する。呼び出しは main から。
+// 背景遷移: 気圧の購読を止め、近接の observer を外して有効化前の状態へ戻す。希望状態
+// （gPressureActive / gProximityActive）は残し、前景復帰で希望されている購読だけを再開する。
 static void RegisterLifecycleObservers(void) {
     if (gBackgroundToken != nil) {
         return;
@@ -87,13 +94,26 @@ static void RegisterLifecycleObservers(void) {
     gBackgroundToken = [NSNotificationCenter.defaultCenter
         addObserverForName:UIApplicationDidEnterBackgroundNotification
                     object:nil
-                     queue:nil
+                     queue:NSOperationQueue.mainQueue
                 usingBlock:^(NSNotification *__unused note) {
                     os_unfair_lock_lock(&gLock);
                     gBackground = YES;
                     gPressureHasValue = NO;
                     gProximityHasValue = NO;
+                    CMAltimeter *old = gAltimeter;
+                    gAltimeter = nil;
+                    gPressureGen++; // 旧 handler の通知は世代照合で捨てられる
+                    BOOL proximityActive = gProximityActive;
+                    BOOL saved = gProximitySavedEnabled;
                     os_unfair_lock_unlock(&gLock);
+                    [old stopRelativeAltitudeUpdates];
+                    if (proximityActive) {
+                        if (gProximityToken != nil) {
+                            [NSNotificationCenter.defaultCenter removeObserver:gProximityToken];
+                            gProximityToken = nil;
+                        }
+                        UIDevice.currentDevice.proximityMonitoringEnabled = saved;
+                    }
                     fandhe_rust_environment_sensors_backgrounded();
                 }];
     // proximityState を読むため main queue で受ける。
@@ -102,16 +122,26 @@ static void RegisterLifecycleObservers(void) {
                     object:nil
                      queue:NSOperationQueue.mainQueue
                 usingBlock:^(NSNotification *__unused note) {
-                    BOOL near = UIDevice.currentDevice.proximityState;
                     os_unfair_lock_lock(&gLock);
                     gBackground = NO;
-                    gPressureSince = NSProcessInfo.processInfo.systemUptime;
-                    gPressureHasValue = NO; // 新規サンプルの到着を待つ
-                    if (gProximityActive) {
-                        gProximityNear = near;
-                        gProximityHasValue = YES;
-                    }
+                    BOOL proximityActive = gProximityActive;
                     os_unfair_lock_unlock(&gLock);
+                    if (proximityActive) {
+                        UIDevice *device = UIDevice.currentDevice;
+                        device.proximityMonitoringEnabled = YES;
+                        BOOL enabled = device.proximityMonitoringEnabled;
+                        BOOL near = device.proximityState;
+                        if (enabled) {
+                            InstallProximityObserver();
+                        }
+                        os_unfair_lock_lock(&gLock);
+                        if (gProximityActive) {
+                            gProximityNear = near;
+                            gProximityHasValue = enabled;
+                        }
+                        os_unfair_lock_unlock(&gLock);
+                    }
+                    BeginAltimeter(); // 希望されている場合のみ再開する（内部で判定）
                     fandhe_rust_environment_sensors_resumed();
                 }];
 }
@@ -122,6 +152,56 @@ static int32_t PressureErrorCode(NSError *error) {
         return 2;
     }
     return 3;
+}
+
+// 気圧の購読を開始する。希望されていて（gPressureActive）背景でなく、未購読のときだけ動く。
+static void BeginAltimeter(void) {
+    os_unfair_lock_lock(&gLock);
+    if (!gPressureActive || gBackground || gAltimeter != nil) {
+        os_unfair_lock_unlock(&gLock);
+        return;
+    }
+    if (gPressureQueue == nil) {
+        gPressureQueue = [[NSOperationQueue alloc] init];
+        gPressureQueue.maxConcurrentOperationCount = 1;
+    }
+    uint64_t gen = ++gPressureGen;
+    CMAltimeter *alt = [[CMAltimeter alloc] init];
+    gAltimeter = alt;
+    gPressureHasValue = NO;
+    gPressureSince = NSProcessInfo.processInfo.systemUptime;
+    NSOperationQueue *queue = gPressureQueue;
+    os_unfair_lock_unlock(&gLock);
+
+    [alt startRelativeAltitudeUpdatesToQueue:queue
+                                 withHandler:^(CMAltitudeData *data, NSError *error) {
+        os_unfair_lock_lock(&gLock);
+        if (!gPressureActive || gBackground || gen != gPressureGen) { // 旧購読・背景中は捨てる
+            os_unfair_lock_unlock(&gLock);
+            return;
+        }
+        if (error != nil) {
+            gPressureHasValue = NO;
+            gPressureFailure = PressureErrorCode(error);
+        } else if (data == nil || data.pressure == nil || !isfinite(data.pressure.doubleValue)) {
+            gPressureHasValue = NO;
+        } else {
+            double nowSec = NSProcessInfo.processInfo.systemUptime;
+            double age = nowSec - data.timestamp;
+            if (data.timestamp < gPressureSince || age < 0 || age > kPressureStaleSec) {
+                gPressureHasValue = NO; // 開始前・未来・古い測定は捨てて次を待つ
+            } else {
+                gPressureKpa = data.pressure.doubleValue;
+                uint64_t now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+                uint64_t ageNs = (uint64_t)(age * (double)NSEC_PER_SEC);
+                gPressureStampNs = now > ageNs ? now - ageNs : 0;
+                gPressureHasValue = YES;
+                gPressureFailure = 0;
+            }
+        }
+        os_unfair_lock_unlock(&gLock);
+        fandhe_rust_environment_sensors_changed();
+    }];
 }
 
 int32_t fandhe_ios_env_pressure_start(void) {
@@ -141,49 +221,11 @@ int32_t fandhe_ios_env_pressure_start(void) {
             os_unfair_lock_unlock(&gLock);
             return 0;
         }
-        if (gPressureQueue == nil) {
-            gPressureQueue = [[NSOperationQueue alloc] init];
-            gPressureQueue.maxConcurrentOperationCount = 1;
-        }
-        uint64_t gen = ++gPressureGen;
-        CMAltimeter *alt = [[CMAltimeter alloc] init];
-        gAltimeter = alt;
         gPressureActive = YES;
         gPressureHasValue = NO;
         gPressureFailure = 0;
-        gPressureSince = NSProcessInfo.processInfo.systemUptime;
-        NSOperationQueue *queue = gPressureQueue;
         os_unfair_lock_unlock(&gLock);
-
-        [alt startRelativeAltitudeUpdatesToQueue:queue
-                                     withHandler:^(CMAltitudeData *data, NSError *error) {
-            os_unfair_lock_lock(&gLock);
-            if (!gPressureActive || gBackground || gen != gPressureGen) { // 旧購読・背景中は捨てる
-                os_unfair_lock_unlock(&gLock);
-                return;
-            }
-            if (error != nil) {
-                gPressureHasValue = NO;
-                gPressureFailure = PressureErrorCode(error);
-            } else if (data == nil || data.pressure == nil || !isfinite(data.pressure.doubleValue)) {
-                gPressureHasValue = NO;
-            } else {
-                double nowSec = NSProcessInfo.processInfo.systemUptime;
-                double age = nowSec - data.timestamp;
-                if (data.timestamp < gPressureSince || age < 0 || age > kPressureStaleSec) {
-                    gPressureHasValue = NO; // 開始前・未来・古い測定は捨てて次を待つ
-                } else {
-                    gPressureKpa = data.pressure.doubleValue;
-                    uint64_t now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
-                    uint64_t ageNs = (uint64_t)(age * (double)NSEC_PER_SEC);
-                    gPressureStampNs = now > ageNs ? now - ageNs : 0;
-                    gPressureHasValue = YES;
-                    gPressureFailure = 0;
-                }
-            }
-            os_unfair_lock_unlock(&gLock);
-            fandhe_rust_environment_sensors_changed();
-        }];
+        BeginAltimeter(); // 背景中なら前景復帰で再開される
     }
     return 0;
 }
@@ -238,6 +280,31 @@ static void ProximityTeardown(uint64_t gen) {
     UIDevice.currentDevice.proximityMonitoringEnabled = saved;
 }
 
+// main 限定。近接の変化 observer を張り直す（既存があれば外してから）。
+static void InstallProximityObserver(void) {
+    if (gProximityToken != nil) {
+        [NSNotificationCenter.defaultCenter removeObserver:gProximityToken];
+        gProximityToken = nil;
+    }
+    gProximityToken = [NSNotificationCenter.defaultCenter
+        addObserverForName:UIDeviceProximityStateDidChangeNotification
+                    object:nil
+                     queue:NSOperationQueue.mainQueue
+                usingBlock:^(NSNotification *__unused note) {
+                    BOOL near = UIDevice.currentDevice.proximityState;
+                    os_unfair_lock_lock(&gLock);
+                    BOOL accept = gProximityActive && !gBackground;
+                    if (accept) {
+                        gProximityNear = near;
+                        gProximityHasValue = YES;
+                    }
+                    os_unfair_lock_unlock(&gLock);
+                    if (accept) {
+                        fandhe_rust_environment_sensors_changed();
+                    }
+                }];
+}
+
 int32_t fandhe_ios_env_proximity_start(void) {
     if (![NSThread isMainThread]) {
         return 3;
@@ -261,27 +328,7 @@ int32_t fandhe_ios_env_proximity_start(void) {
             device.proximityMonitoringEnabled = saved;
             return 1;
         }
-        if (gProximityToken != nil) {
-            [NSNotificationCenter.defaultCenter removeObserver:gProximityToken];
-            gProximityToken = nil;
-        }
-        gProximityToken = [NSNotificationCenter.defaultCenter
-            addObserverForName:UIDeviceProximityStateDidChangeNotification
-                        object:nil
-                         queue:NSOperationQueue.mainQueue
-                    usingBlock:^(NSNotification *__unused note) {
-                        BOOL near = UIDevice.currentDevice.proximityState;
-                        os_unfair_lock_lock(&gLock);
-                        BOOL accept = gProximityActive && !gBackground;
-                        if (accept) {
-                            gProximityNear = near;
-                            gProximityHasValue = YES;
-                        }
-                        os_unfair_lock_unlock(&gLock);
-                        if (accept) {
-                            fandhe_rust_environment_sensors_changed();
-                        }
-                    }];
+        InstallProximityObserver();
         BOOL near = device.proximityState;
         os_unfair_lock_lock(&gLock);
         gProximityGen++;
