@@ -8,36 +8,55 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "`supportedInterfaceOrientations`（固定）、`UIWindowScene.interfaceOrientation`（取得）、`requestGeometryUpdate`（iOS 16+）",
+      "api": "`UIViewController.supportedInterfaceOrientations`（winit の VC へ差し込み）+ `setNeedsUpdateOfSupportedInterfaceOrientations` + `UIWindowScene.requestGeometryUpdate`（iOS 16+）。取得は `UIWindowScene.effectiveGeometry.interfaceOrientation`（`interfaceOrientation` は iOS 26 で非推奨）",
       "perm": "不要",
-      "url": "",
-      "note": "未実装。URL 未確認（iOS 調査で未取得）。iPad で全画面でないときは固定が効かない場合あり（要確認）"
+      "url": [
+        "https://developer.apple.com/documentation/uikit/uiviewcontroller/supportedinterfaceorientations",
+        "https://developer.apple.com/documentation/uikit/uiviewcontroller/setneedsupdateofsupportedinterfaceorientations()",
+        "https://developer.apple.com/documentation/uikit/uiwindowscene/requestgeometryupdate(_:errorhandler:)",
+        "https://developer.apple.com/documentation/uikit/uiwindowscene/effectivegeometry"
+      ],
+      "note": "未実装。iPad はマルチタスク対応アプリで `supportedInterfaceOrientations` が呼ばれない（公式）ため、固定は iPhone のみ。iPad は取得だけで、固定は `Unsupported`。Info.plist は変えず、実機で `requestGeometryUpdate` が失敗したときだけ `UISupportedInterfaceOrientations~iphone` を足す"
     },
     "android": {
       "status": "possible",
-      "api": "manifest `screenOrientation` / `Activity.setRequestedOrientation`、取得は `Display.getRotation`",
+      "api": "`Activity.setRequestedOrientation`（`SENSOR_PORTRAIT` / `SENSOR_LANDSCAPE` / `UNSPECIFIED`）、取得は `Display.getRotation` + `Configuration.orientation`",
       "perm": "不要",
-      "url": "",
-      "note": "未実装。URL 未確認（専用ページ未取得）。再生成を避けるには manifest の `configChanges` が要る"
+      "url": [
+        "https://developer.android.com/reference/android/app/Activity#setRequestedOrientation(int)",
+        "https://developer.android.com/reference/android/view/Display#getRotation()",
+        "https://developer.android.com/about/versions/16/behavior-changes-16"
+      ],
+      "note": "未実装。manifest の `configChanges` に orientation・screenSize が既にあり、回転・固定で Activity は再生成されない（manifest の変更なし）。targetSdk 36 以上の最小幅 600dp 以上の画面とメーカー設定では呼び出しが無視される。実際の向きの読み戻しで失敗として出す。Activity 再生成で固定は引き継がない"
     },
     "macos": {
       "status": "n-a",
       "note": "デスクトップのウィンドウには向きの固定概念がない"
     },
     "windows": {
-      "status": "no",
-      "note": "タブレット機の向きの取得は `DisplayInformation` でできるが、固定はできない（要確認）",
-      "api": "なし（`DisplayInformation` で向きは読めるが、アプリから固定する公開 API は確認できず）",
-      "perm": ""
+      "status": "possible",
+      "api": "`SetDisplayAutoRotationPreferences` / `GetDisplayAutoRotationPreferences`（Windows 8+、プロセス単位）",
+      "perm": "不要",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setdisplayautorotationpreferences",
+        "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdisplayautorotationpreferences",
+        "https://learn.microsoft.com/en-us/windows/win32/api/winuser/ne-winuser-orientation_preference"
+      ],
+      "note": "公開 API はあるが、効く条件（前面のときだけか、全画面が要るか、タブレットモードが要るか）が公式に未記載。回転センサ付きの端末で確認するまで保留。取得は `EnumDisplaySettings` の `dmDisplayOrientation` か winit のモニター情報が候補",
+      "deferred": "API はあるが効く条件が公式に未記載で、回転センサ付きの Windows 端末での確認が要るため保留。確認できれば着手できる"
     },
     "web": {
       "status": "possible",
       "api": "Screen Orientation API（`screen.orientation.type` / `angle`、`lock()`）",
-      "perm": "なし（`lock()` は全画面時のみなど条件あり、要確認）",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Screen_Orientation_API",
-      "safari": "取得は対応。`lock()` は非対応との認識（MDN の互換表では未確認）",
-      "note": "取得は 3 エンジン対応（MDN は 2023-03 から Widely available）。`lock()` は Safari 非対応との認識"
+      "perm": "なし。`lock()` は全画面の文書だけ（W3C の pre-lock condition）。hidden の文書では `SecurityError`",
+      "url": [
+        "https://developer.mozilla.org/en-US/docs/Web/API/Screen_Orientation_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/ScreenOrientation/lock",
+        "https://w3c.github.io/screen-orientation/"
+      ],
+      "safari": "取得・`change` は 16.4+。`lock()` は非対応（MDN の互換データ）",
+      "note": "取得・`change` は主要ブラウザ対応。固定は「固定」ボタンのクリックから同期に全画面へ入って `lock()` を呼び、解除は `unlock()` の後にこの画面が入れた全画面だけ抜ける。デスクトップ Chrome は `lock()` が常に `NotSupportedError`、Firefox は 144+、Safari は非対応で、固定だけ実行時に `Unsupported` とする（取得は動く一部対応）"
     }
   },
-  "note": "モバイルと Web が対象。macOS は n-a、Windows は向きの固定 API が無く no。tilt-motion（既存 id）は `screen.orientation.angle` を回転補正に使うが、向きの固定・通知そのものは本機能の範囲。今回の範囲: 現在の向き（縦・横）と角度を表示し、モバイルでは縦固定 / 横固定 / 解除をボタンで切り替える"
+  "note": "モバイルと Web が対象。macOS は n-a、Windows は公開 API（`SetDisplayAutoRotationPreferences`）はあるが効く条件が未記載のため保留（deferred）。tilt-motion（既存 id）は `screen.orientation.angle` を回転補正に使うが、向きの固定・通知そのものは本機能の範囲。今回の範囲: 現在の向き（縦・横）と角度の表示、変化への追従、縦固定 / 横固定 / 解除（上下・左右は OS 任せ）。成功は実際の向きの読み戻しで確定（期限 3 秒、単調時計）し、失敗したら固定の希望を直前の値へ戻す。守る範囲: 1 プロセス内で表示が実際の向きと固定に追従すること、固定できていない状態を固定中と見せないこと、失敗後に OS 側の希望を残さないこと。守らない範囲: 回転アニメーション中と次の読み取りまで（最大 1 秒 + 1 フレーム）の表示の遅れ、Activity 再生成での固定の引き継ぎ、背景遷移中の状態、分割画面・マルチウィンドウ・ピクチャ・イン・ピクチャ・外部ディスプレイで OS が固定を無視すること、端末の画面回転ロックとの関係、プロセス終了時の後片付け。いずれも表示が一時的に食い違うか OS が片付けるだけで、データの消失・資源の漏れ・嘘の成功には至らない"
 }
