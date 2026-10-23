@@ -210,6 +210,9 @@ int32_t fandhe_ios_activity_recognition_start(void) {
         os_unfair_lock_unlock(&gLock);
         if (m != nil) {
             Subscribe(m, q, epoch);
+        } else {
+            // 背景中の開始: 購読を省くので、ドライバの初回値期限を止める（復帰の resumed で引き直す）
+            fandhe_rust_activity_recognition_backgrounded();
         }
     }
     return 0;
