@@ -30,6 +30,11 @@ pub mod android;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_accessibility_prefs;
+/// Issue #677（親 #132）: Android 向け端末・アプリの真正性証明（現状は `Unsupported` を返すスタブ。#678 が
+/// `AppAttestHelper.java` と JNI で埋める）。`device/app_attest.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_app_attest;
 /// Issue #1362: Android 向けバッジ設定実装（`AppBadgeHelper` が無音の通知 1 件で代用）。`device/app_badge.rs` の android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -286,6 +291,9 @@ pub mod android_web_auth_session;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_wifi_info;
+/// Phase 11（親 #132、Issue #677）: 端末・アプリの真正性証明の effect ドライバ（Android は Key Attestation、
+/// iOS は deferred、他 OS は `UnsupportedAppAttest` 固定）。
+pub mod app_attest;
 /// Phase 11（親 #1141、Issue #1360）: アプリアイコンのバッジ（Windows はタスクバーのオーバーレイ数字）の effect ドライバ（macOS /
 /// Windows は同期、iOS / Android は pull 型 `bridge`、
 /// 他 OS は `UnsupportedAppBadge` 固定。Web は `fandhe-web-dom`）。
