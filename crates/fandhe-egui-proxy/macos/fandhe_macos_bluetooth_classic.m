@@ -16,7 +16,8 @@
 //   int32_t fandhe_macos_bt_classic_start(uint64_t request_id, uint64_t duration_ms)
 //     常に 0（受理）を返し、処理は main queue で非同期に進む。進行中の検索があれば完了コールバック
 //     なしで破棄して置き換える（古い request_id の結果は Rust 側が照合して捨てる）。
-//     duration_ms は Rust 側 `DISCOVERY_WINDOW_MS`（SSOT）で、窓の起点はこの呼び出し（単調時計）。
+//     duration_ms は Rust 側 `DISCOVERY_WINDOW_MS`（SSOT）で、窓の起点はこの呼び出しの入口
+//     （単調時計で絶対期限を確定し、main queue の遅延も窓に含める。期限切れなら検索せず 4 で確定）。
 //   void fandhe_macos_bt_classic_stop(void)
 //     終了時専用。main thread 上なら直接、それ以外なら main queue へ同期ディスパッチして検索を止め
 //     解放する。完了コールバックは呼ばない。呼び出し元は Rust 側のロックを握らないこと
@@ -46,6 +47,7 @@
 #import <IOBluetooth/IOBluetooth.h>
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
 
 #define FANDHE_BT_MAX 50
 #define FANDHE_BT_NAME_BYTES 256
@@ -251,18 +253,38 @@ static void FandheBtFinish(FandheBtSession *session, int32_t code) {
 // delegate はセッションが弱参照するため、セッションと同じ寿命で強参照を持つ。
 static FandheBtDelegate *g_bt_delegate = nil;
 
+// 単調時計（dispatch_time の DISPATCH_TIME_NOW と同じ uptime 基準）の現在値 [ns]。
+static uint64_t FandheBtNowNs(void) {
+    return clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+}
+
 int32_t fandhe_macos_bt_classic_start(uint64_t request_id, uint64_t duration_ms) {
+    // 期限は呼び出しの入口で確定する（main queue の遅延・事前判定の時間も窓に含める。
+    // device-bridge-contracts.md 3 節）。
+    const uint64_t deadline_ns = FandheBtNowNs() + duration_ms * NSEC_PER_MSEC;
     dispatch_async(dispatch_get_main_queue(), ^{
       @autoreleasepool {
           // 進行中の検索は完了コールバックなしで置き換える。
           FandheBtTeardown(g_bt_session);
           g_bt_delegate = nil;
 
+          // main queue の遅延で既に期限を過ぎていれば、検索せず失敗で確定する
+          // （遅れて集めた機器を成功として返さない）。
+          if (FandheBtNowNs() >= deadline_ns) {
+              fandhe_rust_bt_classic_finished(request_id, kFandheBtFailed);
+              return;
+          }
           int32_t pre = FandheBtPrecheck();
           if (pre != kFandheBtOk) {
               fandhe_rust_bt_classic_finished(request_id, pre);
               return;
           }
+          if (FandheBtNowNs() >= deadline_ns) {
+              fandhe_rust_bt_classic_finished(request_id, kFandheBtFailed);
+              return;
+          }
+          uint64_t remaining_ns = deadline_ns - FandheBtNowNs();
+          uint64_t remaining_ms = remaining_ns / NSEC_PER_MSEC;
           FandheBtSession *session = [[FandheBtSession alloc] init];
           session.requestId = request_id;
           FandheBtDelegate *delegate = [[FandheBtDelegate alloc] init];
@@ -272,7 +294,10 @@ int32_t fandhe_macos_bt_classic_start(uint64_t request_id, uint64_t duration_ms)
               fandhe_rust_bt_classic_finished(request_id, kFandheBtFailed);
               return;
           }
-          uint64_t seconds = (duration_ms + 999) / 1000;
+          uint64_t seconds = (remaining_ms + 999) / 1000;
+          if (seconds == 0) {
+              seconds = 1;
+          }
           inquiry.inquiryLength = (uint8_t)(seconds > 255 ? 255 : seconds);
           inquiry.updateNewDeviceNames = YES;
           session.inquiry = inquiry;
@@ -282,9 +307,11 @@ int32_t fandhe_macos_bt_classic_start(uint64_t request_id, uint64_t duration_ms)
               FandheBtFinish(session, kFandheBtFailed);
               return;
           }
-          // 窓を閉じるタイマー（DISPATCH_TIME_NOW は単調時計）。complete が先に来た場合は
-          // finished で無視される。
-          dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(duration_ms * NSEC_PER_MSEC)),
+          // 窓を閉じるタイマー。入口で確定した期限までの残り時間で設定する（単調時計）。
+          // complete が先に来た場合は finished で無視される。
+          uint64_t now_ns = FandheBtNowNs();
+          uint64_t timer_ns = deadline_ns > now_ns ? deadline_ns - now_ns : 0;
+          dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)timer_ns),
                          dispatch_get_main_queue(), ^{
                            @autoreleasepool {
                                FandheBtFinish(session, kFandheBtOk);

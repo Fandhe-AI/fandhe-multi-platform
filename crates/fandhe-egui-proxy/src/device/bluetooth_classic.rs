@@ -204,6 +204,8 @@ impl Observer {
 pub(crate) static OBSERVED: Observer = Observer::new();
 
 /// OS 側の完了通知。バッファを確定して [`bridge`] へ置く（古い要求は捨てる）。
+/// 呼び出し元（検索ドライバ・OS 実装）と同じ OS 集合にだけ置く（契約表 7 節）。
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
 pub(crate) fn finish(request_id: u64, result: Result<(), DeviceError>) {
     if let Some(r) = OBSERVED.finish(request_id, result) {
         bridge::deliver(request_id, r);
@@ -222,6 +224,7 @@ pub(crate) mod bridge {
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
     pub(crate) fn begin() -> u64 {
         SLOT.begin()
     }
