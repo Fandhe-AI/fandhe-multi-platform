@@ -7,7 +7,7 @@
   "bundle": "continuous-push",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "NearbyInteraction `NISession` + `NINearbyPeerConfiguration`（iOS 14+、能力判定は `NISession.deviceCapabilities` iOS 16+）。discovery token は MultipeerConnectivity で交換",
       "perm": "`NSNearbyInteractionUsageDescription`（初回の測距開始で許可ダイアログ）。token 交換に `NSBonjourServices`（`_fandhe-uwb._tcp` / `_fandhe-uwb._udp`）と `NSLocalNetworkUsageDescription`。entitlement は不要",
       "url": [
@@ -16,7 +16,10 @@
         "https://developer.apple.com/documentation/nearbyinteraction/discovering-peers-with-multipeer-connectivity",
         "https://developer.apple.com/documentation/bundleresources/information-property-list/nsnearbyinteractionusagedescription"
       ],
-      "note": "未実装。UWB チップ搭載機に限る（実行時に `deviceCapabilities` で判定し、機種の一覧は持たない）。前面の間だけ測距する（背景継続は Background Modes が要り範囲外）。背景へ回ったら中断で確定し、自動では再開しない"
+      "note": "実装済み（#654）: UWB 搭載機に限る（実行時に `deviceCapabilities` で判定し、機種の一覧は持たない）。非搭載（シミュレータ含む）は能力を `distance: No` で返し、開始は `NotCapable`。距離が取れないときは 0 m や前回値で埋めず「距離なし」にする。許可ダイアログ（Inactive）の間は期限に数えない。前面の間だけ測距し、背景へ回ったら資源を解放して中断で確定し、自動では再開しない（背景継続は Background Modes が要り範囲外）。権限拒否は `PermissionDenied`、Bonjour 未宣言などは `Failed`。守る範囲: 1 プロセス内の開始・停止・受信の順序（世代照合）、嘘の値を出さない、相手の token は長さ検査と `NIDiscoveryToken` 1 クラスだけの secure coding で解凍、停止・中断・失敗の全経路で MPC と `NISession` を解放。守らない範囲: 相手の認証、3 台以上での相手の選び方、方向の測距、精度と更新間隔、背景継続、複数プロセス。既知の天井: `timeout` 理由での再 run、許可拒否時の挙動、交換窓の長さは実機未確認で、問題が判明したらこの `done` を取り下げる。iOS 実機（UWB 搭載 2 台）での確認は #648",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#648）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_uwb_ranging.m + crates/fandhe-egui-proxy/src/device/ios_uwb_ranging.rs、Issue #654"
     },
     "android": {
       "status": "possible",
