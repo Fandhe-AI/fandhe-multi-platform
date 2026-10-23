@@ -237,6 +237,9 @@
 //!   `IOBluetoothDeviceInquiry` による Bluetooth Classic の機器一覧・検索）は **macOS 分岐のみ**で
 //!   feature `device` 有効時にコンパイルし IOBluetooth をリンクする（`src/device/macos_bluetooth_classic.rs`
 //!   から呼ばれる契約）。権限の判定に CoreBluetooth を使う。
+//! - `macos/fandhe_macos_serial_port.m`（Issue #670、IOKit によるシリアルポートの列挙と、POSIX 端末入出力による
+//!   固定設定での 1 行の往復）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルし IOKit をリンクする
+//!   （`src/device/macos_serial_port.rs` から呼ばれる契約）。
 //! - `macos/fandhe_macos_multi_display.m`（Issue #1341、`NSScreen.screens` による画面一覧の同期読み取り）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_multi_display.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -1476,6 +1479,17 @@ fn compile_macos_bluetooth_classic() {
     println!("cargo:rustc-link-lib=framework=CoreBluetooth");
 }
 
+/// `macos/fandhe_macos_serial_port.m` を `cc` でコンパイルし IOKit をリンクする（Issue #670）。
+/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_serial_port.rs` が使う）。
+fn compile_macos_serial_port() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_serial_port.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_serial_port.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_serial_port");
+    println!("cargo:rustc-link-lib=framework=IOKit");
+}
+
 /// `macos/fandhe_macos_compose_mail_sms.m` を `cc` でコンパイルする（Issue #1384）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_compose_mail_sms.rs` が使う）。AppKit は `build_macos` 側の
 /// 既存リンクで足りるため追加リンクは無い。
@@ -2090,6 +2104,8 @@ fn build_macos() {
     compile_macos_usb_device();
     // `macos/fandhe_macos_bluetooth_classic.m`（Issue #659）も macOS 専用。IOBluetooth を使う。
     compile_macos_bluetooth_classic();
+    // `macos/fandhe_macos_serial_port.m`（Issue #670）も macOS 専用。IOKit を使う。
+    compile_macos_serial_port();
     compile_macos_pen_stylus();
     // `macos/fandhe_macos_screen_wake_lock.m`（Issue #1278）も macOS 専用。IOKit を使う。
     compile_macos_screen_wake_lock();

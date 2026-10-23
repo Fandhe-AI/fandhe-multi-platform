@@ -920,6 +920,12 @@ pub mod macos_safe_area_insets;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code, unused_imports))]
 pub mod macos_screen_wake_lock;
+/// Issue #670: macOS 向けシリアルポート実装（`macos/fandhe_macos_serial_port.m` の IOKit 列挙と
+/// POSIX 端末入出力を包む C ABI ラッパー）。`device/serial_port.rs` の macOS 経路から呼ばれる。
+/// 生値の写像をホストでテストできるよう cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_serial_port;
 /// Issue #606: macOS 向け共有の受け取り実装（`macos/fandhe_macos_share_receive.m` のサービスメニュー受信を
 /// 呼ぶ C ABI ラッパー）。`device/share_receive.rs` の macOS 経路と `main.rs`（登録）から使われる。
 #[cfg(target_os = "macos")]
@@ -1074,6 +1080,9 @@ pub mod screen_wake_lock;
 /// Phase 11 の拡充ループ（親 #921、Issue #922・#924）: 資格情報保存の effect
 /// ドライバ（macOS/iOS/Android 実装、Windows は #923）。
 pub mod secure_credential;
+/// Phase 11 の拡充ループ（親 #131、Issue #670）: シリアルポートの一覧と 1 行の往復の effect ドライバ
+/// （macOS 実装。Windows は骨格のスタブで #671 が埋める。他 OS は `UnsupportedSerialPorts` 固定。Web は #672）。
+pub mod serial_port;
 /// Phase 11 の拡充ループ（親 #896、Issue #897/#898/#899）: 共有シートの effect ドライバ
 /// （macOS/iOS/Android/Windows 実装）。
 pub mod share;
@@ -1342,6 +1351,12 @@ pub mod windows_screen_wake_lock;
 /// `device/secure_credential.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_secure_credential;
+/// Issue #670: Windows 向けシリアルポートの骨格（`Unsupported` のスタブ。#671 が Win32 の COM ポート API で
+/// 埋める）。`device/serial_port.rs` の Windows 経路から呼ばれる。後続の子がホストテストを足すときに
+/// 本行の cfg を広げずに済むよう test でもコンパイルする。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_serial_port;
 /// Issue #898: Windows 向け共有シート実装（`IDataTransferManagerInterop` 経由の
 /// COM interop ラッパー）。`device/share.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -1429,6 +1444,7 @@ pub fn shutdown() {
     picture_in_picture::shutdown();
     media_cast::shutdown();
     web_auth_session::shutdown();
+    serial_port::shutdown();
 }
 
 fn to_note_storage_error(e: DeviceError) -> NoteStorageError {
