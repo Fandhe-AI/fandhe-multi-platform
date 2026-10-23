@@ -106,6 +106,8 @@ pub mod url_scheme_show;
 pub mod usb_device_show;
 /// Phase 11 の拡充ループ型サンプル「無操作時間の検知」（親 #125、Issue #631）。
 pub mod user_idle_show;
+/// Phase 11 の拡充ループ型サンプル「UWB による距離・方向」（親 #129、Issue #653）。
+pub mod uwb_ranging_show;
 
 /// Phase 11 の拡充ループ型サンプル「アクセシビリティ設定の追従」（親 #1132、Issue #1308）。
 pub mod accessibility_prefs_show;
