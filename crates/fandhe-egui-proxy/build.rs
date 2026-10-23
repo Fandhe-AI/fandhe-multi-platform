@@ -273,6 +273,9 @@
 //! - `ios/fandhe_ios_environment_sensors.m`（Issue #610、CoreMotion `CMAltimeter` の気圧と `UIDevice` の近接監視）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_environment_sensors.rs`
 //!   から呼ばれる契約）。CoreMotion・UIKit は既存のリンクで足りる。
+//! - `ios/fandhe_ios_activity_recognition.m`（Issue #614、CoreMotion の `CMMotionActivityManager` による
+//!   行動認識）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/ios_activity_recognition.rs` から呼ばれる契約）。CoreMotion は motion 用にリンク済み。
 //! - `ios/fandhe_ios_flashlight.m`（Issue #460、AVFoundation の torch によるライト）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_flashlight.rs`
 //!   から呼ばれる契約）。AVFoundation はカメラ用にリンク済みで追加リンクは無い。
@@ -551,6 +554,8 @@ fn main() {
     compile_ios_compass();
     // `ios/fandhe_ios_environment_sensors.m`（Issue #610）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_environment_sensors();
+    // `ios/fandhe_ios_activity_recognition.m`（Issue #614）。iOS 分岐のみ（macOS は対応表で n-a）。
+    compile_ios_activity_recognition();
     // `ios/fandhe_ios_flashlight.m`（Issue #460）。iOS 分岐のみ（macOS は対応表で n-a）。
     compile_ios_flashlight();
     // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
@@ -1697,6 +1702,17 @@ fn compile_ios_environment_sensors() {
         .file("ios/fandhe_ios_environment_sensors.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_environment_sensors");
+}
+
+/// `ios/fandhe_ios_activity_recognition.m` を `cc` でコンパイルする（Issue #614）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_activity_recognition.rs` が使う）。CoreMotion は motion 用に
+/// リンク済みで追加リンクは無い。
+fn compile_ios_activity_recognition() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_activity_recognition.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_activity_recognition.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_activity_recognition");
 }
 
 /// `ios/fandhe_ios_flashlight.m` を `cc` でコンパイルする（Issue #460）。**iOS 分岐のみ**から

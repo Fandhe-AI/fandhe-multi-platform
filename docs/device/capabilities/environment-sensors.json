@@ -21,7 +21,10 @@
       "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_environment_sensors.m + crates/fandhe-egui-proxy/src/device/ios_environment_sensors.rs + crates/fandhe-egui-proxy/src/device/environment_sensors.rs + crates/fandhe-core/src/screens/environment_sensors_show.rs + crates/fandhe-device/src/environment_sensors.rs、Issue #610"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#602）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_environment_sensors.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/EnvironmentSensorsHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-egui-proxy/src/device/environment_sensors.rs + crates/fandhe-core/src/screens/environment_sensors_show.rs + crates/fandhe-device/src/environment_sensors.rs、Issue #611",
       "api": "`SensorManager` の `TYPE_PRESSURE` / `TYPE_LIGHT` / `TYPE_PROXIMITY`",
       "perm": "不要（`HIGH_SAMPLING_RATE_SENSORS` は 200 Hz を超える motion / position センサーにだけ要る）",
       "url": [
@@ -29,7 +32,7 @@
         "https://developer.android.com/develop/sensors-and-location/sensors/sensors_position",
         "https://source.android.com/docs/core/interaction/sensors/sensor-types"
       ],
-      "note": "未実装。気圧・照度・近接の 3 種で done にする。報告モードは気圧が continuous、照度・近接が on-change（AOSP の sensor-types）。on-change は値が変わらない限り event が出ない。近接は 2 値しか返さない機種がある。Android 9 以降はバックグラウンドで event が届かない。画面下の近接センサーは点滅しうる。センサーの搭載は機種依存で、無い機種は「取得できない」を返す。温度・湿度（`TYPE_AMBIENT_TEMPERATURE` / `TYPE_RELATIVE_HUMIDITY`）は範囲外"
+      "note": "気圧・照度・近接の 3 種とも実装済み（実機確認は #602）。報告モードは気圧が continuous、照度・近接が on-change（AOSP の sensor-types）。on-change は値が変わらない限り event が出ないが、有効化時に初期値が 1 件届く想定（実機で確認する）。権限は不要。センサー非搭載は「この端末にはセンサーがありません」で、OS 非対応とは区別する。背景遷移で解除して値を捨て、復帰で再登録する。Activity 再生成後は購読喪失として失敗表示にし、利用者の再開始が必要。守る範囲: 嘘の値（0・前回値・範囲外・2 秒超の気圧）を出さない、種類ごとに二重登録しない、旧世代の値を捨てる。守らない範囲: 絶対精度、on-change の次の event までの遅れ、近接の距離、2 値しか返さない機種の挙動差、画面下近接センサーの点滅、背景から戻った直後の値なし、複数プロセス。温度・湿度（`TYPE_AMBIENT_TEMPERATURE` / `TYPE_RELATIVE_HUMIDITY`）は範囲外"
     },
     "macos": {
       "status": "no",
@@ -39,7 +42,7 @@
       "note": "Mac の環境光センサー等の公開 API は確認できなかった（要確認）。URL 未確認"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "WinRT `Windows.Devices.Sensors` の `Barometer`（`StationPressureInHectopascals`）・`LightSensor`（`IlluminanceInLux`）・`ProximitySensor`（`GetDefault` は無く、`GetDeviceSelector` + `FromId` で取り、`IsDetected` を読む）",
       "perm": "要確認（パッケージ無しの exe で読めるかは実機待ち。宣言する capability は無い）",
       "url": [
@@ -47,7 +50,10 @@
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.lightsensor",
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.proximitysensor"
       ],
-      "note": "搭載機種のみ。非搭載なら `GetDefault` が null。近接は列挙（`FindAllAsync`）が非同期で、UI スレッドを止めないよう作業スレッドで行う。気圧・照度・近接の 3 種で done にする"
+      "note": "搭載機種のみ。非搭載なら `GetDefault` が null。近接は列挙（`FindAllAsync`）が非同期で、UI スレッドを止めないよう作業スレッドで行う。気圧・照度・近接の 3 種で done にする。実装済み（#612）: 気圧（`Barometer`）・照度（`LightSensor`）は UI スレッドで `GetDefault` し、`ReportInterval` を `max(最小値, 100 ms)` にして最新値を同期 pull する（設定失敗時は 0 へ戻して保持しない）。近接は専用ワーカー 1 本が `GetDeviceSelector` → `FindAllAsyncAqsFilter` → `FromId` を 1 回だけ行い、世代照合で停止後の結果を捨てる（列挙 0 件・null は `NotPresent`、`E_ACCESSDENIED` は `PermissionDenied`、非同期エラーは元の HRESULT を保つ）。気圧は `Timestamp` が変わった読みを単調時計で受信記録し、2 秒超と開始直後の最初の読みは値なしにする。最小化は専用ウォッチャーが `IsIconic` を 200 ms 間隔で見て、背景遷移・復帰として driver に伝え、気圧の受信記録を捨てる。守る範囲: 近接の開始・停止・列挙結果の順序（1 本のワーカーと 1 本の `Mutex`）、嘘の値（0・前回値・範囲外・古い気圧）を出さない、停止と失敗で保持を捨てる。守らない範囲: 絶対精度、近接の距離、OS 間で値がそろうこと、最小化中の表示、複数プロセス。既知の天井: パッケージ無しの素の exe での動作・拒否時の HRESULT・近接を `ReadingChanged` なしで pull して値が出るか・気圧が一定の機種で新しい読みが出るか・最小化からの復元での再描画は実機未確認で、届かないと判明したらこの `done` を取り下げる",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#602）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_environment_sensors.rs + crates/fandhe-egui-proxy/src/device/environment_sensors.rs + crates/fandhe-core/src/screens/environment_sensors_show.rs + crates/fandhe-device/src/environment_sensors.rs、Issue #612"
     },
     "web": {
       "status": "no",

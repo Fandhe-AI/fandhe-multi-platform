@@ -7,15 +7,18 @@
   "bundle": "continuous-push",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "CoreMotion `CMMotionActivityManager`（歩行・走行・自動車・静止などの分類）",
+      "status": "done",
+      "api": "CoreMotion `CMMotionActivityManager`（`startActivityUpdatesToQueue`・拒否コードを拾う `queryActivityStartingFromDate`・`authorizationStatus`）",
       "perm": "`NSMotionUsageDescription`（pedometer で宣言済み）。初回利用時に「モーションとフィットネス」の許可ダイアログが出る。拒否は `authorizationStatus` で読む",
       "url": [
         "https://developer.apple.com/documentation/coremotion/cmmotionactivitymanager",
         "https://developer.apple.com/documentation/coremotion/cmmotionactivity",
         "https://developer.apple.com/documentation/bundleresources/information-property-list/nsmotionusagedescription"
       ],
-      "note": "未実装。既存 pedometer の `CMPedometer` とは別 API。ライブ更新は開始直後に現在の行動が 1 件届き、以後は状態が変わるたびに届く。アプリが suspend 中は届かない。分類のフラグは排他でなく、同時に立つことがある（信号待ちの車内は静止と乗り物）。全フラグが NO のときは「判定なし」にまとめる。過去 7 日の問い合わせも可能だが今回の範囲外。シミュレータでは `isActivityAvailable` が NO で非対応になる"
+      "note": "実装済み（#614）: 非対応（シミュレータ含む。`isActivityAvailable` が NO）は `Unsupported`。`authorizationStatus` の拒否と `CMErrorNotAuthorized` / `CMErrorMotionActivityNotAuthorized` の 2 種は `PermissionDenied`、許可ダイアログの応答待ちは `AwaitingPermission`（期限に数えない）、他のエラーは `Failed`。判定なし（全フラグ NO）と nil は静止にしない。分類フラグは排他でなく同時に立つため `classify_flags` で種別にまとめる。背景遷移で保持値を捨てて購読を解除し、前景復帰で張り直す（suspend 中は届かない）。開始から 5 秒値が届かなければ `NoReading`。守る範囲: 1 プロセス内の開始・停止・受信の順序（世代照合）、嘘の値を出さない、二重に購読しない、停止と背景で購読を解除する。守らない範囲: OS 間の分類の一致、判定の遅れ、過去の履歴、背景中の受信、複数プロセス。既知の天井: 許可後 5 秒以内に最初の 1 件が届くかと拒否判定用 query の挙動は実機未確認で、届かないと判明したらこの `done` を取り下げる。iOS 実機での確認は #603",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#603）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_activity_recognition.m + crates/fandhe-egui-proxy/src/device/ios_activity_recognition.rs、Issue #614"
     },
     "android": {
       "status": "possible",
