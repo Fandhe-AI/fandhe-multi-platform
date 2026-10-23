@@ -1352,8 +1352,8 @@ pub mod windows_web_auth_session;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_wifi_info;
-/// Issue #636: Windows 向けウィンドウ管理の骨格（現状は `UnsupportedWindowManager` を返す薄いスタブ、
-/// 実体は #637）。`device/window_management.rs` の Windows 経路から呼ばれる。
+/// Issue #637: Windows 向けウィンドウ管理の読み取り（`NativeReads` の Windows 実装。最前面か・今いる画面の
+/// 作業領域を Win32 で読む）。`device/window_management.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_window_management;
