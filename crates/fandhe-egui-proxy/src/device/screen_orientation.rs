@@ -155,6 +155,18 @@ fn failed_not_satisfied(target: Option<Orientation>) -> OrientationFailure {
     OrientationFailure::Failed(reason.to_string())
 }
 
+/// 固定の希望を `prev` へ戻す依頼を出し、読み戻しで OS 側の希望が `prev` になったことまで確認する。
+/// 依頼の `Ok` は受理しただけなので成功とみなさない。読み取り失敗・不一致は未復元（`false`）。
+fn restore_lock(
+    imp: &dyn ScreenOrientation,
+    prev: Option<Orientation>,
+) -> (bool, Result<Reading, OrientationFailure>) {
+    let requested = imp.request_lock(prev).is_ok();
+    let reading = read_core(imp);
+    let confirmed = requested && reading.as_ref().is_ok_and(|r| r.lock == prev.map(to_core));
+    (confirmed, reading)
+}
+
 /// 1 フレーム分の処理（テストから実装・時刻・画面サイズを差し込めるよう切り出す）。
 fn drive(
     state: &ScreenOrientationShowState,
@@ -166,10 +178,10 @@ fn drive(
 ) {
     // 未復元の固定があれば、新しい要求より先に戻しを再試行する（成功するまで保持する）。
     if let Some(prev) = d.pending_restore {
-        if imp.request_lock(prev).is_ok() {
+        let (confirmed, reading) = restore_lock(imp, prev);
+        if confirmed {
             d.pending_restore = None;
-            // 復元できたので「元に戻せません」の表示を消し、読み戻した値を画面へ反映する。
-            let reading = read_core(imp);
+            // 読み戻しで復元を確認できたので「元に戻せません」の表示を消し、読み戻した値を反映する。
             let _ = sender.send(Box::new(move |s: &mut ScreenOrientationShowState| {
                 clear_failure_reason(s, RESTORE_FAILED_REASON);
                 if let Ok(r) = reading {
@@ -311,7 +323,7 @@ fn watch_step(imp: &dyn ScreenOrientation, now: Instant, w: &Watch) -> Option<Op
     let core_target = w.target.map(to_core);
     if now.saturating_duration_since(w.started) >= CONFIRM_TIMEOUT {
         // 結果を届ける前に、固定の希望を直前の値へ戻す。失敗は握りつぶさず利用者へ伝える。
-        let restored = imp.request_lock(w.previous).is_ok();
+        let (restored, reading) = restore_lock(imp, w.previous);
         SLOT.deliver(
             w.request_id,
             Outcome {
@@ -321,7 +333,7 @@ fn watch_step(imp: &dyn ScreenOrientation, now: Instant, w: &Watch) -> Option<Op
                 } else {
                     failed_restore()
                 }),
-                reading: read_core(imp),
+                reading,
             },
         );
         return (!restored).then_some(w.previous);
@@ -445,6 +457,8 @@ mod tests {
         can_lock: bool,
         fail_request: Mutex<Option<DeviceError>>,
         fail_read: Mutex<bool>,
+        /// 真なら解除（`None`）の依頼を `Ok` で受けるが、OS の希望は変えない（受理しただけの再現）。
+        ignore_unlock: Mutex<bool>,
         calls: Mutex<Vec<Option<Orientation>>>,
         reads: Mutex<usize>,
     }
@@ -458,6 +472,7 @@ mod tests {
                 can_lock: true,
                 fail_request: Mutex::new(None),
                 fail_read: Mutex::new(false),
+                ignore_unlock: Mutex::new(false),
                 calls: Mutex::new(Vec::new()),
                 reads: Mutex::new(0),
             }
@@ -484,6 +499,9 @@ mod tests {
             self.calls.lock().unwrap().push(target);
             if let Some(e) = self.fail_request.lock().unwrap().take() {
                 return Err(e);
+            }
+            if target.is_none() && *self.ignore_unlock.lock().unwrap() {
+                return Ok(());
             }
             *self.lock.lock().unwrap() = target;
             if self.follow {
@@ -617,6 +635,40 @@ mod tests {
         // 復元に成功したら、画面の「元に戻せません」表示も消える。
         apply_all(&rx, &mut s);
         assert!(!error_text(&s).contains(RESTORE_FAILED_REASON));
+    }
+
+    #[test]
+    fn restore_ok_but_not_read_back_stays_pending() {
+        let _g = guard();
+        let (tx, rx) = sender_with_channel();
+        let mut fake = Fake::new();
+        fake.follow = false;
+        let mut d = Driver::default();
+        let mut s = ready(&tx, &rx, &fake, &mut d);
+        let t0 = Instant::now();
+        lock_landscape(&mut s);
+        drive(&s, &tx, &fake, t0, VP, &mut d);
+        apply_all(&rx, &mut s);
+        // 復元依頼は Ok を返すが、読み戻すと元の固定が残っている。
+        *fake.ignore_unlock.lock().unwrap() = true;
+        drive(&s, &tx, &fake, t0 + CONFIRM_TIMEOUT, VP, &mut d);
+        apply_all(&rx, &mut s);
+        assert!(error_text(&s).contains(RESTORE_FAILED_REASON));
+        assert_eq!(d.pending_restore, Some(None), "初回の復元でも保持する");
+        // 再試行も Ok だが読み戻しで確認できない間は保持し、表示も消さない。
+        drive(&s, &tx, &fake, t0 + CONFIRM_TIMEOUT, VP, &mut d);
+        apply_all(&rx, &mut s);
+        assert_eq!(d.pending_restore, Some(None));
+        assert!(error_text(&s).contains(RESTORE_FAILED_REASON));
+        // 読み戻しが失敗しても握りつぶさず保持する。
+        *fake.ignore_unlock.lock().unwrap() = false;
+        *fake.fail_read.lock().unwrap() = true;
+        drive(&s, &tx, &fake, t0 + CONFIRM_TIMEOUT, VP, &mut d);
+        assert_eq!(d.pending_restore, Some(None));
+        // 読み戻しで復元を確認できたら解く。
+        *fake.fail_read.lock().unwrap() = false;
+        drive(&s, &tx, &fake, t0 + CONFIRM_TIMEOUT, VP, &mut d);
+        assert_eq!(d.pending_restore, None);
     }
 
     #[test]
