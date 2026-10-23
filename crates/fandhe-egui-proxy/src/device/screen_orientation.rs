@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use fandhe_core::screens::screen_orientation_show::{
-    apply_read, clear_failure_reason, finish, lock_satisfied, mark_applying, take_request,
+    apply_read, finish, lock_satisfied, mark_applying, replace_failure_reason, take_request,
     wants_read, Orientation as CoreOrientation, OrientationFailure, Reading,
     ScreenOrientationShowState, NOT_LOCKED_REASON, NOT_UNLOCKED_REASON,
 };
@@ -130,6 +130,8 @@ struct Driver {
     /// 期限切れの復元（`request_lock`）に失敗し、OS に希望が残っている固定の戻し先。
     /// 成功するまで毎フレーム再試行し、残っている間は新しい固定要求を受け付けない。
     pending_restore: Option<Option<Orientation>>,
+    /// `pending_restore` の原因になった固定要求の目標。復元に成功したら、この要求の失敗表示へ戻す。
+    restore_origin: Option<Orientation>,
 }
 
 // ponytail: 1 プロセス 1 ウィンドウ前提の static。複数 Context を扱うなら `ctx.data` へ移す。
@@ -139,6 +141,7 @@ static DRIVER: Mutex<Driver> = Mutex::new(Driver {
     last_read: None,
     last_viewport: None,
     pending_restore: None,
+    restore_origin: None,
 });
 
 /// 復元に失敗して OS の希望状態が残っていることを伝える失敗（利用者へ見せる）。
@@ -181,9 +184,16 @@ fn drive(
         let (confirmed, reading) = restore_lock(imp, prev);
         if confirmed {
             d.pending_restore = None;
-            // 読み戻しで復元を確認できたので「元に戻せません」の表示を消し、読み戻した値を反映する。
+            let origin = d.restore_origin.take();
+            // 読み戻しで復元を確認できたので「元に戻せません」の表示は外す。ただし復元成功は固定要求の
+            // 成功ではないため、エラーは消さず元の要求の失敗表示（未達）へ戻し、読み戻した値を反映する。
+            let reason = if origin.is_some() {
+                NOT_LOCKED_REASON
+            } else {
+                NOT_UNLOCKED_REASON
+            };
             let _ = sender.send(Box::new(move |s: &mut ScreenOrientationShowState| {
-                clear_failure_reason(s, RESTORE_FAILED_REASON);
+                replace_failure_reason(s, RESTORE_FAILED_REASON, reason);
                 if let Ok(r) = reading {
                     apply_read(s, Ok(r));
                 }
@@ -222,6 +232,7 @@ fn drive(
         } else {
             if let Some(unrestored) = watch_step(imp, now, w) {
                 d.pending_restore = Some(unrestored);
+                d.restore_origin = w.target;
             }
             if SLOT.snapshot().is_some_and(|(_, o)| o.is_some()) {
                 d.watch = None;
@@ -635,6 +646,30 @@ mod tests {
         // 復元に成功したら、画面の「元に戻せません」表示も消える。
         apply_all(&rx, &mut s);
         assert!(!error_text(&s).contains(RESTORE_FAILED_REASON));
+    }
+
+    #[test]
+    fn restore_success_after_retry_keeps_original_failure() {
+        let _g = guard();
+        let (tx, rx) = sender_with_channel();
+        let mut fake = Fake::new();
+        fake.follow = false;
+        let mut d = Driver::default();
+        let mut s = ready(&tx, &rx, &fake, &mut d);
+        let t0 = Instant::now();
+        lock_landscape(&mut s);
+        drive(&s, &tx, &fake, t0, VP, &mut d);
+        apply_all(&rx, &mut s);
+        *fake.fail_request.lock().unwrap() = Some(DeviceError::Internal("x"));
+        drive(&s, &tx, &fake, t0 + CONFIRM_TIMEOUT, VP, &mut d);
+        apply_all(&rx, &mut s);
+        assert!(error_text(&s).contains(RESTORE_FAILED_REASON));
+        // 再試行で復元に成功しても、固定要求の失敗は消さず元の未達の表示へ戻す。
+        drive(&s, &tx, &fake, t0 + CONFIRM_TIMEOUT, VP, &mut d);
+        apply_all(&rx, &mut s);
+        assert_eq!(d.pending_restore, None);
+        assert!(!error_text(&s).contains(RESTORE_FAILED_REASON));
+        assert!(error_text(&s).contains(NOT_LOCKED_REASON));
     }
 
     #[test]

@@ -315,6 +315,14 @@ pub fn clear_failure_reason(state: &mut ScreenOrientationShowState, reason: &str
     }
 }
 
+/// 表示中の失敗が `from` ならば `to` へ差し替える（別の失敗は触らない）。
+/// 復元成功は固定要求の成功ではないので、復元失敗の表示を元の失敗へ戻す用途に使う。
+pub fn replace_failure_reason(state: &mut ScreenOrientationShowState, from: &str, to: &str) {
+    if state.error == format!("{FAILED_PREFIX}{from}") {
+        state.error = format!("{FAILED_PREFIX}{to}");
+    }
+}
+
 /// driver が OS を読み直すべきか。非対応・失敗では偽（失敗状態で再描画し続けない）。
 pub fn wants_read(state: &ScreenOrientationShowState) -> bool {
     matches!(state.read, ReadState::Unread | ReadState::Read(_))
