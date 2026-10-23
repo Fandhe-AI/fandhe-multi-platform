@@ -150,6 +150,7 @@ use fandhe_core::screens::screen_capture::{
 use fandhe_core::screens::settings::{
     get_notifications_on, set_notifications_on, settings_screen, SettingsState,
 };
+use fandhe_core::screens::share_receive_show::{share_receive_show_screen, ShareReceiveShowState};
 use fandhe_core::screens::share_text::{current_screen as current_share_screen, ShareTextState};
 use fandhe_core::screens::speech_recognize::{
     current_screen as current_speech_recognize_screen, SpeechRecognizeState,
@@ -1118,6 +1119,20 @@ pub fn mount_haptics_tap_screen(root_id: &str) -> Result<(), JsValue> {
         current_haptics_tap_screen(&initial_state),
         initial_state,
         super::haptics::haptics_tap_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「共有の受け取り」（親 #122、Issue #608）をマウントする
+/// 検証専用エントリポイント。受信は effect が読み込み時に 1 回クエリから行う。Web には登録・解除の
+/// 操作が無いためボタンは足さない。
+#[wasm_bindgen]
+pub fn mount_share_receive_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    super::mount::mount_with_effect(
+        root,
+        share_receive_show_screen(),
+        ShareReceiveShowState::default(),
+        super::share_receive::share_receive_show_effect,
     )
 }
 
