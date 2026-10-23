@@ -18,11 +18,14 @@
       "deferred": "App Group が要り、有料の Apple Developer Program の登録が前提。登録が期限切れのため保留。ベンダーの個別審査は不要で、登録を再開すれば着手できる"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
+      "detail": "できている（Android 実機確認待ち）",
       "api": "`ACTION_SEND` + `mimeType=\"text/plain\"` の intent-filter。`EXTRA_TEXT` のみ読む（`EXTRA_STREAM` は読まない）",
       "perm": "なし（Manifest への intent-filter 追加のみ）",
       "url": "https://developer.android.com/training/sharing/receive",
-      "note": "未実装。受信は url-scheme と同じ `onCreate` / `onNewIntent` 経路を共有する。`ACTION_SEND_MULTIPLE`・画像・ファイルは扱わない（file-association が保留中の理由と同じ問題を持ち込まない）"
+      "note": "実装済み（#607）。url-scheme と同じ `onCreate`（`savedInstanceState` なし・Recents 起動でないときだけ）/ `onNewIntent` 経路で受ける。読むのは `EXTRA_TEXT` のみ。`EXTRA_STREAM` 付き・`ACTION_SEND_MULTIPLE`・`text/plain` 以外は拒否として件数だけ数える。守る範囲は 1 プロセス内の受信順・不正入力（空・16 KiB 超・制御文字・不正な UTF-8）を表示しないこと・コールドスタート分を落とさないこと・嘘の成功の禁止・本文をログに出さないこと・回転や Recents 復帰で二重に受けないこと、守らない範囲はプロセス死亡後の再表示・ポーリング間隔内に連続して届いた分は最後の 1 件だけ表示・起動中の共有で上に重なった外部 Activity が閉じられること。実機確認は #601",
+      "implStatus": "Android 実機確認待ち（#601）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_share_receive.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/ShareReceiveHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-egui-proxy/src/device/share_receive.rs + crates/fandhe-core/src/screens/share_receive_show.rs + crates/fandhe-device/src/share_receive.rs、Issue #607"
     },
     "macos": {
       "status": "done",

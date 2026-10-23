@@ -246,6 +246,18 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="fandhe" />
             </intent-filter>
+
+            <!-- Issue #607: 共有の受け取り。`ACTION_SEND` + `text/plain` の 1 つだけ（受ける範囲の
+                 最小化）。`ACTION_SEND_MULTIPLE`・画像等は宣言せず共有シートに出さない。明示
+                 インテントでは迂回されるため、Java 側 `ShareReceiveHelper` と Rust 側で再検査する。
+                 launchMode=singleTask のため、起動中の共有でも上の fandhe scheme と同じ影響
+                 （自タスクで上に重なった外部 Activity が閉じられる）がある。
+                 権限・queries は足さない。切り離し時に削除する。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <!-- Issue #1337: 画面録画の MediaProjection を持つ。自アプリの明示 Intent だけで起動する
