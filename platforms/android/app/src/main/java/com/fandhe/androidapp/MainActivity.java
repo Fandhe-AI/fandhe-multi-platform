@@ -16,7 +16,8 @@
 // Phase 11（Issue #890）の位置情報（`LocationManager`）中継、
 // Phase 11（Issue #935）のゲームコントローラ（`InputManager`/`dispatchKeyEvent`/
 // `dispatchGenericMotionEvent`）中継、Phase 11（Issue #1218）のカスタム URL scheme
-// （`fandhe://`、`onCreate` の `getIntent()` / `onNewIntent`）受信中継
+// （`fandhe://`、`onCreate` の `getIntent()` / `onNewIntent`）受信中継、
+// Phase 11（Issue #607）の共有テキスト受信（`ShareReceiveHelper.deliver` を同じ経路から呼ぶ）
 // （いずれも feature `device` 切り離し時に削除）。
 // window insets 中継の経緯（Issue #579: `AndroidApp::content_rect()` は GameActivity
 // 経路（android-activity 0.6.1、Pixel 10a / Android 16 実機）で insets を反映せず常に
@@ -2015,6 +2016,7 @@ public class MainActivity extends GameActivity {
         }
         setIntent(intent);
         deliverUrlIntent(intent);
+        ShareReceiveHelper.deliver(intent);
     }
 
     /**
@@ -2055,7 +2057,7 @@ public class MainActivity extends GameActivity {
         installAccessibilityOffGuard();
         fullscreenHelper.register();
 
-        // コールドスタートの URL を届ける。二重配送を避けるため、再生成（savedInstanceState
+        // コールドスタートの URL・共有テキストを届ける。二重配送を避けるため、再生成（savedInstanceState
         // あり）と履歴（Recents）からの再起動（元のインテントが再送される）では届けない。
         // 同一プロセス内の再生成は Rust 側 static の受信箱が保持しているので表示は保たれる。
         // 守らない範囲: プロセス死亡後の復元では前回の URL を再表示しない（新プロセスの
@@ -2063,6 +2065,7 @@ public class MainActivity extends GameActivity {
         if (savedInstanceState == null
                 && (getIntent().getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) {
             deliverUrlIntent(getIntent());
+            ShareReceiveHelper.deliver(getIntent());
         }
 
         // `onCreate` のたびに作り直す（`biometricPrompt` doc 参照）。
