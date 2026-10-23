@@ -6,7 +6,7 @@
 // feature `device` 有効時のみ `cc` コンパイルする（CoreMotion・UIKit は他の .m 用にリンク済み）。
 //
 // 契約（気圧）:
-//   fandhe_ios_env_pressure_start() -> int32_t   0 = 成功（冪等）、1 = 端末非搭載（シミュレータ）、
+//   fandhe_ios_env_pressure_start() -> int32_t   0 = 成功（冪等。main 以外なら購読の開始は main へ非同期）、1 = 端末非搭載（シミュレータ）、
 //                                                2 = 権限拒否（Denied / Restricted）、3 = 失敗
 //   fandhe_ios_env_pressure_read(double *kpa, double *age_ms) -> int32_t
 //                                                0 = 値なし、1 = 値あり（out へ書く）、2 = 権限拒否、3 = 失敗
@@ -208,6 +208,26 @@ static void BeginAltimeter(void) {
     }];
 }
 
+// main 限定。ライフサイクル observer を登録し、背景中なら購読を省き、前景なら購読を開始する。
+// 送る間に停止されていれば（gPressureActive が NO）何もしない。
+static void FinishPressureStart(void) {
+    RegisterLifecycleObservers();
+    BOOL background = UIApplication.sharedApplication.applicationState == UIApplicationStateBackground;
+    os_unfair_lock_lock(&gLock);
+    if (!gPressureActive) {
+        os_unfair_lock_unlock(&gLock);
+        return;
+    }
+    gBackground = background; // 背景中の開始は通知が来ないため、ここで取り込む
+    os_unfair_lock_unlock(&gLock);
+    if (background) {
+        // 背景中の開始: 購読を省くので、ドライバの初回値期限を止める（復帰の resumed で引き直す）
+        fandhe_rust_environment_sensors_backgrounded();
+    } else {
+        BeginAltimeter();
+    }
+}
+
 int32_t fandhe_ios_env_pressure_start(void) {
     @autoreleasepool {
         if (![CMAltimeter isRelativeAltitudeAvailable]) {
@@ -217,16 +237,6 @@ int32_t fandhe_ios_env_pressure_start(void) {
         if (auth == CMAuthorizationStatusDenied || auth == CMAuthorizationStatusRestricted) {
             return 2;
         }
-        // UIApplication は main でのみ触る。ロックの外で現在の状態を読む。
-        __block BOOL background = NO;
-        if ([NSThread isMainThread]) {
-            RegisterLifecycleObservers();
-            background = UIApplication.sharedApplication.applicationState == UIApplicationStateBackground;
-        } else {
-            dispatch_sync(dispatch_get_main_queue(), ^{
-                background = UIApplication.sharedApplication.applicationState == UIApplicationStateBackground;
-            });
-        }
         os_unfair_lock_lock(&gLock);
         if (gPressureActive) {
             os_unfair_lock_unlock(&gLock);
@@ -235,13 +245,15 @@ int32_t fandhe_ios_env_pressure_start(void) {
         gPressureActive = YES;
         gPressureHasValue = NO;
         gPressureFailure = 0;
-        gBackground = background; // 背景中の開始は通知が来ないため、ここで取り込む
         os_unfair_lock_unlock(&gLock);
-        if (background) {
-            // 背景中の開始: 購読を省くので、ドライバの初回値期限を止める（復帰の resumed で引き直す）
-            fandhe_rust_environment_sensors_backgrounded();
+        // UIApplication とライフサイクル登録は main でのみ触る。main 以外からは dispatch_async で送る
+        // （dispatch_sync は main がこのワーカーの完了を待つと相互待ちになる。契約表 11）。
+        if ([NSThread isMainThread]) {
+            FinishPressureStart();
         } else {
-            BeginAltimeter();
+            dispatch_async(dispatch_get_main_queue(), ^{
+                FinishPressureStart();
+            });
         }
     }
     return 0;
