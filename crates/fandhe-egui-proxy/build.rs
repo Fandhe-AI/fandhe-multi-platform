@@ -265,6 +265,10 @@
 //!   `prefersStatusBarHidden` を差し込む全画面表示）は **iOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルする（`src/device/ios_fullscreen_immersive.rs` から呼ばれる契約）。UIKit と objc
 //!   ランタイムは既存のリンクで足りる。
+//! - `ios/fandhe_ios_screen_orientation.m`（Issue #656、winit の ViewController へ
+//!   `supportedInterfaceOrientations` を差し込む画面向きの取得・固定）は **iOS 分岐のみ**で
+//!   feature `device` 有効時にコンパイルする（`src/device/ios_screen_orientation.rs` から呼ばれる契約）。
+//!   UIKit と objc ランタイムは既存のリンクで足りる。
 //! - `ios/fandhe_ios_power_state.m`（Issue #1275、`UIDevice` と `NSProcessInfo` による電源状態）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_power_state.rs`
 //!   から呼ばれる契約）。UIKit は既存のリンクで足りる。
@@ -555,6 +559,8 @@ fn main() {
     compile_ios_screen_brightness();
     // `ios/fandhe_ios_fullscreen_immersive.m`（Issue #1313）。iOS 分岐のみ。
     compile_ios_fullscreen_immersive();
+    // `ios/fandhe_ios_screen_orientation.m`（Issue #656）。iOS 分岐のみ。
+    compile_ios_screen_orientation();
     // `ios/fandhe_ios_power_state.m`（Issue #1275）。iOS 分岐のみ。
     compile_ios_power_state();
     // `ios/fandhe_ios_compose_mail_sms.m`（Issue #1385）。iOS 分岐のみ。
@@ -1668,6 +1674,18 @@ fn compile_ios_fullscreen_immersive() {
         .include("ios")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_fullscreen_immersive");
+}
+
+/// `ios/fandhe_ios_screen_orientation.m` を `cc` でコンパイルする（Issue #656）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_screen_orientation.rs` が使う）。`fandhe_ios_common.h` を使う。
+fn compile_ios_screen_orientation() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_screen_orientation.m");
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_common.h");
+    cc::Build::new()
+        .file("ios/fandhe_ios_screen_orientation.m")
+        .include("ios")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_screen_orientation");
 }
 
 /// `ios/fandhe_ios_compose_mail_sms.m` を `cc` でコンパイルし MessageUI をリンクする（Issue #1385）。
