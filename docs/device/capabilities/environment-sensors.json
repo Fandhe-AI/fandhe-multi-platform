@@ -7,15 +7,18 @@
   "bundle": "continuous-push",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "CoreMotion `CMAltimeter` の relative altitude の更新に含まれる `pressure`（kPa）。近接は `UIDevice.isProximityMonitoringEnabled` / `proximityState` / `proximityStateDidChangeNotification`",
+      "status": "done",
+      "api": "CoreMotion `CMAltimeter.startRelativeAltitudeUpdates` の `pressure`（kPa を hPa へ換算）。近接は `UIDevice.isProximityMonitoringEnabled` / `proximityState` / `proximityStateDidChangeNotification`。UI スレッドから 100 ms ごとに pull",
       "perm": "気圧は `NSMotionUsageDescription` が必須（無いと API を呼んだ時点で落ちる）。拒否は `CMAltimeter.authorizationStatus`（iOS 11+）で読む。近接は権限不要",
       "url": [
         "https://developer.apple.com/documentation/coremotion/cmaltimeter",
         "https://developer.apple.com/documentation/coremotion/cmaltitudedata/pressure",
         "https://developer.apple.com/documentation/uikit/uidevice/isproximitymonitoringenabled"
       ],
-      "note": "未実装。気圧と近接の 2 種で done にする。照度は公開 API が無い（SensorKit の `ambientLightSensor` は承認済みの研究用 entitlement が要るため対象外）。照度は「この OS では取得できません」と出し、端末にセンサーが無い場合の表示とは区別する。近接は有効にすると画面が消える（実機で確認予定）。iPad など近接センサーの無い端末では、有効にしても NO のまま。気圧の配信周期は公式文書に記載が無く、実機で確かめる"
+      "note": "実装済み（Issue #610）。気圧: 端末非搭載（シミュレータ含む）は `NotPresent`、`authorizationStatus` が Denied/Restricted と拒否コード 2 種（`CMErrorNotAuthorized`・`CMErrorMotionActivityNotAuthorized`）は `PermissionDenied`、その他の失敗は `Failed`、範囲外・古い値（2 秒超）・開始前の測定は値なし。近接: 有効にしても NO のままなら `NotPresent`、開始時点の `proximityState` を初期値にする。照度は常に `UnsupportedOnOs`（「この OS では取得できません」）。守る範囲: 嘘の値を出さない・非搭載と OS 非対応の区別・二重購読しない・停止と背景遷移で保持値を捨てる・近接の有効状態を停止で元へ戻す。守らない範囲: 気圧の絶対精度、近接で画面が消えること、複数プロセス、表示の遅れ。既知の天井: 初回の許可ダイアログに 5 秒以内に答えないと `NoReading` になる。近接の初期値と画面消灯、気圧の配信周期は実機で確認する（#602）",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#602）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_environment_sensors.m + crates/fandhe-egui-proxy/src/device/ios_environment_sensors.rs + crates/fandhe-egui-proxy/src/device/environment_sensors.rs + crates/fandhe-core/src/screens/environment_sensors_show.rs + crates/fandhe-device/src/environment_sensors.rs、Issue #610"
     },
     "android": {
       "status": "done",
