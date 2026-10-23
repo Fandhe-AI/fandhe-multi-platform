@@ -38,7 +38,8 @@ import java.util.Set;
 // FINISHED が新しい要求に混ざるため）。一覧は ApplicationContext だけを使う同期メソッドで保留状態を持たない。
 //
 // 期限: 窓の長さ(durationMs)は Rust 側 DISCOVERY_WINDOW_MS をそのまま受け取る。JNI を受けた時点
-// （post より前）の uptimeMillis を起点にし、UI キューと許可ダイアログの待ちも窓に含める。
+// （post より前）の uptimeMillis を起点にし、UI キューと許可ダイアログの待ちも窓に含める（ダイアログで
+// 窓を過ぎたら、許可しても失敗で確定する。守らない範囲として対応表の note に書く）。
 //
 // ライフサイクル: onPause / onDestroy で保留中の要求をコード 4（中断）で確定し、cancelDiscovery・
 // レシーバー解除・タイマー解放を行う（許可ダイアログが起こす onPause は中断扱いにしない）。非前景での
