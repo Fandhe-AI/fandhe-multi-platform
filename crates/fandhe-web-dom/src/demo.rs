@@ -147,6 +147,9 @@ use fandhe_core::screens::safe_area_insets_show::{
 use fandhe_core::screens::screen_capture::{
     current_screen as current_screen_capture_screen, ScreenCaptureState,
 };
+use fandhe_core::screens::serial_port_show::{
+    current_screen as current_serial_port_show_screen, SerialPortShowState,
+};
 use fandhe_core::screens::settings::{
     get_notifications_on, set_notifications_on, settings_screen, SettingsState,
 };
@@ -419,6 +422,22 @@ pub fn mount_usb_device_show_screen(root_id: &str) -> Result<(), JsValue> {
         current_usb_device_show_screen(&initial_state),
         initial_state,
         super::usb_device::usb_device_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「シリアルポート」（親 #131、Issue #672）をマウントする検証専用
+/// エントリポイント。`super::serial_port::serial_port_show_effect` が Web Serial API の
+/// `requestPort` と固定 1 行の往復を駆動する。初期状態は要求なし（ボタン「ポートを選んで往復」から始まる）。
+/// 処理中の二重押下は core 側で no-op になる。
+#[wasm_bindgen]
+pub fn mount_serial_port_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    let initial_state = SerialPortShowState::browser_picker();
+    super::mount::mount_with_effect(
+        root,
+        current_serial_port_show_screen(&initial_state),
+        initial_state,
+        super::serial_port::serial_port_show_effect,
     )
 }
 

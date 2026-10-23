@@ -38,12 +38,15 @@
       "note": "未実装。`GetCommPorts` は `ERROR_FILE_NOT_FOUND` を 0 件として扱う。表示は `COM<n>` のみ（フレンドリー名は SetupAPI が要り範囲外）。`SerialDevice` は package identity 必須と文書で確認済み（https://learn.microsoft.com/en-us/uwp/api/windows.devices.serialcommunication.serialdevice ）。依存は既存の `windows` クレートに feature `Win32_Devices_Communication` を足すだけ。"
     },
     "web": {
-      "status": "possible",
+      "status": "done",
       "api": "Web Serial API（`navigator.serial`）",
       "perm": "ポートごとに利用者が `requestPort()` のダイアログで選ぶ（user activation が必要）。secure context 必須。Permissions Policy `serial` で禁止されると `SecurityError`",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API",
       "safari": "Safari 非対応。Firefox は 151 以降で対応、Firefox Android は非対応（MDN browser-compat-data）。Firefox の許可の前提条件は未確認（要確認）",
-      "note": "未実装。対応ブラウザ: Chrome / Edge / Opera 89 以降、Chrome Android 148 以降（138〜147 は Bluetooth RFCOMM のポートのみ）、Firefox 151 以降。許可済みポートの `getPorts()` による黙った列挙と connect / disconnect イベントは使わない。"
+      "note": "実装済み（#672）。画面のボタンでブラウザのダイアログ（`requestPort()`）を開き、利用者が選んだ 1 ポートを 9600 bps・8N1・フロー制御なしで開いて `fandhe\\n` を送り、LF までの 1 行を受けて出し、毎回閉じる。期限は 3 秒で、起点は選択の確定直後（単調時計 `performance.now()`、open〜受信の全体）。ダイアログを閉じた場合（`NotFoundError`）だけキャンセルとして失敗とは別に出し、権限ポリシーの拒否（`SecurityError`）は権限拒否、`open()` の `InvalidStateError` / `NetworkError` は使用中、読み書き中の `NetworkError` は抜去、非対応・期限切れ・行が長すぎる（256 バイト超）・行の完成前のストリーム終端は区別して失敗として出す。期限後に完成した行は成功にせず、`open()` は中断できないため期限後でも完了を待ってから判定する。全経路で reader の `cancel` と `releaseLock`、writer の `releaseLock`、`close()` を済ませてから結果を出し、画面の破棄でも同じ後片付けを通す。ポート情報・送受信の中身・例外文言はログに出さない。【推測】他アプリが使用中のとき `open()` が `NetworkError` になるか、open 時にブラウザが受信バッファを捨てるか（Web Serial に破棄 API は無い）、bfcache・離脱時にブラウザがポートを閉じるかは、#667 の実ブラウザ確認で確かめる。対応ブラウザ: Chrome / Edge / Opera 89 以降、Chrome Android 148 以降（138〜147 は Bluetooth RFCOMM のポートのみ）、Firefox 151 以降。許可済みポートの `getPorts()` による黙った列挙と connect / disconnect イベントは使わない。守らない範囲: 選択ダイアログの期限、改行で返さない機器（期限切れになる）、受信した行の文字コード（不正な UTF-8 は置換文字）、複数タブ間の一致、中断できない `open()` が期限を大きく超えたときの表示確定の遅れ。",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#667）",
+      "impl": "crates/fandhe-web-dom/src/serial_port.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/serial_port_show.rs + crates/fandhe-device/src/serial_port.rs、Issue #672"
     }
   },
   "note": "macOS / Windows / Web に届く。iOS と Android は OS にシリアル API が無く no。usb-device（USB 機器の直接制御）とは、COM ポート・tty として見えるものを扱う点で別。Windows の WinRT API は package identity 必須。今回の範囲: ポートの一覧を出し（macOS / Windows は OS の列挙、Web は利用者がブラウザのダイアログで 1 つ選ぶ）、選んだポートを固定設定（9600 bps・8N1・フロー制御なし）で開いて固定の 1 行 `fandhe\\n` を送り、LF までの 1 行を受け取って画面に出し、毎回閉じる。全体の期限は 3 秒（開く〜受信、単調時計）。守る範囲: 1 プロセス（Web は 1 マウント）内の要求と完了の順序（古い request_id の結果は捨てる）、失敗（期限切れ・使用中・抜去・権限拒否・非対応・行が長すぎる・送信の途中切れ）を成功に見せないこと、期限後に届いた行を成功にしないこと、全経路でポートを閉じること（macOS は変更前の termios を戻す）、送信前に受信バッファを捨てること、0 件の一覧は成功とし Web のダイアログを閉じた場合はキャンセルとすること、ポート名・送受信の中身・OS のエラー値の生値をログに出さないこと。守らない範囲: 抜き差しの反映（再取得まで）、ボーレート・パリティ・フロー制御の変更 UI、連続受信、バイナリの往復、任意文字列の送信、送受信中の中断ボタン、改行で返さない機器への対応（期限切れになる）、他プロセスとの同時オープンの解決（使用中として失敗にするだけ）、macOS の擬似端末と `/dev/tty.*`、Web の許可済みポートの列挙・選択ダイアログの期限・Chromium 系と Firefox 以外、受信した行の文字コード（不正な UTF-8 は置換文字）、複数タブ・複数プロセス間の一致。"
