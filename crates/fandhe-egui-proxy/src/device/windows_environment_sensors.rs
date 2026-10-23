@@ -158,8 +158,11 @@ impl PressureFreshness {
         }
     }
 
-    /// 背景遷移で受信記録を捨てる。基準の `Timestamp` は残し、復元後は新しい読みだけを受ける。
+    /// 背景遷移で受信記録と基準の `Timestamp` を捨てる。背景中に OS の読みが更新されても、
+    /// 復帰後の最初の読みは開始直後と同じく基準として捨て、次の変化から受信時刻を記録する
+    /// （古い気圧を新規受信として見せない）。
     fn drop_received(&mut self) {
+        self.last_ts = None;
         self.received_at = None;
     }
 }
@@ -738,6 +741,13 @@ mod tests {
         f.drop_received();
         assert!(!f.observe(2, t0 + Duration::from_millis(10)));
         assert!(f.observe(3, t0 + Duration::from_millis(20)));
+        // 背景中に OS の読みが更新されても、復帰後の最初の読みは基準として捨てる。
+        let mut g = PressureFreshness::default();
+        g.observe(1, t0);
+        g.drop_received();
+        assert!(!g.observe(2, t0 + Duration::from_secs(10)));
+        assert!(!g.observe(2, t0 + Duration::from_secs(11)));
+        assert!(g.observe(3, t0 + Duration::from_secs(12)));
         // stop 相当（作り直し）は最初から。
         let mut f = PressureFreshness::default();
         assert!(!f.observe(3, t0));
