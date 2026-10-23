@@ -54,6 +54,12 @@ pub mod android_background_download;
 /// 純関数はホストでテストできるよう cfg を付けない（`android_gamepad.rs` と同じ
 /// 判断）。`device/background_task.rs` の Android 経路から使われる。
 pub mod android_background_task;
+/// Issue #659: Android 向け Bluetooth Classic の骨格（`Unsupported` のスタブ。#661 が
+/// `BluetoothClassicHelper.java` と JNI で埋める）。`device/bluetooth_classic.rs` の Android 経路から呼ばれる。
+/// 後続の子がホストテストを足すときに本行の cfg を広げずに済むよう test でもコンパイルする。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_bluetooth_classic;
 /// Issue #276: Android 向け通話 UI 統合実装。`device/call_ui.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -493,6 +499,9 @@ pub mod barcode_scan;
 /// Phase 11 の拡充ループ（親 #905、Issue #906/#907/#908）: 生体認証の effect ドライバ
 /// （macOS/iOS/Android/Windows 実装）。
 pub mod biometric_auth;
+/// Phase 11 の拡充ループ（親 #130、Issue #659）: Bluetooth Classic の一覧・検索の effect ドライバ
+/// （macOS 実装。Windows・Android は骨格のスタブで #660 / #661 が埋める。他 OS は `UnsupportedBluetoothClassic` 固定）。
+pub mod bluetooth_classic;
 /// Phase 11 の拡充ループ（親 #1059、Issue #1060）: BLE スキャンの effect ドライバ
 /// （iOS/macOS/Windows/Android 実装、他 OS は `UnsupportedBluetoothLe` 固定。Web は別経路 `fandhe-web-dom`（#1063））。
 pub mod bluetooth_le;
@@ -851,6 +860,12 @@ pub mod macos_audio_devices;
 /// background_task.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_background_task;
+/// Issue #659: macOS 向け Bluetooth Classic 実装（`macos/fandhe_macos_bluetooth_classic.m` の
+/// IOBluetooth 呼び出しを包む C ABI ラッパー）。`device/bluetooth_classic.rs` の macOS 経路から呼ばれる。
+/// 写像の純関数をホストでテストできるよう cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_bluetooth_classic;
 /// Issue #1384: macOS 向けメール作成・SMS 作成画面実装（`macos/fandhe_macos_compose_mail_sms.m` を呼ぶ C ABI ラッパー）。`device/compose_mail_sms.rs` の macos 経路から呼ばれる。
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -1169,6 +1184,12 @@ pub mod windows_background_task;
 /// Windows Hello ラッパー）。`device/biometric_auth.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_biometric;
+/// Issue #659: Windows 向け Bluetooth Classic の骨格（`Unsupported` のスタブ。#660 が
+/// `BluetoothFindFirstDevice` で埋める）。`device/bluetooth_classic.rs` の Windows 経路から呼ばれる。
+/// 後続の子がホストテストを足すときに本行の cfg を広げずに済むよう test でもコンパイルする。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_bluetooth_classic;
 /// Issue #1060: Windows 向け BLE スキャン実装（WinRT `BluetoothLEAdvertisementWatcher`
 /// ラッパー）。`device/bluetooth_le.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -1411,6 +1432,9 @@ pub fn shutdown() {
     location::stop_shared_location();
     system_tray::stop_shared_system_tray();
     bluetooth_le::stop_shared_scan();
+    // macOS の停止は main queue へ同期ディスパッチする。`shutdown` は eframe の `on_exit`（main thread）から
+    // ロックを握らずに呼ばれるため、main 上なら直接停止し、デッドロックしない。
+    bluetooth_classic::stop_shared_discovery();
     lan_discovery::stop_shared_discovery();
     local_peer::stop_shared_exchange();
     midi::shutdown();

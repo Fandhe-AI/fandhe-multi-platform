@@ -166,6 +166,10 @@ generated_screens! {
     crate::device::bluetooth_le::ble_scan_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "bluetooth_classic_show" => fandhe_core::screens::bluetooth_classic_show::current_screen,
+    crate::device::bluetooth_classic::bluetooth_classic_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "lan_discover" => fandhe_core::screens::lan_discover::current_screen,
     crate::device::lan_discovery::lan_discover_effect,
     effect
