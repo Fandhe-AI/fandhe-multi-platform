@@ -109,8 +109,8 @@ pub enum Phase {
     Running,
 }
 
-/// 要求の種類。
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// 要求の種類。`Debug` はポート名を出さない（serial_port の契約）。
+#[derive(Clone, PartialEq, Eq)]
 pub enum RequestKind {
     /// ポートの列挙。
     List,
@@ -121,6 +121,16 @@ pub enum RequestKind {
     },
     /// ブラウザのダイアログで選んでから往復する（Web）。
     WebPick,
+}
+
+impl std::fmt::Debug for RequestKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::List => f.write_str("List"),
+            Self::RoundTrip { .. } => f.debug_struct("RoundTrip").finish_non_exhaustive(),
+            Self::WebPick => f.write_str("WebPick"),
+        }
+    }
 }
 
 /// effect ドライバへ渡す要求（世代付き）。
@@ -153,8 +163,8 @@ pub enum PortFailure {
     Failed(String),
 }
 
-/// シリアルポート画面の状態。
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// シリアルポート画面の状態。`Debug` はポート名・受信内容を出さない（serial_port の契約）。
+#[derive(Clone, PartialEq, Eq)]
 pub struct SerialPortShowState {
     /// ポートの選び方。
     pub mode: PortMode,
@@ -174,6 +184,22 @@ pub struct SerialPortShowState {
     pub status: String,
     /// 失敗理由（`TextRole::Error`）。
     pub error: String,
+}
+
+impl std::fmt::Debug for SerialPortShowState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SerialPortShowState")
+            .field("mode", &self.mode)
+            .field("phase", &self.phase)
+            .field("generation", &self.generation)
+            .field("request_kind", &self.request_kind)
+            .field("ports", &self.ports.as_ref().map(Vec::len))
+            .field("selected", &self.selected)
+            .field("received", &self.received.as_ref().map(|_| "<redacted>"))
+            .field("status", &self.status)
+            .field("error", &self.error)
+            .finish()
+    }
 }
 
 impl Default for SerialPortShowState {

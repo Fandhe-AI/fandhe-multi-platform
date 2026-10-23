@@ -44,6 +44,29 @@
 #include <termios.h>
 #include <unistd.h>
 
+/// ハードウェアフロー制御に関わる c_cflag のビット（RTS/CTS・DTR/DSR・CD）。Darwin 固有のものは定義があるときだけ含める。
+#define FANDHE_HW_FLOW_MASK_BASE (CRTSCTS)
+#ifndef CDTR_IFLOW
+#define CDTR_IFLOW 0
+#endif
+#ifndef CDSR_OFLOW
+#define CDSR_OFLOW 0
+#endif
+#ifndef CCAR_OFLOW
+#define CCAR_OFLOW 0
+#endif
+#ifndef CRTS_IFLOW
+#define CRTS_IFLOW 0
+#endif
+#ifndef CCTS_OFLOW
+#define CCTS_OFLOW 0
+#endif
+#ifndef MDMBUF
+#define MDMBUF 0
+#endif
+#define FANDHE_HW_FLOW_MASK \
+    (FANDHE_HW_FLOW_MASK_BASE | CDTR_IFLOW | CDSR_OFLOW | CCAR_OFLOW | CRTS_IFLOW | CCTS_OFLOW | MDMBUF)
+
 #define FANDHE_SERIAL_MAX_PORTS 32
 #define FANDHE_SERIAL_NAME_BYTES 128
 
@@ -142,7 +165,9 @@ FandheSerialHandle *fandhe_macos_serial_open(const char *path, int32_t *out_errn
         cfmakeraw(&t);
         cfsetspeed(&t, B9600);
         t.c_cflag |= (CS8 | CLOCAL | CREAD);
-        t.c_cflag &= ~(tcflag_t)(CRTSCTS | PARENB | CSTOPB);
+        // cfmakeraw は IXOFF・IXANY とモデム信号系のフロー制御を消さないため、継承した設定ごと明示的に外す。
+        t.c_iflag &= ~(tcflag_t)(IXON | IXOFF | IXANY);
+        t.c_cflag &= ~(tcflag_t)(FANDHE_HW_FLOW_MASK | PARENB | CSTOPB);
         t.c_cc[VMIN] = 0;
         t.c_cc[VTIME] = 0;
         int ok = tcsetattr(fd, TCSANOW, &t) == 0;
@@ -151,7 +176,8 @@ FandheSerialHandle *fandhe_macos_serial_open(const char *path, int32_t *out_errn
             // tcsetattr は一部の項目が反映されなくても 0 を返しうるため、読み直して確かめる。
             struct termios got;
             if (tcgetattr(fd, &got) != 0 || cfgetospeed(&got) != B9600 ||
-                (got.c_cflag & CSIZE) != CS8 || (got.c_cflag & (PARENB | CSTOPB | CRTSCTS)) != 0) {
+                (got.c_cflag & CSIZE) != CS8 || (got.c_cflag & (PARENB | CSTOPB | FANDHE_HW_FLOW_MASK)) != 0 ||
+                (got.c_iflag & (IXON | IXOFF | IXANY)) != 0) {
                 ok = 0;
                 err = EINVAL;
             }
