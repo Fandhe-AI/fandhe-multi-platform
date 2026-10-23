@@ -705,6 +705,22 @@ public class MainActivity extends GameActivity {
         return screenWakeLockHelper.isHeld();
     }
 
+    // 画面輝度の上書き（Issue #635）。実装は `ScreenBrightnessHelper`。Rust の
+    // `android_screen_brightness.rs` が egui スレッドから同期で JNI 呼び出しする。
+    private final ScreenBrightnessHelper screenBrightnessHelper = new ScreenBrightnessHelper(this);
+
+    int screenBrightnessSet(float level) {
+        return screenBrightnessHelper.set(level);
+    }
+
+    int screenBrightnessClear() {
+        return screenBrightnessHelper.clear();
+    }
+
+    float screenBrightnessRead() {
+        return screenBrightnessHelper.read();
+    }
+
     // 画面キャプチャの防止・検知（Issue #584）。実装は `CaptureProtectionHelper`。Rust の
     // `android_capture_protection.rs` が egui スレッドから JNI 呼び出しする。
     private final CaptureProtectionHelper captureProtectionHelper = new CaptureProtectionHelper(this);
@@ -2069,6 +2085,7 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        screenBrightnessHelper.onCreate();
         captureProtectionHelper.onCreate();
         installAccessibilityOffGuard();
         fullscreenHelper.register();
@@ -4845,6 +4862,7 @@ public class MainActivity extends GameActivity {
         screenCaptureHelper.onDestroy();
         printHelper.onDestroy();
         screenWakeLockHelper.onDestroy();
+        screenBrightnessHelper.onDestroy();
         captureProtectionHelper.onDestroy();
         flashlightHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため

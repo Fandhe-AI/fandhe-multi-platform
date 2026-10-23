@@ -17,7 +17,7 @@
       "note": "未実装。アプリが元の値を控え、背景で戻し前面で掛け直す。メイン画面のみ。visionOS では効かない。上書き中に利用者が OS 側で輝度を変えたら上書きをやめて利用者の値を残す"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`WindowManager.LayoutParams.screenBrightness`（0〜1、`BRIGHTNESS_OVERRIDE_NONE` = -1 で解除。ウィンドウが前面の間だけ効く）",
       "perm": "不要。システム輝度の変更（`Settings.System.SCREEN_BRIGHTNESS`）は `WRITE_SETTINGS` が要るため範囲外",
       "url": [
@@ -25,7 +25,10 @@
         "https://developer.android.com/reference/android/view/WindowManager.LayoutParams#BRIGHTNESS_OVERRIDE_NONE",
         "https://developer.android.com/reference/android/provider/Settings.System#SCREEN_BRIGHTNESS"
       ],
-      "note": "未実装。上書きしていない間の現在値は出さない（システム値は 1〜255 で端末の曲線と一致しない）。背景ではウィンドウが前面にいないため OS が利用者の値で表示する"
+      "note": "実装済み（#635）。UI スレッドで `screenBrightness` を設定して読み戻す。最長 1 秒待ち、期限後は適用しない。Activity 再生成で要求を持ち越し、実終了で捨てる。上書きしていない間の現在値は出さない（システム値は 1〜255 で端末の曲線と一致しない）。背景ではウィンドウが前面にいないため OS が利用者の値で表示する。守る範囲: 1 プロセス内の順序・失敗を成功と見せないこと・範囲外の値を OS に渡さないこと。守らない範囲: 複数ウィンドウ・分割画面、自動輝度や利用者の操作による一時的な食い違い",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#628）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_screen_brightness.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/ScreenBrightnessHelper.java + crates/fandhe-egui-proxy/src/device/screen_brightness.rs + crates/fandhe-core/src/screens/screen_brightness_show.rs + crates/fandhe-device/src/screen_brightness.rs、Issue #635"
     },
     "macos": {
       "status": "no",
