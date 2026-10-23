@@ -25,7 +25,7 @@
 //
 // 世代: 購読ごとに manager を作り直し、handler が捕捉した epoch をロック内で現在値と照合して旧購読分を捨てる。
 // seq はプロセス内で単調増加させ、stop・再開始・復帰で巻き戻さない。
-// stop は背景・前景の observer と専用 queue も解除・解放し、再開始で登録し直す。
+// stop は背景中なら Rust 側の背景フラグも下ろす（resumed）。背景・前景の observer と専用 queue も解除・解放し、再開始で登録し直す。
 // 背景遷移: 保持値を捨て、購読を解除する（suspend 中は届かないため）。復帰で張り直す。
 // 許可ダイアログ表示中のアプリは Inactive で Background にならない。observer は
 // DidEnterBackground / WillEnterForeground だけを見るため、許可の応答との到着順に依存しない。
@@ -104,6 +104,11 @@ static void Subscribe(CMMotionActivityManager *m, NSOperationQueue *queue, uint6
                              toQueue:queue
                          withHandler:^(NSArray<CMMotionActivity *> *_Nullable acts, NSError *_Nullable error) {
         if (error == nil) {
+            return;
+        }
+        // 許可ダイアログの応答待ち（NotDetermined）の間は probe の失敗を確定しない。
+        // ライブ更新が許可後に届く前に機能を失敗させないため（read も 4 を優先して返す）
+        if ([CMMotionActivityManager authorizationStatus] == CMAuthorizationStatusNotDetermined) {
             return;
         }
         os_unfair_lock_lock(&gLock);
@@ -230,10 +235,10 @@ int32_t fandhe_ios_activity_recognition_read(uint32_t *flags, int32_t *confidenc
             rc = 0;
         } else if (IsDenied(auth)) {
             rc = 2;
+        } else if (auth == CMAuthorizationStatusNotDetermined) {
+            rc = 4; // 応答待ちは過去の失敗より優先する
         } else if (gFailure != 0) {
             rc = gFailure;
-        } else if (auth == CMAuthorizationStatusNotDetermined) {
-            rc = 4;
         } else if (gBackground || !gHasValue) {
             rc = 0;
         } else {
@@ -250,6 +255,10 @@ int32_t fandhe_ios_activity_recognition_read(uint32_t *flags, int32_t *confidenc
 void fandhe_ios_activity_recognition_stop(void) {
     @autoreleasepool {
         os_unfair_lock_lock(&gLock);
+        // 背景中に止めると前景 observer も解除され resumed が届かない。Rust 側の背景フラグを
+        // 下ろさないと、次の start が永久に遮断される
+        BOOL wasBackground = gActive && gBackground;
+        gBackground = NO;
         CMMotionActivityManager *old = gManager;
         gManager = nil;
         gEpoch += 1; // 旧購読の通知はここから照合で捨てられる
@@ -268,6 +277,9 @@ void fandhe_ios_activity_recognition_stop(void) {
         }
         if (fg != nil) {
             [NSNotificationCenter.defaultCenter removeObserver:fg];
+        }
+        if (wasBackground) {
+            fandhe_rust_activity_recognition_resumed();
         }
         if (old == nil) {
             return;
