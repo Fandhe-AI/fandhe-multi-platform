@@ -175,7 +175,7 @@ FandheSerialHandle *fandhe_macos_serial_open(const char *path, int32_t *out_errn
         if (ok) {
             // tcsetattr は一部の項目が反映されなくても 0 を返しうるため、読み直して確かめる。
             struct termios got;
-            if (tcgetattr(fd, &got) != 0 || cfgetospeed(&got) != B9600 ||
+            if (tcgetattr(fd, &got) != 0 || cfgetospeed(&got) != B9600 || cfgetispeed(&got) != B9600 ||
                 (got.c_cflag & CSIZE) != CS8 || (got.c_cflag & (PARENB | CSTOPB | FANDHE_HW_FLOW_MASK)) != 0 ||
                 (got.c_iflag & (IXON | IXOFF | IXANY)) != 0) {
                 ok = 0;

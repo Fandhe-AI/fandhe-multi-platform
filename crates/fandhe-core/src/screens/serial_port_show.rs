@@ -82,7 +82,7 @@ pub const GONE_ERROR: &str = "ポートが見つからないか、抜かれま�
 /// 権限なしの失敗文言。
 pub const PERMISSION_DENIED_ERROR: &str = "シリアルポートの使用が許可されていません";
 /// 非対応の失敗文言。
-pub const UNSUPPORTED_ERROR: &str = "この端末ではシリアルポートを使えません";
+pub const UNSUPPORTED_ERROR: &str = "この端末・ブラウザではシリアルポートを使えません";
 /// 行が長すぎる失敗文言。
 pub const LINE_TOO_LONG_ERROR: &str = "返事の 1 行が長すぎます（256 バイトまで）";
 /// その他の失敗の接頭辞（`{接頭辞}{理由}` の形で表示する）。
