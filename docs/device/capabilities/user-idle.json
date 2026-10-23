@@ -22,26 +22,31 @@
     },
     "macos": {
       "status": "possible",
-      "api": "`CGEventSource.secondsSinceLastEventType`（入力種別ごとの最終入力からの秒数）",
-      "perm": "要確認（権限の要否は未調査）",
-      "url": "",
-      "note": "未実装。URL 未確認（公式 URL を取得できていない）"
+      "api": "`CGEventSourceSecondsSinceLastEventType`（CombinedSessionState・`kCGAnyInputEventType`、CoreGraphics、macOS 10.4+）",
+      "perm": "公式文書に権限の記載なし。Input Monitoring の対象外と見込むが、Mac 目視で確かめる",
+      "url": "https://developer.apple.com/documentation/coregraphics/cgeventsource/secondssincelasteventtype(_:eventtype:)",
+      "note": "未実装。画面ロックの公開 API は無い（`CGSessionCopyCurrentDictionary` のロックのキーは文書に無い）ので対象外。経過秒を出す"
     },
     "windows": {
       "status": "possible",
-      "api": "Win32 `GetLastInputInfo`（Win32 desktop）",
+      "api": "Win32 `GetLastInputInfo` + `GetTickCount`（`LASTINPUTINFO.dwTime` との差。32 bit の折り返しを考慮）",
       "perm": "不要（package identity の要件記載なし）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getlastinputinfo",
-      "note": "未実装。呼び出したセッション内の入力のみ。unpackaged exe で使える前提と読めるが実機未検証"
+      "note": "未実装。呼び出したセッション内の入力だけ。`dwTime` は単調とは限らない（公式文書）。現在の tick より新しい値は 0 秒や前回値で埋めず、取得失敗として表示する（共通の契約と同じ）。`windows` crate の feature `Win32_UI_Input_KeyboardAndMouse` を足す。画面ロックは範囲外。実機未検証。経過秒を出す"
     },
     "web": {
       "status": "possible",
-      "api": "Idle Detection API（`IdleDetector`）",
-      "perm": "`idle-detection` 権限（ユーザー許可）",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Idle_Detection_API",
+      "api": "Idle Detection API（`IdleDetector`。`requestPermission()` は利用者操作の中、`start({threshold})` は 60,000 ms 以上）",
+      "perm": "`idle-detection` 権限（ユーザー許可）+ Permissions Policy `idle-detection`（既定 `'self'`）。secure context 必須",
+      "url": [
+        "https://developer.mozilla.org/en-US/docs/Web/API/Idle_Detection_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/IdleDetector/start",
+        "https://wicg.github.io/idle-detection/",
+        "https://developer.chrome.com/docs/capabilities/web-apis/idle-detection"
+      ],
       "safari": "非対応",
-      "note": "Chromium のみ（MDN は Experimental）。画面ロックの検知も含む。secure context 必須"
+      "note": "Chromium 系のみ（Chrome 94〜）。Firefox は negative、Safari は非対応。経過秒は取れず、操作中 / 離席中（`userState`）と画面ロック（`screenState`）だけを出す。ページ内イベントで経過を数えて代用しない"
     }
   },
-  "note": "macOS / Windows は OS 全体の無操作時間を取れる。モバイルは OS API がなく no、Web は Chromium のみ。screen-wake-lock（別 id）とは逆向きで、本機能は離席検知。今回の範囲: 最後の操作からの経過秒を 1 秒ごとに表示し、しきい値（既定 30 秒）を超えたら「離席中」と表示する"
+  "note": "macOS / Windows は OS 全体の無操作時間を取れる。モバイルは OS API がなく no、Web は Chromium 系のみ。screen-wake-lock（別 id）とは逆向きで、本機能は離席検知。今回の範囲: デスクトップは最後の操作からの経過秒を 1 秒ごとに表示し、Web は操作中 / 離席中と画面ロックの状態だけを表示する。しきい値は全 OS で 60 秒（Web の下限にそろえる）を超えたら「離席中」。画面ロックは Web だけ。守る範囲: 嘘の値を出さない（NaN・負・未来の tick を 0 秒や前回値にしない）、経過は単調な時計で測る、非対応・許可なし・失敗を「操作中」と見せない、Web で経過秒を偽らない、1 プロセス内の順序、Web のリスナーをマウント破棄で解放する。守らない範囲: OS 間の「入力」の定義の差（合成入力・タブレット・ゲームパッド）、反映遅れ（最大 1 秒）、スリープ中の時間の扱いの OS 差、別セッション（ファストユーザースイッチ・RDP）の入力、デスクトップの画面ロック、最小化中・App Nap 中の更新遅れ、Web の複数タブ、Chromium 系以外のブラウザ（非対応表示）"
 }

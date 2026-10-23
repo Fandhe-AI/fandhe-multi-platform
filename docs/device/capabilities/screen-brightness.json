@@ -8,17 +8,24 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "UIKit `UIScreen.brightness`（取得・設定）",
-      "perm": "不要",
-      "url": "",
-      "note": "未実装。URL 未確認（iOS 調査で未取得）。設定した値はシステム設定へ戻る場合がある（要確認）"
+      "api": "UIKit `UIScreen.brightness`（0〜1。端末全体に効き、ロックまで残る）。取得元は前面の `UIWindowScene.screen`（`UIScreen.main` は iOS 26 で非推奨）。利用者の変更は `brightnessDidChangeNotification`",
+      "perm": "不要（公式に権限の記載なし）",
+      "url": [
+        "https://developer.apple.com/documentation/uikit/uiscreen/brightness",
+        "https://developer.apple.com/documentation/uikit/uiscreen/brightnessdidchangenotification"
+      ],
+      "note": "未実装。アプリが元の値を控え、背景で戻し前面で掛け直す。メイン画面のみ。visionOS では効かない。上書き中に利用者が OS 側で輝度を変えたら上書きをやめて利用者の値を残す"
     },
     "android": {
       "status": "possible",
-      "api": "`WindowManager.LayoutParams.screenBrightness`（ウィンドウ単位の上書き）",
-      "perm": "要確認（ウィンドウ単位なら不要と思われる。システム輝度の変更は `WRITE_SETTINGS` が要るはず）",
-      "url": "",
-      "note": "未実装。URL 未確認（専用ガイドを取得できず）。アプリ内だけの上書きに留める"
+      "api": "`WindowManager.LayoutParams.screenBrightness`（0〜1、`BRIGHTNESS_OVERRIDE_NONE` = -1 で解除。ウィンドウが前面の間だけ効く）",
+      "perm": "不要。システム輝度の変更（`Settings.System.SCREEN_BRIGHTNESS`）は `WRITE_SETTINGS` が要るため範囲外",
+      "url": [
+        "https://developer.android.com/reference/android/view/WindowManager.LayoutParams#screenBrightness",
+        "https://developer.android.com/reference/android/view/WindowManager.LayoutParams#BRIGHTNESS_OVERRIDE_NONE",
+        "https://developer.android.com/reference/android/provider/Settings.System#SCREEN_BRIGHTNESS"
+      ],
+      "note": "未実装。上書きしていない間の現在値は出さない（システム値は 1〜255 で端末の曲線と一致しない）。背景ではウィンドウが前面にいないため OS が利用者の値で表示する"
     },
     "macos": {
       "status": "no",
@@ -29,10 +36,15 @@
     },
     "windows": {
       "status": "possible",
-      "api": "WMI（`WmiMonitorBrightness` / `WmiMonitorBrightnessMethods`。内蔵パネルのみ）。アプリ表示中だけ上書きするなら WinRT `Windows.Graphics.Display.BrightnessOverride`",
-      "perm": "要確認（管理者権限の要否は未確認）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.graphics.display.brightnessoverride",
-      "note": "調査では「WMI 等で可能」との一般知識のみ。外部モニターは対象外になりうる。URL 未確認。優先度は低い"
+      "api": "アプリ単位の上書きは WinRT `BrightnessOverride`（10.0.15063+）だが、`GetForCurrentView` は CoreWindow が要り、`GetDefaultForSystem` は IoT の Embedded mode 前提の `systemManagement` 能力が要るため、Win32 アプリからは使えない。WMI `WmiMonitorBrightnessMethods`（内蔵パネルのみ）はシステム輝度そのものを変える。外部モニターの DDC/CI（`SetMonitorBrightness`）は公式が未定義動作を警告",
+      "perm": "WMI は管理者権限の要否が公式に未記載",
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.graphics.display.brightnessoverride",
+        "https://learn.microsoft.com/en-us/windows/win32/wmicoreprov/wmisetbrightness-method-in-class-wmimonitorbrightnessmethods",
+        "https://learn.microsoft.com/en-us/windows/win32/api/highlevelmonitorconfigurationapi/nf-highlevelmonitorconfigurationapi-setmonitorbrightness"
+      ],
+      "note": "未実装。今回の範囲（アプリが前面の間だけ上書きし、確実に戻す）を Win32 で守れる API がない",
+      "deferred": "Win32 アプリから使えるアプリ単位の上書き API が無い。WMI はシステム全体の輝度を書き換え、異常終了すると利用者の設定を戻せないため保留"
     },
     "web": {
       "status": "no",
@@ -43,5 +55,5 @@
       "note": "公開 API はない"
     }
   },
-  "note": "iOS / Android は端末輝度、Windows は内蔵パネルのみ WMI、macOS・Web は公開 API なし。screen-wake-lock（別 id）とは別機能。今回の範囲: 現在の輝度（0〜1）を表示し、スライダーで変更する（モバイル）。変更できない環境では操作を無効にして理由を出す"
+  "note": "iOS / Android は端末輝度、Windows は保留、macOS・Web は公開 API なし。screen-wake-lock（別 id）とは別機能。今回の範囲: アプリが前面にいる間だけ上書きする。読み取り・上書き・解除を扱い、システム設定は変えない。現在の輝度（0〜1）を表示し、スライダーで変更する（モバイル）。変更できない環境では操作を無効にして理由を出す。守る範囲: 1 プロセス内で、解除・背景遷移で利用者の値へ戻ること、上書きしていない状態を「上書き中」と見せないこと、範囲外の値を OS に渡さないこと。守らない範囲: プロセス強制終了時の復元（Android はウィンドウが破棄されると OS が上書きを解く。iOS は端末全体の輝度が変わったまま残り、OS が戻すのは画面ロックのとき。どちらも終了直後に利用者の値へ戻ることは保証しない）、複数ウィンドウ・分割画面・外部ディスプレイ、自動輝度による OS 側の変化と読み取りまでの表示の遅れ、端末ごとの輝度の曲線の違い"
 }
