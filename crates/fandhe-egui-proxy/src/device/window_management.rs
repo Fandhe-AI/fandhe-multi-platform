@@ -35,8 +35,10 @@ use fandhe_core::screens::window_management_show::{
 };
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 use fandhe_device::window_management::UnsupportedWindowManager;
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
+use fandhe_device::window_management::WindowFrame;
 use fandhe_device::window_management::{
-    reached, WindowFrame, WindowManager, WindowOp, WindowSnapshot, WindowSupport,
+    reached, WindowManager, WindowOp, WindowSnapshot, WindowSupport,
 };
 use fandhe_device::DeviceError;
 
