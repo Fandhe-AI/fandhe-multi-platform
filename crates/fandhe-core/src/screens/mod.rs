@@ -221,6 +221,8 @@ pub mod contact_pick;
 pub mod screen_brightness_show;
 /// Phase 11 の拡充ループ型サンプル「画面の録画・キャプチャ」（親 #1135、Issue #1335）。
 pub mod screen_capture;
+/// Phase 11 の拡充ループ型サンプル「画面の向き」（親 #128、Issue #655）。
+pub mod screen_orientation_show;
 /// Phase 11 の拡充ループ型サンプル「シリアルポート」（親 #131、Issue #670）。
 pub mod serial_port_show;
 

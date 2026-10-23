@@ -234,6 +234,11 @@ pub mod android_screen_brightness;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_capture;
+/// Issue #655: Android 向け画面向き実装（#657 が埋めるスタブ）。
+/// `device/screen_orientation.rs` の Android 経路から使われる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_screen_orientation;
 /// Issue #1280: Android 向け画面スリープ抑止実装（`FLAG_KEEP_SCREEN_ON`、Java は `ScreenWakeLockHelper`）。
 /// `device/screen_wake_lock.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
@@ -789,6 +794,11 @@ pub mod ios_safe_area_insets;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_brightness;
+/// Issue #655: iOS 向け画面向き実装（#656 が埋めるスタブ）。
+/// `device/screen_orientation.rs` の iOS 経路から使われる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_screen_orientation;
 /// Issue #1279: iOS 向け画面スリープ抑止実装（`ios/fandhe_ios_screen_wake_lock.m` を呼ぶ C ABI
 /// ラッパー。#1278 のスタブを置き換え）。
 /// `device/screen_wake_lock.rs` の iOS 経路から使われる。
@@ -1073,6 +1083,10 @@ pub mod screen_brightness;
 /// （macOS 実装、iOS・Android 実装、他 OS は
 /// `UnsupportedScreenCapturer` 固定。Web は `fandhe-web-dom`）。
 pub mod screen_capture;
+/// Phase 11 の拡充ループ（親 #128、Issue #655）: 画面向きの effect ドライバ
+/// （iOS は #656、Android は #657 が埋めるスタブ、Web は #658 の `fandhe-web-dom`、
+/// 他 OS は `UnsupportedScreenOrientation` 固定）。
+pub mod screen_orientation;
 /// Phase 11 の拡充ループ（親 #1129、Issue #1278）: 画面スリープ抑止の effect ドライバ
 /// （macOS/Windows/iOS/Android 実装、他 OS は
 /// `UnsupportedScreenWakeLock` 固定。Web は `fandhe-web-dom`）。
