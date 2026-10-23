@@ -129,6 +129,8 @@ pub mod compass_show;
 pub mod compose_mail_sms;
 /// Phase 11 の拡充ループ型サンプル「端末・OS 情報」（親 #1131、Issue #1304）。
 pub mod device_info_show;
+/// Phase 11 の拡充ループ型サンプル「気圧・照度・近接」（親 #123、Issue #609）。
+pub mod environment_sensors_show;
 /// Phase 11 の拡充ループ型サンプル「フォルダの変更監視」（親 #1143、Issue #1410）。
 pub mod file_watch_show;
 /// Phase 11 の拡充ループ型サンプル「ライト（トーチ）」（親 #106、Issue #458）。
