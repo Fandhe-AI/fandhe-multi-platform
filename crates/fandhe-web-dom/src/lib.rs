@@ -100,6 +100,8 @@
 //!   純関数（取得結果の写像・取り直し判定・世代照合）のみ `wasm32` gate の外に置く
 //! - [`usb_device`]: 「USB・HID 機器」画面の Web 経路（親 #112、Issue #508）。
 //!   純関数（失敗種別の写像・ID の値域検査・行への写像）のみ `wasm32` gate の外に置く
+//! - [`user_idle`]: 「無操作時間の検知」画面の Web 経路（親 #125、Issue #632）。
+//!   純関数（許可・例外名・状態の写像と effect の判断）のみ `wasm32` gate の外に置く
 //! - [`flashlight`]: 「ライト（トーチ）」画面の Web 経路（親 #106、Issue #462）。
 //!   純関数（失敗種別の写像・読み戻し・確認ループの判定）のみ `wasm32` gate の外に置く
 //! - [`compass`]: 「方位（コンパス）」画面の Web 経路（親 #1154、Issue #1407）。
@@ -349,6 +351,8 @@ pub mod translation;
 pub mod url_scheme;
 /// 型サンプル「USB・HID 機器」の Web 経路（Issue #508）。[`haptics`] と同じ理由で gate を外す。
 pub mod usb_device;
+/// 型サンプル「無操作時間の検知」の Web 経路（Issue #632）。[`haptics`] と同じ理由で gate を外す。
+pub mod user_idle;
 /// 型サンプル「ウィンドウ管理」の Web 経路（Issue #638）。[`haptics`] と同じ理由で純関数は native からも
 /// テストできるよう gate を外す。
 pub mod window_management;

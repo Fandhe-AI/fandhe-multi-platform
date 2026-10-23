@@ -440,6 +440,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::translation::release_mount(id);
         super::pen_stylus::release_mount(id);
         super::background_download::release_mount(id);
+        super::user_idle::release_mount(id);
     }
 }
 

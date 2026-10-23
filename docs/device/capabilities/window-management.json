@@ -25,14 +25,17 @@
       "note": "実装済み（#636）。確認済み: winit で位置・サイズ・最前面を変更でき、最前面の読み戻しと作業領域だけ AppKit を読む。全画面中は OS へ依頼せず断り、最小化中は位置と大きさを読めないと出す。位置・サイズの保存と復元は扱わない"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "変更は winit（内部は `SetWindowPos`）、読み取りは `GetWindowLongW(GWL_EXSTYLE)` の `WS_EX_TOPMOST`、`MonitorFromWindow` + `GetMonitorInfoW` の `rcWork`。`AppWindow` は使わない",
       "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos",
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmonitorinfow"
       ],
-      "note": "未実装。確認済み: winit で変更でき、最前面の読み戻しと作業領域だけ Win32 を読む。外枠に見えない縁（数 px）を含むため、左上へ寄せた見た目は数 px 内側になる"
+      "note": "実装済み（#637）。位置・大きさ・最前面の変更は winit（`ViewportCommand`）で行い、最前面の読み戻し（`WS_EX_TOPMOST`）と作業領域（`rcWork`）だけ Win32 で読む。`rcWork` は物理 px なので `pixels_per_point` で割って egui point にする。外枠に見えない縁（数 px）を含むため、左上へ寄せた見た目は数 px 内側になる。全画面中は断り、最小化中は読めないと出す。読めない最前面を false で代用しない。MSVC ビルドと実機は未検証（確認用 #629）",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#629）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_window_management.rs + crates/fandhe-egui-proxy/src/device/window_management.rs + crates/fandhe-core/src/screens/window_management_show.rs + crates/fandhe-device/src/window_management.rs、Issue #637"
     },
     "web": {
       "status": "done",
