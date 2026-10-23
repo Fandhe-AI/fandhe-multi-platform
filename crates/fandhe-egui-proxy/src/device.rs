@@ -20,6 +20,9 @@
 /// Issue #1308: アクセシビリティ設定（視差軽減・コントラスト）の effect ドライバ（Windows / macOS / iOS / Android 実装、
 /// 他 OS は `UnsupportedAccessibilityPrefs` 固定。Web は `fandhe-web-dom`）。
 pub mod accessibility_prefs;
+/// Issue #613（親 #124）: 行動認識（歩行・乗車等）の effect ドライバ（Windows 実装、iOS は #614 が埋めるまでスタブ、
+/// 他 OS は `UnsupportedActivityRecognizer` 固定）。
+pub mod activity_recognition;
 #[cfg(target_os = "android")]
 pub mod android;
 /// Issue #1310: Android 向けアクセシビリティ設定実装（`AccessibilityPrefsHelper` を JNI で呼ぶ）。
@@ -225,6 +228,11 @@ pub mod android_screen_capture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_wake_lock;
+/// Issue #606: Android 向け共有の受け取り実装。#607 までは `UnsupportedShareReceive` を返す薄いスタブ。
+/// `device/share_receive.rs::platform_share_receive` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_share_receive;
 /// Issue #580: Android 向けスペルチェック実装（`SpellCheckHelper.java` を JNI で呼ぶ）。`device/spell_check.rs` の
 /// Android 経路から呼ばれる。ホストテストのため `test` でもコンパイルする。
 #[cfg(any(target_os = "android", test))]
@@ -563,6 +571,10 @@ pub mod ios;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_accessibility_prefs;
+/// Issue #613: iOS 向け行動認識実装のスタブ（#614 が `CMMotionActivityManager` で埋める）。`device/activity_recognition.rs` の ios 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_activity_recognition;
 /// Issue #1361: iOS 向けバッジ設定実装（`ios/fandhe_ios_app_badge.m` を呼ぶ C ABI ラッパー）。`device/app_badge.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -879,6 +891,10 @@ pub mod macos_safe_area_insets;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code, unused_imports))]
 pub mod macos_screen_wake_lock;
+/// Issue #606: macOS 向け共有の受け取り実装（`macos/fandhe_macos_share_receive.m` のサービスメニュー受信を
+/// 呼ぶ C ABI ラッパー）。`device/share_receive.rs` の macOS 経路と `main.rs`（登録）から使われる。
+#[cfg(target_os = "macos")]
+pub mod macos_share_receive;
 /// Issue #578: macOS 向けスペルチェック実装（`macos/fandhe_macos_spell_check.m` の `NSSpellChecker` を呼ぶ
 /// C ABI ラッパー）。`device/spell_check.rs` の macOS 経路から呼ばれる。戻り値コードの写像をホストで
 /// テストできるよう cfg は `any(macos, test)`。
@@ -1021,6 +1037,9 @@ pub mod secure_credential;
 /// Phase 11 の拡充ループ（親 #896、Issue #897/#898/#899）: 共有シートの effect ドライバ
 /// （macOS/iOS/Android/Windows 実装）。
 pub mod share;
+/// Phase 11 の拡充ループ（親 #122、Issue #606）: 共有の受け取りの effect ドライバ（macOS 実装、
+/// Android は #607 まで `Unsupported` スタブ、他 OS は `UnsupportedShareReceive` 固定。Web は `fandhe-web-dom`）。
+pub mod share_receive;
 /// Phase 11 の拡充ループ（親 #1023、Issue #1024・#1025）: 音声認識の effect ドライバ
 /// （macOS/iOS/Windows/Android 実装、Android/Web は兄弟 issue）。
 pub mod speech_recognition;
@@ -1067,6 +1086,10 @@ pub mod wifi_info;
 /// `cargo test` で検査するため cfg を付けず、WinRT 呼び出しだけをモジュール内に閉じる。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_accessibility_prefs;
+/// Issue #613: Windows 向け行動認識実装（WinRT `ActivitySensor` の `ReadingChanged`）。`device/activity_recognition.rs` の windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_activity_recognition;
 /// Issue #1360: Windows 向けタスクバーのオーバーレイアイコン実装（`ITaskbarList3::SetOverlayIcon`）。`device/app_badge.rs` の windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]

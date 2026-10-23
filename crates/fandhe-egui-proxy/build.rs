@@ -156,6 +156,10 @@
 //!   によるカスタム URL scheme 受信）は **macOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルする（`src/device/apple_url_scheme.rs` から呼ばれる契約）。AppKit・
 //!   Foundation は既存のリンクで足り、CoreServices の定数は enum のため追加リンクは無い。
+//! - `macos/fandhe_macos_share_receive.m`（Issue #606、`NSServices` のサービスメニューと
+//!   `NSApp.servicesProvider` による共有テキストの受信）は **macOS 分岐のみ**で feature `device` 有効時に
+//!   コンパイルする（`src/device/macos_share_receive.rs` から呼ばれる契約）。AppKit・Foundation は
+//!   既存のリンクで足りる。
 //! - `macos/fandhe_macos_screen_wake_lock.m`（Issue #1278、IOKit の電源アサーションによる
 //!   画面スリープの抑止）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_screen_wake_lock.rs` から呼ばれる契約）。IOKit・CoreFoundation を
@@ -1143,6 +1147,16 @@ fn compile_macos_background_task() {
         .compile("fandhe_macos_background_task");
 }
 
+/// `macos/fandhe_macos_share_receive.m` を `cc` でコンパイルする（Issue #606）。
+/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_share_receive.rs` が使う）。AppKit・Foundation は既にリンク済み。
+fn compile_macos_share_receive() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_share_receive.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_share_receive.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_share_receive");
+}
+
 /// `macos/fandhe_macos_url_scheme.m` を `cc` でコンパイルする（Issue #1215）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/apple_url_scheme.rs` が使う）。
 /// AppKit・CoreServices は `build_macos` 側の既存リンクで足りる。
@@ -1911,6 +1925,8 @@ fn build_macos() {
     compile_macos_background_task();
     // `macos/fandhe_macos_url_scheme.m`（Issue #1215）も macOS 専用。
     compile_macos_url_scheme();
+    // `macos/fandhe_macos_share_receive.m`（Issue #606）も macOS 専用。
+    compile_macos_share_receive();
     // `macos/fandhe_macos_app_shortcuts.m`（Issue #424）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_app_shortcuts();
     // `macos/fandhe_macos_power_state.m`（Issue #1274）も macOS 専用。

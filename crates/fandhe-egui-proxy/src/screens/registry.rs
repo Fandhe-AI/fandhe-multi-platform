@@ -258,6 +258,10 @@ generated_screens! {
     crate::device::environment_sensors::environment_sensors_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "activity_recognition_show" => fandhe_core::screens::activity_recognition_show::current_screen,
+    crate::device::activity_recognition::activity_recognition_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ar_show" => fandhe_core::screens::ar_show::current_screen,
     crate::device::ar::ar_show_effect,
     effect
@@ -340,6 +344,10 @@ generated_screens! {
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "spotlight_index" => fandhe_core::screens::spotlight_index::current_screen,
     crate::device::spotlight_index::spotlight_index_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "share_receive_show" => fandhe_core::screens::share_receive_show::current_screen,
+    crate::device::share_receive::share_receive_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "url_scheme_show" => fandhe_core::screens::url_scheme_show::current_screen,
