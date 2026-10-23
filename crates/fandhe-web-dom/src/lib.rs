@@ -52,6 +52,8 @@
 //!   純関数（`FontData` の family → 一覧・例外の `name` → 失敗種別）のみ `wasm32` gate の外に置く
 //! - [`multi_display`]: 「複数ディスプレイ」画面の Web 経路（Issue #1344）。[`location`] と同じ理由で
 //!   純関数（`getScreenDetails` の生値 → 画面一覧・例外の `name` → 失敗種別）のみ `wasm32` gate の外に置く
+//! - [`window_management`]: 「ウィンドウ管理」画面の Web 経路（Issue #638）。[`location`] と同じ理由で
+//!   純関数（`window` の生値 → 読み戻し・目標の計画・期限の判定）のみ `wasm32` gate の外に置く
 //! - [`mic_record`]: 「マイク録音」画面の Web 経路（Issue #958）。[`location`] と同じ理由で
 //!   純関数（例外の `name` → 結果種別の対応・録音結果の検証・mime の決定）のみ `wasm32`
 //!   gate の外に置く
@@ -351,3 +353,6 @@ pub mod url_scheme;
 pub mod usb_device;
 /// 型サンプル「無操作時間の検知」の Web 経路（Issue #632）。[`haptics`] と同じ理由で gate を外す。
 pub mod user_idle;
+/// 型サンプル「ウィンドウ管理」の Web 経路（Issue #638）。[`haptics`] と同じ理由で純関数は native からも
+/// テストできるよう gate を外す。
+pub mod window_management;

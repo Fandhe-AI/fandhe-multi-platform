@@ -187,6 +187,7 @@ use fandhe_core::screens::wake_lock_toggle::{
     WakeLockToggleState, OFF_BUTTON_ID as WAKE_LOCK_OFF_BUTTON_ID,
     OFF_LABEL as WAKE_LOCK_OFF_LABEL,
 };
+use fandhe_core::screens::window_management_show::current_screen as current_window_management_screen;
 use fandhe_core::{sample_screen, SampleState, WidgetId};
 use wasm_bindgen::prelude::*;
 
@@ -619,6 +620,28 @@ pub fn mount_multi_display_show_screen(root_id: &str) -> Result<(), JsValue> {
         current_multi_display_screen(&initial_state),
         initial_state,
         super::multi_display::multi_display_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「ウィンドウ管理」（Issue #638）をマウントする検証専用
+/// エントリポイント。`super::window_management::window_management_show_effect` を effect として渡すため、
+/// ボタン押下で `moveTo` / `resizeTo` の依頼と読み戻しが動く。
+///
+/// `mount` はボタン構成を組み直さないため、マウント時に読んだ display-mode で画面を作る。
+/// PWA の窓では移動・サイズのボタンを出し、ブラウザのタブではボタンを出さず案内だけを出す。
+/// 処理中の二重押下は core 側の `Idle` 以外 no-op で吸収する。
+///
+/// 呼び出し元が渡す `root_id` の要素が見つからない場合はエラーを返す。
+#[wasm_bindgen]
+pub fn mount_window_management_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = super::window_management::web_initial_state();
+    super::mount::mount_with_effect(
+        root,
+        current_window_management_screen(&initial_state),
+        initial_state,
+        super::window_management::window_management_show_effect,
     )
 }
 
