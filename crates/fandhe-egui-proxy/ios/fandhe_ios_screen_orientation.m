@@ -27,11 +27,13 @@
 //     LandscapeLeft 270（Android の ROTATION_90・Web の landscape-primary と揃える）。
 //     lock: 希望値のコード（0/1/2）。
 //
-// requestGeometryUpdate の errorHandler は、現世代の失敗なら希望値を依頼前の値へ戻す。読み戻しの
-// lock が依頼値と食い違うため、driver は成功を確定せず期限で request_lock(直前値) の復元へ進む
-// （既存の向きが依頼と一致していても、拒否された依頼を成功にしない）。世代を照合して古い依頼の
-// 失敗は捨て、現世代なら `fandhe_rust_screen_orientation_geometry_failed` を呼んで次フレームの
-// 読み戻しを起こす。
+// requestGeometryUpdate はシーンの回転を要求するだけで、固定自体は supportedInterfaceOrientations の
+// 差し替えと setNeedsUpdateOfSupportedInterfaceOrientations で適用済み。errorHandler は希望値を
+// 戻さない（すでにその向きのシーンへの更新は UISceneErrorDomain 101 で拒否されうるため、戻すと
+// 有効な固定を黙って失う。復元要求の失敗が期限切れの固定を復活させる逆の問題も同じ根）。
+// 回転できなかった場合は読み戻しの向きが依頼と食い違うので、driver は期限で request_lock(直前値) の
+// 復元へ進む。現世代の失敗なら `fandhe_rust_screen_orientation_geometry_failed` で次フレームの
+// 読み戻しを起こす。古い世代の失敗は捨てる。
 // NSError の内容はログに出さない（security.md A09）。
 //
 // スレッド: static は main スレッドでのみ読み書きする。main 以外は `dispatch_sync` で main を
@@ -129,7 +131,6 @@ int32_t fandhe_ios_screen_orientation_request(int32_t lock_code) {
             return 3;
         }
         // 失敗経路は上で返し済み。ここから先は希望値を変えてよい。
-        int32_t previous_desired = fandhe_orientation_desired;
         fandhe_orientation_desired = lock_code;
         uint64_t generation = ++fandhe_orientation_generation;
         [vc setNeedsUpdateOfSupportedInterfaceOrientations];
@@ -143,11 +144,8 @@ int32_t fandhe_ios_screen_orientation_request(int32_t lock_code) {
                                            errorHandler:^(NSError *_Nonnull error) {
                                                (void)error;
                                                dispatch_async(dispatch_get_main_queue(), ^{
-                                                   // 古い世代の失敗は捨てる（契約表 2）。
+                                                   // 古い世代の失敗は捨てる（契約表 2）。希望値は触らない。
                                                    if (generation == fandhe_orientation_generation) {
-                                                       // 拒否された依頼を希望として残さない。
-                                                       fandhe_orientation_desired = previous_desired;
-                                                       [vc setNeedsUpdateOfSupportedInterfaceOrientations];
                                                        fandhe_rust_screen_orientation_geometry_failed();
                                                    }
                                                });

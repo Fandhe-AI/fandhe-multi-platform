@@ -110,8 +110,8 @@ impl ScreenOrientation for IosScreenOrientation {
     }
 }
 
-/// `requestGeometryUpdate` の errorHandler（main queue 上）から呼ばれる。希望値の巻き戻しは
-/// `.m` 側で済んでおり（読み戻しの lock が依頼と食い違う）、ここは次フレームを起こして driver に読み戻しをさせる（入力が無いと egui が描画しないため）。
+/// `requestGeometryUpdate` の errorHandler（main queue 上）から呼ばれる。希望値は
+/// 戻さない（固定は swizzle で適用済みで、geometry の失敗と固定の失敗は別）。ここは次フレームを起こして driver に読み戻しをさせる（入力が無いと egui が描画しないため）。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
 #[no_mangle]
