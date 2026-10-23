@@ -25,6 +25,8 @@
 //     DidBecomeActive で掛け直す。戻している間も read は overriding=1 と要求値を返す。
 //   - overriding=0 にするのは、利用者による変更を検知して上書きをやめたときだけ。
 //     検知は通知 block と read の両方で行う（通知の取りこぼしの保険）。
+//   - 背景遷移での復元前と再設定の状態更新前にも現在値を検査し、通知前の利用者変更を検知する
+//     （背景遷移は復元を中止、再設定は利用者の現在値を新しい復元先にする）。
 //   - clear に失敗（screen が取れない）したら gOverriding は YES のまま残す。
 //
 // observer: 初回の set で 1 回だけ登録し、static の strong 参照で握り続ける。プロセスと寿命が
@@ -57,12 +59,6 @@ static UIScreen *_Nullable FandheBrightnessScreen(void) {
     return nil;
 }
 
-// 背景中に戻すための screen。前面で取れなければ最後に控えたものを使う。
-static UIScreen *_Nullable FandheBrightnessAnyScreen(void) {
-    UIScreen *screen = FandheBrightnessScreen();
-    return screen != nil ? screen : gScreen;
-}
-
 // 利用者による変更を検知したら上書きをやめる（利用者の値は残し、元の値へは戻さない）。
 static void FandheBrightnessDetectUserChange(UIScreen *screen) {
     if (gOverriding && !gInBackground &&
@@ -75,7 +71,16 @@ static void FandheBrightnessEnterBackground(void) {
     if (!gOverriding || gInBackground) {
         return;
     }
-    UIScreen *screen = FandheBrightnessAnyScreen();
+    // 通知前に利用者が変えた値を元の値で潰さないよう、復元の前に現在値を検査する。
+    UIScreen *front = FandheBrightnessScreen();
+    if (front != nil) {
+        FandheBrightnessDetectUserChange(front);
+        if (!gOverriding) {
+            fandhe_rust_screen_brightness_changed();
+            return;  // 利用者の値を残し、復元しない。
+        }
+    }
+    UIScreen *screen = front != nil ? front : gScreen;
     if (screen != nil) {
         screen.brightness = gOriginal;
     }
@@ -160,6 +165,8 @@ int32_t fandhe_ios_screen_brightness_set(double level, double tolerance) {
             return 3;
         }
         FandheBrightnessRegisterObservers();
+        // 再設定の前に、通知前の利用者変更を検知する（古い gOriginal を持ち越さない）。
+        FandheBrightnessDetectUserChange(screen);
         if (!gOverriding) {
             gOriginal = screen.brightness;
             gInBackground = NO;
