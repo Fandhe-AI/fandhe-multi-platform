@@ -34,11 +34,14 @@
       "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_bluetooth_classic.m + crates/fandhe-egui-proxy/src/device/macos_bluetooth_classic.rs + crates/fandhe-egui-proxy/src/device/bluetooth_classic.rs + crates/fandhe-core/src/screens/bluetooth_classic_show.rs + crates/fandhe-device/src/bluetooth_classic.rs、Issue #659"
     },
     "windows": {
-      "status": "possible",
-      "api": "Win32 `BluetoothFindFirstDevice`（`BLUETOOTH_DEVICE_SEARCH_PARAMS`、`fIssueInquiry`・`cTimeoutMultiplier`。LE は返さない）。電源は WinRT `BluetoothAdapter` + `Radio`。WinRT `DeviceWatcher` 経路は capability `bluetooth` の要否が unpackaged で未記載のため不採用",
+      "status": "done",
+      "api": "Win32 `BluetoothFindFirstDevice` / `BluetoothFindNextDevice`（`BLUETOOTH_DEVICE_SEARCH_PARAMS`。一覧は `fIssueInquiry` なし、検索は `fIssueInquiry` で `cTimeoutMultiplier` 9 × 1.28 秒。LE は返さない）。電源と対応の判定は WinRT `BluetoothAdapter`（`IsClassicSupported`）+ `Radio`。WinRT `DeviceWatcher` 経路は capability `bluetooth` の要否が unpackaged で未記載のため不採用",
       "perm": "宣言不要（Win32 desktop）。電波強度は取れない",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/bluetoothapis/nf-bluetoothapis-bluetoothfindfirstdevice",
-      "note": "未実装。同期の inquiry は途中で止められない。"
+      "note": "実装済み（#660）。画面を開くとペアリング済み機器（認証済みまたは記憶済み）を読み、「検索（12 秒）」で周辺の機器を固定窓で 1 回検索する。電波強度は取れないため出さない。検索は専用ワーカーで直列化し、窓 + 3 秒で内部エラーを確定して遅れて届いた結果は捨てる。同期の inquiry は止められないため、走行中に再要求が来たら前の inquiry の完了を待ってから残り時間で走らせる。0 件は成功として別に出し、Bluetooth オフ・非対応・アクセス拒否は区別して失敗として出す（失敗では部分結果を捨てる）。【推測】Bluetooth オフのとき WinRT の `Radio.State` が確実に `Off` を返すか、LE だけのペアリング機器が列挙に混ざらないか、`fRemembered` だけの機器をペアリング済みとして扱ってよいか、inquiry の最中に一覧読みがブロックされないか、パッケージなしの exe で同意が要らないかは、#650 の Windows 実機確認で確かめる。守らない範囲: 検索結果のペアリング済み機器が窓の時点で圏内にあること、窓内で名前が解決しきれないこと、OS による inquiry の間引き、他アプリが同時に検索している場合の結果の違い、発見可能モードでない機器が出ないこと、一覧の読みが 2 秒を超えると `Internal` で打ち切り、その間は画面が止まること（検索中に一覧を読み直した場合に起こりうる）。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#650）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_bluetooth_classic.rs + crates/fandhe-egui-proxy/src/device/bluetooth_classic.rs + crates/fandhe-core/src/screens/bluetooth_classic_show.rs + crates/fandhe-device/src/bluetooth_classic.rs、Issue #660"
     },
     "web": {
       "status": "no",
