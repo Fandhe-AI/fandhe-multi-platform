@@ -294,6 +294,10 @@ generated_screens! {
     crate::device::screen_brightness::screen_brightness_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "screen_orientation_show" => fandhe_core::screens::screen_orientation_show::current_screen,
+    crate::device::screen_orientation::screen_orientation_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "flashlight_toggle" => fandhe_core::screens::flashlight_toggle::current_screen,
     crate::device::flashlight::flashlight_toggle_effect,
     effect

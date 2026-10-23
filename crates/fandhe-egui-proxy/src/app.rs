@@ -126,6 +126,18 @@ impl<S> CompletionSender<S> {
         self.ctx.input(|i| i.raw.focused)
     }
 
+    /// このフレームのビューポート（描画領域）の大きさ（`egui::InputState::viewport_rect` への
+    /// 薄い委譲）。画面の向きの effect ドライバ（`device/screen_orientation.rs::drive`）専用で、
+    /// 回転による大きさの変化を契機に向きを即時に読み直すために使う。
+    #[cfg_attr(
+        not(all(feature = "device", not(target_arch = "wasm32"))),
+        allow(dead_code)
+    )]
+    pub(crate) fn viewport_size(&self) -> (f32, f32) {
+        let size = self.ctx.input(|i| i.viewport_rect().size());
+        (size.x, size.y)
+    }
+
     /// ポインタの主ボタン（左クリック/タップ）がこのフレームで押下中か
     /// （`egui::PointerState::primary_down` への薄い委譲）。Issue #912「文字サイズ追従」の
     /// effect ドライバ（`device/text_scale.rs::drive`）専用。スライダーのドラッグ中は
