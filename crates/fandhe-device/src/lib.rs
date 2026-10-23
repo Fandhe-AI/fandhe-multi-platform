@@ -180,6 +180,8 @@ pub mod tts;
 pub mod url_scheme;
 /// Phase 11（端末機能の拡充ループ、親 #112、Issue #505）: USB 機器の一覧（ベンダー ID・製品 ID・製品名）。
 pub mod usb_device;
+/// Phase 11（端末機能の拡充ループ、親 #125、Issue #631）: 無操作時間（最後の入力からの経過）。
+pub mod user_idle;
 /// Phase 11（端末機能の拡充ループ、親 #113、Issue #530）: OAuth 用の Web 認証セッション（デモ認可ページ + コールバック検査）。
 pub mod web_auth_session;
 /// Phase 11（端末機能の拡充ループ、親 #111、Issue #514）: Wi-Fi 情報（現在の接続と周辺の上位数件）。

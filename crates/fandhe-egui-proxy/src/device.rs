@@ -911,6 +911,10 @@ pub mod macos_system_accent_color;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_usb_device;
+/// Issue #631: macOS 向け無操作時間実装（`macos/fandhe_macos_user_idle.m` を呼ぶ C ABI ラッパー）。
+/// `device/user_idle.rs` の macOS 経路から呼ばれる。
+#[cfg(target_os = "macos")]
+pub mod macos_user_idle;
 /// Issue #530: macOS 向け Web 認証セッション実装（`macos/fandhe_macos_web_auth_session.m` の
 /// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の macOS 経路から呼ばれる。
 /// 写像の純関数をホストでテストできるよう cfg は `any(macos, test)`。
@@ -1075,6 +1079,9 @@ pub mod url_scheme;
 /// 他 OS は `UnsupportedUsbDevices` 固定。Web は
 /// `fandhe-web-dom`）。
 pub mod usb_device;
+/// Phase 11 の拡充ループ（親 #125、Issue #631）: 無操作時間の effect ドライバ（macOS・Windows 実装、
+/// 他 OS は `UnsupportedUserIdle` 固定。Web は `fandhe-web-dom`）。
+pub mod user_idle;
 /// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS・Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
 pub mod web_auth_session;
@@ -1324,6 +1331,10 @@ pub mod windows_url_scheme;
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_usb_device;
+/// Issue #631: Windows 向け無操作時間実装（Win32 `GetLastInputInfo` + `GetTickCount`）。
+/// `device/user_idle.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_user_idle;
 /// Issue #530: Windows 向け Web 認証セッション実装。`device/web_auth_session.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

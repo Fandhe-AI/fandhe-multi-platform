@@ -104,6 +104,8 @@ pub mod system_tray;
 pub mod url_scheme_show;
 /// Phase 11 の拡充ループ型サンプル「USB 機器」（親 #112、Issue #505）。
 pub mod usb_device_show;
+/// Phase 11 の拡充ループ型サンプル「無操作時間の検知」（親 #125、Issue #631）。
+pub mod user_idle_show;
 
 /// Phase 11 の拡充ループ型サンプル「アクセシビリティ設定の追従」（親 #1132、Issue #1308）。
 pub mod accessibility_prefs_show;
