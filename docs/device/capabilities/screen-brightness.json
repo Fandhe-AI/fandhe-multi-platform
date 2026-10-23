@@ -7,14 +7,17 @@
   "bundle": "one-shot",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "UIKit `UIScreen.brightness`（0〜1。端末全体に効き、ロックまで残る）。取得元は前面の `UIWindowScene.screen`（`UIScreen.main` は iOS 26 で非推奨）。利用者の変更は `brightnessDidChangeNotification`",
+      "status": "done",
+      "api": "UIKit `UIScreen.brightness`（0〜1。端末全体に効き、ロックまで残る）。取得元は前面の `UIWindowScene.screen`（`UIScreen.main` は iOS 26 で非推奨）。利用者の変更は `brightnessDidChangeNotification`。背景遷移（DidEnterBackground）で元の値へ戻し、WillEnterForeground / DidBecomeActive で掛け直す",
       "perm": "不要（公式に権限の記載なし）",
       "url": [
         "https://developer.apple.com/documentation/uikit/uiscreen/brightness",
         "https://developer.apple.com/documentation/uikit/uiscreen/brightnessdidchangenotification"
       ],
-      "note": "未実装。アプリが元の値を控え、背景で戻し前面で掛け直す。メイン画面のみ。visionOS では効かない。上書き中に利用者が OS 側で輝度を変えたら上書きをやめて利用者の値を残す"
+      "note": "実装済み（Issue #634）。アプリが元の値を控え、背景で戻し前面で掛け直す。背景で戻している間も上書き中として扱い、上書きをやめるのは利用者の変更を検知したときだけ。メイン画面のみ。visionOS では効かない。自動輝度による変化も利用者の変更として上書きをやめる場合がある。利用者変更の判定閾値 0.02 は仮の値で、実機確認（#628）で確定する",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#628）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_screen_brightness.m + crates/fandhe-egui-proxy/src/device/ios_screen_brightness.rs + crates/fandhe-egui-proxy/src/device/screen_brightness.rs + crates/fandhe-core/src/screens/screen_brightness_show.rs + crates/fandhe-device/src/screen_brightness.rs、Issue #634"
     },
     "android": {
       "status": "possible",
