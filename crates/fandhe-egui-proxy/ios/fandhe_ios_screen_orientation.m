@@ -27,9 +27,11 @@
 //     LandscapeLeft 270（Android の ROTATION_90・Web の landscape-primary と揃える）。
 //     lock: 希望値のコード（0/1/2）。
 //
-// requestGeometryUpdate の errorHandler は希望値を戻さない（復元は driver が request_lock(直前値)
-// で行う）。世代を照合して古い依頼の失敗は捨て、現世代なら
-// `fandhe_rust_screen_orientation_geometry_failed` を呼んで次フレームの読み戻しを起こす。
+// requestGeometryUpdate の errorHandler は、現世代の失敗なら希望値を依頼前の値へ戻す。読み戻しの
+// lock が依頼値と食い違うため、driver は成功を確定せず期限で request_lock(直前値) の復元へ進む
+// （既存の向きが依頼と一致していても、拒否された依頼を成功にしない）。世代を照合して古い依頼の
+// 失敗は捨て、現世代なら `fandhe_rust_screen_orientation_geometry_failed` を呼んで次フレームの
+// 読み戻しを起こす。
 // NSError の内容はログに出さない（security.md A09）。
 //
 // スレッド: static は main スレッドでのみ読み書きする。main 以外は `dispatch_sync` で main を
@@ -127,6 +129,7 @@ int32_t fandhe_ios_screen_orientation_request(int32_t lock_code) {
             return 3;
         }
         // 失敗経路は上で返し済み。ここから先は希望値を変えてよい。
+        int32_t previous_desired = fandhe_orientation_desired;
         fandhe_orientation_desired = lock_code;
         uint64_t generation = ++fandhe_orientation_generation;
         [vc setNeedsUpdateOfSupportedInterfaceOrientations];
@@ -142,6 +145,9 @@ int32_t fandhe_ios_screen_orientation_request(int32_t lock_code) {
                                                dispatch_async(dispatch_get_main_queue(), ^{
                                                    // 古い世代の失敗は捨てる（契約表 2）。
                                                    if (generation == fandhe_orientation_generation) {
+                                                       // 拒否された依頼を希望として残さない。
+                                                       fandhe_orientation_desired = previous_desired;
+                                                       [vc setNeedsUpdateOfSupportedInterfaceOrientations];
                                                        fandhe_rust_screen_orientation_geometry_failed();
                                                    }
                                                });
