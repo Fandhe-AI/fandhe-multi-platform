@@ -808,6 +808,10 @@ pub mod ios_spotlight_index;
 /// Issue #536: iOS 向け端末内翻訳実装（macOS と共用の `AppleTextTranslator` を返す）。`device/translation.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_translation;
+/// Issue #653: iOS 向け UWB 測距実装（現状はスタブ。実体は #654）。`device/uwb_ranging.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_uwb_ranging;
 /// Issue #532: iOS 向け Web 認証セッション実装（`ios/fandhe_ios_web_auth_session.m` の
 /// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -1113,6 +1117,9 @@ pub mod usb_device;
 /// Phase 11 の拡充ループ（親 #125、Issue #631）: 無操作時間の effect ドライバ（macOS・Windows 実装、
 /// 他 OS は `UnsupportedUserIdle` 固定。Web は `fandhe-web-dom`）。
 pub mod user_idle;
+/// Phase 11 の拡充ループ（親 #129、Issue #653）: UWB による距離・方向の effect ドライバ（iOS は後続 #654 で実装、
+/// 他 OS は `UnsupportedUwbRanging` 固定。Android は GMS 依存のため保留、Web は対象外）。
+pub mod uwb_ranging;
 /// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS・Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
 pub mod web_auth_session;
