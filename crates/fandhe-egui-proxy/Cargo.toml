@@ -360,6 +360,10 @@ windows = { workspace = true, optional = true, features = [
     "Devices_Bluetooth",
     "Devices_Bluetooth_Advertisement",
     "Devices_Radios",
+    # Issue #660: `device/windows_bluetooth_classic.rs` が Win32 の
+    # `BluetoothFindFirstDevice` / `BluetoothFindNextDevice`（`Win32_Devices_Bluetooth`）で
+    # ペアリング済み機器の一覧と検索を行う。既存クレートの feature を足すだけで新規パッケージは増えない。
+    "Win32_Devices_Bluetooth",
     # Issue #1091: `device/windows_haptics.rs` が `VibrationDevice` /
     # `SimpleHapticsController`（`Devices_Haptics`）と、`SupportedFeedback` が返す
     # `IVectorView`（`Foundation_Collections`）を呼ぶ。新規パッケージは増えない。

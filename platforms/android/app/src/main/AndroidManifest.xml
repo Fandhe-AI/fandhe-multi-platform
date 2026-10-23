@@ -112,6 +112,8 @@
     <!-- BLE 非搭載端末（Android TV 等）をストアの自動フィルタから除外しないための明示
          （カメラ・位置情報の uses-feature required=false と同じ根拠、切り離し時に削除する）。 -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <!-- Bluetooth Classic（Issue #661）。非搭載端末を自動フィルタから除外しない（bluetooth_le と同じ根拠）。 -->
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
     <!-- Phase 11（Issue #957）: マイク録音画面が使う。`MediaRecorder` 経由の実行時許可
          （最小権限、`RECORD_AUDIO` のみ。切り離し時に削除する）。 -->
