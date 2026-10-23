@@ -761,6 +761,25 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnUrlSchemeRece
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeOnShareReceived` no-op フォールバック
+/// （Issue #607）。`ShareReceiveHelper.deliver` は feature を知らず `MainActivity` の
+/// `onCreate` / `onNewIntent` から必ず呼ぶため、スタブが無いと feature 無効ビルドで
+/// `UnsatisfiedLinkError` になる。署名は Java 宣言・`device/android_share_receive.rs` の
+/// 実体と 3 か所で一致させる（`(String) -> void`）。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
+/// シンボル名は JNI 命名規約上の固定名（`nativeOnUrlSchemeReceived` と同じ根拠）。
+#[cfg(not(feature = "device"))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_androidapp_ShareReceiveHelper_nativeOnShareReceived(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _text: *mut core::ffi::c_void,
+) {
+}
+
 // `nativeOnLocationChanged`/`nativeOnLocationFailure`（Issue #890）は上記
 // `nativeOnMotionChanged` と異なり feature 無効ビルド向けの no-op フォールバックを
 // 追加しない。`motionListener` は `onResume` で無条件にセンサ登録するため Java 側は
