@@ -120,6 +120,14 @@
   種別は `fandhe_device::local_peer::SERVICE_TYPE` と一致させる。最小権限（security.md A05）とし、
   multicast entitlement は足さない。
 
+  NSNearbyInteractionUsageDescription / NSBonjourServices の `_fandhe-uwb`（Issue #654）: 型サンプル
+  「UWB による距離」（`FANDHE_PROXY_APP=uwb_ranging_show`）が NearbyInteraction の `NISession` で測距し、
+  相手の discovery token を MultipeerConnectivity
+  （`crates/fandhe-egui-proxy/ios/fandhe_ios_uwb_ranging.m`）で交換するために必須。
+  未設定だと測距開始時にクラッシュし、Bonjour 種別が未宣言だと `didNotStart*` が -72008 になる。
+  種別は `fandhe_device::uwb_ranging::SERVICE_TYPE` と一致させる。最小権限（security.md A05）とし、
+  entitlement・multicast entitlement・`UIBackgroundModes` は足さない（測距は前面の間だけ）。
+
   BGTaskSchedulerPermittedIdentifiers / UIBackgroundModes（Issue #1045）: 型サンプル
   「バックグラウンド処理」画面（`FANDHE_PROXY_APP=background_task`）が
   `BGTaskScheduler`（`crates/fandhe-egui-proxy/ios/fandhe_ios_background_task.m`）で
@@ -261,12 +269,16 @@
 	<key>NSAppleMusicUsageDescription</key>
 	<string>型サンプル「音楽ライブラリ」の動作確認に使います</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>型サンプル「LAN のサービス探索」「近くの端末との直接通信」の動作確認に使います</string>
+	<string>型サンプル「LAN のサービス探索」「近くの端末との直接通信」「UWB による距離」の動作確認に使います</string>
+	<key>NSNearbyInteractionUsageDescription</key>
+	<string>型サンプル「UWB による距離」で、近くの端末までの距離を測るために使います</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_http._tcp</string>
 		<string>_fandhe-p2p._tcp</string>
 		<string>_fandhe-p2p._udp</string>
+		<string>_fandhe-uwb._tcp</string>
+		<string>_fandhe-uwb._udp</string>
 	</array>
 	<key>NSSupportsLiveActivities</key>
 	<true/>

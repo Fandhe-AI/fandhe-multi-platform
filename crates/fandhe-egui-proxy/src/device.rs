@@ -807,7 +807,7 @@ pub mod ios_spotlight_index;
 /// Issue #536: iOS 向け端末内翻訳実装（macOS と共用の `AppleTextTranslator` を返す）。`device/translation.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_translation;
-/// Issue #653: iOS 向け UWB 測距実装（現状はスタブ。実体は #654）。`device/uwb_ranging.rs` の iOS 経路から呼ばれる。
+/// Issue #653・#654: iOS 向け UWB 測距実装（`ios/fandhe_ios_uwb_ranging.m` の NearbyInteraction を呼ぶ C ABI ラッパー）。`device/uwb_ranging.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_uwb_ranging;
