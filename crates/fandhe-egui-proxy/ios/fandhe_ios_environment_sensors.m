@@ -217,8 +217,15 @@ int32_t fandhe_ios_env_pressure_start(void) {
         if (auth == CMAuthorizationStatusDenied || auth == CMAuthorizationStatusRestricted) {
             return 2;
         }
+        // UIApplication は main でのみ触る。ロックの外で現在の状態を読む。
+        __block BOOL background = NO;
         if ([NSThread isMainThread]) {
             RegisterLifecycleObservers();
+            background = UIApplication.sharedApplication.applicationState == UIApplicationStateBackground;
+        } else {
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                background = UIApplication.sharedApplication.applicationState == UIApplicationStateBackground;
+            });
         }
         os_unfair_lock_lock(&gLock);
         if (gPressureActive) {
@@ -228,8 +235,14 @@ int32_t fandhe_ios_env_pressure_start(void) {
         gPressureActive = YES;
         gPressureHasValue = NO;
         gPressureFailure = 0;
+        gBackground = background; // 背景中の開始は通知が来ないため、ここで取り込む
         os_unfair_lock_unlock(&gLock);
-        BeginAltimeter(); // 背景中なら前景復帰で再開される
+        if (background) {
+            // 背景中の開始: 購読を省くので、ドライバの初回値期限を止める（復帰の resumed で引き直す）
+            fandhe_rust_environment_sensors_backgrounded();
+        } else {
+            BeginAltimeter();
+        }
     }
     return 0;
 }
