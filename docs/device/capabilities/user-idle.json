@@ -32,7 +32,7 @@
       "api": "Win32 `GetLastInputInfo` + `GetTickCount`（`LASTINPUTINFO.dwTime` との差。32 bit の折り返しを考慮）",
       "perm": "不要（package identity の要件記載なし）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getlastinputinfo",
-      "note": "未実装。呼び出したセッション内の入力だけ。`dwTime` は単調とは限らない（公式文書）ので、新しすぎる値は 0 秒扱い。`windows` crate の feature `Win32_UI_Input_KeyboardAndMouse` を足す。画面ロックは範囲外。実機未検証。経過秒を出す"
+      "note": "未実装。呼び出したセッション内の入力だけ。`dwTime` は単調とは限らない（公式文書）。現在の tick より新しい値は 0 秒や前回値で埋めず、取得失敗として表示する（共通の契約と同じ）。`windows` crate の feature `Win32_UI_Input_KeyboardAndMouse` を足す。画面ロックは範囲外。実機未検証。経過秒を出す"
     },
     "web": {
       "status": "possible",
