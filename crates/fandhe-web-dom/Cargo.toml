@@ -199,6 +199,9 @@ web-sys = { workspace = true, features = [
     "DomStringList",
     # Issue #1219: カスタム URL scheme（`url_scheme` モジュール）。クエリ `url` の読み取り。
     "Location",
+    # Issue #608: 共有の受け取り（`share_receive` モジュール）。共有パラメーターを
+    # `history.replaceState` で消す。
+    "History",
     "UrlSearchParams",
     # Issue #1311: アクセシビリティ設定の追従（`accessibility_prefs` モジュール）。
     # `window.matchMedia` の戻り値（`media()` / `matches()`）。

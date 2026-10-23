@@ -48,12 +48,15 @@
       "note": "Windows の共有ターゲットは UWP の ShareTarget 契約で、package identity が要ると認識。unpackaged での代替が見つからない（要確認）"
     },
     "web": {
-      "status": "possible",
+      "status": "done",
+      "detail": "できている（実ブラウザ確認待ち）",
       "api": "manifest `share_target`（`method: GET`、Service Worker 不要）",
       "perm": "なし（PWA のインストールが前提）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/share_target",
-      "note": "未実装。MDN は Limited availability 表示。Chromium は対応、Safari・Gecko は非対応と認識（報告より）。インストール済みの PWA のみ。GET はクエリを置き換えるため、画面の選択はパラメーター名で行う。本文が URL に載るので、配信サーバーのアクセスログに残りうる。`share_target` には機能検出 API が無く、このブラウザが共有先になれるかは JS から判定できない",
-      "safari": "非対応と認識"
+      "note": "実装済み（#608）。MDN は Limited availability 表示。Chromium は対応、Safari・Gecko は非対応と認識（報告より）。インストール済みの PWA のみ。GET はクエリを置き換えるため、画面の選択はパラメーター名で行う。本文が URL に載るので、配信サーバーのアクセスログに残りうる。`share_target` には機能検出 API が無く、このブラウザが共有先になれるかは JS から判定できない。パラメーター名は `share_text` / `share_url`。両方あるとき、text が url を含まなければ「text、改行、url」を 1 件として扱い、含めば text のみ、片方が空なら他方を使う。読み込み時に 1 回だけ読み、直後に `history.replaceState` で共有パラメーターを消す（再読み込みで二重に数えない）。secure context 外は PWA を入れられないため未対応と表示する",
+      "safari": "非対応と認識",
+      "implStatus": "実ブラウザ確認待ち（#601）",
+      "impl": "crates/fandhe-web-dom/src/share_receive.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/manifest.webmanifest + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/share_receive_show.rs + crates/fandhe-device/src/share_receive.rs、Issue #608"
     }
   },
   "note": "share-sheet（送る側）との違い: 本機能は他アプリから共有された内容を受け取る側。範囲: 共有されたテキスト 1 件（URL もテキストとして扱う）を受け取り、検査を通ったものを最新 1 件だけ保持して画面に表示する。上限は 16 KiB で、超えたものは途中で切らず拒否する。空・不正な UTF-8・NUL や制御文字（タブ・LF・CR 以外）を含むものも拒否し、件数だけ数える。画像・ファイル・複数件・件名は扱わない。受け取った文字列は表示するだけで、リンクとして開かない。起動中と未起動（コールドスタート）の両方から受ける。守る範囲: 1 プロセス内の受信順、不正入力の非表示、コールドスタート分を落とさないこと、判定と更新を同じ排他の内側で行うこと、嘘の成功の禁止、本文をログ・エラー文に出さないこと。守らない範囲: ポーリング間隔内に連続して届いた分は最後の 1 件だけ表示、複数プロセス・複数タブ、Android のプロセス死亡後の再表示、Web の未インストール PWA と Chromium 以外、Web の GET で本文が URL に載ること、macOS の素の実行体、サービスメニューへの反映の遅れ。iOS は App Group が揃うまで保留（deferred）。"
