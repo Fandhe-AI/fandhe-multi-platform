@@ -795,7 +795,7 @@ extern "system" fn Java_com_fandhe_androidapp_ShareReceiveHelper_nativeOnShareRe
 extern "system" fn Java_com_fandhe_androidapp_EnvironmentSensorsHelper_nativeOnForegroundChanged(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
-    _foreground: u8,
+    _foreground: jni::sys::jboolean,
 ) {
 }
 

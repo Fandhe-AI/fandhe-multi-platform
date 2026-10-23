@@ -60,8 +60,10 @@ impl Drop for DevInfo {
 /// UTF-16 バイト列（LE）を NUL までの文字列にする。不正な UTF-16 は `None`。
 fn utf16_until_nul(bytes: &[u8]) -> Option<String> {
     let units: Vec<u16> = bytes
-        .chunks_exact(2)
-        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| u16::from_le_bytes(*c))
         .take_while(|&u| u != 0)
         .collect();
     String::from_utf16(&units).ok()

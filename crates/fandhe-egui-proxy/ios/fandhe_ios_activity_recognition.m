@@ -102,7 +102,7 @@ static void Subscribe(CMMotionActivityManager *m, NSOperationQueue *queue, uint6
     [m queryActivityStartingFromDate:[now dateByAddingTimeInterval:-kProbeSeconds]
                               toDate:now
                              toQueue:queue
-                         withHandler:^(NSArray<CMMotionActivity *> *_Nullable acts, NSError *_Nullable error) {
+                         withHandler:^(NSArray<CMMotionActivity *> *_Nullable __unused acts, NSError *_Nullable error) {
         if (error == nil) {
             return;
         }
