@@ -186,6 +186,11 @@ pub(crate) fn on_stream_done() -> SerialPortFailure {
     SerialPortFailure::Gone
 }
 
+/// 後片付け（reader の cancel・port の close）を待つ上限（ミリ秒）。保留中の write などで
+/// 完了しない場合に、失敗として記録して先へ進むための値。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) const CLEANUP_WAIT_MS: u32 = 2000;
+
 #[cfg(target_arch = "wasm32")]
 mod web {
     use std::cell::RefCell;
@@ -205,7 +210,7 @@ mod web {
     use super::{
         failure_from_io_error, failure_from_open_error, failure_from_request_error, is_late,
         merge_cleanup, on_chunk, on_stream_done, open_options, remaining_ms, to_port_failure,
-        OptionValue,
+        OptionValue, CLEANUP_WAIT_MS,
     };
     use crate::mount::{is_live, Applier};
 
@@ -222,6 +227,91 @@ mod web {
         needs_close: bool,
         /// 後片付けが失敗して資源が残っている。再試行の対象。
         leftover: bool,
+        /// 後片付けの実行中。同じセッションの後片付けを並行させない。
+        cleaning: bool,
+        /// 期限・破棄で解決する Promise。保留中の読み書きの完了待ちと競合させる。
+        signal: Option<Promise>,
+        resolve_signal: Option<Function>,
+        /// `signal` が解決する値（読み書きの結果と区別する目印）。
+        token: JsValue,
+    }
+
+    impl Session {
+        fn new() -> Self {
+            let slot: Rc<RefCell<Option<Function>>> = Rc::new(RefCell::new(None));
+            let slot2 = slot.clone();
+            let signal = Promise::new(&mut |resolve, _| {
+                *slot2.borrow_mut() = Some(resolve);
+            });
+            let resolve_signal = slot.borrow_mut().take();
+            Session {
+                signal: Some(signal),
+                resolve_signal,
+                token: Object::new().into(),
+                ..Default::default()
+            }
+        }
+    }
+
+    /// 保留中の読み書きの待ちを解く合図を出す。
+    fn fire_signal(s: &Session) {
+        if let Some(f) = &s.resolve_signal {
+            let _ = f.call1(&JsValue::UNDEFINED, &s.token);
+        }
+    }
+
+    enum Wait {
+        /// 期限・破棄の合図が先に来た。読み書きの完了は待たない。
+        Aborted,
+        Failed(JsValue),
+    }
+
+    /// 読み書きの Promise を期限・破棄の合図と競合させて待つ。`abort` / `cancel` は
+    /// 進行中の sink の完了を待つため、未解決のまま止まる write でも合図で抜けられるようにする。
+    async fn wait_io(
+        sess: &Rc<RefCell<Session>>,
+        pending: Result<JsValue, JsValue>,
+    ) -> Result<JsValue, Wait> {
+        let v = pending.map_err(Wait::Failed)?;
+        let (signal, token) = {
+            let s = sess.borrow();
+            (s.signal.clone(), s.token.clone())
+        };
+        let Some(signal) = signal else {
+            return JsFuture::from(Promise::resolve(&v))
+                .await
+                .map_err(Wait::Failed);
+        };
+        let race = Promise::race(&Array::of2(&Promise::resolve(&v), &signal));
+        match JsFuture::from(race).await {
+            Ok(r) if Object::is(&r, &token) => Err(Wait::Aborted),
+            Ok(r) => Ok(r),
+            Err(e) => Err(Wait::Failed(e)),
+        }
+    }
+
+    /// 後片付けの待ちに上限を付ける。上限内に終わらなければ `Err`（失敗として記録し再試行に回す）。
+    async fn bounded(pending: Result<JsValue, JsValue>) -> Result<JsValue, JsValue> {
+        let v = pending?;
+        let marker = JsValue::from_str("__cleanup_deadline__");
+        let m2 = marker.clone();
+        let deadline = Promise::new(&mut |resolve, _| {
+            let m = m2.clone();
+            let cb = Closure::once_into_js(move || {
+                let _ = resolve.call1(&JsValue::UNDEFINED, &m);
+            });
+            if let Some(w) = web_sys::window() {
+                let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                    cb.unchecked_ref(),
+                    CLEANUP_WAIT_MS as i32,
+                );
+            }
+        });
+        let race = Promise::race(&Array::of2(&Promise::resolve(&v), &deadline));
+        match JsFuture::from(race).await {
+            Ok(r) if Object::is(&r, &marker) => Err(JsValue::from_str("cleanup deadline exceeded")),
+            other => other,
+        }
     }
 
     struct MountEntry {
@@ -272,6 +362,7 @@ mod web {
     /// 保留中の読み書きを解く。reader は `cancel`（保留中の `read()` は `done: true`）、
     /// writer は `abort`。結果は見ない。ロックの解放は `cleanup` が行う。
     fn abort_io(s: &Session) {
+        fire_signal(s);
         if let Some(r) = &s.reader {
             let _ = call(r, "cancel", &[]);
         }
@@ -288,6 +379,27 @@ mod web {
         wasm_bindgen_futures::spawn_local(async move {
             let _ = cleanup(&sess).await;
         });
+    }
+
+    /// マウントに残った後片付け失敗のセッションを解放し直す。済むまで待つ。
+    /// 成功すれば記録を消し、失敗すれば残す（次の機会に再試行される）。
+    async fn settle_leftover(id: u64) {
+        let old = MOUNTS.with(|m| m.borrow().get(&id).and_then(|e| e.session.clone()));
+        let Some(old) = old else {
+            return;
+        };
+        if !old.borrow().leftover {
+            return;
+        }
+        if cleanup(&old).await {
+            MOUNTS.with(|m| {
+                if let Some(e) = m.borrow_mut().get_mut(&id) {
+                    if e.session.as_ref().is_some_and(|s| Rc::ptr_eq(s, &old)) {
+                        e.session = None;
+                    }
+                }
+            });
+        }
     }
 
     fn make_options() -> Result<Object, JsValue> {
@@ -396,18 +508,22 @@ mod web {
             let port = match JsFuture::from(promise).await {
                 Ok(p) => p,
                 Err(err) => {
+                    // キャンセルの経路でも、残った資源の解放を試みてから結果を出す。
+                    settle_leftover(id).await;
                     let f = failure_from_request_error(error_name(&err).as_deref());
                     let pf = to_port_failure(f);
                     applier.apply(move |s| finish_round_trip(s, generation, Err(pf)));
                     return;
                 }
             };
+            // 前回の後片付け失敗で残った資源を、open の前に解放し終える（open と重ねない）。
+            settle_leftover(id).await;
             // 選択中にマウントが破棄された。ポートは開いていないので捨てる。
             if !is_live(id) {
                 return;
             }
             let started = now();
-            let sess = Rc::new(RefCell::new(Session::default()));
+            let sess = Rc::new(RefCell::new(Session::new()));
             MOUNTS.with(|m| {
                 if let Some(e) = m.borrow_mut().get_mut(&id) {
                     if let Some(old) = e.session.replace(sess.clone()) {
@@ -449,7 +565,9 @@ mod web {
     /// 期限タイマーを予約する。発火したら `timed_out` を立てて保留中の読み書きを解く。
     fn arm_timer(sess: &Rc<RefCell<Session>>, started: f64) {
         let Some(ms) = remaining_ms(started, now()) else {
-            sess.borrow_mut().timed_out = true;
+            let mut s = sess.borrow_mut();
+            s.timed_out = true;
+            fire_signal(&s);
             return;
         };
         let Some(window) = web_sys::window() else {
@@ -509,8 +627,10 @@ mod web {
         let writer = call(&writable, "getWriter", &[]).map_err(|_| SerialPortFailure::Internal)?;
         sess.borrow_mut().writer = Some(writer.clone());
         let data = Uint8Array::from(SEND_LINE);
-        if let Err(err) = call_await(&writer, "write", &[data.into()]).await {
-            return Err(io_failure(sess, &err));
+        match wait_io(sess, call(&writer, "write", &[data.into()])).await {
+            Ok(_) => {}
+            Err(Wait::Aborted) => return Err(SerialPortFailure::Timeout),
+            Err(Wait::Failed(err)) => return Err(io_failure(sess, &err)),
         }
         let _ = call(&writer, "releaseLock", &[]);
         sess.borrow_mut().writer = None;
@@ -524,9 +644,10 @@ mod web {
         sess.borrow_mut().reader = Some(reader.clone());
         let mut assembler = LineAssembler::new();
         loop {
-            let res = match call_await(&reader, "read", &[]).await {
+            let res = match wait_io(sess, call(&reader, "read", &[])).await {
                 Ok(r) => r,
-                Err(err) => return Err(io_failure(sess, &err)),
+                Err(Wait::Aborted) => return Err(SerialPortFailure::Timeout),
+                Err(Wait::Failed(err)) => return Err(io_failure(sess, &err)),
             };
             if get(&res, "done").and_then(|d| d.as_bool()) == Some(true) {
                 return Err(if sess.borrow().timed_out {
@@ -558,6 +679,10 @@ mod web {
     async fn cleanup(sess: &Rc<RefCell<Session>>) -> bool {
         let (timer, reader, writer, port, needs_close) = {
             let mut s = sess.borrow_mut();
+            if s.cleaning {
+                return false;
+            }
+            s.cleaning = true;
             (
                 s.timer.take(),
                 s.reader.take(),
@@ -573,9 +698,17 @@ mod web {
             drop(cb);
         }
         let mut ok = true;
+        // writer のロックは待たずに先に手放す（保留中の write の完了に依存しない）。
+        if let Some(w) = writer {
+            if call(&w, "releaseLock", &[]).is_err() {
+                ok = false;
+                sess.borrow_mut().writer = Some(w);
+            }
+        }
         if let Some(r) = reader {
             // cancel の失敗と releaseLock の失敗は別に扱う。releaseLock に失敗した reader は戻す。
-            if call_await(&r, "cancel", &[]).await.is_err() {
+            // 待ちには上限を付け、超えたら失敗として記録する。
+            if bounded(call(&r, "cancel", &[])).await.is_err() {
                 ok = false;
             }
             if call(&r, "releaseLock", &[]).is_err() {
@@ -583,22 +716,20 @@ mod web {
                 sess.borrow_mut().reader = Some(r);
             }
         }
-        if let Some(w) = writer {
-            if call(&w, "releaseLock", &[]).is_err() {
-                ok = false;
-                sess.borrow_mut().writer = Some(w);
-            }
-        }
         if needs_close {
             if let Some(port) = port {
-                if call_await(&port, "close", &[]).await.is_err() {
+                if bounded(call(&port, "close", &[])).await.is_err() {
                     ok = false;
                 } else {
                     sess.borrow_mut().needs_close = false;
                 }
             }
         }
-        sess.borrow_mut().leftover = !ok;
+        {
+            let mut s = sess.borrow_mut();
+            s.leftover = !ok;
+            s.cleaning = false;
+        }
         ok
     }
 
@@ -703,6 +834,9 @@ mod tests {
             PortFailure::Failed(FAILED_TEXT.to_string())
         );
     }
+
+    /// 後片付けの待ち上限は 0 より大きく、期限（3 秒）を大きく超えない。
+    const _: () = assert!(CLEANUP_WAIT_MS > 0 && CLEANUP_WAIT_MS <= 5000);
 
     #[test]
     fn deadline_boundaries() {
