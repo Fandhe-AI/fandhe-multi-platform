@@ -252,6 +252,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // （`speech_recognition`/`notification` と同じ理由）。
     #[cfg(feature = "device")]
     crate::device::bluetooth_le::reset_pending_tracking();
+    // Issue #659: `bluetooth_classic::bridge::SLOT` / `OBSERVED` も同じ理由でプロセス static のため、
+    // Activity 再生成をまたいで残る旧要求の保留をここで捨てる。
+    #[cfg(feature = "device")]
+    crate::device::bluetooth_classic::reset_pending_tracking();
     // Issue #486: `lan_discovery::bridge::SLOT` / `OBSERVED` も同じ理由でプロセス static のため、
     // Activity 再生成をまたいで残る旧要求の保留をここで捨てる。
     #[cfg(feature = "device")]
