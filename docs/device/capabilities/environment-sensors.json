@@ -39,7 +39,7 @@
       "note": "Mac の環境光センサー等の公開 API は確認できなかった（要確認）。URL 未確認"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "WinRT `Windows.Devices.Sensors` の `Barometer`（`StationPressureInHectopascals`）・`LightSensor`（`IlluminanceInLux`）・`ProximitySensor`（`GetDefault` は無く、`GetDeviceSelector` + `FromId` で取り、`IsDetected` を読む）",
       "perm": "要確認（パッケージ無しの exe で読めるかは実機待ち。宣言する capability は無い）",
       "url": [
@@ -47,7 +47,10 @@
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.lightsensor",
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.proximitysensor"
       ],
-      "note": "搭載機種のみ。非搭載なら `GetDefault` が null。近接は列挙（`FindAllAsync`）が非同期で、UI スレッドを止めないよう作業スレッドで行う。気圧・照度・近接の 3 種で done にする"
+      "note": "搭載機種のみ。非搭載なら `GetDefault` が null。近接は列挙（`FindAllAsync`）が非同期で、UI スレッドを止めないよう作業スレッドで行う。気圧・照度・近接の 3 種で done にする。実装済み（#612）: 気圧（`Barometer`）・照度（`LightSensor`）は UI スレッドで `GetDefault` し、`ReportInterval` を `max(最小値, 100 ms)` にして最新値を同期 pull する（設定失敗時は 0 へ戻して保持しない）。近接は専用ワーカー 1 本が `GetDeviceSelector` → `FindAllAsyncAqsFilter` → `FromId` を 1 回だけ行い、世代照合で停止後の結果を捨てる（列挙 0 件・null は `NotPresent`、`E_ACCESSDENIED` は `PermissionDenied`、非同期エラーは元の HRESULT を保つ）。気圧は `Timestamp` が変わった読みを単調時計で受信記録し、2 秒超と開始直後の最初の読みは値なしにする。最小化は専用ウォッチャーが `IsIconic` を 200 ms 間隔で見て、背景遷移・復帰として driver に伝え、気圧の受信記録を捨てる。守る範囲: 近接の開始・停止・列挙結果の順序（1 本のワーカーと 1 本の `Mutex`）、嘘の値（0・前回値・範囲外・古い気圧）を出さない、停止と失敗で保持を捨てる。守らない範囲: 絶対精度、近接の距離、OS 間で値がそろうこと、最小化中の表示、複数プロセス。既知の天井: パッケージ無しの素の exe での動作・拒否時の HRESULT・近接を `ReadingChanged` なしで pull して値が出るか・気圧が一定の機種で新しい読みが出るか・最小化からの復元での再描画は実機未確認で、届かないと判明したらこの `done` を取り下げる",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#602）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_environment_sensors.rs + crates/fandhe-egui-proxy/src/device/environment_sensors.rs + crates/fandhe-core/src/screens/environment_sensors_show.rs + crates/fandhe-device/src/environment_sensors.rs、Issue #612"
     },
     "web": {
       "status": "no",
