@@ -83,6 +83,9 @@ fn from_core(o: CoreOrientation) -> Orientation {
     }
 }
 
+/// 復元に失敗したとき利用者へ見せる理由。
+const RESTORE_FAILED_REASON: &str = "画面の向きの固定を元に戻せませんでした。再試行します。";
+
 fn read_core(imp: &dyn ScreenOrientation) -> Result<Reading, OrientationFailure> {
     imp.read()
         .map(|r| Reading {
@@ -124,6 +127,9 @@ struct Driver {
     watch: Option<Watch>,
     last_read: Option<Instant>,
     last_viewport: Option<(f32, f32)>,
+    /// 期限切れの復元（`request_lock`）に失敗し、OS に希望が残っている固定の戻し先。
+    /// 成功するまで毎フレーム再試行し、残っている間は新しい固定要求を受け付けない。
+    pending_restore: Option<Option<Orientation>>,
 }
 
 // ponytail: 1 プロセス 1 ウィンドウ前提の static。複数 Context を扱うなら `ctx.data` へ移す。
@@ -132,7 +138,13 @@ static DRIVER: Mutex<Driver> = Mutex::new(Driver {
     watch: None,
     last_read: None,
     last_viewport: None,
+    pending_restore: None,
 });
+
+/// 復元に失敗して OS の希望状態が残っていることを伝える失敗（利用者へ見せる）。
+fn failed_restore() -> OrientationFailure {
+    OrientationFailure::Failed(RESTORE_FAILED_REASON.to_string())
+}
 
 fn failed_not_satisfied(target: Option<Orientation>) -> OrientationFailure {
     let reason = if target.is_some() {
@@ -152,6 +164,15 @@ fn drive(
     viewport: (f32, f32),
     d: &mut Driver,
 ) {
+    // 未復元の固定があれば、新しい要求より先に戻しを再試行する（成功するまで保持する）。
+    if let Some(prev) = d.pending_restore {
+        if imp.request_lock(prev).is_ok() {
+            d.pending_restore = None;
+        } else {
+            sender.request_repaint_after(request_slot::POLL_INTERVAL);
+        }
+    }
+
     if let Some(req) = take_request(state) {
         // 直前の `mark_applying` がまだ画面へ反映されていないフレームで、同じ要求を OS へ二重に渡さない。
         if d.watch
@@ -178,7 +199,9 @@ fn drive(
             d.watch = None;
             SLOT.reset();
         } else {
-            watch_step(imp, now, w);
+            if let Some(unrestored) = watch_step(imp, now, w) {
+                d.pending_restore = Some(unrestored);
+            }
             if SLOT.snapshot().is_some_and(|(_, o)| o.is_some()) {
                 d.watch = None;
             }
@@ -239,7 +262,20 @@ fn start_request(
         send_finish(Err(OrientationFailure::Unsupported), before);
         return;
     }
-    let previous = before.as_ref().ok().and_then(|r| r.lock).map(from_core);
+    // 未復元の固定が残っているうちは、OS の状態を重ねて変えない。
+    if d.pending_restore.is_some() {
+        send_finish(Err(failed_restore()), before);
+        return;
+    }
+    // 直前値が読めないと、期限切れで戻す先が分からず元の固定を失う。OS を変えず読み取り失敗で終える。
+    let previous = match before.as_ref() {
+        Ok(r) => r.lock.map(from_core),
+        Err(e) => {
+            let failure = e.clone();
+            send_finish(Err(failure), before);
+            return;
+        }
+    };
     match imp.request_lock(target) {
         Err(e) => {
             let failure = to_failure(e);
@@ -259,20 +295,26 @@ fn start_request(
 }
 
 /// 確認待ちを 1 歩進める。期限判定を一致判定より先に行う（期限後に一致しても成功にしない）。
-fn watch_step(imp: &dyn ScreenOrientation, now: Instant, w: &Watch) {
+///
+/// 期限切れで戻しに失敗したときは、未復元の戻し先を `Some` で返す（呼び出し側が保持して再試行する）。
+fn watch_step(imp: &dyn ScreenOrientation, now: Instant, w: &Watch) -> Option<Option<Orientation>> {
     let core_target = w.target.map(to_core);
     if now.saturating_duration_since(w.started) >= CONFIRM_TIMEOUT {
-        // 結果を届ける前に、固定の希望を直前の値へ戻す。戻しの成否に関わらず失敗で確定する。
-        let _ = imp.request_lock(w.previous);
+        // 結果を届ける前に、固定の希望を直前の値へ戻す。失敗は握りつぶさず利用者へ伝える。
+        let restored = imp.request_lock(w.previous).is_ok();
         SLOT.deliver(
             w.request_id,
             Outcome {
                 generation: w.generation,
-                result: Err(failed_not_satisfied(w.target)),
+                result: Err(if restored {
+                    failed_not_satisfied(w.target)
+                } else {
+                    failed_restore()
+                }),
                 reading: read_core(imp),
             },
         );
-        return;
+        return (!restored).then_some(w.previous);
     }
     let reading = read_core(imp);
     if reading
@@ -289,6 +331,7 @@ fn watch_step(imp: &dyn ScreenOrientation, now: Instant, w: &Watch) {
         );
     }
     // 読み取りが失敗している間、または未一致の間は期限まで待つ。
+    None
 }
 
 /// 要求が無いときの間隔つき pull。
@@ -521,6 +564,46 @@ mod tests {
         assert_ne!(lock_text(&s), LOCKED_LANDSCAPE_STATUS);
         // 固定の依頼のあと、直前の値（解除）へ戻す依頼が出ている。
         assert_eq!(fake.calls(), vec![Some(Orientation::Landscape), None]);
+    }
+
+    #[test]
+    fn read_failure_before_request_changes_nothing() {
+        let _g = guard();
+        let (tx, rx) = sender_with_channel();
+        let fake = Fake::new();
+        let mut d = Driver::default();
+        let mut s = ready(&tx, &rx, &fake, &mut d);
+        *fake.fail_read.lock().unwrap() = true;
+        lock_landscape(&mut s);
+        drive(&s, &tx, &fake, Instant::now(), VP, &mut d);
+        apply_all(&rx, &mut s);
+        assert!(!s.applying());
+        assert!(d.watch.is_none());
+        assert!(fake.calls().is_empty(), "OS の固定を変えない");
+    }
+
+    #[test]
+    fn restore_failure_is_reported_and_retried() {
+        let _g = guard();
+        let (tx, rx) = sender_with_channel();
+        let mut fake = Fake::new();
+        fake.follow = false;
+        let mut d = Driver::default();
+        let mut s = ready(&tx, &rx, &fake, &mut d);
+        let t0 = Instant::now();
+        lock_landscape(&mut s);
+        drive(&s, &tx, &fake, t0, VP, &mut d);
+        apply_all(&rx, &mut s);
+        *fake.fail_request.lock().unwrap() = Some(DeviceError::Internal("x"));
+        drive(&s, &tx, &fake, t0 + CONFIRM_TIMEOUT, VP, &mut d);
+        apply_all(&rx, &mut s);
+        assert!(!s.applying());
+        assert!(error_text(&s).contains(RESTORE_FAILED_REASON));
+        assert_eq!(d.pending_restore, Some(None));
+        // 次のフレームで再試行し、成功すれば保持を解く。
+        drive(&s, &tx, &fake, t0 + CONFIRM_TIMEOUT, VP, &mut d);
+        assert_eq!(d.pending_restore, None);
+        assert_eq!(fake.calls().last(), Some(&None));
     }
 
     #[test]
