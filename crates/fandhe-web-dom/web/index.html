@@ -68,6 +68,7 @@
         mount_barcode_scan_screen,
         mount_otp_input_screen,
         mount_url_scheme_show_screen,
+        mount_share_receive_show_screen,
         mount_wake_lock_toggle_screen,
         mount_flashlight_toggle_screen,
         mount_compass_show_screen,
@@ -98,8 +99,13 @@
         mount_translation_screen,
       } from "./fandhe_web_dom.js";
       await init();
-      // 検証用の画面切替（Issue #915/#936/#958/#981/#985/#987/#989/#991/#993/#1007/#1017/#1027/#1037/#1047/#1063/#1223/#1091/#1094/#1103/#1277/#1307/#1311/#423/#1315/#1344/#1333/#1338/#1363/#1387/#1379/#1414/#1401/#271/#315/#329/#344/#347/#367/#389/#393/#419/#539/#559/#587）。既定（?screen 未指定）は従来どおり sample。
-      const screen = new URLSearchParams(location.search).get("screen");
+      // 検証用の画面切替（Issue #915/#936/#958/#981/#985/#987/#989/#991/#993/#1007/#1017/#1027/#1037/#1047/#1063/#1223/#1091/#1094/#1103/#1277/#1307/#1311/#423/#1315/#1344/#1333/#1338/#1363/#1387/#1379/#1414/#1401/#271/#315/#329/#344/#347/#367/#389/#393/#419/#539/#559/#587/#608）。既定（?screen 未指定）は従来どおり sample。
+      const params = new URLSearchParams(location.search);
+      // 共有ターゲット（Issue #608）: GET はクエリが置き換わるため screen ではなく
+      // パラメーター名で振り分ける。screen の指定があればそちらを優先する。
+      const screen =
+        params.get("screen") ??
+        (params.has("share_text") || params.has("share_url") ? "share_receive_show" : null);
       if (screen === "translation") {
         mount_translation_screen("fandhe-dom-root");
       } else if (screen === "on_device_llm") {
@@ -156,6 +162,8 @@
         mount_file_association_show_screen("fandhe-dom-root");
       } else if (screen === "power_state_show") {
         mount_power_state_show_screen("fandhe-dom-root");
+      } else if (screen === "share_receive_show") {
+        mount_share_receive_show_screen("fandhe-dom-root");
       } else if (screen === "url_scheme_show") {
         mount_url_scheme_show_screen("fandhe-dom-root");
       } else if (screen === "photo_pick") {
