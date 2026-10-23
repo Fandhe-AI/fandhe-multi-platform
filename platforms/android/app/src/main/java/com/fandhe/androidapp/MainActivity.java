@@ -721,6 +721,18 @@ public class MainActivity extends GameActivity {
         return screenBrightnessHelper.read();
     }
 
+    // 画面向きの取得・固定（Issue #657）。実装は `ScreenOrientationHelper`。Rust の
+    // `android_screen_orientation.rs` が egui スレッドから同期で JNI 呼び出しする。
+    private final ScreenOrientationHelper screenOrientationHelper = new ScreenOrientationHelper(this);
+
+    int screenOrientationRequest(int lock) {
+        return screenOrientationHelper.request(lock);
+    }
+
+    int[] screenOrientationRead() {
+        return screenOrientationHelper.read();
+    }
+
     // 画面キャプチャの防止・検知（Issue #584）。実装は `CaptureProtectionHelper`。Rust の
     // `android_capture_protection.rs` が egui スレッドから JNI 呼び出しする。
     private final CaptureProtectionHelper captureProtectionHelper = new CaptureProtectionHelper(this);
@@ -4879,6 +4891,7 @@ public class MainActivity extends GameActivity {
         printHelper.onDestroy();
         screenWakeLockHelper.onDestroy();
         screenBrightnessHelper.onDestroy();
+        screenOrientationHelper.onDestroy();
         captureProtectionHelper.onDestroy();
         flashlightHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため

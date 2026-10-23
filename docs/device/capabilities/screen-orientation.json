@@ -19,7 +19,7 @@
       "note": "未実装。iPad はマルチタスク対応アプリで `supportedInterfaceOrientations` が呼ばれない（公式）ため、固定は iPhone のみ。iPad は取得だけで、固定は `Unsupported`。Info.plist は変えず、実機で `requestGeometryUpdate` が失敗したときだけ `UISupportedInterfaceOrientations~iphone` を足す"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`Activity.setRequestedOrientation`（`SENSOR_PORTRAIT` / `SENSOR_LANDSCAPE` / `UNSPECIFIED`）、取得は `Display.getRotation` + `Configuration.orientation`",
       "perm": "不要",
       "url": [
@@ -27,7 +27,10 @@
         "https://developer.android.com/reference/android/view/Display#getRotation()",
         "https://developer.android.com/about/versions/16/behavior-changes-16"
       ],
-      "note": "未実装。manifest の `configChanges` に orientation・screenSize が既にあり、回転・固定で Activity は再生成されない（manifest の変更なし）。targetSdk 36 以上の最小幅 600dp 以上の画面とメーカー設定では呼び出しが無視される。実際の向きの読み戻しで失敗として出す。Activity 再生成で固定は引き継がない"
+      "note": "実装済み（#657）。UI スレッドで `setRequestedOrientation` を設定して `getRequestedOrientation` で読み戻す。最長 1 秒待ち、期限後は適用しない。取得は `Display.getRotation`（API 30 で分岐）と `Configuration.orientation`。manifest の `configChanges` に orientation・screenSize が既にあり、回転・固定で Activity は再生成されない（manifest の変更なし）。targetSdk 36 以上の最小幅 600dp 以上の画面とメーカー設定では呼び出しが無視される。実際の向きの読み戻しで失敗として出す。Activity 再生成で固定は引き継がない",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#649）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_screen_orientation.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/ScreenOrientationHelper.java + crates/fandhe-egui-proxy/src/device/screen_orientation.rs + crates/fandhe-core/src/screens/screen_orientation_show.rs + crates/fandhe-device/src/screen_orientation.rs、Issue #657"
     },
     "macos": {
       "status": "n-a",
