@@ -16,26 +16,32 @@
     },
     "macos": {
       "status": "possible",
-      "api": "AppKit `NSWindow`（`setFrame` / `level` / `makeKeyAndOrderFront`）",
+      "api": "変更は winit（eframe `ViewportCommand::OuterPosition` / `InnerSize` / `WindowLevel`）、読み取りは AppKit `NSWindow.level`・`NSWindow.screen.visibleFrame`",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nswindow",
-      "note": "未実装。winit のウィンドウ API でも位置・サイズ・最前面（`WindowLevel`）は扱える（要確認）。位置・サイズの保存と復元はアプリ側"
+      "note": "未実装。確認済み: winit で位置・サイズ・最前面を変更でき、最前面の読み戻しと作業領域だけ AppKit を読む。位置・サイズの保存と復元は扱わない"
     },
     "windows": {
       "status": "possible",
-      "api": "WinAppSDK `AppWindow`（Move / Resize）、Win32 `SetWindowPos`",
-      "perm": "要確認（`AppWindow` は package identity の要件記載なし。Win32 は不要と見込む）",
-      "url": "https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.appwindow",
-      "note": "未実装。Win32 `SetWindowPos` は URL 未取得。winit 経由で足りる可能性あり（要確認）"
+      "api": "変更は winit（内部は `SetWindowPos`）、読み取りは `GetWindowLongW(GWL_EXSTYLE)` の `WS_EX_TOPMOST`、`MonitorFromWindow` + `GetMonitorInfoW` の `rcWork`。`AppWindow` は使わない",
+      "perm": "不要",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos",
+        "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmonitorinfow"
+      ],
+      "note": "未実装。確認済み: winit で変更でき、最前面の読み戻しと作業領域だけ Win32 を読む。外枠に見えない縁（数 px）を含むため、左上へ寄せた見た目は数 px 内側になる"
     },
     "web": {
       "status": "possible",
-      "api": "Window Management API の一部（`getScreenDetails()` で画面配置を取得し、`window.open` で位置指定）。最前面指定は不可",
-      "perm": "`window-management` 権限（ユーザー許可）",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window_Management_API",
+      "api": "`window.moveTo` / `resizeTo`（インストールした PWA の窓のみ）、`screenX` / `screenY` / `innerWidth` / `innerHeight` で読み戻し、`screen.availLeft` / `availTop`。Window Management API は使わない（画面の列挙は multi-display）",
+      "perm": "不要",
+      "url": [
+        "https://developer.mozilla.org/en-US/docs/Web/API/Window/moveTo",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Window/resizeTo"
+      ],
       "safari": "非対応",
-      "note": "Chromium のみ（MDN は Experimental）。現在のウィンドウの移動・サイズ変更は `window.open` で開いた窓に限られる（要確認）。最前面は固定できない"
+      "note": "Chromium のみ。タブでは動かせない（MDN）ため非対応表示。インストール済み PWA の窓では動かせる。最前面は不可"
     }
   },
-  "note": "macOS / Windows のデスクトップが主対象。iOS / Android は概念がなく n-a、Web は Chromium の実験 API のみ。multi-display / fullscreen-immersive（別 id）との違い: 本機能は 1 ウィンドウの位置・サイズ・前後関係、前者は画面の列挙、後者は全画面。今回の範囲: ウィンドウの位置・サイズを表示し、ボタンで左上へ移動・既定サイズへ戻す・最前面の ON / OFF を行う（位置の保存・復元は扱わない）"
+  "note": "macOS / Windows のデスクトップが主対象。iOS / Android は概念がなく n-a、Web はインストール済み PWA の窓に限る。multi-display / fullscreen-immersive（別 id）との違い: 本機能は 1 ウィンドウの位置・サイズ・前後関係、前者は画面の列挙、後者は全画面。今回の範囲: ウィンドウの位置・サイズを表示し、ボタンで左上へ移動・既定サイズへ戻す・最前面の ON / OFF を行う（位置の保存・復元は扱わない）。「左上」は今いる画面の作業領域の左上、既定サイズは起動時の内側 480 × 360、全画面中は断る。守る範囲: 1 プロセス 1 ウィンドウでの要求と完了の順序、古い世代の完了を捨てること、表示が実際の位置・大きさ・最前面に追従すること、失敗・非対応・読めない状態を成功と見せないこと、1 マウント内で Web のタイマーとリスナーを漏らさないこと。守らない範囲: 複数ウィンドウ、位置・大きさの保存と復元、倍率の違う画面をまたぐ移動での期限切れ、ドラッグ中の一時的なずれ、他アプリの最前面窓との前後、外部プロセスによる最前面の変更の反映遅れ、最小化中（読めないと出す）、プロセス終了時の後片付け（OS が行う）、Web のタブ・Chromium 以外・複数タブ・反映遅れ（最大 1 秒）"
 }
