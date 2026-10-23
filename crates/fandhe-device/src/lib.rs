@@ -60,6 +60,8 @@ pub mod contact_picker;
 pub mod device_info;
 /// Phase 11（端末機能の拡充ループ、親 #1013、Issue #1014）: ドラッグ & ドロップ受け取り。
 pub mod drag_drop;
+/// Phase 11（端末機能の拡充ループ、親 #123、Issue #609）: 気圧・照度・近接センサー。
+pub mod environment_sensors;
 /// Phase 11（端末機能の拡充ループ、親 #102、Issue #416）: ファイルの関連付け（OS から渡されたファイルを開く）。
 pub mod file_association;
 /// Phase 11（端末機能の拡充ループ、Issue #872）: ファイル選択ダイアログ。

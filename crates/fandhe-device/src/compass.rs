@@ -148,12 +148,18 @@ impl WaitTracker {
     /// 1 回の読み取り結果を記録する。値があれば起点を消し、値なしで起点が無ければ今を起点にする。
     /// 起点から [`NO_READING_TIMEOUT_MS`] を超えたら `true`（期限切れ）。
     pub fn observe(&mut self, has_value: bool, now_ms: f64) -> bool {
+        self.observe_within(has_value, now_ms, NO_READING_TIMEOUT_MS)
+    }
+
+    /// [`WaitTracker::observe`] の期限を呼び出し側が決める版（`environment_sensors` が自分の期限で共用する）。
+    /// 起点から `timeout_ms` を超えたら `true`。
+    pub fn observe_within(&mut self, has_value: bool, now_ms: f64, timeout_ms: f64) -> bool {
         if has_value {
             self.since = None;
             return false;
         }
         let since = *self.since.get_or_insert(now_ms);
-        now_ms - since > NO_READING_TIMEOUT_MS
+        now_ms - since > timeout_ms
     }
 
     /// 起点を捨てる（停止時）。
@@ -218,6 +224,18 @@ mod tests {
         assert!(t.observe(false, 23_001.0));
         t.reset();
         assert!(!t.observe(false, 99_999.0));
+    }
+
+    #[test]
+    fn observe_within_uses_given_timeout() {
+        let mut t = WaitTracker::default();
+        t.begin(0.0);
+        assert!(!t.observe_within(false, 5000.0, 5000.0));
+        assert!(t.observe_within(false, 5000.1, 5000.0));
+        // 既存の observe は 3000 ms のまま。
+        let mut u = WaitTracker::default();
+        u.begin(0.0);
+        assert!(u.observe(false, 3000.1));
     }
 
     #[test]
