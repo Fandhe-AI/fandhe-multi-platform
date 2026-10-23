@@ -31,11 +31,14 @@
       "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_serial_port.m + crates/fandhe-egui-proxy/src/device/macos_serial_port.rs + crates/fandhe-egui-proxy/src/device/serial_port.rs + crates/fandhe-core/src/screens/serial_port_show.rs + crates/fandhe-device/src/serial_port.rs、Issue #670"
     },
     "windows": {
-      "status": "possible",
-      "api": "Win32 `GetCommPorts` で一覧 + `CreateFileW` + `SetCommState`（DCB）+ `SetCommTimeouts` + `PurgeComm` + `WriteFile` / `ReadFile`。WinRT `SerialDevice` は package identity 必須のため使わない",
+      "status": "done",
+      "api": "Win32 `GetCommPorts` で一覧 + `CreateFileW`（`\\\\.\\COMn`・排他）+ `GetCommState` / `SetCommState`（DCB）+ `SetCommTimeouts` + `ClearCommError` + `PurgeComm` + `WriteFile` / `ReadFile`。WinRT `SerialDevice` は package identity 必須のため使わない",
       "perm": "unpackaged の Win32 のため manifest・capability の宣言は不要の見込み（推測、Windows 実機確認で見る）。`GetCommPorts` は Windows 10 1803 以降。WinRT `SerialDevice` を使う場合はマニフェストの capability `serialCommunication` が必須（文書で確認）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/devio/communications-resources",
-      "note": "未実装。`GetCommPorts` は `ERROR_FILE_NOT_FOUND` を 0 件として扱う。表示は `COM<n>` のみ（フレンドリー名は SetupAPI が要り範囲外）。`SerialDevice` は package identity 必須と文書で確認済み（https://learn.microsoft.com/en-us/uwp/api/windows.devices.serialcommunication.serialdevice ）。依存は既存の `windows` クレートに feature `Win32_Devices_Communication` を足すだけ。"
+      "note": "実装済み（#671）。画面を開くと COM ポート（`COM1`〜`COM255` の `COM<n>` 表示のみ）を一覧し、選んだポートを 9600 bps・8N1・フロー制御なしで開いて `fandhe\\n` を送り、LF までの 1 行を受けて出し、毎回閉じる。期限は 3 秒で、起点は要求の受付時刻（単調時計）。一覧は先頭 32 件まで。0 件（`ERROR_FILE_NOT_FOUND`）は成功として別に出し、期限切れ・使用中・抜去・非対応・行が長すぎる（256 バイト超）は区別して失敗として出す。期限後に届いた行は成功にせず、全バイトを送れないまま期限が来たときも期限切れとする。開く前に名前が `COM1`〜`COM255` かを確かめて `\\\\.\\COMn` を排他（共有モード 0）で開き、送信前に受信バッファを捨て、全経路で変更前の DCB とタイムアウトを戻して `CloseHandle` する。ポート名・送受信の中身・Win32 エラーの生値はログにも失敗文言にも出さない。【推測】使用中が `ERROR_ACCESS_DENIED` で見えるか、USB シリアルの抜去で `ReadFile` が失敗を返すか、書き込みの期限切れの返り方、unpackaged の exe で宣言が要らないか、終了時に進行中の往復を待つ 300 ms が十分かは、#667 の Windows 実機確認で確認する。守らない範囲: 抜き差しの反映（再取得まで）、改行で返さない機器（期限切れになる）、他プロセスとの同時オープンの解決（使用中として失敗にするだけ）、受信した行の文字コード（不正な UTF-8 は置換文字）、終了処理と進行中の往復の重なり（プロセス終了で OS が閉じる）、`GetCommPorts` の無い Windows 10 1803 未満（対象外）。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#667）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_serial_port.rs + crates/fandhe-egui-proxy/src/device/serial_port.rs + crates/fandhe-core/src/screens/serial_port_show.rs + crates/fandhe-device/src/serial_port.rs、Issue #671"
     },
     "web": {
       "status": "possible",
