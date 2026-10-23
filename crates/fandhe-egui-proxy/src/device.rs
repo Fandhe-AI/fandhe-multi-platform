@@ -927,6 +927,10 @@ pub mod macos_web_auth_session;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_wifi_info;
+/// Issue #636: macOS 向けウィンドウ管理の読み取り実装（`macos/fandhe_macos_window_management.m` を呼ぶ
+/// C ABI ラッパー）。`device/window_management.rs` の macOS 経路から呼ばれる。
+#[cfg(target_os = "macos")]
+pub mod macos_window_management;
 /// Phase 11 の拡充ループ（親 #85、Issue #273）: 地図表示の effect ドライバ（macOS / iOS は
 /// pull 型 `bridge`、他 OS は `UnsupportedMapSnapshotter` 固定）。
 pub mod map_view;
@@ -1088,6 +1092,9 @@ pub mod web_auth_session;
 /// Phase 11 の拡充ループ（親 #111、Issue #514）: Wi-Fi 情報の effect ドライバ（macOS・Windows・Android 実装、
 /// iOS（deferred）・他 OS は `UnsupportedWifiInfo` 固定。Web は対象外）。
 pub mod wifi_info;
+/// Phase 11 の拡充ループ（親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）の effect ドライバ
+/// （macOS 実装、Windows は #637、他 OS は `UnsupportedWindowManager` 固定。Web は `fandhe-web-dom`）。
+pub mod window_management;
 /// Issue #1308: Windows 向けアクセシビリティ設定実装（WinRT `UISettings` / `AccessibilitySettings`）。
 /// `device/accessibility_prefs.rs` の Windows 経路から呼ばれる。写像の純関数はホストの
 /// `cargo test` で検査するため cfg を付けず、WinRT 呼び出しだけをモジュール内に閉じる。
@@ -1345,6 +1352,11 @@ pub mod windows_web_auth_session;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_wifi_info;
+/// Issue #636: Windows 向けウィンドウ管理の骨格（現状は `UnsupportedWindowManager` を返す薄いスタブ、
+/// 実体は #637）。`device/window_management.rs` の Windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_window_management;
 
 use fandhe_core::screens::storage_note::{NoteStorage, NoteStorageError, StorageNoteState};
 use fandhe_device::{storage::Storage, DeviceError};

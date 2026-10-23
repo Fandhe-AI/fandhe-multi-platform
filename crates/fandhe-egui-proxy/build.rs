@@ -212,6 +212,9 @@
 //! - `macos/fandhe_macos_device_info.m`（Issue #1304、`NSProcessInfo` + `sysctl` + `NSURL` による
 //!   端末・OS 情報の同期読み取り）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_device_info.rs` から呼ばれる契約）。Foundation は既存のリンクで足りる。
+//! - `macos/fandhe_macos_window_management.m`（Issue #636、窓の `level` と窓がいる画面の `visibleFrame` の同期読み取り。
+//!   変更は eframe の `ViewportCommand` が行う）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_window_management.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_safe_area_insets.m`（Issue #444、窓の `contentView.safeAreaInsets` の同期読み取り）は
 //!   macOS ターゲットの feature `device` 有効時のみ `cc` でコンパイルする
 //!   （`src/device/macos_safe_area_insets.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -1479,6 +1482,16 @@ fn compile_macos_device_info() {
         .compile("fandhe_macos_device_info");
 }
 
+/// `macos/fandhe_macos_window_management.m` を `cc` でコンパイルする（Issue #636）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_window_management.rs` が使う）。AppKit は既存のリンクで足りる。
+fn compile_macos_window_management() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_window_management.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_window_management.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_window_management");
+}
+
 /// `macos/fandhe_macos_safe_area_insets.m` を `cc` でコンパイルする（Issue #444）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_safe_area_insets.rs` が使う）。AppKit は既存のリンクで足りる。
 fn compile_macos_safe_area_insets() {
@@ -1984,6 +1997,8 @@ fn build_macos() {
     compile_macos_system_accent_color();
     // `macos/fandhe_macos_safe_area_insets.m`（Issue #444）も macOS 専用。
     compile_macos_safe_area_insets();
+    // `macos/fandhe_macos_window_management.m`（Issue #636）も macOS 専用。AppKit は既存のリンクを使う。
+    compile_macos_window_management();
     // `macos/fandhe_macos_app_badge.m`（Issue #1360）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_app_badge();
     // `macos/fandhe_macos_in_app_review.m`（Issue #563）も macOS 専用。StoreKit をリンクする。

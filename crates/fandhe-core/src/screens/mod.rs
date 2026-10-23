@@ -207,6 +207,8 @@ pub mod translation;
 pub mod wake_lock_toggle;
 /// Phase 11 の拡充ループ型サンプル「Wi-Fi 情報」（親 #111、Issue #514）。
 pub mod wifi_info_show;
+/// Phase 11 の拡充ループ型サンプル「ウィンドウ管理」（親 #127、Issue #636）。
+pub mod window_management_show;
 
 /// Phase 11 の拡充ループ型サンプル「連絡先選択」（親 #1117、Issue #1220）。
 pub mod contact_pick;
