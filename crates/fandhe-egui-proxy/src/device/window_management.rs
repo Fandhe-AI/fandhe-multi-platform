@@ -14,7 +14,7 @@
 //! 書き込みは eframe の `ViewportCommand`（`OuterPosition`・`InnerSize`・`WindowLevel`）で行う
 //! （[`ViewportWindowManager`]）。egui の viewport 情報に無い「最前面の読み戻し」と「今いる画面の
 //! 作業領域」だけを OS 別の [`NativeReads`] が読む（macOS は `macos_window_management.rs`、
-//! Windows は `windows_window_management.rs` が #637 で埋める）。
+//! Windows は `windows_window_management.rs`）。
 //! [`implementation`] は全 OS の最終形で、後続の子は触らない。iOS・Android は対応表で `n-a` のため
 //! `UnsupportedWindowManager` 固定。
 //!
