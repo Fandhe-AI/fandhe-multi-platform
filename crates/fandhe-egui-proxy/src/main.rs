@@ -74,12 +74,13 @@
 fn main() -> eframe::Result<()> {
     let start = std::time::Instant::now();
     // 計測条件を通常起動と揃えるため、`NativeOptions` は下の通常分岐と同一内容を組む
-    // （ウィンドウサイズ 480x360・バックエンドは eframe 既定）。分岐ごとに `fn main` が
+    // （ウィンドウサイズは `DEFAULT_INNER_SIZE`・バックエンドは eframe 既定）。分岐ごとに `fn main` が
     // 独立しているため設定そのものは共有できず、ここで同じ内容を再掲している。
     // iOS 側 `ios::run` の `metal_native_options` のような専用バックエンド指定は
     // デスクトップでは不要。
     let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([480.0, 360.0]),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size(fandhe_core::screens::window_management_show::DEFAULT_INNER_SIZE),
         ..Default::default()
     };
     eframe::run_native(
@@ -212,7 +213,8 @@ fn main() -> eframe::Result<()> {
     let save_failed_for_closure = Arc::clone(&save_failed);
 
     let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([480.0, 360.0]),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size(fandhe_core::screens::window_management_show::DEFAULT_INNER_SIZE),
         ..Default::default()
     };
 

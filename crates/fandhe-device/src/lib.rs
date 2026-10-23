@@ -184,6 +184,8 @@ pub mod usb_device;
 pub mod web_auth_session;
 /// Phase 11（端末機能の拡充ループ、親 #111、Issue #514）: Wi-Fi 情報（現在の接続と周辺の上位数件）。
 pub mod wifi_info;
+/// Phase 11（端末機能の拡充ループ、親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）。
+pub mod window_management;
 
 use std::path::PathBuf;
 
