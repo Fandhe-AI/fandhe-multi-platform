@@ -158,6 +158,8 @@ pub mod screen_capture;
 pub mod screen_wake_lock;
 /// Phase 11（端末機能の拡充ループ、親 #921、Issue #922）: 資格情報の安全な保存。
 pub mod secure_credential;
+/// Phase 11（端末機能の拡充ループ、親 #131、Issue #670）: シリアルポートの一覧と 1 行の往復。
+pub mod serial_port;
 /// Phase 11（端末機能の拡充ループ、親 #896、Issue #897）: 共有シート。
 pub mod share;
 /// Phase 11（端末機能の拡充ループ、親 #122、Issue #606）: 共有の受け取り（他アプリから共有されたテキスト 1 件）。

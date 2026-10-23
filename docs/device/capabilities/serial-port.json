@@ -21,11 +21,14 @@
       "note": "usb-device 経由で CDC / FTDI 等を扱う形になるため、本機能としては no。要確認。"
     },
     "macos": {
-      "status": "possible",
-      "api": "IOKit `IOServiceMatching(kIOSerialBSDServiceValue)` + `kIOCalloutDeviceKey`（`/dev/cu.*`）で一覧。POSIX `open(O_NONBLOCK)` + `ioctl(TIOCEXCL)` + `termios`（`cfmakeraw`・`cfsetspeed`・`tcsetattr`・`tcflush`）+ `poll` / `read` / `write` で往復",
+      "status": "done",
+      "api": "IOKit `IOServiceMatching(kIOSerialBSDServiceValue)` + `kIOCalloutDeviceKey`（`/dev/cu.*`）で一覧。POSIX `open(O_NONBLOCK)` + `ioctl(TIOCEXCL)` + `termios`（`cfmakeraw`・`cfsetspeed`・`tcsetattr`・`tcflush`）+ `select` / `read` / `write` で往復",
       "perm": "サンドボックスなしで動かすため entitlement 不要の見込み（推測、Mac 目視で見る）。サンドボックス時は `com.apple.security.device.serial`（旧 Entitlement Key Reference にのみ記載、現行文書には無い）。USB entitlement ではない。TCC の許可ダイアログは無い見込み（推測）",
       "url": "https://developer.apple.com/library/archive/documentation/DeviceDrivers/Conceptual/WorkingWSerial/WWSerial_SerialDevs/SerialDevices.html",
-      "note": "未実装。上記 Apple 文書（アーカイブ、エラー処理は自前で書く前提）の手順に沿う。一覧は callout（`/dev/cu.*`）だけで、擬似端末（pty）と `/dev/tty.*`（dialin）は対象外。"
+      "note": "実装済み（#670）。画面を開くとポート（callout の `/dev/cu.*` だけ。擬似端末と `/dev/tty.*` は対象外）を一覧し、選んだポートを 9600 bps・8N1・フロー制御なしで開いて `fandhe\\n` を送り、LF までの 1 行を受けて出し、毎回閉じる。期限は 3 秒で、起点は要求の受付時刻（単調時計）。一覧は先頭 32 件まで。0 件は成功として別に出し、期限切れ・使用中・抜去・権限拒否・非対応・行が長すぎる（256 バイト超）は区別して失敗として出す。期限後に届いた行は成功にせず、全バイトを送れないまま期限が来たときも期限切れとする。開く前に名前が `/dev/cu.` のパスかを確かめ、送信前に受信バッファを捨て、全経路で変更前の termios を戻して閉じる。ポート名・送受信の中身・errno の生値はログにも失敗文言にも出さない。待ちは `poll` ではなく `select`（端末デバイスで安定するため）。【推測】TCC・entitlement が不要か、USB シリアルの抜去が「準備完了なのに 0 バイト」で見えるか、終了時に進行中の往復を待つ 300 ms が十分かは、#667 の Mac 目視で確認する。守らない範囲: 抜き差しの反映（再取得まで）、改行で返さない機器（期限切れになる）、他プロセスとの同時オープンの解決（使用中として失敗にするだけ）、受信した行の文字コード（不正な UTF-8 は置換文字）、終了処理と進行中の往復の重なり（プロセス終了で OS が閉じる）。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#667）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_serial_port.m + crates/fandhe-egui-proxy/src/device/macos_serial_port.rs + crates/fandhe-egui-proxy/src/device/serial_port.rs + crates/fandhe-core/src/screens/serial_port_show.rs + crates/fandhe-device/src/serial_port.rs、Issue #670"
     },
     "windows": {
       "status": "possible",
