@@ -36,7 +36,9 @@
 //!
 //! 全経路で `clearTimeout` → reader の `cancel` と `releaseLock` → writer の `releaseLock` →
 //! `port.close()` を済ませてから結果を apply する。マウント破棄（[`release_mount`]）でも同じ
-//! 後片付けを通し、結果は apply しない。
+//! 後片付けを通し、結果は apply しない。cancel・releaseLock・close のいずれかが失敗したら、
+//! 往復が成功でも `Internal` の失敗にする（[`merge_cleanup`]）。解放できなかった reader・writer・
+//! close はセッションに残し、マウント破棄または同じマウントの次の要求の開始時に 1 回再試行する。
 //!
 //! # 取らないもの・守る範囲
 //!
@@ -145,6 +147,20 @@ pub(crate) fn is_late(started_ms: f64, now_ms: f64) -> bool {
     remaining_ms(started_ms, now_ms).is_none()
 }
 
+/// 往復の結果と後片付けの成否を合わせる。往復が成功でも後片付け（cancel・releaseLock・close）に
+/// 失敗していれば `Internal`（固定の失敗種別）にし、成功と見せない。往復が既に失敗していれば
+/// その失敗を優先する（後片付けの失敗で原因を隠さない）。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn merge_cleanup<T>(
+    result: Result<T, SerialPortFailure>,
+    cleanup_ok: bool,
+) -> Result<T, SerialPortFailure> {
+    match result {
+        Ok(_) if !cleanup_ok => Err(SerialPortFailure::Internal),
+        other => other,
+    }
+}
+
 /// 受信チャンクを組み立て器へ渡す。行が完成したら `Some`（期限後なら `Timeout`）、未完成は `None`。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn on_chunk(
@@ -188,7 +204,8 @@ mod web {
 
     use super::{
         failure_from_io_error, failure_from_open_error, failure_from_request_error, is_late,
-        on_chunk, on_stream_done, open_options, remaining_ms, to_port_failure, OptionValue,
+        merge_cleanup, on_chunk, on_stream_done, open_options, remaining_ms, to_port_failure,
+        OptionValue,
     };
     use crate::mount::{is_live, Applier};
 
@@ -200,6 +217,11 @@ mod web {
         reader: Option<JsValue>,
         writer: Option<JsValue>,
         timer: Option<(i32, Closure<dyn FnMut()>)>,
+        port: Option<JsValue>,
+        /// `port.close()` が未完了（失敗）。再試行の対象。
+        needs_close: bool,
+        /// 後片付けが失敗して資源が残っている。再試行の対象。
+        leftover: bool,
     }
 
     struct MountEntry {
@@ -256,6 +278,16 @@ mod web {
         if let Some(w) = &s.writer {
             let _ = call(w, "abort", &[]);
         }
+    }
+
+    /// 後片付けに失敗して残った資源を解放し直す（結果は見ない・apply しない）。
+    fn retry_leftover(sess: Rc<RefCell<Session>>) {
+        if !sess.borrow().leftover {
+            return;
+        }
+        wasm_bindgen_futures::spawn_local(async move {
+            let _ = cleanup(&sess).await;
+        });
     }
 
     fn make_options() -> Result<Object, JsValue> {
@@ -378,28 +410,38 @@ mod web {
             let sess = Rc::new(RefCell::new(Session::default()));
             MOUNTS.with(|m| {
                 if let Some(e) = m.borrow_mut().get_mut(&id) {
-                    e.session = Some(sess.clone());
+                    if let Some(old) = e.session.replace(sess.clone()) {
+                        retry_leftover(old);
+                    }
                 }
             });
             arm_timer(&sess, started);
 
+            sess.borrow_mut().port = Some(port.clone());
             let mut opened = false;
             let result = drive(&sess, &port, started, &mut opened).await;
-            cleanup(&sess, &port, opened).await;
+            sess.borrow_mut().needs_close = opened;
+            let cleanup_ok = cleanup(&sess).await;
 
             let released = sess.borrow().released;
-            MOUNTS.with(|m| {
-                if let Some(e) = m.borrow_mut().get_mut(&id) {
-                    if e.session.as_ref().is_some_and(|s| Rc::ptr_eq(s, &sess)) {
-                        e.session = None;
+            // 資源が残っているセッションはマウントに残し、再試行できるようにする。
+            if cleanup_ok {
+                MOUNTS.with(|m| {
+                    if let Some(e) = m.borrow_mut().get_mut(&id) {
+                        if e.session.as_ref().is_some_and(|s| Rc::ptr_eq(s, &sess)) {
+                            e.session = None;
+                        }
                     }
-                }
-            });
+                });
+            } else if released {
+                // 破棄済みでマウントから外れている。ここで 1 回だけ再試行する。
+                retry_leftover(sess.clone());
+            }
             if released {
                 return;
             }
-            // 後片付けが済んでから結果を出す。
-            let result = result.map_err(to_port_failure);
+            // 後片付けが済んでから結果を出す。後片付けの失敗は成功を失敗に変える。
+            let result = merge_cleanup(result, cleanup_ok).map_err(to_port_failure);
             applier.apply(move |s| finish_round_trip(s, generation, result));
         });
     }
@@ -511,11 +553,18 @@ mod web {
     }
 
     /// 全経路の後片付け。タイマー解除 → reader の cancel と releaseLock → writer の
-    /// releaseLock → close。失敗しても結果は変えず、何も出力しない。
-    async fn cleanup(sess: &Rc<RefCell<Session>>, port: &JsValue, opened: bool) {
-        let (timer, reader, writer) = {
+    /// releaseLock → close。各段の失敗を区別して記録し、全て成功したときだけ `true`。
+    /// 解放できなかった reader・writer・close はセッションに戻し、再試行できる状態で残す。
+    async fn cleanup(sess: &Rc<RefCell<Session>>) -> bool {
+        let (timer, reader, writer, port, needs_close) = {
             let mut s = sess.borrow_mut();
-            (s.timer.take(), s.reader.take(), s.writer.take())
+            (
+                s.timer.take(),
+                s.reader.take(),
+                s.writer.take(),
+                s.port.clone(),
+                s.needs_close,
+            )
         };
         if let Some((handle, cb)) = timer {
             if let Some(w) = web_sys::window() {
@@ -523,16 +572,34 @@ mod web {
             }
             drop(cb);
         }
+        let mut ok = true;
         if let Some(r) = reader {
-            let _ = call_await(&r, "cancel", &[]).await;
-            let _ = call(&r, "releaseLock", &[]);
+            // cancel の失敗と releaseLock の失敗は別に扱う。releaseLock に失敗した reader は戻す。
+            if call_await(&r, "cancel", &[]).await.is_err() {
+                ok = false;
+            }
+            if call(&r, "releaseLock", &[]).is_err() {
+                ok = false;
+                sess.borrow_mut().reader = Some(r);
+            }
         }
         if let Some(w) = writer {
-            let _ = call(&w, "releaseLock", &[]);
+            if call(&w, "releaseLock", &[]).is_err() {
+                ok = false;
+                sess.borrow_mut().writer = Some(w);
+            }
         }
-        if opened {
-            let _ = call_await(port, "close", &[]).await;
+        if needs_close {
+            if let Some(port) = port {
+                if call_await(&port, "close", &[]).await.is_err() {
+                    ok = false;
+                } else {
+                    sess.borrow_mut().needs_close = false;
+                }
+            }
         }
+        sess.borrow_mut().leftover = !ok;
+        ok
     }
 
     /// マウント破棄時に進行中の往復を中断する。`mount::sweep_mounts` から呼ばれる。
@@ -542,9 +609,13 @@ mod web {
             return;
         };
         if let Some(sess) = entry.session {
-            let mut s = sess.borrow_mut();
-            s.released = true;
-            abort_io(&s);
+            {
+                let mut s = sess.borrow_mut();
+                s.released = true;
+                abort_io(&s);
+            }
+            // 後片付けに失敗して資源が残っていれば、ここで解放し直す。
+            retry_leftover(sess);
         }
     }
 }
@@ -676,6 +747,30 @@ mod tests {
             on_chunk(&mut a, &[b'x'; 257], 0.0, 1.0),
             Some(Err(SerialPortFailure::LineTooLong))
         );
+    }
+
+    #[test]
+    fn cleanup_failure_turns_success_into_internal() {
+        let ok: Result<Option<String>, _> = Ok(Some("pong".to_string()));
+        assert_eq!(merge_cleanup(ok.clone(), true), ok);
+        assert_eq!(merge_cleanup(ok, false), Err(SerialPortFailure::Internal));
+        // 成功が空行でも同じ。
+        assert_eq!(
+            merge_cleanup(Ok::<Option<String>, _>(None), false),
+            Err(SerialPortFailure::Internal)
+        );
+    }
+
+    #[test]
+    fn cleanup_failure_keeps_original_failure() {
+        for f in [
+            SerialPortFailure::Timeout,
+            SerialPortFailure::Gone,
+            SerialPortFailure::LineTooLong,
+        ] {
+            assert_eq!(merge_cleanup::<()>(Err(f), false), Err(f));
+            assert_eq!(merge_cleanup::<()>(Err(f), true), Err(f));
+        }
     }
 
     #[test]
