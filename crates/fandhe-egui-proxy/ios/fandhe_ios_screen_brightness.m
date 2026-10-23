@@ -196,6 +196,11 @@ int32_t fandhe_ios_screen_brightness_clear(void) {
         if (screen == nil) {
             return 3;  // gOverriding は YES のまま残す。
         }
+        // 変更通知の block が未実行でも、利用者の変更を先に検知して上書きしない。
+        FandheBrightnessDetectUserChange(screen);
+        if (!gOverriding) {
+            return 0;
+        }
         screen.brightness = gOriginal;
         gOverriding = NO;
     }
