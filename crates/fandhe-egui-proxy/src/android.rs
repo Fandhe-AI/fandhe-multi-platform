@@ -780,6 +780,25 @@ extern "system" fn Java_com_fandhe_androidapp_ShareReceiveHelper_nativeOnShareRe
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeOnForegroundChanged` no-op フォールバック
+/// （Issue #611）。`EnvironmentSensorsHelper.onPause` / `onResume` は feature を知らず
+/// `MainActivity` のライフサイクルから無条件に呼ぶため、スタブが無いと feature 無効ビルドで
+/// `UnsatisfiedLinkError` になる。署名は Java 宣言・`device/android_environment_sensors.rs` の
+/// 実体と 3 か所で一致させる（`(boolean) -> void`、`(Z)V`）。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
+/// シンボル名は JNI 命名規約上の固定名（`nativeOnUrlSchemeReceived` と同じ根拠）。
+#[cfg(not(feature = "device"))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_androidapp_EnvironmentSensorsHelper_nativeOnForegroundChanged(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _foreground: u8,
+) {
+}
+
 // `nativeOnLocationChanged`/`nativeOnLocationFailure`（Issue #890）は上記
 // `nativeOnMotionChanged` と異なり feature 無効ビルド向けの no-op フォールバックを
 // 追加しない。`motionListener` は `onResume` で無条件にセンサ登録するため Java 側は
