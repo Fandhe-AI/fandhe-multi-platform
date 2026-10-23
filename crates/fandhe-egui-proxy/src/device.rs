@@ -20,7 +20,7 @@
 /// Issue #1308: アクセシビリティ設定（視差軽減・コントラスト）の effect ドライバ（Windows / macOS / iOS / Android 実装、
 /// 他 OS は `UnsupportedAccessibilityPrefs` 固定。Web は `fandhe-web-dom`）。
 pub mod accessibility_prefs;
-/// Issue #613（親 #124）: 行動認識（歩行・乗車等）の effect ドライバ（Windows 実装、iOS は #614 が埋めるまでスタブ、
+/// Issue #613（親 #124）: 行動認識（歩行・乗車等）の effect ドライバ（Windows 実装、iOS 実装、
 /// 他 OS は `UnsupportedActivityRecognizer` 固定）。
 pub mod activity_recognition;
 #[cfg(target_os = "android")]
@@ -39,7 +39,7 @@ pub mod android_app_badge;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_app_shortcuts;
-/// Issue #1330: Android 向け音声デバイス一覧実装のスタブ（#1332 が埋める）。`device/audio_devices.rs` の
+/// Issue #1330: Android 向け音声デバイス一覧実装。`device/audio_devices.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -54,7 +54,7 @@ pub mod android_background_download;
 /// 純関数はホストでテストできるよう cfg を付けない（`android_gamepad.rs` と同じ
 /// 判断）。`device/background_task.rs` の Android 経路から使われる。
 pub mod android_background_task;
-/// Issue #276: Android 向け通話 UI 統合実装のスタブ（#278 が埋める）。`device/call_ui.rs` の
+/// Issue #276: Android 向け通話 UI 統合実装。`device/call_ui.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -64,7 +64,7 @@ pub mod android_call_ui;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_capture_protection;
-/// Issue #1404: Android 向け方位実装のスタブ（後続の (b-Android) が埋める）。`device/compass.rs` の android 経路から呼ばれる。
+/// Issue #1404: Android 向け方位実装。`device/compass.rs` の android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_compass;
@@ -72,12 +72,12 @@ pub mod android_compass;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_compose_mail_sms;
-/// Issue #1304: Android 向け端末・OS 情報実装のスタブ（#1306 が埋める）。`device/device_info.rs` の
+/// Issue #1304: Android 向け端末・OS 情報実装。`device/device_info.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_device_info;
-/// Issue #609: Android 向け気圧・照度・近接センサー実装のスタブ（#611 が埋める）。
+/// Issue #609: Android 向け気圧・照度・近接センサー実装。
 /// `device/environment_sensors.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -87,7 +87,7 @@ pub mod android_environment_sensors;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_file_association;
-/// Issue #1410: Android 向けフォルダ変更監視実装のスタブ（#1413 が埋める）。`device/file_watch.rs` の
+/// Issue #1410: Android 向けフォルダ変更監視実装。`device/file_watch.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -126,35 +126,35 @@ pub mod android_image_recognition;
 /// `device/lan_discovery.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_lan_discovery;
-/// Issue #294: Android 向けライブアクティビティ（進行中通知）実装のスタブ（b-android が埋める）。
+/// Issue #294: Android 向けライブアクティビティ（進行中通知）実装。
 /// `device/live_activity.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_live_activity;
-/// Issue #1376: Android 向け OS 搭載フォント一覧実装のスタブ（#1378 が埋める）。`device/local_fonts.rs` の
+/// Issue #1376: Android 向け OS 搭載フォント一覧実装。`device/local_fonts.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_local_fonts;
-/// Issue #511: Android 向け近くの端末との直接通信のスタブ（親 #110、b-android が埋める）。
+/// Issue #511: Android 向け近くの端末との直接通信実装。
 /// `device/local_peer.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_local_peer;
-/// Issue #267: Android 向け音声再生実装のスタブ（親 #86 の b-android が埋める）。`device/media_playback.rs` の
+/// Issue #267: Android 向け音声再生実装。`device/media_playback.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_media_playback;
-/// Issue #311: Android 向け音声変換のスタブ（b-android の子が MediaCodec + MediaMuxer で埋める）。
+/// Issue #311: Android 向け音声変換実装。
 /// `device/media_transcode.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_media_transcode;
-/// Issue #1398: Android 向け MIDI 入力実装のスタブ（#1400 が埋める）。`device/midi.rs` の
+/// Issue #1398: Android 向け MIDI 入力実装。`device/midi.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_midi;
-/// Issue #289: Android 向け機械学習推論のスタブ（b-android が NNAPI 実装で埋める）。
+/// Issue #289: Android 向け機械学習推論実装。
 /// `device/ml_inference.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_ml_inference;
@@ -183,27 +183,27 @@ pub mod android_now_playing;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_pdf_viewer;
-/// Issue #1247: Android 向け歩数実装のスタブ（#1249 が埋める）。`device/pedometer.rs` の
+/// Issue #1247: Android 向け歩数実装。`device/pedometer.rs` の
 /// Android 経路から呼ばれる。JNI の本体はモジュール内側の `cfg(target_os = "android")` に閉じ、
 /// 純関数をホストでテストできるよう cfg は `any(android, test)`。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_pedometer;
-/// Issue #355: Android 向けペン・筆圧入力実装のスタブ（#357 が埋める）。`device/pen_stylus.rs` の
+/// Issue #355: Android 向けペン・筆圧入力実装。`device/pen_stylus.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_pen_stylus;
-/// Issue #1254（骨格）/ #1256（実装）: Android 向け写真ライブラリ保存。#1256 までスタブ。
+/// Issue #1254（骨格）/ #1256（実装）: Android 向け写真ライブラリ保存実装。
 /// `device/photo_save.rs` の Android 経路から呼ばれる。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_photo_library;
-/// Issue #364: Android 向けピクチャ・イン・ピクチャ実装のスタブ（親 #97 の b-android が埋める）。
+/// Issue #364: Android 向けピクチャ・イン・ピクチャ実装。
 /// `device/picture_in_picture.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_picture_in_picture;
-/// Issue #1274: Android 向け電源状態実装のスタブ（#1276 が埋める）。`device/power_state.rs` の
+/// Issue #1274: Android 向け電源状態実装。`device/power_state.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -218,7 +218,7 @@ pub mod android_print;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_safe_area_insets;
-/// Issue #1335: Android 向け画面録画のスタブ（#1337 が埋める）。`device/screen_capture.rs` の
+/// Issue #1335: Android 向け画面録画実装。`device/screen_capture.rs` の
 /// Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -228,7 +228,7 @@ pub mod android_screen_capture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_wake_lock;
-/// Issue #606: Android 向け共有の受け取り実装。#607 までは `UnsupportedShareReceive` を返す薄いスタブ。
+/// Issue #606: Android 向け共有の受け取り実装。
 /// `device/share_receive.rs::platform_share_receive` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -276,7 +276,7 @@ pub mod android_web_auth_session;
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_wifi_info;
 /// Phase 11（親 #1141、Issue #1360）: アプリアイコンのバッジ（Windows はタスクバーのオーバーレイ数字）の effect ドライバ（macOS /
-/// Windows は同期、iOS / Android は pull 型 `bridge`（実装は #1361 / #1362 まで `Unsupported` スタブ）、
+/// Windows は同期、iOS / Android は pull 型 `bridge`、
 /// 他 OS は `UnsupportedAppBadge` 固定。Web は `fandhe-web-dom`）。
 pub mod app_badge;
 /// Issue #424（親 #101）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録ドライバ。
@@ -413,7 +413,7 @@ pub mod apple_on_device_llm;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_pdf_viewer;
 /// Issue #1254（macOS）/ #1255（iOS）: iOS / macOS 向け写真ライブラリ保存実装
-/// （`apple/fandhe_apple_photo_library.m` を呼ぶ C ABI ラッパー。iOS は #1255 までスタブ）。
+/// （`apple/fandhe_apple_photo_library.m` を呼ぶ C ABI ラッパー。iOS は実装済み）。
 /// `device/photo_save.rs` の iOS / macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_photo_library;
@@ -462,18 +462,18 @@ pub mod apple_translation;
 /// `main.rs`（登録）から使われる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_url_scheme;
-/// Issue #307（親 #90）: AR 表示の effect ドライバ（iOS は (b-ios) が `ios_ar.rs` を埋めるまでスタブ、
+/// Issue #307（親 #90）: AR 表示の effect ドライバ（iOS は `ios_ar.rs`、
 /// 他 OS は `UnsupportedAr` 固定。Web は `fandhe-web-dom`）。
 pub mod ar;
 /// Phase 11 の拡充ループ（親 #1136、Issue #1330）: 音声デバイス一覧の effect ドライバ（macOS / Windows
-/// 実装、iOS・Android は #1331・#1332 で埋めるスタブ、他 OS は `UnsupportedAudioDevices` 固定）。
+/// ・iOS・Android 実装、他 OS は `UnsupportedAudioDevices` 固定）。
 pub mod audio_devices;
-/// Phase 11 の拡充ループ（親 #121、Issue #585）: ワンタイムコード入力の effect ドライバ（iOS は b-ios（#586）が
-/// `ios_autofill_otp.rs` を埋めるまでスタブ、Android・macOS は保留、Windows は非対応で `UnsupportedAutofillOtp` 固定。
+/// Phase 11 の拡充ループ（親 #121、Issue #585）: ワンタイムコード入力の effect ドライバ（iOS は
+/// `ios_autofill_otp.rs` で実装、Android・macOS は保留、Windows は非対応で `UnsupportedAutofillOtp` 固定。
 /// Web は `fandhe-web-dom` が担う）。
 pub mod autofill_otp;
 /// Phase 11 の拡充ループ（親 #100、Issue #390）: OS 管理のバックグラウンドダウンロードの effect ドライバ
-/// （macOS 実装、iOS・Android・Windows は子 issue が埋めるスタブ、他 OS は `Unsupported` 固定）。
+/// （macOS・iOS・Android・Windows 実装、他 OS は `Unsupported` 固定）。
 pub mod background_download;
 /// Phase 11 の拡充ループ（親 #1042、Issue #1043）: バックグラウンド処理の effect
 /// ドライバ（macOS 実装、他 OS は兄弟 issue #1044〜#1047）。
@@ -490,8 +490,8 @@ pub mod bluetooth_le;
 /// （macOS は EventKit・Android は `Intent.ACTION_INSERT`（#1226）の pull 型 `bridge`、
 /// それ以外は非対応表示）。
 pub mod calendar;
-/// Phase 11 の拡充ループ（親 #87、Issue #276）: 通話 UI 統合の effect ドライバ（iOS・Android は
-/// #277・#278 で埋めるスタブ、他 OS は `UnsupportedCallUi` 固定）。
+/// Phase 11 の拡充ループ（親 #87、Issue #276）: 通話 UI 統合の effect ドライバ（iOS・Android 実装、
+/// 他 OS は `UnsupportedCallUi` 固定）。
 pub mod call_ui;
 pub mod camera_capture;
 /// Phase 11 の拡充ループ（親 #120、Issue #582）: 画面キャプチャの防止・検知の effect ドライバ
@@ -499,11 +499,11 @@ pub mod camera_capture;
 /// `UnsupportedCaptureProtection` 固定）。
 pub mod capture_protection;
 pub mod clipboard;
-/// Issue #1404（親 #1154）: 方位（コンパス）の effect ドライバ（Windows 実装、iOS・Android は後続の子が実装するまでスタブ、
+/// Issue #1404（親 #1154）: 方位（コンパス）の effect ドライバ（Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedCompass` 固定。Web は `fandhe-web-dom`）。
 pub mod compass;
 /// Phase 11（親 #1142、Issue #1384）: メール・SMS 作成画面の effect ドライバ（macOS / Windows は同期、
-/// iOS / Android は pull 型 `bridge`（実装は b-ios / b-android まで `Unsupported` スタブ）、他 OS は
+/// iOS / Android は pull 型 `bridge`、他 OS は
 /// `UnsupportedComposeMailSms` 固定。Web は `fandhe-web-dom`）。
 pub mod compose_mail_sms;
 /// Phase 11 の拡充ループ（親 #1117、Issue #1220・#1221・#1222）: 連絡先選択の effect ドライバ
@@ -511,7 +511,7 @@ pub mod compose_mail_sms;
 /// `UnsupportedContactPicker` 固定）。
 pub mod contact_pick;
 /// Phase 11 の拡充ループ（親 #1131、Issue #1304）: 端末・OS 情報の effect ドライバ（macOS / Windows
-/// 実装、iOS・Android は #1305・#1306 で埋めるスタブ、他 OS は `UnsupportedDeviceInfo` 固定）。
+/// ・iOS・Android 実装、他 OS は `UnsupportedDeviceInfo` 固定）。
 pub mod device_info;
 /// Phase 11 の拡充ループ（親 #1013、Issue #1014・#1015）: ドラッグ & ドロップ受け取りの
 /// effect ドライバ（macOS/Windows は egui `RawInput::hovered_files`/`dropped_files` を
@@ -522,25 +522,25 @@ pub mod drag_drop;
 /// 入力元だが、ロジック自体はホストの `cargo test` から検証できるよう cfg で
 /// ゲートしない（`android_gamepad.rs` と同じ判断）。
 pub mod drop_session;
-/// Phase 11（親 #123、Issue #609）: 気圧・照度・近接センサーの effect ドライバ（iOS・Android・Windows は
-/// 後続の子が実装するまでスタブ、他 OS は `UnsupportedEnvironmentSensors` 固定。Web は対応表で `no`）。
+/// Phase 11（親 #123、Issue #609）: 気圧・照度・近接センサーの effect ドライバ（iOS・Android・Windows 実装、
+/// 他 OS は `UnsupportedEnvironmentSensors` 固定。Web は対応表で `no`）。
 pub mod environment_sensors;
 /// Phase 11 の拡充ループ（親 #102、Issue #416）: ファイルの関連付けの effect ドライバ
-/// （macOS 実装、iOS・Android・Windows は子 issue が埋めるスタブ、他 OS は `Unsupported` 固定）。
+/// （macOS・iOS・Windows 実装、Android は未実装のスタブ、他 OS は `Unsupported` 固定）。
 pub mod file_association;
 pub mod file_pick;
-/// Phase 11 の拡充ループ（親 #1143、Issue #1410）: フォルダの変更監視の effect ドライバ（macOS 実装、
-/// Windows・iOS・Android は #1411〜#1413 で埋めるスタブ、他 OS は `UnsupportedFileWatch` 固定）。
+/// Phase 11 の拡充ループ（親 #1143、Issue #1410）: フォルダの変更監視の effect ドライバ（macOS・Windows・iOS・Android 実装、
+/// 他 OS は `UnsupportedFileWatch` 固定）。
 pub mod file_watch;
 /// Phase 11 の拡充ループ（親 #106、Issue #458）: ライト（トーチ）の effect ドライバ
-/// （iOS・Android・Windows は #460・#461・#459 で埋めるスタブ、他 OS は `UnsupportedFlashlight`
+/// （iOS・Android・Windows 実装、他 OS は `UnsupportedFlashlight`
 /// 固定。Web は `fandhe-web-dom`）。
 pub mod flashlight;
 /// Phase 11 の拡充ループ（親 #104、Issue #438）: 集中モードの状態の effect ドライバ（Windows 実装、
 /// Android は JNI 実装、他 OS は `UnsupportedFocusStatus` 固定）。
 pub mod focus_mode_status;
 /// Phase 11 の拡充ループ（親 #1133、Issue #1312）: 全画面表示の effect ドライバ（macOS/Windows は
-/// eframe の viewport コマンド、iOS/Android は #1313/#1314 で埋めるスタブ、他 OS は
+/// eframe の viewport コマンド、iOS/Android は OS 別モジュール、他 OS は
 /// `UnsupportedFullscreen` 固定。Web は `fandhe-web-dom`）。
 pub mod fullscreen_immersive;
 /// Phase 11 の拡充ループ（親 #932、Issue #933・#934・#935）: ゲームコントローラの effect
@@ -558,11 +558,11 @@ pub mod haptics;
 pub mod home_widget;
 pub mod http_fetch;
 /// Phase 11 の拡充ループ（親 #1120、Issue #1250）: 画像の文字認識の effect ドライバ
-/// （macOS 実装、Windows / iOS / Android は #1251〜#1253 が埋めるスタブ、他 OS は
+/// （macOS・Windows / iOS 実装、Android は骨格のスタブ（対応表で `no`）、他 OS は
 /// `UnsupportedTextRecognizer` 固定。Web は対象外）。
 pub mod image_recognition;
-/// Phase 11 の拡充ループ（Issue #563）: アプリ内レビュー依頼の effect ドライバ（macOS 実装、iOS は b-ios が埋める
-/// スタブ、Android・Windows は保留で `UnsupportedInAppReview` 固定、Web は対象外）。
+/// Phase 11 の拡充ループ（Issue #563）: アプリ内レビュー依頼の effect ドライバ（macOS 実装、iOS 実装、
+/// Android・Windows は保留で `UnsupportedInAppReview` 固定、Web は対象外）。
 pub mod in_app_review;
 #[cfg(target_os = "ios")]
 pub mod ios;
@@ -571,7 +571,7 @@ pub mod ios;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_accessibility_prefs;
-/// Issue #613: iOS 向け行動認識実装のスタブ（#614 が `CMMotionActivityManager` で埋める）。`device/activity_recognition.rs` の ios 経路から呼ばれる。
+/// Issue #613: iOS 向け行動認識実装。`device/activity_recognition.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_activity_recognition;
@@ -584,7 +584,7 @@ pub mod ios_app_badge;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_app_shortcuts;
-/// Issue #307: iOS 向け AR 実装のスタブ（(b-ios) が ARKit で埋める）。`device/ar.rs` の ios 経路から呼ばれる。
+/// Issue #307: iOS 向け AR 実装。`device/ar.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_ar;
@@ -598,7 +598,7 @@ pub mod ios_audio_devices;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_autofill_otp;
-/// Issue #390: iOS 向けバックグラウンドダウンロードのスタブ（b-ios #391 が埋める）。
+/// Issue #390: iOS 向けバックグラウンドダウンロード実装。
 /// `device/background_download.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -640,7 +640,7 @@ pub mod ios_device_info;
 /// 呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_drag_drop;
-/// Issue #609: iOS 向け気圧・照度・近接センサー実装のスタブ（#610 が埋める）。
+/// Issue #609: iOS 向け気圧・照度・近接センサー実装。
 /// `device/environment_sensors.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -649,7 +649,7 @@ pub mod ios_environment_sensors;
 /// `device/file_association.rs::platform` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_file_association;
-/// Issue #1410: iOS 向けフォルダ変更監視実装のスタブ（#1412 が埋める）。`device/file_watch.rs` の
+/// Issue #1410: iOS 向けフォルダ変更監視実装。`device/file_watch.rs` の
 /// iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -677,7 +677,7 @@ pub mod ios_in_app_review;
 /// `device/lan_discovery.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_lan_discovery;
-/// Issue #294: iOS 向けライブアクティビティ（ActivityKit）実装のスタブ（b-ios が埋める）。
+/// Issue #294: iOS 向けライブアクティビティ（ActivityKit）実装。
 /// `device/live_activity.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -695,7 +695,7 @@ pub mod ios_local_peer;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_media_cast;
-/// Issue #267: iOS 向け音声再生実装のスタブ（親 #86 の b-ios が埋める）。`device/media_playback.rs` の
+/// Issue #267: iOS 向け音声再生実装。`device/media_playback.rs` の
 /// iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -765,7 +765,7 @@ pub mod ios_power_state;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_print;
-/// Issue #444: iOS 向けセーフエリア実装のスタブ（b-ios が中身を埋める）。
+/// Issue #444: iOS 向けセーフエリア実装。
 /// `device/safe_area_insets.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -793,16 +793,16 @@ pub mod ios_translation;
 #[cfg(target_os = "ios")]
 pub mod ios_web_auth_session;
 /// Phase 11 の拡充ループ（親 #109、Issue #486）: LAN のサービス探索の effect ドライバ
-/// （macOS 実装、iOS / Android は子 issue が埋めるスタブ、Windows は `DnsServiceBrowse`、他 OS は `UnsupportedLanDiscovery` 固定。Web は対象外）。
+/// （macOS・iOS / Android 実装、Windows は `DnsServiceBrowse`、他 OS は `UnsupportedLanDiscovery` 固定。Web は対象外）。
 pub mod lan_discovery;
-/// Phase 11 の拡充ループ（親 #88、Issue #294）: ライブアクティビティの effect ドライバ（iOS・Android は
-/// b 層が埋めるスタブ、他 OS は `UnsupportedLiveActivity` 固定）。
+/// Phase 11 の拡充ループ（親 #88、Issue #294）: ライブアクティビティの effect ドライバ（iOS・Android 実装、
+/// 他 OS は `UnsupportedLiveActivity` 固定）。
 pub mod live_activity;
 /// Phase 11 の拡充ループ（親 #1145、Issue #1376）: OS 搭載フォント一覧の effect ドライバ（macOS / Windows
-/// 実装、iOS・Android は #1377・#1378 で埋めるスタブ、他 OS は `UnsupportedLocalFonts` 固定）。
+/// ・iOS・Android 実装、他 OS は `UnsupportedLocalFonts` 固定）。
 pub mod local_fonts;
 /// Phase 11 の拡充ループ（親 #110、Issue #511）: 近くの端末との直接通信の effect ドライバ
-/// （macOS 実装、iOS / Android は子 issue が埋めるスタブ、他 OS は `UnsupportedLocalPeer` 固定）。
+/// （macOS・iOS / Android 実装、他 OS は `UnsupportedLocalPeer` 固定）。
 pub mod local_peer;
 /// Phase 11 の拡充ループ（親 #887、Issue #888）: 位置情報の effect ドライバ（Windows のみ実装）。
 pub mod location;
@@ -926,29 +926,29 @@ pub mod macos_wifi_info;
 /// Phase 11 の拡充ループ（親 #85、Issue #273）: 地図表示の effect ドライバ（macOS / iOS は
 /// pull 型 `bridge`、他 OS は `UnsupportedMapSnapshotter` 固定）。
 pub mod map_view;
-/// Phase 11 の拡充ループ（親 #99、Issue #386）: 外部機器への再生の effect ドライバ（macOS 実装、iOS・Windows は
-/// 子 issue が埋めるスタブ、他 OS は `UnsupportedMediaCast` 固定）。
+/// Phase 11 の拡充ループ（親 #99、Issue #386）: 外部機器への再生の effect ドライバ（macOS・iOS・Windows 実装、
+/// 他 OS は `UnsupportedMediaCast` 固定）。
 pub mod media_cast;
-/// Phase 11 の拡充ループ（親 #86、Issue #267）: 音声再生の effect ドライバ（macOS 実装、iOS・Android・Windows は
-/// 親 #86 の子で埋めるスタブ、他 OS は `UnsupportedMediaPlayback` 固定）。
+/// Phase 11 の拡充ループ（親 #86、Issue #267）: 音声再生の effect ドライバ（macOS・iOS・Android・Windows 実装、
+/// 他 OS は `UnsupportedMediaPlayback` 固定）。
 pub mod media_playback;
-/// Phase 11 の拡充ループ（親 #91、Issue #311）: 音声変換（AAC）の effect ドライバ（macOS 実装、
-/// iOS / Windows / Android は子 issue が埋めるスタブ、他 OS は `UnsupportedMediaTranscode` 固定。
+/// Phase 11 の拡充ループ（親 #91、Issue #311）: 音声変換（AAC）の effect ドライバ（macOS・iOS / Windows / Android 実装、
+/// 他 OS は `UnsupportedMediaTranscode` 固定。
 /// Web は `fandhe-web-dom`）。
 pub mod media_transcode;
 /// Phase 11 の拡充ループ（親 #953、Issue #954・#955・#956・#957）: マイク録音の
 /// effect ドライバ（macOS/iOS/Windows/Android 実装、他 OS は `UnsupportedMicRecorder`
 /// 固定）。
 pub mod mic_record;
-/// Phase 11 の拡充ループ（親 #1137、Issue #1398）: MIDI 入力の effect ドライバ（macOS・iOS 実装、
-/// Android・Windows は #1400・#1402 で埋めるスタブ、他 OS は `UnsupportedMidiInput` 固定）。
+/// Phase 11 の拡充ループ（親 #1137、Issue #1398）: MIDI 入力の effect ドライバ（macOS・iOS・Android・Windows 実装、
+/// 他 OS は `UnsupportedMidiInput` 固定）。
 pub mod midi;
-/// Phase 11 の拡充ループ（親 #89、Issue #289）: 機械学習モデル推論の effect ドライバ（macOS 実装、
-/// iOS / Windows / Android は b-ios・windows・b-android の子 issue が埋めるスタブ、他 OS は
+/// Phase 11 の拡充ループ（親 #89、Issue #289）: 機械学習モデル推論の effect ドライバ（macOS・iOS / Windows / Android 実装、
+/// 他 OS は
 /// `UnsupportedMlInference` 固定。Web は対象外）。
 pub mod ml_inference;
 /// Phase 11 の拡充ループ（親 #1134、Issue #1341）: 複数ディスプレイの effect ドライバ（macOS / Windows
-/// 実装、Android は #1343 で埋めるスタブ、他 OS は `UnsupportedMultiDisplay` 固定）。
+/// ・iOS・Android 実装、他 OS は `UnsupportedMultiDisplay` 固定）。
 pub mod multi_display;
 /// Phase 11 の拡充ループ（親 #108、Issue #482）: 音楽ライブラリの effect ドライバ（macOS・iOS 実装、
 /// Windows・Android は #483・#485 の担当、他 OS は `UnsupportedMusicLibrary` 固定。
@@ -965,12 +965,12 @@ pub mod nlp;
 /// Phase 11 の拡充ループ（親 #1003、Issue #1004/#1005）: ローカル通知の effect
 /// ドライバ（macOS/Windows/iOS 実装、Android は #1006）。
 pub mod notification;
-/// Phase 11 の拡充ループ（親 #98、Issue #381）: ロック画面・OS のメディア操作の effect ドライバ（macOS 実装、
-/// iOS・Android・Windows は #382・#383・#385 で埋めるスタブ、他 OS は `UnsupportedNowPlaying` 固定。
+/// Phase 11 の拡充ループ（親 #98、Issue #381）: ロック画面・OS のメディア操作の effect ドライバ（macOS・iOS・Android・Windows 実装、
+/// 他 OS は `UnsupportedNowPlaying` 固定。
 /// Web は #384 で `fandhe-web-dom`）。`media_playback` の `audio_play` 画面から呼ばれる。
 pub mod now_playing;
-/// Phase 11 の拡充ループ（親 #93、Issue #345）: 端末内 LLM の effect ドライバ（macOS 実装、iOS は
-/// b-ios が埋めるスタブ、他 OS は `UnsupportedOnDeviceLlm` 固定。Web は `fandhe-web-dom` が持つ）。
+/// Phase 11 の拡充ループ（親 #93、Issue #345）: 端末内 LLM の effect ドライバ（macOS・iOS 実装、
+/// 他 OS は `UnsupportedOnDeviceLlm` 固定。Web は `fandhe-web-dom` が持つ）。
 pub mod on_device_llm;
 /// Phase 11 の拡充ループ（親 #92、Issue #342）: パスキーの effect ドライバ（Windows はワーカー +
 /// pull 型 bridge、実装は #343 が埋める。他 OS は `UnsupportedPasskey` 固定。Web は `fandhe-web-dom`）。
@@ -979,13 +979,13 @@ pub mod passkey;
 /// `UnsupportedPaymentSheet` 固定の同期経路が最終形。Web は `fandhe-web-dom`）。
 pub mod payment_request;
 /// Phase 11 の拡充ループ（親 #107、Issue #469）: PDF 表示（1 ページ目の画像化）の effect ドライバ
-/// （macOS 実装、iOS / Windows / Android は子 issue が埋めるスタブ、他 OS は `UnsupportedPdfPageRenderer` 固定）。
+/// （macOS・iOS / Windows / Android 実装、他 OS は `UnsupportedPdfPageRenderer` 固定）。
 pub mod pdf_viewer;
-/// Phase 11 の拡充ループ（親 #1119、Issue #1247）: 歩数の effect ドライバ（Windows 実装、
-/// iOS・Android は #1248・#1249 で埋めるスタブ、他 OS は `UnsupportedPedometer` 固定）。
+/// Phase 11 の拡充ループ（親 #1119、Issue #1247）: 歩数の effect ドライバ（Windows・iOS・Android 実装、
+/// 他 OS は `UnsupportedPedometer` 固定）。
 pub mod pedometer;
-/// Phase 11 の拡充ループ（親 #95、Issue #355）: ペン・筆圧入力の effect ドライバ（macOS 実装、
-/// iOS・Android・Windows は #356・#357・#359 で埋めるスタブ、他 OS は `UnsupportedPenStylus` 固定。
+/// Phase 11 の拡充ループ（親 #95、Issue #355）: ペン・筆圧入力の effect ドライバ（macOS・iOS・Android・Windows 実装、
+/// 他 OS は `UnsupportedPenStylus` 固定。
 /// Web は `fandhe-web-dom`）。
 pub mod pen_stylus;
 /// Phase 11 の拡充ループ（親 #1101、Issue #1103/#1104）: 写真選択の effect ドライバ（macOS /
@@ -997,14 +997,14 @@ pub mod photo_pick;
 /// iOS / Android は pull 型 `bridge`、Windows は Pictures フォルダへ同期書き込み、
 /// Linux は `UnsupportedPhotoLibrary` 固定。iOS / Android は兄弟 issue #1255 / #1256 まで非対応）。
 pub mod photo_save;
-/// Phase 11 の拡充ループ（親 #97、Issue #364）: ピクチャ・イン・ピクチャの effect ドライバ（macOS 実装、
-/// iOS・Android は子 issue が埋めるスタブ、他 OS は `UnsupportedPictureInPicture` 固定）。
+/// Phase 11 の拡充ループ（親 #97、Issue #364）: ピクチャ・イン・ピクチャの effect ドライバ（macOS・iOS・Android 実装、
+/// 他 OS は `UnsupportedPictureInPicture` 固定）。
 pub mod picture_in_picture;
 /// Phase 11 の拡充ループ（親 #1128、Issue #1274）: 電源状態の effect ドライバ（macOS / Windows
-/// ・iOS 実装、Android は #1276 で埋めるスタブ、他 OS は `UnsupportedPowerState` 固定）。
+/// ・iOS・Android 実装、他 OS は `UnsupportedPowerState` 固定）。
 pub mod power_state;
 /// Phase 11 の拡充ループ（親 #94、Issue #325）: 印刷ダイアログの effect ドライバ（macOS 実装、
-/// Android は #328 で実装済み、Windows / iOS は #326・#327 が埋めるスタブ、他 OS は `UnsupportedPrint` 固定。
+/// Windows / iOS / Android 実装、他 OS は `UnsupportedPrint` 固定。
 /// Web は `fandhe-web-dom`）。
 pub mod print;
 /// request/response 型端末機能共通の要求追跡（Issue #943、親 #941）。share /
@@ -1021,14 +1021,14 @@ pub mod print;
 )]
 pub(crate) mod request_slot;
 /// Phase 11 の拡充ループ（親 #105、Issue #444）: セーフエリアの effect ドライバ
-/// （macOS 実装、iOS / Android はスタブ、他 OS は `UnsupportedSafeArea` 固定）。
+/// （macOS・iOS / Android 実装、他 OS は `UnsupportedSafeArea` 固定）。
 pub mod safe_area_insets;
 /// Phase 11 の拡充ループ（親 #1135、Issue #1335）: 画面の録画・キャプチャの effect ドライバ
-/// （macOS 実装、iOS は #1336 で実装済み・Android は #1337 で埋めるスタブ、他 OS は
+/// （macOS 実装、iOS・Android 実装、他 OS は
 /// `UnsupportedScreenCapturer` 固定。Web は `fandhe-web-dom`）。
 pub mod screen_capture;
 /// Phase 11 の拡充ループ（親 #1129、Issue #1278）: 画面スリープ抑止の effect ドライバ
-/// （macOS/Windows/iOS 実装、Android は #1280 で埋めるスタブ、他 OS は
+/// （macOS/Windows/iOS/Android 実装、他 OS は
 /// `UnsupportedScreenWakeLock` 固定。Web は `fandhe-web-dom`）。
 pub mod screen_wake_lock;
 /// Phase 11 の拡充ループ（親 #921、Issue #922・#924）: 資格情報保存の effect
@@ -1037,8 +1037,8 @@ pub mod secure_credential;
 /// Phase 11 の拡充ループ（親 #896、Issue #897/#898/#899）: 共有シートの effect ドライバ
 /// （macOS/iOS/Android/Windows 実装）。
 pub mod share;
-/// Phase 11 の拡充ループ（親 #122、Issue #606）: 共有の受け取りの effect ドライバ（macOS 実装、
-/// Android は #607 まで `Unsupported` スタブ、他 OS は `UnsupportedShareReceive` 固定。Web は `fandhe-web-dom`）。
+/// Phase 11 の拡充ループ（親 #122、Issue #606）: 共有の受け取りの effect ドライバ（macOS・Android 実装、
+/// 他 OS は `UnsupportedShareReceive` 固定。Web は `fandhe-web-dom`）。
 pub mod share_receive;
 /// Phase 11 の拡充ループ（親 #1023、Issue #1024・#1025）: 音声認識の effect ドライバ
 /// （macOS/iOS/Windows/Android 実装、Android/Web は兄弟 issue）。
@@ -1071,15 +1071,15 @@ pub mod tts;
 /// Phase 11 の拡充ループ（親 #1116、Issue #1215）: カスタム URL scheme 受信の effect
 /// ドライバ（macOS 実装、他 OS は `UnsupportedUrlScheme` 固定）。
 pub mod url_scheme;
-/// Phase 11 の拡充ループ（親 #112、Issue #505）: USB 機器一覧の effect ドライバ（macOS 実装、
-/// Windows・Android は #506・#507 で埋めるスタブ、他 OS は `UnsupportedUsbDevices` 固定。Web は
+/// Phase 11 の拡充ループ（親 #112、Issue #505）: USB 機器一覧の effect ドライバ（macOS・Windows・Android 実装、
+/// 他 OS は `UnsupportedUsbDevices` 固定。Web は
 /// `fandhe-web-dom`）。
 pub mod usb_device;
-/// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS 実装、
-/// Windows・iOS・Android は #531・#532・#534 が埋めるスタブ、他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
+/// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS・Windows・iOS・Android 実装、
+/// 他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
 pub mod web_auth_session;
-/// Phase 11 の拡充ループ（親 #111、Issue #514）: Wi-Fi 情報の effect ドライバ（macOS 実装、Windows・Android は
-/// 後続の子 Issue が埋めるスタブ、iOS（deferred）・他 OS は `UnsupportedWifiInfo` 固定。Web は対象外）。
+/// Phase 11 の拡充ループ（親 #111、Issue #514）: Wi-Fi 情報の effect ドライバ（macOS・Windows・Android 実装、
+/// iOS（deferred）・他 OS は `UnsupportedWifiInfo` 固定。Web は対象外）。
 pub mod wifi_info;
 /// Issue #1308: Windows 向けアクセシビリティ設定実装（WinRT `UISettings` / `AccessibilitySettings`）。
 /// `device/accessibility_prefs.rs` の Windows 経路から呼ばれる。写像の純関数はホストの
@@ -1103,7 +1103,7 @@ pub mod windows_app_shortcuts;
 /// `device/audio_devices.rs` の Windows 経路（ワーカー）から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_audio_devices;
-/// Issue #390: Windows 向けバックグラウンドダウンロードのスタブ（windows #394 が埋める）。
+/// Issue #390: Windows 向けバックグラウンドダウンロード実装。
 /// `device/background_download.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -1144,17 +1144,17 @@ pub mod windows_compose_mail_sms;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_device_info;
-/// Issue #609: Windows 向け気圧・照度・近接センサー実装のスタブ（#612 が埋める）。
+/// Issue #609: Windows 向け気圧・照度・近接センサー実装。
 /// `device/environment_sensors.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_environment_sensors;
-/// Issue #416: Windows 向けファイルの関連付け受信のスタブ（windows の子が埋める）。
+/// Issue #416: Windows 向けファイルの関連付け受信実装。
 /// `device/file_association.rs` の Windows 経路と `main.rs` から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_file_association;
-/// Issue #1410: Windows 向けフォルダ変更監視実装のスタブ（#1411 が埋める）。`device/file_watch.rs` の
+/// Issue #1410: Windows 向けフォルダ変更監視実装。`device/file_watch.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_file_watch;
@@ -1191,7 +1191,7 @@ pub mod windows_local_fonts;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_media_cast;
-/// Issue #267: Windows 向け音声再生実装のスタブ（親 #86 の windows が埋める）。`device/media_playback.rs` の
+/// Issue #267: Windows 向け音声再生実装。`device/media_playback.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -1204,12 +1204,12 @@ pub mod windows_media_transcode;
 /// `device/mic_record.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_mic_record;
-/// Issue #1398: Windows 向け MIDI 入力実装のスタブ（#1402 が埋める）。`device/midi.rs` の
+/// Issue #1398: Windows 向け MIDI 入力実装。`device/midi.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_midi;
-/// Issue #289: Windows 向け機械学習推論のスタブ（windows の子 issue が WinML 実装で埋める）。
+/// Issue #289: Windows 向け機械学習推論実装。
 /// `device/ml_inference.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_ml_inference;
@@ -1238,7 +1238,7 @@ pub mod windows_nlp;
 /// `device/notification.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_notification;
-/// Issue #381: Windows 向けロック画面・OS のメディア操作実装のスタブ（#385 が埋める）。
+/// Issue #381: Windows 向けロック画面・OS のメディア操作実装。
 /// `device/now_playing.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -1247,7 +1247,7 @@ pub mod windows_now_playing;
 /// `device/passkey.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_passkey;
-/// Issue #469: Windows 向け PDF 表示のスタブ（親 #107 の windows の子が `Windows.Data.Pdf` で埋める）。
+/// Issue #469: Windows 向け PDF 表示実装。
 /// `device/pdf_viewer.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_pdf_viewer;
@@ -1320,11 +1320,11 @@ pub mod windows_text_scale;
 /// モジュール内に閉じる（`windows_background_task` と同じ方針）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_url_scheme;
-/// Issue #505: Windows 向け USB 機器一覧実装のスタブ（#506 が埋める）。`device/usb_device.rs` の
+/// Issue #505: Windows 向け USB 機器一覧実装。`device/usb_device.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_usb_device;
-/// Issue #530: Windows 向け Web 認証セッション実装のスタブ（#531 が埋める）。`device/web_auth_session.rs` の
+/// Issue #530: Windows 向け Web 認証セッション実装。`device/web_auth_session.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_web_auth_session;

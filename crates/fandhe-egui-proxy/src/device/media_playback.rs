@@ -8,8 +8,7 @@
 //!
 //! [`platform_playback`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（macOS: `apple_media_playback`、iOS: `ios_media_playback`、
-//! Android: `android_media_playback`、Windows: `windows_media_playback`。Windows は実装済み、iOS・Android は現状スタブで
-//! `UnsupportedMediaPlayback` を返す）。それ以外は `UnsupportedMediaPlayback` 固定で、ダミーの成功実装へは倒さない。
+//! Android: `android_media_playback`、Windows: `windows_media_playback`。いずれも実装済み）。それ以外は `UnsupportedMediaPlayback` 固定で、ダミーの成功実装へは倒さない。
 //!
 //! # 並行性
 //!

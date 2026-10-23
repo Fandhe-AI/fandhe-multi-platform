@@ -8,8 +8,7 @@
 //! （入力が無いと egui が描画せずポーリングが止まる、契約表 4）。
 //!
 //! dispatch（[`implementation`]）は全対象 OS の最終形。macOS は `macos_safe_area_insets.rs`、
-//! iOS は `ios_safe_area_insets.rs`、Android は `android_safe_area_insets.rs`（いずれも兄弟
-//! issue が埋める。現状 iOS / Android はスタブ）。Web は `fandhe-web-dom` 側。
+//! iOS は `ios_safe_area_insets.rs`、Android は `android_safe_area_insets.rs`（いずれも実装済み）。Web は `fandhe-web-dom` 側。
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};

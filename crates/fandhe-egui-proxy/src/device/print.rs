@@ -5,8 +5,8 @@
 //! 契約と守る範囲は `fandhe_device::print` のモジュール doc を参照。
 //!
 //! - iOS / Android: コールバック型のため pull 型 [`bridge`]（`RequestSlot` の facade）で毎フレーム
-//!   `drive_callback` が結果を反映する。Android は #328 で実装済み。iOS は #327 が埋めるまで
-//!   スタブが `Unsupported` を返す。**dispatch はここで最終形にしてあり、後続 issue は OS 別
+//!   `drive_callback` が結果を反映する。Android（#328）・iOS（#327）とも実装済み。
+//!   **dispatch はここで最終形にしてあり、後続 issue は OS 別
 //!   モジュールだけを埋める**
 //! - macOS / Windows / それ以外: [`Print`] を UI スレッドで同期に呼ぶ（同期モーダル）。Linux は
 //!   `UnsupportedPrint` で「非対応」を表示する

@@ -13,7 +13,7 @@
 //! 古い世代の完了は画面側で捨てられる。
 //!
 //! dispatch（[`implementation`]）は全対象 OS の最終形。Windows は `windows_compass.rs`、iOS は `ios_compass.rs`、Android は
-//! 後続の子（#1404 の (b)）が埋めるまでスタブ（`UnsupportedCompass`）、Web は `fandhe-web-dom` 側、
+//! `android_compass.rs`、Web は `fandhe-web-dom` 側、
 //! macOS・Linux は非対応。
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

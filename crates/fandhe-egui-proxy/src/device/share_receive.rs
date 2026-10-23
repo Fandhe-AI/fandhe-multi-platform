@@ -16,8 +16,8 @@
 //!
 //! # 実装のある OS
 //!
-//! macOS（[`MacosShareReceive`](super::macos_share_receive)、Issue #606）。Android は
-//! #607 まで `UnsupportedShareReceive` のスタブ。iOS・Windows は子 issue を切らず
+//! macOS（[`MacosShareReceive`](super::macos_share_receive)、Issue #606）と Android
+//! （`android_share_receive`、Issue #607）。iOS・Windows は子 issue を切らず
 //! `UnsupportedShareReceive` 固定で、画面には「未対応」と出る。
 
 use std::time::Duration;
@@ -35,7 +35,7 @@ use crate::app::CompletionSender;
 /// 受け口を読み直す間隔。
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
-/// 現在の OS の実装（macOS はサービスメニュー、Android は #607 まで スタブ、他は `Unsupported` 固定）。
+/// 現在の OS の実装（macOS はサービスメニュー、Android は `android_share_receive`、他は `Unsupported` 固定）。
 pub(super) fn platform_share_receive() -> &'static dyn ShareReceive {
     #[cfg(target_os = "macos")]
     {
