@@ -8,24 +8,36 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "NearbyInteraction（iOS 14+）",
-      "perm": "`NSNearbyInteractionUsageDescription`（要確認）",
-      "url": "https://developer.apple.com/documentation/nearbyinteraction",
-      "note": "未実装。UWB チップ搭載機に限る。"
+      "api": "NearbyInteraction `NISession` + `NINearbyPeerConfiguration`（iOS 14+、能力判定は `NISession.deviceCapabilities` iOS 16+）。discovery token は MultipeerConnectivity で交換",
+      "perm": "`NSNearbyInteractionUsageDescription`（初回の測距開始で許可ダイアログ）。token 交換に `NSBonjourServices`（`_fandhe-uwb._tcp` / `_fandhe-uwb._udp`）と `NSLocalNetworkUsageDescription`。entitlement は不要",
+      "url": [
+        "https://developer.apple.com/documentation/nearbyinteraction/nisession",
+        "https://developer.apple.com/documentation/nearbyinteraction/nisession/devicecapabilities",
+        "https://developer.apple.com/documentation/nearbyinteraction/discovering-peers-with-multipeer-connectivity",
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/nsnearbyinteractionusagedescription"
+      ],
+      "note": "未実装。UWB チップ搭載機に限る（実行時に `deviceCapabilities` で判定し、機種の一覧は持たない）。前面の間だけ測距する（背景継続は Background Modes が要り範囲外）。背景へ回ったら中断で確定し、自動では再開しない"
     },
     "android": {
       "status": "possible",
-      "api": "`androidx.core:core-uwb`（Android 12+、対応端末限定）",
-      "perm": "報告に記載なし（`UWB_RANGING` と思われるが未確認）",
-      "url": "https://developer.android.com/develop/connectivity/uwb",
-      "note": "未実装。対応端末が限られる。"
+      "api": "`androidx.core.uwb:uwb`（Android 12+、GMS 依存）/ `android.ranging.RangingManager`（Android 16）",
+      "perm": "`android.permission.RANGING`（android.ranging）。Jetpack 経路の権限は未確認",
+      "url": [
+        "https://developer.android.com/develop/connectivity/uwb",
+        "https://developer.android.com/develop/connectivity/ranging"
+      ],
+      "note": "未実装。対応端末が限られる。Jetpack UWB 1.0.0 は推移依存に `play-services-nearby`・`play-services-base`・`kotlinx-coroutines-play-services` を持つ（POM で確認）。`android.ranging` は GMS 不要だが compileSdk 36 が要る（現行は 35 固定）",
+      "deferred": "Jetpack UWB は Google Play services（`play-services-nearby`）に依存し、GMS に依存しない方針のため保留（activity-recognition・in-app-review と同じ）。`android.ranging`（Android 16）は GMS 不要だが compileSdk 36 が要る。compileSdk を上げるか GMS 方針が変われば着手できる。検証に UWB 搭載の Android 2 台が要る"
     },
     "macos": {
-      "status": "possible",
-      "api": "NearbyInteraction（macOS 11+）",
-      "perm": "要確認（対応する Mac の機種は未確認）",
-      "url": "https://developer.apple.com/documentation/nearbyinteraction",
-      "note": "未実装。Apple 公式のプラットフォーム表記で macOS 11 以降を確認。実際に測距できる機種は要確認。"
+      "status": "no",
+      "api": "なし（`NISession` はネイティブ macOS で提供されない。対応は iOS・iPadOS・Mac Catalyst・watchOS。Mac Catalyst でも距離の測定は非対応）",
+      "perm": "なし",
+      "url": [
+        "https://developer.apple.com/documentation/nearbyinteraction",
+        "https://developer.apple.com/documentation/nearbyinteraction/nisession"
+      ],
+      "note": "NearbyInteraction フレームワーク自体は macOS 11+ と表記されるが、`NISession`・`NINearbyPeerConfiguration`・`NIDiscoveryToken` の対応プラットフォームは iOS・iPadOS・Mac Catalyst・watchOS だけ。本プロジェクトの macOS は Catalyst ではなく、Catalyst でも `supportsPreciseDistanceMeasurement` は false と公式に明記されている"
     },
     "windows": {
       "status": "no",
@@ -43,5 +55,5 @@
       "note": "ブラウザに UWB の API は無い。"
     }
   },
-  "note": "iOS / macOS は NearbyInteraction、Android は Jetpack UWB。対応端末が限られ、Android と iOS 間の相互測距は不可（要確認）。今回の範囲: UWB 対応の端末 2 台で相手までの距離（メートル）を画面に出す（方向・複数台は扱わない）。"
+  "note": "iOS は NearbyInteraction（token の交換は MultipeerConnectivity）。macOS は `NISession` が無く no、Android は GMS 依存のため保留（deferred）、Windows・Web は no。Android と iOS の相互測距は扱わない（Android の公式文書は、iOS と測距するには Apple の Nearby Interaction Accessory Protocol に合わせた設定を app 側で組む必要があるとしている）。今回の範囲: UWB 対応の iPhone 2 台で、同じアプリの相手と token を交換し、相手までの距離（メートル）を出し続ける。端末の能力（距離・方向を測れるか）も常に出す（方向の測距・3 台以上・背景での継続・アクセサリ・異なる OS 同士は扱わない）。守る範囲: 1 プロセス内の要求と完了の順序、圏外を 0 m や古い値で見せないこと、停止・失敗・中断の全経路での MPC と NISession の解放。守らない範囲: 3 台以上が居るときの相手の選び方（最初に token を交換できた 1 台）、交換窓の端での非対称（片方は相手なし、片方は時間切れ）、同じサービス種別を名乗る別インスタンスの token（相手は認証しない）、距離の精度・更新間隔・遮蔽物による欠測（OS が決める）、背景からの自動再開、複数プロセスの同時測距、表示の遅れ（読み取り間隔 + OS の更新周期）"
 }
