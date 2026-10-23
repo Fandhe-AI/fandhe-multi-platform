@@ -338,6 +338,10 @@ generated_screens! {
     crate::device::spotlight_index::spotlight_index_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "share_receive_show" => fandhe_core::screens::share_receive_show::current_screen,
+    crate::device::share_receive::share_receive_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "url_scheme_show" => fandhe_core::screens::url_scheme_show::current_screen,
     crate::device::url_scheme::url_scheme_show_effect,
     effect
