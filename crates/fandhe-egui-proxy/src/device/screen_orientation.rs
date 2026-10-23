@@ -606,6 +606,31 @@ mod tests {
     }
 
     #[test]
+    fn expired_lock_restores_previous_portrait_lock() {
+        let _g = guard();
+        let (tx, rx) = sender_with_channel();
+        let mut fake = Fake::new();
+        fake.follow = false;
+        *fake.lock.lock().unwrap() = Some(Orientation::Portrait);
+        let mut d = Driver::default();
+        let mut s = ready(&tx, &rx, &fake, &mut d);
+        let t0 = Instant::now();
+        lock_landscape(&mut s);
+        drive(&s, &tx, &fake, t0, VP, &mut d);
+        apply_all(&rx, &mut s);
+        drive(&s, &tx, &fake, t0 + CONFIRM_TIMEOUT, VP, &mut d);
+        apply_all(&rx, &mut s);
+        assert!(!s.applying());
+        assert!(error_text(&s).contains(NOT_LOCKED_REASON));
+        // 期限切れの復元は、解除ではなく直前の値（縦固定）へ戻す。
+        assert_eq!(
+            fake.calls(),
+            vec![Some(Orientation::Landscape), Some(Orientation::Portrait)]
+        );
+        assert_eq!(*fake.lock.lock().unwrap(), Some(Orientation::Portrait));
+    }
+
+    #[test]
     fn read_failure_before_request_changes_nothing() {
         let _g = guard();
         let (tx, rx) = sender_with_channel();
