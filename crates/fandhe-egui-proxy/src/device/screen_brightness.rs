@@ -100,7 +100,8 @@ fn drive(
         };
         // 成否に関わらず、結果を届ける前に実際の状態を読み戻す（嘘の成功の禁止）。
         let reading = to_reading(imp.read());
-        timing.last_read = Some(now);
+        // 読み取り失敗は pull を止めるため間隔ゲートを持ち越さない（直後の明示 reload を待たせない）。
+        timing.last_read = reading.is_ok().then_some(now);
         let _ = sender.send(Box::new(move |s: &mut ScreenBrightnessShowState| {
             finish(s, generation, result, reading);
         }));
@@ -120,9 +121,10 @@ fn drive(
             sender.request_repaint_after(READ_INTERVAL - d);
         }
         _ => {
-            timing.last_read = Some(now);
             let result = to_reading(imp.read());
             let keep_polling = result.is_ok();
+            // 失敗時は間隔ゲートを残さず、利用者の明示 reload を即時に読めるようにする。
+            timing.last_read = keep_polling.then_some(now);
             let _ = sender.send(Box::new(move |s: &mut ScreenBrightnessShowState| {
                 apply_read(s, result);
             }));
@@ -381,6 +383,39 @@ mod tests {
         assert_eq!(s.read_state(), &ReadState::Failed);
         drive(&s, &tx, &Failing, t0 + READ_INTERVAL * 3, &mut timing);
         assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn reload_after_failed_read_reads_without_waiting_interval() {
+        struct Failing;
+        impl ScreenBrightness for Failing {
+            fn set_override(&self, _: f32) -> Result<(), DeviceError> {
+                Err(DeviceError::Internal("x"))
+            }
+            fn clear_override(&self) -> Result<(), DeviceError> {
+                Err(DeviceError::Internal("x"))
+            }
+            fn read(&self) -> Result<BrightnessReading, DeviceError> {
+                Err(DeviceError::Internal("x"))
+            }
+        }
+        let (tx, rx) = sender_with_channel();
+        let mut s = ScreenBrightnessShowState::default();
+        let t0 = Instant::now();
+        let mut timing = Timing::default();
+        drive(&s, &tx, &Failing, t0, &mut timing);
+        apply_all(&rx, &mut s);
+        assert_eq!(s.read_state(), &ReadState::Failed);
+        fandhe_core::screens::screen_brightness_show::reload(&mut s);
+        // 100ms 後の明示 reload は READ_INTERVAL を待たず即読む（読めば完了が届く）。
+        drive(
+            &s,
+            &tx,
+            &Failing,
+            t0 + Duration::from_millis(100),
+            &mut timing,
+        );
+        assert!(rx.try_recv().is_ok());
     }
 
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
