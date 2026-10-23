@@ -147,11 +147,24 @@ final class ScreenBrightnessHelper {
             cached = normalize(window.getAttributes().screenBrightness);
             return RESULT_FAILED;
         } catch (RuntimeException e) {
-            // 実値へ再同期する。読めなければ不明にして、成功には倒さない。
-            try {
-                cached = normalize(activity.getWindow().getAttributes().screenBrightness);
-            } catch (RuntimeException e2) {
-                cached = READ_UNKNOWN;
+            // 属性は途中まで書き換わっている可能性がある。取得済みの Window と before で復元を試み、
+            // 読み戻しで確定する。戻せたか確認できなければ不明にして、成功には倒さない。
+            cached = READ_UNKNOWN;
+            if (window != null && before != READ_UNKNOWN) {
+                try {
+                    writeBrightness(window, before);
+                } catch (RuntimeException e2) {
+                    // 復元の書き込みに失敗しても、下の読み戻しで実値を確かめる。
+                }
+                try {
+                    float actual = window.getAttributes().screenBrightness;
+                    boolean restored = before < 0.0f ? actual < 0.0f : Math.abs(actual - before) <= TOLERANCE;
+                    if (restored) {
+                        cached = normalize(actual);
+                    }
+                } catch (RuntimeException e3) {
+                    cached = READ_UNKNOWN;
+                }
             }
             return RESULT_FAILED;
         }
