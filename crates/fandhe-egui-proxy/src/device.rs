@@ -20,6 +20,9 @@
 /// Issue #1308: アクセシビリティ設定（視差軽減・コントラスト）の effect ドライバ（Windows / macOS / iOS / Android 実装、
 /// 他 OS は `UnsupportedAccessibilityPrefs` 固定。Web は `fandhe-web-dom`）。
 pub mod accessibility_prefs;
+/// Issue #613（親 #124）: 行動認識（歩行・乗車等）の effect ドライバ（Windows 実装、iOS は #614 が埋めるまでスタブ、
+/// 他 OS は `UnsupportedActivityRecognizer` 固定）。
+pub mod activity_recognition;
 #[cfg(target_os = "android")]
 pub mod android;
 /// Issue #1310: Android 向けアクセシビリティ設定実装（`AccessibilityPrefsHelper` を JNI で呼ぶ）。
@@ -560,6 +563,10 @@ pub mod ios;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_accessibility_prefs;
+/// Issue #613: iOS 向け行動認識実装のスタブ（#614 が `CMMotionActivityManager` で埋める）。`device/activity_recognition.rs` の ios 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_activity_recognition;
 /// Issue #1361: iOS 向けバッジ設定実装（`ios/fandhe_ios_app_badge.m` を呼ぶ C ABI ラッパー）。`device/app_badge.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -1066,6 +1073,10 @@ pub mod wifi_info;
 /// `cargo test` で検査するため cfg を付けず、WinRT 呼び出しだけをモジュール内に閉じる。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_accessibility_prefs;
+/// Issue #613: Windows 向け行動認識実装（WinRT `ActivitySensor` の `ReadingChanged`）。`device/activity_recognition.rs` の windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_activity_recognition;
 /// Issue #1360: Windows 向けタスクバーのオーバーレイアイコン実装（`ITaskbarList3::SetOverlayIcon`）。`device/app_badge.rs` の windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]

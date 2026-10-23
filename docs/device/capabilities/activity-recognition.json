@@ -33,14 +33,17 @@
       "note": "デスクトップに行動認識の概念がない。`CMMotionActivityManager` は SDK で `API_UNAVAILABLE(macos)`"
     },
     "windows": {
-      "status": "possible",
-      "note": "搭載機種のみ。非搭載なら `GetDefaultAsync` が null で、`Unsupported` とする（compass-heading の Windows と同じ扱い）。行動認識センサーを持つ PC はほとんど無く、多くの機種で非対応表示になる。正常系は実機未確認の天井として残す",
-      "api": "`Windows.Devices.Sensors.ActivitySensor`",
+      "status": "done",
+      "note": "搭載機種のみ。非搭載なら `GetDefaultAsync` が null で、`Unsupported` とする（compass-heading の Windows と同じ扱い）。行動認識センサーを持つ PC はほとんど無く、多くの機種で非対応表示になる。正常系は実機未確認の天井として残す。実装済み（#613）: 専用ワーカー 1 本に開始・停止を直列化し、`GetDefaultAsync` が null なら `Unsupported`、`E_ACCESSDENIED` は `PermissionDenied`、他のエラーは `Failed`（元の HRESULT を潰さない）。写像できる種別だけを `SubscribedActivities` へ足して `ReadingChanged` を購読し、初期値は `GetCurrentReadingAsync` で受ける。`Idle` / `Fidgeting` は静止にまとめ、範囲外の種別・確度はサンプルごと捨てる。開始から 5 秒値が届かなければ `NoReading`（1 件届いた後は期限なし）。値なし・失敗・非対応・判定なしを「静止」にしない。守る範囲: 1 プロセス内の開始・停止・受信の順序（世代照合）、嘘の値を出さない、二重に購読しない、停止と失敗で購読とリスナーを解除する。守らない範囲: OS 間の分類の一致、判定の遅れ、250 ms 以内の多重の遷移、`Idle` / `Fidgeting` の区別、背景中の行動、過去の履歴、複数プロセス。既知の天井: 正常系・capability `activity` の要否・パッケージ無しの素の exe での動作・拒否時の HRESULT は実機未確認で、届かないと判明したらこの `done` を取り下げる。Windows 実機での確認は #603",
+      "api": "`ActivitySensor.GetDefaultAsync`・`SubscribedActivities`・`ReadingChanged`・`GetCurrentReadingAsync`",
       "perm": "クラスの要件に app capability `activity`。素の exe（Medium IL）では不要の見込みだが、実機未確認（pedometer と同じ）",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.activitysensor",
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.activitysensor.getdefaultasync"
-      ]
+      ],
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#603）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_activity_recognition.rs + crates/fandhe-egui-proxy/src/device/activity_recognition.rs + crates/fandhe-core/src/screens/activity_recognition_show.rs + crates/fandhe-device/src/activity_recognition.rs、Issue #613"
     },
     "web": {
       "status": "n-a",

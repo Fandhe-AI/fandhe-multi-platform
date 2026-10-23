@@ -14,6 +14,8 @@
 // SCHEMA.md の例は画面名 `todo` を使うため、この参照実装モジュールを `mod todo;` にすると
 // AI が同じ名前で実際の画面を生成した際に `pub mod todo;` と二重定義してコンパイル
 // 不能になる。生成対象と衝突しない名前にする（`schema_example_fixture.rs` 参照）。
+/// Phase 11 の拡充ループ型サンプル「行動認識（歩行・乗車等）」（親 #124、Issue #613）。
+pub mod activity_recognition_show;
 /// Phase 11（端末機能の型サンプル「バッジの設定」、Issue #1360）。
 pub mod app_badge_set;
 /// Phase 11 の拡充ループ型サンプル「AR 表示」（親 #90、Issue #307）。
