@@ -135,6 +135,7 @@ static MCPeerID *gMcPeer = nil; // 選んだ相手。未定は nil
 static NISession *gNi = nil;
 static NIDiscoveryToken *gPeerToken = nil;
 static BOOL gRanging = NO;
+static BOOL gTokenSent = NO; // 自分の token を相手へ送ったか。相手の token が先に届いても送り漏らさない
 
 static void StopDiscovery(void) {
     if (gAdvertiser != nil) {
@@ -158,6 +159,7 @@ static void TeardownMpc(void) {
     }
     gSelfPeer = nil;
     gMcPeer = nil;
+    gTokenSent = NO;
 }
 
 // 確保済みの全資源を解放する（serial queue 上）。途中まで作った状態でも安全。
@@ -252,10 +254,14 @@ static BOOL TokenIsPeer(NSArray<NINearbyObject *> *objects) {
             if (self != gHandler || session != gMcSession || ![peerID isEqual:gMcPeer]) {
                 return;
             }
-            if (state == MCSessionStateConnected && !gRanging) {
-                if (!Update(self.epoch, kPhaseExchanging, 0, 0)) {
+            if (state == MCSessionStateConnected && !gTokenSent) {
+                // 接続が確立してから探索を止める（招待の送受信中に止めると招待が届かない恐れがある）
+                StopDiscovery();
+                // 相手の token が先に届いて測距を始めていても、自分の token は送る（送らないと相手が交換中のまま止まる）
+                if (!gRanging && !Update(self.epoch, kPhaseExchanging, 0, 0)) {
                     return;
                 }
+                gTokenSent = YES;
                 NSError *err = nil;
                 NSData *mine = [NSKeyedArchiver archivedDataWithRootObject:gNi.discoveryToken
                                                      requiringSecureCoding:YES
@@ -315,7 +321,7 @@ static BOOL TokenIsPeer(NSArray<NINearbyObject *> *objects) {
                 return;
             }
             gMcPeer = peerID;
-            StopDiscovery();
+            // 探索は接続の確立（MCSessionStateConnected）か切断（NotConnected）で止める。gMcPeer があれば以後の招待は断る
             invitationHandler(YES, gMcSession);
         }
     });
@@ -345,10 +351,9 @@ static BOOL TokenIsPeer(NSArray<NINearbyObject *> *objects) {
             }
             gMcPeer = peerID;
             MCSession *s = gMcSession;
-            // 招待を送ってから停止する。先に停止すると browser が招待を届けられない。
-            // 失敗・タイムアウト・キャンセルは Teardown 経由で StopDiscovery と gMcPeer の復元に至る。
+            // 探索は接続の確立（MCSessionStateConnected）まで止めない。止めると招待が届かない恐れがある。
+            // 失敗・タイムアウト・拒否は NotConnected で TeardownMpc → BuildMpc により探索へ戻る。
             [browser invitePeer:peerID toSession:s withContext:nil timeout:kInviteTimeout];
-            StopDiscovery();
         }
     });
 }
