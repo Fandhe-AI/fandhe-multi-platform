@@ -218,6 +218,11 @@ pub mod android_print;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_safe_area_insets;
+/// Issue #633: Android 向け画面輝度実装（#635 が埋めるスタブ）。
+/// `device/screen_brightness.rs` の Android 経路から使われる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_screen_brightness;
 /// Issue #1335: Android 向け画面録画実装。`device/screen_capture.rs` の
 /// Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
@@ -770,6 +775,11 @@ pub mod ios_print;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_safe_area_insets;
+/// Issue #633: iOS 向け画面輝度実装（#634 が埋めるスタブ）。
+/// `device/screen_brightness.rs` の iOS 経路から使われる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_screen_brightness;
 /// Issue #1279: iOS 向け画面スリープ抑止実装（`ios/fandhe_ios_screen_wake_lock.m` を呼ぶ C ABI
 /// ラッパー。#1278 のスタブを置き換え）。
 /// `device/screen_wake_lock.rs` の iOS 経路から使われる。
@@ -1031,6 +1041,9 @@ pub(crate) mod request_slot;
 /// Phase 11 の拡充ループ（親 #105、Issue #444）: セーフエリアの effect ドライバ
 /// （macOS・iOS / Android 実装、他 OS は `UnsupportedSafeArea` 固定）。
 pub mod safe_area_insets;
+/// Phase 11 の拡充ループ（親 #126、Issue #633）: 画面輝度の effect ドライバ
+/// （iOS・Android は後続の子 #634・#635 が埋めるスタブ、他 OS は `UnsupportedScreenBrightness` 固定）。
+pub mod screen_brightness;
 /// Phase 11 の拡充ループ（親 #1135、Issue #1335）: 画面の録画・キャプチャの effect ドライバ
 /// （macOS 実装、iOS・Android 実装、他 OS は
 /// `UnsupportedScreenCapturer` 固定。Web は `fandhe-web-dom`）。
