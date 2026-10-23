@@ -95,6 +95,8 @@
   （`FANDHE_PROXY_APP=pedometer_read`）が `CMPedometer`
   （`crates/fandhe-egui-proxy/ios/fandhe_ios_pedometer.m`）で歩数を読むために必須。
   未設定だと権限要求時にクラッシュする。HealthKit は使わない（security.md A05）。
+  型サンプル「行動認識」（`FANDHE_PROXY_APP=activity_recognition_show`）も `CMMotionActivityManager`
+  （`crates/fandhe-egui-proxy/ios/fandhe_ios_activity_recognition.m`、Issue #614）で同じキーを使う。
 
   NSAppleMusicUsageDescription（Issue #484）: 型サンプル「音楽ライブラリ」画面
   （`FANDHE_PROXY_APP=music_library_list`）が MediaPlayer の `MPMediaLibrary.
@@ -250,7 +252,7 @@
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>型サンプル「BLE スキャン」の動作確認に使います</string>
 	<key>NSMotionUsageDescription</key>
-	<string>型サンプル「歩数」の動作確認に使います</string>
+	<string>型サンプル「歩数」「行動認識」の動作確認に使います</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>型サンプル「写真の保存」の動作確認に使います</string>
 	<key>NSAppleMusicUsageDescription</key>
