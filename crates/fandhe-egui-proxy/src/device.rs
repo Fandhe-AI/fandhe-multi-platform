@@ -357,7 +357,7 @@ pub mod apple_file_association;
 pub mod apple_gamepad;
 /// Issue #691 macOS・#692 iOS: 住所の座標変換実装（`apple/fandhe_apple_geocoding_search.m` の
 /// MapKit `MKGeocodingRequest` を呼ぶ C ABI ラッパー）。`device/geocoding_search.rs` の macOS 経路と、
-/// iOS 経路（#692 で `ios_geocoding_search` 経由）から呼ばれる。`build.rs` のコンパイル条件と
+/// iOS 経路（`ios_geocoding_search` 経由）から呼ばれる。`build.rs` のコンパイル条件と
 /// 同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_geocoding_search;
@@ -708,8 +708,8 @@ pub mod ios_flashlight;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_fullscreen_immersive;
-/// Issue #691: iOS 向け住所の座標変換の骨格（`Unsupported` のスタブ。#692 が macOS と共用の
-/// `AppleForwardGeocoder` を返す）。`device/geocoding_search.rs` の iOS 経路から呼ばれる。
+/// Issue #692: iOS 向け住所の座標変換実装（macOS と共用の `AppleForwardGeocoder` へ委譲し、
+/// 戻り直後に再描画を起こす）。`device/geocoding_search.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_geocoding_search;
 /// Issue #1252: iOS 向け文字認識（PHPicker + Vision）の effect ドライバ。
@@ -856,6 +856,9 @@ pub mod ios_web_auth_session;
 /// Phase 11 の拡充ループ（親 #109、Issue #486）: LAN のサービス探索の effect ドライバ
 /// （macOS・iOS / Android 実装、Windows は `DnsServiceBrowse`、他 OS は `UnsupportedLanDiscovery` 固定。Web は対象外）。
 pub mod lan_discovery;
+/// Phase 11 の拡充ループ（親 #134、Issue #696）: ログイン時の自動起動の effect ドライバ
+/// （macOS 実装。Windows は骨格のスタブで Issue #697 が埋める。他 OS は `UnsupportedLaunchAtLogin` 固定）。
+pub mod launch_at_login;
 /// Phase 11 の拡充ループ（親 #88、Issue #294）: ライブアクティビティの effect ドライバ（iOS・Android 実装、
 /// 他 OS は `UnsupportedLiveActivity` 固定）。
 pub mod live_activity;
@@ -913,6 +916,12 @@ pub mod macos_file_watch;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_in_app_review;
+/// Issue #696: macOS 向けログイン時の自動起動実装（`macos/fandhe_macos_launch_at_login.m` の
+/// `SMAppService.mainApp` を呼ぶ C ABI ラッパー）。`device/launch_at_login.rs` の macOS 経路から呼ばれる。
+/// 写像の純関数をホストでテストできるよう cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_launch_at_login;
 /// Issue #1376: macOS 向け OS 搭載フォント一覧実装（`macos/fandhe_macos_local_fonts.m` を呼ぶ C ABI
 /// ラッパー）。`device/local_fonts.rs` の macOS 経路から呼ばれる。バッファ解釈の純関数をホストで
 /// テストできるよう cfg は `any(macos, test)`。
@@ -1289,6 +1298,12 @@ pub mod windows_image_recognition;
 /// `device/lan_discovery.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_lan_discovery;
+/// Issue #696: Windows 向けログイン時の自動起動の骨格（現状は `Unsupported` を返すスタブ。実装は Issue #697）。
+/// `device/launch_at_login.rs` の windows 経路から呼ばれる。後続の子がホストテストを足すときに
+/// cfg を広げずに済むよう test でもコンパイルする。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_launch_at_login;
 /// Issue #1376: Windows 向け OS 搭載フォント一覧実装（DirectWrite のシステムフォントコレクション）。
 /// `device/local_fonts.rs` の Windows 経路（ワーカー）から呼ばれる。
 #[cfg(target_os = "windows")]

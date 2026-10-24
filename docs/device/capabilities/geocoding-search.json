@@ -7,14 +7,17 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "MapKit `MKGeocodingRequest`（iOS 26 以上）。`CLGeocoder` は iOS 26 で非推奨。経路の `MKDirections`・地点検索の `MKLocalSearch` は今回の範囲外",
+      "status": "done",
+      "api": "MapKit `MKGeocodingRequest`（iOS 26 以上。main queue で開始し completion も main、macOS と同じ `.m`）。`CLGeocoder` は iOS 26 で非推奨。経路の `MKDirections`・地点検索の `MKLocalSearch` は今回の範囲外",
       "perm": "不要（住所 → 座標は現在地を使わない）",
       "url": [
         "https://developer.apple.com/documentation/mapkit/mkgeocodingrequest",
         "https://developer.apple.com/documentation/corelocation/clgeocoder"
       ],
-      "note": "未実装。iOS 26 未満は Unsupported にする（非推奨の CLGeocoder へ倒さない）。地理コードはアプリごとにレート制限があり、上限で `MKErrorLoadingThrottled` を返す。結果は推測で精度の保証なし"
+      "note": "実装済み（#692）。macOS と同じ `.m` を共用し、画面の固定の公開住所 1 件を座標へ変換して先頭候補の緯度・経度と候補数を出す。通信不可・回数上限・該当なし・座標なし・時間切れを区別して失敗にし、0 件・座標なし・error 付きを成功にしない。住所・座標・OS のエラー文はログへ出さない。iOS 26 未満は Unsupported（非推奨の CLGeocoder へ倒さない）。背景にいる間は completion が遅れ得て、その場合は期限切れで失敗を確定し遅れた結果は捨てる。権限・Info.plist は不要。実機での通信・精度は #689 で確かめる。守らない範囲: 結果の精度と候補の選択、回数上限、期限後も OS 側の処理が走り切ること",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#689）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_geocoding_search.rs + crates/fandhe-egui-proxy/src/device/apple_geocoding_search.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_geocoding_search.m + crates/fandhe-egui-proxy/src/device/geocoding_search.rs、Issue #692"
     },
     "android": {
       "status": "done",

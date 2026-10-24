@@ -160,6 +160,8 @@ pub mod image_recognize;
 pub mod in_app_review;
 /// Phase 11 の拡充ループ型サンプル「LAN のサービス探索」（親 #109、Issue #486）。
 pub mod lan_discover;
+/// Phase 11 の拡充ループ型サンプル「ログイン時の自動起動」（親 #134、Issue #696）。
+pub mod launch_at_login_show;
 /// Phase 11 の拡充ループ型サンプル「ライブアクティビティ」（親 #88、Issue #294）。
 pub mod live_activity_show;
 /// Phase 11 の拡充ループ型サンプル「OS 搭載フォント」（親 #1145、Issue #1376）。
