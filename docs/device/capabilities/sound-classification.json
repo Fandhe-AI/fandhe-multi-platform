@@ -7,11 +7,14 @@
   "bundle": "continuous-push",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "SoundAnalysis（`SNClassifySoundRequest` の内蔵分類器 `SNClassifierIdentifierVersion1` + `SNAudioStreamAnalyzer`）+ AVFoundation（`AVAudioEngine` の入力タップ・`AVAudioSession`）",
       "perm": "`NSMicrophoneUsageDescription`（mic-record で宣言済み。新しい権限キーは足さない）",
       "url": "https://developer.apple.com/documentation/soundanalysis/classifying-sounds-in-an-audio-stream",
-      "note": "未実装。内蔵分類器（`initWithClassifierIdentifier:error:`）は iOS 15 以上で、アプリの最小 OS（17）では常に使える。Objective-C から使える。マイクは `AVAudioEngine` の入力タップで取り、専用の serial queue で `analyzeAudioBuffer:atAudioFramePosition:` へ流す（公式文書がリアルタイムの文脈から呼ばず専用キューで直列化するよう求めている）。分類中は `AVAudioSession` を Record にし、開始前の category / options を保存して全終了経路で戻す。背景遷移・音声の割り込み（`AVAudioSessionInterruptionNotification`）・入力形式の変更では止めて中断扱いにし、自動では再開しない。ラベルは OS の識別子（英語の技術名で、公式文書は UI へそのまま出す前提ではないとしている）"
+      "note": "実装済み（#726）。「マイク入力を内蔵分類器へ流し続け、上位 3 件のラベル（OS の識別子のまま）と信頼度を出す」範囲。内蔵分類器（`initWithClassifierIdentifier:error:`）は iOS 15 以上で、アプリの最小 OS（17）では常に使える。マイクは `AVAudioEngine` の入力タップで取り、専用の serial queue で `analyzeAudioBuffer:atAudioFramePosition:` へ流す。分類中は `AVAudioSession` を Record にし、開始前の category / options を保存して全終了経路で戻す（有効化に失敗したら開始は失敗）。背景遷移（`DidEnterBackground`）・音声の割り込み（`AVAudioSessionInterruptionNotification` の Began）・メディアサービスのリセット・入力形式の変更では止めて中断扱いにし、自動では再開しない。許可ダイアログ中の Inactive は中断にせず、許可の応答が背景遷移の後に届いても背景では録音を始めない。状態・結果・通知は 1 本の制御 serial queue に集め、値の確定直後に再描画を起こす（main へ同期で待たない）。ラベルは OS の識別子（英語の技術名で、公式文書は UI へそのまま出す前提ではないとしている）。守る範囲・守らない範囲は全体の note のとおり。未確認事項（実機での分類、許可ダイアログ後の最初の結果までの時間、割り込みと背景遷移の挙動、シミュレータでの分類可否）は実機確認で確かめ、問題があればこの done を取り下げる",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#716）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_sound_classification.m + crates/fandhe-egui-proxy/src/device/ios_sound_classification.rs + crates/fandhe-egui-proxy/src/device/apple_sound_classification.rs + crates/fandhe-egui-proxy/src/device/sound_classification.rs + crates/fandhe-core/src/screens/sound_classification_show.rs + crates/fandhe-device/src/sound_classification.rs、Issue #726"
     },
     "android": {
       "status": "no",
