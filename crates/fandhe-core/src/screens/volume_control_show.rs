@@ -333,15 +333,24 @@ pub fn apply_read(
             if r.mode != ControlMode::Steps {
                 state.pending_step = None;
             }
+            // 上限・下限などの案内は、その時の読み戻し（音量・変え方）に対してだけ有効。
+            // OS 側で音量が変わっていたら古い案内を残さない。
+            let same_reading = matches!(&state.read, ReadState::Read(old)
+                if old.level == r.level && old.mode == r.mode);
+            if !same_reading {
+                state.notice.clear();
+            }
             state.read = ReadState::Read(r);
         }
         Err(VolumeFailure::Unsupported) => {
             state.read = ReadState::Unsupported;
             state.pending_step = None;
+            state.notice.clear();
         }
         Err(f) => {
             state.read = ReadState::Failed;
             state.pending_step = None;
+            state.notice.clear();
             state.error = match f {
                 VolumeFailure::PermissionDenied => PERMISSION_DENIED_REASON.to_string(),
                 _ => READ_FAILED_STATUS.to_string(),
@@ -366,6 +375,7 @@ pub fn expire(state: &mut VolumeControlShowState, ticket: u64) {
         OpKind::Read => {
             state.read = ReadState::Failed;
             state.pending_step = None;
+            state.notice.clear();
             state.error = format!("{FAILED_PREFIX}{TIMEOUT_REASON}");
         }
     }
@@ -518,6 +528,26 @@ mod tests {
         let t = issue_step(&mut s, StepDir::Down);
         finish_step(&mut s, t, Ok(StepResult::Unchanged(steps(0.0))));
         assert_eq!(notice_text(&s), AT_MIN_NOTE);
+    }
+
+    #[test]
+    fn notice_is_dropped_when_readback_changes() {
+        let mut s = ready(1.0);
+        press_up(&mut s);
+        let t = issue_step(&mut s, StepDir::Up);
+        finish_step(&mut s, t, Ok(StepResult::Unchanged(steps(1.0))));
+        assert_eq!(notice_text(&s), AT_MAX_NOTE);
+        // 同じ読み戻しでは案内を残す。
+        let t = s.ticket() + 1;
+        begin(&mut s, t, OpKind::Read);
+        apply_read(&mut s, t, Ok(steps(1.0)));
+        assert_eq!(notice_text(&s), AT_MAX_NOTE);
+        // OS 側で 50% に変わったら案内を消す。
+        let t = s.ticket() + 1;
+        begin(&mut s, t, OpKind::Read);
+        apply_read(&mut s, t, Ok(steps(0.5)));
+        assert_eq!(notice_text(&s), "");
+        assert_eq!(level_text(&s), format!("{LEVEL_PREFIX}50%"));
     }
 
     #[test]

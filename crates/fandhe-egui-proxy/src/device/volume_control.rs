@@ -13,6 +13,9 @@
 //!
 //! # 1 フレームの流れ
 //!
+//! 0. 毎フレーム、`request_slot::poll_and_finish` で `SLOT` を観測し、届いた結果を画面へ反映する
+//!    （要求の追跡は request/response 型共通の `RequestSlot`。ticket は `RequestSlot::begin` の
+//!    request_id を使う）
 //! 1. OS 呼び出しの完了待ち（`is_busy`）なら何もしない（完了・期限切れの注入で再描画される）
 //! 2. 保留中の「＋」「－」があれば `begin` → OS 呼び出し → 結果の注入（読み取りより優先）
 //! 3. 読み直しが要るなら、`READ_INTERVAL` 経過後に `begin` → 読み取り。間隔内なら残り時間で
@@ -23,7 +26,8 @@
 //!
 //! macOS / iOS / Android は UI スレッドから同期で呼ぶ。Windows は COM 初期化の都合（UI スレッドは
 //! STA、実装は MTA）と戻らない場合の備えのため、ワーカーで呼び 5 秒の期限を `Instant`（単調時計）で
-//! 測る。期限切れは `expire` で失敗を確定し、遅れて届いた結果は受信側を drop 済みのため捨てる。
+//! 測る。期限切れは `RequestSlot::clear_if_pending` で結果未着を確かめて消してから `expire` で失敗を確定し、
+//! 遅れて届いた結果は受信側を drop 済みのため捨てる。
 //! 前回の OS 呼び出しが未終了の間は新しい呼び出しを起こさず失敗で確定する（スレッドの累積防止）。
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -49,6 +53,7 @@ use fandhe_device::volume_control::{
 use fandhe_device::DeviceError;
 
 use crate::app::CompletionSender;
+use crate::device::request_slot::{poll_and_finish, RequestSlot};
 
 /// OS 呼び出し（内側スレッド）が実行中か。期限切れで画面を失敗にしても呼び出しが戻るまでは
 /// true のままで、その間は新しい OS スレッドを起こさない。
@@ -131,6 +136,7 @@ fn to_direction(d: StepDir) -> StepDirection {
 }
 
 /// OS 呼び出しの結果（種類ごと）。
+#[derive(Clone)]
 enum Output {
     Read(Result<Reading, VolumeFailure>),
     Step(Result<StepResult, VolumeFailure>),
@@ -155,12 +161,37 @@ fn failed_output(kind: OpKind, reason: &str) -> Output {
     }
 }
 
-fn send_output(sender: &CompletionSender<VolumeControlShowState>, ticket: u64, out: Output) {
-    // 受信側がドロップ済み（終了中）の送信失敗は無視してよい。
-    let _ = sender.send(Box::new(move |s: &mut VolumeControlShowState| match out {
-        Output::Read(r) => apply_read(s, ticket, r),
-        Output::Step(r) => finish_step(s, ticket, r),
-    }));
+/// `SLOT` に置く完了結果。画面へ反映するときに要求と照合できるよう ticket（= request_id）を持つ。
+#[derive(Clone)]
+struct Done {
+    ticket: u64,
+    out: Output,
+}
+
+/// 音量の要求 1 件の追跡（プロセスで 1 個、`device/request_slot.rs`）。
+static SLOT: RequestSlot<Done> = RequestSlot::new();
+
+/// 完了結果を `SLOT` に置き、次のフレームで反映されるよう再描画を予約する。
+/// 期限切れ・要求の差し替えで捨てられた結果（`deliver` が偽）は何もしない。
+fn deliver(
+    slot: &'static RequestSlot<Done>,
+    sender: &CompletionSender<VolumeControlShowState>,
+    ticket: u64,
+    out: Output,
+) {
+    if slot.deliver(ticket, Done { ticket, out }) {
+        sender.request_repaint_after(Duration::ZERO);
+    }
+}
+
+/// `poll_and_finish` の `apply`: 届いた結果を画面へ反映する。ticket が合わない完了は
+/// `apply_read` / `finish_step` が捨てるため、常に `SLOT` を空けてよい。
+fn apply_done(s: &mut VolumeControlShowState, done: Done) -> bool {
+    match done.out {
+        Output::Read(r) => apply_read(s, done.ticket, r),
+        Output::Step(r) => finish_step(s, done.ticket, r),
+    }
+    true
 }
 
 /// 最終読取の時刻（プロセス全体で 1 つ）。
@@ -180,24 +211,25 @@ enum Path {
     Worker { deadline: Duration },
 }
 
-/// OS 呼び出し 1 件を起こす。`begin` を先に送り（FIFO で完了より前に適用される）、完了または
-/// 期限切れを同じ ticket で送る。
+/// OS 呼び出し 1 件を起こす。`SLOT` から request_id を採って ticket とし、`begin` を先に送る
+/// （FIFO で完了の反映より前に適用される）。完了は `SLOT` に置き、反映は `poll_and_finish`、
+/// 期限切れは同じ ticket の `expire` で確定する。
 fn issue(
-    state: &VolumeControlShowState,
     sender: &CompletionSender<VolumeControlShowState>,
     imp: &Arc<dyn VolumeControl>,
     kind: OpKind,
     path: Path,
     in_flight: &'static AtomicBool,
+    slot: &'static RequestSlot<Done>,
 ) {
-    let ticket = state.ticket() + 1;
+    let ticket = slot.begin();
     let _ = sender.send(Box::new(move |s: &mut VolumeControlShowState| {
         begin(s, ticket, kind)
     }));
 
     let deadline = match path {
         Path::Sync => {
-            send_output(sender, ticket, run(imp.as_ref(), kind));
+            deliver(slot, sender, ticket, run(imp.as_ref(), kind));
             return;
         }
         Path::Worker { deadline } => deadline,
@@ -208,7 +240,7 @@ fn issue(
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
         .is_err()
     {
-        send_output(sender, ticket, failed_output(kind, BUSY_REASON));
+        deliver(slot, sender, ticket, failed_output(kind, BUSY_REASON));
         return;
     }
 
@@ -229,25 +261,39 @@ fn issue(
             match inner {
                 // 期限は呼び出しの開始から `Instant`（単調時計）で測る。
                 Ok(_) => match rx.recv_timeout(deadline) {
-                    Ok(out) => send_output(&worker_sender, ticket, out),
+                    Ok(out) => deliver(slot, &worker_sender, ticket, out),
                     Err(_) => {
-                        let _ =
-                            worker_sender.send(Box::new(move |s: &mut VolumeControlShowState| {
-                                expire(s, ticket)
-                            }));
+                        // 結果未着のときだけ失敗を確定する（判定と除去は同じロック内）。
+                        if slot.clear_if_pending(ticket) {
+                            let _ = worker_sender.send(Box::new(
+                                move |s: &mut VolumeControlShowState| expire(s, ticket),
+                            ));
+                        }
                     }
                 },
                 Err(_) => {
                     in_flight.store(false, Ordering::SeqCst);
-                    send_output(&worker_sender, ticket, failed_output(kind, TIMEOUT_REASON));
+                    deliver(
+                        slot,
+                        &worker_sender,
+                        ticket,
+                        failed_output(kind, TIMEOUT_REASON),
+                    );
                 }
             }
         });
     if spawned.is_err() {
         in_flight.store(false, Ordering::SeqCst);
         // スレッドを起こせなくても要求を残さない（ボタンが戻らなくなるため）。
-        send_output(sender, ticket, failed_output(kind, TIMEOUT_REASON));
+        deliver(slot, sender, ticket, failed_output(kind, TIMEOUT_REASON));
     }
+}
+
+/// `drive` に渡す共有状態（OS 呼び出しの実行中フラグと要求の追跡）。テストから差し替える。
+#[derive(Clone, Copy)]
+struct Shared {
+    in_flight: &'static AtomicBool,
+    slot: &'static RequestSlot<Done>,
 }
 
 /// 要求の処理・間隔つき pull・再描画予約を行う本体（テストから実装と時刻を差し込めるよう切り出す）。
@@ -258,14 +304,18 @@ fn drive(
     path: Path,
     now: Instant,
     timing: &mut Timing,
-    in_flight: &'static AtomicBool,
+    shared: Shared,
 ) {
+    let Shared { in_flight, slot } = shared;
+    // 届いた結果の反映（OS 呼び出し中でも観測する）。未着なら再描画を予約して待つ。
+    poll_and_finish(slot, sender, |_| {}, apply_done);
+
     if state.is_busy() {
         return;
     }
 
     if let Some(dir) = take_step(state) {
-        issue(state, sender, imp, OpKind::Step(dir), path, in_flight);
+        issue(sender, imp, OpKind::Step(dir), path, in_flight, slot);
         // 変更の読み戻しも読み取りなので、次の pull までの間隔を取り直す。
         timing.last_read = Some(now);
         sender.request_repaint_after(READ_INTERVAL);
@@ -289,7 +339,7 @@ fn drive(
             sender.request_repaint_after(READ_INTERVAL - d);
         }
         _ => {
-            issue(state, sender, imp, OpKind::Read, path, in_flight);
+            issue(sender, imp, OpKind::Read, path, in_flight, slot);
             timing.last_read = Some(now);
             // 失敗した場合は次の完了で状態が Failed になり、以後 `wants_read` が偽で予約されない。
             sender.request_repaint_after(READ_INTERVAL);
@@ -319,7 +369,10 @@ pub fn volume_control_show_effect(
         path,
         Instant::now(),
         &mut timing,
-        &OS_CALL_IN_FLIGHT,
+        Shared {
+            in_flight: &OS_CALL_IN_FLIGHT,
+            slot: &SLOT,
+        },
     );
 }
 
@@ -348,6 +401,11 @@ mod tests {
 
     fn flag() -> &'static AtomicBool {
         Box::leak(Box::new(AtomicBool::new(false)))
+    }
+
+    /// テストごとに独立した `SLOT`（static の共有を避ける）。
+    fn slot() -> &'static RequestSlot<Done> {
+        Box::leak(Box::new(RequestSlot::new()))
     }
 
     fn reading(level: f32) -> VolumeReading {
@@ -422,7 +480,7 @@ mod tests {
         f
     }
 
-    /// 同期経路で 1 フレーム回し、届いた完了をすべて適用する。
+    /// 同期経路で 2 フレーム回す（1 つ目で OS 呼び出しと結果の格納、2 つ目で `SLOT` から画面へ反映）。
     fn frame(
         s: &mut VolumeControlShowState,
         tx: &CompletionSender<VolumeControlShowState>,
@@ -430,14 +488,35 @@ mod tests {
         imp: &Arc<dyn VolumeControl>,
         now: Instant,
         timing: &mut Timing,
+        slot: &'static RequestSlot<Done>,
     ) {
-        drive(s, tx, imp, Path::Sync, now, timing, flag());
+        let f = flag();
+        drive(
+            s,
+            tx,
+            imp,
+            Path::Sync,
+            now,
+            timing,
+            Shared { in_flight: f, slot },
+        );
+        apply_all(rx, s);
+        drive(
+            s,
+            tx,
+            imp,
+            Path::Sync,
+            now,
+            timing,
+            Shared { in_flight: f, slot },
+        );
         apply_all(rx, s);
     }
 
     #[test]
     fn first_frame_reads_and_shows_level() {
         let (tx, rx) = channel();
+        let sl = slot();
         let fake = Fake::new(0.5);
         let imp = dynamic(fake.clone());
         let mut s = VolumeControlShowState::default();
@@ -448,6 +527,7 @@ mod tests {
             &imp,
             Instant::now(),
             &mut Timing::default(),
+            sl,
         );
         assert_eq!(level_text(&s), format!("{LEVEL_PREFIX}50%"));
         assert_eq!(fake.reads.load(Ordering::SeqCst), 1);
@@ -456,12 +536,13 @@ mod tests {
     #[test]
     fn pull_respects_interval_then_rereads() {
         let (tx, rx) = channel();
+        let sl = slot();
         let fake = Fake::new(0.5);
         let imp = dynamic(fake.clone());
         let mut s = VolumeControlShowState::default();
         let t0 = Instant::now();
         let mut timing = Timing::default();
-        frame(&mut s, &tx, &rx, &imp, t0, &mut timing);
+        frame(&mut s, &tx, &rx, &imp, t0, &mut timing, sl);
         frame(
             &mut s,
             &tx,
@@ -469,28 +550,38 @@ mod tests {
             &imp,
             t0 + Duration::from_millis(400),
             &mut timing,
+            sl,
         );
         assert_eq!(fake.reads.load(Ordering::SeqCst), 1);
         // 表示が同じでも読み直しは省かない。
-        frame(&mut s, &tx, &rx, &imp, t0 + READ_INTERVAL, &mut timing);
+        frame(&mut s, &tx, &rx, &imp, t0 + READ_INTERVAL, &mut timing, sl);
         assert_eq!(fake.reads.load(Ordering::SeqCst), 2);
         // 外部からの変更を反映する。
         *fake.level.lock().unwrap() = 0.8;
-        frame(&mut s, &tx, &rx, &imp, t0 + READ_INTERVAL * 2, &mut timing);
+        frame(
+            &mut s,
+            &tx,
+            &rx,
+            &imp,
+            t0 + READ_INTERVAL * 2,
+            &mut timing,
+            sl,
+        );
         assert_eq!(level_text(&s), format!("{LEVEL_PREFIX}80%"));
     }
 
     #[test]
     fn step_up_shows_readback_value() {
         let (tx, rx) = channel();
+        let sl = slot();
         let fake = Fake::new(0.5);
         let imp = dynamic(fake.clone());
         let mut s = VolumeControlShowState::default();
         let t0 = Instant::now();
         let mut timing = Timing::default();
-        frame(&mut s, &tx, &rx, &imp, t0, &mut timing);
+        frame(&mut s, &tx, &rx, &imp, t0, &mut timing, sl);
         press_up(&mut s);
-        frame(&mut s, &tx, &rx, &imp, t0, &mut timing);
+        frame(&mut s, &tx, &rx, &imp, t0, &mut timing, sl);
         assert_eq!(fake.steps.load(Ordering::SeqCst), 1);
         assert_eq!(level_text(&s), format!("{LEVEL_PREFIX}60%"));
     }
@@ -498,14 +589,15 @@ mod tests {
     #[test]
     fn step_at_limit_is_unchanged_not_failure() {
         let (tx, rx) = channel();
+        let sl = slot();
         let fake = Fake::new(1.0);
         let imp = dynamic(fake.clone());
         let mut s = VolumeControlShowState::default();
         let t0 = Instant::now();
         let mut timing = Timing::default();
-        frame(&mut s, &tx, &rx, &imp, t0, &mut timing);
+        frame(&mut s, &tx, &rx, &imp, t0, &mut timing, sl);
         press_up(&mut s);
-        frame(&mut s, &tx, &rx, &imp, t0, &mut timing);
+        frame(&mut s, &tx, &rx, &imp, t0, &mut timing, sl);
         assert_eq!(error_text(&s), "");
         assert_eq!(notice_text(&s), AT_MAX_NOTE);
     }
@@ -513,54 +605,82 @@ mod tests {
     #[test]
     fn permission_denied_is_its_own_failure() {
         let (tx, rx) = channel();
+        let sl = slot();
         let fake = Fake::new(0.5);
         *fake.step_error.lock().unwrap() = Some(DeviceError::PermissionDenied("volume-control"));
         let imp = dynamic(fake.clone());
         let mut s = VolumeControlShowState::default();
         let t0 = Instant::now();
         let mut timing = Timing::default();
-        frame(&mut s, &tx, &rx, &imp, t0, &mut timing);
+        frame(&mut s, &tx, &rx, &imp, t0, &mut timing, sl);
         press_down(&mut s);
-        frame(&mut s, &tx, &rx, &imp, t0, &mut timing);
+        frame(&mut s, &tx, &rx, &imp, t0, &mut timing, sl);
         assert_eq!(error_text(&s), PERMISSION_DENIED_REASON);
     }
 
     #[test]
     fn unsupported_never_succeeds_and_stops_polling() {
         let (tx, rx) = channel();
+        let sl = slot();
         let imp: Arc<dyn VolumeControl> = Arc::new(Unsupported);
         let mut s = VolumeControlShowState::default();
         let t0 = Instant::now();
         let mut timing = Timing::default();
-        frame(&mut s, &tx, &rx, &imp, t0, &mut timing);
+        frame(&mut s, &tx, &rx, &imp, t0, &mut timing, sl);
         assert_eq!(s.read_state(), &ReadState::Unsupported);
         assert_eq!(level_text(&s), UNSUPPORTED_STATUS);
         press_up(&mut s);
-        frame(&mut s, &tx, &rx, &imp, t0 + READ_INTERVAL * 3, &mut timing);
+        frame(
+            &mut s,
+            &tx,
+            &rx,
+            &imp,
+            t0 + READ_INTERVAL * 3,
+            &mut timing,
+            sl,
+        );
         assert!(rx.try_recv().is_err(), "非対応では要求を出さない");
     }
 
     #[test]
     fn failed_read_stops_polling_and_reload_reads_immediately() {
         let (tx, rx) = channel();
+        let sl = slot();
         let fake = Fake::failing_read();
         let imp = dynamic(fake.clone());
         let mut s = VolumeControlShowState::default();
         let t0 = Instant::now();
         let mut timing = Timing::default();
-        frame(&mut s, &tx, &rx, &imp, t0, &mut timing);
+        frame(&mut s, &tx, &rx, &imp, t0, &mut timing, sl);
         assert_eq!(s.read_state(), &ReadState::Failed);
-        frame(&mut s, &tx, &rx, &imp, t0 + READ_INTERVAL * 3, &mut timing);
+        frame(
+            &mut s,
+            &tx,
+            &rx,
+            &imp,
+            t0 + READ_INTERVAL * 3,
+            &mut timing,
+            sl,
+        );
         assert_eq!(fake.reads.load(Ordering::SeqCst), 1, "失敗後は読み直さない");
         reload(&mut s);
         // 間隔を待たずに読む。
-        frame(&mut s, &tx, &rx, &imp, t0 + READ_INTERVAL * 3, &mut timing);
+        frame(
+            &mut s,
+            &tx,
+            &rx,
+            &imp,
+            t0 + READ_INTERVAL * 3,
+            &mut timing,
+            sl,
+        );
         assert_eq!(fake.reads.load(Ordering::SeqCst), 2);
     }
 
     #[test]
     fn busy_state_does_not_double_issue() {
         let (tx, rx) = channel();
+        let sl = slot();
         let fake = Fake::new(0.5);
         let imp = dynamic(fake.clone());
         let mut s = VolumeControlShowState::default();
@@ -573,7 +693,10 @@ mod tests {
             Path::Sync,
             Instant::now(),
             &mut Timing::default(),
-            flag(),
+            Shared {
+                in_flight: flag(),
+                slot: sl,
+            },
         );
         assert!(rx.try_recv().is_err());
         assert_eq!(fake.reads.load(Ordering::SeqCst), 0);
@@ -583,6 +706,7 @@ mod tests {
     #[test]
     fn worker_deadline_expires_and_late_result_is_dropped() {
         let (tx, rx) = channel();
+        let sl = slot();
         let fake = Fake::slow(0.5, Duration::from_millis(400));
         let imp = dynamic(fake.clone());
         let mut s = VolumeControlShowState::default();
@@ -596,7 +720,10 @@ mod tests {
             path,
             Instant::now(),
             &mut Timing::default(),
-            flag(),
+            Shared {
+                in_flight: flag(),
+                slot: sl,
+            },
         );
         // begin と expire が届くまで待つ。
         let deadline = Instant::now() + Duration::from_secs(5);
@@ -616,6 +743,7 @@ mod tests {
     #[test]
     fn worker_does_not_stack_calls_while_previous_in_flight() {
         let (tx, rx) = channel();
+        let sl = slot();
         let fake = Fake::new(0.5);
         let imp = dynamic(fake.clone());
         let busy = flag();
@@ -630,7 +758,24 @@ mod tests {
             },
             Instant::now(),
             &mut Timing::default(),
-            busy,
+            Shared {
+                in_flight: busy,
+                slot: sl,
+            },
+        );
+        apply_all(&rx, &mut s);
+        // 失敗の結果は `SLOT` 経由で次のフレームに反映される。
+        drive(
+            &s,
+            &tx,
+            &imp,
+            Path::Sync,
+            Instant::now(),
+            &mut Timing::default(),
+            Shared {
+                in_flight: busy,
+                slot: sl,
+            },
         );
         apply_all(&rx, &mut s);
         assert_eq!(
@@ -645,18 +790,30 @@ mod tests {
     #[test]
     fn pending_step_during_read_is_issued_after_completion() {
         let (tx, rx) = channel();
+        let sl = slot();
         let fake = Fake::new(0.5);
         let imp = dynamic(fake.clone());
         let mut s = VolumeControlShowState::default();
         let t0 = Instant::now();
         let mut timing = Timing::default();
-        frame(&mut s, &tx, &rx, &imp, t0, &mut timing);
+        frame(&mut s, &tx, &rx, &imp, t0, &mut timing, sl);
         press_up(&mut s);
         // 呼び出し中に押された体（begin 済み）で保留される。
         let t = s.ticket() + 1;
         begin(&mut s, t, OpKind::Read);
         press_down(&mut s);
-        drive(&s, &tx, &imp, Path::Sync, t0, &mut timing, flag());
+        drive(
+            &s,
+            &tx,
+            &imp,
+            Path::Sync,
+            t0,
+            &mut timing,
+            Shared {
+                in_flight: flag(),
+                slot: sl,
+            },
+        );
         assert_eq!(fake.steps.load(Ordering::SeqCst), 0);
         apply_read(
             &mut s,
@@ -667,7 +824,7 @@ mod tests {
                 mode: ControlMode::Steps,
             }),
         );
-        frame(&mut s, &tx, &rx, &imp, t0, &mut timing);
+        frame(&mut s, &tx, &rx, &imp, t0, &mut timing, sl);
         assert_eq!(fake.steps.load(Ordering::SeqCst), 1);
         assert_eq!(level_text(&s), format!("{LEVEL_PREFIX}40%"));
     }
