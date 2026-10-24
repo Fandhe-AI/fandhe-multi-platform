@@ -477,8 +477,8 @@ n=$(node scripts/device/human-check-issue.mjs "${ID}" "${BODY}") || exit 1   # �
 #### マージ待ち（run の終了を待たない）
 
 run を起動したら、その run の子 issue 番号で `scripts/device/wait-pr-ready.sh` を **Bash の `run_in_background`** で回します。
-子に紐づく open な PR を 60 秒ごとに `guarded-merge.sh` で確かめ、条件を満たした PR（`READY`）か main と競合した PR
-（`CONFLICTING`）が出た時点で 1 行ずつ出して終わります。終わったら通知が来ます。
+子に紐づく open な PR を 60 秒ごとに `guarded-merge.sh` で確かめ、条件を満たした PR（`READY`）・main と競合した PR
+（`CONFLICTING`）・チェックが失敗した PR（`FAILED`）が出た時点で 1 行ずつ出して終わります。終わったら通知が来ます。
 
 ```bash
 scripts/device/wait-pr-ready.sh 1247 1248 1249                 # 機能をまたぐときは全機能の子をまとめて渡す
@@ -491,6 +491,8 @@ KNOWN_CONFLICTING="1260" scripts/device/wait-pr-ready.sh 1247 1248 1249  # 報�
 - `READY` 直後の `guarded-merge.sh` が一度だけ「条件未達」を返すことがある（10 周目に 3 回。数十秒後の再実行で通った）。
   数十秒おいて `guarded-merge.sh` を再実行する。続けて未達なら、出力の内訳（`checks=` 等）を見て止まる条件に従う
 - `CONFLICTING` が出たら Step 4「兄弟 PR の競合」
+- `FAILED #<PR> <チェック名>` は現在の head でチェックが fail / cancel（終了 3。pending が残る間は出ない）。
+  原因を直して push してから待機を回し直す（直さずに回すと同じ FAILED ですぐ戻る）
 - hook が checks の pending（Bugbot の再実行）でマージを止めたら、`gh pr checks <PR> --watch` で終わるのを待ってから
   `guarded-merge.sh` をやり直す。run の監視は Bugbot が指摘 0 件でレビューを投稿しないとき `@cursor review` で
   明示レビューを依頼するので、`READY` の後に Bugbot が走り直すことがある（9 周目に 3 回）。deny は安全側の正常動作
