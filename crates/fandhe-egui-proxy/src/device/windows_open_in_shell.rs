@@ -27,8 +27,9 @@
 //! 2. 拡張子が無ければ `InvalidInput("shell type")`（型を判定できないものは開かない）
 //! 3. [`DENIED_EXTENSIONS`]（固定一覧）に当たれば `InvalidInput("shell type")`
 //! 4. `AssocIsDangerous` が真なら `InvalidInput("shell type")`
-//! 5. `AssocQueryStringW`（`ASSOCSTR_EXECUTABLE`、無ければ `ASSOCSTR_COMMAND`、`ASSOCF_INIT_IGNOREUNKNOWN`）で
-//!    関連付けを引き、無ければ OS を呼ばずに `NoHandler`（「アプリを選ぶ」画面を成功と取り違えない）
+//!
+//! 関連付けの有無は事前に照会せず、OS（`ShellExecuteExW`）の結果で判定する。事前照会は MSIX などの
+//! パッケージ版アプリの関連付けを見落とし、OS と判定がずれて TOCTOU も生むため。
 //!
 //! `reveal` は実行しないので型検査を要さない。
 //!
@@ -45,7 +46,9 @@
 //! 同期呼び出しで保留中の要求を持たないため期限は設けない。守らない範囲: 検査から OS 呼び出しまでの
 //! ファイル差し替え（TOCTOU）、アプリ・Explorer が実際に表示したか、文書型を受けたアプリ側の挙動、
 //! 複数プロセス。成功は OS が受理したことだけを表す。関連付けの無い型は
-//! 事前の関連付け照会で `NoHandler` にするが、実機での挙動は #744 で確かめる。
+//! `ShellExecuteExW` の失敗（`ERROR_NO_ASSOCIATION` / `SE_ERR_NOASSOC`）で `NoHandler` にする。
+//! `SEE_MASK_FLAG_NO_UI` 下で関連付けなしの「アプリを選ぶ」ダイアログが出ないことは実機で未確認（確認用 issue #744）。
+//! 出た場合は表示が一時的に食い違うだけで、守備範囲の外として扱う。
 //!
 //! モジュールは純関数をホストでテストできるよう `cfg(any(windows, test))` でコンパイルする（`device.rs`）。
 
@@ -195,20 +198,13 @@ enum TypeCheck {
     Pass,
     /// 型を拒否する（`InvalidInput("shell type")`）。
     Reject,
-    /// 関連付けが無い。OS を呼ばず `NoHandler` を返す。
-    NoHandler,
 }
 
 /// 「開く」の型検査（SSOT、fail-closed）。`attrs` は `GetFileAttributesW` の結果（失敗は `None`）、
-/// `ext` は小文字の拡張子、`dangerous` は `AssocIsDangerous`、`has_handler` は関連付けの照会結果。
-/// 通常ファイルでない・型を判定できないものは `Reject`、関連付けが無いものは `NoHandler`。
+/// `ext` は小文字の拡張子、`dangerous` は `AssocIsDangerous`。
+/// 通常ファイルでない・型を判定できないものは `Reject`。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-fn open_type_check(
-    attrs: Option<u32>,
-    ext: Option<&str>,
-    dangerous: bool,
-    has_handler: bool,
-) -> TypeCheck {
+fn open_type_check(attrs: Option<u32>, ext: Option<&str>, dangerous: bool) -> TypeCheck {
     match attrs {
         Some(a) if a & (ATTR_DIRECTORY | ATTR_REPARSE_POINT) == 0 => {}
         _ => return TypeCheck::Reject,
@@ -219,11 +215,7 @@ fn open_type_check(
     if DENIED_EXTENSIONS.contains(&ext) || dangerous {
         return TypeCheck::Reject;
     }
-    if has_handler {
-        TypeCheck::Pass
-    } else {
-        TypeCheck::NoHandler
-    }
+    TypeCheck::Pass
 }
 
 /// `ShellExecuteExW` 失敗時の写像。`last_error` は `GetLastError`、`inst_app` は `hInstApp` の数値。
@@ -267,9 +259,8 @@ mod win {
     };
     use windows::Win32::UI::Shell::Common::ITEMIDLIST;
     use windows::Win32::UI::Shell::{
-        AssocIsDangerous, AssocQueryStringW, ILCreateFromPathW, ILFree, SHOpenFolderAndSelectItems,
-        ShellExecuteExW, ASSOCF_INIT_IGNOREUNKNOWN, ASSOCSTR, ASSOCSTR_COMMAND,
-        ASSOCSTR_EXECUTABLE, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW,
+        AssocIsDangerous, ILCreateFromPathW, ILFree, SHOpenFolderAndSelectItems, ShellExecuteExW,
+        SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW,
     };
     use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
@@ -316,47 +307,23 @@ mod win {
         (a != INVALID_FILE_ATTRIBUTES).then_some(a)
     }
 
-    /// 拡張子（`.xxx` 形式の `ext`）に関連付けられた実行ファイルまたはコマンドがあるか。
-    #[allow(unsafe_code)]
-    fn has_association(dotted: &HSTRING) -> bool {
-        let query = |what: ASSOCSTR| {
-            let mut len = 0u32;
-            // SAFETY: `dotted` は NUL 終端の UTF-16。出力バッファは渡さず（None）必要長だけ受け取る。
-            // `len` は呼び出しの間有効な書き込み先。成功（`S_FALSE` 含む）は関連付けが存在する。
-            unsafe {
-                AssocQueryStringW(
-                    ASSOCF_INIT_IGNOREUNKNOWN,
-                    what,
-                    dotted,
-                    PCWSTR::null(),
-                    None,
-                    &mut len,
-                )
-            }
-            .is_ok()
-        };
-        query(ASSOCSTR_EXECUTABLE) || query(ASSOCSTR_COMMAND)
-    }
-
     #[allow(unsafe_code)]
     pub(super) fn open(canonical: &str) -> Result<ShellOutcome, DeviceError> {
         let path = to_win32_path(canonical)?;
         let file = HSTRING::from(path.as_str());
         let attrs = file_attributes(&file);
         let ext = extension_of(&path);
-        let (dangerous, has_handler) = match ext.as_deref() {
+        let dangerous = match ext.as_deref() {
             Some(e) => {
                 let dotted = HSTRING::from(format!(".{e}"));
                 // SAFETY: `dotted` は NUL 終端の UTF-16 で呼び出しの間だけ生きる。OS は引数を保持しない。
-                let d = unsafe { AssocIsDangerous(&dotted) }.as_bool();
-                (d, has_association(&dotted))
+                unsafe { AssocIsDangerous(&dotted) }.as_bool()
             }
-            None => (false, false),
+            None => false,
         };
-        match open_type_check(attrs, ext.as_deref(), dangerous, has_handler) {
+        match open_type_check(attrs, ext.as_deref(), dangerous) {
             TypeCheck::Pass => {}
             TypeCheck::Reject => return Err(DeviceError::InvalidInput("shell type")),
-            TypeCheck::NoHandler => return Ok(ShellOutcome::NoHandler),
         }
         let _com = ComGuard::new();
         let mut info = SHELLEXECUTEINFOW {
@@ -543,37 +510,21 @@ mod tests {
     fn type_check_rejects_non_regular_and_unknown() {
         // ディレクトリ・再解析ポイント・属性を読めない・拡張子なし・固定一覧・危険。
         assert_eq!(
-            open_type_check(Some(ATTR_DIRECTORY), Some("txt"), false, true),
+            open_type_check(Some(ATTR_DIRECTORY), Some("txt"), false),
             TypeCheck::Reject
         );
         assert_eq!(
-            open_type_check(Some(0x20 | ATTR_REPARSE_POINT), Some("txt"), false, true),
+            open_type_check(Some(0x20 | ATTR_REPARSE_POINT), Some("txt"), false),
             TypeCheck::Reject
         );
-        assert_eq!(
-            open_type_check(None, Some("txt"), false, true),
-            TypeCheck::Reject
-        );
-        assert_eq!(open_type_check(FILE, None, false, true), TypeCheck::Reject);
-        assert_eq!(
-            open_type_check(FILE, Some("iso"), false, true),
-            TypeCheck::Reject
-        );
-        assert_eq!(
-            open_type_check(FILE, Some("txt"), true, true),
-            TypeCheck::Reject
-        );
+        assert_eq!(open_type_check(None, Some("txt"), false), TypeCheck::Reject);
+        assert_eq!(open_type_check(FILE, None, false), TypeCheck::Reject);
+        assert_eq!(open_type_check(FILE, Some("iso"), false), TypeCheck::Reject);
+        assert_eq!(open_type_check(FILE, Some("txt"), true), TypeCheck::Reject);
     }
 
     #[test]
-    fn type_check_no_association_and_pass() {
-        assert_eq!(
-            open_type_check(FILE, Some("zzz"), false, false),
-            TypeCheck::NoHandler
-        );
-        assert_eq!(
-            open_type_check(FILE, Some("txt"), false, true),
-            TypeCheck::Pass
-        );
+    fn type_check_pass() {
+        assert_eq!(open_type_check(FILE, Some("txt"), false), TypeCheck::Pass);
     }
 }

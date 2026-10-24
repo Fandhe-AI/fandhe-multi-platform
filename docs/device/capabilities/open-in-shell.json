@@ -33,7 +33,7 @@
     },
     "windows": {
       "status": "done",
-      "api": "Win32 `ShellExecuteExW`（verb `open`、引数なし、`SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI`）で開く。開く前に `GetFileAttributesW` と `AssocQueryStringW` で確かめる。`SHOpenFolderAndSelectItems` + `ILCreateFromPathW` / `ILFree` で Explorer に選択表示。危険な型は `AssocIsDangerous` で拒否",
+      "api": "Win32 `ShellExecuteExW`（verb `open`、引数なし、`SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI`）で開く。開く前に `GetFileAttributesW` で確かめる。`SHOpenFolderAndSelectItems` + `ILCreateFromPathW` / `ILFree` で Explorer に選択表示。危険な型は `AssocIsDangerous` で拒否",
       "perm": "なし（Win32 desktop の API。package identity は不要。`windows` クレートの feature は既存の `Win32_UI_Shell` / `Win32_UI_Shell_Common` / `Win32_System_Com` / `Win32_Storage_FileSystem` / `Win32_UI_WindowsAndMessaging` で足り、追加なし）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecuteexw",
@@ -41,7 +41,7 @@
         "https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-ilcreatefrompathw",
         "https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-associsdangerous"
       ],
-      "note": "実装済み（#750）。`ShellPath` の `\\\\?\\` 接頭辞を外して `X:\\` で渡し、UNC・デバイスパス・代替データストリーム・要素末尾の `.` と空白・260 文字以上は拒否する。「開く」は通常ファイルでないもの（ディレクトリ・再解析ポイント・属性を読めないもの）を Rust と OS 層（`GetFileAttributesW`）の両方で拒否する。型を判定できないとき（拡張子なし）も拒否する（fail-closed）。固定の拒否一覧（.exe・.dll・.iso 等）と `AssocIsDangerous` でも型を拒否する。関連付けが無いときは `AssocQueryStringW` で先に判定し、OS を呼ばず関連付けなしを返す。COM は STA で初期化する。`ShellExecuteExW` の成功は受理、`ERROR_NO_ASSOCIATION` / `SE_ERR_NOASSOC` は関連付けなし、それ以外は失敗。成功は OS が受理したことだけを表し、アプリや Explorer が表示したかは分からない。ゴミ箱は範囲外",
+      "note": "実装済み（#750）。`ShellPath` の `\\\\?\\` 接頭辞を外して `X:\\` で渡し、UNC・デバイスパス・代替データストリーム・要素末尾の `.` と空白・260 文字以上は拒否する。「開く」は通常ファイルでないもの（ディレクトリ・再解析ポイント・属性を読めないもの）を Rust と OS 層（`GetFileAttributesW`）の両方で拒否する。型を判定できないとき（拡張子なし）も拒否する（fail-closed）。固定の拒否一覧（.exe・.dll・.iso 等）と `AssocIsDangerous` でも型を拒否する。関連付けの有無は事前に照会せず OS の結果で判定する（パッケージ版アプリの関連付けを見落とさないため）。`SEE_MASK_FLAG_NO_UI` 下で関連付けなしの選択ダイアログが出ないことは実機で未確認（確認用 issue #744）。出た場合は表示が一時的に食い違うだけで、守備範囲の外として扱う。COM は STA で初期化する。`ShellExecuteExW` の成功は受理、`ERROR_NO_ASSOCIATION` / `SE_ERR_NOASSOC` は関連付けなし、それ以外は失敗。成功は OS が受理したことだけを表し、アプリや Explorer が表示したかは分からない。ゴミ箱は範囲外",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#744）",
       "impl": "crates/fandhe-egui-proxy/src/device/windows_open_in_shell.rs + crates/fandhe-egui-proxy/src/device/open_in_shell.rs + crates/fandhe-core/src/screens/open_in_shell.rs + crates/fandhe-device/src/open_in_shell.rs、Issue #750"
