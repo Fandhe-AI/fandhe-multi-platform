@@ -23,8 +23,8 @@
 // 画像は長辺 2048 画素以下に縮めてから JPEG（品質 0.8）にする（親 #145 の実装方針。
 // もともと 2048 以下なら描き直さない。Rust 側では縮めないため、縮小はこの層の義務）。
 // 提示の完了コールバックが猶予（5 秒）を過ぎても来ない場合は code 7 で確定し、保留と強参照を残さない。
-// 結果を 1.5 秒の保険タイマーで送る経路では、その時点で撮影 UI が画面に残っている可能性がある
-// （閉じ直しは送信と同じ main thread 上で試みるが、完了は待たない）。
+// 結果は撮影 UI が閉じたのを観測した後にだけ送る。遷移中は UIKit の遷移コーディネータの完了を待って
+// dismiss をやり直す（タイマーによる推測はしない）。
 // 画像の中身・NSError の文言はログに出さない。
 // 守らない範囲: 撮影 UI の表示中に Rust 側から閉じること、OS ごとの補正結果の違い、複数プロセス、
 // プロセス死後の結果。
@@ -88,34 +88,25 @@ static FandheDocumentScanDelegate *g_retainedDelegate = nil;
     }
     return YES;
 }
-// 撮影 UI を閉じてから block を実行する。すでに提示が外れていれば即座に実行する。
+// 撮影 UI が閉じたのを見てから block を実行する（main thread）。
+// 遷移中（present / dismiss のアニメーション中）は dismiss が捨てられるため、遷移の完了を待ってやり直す。
+// 提示が外れていれば即実行し、そうでなければ dismiss を 1 回だけ始めてその completion で実行する。
+// block を持つのは claim に勝った 1 回だけで、dismissStarted 後の呼び出しは空 block の後片付けのみ。
 - (void)closeController:(VNDocumentCameraViewController *)controller then:(void (^)(void))block {
-    // dismiss は 1 回だけ始める。開始済みなら重ねず block だけ実行する
-    // （結果の送信は claim に勝った側の block に一本化されている）。
-    if (self.dismissStarted || controller.presentingViewController == nil || controller.isBeingDismissed) {
+    id<UIViewControllerTransitionCoordinator> coordinator = controller.transitionCoordinator;
+    if (coordinator != nil) {
+        [coordinator animateAlongsideTransition:nil
+                                     completion:^(id<UIViewControllerTransitionCoordinatorContext> __unused ctx) {
+                                       [self closeController:controller then:block];
+                                     }];
+        return;
+    }
+    if (self.dismissStarted || controller.presentingViewController == nil) {
         block();
         return;
     }
     self.dismissStarted = YES;
-    // present アニメーション中の dismiss は UIKit が completion を呼ばないことがある。結果が失われないよう、
-    // completion と保険のタイマー（main queue）のどちらか先に届いた方だけで block を 1 回実行する。
-    __block BOOL fired = NO;
-    void (^once)(void) = ^{
-      if (fired) {
-          return;
-      }
-      fired = YES;
-      block();
-    };
-    [controller dismissViewControllerAnimated:YES completion:once];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(),
-                   ^{
-                     // 撮影 UI が残っていれば（dismiss が捨てられた場合）閉じ直してから結果を送る。
-                     if (controller.presentingViewController != nil && !controller.isBeingDismissed) {
-                         [controller dismissViewControllerAnimated:NO completion:nil];
-                     }
-                     once();
-                   });
+    [controller dismissViewControllerAnimated:YES completion:block];
 }
 - (void)documentCameraViewController:(VNDocumentCameraViewController *)controller
                    didFinishWithScan:(VNDocumentCameraScan *)scan {
@@ -202,16 +193,8 @@ static void FandheDocScanPresent(uint64_t request_id) {
                       animated:YES
                     completion:^{
                       presented = YES;
-                      // 確定済み（失敗・破棄を含む）でも、画面に残った撮影 UI はその場で閉じる。
-                      // dismiss の開始は closeController:then: に集約し、開始済みなら何もしない
-                      // （結果の送信は claim に勝った側の completion が担う）。
+                      // 確定済みなら、結果を持つ側の closeController が遷移完了を待って閉じる。
                       if (delegate.done) {
-                          // present 中に確定した場合、dismiss が捨てられていても画面に残さない。
-                          if (!delegate.dismissStarted) {
-                              [delegate closeController:vc then:^{}];
-                          }
-                          // 開始済みなら再 dismiss しない（キュー済みの dismiss は isBeingDismissed が NO のため
-                          // 二重発行になる）。取りこぼしは closeController 内の 1.5 秒タイマーが回収する。
                           return;
                       }
                       if (top.presentedViewController != vc) {
