@@ -94,6 +94,8 @@
 //!   純関数（計算済み色の解析・非対応判定）のみ `wasm32` gate の外に置く
 //! - [`safe_area_insets`]: 「セーフエリア」画面の Web 経路（親 #105、Issue #447）。
 //!   純関数（計算済み長さの解析・非対応判定・値域検査）のみ `wasm32` gate の外に置く
+//! - [`foldable_posture`]: 「折りたたみの姿勢・ヒンジ」画面の Web 経路（親 #141、Issue #724）。
+//!   純関数（生の姿勢・区画 → 画面の入力、非対応・失敗の判定）のみ `wasm32` gate の外に置く
 //! - [`file_association`]: 「ファイルの関連付け」画面の Web 経路（親 #102、Issue #419）。
 //!   純関数（ハンドルの検査・サイズ検査・失敗種別の写像）のみ `wasm32` gate の外に置く
 //! - [`screen_wake_lock`]: 「画面スリープの抑止」画面の Web 経路（親 #1129、Issue #1281）。
@@ -206,6 +208,9 @@ pub mod file_association;
 /// 純関数（一覧の生値 → 走査結果・`type` → 合図・差分 → 記録）は native からもテストできるよう
 /// クレート単位の `wasm32` gate を外す。
 pub mod file_watch;
+/// 型サンプル「折りたたみの姿勢・ヒンジ」の Web 経路（Issue #724）。[`safe_area_insets`] と同じ理由で
+/// 純関数は native からもテストできるようクレート単位の `wasm32` gate を外す。
+pub mod foldable_posture;
 /// 型サンプル「OS 搭載フォント」の Web 経路（Issue #1379）。[`location`] と同じ理由で
 /// 純関数（`family` → 一覧・例外の `name` → 失敗種別）は native からもテストできるよう
 /// クレート単位の `wasm32` gate を外す。
