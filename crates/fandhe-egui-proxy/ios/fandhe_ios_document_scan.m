@@ -60,7 +60,7 @@ static FandheDocumentScanDelegate *g_retainedDelegate = nil;
 }
 // 撮影 UI を閉じてから block を実行する。すでに提示が外れていれば即座に実行する。
 - (void)closeController:(VNDocumentCameraViewController *)controller then:(void (^)(void))block {
-    if (controller.presentingViewController == nil) {
+    if (controller.presentingViewController == nil || controller.isBeingDismissed) {
         block();
         return;
     }
@@ -69,6 +69,8 @@ static FandheDocumentScanDelegate *g_retainedDelegate = nil;
 - (void)documentCameraViewController:(VNDocumentCameraViewController *)controller
                    didFinishWithScan:(VNDocumentCameraScan *)scan {
     if (![self claim]) {
+        // 確定済みでも撮影 UI は必ず閉じる（利用者が抜けられなくなるのを防ぐ）。
+        [self closeController:controller then:^{}];
         return;
     }
     uint64_t rid = self.requestId;
@@ -97,6 +99,8 @@ static FandheDocumentScanDelegate *g_retainedDelegate = nil;
 }
 - (void)documentCameraViewControllerDidCancel:(VNDocumentCameraViewController *)controller {
     if (![self claim]) {
+        // 確定済みでも撮影 UI は必ず閉じる（利用者が抜けられなくなるのを防ぐ）。
+        [self closeController:controller then:^{}];
         return;
     }
     uint64_t rid = self.requestId;
@@ -105,6 +109,8 @@ static FandheDocumentScanDelegate *g_retainedDelegate = nil;
 - (void)documentCameraViewController:(VNDocumentCameraViewController *)controller
                     didFailWithError:(NSError *)error {
     if (![self claim]) {
+        // 確定済みでも撮影 UI は必ず閉じる（利用者が抜けられなくなるのを防ぐ）。
+        [self closeController:controller then:^{}];
         return;
     }
     uint64_t rid = self.requestId;
@@ -141,7 +147,15 @@ static void FandheDocScanPresent(uint64_t request_id) {
     [top presentViewController:vc
                       animated:YES
                     completion:^{
-                      if (!delegate.done && top.presentedViewController != vc) {
+                      // 確定済み（失敗・破棄を含む）でも、画面に残った撮影 UI はその場で閉じる。
+                      // 二重 dismiss を避けるため presentingViewController の有無を見る。
+                      if (delegate.done) {
+                          if (vc.presentingViewController != nil && !vc.isBeingDismissed) {
+                              [vc dismissViewControllerAnimated:YES completion:nil];
+                          }
+                          return;
+                      }
+                      if (top.presentedViewController != vc) {
                           if ([delegate claim]) {
                               FandheDocScanFinishCode(request_id, 7);
                           }
