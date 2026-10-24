@@ -92,16 +92,24 @@ pub fn group_id_from_team(team: &str) -> Option<String> {
     ok.then(|| format!("{team}.com.fandhe.widget"))
 }
 
-/// macOS 既定の実装を作る。Team ID・ホームが取れなければ `None`。
+/// macOS の App Group コンテナのパスを組む。Team ID（`FANDHE_DEVELOPMENT_TEAM`、実行時 →
+/// ビルド時）・ホームが取れなければ `None`。ホーム画面ウィジェットとクイック設定タイル・
+/// コントロール（`apple_quick_settings_tile`）が同じ拡張・同じ App Group を使うため共有する。
 #[cfg(target_os = "macos")]
-pub fn macos_default() -> Option<AppGroupHomeWidget> {
+pub(crate) fn macos_app_group_dir() -> Option<std::path::PathBuf> {
     let team = std::env::var("FANDHE_DEVELOPMENT_TEAM")
         .ok()
         .or_else(|| option_env!("FANDHE_DEVELOPMENT_TEAM").map(str::to_string))?;
     let group = group_id_from_team(&team)?;
     #[allow(deprecated)]
     let home = std::env::home_dir()?;
-    let dir = home.join("Library/Group Containers").join(group);
+    Some(home.join("Library/Group Containers").join(group))
+}
+
+/// macOS 既定の実装を作る。Team ID・ホームが取れなければ `None`。
+#[cfg(target_os = "macos")]
+pub fn macos_default() -> Option<AppGroupHomeWidget> {
+    let dir = macos_app_group_dir()?;
     Some(AppGroupHomeWidget::new(dir, Arc::new(reload_via_host_app)))
 }
 
