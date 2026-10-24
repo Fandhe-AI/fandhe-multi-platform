@@ -8,18 +8,30 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "CarPlay framework",
-      "perm": "CarPlay 用 entitlement（Apple への申請が必要）",
-      "url": "https://developer.apple.com/documentation/carplay",
-      "note": "未実装。アプリの種別（音声・ナビ等）ごとに entitlement が異なる。Apple Developer Program が現在期限切れで、entitlement・capability の要否は検証できない。",
-      "approval": "CarPlay entitlement を Apple へ申請し、承認されること（アプリの種別ごとに別の entitlement）"
+      "api": "CarPlay framework（`CPTemplateApplicationScene` と `CPInterfaceController` に `CPTemplate` を渡す）",
+      "perm": "CarPlay の entitlement（アプリの種別ごとに別。`com.apple.developer.carplay-audio`・`-communication`・`-maps`・`-parking`・`-charging`・`-quick-ordering` など）",
+      "url": [
+        "https://developer.apple.com/documentation/carplay",
+        "https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements",
+        "https://developer.apple.com/documentation/carplay/using-the-carplay-simulator"
+      ],
+      "note": "未実装。シミュレータの CarPlay ウィンドウ（I/O > External Displays > CarPlay）でも、entitlement が無いアプリは表示されない（公式）。テンプレートの中身はアプリが決め、文字の大きさ・色・タッチ領域などは OS が決める（公式）。",
+      "approval": "CarPlay の entitlement を Apple へ申請し、承認されること。種別（音声・通信・ナビ・駐車・EV 充電・料理の注文など）ごとに申請し、CarPlay Entitlement Addendum に同意する。Apple が種別ごとの基準で審査する（公式）。固定の文字を出すだけの型サンプルはどの種別にも当たらない"
     },
     "android": {
       "status": "possible",
-      "api": "Car App Library（Android Auto / Automotive OS）",
-      "perm": "記載なし（要確認）",
-      "url": "https://developer.android.com/training/cars",
-      "note": "未実装。テンプレート UI のみで自由描画は不可（要確認）。Play の審査対象のアプリ種別に制限あり（要確認）"
+      "api": "Android for Cars App Library（`androidx.car.app`）の `CarAppService`・`Session`・`Screen`。`Screen.onGetTemplate` が返す `MessageTemplate` などのテンプレートを、ホスト（Android Auto のアプリ、または Android Automotive OS）が描く",
+      "perm": "`uses-permission` は不要。Manifest に `<service android:exported=\"true\">`（intent-filter の action は `androidx.car.app.CarAppService`、category に `androidx.car.app.category.*` のどれか 1 つ）と、meta-data `androidx.car.app.minCarApiLevel`・`com.google.android.gms.car.application`（`<automotiveApp><uses name=\"template\"/></automotiveApp>` の XML）を置く。接続できるホストは `createHostValidator` で絞る（公式の例は debug ビルドだけ全ホストを許し、release は許可リスト）",
+      "url": [
+        "https://developer.android.com/training/cars/apps",
+        "https://developer.android.com/training/cars/apps/library/set-up-project",
+        "https://developer.android.com/reference/androidx/car/app/CarAppService",
+        "https://developer.android.com/jetpack/androidx/releases/car-app",
+        "https://developer.android.com/training/cars/testing/dhu",
+        "https://developer.android.com/docs/quality-guidelines/car-app-quality"
+      ],
+      "deferred": "Car App Library（`androidx.car.app:app`）は新しい Gradle 依存で、推移依存に guava 本体（`com.google.guava:guava`）と `androidx.media` が入る。あわせてホストが bind する受信側コンポーネント（exported な `CarAppService`）と、アプリの種別（ナビ・POI・IoT・天気など）の宣言を足す。新しい依存・受信側コンポーネントを足さない方針のため保留（foldable-posture・alarm の Android と同じ）。DHU での確認に Play の審査は要らず、依存の追加を決めれば着手できる。車載の種別として Play に出すと追加の人手審査があり、種別外の機能を持たないこと（PC-1）が条件",
+      "note": "未実装。描けるのはホストが用意したテンプレートだけで、egui の自由描画は車載画面に出せない。1 つの作業で出せるテンプレートは 5 つまでで、同じ種類・同じ主内容の更新は数えない（公式）。`Session` のライフサイクル通知は main thread で来る（公式）。車載画面に出ている間、アプリは位置情報の取得では背景扱い（公式）。Android Automotive OS は別の APK（`android.hardware.type.automotive` を必須にし、minSdk 29、`app-automotive` の `CarAppActivity`）が要る。確かめるには Android 9 以上の端末に Android Auto のアプリを入れ、開発者モードでヘッドユニットのサーバーを起こし、PC の DHU（Desktop Head Unit）から `adb forward tcp:5277 tcp:5277` でつなぐ（公式）。実車には Play など信頼できる配布元から入れる必要があり、Car App Library のアプリには「提供元不明のアプリ」の設定が効かない（公式）"
     },
     "macos": {
       "status": "n-a",
@@ -34,5 +46,5 @@
       "note": "車載の概念なし"
     }
   },
-  "note": "car-display は車載画面にテンプレート UI を出す。egui 描画は使えず、OS が決めたテンプレートへ Rust から内容を渡す形になる。今回の範囲: 車載画面に固定テキストの 1 画面を出す（シミュレータで確認）。"
+  "note": "car-display は車載画面に OS のテンプレート UI を出す。egui 描画は使えない。Android は新しい Gradle 依存（Car App Library）と受信側コンポーネントが要るため保留、iOS は Apple の承認制（種別ごとの entitlement）で申請待ち。範囲（再開時の案）: Android Auto（DHU）の車載画面に固定テキストの `MessageTemplate` を 1 画面出す（Android Automotive OS・実車・ストア配布は扱わない）。テンプレートの中身は Java の `Screen` が文字列リソースから組み、Rust はホストが起こすサービス側には居ない前提にする（quick-settings-tile と同じ）。車載画面を出した回数はサービス側が 1 か所（SharedPreferences）に書き、端末側の画面は要求のたびにそこを読む。接続の有無は読むたびに OS（`CarConnection` の接続種別）へ問い、アプリ内にフラグを持たない。守らない範囲: ホストが画面を作り直したときの回数の重複、DHU と実車での見え方の差"
 }
