@@ -18,8 +18,10 @@
 //!
 //! 時刻が来ると OS が利用者の操作なしに予約を一覧から外す。画面を開いたまま待つ
 //! 利用者へ見せるため `state()` を読み、画面の値と差があるときだけ送る
-//! （`device-bridge-contracts.md`「4. ポーリング・再描画」）。予約中の間だけ
-//! `request_repaint_after` で次回を予約し、予約が無い間は追加のポーリングを起こさない。
+//! （`device-bridge-contracts.md`「4. ポーリング・再描画」）。予約中・取得失敗中の
+//! 間だけ `request_repaint_after` で次回を予約し、予約が無い間は追加のポーリングを
+//! 起こさない。取得の失敗は直前の確定表示を消さず、固定文言（OS のエラー文は出さない）
+//! を併記して確認を続け、回復したら自動で正しい状態へ戻す。
 //!
 //! # 実装
 //!
@@ -32,8 +34,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use fandhe_core::screens::alarm_show::{
-    apply_snapshot, finish_action, mark_in_flight, take_request, Action, AlarmShowState, Phase,
-    ScheduleView,
+    apply_check_failure, apply_snapshot, finish_action, mark_in_flight, take_request, Action,
+    AlarmShowState, Phase, ScheduleView,
 };
 use fandhe_device::alarm::{Alarm, AlarmState};
 use fandhe_device::DeviceError;
@@ -56,14 +58,27 @@ fn to_message(e: DeviceError) -> String {
     }
 }
 
-fn to_schedule_view(state: Result<AlarmState, DeviceError>) -> ScheduleView {
+/// 予約一覧の読み取り結果。失敗は成功値へ畳まず、直前の確定表示も消さない
+/// 別の区分にする（`device-bridge-contracts.md`「6. 嘘の成功」）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Observation {
+    /// 読み取れた。
+    View(ScheduleView),
+    /// 一時的に読み取れなかった。画面へは固定文言で併記し、確認を続ける。
+    Failed,
+    /// この環境では読めない（`Unsupported`）。回復しないため確認を続けない。
+    Unavailable,
+}
+
+fn to_observation(state: Result<AlarmState, DeviceError>) -> Observation {
     match state {
-        Ok(AlarmState::NotScheduled) => ScheduleView::NotScheduled,
+        Ok(AlarmState::NotScheduled) => Observation::View(ScheduleView::NotScheduled),
         Ok(AlarmState::Scheduled { fire_at_unix_ms }) => {
-            ScheduleView::Scheduled { fire_at_unix_ms }
+            Observation::View(ScheduleView::Scheduled { fire_at_unix_ms })
         }
-        // 読み取りの失敗は「未観測」として扱い、成功値へ畳まない。
-        Err(_) => ScheduleView::Unknown,
+        Err(DeviceError::Unsupported(_)) => Observation::Unavailable,
+        // OS のエラー文は画面へ出さない（固定文言のみ）。
+        Err(_) => Observation::Failed,
     }
 }
 
@@ -144,10 +159,11 @@ fn drive_poll(
         return;
     }
     let current = state.schedule_view;
+    let check_failed = state.check_failed;
     let generation = state.generation;
     let sender = sender.clone();
     std::thread::spawn(move || {
-        if poll_once(alarm.as_ref(), current, generation, &sender) {
+        if poll_once(alarm.as_ref(), current, check_failed, generation, &sender) {
             sender.request_repaint_after(POLL_INTERVAL);
         }
         in_flight.store(false, Ordering::Release);
@@ -155,22 +171,45 @@ fn drive_poll(
 }
 
 /// 予約一覧を 1 回読み、画面の値と差があれば世代付きで送る。次回ポーリングを
-/// 予約すべきなら真を返す（予約中、または今回の送信で画面の値が変わったとき。
-/// `NotScheduled` を適用した直後も 1 回確認し直す、契約表 4）。
+/// 予約すべきなら真を返す（予約中、今回の送信で画面の値が変わったとき、または
+/// 取得に失敗したとき。`NotScheduled` を適用した直後も 1 回確認し直す、契約表 4）。
+/// 取得の失敗は `schedule_view` を上書きせず、確認失敗の印だけを送る
+/// （既に印が立っていれば再送しないが、OS が回復するまで確認は続ける）。
 fn poll_once(
     alarm: &dyn Alarm,
     current: ScheduleView,
+    current_check_failed: bool,
     generation: u64,
     sender: &CompletionSender<AlarmShowState>,
 ) -> bool {
-    let view = to_schedule_view(alarm.state());
-    let changed = view != current;
-    if changed {
-        let _ = sender.send(Box::new(move |s: &mut AlarmShowState| {
-            apply_snapshot(s, view, generation);
-        }));
+    match to_observation(alarm.state()) {
+        Observation::View(view) => {
+            let changed = view != current || current_check_failed;
+            if changed {
+                let _ = sender.send(Box::new(move |s: &mut AlarmShowState| {
+                    apply_snapshot(s, view, generation);
+                }));
+            }
+            changed || matches!(view, ScheduleView::Scheduled { .. })
+        }
+        Observation::Failed => {
+            if !current_check_failed {
+                let _ = sender.send(Box::new(move |s: &mut AlarmShowState| {
+                    apply_check_failure(s, generation);
+                }));
+            }
+            true
+        }
+        Observation::Unavailable => {
+            // 従来どおり未観測として扱う（再確認しても回復しない）。
+            if current != ScheduleView::Unknown {
+                let _ = sender.send(Box::new(move |s: &mut AlarmShowState| {
+                    apply_snapshot(s, ScheduleView::Unknown, generation);
+                }));
+            }
+            false
+        }
     }
-    changed || matches!(view, ScheduleView::Scheduled { .. })
 }
 
 /// ポーリングの多重起動防止フラグ（プロセス内で 1 本）。
@@ -207,8 +246,8 @@ pub fn alarm_show_effect(state: &AlarmShowState, sender: &CompletionSender<Alarm
     }
     if poll_due() {
         drive_poll(state, sender, alarm, poll_in_flight());
-    } else if matches!(state.schedule_view, ScheduleView::Scheduled { .. }) {
-        // 間引いたフレームでも、予約中は次回の確認を取りこぼさない。
+    } else if matches!(state.schedule_view, ScheduleView::Scheduled { .. }) || state.check_failed {
+        // 間引いたフレームでも、予約中・確認失敗中は次回の確認を取りこぼさない。
         sender.request_repaint_after(POLL_INTERVAL);
     }
 }
@@ -439,7 +478,7 @@ mod tests {
         // 世代 0 で読み始めたポーリング（OS はまだ予約を返さない）。
         let fake = fake_with_state(AlarmState::NotScheduled);
         let current = ScheduleView::Scheduled { fire_at_unix_ms: 9 };
-        assert!(poll_once(&fake, current, 0, &sender));
+        assert!(poll_once(&fake, current, false, 0, &sender));
         let stale = rx.recv().expect("差分があるため送信される");
         // 読む間に予約が完了して世代 1・Idle になった画面へ、古い snapshot が届く。
         let mut state = AlarmShowState::default();
@@ -462,6 +501,7 @@ mod tests {
         assert!(poll_once(
             &fake,
             state.schedule_view,
+            false,
             state.generation,
             &sender
         ));
@@ -497,12 +537,18 @@ mod tests {
         let scheduled = ScheduleView::Scheduled { fire_at_unix_ms: 9 };
         // Scheduled -> NotScheduled の差分を送った回は次回ポーリングを予約する。
         let gone = fake_with_state(AlarmState::NotScheduled);
-        assert!(poll_once(&gone, scheduled, 0, &sender));
+        assert!(poll_once(&gone, scheduled, false, 0, &sender));
         // 差分が無い未予約は予約しない（予約が無い間は追加のポーリングを起こさない）。
-        assert!(!poll_once(&gone, ScheduleView::NotScheduled, 0, &sender));
+        assert!(!poll_once(
+            &gone,
+            ScheduleView::NotScheduled,
+            false,
+            0,
+            &sender
+        ));
         // 予約中のままなら予約する。
         let still = fake_with_state(AlarmState::Scheduled { fire_at_unix_ms: 9 });
-        assert!(poll_once(&still, scheduled, 0, &sender));
+        assert!(poll_once(&still, scheduled, false, 0, &sender));
     }
 
     /// ポーリングスレッドの終了（フラグ解除）を待つ。
@@ -533,11 +579,111 @@ mod tests {
     }
 
     #[test]
-    fn poll_read_failure_is_unknown_not_scheduled() {
+    fn read_failure_is_failed_not_unknown_or_scheduled() {
         assert_eq!(
-            to_schedule_view(Err(DeviceError::Internal("alarm list"))),
-            ScheduleView::Unknown
+            to_observation(Err(DeviceError::Internal("alarm list"))),
+            Observation::Failed
         );
+        assert_eq!(
+            to_observation(Err(DeviceError::Unsupported("alarm"))),
+            Observation::Unavailable
+        );
+    }
+
+    fn failing() -> Fake {
+        Fake {
+            schedule: Outcome::Ok,
+            cancel: Outcome::Ok,
+            state: None,
+        }
+    }
+
+    #[test]
+    fn poll_failure_keeps_scheduled_view_and_keeps_polling() {
+        let (sender, rx) = sender_with_channel();
+        let scheduled = ScheduleView::Scheduled { fire_at_unix_ms: 9 };
+        let mut state = AlarmShowState {
+            schedule_view: scheduled,
+            ..Default::default()
+        };
+        // 1 回目の失敗: 印を送り、次回も予約する。
+        assert!(poll_once(&failing(), scheduled, false, 0, &sender));
+        rx.recv().expect("確認失敗が送られる")(&mut state);
+        assert_eq!(state.schedule_view, scheduled);
+        assert!(state.check_failed);
+        // 2 回続けて失敗しても、再送せずポーリングは止めない。
+        assert!(poll_once(&failing(), scheduled, true, 0, &sender));
+        assert!(rx.try_recv().is_err());
+        // 未観測のまま失敗し続けても止めない。
+        assert!(poll_once(
+            &failing(),
+            ScheduleView::Unknown,
+            true,
+            0,
+            &sender
+        ));
+    }
+
+    #[test]
+    fn poll_recovers_after_failure_even_without_view_change() {
+        let (sender, rx) = sender_with_channel();
+        let scheduled = ScheduleView::Scheduled { fire_at_unix_ms: 9 };
+        let mut state = AlarmShowState {
+            schedule_view: scheduled,
+            check_failed: true,
+            ..Default::default()
+        };
+        let ok = fake_with_state(AlarmState::Scheduled { fire_at_unix_ms: 9 });
+        assert!(poll_once(&ok, scheduled, true, 0, &sender));
+        rx.recv().expect("回復が送られる")(&mut state);
+        assert!(!state.check_failed);
+        assert_eq!(state.schedule_view, scheduled);
+    }
+
+    #[test]
+    fn poll_recovery_shows_cleared_when_reservation_vanished_during_failure() {
+        let (sender, rx) = sender_with_channel();
+        let scheduled = ScheduleView::Scheduled { fire_at_unix_ms: 9 };
+        let mut state = AlarmShowState {
+            schedule_view: scheduled,
+            check_failed: true,
+            ..Default::default()
+        };
+        let gone = fake_with_state(AlarmState::NotScheduled);
+        assert!(poll_once(&gone, scheduled, true, 0, &sender));
+        rx.recv().expect("送られる")(&mut state);
+        assert_eq!(state.schedule_view, ScheduleView::NotScheduled);
+        assert_eq!(
+            state.status,
+            fandhe_core::screens::alarm_show::CLEARED_STATUS
+        );
+    }
+
+    #[test]
+    fn stale_check_failure_is_discarded() {
+        let (sender, rx) = sender_with_channel();
+        assert!(poll_once(
+            &failing(),
+            ScheduleView::NotScheduled,
+            false,
+            0,
+            &sender
+        ));
+        let stale = rx.recv().expect("送られる");
+        let mut state = AlarmShowState::default();
+        schedule(&mut state);
+        mark_in_flight(&mut state);
+        finish_action(&mut state, 1, Action::Schedule, Ok(Some(9)));
+        stale(&mut state);
+        assert!(!state.check_failed);
+    }
+
+    #[test]
+    fn unsupported_state_does_not_poll_forever() {
+        let (sender, rx) = sender_with_channel();
+        let alarm = fandhe_device::alarm::UnsupportedAlarm;
+        assert!(!poll_once(&alarm, ScheduleView::Unknown, false, 0, &sender));
+        assert!(rx.try_recv().is_err());
     }
 
     #[test]

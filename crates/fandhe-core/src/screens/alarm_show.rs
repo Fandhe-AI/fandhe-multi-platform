@@ -43,6 +43,8 @@ pub const CLEARED_STATUS: &str =
     "予約の一覧から消えました（時刻が来たか、OS 側で取り消されました）";
 /// 失敗時の案内の接頭辞（`{接頭辞}{エラー文字列}` の形で表示する）。
 pub const FAILED_PREFIX: &str = "失敗しました: ";
+/// 予約一覧の取得に失敗したときの併記文言（OS のエラー文は出さない）。
+pub const CHECK_FAILED_TEXT: &str = "予約状態を確認できませんでした";
 /// 画面に常時出す補足。
 pub const NOTE: &str = "Windows の通知設定がオフだと予約できません。時刻は UTC で表示します。";
 
@@ -91,8 +93,11 @@ pub struct AlarmShowState {
     pub phase: Phase,
     /// 直近に立てた要求の世代番号。完了通知が「今の要求」を指しているかの照合に使う。
     pub generation: u64,
-    /// OS の予約一覧の観測結果。
+    /// OS の予約一覧の観測結果。取得に失敗しても直前の確定値は消さない。
     pub schedule_view: ScheduleView,
+    /// 直近の予約一覧の取得が失敗したか。`schedule_view` は「最後に確認できた状態」
+    /// のままで、画面には確認失敗を併記する（[`apply_check_failure`]）。
+    pub check_failed: bool,
     /// 成功・取り消し・一覧から消えた旨の案内（通常色）。
     pub status: String,
     /// 失敗理由（`TextRole::Error` で表示）。成功時は空文字列。
@@ -129,6 +134,7 @@ fn request(state: &mut AlarmShowState, action: Action) {
     state.generation = state.generation.wrapping_add(1);
     state.status = String::new();
     state.error = String::new();
+    state.check_failed = false;
 }
 
 /// effect ドライバが未発送の要求を観測する getter（状態は変えない）。
@@ -203,6 +209,17 @@ pub fn apply_snapshot(state: &mut AlarmShowState, view: ScheduleView, generation
         state.error = String::new();
     }
     state.schedule_view = view;
+    state.check_failed = false;
+}
+
+/// 予約一覧の取得失敗を反映する。`schedule_view`（最後に確認できた状態）と
+/// `status` は消さず、確認失敗の印だけを立てる。世代・`Idle` の照合は
+/// [`apply_snapshot`] と同じで、古い観測は捨てる。
+pub fn apply_check_failure(state: &mut AlarmShowState, generation: u64) {
+    if state.phase != Phase::Idle || state.generation != generation {
+        return;
+    }
+    state.check_failed = true;
 }
 
 /// 案内文言（`DynamicText` の `get`）。
@@ -217,12 +234,20 @@ pub fn error_text(state: &AlarmShowState) -> String {
 
 /// 予約状態の案内文言（`DynamicText` の `get`）。
 pub fn schedule_text(state: &AlarmShowState) -> String {
-    match state.schedule_view {
+    let base = match state.schedule_view {
         ScheduleView::Unknown => "予約状態: ...".to_string(),
         ScheduleView::NotScheduled => "予約状態: 未予約".to_string(),
         ScheduleView::Scheduled { fire_at_unix_ms } => {
             format!("予約状態: 予約中（{}）", format_utc(fire_at_unix_ms))
         }
+    };
+    if !state.check_failed {
+        return base;
+    }
+    match state.schedule_view {
+        // 一度も確認できていない場合は「...」のままにせず失敗を言い切る。
+        ScheduleView::Unknown => format!("予約状態: {CHECK_FAILED_TEXT}"),
+        _ => format!("{base}（最後に確認できた状態。{CHECK_FAILED_TEXT}）"),
     }
 }
 
@@ -396,6 +421,60 @@ mod tests {
             ScheduleView::Scheduled { fire_at_unix_ms: 9 }
         );
         assert_eq!(s.status, SCHEDULED_STATUS);
+    }
+
+    #[test]
+    fn check_failure_keeps_last_known_scheduled_and_notes_failure() {
+        let mut s = AlarmShowState::default();
+        schedule(&mut s);
+        mark_in_flight(&mut s);
+        finish_action(&mut s, 1, Action::Schedule, Ok(Some(9)));
+        apply_check_failure(&mut s, 1);
+        assert_eq!(
+            s.schedule_view,
+            ScheduleView::Scheduled { fire_at_unix_ms: 9 }
+        );
+        assert_eq!(s.status, SCHEDULED_STATUS);
+        assert!(schedule_text(&s).contains("予約中"));
+        assert!(schedule_text(&s).contains(CHECK_FAILED_TEXT));
+    }
+
+    #[test]
+    fn check_failure_before_any_observation_is_stated() {
+        let mut s = AlarmShowState::default();
+        apply_check_failure(&mut s, 0);
+        assert_eq!(schedule_text(&s), format!("予約状態: {CHECK_FAILED_TEXT}"));
+    }
+
+    #[test]
+    fn snapshot_after_failure_recovers_and_clears_mark() {
+        let mut s = AlarmShowState::default();
+        apply_snapshot(&mut s, ScheduleView::Scheduled { fire_at_unix_ms: 5 }, 0);
+        apply_check_failure(&mut s, 0);
+        apply_snapshot(&mut s, ScheduleView::NotScheduled, 0);
+        assert!(!s.check_failed);
+        assert_eq!(s.status, CLEARED_STATUS);
+        assert_eq!(schedule_text(&s), "予約状態: 未予約");
+    }
+
+    #[test]
+    fn stale_or_busy_check_failure_is_discarded() {
+        let mut s = AlarmShowState::default();
+        schedule(&mut s);
+        apply_check_failure(&mut s, 1); // Requested 中
+        assert!(!s.check_failed);
+        mark_in_flight(&mut s);
+        finish_action(&mut s, 1, Action::Schedule, Ok(Some(9)));
+        apply_check_failure(&mut s, 0); // 古い世代
+        assert!(!s.check_failed);
+    }
+
+    #[test]
+    fn new_request_clears_check_failure_mark() {
+        let mut s = AlarmShowState::default();
+        apply_check_failure(&mut s, 0);
+        schedule(&mut s);
+        assert!(!s.check_failed);
     }
 
     #[test]
