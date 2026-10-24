@@ -4,29 +4,42 @@
   "group": "未着手の OS 機能",
   "order": 26,
   "priority": 114,
+  "bundle": "request-response",
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "HealthKit（`HKHealthStore`）",
-      "perm": "`NSHealthShareUsageDescription` / `NSHealthUpdateUsageDescription` + HealthKit capability（`com.apple.developer.healthkit` entitlement）",
-      "url": "https://developer.apple.com/documentation/healthkit",
-      "note": "未実装",
-      "sourceName": [
-        "ヘルスデータ読み書き"
-      ]
+      "api": "HealthKit（`HKHealthStore`。可否は `isHealthDataAvailable()`、許可は `requestAuthorization(toShare:read:completion:)`、歩数の合計は `HKStatisticsQuery` の `.cumulativeSum`）",
+      "perm": "HealthKit capability（`com.apple.developer.healthkit` entitlement。無料の Apple Developer でも付けられる）と Info.plist の `NSHealthShareUsageDescription`（読み取り）/ `NSHealthUpdateUsageDescription`（書き込み）。キーが無いと許可の要求でクラッシュする。capability を足すと `UIRequiredDeviceCapabilities` に `healthkit` が入る。臨床記録用の `com.apple.developer.healthkit.access` と背景配信用の `com.apple.developer.healthkit.background-delivery` は単発の読み取りでは不要",
+      "url": [
+        "https://developer.apple.com/documentation/xcode/configuring-healthkit-access",
+        "https://developer.apple.com/documentation/healthkit/setting-up-healthkit",
+        "https://developer.apple.com/documentation/healthkit/authorizing-access-to-health-data",
+        "https://developer.apple.com/documentation/healthkit/hkhealthstore/requestauthorization(toshare:read:completion:)",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-ios",
+        "https://developer.apple.com/app-store/review/guidelines/"
+      ],
+      "deferred": "HealthKit capability（entitlement）と Info.plist の `NSHealthShareUsageDescription` を新しく足し、実行時の許可を新しく求めないとヘルスデータを読めない（公式: キーが無いと許可の要求でクラッシュする）。実機の署名も、プロファイルを作るホストターゲットに HealthKit capability を足す変更が要る。新しい権限を足さない方針のため保留（alarm・smart-home の iOS と同じ）。capability は無料の Apple Developer でも付けられ、ベンダーの個別審査は不要で、方針が変われば着手できる",
+      "note": "未実装。読み取りの許可は拒否されてもアプリから判別できず、クエリは自アプリが保存したサンプルだけを返す（公式: 許可と拒否はアプリから同じに見える）。`requestAuthorization` の `success` は許可の有無を表さない（公式）。iPadOS 16 以前では `isHealthDataAvailable()` が false（iPadOS 17 以上は可）。審査ガイドライン 5.1.3 等で、ヘルスデータの広告・マーケティング利用と iCloud への保存を禁じる。端末の歩数だけなら pedometer（CoreMotion）で取得済み"
     },
     "android": {
       "status": "possible",
-      "api": "Health Connect（`androidx.health.connect`）",
-      "perm": "Health Connect 側の個別権限（読み書き対象データ型ごと）",
-      "url": "https://developer.android.com/health-and-fitness/guides/health-connect",
-      "note": "未実装。Android 14 以降は OS 組み込みのため追加インストール不要。Android 13 以下は別アプリ（Health Connect）のインストールが前提",
-      "sourceName": [
-        "健康データ"
-      ]
+      "api": "Health Connect（Jetpack の `androidx.health.connect:connect-client` の `HealthConnectClient`、または API 34 以上のフレームワーク API `android.health.connect.HealthConnectManager`）。可否は `getSdkStatus`、歩数の合計は `aggregate()`",
+      "perm": "データ型ごとの `android.permission.health.READ_STEPS` 等の宣言（実行時の許可は Health Connect の許可画面）、`<queries>` に `com.google.android.apps.healthdata`、権限の理由（プライバシーポリシー）を出す Activity（Android 13 以下は `ACTION_SHOW_PERMISSIONS_RATIONALE`、14 以上は `VIEW_PERMISSION_USAGE` + `HEALTH_PERMISSIONS` の activity-alias）。公開には Play Console のヘルスアプリ申告が要る",
+      "url": [
+        "https://developer.android.com/health-and-fitness/health-connect/get-started",
+        "https://developer.android.com/health-and-fitness/guides/health-connect/develop/get-started",
+        "https://developer.android.com/health-and-fitness/guides/health-connect/develop/read-data",
+        "https://developer.android.com/health-and-fitness/guides/health-connect/publish/request-access",
+        "https://developer.android.com/jetpack/androidx/releases/health-connect",
+        "https://support.google.com/googleplay/android-developer/answer/9888170"
+      ],
+      "deferred": "Health Connect の権限（`android.permission.health.READ_STEPS` 等）と権限の理由を出す Activity・`<queries>` を新しく足し、Health Connect の許可画面で実行時の許可を新しく求めないと読めない。新しい権限を足さない方針のため保留（alarm の Android と同じ）。Jetpack の `connect-client` は新しい依存で、推移依存に kotlin-stdlib・kotlinx-coroutines・guava が入り、1.1.0 以降は compileSdk 36 が要る（いまは Kotlin なし・compileSdk 35）。依存を足さないフレームワーク API は API 34 以上に限られ、13 以下は別アプリ（Health Connect）が前提。公開には Play Console のヘルスアプリ申告（Google の審査）とプライバシーポリシーが要る。方針が変われば着手できる",
+      "note": "未実装。Android 14 以上は OS 組み込み、13 以下は Play ストアの Health Connect アプリ（Android 9 以上）を別途入れる。既定で読めるのは最初に許可した時点の 30 日前まで（`READ_HEALTH_DATA_HISTORY` で延長）。背景の読み取りは `READ_HEALTH_DATA_IN_BACKGROUND` が別に要る。権限が無い読み取りは `SecurityException`（フレームワーク API）。端末の歩数だけなら pedometer（`TYPE_STEP_COUNTER`）で取得済み"
     },
     "macos": {
-      "status": "n-a"
+      "status": "n-a",
+      "url": "https://developer.apple.com/documentation/healthkit/hkhealthstore/ishealthdataavailable()",
+      "note": "macOS 13 以上にフレームワークはあるがヘルスデータを読み書きできず、`isHealthDataAvailable()` は false を返す（公式）"
     },
     "windows": {
       "status": "n-a"
@@ -35,5 +48,5 @@
       "status": "n-a"
     }
   },
-  "note": "`HealthKit` / Android Health Connect。macOS/Windows/Web にはヘルスデータストア相当の標準 API が無い"
+  "note": "`HealthKit` / Android Health Connect。macOS/Windows/Web にはヘルスデータストア相当の標準 API が無い。iOS は新しい entitlement・Info.plist のキー・実行時の許可、Android は新しい Health Connect の権限（Jetpack を使うなら Kotlin のランタイムと compileSdk の引き上げを含む依存、公開には Play の申告）が要るため、どちらも保留。条件が揃ったら保留の一覧から見直す。範囲（再開時の案）: 今日の歩数の合計をヘルスストアから 1 回読む（書き込み・履歴・背景配信は含めない）。結果は値（0 を含む）・利用不可・失敗の三値。iOS の読み取り拒否はアプリから判別できないため「許可なし」の種別を作らず、OS が返した値をそのまま見せる。完了は OS の completion / OutcomeReceiver で決め、期限で推測しない。許可の状態はアプリ内に保持せず、要求のたびに OS に問い合わせる"
 }
