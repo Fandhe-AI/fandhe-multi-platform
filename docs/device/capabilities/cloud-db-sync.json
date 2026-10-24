@@ -7,10 +7,18 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "CloudKit（`CKContainer` / `CKDatabase`）",
-      "perm": "iCloud capability（CloudKit）＝制限付き entitlement `com.apple.developer.icloud-services`（`CloudKit`）+ `com.apple.developer.icloud-container-identifiers`。provisioning profile が必要。変更通知（`CKSubscription`）には remote notification（`aps-environment`）も要る",
-      "url": "https://developer.apple.com/documentation/cloudkit",
-      "note": "未実装。CloudKit のコンテナ作成と Development / Production のスキーマ運用（CloudKit Console）が要る。サーバーはアプリ側に持たないが、Apple のサービスに依存する。非同期 API が多く completion の一度きり保証が要る。有償の Apple Developer Program が前提。",
+      "api": "CloudKit（`CKContainer(identifier:)` の `privateCloudDatabase` で `CKRecord` を保存・取得。使う前に `accountStatus` で iCloud アカウントの状態（available / noAccount / restricted / couldNotDetermine / temporarilyUnavailable）を確かめ、実行中は `CKAccountChanged` で再確認する）",
+      "perm": "iCloud capability の CloudKit（制限付き entitlement `com.apple.developer.icloud-services` に `CloudKit`、`com.apple.developer.icloud-container-identifiers` に `iCloud.` で始まるコンテナ）。CloudKit を有効にすると Xcode は Push Notifications capability も足す（サーバー側の変更通知に使う）。capability 表では CloudKit・Push notifications とも有料の Apple Developer Program と Enterprise だけに印があり、無料の Apple Developer では付けられない。provisioning profile が必須",
+      "url": [
+        "https://developer.apple.com/documentation/cloudkit",
+        "https://developer.apple.com/documentation/cloudkit/ckcontainer/accountstatus(completionhandler:)",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.icloud-services",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.icloud-container-identifiers",
+        "https://developer.apple.com/documentation/xcode/configuring-icloud-services",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-ios"
+      ],
+      "deferred": "iCloud capability（CloudKit）とコンテナの登録は有料の Apple Developer Program だけができ（無料の Apple Developer の一覧に無い）、開発者登録が期限切れのため保留。変更通知に使う Push Notifications も有料限定。新しい entitlement と、開発者アカウント側のコンテナ・スキーマ（CloudKit Console）の運用を足すことにもなる。ベンダーの個別審査は不要で、登録を再開すれば着手できる",
+      "note": "未実装。プライベートデータベースは iCloud にサインインしたアカウントが前提で、使う前に `accountStatus` で可否を確かめる（公式）。認証できないときは `CKError.Code.notAuthenticated`。コンテナのスキーマ・操作ログは CloudKit Console で管理し、開発者アカウントでサインインする（公式）。名前の「ファイル」に当たる iCloud Documents（ubiquity container）も capability 表で有料限定",
       "sourceName": [
         "iCloud データベース同期（レコード・ファイル）"
       ]
@@ -25,10 +33,18 @@
     },
     "macos": {
       "status": "possible",
-      "api": "CloudKit（`CKContainer` / `CKDatabase`）",
-      "perm": "制限付き entitlement `com.apple.developer.icloud-services`（`CloudKit`）+ `com.apple.developer.icloud-container-identifiers`。.app に `Contents/embedded.provisionprofile` が必要。変更通知には `com.apple.developer.aps-environment` も要る",
-      "url": "https://developer.apple.com/documentation/cloudkit",
-      "note": "未実装。素の実行体には profile を置けないが、.app 包みなら置ける。profile 無しではコード署名の検証で起動が拒否される。App ID に iCloud（CloudKit + コンテナ）を有効化した Developer ID 用 profile が必要（開発用は登録済み端末のみ）。"
+      "api": "CloudKit（macOS 10.10+。`CKContainer(identifier:)` の `privateCloudDatabase` で `CKRecord` を保存・取得。使う前に `accountStatus` で iCloud アカウントの状態（available / noAccount / restricted / couldNotDetermine / temporarilyUnavailable）を確かめ、実行中は `CKAccountChanged` で再確認する）",
+      "perm": "iCloud capability の CloudKit（制限付き entitlement `com.apple.developer.icloud-services` に `CloudKit` + `com.apple.developer.icloud-container-identifiers`）。変更通知には Push Notifications（`com.apple.developer.aps-environment`）も要る。macOS の capability 表では CloudKit・Push notifications とも有料の Apple Developer Program と Developer ID だけに印があり、無料の Apple Developer では付けられない。制限付き entitlement は provisioning profile の許可が要り、.app の `Contents/embedded.provisionprofile` に埋め込む（素の実行体には置けない）",
+      "url": [
+        "https://developer.apple.com/documentation/cloudkit",
+        "https://developer.apple.com/documentation/cloudkit/ckcontainer/accountstatus(completionhandler:)",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.icloud-services",
+        "https://developer.apple.com/documentation/xcode/configuring-icloud-services",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-macos",
+        "https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles"
+      ],
+      "deferred": "iOS と同じく iCloud capability（CloudKit）とコンテナの登録は有料の Apple Developer Program だけができ、開発者登録が期限切れのため保留。いまの .app 化（url-scheme の `scripts/apple/bundle-macos-url-scheme.sh`）はアドホック署名で profile を埋め込まないため、開発用 profile の作成・埋め込みとその Team での署名の手順も新しく要る。ベンダーの個別審査は不要で、登録を再開すれば着手できる",
+      "note": "未実装。アカウントの前提・エラー・CloudKit Console の運用は iOS と同じ（公式）。macOS で profile 無しに使える entitlement として TN3125 が挙げるのは App Sandbox・Hardened Runtime・`get-task-allow`・App Groups で、それ以外の制限付き entitlement（iCloud を含む）は profile の許可が要る。開発用 profile は `ProvisionedDevices` に載せた Mac に限られ、Developer ID 用は全端末が対象（TN3125）"
     },
     "windows": {
       "status": "no",
@@ -48,5 +64,5 @@
       "detail": "できない（端末間でレコード・ファイルを同期するブラウザ標準 API が無い）"
     }
   },
-  "note": "Apple 2 OS は CloudKit（制限付き entitlement + provisioning profile が必須、macOS は .app 包みで profile 同梱可）。Android は Drive / Block Store（GMS）・Auto Backup（同期ではない）で no。Windows は roaming 廃止・identity 前提で no。Web は標準 API が無く no。"
+  "note": "Apple 2 OS は CloudKit。iCloud capability（CloudKit）・コンテナ・Push Notifications は有料の Apple Developer Program 限定で（無料の Apple Developer では付けられない）、開発者登録が期限切れのため iOS・macOS とも保留。Android は Drive / Block Store（GMS）・Auto Backup（同期ではない）で no。Windows は roaming 廃止・identity 前提で no。Web は標準 API が無く no。再開時の設計（OS を正にする）: iCloud アカウントの可否は使うたびに `accountStatus` を問い合わせて 5 値をそのまま写し、記憶しない（`CKAccountChanged` は再問い合わせの合図にだけ使う）。レコードは表示のたびにサーバーから取得し、Rust 側に写しや独自の送信待ちを持たない。競合（`serverRecordChanged`）は失敗として返し、サーバーの値を正とする。変更の検知は利用者操作の再取得で行い、push（`CKSubscription`）もタイマーも使わない（Push Notifications を足さずに済む）。範囲はプライベートデータベースの 1 レコード型で 1 件の保存・取得。layout は `a,b-ios`"
 }
