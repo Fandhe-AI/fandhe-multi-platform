@@ -355,9 +355,9 @@ pub mod apple_barcode_scan;
 /// C ABI ラッパー）。`device/biometric_auth.rs` の macOS/iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_biometric;
-/// Issue #778 macOS（iOS は b-ios #779）: BLE の周辺機器役実装（`apple/fandhe_apple_ble_peripheral.m` を
-/// 呼ぶ C ABI ラッパー）。`device/ble_peripheral.rs` の macOS 経路から呼ばれ、b-ios 後は
-/// `ios_ble_peripheral` も委譲する。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
+/// Issue #778 macOS・Issue #779 iOS: BLE の周辺機器役実装（`apple/fandhe_apple_ble_peripheral.m` を
+/// 呼ぶ C ABI ラッパー）。`device/ble_peripheral.rs` の macOS 経路と、委譲する
+/// `ios_ble_peripheral`（iOS）から呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_ble_peripheral;
 /// Issue #1060 macOS + #1061 iOS: BLE スキャン実装（`apple/fandhe_apple_bluetooth_le.m` を
@@ -559,7 +559,7 @@ pub mod barcode_scan;
 /// （macOS/iOS/Android/Windows 実装）。
 pub mod biometric_auth;
 /// Phase 11 の拡充ループ（親 #164、Issue #778）: BLE の周辺機器役の effect ドライバ
-/// （macOS 実装。iOS は骨格のスタブで b-ios #779 が埋める。Android・Windows は対応表で保留のため
+/// （macOS・iOS 実装。Android・Windows は対応表で保留のため
 /// 他 OS は `UnsupportedBlePeripheral` 固定）。
 pub mod ble_peripheral;
 /// Phase 11 の拡充ループ（親 #130、Issue #659）: Bluetooth Classic の一覧・検索の effect ドライバ
@@ -718,7 +718,7 @@ pub mod ios_background_task;
 /// Issue #557: iOS 向けバーコード・QR 読み取りの骨格（実装は #558）。
 #[cfg(target_os = "ios")]
 pub mod ios_barcode_scan;
-/// Issue #778: iOS 向け BLE の周辺機器役のスタブ（b-ios #779 が `apple_ble_peripheral` への委譲へ差し替える）。
+/// Issue #779: iOS 向け BLE の周辺機器役（`apple_ble_peripheral` へ委譲する）。
 /// `device/ble_peripheral.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_ble_peripheral;

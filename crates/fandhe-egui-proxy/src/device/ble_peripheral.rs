@@ -6,9 +6,8 @@
 //!
 //! `start` は非ブロッキング、`stop` は `.m` の専用キューへの短い同期呼び出しなので UI スレッドで
 //! 同期に呼ぶ。待ち・期限・`request_repaint_after` は持たない（事象は OS の通知 →
-//! `CompletionSender::send` が UI を起こす）。**dispatch はここで最終形にしてあり、b-ios（#779）は
-//! OS 別モジュール（`ios_ble_peripheral.rs`）だけを差し替える**。macOS は
-//! `apple_ble_peripheral`、iOS は当面スタブ、Android・Windows は対応表で保留のため
+//! `CompletionSender::send` が UI を起こす）。**macOS は `apple_ble_peripheral`、iOS は #779 で
+//! `ios_ble_peripheral.rs` から `apple_ble_peripheral` へ委譲済み**。Android・Windows は対応表で保留のため
 //! `UnsupportedBlePeripheral`（非対応表示）に入る。
 //!
 //! 読み取りは「世代つきのまとめ送り」にする: 未適用件数を数え、0 → 1 になったときだけ完了を
