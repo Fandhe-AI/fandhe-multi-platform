@@ -46,7 +46,10 @@
 //!   - UI の提示は main queue で行う
 //!   - 権限の応答時にアプリが前面になければ、UI を出さず `Interrupted` を返す
 //!   - 結果を共有状態へ入れた直後に `crate::ios::request_repaint` を呼ぶ
-//!   - `UIImage` は JPEG（または PNG）へ変換して渡す
+//!   - `UIImage` は長辺 2048 画素以下に縮めてから JPEG へ変換して渡す（親 #145 の実装方針。
+//!     もともと 2048 以下なら描き直さない）。縮小は OS 層の義務で、Rust 側では縮めない
+//!   - 保険タイマー（1.5 秒）で結果を送った時点では、撮影 UI が画面に残っている可能性がある
+//!   - 提示の完了コールバックが猶予（5 秒）内に来なければ `Internal` で確定する
 //!   - `imageOfPageAtIndex:` の前に `pageCount` を確かめる
 //! - **秘密値**（契約表 8）: 画像の中身と OS のエラー文をログ・画面のエラー文・`Debug` に出さない
 //!
@@ -60,7 +63,6 @@
 use std::fmt;
 use std::time::Duration;
 
-use crate::DeviceError;
 use crate::photo_picker::{PickedPhoto, validate_photo};
 
 /// 要求を観測してから撮影 UI を出すまでの期限（Rust のドライバだけが持つ）。
@@ -83,16 +85,20 @@ impl ScannedPage {
     ///
     /// - `page_count == 0` は画像の有無にかかわらず `Empty`
     /// - 上限超過は `TooLarge`
-    /// - 0 バイト・形式不明は `Undecodable`
+    /// - 0 バイト・形式不明は `Undecodable`（上限超過以外の `InvalidInput` を含む）
     ///
     /// `Ok` は「復号できる」ことを意味しない。橋渡し層が表示前に復号して確かめる。
     pub fn from_os(bytes: Vec<u8>, page_count: u32) -> Result<ScannedPage, DocumentScanFailure> {
         if page_count == 0 {
             return Err(DocumentScanFailure::Empty);
         }
+        // 上限超過だけを `TooLarge` にする。`validate_photo` の他の `InvalidInput`
+        // （0 バイト・形式不明など）は復号できない画像として扱う。
+        if bytes.len() > MAX_PAGE_BYTES {
+            return Err(DocumentScanFailure::TooLarge);
+        }
         match validate_photo(bytes) {
             Ok(photo) => Ok(ScannedPage { photo, page_count }),
-            Err(DeviceError::InvalidInput(_)) => Err(DocumentScanFailure::TooLarge),
             Err(_) => Err(DocumentScanFailure::Undecodable),
         }
     }
@@ -214,6 +220,21 @@ mod tests {
         assert_eq!(
             ScannedPage::from_os(big, 1),
             Err(DocumentScanFailure::TooLarge)
+        );
+    }
+
+    #[test]
+    fn invalid_input_other_than_size_is_undecodable() {
+        // 上限以内で形式不明（`InvalidInput` になりうる入力）は `TooLarge` にしない。
+        assert_eq!(
+            ScannedPage::from_os(vec![0u8; 16], 1),
+            Err(DocumentScanFailure::Undecodable)
+        );
+        let mut at_limit = vec![0u8; MAX_PAGE_BYTES];
+        at_limit[0] = 1;
+        assert_eq!(
+            ScannedPage::from_os(at_limit, 1),
+            Err(DocumentScanFailure::Undecodable)
         );
     }
 

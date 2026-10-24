@@ -20,6 +20,11 @@
 //
 // 並行性: UI 操作と done フラグ・強参照は main thread だけが触る。main への dispatch_sync は使わない。
 // JPEG 変換は撮影 UI を閉じた後に global queue で行い、Rust の受け口もその queue から呼ぶ。
+// 画像は長辺 2048 画素以下に縮めてから JPEG（品質 0.8）にする（親 #145 の実装方針。
+// もともと 2048 以下なら描き直さない。Rust 側では縮めないため、縮小はこの層の義務）。
+// 提示の完了コールバックが猶予（5 秒）を過ぎても来ない場合は code 7 で確定し、保留と強参照を残さない。
+// 結果を 1.5 秒の保険タイマーで送る経路では、その時点で撮影 UI が画面に残っている可能性がある
+// （閉じ直しは送信と同じ main thread 上で試みるが、完了は待たない）。
 // 画像の中身・NSError の文言はログに出さない。
 // 守らない範囲: 撮影 UI の表示中に Rust 側から閉じること、OS ごとの補正結果の違い、複数プロセス、
 // プロセス死後の結果。
@@ -32,6 +37,29 @@
 extern int32_t fandhe_rust_document_scan_try_begin_present(uint64_t request_id);
 extern void fandhe_rust_document_scan_complete(uint64_t request_id, int32_t code, const uint8_t *bytes,
                                                size_t len, uint32_t page_count);
+
+// 縮小後の長辺の上限（画素）。
+static const CGFloat kFandheDocScanMaxLongSide = 2048.0;
+// 提示の完了コールバックを待つ猶予（秒）。
+static const int64_t kFandheDocScanPresentGraceSec = 5;
+
+// 長辺が上限を超えるときだけ描き直す。scale = 1 で画素数をそのままポイント数として扱う。
+static UIImage *FandheDocScanDownscaled(UIImage *image) {
+    CGFloat w = image.size.width * image.scale;
+    CGFloat h = image.size.height * image.scale;
+    CGFloat longSide = MAX(w, h);
+    if (longSide <= kFandheDocScanMaxLongSide || longSide <= 0) {
+        return image;
+    }
+    CGFloat ratio = kFandheDocScanMaxLongSide / longSide;
+    CGSize target = CGSizeMake(MAX(1.0, floor(w * ratio)), MAX(1.0, floor(h * ratio)));
+    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat defaultFormat];
+    format.scale = 1;
+    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:target format:format];
+    return [renderer imageWithActions:^(UIGraphicsImageRendererContext *__unused ctx) {
+      [image drawInRect:CGRectMake(0, 0, target.width, target.height)];
+    }];
+}
 
 static void FandheDocScanFinishCode(uint64_t request_id, int32_t code) {
     fandhe_rust_document_scan_complete(request_id, code, NULL, 0, 0);
@@ -108,7 +136,8 @@ static FandheDocumentScanDelegate *g_retainedDelegate = nil;
                        }
                        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
                          @autoreleasepool {
-                             NSData *jpeg = image ? UIImageJPEGRepresentation(image, 0.8) : nil;
+                             UIImage *scaled = image ? FandheDocScanDownscaled(image) : nil;
+                             NSData *jpeg = scaled ? UIImageJPEGRepresentation(scaled, 0.8) : nil;
                              if (jpeg == nil || jpeg.length == 0) {
                                  FandheDocScanFinishCode(rid, 7);
                                  return;
@@ -166,10 +195,13 @@ static void FandheDocScanPresent(uint64_t request_id) {
     vc.modalPresentationStyle = UIModalPresentationFullScreen;
     vc.modalInPresentation = YES;
     g_retainedDelegate = delegate;
+    // 提示の完了を示す旗（main thread のみ）。猶予タイマーが参照する。
+    __block BOOL presented = NO;
     // 提示は非同期に確定するため、成否は completion 内で判定する。
     [top presentViewController:vc
                       animated:YES
                     completion:^{
+                      presented = YES;
                       // 確定済み（失敗・破棄を含む）でも、画面に残った撮影 UI はその場で閉じる。
                       // dismiss の開始は closeController:then: に集約し、開始済みなら何もしない
                       // （結果の送信は claim に勝った側の completion が担う）。
@@ -188,6 +220,19 @@ static void FandheDocScanPresent(uint64_t request_id) {
                           }
                       }
                     }];
+    // completion が来ないと保留と強参照が残り続ける。猶予内に提示が完了しなければ Internal で確定する。
+    // 競合しても `claim` が 1 回に絞る。提示が完了していれば何もしない。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, kFandheDocScanPresentGraceSec * NSEC_PER_SEC),
+                   dispatch_get_main_queue(), ^{
+                     if (presented || ![delegate claim]) {
+                         return;
+                     }
+                     FandheDocScanFinishCode(request_id, 7);
+                     // 遅れて表示された場合に画面へ残さない。
+                     if (vc.presentingViewController != nil && !vc.isBeingDismissed) {
+                         [vc dismissViewControllerAnimated:NO completion:nil];
+                     }
+                   });
 }
 
 int32_t fandhe_ios_document_scan_start(uint64_t request_id) {

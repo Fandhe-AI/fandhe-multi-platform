@@ -151,12 +151,18 @@ impl Bridge {
         true
     }
 
-    /// OS 層からの唯一の結果の受け口。重い復号はロックの外で先に済ませる。
+    /// OS 層からの唯一の結果の受け口。
+    ///
+    /// 先に id を照合して古い・確定済みの完了を重い復号の前に捨てる。復号はロックの外で行い、
+    /// 届ける前にもう一度照合する（復号中に期限切れ・差し替えが起きうるため）。
     fn complete_from_os(
         &self,
         request_id: u64,
         result: Result<DocumentScanOutcome, DocumentScanFailure>,
     ) {
+        if !self.is_current(request_id) {
+            return;
+        }
         let result: Outcome = match result {
             Ok(DocumentScanOutcome::Cancelled) => Ok(CoreScan::Cancelled),
             Ok(DocumentScanOutcome::Scanned(page)) => {
@@ -182,6 +188,13 @@ impl Bridge {
         };
         self.slot.deliver(request_id, result);
         *active = None;
+    }
+
+    /// `request_id` が現在の未確定の要求か。
+    fn is_current(&self, request_id: u64) -> bool {
+        self.lock()
+            .as_ref()
+            .is_some_and(|a| a.request_id == request_id)
     }
 
     /// 表示開始前に期限を過ぎていれば `TimedOut` を確定する。
@@ -285,36 +298,51 @@ fn drive(
     }
     let generation = state.generation;
     bridge.expire_if_due();
+    let slot = bridge.slot;
+    let Some((pending_id, _)) = slot.snapshot() else {
+        return;
+    };
     poll_and_finish(
-        bridge.slot,
+        slot,
         sender,
         |_| {},
         move |s: &mut DocumentScanShowState, outcome: Outcome| {
-            let result = match outcome {
-                Ok(CoreScan::Cancelled) => Ok(CoreOutcome::Cancelled),
-                Ok(CoreScan::Scanned(scan)) => {
-                    let d = &scan.decoded;
-                    // 世代が違う完了は画素を置かない（古い画像が新しい画面に出ない）。
-                    if s.phase != Phase::Running || s.generation != generation {
-                        return false;
-                    }
-                    // 画素を先に置いてから成功を届ける（届いた時点で描ける）。
-                    let source = format!("scan:{generation}");
-                    image_store::put(source.clone(), d.image.clone());
-                    Ok(CoreOutcome::Scanned(ShownPage {
-                        source,
-                        format: d.format.to_string(),
-                        size: d.size,
-                        width: d.width,
-                        height: d.height,
-                        page_count: scan.page_count,
-                    }))
-                }
-                Err(f) => Err(to_core_failure(f)),
-            };
-            finish_scan(s, generation, result)
+            let applied = apply_outcome(s, generation, outcome);
+            // 反映できない完了（世代違い）は捨てる。残すとスロットが埋まったままになり、
+            // `has_pending` が真のまま以降の要求が発送されない。
+            if !applied {
+                slot.clear(pending_id);
+            }
+            applied
         },
     );
+}
+
+/// 完了を画面状態へ反映する。反映できなければ `false`（呼び出し側がスロットを片付ける）。
+fn apply_outcome(s: &mut DocumentScanShowState, generation: u64, outcome: Outcome) -> bool {
+    let result = match outcome {
+        Ok(CoreScan::Cancelled) => Ok(CoreOutcome::Cancelled),
+        Ok(CoreScan::Scanned(scan)) => {
+            let d = &scan.decoded;
+            // 世代が違う完了は画素を置かない（古い画像が新しい画面に出ない）。
+            if s.phase != Phase::Running || s.generation != generation {
+                return false;
+            }
+            // 画素を先に置いてから成功を届ける（届いた時点で描ける）。
+            let source = format!("scan:{generation}");
+            image_store::put(source.clone(), d.image.clone());
+            Ok(CoreOutcome::Scanned(ShownPage {
+                source,
+                format: d.format.to_string(),
+                size: d.size,
+                width: d.width,
+                height: d.height,
+                page_count: scan.page_count,
+            }))
+        }
+        Err(f) => Err(to_core_failure(f)),
+    };
+    finish_scan(s, generation, result)
 }
 
 /// `registry.rs` の `effect` 区画から `document_scan_show` 画面用に配線される effect ドライバ。
@@ -657,6 +685,34 @@ mod tests {
             n += 1;
         }
         assert_eq!(n, 1, "mark_running は 1 件のみ");
+    }
+
+    #[test]
+    fn mismatched_generation_completion_clears_slot_and_unblocks_dispatch() {
+        let bridge = new_bridge(LONG);
+        let f = fake(Mode::Silent, bridge);
+        let imp: Arc<dyn DocumentScanner> = f.clone();
+        let (sender, rx) = channel();
+        let mut state = DocumentScanShowState::default();
+        request_scan(&mut state);
+        drive(&state, &sender, &imp, bridge);
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        let id = bridge.slot.snapshot().unwrap().0;
+        assert!(bridge.try_begin_present(id));
+        bridge.complete_from_os(id, Ok(DocumentScanOutcome::Cancelled));
+        // 世代がずれた画面（再生成など）へ完了が届く。
+        state.generation += 1;
+        drive(&state, &sender, &imp, bridge);
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        assert!(
+            bridge.slot.snapshot().is_none(),
+            "不一致でもスロットを片付ける"
+        );
+        assert!(!bridge.has_pending());
     }
 
     #[test]
