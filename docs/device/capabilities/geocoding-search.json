@@ -27,11 +27,14 @@
       "note": "未実装。フレームワーク API で Gradle 依存の追加は不要。実際の変換はシステムの geocode provider が行い、GMS 端末では通常 Play services が提供する。provider が無い端末は `isPresent()` が false で、Unsupported を返す。取り消し API は無い。失敗理由（通信不可・回数上限）は区別できない"
     },
     "macos": {
-      "status": "possible",
-      "api": "MapKit `MKGeocodingRequest`（macOS 26 以上、iOS と同じ実装）",
+      "status": "done",
+      "api": "MapKit `MKGeocodingRequest`（macOS 26 以上。main queue で開始し completion も main、iOS と同じ `.m`）。座標は `MKMapItem.location`",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/mapkit/mkgeocodingrequest",
-      "note": "未実装。macOS 26 未満は Unsupported。素の実行体から MapKit の地理コードが通るかは Mac 目視で確かめる"
+      "note": "実装済み（#691）。画面の固定の公開住所 1 件を座標へ変換し、先頭候補の緯度・経度と候補数を出す。通信不可・回数上限・該当なし・座標なし・時間切れを区別して失敗にし、0 件・座標なし・error 付きを成功にしない。住所・座標・OS のエラー文はログへ出さない。macOS 26 未満は Unsupported（非推奨の CLGeocoder へ倒さない）。素の実行体から MapKit の地理コードが通るかは Mac 目視（#689）で確かめる。守らない範囲: 結果の精度と候補の選択、回数上限、期限後も OS 側の処理が走り切ること",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#689）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_geocoding_search.m + crates/fandhe-egui-proxy/src/device/apple_geocoding_search.rs + crates/fandhe-egui-proxy/src/device/geocoding_search.rs + crates/fandhe-core/src/screens/geocoding_search_show.rs + crates/fandhe-device/src/geocoding_search.rs、Issue #691"
     },
     "windows": {
       "status": "no",

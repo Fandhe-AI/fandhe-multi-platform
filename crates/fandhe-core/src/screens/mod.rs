@@ -53,6 +53,9 @@ pub mod file_pick;
 /// Phase 11 の拡充ループ型サンプル「位置情報」（Issue #888）。
 pub mod location_show;
 
+/// Phase 11 の拡充ループ型サンプル「住所の座標変換」（親 #133、Issue #691）。
+pub mod geocoding_search_show;
+
 /// Phase 11 の拡充ループ型サンプル「ジオフェンス」（親 #1056、Issue #1057）。
 pub mod geofence_show;
 
