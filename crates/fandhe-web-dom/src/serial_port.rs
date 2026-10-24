@@ -26,6 +26,13 @@
 //! 捨てて `Timeout` にする。タイマー発火時は reader の `cancel` と writer の `abort` で保留中の
 //! 読み書きを解く。
 //!
+//! # 送信前の読み捨て
+//!
+//! open 後、送信の前に reader を取り、`DRAIN_QUIET_MS` の間何も届かなくなるまで届いたデータを
+//! 捨てる（`DRAIN_MAX_MS` を超えて届き続けたら `Timeout`）。静止時に保留中の `read()` は
+//! 受信にそのまま引き継ぐ。Web Serial に OS バッファの破棄 API は無いため、静止窓の後に機器が
+//! 自発的に送る行は応答と区別できない（守らない範囲）。
+//!
 //! # 三値
 //!
 //! - 成功: 1 行（空行を含む）。
@@ -191,6 +198,14 @@ pub(crate) fn on_stream_done() -> SerialPortFailure {
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) const CLEANUP_WAIT_MS: u32 = 2000;
 
+/// 送信前の受信バッファ破棄で、データが途切れたとみなす静止時間（ミリ秒）。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) const DRAIN_QUIET_MS: u32 = 200;
+
+/// 送信前の受信バッファ破棄に使う上限（ミリ秒）。送り続ける機器は応答できないとして `Timeout`。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) const DRAIN_MAX_MS: f64 = 1000.0;
+
 #[cfg(target_arch = "wasm32")]
 mod web {
     use std::cell::RefCell;
@@ -210,7 +225,7 @@ mod web {
     use super::{
         failure_from_io_error, failure_from_open_error, failure_from_request_error, is_late,
         merge_cleanup, on_chunk, on_stream_done, open_options, remaining_ms, to_port_failure,
-        OptionValue, CLEANUP_WAIT_MS,
+        OptionValue, CLEANUP_WAIT_MS, DRAIN_MAX_MS, DRAIN_QUIET_MS,
     };
     use crate::mount::{is_live, Applier};
 
@@ -382,14 +397,15 @@ mod web {
     }
 
     /// マウントに残った後片付け失敗のセッションを解放し直す。済むまで待つ。
-    /// 成功すれば記録を消し、失敗すれば残す（次の機会に再試行される）。
-    async fn settle_leftover(id: u64) {
+    /// 成功すれば記録を消して `true`。失敗すれば記録を残し（破棄時にも再試行できる）`false`。
+    /// `false` のとき呼び出し側は新しい往復を始めない（未解放の資源を新セッションで上書きしない）。
+    async fn settle_leftover(id: u64) -> bool {
         let old = MOUNTS.with(|m| m.borrow().get(&id).and_then(|e| e.session.clone()));
         let Some(old) = old else {
-            return;
+            return true;
         };
         if !old.borrow().leftover {
-            return;
+            return true;
         }
         if cleanup(&old).await {
             MOUNTS.with(|m| {
@@ -399,6 +415,71 @@ mod web {
                     }
                 }
             });
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 一定時間後に `marker` で解決する Promise。
+    fn quiet_timer(ms: u32, marker: &JsValue) -> Promise {
+        let m2 = marker.clone();
+        Promise::new(&mut |resolve, _| {
+            let m = m2.clone();
+            let cb = Closure::once_into_js(move || {
+                let _ = resolve.call1(&JsValue::UNDEFINED, &m);
+            });
+            if let Some(w) = web_sys::window() {
+                let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                    cb.unchecked_ref(),
+                    ms as i32,
+                );
+            }
+        })
+    }
+
+    /// 送信前に、すでに届いている（届き続ける）受信データを読み捨てる。`DRAIN_QUIET_MS` の間
+    /// 何も届かなければ静止とみなし、保留中の `read()` を返す（以後の受信に引き継ぐ。cancel しない）。
+    /// Web Serial にバッファ破棄 API は無いので、読み捨てが保証できるのは静止窓の手前までで、
+    /// 静止窓の後に機器が自発的に送る行は区別できない（守らない範囲）。
+    async fn drain_before_send(
+        sess: &Rc<RefCell<Session>>,
+        reader: &JsValue,
+    ) -> Result<JsValue, SerialPortFailure> {
+        let began = now();
+        let mut pending = call(reader, "read", &[]).map_err(|_| SerialPortFailure::Internal)?;
+        loop {
+            let (signal, token) = {
+                let s = sess.borrow();
+                (s.signal.clone(), s.token.clone())
+            };
+            let marker = JsValue::from_str("__drain_quiet__");
+            let race = Array::of3(
+                &Promise::resolve(&pending),
+                &quiet_timer(DRAIN_QUIET_MS, &marker),
+                &signal.map(JsValue::from).unwrap_or(JsValue::NULL),
+            );
+            match JsFuture::from(Promise::race(&race)).await {
+                Ok(r) if Object::is(&r, &marker) => return Ok(pending),
+                Ok(r) if Object::is(&r, &token) => return Err(SerialPortFailure::Timeout),
+                Ok(r) => {
+                    if get(&r, "done").and_then(|d| d.as_bool()) == Some(true) {
+                        return Err(if sess.borrow().timed_out {
+                            SerialPortFailure::Timeout
+                        } else {
+                            on_stream_done()
+                        });
+                    }
+                    // 送信前に届いたデータは応答ではない。捨てる。
+                    let s = sess.borrow();
+                    if s.released || s.timed_out || now() - began >= DRAIN_MAX_MS {
+                        return Err(SerialPortFailure::Timeout);
+                    }
+                    drop(s);
+                    pending = call(reader, "read", &[]).map_err(|_| SerialPortFailure::Internal)?;
+                }
+                Err(e) => return Err(io_failure(sess, &e)),
+            }
         }
     }
 
@@ -509,7 +590,8 @@ mod web {
                 Ok(p) => p,
                 Err(err) => {
                     // キャンセルの経路でも、残った資源の解放を試みてから結果を出す。
-                    settle_leftover(id).await;
+                    // 解放できなくても、要求自体の失敗はそのまま出す（資源は記録に残る）。
+                    let _ = settle_leftover(id).await;
                     let f = failure_from_request_error(error_name(&err).as_deref());
                     let pf = to_port_failure(f);
                     applier.apply(move |s| finish_round_trip(s, generation, Err(pf)));
@@ -517,9 +599,16 @@ mod web {
                 }
             };
             // 前回の後片付け失敗で残った資源を、open の前に解放し終える（open と重ねない）。
-            settle_leftover(id).await;
+            let settled = settle_leftover(id).await;
             // 選択中にマウントが破棄された。ポートは開いていないので捨てる。
             if !is_live(id) {
+                return;
+            }
+            // 旧セッションを解放できないまま新しい往復を始めない。旧セッションは記録に残り、
+            // 次の要求・マウント破棄で再試行される。
+            if !settled {
+                let pf = to_port_failure(SerialPortFailure::Internal);
+                applier.apply(move |s| finish_round_trip(s, generation, Err(pf)));
                 return;
             }
             let started = now();
@@ -622,6 +711,15 @@ mod web {
             return Err(SerialPortFailure::Timeout);
         }
 
+        // 送信前に受信データを読み捨てる（起動メッセージなどを応答と取り違えない）。
+        let readable = get(port, "readable").ok_or(SerialPortFailure::Internal)?;
+        let reader = call(&readable, "getReader", &[]).map_err(|_| SerialPortFailure::Internal)?;
+        sess.borrow_mut().reader = Some(reader.clone());
+        let mut pending = drain_before_send(sess, &reader).await?;
+        if stop(sess) {
+            return Err(SerialPortFailure::Timeout);
+        }
+
         // 送信
         let writable = get(port, "writable").ok_or(SerialPortFailure::Internal)?;
         let writer = call(&writable, "getWriter", &[]).map_err(|_| SerialPortFailure::Internal)?;
@@ -638,13 +736,10 @@ mod web {
             return Err(SerialPortFailure::Timeout);
         }
 
-        // 受信
-        let readable = get(port, "readable").ok_or(SerialPortFailure::Internal)?;
-        let reader = call(&readable, "getReader", &[]).map_err(|_| SerialPortFailure::Internal)?;
-        sess.borrow_mut().reader = Some(reader.clone());
+        // 受信（静止確認で保留にした read から続ける）
         let mut assembler = LineAssembler::new();
         loop {
-            let res = match wait_io(sess, call(&reader, "read", &[])).await {
+            let res = match wait_io(sess, Ok(pending)).await {
                 Ok(r) => r,
                 Err(Wait::Aborted) => return Err(SerialPortFailure::Timeout),
                 Err(Wait::Failed(err)) => return Err(io_failure(sess, &err)),
@@ -670,6 +765,7 @@ mod web {
             if released || timed_out || is_late(started, now()) {
                 return Err(SerialPortFailure::Timeout);
             }
+            pending = call(&reader, "read", &[]).map_err(|_| SerialPortFailure::Internal)?;
         }
     }
 
