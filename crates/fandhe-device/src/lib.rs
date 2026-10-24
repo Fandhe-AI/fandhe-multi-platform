@@ -43,6 +43,8 @@ pub mod background_task;
 pub mod barcode_scan;
 /// Phase 11（端末機能の拡充ループ、親 #905、Issue #906）: 生体認証。
 pub mod biometric_auth;
+/// Phase 11（端末機能の拡充ループ、親 #164、Issue #778）: BLE の周辺機器役（アドバタイズ・読み取り専用の GATT サーバー）。
+pub mod ble_peripheral;
 /// Phase 11（端末機能の拡充ループ、親 #130、Issue #659）: Bluetooth Classic の機器一覧と検索。
 pub mod bluetooth_classic;
 /// Phase 11（端末機能の拡充ループ）: Bluetooth LE の周辺機器スキャン。

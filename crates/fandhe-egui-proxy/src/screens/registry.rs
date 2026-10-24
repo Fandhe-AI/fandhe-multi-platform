@@ -102,6 +102,10 @@ generated_screens! {
     crate::device::compose_mail_sms::compose_mail_sms_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "ble_peripheral" => fandhe_core::screens::ble_peripheral::current_screen,
+    crate::device::ble_peripheral::ble_peripheral_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "global_hotkey" => fandhe_core::screens::global_hotkey::current_screen,
     crate::device::global_hotkey::global_hotkey_effect,
     effect

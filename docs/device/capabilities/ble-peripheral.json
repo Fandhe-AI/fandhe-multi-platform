@@ -32,14 +32,17 @@
       "deferred": "API 31 以上でアドバタイズするには `BLUETOOTH_ADVERTISE` の uses-permission を新しく足し、実行時の許可を新しく求める必要がある（公式: 実行時の権限。いまの Manifest は bluetooth-le の `BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT` だけ）。新しい権限を足さない方針のため保留（nfc-card-emulation の Android と同じ）。GATT サーバー側の `BLUETOOTH_CONNECT` は宣言済み。ベンダーの個別審査・GMS は不要で、方針が変われば着手できる"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "CoreBluetooth `CBPeripheralManager`（iOS と同じ API・`.m` を共用）",
       "perm": "Info.plist の `NSBluetoothAlwaysUsageDescription`（bluetooth-le で宣言済み。文言に型サンプル名を足すだけ）。App Sandbox 無効の素の実行体のため entitlement は不要（`com.apple.security.device.bluetooth` は Sandbox 有効時のもの）",
       "url": [
         "https://developer.apple.com/documentation/corebluetooth/cbperipheralmanager",
         "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.device.bluetooth"
       ],
-      "note": "未実装。iOS と同じ注意（poweredOn まで命令しない・poweredOff で登録が消える・`stopAdvertising` に完了の通知が無い・接続の通知が無い）。背景遷移の扱いは iOS だけ。TCC の判定がターミナルへ帰属しないよう、確認は `.app` にまとめて `open` で起動する（bluetooth-le と同じ）"
+      "note": "実装済み（#778）。iOS と同じ注意（poweredOn まで命令しない・poweredOff で登録が消える・`stopAdvertising` に完了の通知が無い・接続の通知が無い）。背景遷移の扱いは iOS だけ。TCC の判定がターミナルへ帰属しないよう、確認は `.app` にまとめて `open` で起動する（bluetooth-le と同じ）。許可ダイアログ後の公開、中心役アプリからの読み取り、Bluetooth オフでの確定は Mac 目視で確かめる（#776）",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#776）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_ble_peripheral.m + crates/fandhe-egui-proxy/src/device/apple_ble_peripheral.rs + crates/fandhe-egui-proxy/src/device/ble_peripheral.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-device/src/ble_peripheral.rs、Issue #778"
     },
     "windows": {
       "status": "possible",

@@ -149,6 +149,10 @@
 //! - `apple/fandhe_apple_bluetooth_le.m`（Issue #1060、CoreBluetooth による BLE スキャン）は
 //!   **iOS・macOS 双方**で feature `device` 有効時にコンパイルする（`src/device/
 //!   apple_bluetooth_le.rs` から呼ばれる契約。iOS は #1061）。CoreBluetooth をリンクする。
+//! - `apple/fandhe_apple_ble_peripheral.m`（Issue #778、CoreBluetooth `CBPeripheralManager` による
+//!   BLE の周辺機器役）は **iOS・macOS 双方**で feature `device` 有効時にコンパイルする
+//!   （`src/device/apple_ble_peripheral.rs` から呼ばれる契約。iOS の委譲は b-ios #779 だが、
+//!   `build.rs` を触らずに済むよう両分岐から呼ぶ）。CoreBluetooth をリンクする。
 //! - `apple/fandhe_apple_lan_discovery.m`（Issue #486、`nw_browser` と dns_sd による LAN のサービス探索）は
 //!   **iOS・macOS 双方**で feature `device` 有効時にコンパイルする（`src/device/apple_lan_discovery.rs`
 //!   から呼ばれる契約）。Network をリンクする。
@@ -545,6 +549,8 @@ fn main() {
     // `apple/fandhe_apple_bluetooth_le.m`（Issue #1060 macOS + #1061 iOS）も macOS 分岐と
     // 共用する（上記 doc 参照）。
     compile_apple_bluetooth_le();
+    // `apple/fandhe_apple_ble_peripheral.m`（Issue #778）。macOS・iOS 両分岐から呼ぶ。
+    compile_apple_ble_peripheral();
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
@@ -1189,6 +1195,18 @@ fn compile_apple_network_status() {
         .compile("fandhe_apple_network_status");
     println!("cargo:rustc-link-lib=framework=Network");
     println!("cargo:rustc-link-lib=framework=Foundation");
+}
+
+/// `apple/fandhe_apple_ble_peripheral.m` を `cc` でコンパイルし CoreBluetooth をリンクする
+/// （Issue #778 macOS。iOS は b-ios #779 が委譲する）。iOS・macOS 双方の feature `device` 分岐から呼ぶ。
+fn compile_apple_ble_peripheral() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_ble_peripheral.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_ble_peripheral.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_ble_peripheral");
+
+    println!("cargo:rustc-link-lib=framework=CoreBluetooth");
 }
 
 /// `apple/fandhe_apple_bluetooth_le.m` を `cc` でコンパイルし CoreBluetooth をリンクする
@@ -2169,6 +2187,8 @@ fn build_macos() {
     compile_apple_system_tray();
     // `apple/fandhe_apple_bluetooth_le.m`（Issue #1060 macOS + #1061 iOS）も共用する。
     compile_apple_bluetooth_le();
+    // `apple/fandhe_apple_ble_peripheral.m`（Issue #778）。macOS・iOS 両分岐から呼ぶ。
+    compile_apple_ble_peripheral();
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();

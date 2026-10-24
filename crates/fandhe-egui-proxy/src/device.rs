@@ -350,6 +350,11 @@ pub mod apple_barcode_scan;
 /// C ABI ラッパー）。`device/biometric_auth.rs` の macOS/iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_biometric;
+/// Issue #778 macOS（iOS は b-ios #779）: BLE の周辺機器役実装（`apple/fandhe_apple_ble_peripheral.m` を
+/// 呼ぶ C ABI ラッパー）。`device/ble_peripheral.rs` の macOS 経路から呼ばれ、b-ios 後は
+/// `ios_ble_peripheral` も委譲する。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+pub mod apple_ble_peripheral;
 /// Issue #1060 macOS + #1061 iOS: BLE スキャン実装（`apple/fandhe_apple_bluetooth_le.m` を
 /// 呼ぶ C ABI ラッパー）。`device/bluetooth_le.rs` の iOS / macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -548,6 +553,10 @@ pub mod barcode_scan;
 /// Phase 11 の拡充ループ（親 #905、Issue #906/#907/#908）: 生体認証の effect ドライバ
 /// （macOS/iOS/Android/Windows 実装）。
 pub mod biometric_auth;
+/// Phase 11 の拡充ループ（親 #164、Issue #778）: BLE の周辺機器役の effect ドライバ
+/// （macOS 実装。iOS は骨格のスタブで b-ios #779 が埋める。Android・Windows は対応表で保留のため
+/// 他 OS は `UnsupportedBlePeripheral` 固定）。
+pub mod ble_peripheral;
 /// Phase 11 の拡充ループ（親 #130、Issue #659）: Bluetooth Classic の一覧・検索の effect ドライバ
 /// （macOS 実装。Windows・Android は骨格のスタブで #660 / #661 が埋める。他 OS は `UnsupportedBluetoothClassic` 固定）。
 pub mod bluetooth_classic;
@@ -704,6 +713,10 @@ pub mod ios_background_task;
 /// Issue #557: iOS 向けバーコード・QR 読み取りの骨格（実装は #558）。
 #[cfg(target_os = "ios")]
 pub mod ios_barcode_scan;
+/// Issue #778: iOS 向け BLE の周辺機器役のスタブ（b-ios #779 が `apple_ble_peripheral` への委譲へ差し替える）。
+/// `device/ble_peripheral.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_ble_peripheral;
 /// Issue #277: iOS 向け通話 UI 統合実装（`ios/fandhe_ios_call_ui.m` の CallKit を呼ぶ C ABI ラッパー）。
 /// `device/call_ui.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1593,6 +1606,8 @@ pub fn shutdown() {
     location::stop_shared_location();
     system_tray::stop_shared_system_tray();
     bluetooth_le::stop_shared_scan();
+    // 公開の停止は `.m` の専用キューへの短い同期呼び出し。Rust 側のロックは握らない。
+    ble_peripheral::shutdown();
     // macOS の停止は main queue へ同期ディスパッチする。`shutdown` は eframe の `on_exit`（main thread）から
     // ロックを握らずに呼ばれるため、main 上なら直接停止し、デッドロックしない。
     bluetooth_classic::stop_shared_discovery();
