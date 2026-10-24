@@ -119,11 +119,8 @@ pub fn validate_url(raw: &str) -> Result<BrowserUrl, InAppBrowserFailure> {
     }
     let port = if let Some(v6) = authority.strip_prefix('[') {
         let (inner, after) = v6.split_once(']').ok_or(bad)?;
-        let ok = inner.contains(':')
-            && inner
-                .chars()
-                .all(|c| c.is_ascii_hexdigit() || c == ':' || c == '.');
-        if !ok {
+        // 構文まで検証する（`[:]` や `[1:2:3]` のような不正リテラルを弾く）。
+        if inner.parse::<std::net::Ipv6Addr>().is_err() {
             return Err(bad);
         }
         match after {
@@ -245,6 +242,9 @@ mod tests {
         ng("https://[zz]/");
         ng("https://[::1]x/");
         ng("https://[abcd]/");
+        ng("https://[:]/");
+        ng("https://[1:2:3]/");
+        ng("https://[1:2:3:4:5:6:7:8:9]/");
         ng("");
     }
 
