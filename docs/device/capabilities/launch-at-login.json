@@ -14,25 +14,34 @@
       "note": "iOS にログイン時の自動起動の概念はない"
     },
     "android": {
-      "status": "possible",
-      "api": "`BOOT_COMPLETED` ブロードキャスト（`RECEIVE_BOOT_COMPLETED`）",
-      "perm": "`RECEIVE_BOOT_COMPLETED`",
-      "url": "https://developer.android.com/reference/android/content/Intent",
-      "note": "未実装。『ログイン』ではなく端末起動時。起動直後に画面を出す動作は API レベルで制限される（要確認）。background-task の範囲と重なる"
+      "status": "no",
+      "api": "該当 API なし（`BOOT_COMPLETED` は端末起動後の通知で、ログインではない）",
+      "perm": "なし",
+      "url": [
+        "https://developer.android.com/guide/components/activities/background-starts",
+        "https://developer.android.com/privacy-and-security/direct-boot"
+      ],
+      "note": "できない。Android にログイン時の自動起動の概念はない。近い `BOOT_COMPLETED` の受信から Activity を起動するのは Android 10 以降の背景からの Activity 起動制限に当たり、例外条件に含まれない。通知で利用者を誘導する代替は別機能で、`RECEIVE_BOOT_COMPLETED` の追加が要るため本機能では扱わない"
     },
     "macos": {
       "status": "possible",
-      "api": "`SMAppService`（macOS 13+。`mainApp.register()`）",
-      "perm": "なし（ユーザーが設定画面で許可）",
-      "url": "https://developer.apple.com/documentation/servicemanagement/smappservice",
-      "note": "未実装。.app 化が前提。ユーザーが設定で無効にできるため状態の取得が要る"
+      "api": "`SMAppService.mainApp`（`register` / `unregister` / `status`、macOS 13+）",
+      "perm": "なし（利用者がシステム設定のログイン項目で許可・無効化できる。アプリのコード署名が必要）",
+      "url": [
+        "https://developer.apple.com/documentation/servicemanagement/smappservice/mainapp",
+        "https://developer.apple.com/documentation/servicemanagement/smappservice/status-swift.enum"
+      ],
+      "note": "未実装。macOS 13 未満と、.app 外の素の実行体では `Unsupported`（13 未満の `SMLoginItemSetEnabled` はヘルパーバンドル必須で非推奨のため使わない）。登録後に `status` を読み戻し、`requiresApproval`（承認待ち・利用者が無効化）は有効と表示しない。ad-hoc 署名の .app で登録できるかは Mac 目視で確かめる"
     },
     "windows": {
       "status": "possible",
-      "api": "Run キー（`HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`）。WinRT `StartupTask` は package identity 必須",
-      "perm": "Run キーは package identity 不要と認識（要確認）。StartupTask は package identity 必須（文書で確認済み）",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys",
-      "note": "未実装。package identity 必須の StartupTask を避けて Run キーを使えば unpackaged でも届く見込み。StartupTask の文書は https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.startuptask 。Run キーの扱いは実機未検証"
+      "api": "Run キー（`HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`）。利用者による無効化は `...\\Explorer\\StartupApproved\\Run` を読むだけ（非公開形式）",
+      "perm": "なし（HKCU のため管理者権限不要。package identity 不要の見込み）",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.startuptask"
+      ],
+      "note": "未実装。MSIX の `StartupTask` は package identity が要るため使わない。値データは引用符付きの実行体パス + `--fandhe-launched-at-login`（260 文字以内）。StartupApproved は公式文書が無く、先頭バイト 0x02 を有効・0x03 を無効として読み、それ以外は判別不能と表示する（書き込まない）。同じ値名で別の場所の実行体が登録されていれば、その旨を表示し、解除では消さない"
     },
     "web": {
       "status": "no",
@@ -42,5 +51,5 @@
       "note": "ブラウザからログイン時に起動する公開 API はない"
     }
   },
-  "note": "今回の範囲: 自動起動の有効・無効を切り替えるボタンと現在の状態を画面に出すだけ。デスクトップ（macOS・Windows）が主対象。"
+  "note": "今回の範囲: 自動起動の有効・無効を切り替えるボタン、OS の設定画面を開くボタン、OS から読み戻した現在の状態を画面に出すだけ。デスクトップ（macOS・Windows）が対象。守る範囲: 1 プロセス内の操作順、失敗・承認待ち・利用者による無効を成功と表示しないこと、未登録の解除のべき等性、別の場所の登録を解除で消さないこと、実行体のパスをログに出さないこと。守らない範囲: OS 設定で変えた状態が画面に出るまでの時間差、開発中の実行体のパス変更の自動追従、複数インストール・複数プロセスの同時操作、StartupApproved の非公開形式の変更、ログイン時の起動順・遅延、macOS で起動の由来を判別すること"
 }
