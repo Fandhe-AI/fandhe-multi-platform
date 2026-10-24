@@ -5,8 +5,8 @@
 //!
 //! # 方式
 //!
-//! - 開く: `ShellExecuteW`（verb `open`、`lpParameters` は NULL）。パスは 1 つの引数として渡し、
-//!   コマンドラインは組み立てない
+//! - 開く: `ShellExecuteExW`（verb `open`、`lpParameters` は NULL、`SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI`）。
+//!   パスは 1 つの引数として渡し、コマンドラインは組み立てない。失敗時に OS のダイアログを出さない
 //! - 選択表示: `ILCreateFromPathW` + `SHOpenFolderAndSelectItems`（cidl = 0）。PIDL は RAII で
 //!   全経路で `ILFree` する
 //! - COM は STA で初期化する（`windows_launch_at_login.rs` の `ComGuard` と同型。可視性を変えずここへ複製）
@@ -20,32 +20,32 @@
 //! ドライブルート（`X:\` のみ）は要素を持たないため受け付ける（選択表示の対象になる）。途中の空要素（`\\`）と
 //! 末尾の `\` は引き続き拒否する。
 //!
-//! # 型検査（「開く」のみ）
+//! # 型検査（「開く」のみ・fail-closed）
 //!
-//! Windows では実行ビットの検査が効かないため 2 段で fail-closed にする。どちらも
-//! `InvalidInput("shell type")`。
-//! 1. [`is_denied_extension`]: 実行可能・スクリプト・ショートカット・インストーラー等の固定一覧
-//! 2. `AssocIsDangerous`: OS が危険と判定する型
+//! Windows では実行ビットの検査が効かないため、OS 層で次を順に確かめる（純関数 [`open_type_check`]）。
+//! 1. `GetFileAttributesW` を呼ぶ。失敗・ディレクトリ・再解析ポイントは `InvalidInput("shell type")`
+//! 2. 拡張子が無ければ `InvalidInput("shell type")`（型を判定できないものは開かない）
+//! 3. [`DENIED_EXTENSIONS`]（固定一覧）に当たれば `InvalidInput("shell type")`
+//! 4. `AssocIsDangerous` が真なら `InvalidInput("shell type")`
+//! 5. `AssocQueryStringW`（`ASSOCSTR_EXECUTABLE`、無ければ `ASSOCSTR_COMMAND`、`ASSOCF_INIT_IGNOREUNKNOWN`）で
+//!    関連付けを引き、無ければ OS を呼ばずに `NoHandler`（「アプリを選ぶ」画面を成功と取り違えない）
 //!
 //! `reveal` は実行しないので型検査を要さない。
 //!
 //! # 結果の写像
 //!
-//! | `ShellExecuteW` の戻り値 | 結果 |
-//! |---|---|
-//! | `> 32` | `HandedOff` |
-//! | `31`（`SE_ERR_NOASSOC`） | `NoHandler` |
-//! | その他 | `Internal("shell os")` |
+//! `ShellExecuteExW` が成功すれば `HandedOff`。失敗時は `GetLastError` が `ERROR_NO_ASSOCIATION`、または
+//! `hInstApp` が `SE_ERR_NOASSOC`（31）なら `NoHandler`、それ以外は `Internal("shell os")`。
 //!
 //! `reveal` は PIDL を作れない・HRESULT が失敗のいずれも `Internal("shell os")`（`NoHandler` は返さない）。
 //! パス・HRESULT・戻り値はログにもエラーにも出さない。
-//!
+
 //! # 期限と守らない範囲
 //!
 //! 同期呼び出しで保留中の要求を持たないため期限は設けない。守らない範囲: 検査から OS 呼び出しまでの
 //! ファイル差し替え（TOCTOU）、アプリ・Explorer が実際に表示したか、文書型を受けたアプリ側の挙動、
-//! 複数プロセス。成功は OS が受理したことだけを表す。関連付けの無い型で「アプリを選ぶ」画面が出て
-//! `> 32` が返るか `NoHandler` になるかは実機で確かめる（#744）。
+//! 複数プロセス。成功は OS が受理したことだけを表す。関連付けの無い型は
+//! 事前の関連付け照会で `NoHandler` にするが、実機での挙動は #744 で確かめる。
 //!
 //! モジュールは純関数をホストでテストできるよう `cfg(any(windows, test))` でコンパイルする（`device.rs`）。
 
@@ -54,9 +54,21 @@ use fandhe_device::open_in_shell::UnsupportedOpenInShell;
 use fandhe_device::open_in_shell::{OpenInShell, ShellOutcome};
 use fandhe_device::DeviceError;
 
-/// `ShellExecuteW` の `SE_ERR_NOASSOC`（関連付けが無い）。
+/// `ShellExecuteExW` の `hInstApp` に入る `SE_ERR_NOASSOC`（関連付けが無い）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 const SE_ERR_NOASSOC: isize = 31;
+
+/// `ERROR_NO_ASSOCIATION`（`GetLastError`）。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+const ERROR_NO_ASSOCIATION: u32 = 1155;
+
+/// `FILE_ATTRIBUTE_DIRECTORY`。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+const ATTR_DIRECTORY: u32 = 0x10;
+
+/// `FILE_ATTRIBUTE_REPARSE_POINT`（シンボリックリンク・ジャンクション等）。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+const ATTR_REPARSE_POINT: u32 = 0x400;
 
 /// `MAX_PATH`（終端込み）。パスはこれ未満の UTF-16 長だけ通す。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -94,6 +106,36 @@ const DENIED_EXTENSIONS: &[&str] = &[
     "inf",
     "chm",
     "settingcontent-ms",
+    "dll",
+    "sys",
+    "ocx",
+    "msix",
+    "msixbundle",
+    "appx",
+    "appxbundle",
+    "appinstaller",
+    "sct",
+    "shs",
+    "scf",
+    "rdp",
+    "diagcab",
+    "ps1xml",
+    "psc1",
+    "xll",
+    "vb",
+    "ws",
+    "mde",
+    "ade",
+    "mdb",
+    "library-ms",
+    "searchconnector-ms",
+    "website",
+    "theme",
+    "themepack",
+    "iso",
+    "vhd",
+    "vhdx",
+    "img",
 ];
 
 /// `ShellPath::as_str()`（`\\?\X:\...` または `X:\...`）を OS に渡す `X:\...` へ正規化する。
@@ -139,29 +181,79 @@ fn extension_of(path: &str) -> Option<String> {
     Some(ext.to_ascii_lowercase())
 }
 
-/// 固定の拒否一覧に当たるか。拡張子が無ければ `false`（関連付けが無く `NoHandler` に倒れる）。
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+/// 固定の拒否一覧に当たるか。拡張子が無ければ `false`（拡張子なしの拒否は [`open_type_check`] が行う）。
+#[cfg(test)]
 fn is_denied_extension(path: &str) -> bool {
     extension_of(path).is_some_and(|e| DENIED_EXTENSIONS.contains(&e.as_str()))
 }
 
-/// `ShellExecuteW` の戻り値 → 結果の写像（SSOT）。未知の値は失敗に倒し、成功を作らない。
+/// 「開く」の型検査の結果。
+#[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-fn shell_execute_outcome(code: isize) -> Result<ShellOutcome, DeviceError> {
-    match code {
-        c if c > 32 => Ok(ShellOutcome::HandedOff),
-        SE_ERR_NOASSOC => Ok(ShellOutcome::NoHandler),
-        _ => Err(DeviceError::Internal("shell os")),
+enum TypeCheck {
+    /// OS へ渡してよい。
+    Pass,
+    /// 型を拒否する（`InvalidInput("shell type")`）。
+    Reject,
+    /// 関連付けが無い。OS を呼ばず `NoHandler` を返す。
+    NoHandler,
+}
+
+/// 「開く」の型検査（SSOT、fail-closed）。`attrs` は `GetFileAttributesW` の結果（失敗は `None`）、
+/// `ext` は小文字の拡張子、`dangerous` は `AssocIsDangerous`、`has_handler` は関連付けの照会結果。
+/// 通常ファイルでない・型を判定できないものは `Reject`、関連付けが無いものは `NoHandler`。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn open_type_check(
+    attrs: Option<u32>,
+    ext: Option<&str>,
+    dangerous: bool,
+    has_handler: bool,
+) -> TypeCheck {
+    match attrs {
+        Some(a) if a & (ATTR_DIRECTORY | ATTR_REPARSE_POINT) == 0 => {}
+        _ => return TypeCheck::Reject,
     }
+    let Some(ext) = ext else {
+        return TypeCheck::Reject;
+    };
+    if DENIED_EXTENSIONS.contains(&ext) || dangerous {
+        return TypeCheck::Reject;
+    }
+    if has_handler {
+        TypeCheck::Pass
+    } else {
+        TypeCheck::NoHandler
+    }
+}
+
+/// `ShellExecuteExW` 失敗時の写像。`last_error` は `GetLastError`、`inst_app` は `hInstApp` の数値。
+/// 関連付け無しだけ `NoHandler`、未知の失敗は `Internal`。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn exec_failure_outcome(last_error: u32, inst_app: isize) -> Result<ShellOutcome, DeviceError> {
+    if last_error == ERROR_NO_ASSOCIATION || inst_app == SE_ERR_NOASSOC {
+        Ok(ShellOutcome::NoHandler)
+    } else {
+        Err(DeviceError::Internal("shell os"))
+    }
+}
+
+/// 選択表示の段階ごとの結果。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+enum RevealStep {
+    /// PIDL を作れなかった。
+    NoPidl,
+    /// `SHOpenFolderAndSelectItems` が失敗した。
+    Failed,
+    /// 受理された。
+    Done,
 }
 
 /// 選択表示の結果。PIDL を作れない場合も HRESULT 失敗も `Internal`。`NoHandler` は返さない。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-fn reveal_outcome(pidl_null: bool, hr_ok: bool) -> Result<ShellOutcome, DeviceError> {
-    if pidl_null || !hr_ok {
-        Err(DeviceError::Internal("shell os"))
-    } else {
-        Ok(ShellOutcome::HandedOff)
+fn reveal_outcome(step: RevealStep) -> Result<ShellOutcome, DeviceError> {
+    match step {
+        RevealStep::Done => Ok(ShellOutcome::HandedOff),
+        RevealStep::NoPidl | RevealStep::Failed => Err(DeviceError::Internal("shell os")),
     }
 }
 
@@ -169,12 +261,15 @@ fn reveal_outcome(pidl_null: bool, hr_ok: bool) -> Result<ShellOutcome, DeviceEr
 mod win {
     use super::*;
     use windows::core::{w, HSTRING, PCWSTR};
+    use windows::Win32::Storage::FileSystem::{GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
     use windows::Win32::System::Com::{
         CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
     };
     use windows::Win32::UI::Shell::Common::ITEMIDLIST;
     use windows::Win32::UI::Shell::{
-        AssocIsDangerous, ILCreateFromPathW, ILFree, SHOpenFolderAndSelectItems, ShellExecuteW,
+        AssocIsDangerous, AssocQueryStringW, ILCreateFromPathW, ILFree, SHOpenFolderAndSelectItems,
+        ShellExecuteExW, ASSOCF_INIT_IGNOREUNKNOWN, ASSOCSTR, ASSOCSTR_COMMAND,
+        ASSOCSTR_EXECUTABLE, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW,
     };
     use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
@@ -213,34 +308,78 @@ mod win {
         }
     }
 
+    /// `GetFileAttributesW`。失敗（存在しない・権限なし等）は `None`。
+    #[allow(unsafe_code)]
+    fn file_attributes(path: &HSTRING) -> Option<u32> {
+        // SAFETY: `path` は NUL 終端の UTF-16 で呼び出しの間だけ生きる。OS は引数を保持しない。
+        let a = unsafe { GetFileAttributesW(path) };
+        (a != INVALID_FILE_ATTRIBUTES).then_some(a)
+    }
+
+    /// 拡張子（`.xxx` 形式の `ext`）に関連付けられた実行ファイルまたはコマンドがあるか。
+    #[allow(unsafe_code)]
+    fn has_association(dotted: &HSTRING) -> bool {
+        let query = |what: ASSOCSTR| {
+            let mut len = 0u32;
+            // SAFETY: `dotted` は NUL 終端の UTF-16。出力バッファは渡さず（None）必要長だけ受け取る。
+            // `len` は呼び出しの間有効な書き込み先。成功（`S_FALSE` 含む）は関連付けが存在する。
+            unsafe {
+                AssocQueryStringW(
+                    ASSOCF_INIT_IGNOREUNKNOWN,
+                    what,
+                    dotted,
+                    PCWSTR::null(),
+                    None,
+                    &mut len,
+                )
+            }
+            .is_ok()
+        };
+        query(ASSOCSTR_EXECUTABLE) || query(ASSOCSTR_COMMAND)
+    }
+
     #[allow(unsafe_code)]
     pub(super) fn open(canonical: &str) -> Result<ShellOutcome, DeviceError> {
         let path = to_win32_path(canonical)?;
-        if is_denied_extension(&path) {
-            return Err(DeviceError::InvalidInput("shell type"));
-        }
-        if let Some(ext) = extension_of(&path) {
-            let dotted = HSTRING::from(format!(".{ext}"));
-            // SAFETY: `dotted` は NUL 終端の UTF-16 で呼び出しの間だけ生きる。OS は引数を保持しない。
-            if unsafe { AssocIsDangerous(&dotted) }.as_bool() {
-                return Err(DeviceError::InvalidInput("shell type"));
+        let file = HSTRING::from(path.as_str());
+        let attrs = file_attributes(&file);
+        let ext = extension_of(&path);
+        let (dangerous, has_handler) = match ext.as_deref() {
+            Some(e) => {
+                let dotted = HSTRING::from(format!(".{e}"));
+                // SAFETY: `dotted` は NUL 終端の UTF-16 で呼び出しの間だけ生きる。OS は引数を保持しない。
+                let d = unsafe { AssocIsDangerous(&dotted) }.as_bool();
+                (d, has_association(&dotted))
             }
+            None => (false, false),
+        };
+        match open_type_check(attrs, ext.as_deref(), dangerous, has_handler) {
+            TypeCheck::Pass => {}
+            TypeCheck::Reject => return Err(DeviceError::InvalidInput("shell type")),
+            TypeCheck::NoHandler => return Ok(ShellOutcome::NoHandler),
         }
         let _com = ComGuard::new();
-        let file = HSTRING::from(path);
-        // SAFETY: `file` は NUL 終端の UTF-16 で呼び出しの間だけ生きる。`w!("open")` は静的な
-        // NUL 終端文字列。ShellExecuteW は引数を保持せず、UI スレッドから同期に呼ぶ。
-        let h = unsafe {
-            ShellExecuteW(
-                None,
-                w!("open"),
-                &file,
-                PCWSTR::null(),
-                PCWSTR::null(),
-                SW_SHOWNORMAL,
-            )
+        let mut info = SHELLEXECUTEINFOW {
+            cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+            fMask: SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI,
+            lpVerb: w!("open"),
+            lpFile: PCWSTR(file.as_ptr()),
+            lpParameters: PCWSTR::null(),
+            nShow: SW_SHOWNORMAL.0,
+            ..Default::default()
         };
-        shell_execute_outcome(h.0 as isize)
+        // SAFETY: `info` は `cbSize` を設定した初期化済み構造体。`lpFile` は `file`（NUL 終端の UTF-16）、
+        // `lpVerb` は静的な NUL 終端文字列で、いずれも呼び出しの間だけ生きる。UI スレッドから同期に呼ぶ。
+        match unsafe { ShellExecuteExW(&mut info) } {
+            Ok(()) => Ok(ShellOutcome::HandedOff),
+            Err(e) => {
+                // `windows::core::Error` は Win32 エラーを `0x8007xxxx` の HRESULT で持つ。
+                let hr = e.code().0 as u32;
+                let last = if hr >> 16 == 0x8007 { hr & 0xFFFF } else { 0 };
+                // `hInstApp` は失敗時に `SE_ERR_*` の数値コードが入る（ポインタとしては読まない）。
+                exec_failure_outcome(last, info.hInstApp.0 as isize)
+            }
+        }
     }
 
     #[allow(unsafe_code)]
@@ -252,12 +391,16 @@ mod win {
         // 全経路で一度だけ解放する。
         let pidl = PidlGuard(unsafe { ILCreateFromPathW(&wide) });
         if pidl.0.is_null() {
-            return reveal_outcome(true, false);
+            return reveal_outcome(RevealStep::NoPidl);
         }
         // SAFETY: `pidl.0` は有効な完全 PIDL。cidl = 0 のとき親フォルダーを開いてその項目を選択する。
         // UI スレッドから同期に呼ぶ。
         let r = unsafe { SHOpenFolderAndSelectItems(pidl.0, None, 0) };
-        reveal_outcome(false, r.is_ok())
+        reveal_outcome(if r.is_ok() {
+            RevealStep::Done
+        } else {
+            RevealStep::Failed
+        })
     }
 }
 
@@ -363,42 +506,74 @@ mod tests {
     }
 
     #[test]
-    fn shell_execute_mapping() {
+    fn exec_failure_mapping() {
         assert!(matches!(
-            shell_execute_outcome(33),
-            Ok(ShellOutcome::HandedOff)
-        ));
-        assert!(matches!(
-            shell_execute_outcome(42),
-            Ok(ShellOutcome::HandedOff)
-        ));
-        assert!(matches!(
-            shell_execute_outcome(31),
+            exec_failure_outcome(ERROR_NO_ASSOCIATION, 0),
             Ok(ShellOutcome::NoHandler)
         ));
-        for c in [0, 2, 3, 5, 32, -1, isize::MIN] {
-            assert!(
-                matches!(
-                    shell_execute_outcome(c),
-                    Err(DeviceError::Internal("shell os"))
-                ),
-                "{c}"
-            );
+        assert!(matches!(
+            exec_failure_outcome(0, 31),
+            Ok(ShellOutcome::NoHandler)
+        ));
+        for (e, i) in [(0, 0), (2, 2), (5, 5), (31, 0), (0, 32), (0, -1)] {
+            assert!(matches!(
+                exec_failure_outcome(e, i),
+                Err(DeviceError::Internal("shell os"))
+            ));
         }
-        assert!(shell_execute_outcome(isize::MAX).is_ok());
     }
 
     #[test]
     fn reveal_mapping() {
         assert!(matches!(
-            reveal_outcome(false, true),
+            reveal_outcome(RevealStep::Done),
             Ok(ShellOutcome::HandedOff)
         ));
-        for (n, ok) in [(true, true), (true, false), (false, false)] {
+        for s in [RevealStep::NoPidl, RevealStep::Failed] {
             assert!(matches!(
-                reveal_outcome(n, ok),
+                reveal_outcome(s),
                 Err(DeviceError::Internal("shell os"))
             ));
         }
+    }
+
+    const FILE: Option<u32> = Some(0x20);
+
+    #[test]
+    fn type_check_rejects_non_regular_and_unknown() {
+        // ディレクトリ・再解析ポイント・属性を読めない・拡張子なし・固定一覧・危険。
+        assert_eq!(
+            open_type_check(Some(ATTR_DIRECTORY), Some("txt"), false, true),
+            TypeCheck::Reject
+        );
+        assert_eq!(
+            open_type_check(Some(0x20 | ATTR_REPARSE_POINT), Some("txt"), false, true),
+            TypeCheck::Reject
+        );
+        assert_eq!(
+            open_type_check(None, Some("txt"), false, true),
+            TypeCheck::Reject
+        );
+        assert_eq!(open_type_check(FILE, None, false, true), TypeCheck::Reject);
+        assert_eq!(
+            open_type_check(FILE, Some("iso"), false, true),
+            TypeCheck::Reject
+        );
+        assert_eq!(
+            open_type_check(FILE, Some("txt"), true, true),
+            TypeCheck::Reject
+        );
+    }
+
+    #[test]
+    fn type_check_no_association_and_pass() {
+        assert_eq!(
+            open_type_check(FILE, Some("zzz"), false, false),
+            TypeCheck::NoHandler
+        );
+        assert_eq!(
+            open_type_check(FILE, Some("txt"), false, true),
+            TypeCheck::Pass
+        );
     }
 }
