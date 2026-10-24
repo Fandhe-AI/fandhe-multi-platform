@@ -84,6 +84,13 @@ pub(crate) fn lock_code(recorded: Option<Orientation>, fullscreen: Option<bool>)
     }
 }
 
+/// 遅れて成立した全画面を、継続側が解除してよいか。マウントをまたいで後続の全画面要求
+/// （`current_epoch` が進んでいる）があれば所有権は移っているので解除しない（契約表 2・9）。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn fullscreen_release_allowed(my_epoch: u64, current_epoch: u64) -> bool {
+    my_epoch == current_epoch
+}
+
 /// 固定できる環境か。`lock` 関数・`fullscreenEnabled`・`requestFullscreen` がすべて要る。
 /// 実行時の `NotSupportedError` は core の `downgrade_lock` が拾う。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -153,9 +160,9 @@ mod web {
     use wasm_bindgen_futures::JsFuture;
 
     use super::{
-        decide_lock_support, expired, failure_from_error_name, lock_code, lock_type_str,
-        orientation_code, restore_rejection_is_failure, FULLSCREEN_REJECTED, READ_FAILED,
-        UNLOCK_FAILED,
+        decide_lock_support, expired, failure_from_error_name, fullscreen_release_allowed,
+        lock_code, lock_type_str, orientation_code, restore_rejection_is_failure,
+        FULLSCREEN_REJECTED, READ_FAILED, UNLOCK_FAILED,
     };
     use crate::mount::{is_live, Applier};
 
@@ -188,6 +195,9 @@ mod web {
         static ENTRIES: RefCell<HashMap<u64, Entry>> = RefCell::new(HashMap::new());
         /// `lock()` が resolve した向きと、記録したマウント。読み戻しは全画面のときだけ使う。
         static LOCK: Cell<Option<(u64, Orientation)>> = const { Cell::new(None) };
+        /// マウントをまたぐ全画面要求の世代。`requestFullscreen()` を呼ぶたびに進め、
+        /// 遅延した完了が後続の要求の全画面を解除しないよう照合する。
+        static FS_EPOCH: Cell<u64> = const { Cell::new(0) };
     }
 
     /// 既存の Entry にだけ作用する。破棄済みマウントでは `None`（再生成して漏らさない）。
@@ -642,6 +652,7 @@ mod web {
         applier.apply(move |s| mark_applying(s, gen));
         // transient activation を保つため、全画面への切り替えはここ（同期）で呼ぶ。
         let mut fs_promise = None;
+        let mut fs_epoch = 0;
         if fullscreen() != Some(true) {
             let root = document().and_then(|d| d.document_element());
             let ret = match root {
@@ -651,6 +662,10 @@ mod web {
             match ret {
                 Ok(r) => {
                     with(id, |e| e.own_fullscreen = true);
+                    fs_epoch = FS_EPOCH.with(|c| {
+                        c.set(c.get() + 1);
+                        c.get()
+                    });
                     fs_promise = r.dyn_into::<Promise>().ok();
                 }
                 Err(_) => {
@@ -683,10 +698,15 @@ mod web {
                                 Err(OrientationFailure::Failed(NOT_LOCKED_REASON.to_string())),
                             );
                         } else {
-                            let free = !live
-                                || (recorded().is_none()
-                                    && with(id, |e| e.pending.is_none() && e.restoring.is_none())
-                                        .unwrap_or(true));
+                            let owned =
+                                fullscreen_release_allowed(fs_epoch, FS_EPOCH.with(Cell::get));
+                            let free = owned
+                                && (!live
+                                    || (recorded().is_none()
+                                        && with(id, |e| {
+                                            e.pending.is_none() && e.restoring.is_none()
+                                        })
+                                        .unwrap_or(true)));
                             if free {
                                 exit_fullscreen_now();
                             } else {
@@ -705,6 +725,10 @@ mod web {
                     );
                     return;
                 }
+            }
+            // 既に全画面の経路でも、破棄・世代交代・期限後に lock() を呼ばない（契約表 2・3）。
+            if !current(id, gen) {
+                return;
             }
             let pr = match lock_js(target) {
                 Ok(pr) => pr,
@@ -861,6 +885,12 @@ mod tests {
         assert!(expired(100.0, 50.0, t));
         assert!(expired(f64::NAN, 10.0, t));
         assert!(expired(0.0, f64::INFINITY, t));
+    }
+
+    #[test]
+    fn fullscreen_release_follows_epoch() {
+        assert!(fullscreen_release_allowed(3, 3));
+        assert!(!fullscreen_release_allowed(3, 4));
     }
 
     #[test]
