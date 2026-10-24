@@ -35,16 +35,19 @@
       "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_global_hotkey.m + crates/fandhe-egui-proxy/src/device/macos_global_hotkey.rs + crates/fandhe-egui-proxy/src/device/global_hotkey.rs + crates/fandhe-core/src/screens/global_hotkey.rs + crates/fandhe-device/src/global_hotkey.rs、Issue #766"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "Win32 `RegisterHotKey` / `UnregisterHotKey`（`hWnd` = NULL、`MOD_NOREPEAT`）。`WM_HOTKEY` は登録したスレッドのメッセージキューへ届く",
-      "perm": "なし（デスクトップアプリ専用。`windows` クレートの既存 feature `Win32_UI_Input_KeyboardAndMouse`・`Win32_UI_WindowsAndMessaging` で足りる）",
+      "perm": "なし（デスクトップアプリ専用。`windows` クレートの既存 feature `Win32_UI_Input_KeyboardAndMouse`・`Win32_UI_WindowsAndMessaging`・`Win32_System_Threading` で足りる）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey",
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-unregisterhotkey",
         "https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-hotkey",
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-postthreadmessagew"
       ],
-      "note": "未実装。`hWnd` が NULL なら登録は呼び出しスレッドに結び付き、`WM_HOTKEY` はそのスレッドのキューへ届き、メッセージループで処理する（公式）。解除は登録したスレッドからしかできない。既に別の登録がある組み合わせは通常失敗する（公式。`GetLastError` は `ERROR_HOTKEY_ALREADY_REGISTERED`（1409）の見込み）。Win キーの組み合わせは OS 予約、F12 はデバッガ予約。`MOD_NOREPEAT` で押しっぱなしの連続通知を止める（Windows 7 以降）。専用スレッドに登録・受信・解除を集約する"
+      "note": "実装済み（#767）。登録ごとに専用スレッドを 1 本立て、`PeekMessageW` でキューを先に作ってから `RegisterHotKey` を呼ぶ（`hWnd` が NULL の登録は呼び出しスレッドに結び付き、解除も同じスレッドからしかできない）。解除は `PostThreadMessageW` で専用スレッドへ依頼し、OS が成功したときだけスレッドを終える。失敗なら登録中のまま残す。`ERROR_HOTKEY_ALREADY_REGISTERED`（1409）は使用中へ写す。Win キーの組み合わせは OS 予約、F12 はデバッガ予約。`MOD_NOREPEAT` で押しっぱなしの連続通知を止める（Windows 7 以降）。実機で確かめる項目: unpackaged で動くか、1409 が実際に返るか、`MOD_NOREPEAT` が効くか（#764）",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#764）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_global_hotkey.rs + crates/fandhe-egui-proxy/src/device/global_hotkey.rs + crates/fandhe-core/src/screens/global_hotkey.rs + crates/fandhe-device/src/global_hotkey.rs、Issue #767"
     },
     "web": {
       "status": "no",
