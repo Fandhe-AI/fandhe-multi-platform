@@ -199,6 +199,10 @@
 //! - `macos/fandhe_macos_app_badge.m`（Issue #1360、`NSDockTile.badgeLabel` によるバッジ設定）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/macos_app_badge.rs`
 //!   から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_launch_at_login.m`（Issue #696、`SMAppService.mainApp` によるログイン時の
+//!   自動起動の登録・解除・状態の読み戻し）は **macOS 分岐のみ**で feature `device` 有効時に
+//!   コンパイルする（`src/device/macos_launch_at_login.rs` から呼ばれる契約）。ServiceManagement を
+//!   リンクする。
 //! - `ios/fandhe_ios_in_app_review.m`（Issue #564、`SKStoreReviewController requestReviewInScene:` による
 //!   アプリ内レビュー依頼。`src/device/ios_in_app_review.rs` から呼ばれる契約）。StoreKit を追加でリンクする。
 //! - `ios/fandhe_ios_capture_protection.m`（Issue #583、`sceneCaptureState` とスクリーンショット通知による
@@ -1396,6 +1400,18 @@ fn compile_macos_app_badge() {
         .compile("fandhe_macos_app_badge");
 }
 
+/// `macos/fandhe_macos_launch_at_login.m` を `cc` でコンパイルする（Issue #696）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_launch_at_login.rs` が使う）。ServiceManagement をリンクする
+/// （システムフレームワークで旧 OS にも存在するため強リンクでよい。API は `@available` で守る）。
+fn compile_macos_launch_at_login() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_launch_at_login.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_launch_at_login.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_launch_at_login");
+    println!("cargo:rustc-link-lib=framework=ServiceManagement");
+}
+
 /// `macos/fandhe_macos_in_app_review.m` を `cc` でコンパイルする（Issue #563）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_in_app_review.rs` が使う）。StoreKit を追加でリンクする。
 fn compile_macos_in_app_review() {
@@ -2105,6 +2121,8 @@ fn build_macos() {
     compile_macos_window_management();
     // `macos/fandhe_macos_app_badge.m`（Issue #1360）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_app_badge();
+    // `macos/fandhe_macos_launch_at_login.m`（Issue #696）も macOS 専用。ServiceManagement をリンクする。
+    compile_macos_launch_at_login();
     // `macos/fandhe_macos_in_app_review.m`（Issue #563）も macOS 専用。StoreKit をリンクする。
     compile_macos_in_app_review();
     // `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384）も macOS 専用。AppKit は既存のリンクを使う。

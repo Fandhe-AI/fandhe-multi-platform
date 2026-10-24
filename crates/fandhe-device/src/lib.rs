@@ -97,6 +97,8 @@ pub mod in_app_browser;
 pub mod in_app_review;
 /// Phase 11（端末機能の拡充ループ、親 #109、Issue #486）: LAN のサービス探索（mDNS / Bonjour、`_http._tcp` を固定窓で 1 回探す）。
 pub mod lan_discovery;
+/// Phase 11（端末機能の拡充ループ、親 #134、Issue #696）: ログイン時の自動起動（有効化・無効化・状態の読み戻し）。
+pub mod launch_at_login;
 /// Phase 11（端末機能の拡充ループ、親 #88、Issue #294）: 数値 1 つのライブ表示（ライブアクティビティ・進行中通知）の開始・更新・終了。
 pub mod live_activity;
 /// Phase 11（端末機能の拡充ループ、親 #1145、Issue #1376）: OS 搭載フォントのファミリー名の一覧。
