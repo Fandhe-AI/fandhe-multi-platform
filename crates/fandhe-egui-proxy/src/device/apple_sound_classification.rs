@@ -1,9 +1,9 @@
-//! macOS 向け環境音の分類実装（Issue #725、親 #142）。`apple/fandhe_apple_sound_classification.m`
+//! macOS・iOS 向け環境音の分類実装（Issue #725、親 #142）。`apple/fandhe_apple_sound_classification.m`
 //! （SoundAnalysis の内蔵分類器 `SNClassifySoundRequest` と `AVAudioEngine` の入力タップ。
 //! `build.rs` が macOS・iOS 双方の feature `device` 分岐でコンパイルする）を `unsafe extern "C"`
 //! 3 関数で呼ぶ。`device/sound_classification.rs` の macOS 経路が [`implementation`] を呼ぶ。
-//! iOS（b-ios）は同じ `.m` の iOS 区画を埋め、`ios_sound_classification.rs` をこのモジュールへの
-//! 委譲に差し替える。dispatch・共通コア画面・ドライバ・trait 契約
+//! iOS（Issue #726）も同じ `.m` を使い、`ios_sound_classification.rs` がこのモジュールへ委譲する
+//! （iOS では背景遷移・音声の割り込みを中断にし、`AVAudioSession` を保存して全終了経路で戻す）。dispatch・共通コア画面・ドライバ・trait 契約
 //! （`fandhe_device::sound_classification`）は #725 の最終形のまま変えない。
 //!
 //! `.m` は OS の生値と状態コードを返すだけで、契約値への写像は [`start_result`] / [`read_result`] が
@@ -196,9 +196,7 @@ mod imp {
     }
 }
 
-// iOS は b-ios まで `ios_sound_classification` のスタブがこれを呼ばないため未使用になる。
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-#[cfg_attr(not(target_os = "macos"), allow(unused_imports))]
 pub(crate) use imp::implementation;
 
 #[cfg(test)]
