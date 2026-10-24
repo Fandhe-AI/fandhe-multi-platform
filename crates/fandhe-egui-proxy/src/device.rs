@@ -582,6 +582,9 @@ pub mod contact_pick;
 /// Phase 11 の拡充ループ（親 #1131、Issue #1304）: 端末・OS 情報の effect ドライバ（macOS / Windows
 /// ・iOS・Android 実装、他 OS は `UnsupportedDeviceInfo` 固定）。
 pub mod device_info;
+/// Phase 11（親 #145、Issue #747）: 書類スキャンの effect ドライバ（iOS は後続 #748 が実装、
+/// 他 OS は `UnsupportedDocumentScanner` 固定。Android は GMS 依存のため保留、Web は対象外）。
+pub mod document_scan;
 /// Phase 11 の拡充ループ（親 #1013、Issue #1014・#1015）: ドラッグ & ドロップ受け取りの
 /// effect ドライバ（macOS/Windows は egui `RawInput::hovered_files`/`dropped_files` を
 /// 橋渡し、iOS は [`drop_session`]/[`ios_drag_drop`] 経由で `UIDropInteraction` を橋渡し）。
@@ -715,6 +718,11 @@ pub mod ios_compose_mail_sms;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_device_info;
+/// Issue #747: iOS 向け書類スキャンのスタブ（`Unsupported` を返す。#748 が `VisionKit` 実体へ置き換え）。
+/// `device/document_scan.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_document_scan;
 /// Issue #1015: iOS 向けドラッグ & ドロップ受け取り実装（`ios/fandhe_ios_drag_drop.m`
 /// を呼ぶ C ABI ラッパー）。`device/drag_drop.rs::drag_drop_effect` の iOS 経路から
 /// 呼ばれる。
