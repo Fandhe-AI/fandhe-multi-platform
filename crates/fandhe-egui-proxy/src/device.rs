@@ -993,6 +993,12 @@ pub mod macos_multi_display;
 /// 呼ぶ C ABI ラッパー）。`device/music_library.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_music_library;
+/// Issue #749: macOS 向け「既定アプリで開く・Finder で表示」実装（`macos/fandhe_macos_open_in_shell.m` を
+/// 呼ぶ C ABI ラッパー）。`device/open_in_shell.rs` の macos 経路から呼ばれる。結果コードの写像を
+/// ホストテストするため test でもコンパイルする。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_open_in_shell;
 /// Issue #355: macOS 向けペン・筆圧入力実装（`macos/fandhe_macos_pen_stylus.m` の `NSEvent` local
 /// monitor を呼ぶ C ABI ラッパー）。`device/pen_stylus.rs` の macOS 経路から呼ばれる。写像の純関数を
 /// ホストでテストできるよう cfg は `any(macos, test)`。
@@ -1116,6 +1122,9 @@ pub mod now_playing;
 /// Phase 11 の拡充ループ（親 #93、Issue #345）: 端末内 LLM の effect ドライバ（macOS・iOS 実装、
 /// 他 OS は `UnsupportedOnDeviceLlm` 固定。Web は `fandhe-web-dom` が持つ）。
 pub mod on_device_llm;
+/// Issue #749: 既定アプリで開く・ファイルマネージャーで選択表示の effect ドライバ（サンプルファイルの用意・
+/// `ShellPath` 検査・OS 実装の呼び出し）。`screens/registry.rs` の `effect` 区画から呼ばれる。
+pub mod open_in_shell;
 /// Phase 11 の拡充ループ（親 #92、Issue #342）: パスキーの effect ドライバ（Windows はワーカー +
 /// pull 型 bridge、実装は #343 が埋める。他 OS は `UnsupportedPasskey` 固定。Web は `fandhe-web-dom`）。
 pub mod passkey;
@@ -1423,6 +1432,11 @@ pub mod windows_notification;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_now_playing;
+/// Issue #749: Windows 向け「既定アプリで開く・Explorer で表示」の骨格（実装は #750）。
+/// `device/open_in_shell.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_open_in_shell;
 /// Issue #343: Windows 向けパスキー実装（`webauthn.h` の MakeCredential / GetAssertion）。
 /// `device/passkey.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
