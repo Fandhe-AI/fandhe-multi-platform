@@ -1,5 +1,5 @@
-//! iOS / macOS 向け BLE の周辺機器役の実装（Issue #778 macOS。iOS は b-ios #779 が委譲する）。
-//! `device/ble_peripheral.rs` の macOS 経路（と b-ios 後の `ios_ble_peripheral`）から呼ばれ、
+//! iOS / macOS 向け BLE の周辺機器役の実装（Issue #778 macOS、#779 iOS）。
+//! `device/ble_peripheral.rs` の macOS 経路と `ios_ble_peripheral`（委譲）から呼ばれ、
 //! CoreBluetooth `CBPeripheralManager` 実装（`apple/fandhe_apple_ble_peripheral.m`、`build.rs` が
 //! iOS / macOS の feature `device` 有効時にコンパイル・リンクする）を `unsafe extern "C"` 2 関数で
 //! 呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する（`apple_bluetooth_le.rs` と
@@ -90,8 +90,7 @@ impl BlePeripheral for ApplePeripheral {
     }
 }
 
-/// macOS 経路の実装（b-ios 後は iOS も委譲する）。
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+/// macOS 経路の実装（iOS も `ios_ble_peripheral` が委譲する）。
 pub(crate) fn implementation() -> Arc<dyn BlePeripheral> {
     Arc::new(ApplePeripheral)
 }
@@ -102,6 +101,11 @@ pub(crate) fn implementation() -> Arc<dyn BlePeripheral> {
 #[no_mangle]
 extern "C" fn fandhe_rust_ble_peripheral_event(session: u64, code: i32) {
     SESSION.deliver(session, event_from_apple_code(code));
+    // iOS では OS コールバックが事象を共有状態へ入れた直後に次フレームを起こす
+    // （入力が無いと egui が描画せず画面が処理中のまま止まる、`device-bridge-contracts.md` 4 節）。
+    // 古い session の事象でも再描画は無害なので `deliver` の結果に関係なく呼ぶ。
+    #[cfg(target_os = "ios")]
+    crate::ios::request_repaint();
 }
 
 #[cfg(test)]

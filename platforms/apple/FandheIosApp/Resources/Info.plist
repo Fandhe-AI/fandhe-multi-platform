@@ -92,6 +92,9 @@
   `crates/fandhe-egui-proxy/apple/fandhe_apple_bluetooth_le.m` は iOS/macOS 共用）で
   周辺機器をスキャンするために必須。未設定だと初期化時にクラッシュする。前景のみで
   動かすため `UIBackgroundModes` に `bluetooth-central` は追加しない（security.md A05）。
+  BLE の周辺機器役（Issue #779、`CBPeripheralManager`、`fandhe_apple_ble_peripheral.m` は
+  iOS/macOS 共用）も同じキーを使う。前景のみで動かすため `UIBackgroundModes` に
+  `bluetooth-peripheral` は追加しない（security.md A05）。
 
   NSMotionUsageDescription（Issue #1248）: 型サンプル「歩数」画面
   （`FANDHE_PROXY_APP=pedometer_read`）が `CMPedometer`
@@ -263,7 +266,7 @@
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>型サンプル「音声認識」の動作確認に使います</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>型サンプル「BLE スキャン」の動作確認に使います</string>
+	<string>型サンプル「BLE スキャン」「BLE の周辺機器役」の動作確認に使います</string>
 	<key>NSMotionUsageDescription</key>
 	<string>型サンプル「歩数」「気圧」「行動認識」の動作確認に使います</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
