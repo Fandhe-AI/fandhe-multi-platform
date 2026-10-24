@@ -16,7 +16,7 @@
 //     明記）。password_len = 0 は暗号なし。
 //     戻り値: 0 = 接続した / 1 = 非対応（Wi-Fi インターフェースが無い） /
 //             2 = 許可なし（位置情報サービスのオフを含む） / 3 = Wi-Fi の電源がオフ /
-//             4 = 見つからない / 5 = 内部失敗（引数不正・main thread からの呼び出しを含む） /
+//             4 = 見つからない（スキャンが成功して一致 0 件のときだけ。スキャン失敗は 5） / 5 = 内部失敗（引数不正・main thread からの呼び出しを含む） /
 //             6 = 対応していない認証方式 / 7 = associate の失敗。
 //
 // メモリ安全: 渡されたポインタは呼び出しの間だけ使い、保持しない。書き込まない。
@@ -161,6 +161,11 @@ int32_t fandhe_macos_wifi_connect(const uint8_t *ssid, size_t ssid_len, const ui
         NSSet<CWNetwork *> *found = [iface scanForNetworksWithName:ssidString
                                                      includeHidden:YES
                                                              error:&scanError];
+        // スキャン自体の失敗（found が nil）は「見つからない」ではない。電源・許可を読み直し、
+        // 該当しなければ内部失敗 5 を返す（検索結果ゼロ件と区別する。NSError はログに出さない）。
+        if (found == nil) {
+            return FandheWifiConnectDiagnose(iface, YES, 5);
+        }
         NSMutableArray<CWNetwork *> *matched = [NSMutableArray new];
         for (CWNetwork *net in found) {
             // 許可が無いと ssidData が nil になりうる。照合はバイト一致に限り、一致しない network へは接続しない。
