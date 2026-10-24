@@ -486,6 +486,11 @@ windows = { workspace = true, optional = true, features = [
     "Win32_System_IO",
     "Win32_System_RemoteDesktop",
     "Win32_System_Environment",
+    # Issue #671: `device/windows_serial_port.rs` が `GetCommPorts` / `GetCommState` / `SetCommState` /
+    # `GetCommTimeouts` / `SetCommTimeouts` / `PurgeComm` / `ClearCommError`（`Win32_Devices_Communication`）
+    # を呼ぶ。`CreateFileW` / `ReadFile` / `WriteFile` は導入済みの `Win32_Storage_FileSystem`・`Win32_System_IO`。
+    # 新規パッケージは増えない。
+    "Win32_Devices_Communication",
     # Issue #1278: `device/windows_screen_wake_lock.rs` が `SetThreadExecutionState`
     # （画面スリープの抑止）を呼ぶために使う。新規パッケージは増えない。
     "Win32_System_Power",
