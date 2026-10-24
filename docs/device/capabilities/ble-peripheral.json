@@ -8,31 +8,51 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "CoreBluetooth `CBPeripheralManager`（アドバタイズ・サービス公開）",
-      "perm": "Bluetooth 利用目的の記述（`NSBluetoothAlwaysUsageDescription`）",
-      "url": "https://developer.apple.com/documentation/corebluetooth/cbperipheralmanager",
-      "note": "未実装。バックグラウンドではアドバタイズ内容が制限される（要確認）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "CoreBluetooth `CBPeripheralManager`（専用シリアルキューで生成。`add` → `peripheralManager:didAddService:error:`、`startAdvertising` → `peripheralManagerDidStartAdvertising:error:`、読み取りは値 nil の特性で `peripheralManager:didReceiveReadRequest:` → `respondToRequest:withResult:`）。macOS と `.m` を共用する",
+      "perm": "`NSBluetoothAlwaysUsageDescription`（bluetooth-le で宣言済み。周辺機器役も同じキーで、新しいキーは足さない。`NSBluetoothPeripheralUsageDescription` は iOS 13 で非推奨）。背景モード `bluetooth-peripheral` は宣言しない",
+      "url": [
+        "https://developer.apple.com/documentation/corebluetooth/cbperipheralmanager",
+        "https://developer.apple.com/documentation/corebluetooth/cbperipheralmanager/startadvertising(_:)",
+        "https://developer.apple.com/documentation/corebluetooth/cbperipheralmanagerdelegate/peripheralmanagerdidupdatestate(_:)",
+        "https://developer.apple.com/library/archive/documentation/NetworkingInternetWeb/Conceptual/CoreBluetooth_concepts/CoreBluetoothBackgroundProcessingForIOSApps/PerformingTasksWhileYourAppIsInTheBackground.html",
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/nsbluetoothalwaysusagedescription"
+      ],
+      "note": "未実装。命令は state が poweredOn になってから出す（公式）。poweredOn より下ではアドバタイズが止まり接続が切れ、poweredOff ではサービスの登録も消える（公式）。アドバタイズに載せられるのはローカル名とサービス UUID の 2 キーだけ（公式）。`stopAdvertising` には完了の通知が無い。周辺機器側に接続・切断の通知は無く、観測できるのは読み取り要求と購読だけ。背景モード無しで背景へ移るとアドバタイズが無効になり、動的な値の読み取りはエラーになる（公式）が、その切り替わりの通知は無いため、背景遷移（`DidEnterBackground`）で自分から止めて「背景で停止」として確定する（自動では再開しない）"
     },
     "android": {
       "status": "possible",
-      "api": "`BluetoothLeAdvertiser` + `BluetoothGattServer`",
-      "perm": "`BLUETOOTH_ADVERTISE` / `BLUETOOTH_CONNECT`（API 31+）。API 30 以下は `BLUETOOTH` / `BLUETOOTH_ADMIN`",
-      "url": "https://developer.android.com/develop/connectivity/bluetooth/ble/ble-overview",
-      "note": "未実装。端末によりアドバタイズ非対応がある（`isMultipleAdvertisementSupported`）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "`BluetoothLeAdvertiser.startAdvertising`（結果は `AdvertiseCallback`）+ `BluetoothManager.openGattServer`（`BluetoothGattServerCallback.onCharacteristicReadRequest` → `sendResponse`）",
+      "perm": "API 31+ は `BLUETOOTH_ADVERTISE`（実行時の許可、未宣言）と `BLUETOOTH_CONNECT`（bluetooth-le で宣言済み）。API 30 以下は `BLUETOOTH` / `BLUETOOTH_ADMIN`（宣言済み、`maxSdkVersion=30`）",
+      "url": [
+        "https://developer.android.com/develop/connectivity/bluetooth/bt-permissions",
+        "https://android.googlesource.com/platform/packages/modules/Bluetooth/+/refs/heads/main/framework/java/android/bluetooth/le/AdvertiseCallback.java",
+        "https://android.googlesource.com/platform/packages/modules/Bluetooth/+/refs/heads/main/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java"
+      ],
+      "note": "未実装。`startAdvertising` はすぐ戻り、結果は `onStartSuccess` / `onStartFailure`（`DATA_TOO_LARGE`・`TOO_MANY_ADVERTISERS`・`ALREADY_STARTED`・`INTERNAL_ERROR`・`FEATURE_UNSUPPORTED`）で届く。`BLUETOOTH_ADVERTISE` は常に検査される（AOSP のソース）。`getBluetoothLeAdvertiser()` は Bluetooth オフ・アドバタイズ非対応で null（AOSP のソース）。GATT サーバーは接続・切断を `onConnectionStateChange` で通知する",
+      "deferred": "API 31 以上でアドバタイズするには `BLUETOOTH_ADVERTISE` の uses-permission を新しく足し、実行時の許可を新しく求める必要がある（公式: 実行時の権限。いまの Manifest は bluetooth-le の `BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT` だけ）。新しい権限を足さない方針のため保留（nfc-card-emulation の Android と同じ）。GATT サーバー側の `BLUETOOTH_CONNECT` は宣言済み。ベンダーの個別審査・GMS は不要で、方針が変われば着手できる"
     },
     "macos": {
       "status": "possible",
-      "api": "CoreBluetooth `CBPeripheralManager`",
-      "perm": "Bluetooth 利用目的の記述（sandbox 時は Bluetooth Entitlement）",
-      "url": "https://developer.apple.com/documentation/corebluetooth/cbperipheralmanager",
-      "note": "未実装。iOS と同じ API。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "CoreBluetooth `CBPeripheralManager`（iOS と同じ API・`.m` を共用）",
+      "perm": "Info.plist の `NSBluetoothAlwaysUsageDescription`（bluetooth-le で宣言済み。文言に型サンプル名を足すだけ）。App Sandbox 無効の素の実行体のため entitlement は不要（`com.apple.security.device.bluetooth` は Sandbox 有効時のもの）",
+      "url": [
+        "https://developer.apple.com/documentation/corebluetooth/cbperipheralmanager",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.device.bluetooth"
+      ],
+      "note": "未実装。iOS と同じ注意（poweredOn まで命令しない・poweredOff で登録が消える・`stopAdvertising` に完了の通知が無い・接続の通知が無い）。背景遷移の扱いは iOS だけ。TCC の判定がターミナルへ帰属しないよう、確認は `.app` にまとめて `open` で起動する（bluetooth-le と同じ）"
     },
     "windows": {
       "status": "possible",
-      "api": "WinRT `Windows.Devices.Bluetooth.GenericAttributeProfile.GattServiceProvider` + `BluetoothLEAdvertisementPublisher`",
-      "perm": "Bluetooth 機能の宣言（パッケージ時）。unpackaged は要確認",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattserviceprovider",
-      "note": "未実装。アダプターが周辺機器役に対応している必要がある（`BluetoothAdapter.IsPeripheralRoleSupported`）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "WinRT `GattServiceProvider.CreateAsync` / `CreateCharacteristicAsync` / `StartAdvertising`（`AdvertisementStatusChanged` で状態を受ける）+ `GattLocalCharacteristic.ReadRequested`",
+      "perm": "パッケージ版は `Package.appxmanifest` の `bluetooth` capability が必須（公式）。素の Win32 実行体での要否は公式に記述なし。`windows` クレートの feature `Devices_Bluetooth_GenericAttributeProfile` が未導入",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/uwp/devices-sensors/gatt-server",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattserviceprovider",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattserviceprovideradvertisementstatus",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.bluetoothadapter.isperipheralrolesupported"
+      ],
+      "note": "未実装。結果は `GattServiceProviderResult.Error`（`BluetoothError`）と `AdvertisementStatus`（Created / Stopped / Started / Aborted / StartedWithoutAllAdvertisementData）で届く。`ReadRequested` のハンドラが無いと読み取り要求は `UnlikelyError` で即完了する（公式）。アダプターの周辺機器役対応は `BluetoothAdapter.IsPeripheralRoleSupported`",
+      "deferred": "`windows` クレートの feature `Devices_Bluetooth_GenericAttributeProfile` を新しく足す必要があり、公式は `bluetooth` capability の宣言を必須と書く一方、package identity の無い素の Win32 実行体で使えるかの記述が無い。新しい依存（feature）を足さない方針と、パッケージ化前提の確認が要るため保留（in-app-review・local-peer-connect の Windows と同じ）。ベンダーの個別審査は不要で、feature の追加を決めて素の実行体での可否を確かめれば着手できる"
     },
     "web": {
       "status": "no",
@@ -42,5 +62,5 @@
       "note": "Web Bluetooth は中心役（接続する側）のみで、GATT サーバーとしてアドバタイズする API はない。"
     }
   },
-  "note": "bluetooth-le は周辺機器を探して接続する中心役（スキャン）だが、本機能は自分が周辺機器になって広告し GATT サーバーを公開する逆の役。"
+  "note": "bluetooth-le は周辺機器を探して接続する中心役（スキャン）だが、本機能は自分が周辺機器になって広告し GATT サーバーを公開する逆の役。今回の範囲: 「公開」ボタンで固定のサービス UUID 1 つと読み取り専用の特性 1 つ（固定の短い文字列を返す）を登録し、ローカル名とサービス UUID をアドバタイズする。「停止」ボタン・アプリ終了・iOS の背景遷移で止める。画面はアドバタイズ中かどうかと、今回の公開で読み取られた回数を出す（接続数は Apple に通知が無いため出さない）。書き込み・通知（購読）・ペアリング・背景でのアドバタイズは扱わない。結果は公開中 / 停止（利用者の操作）/ 中断（iOS の背景遷移・失敗とは別の文言）/ Bluetooth オフ / 権限拒否 / 非対応 / 失敗。OS を正にする: 公開できるかを事前に判定せず、state の通知（poweredOn 待ち・unauthorized・poweredOff・unsupported）とサービス登録・アドバタイズ開始のコールバックの結果を写す。「公開中」は開始のコールバックが成功を返したときだけ表示し、アプリ側に別の「アドバタイズ中」の記憶を持たない。公開後に state が poweredOn を外れたら OS が止めたものとして確定し、自動で再開しない。タイマーで推測しない（期限・ポーリングなし。許可ダイアログの回答待ちに期限は無く、停止・終了で止まる）。守らない範囲: 他アプリが同時にアドバタイズしているときの見え方、OS がアドバタイズの間隔や載せる中身（overflow 領域）を変える影響、中心役が読み取らずに接続だけした場合の検出、複数プロセスでの同時公開、終了処理と重なった読み取りの数え漏れ、`stopAdvertising` 直後に OS 側で止まるまでの時間差。中心役の識別子・読み取りの中身はログに出さない。"
 }
