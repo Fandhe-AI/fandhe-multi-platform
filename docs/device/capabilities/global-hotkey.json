@@ -22,17 +22,26 @@
     },
     "macos": {
       "status": "possible",
-      "api": "Carbon `RegisterEventHotKey`（Carbon 由来の旧 API）。監視のみなら `NSEvent.addGlobalMonitorForEvents`",
-      "perm": "アクセシビリティ権限は要確認（監視型は必要と認識）",
-      "url": "https://developer.apple.com/documentation/appkit/nsevent/addglobalmonitorforevents(matching:handler:)",
-      "note": "未実装。Sequoia で shift / option のみの修飾は不可になったとフォーラムにある（https://developer.apple.com/forums/thread/763878 ）。公式リファレンスの URL は未確認。並行性・終了処理があるので device-bridge-contracts.md の対象"
+      "api": "Carbon（HIToolbox）`RegisterEventHotKey` / `UnregisterEventHotKey`。押下は `GetApplicationEventTarget()` に `InstallEventHandler` した `kEventClassKeyboard` / `kEventHotKeyPressed` で受ける。`NSEvent.addGlobalMonitorForEvents` は使わない",
+      "perm": "なし（アクセシビリティ・入力監視の許可を求めない方式を選ぶ。新しい entitlement・Info.plist キーの追加なし。`Carbon.framework` のリンクを足す）",
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nsevent/addglobalmonitorforevents(matching:handler:)",
+        "https://developer.apple.com/forums/thread/763878",
+        "https://developer.apple.com/forums/thread/735223"
+      ],
+      "note": "未実装。`RegisterEventHotKey` の公式リファレンスのページは見当たらず、根拠は SDK のヘッダ（`HIToolbox/CarbonEvents.h`）: スレッド安全でない（main thread で呼ぶ）、同じ組み合わせを複数アプリが登録でき全員に通知される、`kEventHotKeyExclusive` を付けると他プロセスの排他登録と重なったとき `eventHotKeyExistsErr`（-9878）を返す、終了時は OS が解除する。非推奨の印は無い。`NSEvent` の global monitor はキー系イベントにアクセシビリティの信頼が要り（公式）、自アプリ宛てのイベントも届かないため採らない。macOS 15 で shift / option だけの修飾は登録できなくなり 15.2 で緩和された（Apple のフォーラム回答）。Apple の技術サポートは Carbon 由来のため推奨しないと回答しているが、代案の `CGEventTap` は入力監視の許可が要る"
     },
     "windows": {
       "status": "possible",
-      "api": "Win32 `RegisterHotKey`。`WM_HOTKEY` がスレッドのメッセージキューに届く",
-      "perm": "なし（Win32 desktop 専用表記。実機未検証）",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey",
-      "note": "未実装。他アプリと衝突すると登録に失敗する（失敗を成功に畳まない）。専用スレッドに集約する"
+      "api": "Win32 `RegisterHotKey` / `UnregisterHotKey`（`hWnd` = NULL、`MOD_NOREPEAT`）。`WM_HOTKEY` は登録したスレッドのメッセージキューへ届く",
+      "perm": "なし（デスクトップアプリ専用。`windows` クレートの既存 feature `Win32_UI_Input_KeyboardAndMouse`・`Win32_UI_WindowsAndMessaging` で足りる）",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey",
+        "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-unregisterhotkey",
+        "https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-hotkey",
+        "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-postthreadmessagew"
+      ],
+      "note": "未実装。`hWnd` が NULL なら登録は呼び出しスレッドに結び付き、`WM_HOTKEY` はそのスレッドのキューへ届き、メッセージループで処理する（公式）。解除は登録したスレッドからしかできない。既に別の登録がある組み合わせは通常失敗する（公式。`GetLastError` は `ERROR_HOTKEY_ALREADY_REGISTERED`（1409）の見込み）。Win キーの組み合わせは OS 予約、F12 はデバッガ予約。`MOD_NOREPEAT` で押しっぱなしの連続通知を止める（Windows 7 以降）。専用スレッドに登録・受信・解除を集約する"
     },
     "web": {
       "status": "no",
@@ -42,5 +51,5 @@
       "note": "ページが非アクティブなときのキー入力を拾う API はない"
     }
   },
-  "note": "今回の範囲: 固定のキー組み合わせ 1 つを登録し、押されるたびに画面のカウントを増やすだけ。デスクトップ専用。"
+  "note": "今回の範囲: 固定のキー組み合わせ 1 つ（Control + Shift + Option/Alt + K）を「登録」ボタンで登録し、押されるたびに画面のカウントを増やす。「解除」ボタンとアプリ終了で登録を外す。デスクトップ専用。結果は登録 / 使用中（他アプリと重なり OS が拒否）/ 非対応 / 失敗の 4 種で、使用中を失敗や成功に畳まない。OS を正にする: 登録できるかを事前に判定せず登録 API の戻り値を写す。登録の記録は OS の登録を持つハンドル（macOS は `EventHotKeyRef`、Windows は登録したスレッド）1 つだけで、別に「登録中」のフラグを持たない。解除は OS が成功を返したときだけハンドルを手放し、失敗なら登録中のまま残して再試行できる。タイマーで推測しない（期限・ポーリングなし。押下は OS の通知だけで数える）。守らない範囲: macOS の非排他登録（他アプリが排他でなく登録した同じ組み合わせとの重なりは OS が通知しない。排他登録は他を黙らせる）、OS 予約の組み合わせ（Spotlight 等）と重なって押下が届かない場合の検出、キー配列による文字の違い、複数プロセスでの同時登録、終了処理との重なりで 1 回だけ数え漏れること。押されたキーの内容はログに出さない。"
 }
