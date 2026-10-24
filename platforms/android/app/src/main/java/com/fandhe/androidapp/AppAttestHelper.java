@@ -114,6 +114,10 @@ final class AppAttestHelper {
                 result = code(KEYSTORE);
             } catch (RuntimeException e) {
                 result = code(FAILED);
+            } catch (Error e) {
+                // Error は握りつぶさないが、鍵は消してから投げ直す（消せなければ LEFTOVER で次回再試行）。
+                release(ks, alias);
+                throw e;
             }
             // 鍵を消せなかったときは成功を返さない（鍵が残ったまま 0 を返す嘘の成功の禁止）。
             if (!release(ks, alias) && result[0] == OK) {
