@@ -39,14 +39,17 @@
       "note": "今回の範囲（自アプリの設定・通知設定）に当たる公開の入口が無い。`x-apple.systempreferences:` のペイン ID は一覧が公開されておらず、Apple の開発者フォーラムでも「URL scheme は明示的に文書化されない限り API ではない」とされる。文書化されているのはフルディスクアクセス（`ESClient.h`）とログイン項目（`SMAppService`、launch-at-login の型サンプル画面で実装済み）だけ。非公開のペイン ID は OS のバージョンで変わるため使わない。Apple が入口を文書化したら見直す"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "`ms-settings:notifications`（通知）を `ShellExecuteW`（verb `open`）で開く。戻り値 `> 32` を「OS が受け付けた」、`SE_ERR_NOASSOC`（31）を「開けなかった」、それ以外を失敗に写す（compose-mail-sms の `open_url` と同じ表）",
       "perm": "不要（package identity 不要。`Win32_UI_Shell` は有効済みで、`windows` クレートの feature は増やさない）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings",
         "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew"
       ],
-      "note": "未実装。`ms-settings:` の URI は公式の一覧に載る（頁の有無は Windows の版・SKU で変わる、公式）。自アプリの頁（`ms-settings:appsfeatures-app?<PFN>`）はパッケージ ファミリー名が要り、パッケージ化していない本アプリには無いため、「自アプリの設定」は Windows では非対応と返す（別の頁へ置き換えない）。通知は OS 全体の通知の頁で、本アプリだけの頁ではない。公式は `Launcher.LaunchUriAsync`（WinRT）を例に挙げるが、同じ URI を `ShellExecuteW` で開き、WinRT の依存を足さない"
+      "note": "実装済み（#798）。通知は `ms-settings:notifications` を `ShellExecuteW` で開き、戻り値をそのまま画面に出す。自アプリの設定は OS を呼ばずに「この OS では開けない頁」と出す。期限は設けない。`ms-settings:` の URI は公式の一覧に載る（頁の有無は Windows の版・SKU で変わる、公式）。自アプリの頁（`ms-settings:appsfeatures-app?<PFN>`）はパッケージ ファミリー名が要り、パッケージ化していない本アプリには無いため、「自アプリの設定」は Windows では非対応と返す（別の頁へ置き換えない）。通知は OS 全体の通知の頁で、本アプリだけの頁ではない。公式は `Launcher.LaunchUriAsync`（WinRT）を例に挙げるが、同じ URI を `ShellExecuteW` で開き、WinRT の依存を足さない",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#795）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_open_system_settings.rs + crates/fandhe-egui-proxy/src/device/windows_compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/open_system_settings.rs + crates/fandhe-core/src/screens/open_system_settings_show.rs + crates/fandhe-device/src/open_system_settings.rs、Issue #798"
     },
     "web": {
       "status": "no",

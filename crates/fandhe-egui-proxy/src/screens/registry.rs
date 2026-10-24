@@ -102,6 +102,10 @@ generated_screens! {
     crate::device::compose_mail_sms::compose_mail_sms_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "open_system_settings_show" => fandhe_core::screens::open_system_settings_show::current_screen,
+    crate::device::open_system_settings::open_system_settings_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ble_peripheral" => fandhe_core::screens::ble_peripheral::current_screen,
     crate::device::ble_peripheral::ble_peripheral_effect,
     effect
