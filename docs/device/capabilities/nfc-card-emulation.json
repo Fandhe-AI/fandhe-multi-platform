@@ -8,18 +8,27 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "CoreNFC `CardSession`（iOS 17.4+）",
-      "perm": "地域・entitlement の条件あり（要確認）",
-      "url": "https://developer.apple.com/documentation/corenfc/cardsession",
-      "note": "未実装。一般の開発者が使える条件（対象地域・Apple の許可）が未確認のため、実装前に要確認。macOS 版は無い（Apple 公式表記で iOS / iPadOS / Mac Catalyst のみ）。",
-      "approval": "HCE（`CardSession`）の entitlement を Apple へ申請し、承認されること（対象地域の限定あり）"
+      "api": "CoreNFC `CardSession`（iOS 17.4+。EEA 外での開発・テストは iOS 18.2+）",
+      "perm": "HCE の entitlement（Apple の承認制）",
+      "url": [
+        "https://developer.apple.com/documentation/corenfc/cardsession",
+        "https://developer.apple.com/support/hce-transactions-in-apps/"
+      ],
+      "note": "未実装。シミュレータでは使えない（NFC リーダーが無い。公式）。提示前に `CardSession.isEligible` で利用できるかを確かめる（公式の推奨）。macOS 版は無い（Apple 公式表記で iOS / iPadOS / Mac Catalyst のみ）。",
+      "approval": "HCE の entitlement を Apple へ申請し、承認されること。申請は組織で登録した Apple Developer Program の Account Holder が行い、EEA に拠点があること・EEA の利用者向けであること・決済・鍵・社員証・会員・チケット・交通などの用途のいずれかに当たることが条件（公式）。固定の応答を返すだけの型サンプルは用途に当たらない"
     },
     "android": {
       "status": "possible",
-      "api": "`HostApduService`（HCE、API 19+）",
-      "perm": "`NFC`、`uses-feature android.hardware.nfc.hce`、サービスに `BIND_NFC_SERVICE`",
-      "url": "https://developer.android.com/develop/connectivity/nfc/hce",
-      "note": "未実装。AID の登録とサービスの宣言が要る。"
+      "api": "`HostApduService`（HCE、API 19+）の `processCommandApdu` / `onDeactivated`。AID は `res/xml` の `<host-apdu-service>`（`<aid-group android:category=\"other\">` と `<aid-filter>`）で静的に登録する",
+      "perm": "`android.permission.NFC`（protection level は normal。HCE のサービスとして登録するのに要る（公式））。Manifest に `<service>`（exported=true、intent-filter は `android.nfc.cardemulation.action.HOST_APDU_SERVICE`、meta-data `android.nfc.cardemulation.host_apdu_service`）を置き、`android:permission` に `BIND_NFC_SERVICE`（bind できるのはシステムだけになる）を書く。`uses-feature android.hardware.nfc.hce`（required=false）",
+      "url": [
+        "https://developer.android.com/develop/connectivity/nfc/hce",
+        "https://developer.android.com/reference/android/nfc/cardemulation/HostApduService",
+        "https://developer.android.com/reference/android/nfc/cardemulation/CardEmulation",
+        "https://developer.android.com/reference/android/Manifest.permission#NFC"
+      ],
+      "deferred": "HCE のサービスとして登録するには `android.permission.NFC` の宣言が要り（公式: \"Your application also needs to hold the NFC permission to register as an HCE service.\"）、いまの Manifest には無い（nfc のタグ読み取りも未実装）。あわせて受信側コンポーネント（`HostApduService` の `<service>`）と AID 登録の XML を足す。実行時の許可ダイアログは出ない normal の権限だが、新しい権限・受信側コンポーネントを足さない方針のため保留（alarm の Android と同じ）。ベンダーの個別審査・GMS は不要で、方針が変われば（または nfc で `NFC` 権限を足せば）着手できる",
+      "note": "未実装。`processCommandApdu` はアプリの main thread で呼ばれ、すぐ返せないときは null を返して `sendResponseApdu` を使う（公式）。リーダーが別の AID を選ぶかリンクが切れると `onDeactivated`（`DEACTIVATION_DESELECTED` / `DEACTIVATION_LINK_LOSS`）が来る。同じ AID を複数のサービスが登録していると OS が利用者に選ばせ、前面アプリの `setPreferredService` はその解決より優先される（公式）。Android 9 以下は画面オフで HCE が動かず、10 以上は Secure NFC がオンだと画面オフで使えない（公式）。確かめるには HCE 対応の Android 実機と、ISO 14443-4 の読み取り側（別の Android 端末のリーダーモードか PC/SC リーダー）が要る"
     },
     "macos": {
       "status": "n-a",
@@ -30,10 +39,10 @@
     },
     "windows": {
       "status": "no",
-      "api": "なし",
+      "api": "なし（`Windows.Devices.SmartCards.SmartCardEmulator` は Windows Mobile Extension SDK の API）",
       "perm": "なし",
-      "url": "",
-      "note": "公開 API は確認できなかった（要確認）。"
+      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.smartcards.smartcardemulator",
+      "note": "HCE の API（`SmartCardEmulator`）は device family が Windows Mobile Extension SDK で、デスクトップ版 Windows で使える公開 API は確認できなかった。"
     },
     "web": {
       "status": "no",
@@ -44,5 +53,5 @@
       "note": "Web NFC は読み書きのみで、カードの模擬には使えない。"
     }
   },
-  "note": "Android は HCE で標準的に使える。iOS は iOS 17.4 以降に API があるが提供条件は未確認。nfc（既存 id）はタグの読み取りで、本機能は端末自身がカードとして読まれる側の別機能。今回の範囲: Android で固定 AID の応答（固定の文字列）を返し、読み取り回数を画面に出す（実カードの模擬・決済は扱わない）。"
+  "note": "nfc（既存 id）はタグの読み取りで、本機能は端末自身がカードとして読まれる側の別機能。Android は新しい権限（`NFC`）と受信側コンポーネントが要るため保留、iOS は Apple の承認制（EEA 限定・用途の条件あり）で申請待ち。範囲（再開時の案）: Android で固定の独自 AID（`F0` で始まる）への SELECT に固定の文字列を返し、読み取られた回数を画面に出す（実カードの模擬・決済は扱わない）。回数は応答を返したサービスが 1 か所（SharedPreferences）に書き、画面は要求のたびにそこを読む（quick-settings-tile と同じ）。NFC のオン・オフと AID の既定の振り先は、画面が読むたびに OS（`NfcAdapter.isEnabled`・`CardEmulation.isDefaultServiceForAid`）へ問い、アプリ内に持たない。守らない範囲: 他アプリが同じ AID を登録したときの振り先（OS が利用者に選ばせる）、画面オフ・ロック中に届かないこと、読み取り側の再試行で同じ読み取りが複数回に数えられること"
 }
