@@ -52,6 +52,10 @@ pub const OS_SLIDER_NOTE: &str = "音量は端末の音量スライダーや音�
 pub const AT_MAX_NOTE: &str = "これ以上は上げられません";
 /// 下限で変わらなかったときの案内（失敗ではない）。
 pub const AT_MIN_NOTE: &str = "これ以上は下げられません";
+/// 上限・下限と読み取れないまま変わらなかったときの案内（理由は言わない）。
+pub const UNCHANGED_NOTE: &str = "音量が変わりませんでした";
+/// 上限・下限とみなす読み戻しの許容幅。
+const LIMIT_EPSILON: f32 = 1e-4;
 /// Android のおやすみモードで変更が拒否されたときの理由。
 pub const PERMISSION_DENIED_REASON: &str =
     "おやすみモードのため音量を変えられません。設定でおやすみモードを確認してください";
@@ -285,9 +289,12 @@ pub fn finish_step(
         Ok(StepResult::Unchanged(r)) => {
             state.read = ReadState::Read(r);
             state.error.clear();
-            state.notice = match dir {
-                StepDir::Up => AT_MAX_NOTE,
-                StepDir::Down => AT_MIN_NOTE,
+            // 理由は押した向きではなく読み戻した値だけから選ぶ（粗い刻みの機器が
+            // 中間値へ丸め戻した場合に「上限」と偽らない）。値が無ければ理由を言わない。
+            state.notice = match (dir, r.level) {
+                (StepDir::Up, Some(l)) if l >= 1.0 - LIMIT_EPSILON => AT_MAX_NOTE,
+                (StepDir::Down, Some(l)) if l <= LIMIT_EPSILON => AT_MIN_NOTE,
+                _ => UNCHANGED_NOTE,
             }
             .to_string();
         }
@@ -511,6 +518,33 @@ mod tests {
         let t = issue_step(&mut s, StepDir::Down);
         finish_step(&mut s, t, Ok(StepResult::Unchanged(steps(0.0))));
         assert_eq!(notice_text(&s), AT_MIN_NOTE);
+    }
+
+    #[test]
+    fn unchanged_at_midlevel_or_unknown_does_not_claim_limit() {
+        let mut s = ready(0.5);
+        press_up(&mut s);
+        let t = issue_step(&mut s, StepDir::Up);
+        finish_step(&mut s, t, Ok(StepResult::Unchanged(steps(0.5))));
+        assert_eq!(notice_text(&s), UNCHANGED_NOTE);
+        press_down(&mut s);
+        let t = issue_step(&mut s, StepDir::Down);
+        finish_step(&mut s, t, Ok(StepResult::Unchanged(steps(0.5))));
+        assert_eq!(notice_text(&s), UNCHANGED_NOTE);
+        // 上限で「－」、下限で「＋」の Unchanged も限界の理由にしない。
+        press_down(&mut s);
+        let t = issue_step(&mut s, StepDir::Down);
+        finish_step(&mut s, t, Ok(StepResult::Unchanged(steps(1.0))));
+        assert_eq!(notice_text(&s), UNCHANGED_NOTE);
+        press_up(&mut s);
+        let t = issue_step(&mut s, StepDir::Up);
+        let none = Reading {
+            level: None,
+            muted: Some(false),
+            mode: ControlMode::Steps,
+        };
+        finish_step(&mut s, t, Ok(StepResult::Unchanged(none)));
+        assert_eq!(notice_text(&s), UNCHANGED_NOTE);
     }
 
     #[test]
