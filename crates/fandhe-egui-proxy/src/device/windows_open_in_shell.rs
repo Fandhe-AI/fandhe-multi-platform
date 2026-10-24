@@ -17,6 +17,8 @@
 //! `X:\...` で OS に渡す。次は `InvalidInput("shell path")` で拒否する: UNC（`\\?\UNC\` 含む）、
 //! デバイスパス（`\\.\`）、`\\?\Volume{` 等その他の `\\?\`、ドライブ文字なし、`/` 混在、
 //! 代替データストリーム（ドライブの `:` 以外の `:`）、要素末尾の `.` と空白、UTF-16 で 260 文字以上。
+//! ドライブルート（`X:\` のみ）は要素を持たないため受け付ける（選択表示の対象になる）。途中の空要素（`\\`）と
+//! 末尾の `\` は引き続き拒否する。
 //!
 //! # 型検査（「開く」のみ）
 //!
@@ -113,7 +115,9 @@ fn to_win32_path(canonical: &str) -> Result<String, DeviceError> {
         return Err(ERR);
     }
     // 要素末尾の `.` と空白（Win32 が落として別名に解決するのを避ける）。空要素（`\\`）も拒否。
-    for comp in p[3..].split('\\') {
+    // ドライブルート（`X:\` のみ）は要素が無いので検査対象外（選択表示で受け付けるため）。
+    let rest = &p[3..];
+    for comp in rest.split('\\').filter(|_| !rest.is_empty()) {
         if comp.is_empty() || comp.ends_with('.') || comp.ends_with(' ') {
             return Err(ERR);
         }
@@ -302,6 +306,9 @@ mod tests {
     fn path_accepts_normal_forms() {
         assert_eq!(to_win32_path(r"\\?\C:\a\b.txt").unwrap(), r"C:\a\b.txt");
         assert_eq!(to_win32_path(r"C:\a\b.txt").unwrap(), r"C:\a\b.txt");
+        // ドライブルートは受け付ける（途中の空要素の拒否と区別する）。
+        assert_eq!(to_win32_path(r"\\?\C:\").unwrap(), r"C:\");
+        assert_eq!(to_win32_path(r"C:\").unwrap(), r"C:\");
         assert_eq!(
             to_win32_path(r"\\?\D:\ユーザー 名\メモ 1.txt").unwrap(),
             r"D:\ユーザー 名\メモ 1.txt"
@@ -321,6 +328,8 @@ mod tests {
             r"C:\a. \b.txt",
             "C:/a/b.txt",
             r"C:\a\\b.txt",
+            r"C:\a\",
+            r"C:\\",
             "relative",
             "",
             r"C:",
