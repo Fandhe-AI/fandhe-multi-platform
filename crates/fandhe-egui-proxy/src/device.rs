@@ -857,7 +857,7 @@ pub mod ios_web_auth_session;
 /// （macOS・iOS / Android 実装、Windows は `DnsServiceBrowse`、他 OS は `UnsupportedLanDiscovery` 固定。Web は対象外）。
 pub mod lan_discovery;
 /// Phase 11 の拡充ループ（親 #134、Issue #696）: ログイン時の自動起動の effect ドライバ
-/// （macOS 実装。Windows は骨格のスタブで Issue #697 が埋める。他 OS は `UnsupportedLaunchAtLogin` 固定）。
+/// （macOS 実装。Windows は HKCU の Run キーで Issue #697。他 OS は `UnsupportedLaunchAtLogin` 固定）。
 pub mod launch_at_login;
 /// Phase 11 の拡充ループ（親 #88、Issue #294）: ライブアクティビティの effect ドライバ（iOS・Android 実装、
 /// 他 OS は `UnsupportedLiveActivity` 固定）。
@@ -1298,9 +1298,8 @@ pub mod windows_image_recognition;
 /// `device/lan_discovery.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_lan_discovery;
-/// Issue #696: Windows 向けログイン時の自動起動の骨格（現状は `Unsupported` を返すスタブ。実装は Issue #697）。
-/// `device/launch_at_login.rs` の windows 経路から呼ばれる。後続の子がホストテストを足すときに
-/// cfg を広げずに済むよう test でもコンパイルする。
+/// Issue #697: Windows 向けログイン時の自動起動（HKCU の Run キー。骨格は Issue #696）。
+/// `device/launch_at_login.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_launch_at_login;

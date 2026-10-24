@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #134、Issue #696）: ログイン時の自動起動（launch-at-login）の契約。
 //! `fandhe-egui-proxy` の `device/launch_at_login.rs`（effect ドライバ）が、画面のボタン操作ごとに
 //! [`LaunchAtLogin`] を別スレッドで呼ぶ。macOS（`SMAppService.mainApp`）が実装し、Windows
-//! （HKCU の Run キー、Issue #697）は骨格のスタブ（`Unsupported`）から後続の子が埋める。
+//! （HKCU の Run キー、Issue #697）が実装する。
 //! iOS・Android・Web は対象外（対応表 `launch-at-login.json`）。
 //!
 //! # 結果の種類（契約表 10）
@@ -27,7 +27,9 @@
 //!
 //! - macOS: `SMAppService.mainApp`。13 未満と .app 外は `Unsupported`
 //! - Windows: HKCU の Run キー。値データは引用符付きの実行体パス + `--fandhe-launched-at-login`
-//!   （260 文字以内）。StartupApproved は読むだけ。設定画面は `ms-settings:startupapps`
+//!   （260 文字以内）。StartupApproved は読むだけで、値が無ければ有効として扱う。
+//!   同じ値名に別の場所の登録があるとき、有効化は上書きせず `RegisteredElsewhere` を返す。
+//!   設定画面は `ms-settings:startupapps`
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11、`AGENTS.md`「端末機能の並行性は守備範囲で判定する」）
 //!
