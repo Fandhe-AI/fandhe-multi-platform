@@ -8,40 +8,54 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "AlarmKit（iOS 26）",
-      "perm": "AlarmKit の使用説明キー（`NSAlarmKitUsageDescription`、要確認）",
-      "url": "https://developer.apple.com/documentation/alarmkit",
-      "note": "未実装。ページの存在のみ確認、権限・必要な Widget Extension 等は要確認。Apple Developer Program が現在期限切れで、entitlement・capability の要否は検証できない。"
+      "api": "AlarmKit（`AlarmManager.schedule(id:configuration:)`、iOS 26 以上。Swift 専用 API）",
+      "perm": "Info.plist の `NSAlarmKitUsageDescription`（無い・空だと予約できない）と実行時の許可（`requestAuthorization()`）",
+      "url": [
+        "https://developer.apple.com/documentation/alarmkit",
+        "https://developer.apple.com/documentation/alarmkit/scheduling-an-alarm-with-alarmkit",
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/nsalarmkitusagedescription"
+      ],
+      "deferred": "Info.plist に `NSAlarmKitUsageDescription` を足し、実行時の許可を新しく求めないと予約できない（公式: キーが無い・空だとアラームを予約できない）。AlarmKit は iOS 26 以上の Swift 専用 API で、Swift の薄層と AlarmKit の弱リンクも足す。新しい権限を足さない方針のため保留。ベンダーの個別審査は不要で、方針が変われば着手できる",
+      "note": "未実装。entitlement・capability の記載は公式に無い。固定時刻の一回きりのアラームなら Widget Extension は不要（公式: カウントダウン表示を持つ場合に Widget Extension を求める）。アラームは集中モード・消音モードを越えて鳴る（公式）"
     },
     "android": {
       "status": "possible",
-      "api": "`AlarmManager.setExact*`（API 31+ は権限が要る）",
-      "perm": "`SCHEDULE_EXACT_ALARM` または `USE_EXACT_ALARM`（API 31+ target）",
-      "url": "https://developer.android.com/develop/background-work/services/alarms",
-      "note": "未実装。Doze 中の動作・再起動後の再登録（`BOOT_COMPLETED`）に注意。`USE_EXACT_ALARM` は用途が時計・カレンダーアプリに限られ、Play の審査対象（要確認）"
+      "api": "`AlarmManager.setAlarmClock` / `setExactAndAllowWhileIdle`（`PendingIntent` で `BroadcastReceiver` を起こす）",
+      "perm": "`SCHEDULE_EXACT_ALARM`（API 31 以上を target にすると必須。API 33 以上を target にした新規インストールでは既定で拒否）または `USE_EXACT_ALARM`（時計・カレンダーアプリに限る Play のポリシー対象）。再起動後の再登録は `RECEIVE_BOOT_COMPLETED`",
+      "url": [
+        "https://developer.android.com/develop/background-work/services/alarms",
+        "https://developer.android.com/about/versions/14/changes/schedule-exact-alarms",
+        "https://developer.android.com/reference/android/app/AlarmManager"
+      ],
+      "deferred": "アプリを閉じていても鳴らすには `PendingIntent` 経由の正確なアラームが要り、`setAlarmClock` を含めて `SCHEDULE_EXACT_ALARM` か `USE_EXACT_ALARM` の宣言が無いと `SecurityException` になる（API 31 以上を target、本アプリは 35）。前者は新規インストールで既定拒否、後者は Play のポリシーで時計・カレンダーアプリに限られる。権限なしの `OnAlarmListener` は鳴るまでプロセスが生きている必要があり、`setWindow` は 10 分以上の幅になる。新しい権限・受信側コンポーネントを足さない方針のため保留。ベンダーの個別審査は不要で、方針が変われば着手できる",
+      "note": "未実装。既定では端末の電源を切るとすべてのアラームが消え、再登録には `RECEIVE_BOOT_COMPLETED` の受信が要る（公式）。`SCHEDULE_EXACT_ALARM` を取り消されるとアプリが止まり、予約済みの正確なアラームも消える（公式）"
     },
     "macos": {
       "status": "no",
       "api": "アラーム専用の公開 API は確認できず",
       "perm": "",
       "url": "",
-      "note": "要確認。時刻指定の通知は notification（既存 id）で代替でき、画面ロック中に鳴り続ける専用機能とは別。URL 未確認"
+      "note": "AlarmKit は iOS・iPadOS・Mac Catalyst のみで、macOS の AppKit アプリは対象外（公式の対応 OS 表記）。時刻指定の通知は notification（既存 id）で代替でき、画面ロック中に鳴り続ける専用機能とは別"
     },
     "windows": {
       "status": "possible",
-      "api": "`ScheduledToastNotification`（時刻指定のトースト通知）",
-      "perm": "package identity の要否はページに記載なし（要確認）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.ui.notifications.scheduledtoastnotification",
-      "note": "未実装。通知であってアラーム音を鳴らし続ける機能ではない。unpackaged で動くかは未検証（要確認）"
+      "api": "`ScheduledToastNotification` + `ToastNotifier.AddToSchedule`（`scenario=\"alarm\"` のトースト）、取り消しは `GetScheduledToastNotifications` + `RemoveFromSchedule`",
+      "perm": "なし。送り手は notification（既存 id）がスタートメニューのショートカットで登録した AUMID を使い、package identity は持たない",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/apps/develop/notifications/app-notifications/app-notifications-scheduled",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.ui.notifications.toastnotifier.addtoschedule",
+        "https://learn.microsoft.com/en-us/uwp/schemas/tiles/toastschema/element-toast"
+      ],
+      "note": "未実装。予約したトーストはアプリが動いていなくても出る（公式）。`scenario=\"alarm\"` は閉じるまで画面に残り、アラーム音を繰り返す（公式）。配信の猶予は 5 分で、その間ずっと電源が切れていると捨てられる（公式）。時刻は壁時計で、システム時刻を変えると鳴る時刻もずれる。過去の時刻・4096 件超は `AddToSchedule` が失敗する（公式）。`AddToSchedule` の説明には「WinRT を既定の枠組みにするアプリのみ」とあり、package identity の無い実行形態で動くかは Windows 実機で確かめる"
     },
     "web": {
       "status": "no",
-      "api": "起動していないページを指定時刻に起こす標準 API は無い見込み",
+      "api": "起動していないページを指定時刻に起こす標準 API は無い",
       "perm": "",
-      "url": "",
-      "safari": "対応なし（要確認）",
-      "note": "要確認。Notification Triggers の現状を未確認。URL 未確認"
+      "url": "https://developer.chrome.com/docs/web-platform/notification-triggers",
+      "safari": "対応なし",
+      "note": "時刻指定の通知（Notification Triggers の `TimestampTrigger`）は Chrome のオリジントライアルで終わり、出荷されていない（Chrome の解説ページの状態表で Launch が未着手）"
     }
   },
-  "note": "alarm は指定時刻にアプリが閉じていても起こす。notification（既存 id）との違い: 通知は見せるだけ、こちらは正確な時刻・音・スヌーズなど「鳴らす」ことが目的。background-task（既存 id）の定期実行とも別。今回の範囲: 1 分後の時刻を予約し、時刻になったら鳴る / 通知が出ることを確認する。"
+  "note": "alarm は指定時刻にアプリが閉じていても起こす。notification（既存 id）との違い: 通知は今すぐ見せるだけ、こちらは時刻を予約して鳴らす。background-task（既存 id）の処理の実行とも別。iOS は新しい Info.plist のキーと実行時の許可、Android は新しい権限が要るため保留。範囲: Windows で 1 分後の時刻に 1 件だけ予約し、時刻になるとアラーム音付きのトーストが出る。予約・取り消し・予約中かの表示まで。守らない範囲: 鳴ったかどうかの検知（予約の一覧から消えたことしか分からない）、スヌーズ・繰り返し、電源断が 5 分を超えたときの配信、システム時刻の変更、複数プロセス"
 }
