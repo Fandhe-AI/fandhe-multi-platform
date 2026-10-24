@@ -31,6 +31,9 @@
 //!   feature `device` 有効時のみコンパイルする（`src/device/ios.rs` の `present_photo_picker`/
 //!   `fandhe_rust_photo_picker_outcome` から呼ばれる契約）。PhotosUI と、JPEG 変換用の
 //!   ImageIO を追加でリンクする。
+//! - `ios/fandhe_ios_volume_control.m`（Issue #786、`AVAudioSession.outputVolume` の読み取りと
+//!   `MPVolumeView` の配置）は iOS 分岐のみ、feature `device` 有効時にコンパイルする（`src/device/
+//!   ios_volume_control.rs` から呼ばれる契約）。追加のリンクは無い。
 //! - `apple/fandhe_apple_background_download.m`（Issue #390、background `NSURLSession` による OS 管理の
 //!   バックグラウンドダウンロード）は macOS・iOS の両分岐で feature `device` 有効時にコンパイルする
 //!   （`src/device/apple_background_download.rs` から呼ばれる契約）。Foundation のみで追加のリンクは不要。
@@ -619,6 +622,8 @@ fn main() {
     compile_ios_local_fonts();
     // `ios/fandhe_ios_music_library.m`（Issue #484）。iOS 分岐のみ。
     compile_ios_music_library();
+    // `ios/fandhe_ios_volume_control.m`（Issue #786）。iOS 分岐のみ。
+    compile_ios_volume_control();
     // `ios/fandhe_ios_compass.m`（Issue #1405）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_compass();
     // `ios/fandhe_ios_environment_sensors.m`（Issue #610）。iOS 分岐のみ（macOS は対応表で no）。
@@ -1937,6 +1942,18 @@ fn compile_ios_audio_devices() {
         .file("ios/fandhe_ios_audio_devices.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_audio_devices");
+}
+
+/// `ios/fandhe_ios_volume_control.m` を `cc` でコンパイルする（Issue #786）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_volume_control.rs` が使う）。AVFoundation・MediaPlayer・UIKit は
+/// リンク済み（MediaPlayer は `compile_apple_now_playing`）で追加リンクは無い。
+fn compile_ios_volume_control() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_volume_control.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_volume_control.m")
+        .include("ios")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_volume_control");
 }
 
 /// `ios/fandhe_ios_local_fonts.m` を `cc` でコンパイルする（Issue #1377）。**iOS 分岐のみ**
