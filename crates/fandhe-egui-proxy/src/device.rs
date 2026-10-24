@@ -600,6 +600,9 @@ pub mod drop_session;
 /// Phase 11（親 #123、Issue #609）: 気圧・照度・近接センサーの effect ドライバ（iOS・Android・Windows 実装、
 /// 他 OS は `UnsupportedEnvironmentSensors` 固定。Web は対応表で `no`）。
 pub mod environment_sensors;
+/// Phase 11 の拡充ループ（親 #148、Issue #762）: 画面のスポイトの effect ドライバ（macOS は pull 型
+/// `bridge`、他 OS は `UnsupportedEyeDropper` 固定。Web は `fandhe-web-dom` が持つ）。
+pub mod eye_dropper;
 /// Phase 11 の拡充ループ（親 #102、Issue #416）: ファイルの関連付けの effect ドライバ
 /// （macOS・iOS・Windows 実装、Android は未実装のスタブ、他 OS は `Unsupported` 固定）。
 pub mod file_association;
@@ -967,6 +970,10 @@ pub mod macos_compose_mail_sms;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_device_info;
+/// Issue #762: macOS 向け画面のスポイト実装（`macos/fandhe_macos_eye_dropper.m` の `NSColorSampler` を
+/// 呼ぶ C ABI ラッパー）。`device/eye_dropper.rs` の macOS 経路から呼ばれる。
+#[cfg(target_os = "macos")]
+pub mod macos_eye_dropper;
 /// Issue #1410: macOS 向けフォルダ変更監視実装（`macos/fandhe_macos_file_watch.m`、FSEvents を呼ぶ
 /// C ABI ラッパー）。`device/file_watch.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
