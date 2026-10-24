@@ -82,6 +82,10 @@ generated_screens! {
     crate::device::calendar::calendar_add_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "alarm_show" => fandhe_core::screens::alarm_show::current_screen,
+    crate::device::alarm::alarm_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "launch_at_login_show" => fandhe_core::screens::launch_at_login_show::current_screen,
     crate::device::launch_at_login::launch_at_login_show_effect,
     effect
