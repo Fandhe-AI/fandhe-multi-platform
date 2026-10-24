@@ -92,4 +92,6 @@ if [[ "${install}" -eq 1 ]]; then
   echo "[build-macos-widget-host] 導入しました: ${dest}/FandheWidgetHost.app"
   echo "[build-macos-widget-host] ウィジェットの追加: 通知センターを開く →「ウィジェットを編集」→ 「Fandhe テキスト」を追加"
   echo "[build-macos-widget-host] 画面側: FANDHE_DEVELOPMENT_TEAM=<Team ID> FANDHE_PROXY_APP=home_widget_show cargo run -p fandhe-egui-proxy ..."
+  echo "[build-macos-widget-host] コントロールの追加（macOS 26 以降）: コントロールセンターまたはメニューバーの編集 → 「Fandhe カウント」を追加して押す"
+  echo "[build-macos-widget-host] 画面側: FANDHE_DEVELOPMENT_TEAM=<Team ID> FANDHE_PROXY_APP=quick_settings_tile_show cargo run -p fandhe-egui-proxy ..."
 fi

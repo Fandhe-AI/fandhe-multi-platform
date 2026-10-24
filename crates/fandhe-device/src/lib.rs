@@ -156,6 +156,8 @@ pub mod picture_in_picture;
 pub mod power_state;
 /// Phase 11（端末機能の拡充ループ、親 #94、Issue #325）: 印刷ダイアログを開く。
 pub mod print;
+/// Phase 11（端末機能の拡充ループ、親 #139、Issue #719）: クイック設定タイル・コントロール（押された回数の読み出し）。
+pub mod quick_settings_tile;
 /// Phase 11（端末機能の拡充ループ、親 #105、Issue #444）: セーフエリア・ディスプレイ切り欠き。
 pub mod safe_area_insets;
 /// Phase 11（端末機能の拡充ループ、親 #126、Issue #633）: 画面輝度の取得・設定。

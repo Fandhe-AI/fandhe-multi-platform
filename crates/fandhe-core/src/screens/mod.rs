@@ -99,6 +99,8 @@ pub mod background_task;
 pub mod background_download;
 /// Phase 11 の拡充ループ型サンプル「ファイルの関連付け」（親 #102、Issue #416）。
 pub mod file_association_show;
+/// Phase 11 の拡充ループ型サンプル「クイック設定タイル・コントロール」（親 #139、Issue #719）。
+pub mod quick_settings_tile_show;
 /// Phase 11 の拡充ループ型サンプル「共有の受け取り」（親 #122、Issue #606）。
 pub mod share_receive_show;
 /// Phase 11 の拡充ループ型サンプル「OS の検索への登録」（親 #117、Issue #560）。

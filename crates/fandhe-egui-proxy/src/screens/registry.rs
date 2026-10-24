@@ -390,6 +390,10 @@ generated_screens! {
     crate::device::spotlight_index::spotlight_index_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "quick_settings_tile_show" => fandhe_core::screens::quick_settings_tile_show::current_screen,
+    crate::device::quick_settings_tile::quick_settings_tile_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "share_receive_show" => fandhe_core::screens::share_receive_show::current_screen,
     crate::device::share_receive::share_receive_show_effect,
     effect
