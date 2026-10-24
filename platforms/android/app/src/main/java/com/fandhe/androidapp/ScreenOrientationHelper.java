@@ -110,7 +110,8 @@ final class ScreenOrientationHelper {
             if (call.state.compareAndSet(PENDING, ABANDONED)) {
                 return RESULT_TIMEOUT;
             }
-            // 適用開始済み。取り消せないので終了まで待ち、実結果を返す。
+            // 適用開始済み。取り消せないので、期限を超えても終了まで待って実結果を返す
+            // （setRequestedOrientation が system_server 側で詰まった場合の待ちは守る範囲の外）。
             while (true) {
                 try {
                     call.finished.await();
@@ -156,6 +157,12 @@ final class ScreenOrientationHelper {
         }
     }
 
+    // API 30 未満の経路。Activity.getDisplay() が無いため非推奨 API を使う。
+    @SuppressWarnings("deprecation")
+    private Display getDefaultDisplayCompat() {
+        return activity.getWindowManager().getDefaultDisplay();
+    }
+
     // egui スレッドから呼ぶ。読めないときは null。
     int[] read() {
         try {
@@ -168,7 +175,7 @@ final class ScreenOrientationHelper {
             if (Build.VERSION.SDK_INT >= 30) {
                 display = activity.getDisplay();
             } else {
-                display = activity.getWindowManager().getDefaultDisplay();
+                display = getDefaultDisplayCompat();
             }
             if (display == null) {
                 return null;
@@ -204,6 +211,8 @@ final class ScreenOrientationHelper {
                     lock = LOCK_NONE;
                     break;
                 default:
+                    // 本機能が設定しない希望（manifest や他経路の USER・LOCKED 等）は読めない扱いにし、
+                    // Rust 側が read 全体を Internal にする。現状この Activity に他の設定経路は無い。
                     lock = LOCK_UNKNOWN;
                     break;
             }
