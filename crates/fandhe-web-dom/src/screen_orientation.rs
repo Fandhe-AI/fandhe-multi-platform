@@ -105,6 +105,14 @@ pub(crate) fn failure_from_error_name(name: &str) -> OrientationFailure {
     }
 }
 
+/// 復元 `lock()` の reject を「真の失敗」として記録破棄・`unlock()` するか。
+/// `AbortError` は後続の `lock()` / `unlock()` に置き換えられた印で、より新しい固定や
+/// 有効な記録を壊さないよう後始末しない（契約表 2: 古い世代の完了を捨てる）。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn restore_rejection_is_failure(name: &str) -> bool {
+    name != "AbortError"
+}
+
 /// 期限切れか。非有限値・負の経過は期限切れ扱い（成功にしない）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn expired(started_ms: f64, now_ms: f64, timeout: Duration) -> bool {
@@ -146,7 +154,8 @@ mod web {
 
     use super::{
         decide_lock_support, expired, failure_from_error_name, lock_code, lock_type_str,
-        orientation_code, FULLSCREEN_REJECTED, READ_FAILED, UNLOCK_FAILED,
+        orientation_code, restore_rejection_is_failure, FULLSCREEN_REJECTED, READ_FAILED,
+        UNLOCK_FAILED,
     };
     use crate::mount::{is_live, Applier};
 
@@ -352,8 +361,15 @@ mod web {
             Some((_, p)) => match lock_js(p) {
                 Ok(pr) => {
                     wasm_bindgen_futures::spawn_local(async move {
-                        let ok = JsFuture::from(pr).await.is_ok();
+                        let res = JsFuture::from(pr).await;
+                        let ok = res.is_ok();
                         let now = LOCK.with(|l| l.get()).map(|(_, o)| o);
+                        if let Err(e) = &res {
+                            // 後続の lock/unlock に中断されただけなら、新しい固定と記録を守る。
+                            if !restore_rejection_is_failure(&error_name(e)) {
+                                return;
+                            }
+                        }
                         if ok {
                             // 待つ間に記録が変わっていたら、今の記録へ揃え直す。
                             if now != Some(p) {
@@ -826,6 +842,14 @@ mod tests {
                 failure_from_error_name(n),
                 OrientationFailure::Failed(LOCK_REJECTED.to_string())
             );
+        }
+    }
+
+    #[test]
+    fn restore_abort_is_not_failure() {
+        assert!(!restore_rejection_is_failure("AbortError"));
+        for n in ["NotSupportedError", "SecurityError", "TypeError", ""] {
+            assert!(restore_rejection_is_failure(n));
         }
     }
 
