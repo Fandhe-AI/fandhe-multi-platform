@@ -9,30 +9,46 @@
     "ios": {
       "status": "possible",
       "api": "GameKit（`GKLocalPlayer` / `GKLeaderboard` / `GKAchievement`）",
-      "perm": "Game Center capability（要確認）",
-      "url": "https://developer.apple.com/documentation/gamekit",
-      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement・capability の要否は検証できない。"
+      "perm": "Game Center capability（`com.apple.developer.game-center` entitlement。有料の Apple Developer Program のみで、無料の Apple Developer では付けられない）",
+      "url": [
+        "https://developer.apple.com/documentation/gamekit/initializing-and-configuring-game-center",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.game-center",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-ios",
+        "https://developer.apple.com/documentation/gamekit/authenticating-a-player"
+      ],
+      "deferred": "Game Center capability は有料の Apple Developer Program だけが付けられ（無料の Apple Developer の一覧に無い）、ランキング・実績は Xcode の GameKit bundle で定義して App Store Connect と同期するか、Xcode の Debug Mode と Game Progress Manager（実機・iOS 18.4 以上）で手元で試す。開発者登録が期限切れで、iOS アプリは Xcode の scheme から起動しない手組みのバンドルのため保留。ベンダーの個別審査は不要で、開発者登録と App Store Connect のアプリ登録が揃えば着手できる",
+      "note": "未実装。サインインは `GKLocalPlayer.local.authenticateHandler` に渡し、GameKit が「ゲームが Game Center 用に構成されているか」も確かめる（公式）。構成されていないアプリでの失敗は `GKError.Code.gameUnrecognized` に当たる見込み（未検証）"
     },
     "android": {
       "status": "possible",
-      "api": "Google Play Games Services v2（ランキング・実績・フレンド）",
-      "perm": "なし（ページに記載なし、要確認）",
-      "url": "https://developer.android.com/games/pgs/overview",
-      "note": "未実装。GMS（Google Play 開発者サービス）依存。Play Console 側でのゲーム登録が前提（要確認）"
+      "api": "Google Play Games Services v2（`com.google.android.gms:play-services-games-v2`。サインイン・ランキング・実績）",
+      "perm": "アプリで宣言する権限はページに記載なし。Play Console でのゲーム登録、OAuth 2.0 クライアント（パッケージ名と署名証明書の SHA-1）、manifest へのプロジェクト ID、テスターの登録が要る",
+      "url": [
+        "https://developer.android.com/games/pgs/overview",
+        "https://developer.android.com/games/pgs/android/android-start",
+        "https://developer.android.com/games/pgs/console/setup"
+      ],
+      "deferred": "Play Games Services v2 の SDK は Google Play services のライブラリ（`play-services-games-v2`）で、GMS に依存しない方針のため保留（in-app-review・activity-recognition と同じ）。確かめるには Play Console でのゲーム登録・OAuth クライアント・テスター登録も要る。ベンダーの個別審査は不要で、方針が変われば着手できる",
+      "note": "未実装。GMS 非搭載端末では使えない。未公開のゲームはテスターに登録したアカウントでしか動かない（公式）"
     },
     "macos": {
       "status": "possible",
-      "api": "GameKit（iOS と同じフレームワーク）",
-      "perm": "Game Center capability（要確認）",
-      "url": "https://developer.apple.com/documentation/gamekit",
-      "note": "未実装。macOS での利用可否の詳細は要確認。Apple Developer Program が現在期限切れで、entitlement・capability の要否は検証できない。"
+      "api": "GameKit（iOS と同じフレームワーク。`authenticateHandler` は macOS 10.9 以上）",
+      "perm": "Game Center capability（`com.apple.developer.game-center` entitlement。有料の Apple Developer Program のみ）と App Sandbox の Incoming / Outgoing Connections",
+      "url": [
+        "https://developer.apple.com/documentation/gamekit/initializing-and-configuring-game-center",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.game-center",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-macos"
+      ],
+      "deferred": "Game Center capability は有料の Apple Developer Program だけが付けられ（無料の Apple Developer の一覧に無い）、ランキング・実績は Xcode の GameKit bundle で定義して App Store Connect と同期するか、Xcode の Debug Mode と Game Progress Manager（macOS 15.4 以上）で手元で試す。開発者登録が期限切れで、デスクトップ版は Xcode の scheme から起動しない素の実行体のため保留。ベンダーの個別審査は不要で、開発者登録と App Store Connect のアプリ登録が揃えば着手できる",
+      "note": "未実装。Mac のターゲットは App Sandbox の Incoming / Outgoing Connections を両方有効にする（公式）"
     },
     "windows": {
       "status": "no",
-      "api": "OS 標準のランキング・実績 API は確認できず",
+      "api": "OS 標準のランキング・実績 API なし（Xbox services は GDK と Partner Center の別系統）",
       "perm": "",
-      "url": "",
-      "note": "要確認。Xbox のサービスは別系統で、本調査では URL 未確認"
+      "url": "https://learn.microsoft.com/en-us/gaming/game-publishing/concepts/xbox-services",
+      "note": "Xbox services（サインイン・実績・ランキング）は OS の API ではなく、Xbox の開発者プログラムへの登録と Partner Center でのゲーム構成が前提。実績の構成はゲームのコンセプト承認の後にしかできない"
     },
     "web": {
       "status": "no",
@@ -43,5 +59,5 @@
       "note": ""
     }
   },
-  "note": "game-center は各プラットフォームのゲーム用ソーシャル基盤。iOS / macOS は GameKit、Android は Play Games Services で、API が別系統のため共通 trait は「ログイン・ランキング送信・実績解除」に絞る必要がある。gamepad（既存 id）との違い: 入力ではなくオンラインの記録。今回の範囲: サインイン状態を画面に出し、固定のスコアをランキングへ送る。"
+  "note": "game-center は各プラットフォームのゲーム用ソーシャル基盤。iOS / macOS は GameKit、Android は Play Games Services で、API が別系統のため共通 trait は「サインイン・ランキング送信・実績解除」に絞る必要がある。gamepad（既存 id）との違い: 入力ではなくオンラインの記録。どの OS も AI 側だけではサインインとスコア送信を確かめられない（有料の開発者登録・ストア側の登録・GMS 依存のいずれかが要る）ため、iOS・macOS・Android は保留、Windows・Web はできない。条件が揃ったら保留の一覧から見直す。範囲（再開時の案）: サインイン状態を画面に出し、固定のスコアを 1 つのランキングへ送る。結果は送信済み・未サインイン・失敗の三値で、ランキングの表示・実績・マルチプレイは持たない"
 }
