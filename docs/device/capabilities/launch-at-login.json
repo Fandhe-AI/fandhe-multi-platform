@@ -24,14 +24,17 @@
       "note": "できない。Android にログイン時の自動起動の概念はない。近い `BOOT_COMPLETED` の受信から Activity を起動するのは Android 10 以降の背景からの Activity 起動制限に当たり、例外条件に含まれない。通知で利用者を誘導する代替は別機能で、`RECEIVE_BOOT_COMPLETED` の追加が要るため本機能では扱わない"
     },
     "macos": {
-      "status": "possible",
-      "api": "`SMAppService.mainApp`（`register` / `unregister` / `status`、macOS 13+）",
+      "status": "done",
+      "api": "`SMAppService.mainApp`（`register` / `unregister` / `status`、`openSystemSettingsLoginItems`、macOS 13+）",
       "perm": "なし（利用者がシステム設定のログイン項目で許可・無効化できる。アプリのコード署名が必要）",
       "url": [
         "https://developer.apple.com/documentation/servicemanagement/smappservice/mainapp",
         "https://developer.apple.com/documentation/servicemanagement/smappservice/status-swift.enum"
       ],
-      "note": "未実装。macOS 13 未満と、.app 外の素の実行体では `Unsupported`（13 未満の `SMLoginItemSetEnabled` はヘルパーバンドル必須で非推奨のため使わない）。登録後に `status` を読み戻し、`requiresApproval`（承認待ち・利用者が無効化）は有効と表示しない。ad-hoc 署名の .app で登録できるかは Mac 目視で確かめる"
+      "note": "実装済み（#696）。画面のボタンで有効化・無効化・設定画面を開く・状態の読み直しができる。登録後に `status` を読み戻し、`requiresApproval`（承認待ち・利用者が無効化）は有効と表示しない（成功は `Enabled` だけ）。未登録の解除は OS を呼ばずべき等に成功する。macOS 13 未満と、.app 外の素の実行体では `Unsupported`（13 未満の `SMLoginItemSetEnabled` はヘルパーバンドル必須で非推奨のため使わない）。未確認: ad-hoc 署名の .app で登録できるか、`requiresApproval` の出方（どちらも Mac 目視で確かめる）。エラーコードの分類は SMErrors.h の値に基づくが、一次情報との照合は未了で、外れても失敗に倒れ成功は作らない",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#694）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_launch_at_login.m + crates/fandhe-egui-proxy/src/device/macos_launch_at_login.rs + crates/fandhe-egui-proxy/src/device/launch_at_login.rs + crates/fandhe-core/src/screens/launch_at_login_show.rs + crates/fandhe-device/src/launch_at_login.rs、Issue #696"
     },
     "windows": {
       "status": "possible",
