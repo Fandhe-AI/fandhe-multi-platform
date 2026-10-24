@@ -163,6 +163,8 @@ pub mod focus_mode_status_show;
 pub mod foldable_posture_show;
 /// Phase 11 の拡充ループ型サンプル「全画面表示」（親 #1133、Issue #1312）。
 pub mod fullscreen_toggle;
+/// Phase 11 の拡充ループ型サンプル「グローバルホットキー」（親 #150、Issue #766）。
+pub mod global_hotkey;
 /// Phase 11 の拡充ループ型サンプル「触覚フィードバック」（親 #1090、Issue #1091）。
 pub mod haptics_tap;
 /// Phase 11 の拡充ループ型サンプル「ホーム画面ウィジェット」（親 #1064、Issue #1065）。

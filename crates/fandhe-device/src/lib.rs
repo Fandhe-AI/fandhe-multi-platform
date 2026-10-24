@@ -94,6 +94,8 @@ pub mod gamepad;
 pub mod geocoding_search;
 /// Phase 11（端末機能の拡充ループ）: location に乗せた Rust 側のジオフェンス判定。
 pub mod geofence;
+/// Phase 11（端末機能の拡充ループ、親 #150、Issue #766）: グローバルホットキー（固定の組み合わせ 1 つ）。
+pub mod global_hotkey;
 /// Phase 11（端末機能の拡充ループ）: 触覚フィードバック（軽い振動 1 回）。
 pub mod haptics;
 /// Phase 11（端末機能の拡充ループ）: ホーム画面ウィジェットの 1 行テキスト。

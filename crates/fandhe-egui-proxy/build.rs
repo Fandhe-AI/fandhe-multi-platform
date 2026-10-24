@@ -223,6 +223,9 @@
 //! - `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384、`NSWorkspace openURL:` による
 //!   `mailto:` / `sms:` の作成画面表示）は **macOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルする（`src/device/macos_compose_mail_sms.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_global_hotkey.m`（Issue #766、Carbon の `RegisterEventHotKey` による固定
+//!   組み合わせ 1 つの登録・解除・押下通知。`src/device/macos_global_hotkey.rs` から呼ばれる契約）。
+//!   `Carbon.framework` をリンクする。
 //! - `macos/fandhe_macos_open_in_shell.m`（Issue #749、`NSWorkspace` による既定アプリで開く・
 //!   Finder で選択表示）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_open_in_shell.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -1581,6 +1584,18 @@ fn compile_macos_compose_mail_sms() {
         .compile("fandhe_macos_compose_mail_sms");
 }
 
+/// `macos/fandhe_macos_global_hotkey.m` を `cc` でコンパイルする（Issue #766）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_global_hotkey.rs` が使う）。Carbon の `RegisterEventHotKey` を
+/// 使うため `Carbon.framework` をここでリンクする（許可・entitlement は不要）。
+fn compile_macos_global_hotkey() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_global_hotkey.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_global_hotkey.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_global_hotkey");
+    println!("cargo:rustc-link-lib=framework=Carbon");
+}
+
 /// `macos/fandhe_macos_open_in_shell.m` を `cc` でコンパイルする（Issue #749）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_open_in_shell.rs` が使う）。AppKit は `build_macos` 側の
 /// 既存リンクで足りるため追加リンクは無い。
@@ -2214,6 +2229,8 @@ fn build_macos() {
     compile_macos_in_app_review();
     // `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_compose_mail_sms();
+    // `macos/fandhe_macos_global_hotkey.m`（Issue #766）も macOS 専用。Carbon をリンクする。
+    compile_macos_global_hotkey();
     // `macos/fandhe_macos_open_in_shell.m`（Issue #749）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_open_in_shell();
     // `macos/fandhe_macos_eye_dropper.m`（Issue #762）も macOS 専用。AppKit は既存のリンクを使う。

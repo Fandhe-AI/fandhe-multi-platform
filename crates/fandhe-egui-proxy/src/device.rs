@@ -634,6 +634,9 @@ pub mod geocoding_search;
 /// Phase 11 の拡充ループ（親 #1056、Issue #1057）: ジオフェンスの effect ドライバ
 /// （location の継続取得に乗せて `GeofenceTracker` で判定する）。
 pub mod geofence;
+/// Phase 11 の拡充ループ（親 #150、Issue #766）: グローバルホットキーの effect ドライバ
+/// （macOS 実装。Windows は骨格のスタブで #767 が埋める。他 OS は `UnsupportedGlobalHotkey` 固定）。
+pub mod global_hotkey;
 /// Phase 11 の拡充ループ（親 #1090、Issue #1091）: 触覚フィードバックの effect ドライバ
 /// （macOS/Windows 実装、他 OS は `UnsupportedHaptics` 固定。Web は `fandhe-web-dom`、
 /// iOS/Android は #1092）。
@@ -975,6 +978,10 @@ pub mod macos_eye_dropper;
 /// C ABI ラッパー）。`device/file_watch.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_file_watch;
+/// Issue #766: macOS 向けグローバルホットキー実装（`macos/fandhe_macos_global_hotkey.m`（Carbon）を呼ぶ
+/// C ABI ラッパーと押下の受け口）。`device/global_hotkey.rs` の macos 経路から呼ばれる。
+#[cfg(target_os = "macos")]
+pub mod macos_global_hotkey;
 /// Issue #563: macOS 向けアプリ内レビュー依頼実装（`macos/fandhe_macos_in_app_review.m` を呼ぶ C ABI ラッパー）。
 /// `device/in_app_review.rs` の macos 経路から呼ばれる。結果コードの写像をホストでテストできるよう cfg は `any(macos, test)`。
 #[cfg(any(target_os = "macos", test))]
@@ -1373,6 +1380,11 @@ pub mod windows_focus_mode_status;
 /// ラッパー）。`device/gamepad.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_gamepad;
+/// Issue #766: Windows 向けグローバルホットキーの骨格（実装は #767）。
+/// `device/global_hotkey.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_global_hotkey;
 /// Issue #1091: Windows 向け触覚フィードバック実装（WinRT `VibrationDevice` ラッパー）。
 /// `device/haptics.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -1586,6 +1598,7 @@ pub fn shutdown() {
     bluetooth_classic::stop_shared_discovery();
     lan_discovery::stop_shared_discovery();
     local_peer::stop_shared_exchange();
+    global_hotkey::shutdown();
     midi::shutdown();
     media_playback::shutdown();
     now_playing::shutdown();
