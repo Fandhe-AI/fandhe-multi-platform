@@ -342,16 +342,37 @@ mod web {
     }
 
     /// 現在の記録どおりに OS の希望を揃える（期限後・破棄後に遅れて resolve した `lock()` の始末）。
+    /// 復元 `lock()` が保留・失敗しても記録と実際の固定がずれないよう、完了後に記録を照合し直す
+    /// （保留中に解除・再固定が走っていれば、その時点の記録へ揃え直す。契約表 2）。
     fn restore_to_record() {
         match LOCK.with(|l| l.get()) {
             None => {
                 let _ = unlock_js();
             }
-            Some((_, p)) => {
-                if let Ok(pr) = lock_js(p) {
-                    swallow(pr.into());
+            Some((_, p)) => match lock_js(p) {
+                Ok(pr) => {
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let ok = JsFuture::from(pr).await.is_ok();
+                        let now = LOCK.with(|l| l.get()).map(|(_, o)| o);
+                        if ok {
+                            // 待つ間に記録が変わっていたら、今の記録へ揃え直す。
+                            if now != Some(p) {
+                                restore_to_record();
+                            }
+                        } else if now == Some(p) {
+                            // 復元に失敗した。記録が固定を主張したままにしない。
+                            LOCK.with(|l| l.set(None));
+                            let _ = unlock_js();
+                        }
+                    });
                 }
-            }
+                Err(_) => {
+                    if recorded() == Some(p) {
+                        LOCK.with(|l| l.set(None));
+                        let _ = unlock_js();
+                    }
+                }
+            },
         }
     }
 
