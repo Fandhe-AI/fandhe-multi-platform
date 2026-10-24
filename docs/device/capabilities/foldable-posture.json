@@ -15,10 +15,14 @@
     },
     "android": {
       "status": "possible",
-      "api": "Jetpack WindowManager（`WindowInfoTracker` の `FoldingFeature`：折れ目の位置・姿勢 flat / half-opened）",
+      "api": "Jetpack WindowManager（`WindowInfoTracker` の `FoldingFeature`：折れ目の位置 `bounds`・向き `orientation`・姿勢 `state`（`FLAT` / `HALF_OPENED`））",
       "perm": "不要",
-      "url": "https://developer.android.com/develop/ui/compose/layouts/adaptive/foldables/make-your-app-fold-aware",
-      "note": "未実装。Compose 向けのページ。View / JNI 経由で Rust へ姿勢を渡す。折りたたみ端末でないと実機確認できない"
+      "url": [
+        "https://developer.android.com/develop/ui/compose/layouts/adaptive/foldables/make-your-app-fold-aware",
+        "https://developer.android.com/jetpack/androidx/releases/window"
+      ],
+      "note": "未実装。`FoldingFeature` は窓と交わる折れ目だけを報告し（窓が折れ目をまたがなければ空）、ヒンジの角度は公開しない。閉じた状態を表す値は無い。Java から受けるには 1.5 系では `androidx.window:window-java` の `WindowInfoTrackerCallbackAdapter` を使う。依存なしの代替は無い: `Sensor.TYPE_HINGE_ANGLE` は角度だけで折れ目の位置・向きが取れず、`DeviceStateManager` は SystemApi で一般のアプリは使えない",
+      "deferred": "`androidx.window`（`window` と `window-java`）は新しい依存で、推移依存に kotlin-stdlib と kotlinx-coroutines が入る（Kotlin ソースを持たない現在の Gradle 構成に Kotlin のランタイムが加わる）。新しい依存を足すため保留。依存の追加を決めれば着手できる。確かめるには折りたたみ端末が要る"
     },
     "macos": {
       "status": "n-a",
@@ -33,12 +37,16 @@
     },
     "web": {
       "status": "possible",
-      "api": "Device Posture API（`navigator.devicePosture`、CSS `device-posture`）、Viewport Segments は実験的",
-      "perm": "なし",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Device_Posture_API",
-      "safari": "非対応",
-      "note": "Chromium のみ（MDN は Experimental / Limited availability）。折りたたみ端末でないと値が変わらない"
+      "api": "Device Posture API（`navigator.devicePosture.type`：`continuous` / `folded`、Chrome 132+）と Viewport Segments API（`window.viewport.segments`、Chrome 138+）",
+      "perm": "なし（secure context 必須）",
+      "url": [
+        "https://developer.mozilla.org/en-US/docs/Web/API/Device_Posture_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Viewport_Segments_API",
+        "https://w3c.github.io/device-posture/"
+      ],
+      "safari": "Viewport Segments は非対応。Device Posture は iOS Safari 27 で設定（`DevicePostureEnabled`）を有効にした場合のみ（MDN の互換表）。デスクトップ Safari は非対応",
+      "note": "未実装。Chromium 系のみ（Firefox は非対応、MDN は Experimental）。姿勢は `continuous` / `folded` の 2 値で、全開と全閉はどちらも `continuous`（閉じを表す値は無い）。折りたたみでない端末も `continuous` を返すため、折りたためない端末と広げた端末は区別できない。折れ目の位置・向きは 2 つの区画（segment）の並びから求める。web-sys に型が無いため `js_sys::Reflect` で読む（新しい crate・feature は足さない）。Chrome DevTools Protocol の `Emulation.setDevicePostureOverride` / `setDisplayFeaturesOverride` で折りたたみ端末なしに値を与えられる"
     }
   },
-  "note": "Android と Web（Chromium）が主。iOS は 旧#1108 で調査中のため unrated。macOS は n-a、Windows は no 寄り。safe-area-insets・screen-orientation（別 id）との違い: 折れ目と姿勢（広げた / 半開き）を扱う。今回の範囲: 姿勢（平ら・半開き・閉じ）とヒンジの位置・向きを表示し、半開きなら画面を上下 2 分割で描く"
+  "note": "Web（Chromium）が主。Android は新しい依存（androidx.window）が要るため保留、iOS は 旧#1108 で調査中のため unrated。macOS は n-a、Windows は no 寄り。safe-area-insets・screen-orientation（別 id）との違い: 折れ目と姿勢を扱う。今回の範囲: 姿勢（平ら / 折れている / 不明）と折れ目の位置・向きを一定間隔で読み直して表示し、折れていて折れ目が分かるときは画面を折れ目に沿って 2 分割で描く。閉じた状態とヒンジの角度は扱わない（Web・Android とも API に無い）。守る範囲: 取れないときに「平ら」や折れ目なしへ倒さないこと、1 ページ内の読み取り、タイマーとリスナーの解放。守らない範囲: 反映の遅れ（読み直しの間隔 + 1 フレーム。背景タブはさらに遅れる）、折りたためない端末と広げた端末の区別、複数タブ間の食い違い、ページの zoom が 1 でないときの位置のずれ"
 }
