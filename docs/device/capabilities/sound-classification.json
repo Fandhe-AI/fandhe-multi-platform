@@ -8,10 +8,10 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "SoundAnalysis（`SNClassifySoundRequest`）",
-      "perm": "マイク使用時は `NSMicrophoneUsageDescription`（要確認）",
-      "url": "https://developer.apple.com/documentation/soundanalysis",
-      "note": "未実装。OS 内蔵の分類器が使える（iOS 15+）。"
+      "api": "SoundAnalysis（`SNClassifySoundRequest` の内蔵分類器 `SNClassifierIdentifierVersion1` + `SNAudioStreamAnalyzer`）+ AVFoundation（`AVAudioEngine` の入力タップ・`AVAudioSession`）",
+      "perm": "`NSMicrophoneUsageDescription`（mic-record で宣言済み。新しい権限キーは足さない）",
+      "url": "https://developer.apple.com/documentation/soundanalysis/classifying-sounds-in-an-audio-stream",
+      "note": "未実装。内蔵分類器（`initWithClassifierIdentifier:error:`）は iOS 15 以上で、アプリの最小 OS（17）では常に使える。Objective-C から使える。マイクは `AVAudioEngine` の入力タップで取り、専用の serial queue で `analyzeAudioBuffer:atAudioFramePosition:` へ流す（公式文書がリアルタイムの文脈から呼ばず専用キューで直列化するよう求めている）。分類中は `AVAudioSession` を Record にし、開始前の category / options を保存して全終了経路で戻す。背景遷移・音声の割り込み（`AVAudioSessionInterruptionNotification`）・入力形式の変更では止めて中断扱いにし、自動では再開しない。ラベルは OS の識別子（英語の技術名で、公式文書は UI へそのまま出す前提ではないとしている）"
     },
     "android": {
       "status": "no",
@@ -22,10 +22,10 @@
     },
     "macos": {
       "status": "possible",
-      "api": "SoundAnalysis（macOS 12+）",
-      "perm": "マイク使用時は TCC のマイク許可（要確認）",
-      "url": "https://developer.apple.com/documentation/soundanalysis",
-      "note": "未実装。"
+      "api": "SoundAnalysis（`SNClassifySoundRequest` の内蔵分類器 `SNClassifierIdentifierVersion1` + `SNAudioStreamAnalyzer`）+ AVFoundation（`AVAudioEngine` の入力タップ）",
+      "perm": "Info.plist `NSMicrophoneUsageDescription`（mic-record で実行体に埋め込み済み。entitlement 不要。App Sandbox 無効の素の実行体のため）",
+      "url": "https://developer.apple.com/documentation/soundanalysis/classifying-sounds-in-an-audio-stream",
+      "note": "未実装。内蔵分類器は macOS 12 以上。実行体の最小 OS は 11 のため `@available` で分け、11 は非対応として返す。権限判定は mic-record と同じ `AVCaptureDevice` の API を使う。ターミナルから素の実行体を起動すると TCC の許可の紐づけ先が起動元のアプリになるため、確認は `.app` にまとめて `open` で起動する。入力機器の変更（`AVAudioEngineConfigurationChangeNotification`）では止めて中断扱いにする（公式文書は入力形式が変わったら analyzer を作り直すよう求めている）"
     },
     "windows": {
       "status": "no",
@@ -43,5 +43,5 @@
       "note": "ブラウザに音分類 API は無い。"
     }
   },
-  "note": "iOS / macOS は SoundAnalysis の内蔵分類器で、Android・Windows・Web は OS 内蔵の分類器が無く no。ml-inference（既存 id）は自前モデルを動かす機能で、本機能は OS が持つ分類器を使う点が違う。今回の範囲: マイク入力を内蔵分類器へ流し、上位 1 件のラベルと信頼度を画面に出す（独自カテゴリ・録音保存は扱わない）。"
+  "note": "iOS / macOS は SoundAnalysis の内蔵分類器で、Android・Windows・Web は OS 内蔵の分類器が無く no。ml-inference（既存 id）は自前モデルを動かす機能で、本機能は OS が持つ分類器を使う点が違う。今回の範囲: マイク入力を内蔵分類器へ流し続け、上位 3 件のラベル（OS の識別子のまま）と信頼度を画面に出す。開始・停止は利用者の操作で、画面を離れると止める。守る範囲: 1 プロセス内の開始・停止・結果の順序、最後の結果を古いまま見せ続けない、権限拒否・マイクなし・中断を成功に見せない、全終了経路でマイクと音声セッションを解放・復元する、ラベル・信頼度・OS のエラーをログに出さない。守らない範囲: ラベルの翻訳、分類の精度と更新間隔（OS が決める）、背景での分類、割り込み後の自動再開、マイクを使う他の機能との同時使用（1 プロセス 1 画面の前提）、複数プロセス、独自カテゴリ・録音の保存。"
 }
