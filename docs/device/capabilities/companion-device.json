@@ -19,14 +19,17 @@
       "note": "未実装。iOS / iPadOS のみ（Apple 公式表記）。探す条件（service UUID か company identifier）は Info.plist に宣言した値と一致させる必要がある"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`CompanionDeviceManager.associate(AssociationRequest, Executor, Callback)`（API 33 以上）+ `BluetoothLeDeviceFilter`",
       "perm": "uses-permission は不要（位置情報の権限も不要）。Manifest に `uses-feature android.software.companion_device_setup`（`required=false`）。端末の位置情報サービスがオンであること（公式）",
       "url": [
         "https://developer.android.com/develop/connectivity/bluetooth/companion-device-pairing",
         "https://developer.android.com/sdk/api_diff/33/changes/android.companion.CompanionDeviceManager"
       ],
-      "note": "未実装。OS の機器選択画面（同意ダイアログ）を `onAssociationPending` の `IntentSender` で出し、結果を Activity の結果で受ける。名前は `AssociationInfo.getDisplayName()`（API 33）で取り、表示した後に `disassociate(int)` で関連付けを外す。API 26〜32 の旧経路（`onDeviceFound`・`EXTRA_DEVICE`・`disassociate(String)`）は使わず非対応にする。フレームワーク API で追加の依存は無い"
+      "note": "実装済み（Issue #741）。API 33 以上で OS の機器選択画面（同意ダイアログ）を `onAssociationPending` の `IntentSender` で出し、BLE 機器を 1 台選ばせる。名前は `AssociationInfo.getDisplayName()`（API 33）で取り、`disassociate(int)` で関連付けを外し終えてから結果を返す（外せなければ失敗）。位置情報サービス・Bluetooth がオフなら失敗、API 32 以下・機能なしは非対応にする。API 26〜32 の旧経路（`onDeviceFound`・`EXTRA_DEVICE`・`disassociate(String)`）は使わない。フレームワーク API で追加の依存は無い。守らない範囲: API 32 以下、関連付けを残すこと、背景での起動、通信とボンディング、選択画面の表示中のプロセス死、複数プロセス。API 33 は見つからない場合もキャンセルとして出ることがある（結果コードで区別できる API 34 以上は NotFound にする）",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#734）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/CompanionDeviceHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_companion_device.rs + crates/fandhe-egui-proxy/src/device/companion_device.rs + crates/fandhe-core/src/screens/companion_device_show.rs + crates/fandhe-device/src/companion_device.rs、Issue #741"
     },
     "macos": {
       "status": "no",
@@ -51,5 +54,5 @@
       "note": "ブラウザに付属機器のペアリング API は無い（Web Bluetooth の `requestDevice` は bluetooth-le の範囲）。"
     }
   },
-  "note": "iOS 18 以降と Android に届く。bluetooth-le（既存 id）の接続は機器を自分で探すもので、本機能は OS の標準ペアリング UI で機器を選び、位置権限などを避けて接続する点が違う。iOS は宣言でアプリ全体の CoreBluetooth が登録済みの機器に限られ bluetooth-le と両立しないため保留。範囲: Android 13 以上で OS の機器選択画面を出して BLE 機器 1 台を選び、選んだ機器の名前を画面に出す。結果は選んだ（名前、名前なしを含む）/ キャンセル / 失敗の三値で、表示した後に関連付けを外す（以降の通信は bluetooth-le に任せる）。守らない範囲: Android 12L 以下、関連付けを残すこと・背景での起動、機器との通信・OS のペアリング（ボンディング）、選択画面の表示中のプロセス死、複数プロセス"
+  "note": "iOS 18 以降と Android に届く。bluetooth-le（既存 id）の接続は機器を自分で探すもので、本機能は OS の標準ペアリング UI で機器を選び、位置権限などを避けて接続する点が違う。iOS は宣言でアプリ全体の CoreBluetooth が登録済みの機器に限られ bluetooth-le と両立しないため保留。範囲: Android 13 以上で OS の機器選択画面を出して BLE 機器 1 台を選び、選んだ機器の名前を画面に出す。結果は選んだ（名前、名前なしを含む）/ キャンセル / 失敗の三値で、表示した後に関連付けを外す（以降の通信は bluetooth-le に任せる）。再生成で旧 helper が回収された後に届いた関連付けも外す。守らない範囲: Android 12L 以下、関連付けを残すこと・背景での起動、機器との通信・OS のペアリング（ボンディング）、選択画面の表示中のプロセス死、複数プロセス、`disassociate` が失敗した関連付けはアプリ内に記憶せず、起動時と次の要求の開始直前に OS の関連付け一覧（`getMyAssociations`）と突き合わせて全件外す（再生成・プロセス死をまたいで回収する。回収までの間は OS 側に残りうる。失敗した結果は `Internal` で返し、成功とは見せない）"
 }

@@ -1,0 +1,561 @@
+package com.fandhe.androidapp;
+
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothManager;
+import android.companion.AssociationInfo;
+import android.companion.AssociationRequest;
+import android.companion.BluetoothLeDeviceFilter;
+import android.companion.CompanionDeviceManager;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentSender;
+import android.content.pm.PackageManager;
+import android.location.LocationManager;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+
+import androidx.activity.ComponentActivity;
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.IntentSenderRequest;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.RequiresApi;
+import androidx.core.content.ContextCompat;
+import androidx.core.location.LocationManagerCompat;
+import androidx.lifecycle.Lifecycle;
+
+import java.lang.ref.WeakReference;
+
+// 付属機器のペアリング（Issue #741、親 #143 の b-android）の Android 実装ヘルパー。範囲は Android 13
+// （API 33）以上で OS の機器選択画面を出し、BLE 機器を 1 台選ばせて名前を返すこと。名前を取ったら関連付けを
+// 外す（関連付けを残すこと・機器との通信・ボンディングは範囲外）。MainActivity から生成・委譲される。
+// Rust の `device/android_companion_device.rs` が `MainActivity.requestCompanionDevicePick` を JNI で呼び、
+// 結果を `nativeOnCompanionDeviceResult` で受けて `companion_device::complete_from_os` へ渡す。
+// 選択画面を起動する直前に `nativeTryBeginPresent` で Rust 側の期限切れ・差し替えと排他にする。
+//
+// 流れ: pick（JNI スレッド）→ start（UI スレッド。API・機能・位置情報サービス・Bluetooth を検査）→
+// CompanionDeviceManager.associate → onAssociationPending で IntentSender を起動 →
+// Activity の結果（RESULT_OK と AssociationInfo が揃った時点）→ disassociate → 結果を Rust へ。
+// RESULT_OK 後に AssociationInfo が届かない場合は 3 秒の猶予（UI スレッドの単調時計）で KIND_INTERNAL にする。
+// disassociate は Rust へ結果を送るより前に行う。外せなければ KIND_INTERNAL（成功にしない）。
+//
+// 結果コードの SSOT は Rust 側 `fandhe_device::companion_device` の契約で、KIND_* は
+// `android_companion_device.rs` の定数と同じ値。期限（表示開始まで）は Rust の単調時計だけが持ち、
+// ここには持たない。API 33 ではキャンセルと探索の期限切れを結果コードで区別できない場合があり、
+// 区別できない結果は KIND_CANCELLED に倒す（嘘の成功ではない）。
+//
+// ライフサイクル: Activity は WeakReference で持ち、OS へ渡す CDM コールバックは static クラスで helper を
+// 弱参照する（旧 Activity を OS 側の保留処理から到達させない）。状態はインスタンスフィールド。onPause は中断扱いにしない（選択画面を出すと自身が pause
+// する）。onDestroy で保留中の要求を KIND_INTERRUPTED で確定し、記録済みの関連付けを外す。再生成後の新
+// インスタンスは NONE から始まり、Rust 側 reset_pending_tracking() と対で旧要求を捨てる。旧インスタンス
+// 宛の結果が新インスタンスのランチャーへ届いても、起動を記録した要求が無いため関連付けを外して捨て、
+// 新しい要求の id は消費しない。
+// 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止・旧要求の関連付けの解除。
+// helper が回収された後に届いた関連付けは、static コールバックが Application Context で自力で外す。
+// 解除に失敗した関連付けはアプリ内に記憶せず、OS の一覧（getMyAssociations）を正として `sweep` が
+// init と新しい要求の開始直前に全件外す（再生成・プロセス死をまたいでも取り残しを回収する）。
+// 解除に失敗した結果は KIND_INTERNAL で、成功とは見せない。
+// 守らない範囲: API 32 以下・関連付けを残すこと・背景での起動・機器との通信とボンディング・
+// 選択画面の表示中のプロセス死・複数プロセス・次の sweep までの間に OS 側へ残る関連付け。
+// ロック順: this のロックを持ったまま nativeTryBeginPresent / nativeOnCompanionDeviceResult を呼ぶ。
+// Rust 側は自分のロックの内側から Java を呼ばない（begin() でロックを放してから pick を呼ぶ）ため
+// 循環しない。CDM のコールバックは main executor で受け、Activity の結果と同じ UI スレッドに直列化する。
+// 機器名・onFailure の文言・例外メッセージはログに出さない。
+final class CompanionDeviceHelper {
+    static final int KIND_SELECTED = 0;
+    static final int KIND_CANCELLED = 1;
+    static final int KIND_UNSUPPORTED = 2;
+    static final int KIND_LOCATION_OFF = 3;
+    static final int KIND_BLUETOOTH_OFF = 4;
+    static final int KIND_NOT_FOUND = 5;
+    static final int KIND_NOT_FOREGROUND = 6;
+    static final int KIND_INTERRUPTED = 7;
+    static final int KIND_INTERNAL = 8;
+
+    private static native boolean nativeTryBeginPresent(long requestId);
+
+    private static native void nativeOnCompanionDeviceResult(long requestId, int kind, String name);
+
+    // Activity は弱参照で持つ。OS（CompanionDeviceManager）へ渡すコールバックから旧 Activity へ到達させない
+    // （GeocodingHelper #714 と同じ方針）。OS 呼び出しに要る Context は Application Context を使う。
+    private final WeakReference<ComponentActivity> activityRef;
+    // Application Context は Activity.attach 前に取れない（NPE になる）ため、onCreate 以降の `init` または初回の
+    // `start` で取る。コンストラクタ（MainActivity のフィールド初期化子から呼ばれる）では触らない。
+    private volatile Context appContext;
+    private final RequestTracker request = new RequestTracker();
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
+    private final ActivityResultLauncher<IntentSenderRequest> launcher;
+
+    // 以下は this のロックで守る。
+    // 選択画面の起動を OS に渡した要求。
+    private long launchedId = RequestTracker.NONE;
+    // RESULT_OK を受けたが AssociationInfo がまだ届いていない要求。
+    private long okWaitingId = RequestTracker.NONE;
+    // onAssociationCreated で届いた現在の要求の関連付け（AssociationInfo。API 33 未満では常に null）。
+    private Object pendingInfo;
+    private boolean destroyed;
+    // RESULT_OK 後に AssociationInfo を待つ猶予。postDelayed は端末稼働時間（単調時計）基準で、壁時計の変更に影響されない。
+    private static final long INFO_GRACE_MS = 3000L;
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private Runnable graceTask;
+
+    CompanionDeviceHelper(ComponentActivity activity) {
+        this.activityRef = new WeakReference<>(activity);
+        this.launcher = activity.registerForActivityResult(
+                new ActivityResultContracts.StartIntentSenderForResult(), this::onActivityResult);
+    }
+
+    // MainActivity.onCreate から呼ぶ。Application Context を取る（取得済みなら何もしない）。
+    void init() {
+        ensureAppContext(activity());
+        synchronized (this) {
+            sweep();
+        }
+    }
+
+    private Context ensureAppContext(ComponentActivity activity) {
+        Context ctx = appContext;
+        if (ctx == null && activity != null) {
+            ctx = activity.getApplicationContext();
+            appContext = ctx;
+        }
+        return ctx;
+    }
+
+    private ComponentActivity activity() {
+        return activityRef.get();
+    }
+
+    // JNI スレッドから呼ばれる。
+    void pick(long id) {
+        synchronized (this) {
+            request.track(id);
+            launchedId = RequestTracker.NONE;
+            okWaitingId = RequestTracker.NONE;
+            cancelGraceTimer();
+            dropPendingInfo();
+        }
+        uiHandler.post(() -> start(id));
+    }
+
+    private synchronized void start(long id) {
+        // 差し替え済み・確定済みの旧要求は始めない。
+        if (request.current() != id || destroyed) {
+            return;
+        }
+        ComponentActivity activity = activity();
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
+            finish(id, KIND_INTERRUPTED, null);
+            return;
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            finish(id, KIND_UNSUPPORTED, null);
+            return;
+        }
+        PackageManager pm = activity.getPackageManager();
+        if (!pm.hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP)
+                || !pm.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+            finish(id, KIND_UNSUPPORTED, null);
+            return;
+        }
+        // 背景で選択画面を出さない。
+        if (!activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
+            finish(id, KIND_NOT_FOREGROUND, null);
+            return;
+        }
+        if (ensureAppContext(activity) == null) {
+            finish(id, KIND_INTERNAL, null);
+            return;
+        }
+        startApi33(id, activity);
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private void startApi33(long id, ComponentActivity activity) {
+        CompanionDeviceManager cdm = activity.getSystemService(CompanionDeviceManager.class);
+        if (cdm == null) {
+            finish(id, KIND_UNSUPPORTED, null);
+            return;
+        }
+        // 位置情報サービスがオフだと探索できない（権限は不要）。取得できないときもオフ扱い。
+        LocationManager lm = activity.getSystemService(LocationManager.class);
+        if (lm == null || !LocationManagerCompat.isLocationEnabled(lm)) {
+            finish(id, KIND_LOCATION_OFF, null);
+            return;
+        }
+        BluetoothManager bm = activity.getSystemService(BluetoothManager.class);
+        BluetoothAdapter adapter = bm == null ? null : bm.getAdapter();
+        if (adapter == null) {
+            finish(id, KIND_UNSUPPORTED, null);
+            return;
+        }
+        try {
+            if (!adapter.isEnabled()) {
+                finish(id, KIND_BLUETOOTH_OFF, null);
+                return;
+            }
+        } catch (SecurityException e) {
+            // 判定できないときは OS の結果に任せる（成功へは倒れない）。
+        }
+        // 前回までに外せなかった関連付けを OS の一覧から回収してから新しく作る。
+        sweep();
+        try {
+            AssociationRequest req = new AssociationRequest.Builder()
+                    .addDeviceFilter(new BluetoothLeDeviceFilter.Builder().build())
+                    .setSingleDevice(true)
+                    .build();
+            cdm.associate(req, ContextCompat.getMainExecutor(appContext), new Cb(this, id, appContext));
+        } catch (RuntimeException e) {
+            finish(id, KIND_INTERNAL, null);
+        }
+    }
+
+    // CDM のコールバック。OS 側の保留処理が握り続けるため static にし、helper を弱参照・id だけを持つ
+    // （非 static だと helper 経由で旧 Activity まで強参照で残る）。helper が回収済みなら何もしない。
+    // 要求ごとに id を持ち、現在の要求でなければ関連付けを外して捨てる。helper が回収済みでも関連付けが
+    // 取り残されないよう、Activity に依存しない Application Context を強参照で持ち、自力で解除する
+    // （Application Context なので旧 Activity のリークにならない）。
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private static final class Cb extends CompanionDeviceManager.Callback {
+        private final WeakReference<CompanionDeviceHelper> helperRef;
+        private final long id;
+        private final Context appContext;
+
+        Cb(CompanionDeviceHelper helper, long id, Context appContext) {
+            this.helperRef = new WeakReference<>(helper);
+            this.id = id;
+            this.appContext = appContext;
+        }
+
+        // helper 回収後に届いた関連付けを外す。失敗しても例外で落とさない（外せなければ OS 側に残りうる）。
+        private void disassociateWithoutHelper(AssociationInfo info) {
+            try {
+                CompanionDeviceManager cdm = appContext.getSystemService(CompanionDeviceManager.class);
+                if (cdm != null) {
+                    cdm.disassociate(info.getId());
+                }
+            } catch (RuntimeException e) {
+                // 例外メッセージはログに出さない。
+            }
+        }
+
+        @Override
+        public void onAssociationPending(IntentSender sender) {
+            CompanionDeviceHelper helper = helperRef.get();
+            if (helper != null) {
+                helper.onPending(id, sender);
+            }
+        }
+
+        @Override
+        public void onAssociationCreated(AssociationInfo info) {
+            CompanionDeviceHelper helper = helperRef.get();
+            if (helper != null) {
+                helper.onCreated(id, info);
+            } else {
+                disassociateWithoutHelper(info);
+            }
+        }
+
+        @Override
+        public void onFailure(CharSequence error) {
+            // 文言は読まない・ログに出さない。
+            CompanionDeviceHelper helper = helperRef.get();
+            if (helper != null) {
+                helper.onFailed(id);
+            }
+        }
+    }
+
+    private synchronized void onPending(long id, IntentSender sender) {
+        if (request.current() != id || destroyed) {
+            return;
+        }
+        ComponentActivity activity = activity();
+        if (activity == null) {
+            finish(id, KIND_INTERRUPTED, null);
+            return;
+        }
+        if (!activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
+            finish(id, KIND_NOT_FOREGROUND, null);
+            return;
+        }
+        // false は Rust 側が期限切れを確定済み、または古い要求。結果は送らず追跡だけ外す。
+        if (!nativeTryBeginPresent(id)) {
+            request.complete(id);
+            return;
+        }
+        try {
+            launcher.launch(new IntentSenderRequest.Builder(sender).build());
+            launchedId = id;
+        } catch (RuntimeException e) {
+            finish(id, KIND_INTERNAL, null);
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private synchronized void onCreated(long id, AssociationInfo info) {
+        if (request.current() != id || destroyed) {
+            // 古い要求・破棄後に作られた関連付けは外して捨てる。
+            disassociate(info);
+            return;
+        }
+        if (okWaitingId == id) {
+            completeSelected(id, info);
+        } else {
+            pendingInfo = info;
+        }
+    }
+
+    private synchronized void onFailed(long id) {
+        if (request.current() != id || destroyed) {
+            return;
+        }
+        // 選択画面の表示後は Activity の結果を正とする。表示前の失敗は成功にせず Internal。
+        // RESULT_OK 後に AssociationInfo を待っている間の失敗も、待ち続けず Internal で確定する。
+        if (launchedId != id || okWaitingId == id) {
+            finish(id, KIND_INTERNAL, null);
+        }
+    }
+
+    // AssociationInfo が届かないまま猶予を超えたら Internal で確定する（処理中のまま止めない）。
+    private void startGraceTimer(long id) {
+        cancelGraceTimer();
+        Runnable task = () -> onGraceExpired(id);
+        graceTask = task;
+        uiHandler.postDelayed(task, INFO_GRACE_MS);
+    }
+
+    private void cancelGraceTimer() {
+        if (graceTask != null) {
+            uiHandler.removeCallbacks(graceTask);
+            graceTask = null;
+        }
+    }
+
+    private synchronized void onGraceExpired(long id) {
+        graceTask = null;
+        if (okWaitingId == id && request.current() == id) {
+            finish(id, KIND_INTERNAL, null);
+        }
+    }
+
+    // Activity の結果（UI スレッド）。
+    private synchronized void onActivityResult(ActivityResult result) {
+        long id = launchedId;
+        Intent data = result.getData();
+        Object info = extractInfo(data);
+        if (id == RequestTracker.NONE || request.current() != id) {
+            // 起動を記録した要求が無い（作り直し後の旧結果など）。関連付けがあれば外して捨てる。
+            disassociateObject(info);
+            return;
+        }
+        int code = result.getResultCode();
+        if (code == android.app.Activity.RESULT_OK) {
+            if (info == null) {
+                info = pendingInfo;
+            }
+            if (info == null) {
+                // AssociationInfo が揃うまで確定しない（onAssociationCreated で続きを行う）。
+                okWaitingId = id;
+                startGraceTimer(id);
+                return;
+            }
+            completeSelected(id, info);
+            return;
+        }
+        // キャンセル・拒否・探索の期限切れ・内部エラー。記録済みの関連付けは先に外す。
+        if (info == null) {
+            info = pendingInfo;
+        }
+        boolean released = info == null || disassociateObject(info);
+        // 解除済みの記録を finish の dropPendingInfo が再度外さないよう、先に消す。
+        clearPendingIfSame(info);
+        finish(id, released ? kindForFailedResult(code) : KIND_INTERNAL, null);
+    }
+
+    private static int kindForFailedResult(int code) {
+        if (code == android.app.Activity.RESULT_CANCELED) {
+            return KIND_CANCELLED;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            if (code == CompanionDeviceManager.RESULT_USER_REJECTED) {
+                return KIND_CANCELLED;
+            }
+            if (code == CompanionDeviceManager.RESULT_DISCOVERY_TIMEOUT) {
+                return KIND_NOT_FOUND;
+            }
+        }
+        // 内部エラーと未知のコードは成功へ倒さない。
+        return KIND_INTERNAL;
+    }
+
+    private Object extractInfo(Intent data) {
+        if (data == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return null;
+        }
+        return extractInfoApi33(data);
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private static Object extractInfoApi33(Intent data) {
+        try {
+            return data.getParcelableExtra(CompanionDeviceManager.EXTRA_ASSOCIATION, AssociationInfo.class);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    // 選んだ結果の確定。関連付けを外し終えてから成功を返す。
+    private void completeSelected(long id, Object info) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            finish(id, KIND_INTERNAL, null);
+            return;
+        }
+        completeSelectedApi33(id, (AssociationInfo) info);
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private void completeSelectedApi33(long id, AssociationInfo info) {
+        clearPendingIfSame(info);
+        String name = null;
+        try {
+            CharSequence display = info.getDisplayName();
+            name = display == null ? null : display.toString();
+        } catch (RuntimeException e) {
+            name = null;
+        }
+        if (disassociate(info)) {
+            finish(id, KIND_SELECTED, name);
+        } else {
+            finish(id, KIND_INTERNAL, null);
+        }
+    }
+
+    // 解除済みの関連付けと同じ ID の pendingInfo を消す（別インスタンスでも二重解除させない）。
+    private void clearPendingIfSame(Object info) {
+        Object pending = pendingInfo;
+        if (pending == null || info == null) {
+            return;
+        }
+        if (pending == info
+                || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && sameAssociationId(pending, info))) {
+            pendingInfo = null;
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private static boolean sameAssociationId(Object a, Object b) {
+        try {
+            return ((AssociationInfo) a).getId() == ((AssociationInfo) b).getId();
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    private boolean disassociateObject(Object info) {
+        if (info == null) {
+            return true;
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return false;
+        }
+        return disassociate((AssociationInfo) info);
+    }
+
+    // 関連付けを外す。OS の一覧に無ければ解除済みとして成功扱い（冪等）。外せなければ false（次の sweep に任せる）。
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private boolean disassociate(AssociationInfo info) {
+        try {
+            CompanionDeviceManager cdm = cdm();
+            if (cdm == null) {
+                return false;
+            }
+            int associationId = info.getId();
+            if (!isAssociated(cdm, associationId)) {
+                return true;
+            }
+            cdm.disassociate(associationId);
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    private CompanionDeviceManager cdm() {
+        Context ctx = appContext;
+        return ctx == null ? null : ctx.getSystemService(CompanionDeviceManager.class);
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private static boolean isAssociated(CompanionDeviceManager cdm, int associationId) {
+        for (AssociationInfo a : cdm.getMyAssociations()) {
+            if (a.getId() == associationId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // OS の関連付け一覧（getMyAssociations）を正として全件外す。本機能は関連付けを残さない契約のため、
+    // 一覧に残っているものは取り残し。進行中の要求の関連付けを外さないよう、起動済み・結果待ちのときは何もしない。
+    // 呼び出しは UI スレッド（init・start）。個々の失敗は無視し、次の sweep に任せる。
+    private void sweep() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                || launchedId != RequestTracker.NONE || okWaitingId != RequestTracker.NONE) {
+            return;
+        }
+        sweepApi33();
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private void sweepApi33() {
+        try {
+            CompanionDeviceManager cdm = cdm();
+            if (cdm == null) {
+                return;
+            }
+            for (AssociationInfo a : cdm.getMyAssociations()) {
+                try {
+                    cdm.disassociate(a.getId());
+                } catch (RuntimeException e) {
+                    // 既に無い id など。次の sweep に任せる。
+                }
+            }
+        } catch (RuntimeException e) {
+            // 一覧を取れないときは何もしない。
+        }
+    }
+
+    // 記録済みの関連付けを外す。外せなければ false を返す（呼び出し元が Internal に反映する）。
+    private boolean dropPendingInfo() {
+        Object info = pendingInfo;
+        pendingInfo = null;
+        return disassociateObject(info);
+    }
+
+    // first-wins: 現在の要求だけ確定して Rust へ返す。名前は KIND_SELECTED のときだけ渡す。
+    private void finish(long id, int kind, String name) {
+        if (request.complete(id)) {
+            cancelGraceTimer();
+            launchedId = RequestTracker.NONE;
+            okWaitingId = RequestTracker.NONE;
+            // 確定時に残った関連付けを外す（成功経路の分は completeSelected が外して null にしてある）。
+            boolean released = dropPendingInfo();
+            // 関連付けを外せないまま成功以外の別の結果を返さない（外せなければ Internal）。
+            int finalKind = released || kind == KIND_INTERNAL ? kind : KIND_INTERNAL;
+            nativeOnCompanionDeviceResult(id, finalKind, finalKind == KIND_SELECTED ? name : null);
+        }
+    }
+
+    synchronized void onDestroy() {
+        destroyed = true;
+        long id = request.current();
+        if (id != RequestTracker.NONE) {
+            finish(id, KIND_INTERRUPTED, null);
+        } else {
+            dropPendingInfo();
+        }
+    }
+}
