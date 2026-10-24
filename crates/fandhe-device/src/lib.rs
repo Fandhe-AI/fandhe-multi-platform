@@ -224,6 +224,8 @@ pub mod uwb_ranging;
 pub mod volume_control;
 /// Phase 11（端末機能の拡充ループ、親 #113、Issue #530）: OAuth 用の Web 認証セッション（デモ認可ページ + コールバック検査）。
 pub mod web_auth_session;
+/// Phase 11 の拡充ループ（親 #165、Issue #791）: 指定した Wi-Fi への接続（SSID とパスワードを指定して 1 回要求）。
+pub mod wifi_connect;
 /// Phase 11（端末機能の拡充ループ、親 #111、Issue #514）: Wi-Fi 情報（現在の接続と周辺の上位数件）。
 pub mod wifi_info;
 /// Phase 11（端末機能の拡充ループ、親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）。

@@ -1109,6 +1109,12 @@ pub mod macos_volume_control;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_web_auth_session;
+/// Issue #791: macOS 向け「指定した Wi-Fi への接続」実装（`macos/fandhe_macos_wifi_connect.m` の CoreWLAN を
+/// 呼ぶ C ABI ラッパー）。`device/wifi_connect.rs` の macOS 経路から呼ばれる。写像の純関数を
+/// ホストでテストするため test でも載せる。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_wifi_connect;
 /// Issue #514: macOS 向け Wi-Fi 情報実装（`macos/fandhe_macos_wifi_info.m` の CoreWLAN と CoreLocation の
 /// 許可判定を呼ぶ C ABI ラッパー）。`device/wifi_info.rs` の macOS 経路から呼ばれる。写像の純関数を
 /// ホストでテストするため test でも載せる。
@@ -1302,6 +1308,9 @@ pub mod volume_control;
 /// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS・Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
 pub mod web_auth_session;
+/// Phase 11 の拡充ループ（親 #165、Issue #791）: 指定した Wi-Fi への接続の effect ドライバ（macOS 実装、Windows は #792 が
+/// 埋めるスタブ、iOS・Android（deferred）・他 OS は `UnsupportedWifiConnect` 固定。Web は対象外）。
+pub mod wifi_connect;
 /// Phase 11 の拡充ループ（親 #111、Issue #514）: Wi-Fi 情報の effect ドライバ（macOS・Windows・Android 実装、
 /// iOS（deferred）・他 OS は `UnsupportedWifiInfo` 固定。Web は対象外）。
 pub mod wifi_info;
@@ -1598,6 +1607,11 @@ pub mod windows_volume_control;
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_web_auth_session;
+/// Issue #791: Windows 向け「指定した Wi-Fi への接続」実装のスタブ（実装は #792）。
+/// `device/wifi_connect.rs` の Windows 経路から呼ばれる。#792 が cfg を変えずに済むよう `any(windows, test)`。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_wifi_connect;
 /// Issue #515: Windows 向け Wi-Fi 情報実装（`wlanapi`）。
 /// `device/wifi_info.rs` の Windows 経路から呼ばれる。写像の純関数をホストでテストできるよう
 /// cfg は `any(windows, test)`。

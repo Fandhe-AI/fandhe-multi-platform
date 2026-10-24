@@ -33,7 +33,7 @@
       "deferred": "`requestNetwork` に要る `CHANGE_NETWORK_STATE` の uses-permission を新しく足すことになる（AOSP のソース。いまの Manifest に無い）。また Specifier の接続はアプリ限定で要求を握り続ける間だけ保たれ、Suggestion は接続の結果を返さないため、他の OS と同じ「接続を要求して OS の結果を 1 回受け取る」形にならず、要求の保持とライフサイクルの設計が別に要る。新しい権限・設計を足さない方針のため保留。ベンダーの個別審査は不要"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "CoreWLAN `CWWiFiClient` の `interface` で `scanForNetworksWithName:error:`（指定 SSID への directed scan）→ 一致した `CWNetwork` へ `associateToNetwork:password:error:`。どちらもブロッキング",
       "perm": "位置情報の許可（wifi-info と同じ `NSLocationUsageDescription`。宣言済みで文言に型サンプル名を足すだけ）。App Sandbox 無効の素の実行体のため entitlement は不要。CoreWLAN は wifi-info でリンク済み",
       "url": [
@@ -41,7 +41,10 @@
         "https://developer.apple.com/documentation/corewlan/cwinterface/scanfornetworks(withname:)",
         "https://developer.apple.com/documentation/corewlan/cwerr"
       ],
-      "note": "未実装。associate は接続の間ブロックし、管理者パスワードを求めることがある（公式）。結果は BOOL と `CWErr` の NSError で返る。SDK のヘッダーでは、位置情報の許可が無いとスキャン結果に BSSID が入らない。macOS 14 以降は SSID の取得にも位置情報の許可が要る（wifi-info の macOS と同じ前提）。"
+      "note": "実装済み（#791）。指定 SSID への directed scan → `ssidData` のバイト一致するものだけを残す → 暗号なし・Personal 系の方式だけに associate。位置情報の許可は未決定のときだけ要求し、失敗したときに電源・許可を読み直して理由を分ける。associate は接続の間ブロックし、管理者パスワードを求めることがある（公式）。結果は BOOL と `CWErr` の NSError で返る。SDK のヘッダーでは、位置情報の許可が無いとスキャン結果に BSSID が入らない。macOS 14 以降は SSID の取得にも位置情報の許可が要る（wifi-info の macOS と同じ前提）。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#782）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_wifi_connect.m + crates/fandhe-egui-proxy/src/device/macos_wifi_connect.rs + crates/fandhe-egui-proxy/src/device/wifi_connect.rs + crates/fandhe-core/src/screens/wifi_connect_show.rs + crates/fandhe-device/src/wifi_connect.rs、Issue #791"
     },
     "windows": {
       "status": "possible",
