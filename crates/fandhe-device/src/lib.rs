@@ -76,6 +76,8 @@ pub mod file_watch;
 pub mod flashlight;
 /// Phase 11（端末機能の拡充ループ、親 #104、Issue #438）: 集中モード・おやすみモードの状態。
 pub mod focus_mode_status;
+/// Phase 11 の拡充ループ（親 #141、Issue #723）: 折りたたみ端末の姿勢と折れ目。
+pub mod foldable_posture;
 /// Phase 11（端末機能の拡充ループ、親 #1133、Issue #1312）: 全画面表示（システムバー非表示）。
 pub mod fullscreen_immersive;
 /// Phase 11（端末機能の拡充ループ、親 #932、Issue #933）: 継続 push 型のゲームコントローラ入力。

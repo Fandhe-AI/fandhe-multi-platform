@@ -262,6 +262,10 @@ generated_screens! {
     crate::device::safe_area_insets::safe_area_insets_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "foldable_posture_show" => fandhe_core::screens::foldable_posture_show::current_screen,
+    crate::device::foldable_posture::foldable_posture_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "focus_mode_status_show" => fandhe_core::screens::focus_mode_status_show::current_screen,
     crate::device::focus_mode_status::focus_mode_status_show_effect,
     effect
