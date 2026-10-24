@@ -814,6 +814,18 @@ public class MainActivity extends GameActivity {
         return flashlightHelper.read();
     }
 
+    // システム音量（Issue #787）。実装は `VolumeControlHelper`。Rust の `android_volume_control.rs` が
+    // egui スレッドから同期で JNI 呼び出しする。
+    private final VolumeControlHelper volumeControlHelper = new VolumeControlHelper(this);
+
+    int[] volumeControlRead() {
+        return volumeControlHelper.read();
+    }
+
+    int volumeControlAdjust(int direction) {
+        return volumeControlHelper.adjust(direction);
+    }
+
     @Override
     protected void onStart() {
         super.onStart();
