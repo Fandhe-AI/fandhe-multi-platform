@@ -2155,6 +2155,7 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        companionDeviceHelper.init();
         screenBrightnessHelper.onCreate();
         captureProtectionHelper.onCreate();
         installAccessibilityOffGuard();

@@ -52,6 +52,7 @@ import java.lang.ref.WeakReference;
 // 宛の結果が新インスタンスのランチャーへ届いても、起動を記録した要求が無いため関連付けを外して捨て、
 // 新しい要求の id は消費しない。
 // 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止・旧要求の関連付けの解除。
+// // helper が回収された後に届いた関連付けは、static コールバックが Application Context で自力で外す。
 // 守らない範囲: API 32 以下・関連付けを残すこと・背景での起動・機器との通信とボンディング・
 // 選択画面の表示中のプロセス死・複数プロセス・orphans の再試行の Activity 再生成をまたぐ引き継ぎ
 // （外せないまま再生成されると OS 側に残りうる。結果は KIND_INTERNAL で、成功とは見せない）。
@@ -77,7 +78,9 @@ final class CompanionDeviceHelper {
     // Activity は弱参照で持つ。OS（CompanionDeviceManager）へ渡すコールバックから旧 Activity へ到達させない
     // （GeocodingHelper #714 と同じ方針）。OS 呼び出しに要る Context は Application Context を使う。
     private final WeakReference<ComponentActivity> activityRef;
-    private final Context appContext;
+    // Application Context は Activity.attach 前に取れない（NPE になる）ため、onCreate 以降の `init` または初回の
+    // `start` で取る。コンストラクタ（MainActivity のフィールド初期化子から呼ばれる）では触らない。
+    private volatile Context appContext;
     private final RequestTracker request = new RequestTracker();
     // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
     private final ActivityResultLauncher<IntentSenderRequest> launcher;
@@ -103,9 +106,22 @@ final class CompanionDeviceHelper {
 
     CompanionDeviceHelper(ComponentActivity activity) {
         this.activityRef = new WeakReference<>(activity);
-        this.appContext = activity.getApplicationContext();
         this.launcher = activity.registerForActivityResult(
                 new ActivityResultContracts.StartIntentSenderForResult(), this::onActivityResult);
+    }
+
+    // MainActivity.onCreate から呼ぶ。Application Context を取る（取得済みなら何もしない）。
+    void init() {
+        ensureAppContext(activity());
+    }
+
+    private Context ensureAppContext(ComponentActivity activity) {
+        Context ctx = appContext;
+        if (ctx == null && activity != null) {
+            ctx = activity.getApplicationContext();
+            appContext = ctx;
+        }
+        return ctx;
     }
 
     private ComponentActivity activity() {
@@ -149,6 +165,10 @@ final class CompanionDeviceHelper {
             finish(id, KIND_NOT_FOREGROUND, null);
             return;
         }
+        if (ensureAppContext(activity) == null) {
+            finish(id, KIND_INTERNAL, null);
+            return;
+        }
         startApi33(id, activity);
     }
 
@@ -184,7 +204,7 @@ final class CompanionDeviceHelper {
                     .addDeviceFilter(new BluetoothLeDeviceFilter.Builder().build())
                     .setSingleDevice(true)
                     .build();
-            cdm.associate(req, ContextCompat.getMainExecutor(appContext), new Cb(this, id));
+            cdm.associate(req, ContextCompat.getMainExecutor(appContext), new Cb(this, id, appContext));
         } catch (RuntimeException e) {
             finish(id, KIND_INTERNAL, null);
         }
@@ -192,15 +212,31 @@ final class CompanionDeviceHelper {
 
     // CDM のコールバック。OS 側の保留処理が握り続けるため static にし、helper を弱参照・id だけを持つ
     // （非 static だと helper 経由で旧 Activity まで強参照で残る）。helper が回収済みなら何もしない。
-    // 要求ごとに id を持ち、現在の要求でなければ関連付けを外して捨てる。
+    // 要求ごとに id を持ち、現在の要求でなければ関連付けを外して捨てる。helper が回収済みでも関連付けが
+    // 取り残されないよう、Activity に依存しない Application Context を強参照で持ち、自力で解除する
+    // （Application Context なので旧 Activity のリークにならない）。
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private static final class Cb extends CompanionDeviceManager.Callback {
         private final WeakReference<CompanionDeviceHelper> helperRef;
         private final long id;
+        private final Context appContext;
 
-        Cb(CompanionDeviceHelper helper, long id) {
+        Cb(CompanionDeviceHelper helper, long id, Context appContext) {
             this.helperRef = new WeakReference<>(helper);
             this.id = id;
+            this.appContext = appContext;
+        }
+
+        // helper 回収後に届いた関連付けを外す。失敗しても例外で落とさない（外せなければ OS 側に残りうる）。
+        private void disassociateWithoutHelper(AssociationInfo info) {
+            try {
+                CompanionDeviceManager cdm = appContext.getSystemService(CompanionDeviceManager.class);
+                if (cdm != null) {
+                    cdm.disassociate(info.getId());
+                }
+            } catch (RuntimeException e) {
+                // 例外メッセージはログに出さない。
+            }
         }
 
         @Override
@@ -216,6 +252,8 @@ final class CompanionDeviceHelper {
             CompanionDeviceHelper helper = helperRef.get();
             if (helper != null) {
                 helper.onCreated(id, info);
+            } else {
+                disassociateWithoutHelper(info);
             }
         }
 
@@ -463,7 +501,8 @@ final class CompanionDeviceHelper {
             if (releasedIds.contains(associationId)) {
                 return true;
             }
-            CompanionDeviceManager cdm = appContext.getSystemService(CompanionDeviceManager.class);
+            Context ctx = appContext;
+            CompanionDeviceManager cdm = ctx == null ? null : ctx.getSystemService(CompanionDeviceManager.class);
             if (cdm == null) {
                 return false;
             }
