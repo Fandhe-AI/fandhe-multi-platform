@@ -7,10 +7,16 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "Foundation（`NSUbiquitousKeyValueStore`）",
-      "perm": "iCloud capability（Key-value storage）＝制限付き entitlement `com.apple.developer.ubiquity-kvstore-identifier`。provisioning profile が必要",
-      "url": "https://developer.apple.com/documentation/foundation/nsubiquitouskeyvaluestore",
-      "note": "未実装。容量は 1 MB（1 キー 64 KB）で、同期の即時性は保証されない。外部変更は `NSUbiquitousKeyValueStoreDidChangeExternallyNotification` で受ける（通知の登録トークンを握り続ける）。有償の Apple Developer Program の App ID に iCloud を有効化した profile が前提。実機は iCloud サインインが必要で、シミュレータでの同期確認は不確実。",
+      "api": "Foundation（`NSUbiquitousKeyValueStore` の `default`。他端末からの変更は `didChangeExternallyNotification` で届き、`NSUbiquitousKeyValueStoreChangeReasonKey` に理由（サーバー変更・初回同期・容量超過・アカウント変更）、`NSUbiquitousKeyValueStoreChangedKeysKey` に変わったキーが入る）",
+      "perm": "iCloud capability の Key-value storage（制限付き entitlement `com.apple.developer.ubiquity-kvstore-identifier`）。capability 表では有料の Apple Developer Program と Enterprise だけに印があり、無料の Apple Developer では付けられない。provisioning profile が必須",
+      "url": [
+        "https://developer.apple.com/documentation/foundation/nsubiquitouskeyvaluestore",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.ubiquity-kvstore-identifier",
+        "https://developer.apple.com/documentation/foundation/nsubiquitouskeyvaluestore/synchronize()",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-ios"
+      ],
+      "deferred": "iCloud capability（Key-value storage）は有料の Apple Developer Program だけが付けられ（無料の Apple Developer の一覧に無い）、開発者登録が期限切れのため保留（app-attest・wifi-info の iOS と同じ）。新しい entitlement を足すことにもなる。ベンダーの個別審査は不要で、登録を再開すれば着手できる",
+      "note": "未実装。上限はキー 1024 個・値の合計 1 MB・1 値 1 MB・キー長 128（UTF-16）で、超えた書き込みは失敗し、容量超過は外部変更通知の理由で届く（公式）。Apple アカウントの無い端末では変更が端末内に留まり、サインイン後にサーバーと突き合わせる。アカウントが変わると旧データは消え、新しいアカウントのものに置き換わる（公式）。`synchronize()` は entitlement が無いと false を返す。他端末への反映は即時でなく、iCloud の更新はおおむね毎分数回まで（公式）。値は暗号化されずにディスクへ置かれるため、秘密値は置かない（公式は Keychain を勧める）。公式は App Store での配布を利用条件に挙げる。下敷き（再開時）: storage（端末内のキー値）",
       "sourceName": [
         "iCloud キー値同期（小容量の設定値）"
       ]
@@ -25,10 +31,16 @@
     },
     "macos": {
       "status": "possible",
-      "api": "Foundation（`NSUbiquitousKeyValueStore`）",
-      "perm": "iCloud capability（Key-value storage）＝制限付き entitlement `com.apple.developer.ubiquity-kvstore-identifier`。.app に `Contents/embedded.provisionprofile` が必要",
-      "url": "https://developer.apple.com/documentation/foundation/nsubiquitouskeyvaluestore",
-      "note": "未実装。素の実行体には provisioning profile を置く場所が無いが、.app で包む形なら `Contents/embedded.provisionprofile` に置ける（Apple Developer Forums の検索結果、https://developer.apple.com/forums/thread/680284 で確認。Apple 公式ドキュメント本文は取得できず未確認）。profile 無しだとコード署名の検証で起動が拒否される。開発用 profile は登録済み端末に限られる。配布は Developer ID 用 profile が要る。"
+      "api": "Foundation（macOS 10.7+。`NSUbiquitousKeyValueStore` の `default`。他端末からの変更は `didChangeExternallyNotification` で届き、`NSUbiquitousKeyValueStoreChangeReasonKey` に理由（サーバー変更・初回同期・容量超過・アカウント変更）、`NSUbiquitousKeyValueStoreChangedKeysKey` に変わったキーが入る）",
+      "perm": "iCloud capability の Key-value storage（制限付き entitlement `com.apple.developer.ubiquity-kvstore-identifier`）。macOS の capability 表では有料の Apple Developer Program と Developer ID だけに印があり、無料の Apple Developer では付けられない。制限付き entitlement は provisioning profile の許可が要り、.app の `Contents/embedded.provisionprofile` に埋め込む（素の実行体には置けない）",
+      "url": [
+        "https://developer.apple.com/documentation/foundation/nsubiquitouskeyvaluestore",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.ubiquity-kvstore-identifier",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-macos",
+        "https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles"
+      ],
+      "deferred": "iOS と同じく iCloud capability は有料の Apple Developer Program だけが付けられ、開発者登録が期限切れのため保留。いまの .app 化（url-scheme の `scripts/apple/bundle-macos-url-scheme.sh`）はアドホック署名で profile を埋め込まないため、開発用 profile の作成・埋め込みとその Team での署名の手順も新しく要る。ベンダーの個別審査は不要で、登録を再開すれば着手できる",
+      "note": "未実装。容量・アカウント・暗号化の条件は iOS と同じ（公式）。macOS で profile 無しに使える entitlement として TN3125 が挙げるのは App Sandbox・Hardened Runtime・`get-task-allow`・App Groups で、それ以外の制限付き entitlement（iCloud を含む）は profile の許可が要る。配布は capability 表では Developer ID も対象だが、`NSUbiquitousKeyValueStore` の文書は App Store / Mac App Store での配布を条件に挙げており、Developer ID で使えるかは未確認"
     },
     "windows": {
       "status": "no",
@@ -48,5 +60,5 @@
       "detail": "できない（端末間でキー値を同期するブラウザ標準 API が無い）"
     }
   },
-  "note": "Apple 2 OS は `NSUbiquitousKeyValueStore`（iCloud KVS、制限付き entitlement + provisioning profile が必須）。macOS は素の実行体では profile を置けないが .app 包みなら置ける。Android は Block Store（GMS）・Auto Backup（同期ではない）で no。Windows は roaming 廃止・identity 前提で no。Web は標準 API が無く no。"
+  "note": "Apple 2 OS は `NSUbiquitousKeyValueStore`（iCloud KVS）。iCloud capability（Key-value storage）は有料の Apple Developer Program 限定で（無料の Apple Developer では付けられない）、開発者登録が期限切れのため iOS・macOS とも保留。Android は Block Store（GMS）・Auto Backup（同期ではない）で no。Windows は roaming 廃止・identity 前提で no。Web は標準 API が無く no。再開時の設計（OS を正にする）: 値は読むたびに `NSUbiquitousKeyValueStore` から取り、Rust 側に写しを持たない。他端末の変更は外部変更通知（理由と変わったキー）を写して再描画するだけで、タイマーで同期を推測しない。iCloud アカウントの有無を事前判定しない（無ければ端末内に留まるのが OS の挙動）。容量超過と `synchronize()` の false は失敗として返し、成功に畳まない。範囲は 1 キーの文字列の書き込み・読み出しと外部変更の受信。layout は `a,b-ios`"
 }
