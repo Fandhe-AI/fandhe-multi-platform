@@ -11,6 +11,8 @@ import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.activity.ComponentActivity;
 import androidx.activity.result.ActivityResult;
@@ -32,6 +34,7 @@ import androidx.lifecycle.Lifecycle;
 // 流れ: pick（JNI スレッド）→ start（UI スレッド。API・機能・位置情報サービス・Bluetooth を検査）→
 // CompanionDeviceManager.associate → onAssociationPending で IntentSender を起動 →
 // Activity の結果（RESULT_OK と AssociationInfo が揃った時点）→ disassociate → 結果を Rust へ。
+// RESULT_OK 後に AssociationInfo が届かない場合は 3 秒の猶予（UI スレッドの単調時計）で KIND_INTERNAL にする。
 // disassociate は Rust へ結果を送るより前に行う。外せなければ KIND_INTERNAL（成功にしない）。
 //
 // 結果コードの SSOT は Rust 側 `fandhe_device::companion_device` の契約で、KIND_* は
@@ -79,6 +82,10 @@ final class CompanionDeviceHelper {
     // onAssociationCreated で届いた現在の要求の関連付け（AssociationInfo。API 33 未満では常に null）。
     private Object pendingInfo;
     private boolean destroyed;
+    // RESULT_OK 後に AssociationInfo を待つ猶予。postDelayed は端末稼働時間（単調時計）基準で、壁時計の変更に影響されない。
+    private static final long INFO_GRACE_MS = 3000L;
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private Runnable graceTask;
 
     CompanionDeviceHelper(ComponentActivity activity) {
         this.activity = activity;
@@ -92,6 +99,7 @@ final class CompanionDeviceHelper {
             request.track(id);
             launchedId = RequestTracker.NONE;
             okWaitingId = RequestTracker.NONE;
+            cancelGraceTimer();
             dropPendingInfo();
         }
         activity.runOnUiThread(() -> start(id));
@@ -228,7 +236,30 @@ final class CompanionDeviceHelper {
             return;
         }
         // 選択画面の表示後は Activity の結果を正とする。表示前の失敗は成功にせず Internal。
-        if (launchedId != id) {
+        // RESULT_OK 後に AssociationInfo を待っている間の失敗も、待ち続けず Internal で確定する。
+        if (launchedId != id || okWaitingId == id) {
+            finish(id, KIND_INTERNAL, null);
+        }
+    }
+
+    // AssociationInfo が届かないまま猶予を超えたら Internal で確定する（処理中のまま止めない）。
+    private void startGraceTimer(long id) {
+        cancelGraceTimer();
+        Runnable task = () -> onGraceExpired(id);
+        graceTask = task;
+        uiHandler.postDelayed(task, INFO_GRACE_MS);
+    }
+
+    private void cancelGraceTimer() {
+        if (graceTask != null) {
+            uiHandler.removeCallbacks(graceTask);
+            graceTask = null;
+        }
+    }
+
+    private synchronized void onGraceExpired(long id) {
+        graceTask = null;
+        if (okWaitingId == id && request.current() == id) {
             finish(id, KIND_INTERNAL, null);
         }
     }
@@ -251,6 +282,7 @@ final class CompanionDeviceHelper {
             if (info == null) {
                 // AssociationInfo が揃うまで確定しない（onAssociationCreated で続きを行う）。
                 okWaitingId = id;
+                startGraceTimer(id);
                 return;
             }
             completeSelected(id, info);
@@ -358,6 +390,7 @@ final class CompanionDeviceHelper {
     // first-wins: 現在の要求だけ確定して Rust へ返す。名前は KIND_SELECTED のときだけ渡す。
     private void finish(long id, int kind, String name) {
         if (request.complete(id)) {
+            cancelGraceTimer();
             launchedId = RequestTracker.NONE;
             okWaitingId = RequestTracker.NONE;
             // 確定時に残った関連付けを外す（成功経路の分は completeSelected が外して null にしてある）。
