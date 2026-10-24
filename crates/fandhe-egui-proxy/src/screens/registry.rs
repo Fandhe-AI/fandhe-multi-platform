@@ -86,7 +86,7 @@ generated_screens! {
     crate::device::launch_at_login::launch_at_login_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
-    "app_badge_set" =>fandhe_core::screens::app_badge_set::current_screen,
+    "app_badge_set" => fandhe_core::screens::app_badge_set::current_screen,
     crate::device::app_badge::app_badge_set_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
