@@ -21,7 +21,7 @@
 //! # 実装のある OS
 //!
 //! macOS（[`apple_quick_settings_tile`](super::apple_quick_settings_tile)、Issue #719）と
-//! Android（`android_quick_settings_tile`、スタブ。実体は b-android）。iOS は保留、Windows は
+//! Android（[`android_quick_settings_tile`](super::android_quick_settings_tile)、Issue #720）。iOS は保留、Windows は
 //! 対象外で `UnsupportedQuickSettingsTile` 固定のため、画面には「未対応」と出る。
 
 use std::sync::{Arc, Mutex, OnceLock};

@@ -690,6 +690,16 @@ public class MainActivity extends GameActivity {
         inAppBrowserHelper.open(requestId, url);
     }
 
+    // クイック設定タイル（Issue #720）。実装は `QuickSettingsTileStore`。Rust の
+    // `android_quick_settings_tile.rs` が JNI（署名 `()Ljava/lang/String;` と `()J`）で呼ぶ。
+    String quickSettingsTileCountRaw() {
+        return QuickSettingsTileStore.readRaw(getApplicationContext());
+    }
+
+    long quickSettingsTileFailedPresses() {
+        return QuickSettingsTileStore.failedPresses();
+    }
+
     // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
     // Rust の `android_print.rs` が JNI で呼ぶ。
     private final PrintHelper printHelper = new PrintHelper(this);
