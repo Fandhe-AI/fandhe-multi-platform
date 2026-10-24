@@ -24,7 +24,7 @@ use crate::{Node, Screen, WidgetId};
 const ATTEST_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 
 /// 未操作時の案内。
-pub const IDLE_HINT: &str = "この端末の鍵の証明データを 1 回取得し、件数とサイズだけを表示します";
+pub const IDLE_HINT: &str = "この端末の鍵の証明データを 1 回取得し、件数とサイズだけを表示します（対応は Android のみ。iOS は保留中、macOS では使えません）";
 /// 取得を待っている間の案内。
 pub const RUNNING_STATUS: &str = "証明データを取得しています…";
 /// 失敗時の案内の接頭辞（`{接頭辞}{メッセージ}` の形で表示する）。
