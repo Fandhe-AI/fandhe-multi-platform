@@ -316,6 +316,22 @@
         <receiver
             android:name="com.fandhe.androidapp.CallUiActionReceiver"
             android:exported="false" />
+
+        <!-- Issue #720: クイック設定タイル。intent-filter を持つため exported=true だが、
+             BIND_QUICK_SETTINGS_TILE（システムだけが持つ権限）を要求するので bind できるのは
+             システムだけ（security.md A05）。uses-permission は足さない。ACTIVE_TILE は付けない
+             （非アクティブモード）。切り離し時にこの service と strings.xml の
+             quick_settings_tile_label、res/drawable/ic_quick_settings_tile.xml を削除する。 -->
+        <service
+            android:name="com.fandhe.androidapp.QuickSettingsTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_quick_settings_tile"
+            android:label="@string/quick_settings_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

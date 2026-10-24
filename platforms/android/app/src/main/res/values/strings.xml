@@ -20,4 +20,7 @@
     <string name="call_ui_channel_name">着信</string>
     <string name="call_ui_account_label">Fandhe 通話</string>
     <string name="call_ui_caller_name">Fandhe テスト着信</string>
+    <!-- クイック設定タイル（Issue #720）の表示名。fandhe_core の
+         `screens::quick_settings_tile_show::TILE_LABEL` と一致させる。切り離し時に削除する。 -->
+    <string name="quick_settings_tile_label">Fandhe カウント</string>
 </resources>

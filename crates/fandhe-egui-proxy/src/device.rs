@@ -235,8 +235,8 @@ pub mod android_power_state;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_print;
-/// Issue #719（親 #139）: Android 向けクイック設定タイル（`TileService`）の骨格（`Unsupported` のスタブ。
-/// b-android が埋める）。`device/quick_settings_tile.rs` の Android 経路から呼ばれる。
+/// Issue #720（親 #139）: Android 向けクイック設定タイル。Java の `TileService` が SharedPreferences に
+/// 数えた回数を JNI で読む実装。`device/quick_settings_tile.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_quick_settings_tile;
@@ -1122,7 +1122,7 @@ pub mod power_state;
 /// Web は `fandhe-web-dom`）。
 pub mod print;
 /// Phase 11 の拡充ループ（親 #139、Issue #719）: クイック設定タイル・コントロールの effect ドライバ
-/// （macOS は App Group の回数ファイル、Android はスタブ、他 OS は `UnsupportedQuickSettingsTile` 固定）。
+/// （macOS は App Group の回数ファイル、Android は SharedPreferences の回数、他 OS は `UnsupportedQuickSettingsTile` 固定）。
 pub mod quick_settings_tile;
 /// request/response 型端末機能共通の要求追跡（Issue #943、親 #941）。share /
 /// biometric_auth / file_pick の `bridge` facade から使う。4 OS

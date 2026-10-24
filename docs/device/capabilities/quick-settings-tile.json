@@ -18,14 +18,17 @@
       "note": "未実装。ライブアクティビティ用の Widget Extension（`FandheLiveActivity`）はシミュレータ向けにだけ同梱している。再開時は macOS と同じく「拡張が共有コンテナの回数を増やし、アプリが読む」形を下敷きにする"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`TileService`（API 24+）の `onClick`。追加はユーザーがクイック設定の編集から行う（API 33+ の `StatusBarManager.requestAddTileService` は使わない）",
       "perm": "なし（アプリが `uses-permission` で要求する権限は無い）。Manifest に `<service>`（exported=true、intent-filter は `android.service.quicksettings.action.QS_TILE`）を置き、`android:permission` に `BIND_QUICK_SETTINGS_TILE`（システムだけが持つ権限。bind できるのはシステムだけになる）を書く",
       "url": [
         "https://developer.android.com/develop/ui/views/quicksettings-tiles",
         "https://developer.android.com/reference/android/service/quicksettings/TileService"
       ],
-      "note": "未実装。タイルのタップでアプリのプロセスが無ければ OS がサービスのために起こすが、`MainActivity` とネイティブライブラリは読み込まれない。回数は Java 側が SharedPreferences（`commit()`）に保存し、Rust は画面から JNI で読む（home-widget の Android と同じ SharedPreferences + JNI の読み出し）。タイルは非アクティブモード（`ACTIVE_TILE` を付けない）"
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#710）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_quick_settings_tile.rs + crates/fandhe-egui-proxy/src/device/quick_settings_tile.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/QuickSettingsTileService.java + platforms/android/app/src/main/java/com/fandhe/androidapp/QuickSettingsTileStore.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java、Issue #720",
+      "note": "実装済み（#720）。`TileService.onClick` が SharedPreferences（`fandhe_quick_settings_tile` の `count`、ASCII 10 進数）の回数を `commit()` で増やし（同一プロセス内は synchronized で排他、壊れた内容・溢れ・保存失敗は数えない）、アプリ（Rust）が JNI で読む。保存に失敗した押下はプロセス内の失敗件数として画面に出る。未保存は 0 回、壊れた内容は「回数を読み出せません」で 0 にしない。守らない範囲: ポーリング間隔（1 秒）ぶんの表示の遅れ、プロセス終了で失敗件数が消えること、タイル側への回数の表示。実機で見る点: (1) クイック設定の編集に「Fandhe カウント」が出る (2) 押すと回数が増える (3) アプリを止めている間に押した分が次の起動で数えられる (4) ロック画面から押しても数えられる"
     },
     "macos": {
       "status": "done",
