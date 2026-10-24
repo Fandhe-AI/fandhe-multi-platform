@@ -80,6 +80,8 @@ pub mod focus_mode_status;
 pub mod fullscreen_immersive;
 /// Phase 11（端末機能の拡充ループ、親 #932、Issue #933）: 継続 push 型のゲームコントローラ入力。
 pub mod gamepad;
+/// Phase 11（端末機能の拡充ループ、親 #133、Issue #691）: 住所の座標変換（順ジオコーディング）。
+pub mod geocoding_search;
 /// Phase 11（端末機能の拡充ループ）: location に乗せた Rust 側のジオフェンス判定。
 pub mod geofence;
 /// Phase 11（端末機能の拡充ループ）: 触覚フィードバック（軽い振動 1 回）。
