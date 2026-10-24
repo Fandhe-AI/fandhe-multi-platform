@@ -205,8 +205,9 @@ pub fn apply_snapshot(state: &mut AlarmShowState, view: ScheduleView, generation
     }
     let was_scheduled = matches!(state.schedule_view, ScheduleView::Scheduled { .. });
     if was_scheduled && view == ScheduleView::NotScheduled {
+        // `error` は直前の操作の失敗理由なので、ポーリングでは消さない
+        // （消すのは次の利用者操作の開始と操作の成功完了だけ）。
         state.status = CLEARED_STATUS.to_string();
-        state.error = String::new();
     }
     state.schedule_view = view;
     state.check_failed = false;
@@ -383,6 +384,22 @@ mod tests {
         apply_snapshot(&mut s, ScheduleView::NotScheduled, 0);
         assert_eq!(s.status, CLEARED_STATUS);
         assert!(!s.status.contains("鳴りました"));
+    }
+
+    #[test]
+    fn snapshot_not_scheduled_keeps_previous_action_error() {
+        let mut s = AlarmShowState::default();
+        schedule(&mut s);
+        mark_in_flight(&mut s);
+        finish_action(&mut s, 1, Action::Schedule, Ok(Some(5)));
+        // 再予約: 古い予約の削除後に追加が失敗し、表示は Scheduled のまま残る。
+        schedule(&mut s);
+        mark_in_flight(&mut s);
+        finish_action(&mut s, 2, Action::Schedule, Err("失敗".to_string()));
+        assert!(s.error.starts_with(FAILED_PREFIX));
+        apply_snapshot(&mut s, ScheduleView::NotScheduled, 2);
+        assert!(s.error.starts_with(FAILED_PREFIX));
+        assert_eq!(s.schedule_view, ScheduleView::NotScheduled);
     }
 
     #[test]
