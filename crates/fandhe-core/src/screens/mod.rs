@@ -241,6 +241,9 @@ pub mod window_management_show;
 /// Phase 11 の拡充ループ型サンプル「連絡先選択」（親 #1117、Issue #1220）。
 pub mod contact_pick;
 
+/// Phase 11 の拡充ループ型サンプル「画面のスポイト」（親 #148、Issue #762）。
+pub mod eye_dropper_pick;
+
 /// Phase 11 の拡充ループ型サンプル「画面の明るさ」（親 #126、Issue #633）。
 pub mod screen_brightness_show;
 /// Phase 11 の拡充ループ型サンプル「画面の録画・キャプチャ」（親 #1135、Issue #1335）。

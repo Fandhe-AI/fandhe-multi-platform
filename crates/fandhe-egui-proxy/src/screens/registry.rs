@@ -62,6 +62,10 @@ generated_screens! {
     crate::device::contact_pick::contact_pick_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "eye_dropper" => fandhe_core::screens::eye_dropper_pick::current_screen,
+    crate::device::eye_dropper::eye_dropper_pick_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "location_show" => fandhe_core::screens::location_show::current_screen,
     crate::device::location::location_effect,
     effect

@@ -21,7 +21,7 @@
       "note": "要確認。URL 未確認"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "AppKit `NSColorSampler`（macOS 10.15+、`showSamplerWithSelectionHandler:`）。結果の `NSColor` を `colorUsingColorSpace:NSColorSpace.sRGBColorSpace` で sRGB に直して読む",
       "perm": "なし（画面収録の許可は要らない。新しい framework・entitlement・Info.plist キーの追加なし。AppKit は既存のリンク）",
       "url": [
@@ -29,7 +29,10 @@
         "https://developer.apple.com/documentation/appkit/nscolorsampler/show(selectionhandler:)",
         "https://developer.apple.com/videos/play/wwdc2019/210/"
       ],
-      "note": "未実装。`show` はすぐ戻り、利用者がクリックするとサンプラーを閉じて、選択ハンドラを main thread で呼ぶ（公式）。取り消すとハンドラに nil が渡る。自前で画面を読むと macOS 10.15 から画面収録の許可を求められるが、`NSColorSampler` を使えば求められない（WWDC19「What's New in AppKit for macOS Catalina」）。サンプラーを閉じる公開 API は無い。ハンドラが必ず一度呼ばれるかは公式に記述がない"
+      "note": "実装済み（#762）。`show` はすぐ戻り、利用者がクリックするとサンプラーを閉じて、選択ハンドラを main thread で呼ぶ（公式）。取り消すとハンドラに nil が渡る。自前で画面を読むと macOS 10.15 から画面収録の許可を求められるが、`NSColorSampler` を使えば求められない（WWDC19「What's New in AppKit for macOS Catalina」）。サンプラーを閉じる公開 API は無い。ハンドラが必ず一度呼ばれるかは公式に記述がない",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#759）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_eye_dropper.m + crates/fandhe-egui-proxy/src/device/macos_eye_dropper.rs + crates/fandhe-egui-proxy/src/device/eye_dropper.rs + crates/fandhe-core/src/screens/eye_dropper_pick.rs + crates/fandhe-device/src/eye_dropper.rs、Issue #762"
     },
     "windows": {
       "status": "no",
