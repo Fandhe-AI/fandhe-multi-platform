@@ -89,9 +89,13 @@ fn drive(
     now: Instant,
     timing: &mut Timing,
 ) -> Option<Duration> {
-    let due = timing
-        .last_read
-        .is_none_or(|prev| now.saturating_duration_since(prev) >= READ_INTERVAL);
+    // 非対応だった後は間隔を待たずに毎回読む（読みは固定の Unsupported を返すだけで軽い）。
+    // 画面を離れて間隔内に戻ると状態は「読み取り中」へ戻るが、非対応では再描画を予約しないため、
+    // 間隔で読みを省くと次の入力まで「読み取り中」のまま止まる。
+    let due = timing.unsupported
+        || timing
+            .last_read
+            .is_none_or(|prev| now.saturating_duration_since(prev) >= READ_INTERVAL);
     let result = if due {
         timing.last_read = Some(now);
         let r = to_result(src.read());
@@ -315,6 +319,27 @@ mod tests {
         apply_all(&rx, &mut state);
         assert_eq!(state.view, View::Unsupported);
         assert_eq!(w, None);
+    }
+
+    #[test]
+    fn revisit_within_interval_after_unsupported_reads_again() {
+        // 非対応を見た後に画面を離れ、間隔内に戻る（状態は既定の読み取り中へ戻る）。
+        let (tx, rx) = sender_with_channel();
+        let t0 = Instant::now();
+        let mut timing = Timing::default();
+        let mut first = FoldablePostureShowState::default();
+        drive(&first, &tx, &UnsupportedFoldablePosture, t0, &mut timing);
+        apply_all(&rx, &mut first);
+        let mut revisit = FoldablePostureShowState::default();
+        drive(
+            &revisit,
+            &tx,
+            &UnsupportedFoldablePosture,
+            t0 + Duration::from_millis(200),
+            &mut timing,
+        );
+        apply_all(&rx, &mut revisit);
+        assert_eq!(revisit.view, View::Unsupported);
     }
 
     #[test]
