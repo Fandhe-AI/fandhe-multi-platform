@@ -245,6 +245,12 @@ mod web {
         leftover: bool,
         /// 後片付けの実行中。同じセッションの後片付けを並行させない。
         cleaning: bool,
+        /// 実行中の後片付けが終わると解決する Promise。並行して呼ばれた後片付けはこれを待つ。
+        cleaning_done: Option<Promise>,
+        resolve_cleaning: Option<Function>,
+        /// 発行済みで未完了の `port.close()`。`close()` は閉じ済みだけでなく closing 中でも
+        /// `InvalidStateError` になるため、再試行では新たに呼ばずこの完了を待つ。
+        close_pending: Option<Promise>,
         /// 期限・破棄で解決する Promise。保留中の読み書きの完了待ちと競合させる。
         signal: Option<Promise>,
         resolve_signal: Option<Function>,
@@ -388,12 +394,13 @@ mod web {
     }
 
     /// 後片付けに失敗して残った資源を解放し直す（結果は見ない・apply しない）。
+    /// 実行中の後片付けがあれば `cleanup` がその完了を待つので、`leftover` の立ち上がりを待たず
+    /// 常に呼んでよい（資源が無ければ何もしない）。失敗したら 1 回だけ重ねて再試行する。
     fn retry_leftover(sess: Rc<RefCell<Session>>) {
-        if !sess.borrow().leftover {
-            return;
-        }
         wasm_bindgen_futures::spawn_local(async move {
-            let _ = cleanup(&sess).await;
+            if !cleanup(&sess).await {
+                let _ = cleanup(&sess).await;
+            }
         });
     }
 
@@ -405,8 +412,11 @@ mod web {
         let Some(old) = old else {
             return true;
         };
-        if !old.borrow().leftover {
-            return true;
+        {
+            let o = old.borrow();
+            if !o.leftover && !o.cleaning {
+                return true;
+            }
         }
         if cleanup(&old).await {
             MOUNTS.with(|m| {
@@ -781,16 +791,24 @@ mod web {
     /// 上限超過で `bounded` が先に失敗を返しても、元の close が後から成功（または閉じ済みの
     /// `InvalidStateError`）で終われば `needs_close` を下ろし、閉じ済みポートへの再 close を防ぐ。
     /// セッションが破棄済みなら何もしない（弱参照）。差し替え後の新セッションには触れない。
-    fn record_close_completion(sess: &Rc<RefCell<Session>>, pending: JsValue) {
+    fn record_close_completion(sess: &Rc<RefCell<Session>>, pending: Promise) {
         let weak = Rc::downgrade(sess);
         wasm_bindgen_futures::spawn_local(async move {
-            let closed = match JsFuture::from(Promise::resolve(&pending)).await {
+            let closed = match JsFuture::from(pending.clone()).await {
                 Ok(_) => true,
                 Err(e) => error_name(&e).as_deref() == Some("InvalidStateError"),
             };
-            if closed {
-                if let Some(s) = weak.upgrade() {
-                    s.borrow_mut().needs_close = false;
+            if let Some(s) = weak.upgrade() {
+                let mut s = s.borrow_mut();
+                // 完了した close は進行中ではなくなる。失敗なら次の再試行が新たに close を呼ぶ。
+                if s.close_pending
+                    .as_ref()
+                    .is_some_and(|p| Object::is(p, &pending))
+                {
+                    s.close_pending = None;
+                }
+                if closed {
+                    s.needs_close = false;
                 }
             }
         });
@@ -800,12 +818,29 @@ mod web {
     /// releaseLock → close。各段の失敗を区別して記録し、全て成功したときだけ `true`。
     /// 解放できなかった reader・writer・close はセッションに戻し、再試行できる状態で残す。
     async fn cleanup(sess: &Rc<RefCell<Session>>) -> bool {
+        // 実行中の後片付けがあれば、その完了を待って結果を引き継ぐ（破棄経路が失敗を見失わない）。
+        let running = {
+            let s = sess.borrow();
+            if s.cleaning {
+                s.cleaning_done.clone()
+            } else {
+                None
+            }
+        };
+        if let Some(done) = running {
+            let _ = JsFuture::from(done).await;
+            let s = sess.borrow();
+            return !s.leftover && !s.cleaning;
+        }
         let (timer, reader, writer, port, needs_close) = {
             let mut s = sess.borrow_mut();
-            if s.cleaning {
-                return false;
-            }
             s.cleaning = true;
+            let slot: Rc<RefCell<Option<Function>>> = Rc::new(RefCell::new(None));
+            let slot2 = slot.clone();
+            s.cleaning_done = Some(Promise::new(&mut |resolve, _| {
+                *slot2.borrow_mut() = Some(resolve);
+            }));
+            s.resolve_cleaning = slot.borrow_mut().take();
             (
                 s.timer.take(),
                 s.reader.take(),
@@ -841,14 +876,25 @@ mod web {
         }
         if needs_close {
             if let Some(port) = port {
-                let pending = call(&port, "close", &[]);
-                if let Ok(p) = &pending {
-                    // 待機上限を超えて遅れて完了した close も記録する（契約表 9）。
-                    record_close_completion(sess, p.clone());
-                }
+                // 未完了の close があれば呼び直さず完了を待つ（closing 中の close は
+                // InvalidStateError になり、閉じ済みと区別できないため）。
+                let inflight = sess.borrow().close_pending.clone();
+                let pending = match inflight {
+                    Some(p) => Ok(p.into()),
+                    None => {
+                        let r = call(&port, "close", &[]);
+                        if let Ok(v) = &r {
+                            let p = Promise::resolve(v);
+                            sess.borrow_mut().close_pending = Some(p.clone());
+                            // 待機上限を超えて遅れて完了した close も記録する（契約表 9）。
+                            record_close_completion(sess, p);
+                        }
+                        r
+                    }
+                };
                 match bounded(pending).await {
                     Ok(_) => sess.borrow_mut().needs_close = false,
-                    // 閉じ済みのポートへの close() は InvalidStateError で拒否される。
+                    // 発行した close 自体が InvalidStateError で拒否された場合は閉じ済み。
                     // 目的の状態（閉じている）に達しているので、失敗扱いにしない。
                     Err(e) if error_name(&e).as_deref() == Some("InvalidStateError") => {
                         sess.borrow_mut().needs_close = false;
@@ -861,6 +907,10 @@ mod web {
             let mut s = sess.borrow_mut();
             s.leftover = !ok;
             s.cleaning = false;
+            s.cleaning_done = None;
+            if let Some(f) = s.resolve_cleaning.take() {
+                let _ = f.call0(&JsValue::UNDEFINED);
+            }
         }
         ok
     }
