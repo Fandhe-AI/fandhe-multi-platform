@@ -8,24 +8,41 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "PassKit `PKAddPassesViewController`（`.pkpass` を渡して追加画面を出す）",
-      "perm": "`.pkpass` の署名用に Pass Type ID 証明書（要確認）",
-      "url": "https://developer.apple.com/documentation/passkit/pkaddpassesviewcontroller",
-      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。 パスの署名はサーバー側で行う"
+      "api": "PassKit `PKAddPassesViewController`（`PKPass(data:)` で読んだ `.pkpass` を渡して追加画面を出す。追加できるかは `canAddPasses()`）",
+      "perm": "アプリ側の entitlement は追加画面を出すだけなら不要（要確認）。`.pkpass` は Pass Type ID 証明書の秘密鍵で署名したもの（PKCS #7 detached signature）に限り、証明書は Certificates, Identifiers & Profiles で作る（Account Holder か Admin のみ）",
+      "url": [
+        "https://developer.apple.com/documentation/passkit/pkaddpassesviewcontroller",
+        "https://developer.apple.com/documentation/walletpasses/building-a-pass",
+        "https://developer.apple.com/help/account/capabilities/create-wallet-identifiers-and-certificates",
+        "https://developer.apple.com/documentation/passkit/pkpass/init(data:)"
+      ],
+      "deferred": "追加画面に渡す `.pkpass` は Pass Type ID 証明書の秘密鍵で署名したものでなければならず（署名が不正なら `PKPass(data:)` が `invalidSignature` で失敗する）、証明書は有料の Apple Developer Program の Certificates, Identifiers & Profiles で作る。開発者登録が期限切れで証明書を作れず、署名済みのデモ用パスを用意できないため保留。署名済みのパスをリポジトリに置くには、証明書の秘密鍵を手元か CI で扱うことになる（秘密値の扱いが増える）。ベンダーの個別審査は不要で、開発者登録が揃い、デモ用パスの署名と置き場所を決めれば着手できる",
+      "note": "未実装。追加画面の結果は delegate の `addPassesViewControllerDidFinish(_:)` だけで、追加したか取り消したかは返らない。追加の有無は閉じた後に `PKPassLibrary.containsPass(_:)` で確かめる見込み（未検証）"
     },
     "android": {
       "status": "possible",
-      "api": "Google Wallet API（`play-services-pay`。GMS 依存）",
-      "perm": "記載なし（要確認）",
-      "url": "https://developers.google.com/wallet/generic/android",
-      "note": "未実装。GMS（Google Play 開発者サービス）依存。発行者アカウントと JWT 署名がサーバー側に要る"
+      "api": "Google Wallet Android SDK（`com.google.android.gms:play-services-pay`。`PayClient.savePasses` に未署名の JWT、`savePassesJwt` に署名済みの JWT を渡す）",
+      "perm": "アプリで宣言する権限はページに記載なし。Google Pay & Wallet Console の発行者アカウント、パスの Class の作成、アプリのパッケージ名と署名証明書の SHA-1 の登録が要る",
+      "url": [
+        "https://developers.google.com/wallet/generic/android",
+        "https://developers.google.com/wallet/generic/getting-started/onboarding-guide",
+        "https://developers.google.com/wallet/generic/getting-started/auth/android",
+        "https://developers.google.com/wallet/generic/use-cases/jwt"
+      ],
+      "deferred": "Google Wallet Android SDK は Google Play services のライブラリ（`play-services-pay`）で、GMS に依存しない方針のため保留（payment-request・in-app-review と同じ）。SDK を使わずに保存リンク（`https://pay.google.com/gp/v/save/<JWT>`）を開く方法は、JWT を Google Cloud のサービスアカウント鍵で署名する必要があり、秘密値の扱いが増える。どちらの経路も発行者アカウントとパスの Class の作成が前提。ベンダーの個別審査は不要（デモモードのまま試せる見込み）で、方針と発行者アカウントが揃えば着手できる",
+      "note": "未実装。GMS 非搭載端末では使えない。公開前（デモモード）のパスは名前に「[TEST ONLY]」が付く（公式）"
     },
     "macos": {
-      "status": "no",
-      "api": "なし（`PKAddPassesViewController` は iOS・iPadOS・Mac Catalyst・visionOS のみで macOS 版が無い）",
-      "perm": "",
-      "url": "https://developer.apple.com/documentation/passkit/pkaddpassesviewcontroller",
-      "note": "macOS ネイティブでパスを追加する公開 API は無い。Mac Catalyst 経由は本フレームワークの対象外"
+      "status": "possible",
+      "api": "PassKit `PKPassLibrary.addPasses(_:withCompletionHandler:)`（macOS 10.12 以上。結果の `PKPassLibraryAddPassesStatus` は macOS 10.13 以上）。`PKAddPassesViewController` は macOS 版が無い",
+      "perm": "iOS と同じく、Pass Type ID 証明書で署名した `.pkpass` が要る",
+      "url": [
+        "https://developer.apple.com/documentation/passkit/pkpasslibrary/addpasses(_:withcompletionhandler:)",
+        "https://developer.apple.com/documentation/passkit/pkpasslibraryaddpassesstatus",
+        "https://developer.apple.com/documentation/walletpasses/building-a-pass"
+      ],
+      "deferred": "iOS と同じく、渡す `.pkpass` は有料の Apple Developer Program で作る Pass Type ID 証明書で署名したものに限る。開発者登録が期限切れで署名済みのデモ用パスを用意できないため保留。macOS では追加したパスがどこに保存・表示されるかを公式文書で確かめられておらず、着手時に実機で確かめる",
+      "note": "未実装。`addPasses` の結果は追加済み・要確認・取り消しの三値（`didAddPasses` / `shouldReviewPasses` / `didCancelAddPasses`）で返る"
     },
     "windows": {
       "status": "no",
@@ -38,9 +55,12 @@
       "status": "no",
       "api": "公開 API なし",
       "perm": "なし",
-      "url": "",
-      "note": "ブラウザの JS API はなく、各ウォレットの『追加』リンクを開くだけ（リンクは通常の遷移で、端末機能の橋渡しではない）"
+      "url": [
+        "https://developer.apple.com/documentation/walletpasses/distributing-and-updating-a-pass",
+        "https://developers.google.com/wallet/generic/use-cases/jwt"
+      ],
+      "note": "ブラウザの JS API はなく、各ウォレットの『追加』リンクを開くか `.pkpass` を配るだけ（通常の遷移・ダウンロードで、端末機能の橋渡しではない）。どちらも署名済みのパス・JWT が要る"
     }
   },
-  "note": "payment-request（決済）とは別: 本機能はチケット・会員証などのパスを保存する。今回の範囲: 固定の署名済みパスを渡して追加画面を出し、追加成功・キャンセルを画面に出すだけ。"
+  "note": "payment-request（決済）とは別: 本機能はチケット・会員証などのパスを保存する。どの OS も、追加画面に渡すパスは発行者の鍵で署名したもの（Apple は Pass Type ID 証明書、Google は発行者アカウントとサービスアカウント鍵または GMS の SDK）が要り、AI 側だけではデモ用のパスを用意できないため、iOS・macOS・Android は保留、Windows・Web はできない。条件が揃ったら保留の一覧から見直す。範囲（再開時の案）: 固定の署名済みパスを渡して追加画面を出し、追加・取り消し・失敗を画面に出すだけ。パスの発行・更新・署名はアプリに持たない"
 }
