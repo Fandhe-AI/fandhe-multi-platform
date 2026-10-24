@@ -8,24 +8,41 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "HomeKit / MatterSupport",
-      "perm": "`NSHomeKitUsageDescription`（要確認）、HomeKit capability（要確認）",
-      "url": "https://developer.apple.com/documentation/homekit",
-      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement・capability の要否は検証できない。"
+      "api": "HomeKit（`HMHomeManager` の `homes` → `HMHome.accessories` → `HMAccessory.name`。読み込み完了は `HMHomeManagerDelegate.homeManagerDidUpdateHomes(_:)`、許可は `authorizationStatus` と `homeManager(_:didUpdate:)`）",
+      "perm": "HomeKit capability（`com.apple.developer.homekit` entitlement。無料の Apple Developer でも付けられる）と Info.plist の `NSHomeKitUsageDescription`（無いと初回の HomeKit 利用でクラッシュする）。初回の `HMHomeManager` 生成で実行時の許可を求める",
+      "url": [
+        "https://developer.apple.com/documentation/homekit/enabling-homekit-in-your-app",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.homekit",
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/nshomekitusagedescription",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-ios",
+        "https://developer.apple.com/documentation/homekit/hmhomemanager/homes"
+      ],
+      "deferred": "HomeKit capability（entitlement）と Info.plist の `NSHomeKitUsageDescription` を新しく足し、初回の `HMHomeManager` 生成で実行時の許可を新しく求めないと家の情報を読めない（公式: キーが無いと初回の利用でクラッシュする）。実機の署名も、プロファイルを作るホストターゲットに HomeKit capability を足す変更が要る。新しい権限を足さない方針のため保留（alarm の iOS と同じ）。capability は無料の Apple Developer でも付けられ、ベンダーの個別審査は不要で、方針が変われば着手できる",
+      "note": "未実装。`homes` は生成直後は空で、`homeManagerDidUpdateHomes(_:)` の初回呼び出しの後にだけ HomeKit のデータベースの内容になる（公式）。拒否されると以後の呼び出しは `HMError.Code.homeAccessNotAuthorized` で失敗し、利用者は設定アプリでいつでも取り消せる（公式）。家を作っていない端末では一覧が空になる。MatterSupport（iOS 16.1 以上）は機器を自前のエコシステムへ追加する仕組みで、登録済みの機器の一覧は読めない"
     },
     "android": {
       "status": "possible",
-      "api": "Google Home APIs for Android",
-      "perm": "記載なし（要確認）",
-      "url": "",
-      "note": "未実装。URL 未確認（developers.home.google.com/apis/android は取得時 404）。Google Home 側の開発者登録・GMS 依存の見込み（要確認）"
+      "api": "Google Home APIs for Android（`Home.getClient` → `structures()` / `rooms()` / `devices()` の `HomeObjectsFlow`。許可は `hasPermissions()` / `requestPermissions()`）。OS 標準（AOSP）の API は無い",
+      "perm": "アプリで宣言する Android の権限はページに記載なし。Google Cloud の OAuth 同意画面と Android 用 OAuth クライアント（署名証明書の SHA-1）、テストユーザーの登録が要る。家の機器への許可は Home APIs の許可画面で利用者が与える",
+      "url": [
+        "https://developers.home.google.com/apis/android/sdk",
+        "https://developers.home.google.com/apis/android/oauth",
+        "https://developers.home.google.com/apis/android/permissions",
+        "https://developers.home.google.com/apis/android/structure",
+        "https://developers.home.google.com/apis/android/sample-app/build"
+      ],
+      "deferred": "Home APIs の SDK は Google Play services のライブラリ（`com.google.android.gms:play-services-home` と `play-services-home-types`）で、Google Home Developers にサインインしてダウンロードし手元に置く配布（公開の Maven に無い）。GMS に依存しない方針のため保留（game-center・in-app-review と同じ）。公式サンプルは Kotlin・kotlinx-coroutines・minSdk 29・compileSdk 36 で、いまの Gradle 構成（Kotlin なし・minSdk 24・compileSdk 35）にも合わない。確かめるには OAuth クライアントの登録と Google Home に家を作ったアカウントが要る。テストは Developer Console の登録なしでできる（100 ユーザーまで）が、公開には Developer Console の承認が要る（登録の受付は未開始）",
+      "note": "未実装。`structures()` は初期化直後に正しい一覧を返さないことがあり、接続断・許可の取り消しでも空になる（公式。公式例は 5 秒の期限付きで空でない一覧を待つ）。許可の状態は `GRANTED` / `NOT_GRANTED` / `PERMISSIONS_STATE_UNAVAILABLE` / `PERMISSIONS_STATE_UNINITIALIZED`、要求の結果は `SUCCESS` / `CANCELLED` / `ERROR`（公式）。公式サンプルは実機（Android 10 以上）を推奨し、Matter 機器の操作には Home APIs 対応の Google のハブが要る"
     },
     "macos": {
       "status": "no",
       "api": "なし（HomeKit は iOS・iPadOS・Mac Catalyst・tvOS・watchOS・visionOS のみで macOS ネイティブ版が無い）",
       "perm": "",
-      "url": "https://developer.apple.com/documentation/homekit",
-      "note": "macOS ネイティブで HomeKit を使う公開 API は無い。Mac Catalyst 経由は本フレームワークの対象外"
+      "url": [
+        "https://developer.apple.com/documentation/homekit",
+        "https://developer.apple.com/documentation/mattersupport"
+      ],
+      "note": "macOS ネイティブで HomeKit を使う公開 API は無い。Mac Catalyst 経由は本フレームワークの対象外。MatterSupport は macOS 14 以上にもあるが、機器を自前のエコシステムへ追加する仕組みで、登録済みの機器の一覧は読めない"
     },
     "windows": {
       "status": "no",
@@ -43,5 +60,5 @@
       "note": ""
     }
   },
-  "note": "smart-home は照明・錠などのスマート家電を操作する。iOS は HomeKit、Android は Google Home と系統が別で、共通 trait にするには対象機器の操作を「機器一覧の取得・オンオフ」程度に絞る必要がある。実機（Matter / HomeKit 対応機器）が要る。今回の範囲: 登録済み機器の名前一覧を画面に出す（操作は含めない）。"
+  "note": "smart-home は照明・錠などのスマート家電を操作する。iOS は HomeKit、Android は Google Home APIs と系統が別で、共通 trait にするには対象機器の操作を「機器一覧の取得・オンオフ」程度に絞る必要がある。iOS は新しい entitlement・Info.plist のキー・実行時の許可、Android は GMS のライブラリ（Kotlin のランタイムと minSdk・compileSdk の引き上げを含む）が要るため、どちらも保留。条件が揃ったら保留の一覧から見直す。範囲（再開時の案）: 登録済み機器の名前一覧を画面に出す（操作は含めない）。結果は一覧（空を含む）・許可なし・失敗の三値。一覧は OS の読み込み完了の通知（iOS は `homeManagerDidUpdateHomes(_:)`、Android は Flow の値）を待って取り、期限で完了を推測しない。家の構成・機器の状態はアプリ内に保持せず、要求のたびに OS から読み直す。実機（Matter / HomeKit 対応機器か、家を作ったアカウント）が要る"
 }
