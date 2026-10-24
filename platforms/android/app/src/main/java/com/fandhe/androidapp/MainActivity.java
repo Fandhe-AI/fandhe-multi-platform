@@ -682,6 +682,14 @@ public class MainActivity extends GameActivity {
         return WebAuthSessionHelper.sha256(data);
     }
 
+    // アプリ内ブラウザ（Issue #703）。実装は `InAppBrowserHelper`。
+    // Rust の `android_in_app_browser.rs` が JNI で呼ぶ。
+    private final InAppBrowserHelper inAppBrowserHelper = new InAppBrowserHelper(this);
+
+    void requestInAppBrowserOpen(long requestId, String url) {
+        inAppBrowserHelper.open(requestId, url);
+    }
+
     // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
     // Rust の `android_print.rs` が JNI で呼ぶ。
     private final PrintHelper printHelper = new PrintHelper(this);
@@ -2546,6 +2554,7 @@ public class MainActivity extends GameActivity {
         super.onResume();
         activityResumed = true;
         webAuthSessionHelper.onResume();
+        inAppBrowserHelper.onResume();
         compassHelper.onResume();
         environmentSensorsHelper.onResume();
         localPeerHelper.onResume();
@@ -2641,6 +2650,7 @@ public class MainActivity extends GameActivity {
         activityResumed = false;
         penStylusHelper.onPause();
         webAuthSessionHelper.onPause();
+        inAppBrowserHelper.onPause();
         screenCaptureHelper.onPause();
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
@@ -4882,6 +4892,7 @@ public class MainActivity extends GameActivity {
         // UI キューを待つネイティブ終了処理（clear）が super.onDestroy() の後ろで詰まらないよう先に解放する。
         nowPlayingHelper.onDestroy();
         super.onDestroy();
+        inAppBrowserHelper.onDestroy();
         pedometerHelper.onDestroy();
         translationHelper.onDestroy();
         spellCheckHelper.onDestroy();

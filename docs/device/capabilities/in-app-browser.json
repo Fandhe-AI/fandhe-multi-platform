@@ -17,11 +17,14 @@
       "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_in_app_browser.m + crates/fandhe-egui-proxy/src/device/ios_in_app_browser.rs、Issue #702"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "Custom Tabs（`androidx.browser`）",
       "perm": "なし",
       "url": "https://developer.android.com/develop/ui/views/layout/webapps/overview-of-android-custom-tabs",
-      "note": "未実装。`androidx.browser` は既存依存（web-auth-session で導入済み）。Custom Tabs 対応ブラウザが無い端末では `CustomTabsIntent` が既定ブラウザで開く（公式の既定動作、https://developer.chrome.com/docs/android/custom-tabs/guide-get-started ）。ブラウザが 1 つも無いと `ActivityNotFoundException`。閉じた通知の専用 API は無いので、起動後の離脱と復帰（`onPause` → `onResume`）で判定する"
+      "note": "実装済み（#703）。`androidx.browser` は既存依存（web-auth-session で導入済み）。Custom Tabs 対応ブラウザが無い端末では `CustomTabsIntent` が既定ブラウザで開く（公式の既定動作、https://developer.chrome.com/docs/android/custom-tabs/guide-get-started ）。その場合も離脱して戻れば「閉じた」になる。ブラウザが 1 つも無いと `ActivityNotFoundException` で開けなかった（ブラウザなし）として返す。閉じた通知の専用 API は無いので、起動後の離脱と復帰（`onPause` → `onResume`）で判定する。URL は共通コアで検査し、OS 層でも http / https・host あり・userinfo なしを確かめ直す。開くまでの期限は 10 秒（単調時計）で、期限切れ後は表示しない。非前景は表示先なし、再生成・終了は中断として返す。守らない範囲: 開いた後に Rust から閉じること・閲覧内容と遷移先と読み込み失敗の検知・複数プロセス・プロセス死後の結果。Android 実機での確認は #699",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#699）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_in_app_browser.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/InAppBrowserHelper.java + crates/fandhe-egui-proxy/src/device/in_app_browser.rs + crates/fandhe-core/src/screens/in_app_browser_show.rs + crates/fandhe-device/src/in_app_browser.rs、Issue #703"
     },
     "macos": {
       "status": "no",
