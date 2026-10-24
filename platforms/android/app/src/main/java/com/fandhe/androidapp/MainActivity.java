@@ -497,10 +497,10 @@ public class MainActivity extends GameActivity {
     }
 
     // 住所の座標変換（Issue #693）。実装は `GeocodingHelper`。Rust の `android_geocoding_search.rs` が JNI で呼ぶ。
-    private final GeocodingHelper geocodingHelper = new GeocodingHelper(this);
+    private final GeocodingHelper geocodingHelper = new GeocodingHelper();
 
     void requestGeocode(long requestId, String address, int maxResults) {
-        geocodingHelper.request(requestId, address, maxResults);
+        geocodingHelper.request(getApplicationContext(), requestId, address, maxResults);
     }
 
     void cancelGeocode(long requestId) {

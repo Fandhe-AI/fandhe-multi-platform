@@ -1,12 +1,13 @@
 package com.fandhe.androidapp;
 
+import android.content.Context;
 import android.location.Address;
 import android.location.Geocoder;
 import android.os.Build;
 
-import androidx.activity.ComponentActivity;
 import androidx.annotation.RequiresApi;
 
+import java.lang.ref.WeakReference;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -28,6 +29,11 @@ import java.util.concurrent.RejectedExecutionException;
 // 取り消し: Geocoder に取り消し API は無い。`cancel` は追跡を外すだけで、OS 側の処理は走り切る
 // （結果は捨てる）。同期版が詰まると単一 executor の後続が待たされるが、Rust の期限で失敗が確定する。
 //
+// Activity 非保持: helper は Activity を持たない。application context は呼び出しごとに MainActivity から
+// 引数で受け、フィールドにも持たない。OS 側の未完了処理（同期版の長い停止・GeocodeListener）から
+// Activity へ到達できないため、再生成後も旧 Activity とその画面資源が回収を妨げられない。
+// リスナーは static 入れ子クラスで、helper も弱参照でしか持たない。
+//
 // ライフサイクル: `onDestroy`（Activity 再生成を含む）で保留中の要求を INTERRUPTED で確定する。
 // `request` はインスタンスフィールドなので、再生成後の新インスタンスは未追跡から始まり旧結果を拾わない。
 // 住所・座標・OS の例外メッセージはログに出さない。
@@ -41,7 +47,6 @@ final class GeocodingHelper {
     private static native void nativeOnGeocodeResult(
             long requestId, int code, double latitude, double longitude, boolean hasCoordinate, int count);
 
-    private final ComponentActivity activity;
     private final RequestTracker request = new RequestTracker();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Object lock = new Object();
@@ -49,14 +54,10 @@ final class GeocodingHelper {
     private long cancelledId = RequestTracker.NONE;
     private volatile boolean destroyed;
 
-    GeocodingHelper(ComponentActivity activity) {
-        this.activity = activity;
-    }
-
-    // JNI スレッドから呼ばれる。
-    void request(long id, String address, int maxResults) {
+    // JNI スレッドから呼ばれる。appContext は MainActivity が `getApplicationContext()` で渡す。
+    void request(Context appContext, long id, String address, int maxResults) {
         try {
-            executor.execute(() -> start(id, address, maxResults));
+            executor.execute(() -> start(appContext, id, address, maxResults));
         } catch (RejectedExecutionException e) {
             nativeOnGeocodeResult(id, RESULT_INTERRUPTED, 0, 0, false, 0);
         }
@@ -84,7 +85,7 @@ final class GeocodingHelper {
     }
 
     // executor 上で実行する。
-    private void start(long id, String address, int maxResults) {
+    private void start(Context appContext, long id, String address, int maxResults) {
         synchronized (lock) {
             if (id <= cancelledId) {
                 return;
@@ -102,8 +103,7 @@ final class GeocodingHelper {
                 finish(id, RESULT_UNSUPPORTED, null);
                 return;
             }
-            // Activity を保持しないよう application context で作る（再生成をまたいで握らない）。
-            Geocoder geocoder = new Geocoder(activity.getApplicationContext());
+            Geocoder geocoder = new Geocoder(appContext);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 startOnT(geocoder, id, address, maxResults);
             } else {
@@ -116,18 +116,7 @@ final class GeocodingHelper {
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private void startOnT(Geocoder geocoder, long id, String address, int maxResults) {
-        geocoder.getFromLocationName(address, maxResults, new Geocoder.GeocodeListener() {
-            @Override
-            public void onGeocode(List<Address> addresses) {
-                finish(id, RESULT_OK, addresses);
-            }
-
-            // 失敗理由は区別しない。届かない場合は Rust 側の期限が TIMEOUT にする。
-            @Override
-            public void onError(String errorMessage) {
-                finish(id, RESULT_FAILED, null);
-            }
-        });
+        geocoder.getFromLocationName(address, maxResults, new Listener(this, id));
     }
 
     @SuppressWarnings("deprecation")
@@ -140,6 +129,35 @@ final class GeocodingHelper {
             return;
         }
         finish(id, RESULT_OK, list);
+    }
+
+    // API 33 以上の結果受け口。helper を弱参照でしか持たず、Activity への参照は無い。
+    // 失敗理由は区別しない。onError が届かない場合は Rust 側の期限が TIMEOUT にする。
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private static final class Listener implements Geocoder.GeocodeListener {
+        private final WeakReference<GeocodingHelper> helper;
+        private final long id;
+
+        Listener(GeocodingHelper helper, long id) {
+            this.helper = new WeakReference<>(helper);
+            this.id = id;
+        }
+
+        @Override
+        public void onGeocode(List<Address> addresses) {
+            GeocodingHelper h = helper.get();
+            if (h != null) {
+                h.finish(id, RESULT_OK, addresses);
+            }
+        }
+
+        @Override
+        public void onError(String errorMessage) {
+            GeocodingHelper h = helper.get();
+            if (h != null) {
+                h.finish(id, RESULT_FAILED, null);
+            }
+        }
     }
 
     // この id が保留中の要求なら 1 回だけ確定する。判定と追跡の解除は lock の内側、native 通知は外で行う
