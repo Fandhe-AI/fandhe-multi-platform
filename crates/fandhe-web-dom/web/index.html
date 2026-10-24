@@ -84,6 +84,7 @@
         mount_device_info_show_screen,
         mount_audio_devices_show_screen,
         mount_local_fonts_show_screen,
+        mount_eye_dropper_screen,
         mount_multi_display_show_screen,
         mount_window_management_show_screen,
         mount_accessibility_prefs_show_screen,
@@ -133,6 +134,8 @@
         mount_compose_mail_sms_screen("fandhe-dom-root");
       } else if (screen === "app_badge_set") {
         mount_app_badge_set_screen("fandhe-dom-root");
+      } else if (screen === "eye_dropper") {
+        mount_eye_dropper_screen("fandhe-dom-root");
       } else if (screen === "local_fonts_show") {
         mount_local_fonts_show_screen("fandhe-dom-root");
       } else if (screen === "audio_devices_show") {

@@ -42,8 +42,8 @@
       "note": "要確認。画面キャプチャ（`Windows.Graphics.Capture`）で自前実装は可能だが、標準機能ではなく範囲外。URL 未確認"
     },
     "web": {
-      "status": "possible",
-      "api": "`EyeDropper` API（`new EyeDropper().open({ signal })`、結果は `sRGBHex`）",
+      "status": "done",
+      "api": "`EyeDropper` API（`new EyeDropper().open({ signal })`、結果は `sRGBHex`）。`Reflect` で呼び、`AbortController` の `signal` を渡す",
       "perm": "なし（secure context 限定。`open()` はユーザー操作（transient activation）の中で呼ぶ。外だと `NotAllowedError`）",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/API/EyeDropper_API",
@@ -51,7 +51,10 @@
         "https://wicg.github.io/eyedropper-api/"
       ],
       "safari": "Safari 非対応（iOS を含む）。Firefox・Android 版 Chrome も非対応。デスクトップの Chrome・Edge 95 以降のみ",
-      "note": "未実装。MDN は Limited availability・Experimental。`EyeDropper` は `[SecureContext]` で、secure context 外ではコンストラクタ自体が無い。`open()` の拒否は `NotAllowedError`（ユーザー操作外）・`InvalidStateError`（別のスポイトが開いている）・`AbortError`（Esc での取り消し・`AbortSignal` での中断）・`OperationError`（その他の失敗）（MDN）。`sRGBHex` は `#aabbcc` 形式の sRGB"
+      "note": "実装済み（#763）。コンストラクタが無ければ非対応、`AbortError` だけを取り消し、ほかの拒否と不正な `sRGBHex` は失敗として扱う。画面の破棄と `pagehide` で `signal` により中断する。MDN は Limited availability・Experimental。`EyeDropper` は `[SecureContext]` で、secure context 外ではコンストラクタ自体が無い。`open()` の拒否は `NotAllowedError`（ユーザー操作外）・`InvalidStateError`（別のスポイトが開いている）・`AbortError`（Esc での取り消し・`AbortSignal` での中断）・`OperationError`（その他の失敗）（MDN）。`sRGBHex` は `#aabbcc` 形式の sRGB",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#759）",
+      "impl": "crates/fandhe-web-dom/src/eye_dropper.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/eye_dropper_pick.rs + crates/fandhe-device/src/eye_dropper.rs、Issue #763"
     }
   },
   "note": "eye-dropper は macOS と Web のみ。ほかは no のため、共通 trait は「この OS では使えない」を返す前提になる。color-picker（既存 id）との違い: こちらは画面上の任意の点から色を拾う。今回の範囲: ボタンを押すとスポイトが起動し、選んだ色を 16 進（`#rrggbb`）で画面に出す（macOS と Web）。結果は「選んだ / 取り消した / 非対応 / 失敗」の 4 種で、取り消しを失敗に見せない。OS・ブラウザに対応の有無を先に問い合わせず、呼んだ結果（コンストラクタの有無・例外名・nil）で判定する。macOS は sRGB の外の色を各成分 0〜1 に寄せて丸める。守らない範囲: macOS でハンドラが呼ばれないまま残った場合の復旧（閉じる API が無く期限も持たない）、sRGB の外の色の正確さ、ブラウザ・OS ごとのサンプリング位置や色管理の差、複数タブ・複数プロセスでの同時操作。拾った色はログに出さない。"

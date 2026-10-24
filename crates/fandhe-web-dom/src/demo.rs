@@ -65,6 +65,9 @@ use fandhe_core::screens::device_info_show::{
     current_screen as current_device_info_screen, DeviceInfoShowState,
 };
 use fandhe_core::screens::drag_drop::{current_screen as current_drag_drop_screen, DragDropState};
+use fandhe_core::screens::eye_dropper_pick::{
+    current_screen as current_eye_dropper_screen, EyeDropperState,
+};
 use fandhe_core::screens::file_association_show::{
     file_association_show_screen, FileAssociationShowState,
 };
@@ -611,6 +614,25 @@ pub fn mount_audio_devices_show_screen(root_id: &str) -> Result<(), JsValue> {
         current_audio_devices_screen(&initial_state),
         initial_state,
         super::audio_devices::audio_devices_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「画面のスポイト」（Issue #763）をマウントする検証専用
+/// エントリポイント。`super::eye_dropper::eye_dropper_pick_effect` を effect として渡す。
+/// 起動時には呼ばず、ボタン押下（ユーザー操作）の中で `EyeDropper.open()` が動く。
+///
+/// 呼び出し元が渡す `root_id` の要素が見つからない場合はエラーを返す
+/// （panic を API 契約にしない方針、coding-rust.md 準拠）。
+#[wasm_bindgen]
+pub fn mount_eye_dropper_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = EyeDropperState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_eye_dropper_screen(&initial_state),
+        initial_state,
+        super::eye_dropper::eye_dropper_pick_effect,
     )
 }
 
