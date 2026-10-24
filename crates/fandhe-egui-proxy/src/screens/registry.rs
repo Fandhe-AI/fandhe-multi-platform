@@ -98,6 +98,10 @@ generated_screens! {
     crate::device::compose_mail_sms::compose_mail_sms_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "global_hotkey" => fandhe_core::screens::global_hotkey::current_screen,
+    crate::device::global_hotkey::global_hotkey_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "open_in_shell" => fandhe_core::screens::open_in_shell::current_screen,
     crate::device::open_in_shell::open_in_shell_effect,
     effect

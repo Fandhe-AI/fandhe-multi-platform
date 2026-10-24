@@ -21,7 +21,7 @@
       "note": "Android にアプリ外のキー入力を拾う概念はない"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "Carbon（HIToolbox）`RegisterEventHotKey` / `UnregisterEventHotKey`。押下は `GetApplicationEventTarget()` に `InstallEventHandler` した `kEventClassKeyboard` / `kEventHotKeyPressed` で受ける。`NSEvent.addGlobalMonitorForEvents` は使わない",
       "perm": "なし（アクセシビリティ・入力監視の許可を求めない方式を選ぶ。新しい entitlement・Info.plist キーの追加なし。`Carbon.framework` のリンクを足す）",
       "url": [
@@ -29,7 +29,10 @@
         "https://developer.apple.com/forums/thread/763878",
         "https://developer.apple.com/forums/thread/735223"
       ],
-      "note": "未実装。`RegisterEventHotKey` の公式リファレンスのページは見当たらず、根拠は SDK のヘッダ（`HIToolbox/CarbonEvents.h`）: スレッド安全でない（main thread で呼ぶ）、同じ組み合わせを複数アプリが登録でき全員に通知される、`kEventHotKeyExclusive` を付けると他プロセスの排他登録と重なったとき `eventHotKeyExistsErr`（-9878）を返す、終了時は OS が解除する。非推奨の印は無い。`NSEvent` の global monitor はキー系イベントにアクセシビリティの信頼が要り（公式）、自アプリ宛てのイベントも届かないため採らない。macOS 15 で shift / option だけの修飾は登録できなくなり 15.2 で緩和された（Apple のフォーラム回答）。Apple の技術サポートは Carbon 由来のため推奨しないと回答しているが、代案の `CGEventTap` は入力監視の許可が要る"
+      "note": "実装済み（#766）。`kEventHotKeyExclusive` 付きで登録し、`eventHotKeyExistsErr` を使用中へ写す。解除は OS が成功を返したときだけ記録（`EventHotKeyRef`）を手放し、失敗なら登録中のまま残す。イベントハンドラは一度導入したらプロセスの終了まで保持する（登録の記録には使わない）。`RegisterEventHotKey` の公式リファレンスのページは見当たらず、根拠は SDK のヘッダ（`HIToolbox/CarbonEvents.h`）: スレッド安全でない（main thread で呼ぶ）、同じ組み合わせを複数アプリが登録でき全員に通知される、`kEventHotKeyExclusive` を付けると他プロセスの排他登録と重なったとき `eventHotKeyExistsErr`（-9878）を返す、終了時は OS が解除する。非推奨の印は無い。`NSEvent` の global monitor はキー系イベントにアクセシビリティの信頼が要り（公式）、自アプリ宛てのイベントも届かないため採らない。macOS 15 で shift / option だけの修飾は登録できなくなり 15.2 で緩和された（Apple のフォーラム回答）。Apple の技術サポートは Carbon 由来のため推奨しないと回答しているが、代案の `CGEventTap` は入力監視の許可が要る",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#764）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_global_hotkey.m + crates/fandhe-egui-proxy/src/device/macos_global_hotkey.rs + crates/fandhe-egui-proxy/src/device/global_hotkey.rs + crates/fandhe-core/src/screens/global_hotkey.rs + crates/fandhe-device/src/global_hotkey.rs、Issue #766"
     },
     "windows": {
       "status": "possible",
