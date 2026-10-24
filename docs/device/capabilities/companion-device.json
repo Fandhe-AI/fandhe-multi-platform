@@ -8,17 +8,25 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "AccessorySetupKit（iOS 18+）",
-      "perm": "Info.plist の宣言（要確認）",
-      "url": "https://developer.apple.com/documentation/accessorysetupkit",
-      "note": "未実装。Apple 公式表記で iOS / iPadOS のみ。"
+      "api": "AccessorySetupKit（`ASAccessorySession` の `showPickerForDisplayItems:completionHandler:`。iOS 18 以上、Objective-C のヘッダあり）",
+      "perm": "Info.plist の `NSAccessorySetupKitSupports`（`Bluetooth`）と、探す条件の `NSAccessorySetupBluetoothServices` / `NSAccessorySetupBluetoothCompanyIdentifiers` / `NSAccessorySetupBluetoothNames`。Bluetooth の許可ダイアログは出ない（公式）。entitlement の要否は公式に記載なし",
+      "url": [
+        "https://developer.apple.com/documentation/accessorysetupkit",
+        "https://developer.apple.com/documentation/accessorysetupkit/discovering-and-configuring-accessories",
+        "https://developer.apple.com/videos/play/wwdc2024/10203/"
+      ],
+      "deferred": "AccessorySetupKit を使うと宣言したアプリでは、CoreBluetooth の状態は付属機器を登録するまで poweredOn にならず、スキャン結果も登録済みの機器だけになる（公式: WWDC24「Meet AccessorySetupKit」）。宣言はアプリ単位の Info.plist に入るため、実装済みの bluetooth-le（周辺の BLE 機器を一覧するスキャン）を壊す。避けるには別アプリ（別ターゲット）に分けるなど設計を変える必要があるため保留。ほかに、配備対象（iOS 17）より新しい iOS 18 の framework の弱リンクと、条件に合う広告を出す相手機器が要る。ベンダーの個別審査は不要で、bluetooth-le との共存の方針が決まれば着手できる",
+      "note": "未実装。iOS / iPadOS のみ（Apple 公式表記）。探す条件（service UUID か company identifier）は Info.plist に宣言した値と一致させる必要がある"
     },
     "android": {
       "status": "possible",
-      "api": "`CompanionDeviceManager`（API 26+）",
-      "perm": "位置権限は不要。`uses-feature android.software.companion_device_setup`",
-      "url": "https://developer.android.com/develop/connectivity/bluetooth/companion-device-pairing",
-      "note": "未実装。"
+      "api": "`CompanionDeviceManager.associate(AssociationRequest, Executor, Callback)`（API 33 以上）+ `BluetoothLeDeviceFilter`",
+      "perm": "uses-permission は不要（位置情報の権限も不要）。Manifest に `uses-feature android.software.companion_device_setup`（`required=false`）。端末の位置情報サービスがオンであること（公式）",
+      "url": [
+        "https://developer.android.com/develop/connectivity/bluetooth/companion-device-pairing",
+        "https://developer.android.com/sdk/api_diff/33/changes/android.companion.CompanionDeviceManager"
+      ],
+      "note": "未実装。OS の機器選択画面（同意ダイアログ）を `onAssociationPending` の `IntentSender` で出し、結果を Activity の結果で受ける。名前は `AssociationInfo.getDisplayName()`（API 33）で取り、表示した後に `disassociate(int)` で関連付けを外す。API 26〜32 の旧経路（`onDeviceFound`・`EXTRA_DEVICE`・`disassociate(String)`）は使わず非対応にする。フレームワーク API で追加の依存は無い"
     },
     "macos": {
       "status": "no",
@@ -43,5 +51,5 @@
       "note": "ブラウザに付属機器のペアリング API は無い（Web Bluetooth の `requestDevice` は bluetooth-le の範囲）。"
     }
   },
-  "note": "iOS 18 以降と Android に届く。bluetooth-le（既存 id）の接続は機器を自分で探すもので、本機能は OS の標準ペアリング UI で機器を選び、位置権限などを避けて接続する点が違う。今回の範囲: 標準のペアリング UI を出して機器 1 台を選び、選んだ機器の名前を画面に出す（以降の通信は bluetooth-le に任せる）。"
+  "note": "iOS 18 以降と Android に届く。bluetooth-le（既存 id）の接続は機器を自分で探すもので、本機能は OS の標準ペアリング UI で機器を選び、位置権限などを避けて接続する点が違う。iOS は宣言でアプリ全体の CoreBluetooth が登録済みの機器に限られ bluetooth-le と両立しないため保留。範囲: Android 13 以上で OS の機器選択画面を出して BLE 機器 1 台を選び、選んだ機器の名前を画面に出す。結果は選んだ（名前、名前なしを含む）/ キャンセル / 失敗の三値で、表示した後に関連付けを外す（以降の通信は bluetooth-le に任せる）。守らない範囲: Android 12L 以下、関連付けを残すこと・背景での起動、機器との通信・OS のペアリング（ボンディング）、選択画面の表示中のプロセス死、複数プロセス"
 }
