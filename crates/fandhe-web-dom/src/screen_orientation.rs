@@ -24,6 +24,8 @@
 //!   呼び出し開始で、単調時計（`performance.now()`）で測る。期限後に届いた結果は成功にしない
 //! - 失敗・期限切れ・破棄の後は `lock()` の希望を残さない。直前が未固定なら `unlock()` とこの画面が
 //!   入れた全画面の解除、直前が固定済みなら直前の向きへ `lock()` し直す
+//! - 固定済みから別の向きへの固定が失敗したときの復元 `lock()` は期限付きで待ち、確定してから
+//!   結果を届ける（その間は処理中のまま）。通知経路でも期限を確認し、遅れて成立した全画面は抜ける
 //! - 解除は `unlock()` を同期に呼び、記録を消し、この画面が入れた全画面だけを抜ける
 //!   （他者が入れた全画面は抜けない）。全画面を抜けられなくても lock は解けているので成功とする
 //! - `lock()` の `NotSupportedError`（Safari・デスクトップ Chrome）は固定だけ `Unsupported`
@@ -165,6 +167,8 @@ mod web {
         pending: Option<Pending>,
         /// この画面が入れた全画面か（解除・失敗時にこれだけを抜ける）。
         own_fullscreen: bool,
+        /// 失敗後の復元 `lock()` を待っている世代。解除・破棄で `None` にして無効化する。
+        restoring: Option<u64>,
         /// `change`・`fullscreenchange`・`pageshow` で共有する読み直し。
         on_change: Option<Closure<dyn FnMut()>>,
     }
@@ -320,38 +324,69 @@ mod web {
         }
     }
 
-    /// 失敗・期限切れで確定する前に、`lock()` の希望を依頼前へ戻す（契約表 3・9）。
-    fn rollback(applier: &Applier<State>, id: u64, p: &Pending) {
-        match p.before {
-            None => {
-                let _ = unlock_js();
-                LOCK.with(|l| l.set(None));
-                exit_own_fullscreen(id);
+    /// 復元 `lock()` を待つ期限付き Promise。期限側は文字列 "timeout" で resolve する。
+    fn race_with_timeout(p: Promise) -> Promise {
+        let timeout = Promise::new(&mut |resolve, _| {
+            if let Some(w) = web_sys::window() {
+                let _ = w.set_timeout_with_callback_and_timeout_and_arguments_1(
+                    &resolve,
+                    CONFIRM_TIMEOUT.as_millis() as i32,
+                    &JsValue::from_str("timeout"),
+                );
             }
-            Some(b) => {
-                // 固定中と見せないよう先に記録を消し、直前の向きへ戻せたら立て直す。
-                LOCK.with(|l| l.set(None));
-                let a = applier.clone();
-                wasm_bindgen_futures::spawn_local(async move {
-                    let ok = match lock_js(b) {
-                        Ok(pr) => JsFuture::from(pr).await.is_ok(),
-                        Err(_) => false,
-                    };
-                    if ok && is_live(id) {
-                        LOCK.with(|l| {
-                            if l.get().is_none() {
-                                l.set(Some((id, b)));
-                            }
-                        });
-                    } else {
-                        let _ = unlock_js();
-                        LOCK.with(|l| l.set(None));
-                        exit_own_fullscreen(id);
+        });
+        Promise::race(&js_sys::Array::of2(&p, &timeout))
+    }
+
+    /// 直前が未固定だった失敗の巻き戻し（同期）。
+    fn rollback_unlocked(id: u64) {
+        let _ = unlock_js();
+        LOCK.with(|l| l.set(None));
+        exit_own_fullscreen(id);
+    }
+
+    /// 直前が固定済みだった失敗の巻き戻し。復元 `lock()` を期限付きで待ち、確定してから
+    /// 結果を届ける（復元が保留のまま次の要求を受け付けない。契約表 2・3・9）。
+    /// 待つ間に解除・破棄で世代（`restoring`）が変わったら、遅れて resolve した復元は
+    /// 現在の記録へ揃え直す。
+    fn rollback_locked(
+        applier: &Applier<State>,
+        id: u64,
+        gen: u64,
+        b: Orientation,
+        res: Result<(), OrientationFailure>,
+    ) {
+        LOCK.with(|l| l.set(None));
+        with(id, |e| e.restoring = Some(gen));
+        let a = applier.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let ok = match lock_js(b) {
+                Ok(pr) => match JsFuture::from(race_with_timeout(pr)).await {
+                    Ok(v) => v.as_string().as_deref() != Some("timeout"),
+                    Err(_) => false,
+                },
+                Err(_) => false,
+            };
+            let current = is_live(id) && with(id, |e| e.restoring == Some(gen)).unwrap_or(false);
+            if !current {
+                // 解除・破棄が先に走った。遅れて効いた復元を現在の記録へ揃える。
+                if ok {
+                    restore_to_record();
+                }
+                return;
+            }
+            with(id, |e| e.restoring = None);
+            if ok {
+                LOCK.with(|l| {
+                    if l.get().is_none() {
+                        l.set(Some((id, b)));
                     }
-                    a.apply(|s| apply_read(s, read_now()));
                 });
+            } else {
+                rollback_unlocked(id);
             }
-        }
+            a.apply(move |s| finish(s, gen, res, read_now()));
+        });
     }
 
     /// 保留中の要求を確定する。タイマーを止め、失敗なら希望を戻してから結果を届ける
@@ -363,10 +398,13 @@ mod web {
         if let Some(w) = web_sys::window() {
             w.clear_timeout_with_handle(p.timer.0);
         }
-        if result.is_err() {
-            rollback(applier, id, &p);
-        }
         let gen = p.generation;
+        if result.is_err() {
+            match p.before {
+                None => rollback_unlocked(id),
+                Some(b) => return rollback_locked(applier, id, gen, b, result),
+            }
+        }
         applier.apply(move |s| finish(s, gen, result, read_now()));
     }
 
@@ -384,6 +422,21 @@ mod web {
     /// 通知（`change` など）で読み直す。全画面を抜けたと分かったら記録を消し、保留中の固定が
     /// 満たされていれば確定する。
     fn on_notified(applier: &Applier<State>, id: u64) {
+        // 通知経路でも期限を確認する（タイマーより先に届いた期限後の change を成功にしない）。
+        let late = with(id, |e| {
+            e.pending
+                .as_ref()
+                .is_some_and(|p| expired(p.started_ms, now_ms(), CONFIRM_TIMEOUT))
+        })
+        .unwrap_or(false);
+        if late {
+            complete(
+                applier,
+                id,
+                Err(OrientationFailure::Failed(NOT_LOCKED_REASON.to_string())),
+            );
+            return;
+        }
         if fullscreen() == Some(false) {
             LOCK.with(|l| l.set(None));
             with(id, |e| {
@@ -441,6 +494,7 @@ mod web {
     fn start_unlock(applier: &Applier<State>, id: u64, gen: u64) {
         let ok = unlock_js().is_ok();
         LOCK.with(|l| l.set(None));
+        with(id, |e| e.restoring = None);
         exit_own_fullscreen(id);
         let res = if ok {
             Ok(())
@@ -531,6 +585,29 @@ mod web {
             if let Some(p) = fs_promise {
                 let ok = JsFuture::from(p).await.is_ok();
                 if !current(id, gen) {
+                    if ok {
+                        // 遅れて成立した全画面は、この要求が入れたもの。後続の要求が無ければ抜ける。
+                        let live = is_live(id);
+                        let late_same = live
+                            && with(id, |e| {
+                                e.pending.as_ref().is_some_and(|p| p.generation == gen)
+                            })
+                            .unwrap_or(false);
+                        if late_same {
+                            complete(
+                                &a,
+                                id,
+                                Err(OrientationFailure::Failed(NOT_LOCKED_REASON.to_string())),
+                            );
+                        } else {
+                            let free = !live
+                                || with(id, |e| e.pending.is_none() && e.restoring.is_none())
+                                    .unwrap_or(true);
+                            if free {
+                                exit_fullscreen_now();
+                            }
+                        }
+                    }
                     return;
                 }
                 if !ok {
@@ -604,7 +681,7 @@ mod web {
             return;
         };
         let win = web_sys::window();
-        let had_pending = entry.pending.is_some();
+        let had_pending = entry.pending.is_some() || entry.restoring.is_some();
         if let (Some(p), Some(w)) = (entry.pending.take(), &win) {
             w.clear_timeout_with_handle(p.timer.0);
         }
