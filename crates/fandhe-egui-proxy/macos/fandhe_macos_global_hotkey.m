@@ -17,7 +17,7 @@
 //     `UnregisterEventHotKey` が noErr のときだけ EventHotKeyRef を手放す。失敗なら保持したまま
 //     その OSStatus を返す（登録中のまま再試行できる）。
 //   Rust から受ける: void fandhe_rust_global_hotkey_fire(uint32_t token)
-//     押下のたびに main thread で呼ぶ。登録中（EventHotKeyRef あり）かつ ID が一致するときだけ。
+//     押下のたびに main thread で呼ぶ。登録中（EventHotKeyRef あり）かつ署名・固定 ID が一致するときだけ、現在の token で呼ぶ。
 //
 // イベントハンドラは一度導入したらプロセス終了まで保持する（終了時は OS が片付ける）。登録の記録には
 // 使わず、記録は EventHotKeyRef 1 つだけ。押されたキーの内容・OS のコードはログに出さない。
@@ -31,6 +31,8 @@ extern void fandhe_rust_global_hotkey_fire(uint32_t token);
 
 static const OSType kFandheHotKeySignature = 'FGHK';
 static EventHotKeyRef g_hotkey_ref = NULL;
+// OS へ登録する ID は固定。再登録で変わる token は g_token だけで持ち、ID とは分ける。
+static const uint32_t kFandheHotKeyId = 1;
 static uint32_t g_token = 0;
 static EventHandlerRef g_handler_ref = NULL;
 
@@ -44,7 +46,7 @@ static OSStatus fandhe_hotkey_handler(EventHandlerCallRef next, EventRef event, 
         if (status != noErr) {
             return eventNotHandledErr;
         }
-        if (g_hotkey_ref == NULL || id.signature != kFandheHotKeySignature || id.id != g_token) {
+        if (g_hotkey_ref == NULL || id.signature != kFandheHotKeySignature || id.id != kFandheHotKeyId) {
             return eventNotHandledErr;
         }
         fandhe_rust_global_hotkey_fire(g_token);
@@ -70,7 +72,7 @@ int32_t fandhe_macos_global_hotkey_register(uint32_t token) {
                 return (int32_t)status;
             }
         }
-        EventHotKeyID id = {kFandheHotKeySignature, token};
+        EventHotKeyID id = {kFandheHotKeySignature, kFandheHotKeyId};
         EventHotKeyRef ref = NULL;
         OSStatus status = RegisterEventHotKey(kVK_ANSI_K, controlKey | shiftKey | optionKey, id,
                                               GetApplicationEventTarget(), kEventHotKeyExclusive, &ref);

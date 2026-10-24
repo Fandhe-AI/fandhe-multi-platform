@@ -117,11 +117,16 @@ pub(crate) fn implementation() -> Arc<dyn GlobalHotkey> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicUsize;
+
+    /// SLOT は static のため、slot を触るテストを直列化する。
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
 
     /// `cargo test` のスレッドは main thread ではないため、登録は成功を返さず失敗になる。
     /// 実際の登録と押下は #764 の Mac 目視で扱う。
     #[test]
     fn register_off_main_thread_fails_and_leaves_no_slot() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let imp = MacGlobalHotkey;
         let r = imp.register(Arc::new(|| {}));
         assert!(matches!(
@@ -133,6 +138,7 @@ mod tests {
 
     #[test]
     fn unregister_off_main_thread_fails() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let imp = MacGlobalHotkey;
         assert!(matches!(
             imp.unregister(),
@@ -142,7 +148,37 @@ mod tests {
 
     #[test]
     fn fire_ignores_unknown_token() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // 受け口が空・token 不一致では何も呼ばない（パニックしない）。
         fandhe_rust_global_hotkey_fire(u32::MAX);
+    }
+
+    /// 登録中の再 register は slot の token だけが差し替わる。`.m` は現在の token で fire するため、
+    /// 新 token でのみ OnPress が呼ばれ、古い token では呼ばれない（冪等契約）。
+    #[test]
+    fn fire_follows_replaced_token() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let count = Arc::new(AtomicUsize::new(0));
+        let c = Arc::clone(&count);
+        let previous = lock_slot().replace((
+            7,
+            Arc::new(move || {
+                c.fetch_add(1, Ordering::SeqCst);
+            }),
+        ));
+        fandhe_rust_global_hotkey_fire(7);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        let c2 = Arc::clone(&count);
+        lock_slot().replace((
+            8,
+            Arc::new(move || {
+                c2.fetch_add(10, Ordering::SeqCst);
+            }),
+        ));
+        fandhe_rust_global_hotkey_fire(7);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        fandhe_rust_global_hotkey_fire(8);
+        assert_eq!(count.load(Ordering::SeqCst), 11);
+        *lock_slot() = previous;
     }
 }
