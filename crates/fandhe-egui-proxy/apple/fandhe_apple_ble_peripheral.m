@@ -17,7 +17,7 @@
 //     0 = 停止した / 1 = 動いていなかった。呼び出し元は Rust 側のロックを握らないこと。
 //   fandhe_rust_ble_peripheral_event(session, code)
 //     Rust 側が公開する `extern "C"` 関数。code: 0 公開中（開始のコールバック成功）/ 1 読み取り 1 件 /
-//     2 Bluetooth オフ / 3 権限拒否 / 4 非対応 / 5 失敗 / 6 中断（iOS の背景遷移、b-ios が発火）。
+//     2 Bluetooth オフ / 3 権限拒否 / 4 非対応 / 5 失敗 / 6 中断（iOS の背景遷移で発火）。
 //     写像の SSOT は Rust 側 `fandhe_device::ble_peripheral` の純関数。終了系のコード（2〜6）は
 //     1 つの公開につき高々 1 回（`FandheBlePeripheralFinish` が唯一の発火点）で、通知の前に
 //     資源の解放を済ませる。
@@ -31,12 +31,20 @@
 // `peripheralManagerDidStartAdvertising:error:` が成功したときにだけ送る。公開後に state が
 // poweredOn を外れたら解放してから理由別のコードを送り、自動では再開しない。
 //
+// iOS の背景遷移: DidEnterBackground を受けたら専用キューで Teardown（stopAdvertising /
+// removeAllServices）を済ませてから中断（6）を確定する。背景モードは宣言せず、背景でのアドバタイズ
+// 停止を OS は通知しないため。WillResignActive は見ない（許可ダイアログ中は Inactive になるだけ）。
+// 前景へ戻っても自動では再開しない。購読トークンはプロセスの生存中保持する（ARC 解放で購読が無効になる）。
+//
 // ログ方針: 中心役の識別子・読み取り要求の中身・OS のエラーコードを NSLog 等へ出さない
 // （security.md A09）。
 
 #import <Foundation/Foundation.h>
 #import <CoreBluetooth/CoreBluetooth.h>
 #import <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+#import <UIKit/UIKit.h>
+#endif
 
 extern void fandhe_rust_ble_peripheral_event(uint64_t session, int32_t code);
 
@@ -47,7 +55,7 @@ enum {
     kFandheBlePeripheralPermissionDenied = 3,
     kFandheBlePeripheralUnsupported = 4,
     kFandheBlePeripheralFailed = 5,
-    kFandheBlePeripheralInterrupted = 6, // iOS の背景遷移（b-ios が使う）
+    kFandheBlePeripheralInterrupted = 6, // iOS の背景遷移
 };
 
 @interface FandheBlePeripheralDelegate : NSObject <CBPeripheralManagerDelegate>
@@ -202,10 +210,43 @@ static int32_t FandheBlePeripheralCodeForState(CBManagerState state) {
 @end
 
 #if TARGET_OS_IPHONE
-// b-ios（Issue #779）がここに背景遷移（UIApplicationDidEnterBackgroundNotification）を埋める。
-// 購読したら専用キューで FandheBlePeripheralFinish(session, kFandheBlePeripheralInterrupted) を
-// 呼んで止める。背景モードは宣言しないため、背景へ移るとアドバタイズが無効になる（OS の仕様）。
-// (a) では空の受け口だけを置く。
+// 背景遷移の購読（プロセスの生存中保持し解除しない）。g_background は専用キュー上でだけ読み書きする。
+static id g_bg_token = nil;
+static id g_fg_token = nil;
+static BOOL g_background = NO;
+
+// 初回の公開依頼で 1 回だけ登録する（最初の公開より前に終わるので通知を落とさない）。
+// main からは dispatch_async だけで専用キューへ渡し、dispatch_sync しない（契約表 11）。
+static void FandheBlePeripheralEnsureLifecycleObservers(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+      g_bg_token = [center addObserverForName:UIApplicationDidEnterBackgroundNotification
+                                       object:nil
+                                        queue:nil
+                                   usingBlock:^(NSNotification *__unused note) {
+                                     dispatch_async(FandheBlePeripheralQueue(), ^{
+                                       @autoreleasepool {
+                                           g_background = YES;
+                                           if (g_delegate != nil) {
+                                               FandheBlePeripheralFinish(g_delegate.session,
+                                                                         kFandheBlePeripheralInterrupted);
+                                           }
+                                       }
+                                     });
+                                   }];
+      g_fg_token = [center addObserverForName:UIApplicationWillEnterForegroundNotification
+                                       object:nil
+                                        queue:nil
+                                   usingBlock:^(NSNotification *__unused note) {
+                                     dispatch_async(FandheBlePeripheralQueue(), ^{
+                                       g_background = NO;
+                                     });
+                                   }];
+    });
+}
+#else
+#define FandheBlePeripheralEnsureLifecycleObservers() ((void)0)
 #endif
 
 int32_t fandhe_apple_ble_peripheral_start(uint64_t session, const char *service_uuid,
@@ -214,6 +255,7 @@ int32_t fandhe_apple_ble_peripheral_start(uint64_t session, const char *service_
     if (service_uuid == NULL || characteristic_uuid == NULL || local_name == NULL || value == NULL) {
         return 1;
     }
+    FandheBlePeripheralEnsureLifecycleObservers();
     // 戻る前に NSString / NSData へコピーし終える。
     NSString *serviceString = [NSString stringWithUTF8String:service_uuid];
     NSString *characteristicString = [NSString stringWithUTF8String:characteristic_uuid];
@@ -234,6 +276,15 @@ int32_t fandhe_apple_ble_peripheral_start(uint64_t session, const char *service_
           delegate.localName = name;
           delegate.value = [valueString dataUsingEncoding:NSUTF8StringEncoding];
           g_delegate = delegate;
+#if TARGET_OS_IPHONE
+          // 背景で公開を始めない（許可ダイアログの応答と背景遷移の到着順が入れ替わる場合の防御）。
+          // 背景遷移後に届く許可の応答は、Finish で g_delegate が nil になるため
+          // peripheralManagerDidUpdateState: の `g_delegate != self` で捨てられる。
+          if (g_background) {
+              FandheBlePeripheralFinish(session, kFandheBlePeripheralInterrupted);
+              return;
+          }
+#endif
           // 電源オフ時の OS 標準アラートは出さない（状態は画面の表示で伝える）。
           g_manager = [[CBPeripheralManager alloc]
               initWithDelegate:delegate

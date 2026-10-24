@@ -7,7 +7,7 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "CoreBluetooth `CBPeripheralManager`（専用シリアルキューで生成。`add` → `peripheralManager:didAddService:error:`、`startAdvertising` → `peripheralManagerDidStartAdvertising:error:`、読み取りは値 nil の特性で `peripheralManager:didReceiveReadRequest:` → `respondToRequest:withResult:`）。macOS と `.m` を共用する",
       "perm": "`NSBluetoothAlwaysUsageDescription`（bluetooth-le で宣言済み。周辺機器役も同じキーで、新しいキーは足さない。`NSBluetoothPeripheralUsageDescription` は iOS 13 で非推奨）。背景モード `bluetooth-peripheral` は宣言しない",
       "url": [
@@ -17,7 +17,10 @@
         "https://developer.apple.com/library/archive/documentation/NetworkingInternetWeb/Conceptual/CoreBluetooth_concepts/CoreBluetoothBackgroundProcessingForIOSApps/PerformingTasksWhileYourAppIsInTheBackground.html",
         "https://developer.apple.com/documentation/bundleresources/information-property-list/nsbluetoothalwaysusagedescription"
       ],
-      "note": "未実装。命令は state が poweredOn になってから出す（公式）。poweredOn より下ではアドバタイズが止まり接続が切れ、poweredOff ではサービスの登録も消える（公式）。アドバタイズに載せられるのはローカル名とサービス UUID の 2 キーだけ（公式）。`stopAdvertising` には完了の通知が無い。周辺機器側に接続・切断の通知は無く、観測できるのは読み取り要求と購読だけ。背景モード無しで背景へ移るとアドバタイズが無効になり、動的な値の読み取りはエラーになる（公式）が、その切り替わりの通知は無いため、背景遷移（`DidEnterBackground`）で自分から止めて「背景で停止」として確定する（自動では再開しない）"
+      "note": "実装済み（#779）。命令は state が poweredOn になってから出す（公式）。poweredOn より下ではアドバタイズが止まり接続が切れ、poweredOff ではサービスの登録も消える（公式）。アドバタイズに載せられるのはローカル名とサービス UUID の 2 キーだけ（公式）。`stopAdvertising` には完了の通知が無い。周辺機器側に接続・切断の通知は無く、観測できるのは読み取り要求と購読だけ。背景モード無しで背景へ移るとアドバタイズが無効になり、動的な値の読み取りはエラーになる（公式）が、その切り替わりの通知は無いため、背景遷移（`DidEnterBackground`）で自分から止めて「背景で停止」として確定する（自動では再開しない）。許可ダイアログ後の公開、中心役アプリからの読み取り、背景遷移での中断、Bluetooth オフでの確定は実機確認で確かめる（#776。問題があれば done を取り下げる）",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#776）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_ble_peripheral.m + crates/fandhe-egui-proxy/src/device/ios_ble_peripheral.rs + crates/fandhe-egui-proxy/src/device/apple_ble_peripheral.rs + crates/fandhe-egui-proxy/src/device/ble_peripheral.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-device/src/ble_peripheral.rs、Issue #779"
     },
     "android": {
       "status": "possible",
