@@ -40,6 +40,8 @@ static void FandheDocScanFinishCode(uint64_t request_id, int32_t code) {
 @interface FandheDocumentScanDelegate : NSObject <VNDocumentCameraViewControllerDelegate>
 @property(nonatomic) uint64_t requestId;
 @property(nonatomic) BOOL done;
+// dismiss を開始済みか。isBeingDismissed は遷移キューの後ろでは NO のままなので、自前の旗で排他にする。
+@property(nonatomic) BOOL dismissStarted;
 - (BOOL)claim;
 @end
 
@@ -60,10 +62,13 @@ static FandheDocumentScanDelegate *g_retainedDelegate = nil;
 }
 // 撮影 UI を閉じてから block を実行する。すでに提示が外れていれば即座に実行する。
 - (void)closeController:(VNDocumentCameraViewController *)controller then:(void (^)(void))block {
-    if (controller.presentingViewController == nil || controller.isBeingDismissed) {
+    // dismiss は 1 回だけ始める。開始済みなら重ねず block だけ実行する
+    // （結果の送信は claim に勝った側の block に一本化されている）。
+    if (self.dismissStarted || controller.presentingViewController == nil || controller.isBeingDismissed) {
         block();
         return;
     }
+    self.dismissStarted = YES;
     [controller dismissViewControllerAnimated:YES completion:block];
 }
 - (void)documentCameraViewController:(VNDocumentCameraViewController *)controller
@@ -148,11 +153,10 @@ static void FandheDocScanPresent(uint64_t request_id) {
                       animated:YES
                     completion:^{
                       // 確定済み（失敗・破棄を含む）でも、画面に残った撮影 UI はその場で閉じる。
-                      // 二重 dismiss を避けるため presentingViewController の有無を見る。
+                      // dismiss の開始は closeController:then: に集約し、開始済みなら何もしない
+                      // （結果の送信は claim に勝った側の completion が担う）。
                       if (delegate.done) {
-                          if (vc.presentingViewController != nil && !vc.isBeingDismissed) {
-                              [vc dismissViewControllerAnimated:YES completion:nil];
-                          }
+                          [delegate closeController:vc then:^{}];
                           return;
                       }
                       if (top.presentedViewController != vc) {
