@@ -1,6 +1,6 @@
 #!/bin/bash
-# 子 issue に紐づく open な PR を一定間隔で確かめ、マージ条件を満たした PR か main と競合した PR が
-# 出たら 1 行ずつ出して終わる（expand-capability Step 8「マージ待ち」。run の終了を待たずにマージするため）。
+# 子 issue に紐づく open な PR を一定間隔で確かめ、マージ条件を満たした PR・main と競合した PR・
+# CI のチェックが失敗した PR が出たら 1 行ずつ出して終わる（expand-capability Step 8「マージ待ち」。run の終了を待たずにマージするため）。
 #
 # **このスクリプトはマージしない。** 条件確認は scripts/pr/guarded-merge.sh（SSOT）に任せ、
 # READY の PR は main が guarded-merge.sh の最終行の `gh pr merge` を直接打つ（PreToolUse hook が再検証する）。
@@ -8,11 +8,15 @@
 #
 # 使い方: scripts/device/wait-pr-ready.sh <子 issue 番号>...
 #   - 出力: `READY #<PR> sha=...`（条件を満たした）/ `CONFLICTING #<PR>`（main と競合）。1 件でも出たら終了 0
+#     `FAILED #<PR> <失敗したチェック名をカンマ区切り>`（現在の head でチェックが fail / cancel）は終了 3。
+#     pending が 1 つでも残る間は判定せず待つ（途中経過の fail を拾わない）。READY / CONFLICTING が同じ周回で
+#     出ていればそれらを優先し、FAILED は出さない。FAILED の PR は修正を push してから回し直す
 #   - 対象の PR: 本文の Closes が子 issue を指すもの、またはブランチ名が implement-issue-tree の規則
 #     `<type>/<子 issue 番号>-...` に合うもの（run は Closes が無い PR も正常扱いするため両方で拾う）
 #   - KNOWN_CONFLICTING: 競合を報告済みの PR 番号（空白区切り）。これらは CONFLICTING を出し直さないが、
 #     run が競合を解いて条件を満たせば READY は出す（同じ parent の run の終了を待つ間、待機を 1 本で回すため）
 #   - INTERVAL: 確認の間隔（秒、既定 60）。MAX_SEC: これを超えたら `TIMEOUT` を出して終了 2（既定 4 時間）
+#   - 終了コード: 0 = READY / CONFLICTING、1 = 引数不正・GH_FAILED、2 = TIMEOUT、3 = FAILED
 #   - gh の PR 一覧の取得（open な PR が 1000 件以上で取りこぼしうる場合を含む）が 10 回続けて失敗したら
 #     `GH_FAILED` を出して終了 1（認証切れ等で黙って回り続けないため）
 set -u -o pipefail
@@ -49,6 +53,7 @@ while :; do
     prs=""
   fi
   hit=0
+  failed=""
   for n in ${prs}; do
     out=$(bash "${root}/scripts/pr/guarded-merge.sh" "${n}" 2>&1)
     rc=$?
@@ -60,9 +65,18 @@ while :; do
       case "${known}" in *" ${n} "*) continue ;; esac
       echo "CONFLICTING #${n}"
       hit=1
+    else
+      # 未達の PR は現在の head のチェックを見る。pending が残る間は何もしない。取得に失敗したら次の周回へ
+      if checks=$(gh pr checks "${n}" --json name,bucket 2>/dev/null || true) \
+        && bad=$(printf '%s' "${checks}" | jq -r 'if type == "array" and all(.[]; .bucket != "pending")
+            then [.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(",") else "" end') \
+        && [ -n "${bad}" ]; then
+        failed="${failed}FAILED #${n} ${bad}"$'\n'
+      fi
     fi
   done
   [ "${hit}" -eq 1 ] && exit 0
+  [ -n "${failed}" ] && { printf '%s' "${failed}"; exit 3; }
   [ "$(date +%s)" -ge "${deadline}" ] && { echo "TIMEOUT ${max_sec} 秒で READY / CONFLICTING なし"; exit 2; }
   sleep "${interval}"
 done
