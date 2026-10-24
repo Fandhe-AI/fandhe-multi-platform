@@ -422,6 +422,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::safe_area_insets::release_mount(id);
         super::file_association::release_mount(id);
         super::fullscreen_immersive::release_mount(id);
+        super::screen_orientation::release_mount(id);
         super::picture_in_picture::release_mount(id);
         super::media_cast::release_mount(id);
         super::screen_capture::release_mount(id);

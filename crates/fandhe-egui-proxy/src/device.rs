@@ -30,8 +30,8 @@ pub mod android;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_accessibility_prefs;
-/// Issue #677（親 #132）: Android 向け端末・アプリの真正性証明（現状は `Unsupported` を返すスタブ。#678 が
-/// `AppAttestHelper.java` と JNI で埋める）。`device/app_attest.rs` の Android 経路から呼ばれる。
+/// Issue #677 / #678（親 #132）: Android 向け端末・アプリの真正性証明（`AppAttestHelper.java` を同期 JNI で
+/// 呼び、Key Attestation のチェーンを取る）。`device/app_attest.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_app_attest;

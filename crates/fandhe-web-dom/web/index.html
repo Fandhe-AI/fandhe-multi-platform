@@ -77,6 +77,7 @@
         mount_pen_draw_screen,
         mount_ar_show_screen,
         mount_fullscreen_toggle_screen,
+        mount_screen_orientation_show_screen,
         mount_pip_show_screen,
         mount_cast_show_screen,
         mount_power_state_show_screen,
@@ -145,6 +146,8 @@
         mount_cast_show_screen("fandhe-dom-root");
       } else if (screen === "pip_show") {
         mount_pip_show_screen("fandhe-dom-root");
+      } else if (screen === "screen_orientation_show") {
+        mount_screen_orientation_show_screen("fandhe-dom-root");
       } else if (screen === "fullscreen_toggle") {
         mount_fullscreen_toggle_screen("fandhe-dom-root");
       } else if (screen === "ar_show") {

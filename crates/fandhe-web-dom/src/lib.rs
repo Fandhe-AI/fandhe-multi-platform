@@ -117,6 +117,8 @@
 //!   純関数（経路・失敗の写像・期限判定）のみ `wasm32` gate の外に置く
 //! - [`fullscreen_immersive`]: 「全画面表示」画面の Web 経路（親 #1133、Issue #1315）。
 //!   純関数（発送判定・到達判定）のみ `wasm32` gate の外に置く
+//! - [`screen_orientation`]: 「画面の向き」画面の Web 経路（親 #128、Issue #658）。
+//!   純関数（コード写像・期限判定・失敗の写像）のみ `wasm32` gate の外に置く
 //!
 //! # 他 sub-issue との分界（TASK-4.4）
 //!
@@ -343,6 +345,8 @@ pub mod pen_stylus;
 pub mod picture_in_picture;
 /// 型サンプル「印刷」の Web 経路（Issue #329）。[`haptics`] と同じ理由で gate を外す。
 pub mod print_page;
+/// 型サンプル「画面の向き」の Web 経路（Issue #658）。[`haptics`] と同じ理由で gate を外す。
+pub mod screen_orientation;
 /// 型サンプル「画面スリープの抑止」の Web 経路（Issue #1281）。[`haptics`] と同じ理由で gate を外す。
 pub mod screen_wake_lock;
 /// 型サンプル「シリアルポート」の Web 経路（Issue #672）。[`haptics`] と同じ理由で gate を外す。

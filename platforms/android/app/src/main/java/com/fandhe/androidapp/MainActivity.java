@@ -591,6 +591,15 @@ public class MainActivity extends GameActivity {
         return MediaTranscodeHelper.transcode(getCacheDir(), pcmLe, sampleRate, remainingMs);
     }
 
+    // 端末・アプリの真正性証明（Issue #678）。実装は `AppAttestHelper`。Rust の `android_app_attest.rs` がワーカースレッドから同期 JNI で呼ぶ。
+    byte[] appAttestRandom(int len) {
+        return AppAttestHelper.random(len);
+    }
+
+    byte[] appAttest(byte[] challenge, long remainingMs) {
+        return AppAttestHelper.attest(challenge, remainingMs);
+    }
+
     // OS の検索への登録（Issue #562）。実装は `SpotlightIndexHelper`。Rust の `android_spotlight_index.rs` がワーカースレッドから同期 JNI で呼ぶ。
     int spotlightIndex(String domain, String id, String title, String text, long remainingMs) {
         return SpotlightIndexHelper.index(getApplicationContext(), domain, id, title, text, remainingMs);
