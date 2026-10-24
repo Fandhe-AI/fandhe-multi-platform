@@ -169,6 +169,13 @@ pub(crate) fn merge_cleanup<T>(
     }
 }
 
+/// 先行の後片付けが成功で終わった後に、合流側が自分で close まで行う必要があるか。
+/// 先行が取り込んだ時点より後に `needs_close` が立った場合に真になる。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn rejoin_needed(needs_close_after_join: bool) -> bool {
+    needs_close_after_join
+}
+
 /// 受信チャンクを組み立て器へ渡す。行が完成したら `Some`（期限後なら `Timeout`）、未完成は `None`。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn on_chunk(
@@ -225,8 +232,8 @@ mod web {
 
     use super::{
         failure_from_io_error, failure_from_open_error, failure_from_request_error, is_late,
-        merge_cleanup, on_chunk, on_stream_done, open_options, remaining_ms, to_port_failure,
-        OptionValue, CLEANUP_WAIT_MS, DRAIN_MAX_MS, DRAIN_QUIET_MS,
+        merge_cleanup, on_chunk, on_stream_done, open_options, rejoin_needed, remaining_ms,
+        to_port_failure, OptionValue, CLEANUP_WAIT_MS, DRAIN_MAX_MS, DRAIN_QUIET_MS,
     };
     use crate::mount::{is_live, Applier};
 
@@ -643,7 +650,8 @@ mod web {
             sess.borrow_mut().port = Some(port.clone());
             let mut opened = false;
             let result = drive(&sess, &port, started, &mut opened).await;
-            sess.borrow_mut().needs_close = opened;
+            // `needs_close` は drive が open 直後に立て、close 完了で下ろす。ここで上書きしない。
+            let _ = opened;
             let cleanup_ok = cleanup(&sess).await;
 
             let released = sess.borrow().released;
@@ -721,6 +729,9 @@ mod web {
             });
         }
         *opened = true;
+        // open 成功の直後に印を立てる。この後の読み書き待ちで画面が破棄され、先行の後片付けが
+        // 走っていても、後片付けが最新の印を読んで close できるようにする。
+        sess.borrow_mut().needs_close = true;
         let stop = |s: &Rc<RefCell<Session>>| {
             let s = s.borrow();
             s.released || s.timed_out
@@ -829,10 +840,17 @@ mod web {
         };
         if let Some(done) = running {
             let _ = JsFuture::from(done).await;
-            let s = sess.borrow();
-            return !s.leftover && !s.cleaning;
+            let (finished, still_open) = {
+                let s = sess.borrow();
+                (!s.leftover && !s.cleaning, s.needs_close)
+            };
+            // 先行の後片付けが終わった後で open 済みの印が立っていた（中断された drive が遅れて
+            // 立てた）なら、合流側で成功を引き継がず、自分で close まで行う。
+            if !(finished && rejoin_needed(still_open)) {
+                return finished;
+            }
         }
-        let (timer, reader, writer, port, needs_close) = {
+        let (timer, reader, writer, port) = {
             let mut s = sess.borrow_mut();
             s.cleaning = true;
             let slot: Rc<RefCell<Option<Function>>> = Rc::new(RefCell::new(None));
@@ -846,7 +864,6 @@ mod web {
                 s.reader.take(),
                 s.writer.take(),
                 s.port.clone(),
-                s.needs_close,
             )
         };
         if let Some((handle, cb)) = timer {
@@ -874,6 +891,8 @@ mod web {
                 sess.borrow_mut().reader = Some(r);
             }
         }
+        // reader・writer の解放を待つ間に印が立つことがあるため、開始時ではなくここで読み直す。
+        let needs_close = sess.borrow().needs_close;
         if needs_close {
             if let Some(port) = port {
                 // 未完了の close があれば呼び直さず完了を待つ（closing 中の close は
@@ -1063,6 +1082,12 @@ mod tests {
             on_chunk(&mut a, &[b'x'; 257], 0.0, 1.0),
             Some(Err(SerialPortFailure::LineTooLong))
         );
+    }
+
+    #[test]
+    fn rejoin_needed_only_when_still_open() {
+        assert!(rejoin_needed(true));
+        assert!(!rejoin_needed(false));
     }
 
     #[test]
