@@ -52,10 +52,12 @@ import java.lang.ref.WeakReference;
 // 宛の結果が新インスタンスのランチャーへ届いても、起動を記録した要求が無いため関連付けを外して捨て、
 // 新しい要求の id は消費しない。
 // 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止・旧要求の関連付けの解除。
-// // helper が回収された後に届いた関連付けは、static コールバックが Application Context で自力で外す。
+// helper が回収された後に届いた関連付けは、static コールバックが Application Context で自力で外す。
+// 解除に失敗した関連付けはアプリ内に記憶せず、OS の一覧（getMyAssociations）を正として `sweep` が
+// init と新しい要求の開始直前に全件外す（再生成・プロセス死をまたいでも取り残しを回収する）。
+// 解除に失敗した結果は KIND_INTERNAL で、成功とは見せない。
 // 守らない範囲: API 32 以下・関連付けを残すこと・背景での起動・機器との通信とボンディング・
-// 選択画面の表示中のプロセス死・複数プロセス・orphans の再試行の Activity 再生成をまたぐ引き継ぎ
-// （外せないまま再生成されると OS 側に残りうる。結果は KIND_INTERNAL で、成功とは見せない）。
+// 選択画面の表示中のプロセス死・複数プロセス・次の sweep までの間に OS 側へ残る関連付け。
 // ロック順: this のロックを持ったまま nativeTryBeginPresent / nativeOnCompanionDeviceResult を呼ぶ。
 // Rust 側は自分のロックの内側から Java を呼ばない（begin() でロックを放してから pick を呼ぶ）ため
 // 循環しない。CDM のコールバックは main executor で受け、Activity の結果と同じ UI スレッドに直列化する。
@@ -93,12 +95,6 @@ final class CompanionDeviceHelper {
     // onAssociationCreated で届いた現在の要求の関連付け（AssociationInfo。API 33 未満では常に null）。
     private Object pendingInfo;
     private boolean destroyed;
-    // 解除に失敗した関連付け（再試行のため保持する）。
-    private final java.util.List<Object> orphans = new java.util.ArrayList<>();
-    // 解除に成功した関連付け ID。Activity の結果と onAssociationCreated が逆順・遅延で届いても、同じ関連付けへ
-    // 二度目の解除（例外 → orphans 増加）を行わないための冪等化。直近 MAX_RELEASED_IDS 件だけ保持する。
-    private final java.util.LinkedHashSet<Integer> releasedIds = new java.util.LinkedHashSet<>();
-    private static final int MAX_RELEASED_IDS = 64;
     // RESULT_OK 後に AssociationInfo を待つ猶予。postDelayed は端末稼働時間（単調時計）基準で、壁時計の変更に影響されない。
     private static final long INFO_GRACE_MS = 3000L;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
@@ -113,6 +109,9 @@ final class CompanionDeviceHelper {
     // MainActivity.onCreate から呼ぶ。Application Context を取る（取得済みなら何もしない）。
     void init() {
         ensureAppContext(activity());
+        synchronized (this) {
+            sweep();
+        }
     }
 
     private Context ensureAppContext(ComponentActivity activity) {
@@ -199,6 +198,8 @@ final class CompanionDeviceHelper {
         } catch (SecurityException e) {
             // 判定できないときは OS の結果に任せる（成功へは倒れない）。
         }
+        // 前回までに外せなかった関連付けを OS の一覧から回収してから新しく作る。
+        sweep();
         try {
             AssociationRequest req = new AssociationRequest.Builder()
                     .addDeviceFilter(new BluetoothLeDeviceFilter.Builder().build())
@@ -300,8 +301,6 @@ final class CompanionDeviceHelper {
             disassociate(info);
             return;
         }
-        // 現在の要求に作られた新しい関連付け。ID が再利用されていても解除済み扱いにしない。
-        forgetReleased(info);
         if (okWaitingId == id) {
             completeSelected(id, info);
         } else {
@@ -465,76 +464,75 @@ final class CompanionDeviceHelper {
         return disassociate((AssociationInfo) info);
     }
 
-    // 外せなかった関連付けは破棄せず orphans に保持し、次の pick・確定・onDestroy で再試行する。
+    // 関連付けを外す。OS の一覧に無ければ解除済みとして成功扱い（冪等）。外せなければ false（次の sweep に任せる）。
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private boolean disassociate(AssociationInfo info) {
-        if (rawDisassociate(info)) {
-            return true;
-        }
-        orphans.add(info);
-        return false;
-    }
-
-    // 保持中の外せなかった関連付けを再試行する。結果は呼び出し元の確定種別には影響しない。
-    private void retryOrphans() {
-        if (orphans.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            return;
-        }
-        retryOrphansApi33();
-    }
-
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    private void retryOrphansApi33() {
-        java.util.Iterator<Object> it = orphans.iterator();
-        while (it.hasNext()) {
-            if (rawDisassociate((AssociationInfo) it.next())) {
-                it.remove();
-            }
-        }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    private boolean rawDisassociate(AssociationInfo info) {
         try {
-            int associationId = info.getId();
-            // 解除済みの関連付けへの再解除は成功扱い（OS 呼び出しも orphans への追加も行わない）。
-            if (releasedIds.contains(associationId)) {
-                return true;
-            }
-            Context ctx = appContext;
-            CompanionDeviceManager cdm = ctx == null ? null : ctx.getSystemService(CompanionDeviceManager.class);
+            CompanionDeviceManager cdm = cdm();
             if (cdm == null) {
                 return false;
             }
-            cdm.disassociate(associationId);
-            releasedIds.add(associationId);
-            if (releasedIds.size() > MAX_RELEASED_IDS) {
-                java.util.Iterator<Integer> it = releasedIds.iterator();
-                it.next();
-                it.remove();
+            int associationId = info.getId();
+            if (!isAssociated(cdm, associationId)) {
+                return true;
             }
+            cdm.disassociate(associationId);
             return true;
         } catch (RuntimeException e) {
             return false;
         }
     }
 
+    private CompanionDeviceManager cdm() {
+        Context ctx = appContext;
+        return ctx == null ? null : ctx.getSystemService(CompanionDeviceManager.class);
+    }
+
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    private void forgetReleased(AssociationInfo info) {
+    private static boolean isAssociated(CompanionDeviceManager cdm, int associationId) {
+        for (AssociationInfo a : cdm.getMyAssociations()) {
+            if (a.getId() == associationId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // OS の関連付け一覧（getMyAssociations）を正として全件外す。本機能は関連付けを残さない契約のため、
+    // 一覧に残っているものは取り残し。進行中の要求の関連付けを外さないよう、起動済み・結果待ちのときは何もしない。
+    // 呼び出しは UI スレッド（init・start）。個々の失敗は無視し、次の sweep に任せる。
+    private void sweep() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                || launchedId != RequestTracker.NONE || okWaitingId != RequestTracker.NONE) {
+            return;
+        }
+        sweepApi33();
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private void sweepApi33() {
         try {
-            releasedIds.remove(info.getId());
+            CompanionDeviceManager cdm = cdm();
+            if (cdm == null) {
+                return;
+            }
+            for (AssociationInfo a : cdm.getMyAssociations()) {
+                try {
+                    cdm.disassociate(a.getId());
+                } catch (RuntimeException e) {
+                    // 既に無い id など。次の sweep に任せる。
+                }
+            }
         } catch (RuntimeException e) {
-            // ID を読めないときは何もしない。
+            // 一覧を取れないときは何もしない。
         }
     }
 
-    // 記録済みの関連付けを外す。外せなければ orphans に保持して false を返す（呼び出し元が Internal に反映する）。
+    // 記録済みの関連付けを外す。外せなければ false を返す（呼び出し元が Internal に反映する）。
     private boolean dropPendingInfo() {
         Object info = pendingInfo;
         pendingInfo = null;
-        boolean released = disassociateObject(info);
-        retryOrphans();
-        return released;
+        return disassociateObject(info);
     }
 
     // first-wins: 現在の要求だけ確定して Rust へ返す。名前は KIND_SELECTED のときだけ渡す。
