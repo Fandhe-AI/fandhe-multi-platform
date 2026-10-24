@@ -21,6 +21,8 @@
 pub mod accessibility_prefs;
 /// Phase 11（端末機能の拡充ループ、親 #124、Issue #613）: 行動認識（歩行・走行・乗り物など）。
 pub mod activity_recognition;
+/// Phase 11（端末機能の拡充ループ、親 #132、Issue #677）: 端末・アプリの真正性証明（Android の Key Attestation を 1 回取得する）。
+pub mod app_attest;
 /// Phase 11（端末機能の拡充ループ、親 #1141、Issue #1360）: アプリアイコンのバッジ（Windows はタスクバーのオーバーレイ数字）。
 pub mod app_badge;
 /// Phase 11（端末機能の拡充ループ、親 #101、Issue #424）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録。
