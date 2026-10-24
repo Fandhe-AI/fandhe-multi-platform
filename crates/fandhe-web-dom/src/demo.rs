@@ -147,6 +147,13 @@ use fandhe_core::screens::safe_area_insets_show::{
 use fandhe_core::screens::screen_capture::{
     current_screen as current_screen_capture_screen, ScreenCaptureState,
 };
+use fandhe_core::screens::screen_orientation_show::{
+    current_screen as current_screen_orientation_screen,
+    lock_landscape as orientation_lock_landscape, lock_portrait as orientation_lock_portrait,
+    reload as orientation_reload, unlock as orientation_unlock, ScreenOrientationShowState,
+    LOCK_LANDSCAPE_ID, LOCK_LANDSCAPE_LABEL, LOCK_PORTRAIT_ID, LOCK_PORTRAIT_LABEL, RELOAD_ID,
+    RELOAD_LABEL, UNLOCK_ID, UNLOCK_LABEL,
+};
 use fandhe_core::screens::settings::{
     get_notifications_on, set_notifications_on, settings_screen, SettingsState,
 };
@@ -1291,6 +1298,38 @@ pub fn mount_fullscreen_toggle_screen(root_id: &str) -> Result<(), JsValue> {
         screen,
         initial_state,
         super::fullscreen_immersive::fullscreen_toggle_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「画面の向き」（親 #128、Issue #658）をマウントする
+/// 検証専用エントリポイント。`super::screen_orientation::screen_orientation_show_effect` が
+/// Screen Orientation API と Fullscreen API を駆動する。
+///
+/// `mount` は `Screen<S>` を再構築せず、初期状態（未読み取り）の画面にはボタンが無い。操作できるよう
+/// ボタンを最初から足す（core の `request_lock` は固定不可・処理中のとき no-op、`reload` は冪等）。
+#[wasm_bindgen]
+pub fn mount_screen_orientation_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = ScreenOrientationShowState::default();
+    let screen = current_screen_orientation_screen(&initial_state)
+        .button(
+            LOCK_PORTRAIT_ID,
+            LOCK_PORTRAIT_LABEL,
+            orientation_lock_portrait,
+        )
+        .button(
+            LOCK_LANDSCAPE_ID,
+            LOCK_LANDSCAPE_LABEL,
+            orientation_lock_landscape,
+        )
+        .button(UNLOCK_ID, UNLOCK_LABEL, orientation_unlock)
+        .button(RELOAD_ID, RELOAD_LABEL, orientation_reload);
+    super::mount::mount_with_effect(
+        root,
+        screen,
+        initial_state,
+        super::screen_orientation::screen_orientation_show_effect,
     )
 }
 
