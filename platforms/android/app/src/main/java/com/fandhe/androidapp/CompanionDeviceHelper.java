@@ -6,6 +6,7 @@ import android.companion.AssociationInfo;
 import android.companion.AssociationRequest;
 import android.companion.BluetoothLeDeviceFilter;
 import android.companion.CompanionDeviceManager;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
@@ -23,6 +24,8 @@ import androidx.annotation.RequiresApi;
 import androidx.core.content.ContextCompat;
 import androidx.core.location.LocationManagerCompat;
 import androidx.lifecycle.Lifecycle;
+
+import java.lang.ref.WeakReference;
 
 // 付属機器のペアリング（Issue #741、親 #143 の b-android）の Android 実装ヘルパー。範囲は Android 13
 // （API 33）以上で OS の機器選択画面を出し、BLE 機器を 1 台選ばせて名前を返すこと。名前を取ったら関連付けを
@@ -42,14 +45,16 @@ import androidx.lifecycle.Lifecycle;
 // ここには持たない。API 33 ではキャンセルと探索の期限切れを結果コードで区別できない場合があり、
 // 区別できない結果は KIND_CANCELLED に倒す（嘘の成功ではない）。
 //
-// ライフサイクル: 状態はインスタンスフィールド。onPause は中断扱いにしない（選択画面を出すと自身が pause
+// ライフサイクル: Activity は WeakReference で持ち、OS へ渡す CDM コールバックは static クラスで helper を
+// 弱参照する（旧 Activity を OS 側の保留処理から到達させない）。状態はインスタンスフィールド。onPause は中断扱いにしない（選択画面を出すと自身が pause
 // する）。onDestroy で保留中の要求を KIND_INTERRUPTED で確定し、記録済みの関連付けを外す。再生成後の新
 // インスタンスは NONE から始まり、Rust 側 reset_pending_tracking() と対で旧要求を捨てる。旧インスタンス
 // 宛の結果が新インスタンスのランチャーへ届いても、起動を記録した要求が無いため関連付けを外して捨て、
 // 新しい要求の id は消費しない。
 // 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止・旧要求の関連付けの解除。
 // 守らない範囲: API 32 以下・関連付けを残すこと・背景での起動・機器との通信とボンディング・
-// 選択画面の表示中のプロセス死・複数プロセス。
+// 選択画面の表示中のプロセス死・複数プロセス・orphans の再試行の Activity 再生成をまたぐ引き継ぎ
+// （外せないまま再生成されると OS 側に残りうる。結果は KIND_INTERNAL で、成功とは見せない）。
 // ロック順: this のロックを持ったまま nativeTryBeginPresent / nativeOnCompanionDeviceResult を呼ぶ。
 // Rust 側は自分のロックの内側から Java を呼ばない（begin() でロックを放してから pick を呼ぶ）ため
 // 循環しない。CDM のコールバックは main executor で受け、Activity の結果と同じ UI スレッドに直列化する。
@@ -69,7 +74,10 @@ final class CompanionDeviceHelper {
 
     private static native void nativeOnCompanionDeviceResult(long requestId, int kind, String name);
 
-    private final ComponentActivity activity;
+    // Activity は弱参照で持つ。OS（CompanionDeviceManager）へ渡すコールバックから旧 Activity へ到達させない
+    // （GeocodingHelper #714 と同じ方針）。OS 呼び出しに要る Context は Application Context を使う。
+    private final WeakReference<ComponentActivity> activityRef;
+    private final Context appContext;
     private final RequestTracker request = new RequestTracker();
     // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
     private final ActivityResultLauncher<IntentSenderRequest> launcher;
@@ -94,9 +102,14 @@ final class CompanionDeviceHelper {
     private Runnable graceTask;
 
     CompanionDeviceHelper(ComponentActivity activity) {
-        this.activity = activity;
+        this.activityRef = new WeakReference<>(activity);
+        this.appContext = activity.getApplicationContext();
         this.launcher = activity.registerForActivityResult(
                 new ActivityResultContracts.StartIntentSenderForResult(), this::onActivityResult);
+    }
+
+    private ComponentActivity activity() {
+        return activityRef.get();
     }
 
     // JNI スレッドから呼ばれる。
@@ -108,7 +121,7 @@ final class CompanionDeviceHelper {
             cancelGraceTimer();
             dropPendingInfo();
         }
-        activity.runOnUiThread(() -> start(id));
+        uiHandler.post(() -> start(id));
     }
 
     private synchronized void start(long id) {
@@ -116,7 +129,8 @@ final class CompanionDeviceHelper {
         if (request.current() != id || destroyed) {
             return;
         }
-        if (activity.isFinishing() || activity.isDestroyed()) {
+        ComponentActivity activity = activity();
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
             finish(id, KIND_INTERRUPTED, null);
             return;
         }
@@ -135,11 +149,11 @@ final class CompanionDeviceHelper {
             finish(id, KIND_NOT_FOREGROUND, null);
             return;
         }
-        startApi33(id);
+        startApi33(id, activity);
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    private void startApi33(long id) {
+    private void startApi33(long id, ComponentActivity activity) {
         CompanionDeviceManager cdm = activity.getSystemService(CompanionDeviceManager.class);
         if (cdm == null) {
             finish(id, KIND_UNSUPPORTED, null);
@@ -170,40 +184,58 @@ final class CompanionDeviceHelper {
                     .addDeviceFilter(new BluetoothLeDeviceFilter.Builder().build())
                     .setSingleDevice(true)
                     .build();
-            cdm.associate(req, ContextCompat.getMainExecutor(activity), new Cb(id));
+            cdm.associate(req, ContextCompat.getMainExecutor(appContext), new Cb(this, id));
         } catch (RuntimeException e) {
             finish(id, KIND_INTERNAL, null);
         }
     }
 
-    // CDM のコールバック。要求ごとに id を持ち、現在の要求でなければ関連付けを外して捨てる。
+    // CDM のコールバック。OS 側の保留処理が握り続けるため static にし、helper を弱参照・id だけを持つ
+    // （非 static だと helper 経由で旧 Activity まで強参照で残る）。helper が回収済みなら何もしない。
+    // 要求ごとに id を持ち、現在の要求でなければ関連付けを外して捨てる。
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    private final class Cb extends CompanionDeviceManager.Callback {
+    private static final class Cb extends CompanionDeviceManager.Callback {
+        private final WeakReference<CompanionDeviceHelper> helperRef;
         private final long id;
 
-        Cb(long id) {
+        Cb(CompanionDeviceHelper helper, long id) {
+            this.helperRef = new WeakReference<>(helper);
             this.id = id;
         }
 
         @Override
         public void onAssociationPending(IntentSender sender) {
-            onPending(id, sender);
+            CompanionDeviceHelper helper = helperRef.get();
+            if (helper != null) {
+                helper.onPending(id, sender);
+            }
         }
 
         @Override
         public void onAssociationCreated(AssociationInfo info) {
-            onCreated(id, info);
+            CompanionDeviceHelper helper = helperRef.get();
+            if (helper != null) {
+                helper.onCreated(id, info);
+            }
         }
 
         @Override
         public void onFailure(CharSequence error) {
             // 文言は読まない・ログに出さない。
-            onFailed(id);
+            CompanionDeviceHelper helper = helperRef.get();
+            if (helper != null) {
+                helper.onFailed(id);
+            }
         }
     }
 
     private synchronized void onPending(long id, IntentSender sender) {
         if (request.current() != id || destroyed) {
+            return;
+        }
+        ComponentActivity activity = activity();
+        if (activity == null) {
+            finish(id, KIND_INTERRUPTED, null);
             return;
         }
         if (!activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
@@ -431,7 +463,7 @@ final class CompanionDeviceHelper {
             if (releasedIds.contains(associationId)) {
                 return true;
             }
-            CompanionDeviceManager cdm = activity.getSystemService(CompanionDeviceManager.class);
+            CompanionDeviceManager cdm = appContext.getSystemService(CompanionDeviceManager.class);
             if (cdm == null) {
                 return false;
             }
