@@ -167,6 +167,8 @@ pub struct BlePeripheralState {
     /// `Starting` 中に届いた事象の保留。受理結果（[`finish_start`]）の反映後に適用する。
     /// `Ended` は終端なので、保留したあとに届く事象は捨てる。
     pub pending_event: Option<ScreenEvent>,
+    /// `Starting` 中に届いた読み取り件数の保留。受理結果と保留中の事象の反映後に加算する。
+    pub pending_reads: u64,
 }
 
 fn clear_messages(state: &mut BlePeripheralState) {
@@ -189,6 +191,7 @@ pub fn request_start(state: &mut BlePeripheralState) {
     state.session = state.generation;
     state.reads = 0;
     state.pending_event = None;
+    state.pending_reads = 0;
     clear_advert_info(state);
     clear_messages(state);
 }
@@ -240,6 +243,7 @@ pub fn finish_start(
     }
     clear_messages(state);
     let pending = state.pending_event.take();
+    let pending_reads = std::mem::take(&mut state.pending_reads);
     match result {
         Ok(StartResult::Accepted) => {
             state.phase = PeripheralPhase::Waiting;
@@ -248,6 +252,9 @@ pub fn finish_start(
                 let session = state.session;
                 apply_event(state, session, event);
             }
+            // 公開中になっていれば、開始中に届いた読み取りを数える（Waiting のままなら捨てる）。
+            let session = state.session;
+            apply_reads(state, session, pending_reads);
         }
         Ok(StartResult::Unsupported) => {
             state.phase = PeripheralPhase::Idle;
@@ -323,7 +330,13 @@ pub fn apply_event(state: &mut BlePeripheralState, session: u64, event: ScreenEv
 }
 
 /// 読み取り `n` 件を反映する。公開中（`Advertising`）かつ session が一致するときだけ数える。
+/// `Starting` 中は保留し、[`finish_start`] の反映後に加算する。
 pub fn apply_reads(state: &mut BlePeripheralState, session: u64, n: u64) {
+    if state.phase == PeripheralPhase::Starting && state.session == session {
+        // 開始結果より先に届いた読み取りは捨てず、finish_start の反映後に加算する。
+        state.pending_reads = state.pending_reads.saturating_add(n);
+        return;
+    }
     if state.phase == PeripheralPhase::Advertising && state.session == session {
         state.reads = state.reads.saturating_add(n);
     }
@@ -572,6 +585,20 @@ mod tests {
         finish_stop(&mut s, g, Ok(StopResult::NotRunning));
         request_start(&mut s);
         assert_eq!(s.reads, 0);
+    }
+
+    #[test]
+    fn reads_before_accept_are_kept_and_added_after_advertising() {
+        let mut s = starting();
+        let sess = s.session;
+        let g = s.generation;
+        apply_event(&mut s, sess, adv());
+        apply_reads(&mut s, sess, 3);
+        assert_eq!(s.reads, 0);
+        finish_start(&mut s, g, Ok(StartResult::Accepted));
+        assert_eq!(s.phase, PeripheralPhase::Advertising);
+        assert_eq!(s.reads, 3);
+        assert_eq!(s.pending_reads, 0);
     }
 
     #[test]

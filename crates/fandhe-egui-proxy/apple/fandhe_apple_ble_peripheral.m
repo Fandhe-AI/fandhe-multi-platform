@@ -239,6 +239,11 @@ int32_t fandhe_apple_ble_peripheral_start(uint64_t session, const char *service_
               initWithDelegate:delegate
                          queue:FandheBlePeripheralQueue()
                        options:@{CBPeripheralManagerOptionShowPowerAlertKey : @NO}];
+          // init 中に終端状態が通知され teardown 済みなら、代入された manager を孤立させず解放する。
+          if (g_delegate != delegate) {
+              g_manager.delegate = nil;
+              g_manager = nil;
+          }
       }
     });
     return 0;
