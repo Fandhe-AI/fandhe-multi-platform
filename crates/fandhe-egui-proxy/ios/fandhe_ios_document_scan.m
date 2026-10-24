@@ -69,7 +69,25 @@ static FandheDocumentScanDelegate *g_retainedDelegate = nil;
         return;
     }
     self.dismissStarted = YES;
-    [controller dismissViewControllerAnimated:YES completion:block];
+    // present アニメーション中の dismiss は UIKit が completion を呼ばないことがある。結果が失われないよう、
+    // completion と保険のタイマー（main queue）のどちらか先に届いた方だけで block を 1 回実行する。
+    __block BOOL fired = NO;
+    void (^once)(void) = ^{
+      if (fired) {
+          return;
+      }
+      fired = YES;
+      block();
+    };
+    [controller dismissViewControllerAnimated:YES completion:once];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(),
+                   ^{
+                     // 撮影 UI が残っていれば（dismiss が捨てられた場合）閉じ直してから結果を送る。
+                     if (controller.presentingViewController != nil && !controller.isBeingDismissed) {
+                         [controller dismissViewControllerAnimated:NO completion:nil];
+                     }
+                     once();
+                   });
 }
 - (void)documentCameraViewController:(VNDocumentCameraViewController *)controller
                    didFinishWithScan:(VNDocumentCameraScan *)scan {
@@ -156,7 +174,12 @@ static void FandheDocScanPresent(uint64_t request_id) {
                       // dismiss の開始は closeController:then: に集約し、開始済みなら何もしない
                       // （結果の送信は claim に勝った側の completion が担う）。
                       if (delegate.done) {
-                          [delegate closeController:vc then:^{}];
+                          // present 中に確定した場合、dismiss が捨てられていても画面に残さない。
+                          if (!delegate.dismissStarted) {
+                              [delegate closeController:vc then:^{}];
+                          } else if (vc.presentingViewController != nil && !vc.isBeingDismissed) {
+                              [vc dismissViewControllerAnimated:YES completion:nil];
+                          }
                           return;
                       }
                       if (top.presentedViewController != vc) {
