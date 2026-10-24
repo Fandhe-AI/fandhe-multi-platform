@@ -15,6 +15,7 @@
 //!   `normalize_ports(.., is_windows_com_name)` を通す
 //! - 開く: 名前を `is_windows_com_name` で検証し `\\.\COMn` にして `CreateFileW`（共有モード 0 の
 //!   排他、非 overlapped）。DCB（9600 bps・8N1・フロー制御なし）と `COMMTIMEOUTS` を適用し、
+//!   `GetCommState` で読み直して `verify_dcb` で確かめ（ドライバが黙って別の値にしても成功にしない）、
 //!   `ClearCommError` と `PurgeComm` で受信バッファまで捨てて返す。任意のデバイスパスは開かない
 //!   （security.md A03）
 //! - 読み書き: 期限は `wait` に合わせた `COMMTIMEOUTS` で表す。0 バイトは「まだ届かない・書けない」で、
@@ -37,6 +38,11 @@
 //! - 【推測】unpackaged の exe で manifest・capability の宣言が要らないか
 //! - `GetCommPorts` が無い 1803 未満は対象外（静的 import のため起動できない可能性がある）
 //! - 終了時に待つ 300 ms（dispatch 側）で足りるか
+//!
+//! - DTR / RTS を ENABLE にしているのは、機器によっては信号線が立たないと応答しないため（フロー制御
+//!   ではなく静的な出力）。Arduino 系はオープン時の DTR で自動リセットされ、起動が終わるまで 3 秒の期限内に
+//!   応答できないことがある（期限切れになる）
+//! - COM256 以上は一覧に出ない（`is_windows_com_name` が `COM1`〜`COM255` のみ通す）
 //!
 //! 型検査は `x86_64-pc-windows-gnu` で行い、実機確認は #667 で行う。純関数は OS 非依存でホストでも
 //! テストできるよう、モジュールは `cfg(any(windows, test))`。
@@ -155,6 +161,49 @@ fn dcb_bitfield(current: u32) -> u32 {
         | (CONTROL_ENABLE << DCB_RTS_CONTROL_SHIFT)
 }
 
+/// `fOutxCtsFlow` / `fOutxDsrFlow` / `fOutX` / `fInX`（フロー制御）と DTR / RTS 制御のビット。
+const DCB_VERIFY_MASK: u32 = (1 << 2)
+    | (1 << 3)
+    | (3 << DCB_DTR_CONTROL_SHIFT)
+    | (1 << 8)
+    | (1 << 9)
+    | (3 << DCB_RTS_CONTROL_SHIFT);
+
+/// `SetCommState` 後に `GetCommState` で読み直した DCB が、適用した固定設定
+/// （9600 bps・8 bit・パリティなし・1 ストップビット・フロー制御なし・DTR/RTS は `dcb_bitfield` の値）
+/// と一致するかを確かめる。ドライバが値を黙って丸めたら嘘の成功にせず `Internal`
+/// （macOS 側の `tcgetattr` 読み直しと同じ考え方）。
+fn verify_dcb(
+    baud: u32,
+    byte_size: u8,
+    parity: u8,
+    stop_bits: u8,
+    bitfield: u32,
+    expected_bitfield: u32,
+) -> Result<(), SerialPortFailure> {
+    let ok = baud == fandhe_device::serial_port::BAUD_RATE
+        && byte_size == 8
+        && parity == 0
+        && stop_bits == 0
+        && (bitfield & DCB_VERIFY_MASK) == (expected_bitfield & DCB_VERIFY_MASK);
+    if ok {
+        Ok(())
+    } else {
+        Err(SerialPortFailure::Internal)
+    }
+}
+
+/// `GetCommPorts` が `ERROR_MORE_DATA` を返したときの次のバッファ件数。拡張は 1 回だけで、
+/// すでに拡張済み・必要件数が現在以下（契約違反）・上限到達なら `None`（呼び出し側は `Internal`）。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn next_list_cap(cap: usize, found: u32, retried: bool) -> Option<usize> {
+    if retried || cap >= LIST_CAP_MAX {
+        return None;
+    }
+    let need = usize::try_from(found).ok()?;
+    (need > cap).then(|| need.min(LIST_CAP_MAX))
+}
+
 /// `wait` を `COMMTIMEOUTS` の Constant（ミリ秒）へ丸める。`ReadIntervalTimeout` と
 /// `ReadTotalTimeoutMultiplier` を `MAXDWORD` にする組み合わせでは、Constant は `1..MAXDWORD` の範囲。
 fn timeout_ms(wait: Duration) -> u32 {
@@ -265,12 +314,35 @@ mod os {
             dcb.Parity = DCB_PARITY(0); // NOPARITY
             dcb.StopBits = DCB_STOP_BITS(0); // ONESTOPBIT
             dcb._bitfield = dcb_bitfield(dcb._bitfield);
+            let expected_bitfield = dcb._bitfield;
             let t = timeouts(100, 100);
-            // SAFETY: `handle` は有効で、`dcb` / `t` は呼び出しの間有効な参照。`ClearCommError` の
-            // 出力先は使わないため None。
+            // SAFETY: `handle` は有効で、`dcb` は呼び出しの間有効な参照。
             #[allow(unsafe_code)]
             unsafe {
                 SetCommState(self.handle, &dcb).map_err(map)?;
+            }
+            // 読み直して固定設定が本当に効いたかを確かめる。
+            let mut got = DCB {
+                DCBlength: std::mem::size_of::<DCB>() as u32,
+                ..Default::default()
+            };
+            // SAFETY: `handle` は有効で、`got` は呼び出しの間有効な排他参照。
+            #[allow(unsafe_code)]
+            unsafe {
+                GetCommState(self.handle, &mut got).map_err(map)?;
+            }
+            verify_dcb(
+                got.BaudRate,
+                got.ByteSize,
+                got.Parity.0,
+                got.StopBits.0,
+                got._bitfield,
+                expected_bitfield,
+            )?;
+            // SAFETY: `handle` は有効で、`t` は呼び出しの間有効な参照。`ClearCommError` の
+            // 出力先は使わないため None。
+            #[allow(unsafe_code)]
+            unsafe {
                 SetCommTimeouts(self.handle, &t).map_err(map)?;
                 ClearCommError(self.handle, None, None).map_err(map)?;
                 PurgeComm(self.handle, PURGE_RXCLEAR | PURGE_TXCLEAR).map_err(map)?;
@@ -330,6 +402,7 @@ mod os {
     impl SerialPorts for WinSerialPorts {
         fn list(&self) -> Result<Vec<SerialPortEntry>, SerialPortFailure> {
             let mut cap = LIST_CAP_INIT;
+            let mut retried = false;
             loop {
                 let mut buf = vec![0u32; cap];
                 let mut found = 0u32;
@@ -339,13 +412,14 @@ mod os {
                 match classify_list_status(code) {
                     ListStatus::Ok => return entries_from_port_numbers(&buf, found),
                     ListStatus::Empty => return Ok(Vec::new()),
-                    ListStatus::Retry if cap < LIST_CAP_MAX => {
-                        // 必要件数を上限で丸めて 1 回だけ拡張する。2 回目も足りなければ Internal。
-                        cap = usize::try_from(found)
-                            .unwrap_or(LIST_CAP_MAX)
-                            .clamp(cap + 1, LIST_CAP_MAX);
+                    ListStatus::Retry => {
+                        // 必要件数（上限で丸める）で 1 回だけ拡張する。2 回目の不足・必要件数が
+                        // 現在以下（契約違反）・上限到達は Internal。
+                        cap = next_list_cap(cap, found, retried)
+                            .ok_or(SerialPortFailure::Internal)?;
+                        retried = true;
                     }
-                    _ => return Err(SerialPortFailure::Internal),
+                    ListStatus::Failed => return Err(SerialPortFailure::Internal),
                 }
             }
         }
@@ -458,6 +532,45 @@ mod tests {
             0xFFFF_8000 | 1 | (1 << 4) | (1 << 12)
         );
         assert_eq!(dcb_bitfield(0), 1 | (1 << 4) | (1 << 12));
+    }
+
+    #[test]
+    fn verify_dcb_accepts_applied_config() {
+        let exp = dcb_bitfield(0);
+        assert_eq!(verify_dcb(9600, 8, 0, 0, exp, exp), Ok(()));
+        // 検証対象外のビット（fAbortOnError 等）の差は許す。
+        assert_eq!(verify_dcb(9600, 8, 0, 0, exp | (1 << 14), exp), Ok(()));
+    }
+
+    #[test]
+    fn verify_dcb_rejects_each_mismatch() {
+        let exp = dcb_bitfield(0);
+        let bad = Err(SerialPortFailure::Internal);
+        assert_eq!(verify_dcb(115_200, 8, 0, 0, exp, exp), bad);
+        assert_eq!(verify_dcb(9600, 7, 0, 0, exp, exp), bad);
+        assert_eq!(verify_dcb(9600, 8, 2, 0, exp, exp), bad);
+        assert_eq!(verify_dcb(9600, 8, 0, 2, exp, exp), bad);
+        for bit in [2u32, 3, 8, 9] {
+            assert_eq!(
+                verify_dcb(9600, 8, 0, 0, exp | (1 << bit), exp),
+                bad,
+                "{bit}"
+            );
+        }
+        // DTR / RTS が期待と違う（ハンドシェイクに変えられた）。
+        assert_eq!(verify_dcb(9600, 8, 0, 0, exp | (1 << 5), exp), bad);
+        assert_eq!(verify_dcb(9600, 8, 0, 0, exp & !(1 << 12), exp), bad);
+        assert_eq!(verify_dcb(9600, 8, 0, 0, exp & !(1 << 4), exp), bad);
+    }
+
+    #[test]
+    fn list_cap_expands_once() {
+        assert_eq!(next_list_cap(256, 300, false), Some(300));
+        assert_eq!(next_list_cap(256, 100_000, false), Some(LIST_CAP_MAX));
+        // 2 回目、必要件数が現在以下、上限到達は拡張しない。
+        assert_eq!(next_list_cap(300, 400, true), None);
+        assert_eq!(next_list_cap(256, 256, false), None);
+        assert_eq!(next_list_cap(LIST_CAP_MAX, 5000, false), None);
     }
 
     #[test]
