@@ -8,31 +8,44 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "App Intents（`AppIntent` / `AppShortcutsProvider`）",
-      "perm": "不要（宣言のみと認識。要確認）",
-      "url": "https://developer.apple.com/documentation/appintents",
-      "note": "未実装。Swift の宣言型で、Rust 側へ橋渡しする経路の設計が要る。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。"
+      "api": "App Intents（`AppIntent` / `AppShortcutsProvider`。iOS 16 以上）",
+      "perm": "権限ダイアログなし。entitlement は不要と認識（Siri capability は SiriKit 用で、App Shortcuts に要るかは未確認）",
+      "url": [
+        "https://developer.apple.com/documentation/appintents",
+        "https://developer.apple.com/videos/play/wwdc2022/10032/",
+        "https://developer.apple.com/videos/play/wwdc2025/275/"
+      ],
+      "deferred": "App Intents はビルド時に Swift コンパイラの出力から Xcode がメタデータを抽出し、アプリの bundle に置く方式で、システムはこれを読んで Shortcuts・Siri に出す。iOS 版は cargo の成果物を手組みで .app にしており Xcode のビルドを通らないため、抽出の手順をビルドに足すビルド構成の変更（設計変更）が要る。抽出ツール（`appintentsmetadataprocessor`）は Xcode 内部のツールで公開の手順が無いため、ビルド構成の設計が決まるまで保留",
+      "note": "未実装。Swift 専用の宣言型 API。Swift の薄層を swiftc で静的ライブラリにして Rust から呼ぶ前例はある（翻訳・端末内 LLM・ライブアクティビティ）が、App Intents は型の定義そのものをメタデータとして抽出させる必要がある。静的ライブラリ・Swift Package に置く場合は `AppIntentsPackage`（iOS 17 以上）で app 側から参照する（公式）。ショートカット App の「URL を開く」から `fandhe://` を開く経路は url-scheme（done）で既にあるが、本機能のアクション公開には当たらない"
     },
     "android": {
       "status": "possible",
-      "api": "`androidx.appfunctions`（1.0.0-alpha12、2026-09-23 時点）",
-      "perm": "記載なし（要確認）",
-      "url": "https://developer.android.com/ai/appfunctions",
-      "note": "未実装。アルファ版で API が変わる前提。対象 API レベルは要確認。GMS ではなく OS 側に依存する（報告より）"
+      "api": "AppFunctions（`androidx.appfunctions` 1.0.0-beta01、2026-10-21。Android 16 以上）",
+      "perm": "公開側は宣言のみ。呼び出し側に `EXECUTE_APP_FUNCTIONS` が要る",
+      "url": [
+        "https://developer.android.com/ai/appfunctions",
+        "https://developer.android.com/jetpack/androidx/releases/appfunctions"
+      ],
+      "deferred": "Android 16（API 36）以上でしか動かず、compileSdk を 35 から上げる必要がある。Jetpack ライブラリは experimental preview で、注釈処理に KSP（Kotlin Symbol Processing）を使い、Kotlin ソースを持たない現在の Gradle 構成に Kotlin・KSP のプラグインと新しい依存を足すことになる。呼び出し側は `EXECUTE_APP_FUNCTIONS` を持つエージェント等に限られ、Gemini との連携は限定公開。ビルド構成の変更と新しい依存を足すため保留。API が安定し、compileSdk と Kotlin の導入を決めたら着手できる",
+      "note": "未実装。OS 側の仕組みで、公式文書は Google Play services への依存に触れていない。登録の確認は `adb shell cmd app_function list-app-functions`（公式）"
     },
     "macos": {
       "status": "possible",
-      "api": "App Intents（macOS でも提供と認識。要確認）",
-      "perm": "不要と認識（要確認）",
-      "url": "https://developer.apple.com/documentation/appintents",
-      "note": "未実装。Apple Developer Program が現在期限切れで、entitlement を要する検証は未実施。"
+      "api": "App Intents（`AppIntent` / `AppShortcutsProvider`。macOS 13 以上）",
+      "perm": "権限ダイアログなし。entitlement は不要と認識",
+      "url": [
+        "https://developer.apple.com/documentation/appintents",
+        "https://developer.apple.com/videos/play/wwdc2022/10032/"
+      ],
+      "deferred": "iOS と同じく、Xcode がビルド時にメタデータを抽出してアプリの bundle に置く方式。デスクトップ版は cargo で作る素の実行体で bundle を持たず（.app 化は url-scheme の Mac 目視用スクリプトだけ）、Xcode のビルドも通らないため、.app 化とメタデータ抽出をビルドに足す設計変更が要る。ビルド構成の設計が決まるまで保留",
+      "note": "未実装"
     },
     "windows": {
       "status": "no",
-      "api": "App Actions（URL 未確認）",
-      "perm": "package identity（要確認）",
-      "url": "",
-      "note": "Windows の App Actions は package 前提と認識するが、一次情報の URL を確認できていない（要確認）"
+      "api": "App Actions on Windows（`Windows.AI.Actions`）",
+      "perm": "package identity（MSIX のマニフェストで登録）",
+      "url": "https://learn.microsoft.com/en-us/windows/ai/app-actions/",
+      "note": "公式は「Apps must have package identity in order to register an app action」とし、アクションの定義は MSIX のマニフェストから参照する JSON で行う。MSIX なし・identity なしの素の exe では登録できないため no（calendar と同じ扱い）"
     },
     "web": {
       "status": "no",
@@ -42,5 +55,5 @@
       "note": "Web にアシスタントへ機能を公開する API はない"
     }
   },
-  "note": "spotlight-index・share-receive とは別: 本機能は音声・ショートカットから呼ばれる『アクション』を公開する。今回の範囲: 固定のアクション 1 つ（画面に文字列を出す）を公開し、呼び出し時に画面へ反映するだけ。"
+  "note": "spotlight-index・share-receive とは別: 本機能は音声・ショートカットから呼ばれる『アクション』を公開する。app-shortcuts（ホーム画面の長押し・Dock・ジャンプリスト）とも別。どの OS も新しいビルド構成か依存が要るため（iOS・macOS は Xcode によるメタデータ抽出、Android は Android 16 と Kotlin・KSP）、iOS・Android・macOS は保留、Windows・Web はできない。条件が揃ったら保留の一覧から見直す。範囲（再開時の案）: 固定のアクション 1 つ（画面に文字列を出す）を公開し、呼び出し時に画面へ反映するだけ。反映の経路は url-scheme の受け口を再利用する（app-shortcuts と同じ）"
 }
