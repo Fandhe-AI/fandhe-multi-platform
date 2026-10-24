@@ -7,7 +7,10 @@
   "bundle": "continuous-push",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#649）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_screen_orientation.m + crates/fandhe-egui-proxy/src/device/ios_screen_orientation.rs、Issue #656",
       "api": "`UIViewController.supportedInterfaceOrientations`（winit の VC へ差し込み）+ `setNeedsUpdateOfSupportedInterfaceOrientations` + `UIWindowScene.requestGeometryUpdate`（iOS 16+）。取得は `UIWindowScene.effectiveGeometry.interfaceOrientation`（`interfaceOrientation` は iOS 26 で非推奨）",
       "perm": "不要",
       "url": [
@@ -16,7 +19,7 @@
         "https://developer.apple.com/documentation/uikit/uiwindowscene/requestgeometryupdate(_:errorhandler:)",
         "https://developer.apple.com/documentation/uikit/uiwindowscene/effectivegeometry"
       ],
-      "note": "未実装。iPad はマルチタスク対応アプリで `supportedInterfaceOrientations` が呼ばれない（公式）ため、固定は iPhone のみ。iPad は取得だけで、固定は `Unsupported`。Info.plist は変えず、実機で `requestGeometryUpdate` が失敗したときだけ `UISupportedInterfaceOrientations~iphone` を足す"
+      "note": "実装済み（#656）: winit の VC の `supportedInterfaceOrientations` を差し替え、`setNeedsUpdateOfSupportedInterfaceOrientations` と `requestGeometryUpdate` で固定し、`effectiveGeometry.interfaceOrientation` で読み戻す。成功は driver が読み戻しで確定する。iPad・Mac 上の iOS アプリは取得のみで、固定は `Unsupported`。Info.plist は変えていない。実機での確認事項は #649（`requestGeometryUpdate` の挙動と、Info.plist 未宣言時の対応向き。失敗するときだけ `UISupportedInterfaceOrientations~iphone` を足す）"
     },
     "android": {
       "status": "done",
