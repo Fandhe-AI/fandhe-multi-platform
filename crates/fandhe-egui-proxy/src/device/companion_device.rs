@@ -118,7 +118,7 @@ impl Bridge {
 
     /// 表示開始の記録。現在の要求で、未確定で、期限前のときだけ `true`。
     /// 期限を過ぎていれば `TimedOut` を確定して `false`。
-    #[allow(dead_code)] // 呼び出し元は OS 層（#741）と単体テスト。
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))] // 呼び出し元は Android 実装と単体テスト。
     fn try_begin_present(&self, request_id: u64) -> bool {
         let mut active = self.lock();
         let Some(a) = active.as_mut().filter(|a| a.request_id == request_id) else {
@@ -180,15 +180,15 @@ fn bridge() -> &'static Bridge {
 }
 
 /// OS 層が選択画面を出す直前に呼ぶ。`false` なら出さない（モジュール doc 参照）。
-// OS 層（#741）が呼ぶまでは未使用（スタブは呼ばない）。
-#[allow(dead_code)]
+// Android 実装が呼ぶ。Android 以外のビルドでは未使用。
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) fn try_begin_present(request_id: u64) -> bool {
     bridge().try_begin_present(request_id)
 }
 
 /// OS 層が結果を 1 回だけ送る受け口（モジュール doc 参照）。
-// OS 層（#741）が呼ぶまでは未使用（スタブは呼ばない）。
-#[allow(dead_code)]
+// Android 実装が呼ぶ。Android 以外のビルドでは未使用。
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) fn complete_from_os(request_id: u64, result: Outcome) {
     bridge().complete_from_os(request_id, result);
 }
