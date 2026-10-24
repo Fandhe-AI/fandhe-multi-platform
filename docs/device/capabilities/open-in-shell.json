@@ -16,22 +16,34 @@
     },
     "macos": {
       "status": "possible",
-      "api": "AppKit `NSWorkspace`（open / Finder で選択表示 / ゴミ箱へ移動）",
-      "perm": "なし（サンドボックス時のファイルアクセス権は要確認）",
-      "url": "https://developer.apple.com/documentation/appkit/nsworkspace",
-      "note": "未実装。ゴミ箱は `recycle` 系で、メソッド名の詳細は公式本文で未確認（要確認）"
+      "api": "AppKit `NSWorkspace`（開く: `urlForApplication(toOpen:)` で既定アプリの有無を確かめてから `open(_:)`、Finder で選択表示: `selectFile(_:inFileViewerRootedAtPath:)`）。実行可能判定は `URLResourceKey` の `isExecutableKey` / `isApplicationKey` / `isPackageKey`",
+      "perm": "なし（アプリはサンドボックス外。新しい framework・entitlement・Info.plist キーの追加なし）",
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nsworkspace",
+        "https://developer.apple.com/documentation/appkit/nsworkspace/open(_:)",
+        "https://developer.apple.com/documentation/appkit/nsworkspace/urlforapplication(toopen:)-7qkzf",
+        "https://developer.apple.com/documentation/appkit/nsworkspace/selectfile(_:infileviewerrootedatpath:)",
+        "https://developer.apple.com/documentation/foundation/urlresourcekey/isexecutablekey",
+        "https://developer.apple.com/documentation/foundation/urlresourcekey/isapplicationkey"
+      ],
+      "note": "未実装。`open(_:)` と `selectFile` はどちらも Bool を返し、どのスレッドからも呼べる（公式）。`open(_:)` はファイル URL がアプリや実行ファイルでも起動するため、実行可能・アプリ・パッケージは開かずに拒否する。`selectFile` はシンボリックリンクをたどらない（公式）ため、正規化済みのパスを渡す。`urlForApplication(toOpen:)` は扱えるアプリが無いか、ファイルが無いと nil。ゴミ箱は `recycle(_:completionHandler:)`（今回の範囲外）"
     },
     "windows": {
       "status": "possible",
-      "api": "Win32 `ShellExecute`（open / explore）。ゴミ箱は `SHFileOperation` / `IFileOperation`（URL 未確認）",
-      "perm": "なし（Win32 desktop 専用、package identity 要件の記載なし。要確認）",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew",
-      "note": "未実装。WinRT の `Launcher` も候補（https://learn.microsoft.com/en-us/uwp/api/windows.system.launcher、フォルダ表示 `LaunchFolderPathAsync` あり）。ゴミ箱側は URL 未確認"
+      "api": "Win32 `ShellExecuteW`（verb `open`、引数なし）で開く。`SHOpenFolderAndSelectItems` + `ILCreateFromPathW` / `ILFree` で Explorer に選択表示。危険な型は `AssocIsDangerous` で拒否",
+      "perm": "なし（Win32 desktop の API。package identity は不要。`windows` クレートの feature は既存の `Win32_UI_Shell` / `Win32_UI_Shell_Common` / `Win32_System_Com` / `Win32_UI_WindowsAndMessaging` で足り、追加なし）",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew",
+        "https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shopenfolderandselectitems",
+        "https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-ilcreatefrompathw",
+        "https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-associsdangerous"
+      ],
+      "note": "未実装。`ShellExecuteW` は 32 超で成功、`SE_ERR_NOASSOC`（31）は関連付けなし。COM（STA）の初期化を先に行う（公式は常に初期化を推奨、`SHOpenFolderAndSelectItems` は未初期化だと失敗する）。`ILCreateFromPathW` のパスは MAX_PATH（終端込み 260 文字）以内。`AssocIsDangerous` は .exe 等の危険な型を判定する（公式）。成功の戻り値は OS が受理したことだけで、アプリが表示したかは分からない。ゴミ箱は `IFileOperation`（今回の範囲外）"
     },
     "web": {
       "status": "n-a",
       "note": "ブラウザはローカルファイルの表示・ゴミ箱を操作できない"
     }
   },
-  "note": "open-in-shell はデスクトップ固有。file-picker（既存 id）との違い: 選ぶ側ではなく、決まったパスを OS のアプリで開く・場所を表示する・ゴミ箱へ送る側。今回の範囲: 指定ファイルを既定アプリで開く、ファイルマネージャーで選択表示する、の 2 操作（ゴミ箱は破壊的なので後回し）。"
+  "note": "open-in-shell はデスクトップ固有。file-picker（既存 id）との違い: 選ぶ側ではなく、決まったパスを OS のアプリで開く・場所を表示する側。範囲: 指定ファイルを既定アプリで開く、ファイルマネージャーで選択表示する、の 2 操作。結果は「渡した（OS が受理した）/ 開けなかった / 非対応」の三値で、アプリが実際に表示したかは確かめない。パスは絶対パス・存在する・正規化済み（シンボリックリンク解決後）・NUL なし・長さ上限内だけを通し、Windows は UNC・デバイスパス・代替データストリームを拒否する。開く操作は通常のファイルだけで、実行可能・アプリ・危険な型は拒否する。守らない範囲: 検査から OS 呼び出しまでの間のファイルの差し替え、表示したアプリ・ウィンドウの確認、実行可能でない文書型を受けたアプリ側の動作、複数プロセス。ゴミ箱は破壊的なので後回し。"
 }
