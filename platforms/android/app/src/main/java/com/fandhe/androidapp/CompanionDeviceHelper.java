@@ -295,6 +295,8 @@ final class CompanionDeviceHelper {
             info = pendingInfo;
         }
         boolean released = info == null || disassociateObject(info);
+        // 解除済みの記録を finish の dropPendingInfo が再度外さないよう、先に消す。
+        clearPendingIfSame(info);
         finish(id, released ? kindForFailedResult(code) : KIND_INTERNAL, null);
     }
 
@@ -341,9 +343,7 @@ final class CompanionDeviceHelper {
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private void completeSelectedApi33(long id, AssociationInfo info) {
-        if (pendingInfo == info) {
-            pendingInfo = null;
-        }
+        clearPendingIfSame(info);
         String name = null;
         try {
             CharSequence display = info.getDisplayName();
@@ -355,6 +355,27 @@ final class CompanionDeviceHelper {
             finish(id, KIND_SELECTED, name);
         } else {
             finish(id, KIND_INTERNAL, null);
+        }
+    }
+
+    // 解除済みの関連付けと同じ ID の pendingInfo を消す（別インスタンスでも二重解除させない）。
+    private void clearPendingIfSame(Object info) {
+        Object pending = pendingInfo;
+        if (pending == null || info == null) {
+            return;
+        }
+        if (pending == info
+                || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && sameAssociationId(pending, info))) {
+            pendingInfo = null;
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private static boolean sameAssociationId(Object a, Object b) {
+        try {
+            return ((AssociationInfo) a).getId() == ((AssociationInfo) b).getId();
+        } catch (RuntimeException e) {
+            return false;
         }
     }
 
