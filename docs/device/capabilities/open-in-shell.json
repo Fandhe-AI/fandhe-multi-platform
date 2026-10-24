@@ -26,7 +26,7 @@
         "https://developer.apple.com/documentation/foundation/urlresourcekey/isexecutablekey",
         "https://developer.apple.com/documentation/foundation/urlresourcekey/isapplicationkey"
       ],
-      "note": "実装済み（#749）。`open(_:)` と `selectFile` はどちらも Bool を返し、どのスレッドからも呼べる（公式）。`open(_:)` はファイル URL がアプリや実行ファイルでも起動するため、実行可能・アプリ・パッケージは Rust と ObjC の両方で開かずに拒否し、resource key を読めないときも拒否する。`selectFile` はシンボリックリンクをたどらない（公式）ため、正規化済みのパスを渡す。`urlForApplication(toOpen:)` は扱えるアプリが無いか、ファイルが無いと nil で、扱うアプリ無しとして返す。成功は OS が受理したことだけで、アプリ・Finder が表示したかは確かめない。ゴミ箱は `recycle(_:completionHandler:)`（今回の範囲外）",
+      "note": "実装済み（#749）。`open(_:)` と `selectFile` はどちらも Bool を返し、どのスレッドからも呼べる（公式）。`open(_:)` はファイル URL がアプリや実行ファイルでも起動するため、通常ファイルでないもの（ディレクトリ等）と、実行可能・アプリ・パッケージは Rust と ObjC の両方で開かずに拒否する。ObjC 側はさらに型識別子（`NSURLTypeIdentifierKey`）が実行可能・スクリプト・インストーラ・インターネットロケーション・Java アーカイブ等に適合する型（exec ビットの無い `.command`・`.terminal`・`.webloc`・`.fileloc`・`.pkg`・`.jar` を含む）も拒否し、resource key や型を読めないときも拒否する（fail-closed）。`selectFile` はシンボリックリンクをたどらない（公式）ため、正規化済みのパスを渡す。`urlForApplication(toOpen:)` は扱えるアプリが無いか、ファイルが無いと nil で、扱うアプリ無しとして返す。成功は OS が受理したことだけで、アプリ・Finder が表示したかは確かめない。ゴミ箱は `recycle(_:completionHandler:)`（今回の範囲外）",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#744）",
       "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_open_in_shell.m + crates/fandhe-egui-proxy/src/device/macos_open_in_shell.rs + crates/fandhe-egui-proxy/src/device/open_in_shell.rs + crates/fandhe-core/src/screens/open_in_shell.rs + crates/fandhe-device/src/open_in_shell.rs、Issue #749"
