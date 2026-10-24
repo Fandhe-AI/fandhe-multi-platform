@@ -235,6 +235,11 @@ pub mod android_power_state;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_print;
+/// Issue #719（親 #139）: Android 向けクイック設定タイル（`TileService`）の骨格（`Unsupported` のスタブ。
+/// b-android が埋める）。`device/quick_settings_tile.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_quick_settings_tile;
 /// Issue #446: Android 向けセーフエリア実装（既存の insets リスナーの値を pull で読む）。
 /// `device/safe_area_insets.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -462,6 +467,11 @@ pub mod apple_photo_library;
 /// 呼ぶ C ABI ラッパー）。`device/picture_in_picture.rs` の macOS・iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_picture_in_picture;
+/// Issue #719（macOS）: クイック設定コントロールの回数を App Group コンテナのファイルから読む実装。
+/// `device/quick_settings_tile.rs` の macOS 経路から呼ばれる。ホストの `cargo test` でも検証できるよう
+/// `cfg(test)` でも有効にする。
+#[cfg(any(target_os = "macos", test))]
+pub mod apple_quick_settings_tile;
 /// Issue #1335（macOS）/ #1336（iOS）: macOS 向け ScreenCaptureKit 画面録画（`apple/
 /// fandhe_apple_screen_capture.m` を呼ぶ C ABI ラッパー。iOS は #1336 の ReplayKit）。
 /// `device/screen_capture.rs` の macOS / iOS 経路から呼ばれる。
@@ -1114,6 +1124,9 @@ pub mod power_state;
 /// Windows / iOS / Android 実装、他 OS は `UnsupportedPrint` 固定。
 /// Web は `fandhe-web-dom`）。
 pub mod print;
+/// Phase 11 の拡充ループ（親 #139、Issue #719）: クイック設定タイル・コントロールの effect ドライバ
+/// （macOS は App Group の回数ファイル、Android はスタブ、他 OS は `UnsupportedQuickSettingsTile` 固定）。
+pub mod quick_settings_tile;
 /// request/response 型端末機能共通の要求追跡（Issue #943、親 #941）。share /
 /// biometric_auth / file_pick の `bridge` facade から使う。4 OS
 /// （macOS/iOS/Android/Windows）以外では利用者が無いため `dead_code` を許容する。
