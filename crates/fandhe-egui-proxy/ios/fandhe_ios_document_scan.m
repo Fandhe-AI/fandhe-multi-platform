@@ -22,7 +22,8 @@
 // JPEG 変換は撮影 UI を閉じた後に global queue で行い、Rust の受け口もその queue から呼ぶ。
 // 画像は長辺 2048 画素以下に縮めてから JPEG（品質 0.8）にする（親 #145 の実装方針。
 // もともと 2048 以下なら描き直さない。Rust 側では縮めないため、縮小はこの層の義務）。
-// 提示の完了コールバックが猶予（5 秒）を過ぎても来ない場合は code 7 で確定し、保留と強参照を残さない。
+// 提示の完了コールバックが猶予（5 秒）を過ぎても来ない場合は code 7 で確定し、保留と強参照を残さない
+// （この失敗だけは撮影 UI が出ていない前提で先に返す。遅れて出た UI は提示の completion が閉じる）。
 // 結果は撮影 UI が閉じたのを観測した後にだけ送る。遷移中は UIKit の遷移コーディネータの完了を待って
 // dismiss をやり直す（タイマーによる推測はしない）。
 // 画像の中身・NSError の文言はログに出さない。
@@ -193,8 +194,10 @@ static void FandheDocScanPresent(uint64_t request_id) {
                       animated:YES
                     completion:^{
                       presented = YES;
-                      // 確定済みなら、結果を持つ側の closeController が遷移完了を待って閉じる。
+                      // 確定済み（猶予切れ・失敗を含む）でも、画面に出た撮影 UI は閉じる。
+                      // closeController は冪等で、遷移を待つ判断もそこだけが持つ。
                       if (delegate.done) {
+                          [delegate closeController:vc then:^{}];
                           return;
                       }
                       if (top.presentedViewController != vc) {
@@ -211,10 +214,9 @@ static void FandheDocScanPresent(uint64_t request_id) {
                          return;
                      }
                      FandheDocScanFinishCode(request_id, 7);
-                     // 遅れて表示された場合に画面へ残さない。
-                     if (vc.presentingViewController != nil && !vc.isBeingDismissed) {
-                         [vc dismissViewControllerAnimated:NO completion:nil];
-                     }
+                     // 失敗は先に返す（Rust の期限は表示開始までで、提示の完了が来ない場合の唯一の出口）。
+                     // 遅れて表示された場合は、提示の completion が closeController で閉じる。
+                     [delegate closeController:vc then:^{}];
                    });
 }
 
