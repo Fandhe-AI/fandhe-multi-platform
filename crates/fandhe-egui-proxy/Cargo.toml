@@ -400,6 +400,10 @@ windows = { workspace = true, optional = true, features = [
     # 新規パッケージは増えない。
     "Win32_Media_Audio",
     "Win32_Devices_FunctionDiscovery",
+    # Issue #785: `device/windows_volume_control.rs` が `IAudioEndpointVolume`
+    # （`GetMasterVolumeLevelScalar` / `GetMute` / `VolumeStepUp` / `VolumeStepDown`）を呼ぶ。
+    # 新規パッケージは増えない。
+    "Win32_Media_Audio_Endpoints",
     # Issue #1376: `device/windows_local_fonts.rs` が DirectWrite の `DWriteCreateFactory` /
     # `IDWriteFontCollection`（`Win32_Graphics_DirectWrite`）を呼ぶ。新規パッケージは増えない。
     "Win32_Graphics_DirectWrite",

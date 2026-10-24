@@ -210,6 +210,9 @@
 //! - `macos/fandhe_macos_audio_devices.m`（Issue #1330、Core Audio による音声デバイスの列挙）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_audio_devices.rs` から呼ばれる契約）。CoreAudio を追加でリンクする。
+//! - `macos/fandhe_macos_volume_control.m`（Issue #785、Core Audio による既定の出力の音量・消音の
+//!   読み取りと 1/16 刻みの変更）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_volume_control.rs` から呼ばれる契約）。CoreAudio・AudioToolbox を追加でリンクする。
 //! - `macos/fandhe_macos_app_badge.m`（Issue #1360、`NSDockTile.badgeLabel` によるバッジ設定）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/macos_app_badge.rs`
 //!   から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -1435,6 +1438,19 @@ fn compile_macos_audio_devices() {
         .compile("fandhe_macos_audio_devices");
 }
 
+/// `macos/fandhe_macos_volume_control.m` を `cc` でコンパイルする（Issue #785）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_volume_control.rs` が使う）。CoreAudio と AudioToolbox
+/// （`kAudioHardwareServiceDeviceProperty_VirtualMainVolume`）を追加でリンクする。
+fn compile_macos_volume_control() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_volume_control.m");
+    println!("cargo:rustc-link-lib=framework=CoreAudio");
+    println!("cargo:rustc-link-lib=framework=AudioToolbox");
+    cc::Build::new()
+        .file("macos/fandhe_macos_volume_control.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_volume_control");
+}
+
 /// `macos/fandhe_macos_file_watch.m` を `cc` でコンパイルする（Issue #1410）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_file_watch.rs` が使う）。FSEvents のため CoreServices をリンクする。
 fn compile_macos_file_watch() {
@@ -2259,6 +2275,8 @@ fn build_macos() {
     compile_macos_print();
     // `macos/fandhe_macos_audio_devices.m`（Issue #1330）も macOS 専用。CoreAudio を使う。
     compile_macos_audio_devices();
+    // `macos/fandhe_macos_volume_control.m`（Issue #785）も macOS 専用。CoreAudio・AudioToolbox を使う。
+    compile_macos_volume_control();
     // `apple/fandhe_apple_media_cast.m`（Issue #386 macOS + #387 iOS）。iOS 分岐と共用する。AVKit・CoreAudio を使う。
     compile_apple_media_cast(false);
     // `apple/fandhe_apple_midi.m`（Issue #1398）。iOS 分岐（#1399）と共用する。CoreMIDI を使う。

@@ -334,6 +334,10 @@ generated_screens! {
     crate::device::screen_brightness::screen_brightness_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "volume_control_show" => fandhe_core::screens::volume_control_show::current_screen,
+    crate::device::volume_control::volume_control_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "screen_orientation_show" => fandhe_core::screens::screen_orientation_show::current_screen,
     crate::device::screen_orientation::screen_orientation_show_effect,
     effect

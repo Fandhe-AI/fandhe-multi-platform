@@ -120,6 +120,8 @@ pub mod usb_device_show;
 pub mod user_idle_show;
 /// Phase 11 の拡充ループ型サンプル「UWB による距離・方向」（親 #129、Issue #653）。
 pub mod uwb_ranging_show;
+/// Phase 11 の拡充ループ型サンプル「システム音量」（親 #166、Issue #785）。
+pub mod volume_control_show;
 
 /// Phase 11 の拡充ループ型サンプル「アクセシビリティ設定の追従」（親 #1132、Issue #1308）。
 pub mod accessibility_prefs_show;
