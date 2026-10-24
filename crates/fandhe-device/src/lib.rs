@@ -91,6 +91,8 @@ pub mod home_widget;
 pub mod http;
 /// Phase 11（端末機能の拡充ループ、親 #1120、Issue #1250）: 画像内の文字認識（OCR）。
 pub mod image_recognition;
+/// Phase 11（端末機能の拡充ループ、親 #135、Issue #701）: アプリ内ブラウザ（固定の公開 URL を OS のアプリ内ブラウザで開く）。
+pub mod in_app_browser;
 /// Phase 11（端末機能の拡充ループ、Issue #563）: アプリ内レビュー依頼（OS のレビュー依頼 API を 1 回呼ぶ）。
 pub mod in_app_review;
 /// Phase 11（端末機能の拡充ループ、親 #109、Issue #486）: LAN のサービス探索（mDNS / Bonjour、`_http._tcp` を固定窓で 1 回探す）。
