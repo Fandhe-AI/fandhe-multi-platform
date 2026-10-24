@@ -144,7 +144,7 @@ mod imp {
         let setting = notifier
             .Setting()
             .map_err(|_| DeviceError::Internal("alarm setting"))?;
-        setting_result_for(setting.0, "alarm")?;
+        setting_result_for(setting.0, "alarm", "toast setting")?;
         Ok(notifier)
     }
 

@@ -85,24 +85,24 @@ const SHORTCUT_FILE: &str = "Fandhe egui proxy.lnk";
 /// （0=Enabled, 1=DisabledForApplication, 2=DisabledForUser,
 /// 3=DisabledByGroupPolicy, 4=DisabledByManifest）。
 fn setting_result(code: i32) -> Result<(), DeviceError> {
-    setting_result_for(code, "notification")
+    setting_result_for(code, "notification", "notification setting")
 }
 
 /// [`setting_result`] を機能ラベル付きに一般化したもの。同じ送り手（AUMID）の
 /// トーストを使う `windows_alarm.rs`（Issue #721）が、自機能のラベルで同じ写像を
-/// 共用する。未知の値の `Internal` ラベルは固定文字列にするため、`notification`
-/// 経路の文言は変わらない。
-pub(super) fn setting_result_for(code: i32, feature: &'static str) -> Result<(), DeviceError> {
+/// 共用する。未知の値の `Internal` ラベルは呼び出し元が `internal` で渡す
+/// （機能名の文字列比較で切り替えない）。
+pub(super) fn setting_result_for(
+    code: i32,
+    feature: &'static str,
+    internal: &'static str,
+) -> Result<(), DeviceError> {
     match code {
         0 => Ok(()),
         1 => Err(DeviceError::PermissionDenied(feature)),
         2 | 3 => Err(DeviceError::Disabled(feature)),
         4 => Err(DeviceError::Unsupported(feature)),
-        _ => Err(DeviceError::Internal(if feature == "notification" {
-            "notification setting"
-        } else {
-            "toast setting"
-        })),
+        _ => Err(DeviceError::Internal(internal)),
     }
 }
 
