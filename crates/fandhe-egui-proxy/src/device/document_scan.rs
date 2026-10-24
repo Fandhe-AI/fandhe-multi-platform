@@ -9,7 +9,7 @@
 //!
 //! # OS 別の分担（dispatch・bridge・本ファイルは #747 で最終形。後続の子はここを触らない）
 //!
-//! - iOS: `ios_document_scan`（#748。`VNDocumentCameraViewController`。#747 時点はスタブ）
+//! - iOS: `ios_document_scan`（#748。`VNDocumentCameraViewController`）
 //! - Android: GMS 依存のため保留。OS 別モジュールを置かず fallback に含める。保留を解くときは
 //!   dispatch の変更を別 issue で扱う
 //! - macOS・Windows・Linux: 対応表で `no` のため `UnsupportedDocumentScanner` 固定
@@ -132,7 +132,7 @@ impl Bridge {
 
     /// 表示開始の記録。現在の要求で、未確定で、期限前のときだけ `true`。
     /// 期限を過ぎていれば `TimedOut` を確定して `false`。
-    #[allow(dead_code)] // 呼び出し元は OS 層（#748）と単体テスト。
+    #[allow(dead_code)] // iOS 以外のビルドでは単体テストだけが呼ぶ。
     fn try_begin_present(&self, request_id: u64) -> bool {
         let mut active = self.lock();
         let Some(a) = active.as_mut().filter(|a| a.request_id == request_id) else {
@@ -212,14 +212,14 @@ fn bridge() -> &'static Bridge {
 }
 
 /// OS 層が撮影 UI を出す直前に呼ぶ。`false` なら出さない（モジュール doc 参照）。
-// OS 層（#748）が呼ぶまでは未使用（スタブは呼ばない）。
+// iOS 以外のビルドでは未使用（iOS は `ios_document_scan` の受け口が呼ぶ）。
 #[allow(dead_code)]
 pub(crate) fn try_begin_present(request_id: u64) -> bool {
     bridge().try_begin_present(request_id)
 }
 
 /// OS 層が結果を 1 回だけ送る受け口（モジュール doc 参照）。
-// OS 層（#748）が呼ぶまでは未使用（スタブは呼ばない）。
+// iOS 以外のビルドでは未使用（iOS は `ios_document_scan` の受け口が呼ぶ）。
 #[allow(dead_code)]
 pub(crate) fn complete_from_os(
     request_id: u64,
@@ -230,7 +230,7 @@ pub(crate) fn complete_from_os(
 
 /// 画面の作り直し時に保留中の要求を破棄する。画面状態は `default()`（世代 0）に戻るため、
 /// 保留が残ると次の要求が発送されず飲み込まれる。旧要求の遅延完了は id 不一致で捨てられる。
-// OS 層（#748）の再生成経路が呼ぶまでは未使用。
+// Android の再生成経路向け（保留中）。iOS には再生成経路がなく未使用。
 #[allow(dead_code)]
 pub(crate) fn reset_pending_tracking() {
     if let Some(b) = BRIDGE.get() {
