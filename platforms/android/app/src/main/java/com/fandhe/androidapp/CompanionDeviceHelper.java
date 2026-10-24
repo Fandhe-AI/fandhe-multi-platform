@@ -84,6 +84,10 @@ final class CompanionDeviceHelper {
     private boolean destroyed;
     // 解除に失敗した関連付け（再試行のため保持する）。
     private final java.util.List<Object> orphans = new java.util.ArrayList<>();
+    // 解除に成功した関連付け ID。Activity の結果と onAssociationCreated が逆順・遅延で届いても、同じ関連付けへ
+    // 二度目の解除（例外 → orphans 増加）を行わないための冪等化。直近 MAX_RELEASED_IDS 件だけ保持する。
+    private final java.util.LinkedHashSet<Integer> releasedIds = new java.util.LinkedHashSet<>();
+    private static final int MAX_RELEASED_IDS = 64;
     // RESULT_OK 後に AssociationInfo を待つ猶予。postDelayed は端末稼働時間（単調時計）基準で、壁時計の変更に影響されない。
     private static final long INFO_GRACE_MS = 3000L;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
@@ -226,6 +230,8 @@ final class CompanionDeviceHelper {
             disassociate(info);
             return;
         }
+        // 現在の要求に作られた新しい関連付け。ID が再利用されていても解除済み扱いにしない。
+        forgetReleased(info);
         if (okWaitingId == id) {
             completeSelected(id, info);
         } else {
@@ -420,14 +426,34 @@ final class CompanionDeviceHelper {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private boolean rawDisassociate(AssociationInfo info) {
         try {
+            int associationId = info.getId();
+            // 解除済みの関連付けへの再解除は成功扱い（OS 呼び出しも orphans への追加も行わない）。
+            if (releasedIds.contains(associationId)) {
+                return true;
+            }
             CompanionDeviceManager cdm = activity.getSystemService(CompanionDeviceManager.class);
             if (cdm == null) {
                 return false;
             }
-            cdm.disassociate(info.getId());
+            cdm.disassociate(associationId);
+            releasedIds.add(associationId);
+            if (releasedIds.size() > MAX_RELEASED_IDS) {
+                java.util.Iterator<Integer> it = releasedIds.iterator();
+                it.next();
+                it.remove();
+            }
             return true;
         } catch (RuntimeException e) {
             return false;
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private void forgetReleased(AssociationInfo info) {
+        try {
+            releasedIds.remove(info.getId());
+        } catch (RuntimeException e) {
+            // ID を読めないときは何もしない。
         }
     }
 
