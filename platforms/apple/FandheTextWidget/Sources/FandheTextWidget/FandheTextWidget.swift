@@ -5,7 +5,7 @@
 // へ原子的に書く。ここはそれを読んで表示するだけで、中身を解釈・実行しない。
 // 更新は Rust の再描画要求（ホストアプリ経由の reloadAllTimelines）に任せ、
 // 自前の定期更新は持たない（policy は .never）。
-// iOS 追加（#1066）時にソースを共有できるよう `#if os(...)` 分岐は置かない。
+// iOS 追加（#1066）時にソースを共有できるよう、OS 分岐は `FandheWidgets`（コントロール側）に限る。
 import SwiftUI
 import WidgetKit
 
@@ -84,5 +84,19 @@ struct FandheTextWidget: Widget {
         .configurationDisplayName("Fandhe テキスト")
         .description("アプリで保存した 1 行の文字を表示します。")
         .supportedFamilies([.systemSmall])
+    }
+}
+
+/// 拡張のエントリポイント。テキストウィジェットに加え、macOS 26+ ではカウントコントロールを出す。
+/// コントロール（`FandheCountControl.swift`）は macOS 専用の構成のため `#if os(macOS)` で囲む。
+@main
+struct FandheWidgets: WidgetBundle {
+    var body: some Widget {
+        FandheTextWidget()
+        #if os(macOS)
+        if #available(macOS 26.0, *) {
+            FandheCountControl()
+        }
+        #endif
     }
 }
