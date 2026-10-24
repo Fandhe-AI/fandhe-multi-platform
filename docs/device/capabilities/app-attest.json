@@ -20,14 +20,17 @@
       "deferred": "App Attest の capability が有料の Apple Developer Program 限定で、登録が期限切れのため保留。ベンダーの個別審査は不要で、登録を再開すれば着手できる。entitlement を省いた無料の Personal Team で attestation が通るかは公式情報になく未確認"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "Key Attestation（`AndroidKeyStore` の `KeyGenParameterSpec.Builder.setAttestationChallenge` で鍵を作り、`KeyStore.getCertificateChain` で証明書チェーンを取る。API 24+、GMS 不要）",
       "perm": "なし",
       "url": [
         "https://developer.android.com/privacy-and-security/security-key-attestation",
         "https://developer.android.com/reference/android/security/keystore/KeyGenParameterSpec.Builder#setAttestationChallenge(byte[])"
       ],
-      "note": "未実装。minSdk 24 から全域で使え、API レベルの分岐は要らない。challenge は最大 128 バイト。安全なハードウェアが無い・証明に非対応の端末では、失敗ではなく信頼できない証明書を根とするチェーンが返る。公式は同じ端末上での検証を禁じ、信頼できる別のサーバーで根・失効・アプリ id を確かめる前提。Play Integrity（`com.google.android.play:integrity`）は採らない: 推移依存に `play-services-basement`・`play-services-tasks` を持ち（POM で確認）GMS に依存しない方針に合わない、Google Cloud プロジェクトが要る、判定の復号をクライアントでできない、Play 経由の配布が前提（Play 以外は `UNLICENSED`）。Key Attestation は「鍵が端末のどこにあり、どのアプリが作ったか」の証明で、Play Integrity の「Play から入れた正規アプリか」とは粒度が違う"
+      "note": "実装済み（#678）。範囲は、要求ごとに EC P-256 鍵を AndroidKeyStore に作り、32 バイトの challenge を結び付けた Key Attestation の証明書チェーンを 1 回取得し、件数とバイト数だけを画面に出すこと。失敗は鍵ストアの失敗・空のチェーンまたは 0 バイトの証明書・件数または合計バイトの超過・期限切れを分けて表示し、成功に畳まない。期限は 30 秒で、単調時計で確かめ、期限後に届いた成功は捨てる。鍵は成功・失敗・期限切れの全経路で削除し、前回プロセスが残した鍵はプロセス内の初回の要求で掃除する。Activity を作り直したときは保留中の要求を Rust 側で破棄し、古い結果が新しい要求を消費しない。alias・challenge・証明データはログにも画面にも出さない。守らない範囲: 取得できた証明の信頼性（判断はサーバーの責務）、StrongBox の不使用、端末ごとの所要時間、期限後も鍵生成が走り切ること、複数プロセス間。【推測】実機で見る点: API 24・25 の証明に非対応の端末で例外になるか信頼できない根のチェーンが返るか、所要時間が 30 秒に収まるか、チェーンの件数とサイズが仮上限（10 件・64 KiB）に収まるか。いずれも Android 実機の目視（#674）で確かめる。元の前提: minSdk 24 から全域で使え、API レベルの分岐は要らない。challenge は最大 128 バイト。安全なハードウェアが無い・証明に非対応の端末では、失敗ではなく信頼できない証明書を根とするチェーンが返る。公式は同じ端末上での検証を禁じ、信頼できる別のサーバーで根・失効・アプリ id を確かめる前提。Play Integrity（`com.google.android.play:integrity`）は採らない: 推移依存に `play-services-basement`・`play-services-tasks` を持ち（POM で確認）GMS に依存しない方針に合わない、Google Cloud プロジェクトが要る、判定の復号をクライアントでできない、Play 経由の配布が前提（Play 以外は `UNLICENSED`）。Key Attestation は「鍵が端末のどこにあり、どのアプリが作ったか」の証明で、Play Integrity の「Play から入れた正規アプリか」とは粒度が違う",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#674）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_app_attest.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/AppAttestHelper.java + crates/fandhe-egui-proxy/src/device/app_attest.rs + crates/fandhe-core/src/screens/app_attest_show.rs + crates/fandhe-device/src/app_attest.rs、Issue #678"
     },
     "macos": {
       "status": "no",
