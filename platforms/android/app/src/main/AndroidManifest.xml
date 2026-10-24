@@ -78,6 +78,9 @@
          この宣言を使う。切り離し時に削除する。 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- 付属機器のペアリング（Issue #741）。非搭載端末をストアの自動フィルタから除外しないための
+         明示（required=false。切り離し時に削除する）。 -->
+    <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
     <!-- 位置情報非搭載端末（Android TV 等）をストアの自動フィルタから除外しないための
          明示（カメラの uses-feature required=false と同じ根拠、切り離し時に削除する）。 -->
     <uses-feature android:name="android.hardware.location" android:required="false" />

@@ -19,14 +19,17 @@
       "note": "未実装。iOS / iPadOS のみ（Apple 公式表記）。探す条件（service UUID か company identifier）は Info.plist に宣言した値と一致させる必要がある"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`CompanionDeviceManager.associate(AssociationRequest, Executor, Callback)`（API 33 以上）+ `BluetoothLeDeviceFilter`",
       "perm": "uses-permission は不要（位置情報の権限も不要）。Manifest に `uses-feature android.software.companion_device_setup`（`required=false`）。端末の位置情報サービスがオンであること（公式）",
       "url": [
         "https://developer.android.com/develop/connectivity/bluetooth/companion-device-pairing",
         "https://developer.android.com/sdk/api_diff/33/changes/android.companion.CompanionDeviceManager"
       ],
-      "note": "未実装。OS の機器選択画面（同意ダイアログ）を `onAssociationPending` の `IntentSender` で出し、結果を Activity の結果で受ける。名前は `AssociationInfo.getDisplayName()`（API 33）で取り、表示した後に `disassociate(int)` で関連付けを外す。API 26〜32 の旧経路（`onDeviceFound`・`EXTRA_DEVICE`・`disassociate(String)`）は使わず非対応にする。フレームワーク API で追加の依存は無い"
+      "note": "実装済み（Issue #741）。API 33 以上で OS の機器選択画面（同意ダイアログ）を `onAssociationPending` の `IntentSender` で出し、BLE 機器を 1 台選ばせる。名前は `AssociationInfo.getDisplayName()`（API 33）で取り、`disassociate(int)` で関連付けを外し終えてから結果を返す（外せなければ失敗）。位置情報サービス・Bluetooth がオフなら失敗、API 32 以下・機能なしは非対応にする。API 26〜32 の旧経路（`onDeviceFound`・`EXTRA_DEVICE`・`disassociate(String)`）は使わない。フレームワーク API で追加の依存は無い。守らない範囲: API 32 以下、関連付けを残すこと、背景での起動、通信とボンディング、選択画面の表示中のプロセス死、複数プロセス。API 33 は見つからない場合もキャンセルとして出ることがある（結果コードで区別できる API 34 以上は NotFound にする）",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#734）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/CompanionDeviceHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_companion_device.rs + crates/fandhe-egui-proxy/src/device/companion_device.rs + crates/fandhe-core/src/screens/companion_device_show.rs + crates/fandhe-device/src/companion_device.rs、Issue #741"
     },
     "macos": {
       "status": "no",

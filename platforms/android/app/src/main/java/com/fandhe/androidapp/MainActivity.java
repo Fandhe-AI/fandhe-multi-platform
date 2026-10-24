@@ -693,6 +693,13 @@ public class MainActivity extends GameActivity {
         return WebAuthSessionHelper.sha256(data);
     }
 
+    // 付属機器のペアリング（Issue #741）。実装は `CompanionDeviceHelper`（結果ランチャーを STARTED 前に登録）。
+    private final CompanionDeviceHelper companionDeviceHelper = new CompanionDeviceHelper(this);
+
+    void requestCompanionDevicePick(long requestId) {
+        companionDeviceHelper.pick(requestId);
+    }
+
     // アプリ内ブラウザ（Issue #703）。実装は `InAppBrowserHelper`。
     // Rust の `android_in_app_browser.rs` が JNI で呼ぶ。
     private final InAppBrowserHelper inAppBrowserHelper = new InAppBrowserHelper(this);
@@ -4914,6 +4921,7 @@ public class MainActivity extends GameActivity {
         nowPlayingHelper.onDestroy();
         super.onDestroy();
         inAppBrowserHelper.onDestroy();
+        companionDeviceHelper.onDestroy();
         pedometerHelper.onDestroy();
         translationHelper.onDestroy();
         geocodingHelper.onDestroy();
