@@ -7,30 +7,42 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "Universal Links（`application:continueUserActivity:restorationHandler:` / `scene:continueUserActivity:`、`NSUserActivityTypeBrowsingWeb`）",
-      "perm": "Associated Domains entitlement（`com.apple.developer.associated-domains`、`applinks:<domain>`）。制限付き entitlement のため provisioning profile が必須。ワイルドカード profile 不可",
-      "url": "https://developer.apple.com/documentation/xcode/supporting-universal-links-in-your-app",
-      "note": "未実装。前提: 検証用ドメインに `https://<domain>/.well-known/apple-app-site-association`（拡張子なし JSON、HTTPS）をホスティングし、appID（Team ID + Bundle ID）と paths を載せる。Apple Developer Program の有効な契約と、entitlement 入りの profile が要る。実機でのみ検証可能",
-      "sourceName": [
-        "Universal Links"
-      ]
+      "api": "Universal Links（`NSUserActivity` の `activityType` が `NSUserActivityTypeBrowsingWeb`、URL は `webpageURL`。受信は scene 形態で `scene:willConnectToSession:options:` の `connectionOptions.userActivities` と `scene:continueUserActivity:`、シーン無しで `application:continueUserActivity:restorationHandler:`）",
+      "perm": "Associated Domains capability（`com.apple.developer.associated-domains` に `applinks:<domain>`）。capability 表では有料の Apple Developer Program と Enterprise だけに印があり、無料の Apple Developer では付けられない。制限付き entitlement のため provisioning profile が必須",
+      "url": [
+        "https://developer.apple.com/documentation/xcode/supporting-universal-links-in-your-app",
+        "https://developer.apple.com/documentation/xcode/supporting-associated-domains",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.associated-domains",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-ios"
+      ],
+      "deferred": "Associated Domains capability は有料の Apple Developer Program だけが付けられ（無料の Apple Developer の一覧に無い）、開発者登録が期限切れ。加えて `apple-app-site-association` を置く検証用ドメインが未定のため保留（passkey-signin の iOS と同じ）。ベンダーの個別審査は不要で、開発者登録とドメインが揃えば着手できる",
+      "note": "未実装。前提: 検証用ドメインの `https://<domain>/.well-known/apple-app-site-association`（拡張子なし）に appID と URL の範囲を載せ、有効な証明書の https でリダイレクトなしに配信する（公式）。iOS 14 以上は Apple の CDN 経由で取得し、CDN は 24 時間以内に取りに行き、端末はインストール後おおむね週 1 回更新を確かめる（公式）。公開インターネットから届かない開発用サーバーは entitlement の alternate mode で CDN を迂回できる（公式）。受け取った URL は公式も検査と不正な URL の破棄を求めている。下敷き: url-scheme の iOS（scene delegate と、起動通知で差し込む application delegate）"
     },
     "android": {
       "status": "possible",
       "api": "App Links（`<intent-filter android:autoVerify=\"true\">` + `ACTION_VIEW` / `BROWSABLE` / `DEFAULT` + `<data android:scheme=\"https\" android:host>`）。受信は MainActivity の `getIntent()` / `onNewIntent`、JNI で Rust へ",
-      "perm": "なし（intent-filter のみ。`INTERNET` はアプリ側で既存のはず）",
-      "url": "https://developer.android.com/training/app-links/verify-android-applinks",
-      "note": "未実装。前提: 検証用ドメインに `https://<domain>/.well-known/assetlinks.json` をホスティングし、署名証明書の SHA-256 を載せる（debug / release で鍵が異なるので両方）。autoVerify は API 23+ で minSdk 24 は全域対象。Android 12+ は新しい検証プロセス、Android 15+（targetSdk 35）は定期再検証で変更反映に最大 7 日。`adb shell pm get-app-links` で状態確認可",
-      "sourceName": [
-        "App Links / Deep Link"
-      ]
+      "perm": "なし（intent-filter のみ）。検証用ドメインに `assetlinks.json` を置く",
+      "url": [
+        "https://developer.android.com/training/app-links/verify-android-applinks",
+        "https://developer.android.com/training/app-links/configure-assetlinks",
+        "https://developer.android.com/about/versions/12/behavior-changes-all",
+        "https://developer.android.com/training/app-links"
+      ],
+      "deferred": "検証用ドメイン（`assetlinks.json` の配置先）が未定のため保留（passkey-signin の Android と同じ）。Android 12 以上は、アプリが承認されていないドメインの web intent を既定のブラウザへ渡すため（公式）、検証なしの https の intent-filter ではアプリに届かない。ベンダーの個別審査は不要で、ドメインが決まれば着手できる",
+      "note": "未実装。前提: 検証用ドメインの `https://<domain>/.well-known/assetlinks.json` に署名証明書の SHA-256 を載せ、`application/json`・リダイレクトなしで配信する（debug と release で鍵が違うので両方。Play App Signing では手元の keytool の値と一致しない）（公式）。autoVerify は API 23 以上（minSdk 24 は全域）。公式は App Links を「Google services のある端末」で対応としている。Android 12 以上は `adb shell pm verify-app-links --re-verify` で手動検証し `pm get-app-links` で状態を見る。Android 15 以上は定期再検証で反映に最大 7 日（公式）。下敷き: url-scheme の Android（`singleTask`・`deliverUrlIntent`）。ただし `deliverUrlIntent` は `ACTION_VIEW` をすべて url-scheme の受信箱へ渡しているため、https を足すときは振り分けが要る"
     },
     "macos": {
       "status": "possible",
-      "api": "Universal Links（`NSApplicationDelegate` の `application:continueUserActivity:restorationHandler:`）",
-      "perm": "Associated Domains entitlement（`com.apple.developer.associated-domains`）。provisioning profile が必須で .app に埋め込む。署名は Team ID 付き",
-      "url": "https://developer.apple.com/documentation/xcode/allowing-apps-and-websites-to-link-to-your-content",
-      "note": "未実装。macOS も Associated Domains による Universal Links 対象（Apple Developer 記載）。前提は iOS と同じ AASA のホスティング。App Sandbox なしの .app でも制限付き entitlement には profile が要る。macOS 側の delegate メソッド名は未確認（調査未了）"
+      "api": "Universal Links（`NSApplicationDelegate` の `application:continueUserActivity:restorationHandler:`、macOS 10.10+。`NSUserActivity` の `webpageURL`）",
+      "perm": "Associated Domains capability（`com.apple.developer.associated-domains`、macOS 10.15+）。capability 表では有料の Apple Developer Program と Enterprise だけに印。provisioning profile を .app に埋め込む",
+      "url": [
+        "https://developer.apple.com/documentation/xcode/supporting-universal-links-in-your-app",
+        "https://developer.apple.com/documentation/appkit/nsapplicationdelegate/application(_:continue:restorationhandler:)",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.associated-domains",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-macos"
+      ],
+      "deferred": "Associated Domains capability は有料の Apple Developer Program だけが付けられ（無料の Apple Developer の一覧に無い）、開発者登録が期限切れ。`apple-app-site-association` を置く検証用ドメインも未定のため保留（passkey-signin の macOS と同じ）。加えて受信は application delegate のメソッドで、url-scheme の Apple Event（`kAEGetURL`）方式では受けられず、winit 0.30 が登録する delegate へメソッドを足す設計が要る。ベンダーの個別審査は不要で、開発者登録とドメインが揃えば着手できる",
+      "note": "未実装。前提は iOS と同じ `apple-app-site-association` の配信（macOS 11 以上は Apple の CDN 経由、公式）。素の実行体には profile を置けず .app 化が要る（url-scheme の Mac 目視は `scripts/apple/bundle-macos-url-scheme.sh` で .app 化している）。winit 0.30 の application delegate は差し替えると panic する（`crates/fandhe-device/src/url_scheme.rs` の doc）"
     },
     "windows": {
       "status": "no",
@@ -44,5 +56,5 @@
       "status": "n-a"
     }
   },
-  "note": "iOS / macOS は Universal Links（Associated Domains + AASA）、Android は App Links（autoVerify + assetlinks.json）。Windows は `windows.appUriHandler` が package identity 必須のため no。Web は https URL 自体がリンクで、アプリ側で受ける概念が無いため n-a。いずれの OS でも検証用ドメインのホスティング（apple-app-site-association / assetlinks.json）が前提"
+  "note": "url-scheme との違い: url-scheme はアプリ固有の scheme（`fandhe://`）で、宣言だけで受けられる（ドメインの検証なし・他アプリも同じ scheme を宣言できる）。本機能は https の URL を、ドメイン所有者がサーバーに置いた関連付けファイル（iOS / macOS は `apple-app-site-association`、Android は `assetlinks.json`）で OS が検証した場合にだけアプリへ渡す。iOS / macOS は Associated Domains capability が有料の開発者登録限定で登録が期限切れ、全 OS とも検証用ドメインが未定のため保留（passkey-signin と同じ理由）。Windows は `windows.appUriHandler` が package identity 必須のため no。Web は https URL 自体がリンクで、アプリ側で受ける概念が無いため n-a。範囲（再開時の案）: 検証済みドメインの https URL で起動し、受け取った URL 文字列を画面に出すだけ（ルーティングは扱わない）。受け口・検査・最新 1 件の保持は url-scheme の受信箱と同じ契約で、検査の scheme を https とホストの一致に替える。検証の可否は OS が決めるため、アプリ側で事前判定も記憶もせず、届いた URL だけを数える。結果は受信（URL）・拒否（件数のみ）・非対応の 3 種で、ポーリングやタイマーで到着を推測しない"
 }
