@@ -102,7 +102,8 @@ final class GeocodingHelper {
                 finish(id, RESULT_UNSUPPORTED, null);
                 return;
             }
-            Geocoder geocoder = new Geocoder(activity);
+            // Activity を保持しないよう application context で作る（再生成をまたいで握らない）。
+            Geocoder geocoder = new Geocoder(activity.getApplicationContext());
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 startOnT(geocoder, id, address, maxResults);
             } else {
@@ -122,6 +123,7 @@ final class GeocodingHelper {
             }
 
             // 失敗理由は区別しない。届かない場合は Rust 側の期限が TIMEOUT にする。
+            @Override
             public void onError(String errorMessage) {
                 finish(id, RESULT_FAILED, null);
             }
