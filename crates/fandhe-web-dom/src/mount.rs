@@ -420,6 +420,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::accessibility_prefs::release_mount(id);
         super::system_accent_color::release_mount(id);
         super::safe_area_insets::release_mount(id);
+        super::foldable_posture::release_mount(id);
         super::file_association::release_mount(id);
         super::fullscreen_immersive::release_mount(id);
         super::screen_orientation::release_mount(id);

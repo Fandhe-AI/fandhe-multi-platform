@@ -77,6 +77,9 @@ use fandhe_core::screens::flashlight_toggle::{
     current_screen as current_flashlight_toggle_screen, FlashlightToggleState,
     WEB_NOTE as FLASHLIGHT_WEB_NOTE,
 };
+use fandhe_core::screens::foldable_posture_show::{
+    foldable_posture_show_web_screen, FoldablePostureShowState,
+};
 use fandhe_core::screens::fullscreen_toggle::{
     current_screen as current_fullscreen_toggle_screen, exit as fullscreen_exit,
     FullscreenToggleState, EXIT_BUTTON_ID as FULLSCREEN_EXIT_BUTTON_ID,
@@ -721,6 +724,23 @@ pub fn mount_safe_area_insets_show_screen(root_id: &str) -> Result<(), JsValue> 
         safe_area_insets_show_web_screen(),
         SafeAreaInsetsShowState::default(),
         super::safe_area_insets::safe_area_insets_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「折りたたみの姿勢・ヒンジ」（Issue #724）をマウントする検証専用
+/// エントリポイント。`super::foldable_posture::foldable_posture_show_effect` を effect として渡すため、
+/// Device Posture API と Viewport Segments API の 1 秒ごとの読み直しが動く。
+///
+/// 呼び出し元が渡す `root_id` の要素が見つからない場合はエラーを返す。
+#[wasm_bindgen]
+pub fn mount_foldable_posture_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    super::mount::mount_with_effect(
+        root,
+        foldable_posture_show_web_screen(),
+        FoldablePostureShowState::default(),
+        super::foldable_posture::foldable_posture_show_effect,
     )
 }
 

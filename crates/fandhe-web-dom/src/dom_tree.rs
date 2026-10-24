@@ -748,6 +748,40 @@ mod tests {
         assert!(inset_rect_to_dom_node(&PaintCommand::Rect, size).is_none());
     }
 
+    /// `foldable_posture_show`: 読めたときだけ canvas と InsetRect が出る。縦の折れ目で 2 枚。
+    #[test]
+    fn foldable_posture_canvas_only_when_read() {
+        use fandhe_core::screens::foldable_posture_show::{
+            apply_read, foldable_posture_show_web_screen, Fold, FoldInfo, FoldOrientation,
+            FoldablePostureShowState, Posture, PostureReading, ReadFailure,
+        };
+        let html = |s: &FoldablePostureShowState| {
+            crate::html::to_html(&build_dom_tree(&foldable_posture_show_web_screen(), s, 0))
+        };
+        let mut state = FoldablePostureShowState::default();
+        assert!(!html(&state).contains("fandhe-inset-rect"));
+        apply_read(&mut state, Err(ReadFailure::Unsupported));
+        assert!(!html(&state).contains("fandhe-inset-rect"));
+        apply_read(&mut state, Err(ReadFailure::Failed("x".into())));
+        assert!(!html(&state).contains("fandhe-inset-rect"));
+        apply_read(
+            &mut state,
+            Ok(PostureReading {
+                posture: Posture::Folded,
+                fold: FoldInfo::Known(Fold {
+                    orientation: FoldOrientation::Vertical,
+                    start: 400.0,
+                    thickness: 20.0,
+                    extent: 820.0,
+                }),
+            }),
+        );
+        let h = html(&state);
+        assert!(h.contains("fandhe-canvas"), "{h}");
+        assert_eq!(h.matches("fandhe-inset-rect").count(), 2, "{h}");
+        assert!(h.contains("折れている") && h.contains("折れ目: 縦"), "{h}");
+    }
+
     /// `safe_area_insets_show`: 読めたときだけ canvas と InsetRect が出る（嘘の成功を出さない）。
     #[test]
     fn safe_area_insets_canvas_only_when_read() {
