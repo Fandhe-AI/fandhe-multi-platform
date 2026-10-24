@@ -7,7 +7,7 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "VisionKit `VNDocumentCameraViewController`（書類の自動検出・補正の撮影 UI）+ `VNDocumentCameraScan`（`pageCount`・`imageOfPageAtIndex:`）",
       "perm": "`NSCameraUsageDescription`（camera-capture で宣言済み。新しい権限キーは足さず、文言に機能名を足すだけ）",
       "url": [
@@ -15,7 +15,10 @@
         "https://developer.apple.com/documentation/visionkit/vndocumentcameraviewcontrollerdelegate",
         "https://developer.apple.com/documentation/bundleresources/information-property-list/nscamerausagedescription"
       ],
-      "note": "未実装。iOS 13 以上で、アプリの最小 OS（17）では常に使える。Objective-C から使える。非対応の機器では `isSupported` が NO を返すので、提示せず非対応とする。結果は delegate の 3 経路（`didFinishWithScan` / `DidCancel` / `didFailWithError`）で届き、公式文書はすべての経路でアプリが撮影 UI を閉じるよう求めている。ページの画像は `UIImage` で、`index` が範囲外だと例外を投げるため `pageCount` を先に確かめる。カメラ権限の拒否は提示前に `AVCaptureDevice` の状態で判定する"
+      "note": "実装済み（#748）。提示前に `isSupported`・前面・カメラ権限・表示先を確かめ、シミュレータなど非対応の機器では非対応として返す。撮影 UI を出すまでの期限は 10 秒（単調時計）で、期限切れ後は表示しない。delegate の 3 経路（完了・キャンセル・失敗）すべてで撮影 UI を閉じてから結果を返す。1 ページ目を JPEG にして渡し、画像は表示前に復号して確かめる。キャンセルは失敗にしない。守らない範囲: 撮影 UI の表示中に Rust 側から閉じること・OS ごとの補正結果の違い・複数プロセス・プロセス死後の結果。iOS 実機での確認は #739",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#739）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_document_scan.m + crates/fandhe-egui-proxy/src/device/ios_document_scan.rs、Issue #748"
     },
     "android": {
       "status": "possible",

@@ -82,6 +82,9 @@
 //! - `ios/fandhe_ios_in_app_browser.m`（Issue #702、SafariServices `SFSafariViewController` によるアプリ内ブラウザ）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルし SafariServices をリンクする
 //!   （`src/device/ios_in_app_browser.rs` から呼ばれる契約）。
+//! - `ios/fandhe_ios_document_scan.m`（Issue #748、VisionKit `VNDocumentCameraViewController` による書類スキャン）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルし VisionKit をリンクする
+//!   （`src/device/ios_document_scan.rs` から呼ばれる契約）。
 //! - `apple/fandhe_apple_on_device_llm.swift`（Issue #345、FoundationModels による端末内 LLM）は
 //!   **macOS・iOS 両分岐**（iOS は Issue #346）で feature `device` 有効時に swiftc で静的ライブラリ化し、
 //!   FoundationModels を弱リンクする（`src/device/apple_on_device_llm.rs` から呼ばれる契約）。
@@ -627,6 +630,8 @@ fn main() {
     compile_ios_web_auth_session();
     // `ios/fandhe_ios_in_app_browser.m`（Issue #702）。iOS 分岐のみ。SafariServices をリンクする。
     compile_ios_in_app_browser();
+    // `ios/fandhe_ios_document_scan.m`（Issue #748）。iOS 分岐のみ。VisionKit をリンクする。
+    compile_ios_document_scan();
     // `ios/fandhe_ios_in_app_review.m`（Issue #564）。iOS 分岐のみ。StoreKit をリンクする。
     compile_ios_in_app_review();
     // `ios/fandhe_ios_capture_protection.m`（Issue #583）。iOS 分岐のみ（macOS は対応表で no）。
@@ -1802,6 +1807,19 @@ fn compile_ios_in_app_browser() {
         .flag("-fobjc-arc")
         .compile("fandhe_ios_in_app_browser");
     println!("cargo:rustc-link-lib=framework=SafariServices");
+}
+
+/// `ios/fandhe_ios_document_scan.m` を `cc` でコンパイルし VisionKit をリンクする（Issue #748）。
+/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_document_scan.rs` が使う）。AVFoundation は camera 用にリンク済み。
+fn compile_ios_document_scan() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_document_scan.m");
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_common.h");
+    cc::Build::new()
+        .file("ios/fandhe_ios_document_scan.m")
+        .include("ios")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_document_scan");
+    println!("cargo:rustc-link-lib=framework=VisionKit");
 }
 
 /// `ios/fandhe_ios_print.m` を `cc` でコンパイルする（Issue #327）。**iOS 分岐のみ**から
