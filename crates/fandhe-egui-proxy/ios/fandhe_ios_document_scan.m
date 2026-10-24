@@ -177,9 +177,9 @@ static void FandheDocScanPresent(uint64_t request_id) {
                           // present 中に確定した場合、dismiss が捨てられていても画面に残さない。
                           if (!delegate.dismissStarted) {
                               [delegate closeController:vc then:^{}];
-                          } else if (vc.presentingViewController != nil && !vc.isBeingDismissed) {
-                              [vc dismissViewControllerAnimated:YES completion:nil];
                           }
+                          // 開始済みなら再 dismiss しない（キュー済みの dismiss は isBeingDismissed が NO のため
+                          // 二重発行になる）。取りこぼしは closeController 内の 1.5 秒タイマーが回収する。
                           return;
                       }
                       if (top.presentedViewController != vc) {
