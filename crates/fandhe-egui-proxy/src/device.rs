@@ -124,6 +124,12 @@ pub mod android_fullscreen_immersive;
 /// JNI エクスポートは Android ターゲットのみでコンパイルされる（モジュール自体の cfg は
 /// 付けない。`device/tilt.rs` と同じ判断）。`device/gamepad.rs` の Android 経路から使われる。
 pub mod android_gamepad;
+/// Issue #691: Android 向け住所の座標変換の骨格（`Unsupported` のスタブ。#693 が
+/// `android.location.Geocoder` で埋める）。`device/geocoding_search.rs` の Android 経路から呼ばれる。
+/// 後続の子がホストテストを足すときに本行の cfg を広げずに済むよう test でもコンパイルする。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_geocoding_search;
 /// Issue #1067: ホーム画面ウィジェットの Android 実装（`AppWidgetProvider` + SharedPreferences
 /// を呼ぶ Java 側 `MainActivity` の JNI 受け口）。`device/home_widget.rs` の Android 経路から
 /// 使われる。写像の純関数はホストでテストできるよう cfg は `any(android, test)`。
@@ -349,6 +355,12 @@ pub mod apple_file_association;
 /// Apple cfg 分岐から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_gamepad;
+/// Issue #691 macOS・#692 iOS: 住所の座標変換実装（`apple/fandhe_apple_geocoding_search.m` の
+/// MapKit `MKGeocodingRequest` を呼ぶ C ABI ラッパー）。`device/geocoding_search.rs` の macOS 経路と、
+/// iOS 経路（#692 で `ios_geocoding_search` 経由）から呼ばれる。`build.rs` のコンパイル条件と
+/// 同じ OS 集合に保つ。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+pub mod apple_geocoding_search;
 /// Issue #1091・#1092: macOS / iOS 向け触覚フィードバック実装（`apple/fandhe_apple_haptics.m`
 /// を呼ぶ C ABI ラッパー）。`device/haptics.rs` の Apple 経路から呼ばれる。`build.rs` の
 /// コンパイル条件と同じ OS 集合に保つ。
@@ -573,6 +585,10 @@ pub mod fullscreen_immersive;
 /// Phase 11 の拡充ループ（親 #932、Issue #933・#934・#935）: ゲームコントローラの effect
 /// ドライバ（Windows / iOS / macOS / Android 実装）。
 pub mod gamepad;
+/// Phase 11 の拡充ループ（親 #133、Issue #691）: 住所の座標変換の effect ドライバ
+/// （macOS 実装。iOS・Android は骨格のスタブで #692 / #693 が埋める。他 OS は
+/// `UnsupportedForwardGeocoder` 固定）。
+pub mod geocoding_search;
 /// Phase 11 の拡充ループ（親 #1056、Issue #1057）: ジオフェンスの effect ドライバ
 /// （location の継続取得に乗せて `GeofenceTracker` で判定する）。
 pub mod geofence;
@@ -692,6 +708,10 @@ pub mod ios_flashlight;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_fullscreen_immersive;
+/// Issue #691: iOS 向け住所の座標変換の骨格（`Unsupported` のスタブ。#692 が macOS と共用の
+/// `AppleForwardGeocoder` を返す）。`device/geocoding_search.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_geocoding_search;
 /// Issue #1252: iOS 向け文字認識（PHPicker + Vision）の effect ドライバ。
 #[cfg(target_os = "ios")]
 pub mod ios_image_recognition;

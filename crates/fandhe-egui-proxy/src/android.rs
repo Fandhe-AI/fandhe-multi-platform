@@ -356,6 +356,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // `device::translation::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::translation::reset_pending_tracking();
+    // Issue #691: 住所の座標変換の処理済み世代も破棄する（理由は translation と同じ。
+    // `device::geocoding_search::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::geocoding_search::reset_pending_tracking();
     // Issue #677: 端末・アプリの真正性証明の処理済み世代も破棄する（理由は translation と同じ。
     // `device::app_attest::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
