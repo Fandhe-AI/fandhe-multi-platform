@@ -334,6 +334,29 @@ mod tests {
     }
 
     #[test]
+    fn advertising_then_reads_during_start_are_counted_after_accept() {
+        struct EarlyReads;
+        impl BlePeripheral for EarlyReads {
+            fn start(&self, _s: u64, on_event: OnEvent) -> Result<StartOutcome, DeviceError> {
+                on_event(PeripheralEvent::Advertising);
+                for _ in 0..3 {
+                    on_event(PeripheralEvent::Read);
+                }
+                Ok(StartOutcome::Accepted)
+            }
+            fn stop(&self) -> Result<StopOutcome, DeviceError> {
+                Ok(StopOutcome::NotRunning)
+            }
+        }
+        let (sender, rx) = channel();
+        let mut s = BlePeripheralState::default();
+        screen::request_start(&mut s);
+        step(&mut s, &sender, &rx, &EarlyReads);
+        assert_eq!(s.phase, PeripheralPhase::Advertising);
+        assert_eq!(s.reads, 3);
+    }
+
+    #[test]
     fn reads_are_batched_into_one_completion() {
         let f = ok_fake();
         let (sender, rx) = channel();

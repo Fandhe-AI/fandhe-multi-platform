@@ -164,11 +164,6 @@ pub struct BlePeripheralState {
     pub notice: String,
     /// 失敗系（`TextRole::Error`）。
     pub error: String,
-    /// `Starting` 中に届いた事象の保留。受理結果（[`finish_start`]）の反映後に適用する。
-    /// `Ended` は終端なので、保留したあとに届く事象は捨てる。
-    pub pending_event: Option<ScreenEvent>,
-    /// `Starting` 中に届いた読み取り件数の保留。受理結果と保留中の事象の反映後に加算する。
-    pub pending_reads: u64,
 }
 
 fn clear_messages(state: &mut BlePeripheralState) {
@@ -190,8 +185,6 @@ pub fn request_start(state: &mut BlePeripheralState) {
     state.generation = state.generation.wrapping_add(1);
     state.session = state.generation;
     state.reads = 0;
-    state.pending_event = None;
-    state.pending_reads = 0;
     clear_advert_info(state);
     clear_messages(state);
 }
@@ -231,8 +224,9 @@ pub fn mark_in_flight(state: &mut BlePeripheralState) {
     };
 }
 
-/// 公開の依頼の結果を反映する。処理中でない・世代が違う完了は無視する。
+/// 公開の依頼の結果を反映する。`Starting` でない・世代が違う完了は無視する。
 /// 受理は「準備中」で、公開中ではない（公開中は [`apply_event`] だけが作る）。
+/// 完了より先に事象が届いて `Idle` / `Advertising` へ進んでいれば、OS の事象を正として上書きしない。
 pub fn finish_start(
     state: &mut BlePeripheralState,
     generation: u64,
@@ -242,19 +236,9 @@ pub fn finish_start(
         return;
     }
     clear_messages(state);
-    let pending = state.pending_event.take();
-    let pending_reads = std::mem::take(&mut state.pending_reads);
     match result {
         Ok(StartResult::Accepted) => {
             state.phase = PeripheralPhase::Waiting;
-            // 開始完了より先に届いた事象を、受理の反映後に現在の状態で評価し直す。
-            if let Some(event) = pending {
-                let session = state.session;
-                apply_event(state, session, event);
-            }
-            // 公開中になっていれば、開始中に届いた読み取りを数える（Waiting のままなら捨てる）。
-            let session = state.session;
-            apply_reads(state, session, pending_reads);
         }
         Ok(StartResult::Unsupported) => {
             state.phase = PeripheralPhase::Idle;
@@ -287,20 +271,14 @@ pub fn finish_stop(
     }
 }
 
-/// OS からの事象を反映する。`session` が現在の公開と一致し、`Waiting` / `Advertising` のときだけ
-/// 反映する（古い世代・停止後・停止処理中の事象は捨てる）。`Starting` 中の事象は保留する。
+/// OS からの事象を反映する。`session` が現在の公開と一致し、`Starting` / `Waiting` / `Advertising` の
+/// ときだけ反映する（古い世代・停止後・停止処理中の事象は捨てる）。`Starting` 中でも保留せず
+/// そのまま反映し、後から届く [`finish_start`] はこの結果を上書きしない（OS を正にする）。
 pub fn apply_event(state: &mut BlePeripheralState, session: u64, event: ScreenEvent) {
-    if state.session == session && state.phase == PeripheralPhase::Starting {
-        // 開始結果より先に届いた事象は捨てず、finish_start の反映後に適用する。
-        if !matches!(state.pending_event, Some(ScreenEvent::Ended(_))) {
-            state.pending_event = Some(event);
-        }
-        return;
-    }
     if state.session != session
         || !matches!(
             state.phase,
-            PeripheralPhase::Waiting | PeripheralPhase::Advertising
+            PeripheralPhase::Starting | PeripheralPhase::Waiting | PeripheralPhase::Advertising
         )
     {
         return;
@@ -330,13 +308,8 @@ pub fn apply_event(state: &mut BlePeripheralState, session: u64, event: ScreenEv
 }
 
 /// 読み取り `n` 件を反映する。公開中（`Advertising`）かつ session が一致するときだけ数える。
-/// `Starting` 中は保留し、[`finish_start`] の反映後に加算する。
+/// 読み取りは公開開始の事象より後にしか起きないため、`Starting` で届く順序は想定しない。
 pub fn apply_reads(state: &mut BlePeripheralState, session: u64, n: u64) {
-    if state.phase == PeripheralPhase::Starting && state.session == session {
-        // 開始結果より先に届いた読み取りは捨てず、finish_start の反映後に加算する。
-        state.pending_reads = state.pending_reads.saturating_add(n);
-        return;
-    }
     if state.phase == PeripheralPhase::Advertising && state.session == session {
         state.reads = state.reads.saturating_add(n);
     }
@@ -430,37 +403,28 @@ mod tests {
     }
 
     #[test]
-    fn event_during_starting_is_held_until_accept() {
+    fn ended_during_starting_is_applied_and_not_overwritten_by_accept() {
         let mut s = starting();
         let sess = s.session;
-        apply_event(&mut s, sess, adv());
-        apply_event(&mut s, sess, ScreenEvent::Ended(EndKind::BluetoothOff));
-        // 終端の後に届いた事象は保留を上書きしない。
-        apply_event(&mut s, sess, adv());
-        assert_eq!(s.phase, PeripheralPhase::Starting);
         let g = s.generation;
+        apply_event(&mut s, sess, ScreenEvent::Ended(EndKind::BluetoothOff));
+        assert_eq!(s.phase, PeripheralPhase::Idle);
+        assert_eq!(s.error, BLUETOOTH_OFF_ERROR);
         finish_start(&mut s, g, Ok(StartResult::Accepted));
         assert_eq!(s.phase, PeripheralPhase::Idle);
         assert_eq!(s.error, BLUETOOTH_OFF_ERROR);
-        assert!(s.pending_event.is_none());
     }
 
     #[test]
-    fn pending_advertising_applies_after_accept_and_drops_on_failure() {
+    fn advertising_during_starting_is_applied_and_not_overwritten_by_accept() {
         let mut s = starting();
         let sess = s.session;
-        apply_event(&mut s, sess, adv());
         let g = s.generation;
+        apply_event(&mut s, sess, adv());
+        assert_eq!(s.phase, PeripheralPhase::Advertising);
         finish_start(&mut s, g, Ok(StartResult::Accepted));
         assert_eq!(s.phase, PeripheralPhase::Advertising);
-
-        let mut s = starting();
-        let sess = s.session;
-        apply_event(&mut s, sess, adv());
-        let g = s.generation;
-        finish_start(&mut s, g, Err(PeripheralFailure));
-        assert_eq!(s.phase, PeripheralPhase::Idle);
-        assert!(s.pending_event.is_none());
+        assert_eq!(s.local_name, "N");
     }
 
     #[test]
@@ -588,17 +552,15 @@ mod tests {
     }
 
     #[test]
-    fn reads_before_accept_are_kept_and_added_after_advertising() {
+    fn reads_after_advertising_during_starting_are_counted() {
         let mut s = starting();
         let sess = s.session;
         let g = s.generation;
         apply_event(&mut s, sess, adv());
         apply_reads(&mut s, sess, 3);
-        assert_eq!(s.reads, 0);
         finish_start(&mut s, g, Ok(StartResult::Accepted));
         assert_eq!(s.phase, PeripheralPhase::Advertising);
         assert_eq!(s.reads, 3);
-        assert_eq!(s.pending_reads, 0);
     }
 
     #[test]
