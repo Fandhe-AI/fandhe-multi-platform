@@ -8,24 +8,34 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "WidgetKit の Control Widget（iOS 18+、`ControlWidget`）",
-      "perm": "Widget Extension の追加。App Group が要る可能性あり（要確認）",
-      "url": "https://developer.apple.com/documentation/swiftui/controlwidget",
-      "note": "未実装。Widget Extension 経由で、home-widget（既存 id）と同じ土台。Apple Developer Program が現在期限切れで、entitlement・capability の要否は検証できない。"
+      "api": "WidgetKit の Control Widget（`ControlWidget` / `ControlWidgetButton`、iOS 18+）。操作は App Intents の `AppIntent`",
+      "perm": "権限ダイアログなし。Widget Extension ターゲットに加え、アプリへ操作を届けるには App Group（有料の Apple Developer Program が前提）か、アプリ側にも同じ `OpenIntent` を置くこと（公式: intent の Target Membership をアプリと拡張の両方に）が要る",
+      "url": [
+        "https://developer.apple.com/documentation/swiftui/controlwidget",
+        "https://developer.apple.com/documentation/widgetkit/creating-controls-to-perform-actions-across-the-system"
+      ],
+      "deferred": "コントロールの操作は Widget Extension 内の App Intent で実行され、アプリ本体へ届ける経路が 2 つとも今は使えない。(1) App Group の共有コンテナは有料登録が前提で、登録が期限切れ（home-widget の iOS と同じ）。(2) アプリを開く `OpenIntent` はアプリ側にも intent を置く必要があるが、iOS 版は cargo の成果物を手組みで .app にしており Xcode のビルドを通らず、App Intents のメタデータが出ない（app-intents と同じ）。加えて拡張は実機ビルドへ同梱する署名手順が無い（live-activity と同じ）。登録の再開か、ビルド構成の設計が決まるまで保留",
+      "note": "未実装。ライブアクティビティ用の Widget Extension（`FandheLiveActivity`）はシミュレータ向けにだけ同梱している。再開時は macOS と同じく「拡張が共有コンテナの回数を増やし、アプリが読む」形を下敷きにする"
     },
     "android": {
       "status": "possible",
-      "api": "`TileService`（API 25+）、マニフェストにサービス登録",
-      "perm": "サービスに `BIND_QUICK_SETTINGS_TILE`",
-      "url": "https://developer.android.com/develop/ui/views/quicksettings-tiles",
-      "note": "未実装。タイル追加はユーザー操作（API 33+ はアプリから追加依頼ダイアログ可、要確認）。タップ時の処理は JNI で Rust へ渡す"
+      "api": "`TileService`（API 24+）の `onClick`。追加はユーザーがクイック設定の編集から行う（API 33+ の `StatusBarManager.requestAddTileService` は使わない）",
+      "perm": "なし（アプリが `uses-permission` で要求する権限は無い）。Manifest に `<service>`（exported=true、intent-filter は `android.service.quicksettings.action.QS_TILE`）を置き、`android:permission` に `BIND_QUICK_SETTINGS_TILE`（システムだけが持つ権限。bind できるのはシステムだけになる）を書く",
+      "url": [
+        "https://developer.android.com/develop/ui/views/quicksettings-tiles",
+        "https://developer.android.com/reference/android/service/quicksettings/TileService"
+      ],
+      "note": "未実装。タイルのタップでアプリのプロセスが無ければ OS がサービスのために起こすが、`MainActivity` とネイティブライブラリは読み込まれない。回数は Java 側が SharedPreferences（`commit()`）に保存し、Rust は画面から JNI で読む（home-widget の Android と同じ SharedPreferences + JNI の読み出し）。タイルは非アクティブモード（`ACTIVE_TILE` を付けない）"
     },
     "macos": {
       "status": "possible",
-      "api": "SwiftUI `ControlWidget`（macOS 26+）",
-      "perm": "Widget Extension の追加（home-widget の macOS と同じ土台）",
-      "url": "https://developer.apple.com/documentation/swiftui/controlwidget",
-      "note": "未実装。macOS 26 以降のみ"
+      "api": "SwiftUI `ControlWidget` / `ControlWidgetButton`（macOS 26+）。操作は App Intents の `AppIntent`（拡張内で実行）",
+      "perm": "権限ダイアログなし。home-widget の macOS で導入済みの Widget Extension（`FandheTextWidget`、ホストアプリ `FandheWidgetHost`）と App Group（`<Team ID>.com.fandhe.widget`）を再利用し、新しいターゲット・entitlement は足さない",
+      "url": [
+        "https://developer.apple.com/documentation/swiftui/controlwidget",
+        "https://developer.apple.com/documentation/widgetkit/creating-controls-to-perform-actions-across-the-system"
+      ],
+      "note": "未実装。macOS 26 以降のみ。拡張の `perform()` が App Group コンテナのファイルの回数を増やし、アプリ（Rust）が同じファイルを読む。Team ID は home-widget と同じく環境変数 `FANDHE_DEVELOPMENT_TEAM` から取り、無ければ Unsupported"
     },
     "windows": {
       "status": "no",
@@ -39,5 +49,5 @@
       "note": "ブラウザ・OS のクイック設定に相当する概念なし"
     }
   },
-  "note": "quick-settings-tile 相当は OS ごとに「システム UI へ小さな操作を置く」機能。home-widget（既存 id）との違い: ウィジェットは画面上の表示領域、こちらはクイック設定・コントロールセンターに置く 1 操作。今回の範囲: Android のタイルをタップしたらアプリ内のカウンタが 1 増え、画面に値を出す（iOS / macOS は Control Widget で同じことをする）。"
+  "note": "quick-settings-tile は OS のシステム UI（Android のクイック設定、Apple のコントロールセンター）へ 1 操作のボタンを置く機能。home-widget（既存 id）との違い: ウィジェットは画面上の表示領域、こちらはシステム UI に置く 1 操作。範囲: タイル・コントロールを押すと回数が 1 増えて OS 側に保存され、アプリの画面がその回数を読んで表示する。アプリが起動していないときに押した分も、次に開いたときに数に入る。守る範囲: 1 回の押下で 1 だけ増やすこと（同じプロセス内で読み・増加・保存を排他にする）、保存に失敗した押下を数えたことにしないこと、未押下（0）と読み出し失敗を区別すること、嘘の成功の禁止。守らない範囲: アプリからタイル・コントロールを追加させる操作、タイル・コントロール側への回数の表示、ポーリング間隔ぶんの表示の遅れ、複数ユーザー・複数端末、アンインストールでの回数の消失"
 }
