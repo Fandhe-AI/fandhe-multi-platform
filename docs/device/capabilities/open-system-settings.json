@@ -29,15 +29,14 @@
       "note": "未実装。公式は設定の Intent について「対応する Activity が無い場合があるので備えること」と書く。通知設定の Intent は API 26 で追加され、minSdk 24 の端末（API 24・25）では Activity が無く `ActivityNotFoundException` になる見込みで、そのときは「開けなかった」と出す（別の頁へ置き換えない）。前景（RESUMED）でないときは OS に黙って抑止されうるため起動しない。`startActivity` が戻ったことは OS が Intent を受け付けたことまでで、利用者が設定を変えたかは分からない"
     },
     "macos": {
-      "status": "possible",
+      "status": "no",
       "api": "公開の入口は `SMAppService.openSystemSettingsLoginItems()`（ログイン項目、macOS 13+、launch-at-login で使用済み）と、`EndpointSecurity/ESClient.h` が書くフルディスクアクセスの `x-apple.systempreferences:` URL だけ",
       "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/servicemanagement/smappservice/opensystemsettingsloginitems()",
         "https://developer.apple.com/forums/thread/714724"
       ],
-      "deferred": "今回の範囲（自アプリの設定・通知設定）に当たる公開の入口が無いため保留。`x-apple.systempreferences:` のペイン ID は一覧が公開されておらず、Apple の開発者フォーラムでも「URL scheme は明示的に文書化されない限り API ではない」とされる。文書化されているのはフルディスクアクセス（`ESClient.h`）とログイン項目（`SMAppService`）だけ。Apple が通知設定などの入口を文書化するか、範囲をこの 2 つに広げると決めたら着手できる",
-      "note": "未実装。非公開のペイン ID（通知・プライバシー等）は OS のバージョンで変わるため使わない。ログイン項目を開く操作は launch-at-login の型サンプル画面で実装済み"
+      "note": "今回の範囲（自アプリの設定・通知設定）に当たる公開の入口が無い。`x-apple.systempreferences:` のペイン ID は一覧が公開されておらず、Apple の開発者フォーラムでも「URL scheme は明示的に文書化されない限り API ではない」とされる。文書化されているのはフルディスクアクセス（`ESClient.h`）とログイン項目（`SMAppService`、launch-at-login の型サンプル画面で実装済み）だけ。非公開のペイン ID は OS のバージョンで変わるため使わない。Apple が入口を文書化したら見直す"
     },
     "windows": {
       "status": "possible",
