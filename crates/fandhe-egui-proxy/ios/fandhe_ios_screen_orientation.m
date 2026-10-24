@@ -84,9 +84,12 @@ static BOOL fandhe_orientation_install(void) {
     if (m == NULL) {
         return NO;
     }
-    fandhe_orig_supported_orientations = class_replaceMethod(
+    // 継承したメソッドだと class_replaceMethod は NULL を返すため、親の実装を先に取っておく。
+    IMP inherited = method_getImplementation(m);
+    IMP replaced = class_replaceMethod(
         cls, @selector(supportedInterfaceOrientations), (IMP)fandhe_supported_orientations,
         method_getTypeEncoding(m));
+    fandhe_orig_supported_orientations = replaced != NULL ? replaced : inherited;
     fandhe_orientation_installed = YES;
     return YES;
 }
