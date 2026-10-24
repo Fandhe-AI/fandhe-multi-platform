@@ -226,6 +226,9 @@
 //! - `macos/fandhe_macos_open_in_shell.m`（Issue #749、`NSWorkspace` による既定アプリで開く・
 //!   Finder で選択表示）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_open_in_shell.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_eye_dropper.m`（Issue #762、`NSColorSampler` による画面のスポイト）は
+//!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_eye_dropper.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_print.m`（Issue #325、`NSPrintPanel` + `NSPrintOperation` による印刷
 //!   ダイアログ）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_print.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -1589,6 +1592,17 @@ fn compile_macos_open_in_shell() {
         .compile("fandhe_macos_open_in_shell");
 }
 
+/// `macos/fandhe_macos_eye_dropper.m` を `cc` でコンパイルする（Issue #762）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_eye_dropper.rs` が使う）。AppKit は `build_macos` 側の
+/// 既存リンクで足りるため追加リンクは無い。
+fn compile_macos_eye_dropper() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_eye_dropper.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_eye_dropper.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_eye_dropper");
+}
+
 /// `macos/fandhe_macos_print.m` を `cc` でコンパイルする（Issue #325）。**macOS 分岐のみ**から
 /// 呼ばれる（`src/device/macos_print.rs` が使う）。AppKit は `build_macos` 側の既存リンクで足りる。
 fn compile_macos_print() {
@@ -2202,6 +2216,8 @@ fn build_macos() {
     compile_macos_compose_mail_sms();
     // `macos/fandhe_macos_open_in_shell.m`（Issue #749）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_open_in_shell();
+    // `macos/fandhe_macos_eye_dropper.m`（Issue #762）も macOS 専用。AppKit は既存のリンクを使う。
+    compile_macos_eye_dropper();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_print();
     // `macos/fandhe_macos_audio_devices.m`（Issue #1330）も macOS 専用。CoreAudio を使う。
