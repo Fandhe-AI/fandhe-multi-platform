@@ -15,13 +15,16 @@
 //! `AddToSchedule` の直後に予約一覧を読み直し、自分の Id が無ければ
 //! `Unsupported("alarm")` を返す。package identity の無い実行形態で OS が予約を
 //! 黙って捨てる場合に、成功を装わないため（`device-bridge-contracts.md`
-//! 「6. 嘘の成功」）。通知の設定が無効なら予約前に失敗させる。
+//! 「6. 嘘の成功」）。通知の設定が無効なら予約前に失敗させる（schedule のみ。cancel と state は
+//! 設定を確かめず予約一覧を直接読む・消すので、予約後に通知を無効化されても
+//! 取り消せて状態も読める）。
 //!
 //! # 守る範囲・守らない範囲
 //!
 //! trait doc（`fandhe_device::alarm`）の契約に従う。実装固有の点は次のとおり。
-//! 古い予約を消してから新しい予約を足すため、途中で失敗すると古い予約は戻らず
-//! 「予約なし」になる。schedule・cancel・state はプロセス内で `Mutex` により直列化し、
+//! XML と予約オブジェクトを作り切ってから古い予約を消して新しい予約を足す。
+//! 失敗で古い予約が失われるのは、古い予約の削除後の `AddToSchedule` の失敗だけで、
+//! その場合は戻らず「予約なし」になる。schedule・cancel・state はプロセス内で `Mutex` により直列化し、
 //! 判定と更新を同じロックの内側で行う。
 //!
 //! 時刻変換・検証・設定値の写像・XML 定数などの純関数は、ホストの `cargo test` で
@@ -134,13 +137,20 @@ mod imp {
         u64::try_from(d.as_millis()).map_err(|_| DeviceError::Internal("alarm clock"))
     }
 
-    /// 登録済み AUMID の送り手を作り、通知設定が有効であることを確かめる。
+    /// 登録済み AUMID の送り手を作る（通知設定は確かめない）。予約一覧の読み取りと
+    /// 取り消しはこれだけで足り、通知が後から無効化されても予約を消せる・読める
+    /// ようにする。AUMID の登録（ショートカット作成）という副作用も起こさない。
     /// 呼び出し元が `ComInit` 済みのスレッド上で呼ぶ契約。
+    fn open_list_notifier() -> Result<ToastNotifier, DeviceError> {
+        ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_AUMID))
+            .map_err(|_| DeviceError::Internal("alarm notifier"))
+    }
+
+    /// AUMID を登録し、通知設定が有効であることを確かめた送り手を作る。予約
+    /// （schedule）だけが使う。呼び出し元が `ComInit` 済みのスレッド上で呼ぶ契約。
     fn open_notifier() -> Result<ToastNotifier, DeviceError> {
         ensure_app_aumid("alarm")?;
-        let notifier =
-            ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_AUMID))
-                .map_err(|_| DeviceError::Internal("alarm notifier"))?;
+        let notifier = open_list_notifier()?;
         let setting = notifier
             .Setting()
             .map_err(|_| DeviceError::Internal("alarm setting"))?;
@@ -193,14 +203,8 @@ mod imp {
             let _com = ComInit::new("alarm com init")?;
             let notifier = open_notifier()?;
 
-            // 置き換え: 既存の予約を先に全部消す。以降で失敗しても古い予約は
-            // 戻さない（trait doc の契約）。
-            for old in own_entries(&notifier)? {
-                notifier
-                    .RemoveFromSchedule(&old)
-                    .map_err(|_| DeviceError::Internal("alarm remove"))?;
-            }
-
+            // XML と予約オブジェクトは古い予約を消す前に作り切る。以降で失敗しうるのは
+            // 古い予約の削除と AddToSchedule だけにする。
             let xml = build_xml()?;
             let toast = ScheduledToastNotification::CreateScheduledToastNotification(
                 &xml,
@@ -212,6 +216,14 @@ mod imp {
             toast
                 .SetId(&HSTRING::from(ALARM_ID))
                 .map_err(|_| DeviceError::Internal("alarm create"))?;
+
+            // 置き換え: 既存の予約を先に全部消す。以降で失敗しても古い予約は
+            // 戻さない（trait doc の契約）。
+            for old in own_entries(&notifier)? {
+                notifier
+                    .RemoveFromSchedule(&old)
+                    .map_err(|_| DeviceError::Internal("alarm remove"))?;
+            }
             notifier
                 .AddToSchedule(&toast)
                 .map_err(|_| DeviceError::Internal("alarm add"))?;
@@ -229,7 +241,7 @@ mod imp {
                 .lock()
                 .map_err(|_| DeviceError::Internal("alarm lock"))?;
             let _com = ComInit::new("alarm com init")?;
-            let notifier = open_notifier()?;
+            let notifier = open_list_notifier()?;
             for old in own_entries(&notifier)? {
                 notifier
                     .RemoveFromSchedule(&old)
@@ -244,7 +256,7 @@ mod imp {
                 .lock()
                 .map_err(|_| DeviceError::Internal("alarm lock"))?;
             let _com = ComInit::new("alarm com init")?;
-            let notifier = open_notifier()?;
+            let notifier = open_list_notifier()?;
             let entries = own_entries(&notifier)?;
             let Some(first) = entries.first() else {
                 return Ok(AlarmState::NotScheduled);

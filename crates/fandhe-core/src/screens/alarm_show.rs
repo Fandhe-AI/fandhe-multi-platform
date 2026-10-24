@@ -186,12 +186,19 @@ pub fn finish_action(
     }
 }
 
-/// OS の予約一覧のポーリング結果を反映する（`phase` には触れない）。操作中でない
+/// OS の予約一覧のポーリング結果を反映する（`phase` には触れない）。
+///
+/// `generation` は読み取りを始めた時点の [`AlarmShowState::generation`]。現在の世代と
+/// 違う（読んでいる間に予約・取り消しの要求が立った）、または `Idle` 以外（操作中で、
+/// 結果が [`finish_action`] で確定する）のときは古い観測として捨てる。操作中でない
 /// ときに `Scheduled` から `NotScheduled` へ変わったら、取り消し操作なしに一覧から
 /// 消えたとして案内を出す。
-pub fn apply_snapshot(state: &mut AlarmShowState, view: ScheduleView) {
+pub fn apply_snapshot(state: &mut AlarmShowState, view: ScheduleView, generation: u64) {
+    if state.phase != Phase::Idle || state.generation != generation {
+        return;
+    }
     let was_scheduled = matches!(state.schedule_view, ScheduleView::Scheduled { .. });
-    if state.phase == Phase::Idle && was_scheduled && view == ScheduleView::NotScheduled {
+    if was_scheduled && view == ScheduleView::NotScheduled {
         state.status = CLEARED_STATUS.to_string();
         state.error = String::new();
     }
@@ -347,28 +354,48 @@ mod tests {
     #[test]
     fn snapshot_scheduled_to_not_scheduled_reports_cleared() {
         let mut s = AlarmShowState::default();
-        apply_snapshot(&mut s, ScheduleView::Scheduled { fire_at_unix_ms: 5 });
-        apply_snapshot(&mut s, ScheduleView::NotScheduled);
+        apply_snapshot(&mut s, ScheduleView::Scheduled { fire_at_unix_ms: 5 }, 0);
+        apply_snapshot(&mut s, ScheduleView::NotScheduled, 0);
         assert_eq!(s.status, CLEARED_STATUS);
         assert!(!s.status.contains("鳴りました"));
     }
 
     #[test]
-    fn snapshot_while_busy_does_not_report_cleared() {
+    fn snapshot_while_busy_is_discarded() {
         let mut s = AlarmShowState {
             schedule_view: ScheduleView::Scheduled { fire_at_unix_ms: 5 },
             ..Default::default()
         };
         schedule(&mut s);
-        apply_snapshot(&mut s, ScheduleView::NotScheduled);
+        let generation = s.generation;
+        apply_snapshot(&mut s, ScheduleView::NotScheduled, generation);
         assert_eq!(s.status, "");
+        assert_eq!(
+            s.schedule_view,
+            ScheduleView::Scheduled { fire_at_unix_ms: 5 }
+        );
+        mark_in_flight(&mut s);
+        apply_snapshot(&mut s, ScheduleView::NotScheduled, generation);
+        assert_eq!(
+            s.schedule_view,
+            ScheduleView::Scheduled { fire_at_unix_ms: 5 }
+        );
+        assert_eq!(s.phase, Phase::InFlight);
     }
 
     #[test]
-    fn snapshot_does_not_touch_phase() {
-        let mut s = in_flight(Action::Schedule);
-        apply_snapshot(&mut s, ScheduleView::NotScheduled);
-        assert_eq!(s.phase, Phase::InFlight);
+    fn snapshot_read_before_a_newer_action_is_discarded() {
+        // 世代 0 で読み始めたポーリングが、予約の完了（世代 1・Idle）より後に届く。
+        let mut s = AlarmShowState::default();
+        schedule(&mut s);
+        mark_in_flight(&mut s);
+        finish_action(&mut s, 1, Action::Schedule, Ok(Some(9)));
+        apply_snapshot(&mut s, ScheduleView::NotScheduled, 0);
+        assert_eq!(
+            s.schedule_view,
+            ScheduleView::Scheduled { fire_at_unix_ms: 9 }
+        );
+        assert_eq!(s.status, SCHEDULED_STATUS);
     }
 
     #[test]

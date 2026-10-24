@@ -32,7 +32,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use fandhe_core::screens::alarm_show::{
-    apply_snapshot, finish_action, mark_in_flight, take_request, Action, AlarmShowState,
+    apply_snapshot, finish_action, mark_in_flight, take_request, Action, AlarmShowState, Phase,
     ScheduleView,
 };
 use fandhe_device::alarm::{Alarm, AlarmState};
@@ -131,31 +131,46 @@ fn drive_request(
 
 /// ポーリング 1 回分。OS の予約一覧の読み取り（COM・ファイル I/O を含みうる）は
 /// UI スレッドで行わず、別スレッドへ逃がす。`in_flight` が立っている間は新しい
-/// スレッドを起こさない（多重起動防止）。画面の値と差があるときだけ送り、
-/// 予約中のままなら次回ポーリングを予約する。
+/// スレッドを起こさない（多重起動防止）。操作中（`Idle` 以外）は読み始めない。
+/// 読み始めた時点の世代を snapshot に持たせ、読む間に予約・取り消しが挟まった
+/// 古い観測は適用側（`apply_snapshot`）で捨てる。
 fn drive_poll(
     state: &AlarmShowState,
     sender: &CompletionSender<AlarmShowState>,
     alarm: Arc<dyn Alarm>,
     in_flight: Arc<AtomicBool>,
 ) {
-    if in_flight.swap(true, Ordering::AcqRel) {
+    if state.phase != Phase::Idle || in_flight.swap(true, Ordering::AcqRel) {
         return;
     }
     let current = state.schedule_view;
+    let generation = state.generation;
     let sender = sender.clone();
     std::thread::spawn(move || {
-        let view = to_schedule_view(alarm.state());
-        if view != current {
-            let _ = sender.send(Box::new(move |s: &mut AlarmShowState| {
-                apply_snapshot(s, view);
-            }));
-        }
-        if matches!(view, ScheduleView::Scheduled { .. }) {
+        if poll_once(alarm.as_ref(), current, generation, &sender) {
             sender.request_repaint_after(POLL_INTERVAL);
         }
         in_flight.store(false, Ordering::Release);
     });
+}
+
+/// 予約一覧を 1 回読み、画面の値と差があれば世代付きで送る。次回ポーリングを
+/// 予約すべきなら真を返す（予約中、または今回の送信で画面の値が変わったとき。
+/// `NotScheduled` を適用した直後も 1 回確認し直す、契約表 4）。
+fn poll_once(
+    alarm: &dyn Alarm,
+    current: ScheduleView,
+    generation: u64,
+    sender: &CompletionSender<AlarmShowState>,
+) -> bool {
+    let view = to_schedule_view(alarm.state());
+    let changed = view != current;
+    if changed {
+        let _ = sender.send(Box::new(move |s: &mut AlarmShowState| {
+            apply_snapshot(s, view, generation);
+        }));
+    }
+    changed || matches!(view, ScheduleView::Scheduled { .. })
 }
 
 /// ポーリングの多重起動防止フラグ（プロセス内で 1 本）。
@@ -408,6 +423,86 @@ mod tests {
         drive_poll(&state, &sender, alarm, flag.clone());
         wait_idle(&flag);
         assert!(rx.try_recv().is_err());
+    }
+
+    fn fake_with_state(state: AlarmState) -> Fake {
+        Fake {
+            schedule: Outcome::Ok,
+            cancel: Outcome::Ok,
+            state: Some(state),
+        }
+    }
+
+    #[test]
+    fn poll_snapshot_read_before_a_newer_action_is_discarded() {
+        let (sender, rx) = sender_with_channel();
+        // 世代 0 で読み始めたポーリング（OS はまだ予約を返さない）。
+        let fake = fake_with_state(AlarmState::NotScheduled);
+        let current = ScheduleView::Scheduled { fire_at_unix_ms: 9 };
+        assert!(poll_once(&fake, current, 0, &sender));
+        let stale = rx.recv().expect("差分があるため送信される");
+        // 読む間に予約が完了して世代 1・Idle になった画面へ、古い snapshot が届く。
+        let mut state = AlarmShowState::default();
+        schedule(&mut state);
+        mark_in_flight(&mut state);
+        finish_action(&mut state, 1, Action::Schedule, Ok(Some(9)));
+        stale(&mut state);
+        assert_eq!(state.schedule_view, current);
+        assert_eq!(status_text(&state), SCHEDULED_STATUS);
+    }
+
+    #[test]
+    fn poll_snapshot_while_action_pending_is_discarded() {
+        let (sender, rx) = sender_with_channel();
+        let fake = fake_with_state(AlarmState::NotScheduled);
+        let mut state = AlarmShowState {
+            schedule_view: ScheduleView::Scheduled { fire_at_unix_ms: 9 },
+            ..Default::default()
+        };
+        assert!(poll_once(
+            &fake,
+            state.schedule_view,
+            state.generation,
+            &sender
+        ));
+        let snapshot = rx.recv().expect("送信される");
+        cancel(&mut state); // 読む間に取り消しが要求された
+        snapshot(&mut state);
+        assert_eq!(
+            state.schedule_view,
+            ScheduleView::Scheduled { fire_at_unix_ms: 9 }
+        );
+    }
+
+    #[test]
+    fn poll_is_not_started_while_action_pending() {
+        let (sender, rx) = sender_with_channel();
+        let mut state = AlarmShowState::default();
+        schedule(&mut state);
+        let flag = Arc::new(AtomicBool::new(false));
+        drive_poll(
+            &state,
+            &sender,
+            Arc::new(fake_with_state(AlarmState::NotScheduled)),
+            flag.clone(),
+        );
+        std::thread::sleep(Duration::from_millis(50));
+        assert!(!flag.load(Ordering::Acquire));
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn poll_requests_next_poll_after_applying_not_scheduled() {
+        let (sender, _rx) = sender_with_channel();
+        let scheduled = ScheduleView::Scheduled { fire_at_unix_ms: 9 };
+        // Scheduled -> NotScheduled の差分を送った回は次回ポーリングを予約する。
+        let gone = fake_with_state(AlarmState::NotScheduled);
+        assert!(poll_once(&gone, scheduled, 0, &sender));
+        // 差分が無い未予約は予約しない（予約が無い間は追加のポーリングを起こさない）。
+        assert!(!poll_once(&gone, ScheduleView::NotScheduled, 0, &sender));
+        // 予約中のままなら予約する。
+        let still = fake_with_state(AlarmState::Scheduled { fire_at_unix_ms: 9 });
+        assert!(poll_once(&still, scheduled, 0, &sender));
     }
 
     /// ポーリングスレッドの終了（フラグ解除）を待つ。
