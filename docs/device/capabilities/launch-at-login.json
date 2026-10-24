@@ -37,14 +37,17 @@
       "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_launch_at_login.m + crates/fandhe-egui-proxy/src/device/macos_launch_at_login.rs + crates/fandhe-egui-proxy/src/device/launch_at_login.rs + crates/fandhe-core/src/screens/launch_at_login_show.rs + crates/fandhe-device/src/launch_at_login.rs、Issue #696"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "Run キー（`HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`）。利用者による無効化は `...\\Explorer\\StartupApproved\\Run` を読むだけ（非公開形式）",
       "perm": "なし（HKCU のため管理者権限不要。package identity 不要の見込み）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys",
         "https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.startuptask"
       ],
-      "note": "未実装。MSIX の `StartupTask` は package identity が要るため使わない。値データは引用符付きの実行体パス + `--fandhe-launched-at-login`（260 文字以内）。StartupApproved は公式文書が無く、先頭バイト 0x02 を有効・0x03 を無効として読み、それ以外は判別不能と表示する（書き込まない）。同じ値名で別の場所の実行体が登録されていれば、その旨を表示し、解除では消さない"
+      "note": "実装済み（#697）。MSIX の `StartupTask` は package identity が要るため使わない。HKCU の Run キーに値 `fandhe-egui-proxy` を書く。値データは引用符付きの実行体パス + `--fandhe-launched-at-login`（260 文字以内、`\"` を含むパスは拒否）。StartupApproved は公式文書が無く、読むだけで書かない。値が無ければ有効、先頭バイト 0x02 は有効、0x03 は利用者が無効、それ以外は判別不能と表示する。同じ値名に別の場所の実行体があれば、有効化では上書きせず、解除でも消さず、その旨を表示する。設定画面は `ms-settings:startupapps`。未確認: StartupApproved の値が無い・0x02・0x03 のときの実際の起動有無（Windows 実機で確かめる）",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#694）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_launch_at_login.rs + crates/fandhe-egui-proxy/src/device/launch_at_login.rs + crates/fandhe-core/src/screens/launch_at_login_show.rs + crates/fandhe-device/src/launch_at_login.rs、Issue #697"
     },
     "web": {
       "status": "no",
