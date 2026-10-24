@@ -139,6 +139,8 @@ pub mod call_ui_show;
 pub mod capture_protection_show;
 /// Phase 11 の拡充ループ型サンプル「外部機器への再生」（親 #99、Issue #386）。
 pub mod cast_show;
+/// Phase 11 の拡充ループ型サンプル「付属機器のペアリング」（親 #143、Issue #740）。
+pub mod companion_device_show;
 /// Phase 11 の拡充ループ型サンプル「方位（コンパス）」（親 #1154、Issue #1404）。
 pub mod compass_show;
 /// Phase 11 の拡充ループ型サンプル「メール・SMS の作成」（親 #1142、Issue #1384）。
