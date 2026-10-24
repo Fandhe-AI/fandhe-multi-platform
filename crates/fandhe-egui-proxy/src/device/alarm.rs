@@ -18,9 +18,11 @@
 //!
 //! 時刻が来ると OS が利用者の操作なしに予約を一覧から外す。画面を開いたまま待つ
 //! 利用者へ見せるため `state()` を読み、画面の値と差があるときだけ送る
-//! （`device-bridge-contracts.md`「4. ポーリング・再描画」）。予約中・取得失敗中の
-//! 間だけ `request_repaint_after` で次回を予約し、予約が無い間は追加のポーリングを
-//! 起こさない。取得の失敗は直前の確定表示を消さず、固定文言（OS のエラー文は出さない）
+//! （`device-bridge-contracts.md`「4. ポーリング・再描画」）。予約は画面外・別アプリ
+//! からも変わりうるため、表示内容（未予約・未観測・操作失敗後を含む）で再確認の要否を
+//! 絞らず、画面が表示されている間は [`POLL_INTERVAL`] ごとに OS を確かめ直す。止めるのは
+//! 回復しない `Unsupported`（[`Observation::Unavailable`]）のときだけ。操作の完了直後は
+//! 次の間隔を待たずに確かめ直す。取得の失敗は直前の確定表示を消さず、固定文言（OS のエラー文は出さない）
 //! を併記して確認を続け、回復したら自動で正しい状態へ戻す。
 //!
 //! # 実装
@@ -42,7 +44,7 @@ use fandhe_device::DeviceError;
 
 use crate::app::CompletionSender;
 
-/// 予約中の間、次回ポーリングを予約する間隔。
+/// 画面の表示中、OS の予約状態を確かめ直す間隔。
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 /// 「1 分後」の長さ。
@@ -139,6 +141,8 @@ fn drive_request(
         let result = result.map_err(to_message);
         let _ = sender.send(Box::new(move |s: &mut AlarmShowState| {
             finish_action(s, generation, action, result);
+            // 完了直後は間隔を待たず、次のフレームで OS の実状態を確かめ直す。
+            reset_poll_due();
         }));
     });
     true
@@ -154,6 +158,7 @@ fn drive_poll(
     sender: &CompletionSender<AlarmShowState>,
     alarm: Arc<dyn Alarm>,
     in_flight: Arc<AtomicBool>,
+    unavailable: Arc<AtomicBool>,
 ) {
     if state.phase != Phase::Idle || in_flight.swap(true, Ordering::AcqRel) {
         return;
@@ -163,16 +168,15 @@ fn drive_poll(
     let generation = state.generation;
     let sender = sender.clone();
     std::thread::spawn(move || {
-        if poll_once(alarm.as_ref(), current, check_failed, generation, &sender) {
-            sender.request_repaint_after(POLL_INTERVAL);
+        if !poll_once(alarm.as_ref(), current, check_failed, generation, &sender) {
+            unavailable.store(true, Ordering::Release);
         }
         in_flight.store(false, Ordering::Release);
     });
 }
 
-/// 予約一覧を 1 回読み、画面の値と差があれば世代付きで送る。次回ポーリングを
-/// 予約すべきなら真を返す（予約中、今回の送信で画面の値が変わったとき、または
-/// 取得に失敗したとき。`NotScheduled` を適用した直後も 1 回確認し直す、契約表 4）。
+/// 予約一覧を 1 回読み、画面の値と差があれば世代付きで送る。確認を続けるべきなら
+/// 真を返す。偽は回復しない `Unavailable` のときだけで、表示内容では絞らない。
 /// 取得の失敗は `schedule_view` を上書きせず、確認失敗の印だけを送る
 /// （既に印が立っていれば再送しないが、OS が回復するまで確認は続ける）。
 fn poll_once(
@@ -184,13 +188,12 @@ fn poll_once(
 ) -> bool {
     match to_observation(alarm.state()) {
         Observation::View(view) => {
-            let changed = view != current || current_check_failed;
-            if changed {
+            if view != current || current_check_failed {
                 let _ = sender.send(Box::new(move |s: &mut AlarmShowState| {
                     apply_snapshot(s, view, generation);
                 }));
             }
-            changed || matches!(view, ScheduleView::Scheduled { .. })
+            true
         }
         Observation::Failed => {
             if !current_check_failed {
@@ -212,6 +215,14 @@ fn poll_once(
     }
 }
 
+/// 回復しない `Unsupported` を観測した印（プロセス内で 1 本）。立てば確認を止める。
+fn poll_unavailable() -> Arc<AtomicBool> {
+    use std::sync::OnceLock;
+    static FLAG: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+    FLAG.get_or_init(|| Arc::new(AtomicBool::new(false)))
+        .clone()
+}
+
 /// ポーリングの多重起動防止フラグ（プロセス内で 1 本）。
 fn poll_in_flight() -> Arc<AtomicBool> {
     use std::sync::OnceLock;
@@ -220,12 +231,24 @@ fn poll_in_flight() -> Arc<AtomicBool> {
         .clone()
 }
 
+/// 前回のポーリング開始時刻（単調時計）。
+fn poll_last() -> &'static Mutex<Option<Instant>> {
+    use std::sync::OnceLock;
+    static LAST: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
+    LAST.get_or_init(|| Mutex::new(None))
+}
+
+/// 次の [`poll_due`] を真にする（操作の完了直後に確かめ直すため）。
+fn reset_poll_due() {
+    if let Ok(mut last) = poll_last().lock() {
+        *last = None;
+    }
+}
+
 /// 前回のポーリング開始から [`POLL_INTERVAL`] 経ったときだけ真を返し、時刻を更新する。
 /// 単調時計（`Instant`）で測る。フレームごとに呼ばれても OS 呼び出しを間引く。
 fn poll_due() -> bool {
-    use std::sync::OnceLock;
-    static LAST: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
-    let Ok(mut last) = LAST.get_or_init(|| Mutex::new(None)).lock() else {
+    let Ok(mut last) = poll_last().lock() else {
         return false;
     };
     let now = Instant::now();
@@ -240,16 +263,40 @@ fn poll_due() -> bool {
 
 /// `registry.rs` の `effect` 区画から `alarm_show` 画面用に配線される effect ドライバ。
 pub fn alarm_show_effect(state: &AlarmShowState, sender: &CompletionSender<AlarmShowState>) {
-    let alarm = implementation();
-    if drive_request(state, sender, alarm.clone(), now_unix_ms) {
+    drive_effect(
+        state,
+        sender,
+        implementation(),
+        now_unix_ms,
+        poll_due,
+        poll_in_flight(),
+        poll_unavailable(),
+    );
+}
+
+/// `alarm_show_effect` の本体（テストから実装・時計・間引きを差し込む）。
+/// 要求があれば処理する（完了が再描画を起こす）。無ければ、回復しない `Unsupported`
+/// を観測済みでない限り、表示内容に関係なく毎回次回の確認を予約し、間隔が来ていれば
+/// 読みに行く。
+fn drive_effect(
+    state: &AlarmShowState,
+    sender: &CompletionSender<AlarmShowState>,
+    alarm: Arc<dyn Alarm>,
+    now: fn() -> Result<u64, DeviceError>,
+    due: fn() -> bool,
+    in_flight: Arc<AtomicBool>,
+    unavailable: Arc<AtomicBool>,
+) {
+    if drive_request(state, sender, alarm.clone(), now) {
         return;
     }
-    if poll_due() {
-        drive_poll(state, sender, alarm, poll_in_flight());
-    } else if matches!(state.schedule_view, ScheduleView::Scheduled { .. }) || state.check_failed {
-        // 間引いたフレームでも、予約中・確認失敗中は次回の確認を取りこぼさない。
-        sender.request_repaint_after(POLL_INTERVAL);
+    if unavailable.load(Ordering::Acquire) {
+        return;
     }
+    if due() {
+        drive_poll(state, sender, alarm, in_flight, unavailable);
+    }
+    sender.request_repaint_after(POLL_INTERVAL);
 }
 
 #[cfg(test)]
@@ -433,14 +480,14 @@ mod tests {
             state: Some(AlarmState::NotScheduled),
         });
         let flag = Arc::new(AtomicBool::new(false));
-        drive_poll(&state, &sender, alarm.clone(), flag.clone());
+        drive_poll(&state, &sender, alarm.clone(), flag.clone(), no());
         let completion = rx.recv().expect("差分があるため送信される");
         let mut applied = state.clone();
         completion(&mut applied);
         assert_eq!(applied.schedule_view, ScheduleView::NotScheduled);
         wait_idle(&flag);
 
-        drive_poll(&applied, &sender, alarm, flag.clone());
+        drive_poll(&applied, &sender, alarm, flag.clone(), no());
         wait_idle(&flag);
         assert!(rx.try_recv().is_err());
     }
@@ -459,7 +506,7 @@ mod tests {
         });
         // 差分が無ければ送らない（次回ポーリングの予約は `request_repaint_after` 側）。
         let flag = Arc::new(AtomicBool::new(false));
-        drive_poll(&state, &sender, alarm, flag.clone());
+        drive_poll(&state, &sender, alarm, flag.clone(), no());
         wait_idle(&flag);
         assert!(rx.try_recv().is_err());
     }
@@ -525,6 +572,7 @@ mod tests {
             &sender,
             Arc::new(fake_with_state(AlarmState::NotScheduled)),
             flag.clone(),
+            no(),
         );
         std::thread::sleep(Duration::from_millis(50));
         assert!(!flag.load(Ordering::Acquire));
@@ -532,23 +580,148 @@ mod tests {
     }
 
     #[test]
-    fn poll_requests_next_poll_after_applying_not_scheduled() {
+    fn poll_keeps_going_regardless_of_displayed_value() {
         let (sender, _rx) = sender_with_channel();
         let scheduled = ScheduleView::Scheduled { fire_at_unix_ms: 9 };
-        // Scheduled -> NotScheduled の差分を送った回は次回ポーリングを予約する。
         let gone = fake_with_state(AlarmState::NotScheduled);
         assert!(poll_once(&gone, scheduled, false, 0, &sender));
-        // 差分が無い未予約は予約しない（予約が無い間は追加のポーリングを起こさない）。
-        assert!(!poll_once(
+        // 差分が無い未予約でも確認を続ける（予約は画面外からも変わりうる）。
+        assert!(poll_once(
             &gone,
             ScheduleView::NotScheduled,
             false,
             0,
             &sender
         ));
-        // 予約中のままなら予約する。
         let still = fake_with_state(AlarmState::Scheduled { fire_at_unix_ms: 9 });
         assert!(poll_once(&still, scheduled, false, 0, &sender));
+    }
+
+    fn no() -> Arc<AtomicBool> {
+        Arc::new(AtomicBool::new(false))
+    }
+
+    fn always_due() -> bool {
+        true
+    }
+
+    fn never_due() -> bool {
+        false
+    }
+
+    type RecordingSender = (
+        CompletionSender<AlarmShowState>,
+        std::sync::mpsc::Receiver<crate::app::Completion<AlarmShowState>>,
+        Arc<Mutex<Vec<Duration>>>,
+    );
+
+    /// 予約された遅延が次回確認の予約（0 より大きく [`POLL_INTERVAL`] 以下）か。
+    /// egui は直近フレーム時間ぶん遅延を縮め、最小値を更新したときだけ通知する。
+    fn has_poll_reservation(delays: &Mutex<Vec<Duration>>) -> bool {
+        delays
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|d| *d > Duration::ZERO && *d <= POLL_INTERVAL)
+    }
+
+    /// `request_repaint_after` で予約された遅延を記録するコンテキスト付き sender。
+    fn sender_recording_delays() -> RecordingSender {
+        let ctx = egui::Context::default();
+        let delays = Arc::new(Mutex::new(Vec::new()));
+        let rec = delays.clone();
+        ctx.set_request_repaint_callback(move |info| rec.lock().unwrap().push(info.delay));
+        let (tx, rx) = std::sync::mpsc::channel();
+        (CompletionSender::new(tx, ctx), rx, delays)
+    }
+
+    #[test]
+    fn next_poll_is_scheduled_even_when_not_scheduled_after_failed_action() {
+        // 操作が失敗し、表示は NotScheduled のまま（エラーは保持）。
+        let mut state = AlarmShowState::default();
+        schedule(&mut state);
+        mark_in_flight(&mut state);
+        finish_action(&mut state, 1, Action::Schedule, Err("x".to_string()));
+        let generation = state.generation;
+        apply_snapshot(&mut state, ScheduleView::NotScheduled, generation);
+        assert_eq!(state.schedule_view, ScheduleView::NotScheduled);
+        assert!(!state.check_failed);
+        // 間隔が来ていないフレームでも、来ているフレームでも次回を予約する。
+        for due in [never_due as fn() -> bool, always_due] {
+            let (sender, _rx, delays) = sender_recording_delays();
+            drive_effect(
+                &state,
+                &sender,
+                fake(Outcome::Ok),
+                fixed_now,
+                due,
+                no(),
+                no(),
+            );
+            assert!(has_poll_reservation(&delays));
+        }
+    }
+
+    #[test]
+    fn next_poll_is_scheduled_while_unknown() {
+        let (sender, _rx, delays) = sender_recording_delays();
+        let state = AlarmShowState::default();
+        drive_effect(
+            &state,
+            &sender,
+            fake(Outcome::Ok),
+            fixed_now,
+            never_due,
+            no(),
+            no(),
+        );
+        assert!(has_poll_reservation(&delays));
+    }
+
+    #[test]
+    fn no_poll_is_scheduled_once_unavailable() {
+        let (sender, _rx, delays) = sender_recording_delays();
+        let state = AlarmShowState::default();
+        drive_effect(
+            &state,
+            &sender,
+            fake(Outcome::Ok),
+            fixed_now,
+            always_due,
+            no(),
+            Arc::new(AtomicBool::new(true)),
+        );
+        assert!(!has_poll_reservation(&delays));
+    }
+
+    #[test]
+    fn unsupported_poll_marks_unavailable() {
+        let (sender, _rx) = sender_with_channel();
+        let state = AlarmShowState::default();
+        let flag = no();
+        let unavailable = no();
+        drive_poll(
+            &state,
+            &sender,
+            Arc::new(fandhe_device::alarm::UnsupportedAlarm),
+            flag.clone(),
+            unavailable.clone(),
+        );
+        wait_idle(&flag);
+        assert!(unavailable.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn action_completion_makes_next_poll_due() {
+        let (sender, rx) = sender_with_channel();
+        let mut state = AlarmShowState::default();
+        schedule(&mut state);
+        drive_request(&state, &sender, fake(Outcome::Ok), fixed_now);
+        rx.recv().expect("起動済みマーク")(&mut state);
+        // 他テストの完了も同じ時刻を初期化するため、完了後に真になることだけ確かめる。
+        let _ = poll_due();
+        rx.recv().expect("完了")(&mut state);
+        assert!(poll_due());
     }
 
     /// ポーリングスレッドの終了（フラグ解除）を待つ。
@@ -573,7 +746,7 @@ mod tests {
             state: Some(AlarmState::NotScheduled),
         });
         let flag = Arc::new(AtomicBool::new(true));
-        drive_poll(&state, &sender, alarm, flag);
+        drive_poll(&state, &sender, alarm, flag, no());
         std::thread::sleep(Duration::from_millis(50));
         assert!(rx.try_recv().is_err());
     }
