@@ -7,7 +7,7 @@
   "bundle": "one-shot",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "AVFAudio `AVAudioSession.outputVolume`（0.0〜1.0、読み取りのみ）。変更は MediaPlayer `MPVolumeView`（OS の音量スライダー）を画面に置き、利用者が操作する。アプリから音量を設定する公開 API は無い（`MPMusicPlayerController.volume` は iOS 7 で非推奨）",
       "perm": "不要（usage description・entitlement の追加なし）。音声セッションの category・有効化は変えない。AVFoundation・MediaPlayer はリンク済み",
       "url": [
@@ -15,7 +15,10 @@
         "https://developer.apple.com/documentation/mediaplayer/mpvolumeview",
         "https://developer.apple.com/documentation/mediaplayer/mpmusicplayercontroller/volume"
       ],
-      "note": "未実装。公式は「システム音量を直接変えられるのは利用者だけ。アプリ内の音量操作は `MPVolumeView` で出す」と書く。`MPVolumeView` は音量を制御できない出力先（車載機等）ではスライダーの代わりに出力先の名前を出し、シミュレータでは音量を変えられない（公式）。消音スイッチの状態を読む公開 API は無い。`outputVolume` は値の変化を KVO で観測できる（公式）が、音声セッションを有効にしていないと更新が届かない・古い値や 0 が返る旨の報告が Apple Developer Forums にある（公式文書には記載なし）"
+      "note": "実装済み（#786）。1 秒ごとに `outputVolume` を読み、画面の下端に `MPVolumeView` を 1 個置く（画面が出ている間ずっと置き、プロセスの終了で消える）。消音は読めず、「＋」「－」は出さない。音声セッションは変えない。公式は「システム音量を直接変えられるのは利用者だけ。アプリ内の音量操作は `MPVolumeView` で出す」と書く。`MPVolumeView` は音量を制御できない出力先（車載機等）ではスライダーの代わりに出力先の名前を出し、シミュレータでは音量を変えられない（公式）。消音スイッチの状態を読む公開 API は無い。`outputVolume` は値の変化を KVO で観測できる（公式）が、音声セッションを有効にしていないと更新が届かない・古い値や 0 が返る旨の報告が Apple Developer Forums にある（公式文書には記載なし）",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#780）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_volume_control.m + crates/fandhe-egui-proxy/src/device/ios_volume_control.rs + crates/fandhe-egui-proxy/src/device/volume_control.rs + crates/fandhe-core/src/screens/volume_control_show.rs + crates/fandhe-device/src/volume_control.rs、Issue #786"
     },
     "android": {
       "status": "possible",
