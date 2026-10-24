@@ -38,7 +38,7 @@
       "note": "AlarmKit は iOS・iPadOS・Mac Catalyst のみで、macOS の AppKit アプリは対象外（公式の対応 OS 表記）。時刻指定の通知は notification（既存 id）で代替でき、画面ロック中に鳴り続ける専用機能とは別"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "`ScheduledToastNotification` + `ToastNotifier.AddToSchedule`（`scenario=\"alarm\"` のトースト）、取り消しは `GetScheduledToastNotifications` + `RemoveFromSchedule`",
       "perm": "なし。送り手は notification（既存 id）がスタートメニューのショートカットで登録した AUMID を使い、package identity は持たない",
       "url": [
@@ -46,7 +46,10 @@
         "https://learn.microsoft.com/en-us/uwp/api/windows.ui.notifications.toastnotifier.addtoschedule",
         "https://learn.microsoft.com/en-us/uwp/schemas/tiles/toastschema/element-toast"
       ],
-      "note": "未実装。予約したトーストはアプリが動いていなくても出る（公式）。`scenario=\"alarm\"` は閉じるまで画面に残り、アラーム音を繰り返す（公式）。配信の猶予は 5 分で、その間ずっと電源が切れていると捨てられる（公式）。時刻は壁時計で、システム時刻を変えると鳴る時刻もずれる。過去の時刻・4096 件超は `AddToSchedule` が失敗する（公式）。`AddToSchedule` の説明には「WinRT を既定の枠組みにするアプリのみ」とあり、package identity の無い実行形態で動くかは Windows 実機で確かめる"
+      "note": "実装済み（#721）。画面で「1 分後にアラームを予約」を押すと、現在の壁時計に 60 秒を足した時刻で `scenario=\"alarm\"` のトースト（アラーム音を繰り返し、`dismiss` ボタン付き）を 1 件予約する。予約したトーストはアプリが動いていなくても出る（公式）。二重予約は置き換えで、予約は常に高々 1 件。取り消しは予約の一覧から本アプリの Id を消すだけで、予約が無くても成功。`AddToSchedule` の後に予約の一覧を読み直し、自分の予約が無ければ成功にせず非対応として失敗にする。通知の設定が無効なら予約前に失敗にする。過去・現在の時刻は入力不正として失敗にする。途中で失敗すると古い予約は消えたままで戻さない。送り手は notification（既存 id）が登録するスタートメニューのショートカットの AUMID で、新しい権限・manifest は足さない。【推測】package identity の無い実行形態で `AddToSchedule` が効くか、AUMID の登録直後に予約が反映されるか、`DeliveryTime` の読み戻しが 100ns 単位で往復するかは、#711 の Windows 実機確認で確かめる。守らない範囲: 鳴ったかどうかの検知（一覧から消えたことしか分からず、時刻が来たのか取り消されたのかは区別しない）、スヌーズ・繰り返し、配信の猶予 5 分を超える電源断の間の配信（公式）、予約後のシステム時刻の変更（時刻は壁時計で、変えると鳴る時刻もずれる）、複数プロセス、トーストのクリックでアプリを開くこと。4096 件超は `AddToSchedule` が失敗する（公式）が、本画面は 1 件しか予約しない",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#711）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_alarm.rs + crates/fandhe-egui-proxy/src/device/alarm.rs + crates/fandhe-core/src/screens/alarm_show.rs + crates/fandhe-device/src/alarm.rs、Issue #721"
     },
     "web": {
       "status": "no",

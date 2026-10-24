@@ -23,6 +23,9 @@ pub mod accessibility_prefs;
 /// Issue #613（親 #124）: 行動認識（歩行・乗車等）の effect ドライバ（Windows 実装、iOS 実装、
 /// 他 OS は `UnsupportedActivityRecognizer` 固定）。
 pub mod activity_recognition;
+/// Phase 11 の拡充ループ（親 #140、Issue #721）: アラーム・正確な時刻の予約の effect
+/// ドライバ（Windows 実装、他 OS は `Unsupported` 固定）。
+pub mod alarm;
 #[cfg(target_os = "android")]
 pub mod android;
 /// Issue #1310: Android 向けアクセシビリティ設定実装（`AccessibilityPrefsHelper` を JNI で呼ぶ）。
@@ -1268,6 +1271,14 @@ pub mod windows_accessibility_prefs;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_activity_recognition;
+/// Issue #721: Windows 向けアラーム実装（`ScheduledToastNotification` +
+/// `scenario="alarm"` のトースト）。`device/alarm.rs` の Windows 経路から呼ばれる。
+/// 時刻変換・検証・XML 定数等の純関数はホストの `cargo test` から検証できるよう
+/// `cfg(target_os = "windows")` を付けず、WinRT 呼び出しだけをモジュール内の
+/// `cfg(target_os = "windows")` に閉じる。Windows 以外では利用者が無いため
+/// `dead_code` を許容する。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_alarm;
 /// Issue #1360: Windows 向けタスクバーのオーバーレイアイコン実装（`ITaskbarList3::SetOverlayIcon`）。`device/app_badge.rs` の windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]

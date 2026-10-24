@@ -72,7 +72,7 @@ use windows::UI::Notifications::{
 /// 本アプリ固有の AUMID。他アプリ（PowerShell 等）の識別子は借用しない
 /// （モジュール doc 参照）。`windows_secure_credential.rs::RESOURCE` と同じ識別子を
 /// 流用し、Windows 側の資源識別子を 1 か所に揃える。
-const APP_AUMID: &str = "com.fandhe.egui-proxy-desktop";
+pub(super) const APP_AUMID: &str = "com.fandhe.egui-proxy-desktop";
 
 /// スタートメニューに置くショートカットのファイル名。表示名はトーストの送り元名
 /// としても使われる。
@@ -85,12 +85,24 @@ const SHORTCUT_FILE: &str = "Fandhe egui proxy.lnk";
 /// （0=Enabled, 1=DisabledForApplication, 2=DisabledForUser,
 /// 3=DisabledByGroupPolicy, 4=DisabledByManifest）。
 fn setting_result(code: i32) -> Result<(), DeviceError> {
+    setting_result_for(code, "notification", "notification setting")
+}
+
+/// [`setting_result`] を機能ラベル付きに一般化したもの。同じ送り手（AUMID）の
+/// トーストを使う `windows_alarm.rs`（Issue #721）が、自機能のラベルで同じ写像を
+/// 共用する。未知の値の `Internal` ラベルは呼び出し元が `internal` で渡す
+/// （機能名の文字列比較で切り替えない）。
+pub(super) fn setting_result_for(
+    code: i32,
+    feature: &'static str,
+    internal: &'static str,
+) -> Result<(), DeviceError> {
     match code {
         0 => Ok(()),
-        1 => Err(DeviceError::PermissionDenied("notification")),
-        2 | 3 => Err(DeviceError::Disabled("notification")),
-        4 => Err(DeviceError::Unsupported("notification")),
-        _ => Err(DeviceError::Internal("notification setting")),
+        1 => Err(DeviceError::PermissionDenied(feature)),
+        2 | 3 => Err(DeviceError::Disabled(feature)),
+        4 => Err(DeviceError::Unsupported(feature)),
+        _ => Err(DeviceError::Internal(internal)),
     }
 }
 
@@ -382,6 +394,18 @@ fn write_shortcut(path: &Path, exe: &Path) -> Result<(), DeviceError> {
         .map_err(|_| DeviceError::Internal("notification shortcut"))
 }
 
+/// スタートメニューのショートカットで [`APP_AUMID`] を登録済みにする（無ければ作る）。
+/// `notify` と `windows_alarm.rs`（Issue #721）が同じ送り手を使うための共通入口。
+/// `feature` は APPDATA・実行ファイルが取れないときの `Unsupported` のラベル。
+/// 呼び出し元が [`ComInit`] で COM を初期化済みのスレッド上でのみ呼ぶ契約。
+pub(super) fn ensure_app_aumid(feature: &'static str) -> Result<(), DeviceError> {
+    let appdata = std::env::var_os("APPDATA").ok_or(DeviceError::Unsupported(feature))?;
+    let exe = std::env::current_exe().map_err(|_| DeviceError::Unsupported(feature))?;
+    let path = shortcut_path(&appdata);
+    ensure_shortcut(&path, &exe)?;
+    Ok(())
+}
+
 /// WinRT Toast（`Windows.UI.Notifications`）による `Notifier` 実装。
 pub(crate) struct WindowsToastNotifier;
 
@@ -392,11 +416,6 @@ impl Notifier for WindowsToastNotifier {
         // 失敗したら後続の COM 操作へ進まず、ここで止める。
         let _com = ComInit::new("notification com init")?;
 
-        let appdata =
-            std::env::var_os("APPDATA").ok_or(DeviceError::Unsupported("notification"))?;
-        let exe = std::env::current_exe().map_err(|_| DeviceError::Unsupported("notification"))?;
-        let path = shortcut_path(&appdata);
-
         // `ensure_shortcut` の失敗（作成そのものの失敗）はここで作りかけのファイルを
         // 自前で消して `Err` を返す（内部で完結、下記参照）。一方 `show_toast` の
         // 失敗はショートカット作成とは独立した事象であり、特に AUMID 登録直後は
@@ -405,7 +424,7 @@ impl Notifier for WindowsToastNotifier {
         // 削除すると、次回呼び出しでも「作成→反映待ちで失敗→削除」を繰り返し、
         // 反映さえ済めば成功するはずの一時的失敗が恒久的な機能不全になる。
         // したがって `show_toast` の成否に関わらずショートカットは残す。
-        ensure_shortcut(&path, &exe)?;
+        ensure_app_aumid("notification")?;
         show_toast(request)
     }
 }
