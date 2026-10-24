@@ -20,7 +20,8 @@
 //!
 //! # 期限
 //!
-//! 起点は `requestPort()` の resolve 直後（選択ダイアログの期限は守らない範囲）。
+//! 起点は `requestPort()` の resolve 直後（選択ダイアログの期限は守らない範囲）。前回の解放再試行に
+//! 使った時間も期限に含め、使い切っていたら往復を始めず `Timeout` にする。
 //! 単調時計（`performance.now()`）で [`ROUND_TRIP_TIMEOUT`] を測り、open〜受信の全体にかける。
 //! `open()` は中断できないため、期限を過ぎても完了を待ってから判定する。期限後に完成した行は
 //! 捨てて `Timeout` にする。タイマー発火時は reader の `cancel` と writer の `abort` で保留中の
@@ -598,6 +599,8 @@ mod web {
                     return;
                 }
             };
+            // 期限の起点は選択の確定直後。前回の解放再試行に使った時間も期限に含める（契約表 3）。
+            let started = now();
             // 前回の後片付け失敗で残った資源を、open の前に解放し終える（open と重ねない）。
             let settled = settle_leftover(id).await;
             // 選択中にマウントが破棄された。ポートは開いていないので捨てる。
@@ -611,7 +614,12 @@ mod web {
                 applier.apply(move |s| finish_round_trip(s, generation, Err(pf)));
                 return;
             }
-            let started = now();
+            // 再試行で期限を使い切っていたら往復を始めない。
+            if remaining_ms(started, now()).is_none() {
+                let pf = to_port_failure(SerialPortFailure::Timeout);
+                applier.apply(move |s| finish_round_trip(s, generation, Err(pf)));
+                return;
+            }
             let sess = Rc::new(RefCell::new(Session::new()));
             MOUNTS.with(|m| {
                 if let Some(e) = m.borrow_mut().get_mut(&id) {
@@ -769,6 +777,25 @@ mod web {
         }
     }
 
+    /// `close()` の Promise の完了を待機上限と無関係にセッションへ反映する。
+    /// 上限超過で `bounded` が先に失敗を返しても、元の close が後から成功（または閉じ済みの
+    /// `InvalidStateError`）で終われば `needs_close` を下ろし、閉じ済みポートへの再 close を防ぐ。
+    /// セッションが破棄済みなら何もしない（弱参照）。差し替え後の新セッションには触れない。
+    fn record_close_completion(sess: &Rc<RefCell<Session>>, pending: JsValue) {
+        let weak = Rc::downgrade(sess);
+        wasm_bindgen_futures::spawn_local(async move {
+            let closed = match JsFuture::from(Promise::resolve(&pending)).await {
+                Ok(_) => true,
+                Err(e) => error_name(&e).as_deref() == Some("InvalidStateError"),
+            };
+            if closed {
+                if let Some(s) = weak.upgrade() {
+                    s.borrow_mut().needs_close = false;
+                }
+            }
+        });
+    }
+
     /// 全経路の後片付け。タイマー解除 → reader の cancel と releaseLock → writer の
     /// releaseLock → close。各段の失敗を区別して記録し、全て成功したときだけ `true`。
     /// 解放できなかった reader・writer・close はセッションに戻し、再試行できる状態で残す。
@@ -814,10 +841,19 @@ mod web {
         }
         if needs_close {
             if let Some(port) = port {
-                if bounded(call(&port, "close", &[])).await.is_err() {
-                    ok = false;
-                } else {
-                    sess.borrow_mut().needs_close = false;
+                let pending = call(&port, "close", &[]);
+                if let Ok(p) = &pending {
+                    // 待機上限を超えて遅れて完了した close も記録する（契約表 9）。
+                    record_close_completion(sess, p.clone());
+                }
+                match bounded(pending).await {
+                    Ok(_) => sess.borrow_mut().needs_close = false,
+                    // 閉じ済みのポートへの close() は InvalidStateError で拒否される。
+                    // 目的の状態（閉じている）に達しているので、失敗扱いにしない。
+                    Err(e) if error_name(&e).as_deref() == Some("InvalidStateError") => {
+                        sess.borrow_mut().needs_close = false;
+                    }
+                    Err(_) => ok = false,
                 }
             }
         }
