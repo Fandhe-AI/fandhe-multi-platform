@@ -26,6 +26,8 @@
 //!   入れた全画面の解除、直前が固定済みなら直前の向きへ `lock()` し直す
 //! - 固定済みから別の向きへの固定が失敗したときの復元 `lock()` は期限付きで待ち、確定してから
 //!   結果を届ける（その間は処理中のまま）。通知経路でも期限を確認し、遅れて成立した全画面は抜ける
+//! - 全画面を抜ける `exitFullscreen()` は完了まで処理中を保つ（終了中の全画面へ次の固定が相乗りしない）。
+//!   期限後に成立した復元 `lock()` も最後まで監視し、その時点の記録へ揃える
 //! - 解除は `unlock()` を同期に呼び、記録を消し、この画面が入れた全画面だけを抜ける
 //!   （他者が入れた全画面は抜けない）。全画面を抜けられなくても lock は解けているので成功とする
 //! - `lock()` の `NotSupportedError`（Safari・デスクトップ Chrome）は固定だけ `Unsupported`
@@ -292,22 +294,51 @@ mod web {
         }
     }
 
-    fn exit_fullscreen_now() {
+    /// `exitFullscreen()` を呼び、完了を待てる Promise を返す。全画面でなければ `None`。
+    fn exit_fullscreen_promise() -> Option<Promise> {
         if fullscreen() != Some(true) {
-            return;
+            return None;
         }
-        if let Some(d) = document() {
-            if let Ok(r) = call0(&d, "exitFullscreen") {
-                swallow(r);
-            }
+        let d = document()?;
+        call0(&d, "exitFullscreen").ok()?.dyn_into::<Promise>().ok()
+    }
+
+    /// 完了を待たない全画面解除（破棄・遅れて成立した全画面の始末）。
+    fn exit_fullscreen_now() {
+        if let Some(p) = exit_fullscreen_promise() {
+            swallow(p.into());
         }
     }
 
-    /// この画面が入れた全画面だけを抜ける。
-    fn exit_own_fullscreen(id: u64) {
+    /// この画面が入れた全画面だけを抜ける。完了待ち用の Promise を返す
+    /// （終了中の全画面へ次の固定が相乗りしないよう、呼び出し側は完了まで処理中を保つ）。
+    fn exit_own_fullscreen(id: u64) -> Option<Promise> {
         if with(id, |e| std::mem::take(&mut e.own_fullscreen)).unwrap_or(false) {
-            exit_fullscreen_now();
+            exit_fullscreen_promise()
+        } else {
+            None
         }
+    }
+
+    /// 全画面終了（あれば）の完了を待ってから結果を届ける。待つ間も core は処理中のまま。
+    fn deliver(
+        applier: &Applier<State>,
+        id: u64,
+        gen: u64,
+        res: Result<(), OrientationFailure>,
+        exit: Option<Promise>,
+    ) {
+        let Some(p) = exit else {
+            applier.apply(move |s| finish(s, gen, res, read_now()));
+            return;
+        };
+        let a = applier.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let _ = JsFuture::from(p).await;
+            if is_live(id) {
+                a.apply(move |s| finish(s, gen, res, read_now()));
+            }
+        });
     }
 
     /// 現在の記録どおりに OS の希望を揃える（期限後・破棄後に遅れて resolve した `lock()` の始末）。
@@ -339,10 +370,10 @@ mod web {
     }
 
     /// 直前が未固定だった失敗の巻き戻し（同期）。
-    fn rollback_unlocked(id: u64) {
+    fn rollback_unlocked(id: u64) -> Option<Promise> {
         let _ = unlock_js();
         LOCK.with(|l| l.set(None));
-        exit_own_fullscreen(id);
+        exit_own_fullscreen(id)
     }
 
     /// 直前が固定済みだった失敗の巻き戻し。復元 `lock()` を期限付きで待ち、確定してから
@@ -361,8 +392,20 @@ mod web {
         let a = applier.clone();
         wasm_bindgen_futures::spawn_local(async move {
             let ok = match lock_js(b) {
-                Ok(pr) => match JsFuture::from(race_with_timeout(pr)).await {
-                    Ok(v) => v.as_string().as_deref() != Some("timeout"),
+                Ok(pr) => match JsFuture::from(race_with_timeout(pr.clone())).await {
+                    Ok(v) => {
+                        let timed_out = v.as_string().as_deref() == Some("timeout");
+                        if timed_out {
+                            // 期限後も元の復元 Promise を最後まで監視し、成立したら
+                            // その時点の記録へ揃える（解除・再固定を取りこぼさない）。
+                            wasm_bindgen_futures::spawn_local(async move {
+                                if JsFuture::from(pr).await.is_ok() {
+                                    restore_to_record();
+                                }
+                            });
+                        }
+                        !timed_out
+                    }
                     Err(_) => false,
                 },
                 Err(_) => false,
@@ -382,10 +425,11 @@ mod web {
                         l.set(Some((id, b)));
                     }
                 });
+                a.apply(move |s| finish(s, gen, res, read_now()));
             } else {
-                rollback_unlocked(id);
+                let exit = rollback_unlocked(id);
+                deliver(&a, id, gen, res, exit);
             }
-            a.apply(move |s| finish(s, gen, res, read_now()));
         });
     }
 
@@ -401,7 +445,10 @@ mod web {
         let gen = p.generation;
         if result.is_err() {
             match p.before {
-                None => rollback_unlocked(id),
+                None => {
+                    let exit = rollback_unlocked(id);
+                    return deliver(applier, id, gen, result, exit);
+                }
                 Some(b) => return rollback_locked(applier, id, gen, b, result),
             }
         }
@@ -495,16 +542,15 @@ mod web {
         let ok = unlock_js().is_ok();
         LOCK.with(|l| l.set(None));
         with(id, |e| e.restoring = None);
-        exit_own_fullscreen(id);
+        let exit = exit_own_fullscreen(id);
         let res = if ok {
             Ok(())
         } else {
             Err(OrientationFailure::Failed(UNLOCK_FAILED.to_string()))
         };
-        applier.apply(move |s| {
-            mark_applying(s, gen);
-            finish(s, gen, res, read_now());
-        });
+        // 全画面終了の完了まで処理中を保ち、次の固定が終了中の全画面に相乗りしないようにする。
+        applier.apply(move |s| mark_applying(s, gen));
+        deliver(applier, id, gen, res, exit);
     }
 
     fn finish_now(applier: &Applier<State>, gen: u64, res: Result<(), OrientationFailure>) {
@@ -601,10 +647,14 @@ mod web {
                             );
                         } else {
                             let free = !live
-                                || with(id, |e| e.pending.is_none() && e.restoring.is_none())
-                                    .unwrap_or(true);
+                                || (recorded().is_none()
+                                    && with(id, |e| e.pending.is_none() && e.restoring.is_none())
+                                        .unwrap_or(true));
                             if free {
                                 exit_fullscreen_now();
+                            } else {
+                                // 後続の固定がこの全画面に依存している。落とさず、以後の解除で抜ける。
+                                with(id, |e| e.own_fullscreen = true);
                             }
                         }
                     }
