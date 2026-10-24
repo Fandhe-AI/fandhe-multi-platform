@@ -4,21 +4,21 @@
   "group": "未着手の OS 機能",
   "order": 116,
   "priority": 100,
-  "bundle": "one-shot",
+  "bundle": "request-response",
   "platforms": {
     "ios": {
       "status": "possible",
       "api": "SafariServices `SFSafariViewController`",
       "perm": "なし",
       "url": "https://developer.apple.com/documentation/safariservices/sfsafariviewcontroller",
-      "note": "未実装。View Controller の present と閉じた通知の取得が要る"
+      "note": "未実装。最前面の View Controller から present し、`safariViewControllerDidFinish` で閉じたことを受ける。URL は http / https のみ（それ以外は初期化で拒否されるため事前に検査する）。閲覧内容・遷移先はアプリから取れない"
     },
     "android": {
       "status": "possible",
       "api": "Custom Tabs（`androidx.browser`）",
       "perm": "なし",
       "url": "https://developer.android.com/develop/ui/views/layout/webapps/overview-of-android-custom-tabs",
-      "note": "未実装。Custom Tabs 対応ブラウザが無い端末ではブラウザ起動に落ちる（要確認）"
+      "note": "未実装。`androidx.browser` は既存依存（web-auth-session で導入済み）。Custom Tabs 対応ブラウザが無い端末では `CustomTabsIntent` が既定ブラウザで開く（公式の既定動作、https://developer.chrome.com/docs/android/custom-tabs/guide-get-started ）。ブラウザが 1 つも無いと `ActivityNotFoundException`。閉じた通知の専用 API は無いので、起動後の離脱と復帰（`onPause` → `onResume`）で判定する"
     },
     "macos": {
       "status": "no",
@@ -35,13 +35,12 @@
       "note": "要確認。WebView2 は UI 部品で範囲外。URL 未確認"
     },
     "web": {
-      "status": "possible",
+      "status": "n-a",
       "api": "`window.open()`（ポップアップ / 新規タブ）",
-      "perm": "なし（ポップアップブロッカー対象、ユーザー操作内で呼ぶ）",
+      "perm": "",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/open",
-      "safari": "全エンジンで利用可（MDN 本文からは個別確認できず、要確認）",
-      "note": "「アプリ内」ではなく新規タブ / ウィンドウを開くだけ。MDN は Limited availability 表示"
+      "note": "アプリの上に重ねて閉じたら戻る、という概念がブラウザに無い。`window.open` は新しいタブを開くだけで、`noopener` 付きでは戻り値が常に null（ブロックと区別できない）、COOP で `closed` も当てにならず、閉じたことを返せない。リンクを新しいタブで開くのはアプリ内ブラウザではない"
     }
   },
-  "note": "in-app-browser は外部ブラウザへ遷移せずアプリ上に Web ページを重ねる。url-scheme / deep-link（既存 id）とは別で、こちらは「開く側」。今回の範囲: URL を渡して iOS は SFSafariViewController、Android は Custom Tabs、Web は新規タブで開く。"
+  "note": "in-app-browser は外部ブラウザへ遷移せずアプリ上に Web ページを重ねる。url-scheme / deep-link（既存 id）とは別で、こちらは「開く側」。範囲: 固定の公開 URL（http / https のみ）を iOS は SFSafariViewController、Android は Custom Tabs で開き、結果は「閉じた / 開けなかった / 非対応」の三値。守らない範囲: 開いた後の取り消しで閉じること、閲覧内容・遷移先・読み込み失敗の検知、Custom Tabs 非対応ブラウザでの表示の差、複数プロセス、プロセス死後の結果"
 }
