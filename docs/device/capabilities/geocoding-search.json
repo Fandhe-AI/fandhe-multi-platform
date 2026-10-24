@@ -8,24 +8,30 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "MapKit `MKLocalSearch` / `MKDirections`、CoreLocation `CLGeocoder`",
-      "perm": "現在地を使う場合のみ位置情報の許可",
-      "url": "https://developer.apple.com/documentation/mapkit/mklocalsearch",
-      "note": "未実装。ジオコーディングのレート制限あり（要確認）"
+      "api": "MapKit `MKGeocodingRequest`（iOS 26 以上）。`CLGeocoder` は iOS 26 で非推奨。経路の `MKDirections`・地点検索の `MKLocalSearch` は今回の範囲外",
+      "perm": "不要（住所 → 座標は現在地を使わない）",
+      "url": [
+        "https://developer.apple.com/documentation/mapkit/mkgeocodingrequest",
+        "https://developer.apple.com/documentation/corelocation/clgeocoder"
+      ],
+      "note": "未実装。iOS 26 未満は Unsupported にする（非推奨の CLGeocoder へ倒さない）。地理コードはアプリごとにレート制限があり、上限で `MKErrorLoadingThrottled` を返す。結果は推測で精度の保証なし"
     },
     "android": {
       "status": "possible",
-      "api": "`android.location.Geocoder`（API 33 で非同期版追加）。経路は標準 API なし",
-      "perm": "`ACCESS_*_LOCATION`（報告で要確認とされたもの。要確認）",
-      "url": "https://developer.android.com/reference/android/location/Geocoder",
-      "note": "未実装。バックエンドは主に Play services で、実質 GMS 依存（報告より）。端末によっては `isPresent()` が false で空を返す"
+      "api": "`android.location.Geocoder`（API 33 以上は `GeocodeListener` 版、24〜32 は同期版）。経路は標準 API なし",
+      "perm": "不要（住所 → 座標は位置情報の権限を確かめない。`INTERNET` は宣言済み）",
+      "url": [
+        "https://developer.android.com/reference/android/location/Geocoder",
+        "https://developer.android.com/reference/android/location/Geocoder.GeocodeListener"
+      ],
+      "note": "未実装。フレームワーク API で Gradle 依存の追加は不要。実際の変換はシステムの geocode provider が行い、GMS 端末では通常 Play services が提供する。provider が無い端末は `isPresent()` が false で、Unsupported を返す。取り消し API は無い。失敗理由（通信不可・回数上限）は区別できない"
     },
     "macos": {
       "status": "possible",
-      "api": "MapKit `MKLocalSearch` / `MKDirections`、CoreLocation `CLGeocoder`（iOS と同じ）",
-      "perm": "現在地を使う場合のみ位置情報の許可",
-      "url": "https://developer.apple.com/documentation/mapkit/mklocalsearch",
-      "note": "未実装"
+      "api": "MapKit `MKGeocodingRequest`（macOS 26 以上、iOS と同じ実装）",
+      "perm": "不要",
+      "url": "https://developer.apple.com/documentation/mapkit/mkgeocodingrequest",
+      "note": "未実装。macOS 26 未満は Unsupported。素の実行体から MapKit の地理コードが通るかは Mac 目視で確かめる"
     },
     "windows": {
       "status": "no",
@@ -42,5 +48,5 @@
       "note": "ブラウザに住所検索・経路の API はない（Geolocation は位置の取得のみで location に既出）"
     }
   },
-  "note": "map-view（地図表示のみ）・location（現在地の取得）との違い: 本機能は住所や地名から座標を引く、または経路を求める。今回の範囲: 固定の住所 1 件を座標に変換して画面に出すだけ（経路は含めない）。"
+  "note": "map-view（地図表示のみ）・location（現在地の取得）との違い: 本機能は住所や地名から座標を引く、または経路を求める。今回の範囲: 画面に埋め込んだ固定の公開住所 1 件を座標に変換し、先頭候補の座標と候補数を出すだけ（経路・地点検索・逆ジオコーディング・利用者の入力・現在地は含めない）。守る範囲: 1 プロセス・1 画面の順序、結果は 1 回きり、0 件・座標なしを成功にしない、期限後の成功を捨てる、住所・座標をログへ出さない。守らない範囲: 結果の精度と候補の選択、回数上限、期限後も OS 側の処理が走り切ること、背景にいる間の要求、複数プロセス。"
 }
