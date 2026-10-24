@@ -1,5 +1,5 @@
 //! macOS / iOS 向け住所の座標変換実装（Issue #691 macOS、iOS は #692）。
-//! `device/geocoding_search.rs` の macOS 経路（と #692 以降の iOS 経路）から呼ばれ、
+//! `device/geocoding_search.rs` の macOS 経路と iOS 経路（`ios_geocoding_search` 経由）から呼ばれ、
 //! `apple/fandhe_apple_geocoding_search.m`（MapKit `MKGeocodingRequest`。`build.rs` が feature
 //! `device` 有効時に `cc` でコンパイル）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの
 //! 呼び出し 1 か所に閉じる（coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・
@@ -7,8 +7,6 @@
 //!
 //! 契約の SSOT は `fandhe_device::geocoding_search`。戻りコード → `DeviceError` の写像の SSOT は
 //! 本ファイルの `match`。呼び出しはブロックするため、呼び出し元はワーカーで呼ぶ。
-// iOS では #692 が使い始めるまで未使用になる。使い始めたら本行を外してよい。
-#![cfg_attr(target_os = "ios", allow(dead_code))]
 
 use std::time::Duration;
 

@@ -357,7 +357,7 @@ pub mod apple_file_association;
 pub mod apple_gamepad;
 /// Issue #691 macOS・#692 iOS: 住所の座標変換実装（`apple/fandhe_apple_geocoding_search.m` の
 /// MapKit `MKGeocodingRequest` を呼ぶ C ABI ラッパー）。`device/geocoding_search.rs` の macOS 経路と、
-/// iOS 経路（#692 で `ios_geocoding_search` 経由）から呼ばれる。`build.rs` のコンパイル条件と
+/// iOS 経路（`ios_geocoding_search` 経由）から呼ばれる。`build.rs` のコンパイル条件と
 /// 同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_geocoding_search;
@@ -708,8 +708,8 @@ pub mod ios_flashlight;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_fullscreen_immersive;
-/// Issue #691: iOS 向け住所の座標変換の骨格（`Unsupported` のスタブ。#692 が macOS と共用の
-/// `AppleForwardGeocoder` を返す）。`device/geocoding_search.rs` の iOS 経路から呼ばれる。
+/// Issue #692: iOS 向け住所の座標変換実装（macOS と共用の `AppleForwardGeocoder` へ委譲し、
+/// 戻り直後に再描画を起こす）。`device/geocoding_search.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_geocoding_search;
 /// Issue #1252: iOS 向け文字認識（PHPicker + Vision）の effect ドライバ。
