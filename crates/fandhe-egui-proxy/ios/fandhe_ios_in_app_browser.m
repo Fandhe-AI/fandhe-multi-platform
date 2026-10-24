@@ -45,20 +45,10 @@ static FandheInAppBrowserDelegate *g_retainedDelegate = nil;
     }
     fandhe_rust_in_app_browser_complete(self.requestId, code);
 }
-// 「完了」押下。通常は OS が自身を閉じるが、まだ提示中なら明示的に dismiss し、画面の終了後に
-// 完了を送る（ブラウザが残ったまま要求だけ成功しないようにする）。dismiss 済み・dismiss 中なら
-// 二重に dismiss せず、そのまま完了を送る。finish: が done で一度きりに絞る。
+// 「完了」押下。OS がこのコールバックの後で自身を閉じるため、ここでは dismiss を呼ばない
+// （追加の dismiss はシステムの dismiss と競合し、completion が届かず要求が保留のまま残る）。
+// 完了を直接送る。finish: が done で一度きりに絞り、強参照も解放する。
 - (void)safariViewControllerDidFinish:(SFSafariViewController *)controller {
-    if (self.done) {
-        return;
-    }
-    if (controller.presentingViewController != nil && !controller.isBeingDismissed) {
-        [controller dismissViewControllerAnimated:YES
-                                       completion:^{
-                                         [self finish:0];
-                                       }];
-        return;
-    }
     [self finish:0];
 }
 - (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
