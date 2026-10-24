@@ -8,24 +8,32 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "VisionKit `VNDocumentCameraViewController`（書類の自動検出・補正の撮影 UI）",
-      "perm": "`NSCameraUsageDescription`",
-      "url": "https://developer.apple.com/documentation/visionkit/vndocumentcameraviewcontroller",
-      "note": "未実装。結果は画像（`VNDocumentCameraScan`）で返る"
+      "api": "VisionKit `VNDocumentCameraViewController`（書類の自動検出・補正の撮影 UI）+ `VNDocumentCameraScan`（`pageCount`・`imageOfPageAtIndex:`）",
+      "perm": "`NSCameraUsageDescription`（camera-capture で宣言済み。新しい権限キーは足さず、文言に機能名を足すだけ）",
+      "url": [
+        "https://developer.apple.com/documentation/visionkit/vndocumentcameraviewcontroller",
+        "https://developer.apple.com/documentation/visionkit/vndocumentcameraviewcontrollerdelegate",
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/nscamerausagedescription"
+      ],
+      "note": "未実装。iOS 13 以上で、アプリの最小 OS（17）では常に使える。Objective-C から使える。非対応の機器では `isSupported` が NO を返すので、提示せず非対応とする。結果は delegate の 3 経路（`didFinishWithScan` / `DidCancel` / `didFailWithError`）で届き、公式文書はすべての経路でアプリが撮影 UI を閉じるよう求めている。ページの画像は `UIImage` で、`index` が範囲外だと例外を投げるため `pageCount` を先に確かめる。カメラ権限の拒否は提示前に `AVCaptureDevice` の状態で判定する"
     },
     "android": {
       "status": "possible",
-      "api": "ML Kit Document Scanner（GMS 依存）",
-      "perm": "カメラ権限は不要（Play services 側。報告より）",
-      "url": "https://developers.google.com/ml-kit/vision/doc-scanner",
-      "note": "未実装。GMS（Google Play 開発者サービス）依存"
+      "api": "ML Kit Document Scanner（`com.google.android.gms:play-services-mlkit-document-scanner`、GMS 依存）",
+      "perm": "カメラ権限の記載なし（撮影 UI は Google Play services 側）",
+      "url": [
+        "https://developers.google.com/ml-kit/vision/doc-scanner/android",
+        "https://dl.google.com/android/maven2/com/google/android/gms/play-services-mlkit-document-scanner/16.0.0/play-services-mlkit-document-scanner-16.0.0.pom"
+      ],
+      "note": "未実装。16.0.0 の POM は `play-services-base`・`play-services-basement`・`play-services-tasks` と Firebase の部品を直接依存に持つ。公式文書はモデル・スキャン処理・UI を Google Play services が動的にダウンロードするとし、端末の RAM が 1.7 GB 未満なら `UNSUPPORTED` を返すとしている。GMS 非搭載端末での扱いは公式文書に書かれていない。AOSP に書類スキャンの公開 API はない",
+      "deferred": "ML Kit Document Scanner は Google Play services だけが提供するランタイム機能で、GMS（`play-services-base` 等）を新しい依存に足す。GMS に依存しない方針のため保留（activity-recognition・in-app-review・uwb-ranging と同じ）。方針が変われば着手できる"
     },
     "macos": {
       "status": "no",
       "api": "公開 API なし",
       "perm": "なし",
-      "url": "",
-      "note": "`VNDocumentCameraViewController` は iOS 向けで、macOS 版の標準スキャン UI は報告で確認できていない（要確認）"
+      "url": "https://developer.apple.com/documentation/visionkit/vndocumentcameraviewcontroller",
+      "note": "`VNDocumentCameraViewController` は SDK のヘッダーで `API_UNAVAILABLE(macos)`。公式文書の対応環境は iOS・iPadOS・Mac Catalyst・visionOS で、AppKit の実行体からは使えない（本アプリは Mac Catalyst ではない）"
     },
     "windows": {
       "status": "no",
@@ -42,5 +50,5 @@
       "note": "標準 API なし。カメラ映像と自前処理は OS の端末機能ではないので判定に使わない"
     }
   },
-  "note": "barcode-scan とは別: 本機能は紙の書類を撮影して補正した画像を得る。今回の範囲: スキャン UI を出し、返ってきた 1 ページの画像を画面に表示するだけ。macOS・Windows・Web は no。"
+  "note": "barcode-scan とは別: 本機能は紙の書類を撮影して補正した画像を得る。camera-capture（通常の撮影）とも別で、書類の検出・台形補正は OS の撮影 UI が行う。iOS は VisionKit、Android は Play services だけが提供するため GMS に依存しない方針で保留（deferred）。macOS・Windows・Web は no。今回の範囲: スキャン UI を出し、返ってきた 1 ページ目の画像を画面に表示するだけ（2 ページ目以降・PDF 化・文字認識・保存・共有は扱わない）。結果は「表示した / キャンセル / 失敗 / 非対応」で、キャンセルは失敗として見せない。守る範囲: 1 プロセス内の要求と結果の順序（古い要求の結果は世代で捨てる）、嘘の成功の禁止（非対応・権限拒否・0 ページ・復号できない画像を成功にしない）、撮影 UI を閉じることと画像の受け渡し領域の解放を全経路で行うこと。守らない範囲: 撮影 UI の表示中に Rust 側から閉じること、OS ごとの補正結果の違い、複数プロセス、プロセス死後の結果。画像の中身はログに出さない"
 }
