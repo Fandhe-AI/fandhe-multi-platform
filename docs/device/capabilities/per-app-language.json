@@ -8,24 +8,37 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "設定アプリの「アプリごとの言語」を `Bundle.main.preferredLocalizations` / `Locale` で読む",
-      "perm": "なし",
-      "url": "",
-      "note": "URL 未確認。アプリ側は Info.plist に対応言語（`CFBundleLocalizations`）を宣言する必要がある。設定画面を開く導線は `UIApplication.openSettingsURLString`（要確認）"
+      "api": "`Bundle.main.preferredLocalizations`（アプリが使う言語）。設定アプリのこのアプリの「言語」で利用者が選ぶ（iOS 13+）",
+      "perm": "なし。設定アプリに言語の選択を出すには、アプリが対応言語を宣言する必要がある（`CFBundleLocalizations` または `.lproj`）",
+      "url": [
+        "https://developer.apple.com/documentation/foundation/bundle/preferredlocalizations",
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundlelocalizations",
+        "https://developer.apple.com/videos/play/wwdc2019/403/"
+      ],
+      "note": "未実装。言語を変えるとアプリは再起動する（WWDC19）。`Locale.preferredLanguages` はアプリの対応言語に関係なく利用者の希望一覧を返すため、アプリの言語には `Bundle` を使う。アプリ別の設定か OS 全体の設定かを区別する公開 API は確認できていない。現状 Info.plist に対応言語の宣言が無い",
+      "deferred": "設定アプリにこのアプリの言語の選択を出すには対応言語の宣言が要り、宣言はアプリ全体の申告と OS が描く UI の言語に影響する設計変更のため保留。宣言しないと利用者が設定できず、読める値は常に OS 全体の設定になる。宣言の可否が決まれば同期読み取りで実装できる"
     },
     "android": {
       "status": "possible",
-      "api": "`LocaleManager`（API 33+）、`AppCompatDelegate`（API 32 以前は AppCompat 1.6.0+）",
-      "perm": "なし",
-      "url": "https://developer.android.com/guide/topics/resources/app-languages",
-      "note": "未実装。`locales_config.xml` の宣言が要る。API 33 未満は AppCompat 経由で minSdk に応じた分岐が要る（要確認）"
+      "api": "`LocaleManager.getApplicationLocales()`（API 33+、未設定なら空の LocaleList）と自プロセスの `Configuration.getLocales()`",
+      "perm": "なし。設定に出すには `res/xml/locale_config.xml` と `<application android:localeConfig>` の宣言が要る",
+      "url": [
+        "https://developer.android.com/guide/topics/resources/app-languages",
+        "https://developer.android.com/reference/android/app/LocaleManager"
+      ],
+      "note": "未実装。OS のアプリ別言語設定は Android 13（API 33）から。minSdk 24 のため API 32 以下は `Unsupported` にする。AppCompat（既存依存）の `AppCompatDelegate` の後方互換はアプリ内で保存する仕組みで、OS 設定の読み取りではないため使わない。`MainActivity` の `configChanges` に `locale` があり、言語変更で Activity は再生成されない",
+      "deferred": "`android:localeConfig` を宣言しないと、利用者は設定でこのアプリの言語を選べない（公式に明記）。宣言はアプリ全体の申告と OS が描く UI の言語に影響する設計変更のため保留。宣言の可否が決まれば API 33+ の同期読み取りで実装できる"
     },
     "macos": {
       "status": "possible",
-      "api": "システム設定の「アプリの言語」を `Bundle.main.preferredLocalizations` で読む",
-      "perm": "なし",
-      "url": "",
-      "note": "URL 未確認。macOS での扱いは iOS と同様の見込み（要確認）"
+      "api": "`Bundle.main.preferredLocalizations`。システム設定 → 一般 → 言語と地域 → アプリケーションで利用者が選ぶ",
+      "perm": "なし。言語の選択肢はアプリの対応言語の宣言（`CFBundleLocalizations` または `.lproj`）から決まる見込み",
+      "url": [
+        "https://developer.apple.com/documentation/foundation/bundle/preferredlocalizations",
+        "https://support.apple.com/guide/mac-help/change-the-language-your-mac-uses-mh26684/mac"
+      ],
+      "note": "未実装。変更の反映にはアプリの再起動が要る場合がある（Apple サポート）。現状 `macos/Info.plist` に対応言語の宣言が無い。素の実行体（Info.plist を埋め込み）をシステム設定のアプリ一覧で選べるかは未確認で、目視は .app 化が要る見込み",
+      "deferred": "iOS と同じく対応言語の宣言が要り、宣言は設計変更のため保留。宣言の可否が決まれば同期読み取りで実装できる"
     },
     "windows": {
       "status": "no",
@@ -39,5 +52,5 @@
       "note": "言語はブラウザ全体の設定（`navigator.languages`）でアプリ別の概念なし"
     }
   },
-  "note": "per-app-language は OS が持つ「このアプリだけ別の言語」設定の読み取り。dynamic-type / dark-mode（既存 id）と同じ「OS 設定の追従」系。今回の範囲: 現在の言語コードを画面に出し、設定アプリへの案内を表示する（言語切替後の再描画は含めない）。"
+  "note": "per-app-language は OS が持つ「このアプリだけ別の言語」設定の読み取り。dynamic-type / dark-mode（既存 id）と同じ「OS 設定の追従」系。設定画面を開く操作は open-system-settings（既存 id）の範囲。範囲（実装時）: アプリが使う言語のタグと、アプリ別の設定か OS 全体の設定か（Android のみ区別）を押下ごとに読んで画面に出し、設定の場所を文章で案内する。守らない範囲: 読み取り後の変更の反映（再読込まで）、アプリ自身の文言の切り替え、アプリ内からの言語変更、Apple でのアプリ別 / OS 全体の区別、複数プロセス。3 OS とも対応言語の宣言（設計変更）の可否が決まるまで保留"
 }
