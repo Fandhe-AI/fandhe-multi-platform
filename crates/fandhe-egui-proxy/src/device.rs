@@ -75,6 +75,11 @@ pub mod android_call_ui;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_capture_protection;
+/// Issue #740 / #741（親 #143）: Android 向け付属機器のペアリング（`CompanionDeviceManager`）の骨格。
+/// `device/companion_device.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_companion_device;
 /// Issue #1404: Android 向け方位実装。`device/compass.rs` の android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -559,6 +564,10 @@ pub mod camera_capture;
 /// `UnsupportedCaptureProtection` 固定）。
 pub mod capture_protection;
 pub mod clipboard;
+/// Phase 11（親 #143、Issue #740）: 付属機器のペアリングの effect ドライバ（Android は
+/// `CompanionDeviceManager` で #741 が実装、iOS は保留のため他 OS と同じ
+/// `UnsupportedCompanionDevicePicker` 固定。Web は対象外）。
+pub mod companion_device;
 /// Issue #1404（親 #1154）: 方位（コンパス）の effect ドライバ（Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedCompass` 固定。Web は `fandhe-web-dom`）。
 pub mod compass;

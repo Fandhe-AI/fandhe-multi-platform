@@ -364,6 +364,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // `device::app_attest::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::app_attest::reset_pending_tracking();
+    // Issue #740: 付属機器のペアリングの保留中の要求も破棄する（理由は translation と同じ。
+    // `device::companion_device::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::companion_device::reset_pending_tracking();
     // Issue #701: アプリ内ブラウザの保留中の要求も破棄する（理由は translation と同じ。
     // `device::in_app_browser::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
