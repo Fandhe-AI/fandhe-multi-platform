@@ -56,7 +56,24 @@ fn to_outcome(result: Result<ShellOutcome, DeviceError>) -> Result<CoreOutcome, 
 fn prepare_sample_file(base: &Path) -> Result<PathBuf, DeviceError> {
     let fail = || DeviceError::Internal("shell sample");
     let dir = base.join(SAMPLE_DIR);
-    std::fs::create_dir_all(&dir).map_err(|_| fail())?;
+    // 配置先ディレクトリ自体がシンボリックリンクなら、リンク先へ書かないよう拒否する。
+    // 作成直後にも再検査し、確認から作成までに差し替えられたものも弾く。
+    let is_real_dir = |p: &Path| {
+        std::fs::symlink_metadata(p)
+            .map(|m| m.file_type().is_dir())
+            .map_err(|e| e.kind())
+    };
+    match is_real_dir(&dir) {
+        Ok(true) => {}
+        Ok(false) => return Err(fail()),
+        Err(std::io::ErrorKind::NotFound) => {
+            std::fs::create_dir_all(&dir).map_err(|_| fail())?;
+            if !matches!(is_real_dir(&dir), Ok(true)) {
+                return Err(fail());
+            }
+        }
+        Err(_) => return Err(fail()),
+    }
     let file = dir.join(SAMPLE_FILE);
     match std::fs::symlink_metadata(&file) {
         Ok(meta) if meta.file_type().is_file() => Ok(file),
@@ -341,6 +358,24 @@ mod tests {
         std::fs::remove_file(&file).unwrap();
         let again = prepare_sample_file(&base).unwrap();
         assert_eq!(std::fs::read_to_string(again).unwrap(), SAMPLE_CONTENT);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sample_dir_symlink_is_rejected_without_writing() {
+        let base = temp_base("dirlink");
+        let target = base.join("elsewhere");
+        std::fs::create_dir_all(&target).unwrap();
+        std::os::unix::fs::symlink(&target, base.join(SAMPLE_DIR)).unwrap();
+        assert!(matches!(
+            prepare_sample_file(&base),
+            Err(DeviceError::Internal("shell sample"))
+        ));
+        assert!(!target.join(SAMPLE_FILE).exists());
+        // リンク先に通常ファイルがあっても OS へ渡さない。
+        std::fs::write(target.join(SAMPLE_FILE), b"x").unwrap();
+        assert!(prepare_sample_file(&base).is_err());
         let _ = std::fs::remove_dir_all(&base);
     }
 
