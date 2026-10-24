@@ -1,14 +1,13 @@
-// Phase 11 の拡充ループ（親 #142）型サンプル「環境音の分類」: macOS 実装（Issue #725）。
-// iOS / macOS 共用ファイル（`fandhe_apple_speech_recognition.m` と同じ判断）。iOS 側（b-ios）は
-// `#if TARGET_OS_IPHONE` の区画を埋める。(a) の時点の iOS 区画は「非対応」を返すだけで、
-// `build.rs` が iOS 分岐でもコンパイルするため b-ios は `build.rs` / `device.rs` を触らずに済む。
+// Phase 11 の拡充ループ（親 #142）型サンプル「環境音の分類」: macOS 実装（Issue #725）と
+// iOS 実装（Issue #726）。iOS / macOS 共用ファイル（`fandhe_apple_speech_recognition.m` と同じ判断）。
+// iOS 固有の区画（AVAudioSession、背景・割り込みの購読、再描画の通知）は `#if TARGET_OS_IPHONE`。
 // Android / Windows / Web は対応表で「できない」のまま（Rust 側の `UnsupportedSoundClassifier`）。
 //
 // `crates/fandhe-egui-proxy/src/device/apple_sound_classification.rs` から C ABI 経由で呼ばれる。
 //
 // 契約（pull 型。OS 側が最新の結果を持ち、Rust 側が間隔つきで読む。`ios_activity_recognition.m` と同型）:
 //   int32_t fandhe_apple_sound_classification_start(void)
-//     -> 0: 受理（許可待ちを含む。結果は read で読む）/ 1: 非対応（macOS 12 未満、(a) 時点の iOS）/
+//     -> 0: 受理（許可待ちを含む。結果は read で読む）/ 1: 非対応（macOS 12 未満 / iOS 15 未満）/
 //        2: 権限拒否（同期で分かる場合）/ 3: マイクなし / 9: その他。
 //        冪等（許可待ち・聞き取り中の二重呼び出しは 0 を返すだけ）。
 //   int32_t fandhe_apple_sound_classification_read(uint64_t *seq, uint8_t *labels /* 3 * 64 */,
@@ -41,6 +40,19 @@
 // 入力機器の変更（AVAudioEngineConfigurationChangeNotification）は中断（3）として資源を解放し、
 // 自動では再開しない。
 //
+// iOS（Issue #726）:
+// - AVAudioSession: 開始前に category / categoryOptions を保存して Record + active にし、
+//   Teardown（全終了経路）で setActive:NO（他アプリへ通知）と保存値への復元を行う。有効化に失敗
+//   したら start は失敗（9）で、成功を偽らない。mode は変えない（復元対象を増やさない）。
+// - 背景: DidEnterBackground で聞き取り中・許可待ちを中断（1）にして資源を解放する。WillResignActive
+//   は見ない（許可ダイアログの表示中は Inactive になるだけで、正常な許可を中断扱いにしないため）。
+//   許可の応答が背景遷移の後に届いても、背景では録音を始めず中断（1）にする。自動再開しない。
+// - 音声の割り込み: AVAudioSessionInterruptionNotification の Began とメディアサービスのリセットを
+//   中断（2）にする。Ended では再開しない。通知トークンは static に持ち Teardown で解除する。
+// - 再描画: 非同期の経路で値を確定した直後に fandhe_rust_sound_classification_changed を
+//   グローバルキューから呼ぶ（入力がないと egui が描画せず画面が止まるため）。同期の start / read /
+//   stop の中では呼ばない（ドライバが間隔つきで再描画を予約している）。
+//
 // ログ: ラベル・信頼度・NSError を NSLog に出さない（契約表 8、security.md）。
 // ワーカーキュー上の Cocoa 呼び出しは @autoreleasepool で囲む（契約表 5）。
 // 音声バッファは保存も送信もしない。
@@ -50,10 +62,22 @@
 #include <stdint.h>
 #include <string.h>
 
-#if !TARGET_OS_IPHONE
-
 #import <AVFoundation/AVFoundation.h>
 #import <SoundAnalysis/SoundAnalysis.h>
+#if TARGET_OS_IPHONE
+#import <UIKit/UIKit.h>
+
+// Rust 側（`ios_sound_classification.rs`）の受け口。`crate::ios::request_repaint` を呼ぶだけ。
+extern void fandhe_rust_sound_classification_changed(void);
+
+// 制御キューの外から呼ぶ（main が dispatch_sync(g_ctrl) 中でも入れ子の待ちを作らない）。
+#define FANDHE_SOUND_NOTIFY()                                                                  \
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{                  \
+        fandhe_rust_sound_classification_changed();                                            \
+    })
+#else
+#define FANDHE_SOUND_NOTIFY() ((void)0)
+#endif
 
 enum {
     kSoundIdle = 0,
@@ -84,14 +108,90 @@ static AVAudioEngine *g_engine = nil;
 static SNAudioStreamAnalyzer *g_analyzer = nil;
 static id g_observer = nil;
 static id g_config_token = nil;
+#if TARGET_OS_IPHONE
+static id g_interrupt_token = nil;
+static id g_reset_token = nil;
+// 背景遷移の購読トークン。プロセスの生存中保持する（ARC で解放されると購読が無効になる）。
+static id g_bg_token = nil;
+static id g_fg_token = nil;
+static BOOL g_background = NO;
+// AVAudioSession の開始前の状態（Teardown で復元する）。
+static NSString *g_prev_category = nil;
+static AVAudioSessionCategoryOptions g_prev_options = 0;
+static BOOL g_session_active = NO;
+#endif
+
+static void FandheSoundFinish(int state, int32_t code, int32_t reason);
 
 static void FandheSoundEnsureQueues(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         g_ctrl = dispatch_queue_create("com.fandhe.sound.control", DISPATCH_QUEUE_SERIAL);
         g_analysis = dispatch_queue_create("com.fandhe.sound.analysis", DISPATCH_QUEUE_SERIAL);
+#if TARGET_OS_IPHONE
+        g_bg_token = [[NSNotificationCenter defaultCenter]
+            addObserverForName:UIApplicationDidEnterBackgroundNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *__unused note) {
+                        dispatch_async(g_ctrl, ^{
+                            @autoreleasepool {
+                                g_background = YES;
+                                if (g_state == kSoundListening || g_state == kSoundAwaitingPermission) {
+                                    FandheSoundFinish(kSoundInterrupted, 0, 1);
+                                    FANDHE_SOUND_NOTIFY();
+                                }
+                            }
+                        });
+                    }];
+        g_fg_token = [[NSNotificationCenter defaultCenter]
+            addObserverForName:UIApplicationWillEnterForegroundNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *__unused note) {
+                        // 自動では再開しない。
+                        dispatch_async(g_ctrl, ^{
+                            g_background = NO;
+                        });
+                    }];
+#endif
     });
 }
+
+#if TARGET_OS_IPHONE
+// AVAudioSession を Record + active にする。失敗時は保存値へ戻して NO。制御キュー上でだけ呼ぶ。
+static BOOL FandheSoundActivateSession(void) {
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+    g_prev_category = session.category;
+    g_prev_options = session.categoryOptions;
+    NSError *error = nil;
+    if (![session setCategory:AVAudioSessionCategoryRecord error:&error] ||
+        ![session setActive:YES error:&error]) {
+        // 変更前の category / options へ戻す（エラーの内容は出さない）。
+        [session setCategory:g_prev_category withOptions:g_prev_options error:nil];
+        g_prev_category = nil;
+        return NO;
+    }
+    g_session_active = YES;
+    return YES;
+}
+
+// 有効化していれば無効にして category / options を戻す（冪等）。制御キュー上でだけ呼ぶ。
+static void FandheSoundDeactivateSession(void) {
+    if (!g_session_active) {
+        return;
+    }
+    g_session_active = NO;
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+    [session setActive:NO
+           withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
+                 error:nil];
+    if (g_prev_category != nil) {
+        [session setCategory:g_prev_category withOptions:g_prev_options error:nil];
+    }
+    g_prev_category = nil;
+}
+#endif
 
 // 資源を全部解放する（冪等）。制御キュー上でだけ呼ぶ。
 static void FandheSoundTeardown(void) {
@@ -99,6 +199,16 @@ static void FandheSoundTeardown(void) {
         [[NSNotificationCenter defaultCenter] removeObserver:g_config_token];
         g_config_token = nil;
     }
+#if TARGET_OS_IPHONE
+    if (g_interrupt_token != nil) {
+        [[NSNotificationCenter defaultCenter] removeObserver:g_interrupt_token];
+        g_interrupt_token = nil;
+    }
+    if (g_reset_token != nil) {
+        [[NSNotificationCenter defaultCenter] removeObserver:g_reset_token];
+        g_reset_token = nil;
+    }
+#endif
     AVAudioEngine *engine = g_engine;
     SNAudioStreamAnalyzer *analyzer = g_analyzer;
     g_engine = nil;
@@ -119,6 +229,10 @@ static void FandheSoundTeardown(void) {
             }
         });
     }
+#if TARGET_OS_IPHONE
+    // タップ除去と engine stop の後にセッションを戻す。全終了経路がここを通る。
+    FandheSoundDeactivateSession();
+#endif
 }
 
 // 状態を確定する。必ず資源を解放してから。制御キュー上でだけ呼ぶ。
@@ -185,6 +299,7 @@ static void FandheSoundFinish(int state, int32_t code, int32_t reason) {
                 g_has_result = n > 0;
                 if (n > 0) {
                     g_seq++;
+                    FANDHE_SOUND_NOTIFY();
                 }
             }
         });
@@ -198,6 +313,7 @@ static void FandheSoundFinish(int state, int32_t code, int32_t reason) {
         @autoreleasepool {
             if (gen == g_generation && g_state == kSoundListening) {
                 FandheSoundFinish(kSoundFailed, 9, 0);
+                FANDHE_SOUND_NOTIFY();
             }
         }
     });
@@ -210,6 +326,7 @@ static void FandheSoundFinish(int state, int32_t code, int32_t reason) {
         @autoreleasepool {
             if (gen == g_generation && g_state == kSoundListening) {
                 FandheSoundFinish(kSoundFailed, 9, 0);
+                FANDHE_SOUND_NOTIFY();
             }
         }
     });
@@ -220,8 +337,14 @@ static void FandheSoundFinish(int state, int32_t code, int32_t reason) {
 // 聞き取りを始める。0 成功 / 1 非対応 / 3 マイクなし / 9 失敗。失敗時は資源を解放済みで戻る。
 // 制御キュー上でだけ呼ぶ。
 static int32_t FandheSoundBegin(void) {
-    if (@available(macOS 12.0, *)) {
+    if (@available(macOS 12.0, iOS 15.0, *)) {
         @try {
+#if TARGET_OS_IPHONE
+            // 入力形式はセッションを有効にした後でないと正しく取れない。
+            if (!FandheSoundActivateSession()) {
+                return 9;
+            }
+#endif
             AVAudioEngine *engine = [[AVAudioEngine alloc] init];
             AVAudioInputNode *input = engine.inputNode;
             AVAudioFormat *format = [input inputFormatForBus:0];
@@ -265,6 +388,7 @@ static int32_t FandheSoundBegin(void) {
                                                      if (gen == g_generation &&
                                                          g_state == kSoundListening) {
                                                          FandheSoundFinish(kSoundFailed, 9, 0);
+                                                         FANDHE_SOUND_NOTIFY();
                                                      }
                                                  }
                                              });
@@ -286,10 +410,44 @@ static int32_t FandheSoundBegin(void) {
                                 @autoreleasepool {
                                     if (gen == g_generation && g_state == kSoundListening) {
                                         FandheSoundFinish(kSoundInterrupted, 0, 3);
+                                        FANDHE_SOUND_NOTIFY();
                                     }
                                 }
                             });
                         }];
+#if TARGET_OS_IPHONE
+            AVAudioSession *session = [AVAudioSession sharedInstance];
+            void (^interrupt)(void) = ^{
+                dispatch_async(g_ctrl, ^{
+                    @autoreleasepool {
+                        if (gen == g_generation && g_state == kSoundListening) {
+                            FandheSoundFinish(kSoundInterrupted, 0, 2);
+                            FANDHE_SOUND_NOTIFY();
+                        }
+                    }
+                });
+            };
+            g_interrupt_token = [[NSNotificationCenter defaultCenter]
+                addObserverForName:AVAudioSessionInterruptionNotification
+                            object:session
+                             queue:nil
+                        usingBlock:^(NSNotification *note) {
+                            // Began のときだけ中断する。Ended では再開しない。
+                            NSNumber *type = note.userInfo[AVAudioSessionInterruptionTypeKey];
+                            if (type != nil &&
+                                type.unsignedIntegerValue == AVAudioSessionInterruptionTypeBegan) {
+                                interrupt();
+                            }
+                        }];
+            // メディアサービスのリセットでエンジンが無効になるため、割り込みとして中断する。
+            g_reset_token = [[NSNotificationCenter defaultCenter]
+                addObserverForName:AVAudioSessionMediaServicesWereResetNotification
+                            object:session
+                             queue:nil
+                        usingBlock:^(NSNotification *__unused note) {
+                            interrupt();
+                        }];
+#endif
             g_state = kSoundListening;
             g_has_result = NO;
             g_count = 0;
@@ -313,12 +471,21 @@ int32_t fandhe_apple_sound_classification_start(void) {
             }
             // 中断・失敗の残りがあれば初期状態へ戻してから始める。
             FandheSoundFinish(kSoundIdle, 9, 0);
-            if (@available(macOS 12.0, *)) {
+            if (@available(macOS 12.0, iOS 15.0, *)) {
             } else {
                 code = 1;
                 return;
             }
             g_generation++;
+#if TARGET_OS_IPHONE
+            if (g_background) {
+                // 背景では録音を始めない。成功は偽らず、中断（背景）として read に返す。
+                g_state = kSoundInterrupted;
+                g_interrupt_reason = 1;
+                code = 0;
+                return;
+            }
+#endif
             AVAuthorizationStatus status =
                 [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
             if (status == AVAuthorizationStatusAuthorized) {
@@ -341,14 +508,23 @@ int32_t fandhe_apple_sound_classification_start(void) {
                                                      }
                                                      if (!granted) {
                                                          FandheSoundFinish(kSoundFailed, 5, 0);
+                                                         FANDHE_SOUND_NOTIFY();
                                                          return;
                                                      }
+#if TARGET_OS_IPHONE
+                                                     if (g_background) {
+                                                         // 応答が背景遷移の後に届いた。録音は始めない。
+                                                         FandheSoundFinish(kSoundInterrupted, 0, 1);
+                                                         FANDHE_SOUND_NOTIFY();
+                                                         return;
+                                                     }
+#endif
                                                      int32_t r = FandheSoundBegin();
-                                                     if (r == 0) {
-                                                         return;
+                                                     if (r != 0) {
+                                                         FandheSoundFinish(kSoundFailed,
+                                                                           r == 3 ? 6 : 9, 0);
                                                      }
-                                                     FandheSoundFinish(kSoundFailed,
-                                                                       r == 3 ? 6 : 9, 0);
+                                                     FANDHE_SOUND_NOTIFY();
                                                  }
                                              });
                                          }];
@@ -415,26 +591,3 @@ void fandhe_apple_sound_classification_stop(void) {
         }
     });
 }
-
-#else  // TARGET_OS_IPHONE
-
-// iOS 区画（b-ios が実装する）。(a) の時点では非対応を返すだけで、成功を偽らない。
-int32_t fandhe_apple_sound_classification_start(void) {
-    return 1;
-}
-
-int32_t fandhe_apple_sound_classification_read(uint64_t *seq, uint8_t *labels, uint32_t *label_lens,
-                                               double *confidences, uint32_t *count, int32_t *reason) {
-    (void)seq;
-    (void)labels;
-    (void)label_lens;
-    (void)confidences;
-    (void)count;
-    (void)reason;
-    return 0;
-}
-
-void fandhe_apple_sound_classification_stop(void) {
-}
-
-#endif
