@@ -164,6 +164,9 @@ pub struct BlePeripheralState {
     pub notice: String,
     /// 失敗系（`TextRole::Error`）。
     pub error: String,
+    /// `Starting` 中に届いた事象の保留。受理結果（[`finish_start`]）の反映後に適用する。
+    /// `Ended` は終端なので、保留したあとに届く事象は捨てる。
+    pub pending_event: Option<ScreenEvent>,
 }
 
 fn clear_messages(state: &mut BlePeripheralState) {
@@ -185,6 +188,7 @@ pub fn request_start(state: &mut BlePeripheralState) {
     state.generation = state.generation.wrapping_add(1);
     state.session = state.generation;
     state.reads = 0;
+    state.pending_event = None;
     clear_advert_info(state);
     clear_messages(state);
 }
@@ -235,8 +239,16 @@ pub fn finish_start(
         return;
     }
     clear_messages(state);
+    let pending = state.pending_event.take();
     match result {
-        Ok(StartResult::Accepted) => state.phase = PeripheralPhase::Waiting,
+        Ok(StartResult::Accepted) => {
+            state.phase = PeripheralPhase::Waiting;
+            // 開始完了より先に届いた事象を、受理の反映後に現在の状態で評価し直す。
+            if let Some(event) = pending {
+                let session = state.session;
+                apply_event(state, session, event);
+            }
+        }
         Ok(StartResult::Unsupported) => {
             state.phase = PeripheralPhase::Idle;
             state.notice = UNSUPPORTED_NOTICE.to_string();
@@ -269,8 +281,15 @@ pub fn finish_stop(
 }
 
 /// OS からの事象を反映する。`session` が現在の公開と一致し、`Waiting` / `Advertising` のときだけ
-/// 反映する（古い世代・停止後・停止処理中の事象は捨てる）。
+/// 反映する（古い世代・停止後・停止処理中の事象は捨てる）。`Starting` 中の事象は保留する。
 pub fn apply_event(state: &mut BlePeripheralState, session: u64, event: ScreenEvent) {
+    if state.session == session && state.phase == PeripheralPhase::Starting {
+        // 開始結果より先に届いた事象は捨てず、finish_start の反映後に適用する。
+        if !matches!(state.pending_event, Some(ScreenEvent::Ended(_))) {
+            state.pending_event = Some(event);
+        }
+        return;
+    }
     if state.session != session
         || !matches!(
             state.phase,
@@ -395,6 +414,40 @@ mod tests {
         let sess = s.session;
         apply_event(&mut s, sess, adv());
         s
+    }
+
+    #[test]
+    fn event_during_starting_is_held_until_accept() {
+        let mut s = starting();
+        let sess = s.session;
+        apply_event(&mut s, sess, adv());
+        apply_event(&mut s, sess, ScreenEvent::Ended(EndKind::BluetoothOff));
+        // 終端の後に届いた事象は保留を上書きしない。
+        apply_event(&mut s, sess, adv());
+        assert_eq!(s.phase, PeripheralPhase::Starting);
+        let g = s.generation;
+        finish_start(&mut s, g, Ok(StartResult::Accepted));
+        assert_eq!(s.phase, PeripheralPhase::Idle);
+        assert_eq!(s.error, BLUETOOTH_OFF_ERROR);
+        assert!(s.pending_event.is_none());
+    }
+
+    #[test]
+    fn pending_advertising_applies_after_accept_and_drops_on_failure() {
+        let mut s = starting();
+        let sess = s.session;
+        apply_event(&mut s, sess, adv());
+        let g = s.generation;
+        finish_start(&mut s, g, Ok(StartResult::Accepted));
+        assert_eq!(s.phase, PeripheralPhase::Advertising);
+
+        let mut s = starting();
+        let sess = s.session;
+        apply_event(&mut s, sess, adv());
+        let g = s.generation;
+        finish_start(&mut s, g, Err(PeripheralFailure));
+        assert_eq!(s.phase, PeripheralPhase::Idle);
+        assert!(s.pending_event.is_none());
     }
 
     #[test]
