@@ -496,6 +496,17 @@ public class MainActivity extends GameActivity {
         translationHelper.cancel(requestId);
     }
 
+    // 住所の座標変換（Issue #693）。実装は `GeocodingHelper`。Rust の `android_geocoding_search.rs` が JNI で呼ぶ。
+    private final GeocodingHelper geocodingHelper = new GeocodingHelper(this);
+
+    void requestGeocode(long requestId, String address, int maxResults) {
+        geocodingHelper.request(requestId, address, maxResults);
+    }
+
+    void cancelGeocode(long requestId) {
+        geocodingHelper.cancel(requestId);
+    }
+
     // スペルチェック（Issue #580）。実装は `SpellCheckHelper`。Rust の `android_spell_check.rs` が JNI で呼ぶ。
     private final SpellCheckHelper spellCheckHelper = new SpellCheckHelper(this);
 
@@ -4884,6 +4895,7 @@ public class MainActivity extends GameActivity {
         super.onDestroy();
         pedometerHelper.onDestroy();
         translationHelper.onDestroy();
+        geocodingHelper.onDestroy();
         spellCheckHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();

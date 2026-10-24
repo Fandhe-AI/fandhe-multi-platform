@@ -124,9 +124,9 @@ pub mod android_fullscreen_immersive;
 /// JNI エクスポートは Android ターゲットのみでコンパイルされる（モジュール自体の cfg は
 /// 付けない。`device/tilt.rs` と同じ判断）。`device/gamepad.rs` の Android 経路から使われる。
 pub mod android_gamepad;
-/// Issue #691: Android 向け住所の座標変換の骨格（`Unsupported` のスタブ。#693 が
-/// `android.location.Geocoder` で埋める）。`device/geocoding_search.rs` の Android 経路から呼ばれる。
-/// 後続の子がホストテストを足すときに本行の cfg を広げずに済むよう test でもコンパイルする。
+/// Issue #693: Android 向け住所の座標変換の実装（`android.location.Geocoder`、Java 側は
+/// `GeocodingHelper`）。`device/geocoding_search.rs` の Android 経路から呼ばれる。
+/// 写像・期限のホストテストが走るよう cfg は `any(android, test)`。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_geocoding_search;

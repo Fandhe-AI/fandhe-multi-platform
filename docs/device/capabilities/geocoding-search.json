@@ -17,14 +17,17 @@
       "note": "未実装。iOS 26 未満は Unsupported にする（非推奨の CLGeocoder へ倒さない）。地理コードはアプリごとにレート制限があり、上限で `MKErrorLoadingThrottled` を返す。結果は推測で精度の保証なし"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`android.location.Geocoder`（API 33 以上は `GeocodeListener` 版、24〜32 は同期版）。経路は標準 API なし",
       "perm": "不要（住所 → 座標は位置情報の権限を確かめない。`INTERNET` は宣言済み）",
       "url": [
         "https://developer.android.com/reference/android/location/Geocoder",
         "https://developer.android.com/reference/android/location/Geocoder.GeocodeListener"
       ],
-      "note": "未実装。フレームワーク API で Gradle 依存の追加は不要。実際の変換はシステムの geocode provider が行い、GMS 端末では通常 Play services が提供する。provider が無い端末は `isPresent()` が false で、Unsupported を返す。取り消し API は無い。失敗理由（通信不可・回数上限）は区別できない"
+      "note": "実装済み（#693）。画面の固定の公開住所 1 件を `Geocoder` で座標へ変換し、先頭候補の緯度・経度と候補数を出す。API 33 以上は `GeocodeListener` 版、24〜32 は同期版を executor で呼ぶ。`isPresent()` が false なら Unsupported。0 件・座標なし・範囲外・時間切れを失敗にし、成功へ畳まない。通信不可・回数上限・IOException は区別せず失敗にする。住所・座標・OS の例外文はログへ出さない。フレームワーク API で権限と Gradle 依存の追加は不要。守らない範囲: 取り消し API が無く期限後も OS 側の変換が走り切ること、同期版が詰まったときの後続要求の遅れ（Rust の期限で失敗が確定する）、結果の精度と候補の選択、provider の有無による端末差",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#689）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/GeocodingHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_geocoding_search.rs + crates/fandhe-egui-proxy/src/device/geocoding_search.rs + crates/fandhe-core/src/screens/geocoding_search_show.rs + crates/fandhe-device/src/geocoding_search.rs、Issue #693"
     },
     "macos": {
       "status": "done",
