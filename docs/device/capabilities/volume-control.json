@@ -29,7 +29,7 @@
       "note": "未実装。`adjustStreamVolume` は 1 段階ずつ変え、段の幅と上下限は OS が決める。音量固定の端末（`isVolumeFixed()` が真）では変更が効かない（公式）。公式は `adjustStreamVolume` を「全体の音声設定を置き換えるアプリか電話アプリ向け」と書く。音量の変化を知らせる公開の通知（broadcast・listener）は無い。対象はメディア音量（`STREAM_MUSIC`）だけで、着信音・通知音量は扱わない"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "Core Audio `AudioObjectGetPropertyData` / `AudioObjectSetPropertyData` / `AudioObjectIsPropertySettable`。既定の出力機器（`kAudioHardwarePropertyDefaultOutputDevice`）の `kAudioHardwareServiceDeviceProperty_VirtualMainVolume`（Float32、0.0〜1.0、AudioToolbox）と `kAudioDevicePropertyMute`（output scope・main element）",
       "perm": "不要（I/O を開かない）。CoreAudio・AudioToolbox はリンク済み",
       "url": [
@@ -38,10 +38,13 @@
         "https://developer.apple.com/documentation/coreaudio/kaudiodevicepropertymute",
         "https://developer.apple.com/documentation/coreaudio/kaudiodevicepropertyvolumescalar"
       ],
-      "note": "未実装。VirtualMainVolume は機器が主音量を持てばそれを、チャンネル別の音量しか持たなければ優先ステレオ対のチャンネルをまとめて動かし、左右の比を保つ（SDK のヘッダ）。音量の値は機器が選べる値へ丸められる（`kAudioDevicePropertyVolumeScalar` のヘッダ）。音量の制御を持たない出力機器（HDMI 等）ではプロパティが無い。段の幅を返す API は無く、1 段階はアプリが決めた幅（1/16）"
+      "note": "実装済み（#785）。毎回既定の出力機器を OS へ問い、「＋」「－」で 1/16 刻みに設定して同じ呼び出しの中で読み戻した値を表示する（設定値は機器が丸めるため読み戻しが少しずれることがある）。上限・下限は「変わらなかった」で失敗にしない。音量を持たない出力機器・設定できない機器は「変更できない」でボタンを出さない。VirtualMainVolume は機器が主音量を持てばそれを、チャンネル別の音量しか持たなければ優先ステレオ対のチャンネルをまとめて動かし、左右の比を保つ（SDK のヘッダ）。音量の値は機器が選べる値へ丸められる（`kAudioDevicePropertyVolumeScalar` のヘッダ）。音量の制御を持たない出力機器（HDMI 等）ではプロパティが無い。段の幅を返す API は無く、1 段階はアプリが決めた幅（1/16）",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#780）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_volume_control.m + crates/fandhe-egui-proxy/src/device/macos_volume_control.rs + crates/fandhe-egui-proxy/src/device/volume_control.rs + crates/fandhe-core/src/screens/volume_control_show.rs + crates/fandhe-device/src/volume_control.rs、Issue #785"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "Core Audio `IMMDeviceEnumerator::GetDefaultAudioEndpoint(eRender, eConsole)` → `IMMDevice::Activate` で `IAudioEndpointVolume`（`GetMasterVolumeLevelScalar` / `GetMute` / `VolumeStepUp` / `VolumeStepDown`）",
       "perm": "不要（package identity 不要）。`windows` クレートに feature `Win32_Media_Audio_Endpoints` を 1 つ足す（新しいクレートは増えない）",
       "url": [
@@ -50,7 +53,10 @@
         "https://learn.microsoft.com/en-us/windows/win32/api/endpointvolume/nf-endpointvolume-iaudioendpointvolume-getmastervolumelevelscalar",
         "https://learn.microsoft.com/en-us/windows/win32/api/endpointvolume/nf-endpointvolume-iaudioendpointvolume-getmute"
       ],
-      "note": "未実装。音量は 0.0〜1.0 の正規化値で、聴感に合わせた曲線（公式）。`VolumeStepUp` / `VolumeStepDown` は OS が決める次の段へ動かし、上限・下限ではなにもせず S_OK を返す（公式）。変化の通知は `RegisterControlChangeNotify` で受けられるが、解除の前にコールバックを解放すると資源が漏れる（公式）"
+      "note": "実装済み（#785）。ワーカー上の COM（MTA）で既定の出力を毎回問い、`VolumeStepUp/Down` の後に読み戻した値を表示する。期限は 5 秒（単調時計）で、期限後に届いた結果は捨てる。出力機器が無いときは失敗ではなく「変更できない」。音量は 0.0〜1.0 の正規化値で、聴感に合わせた曲線（公式）。`VolumeStepUp` / `VolumeStepDown` は OS が決める次の段へ動かし、上限・下限ではなにもせず S_OK を返す（公式）。変化の通知は `RegisterControlChangeNotify` で受けられるが、解除の前にコールバックを解放すると資源が漏れる（公式）",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#780）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_volume_control.rs + crates/fandhe-egui-proxy/src/device/volume_control.rs + crates/fandhe-core/src/screens/volume_control_show.rs + crates/fandhe-device/src/volume_control.rs、Issue #785"
     },
     "web": {
       "status": "no",

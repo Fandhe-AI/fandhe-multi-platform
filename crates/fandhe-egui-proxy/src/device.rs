@@ -310,6 +310,11 @@ pub mod android_url_scheme;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_usb_device;
+/// Issue #785: Android 向けシステム音量実装（#787 が埋めるスタブ）。
+/// `device/volume_control.rs` の Android 経路から使われる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_volume_control;
 /// Issue #534: Android 向け Web 認証セッション実装（Custom Tabs、Java 側 `WebAuthSessionHelper`）。
 /// `device/web_auth_session.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でもコンパイルする。
 #[cfg(any(target_os = "android", test))]
@@ -912,6 +917,11 @@ pub mod ios_translation;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_uwb_ranging;
+/// Issue #785: iOS 向けシステム音量実装（#786 が埋めるスタブ）。
+/// `device/volume_control.rs` の iOS 経路から使われる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_volume_control;
 /// Issue #532: iOS 向け Web 認証セッション実装（`ios/fandhe_ios_web_auth_session.m` の
 /// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -1074,6 +1084,12 @@ pub mod macos_usb_device;
 /// `device/user_idle.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_user_idle;
+/// Issue #785: macOS 向けシステム音量実装（`macos/fandhe_macos_volume_control.m` の Core Audio を呼ぶ
+/// C ABI ラッパー）。`device/volume_control.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
+/// テストできるよう cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_volume_control;
 /// Issue #530: macOS 向け Web 認証セッション実装（`macos/fandhe_macos_web_auth_session.m` の
 /// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の macOS 経路から呼ばれる。
 /// 写像の純関数をホストでテストできるよう cfg は `any(macos, test)`。
@@ -1267,6 +1283,9 @@ pub mod user_idle;
 /// Phase 11 の拡充ループ（親 #129、Issue #653）: UWB による距離・方向の effect ドライバ（iOS は後続 #654 で実装、
 /// 他 OS は `UnsupportedUwbRanging` 固定。Android は GMS 依存のため保留、Web は対象外）。
 pub mod uwb_ranging;
+/// Phase 11 の拡充ループ（親 #166、Issue #785）: システム音量の effect ドライバ
+/// （macOS・Windows 実装、iOS は #786・Android は #787 が埋めるスタブ、他 OS は `UnsupportedVolumeControl` 固定）。
+pub mod volume_control;
 /// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS・Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
 pub mod web_auth_session;
@@ -1558,6 +1577,10 @@ pub mod windows_usb_device;
 /// `device/user_idle.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_user_idle;
+/// Issue #785: Windows 向けシステム音量実装（`IAudioEndpointVolume`）。
+/// `device/volume_control.rs` の Windows 経路（ワーカー）から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_volume_control;
 /// Issue #530: Windows 向け Web 認証セッション実装。`device/web_auth_session.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
