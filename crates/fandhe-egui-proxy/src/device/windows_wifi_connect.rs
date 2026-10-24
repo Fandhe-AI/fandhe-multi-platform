@@ -11,6 +11,7 @@
 //! 3. 一時プロファイル（`wlan_connection_mode_temporary_profile`）で `WlanConnect`。戻り値 0 は
 //!    「要求を受け付けた」だけで、成功にしない。`connection_complete` の通知を待つ
 //! 4. 通知を [`match_notification`] で照合する。`connection_complete` かつ reason が成功のときだけ成功
+//!    （`connection_attempt_fail` は途中経過で終端にしない。失敗理由も `connection_complete` 側で写す）
 //! 5. 片付けは全経路で「登録解除（実行中のコールバックの終了を待つ）→ context の解放 →
 //!    ハンドルを閉じる」の順（`ConnectGuard` の `Drop`）
 //!
@@ -137,7 +138,9 @@ fn match_notification(
     if code == ACM_INTERFACE_REMOVAL {
         return Some(Outcome::Failed);
     }
-    if code != ACM_CONNECTION_COMPLETE && code != ACM_ATTEMPT_FAIL {
+    // attempt_fail は途中経過（同じ SSID の別 AP を続けて試す等）。connection_complete の前に
+    // 0 回以上届くため、終端にせず待ち続ける。成否と失敗理由は connection_complete だけで決める。
+    if code == ACM_ATTEMPT_FAIL || code != ACM_CONNECTION_COMPLETE {
         return None;
     }
     let d = data?;
@@ -147,12 +150,7 @@ fn match_notification(
     if d.mode != MODE_TEMPORARY_PROFILE || d.ssid[..len] != *want_ssid {
         return None;
     }
-    let outcome = outcome_from_reason(d.reason);
-    // 成功は connection_complete のみ。attempt_fail が成功 reason を持っても成功にしない。
-    if outcome == Outcome::Success && code != ACM_CONNECTION_COMPLETE {
-        return Some(Outcome::Failed);
-    }
-    Some(outcome)
+    Some(outcome_from_reason(d.reason))
 }
 
 /// 終端を一度だけ受ける 1 スロット。コールバック（OS スレッド）が確定し、ワーカーが待つ。
@@ -669,7 +667,6 @@ mod tests {
     fn only_complete_with_success_reason_succeeds() {
         let ok = data(1, b"home", 0);
         assert_eq!(m(10, Some(&ok)), Some(Outcome::Success));
-        assert_eq!(m(11, Some(&ok)), Some(Outcome::Failed));
         assert_eq!(
             m(10, Some(&data(1, b"home", 0x28001))),
             Some(Outcome::Failed)
@@ -679,9 +676,26 @@ mod tests {
             Some(Outcome::NotFound)
         );
         assert_eq!(
-            m(11, Some(&data(1, b"home", REASON_NETWORK_NOT_AVAILABLE))),
+            m(10, Some(&data(1, b"home", REASON_NETWORK_NOT_AVAILABLE))),
             Some(Outcome::NotFound)
         );
+    }
+
+    #[test]
+    fn attempt_fail_is_progress_and_complete_decides() {
+        let slot = Slot::new();
+        let fail = data(1, b"home", REASON_NETWORK_NOT_AVAILABLE);
+        let ok = data(1, b"home", 0);
+        // 最初の試行失敗では終端にならず、後続の complete 成功が成功になる。
+        for (code, d) in [(11, &fail), (10, &ok)] {
+            if let Some(o) = m(code, Some(d)) {
+                slot.finish(o);
+            }
+        }
+        assert_eq!(slot.wait(), Outcome::Success);
+        // attempt_fail だけでは終端しない（成功 reason でも同様）。
+        assert_eq!(m(11, Some(&fail)), None);
+        assert_eq!(m(11, Some(&ok)), None);
     }
 
     #[test]
