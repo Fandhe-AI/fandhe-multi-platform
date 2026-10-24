@@ -263,7 +263,8 @@ impl FirstResultDeadline {
     }
 
     /// 1 回の読み取り結果を記録し、期限切れなら `true`。
-    /// - `Result`: 受信済みにして期限を外す
+    /// - `Result`: 未受信なら起点からの経過が期限を超えていないか先に確認し（超過なら `true`）、
+    ///   超えていなければ受信済みにして期限を外す
     /// - `AwaitingPermission`: 起点を消す（許可待ちは数えない。許可後の最初の観測が新しい起点）
     /// - `Interrupted`: 終端なので期限は見ない
     /// - `Idle` / `Listening`: 受信済みなら `false`。未受信なら起点からの経過が
@@ -272,6 +273,14 @@ impl FirstResultDeadline {
     pub fn observe(&mut self, poll: PollKind, now_ms: f64) -> bool {
         match poll {
             PollKind::Result => {
+                if self.received {
+                    return false;
+                }
+                // 期限を過ぎてから届いた初回の結果は成功として受け取らない（契約表 3）。
+                let since = *self.since.get_or_insert(now_ms);
+                if now_ms - since > FIRST_RESULT_TIMEOUT_MS {
+                    return true;
+                }
                 self.received = true;
                 false
             }
@@ -391,6 +400,19 @@ mod tests {
         let c: Vec<(&[u8], f64)> = vec![(b"", 0.5), (b"x", -1.0)];
         assert!(select_top(&c).is_empty());
         assert!(select_top(&[]).is_empty());
+    }
+
+    #[test]
+    fn late_first_result_is_expired() {
+        let mut d = FirstResultDeadline::default();
+        d.begin(0.0);
+        assert!(!d.observe(PollKind::Listening, 5000.0));
+        assert!(d.observe(PollKind::Result, 5250.0));
+        // 期限内の初回結果は受理される。
+        let mut d = FirstResultDeadline::default();
+        d.begin(0.0);
+        assert!(!d.observe(PollKind::Result, 5000.0));
+        assert!(!d.observe(PollKind::Listening, 99999.0));
     }
 
     #[test]

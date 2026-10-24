@@ -258,11 +258,25 @@ static int32_t FandheSoundBegin(void) {
                                          @try {
                                              [analyzer analyzeAudioBuffer:buffer atAudioFramePosition:pos];
                                          } @catch (NSException *e) {
-                                             // 内容は出さない。結果が届かなければ期限切れで確定する。
+                                             // 内容は出さない。制御キューへ戻し、世代と状態を確かめて
+                                             // 失敗を確定する（Finish が資源も解放する）。
+                                             dispatch_async(g_ctrl, ^{
+                                                 @autoreleasepool {
+                                                     if (gen == g_generation &&
+                                                         g_state == kSoundListening) {
+                                                         FandheSoundFinish(kSoundFailed, 9, 0);
+                                                     }
+                                                 }
+                                             });
                                          }
                                      }
                                  });
                              }];
+            if (![engine startAndReturnError:&error]) {
+                FandheSoundTeardown();
+                return 9;
+            }
+            // 開始中のグラフ変更を InputChanged と誤認しないよう、start 成功後に登録する。
             g_config_token = [[NSNotificationCenter defaultCenter]
                 addObserverForName:AVAudioEngineConfigurationChangeNotification
                             object:engine
@@ -276,10 +290,6 @@ static int32_t FandheSoundBegin(void) {
                                 }
                             });
                         }];
-            if (![engine startAndReturnError:&error]) {
-                FandheSoundTeardown();
-                return 9;
-            }
             g_state = kSoundListening;
             g_has_result = NO;
             g_count = 0;
