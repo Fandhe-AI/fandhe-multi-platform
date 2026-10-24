@@ -8,7 +8,7 @@
 //! **dispatch はここで最終形にしてあり、後続 issue は OS 別モジュールだけを埋める**。
 //!
 //! - macOS: [`super::macos_launch_at_login`]（`SMAppService.mainApp`）
-//! - Windows: [`super::windows_launch_at_login`]（骨格のスタブ。Issue #697 が埋める）
+//! - Windows: [`super::windows_launch_at_login`]（HKCU の Run キー。Issue #697）
 //! - それ以外: `UnsupportedLaunchAtLogin` 固定で、画面には「未対応」と出る
 //!
 //! # 流れ
@@ -33,7 +33,7 @@ use fandhe_device::DeviceError;
 
 use crate::app::CompletionSender;
 
-/// 現在の OS の実装（macOS は `SMAppService`、Windows は骨格のスタブ、他は `Unsupported` 固定）。
+/// 現在の OS の実装（macOS は `SMAppService`、Windows は HKCU の Run キー、他は `Unsupported` 固定）。
 fn platform_launch_at_login() -> &'static dyn LaunchAtLogin {
     static IMPL: OnceLock<Box<dyn LaunchAtLogin>> = OnceLock::new();
     IMPL.get_or_init(|| {
