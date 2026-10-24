@@ -82,6 +82,8 @@ final class CompanionDeviceHelper {
     // onAssociationCreated で届いた現在の要求の関連付け（AssociationInfo。API 33 未満では常に null）。
     private Object pendingInfo;
     private boolean destroyed;
+    // 解除に失敗した関連付け（再試行のため保持する）。
+    private final java.util.List<Object> orphans = new java.util.ArrayList<>();
     // RESULT_OK 後に AssociationInfo を待つ猶予。postDelayed は端末稼働時間（単調時計）基準で、壁時計の変更に影響されない。
     private static final long INFO_GRACE_MS = 3000L;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
@@ -366,8 +368,36 @@ final class CompanionDeviceHelper {
         return disassociate((AssociationInfo) info);
     }
 
+    // 外せなかった関連付けは破棄せず orphans に保持し、次の pick・確定・onDestroy で再試行する。
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private boolean disassociate(AssociationInfo info) {
+        if (rawDisassociate(info)) {
+            return true;
+        }
+        orphans.add(info);
+        return false;
+    }
+
+    // 保持中の外せなかった関連付けを再試行する。結果は呼び出し元の確定種別には影響しない。
+    private void retryOrphans() {
+        if (orphans.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return;
+        }
+        retryOrphansApi33();
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private void retryOrphansApi33() {
+        java.util.Iterator<Object> it = orphans.iterator();
+        while (it.hasNext()) {
+            if (rawDisassociate((AssociationInfo) it.next())) {
+                it.remove();
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private boolean rawDisassociate(AssociationInfo info) {
         try {
             CompanionDeviceManager cdm = activity.getSystemService(CompanionDeviceManager.class);
             if (cdm == null) {
@@ -380,11 +410,13 @@ final class CompanionDeviceHelper {
         }
     }
 
-    // 記録済みの関連付けを外して捨てる。
-    private void dropPendingInfo() {
+    // 記録済みの関連付けを外す。外せなければ orphans に保持して false を返す（呼び出し元が Internal に反映する）。
+    private boolean dropPendingInfo() {
         Object info = pendingInfo;
         pendingInfo = null;
-        disassociateObject(info);
+        boolean released = disassociateObject(info);
+        retryOrphans();
+        return released;
     }
 
     // first-wins: 現在の要求だけ確定して Rust へ返す。名前は KIND_SELECTED のときだけ渡す。
@@ -394,8 +426,10 @@ final class CompanionDeviceHelper {
             launchedId = RequestTracker.NONE;
             okWaitingId = RequestTracker.NONE;
             // 確定時に残った関連付けを外す（成功経路の分は completeSelected が外して null にしてある）。
-            dropPendingInfo();
-            nativeOnCompanionDeviceResult(id, kind, kind == KIND_SELECTED ? name : null);
+            boolean released = dropPendingInfo();
+            // 関連付けを外せないまま成功以外の別の結果を返さない（外せなければ Internal）。
+            int finalKind = released || kind == KIND_INTERNAL ? kind : KIND_INTERNAL;
+            nativeOnCompanionDeviceResult(id, finalKind, finalKind == KIND_SELECTED ? name : null);
         }
     }
 
