@@ -32,7 +32,7 @@
       "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_open_in_shell.m + crates/fandhe-egui-proxy/src/device/macos_open_in_shell.rs + crates/fandhe-egui-proxy/src/device/open_in_shell.rs + crates/fandhe-core/src/screens/open_in_shell.rs + crates/fandhe-device/src/open_in_shell.rs、Issue #749"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "Win32 `ShellExecuteW`（verb `open`、引数なし）で開く。`SHOpenFolderAndSelectItems` + `ILCreateFromPathW` / `ILFree` で Explorer に選択表示。危険な型は `AssocIsDangerous` で拒否",
       "perm": "なし（Win32 desktop の API。package identity は不要。`windows` クレートの feature は既存の `Win32_UI_Shell` / `Win32_UI_Shell_Common` / `Win32_System_Com` / `Win32_UI_WindowsAndMessaging` で足り、追加なし）",
       "url": [
@@ -41,7 +41,10 @@
         "https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-ilcreatefrompathw",
         "https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-associsdangerous"
       ],
-      "note": "未実装。`ShellExecuteW` は 32 超で成功、`SE_ERR_NOASSOC`（31）は関連付けなし。COM（STA）の初期化を先に行う（公式は常に初期化を推奨、`SHOpenFolderAndSelectItems` は未初期化だと失敗する）。`ILCreateFromPathW` のパスは MAX_PATH（終端込み 260 文字）以内。`AssocIsDangerous` は .exe 等の危険な型を判定する（公式）。成功の戻り値は OS が受理したことだけで、アプリが表示したかは分からない。ゴミ箱は `IFileOperation`（今回の範囲外）"
+      "note": "実装済み（#750）。`ShellPath` の `\\\\?\\` 接頭辞を外して `X:\\` で渡し、UNC・デバイスパス・代替データストリーム・要素末尾の `.` と空白・260 文字以上は拒否する。「開く」は固定の拒否一覧（.exe 等）と `AssocIsDangerous` の 2 段で型を拒否する。COM は STA で初期化する。`ShellExecuteW` は 32 超を受理、`SE_ERR_NOASSOC`（31）は関連付けなし、それ以外は失敗。成功は OS が受理したことだけを表し、アプリや Explorer が表示したかは分からない。ゴミ箱は範囲外",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#744）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_open_in_shell.rs + crates/fandhe-egui-proxy/src/device/open_in_shell.rs + crates/fandhe-core/src/screens/open_in_shell.rs + crates/fandhe-device/src/open_in_shell.rs、Issue #750"
     },
     "web": {
       "status": "n-a",
