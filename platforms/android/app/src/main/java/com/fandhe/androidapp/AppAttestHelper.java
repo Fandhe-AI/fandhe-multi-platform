@@ -13,6 +13,9 @@ import java.security.SecureRandom;
 import java.security.cert.Certificate;
 import java.security.spec.ECGenParameterSpec;
 import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Set;
 import java.util.UUID;
 
 // 端末・アプリの真正性証明（Issue #678、親 #132 の b-android）の Android 実装ヘルパー。
@@ -34,7 +37,9 @@ import java.util.UUID;
 // ロック待ちも期限に数え、鍵生成後に締切を過ぎていれば成功を捨てて 1 を返す。
 // ライフサイクル: Activity の再生成でも中断しない。結果の破棄は Rust 側の保留記録の破棄で行う。
 // 鍵: alias は要求ごとに一意（UUID のみ。外部文字列を含めない）。finally で必ず削除する。
-// 前回プロセスがクラッシュして残した alias は、プロセス内の初回だけロック内で掃除する。
+// 削除に失敗した場合は成功コードを返さず 2（鍵ストアの失敗）にし、alias を LEFTOVER に保持して
+// 次の要求の冒頭で再試行する。前回プロセスが残した alias の掃除は、列挙と全削除が成功するまで
+// 要求ごとに再試行する（途中で失敗したら swept を立てない）。
 //
 // 守る範囲: 失敗を成功値へ畳まないこと・鍵エントリの全経路での解放・FFI に渡す長さの上限。
 // 守らない範囲: チェーンの信頼性、StrongBox の不使用（非搭載端末で例外になるため）、端末ごとの
@@ -52,6 +57,8 @@ final class AppAttestHelper {
     private static final Object LOCK = new Object();
     // LOCK の内側でだけ読み書きする。
     private static boolean swept = false;
+    // 削除に失敗して残っている alias。LOCK の内側でだけ読み書きする。
+    private static final Set<String> LEFTOVER = new HashSet<>();
 
     private AppAttestHelper() {}
 
@@ -88,6 +95,7 @@ final class AppAttestHelper {
             }
             sweepOnce(ks);
             final String alias = ALIAS_PREFIX + UUID.randomUUID();
+            byte[] result;
             try {
                 KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(
                         alias, KeyProperties.PURPOSE_SIGN)
@@ -100,17 +108,18 @@ final class AppAttestHelper {
                 gen.initialize(spec);
                 gen.generateKeyPair();
                 Certificate[] chain = ks.getCertificateChain(alias);
-                if (System.nanoTime() >= deadline) {
-                    return code(TIMEOUT);
-                }
-                return encode(chain);
+                // 期限切れでも return せず、下の release で鍵を消してから返す。
+                result = System.nanoTime() >= deadline ? code(TIMEOUT) : encode(chain);
             } catch (GeneralSecurityException | ProviderException e) {
-                return code(KEYSTORE);
+                result = code(KEYSTORE);
             } catch (RuntimeException e) {
-                return code(FAILED);
-            } finally {
-                deleteQuietly(ks, alias);
+                result = code(FAILED);
             }
+            // 鍵を消せなかったときは成功を返さない（鍵が残ったまま 0 を返す嘘の成功の禁止）。
+            if (!release(ks, alias) && result[0] == OK) {
+                return code(KEYSTORE);
+            }
+            return result;
         }
     }
 
@@ -143,30 +152,49 @@ final class AppAttestHelper {
         return out.toByteArray();
     }
 
-    // 前回プロセスの残りを掃除する。失敗は握る（今回の要求の成否に影響させない）。LOCK の内側で呼ぶ。
+    // 前回プロセスと過去の削除失敗の残りを掃除する。LOCK の内側で呼ぶ。
+    // 今回の要求の成否には影響させない。列挙・削除のどれかが失敗したら swept を立てず次回再試行する。
     private static void sweepOnce(KeyStore ks) {
+        Iterator<String> it = LEFTOVER.iterator();
+        while (it.hasNext()) {
+            if (deleteEntry(ks, it.next())) {
+                it.remove();
+            }
+        }
         if (swept) {
             return;
         }
-        swept = true;
+        boolean clean = true;
         try {
             Enumeration<String> aliases = ks.aliases();
             while (aliases.hasMoreElements()) {
                 String a = aliases.nextElement();
-                if (a != null && a.startsWith(ALIAS_PREFIX)) {
-                    deleteQuietly(ks, a);
+                if (a != null && a.startsWith(ALIAS_PREFIX) && !deleteEntry(ks, a)) {
+                    LEFTOVER.add(a);
+                    clean = false;
                 }
             }
         } catch (Exception e) {
-            // 掃除は best effort。
+            clean = false;
         }
+        swept = clean;
     }
 
-    private static void deleteQuietly(KeyStore ks, String alias) {
+    // 鍵を削除し、失敗した alias は LEFTOVER へ保持する。成功なら true。
+    private static boolean release(KeyStore ks, String alias) {
+        if (deleteEntry(ks, alias)) {
+            return true;
+        }
+        LEFTOVER.add(alias);
+        return false;
+    }
+
+    private static boolean deleteEntry(KeyStore ks, String alias) {
         try {
             ks.deleteEntry(alias);
+            return true;
         } catch (Exception e) {
-            // 解放の失敗で結果を変えない。
+            return false;
         }
     }
 
