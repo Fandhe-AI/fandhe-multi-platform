@@ -22,10 +22,14 @@
     },
     "macos": {
       "status": "possible",
-      "api": "AppKit `NSColorSampler`",
-      "perm": "なし",
-      "url": "https://developer.apple.com/documentation/appkit/nscolorsampler",
-      "note": "未実装。画面収録の許可は不要の見込み（要確認）。ユーザーが画面上をクリックして色を選ぶ"
+      "api": "AppKit `NSColorSampler`（macOS 10.15+、`showSamplerWithSelectionHandler:`）。結果の `NSColor` を `colorUsingColorSpace:NSColorSpace.sRGBColorSpace` で sRGB に直して読む",
+      "perm": "なし（画面収録の許可は要らない。新しい framework・entitlement・Info.plist キーの追加なし。AppKit は既存のリンク）",
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nscolorsampler",
+        "https://developer.apple.com/documentation/appkit/nscolorsampler/show(selectionhandler:)",
+        "https://developer.apple.com/videos/play/wwdc2019/210/"
+      ],
+      "note": "未実装。`show` はすぐ戻り、利用者がクリックするとサンプラーを閉じて、選択ハンドラを main thread で呼ぶ（公式）。取り消すとハンドラに nil が渡る。自前で画面を読むと macOS 10.15 から画面収録の許可を求められるが、`NSColorSampler` を使えば求められない（WWDC19「What's New in AppKit for macOS Catalina」）。サンプラーを閉じる公開 API は無い。ハンドラが必ず一度呼ばれるかは公式に記述がない"
     },
     "windows": {
       "status": "no",
@@ -36,12 +40,16 @@
     },
     "web": {
       "status": "possible",
-      "api": "`EyeDropper` API（`new EyeDropper().open()`）",
-      "perm": "なし（ユーザー操作内で呼ぶ）",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/EyeDropper_API",
-      "safari": "Safari 非対応（Firefox も非対応と認識、要確認）",
-      "note": "MDN は Limited availability。Chromium 限定"
+      "api": "`EyeDropper` API（`new EyeDropper().open({ signal })`、結果は `sRGBHex`）",
+      "perm": "なし（secure context 限定。`open()` はユーザー操作（transient activation）の中で呼ぶ。外だと `NotAllowedError`）",
+      "url": [
+        "https://developer.mozilla.org/en-US/docs/Web/API/EyeDropper_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/EyeDropper/open",
+        "https://wicg.github.io/eyedropper-api/"
+      ],
+      "safari": "Safari 非対応（iOS を含む）。Firefox・Android 版 Chrome も非対応。デスクトップの Chrome・Edge 95 以降のみ",
+      "note": "未実装。MDN は Limited availability・Experimental。`EyeDropper` は `[SecureContext]` で、secure context 外ではコンストラクタ自体が無い。`open()` の拒否は `NotAllowedError`（ユーザー操作外）・`InvalidStateError`（別のスポイトが開いている）・`AbortError`（Esc での取り消し・`AbortSignal` での中断）・`OperationError`（その他の失敗）（MDN）。`sRGBHex` は `#aabbcc` 形式の sRGB"
     }
   },
-  "note": "eye-dropper は macOS と Web のみ。ほかは no のため、共通 trait は「この OS では使えない」を返す前提になる。今回の範囲: ボタンを押すとスポイトが起動し、選んだ色を 16 進で画面に出す（macOS と Web）。"
+  "note": "eye-dropper は macOS と Web のみ。ほかは no のため、共通 trait は「この OS では使えない」を返す前提になる。color-picker（既存 id）との違い: こちらは画面上の任意の点から色を拾う。今回の範囲: ボタンを押すとスポイトが起動し、選んだ色を 16 進（`#rrggbb`）で画面に出す（macOS と Web）。結果は「選んだ / 取り消した / 非対応 / 失敗」の 4 種で、取り消しを失敗に見せない。OS・ブラウザに対応の有無を先に問い合わせず、呼んだ結果（コンストラクタの有無・例外名・nil）で判定する。macOS は sRGB の外の色を各成分 0〜1 に寄せて丸める。守らない範囲: macOS でハンドラが呼ばれないまま残った場合の復旧（閉じる API が無く期限も持たない）、sRGB の外の色の正確さ、ブラウザ・OS ごとのサンプリング位置や色管理の差、複数タブ・複数プロセスでの同時操作。拾った色はログに出さない。"
 }
