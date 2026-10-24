@@ -593,6 +593,9 @@ pub mod flashlight;
 /// Phase 11 の拡充ループ（親 #104、Issue #438）: 集中モードの状態の effect ドライバ（Windows 実装、
 /// Android は JNI 実装、他 OS は `UnsupportedFocusStatus` 固定）。
 pub mod focus_mode_status;
+/// Phase 11 の拡充ループ（親 #141、Issue #723）: 折りたたみの姿勢の effect ドライバ
+/// （全ネイティブ OS は `UnsupportedFoldablePosture` 固定。Web は `fandhe-web-dom`）。
+pub mod foldable_posture;
 /// Phase 11 の拡充ループ（親 #1133、Issue #1312）: 全画面表示の effect ドライバ（macOS/Windows は
 /// eframe の viewport コマンド、iOS/Android は OS 別モジュール、他 OS は
 /// `UnsupportedFullscreen` 固定。Web は `fandhe-web-dom`）。
