@@ -8,31 +8,46 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "`UIApplication.openSettingsURLString`（自アプリの設定画面）を `open(_:)` で開く",
-      "perm": "不要",
-      "url": "https://developer.apple.com/documentation/uikit/uiapplication/1623042-opensettingsurlstring",
-      "note": "未実装。開けるのは自アプリの設定のみで、任意の設定ページは公開 API にない。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "`UIApplication.openSettingsURLString`（自アプリの設定、iOS 8+）と `UIApplication.openNotificationSettingsURLString`（自アプリの通知設定、iOS 16+）から URL を作り、`open(_:options:completionHandler:)`（iOS 10+）で開く。結果は completion の `success`（main thread で非同期に 1 回）",
+      "perm": "不要（usage description・`LSApplicationQueriesSchemes` の追加なし。`canOpenURL` は呼ばない）。deployment target 17.0 のため両方の URL が全域で使える",
+      "url": [
+        "https://developer.apple.com/documentation/uikit/uiapplication/opensettingsurlstring",
+        "https://developer.apple.com/documentation/uikit/uiapplication/opennotificationsettingsurlstring",
+        "https://developer.apple.com/documentation/uikit/uiapplication/open(_:options:completionhandler:)"
+      ],
+      "note": "未実装。公式は「Settings アプリを起動し、自アプリの設定（通知設定）があればそれを表示する」と書く。開けるのは自アプリの頁だけで、Wi-Fi・Bluetooth など任意の設定頁を開く公開 URL は無い（`App-Prefs:` 等の非公開 URL は使わない）。completion の `success` は OS が URL を開けたかで、利用者が設定を変えたかは分からない。扱える app が無ければ `false`（公式）"
     },
     "android": {
       "status": "possible",
-      "api": "`Settings.ACTION_APPLICATION_DETAILS_SETTINGS`・`ACTION_WIFI_SETTINGS`・`ACTION_BLUETOOTH_SETTINGS` 等の Intent",
-      "perm": "不要",
-      "url": "https://developer.android.com/reference/android/provider/Settings",
-      "note": "未実装。ほとんどの設定ページを Intent で開ける。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "`Settings.ACTION_APPLICATION_DETAILS_SETTINGS`（data に `package:<自パッケージ>`、API 9+）と `Settings.ACTION_APP_NOTIFICATION_SETTINGS`（extra `Settings.EXTRA_APP_PACKAGE`、API 26+）の Intent を `Activity.startActivity` で開く。`ActivityNotFoundException` を「開けなかった」に写す",
+      "perm": "不要（uses-permission・`<queries>` の追加なし）。`startActivity` は package visibility を要さない（公式）。`resolveActivity` で事前に確かめない",
+      "url": [
+        "https://developer.android.com/reference/android/provider/Settings#ACTION_APPLICATION_DETAILS_SETTINGS",
+        "https://developer.android.com/reference/android/provider/Settings#ACTION_APP_NOTIFICATION_SETTINGS",
+        "https://developer.android.com/training/package-visibility/use-cases"
+      ],
+      "note": "未実装。公式は設定の Intent について「対応する Activity が無い場合があるので備えること」と書く。通知設定の Intent は API 26 で追加され、minSdk 24 の端末（API 24・25）では Activity が無く `ActivityNotFoundException` になる見込みで、そのときは「開けなかった」と出す（別の頁へ置き換えない）。前景（RESUMED）でないときは OS に黙って抑止されうるため起動しない。`startActivity` が戻ったことは OS が Intent を受け付けたことまでで、利用者が設定を変えたかは分からない"
     },
     "macos": {
       "status": "possible",
-      "api": "`NSWorkspace.open` で `x-apple.systempreferences:` URL を開く",
+      "api": "公開の入口は `SMAppService.openSystemSettingsLoginItems()`（ログイン項目、macOS 13+、launch-at-login で使用済み）と、`EndpointSecurity/ESClient.h` が書くフルディスクアクセスの `x-apple.systempreferences:` URL だけ",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/appkit/nsworkspace",
-      "note": "未実装。ペイン ID は非公式で OS バージョンにより変わる（要確認）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "url": [
+        "https://developer.apple.com/documentation/servicemanagement/smappservice/opensystemsettingsloginitems()",
+        "https://developer.apple.com/forums/thread/714724"
+      ],
+      "deferred": "今回の範囲（自アプリの設定・通知設定）に当たる公開の入口が無いため保留。`x-apple.systempreferences:` のペイン ID は一覧が公開されておらず、Apple の開発者フォーラムでも「URL scheme は明示的に文書化されない限り API ではない」とされる。文書化されているのはフルディスクアクセス（`ESClient.h`）とログイン項目（`SMAppService`）だけ。Apple が通知設定などの入口を文書化するか、範囲をこの 2 つに広げると決めたら着手できる",
+      "note": "未実装。非公開のペイン ID（通知・プライバシー等）は OS のバージョンで変わるため使わない。ログイン項目を開く操作は launch-at-login の型サンプル画面で実装済み"
     },
     "windows": {
       "status": "possible",
-      "api": "`ms-settings:` URI を `Launcher.LaunchUriAsync` / `ShellExecute` で開く",
-      "perm": "不要",
-      "url": "https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings-app",
-      "note": "未実装。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "`ms-settings:notifications`（通知）を `ShellExecuteW`（verb `open`）で開く。戻り値 `> 32` を「OS が受け付けた」、`SE_ERR_NOASSOC`（31）を「開けなかった」、それ以外を失敗に写す（compose-mail-sms の `open_url` と同じ表）",
+      "perm": "不要（package identity 不要。`Win32_UI_Shell` は有効済みで、`windows` クレートの feature は増やさない）",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings",
+        "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew"
+      ],
+      "note": "未実装。`ms-settings:` の URI は公式の一覧に載る（頁の有無は Windows の版・SKU で変わる、公式）。自アプリの頁（`ms-settings:appsfeatures-app?<PFN>`）はパッケージ ファミリー名が要り、パッケージ化していない本アプリには無いため、「自アプリの設定」は Windows では非対応と返す（別の頁へ置き換えない）。通知は OS 全体の通知の頁で、本アプリだけの頁ではない。公式は `Launcher.LaunchUriAsync`（WinRT）を例に挙げるが、同じ URI を `ShellExecuteW` で開き、WinRT の依存を足さない"
     },
     "web": {
       "status": "no",
@@ -42,5 +57,5 @@
       "note": "ブラウザから OS やブラウザの設定画面を開く標準 API はない。"
     }
   },
-  "note": "permission 系の許可ダイアログではなく、権限を拒否された後に利用者を OS の設定画面へ導く操作。open-in-shell（URL・ファイルを開く）とは対象が OS 設定で別。"
+  "note": "permission 系の許可ダイアログではなく、権限を拒否された後に利用者を OS の設定画面へ導く操作。open-in-shell（URL・ファイルを開く）とは対象が OS 設定で別。今回の範囲: 開く頁を固定の 2 種（自アプリの設定・通知の設定）に限り、任意の URL・Intent・URI を外から渡す経路は作らない。結果は OS に渡した（OS が受け付けた。開いた頁で利用者が何をしたかは分からない）/ 開けなかった（iOS の completion が `false`・Android の `ActivityNotFoundException`・Windows の関連付けなし）/ この OS では開けない頁（Windows の自アプリの設定）/ 非対応 / 失敗。OS を正にする: 開けるかを事前に判定せず（`canOpenURL`・`resolveActivity` を呼ばない）、OS の戻り値をそのまま写す。開いた後の状態（設定を変えたか・戻ってきたか）をアプリ内で記憶・推測せず、タイマーも使わない。守らない範囲: OS が受け付けた後に設定画面が実際に出たか、利用者の操作、iOS の completion が届かない場合（期限は設けない）、複数プロセス・複数窓。"
 }
