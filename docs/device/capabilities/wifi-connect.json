@@ -47,9 +47,9 @@
       "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_wifi_connect.m + crates/fandhe-egui-proxy/src/device/macos_wifi_connect.rs + crates/fandhe-egui-proxy/src/device/wifi_connect.rs + crates/fandhe-core/src/screens/wifi_connect_show.rs + crates/fandhe-device/src/wifi_connect.rs、Issue #791"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "Win32 wlanapi。`WlanOpenHandle`・`WlanEnumInterfaces` → `WlanRegisterNotification`（ACM の通知だけ）→ `WlanConnect`（`wlan_connection_mode_temporary_profile`、プロファイル XML を渡す）→ `wlan_notification_acm_connection_complete` の `WLAN_CONNECTION_NOTIFICATION_DATA.wlanReasonCode` で結果を受ける",
-      "perm": "宣言・同意は不要の見込み（Windows 11 24H2 の位置情報同意で `ERROR_ACCESS_DENIED` になる関数の一覧に `WlanConnect` は無い）。`windows` クレートの feature `Win32_NetworkManagement_WiFi` は wifi-info で導入済み。MSM の通知は `wiFiControl` が要るため登録しない",
+      "perm": "宣言・同意は不要の見込み（Windows 11 24H2 の位置情報同意で `ERROR_ACCESS_DENIED` になる関数の一覧に `WlanConnect` は無い）。`windows` クレートの feature `Win32_NetworkManagement_WiFi` は wifi-info で導入済みで、`Win32_NetworkManagement_Ndis` を #792 で追加。MSM の通知は `wiFiControl` が要るため登録しない",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlanconnect",
         "https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/ns-wlanapi-wlan_connection_parameters",
@@ -58,7 +58,10 @@
         "https://learn.microsoft.com/en-us/windows/win32/nativewifi/wi-fi-access-location-changes",
         "https://learn.microsoft.com/en-us/windows/win32/nativewifi/wlan-profileschema-sharedkey-security-element"
       ],
-      "note": "未実装。`WlanConnect` はすぐ戻り、接続の成否は `WlanRegisterNotification` で受ける（公式）。`connection_complete` の `wlanReasonCode` が失敗の理由を持つ（公式）。一時プロファイルは XML 文字列で渡し、パスフレーズは `keyMaterial` に平文で入る（公式）。WinRT の `WiFiAdapter.ConnectAsync` はスキャン結果の `WiFiAvailableNetwork` が要り、`Windows.Devices.WiFi` は位置情報の同意の対象のため使わない。"
+      "note": "実装済み（#792）。`WlanConnect` の戻り値 0 は要求の受け付けにすぎないため成功にせず、`connection_complete` の通知（interface GUID・SSID・一時プロファイルで照合、reason が成功のときだけ成功）を待つ。登録解除 → context の解放 → ハンドルを閉じる、の順を全経路で守る。アダプターが外れた通知（`interface_removal`）は失敗として待ちを終える。一時プロファイルは XML 文字列で渡し、SSID は 16 進、パスフレーズは XML エスケープして `keyMaterial` に平文で入る（公式）。失敗したときだけ電源を読み直して Wi-Fi オフを分ける。`UNSUPPORTED_SECURITY` は返さず、WPA3 のみのネットワークなどは `CONNECT_FAILED` に入る。`windows` クレートの feature `Win32_NetworkManagement_Ndis` を足した（`WlanConnect` の型がこの下にある。新規パッケージは増えない）。WinRT の `WiFiAdapter.ConnectAsync` はスキャン結果の `WiFiAvailableNetwork` が要り、`Windows.Devices.WiFi` は位置情報の同意の対象のため使わない。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#782）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_wifi_connect.rs + crates/fandhe-egui-proxy/src/device/windows_wifi_info.rs + crates/fandhe-egui-proxy/src/device/wifi_connect.rs + crates/fandhe-core/src/screens/wifi_connect_show.rs + crates/fandhe-device/src/wifi_connect.rs、Issue #792"
     },
     "web": {
       "status": "no",

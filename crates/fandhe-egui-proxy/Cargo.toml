@@ -537,6 +537,9 @@ windows = { workspace = true, optional = true, features = [
     # Issue #515: `device/windows_wifi_info.rs` が wlanapi（`WlanOpenHandle` / `WlanEnumInterfaces` /
     # `WlanQueryInterface` / `WlanGetNetworkBssList`）を呼ぶ。新規パッケージは増えない（Cargo.lock は不変）。
     "Win32_NetworkManagement_WiFi",
+    # Issue #792: `device/windows_wifi_connect.rs` が `WlanConnect` / `WLAN_CONNECTION_PARAMETERS`
+    # （windows 0.61 では `Win32_NetworkManagement_Ndis` の下）を呼ぶ。新規パッケージは増えない（Cargo.lock は不変）。
+    "Win32_NetworkManagement_Ndis",
     # Issue #531: `device/windows_web_auth_session.rs` が `BCryptGenRandom` / `BCryptHash` を呼ぶ。
     # 新規パッケージは増えない（Cargo.lock は不変）。
     "Win32_Security_Cryptography",

@@ -63,7 +63,7 @@ fn open_error(code: u32) -> DeviceError {
 
 /// `(ソフト, ハード)` の電源状態で、明示的にオフの PHY が 1 つ以上あり、かつ両方オンの PHY が
 /// 無いときだけ true。unknown（0）だけ・空は判定不能として false（偽の失敗を避ける）。
-fn radio_off(states: &[(i32, i32)]) -> bool {
+pub(super) fn radio_off(states: &[(i32, i32)]) -> bool {
     let on = states.iter().any(|&(s, h)| s == RADIO_ON && h == RADIO_ON);
     let off = states
         .iter()
