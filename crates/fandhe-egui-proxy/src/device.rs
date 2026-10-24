@@ -487,6 +487,12 @@ pub mod apple_secure_credential;
 /// macOS/iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_share;
+/// Issue #725 macOS: 環境音の分類実装（`apple/fandhe_apple_sound_classification.m` を呼ぶ C ABI ラッパー）。
+/// `device/sound_classification.rs` の macOS 経路と、b-ios が委譲する `ios_sound_classification` から呼ばれる。
+/// `build.rs` のコンパイル条件と同じ OS 集合（+ ホストテスト）に保つ。
+#[cfg(any(target_os = "ios", target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod apple_sound_classification;
 /// Issue #1024（macOS）/ #1025（iOS）: iOS / macOS 向け音声認識実装（`apple/
 /// fandhe_apple_speech_recognition.m` を呼ぶ C ABI ラッパー）。`device/
 /// speech_recognition.rs` の iOS/macOS 経路から呼ばれる。
@@ -860,6 +866,10 @@ pub mod ios_screen_orientation;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_wake_lock;
+/// Issue #725: iOS 向け環境音の分類（b-ios まではスタブ。実装時に `apple_sound_classification` へ委譲する）。
+/// `device/sound_classification.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_sound_classification;
 /// Issue #579: iOS 向けスペルチェック実装（`ios/fandhe_ios_spell_check.m` の `UITextChecker` を呼ぶ）。`device/spell_check.rs` の
 /// iOS 経路から呼ばれる。ホストテストのため `test` でもコンパイルする。
 #[cfg(any(target_os = "ios", test))]
@@ -1170,6 +1180,9 @@ pub mod share;
 /// Phase 11 の拡充ループ（親 #122、Issue #606）: 共有の受け取りの effect ドライバ（macOS・Android 実装、
 /// 他 OS は `UnsupportedShareReceive` 固定。Web は `fandhe-web-dom`）。
 pub mod share_receive;
+/// Phase 11 の拡充ループ（親 #142、Issue #725）: 環境音の分類の effect ドライバ（macOS 実装、
+/// iOS は b-ios、他 OS は `UnsupportedSoundClassifier` 固定）。
+pub mod sound_classification;
 /// Phase 11 の拡充ループ（親 #1023、Issue #1024・#1025）: 音声認識の effect ドライバ
 /// （macOS/iOS/Windows/Android 実装、Android/Web は兄弟 issue）。
 pub mod speech_recognition;
