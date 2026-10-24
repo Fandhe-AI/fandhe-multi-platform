@@ -21,8 +21,8 @@
 //   open_settings: システム設定のログイン項目を開くよう依頼する（開いたかは確かめない）。
 //
 // エラーの分類は NSError の code で行う（ServiceManagement/SMErrors.h の kSMError* の値:
-// 2 = InvalidSignature / 3 = AuthorizationFailure / 10 = LaunchDeniedByUser）。ドメイン名は
-// 一次情報で未照合のため照合しない。分類が外れても「その他（5）」へ倒れ、成功は作らない。
+// 3 = InvalidSignature / 4 = AuthorizationFailure / 11 = LaunchDeniedByUser。SDK ヘッダと照合済み）。
+// ドメイン名は一次情報で未照合のため照合しない。分類が外れても「その他（5）」へ倒れ、成功は作らない。
 // 登録の成否は可能な限り status の読み戻しで決める（エラー文言に頼らない）。
 // 参照: https://developer.apple.com/documentation/servicemanagement/smappservice
 //
@@ -50,10 +50,10 @@ static int32_t fandhe_launch_at_login_precheck(void) {
 
 static int32_t fandhe_launch_at_login_error_code(NSError *error) {
     switch (error.code) {
-        case 3:
-        case 10:
+        case 4:  // kSMErrorAuthorizationFailure
+        case 11: // kSMErrorLaunchDeniedByUser
             return 3;
-        case 2:
+        case 3:  // kSMErrorInvalidSignature
             return 4;
         default:
             return 5;
