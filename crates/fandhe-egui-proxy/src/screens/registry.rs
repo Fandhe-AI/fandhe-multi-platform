@@ -370,6 +370,10 @@ generated_screens! {
     crate::device::app_attest::app_attest_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "in_app_browser_show" => fandhe_core::screens::in_app_browser_show::current_screen,
+    crate::device::in_app_browser::in_app_browser_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "geocoding_search_show" => fandhe_core::screens::geocoding_search_show::current_screen,
     crate::device::geocoding_search::geocoding_search_show_effect,
     effect
