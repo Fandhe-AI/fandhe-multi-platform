@@ -14,7 +14,7 @@
 //!
 //! # 前提
 //!
-//! - コントロールは macOS 26 以降にしか置けない。26 未満・判定不能なら [`macos_default`] は
+//! - コントロールは macOS 26 以降にしか置けない（互換モードで 16 と報告される場合も 26 扱い）。26 未満・判定不能なら [`macos_default`] は
 //!   `None` を返し、呼び出し側が `UnsupportedQuickSettingsTile` へ倒す（0 回と見せない）
 //! - Team ID は home-widget と同じ `apple_home_widget::macos_app_group_dir` から取る。取れなければ `None`
 
@@ -29,9 +29,14 @@ pub const COUNT_FILE_NAME: &str = "717569636b5f73657474696e67735f636f756e74";
 /// コントロールを置ける最小の macOS メジャーバージョン。
 const MIN_CONTROLS_MAJOR: u32 = 26;
 
+/// macOS 26 が互換モード（古い SDK でのビルド・`SYSTEM_VERSION_COMPAT=1`）で名乗るメジャー。
+/// macOS 16 は実在しないため、この値は 26 と同じ OS として扱う。
+const COMPAT_TAHOE_MAJOR: u32 = 16;
+
 /// OS のメジャーバージョンがコントロールを置ける範囲か。判定できなければ `false`。
+/// 互換モードの 16 は macOS 26 なので対応扱い。
 pub fn supports_controls(major: Option<u32>) -> bool {
-    matches!(major, Some(m) if m >= MIN_CONTROLS_MAJOR)
+    matches!(major, Some(m) if m >= MIN_CONTROLS_MAJOR || m == COMPAT_TAHOE_MAJOR)
 }
 
 /// `"26.0.1"` 形式の OS バージョン文字列からメジャーを取る。
@@ -206,6 +211,9 @@ mod tests {
     fn controls_need_macos_26() {
         assert!(!supports_controls(None));
         assert!(!supports_controls(Some(25)));
+        assert!(!supports_controls(Some(15)));
+        // 互換モードの macOS 26（16 を返す）は対応扱い。
+        assert!(supports_controls(Some(16)));
         assert!(supports_controls(Some(26)));
         assert!(supports_controls(Some(27)));
     }
