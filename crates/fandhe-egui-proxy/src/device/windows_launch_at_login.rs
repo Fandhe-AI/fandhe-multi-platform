@@ -237,7 +237,9 @@ mod win {
     pub(super) fn read_back(expected: &str) -> Result<LoginItemStatus, DeviceError> {
         let owner = current_owner(expected)?;
         let approved = if owner == Ownership::Ours {
-            Some(approved()?)
+            // StartupApproved が読めないだけなら Run キーの登録は済んでいるので、
+            // エラーにせず判別不能（Unknown、有効とは見せない）に落とす。
+            Some(approved().unwrap_or(LoginItemStatus::Unknown))
         } else {
             None
         };
