@@ -129,6 +129,8 @@ pub mod audio_devices_show;
 pub mod audio_play;
 /// Phase 11 の拡充ループ型サンプル「バーコード・QR 読み取り」（親 #116、Issue #557）。
 pub mod barcode_scan;
+/// Phase 11 の拡充ループ型サンプル「BLE の周辺機器役」（親 #164、Issue #778）。
+pub mod ble_peripheral;
 /// Phase 11 の拡充ループ型サンプル「BLE スキャン」（親 #1059、Issue #1060）。
 pub mod ble_scan;
 /// Phase 11 の拡充ループ型サンプル「Bluetooth Classic」（親 #130、Issue #659）。
