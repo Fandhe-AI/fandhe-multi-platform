@@ -1,4 +1,6 @@
 // Issue #1065: アプリが保存した 1 行テキストを表示する WidgetKit 拡張（macOS / iOS 共用）。
+// Issue #719: 同じ拡張にクイック設定コントロール（`FandheCountControl.swift`、macOS 26+）を
+// 同居させるため、エントリポイントを `FandheWidgets`（WidgetBundle）にしてある。
 // 保存は Rust 側（fandhe-egui-proxy の apple_home_widget）が App Group コンテナのファイル
 // へ原子的に書く。ここはそれを読んで表示するだけで、中身を解釈・実行しない。
 // 更新は Rust の再描画要求（ホストアプリ経由の reloadAllTimelines）に任せ、
@@ -74,7 +76,6 @@ struct TextWidgetView: View {
     }
 }
 
-@main
 struct FandheTextWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "FandheTextWidget", provider: TextProvider()) { entry in

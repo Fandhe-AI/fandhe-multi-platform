@@ -28,14 +28,17 @@
       "note": "未実装。タイルのタップでアプリのプロセスが無ければ OS がサービスのために起こすが、`MainActivity` とネイティブライブラリは読み込まれない。回数は Java 側が SharedPreferences（`commit()`）に保存し、Rust は画面から JNI で読む（home-widget の Android と同じ SharedPreferences + JNI の読み出し）。タイルは非アクティブモード（`ACTIVE_TILE` を付けない）"
     },
     "macos": {
-      "status": "possible",
-      "api": "SwiftUI `ControlWidget` / `ControlWidgetButton`（macOS 26+）。操作は App Intents の `AppIntent`（拡張内で実行）",
+      "status": "done",
+      "api": "SwiftUI `ControlWidget` / `ControlWidgetButton`（macOS 26+）。操作は App Intents の `AppIntent`（拡張内で実行）。Rust は App Group コンテナの回数ファイルを読むだけ",
       "perm": "権限ダイアログなし。home-widget の macOS で導入済みの Widget Extension（`FandheTextWidget`、ホストアプリ `FandheWidgetHost`）と App Group（`<Team ID>.com.fandhe.widget`）を再利用し、新しいターゲット・entitlement は足さない",
       "url": [
         "https://developer.apple.com/documentation/swiftui/controlwidget",
         "https://developer.apple.com/documentation/widgetkit/creating-controls-to-perform-actions-across-the-system"
       ],
-      "note": "未実装。macOS 26 以降のみ。拡張の `perform()` が App Group コンテナのファイルの回数を増やし、アプリ（Rust）が同じファイルを読む。Team ID は home-widget と同じく環境変数 `FANDHE_DEVELOPMENT_TEAM` から取り、無ければ Unsupported"
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#710）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_quick_settings_tile.rs + crates/fandhe-egui-proxy/src/device/quick_settings_tile.rs + platforms/apple/FandheTextWidget/Sources/FandheTextWidget/FandheCountControl.swift、Issue #719",
+      "note": "実装済み（#719）。macOS 26 以降のみ。拡張の `perform()` が App Group コンテナのファイルの回数を増やし（拡張内は NSLock で排他、壊れた内容・溢れ・書き込み失敗は throw して数えない）、アプリ（Rust）が同じファイルを読む。Team ID は home-widget と同じく環境変数 `FANDHE_DEVELOPMENT_TEAM` から取る。Team ID が無い・macOS 26 未満・OS バージョンが判定できない場合は Unsupported で、0 回とは見せない。ファイルが無ければ 0 回、壊れた内容・権限拒否は「回数を読み出せません」。守らない範囲: ポーリング間隔（1 秒）ぶんの表示の遅れ、複数の拡張プロセスが同時に走る場合の排他。Mac 目視で見る点: (1) コントロールセンターまたはメニューバーの編集から「Fandhe カウント」を追加できる (2) 押すと回数が増える (3) アプリを止めている間に押した分が次の起動で数えられる (4) App Group の確認ダイアログを拒否したとき「回数を読み出せません」になり 0 にならない"
     },
     "windows": {
       "status": "no",
