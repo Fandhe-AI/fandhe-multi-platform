@@ -178,6 +178,8 @@ pub mod serial_port;
 pub mod share;
 /// Phase 11（端末機能の拡充ループ、親 #122、Issue #606）: 共有の受け取り（他アプリから共有されたテキスト 1 件）。
 pub mod share_receive;
+/// Phase 11（端末機能の拡充ループ、親 #142、Issue #725）: 環境音の分類（上位 3 件のラベルと信頼度）。
+pub mod sound_classification;
 /// Phase 11（端末機能の拡充ループ、親 #1023、Issue #1024）: 音声認識。
 pub mod speech_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #119、Issue #578）: スペルチェック（入力文の誤り語と修正候補）。

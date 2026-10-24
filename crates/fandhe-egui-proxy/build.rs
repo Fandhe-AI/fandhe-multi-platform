@@ -149,6 +149,10 @@
 //! - `apple/fandhe_apple_lan_discovery.m`（Issue #486、`nw_browser` と dns_sd による LAN のサービス探索）は
 //!   **iOS・macOS 双方**で feature `device` 有効時にコンパイルする（`src/device/apple_lan_discovery.rs`
 //!   から呼ばれる契約）。Network をリンクする。
+//! - `apple/fandhe_apple_sound_classification.m`（Issue #725、SoundAnalysis の内蔵分類器と `AVAudioEngine` の
+//!   入力タップによる環境音の分類）は **iOS・macOS 双方**で feature `device` 有効時にコンパイルする
+//!   （`src/device/apple_sound_classification.rs` から呼ばれる契約。iOS 区画は b-ios が埋める）。
+//!   SoundAnalysis をリンクする（AVFoundation は camera/mic_record 用に既にリンク済み）。
 //! - `apple/fandhe_apple_local_peer.m`（Issue #511、MultipeerConnectivity による近くの端末との直接通信）は
 //!   **iOS・macOS 双方**で feature `device` 有効時にコンパイルする（`src/device/apple_local_peer.rs`
 //!   から呼ばれる契約。iOS は b-ios が委譲する）。MultipeerConnectivity をリンクする。
@@ -532,6 +536,9 @@ fn main() {
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
+    // `apple/fandhe_apple_sound_classification.m`（Issue #725 macOS + b-ios iOS）。macOS・iOS 両分岐から呼ぶ
+    // （b-ios は build.rs を触らずに済む）。SoundAnalysis をリンクする。
+    compile_apple_sound_classification();
     // `apple/fandhe_apple_local_peer.m`（Issue #511 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
     compile_apple_local_peer();
@@ -1192,6 +1199,19 @@ fn compile_apple_lan_discovery() {
         .compile("fandhe_apple_lan_discovery");
 
     println!("cargo:rustc-link-lib=framework=Network");
+}
+
+/// `apple/fandhe_apple_sound_classification.m` を `cc` でコンパイルし SoundAnalysis をリンクする
+/// （Issue #725 macOS・b-ios で iOS も共用）。SoundAnalysis は macOS 10.15・iOS 13 からあるため強リンクで
+/// よい（内蔵分類器は `.m` の `@available(macOS 12.0, *)` で守る）。AVFoundation は既にリンク済み。
+fn compile_apple_sound_classification() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_sound_classification.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_sound_classification.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_sound_classification");
+
+    println!("cargo:rustc-link-lib=framework=SoundAnalysis");
 }
 
 /// `apple/fandhe_apple_local_peer.m` を `cc` でコンパイルし MultipeerConnectivity をリンクする
@@ -2091,6 +2111,9 @@ fn build_macos() {
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
+    // `apple/fandhe_apple_sound_classification.m`（Issue #725 macOS + b-ios iOS）。macOS・iOS 両分岐から呼ぶ
+    // （b-ios は build.rs を触らずに済む）。SoundAnalysis をリンクする。
+    compile_apple_sound_classification();
     // `apple/fandhe_apple_local_peer.m`（Issue #511 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
     compile_apple_local_peer();

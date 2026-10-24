@@ -89,6 +89,9 @@ pub mod drag_drop;
 /// Phase 11 の拡充ループ型サンプル「音声認識」（親 #1023、Issue #1024）。
 pub mod speech_recognize;
 
+/// Phase 11 の拡充ループ型サンプル「環境音の分類」（親 #142、Issue #725）。
+pub mod sound_classification_show;
+
 /// Phase 11 の拡充ループ型サンプル「チェックボックス一覧」（親 #1036、Issue #1037）。
 pub mod checkbox_list;
 

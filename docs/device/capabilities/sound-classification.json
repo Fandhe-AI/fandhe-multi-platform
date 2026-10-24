@@ -21,11 +21,14 @@
       "note": "YAMNet などは TFLite の自前モデルで、本機能の対象外（ml-inference の範囲）。"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "SoundAnalysis（`SNClassifySoundRequest` の内蔵分類器 `SNClassifierIdentifierVersion1` + `SNAudioStreamAnalyzer`）+ AVFoundation（`AVAudioEngine` の入力タップ）",
       "perm": "Info.plist `NSMicrophoneUsageDescription`（mic-record で実行体に埋め込み済み。entitlement 不要。App Sandbox 無効の素の実行体のため）",
       "url": "https://developer.apple.com/documentation/soundanalysis/classifying-sounds-in-an-audio-stream",
-      "note": "未実装。内蔵分類器は macOS 12 以上。実行体の最小 OS は 11 のため `@available` で分け、11 は非対応として返す。権限判定は mic-record と同じ `AVCaptureDevice` の API を使う。ターミナルから素の実行体を起動すると TCC の許可の紐づけ先が起動元のアプリになるため、確認は `.app` にまとめて `open` で起動する。入力機器の変更（`AVAudioEngineConfigurationChangeNotification`）では止めて中断扱いにする（公式文書は入力形式が変わったら analyzer を作り直すよう求めている）"
+      "note": "実装済み（#725）。「マイク入力を内蔵分類器へ流し続け、上位 3 件のラベル（OS の識別子のまま）と信頼度を出す」範囲。内蔵分類器は macOS 12 以上で、11 は非対応として返す（`@available` で分ける）。権限判定は mic-record と同じ `AVCaptureDevice` の API を使う。入力機器の変更（`AVAudioEngineConfigurationChangeNotification`）では止めて中断扱いにし、自動では再開しない。状態・結果の格納・許可の応答・通知は 1 本の制御 serial queue に集め、解析は別の serial queue で回す（main へ同期で待たない）。ターミナルから素の実行体を起動すると TCC の許可の紐づけ先が起動元のアプリになるため、確認は `.app` にまとめて `open` で起動する。未確認事項（実際の分類、許可ダイアログ後の最初の結果までの時間、入力機器を変えたときの中断）は Mac 目視で確かめる",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#716）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_sound_classification.m + crates/fandhe-egui-proxy/src/device/apple_sound_classification.rs + crates/fandhe-egui-proxy/src/device/sound_classification.rs + crates/fandhe-core/src/screens/sound_classification_show.rs + crates/fandhe-device/src/sound_classification.rs、Issue #725"
     },
     "windows": {
       "status": "no",
