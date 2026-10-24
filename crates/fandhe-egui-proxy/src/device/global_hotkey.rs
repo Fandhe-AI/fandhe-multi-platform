@@ -345,8 +345,10 @@ mod tests {
         assert_eq!(s.notice, screen::UNSUPPORTED_STATUS);
     }
 
+    // Windows ホストでは本物の `RegisterHotKey` を呼ぶため、非 Windows ホストだけで確かめる。
+    #[cfg(not(target_os = "windows"))]
     #[test]
-    fn windows_stub_is_unsupported() {
+    fn windows_impl_is_unsupported_on_non_windows_host() {
         let imp = super::super::windows_global_hotkey::implementation();
         assert!(matches!(
             imp.register(Arc::new(|| {})),
