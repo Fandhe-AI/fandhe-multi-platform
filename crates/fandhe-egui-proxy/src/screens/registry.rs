@@ -158,6 +158,10 @@ generated_screens! {
     crate::device::speech_recognition::speech_recognize_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "sound_classification_show" => fandhe_core::screens::sound_classification_show::current_screen,
+    crate::device::sound_classification::sound_classification_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "system_tray" => fandhe_core::screens::system_tray::current_screen,
     crate::device::system_tray::system_tray_effect,
     effect
