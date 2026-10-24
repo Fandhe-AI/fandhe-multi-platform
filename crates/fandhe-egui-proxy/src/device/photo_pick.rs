@@ -87,11 +87,11 @@ pub(crate) fn implementation() -> Arc<dyn PhotoPicker> {
 
 /// 復号確認を通った画像。
 pub(crate) struct Decoded {
-    image: egui::ColorImage,
-    format: &'static str,
-    size: usize,
-    width: u32,
-    height: u32,
+    pub(crate) image: egui::ColorImage,
+    pub(crate) format: &'static str,
+    pub(crate) size: usize,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
 }
 
 fn format_name(f: ImageFormat) -> &'static str {
@@ -105,7 +105,7 @@ fn format_name(f: ImageFormat) -> &'static str {
 
 /// 2 段目: 実際に復号できるかを確かめ、表示用の画素を作る。失敗は `Internal`。
 /// ファイル名・パス・バイト列はエラーに含めない（A09）。
-fn decode_for_display(photo: &PickedPhoto) -> Result<Decoded, DeviceError> {
+pub(crate) fn decode_for_display(photo: &PickedPhoto) -> Result<Decoded, DeviceError> {
     let fail = DeviceError::Internal("photo_picker decode");
     let format = match photo.format {
         ImageFormat::Png => image::ImageFormat::Png,

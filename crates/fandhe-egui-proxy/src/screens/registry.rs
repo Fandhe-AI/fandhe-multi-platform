@@ -382,6 +382,10 @@ generated_screens! {
     crate::device::companion_device::companion_device_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "document_scan_show" => fandhe_core::screens::document_scan_show::current_screen,
+    crate::device::document_scan::document_scan_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "in_app_browser_show" => fandhe_core::screens::in_app_browser_show::current_screen,
     crate::device::in_app_browser::in_app_browser_show_effect,
     effect
