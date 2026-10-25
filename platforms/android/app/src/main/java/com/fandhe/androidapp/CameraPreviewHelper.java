@@ -44,7 +44,7 @@ import java.util.Collections;
 // スレッド: 許可・開始・ライフサイクルは UI スレッド、open・フレーム受信・ズーム適用・解放は
 // プロセスで 1 本のカメラスレッド（`CameraThread`、Activity 再生成をまたいで終了しない）に直列化する
 // （前の解放が次の open より先に終わる。途中の open の onOpened も必ず受けて閉じる）。
-// CameraDevice.close() は非同期のため、次の open は前のデバイスの onClosed を待つ（`outstandingDevices`）。
+// CameraDevice.close() は非同期のため、次の open は前のデバイスの onClosed を待つ（`outstandingSessions`、セッション単位で追跡）。
 // 状態は `lock` で守り、native 通知は必ず `lock` の外で行う（Rust 側のロックとの取り合いを避ける）。
 //
 // 数値コード: `nativeOnCameraPreviewEvent` の code / detail の SSOT は Rust の
@@ -125,9 +125,11 @@ final class CameraPreviewHelper {
     // 以下 2 つは lock の内側。
     private Session session;
     private boolean destroyedHelper;
-    // openCamera 済みで onClosed が未着の CameraDevice の数と、それ待ちの open（lock の内側）。
+    // openCamera 済みで onClosed が未着のセッションの集合と、それ待ちの open（lock の内側）。
     // Camera2 の close は非同期で、完了前に次の open をすると使用中で失敗し得るため、onClosed で確定する。
-    private static int outstandingDevices;
+    // 数ではなくセッション単位で持ち、対応するセッションの onClosed でのみ外す
+    // （期限切れで一括破棄すると、遅れて届く旧 onClosed が新デバイス分の追跡を壊す）。
+    private static final java.util.Set<Session> outstandingSessions = new java.util.HashSet<>();
     private static Runnable deferredOpen;
     private static final long DEFER_TIMEOUT_MS = 2000;
     // 取り消し済みの最大 id（lock の内側）。stop が start より先に走っても古い要求を開始しない。
@@ -335,8 +337,13 @@ final class CameraPreviewHelper {
     }
 
     private void openOnCameraThread(long id, Handler h) {
+        openOnCameraThread(id, h, false);
+    }
+
+    // skipDefer: close 待ちの期限切れで進める場合 true（再度保留しない。追跡は外さない）。
+    private void openOnCameraThread(long id, Handler h, boolean skipDefer) {
         final Session s;
-        if (deferUntilClosed(id, h)) {
+        if (!skipDefer && deferUntilClosed(id, h)) {
             return;
         }
         synchronized (lock) {
@@ -392,7 +399,7 @@ final class CameraPreviewHelper {
             reader.setOnImageAvailableListener(r -> onImageAvailable(s, r), h);
             synchronized (lock) {
                 s.deviceOutstanding = true;
-                outstandingDevices++;
+                outstandingSessions.add(s);
             }
             try {
                 manager.openCamera(cameraId, new DeviceCallback(s), h);
@@ -401,7 +408,7 @@ final class CameraPreviewHelper {
                 synchronized (lock) {
                     if (s.deviceOutstanding) {
                         s.deviceOutstanding = false;
-                        outstandingDevices--;
+                        outstandingSessions.remove(s);
                     }
                 }
                 throw e;
@@ -423,10 +430,10 @@ final class CameraPreviewHelper {
     private boolean deferUntilClosed(long id, Handler h) {
         final Runnable[] holder = new Runnable[1];
         synchronized (lock) {
-            if (outstandingDevices <= 0) {
+            if (outstandingSessions.isEmpty()) {
                 return false;
             }
-            holder[0] = () -> openOnCameraThread(id, h);
+            holder[0] = () -> openOnCameraThread(id, h, false);
             deferredOpen = holder[0];
         }
         h.postDelayed(() -> {
@@ -434,12 +441,12 @@ final class CameraPreviewHelper {
             synchronized (lock) {
                 if (deferredOpen == holder[0]) {
                     deferredOpen = null;
-                    outstandingDevices = 0; // onClosed が来なかった。これ以上は待たない。
                     r = holder[0];
                 }
             }
             if (r != null) {
-                r.run();
+                // 追跡は外さない（旧 onClosed は対応セッションでのみ解除する）。open は OS の結果に任せる。
+                openOnCameraThread(id, h, true);
             }
         }, DEFER_TIMEOUT_MS);
         return true;
@@ -453,10 +460,8 @@ final class CameraPreviewHelper {
                 return;
             }
             s.deviceOutstanding = false;
-            if (outstandingDevices > 0) {
-                outstandingDevices--;
-            }
-            if (outstandingDevices == 0) {
+            outstandingSessions.remove(s);
+            if (outstandingSessions.isEmpty()) {
                 r = deferredOpen;
                 deferredOpen = null;
             }
