@@ -46,6 +46,9 @@ use fandhe_core::screens::ble_scan::{current_screen as current_ble_scan_screen, 
 use fandhe_core::screens::camera_capture::{
     current_screen as current_camera_capture_screen, CameraCaptureState,
 };
+use fandhe_core::screens::camera_preview_stream_show::{
+    current_screen as current_camera_preview_stream_screen, CameraPreviewStreamShowState,
+};
 use fandhe_core::screens::cast_show::{current_screen as current_cast_show_screen, CastShowState};
 use fandhe_core::screens::checkbox_list::{checkbox_list_screen, CheckboxListState};
 use fandhe_core::screens::clipboard_text::{
@@ -941,6 +944,28 @@ pub fn mount_camera_capture_screen(root_id: &str) -> Result<(), JsValue> {
         current_camera_capture_screen(&initial_state),
         initial_state,
         super::camera_capture::camera_capture_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「カメラのライブ映像・フレーム取得」（親 #168、Issue #815）を
+/// マウントする検証専用エントリポイント。`super::camera_preview_stream::camera_preview_stream_show_effect`
+/// を effect として渡すため、`getUserMedia` 経由の映像開始 → フレーム表示が動く。
+///
+/// 起動時には映像を始めない（「映像を始める」ボタンの操作を起点にする）。画面は
+/// `current_screen(&CameraPreviewStreamShowState::default())` で固定するため、トグルの文言は
+/// 「映像を始める」のまま変わらず、ズームのボタンも出ない（`mic_record` と同じ既存の制約）。
+///
+/// 呼び出し元が渡す `root_id` の要素が見つからない場合はエラーを返す。
+#[wasm_bindgen]
+pub fn mount_camera_preview_stream_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = CameraPreviewStreamShowState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_camera_preview_stream_screen(&initial_state),
+        initial_state,
+        super::camera_preview_stream::camera_preview_stream_show_effect,
     )
 }
 
