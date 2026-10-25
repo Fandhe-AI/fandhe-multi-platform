@@ -199,6 +199,11 @@ impl PreviewSink for QueueSink {
         }
         {
             let mut ib = lock(&self.shared.inbox);
+            // 中断前に届いたフレームは、再開後の映像として適用しない。通知列と最新フレームは別々に
+            // 保持するため到着順が失われる。そこで中断の通知を受けた同じロックの内側で破棄する。
+            if matches!(e, PreviewEvent::Interrupted) {
+                ib.latest = None;
+            }
             if ib.events.len() >= MAX_PENDING_EVENTS {
                 if let Some(i) = ib.events.iter().position(|x| !x.is_terminal()) {
                     ib.events.remove(i);
@@ -243,6 +248,14 @@ static ACTIVE: Mutex<Option<Active>> = Mutex::new(None);
 pub(crate) fn shutdown() {
     let a = lock(&ACTIVE).take();
     drop(a);
+}
+
+/// Activity 再生成時（`android_main` の再実行）に、実行中の映像を止めて破棄する。画面状態は再生成で
+/// `default()` に戻るため、残すと旧セッションが動いたまま新しい UI スレッドと [`ACTIVE`] を取り合う。
+/// 他の長時間ドライバの `reset_pending_tracking` と同じ位置づけで、停止の待ちはロックの外で行う。
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub(crate) fn reset_pending_tracking() {
+    shutdown();
 }
 
 fn to_failure_view(f: StartFailure) -> FailureView {
@@ -728,6 +741,38 @@ mod tests {
         e.tick();
         assert_eq!(e.state.phase, PreviewPhase::Failed(FailureView::Runtime));
         assert_eq!(e.drops(), 1);
+    }
+
+    #[test]
+    fn frame_before_interruption_is_not_applied_after_resume() {
+        let mut e = Env::live();
+        let sink = e.fake.sink();
+        sink.frame(frame(Some(2.0)));
+        sink.event(PreviewEvent::Interrupted);
+        sink.event(PreviewEvent::Running);
+        e.tick();
+        assert_eq!(e.state.phase, PreviewPhase::Live);
+        assert!(e.state.frame.is_none(), "中断前の画像は復活しない");
+        assert_ne!(e.state.zoom, ZoomView::Value(2.0));
+    }
+
+    #[test]
+    fn reset_pending_tracking_releases_static_session() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let session = FakeSession {
+            drops: drops.clone(),
+            zooms: Arc::new(AtomicUsize::new(0)),
+        };
+        *lock(&ACTIVE) = Some(Active {
+            generation: 1,
+            id: 0,
+            shared: Arc::new(Shared::default()),
+            last_zoom_seq: 0,
+            session: Box::new(session),
+        });
+        reset_pending_tracking();
+        assert!(lock(&ACTIVE).is_none());
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
     }
 
     #[test]
