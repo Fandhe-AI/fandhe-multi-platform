@@ -36,10 +36,16 @@
 //!
 //! # 表示の間引き
 //!
-//! `Applier::apply` は DOM 全体の再構築と PNG の data URL 生成を伴う。フレームごとに行うと負荷が
-//! 大きく、ボタンのクリックも取りこぼすため、前回の表示から [`DISPLAY_MIN_INTERVAL_MS`] 未満の
-//! フレームは描画と apply を省く（受信数には数える。次のコールバックは必ず予約する）。
-//! 表示間隔を決めるだけで、状態の判定には使わない。
+//! PNG の data URL 生成を伴うため、フレームごとに行うと負荷が大きい。前回の表示から
+//! [`DISPLAY_MIN_INTERVAL_MS`] 未満のフレームは描画と反映を省く（受信数には数える。次のコールバックは
+//! 必ず予約する）。表示間隔を決めるだけで、状態の判定には使わない。
+//!
+//! # フレームの反映でボタンを作り直さない
+//!
+//! `Applier::apply` は root の子を全て作り直すため、mousedown と mouseup の間に挟まると「止める」の
+//! `click` が発火しない（間引きは頻度を下げるだけで防げない）。フレームは
+//! `Applier::apply_in_place` で `img` の `src` と案内文だけを書き換え、ボタンの要素を残す。
+//! 最初のフレーム（`img` がまだ無い）など構造が変わる更新だけが全再構築になる。
 //!
 //! # 守る範囲 / 守らない範囲
 //!
@@ -137,7 +143,7 @@ mod web {
 
     use fandhe_core::screens::camera_preview_stream_show::{
         apply_frame, apply_interrupted, apply_running, apply_runtime_failed, apply_start_failed,
-        apply_stopped, apply_unsupported, finish_zoom, take_start, take_zoom,
+        apply_stopped, apply_unsupported, finish_zoom, status_text, take_start, take_zoom,
         CameraPreviewStreamShowState, FailureView, StopView, ZoomFailureView,
     };
     use js_sys::{Function, Object, Reflect};
@@ -151,7 +157,7 @@ mod web {
 
     use super::{
         canvas_size, failure_from_error_name, frame_view_from_image_data, keep_session,
-        should_display,
+        should_display, PreviewPhase,
     };
     use crate::mount::{is_live, Applier};
 
@@ -599,6 +605,27 @@ mod web {
         Some(data.data().0)
     }
 
+    /// フレームの到着を既存の DOM へ直接書く（`img` の `src` と案内文だけ）。ボタンを作り直さない
+    /// ので、クリックの途中で要素が差し替わらない。`Live` で映像の要素がまだ無いとき（最初のフレーム
+    /// ・フェーズの切り替わり）は `false` を返して全再構築へ倒す。
+    fn patch_frame(root: &web_sys::Element, state: &CameraPreviewStreamShowState) -> bool {
+        let (PreviewPhase::Live, Some(frame)) = (state.phase, &state.frame) else {
+            return false;
+        };
+        let (Ok(Some(img)), Ok(Some(status))) = (
+            root.query_selector("img.fandhe-image"),
+            root.query_selector("p"),
+        ) else {
+            return false;
+        };
+        img.set_attribute("src", &crate::png_data_url::png_data_url(&frame.pixels))
+            .is_ok()
+            && {
+                status.set_text_content(Some(&status_text(state)));
+                true
+            }
+    }
+
     /// `requestVideoFrameCallback` の本体。判断は `ACTIVE` の借用の中で済ませ、借用を落としてから
     /// apply する（apply は同期で再描画と effect を起こすため）。
     fn on_frame(mount_id: u64, generation: u64, now: f64) {
@@ -638,9 +665,10 @@ mod web {
                 let view = draw(mount_id, generation, &video, cw, ch)
                     .and_then(|d| frame_view_from_image_data(sw, sh, cw, ch, &d));
                 match view {
-                    Some(view) => {
-                        applier.apply(move |s| apply_frame(s, generation, received, view, None))
-                    }
+                    Some(view) => applier.apply_in_place(
+                        move |s| apply_frame(s, generation, received, view, None),
+                        patch_frame,
+                    ),
                     None => return fail_with(mount_id, FailureView::Runtime, true),
                 }
             }
