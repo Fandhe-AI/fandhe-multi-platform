@@ -20,16 +20,18 @@
 // - 送るファイルは NSCachesDirectory/<bundle id>/background-upload の固定名 1 ファイル（atomic に上書き）。
 //   背景 session の送信はファイルからだけ（メモリ・stream はアプリ終了後に失敗する、公式）。
 //   パスはログにも画面にも出さない。
-// - 待ちは単調時計の期限つき（`dispatch_time(DISPATCH_TIME_NOW, ..)`）。main queue への
-//   `dispatch_sync` はしない。各 C 関数は `@autoreleasepool` で囲む（契約表 5）。
+// - `getAllTasks` の completion は期限なしで待つ（`DISPATCH_TIME_FOREVER`）。期限で打ち切ると、失敗を
+//   返した後に completion が走って `[task cancel]` が OS の状態を変えてしまうため。呼び出しは Rust の
+//   直列ワーカー（UI スレッドではない）からだけで、main queue への `dispatch_sync` はしない。
+//   completion が来ない場合は守らない範囲（対応表 note）。各 C 関数は `@autoreleasepool` で囲む（契約表 5）。
 //
 // 契約:
 //   int32_t fandhe_apple_bgul_init(void);   // 0 = 成功 / 1 = session を作れない
-//   int32_t fandhe_apple_bgul_start(const char *url, const uint8_t *body, size_t len, uint64_t deadline_ms);
-//     // 0 / 1 = session なし / 2 = URL 不正 / 3 = ファイルを書けない / 4 = 期限内に前の転送の取り消しを終えられない
-//   int32_t fandhe_apple_bgul_cancel(uint64_t deadline_ms);   // 0 / 1 / 4
-//   int32_t fandhe_apple_bgul_list(uint64_t deadline_ms, FandheBgulTask *out, size_t cap, size_t *out_len);
-//     // 0 / 1 / 4 = 期限切れ。`cap` 件までしか書かない。`out_len` は書いた件数。期限切れのときは `out` に触らない
+//   int32_t fandhe_apple_bgul_start(const char *url, const uint8_t *body, size_t len);
+//     // 0 / 1 = session なし / 2 = URL 不正 / 3 = ファイルを書けない
+//   int32_t fandhe_apple_bgul_cancel(void);   // 0 / 1
+//   int32_t fandhe_apple_bgul_list(FandheBgulTask *out, size_t cap, size_t *out_len);
+//     // 0 / 1。`cap` 件までしか書かない。`out_len` は書いた件数
 //   delegate → Rust の終了コード: 0 = エラーなし / 1 = 取り消し / 2 = その他の NSURLErrorDomain / 4 = その他
 #import <Foundation/Foundation.h>
 #import <stdbool.h>
@@ -69,10 +71,10 @@ static NSURL *file_url(void) {
     return [dir URLByAppendingPathComponent:kFileName];
 }
 
-// 全 task の `[task cancel]` を呼び終えるまで待つ。期限切れなら true。
+// 全 task の `[task cancel]` を呼び終えるまで待つ。
 // `getAllTasks` の completion は非同期（delegate queue 上）。呼び出しは Rust のワーカースレッドで、
-// main queue への待ち合わせは無い。completion は Rust のロックを取らないので、待ちは詰まらず期限内に解ける。
-static bool cancel_all_tasks(uint64_t deadline_ms) {
+// main queue への待ち合わせは無い。completion は Rust のロックを取らないので、待ちは詰まらない。
+static void cancel_all_tasks(void) {
     dispatch_semaphore_t done = dispatch_semaphore_create(0);
     [g_session getAllTasksWithCompletionHandler:^(NSArray<__kindof NSURLSessionTask *> *tasks) {
         for (NSURLSessionTask *task in tasks) {
@@ -80,8 +82,7 @@ static bool cancel_all_tasks(uint64_t deadline_ms) {
         }
         dispatch_semaphore_signal(done);
     }];
-    dispatch_time_t limit = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(deadline_ms * NSEC_PER_MSEC));
-    return dispatch_semaphore_wait(done, limit) != 0;
+    dispatch_semaphore_wait(done, DISPATCH_TIME_FOREVER);
 }
 
 @interface FandheBgulDelegate : NSObject <NSURLSessionTaskDelegate, NSURLSessionDataDelegate>
@@ -148,7 +149,7 @@ int32_t fandhe_apple_bgul_init(void) {
     }
 }
 
-int32_t fandhe_apple_bgul_start(const char *url, const uint8_t *body, size_t len, uint64_t deadline_ms) {
+int32_t fandhe_apple_bgul_start(const char *url, const uint8_t *body, size_t len) {
     @autoreleasepool {
         if (g_session == nil) {
             return 1;
@@ -158,10 +159,8 @@ int32_t fandhe_apple_bgul_start(const char *url, const uint8_t *body, size_t len
         if (nsurl == nil) {
             return 2;
         }
-        // 置き換え: 前の転送を、ファイルを書き換える前に止める。依頼が終わらなければ新しい task は作らない。
-        if (cancel_all_tasks(deadline_ms)) {
-            return 4;
-        }
+        // 置き換え: 前の転送の取り消しを依頼する。
+        cancel_all_tasks();
         NSURL *file = file_url();
         if (file == nil || body == NULL ||
             ![[NSData dataWithBytes:body length:len] writeToURL:file options:NSDataWritingAtomic error:nil]) {
@@ -181,16 +180,17 @@ int32_t fandhe_apple_bgul_start(const char *url, const uint8_t *body, size_t len
     }
 }
 
-int32_t fandhe_apple_bgul_cancel(uint64_t deadline_ms) {
+int32_t fandhe_apple_bgul_cancel(void) {
     @autoreleasepool {
         if (g_session == nil) {
             return 1;
         }
-        return cancel_all_tasks(deadline_ms) ? 4 : 0;
+        cancel_all_tasks();
+        return 0;
     }
 }
 
-int32_t fandhe_apple_bgul_list(uint64_t deadline_ms, FandheBgulTask *out, size_t cap, size_t *out_len) {
+int32_t fandhe_apple_bgul_list(FandheBgulTask *out, size_t cap, size_t *out_len) {
     @autoreleasepool {
         if (out_len != NULL) {
             *out_len = 0;
@@ -198,35 +198,26 @@ int32_t fandhe_apple_bgul_list(uint64_t deadline_ms, FandheBgulTask *out, size_t
         if (g_session == nil) {
             return 1;
         }
-        // completion は期限後に遅れて走りうるので、`out` ではなくブロックが保持する領域へ書き、
-        // 待ちが成功した後でだけ `out` へ写す（呼び出し側のバッファの寿命に依存しない）。
-        NSMutableData *buf = [NSMutableData data];
+        // completion を待ち終えてから戻るので、`out` へ直接書いてよい（呼び出し側のバッファは戻るまで生きている）。
         dispatch_semaphore_t done = dispatch_semaphore_create(0);
         [g_session getAllTasksWithCompletionHandler:^(NSArray<__kindof NSURLSessionTask *> *tasks) {
+            size_t n = 0;
             for (NSURLSessionTask *task in tasks) {
-                FandheBgulTask t;
-                t.id = (uint64_t)task.taskIdentifier;
-                t.state = (int32_t)task.state;
-                t.sent = (uint64_t)task.countOfBytesSent;
-                t.expected = (int64_t)task.countOfBytesExpectedToSend;
-                [buf appendBytes:&t length:sizeof(t)];
+                if (n >= cap || out == NULL) {
+                    break;
+                }
+                out[n].id = (uint64_t)task.taskIdentifier;
+                out[n].state = (int32_t)task.state;
+                out[n].sent = (uint64_t)task.countOfBytesSent;
+                out[n].expected = (int64_t)task.countOfBytesExpectedToSend;
+                n++;
+            }
+            if (out_len != NULL) {
+                *out_len = n;
             }
             dispatch_semaphore_signal(done);
         }];
-        dispatch_time_t limit = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(deadline_ms * NSEC_PER_MSEC));
-        if (dispatch_semaphore_wait(done, limit) != 0) {
-            return 4;
-        }
-        size_t n = buf.length / sizeof(FandheBgulTask);
-        if (n > cap) {
-            n = cap;
-        }
-        if (n > 0 && out != NULL) {
-            memcpy(out, buf.bytes, n * sizeof(FandheBgulTask));
-        }
-        if (out_len != NULL) {
-            *out_len = (out != NULL) ? n : 0;
-        }
+        dispatch_semaphore_wait(done, DISPATCH_TIME_FOREVER);
         return 0;
     }
 }

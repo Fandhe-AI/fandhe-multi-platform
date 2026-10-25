@@ -22,7 +22,8 @@
 //! # ロック順（契約表 11）
 //!
 //! [`Slot`] のロックを持ったまま `.m` を呼ばない。`.m` の待ち（`getAllTasks` の completion）は Rust のロックを
-//! 取らない。`start`・`cancel` は呼び出し側（ドライバ）が 1 本の直列ワーカーから呼ぶ前提。
+//! 取らない。`.m` は completion を期限なしで待つので、`start`・`cancel`・`status` は呼び出し側（ドライバ）が
+//! 1 本の直列ワーカー（UI スレッドではない）から呼ぶ前提。`getAllTasks` の completion が来ない場合は守らない範囲。
 
 // ホストの `cargo test`（Linux 等）では FFI 部分が存在せず純ロジックだけが使われる。
 #![cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
@@ -33,10 +34,6 @@ use fandhe_device::background_upload::{
     completion_status, OnSignal, UploadFailure, UploadStatus, FILE_ERROR,
 };
 use fandhe_device::DeviceError;
-
-/// `.m` が OS への依頼・一覧の取得を待つ期限（ミリ秒）。他の端末機能の期限（5 秒）に揃える。
-/// `.m` は単調時計で測る。
-const DEADLINE_MS: u64 = 5_000;
 
 /// 一覧から読む task の上限件数。このアプリが作る転送は 1 つだけなので十分に大きい。
 const LIST_CAP: usize = 8;
@@ -167,19 +164,9 @@ mod imp {
     #[allow(unsafe_code)]
     unsafe extern "C" {
         fn fandhe_apple_bgul_init() -> i32;
-        fn fandhe_apple_bgul_start(
-            url: *const c_char,
-            body: *const u8,
-            len: usize,
-            deadline_ms: u64,
-        ) -> i32;
-        fn fandhe_apple_bgul_cancel(deadline_ms: u64) -> i32;
-        fn fandhe_apple_bgul_list(
-            deadline_ms: u64,
-            out: *mut TaskInfo,
-            cap: usize,
-            out_len: *mut usize,
-        ) -> i32;
+        fn fandhe_apple_bgul_start(url: *const c_char, body: *const u8, len: usize) -> i32;
+        fn fandhe_apple_bgul_cancel() -> i32;
+        fn fandhe_apple_bgul_list(out: *mut TaskInfo, cap: usize, out_len: *mut usize) -> i32;
     }
 
     pub(super) struct AppleBackgroundUpload;
@@ -202,9 +189,8 @@ mod imp {
             let body = file_contents();
             // SAFETY: `c_url` と `body` は呼び出し中生きており、`.m` は同期でコピー（NSData / 文字列）して
             // ポインタを保持しない。`SLOT` のロックは持たない（`.m` が `will_resume` で取るため）。
-            let code = unsafe {
-                fandhe_apple_bgul_start(c_url.as_ptr(), body.as_ptr(), body.len(), DEADLINE_MS)
-            };
+            let code =
+                unsafe { fandhe_apple_bgul_start(c_url.as_ptr(), body.as_ptr(), body.len()) };
             if code == 0 {
                 Ok(())
             } else {
@@ -214,8 +200,8 @@ mod imp {
 
         #[allow(unsafe_code)]
         fn cancel(&self) -> Result<(), DeviceError> {
-            // SAFETY: 値渡しのみ。`.m` は全 task への `[task cancel]` が終わる（または期限）まで待つ。
-            let code = unsafe { fandhe_apple_bgul_cancel(DEADLINE_MS) };
+            // SAFETY: 引数なし。`.m` は全 task への `[task cancel]` が終わるまで待つ。
+            let code = unsafe { fandhe_apple_bgul_cancel() };
             match code {
                 0 => Ok(()),
                 1 => Err(DeviceError::Unsupported("background upload")),
@@ -228,10 +214,8 @@ mod imp {
             let mut tasks = [TaskInfo::default(); LIST_CAP];
             let mut len: usize = 0;
             // SAFETY: `tasks` は `LIST_CAP` 件の領域で、`.m` はそれを超えて書かない（`cap` で渡す）。
-            // `len` は有効な書き込み先。期限切れのとき `.m` は `tasks` に触らない。
-            let code = unsafe {
-                fandhe_apple_bgul_list(DEADLINE_MS, tasks.as_mut_ptr(), LIST_CAP, &mut len)
-            };
+            // `len` は有効な書き込み先。`.m` は completion を待ち終えてから戻るので、戻った後に書かない。
+            let code = unsafe { fandhe_apple_bgul_list(tasks.as_mut_ptr(), LIST_CAP, &mut len) };
             if code != 0 {
                 return Err(DeviceError::Internal("background upload"));
             }
@@ -442,7 +426,6 @@ mod tests {
         assert!(matches!(start_error(1), DeviceError::Unsupported(_)));
         assert!(matches!(start_error(2), DeviceError::InvalidInput(_)));
         assert!(matches!(start_error(3), DeviceError::Internal(FILE_ERROR)));
-        assert!(matches!(start_error(4), DeviceError::Internal(m) if m != FILE_ERROR));
         assert!(matches!(start_error(99), DeviceError::Internal(_)));
     }
 }
