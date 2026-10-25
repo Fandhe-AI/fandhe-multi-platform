@@ -210,6 +210,9 @@
 //! - `macos/fandhe_macos_spell_check.m`（Issue #578、`NSSpellChecker` による入力文のスペルチェック）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_spell_check.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_sleep_lock_events.m`（Issue #810、NSWorkspace の通知によるスリープ・復帰・画面の
+//!   消灯と点灯の受信）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_sleep_lock_events.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_file_watch.m`（Issue #1410、CoreServices の FSEventStream によるフォルダの
 //!   変更監視）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_file_watch.rs` から呼ばれる契約）。CoreServices をリンクする。
@@ -1464,6 +1467,17 @@ fn compile_macos_volume_control() {
         .compile("fandhe_macos_volume_control");
 }
 
+/// `macos/fandhe_macos_sleep_lock_events.m` を `cc` でコンパイルする（Issue #810）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_sleep_lock_events.rs` が使う）。AppKit は `build_macos` 側の
+/// 既存リンクで足りるため追加リンクは無い。
+fn compile_macos_sleep_lock_events() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_sleep_lock_events.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_sleep_lock_events.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_sleep_lock_events");
+}
+
 /// `macos/fandhe_macos_file_watch.m` を `cc` でコンパイルする（Issue #1410）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_file_watch.rs` が使う）。FSEvents のため CoreServices をリンクする。
 fn compile_macos_file_watch() {
@@ -2344,6 +2358,8 @@ fn build_macos() {
     compile_macos_spell_check();
     // `macos/fandhe_macos_file_watch.m`（Issue #1410）も macOS 専用。CoreServices を使う。
     compile_macos_file_watch();
+    // `macos/fandhe_macos_sleep_lock_events.m`（Issue #810）も macOS 専用。AppKit は既存リンクで足りる。
+    compile_macos_sleep_lock_events();
     // `macos/fandhe_macos_multi_display.m`（Issue #1341）も macOS 専用。
     compile_macos_multi_display();
     // `macos/fandhe_macos_music_library.m`（Issue #482）も macOS 専用。iTunesLibrary を使う。

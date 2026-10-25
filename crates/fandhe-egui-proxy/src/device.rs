@@ -287,6 +287,11 @@ pub mod android_screen_wake_lock;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_share_receive;
+/// Issue #810: Android 向けスリープ・ロックの通知の骨格（`Unsupported` のスタブ。#811 が埋める）。
+/// `device/sleep_lock_events.rs` の Android 経路から使われる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_sleep_lock_events;
 /// Issue #580: Android 向けスペルチェック実装（`SpellCheckHelper.java` を JNI で呼ぶ）。`device/spell_check.rs` の
 /// Android 経路から呼ばれる。ホストテストのため `test` でもコンパイルする。
 #[cfg(any(target_os = "android", test))]
@@ -1099,6 +1104,10 @@ pub mod macos_serial_port;
 /// 呼ぶ C ABI ラッパー）。`device/share_receive.rs` の macOS 経路と `main.rs`（登録）から使われる。
 #[cfg(target_os = "macos")]
 pub mod macos_share_receive;
+/// Issue #810: macOS 向けスリープ・ロックの通知実装（`macos/fandhe_macos_sleep_lock_events.m`、
+/// NSWorkspace の通知を呼ぶ C ABI ラッパー）。`device/sleep_lock_events.rs` の macOS 経路から呼ばれる。
+#[cfg(target_os = "macos")]
+pub mod macos_sleep_lock_events;
 /// Issue #578: macOS 向けスペルチェック実装（`macos/fandhe_macos_spell_check.m` の `NSSpellChecker` を呼ぶ
 /// C ABI ラッパー）。`device/spell_check.rs` の macOS 経路から呼ばれる。戻り値コードの写像をホストで
 /// テストできるよう cfg は `any(macos, test)`。
@@ -1284,6 +1293,9 @@ pub mod share;
 /// Phase 11 の拡充ループ（親 #122、Issue #606）: 共有の受け取りの effect ドライバ（macOS・Android 実装、
 /// 他 OS は `UnsupportedShareReceive` 固定。Web は `fandhe-web-dom`）。
 pub mod share_receive;
+/// Phase 11 の拡充ループ（親 #167、Issue #810）: スリープ・ロックの通知の effect ドライバ
+/// （macOS・Windows 実装、Android は骨格のスタブで #811 が埋める。他 OS は `UnsupportedSleepLockEvents` 固定）。
+pub mod sleep_lock_events;
 /// Phase 11 の拡充ループ（親 #142、Issue #725）: 環境音の分類の effect ドライバ（macOS 実装、
 /// iOS は b-ios、他 OS は `UnsupportedSoundClassifier` 固定）。
 pub mod sound_classification;
@@ -1593,6 +1605,10 @@ pub mod windows_serial_port;
 /// COM interop ラッパー）。`device/share.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_share;
+/// Issue #810: Windows 向けスリープ・ロックの通知実装（不可視ウィンドウ + `WTSRegisterSessionNotification` /
+/// `RegisterSuspendResumeNotification`）。`device/sleep_lock_events.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_sleep_lock_events;
 /// Issue #1024: Windows 向け音声認識実装（WinRT `SpeechRecognizer` ラッパー）。
 /// `device/speech_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
