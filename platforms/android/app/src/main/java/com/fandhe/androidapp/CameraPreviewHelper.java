@@ -44,6 +44,7 @@ import java.util.Collections;
 // スレッド: 許可・開始・ライフサイクルは UI スレッド、open・フレーム受信・ズーム適用・解放は
 // プロセスで 1 本のカメラスレッド（`CameraThread`、Activity 再生成をまたいで終了しない）に直列化する
 // （前の解放が次の open より先に終わる。途中の open の onOpened も必ず受けて閉じる）。
+// CameraDevice.close() は非同期のため、次の open は前のデバイスの onClosed を待つ（`outstandingDevices`）。
 // 状態は `lock` で守り、native 通知は必ず `lock` の外で行う（Rust 側のロックとの取り合いを避ける）。
 //
 // 数値コード: `nativeOnCameraPreviewEvent` の code / detail の SSOT は Rust の
@@ -109,6 +110,7 @@ final class CameraPreviewHelper {
         boolean configured;
         boolean running;
         boolean closed;
+        boolean deviceOutstanding; // openCamera を呼んだ CameraDevice の onClosed 待ち（lock の内側）。
         volatile float lastZoom = Float.NaN;
 
         Session(long id, Handler handler) {
@@ -123,6 +125,11 @@ final class CameraPreviewHelper {
     // 以下 2 つは lock の内側。
     private Session session;
     private boolean destroyedHelper;
+    // openCamera 済みで onClosed が未着の CameraDevice の数と、それ待ちの open（lock の内側）。
+    // Camera2 の close は非同期で、完了前に次の open をすると使用中で失敗し得るため、onClosed で確定する。
+    private static int outstandingDevices;
+    private static Runnable deferredOpen;
+    private static final long DEFER_TIMEOUT_MS = 2000;
     // 取り消し済みの最大 id（lock の内側）。stop が start より先に走っても古い要求を開始しない。
     private long cancelledId = RequestTracker.NONE;
     // 以下は UI スレッド専用。
@@ -329,6 +336,9 @@ final class CameraPreviewHelper {
 
     private void openOnCameraThread(long id, Handler h) {
         final Session s;
+        if (deferUntilClosed(id, h)) {
+            return;
+        }
         synchronized (lock) {
             if (request.current() != id || destroyedHelper) {
                 return; // 取り消し・差し替え・破棄済み。
@@ -380,7 +390,22 @@ final class CameraPreviewHelper {
                 return;
             }
             reader.setOnImageAvailableListener(r -> onImageAvailable(s, r), h);
-            manager.openCamera(cameraId, new DeviceCallback(s), h);
+            synchronized (lock) {
+                s.deviceOutstanding = true;
+                outstandingDevices++;
+            }
+            try {
+                manager.openCamera(cameraId, new DeviceCallback(s), h);
+            } catch (CameraAccessException | RuntimeException e) {
+                // open 自体が失敗した場合は onClosed が来ない。
+                synchronized (lock) {
+                    if (s.deviceOutstanding) {
+                        s.deviceOutstanding = false;
+                        outstandingDevices--;
+                    }
+                }
+                throw e;
+            }
         } catch (SecurityException e) {
             finishSession(s, EV_START_FAILED, DETAIL_PERMISSION);
         } catch (CameraAccessException e) {
@@ -390,6 +415,54 @@ final class CameraPreviewHelper {
             finishSession(s, EV_START_FAILED, inUse ? DETAIL_IN_USE : DETAIL_OTHER);
         } catch (RuntimeException e) {
             finishSession(s, EV_START_FAILED, DETAIL_OTHER);
+        }
+    }
+
+    // 前のデバイスの close 完了（onClosed）が未着なら、open を保留して true を返す。
+    // 保留した open は onClosed で再評価する。onClosed が来ない場合に備え、期限で打ち切って進める。
+    private boolean deferUntilClosed(long id, Handler h) {
+        final Runnable[] holder = new Runnable[1];
+        synchronized (lock) {
+            if (outstandingDevices <= 0) {
+                return false;
+            }
+            holder[0] = () -> openOnCameraThread(id, h);
+            deferredOpen = holder[0];
+        }
+        h.postDelayed(() -> {
+            Runnable r = null;
+            synchronized (lock) {
+                if (deferredOpen == holder[0]) {
+                    deferredOpen = null;
+                    outstandingDevices = 0; // onClosed が来なかった。これ以上は待たない。
+                    r = holder[0];
+                }
+            }
+            if (r != null) {
+                r.run();
+            }
+        }, DEFER_TIMEOUT_MS);
+        return true;
+    }
+
+    // onClosed で呼ぶ。数を減らし、保留中の open があれば実行する。
+    private void onDeviceClosed(Session s) {
+        Runnable r = null;
+        synchronized (lock) {
+            if (!s.deviceOutstanding) {
+                return;
+            }
+            s.deviceOutstanding = false;
+            if (outstandingDevices > 0) {
+                outstandingDevices--;
+            }
+            if (outstandingDevices == 0) {
+                r = deferredOpen;
+                deferredOpen = null;
+            }
+        }
+        if (r != null) {
+            r.run();
         }
     }
 
@@ -463,6 +536,11 @@ final class CameraPreviewHelper {
                 return;
             }
             createSession(s, device);
+        }
+
+        @Override
+        public void onClosed(CameraDevice device) {
+            onDeviceClosed(s);
         }
 
         @Override
@@ -631,10 +709,13 @@ final class CameraPreviewHelper {
                     || pu.getRowStride() != pv.getRowStride()) {
                 return; // 想定外の並びは捨てる（嘘の画を出さない）。
             }
+            // 各面を position 位置から remaining 分だけに切り出して渡す（U/V が 1 つの割り当てを
+            // 共有し position が 0 でない場合に、Rust 側が先頭から読んで偽色になるのを防ぐ。
+            // slice の capacity = remaining で、必要長の検証は Rust 側 `downscale_yuv420` が行う）。
             nativeOnCameraPreviewFrame(s.id, image.getWidth(), image.getHeight(),
-                    py.getBuffer(), py.getRowStride(),
-                    pu.getBuffer(), pv.getBuffer(), pu.getRowStride(), pu.getPixelStride(),
-                    s.lastZoom);
+                    py.getBuffer().slice(), py.getRowStride(),
+                    pu.getBuffer().slice(), pv.getBuffer().slice(), pu.getRowStride(),
+                    pu.getPixelStride(), s.lastZoom);
         } catch (IllegalStateException e) {
             // reader が解放済み・取得上限。次のフレームを待つ。
         } finally {

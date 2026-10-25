@@ -290,6 +290,8 @@ extern "system" fn Java_com_fandhe_androidapp_CameraPreviewHelper_nativeOnCamera
 /// `CameraPreviewHelper.nativeOnCameraPreviewFrame`（Java 側）から呼ばれる JNI エクスポート。
 /// 3 面の direct `ByteBuffer` を読んで縮小し、ドライバへ渡す。`Image` は Java 側でこの呼び出しが
 /// 戻るまで close されない。不正なフレームは捨てる。
+/// 各面は Java 側が `slice()` で position 位置から remaining 分に切り出したもので、capacity が実データ長。
+/// 必要長に満たない面は `frame_from_planes`（`downscale_yuv420`）が変換の前に弾く。
 ///
 /// # Safety
 /// `unsafe` は direct buffer から slice を作る 1 箇所に限る（根拠は本文の SAFETY）。`#[no_mangle]` は
