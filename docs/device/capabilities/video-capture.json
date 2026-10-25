@@ -8,40 +8,74 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "UIKit `UIImagePickerController`（`mediaTypes = [public.movie]`）",
-      "perm": "カメラ・マイク利用目的の記述",
-      "url": "https://developer.apple.com/documentation/uikit/uiimagepickercontroller",
-      "note": "未実装。camera-capture の iOS と同じ経路で mediaTypes を変える。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "UIKit `UIImagePickerController`（`sourceType = .camera`、`mediaTypes = [public.movie]`、`videoMaximumDuration`）。撮れた動画は `InfoKey.mediaURL` のファイルを AVFoundation `AVURLAsset`（`loadValuesAsynchronouslyForKeys:` の `duration`、`loadTracksWithMediaType:completionHandler:` の映像トラックの `naturalSize` / `preferredTransform`）で読む",
+      "perm": "`NSCameraUsageDescription` と `NSMicrophoneUsageDescription`（どちらも宣言済み。文言に本機能の画面名を足す）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）",
+      "url": [
+        "https://developer.apple.com/documentation/uikit/uiimagepickercontroller",
+        "https://developer.apple.com/documentation/uikit/uiimagepickercontroller/videomaximumduration",
+        "https://developer.apple.com/documentation/uikit/uiimagepickercontroller/availablemediatypes(for:)",
+        "https://developer.apple.com/documentation/uikit/uiimagepickercontroller/infokey/mediaurl",
+        "https://developer.apple.com/documentation/uikit/uiimagepickercontrollerdelegate/imagepickercontrollerdidcancel(_:)",
+        "https://developer.apple.com/documentation/avfoundation/avasset/loadtracks(withmediatype:completionhandler:)",
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/nsmicrophoneusagedescription"
+      ],
+      "note": "未実装。camera-capture の iOS と同じ撮影 UI を `mediaTypes` を動画に変えて出す。`videoMaximumDuration` の既定は 600 秒で、動画を含むときだけ効く（公式）。`mediaURL` の一時ファイルの置き場所・寿命・削除の責任は公式に書かれていないため、長さ・寸法・サイズを読んだら成功・失敗とも消す。`AVAsset.duration` と `naturalSize` / `preferredTransform` の同期の読み取りは iOS 16 で非推奨で、読み込み API（iOS 15 以上）を使う（公式）。撮影 UI で動画を撮るときにマイクの利用目的の記述が要るとの公式の明記は見当たらないが、宣言済みのため問題にならない。録画中に背景へ移ったときの挙動は公式に記載が無い"
     },
     "android": {
       "status": "possible",
-      "api": "`MediaStore.ACTION_VIDEO_CAPTURE`（Intent）",
-      "perm": "Intent 経由なら `CAMERA` 不要（マニフェストに宣言した場合のみ要）",
-      "url": "https://developer.android.com/media/camera/camera-intents",
-      "note": "未実装。保存先 URI（`EXTRA_OUTPUT`）の FileProvider 設計が要る。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "`MediaStore.ACTION_VIDEO_CAPTURE`（Intent、`EXTRA_OUTPUT` に `FileProvider` の content URI、`EXTRA_DURATION_LIMIT`）を `ActivityResultContracts.StartActivityForResult` で起動。撮れた動画は `MediaMetadataRetriever`（`METADATA_KEY_DURATION` / `VIDEO_WIDTH` / `VIDEO_HEIGHT` / `VIDEO_ROTATION`）で読む",
+      "perm": "`android.permission.CAMERA`（宣言済みのため実行時の許可が要る）。`RECORD_AUDIO`・`<queries>` は使わない。`FileProvider` は宣言済みのものに公開パスを 1 つ足す",
+      "url": [
+        "https://developer.android.com/media/camera/camera-intents",
+        "https://developer.android.com/reference/android/provider/MediaStore#ACTION_VIDEO_CAPTURE",
+        "https://developer.android.com/reference/android/media/MediaMetadataRetriever",
+        "https://developer.android.com/training/package-visibility/use-cases",
+        "https://developer.android.com/guide/topics/media/camera.html"
+      ],
+      "note": "未実装。`CAMERA` をマニフェストに宣言しているアプリは、許可の無いまま `ACTION_VIDEO_CAPTURE` を投げると `SecurityException` になる（javadoc、AOSP のソースで確認）。camera-capture と同じく許可を求めてから起動する。`EXTRA_OUTPUT` を省くとカメラアプリが既定の場所（端末の動画の一覧）へ保存し、アプリから消せないため、アプリの cache 配下（`cache/video_capture/`）を `FileProvider` で渡し、読み終えたら消す。起動の前に `resolveActivity` で確かめず、`ActivityNotFoundException` を受ける（`<queries>` を足さない、公式の推奨）。`MediaMetadataRetriever.close()` は API 29 からのため minSdk 24 では `release()` を呼ぶ。`VIDEO_ROTATION` は 0 / 90 / 180 / 270（取れる場合のみ）。`EXTRA_OUTPUT` を無視して別の場所へ保存するカメラアプリがあるか、録画の音声に `RECORD_AUDIO` が要らないことの明文は未確認"
     },
     "macos": {
       "status": "possible",
-      "api": "AVFoundation `AVCaptureMovieFileOutput`",
-      "perm": "カメラ・マイク利用目的の記述、sandbox 時は Entitlement",
-      "url": "https://developer.apple.com/documentation/avfoundation/avcapturemoviefileoutput",
-      "note": "未実装。標準の撮影 UI はなく自前で組む。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "AVFoundation `AVCaptureSession` + `AVCaptureMovieFileOutput`（`startRecordingToOutputFileURL:recordingDelegate:`、完了は `captureOutput:didFinishRecordingToOutputFileAtURL:fromConnections:error:`）。OS 標準の動画撮影 UI は無い",
+      "perm": "`NSCameraUsageDescription`（未宣言。埋め込み Info.plist に新しく足す必要がある）・`NSMicrophoneUsageDescription`（宣言済み）、実行時のカメラ・マイクの許可。Sandbox 時は `com.apple.security.device.camera` / `audio-input`",
+      "url": [
+        "https://developer.apple.com/documentation/avfoundation/avcapturemoviefileoutput",
+        "https://developer.apple.com/documentation/avfoundation/avcapturefileoutput/startrecording(to:recordingdelegate:)",
+        "https://developer.apple.com/documentation/avfoundation/avcapturefileoutputrecordingdelegate/fileoutput(_:didfinishrecordingto:from:error:)",
+        "https://developer.apple.com/documentation/avfoundation/avcapturedevice/requestaccess(for:completionhandler:)",
+        "https://developer.apple.com/documentation/avfoundation/requesting-authorization-to-capture-and-save-media"
+      ],
+      "deferred": "カメラの利用目的（`NSCameraUsageDescription`）が macOS の埋め込み Info.plist に無く、新しい権限の宣言になる（camera-capture の macOS はダミー実装で実カメラを使っていない）。OS 標準の撮影 UI も無いため、プレビュー・録画の開始と停止の画面を自前で組む設計が要る。camera-preview-stream の macOS と同じく、カメラの宣言を足す方針が決まったら見直す",
+      "note": "未実装。完了の delegate は録画要求ごとに必ず呼ばれ、データが書けなかった場合も呼ばれる（公式）。`maxRecordedDuration` に達すると録画が止まり、delegate にエラー付きで届く（公式）。そのため成否はエラーの有無だけで決められず、`AVErrorRecordingSuccessfullyFinishedKey` を見る必要がある（キーの存在は公式、扱いは未確認）。出力先に既存のファイルがあると失敗する（公式）。利用目的の記述が無いと許可の要求で終了させられる（公式）"
     },
     "windows": {
       "status": "possible",
-      "api": "WinRT `MediaCapture.PrepareLowLagRecordToStorageFileAsync`（`MediaEncodingProfile`）",
-      "perm": "`webcam` と `microphone` 機能の宣言",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacapture",
-      "note": "未実装。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "Windows App SDK `Microsoft.Windows.Media.Capture.CameraCaptureUI`（`CaptureFileAsync(CameraCaptureUIMode.Video)`、`AppWindow.Id` が要る）。自前で組むなら WinRT `MediaCapture.StartRecordToStorageFileAsync`（`MediaEncodingProfile.CreateMp4`）+ `StorageFile.Properties.GetVideoPropertiesAsync`",
+      "perm": "unpackaged の実行では宣言不要の見込み（設定の「デスクトップ アプリにカメラへのアクセスを許可する」に従い、拒否は `E_ACCESSDENIED`）。パッケージ時は `webcam` / `microphone` capability",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/uwp/audio-video-camera/capture-photos-and-video-with-cameracaptureui",
+        "https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.windows.media.capture.cameracaptureui",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacapture.startrecordtostoragefileasync",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacapture.initializeasync",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.storage.fileproperties.videoproperties",
+        "https://learn.microsoft.com/en-us/windows/apps/develop/camera/camera-privacy-setting"
+      ],
+      "deferred": "WinRT の `Windows.Media.Capture.CameraCaptureUI` は UWP 限定で、デスクトップアプリは Windows App SDK 版を使うよう公式に書かれており、Windows App SDK は新しい依存になる。`MediaCapture` で自前に組むと、撮影の画面（プレビュー・開始と停止）の設計に加え、`InitializeAsync` の初回を STA の UI スレッドで呼ぶ設計の変更（既存の WinRT 呼び出しは作業スレッドから MTA で呼ぶ）と、`windows` クレートの feature（`Storage_FileProperties`）の追加が要る。camera-preview-stream の Windows と同じく、カメラの利用方式が決まったら見直す",
+      "note": "未実装。Windows App SDK 版の `CaptureFileAsync` はキャンセルとエラーをどちらも null で返し区別しない（公式）。unpackaged の Win32 で動くか、導入された版は公式に明記が無い。`VideoProperties` は `Duration` / `Width` / `Height` / `Orientation` を返す（公式）。`MediaCapture` の単一録画の上限は約 3 時間（公式）"
     },
     "web": {
       "status": "possible",
-      "api": "`MediaRecorder`（`getUserMedia` の映像・音声）",
-      "perm": "カメラ・マイク許可、secure context 必須",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder",
-      "safari": "対応（mp4 出力）",
-      "note": "未実装。出力コンテナはブラウザ依存（Safari は mp4、Chromium は webm）。"
+      "api": "`<input type=\"file\" accept=\"video/*\" capture=\"environment\">`（HTML Media Capture）。選ばれた `File` の `size`、`URL.createObjectURL` を入れた `<video>`（`preload = metadata`）の `loadedmetadata` で `duration` / `videoWidth` / `videoHeight` を読む",
+      "perm": "不要（撮影はブラウザ・OS のカメラアプリが行う）。secure context の制約なし",
+      "url": [
+        "https://www.w3.org/TR/html-media-capture/",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/capture",
+        "https://developer.mozilla.org/en-US/docs/Web/API/HTMLInputElement/cancel_event",
+        "https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/duration"
+      ],
+      "safari": "iOS Safari はカメラで撮る選択肢を出す（`capture` 属性そのものは無視し、選択肢の一覧から選ばせる）。`cancel` イベントは 16.4 以上",
+      "note": "未実装。`capture` はモバイルのブラウザでカメラを開き、デスクトップのブラウザでは無視されて通常のファイル選択になる（MDN）。その場合は既存の動画ファイルを選ぶことになり、「撮った動画」ではなく「受け取った動画」として出す。`cancel` は Chrome 113・Firefox 91・Safari 16.4 以上で、同じファイルを選び直したときも発火する（MDN）。`duration` はメディアが無ければ NaN、長さが不明なら Infinity（MDN）で、その場合は長さを出さない。`MediaRecorder` で自前に録る方式は、カメラ・マイクの許可を新しく求め、撮影の画面を自前で組むことになるため使わない"
     }
   },
-  "note": "camera-capture は静止画、本機能は動画ファイル。mic-record（音声のみ）・camera-preview-stream（ファイルにしない生フレーム）とも別。"
+  "note": "camera-capture は静止画 1 枚、本機能は動画ファイル。mic-record（音声のみ）・screen-capture（画面の録画）・camera-preview-stream（ファイルにしない生フレーム）とも別。今回の範囲: 「動画を撮る」で OS の撮影 UI（iOS は撮影画面、Android はカメラアプリ、Web はブラウザのファイル入力）を開き、撮れた動画の長さ・表示の寸法・ファイルサイズを出す。長さの上限 30 秒を OS の撮影 UI に渡す（Web は渡せない）。動画の再生・保存・共有は範囲外。結果は 撮れた / 取り消した（利用者が撮影 UI を閉じた、失敗にしない）/ 失敗（権限拒否・カメラアプリなし・前面でない・中断・空のファイル・読めない動画・その他）/ 非対応。OS を正にする: 撮れたかどうかは OS の完了通知（delegate・Activity の結果・`change` / `cancel`）だけで決め、タイマー・期限で推測しない。長さ・寸法・サイズは OS がファイルに書いたメタデータとファイルの大きさから読み、アプリ内で数えない（OS が長さを返さなければ「長さを読めない」と出す）。寸法は OS が返した回転（0 / 90 / 180 / 270）を当てた表示の向きで出す。撮影 UI の一時ファイルは読み終えたら成功・取り消し・失敗の全経路で消す（Android は次の撮影の前にも置き場を空にする）。守らない範囲: 動画の中身、OS の撮影 UI の見た目・画質・形式、撮影中に背景へ移ったときの OS の挙動、撮影 UI が閉じないまま完了通知が届かない場合（期限を持たないため画面は撮影中のまま）、デスクトップのブラウザで既存のファイルが選ばれること、`EXTRA_OUTPUT` を無視するカメラアプリ、複数タブ・複数プロセス、撮影中のプロセス死（Android は次回の撮影の前に置き場を空にして回収する）。"
 }
