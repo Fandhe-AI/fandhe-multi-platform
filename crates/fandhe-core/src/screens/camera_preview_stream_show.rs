@@ -19,7 +19,7 @@
 //! Idle/Stopped/Failed --「映像を始める」--> Starting(gen += 1)
 //! Starting --apply_running--> Live <--apply_running / apply_interrupted--> Interrupted
 //! Starting/Live/Interrupted --「止める」--> Stopped(User)
-//! Starting --apply_start_failed--> Failed / Live・Interrupted --apply_runtime_failed--> Failed
+//! Starting/Live/Interrupted --apply_start_failed / apply_runtime_failed--> Failed
 //! Starting/Live/Interrupted --apply_stopped--> Stopped(Backgrounded / LeftScreen)
 //! ```
 //!
@@ -320,31 +320,31 @@ pub fn apply_stopped(state: &mut CameraPreviewStreamShowState, generation: u64, 
     clear_media(state);
 }
 
-/// 開始の失敗。`Starting` の間だけ受ける。
+/// 開始の失敗。`Starting`・`Live`・`Interrupted` の間に受ける。ドライバは終端通知でセッションを
+/// 解放するため、画面側が受理しないと phase だけが残り失敗が見えなくなる（嘘の成功の禁止）。
 pub fn apply_start_failed(
     state: &mut CameraPreviewStreamShowState,
     generation: u64,
     why: FailureView,
 ) {
-    if state.generation != generation || state.phase != PreviewPhase::Starting {
+    if state.generation != generation || !is_active(state.phase) {
         return;
     }
     state.phase = PreviewPhase::Failed(why);
     clear_media(state);
 }
 
-/// 実行中の失敗。`Live`・`Interrupted` の間だけ受ける。
+/// 実行中の失敗。`Starting`・`Live`・`Interrupted` の間に受ける（Running 通知より前に届く
+/// 実行時エラーも失敗として見せる）。
 pub fn apply_runtime_failed(state: &mut CameraPreviewStreamShowState, generation: u64) {
-    if state.generation != generation
-        || !matches!(state.phase, PreviewPhase::Live | PreviewPhase::Interrupted)
-    {
+    if state.generation != generation || !is_active(state.phase) {
         return;
     }
     state.phase = PreviewPhase::Failed(FailureView::Runtime);
     clear_media(state);
 }
 
-/// 非対応。`Starting` の間だけ受ける。
+/// 非対応。開始の失敗と同じ扱い。
 pub fn apply_unsupported(state: &mut CameraPreviewStreamShowState, generation: u64) {
     apply_start_failed(state, generation, FailureView::Unsupported);
 }
@@ -564,10 +564,21 @@ mod tests {
         // 失敗後にフレームが届いても映像にならない。
         apply_frame(&mut s, 1, 1, frame(), Some(1.0));
         assert!(s.frame.is_none());
-        // 開始待ちの失敗は Live では受けない。
+    }
+
+    #[test]
+    fn terminal_failures_are_accepted_in_any_active_phase() {
+        // Starting 中の実行時失敗（Running より前に届く OS エラー）。
+        let mut s = CameraPreviewStreamShowState::default();
+        start(&mut s);
+        apply_runtime_failed(&mut s, 1);
+        assert_eq!(s.phase, PreviewPhase::Failed(FailureView::Runtime));
+        assert_eq!(take_start(&s), None, "失敗後に開始を再要求しない");
+        // Live 中の開始失敗通知。
         let mut s = live();
         apply_start_failed(&mut s, 1, FailureView::Other);
-        assert_eq!(s.phase, PreviewPhase::Live);
+        assert_eq!(s.phase, PreviewPhase::Failed(FailureView::Other));
+        assert!(s.frame.is_none());
     }
 
     #[test]
