@@ -320,6 +320,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // （`fandhe_device::contact_picker` モジュール doc）なので、旧要求の遅延完了を id 不一致で無視させる。
     #[cfg(feature = "device")]
     crate::device::contact_pick::reset_pending_tracking();
+    // Issue #812: カメラのライブ映像も同様。画面状態が generation 0 に戻るため、動いたままの
+    // セッションを止めて `ACTIVE` を解放する（`device::camera_preview_stream::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::camera_preview_stream::reset_pending_tracking();
     // Issue #1400: MIDI の購読（Rust 側 epoch・sink）とドライバの処理済み世代も破棄する。画面状態は
     // 再生成で generation 0 に戻るため、残すと次の「受信開始」が処理済みとして飲み込まれる
     // （`device::midi::reset_pending_tracking` doc 参照）。

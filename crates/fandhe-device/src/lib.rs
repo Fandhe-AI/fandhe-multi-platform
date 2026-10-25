@@ -54,6 +54,8 @@ pub mod calendar;
 /// Phase 11（端末機能の拡充ループ、親 #87、Issue #276）: 疑似着信の OS 着信 UI への表示と結果の取得。
 pub mod call_ui;
 pub mod camera;
+/// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得（ズーム操作を含む）。
+pub mod camera_preview_stream;
 /// Phase 11（端末機能の拡充ループ、親 #120、Issue #582）: 画面キャプチャの防止・検知。
 pub mod capture_protection;
 /// Phase 11（端末機能の拡充ループ、Issue #859）: クリップボード読み書き。

@@ -26,6 +26,8 @@ pub mod app_badge_set;
 pub mod ar_show;
 /// Phase 8（端末機能の型サンプル「カメラ撮影」、Issue #749）。
 pub mod camera_capture;
+/// Phase 11 の拡充ループ型サンプル「カメラのライブ映像」（親 #168、Issue #812）。
+pub mod camera_preview_stream_show;
 pub mod confirm_dialog;
 pub mod list_detail;
 pub mod schema_example_fixture;
