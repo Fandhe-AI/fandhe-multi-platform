@@ -52,6 +52,11 @@ pub mod android_app_shortcuts;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_audio_devices;
+/// Issue #840: Android 向け音声セッション実装のスタブ（#842 が埋める）。
+/// `device/audio_session.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_audio_session;
 /// Issue #392: Android 向けバックグラウンドダウンロード実装（`DownloadManager` を同期 JNI で呼ぶ）。
 /// `device/background_download.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -574,6 +579,9 @@ pub mod ar;
 /// Phase 11 の拡充ループ（親 #1136、Issue #1330）: 音声デバイス一覧の effect ドライバ（macOS / Windows
 /// ・iOS・Android 実装、他 OS は `UnsupportedAudioDevices` 固定）。
 pub mod audio_devices;
+/// Phase 11 の拡充ループ（親 #172、Issue #840）: 音声の割り込み・セッション種別の effect ドライバ
+/// （iOS は #841・Android は #842 が埋めるスタブ、他 OS は `UnsupportedAudioSession` 固定）。
+pub mod audio_session;
 /// Phase 11 の拡充ループ（親 #121、Issue #585）: ワンタイムコード入力の effect ドライバ（iOS は
 /// `ios_autofill_otp.rs` で実装、Android・macOS は保留、Windows は非対応で `UnsupportedAutofillOtp` 固定。
 /// Web は `fandhe-web-dom` が担う）。
@@ -737,6 +745,11 @@ pub mod ios_ar;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_audio_devices;
+/// Issue #840: iOS 向け音声セッション実装のスタブ（#841 が埋める）。
+/// `device/audio_session.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_audio_session;
 /// Issue #585: iOS 向けワンタイムコード自動入力の骨格（実装は #586）。
 /// `device/autofill_otp.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1740,6 +1753,7 @@ pub fn shutdown() {
     web_auth_session::shutdown();
     serial_port::shutdown();
     camera_preview_stream::shutdown();
+    audio_session::shutdown();
 }
 
 fn to_note_storage_error(e: DeviceError) -> NoteStorageError {

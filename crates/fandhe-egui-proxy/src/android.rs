@@ -324,6 +324,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // セッションを止めて `ACTIVE` を解放する（`device::camera_preview_stream::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::camera_preview_stream::reset_pending_tracking();
+    // Issue #840: 音声セッションも同様。画面状態が generation 0 に戻るため、処理済み世代を捨て、
+    // 握っているセッションを解放する（`device::audio_session::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::audio_session::reset_pending_tracking();
     // Issue #821: 動画の撮影も同様。画面状態が generation 0 に戻るため、保留中の要求を破棄し、
     // 旧要求の遅延完了を id 不一致で捨てさせる（`device::video_capture::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

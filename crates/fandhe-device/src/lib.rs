@@ -33,6 +33,8 @@ pub mod app_shortcuts;
 pub mod ar;
 /// Phase 11（端末機能の拡充ループ、親 #1136、Issue #1330）: 音声デバイスの一覧（入力・出力の名前）。
 pub mod audio_devices;
+/// Phase 11 の拡充ループ（親 #172、Issue #840）: 音声の割り込み・セッション種別（他の音を止める・下げる・混ぜる）。
+pub mod audio_session;
 /// Phase 11（端末機能の拡充ループ、親 #121、Issue #585）: ワンタイムコード（OTP）の自動入力のヒント。
 pub mod autofill_otp;
 /// Phase 11（端末機能の拡充ループ、親 #100、Issue #390）: OS 管理のバックグラウンドダウンロード。
