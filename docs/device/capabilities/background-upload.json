@@ -8,40 +8,69 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "`URLSessionConfiguration.background(withIdentifier:)` + `uploadTask(with:fromFile:)`",
-      "perm": "不要",
-      "url": "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/1407496-background",
-      "note": "未実装。アップロード元はファイルで渡す必要がある（メモリ上のデータ不可）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "`URLSessionConfiguration.background(withIdentifier:)` の session で `uploadTask(with:fromFile:)`。走行中の転送は `getAllTasks(completionHandler:)`、進み具合は `countOfBytesSent` / `countOfBytesExpectedToSend`、終わりは delegate の `urlSession(_:task:didCompleteWithError:)`。背景起動は `application(_:handleEventsForBackgroundURLSession:completionHandler:)` と `urlSessionDidFinishEvents(forBackgroundURLSession:)`",
+      "perm": "不要（`UIBackgroundModes` は足さない。ローカルの確認用の受け口へつなぐ `NSAllowsLocalNetworking` は background-download で宣言済み）",
+      "url": [
+        "https://developer.apple.com/documentation/foundation/downloading-files-in-the-background",
+        "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/background(withidentifier:)",
+        "https://developer.apple.com/documentation/foundation/urlsession/getalltasks(completionhandler:)",
+        "https://developer.apple.com/documentation/uikit/uiapplicationdelegate/application(_:handleeventsforbackgroundurlsession:completionhandler:)",
+        "https://developer.apple.com/documentation/foundation/urlsessiondelegate/urlsessiondidfinishevents(forbackgroundurlsession:)"
+      ],
+      "note": "未実装。背景 session の送信はファイルからだけ（メモリ上のデータ・stream からの送信はアプリの終了後に失敗する、公式）。delegate が必須で、リダイレクトは常に追い delegate は呼ばれない（公式）。同じ identifier で session を作り直すと OS が続けている転送に再び結び付く（公式）。`getAllTasks` は完了・失敗・取り消しで無効になった転送を返さない（公式）。`handleEventsForBackgroundURLSession` は転送がすべて終わったとき（成功・失敗とも）に呼ばれ、未完了の転送しか無い起動では呼ばれない（公式）。利用者がマルチタスク画面から終了すると、その session の転送はすべて取り消される（公式）。application delegate の受け口は background-download（`ios/fandhe_ios_url_scheme.m`）と共用で、identifier で振り分ける"
     },
     "android": {
       "status": "possible",
-      "api": "WorkManager の `CoroutineWorker` / `setForeground`（`ForegroundInfo` のデータ同期型）。OS 管理の送信専用 API はない",
-      "perm": "`POST_NOTIFICATIONS`（API 33+、前面サービスの通知）、`FOREGROUND_SERVICE_DATA_SYNC`",
-      "url": "https://developer.android.com/develop/background-work/background-tasks/persistent",
-      "note": "未実装。background-download と違い DownloadManager 相当がなく、アプリのプロセスが処理する。ユーザー起点のデータ転送ジョブ（API 34+ `JobInfo.Builder.setUserInitiated`）も候補。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "WorkManager（`androidx.work`、導入済み）の `OneTimeWorkRequest` を `enqueueUniqueWork`（`ExistingWorkPolicy.REPLACE`、`NetworkType.CONNECTED` の制約）で依頼し、Worker が `HttpURLConnection` で送る。状態は `getWorkInfosForUniqueWork` / `getWorkInfosForUniqueWorkLiveData` の `WorkInfo`（`State`・`getProgress`・`getOutputData`）から読み、取り消しは `cancelUniqueWork`。OS 管理の送信専用 API（DownloadManager の送信版）は無い",
+      "perm": "不要（`INTERNET` は宣言済み。小さなファイル 1 つで前面サービスを使わないため、`POST_NOTIFICATIONS`・`FOREGROUND_SERVICE_DATA_SYNC` は足さない。ローカルの確認用の受け口への平文は background-download の network security config で許可済み）",
+      "url": [
+        "https://developer.android.com/develop/background-work/background-tasks/persistent",
+        "https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/manage-work",
+        "https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/observe",
+        "https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/long-running",
+        "https://developer.android.com/develop/background-work/background-tasks/uidt"
+      ],
+      "note": "未実装。転送そのものはアプリのプロセス（Worker）が行い、依頼・制約・再実行・状態の保存は WorkManager が持つ。依頼はアプリの終了・端末の再起動後も残る（公式）。`setProgress` の進み具合は実行中だけ観測でき、終わった後の設定は無視される（公式）。終わった `WorkInfo` は一定期間の後に WorkManager が消す（期間は公式ページで未確認）。長い転送は `setForeground`（前面サービスと通知）が要り、Android 14 以上は前面サービスの種類の宣言が要る（公式）。ユーザー起点のデータ転送ジョブ（`setUserInitiated`、Android 14 以上）は `RUN_USER_INITIATED_JOBS` と通知が要る（公式）。どちらも今回は使わない"
     },
     "macos": {
       "status": "possible",
-      "api": "`URLSessionConfiguration.background(withIdentifier:)`",
-      "perm": "不要",
-      "url": "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/1407496-background",
-      "note": "未実装。iOS と同じ API。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "iOS と同じ background `NSURLSession`（`uploadTask(with:fromFile:)`、`getAllTasks`、delegate の完了通知）",
+      "perm": "不要（App Sandbox を使わない素の実行体。`NSAllowsLocalNetworking` は background-download で宣言済み）",
+      "url": [
+        "https://developer.apple.com/documentation/foundation/downloading-files-in-the-background",
+        "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/background(withidentifier:)",
+        "https://developer.apple.com/documentation/foundation/urlsession/getalltasks(completionhandler:)"
+      ],
+      "note": "未実装。`sessionSendsLaunchEvents` による背景起動は iOS だけ（公式）で、macOS はアプリを開き直して同じ identifier の session を作ったときに OS が続けた転送へ結び付く。送信元はファイルだけ（iOS と同じ）"
     },
     "windows": {
       "status": "possible",
-      "api": "WinRT `Windows.Networking.BackgroundTransfer.BackgroundUploader`",
-      "perm": "`internetClient` 機能の宣言（パッケージ時）。unpackaged は要確認",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.networking.backgroundtransfer.backgrounduploader",
-      "note": "未実装。background-download の Windows と同じ名前空間。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "WinRT `Windows.Networking.BackgroundTransfer.BackgroundUploader`（package identity 必須）。BITS（`IBackgroundCopyManager` の `BG_JOB_TYPE_UPLOAD`）は受け口に BITS Upload Protocol を要求する",
+      "perm": "`BackgroundUploader` は package identity が要る。BITS は不要だが、受け口が IIS の BITS 拡張相当である必要がある",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/apps/develop/networking/background-transfers",
+        "https://learn.microsoft.com/en-us/windows/win32/bits/about-bits",
+        "https://learn.microsoft.com/en-us/windows/win32/bits/iis-requirements-for-bits-uploads",
+        "https://learn.microsoft.com/en-us/windows/win32/bits/bits-upload-protocol"
+      ],
+      "deferred": "`BackgroundUploader` は「Background transfers require package identity; unpackaged apps cannot use this API.」（Microsoft の文書）で、本リポジトリの Windows 版は unpackaged のため使えない。BITS の送信は `BITS_POST` と `BITS-Packet-Type` ヘッダの専用プロトコル（1 セッション 1 ファイル）で、受け口に IIS の BITS 拡張相当が要り、普通の HTTP の PUT・POST の受け口では動かない。確認用の受け口に専用プロトコルを実装するか、MSIX 化（package identity）が要り、どちらも設計の変更になるため保留。MSIX 化の方針が決まったら `BackgroundUploader` で見直す",
+      "note": "未実装。`BackgroundUploader` は upload がアプリの終了後も残り、起動時に `GetCurrentUploadsAsync` で列挙して `AttachAsync` で再び結び付ける（公式）。BITS は開始したユーザーがログオンしている間、アプリが終了しても続く（公式）。download の Windows（background-download）は BITS の `BG_JOB_TYPE_DOWNLOAD` で、普通の HTTP サーバーで動く"
     },
     "web": {
       "status": "possible",
-      "api": "Background Sync API（`SyncManager`）。Background Fetch は取得専用",
-      "perm": "Service Worker の登録",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API",
-      "safari": "非対応",
-      "note": "未実装。Chromium 系のみ。送信の完了保証は弱い。"
+      "api": "Background Fetch API（`BackgroundFetchManager.fetch()` に本文付きの `Request`。`uploadTotal` / `uploaded`）。Background Synchronization API（`SyncManager`）は Service Worker の `sync` イベントで自前の `fetch` を走らせるだけで、転送の代行ではない",
+      "perm": "専用の Service Worker が要る。secure context 必須",
+      "url": [
+        "https://wicg.github.io/background-fetch/",
+        "https://developer.mozilla.org/en-US/docs/Web/API/BackgroundFetchRegistration",
+        "https://developer.chrome.com/blog/background-fetch",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API",
+        "https://caniuse.com/background-sync"
+      ],
+      "safari": "非対応（Background Fetch・Background Sync とも。Firefox も非対応）",
+      "deferred": "転送をブラウザに任せられるのは Background Fetch だけ。仕様は本文付きの要求を許すが、Chrome の公式記事は「本文の無い要求だけを受け付ける」と書いたまま（2018 年）で、現行の Chrome が送信に対応するかは公式文書で確かめられない。Chrome は CORS の preflight が要る要求も受け付けないため、受け口はページと同じオリジンに置く必要があり、確認用の配信サーバー（GET だけを返す）に送信の受け口を足す設計の変更になる。Background Sync は転送の代行ではなく本機能に当たらない。Chrome の送信への対応が公式に確かめられたら見直す",
+      "note": "未実装。Background Fetch・Background Sync とも experimental で Baseline ではない（MDN）。download の Web（background-download）は同じ Background Fetch で本文の無い GET"
     }
   },
-  "note": "background-download はダウンロード、本機能は逆向きのアップロード。http-get / background-task（短時間処理）とも別で、転送そのものを OS に任せる点は background-download と同じ。"
+  "note": "background-download（受信）の逆向きで、転送そのものを OS に任せる。http-get（前面の GET 1 回）・background-task（短時間の処理）とも別。今回の範囲: アプリが作る固定内容の小さなファイル 1 つ（1 MiB、アプリのキャッシュに固定名。利用者のデータは送らない）を、ローカルの確認用の受け口（`scripts/device/serve-upload-sink.mjs`、既定 `http://127.0.0.1:8789/upload`、受け取った本文は捨ててバイト数だけを返す）へ PUT で送るよう OS に依頼し、待機・送信中（送信済みバイト数）・完了（バイト数・HTTP 状態）・取り消し・失敗を画面に出す。外部の URL は既定値に入れない。再開・複数ファイル・一時停止・URL や送るファイルの選択は扱わない。結果は 完了 / 取り消し（利用者の操作、失敗にしない）/ 失敗（HTTP が 2xx でない・送信バイト数がファイルの大きさと違う・接続の失敗・ファイルを用意できない・許可外のリダイレクト先）/ 非対応。OS を正にする: 送信中か・進み具合・結果をアプリ内に覚えて二重に持たず、画面を開いたときと OS の通知（Apple の delegate、Android の `WorkInfo` の変化）が届くたびに OS の一覧（`getAllTasks`・`getWorkInfosForUniqueWork`）を読み直して出す。事前に通信できるかを判定しない（Android の接続待ちは WorkManager の制約に任せる）。周期のタイマーで状態を推測しない。アプリの終了・再起動後は OS の一覧から走行中の転送を読み戻し、Android は終わった `WorkInfo` から結果も読み戻す。守る範囲: 1 プロセス内の開始・取り消し・完了の順序、置き換え・取り消しの後に届いた古い転送の通知を捨てること、嘘の成功の禁止、背景起動の完了通知を 1 回だけ返すこと（iOS）。守らない範囲: Apple でアプリが終わっている間に完了した転送の結果（OS の一覧から消えるため、背景起動で受けた後にプロセスが終わると失われる）、Android で WorkManager が消した古い結果、iOS で利用者がマルチタスク画面から終了したときの取り消し（OS が行う）、接続できない間は OS が待ち続け待機中・送信中のままになりうること、複数プロセス"
 }
