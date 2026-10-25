@@ -82,6 +82,9 @@
 //! - `ios/fandhe_ios_web_auth_session.m`（Issue #532、AuthenticationServices `ASWebAuthenticationSession` による
 //!   OAuth 用の Web 認証セッション）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルし
 //!   AuthenticationServices をリンクする（`src/device/ios_web_auth_session.rs` から呼ばれる契約）。
+//! - `ios/fandhe_ios_open_system_settings.m`（Issue #799、`UIApplication.open` による自アプリの設定・通知設定の表示）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_open_system_settings.rs` から
+//!   呼ばれる契約）。UIKit は既存のリンクで足りる。
 //! - `ios/fandhe_ios_in_app_browser.m`（Issue #702、SafariServices `SFSafariViewController` によるアプリ内ブラウザ）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルし SafariServices をリンクする
 //!   （`src/device/ios_in_app_browser.rs` から呼ばれる契約）。
@@ -615,6 +618,8 @@ fn main() {
     compile_ios_compose_mail_sms();
     // `ios/fandhe_ios_print.m`（Issue #327）。iOS 分岐のみ。
     compile_ios_print();
+    // `ios/fandhe_ios_open_system_settings.m`（Issue #799）。iOS 分岐のみ。
+    compile_ios_open_system_settings();
     // `ios/fandhe_ios_device_info.m`（Issue #1305）。iOS 分岐のみ。
     compile_ios_device_info();
     // `ios/fandhe_ios_safe_area_insets.m`（Issue #445）。iOS 分岐のみ。
@@ -1903,6 +1908,16 @@ fn compile_ios_document_scan() {
         .flag("-fobjc-arc")
         .compile("fandhe_ios_document_scan");
     println!("cargo:rustc-link-lib=framework=VisionKit");
+}
+
+/// `ios/fandhe_ios_open_system_settings.m` を `cc` でコンパイルする（Issue #799）。**iOS 分岐のみ**から
+/// 呼ばれる（`src/device/ios_open_system_settings.rs` が使う）。UIKit はリンク済み。
+fn compile_ios_open_system_settings() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_open_system_settings.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_open_system_settings.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_open_system_settings");
 }
 
 /// `ios/fandhe_ios_print.m` を `cc` でコンパイルする（Issue #327）。**iOS 分岐のみ**から
