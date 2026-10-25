@@ -21,7 +21,7 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_open_system_settings.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_open_system_settings.m + crates/fandhe-egui-proxy/src/device/open_system_settings.rs + crates/fandhe-core/src/screens/open_system_settings_show.rs + crates/fandhe-device/src/open_system_settings.rs、Issue #799"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`Settings.ACTION_APPLICATION_DETAILS_SETTINGS`（data に `package:<自パッケージ>`、API 9+）と `Settings.ACTION_APP_NOTIFICATION_SETTINGS`（extra `Settings.EXTRA_APP_PACKAGE`、API 26+）の Intent を `Activity.startActivity` で開く。`ActivityNotFoundException` を「開けなかった」に写す",
       "perm": "不要（uses-permission・`<queries>` の追加なし）。`startActivity` は package visibility を要さない（公式）。`resolveActivity` で事前に確かめない",
       "url": [
@@ -29,7 +29,10 @@
         "https://developer.android.com/reference/android/provider/Settings#ACTION_APP_NOTIFICATION_SETTINGS",
         "https://developer.android.com/training/package-visibility/use-cases"
       ],
-      "note": "未実装。公式は設定の Intent について「対応する Activity が無い場合があるので備えること」と書く。通知設定の Intent は API 26 で追加され、minSdk 24 の端末（API 24・25）では Activity が無く `ActivityNotFoundException` になる見込みで、そのときは「開けなかった」と出す（別の頁へ置き換えない）。前景（RESUMED）でないときは OS に黙って抑止されうるため起動しない。`startActivity` が戻ったことは OS が Intent を受け付けたことまでで、利用者が設定を変えたかは分からない"
+      "note": "実装済み（#800）。`startActivity` の結果をそのまま写し、前景（RESUMED）でなければ起動せず失敗を返す。API 24・25 の通知設定は「開けなかった」と出す。公式は設定の Intent について「対応する Activity が無い場合があるので備えること」と書く。通知設定の Intent は API 26 で追加され、minSdk 24 の端末（API 24・25）では Activity が無く `ActivityNotFoundException` になる見込みで、そのときは「開けなかった」と出す（別の頁へ置き換えない）。前景（RESUMED）でないときは OS に黙って抑止されうるため起動しない。`startActivity` が戻ったことは OS が Intent を受け付けたことまでで、利用者が設定を変えたかは分からない",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#795）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/SystemSettingsHelper.java + crates/fandhe-egui-proxy/src/device/android_open_system_settings.rs + crates/fandhe-egui-proxy/src/device/open_system_settings.rs + crates/fandhe-core/src/screens/open_system_settings_show.rs + crates/fandhe-device/src/open_system_settings.rs、Issue #800"
     },
     "macos": {
       "status": "no",
