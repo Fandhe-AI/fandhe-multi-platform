@@ -62,6 +62,11 @@ pub mod android_background_download;
 /// 純関数はホストでテストできるよう cfg を付けない（`android_gamepad.rs` と同じ
 /// 判断）。`device/background_task.rs` の Android 経路から使われる。
 pub mod android_background_task;
+/// Issue #835（骨格）/ #837（実装）: Android 向けバックグラウンド送信実装。
+/// `device/background_upload.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_background_upload;
 /// Issue #659: Android 向け Bluetooth Classic の骨格（`Unsupported` のスタブ。#661 が
 /// `BluetoothClassicHelper.java` と JNI で埋める）。`device/bluetooth_classic.rs` の Android 経路から呼ばれる。
 /// 後続の子がホストテストを足すときに本行の cfg を広げずに済むよう test でもコンパイルする。
@@ -365,6 +370,13 @@ pub mod apple_accessibility_prefs;
 /// 状態遷移の純ロジックをホストの `cargo test` で検査するため cfg に `test` を含める。
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
 pub mod apple_background_download;
+/// Issue #835（macOS）/ #836（iOS）: バックグラウンド送信実装（`apple/fandhe_apple_background_upload.m` の
+/// background `NSURLSession` を呼ぶ C ABI ラッパー）。`device/background_upload.rs` の macOS 経路（iOS は
+/// `ios_background_upload` 経由）から呼ばれる。結果の照合の純ロジックをホストの `cargo test` で検査するため
+/// cfg に `test` を含める。
+#[cfg(any(target_os = "ios", target_os = "macos", test))]
+#[cfg_attr(target_os = "ios", allow(dead_code))]
+pub mod apple_background_upload;
 /// Issue #557 macOS・#558 iOS: バーコード・QR 読み取り実装（`apple/fandhe_apple_barcode_scan.m` を
 /// 呼ぶ C ABI ラッパー）。`device/barcode_scan.rs` の macOS 経路と `ios_barcode_scan` から呼ばれる。
 /// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
@@ -572,6 +584,9 @@ pub mod background_download;
 /// Phase 11 の拡充ループ（親 #1042、Issue #1043）: バックグラウンド処理の effect
 /// ドライバ（macOS 実装、他 OS は兄弟 issue #1044〜#1047）。
 pub mod background_task;
+/// Phase 11 の拡充ループ（親 #170、Issue #835）: OS 管理のバックグラウンド送信の effect ドライバ
+/// （macOS 実装、iOS・Android は兄弟 issue #836・#837 が埋めるスタブ、他 OS は `Unsupported` 固定）。
+pub mod background_upload;
 /// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取りの effect ドライバ。
 pub mod barcode_scan;
 /// Phase 11 の拡充ループ（親 #905、Issue #906/#907/#908）: 生体認証の effect ドライバ
@@ -738,6 +753,11 @@ pub mod ios_background_download;
 /// で host の `cargo test` から状態機械を検証できる（モジュール doc 参照）。
 #[cfg(any(target_os = "ios", test))]
 pub mod ios_background_task;
+/// Issue #835（骨格）/ #836（実装）: iOS 向けバックグラウンド送信実装。
+/// `device/background_upload.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_background_upload;
 /// Issue #557: iOS 向けバーコード・QR 読み取りの骨格（実装は #558）。
 #[cfg(target_os = "ios")]
 pub mod ios_barcode_scan;

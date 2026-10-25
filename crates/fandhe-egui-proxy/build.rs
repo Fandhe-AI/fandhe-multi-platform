@@ -37,6 +37,9 @@
 //! - `apple/fandhe_apple_background_download.m`（Issue #390、background `NSURLSession` による OS 管理の
 //!   バックグラウンドダウンロード）は macOS・iOS の両分岐で feature `device` 有効時にコンパイルする
 //!   （`src/device/apple_background_download.rs` から呼ばれる契約）。Foundation のみで追加のリンクは不要。
+//! - `apple/fandhe_apple_background_upload.m`（Issue #835、background `NSURLSession` による OS 管理の
+//!   バックグラウンド送信）は macOS・iOS の両分岐で feature `device` 有効時にコンパイルする
+//!   （`src/device/apple_background_upload.rs` から呼ばれる契約）。Foundation のみで追加のリンクは不要。
 //! - `apple/fandhe_apple_file_association.m`（Issue #416、Apple Event `kAEOpenDocuments` によるファイルの
 //!   関連付け受信）は macOS・iOS の両分岐で feature `device` 有効時にコンパイルする（`src/device/
 //!   apple_file_association.rs` から呼ばれる契約。iOS 側は Issue #417 で実装済み）。追加のリンクは不要。
@@ -687,6 +690,8 @@ fn main() {
     compile_apple_picture_in_picture(true);
     // `apple/fandhe_apple_background_download.m`（Issue #390）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_background_download();
+    // `apple/fandhe_apple_background_upload.m`（Issue #835）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
+    compile_apple_background_upload();
     // `apple/fandhe_apple_file_association.m`（Issue #416）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_file_association();
     // `apple/fandhe_apple_media_cast.m`（Issue #387）。macOS 分岐と共用する。AVKit を使う。
@@ -1359,6 +1364,16 @@ fn compile_apple_background_download() {
         .file("apple/fandhe_apple_background_download.m")
         .flag("-fobjc-arc")
         .compile("fandhe_apple_background_download");
+}
+
+/// `apple/fandhe_apple_background_upload.m` を `cc` でコンパイルする（Issue #835）。macOS・iOS 双方の
+/// 分岐から呼ばれる（`src/device/apple_background_upload.rs` が使う）。Foundation は既存のリンクで足りる。
+fn compile_apple_background_upload() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_background_upload.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_background_upload.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_background_upload");
 }
 
 /// `apple/fandhe_apple_file_association.m` を `cc` でコンパイルする（Issue #416）。macOS・iOS 双方の
@@ -2386,6 +2401,8 @@ fn build_macos() {
     compile_apple_picture_in_picture(false);
     // `apple/fandhe_apple_background_download.m`（Issue #390）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_background_download();
+    // `apple/fandhe_apple_background_upload.m`（Issue #835）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
+    compile_apple_background_upload();
     // `apple/fandhe_apple_file_association.m`（Issue #416）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_file_association();
     // `apple/fandhe_apple_now_playing.m`（Issue #381）。iOS 分岐と共用する。MediaPlayer を使う。

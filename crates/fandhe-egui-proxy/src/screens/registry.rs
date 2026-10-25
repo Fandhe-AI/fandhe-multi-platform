@@ -230,6 +230,10 @@ generated_screens! {
     crate::device::background_download::background_download_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "background_upload" => fandhe_core::screens::background_upload::current_screen,
+    crate::device::background_upload::background_upload_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pip_show" => fandhe_core::screens::pip_show::current_screen,
     crate::device::picture_in_picture::pip_show_effect,
     effect
