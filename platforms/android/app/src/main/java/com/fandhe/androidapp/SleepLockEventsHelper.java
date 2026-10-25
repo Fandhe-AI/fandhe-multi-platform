@@ -35,6 +35,8 @@ import androidx.activity.ComponentActivity;
 // ライフサイクル: onPause / onStop では止めない（画面を消すと Activity が onPause / onStop するため、
 // 止めると消灯を受けられない）。onDestroy（Activity 再生成を含む）はレシーバーを解除する。停止を
 // 失敗として送らない。新インスタンスは購読を持たない状態から始まる。id・例外の内容はログへ出さない。
+// sticky: 登録時にキャッシュ済みの SCREEN_ON / OFF が再生される場合は isInitialStickyBroadcast() で捨てる
+// （live の出来事として数えない。初回状態は read() が返す）。
 // 守らない範囲: Android 14 以上でキャッシュ状態の間に溜められた通知の順序と畳み込み、画面を開く前・
 // 止めた後の出来事。
 final class SleepLockEventsHelper {
@@ -75,6 +77,11 @@ final class SleepLockEventsHelper {
             BroadcastReceiver r = new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
+                    // 登録時に再生されるキャッシュ済み（sticky）の配送は、購読開始後に起きた出来事ではない。
+                    // 初回状態は read() が担うので捨てる。
+                    if (isInitialStickyBroadcast()) {
+                        return;
+                    }
                     onBroadcast(this, intent);
                 }
             };
