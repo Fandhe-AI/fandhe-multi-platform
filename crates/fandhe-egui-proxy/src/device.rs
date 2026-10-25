@@ -324,6 +324,11 @@ pub mod android_url_scheme;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_usb_device;
+/// Issue #821: Android 向け動画の撮影実装のスタブ（#823 が埋める）。
+/// `device/video_capture.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_video_capture;
 /// Issue #785: Android 向けシステム音量実装（#787 が埋めるスタブ）。
 /// `device/volume_control.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
@@ -957,6 +962,11 @@ pub mod ios_translation;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_uwb_ranging;
+/// Issue #821: iOS 向け動画の撮影実装のスタブ（#822 が埋める）。
+/// `device/video_capture.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_video_capture;
 /// Issue #785: iOS 向けシステム音量実装（#786 が埋めるスタブ）。
 /// `device/volume_control.rs` の iOS 経路から使われる。
 #[cfg(any(target_os = "ios", test))]
@@ -1340,6 +1350,10 @@ pub mod user_idle;
 /// Phase 11 の拡充ループ（親 #129、Issue #653）: UWB による距離・方向の effect ドライバ（iOS は後続 #654 で実装、
 /// 他 OS は `UnsupportedUwbRanging` 固定。Android は GMS 依存のため保留、Web は対象外）。
 pub mod uwb_ranging;
+/// Phase 11 の拡充ループ（親 #169、Issue #821）: 動画の撮影の effect ドライバ
+/// （iOS は #822・Android は #823 が埋めるスタブ、Web は `fandhe-web-dom`（#824）、
+/// macOS・Windows・Linux は `UnsupportedVideoCapturer` 固定）。
+pub mod video_capture;
 /// Phase 11 の拡充ループ（親 #166、Issue #785）: システム音量の effect ドライバ
 /// （macOS・Windows 実装、iOS は #786・Android は #787 が埋めるスタブ、他 OS は `UnsupportedVolumeControl` 固定）。
 pub mod volume_control;

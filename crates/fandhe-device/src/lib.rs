@@ -226,6 +226,8 @@ pub mod usb_device;
 pub mod user_idle;
 /// Phase 11（端末機能の拡充ループ、親 #129、Issue #653）: UWB による相手との距離・方向（能力の可否と測距）。
 pub mod uwb_ranging;
+/// Phase 11（端末機能の拡充ループ、親 #169、Issue #821）: 動画の撮影（OS の撮影 UI を開き、長さ・寸法・サイズを出す）。
+pub mod video_capture;
 /// Phase 11（端末機能の拡充ループ、親 #166、Issue #785）: システム音量・消音状態の取得と変更。
 pub mod volume_control;
 /// Phase 11（端末機能の拡充ループ、親 #113、Issue #530）: OAuth 用の Web 認証セッション（デモ認可ページ + コールバック検査）。
