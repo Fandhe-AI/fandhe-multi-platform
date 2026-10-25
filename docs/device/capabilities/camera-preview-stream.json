@@ -9,7 +9,7 @@
     "ios": {
       "status": "done",
       "api": "AVFoundation `AVCaptureSession`（`sessionPreset` = `vga640x480`）+ `AVCaptureVideoDataOutput`（`setSampleBufferDelegate:queue:` に serial queue、`kCVPixelBufferPixelFormatTypeKey` = 32BGRA）、`CMSampleBufferGetImageBuffer` + `CVPixelBufferLockBaseAddress`。ズームは `AVCaptureDevice.videoZoomFactor`（`lockForConfiguration` 必須、範囲は `minAvailableVideoZoomFactor`〜`maxAvailableVideoZoomFactor`）。中断は `AVCaptureSessionWasInterruptedNotification` / `InterruptionEndedNotification`、実行時の失敗は `AVCaptureSessionRuntimeErrorNotification`",
-      "perm": "`NSCameraUsageDescription`（宣言済み。文言に本機能の画面名を足す）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）",
+      "perm": "`NSCameraUsageDescription`（宣言済み。文言に本機能の画面名を含む）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）",
       "url": [
         "https://developer.apple.com/documentation/avfoundation/avcapturesession",
         "https://developer.apple.com/documentation/avfoundation/avcapturevideodataoutput/setsamplebufferdelegate(_:queue:)",
