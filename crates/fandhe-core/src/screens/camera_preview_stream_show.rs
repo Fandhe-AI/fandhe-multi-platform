@@ -300,6 +300,7 @@ pub fn apply_running(state: &mut CameraPreviewStreamShowState, generation: u64) 
 }
 
 /// OS の中断通知。`Starting`・`Live` を `Interrupted` にし、古いフレームを映像として出さない。
+/// ズーム値もフレームと一緒に届いた OS の値だけを出すため、再開後の次のフレームまで未取得に戻す。
 pub fn apply_interrupted(state: &mut CameraPreviewStreamShowState, generation: u64) {
     if state.generation != generation
         || !matches!(state.phase, PreviewPhase::Starting | PreviewPhase::Live)
@@ -308,6 +309,7 @@ pub fn apply_interrupted(state: &mut CameraPreviewStreamShowState, generation: u
     }
     state.phase = PreviewPhase::Interrupted;
     state.frame = None;
+    state.zoom = ZoomView::Unknown;
     state.zoom_request = None;
 }
 
@@ -552,11 +554,15 @@ mod tests {
         );
 
         let mut s = live();
+        apply_frame(&mut s, 1, 1, frame(), Some(2.0));
+        assert_eq!(s.zoom, ZoomView::Value(2.0));
         apply_interrupted(&mut s, 1);
         assert_eq!(s.phase, PreviewPhase::Interrupted);
         assert_eq!(status_text(&s), INTERRUPTED_STATUS);
         apply_running(&mut s, 1);
         assert_eq!(s.phase, PreviewPhase::Live);
+        // 中断前のズーム値を現在値として出し続けない（次のフレームが OS の値を運ぶ）。
+        assert_eq!(s.zoom, ZoomView::Unknown);
 
         apply_runtime_failed(&mut s, 1);
         assert_eq!(s.phase, PreviewPhase::Failed(FailureView::Runtime));
