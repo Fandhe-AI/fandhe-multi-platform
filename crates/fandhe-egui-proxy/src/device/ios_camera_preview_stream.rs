@@ -9,7 +9,7 @@
 //!
 //! 1. `start`: driver の `register` で `id` を得て `.m` の start を呼ぶ。許可の要求・構成・開始は `.m` が
 //!    session queue で非同期に行い、結果は OS の通知（開始・中断・実行時エラー・背景遷移）で確定する。
-//!    タイマーで推測しない。受理されなければ `unregister` して `Err` を返す（登録を残さない）
+//!    タイマーや `startRunning` 直後の状態読みで推測しない（開始・失敗の確定は通知に一本化）。受理されなければ `unregister` して `Err` を返す（登録を残さない）
 //! 2. `.m` の通知は `fandhe_rust_camera_preview_stream_event`（コードの表は `event_from_code`）、
 //!    フレームは `fandhe_rust_camera_preview_stream_frame` が受け、`deliver_event` / `deliver_frame` で届ける。
 //!    届いた先で driver が `QueueSink::wake` → `crate::ios::request_repaint` を呼ぶ
@@ -30,7 +30,7 @@
 //! # 既知の天井（実機確認 #808 で確かめる）
 //!
 //! - 32BGRA が出力の対応形式に含まれるか、preset 640x480 が通るか
-//! - 中断の理由が届く順、`startRunning` 後の状態
+//! - 中断の理由が届く順、`startRunning` の同期ブロック中に画面を離れたときの停止の待ち
 //! - シミュレータにはカメラが無く、開始失敗（カメラなし）になる
 
 use fandhe_device::camera_preview_stream::{

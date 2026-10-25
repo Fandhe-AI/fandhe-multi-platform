@@ -34,7 +34,8 @@
 //   - set_zoom の受理判定だけは queue に載せず、アトミックな `g_active_id` で行う（`startRunning` の
 //     ブロック中に main を待たせないため）。
 //
-// 結果は OS の通知で確定し、タイマーで推測しない。
+// 結果は OS の通知で確定し、タイマーや `startRunning` 直後の状態読みで推測しない。
+// 開始・失敗の確定は DidStartRunning / RuntimeError / WasInterrupted の通知に一本化している。
 //   - 開始: `AVCaptureSessionDidStartRunningNotification` で Running。
 //   - 中断: `WasInterrupted`（背景由来 = `VideoDeviceNotAvailableInBackground` は背景停止、他は Interrupted）、
 //     `InterruptionEnded` で Running へ戻る。
@@ -44,6 +45,9 @@
 //   - 許可: `requestAccessForMediaType:` を常に呼ぶ（OS を正にする）。応答の後に `g_ctx` と cancelled を
 //     再確認してから構成する。
 // 終端（2・3・4・5）は `terminalSent` で 1 回だけ送る。送る前に文脈を解放側へ確定させる。
+//
+// 既知の天井: stop（Drop、UI スレッド）は `dispatch_sync(sessionQueue)` を待つため、sessionQueue が
+// `startRunning`（同期ブロック）中だと画面離脱がその間止まる（実機で確認する）。
 //
 // 守る範囲: 失敗・カメラなし（シミュレータ）・権限拒否を成功へ畳まない、停止・失敗・背景の全経路で
 // 入出力・購読・delegate を外す。守らない範囲: 自動の再開（中断の終了を除く）、前面・背面の切り替え、
@@ -331,11 +335,9 @@ static void configure_and_start(FandheCamPreviewCtx *ctx) {
             }
         });
 
+        // 開始・失敗の確定は上の通知だけで行う。`startRunning` の戻り後に `isRunning` を読んで
+        // 失敗と推測しない（同期ブロック中に届いた RuntimeError の写像を潰すため）。
         [session startRunning];
-        // `startRunning` の戻り後に OS の状態を読む（タイマーで推測しない）。
-        if (g_ctx == ctx && !ctx.cancelled && !session.isRunning && !session.isInterrupted) {
-            send_terminal(ctx, kEvStartFailed, kDetailOther);
-        }
     }
 }
 
