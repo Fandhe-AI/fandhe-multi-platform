@@ -45,6 +45,8 @@ import java.util.Collections;
 // プロセスで 1 本のカメラスレッド（`CameraThread`、Activity 再生成をまたいで終了しない）に直列化する
 // （前の解放が次の open より先に終わる。途中の open の onOpened も必ず受けて閉じる）。
 // CameraDevice.close() は非同期のため、次の open は前のデバイスの onClosed を待つ（`outstandingSessions`、セッション単位で追跡）。
+// onClosed が届かない場合は守らない範囲（期限で打ち切らず、届くまで次の open を保留する。
+// close() 後の onClosed は Camera2 の契約で、カメラスレッドも終了しない）。
 // 状態は `lock` で守り、native 通知は必ず `lock` の外で行う（Rust 側のロックとの取り合いを避ける）。
 //
 // 数値コード: `nativeOnCameraPreviewEvent` の code / detail の SSOT は Rust の
@@ -127,11 +129,9 @@ final class CameraPreviewHelper {
     private boolean destroyedHelper;
     // openCamera 済みで onClosed が未着のセッションの集合と、それ待ちの open（lock の内側）。
     // Camera2 の close は非同期で、完了前に次の open をすると使用中で失敗し得るため、onClosed で確定する。
-    // 数ではなくセッション単位で持ち、対応するセッションの onClosed でのみ外す
-    // （期限切れで一括破棄すると、遅れて届く旧 onClosed が新デバイス分の追跡を壊す）。
+    // 数ではなくセッション単位で持ち、対応するセッションの onClosed でのみ外す。
     private static final java.util.Set<Session> outstandingSessions = new java.util.HashSet<>();
     private static Runnable deferredOpen;
-    private static final long DEFER_TIMEOUT_MS = 2000;
     // 取り消し済みの最大 id（lock の内側）。stop が start より先に走っても古い要求を開始しない。
     private long cancelledId = RequestTracker.NONE;
     // 以下は UI スレッド専用。
@@ -337,14 +337,9 @@ final class CameraPreviewHelper {
     }
 
     private void openOnCameraThread(long id, Handler h) {
-        openOnCameraThread(id, h, false);
-    }
-
-    // skipDefer: close 待ちの期限切れで進める場合 true（再度保留しない。期限切れ側で追跡は外し済み）。
-    private void openOnCameraThread(long id, Handler h, boolean skipDefer) {
         final Session s;
         Session replaced = null;
-        if (!skipDefer && deferUntilClosed(id, h)) {
+        if (deferUntilClosed(id, h)) {
             return;
         }
         synchronized (lock) {
@@ -438,35 +433,15 @@ final class CameraPreviewHelper {
     }
 
     // 前のデバイスの close 完了（onClosed）が未着なら、open を保留して true を返す。
-    // 保留した open は onClosed で再評価する。onClosed が来ない場合に備え、期限で打ち切って進める。
+    // 保留した open は onClosed だけで再評価する。close() の後に onClosed が届くのは Camera2 の契約で、
+    // カメラスレッドは終了しないため、期限で打ち切らない（タイマーで推測しない）。
     private boolean deferUntilClosed(long id, Handler h) {
-        final Runnable[] holder = new Runnable[1];
         synchronized (lock) {
             if (outstandingSessions.isEmpty()) {
                 return false;
             }
-            holder[0] = () -> openOnCameraThread(id, h, false);
-            deferredOpen = holder[0];
+            deferredOpen = () -> openOnCameraThread(id, h);
         }
-        h.postDelayed(() -> {
-            Runnable r = null;
-            synchronized (lock) {
-                if (deferredOpen == holder[0]) {
-                    deferredOpen = null;
-                    r = holder[0];
-                    // 期限切れ時点の未着セッションは追跡から外す。残すと以降の open が毎回期限全長を待つ。
-                    // 遅れて届く旧 onClosed は deviceOutstanding が false なので何もしない（冪等）。
-                    for (Session old : outstandingSessions) {
-                        old.deviceOutstanding = false;
-                    }
-                    outstandingSessions.clear();
-                }
-            }
-            if (r != null) {
-                // open は OS の結果に任せる。
-                openOnCameraThread(id, h, true);
-            }
-        }, DEFER_TIMEOUT_MS);
         return true;
     }
 
