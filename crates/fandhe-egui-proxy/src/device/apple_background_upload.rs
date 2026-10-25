@@ -78,12 +78,19 @@ impl Slot {
 
     /// 完了の通知を照合して記録する。置き換え後の古い転送の通知は捨てて `false`。
     /// 未知のコードを成功にしない。
-    fn completed(&mut self, id: u64, code: i32, http_status: i32, sent: u64) -> bool {
+    fn completed(
+        &mut self,
+        id: u64,
+        code: i32,
+        http_status: i32,
+        sent: u64,
+        redirected: bool,
+    ) -> bool {
         if self.expected.is_some_and(|e| e != id) {
             return false;
         }
         self.outcome = Some(match code {
-            0 => completion_status(u16::try_from(http_status).ok(), sent),
+            0 => completion_status(u16::try_from(http_status).ok(), sent, redirected),
             1 => UploadStatus::Cancelled,
             2 => UploadStatus::Failed(UploadFailure::Network),
             _ => UploadStatus::Failed(UploadFailure::Other),
@@ -234,12 +241,18 @@ mod imp {
         }
     }
 
-    /// 転送の終了。
+    /// 転送の終了。`redirected` は開始 URL と異なる URL へ転送された（OS が追った）とき真。
     #[allow(unsafe_code)]
     #[no_mangle]
-    extern "C" fn fandhe_rust_bgul_completed(task_id: u64, code: i32, http_status: i32, sent: u64) {
+    extern "C" fn fandhe_rust_bgul_completed(
+        task_id: u64,
+        code: i32,
+        http_status: i32,
+        sent: u64,
+        redirected: bool,
+    ) {
         if let Ok(mut s) = SLOT.lock() {
-            s.completed(task_id, code, http_status, sent);
+            s.completed(task_id, code, http_status, sent, redirected);
         }
     }
 
@@ -285,9 +298,9 @@ mod tests {
     fn stale_completion_after_replace_is_dropped() {
         let mut s = Slot::default();
         s.will_resume(2);
-        assert!(!s.completed(1, 1, -1, 0));
+        assert!(!s.completed(1, 1, -1, 0, false));
         assert_eq!(s.outcome, None);
-        assert!(s.completed(2, 0, 200, FILE_SIZE));
+        assert!(s.completed(2, 0, 200, FILE_SIZE, false));
         assert_eq!(
             s.outcome,
             Some(UploadStatus::Completed {
@@ -301,7 +314,7 @@ mod tests {
     fn will_resume_clears_previous_outcome() {
         let mut s = Slot::default();
         s.will_resume(1);
-        s.completed(1, 0, 200, FILE_SIZE);
+        s.completed(1, 0, 200, FILE_SIZE, false);
         s.will_resume(2);
         assert_eq!(s.outcome, None);
     }
@@ -309,35 +322,34 @@ mod tests {
     #[test]
     fn completion_before_any_start_is_adopted() {
         let mut s = Slot::default();
-        assert!(s.completed(41, 0, 200, FILE_SIZE));
+        assert!(s.completed(41, 0, 200, FILE_SIZE, false));
         assert!(matches!(s.outcome, Some(UploadStatus::Completed { .. })));
     }
 
     #[test]
     fn codes_map_without_inventing_success() {
         let mut s = Slot::default();
-        s.completed(1, 1, -1, 0);
+        s.completed(1, 1, -1, 0, false);
         assert_eq!(s.outcome, Some(UploadStatus::Cancelled));
-        s.completed(1, 2, -1, 0);
+        s.completed(1, 2, -1, 0, false);
         assert_eq!(
             s.outcome,
             Some(UploadStatus::Failed(UploadFailure::Network))
         );
-        s.completed(1, 99, 200, FILE_SIZE);
+        s.completed(1, 99, 200, FILE_SIZE, false);
         assert_eq!(s.outcome, Some(UploadStatus::Failed(UploadFailure::Other)));
-        // code 0 でも HTTP の状態が無い・サイズ違いは成功にならない。
-        s.completed(1, 0, -1, FILE_SIZE);
+        // code 0 でも HTTP の状態が無い・サイズ違い・リダイレクトは成功にならない。
+        s.completed(1, 0, -1, FILE_SIZE, false);
         assert_eq!(s.outcome, Some(UploadStatus::Failed(UploadFailure::Other)));
-        s.completed(1, 0, 200, 10);
+        s.completed(1, 0, 200, 10, false);
         assert!(matches!(
             s.outcome,
             Some(UploadStatus::Failed(UploadFailure::SizeMismatch { .. }))
         ));
-        // 3xx はリダイレクトを追わずそのまま失敗（`.m` が `completionHandler(nil)` を返す）。
-        s.completed(1, 0, 302, FILE_SIZE);
+        s.completed(1, 0, 200, FILE_SIZE, true);
         assert_eq!(
             s.outcome,
-            Some(UploadStatus::Failed(UploadFailure::Http(302)))
+            Some(UploadStatus::Failed(UploadFailure::RedirectNotAllowed))
         );
     }
 
@@ -379,7 +391,7 @@ mod tests {
     fn other_tasks_do_not_hide_my_outcome() {
         let mut s = Slot::default();
         s.will_resume(5);
-        s.completed(5, 0, 200, FILE_SIZE);
+        s.completed(5, 0, 200, FILE_SIZE, false);
         // 置き換え前の task（識別子 4）が一覧に残っていても、自分の結果を返す。
         assert!(matches!(
             status_from(&[running(4, 1)], &s),

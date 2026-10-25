@@ -45,7 +45,7 @@ typedef struct {
 } FandheBgulTask;
 
 extern void fandhe_rust_bgul_will_resume(uint64_t task_id);
-extern void fandhe_rust_bgul_completed(uint64_t task_id, int32_t code, int32_t http_status, uint64_t sent);
+extern void fandhe_rust_bgul_completed(uint64_t task_id, int32_t code, int32_t http_status, uint64_t sent, bool redirected);
 extern void fandhe_rust_bgul_signal(void);
 
 static NSString *const kSessionId = @"com.fandhe.egui-proxy.background-upload";
@@ -100,16 +100,6 @@ static void cancel_all_tasks(void) {
     }
 }
 
-// リダイレクトは追わない。`nil` を返すと 3xx の応答のまま転送が終わり、Rust 側が 2xx でないものとして
-// 失敗にする（OS の観測を正とし、リダイレクト後の URL を事後に判定しない）。
-- (void)URLSession:(NSURLSession *)session
-                          task:(NSURLSessionTask *)task
-    willPerformHTTPRedirection:(NSHTTPURLResponse *)response
-                    newRequest:(NSURLRequest *)request
-             completionHandler:(void (^)(NSURLRequest *_Nullable))completionHandler {
-    completionHandler(nil);
-}
-
 // 転送の終了（成功・失敗・取り消し）。終わった task は `getAllTasks` から消えるので、結果だけ Rust へ渡す。
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
     @autoreleasepool {
@@ -124,8 +114,11 @@ static void cancel_all_tasks(void) {
                                       ? (NSHTTPURLResponse *)task.response
                                       : nil;
         int32_t status = http != nil ? (int32_t)http.statusCode : -1;
+        // background session は OS がリダイレクトを必ず追い、delegate の `willPerformHTTPRedirection` は
+        // 呼ばれない（公式）。阻止はできないので、開始 URL と今の URL の違いで完了時に検出する。
+        bool redirected = ![task.originalRequest.URL isEqual:task.currentRequest.URL];
         fandhe_rust_bgul_completed((uint64_t)task.taskIdentifier, code, status,
-                                   (uint64_t)task.countOfBytesSent);
+                                   (uint64_t)task.countOfBytesSent, redirected);
         fandhe_rust_bgul_signal();
     }
 }

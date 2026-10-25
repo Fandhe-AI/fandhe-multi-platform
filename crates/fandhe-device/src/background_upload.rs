@@ -10,11 +10,11 @@
 //!
 //! # 結果の種類（契約表 6・10）
 //!
-//! - 完了: HTTP が 2xx、送信バイト数が [`FILE_SIZE`] と一致、の両方が揃ったときだけ
+//! - 完了: HTTP が 2xx、送信バイト数が [`FILE_SIZE`] と一致、リダイレクトされていない、の全てが揃ったときだけ
 //!   [`UploadStatus::Completed`]（判定は [`completion_status`] を全 OS で共有する）
 //! - 取り消し: 利用者の操作（Apple の `NSURLErrorCancelled`、Android の `cancelUniqueWork` 後）は
 //!   [`UploadStatus::Cancelled`]。失敗にしない
-//! - 失敗: 2xx でない・送信バイト数の不一致・接続の失敗・ファイルを用意できない・リダイレクト（3xx のまま `Http`。追わない）は
+//! - 失敗: 2xx でない・送信バイト数の不一致・接続の失敗・ファイルを用意できない・リダイレクト（OS が必ず追うため阻止できず、完了時に検出する）は
 //!   [`UploadStatus::Failed`]（理由は [`UploadFailure`]。固定の種別で、URL・パス・OS の生の文言を持たない。A09）
 //! - 非対応・初期化の失敗: `Err(Unsupported("background upload"))`。ダミーの成功実装へ倒さない
 //! - 読み出しの失敗: `status` が `Err`。`Idle` に畳まない
@@ -79,6 +79,8 @@ pub enum UploadFailure {
     Network,
     /// ファイルを用意できない。
     FileUnavailable,
+    /// リダイレクトされた（background session は OS が必ず追う。完了時に検出して失敗にする）。
+    RedirectNotAllowed,
     /// その他（HTTP の状態が無いのに成功扱いになった等）。
     Other,
 }
@@ -147,10 +149,13 @@ impl BackgroundUpload for UnsupportedBackgroundUpload {
 }
 
 /// 完了した転送を判定する純関数（全 OS で共有。契約表 6「嘘の成功」）。
-/// 順に、HTTP の状態が無ければ `Other`
+/// 順に、リダイレクトされていれば `RedirectNotAllowed`、HTTP の状態が無ければ `Other`
 /// （受信と違い、状態の無い成功は認めない）、2xx でなければ `Http`、送信バイト数が [`FILE_SIZE`] と
 /// 違えば `SizeMismatch`、全て通れば `Completed`。
-pub fn completion_status(http_status: Option<u16>, sent: u64) -> UploadStatus {
+pub fn completion_status(http_status: Option<u16>, sent: u64, redirected: bool) -> UploadStatus {
+    if redirected {
+        return UploadStatus::Failed(UploadFailure::RedirectNotAllowed);
+    }
     let Some(code) = http_status else {
         return UploadStatus::Failed(UploadFailure::Other);
     };
@@ -191,30 +196,31 @@ mod tests {
     #[test]
     fn completion_requires_every_condition() {
         assert_eq!(
-            completion_status(Some(200), FILE_SIZE),
+            completion_status(Some(200), FILE_SIZE, false),
             UploadStatus::Completed {
                 bytes: FILE_SIZE,
                 http_status: 200
             }
         );
         assert_eq!(
-            completion_status(Some(404), FILE_SIZE),
+            completion_status(Some(404), FILE_SIZE, false),
             UploadStatus::Failed(UploadFailure::Http(404))
         );
         assert_eq!(
-            completion_status(Some(200), 10),
+            completion_status(Some(200), 10, false),
             UploadStatus::Failed(UploadFailure::SizeMismatch {
                 sent: 10,
                 expected: FILE_SIZE
             })
         );
         assert_eq!(
-            completion_status(None, FILE_SIZE),
+            completion_status(None, FILE_SIZE, false),
             UploadStatus::Failed(UploadFailure::Other)
         );
+        // リダイレクトされた転送は、応答が 2xx でも成功にしない。
         assert_eq!(
-            completion_status(Some(302), FILE_SIZE),
-            UploadStatus::Failed(UploadFailure::Http(302))
+            completion_status(Some(200), FILE_SIZE, true),
+            UploadStatus::Failed(UploadFailure::RedirectNotAllowed)
         );
     }
 
