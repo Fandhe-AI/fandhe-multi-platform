@@ -149,11 +149,15 @@ static FandheVideoCaptureDelegate *g_retainedVideoDelegate = nil;
 - (void)closeController:(UIViewController *)controller then:(void (^)(void))block {
     id<UIViewControllerTransitionCoordinator> coordinator = controller.transitionCoordinator;
     if (coordinator != nil) {
-        [coordinator animateAlongsideTransition:nil
-                                     completion:^(id<UIViewControllerTransitionCoordinatorContext> __unused ctx) {
-                                       [self closeController:controller then:block];
-                                     }];
-        return;
+        // NO のとき completion は呼ばれない（遷移がすでに終わっている等）。block を落とさず下の経路へ進む。
+        // YES のときだけ completion が一度呼ばれるので、block は必ず一度だけ実行される。
+        BOOL registered = [coordinator animateAlongsideTransition:nil
+                                                       completion:^(id<UIViewControllerTransitionCoordinatorContext> __unused ctx) {
+                                                         [self closeController:controller then:block];
+                                                       }];
+        if (registered) {
+            return;
+        }
     }
     if (self.dismissStarted || controller.presentingViewController == nil) {
         block();
