@@ -349,37 +349,6 @@ impl AudioSession for UnsupportedAudioSession {
     }
 }
 
-/// 直近に保持する出来事の件数。
-pub const MAX_RECENT: usize = 8;
-
-/// 受信記録。番号は受信順に 1 から振る。
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct EventLog {
-    next_seq: u64,
-    recent: Vec<(u64, AudioSessionEvent)>,
-    counts: [u64; 8],
-}
-
-impl EventLog {
-    /// 空の記録。
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// 出来事を 1 件記録する。直近 [`MAX_RECENT`] 件を超えた古いものは捨てる（回数には残す）。
-    pub fn record(&mut self, event: AudioSessionEvent) {
-        self.next_seq += 1;
-        self.counts[event.kind.index()] += 1;
-        self.recent.insert(0, (self.next_seq, event));
-        self.recent.truncate(MAX_RECENT);
-    }
-
-    /// `(新しい順の直近、種類ごとの回数)`。
-    pub fn snapshot(&self) -> (Vec<(u64, AudioSessionEvent)>, [u64; 8]) {
-        (self.recent.clone(), self.counts)
-    }
-}
-
 /// iOS の受け口のコード → 合図（0 = 割り込み開始、1 = 割り込み終了（再開しない）、
 /// 2 = 割り込み終了（再開してよい）、3 = 経路の変更、4 = メディアサービスのリセット）。
 /// 未知は `None`（捏造しない）。
@@ -442,19 +411,6 @@ mod tests {
 
     fn ev(kind: EventKind) -> AudioSessionEvent {
         AudioSessionEvent::plain(kind)
-    }
-
-    #[test]
-    fn log_numbers_from_one_and_keeps_latest_eight() {
-        let mut log = EventLog::new();
-        for _ in 0..9 {
-            log.record(ev(EventKind::FocusGained));
-        }
-        let (recent, counts) = log.snapshot();
-        assert_eq!(recent.len(), MAX_RECENT);
-        assert_eq!(recent[0].0, 9);
-        assert_eq!(recent[7].0, 2);
-        assert_eq!(counts[EventKind::FocusGained.index()], 9);
     }
 
     #[test]
