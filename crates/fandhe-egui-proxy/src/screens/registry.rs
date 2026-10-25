@@ -258,6 +258,10 @@ generated_screens! {
     crate::device::local_fonts::local_fonts_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "camera_preview_stream_show" => fandhe_core::screens::camera_preview_stream_show::current_screen,
+    crate::device::camera_preview_stream::camera_preview_stream_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_watch_show" => fandhe_core::screens::file_watch_show::current_screen,
     crate::device::file_watch::file_watch_show_effect,
     effect

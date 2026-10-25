@@ -73,6 +73,11 @@ pub mod android_bluetooth_classic;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_call_ui;
+/// Issue #812: Android 向けカメラのライブ映像実装のスタブ（#814 が埋める）。
+/// `device/camera_preview_stream.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_camera_preview_stream;
 /// Issue #584: Android 向け画面キャプチャの防止・検知（`CaptureProtectionHelper.java` を JNI で呼ぶ）。
 /// `device/capture_protection.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
@@ -580,6 +585,10 @@ pub mod calendar;
 /// 他 OS は `UnsupportedCallUi` 固定）。
 pub mod call_ui;
 pub mod camera_capture;
+/// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得の effect ドライバ
+/// （iOS #813・Android #814 は後続で実装、macOS・Windows は保留で他 OS と同じく `UnsupportedCameraPreview`
+/// 固定。Web は `fandhe-web-dom`、#815）。
+pub mod camera_preview_stream;
 /// Phase 11 の拡充ループ（親 #120、Issue #582）: 画面キャプチャの防止・検知の effect ドライバ
 /// （Windows は防止のみ、iOS は検知のみ（#583）、Android は防止・検知（#584）、他 OS は
 /// `UnsupportedCaptureProtection` 固定）。
@@ -731,6 +740,11 @@ pub mod ios_ble_peripheral;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_call_ui;
+/// Issue #812: iOS 向けカメラのライブ映像実装のスタブ（#813 が埋める）。
+/// `device/camera_preview_stream.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_camera_preview_stream;
 /// Issue #583: iOS 向け画面キャプチャの検知（`ios/fandhe_ios_capture_protection.m` を呼ぶ）。
 /// `device/capture_protection.rs` の iOS 経路から使われる。
 #[cfg(any(target_os = "ios", test))]
@@ -1675,6 +1689,7 @@ pub fn shutdown() {
     media_cast::shutdown();
     web_auth_session::shutdown();
     serial_port::shutdown();
+    camera_preview_stream::shutdown();
 }
 
 fn to_note_storage_error(e: DeviceError) -> NoteStorageError {
