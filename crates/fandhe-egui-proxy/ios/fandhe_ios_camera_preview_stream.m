@@ -10,7 +10,8 @@
 //   fandhe_ios_camera_preview_stream_start(uint64_t id) -> int32_t
 //     0 = 受理（許可の要求・構成・開始は session queue で非同期）、他 = 受理しない。
 //   fandhe_ios_camera_preview_stream_set_zoom(uint64_t id, int32_t step) -> int32_t
-//     0 = 受理（範囲の読み取り・適用は session queue で非同期。失敗は通知コード 6）、
+//     0 = 受理（範囲の読み取り・適用は session queue で非同期。失敗は通知コード 6。
+//     許可待ち・構成前でデバイスがまだ無いときも 6）、
 //     他 = 現在の `id` と一致しない。step は 1 = 1 倍 / 2 = 2 倍。
 //   fandhe_ios_camera_preview_stream_stop(uint64_t id)
 //     停止・解放・実行中 delegate の終了待ちを完了してから戻る。`id` 不一致は何もしない。
@@ -398,7 +399,13 @@ int32_t fandhe_ios_camera_preview_stream_set_zoom(uint64_t id, int32_t step) {
     }
     dispatch_async(sessionQueue(), ^{
         FandheCamPreviewCtx *ctx = g_ctx;
-        if (ctx == nil || ctx.cid != id || ctx.cancelled || ctx.device == nil) {
+        // 破棄済み（id 不一致・cancelled）は Rust が登録解除済みなので黙って捨てる。
+        if (ctx == nil || ctx.cid != id || ctx.cancelled) {
+            return;
+        }
+        // 受理済みの要求を黙って捨てない。許可待ち・構成前でまだ OS のデバイスが無いときは失敗で返す。
+        if (ctx.device == nil) {
+            fandhe_rust_camera_preview_stream_event(id, kEvZoomFailed, 1);
             return;
         }
         @autoreleasepool {
