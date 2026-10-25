@@ -8,40 +8,68 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "`UIApplication.protectedDataWillBecomeUnavailableNotification` / `protectedDataDidBecomeAvailableNotification`（端末ロックの近似）",
+      "api": "`UIApplication.protectedDataWillBecomeUnavailableNotification` / `protectedDataDidBecomeAvailableNotification`、`isProtectedDataAvailable`（いずれもデータ保護の可否で、端末ロックの近似）",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/uikit/uiapplication/protecteddatadidbecomeavailablenotification",
-      "note": "未実装。ロック自体を直接知る公開 API はなく、データ保護の可否で近似する。パスコード未設定では届かない。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "url": [
+        "https://developer.apple.com/documentation/uikit/uiapplication/protecteddatawillbecomeunavailablenotification",
+        "https://developer.apple.com/documentation/uikit/uiapplication/protecteddatadidbecomeavailablenotification",
+        "https://developer.apple.com/documentation/uikit/uiapplication/isprotecteddataavailable"
+      ],
+      "deferred": "ロックやスリープを直接知らせる公開 API は無く、公開されているのは保護ファイルが使えなくなる直前・使えるようになった時の通知だけ（ロックの近似）。利用者が端末をロックする時点でアプリは前面に無く、背景で停止している間にこの通知を受け取れるかは公式文書に書かれていない。確実に受けるには背景実行モード（`UIBackgroundModes`）の追加が要り、新しい権限・設計の変更になるため保留。背景実行の方針が決まったら見直す",
+      "note": "未実装。公式: 通知はデータ保護が有効で端末がロックされる直前・解除後に届き、`isProtectedDataAvailable` はロック中なら false、ロック解除済みかデータ保護が無効なら true。発火までの遅れ・パスコード未設定時の扱いは公式文書に記載が無い"
     },
     "android": {
       "status": "possible",
-      "api": "`ACTION_SCREEN_OFF` / `ACTION_SCREEN_ON` / `ACTION_USER_PRESENT`（動的登録の `BroadcastReceiver`）、`KeyguardManager.isKeyguardLocked`",
-      "perm": "不要",
-      "url": "https://developer.android.com/reference/android/content/Intent#ACTION_USER_PRESENT",
-      "note": "未実装。マニフェスト登録では届かず、動的登録が必要。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "`Intent.ACTION_SCREEN_OFF` / `ACTION_SCREEN_ON` / `ACTION_USER_PRESENT` を `Context.registerReceiver` で動的に受ける。今の状態は `PowerManager.isInteractive` / `KeyguardManager.isKeyguardLocked` で読む",
+      "perm": "不要（新しい uses-permission なし）",
+      "url": [
+        "https://developer.android.com/reference/android/content/Intent#ACTION_SCREEN_OFF",
+        "https://developer.android.com/reference/android/content/Intent#ACTION_USER_PRESENT",
+        "https://developer.android.com/develop/background-work/background-tasks/broadcasts",
+        "https://developer.android.com/about/versions/14/behavior-changes-14",
+        "https://developer.android.com/about/versions/14/behavior-changes-all"
+      ],
+      "note": "未実装。`ACTION_SCREEN_OFF` / `ON` はマニフェストに宣言した受信側では受け取れず（javadoc）、3 つともシステムだけが送る保護されたブロードキャスト。システムのブロードキャストだけを受けるレシーバーは、Android 14 以上でも `RECEIVER_EXPORTED` / `NOT_EXPORTED` を指定しない（公式）。Android 14 以上では、アプリがキャッシュ状態の間に届いたブロードキャストは列に溜められ、前面へ戻った時にまとめて届き、同種のものは 1 件に畳まれることがある（公式）。ロックした瞬間を知らせるブロードキャストは無い（`ACTION_USER_PRESENT` は解除のみ）。`isInteractive`・`isKeyguardLocked` の API レベルは公式ページで未確認（minSdk 24 で使える見込み）"
     },
     "macos": {
       "status": "possible",
-      "api": "`NSWorkspace.willSleepNotification` / `didWakeNotification` / `screensDidSleepNotification`。画面ロックは `DistributedNotificationCenter` の `com.apple.screenIsLocked`（非公式名、要確認）",
+      "api": "`NSWorkspace.shared.notificationCenter` の `willSleepNotification` / `didWakeNotification`（システムのスリープ・復帰）と `screensDidSleepNotification` / `screensDidWakeNotification`（画面のスリープ・復帰、macOS 10.6+）。画面ロックを知らせる公開 API は無い",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/appkit/nsworkspace/willsleepnotification",
-      "note": "未実装。スリープ通知は公開、ロック通知は非公式の通知名に頼る。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nsworkspace/willsleepnotification",
+        "https://developer.apple.com/documentation/appkit/nsworkspace/didwakenotification",
+        "https://developer.apple.com/documentation/appkit/nsworkspace/screensdidsleepnotification",
+        "https://developer.apple.com/documentation/appkit/nsworkspace/screensdidwakenotification"
+      ],
+      "note": "未実装。4 つの通知は `NSWorkspace` の通知センターに登録しないと届かない（公式の注記）。`willSleepNotification` の処理中はスリープを最大 30 秒遅らせうる（公式）ため、受け取ったら記録して即座に戻る。画面ロックは公式文書に無い分散通知名（`com.apple.screenIsLocked` 等）か `CGSessionCopyCurrentDictionary` の文書化されていないキーに頼るしかなく、使わない（画面には「この OS では取れない」と出す）"
     },
     "windows": {
       "status": "possible",
-      "api": "Win32 `WTSRegisterSessionNotification`（`WM_WTSSESSION_CHANGE`: ロック・解除）、`RegisterSuspendResumeNotification`（スリープ・復帰）",
+      "api": "Win32 `WTSRegisterSessionNotification`（`WM_WTSSESSION_CHANGE` の `WTS_SESSION_LOCK` / `UNLOCK`）、`RegisterSuspendResumeNotification`（`WM_POWERBROADCAST` の `PBT_APMSUSPEND` / `PBT_APMRESUMEAUTOMATIC`）。今のロック状態は `WTSQuerySessionInformationW`（`WTSSessionInfoEx` の `SessionFlags`）で読む",
       "perm": "不要",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsregistersessionnotification",
-      "note": "未実装。ウィンドウメッセージを受ける HWND が要る。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsregistersessionnotification",
+        "https://learn.microsoft.com/en-us/windows/win32/termserv/wm-wtssession-change",
+        "https://learn.microsoft.com/en-us/windows/win32/power/wm-powerbroadcast",
+        "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registersuspendresumenotification",
+        "https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/ns-wtsapi32-wtsinfoex_level1_w"
+      ],
+      "note": "未実装。通知は登録したウィンドウにだけ届くため HWND が要り、ウィンドウを壊す前に `WTSUnRegisterSessionNotification` を登録と 1 対 1 で呼ぶ（公式）。`PBT_APMRESUMEAUTOMATIC` は復帰のたびに必ず届き、利用者の操作による復帰では続けて `PBT_APMRESUMESUSPEND` も届く（公式）。`SessionFlags` は Windows 7 / Server 2008 R2 では LOCK と UNLOCK が逆になる（公式の注記、対象外の版）。使う関数は `windows` クレートの導入済み feature（`Win32_System_RemoteDesktop`・`Win32_System_Power`・`Win32_UI_WindowsAndMessaging`）にある"
     },
     "web": {
       "status": "possible",
-      "api": "Page Visibility API（`visibilitychange`）。画面ロックの直接通知はない",
-      "perm": "不要",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event",
-      "safari": "対応（visibilitychange）",
-      "note": "未実装。非表示になったことは分かるが、ロックやスリープが原因かは区別できない。"
+      "api": "Idle Detection API の `IdleDetector.screenState`（`locked` / `unlocked`）と `change` イベント。Page Visibility API（`visibilitychange`）は非表示になったことしか分からない。スリープ・復帰の通知は無い",
+      "perm": "`idle-detection`（`IdleDetector.requestPermission()` を利用者の操作の中で呼ぶ。secure context 必須）",
+      "url": [
+        "https://developer.mozilla.org/en-US/docs/Web/API/IdleDetector/screenState",
+        "https://wicg.github.io/idle-detection/",
+        "https://caniuse.com/mdn-api_idledetector",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event"
+      ],
+      "safari": "非対応（Idle Detection API）。visibilitychange は対応",
+      "deferred": "ロック・解除を知る手段は Idle Detection API だけで、許可（`idle-detection`）が要り、Chromium 系のみ。`visibilitychange` はタブ切り替え・最小化と区別できず、ロック・スリープの通知にはならない。本機能のために新しく許可を求めることになるため保留。画面ロックの状態は user-idle の Web（同じ API・同じ許可）が既に表示している",
+      "note": "未実装。Idle Detection API は experimental で Baseline ではない（MDN）。`screenState` は `start()` 前は null"
     }
   },
-  "note": "power-state の省電力・熱とは別で、スリープ・ロック・解除の出来事を受け取る。screen-wake-lock（スリープの抑止）とも逆向きで、本機能は通知の受信のみ。"
+  "note": "power-state の省電力・熱とは別で、スリープ・ロック・解除の出来事を受け取る。screen-wake-lock（スリープの抑止）とも逆向きで、本機能は通知の受信のみ。app-lifecycle（アプリの前面・背景）とも別で、端末側の出来事だけを扱う。今回の範囲: 画面を開いている間に OS から届いた出来事（システムのスリープ・復帰、画面の消灯・点灯、ロック・解除のうち OS が知らせるもの）を受信順の番号つきで直近 8 件と、種類ごとの回数を並べ、OS が今の状態を返せるもの（Windows のロック、Android の画面点灯・ロック）は画面を開いた時と出来事が届くたびに読み直して出す。OS が知らせない種類は「この OS では取れない」と出す（macOS のロック、Android のシステムのスリープ・ロックした瞬間、Windows の画面の消灯）。受け取りは「受け取りを始める」「止める」で切り替え、画面を離れたら止める。結果は 受信中 / 停止（利用者の操作・画面を離れた、正常）/ 開始失敗 / 実行中の失敗 / 非対応。OS を正にする: 出来事は OS の通知だけで受け、ロック中かどうかをアプリ内に覚えて二重に持たない（今の状態は読める OS で読むたびに OS へ問う）。タイマーで状態を推測しない。経過時間・時刻は出さない（単調時計はスリープ中に止まる OS があり、スリープをまたぐ経過は正しく測れない）。購読の解除は止める・画面を離れる・開始の途中で失敗した経路のすべてで行い、解除後に遅れて届いた通知は捨てる。守らない範囲: 画面を開く前・止めた後の出来事、Android 14 以上でキャッシュ状態の間に溜められ前面へ戻った時にまとめて届く通知の順序と畳み込み（回数が実際より少なく出ることがある）、OS 間の「画面の消灯」「ロック」の定義の差、複数プロセス・複数窓、通知が届くまでの OS 側の遅れ。"
 }
