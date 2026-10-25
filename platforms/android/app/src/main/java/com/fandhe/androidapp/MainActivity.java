@@ -631,6 +631,22 @@ public class MainActivity extends GameActivity {
         midiHelper.stop();
     }
 
+    // スリープ・画面ロック・解除の通知（Issue #811）。実装は `SleepLockEventsHelper`。
+    // Rust の `android_sleep_lock_events.rs` が JNI で呼ぶ。
+    private final SleepLockEventsHelper sleepLockEventsHelper = new SleepLockEventsHelper(this);
+
+    int sleepLockEventsStart(long id) {
+        return sleepLockEventsHelper.start(id);
+    }
+
+    void sleepLockEventsStop(long id) {
+        sleepLockEventsHelper.stop(id);
+    }
+
+    int sleepLockEventsRead() {
+        return sleepLockEventsHelper.read();
+    }
+
     // 通話 UI 統合（Issue #278）。実装は `CallUiHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_call_ui.rs` が JNI で呼ぶ。
     private final CallUiHelper callUiHelper = new CallUiHelper(this);
@@ -4957,6 +4973,7 @@ public class MainActivity extends GameActivity {
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
         midiHelper.onDestroy();
+        sleepLockEventsHelper.onDestroy();
         callUiHelper.onDestroy();
         screenCaptureHelper.onDestroy();
         printHelper.onDestroy();
