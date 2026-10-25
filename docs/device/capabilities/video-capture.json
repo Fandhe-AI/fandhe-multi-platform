@@ -70,7 +70,7 @@
       "note": "未実装。Windows App SDK 版の `CaptureFileAsync` はキャンセルとエラーをどちらも null で返し区別しない（公式）。unpackaged の Win32 で動くか、導入された版は公式に明記が無い。`VideoProperties` は `Duration` / `Width` / `Height` / `Orientation` を返す（公式）。`MediaCapture` の単一録画の上限は約 3 時間（公式）"
     },
     "web": {
-      "status": "possible",
+      "status": "done",
       "api": "`<input type=\"file\" accept=\"video/*\" capture=\"environment\">`（HTML Media Capture）。選ばれた `File` の `size`、`URL.createObjectURL` を入れた `<video>`（`preload = metadata`）の `loadedmetadata` で `duration` / `videoWidth` / `videoHeight` を読む",
       "perm": "不要（撮影はブラウザ・OS のカメラアプリが行う）。secure context の制約なし",
       "url": [
@@ -80,7 +80,10 @@
         "https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/duration"
       ],
       "safari": "iOS Safari はカメラで撮る選択肢を出す（`capture` 属性そのものは無視し、選択肢の一覧から選ばせる）。`cancel` イベントは 16.4 以上",
-      "note": "未実装。`capture` はモバイルのブラウザでカメラを開き、デスクトップのブラウザでは無視されて通常のファイル選択になる（MDN）。その場合は既存の動画ファイルを選ぶことになり、「撮った動画」ではなく「受け取った動画」として出す。`cancel` は Chrome 113・Firefox 91・Safari 16.4 以上で、同じファイルを選び直したときも発火する（MDN）。`duration` はメディアが無ければ NaN、長さが不明なら Infinity（MDN）で、その場合は長さを出さない。`MediaRecorder` で自前に録る方式は、カメラ・マイクの許可を新しく求め、撮影の画面を自前で組むことになるため使わない"
+      "note": "実装済み（#824）。取り消しは `cancel` とファイルなしの `change`（失敗にしない）。0 バイトは空、`<video>` の `error` と寸法 0 は読めない動画、NaN・Infinity の長さは「長さを読めません」。検査は `VideoClip::from_os` を通し、動画の中身は読まない。object URL・`src`・リスナーは成功・失敗・取り消し・画面の破棄の全経路で解放する。ページが隠れても取り消さない（モバイルはカメラアプリを開くと隠れるのが正常）。守らない範囲: `cancel` 非対応の古いブラウザで通知が届かない場合（画面は撮影中のまま）、ブラウザが回転を当てた寸法を返す前提（未確認。#819 の実ブラウザ確認で縦撮りを見る）、撮影中のブラウザのプロセス死、複数タブ。`capture` はモバイルのブラウザでカメラを開き、デスクトップのブラウザでは無視されて通常のファイル選択になる（MDN）。その場合は既存の動画ファイルを選ぶことになり、「撮った動画」ではなく「受け取った動画」として出す。`cancel` は Chrome 113・Firefox 91・Safari 16.4 以上で、同じファイルを選び直したときも発火する（MDN）。`duration` はメディアが無ければ NaN、長さが不明なら Infinity（MDN）で、その場合は長さを出さない。`MediaRecorder` で自前に録る方式は、カメラ・マイクの許可を新しく求め、撮影の画面を自前で組むことになるため使わない",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#819）",
+      "impl": "crates/fandhe-web-dom/src/video_capture.rs + crates/fandhe-web-dom/src/file_picker.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html、Issue #824"
     }
   },
   "note": "camera-capture は静止画 1 枚、本機能は動画ファイル。mic-record（音声のみ）・screen-capture（画面の録画）・camera-preview-stream（ファイルにしない生フレーム）とも別。今回の範囲: 「動画を撮る」で OS の撮影 UI（iOS は撮影画面、Android はカメラアプリ、Web はブラウザのファイル入力）を開き、撮れた動画の長さ・表示の寸法・ファイルサイズを出す。長さの上限 30 秒を OS の撮影 UI に渡す（Web は渡せない）。動画の再生・保存・共有は範囲外。結果は 撮れた / 取り消した（利用者が撮影 UI を閉じた、失敗にしない）/ 失敗（権限拒否・カメラアプリなし・前面でない・中断・空のファイル・読めない動画・その他）/ 非対応。OS を正にする: 撮れたかどうかは OS の完了通知（delegate・Activity の結果・`change` / `cancel`）だけで決め、タイマー・期限で推測しない。長さ・寸法・サイズは OS がファイルに書いたメタデータとファイルの大きさから読み、アプリ内で数えない（OS が長さを返さなければ「長さを読めない」と出す）。寸法は OS が返した回転（0 / 90 / 180 / 270）を当てた表示の向きで出す。撮影 UI の一時ファイルは読み終えたら成功・取り消し・失敗の全経路で消す（Android は次の撮影の前にも置き場を空にする）。守らない範囲: 動画の中身、OS の撮影 UI の見た目・画質・形式、撮影中に背景へ移ったときの OS の挙動、撮影 UI が閉じないまま完了通知が届かない場合（期限を持たないため画面は撮影中のまま）、デスクトップのブラウザで既存のファイルが選ばれること、`EXTRA_OUTPUT` を無視するカメラアプリ、複数タブ・複数プロセス、撮影中のプロセス死（Android は次回の撮影の前に置き場を空にして回収する）。"

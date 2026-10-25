@@ -216,6 +216,7 @@ mod web {
 
     const BARCODE_HOOKS: WebPickHooks<BarcodeScanState, ScanOutcome> = WebPickHooks {
         accept: Some("image/*"),
+        capture: None,
         take_request,
         mark_picking: mark_scanning,
         convert: scan_boxed,
