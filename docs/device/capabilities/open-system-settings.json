@@ -7,7 +7,7 @@
   "bundle": "one-shot",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "`UIApplication.openSettingsURLString`（自アプリの設定、iOS 8+）と `UIApplication.openNotificationSettingsURLString`（自アプリの通知設定、iOS 16+）から URL を作り、`open(_:options:completionHandler:)`（iOS 10+）で開く。結果は completion の `success`（main thread で非同期に 1 回）",
       "perm": "不要（usage description・`LSApplicationQueriesSchemes` の追加なし。`canOpenURL` は呼ばない）。deployment target 17.0 のため両方の URL が全域で使える",
       "url": [
@@ -15,7 +15,10 @@
         "https://developer.apple.com/documentation/uikit/uiapplication/opennotificationsettingsurlstring",
         "https://developer.apple.com/documentation/uikit/uiapplication/open(_:options:completionhandler:)"
       ],
-      "note": "未実装。公式は「Settings アプリを起動し、自アプリの設定（通知設定）があればそれを表示する」と書く。開けるのは自アプリの頁だけで、Wi-Fi・Bluetooth など任意の設定頁を開く公開 URL は無い（`App-Prefs:` 等の非公開 URL は使わない）。completion の `success` は OS が URL を開けたかで、利用者が設定を変えたかは分からない。扱える app が無ければ `false`（公式）"
+      "note": "実装済み（#799）。completion の `success` をそのまま画面に出す（`canOpenURL` は呼ばない・期限は設けない）。公式は「Settings アプリを起動し、自アプリの設定（通知設定）があればそれを表示する」と書く。開けるのは自アプリの頁だけで、Wi-Fi・Bluetooth など任意の設定頁を開く公開 URL は無い（`App-Prefs:` 等の非公開 URL は使わない）。completion の `success` は OS が URL を開けたかで、利用者が設定を変えたかは分からない。扱える app が無ければ `false`（公式）",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#795）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_open_system_settings.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_open_system_settings.m + crates/fandhe-egui-proxy/src/device/open_system_settings.rs + crates/fandhe-core/src/screens/open_system_settings_show.rs + crates/fandhe-device/src/open_system_settings.rs、Issue #799"
     },
     "android": {
       "status": "possible",
