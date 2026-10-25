@@ -136,6 +136,27 @@ pub fn keep_session(phase: PreviewPhase, state_gen: u64, session_gen: u64) -> bo
         )
 }
 
+/// フレームの到着を DOM へどう反映するか。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FramePatch {
+    /// `Live`: 映像の要素だけを書き換える（要素が無ければ呼び出し側が全再構築へ倒す）。
+    Rewrite,
+    /// `Starting`・`Interrupted`: 状態はフレームで変わらず DOM は直前の描画と一致する。
+    /// 何も書かない（全再構築すると停止ボタンが作り直されクリックを取り逃がす）。
+    Keep,
+    /// それ以外（終端等）: 全再構築に任せる。
+    Rebuild,
+}
+
+/// フェーズからフレーム到着時の DOM 反映方法を決める。
+pub fn frame_patch_kind(phase: PreviewPhase) -> FramePatch {
+    match phase {
+        PreviewPhase::Live => FramePatch::Rewrite,
+        PreviewPhase::Starting | PreviewPhase::Interrupted => FramePatch::Keep,
+        _ => FramePatch::Rebuild,
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 mod web {
     use std::cell::RefCell;
@@ -156,8 +177,8 @@ mod web {
     };
 
     use super::{
-        canvas_size, failure_from_error_name, frame_view_from_image_data, keep_session,
-        should_display, PreviewPhase,
+        canvas_size, failure_from_error_name, frame_patch_kind, frame_view_from_image_data,
+        keep_session, should_display, FramePatch,
     };
     use crate::mount::{is_live, Applier};
 
@@ -609,7 +630,12 @@ mod web {
     /// ので、クリックの途中で要素が差し替わらない。`Live` で映像の要素がまだ無いとき（最初のフレーム
     /// ・フェーズの切り替わり）は `false` を返して全再構築へ倒す。
     fn patch_frame(root: &web_sys::Element, state: &CameraPreviewStreamShowState) -> bool {
-        let (PreviewPhase::Live, Some(frame)) = (state.phase, &state.frame) else {
+        match frame_patch_kind(state.phase) {
+            FramePatch::Keep => return true,
+            FramePatch::Rebuild => return false,
+            FramePatch::Rewrite => {}
+        }
+        let Some(frame) = &state.frame else {
             return false;
         };
         let (Ok(Some(img)), Ok(Some(status))) = (
@@ -885,6 +911,21 @@ mod tests {
         assert!(should_display(10.0, Some(500.0)), "逆行は表示側に倒す");
         assert!(should_display(f64::NAN, Some(0.0)));
         assert!(should_display(100.0, Some(f64::NAN)));
+    }
+
+    #[test]
+    fn interrupted_and_starting_frames_keep_dom() {
+        use fandhe_core::screens::camera_preview_stream_show::StopView;
+        assert_eq!(frame_patch_kind(PreviewPhase::Live), FramePatch::Rewrite);
+        assert_eq!(
+            frame_patch_kind(PreviewPhase::Interrupted),
+            FramePatch::Keep
+        );
+        assert_eq!(frame_patch_kind(PreviewPhase::Starting), FramePatch::Keep);
+        assert_eq!(
+            frame_patch_kind(PreviewPhase::Stopped(StopView::User)),
+            FramePatch::Rebuild
+        );
     }
 
     #[test]
