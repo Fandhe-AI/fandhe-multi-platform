@@ -84,8 +84,6 @@ pub enum FailureView {
     Network,
     /// ファイルを用意できない。
     FileUnavailable,
-    /// 許可外のリダイレクト先。
-    RedirectNotAllowed,
     /// その他。
     Other,
 }
@@ -249,7 +247,6 @@ fn failure_text(failure: &FailureView) -> String {
         }
         FailureView::Network => "接続できませんでした".to_string(),
         FailureView::FileUnavailable => "送るファイルを用意できませんでした".to_string(),
-        FailureView::RedirectNotAllowed => "リダイレクト先が許可されていません".to_string(),
         FailureView::Other => "送信に失敗しました".to_string(),
     }
 }

@@ -45,8 +45,7 @@ typedef struct {
 } FandheBgulTask;
 
 extern void fandhe_rust_bgul_will_resume(uint64_t task_id);
-extern void fandhe_rust_bgul_completed(uint64_t task_id, int32_t code, int32_t http_status, uint64_t sent,
-                                       const char *final_url);
+extern void fandhe_rust_bgul_completed(uint64_t task_id, int32_t code, int32_t http_status, uint64_t sent);
 extern void fandhe_rust_bgul_signal(void);
 
 static NSString *const kSessionId = @"com.fandhe.egui-proxy.background-upload";
@@ -78,7 +77,7 @@ static void cancel_all_tasks(void) {
     dispatch_semaphore_t done = dispatch_semaphore_create(0);
     [g_session getAllTasksWithCompletionHandler:^(NSArray<__kindof NSURLSessionTask *> *tasks) {
         for (NSURLSessionTask *task in tasks) {
-            [task cancel];
+            [task cancel];  // 取り消しの依頼だけ。即時停止ではなく、停止は didCompleteWithError で届く。
         }
         dispatch_semaphore_signal(done);
     }];
@@ -101,6 +100,16 @@ static void cancel_all_tasks(void) {
     }
 }
 
+// リダイレクトは追わない。`nil` を返すと 3xx の応答のまま転送が終わり、Rust 側が 2xx でないものとして
+// 失敗にする（OS の観測を正とし、リダイレクト後の URL を事後に判定しない）。
+- (void)URLSession:(NSURLSession *)session
+                          task:(NSURLSessionTask *)task
+    willPerformHTTPRedirection:(NSHTTPURLResponse *)response
+                    newRequest:(NSURLRequest *)request
+             completionHandler:(void (^)(NSURLRequest *_Nullable))completionHandler {
+    completionHandler(nil);
+}
+
 // 転送の終了（成功・失敗・取り消し）。終わった task は `getAllTasks` から消えるので、結果だけ Rust へ渡す。
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
     @autoreleasepool {
@@ -115,9 +124,8 @@ static void cancel_all_tasks(void) {
                                       ? (NSHTTPURLResponse *)task.response
                                       : nil;
         int32_t status = http != nil ? (int32_t)http.statusCode : -1;
-        NSString *finalUrl = task.currentRequest.URL.absoluteString ?: @"";
         fandhe_rust_bgul_completed((uint64_t)task.taskIdentifier, code, status,
-                                   (uint64_t)task.countOfBytesSent, finalUrl.UTF8String);
+                                   (uint64_t)task.countOfBytesSent);
         fandhe_rust_bgul_signal();
     }
 }

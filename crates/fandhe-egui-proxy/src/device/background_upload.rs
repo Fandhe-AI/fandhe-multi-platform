@@ -95,7 +95,6 @@ fn failure_view(f: UploadFailure) -> FailureView {
         }
         UploadFailure::Network => FailureView::Network,
         UploadFailure::FileUnavailable => FailureView::FileUnavailable,
-        UploadFailure::RedirectNotAllowed => FailureView::RedirectNotAllowed,
         UploadFailure::Other => FailureView::Other,
     }
 }
