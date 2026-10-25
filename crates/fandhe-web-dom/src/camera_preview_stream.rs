@@ -391,7 +391,8 @@ mod web {
                 .add_event_listener_with_callback(ev, closure.as_ref().unchecked_ref())
                 .is_ok()
             {
-                added.push((track.clone(), ev, closure));
+                // `MediaStreamTrack::clone` は JS の clone()（別トラック）になるため、参照の複製を明示する。
+                added.push((Clone::clone(track), ev, closure));
             }
         }
         ACTIVE.with(|a| {
@@ -405,6 +406,24 @@ mod web {
 
     /// 再生を始める（`document.hidden` でないときだけ呼ぶ）。`play()` の resolve で開始を確定する。
     fn begin_playback(mount_id: u64, generation: u64, stream: MediaStream) {
+        // 先にストリームをセッションへ預ける。以降の早期 return はすべて `release`（`fail_with`）を
+        // 通り、トラックの停止はそこへ一本化される（分岐ごとに `stop_stream` を足さない）。
+        let stored = ACTIVE.with(|a| {
+            if let Some(s) = a.borrow_mut().get_mut(&mount_id) {
+                if s.generation == generation {
+                    s.stage = Stage::Playing;
+                    // `stream.clone()` は JS の MediaStream.clone()（トラック複製）になるため
+                    // `Clone::clone` で参照の複製を明示する。
+                    s.stream = Some(Clone::clone(&stream));
+                    return true;
+                }
+            }
+            false
+        });
+        if !stored {
+            stop_stream(&stream);
+            return;
+        }
         let Some(doc) = window().and_then(|w| w.document()) else {
             return fail_with(mount_id, FailureView::Other, false);
         };
@@ -421,33 +440,25 @@ mod web {
         video.set_muted(true);
         let _ = video.set_attribute("playsinline", "");
         video.set_src_object(Some(&stream));
-        let stored = ACTIVE.with(|a| {
+        let video_stored = ACTIVE.with(|a| {
             if let Some(s) = a.borrow_mut().get_mut(&mount_id) {
                 if s.generation == generation {
-                    s.stage = Stage::Playing;
-                    // `stream.clone()` は JS の MediaStream.clone()（トラック複製）になるため
-                    // `Clone::clone` で参照の複製を明示する。
-                    s.stream = Some(Clone::clone(&stream));
                     s.video = Some(video.clone());
                     return true;
                 }
             }
             false
         });
-        if !stored {
+        if !video_stored {
             video.set_src_object(None);
-            stop_stream(&stream);
             return;
         }
-        // 取得から購読までの間（hidden の `AwaitVisible` 待ちを含む）に ended になった
-        // トラックは `ended` イベントを取り逃すため、購読直後に状態を直接確認する。
-        let mut already_ended = false;
-        for t in stream.get_video_tracks().iter() {
-            if let Ok(t) = t.dyn_into::<MediaStreamTrack>() {
-                listen_track(mount_id, generation, &t);
-                already_ended |= t.ready_state() == web_sys::MediaStreamTrackState::Ended;
-            }
-        }
+        // 取得から再生の確定までに ended になったトラックは `ended` イベントを取り逃すため、
+        // `play()` の前後で状態を直接確認する。購読は開始の確定後（下の非同期部）に始める。
+        let already_ended = stream.get_video_tracks().iter().any(|t| {
+            t.dyn_into::<MediaStreamTrack>()
+                .is_ok_and(|t| t.ready_state() == web_sys::MediaStreamTrackState::Ended)
+        });
         if already_ended {
             return fail_with(mount_id, FailureView::Runtime, true);
         }
@@ -474,6 +485,12 @@ mod web {
                 .any(|t| t.ready_state() == web_sys::MediaStreamTrackState::Ended)
             {
                 return fail_with(mount_id, FailureView::Runtime, true);
+            }
+            // 開始は `play()` の resolve で確定する。`mute`/`unmute` の購読はここから始め、
+            // 確定前の `unmute` で開始が確定しないようにする（確定の場所を 1 か所にする）。
+            // 状態の読み取りと購読の間に await を挟まないため、取りこぼしは起きない。
+            for t in &tracks {
+                listen_track(mount_id, generation, t);
             }
             let muted = tracks.iter().any(|t| t.muted());
             let Some(applier) = ACTIVE.with(|a| {
