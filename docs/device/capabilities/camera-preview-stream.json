@@ -21,7 +21,7 @@
       "note": "未実装。delegate の queue は serial 必須で、処理中に届いたフレームは `alwaysDiscardsLateVideoFrames`（既定 true）で捨てられる（公式）。`startRunning` / `stopRunning` は同期で、開始か失敗まで・停止しきるまでブロックする（公式）。`videoZoomFactor` は `lockForConfiguration` 無しで設定すると例外、範囲外も例外（公式）。中断の理由に背景遷移・他アプリの使用・iPad のマルチタスクがある（公式）。BGRA は非ネイティブで変換が入る（公式）。32BGRA が `availableVideoPixelFormatTypes` に含まれるかは実機で確かめる"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "Camera2（`CameraManager.openCamera` + `CameraDevice.StateCallback`、`createCaptureSession`（API 28 以上は `SessionConfiguration`）、`ImageReader`（`YUV_420_888`、`acquireLatestImage`））。ズームは API 30 以上で `CaptureRequest.CONTROL_ZOOM_RATIO`（範囲は `CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE`、適用値は `CaptureResult` から読む）",
       "perm": "`CAMERA`（宣言済み、実行時の許可）。uses-permission・Gradle 依存は足さない",
       "url": [
@@ -32,7 +32,10 @@
         "https://developer.android.com/reference/android/hardware/camera2/CameraCharacteristics#CONTROL_ZOOM_RATIO_RANGE",
         "https://developer.android.com/jetpack/androidx/releases/camera"
       ],
-      "note": "未実装。CameraX は `androidx.camera:*` の Gradle 依存の追加が要るため使わず、OS 同梱の Camera2 を使う（flashlight が `CameraManager` を使用済み）。`acquireLatestImage` は最新以外を捨てる（公式）。API 30 以上はズームに `CONTROL_ZOOM_RATIO` が強く推奨され、範囲は 1.0 未満を含みうる（公式）。API 29 以下のズームは範囲外とし「この端末では使えない」と出す。`openCamera` は `CAMERA` の許可が無いと `SecurityException`（公式）"
+      "note": "実装済み（#814）。CameraX は `androidx.camera:*` の Gradle 依存の追加が要るため使わず、OS 同梱の Camera2 を使う（flashlight が `CameraManager` を使用済み）。`ImageReader`（`YUV_420_888`）の `acquireLatestImage` で最新の 1 枚だけ取り（公式）、Rust の `downscale_yuv420` で長辺 320 ピクセル以下へ縮める。API 30 以上はズームに `CONTROL_ZOOM_RATIO` が強く推奨され、範囲は 1.0 未満を含みうる（公式）。API 29 以下のズームは範囲外とし「この端末では使えない」と出す。`openCamera` は `CAMERA` の許可が無いと `SecurityException`（公式）。Android では「中断中」を出さず、他アプリに取られるなど OS が止めたら終端（使用中・実行中の失敗）にして自動では再開しない。`onPause` で背景停止する（許可ダイアログの表示中は除く）。`onDestroy`（Activity 再生成を含む）で映像を止めてカメラを解放する",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#808）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_camera_preview_stream.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/CameraPreviewHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/camera_preview_stream.rs + crates/fandhe-core/src/screens/camera_preview_stream_show.rs + crates/fandhe-device/src/camera_preview_stream.rs、Issue #814"
     },
     "macos": {
       "status": "possible",

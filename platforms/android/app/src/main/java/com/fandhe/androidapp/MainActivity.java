@@ -647,6 +647,26 @@ public class MainActivity extends GameActivity {
         return sleepLockEventsHelper.read();
     }
 
+    // カメラのライブ映像（Issue #814）。実装は `CameraPreviewHelper`（許可ランチャーを STARTED 前に登録）。
+    // Rust の `android_camera_preview_stream.rs` が JNI で呼ぶ。
+    private final CameraPreviewHelper cameraPreviewHelper = new CameraPreviewHelper(this);
+
+    int cameraPreviewStart(long id) {
+        return cameraPreviewHelper.start(id);
+    }
+
+    void cameraPreviewStop(long id) {
+        cameraPreviewHelper.stop(id);
+    }
+
+    float[] cameraPreviewZoomRange(long id) {
+        return cameraPreviewHelper.zoomRange(id);
+    }
+
+    int cameraPreviewSetZoom(long id, float ratio) {
+        return cameraPreviewHelper.setZoom(id, ratio);
+    }
+
     // 通話 UI 統合（Issue #278）。実装は `CallUiHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_call_ui.rs` が JNI で呼ぶ。
     private final CallUiHelper callUiHelper = new CallUiHelper(this);
@@ -2626,6 +2646,7 @@ public class MainActivity extends GameActivity {
         bluetoothClassicHelper.onResume();
         mediaPlaybackHelper.onResume();
         nowPlayingHelper.onResume();
+        cameraPreviewHelper.onResume();
         if (sensorManager != null && motionSensor != null) {
             sensorManager.registerListener(
                     motionListener, motionSensor, SensorManager.SENSOR_DELAY_GAME);
@@ -2724,6 +2745,7 @@ public class MainActivity extends GameActivity {
         environmentSensorsHelper.onPause();
         mediaPlaybackHelper.onPause();
         nowPlayingHelper.onPause();
+        cameraPreviewHelper.onPause();
         if (sensorManager != null) {
             sensorManager.unregisterListener(motionListener);
         }
@@ -4974,6 +4996,7 @@ public class MainActivity extends GameActivity {
         pictureInPictureHelper.onDestroy();
         midiHelper.onDestroy();
         sleepLockEventsHelper.onDestroy();
+        cameraPreviewHelper.onDestroy();
         callUiHelper.onDestroy();
         screenCaptureHelper.onDestroy();
         printHelper.onDestroy();
