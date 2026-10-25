@@ -60,6 +60,8 @@ struct Slot {
     expected: Option<u64>,
     /// 照合済みの完了の結果。
     outcome: Option<UploadStatus>,
+    /// 取り消しを依頼した後。次の `will_resume` までに届く完了は、取り消した要求のものとして捨てる。
+    cancelled: bool,
 }
 
 impl Slot {
@@ -67,6 +69,16 @@ impl Slot {
         Self {
             expected: None,
             outcome: None,
+            cancelled: false,
+        }
+    }
+
+    /// 取り消しが OS へ通った後に呼ぶ。完了前なら結果を `Cancelled` に確定し、以後の遅延した完了
+    /// （成功を含む）は採らない（契約表 2）。完了済みの結果は上書きしない。
+    fn cancel(&mut self) {
+        self.cancelled = true;
+        if self.expected.is_some() && self.outcome.is_none() {
+            self.outcome = Some(UploadStatus::Cancelled);
         }
     }
 
@@ -74,6 +86,7 @@ impl Slot {
     fn will_resume(&mut self, id: u64) {
         self.expected = Some(id);
         self.outcome = None;
+        self.cancelled = false;
     }
 
     /// 完了の通知を照合して記録する。置き換え後の古い転送の通知は捨てて `false`。
@@ -86,7 +99,7 @@ impl Slot {
         sent: u64,
         redirected: bool,
     ) -> bool {
-        if self.expected.is_some_and(|e| e != id) {
+        if self.cancelled || self.expected.is_some_and(|e| e != id) {
             return false;
         }
         self.outcome = Some(match code {
@@ -203,7 +216,10 @@ mod imp {
             // SAFETY: 引数なし。`.m` は全 task への `[task cancel]` が終わるまで待つ。
             let code = unsafe { fandhe_apple_bgul_cancel() };
             match code {
-                0 => Ok(()),
+                0 => {
+                    slot()?.cancel();
+                    Ok(())
+                }
                 1 => Err(DeviceError::Unsupported("background upload")),
                 _ => Err(DeviceError::Internal("background upload")),
             }
@@ -308,6 +324,28 @@ mod tests {
                 http_status: 200
             })
         );
+    }
+
+    #[test]
+    fn late_success_after_cancel_is_dropped() {
+        let mut s = Slot::default();
+        s.will_resume(1);
+        s.cancel();
+        assert!(!s.completed(1, 0, 200, FILE_SIZE, false));
+        assert_eq!(s.outcome, Some(UploadStatus::Cancelled));
+        // 次の開始で解除される。
+        s.will_resume(2);
+        assert!(s.completed(2, 0, 200, FILE_SIZE, false));
+        assert!(matches!(s.outcome, Some(UploadStatus::Completed { .. })));
+    }
+
+    #[test]
+    fn cancel_keeps_finished_outcome() {
+        let mut s = Slot::default();
+        s.will_resume(1);
+        s.completed(1, 0, 200, FILE_SIZE, false);
+        s.cancel();
+        assert!(matches!(s.outcome, Some(UploadStatus::Completed { .. })));
     }
 
     #[test]

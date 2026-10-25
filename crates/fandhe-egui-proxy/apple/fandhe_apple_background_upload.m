@@ -53,6 +53,8 @@ static NSString *const kSessionId = @"com.fandhe.egui-proxy.background-upload";
 static NSString *const kFileName = @"background-upload";
 
 static NSURLSession *g_session = nil;
+// task ごとの経由回数（delegate queue が直列なので排他は不要）。完了の通知で取り出して消す。
+static NSMutableDictionary<NSNumber *, NSNumber *> *g_redirects = nil;
 
 // 送るファイルの URL。ディレクトリは作っておく。取得できなければ nil。
 static NSURL *file_url(void) {
@@ -115,11 +117,24 @@ static void cancel_all_tasks(void) {
                                       : nil;
         int32_t status = http != nil ? (int32_t)http.statusCode : -1;
         // background session は OS がリダイレクトを必ず追い、delegate の `willPerformHTTPRedirection` は
-        // 呼ばれない（公式）。阻止はできないので、開始 URL と今の URL の違いで完了時に検出する。
-        bool redirected = ![task.originalRequest.URL isEqual:task.currentRequest.URL];
+        // 呼ばれない。阻止はできないので、OS の計測（`redirectCount`）で経由の有無を判定する。最終 URL が
+        // 開始 URL と同じでも、経由して戻っただけかもしれないので URL 比較は証拠にしない。計測が届かなかった
+        // 完了は、経由なしと言い切れないので「リダイレクトあり」に倒す（嘘の成功にしない）。
+        NSNumber *count = g_redirects[@(task.taskIdentifier)];
+        [g_redirects removeObjectForKey:@(task.taskIdentifier)];
+        bool redirected = count == nil || count.integerValue > 0;
         fandhe_rust_bgul_completed((uint64_t)task.taskIdentifier, code, status,
                                    (uint64_t)task.countOfBytesSent, redirected);
         fandhe_rust_bgul_signal();
+    }
+}
+
+// 計測の到着（`didCompleteWithError` の前に、同じ直列 queue で届く）。経由の回数だけ覚える。
+- (void)URLSession:(NSURLSession *)session
+                          task:(NSURLSessionTask *)task
+    didFinishCollectingMetrics:(NSURLSessionTaskMetrics *)metrics {
+    @autoreleasepool {
+        g_redirects[@(task.taskIdentifier)] = @(metrics.redirectCount);
     }
 }
 
@@ -140,6 +155,7 @@ int32_t fandhe_apple_bgul_init(void) {
             if (config == nil) {
                 return;
             }
+            g_redirects = [NSMutableDictionary dictionary];
             NSOperationQueue *queue = [[NSOperationQueue alloc] init];
             queue.maxConcurrentOperationCount = 1;
             g_session = [NSURLSession sessionWithConfiguration:config
