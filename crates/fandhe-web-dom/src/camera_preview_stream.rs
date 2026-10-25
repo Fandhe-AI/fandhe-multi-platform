@@ -439,10 +439,17 @@ mod web {
             stop_stream(&stream);
             return;
         }
+        // 取得から購読までの間（hidden の `AwaitVisible` 待ちを含む）に ended になった
+        // トラックは `ended` イベントを取り逃すため、購読直後に状態を直接確認する。
+        let mut already_ended = false;
         for t in stream.get_video_tracks().iter() {
             if let Ok(t) = t.dyn_into::<MediaStreamTrack>() {
                 listen_track(mount_id, generation, &t);
+                already_ended |= t.ready_state() == web_sys::MediaStreamTrackState::Ended;
             }
+        }
+        if already_ended {
+            return fail_with(mount_id, FailureView::Runtime, true);
         }
         let Ok(promise) = video.play() else {
             return fail_with(mount_id, FailureView::Other, false);
@@ -456,11 +463,19 @@ mod web {
             if result.is_err() {
                 return fail_with(mount_id, FailureView::Other, false);
             }
-            let muted = stream
+            let tracks: Vec<MediaStreamTrack> = stream
                 .get_video_tracks()
                 .iter()
                 .filter_map(|t| t.dyn_into::<MediaStreamTrack>().ok())
-                .any(|t| t.muted());
+                .collect();
+            // play() 待ちの間に ended になった場合も、映像中にせず失敗へ倒す。
+            if tracks
+                .iter()
+                .any(|t| t.ready_state() == web_sys::MediaStreamTrackState::Ended)
+            {
+                return fail_with(mount_id, FailureView::Runtime, true);
+            }
+            let muted = tracks.iter().any(|t| t.muted());
             let Some(applier) = ACTIVE.with(|a| {
                 a.borrow()
                     .get(&mount_id)

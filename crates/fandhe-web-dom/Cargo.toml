@@ -121,6 +121,8 @@ web-sys = { workspace = true, features = [
     "MediaDevices",
     "MediaStream",
     "MediaStreamTrack",
+    # camera_preview_stream: 購読前に ended になったトラックの検出（`ready_state`）に使う。
+    "MediaStreamTrackState",
     "MediaStreamConstraints",
     "MediaRecorder",
     "BlobEvent",
