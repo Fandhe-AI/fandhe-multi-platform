@@ -19,7 +19,7 @@
       "note": "未実装。公式: 通知はデータ保護が有効で端末がロックされる直前・解除後に届き、`isProtectedDataAvailable` はロック中なら false、ロック解除済みかデータ保護が無効なら true。発火までの遅れ・パスコード未設定時の扱いは公式文書に記載が無い"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`Intent.ACTION_SCREEN_OFF` / `ACTION_SCREEN_ON` / `ACTION_USER_PRESENT` を `Context.registerReceiver` で動的に受ける。今の状態は `PowerManager.isInteractive` / `KeyguardManager.isKeyguardLocked` で読む",
       "perm": "不要（新しい uses-permission なし）",
       "url": [
@@ -29,7 +29,10 @@
         "https://developer.android.com/about/versions/14/behavior-changes-14",
         "https://developer.android.com/about/versions/14/behavior-changes-all"
       ],
-      "note": "未実装。`ACTION_SCREEN_OFF` / `ON` はマニフェストに宣言した受信側では受け取れず（javadoc）、3 つともシステムだけが送る保護されたブロードキャスト。システムのブロードキャストだけを受けるレシーバーは、Android 14 以上でも `RECEIVER_EXPORTED` / `NOT_EXPORTED` を指定しない（公式）。Android 14 以上では、アプリがキャッシュ状態の間に届いたブロードキャストは列に溜められ、前面へ戻った時にまとめて届き、同種のものは 1 件に畳まれることがある（公式）。ロックした瞬間を知らせるブロードキャストは無い（`ACTION_USER_PRESENT` は解除のみ）。`isInteractive`・`isKeyguardLocked` の API レベルは公式ページで未確認（minSdk 24 で使える見込み）"
+      "note": "実装済み（#811）。画面の消灯・点灯・解除の 3 種を受け、システムのスリープ・復帰とロックした瞬間は「この OS では取れない」と出す（知らせるブロードキャストが無い。`ACTION_USER_PRESENT` は解除のみ）。今の状態は画面を開いた時と出来事が届くたびに `isInteractive` / `isKeyguardLocked` で読み直し、サービスが取れない項目は「不明」、読み取りの失敗は失敗として出す（点灯・ロックなしへ畳まない）。`ACTION_SCREEN_OFF` / `ON` はマニフェストに宣言した受信側では受け取れず（javadoc）、Application Context へ動的に登録する。3 つともシステムだけが送る保護されたブロードキャストで、システムのブロードキャストだけを受けるレシーバーは、Android 14 以上でも `RECEIVER_EXPORTED` / `NOT_EXPORTED` を指定しない（公式）。画面を消すと Activity が onPause するため、onPause では止めない。`onDestroy`（Activity 再生成を含む）でレシーバーを解除し、停止を失敗として扱わない。購読は id で数え、解除後と再生成前の古い id の通知は捨てる。Android 14 以上では、アプリがキャッシュ状態の間に届いたブロードキャストは列に溜められ、前面へ戻った時にまとめて届き、同種のものは 1 件に畳まれることがある（公式、守らない範囲）。`isKeyguardLocked` は鍵なしのキーガード表示中も true になりうる（OS の定義の差、守らない範囲）。`isInteractive` は API 20、`isKeyguardLocked` は API 16 で追加されており、minSdk 24 で使える",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#806）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_sleep_lock_events.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/SleepLockEventsHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/sleep_lock_events.rs + crates/fandhe-core/src/screens/sleep_lock_events_show.rs + crates/fandhe-device/src/sleep_lock_events.rs、Issue #811"
     },
     "macos": {
       "status": "done",
