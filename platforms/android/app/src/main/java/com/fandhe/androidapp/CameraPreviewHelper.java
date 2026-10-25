@@ -343,6 +343,7 @@ final class CameraPreviewHelper {
     // skipDefer: close 待ちの期限切れで進める場合 true（再度保留しない。期限切れ側で追跡は外し済み）。
     private void openOnCameraThread(long id, Handler h, boolean skipDefer) {
         final Session s;
+        Session stale = null;
         if (!skipDefer && deferUntilClosed(id, h)) {
             return;
         }
@@ -350,8 +351,19 @@ final class CameraPreviewHelper {
             if (request.current() != id || destroyedHelper) {
                 return; // 取り消し・差し替え・破棄済み。
             }
+            if (session != null && !session.closed) {
+                if (session.id == id) {
+                    return; // 同じ要求の open が二重に post された。先の 1 本に任せる。
+                }
+                // 別の要求の生きたセッションを上書きすると CameraDevice が漏れるため、先に閉じる。
+                stale = session;
+                stale.closed = true;
+            }
             s = new Session(id, h);
             session = s;
+        }
+        if (stale != null) {
+            release(stale);
         }
         try {
             CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
