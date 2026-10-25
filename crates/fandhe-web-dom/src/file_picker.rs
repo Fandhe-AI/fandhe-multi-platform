@@ -1,4 +1,6 @@
 //! Phase 11（親 #871）型サンプル「ファイル選択」の Web 経路（Issue #875、`wasm32` 専用）。
+//! Issue #824（親 #169）で「動画の撮影」画面（`video_capture.rs`）も `capture` 属性付きで
+//! 同じ配線を共有する。
 //! Issue #981（親 #979）で「TSV 読み込み」画面（[`tsv_import_effect`]）とこの
 //! `<input type="file">` 配線を共有する形へ拡張した。
 //!
@@ -191,6 +193,10 @@ pub(crate) async fn read(file: File) -> Result<Picked, String> {
 pub(crate) struct WebPickHooks<S, R> {
     /// `<input>` の `accept` 属性（`None` なら付けない。写真選択は `image/*`）。
     pub(crate) accept: Option<&'static str>,
+    /// `<input>` の `capture` 属性（`None` なら付けない）。動画の撮影（#824）は
+    /// `environment`。モバイルではカメラを開き、デスクトップでは無視されて通常の
+    /// ファイル選択になる（HTML Media Capture）。
+    pub(crate) capture: Option<&'static str>,
     /// 未発送の要求があれば世代番号を返す（画面の `take_request` 相当）。
     pub(crate) take_request: fn(&S) -> Option<u64>,
     /// `Requested` → `Picking` へ進める（画面の `mark_picking` 相当）。
@@ -272,6 +278,9 @@ pub(crate) fn drive<S: 'static, R: 'static>(
     if let Some(accept) = hooks.accept {
         let _ = input.set_attribute("accept", accept);
     }
+    if let Some(capture) = hooks.capture {
+        let _ = input.set_attribute("capture", capture);
+    }
     if body.append_child(&input).is_err() {
         fail(applier, generation, UNAVAILABLE, hooks);
         return;
@@ -346,6 +355,7 @@ pub(crate) fn drive<S: 'static, R: 'static>(
 /// `PickedSummary` へ潰す（バイト列は画面状態に残さない、モジュール doc 参照）。
 const FILE_PICK_HOOKS: WebPickHooks<FilePickState, Picked> = WebPickHooks {
     accept: None,
+    capture: None,
     convert: read_boxed,
     take_request: file_pick_take_request,
     mark_picking: file_pick_mark_picking,
@@ -370,6 +380,7 @@ const FILE_PICK_HOOKS: WebPickHooks<FilePickState, Picked> = WebPickHooks {
 /// （解析時）、モジュール doc 参照）。
 const TSV_IMPORT_HOOKS: WebPickHooks<TsvImportState, Picked> = WebPickHooks {
     accept: None,
+    capture: None,
     convert: read_boxed,
     take_request: tsv_take_request,
     mark_picking: tsv_mark_picking,
@@ -505,6 +516,7 @@ fn read_photo_boxed(mount_id: u64, file: File) -> ConvertFuture<ShownPhoto> {
 /// [`photo_pick_effect`] が [`sync_photo_url`] で行う。
 const PHOTO_PICK_HOOKS: WebPickHooks<PhotoPickState, ShownPhoto> = WebPickHooks {
     accept: Some("image/*"),
+    capture: None,
     take_request: photo_take_request,
     mark_picking: photo_mark_picking,
     convert: read_photo_boxed,

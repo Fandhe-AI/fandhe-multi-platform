@@ -484,6 +484,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::background_download::release_mount(id);
         super::user_idle::release_mount(id);
         super::serial_port::release_mount(id);
+        super::video_capture::release_mount(id);
     }
 }
 

@@ -214,6 +214,9 @@ web-sys = { workspace = true, features = [
     # `getBoundingClientRect` の戻り値でキャンバス座標を求める。
     "PointerEvent",
     "DomRect",
+    # Issue #824: 動画の撮影（`video_capture` モジュール）。`<video>` の `loadedmetadata` /
+    # `error` を `{ once: true }` で購読し、解除し忘れを避ける。
+    "AddEventListenerOptions",
 ] }
 
 [dev-dependencies]

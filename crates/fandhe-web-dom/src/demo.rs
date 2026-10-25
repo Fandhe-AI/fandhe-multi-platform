@@ -201,6 +201,9 @@ use fandhe_core::screens::user_idle_show::{
     current_screen as current_user_idle_show_screen,
     web_initial_state as user_idle_web_initial_state,
 };
+use fandhe_core::screens::video_capture_show::{
+    current_screen as current_video_capture_show_screen, VideoCaptureShowState,
+};
 use fandhe_core::screens::wake_lock_toggle::{
     current_screen as current_wake_lock_toggle_screen, turn_off as wake_lock_turn_off,
     WakeLockToggleState, OFF_BUTTON_ID as WAKE_LOCK_OFF_BUTTON_ID,
@@ -327,6 +330,23 @@ pub fn mount_photo_pick_screen(root_id: &str) -> Result<(), JsValue> {
         current_photo_pick_screen(&initial_state),
         initial_state,
         super::file_picker::photo_pick_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「動画の撮影」（Issue #824）をマウントする検証専用
+/// エントリポイント。`super::video_capture::video_capture_show_effect` を effect として渡すため、
+/// `<input type="file" accept="video/*" capture="environment">` 経由の選択 →
+/// `<video>` の `loadedmetadata` での長さ・寸法の読み取りが動く。
+#[wasm_bindgen]
+pub fn mount_video_capture_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = VideoCaptureShowState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_video_capture_show_screen(&initial_state),
+        initial_state,
+        super::video_capture::video_capture_show_effect,
     )
 }
 

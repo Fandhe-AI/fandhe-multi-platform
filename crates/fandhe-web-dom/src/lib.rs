@@ -273,6 +273,10 @@ pub mod storage_note;
 /// からもテストできるようクレート単位の `wasm32` gate を外す。
 pub mod tilt;
 
+/// 型サンプル「動画の撮影」の Web 経路（親 #169、Issue #824）。[`haptics`] と同じ理由で
+/// 純関数は native からもテストできるよう gate を外す（wasm 部は内側の `cfg`）。
+pub mod video_capture;
+
 /// 型サンプル「ドラッグ & ドロップ受け取り」の Web 経路（親 #1013、Issue #1017）。
 /// [`location`] と同じ理由で純関数は native からもテストできるようクレート単位の
 /// `wasm32` gate を外す。
