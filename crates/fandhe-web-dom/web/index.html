@@ -52,6 +52,7 @@
         mount_storage_note_screen,
         mount_tilt_ball_screen,
         mount_camera_capture_screen,
+        mount_camera_preview_stream_show_screen,
         mount_settings_screen,
         mount_notification_send_screen,
         mount_drag_drop_screen,
@@ -216,6 +217,8 @@
         mount_tilt_ball_screen("fandhe-dom-root");
       } else if (screen === "camera_capture") {
         mount_camera_capture_screen("fandhe-dom-root");
+      } else if (screen === "camera_preview_stream_show") {
+        mount_camera_preview_stream_show_screen("fandhe-dom-root");
       } else if (screen === "settings") {
         mount_settings_screen("fandhe-dom-root");
       } else if (screen === "text_scale") {

@@ -59,6 +59,9 @@
 //! - [`mic_record`]: 「マイク録音」画面の Web 経路（Issue #958）。[`location`] と同じ理由で
 //!   純関数（例外の `name` → 結果種別の対応・録音結果の検証・mime の決定）のみ `wasm32`
 //!   gate の外に置く
+//! - [`camera_preview_stream`]: 「カメラのライブ映像・フレーム取得」画面の Web 経路（Issue #815）。
+//!   [`location`] と同じ理由で純関数（例外の `name` → 失敗種別・縮小寸法・フレーム検証・表示間引き）
+//!   のみ `wasm32` gate の外に置く
 //! - [`screen_capture`]: 「画面の録画・キャプチャ」画面の Web 経路（Issue #1338）。[`location`] と同じ理由で
 //!   純関数（例外の `name` → 結果種別・`Blob.size` 等 → 録画結果の検証）のみ `wasm32` gate の外に置く
 //! - [`http_fetch`]: 「HTTP 取得（GET 限定）」画面の Web 経路（Issue #985）。[`location`]
@@ -279,6 +282,10 @@ pub mod drag_drop;
 /// 純関数（例外の `name` → 結果種別の対応・サムネイル化の境界検証）は native
 /// からもテストできるようクレート単位の `wasm32` gate を外す。
 pub mod camera_capture;
+
+/// 型サンプル「カメラのライブ映像・フレーム取得」の Web 経路（親 #168、Issue #815）。
+/// [`location`] と同じ理由で純関数は native からもテストできるよう `wasm32` gate を外す。
+pub mod camera_preview_stream;
 
 /// 型サンプル「通知」の Web 経路（Issue #1007）。[`location`] と同じ理由で
 /// 純関数（権限の解決値・例外の `name` → 結果種別の対応）は native からもテスト

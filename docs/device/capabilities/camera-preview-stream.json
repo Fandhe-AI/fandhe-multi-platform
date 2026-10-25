@@ -65,8 +65,8 @@
       "note": "未実装。`MemoryPreference` が Cpu でないと `SoftwareBitmap` が null になりうる（公式）。`TryAcquireLatestFrame` で得た `SoftwareBitmap` を Dispose しないと、上限を超えたところでフレームの供給が止まる（公式）。Realtime はハンドラの実行中に届いたフレームを捨てる（公式、1709 以上）。PC の Web カメラはズームに対応しないものが多い見込み（未確認）"
     },
     "web": {
-      "status": "possible",
-      "api": "`MediaDevices.getUserMedia({ video })` + 非表示の `<video>`、`HTMLVideoElement.requestVideoFrameCallback` で新しいフレームごとに `<canvas>` の `drawImage` → `getImageData`（RGBA）",
+      "status": "done",
+      "api": "`MediaDevices.getUserMedia({ video })` + 非表示の `<video>`、`HTMLVideoElement.requestVideoFrameCallback` で新しいフレームごとに `<canvas>` の `drawImage` → `getImageData`（RGBA）。実装は `getUserMedia({ video: { facingMode: { ideal: \"environment\" } }, audio: false })`（背面が無ければ既定のカメラ）、`requestVideoFrameCallback` は web-sys に型が無いため `Reflect` で呼ぶ、`fandhe_device` の `preview_size` で縮めたキャンバスへ `drawImage` → `getImageData`、中断・再開はトラックの `mute` / `unmute`、実行中の失敗は `ended`",
       "perm": "カメラの許可（camera-capture の Web と同じ）、secure context 必須。ズーム（`zoom` 制約）は `camera` の許可を `panTiltZoom: true` 付きで得る必要がある",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia",
@@ -77,7 +77,10 @@
         "https://w3c.github.io/mediacapture-image/#zoom"
       ],
       "safari": "getUserMedia・requestVideoFrameCallback（15.4 以上）は対応。ズームは範囲外",
-      "note": "未実装。`requestVideoFrameCallback` は Chrome / Edge 83 以上、Firefox 132 以上、Safari 15.4 以上（caniuse）。`ended` は権限の取り消し・デバイスの取り外しで発火し、`track.stop()` では発火しない（MDN）。ズームは PTZ の許可（`panTiltZoom`）を新しく求めることになるため今回の範囲外とし、画面に「この環境では使えない」と出す。背景タブで `requestVideoFrameCallback` がいつ止まるかは公式の記載が無い"
+      "note": "実装済み（#815）。開始は `video.play()` の resolve で確定し、期限は張らない（開始待ちは「止める」で取り消せる）。トラックが `mute` なら中断中、`unmute` で映像中へ戻る。`ended`（権限の取り消し・取り外し）は実行中の失敗にして解放する。映像の開始後に背景へ移った（`visibilitychange`）ら背景停止、`pagehide`（bfcache を含む）は画面を離れた停止で、どちらも戻っても自動では再開しない。許可ダイアログの表示中に `hidden` になるモバイル Chromium に備え、`visibilitychange` はストリーム取得後にだけ効かせ、取得時に `hidden` なら再生せず visible になるまでストリームを保持する。`requestVideoFrameCallback` が無い環境、secure context でない環境は API の有無だけで非対応にする。画面に出すフレームは前回から 200 ミリ秒以上空いたものだけ（再描画の負荷としきい値は実ブラウザで見直す）で、受信数には全フレームを数える。ズームは範囲外で、要求には常に「この環境では使えない」を返す。`mount_with_effect` が画面を固定するため、トグルの文言は「映像を始める」のまま変わらずズームのボタンも出ない（mic-record の Web と同じ既存の制約）。背景タブで `requestVideoFrameCallback` がいつ止まるかは公式の記載が無い",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#808）",
+      "impl": "crates/fandhe-web-dom/src/camera_preview_stream.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/camera_preview_stream_show.rs + crates/fandhe-device/src/camera_preview_stream.rs、Issue #815"
     }
   },
   "note": "camera-capture は静止画 1 枚を撮る一発の機能で、本機能は映像を流し続けて毎フレームを受け取り、ズームも操作する。video-capture（動画ファイルの撮影）とも別。今回の範囲: 「映像を始める」「止める」で背面カメラ（無ければ既定のカメラ）のライブ映像を受け取り、届いたフレームのうち最新の 1 枚を長辺 320 ピクセル以下へ縮めて画面に出す。受け取ったフレーム数と元の寸法を出す。ズームは「1 倍」「2 倍」の 2 段（2 倍は OS が返す上限を超えない）で、表示するズーム値は OS から読んだ値。OS がズームを返さない環境は「この環境では使えない」と出す。結果は 映像中 / 中断中（OS が知らせた中断。OS が再開すれば映像中へ戻る）/ 停止（利用者の操作・画面を離れた・背景へ移った、正常）/ 開始失敗（権限拒否・カメラなし・使用中）/ 実行中の失敗 / 非対応。OS を正にする: 開始・停止・中断・失敗は OS の完了通知・コールバックで確定し、タイマーで推測しない（期限を張らず、開始待ちは「止める」で取り消せる）。フレームは OS の到着で受け、最新 1 枚だけを残す（古いものは捨てる）。ズーム値・セッションの状態をアプリ内に別に覚えず、OS から読んだ値を出す。停止・画面を離れる・背景へ移る・開始の途中の失敗・実行中の失敗の全経路でセッションとカメラを解放し、解放後に遅れて届いたフレームは捨てる。守らない範囲: 画面に出すフレームの間隔（端末・負荷によって変わる。全フレームは出さない）、フレームの時刻、前面・背面の切り替え、露出・焦点・ライト、複数のカメラ・複数画面での同時利用、他アプリとの取り合いで OS が止めた後の自動の再開（iOS の中断の終了を除く）、映像の向き（端末の向きが変わったときの追従）。"

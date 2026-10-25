@@ -127,6 +127,44 @@ impl<S: 'static> Applier<S> {
     }
 }
 
+impl<S: 'static> Applier<S> {
+    /// `update` で状態を書き換え、DOM は**作り直さず**に `patch` で既存の要素へ直接反映する。
+    ///
+    /// 全再構築はボタンを含む要素を毎回作り直すため、mousedown と mouseup の間に挟まると
+    /// `click` が発火しない。映像フレームのように高頻度で届く更新は、ボタン等を残したまま
+    /// 一部の要素だけを書き換える（Issue #815）。`patch` は root 要素と更新後の状態を受け取り、
+    /// 反映できたら `true` を返す。`false`（対象要素が無い等、構造が変わる更新）のときは
+    /// [`Applier::apply`] と同じ全再構築へ倒す。effect は呼ばない（要求の観測が要る更新には使わない）。
+    pub fn apply_in_place(
+        &self,
+        update: impl FnOnce(&mut S) + 'static,
+        patch: impl FnOnce(&Element, &S) -> bool + 'static,
+    ) {
+        if !is_live(self.mount_id) {
+            return;
+        }
+        let Ok(mut state) = self.state.try_borrow_mut() else {
+            let deferred = self.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                deferred.apply_in_place(update, patch);
+            });
+            return;
+        };
+        update(&mut state);
+        let patched = match root_of(self.mount_id) {
+            Some(root) => patch(&root, &state),
+            None => false,
+        };
+        drop(state);
+        if patched {
+            return;
+        }
+        if let Err(e) = (self.render)() {
+            web_sys::console::error_1(&e);
+        }
+    }
+}
+
 /// `handler_index` 順に並んだ `Node::Button::on_click` の共有ベクタ
 /// （`clippy::type_complexity` 対策の型エイリアス、実体は [`super::dom_tree::Rendered`] と同じ）。
 type ClickHandlers<S> = Rc<Vec<fn(&mut S)>>;
@@ -416,6 +454,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::audio_devices::release_mount(id);
         super::local_fonts::release_mount(id);
         super::eye_dropper::release_mount(id);
+        super::camera_preview_stream::release_mount(id);
         super::multi_display::release_mount(id);
         super::window_management::release_mount(id);
         super::accessibility_prefs::release_mount(id);
