@@ -256,8 +256,9 @@ fn drive(
             }));
             match command {
                 AudioSessionCommand::Start(kind) => {
-                    if let Some((g, old)) = inner.guard.take() {
-                        release(sender, g, old);
+                    // 旧 guard の解放失敗は旧世代の通知として捨てられないよう、現在の要求の世代で知らせる。
+                    if let Some((_, old)) = inner.guard.take() {
+                        release(sender, generation, old);
                     }
                     let on_signal = make_on_signal(sender.clone(), generation);
                     match session.start(to_session_kind(kind), on_signal) {
@@ -520,6 +521,20 @@ mod tests {
         start(&mut r.state);
         r.frame();
         assert_eq!(r.state.phase, AudioSessionPhase::Active);
+    }
+
+    #[test]
+    fn restore_failure_on_restart_after_runtime_failure_is_reported() {
+        let mut r = Rig::new(fake(None, true));
+        start(&mut r.state);
+        r.frame();
+        r.signal(Signal::Failed);
+        pump(&mut r.state, &r.rx);
+        // Failed を反映したフレームの前に利用者が再開始する。
+        start(&mut r.state);
+        r.frame();
+        assert_eq!(r.state.phase, AudioSessionPhase::Active);
+        assert!(r.state.restore_failed, "旧 guard の復元失敗を捨てない");
     }
 
     #[test]
