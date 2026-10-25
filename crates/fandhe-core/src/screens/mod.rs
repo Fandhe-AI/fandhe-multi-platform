@@ -104,6 +104,8 @@ pub mod background_task;
 
 /// Phase 11 の拡充ループ型サンプル「バックグラウンドダウンロード」（親 #100、Issue #390）。
 pub mod background_download;
+/// Phase 11 の拡充ループ型サンプル「バックグラウンド送信」（親 #170、Issue #835）。
+pub mod background_upload;
 /// Phase 11 の拡充ループ型サンプル「ファイルの関連付け」（親 #102、Issue #416）。
 pub mod file_association_show;
 /// Phase 11 の拡充ループ型サンプル「クイック設定タイル・コントロール」（親 #139、Issue #719）。
