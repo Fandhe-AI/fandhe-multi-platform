@@ -152,6 +152,8 @@ pub mod now_playing;
 pub mod on_device_llm;
 /// Phase 11（端末機能の拡充ループ、親 #146、Issue #749）: 既定アプリで開く・ファイルマネージャーで選択表示。
 pub mod open_in_shell;
+/// Phase 11（端末機能の拡充ループ、親 #171、Issue #798）: OS の設定画面を開く（固定の 2 頁）。
+pub mod open_system_settings;
 /// Phase 11（端末機能の拡充ループ、親 #92、Issue #342）: パスキーの登録・サインイン要求（サーバー検証なし）。
 pub mod passkey;
 /// Phase 11（端末機能の拡充ループ、親 #114、Issue #541）: 物・サービスの決済シート（Google Pay TEST 環境、課金なし）。

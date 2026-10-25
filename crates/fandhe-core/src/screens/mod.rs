@@ -207,6 +207,8 @@ pub mod nlp_segment;
 pub mod on_device_llm;
 /// Phase 11 の拡充ループ型サンプル「既定アプリで開く・ファイルマネージャーで表示」（親 #146、Issue #749）。
 pub mod open_in_shell;
+/// Phase 11 の拡充ループ型サンプル「OS の設定画面を開く」（親 #171、Issue #798）。
+pub mod open_system_settings_show;
 /// Phase 11 の拡充ループ型サンプル「ワンタイムコードの入力」（親 #121、Issue #585）。
 pub mod otp_input;
 /// Phase 11 の拡充ループ型サンプル「パスキー・サインイン連携」（親 #92、Issue #342）。

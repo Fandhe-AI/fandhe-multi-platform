@@ -208,6 +208,10 @@ pub mod android_network_status;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_now_playing;
+/// Issue #798: Android 向け「OS の設定画面を開く」の骨格（実体は #800）。`device/open_system_settings.rs` の android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_open_system_settings;
 /// Issue #472: Android 向け PDF 表示の実装（`PdfRenderer`）。
 /// `device/pdf_viewer.rs` の Android 経路から呼ばれる。応答の解読をホストでテストするため test でも載せる。
 #[cfg(any(target_os = "android", test))]
@@ -858,6 +862,10 @@ pub mod ios_now_playing;
 /// `device/on_device_llm.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_on_device_llm;
+/// Issue #798: iOS 向け「OS の設定画面を開く」の骨格（実体は #799）。`device/open_system_settings.rs` の ios 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_open_system_settings;
 /// Issue #471: iOS 向け PDF 表示実装（macOS と共用の `ApplePdfPageRenderer` を返す）。
 /// `device/pdf_viewer.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -1177,6 +1185,10 @@ pub mod on_device_llm;
 /// Issue #749: 既定アプリで開く・ファイルマネージャーで選択表示の effect ドライバ（サンプルファイルの用意・
 /// `ShellPath` 検査・OS 実装の呼び出し）。`screens/registry.rs` の `effect` 区画から呼ばれる。
 pub mod open_in_shell;
+/// Phase 11 の拡充ループ（親 #171、Issue #798）: OS の設定画面を開く effect ドライバ（Windows は同期、
+/// iOS / Android は pull 型 `bridge`（#799・#800 が埋めるスタブ）、他 OS は
+/// `UnsupportedOpenSystemSettings` 固定。Web は対象外）。
+pub mod open_system_settings;
 /// Phase 11 の拡充ループ（親 #92、Issue #342）: パスキーの effect ドライバ（Windows はワーカー +
 /// pull 型 bridge、実装は #343 が埋める。他 OS は `UnsupportedPasskey` 固定。Web は `fandhe-web-dom`）。
 pub mod passkey;
@@ -1508,6 +1520,11 @@ pub mod windows_now_playing;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_open_in_shell;
+/// Issue #798: Windows 向け「OS の設定画面を開く」実装（`ms-settings:notifications` を `ShellExecuteW` で開く）。
+/// `device/open_system_settings.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_open_system_settings;
 /// Issue #343: Windows 向けパスキー実装（`webauthn.h` の MakeCredential / GetAssertion）。
 /// `device/passkey.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
