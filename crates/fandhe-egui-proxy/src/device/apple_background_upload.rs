@@ -82,6 +82,17 @@ impl Slot {
         }
     }
 
+    /// 前のプロセスから続く転送を `expected` に採用する（まだ何も照合していないときだけ）。
+    /// 取り消しの前に呼び、`cancel` が `Cancelled` を確定できるようにする（契約表 3・10）。
+    fn adopt(&mut self, tasks: &[TaskInfo]) {
+        if self.expected.is_none() && self.outcome.is_none() {
+            self.expected = tasks
+                .iter()
+                .find(|t| t.state == STATE_RUNNING || t.state == STATE_SUSPENDED)
+                .map(|t| t.id);
+        }
+    }
+
     /// 開始する転送の識別子を受ける（`resume` の前）。前の結果は捨てる。
     fn will_resume(&mut self, id: u64) {
         self.expected = Some(id);
@@ -184,6 +195,20 @@ mod imp {
 
     pub(super) struct AppleBackgroundUpload;
 
+    /// OS の一覧を読む。`SLOT` のロックは持たずに呼ぶこと。
+    #[allow(unsafe_code)]
+    fn list_tasks() -> Result<Vec<TaskInfo>, DeviceError> {
+        let mut tasks = [TaskInfo::default(); LIST_CAP];
+        let mut len: usize = 0;
+        // SAFETY: `tasks` は `LIST_CAP` 件の領域で、`.m` はそれを超えて書かない（`cap` で渡す）。
+        // `len` は有効な書き込み先。`.m` は completion を待ち終えてから戻るので、戻った後に書かない。
+        let code = unsafe { fandhe_apple_bgul_list(tasks.as_mut_ptr(), LIST_CAP, &mut len) };
+        if code != 0 {
+            return Err(DeviceError::Internal("background upload"));
+        }
+        Ok(tasks[..len.min(LIST_CAP)].to_vec())
+    }
+
     /// session を作って実装を返す。作れなければ `None`（呼び出し側が `Unsupported` に倒す。
     /// ダミーの成功実装にはしない）。
     pub(super) fn init() -> Option<Arc<dyn BackgroundUpload>> {
@@ -213,6 +238,9 @@ mod imp {
 
         #[allow(unsafe_code)]
         fn cancel(&self) -> Result<(), DeviceError> {
+            // 前のプロセスから続く転送を取り消すとき、識別子を先に採用して `Cancelled` を保てるようにする。
+            let tasks = list_tasks()?;
+            slot()?.adopt(&tasks);
             // SAFETY: 引数なし。`.m` は全 task への `[task cancel]` が終わるまで待つ。
             let code = unsafe { fandhe_apple_bgul_cancel() };
             match code {
@@ -225,19 +253,10 @@ mod imp {
             }
         }
 
-        #[allow(unsafe_code)]
         fn status(&self) -> Result<UploadStatus, DeviceError> {
-            let mut tasks = [TaskInfo::default(); LIST_CAP];
-            let mut len: usize = 0;
-            // SAFETY: `tasks` は `LIST_CAP` 件の領域で、`.m` はそれを超えて書かない（`cap` で渡す）。
-            // `len` は有効な書き込み先。`.m` は completion を待ち終えてから戻るので、戻った後に書かない。
-            let code = unsafe { fandhe_apple_bgul_list(tasks.as_mut_ptr(), LIST_CAP, &mut len) };
-            if code != 0 {
-                return Err(DeviceError::Internal("background upload"));
-            }
-            let len = len.min(LIST_CAP);
+            let tasks = list_tasks()?;
             let guard = slot()?;
-            Ok(status_from(&tasks[..len], &guard))
+            Ok(status_from(&tasks, &guard))
         }
 
         fn set_signal(&self, on_signal: OnSignal) -> Result<(), DeviceError> {
@@ -337,6 +356,24 @@ mod tests {
         s.will_resume(2);
         assert!(s.completed(2, 0, 200, FILE_SIZE, false));
         assert!(matches!(s.outcome, Some(UploadStatus::Completed { .. })));
+    }
+
+    #[test]
+    fn cancel_of_inherited_task_is_kept_as_cancelled() {
+        let mut s = Slot::default();
+        s.adopt(&[running(9, 5)]);
+        s.cancel();
+        // 後から届く取り消し完了・成功で上書きされず、一覧から消えても Idle に戻らない。
+        assert!(!s.completed(9, 0, 200, FILE_SIZE, false));
+        assert_eq!(status_from(&[], &s), UploadStatus::Cancelled);
+    }
+
+    #[test]
+    fn adopt_without_task_keeps_idle() {
+        let mut s = Slot::default();
+        s.adopt(&[]);
+        s.cancel();
+        assert_eq!(status_from(&[], &s), UploadStatus::Idle);
     }
 
     #[test]
