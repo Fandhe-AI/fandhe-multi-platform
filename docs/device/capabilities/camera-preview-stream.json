@@ -8,40 +8,74 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "AVFoundation `AVCaptureSession` + `AVCaptureVideoDataOutput`（フレーム）、`AVCaptureDevice.videoZoomFactor`",
-      "perm": "カメラ利用目的の記述（`NSCameraUsageDescription`）",
-      "url": "https://developer.apple.com/documentation/avfoundation/avcapturesession",
-      "note": "未実装。毎フレームを Rust へ渡す経路（コピーか共有バッファか）の設計が要る。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "AVFoundation `AVCaptureSession`（`sessionPreset` = `vga640x480`）+ `AVCaptureVideoDataOutput`（`setSampleBufferDelegate:queue:` に serial queue、`kCVPixelBufferPixelFormatTypeKey` = 32BGRA）、`CMSampleBufferGetImageBuffer` + `CVPixelBufferLockBaseAddress`。ズームは `AVCaptureDevice.videoZoomFactor`（`lockForConfiguration` 必須、範囲は `minAvailableVideoZoomFactor`〜`maxAvailableVideoZoomFactor`）。中断は `AVCaptureSessionWasInterruptedNotification` / `InterruptionEndedNotification`、実行時の失敗は `AVCaptureSessionRuntimeErrorNotification`",
+      "perm": "`NSCameraUsageDescription`（宣言済み。文言に本機能の画面名を足す）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）",
+      "url": [
+        "https://developer.apple.com/documentation/avfoundation/avcapturesession",
+        "https://developer.apple.com/documentation/avfoundation/avcapturevideodataoutput/setsamplebufferdelegate(_:queue:)",
+        "https://developer.apple.com/documentation/avfoundation/avcapturevideodataoutput/alwaysdiscardslatevideoframes",
+        "https://developer.apple.com/documentation/avfoundation/avcapturedevice/videozoomfactor",
+        "https://developer.apple.com/documentation/avfoundation/avcapturesession/wasinterruptednotification",
+        "https://developer.apple.com/documentation/avfoundation/avcapturedevice/requestaccess(for:completionhandler:)"
+      ],
+      "note": "未実装。delegate の queue は serial 必須で、処理中に届いたフレームは `alwaysDiscardsLateVideoFrames`（既定 true）で捨てられる（公式）。`startRunning` / `stopRunning` は同期で、開始か失敗まで・停止しきるまでブロックする（公式）。`videoZoomFactor` は `lockForConfiguration` 無しで設定すると例外、範囲外も例外（公式）。中断の理由に背景遷移・他アプリの使用・iPad のマルチタスクがある（公式）。BGRA は非ネイティブで変換が入る（公式）。32BGRA が `availableVideoPixelFormatTypes` に含まれるかは実機で確かめる"
     },
     "android": {
       "status": "possible",
-      "api": "CameraX（`Preview` / `ImageAnalysis`）、`CameraControl.setZoomRatio`",
-      "perm": "`CAMERA`",
-      "url": "https://developer.android.com/media/camera/camerax",
-      "note": "未実装。CameraX は AndroidX 依存の追加が要る。Camera2 でも可能。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "Camera2（`CameraManager.openCamera` + `CameraDevice.StateCallback`、`createCaptureSession`（API 28 以上は `SessionConfiguration`）、`ImageReader`（`YUV_420_888`、`acquireLatestImage`））。ズームは API 30 以上で `CaptureRequest.CONTROL_ZOOM_RATIO`（範囲は `CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE`、適用値は `CaptureResult` から読む）",
+      "perm": "`CAMERA`（宣言済み、実行時の許可）。uses-permission・Gradle 依存は足さない",
+      "url": [
+        "https://developer.android.com/reference/android/hardware/camera2/CameraManager",
+        "https://developer.android.com/reference/android/hardware/camera2/CameraDevice.StateCallback",
+        "https://developer.android.com/reference/android/media/ImageReader",
+        "https://developer.android.com/reference/android/hardware/camera2/CaptureRequest#CONTROL_ZOOM_RATIO",
+        "https://developer.android.com/reference/android/hardware/camera2/CameraCharacteristics#CONTROL_ZOOM_RATIO_RANGE",
+        "https://developer.android.com/jetpack/androidx/releases/camera"
+      ],
+      "note": "未実装。CameraX は `androidx.camera:*` の Gradle 依存の追加が要るため使わず、OS 同梱の Camera2 を使う（flashlight が `CameraManager` を使用済み）。`acquireLatestImage` は最新以外を捨てる（公式）。API 30 以上はズームに `CONTROL_ZOOM_RATIO` が強く推奨され、範囲は 1.0 未満を含みうる（公式）。API 29 以下のズームは範囲外とし「この端末では使えない」と出す。`openCamera` は `CAMERA` の許可が無いと `SecurityException`（公式）"
     },
     "macos": {
       "status": "possible",
-      "api": "AVFoundation `AVCaptureSession` + `AVCaptureVideoDataOutput`",
-      "perm": "カメラ利用目的の記述、sandbox 時は Camera Entitlement",
-      "url": "https://developer.apple.com/documentation/avfoundation/avcapturesession",
-      "note": "未実装。iOS と同じ API。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "AVFoundation `AVCaptureSession` + `AVCaptureVideoDataOutput`（iOS と同じ）。`videoZoomFactor` / `videoMaxZoomFactor` は公式の対応 OS に macOS が無い（Mac Catalyst のみ）",
+      "perm": "`NSCameraUsageDescription`（未宣言。埋め込み Info.plist に新しく足す必要がある）、Hardened Runtime / Sandbox 時は `com.apple.security.device.camera`",
+      "url": [
+        "https://developer.apple.com/documentation/avfoundation/avcapturevideodataoutput",
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/nscamerausagedescription",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.device.camera",
+        "https://developer.apple.com/documentation/avfoundation/avcapturedevice/videozoomfactor"
+      ],
+      "deferred": "カメラの利用目的（`NSCameraUsageDescription`）が macOS の埋め込み Info.plist に無く、新しい権限の宣言になる（camera-capture の macOS はダミー実装で実カメラを使っていない）。ズームも公式の対応 OS に macOS が無い。カメラの宣言を足す方針が決まったら、iOS と同じ `.m` を共有して見直す",
+      "note": "未実装。`NSCameraUsageDescription` が無いと許可の要求かセッション開始で例外になる（公式）。中断の通知は macOS 10.14 以上にあるが、中断の理由の列挙は macOS が公式の対応 OS に無い"
     },
     "windows": {
       "status": "possible",
-      "api": "WinRT `MediaCapture` + `MediaFrameReader`、`VideoDeviceController`（ズーム等）",
-      "perm": "`webcam` 機能の宣言（パッケージ時）。unpackaged は要確認",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.frames.mediaframereader",
-      "note": "未実装。camera-capture の Windows と同じ `MediaCapture`。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "WinRT `MediaCapture`（`MemoryPreference::Cpu`、`SharingMode`）+ `MediaFrameReader`（`AcquisitionMode` = Realtime、`FrameArrived` 内で `TryAcquireLatestFrame`）、`VideoMediaFrame.SoftwareBitmap`。ズームは `VideoDeviceController.ZoomControl`",
+      "perm": "unpackaged の実行では宣言不要の見込み（設定の「デスクトップ アプリにカメラへのアクセスを許可する」に従う）。パッケージ時は `webcam` capability",
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacapture",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.frames.mediaframereader",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.frames.mediaframereader.tryacquirelatestframe",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacaptureinitializationsettings.memorypreference",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.devices.zoomcontrol"
+      ],
+      "deferred": "`windows` クレートに feature（`Media_Capture_Frames`・`Media_Devices`）を足す必要がある。加えて `MediaCapture.InitializeAsync` は初回を STA の UI スレッドで呼ぶよう公式に書かれており、既存の WinRT 呼び出し（作業スレッドから MTA で呼ぶ方式）と合わない。UI スレッドで初期化する設計の変更が要るため保留。カメラの利用（mic-record と同じ作業スレッド方式で動くか）を確かめてから見直す",
+      "note": "未実装。`MemoryPreference` が Cpu でないと `SoftwareBitmap` が null になりうる（公式）。`TryAcquireLatestFrame` で得た `SoftwareBitmap` を Dispose しないと、上限を超えたところでフレームの供給が止まる（公式）。Realtime はハンドラの実行中に届いたフレームを捨てる（公式、1709 以上）。PC の Web カメラはズームに対応しないものが多い見込み（未確認）"
     },
     "web": {
       "status": "possible",
-      "api": "`MediaDevices.getUserMedia` + `<video>` / `MediaStreamTrack.applyConstraints`（`zoom` は対応ブラウザのみ）",
-      "perm": "カメラ許可、secure context 必須",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia",
-      "safari": "getUserMedia は対応、ズーム制約は未対応の見込み（要確認）",
-      "note": "未実装。ズームは Chromium 系のみの見込み（要確認）。"
+      "api": "`MediaDevices.getUserMedia({ video })` + 非表示の `<video>`、`HTMLVideoElement.requestVideoFrameCallback` で新しいフレームごとに `<canvas>` の `drawImage` → `getImageData`（RGBA）",
+      "perm": "カメラの許可（camera-capture の Web と同じ）、secure context 必須。ズーム（`zoom` 制約）は `camera` の許可を `panTiltZoom: true` 付きで得る必要がある",
+      "url": [
+        "https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia",
+        "https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback",
+        "https://caniuse.com/mdn-api_htmlvideoelement_requestvideoframecallback",
+        "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getImageData",
+        "https://developer.mozilla.org/en-US/docs/Web/API/MediaStreamTrack/ended_event",
+        "https://w3c.github.io/mediacapture-image/#zoom"
+      ],
+      "safari": "getUserMedia・requestVideoFrameCallback（15.4 以上）は対応。ズームは範囲外",
+      "note": "未実装。`requestVideoFrameCallback` は Chrome / Edge 83 以上、Firefox 132 以上、Safari 15.4 以上（caniuse）。`ended` は権限の取り消し・デバイスの取り外しで発火し、`track.stop()` では発火しない（MDN）。ズームは PTZ の許可（`panTiltZoom`）を新しく求めることになるため今回の範囲外とし、画面に「この環境では使えない」と出す。背景タブで `requestVideoFrameCallback` がいつ止まるかは公式の記載が無い"
     }
   },
-  "note": "camera-capture は静止画 1 枚を撮る一発の機能で、本機能は映像を流し続けて毎フレームを受け取り、ズーム等も操作する。video-capture（動画ファイルの撮影）とも別。"
+  "note": "camera-capture は静止画 1 枚を撮る一発の機能で、本機能は映像を流し続けて毎フレームを受け取り、ズームも操作する。video-capture（動画ファイルの撮影）とも別。今回の範囲: 「映像を始める」「止める」で背面カメラ（無ければ既定のカメラ）のライブ映像を受け取り、届いたフレームのうち最新の 1 枚を長辺 320 ピクセル以下へ縮めて画面に出す。受け取ったフレーム数と元の寸法を出す。ズームは「1 倍」「2 倍」の 2 段（2 倍は OS が返す上限を超えない）で、表示するズーム値は OS から読んだ値。OS がズームを返さない環境は「この環境では使えない」と出す。結果は 映像中 / 中断中（OS が知らせた中断。OS が再開すれば映像中へ戻る）/ 停止（利用者の操作・画面を離れた・背景へ移った、正常）/ 開始失敗（権限拒否・カメラなし・使用中）/ 実行中の失敗 / 非対応。OS を正にする: 開始・停止・中断・失敗は OS の完了通知・コールバックで確定し、タイマーで推測しない（期限を張らず、開始待ちは「止める」で取り消せる）。フレームは OS の到着で受け、最新 1 枚だけを残す（古いものは捨てる）。ズーム値・セッションの状態をアプリ内に別に覚えず、OS から読んだ値を出す。停止・画面を離れる・背景へ移る・開始の途中の失敗・実行中の失敗の全経路でセッションとカメラを解放し、解放後に遅れて届いたフレームは捨てる。守らない範囲: 画面に出すフレームの間隔（端末・負荷によって変わる。全フレームは出さない）、フレームの時刻、前面・背面の切り替え、露出・焦点・ライト、複数のカメラ・複数画面での同時利用、他アプリとの取り合いで OS が止めた後の自動の再開（iOS の中断の終了を除く）、映像の向き（端末の向きが変わったときの追従）。"
 }
