@@ -131,6 +131,8 @@ pub mod volume_control_show;
 pub mod accessibility_prefs_show;
 /// Phase 11 の拡充ループ型サンプル「音声デバイス」（親 #1136、Issue #1330）。
 pub mod audio_devices_show;
+/// Phase 11 の拡充ループ型サンプル「音声の割り込み・セッション種別」（親 #172、Issue #840）。
+pub mod audio_session_show;
 /// Phase 11 の拡充ループ型サンプル「音声の再生」（親 #86、Issue #267）。
 pub mod audio_play;
 /// Phase 11 の拡充ループ型サンプル「バーコード・QR 読み取り」（親 #116、Issue #557）。
