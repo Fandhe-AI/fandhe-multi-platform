@@ -329,6 +329,9 @@
 //! - `ios/fandhe_ios_audio_devices.m`（Issue #1331、`AVAudioSession` の読み取りによる音声デバイス一覧）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_audio_devices.rs`
 //!   から呼ばれる契約）。AVFoundation は既存のリンクで足りる。
+//! - `ios/fandhe_ios_audio_session.m`（Issue #841、`AVAudioSession` による音声の割り込み・セッション種別）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_audio_session.rs`
+//!   から呼ばれる契約）。AVFoundation は既存のリンクで足りる。
 //! - `ios/fandhe_ios_local_fonts.m`（Issue #1377、UIKit `UIFont.familyNames` によるフォントのファミリー名）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_local_fonts.rs`
 //!   から呼ばれる契約）。UIKit は既存のリンクで足りる。
@@ -635,6 +638,8 @@ fn main() {
     compile_ios_safe_area_insets();
     // `ios/fandhe_ios_audio_devices.m`（Issue #1331）。iOS 分岐のみ。
     compile_ios_audio_devices();
+    // `ios/fandhe_ios_audio_session.m`（Issue #841）。iOS 分岐のみ。
+    compile_ios_audio_session();
     // `ios/fandhe_ios_local_fonts.m`（Issue #1377）。iOS 分岐のみ。
     compile_ios_local_fonts();
     // `ios/fandhe_ios_music_library.m`（Issue #484）。iOS 分岐のみ。
@@ -2009,6 +2014,16 @@ fn compile_ios_audio_devices() {
         .file("ios/fandhe_ios_audio_devices.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_audio_devices");
+}
+
+/// `ios/fandhe_ios_audio_session.m` を `cc` でコンパイルする（Issue #841）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_audio_session.rs` が使う）。AVFoundation はリンク済み。
+fn compile_ios_audio_session() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_audio_session.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_audio_session.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_audio_session");
 }
 
 /// `ios/fandhe_ios_volume_control.m` を `cc` でコンパイルする（Issue #786）。**iOS 分岐のみ**
