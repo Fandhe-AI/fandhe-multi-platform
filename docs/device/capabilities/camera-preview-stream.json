@@ -7,9 +7,9 @@
   "bundle": "continuous-push",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "AVFoundation `AVCaptureSession`（`sessionPreset` = `vga640x480`）+ `AVCaptureVideoDataOutput`（`setSampleBufferDelegate:queue:` に serial queue、`kCVPixelBufferPixelFormatTypeKey` = 32BGRA）、`CMSampleBufferGetImageBuffer` + `CVPixelBufferLockBaseAddress`。ズームは `AVCaptureDevice.videoZoomFactor`（`lockForConfiguration` 必須、範囲は `minAvailableVideoZoomFactor`〜`maxAvailableVideoZoomFactor`）。中断は `AVCaptureSessionWasInterruptedNotification` / `InterruptionEndedNotification`、実行時の失敗は `AVCaptureSessionRuntimeErrorNotification`",
-      "perm": "`NSCameraUsageDescription`（宣言済み。文言に本機能の画面名を足す）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）",
+      "perm": "`NSCameraUsageDescription`（宣言済み。文言に本機能の画面名を含む）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）",
       "url": [
         "https://developer.apple.com/documentation/avfoundation/avcapturesession",
         "https://developer.apple.com/documentation/avfoundation/avcapturevideodataoutput/setsamplebufferdelegate(_:queue:)",
@@ -18,7 +18,10 @@
         "https://developer.apple.com/documentation/avfoundation/avcapturesession/wasinterruptednotification",
         "https://developer.apple.com/documentation/avfoundation/avcapturedevice/requestaccess(for:completionhandler:)"
       ],
-      "note": "未実装。delegate の queue は serial 必須で、処理中に届いたフレームは `alwaysDiscardsLateVideoFrames`（既定 true）で捨てられる（公式）。`startRunning` / `stopRunning` は同期で、開始か失敗まで・停止しきるまでブロックする（公式）。`videoZoomFactor` は `lockForConfiguration` 無しで設定すると例外、範囲外も例外（公式）。中断の理由に背景遷移・他アプリの使用・iPad のマルチタスクがある（公式）。BGRA は非ネイティブで変換が入る（公式）。32BGRA が `availableVideoPixelFormatTypes` に含まれるかは実機で確かめる"
+      "note": "実装済み（#813）: 許可は常に `requestAccessForMediaType` で OS に問い、応答の後に取り消しを再確認してから構成する。開始・中断・実行時エラー・背景遷移は OS の通知で確定し、タイマーで推測しない。背景は許可待ちでも解放して停止（背景）にし、`WillResignActive` は許可ダイアログで Inactive になるため使わない。ズーム範囲の検証は Rust の `zoom_target` 1 か所。シミュレータはカメラが無く開始失敗（カメラなし）になる。天井: 32BGRA が `availableVideoPixelFormatTypes` に含まれるか・preset 640x480 が通るか・中断の理由が届く順は実機未確認で、#808 で確かめ、問題があれば `done` を取り下げる。delegate の queue は serial 必須で、処理中に届いたフレームは `alwaysDiscardsLateVideoFrames` で捨てられる（公式）。`startRunning` / `stopRunning` は同期でブロックする（公式）",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#808）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_camera_preview_stream.m + crates/fandhe-egui-proxy/src/device/ios_camera_preview_stream.rs、Issue #813"
     },
     "android": {
       "status": "done",

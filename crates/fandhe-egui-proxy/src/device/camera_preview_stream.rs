@@ -93,14 +93,14 @@ pub(crate) fn unregister(id: u64) {
     lock(&SINKS).remove(&id);
 }
 
-#[allow(dead_code)] // deliver_* 経由で #813・#814 が使い始めるまで未使用。
+#[allow(dead_code)] // deliver_* 経由で iOS（#813）が使う。Android 実装（#814）が来るまで他 OS では未使用。
 fn lookup(id: u64) -> Option<Arc<dyn PreviewSink>> {
     lock(&SINKS).get(&id).cloned()
 }
 
 /// フレームを届ける。ロックの内側では sink を呼ばず、登録表に無い `id`（停止後の遅れた呼び出し）は捨てる。
 /// iOS・Android の OS 実装（#813・#814）の受け口から呼ばれる。
-#[allow(dead_code)] // #813・#814 が使い始めるまで未使用。
+#[allow(dead_code)] // iOS（#813）が使う。Android 実装（#814）が来るまで他 OS では未使用。
 pub(crate) fn deliver_frame(id: u64, frame: PreviewFrame) {
     if let Some(sink) = lookup(id) {
         sink.frame(frame);
@@ -108,7 +108,7 @@ pub(crate) fn deliver_frame(id: u64, frame: PreviewFrame) {
 }
 
 /// 通知を届ける。扱いは [`deliver_frame`] と同じ。
-#[allow(dead_code)] // #813・#814 が使い始めるまで未使用。
+#[allow(dead_code)] // iOS（#813）が使う。Android 実装（#814）が来るまで他 OS では未使用。
 pub(crate) fn deliver_event(id: u64, event: PreviewEvent) {
     if let Some(sink) = lookup(id) {
         sink.event(event);

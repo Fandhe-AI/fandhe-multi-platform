@@ -347,6 +347,9 @@
 //! - `ios/fandhe_ios_uwb_ranging.m`（Issue #654、NearbyInteraction の `NISession` と MultipeerConnectivity による
 //!   UWB 測距）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_uwb_ranging.rs`
 //!   から呼ばれる契約）。NearbyInteraction をリンクする。MultipeerConnectivity は local_peer 用にリンク済み。
+//! - `ios/fandhe_ios_camera_preview_stream.m`（Issue #813、`AVCaptureSession` + `AVCaptureVideoDataOutput` による
+//!   カメラのライブ映像・フレーム取得）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/ios_camera_preview_stream.rs` から呼ばれる契約）。AVFoundation・CoreMedia・CoreVideo を明示リンクする。
 //! - `ios/fandhe_ios_flashlight.m`（Issue #460、AVFoundation の torch によるライト）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_flashlight.rs`
 //!   から呼ばれる契約）。AVFoundation はカメラ用にリンク済みで追加リンクは無い。
@@ -646,6 +649,8 @@ fn main() {
     compile_ios_activity_recognition();
     // `ios/fandhe_ios_uwb_ranging.m`（Issue #654）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_uwb_ranging();
+    // `ios/fandhe_ios_camera_preview_stream.m`（Issue #813）。iOS 分岐のみ（macOS は対応表で保留）。
+    compile_ios_camera_preview_stream();
     // `ios/fandhe_ios_flashlight.m`（Issue #460）。iOS 分岐のみ（macOS は対応表で n-a）。
     compile_ios_flashlight();
     // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
@@ -2071,6 +2076,21 @@ fn compile_ios_uwb_ranging() {
         .compile("fandhe_ios_uwb_ranging");
 
     println!("cargo:rustc-link-lib=framework=NearbyInteraction");
+}
+
+/// `ios/fandhe_ios_camera_preview_stream.m` を `cc` でコンパイルする（Issue #813）。**iOS 分岐のみ**から
+/// 呼ばれる（`src/device/ios_camera_preview_stream.rs` が使う）。AVFoundation は camera 用にリンク済みだが、
+/// 本機能が使う CoreMedia・CoreVideo と合わせて明示する。
+fn compile_ios_camera_preview_stream() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_camera_preview_stream.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_camera_preview_stream.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_camera_preview_stream");
+
+    println!("cargo:rustc-link-lib=framework=AVFoundation");
+    println!("cargo:rustc-link-lib=framework=CoreMedia");
+    println!("cargo:rustc-link-lib=framework=CoreVideo");
 }
 
 /// `ios/fandhe_ios_flashlight.m` を `cc` でコンパイルする（Issue #460）。**iOS 分岐のみ**から
