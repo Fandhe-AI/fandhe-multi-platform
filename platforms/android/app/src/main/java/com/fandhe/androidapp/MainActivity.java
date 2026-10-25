@@ -673,6 +673,14 @@ public class MainActivity extends GameActivity {
                 attName);
     }
 
+    // OS の設定画面を開く（Issue #800）。実装は `SystemSettingsHelper`。
+    // Rust の `android_open_system_settings.rs` が JNI で呼ぶ。
+    private final SystemSettingsHelper systemSettingsHelper = new SystemSettingsHelper(this);
+
+    void requestOpenSystemSettings(long requestId, int page) {
+        systemSettingsHelper.open(requestId, page);
+    }
+
     // OAuth 用 Web 認証セッション（Issue #534）。実装は `WebAuthSessionHelper`。
     // Rust の `android_web_auth_session.rs` が JNI で呼ぶ。
     private final WebAuthSessionHelper webAuthSessionHelper = new WebAuthSessionHelper(this);
