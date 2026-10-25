@@ -91,6 +91,9 @@
 //! - `ios/fandhe_ios_document_scan.m`（Issue #748、VisionKit `VNDocumentCameraViewController` による書類スキャン）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルし VisionKit をリンクする
 //!   （`src/device/ios_document_scan.rs` から呼ばれる契約）。
+//! - `ios/fandhe_ios_video_capture.m`（Issue #822、`UIImagePickerController` による動画の撮影）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルし CoreMedia をリンクする
+//!   （`src/device/ios_video_capture.rs` から呼ばれる契約）。
 //! - `apple/fandhe_apple_on_device_llm.swift`（Issue #345、FoundationModels による端末内 LLM）は
 //!   **macOS・iOS 両分岐**（iOS は Issue #346）で feature `device` 有効時に swiftc で静的ライブラリ化し、
 //!   FoundationModels を弱リンクする（`src/device/apple_on_device_llm.rs` から呼ばれる契約）。
@@ -663,6 +666,8 @@ fn main() {
     compile_ios_in_app_browser();
     // `ios/fandhe_ios_document_scan.m`（Issue #748）。iOS 分岐のみ。VisionKit をリンクする。
     compile_ios_document_scan();
+    // `ios/fandhe_ios_video_capture.m`（Issue #822）。iOS 分岐のみ。CoreMedia をリンクする。
+    compile_ios_video_capture();
     // `ios/fandhe_ios_in_app_review.m`（Issue #564）。iOS 分岐のみ。StoreKit をリンクする。
     compile_ios_in_app_review();
     // `ios/fandhe_ios_capture_protection.m`（Issue #583）。iOS 分岐のみ（macOS は対応表で no）。
@@ -1922,6 +1927,19 @@ fn compile_ios_document_scan() {
         .flag("-fobjc-arc")
         .compile("fandhe_ios_document_scan");
     println!("cargo:rustc-link-lib=framework=VisionKit");
+}
+
+/// `ios/fandhe_ios_video_capture.m` を `cc` でコンパイルし CoreMedia をリンクする（Issue #822）。
+/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_video_capture.rs` が使う）。AVFoundation・UIKit は既存のリンクで足りる。
+fn compile_ios_video_capture() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_video_capture.m");
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_common.h");
+    cc::Build::new()
+        .file("ios/fandhe_ios_video_capture.m")
+        .include("ios")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_video_capture");
+    println!("cargo:rustc-link-lib=framework=CoreMedia");
 }
 
 /// `ios/fandhe_ios_open_system_settings.m` を `cc` でコンパイルする（Issue #799）。**iOS 分岐のみ**から

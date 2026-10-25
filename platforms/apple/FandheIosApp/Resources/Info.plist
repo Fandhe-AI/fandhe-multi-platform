@@ -47,11 +47,13 @@
   へコピーして渡し、受信側（`crates/fandhe-egui-proxy/apple/fandhe_apple_file_association.m`）が
   読んだ後にそのコピーを消す。`UIFileSharingEnabled` は足さない（Documents を Files に公開しない）。
 
-  NSCameraUsageDescription（Phase 8 / Issue #751、AR 表示は Issue #308、書類スキャンは Issue #748）:
+  NSCameraUsageDescription（Phase 8 / Issue #751、AR 表示は Issue #308、書類スキャンは Issue #748、動画の撮影は Issue #822）:
   型サンプル「カメラ撮影」画面（`FANDHE_PROXY_APP=camera_capture`）と「AR 表示」画面
   （`FANDHE_PROXY_APP=ar_show`、`crates/fandhe-egui-proxy/ios/fandhe_ios_ar.m`）と「書類スキャン」画面
   （`FANDHE_PROXY_APP=document_scan_show`、
-  `crates/fandhe-egui-proxy/ios/fandhe_ios_document_scan.m`）が `UIImagePickerController`
+  `crates/fandhe-egui-proxy/ios/fandhe_ios_document_scan.m`）と「動画の撮影」画面
+  （`FANDHE_PROXY_APP=video_capture_show`、
+  `crates/fandhe-egui-proxy/ios/fandhe_ios_video_capture.m`）が `UIImagePickerController`
   （`crates/fandhe-egui-proxy/ios/fandhe_ios_camera.m`）でカメラを起動するために
   必須（未設定だと初回起動時に即クラッシュする）。Phase 8 が spec 要件化されず
   切り離す場合は本キーも削除する（docs/architecture/device-feature-removal.md）。
@@ -72,7 +74,8 @@
   （`FANDHE_PROXY_APP=mic_record`）が `AVAudioRecorder`
   （`crates/fandhe-egui-proxy/apple/fandhe_apple_mic_record.m` は iOS/macOS 共用）を
   起動するために必須。未設定だと権限要求時にクラッシュする。型サンプル「音声認識」
-  画面（`FANDHE_PROXY_APP=speech_recognize`）も同じキーを併用する（下記
+  画面（`FANDHE_PROXY_APP=speech_recognize`）と「動画の撮影」画面
+  （`FANDHE_PROXY_APP=video_capture_show`、撮影 UI が音声を録る）も同じキーを併用する（下記
   NSSpeechRecognitionUsageDescription 参照）。
 
   NSSpeechRecognitionUsageDescription（Issue #1025）: 型サンプル「音声認識」画面
@@ -256,13 +259,13 @@
 	<key>MinimumOSVersion</key>
 	<string>17.0</string>
 	<key>NSCameraUsageDescription</key>
-	<string>型サンプル「カメラ撮影」「AR 表示」「書類スキャン」の動作確認に使います</string>
+	<string>型サンプル「カメラ撮影」「AR 表示」「書類スキャン」「動画の撮影」の動作確認に使います</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>型サンプル「位置情報」の動作確認に使います</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>型サンプル「生体認証」の動作確認に使います</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>型サンプル「マイク録音」「音声認識」の動作確認に使います</string>
+	<string>型サンプル「マイク録音」「音声認識」「動画の撮影」の動作確認に使います</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>型サンプル「音声認識」の動作確認に使います</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>

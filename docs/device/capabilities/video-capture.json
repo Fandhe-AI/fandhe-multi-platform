@@ -7,7 +7,7 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "UIKit `UIImagePickerController`（`sourceType = .camera`、`mediaTypes = [public.movie]`、`videoMaximumDuration`）。撮れた動画は `InfoKey.mediaURL` のファイルを AVFoundation `AVURLAsset`（`loadValuesAsynchronouslyForKeys:` の `duration`、`loadTracksWithMediaType:completionHandler:` の映像トラックの `naturalSize` / `preferredTransform`）で読む",
       "perm": "`NSCameraUsageDescription` と `NSMicrophoneUsageDescription`（どちらも宣言済み。文言に本機能の画面名を足す）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）",
       "url": [
@@ -19,7 +19,10 @@
         "https://developer.apple.com/documentation/avfoundation/avasset/loadtracks(withmediatype:completionhandler:)",
         "https://developer.apple.com/documentation/bundleresources/information-property-list/nsmicrophoneusagedescription"
       ],
-      "note": "未実装。camera-capture の iOS と同じ撮影 UI を `mediaTypes` を動画に変えて出す。`videoMaximumDuration` の既定は 600 秒で、動画を含むときだけ効く（公式）。`mediaURL` の一時ファイルの置き場所・寿命・削除の責任は公式に書かれていないため、長さ・寸法・サイズを読んだら成功・失敗とも消す。`AVAsset.duration` と `naturalSize` / `preferredTransform` の同期の読み取りは iOS 16 で非推奨で、読み込み API（iOS 15 以上）を使う（公式）。撮影 UI で動画を撮るときにマイクの利用目的の記述が要るとの公式の明記は見当たらないが、宣言済みのため問題にならない。録画中に背景へ移ったときの挙動は公式に記載が無い"
+      "note": "実装済み（#822）。提示前にカメラ・動画モードの有無（シミュレータなど非対応の機器は非対応として返す）・前面・カメラ権限を確かめ、上限 30 秒を `videoMaximumDuration` に渡す。撮影 UI を閉じたのを観測してから 1 回だけ結果を返す。長さ・寸法・回転は `AVURLAsset` の読み込み API（`duration`、映像トラックの `naturalSize` / `preferredTransform`）、サイズはファイルから読み、長さだけ読めなければ長さなしで返す。`mediaURL` の一時ファイルは成功・取り消し・失敗の全経路で消す。期限・タイマーは持たず、完了は OS の delegate 通知だけで決める。守らない範囲: 提示の completion が届かない場合、録画中の背景遷移の扱い（OS 任せ）。実機確認は #819",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#819）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_video_capture.m + crates/fandhe-egui-proxy/src/device/ios_video_capture.rs、Issue #822"
     },
     "android": {
       "status": "possible",
