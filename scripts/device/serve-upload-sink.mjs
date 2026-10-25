@@ -24,7 +24,9 @@ const UPLOAD_PATH = "/upload";
 /** ループバック、または RFC 1918 の私設 IPv4 リテラルか。 */
 export function isAllowedHost(host) {
   if (host === "127.0.0.1" || host === "::1" || host === "localhost") return true;
-  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  // 先頭ゼロは OS が八進と解釈し別アドレスになるため拒否する（"0" 単体は可）
+  const d = "(0|[1-9]\\d{0,2})";
+  const m = new RegExp(`^${d}\\.${d}\\.${d}\\.${d}$`).exec(host);
   if (!m) return false;
   const o = m.slice(1).map(Number);
   if (o.some((n) => n > 255)) return false;
