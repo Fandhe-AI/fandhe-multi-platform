@@ -340,7 +340,7 @@ final class CameraPreviewHelper {
         openOnCameraThread(id, h, false);
     }
 
-    // skipDefer: close 待ちの期限切れで進める場合 true（再度保留しない。追跡は外さない）。
+    // skipDefer: close 待ちの期限切れで進める場合 true（再度保留しない。期限切れ側で追跡は外し済み）。
     private void openOnCameraThread(long id, Handler h, boolean skipDefer) {
         final Session s;
         if (!skipDefer && deferUntilClosed(id, h)) {
@@ -442,10 +442,16 @@ final class CameraPreviewHelper {
                 if (deferredOpen == holder[0]) {
                     deferredOpen = null;
                     r = holder[0];
+                    // 期限切れ時点の未着セッションは追跡から外す。残すと以降の open が毎回期限全長を待つ。
+                    // 遅れて届く旧 onClosed は deviceOutstanding が false なので何もしない（冪等）。
+                    for (Session old : outstandingSessions) {
+                        old.deviceOutstanding = false;
+                    }
+                    outstandingSessions.clear();
                 }
             }
             if (r != null) {
-                // 追跡は外さない（旧 onClosed は対応セッションでのみ解除する）。open は OS の結果に任せる。
+                // open は OS の結果に任せる。
                 openOnCameraThread(id, h, true);
             }
         }, DEFER_TIMEOUT_MS);
