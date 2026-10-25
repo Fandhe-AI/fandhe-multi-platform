@@ -285,6 +285,14 @@ static void configure_and_start(FandheCamPreviewCtx *ctx) {
         [session addInput:input];
 
         AVCaptureVideoDataOutput *output = [[AVCaptureVideoDataOutput alloc] init];
+        if (![session canAddOutput:output]) {
+            [session commitConfiguration];
+            send_terminal(ctx, kEvStartFailed, kDetailOther);
+            return;
+        }
+        [session addOutput:output];
+        // 対応する画素形式の一覧は接続先のデバイスに依存し、セッションへ繋ぐ前は空になる。
+        // 接続した後の OS の一覧で BGRA を確かめる。
         BOOL bgraOk = NO;
         for (NSNumber *fmt in output.availableVideoCVPixelFormatTypes) {
             if (fmt.unsignedIntValue == kCVPixelFormatType_32BGRA) {
@@ -292,7 +300,7 @@ static void configure_and_start(FandheCamPreviewCtx *ctx) {
                 break;
             }
         }
-        if (!bgraOk || ![session canAddOutput:output]) {
+        if (!bgraOk) {
             [session commitConfiguration];
             send_terminal(ctx, kEvStartFailed, kDetailOther);
             return;
@@ -303,7 +311,6 @@ static void configure_and_start(FandheCamPreviewCtx *ctx) {
         delegate.cid = ctx.cid;
         delegate.device = device;
         [output setSampleBufferDelegate:delegate queue:videoQueue()];
-        [session addOutput:output];
         [session commitConfiguration];
         ctx.output = output;
         ctx.delegate = delegate;
