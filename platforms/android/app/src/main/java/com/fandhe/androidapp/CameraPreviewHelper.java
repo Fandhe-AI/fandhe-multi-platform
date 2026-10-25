@@ -42,7 +42,8 @@ import java.util.Collections;
 // CameraX は Gradle 依存の追加が要るため使わない。
 //
 // スレッド: 許可・開始・ライフサイクルは UI スレッド、open・フレーム受信・ズーム適用・解放は
-// ヘルパー専用の 1 本のカメラスレッドに直列化する（前の解放が次の open より先に終わる）。
+// プロセスで 1 本のカメラスレッド（`CameraThread`、Activity 再生成をまたいで終了しない）に直列化する
+// （前の解放が次の open より先に終わる。途中の open の onOpened も必ず受けて閉じる）。
 // 状態は `lock` で守り、native 通知は必ず `lock` の外で行う（Rust 側のロックとの取り合いを避ける）。
 //
 // 数値コード: `nativeOnCameraPreviewEvent` の code / detail の SSOT は Rust の
@@ -119,10 +120,8 @@ final class CameraPreviewHelper {
     private final ComponentActivity activity;
     private final RequestTracker request = new RequestTracker();
     private final Object lock = new Object();
-    // 以下 3 つは lock の内側。
+    // 以下 2 つは lock の内側。
     private Session session;
-    private HandlerThread thread;
-    private Handler handler;
     private boolean destroyedHelper;
     // 取り消し済みの最大 id（lock の内側）。stop が start より先に走っても古い要求を開始しない。
     private long cancelledId = RequestTracker.NONE;
@@ -226,18 +225,12 @@ final class CameraPreviewHelper {
         finishRequest(EV_STOPPED_BACKGROUND, 0);
     }
 
+    // カメラスレッドは止めない。openCamera の途中で止めると OS の onOpened が届かず、
+    // 開いた CameraDevice を閉じる経路が無くなる（スレッドはプロセスで 1 本、CameraThread）。
     void onDestroy() {
         finishRequest(EV_STOPPED_LEFT, 0);
-        final HandlerThread t;
         synchronized (lock) {
             destroyedHelper = true;
-            t = thread;
-            thread = null;
-            handler = null;
-        }
-        if (t != null) {
-            // 先に post した解放は quitSafely が処理してから終わる。
-            t.quitSafely();
         }
     }
 
@@ -323,12 +316,7 @@ final class CameraPreviewHelper {
             if (destroyedHelper) {
                 return null;
             }
-            if (handler == null) {
-                thread = new HandlerThread("fandhe-camera-preview");
-                thread.start();
-                handler = new Handler(thread.getLooper());
-            }
-            return handler;
+            return CameraThread.HANDLER;
         }
     }
 
@@ -474,7 +462,7 @@ final class CameraPreviewHelper {
                 device.close();
                 return;
             }
-            createSession(device);
+            createSession(s, device);
         }
 
         @Override
@@ -503,12 +491,10 @@ final class CameraPreviewHelper {
         }
     }
 
-    private void createSession(CameraDevice device) {
-        final Session s;
+    private void createSession(Session s, CameraDevice device) {
         final Surface surface;
         synchronized (lock) {
-            s = session;
-            if (s == null || s.closed || s.reader == null) {
+            if (s.closed || s.reader == null) {
                 return;
             }
             surface = s.reader.getSurface();
@@ -701,7 +687,7 @@ final class CameraPreviewHelper {
     }
 
     // 解放をカメラスレッドへ直列化する（capture session → device → reader の順）。
-    // スレッドが既に終わっていれば、競合する相手がいないのでその場で行う。
+    // スレッドは終わらないので、post の失敗は想定しないがその場で行う。
     private void release(Session s) {
         Runnable r = () -> {
             final CameraCaptureSession cs;
@@ -741,5 +727,19 @@ final class CameraPreviewHelper {
         if (!s.handler.post(r)) {
             r.run();
         }
+    }
+
+    // プロセスで 1 本のカメラスレッド。Activity の再生成をまたいで生き、OS のカメラ
+    // コールバック（onOpened 等）を必ず受け取れるようにする。初回利用時に起動し、終了しない。
+    private static final class CameraThread {
+        static final Handler HANDLER;
+
+        static {
+            HandlerThread t = new HandlerThread("fandhe-camera-preview");
+            t.start();
+            HANDLER = new Handler(t.getLooper());
+        }
+
+        private CameraThread() {}
     }
 }
