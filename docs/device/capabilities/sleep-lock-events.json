@@ -32,7 +32,7 @@
       "note": "未実装。`ACTION_SCREEN_OFF` / `ON` はマニフェストに宣言した受信側では受け取れず（javadoc）、3 つともシステムだけが送る保護されたブロードキャスト。システムのブロードキャストだけを受けるレシーバーは、Android 14 以上でも `RECEIVER_EXPORTED` / `NOT_EXPORTED` を指定しない（公式）。Android 14 以上では、アプリがキャッシュ状態の間に届いたブロードキャストは列に溜められ、前面へ戻った時にまとめて届き、同種のものは 1 件に畳まれることがある（公式）。ロックした瞬間を知らせるブロードキャストは無い（`ACTION_USER_PRESENT` は解除のみ）。`isInteractive`・`isKeyguardLocked` の API レベルは公式ページで未確認（minSdk 24 で使える見込み）"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "`NSWorkspace.shared.notificationCenter` の `willSleepNotification` / `didWakeNotification`（システムのスリープ・復帰）と `screensDidSleepNotification` / `screensDidWakeNotification`（画面のスリープ・復帰、macOS 10.6+）。画面ロックを知らせる公開 API は無い",
       "perm": "不要",
       "url": [
@@ -41,10 +41,13 @@
         "https://developer.apple.com/documentation/appkit/nsworkspace/screensdidsleepnotification",
         "https://developer.apple.com/documentation/appkit/nsworkspace/screensdidwakenotification"
       ],
-      "note": "未実装。4 つの通知は `NSWorkspace` の通知センターに登録しないと届かない（公式の注記）。`willSleepNotification` の処理中はスリープを最大 30 秒遅らせうる（公式）ため、受け取ったら記録して即座に戻る。画面ロックは公式文書に無い分散通知名（`com.apple.screenIsLocked` 等）か `CGSessionCopyCurrentDictionary` の文書化されていないキーに頼るしかなく、使わない（画面には「この OS では取れない」と出す）"
+      "note": "実装済み（#810）。スリープ・復帰・画面の消灯・点灯の 4 種を受け、ロックと今の状態の読み取りは「この OS では取れない」と出す。停止は observer の解除で、解除後に届いた通知は捨てる。4 つの通知は `NSWorkspace` の通知センターに登録しないと届かない（公式の注記）。`willSleepNotification` の処理中はスリープを最大 30 秒遅らせうる（公式）ため、受け取ったら記録して即座に戻る。画面ロックは公式文書に無い分散通知名（`com.apple.screenIsLocked` 等）か `CGSessionCopyCurrentDictionary` の文書化されていないキーに頼るしかなく、使わない（画面には「この OS では取れない」と出す）",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#806）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_sleep_lock_events.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_sleep_lock_events.m + crates/fandhe-egui-proxy/src/device/sleep_lock_events.rs + crates/fandhe-core/src/screens/sleep_lock_events_show.rs + crates/fandhe-device/src/sleep_lock_events.rs、Issue #810"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "Win32 `WTSRegisterSessionNotification`（`WM_WTSSESSION_CHANGE` の `WTS_SESSION_LOCK` / `UNLOCK`）、`RegisterSuspendResumeNotification`（`WM_POWERBROADCAST` の `PBT_APMSUSPEND` / `PBT_APMRESUMEAUTOMATIC`）。今のロック状態は `WTSQuerySessionInformationW`（`WTSSessionInfoEx` の `SessionFlags`）で読む",
       "perm": "不要",
       "url": [
@@ -54,7 +57,10 @@
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registersuspendresumenotification",
         "https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/ns-wtsapi32-wtsinfoex_level1_w"
       ],
-      "note": "未実装。通知は登録したウィンドウにだけ届くため HWND が要り、ウィンドウを壊す前に `WTSUnRegisterSessionNotification` を登録と 1 対 1 で呼ぶ（公式）。`PBT_APMRESUMEAUTOMATIC` は復帰のたびに必ず届き、利用者の操作による復帰では続けて `PBT_APMRESUMESUSPEND` も届く（公式）。`SessionFlags` は Windows 7 / Server 2008 R2 では LOCK と UNLOCK が逆になる（公式の注記、対象外の版）。使う関数は `windows` クレートの導入済み feature（`Win32_System_RemoteDesktop`・`Win32_System_Power`・`Win32_UI_WindowsAndMessaging`）にある"
+      "note": "実装済み（#810）。スリープ・復帰・ロック・解除の 4 種を、購読ごとの専用スレッドの不可視のトップレベルウィンドウで受ける。復帰は `PBT_APMRESUMEAUTOMATIC` だけ数え、`PBT_APMRESUMESUSPEND` は二重計上になるため数えない。今のロック状態は出来事が届くたびに `WTSQuerySessionInformationW` で問い直す。画面の消灯・点灯は「この OS では取れない」と出す。通知は登録したウィンドウにだけ届くため HWND が要り、ウィンドウを壊す前に `WTSUnRegisterSessionNotification` を登録と 1 対 1 で呼ぶ（公式）。`PBT_APMRESUMEAUTOMATIC` は復帰のたびに必ず届き、利用者の操作による復帰では続けて `PBT_APMRESUMESUSPEND` も届く（公式）。`SessionFlags` は Windows 7 / Server 2008 R2 では LOCK と UNLOCK が逆になる（公式の注記、対象外の版）。使う関数は `windows` クレートの導入済み feature（`Win32_System_RemoteDesktop`・`Win32_System_Power`・`Win32_UI_WindowsAndMessaging`）にある",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#806）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_sleep_lock_events.rs + crates/fandhe-egui-proxy/src/device/sleep_lock_events.rs + crates/fandhe-core/src/screens/sleep_lock_events_show.rs + crates/fandhe-device/src/sleep_lock_events.rs、Issue #810"
     },
     "web": {
       "status": "possible",
