@@ -274,7 +274,7 @@
 
         <!-- Issue #32: メール添付の content URI を渡す FileProvider。exported=false のまま、
              Intent 単位の一時読み取り許可（grantUriPermissions）だけで受け手に読ませる。公開する
-             パスは `cache/compose/` だけ（res/xml/compose_file_paths.xml）。新しい権限は足さない。
+             パスは `cache/compose/` と動画の撮影の `cache/video_capture/` だけ（res/xml/compose_file_paths.xml）。新しい権限は足さない。
              切り離し時に削除する。 -->
         <provider
             android:name="androidx.core.content.FileProvider"

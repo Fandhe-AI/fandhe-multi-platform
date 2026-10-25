@@ -25,7 +25,7 @@
       "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_video_capture.m + crates/fandhe-egui-proxy/src/device/ios_video_capture.rs、Issue #822"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`MediaStore.ACTION_VIDEO_CAPTURE`（Intent、`EXTRA_OUTPUT` に `FileProvider` の content URI、`EXTRA_DURATION_LIMIT`）を `ActivityResultContracts.StartActivityForResult` で起動。撮れた動画は `MediaMetadataRetriever`（`METADATA_KEY_DURATION` / `VIDEO_WIDTH` / `VIDEO_HEIGHT` / `VIDEO_ROTATION`）で読む",
       "perm": "`android.permission.CAMERA`（宣言済みのため実行時の許可が要る）。`RECORD_AUDIO`・`<queries>` は使わない。`FileProvider` は宣言済みのものに公開パスを 1 つ足す",
       "url": [
@@ -35,7 +35,10 @@
         "https://developer.android.com/training/package-visibility/use-cases",
         "https://developer.android.com/guide/topics/media/camera.html"
       ],
-      "note": "未実装。`CAMERA` をマニフェストに宣言しているアプリは、許可の無いまま `ACTION_VIDEO_CAPTURE` を投げると `SecurityException` になる（javadoc、AOSP のソースで確認）。camera-capture と同じく許可を求めてから起動する。`EXTRA_OUTPUT` を省くとカメラアプリが既定の場所（端末の動画の一覧）へ保存し、アプリから消せないため、アプリの cache 配下（`cache/video_capture/`）を `FileProvider` で渡し、読み終えたら消す。起動の前に `resolveActivity` で確かめず、`ActivityNotFoundException` を受ける（`<queries>` を足さない、公式の推奨）。`MediaMetadataRetriever.close()` は API 29 からのため minSdk 24 では `release()` を呼ぶ。`VIDEO_ROTATION` は 0 / 90 / 180 / 270（取れる場合のみ）。`EXTRA_OUTPUT` を無視して別の場所へ保存するカメラアプリがあるか、録画の音声に `RECORD_AUDIO` が要らないことの明文は未確認"
+      "note": "実装済み（#823）。CAMERA の許可を求めてから `ACTION_VIDEO_CAPTURE` を起動し、上限 30 秒を `EXTRA_DURATION_LIMIT` に渡す。出力先は `cache/video_capture/` を `FileProvider` で渡し、撮影の前に置き場を空にして、成功・取り消し・失敗・破棄の全経路で消す。`resolveActivity` で事前判定せず、`ActivityNotFoundException` を「カメラアプリなし」に写す。長さ・寸法・回転は `MediaMetadataRetriever`（minSdk 24 のため `close()` ではなく `release()`）、サイズはファイルの大きさから読み、回転が無いときは 0 として扱う。期限・タイマーは持たず、完了は Activity の結果だけで決める。守らない範囲: `EXTRA_OUTPUT` を無視して別の場所へ保存するカメラアプリ（空のファイルとして失敗にする）、撮影中の背景遷移の扱い（OS 任せ）、撮影中のプロセス死（次回の撮影の前に回収）。`RECORD_AUDIO` が録画の音声に要らないことの明文は未確認。実機確認は #819",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#819）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_video_capture.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/VideoCaptureHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + platforms/android/app/src/main/res/xml/compose_file_paths.xml、Issue #823"
     },
     "macos": {
       "status": "possible",
