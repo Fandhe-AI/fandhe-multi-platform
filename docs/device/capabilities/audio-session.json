@@ -8,40 +8,62 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "`AVAudioSession`（`category` / `setActive` / `interruptionNotification`）",
-      "perm": "不要",
-      "url": "https://developer.apple.com/documentation/avfaudio/avaudiosession",
-      "note": "未実装。audio-devices が読むのは経路のみ。本機能は category の設定と割り込み通知（電話・Siri）への応答。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "`AVAudioSession` の `setCategory(_:mode:policy:options:)` / `setActive(_:options:)`（`.notifyOthersOnDeactivation`）、読み戻しは `category` / `mode` / `categoryOptions` / `isOtherAudioPlaying` / `secondaryAudioShouldBeSilencedHint`。通知は `interruptionNotification`（began / ended、ended の `.shouldResume`、`InterruptionReason`）・`routeChangeNotification`（`RouteChangeReason`）・`mediaServicesWereResetNotification`",
+      "perm": "不要（録音を伴う category は使わない）",
+      "url": [
+        "https://developer.apple.com/documentation/avfaudio/avaudiosession",
+        "https://developer.apple.com/documentation/avfaudio/avaudiosession/setactive(_:options:)",
+        "https://developer.apple.com/documentation/avfaudio/avaudiosession/category-swift.struct",
+        "https://developer.apple.com/documentation/avfaudio/avaudiosession/interruptionnotification",
+        "https://developer.apple.com/documentation/avfaudio/avaudiosession/routechangenotification",
+        "https://developer.apple.com/documentation/avfaudio/avaudiosession/secondaryaudioshouldbesilencedhint"
+      ],
+      "note": "未実装。既定の category は `soloAmbient`（消音スイッチ・画面ロックで消音、他の非混在セッションを中断）。`interruptionNotification` は main thread、`routeChangeNotification` は secondary thread で届く（公式）。`appWasSuspended` 由来の割り込み通知は復帰後に遅れて届くことがある（公式）。動いている音声オブジェクトがある状態で `setActive(false)` を呼ぶと、オブジェクトを止めてセッションは非アクティブになるが `isBusy` のエラーが返る（公式）。セッションが有効かを読む公開プロパティは無い。音声セッションはプロセスで 1 つを共有し、mic-record・speech-recognition・sound-classification（Record）と media-cast・picture-in-picture（Playback）が各自で変更前の値を保存して戻している"
     },
     "android": {
       "status": "possible",
-      "api": "`AudioManager.requestAudioFocus` / `AudioFocusRequest`（`OnAudioFocusChangeListener`）、`AudioAttributes`",
-      "perm": "不要",
-      "url": "https://developer.android.com/media/optimize/audio-focus",
-      "note": "未実装。フォーカス喪失時の一時停止・音量下げ（ducking）を自前で行う。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "`AudioManager.requestAudioFocus(AudioFocusRequest)` / `abandonAudioFocusRequest`（API 26+）、`AudioFocusRequest.Builder`（`setAudioAttributes`・`setOnAudioFocusChangeListener(listener, handler)`）、`OnAudioFocusChangeListener`（GAIN / LOSS / LOSS_TRANSIENT / LOSS_TRANSIENT_CAN_DUCK）、`ACTION_AUDIO_BECOMING_NOISY`（動的登録）。読み戻しは `getMode` / `isMusicActive`",
+      "perm": "不要（新しい uses-permission なし）",
+      "url": [
+        "https://developer.android.com/media/optimize/audio-focus",
+        "https://developer.android.com/reference/android/media/AudioManager#requestAudioFocus(android.media.AudioFocusRequest)",
+        "https://developer.android.com/reference/android/media/AudioFocusRequest.Builder",
+        "https://developer.android.com/reference/android/media/AudioManager#ACTION_AUDIO_BECOMING_NOISY",
+        "https://developer.android.com/reference/android/media/AudioManager#getMode()"
+      ],
+      "note": "未実装。`requestAudioFocus` の戻り値は GRANTED / FAILED / DELAYED で、DELAYED は `setAcceptsDelayedFocusGain(true)` のときだけ（公式）。Android 15（API 35）以上を target にするアプリは、最前面か foreground service でないと FAILED（公式。本アプリは targetSdk 35）。今フォーカスを持っているかを OS に問う公開 API は見当たらない。Android 8 以降は条件を満たすとシステムが自動で音量を下げ、そのときアプリにコールバックは来ない。Android 12 以降は他アプリが GAIN を要求すると、media / game の保持者をフェードアウトさせてから LOSS を通知する（公式）。`AudioFocusRequest` は API 26 からで、minSdk 24 の端末（API 24・25）は旧 `requestAudioFocus(listener, streamType, durationHint)`（API 26 で deprecated）しか無い"
     },
     "macos": {
       "status": "n-a",
       "api": "-",
       "perm": "-",
-      "url": "",
-      "note": "macOS に割り込み型のセッション管理（`AVAudioSession` 相当）はない（iOS のみ）。"
+      "url": "https://developer.apple.com/documentation/avfaudio/avaudiosession",
+      "note": "`AVAudioSession` の対応 OS は iOS・iPadOS・Mac Catalyst・tvOS・visionOS・watchOS で、macOS は含まれない（公式の Availability）。macOS に他アプリとの割り込みを調停するセッション管理は無い。"
     },
     "windows": {
       "status": "no",
       "api": "公開 API なし",
       "perm": "-",
-      "url": "",
-      "note": "音声フォーカスを調停する公開 API はない（セッションごとの音量は Core Audio の `IAudioSessionManager2` で扱えるが割り込み通知とは別）。"
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/audiopolicy/nn-audiopolicy-iaudiosessionevents",
+        "https://learn.microsoft.com/en-us/windows/win32/coreaudio/stream-attenuation",
+        "https://learn.microsoft.com/en-us/windows/win32/api/audiopolicy/nn-audiopolicy-iaudiovolumeducknotification"
+      ],
+      "note": "他アプリとの割り込み・音声フォーカスを調停する公開 API は無い。`IAudioSessionEvents::OnStateChanged` は自分のストリームの活動状態（Active / Inactive / Expired）で、他アプリの割り込みは知らせない。`IAudioVolumeDuckNotification` は通話等の通信ストリームが開いたときのシステムの減衰（ducking）だけを知らせる（公式）。"
     },
     "web": {
       "status": "possible",
-      "api": "Audio Session API（`navigator.audioSession.type`）",
+      "api": "Audio Session API（`navigator.audioSession.type`: auto / playback / transient / transient-solo / ambient / play-and-record、`state`: inactive / active / interrupted、`statechange` イベント）",
       "perm": "不要",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/AudioSession",
-      "safari": "対応（先行実装）",
-      "note": "未実装。実験的な API。Safari が先行（iOS の消音スイッチ・割り込みに対応）。"
+      "url": [
+        "https://w3c.github.io/audio-session/",
+        "https://developer.mozilla.org/en-US/docs/Web/API/AudioSession",
+        "https://caniuse.com/mdn-api_audiosession"
+      ],
+      "safari": "対応（16.4 以上、iOS Safari も同じ）",
+      "deferred": "`state` が active・interrupted になるのは、そのページが音を鳴らしている間だけ（仕様）。割り込みを受けるには本機能の画面に音を鳴らす仕組みを足すことになり、範囲を超える。`type` は設定した値を読み戻すだけで OS の結果を写せない。対応は Safari と Firefox（デスクトップ）だけで Chromium 系は非対応。media-playback の Web と組み合わせる方針が決まったら見直す",
+      "note": "未実装。仕様は W3C Media WG の Editor's Draft。MDN は Experimental で Baseline ではない。Media Session API はメタデータとメディアキーの操作で、割り込み・種別は扱わない"
     }
   },
-  "note": "audio-devices はデバイスの列挙、media-playback は再生そのもので、本機能は再生・録音が他アプリ（電話・ナビ等）と競合するときの調停と、セッション種別の指定。"
+  "note": "audio-devices は入出力機器の列挙、media-playback は再生そのもの、volume-control はシステム音量で、本機能は他アプリ（電話・ナビ等）との音声の取り合いの調停とセッション種別の指定。今回の範囲: 種別（他の音を止める / 他の音を下げる / 他の音と混ぜる）を選んで「始める」と、OS へ種別を指定して有効にし（iOS は category の設定と setActive、Android は音声フォーカスの要求）、止めるまで OS から届く割り込みの開始・終了（iOS）、フォーカスの獲得・喪失（Android）、出力経路の変化（iOS の経路変更、Android の `ACTION_AUDIO_BECOMING_NOISY`）を受信順の番号つきで直近 8 件と種類ごとの回数を並べる。今の状態は OS が返せるものだけを、始めた時と出来事が届くたびに読み直して出す（iOS は category・他アプリの再生中、Android は音声モード・音楽の再生中）。音は鳴らさない。OS が選べない種別・知らせない種類・読めない状態は「この OS では取れない」と出す。結果は 受信中 / 停止（利用者の操作・画面を離れた、正常）/ 停止したが元の設定に戻せなかった / OS が受け付けなかった（Android の FAILED）/ 開始失敗 / 実行中の失敗（iOS のメディアサービスのリセット）/ 非対応。OS を正にする: 種別は OS から読み戻した値を出し、選んだ値で上書きしない。割り込み中か・フォーカスを持っているかをアプリ内に覚えない（読めない OS は「この OS では取れない」）。割り込み終了やフォーカスの再獲得で勝手に有効にし直さない。タイマーで状態を推測しない。共有の音声セッション（iOS）は変更前の category・mode・options・routeSharingPolicy を保存し、止める・画面を離れる・開始の途中の失敗・実行中の失敗の全経路で無効化と復元を行う。購読（通知・リスナー・レシーバー）は同じ全経路で解除し、解除後に遅れて届いた通知は捨てる。守らない範囲: 画面を開く前・止めた後の出来事、他画面と同時に音声セッションを使うこと（1 プロセスに画面は 1 つ）、他機能の復元が失敗して残した値の上に重ねた場合の戻り先、iOS の `appWasSuspended` による遅れた通知の順序、Android 8 以降のシステムの自動ダッキング（コールバックが来ない）、複数プロセス、OS 側の通知の遅れ。"
 }
