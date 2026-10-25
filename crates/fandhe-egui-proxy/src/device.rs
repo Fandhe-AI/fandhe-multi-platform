@@ -730,7 +730,7 @@ pub mod ios_ar;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_audio_devices;
-/// Issue #840: iOS 向け音声セッション実装のスタブ（#841 が埋める）。
+/// Issue #840: iOS 向け音声セッション実装（`ios/fandhe_ios_audio_session.m` を呼ぶ C ABI ラッパー）。
 /// `device/audio_session.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]

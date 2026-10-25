@@ -9,7 +9,7 @@
 //! `start` が id を採番し、**`.m` を呼ぶ前に**購読の登録表（[`SLOT`]）へ `OnSignal` を入れる
 //! （`setActive` の中で同期に届く通知も落とさない）。`.m` が category と有効化を行い、通知を
 //! [`fandhe_rust_audio_session_signal`] で届ける。受け口は id を照合して配送し、直後に
-//! `crate::ios::request_repaint` で次フレームを起こす。停止は登録解除 → `.m` の購読解除・無効化・復元の順。
+//! `crate::ios::request_repaint` で次フレームを起こす。枠が埋まっている間の `start` は `.m` を呼ばず失敗で返す。停止は登録解除 → `.m` の購読解除・無効化・復元の順。
 //! `.m` の呼び出し中は [`SLOT`] のロックを持たない（main で同期に届く通知が同じロックを取るため）。
 //!
 //! 写像と読み戻しの判定は純関数で、ホストでもテストできるようモジュールは `cfg(any(ios, test))`。
@@ -168,7 +168,15 @@ mod imp {
             on_signal: OnSignal,
         ) -> Result<Box<dyn AudioSessionGuard>, StartFailure> {
             let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-            *SLOT.lock().unwrap_or_else(|e| e.into_inner()) = Some((id, on_signal));
+            {
+                // 枠が埋まっている = 有効な購読が既にある。上書きすると既存の通知が捨てられるため、
+                // `.m` を呼ばずに失敗で返す（何も変えていないので restored: true）。
+                let mut slot = SLOT.lock().unwrap_or_else(|e| e.into_inner());
+                if slot.is_some() {
+                    return Err(StartFailure::Failed { restored: true });
+                }
+                *slot = Some((id, on_signal));
+            }
             // SAFETY: 整数を渡すだけ。`.m` は Rust のポインタを保持しない。ロックは持たずに呼ぶ。
             #[allow(unsafe_code)]
             let code = unsafe { fandhe_ios_audio_session_start(id, kind.code()) };
