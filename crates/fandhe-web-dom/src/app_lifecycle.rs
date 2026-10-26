@@ -127,8 +127,8 @@ mod web {
     use std::collections::HashMap;
 
     use fandhe_core::screens::app_lifecycle_show::{
-        apply_init, apply_snapshot, finish_start, take_init, take_start, AppLifecycleShowState,
-        CurrentView, EventKind, Phase, StartFailure,
+        apply_init, apply_snapshot, finish_start, status_text, take_init, take_start,
+        AppLifecycleShowState, CurrentView, EventKind, Phase, StartFailure,
     };
     use fandhe_device::app_lifecycle::EventLog;
     use js_sys::Reflect;
@@ -242,8 +242,24 @@ mod web {
             }
             let (recent, counts) = snapshot_of(id);
             let current = read_current();
-            applier.apply(move |s| apply_snapshot(s, gen, recent, counts, Some(current)));
+            // 全再構築すると停止ボタンの DOM が mousedown と mouseup の間に除去され、click が
+            // 成立しない（focus で戻った直後のクリック）。状態文だけを書き換えてボタンを残す。
+            applier.apply_in_place(
+                move |s| apply_snapshot(s, gen, recent, counts, Some(current)),
+                patch_status,
+            );
         })
+    }
+
+    /// 状態文（先頭の `p`）だけを既存の DOM へ直接書く。要素が無ければ `false`（全再構築へ倒す）。
+    fn patch_status(root: &web_sys::Element, state: &State) -> bool {
+        match root.query_selector("p") {
+            Ok(Some(p)) => {
+                p.set_text_content(Some(&status_text(state)));
+                true
+            }
+            _ => false,
+        }
     }
 
     fn do_start(applier: &Applier<State>, id: u64, gen: u64, freeze: bool) {
