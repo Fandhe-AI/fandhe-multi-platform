@@ -20,6 +20,9 @@ use fandhe_core::screens::accessibility_prefs_show::{
 use fandhe_core::screens::app_badge_set::{
     current_screen as current_app_badge_set_screen, AppBadgeSetState,
 };
+use fandhe_core::screens::app_lifecycle_show::{
+    current_screen as current_app_lifecycle_show_screen, AppLifecycleShowState,
+};
 use fandhe_core::screens::ar_show::{
     current_screen as current_ar_screen, stop as ar_stop, ArShowState,
     STOP_BUTTON_ID as AR_STOP_BUTTON_ID, STOP_LABEL as AR_STOP_LABEL,
@@ -480,6 +483,20 @@ pub fn mount_serial_port_show_screen(root_id: &str) -> Result<(), JsValue> {
         current_serial_port_show_screen(&initial_state),
         initial_state,
         super::serial_port::serial_port_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「アプリの前面・背面」（親 #178、Issue #896）をマウントする検証専用
+/// エントリポイント。`super::app_lifecycle::app_lifecycle_show_effect` が focus / visibilitychange 等を購読する。
+#[wasm_bindgen]
+pub fn mount_app_lifecycle_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    let initial_state = AppLifecycleShowState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_app_lifecycle_show_screen(&initial_state),
+        initial_state,
+        super::app_lifecycle::app_lifecycle_show_effect,
     )
 }
 
