@@ -34,7 +34,7 @@
 //! | --- | --- | --- |
 //! | macOS | `QLThumbnailGenerator`（#917） | 自前の窓の `QLPreviewView`（#917） |
 //! | iOS | 同上を共用（b-ios） | `QLPreviewController`（b-ios） |
-//! | Windows | `IShellItemImageFactory`（windows の子） | `TargetUnavailable` |
+//! | Windows | `IShellItemImageFactory`（#918） | `TargetUnavailable` |
 //! | Android | `ThumbnailUtils`（API 29+。b-android） | `ACTION_VIEW` で他アプリへ（`HandedOff` / `NoHandler`） |
 //! | その他 | `Unsupported` | `Unsupported` |
 //!
@@ -254,6 +254,45 @@ pub fn thumbnail_from_apple_code(code: i32) -> Result<bool, DeviceError> {
     }
 }
 
+/// `IShellItemImageFactory::GetImage` が「サムネイルを作れなかった」ときの HRESULT。
+pub const WTS_E_FAILEDEXTRACTION: i32 = 0x8004_B200_u32 as i32;
+/// `GetImage` がサムネイル抽出の期限切れを返したときの HRESULT。
+pub const WTS_E_EXTRACTIONTIMEDOUT: i32 = 0x8004_B201_u32 as i32;
+/// 引数（寸法等）が不正なときの HRESULT。
+pub const E_INVALIDARG: i32 = 0x8007_0057_u32 as i32;
+/// 必要な interface を OS が持たないときの HRESULT。
+pub const E_NOINTERFACE: i32 = 0x8000_4002_u32 as i32;
+
+/// Windows の失敗 HRESULT を写す（成功値は渡さない）。`WTS_E_FAILEDEXTRACTION` は OS が「作れない」と
+/// 答えたので失敗にせず `NoThumbnail`。未知の値・成功値の誤渡しは失敗（嘘の成功の禁止）。
+/// 実機で別の「サムネイルなし」値が観測されたら（#890）ここへ 1 行足す。
+pub fn thumbnail_from_windows_hresult(hr: i32) -> Result<ThumbnailResult, DeviceError> {
+    match hr {
+        WTS_E_FAILEDEXTRACTION => Ok(ThumbnailResult::NoThumbnail),
+        WTS_E_EXTRACTIONTIMEDOUT => Err(DeviceError::Internal(TIMEOUT)),
+        E_INVALIDARG => Err(DeviceError::Internal(SIZE)),
+        E_NOINTERFACE => Err(DeviceError::Unsupported("file_preview")),
+        _ => Err(DeviceError::Internal(OUTCOME)),
+    }
+}
+
+/// `GetDIBits` の 32bpp BGRA を RGBA にして [`check_thumbnail`] を通す。全画素のアルファが 0 のとき
+/// （アルファを持たない DIB）だけ 255 で埋める。乗算済みアルファの解除はしない。
+pub fn thumbnail_from_windows_bgra(
+    width: u32,
+    height: u32,
+    mut bgra: Vec<u8>,
+) -> Result<ThumbnailResult, DeviceError> {
+    let opaque_fill = bgra.as_chunks::<4>().0.iter().all(|p| p[3] == 0);
+    for p in bgra.as_chunks_mut::<4>().0 {
+        p.swap(0, 2);
+        if opaque_fill {
+            p[3] = 255;
+        }
+    }
+    check_thumbnail(width, height, bgra)
+}
+
 /// macOS のプレビュー結果コードを写す。0 = 窓が閉じた。1 = 提示できなかった（`NSApp` が無い・
 /// URL や view を作れない）。未知の値は失敗。
 pub fn preview_from_macos_code(code: i32) -> Result<PreviewResult, DeviceError> {
@@ -414,5 +453,51 @@ mod tests {
             rgba: vec![7, 7, 7, 7],
         });
         assert_eq!(format!("{t:?}"), "Thumbnail(1x1)");
+    }
+
+    #[test]
+    fn windows_hresult_table() {
+        assert!(matches!(
+            thumbnail_from_windows_hresult(WTS_E_FAILEDEXTRACTION),
+            Ok(ThumbnailResult::NoThumbnail)
+        ));
+        assert!(matches!(
+            thumbnail_from_windows_hresult(WTS_E_EXTRACTIONTIMEDOUT).unwrap_err(),
+            DeviceError::Internal(TIMEOUT)
+        ));
+        assert!(matches!(
+            thumbnail_from_windows_hresult(E_INVALIDARG).unwrap_err(),
+            DeviceError::Internal(SIZE)
+        ));
+        assert!(matches!(
+            thumbnail_from_windows_hresult(E_NOINTERFACE).unwrap_err(),
+            DeviceError::Unsupported("file_preview")
+        ));
+        for hr in [0x8000_4005_u32 as i32, 0, -1, i32::MIN] {
+            assert!(matches!(
+                thumbnail_from_windows_hresult(hr).unwrap_err(),
+                DeviceError::Internal(OUTCOME)
+            ));
+        }
+    }
+
+    #[test]
+    fn windows_bgra_swaps_and_fills_alpha() {
+        let ThumbnailResult::Thumbnail(i) =
+            thumbnail_from_windows_bgra(2, 1, vec![1, 2, 3, 0, 4, 5, 6, 0]).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(i.rgba, vec![3, 2, 1, 255, 6, 5, 4, 255]);
+        let ThumbnailResult::Thumbnail(i) =
+            thumbnail_from_windows_bgra(2, 1, vec![1, 2, 3, 0, 4, 5, 6, 9]).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(i.rgba, vec![3, 2, 1, 0, 6, 5, 4, 9]);
+        assert!(matches!(
+            thumbnail_from_windows_bgra(2, 2, vec![0; 4]).unwrap_err(),
+            DeviceError::Internal(SIZE)
+        ));
     }
 }

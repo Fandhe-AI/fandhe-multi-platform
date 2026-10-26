@@ -46,14 +46,18 @@
       "note": "実装済み（#917）。サムネイルは `.thumbnail` だけを頼み、返った表現の型も確かめる（アイコンを混ぜない）。期限 10 秒で `cancelRequest:` する。プレビューは自前の窓の `QLPreviewView` で、窓が閉じた通知で `Closed` にする。`QLPreviewPanel` は制御者をレスポンダーチェーンで決め、制御していない側が状態を変えてはならないため、winit の窓へ responder を差し込む必要があり採らない。自前の窓に `QLPreviewView` を載せ、窓が閉じた通知で閉じたことを知る。サムネイルは macOS 10.15+（それ未満は `Unsupported`）。"
     },
     "windows": {
-      "status": "possible",
-      "api": "`SHCreateItemFromParsingName` → `IShellItemImageFactory::GetImage`（`SIIGBF_THUMBNAILONLY`）",
+      "status": "done",
+      "api": "`SHCreateItemFromParsingName` → `IShellItemImageFactory::GetImage`（`SIIGBF_THUMBNAILONLY`）、`GetDIBits`（RGBA への変換）",
       "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishellitemimagefactory-getimage",
-        "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-shcreateitemfromparsingname"
+        "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-shcreateitemfromparsingname",
+        "https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-getdibits"
       ],
-      "note": "未実装。サムネイルのみ。`SIIGBF_THUMBNAILONLY` でサムネイルが無いときは失敗し、アイコンへ倒れない。返る `HBITMAP` は呼び出し側が `DeleteObject` し、UI スレッドでは呼ばない。プレビュー表示は対象外（Preview Handler の埋め込みは子窓の管理が要るため採らない）。`IThumbnailProvider` は提供側の interface、`StorageFile.GetThumbnailAsync` は採らない。"
+      "note": "実装済み（#918）。サムネイルのみ。`SIIGBF_THUMBNAILONLY` でサムネイルが無いときは失敗し、アイコンへ倒れない。返る `HBITMAP` は呼び出し側が `DeleteObject` し、UI スレッドでは呼ばない。プレビュー表示は対象外（Preview Handler の埋め込みは子窓の管理が要るため採らない）。`IThumbnailProvider` は提供側の interface、`StorageFile.GetThumbnailAsync` は採らない。 COM は STA で初期化する。`GetImage` は取り消せないため、期限後の結果はドライバが捨てる。サムネイルが無いときの HRESULT（想定は `WTS_E_FAILEDEXTRACTION`）は実機で確認する。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#890）",
+      "impl": "`crates/fandhe-egui-proxy/src/device/windows_file_preview.rs` + `crates/fandhe-egui-proxy/src/device/file_preview.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-device/src/file_preview.rs`、Issue #918"
     },
     "web": {
       "status": "no",
