@@ -107,6 +107,9 @@ static _Atomic BOOL g_tilt_uses_device_motion = NO;
 // deviceMotion の handler が受け取った非同期エラー（0 = なし、2 = 権限拒否、3 = 失敗）。
 // 次のサンプルが正常に届けば 0 へ戻す。線形加速度の read が失敗として返すために読む（Issue #900）。
 static _Atomic int32_t g_device_motion_failure = 0;
+// device motion セッションの世代。start / stop ごとに進め、handler は自分が開始した世代が
+// 現行のときだけ failure を書く（停止後・再開後に遅れて届いたエラーで古い失敗を残さない）。
+static _Atomic uint64_t g_device_motion_gen = 0;
 
 // 共有 manager を返す（`fandhe_ios_motion_raw_sensors.m` が extern 宣言して使う）。
 CMMotionManager *fandhe_ios_shared_motion_manager(void) {
@@ -139,8 +142,12 @@ int32_t fandhe_ios_device_motion_ensure_started(void) {
           queue.maxConcurrentOperationCount = 1;
         });
         g_device_motion_failure = 0;
+        const uint64_t gen = ++g_device_motion_gen;
         [manager startDeviceMotionUpdatesToQueue:queue
                                      withHandler:^(CMDeviceMotion *motion, NSError *error) {
+                                       if (gen != g_device_motion_gen) {
+                                           return;
+                                       }
                                        if (error == nil) {
                                            g_device_motion_failure = 0;
                                        } else if ([error.domain isEqualToString:CMErrorDomain] &&
@@ -160,9 +167,16 @@ int32_t fandhe_ios_device_motion_failure(void) {
     return g_device_motion_failure;
 }
 
+// 消費者（線形加速度）の開始時に、それ以前に残った失敗を捨てる。tilt が device motion を
+// 維持している間も古い失敗が新しい利用へ持ち越されないようにする。どのスレッドからでも可。
+void fandhe_ios_device_motion_clear_failure(void) {
+    g_device_motion_failure = 0;
+}
+
 // 線形加速度だけが device motion を使っていた場合に停止する（tilt 利用中は維持）。どのスレッドからでも可。
 void fandhe_ios_device_motion_release_if_unused(void) {
     if (!g_tilt_uses_device_motion) {
+        g_device_motion_gen++;
         [fandhe_ios_shared_motion_manager() stopDeviceMotionUpdates];
         g_device_motion_failure = 0;
     }

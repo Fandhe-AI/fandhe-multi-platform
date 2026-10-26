@@ -30,6 +30,7 @@ extern CMMotionManager *fandhe_ios_shared_motion_manager(void);
 extern int32_t fandhe_ios_device_motion_ensure_started(void);
 extern void fandhe_ios_device_motion_release_if_unused(void);
 extern int32_t fandhe_ios_device_motion_failure(void);
+extern void fandhe_ios_device_motion_clear_failure(void);
 
 // Rust 側（`ios_motion_raw_sensors.rs`）の受け口。値・失敗を確定した直後に次フレームを起こす。
 extern void fandhe_rust_motion_raw_sensors_changed(void);
@@ -159,6 +160,7 @@ static void FandheObserveLifecycleOnce(void) {
                               continue;
                           }
                           if (k == kKindLinear) {
+                              fandhe_ios_device_motion_clear_failure();
                               fandhe_ios_device_motion_ensure_started();
                           } else {
                               FandheStartUpdates(k, gens[k]);
@@ -203,6 +205,7 @@ int32_t fandhe_ios_motion_raw_start(int32_t kind) {
         os_unfair_lock_unlock(&gLock);
 
         if (kind == kKindLinear) {
+            fandhe_ios_device_motion_clear_failure();  // tilt 稼働中でも以前の失敗を持ち越さない
             if (fandhe_ios_device_motion_ensure_started() != 0) {
                 os_unfair_lock_lock(&gLock);
                 s->active = NO;
