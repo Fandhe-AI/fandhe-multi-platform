@@ -468,6 +468,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::media_cast::release_mount(id);
         super::screen_capture::release_mount(id);
         super::app_badge::release_mount(id);
+        super::app_lifecycle::release_mount(id);
         super::compose_mail_sms::release_mount(id);
         super::external_app_launch::release_mount(id);
         super::display_refresh_hdr::release_mount(id);

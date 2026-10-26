@@ -64,6 +64,7 @@
         mount_usb_device_show_screen,
         mount_serial_port_show_screen,
         mount_user_idle_show_screen,
+        mount_app_lifecycle_show_screen,
         mount_contact_pick_screen,
         mount_haptics_tap_screen,
         mount_nlp_segment_screen,
@@ -206,6 +207,8 @@
         mount_usb_device_show_screen("fandhe-dom-root");
       } else if (screen === "serial_port_show") {
         mount_serial_port_show_screen("fandhe-dom-root");
+      } else if (screen === "app_lifecycle_show") {
+        mount_app_lifecycle_show_screen("fandhe-dom-root");
       } else if (screen === "user_idle_show") {
         mount_user_idle_show_screen("fandhe-dom-root");
       } else if (screen === "ble_scan") {
