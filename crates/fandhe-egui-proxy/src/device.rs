@@ -361,6 +361,9 @@ pub mod app_attest;
 /// Windows は同期、iOS / Android は pull 型 `bridge`、
 /// 他 OS は `UnsupportedAppBadge` 固定。Web は `fandhe-web-dom`）。
 pub mod app_badge;
+/// Phase 11（親 #174、Issue #860）: Dock・タスクバーの進捗表示と注意喚起の effect ドライバ（macOS /
+/// Windows は同期、他 OS は `UnsupportedAppProgressAttention` 固定。モバイル・Web に該当機能は無い）。
+pub mod app_progress_attention;
 /// Issue #424（親 #101）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録ドライバ。
 /// `device/url_scheme.rs::url_scheme_show_effect` から呼ばれる。実装は macOS（Dock メニュー）、
 /// iOS は Info.plist の静的宣言（`Declared`、#425）、Android・Windows（ジャンプリスト）は実装済み、他 OS は `UnsupportedAppShortcuts` 固定。
@@ -1029,6 +1032,10 @@ pub mod location;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_app_badge;
+/// Issue #860: macOS 向け進捗表示・注意喚起実装（`macos/fandhe_macos_app_progress_attention.m` を呼ぶ C ABI ラッパー）。`device/app_progress_attention.rs` の macos 経路から呼ばれる。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_app_progress_attention;
 /// Issue #424: macOS 向けアプリショートカット実装（`macos/fandhe_macos_app_shortcuts.m` の Dock メニューを呼ぶ
 /// C ABI ラッパー）。`device/app_shortcuts.rs` の macOS 経路から呼ばれる。結果コードの写像をホストで
 /// テストできるよう cfg は `any(macos, test)`。
@@ -1422,6 +1429,10 @@ pub mod windows_alarm;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_app_badge;
+/// Issue #860: Windows 向け進捗表示・注意喚起実装（`ITaskbarList3` の進捗と `FlashWindowEx`）。`device/app_progress_attention.rs` の windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_app_progress_attention;
 /// Issue #424 / #428: Windows 向けアプリショートカット実装（ジャンプリストのタスク 1 件）。
 /// `device/app_shortcuts.rs` の windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

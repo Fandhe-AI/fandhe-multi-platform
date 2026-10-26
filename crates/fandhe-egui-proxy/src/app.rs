@@ -121,7 +121,13 @@ impl<S> CompletionSender<S> {
     /// → 復帰後も結果未着」を判定するために使う。`DataTransferManager` に
     /// 「共有 UI を閉じた」イベントが無いための代替、`device/windows_share.rs`
     /// モジュール doc「キャンセル検知の天井」参照）。
-    #[cfg_attr(not(all(target_os = "windows", feature = "device")), allow(dead_code))]
+    ///
+    /// 2 人目の利用者は `device/app_progress_attention.rs` の注意喚起の待機で、「フォーカスを
+    /// 失った最初のフレーム」の判定に読む（タイマーやアプリ内の記憶を持たず OS の観測を正にする）。
+    #[cfg_attr(
+        not(all(feature = "device", not(target_arch = "wasm32"))),
+        allow(dead_code)
+    )]
     pub(crate) fn focused(&self) -> bool {
         self.ctx.input(|i| i.raw.focused)
     }

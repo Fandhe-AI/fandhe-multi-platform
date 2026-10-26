@@ -21,7 +21,7 @@
       "note": "ホーム画面アイコンの進捗・注意喚起の概念はない（通知の進捗表示は notification 側）。"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "AppKit `NSDockTile.contentView` + `display`（アイコンと進捗バーを自分で描く）、`NSApplication.requestUserAttention(.criticalRequest)`（Dock のアイコンが跳ね続ける）",
       "perm": "なし",
       "url": [
@@ -30,10 +30,13 @@
         "https://developer.apple.com/documentation/appkit/nsapplication/requestuserattention(_:)",
         "https://developer.apple.com/documentation/appkit/nsapplication/requestuserattentiontype/criticalrequest"
       ],
-      "note": "未実装。`contentView` を設定するとタイル全体を自前で描く（アプリのアイコンも描く。バッジは OS が上に重ねるので描かない）。Cocoa は自動で描き直さないため、変更のたびに `display` を送る。`NSDockTile` は `NSApp.dockTile` だけで届き、ウィンドウハンドルは要らない。`requestUserAttention` の戻り値は取り消し用の id。前面のアプリへ送っても何も起きず、アプリを前面にすると OS が要求を取り消す。`.criticalRequest` は前面になるか取り消されるまで跳ね続ける。読み戻す API は無い"
+      "note": "`contentView` を設定するとタイル全体を自前で描く（アプリのアイコンも描く。バッジは OS が上に重ねるので描かない）。Cocoa は自動で描き直さないため、変更のたびに `display` を送る。`NSDockTile` は `NSApp.dockTile` だけで届き、ウィンドウハンドルは要らない。`requestUserAttention` の戻り値は取り消し用の id。前面のアプリへ送っても何も起きず、アプリを前面にすると OS が要求を取り消す。`.criticalRequest` は前面になるか取り消されるまで跳ね続ける。読み戻す API は無い",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#852）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_app_progress_attention.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_app_progress_attention.m + crates/fandhe-egui-proxy/src/device/app_progress_attention.rs + crates/fandhe-core/src/screens/app_progress_attention_show.rs + crates/fandhe-device/src/app_progress_attention.rs、Issue #860"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "Win32 `ITaskbarList3::SetProgressValue` / `SetProgressState(TBPF_NOPROGRESS)`、`FlashWindowEx`（`FLASHW_ALL | FLASHW_TIMERNOFG`）",
       "perm": "なし",
       "url": [
@@ -43,7 +46,10 @@
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-flashwindowex",
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-flashwinfo"
       ],
-      "note": "未実装。app-badge の Windows と同じ `ITaskbarList3` と HWND（オーバーレイは app-badge、進捗は本機能）。`SetProgressValue` は `HRESULT` を返し、`TBPF_ERROR` / `TBPF_PAUSED` でなければ呼ぶだけで `TBPF_NORMAL` 扱い。終わったら `SetProgressState(TBPF_NOPROGRESS)` で消す。ハイコントラスト配色では進捗が出ない。`FlashWindowEx` の戻り値は失敗ではなく「呼ぶ前にキャプションが active 描画だったか」で、失敗を表す戻り値は無い。`FLASHW_TIMERNOFG` は前面に来るまで点滅し続ける。読み戻す API は無い"
+      "note": "app-badge の Windows と同じ `ITaskbarList3` と HWND（オーバーレイは app-badge、進捗は本機能）。`SetProgressValue` は `HRESULT` を返し、`TBPF_ERROR` / `TBPF_PAUSED` でなければ呼ぶだけで `TBPF_NORMAL` 扱い。終わったら `SetProgressState(TBPF_NOPROGRESS)` で消す。ハイコントラスト配色では進捗が出ない。`FlashWindowEx` の戻り値は失敗ではなく「呼ぶ前にキャプションが active 描画だったか」で、失敗を表す戻り値は無い。`FLASHW_TIMERNOFG` は前面に来るまで点滅し続ける。読み戻す API は無い",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#852）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_app_progress_attention.rs + crates/fandhe-egui-proxy/src/device/app_progress_attention.rs + crates/fandhe-core/src/screens/app_progress_attention_show.rs + crates/fandhe-device/src/app_progress_attention.rs、Issue #860"
     },
     "web": {
       "status": "no",
