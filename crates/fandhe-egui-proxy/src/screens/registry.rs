@@ -342,6 +342,10 @@ generated_screens! {
     crate::device::environment_sensors::environment_sensors_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "motion_raw_sensors_show" => fandhe_core::screens::motion_raw_sensors_show::current_screen,
+    crate::device::motion_raw_sensors::motion_raw_sensors_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "activity_recognition_show" => fandhe_core::screens::activity_recognition_show::current_screen,
     crate::device::activity_recognition::activity_recognition_show_effect,
     effect

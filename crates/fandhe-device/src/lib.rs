@@ -152,6 +152,8 @@ pub mod midi;
 /// Phase 11（端末機能の拡充ループ、親 #89、Issue #289）: 固定の線形モデルの推論 1 回（Core ML 等）。
 pub mod ml_inference;
 pub mod motion;
+/// Phase 11（端末機能の拡充ループ、親 #180、Issue #898）: ジャイロ・磁気・線形加速度の生値。
+pub mod motion_raw_sensors;
 /// Phase 11（端末機能の拡充ループ、親 #1134、Issue #1341）: 複数ディスプレイ・外部ディスプレイの一覧。
 pub mod multi_display;
 /// Phase 11（端末機能の拡充ループ、親 #108、Issue #482）: 音楽ライブラリ（曲のタイトルとアーティストの先頭 20 件）。
