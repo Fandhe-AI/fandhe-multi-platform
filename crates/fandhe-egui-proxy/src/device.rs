@@ -1904,6 +1904,7 @@ pub fn shutdown() {
     serial_port::shutdown();
     camera_preview_stream::shutdown();
     audio_session::shutdown();
+    memory_pressure::stop_shared();
 }
 
 fn to_note_storage_error(e: DeviceError) -> NoteStorageError {

@@ -335,6 +335,18 @@ fn do_start(
     }
 }
 
+/// 保持中の購読を止める（`device::shutdown` と `ProxyApp` の drop から呼ばれる）。画面を離れる / 終了する
+/// とき、停止ボタンや次回の `drive` を待たずに guard・通知登録・待機スレッドを解放する。
+/// 解除はロックの外で行う（OS コールバックが同じロックを取りうるため）。
+pub(crate) fn stop_shared() {
+    take_active(&ACTIVE);
+}
+
+fn take_active(active: &Mutex<Option<ActiveSubscription>>) {
+    let stale = lock(active).take();
+    drop(stale);
+}
+
 /// `registry.rs` の `effect` 区画から `memory_pressure_show` 画面用に配線される effect ドライバ。
 pub fn memory_pressure_show_effect(state: &MemoryPressureShowState, sender: &Sender) {
     drive(state, sender, &ACTIVE, platform_memory_pressure().as_ref());
@@ -513,6 +525,14 @@ mod tests {
             ]
         );
         assert_eq!(e.state.counts[EventKind::Trim(0).index()], 1);
+    }
+
+    #[test]
+    fn stop_active_releases_guard_without_drive() {
+        let mut e = Env::receiving(Fake::new());
+        take_active(&e.active);
+        assert_eq!(e.drops(), 1);
+        assert!(lock(&e.active).is_none());
     }
 
     #[test]
