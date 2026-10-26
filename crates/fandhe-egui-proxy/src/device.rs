@@ -213,6 +213,11 @@ pub mod android_media_playback;
 /// `device/media_transcode.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_media_transcode;
+/// Issue #911: Android 向けメモリ逼迫の通知の骨格（`Unsupported` のスタブ。b-android が埋める）。
+/// `device/memory_pressure.rs` の Android 経路から使われる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_memory_pressure;
 /// Issue #1398: Android 向け MIDI 入力実装。`device/midi.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -952,6 +957,11 @@ pub mod ios_media_playback;
 /// `device/media_transcode.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_media_transcode;
+/// Issue #911: iOS 向けメモリ逼迫の通知の骨格（`Unsupported` のスタブ。b-ios が埋める）。
+/// `device/memory_pressure.rs` の ios 経路から使われる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_memory_pressure;
 /// Issue #291: iOS 向け機械学習推論（macOS と共用の `AppleMlInference` を返す）。
 /// `device/ml_inference.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -1178,6 +1188,10 @@ pub mod macos_launch_at_login;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_local_fonts;
+/// Issue #911: macOS 向けメモリ逼迫の通知実装（`macos/fandhe_macos_memory_pressure.m`、libdispatch の
+/// memory pressure source を呼ぶ C ABI ラッパー）。`device/memory_pressure.rs` の macOS 経路から呼ばれる。
+#[cfg(target_os = "macos")]
+pub mod macos_memory_pressure;
 /// Issue #1341: macOS 向け複数ディスプレイ実装（`macos/fandhe_macos_multi_display.m` を呼ぶ C ABI
 /// ラッパー）。`device/multi_display.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
 /// テストできるよう cfg は `any(macos, test)`。写像の純関数は iOS 実装（`ios_multi_display`）と
@@ -1304,6 +1318,10 @@ pub mod media_playback;
 /// 他 OS は `UnsupportedMediaTranscode` 固定。
 /// Web は `fandhe-web-dom`）。
 pub mod media_transcode;
+/// Phase 11 の拡充ループ（親 #179、Issue #911）: メモリ逼迫・負荷の通知の effect ドライバ（macOS・Windows 実装、
+/// iOS・Android は骨格のスタブで b-ios・b-android が埋める。他 OS は `UnsupportedMemoryPressure` 固定。
+/// Web は `fandhe-web-dom`）。
+pub mod memory_pressure;
 /// Phase 11 の拡充ループ（親 #953、Issue #954・#955・#956・#957）: マイク録音の
 /// effect ドライバ（macOS/iOS/Windows/Android 実装、他 OS は `UnsupportedMicRecorder`
 /// 固定）。
@@ -1663,6 +1681,11 @@ pub mod windows_media_playback;
 /// `device/media_transcode.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_media_transcode;
+/// Issue #911: Windows 向けメモリ逼迫の通知実装（`CreateMemoryResourceNotification` の Low / High を待機スレッドで
+/// 受ける）。`device/memory_pressure.rs` の Windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_memory_pressure;
 /// Issue #955: Windows 向けマイク録音実装（WinRT `MediaCapture` ラッパー）。
 /// `device/mic_record.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
