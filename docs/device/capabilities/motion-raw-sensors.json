@@ -14,11 +14,14 @@
       "note": "未実装。単位は rad/s・µT・G。`CMMotionManager` はアプリで 1 つだけ作る（tilt-motion と共有）。`gyroData`・`magnetometerData` は生値でバイアスが乗る。サンプリング間隔は `*UpdateInterval` で指定。一次情報: https://developer.apple.com/documentation/coremotion/cmgyrodata/rotationrate / https://developer.apple.com/documentation/coremotion/cmmagnetometerdata/magneticfield / https://developer.apple.com/documentation/coremotion/cmdevicemotion/useracceleration / https://developer.apple.com/documentation/bundleresources/information-property-list/nsmotionusagedescription"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#885）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_motion_raw_sensors.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MotionRawSensorsHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/motion_raw_sensors.rs + crates/fandhe-core/src/screens/motion_raw_sensors_show.rs + crates/fandhe-device/src/motion_raw_sensors.rs、Issue #901",
       "api": "`SensorManager`（`TYPE_GYROSCOPE` / `TYPE_MAGNETIC_FIELD` / `TYPE_LINEAR_ACCELERATION`）",
       "perm": "不要（`registerListener` の上限は 200 Hz。`SENSOR_DELAY_UI` で登録するので `HIGH_SAMPLING_RATE_SENSORS` は要らない。公式）",
       "url": "https://developer.android.com/develop/sensors-and-location/sensors/sensors_motion",
-      "note": "未実装。単位は rad/s・µT・m/s²。線形加速度はソフトウェアのセンサーのことがあり、ジャイロの無い端末では null になる。`onPause` で解除する（公式の推奨）。一次情報: https://developer.android.com/develop/sensors-and-location/sensors/sensors_position / https://developer.android.com/develop/sensors-and-location/sensors/sensors_overview"
+      "note": "実装済み（#901、実機確認は #885）。単位は rad/s・µT・m/s²。線形加速度はソフトウェアのセンサーのことがあり、ジャイロの無い端末では null になる。`onPause` で解除して値を捨て、復帰で再登録する（公式の推奨）。Activity 再生成後は購読喪失として失敗表示にし、利用者の再開始が必要。一次情報: https://developer.android.com/develop/sensors-and-location/sensors/sensors_position / https://developer.android.com/develop/sensors-and-location/sensors/sensors_overview"
     },
     "macos": {
       "status": "no",
