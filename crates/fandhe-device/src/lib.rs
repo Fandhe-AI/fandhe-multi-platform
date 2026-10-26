@@ -74,6 +74,8 @@ pub mod compass;
 pub mod compose_mail_sms;
 /// Phase 11（端末機能の拡充ループ、親 #1117、Issue #1220）: 連絡先を 1 件選ぶ。
 pub mod contact_picker;
+/// Phase 11（端末機能の拡充ループ、親 #181、Issue #903）: アプリ・端末の識別子（IDFV / ANDROID_ID を伏せて 1 回読む）。
+pub mod device_identifier;
 /// Phase 11（端末機能の拡充ループ、親 #1131、Issue #1304）: 端末・OS 情報（機種・OS 版・空き容量）。
 pub mod device_info;
 /// Phase 11（端末機能の拡充ループ、親 #177、Issue #870）: 画面のリフレッシュレート・HDR・広色域。

@@ -106,6 +106,11 @@ pub mod android_compass;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_compose_mail_sms;
+/// Issue #903: Android 向けアプリ・端末の識別子の骨格（実体は #904）。`device/device_identifier.rs` の
+/// Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_device_identifier;
 /// Issue #1304: Android 向け端末・OS 情報実装。`device/device_info.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -658,6 +663,9 @@ pub mod compose_mail_sms;
 /// （macOS / iOS / Android は pull 型 `bridge`、他 OS は兄弟 issue が入るまで
 /// `UnsupportedContactPicker` 固定）。
 pub mod contact_pick;
+/// Phase 11 の拡充ループ（親 #181、Issue #903）: アプリ・端末の識別子の effect ドライバ（iOS・Android は
+/// 骨格で実体は #904、他 OS は `UnsupportedDeviceIdentifier` 固定）。
+pub mod device_identifier;
 /// Phase 11 の拡充ループ（親 #1131、Issue #1304）: 端末・OS 情報の effect ドライバ（macOS / Windows
 /// ・iOS・Android 実装、他 OS は `UnsupportedDeviceInfo` 固定）。
 pub mod device_info;
@@ -824,6 +832,11 @@ pub mod ios_compass;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_compose_mail_sms;
+/// Issue #903: iOS 向けアプリ・端末の識別子の骨格（実体は #904）。`device/device_identifier.rs` の
+/// iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_device_identifier;
 /// Issue #1305: iOS 向け端末・OS 情報実装（`ios/fandhe_ios_device_info.m` を呼ぶ C ABI ラッパー。
 /// #1304 のスタブを置き換え）。`device/device_info.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
