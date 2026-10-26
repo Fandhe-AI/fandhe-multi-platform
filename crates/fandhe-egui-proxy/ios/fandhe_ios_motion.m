@@ -94,33 +94,43 @@ static void FandheRotateGravityToInterfaceOrientation(float gx, float gy,
 
 // プロセス内で 1 個だけ生成する `CMMotionManager`（`dispatch_once` で初期化、
 // `fandhe_ios_camera.m` の `g_capture_in_flight` と同じくプロセス単位の単純化）。
+// Apple の「manager はアプリで 1 つ」に従い、`fandhe_ios_motion_raw_sensors.m`
+// （ジャイロ・磁気・線形加速度の生値、Issue #900）とも共有する。常に保持する。
 static CMMotionManager *_Nullable g_motion_manager = nil;
 // device motion 自体が非対応（シミュレータ等）だった場合に `true` を保持し、
-// 以後の呼び出しでは `CMMotionManager` へ触れず毎回 1 を返す。
+// 以後の呼び出しでは device motion を開始せず毎回 1 を返す。
 static BOOL g_motion_unavailable = NO;
 
-static void FandheEnsureMotionManagerStarted(void) {
+// 共有 manager を返す（`fandhe_ios_motion_raw_sensors.m` が extern 宣言して使う）。
+CMMotionManager *fandhe_ios_shared_motion_manager(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-      CMMotionManager *manager = [[CMMotionManager alloc] init];
-      if (!manager.isDeviceMotionAvailable) {
-          g_motion_unavailable = YES;
-          return;
-      }
-      manager.deviceMotionUpdateInterval = 1.0 / 60.0;
-      // ハンドラ無しの pull 方式（`fandhe_ios_motion_read` が毎フレーム
-      // `manager.deviceMotion` を読む、モジュール冒頭コメント参照）。既定の
-      // reference frame で十分なため（gravity 成分のみ使う）、参照系を
-      // 明示指定する `startDeviceMotionUpdatesUsingReferenceFrame:` は使わない。
-      [manager startDeviceMotionUpdates];
-      g_motion_manager = manager;
+      g_motion_manager = [[CMMotionManager alloc] init];
+      g_motion_unavailable = !g_motion_manager.isDeviceMotionAvailable;
     });
+    return g_motion_manager;
+}
+
+// device motion を未起動のときだけ開始する。0 = 起動済み、1 = 非対応。
+// tilt はこれを止めない（止めると生値側の線形加速度も止まるため、止める責務は持たない）。
+int32_t fandhe_ios_device_motion_ensure_started(void) {
+    CMMotionManager *manager = fandhe_ios_shared_motion_manager();
+    if (g_motion_unavailable) {
+        return 1;
+    }
+    if (!manager.isDeviceMotionActive) {
+        manager.deviceMotionUpdateInterval = 1.0 / 60.0;
+        // ハンドラ無しの pull 方式（`fandhe_ios_motion_read` が毎フレーム
+        // `manager.deviceMotion` を読む、モジュール冒頭コメント参照）。既定の
+        // reference frame で十分なため（gravity 成分のみ使う）、参照系を
+        // 明示指定する `startDeviceMotionUpdatesUsingReferenceFrame:` は使わない。
+        [manager startDeviceMotionUpdates];
+    }
+    return 0;
 }
 
 int32_t fandhe_ios_motion_read(float *out_x, float *out_y) {
-    FandheEnsureMotionManagerStarted();
-
-    if (g_motion_unavailable) {
+    if (fandhe_ios_device_motion_ensure_started() != 0) {
         return 1;
     }
 

@@ -371,6 +371,9 @@
 //! - `ios/fandhe_ios_environment_sensors.m`（Issue #610、CoreMotion `CMAltimeter` の気圧と `UIDevice` の近接監視）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_environment_sensors.rs`
 //!   から呼ばれる契約）。CoreMotion・UIKit は既存のリンクで足りる。
+//! - `ios/fandhe_ios_motion_raw_sensors.m`（Issue #900、CoreMotion のジャイロ・磁気・線形加速度の生値）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_motion_raw_sensors.rs`
+//!   から呼ばれる契約）。CoreMotion・UIKit は既存のリンクで足りる。
 //! - `ios/fandhe_ios_activity_recognition.m`（Issue #614、CoreMotion の `CMMotionActivityManager` による
 //!   行動認識）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/ios_activity_recognition.rs` から呼ばれる契約）。CoreMotion は motion 用にリンク済み。
@@ -686,6 +689,8 @@ fn main() {
     compile_ios_compass();
     // `ios/fandhe_ios_environment_sensors.m`（Issue #610）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_environment_sensors();
+    // `ios/fandhe_ios_motion_raw_sensors.m`（Issue #900）。iOS 分岐のみ（macOS は対応表で no）。
+    compile_ios_motion_raw_sensors();
     // `ios/fandhe_ios_activity_recognition.m`（Issue #614）。iOS 分岐のみ（macOS は対応表で n-a）。
     compile_ios_activity_recognition();
     // `ios/fandhe_ios_uwb_ranging.m`（Issue #654）。iOS 分岐のみ（macOS は対応表で no）。
@@ -2215,6 +2220,16 @@ fn compile_ios_environment_sensors() {
         .file("ios/fandhe_ios_environment_sensors.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_environment_sensors");
+}
+
+/// `ios/fandhe_ios_motion_raw_sensors.m` を `cc` でコンパイルする（Issue #900）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_motion_raw_sensors.rs` が使う）。CoreMotion・UIKit はリンク済み。
+fn compile_ios_motion_raw_sensors() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_motion_raw_sensors.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_motion_raw_sensors.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_motion_raw_sensors");
 }
 
 /// `ios/fandhe_ios_activity_recognition.m` を `cc` でコンパイルする（Issue #614）。**iOS 分岐のみ**
