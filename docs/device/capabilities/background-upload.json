@@ -20,7 +20,10 @@
       "note": "未実装。背景 session の送信はファイルからだけ（メモリ上のデータ・stream からの送信はアプリの終了後に失敗する、公式）。delegate が必須で、リダイレクトは常に追い delegate は呼ばれない（公式）。同じ identifier で session を作り直すと OS が続けている転送に再び結び付く（公式）。`getAllTasks` は完了・失敗・取り消しで無効になった転送を返さない（公式）。`handleEventsForBackgroundURLSession` は転送がすべて終わったとき（成功・失敗とも）に呼ばれ、未完了の転送しか無い起動では呼ばれない（公式）。利用者がマルチタスク画面から終了すると、その session の転送はすべて取り消される（公式）。application delegate の受け口は background-download（`ios/fandhe_ios_url_scheme.m`）と共用で、identifier で振り分ける"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#833）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_background_upload.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/BackgroundUploadHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/BackgroundUploadWorker.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/background_upload.rs + crates/fandhe-core/src/screens/background_upload.rs + crates/fandhe-device/src/background_upload.rs + scripts/device/serve-upload-sink.mjs、Issue #837",
       "api": "WorkManager（`androidx.work`、導入済み）の `OneTimeWorkRequest` を `enqueueUniqueWork`（`ExistingWorkPolicy.REPLACE`、`NetworkType.CONNECTED` の制約）で依頼し、Worker が `HttpURLConnection` で送る。状態は `getWorkInfosForUniqueWork` / `getWorkInfosForUniqueWorkLiveData` の `WorkInfo`（`State`・`getProgress`・`getOutputData`）から読み、取り消しは `cancelUniqueWork`。OS 管理の送信専用 API（DownloadManager の送信版）は無い",
       "perm": "不要（`INTERNET` は宣言済み。小さなファイル 1 つで前面サービスを使わないため、`POST_NOTIFICATIONS`・`FOREGROUND_SERVICE_DATA_SYNC` は足さない。ローカルの確認用の受け口への平文は background-download の network security config で許可済み）",
       "url": [
@@ -30,7 +33,7 @@
         "https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/long-running",
         "https://developer.android.com/develop/background-work/background-tasks/uidt"
       ],
-      "note": "未実装。転送そのものはアプリのプロセス（Worker）が行い、依頼・制約・再実行・状態の保存は WorkManager が持つ。依頼はアプリの終了・端末の再起動後も残る（公式）。`setProgress` の進み具合は実行中だけ観測でき、終わった後の設定は無視される（公式）。終わった `WorkInfo` は一定期間の後に WorkManager が消す（期間は公式ページで未確認）。長い転送は `setForeground`（前面サービスと通知）が要り、Android 14 以上は前面サービスの種類の宣言が要る（公式）。ユーザー起点のデータ転送ジョブ（`setUserInitiated`、Android 14 以上）は `RUN_USER_INITIATED_JOBS` と通知が要る（公式）。どちらも今回は使わない"
+      "note": "実装済み（#837）。WorkManager の一意名（REPLACE・ネットワーク接続の制約）で依頼し、Worker が HttpURLConnection で固定内容 1 MiB を PUT する。状態は呼ぶたびに getWorkInfosForUniqueWork を読み直し、アプリが持つのは今の要求の UUID だけ（置き換え前の世代の履歴は UUID で捨てる）。LiveData の変化は読み直せの合図にだけ使い、Activity の作り直しでは新しい onCreate が登録し直す。リダイレクトは追わず（setInstanceFollowRedirects(false)）3xx は失敗にする。取り消しは失敗にしない。守る範囲は 1 プロセス内の順序と嘘の成功の禁止、守らない範囲は WorkManager が消した古い結果・接続できない間の待機中表示・複数プロセス。人手の実機確認は #833。転送そのものはアプリのプロセス（Worker）が行い、依頼・制約・再実行・状態の保存は WorkManager が持つ。依頼はアプリの終了・端末の再起動後も残る（公式）。`setProgress` の進み具合は実行中だけ観測でき、終わった後の設定は無視される（公式）。終わった `WorkInfo` は一定期間の後に WorkManager が消す（期間は公式ページで未確認）。長い転送は `setForeground`（前面サービスと通知）が要り、Android 14 以上は前面サービスの種類の宣言が要る（公式）。ユーザー起点のデータ転送ジョブ（`setUserInitiated`、Android 14 以上）は `RUN_USER_INITIATED_JOBS` と通知が要る（公式）。どちらも今回は使わない"
     },
     "macos": {
       "status": "done",
