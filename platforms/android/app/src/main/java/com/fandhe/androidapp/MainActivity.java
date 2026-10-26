@@ -948,6 +948,26 @@ public class MainActivity extends GameActivity {
         return backgroundDownloadHelper.status();
     }
 
+    // OS 管理のバックグラウンド送信（Issue #837）。実装は `BackgroundUploadHelper`。Rust の
+    // `android_background_upload.rs` が同期 JNI で呼び、状態変化は native コールバックで合図される。
+    private final BackgroundUploadHelper backgroundUploadHelper = new BackgroundUploadHelper(this);
+
+    int backgroundUploadStart(String url) {
+        return backgroundUploadHelper.start(url);
+    }
+
+    int backgroundUploadCancel() {
+        return backgroundUploadHelper.cancel();
+    }
+
+    long[] backgroundUploadStatus() {
+        return backgroundUploadHelper.status();
+    }
+
+    int backgroundUploadObserve() {
+        return backgroundUploadHelper.observe();
+    }
+
     // ペン・筆圧入力（Issue #357）。実装は `PenStylusHelper`。
     private final PenStylusHelper penStylusHelper = new PenStylusHelper();
 
@@ -2219,6 +2239,7 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        backgroundUploadHelper.onCreate();
         companionDeviceHelper.init();
         screenBrightnessHelper.onCreate();
         captureProtectionHelper.onCreate();
@@ -4854,7 +4875,7 @@ public class MainActivity extends GameActivity {
     // 作業スレッドから呼ぶため、無期限に待っても画面は固まらない（システムトレイと
     // 同じ判断）。割込みでも中断せず
     // 確定まで待ち、割込み状態は最後に戻す。戻り値: 0 = 成功、1 = 失敗。
-    private static int awaitOperation(androidx.work.Operation operation) {
+    static int awaitOperation(androidx.work.Operation operation) {
         boolean interrupted = false;
         try {
             while (true) {
