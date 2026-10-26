@@ -231,6 +231,9 @@
 //! - `macos/fandhe_macos_app_badge.m`（Issue #1360、`NSDockTile.badgeLabel` によるバッジ設定）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/macos_app_badge.rs`
 //!   から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_app_progress_attention.m`（Issue #860、`NSDockTile.contentView` による進捗バーと
+//!   `requestUserAttention` による注意喚起）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_app_progress_attention.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_launch_at_login.m`（Issue #696、`SMAppService.mainApp` によるログイン時の
 //!   自動起動の登録・解除・状態の読み戻し）は **macOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルする（`src/device/macos_launch_at_login.rs` から呼ばれる契約）。ServiceManagement を
@@ -1519,6 +1522,17 @@ fn compile_macos_file_watch() {
         .compile("fandhe_macos_file_watch");
 }
 
+/// `macos/fandhe_macos_app_progress_attention.m` を `cc` でコンパイルする（Issue #860）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_app_progress_attention.rs` が使う）。AppKit は `build_macos` 側の
+/// 既存リンクで足りるため追加リンクは無い。
+fn compile_macos_app_progress_attention() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_app_progress_attention.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_app_progress_attention.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_app_progress_attention");
+}
+
 /// `macos/fandhe_macos_app_badge.m` を `cc` でコンパイルする（Issue #1360）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_app_badge.rs` が使う）。AppKit は `build_macos` 側の
 /// 既存リンクで足りるため追加リンクは無い。
@@ -2388,6 +2402,8 @@ fn build_macos() {
     compile_macos_window_management();
     // `macos/fandhe_macos_app_badge.m`（Issue #1360）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_app_badge();
+    // `macos/fandhe_macos_app_progress_attention.m`（Issue #860）も macOS 専用。AppKit は既存のリンクを使う。
+    compile_macos_app_progress_attention();
     // `macos/fandhe_macos_launch_at_login.m`（Issue #696）も macOS 専用。ServiceManagement をリンクする。
     compile_macos_launch_at_login();
     // `macos/fandhe_macos_in_app_review.m`（Issue #563）も macOS 専用。StoreKit をリンクする。

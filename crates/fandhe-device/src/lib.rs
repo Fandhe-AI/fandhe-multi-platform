@@ -27,6 +27,8 @@ pub mod alarm;
 pub mod app_attest;
 /// Phase 11（端末機能の拡充ループ、親 #1141、Issue #1360）: アプリアイコンのバッジ（Windows はタスクバーのオーバーレイ数字）。
 pub mod app_badge;
+/// Phase 11 の拡充ループ（親 #174、Issue #860）: Dock・タスクバーの進捗表示と注意喚起。
+pub mod app_progress_attention;
 /// Phase 11（端末機能の拡充ループ、親 #101、Issue #424）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録。
 pub mod app_shortcuts;
 /// Phase 11（端末機能の拡充ループ、親 #90、Issue #307）: AR 表示（追跡状態・位置・水平面の数）。

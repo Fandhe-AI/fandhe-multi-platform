@@ -98,6 +98,10 @@ generated_screens! {
     crate::device::app_badge::app_badge_set_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "app_progress_attention_show" => fandhe_core::screens::app_progress_attention_show::current_screen,
+    crate::device::app_progress_attention::app_progress_attention_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "compose_mail_sms" => fandhe_core::screens::compose_mail_sms::current_screen,
     crate::device::compose_mail_sms::compose_mail_sms_effect,
     effect
