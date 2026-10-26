@@ -663,22 +663,6 @@ public class MainActivity extends GameActivity {
         return audioSessionHelper.read();
     }
 
-    // 音声の割り込み・セッション種別（Issue #842）。実装は `AudioSessionHelper`。
-    // Rust の `android_audio_session.rs` が JNI で呼ぶ。
-    private final AudioSessionHelper audioSessionHelper = new AudioSessionHelper(this);
-
-    int audioSessionStart(long id, int kind) {
-        return audioSessionHelper.start(id, kind);
-    }
-
-    int audioSessionStop(long id) {
-        return audioSessionHelper.stop(id);
-    }
-
-    int audioSessionRead() {
-        return audioSessionHelper.read();
-    }
-
     // カメラのライブ映像（Issue #814）。実装は `CameraPreviewHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_camera_preview_stream.rs` が JNI で呼ぶ。
     private final CameraPreviewHelper cameraPreviewHelper = new CameraPreviewHelper(this);
@@ -5036,7 +5020,6 @@ public class MainActivity extends GameActivity {
         pictureInPictureHelper.onDestroy();
         midiHelper.onDestroy();
         sleepLockEventsHelper.onDestroy();
-        audioSessionHelper.onDestroy();
         audioSessionHelper.onDestroy();
         cameraPreviewHelper.onDestroy();
         callUiHelper.onDestroy();
