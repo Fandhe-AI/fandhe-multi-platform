@@ -212,6 +212,11 @@ pub mod android_midi;
 /// `device/ml_inference.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_ml_inference;
+/// Issue #898: Android 向けジャイロ・磁気・線形加速度の生値実装（骨格。実体は #901）。
+/// `device/motion_raw_sensors.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_motion_raw_sensors;
 /// Issue #1343: Android 向け複数ディスプレイ実装（`DisplayManager` を JNI で読む）。
 /// `device/multi_display.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -925,6 +930,11 @@ pub mod ios_media_transcode;
 /// `device/ml_inference.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_ml_inference;
+/// Issue #898: iOS 向けジャイロ・磁気・線形加速度の生値実装（骨格。実体は #900）。
+/// `device/motion_raw_sensors.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_motion_raw_sensors;
 /// Issue #27: iOS 向け複数ディスプレイ実装（`ios/fandhe_ios_multi_display.m`、scene の `UIScreen`）。
 /// `device/multi_display.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -1275,6 +1285,9 @@ pub mod midi;
 /// 他 OS は
 /// `UnsupportedMlInference` 固定。Web は対象外）。
 pub mod ml_inference;
+/// Phase 11（親 #180、Issue #898）: ジャイロ・磁気・線形加速度の生値の effect ドライバ（iOS・Android・Windows 実装、
+/// 他 OS は `UnsupportedMotionRawSensors` 固定。Web は `fandhe-web-dom` 側）。
+pub mod motion_raw_sensors;
 /// Phase 11 の拡充ループ（親 #1134、Issue #1341）: 複数ディスプレイの effect ドライバ（macOS / Windows
 /// ・iOS・Android 実装、他 OS は `UnsupportedMultiDisplay` 固定）。
 pub mod multi_display;
@@ -1628,6 +1641,11 @@ pub mod windows_midi;
 /// `device/ml_inference.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_ml_inference;
+/// Issue #898: Windows 向けジャイロ・磁気・線形加速度の生値実装（骨格。実体は #899）。
+/// `device/motion_raw_sensors.rs` の Windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_motion_raw_sensors;
 /// Issue #1341: Windows 向け複数ディスプレイ実装（`EnumDisplayMonitors` / `GetMonitorInfoW` /
 /// `GetDpiForMonitor`）。`device/multi_display.rs` の Windows 経路から呼ばれる。写像の純関数を
 /// ホストでテストできるよう cfg は `any(windows, test)`。
