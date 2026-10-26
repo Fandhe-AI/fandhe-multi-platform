@@ -100,6 +100,9 @@ static CMMotionManager *_Nullable g_motion_manager = nil;
 // device motion 自体が非対応（シミュレータ等）だった場合に `true` を保持し、
 // 以後の呼び出しでは device motion を開始せず毎回 1 を返す。
 static BOOL g_motion_unavailable = NO;
+// tilt が一度でも device motion を読んだら立てる（tilt は停止しないため戻さない）。
+// 立っている間は生値側の線形加速度が止めても device motion を維持する。
+static _Atomic BOOL g_tilt_uses_device_motion = NO;
 
 // 共有 manager を返す（`fandhe_ios_motion_raw_sensors.m` が extern 宣言して使う）。
 CMMotionManager *fandhe_ios_shared_motion_manager(void) {
@@ -112,7 +115,7 @@ CMMotionManager *fandhe_ios_shared_motion_manager(void) {
 }
 
 // device motion を未起動のときだけ開始する。0 = 起動済み、1 = 非対応。
-// tilt はこれを止めない（止めると生値側の線形加速度も止まるため、止める責務は持たない）。
+// tilt は止めない。線形加速度だけの利用は `fandhe_ios_device_motion_release_if_unused` で止める。
 int32_t fandhe_ios_device_motion_ensure_started(void) {
     CMMotionManager *manager = fandhe_ios_shared_motion_manager();
     if (g_motion_unavailable) {
@@ -129,7 +132,15 @@ int32_t fandhe_ios_device_motion_ensure_started(void) {
     return 0;
 }
 
+// 線形加速度だけが device motion を使っていた場合に停止する（tilt 利用中は維持）。どのスレッドからでも可。
+void fandhe_ios_device_motion_release_if_unused(void) {
+    if (!g_tilt_uses_device_motion) {
+        [fandhe_ios_shared_motion_manager() stopDeviceMotionUpdates];
+    }
+}
+
 int32_t fandhe_ios_motion_read(float *out_x, float *out_y) {
+    g_tilt_uses_device_motion = YES;
     if (fandhe_ios_device_motion_ensure_started() != 0) {
         return 1;
     }

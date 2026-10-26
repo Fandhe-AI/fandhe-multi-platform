@@ -6,8 +6,8 @@
 // feature `device` 有効時のみ `cc` コンパイルする（CoreMotion・UIKit は他の .m 用にリンク済み）。
 //
 // manager は `fandhe_ios_motion.m`（tilt）と共有する 1 つだけを使う。そちらを正とし、ここでは
-// extern 宣言のみ置く。deviceMotion は tilt が動かしているので、こちらからは止めない
-// （止めるのはジャイロと磁気だけ）。
+// extern 宣言のみ置く。deviceMotion は tilt が使った後は維持し、線形加速度だけが使っていた
+// 場合に限り stop・背景遷移で止める（`fandhe_ios_device_motion_release_if_unused`）。
 //
 // 契約（kind: 0 = 角速度、1 = 磁場、2 = 線形加速度。範囲外は失敗）:
 //   fandhe_ios_motion_raw_start(kind) -> int32_t   0 = 成功（冪等）、1 = 端末に無い（is*Available == NO）、
@@ -28,6 +28,7 @@
 // `fandhe_ios_motion.m` が定義する共有 manager と device motion の起動（tilt と共有）。
 extern CMMotionManager *fandhe_ios_shared_motion_manager(void);
 extern int32_t fandhe_ios_device_motion_ensure_started(void);
+extern void fandhe_ios_device_motion_release_if_unused(void);
 
 // Rust 側（`ios_motion_raw_sensors.rs`）の受け口。値・失敗を確定した直後に次フレームを起こす。
 extern void fandhe_rust_motion_raw_sensors_changed(void);
@@ -134,6 +135,7 @@ static void FandheObserveLifecycleOnce(void) {
                       os_unfair_lock_unlock(&gLock);
                       FandheStopUpdates(kKindGyro);
                       FandheStopUpdates(kKindMag);
+                      fandhe_ios_device_motion_release_if_unused();
                     }];
     [center addObserverForName:UIApplicationWillEnterForegroundNotification
                         object:nil
@@ -148,11 +150,16 @@ static void FandheObserveLifecycleOnce(void) {
                       for (int k = 0; k < kKindCount; k++) {
                           gState[k].since = now;
                           gens[k] = gState[k].gen;
-                          restart[k] = gState[k].active && k != kKindLinear;
+                          restart[k] = gState[k].active;
                       }
                       os_unfair_lock_unlock(&gLock);
                       for (int k = 0; k < kKindCount; k++) {
-                          if (restart[k]) {
+                          if (!restart[k]) {
+                              continue;
+                          }
+                          if (k == kKindLinear) {
+                              fandhe_ios_device_motion_ensure_started();
+                          } else {
                               FandheStartUpdates(k, gens[k]);
                           }
                       }
@@ -255,9 +262,10 @@ void fandhe_ios_motion_raw_stop(int32_t kind) {
     s->failure = 0;
     s->gen++;
     os_unfair_lock_unlock(&gLock);
-    // 線形加速度の deviceMotion は tilt と共有のため止めない。
-    if (kind != kKindLinear) {
-        @autoreleasepool {
+    @autoreleasepool {
+        if (kind == kKindLinear) {
+            fandhe_ios_device_motion_release_if_unused();  // tilt 利用中なら維持される
+        } else {
             FandheStopUpdates(kind);
         }
     }
