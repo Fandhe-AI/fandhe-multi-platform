@@ -17,10 +17,10 @@
 // を受けるために自前の delegate を差し込む（scene 形態では呼ばれないが害は無い）。
 // `UIApplicationMain` より前は `sharedApplication` が無いので、最も早い
 // `UIApplicationDidFinishLaunchingNotification` で `delegate == nil` のときだけ差し込む。
-// 実装するのは `application:openURL:options:` と、背景ダウンロードの
-// `application:handleEventsForBackgroundURLSession:completionHandler:`（Issue #391。`UIApplication.delegate` は
+// 実装するのは `application:openURL:options:` と、背景ダウンロード・背景送信の
+// `application:handleEventsForBackgroundURLSession:completionHandler:`（Issue #391、#836。`UIApplication.delegate` は
 // 1 枠しかなく、UIKit は setDelegate 時に応答メソッドを記録するため、別の delegate を差さず本クラスへ足す。
-// 転送先は `apple/fandhe_apple_background_download.m`）だけで、UIKit の既定動作は変えない。
+// 転送先は `apple/fandhe_apple_background_upload.m`、外れたら `apple/fandhe_apple_background_download.m`）だけで、UIKit の既定動作は変えない。
 //
 // 契約:
 //   fandhe_apple_url_scheme_register(void) -> void
@@ -45,6 +45,7 @@
 #import <UIKit/UIKit.h>
 
 extern void fandhe_rust_url_scheme_received(const uint8_t *ptr, size_t len);
+extern bool fandhe_apple_bgul_handle_events(NSString *identifier, void (^handler)(void));
 extern void fandhe_apple_bgdl_handle_events(NSString *identifier, void (^handler)(void));
 
 static void fandhe_forward_url(NSURL *url) {
@@ -95,12 +96,15 @@ static void fandhe_handle_open_url(NSURL *url) {
   return YES;
 }
 
-// OS が背景ダウンロードの完了でアプリを起こした。handler は `.m` が 1 回だけ呼ぶ。
+// OS が背景転送の完了でアプリを起こした。identifier で振り分ける。download 側は未知の identifier の
+// handler を即返すので、upload を先に照合し、外れたときだけ download へ渡す。handler は `.m` が 1 回だけ呼ぶ。
 - (void)application:(UIApplication *)application
     handleEventsForBackgroundURLSession:(NSString *)identifier
                       completionHandler:(void (^)(void))completionHandler {
   @autoreleasepool {
-    fandhe_apple_bgdl_handle_events(identifier, completionHandler);
+    if (!fandhe_apple_bgul_handle_events(identifier, completionHandler)) {
+      fandhe_apple_bgdl_handle_events(identifier, completionHandler);
+    }
   }
 }
 @end

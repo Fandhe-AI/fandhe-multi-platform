@@ -1,6 +1,6 @@
 // Phase 11 の拡充ループ（親 #170）: OS 管理のバックグラウンド送信を Apple（macOS / iOS）へ橋渡しする
 // （Issue #835 macOS、#836 iOS）。background `NSURLSession` は macOS と iOS で同一 API のため 1 ファイルを
-// 共用する。iOS だけ背景起動の受け口（`TARGET_OS_IOS` の区画）を持つが、その区画は #836 が足す。
+// 共用する。iOS だけ背景起動の受け口（`TARGET_OS_IOS` の区画）を持つ。
 //
 // `crates/fandhe-egui-proxy/src/device/apple_background_upload.rs` から C ABI 経由で呼ばれ、delegate の
 // 通知は同ファイルの `fandhe_rust_bgul_*`（`#[no_mangle]`）へ返す。`build.rs` が `cc` でコンパイルする。
@@ -32,6 +32,9 @@
 //   int32_t fandhe_apple_bgul_cancel(void);   // 0 / 1
 //   int32_t fandhe_apple_bgul_list(FandheBgulTask *out, size_t cap, size_t *out_len);
 //     // 0 / 1。`cap` 件までしか書かない。`out_len` は書いた件数
+//   bool fandhe_apple_bgul_handle_events(NSString *identifier, void (^handler)(void));   // iOS のみ、main thread から
+//     // identifier が upload の session なら true（handler を保持し、`URLSessionDidFinishEventsForBackgroundURLSession:`
+//     // で main thread から 1 回だけ呼ぶ）。違えば false（handler には触らない。呼び出し側が download へ渡す）
 //   delegate → Rust の終了コード: 0 = エラーなし / 1 = 取り消し / 2 = その他の NSURLErrorDomain / 4 = その他
 #import <Foundation/Foundation.h>
 #import <stdbool.h>
@@ -90,6 +93,25 @@ static void cancel_all_tasks(void) {
 @end
 
 @implementation FandheBgulDelegate
+
+#if TARGET_OS_IOS
+// 背景起動の completion handler。main thread だけが触る。
+static void (^g_events_handler)(void) = nil;
+
+// OS が保留中のイベントを配り終えた。delegate queue 上で呼ばれるので main へ非同期に移して handler を呼ぶ
+// （main への `dispatch_sync` はしない、契約表 11）。UI の更新は Rust 側が `request_repaint` で行う。
+- (void)URLSessionDidFinishEventsForBackgroundURLSession:(NSURLSession *)session {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @autoreleasepool {
+            void (^handler)(void) = g_events_handler;
+            g_events_handler = nil;
+            if (handler != nil) {
+                handler();
+            }
+        }
+    });
+}
+#endif
 
 // 進み具合が変わった。状態は運ばず、読み直せの合図だけ送る。
 - (void)URLSession:(NSURLSession *)session
@@ -238,3 +260,28 @@ int32_t fandhe_apple_bgul_list(FandheBgulTask *out, size_t cap, size_t *out_len)
         return 0;
     }
 }
+
+#if TARGET_OS_IOS
+bool fandhe_apple_bgul_handle_events(NSString *identifier, void (^handler)(void)) {
+    @autoreleasepool {
+        if (handler == nil || ![identifier isEqualToString:kSessionId]) {
+            return false;  // 自分の session ではない。handler には触らない。
+        }
+        // 各 handler を必ず 1 回だけ呼ぶ。前のものが残っていれば先に呼んでから差し替える。
+        void (^previous)(void) = g_events_handler;
+        g_events_handler = [handler copy];
+        if (previous != nil) {
+            previous();
+        }
+        // session を作り直す（`dispatch_once` で冪等）。作れなければ配るイベントは無いので handler を返す。
+        if (fandhe_apple_bgul_init() != 0) {
+            void (^h)(void) = g_events_handler;
+            g_events_handler = nil;
+            if (h != nil) {
+                h();
+            }
+        }
+        return true;
+    }
+}
+#endif
