@@ -60,15 +60,18 @@
       "impl": "crates/fandhe-egui-proxy/src/device/windows_app_lifecycle.rs + crates/fandhe-egui-proxy/src/device/app_lifecycle.rs + crates/fandhe-core/src/screens/app_lifecycle_show.rs + crates/fandhe-device/src/app_lifecycle.rs、Issue #893"
     },
     "web": {
-      "status": "possible",
-      "api": "Page Visibility API（`visibilitychange`）、`window` の `focus` / `blur`、Page Lifecycle の `freeze` / `resume`、`pageshow` の `persisted`（bfcache 復帰）",
+      "status": "done",
+      "api": "Page Visibility API（`visibilitychange`）、`window` の `focus` / `blur`、Page Lifecycle の `freeze` / `resume`、`pageshow` の `persisted`（bfcache 復帰）、今の状態の `document.hasFocus()` と `visibilityState`",
       "perm": "不要",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API",
         "https://developer.chrome.com/docs/web-platform/page-lifecycle-api"
       ],
       "safari": "一部対応（visibilitychange / pageshow は対応、freeze / resume は非対応）",
-      "note": "未実装。`freeze` / `resume` は Chromium 系のみ（Firefox も非対応）。bfcache 復帰は `pageshow` の `persisted` で判定。破棄（discard）はその時点では観測できない。"
+      "note": "実装済み（#896）。`freeze` / `resume` は `document.onfreeze` があるとき（Chromium 系）だけ購読し、無ければ「この OS では取れない」と出す。bfcache 中もリスナーを保ち、`pageshow` の `persisted` が真のときだけ記録して今の状態を読み直す。`isTrusted` が偽の出来事は捨てる。`visibilitychange` は届いた時点の `visibilityState` で見えなくなった・見えるようになったに分け、それ以外は出来事にしない。今の状態は `hasFocus()` と `visibilityState` を問い直し、読めない値は前面・見えているに畳まない。停止・マウント破棄・登録失敗でリスナーを外す。守らない範囲は画面を開く前と止めた後の出来事、複数タブ・複数マウント、iframe 内のフォーカス移動、ブラウザ間の「見える」の定義差。破棄（discard）は観測できない。",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#883）",
+      "impl": "crates/fandhe-web-dom/src/app_lifecycle.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/app_lifecycle_show.rs + crates/fandhe-device/src/app_lifecycle.rs、Issue #896"
     }
   },
   "note": "描画ループ内部の休止判定ではなく、アプリが前面・背面・凍結の状態を知って保存や停止を行うための通知 API。出来事は操作の対象になった・外れた、見える・見えなくなった、凍結された・戻った、bfcache から戻った。OS が知らせない種類は「この OS では取れない」と宣言する。状態はアプリ内に覚えず、出来事は OS の通知だけ、今の状態は届くたびに OS へ問い直す。タイマー・遅延を使わず、届かなかった出来事を補わない。守る範囲は 1 プロセス内の順序・読めない状態を前面に畳まないこと・資源の解放。守らない範囲は画面を開く前と止めた後の出来事、OS 間の「操作の対象」「見える」の定義差、Android の停止中の再生成、複数プロセス・複数窓・複数 scene。終了の通知、iOS の suspended、Android のキャッシュ凍結、macOS の App Nap、Web の discard、システムのスリープ・ロック（sleep-lock-events の担当）は範囲外。"

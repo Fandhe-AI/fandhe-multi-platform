@@ -109,6 +109,7 @@
 //!   純関数（失敗種別の写像・ID の値域検査・行への写像）のみ `wasm32` gate の外に置く
 //! - [`serial_port`]: 「シリアルポート」画面の Web 経路（親 #131、Issue #672）。
 //!   純関数（例外名の写像・期限判定・受信チャンクの行組み立て）のみ `wasm32` gate の外に置く
+//! - [`app_lifecycle`]: 「アプリの前面・背面」画面の Web 経路（親 #178、Issue #896）。純関数のみ `wasm32` gate の外に置く
 //! - [`user_idle`]: 「無操作時間の検知」画面の Web 経路（親 #125、Issue #632）。
 //!   純関数（許可・例外名・状態の写像と effect の判断）のみ `wasm32` gate の外に置く
 //! - [`flashlight`]: 「ライト（トーチ）」画面の Web 経路（親 #106、Issue #462）。
@@ -326,6 +327,8 @@ pub use mount::{mount, mount_with_effect, Applier, WebEffect};
 
 /// 型サンプル「バッジの設定」の Web 経路（Issue #1363）。[`haptics`] と同じ理由で gate を外す。
 pub mod app_badge;
+/// 型サンプル「アプリの前面・背面」の Web 経路（Issue #896）。[`haptics`] と同じ理由で純関数は native からもテストできるよう gate を外す。
+pub mod app_lifecycle;
 /// 型サンプル「AR 表示」の Web 経路（Issue #309）。[`haptics`] と同じ理由で gate を外す。
 pub mod ar;
 /// 型サンプル「パスワード・ワンタイムコードの自動入力」の Web 経路（Issue #587）。[`haptics`] と同じ理由で純関数は
