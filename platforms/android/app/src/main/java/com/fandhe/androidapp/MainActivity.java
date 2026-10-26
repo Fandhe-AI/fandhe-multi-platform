@@ -573,6 +573,22 @@ public class MainActivity extends GameActivity {
         environmentSensorsHelper.stop(kind);
     }
 
+    // ジャイロ・磁気・線形加速度の生値（Issue #901）。実装は `MotionRawSensorsHelper`。Rust の
+    // `android_motion_raw_sensors.rs` が同期 JNI で呼ぶ。
+    private final MotionRawSensorsHelper motionRawSensorsHelper = new MotionRawSensorsHelper(this);
+
+    int motionRawSensorsStart(int kind) {
+        return motionRawSensorsHelper.start(kind);
+    }
+
+    long[] motionRawSensorsRead(int kind) {
+        return motionRawSensorsHelper.read(kind);
+    }
+
+    void motionRawSensorsStop(int kind) {
+        motionRawSensorsHelper.stop(kind);
+    }
+
     // 音声再生（Issue #270）。実装は `MediaPlaybackHelper`。Rust の `android_media_playback.rs` が同期 JNI で呼ぶ。
     private final MediaPlaybackHelper mediaPlaybackHelper = new MediaPlaybackHelper();
 
@@ -2750,6 +2766,7 @@ public class MainActivity extends GameActivity {
         inAppBrowserHelper.onResume();
         compassHelper.onResume();
         environmentSensorsHelper.onResume();
+        motionRawSensorsHelper.onResume();
         localPeerHelper.onResume();
         bluetoothClassicHelper.onResume();
         mediaPlaybackHelper.onResume();
@@ -2852,6 +2869,7 @@ public class MainActivity extends GameActivity {
         bluetoothClassicHelper.onPause();
         compassHelper.onPause();
         environmentSensorsHelper.onPause();
+        motionRawSensorsHelper.onPause();
         mediaPlaybackHelper.onPause();
         nowPlayingHelper.onPause();
         cameraPreviewHelper.onPause();
@@ -5114,6 +5132,7 @@ public class MainActivity extends GameActivity {
         wifiInfoHelper.onDestroy();
         compassHelper.onDestroy();
         environmentSensorsHelper.onDestroy();
+        motionRawSensorsHelper.onDestroy();
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
         midiHelper.onDestroy();
