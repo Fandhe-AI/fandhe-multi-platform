@@ -68,6 +68,9 @@ use fandhe_core::screens::device_info_show::{
     current_screen as current_device_info_screen, DeviceInfoShowState,
 };
 use fandhe_core::screens::drag_drop::{current_screen as current_drag_drop_screen, DragDropState};
+use fandhe_core::screens::external_app_launch_show::{
+    current_screen as current_external_app_launch_show_screen, ExternalAppLaunchState,
+};
 use fandhe_core::screens::eye_dropper_pick::{
     current_screen as current_eye_dropper_screen, EyeDropperState,
 };
@@ -1164,6 +1167,21 @@ pub fn mount_compose_mail_sms_screen(root_id: &str) -> Result<(), JsValue> {
         current_compose_mail_sms_screen(&initial_state),
         initial_state,
         super::compose_mail_sms::compose_mail_sms_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「他アプリの起動」（親 #176、Issue #864）をマウントする
+/// 検証専用エントリポイント。`super::external_app_launch::external_app_launch_show_effect` が `tel:` / `geo:` へ遷移する。
+#[wasm_bindgen]
+pub fn mount_external_app_launch_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = ExternalAppLaunchState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_external_app_launch_show_screen(&initial_state),
+        initial_state,
+        super::external_app_launch::external_app_launch_show_effect,
     )
 }
 

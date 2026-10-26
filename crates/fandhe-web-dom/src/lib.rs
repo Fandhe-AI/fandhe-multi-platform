@@ -338,6 +338,8 @@ pub mod barcode_scan;
 pub mod compass;
 /// 型サンプル「メール・SMS の作成」の Web 経路（Issue #1387）。[`haptics`] と同じ理由で gate を外す。
 pub mod compose_mail_sms;
+/// 型サンプル「他アプリの起動（電話・地図）」の Web 経路（Issue #864）。[`haptics`] と同じ理由で gate を外す。
+pub mod external_app_launch;
 /// 型サンプル「ライト（トーチ）」の Web 経路（Issue #462）。[`haptics`] と同じ理由で gate を外す。
 pub mod flashlight;
 /// 型サンプル「全画面表示」の Web 経路（Issue #1315）。[`haptics`] と同じ理由で gate を外す。
