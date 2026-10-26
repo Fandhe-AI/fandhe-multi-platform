@@ -24,8 +24,10 @@ import androidx.activity.ComponentActivity;
 // コードの SSOT はここで、Rust 側 `android_audio_session.rs` が同じ値で写像する。
 //   kind: 0 = StopOthers / 1 = DuckOthers
 //   start の戻り値: 1 = GRANTED / 0 = FAILED / 2 = DELAYED（遅延獲得を要求しないので来ない想定）/
-//                   -1 = API 26 未満 / -2 = 例外・破棄済み・未知の kind
+//                   -1 = API 26 未満 / -2 = 例外・破棄済み・未知の kind /
+//                   -3 = 失敗の後始末（フォーカス・レシーバーの解除）も失敗＝元に戻せていない
 //   stop の戻り値: 0 = 解除済み（現在の id でなければ何もせず 0）/ 1 = 解除の失敗
+//                  （onDestroy の解除が失敗していた id の stop も 1）
 //   native の code: focusChange の生値（1 / -1 / -2 / -3）または 1000（BECOMING_NOISY）
 //   read の戻り値: -1 = 失敗。bit 0-7 = AudioManager.getMode()（範囲外は 0xFF = 不明）、bit 8 = isMusicActive()
 //
@@ -43,6 +45,7 @@ final class AudioSessionHelper {
     static final int START_DELAYED = 2;
     static final int START_UNSUPPORTED = -1;
     static final int START_ERROR = -2;
+    static final int START_UNRESTORED = -3;
 
     static final int KIND_STOP_OTHERS = 0;
     static final int KIND_DUCK_OTHERS = 1;
@@ -61,6 +64,8 @@ final class AudioSessionHelper {
     private AudioFocusRequest request;
     private BroadcastReceiver receiver;
     private boolean destroyed;
+    // onDestroy の解除に失敗した購読の id。その id の stop は解除失敗として返す。
+    private long lostId = NONE;
 
     AudioSessionHelper(ComponentActivity activity) {
         this.activity = activity;
@@ -88,7 +93,9 @@ final class AudioSessionHelper {
                 return START_ERROR;
             }
             // 古い購読を残さないための片付け（通常は購読が 1 本なので起きない）。
-            releaseLocked();
+            if (!releaseLocked()) {
+                return START_UNRESTORED;
+            }
             AudioManager am = audioManager();
             if (am == null) {
                 return START_ERROR;
@@ -131,7 +138,9 @@ final class AudioSessionHelper {
                 return START_GRANTED;
             }
             // GRANTED 以外は何も保持しない。abandon は DELAYED の取り消しを兼ねる（結果は無視）。
-            releaseLocked();
+            if (!releaseLocked()) {
+                return START_UNRESTORED;
+            }
             if (result == AudioManager.AUDIOFOCUS_REQUEST_FAILED) {
                 return START_FAILED;
             }
@@ -142,6 +151,10 @@ final class AudioSessionHelper {
     // 現在の id と一致するときだけ解除する（再生成後の新インスタンスへ届く古い id の stop は何もしない）。
     int stop(long id) {
         synchronized (lock) {
+            if (lostId != NONE && id == lostId) {
+                lostId = NONE;
+                return 1;
+            }
             if (current == NONE || id != current) {
                 return 0;
             }
@@ -152,7 +165,10 @@ final class AudioSessionHelper {
     void onDestroy() {
         synchronized (lock) {
             destroyed = true;
-            releaseLocked();
+            long id = current;
+            if (!releaseLocked() && id != NONE) {
+                lostId = id;
+            }
         }
     }
 

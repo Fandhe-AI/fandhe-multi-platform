@@ -395,12 +395,14 @@ pub fn event_from_android_code(code: i32) -> Option<AudioSessionEvent> {
 
 /// `requestAudioFocus` の結果 → 開始結果。1（GRANTED）だけ `Ok`、0（FAILED）は `Rejected`、
 /// 2（DELAYED）は遅延獲得を要求しないので成功にしない、-1（API 26 未満）は `Unsupported`、
+/// -3（失敗の後始末の解除も失敗）は `Failed { restored: false }`、
 /// -2（JNI 例外等）と未知の値は `Failed { restored: true }`。
 pub fn start_result_from_android(code: i32) -> Result<(), StartFailure> {
     match code {
         1 => Ok(()),
         0 => Err(StartFailure::Rejected),
         -1 => Err(StartFailure::Unsupported),
+        -3 => Err(StartFailure::Failed { restored: false }),
         _ => Err(StartFailure::Failed { restored: true }),
     }
 }
@@ -487,6 +489,10 @@ mod tests {
         assert_eq!(
             start_result_from_android(-1),
             Err(StartFailure::Unsupported)
+        );
+        assert_eq!(
+            start_result_from_android(-3),
+            Err(StartFailure::Failed { restored: false })
         );
         for c in [2, -2, 3, 99] {
             assert_eq!(
