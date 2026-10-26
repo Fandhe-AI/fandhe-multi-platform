@@ -271,7 +271,7 @@ pub mod android_print;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_quick_settings_tile;
-/// Issue #858: Android 向け外部ストレージの着脱の骨格（`Unsupported` のスタブ。#859 が埋める）。
+/// Issue #859: Android 向け外部ストレージの着脱の実装（`RemovableStorageHelper` 経由の JNI。骨格は #858）。
 /// `device/removable_storage.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -1327,7 +1327,7 @@ pub mod print;
 /// （macOS は App Group の回数ファイル、Android は SharedPreferences の回数、他 OS は `UnsupportedQuickSettingsTile` 固定）。
 pub mod quick_settings_tile;
 /// Phase 11 の拡充ループ（親 #175、Issue #858）: 外部ストレージの着脱の effect ドライバ
-/// （macOS・Windows 実装、Android は骨格のスタブで #859 が埋める。他 OS は `UnsupportedRemovableStorage` 固定）。
+/// （macOS・Windows 実装、Android は JNI 実装（#859）。他 OS は `UnsupportedRemovableStorage` 固定）。
 pub mod removable_storage;
 /// request/response 型端末機能共通の要求追跡（Issue #943、親 #941）。share /
 /// biometric_auth / file_pick の `bridge` facade から使う。4 OS
