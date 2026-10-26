@@ -733,6 +733,14 @@ public class MainActivity extends GameActivity {
         systemSettingsHelper.open(requestId, page);
     }
 
+    // 電話発信・地図など他アプリの起動（Issue #863）。実装は `ExternalAppLaunchHelper`。
+    // Rust の `android_external_app_launch.rs` が JNI で呼ぶ。
+    private final ExternalAppLaunchHelper externalAppLaunchHelper = new ExternalAppLaunchHelper(this);
+
+    void requestExternalAppLaunch(long requestId, int target, String uri) {
+        externalAppLaunchHelper.launch(requestId, target, uri);
+    }
+
     // OAuth 用 Web 認証セッション（Issue #534）。実装は `WebAuthSessionHelper`。
     // Rust の `android_web_auth_session.rs` が JNI で呼ぶ。
     private final WebAuthSessionHelper webAuthSessionHelper = new WebAuthSessionHelper(this);
