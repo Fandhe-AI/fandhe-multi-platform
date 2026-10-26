@@ -8,8 +8,7 @@
 //!
 //! [`platform_app_lifecycle`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（macOS: `macos_app_lifecycle`、Windows: `windows_app_lifecycle`（いずれも #893）、
-//! iOS: `ios_app_lifecycle`、Android: `android_app_lifecycle`（b-android が埋める
-//! スタブ））。それ以外（Linux 等）は `UnsupportedAppLifecycle` 固定で、ダミーの成功実装へは倒さない。
+//! iOS: `ios_app_lifecycle`、Android: `android_app_lifecycle`）。それ以外（Linux 等）は `UnsupportedAppLifecycle` 固定で、ダミーの成功実装へは倒さない。
 //! Web は本ドライバを通らない（`fandhe-web-dom`）。OS のコールバックは [`register`] で得た `id` を持ち、
 //! [`fire`] を呼ぶ。macOS・iOS の `.m` は `extern "C"` の受け口 `fandhe_rust_app_lifecycle_fire` を使う。
 //!
@@ -81,10 +80,10 @@ fn platform_app_lifecycle() -> Arc<dyn AppLifecycle> {
 // ---- 登録表（全 OS 共通）-------------------------------------------------------------------
 
 type Callbacks = Mutex<HashMap<u64, OnSignal>>;
-#[allow(dead_code)] // Android が使い始めるまで未使用（使うのは register / fire）。
+#[allow(dead_code)] // 対象 OS（macOS・Windows・iOS・Android）以外では未使用。
 static CALLBACKS: std::sync::LazyLock<Callbacks> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
-#[allow(dead_code)] // Android が使い始めるまで未使用。
+#[allow(dead_code)] // 対象 OS 以外では未使用。
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -93,7 +92,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 
 /// OS コールバックが引く `id` を発行して合図の送り先を登録する。OS 側は生ポインタではなく
 /// この `id` だけを持ち、停止後に遅れて届いた呼び出しは [`fire`] が捨てる。
-#[allow(dead_code)] // Android は b-android が使い始めるまで未使用（macOS・Windows・iOS は使用）。
+#[allow(dead_code)] // 対象 OS 以外では未使用。
 pub(crate) fn register(cb: OnSignal) -> u64 {
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
     lock(&CALLBACKS).insert(id, cb);
@@ -101,13 +100,13 @@ pub(crate) fn register(cb: OnSignal) -> u64 {
 }
 
 /// 登録を外す。停止の最初に呼び、以後の [`fire`] は何もしない。
-#[allow(dead_code)] // Android は b-android が使い始めるまで未使用（macOS・Windows・iOS は使用）。
+#[allow(dead_code)] // 対象 OS 以外では未使用。
 pub(crate) fn unregister(id: u64) {
     lock(&CALLBACKS).remove(&id);
 }
 
 /// 合図を送る。ロックの内側では呼ばず、登録表に無い `id`（停止後の遅れた呼び出し）は捨てる。
-#[allow(dead_code)] // Android は b-android が使い始めるまで未使用（macOS・Windows・iOS は使用）。
+#[allow(dead_code)] // 対象 OS 以外では未使用。
 pub(crate) fn fire(id: u64, signal: Signal) {
     let cb = lock(&CALLBACKS).get(&id).cloned();
     if let Some(cb) = cb {

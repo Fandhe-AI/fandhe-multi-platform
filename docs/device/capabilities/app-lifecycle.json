@@ -20,7 +20,7 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_app_lifecycle.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_app_lifecycle.m + crates/fandhe-egui-proxy/src/device/app_lifecycle.rs + crates/fandhe-core/src/screens/app_lifecycle_show.rs + crates/fandhe-device/src/app_lifecycle.rs、Issue #894"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`Activity` の `onResume` / `onPause` / `onStart` / `onStop`、`isChangingConfigurations()`、今の状態の `ActivityManager.getMyMemoryState`（`importance`）",
       "perm": "不要",
       "url": [
@@ -28,7 +28,10 @@
         "https://developer.android.com/reference/android/app/Activity#isChangingConfigurations()",
         "https://developer.android.com/reference/android/app/ActivityManager#getMyMemoryState(android.app.ActivityManager.RunningAppProcessInfo)"
       ],
-      "note": "未実装。`ProcessLifecycleOwner` は依存追加が要り、`ON_PAUSE` / `ON_STOP` を意図的に遅らせて配る（推測タイマー）ため採らない。再生成は `isChangingConfigurations()` で区別する（停止中の再生成は区別できない、公式）。キャッシュ状態の凍結を知らせる API は見当たらない。`getMyMemoryState` を minSdk 24 で使えるかは実装時に確認する。"
+      "note": "実装済み（#895）。操作の対象になった・外れた（onResume / onPause）、見えるようになった・見えなくなった（onStart / onStop）の 4 種を受け、凍結・bfcache 復帰は「この OS では取れない」と出す。`ProcessLifecycleOwner` は依存追加が要り、`ON_PAUSE` / `ON_STOP` を意図的に遅らせて配る（推測タイマー）ため採らない。再生成は `isChangingConfigurations()` で区別し、その間の onPause / onStop は出来事にしない（停止中の再生成は区別できない、公式）。今の状態は画面を開いた時と出来事が届くたびに `getMyMemoryState` の `importance`（API 16 のため minSdk 24 で使える）を問い直し、想定外の値は「不明」、読み取りの失敗は失敗として出す。`importance` の更新が通知より遅れて一時的に食い違うことは守らない範囲。停止後と再生成前の古い id の通知は登録表で捨てる。キャッシュ状態の凍結を知らせる API は見当たらない。",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#883）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_app_lifecycle.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/AppLifecycleHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/app_lifecycle.rs + crates/fandhe-core/src/screens/app_lifecycle_show.rs + crates/fandhe-device/src/app_lifecycle.rs、Issue #895"
     },
     "macos": {
       "status": "done",

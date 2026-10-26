@@ -647,6 +647,22 @@ public class MainActivity extends GameActivity {
         return sleepLockEventsHelper.read();
     }
 
+    // アプリの前面・背面の通知（Issue #895）。実装は `AppLifecycleHelper`。
+    // Rust の `android_app_lifecycle.rs` が JNI で呼ぶ。
+    private final AppLifecycleHelper appLifecycleHelper = new AppLifecycleHelper(this);
+
+    int appLifecycleStart(long id) {
+        return appLifecycleHelper.start(id);
+    }
+
+    void appLifecycleStop(long id) {
+        appLifecycleHelper.stop(id);
+    }
+
+    int appLifecycleRead() {
+        return appLifecycleHelper.read();
+    }
+
     // 外部ストレージの着脱（Issue #859）。実装は `RemovableStorageHelper`。
     // Rust の `android_removable_storage.rs` が JNI で呼ぶ。
     private final RemovableStorageHelper removableStorageHelper = new RemovableStorageHelper(this);
@@ -925,12 +941,14 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onStart() {
         super.onStart();
+        appLifecycleHelper.onStart();
         flashlightHelper.onStart();
         captureProtectionHelper.onStart();
     }
 
     @Override
     protected void onStop() {
+        appLifecycleHelper.onStop();
         flashlightHelper.onStop();
         captureProtectionHelper.onStop();
         super.onStop();
@@ -2710,6 +2728,7 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        appLifecycleHelper.onResume();
         activityResumed = true;
         webAuthSessionHelper.onResume();
         inAppBrowserHelper.onResume();
@@ -2802,6 +2821,7 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        appLifecycleHelper.onPause();
         // `requestLocationUpdates`/`requestLocationPermission` の Runnable・コールバックが
         // ここより後に UI スレッドで実行される場合に、停止済み Activity へリスナーを
         // 再登録しないようにするための可視性フラグ（codex-review P1 指摘、PR #894）。
@@ -5076,6 +5096,7 @@ public class MainActivity extends GameActivity {
         pictureInPictureHelper.onDestroy();
         midiHelper.onDestroy();
         sleepLockEventsHelper.onDestroy();
+        appLifecycleHelper.onDestroy();
         removableStorageHelper.onDestroy();
         audioSessionHelper.onDestroy();
         cameraPreviewHelper.onDestroy();
