@@ -8,40 +8,57 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "`UIApplication.didReceiveMemoryWarningNotification`。`DispatchSource.makeMemoryPressureSource`（段階つき）",
+      "api": "`UIApplication.didReceiveMemoryWarningNotification`（userInfo なし）。`DISPATCH_SOURCE_TYPE_MEMORYPRESSURE`（normal / warning / critical の変化）",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/uikit/uiapplication/didreceivememorywarningnotification",
-      "note": "未実装。段階つきの Memory Pressure Source は iOS でも使える見込みだが要確認。"
+      "url": [
+        "https://developer.apple.com/documentation/uikit/uiapplication/didreceivememorywarningnotification",
+        "https://developer.apple.com/documentation/dispatch/dispatch_source_type_memorypressure",
+        "https://developer.apple.com/documentation/dispatch/dispatchsource/memorypressureevent"
+      ],
+      "note": "未実装。公式の対象 OS に iOS が載る。observer は main キュー指定で受ける。通知の発行スレッドと、背景で停止中に届くかは公式に記載なし。"
     },
     "android": {
       "status": "possible",
-      "api": "`ComponentCallbacks2.onTrimMemory(level)` / `onLowMemory`",
+      "api": "`ComponentCallbacks2.onTrimMemory(level)`。API 34 以上は `TRIM_MEMORY_UI_HIDDEN` / `TRIM_MEMORY_BACKGROUND` のみ届き、`onLowMemory` は API 34 以上で呼ばれない。今の状態は `ActivityManager.MemoryInfo.lowMemory`",
       "perm": "不要",
-      "url": "https://developer.android.com/reference/android/content/ComponentCallbacks2",
-      "note": "未実装。Activity / Application で受ける。level の段階が細かい。"
+      "url": [
+        "https://developer.android.com/reference/android/content/ComponentCallbacks2",
+        "https://developer.android.com/reference/android/app/ActivityManager.MemoryInfo"
+      ],
+      "note": "未実装。Application Context へ登録して受ける。段階は API 33 以下は 7 段階、34 以上は 2 段階。今後増えうるため特定の値に依存せず大小で見る（公式）。`lowMemory` は「システムが今メモリ不足と見なしているか」（公式）。"
     },
     "macos": {
       "status": "possible",
-      "api": "`DispatchSource.makeMemoryPressureSource`（`.warning` / `.critical`）",
+      "api": "`DISPATCH_SOURCE_TYPE_MEMORYPRESSURE`（libdispatch の C API。normal / warning / critical）",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/dispatch/dispatchsource/memorypressureevent",
-      "note": "未実装。Rust からは libdispatch の C API を直呼びできる見込み。URL 未確認（一般知識、要確認）。"
+      "url": [
+        "https://developer.apple.com/documentation/dispatch/dispatch_source_type_memorypressure",
+        "https://developer.apple.com/documentation/dispatch/dispatchsource/memorypressureevent"
+      ],
+      "note": "未実装。Rust からは libdispatch の C API を直呼びする。今の段階を読む公開 API は無く、非公開の sysctl は使わない。"
     },
     "windows": {
       "status": "possible",
-      "api": "`CreateMemoryResourceNotification`（`LowMemoryResourceNotification`）+ 待機。UWP は `MemoryManager.AppMemoryUsageLimitChanging`",
+      "api": "`CreateMemoryResourceNotification`（`LowMemoryResourceNotification` / `HighMemoryResourceNotification`）+ 待機。今の状態は `QueryMemoryResourceNotification`",
       "perm": "不要",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-creatememoryresourcenotification",
-      "note": "未実装。システム全体の低メモリ通知で、プロセス単位ではない。"
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-creatememoryresourcenotification",
+        "https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-querymemoryresourcenotification"
+      ],
+      "note": "未実装。システム全体の値でプロセス単位ではない。Low / High は条件が成り立つ間 signaled の状態オブジェクトで、どちらでもない中間帯がある（公式）。UWP の `MemoryManager` は採らない（Win32 で足りる）。"
     },
     "web": {
       "status": "possible",
-      "api": "Compute Pressure API（`PressureObserver`、CPU の nominal / fair / serious / critical）。メモリ逼迫の標準通知は無い",
+      "api": "Compute Pressure API（`PressureObserver.observe(\"cpu\")`、nominal / fair / serious / critical）。メモリ逼迫の標準通知は無い",
       "perm": "不要（Permissions Policy `compute-pressure`）",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Compute_Pressure_API",
+      "url": [
+        "https://developer.mozilla.org/en-US/docs/Web/API/Compute_Pressure_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/PressureObserver/observe",
+        "https://w3c.github.io/compute-pressure/"
+      ],
       "safari": "非対応",
-      "note": "未実装。メモリではなく CPU 負荷のみ。Chromium 系のみ・要セキュアコンテキスト。"
+      "note": "未実装。メモリではなく CPU の負荷として明記して出す。Chromium 系のみ・secure context 必須。非対応 source は `NotSupportedError`、Policy 拒否は `NotAllowedError`（別の文言で出す）。届くのは implicit focus を持つ文書だけで、変化が多いと間引かれる（仕様）。`thermals` は仕様で at-risk のため扱わない。"
     }
   },
-  "note": "power-state の熱・電池とは別に、メモリ逼迫（と Web の Compute Pressure による CPU 負荷）の通知を扱う。"
+  "note": "power-state の熱・電池とは別に、メモリ逼迫（と Web の Compute Pressure による CPU 負荷）の通知を扱う。範囲: sleep-lock-events と同じ形。画面を開いている間に届いた合図を受信順の番号つきで直近 8 件と種類ごとの回数で並べ、今の状態を読める OS（Android・Windows）は画面を開いた時と合図のたびに OS へ問い直す。「受け取りを始める」「止める」で切り替え、画面を離れたら止める。メモリ解放など合図に応じた処理はしない。種別: iOS はメモリ警告と段階、Android は trim 段階（値をそのまま持ち、未知の値も捨てない）、macOS は段階、Windows は Low / High、Web は CPU の段階。失敗・非対応・許可なしを区別する。OS を正にする: 合図は OS の通知だけで受け、「平常」をアプリ側で仮定しない（最初の通知までは「まだ届いていない」）。今の状態は読むたびに OS へ問い、最後の合図から作らない。タイマー・ポーリングを使わない。守る: 1 プロセス内の順序、嘘の成功の禁止（読めない状態を「逼迫していない」に畳まない）、資源の解放（解除後の通知は捨てる）。守らない: 画面を開く前・止めた後の合図、背景で停止中の合図、Windows の中間帯をまたぐ変化、Web の implicit focus を失った間の記録と間引き、OS 間の「逼迫」基準の差、システム全体の値でありプロセス単位でないこと、複数プロセス・複数窓・複数タブ、OS 側の通知の遅れ。"
 }
