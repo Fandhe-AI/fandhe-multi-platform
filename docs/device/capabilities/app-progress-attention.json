@@ -22,17 +22,28 @@
     },
     "macos": {
       "status": "possible",
-      "api": "AppKit `NSDockTile.contentView`（進捗の自前描画）、`NSApplication.requestUserAttention`（Dock のバウンス）",
-      "perm": "不要",
-      "url": "https://developer.apple.com/documentation/appkit/nsapplication/1428358-requestuserattention",
-      "note": "未実装。進捗バーは contentView を自前で描く。バッジ数は app-badge が扱う。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "AppKit `NSDockTile.contentView` + `display`（アイコンと進捗バーを自分で描く）、`NSApplication.requestUserAttention(.criticalRequest)`（Dock のアイコンが跳ね続ける）",
+      "perm": "なし",
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nsdocktile/contentview",
+        "https://developer.apple.com/documentation/appkit/nsdocktile/display()",
+        "https://developer.apple.com/documentation/appkit/nsapplication/requestuserattention(_:)",
+        "https://developer.apple.com/documentation/appkit/nsapplication/requestuserattentiontype/criticalrequest"
+      ],
+      "note": "未実装。`contentView` を設定するとタイル全体を自前で描く（アプリのアイコンも描く。バッジは OS が上に重ねるので描かない）。Cocoa は自動で描き直さないため、変更のたびに `display` を送る。`NSDockTile` は `NSApp.dockTile` だけで届き、ウィンドウハンドルは要らない。`requestUserAttention` の戻り値は取り消し用の id。前面のアプリへ送っても何も起きず、アプリを前面にすると OS が要求を取り消す。`.criticalRequest` は前面になるか取り消されるまで跳ね続ける。読み戻す API は無い"
     },
     "windows": {
       "status": "possible",
-      "api": "Win32 `ITaskbarList3::SetProgressState` / `SetProgressValue`、`FlashWindowEx`",
-      "perm": "不要",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-itaskbarlist3",
-      "note": "未実装。app-badge の Windows と同じ `ITaskbarList3`（オーバーレイは app-badge、進捗は本機能）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "Win32 `ITaskbarList3::SetProgressValue` / `SetProgressState(TBPF_NOPROGRESS)`、`FlashWindowEx`（`FLASHW_ALL | FLASHW_TIMERNOFG`）",
+      "perm": "なし",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-itaskbarlist3",
+        "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-itaskbarlist3-setprogressvalue",
+        "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-itaskbarlist3-setprogressstate",
+        "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-flashwindowex",
+        "https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-flashwinfo"
+      ],
+      "note": "未実装。app-badge の Windows と同じ `ITaskbarList3` と HWND（オーバーレイは app-badge、進捗は本機能）。`SetProgressValue` は `HRESULT` を返し、`TBPF_ERROR` / `TBPF_PAUSED` でなければ呼ぶだけで `TBPF_NORMAL` 扱い。終わったら `SetProgressState(TBPF_NOPROGRESS)` で消す。ハイコントラスト配色では進捗が出ない。`FlashWindowEx` の戻り値は失敗ではなく「呼ぶ前にキャプションが active 描画だったか」で、失敗を表す戻り値は無い。`FLASHW_TIMERNOFG` は前面に来るまで点滅し続ける。読み戻す API は無い"
     },
     "web": {
       "status": "no",
@@ -42,5 +53,5 @@
       "note": "タブやウィンドウのタスクバー進捗・点滅の標準 API はない（`navigator.setAppBadge` は app-badge で扱う）。"
     }
   },
-  "note": "app-badge はアイコンの数字・オーバーレイで、本機能はタスクバー進捗バーと Dock のバウンス・タスクバー点滅（利用者の注意を引く）。notification とも別。"
+  "note": "app-badge はアイコンの数字・オーバーレイで、本機能はタスクバー進捗バーと Dock のバウンス・タスクバー点滅（利用者の注意を引く）。notification とも別。今回の範囲: 進捗は 0〜100 の確定値（%）を OS へ渡す／消すだけ（範囲検証は OS 型へ変換する前）。注意喚起は「利用者がアプリへ戻るまで」の 1 種類（macOS `.criticalRequest`、Windows `FLASHW_ALL | FLASHW_TIMERNOFG`）で、画面で「背面に回ったら注意を引く」を押すと待機し、ウィンドウがフォーカスを失った最初のフレームで 1 回だけ OS を呼ぶ（フォーカスは winit の `Focused` → egui の `input.focused`、OS の観測を読む。タイマーなし）。前面のまま呼ぶと macOS は何も起きないため、ボタンで即時に呼ぶ形は取らない。結果の種別: 進捗を設定 / 注意を引く は「OS へ渡した」、進捗を消すは「消去を依頼した」、待機の取り消しは OS を呼ばず失敗にしない、範囲外は入力不正で OS は呼ばない、Linux 等は非対応、OS の失敗は内部エラー（OS の文言・`HRESULT` は出さない）。読み戻す API が両 OS に無いので「表示中」とは言わない。OS を正にする: 進捗の現在値・注意喚起中かをアプリ内に覚えず、前面かどうか・ハイコントラストかを事前判定しない。`HRESULT` の失敗はそのまま内部エラーへ写す。`FlashWindowEx` の戻り値は失敗を表さないので結果に使わず、`requestUserAttention` の戻り値（id）も使わない。守る範囲: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、資源（COM ポインタ・view）の解放。守らない範囲: 他画面・複数ウィンドウ（Windows のグループ表示の優先度を含む。デスクトップは 1 プロセス 1 画面）、画面を離れたとき（ウィンドウを閉じてプロセスが終わる）の表示の後始末（OS が片付けるため終了処理に解除を足さない）、設定後に OS が表示を変えた・出さないときの食い違い（ハイコントラスト、Dock のリサイズでの描き直し等）、前面のままの注意喚起が何も起こさないこと（OS の仕様）、不確定・一時停止・エラーの進捗、1 回だけ跳ねる注意喚起と注意喚起の取り消し、`TaskbarButtonCreated` 前の呼び出し、アプリが実行中でないときの Dock タイル（`NSDockTilePlugIn` が要る）。"
 }
