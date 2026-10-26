@@ -115,12 +115,15 @@ mod imp {
     /// `suspended`（最小化中）の判定と `ReportInterval` の変更は同じロックの内側で行う。
     struct State {
         held: [Option<Held>; 3],
+        /// 復元時に再設定できなかった種類の失敗。次の `read` が一度だけ `Err` で返す。
+        failed: [Option<RawSensorFailure>; 3],
         suspended: bool,
     }
 
     /// ウォッチャーからも触るためプロセスで 1 つにする。
     static STATE: Mutex<State> = Mutex::new(State {
         held: [None, None, None],
+        failed: [None, None, None],
         suspended: false,
     });
 
@@ -307,18 +310,22 @@ mod imp {
     }
 
     /// 最小化状態が変わったときだけ、保持中の全種類の `ReportInterval` を切り替える。
-    /// 復元時に再設定できなかった種類は保持を捨てる（次の `read` は値なしになり、
-    /// 呼び出し側が `start` し直せる。保持したまま止まった状態にしない）。
+    /// 復元時に再設定できなかった種類は保持を捨て、失敗を `failed` に残す（次の `read` が
+    /// `Err` で返し、driver の失敗表示経路へ渡る。失敗を握りつぶして待機のままにしない）。
     fn set_suspended(minimized: bool) {
         let mut st = state();
         if st.suspended == minimized {
             return;
         }
         st.suspended = minimized;
-        for slot in st.held.iter_mut() {
+        let State { held, failed, .. } = &mut *st;
+        for (slot, fail) in held.iter_mut().zip(failed.iter_mut()) {
             if let Some(h) = slot {
-                if h.apply(!minimized).is_err() && !minimized {
-                    *slot = None;
+                if let Err(f) = h.apply(!minimized) {
+                    if !minimized {
+                        *slot = None;
+                        *fail = Some(f);
+                    }
                 }
             }
         }
@@ -339,21 +346,26 @@ mod imp {
                 return Ok(());
             }
             let suspended = st.suspended;
+            st.failed[idx(kind)] = None;
             st.held[idx(kind)] = Some(acquire(kind, suspended)?);
             Ok(())
         }
 
         fn read(&self, kind: RawKind) -> Result<Option<RawReading>, RawSensorFailure> {
             ensure_minimize_watcher();
-            let guard = state();
+            let mut guard = state();
             let Some(h) = guard.held[idx(kind)].as_ref() else {
-                return Ok(None);
+                return guard.failed[idx(kind)].take().map_or(Ok(None), Err);
             };
             Ok(read_axes(h)?.and_then(|(x, y, z)| to_reading(kind, x, y, z)))
         }
 
         fn stop(&self, kind: RawKind) {
-            let taken = state().held[idx(kind)].take();
+            let taken = {
+                let mut st = state();
+                st.failed[idx(kind)] = None;
+                st.held[idx(kind)].take()
+            };
             if let Some(h) = taken {
                 release(h);
             }
