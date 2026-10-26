@@ -287,20 +287,23 @@ mod imp {
     // ---- 最小化ウォッチャー ----
 
     /// ウォッチャーを 1 回だけ起動する。ウィンドウ未取得なら起動せず次回に再試行する。
-    fn ensure_minimize_watcher() {
+    /// 起動に失敗したら `Failed`（`start` が取得を始めずに返す。背景で止められない状態を作らない）。
+    fn ensure_minimize_watcher() -> Result<(), RawSensorFailure> {
         static STARTED: AtomicBool = AtomicBool::new(false);
         if STARTED.load(Ordering::Acquire)
             || super::super::windows_share::window().is_none()
             || STARTED.swap(true, Ordering::AcqRel)
         {
-            return;
+            return Ok(());
         }
         let spawned = std::thread::Builder::new()
             .name("fandhe-motion-raw-sensors-minimize".into())
             .spawn(watch_minimize);
         if spawned.is_err() {
             STARTED.store(false, Ordering::Release);
+            return Err(RawSensorFailure::Failed);
         }
+        Ok(())
     }
 
     fn watch_minimize() {
@@ -331,6 +334,8 @@ mod imp {
         for (slot, fail) in held.iter_mut().zip(failed.iter_mut()) {
             let Some(h) = slot else { continue };
             let Err(f) = h.apply(!minimized) else {
+                // 回復した種類に過去の切替失敗を残さない。
+                *fail = None;
                 continue;
             };
             *fail = Some(f);
@@ -352,7 +357,7 @@ mod imp {
 
     impl MotionRawSensors for WindowsMotionRawSensors {
         fn start(&self, kind: RawKind) -> Result<(), RawSensorFailure> {
-            ensure_minimize_watcher();
+            ensure_minimize_watcher()?;
             let mut st = state();
             if st.held[idx(kind)].is_some() {
                 return Ok(());
@@ -364,7 +369,7 @@ mod imp {
         }
 
         fn read(&self, kind: RawKind) -> Result<Option<RawReading>, RawSensorFailure> {
-            ensure_minimize_watcher();
+            let _ = ensure_minimize_watcher();
             let mut guard = state();
             if let Some(f) = guard.failed[idx(kind)].take() {
                 return Err(f);
