@@ -65,15 +65,18 @@
       "impl": "crates/fandhe-egui-proxy/src/device/windows_display_refresh_hdr.rs + crates/fandhe-egui-proxy/src/device/display_refresh_hdr.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #870"
     },
     "web": {
-      "status": "possible",
-      "api": "HDR は `matchMedia(\"(dynamic-range: high)\")`、広色域は `matchMedia(\"(color-gamut: p3)\")`。リフレッシュレートは標準 API が無い",
+      "status": "done",
+      "api": "HDR は `matchMedia(\"(dynamic-range: high)\")`（否定側は `standard`）、広色域は `matchMedia(\"(color-gamut: p3)\")`（否定側は `srgb`）。リフレッシュレートは標準 API が無い",
       "perm": "不要",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/CSS/@media/dynamic-range",
         "https://developer.mozilla.org/en-US/docs/Web/CSS/@media/color-gamut"
       ],
       "safari": "対応（dynamic-range は 2022-05、color-gamut は 2023-02 から全主要ブラウザで Baseline）",
-      "note": "未実装。今の Hz・最大 Hz とも「この OS では取れない」。`requestAnimationFrame` の間隔からの推定は推測なのでやらない。HDR・広色域はブラウザと出力機器の組で決まる。"
+      "note": "実装済み（#873）。今の Hz・最大 Hz とも常に「この OS では取れない」（`requestAnimationFrame` の間隔からの推定は推測なのでやらない）。両クエリが偽・`not all` は「取れない」。`match_media` の例外は固定文言の失敗、`window` なしは非対応、HDR と広色域の両方が取れなければ失敗。守らない範囲: `change` の追従、ブラウザと出力機器の組による意味の差、複数タブ、wasm canvas 経路。",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#868）",
+      "impl": "crates/fandhe-web-dom/src/display_refresh_hdr.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #873"
     }
   },
   "note": "multi-display は画面ごとの寸法・枚数、これはアプリの窓がある画面 1 枚の表示能力（今と最大のリフレッシュレート・HDR・広色域）の取得。範囲は読むだけ: 画面で「画面の表示能力を読む」を押すたびに OS から 1 回読む（定期 pull・変化通知はしない）。リフレッシュレートの変更要求と HDR・広色域での描画（swap chain の色空間・EDR）は描画パイプラインに触るため範囲外。HDR は数値を出さず「はい・いいえ」のみ（OS ごとに単位と意味が違う）。結果の種別は、読めた（項目ごとに値か「取れない」。0・負・非有限の Hz と 1.0 以下の headroom は番兵として値にせず、Hz は「取れない」、HDR は「いいえ」。検証は丸めの前）・非対応（`Unsupported`）・失敗（`Internal`。OS 呼び出しの失敗・窓が無い・全項目が取れない）。OS を正にする方針で、毎回 OS から読み直し、前回値やアプリ内の記憶を出さない。読み取り中の再押下と古い世代の完了は捨てる。個体識別子（EDID・DeviceName のパス）は読まず出さない。守らない範囲: 読んだ後の変化の追従（窓の移動・設定変更・低電力モード・外部画面の着脱。押し直すまで反映しない）、窓が複数画面にまたがるときの画面の選び方（OS が返す主な画面のとおり）、可変リフレッシュレート（ProMotion・VRR）の瞬間値、OS 間で「HDR 対応」「広色域」の意味が揃うこと、複数タブ・複数プロセス。"

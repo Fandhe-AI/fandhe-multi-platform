@@ -67,6 +67,9 @@ use fandhe_core::screens::contact_pick::{
 use fandhe_core::screens::device_info_show::{
     current_screen as current_device_info_screen, DeviceInfoShowState,
 };
+use fandhe_core::screens::display_refresh_hdr_show::{
+    current_screen as current_display_refresh_hdr_show_screen, DisplayRefreshHdrShowState,
+};
 use fandhe_core::screens::drag_drop::{current_screen as current_drag_drop_screen, DragDropState};
 use fandhe_core::screens::external_app_launch_show::{
     current_screen as current_external_app_launch_show_screen, ExternalAppLaunchState,
@@ -1182,6 +1185,21 @@ pub fn mount_external_app_launch_show_screen(root_id: &str) -> Result<(), JsValu
         current_external_app_launch_show_screen(&initial_state),
         initial_state,
         super::external_app_launch::external_app_launch_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「画面のリフレッシュレート・HDR・広色域」（親 #177、Issue #873）をマウントする
+/// 検証専用エントリポイント。`super::display_refresh_hdr::display_refresh_hdr_show_effect` が `matchMedia` を読む。
+#[wasm_bindgen]
+pub fn mount_display_refresh_hdr_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = DisplayRefreshHdrShowState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_display_refresh_hdr_show_screen(&initial_state),
+        initial_state,
+        super::display_refresh_hdr::display_refresh_hdr_show_effect,
     )
 }
 
