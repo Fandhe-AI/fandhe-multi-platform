@@ -7,8 +7,9 @@
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`platform_device_identifier`] の cfg 分岐が全対象 OS の最終形で、iOS（`ios_device_identifier`）と
-//! Android（`android_device_identifier`）は #904 が `implementation()` を実体へ置き換える。
+//! [`platform_device_identifier`] の cfg 分岐が全対象 OS の最終形で、iOS（`ios_device_identifier`、
+//! `UIDevice.identifierForVendor`）と Android（`android_device_identifier`、`Settings.Secure.ANDROID_ID`）
+//! は #904 で実体になっている。
 //! それ以外（macOS・Windows・Linux・Web）は対応表で `no` のため `Unsupported` 固定で、成功には届かない。
 //! 識別子の全体（`DeviceId`）はここで捨てて画面へ渡さない。ログ出力はしない。
 
