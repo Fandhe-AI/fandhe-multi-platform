@@ -13,8 +13,10 @@
 //! - `read`: `GetCurrentReading()` の 3 軸。null は値なし。3 軸がそろい有限なときだけ値にし、
 //!   1 軸でも取れなければ値なし／失敗（0 や前回値で埋めない）
 //! - 最小化: ウォッチャー（プロセスに 1 本）が HWND の `IsIconic` を 200 ms 間隔で見て、最小化で
-//!   保持中の全種類の `ReportInterval` を 0 に戻し（保持は残す）、復元で再設定する。最小化中に
-//!   始まった `start` は保持だけして間隔を設定せず、復元で設定する（背景で取得を続けない。契約表 1）
+//!   保持中の全種類を解放する（`ReportInterval` 0 は WinRT では「既定間隔」で停止ではないため、
+//!   0 に戻したうえで保持を drop する。解除の失敗は `failed` に残し次の `read` が `Err` で返す）。
+//!   要求中の種類は `wanted` に残し、復元で取り直す（失敗は `failed` に残して要求を外す）。
+//!   最小化中の `start` は要求だけ控えて取得せず、復元で取る（背景で取得を続けない。契約表 1）
 //! - `stop`: 保持を捨て `ReportInterval` を 0 に戻す（結果は無視）。冪等
 //!
 //! 線形加速度は `AccelerometerReadingType::Linear` で取る（重力は OS が除く。#898 で「#899 で
@@ -112,22 +114,22 @@ mod imp {
     const MINIMIZE_POLL_MS: u64 = 200;
 
     /// `held` は `RawKind::ALL` の添字ごとに高々 1 個保持する（種類ごとに購読を二重にしない）。
-    /// `suspended`（最小化中）の判定と `ReportInterval` の変更は同じロックの内側で行う。
+    /// `suspended`（最小化中）の判定と保持の増減は同じロックの内側で行う。
     struct State {
         held: [Option<Held>; 3],
-        /// `ReportInterval` の切替に失敗した種類の失敗。次の `read` が一度だけ `Err` で返す。
+        /// `start` 済みで `stop` されていない種類。最小化中は `held` が空でも残り、復元で取り直す。
+        wanted: [bool; 3],
+        /// 解除・再取得に失敗した種類の失敗。次の `read` が一度だけ `Err` で返す。
         failed: [Option<RawSensorFailure>; 3],
         suspended: bool,
-        /// 最小化時の解除（`ReportInterval` 0）に失敗した種類がある。ウォッチャーが再試行する。
-        release_failed: bool,
     }
 
     /// ウォッチャーからも触るためプロセスで 1 つにする。
     static STATE: Mutex<State> = Mutex::new(State {
         held: [None, None, None],
+        wanted: [false; 3],
         failed: [None, None, None],
         suspended: false,
-        release_failed: false,
     });
 
     fn state() -> std::sync::MutexGuard<'static, State> {
@@ -199,20 +201,16 @@ mod imp {
         }
     }
 
-    fn acquire(kind: RawKind, suspended: bool) -> Result<Held, RawSensorFailure> {
+    fn acquire(kind: RawKind) -> Result<Held, RawSensorFailure> {
         Ok(match kind {
             RawKind::AngularVelocity => {
                 let s = Gyrometer::GetDefault().map_err(fail)?;
-                if !suspended {
-                    apply_interval(&s, true)?;
-                }
+                apply_interval(&s, true)?;
                 Held::Gyro(s)
             }
             RawKind::MagneticField => {
                 let s = Magnetometer::GetDefault().map_err(fail)?;
-                if !suspended {
-                    apply_interval(&s, true)?;
-                }
+                apply_interval(&s, true)?;
                 Held::Mag(s)
             }
             RawKind::LinearAcceleration => {
@@ -220,9 +218,7 @@ mod imp {
                     AccelerometerReadingType::Linear,
                 )
                 .map_err(fail)?;
-                if !suspended {
-                    apply_interval(&s, true)?;
-                }
+                apply_interval(&s, true)?;
                 Held::Lin(s)
             }
         })
@@ -319,39 +315,34 @@ mod imp {
         }
     }
 
-    /// 最小化状態が変わったときだけ、保持中の全種類の `ReportInterval` を切り替える。
-    /// 復元時に再設定できなかった種類は保持を捨て、失敗を `failed` に残す（次の `read` が
-    /// `Err` で返し、driver の失敗表示経路へ渡る。失敗を握りつぶして待機のままにしない）。
+    /// 最小化状態が変わったときだけ切り替える。最小化で全種類を解放し、復元で要求中の種類を
+    /// 取り直す。失敗は `failed` に残す（握りつぶして待機のままにしない）。
     fn set_suspended(minimized: bool) {
         let mut st = state();
-        if st.suspended == minimized && !st.release_failed {
+        if st.suspended == minimized {
             return;
         }
         st.suspended = minimized;
-        let State {
-            held,
-            failed,
-            release_failed,
-            ..
-        } = &mut *st;
-        *release_failed = false;
-        for (slot, fail) in held.iter_mut().zip(failed.iter_mut()) {
-            let Some(h) = slot else { continue };
-            let Err(f) = h.apply(!minimized) else {
-                // 回復した種類に過去の切替失敗を残さない。
-                *fail = None;
-                continue;
-            };
-            *fail = Some(f);
+        for kind in RawKind::ALL {
+            let i = idx(kind);
             if minimized {
-                // 解除失敗: 保持を残し、次回のポーリングで再試行する。
-                *release_failed = true;
-            } else if h.apply(false).is_ok() {
-                // 間隔を 0 に戻せたときだけ保持を捨てる（0 にできないまま drop しない）。
-                *slot = None;
-            } else {
-                // 0 に戻せない: 保持を残し、ウォッチャーが再試行する。
-                *release_failed = true;
+                // 失敗しても drop で解放する。失敗は次の `read` へ渡す。
+                if let Some(h) = st.held[i].take() {
+                    if let Err(f) = h.apply(false) {
+                        st.failed[i] = Some(f);
+                    }
+                }
+            } else if st.wanted[i] && st.held[i].is_none() {
+                match acquire(kind) {
+                    Ok(h) => {
+                        st.held[i] = Some(h);
+                        st.failed[i] = None;
+                    }
+                    Err(f) => {
+                        st.failed[i] = Some(f);
+                        st.wanted[i] = false;
+                    }
+                }
             }
         }
     }
@@ -367,12 +358,14 @@ mod imp {
         fn start(&self, kind: RawKind) -> Result<(), RawSensorFailure> {
             ensure_minimize_watcher()?;
             let mut st = state();
-            if st.held[idx(kind)].is_some() {
+            if st.wanted[idx(kind)] {
                 return Ok(());
             }
-            let suspended = st.suspended;
             st.failed[idx(kind)] = None;
-            st.held[idx(kind)] = Some(acquire(kind, suspended)?);
+            if !st.suspended {
+                st.held[idx(kind)] = Some(acquire(kind)?);
+            }
+            st.wanted[idx(kind)] = true;
             Ok(())
         }
 
@@ -382,8 +375,8 @@ mod imp {
             if let Some(f) = guard.failed[idx(kind)].take() {
                 return Err(f);
             }
-            // 非表示中は取得しない（復元直後でウォッチャーが解除する前も含む）。
-            let Some(h) = guard.held[idx(kind)].as_ref().filter(|_| !guard.suspended) else {
+            // 最小化中・復元直後でウォッチャーが取り直す前は保持が無く、値なし。
+            let Some(h) = guard.held[idx(kind)].as_ref() else {
                 return Ok(None);
             };
             Ok(read_axes(h)?.and_then(|(x, y, z)| to_reading(kind, x, y, z)))
@@ -393,6 +386,7 @@ mod imp {
             let taken = {
                 let mut st = state();
                 st.failed[idx(kind)] = None;
+                st.wanted[idx(kind)] = false;
                 st.held[idx(kind)].take()
             };
             if let Some(h) = taken {
