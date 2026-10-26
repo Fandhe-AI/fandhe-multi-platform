@@ -213,6 +213,8 @@ pub mod media_transcode;
 pub mod midi_show;
 /// Phase 11 の拡充ループ型サンプル「機械学習モデル推論」（親 #89、Issue #289）。
 pub mod ml_infer;
+/// Phase 11 の拡充ループ型サンプル「ジャイロ・磁気・線形加速度」（親 #180、Issue #898）。
+pub mod motion_raw_sensors_show;
 /// Phase 11 の拡充ループ型サンプル「複数ディスプレイ」（親 #1134、Issue #1341）。
 pub mod multi_display_show;
 /// Phase 11 の拡充ループ型サンプル「音楽ライブラリ」（親 #108、Issue #482）。
