@@ -7,7 +7,7 @@
   "bundle": "one-shot",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "最大 Hz は `UIScreen.maximumFramesPerSecond`（10.3+）、HDR は `UIScreen.potentialEDRHeadroom`（16.0+）が 1.0 を超えるか、広色域は `UITraitCollection.displayGamut`（`.P3` / `.SRGB` / `.unspecified`）",
       "perm": "不要",
       "url": [
@@ -16,7 +16,10 @@
         "https://developer.apple.com/documentation/uikit/uitraitcollection/displaygamut",
         "https://developer.apple.com/documentation/uikit/uidisplaygamut"
       ],
-      "note": "未実装。配備の下限 17.0 なら `potentialEDRHeadroom` は常に使える。今の Hz は `CADisplayLink` を回して毎フレーム観測しないと取れないため、推定せず「この OS では取れない」。`currentEDRHeadroom` は EDR を描いている間だけ 1 を超えるので HDR の判定に使わない。`displayGamut` が `.unspecified` のときは広色域も取れない。窓の画面は `window.windowScene.screen`。"
+      "note": "実装済み（#871）。配備の下限 17.0 なら `potentialEDRHeadroom` は常に使える。今の Hz は `CADisplayLink` を回して毎フレーム観測しないと取れないため、推定せず「この OS では取れない」。`currentEDRHeadroom` は EDR を描いている間だけ 1 を超えるので HDR の判定に使わない。`displayGamut` が `.unspecified` のときは広色域も取れない。窓の画面は `window.windowScene.screen`。",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#868）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_display_refresh_hdr.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_display_refresh_hdr.m + crates/fandhe-egui-proxy/src/device/display_refresh_hdr.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #871"
     },
     "android": {
       "status": "possible",
