@@ -406,6 +406,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // `device::pdf_viewer::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::pdf_viewer::reset_pending_tracking();
+    // Issue #917: ファイル・動画のプレビューとサムネイルの処理済み世代も破棄する（理由は pdf_viewer と同じ。
+    // `device::file_preview::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::file_preview::reset_pending_tracking();
 
     let native_options = eframe::NativeOptions {
         android_app: Some(app),
