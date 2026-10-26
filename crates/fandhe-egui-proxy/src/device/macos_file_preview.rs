@@ -9,13 +9,30 @@
 //! `fandhe_device::file_preview::preview_from_macos_code` に一本化する。固定ファイルは
 //! `temp_dir()/fandhe-file-preview/` へ書き、そのパスだけを `.m` へ渡す。
 
+use std::collections::HashMap;
 use std::ffi::{c_char, CString};
 use std::os::unix::ffi::OsStrExt;
+use std::path::PathBuf;
+use std::sync::Mutex;
 
 use fandhe_device::file_preview::{
     preview_from_macos_code, write_fixed, FileKind, PreviewResult, DIR_NAME, WRITE,
 };
 use fandhe_device::DeviceError;
+
+/// 表示中の窓が参照する一時ファイル（要求 id → パス）。窓が閉じたとき（または提示失敗時）に消す。
+/// 閉じた通知が届かない場合は残る（`fandhe_device::file_preview` の「守らない範囲」）。
+static PENDING_FILES: Mutex<Option<HashMap<u64, PathBuf>>> = Mutex::new(None);
+
+fn remove_pending_file(request_id: u64) {
+    let path = PENDING_FILES
+        .lock()
+        .ok()
+        .and_then(|mut g| g.as_mut().and_then(|m| m.remove(&request_id)));
+    if let Some(p) = path {
+        let _ = std::fs::remove_file(p);
+    }
+}
 
 // SAFETY: `macos/fandhe_macos_file_preview.m` が定義する C ABI。契約は `.m` ファイル冒頭コメントに集約する。
 #[allow(unsafe_code)]
@@ -32,14 +49,27 @@ pub(crate) fn present(
     bytes: &[u8],
 ) -> Result<Option<PreviewResult>, DeviceError> {
     let path = write_fixed(&std::env::temp_dir().join(DIR_NAME), kind, bytes)?;
-    let cpath =
-        CString::new(path.as_os_str().as_bytes()).map_err(|_| DeviceError::Internal(WRITE))?;
+    let Ok(cpath) = CString::new(path.as_os_str().as_bytes()) else {
+        let _ = std::fs::remove_file(&path);
+        return Err(DeviceError::Internal(WRITE));
+    };
+    // `.m` が窓の通知を返す前に登録する（通知が先に届いても取りこぼさない）。
+    match PENDING_FILES.lock() {
+        Ok(mut g) => {
+            g.get_or_insert_with(HashMap::new).insert(request_id, path);
+        }
+        Err(_) => {
+            let _ = std::fs::remove_file(&path);
+            return Err(DeviceError::Internal(WRITE));
+        }
+    }
     // SAFETY: `cpath` は NUL 終端の有効な C 文字列で、`.m` は呼び出しの間にコピーしてから
     // main queue へ dispatch して即座に 0 を返す契約（ポインタを保持しない）。
     let code = unsafe { fandhe_macos_file_preview_present(request_id, cpath.as_ptr()) };
     if code == 0 {
         Ok(None)
     } else {
+        remove_pending_file(request_id);
         Err(DeviceError::Internal("file_preview present"))
     }
 }
@@ -49,5 +79,6 @@ pub(crate) fn present(
 #[allow(unsafe_code)]
 #[no_mangle]
 extern "C" fn fandhe_rust_file_preview_outcome(request_id: u64, code: i32) {
+    remove_pending_file(request_id);
     super::file_preview::bridge::deliver(request_id, preview_from_macos_code(code));
 }

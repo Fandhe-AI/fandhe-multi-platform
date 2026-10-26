@@ -185,16 +185,30 @@ pub fn sample_image() -> Image {
     }
 }
 
-/// `dir` を作り、`<name>.tmp` に書いてから rename して固定ファイルを置く（Apple・Windows で共用）。
-/// 同じ名前は上書きする。失敗した経路では tmp を消し `Internal(`[`WRITE`]`)` を返す。
+/// `dir` を作り、呼び出しごとに一意な名前（`<pid>-<連番>-<name>`）で排他的に（`create_new`、O_EXCL 相当）
+/// 固定ファイルを置く（Apple・Windows で共用）。既存のファイル・シンボリックリンクは追跡も上書きもしない。
+/// 置いたファイルの削除は呼び出し側の責務（OS が参照しなくなった時点で `remove_file` する）。
+/// 失敗した経路では書きかけを消し `Internal(`[`WRITE`]`)` を返す。
 pub fn write_fixed(dir: &Path, kind: FileKind, bytes: &[u8]) -> Result<PathBuf, DeviceError> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
     let fail = |_: std::io::Error| DeviceError::Internal(WRITE);
     std::fs::create_dir_all(dir).map_err(fail)?;
-    let dest = dir.join(kind.file_name());
-    let tmp = dir.join(format!("{}.tmp", kind.file_name()));
-    let result = std::fs::write(&tmp, bytes).and_then(|()| std::fs::rename(&tmp, &dest));
+    let name = format!(
+        "{}-{}-{}",
+        std::process::id(),
+        SEQ.fetch_add(1, Ordering::Relaxed),
+        kind.file_name()
+    );
+    let dest = dir.join(name);
+    let result = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&dest)
+        .and_then(|mut f| f.write_all(bytes));
     if let Err(e) = result {
-        let _ = std::fs::remove_file(&tmp);
+        let _ = std::fs::remove_file(&dest);
         return Err(fail(e));
     }
     Ok(dest)
@@ -280,13 +294,23 @@ mod tests {
     }
 
     #[test]
-    fn write_fixed_writes_overwrites_and_leaves_no_tmp() {
+    fn write_fixed_is_unique_exclusive_and_ignores_planted_links() {
         let dir = scratch("ok");
-        let p = write_fixed(&dir, FileKind::Unknown, b"abc").unwrap();
-        assert_eq!(std::fs::read(&p).unwrap(), b"abc");
-        let p = write_fixed(&dir, FileKind::Unknown, b"xyz").unwrap();
-        assert_eq!(std::fs::read(&p).unwrap(), b"xyz");
-        assert!(!dir.join("fandhe-unknown.bin.tmp").exists());
+        let p1 = write_fixed(&dir, FileKind::Unknown, b"abc").unwrap();
+        let p2 = write_fixed(&dir, FileKind::Unknown, b"xyz").unwrap();
+        assert_ne!(p1, p2);
+        assert_eq!(std::fs::read(&p1).unwrap(), b"abc");
+        assert_eq!(std::fs::read(&p2).unwrap(), b"xyz");
+        // 旧実装の固定名 tmp にリンクを仕込んでも、リンク先は書き換わらない。
+        #[cfg(unix)]
+        {
+            let victim = dir.join("victim");
+            std::fs::write(&victim, b"keep").unwrap();
+            let old_tmp = dir.join(format!("{}.tmp", FileKind::Unknown.file_name()));
+            std::os::unix::fs::symlink(&victim, &old_tmp).unwrap();
+            write_fixed(&dir, FileKind::Unknown, b"zzz").unwrap();
+            assert_eq!(std::fs::read(&victim).unwrap(), b"keep");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -294,12 +318,6 @@ mod tests {
     fn write_fixed_failure_is_internal_write() {
         let dir = scratch("fail");
         std::fs::create_dir_all(&dir).unwrap();
-        // dest が空でないディレクトリだと rename が失敗する。
-        let dest = dir.join(FileKind::Unknown.file_name());
-        std::fs::create_dir_all(dest.join("child")).unwrap();
-        let r = write_fixed(&dir, FileKind::Unknown, b"abc");
-        assert!(matches!(r, Err(DeviceError::Internal(WRITE))), "{r:?}");
-        assert!(!dir.join("fandhe-unknown.bin.tmp").exists());
         // dir がファイルのとき。
         let file = dir.join("plain");
         std::fs::write(&file, b"x").unwrap();

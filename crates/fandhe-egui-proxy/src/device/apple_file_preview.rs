@@ -56,13 +56,15 @@ impl FileThumbnailer for AppleFileThumbnailer {
             return Err(DeviceError::InvalidInput("file_preview input"));
         }
         let path = write_fixed(&std::env::temp_dir().join(DIR_NAME), kind, bytes)?;
-        let cpath =
-            CString::new(path.as_os_str().as_bytes()).map_err(|_| DeviceError::Internal(WRITE))?;
+        let Ok(cpath) = CString::new(path.as_os_str().as_bytes()) else {
+            let _ = std::fs::remove_file(&path);
+            return Err(DeviceError::Internal(WRITE));
+        };
         let side = max_side as usize;
-        let cap = side
-            .checked_mul(side)
-            .and_then(|n| n.checked_mul(4))
-            .ok_or(DeviceError::Internal(SIZE))?;
+        let Some(cap) = side.checked_mul(side).and_then(|n| n.checked_mul(4)) else {
+            let _ = std::fs::remove_file(&path);
+            return Err(DeviceError::Internal(SIZE));
+        };
         let mut buf = vec![0u8; cap];
         let (mut w, mut h) = (0u32, 0u32);
         let timeout_ms = timeout.as_millis().clamp(1, u128::from(u32::MAX)) as u32;
@@ -80,6 +82,8 @@ impl FileThumbnailer for AppleFileThumbnailer {
                 &mut h,
             )
         };
+        // 同期呼び出しで OS は参照を終えているため、結果の判定より前に一時ファイルを消す。
+        let _ = std::fs::remove_file(&path);
         if !thumbnail_from_apple_code(code)? {
             return Ok(ThumbnailResult::NoThumbnail);
         }
