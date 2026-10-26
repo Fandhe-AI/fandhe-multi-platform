@@ -7,7 +7,7 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "`UIApplication.open(_:options:completionHandler:)` で `tel:` と Apple 地図の統一 URL（`https://maps.apple.com/place?coordinate=...`）を開く。開けるアプリが無ければ completion の `success` が `false`",
       "perm": "不要（`open` は `LSApplicationQueriesSchemes` の制約を受けない。制約を受けるのは `canOpenURL`）",
       "url": [
@@ -15,7 +15,10 @@
         "https://developer.apple.com/documentation/uikit/uiapplication/canopenurl(_:)",
         "https://developer.apple.com/library/archive/featuredarticles/iPhoneURLScheme_Reference/PhoneLinks/PhoneLinks.html"
       ],
-      "note": "未実装。`canOpenURL` は事前判定に使わず `open` の `success` だけを見る。`tel:` は iOS 10.3 以降で OS が発信の確認を出す。番号に `*` `#` を含むと発信しない。電話の無い端末（iPad 等）では OS が警告を出す。統一 URL は iOS 18.4 以降が対象で、旧 OS での扱いは実機確認で見る。`success` は「OS が受け付けた」までで、相手アプリが出たか・発信したかは分からない"
+      "note": "実装済み（#862）。main queue で `openURL:options:completionHandler:` を呼び、`success` が `NO` なら開けるアプリなしとして扱う。`canOpenURL` は事前判定に使わず `open` の `success` だけを見る。`tel:` は iOS 10.3 以降で OS が発信の確認を出す。番号に `*` `#` を含むと発信しない。電話の無い端末（iPad 等）では OS が警告を出す。統一 URL は iOS 18.4 以降が対象で、旧 OS での扱いは実機確認で見る。`success` は「OS が受け付けた」までで、相手アプリが出たか・発信したかは分からない",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#856）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_external_app_launch.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_external_app_launch.m + crates/fandhe-egui-proxy/src/device/external_app_launch.rs + crates/fandhe-core/src/screens/external_app_launch_show.rs + crates/fandhe-device/src/external_app_launch.rs、Issue #862"
     },
     "android": {
       "status": "possible",

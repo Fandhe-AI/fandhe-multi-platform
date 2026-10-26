@@ -88,6 +88,9 @@
 //! - `ios/fandhe_ios_open_system_settings.m`（Issue #799、`UIApplication.open` による自アプリの設定・通知設定の表示）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_open_system_settings.rs` から
 //!   呼ばれる契約）。UIKit は既存のリンクで足りる。
+//! - `ios/fandhe_ios_external_app_launch.m`（Issue #862、`UIApplication.open` による電話・地図など他アプリの起動）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_external_app_launch.rs` から
+//!   呼ばれる契約）。UIKit は既存のリンクで足りる。
 //! - `ios/fandhe_ios_in_app_browser.m`（Issue #702、SafariServices `SFSafariViewController` によるアプリ内ブラウザ）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルし SafariServices をリンクする
 //!   （`src/device/ios_in_app_browser.rs` から呼ばれる契約）。
@@ -644,6 +647,8 @@ fn main() {
     compile_ios_print();
     // `ios/fandhe_ios_open_system_settings.m`（Issue #799）。iOS 分岐のみ。
     compile_ios_open_system_settings();
+    // `ios/fandhe_ios_external_app_launch.m`（Issue #862）。iOS 分岐のみ。
+    compile_ios_external_app_launch();
     // `ios/fandhe_ios_device_info.m`（Issue #1305）。iOS 分岐のみ。
     compile_ios_device_info();
     // `ios/fandhe_ios_safe_area_insets.m`（Issue #445）。iOS 分岐のみ。
@@ -2017,6 +2022,16 @@ fn compile_ios_open_system_settings() {
         .file("ios/fandhe_ios_open_system_settings.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_open_system_settings");
+}
+
+/// `ios/fandhe_ios_external_app_launch.m` を `cc` でコンパイルする（Issue #862）。**iOS 分岐のみ**から
+/// 呼ばれる（`src/device/ios_external_app_launch.rs` が使う）。UIKit はリンク済み。
+fn compile_ios_external_app_launch() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_external_app_launch.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_external_app_launch.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_external_app_launch");
 }
 
 /// `ios/fandhe_ios_print.m` を `cc` でコンパイルする（Issue #327）。**iOS 分岐のみ**から

@@ -7,7 +7,7 @@
 //!
 //! - macOS・Windows: [`ExternalAppLaunch`] を UI スレッドで同期に呼ぶ
 //! - iOS / Android: コールバック型のため pull 型 [`bridge`]（`RequestSlot` の facade）で毎フレーム
-//!   `drive_callback` が結果を反映する。OS 別モジュールは (b-ios) / (b-android) が埋めるまでスタブ
+//!   `drive_callback` が結果を反映する。iOS は実装済み（#862）、Android は (b-android) が埋めるまでスタブ
 //!   （`Unsupported`）。**dispatch はここで最終形にしてあり、後続 issue は OS 別モジュールだけを埋める**
 //! - Linux・それ以外: `UnsupportedExternalAppLaunch` で「非対応」を表示する（Web は `fandhe-web-dom`）
 
@@ -51,7 +51,7 @@ fn to_target(kind: LaunchKind) -> LaunchTarget {
 }
 
 /// iOS の結果コード表（SSOT。`.m` の定数と一致させる）。未知のコードは失敗に倒す。
-#[allow(dead_code)] // (b-ios) が結果受け口から使う
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))] // iOS の結果受け口が使う
 pub(crate) fn outcome_from_ios_code(code: i32) -> Result<LaunchOutcome, DeviceError> {
     match code {
         0 => Ok(LaunchOutcome::HandedOff),
@@ -94,7 +94,7 @@ pub(crate) mod bridge {
 
     /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
     /// 捨てて `false`（先に届いたものだけを採る）。
-    #[allow(dead_code)] // 後続 issue（b-ios / b-android）の受け口が使う
+    #[cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))] // iOS（#862）/ Android（b-android）の受け口が使う
     pub(crate) fn deliver(request_id: u64, result: Result<LaunchOutcome, DeviceError>) -> bool {
         SLOT.deliver(request_id, super::to_outcome(result))
     }
