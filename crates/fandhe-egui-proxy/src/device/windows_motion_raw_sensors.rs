@@ -286,14 +286,18 @@ mod imp {
 
     // ---- 最小化ウォッチャー ----
 
-    /// ウォッチャーを 1 回だけ起動する。ウィンドウ未取得なら起動せず次回に再試行する。
+    /// ウォッチャーを 1 回だけ起動する。ウィンドウ未取得なら `Failed`（次回に再試行する）。
     /// 起動に失敗したら `Failed`（`start` が取得を始めずに返す。背景で止められない状態を作らない）。
     fn ensure_minimize_watcher() -> Result<(), RawSensorFailure> {
         static STARTED: AtomicBool = AtomicBool::new(false);
-        if STARTED.load(Ordering::Acquire)
-            || super::super::windows_share::window().is_none()
-            || STARTED.swap(true, Ordering::AcqRel)
-        {
+        if STARTED.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        // ウィンドウが無いと最小化を監視できず、背景で取得を止められない。取得を始めさせない。
+        if super::super::windows_share::window().is_none() {
+            return Err(RawSensorFailure::Failed);
+        }
+        if STARTED.swap(true, Ordering::AcqRel) {
             return Ok(());
         }
         let spawned = std::thread::Builder::new()
@@ -342,8 +346,12 @@ mod imp {
             if minimized {
                 // 解除失敗: 保持を残し、次回のポーリングで再試行する。
                 *release_failed = true;
-            } else {
+            } else if h.apply(false).is_ok() {
+                // 間隔を 0 に戻せたときだけ保持を捨てる（0 にできないまま drop しない）。
                 *slot = None;
+            } else {
+                // 0 に戻せない: 保持を残し、ウォッチャーが再試行する。
+                *release_failed = true;
             }
         }
     }
