@@ -21,14 +21,17 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_memory_pressure.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_memory_pressure.m + crates/fandhe-egui-proxy/src/device/memory_pressure.rs + crates/fandhe-core/src/screens/memory_pressure_show.rs + crates/fandhe-device/src/memory_pressure.rs、Issue #912"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`ComponentCallbacks2.onTrimMemory(level)`。API 34 以上は `TRIM_MEMORY_UI_HIDDEN` / `TRIM_MEMORY_BACKGROUND` のみ届き、`onLowMemory` は API 34 以上で呼ばれない。今の状態は `ActivityManager.MemoryInfo.lowMemory`",
       "perm": "不要",
       "url": [
         "https://developer.android.com/reference/android/content/ComponentCallbacks2",
         "https://developer.android.com/reference/android/app/ActivityManager.MemoryInfo"
       ],
-      "note": "未実装。Application Context へ登録して受ける。段階は API 33 以下は 7 段階、34 以上は 2 段階。今後増えうるため特定の値に依存せず大小で見る（公式）。`lowMemory` は「システムが今メモリ不足と見なしているか」（公式）。"
+      "note": "実装済み（#913）。Application Context に `ComponentCallbacks2` を登録して `onTrimMemory(level)` の値をそのまま受ける（未知値も捨てず、特定値に依存しない）。メモリ警告・段階・Low / High・CPU は「この OS では取れない」。`onLowMemory` は API 34 以上で呼ばれず対応する種類が無いため使わない。今の状態は画面を開いた時と合図のたびに `ActivityManager.MemoryInfo.lowMemory` を問い直し、読み取りの失敗は失敗として出す（「不足ではない」へ畳まない）。最初の通知までは「まだ届いていない」。停止・Activity 再生成（onDestroy で解除）後と古い id の通知は登録表で捨てる。",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#884）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_memory_pressure.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MemoryPressureHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/memory_pressure.rs + crates/fandhe-core/src/screens/memory_pressure_show.rs + crates/fandhe-device/src/memory_pressure.rs、Issue #913"
     },
     "macos": {
       "status": "done",

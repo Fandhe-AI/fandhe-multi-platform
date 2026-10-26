@@ -213,7 +213,7 @@ pub mod android_media_playback;
 /// `device/media_transcode.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_media_transcode;
-/// Issue #911: Android 向けメモリ逼迫の通知の骨格（`Unsupported` のスタブ。b-android が埋める）。
+/// Issue #913: Android 向けメモリ逼迫の通知の実装（`ComponentCallbacks2` + `ActivityManager.MemoryInfo`）。
 /// `device/memory_pressure.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]

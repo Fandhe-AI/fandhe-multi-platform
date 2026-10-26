@@ -663,6 +663,22 @@ public class MainActivity extends GameActivity {
         return appLifecycleHelper.read();
     }
 
+    // メモリ逼迫・負荷の通知（Issue #913）。実装は `MemoryPressureHelper`。
+    // Rust の `android_memory_pressure.rs` が JNI で呼ぶ。
+    private final MemoryPressureHelper memoryPressureHelper = new MemoryPressureHelper(this);
+
+    int memoryPressureStart(long id) {
+        return memoryPressureHelper.start(id);
+    }
+
+    void memoryPressureStop(long id) {
+        memoryPressureHelper.stop(id);
+    }
+
+    int memoryPressureRead() {
+        return memoryPressureHelper.read();
+    }
+
     // 外部ストレージの着脱（Issue #859）。実装は `RemovableStorageHelper`。
     // Rust の `android_removable_storage.rs` が JNI で呼ぶ。
     private final RemovableStorageHelper removableStorageHelper = new RemovableStorageHelper(this);
@@ -5103,6 +5119,7 @@ public class MainActivity extends GameActivity {
         midiHelper.onDestroy();
         sleepLockEventsHelper.onDestroy();
         appLifecycleHelper.onDestroy();
+        memoryPressureHelper.onDestroy();
         removableStorageHelper.onDestroy();
         audioSessionHelper.onDestroy();
         cameraPreviewHelper.onDestroy();
