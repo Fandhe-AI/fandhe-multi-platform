@@ -52,7 +52,7 @@ pub mod android_app_shortcuts;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_audio_devices;
-/// Issue #840: Android 向け音声セッション実装のスタブ（#842 が埋める）。
+/// Issue #842: Android 向け音声セッション実装（`AudioSessionHelper.java` を JNI で呼ぶ）。
 /// `device/audio_session.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
