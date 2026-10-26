@@ -9,39 +9,39 @@
     "ios": {
       "status": "possible",
       "api": "CoreMotion `CMMotionManager`（`gyroData` / `magnetometerData` / `deviceMotion.userAcceleration`）",
-      "perm": "不要（`NSMotionUsageDescription` は歩数系のみ。要確認）",
+      "perm": "不要（`NSMotionUsageDescription` が必須なのは `CMPedometer` 等の 4 クラスで、`CMMotionManager` は入っていない。公式）",
       "url": "https://developer.apple.com/documentation/coremotion/cmmotionmanager",
-      "note": "未実装。サンプリング間隔は `*UpdateInterval` で指定。URL 以外の権限記述は一般知識、要確認。"
+      "note": "未実装。単位は rad/s・µT・G。`CMMotionManager` はアプリで 1 つだけ作る（tilt-motion と共有）。`gyroData`・`magnetometerData` は生値でバイアスが乗る。サンプリング間隔は `*UpdateInterval` で指定。一次情報: https://developer.apple.com/documentation/coremotion/cmgyrodata/rotationrate / https://developer.apple.com/documentation/coremotion/cmmagnetometerdata/magneticfield / https://developer.apple.com/documentation/coremotion/cmdevicemotion/useracceleration / https://developer.apple.com/documentation/bundleresources/information-property-list/nsmotionusagedescription"
     },
     "android": {
       "status": "possible",
       "api": "`SensorManager`（`TYPE_GYROSCOPE` / `TYPE_MAGNETIC_FIELD` / `TYPE_LINEAR_ACCELERATION`）",
-      "perm": "Android 12+ で 200Hz 超は `HIGH_SAMPLING_RATE_SENSORS`",
+      "perm": "不要（`registerListener` の上限は 200 Hz。`SENSOR_DELAY_UI` で登録するので `HIGH_SAMPLING_RATE_SENSORS` は要らない。公式）",
       "url": "https://developer.android.com/develop/sensors-and-location/sensors/sensors_motion",
-      "note": "未実装。既定の上限は 200Hz。"
+      "note": "未実装。単位は rad/s・µT・m/s²。線形加速度はソフトウェアのセンサーのことがあり、ジャイロの無い端末では null になる。`onPause` で解除する（公式の推奨）。一次情報: https://developer.android.com/develop/sensors-and-location/sensors/sensors_position / https://developer.android.com/develop/sensors-and-location/sensors/sensors_overview"
     },
     "macos": {
       "status": "no",
-      "api": "CoreMotion は iOS / watchOS 系のみ（一般知識、要確認）",
+      "api": "`CMMotionManager` の対応プラットフォームは iOS・iPadOS・Mac Catalyst・visionOS・watchOS（公式）",
       "perm": "-",
-      "url": "",
+      "url": "https://developer.apple.com/documentation/coremotion/cmmotionmanager",
       "note": "macOS は CoreMotion のセンサー API を提供しない（Apple シリコン Mac の内蔵センサーは非公開）"
     },
     "windows": {
       "status": "possible",
-      "api": "WinRT `Windows.Devices.Sensors.Gyrometer` / `Magnetometer` / `Accelerometer`（線形は生値から重力を引く）",
+      "api": "WinRT `Windows.Devices.Sensors.Gyrometer` / `Magnetometer` / `Accelerometer.GetDefault(AccelerometerReadingType.Linear)`（Windows 10 1607 / 14393 以上。重力は OS が除く）",
       "perm": "不要",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.gyrometer",
-      "note": "未実装。センサー搭載機（2-in-1 等）のみ。デスクトップ PC では `GetDefault` が null。"
+      "note": "未実装。単位は度/秒・µT・g。センサー搭載機（2-in-1 等）のみ。デスクトップ PC では `GetDefault` が null。Connected Standby の間も null。一次情報: https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.gyrometerreading / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.magnetometerreading / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.accelerometer.getdefault / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.accelerometerreadingtype"
     },
     "web": {
       "status": "possible",
-      "api": "Generic Sensor API（`Gyroscope` / `Magnetometer` / `LinearAccelerationSensor`）、`DeviceMotionEvent.rotationRate`",
-      "perm": "Permissions API の `gyroscope` / `magnetometer`。iOS Safari は `DeviceMotionEvent.requestPermission()`",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Sensor_APIs",
-      "safari": "一部対応（DeviceMotionEvent のみ。Generic Sensor は非対応）",
-      "note": "未実装。Magnetometer は Chromium 系のみ。iOS Safari は DeviceMotion のみ。"
+      "api": "`devicemotion` イベント（`DeviceMotionEvent.rotationRate` / `acceleration`）",
+      "perm": "iOS Safari 14.5 以上と Chrome 152 以上は `DeviceMotionEvent.requestPermission()`。secure context が必須",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/DeviceMotionEvent",
+      "safari": "`devicemotion` で角速度と線形加速度は取れる。磁場は取れない",
+      "note": "未実装。単位は度/秒（beta→x・gamma→y・alpha→z）・m/s²。Generic Sensor の `Gyroscope` / `LinearAccelerationSensor` は Chromium のみ、`Magnetometer` は Chromium でも実験フラグが要るので、Web の磁場は「この OS では取得できません」。一次情報: https://developer.mozilla.org/en-US/docs/Web/API/Magnetometer / https://developer.mozilla.org/en-US/docs/Web/API/Sensor_APIs / https://github.com/mdn/browser-compat-data/blob/main/api/Magnetometer.json / https://github.com/mdn/browser-compat-data/blob/main/api/DeviceMotionEvent.json"
     }
   },
-  "note": "tilt-motion は重力ベクトル（傾き）、compass-heading は方位で、これは角速度・磁場・線形加速度の生値を継続配信する。"
+  "note": "tilt-motion は重力ベクトル（傾き）、compass-heading は方位で、これは角速度・磁場・線形加速度の生値を継続配信する。範囲: 3 種類の x・y・z を OS が出した単位のまま単位付きで表示し、開始・停止は 3 種類まとめて 1 組。間隔は OS 任せ（表示に足りる間隔のみ要求）。範囲外は姿勢・重力・生の加速度・方位・較正前後の併記・200 Hz 超・記録・グラフ。方針: 単位はそろえない。事前判定をせず `is*Available` / `getDefaultSensor` / `GetDefault` の結果をそのまま「センサーなし」に写す。期限・古さの閾値は置かず、古い値の破棄は OS が示す事実（iOS の timestamp、Android の onPause、Windows の null、Web の非表示と null 成分）だけで決める。前回値や 0 で埋めない。守る範囲: 嘘の値を出さない、「OS に API が無い」と「端末に無い」を区別する、種類ごとに購読を二重にしない、停止・失敗・背景遷移・破棄で解除する、古い世代を捨てる、iOS の `CMMotionManager` を 1 つにする。守らない範囲: 絶対精度と較正、OS 間で単位・軸・座標系がそろうこと、画面回転時の軸、サンプリング周期と表示の遅れ、値が届かないまま待ち続ける場合、ブラウザ間の座標の扱いの違い、tilt 画面との同時利用時の iOS の周期変化、複数タブ・複数プロセス。"
 }
