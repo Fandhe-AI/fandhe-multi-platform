@@ -8,40 +8,56 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "`UIApplication.didBecomeActiveNotification` / `willResignActive` / `didEnterBackground` / `willEnterForeground`、Scene delegate",
+      "api": "`UIScene` の `didActivateNotification` / `willDeactivateNotification` / `didEnterBackgroundNotification` / `willEnterForegroundNotification` と、今の状態の `activationState`",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/uikit/app_and_environment/managing_your_app_s_life_cycle",
-      "note": "未実装。Rust 側へは extern \"C\" コールバックで橋渡し。登録トークンの保持に注意（契約表 1）。"
+      "url": [
+        "https://developer.apple.com/documentation/uikit/managing-your-app-s-life-cycle",
+        "https://developer.apple.com/documentation/uikit/uiscene"
+      ],
+      "note": "未実装。本アプリは scene 対応のため scene の通知を使う（`UIApplication` の通知は scene 対応時の配送が公式に記載なく採らない）。application ロールの scene だけを見る（外部画面の scene を数えない）。suspended へ移る通知は無い。Rust 側へは extern \"C\" コールバックで橋渡し。登録トークンの保持に注意（契約表 1）。"
     },
     "android": {
       "status": "possible",
-      "api": "`ProcessLifecycleOwner`（androidx.lifecycle）または `Activity.onStart` / `onStop` / `onPause`",
+      "api": "`Activity` の `onResume` / `onPause` / `onStart` / `onStop`、`isChangingConfigurations()`、今の状態の `ActivityManager.getMyMemoryState`（`importance`）",
       "perm": "不要",
-      "url": "https://developer.android.com/guide/components/activities/activity-lifecycle",
-      "note": "未実装。Activity 再生成と背面遷移を区別する必要がある（契約表 1）。"
+      "url": [
+        "https://developer.android.com/guide/components/activities/activity-lifecycle",
+        "https://developer.android.com/reference/android/app/Activity#isChangingConfigurations()",
+        "https://developer.android.com/reference/android/app/ActivityManager#getMyMemoryState(android.app.ActivityManager.RunningAppProcessInfo)"
+      ],
+      "note": "未実装。`ProcessLifecycleOwner` は依存追加が要り、`ON_PAUSE` / `ON_STOP` を意図的に遅らせて配る（推測タイマー）ため採らない。再生成は `isChangingConfigurations()` で区別する（停止中の再生成は区別できない、公式）。キャッシュ状態の凍結を知らせる API は見当たらない。`getMyMemoryState` を minSdk 24 で使えるかは実装時に確認する。"
     },
     "macos": {
       "status": "possible",
-      "api": "`NSApplication.didBecomeActiveNotification` / `didResignActive` / `didHide` / `didUnhide`、`NSWorkspace` のスリープ通知",
+      "api": "`NSApplication.didBecomeActiveNotification` / `didResignActiveNotification` / `didChangeOcclusionStateNotification`（受けたら `occlusionState` を問い直す）",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/appkit/nsapplication/didbecomeactivenotification",
-      "note": "未実装。URL 未確認（一般知識、要確認）。sleep-lock-events（候補）との境界は電源・ロックの通知側。"
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nsapplication/didbecomeactivenotification",
+        "https://developer.apple.com/documentation/appkit/nsapplication/didchangeocclusionstatenotification"
+      ],
+      "note": "未実装。`didHide` / `didUnhide` は occlusion に含まれるため別に取らない。凍結（App Nap）の通知は見当たらない。システムのスリープ・ロックは sleep-lock-events の担当。"
     },
     "windows": {
       "status": "possible",
-      "api": "Win32 `WM_ACTIVATEAPP` / `WM_SIZE`（最小化）、winit のウィンドウイベント。UWP/WinUI は `Window.VisibilityChanged`・`Suspending`",
+      "api": "Win32 `WM_ACTIVATEAPP` / `WM_SIZE`（`SIZE_MINIMIZED` / `SIZE_RESTORED` / `SIZE_MAXIMIZED`）をメインウィンドウの観測専用サブクラスで受ける",
       "perm": "不要",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-activateapp",
-      "note": "未実装。デスクトップ（アンパッケージ）に凍結の概念は無く、前面・背面のみ。"
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-activateapp",
+        "https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-size"
+      ],
+      "note": "未実装。デスクトップ（アンパッケージ）に凍結の概念は無く、前面・背面のみ（凍結はこの OS では取れない）。今の状態は `GetForegroundWindow` の所有プロセスと `IsIconic` で問い直す。"
     },
     "web": {
       "status": "possible",
-      "api": "Page Visibility API（`visibilitychange`）、Page Lifecycle の `freeze` / `resume`、`pagehide` / `pageshow`",
+      "api": "Page Visibility API（`visibilitychange`）、`window` の `focus` / `blur`、Page Lifecycle の `freeze` / `resume`、`pageshow` の `persisted`（bfcache 復帰）",
       "perm": "不要",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API",
-      "safari": "一部対応（visibilitychange / pagehide は対応、freeze / resume は非対応）",
-      "note": "未実装。`freeze` / `resume` は Chromium 系のみ。bfcache 復帰は `pageshow` の `persisted` で判定。"
+      "url": [
+        "https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API",
+        "https://developer.chrome.com/docs/web-platform/page-lifecycle-api"
+      ],
+      "safari": "一部対応（visibilitychange / pageshow は対応、freeze / resume は非対応）",
+      "note": "未実装。`freeze` / `resume` は Chromium 系のみ（Firefox も非対応）。bfcache 復帰は `pageshow` の `persisted` で判定。破棄（discard）はその時点では観測できない。"
     }
   },
-  "note": "描画ループ内部の休止判定ではなく、アプリが前面・背面・凍結の状態を知って保存や停止を行うための通知 API。"
+  "note": "描画ループ内部の休止判定ではなく、アプリが前面・背面・凍結の状態を知って保存や停止を行うための通知 API。出来事は操作の対象になった・外れた、見える・見えなくなった、凍結された・戻った、bfcache から戻った。OS が知らせない種類は「この OS では取れない」と宣言する。状態はアプリ内に覚えず、出来事は OS の通知だけ、今の状態は届くたびに OS へ問い直す。タイマー・遅延を使わず、届かなかった出来事を補わない。守る範囲は 1 プロセス内の順序・読めない状態を前面に畳まないこと・資源の解放。守らない範囲は画面を開く前と止めた後の出来事、OS 間の「操作の対象」「見える」の定義差、Android の停止中の再生成、複数プロセス・複数窓・複数 scene。終了の通知、iOS の suspended、Android のキャッシュ凍結、macOS の App Nap、Web の discard、システムのスリープ・ロック（sleep-lock-events の担当）は範囲外。"
 }
