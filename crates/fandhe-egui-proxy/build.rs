@@ -341,6 +341,9 @@
 //! - `ios/fandhe_ios_power_state.m`（Issue #1275、`UIDevice` と `NSProcessInfo` による電源状態）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_power_state.rs`
 //!   から呼ばれる契約）。UIKit は既存のリンクで足りる。
+//! - `ios/fandhe_ios_app_lifecycle.m`（Issue #894、`UIScene` の通知によるアプリの前面・背面）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_app_lifecycle.rs`
+//!   から呼ばれる契約）。UIKit は既存のリンクで足りる。
 //! - `ios/fandhe_ios_device_info.m`（Issue #1305、`NSProcessInfo` と `sysctl` による端末・OS 情報）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_device_info.rs`
 //!   から呼ばれる契約）。Foundation は既存のリンクで足りる。
@@ -650,6 +653,8 @@ fn main() {
     compile_ios_screen_orientation();
     // `ios/fandhe_ios_power_state.m`（Issue #1275）。iOS 分岐のみ。
     compile_ios_power_state();
+    // `ios/fandhe_ios_app_lifecycle.m`（Issue #894）。iOS 分岐のみ。
+    compile_ios_app_lifecycle();
     // `ios/fandhe_ios_compose_mail_sms.m`（Issue #1385）。iOS 分岐のみ。
     compile_ios_compose_mail_sms();
     // `ios/fandhe_ios_print.m`（Issue #327）。iOS 分岐のみ。
@@ -2100,6 +2105,16 @@ fn compile_ios_power_state() {
         .file("ios/fandhe_ios_power_state.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_power_state");
+}
+
+/// `ios/fandhe_ios_app_lifecycle.m` を `cc` でコンパイルする（Issue #894）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_app_lifecycle.rs` が使う）。UIKit はリンク済み。
+fn compile_ios_app_lifecycle() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_app_lifecycle.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_app_lifecycle.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_app_lifecycle");
 }
 
 /// `ios/fandhe_ios_device_info.m` を `cc` でコンパイルする（Issue #1305）。**iOS 分岐のみ**

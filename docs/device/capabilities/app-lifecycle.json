@@ -7,14 +7,17 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "`UIScene` の `didActivateNotification` / `willDeactivateNotification` / `didEnterBackgroundNotification` / `willEnterForegroundNotification` と、今の状態の `activationState`",
       "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/uikit/managing-your-app-s-life-cycle",
         "https://developer.apple.com/documentation/uikit/uiscene"
       ],
-      "note": "未実装。本アプリは scene 対応のため scene の通知を使う（`UIApplication` の通知は scene 対応時の配送が公式に記載なく採らない）。application ロールの scene だけを見る（外部画面の scene を数えない）。suspended へ移る通知は無い。Rust 側へは extern \"C\" コールバックで橋渡し。登録トークンの保持に注意（契約表 1）。"
+      "note": "実装済み（#894）。本アプリは scene 対応のため scene の通知を使う（`UIApplication` の通知は scene 対応時の配送が公式に記載なく採らない）。application ロールの scene だけを見る（外部画面の scene を数えない）。suspended へ移る通知は無い。Rust 側へは extern \"C\" コールバックで橋渡し。登録トークンの保持に注意（契約表 1）。凍結・bfcache 復帰は「この OS では取れない」と出す。今の状態は画面を開いた時と出来事が届くたびに `activationState` を問い直し、scene 未接続・Unattached は「不明」、main thread 以外の読み取りは失敗として出す。停止は observer の解除で、解除後に届いた通知は捨てる。",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#883）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_app_lifecycle.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_app_lifecycle.m + crates/fandhe-egui-proxy/src/device/app_lifecycle.rs + crates/fandhe-core/src/screens/app_lifecycle_show.rs + crates/fandhe-device/src/app_lifecycle.rs、Issue #894"
     },
     "android": {
       "status": "possible",
