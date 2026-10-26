@@ -118,6 +118,9 @@ use fandhe_core::screens::location_show::{
 use fandhe_core::screens::media_transcode::{
     current_screen as current_media_transcode_screen, TranscodeState,
 };
+use fandhe_core::screens::memory_pressure_show::{
+    current_screen as current_memory_pressure_show_screen, MemoryPressureShowState,
+};
 use fandhe_core::screens::mic_record::{
     current_screen as current_mic_record_screen, MicRecordState,
 };
@@ -497,6 +500,20 @@ pub fn mount_app_lifecycle_show_screen(root_id: &str) -> Result<(), JsValue> {
         current_app_lifecycle_show_screen(&initial_state),
         initial_state,
         super::app_lifecycle::app_lifecycle_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「メモリ逼迫・負荷」（親 #179、Issue #914）をマウントする検証専用
+/// エントリポイント。`super::memory_pressure::memory_pressure_show_effect` が Compute Pressure API を駆動する。
+#[wasm_bindgen]
+pub fn mount_memory_pressure_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    let initial_state = MemoryPressureShowState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_memory_pressure_show_screen(&initial_state),
+        initial_state,
+        super::memory_pressure::memory_pressure_show_effect,
     )
 }
 
