@@ -272,6 +272,10 @@
 //! - `macos/fandhe_macos_eye_dropper.m`（Issue #762、`NSColorSampler` による画面のスポイト）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_eye_dropper.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_file_preview.m`（Issue #917、自前の窓に載せる `QLPreviewView` による固定ファイルの
+//!   プレビュー）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_file_preview.rs` から呼ばれる契約）。QuickLookUI を追加でリンクする。
+//!   サムネイル側の `apple/fandhe_apple_file_preview.m`（QuickLookThumbnailing）は macOS・iOS 両分岐から呼ぶ。
 //! - `macos/fandhe_macos_print.m`（Issue #325、`NSPrintPanel` + `NSPrintOperation` による印刷
 //!   ダイアログ）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_print.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -350,6 +354,9 @@
 //! - `ios/fandhe_ios_app_lifecycle.m`（Issue #894、`UIScene` の通知によるアプリの前面・背面）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_app_lifecycle.rs`
 //!   から呼ばれる契約）。UIKit は既存のリンクで足りる。
+//! - `ios/fandhe_ios_memory_pressure.m`（Issue #912、メモリ警告の observer と memory pressure source）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_memory_pressure.rs`
+//!   から呼ばれる契約）。UIKit と libdispatch は既存のリンクで足りる。
 //! - `ios/fandhe_ios_device_info.m`（Issue #1305、`NSProcessInfo` と `sysctl` による端末・OS 情報）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_device_info.rs`
 //!   から呼ばれる契約）。Foundation は既存のリンクで足りる。
@@ -635,6 +642,8 @@ fn main() {
     compile_apple_media_transcode();
     // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
     compile_apple_pdf_viewer();
+    // `apple/fandhe_apple_file_preview.m`（Issue #917 macOS + b-ios iOS）も共用する。
+    compile_apple_file_preview();
     // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS + #346 iOS）も共用する。
     compile_apple_on_device_llm(true);
     // `apple/fandhe_apple_translation.swift`（Issue #535 macOS + #536 iOS）も共用する。
@@ -664,6 +673,8 @@ fn main() {
     compile_ios_power_state();
     // `ios/fandhe_ios_app_lifecycle.m`（Issue #894）。iOS 分岐のみ。
     compile_ios_app_lifecycle();
+    // `ios/fandhe_ios_memory_pressure.m`（Issue #912）。iOS 分岐のみ。
+    compile_ios_memory_pressure();
     // `ios/fandhe_ios_compose_mail_sms.m`（Issue #1385）。iOS 分岐のみ。
     compile_ios_compose_mail_sms();
     // `ios/fandhe_ios_print.m`（Issue #327）。iOS 分岐のみ。
@@ -1052,6 +1063,20 @@ fn compile_apple_pdf_viewer() {
         .file("apple/fandhe_apple_pdf_viewer.m")
         .flag("-fobjc-arc")
         .compile("fandhe_apple_pdf_viewer");
+    println!("cargo:rustc-link-lib=framework=CoreGraphics");
+}
+
+/// `apple/fandhe_apple_file_preview.m` を `cc` でコンパイルし QuickLookThumbnailing・CoreGraphics を
+/// リンクする（Issue #917 macOS、iOS は b-ios が利用、固定ファイルのサムネイル生成）。
+/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_file_preview`）と
+/// 同じ OS 集合に保つ。
+fn compile_apple_file_preview() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_file_preview.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_file_preview.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_file_preview");
+    println!("cargo:rustc-link-lib=framework=QuickLookThumbnailing");
     println!("cargo:rustc-link-lib=framework=CoreGraphics");
 }
 
@@ -1819,6 +1844,18 @@ fn compile_macos_eye_dropper() {
         .compile("fandhe_macos_eye_dropper");
 }
 
+/// `macos/fandhe_macos_file_preview.m` を `cc` でコンパイルし QuickLookUI をリンクする（Issue #917）。
+/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_file_preview.rs` が使う）。AppKit は
+/// `build_macos` 側の既存リンクで足りる。
+fn compile_macos_file_preview() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_file_preview.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_file_preview.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_file_preview");
+    println!("cargo:rustc-link-lib=framework=QuickLookUI");
+}
+
 /// `macos/fandhe_macos_print.m` を `cc` でコンパイルする（Issue #325）。**macOS 分岐のみ**から
 /// 呼ばれる（`src/device/macos_print.rs` が使う）。AppKit は `build_macos` 側の既存リンクで足りる。
 fn compile_macos_print() {
@@ -2149,6 +2186,16 @@ fn compile_ios_app_lifecycle() {
         .file("ios/fandhe_ios_app_lifecycle.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_app_lifecycle");
+}
+
+/// `ios/fandhe_ios_memory_pressure.m` を `cc` でコンパイルする（Issue #912）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_memory_pressure.rs` が使う）。UIKit・libdispatch はリンク済み。
+fn compile_ios_memory_pressure() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_memory_pressure.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_memory_pressure.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_memory_pressure");
 }
 
 /// `ios/fandhe_ios_device_info.m` を `cc` でコンパイルする（Issue #1305）。**iOS 分岐のみ**
@@ -2524,6 +2571,8 @@ fn build_macos() {
     compile_apple_media_transcode();
     // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
     compile_apple_pdf_viewer();
+    // `apple/fandhe_apple_file_preview.m`（Issue #917 macOS + b-ios iOS）も共用する。
+    compile_apple_file_preview();
     // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308）。iOS 分岐と共用する。
@@ -2568,6 +2617,8 @@ fn build_macos() {
     compile_macos_open_in_shell();
     // `macos/fandhe_macos_eye_dropper.m`（Issue #762）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_eye_dropper();
+    // `macos/fandhe_macos_file_preview.m`（Issue #917）も macOS 専用。QuickLookUI をリンクする。
+    compile_macos_file_preview();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_print();
     // `macos/fandhe_macos_audio_devices.m`（Issue #1330）も macOS 専用。CoreAudio を使う。
