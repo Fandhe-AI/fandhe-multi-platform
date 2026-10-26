@@ -10,37 +10,51 @@
       "status": "possible",
       "api": "`UIDevice.identifierForVendor`（IDFV）",
       "perm": "不要（広告用 IDFA は ATT 許可が要り対象外）",
-      "url": "https://developer.apple.com/documentation/uikit/uidevice/identifierforvendor",
-      "note": "未実装。同じベンダーのアプリが全て消えると変わる。アプリ削除後の再インストールでも変わりうる。"
+      "url": [
+        "https://developer.apple.com/documentation/uikit/uidevice/identifierforvendor",
+        "https://developer.apple.com/app-store/user-privacy-and-data-use/",
+        "https://developer.apple.com/app-store/app-privacy-details/"
+      ],
+      "note": "未実装。同じベンダーのアプリが他に無い状態で全て消すと変わる。nil は再起動後・初回ロック解除前などで返りうる（取り直しは利用者の押し直し）。Xcode のテストビルド・ad-hoc 配布でも変わりうる。ATT は不要（同じ提供元の範囲。他社のアプリ・サイトをまたぐ追跡に組み合わせない）。プライバシー表示の Device ID は端末の外へ送る場合のみ申告対象。"
     },
     "android": {
       "status": "possible",
       "api": "`Settings.Secure.ANDROID_ID`（アプリの署名鍵・ユーザー・端末の組ごとの値）",
       "perm": "不要（IMEI・シリアルは取得不可）",
-      "url": "https://developer.android.com/training/articles/user-data-ids",
-      "note": "未実装。Android 8+ は署名鍵ごとに値が異なる。工場出荷リセットで変わる。広告 ID は対象外。"
+      "url": [
+        "https://developer.android.com/reference/android/provider/Settings.Secure#ANDROID_ID",
+        "https://developer.android.com/about/versions/oreo/android-8.0-changes",
+        "https://developer.android.com/training/articles/user-data-ids"
+      ],
+      "note": "未実装。Android 8+ は署名鍵・ユーザー・端末の組ごとの値で、同じ署名鍵ならアンインストール・再インストールで変わらない。Android 7（minSdk 24〜25）は署名鍵で分かれず、端末・ユーザーで共通。工場出荷リセット・署名鍵の変更で変わる。Play のポリシー上、広告 ID・個人の機微データと結び付けない。広告 ID は対象外。"
     },
     "macos": {
-      "status": "possible",
-      "api": "`IOPlatformUUID`（`IORegistryEntryCreateCFProperty`）またはキーチェーンに保存した自前 UUID",
+      "status": "no",
+      "api": "`IOPlatformUUID`（`kIOPlatformUUIDKey`、公開定数）は全アプリ共通の機体 ID で、ベンダー単位の識別子は無い",
       "perm": "不要",
-      "url": "",
-      "note": "未実装。ハードウェア UUID の取得は公開 API ではないため自前 UUID を推奨。URL 未確認（一般知識、要確認）。"
+      "url": [
+        "https://developer.apple.com/documentation/iokit/kioplatformuuidkey",
+        "https://developer.apple.com/app-store/user-privacy-and-data-use/"
+      ],
+      "note": "ベンダー単位の ID が無い。`IOPlatformUUID` は全アプリ共通の機体 ID で、Apple の『端末を一意に識別する目的で導き出さない』に触れうるため扱わない。自前 UUID は OS の値ではないため扱わない。"
     },
     "windows": {
-      "status": "possible",
-      "api": "レジストリ `HKLM\\SOFTWARE\\Microsoft\\Cryptography\\MachineGuid`、または自前 UUID を `%APPDATA%` に保存",
+      "status": "no",
+      "api": "`SystemIdentification.GetSystemIdForPublisher`（unpackaged では全アプリで同じ値）",
       "perm": "不要",
-      "url": "",
-      "note": "未実装。MachineGuid は OS 再インストールで変わる。ハードウェア ID の追跡的な利用はプライバシー上避ける。URL 未確認。"
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.system.profile.systemidentification.getsystemidforpublisher",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.system.profile.systemidentification"
+      ],
+      "note": "unpackaged では全アプリで同じ値（公式）で、発行元単位にならない。`MachineGuid` は公式文書が無い。自前 UUID は OS の値ではないため扱わない。"
     },
     "web": {
       "status": "no",
       "api": "端末識別子の API なし",
       "perm": "-",
       "url": "",
-      "note": "端末識別子の API は無い。`localStorage` 等に自前 UUID を保存するのが上限（ストレージ消去で変わる）"
+      "note": "端末識別子の API は無い。自前 UUID は OS の値ではないため扱わない"
     }
   },
-  "note": "device-info（機種・OS 版・空き容量）とは別に、アプリ単位の識別子を扱う。端末固有の永続 ID は取れず、再インストール・初期化で変わる前提。"
+  "note": "device-info（機種・OS 版・空き容量）とは別に、アプリ単位の識別子を扱う。端末固有の永続 ID は取れず、再インストール・初期化で変わる前提。\n範囲: OS が返す識別子を 1 回読み、伏せて表示するだけ。保存・送信・比較・再設定・広告 ID・IMEI・シリアル・MAC は範囲外。対象 OS は iOS・Android。\n値の扱い: 画面は末尾 4 文字だけを出し全体は出さない。ログ・対応表・PR・確認用 issue・キャプチャに値を残さない。iOS の nil は失敗にせず「後で取り直す」とし、null・空・失敗は成功に畳まない。\nOS を正にする: 事前判定・自動再試行・自前 UUID の保存・前回値との比較をしない。\n守る: OS の値をそのまま 1 回読むこと、失敗を成功に畳まないこと、値を残さないこと、古い結果を捨てること。\n守らない: 値がいつ変わるか、Android 7 でのアプリ間共有、iOS の nil がいつ解けるか、読んだ後の変化の反映、OS 呼び出しが戻らない場合の期限、複数プロセス・複数ユーザー間の一致。"
 }
