@@ -115,9 +115,11 @@ mod imp {
     /// `suspended`（最小化中）の判定と `ReportInterval` の変更は同じロックの内側で行う。
     struct State {
         held: [Option<Held>; 3],
-        /// 復元時に再設定できなかった種類の失敗。次の `read` が一度だけ `Err` で返す。
+        /// `ReportInterval` の切替に失敗した種類の失敗。次の `read` が一度だけ `Err` で返す。
         failed: [Option<RawSensorFailure>; 3],
         suspended: bool,
+        /// 最小化時の解除（`ReportInterval` 0）に失敗した種類がある。ウォッチャーが再試行する。
+        release_failed: bool,
     }
 
     /// ウォッチャーからも触るためプロセスで 1 つにする。
@@ -125,6 +127,7 @@ mod imp {
         held: [None, None, None],
         failed: [None, None, None],
         suspended: false,
+        release_failed: false,
     });
 
     fn state() -> std::sync::MutexGuard<'static, State> {
@@ -314,19 +317,28 @@ mod imp {
     /// `Err` で返し、driver の失敗表示経路へ渡る。失敗を握りつぶして待機のままにしない）。
     fn set_suspended(minimized: bool) {
         let mut st = state();
-        if st.suspended == minimized {
+        if st.suspended == minimized && !st.release_failed {
             return;
         }
         st.suspended = minimized;
-        let State { held, failed, .. } = &mut *st;
+        let State {
+            held,
+            failed,
+            release_failed,
+            ..
+        } = &mut *st;
+        *release_failed = false;
         for (slot, fail) in held.iter_mut().zip(failed.iter_mut()) {
-            if let Some(h) = slot {
-                if let Err(f) = h.apply(!minimized) {
-                    if !minimized {
-                        *slot = None;
-                        *fail = Some(f);
-                    }
-                }
+            let Some(h) = slot else { continue };
+            let Err(f) = h.apply(!minimized) else {
+                continue;
+            };
+            *fail = Some(f);
+            if minimized {
+                // 解除失敗: 保持を残し、次回のポーリングで再試行する。
+                *release_failed = true;
+            } else {
+                *slot = None;
             }
         }
     }
@@ -354,8 +366,12 @@ mod imp {
         fn read(&self, kind: RawKind) -> Result<Option<RawReading>, RawSensorFailure> {
             ensure_minimize_watcher();
             let mut guard = state();
-            let Some(h) = guard.held[idx(kind)].as_ref() else {
-                return guard.failed[idx(kind)].take().map_or(Ok(None), Err);
+            if let Some(f) = guard.failed[idx(kind)].take() {
+                return Err(f);
+            }
+            // 非表示中は取得しない（復元直後でウォッチャーが解除する前も含む）。
+            let Some(h) = guard.held[idx(kind)].as_ref().filter(|_| !guard.suspended) else {
+                return Ok(None);
             };
             Ok(read_axes(h)?.and_then(|(x, y, z)| to_reading(kind, x, y, z)))
         }
