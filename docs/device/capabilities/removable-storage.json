@@ -15,24 +15,40 @@
     },
     "android": {
       "status": "possible",
-      "api": "`StorageManager.getStorageVolumes()` / `StorageVolume`、`ACTION_MEDIA_MOUNTED` / `ACTION_MEDIA_EJECT`、`ACTION_OPEN_DOCUMENT_TREE`",
-      "perm": "不要（ファイル読みは SAF 経由）",
-      "url": "https://developer.android.com/reference/android/os/storage/StorageManager",
-      "note": "未実装。ボリュームの列挙と着脱は届くが、読み書きは SAF が前提。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "`StorageManager.getStorageVolumes()`（API 24）と `StorageVolume` の `getDescription` / `getState` / `isRemovable` / `isPrimary`（API 24）、通知は `StorageManager.registerStorageVolumeCallback`（API 30）の `StorageVolumeCallback.onStateChanged`",
+      "perm": "不要（新しい uses-permission なし。BroadcastReceiver も使わない）",
+      "url": [
+        "https://developer.android.com/reference/android/os/storage/StorageManager",
+        "https://developer.android.com/reference/android/os/storage/StorageManager.StorageVolumeCallback",
+        "https://developer.android.com/reference/android/os/storage/StorageVolume"
+      ],
+      "note": "未実装。API 30 未満は `registerStorageVolumeCallback` が無く、一覧だけ出して通知は「この OS 版では取れない」と出す。`getStorageVolumes` は今つながっているボリューム（SD カード・USB ドライブを含み、状態は任意）を返す（公式）。`onStateChanged` の `StorageVolume` はその時点のスナップショットで、最新は `getStorageVolumes` を読み直す（公式）。`getDirectory`（API 30）と UUID は読まない。`ACTION_OPEN_DOCUMENT_TREE` はボリュームの中身を読む別機能（file-picker）で本機能の範囲外"
     },
     "macos": {
       "status": "possible",
-      "api": "`NSWorkspace.didMountNotification` / `willUnmountNotification` / `didUnmountNotification`、`FileManager.mountedVolumeURLs`",
-      "perm": "不要（sandbox 時は選択ダイアログ経由で読む）",
-      "url": "https://developer.apple.com/documentation/appkit/nsworkspace/didmountnotification",
-      "note": "未実装。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "`NSWorkspace.shared.notificationCenter` の `didMountNotification` / `willUnmountNotification` / `didUnmountNotification`、一覧は `FileManager.mountedVolumeURLs(includingResourceValuesForKeys:options:)`（`.skipHiddenVolumes`）と `URLResourceKey` の `volumeLocalizedNameKey` / `volumeIsRemovableKey` / `volumeIsEjectableKey` / `volumeIsInternalKey` / `volumeIsLocalKey`",
+      "perm": "不要（本体アプリは sandbox なし）",
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nsworkspace/didmountnotification",
+        "https://developer.apple.com/documentation/appkit/nsworkspace/willunmountnotification",
+        "https://developer.apple.com/documentation/appkit/nsworkspace/didunmountnotification",
+        "https://developer.apple.com/documentation/foundation/filemanager/mountedvolumeurls(includingresourcevaluesforkeys:options:)",
+        "https://developer.apple.com/documentation/foundation/urlresourcekey/volumeisremovablekey"
+      ],
+      "note": "未実装。`willUnmountNotification` は強制的に即座に使えなくなった場合は届かず、`didUnmountNotification` は取り出さずに抜いても届く（公式）。`mountedVolumeURLs` は I/O が要ると待つことがある（公式、守らない範囲）"
     },
     "windows": {
       "status": "possible",
-      "api": "WinRT `Windows.Devices.Enumeration.DeviceWatcher`（`StorageDevice.GetDeviceSelector`）、Win32 `WM_DEVICECHANGE`",
-      "perm": "`removableStorage` 機能の宣言（パッケージ時）。unpackaged は要確認",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.enumeration.devicewatcher",
-      "note": "未実装。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "Win32 `WM_DEVICECHANGE` の `DBT_DEVICEARRIVAL` / `DBT_DEVICEREMOVECOMPLETE`（`DEV_BROADCAST_VOLUME`、`dbch_devicetype` が `DBT_DEVTYP_VOLUME`）を不可視のトップレベルウィンドウで受ける。一覧は `GetLogicalDrives` / `GetDriveTypeW` / `GetVolumeInformationW`。空のカードリーダーでディスク挿入のダイアログを出さないよう `SetThreadErrorMode(SEM_FAILCRITICALERRORS)` を使う",
+      "perm": "不要（パッケージの `removableStorage` capability は UWP で `KnownFolders.RemovableDevices` の中身を読むためのもので、本機能の Win32 API には要らない）",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/devio/wm-devicechange",
+        "https://learn.microsoft.com/en-us/windows/win32/devio/dbt-devicearrival",
+        "https://learn.microsoft.com/en-us/windows/win32/api/dbt/ns-dbt-dev_broadcast_volume",
+        "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerdevicenotificationw",
+        "https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getdrivetypew"
+      ],
+      "note": "未実装。ボリュームの通知はトップレベルウィンドウへ自動で配られ、`RegisterDeviceNotification` は `DBT_DEVTYP_VOLUME` では失敗する（公式）ため使わない。同じ出来事で通知が複数回届きうる（公式、守らない範囲）。`GetDriveTypeW` は USB の HDD を `DRIVE_FIXED` と返す（USB 判定には別の API が要る、守らない範囲）。`DBT_DEVICEQUERYREMOVE` 相当の「取り外しの直前」と「その他の変化」は取らず「この OS では取れない」と出す"
     },
     "web": {
       "status": "no",
@@ -43,5 +59,5 @@
       "note": "ボリュームの着脱を知らせる API が無い。選んだフォルダの読み書き（file-picker / file-watch の範囲）だけができる。"
     }
   },
-  "note": "usb-device は USB 機器の直接制御、file-picker は利用者が選んだファイルの取得で、本機能はストレージボリュームの着脱の検知と列挙。file-watch（フォルダ内の変更）とも別。"
+  "note": "usb-device は USB 機器の直接制御、file-picker は利用者が選んだファイルの取得で、本機能はストレージボリュームの着脱の検知と列挙。file-watch（フォルダ内の変更）とも別。今回の範囲: 「始める」で OS の着脱通知（マウントされた・取り外しの直前・取り外された・その他の変化）を購読し、止めるまで受信順の番号つきで直近 8 件と種類ごとの回数を並べる。今のボリューム一覧（名前・種類・状態）は、画面を開いた時・通知が届くたび・「再取得」で OS から読み直して丸ごと置き換える。ボリュームの中身は読まない・書かない・取り出し操作もしない。結果は 受信中 / 停止（利用者の操作・画面を離れた、正常）/ 開始失敗 / 実行中の失敗 / 非対応。一覧の読み取りは 成功（0 件を含む）/ 失敗 / 非対応で、失敗を 0 件に畳まない。OS を正にする: 一覧はアプリ内で差分管理せず、通知の中身（Windows の `dbcv_unitmask`、Android の `StorageVolume`、macOS の `NSDevicePath`）から組み立てない。種類・状態は OS が返した値をそのまま写し、「外部かどうか」をアプリで判定せず内蔵ボリュームも OS が返せば出して種類欄で区別する。Android API 30 未満の通知、Windows の取り外しの直前、macOS・Windows のその他の変化は「この OS では取れない」と出す。UUID・シリアル番号・マウントパスは取らず、名前はログに出さない。通知・コールバック・ウィンドウは、止める・画面を離れる・開始の途中の失敗・Activity の `onDestroy` の全経路で外し、解除後に遅れて届いた通知は捨てる。一覧は同期で読む。守らない範囲: 画面を開く前・止めた後の出来事、通知と一覧の読み直しの間の時間差（読み直した時点の一覧が正）、同じ着脱で OS が通知を複数回出すこと、OS 間の「外部」「取り外し可能」の定義の差、macOS の強制抜去で `willUnmount` が届かないこと、一覧の読み取りが I/O で待つ間（ネットワークボリューム等）の画面の停止と期限、複数プロセス・複数窓、OS 側の通知の遅れ。"
 }
