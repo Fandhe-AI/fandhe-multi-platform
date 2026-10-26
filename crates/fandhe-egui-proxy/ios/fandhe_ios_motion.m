@@ -110,6 +110,30 @@ static _Atomic int32_t g_device_motion_failure = 0;
 // device motion セッションの世代。start / stop ごとに進め、handler は自分が開始した世代が
 // 現行のときだけ failure を書く（停止後・再開後に遅れて届いたエラーで古い失敗を残さない）。
 static _Atomic uint64_t g_device_motion_gen = 0;
+// handler 方式では pull 用の `manager.deviceMotion` に頼れないため、handler が受け取った最新
+// サンプルをここへ保持する（@synchronized で保護）。tilt と線形加速度の read が共通で読む。
+static CMDeviceMotion *g_latest_motion = nil;
+static NSObject *g_latest_motion_lock = nil;
+
+static NSObject *FandheLatestMotionLock(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      g_latest_motion_lock = [[NSObject alloc] init];
+    });
+    return g_latest_motion_lock;
+}
+
+CMDeviceMotion *_Nullable fandhe_ios_device_motion_latest(void) {
+    @synchronized(FandheLatestMotionLock()) {
+        return g_latest_motion;
+    }
+}
+
+static void FandheSetLatestMotion(CMDeviceMotion *_Nullable motion) {
+    @synchronized(FandheLatestMotionLock()) {
+        g_latest_motion = motion;
+    }
+}
 
 // 共有 manager を返す（`fandhe_ios_motion_raw_sensors.m` が extern 宣言して使う）。
 CMMotionManager *fandhe_ios_shared_motion_manager(void) {
@@ -130,11 +154,10 @@ int32_t fandhe_ios_device_motion_ensure_started(void) {
     }
     if (!manager.isDeviceMotionActive) {
         manager.deviceMotionUpdateInterval = 1.0 / 60.0;
-        // ハンドラ無しの pull 方式（`fandhe_ios_motion_read` が毎フレーム
-        // `manager.deviceMotion` を読む、モジュール冒頭コメント参照）。既定の
+        // handler が最新サンプルを保持し、`fandhe_ios_motion_read` が毎フレーム
+        // それを読む（モジュール冒頭コメント参照）。既定の
         // reference frame で十分なため（gravity 成分のみ使う）、参照系を
         // 明示指定する `startDeviceMotionUpdatesUsingReferenceFrame:` は使わない。
-        // handler は値を持たずエラーの観測だけに使う（値は従来どおり `deviceMotion` を pull で読む）。
         static NSOperationQueue *queue = nil;
         static dispatch_once_t queueOnce;
         dispatch_once(&queueOnce, ^{
@@ -142,6 +165,7 @@ int32_t fandhe_ios_device_motion_ensure_started(void) {
           queue.maxConcurrentOperationCount = 1;
         });
         g_device_motion_failure = 0;
+        FandheSetLatestMotion(nil);
         const uint64_t gen = ++g_device_motion_gen;
         [manager startDeviceMotionUpdatesToQueue:queue
                                      withHandler:^(CMDeviceMotion *motion, NSError *error) {
@@ -149,6 +173,7 @@ int32_t fandhe_ios_device_motion_ensure_started(void) {
                                            return;
                                        }
                                        if (error == nil) {
+                                           FandheSetLatestMotion(motion);
                                            g_device_motion_failure = 0;
                                        } else if ([error.domain isEqualToString:CMErrorDomain] &&
                                                   (error.code == CMErrorNotAuthorized ||
@@ -179,6 +204,7 @@ void fandhe_ios_device_motion_release_if_unused(void) {
         g_device_motion_gen++;
         [fandhe_ios_shared_motion_manager() stopDeviceMotionUpdates];
         g_device_motion_failure = 0;
+        FandheSetLatestMotion(nil);
     }
 }
 
@@ -188,7 +214,7 @@ int32_t fandhe_ios_motion_read(float *out_x, float *out_y) {
         return 1;
     }
 
-    CMDeviceMotion *motion = g_motion_manager.deviceMotion;
+    CMDeviceMotion *motion = fandhe_ios_device_motion_latest();
     if (motion == nil) {
         // 起動直後、最初のサンプルがまだ届いていない区間（契約: (0.0, 0.0) を
         // 書いて成功として扱う）。

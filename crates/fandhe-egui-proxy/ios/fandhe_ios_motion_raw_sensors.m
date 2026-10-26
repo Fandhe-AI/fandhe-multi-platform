@@ -31,6 +31,7 @@ extern int32_t fandhe_ios_device_motion_ensure_started(void);
 extern void fandhe_ios_device_motion_release_if_unused(void);
 extern int32_t fandhe_ios_device_motion_failure(void);
 extern void fandhe_ios_device_motion_clear_failure(void);
+extern CMDeviceMotion *_Nullable fandhe_ios_device_motion_latest(void);
 
 // Rust 側（`ios_motion_raw_sensors.rs`）の受け口。値・失敗を確定した直後に次フレームを起こす。
 extern void fandhe_rust_motion_raw_sensors_changed(void);
@@ -248,7 +249,7 @@ int32_t fandhe_ios_motion_raw_read(int32_t kind, double *x, double *y, double *z
         if (failure != 0) {
             return failure;
         }
-        CMDeviceMotion *motion = fandhe_ios_shared_motion_manager().deviceMotion;
+        CMDeviceMotion *motion = fandhe_ios_device_motion_latest();
         if (motion == nil || motion.timestamp < s.since) {
             return 0;
         }
