@@ -163,6 +163,8 @@ pub mod companion_device_show;
 pub mod compass_show;
 /// Phase 11 の拡充ループ型サンプル「メール・SMS の作成」（親 #1142、Issue #1384）。
 pub mod compose_mail_sms;
+/// Phase 11 の拡充ループ型サンプル「アプリ・端末の識別子」（親 #181、Issue #903）。
+pub mod device_identifier_show;
 /// Phase 11 の拡充ループ型サンプル「端末・OS 情報」（親 #1131、Issue #1304）。
 pub mod device_info_show;
 /// Phase 11 の拡充ループ型サンプル「画面のリフレッシュレート・HDR・広色域」（親 #177、Issue #870）。
