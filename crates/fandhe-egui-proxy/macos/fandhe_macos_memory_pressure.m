@@ -55,13 +55,20 @@ int32_t fandhe_macos_memory_pressure_start(uint64_t sub_id) {
         if (src == nil) {
             return 4;
         }
+        // 強参照で捕捉すると source ⇄ ハンドラの循環になり、stop 後も解放されない。弱参照で捕捉する。
+        __weak dispatch_source_t weakSrc = src;
         dispatch_source_set_event_handler(src, ^{
-            fandhe_rust_memory_pressure_fire(sub_id, 0, (uint64_t)dispatch_source_get_data(src));
+            dispatch_source_t s = weakSrc;
+            if (s == nil) {
+                return;
+            }
+            fandhe_rust_memory_pressure_fire(sub_id, 0, (uint64_t)dispatch_source_get_data(s));
         });
         // 辞書へ保存してから resume する（保存前に届いた合図で停止と競合しない）。
         @synchronized(map) {
             if (map[@(sub_id)] != nil) {
                 // 未 resume のまま解放すると落ちるため、resume してから cancel する。
+                dispatch_source_set_event_handler(src, nil);
                 dispatch_resume(src);
                 dispatch_source_cancel(src);
                 return 2;
@@ -84,6 +91,8 @@ void fandhe_macos_memory_pressure_stop(uint64_t sub_id) {
         if (src == nil) {
             return;
         }
+        // ハンドラを外してから cancel し、保持関係を確実に断つ。
+        dispatch_source_set_event_handler(src, nil);
         dispatch_source_cancel(src);
     }
 }
