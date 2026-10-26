@@ -28,24 +28,30 @@
       "note": "未実装。`ProcessLifecycleOwner` は依存追加が要り、`ON_PAUSE` / `ON_STOP` を意図的に遅らせて配る（推測タイマー）ため採らない。再生成は `isChangingConfigurations()` で区別する（停止中の再生成は区別できない、公式）。キャッシュ状態の凍結を知らせる API は見当たらない。`getMyMemoryState` を minSdk 24 で使えるかは実装時に確認する。"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "`NSApplication.didBecomeActiveNotification` / `didResignActiveNotification` / `didChangeOcclusionStateNotification`（受けたら `occlusionState` を問い直す）",
       "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/appkit/nsapplication/didbecomeactivenotification",
         "https://developer.apple.com/documentation/appkit/nsapplication/didchangeocclusionstatenotification"
       ],
-      "note": "未実装。`didHide` / `didUnhide` は occlusion に含まれるため別に取らない。凍結（App Nap）の通知は見当たらない。システムのスリープ・ロックは sleep-lock-events の担当。"
+      "note": "実装済み（#893）。操作の対象になった・外れた、見えるようになった・見えなくなった（`occlusionState` を通知のたびに問い直す）の 4 種を受け、凍結・bfcache 復帰は「この OS では取れない」と出す。今の状態は画面を開いた時と出来事が届くたびに `isActive` / `occlusionState` で OS へ問い直し、UI スレッド以外・`NSApp` 不在の読み取りは失敗として出す（前面・見えているへ畳まない）。停止は observer の解除で、解除後に届いた通知は捨てる。`didHide` / `didUnhide` は occlusion に含まれるため別に取らない。凍結（App Nap）の通知は見当たらない。システムのスリープ・ロックは sleep-lock-events の担当。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#883）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_app_lifecycle.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_app_lifecycle.m + crates/fandhe-egui-proxy/src/device/app_lifecycle.rs + crates/fandhe-core/src/screens/app_lifecycle_show.rs + crates/fandhe-device/src/app_lifecycle.rs、Issue #893"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "Win32 `WM_ACTIVATEAPP` / `WM_SIZE`（`SIZE_MINIMIZED` / `SIZE_RESTORED` / `SIZE_MAXIMIZED`）をメインウィンドウの観測専用サブクラスで受ける",
       "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-activateapp",
         "https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-size"
       ],
-      "note": "未実装。デスクトップ（アンパッケージ）に凍結の概念は無く、前面・背面のみ（凍結はこの OS では取れない）。今の状態は `GetForegroundWindow` の所有プロセスと `IsIconic` で問い直す。"
+      "note": "実装済み（#893）。操作の対象になった・外れた、最小化・最小化からの復帰の 4 種を受け、凍結・bfcache 復帰は「この OS では取れない」と出す（デスクトップ（アンパッケージ）に凍結の概念は無い）。「見えるようになった」は最小化からの復帰だけで、他のウィンドウに隠れただけでは出ない（OS 間の定義の差、守らない範囲）。今の状態は画面を開いた時と出来事が届くたびに `GetForegroundWindow` の所有プロセスと `IsIconic` で OS へ問い直し、前面ウィンドウが無いときは「不明」と出す。停止後に届いたメッセージは登録表で捨て、ウィンドウの破棄は実行中の失敗として知らせる。観測専用のサブクラスは `windows` クレートの導入済み feature で足りる。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#883）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_app_lifecycle.rs + crates/fandhe-egui-proxy/src/device/app_lifecycle.rs + crates/fandhe-core/src/screens/app_lifecycle_show.rs + crates/fandhe-device/src/app_lifecycle.rs、Issue #893"
     },
     "web": {
       "status": "possible",

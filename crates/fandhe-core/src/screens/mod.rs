@@ -22,6 +22,8 @@ pub mod alarm_show;
 pub mod app_attest_show;
 /// Phase 11（端末機能の型サンプル「バッジの設定」、Issue #1360）。
 pub mod app_badge_set;
+/// Phase 11 の拡充ループ型サンプル「アプリの前面・背面」（親 #178、Issue #893）。
+pub mod app_lifecycle_show;
 /// Phase 11（端末機能の型サンプル「Dock・タスクバーの進捗表示と注意喚起」、Issue #860）。
 pub mod app_progress_attention_show;
 /// Phase 11 の拡充ループ型サンプル「AR 表示」（親 #90、Issue #307）。
