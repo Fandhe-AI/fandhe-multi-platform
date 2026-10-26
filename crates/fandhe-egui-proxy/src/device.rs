@@ -42,7 +42,7 @@ pub mod android_app_attest;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_app_badge;
-/// Issue #893: Android 向けアプリの前面・背面の通知の骨格（`Unsupported` のスタブ。b-android が埋める）。
+/// Issue #893: Android 向けアプリの前面・背面の通知実装（`AppLifecycleHelper` を JNI で呼ぶ）。
 /// `device/app_lifecycle.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
