@@ -190,7 +190,6 @@ pub fn sample_image() -> Image {
 /// 置いたファイルの削除は呼び出し側の責務（OS が参照しなくなった時点で `remove_file` する）。
 /// 失敗した経路では書きかけを消し `Internal(`[`WRITE`]`)` を返す。
 pub fn write_fixed(dir: &Path, kind: FileKind, bytes: &[u8]) -> Result<PathBuf, DeviceError> {
-    use std::io::Write;
     use std::sync::atomic::{AtomicU64, Ordering};
     static SEQ: AtomicU64 = AtomicU64::new(0);
     let fail = |_: std::io::Error| DeviceError::Internal(WRITE);
@@ -202,16 +201,21 @@ pub fn write_fixed(dir: &Path, kind: FileKind, bytes: &[u8]) -> Result<PathBuf, 
         kind.file_name()
     );
     let dest = dir.join(name);
-    let result = std::fs::OpenOptions::new()
+    create_exclusive(&dest, bytes).map_err(fail)?;
+    Ok(dest)
+}
+
+/// `dest` を排他的に作って書く。作成（`open`）の失敗は既存ファイルが他者のものなので消さず返す。
+/// 自分で作れたファイルへの書き込みが失敗したときだけ、書きかけを消す。
+fn create_exclusive(dest: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(&dest)
-        .and_then(|mut f| f.write_all(bytes));
-    if let Err(e) = result {
-        let _ = std::fs::remove_file(&dest);
-        return Err(fail(e));
-    }
-    Ok(dest)
+        .open(dest)?;
+    f.write_all(bytes).inspect_err(|_| {
+        let _ = std::fs::remove_file(dest);
+    })
 }
 
 /// 成功を判定する唯一の関数。寸法が `1..=`[`THUMBNAIL_MAX_SIDE`] で `rgba.len() == w * h * 4`。
@@ -311,6 +315,18 @@ mod tests {
             write_fixed(&dir, FileKind::Unknown, b"zzz").unwrap();
             assert_eq!(std::fs::read(&victim).unwrap(), b"keep");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn create_exclusive_keeps_existing_file_on_already_exists() {
+        let dir = scratch("exist");
+        std::fs::create_dir_all(&dir).unwrap();
+        let dest = dir.join("planted");
+        std::fs::write(&dest, b"keep").unwrap();
+        let e = create_exclusive(&dest, b"new").unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&dest).unwrap(), b"keep");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
