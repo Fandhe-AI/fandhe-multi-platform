@@ -271,6 +271,11 @@ pub mod android_print;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_quick_settings_tile;
+/// Issue #858: Android 向け外部ストレージの着脱の骨格（`Unsupported` のスタブ。#859 が埋める）。
+/// `device/removable_storage.rs` の Android 経路から使われる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_removable_storage;
 /// Issue #446: Android 向けセーフエリア実装（既存の insets リスナーの値を pull で読む）。
 /// `device/safe_area_insets.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -1149,6 +1154,12 @@ pub mod macos_power_state;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_print;
+/// Issue #858: macOS 向け外部ストレージの着脱の実装（`macos/fandhe_macos_removable_storage.m`、NSWorkspace の
+/// 通知と `mountedVolumeURLs` を呼ぶ C ABI ラッパー）。`device/removable_storage.rs` の macOS 経路から呼ばれる。
+/// 生値の写像をホストでテストできるよう cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_removable_storage;
 /// Issue #444: macOS 向けセーフエリア実装（`macos/fandhe_macos_safe_area_insets.m` を呼ぶ
 /// C ABI ラッパー）。`device/safe_area_insets.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -1315,6 +1326,9 @@ pub mod print;
 /// Phase 11 の拡充ループ（親 #139、Issue #719）: クイック設定タイル・コントロールの effect ドライバ
 /// （macOS は App Group の回数ファイル、Android は SharedPreferences の回数、他 OS は `UnsupportedQuickSettingsTile` 固定）。
 pub mod quick_settings_tile;
+/// Phase 11 の拡充ループ（親 #175、Issue #858）: 外部ストレージの着脱の effect ドライバ
+/// （macOS・Windows 実装、Android は骨格のスタブで #859 が埋める。他 OS は `UnsupportedRemovableStorage` 固定）。
+pub mod removable_storage;
 /// request/response 型端末機能共通の要求追跡（Issue #943、親 #941）。share /
 /// biometric_auth / file_pick の `bridge` facade から使う。4 OS
 /// （macOS/iOS/Android/Windows）以外では利用者が無いため `dead_code` を許容する。
@@ -1661,6 +1675,10 @@ pub mod windows_power_state;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_print;
+/// Issue #858: Windows 向け外部ストレージの着脱の実装（不可視ウィンドウの `WM_DEVICECHANGE` と
+/// `GetLogicalDrives` 系）。`device/removable_storage.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_removable_storage;
 /// Issue #26: Windows 向け画面録画実装（`Windows.Graphics.Capture` + `MediaTranscoder`）。
 /// `device/screen_capture.rs` の Windows 経路から使われる。
 #[cfg(target_os = "windows")]
