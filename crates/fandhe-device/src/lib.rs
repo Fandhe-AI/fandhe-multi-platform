@@ -76,6 +76,8 @@ pub mod compose_mail_sms;
 pub mod contact_picker;
 /// Phase 11（端末機能の拡充ループ、親 #1131、Issue #1304）: 端末・OS 情報（機種・OS 版・空き容量）。
 pub mod device_info;
+/// Phase 11（端末機能の拡充ループ、親 #177、Issue #870）: 画面のリフレッシュレート・HDR・広色域。
+pub mod display_refresh_hdr;
 /// Phase 11（端末機能の拡充ループ、親 #145、Issue #747）: 書類スキャン（OS のスキャン UI で撮影した 1 ページ目を表示する）。
 pub mod document_scan;
 /// Phase 11（端末機能の拡充ループ、親 #1013、Issue #1014）: ドラッグ & ドロップ受け取り。

@@ -269,6 +269,9 @@
 //! - `macos/fandhe_macos_device_info.m`（Issue #1304、`NSProcessInfo` + `sysctl` + `NSURL` による
 //!   端末・OS 情報の同期読み取り）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_device_info.rs` から呼ばれる契約）。Foundation は既存のリンクで足りる。
+//! - `macos/fandhe_macos_display_refresh_hdr.m`（Issue #870、`NSScreen` / `CGDisplayMode` による窓の画面の
+//!   リフレッシュレート・HDR・広色域の同期読み取り）は **macOS 分岐のみ**で feature `device` 有効時に
+//!   コンパイルする（`src/device/macos_display_refresh_hdr.rs` から呼ばれる契約）。CoreGraphics を追加でリンクする。
 //! - `macos/fandhe_macos_window_management.m`（Issue #636、窓の `level` と窓がいる画面の `visibleFrame` の同期読み取り。
 //!   変更は eframe の `ViewportCommand` が行う）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_window_management.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -1784,6 +1787,18 @@ fn compile_macos_device_info() {
         .compile("fandhe_macos_device_info");
 }
 
+/// `macos/fandhe_macos_display_refresh_hdr.m` を `cc` でコンパイルする（Issue #870）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_display_refresh_hdr.rs` が使う）。AppKit は既存のリンクで足り、
+/// `CGDisplayCopyDisplayMode` のため CoreGraphics を追加でリンクする。
+fn compile_macos_display_refresh_hdr() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_display_refresh_hdr.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_display_refresh_hdr.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_display_refresh_hdr");
+    println!("cargo:rustc-link-lib=framework=CoreGraphics");
+}
+
 /// `macos/fandhe_macos_window_management.m` を `cc` でコンパイルする（Issue #636）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_window_management.rs` が使う）。AppKit は既存のリンクで足りる。
 fn compile_macos_window_management() {
@@ -2422,6 +2437,8 @@ fn build_macos() {
     compile_macos_user_idle();
     // `macos/fandhe_macos_device_info.m`（Issue #1304）も macOS 専用。
     compile_macos_device_info();
+    // `macos/fandhe_macos_display_refresh_hdr.m`（Issue #870）も macOS 専用。
+    compile_macos_display_refresh_hdr();
     // `macos/fandhe_macos_system_accent_color.m`（Issue #421）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_system_accent_color();
     // `macos/fandhe_macos_safe_area_insets.m`（Issue #444）も macOS 専用。

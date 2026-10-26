@@ -30,7 +30,7 @@
       "note": "未実装。minSdk 24 のため API 24・25 の広色域は「この OS（版）では取れない」。`getHdrCapabilities()` は API 34 で非推奨だが動く。窓の画面は `getWindowManager().getDefaultDisplay()`（`Activity.getDisplay()` は API 30+ のため使わない）。"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "最大 Hz は `NSScreen.maximumFramesPerSecond`（12.0+）、今の Hz は `CGDisplayModeGetRefreshRate(CGDisplayCopyDisplayMode(id))`、HDR は `NSScreen.maximumPotentialExtendedDynamicRangeColorComponentValue`（10.15+）が 1.0 を超えるか、広色域は `NSScreen.canRepresentDisplayGamut:`（`NSDisplayGamutP3`、10.12+）",
       "perm": "不要",
       "url": [
@@ -39,10 +39,13 @@
         "https://developer.apple.com/documentation/appkit/nsscreen/maximumpotentialextendeddynamicrangecolorcomponentvalue",
         "https://developer.apple.com/documentation/appkit/nsscreen/canrepresent(_:)"
       ],
-      "note": "未実装。`maximumFramesPerSecond` は 12.0+ で、実行体の下限 11.0 では取れない。`CGDisplayModeGetRefreshRate` は 0 を返す画面があり、0 は「取れない」。`maximumExtendedDynamicRangeColorComponentValue` は EDR を描いている間だけ 1 を超えるので使わない。`CGDirectDisplayID` は `screen.deviceDescription[@\"NSScreenNumber\"]`。"
+      "note": "実装済み（#870）。`maximumFramesPerSecond` は 12.0+ で、実行体の下限 11.0 では取れない。`CGDisplayModeGetRefreshRate` は 0 を返す画面があり、0 は「取れない」。`maximumExtendedDynamicRangeColorComponentValue` は EDR を描いている間だけ 1 を超えるので使わない。`CGDirectDisplayID` は `screen.deviceDescription[@\"NSScreenNumber\"]`。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#868）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_display_refresh_hdr.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_display_refresh_hdr.m + crates/fandhe-egui-proxy/src/device/display_refresh_hdr.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #870"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "今の Hz は `EnumDisplaySettingsW(ENUM_CURRENT_SETTINGS)` の `dmDisplayFrequency`、最大 Hz は同関数でのモード列挙の最大（今の解像度のモードに限る）、HDR は `IDXGIOutput6::GetDesc1` の `ColorSpace` が `DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020` か",
       "perm": "不要",
       "url": [
@@ -50,7 +53,10 @@
         "https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_6/ns-dxgi1_6-dxgi_output_desc1",
         "https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-devmodew"
       ],
-      "note": "未実装。HDR はオンのときだけ「対応」と分かる。オフと非対応は DXGI が区別できない（どちらも `G22_NONE_P709`）ため「取れない」。広色域も DXGI で区別できない（SDR の広色域も `G22` で返る）ため「取れない」。`DisplayInformation.GetAdvancedColorInfo` は CoreWindow の無いデスクトップアプリでは使えないので使わない。`dmDisplayFrequency` の 0・1 は「取れない」。窓の画面は `MonitorFromWindow` で決め、DXGI は毎回作り直した factory の全出力から `DXGI_OUTPUT_DESC1.Monitor` が一致するものを探す。windows クレートの features 追加なし。"
+      "note": "実装済み（#870）。HDR はオンのときだけ「対応」と分かる。オフと非対応は DXGI が区別できない（どちらも `G22_NONE_P709`）ため「取れない」。広色域も DXGI で区別できない（SDR の広色域も `G22` で返る）ため「取れない」。`DisplayInformation.GetAdvancedColorInfo` は CoreWindow の無いデスクトップアプリでは使えないので使わない。`dmDisplayFrequency` の 0・1 は「取れない」。窓の画面は `MonitorFromWindow` で決め、DXGI は毎回作り直した factory の全出力から `DXGI_OUTPUT_DESC1.Monitor` が一致するものを探す。windows クレートの features 追加なし。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#868）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_display_refresh_hdr.rs + crates/fandhe-egui-proxy/src/device/display_refresh_hdr.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #870"
     },
     "web": {
       "status": "possible",

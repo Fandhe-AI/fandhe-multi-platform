@@ -290,6 +290,10 @@ generated_screens! {
     crate::device::device_info::device_info_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "display_refresh_hdr_show" => fandhe_core::screens::display_refresh_hdr_show::current_screen,
+    crate::device::display_refresh_hdr::display_refresh_hdr_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "multi_display_show" => fandhe_core::screens::multi_display_show::current_screen,
     crate::device::multi_display::multi_display_show_effect,
     effect

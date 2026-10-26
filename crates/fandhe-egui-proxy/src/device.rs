@@ -111,6 +111,11 @@ pub mod android_compose_mail_sms;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_device_info;
+/// Issue #870: Android 向け画面のリフレッシュレート・HDR・広色域の骨格（実体は (b-android)）。
+/// `device/display_refresh_hdr.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_display_refresh_hdr;
 /// Issue #609: Android 向け気圧・照度・近接センサー実装。
 /// `device/environment_sensors.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -656,6 +661,9 @@ pub mod contact_pick;
 /// Phase 11 の拡充ループ（親 #1131、Issue #1304）: 端末・OS 情報の effect ドライバ（macOS / Windows
 /// ・iOS・Android 実装、他 OS は `UnsupportedDeviceInfo` 固定）。
 pub mod device_info;
+/// Phase 11 の拡充ループ（親 #177、Issue #870）: 画面のリフレッシュレート・HDR・広色域の effect
+/// ドライバ（macOS / Windows 実装、iOS・Android は骨格、他 OS は `UnsupportedDisplayRefreshHdr` 固定）。
+pub mod display_refresh_hdr;
 /// Phase 11（親 #145、Issue #747）: 書類スキャンの effect ドライバ（iOS は後続 #748 が実装、
 /// 他 OS は `UnsupportedDocumentScanner` 固定。Android は GMS 依存のため保留、Web は対象外）。
 pub mod document_scan;
@@ -821,6 +829,11 @@ pub mod ios_compose_mail_sms;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_device_info;
+/// Issue #870: iOS 向け画面のリフレッシュレート・HDR・広色域の骨格（実体は (b-ios)）。
+/// `device/display_refresh_hdr.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_display_refresh_hdr;
 /// Issue #747: iOS 向け書類スキャンのスタブ（`Unsupported` を返す。#748 が `VisionKit` 実体へ置き換え）。
 /// `device/document_scan.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1086,6 +1099,12 @@ pub mod macos_compose_mail_sms;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_device_info;
+/// Issue #870: macOS 向け画面のリフレッシュレート・HDR・広色域実装（`macos/fandhe_macos_display_refresh_hdr.m`
+/// を呼ぶ C ABI ラッパー）。`device/display_refresh_hdr.rs` の macOS 経路から呼ばれる。写像の純関数を
+/// ホストでテストできるよう cfg は `any(macos, test)`。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_display_refresh_hdr;
 /// Issue #861: macOS 向け「電話発信・地図など他アプリの起動」実装（`macos/fandhe_macos_external_app_launch.m` を呼ぶ C ABI ラッパー）。`device/external_app_launch.rs` の macos 経路から呼ばれる。
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -1519,6 +1538,12 @@ pub mod windows_compose_mail_sms;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_device_info;
+/// Issue #870: Windows 向け画面のリフレッシュレート・HDR・広色域実装（`EnumDisplaySettingsW` / DXGI）。
+/// `device/display_refresh_hdr.rs` の Windows 経路から呼ばれる。写像の純関数をホストでテストできるよう
+/// cfg は `any(windows, test)`。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_display_refresh_hdr;
 /// Issue #609: Windows 向け気圧・照度・近接センサー実装。
 /// `device/environment_sensors.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
