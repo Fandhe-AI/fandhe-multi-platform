@@ -21,14 +21,17 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_external_app_launch.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_external_app_launch.m + crates/fandhe-egui-proxy/src/device/external_app_launch.rs + crates/fandhe-core/src/screens/external_app_launch_show.rs + crates/fandhe-device/src/external_app_launch.rs、Issue #862"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`Intent.ACTION_DIAL`（`tel:`）/ `ACTION_VIEW`（`geo:<lat>,<lng>?q=<lat>,<lng>(<label>)`）+ `startActivity`",
       "perm": "不要（`ACTION_DIAL` は `CALL_PHONE` 不要。`startActivity` は package visibility の対象外で `<queries>` も不要）",
       "url": [
         "https://developer.android.com/guide/components/intents-common",
         "https://developer.android.com/training/package-visibility/use-cases"
       ],
-      "note": "未実装。`<queries>` は `resolveActivity` / `queryIntentActivities` で事前判定する場合に要るもので、本機能は事前判定をせず `ActivityNotFoundException` を捕まえるので足さない。`ACTION_CALL` は `CALL_PHONE` が要るため対象外。`ACTION_DIAL` はダイヤラーに番号を出すだけで発信しない。非前景では起動しない"
+      "note": "実装済み（#863）。`<queries>` は `resolveActivity` / `queryIntentActivities` で事前判定する場合に要るもので、本機能は事前判定をせず `ActivityNotFoundException` を捕まえるので足さない。`ACTION_CALL` は `CALL_PHONE` が要るため対象外。`ACTION_DIAL` はダイヤラーに番号を出すだけで発信しない。非前景では起動しない。`ActivityNotFoundException` は「開けるアプリなし」として返す",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#856）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/ExternalAppLaunchHelper.java + crates/fandhe-egui-proxy/src/device/android_external_app_launch.rs + crates/fandhe-egui-proxy/src/device/external_app_launch.rs + crates/fandhe-core/src/screens/external_app_launch_show.rs + crates/fandhe-device/src/external_app_launch.rs、Issue #863"
     },
     "macos": {
       "status": "done",
