@@ -225,6 +225,9 @@
 //! - `macos/fandhe_macos_app_lifecycle.m`（Issue #893、`NSApplication` の通知によるアプリの前面・背面の
 //!   受信）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_app_lifecycle.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_memory_pressure.m`（Issue #911、libdispatch の memory pressure source による
+//!   メモリ逼迫の受信）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_memory_pressure.rs` から呼ばれる契約）。libdispatch は既存のリンクで足りる。
 //! - `macos/fandhe_macos_removable_storage.m`（Issue #858、NSWorkspace のマウント・取り外しの通知と
 //!   `mountedVolumeURLs` によるボリューム一覧）は **macOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルする（`src/device/macos_removable_storage.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -1563,6 +1566,17 @@ fn compile_macos_app_lifecycle() {
         .compile("fandhe_macos_app_lifecycle");
 }
 
+/// `macos/fandhe_macos_memory_pressure.m` を `cc` でコンパイルする（Issue #911）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_memory_pressure.rs` が使う）。libdispatch は libSystem に含まれ
+/// 追加リンクは無い。
+fn compile_macos_memory_pressure() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_memory_pressure.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_memory_pressure.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_memory_pressure");
+}
+
 /// `macos/fandhe_macos_sleep_lock_events.m` を `cc` でコンパイルする（Issue #810）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_sleep_lock_events.rs` が使う）。AppKit は `build_macos` 側の
 /// 既存リンクで足りるため追加リンクは無い。
@@ -2607,6 +2621,8 @@ fn build_macos() {
     compile_macos_sleep_lock_events();
     // `macos/fandhe_macos_app_lifecycle.m`（Issue #893）も macOS 専用。AppKit は既存リンクで足りる。
     compile_macos_app_lifecycle();
+    // `macos/fandhe_macos_memory_pressure.m`（Issue #911）も macOS 専用。libdispatch は既存リンクで足りる。
+    compile_macos_memory_pressure();
     // `macos/fandhe_macos_removable_storage.m`（Issue #858）も macOS 専用。AppKit は既存リンクで足りる。
     compile_macos_removable_storage();
     // `macos/fandhe_macos_multi_display.m`（Issue #1341）も macOS 専用。

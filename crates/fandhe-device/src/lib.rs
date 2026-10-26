@@ -147,6 +147,8 @@ pub mod media_cast;
 pub mod media_playback;
 /// Phase 11（端末機能の拡充ループ、親 #91、Issue #311）: 音声 1 本の AAC（m4a）への変換と出力の検証。
 pub mod media_transcode;
+/// Phase 11 の拡充ループ（親 #179、Issue #911）: メモリ逼迫・負荷の通知。
+pub mod memory_pressure;
 /// Phase 11（端末機能の拡充ループ、親 #953、Issue #954）: マイク録音。
 pub mod mic_record;
 /// Phase 11（端末機能の拡充ループ、親 #1137、Issue #1398）: MIDI 入力（ノートオン / オフ）。
