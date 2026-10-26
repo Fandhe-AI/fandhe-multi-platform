@@ -35,6 +35,9 @@ public final class BackgroundUploadWorker extends Worker {
     static final int ERR_OTHER = 4;
 
     private static final int CHUNK = 64 * 1024;
+    // 応答しないサーバーで WorkInfo が RUNNING のまま止まらないよう有限にする。超過は IOException（SocketTimeoutException）
+    // として ERR_NETWORK の失敗に確定する。
+    private static final int TIMEOUT_MS = 30_000;
 
     // 取り消し（onStopped）がブロック中の書き込み・読み込みを解くために握る。
     private volatile HttpURLConnection connection;
@@ -61,9 +64,12 @@ public final class BackgroundUploadWorker extends Worker {
         String url = getInputData().getString(KEY_URL);
         if (url == null) return finish(false, 0, -1, ERR_OTHER);
         long sent = 0;
+        HttpURLConnection c = null;
         try {
-            HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+            c = (HttpURLConnection) new URL(url).openConnection();
             connection = c;
+            c.setConnectTimeout(TIMEOUT_MS);
+            c.setReadTimeout(TIMEOUT_MS);
             c.setRequestMethod("PUT");
             c.setDoOutput(true);
             c.setFixedLengthStreamingMode(total);
@@ -83,13 +89,14 @@ public final class BackgroundUploadWorker extends Worker {
                 }
             }
             int code = c.getResponseCode();
-            c.disconnect();
             boolean redirect = code >= 300 && code <= 399;
             return finish(true, sent, code, redirect ? ERR_REDIRECT : ERR_NONE);
         } catch (IOException e) {
             return finish(false, sent, -1, ERR_NETWORK);
         } catch (RuntimeException e) {
             return finish(false, sent, -1, ERR_OTHER);
+        } finally {
+            if (c != null) c.disconnect();
         }
     }
 
