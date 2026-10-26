@@ -140,6 +140,10 @@ pub mod android_external_app_launch;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_file_association;
+/// Issue #917: Android 向けファイル・動画のプレビューとサムネイルの骨格（実体は b-android）。
+/// `device/file_preview.rs` の Android 経路から呼ばれる。
+#[cfg(target_os = "android")]
+pub mod android_file_preview;
 /// Issue #1410: Android 向けフォルダ変更監視実装。`device/file_watch.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -449,6 +453,11 @@ pub mod apple_contact_picker;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 #[cfg_attr(target_os = "ios", allow(dead_code))]
 pub mod apple_file_association;
+/// Issue #917: macOS / iOS 向けサムネイル実装（`apple/fandhe_apple_file_preview.m` の QuickLookThumbnailing を
+/// 呼ぶ C ABI ラッパー）。`device/file_preview.rs` の macOS 経路と `ios_file_preview`（b-ios）から
+/// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+pub mod apple_file_preview;
 /// Issue #934: iOS / macOS 共通のゲームコントローラ実装（`apple/
 /// fandhe_apple_gamepad.m` を呼ぶ C ABI ラッパー）。`device/gamepad.rs` の
 /// Apple cfg 分岐から呼ばれる。
@@ -711,6 +720,9 @@ pub mod eye_dropper;
 /// （macOS・iOS・Windows 実装、Android は未実装のスタブ、他 OS は `Unsupported` 固定）。
 pub mod file_association;
 pub mod file_pick;
+/// Phase 11 の拡充ループ（親 #182、Issue #917）: ファイル・動画のプレビューとサムネイルの effect ドライバ
+/// （macOS 実装、iOS / Windows / Android は骨格、他 OS は `UnsupportedFileThumbnailer` 固定）。
+pub mod file_preview;
 /// Phase 11 の拡充ループ（親 #1143、Issue #1410）: フォルダの変更監視の effect ドライバ（macOS・Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedFileWatch` 固定）。
 pub mod file_watch;
@@ -888,6 +900,10 @@ pub mod ios_external_app_launch;
 /// `device/file_association.rs::platform` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_file_association;
+/// Issue #917: iOS 向けファイル・動画のプレビューとサムネイルの骨格（実体は b-ios）。
+/// `device/file_preview.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_file_preview;
 /// Issue #1410: iOS 向けフォルダ変更監視実装。`device/file_watch.rs` の
 /// iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1153,6 +1169,10 @@ pub mod macos_external_app_launch;
 /// 呼ぶ C ABI ラッパー）。`device/eye_dropper.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_eye_dropper;
+/// Issue #917: macOS 向けプレビュー実装（`macos/fandhe_macos_file_preview.m` の `QLPreviewView` を呼ぶ
+/// C ABI ラッパーと窓が閉じた通知の受け口）。`device/file_preview.rs` の macOS 経路から呼ばれる。
+#[cfg(target_os = "macos")]
+pub mod macos_file_preview;
 /// Issue #1410: macOS 向けフォルダ変更監視実装（`macos/fandhe_macos_file_watch.m`、FSEvents を呼ぶ
 /// C ABI ラッパー）。`device/file_watch.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -1607,6 +1627,10 @@ pub mod windows_external_app_launch;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_file_association;
+/// Issue #917: Windows 向けファイル・動画のプレビューとサムネイルの骨格（実体は windows の子）。
+/// `device/file_preview.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_file_preview;
 /// Issue #1410: Windows 向けフォルダ変更監視実装。`device/file_watch.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

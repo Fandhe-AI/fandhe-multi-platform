@@ -490,6 +490,10 @@ generated_screens! {
     crate::device::url_scheme::url_scheme_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "file_preview" => fandhe_core::screens::file_preview_show::current_screen,
+    crate::device::file_preview::file_preview_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_association_show" => fandhe_core::screens::file_association_show::current_screen,
     crate::device::file_association::file_association_show_effect,
     effect
