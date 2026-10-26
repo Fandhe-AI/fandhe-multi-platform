@@ -828,6 +828,15 @@ impl<S: 'static> eframe::App for ProxyApp<S> {
     }
 }
 
+/// 画面（`ProxyApp`）の破棄時に、停止操作なしで残りうる購読を解放する（同一プロセスで別画面へ
+/// 切り替えても guard・通知登録が残らないようにする。メモリ逼迫の通知、Issue #911）。
+impl<S> Drop for ProxyApp<S> {
+    fn drop(&mut self) {
+        #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+        crate::device::memory_pressure::stop_shared();
+    }
+}
+
 /// [`ProxyApp::on_exit`] から呼ぶ端末リソースの解放処理。`fandhe-device`（feature
 /// `device`、既定 on）を持たないビルド（wasm32 は依存自体が入らない、`device.rs`
 /// モジュール doc 参照）では何もしない。
