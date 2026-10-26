@@ -547,6 +547,10 @@ windows = { workspace = true, optional = true, features = [
     # `IEnumSpellingError`（`Win32_Globalization`）を呼ぶ。新規パッケージは増えない（Cargo.lock は不変）。
     # `IEnumString`・`CoCreateInstance`・`CoTaskMemFree` は導入済みの `Win32_System_Com` で足りる。
     "Win32_Globalization",
+    # Issue #858: `device/windows_removable_storage.rs` が一覧の読み取り中だけ
+    # `SetThreadErrorMode(SEM_FAILCRITICALERRORS)`（`Win32_System_Diagnostics_Debug`）で、空のカードリーダーへの
+    # 「ディスクを挿入してください」ダイアログを抑止する。新規パッケージは増えない（Cargo.lock は不変）。
+    "Win32_System_Diagnostics_Debug",
 ] }
 # Issue #898: `device/windows_share.rs::remember_window` が `eframe::CreationContext`
 # から HWND を取り出すために使う（`raw-window-handle` の `HasWindowHandle` トレイト）。

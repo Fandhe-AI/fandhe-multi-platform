@@ -274,6 +274,10 @@ generated_screens! {
     crate::device::sleep_lock_events::sleep_lock_events_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "removable_storage_show" => fandhe_core::screens::removable_storage_show::current_screen,
+    crate::device::removable_storage::removable_storage_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "device_info_show" => fandhe_core::screens::device_info_show::current_screen,
     crate::device::device_info::device_info_show_effect,
     effect
