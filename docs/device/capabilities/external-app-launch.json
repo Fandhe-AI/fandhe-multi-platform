@@ -57,11 +57,14 @@
       "impl": "crates/fandhe-egui-proxy/src/device/windows_external_app_launch.rs + crates/fandhe-egui-proxy/src/device/external_app_launch.rs + crates/fandhe-core/src/screens/external_app_launch_show.rs + crates/fandhe-device/src/external_app_launch.rs、Issue #861"
     },
     "web": {
-      "status": "possible",
-      "api": "`location.href` へ `tel:` / `geo:` を代入して遷移",
+      "status": "done",
+      "api": "`location.href`（`Location.set_href`）へ固定の `tel:`（`PHONE_URI`）/ `geo:`（`GEO_URI`）を代入して遷移",
       "perm": "不要",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a#linking_to_telephone_numbers",
-      "note": "未実装。結果は「ブラウザに渡した」までで、ハンドラの有無は取れない（例外が出ない）。対応アプリが無い環境（PC ブラウザ等）では何も起きない。ユーザー操作起点でないとブロックされる場合がある。地図は `geo:` で渡すだけ"
+      "note": "実装済み（#864）。結果は `HandedOff`（ブラウザに渡しただけ）のみ。ハンドラの有無は取れない（例外が出ない）。`set_href` の例外は固定文言の失敗、`window` なしは非対応。クリックから同期に遷移させる。守らない範囲: ハンドラの有無・ブラウザ差・PC ブラウザでの無反応・複数タブ・wasm canvas 経路",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#856）",
+      "impl": "crates/fandhe-web-dom/src/external_app_launch.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/external_app_launch_show.rs + crates/fandhe-device/src/external_app_launch.rs、Issue #864"
     }
   },
   "note": "open-in-shell（ファイルを既定アプリで開く）・compose-mail-sms（mailto: / sms:）・url-scheme（自アプリの受信）とは別で、tel: / geo: / maps 等の URL で他アプリを起動する送信側。今回の範囲: 固定の 2 操作だけ。電話（固定番号 `tel:+1-202-555-0100`。北米の架空用予約帯）と地図（固定地点 東京駅 `35.681236,139.767125`）。任意の URL・番号・座標を外から渡す経路は作らない。地図は iOS・macOS が Apple 地図の統一 URL、Android が `geo:`、Web が `geo:`、Windows は OS を呼ばず「この OS では開けない」（電話のみ対応）。`ACTION_CALL`・`http(s)` の汎用オープン・経路案内は範囲外。結果は 起動依頼済み（OS が受け付けた。相手アプリが出たか・発信したかは分からない）/ 開けるアプリなし（失敗扱いにしない）/ 利用者キャンセル（Windows のみ取れる）/ この OS では開けない（Windows の地図）/ 失敗 / 非対応。「開きました」「発信しました」とは出さず「OS に渡しました」と出す。Web は起動依頼済みしか返さない旨を画面に注記する。OS を正にする: 事前判定（`canOpenURL`・`resolveActivity`・`AssocQueryStringW`）をせず、`LSApplicationQueriesSchemes`・`<queries>` を足さない。開いた後の状態（発信したか・戻ってきたか）を覚えず、前面復帰の監視・タイマー・期限を持たない。開けなかった操作を別の URL で代わりに開かない。守る範囲: 1 プロセス内の要求と完了の順序、「開けるアプリなし」「キャンセル」「この OS では開けない」「非対応」を成功に畳まないこと、固定値以外を開かないこと。守らない範囲: OS が受け付けた後に相手アプリが出たか・利用者が発信したか、iOS の確認ダイアログでの取り消し（`success` に出るかは OS 次第）、iOS の completion が届かない場合（期限なし）、Windows で `SEE_MASK_FLAG_NO_UI` 下でも「アプリを選ぶ」が出る場合、Web のハンドラ有無・ブラウザ差、複数プロセス・複数窓。"
