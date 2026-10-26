@@ -82,6 +82,8 @@ pub mod document_scan;
 pub mod drag_drop;
 /// Phase 11（端末機能の拡充ループ、親 #123、Issue #609）: 気圧・照度・近接センサー。
 pub mod environment_sensors;
+/// Phase 11（端末機能の拡充ループ、親 #176、Issue #861）: 電話発信・地図など他アプリの起動（固定の 2 操作）。
+pub mod external_app_launch;
 /// Phase 11（端末機能の拡充ループ、親 #148、Issue #762）: 画面のスポイト（画面上の 1 点の色を `#rrggbb` で返す）。
 pub mod eye_dropper;
 /// Phase 11（端末機能の拡充ループ、親 #102、Issue #416）: ファイルの関連付け（OS から渡されたファイルを開く）。

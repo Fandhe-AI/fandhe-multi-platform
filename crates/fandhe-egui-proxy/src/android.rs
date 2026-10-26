@@ -309,6 +309,9 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // Issue #798: `open_system_settings::bridge::SLOT` も同様に破棄する（Activity 再生成で保留中の要求を復元しない）。
     #[cfg(feature = "device")]
     crate::device::open_system_settings::reset_pending_tracking();
+    // Issue #861: `external_app_launch::bridge::SLOT` も同様に破棄する（Activity 再生成で保留中の要求を復元しない）。
+    #[cfg(feature = "device")]
+    crate::device::external_app_launch::reset_pending_tracking();
     // Issue #534: `web_auth_session::bridge` の `ACTIVE`（デモサーバー）と `SLOT` も同様に破棄する。
     // 残ると次の要求が開けなくなる（`device::android_web_auth_session::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

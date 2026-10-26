@@ -110,6 +110,10 @@ generated_screens! {
     crate::device::open_system_settings::open_system_settings_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "external_app_launch_show" => fandhe_core::screens::external_app_launch_show::current_screen,
+    crate::device::external_app_launch::external_app_launch_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ble_peripheral" => fandhe_core::screens::ble_peripheral::current_screen,
     crate::device::ble_peripheral::ble_peripheral_effect,
     effect

@@ -28,21 +28,27 @@
       "note": "未実装。`<queries>` は `resolveActivity` / `queryIntentActivities` で事前判定する場合に要るもので、本機能は事前判定をせず `ActivityNotFoundException` を捕まえるので足さない。`ACTION_CALL` は `CALL_PHONE` が要るため対象外。`ACTION_DIAL` はダイヤラーに番号を出すだけで発信しない。非前景では起動しない"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "`NSWorkspace.open(_:)` で `tel:`（FaceTime / 連携 iPhone）・`maps:` 等を開く",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nsworkspace/open(_:)",
-      "note": "未実装。`open(_:)` は開けたかの Bool を返し、任意のスレッドから呼べる。`NO` を「開けるアプリなし」として扱う（エラーの詳細は見ない）。`tel:` は FaceTime や連携 iPhone が無いと開けない場合がある。地図は iOS と同じ統一 URL（macOS 15.4 以降が対象）"
+      "note": "実装済み（#861）。電話・地図とも固定の URL を `NSWorkspace openURL:` に渡し、期限は設けない。`open(_:)` は開けたかの Bool を返し、任意のスレッドから呼べる。`NO` を「開けるアプリなし」として扱う（エラーの詳細は見ない）。`tel:` は FaceTime や連携 iPhone が無いと開けない場合がある。地図は iOS と同じ統一 URL（macOS 15.4 以降が対象）",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#856）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_external_app_launch.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_external_app_launch.m + crates/fandhe-egui-proxy/src/device/external_app_launch.rs + crates/fandhe-core/src/screens/external_app_launch_show.rs + crates/fandhe-device/src/external_app_launch.rs、Issue #861"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "`ShellExecuteExW`（`SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI`）で `tel:` を開く。地図は OS を呼ばない",
       "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecuteexw",
         "https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-default-app"
       ],
-      "note": "未実装。範囲は電話のみ。WinRT `Launcher.LaunchUriAsync` は package identity が前提で、確認プロンプトはデスクトップアプリでは失敗するため採らない。Windows の地図アプリは非推奨で 2025-07 に Store から削除済みなので `bingmaps:` は呼ばず、地図は「この OS では開けない」と返す。`ShellExecuteExW` の失敗は `GetLastError` で `ERROR_NO_ASSOCIATION`（開けるアプリなし）・`ERROR_CANCELLED`（利用者のキャンセル）を分ける。`tel:` は対応アプリ（Phone Link 等）が無いと失敗する。open-in-shell と同じ呼び出し経路を写す"
+      "note": "実装済み（#861）。電話のみ `ShellExecuteExW` に渡し、地図は OS を呼ばず「この OS では開けない」を返す。`ERROR_CANCELLED` は失敗ではなくキャンセルに写す。範囲は電話のみ。WinRT `Launcher.LaunchUriAsync` は package identity が前提で、確認プロンプトはデスクトップアプリでは失敗するため採らない。Windows の地図アプリは非推奨で 2025-07 に Store から削除済みなので `bingmaps:` は呼ばず、地図は「この OS では開けない」と返す。`ShellExecuteExW` の失敗は `GetLastError` で `ERROR_NO_ASSOCIATION`（開けるアプリなし）・`ERROR_CANCELLED`（利用者のキャンセル）を分ける。`tel:` は対応アプリ（Phone Link 等）が無いと失敗する。open-in-shell と同じ呼び出し経路を写す",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#856）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_external_app_launch.rs + crates/fandhe-egui-proxy/src/device/external_app_launch.rs + crates/fandhe-core/src/screens/external_app_launch_show.rs + crates/fandhe-device/src/external_app_launch.rs、Issue #861"
     },
     "web": {
       "status": "possible",
