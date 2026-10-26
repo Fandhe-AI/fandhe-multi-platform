@@ -395,6 +395,9 @@
 //! - `ios/fandhe_ios_multi_display.m`（Issue #27、scene の `UIScreen` による複数ディスプレイ）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_multi_display.rs`
 //!   から呼ばれる契約）。UIKit は既存のリンクで足りる。
+//! - `ios/fandhe_ios_display_refresh_hdr.m`（Issue #871、`UIScreen` と `UITraitCollection` による窓の画面の
+//!   同期読み取り）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/ios_display_refresh_hdr.rs` から呼ばれる契約）。追加のリンクは無い。
 //! - `ios/fandhe_ios_background_task.m`（Issue #1045、`BackgroundTasks`
 //!   （`BGTaskScheduler`）によるバックグラウンド処理）は **iOS 分岐のみ**で
 //!   feature `device` 有効時にコンパイルする（`src/device/ios_background_task.rs`
@@ -686,6 +689,8 @@ fn main() {
     compile_ios_file_watch();
     // `ios/fandhe_ios_multi_display.m`（Issue #27）。iOS 分岐のみ。
     compile_ios_multi_display();
+    // `ios/fandhe_ios_display_refresh_hdr.m`（Issue #871）。iOS 分岐のみ。
+    compile_ios_display_refresh_hdr();
     // `ios/fandhe_ios_call_ui.m`（Issue #277）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_call_ui();
     // `ios/fandhe_ios_live_activity.swift`（Issue #295）。iOS 分岐のみ（macOS は対応表で no）。
@@ -1864,6 +1869,18 @@ fn compile_ios_multi_display() {
         .file("ios/fandhe_ios_multi_display.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_multi_display");
+}
+
+/// `ios/fandhe_ios_display_refresh_hdr.m` を `cc` でコンパイルする（Issue #871）。**iOS 分岐のみ**から
+/// 呼ばれる（`src/device/ios_display_refresh_hdr.rs` が使う）。UIKit は既存のリンクで足りる。
+fn compile_ios_display_refresh_hdr() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_display_refresh_hdr.m");
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_common.h");
+    cc::Build::new()
+        .file("ios/fandhe_ios_display_refresh_hdr.m")
+        .include("ios")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_display_refresh_hdr");
 }
 
 /// `macos/fandhe_macos_power_state.m` を `cc` でコンパイルする（Issue #1274）。**macOS 分岐のみ**
