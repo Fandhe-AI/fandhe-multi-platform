@@ -529,7 +529,7 @@ mod tests {
 
     #[test]
     fn stop_active_releases_guard_without_drive() {
-        let mut e = Env::receiving(Fake::new());
+        let e = Env::receiving(Fake::new());
         take_active(&e.active);
         assert_eq!(e.drops(), 1);
         assert!(lock(&e.active).is_none());
