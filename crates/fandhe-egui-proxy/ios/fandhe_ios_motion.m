@@ -104,6 +104,10 @@ static BOOL g_motion_unavailable = NO;
 // 立っている間は生値側の線形加速度が止めても device motion を維持する。
 static _Atomic BOOL g_tilt_uses_device_motion = NO;
 
+// deviceMotion の handler が受け取った非同期エラー（0 = なし、2 = 権限拒否、3 = 失敗）。
+// 次のサンプルが正常に届けば 0 へ戻す。線形加速度の read が失敗として返すために読む（Issue #900）。
+static _Atomic int32_t g_device_motion_failure = 0;
+
 // 共有 manager を返す（`fandhe_ios_motion_raw_sensors.m` が extern 宣言して使う）。
 CMMotionManager *fandhe_ios_shared_motion_manager(void) {
     static dispatch_once_t onceToken;
@@ -127,15 +131,40 @@ int32_t fandhe_ios_device_motion_ensure_started(void) {
         // `manager.deviceMotion` を読む、モジュール冒頭コメント参照）。既定の
         // reference frame で十分なため（gravity 成分のみ使う）、参照系を
         // 明示指定する `startDeviceMotionUpdatesUsingReferenceFrame:` は使わない。
-        [manager startDeviceMotionUpdates];
+        // handler は値を持たずエラーの観測だけに使う（値は従来どおり `deviceMotion` を pull で読む）。
+        static NSOperationQueue *queue = nil;
+        static dispatch_once_t queueOnce;
+        dispatch_once(&queueOnce, ^{
+          queue = [[NSOperationQueue alloc] init];
+          queue.maxConcurrentOperationCount = 1;
+        });
+        g_device_motion_failure = 0;
+        [manager startDeviceMotionUpdatesToQueue:queue
+                                     withHandler:^(CMDeviceMotion *motion, NSError *error) {
+                                       if (error == nil) {
+                                           g_device_motion_failure = 0;
+                                       } else if ([error.domain isEqualToString:CMErrorDomain] &&
+                                                  (error.code == CMErrorNotAuthorized ||
+                                                   error.code == CMErrorMotionActivityNotAuthorized)) {
+                                           g_device_motion_failure = 2;
+                                       } else {
+                                           g_device_motion_failure = 3;
+                                       }
+                                     }];
     }
     return 0;
+}
+
+// deviceMotion の直近の非同期エラー（0 = なし、2 = 権限拒否、3 = 失敗）。どのスレッドからでも可。
+int32_t fandhe_ios_device_motion_failure(void) {
+    return g_device_motion_failure;
 }
 
 // 線形加速度だけが device motion を使っていた場合に停止する（tilt 利用中は維持）。どのスレッドからでも可。
 void fandhe_ios_device_motion_release_if_unused(void) {
     if (!g_tilt_uses_device_motion) {
         [fandhe_ios_shared_motion_manager() stopDeviceMotionUpdates];
+        g_device_motion_failure = 0;
     }
 }
 
