@@ -7,7 +7,7 @@
   "bundle": "one-shot",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "`UIDevice.identifierForVendor`（IDFV）",
       "perm": "不要（広告用 IDFA は ATT 許可が要り対象外）",
       "url": [
@@ -15,10 +15,13 @@
         "https://developer.apple.com/app-store/user-privacy-and-data-use/",
         "https://developer.apple.com/app-store/app-privacy-details/"
       ],
-      "note": "未実装。同じベンダーのアプリが他に無い状態で全て消すと変わる。nil は再起動後・初回ロック解除前などで返りうる（取り直しは利用者の押し直し）。Xcode のテストビルド・ad-hoc 配布でも変わりうる。ATT は不要（同じ提供元の範囲。他社のアプリ・サイトをまたぐ追跡に組み合わせない）。プライバシー表示の Device ID は端末の外へ送る場合のみ申告対象。"
+      "note": "実装済み（#904）。nil は失敗にせず「後で取り直す」、空は失敗、main thread 以外から呼ばれた場合も失敗。同じベンダーのアプリが他に無い状態で全て消すと変わる。nil は再起動後・初回ロック解除前などで返りうる（取り直しは利用者の押し直し）。Xcode のテストビルド・ad-hoc 配布でも変わりうる。ATT は不要（同じ提供元の範囲。他社のアプリ・サイトをまたぐ追跡に組み合わせない）。プライバシー表示の Device ID は端末の外へ送る場合のみ申告対象。",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#889）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_device_identifier.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_device_identifier.m + crates/fandhe-egui-proxy/src/device/device_identifier.rs + crates/fandhe-core/src/screens/device_identifier_show.rs + crates/fandhe-device/src/device_identifier.rs、Issue #904"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`Settings.Secure.ANDROID_ID`（アプリの署名鍵・ユーザー・端末の組ごとの値）",
       "perm": "不要（IMEI・シリアルは取得不可）",
       "url": [
@@ -26,7 +29,10 @@
         "https://developer.android.com/about/versions/oreo/android-8.0-changes",
         "https://developer.android.com/training/articles/user-data-ids"
       ],
-      "note": "未実装。Android 8+ は署名鍵・ユーザー・端末の組ごとの値で、同じ署名鍵ならアンインストール・再インストールで変わらない。Android 7（minSdk 24〜25）は署名鍵で分かれず、端末・ユーザーで共通。工場出荷リセット・署名鍵の変更で変わる。Play のポリシー上、広告 ID・個人の機微データと結び付けない。広告 ID は対象外。"
+      "note": "実装済み（#904）。null・空・例外は失敗。Android 8+ は署名鍵・ユーザー・端末の組ごとの値で、同じ署名鍵ならアンインストール・再インストールで変わらない。Android 7（minSdk 24〜25）は署名鍵で分かれず、端末・ユーザーで共通。工場出荷リセット・署名鍵の変更で変わる。Play のポリシー上、広告 ID・個人の機微データと結び付けない。広告 ID は対象外。",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#889）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_device_identifier.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/DeviceIdentifierHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/device_identifier.rs + crates/fandhe-core/src/screens/device_identifier_show.rs + crates/fandhe-device/src/device_identifier.rs、Issue #904"
     },
     "macos": {
       "status": "no",

@@ -341,6 +341,9 @@
 //! - `ios/fandhe_ios_power_state.m`（Issue #1275、`UIDevice` と `NSProcessInfo` による電源状態）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_power_state.rs`
 //!   から呼ばれる契約）。UIKit は既存のリンクで足りる。
+//! - `ios/fandhe_ios_device_identifier.m`（Issue #904、`UIDevice.identifierForVendor` による識別子の読み取り）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_device_identifier.rs`
+//!   から呼ばれる契約）。Foundation・UIKit は既存のリンクで足りる。
 //! - `ios/fandhe_ios_device_info.m`（Issue #1305、`NSProcessInfo` と `sysctl` による端末・OS 情報）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_device_info.rs`
 //!   から呼ばれる契約）。Foundation は既存のリンクで足りる。
@@ -658,6 +661,8 @@ fn main() {
     compile_ios_open_system_settings();
     // `ios/fandhe_ios_external_app_launch.m`（Issue #862）。iOS 分岐のみ。
     compile_ios_external_app_launch();
+    // `ios/fandhe_ios_device_identifier.m`（Issue #904）。iOS 分岐のみ。
+    compile_ios_device_identifier();
     // `ios/fandhe_ios_device_info.m`（Issue #1305）。iOS 分岐のみ。
     compile_ios_device_info();
     // `ios/fandhe_ios_safe_area_insets.m`（Issue #445）。iOS 分岐のみ。
@@ -2100,6 +2105,16 @@ fn compile_ios_power_state() {
         .file("ios/fandhe_ios_power_state.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_power_state");
+}
+
+/// `ios/fandhe_ios_device_identifier.m` を `cc` でコンパイルする（Issue #904）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_device_identifier.rs` が使う）。Foundation・UIKit はリンク済み。
+fn compile_ios_device_identifier() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_device_identifier.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_device_identifier.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_device_identifier");
 }
 
 /// `ios/fandhe_ios_device_info.m` を `cc` でコンパイルする（Issue #1305）。**iOS 分岐のみ**
