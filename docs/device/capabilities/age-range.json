@@ -8,24 +8,40 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "Declared Age Range API（`DeclaredAgeRange` の `AgeRangeService`）",
-      "perm": "Declared Age Range の Entitlement（`com.apple.developer.declared-age-range`）（Xcode の capability で有効化。個別の申請が要るかは要確認）",
-      "url": "https://developer.apple.com/documentation/declaredagerange",
-      "note": "未実装。利用者・保護者が共有を許可した年齢区分のみが返る。対象地域・OS バージョン（iOS 26 系）に制限がある（要確認）。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "`DeclaredAgeRange` の `AgeRangeService.shared.requestAgeRange(ageGates:_:_:in:)`（iOS 26 以上、Swift 専用の `async throws`。区切りは最大 3 つ・各幅 2 年以上）、`isEligibleForAgeFeatures`（26.2 以上）",
+      "perm": "`com.apple.developer.declared-age-range` entitlement（Xcode の capability。有料の Apple Developer Program のチームのみで、Personal Team では capability が出ない）。Info.plist の usage description は公式に記載なし",
+      "url": [
+        "https://developer.apple.com/documentation/declaredagerange",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.declared-age-range",
+        "https://developer.apple.com/forums/thread/813285"
+      ],
+      "note": "未実装。返る値は `.sharing(range:)`（下限・上限、申告の方法〔本人 / 保護者 / 確認済み〕、保護者による制限）と `.declinedSharing`。エラーは `notAvailable`・`invalidRequest`（iOS 27 で `declinedOnboarding`・`invalidAccount`・`network` が加わる）。地域の法令で OS が区切りを上書きし、規制地域では共有を拒否できない。Developer Mode の sandbox で年齢帯を切り替えて試せる",
+      "deferred": "Declared Age Range の capability は有料の Apple Developer Program のチームでしか付けられず（Apple の開発者サポートの回答。Apple の対応表は未更新）、開発者登録が期限切れのため保留（wifi-info・cloud-kv-sync と同じ）。ベンダーの個別審査は不要で、登録を再開すれば着手できる。API は Swift 専用のため Swift 薄層も要る"
     },
     "android": {
       "status": "possible",
-      "api": "Play Age Signals API（Google Play services、ベータ）",
-      "perm": "Play services が必要（GMS 非搭載端末は不可）。Play Console での利用設定が要る見込み（要確認）",
-      "url": "https://developer.android.com/google/play/age-signals",
-      "note": "未実装。ベータで提供範囲（地域・法令対象）が限定される。URL 未確認。"
+      "api": "Play Age Signals API（beta、`com.google.android.play:age-signals` 0.0.4）の `AgeSignalsManager.requestAgeSignalsAccess(Activity)` → `SHARED` のときだけ `checkAgeSignals()`（`ageLower`・`ageUpper`・`ageRangeSource`）。API 23 以上",
+      "perm": "アプリで宣言する権限なし。Play ストアと Play services が要る（GMS 非搭載端末は `PLAY_STORE_NOT_FOUND` 等）。Play から入れた版に限る（それ以外は `APP_NOT_OWNED`、-9、再試行不可）",
+      "url": [
+        "https://developer.android.com/google/play/age-signals/overview",
+        "https://developer.android.com/google/play/age-signals/use-age-signals-api",
+        "https://developer.android.com/google/play/age-signals/handle-errors",
+        "https://dl.google.com/dl/android/maven2/com/google/android/play/age-signals/0.0.4/age-signals-0.0.4.pom"
+      ],
+      "note": "未実装。値が返るのは対象地域の利用者だけ（2026-03 からブラジル、2026-05-28 以降に作られた米テキサス州のアカウント）。広告・分析への利用は利用規約で禁止。エラーは 11 種（-1〜-10・-100）",
+      "deferred": "Play Age Signals は推移依存に Google Play services（`play-services-basement`・`play-services-tasks`）が入る。GMS に依存しない方針のため保留（in-app-review と同じ）。確かめるには Play から入れた版（内部テストトラック等）も要る"
     },
     "macos": {
       "status": "possible",
-      "api": "Declared Age Range API（`DeclaredAgeRange`）",
-      "perm": "Declared Age Range の Entitlement（Xcode の capability で有効化。個別の申請が要るかは要確認）",
-      "url": "https://developer.apple.com/documentation/declaredagerange",
-      "note": "未実装。macOS での提供有無は未確認。（URL・API は一般知識、WebFetch 未確認、要確認）"
+      "api": "`DeclaredAgeRange` の `requestAgeRange(ageGates:_:_:in: NSWindow)`（macOS 26 以上）",
+      "perm": "iOS と同じ `com.apple.developer.declared-age-range` entitlement（有料の Apple Developer Program のチームのみ）",
+      "url": [
+        "https://developer.apple.com/documentation/declaredagerange/agerangeservice/requestagerange(agegates:_:_:in:)-4yo3r",
+        "https://developer.apple.com/documentation/declaredagerange/agerangeservice/iseligibleforagefeatures",
+        "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.declared-age-range"
+      ],
+      "note": "未実装。`isEligibleForAgeFeatures` は macOS では常に false（公式）",
+      "deferred": "iOS と同じ entitlement で有料の開発者登録が前提（期限切れ）。加えて、いまのデスクトップ版は bundle・provisioning profile を持たない素の実行体で、profile が要る entitlement を載せられない（focus-mode-status の macOS と同じ）"
     },
     "windows": {
       "status": "no",
@@ -42,5 +58,5 @@
       "note": "年齢区分を返すブラウザの標準 API はない。"
     }
   },
-  "note": "device-info（機種・OS）や identifier とは無関係で、OS が保持する年齢区分（範囲のみ、生年月日は返らない）を問い合わせる。"
+  "note": "device-info（機種・OS）や identifier とは無関係で、OS が保持する年齢区分（範囲のみ、生年月日は返らない）を問い合わせる。再開時の設計: 範囲は、型サンプル画面で区切りの年齢（既定 13・16・18）を選び「確かめる」で OS の共有確認を 1 回出し、返った区分（下限〜上限）と申告の方法を出す。生年月日・年齢そのものと結果の保存は扱わず（押すたびに OS へ聞き直す）、保護者の承認依頼・重大な変更の通知・同意撤回の受信も扱わない。結果の種別は、成功（共有された）・キャンセル（`.declinedSharing`・`notAvailable`・`declinedOnboarding`・`NOT_SHARED`）・要対応（`VERIFICATION_REQUIRED`）・失敗（元のエラー名・コードをそのまま出す）・非対応で分け、キャンセルを失敗に、要対応を成功に畳まず、下限・上限の null を 0 や 18 で埋めない。OS を正にする方針として、`isEligibleForAgeFeatures` や Play ストアの有無で事前判定せず、前回の区分を覚えず、推測タイマーを置かない。守らない範囲は、地域の法令による区切りの上書きの解釈・共有確認の表示有無・結果を出した後の区分の変化・Android の対象地域外で値が返らないこと・同意撤回の通知・複数プロセス・OS 側の遅れ。"
 }
