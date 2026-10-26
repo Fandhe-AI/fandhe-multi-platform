@@ -110,6 +110,7 @@
 //! - [`serial_port`]: 「シリアルポート」画面の Web 経路（親 #131、Issue #672）。
 //!   純関数（例外名の写像・期限判定・受信チャンクの行組み立て）のみ `wasm32` gate の外に置く
 //! - [`app_lifecycle`]: 「アプリの前面・背面」画面の Web 経路（親 #178、Issue #896）。純関数のみ `wasm32` gate の外に置く
+//! - [`memory_pressure`]: 「メモリ逼迫・負荷」画面の Web 経路（親 #179、Issue #914）。Compute Pressure API で CPU 負荷を受ける。純関数のみ `wasm32` gate の外に置く
 //! - [`user_idle`]: 「無操作時間の検知」画面の Web 経路（親 #125、Issue #632）。
 //!   純関数（許可・例外名・状態の写像と effect の判断）のみ `wasm32` gate の外に置く
 //! - [`flashlight`]: 「ライト（トーチ）」画面の Web 経路（親 #106、Issue #462）。
@@ -355,6 +356,8 @@ pub mod haptics;
 /// 型サンプル「外部機器への再生」の Web 経路（Issue #389）。[`haptics`] と同じ理由で純関数は native からも
 /// テストできるよう gate を外す。
 pub mod media_cast;
+/// 型サンプル「メモリ逼迫・負荷」の Web 経路（Issue #914）。[`haptics`] と同じ理由で純関数は native からもテストできるよう gate を外す。
+pub mod memory_pressure;
 /// 型サンプル「ネットワーク接続状態」の Web 経路（Issue #1285）。[`haptics`] と同じ理由で gate を外す。
 pub mod network_status;
 /// 型サンプル「単語分割」の Web 経路（Issue #1094）。[`haptics`] と同じ理由で純関数は native からも
