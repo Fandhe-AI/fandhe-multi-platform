@@ -470,6 +470,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::app_badge::release_mount(id);
         super::compose_mail_sms::release_mount(id);
         super::external_app_launch::release_mount(id);
+        super::display_refresh_hdr::release_mount(id);
         super::print_page::release_mount(id);
         super::passkey::release_mount(id);
         super::autofill_otp::release_mount(id);
