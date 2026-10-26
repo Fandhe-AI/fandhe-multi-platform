@@ -957,8 +957,8 @@ pub mod ios_media_playback;
 /// `device/media_transcode.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_media_transcode;
-/// Issue #911: iOS 向けメモリ逼迫の通知の骨格（`Unsupported` のスタブ。b-ios が埋める）。
-/// `device/memory_pressure.rs` の ios 経路から使われる。
+/// Issue #912: iOS 向けメモリ逼迫の通知実装（`ios/fandhe_ios_memory_pressure.m` のメモリ警告 observer と
+/// memory pressure source を呼ぶ C ABI ラッパー）。`device/memory_pressure.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_memory_pressure;

@@ -350,6 +350,9 @@
 //! - `ios/fandhe_ios_app_lifecycle.m`（Issue #894、`UIScene` の通知によるアプリの前面・背面）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_app_lifecycle.rs`
 //!   から呼ばれる契約）。UIKit は既存のリンクで足りる。
+//! - `ios/fandhe_ios_memory_pressure.m`（Issue #912、メモリ警告の observer と memory pressure source）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_memory_pressure.rs`
+//!   から呼ばれる契約）。UIKit と libdispatch は既存のリンクで足りる。
 //! - `ios/fandhe_ios_device_info.m`（Issue #1305、`NSProcessInfo` と `sysctl` による端末・OS 情報）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_device_info.rs`
 //!   から呼ばれる契約）。Foundation は既存のリンクで足りる。
@@ -661,6 +664,8 @@ fn main() {
     compile_ios_power_state();
     // `ios/fandhe_ios_app_lifecycle.m`（Issue #894）。iOS 分岐のみ。
     compile_ios_app_lifecycle();
+    // `ios/fandhe_ios_memory_pressure.m`（Issue #912）。iOS 分岐のみ。
+    compile_ios_memory_pressure();
     // `ios/fandhe_ios_compose_mail_sms.m`（Issue #1385）。iOS 分岐のみ。
     compile_ios_compose_mail_sms();
     // `ios/fandhe_ios_print.m`（Issue #327）。iOS 分岐のみ。
@@ -2144,6 +2149,16 @@ fn compile_ios_app_lifecycle() {
         .file("ios/fandhe_ios_app_lifecycle.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_app_lifecycle");
+}
+
+/// `ios/fandhe_ios_memory_pressure.m` を `cc` でコンパイルする（Issue #912）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_memory_pressure.rs` が使う）。UIKit・libdispatch はリンク済み。
+fn compile_ios_memory_pressure() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_memory_pressure.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_memory_pressure.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_memory_pressure");
 }
 
 /// `ios/fandhe_ios_device_info.m` を `cc` でコンパイルする（Issue #1305）。**iOS 分岐のみ**
