@@ -6,7 +6,7 @@
 //! # OS 実装の差し込み口
 //!
 //! [`implementation`] は全対象 OS の最終形。macOS は `apple_background_upload`（本 issue）、iOS・Android は
-//! `ios_background_upload`・`android_background_upload`（後続の子 #836・#837 が埋めるスタブ）が返る。
+//! `ios_background_upload`（#836、macOS と共用実装）・`android_background_upload`（後続の子 #837 が埋めるスタブ）が返る。
 //! Windows・Web は対応表で保留のため、fallback 行で `Unsupported` 固定にする。
 //!
 //! # OS を正にする（ポーリングしない）

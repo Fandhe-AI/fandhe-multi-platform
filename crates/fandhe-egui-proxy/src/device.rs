@@ -380,7 +380,6 @@ pub mod apple_background_download;
 /// `ios_background_upload` 経由）から呼ばれる。結果の照合の純ロジックをホストの `cargo test` で検査するため
 /// cfg に `test` を含める。
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
-#[cfg_attr(target_os = "ios", allow(dead_code))]
 pub mod apple_background_upload;
 /// Issue #557 macOS・#558 iOS: バーコード・QR 読み取り実装（`apple/fandhe_apple_barcode_scan.m` を
 /// 呼ぶ C ABI ラッパー）。`device/barcode_scan.rs` の macOS 経路と `ios_barcode_scan` から呼ばれる。
@@ -593,7 +592,7 @@ pub mod background_download;
 /// ドライバ（macOS 実装、他 OS は兄弟 issue #1044〜#1047）。
 pub mod background_task;
 /// Phase 11 の拡充ループ（親 #170、Issue #835）: OS 管理のバックグラウンド送信の effect ドライバ
-/// （macOS 実装、iOS・Android は兄弟 issue #836・#837 が埋めるスタブ、他 OS は `Unsupported` 固定）。
+/// （macOS #835・iOS #836 は共用実装、Android は兄弟 issue #837 が埋めるスタブ、他 OS は `Unsupported` 固定）。
 pub mod background_upload;
 /// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取りの effect ドライバ。
 pub mod barcode_scan;
