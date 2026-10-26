@@ -42,6 +42,11 @@ pub mod android_app_attest;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_app_badge;
+/// Issue #893: Android 向けアプリの前面・背面の通知の骨格（`Unsupported` のスタブ。b-android が埋める）。
+/// `device/app_lifecycle.rs` の Android 経路から使われる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_app_lifecycle;
 /// Issue #426: Android 向けアプリショートカット実装（`ShortcutManager` の動的ショートカット）。
 /// `device/app_shortcuts.rs` の android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -380,6 +385,10 @@ pub mod app_attest;
 /// Windows は同期、iOS / Android は pull 型 `bridge`、
 /// 他 OS は `UnsupportedAppBadge` 固定。Web は `fandhe-web-dom`）。
 pub mod app_badge;
+/// Phase 11 の拡充ループ（親 #178、Issue #893）: アプリの前面・背面・凍結の通知の effect ドライバ
+/// （macOS・Windows 実装、iOS・Android は骨格のスタブで b-ios・b-android が埋める。他 OS は
+/// `UnsupportedAppLifecycle` 固定。Web は `fandhe-web-dom`）。
+pub mod app_lifecycle;
 /// Phase 11（親 #174、Issue #860）: Dock・タスクバーの進捗表示と注意喚起の effect ドライバ（macOS /
 /// Windows は同期、他 OS は `UnsupportedAppProgressAttention` 固定。モバイル・Web に該当機能は無い）。
 pub mod app_progress_attention;
@@ -762,6 +771,11 @@ pub mod ios_activity_recognition;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_app_badge;
+/// Issue #893: iOS 向けアプリの前面・背面の通知の骨格（`Unsupported` のスタブ。b-ios が埋める）。
+/// `device/app_lifecycle.rs` の ios 経路から使われる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_app_lifecycle;
 /// Issue #425: iOS 向けアプリショートカット実装（Info.plist の静的宣言。`Declared` を返す）。
 /// `device/app_shortcuts.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1075,6 +1089,10 @@ pub mod location;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_app_badge;
+/// Issue #893: macOS 向けアプリの前面・背面の通知実装（`macos/fandhe_macos_app_lifecycle.m`、
+/// `NSApplication` の通知を呼ぶ C ABI ラッパー）。`device/app_lifecycle.rs` の macOS 経路から呼ばれる。
+#[cfg(target_os = "macos")]
+pub mod macos_app_lifecycle;
 /// Issue #860: macOS 向け進捗表示・注意喚起実装（`macos/fandhe_macos_app_progress_attention.m` を呼ぶ C ABI ラッパー）。`device/app_progress_attention.rs` の macos 経路から呼ばれる。
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -1491,6 +1509,11 @@ pub mod windows_alarm;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_app_badge;
+/// Issue #893: Windows 向けアプリの前面・背面の通知実装（メインウィンドウの観測専用サブクラスで
+/// `WM_ACTIVATEAPP` / `WM_SIZE` を受ける）。`device/app_lifecycle.rs` の Windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_app_lifecycle;
 /// Issue #860: Windows 向け進捗表示・注意喚起実装（`ITaskbarList3` の進捗と `FlashWindowEx`）。`device/app_progress_attention.rs` の windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]

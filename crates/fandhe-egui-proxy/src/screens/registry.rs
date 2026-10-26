@@ -278,6 +278,10 @@ generated_screens! {
     crate::device::file_watch::file_watch_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "app_lifecycle_show" => fandhe_core::screens::app_lifecycle_show::current_screen,
+    crate::device::app_lifecycle::app_lifecycle_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "sleep_lock_events_show" => fandhe_core::screens::sleep_lock_events_show::current_screen,
     crate::device::sleep_lock_events::sleep_lock_events_show_effect,
     effect
