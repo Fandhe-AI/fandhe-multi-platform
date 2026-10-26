@@ -8,31 +8,49 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "QuickLook `QLPreviewController`（プレビュー表示）、`QLThumbnailGenerator`（サムネイル）",
+      "api": "`QLThumbnailGenerator`（サムネイル。`representationTypes` は `.thumbnail` だけを頼み、取り消しは `cancel(_:)`）、`QLPreviewController`（プレビュー。閉じたことは `previewControllerDidDismiss(_:)` で知る）",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/quicklook/qlpreviewcontroller",
-      "note": "未実装。サンドボックス内のファイルのみ。対応形式は OS 依存。"
+      "url": [
+        "https://developer.apple.com/documentation/quicklook/qlpreviewcontroller",
+        "https://developer.apple.com/documentation/quicklookthumbnailing/qlthumbnailgenerator",
+        "https://developer.apple.com/documentation/quicklookthumbnailing/qlthumbnailgenerator/cancel(_:)",
+        "https://developer.apple.com/documentation/quicklook/qlpreviewcontrollerdelegate/previewcontrollerdiddismiss(_:)",
+        "https://developer.apple.com/documentation/quicklook/qlpreviewitem/previewitemurl"
+      ],
+      "note": "未実装。アプリの一時領域に書いた固定サンプルを渡す（任意のパスは受け取らない）。`previewItemURL` はファイル URL が必須。アイコンをサムネイルとして成功に混ぜない。対応形式は OS 依存。"
     },
     "android": {
       "status": "possible",
-      "api": "動画・画像サムネイルは `ContentResolver.loadThumbnail`（API 29+）/ `ThumbnailUtils`。プレビュー表示は `ACTION_VIEW` で他アプリへ",
-      "perm": "不要（対象ファイルの URI 権限は別）",
-      "url": "https://developer.android.com/reference/android/content/ContentResolver#loadThumbnail(android.net.Uri,%20android.util.Size,%20android.os.CancellationSignal)",
-      "note": "未実装。OS 標準のプレビュー画面は無く、表示は他アプリ委譲。minSdk と API 29 の差に注意。"
+      "api": "サムネイルは `ThumbnailUtils.createImageThumbnail(File, Size, CancellationSignal)`（API 29+）。プレビューは FileProvider の content URI を `ACTION_VIEW` + `FLAG_GRANT_READ_URI_PERMISSION` で他アプリへ渡す",
+      "perm": "不要（`<queries>` も不要。読み取りは Intent 単位の一時許可）",
+      "url": [
+        "https://developer.android.com/reference/android/media/ThumbnailUtils#createImageThumbnail(java.io.File,%20android.util.Size,%20android.os.CancellationSignal)",
+        "https://developer.android.com/reference/androidx/core/content/FileProvider",
+        "https://developer.android.com/guide/components/intents-common"
+      ],
+      "note": "未実装。OS 標準のプレビュー画面は無く、表示は他アプリ委譲（FileProvider は既存の `.compose` を共用）。`ContentResolver.loadThumbnail` は外部の provider 向けで、自アプリのファイルには使わない。minSdk 24〜28 は OS のサムネイル経路が無いため `Unsupported`（この OS 版では使えない）にする。"
     },
     "macos": {
       "status": "possible",
-      "api": "QuickLookUI `QLPreviewPanel`、QuickLookThumbnailing `QLThumbnailGenerator`",
+      "api": "QuickLookThumbnailing `QLThumbnailGenerator`（サムネイル）、QuickLookUI `QLPreviewView`（自前の窓に載せるプレビュー）",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/quicklookui/qlpreviewpanel",
-      "note": "未実装。共有パネルは AppKit のレスポンダーチェーン経由で提示する。URL 未確認箇所あり（一般知識、要確認）。"
+      "url": [
+        "https://developer.apple.com/documentation/quicklookthumbnailing/qlthumbnailgenerator",
+        "https://developer.apple.com/documentation/quicklookui/qlpreviewview",
+        "https://developer.apple.com/documentation/quicklookui/qlpreviewview/close()",
+        "https://developer.apple.com/documentation/quicklookui/qlpreviewpanel"
+      ],
+      "note": "未実装。`QLPreviewPanel` は制御者をレスポンダーチェーンで決め、制御していない側が状態を変えてはならないため、winit の窓へ responder を差し込む必要があり採らない。自前の窓に `QLPreviewView` を載せ、窓が閉じた通知で閉じたことを知る。サムネイルは macOS 10.15+（それ未満は `Unsupported`）。"
     },
     "windows": {
       "status": "possible",
-      "api": "Shell `IThumbnailProvider` / `IShellItemImageFactory::GetImage`（サムネイル）、WinRT `StorageFile.GetThumbnailAsync`",
+      "api": "`SHCreateItemFromParsingName` → `IShellItemImageFactory::GetImage`（`SIIGBF_THUMBNAILONLY`）",
       "perm": "不要",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/shell/thumbnail-providers",
-      "note": "未実装。プレビュー表示（Preview Handler）をアプリ内に埋め込むのは複雑。当面はサムネイル中心。"
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishellitemimagefactory-getimage",
+        "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-shcreateitemfromparsingname"
+      ],
+      "note": "未実装。サムネイルのみ。`SIIGBF_THUMBNAILONLY` でサムネイルが無いときは失敗し、アイコンへ倒れない。返る `HBITMAP` は呼び出し側が `DeleteObject` し、UI スレッドでは呼ばない。プレビュー表示は対象外（Preview Handler の埋め込みは子窓の管理が要るため採らない）。`IThumbnailProvider` は提供側の interface、`StorageFile.GetThumbnailAsync` は採らない。"
     },
     "web": {
       "status": "no",
@@ -42,5 +60,5 @@
       "note": "任意ファイルの標準プレビュー API は無い。画像は `createImageBitmap`、動画は `<video>` + canvas でフレームを取れるが形式依存"
     }
   },
-  "note": "pdf-viewer は PDF の表示、photo-picker は写真の選択で、これは任意ファイルの OS 標準プレビュー表示と動画・ファイルのサムネイル生成。"
+  "note": "pdf-viewer は PDF の表示、photo-picker は写真の選択で、これは任意ファイルの OS 標準プレビュー表示とサムネイル生成。範囲は固定のファイル 2 つ（サンプル画像と種類不明のファイル）に対する固定の 3 操作（サムネイル・種類不明ファイルのサムネイル・プレビュー）だけで、任意のパスを外から渡す経路は作らない。動画・PDF・複数ファイルのサムネイルは今回の範囲外。結果はサムネイル・サムネイルなし（失敗にしない）・期限切れ・非対応を分け、プレビューは閉じた・他アプリへ渡した・表示アプリなし・この OS では対象外を分ける。いずれも成功に畳まない。OS を正にする: 事前判定（`canPreviewItem:`・`resolveActivity`・拡張子での種類判定）をせず、アイコンをサムネイルとして成功に混ぜず、プレビューの表示・閉じたを推測しない。期限（サムネイルのみ 10 秒）は処理中のまま止まらないための上限で、結果の推測には使わない。Windows はサムネイルのみでプレビューは対象外、Android 24〜28 のサムネイルは非対応。守らない範囲: サムネイルの色・アルファの正確さと所要時間、期限後も OS 側の生成が走り切ること（Windows は取り消せない）、Android の受け手アプリが実際に表示したか、複数プロセス・複数窓。"
 }
