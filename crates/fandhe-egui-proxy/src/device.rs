@@ -831,7 +831,7 @@ pub mod ios_drag_drop;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_environment_sensors;
-/// Issue #861: iOS 向け「電話発信・地図など他アプリの起動」の骨格（実体は (b-ios)）。`device/external_app_launch.rs` の ios 経路から呼ばれる。
+/// Issue #862: iOS 向け電話発信・地図など他アプリの起動（UIApplication.open）。`device/external_app_launch.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_external_app_launch;
