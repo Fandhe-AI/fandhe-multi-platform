@@ -647,6 +647,26 @@ public class MainActivity extends GameActivity {
         return sleepLockEventsHelper.read();
     }
 
+    // 外部ストレージの着脱（Issue #859）。実装は `RemovableStorageHelper`。
+    // Rust の `android_removable_storage.rs` が JNI で呼ぶ。
+    private final RemovableStorageHelper removableStorageHelper = new RemovableStorageHelper(this);
+
+    int removableStorageSupport() {
+        return removableStorageHelper.support();
+    }
+
+    int removableStorageStart(long id) {
+        return removableStorageHelper.start(id);
+    }
+
+    void removableStorageStop(long id) {
+        removableStorageHelper.stop(id);
+    }
+
+    String removableStorageList() {
+        return removableStorageHelper.list();
+    }
+
     // 音声の割り込み・セッション種別（Issue #842）。実装は `AudioSessionHelper`。
     // Rust の `android_audio_session.rs` が JNI で呼ぶ。
     private final AudioSessionHelper audioSessionHelper = new AudioSessionHelper(this);
@@ -5049,6 +5069,7 @@ public class MainActivity extends GameActivity {
         pictureInPictureHelper.onDestroy();
         midiHelper.onDestroy();
         sleepLockEventsHelper.onDestroy();
+        removableStorageHelper.onDestroy();
         audioSessionHelper.onDestroy();
         cameraPreviewHelper.onDestroy();
         callUiHelper.onDestroy();

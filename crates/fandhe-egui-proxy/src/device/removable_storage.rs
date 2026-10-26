@@ -9,7 +9,7 @@
 //!
 //! [`platform_removable_storage`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（macOS: `macos_removable_storage`、Windows: `windows_removable_storage`
-//! （いずれも #858）、Android: `android_removable_storage`（#859 が埋めるスタブ））。それ以外（iOS・Linux 等）は
+//! （いずれも #858）、Android: `android_removable_storage`（JNI 実装、#859））。それ以外（iOS・Linux 等）は
 //! `UnsupportedRemovableStorage` 固定で、ダミーの成功実装へは倒さない。Web は本ドライバを通らない。
 //! OS のコールバックは [`register`] で得た `id` を持ち、[`fire`] を呼ぶ。macOS は `extern "C"` の
 //! 受け口 `fandhe_rust_removable_storage_fire` を使う。
@@ -67,13 +67,9 @@ fn platform_removable_storage() -> Arc<dyn RemovableStorage> {
 
 // ---- 登録表（全 OS 共通）-------------------------------------------------------------------
 
-// Android は骨格のスタブで登録表を使わない（#859 が使い始めるとき、下の `dead_code` 許可を外す）。
-#[cfg_attr(target_os = "android", allow(dead_code))]
 type Callbacks = Mutex<HashMap<u64, OnSignal>>;
-#[cfg_attr(target_os = "android", allow(dead_code))]
 static CALLBACKS: std::sync::LazyLock<Callbacks> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
-#[cfg_attr(target_os = "android", allow(dead_code))]
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -83,7 +79,12 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 /// OS コールバックが引く `id` を発行して合図の送り先を登録する。OS 側は生ポインタではなく
 /// この `id` だけを持ち、停止後に遅れて届いた呼び出しは [`fire`] が捨てる。
 #[cfg_attr(
-    not(any(target_os = "macos", target_os = "windows", test)),
+    not(any(
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "android",
+        test
+    )),
     allow(dead_code)
 )]
 pub(crate) fn register(cb: OnSignal) -> u64 {
@@ -94,7 +95,12 @@ pub(crate) fn register(cb: OnSignal) -> u64 {
 
 /// 登録を外す。停止の最初に呼び、以後の [`fire`] は何もしない。
 #[cfg_attr(
-    not(any(target_os = "macos", target_os = "windows", test)),
+    not(any(
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "android",
+        test
+    )),
     allow(dead_code)
 )]
 pub(crate) fn unregister(id: u64) {
@@ -103,7 +109,12 @@ pub(crate) fn unregister(id: u64) {
 
 /// 合図を送る。ロックの内側では呼ばず、登録表に無い `id`（停止後の遅れた呼び出し）は捨てる。
 #[cfg_attr(
-    not(any(target_os = "macos", target_os = "windows", test)),
+    not(any(
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "android",
+        test
+    )),
     allow(dead_code)
 )]
 pub(crate) fn fire(id: u64, signal: Signal) {
