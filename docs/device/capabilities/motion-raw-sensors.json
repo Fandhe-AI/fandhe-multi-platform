@@ -38,12 +38,15 @@
       "note": "未実装。単位は度/秒・µT・g。センサー搭載機（2-in-1 等）のみ。デスクトップ PC では `GetDefault` が null。Connected Standby の間も null。一次情報: https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.gyrometerreading / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.magnetometerreading / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.accelerometer.getdefault / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.accelerometerreadingtype"
     },
     "web": {
-      "status": "possible",
+      "status": "done",
       "api": "`devicemotion` イベント（`DeviceMotionEvent.rotationRate` / `acceleration`）",
       "perm": "iOS Safari 14.5 以上と Chrome 152 以上は `DeviceMotionEvent.requestPermission()`。secure context が必須",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/DeviceMotionEvent",
       "safari": "`devicemotion` で角速度と線形加速度は取れる。磁場は取れない",
-      "note": "未実装。単位は度/秒（beta→x・gamma→y・alpha→z）・m/s²。Generic Sensor の `Gyroscope` / `LinearAccelerationSensor` は Chromium のみ、`Magnetometer` は Chromium でも実験フラグが要るので、Web の磁場は「この OS では取得できません」。一次情報: https://developer.mozilla.org/en-US/docs/Web/API/Magnetometer / https://developer.mozilla.org/en-US/docs/Web/API/Sensor_APIs / https://github.com/mdn/browser-compat-data/blob/main/api/Magnetometer.json / https://github.com/mdn/browser-compat-data/blob/main/api/DeviceMotionEvent.json"
+      "note": "実装済み（#902）。単位は度/秒（beta→x・gamma→y・alpha→z）・m/s²。磁場は Web で取れないため常に「この OS では取得できません」（Generic Sensor の `Magnetometer` は使わない）。非 secure context と `DeviceMotionEvent` が無い場合は `UnsupportedOnOs`、`requestPermission()` は `denied` と `NotAllowedError` を `PermissionDenied`、ほかを `Failed` に写す。成分が null・非有限・非表示は値なし（0 や前回値で埋めない）。期限・古さの閾値は置かず、センサーが無い環境は `NotPresent` を出さず値なしのまま待つ（守らない範囲）。守る範囲: 嘘の値を出さない、種類ごとに購読を二重にしない、停止・失敗・非表示・マウント破棄で解除する、古い世代を捨てる。守らない範囲: ブラウザ間の座標・軸の違いと画面回転、許可ダイアログの応答待ちの期限、複数タブ・複数マウント、最大 100 ms + イベント周期の遅れ、wasm canvas 経路、bfcache 復帰後の配信。",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#885）",
+      "impl": "crates/fandhe-web-dom/src/motion_raw_sensors.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/motion_raw_sensors_show.rs + crates/fandhe-device/src/motion_raw_sensors.rs、Issue #902"
     }
   },
   "note": "tilt-motion は重力ベクトル（傾き）、compass-heading は方位で、これは角速度・磁場・線形加速度の生値を継続配信する。範囲: 3 種類の x・y・z を OS が出した単位のまま単位付きで表示し、開始・停止は 3 種類まとめて 1 組。間隔は OS 任せ（表示に足りる間隔のみ要求）。範囲外は姿勢・重力・生の加速度・方位・較正前後の併記・200 Hz 超・記録・グラフ。方針: 単位はそろえない。事前判定をせず `is*Available` / `getDefaultSensor` / `GetDefault` の結果をそのまま「センサーなし」に写す。期限・古さの閾値は置かず、古い値の破棄は OS が示す事実（iOS の timestamp、Android の onPause、Windows の null、Web の非表示と null 成分）だけで決める。前回値や 0 で埋めない。守る範囲: 嘘の値を出さない、「OS に API が無い」と「端末に無い」を区別する、種類ごとに購読を二重にしない、停止・失敗・背景遷移・破棄で解除する、古い世代を捨てる、iOS の `CMMotionManager` を 1 つにする。守らない範囲: 絶対精度と較正、OS 間で単位・軸・座標系がそろうこと、画面回転時の軸、サンプリング周期と表示の遅れ、値が届かないまま待ち続ける場合、ブラウザ間の座標の扱いの違い、tilt 画面との同時利用時の iOS の周期変化、複数タブ・複数プロセス。"

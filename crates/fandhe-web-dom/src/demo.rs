@@ -128,6 +128,9 @@ use fandhe_core::screens::midi_show::{
     clear as midi_clear, current_screen as current_midi_screen, stop as midi_stop, MidiShowState,
     CLEAR_LABEL as MIDI_CLEAR_LABEL, STOP_LABEL as MIDI_STOP_LABEL,
 };
+use fandhe_core::screens::motion_raw_sensors_show::{
+    current_screen as current_motion_raw_sensors_show_screen, MotionRawSensorsShowState,
+};
 use fandhe_core::screens::multi_display_show::{
     current_screen as current_multi_display_screen,
     web_initial_state as multi_display_initial_state,
@@ -514,6 +517,20 @@ pub fn mount_memory_pressure_show_screen(root_id: &str) -> Result<(), JsValue> {
         current_memory_pressure_show_screen(&initial_state),
         initial_state,
         super::memory_pressure::memory_pressure_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「ジャイロ・磁気・線形加速度」（親 #180、Issue #902）をマウントする検証専用
+/// エントリポイント。`super::motion_raw_sensors::motion_raw_sensors_show_effect` が `devicemotion` を駆動する。
+#[wasm_bindgen]
+pub fn mount_motion_raw_sensors_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    let initial_state = MotionRawSensorsShowState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_motion_raw_sensors_show_screen(&initial_state),
+        initial_state,
+        super::motion_raw_sensors::motion_raw_sensors_show_effect,
     )
 }
 
