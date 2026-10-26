@@ -28,24 +28,30 @@
       "note": "未実装。Application Context へ登録して受ける。段階は API 33 以下は 7 段階、34 以上は 2 段階。今後増えうるため特定の値に依存せず大小で見る（公式）。`lowMemory` は「システムが今メモリ不足と見なしているか」（公式）。"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "`DISPATCH_SOURCE_TYPE_MEMORYPRESSURE`（libdispatch の C API。normal / warning / critical）",
       "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/dispatch/dispatch_source_type_memorypressure",
         "https://developer.apple.com/documentation/dispatch/dispatchsource/memorypressureevent"
       ],
-      "note": "未実装。Rust からは libdispatch の C API を直呼びする。今の段階を読む公開 API は無く、非公開の sysctl は使わない。"
+      "note": "実装済み（#911）。段階の変化（平常・警告・危機的）を受け、メモリ警告・trim・Low / High・CPU の段階は「この OS では取れない」と出す。今の状態を読む公開 API は無く、非公開の sysctl は使わないため「この OS では取れない」と出し、最初の通知までは「まだ届いていません」（「平常」を仮定しない）。起動時の段階は合図にしない。停止は dispatch source の cancel で、解除後に届いた通知は登録表で捨てる。複数ビット・未知ビットの値は捨てる（捏造しない）。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#884）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_memory_pressure.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_memory_pressure.m + crates/fandhe-egui-proxy/src/device/memory_pressure.rs + crates/fandhe-core/src/screens/memory_pressure_show.rs + crates/fandhe-device/src/memory_pressure.rs、Issue #911"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "`CreateMemoryResourceNotification`（`LowMemoryResourceNotification` / `HighMemoryResourceNotification`）+ 待機。今の状態は `QueryMemoryResourceNotification`",
       "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-creatememoryresourcenotification",
         "https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-querymemoryresourcenotification"
       ],
-      "note": "未実装。システム全体の値でプロセス単位ではない。Low / High は条件が成り立つ間 signaled の状態オブジェクトで、どちらでもない中間帯がある（公式）。UWP の `MemoryManager` は採らない（Win32 で足りる）。"
+      "note": "実装済み（#911）。Low（メモリ不足）/ High（メモリに余裕）を専用スレッドの待機で受け、段階・メモリ警告・trim・CPU の段階は「この OS では取れない」と出す。Low / High は条件が成り立つ間 signaled の状態オブジェクトなので、毎回 OS へ問い直して反対側だけを待つ（タイマー・ポーリングは使わない）。今の状態は画面を開いた時と合図のたびに `QueryMemoryResourceNotification` で問い直し、中間帯（不足でも余裕でもない）と読み取りの失敗を別に出す。Low → 中間 → Low のように中間帯をまたぐ変化は取りこぼす（守らない範囲）。停止後に届いた通知は捨て、待機の失敗は実行中の失敗として出す。`windows` クレートは feature `Win32_System_Memory` の追加だけで足りる。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#884）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_memory_pressure.rs + crates/fandhe-egui-proxy/src/device/memory_pressure.rs + crates/fandhe-core/src/screens/memory_pressure_show.rs + crates/fandhe-device/src/memory_pressure.rs、Issue #911"
     },
     "web": {
       "status": "possible",

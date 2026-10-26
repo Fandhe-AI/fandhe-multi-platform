@@ -282,6 +282,10 @@ generated_screens! {
     crate::device::app_lifecycle::app_lifecycle_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "memory_pressure_show" => fandhe_core::screens::memory_pressure_show::current_screen,
+    crate::device::memory_pressure::memory_pressure_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "sleep_lock_events_show" => fandhe_core::screens::sleep_lock_events_show::current_screen,
     crate::device::sleep_lock_events::sleep_lock_events_show_effect,
     effect

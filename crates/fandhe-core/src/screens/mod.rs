@@ -34,6 +34,8 @@ pub mod camera_capture;
 pub mod camera_preview_stream_show;
 pub mod confirm_dialog;
 pub mod list_detail;
+/// Phase 11 の拡充ループ型サンプル「メモリ逼迫・負荷」（親 #179、Issue #911）。
+pub mod memory_pressure_show;
 pub mod schema_example_fixture;
 
 /// M7 型サンプル「フォーム」（Issue #728）。
