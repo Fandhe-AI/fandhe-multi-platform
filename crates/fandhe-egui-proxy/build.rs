@@ -276,6 +276,9 @@
 //!   プレビュー）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_file_preview.rs` から呼ばれる契約）。QuickLookUI を追加でリンクする。
 //!   サムネイル側の `apple/fandhe_apple_file_preview.m`（QuickLookThumbnailing）は macOS・iOS 両分岐から呼ぶ。
+//! - `ios/fandhe_ios_file_preview.m`（Issue #919、`QLPreviewController` による固定ファイルのプレビュー）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_file_preview.rs` から
+//!   呼ばれる契約）。QuickLook を追加でリンクする。
 //! - `macos/fandhe_macos_print.m`（Issue #325、`NSPrintPanel` + `NSPrintOperation` による印刷
 //!   ダイアログ）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_print.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -734,6 +737,8 @@ fn main() {
     compile_ios_in_app_review();
     // `ios/fandhe_ios_capture_protection.m`（Issue #583）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_capture_protection();
+    // `ios/fandhe_ios_file_preview.m`（Issue #919）。iOS 分岐のみ。QuickLook をリンクする。
+    compile_ios_file_preview();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_midi.m`（Issue #1398 macOS + #1399 iOS）も共用する。CoreMIDI を使う。
@@ -1669,6 +1674,19 @@ fn compile_ios_in_app_review() {
         .file("ios/fandhe_ios_in_app_review.m")
         .flag("-fobjc-arc")
         .compile("fandhe_ios_in_app_review");
+}
+
+/// `ios/fandhe_ios_file_preview.m` を `cc` でコンパイルし QuickLook をリンクする（Issue #919）。
+/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_file_preview.rs` が使う）。
+fn compile_ios_file_preview() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_file_preview.m");
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_common.h");
+    cc::Build::new()
+        .file("ios/fandhe_ios_file_preview.m")
+        .include("ios")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_file_preview");
+    println!("cargo:rustc-link-lib=framework=QuickLook");
 }
 
 /// `ios/fandhe_ios_capture_protection.m` を `cc` でコンパイルする（Issue #583）。**iOS 分岐のみ**

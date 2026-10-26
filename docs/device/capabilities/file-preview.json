@@ -7,7 +7,7 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "`QLThumbnailGenerator`（サムネイル。`representationTypes` は `.thumbnail` だけを頼み、取り消しは `cancel(_:)`）、`QLPreviewController`（プレビュー。閉じたことは `previewControllerDidDismiss(_:)` で知る）",
       "perm": "不要",
       "url": [
@@ -17,7 +17,10 @@
         "https://developer.apple.com/documentation/quicklook/qlpreviewcontrollerdelegate/previewcontrollerdiddismiss(_:)",
         "https://developer.apple.com/documentation/quicklook/qlpreviewitem/previewitemurl"
       ],
-      "note": "未実装。アプリの一時領域に書いた固定サンプルを渡す（任意のパスは受け取らない）。`previewItemURL` はファイル URL が必須。アイコンをサムネイルとして成功に混ぜない。対応形式は OS 依存。"
+      "note": "実装済み（#919）。サムネイルは `.thumbnail` だけを頼み、期限 10 秒で `cancelRequest:` する（macOS と共用）。プレビューは `QLPreviewController` を全画面で提示し、閉じたことは `previewControllerDidDismiss:` で知って `Closed` にする。事前判定（`canPreviewItem:`）はしない。アイコンをサムネイルとして成功に混ぜない。サムネイルは iOS 13+（それ未満は `Unsupported`）。",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#890）",
+      "impl": "`crates/fandhe-egui-proxy/src/device/ios_file_preview.rs` + `crates/fandhe-egui-proxy/ios/fandhe_ios_file_preview.m` + `crates/fandhe-egui-proxy/src/device/apple_file_preview.rs` + `crates/fandhe-egui-proxy/apple/fandhe_apple_file_preview.m` + `crates/fandhe-egui-proxy/src/device/file_preview.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-device/src/file_preview.rs`、Issue #919"
     },
     "android": {
       "status": "possible",
