@@ -12,6 +12,9 @@
 //!   0 へ戻して保持せず失敗（類型 9）
 //! - `read`: `GetCurrentReading()` の 3 軸。null は値なし。3 軸がそろい有限なときだけ値にし、
 //!   1 軸でも取れなければ値なし／失敗（0 や前回値で埋めない）
+//! - 最小化: ウォッチャー（プロセスに 1 本）が HWND の `IsIconic` を 200 ms 間隔で見て、最小化で
+//!   保持中の全種類の `ReportInterval` を 0 に戻し（保持は残す）、復元で再設定する。最小化中に
+//!   始まった `start` は保持だけして間隔を設定せず、復元で設定する（背景で取得を続けない。契約表 1）
 //! - `stop`: 保持を捨て `ReportInterval` を 0 に戻す（結果は無視）。冪等
 //!
 //! 線形加速度は `AccelerometerReadingType::Linear` で取る（重力は OS が除く。#898 で「#899 で
@@ -19,7 +22,7 @@
 //! `DirectionalAccuracy` と `Timestamp` は読まない（較正は範囲外。古い値の破棄は Windows が返す
 //! null だけに任せ、時刻による古さの閾値は置かない）。最小化中は eframe が `update` を呼ばず
 //! driver が読まない。HRESULT・センサー値はログにも画面にも出さない（security.md A09）。
-//! `unsafe` と `RoInitialize` は使わない。
+//! `unsafe` は `IsIconic` の呼び出し 1 箇所に限る。`RoInitialize` は使わない。
 //!
 //! 一次情報:
 //! <https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.gyrometer> /
@@ -87,7 +90,9 @@ fn to_reading(kind: RawKind, x: f64, y: f64, z: f64) -> Option<RawReading> {
 
 #[cfg(target_os = "windows")]
 mod imp {
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
+    use std::time::Duration;
 
     use windows::Devices::Sensors::{
         Accelerometer, AccelerometerReadingType, Gyrometer, Magnetometer,
@@ -103,15 +108,30 @@ mod imp {
         Lin(Accelerometer),
     }
 
-    /// `RawKind::ALL` の添字ごとに高々 1 個保持する（種類ごとに購読を二重にしない）。
-    struct WindowsMotionRawSensors {
-        held: Mutex<[Option<Held>; 3]>,
+    /// 最小化の確認間隔（ms）。
+    const MINIMIZE_POLL_MS: u64 = 200;
+
+    /// `held` は `RawKind::ALL` の添字ごとに高々 1 個保持する（種類ごとに購読を二重にしない）。
+    /// `suspended`（最小化中）の判定と `ReportInterval` の変更は同じロックの内側で行う。
+    struct State {
+        held: [Option<Held>; 3],
+        suspended: bool,
     }
 
+    /// ウォッチャーからも触るためプロセスで 1 つにする。
+    static STATE: Mutex<State> = Mutex::new(State {
+        held: [None, None, None],
+        suspended: false,
+    });
+
+    fn state() -> std::sync::MutexGuard<'static, State> {
+        STATE.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    struct WindowsMotionRawSensors;
+
     pub(crate) fn implementation() -> Arc<dyn MotionRawSensors> {
-        Arc::new(WindowsMotionRawSensors {
-            held: Mutex::new([None, None, None]),
-        })
+        Arc::new(WindowsMotionRawSensors)
     }
 
     fn idx(kind: RawKind) -> usize {
@@ -128,26 +148,65 @@ mod imp {
 
     /// `$s` に `ReportInterval`（最小値と 100 ms の大きい方）を設定する。
     /// 設定に失敗したら 0 へ戻してエラーを返す。
-    macro_rules! set_interval {
-        ($s:expr) => {{
-            let min = $s.MinimumReportInterval().map_err(fail)?;
-            if let Err(e) = $s.SetReportInterval(min.max(100)) {
-                let _ = $s.SetReportInterval(0);
-                return Err(fail(e));
-            }
-        }};
+    /// 最小値を取り、`on` なら `max(最小値, 100 ms)`、そうでなければ 0 を設定する。
+    /// 設定に失敗したら 0 へ戻してエラーを返す。
+    fn apply_interval<S: Interval>(s: &S, on: bool) -> Result<(), RawSensorFailure> {
+        if !on {
+            return s.set(0).map_err(fail);
+        }
+        let min = s.min().map_err(fail)?;
+        if let Err(e) = s.set(min.max(100)) {
+            let _ = s.set(0);
+            return Err(fail(e));
+        }
+        Ok(())
     }
 
-    fn acquire(kind: RawKind) -> Result<Held, RawSensorFailure> {
+    /// 3 種のセンサーに共通の `ReportInterval` 操作。
+    trait Interval {
+        fn min(&self) -> windows::core::Result<u32>;
+        fn set(&self, ms: u32) -> windows::core::Result<()>;
+    }
+    macro_rules! impl_interval {
+        ($t:ty) => {
+            impl Interval for $t {
+                fn min(&self) -> windows::core::Result<u32> {
+                    self.MinimumReportInterval()
+                }
+                fn set(&self, ms: u32) -> windows::core::Result<()> {
+                    self.SetReportInterval(ms)
+                }
+            }
+        };
+    }
+    impl_interval!(Gyrometer);
+    impl_interval!(Magnetometer);
+    impl_interval!(Accelerometer);
+
+    impl Held {
+        fn apply(&self, on: bool) -> Result<(), RawSensorFailure> {
+            match self {
+                Held::Gyro(s) => apply_interval(s, on),
+                Held::Mag(s) => apply_interval(s, on),
+                Held::Lin(s) => apply_interval(s, on),
+            }
+        }
+    }
+
+    fn acquire(kind: RawKind, suspended: bool) -> Result<Held, RawSensorFailure> {
         Ok(match kind {
             RawKind::AngularVelocity => {
                 let s = Gyrometer::GetDefault().map_err(fail)?;
-                set_interval!(s);
+                if !suspended {
+                    apply_interval(&s, true)?;
+                }
                 Held::Gyro(s)
             }
             RawKind::MagneticField => {
                 let s = Magnetometer::GetDefault().map_err(fail)?;
-                set_interval!(s);
+                if !suspended {
+                    apply_interval(&s, true)?;
+                }
                 Held::Mag(s)
             }
             RawKind::LinearAcceleration => {
@@ -155,7 +214,9 @@ mod imp {
                     AccelerometerReadingType::Linear,
                 )
                 .map_err(fail)?;
-                set_interval!(s);
+                if !suspended {
+                    apply_interval(&s, true)?;
+                }
                 Held::Lin(s)
             }
         })
@@ -214,33 +275,85 @@ mod imp {
     }
 
     fn release(h: Held) {
-        let _ = match h {
-            Held::Gyro(s) => s.SetReportInterval(0),
-            Held::Mag(s) => s.SetReportInterval(0),
-            Held::Lin(s) => s.SetReportInterval(0),
-        };
+        let _ = h.apply(false);
+    }
+
+    // ---- 最小化ウォッチャー ----
+
+    /// ウォッチャーを 1 回だけ起動する。ウィンドウ未取得なら起動せず次回に再試行する。
+    fn ensure_minimize_watcher() {
+        static STARTED: AtomicBool = AtomicBool::new(false);
+        if STARTED.load(Ordering::Acquire)
+            || super::super::windows_share::window().is_none()
+            || STARTED.swap(true, Ordering::AcqRel)
+        {
+            return;
+        }
+        let spawned = std::thread::Builder::new()
+            .name("fandhe-motion-raw-sensors-minimize".into())
+            .spawn(watch_minimize);
+        if spawned.is_err() {
+            STARTED.store(false, Ordering::Release);
+        }
+    }
+
+    fn watch_minimize() {
+        loop {
+            if let Some(hwnd) = super::super::windows_share::window() {
+                set_suspended(is_minimized(hwnd));
+            }
+            std::thread::sleep(Duration::from_millis(MINIMIZE_POLL_MS));
+        }
+    }
+
+    /// 最小化状態が変わったときだけ、保持中の全種類の `ReportInterval` を切り替える。
+    /// 復元時に再設定できなかった種類は保持を捨てる（次の `read` は値なしになり、
+    /// 呼び出し側が `start` し直せる。保持したまま止まった状態にしない）。
+    fn set_suspended(minimized: bool) {
+        let mut st = state();
+        if st.suspended == minimized {
+            return;
+        }
+        st.suspended = minimized;
+        for slot in st.held.iter_mut() {
+            if let Some(h) = slot {
+                if h.apply(!minimized).is_err() && !minimized {
+                    *slot = None;
+                }
+            }
+        }
+    }
+
+    #[allow(unsafe_code)]
+    fn is_minimized(hwnd: windows::Win32::Foundation::HWND) -> bool {
+        // SAFETY: `hwnd` は `remember_window` が控えたメインウィンドウで、プロセス生存中は有効。
+        // `IsIconic` は無効な HWND でも FALSE を返すだけで副作用がない。
+        unsafe { windows::Win32::UI::WindowsAndMessaging::IsIconic(hwnd) }.as_bool()
     }
 
     impl MotionRawSensors for WindowsMotionRawSensors {
         fn start(&self, kind: RawKind) -> Result<(), RawSensorFailure> {
-            let mut guard = self.held.lock().unwrap_or_else(|p| p.into_inner());
-            if guard[idx(kind)].is_some() {
+            ensure_minimize_watcher();
+            let mut st = state();
+            if st.held[idx(kind)].is_some() {
                 return Ok(());
             }
-            guard[idx(kind)] = Some(acquire(kind)?);
+            let suspended = st.suspended;
+            st.held[idx(kind)] = Some(acquire(kind, suspended)?);
             Ok(())
         }
 
         fn read(&self, kind: RawKind) -> Result<Option<RawReading>, RawSensorFailure> {
-            let guard = self.held.lock().unwrap_or_else(|p| p.into_inner());
-            let Some(h) = guard[idx(kind)].as_ref() else {
+            ensure_minimize_watcher();
+            let guard = state();
+            let Some(h) = guard.held[idx(kind)].as_ref() else {
                 return Ok(None);
             };
             Ok(read_axes(h)?.and_then(|(x, y, z)| to_reading(kind, x, y, z)))
         }
 
         fn stop(&self, kind: RawKind) {
-            let taken = self.held.lock().unwrap_or_else(|p| p.into_inner())[idx(kind)].take();
+            let taken = state().held[idx(kind)].take();
             if let Some(h) = taken {
                 release(h);
             }
