@@ -31,16 +31,19 @@
       "note": "未実装。OS 標準のプレビュー画面は無く、表示は他アプリ委譲（FileProvider は既存の `.compose` を共用）。`ContentResolver.loadThumbnail` は外部の provider 向けで、自アプリのファイルには使わない。minSdk 24〜28 は OS のサムネイル経路が無いため `Unsupported`（この OS 版では使えない）にする。"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "QuickLookThumbnailing `QLThumbnailGenerator`（サムネイル）、QuickLookUI `QLPreviewView`（自前の窓に載せるプレビュー）",
       "perm": "不要",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#890）",
+      "impl": "`crates/fandhe-egui-proxy/src/device/apple_file_preview.rs` + `crates/fandhe-egui-proxy/apple/fandhe_apple_file_preview.m` + `crates/fandhe-egui-proxy/src/device/macos_file_preview.rs` + `crates/fandhe-egui-proxy/macos/fandhe_macos_file_preview.m` + `crates/fandhe-egui-proxy/src/device/file_preview.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-device/src/file_preview.rs`、Issue #917",
       "url": [
         "https://developer.apple.com/documentation/quicklookthumbnailing/qlthumbnailgenerator",
         "https://developer.apple.com/documentation/quicklookui/qlpreviewview",
         "https://developer.apple.com/documentation/quicklookui/qlpreviewview/close()",
         "https://developer.apple.com/documentation/quicklookui/qlpreviewpanel"
       ],
-      "note": "未実装。`QLPreviewPanel` は制御者をレスポンダーチェーンで決め、制御していない側が状態を変えてはならないため、winit の窓へ responder を差し込む必要があり採らない。自前の窓に `QLPreviewView` を載せ、窓が閉じた通知で閉じたことを知る。サムネイルは macOS 10.15+（それ未満は `Unsupported`）。"
+      "note": "実装済み（#917）。サムネイルは `.thumbnail` だけを頼み、返った表現の型も確かめる（アイコンを混ぜない）。期限 10 秒で `cancelRequest:` する。プレビューは自前の窓の `QLPreviewView` で、窓が閉じた通知で `Closed` にする。`QLPreviewPanel` は制御者をレスポンダーチェーンで決め、制御していない側が状態を変えてはならないため、winit の窓へ responder を差し込む必要があり採らない。自前の窓に `QLPreviewView` を載せ、窓が閉じた通知で閉じたことを知る。サムネイルは macOS 10.15+（それ未満は `Unsupported`）。"
     },
     "windows": {
       "status": "possible",
