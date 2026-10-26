@@ -245,6 +245,9 @@
 //! - `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384、`NSWorkspace openURL:` による
 //!   `mailto:` / `sms:` の作成画面表示）は **macOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルする（`src/device/macos_compose_mail_sms.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_external_app_launch.m`（Issue #861、`NSWorkspace openURL:` による固定の
+//!   `tel:` / Apple 地図 URL の起動）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_external_app_launch.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_global_hotkey.m`（Issue #766、Carbon の `RegisterEventHotKey` による固定
 //!   組み合わせ 1 つの登録・解除・押下通知。`src/device/macos_global_hotkey.rs` から呼ばれる契約）。
 //!   `Carbon.framework` をリンクする。
@@ -1687,6 +1690,17 @@ fn compile_macos_compose_mail_sms() {
         .compile("fandhe_macos_compose_mail_sms");
 }
 
+/// `macos/fandhe_macos_external_app_launch.m` を `cc` でコンパイルする（Issue #861）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_external_app_launch.rs` が使う）。AppKit は `build_macos` 側の
+/// 既存リンクで足りるため追加リンクは無い。
+fn compile_macos_external_app_launch() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_external_app_launch.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_external_app_launch.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_external_app_launch");
+}
+
 /// `macos/fandhe_macos_global_hotkey.m` を `cc` でコンパイルする（Issue #766）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_global_hotkey.rs` が使う）。Carbon の `RegisterEventHotKey` を
 /// 使うため `Carbon.framework` をここでリンクする（許可・entitlement は不要）。
@@ -2394,6 +2408,8 @@ fn build_macos() {
     compile_macos_in_app_review();
     // `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_compose_mail_sms();
+    // `macos/fandhe_macos_external_app_launch.m`（Issue #861）も macOS 専用。AppKit は既存のリンクを使う。
+    compile_macos_external_app_launch();
     // `macos/fandhe_macos_global_hotkey.m`（Issue #766）も macOS 専用。Carbon をリンクする。
     compile_macos_global_hotkey();
     // `macos/fandhe_macos_open_in_shell.m`（Issue #749）も macOS 専用。AppKit は既存のリンクを使う。

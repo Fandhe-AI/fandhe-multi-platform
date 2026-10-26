@@ -165,6 +165,8 @@ pub mod device_info_show;
 pub mod document_scan_show;
 /// Phase 11 の拡充ループ型サンプル「気圧・照度・近接」（親 #123、Issue #609）。
 pub mod environment_sensors_show;
+/// Phase 11 の拡充ループ型サンプル「電話発信・地図など他アプリの起動」（親 #176、Issue #861）。
+pub mod external_app_launch_show;
 /// Phase 11 の拡充ループ型サンプル「フォルダの変更監視」（親 #1143、Issue #1410）。
 pub mod file_watch_show;
 /// Phase 11 の拡充ループ型サンプル「ライト（トーチ）」（親 #106、Issue #458）。
