@@ -4723,6 +4723,13 @@ public class MainActivity extends GameActivity {
         return LocalFontsHelper.list();
     }
 
+    // Rust 側（`device/android_display_refresh_hdr.rs`、Issue #872）から JNI 経由で egui
+    // スレッドが押下ごとに呼ぶ同期メソッド（シグネチャ `()[F`）。詰め方は
+    // `DisplayRefreshHdrHelper` 冒頭を参照。失敗は null。
+    private float[] displayRefreshHdrRead() {
+        return DisplayRefreshHdrHelper.read(this);
+    }
+
     // Rust 側（`device/android_multi_display.rs`、Issue #1343）から JNI 経由で egui スレッドが
     // 1 秒ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
     // `MultiDisplayHelper` 冒頭を参照。失敗は null。

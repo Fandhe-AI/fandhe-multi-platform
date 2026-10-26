@@ -22,7 +22,7 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_display_refresh_hdr.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_display_refresh_hdr.m + crates/fandhe-egui-proxy/src/device/display_refresh_hdr.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #871"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "今の Hz は `Display.getRefreshRate()`、最大 Hz は `Display.getSupportedModes()`（API 23+）の `Mode.getRefreshRate()` の最大、HDR は `Display.isHdr()`（API 26+）・API 24・25 は `Display.getHdrCapabilities().getSupportedHdrTypes()` が空でないか、広色域は `Configuration.isScreenWideColorGamut()`（API 26+）",
       "perm": "不要",
       "url": [
@@ -30,7 +30,10 @@
         "https://developer.android.com/reference/android/view/Display.HdrCapabilities",
         "https://developer.android.com/reference/android/content/res/Configuration"
       ],
-      "note": "未実装。minSdk 24 のため API 24・25 の広色域は「この OS（版）では取れない」。`getHdrCapabilities()` は API 34 で非推奨だが動く。窓の画面は `getWindowManager().getDefaultDisplay()`（`Activity.getDisplay()` は API 30+ のため使わない）。"
+      "note": "実装済み（#872）。minSdk 24 のため API 24・25 の広色域は「この OS（版）では取れない」。`getHdrCapabilities()` は API 34 で非推奨だが動く。窓の画面は `getWindowManager().getDefaultDisplay()`（`Activity.getDisplay()` は API 30+ のため使わない）。",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#868）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/DisplayRefreshHdrHelper.java + crates/fandhe-egui-proxy/src/device/android_display_refresh_hdr.rs + crates/fandhe-egui-proxy/src/device/display_refresh_hdr.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #872"
     },
     "macos": {
       "status": "done",
