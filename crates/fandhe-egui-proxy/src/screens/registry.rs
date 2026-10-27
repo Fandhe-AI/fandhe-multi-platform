@@ -234,6 +234,10 @@ generated_screens! {
     crate::device::haptics::haptics_tap_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "system_sound_beep" => fandhe_core::screens::system_sound_beep::current_screen,
+    crate::device::system_sound::system_sound_beep_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pedometer_read" => fandhe_core::screens::pedometer_read::current_screen,
     crate::device::pedometer::pedometer_read_effect,
     effect

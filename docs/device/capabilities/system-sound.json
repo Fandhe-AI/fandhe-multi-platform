@@ -21,18 +21,24 @@
       "note": "未実装。同時に鳴るのは 1 音で、再生中に呼ぶと前の音は止まって置き換わる。ストリーム音量・消音モードとの関係は公式に記載なし（実機で確認）。使い終わったら `release()`。"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "`NSBeep()`（Swift は `NSSound.beep()`）。`NSSound(named:)` は今回の範囲外",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nssound/beep()",
-      "note": "未実装。音は利用者がシステム設定のサウンドで選ぶ。戻り値は無く、鳴ったかは検知できない（成功は「要求を渡した」まで）。"
+      "note": "実装済み（#939）。音は利用者がシステム設定のサウンドで選ぶ。戻り値は無く、鳴ったかは検知できない（成功は「要求を渡した」まで）。 `Requested` は OS に渡したまで。main スレッド以外から呼ぶと失敗。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#935）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_system_sound.m + crates/fandhe-egui-proxy/src/device/macos_system_sound.rs + crates/fandhe-egui-proxy/src/device/system_sound.rs + crates/fandhe-core/src/screens/system_sound_beep.rs + crates/fandhe-device/src/system_sound.rs、Issue #939"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "`PlaySoundW(\"SystemDefault\", NULL, SND_ALIAS | SND_ASYNC | SND_NODEFAULT | SND_SYSTEM)`（戻りは TRUE / FALSE）。`MessageBeep` は鳴らせないと既定音・`Beep` へ倒れ、鳴らなかったことが成功に紛れるため採らない",
       "perm": "不要",
       "url": "https://learn.microsoft.com/en-us/previous-versions/dd743680(v=vs.85)",
-      "note": "未実装。`SND_NODEFAULT` で音が無いとき既定音へ倒さず黙って戻る。`SND_SYSTEM` でシステム通知音の音量に従う。"
+      "note": "実装済み（#939）。`SND_NODEFAULT` で音が無いとき既定音へ倒さず黙って戻る。`SND_SYSTEM` でシステム通知音の音量に従う。 `TRUE` は OS に渡した、`FALSE` は OS は鳴らさなかった（成功にも失敗の色にもしない）。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#935）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_system_sound.rs + crates/fandhe-egui-proxy/src/device/system_sound.rs + crates/fandhe-core/src/screens/system_sound_beep.rs + crates/fandhe-device/src/system_sound.rs、Issue #939"
     },
     "web": {
       "status": "no",

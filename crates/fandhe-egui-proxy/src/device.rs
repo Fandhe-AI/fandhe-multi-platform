@@ -360,6 +360,11 @@ pub mod android_spotlight_index;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_system_accent_color;
+/// Issue #939: Android 向けシステムの効果音の骨格（`Unsupported` を返すスタブ。#940 が実体に置き換える）。
+/// `device/system_sound.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_system_sound;
 /// Issue #537（親 #115）: Android 向け端末内翻訳実装（`android.view.translation`）。
 /// `device/translation.rs` の Android 経路から呼ばれる。JNI の本体はモジュール内側の
 /// `cfg(target_os = "android")` に閉じ、純関数をホストでテストできるよう cfg は `any(android, test)`。
@@ -1311,6 +1316,11 @@ pub mod macos_spell_check;
 /// 呼ぶ C ABI ラッパー）。`device/system_accent_color.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_system_accent_color;
+/// Issue #939: macOS 向けシステムの効果音実装（`macos/fandhe_macos_system_sound.m` を呼ぶ C ABI ラッパー）。
+/// `device/system_sound.rs` の macOS 経路から呼ばれる。結果コードの写像をホストでテストするため test でもコンパイルする。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_system_sound;
 /// Issue #505: macOS 向け USB 機器一覧実装（`macos/fandhe_macos_usb_device.m` の IOKit 列挙を呼ぶ
 /// C ABI ラッパー）。`device/usb_device.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
 /// テストできるよう cfg は `any(macos, test)`。
@@ -1518,6 +1528,9 @@ pub mod spotlight_index;
 /// Phase 11 の拡充ループ（親 #103、Issue #421）: システムのアクセント色の effect ドライバ
 /// （macOS / Windows 実装、Android は JNI 実装、他 OS は `UnsupportedAccentColor` 固定）。
 pub mod system_accent_color;
+/// Phase 11 の拡充ループ（親 #183、Issue #939）: システムの効果音の effect ドライバ
+/// （macOS / Windows 実装、Android は骨格のスタブで #940 が埋める、iOS・他 OS は `UnsupportedSystemSound` 固定）。
+pub mod system_sound;
 /// Phase 11 の拡充ループ（親 #1038、Issue #1039）: システムトレイの effect
 /// ドライバ（macOS/Windows 実装、他 OS は `UnsupportedSystemTray` 固定）。
 pub mod system_tray;
@@ -1874,6 +1887,10 @@ pub mod windows_spell_check;
 /// `device/system_accent_color.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_system_accent_color;
+/// Issue #939: Windows 向けシステムの効果音実装（`PlaySoundW` の `SystemDefault` 別名）。
+/// `device/system_sound.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_system_sound;
 /// Issue #1039: Windows 向けシステムトレイ実装（`Shell_NotifyIconW` + 隠しウィンドウ
 /// + `TrackPopupMenu` ラッパー）。`device/system_tray.rs::platform_tray` の Windows
 /// 経路から呼ばれる。
