@@ -74,6 +74,9 @@ use fandhe_core::screens::contact_pick::{
 use fandhe_core::screens::device_info_show::{
     current_screen as current_device_info_screen, DeviceInfoShowState,
 };
+use fandhe_core::screens::digital_credentials::{
+    current_screen as current_digital_credentials_screen, DigitalCredentialsState,
+};
 use fandhe_core::screens::display_refresh_hdr_show::{
     current_screen as current_display_refresh_hdr_show_screen, DisplayRefreshHdrShowState,
 };
@@ -1326,6 +1329,24 @@ pub fn mount_translation_screen(root_id: &str) -> Result<(), JsValue> {
         current_translation_screen(&initial_state),
         initial_state,
         super::translation::translation_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「デジタル身分証の提示要求」（親 #186、Issue #959）をマウントする
+/// 検証専用エントリポイント。`super::digital_credentials::digital_credentials_effect` が
+/// Digital Credentials API を呼ぶ。起動時には要求を出さず、ボタンを押したときに出す。
+/// mount は画面を 1 回しか組まないため処理中もボタンは出たままだが、`request` は Idle 以外で no-op、
+/// 二重発送は effect 側の世代記録が防ぐので挙動は変わらない。
+#[wasm_bindgen]
+pub fn mount_digital_credentials_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = DigitalCredentialsState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_digital_credentials_screen(&initial_state),
+        initial_state,
+        super::digital_credentials::digital_credentials_effect,
     )
 }
 
