@@ -243,6 +243,9 @@
 //! - `macos/fandhe_macos_app_badge.m`（Issue #1360、`NSDockTile.badgeLabel` によるバッジ設定）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/macos_app_badge.rs`
 //!   から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_system_sound.m`（Issue #939、`NSBeep` による警告音 1 回）は **macOS 分岐のみ**で
+//!   feature `device` 有効時にコンパイルする（`src/device/macos_system_sound.rs` から呼ばれる契約）。
+//!   AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_app_progress_attention.m`（Issue #860、`NSDockTile.contentView` による進捗バーと
 //!   `requestUserAttention` による注意喚起）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_app_progress_attention.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -1670,6 +1673,16 @@ fn compile_macos_app_badge() {
         .compile("fandhe_macos_app_badge");
 }
 
+/// `macos/fandhe_macos_system_sound.m` を `cc` でコンパイルする（Issue #939）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_system_sound.rs` が使う）。AppKit は既存のリンクで足りる。
+fn compile_macos_system_sound() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_system_sound.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_system_sound.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_system_sound");
+}
+
 /// `macos/fandhe_macos_launch_at_login.m` を `cc` でコンパイルする（Issue #696）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_launch_at_login.rs` が使う）。ServiceManagement をリンクする
 /// （システムフレームワークで旧 OS にも存在するため強リンクでよい。API は `@available` で守る）。
@@ -2662,6 +2675,8 @@ fn build_macos() {
     compile_macos_window_management();
     // `macos/fandhe_macos_app_badge.m`（Issue #1360）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_app_badge();
+    // `macos/fandhe_macos_system_sound.m`（Issue #939）も macOS 専用。AppKit は既存のリンクを使う。
+    compile_macos_system_sound();
     // `macos/fandhe_macos_app_progress_attention.m`（Issue #860）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_app_progress_attention();
     // `macos/fandhe_macos_launch_at_login.m`（Issue #696）も macOS 専用。ServiceManagement をリンクする。
