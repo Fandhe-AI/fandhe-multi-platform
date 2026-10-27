@@ -47,6 +47,7 @@ pub mod storage_note;
 
 /// Phase 8 型サンプル「HTTP 取得」（Issue #748）。
 pub mod http_fetch;
+/// Phase 11 型サンプル「人の在席・離席の検知」（Issue #960）。
 pub mod human_presence_read;
 
 /// Phase 10 型サンプル「傾きで玉が転がる」（Issue #830）。
