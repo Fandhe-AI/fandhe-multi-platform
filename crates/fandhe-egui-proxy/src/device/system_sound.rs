@@ -16,7 +16,7 @@
 //! # 対応 OS
 //!
 //! macOS: [`super::macos_system_sound`]、Windows: [`super::windows_system_sound`]、
-//! Android: 骨格のスタブ [`super::android_system_sound`]（#940 が実体にする）。
+//! Android: `ToneGenerator`（JNI）[`super::android_system_sound`]（#940）。
 //! iOS（OS 標準の音を鳴らせない）・Linux は `UnsupportedSystemSound`。
 
 use std::sync::Arc;
