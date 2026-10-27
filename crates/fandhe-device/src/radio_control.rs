@@ -45,7 +45,7 @@
 //! - macOS（#972）: Wi-Fi は `CWWiFiClient.interface` の `powerOn` と `setPower:error:`。Bluetooth は
 //!   `IOBluetoothHostController.powerState` の読み取りのみで、`set` は `Unsupported`
 //!   （切り替えの公開 API なし）
-//! - Windows（#973 への約束）: `Radio::GetRadiosAsync` を Kind で絞った先頭 1 つを使い、無ければ
+//! - Windows（#973）: `Radio::GetRadiosAsync` を Kind で絞った先頭 1 つを使い、無ければ
 //!   [`RadioState::NotPresent`]。`RequestAccessAsync` の後に `SetStateAsync`。`Allowed` は
 //!   [`SwitchOutcome::Accepted`]、`DeniedByUser` は `PermissionDenied`、`DeniedBySystem` と
 //!   `Unspecified` は [`DENIED_BY_SYSTEM`]
