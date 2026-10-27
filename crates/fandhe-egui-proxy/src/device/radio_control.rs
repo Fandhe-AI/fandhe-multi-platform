@@ -140,8 +140,24 @@ fn drive(
     if spawned.is_err() {
         // スレッドを起こせなくても要求を残さない（ボタンが戻らなくなるため）。
         let _ = sender.send(Box::new(move |s: &mut RadioControlShowState| {
-            finish_read(s, generation, kind, Err(Failure::Failed));
+            finish_spawn_failed(s, generation, kind, action);
         }));
+    }
+}
+
+/// スレッド生成に失敗した要求を、種類に合う失敗文言（読み取り / 切り替え）で確定する。
+/// OS を呼べていないため、切り替えの読み直しも失敗として渡す。
+fn finish_spawn_failed(s: &mut RadioControlShowState, generation: u64, kind: Kind, action: Action) {
+    match action {
+        Action::Read => finish_read(s, generation, kind, Err(Failure::Failed)),
+        Action::Set(on) => finish_switch(
+            s,
+            generation,
+            kind,
+            on,
+            Err(Failure::Failed),
+            Err(Failure::Failed),
+        ),
     }
 }
 
@@ -260,6 +276,21 @@ mod tests {
             .status
             .ends_with(&format!("{STATE_PREFIX}{STATE_OFF}")));
         assert_eq!(state.wifi.error, "");
+    }
+
+    #[test]
+    fn spawn_failure_uses_action_specific_error() {
+        let mut state = RadioControlShowState::default();
+        wifi_on(&mut state);
+        let r = take_request(&state).expect("要求あり");
+        finish_spawn_failed(&mut state, r.generation, r.kind, r.action);
+        assert_eq!(state.wifi.error, FAILED_SWITCH);
+
+        let mut state = RadioControlShowState::default();
+        wifi_read(&mut state);
+        let r = take_request(&state).expect("要求あり");
+        finish_spawn_failed(&mut state, r.generation, r.kind, r.action);
+        assert_eq!(state.wifi.error, FAILED_READ);
     }
 
     #[test]
