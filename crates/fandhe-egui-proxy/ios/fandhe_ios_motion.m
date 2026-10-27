@@ -94,37 +94,135 @@ static void FandheRotateGravityToInterfaceOrientation(float gx, float gy,
 
 // プロセス内で 1 個だけ生成する `CMMotionManager`（`dispatch_once` で初期化、
 // `fandhe_ios_camera.m` の `g_capture_in_flight` と同じくプロセス単位の単純化）。
+// Apple の「manager はアプリで 1 つ」に従い、`fandhe_ios_motion_raw_sensors.m`
+// （ジャイロ・磁気・線形加速度の生値、Issue #900）とも共有する。常に保持する。
 static CMMotionManager *_Nullable g_motion_manager = nil;
 // device motion 自体が非対応（シミュレータ等）だった場合に `true` を保持し、
-// 以後の呼び出しでは `CMMotionManager` へ触れず毎回 1 を返す。
+// 以後の呼び出しでは device motion を開始せず毎回 1 を返す。
 static BOOL g_motion_unavailable = NO;
+// tilt が一度でも device motion を読んだら立てる（tilt は停止しないため戻さない）。
+// 立っている間は生値側の線形加速度が止めても device motion を維持する。
+static _Atomic BOOL g_tilt_uses_device_motion = NO;
 
-static void FandheEnsureMotionManagerStarted(void) {
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-      CMMotionManager *manager = [[CMMotionManager alloc] init];
-      if (!manager.isDeviceMotionAvailable) {
-          g_motion_unavailable = YES;
-          return;
-      }
-      manager.deviceMotionUpdateInterval = 1.0 / 60.0;
-      // ハンドラ無しの pull 方式（`fandhe_ios_motion_read` が毎フレーム
-      // `manager.deviceMotion` を読む、モジュール冒頭コメント参照）。既定の
-      // reference frame で十分なため（gravity 成分のみ使う）、参照系を
-      // 明示指定する `startDeviceMotionUpdatesUsingReferenceFrame:` は使わない。
-      [manager startDeviceMotionUpdates];
-      g_motion_manager = manager;
+// deviceMotion の handler が受け取った非同期エラー（0 = なし、2 = 権限拒否、3 = 失敗）。
+// 次のサンプルが正常に届けば 0 へ戻す。線形加速度の read が失敗として返すために読む（Issue #900）。
+// g_device_motion_gen / g_latest_motion と同じ `FandheLatestMotionLock` で保護する。
+static int32_t g_device_motion_failure = 0;
+// device motion セッションの世代。start / stop ごとに進め、handler は自分が開始した世代が
+// 現行のときだけ failure を書く（停止後・再開後に遅れて届いたエラーで古い失敗を残さない）。
+static uint64_t g_device_motion_gen = 0;
+// handler 方式では pull 用の `manager.deviceMotion` に頼れないため、handler が受け取った最新
+// サンプルをここへ保持する（@synchronized で保護）。tilt と線形加速度の read が共通で読む。
+static CMDeviceMotion *g_latest_motion = nil;
+static NSObject *g_latest_motion_lock = nil;
+
+static NSObject *FandheLatestMotionLock(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      g_latest_motion_lock = [[NSObject alloc] init];
     });
+    return g_latest_motion_lock;
 }
 
-int32_t fandhe_ios_motion_read(float *out_x, float *out_y) {
-    FandheEnsureMotionManagerStarted();
+CMDeviceMotion *_Nullable fandhe_ios_device_motion_latest(void) {
+    @synchronized(FandheLatestMotionLock()) {
+        return g_latest_motion;
+    }
+}
 
+// 共有 manager を返す（`fandhe_ios_motion_raw_sensors.m` が extern 宣言して使う）。
+CMMotionManager *fandhe_ios_shared_motion_manager(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      g_motion_manager = [[CMMotionManager alloc] init];
+      g_motion_unavailable = !g_motion_manager.isDeviceMotionAvailable;
+    });
+    return g_motion_manager;
+}
+
+// device motion を未起動のときだけ開始する。0 = 起動済み、1 = 非対応。
+// tilt は止めない。線形加速度だけの利用は `fandhe_ios_device_motion_release_if_unused` で止める。
+int32_t fandhe_ios_device_motion_ensure_started(void) {
+    CMMotionManager *manager = fandhe_ios_shared_motion_manager();
     if (g_motion_unavailable) {
         return 1;
     }
+    if (!manager.isDeviceMotionActive) {
+        manager.deviceMotionUpdateInterval = 1.0 / 60.0;
+        // handler が最新サンプルを保持し、`fandhe_ios_motion_read` が毎フレーム
+        // それを読む（モジュール冒頭コメント参照）。既定の
+        // reference frame で十分なため（gravity 成分のみ使う）、参照系を
+        // 明示指定する `startDeviceMotionUpdatesUsingReferenceFrame:` は使わない。
+        static NSOperationQueue *queue = nil;
+        static dispatch_once_t queueOnce;
+        dispatch_once(&queueOnce, ^{
+          queue = [[NSOperationQueue alloc] init];
+          queue.maxConcurrentOperationCount = 1;
+        });
+        uint64_t gen;
+        @synchronized(FandheLatestMotionLock()) {
+            g_device_motion_failure = 0;
+            g_latest_motion = nil;
+            gen = ++g_device_motion_gen;
+        }
+        [manager startDeviceMotionUpdatesToQueue:queue
+                                     withHandler:^(CMDeviceMotion *motion, NSError *error) {
+                                       // 世代照合と結果保存を同じ排他区間で行う（stop / start との間に
+                                       // 割り込まれて古い世代が新しい失敗を上書きしない）。
+                                       @synchronized(FandheLatestMotionLock()) {
+                                           if (gen != g_device_motion_gen) {
+                                               return;
+                                           }
+                                           if (error == nil) {
+                                               g_latest_motion = motion;
+                                               g_device_motion_failure = 0;
+                                           } else if ([error.domain isEqualToString:CMErrorDomain] &&
+                                                      (error.code == CMErrorNotAuthorized ||
+                                                       error.code == CMErrorMotionActivityNotAuthorized)) {
+                                               g_device_motion_failure = 2;
+                                           } else {
+                                               g_device_motion_failure = 3;
+                                           }
+                                       }
+                                     }];
+    }
+    return 0;
+}
 
-    CMDeviceMotion *motion = g_motion_manager.deviceMotion;
+// deviceMotion の直近の非同期エラー（0 = なし、2 = 権限拒否、3 = 失敗）。どのスレッドからでも可。
+int32_t fandhe_ios_device_motion_failure(void) {
+    @synchronized(FandheLatestMotionLock()) {
+        return g_device_motion_failure;
+    }
+}
+
+// 消費者（線形加速度）の開始時に、それ以前に残った失敗を捨てる。tilt が device motion を
+// 維持している間も古い失敗が新しい利用へ持ち越されないようにする。どのスレッドからでも可。
+void fandhe_ios_device_motion_clear_failure(void) {
+    @synchronized(FandheLatestMotionLock()) {
+        g_device_motion_failure = 0;
+    }
+}
+
+// 線形加速度だけが device motion を使っていた場合に停止する（tilt 利用中は維持）。どのスレッドからでも可。
+void fandhe_ios_device_motion_release_if_unused(void) {
+    if (!g_tilt_uses_device_motion) {
+        @synchronized(FandheLatestMotionLock()) {
+            g_device_motion_gen++;
+            g_device_motion_failure = 0;
+            g_latest_motion = nil;
+        }
+        [fandhe_ios_shared_motion_manager() stopDeviceMotionUpdates];
+    }
+}
+
+int32_t fandhe_ios_motion_read(float *out_x, float *out_y) {
+    g_tilt_uses_device_motion = YES;
+    if (fandhe_ios_device_motion_ensure_started() != 0) {
+        return 1;
+    }
+
+    CMDeviceMotion *motion = fandhe_ios_device_motion_latest();
     if (motion == nil) {
         // 起動直後、最初のサンプルがまだ届いていない区間（契約: (0.0, 0.0) を
         // 書いて成功として扱う）。

@@ -982,8 +982,8 @@ pub mod ios_memory_pressure;
 /// `device/ml_inference.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_ml_inference;
-/// Issue #898: iOS 向けジャイロ・磁気・線形加速度の生値実装（骨格。実体は #900）。
-/// `device/motion_raw_sensors.rs` の iOS 経路から呼ばれる。
+/// Issue #900: iOS 向けジャイロ・磁気・線形加速度の生値実装（`ios/fandhe_ios_motion_raw_sensors.m`、
+/// CoreMotion の `CMMotionManager`）。`device/motion_raw_sensors.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_motion_raw_sensors;
