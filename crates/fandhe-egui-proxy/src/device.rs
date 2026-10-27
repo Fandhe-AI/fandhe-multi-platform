@@ -392,6 +392,11 @@ pub mod android_video_capture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_volume_control;
+/// Issue #970: Android 向け壁紙設定の骨格（`Unsupported` を返すスタブ。#971 が実体に置き換える）。
+/// `device/wallpaper.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_wallpaper;
 /// Issue #534: Android 向け Web 認証セッション実装（Custom Tabs、Java 側 `WebAuthSessionHelper`）。
 /// `device/web_auth_session.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でもコンパイルする。
 #[cfg(any(target_os = "android", test))]
@@ -1356,6 +1361,11 @@ pub mod macos_user_idle;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_volume_control;
+/// Issue #970: macOS 向け壁紙設定実装（`macos/fandhe_macos_wallpaper.m` を呼ぶ C ABI ラッパー）。
+/// `device/wallpaper.rs` の macOS 経路から呼ばれる。結果コードの写像をホストでテストするため test でもコンパイルする。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_wallpaper;
 /// Issue #530: macOS 向け Web 認証セッション実装（`macos/fandhe_macos_web_auth_session.m` の
 /// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の macOS 経路から呼ばれる。
 /// 写像の純関数をホストでテストできるよう cfg は `any(macos, test)`。
@@ -1585,6 +1595,9 @@ pub mod video_capture;
 /// Phase 11 の拡充ループ（親 #166、Issue #785）: システム音量の effect ドライバ
 /// （macOS・Windows 実装、iOS は #786・Android は #787 が埋めるスタブ、他 OS は `UnsupportedVolumeControl` 固定）。
 pub mod volume_control;
+/// Phase 11 の拡充ループ（親 #188、Issue #970）: 壁紙・ロック画面の設定の effect ドライバ
+/// （macOS・Windows 実装、Android は #971 が埋めるスタブ、iOS・他 OS は `UnsupportedWallpaper` 固定）。
+pub mod wallpaper;
 /// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS・Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
 pub mod web_auth_session;
@@ -1942,6 +1955,10 @@ pub mod windows_user_idle;
 /// `device/volume_control.rs` の Windows 経路（ワーカー）から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_volume_control;
+/// Issue #970: Windows 向け壁紙設定実装（`SystemParametersInfoW(SPI_SETDESKWALLPAPER)`）。
+/// `device/wallpaper.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_wallpaper;
 /// Issue #530: Windows 向け Web 認証セッション実装。`device/web_auth_session.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
