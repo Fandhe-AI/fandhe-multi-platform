@@ -977,7 +977,7 @@ pub mod ios_local_fonts;
 /// `device/local_peer.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_local_peer;
-/// Issue #944: iOS 向け MDM 管理アプリ設定（b-ios #945 まではスタブ）。
+/// Issue #945: iOS 向け MDM 管理アプリ設定実装（`ios/fandhe_ios_managed_app_config.m` の `NSUserDefaults` を呼ぶ C ABI ラッパー）。
 /// `device/managed_app_config.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_managed_app_config;
@@ -1360,7 +1360,7 @@ pub mod macos_wifi_info;
 #[cfg(target_os = "macos")]
 pub mod macos_window_management;
 /// Phase 11 の拡充ループ（親 #185、Issue #944）: MDM 管理アプリ設定の effect ドライバ（macOS 実装、
-/// iOS・Android は b-ios・b-android まで `UnsupportedManagedAppConfig` を返すスタブ、他 OS は固定。Web は対象外）。
+/// iOS は #945 で実装済み、Android は b-android まで `UnsupportedManagedAppConfig` を返すスタブ、他 OS は固定。Web は対象外）。
 pub mod managed_app_config;
 /// Phase 11 の拡充ループ（親 #85、Issue #273）: 地図表示の effect ドライバ（macOS / iOS は
 /// pull 型 `bridge`、他 OS は `UnsupportedMapSnapshotter` 固定）。
