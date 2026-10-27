@@ -5,9 +5,8 @@
 //! 契約と守る範囲は `fandhe_device::recent_documents` のモジュール doc を参照。
 //!
 //! OS の呼び出しは同期で結果を返す軽い呼び出しなので UI スレッド（macOS は main thread）で同期に呼ぶ。
-//! **dispatch はここで最終形にしてあり、後続 issue（Windows は #989）は
-//! `windows_recent_documents.rs` だけを埋める**。macOS は `macos_recent_documents.rs`、
-//! それ以外は `UnsupportedRecentDocuments` で「非対応」を表示する。
+//! dispatch はここで最終形。Windows は `windows_recent_documents.rs`（#989）、
+//! macOS は `macos_recent_documents.rs`、それ以外は `UnsupportedRecentDocuments` で「非対応」を表示する。
 
 use std::path::Path;
 

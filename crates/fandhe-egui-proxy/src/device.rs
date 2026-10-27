@@ -1513,7 +1513,7 @@ pub mod quick_settings_tile;
 /// （macOS 実装、Windows は #973・Android は #974 が埋めるスタブ。他 OS は `UnsupportedRadioControl` 固定）。
 pub mod radio_control;
 /// Phase 11 の拡充ループ（親 #193、Issue #988）: 「最近使った項目」への登録と読み戻しの effect ドライバ
-/// （macOS 実装、Windows は #989 が埋めるスタブ。他 OS は `UnsupportedRecentDocuments` 固定）。
+/// （macOS・Windows 実装。他 OS は `UnsupportedRecentDocuments` 固定）。
 pub mod recent_documents;
 /// Phase 11 の拡充ループ（親 #175、Issue #858）: 外部ストレージの着脱の effect ドライバ
 /// （macOS・Windows 実装、Android は JNI 実装（#859）。他 OS は `UnsupportedRemovableStorage` 固定）。
@@ -1908,7 +1908,7 @@ pub mod windows_print;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_radio_control;
-/// Issue #988: Windows 向け「最近使った項目」の骨格（実装は #989）。
+/// Issue #989: Windows 向け「最近使った項目」の実装（骨格は #988）。
 /// `device/recent_documents.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
