@@ -1529,7 +1529,7 @@ pub mod spotlight_index;
 /// （macOS / Windows 実装、Android は JNI 実装、他 OS は `UnsupportedAccentColor` 固定）。
 pub mod system_accent_color;
 /// Phase 11 の拡充ループ（親 #183、Issue #939）: システムの効果音の effect ドライバ
-/// （macOS / Windows 実装、Android は骨格のスタブで #940 が埋める、iOS・他 OS は `UnsupportedSystemSound` 固定）。
+/// （macOS / Windows 実装、Android は `ToneGenerator`（#940）、iOS・他 OS は `UnsupportedSystemSound` 固定）。
 pub mod system_sound;
 /// Phase 11 の拡充ループ（親 #1038、Issue #1039）: システムトレイの effect
 /// ドライバ（macOS/Windows 実装、他 OS は `UnsupportedSystemTray` 固定）。

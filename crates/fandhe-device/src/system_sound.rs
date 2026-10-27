@@ -35,7 +35,7 @@
 //! 連打時の聞こえ方（Android は前の音を止めて置き換える、macOS / Windows は OS 任せ）、
 //! 音の種類と長さの OS 差、複数プロセス・複数窓、終了時に鳴っている音の後片付け（OS に任せる）。
 //!
-//! Android の予定: `startTone(TONE_PROP_BEEP)` の `true` は `Requested`、`false` は
+//! Android: `startTone(TONE_PROP_BEEP)` の `true` は `Requested`、`false` は
 //! `NotPlayed`、生成や呼び出しの例外は `Internal`。
 
 use crate::DeviceError;

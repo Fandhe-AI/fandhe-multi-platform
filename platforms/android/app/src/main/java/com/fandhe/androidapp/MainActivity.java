@@ -970,6 +970,14 @@ public class MainActivity extends GameActivity {
         return flashlightHelper.read();
     }
 
+    // システムの効果音（Issue #940）。実装は `SystemSoundHelper`。Rust の `android_system_sound.rs` が
+    // egui スレッドから同期で JNI 呼び出しする（0=要求した／1=鳴らさなかった／2=失敗）。
+    private final SystemSoundHelper systemSoundHelper = new SystemSoundHelper();
+
+    int systemSoundBeep() {
+        return systemSoundHelper.beep();
+    }
+
     // システム音量（Issue #787）。実装は `VolumeControlHelper`。Rust の `android_volume_control.rs` が
     // egui スレッドから同期で JNI 呼び出しする。
     private final VolumeControlHelper volumeControlHelper = new VolumeControlHelper(this);
@@ -5163,6 +5171,7 @@ public class MainActivity extends GameActivity {
         screenOrientationHelper.onDestroy();
         captureProtectionHelper.onDestroy();
         flashlightHelper.onDestroy();
+        systemSoundHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず
         // 直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。

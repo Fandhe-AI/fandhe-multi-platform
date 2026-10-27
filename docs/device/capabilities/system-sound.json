@@ -14,11 +14,14 @@
       "note": "公式に「System-supplied alert sounds and system-supplied user-interface sound effects are not available to your iOS application」とあり、OS 標準の音は鳴らせない。自前の音は音声再生の領域で、本機能の対象外。"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`ToneGenerator(STREAM_NOTIFICATION, MAX_VOLUME)` の `startTone(TONE_PROP_BEEP)`（戻りは boolean）。`RingtoneManager.getRingtone` + `play()`（戻り値なし）と `View.playSoundEffect`（タッチ音の設定に従い戻り値なし）は採らない",
       "perm": "不要",
       "url": "https://developer.android.com/reference/android/media/ToneGenerator",
-      "note": "未実装。同時に鳴るのは 1 音で、再生中に呼ぶと前の音は止まって置き換わる。ストリーム音量・消音モードとの関係は公式に記載なし（実機で確認）。使い終わったら `release()`。"
+      "note": "実装済み（#940）。`startTone` の `true` は OS に渡した、`false` は OS は鳴らさなかった（成功にも失敗の色にもしない）。生成に失敗した `ToneGenerator` は保持せず次回作り直し、`onDestroy` で `release()` する。同時に鳴るのは 1 音で、再生中に呼ぶと前の音は止まって置き換わる。ストリーム音量・消音モードとの関係は公式に記載なし（実機で確認）。",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#935）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_system_sound.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/SystemSoundHelper.java + crates/fandhe-egui-proxy/src/device/system_sound.rs + crates/fandhe-core/src/screens/system_sound_beep.rs + crates/fandhe-device/src/system_sound.rs、Issue #940"
     },
     "macos": {
       "status": "done",
