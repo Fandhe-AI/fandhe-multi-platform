@@ -984,7 +984,7 @@ pub mod ios_fullscreen_immersive;
 /// 戻り直後に再描画を起こす）。`device/geocoding_search.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_geocoding_search;
-/// Issue #975: iOS 向け画像生成のスタブ（`Unsupported` を返す。#976 が UIKit の実体へ置き換え）。
+/// Issue #976: iOS 向け画像生成（macOS と共用の `AppleImageGenerator` を返す）。
 /// `device/image_generation.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_image_generation;
