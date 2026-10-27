@@ -8,10 +8,17 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "Image Playground（`ImagePlayground` の `ImageCreator`、iOS 18.4+）",
-      "perm": "不要（要確認）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。Apple Intelligence 対応機種に限る。画像生成用の UI（`imagePlaygroundSheet`）もある"
+      "api": "Image Playground の生成画面（`ImagePlaygroundViewController`、iOS 18.4+ で使う）。結果は `didCreateImageAt` の一時ファイル。`ImageCreator` は iOS 27 で非推奨・`init()` が `notSupported` を投げるため使わない",
+      "perm": "宣言不要（生成画面は OS が出す。人物の取り込み（personalization）は無効にして写真ライブラリに触れない）",
+      "url": [
+        "https://developer.apple.com/documentation/imageplayground/imageplaygroundviewcontroller",
+        "https://developer.apple.com/documentation/imageplayground/imageplaygroundviewcontroller/isavailable",
+        "https://developer.apple.com/documentation/imageplayground/imageplaygroundviewcontroller/delegate-swift.protocol/imageplaygroundviewcontroller(_:didcreateimageat:)",
+        "https://developer.apple.com/documentation/imageplayground/imagecreator",
+        "https://developer.apple.com/documentation/imageplayground/imagecreator/init()",
+        "https://developer.apple.com/forums/thread/770386"
+      ],
+      "note": "未実装。Apple Intelligence 対応機種に限る。結果は `didCreateImageAt` の一時ファイルで、復号後に全経路で消す。可否は `isAvailable` と `#available` だけで決め、機種・Apple Intelligence の設定を自前判定しない。`imagePlaygroundSheet`（SwiftUI）は使わない（egui の窓に SwiftUI の階層が無いため VC を直接出す）。生成スタイルは `animation` / `illustration` / `sketch` に絞り外部提供者を選べなくする（端末内で生成されるかは公式頁で未確認）。範囲外: 画面なしの生成・複数枚・元画像の指定・人物の取り込み・genmoji。守らない範囲: 生成内容・OS の画面内での失敗理由・`isAvailable` と実際に生成できるかの食い違い。既知の天井: `didCreateImageAt` のファイル形式（HEIC か PNG か）は未確認"
     },
     "android": {
       "status": "no",
@@ -22,10 +29,17 @@
     },
     "macos": {
       "status": "possible",
-      "api": "Image Playground（`ImagePlayground` の `ImageCreator`）",
-      "perm": "不要（要確認）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。Apple Intelligence 対応の Mac に限る"
+      "api": "Image Playground の生成画面（`ImagePlaygroundViewController`、macOS 15.4+ で使う）。結果は `didCreateImageAt` の一時ファイル。`ImageCreator` は macOS 27 で非推奨・`init()` が `notSupported` を投げるため使わない",
+      "perm": "宣言不要（生成画面は OS が出す。人物の取り込み（personalization）は無効にして写真ライブラリに触れない）",
+      "url": [
+        "https://developer.apple.com/documentation/imageplayground/imageplaygroundviewcontroller",
+        "https://developer.apple.com/documentation/imageplayground/imageplaygroundviewcontroller/isavailable",
+        "https://developer.apple.com/documentation/imageplayground/imageplaygroundviewcontroller/delegate-swift.protocol/imageplaygroundviewcontroller(_:didcreateimageat:)",
+        "https://developer.apple.com/documentation/imageplayground/imagecreator",
+        "https://developer.apple.com/documentation/imageplayground/imagecreator/init()",
+        "https://support.apple.com/guide/mac-help/mchld5412d00"
+      ],
+      "note": "未実装。Apple Intelligence 対応の Mac に限る。結果は `didCreateImageAt` の一時ファイルで、復号後に全経路で消す。可否は `isAvailable` と `#available` だけで決め、機種・Apple Intelligence の設定を自前判定しない。`imagePlaygroundSheet`（SwiftUI）は使わない（egui の窓に SwiftUI の階層が無いため VC を直接出す）。生成スタイルは `animation` / `illustration` / `sketch` に絞り外部提供者を選べなくする（端末内で生成されるかは公式頁で未確認）。範囲外: 画面なしの生成・複数枚・元画像の指定・人物の取り込み・genmoji。守らない範囲: 生成内容・OS の画面内での失敗理由・`isAvailable` と実際に生成できるかの食い違い。既知の天井: パッケージ化していない実行体・winit の窓（`contentViewController` が無い）から VC を出せるかは未確認。出せないと判明したら `no` に下げて起案し直す"
     },
     "windows": {
       "status": "no",
@@ -42,5 +56,5 @@
       "note": "ブラウザ標準の画像生成 API はない"
     }
   },
-  "note": "on-device-llm は文章を生成する機能で、こちらは端末内モデルで画像を生成する別機能（対応機種が限られる）"
+  "note": "on-device-llm は文章を生成する機能で、こちらは端末内モデルで画像を生成する別機能（対応機種が限られる）。`ImageCreator`（画面なしの生成）は 27 で廃止方向のため、画面なしの生成は扱わない"
 }

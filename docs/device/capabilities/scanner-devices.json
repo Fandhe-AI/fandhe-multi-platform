@@ -8,31 +8,48 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "ImageCaptureCore `ICDeviceBrowser`（接続したカメラ機器からの取り込み）",
-      "perm": "不要（要確認）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。iOS で使える範囲（カメラのみでスキャナーは不可の見込み）は未確認"
+      "api": "ImageCaptureCore `ICDeviceBrowser`（iOS 13+）で USB 接続のカメラ機器を探し、`ICCameraDevice` の最新の画像 1 枚を取り込む。`ICScannerDevice` は macOS のみ",
+      "perm": "iOS 14 以降は `requestContentsAuthorization` の許可。`NSCameraUsageDescription` は既存キーの文言に用途を足す（取り込みだけで要るかは未確認）",
+      "url": [
+        "https://developer.apple.com/documentation/imagecapturecore/icdevicebrowser/requestcontentsauthorization(completion:)",
+        "https://developer.apple.com/documentation/imagecapturecore/icdevicebrowser/browseddevicetypemask",
+        "https://developer.apple.com/documentation/imagecapturecore/iccamerafile/requestdownload(options:completion:)"
+      ],
+      "note": "未実装。カメラ機器のみ（スキャナーは API なし）。守る: 失敗・0 件・拒否・ロックを成功に畳まない、セッション・一時ファイル・接続を全経路で閉じる。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）。範囲外: 機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク接続の機器。既知の天井: 取り込みだけで `NSCameraUsageDescription` が要るか（実機未確認）"
     },
     "android": {
       "status": "possible",
-      "api": "`android.mtp.MtpDevice`（USB のカメラ機器）。スキャナー向けの標準 API はない",
-      "perm": "USB 機器のアクセス許可（`UsbManager`）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。スキャナーは対象外の見込み"
+      "api": "`UsbManager.getDeviceList` から Still Image クラス（`UsbConstants.USB_CLASS_STILL_IMAGE`）の機器を選び、`requestPermission` → `openDevice` → `MtpDevice.open`（API 12）で最新の画像 1 枚を `getObject` で読む",
+      "perm": "機器ごとの USB 接続許可（`UsbManager.requestPermission` の実行時ダイアログ）。マニフェストの権限は無い",
+      "url": [
+        "https://developer.android.com/reference/android/mtp/MtpDevice",
+        "https://developer.android.com/develop/connectivity/usb/host"
+      ],
+      "note": "未実装。USB の PTP / MTP カメラ機器のみ（スキャナー向けの標準 API はない）。許可は broadcast の extras を信じず `hasPermission` を読み直す。許可ダイアログを閉じる操作は拒否と区別できないので `PermissionDenied`。守る: 失敗・0 件・拒否・ロックを成功に畳まない、セッション・一時ファイル・接続を全経路で閉じる。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）。範囲外: 機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク接続の機器。既知の天井: 機器のロックを判別できない、システムが機器を掴んでいるときの `open` の結果は実機未確認"
     },
     "macos": {
       "status": "possible",
-      "api": "ImageCaptureCore `ICDeviceBrowser` / `ICScannerDevice` / `ICCameraDevice`",
-      "perm": "不要（サンドボックス時は USB 等の entitlement、要確認）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。スキャナーとカメラの両方を扱える"
+      "api": "ImageCaptureCore `ICDeviceBrowser` / `ICCameraDevice`（今回はカメラ機器のみ。`ICScannerDevice` は範囲外）",
+      "perm": "不要（App Sandbox 無効・Hardened Runtime 無しの実行体）。Hardened Runtime を有効にするなら Photos Library entitlement、sandbox 化するなら macOS 14 以降 `com.apple.security.device.usb`",
+      "url": [
+        "https://developer.apple.com/documentation/imagecapturecore",
+        "https://developer.apple.com/documentation/imagecapturecore/icdevicebrowser",
+        "https://developer.apple.com/documentation/imagecapturecore/iccameradevice",
+        "https://developer.apple.com/documentation/imagecapturecore/icscannerdevice"
+      ],
+      "note": "未実装。カメラ機器のみ（macOS のスキャナーは範囲外）。守る: 失敗・0 件・拒否・ロックを成功に畳まない、セッション・一時ファイル・接続を全経路で閉じる。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）。範囲外: 機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク接続の機器。既知の天井: TCC の確認が出るか（実機未確認）"
     },
     "windows": {
       "status": "possible",
-      "api": "WinRT `Windows.Devices.Scanners.ImageScanner`。互換性が要るなら Win32 の WIA（`IWiaDevMgr2`）",
-      "perm": "不要（要確認）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.scanners.imagescanner",
-      "note": "未実装。URL 未確認（一般知識、要確認）。WinRT 側はフラットベッドスキャナー中心"
+      "api": "`DeviceInformation.FindAllAsync(ImageScanner.GetDeviceSelector())` → `ImageScanner.FromIdAsync` → `ScanPreviewToStreamAsync`（最低解像度で 1 枚）。WIA ドライバーのスキャナーのみ",
+      "perm": "宣言不要（パッケージ無しの exe。メモリのストリームへ取り込み、Pictures Library へ保存しない）",
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.scanners.imagescanner",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.scanners.imagescanner.scanpreviewtostreamasync",
+        "https://learn.microsoft.com/en-us/windows/apps/develop/devices-sensors/scan-from-your-app",
+        "https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/winrt-api-desktop-app-support"
+      ],
+      "note": "未実装。WIA ドライバーのスキャナーのみ（カメラ機器は範囲外）。守る: 失敗・0 件・拒否・ロックを成功に畳まない、セッション・一時ファイル・接続を全経路で閉じる。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）。範囲外: 機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク接続の機器。既知の天井: 正常系の機材が手元に無く実機未確認、WIA エラーの HRESULT。届かないと判明したら `done` を取り下げる"
     },
     "web": {
       "status": "no",
@@ -42,5 +59,5 @@
       "note": "接続したスキャナーを扱う標準 API はない（WebUSB は機器ごとの独自実装になる）"
     }
   },
-  "note": "document-scan はスマホのカメラで書類を撮る方式だが、こちらは USB やネットワークで接続したフラットベッドスキャナー・カメラ機器から画像を取り込む別機能"
+  "note": "document-scan はスマホのカメラで書類を撮る方式だが、こちらは USB やネットワークで接続したフラットベッドスキャナー・カメラ機器から画像を取り込む別機能。OS ごとに扱える機器が違う（Apple・Android はカメラ機器、Windows はスキャナー）。macOS のスキャナー・Windows のカメラ機器・ネットワーク接続の機器は範囲外"
 }
