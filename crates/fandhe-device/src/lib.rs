@@ -139,6 +139,8 @@ pub mod local_fonts;
 pub mod local_peer;
 /// Phase 11（端末機能の拡充ループ、親 #887、Issue #888）: 継続 push 型の位置情報取得。
 pub mod location;
+/// Phase 11（端末機能の拡充ループ、親 #185、Issue #944）: MDM が配った管理アプリ設定（固定 3 キー）の読み取り。
+pub mod managed_app_config;
 /// Phase 11（端末機能の拡充ループ、親 #85、Issue #273）: 地図の静止画 1 枚の取得。
 pub mod map_view;
 /// Phase 11（端末機能の拡充ループ、親 #99、Issue #386）: 外部機器への再生（AirPlay・Cast 等）。

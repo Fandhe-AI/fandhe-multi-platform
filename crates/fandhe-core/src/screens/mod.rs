@@ -207,6 +207,8 @@ pub mod launch_at_login_show;
 pub mod live_activity_show;
 /// Phase 11 の拡充ループ型サンプル「OS 搭載フォント」（親 #1145、Issue #1376）。
 pub mod local_fonts_show;
+/// Phase 11 の拡充ループ型サンプル「MDM の管理アプリ設定」（親 #185、Issue #944）。
+pub mod managed_app_config_show;
 /// Phase 11 の拡充ループ型サンプル「地図表示」（親 #85、Issue #273）。
 pub mod map_view_show;
 /// Phase 11 の拡充ループ型サンプル「動画・音声の変換」（親 #91、Issue #311）。

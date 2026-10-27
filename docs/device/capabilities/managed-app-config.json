@@ -27,14 +27,17 @@
       "note": "未実装。未管理端末では null。Bundle には管理者が設定したキーだけが入り、XML の `defaultValue` が入る保証は無い。"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "構成プロファイル `com.apple.ManagedClient.preferences` がアプリの domain へ強制したキーを `CFPreferencesCopyAppValue` + `CFPreferencesAppValueIsForced` で読む",
       "perm": "不要（MDM 側の配布が前提）",
       "url": [
         "https://developer.apple.com/documentation/devicemanagement/managedpreferences",
         "https://developer.apple.com/documentation/corefoundation/cfpreferencesappvalueisforced(_:_:)"
       ],
-      "note": "未実装。`com.apple.configuration.managed` の辞書ではなくキー単位で届くため、読むのは固定キーだけ。強制されていない値（`defaults write` の値）は管理設定として扱わない。"
+      "note": "実装済み（#944）。`com.apple.configuration.managed` の辞書ではなくキー単位で届くため、読むのは固定キーだけ。強制されていない値（`defaults write` の値）は管理設定として扱わない。main bundle の識別子が取れないときは「設定なし」にせず失敗にする。型違いは捨てずに見せ、文字列は文字数だけ返す。その他のキーは数えない。守らない範囲: プロファイルが重なったときの勝敗、読み取り後の変化の反映（再押下まで）、OS 呼び出しが戻らない場合の期限",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#937）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_managed_app_config.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_managed_app_config.m + crates/fandhe-egui-proxy/src/device/managed_app_config.rs + crates/fandhe-core/src/screens/managed_app_config_show.rs + crates/fandhe-device/src/managed_app_config.rs、Issue #944"
     },
     "windows": {
       "status": "no",

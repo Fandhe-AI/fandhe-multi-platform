@@ -208,6 +208,10 @@ pub mod android_local_fonts;
 /// `device/local_peer.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_local_peer;
+/// Issue #944: Android 向け MDM 管理アプリ設定（b-android #946 まではスタブ）。
+/// `device/managed_app_config.rs` の Android 経路から呼ばれる。
+#[cfg(target_os = "android")]
+pub mod android_managed_app_config;
 /// Issue #267: Android 向け音声再生実装。`device/media_playback.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -960,6 +964,10 @@ pub mod ios_local_fonts;
 /// `device/local_peer.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_local_peer;
+/// Issue #944: iOS 向け MDM 管理アプリ設定（b-ios #945 まではスタブ）。
+/// `device/managed_app_config.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_managed_app_config;
 /// Issue #387: iOS 向け外部機器への再生（macOS と共用の `apple_media_cast` へ委譲。`device/media_cast.rs` の iOS 経路から呼ばれる）。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -1208,6 +1216,10 @@ pub mod macos_launch_at_login;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_local_fonts;
+/// Issue #944: macOS 向け MDM 管理アプリ設定実装（`macos/fandhe_macos_managed_app_config.m` を呼ぶ
+/// C ABI ラッパー）。`device/managed_app_config.rs` の macOS 経路から呼ばれる。
+#[cfg(target_os = "macos")]
+pub mod macos_managed_app_config;
 /// Issue #911: macOS 向けメモリ逼迫の通知実装（`macos/fandhe_macos_memory_pressure.m`、libdispatch の
 /// memory pressure source を呼ぶ C ABI ラッパー）。`device/memory_pressure.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -1325,6 +1337,9 @@ pub mod macos_wifi_info;
 /// C ABI ラッパー）。`device/window_management.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_window_management;
+/// Phase 11 の拡充ループ（親 #185、Issue #944）: MDM 管理アプリ設定の effect ドライバ（macOS 実装、
+/// iOS・Android は b-ios・b-android まで `UnsupportedManagedAppConfig` を返すスタブ、他 OS は固定。Web は対象外）。
+pub mod managed_app_config;
 /// Phase 11 の拡充ループ（親 #85、Issue #273）: 地図表示の effect ドライバ（macOS / iOS は
 /// pull 型 `bridge`、他 OS は `UnsupportedMapSnapshotter` 固定）。
 pub mod map_view;
