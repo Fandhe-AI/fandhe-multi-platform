@@ -282,6 +282,10 @@
 //! - `macos/fandhe_macos_print.m`（Issue #325、`NSPrintPanel` + `NSPrintOperation` による印刷
 //!   ダイアログ）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_print.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_managed_app_config.m`（Issue #944、`CFPreferences` による MDM 管理アプリ設定の
+//!   読み取り。強制された値だけを数値と記号のワイヤ文字列にして返す）は **macOS 分岐のみ**で feature
+//!   `device` 有効時にコンパイルする（`src/device/macos_managed_app_config.rs` から呼ばれる契約）。
+//!   CoreFoundation をリンクする。
 //! - `macos/fandhe_macos_device_info.m`（Issue #1304、`NSProcessInfo` + `sysctl` + `NSURL` による
 //!   端末・OS 情報の同期読み取り）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_device_info.rs` から呼ばれる契約）。Foundation は既存のリンクで足りる。
@@ -1410,6 +1414,17 @@ fn compile_macos_app_shortcuts() {
         .file("macos/fandhe_macos_app_shortcuts.m")
         .flag("-fobjc-arc")
         .compile("fandhe_macos_app_shortcuts");
+}
+
+/// `macos/fandhe_macos_managed_app_config.m` を `cc` でコンパイルし CoreFoundation をリンクする
+/// （Issue #944）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_managed_app_config.rs` が使う）。
+fn compile_macos_managed_app_config() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_managed_app_config.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_managed_app_config.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_managed_app_config");
+    println!("cargo:rustc-link-lib=framework=CoreFoundation");
 }
 
 /// `macos/fandhe_macos_screen_wake_lock.m` を `cc` でコンパイルし IOKit をリンクする
@@ -2692,6 +2707,8 @@ fn build_macos() {
     compile_macos_pen_stylus();
     // `macos/fandhe_macos_screen_wake_lock.m`（Issue #1278）も macOS 専用。IOKit を使う。
     compile_macos_screen_wake_lock();
+    // `macos/fandhe_macos_managed_app_config.m`（Issue #944）も macOS 専用。CoreFoundation を使う。
+    compile_macos_managed_app_config();
     // `apple/fandhe_apple_screen_capture.m`（Issue #1335）の macOS 側（ScreenCaptureKit）。
     compile_apple_screen_capture(false);
 

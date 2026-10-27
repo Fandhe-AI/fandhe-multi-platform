@@ -142,6 +142,10 @@ generated_screens! {
     crate::device::print::print_page_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "managed_app_config_show" => fandhe_core::screens::managed_app_config_show::current_screen,
+    crate::device::managed_app_config::managed_app_config_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "map_view_show" => fandhe_core::screens::map_view_show::current_screen,
     crate::device::map_view::map_view_show_effect,
     effect
