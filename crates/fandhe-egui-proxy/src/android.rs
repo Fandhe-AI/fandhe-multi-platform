@@ -300,6 +300,9 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // 旧要求の遅延完了を id 不一致で無視させる（`device::photo_save::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::photo_save::reset_pending_tracking();
+    // Issue #970: `wallpaper::bridge::SLOT` も同様に破棄する（#971 が触らずに済むよう本 PR で置く）。
+    #[cfg(feature = "device")]
+    crate::device::wallpaper::reset_pending_tracking();
     // Issue #1360: `app_badge::bridge::SLOT` も同様に破棄する（`device::app_badge::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::app_badge::reset_pending_tracking();

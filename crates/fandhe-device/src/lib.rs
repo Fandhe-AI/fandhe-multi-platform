@@ -262,6 +262,8 @@ pub mod uwb_ranging;
 pub mod video_capture;
 /// Phase 11（端末機能の拡充ループ、親 #166、Issue #785）: システム音量・消音状態の取得と変更。
 pub mod volume_control;
+/// Phase 11（端末機能の拡充ループ、親 #188、Issue #970）: 壁紙・ロック画面の設定（アプリが作った PNG 1 枚）。
+pub mod wallpaper;
 /// Phase 11（端末機能の拡充ループ、親 #113、Issue #530）: OAuth 用の Web 認証セッション（デモ認可ページ + コールバック検査）。
 pub mod web_auth_session;
 /// Phase 11 の拡充ループ（親 #165、Issue #791）: 指定した Wi-Fi への接続（SSID とパスワードを指定して 1 回要求）。
