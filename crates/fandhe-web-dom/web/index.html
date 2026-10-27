@@ -108,6 +108,7 @@
         mount_media_transcode_screen,
         mount_print_page_screen,
         mount_passkey_signin_screen,
+        mount_digital_credentials_screen,
         mount_payment_request_screen,
         mount_on_device_llm_screen,
         mount_translation_screen,
@@ -124,6 +125,8 @@
         mount_translation_screen("fandhe-dom-root");
       } else if (screen === "on_device_llm") {
         mount_on_device_llm_screen("fandhe-dom-root");
+      } else if (screen === "digital_credentials") {
+        mount_digital_credentials_screen("fandhe-dom-root");
       } else if (screen === "passkey_signin") {
         mount_passkey_signin_screen("fandhe-dom-root");
       } else if (screen === "payment_request") {
