@@ -305,6 +305,11 @@ pub mod android_print;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_quick_settings_tile;
+/// Issue #972: Android 向け「無線の状態と切り替え」実装のスタブ（実装は #974）。
+/// `device/radio_control.rs` の Android 経路から呼ばれる。#974 が cfg を変えずに済むよう `any(android, test)`。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_radio_control;
 /// Issue #859: Android 向け外部ストレージの着脱の実装（`RemovableStorageHelper` 経由の JNI。骨格は #858）。
 /// `device/removable_storage.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
@@ -1288,6 +1293,12 @@ pub mod macos_power_state;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_print;
+/// Issue #972: macOS 向け「無線の状態と切り替え」実装（`macos/fandhe_macos_radio_control.m` の CoreWLAN と
+/// IOBluetooth を呼ぶ C ABI ラッパー）。`device/radio_control.rs` の macOS 経路から呼ばれる。写像の純関数を
+/// ホストでテストするため test でも載せる。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_radio_control;
 /// Issue #858: macOS 向け外部ストレージの着脱の実装（`macos/fandhe_macos_removable_storage.m`、NSWorkspace の
 /// 通知と `mountedVolumeURLs` を呼ぶ C ABI ラッパー）。`device/removable_storage.rs` の macOS 経路から呼ばれる。
 /// 生値の写像をホストでテストできるよう cfg は `any(macos, test)`。
@@ -1480,6 +1491,9 @@ pub mod print;
 /// Phase 11 の拡充ループ（親 #139、Issue #719）: クイック設定タイル・コントロールの effect ドライバ
 /// （macOS は App Group の回数ファイル、Android は SharedPreferences の回数、他 OS は `UnsupportedQuickSettingsTile` 固定）。
 pub mod quick_settings_tile;
+/// Phase 11 の拡充ループ（親 #189、Issue #972）: 無線（Wi-Fi・Bluetooth）の状態取得と切り替えの effect ドライバ
+/// （macOS 実装、Windows は #973・Android は #974 が埋めるスタブ。他 OS は `UnsupportedRadioControl` 固定）。
+pub mod radio_control;
 /// Phase 11 の拡充ループ（親 #175、Issue #858）: 外部ストレージの着脱の effect ドライバ
 /// （macOS・Windows 実装、Android は JNI 実装（#859）。他 OS は `UnsupportedRemovableStorage` 固定）。
 pub mod removable_storage;
@@ -1868,6 +1882,11 @@ pub mod windows_power_state;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_print;
+/// Issue #972: Windows 向け「無線の状態と切り替え」実装のスタブ（実装は #973）。
+/// `device/radio_control.rs` の Windows 経路から呼ばれる。#973 が cfg を変えずに済むよう `any(windows, test)`。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_radio_control;
 /// Issue #858: Windows 向け外部ストレージの着脱の実装（不可視ウィンドウの `WM_DEVICECHANGE` と
 /// `GetLogicalDrives` 系）。`device/removable_storage.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
