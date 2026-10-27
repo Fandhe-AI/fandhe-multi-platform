@@ -227,7 +227,7 @@ final class FilePreviewHelper {
             if (!dir.isDirectory() && !dir.mkdirs() && !dir.isDirectory()) {
                 return null;
             }
-            tmp = File.createTempFile("fp", ".tmp", dir);
+            tmp = File.createTempFile("fp-", ".tmp", dir);
             try (FileOutputStream out = new FileOutputStream(tmp)) {
                 out.write(data);
             }
