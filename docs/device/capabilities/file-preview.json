@@ -23,15 +23,18 @@
       "impl": "`crates/fandhe-egui-proxy/src/device/ios_file_preview.rs` + `crates/fandhe-egui-proxy/ios/fandhe_ios_file_preview.m` + `crates/fandhe-egui-proxy/src/device/apple_file_preview.rs` + `crates/fandhe-egui-proxy/apple/fandhe_apple_file_preview.m` + `crates/fandhe-egui-proxy/src/device/file_preview.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-device/src/file_preview.rs`、Issue #919"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "サムネイルは `ThumbnailUtils.createImageThumbnail(File, Size, CancellationSignal)`（API 29+）。プレビューは FileProvider の content URI を `ACTION_VIEW` + `FLAG_GRANT_READ_URI_PERMISSION` で他アプリへ渡す",
       "perm": "不要（`<queries>` も不要。読み取りは Intent 単位の一時許可）",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#890）",
+      "impl": "`crates/fandhe-egui-proxy/src/device/android_file_preview.rs` + `platforms/android/app/src/main/java/com/fandhe/androidapp/FilePreviewHelper.java` + `crates/fandhe-egui-proxy/src/device/file_preview.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-device/src/file_preview.rs`、Issue #920",
       "url": [
         "https://developer.android.com/reference/android/media/ThumbnailUtils#createImageThumbnail(java.io.File,%20android.util.Size,%20android.os.CancellationSignal)",
         "https://developer.android.com/reference/androidx/core/content/FileProvider",
         "https://developer.android.com/guide/components/intents-common"
       ],
-      "note": "未実装。OS 標準のプレビュー画面は無く、表示は他アプリ委譲（FileProvider は既存の `.compose` を共用）。`ContentResolver.loadThumbnail` は外部の provider 向けで、自アプリのファイルには使わない。minSdk 24〜28 は OS のサムネイル経路が無いため `Unsupported`（この OS 版では使えない）にする。"
+      "note": "実装済み（#920）。OS 標準のプレビュー画面は無く、表示は他アプリ委譲（FileProvider は既存の `.compose` を共用し `cache/file_preview/` を公開）。結果は `HandedOff`（渡しただけで表示の保証ではない）/ `NoHandler`。`ContentResolver.loadThumbnail` は外部の provider 向けで、自アプリのファイルには使わない。API 29 未満は OS のサムネイル経路が無いため `Unsupported`（この OS 版では使えない）。期限は `CancellationSignal` で取り消し、OS が長辺 256 を超える寸法（320x240 等）で返したときは長辺 256 へ縮める。"
     },
     "macos": {
       "status": "done",

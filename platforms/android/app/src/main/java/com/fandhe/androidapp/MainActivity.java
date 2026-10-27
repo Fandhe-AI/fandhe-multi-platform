@@ -613,6 +613,18 @@ public class MainActivity extends GameActivity {
         return PdfPageHelper.renderFirstPage(getCacheDir(), pdf, maxSide);
     }
 
+    // ファイル・動画のプレビューとサムネイル（Issue #920）。実装は `FilePreviewHelper`。
+    // Rust の `android_file_preview.rs` が JNI で呼ぶ（サムネイルは同期 `(I[BIJ)[B`、プレビューは非同期 `(JI[B)V`）。
+    private final FilePreviewHelper filePreviewHelper = new FilePreviewHelper(this);
+
+    byte[] filePreviewThumbnail(int kind, byte[] data, int maxSide, long timeoutMs) {
+        return FilePreviewHelper.thumbnail(getCacheDir(), kind, data, maxSide, timeoutMs);
+    }
+
+    void requestFilePreview(long requestId, int kind, byte[] data) {
+        filePreviewHelper.preview(requestId, kind, data);
+    }
+
     // 音声変換（Issue #314）。実装は `MediaTranscodeHelper`。Rust の `android_media_transcode.rs` がワーカースレッドから同期 JNI で呼ぶ。
     byte[] mediaTranscode(byte[] pcmLe, int sampleRate, long remainingMs) {
         return MediaTranscodeHelper.transcode(getCacheDir(), pcmLe, sampleRate, remainingMs);
