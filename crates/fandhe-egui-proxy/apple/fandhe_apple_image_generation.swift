@@ -81,7 +81,11 @@ private final class Session: NSObject, ImagePlaygroundViewController.Delegate {
         // 窓を作って親窓の beginSheet で出す 1 経路にする。Mac 目視（#966）で出せなければ `no` へ下げる。
         let sheet = NSWindow(contentViewController: vc)
         self.sheet = sheet
-        parent.beginSheet(sheet, completionHandler: nil)
+        // 閉じるボタン・Esc などでシートが終わっても DidCancel は届かない。終了を観測してキャンセルを確定する。
+        // 通常経路は `deliver` が先に `delivered` を立てるため、ここは 2 回目として無視される。
+        parent.beginSheet(sheet) { [weak self] _ in
+            MainActor.assumeIsolated { self?.deliver(code: 1) }
+        }
     }
 
     func imagePlaygroundViewController(
