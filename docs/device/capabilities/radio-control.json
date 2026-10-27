@@ -43,7 +43,7 @@
       "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_radio_control.m + crates/fandhe-egui-proxy/src/device/macos_radio_control.rs + crates/fandhe-egui-proxy/src/device/radio_control.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-device/src/radio_control.rs、Issue #972"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "WinRT `Windows.Devices.Radios.Radio`（`GetRadiosAsync` / `SetStateAsync`、`RequestAccessAsync`）",
       "perm": "パッケージ化したアプリは `<DeviceCapability Name=\"radios\"/>`。素の exe は宣言の対象外（読み取りは常に許可、切り替えは実機確認）",
       "url": [
@@ -55,7 +55,10 @@
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radiostate",
         "https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/app-capability-declarations"
       ],
-      "note": "未実装。Wi-Fi・Bluetooth の無線を同じ API で扱える。`SetStateAsync` の `Allowed` は「要求を受け付けた」で、最終状態は非同期に移りハードウェアスイッチ・ポリシーが覆しうるため、`State` を読み直して確かめる。`GetRadiosAsync` の空リストは失敗ではなく `NotPresent`。既知の天井（実機未確認）: 素の exe で `RequestAccessAsync` / `SetStateAsync` が `Allowed` を返すか。`DeniedBySystem` に倒れるなら読み取りだけの `done` に note を直す"
+      "note": "実装済み（#973）。`RequestAccessAsync` の後に `GetRadiosAsync` を Kind で絞った先頭 1 つを使い `SetStateAsync` を呼ぶ。Wi-Fi・Bluetooth の無線を同じ API で扱える。`SetStateAsync` の `Allowed` は「要求を受け付けた」で、最終状態は非同期に移りハードウェアスイッチ・ポリシーが覆しうるため、`State` を読み直して確かめる（`Allowed` は `Accepted` で、状態は読み直した値で出す）。`GetRadiosAsync` の空リストは失敗ではなく `NotPresent`。既知の天井（実機未確認）: 素の exe で `RequestAccessAsync` / `SetStateAsync` が `Allowed` を返すか。`DeniedBySystem` に倒れるなら読み取りだけの `done` に note を直す",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#965）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_radio_control.rs + crates/fandhe-egui-proxy/src/device/radio_control.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-device/src/radio_control.rs、Issue #973"
     },
     "web": {
       "status": "no",
