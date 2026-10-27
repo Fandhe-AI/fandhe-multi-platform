@@ -11,9 +11,7 @@
 //! ログへ出さない（security.md A09）。
 //!
 //! 同期呼び出しで、`.m` は期限で `cancelRequest:` してから戻る。呼び出し側（ワーカー）から直接呼ぶ。
-//! iOS ではまだ使われない（b-ios が `ios_file_preview` から返す）ため `dead_code` を許す。
-
-#![cfg_attr(target_os = "ios", allow(dead_code))]
+//! iOS は `ios_file_preview::thumbnailer` から使う。
 
 use std::ffi::{c_char, CString};
 use std::os::unix::ffi::OsStrExt;

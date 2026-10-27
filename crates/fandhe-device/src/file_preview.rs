@@ -293,8 +293,8 @@ pub fn thumbnail_from_windows_bgra(
     check_thumbnail(width, height, bgra)
 }
 
-/// macOS のプレビュー結果コードを写す。0 = 窓が閉じた。1 = 提示できなかった（`NSApp` が無い・
-/// URL や view を作れない）。未知の値は失敗。
+/// macOS / iOS 共用のプレビュー結果コード表。0 = 窓（iOS は画面）が閉じた。1 = 提示できなかった
+/// （macOS は `NSApp` が無い・URL や view を作れない、iOS は背景・表示先なし）。未知の値は失敗。
 pub fn preview_from_macos_code(code: i32) -> Result<PreviewResult, DeviceError> {
     match code {
         0 => Ok(PreviewResult::Closed),
