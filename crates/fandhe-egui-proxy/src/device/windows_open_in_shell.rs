@@ -144,7 +144,7 @@ const DENIED_EXTENSIONS: &[&str] = &[
 /// `ShellPath::as_str()`（`\\?\X:\...` または `X:\...`）を OS に渡す `X:\...` へ正規化する。
 /// 規則は本モジュール doc の「パスの正規化」。不適合は `InvalidInput("shell path")`。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-fn to_win32_path(canonical: &str) -> Result<String, DeviceError> {
+pub(super) fn to_win32_path(canonical: &str) -> Result<String, DeviceError> {
     const ERR: DeviceError = DeviceError::InvalidInput("shell path");
     let p = canonical.strip_prefix(r"\\?\").unwrap_or(canonical);
     let b = p.as_bytes();
