@@ -14,14 +14,17 @@
       "note": "壁紙を設定する公開 API はない（ユーザーが写真アプリから手動で設定する）"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`WallpaperManager.setStream(PNG, null, false, FLAG_SYSTEM | FLAG_LOCK のどちらか)`（API 24）。戻り値 0 は失敗。事前に `isWallpaperSupported` / `isSetWallpaperAllowed` を読む",
-      "perm": "`SET_WALLPAPER`（normal 権限、実行時の許可ダイアログなし）",
+      "perm": "`android.permission.SET_WALLPAPER`（normal 権限、実行時の許可ダイアログなし）",
       "url": [
         "https://developer.android.com/reference/android/app/WallpaperManager",
         "https://developer.android.com/reference/android/Manifest.permission#SET_WALLPAPER"
       ],
-      "note": "未実装。minSdk 24 なので `FLAG_LOCK` の分岐なし。対応・禁止は `isWallpaperSupported` / `isSetWallpaperAllowed` の答えで決め、OS 版や端末種別で事前判定しない。既知の天井: Android 12 以降は壁紙の変更でテーマ色が変わると OS が Activity を作り直し（`configChanges` で止められない）、結果の表示が消えて画面が初期状態へ戻る。作り直し前に届いた結果は表示し、後に届いた結果は破棄する（嘘の成功にはならない）。範囲外: 元の壁紙へ戻す操作、ホームとロックの同時指定、ライブ壁紙"
+      "note": "実装済み（#971）。minSdk 24 なので `FLAG_LOCK` の分岐なし。対応・禁止は `isWallpaperSupported` / `isSetWallpaperAllowed` の答えで決め、OS 版や端末種別で事前判定しない。既知の天井: Android 12 以降は壁紙の変更でテーマ色が変わると OS が Activity を作り直し（`configChanges` で止められない）、結果の表示が消えて画面が初期状態へ戻る。作り直し前に届いた結果は表示し、後に届いた結果は破棄する（嘘の成功にはならない）。Activity 再生成時は保留中の要求を破棄する。範囲外: 元の壁紙へ戻す操作、ホームとロックの同時指定、ライブ壁紙",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#964）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_wallpaper.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/WallpaperHelper.java + crates/fandhe-egui-proxy/src/device/wallpaper.rs + crates/fandhe-core/src/screens/wallpaper_set.rs + crates/fandhe-device/src/wallpaper.rs、Issue #971"
     },
     "macos": {
       "status": "done",
