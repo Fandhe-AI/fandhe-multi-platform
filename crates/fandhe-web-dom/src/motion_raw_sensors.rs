@@ -21,7 +21,9 @@
 //!
 //! # 守る範囲 / 守らない範囲
 //!
-//! 守る: 嘘の値を出さない、種類ごとに購読を二重にしない、停止・失敗・非表示・マウント破棄で解除する、
+//! 守る: 嘘の値を出さない、種類ごとに購読を二重にしない、停止・失敗・非表示・マウント破棄で解除する
+//! （非表示で devicemotion リスナーと interval を外し、可視復帰で現在の世代があれば再登録する。
+//! 許可要求が非表示中に完了した場合も登録を保留する）、
 //! 古い世代の完了の破棄、非対応・権限拒否・失敗の区別。
 //! 守らない: 値が届かないまま待ち続ける場合（Web では `NotPresent` を出さない）、ブラウザ間の座標・軸の違いと
 //! 画面回転、許可ダイアログの応答待ちの期限、複数タブ・複数マウント、表示の遅れ（最大 `READ_INTERVAL` +
@@ -221,8 +223,9 @@ mod web {
             .unwrap_or(false)
     }
 
-    /// リスナー・interval・visibilitychange を外し、保持値を捨てる（冪等）。
-    fn teardown(e: &mut Entry) {
+    /// devicemotion リスナーと interval だけを外し、保持値を捨てる（冪等）。
+    /// 非表示中の購読資源の保持を避けるため、visibilitychange の監視は残す。
+    fn release_sensing(e: &mut Entry) {
         if let Some(w) = web_sys::window() {
             if std::mem::take(&mut e.listening) {
                 let _ = w.remove_event_listener_with_callback(
@@ -230,20 +233,50 @@ mod web {
                     e.listener.as_ref().unchecked_ref(),
                 );
             }
+            // clearInterval でハンドルを止めてから closure は Entry が保持する（drop は release_mount のみ）。
             if let Some(h) = e.interval.take() {
                 w.clear_interval_with_handle(h);
-            }
-            if std::mem::take(&mut e.watching_visibility) {
-                if let Some(d) = w.document() {
-                    let _ = d.remove_event_listener_with_callback(
-                        "visibilitychange",
-                        e.visibility.as_ref().unchecked_ref(),
-                    );
-                }
             }
         }
         e.latest.set([None; 2]);
         e.last_sent = [None; 2];
+    }
+
+    /// リスナー・interval・visibilitychange を外し、保持値を捨てる（冪等）。
+    fn teardown(e: &mut Entry) {
+        release_sensing(e);
+        if std::mem::take(&mut e.watching_visibility) {
+            if let Some(d) = web_sys::window().and_then(|w| w.document()) {
+                let _ = d.remove_event_listener_with_callback(
+                    "visibilitychange",
+                    e.visibility.as_ref().unchecked_ref(),
+                );
+            }
+        }
+    }
+
+    /// devicemotion リスナーと interval を登録する。失敗時は確保済みの分を解放して `Err`。
+    fn add_sensing(e: &mut Entry, w: &web_sys::Window) -> Result<(), ()> {
+        if e.listening {
+            return Ok(());
+        }
+        if w.add_event_listener_with_callback("devicemotion", e.listener.as_ref().unchecked_ref())
+            .is_err()
+        {
+            return Err(());
+        }
+        e.listening = true;
+        match w.set_interval_with_callback_and_timeout_and_arguments_0(
+            e.ticker.as_ref().unchecked_ref(),
+            READ_INTERVAL.as_millis() as i32,
+        ) {
+            Ok(h) => e.interval = Some(h),
+            Err(_) => {
+                release_sensing(e);
+                return Err(());
+            }
+        }
+        Ok(())
     }
 
     /// `want` の全種類を同じ失敗で 1 度に確定する（反映途中の effect で片方だけ再開始させない）。
@@ -293,43 +326,31 @@ mod web {
         })
     }
 
-    /// リスナー・interval・visibilitychange を登録する。失敗時は確保済みの分を解放して `Err`。
+    /// visibilitychange を監視し、表示中ならリスナー・interval も登録する。失敗時は全て解放して `Err`。
+    /// 非表示中の完了なら購読は保留し、可視へ戻った時点で `visibility` が登録する。
     fn register(mount_id: u64) -> Result<(), ()> {
         let w = web_sys::window().ok_or(())?;
+        let hidden = is_hidden();
         ENTRIES.with(|m| {
             let mut m = m.borrow_mut();
             let e = m.get_mut(&mount_id).ok_or(())?;
-            if w.add_event_listener_with_callback(
-                "devicemotion",
-                e.listener.as_ref().unchecked_ref(),
-            )
-            .is_err()
-            {
-                return Err(());
-            }
-            e.listening = true;
-            match w.set_interval_with_callback_and_timeout_and_arguments_0(
-                e.ticker.as_ref().unchecked_ref(),
-                READ_INTERVAL.as_millis() as i32,
-            ) {
-                Ok(h) => e.interval = Some(h),
-                Err(_) => {
-                    teardown(e);
+            if !e.watching_visibility {
+                let added = w.document().is_some_and(|d| {
+                    d.add_event_listener_with_callback(
+                        "visibilitychange",
+                        e.visibility.as_ref().unchecked_ref(),
+                    )
+                    .is_ok()
+                });
+                if !added {
                     return Err(());
                 }
+                e.watching_visibility = true;
             }
-            let added = w.document().is_some_and(|d| {
-                d.add_event_listener_with_callback(
-                    "visibilitychange",
-                    e.visibility.as_ref().unchecked_ref(),
-                )
-                .is_ok()
-            });
-            if !added {
+            if !hidden && add_sensing(e, &w).is_err() {
                 teardown(e);
                 return Err(());
             }
-            e.watching_visibility = true;
             Ok(())
         })
     }
@@ -395,15 +416,58 @@ mod web {
                 patch_rows,
             );
         });
+        let vis_applier = applier.clone();
         let visibility = Closure::<dyn FnMut()>::new(move || {
-            if !is_hidden() {
+            if !is_live(mount_id) {
                 return;
             }
-            ENTRIES.with(|m| {
-                if let Some(e) = m.borrow().get(&mount_id) {
-                    e.latest.set([None; 2]);
+            let hidden = is_hidden();
+            // 実際の状態（listening / active）を見て判断する。ENTRIES の borrow は apply の前に落とす。
+            enum Next {
+                None,
+                Cleared(Vec<(RawKindView, u64)>),
+                Failed([Option<u64>; 2]),
+            }
+            let next = ENTRIES.with(|m| {
+                let mut m = m.borrow_mut();
+                let Some(e) = m.get_mut(&mount_id) else {
+                    return Next::None;
+                };
+                if hidden {
+                    if !e.listening {
+                        return Next::None;
+                    }
+                    release_sensing(e);
+                    // 古い値を出し続けない。
+                    let cleared = (0..2)
+                        .filter_map(|i| e.active[i].map(|s| (KINDS[i], s)))
+                        .collect();
+                    return Next::Cleared(cleared);
+                }
+                if e.listening || e.active.iter().all(Option::is_none) {
+                    return Next::None;
+                }
+                match web_sys::window().map(|w| add_sensing(e, &w)) {
+                    Some(Ok(())) => Next::None,
+                    _ => {
+                        let want = e.active;
+                        teardown(e);
+                        Next::Failed(want)
+                    }
                 }
             });
+            match next {
+                Next::None => {}
+                Next::Cleared(kinds) => vis_applier.apply_in_place(
+                    move |s| {
+                        for (kind, session) in kinds {
+                            apply_reading(s, kind, session, None);
+                        }
+                    },
+                    patch_rows,
+                ),
+                Next::Failed(want) => fail_all(&vis_applier, want, RawSensorFailure::Failed),
+            }
         });
         Entry {
             active: [None; 2],
