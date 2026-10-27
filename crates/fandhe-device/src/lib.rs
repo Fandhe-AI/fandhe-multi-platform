@@ -82,6 +82,8 @@ pub mod contact_picker;
 pub mod device_identifier;
 /// Phase 11（端末機能の拡充ループ、親 #1131、Issue #1304）: 端末・OS 情報（機種・OS 版・空き容量）。
 pub mod device_info;
+/// Phase 11（端末機能の拡充ループ、親 #186、Issue #958）: デジタル身分証の提示要求（検証側・応答の中身は読まない）。
+pub mod digital_credentials;
 /// Phase 11（端末機能の拡充ループ、親 #177、Issue #870）: 画面のリフレッシュレート・HDR・広色域。
 pub mod display_refresh_hdr;
 /// Phase 11（端末機能の拡充ループ、親 #145、Issue #747）: 書類スキャン（OS のスキャン UI で撮影した 1 ページ目を表示する）。

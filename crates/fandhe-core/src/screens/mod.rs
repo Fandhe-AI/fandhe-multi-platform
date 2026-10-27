@@ -169,6 +169,8 @@ pub mod compose_mail_sms;
 pub mod device_identifier_show;
 /// Phase 11 の拡充ループ型サンプル「端末・OS 情報」（親 #1131、Issue #1304）。
 pub mod device_info_show;
+/// Phase 11 の拡充ループ型サンプル「デジタル身分証の提示要求」（親 #186、Issue #958）。
+pub mod digital_credentials;
 /// Phase 11 の拡充ループ型サンプル「画面のリフレッシュレート・HDR・広色域」（親 #177、Issue #870）。
 pub mod display_refresh_hdr_show;
 /// Phase 11 の拡充ループ型サンプル「書類スキャン」（親 #145、Issue #747）。
