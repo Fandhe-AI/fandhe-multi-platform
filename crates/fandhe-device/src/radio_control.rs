@@ -49,9 +49,10 @@
 //!   [`RadioState::NotPresent`]。`RequestAccessAsync` の後に `SetStateAsync`。`Allowed` は
 //!   [`SwitchOutcome::Accepted`]、`DeniedByUser` は `PermissionDenied`、`DeniedBySystem` と
 //!   `Unspecified` は [`DENIED_BY_SYSTEM`]
-//! - Android（#974 への約束）: Wi-Fi の切り替えと Bluetooth のオフは設定画面を開いて
+//! - Android（#974）: Wi-Fi の切り替えと Bluetooth のオフは設定画面を開いて
 //!   [`SwitchOutcome::Opened`]。Bluetooth のオンは `ACTION_REQUEST_ENABLE` で、`RESULT_OK` は
-//!   [`SwitchOutcome::Applied`]、`RESULT_CANCELED` は [`SwitchOutcome::NotChanged`]
+//!   [`SwitchOutcome::Applied`]、`RESULT_CANCELED` は [`SwitchOutcome::NotChanged`]。[`RadioState::Disabled`] は返さない（相当する OS 値がない）。
+//!   読み取りの `SecurityException` は `PermissionDenied`
 
 use crate::DeviceError;
 
