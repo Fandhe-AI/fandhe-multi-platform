@@ -128,6 +128,12 @@ use fandhe_core::screens::midi_show::{
     clear as midi_clear, current_screen as current_midi_screen, stop as midi_stop, MidiShowState,
     CLEAR_LABEL as MIDI_CLEAR_LABEL, STOP_LABEL as MIDI_STOP_LABEL,
 };
+use fandhe_core::screens::motion_raw_sensors_show::{
+    current_screen as current_motion_raw_sensors_show_screen,
+    stop_all as motion_raw_sensors_stop_all, MotionRawSensorsShowState,
+    STOP_BUTTON_ID as MOTION_RAW_SENSORS_STOP_BUTTON_ID,
+    STOP_LABEL as MOTION_RAW_SENSORS_STOP_LABEL,
+};
 use fandhe_core::screens::multi_display_show::{
     current_screen as current_multi_display_screen,
     web_initial_state as multi_display_initial_state,
@@ -514,6 +520,28 @@ pub fn mount_memory_pressure_show_screen(root_id: &str) -> Result<(), JsValue> {
         current_memory_pressure_show_screen(&initial_state),
         initial_state,
         super::memory_pressure::memory_pressure_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「ジャイロ・磁気・線形加速度」（親 #180、Issue #902）をマウントする検証専用
+/// エントリポイント。`super::motion_raw_sensors::motion_raw_sensors_show_effect` が `devicemotion` を駆動する。
+///
+/// `mount` は `Screen<S>` を再構築しないため、止められるよう「停止」を最初から足す
+/// （`stop_all` は冪等のため二重押下は実害にならない）。
+#[wasm_bindgen]
+pub fn mount_motion_raw_sensors_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    let initial_state = MotionRawSensorsShowState::default();
+    let screen = current_motion_raw_sensors_show_screen(&initial_state).button(
+        MOTION_RAW_SENSORS_STOP_BUTTON_ID,
+        MOTION_RAW_SENSORS_STOP_LABEL,
+        motion_raw_sensors_stop_all,
+    );
+    super::mount::mount_with_effect(
+        root,
+        screen,
+        initial_state,
+        super::motion_raw_sensors::motion_raw_sensors_show_effect,
     )
 }
 

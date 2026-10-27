@@ -115,6 +115,8 @@
 //!   純関数（許可・例外名・状態の写像と effect の判断）のみ `wasm32` gate の外に置く
 //! - [`flashlight`]: 「ライト（トーチ）」画面の Web 経路（親 #106、Issue #462）。
 //!   純関数（失敗種別の写像・読み戻し・確認ループの判定）のみ `wasm32` gate の外に置く
+//! - [`motion_raw_sensors`]: 「ジャイロ・磁気・線形加速度」画面の Web 経路（親 #180、Issue #902）。
+//!   純関数（成分 → 値の写像・許可結果の写像・購読計画）のみ `wasm32` gate の外に置く
 //! - [`compass`]: 「方位（コンパス）」画面の Web 経路（親 #1154、Issue #1407）。
 //!   純関数（イベント値 → 方位・許可結果の写像・tick 判定・世代照合）のみ `wasm32` gate の外に置く
 //! - [`pen_stylus`]: 「ペン・筆圧で描く」画面の Web 経路（親 #95、Issue #358）。
@@ -358,6 +360,8 @@ pub mod haptics;
 pub mod media_cast;
 /// 型サンプル「メモリ逼迫・負荷」の Web 経路（Issue #914）。[`haptics`] と同じ理由で純関数は native からもテストできるよう gate を外す。
 pub mod memory_pressure;
+/// 型サンプル「ジャイロ・磁気・線形加速度」の Web 経路（Issue #902）。[`haptics`] と同じ理由で純関数は native からもテストできるよう gate を外す。
+pub mod motion_raw_sensors;
 /// 型サンプル「ネットワーク接続状態」の Web 経路（Issue #1285）。[`haptics`] と同じ理由で gate を外す。
 pub mod network_status;
 /// 型サンプル「単語分割」の Web 経路（Issue #1094）。[`haptics`] と同じ理由で純関数は native からも
