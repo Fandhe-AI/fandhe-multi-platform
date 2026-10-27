@@ -8,10 +8,14 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "UIKit `UIColorPickerViewController`（iOS 14+）",
+      "api": "UIKit `UIColorPickerViewController`（iOS 14+、`supportsAlpha = NO`）。選択は `colorPickerViewController(_:didSelectColor:continuously:)`、閉じたことは `colorPickerViewControllerDidFinish(_:)` と `presentationControllerDidDismiss(_:)`（スワイプで閉じた場合）",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/uikit/uicolorpickerviewcontroller",
-      "note": "未実装。結果は delegate で受ける。キャンセルは閉じた通知のみ。"
+      "url": [
+        "https://developer.apple.com/documentation/uikit/uicolorpickerviewcontroller",
+        "https://developer.apple.com/documentation/uikit/uicolorpickerviewcontrollerdelegate",
+        "https://developer.apple.com/documentation/uikit/uiadaptivepresentationcontrollerdelegate/presentationcontrollerdiddismiss(_:)"
+      ],
+      "note": "未実装。確定・取り消しのボタンは無い。閉じた時点で、OS の選択通知が来ていれば選んだ色、来ていなければ「選ばずに閉じた」。"
     },
     "android": {
       "status": "no",
@@ -22,26 +26,39 @@
     },
     "macos": {
       "status": "possible",
-      "api": "AppKit `NSColorPanel.shared`（`NSColorPanelColorDidChangeNotification`）",
+      "api": "AppKit `NSColorPanel.shared`（`NSColorPanelColorDidChangeNotification`）、閉じたことは `NSWindowWillCloseNotification`（object = パネル）",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/appkit/nscolorpanel",
-      "note": "未実装。共有パネルで、選択は連続通知。"
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nscolorpanel",
+        "https://developer.apple.com/documentation/appkit/nscolorpanel/colordidchangenotification",
+        "https://developer.apple.com/documentation/appkit/nswindow/willclosenotification",
+        "https://developer.apple.com/documentation/appkit/nswindow/hidesondeactivate"
+      ],
+      "note": "未実装。共有パネルで確定ボタンは無く、確定は閉じたとき。色の変化通知はプログラムでの設定でも出るため、初期色を入れてから購読する。`hidesOnDeactivate` が既定 YES で、非アクティブ時は閉じずに隠れる（閉じた通知は出ない）。"
     },
     "windows": {
       "status": "possible",
-      "api": "Win32 共通ダイアログ `ChooseColorW`",
+      "api": "Win32 共通ダイアログ `ChooseColorW`（OK で非 0、取り消し・エラーは 0 で `CommDlgExtendedError` が 0 なら取り消し）。色は `COLORREF`（`0x00bbggrr`）",
       "perm": "不要",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/dlgbox/color-dialog-box",
-      "note": "未実装。従来型の簡易ダイアログ。WinUI の ColorPicker は自前のコントロール。"
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/dlgbox/color-dialog-box",
+        "https://learn.microsoft.com/en-us/windows/win32/api/commdlg/ns-commdlg-choosecolorw",
+        "https://learn.microsoft.com/en-us/windows/win32/gdi/colorref"
+      ],
+      "note": "未実装。従来型の簡易ダイアログ（WinUI の ColorPicker は自前のコントロール）。`lpCustColors` は 16 要素の配列が必須。取り消し・エラー時の `rgbResult` は未定義。"
     },
     "web": {
       "status": "possible",
       "api": "`<input type=\"color\">`（ブラウザ標準のカラーピッカー）",
       "perm": "不要",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/color",
+      "url": [
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/color",
+        "https://developer.mozilla.org/en-US/docs/Web/API/HTMLInputElement/cancel_event",
+        "https://developer.mozilla.org/en-US/docs/Web/API/HTMLInputElement/showPicker"
+      ],
       "safari": "対応",
-      "note": "未実装。UI はブラウザ依存。アルファは `alpha` 属性（新しめ、要確認）。"
+      "note": "未実装。UI はブラウザ依存。`alpha`・`colorspace` は付けない（付けると `value` が `#rrggbb` 以外になりうる）。`change` は閉じたときに出るが取り消しの通知は無い（`cancel` は file 型のみ）。"
     }
   },
-  "note": "eye-dropper は画面から色を拾うスポイト、これは OS 標準の色選択ダイアログ（パレット・スライダー）で色を選ばせる。"
+  "note": "eye-dropper は画面から色を拾うスポイト、これは OS 標準の色選択ダイアログで色を選ばせる。範囲は固定の初期色から 1 色を選び `#rrggbb` で出すまで（アルファ・広色域・色の保存・逐次反映は範囲外）。「選んだか」は OS の選択通知・戻り値・`change` だけで決め、初期色との比較で推測しない。結果は 選んだ色 / 選ばずに閉じた / 非対応 / 失敗 を分ける。守らない範囲: macOS で非アクティブ中の表示、閉じた通知が届かない場合の復旧、Web で色を変えずに閉じた場合と初期色と同じ色を選んだ場合、sRGB 外の色、ブラウザごとの差、複数タブ・複数プロセス・複数窓。選んだ色はログに出さない。"
 }
