@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- FileProvider が公開するパス。メール添付（Issue #32）は `getCacheDir()/compose/`、動画の撮影（Issue #823）の出力先は `getCacheDir()/video_capture/` だけに限る。 -->
+<!-- FileProvider が公開するパス。メール添付（Issue #32）は `getCacheDir()/compose/`、動画の撮影（Issue #823）の出力先は `getCacheDir()/video_capture/`、ファイルのプレビュー（Issue #920）は `getCacheDir()/file_preview/` だけに限る。 -->
 <paths>
     <cache-path name="compose" path="compose/" />
     <cache-path name="video_capture" path="video_capture/" />
+    <cache-path name="file_preview" path="file_preview/" />
 </paths>

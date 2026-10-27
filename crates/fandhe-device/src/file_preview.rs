@@ -303,9 +303,104 @@ pub fn preview_from_macos_code(code: i32) -> Result<PreviewResult, DeviceError> 
     }
 }
 
+/// Android の同期 JNI の戻り（`FilePreviewHelper.thumbnail`）を契約へ写す。先頭 1 バイトのコードは
+/// [`thumbnail_from_apple_code`] と同じ表（Java 側の定数と対）。成功は
+/// `[0][w:u32 BE][h:u32 BE][RGBA]` で、[`check_thumbnail`] を通ったものだけ。空・短い・長さの過不足・
+/// 未知のコードはすべて失敗（嘘の成功の禁止）。
+pub fn thumbnail_from_android_reply(reply: &[u8]) -> Result<ThumbnailResult, DeviceError> {
+    let Some((&code, rest)) = reply.split_first() else {
+        return Err(DeviceError::Internal(OUTCOME));
+    };
+    if !thumbnail_from_apple_code(i32::from(code))? {
+        return Ok(ThumbnailResult::NoThumbnail);
+    }
+    let Some((head, rgba)) = rest.split_first_chunk::<8>() else {
+        return Err(DeviceError::Internal(SIZE));
+    };
+    let w = u32::from_be_bytes([head[0], head[1], head[2], head[3]]);
+    let h = u32::from_be_bytes([head[4], head[5], head[6], head[7]]);
+    check_thumbnail(w, h, rgba.to_vec())
+}
+
+/// Android のプレビュー結果コード表（`FilePreviewHelper.RESULT_*` と対）。0 = 他アプリへ渡した /
+/// 1 = 表示できるアプリなし / 2 = 非前景・破棄中 / 3 = 提示できなかった。未知の値は失敗。
+pub fn preview_from_android_code(code: i32) -> Result<PreviewResult, DeviceError> {
+    match code {
+        0 => Ok(PreviewResult::HandedOff),
+        1 => Ok(PreviewResult::NoHandler),
+        _ => Err(DeviceError::Internal(OUTCOME)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn android_reply(w: u32, h: u32, body: usize) -> Vec<u8> {
+        let mut v = vec![0];
+        v.extend(w.to_be_bytes());
+        v.extend(h.to_be_bytes());
+        v.extend(vec![9; body]);
+        v
+    }
+
+    fn internal<T: std::fmt::Debug>(r: Result<T, DeviceError>) -> &'static str {
+        match r {
+            Err(DeviceError::Internal(s)) => s,
+            other => panic!("失敗のはずが {other:?}"),
+        }
+    }
+
+    #[test]
+    fn android_reply_success_and_codes() {
+        assert!(matches!(
+            thumbnail_from_android_reply(&android_reply(2, 2, 16)),
+            Ok(ThumbnailResult::Thumbnail(_))
+        ));
+        assert!(matches!(
+            thumbnail_from_android_reply(&[2]),
+            Ok(ThumbnailResult::NoThumbnail)
+        ));
+        assert!(matches!(
+            thumbnail_from_android_reply(&[1]),
+            Err(DeviceError::Unsupported("file_preview"))
+        ));
+        assert_eq!(internal(thumbnail_from_android_reply(&[3])), TIMEOUT);
+        assert_eq!(internal(thumbnail_from_android_reply(&[4])), SIZE);
+        assert_eq!(internal(thumbnail_from_android_reply(&[5])), OUTCOME);
+        assert_eq!(internal(thumbnail_from_android_reply(&[99])), OUTCOME);
+        assert_eq!(internal(thumbnail_from_android_reply(&[])), OUTCOME);
+    }
+
+    #[test]
+    fn android_reply_malformed_success_never_passes() {
+        assert_eq!(internal(thumbnail_from_android_reply(&[0])), SIZE);
+        let ok = android_reply(2, 2, 16);
+        assert_eq!(internal(thumbnail_from_android_reply(&ok[..8])), SIZE);
+        for body in [15, 17] {
+            let r = android_reply(2, 2, body);
+            assert_eq!(internal(thumbnail_from_android_reply(&r)), SIZE);
+        }
+        let zero = android_reply(0, 2, 0);
+        assert_eq!(internal(thumbnail_from_android_reply(&zero)), SIZE);
+        let wide = android_reply(257, 1, 0);
+        assert_eq!(internal(thumbnail_from_android_reply(&wide)), SIZE);
+    }
+
+    #[test]
+    fn android_preview_codes() {
+        assert_eq!(
+            preview_from_android_code(0).unwrap(),
+            PreviewResult::HandedOff
+        );
+        assert_eq!(
+            preview_from_android_code(1).unwrap(),
+            PreviewResult::NoHandler
+        );
+        for c in [2, 3, 99, -1] {
+            assert_eq!(internal(preview_from_android_code(c)), OUTCOME);
+        }
+    }
 
     #[test]
     fn sample_image_is_deterministic_and_four_colored() {
