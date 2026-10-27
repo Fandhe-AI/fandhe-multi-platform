@@ -57,6 +57,10 @@ use fandhe_core::screens::checkbox_list::{checkbox_list_screen, CheckboxListStat
 use fandhe_core::screens::clipboard_text::{
     current_screen as current_clipboard_screen, ClipboardTextState,
 };
+use fandhe_core::screens::color_picker_pick::{
+    abandon_pick as abandon_color_pick, current_screen as current_color_picker_screen,
+    ColorPickerState, ABANDON_LABEL as COLOR_PICKER_ABANDON_LABEL,
+};
 use fandhe_core::screens::compass_show::{
     current_screen as current_compass_screen, stop as compass_stop, CompassShowState,
     STOP_BUTTON_ID as COMPASS_STOP_BUTTON_ID, STOP_LABEL as COMPASS_STOP_LABEL,
@@ -724,6 +728,36 @@ pub fn mount_eye_dropper_screen(root_id: &str) -> Result<(), JsValue> {
         current_eye_dropper_screen(&initial_state),
         initial_state,
         super::eye_dropper::eye_dropper_pick_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「システムの色選択ダイアログ」（Issue #943）をマウントする検証専用
+/// エントリポイント。`super::color_picker::color_picker_pick_effect` を effect として渡す。
+/// 起動時には開かず、ボタン押下（ユーザー操作）の中で `<input type="color">` が開く。
+///
+/// mount は画面を最初に 1 回しか組まず、ボタンは状態で出し分けられない。そのため
+/// `web_screen`（phase で出し分ける）は使わず、「色を選ぶ」と「やめる」を常に両方出す
+/// （`request_pick` は Idle 以外、`abandon_pick` は Requested / Picking 以外で no-op なので挙動は同じ）。
+/// `<input type="color">` には取り消しの通知が無く、色を変えずに閉じると「やめる」でしか抜けられない。
+///
+/// 呼び出し元が渡す `root_id` の要素が見つからない場合はエラーを返す
+/// （panic を API 契約にしない方針、coding-rust.md 準拠）。
+#[wasm_bindgen]
+pub fn mount_color_picker_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = ColorPickerState::default();
+    // WidgetId 2 は共通コア画面の「やめる」と同じ値（1 = 選ぶ、3 = 見本と重複しない）。
+    let screen = current_color_picker_screen(&initial_state).button(
+        fandhe_core::WidgetId::from_raw(2),
+        COLOR_PICKER_ABANDON_LABEL,
+        abandon_color_pick,
+    );
+    super::mount::mount_with_effect(
+        root,
+        screen,
+        initial_state,
+        super::color_picker::color_picker_pick_effect,
     )
 }
 
