@@ -180,6 +180,10 @@
          通常権限で実行時許可は無い。切り離し時に削除する。 -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Phase 11（Issue #971）: 壁紙設定画面が `WallpaperManager.setStream` を呼ぶ。
+         通常権限で実行時許可は無い。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+
     <!-- Phase 11（Issue #1337）: 画面録画画面が `MediaProjection` を型 mediaProjection の
          フォアグラウンドサービスで使う。通常権限 2 つのみ（`RECORD_AUDIO`・`SYSTEM_ALERT_WINDOW`
          は追加しない。音声は録らない）。実行ごとに OS の同意ダイアログが出る。切り離し時に

@@ -4004,6 +4004,12 @@ public class MainActivity extends GameActivity {
         PhotoSaveHelper.save(getApplicationContext().getContentResolver(), requestId, png);
     }
 
+    // 壁紙・ロック画面の設定（Issue #971）。Rust 側 `device/android_wallpaper.rs` から JNI で
+    // 呼ばれる。実処理は `WallpaperHelper`（Activity を握らない。再生成時の破棄は Rust 側 reset と対）。
+    private void requestWallpaperSet(long requestId, byte[] png, int target) {
+        WallpaperHelper.set(getApplicationContext(), requestId, png, target);
+    }
+
     // Rust 側 bridge モジュール（`device/notification.rs`）の `present`（Android 分岐）から
     // JNI 経由で呼ばれる（Issue #1006）。`requestBiometric` と同じ「即時 return・結果は
     // 非同期通知」の形。`title`/`body` は Rust 側 `NotificationRequest::new`（空・NUL・
