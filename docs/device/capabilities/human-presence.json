@@ -28,7 +28,10 @@
       "note": "在席を返す公開 API は確認できず（一般知識、要確認）"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#954）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_human_presence.rs + crates/fandhe-egui-proxy/src/device/human_presence.rs + crates/fandhe-core/src/screens/human_presence_read.rs + crates/fandhe-device/src/human_presence.rs、Issue #960",
       "api": "WinRT `Windows.Devices.Sensors.HumanPresenceSensor`。`GetDefaultAsync` → `GetCurrentReading` の `Presence`（`Present` / `NotPresent` / `Unknown`）を押したときに 1 回読む。`ReadingChanged` は購読しない。`UniversalApiContract` v15（Windows 11 22H2 以降。公式頁の要件欄は 22621 と 23504 で食い違う）",
       "perm": "宣言不要（パッケージ無しの exe は設定の「デスクトップ アプリに Presence Sensing へのアクセスを許可する」でまとめて制御。capability `humanPresence` はパッケージ化したアプリの宣言）",
       "url": [
@@ -38,7 +41,7 @@
         "https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/app-capability-declarations",
         "https://support.microsoft.com/en-US/Windows/privacy/managing-presence-sensing-settings-in-windows-11"
       ],
-      "note": "未実装。センサー搭載機に限る。センサー非搭載（`GetDefaultAsync` が null）は非対応、`Unknown` と失敗は離席に畳まない。OS 版の事前判定・センサー列挙・`IsPresenceSupported` は使わず、有効化の結果で決める。守らない範囲は、押してから表示までの間の人の動き、検知の精度・距離、既定以外のセンサー。既知の天井: 正常系・拒否時の HRESULT・クラス未登録時の HRESULT・購読なしの `GetCurrentReading` が値を返すかは実機未確認。購読なしでは常に null と判明したら `done` を取り下げ、`ReadingChanged` の購読で起案し直す"
+      "note": "実装済み（#960）。センサー搭載機に限る。センサー非搭載（`GetDefaultAsync` が null、`REGDB_E_CLASSNOTREG`）は非対応、`GetCurrentReading` の null は未取得、`E_ACCESSDENIED` は権限拒否、期限 15 秒で `Cancel` して未取得、`Unknown` と失敗は離席に畳まない。パッケージ化した場合は `<DeviceCapability Name=\"humanPresence\"/>` が要る。OS 版の事前判定・センサー列挙・`IsPresenceSupported` は使わず、有効化の結果で決める。守らない範囲は、押してから表示までの間の人の動き、検知の精度・距離、既定以外のセンサー。既知の天井: 正常系・拒否時の HRESULT・クラス未登録時の HRESULT・購読なしの `GetCurrentReading` が値を返すかは実機未確認。購読なしでは常に null と判明したら `done` を取り下げ、`ReadingChanged` の購読で起案し直す"
     },
     "web": {
       "status": "no",

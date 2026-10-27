@@ -780,6 +780,9 @@ pub mod haptics;
 /// ドライバ（macOS 実装、iOS・Android は #1066・#1067）。
 pub mod home_widget;
 pub mod http_fetch;
+/// Phase 11 の拡充ループ（親 #187、Issue #960）: 人の在席・離席の検知の effect ドライバ（Windows 実装、
+/// 他 OS は `UnsupportedHumanPresence` 固定）。
+pub mod human_presence;
 /// Phase 11 の拡充ループ（親 #1120、Issue #1250）: 画像の文字認識の effect ドライバ
 /// （macOS・Windows / iOS 実装、Android は骨格のスタブ（対応表で `no`）、他 OS は
 /// `UnsupportedTextRecognizer` 固定。Web は対象外）。
@@ -1720,6 +1723,10 @@ pub mod windows_global_hotkey;
 /// `device/haptics.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_haptics;
+/// Issue #960: Windows 向け在席検知実装（WinRT `HumanPresenceSensor` ラッパー）。
+/// `device/human_presence.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_human_presence;
 /// Issue #1250: Windows 向け文字認識の骨格（#1251 が WinRT `OcrEngine` 実装に置き換える）。
 /// `device/image_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
