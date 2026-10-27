@@ -4,7 +4,7 @@
   "group": "未着手の OS 機能",
   "order": 154,
   "priority": 144,
-  "bundle": "continuous-push",
+  "bundle": "request-response",
   "platforms": {
     "ios": {
       "status": "no",
@@ -29,10 +29,16 @@
     },
     "windows": {
       "status": "possible",
-      "api": "WinRT `Windows.Devices.Sensors.HumanPresenceSensor`（`GetDefaultAsync` / `ReadingChanged`）",
-      "perm": "要確認（人の在席センサーの capability 宣言が要るはず）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。対応する機種のセンサー搭載機に限る。センサーが無い機種では取得できない"
+      "api": "WinRT `Windows.Devices.Sensors.HumanPresenceSensor`。`GetDefaultAsync` → `GetCurrentReading` の `Presence`（`Present` / `NotPresent` / `Unknown`）を押したときに 1 回読む。`ReadingChanged` は購読しない。`UniversalApiContract` v15（Windows 11 22H2 以降。公式頁の要件欄は 22621 と 23504 で食い違う）",
+      "perm": "宣言不要（パッケージ無しの exe は設定の「デスクトップ アプリに Presence Sensing へのアクセスを許可する」でまとめて制御。capability `humanPresence` はパッケージ化したアプリの宣言）",
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.humanpresencesensor",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.humanpresencesensor.getcurrentreading",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.humanpresence",
+        "https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/app-capability-declarations",
+        "https://support.microsoft.com/en-US/Windows/privacy/managing-presence-sensing-settings-in-windows-11"
+      ],
+      "note": "未実装。センサー搭載機に限る。センサー非搭載（`GetDefaultAsync` が null）は非対応、`Unknown` と失敗は離席に畳まない。OS 版の事前判定・センサー列挙・`IsPresenceSupported` は使わず、有効化の結果で決める。守らない範囲は、押してから表示までの間の人の動き、検知の精度・距離、既定以外のセンサー。既知の天井: 正常系・拒否時の HRESULT・クラス未登録時の HRESULT・購読なしの `GetCurrentReading` が値を返すかは実機未確認。購読なしでは常に null と判明したら `done` を取り下げ、`ReadingChanged` の購読で起案し直す"
     },
     "web": {
       "status": "no",
