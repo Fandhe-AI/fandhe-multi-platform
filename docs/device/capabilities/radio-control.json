@@ -14,9 +14,9 @@
       "note": "無線の切り替えは不可。Bluetooth の状態読み取りは bluetooth-le の `CBCentralManager.state` で足りる"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "読み取りは `BluetoothAdapter.getState` / `WifiManager.getWifiState`。Bluetooth のオンは `ACTION_REQUEST_ENABLE`（OS のダイアログ）、オフは `Settings.ACTION_BLUETOOTH_SETTINGS` を開く。Wi-Fi は `Settings.Panel.ACTION_WIFI`（API 29+）/ `Settings.ACTION_WIFI_SETTINGS`（API 24〜28）を開く",
-      "perm": "`BLUETOOTH_CONNECT`（API 31+、`ACTION_REQUEST_ENABLE` にだけ要る。読み取りは不要）・`ACCESS_WIFI_STATE`（宣言済み）",
+      "perm": "android.permission.BLUETOOTH_CONNECT（API 31+、`ACTION_REQUEST_ENABLE` にだけ要る。宣言済み）・android.permission.ACCESS_WIFI_STATE（宣言済み）",
       "url": [
         "https://developer.android.com/reference/android/net/wifi/WifiManager#setWifiEnabled(boolean)",
         "https://developer.android.com/reference/android/net/wifi/WifiManager#getWifiState()",
@@ -25,7 +25,10 @@
         "https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#ACTION_REQUEST_ENABLE",
         "https://developer.android.com/reference/android/provider/Settings.Panel#ACTION_WIFI"
       ],
-      "note": "未実装。`setWifiEnabled` は「Q 以上を target するアプリでは常に失敗し false を返す」、`BluetoothAdapter.enable()` / `disable()` は「TIRAMISU 以上を target すると常に失敗」（公式）。アプリ自身では切り替えられず、設定画面を開く（`Opened`）か OS のダイアログに委ねる。`Opened` / `NotChanged` を「切り替えた」と言わず、直後の読み直しの値だけで状態を出す"
+      "note": "実装済み（#974）。読み取りは `getWifiState` / `getState` を写し、Wi-Fi の切り替えと Bluetooth のオフは設定画面を開いて `Opened`、Bluetooth のオンは `ACTION_REQUEST_ENABLE` で `RESULT_OK` が `Applied`、`RESULT_CANCELED` が `NotChanged`（失敗にしない）。`setWifiEnabled` は「Q 以上を target するアプリでは常に失敗し false を返す」、`BluetoothAdapter.enable()` / `disable()` は「TIRAMISU 以上を target すると常に失敗」（公式）のため使わない。`Disabled` は返さない（相当する OS 値がない）。`Opened` / `NotChanged` を「切り替えた」と言わず、直後の読み直しの値だけで状態を出す。Activity を作り直したら保留中の要求を破棄する。守らない範囲: 設定画面での利用者の操作、読み直し時点で切り替わり途中の値、ダイアログや設定画面の待ち時間。既知の天井（実機未確認）: 端末によって `getState` に許可が要るか、`ACTION_REQUEST_ENABLE` が既にオンの端末で返す値",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#965）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_radio_control.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/RadioControlHelper.java + crates/fandhe-egui-proxy/src/device/radio_control.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-device/src/radio_control.rs、Issue #974"
     },
     "macos": {
       "status": "done",

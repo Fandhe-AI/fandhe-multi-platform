@@ -542,6 +542,18 @@ public class MainActivity extends GameActivity {
         wifiInfoHelper.cancel(requestId);
     }
 
+    // 無線の状態取得と切り替え（Issue #974）。実装は `RadioControlHelper`（ランチャーを STARTED 前に登録）。
+    // Rust の `android_radio_control.rs` が JNI で呼ぶ。
+    private final RadioControlHelper radioControlHelper = new RadioControlHelper(this);
+
+    int radioControlRead(int kind) {
+        return radioControlHelper.read(kind);
+    }
+
+    void requestRadioControlSet(long requestId, int kind, boolean on) {
+        radioControlHelper.set(requestId, kind, on);
+    }
+
     // 方位（Issue #1406）。実装は `CompassHelper`。Rust の `android_compass.rs` が同期 JNI で呼ぶ。
     private final CompassHelper compassHelper = new CompassHelper(this);
 
@@ -5163,6 +5175,7 @@ public class MainActivity extends GameActivity {
         bluetoothClassicHelper.onDestroy();
         musicLibraryHelper.onDestroy();
         wifiInfoHelper.onDestroy();
+        radioControlHelper.onDestroy();
         compassHelper.onDestroy();
         environmentSensorsHelper.onDestroy();
         motionRawSensorsHelper.onDestroy();
