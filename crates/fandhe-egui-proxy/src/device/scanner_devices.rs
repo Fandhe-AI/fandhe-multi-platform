@@ -25,6 +25,7 @@
 //!
 //! 成功値は 2 段の検査（`ImportedImage::from_os` とここでの復号）を通った画像だけ。
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -87,6 +88,9 @@ struct Session {
     slot: &'static RequestSlot<Outcome>,
     /// 進行中の要求を観測した時刻（単調時計）。
     started: Mutex<Option<Instant>>,
+    /// OS 操作を持つワーカーが走っている間 true。期限切れ表示でスロットを空にしても、
+    /// ワーカー（機器の閉鎖まで済ませてから戻る）が終わるまで次の発送を止める。
+    os_active: Arc<AtomicBool>,
 }
 
 impl Default for Session {
@@ -94,6 +98,7 @@ impl Default for Session {
         Self {
             slot: Box::leak(Box::new(RequestSlot::new())),
             started: Mutex::new(None),
+            os_active: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -185,6 +190,11 @@ fn drive(
         if slot.snapshot().is_some() {
             return;
         }
+        // 前回のワーカーが機器を解放し終えるまで発送しない（同じ機器を二重に開かない）。
+        if session.os_active.load(Ordering::Acquire) {
+            sender.request_repaint_after(POLL_INTERVAL);
+            return;
+        }
         // 前回の画素を先に解放する（失敗の横に前の画像を残さない）。
         image_store::clear();
         let request_id = slot.begin();
@@ -194,13 +204,17 @@ fn drive(
         sender.request_repaint_after(POLL_INTERVAL);
 
         let worker_imp = imp.clone();
+        session.os_active.store(true, Ordering::Release);
+        let active = session.os_active.clone();
         let spawned = std::thread::Builder::new()
             .name("scanner_devices".into())
             .spawn(move || {
                 let result = run_worker(&*worker_imp, started, deadline);
+                active.store(false, Ordering::Release);
                 slot.deliver(request_id, result);
             });
         if spawned.is_err() {
+            session.os_active.store(false, Ordering::Release);
             slot.deliver(request_id, Err(ScannerImportFailure::Failed));
         }
         return;
@@ -439,6 +453,31 @@ mod tests {
         drive(&state, &sender, &imp, &session, deadline);
         assert!(rx.try_recv().is_err());
         assert_eq!(failure(&state), CoreFailure::TimedOut);
+    }
+
+    #[test]
+    fn new_request_waits_until_previous_worker_finishes() {
+        let imp = fake_with(good, Duration::from_millis(200));
+        let (sender, rx) = channel();
+        let session = Session::default();
+        let mut state = State::default();
+        request_import(&mut state);
+        pump(
+            &mut state,
+            &sender,
+            &rx,
+            &imp,
+            &session,
+            Duration::from_millis(20),
+        );
+        assert_eq!(failure(&state), CoreFailure::TimedOut);
+        // ワーカーはまだ走っている: 再押下しても発送されない。
+        request_import(&mut state);
+        drive(&state, &sender, &imp, &session, Duration::from_secs(30));
+        assert!(rx.try_recv().is_err());
+        std::thread::sleep(Duration::from_millis(250));
+        drive(&state, &sender, &imp, &session, Duration::from_secs(30));
+        assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok());
     }
 
     #[test]

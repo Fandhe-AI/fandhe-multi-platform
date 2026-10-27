@@ -63,6 +63,9 @@ static const int kFandheMaxPixel = 2048;
 @property(nonatomic) BOOL closeRequested;
 @property(nonatomic) BOOL closeSignaled;
 @property(nonatomic) BOOL closeWait;
+// 閉鎖 completion がエラーで返った（`lock` の内側でだけ読み書き）。成功を偽らないために保持する。
+@property(nonatomic) BOOL closeFailed;
+@property(nonatomic) int64_t closeOsCode;
 @property(nonatomic) int32_t code;
 @property(nonatomic) int64_t osCode;
 @property(nonatomic, strong, nullable) NSData *jpeg;
@@ -111,6 +114,13 @@ static const int kFandheMaxPixel = 2048;
         *code = self.code;
         *os = self.osCode;
         *jpeg = self.jpeg;
+    }
+}
+
+- (void)snapshotCloseFailed:(BOOL *)failed os:(int64_t *)os {
+    @synchronized(_lock) {
+        *failed = self.closeFailed;
+        *os = self.closeOsCode;
     }
 }
 
@@ -179,7 +189,10 @@ static const int kFandheMaxPixel = 2048;
         }
     }
     if (close) {
-        [self.device requestCloseSession];
+        // ImageCaptureCore の開閉は main queue で行う（completion の queue からは直接呼ばない）。
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.device requestCloseSession];
+        });
     } else if (signal) {
         [self signalClosed];
     } else if (error != nil) {
@@ -370,6 +383,7 @@ static const int kFandheMaxPixel = 2048;
             moreGoing:(BOOL)moreGoing {
     if (device == self.device) {
         [self finish:7 os:0 jpeg:nil];
+        [self signalClosed];
     } else if (!self.discoveryEnded) {
         // 探索窓の間に外れた機器は候補から除く（先頭に選んで OS の失敗になるのを防ぐ）。
         [_cameras removeObject:(ICCameraDevice *)device];
@@ -387,10 +401,8 @@ static const int kFandheMaxPixel = 2048;
 
 - (void)didRemoveDevice:(ICDevice *)device {
     [self finish:7 os:0 jpeg:nil];
-    // 外れた機器のセッションは閉鎖の完了が来ない。
-    if (self.tornDown) {
-        [self signalClosed];
-    }
+    // 外れた機器のセッションは閉鎖の完了が来ない。後片付けの前後どちらで外れても待たせない。
+    [self signalClosed];
 }
 
 - (void)device:(ICDevice *)device didOpenSessionWithError:(NSError *)error {
@@ -401,6 +413,12 @@ static const int kFandheMaxPixel = 2048;
 
 - (void)device:(ICDevice *)device didCloseSessionWithError:(NSError *)error {
     if (self.tornDown) {
+        if (error != nil) {
+            @synchronized(_lock) {
+                self.closeFailed = YES;
+                self.closeOsCode = (int64_t)error.code;
+            }
+        }
         [self signalClosed];
         return;
     }
@@ -499,9 +517,11 @@ int32_t fandhe_apple_scanner_devices_import(uint64_t deadline_ms, uint64_t disco
             [state teardown];
         });
         // 閉鎖 completion（開始中だった要求の完了後の閉鎖を含む）を待つ。上限は機器が応答しない場合の保険。
+        BOOL closeTimedOut = NO;
         if ([state needsCloseWait]) {
-            dispatch_semaphore_wait(state.closeSem,
-                                    dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+            closeTimedOut = dispatch_semaphore_wait(
+                                state.closeSem,
+                                dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0;
         }
         dispatch_sync(dispatch_get_main_queue(), ^{
             state.device.delegate = nil;
@@ -512,6 +532,21 @@ int32_t fandhe_apple_scanner_devices_import(uint64_t deadline_ms, uint64_t disco
         int64_t os = 0;
         NSData *jpeg = nil;
         [state snapshotCode:&code os:&os jpeg:&jpeg];
+        // 機器を閉じ切れていない（閉鎖のエラー・待機の期限切れ）のに成功を返さない。
+        if (code == 0) {
+            BOOL failed = NO;
+            int64_t closeOs = 0;
+            [state snapshotCloseFailed:&failed os:&closeOs];
+            if (failed) {
+                *out_found = state.found;
+                *out_os_code = closeOs;
+                return 9;
+            }
+            if (closeTimedOut) {
+                *out_found = state.found;
+                return 6;
+            }
+        }
         *out_found = state.found;
         *out_os_code = os;
         if (code == 0) {
