@@ -305,8 +305,8 @@ pub mod android_print;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_quick_settings_tile;
-/// Issue #972: Android 向け「無線の状態と切り替え」実装のスタブ（実装は #974）。
-/// `device/radio_control.rs` の Android 経路から呼ばれる。#974 が cfg を変えずに済むよう `any(android, test)`。
+/// Issue #974（骨格は #972）: Android 向け「無線の状態と切り替え」実装（`RadioControlHelper` 経由の JNI）。
+/// `device/radio_control.rs` の Android 経路から呼ばれる。純関数をホストで試すため `any(android, test)`。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_radio_control;
