@@ -292,6 +292,9 @@ pub mod color_picker_pick;
 /// Phase 11 の拡充ループ型サンプル「ファイル・動画のプレビューとサムネイル」（親 #182、Issue #917）。
 pub mod file_preview_show;
 
+/// Phase 11 の拡充ループ型サンプル「無線の状態と切り替え」（親 #189、Issue #972）。
+pub mod radio_control_show;
+
 /// Phase 11 の拡充ループ型サンプル「外部ストレージの着脱」（親 #175、Issue #858）。
 pub mod removable_storage_show;
 /// Phase 11 の拡充ループ型サンプル「画面の明るさ」（親 #126、Issue #633）。
