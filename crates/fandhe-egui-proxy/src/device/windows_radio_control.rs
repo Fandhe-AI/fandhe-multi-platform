@@ -7,7 +7,9 @@
 //!
 //! - `read`: `GetRadiosAsync().get()` の一覧を Kind で絞り、先頭の 1 つの `State()` を返す。
 //!   一覧に無ければ `NotPresent`（失敗ではない）
-//! - `set`: `RequestAccessAsync().get()` → `GetRadiosAsync().get()` → `SetStateAsync(..).get()`。
+//! - `begin_access`: `RequestAccessAsync` は UI スレッドから呼ぶ必要があるため、ドライバ（UI スレッド）が
+//!   `set` の前に呼ぶ。`.get()` では待たず `SetCompleted` で結果をチャネルへ流し、ワーカーが受け取る
+//! - `set`: `GetRadiosAsync().get()` → `SetStateAsync(..).get()`（許可要求は済んでいる前提）。
 //!   `Allowed` は `Accepted`（受付であり、最終状態は非同期に決まる。読み直しはドライバ側）
 //!
 //! `unsafe` と `RoInitialize` は使わない。HRESULT と `Radio.Name`（アダプター名）はログにも画面にも
@@ -84,15 +86,54 @@ fn error_from_hresult(code: i32) -> DeviceError {
 
 #[cfg(target_os = "windows")]
 mod imp {
+    use std::cell::RefCell;
+    use std::sync::mpsc::{channel, Receiver};
     use std::sync::Arc;
 
     use windows::Devices::Radios as win;
+    use windows_future::{AsyncOperationCompletedHandler, AsyncStatus, IAsyncOperation};
 
     use super::{access_result, error_from_hresult, kind_raw, state_from_raw};
     use fandhe_device::radio_control::{RadioControl, RadioKind, RadioState, SwitchOutcome};
     use fandhe_device::DeviceError;
 
     struct WindowsRadioControl;
+
+    thread_local! {
+        /// 完了ハンドラが呼ばれる前に落とさないよう保持する（UI スレッド専用、次回で置き換わる）。
+        static HELD: RefCell<Option<IAsyncOperation<win::RadioAccessStatus>>> =
+            const { RefCell::new(None) };
+    }
+
+    /// 無線のアクセス許可要求を開始する。UI スレッドから呼ぶこと（`RequestAccessAsync` の要件）。
+    /// 待たずに返り、結果（`Allowed` のみ `Ok`）は戻り値のチャネルへ 1 回だけ流れる。
+    pub(crate) fn begin_access() -> Receiver<Result<(), DeviceError>> {
+        let (tx, rx) = channel();
+        let started = win::Radio::RequestAccessAsync()
+            .map_err(err)
+            .and_then(|op| {
+                let tx = tx.clone();
+                op.SetCompleted(&AsyncOperationCompletedHandler::new(move |op, status| {
+                    let result = match (op.ok(), status) {
+                        (Ok(op), AsyncStatus::Completed) => op
+                            .GetResults()
+                            .map_err(err)
+                            .and_then(|s: win::RadioAccessStatus| access_result(s.0))
+                            .map(|_| ()),
+                        _ => Err(DeviceError::Internal(fandhe_device::radio_control::FAILED)),
+                    };
+                    let _ = tx.send(result);
+                    Ok(())
+                }))
+                .map_err(err)?;
+                HELD.with_borrow_mut(|h| *h = Some(op));
+                Ok(())
+            });
+        if let Err(e) = started {
+            let _ = tx.send(Err(e));
+        }
+        rx
+    }
 
     pub(crate) fn implementation() -> Arc<dyn RadioControl> {
         Arc::new(WindowsRadioControl)
@@ -125,11 +166,6 @@ mod imp {
         }
 
         fn set(&self, kind: RadioKind, on: bool) -> Result<SwitchOutcome, DeviceError> {
-            let status = win::Radio::RequestAccessAsync()
-                .map_err(err)?
-                .get()
-                .map_err(err)?;
-            access_result(status.0)?;
             let Some(r) = find(kind)? else {
                 return Err(DeviceError::Unsupported(
                     fandhe_device::radio_control::FEATURE,
@@ -147,7 +183,7 @@ mod imp {
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) use imp::implementation;
+pub(crate) use imp::{begin_access, implementation};
 
 #[cfg(test)]
 mod tests {

@@ -6,7 +6,7 @@
 //!
 //! # スレッド
 //!
-//! macOS の管理者パスワードのダイアログや Windows の同意 UI を待つブロッキング呼び出しになりうるため、
+//! macOS の管理者パスワードのダイアログや Windows の同意 UI（許可要求の開始だけ UI スレッド）を待つブロッキング呼び出しになりうるため、
 //! UI を止めないよう OS を問わずワーカースレッドで呼ぶ。切り替え（`set`）の後は成否によらず同じ
 //! ワーカーで `read` を 1 回呼び、画面は読み直した値だけで状態を出す。完了は画面状態の世代照合つきで
 //! 入れる（古い世代は捨てられる）。要求の追跡は世代照合で足りるため `RequestSlot` は使わない
@@ -112,6 +112,10 @@ fn drive(
     // 次の再描画から `take_request` が `None` を返すようにし、二重に OS へ渡さない。
     let _ = sender.send(Box::new(mark_busy));
 
+    // Windows は無線の許可要求を UI スレッド（ここ）から始める。ワーカーは結果をチャネルで待つだけ。
+    #[cfg(target_os = "windows")]
+    let access = matches!(action, Action::Set(_)).then(super::windows_radio_control::begin_access);
+
     let worker_sender = sender.clone();
     let spawned = std::thread::Builder::new()
         .name("radio-control".to_string())
@@ -125,8 +129,16 @@ fn drive(
                     }));
                 }
                 Action::Set(on) => {
-                    let result = radio
-                        .set(radio_kind, on)
+                    #[cfg(target_os = "windows")]
+                    let granted = access.map_or(Ok(()), |rx| {
+                        rx.recv().unwrap_or(Err(DeviceError::Internal(
+                            fandhe_device::radio_control::FAILED,
+                        )))
+                    });
+                    #[cfg(not(target_os = "windows"))]
+                    let granted = Ok(());
+                    let result = granted
+                        .and_then(|()| radio.set(radio_kind, on))
                         .map(to_switched)
                         .map_err(to_failure);
                     // 成否によらず読み直し、状態が変わっていないことも見せる。
