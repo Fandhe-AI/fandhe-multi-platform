@@ -454,6 +454,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::audio_devices::release_mount(id);
         super::local_fonts::release_mount(id);
         super::eye_dropper::release_mount(id);
+        super::color_picker::release_mount(id);
         super::camera_preview_stream::release_mount(id);
         super::multi_display::release_mount(id);
         super::window_management::release_mount(id);
