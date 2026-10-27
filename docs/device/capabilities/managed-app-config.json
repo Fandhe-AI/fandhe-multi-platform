@@ -8,24 +8,33 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "`UserDefaults.standard.dictionary(forKey: \"com.apple.configuration.managed\")`、更新は `UserDefaults.didChangeNotification`",
+      "api": "`NSUserDefaults` の `objectForKey:@\"com.apple.configuration.managed\"`（辞書であることを `isKindOfClass:` で確かめる。`dictionaryForKey:` は「無い」と「辞書でない」がどちらも nil）",
       "perm": "不要（MDM 側の配布設定が前提）",
-      "url": "https://developer.apple.com/documentation/foundation/nsuserdefaults",
-      "note": "未実装。MDM 未管理の端末では空。"
+      "url": [
+        "https://developer.apple.com/library/archive/samplecode/sc2279/introduction/intro.html",
+        "https://developer.apple.com/documentation/devicemanagement/configuring-managed-apps-and-extensions"
+      ],
+      "note": "未実装。未管理端末ではキーが無い（未管理と管理下で設定ゼロは区別できない）。`UserDefaults.didChangeNotification` は自プロセスの変更でしか出ず MDM の更新は拾えないため、変更は押下ごとの再読込で拾う。`ManagedApp` framework（iOS 18.4+、Swift 専用）は採らない。宣言型管理の legacy 設定も同じキーに届く。"
     },
     "android": {
       "status": "possible",
-      "api": "`RestrictionsManager.getApplicationRestrictions()`（`ACTION_APPLICATION_RESTRICTIONS_CHANGED` で変更検知）。`res/xml` に制限スキーマの宣言が必要",
+      "api": "`RestrictionsManager.getApplicationRestrictions()`（制限が無ければ `null`。ディスク I/O のため main スレッドで呼ばない）。`res/xml` に制限スキーマの宣言が必要（`ACTION_APPLICATION_RESTRICTIONS_CHANGED` は動的登録のみ届く。本実装は押下ごとに再読込）",
       "perm": "不要（MDM / EMM 側の配布が前提）",
-      "url": "https://developer.android.com/work/managed-configurations",
-      "note": "未実装。未管理端末では空。"
+      "url": [
+        "https://developer.android.com/reference/android/content/RestrictionsManager#getApplicationRestrictions()",
+        "https://developer.android.com/work/managed-configurations"
+      ],
+      "note": "未実装。未管理端末では null。Bundle には管理者が設定したキーだけが入り、XML の `defaultValue` が入る保証は無い。"
     },
     "macos": {
       "status": "possible",
-      "api": "`UserDefaults` の管理設定ドメイン（構成プロファイルで配布した `com.apple.configuration.managed` 相当）",
+      "api": "構成プロファイル `com.apple.ManagedClient.preferences` がアプリの domain へ強制したキーを `CFPreferencesCopyAppValue` + `CFPreferencesAppValueIsForced` で読む",
       "perm": "不要（MDM 側の配布が前提）",
-      "url": "",
-      "note": "未実装。macOS での配布経路は構成プロファイルで iOS と異なる可能性。URL 未確認（一般知識、要確認）。"
+      "url": [
+        "https://developer.apple.com/documentation/devicemanagement/managedpreferences",
+        "https://developer.apple.com/documentation/corefoundation/cfpreferencesappvalueisforced(_:_:)"
+      ],
+      "note": "未実装。`com.apple.configuration.managed` の辞書ではなくキー単位で届くため、読むのは固定キーだけ。強制されていない値（`defaults write` の値）は管理設定として扱わない。"
     },
     "windows": {
       "status": "no",
@@ -42,5 +51,5 @@
       "note": "ブラウザ管理ポリシーは存在するがアプリ設定を読む API は無い"
     }
   },
-  "note": "企業の MDM が配布するアプリ設定（Managed App Configuration）を読むだけの機能で、端末管理（Lock Task 等）は対象外。"
+  "note": "企業の MDM が配布するアプリ設定を読むだけの機能で、端末管理（Lock Task 等）は対象外。固定の 3 キー（真偽・整数・文字列）だけを押下ごとに読み、変更通知の購読はしない。文字列は文字数だけ出し、値の中身（文字列）は画面にもログにも出さない。管理下かを事前判定せず、OS が返した値だけを出す（XML の既定値やアプリ内の記憶は出さない）。結果は 設定なし / 設定あり / 失敗 / 非対応 を分け、型違いは捨てずに見せる。守らない範囲: 読み取り後の変化の反映、OS 呼び出しが戻らない場合の期限、Android 34+ の Supervision 管理者の値、macOS でプロファイルが重なったときの勝敗、OS 間の件数の数え方。"
 }
