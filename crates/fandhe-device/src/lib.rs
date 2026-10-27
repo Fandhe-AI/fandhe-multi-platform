@@ -127,6 +127,8 @@ pub mod home_widget;
 pub mod http;
 /// Phase 11（端末機能の拡充ループ、親 #187、Issue #960）: 人の在席・離席の検知（現在値を 1 回読む）。
 pub mod human_presence;
+/// Phase 11（端末機能の拡充ループ、親 #191、Issue #975）: 端末内での画像生成（OS の生成画面で作った 1 枚を表示する）。
+pub mod image_generation;
 /// Phase 11（端末機能の拡充ループ、親 #1120、Issue #1250）: 画像内の文字認識（OCR）。
 pub mod image_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #135、Issue #701）: アプリ内ブラウザ（固定の公開 URL を OS のアプリ内ブラウザで開く）。
