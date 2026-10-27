@@ -4789,6 +4789,13 @@ public class MainActivity extends GameActivity {
         return AudioDevicesHelper.list(getApplicationContext());
     }
 
+    // Rust 側（`device/android_managed_app_config.rs`、Issue #946）からワーカースレッドが JNI 経由で
+    // 押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
+    // `ManagedAppConfigHelper` 冒頭を参照。失敗は null。ディスク I/O を伴うので UI スレッドから呼ばない。
+    private String managedAppConfigRead() {
+        return ManagedAppConfigHelper.read(getApplicationContext());
+    }
+
     // Rust 側（`device/android_usb_device.rs`、Issue #507）から JNI 経由で egui スレッドが
     // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
     // `UsbDeviceHelper` 冒頭を参照。失敗は null、USB ホスト非搭載は空文字。

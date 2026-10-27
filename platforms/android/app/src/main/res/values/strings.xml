@@ -23,4 +23,9 @@
     <!-- クイック設定タイル（Issue #720）の表示名。fandhe_core の
          `screens::quick_settings_tile_show::TILE_LABEL` と一致させる。切り離し時に削除する。 -->
     <string name="quick_settings_tile_label">Fandhe カウント</string>
+    <!-- 管理アプリ設定（Issue #946）の制限スキーマの表示名。`res/xml/app_restrictions.xml` から参照する。
+         キーは `fandhe_device::managed_app_config` の固定 3 キーと一致させる。切り離し時に削除する。 -->
+    <string name="restriction_sample_bool">サンプル（真偽）</string>
+    <string name="restriction_sample_integer">サンプル（整数）</string>
+    <string name="restriction_sample_text">サンプル（文字列）</string>
 </resources>
