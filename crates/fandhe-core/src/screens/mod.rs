@@ -259,6 +259,8 @@ pub mod safe_area_insets_show;
 pub mod spell_check;
 /// Phase 11 の拡充ループ型サンプル「システムのアクセント色」（親 #103、Issue #421）。
 pub mod system_accent_color_show;
+/// Phase 11 の拡充ループ型サンプル「システムの効果音」（親 #183、Issue #939）。
+pub mod system_sound_beep;
 /// Phase 11 の拡充ループ型サンプル「端末内翻訳」（親 #115、Issue #535）。
 pub mod translation;
 /// Phase 11 の拡充ループ型サンプル「画面スリープの抑止」（親 #1129、Issue #1278）。
