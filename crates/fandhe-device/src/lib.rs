@@ -68,6 +68,8 @@ pub mod camera_preview_stream;
 pub mod capture_protection;
 /// Phase 11（端末機能の拡充ループ、Issue #859）: クリップボード読み書き。
 pub mod clipboard;
+/// Phase 11（端末機能の拡充ループ、親 #184、Issue #941）: システムの色選択ダイアログ（固定の初期色から 1 色を選ばせ `#rrggbb` で返す）。
+pub mod color_picker;
 /// Phase 11（端末機能の拡充ループ、親 #143、Issue #740）: 付属機器のペアリング（OS の機器選択画面で BLE 機器を 1 台選び、名前を知る）。
 pub mod companion_device;
 /// Phase 11（端末機能の拡充ループ、親 #1154、Issue #1404）: 方位（コンパス）。

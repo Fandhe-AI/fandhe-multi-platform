@@ -676,6 +676,10 @@ pub mod camera_preview_stream;
 /// `UnsupportedCaptureProtection` 固定）。
 pub mod capture_protection;
 pub mod clipboard;
+/// Phase 11 の拡充ループ（親 #184、Issue #941）: システムの色選択ダイアログの effect ドライバ
+/// （macOS・iOS は pull 型 `bridge`、Windows は同期モーダル、他 OS は `UnsupportedColorPicker` 固定。
+/// Web は `fandhe-web-dom` が持つ）。
+pub mod color_picker;
 /// Phase 11（親 #143、Issue #740）: 付属機器のペアリングの effect ドライバ（Android は
 /// `CompanionDeviceManager` で #741 が実装、iOS は保留のため他 OS と同じ
 /// `UnsupportedCompanionDevicePicker` 固定。Web は対象外）。
@@ -859,6 +863,10 @@ pub mod ios_camera_preview_stream;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_capture_protection;
+/// Issue #941: iOS 向けシステムの色選択ダイアログの骨格（実体は #942）。
+/// `device/color_picker.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_color_picker;
 /// Issue #1405: iOS 向け方位実装（`ios/fandhe_ios_compass.m` を呼ぶ C ABI ラッパー、CoreLocation の heading）。`device/compass.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -1155,6 +1163,10 @@ pub mod macos_background_task;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_bluetooth_classic;
+/// Issue #941: macOS 向けシステムの色選択ダイアログ実装（`macos/fandhe_macos_color_picker.m` の
+/// `NSColorPanel` を呼ぶ C ABI ラッパー）。`device/color_picker.rs` の macOS 経路から呼ばれる。
+#[cfg(target_os = "macos")]
+pub mod macos_color_picker;
 /// Issue #1384: macOS 向けメール作成・SMS 作成画面実装（`macos/fandhe_macos_compose_mail_sms.m` を呼ぶ C ABI ラッパー）。`device/compose_mail_sms.rs` の macos 経路から呼ばれる。
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -1609,6 +1621,10 @@ pub mod windows_bluetooth_le;
 /// `device/capture_protection.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_capture_protection;
+/// Issue #941: Windows 向けシステムの色選択ダイアログ実装（`ChooseColorW`）。
+/// `device/color_picker.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_color_picker;
 /// Issue #1404: Windows 向け方位実装（WinRT `Compass` の pull）。`device/compass.rs` の windows 経路から呼ばれる。
 /// 写像の純関数をホストでテストできるよう cfg は `any(windows, test)`。
 #[cfg(any(target_os = "windows", test))]

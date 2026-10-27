@@ -25,7 +25,10 @@
       "note": "OS 標準の色選択ダイアログは無い（Material の色選択は自前実装・サードパーティ）"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#936）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_color_picker.m + crates/fandhe-egui-proxy/src/device/macos_color_picker.rs + crates/fandhe-egui-proxy/src/device/color_picker.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-device/src/color_picker.rs、Issue #941",
       "api": "AppKit `NSColorPanel.shared`（`NSColorPanelColorDidChangeNotification`）、閉じたことは `NSWindowWillCloseNotification`（object = パネル）",
       "perm": "不要",
       "url": [
@@ -34,10 +37,13 @@
         "https://developer.apple.com/documentation/appkit/nswindow/willclosenotification",
         "https://developer.apple.com/documentation/appkit/nswindow/hidesondeactivate"
       ],
-      "note": "未実装。共有パネルで確定ボタンは無く、確定は閉じたとき。色の変化通知はプログラムでの設定でも出るため、初期色を入れてから購読する。`hidesOnDeactivate` が既定 YES で、非アクティブ時は閉じずに隠れる（閉じた通知は出ない）。"
+      "note": "実装済み（#941）。共有パネルで確定ボタンは無く、確定は閉じたとき。色の変化通知はプログラムでの設定でも出るため、初期色を入れてから購読する。`hidesOnDeactivate` が既定 YES で、非アクティブ時は閉じずに隠れる（閉じた通知は出ない）。"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#936）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_color_picker.rs + crates/fandhe-egui-proxy/src/device/color_picker.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-device/src/color_picker.rs、Issue #941",
       "api": "Win32 共通ダイアログ `ChooseColorW`（OK で非 0、取り消し・エラーは 0 で `CommDlgExtendedError` が 0 なら取り消し）。色は `COLORREF`（`0x00bbggrr`）",
       "perm": "不要",
       "url": [
@@ -45,7 +51,7 @@
         "https://learn.microsoft.com/en-us/windows/win32/api/commdlg/ns-commdlg-choosecolorw",
         "https://learn.microsoft.com/en-us/windows/win32/gdi/colorref"
       ],
-      "note": "未実装。従来型の簡易ダイアログ（WinUI の ColorPicker は自前のコントロール）。`lpCustColors` は 16 要素の配列が必須。取り消し・エラー時の `rgbResult` は未定義。"
+      "note": "実装済み（#941）。従来型の簡易ダイアログ（WinUI の ColorPicker は自前のコントロール）。`lpCustColors` は 16 要素の配列が必須。取り消し・エラー時の `rgbResult` は未定義。"
     },
     "web": {
       "status": "possible",
