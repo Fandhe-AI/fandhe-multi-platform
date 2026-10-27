@@ -35,7 +35,8 @@
       "api": "WinRT `Windows.Devices.Sensors.Gyrometer` / `Magnetometer` / `Accelerometer.GetDefault(AccelerometerReadingType.Linear)`（Windows 10 1607 / 14393 以上。重力は OS が除く）",
       "perm": "不要",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.gyrometer",
-      "note": "未実装。単位は度/秒・µT・g。センサー搭載機（2-in-1 等）のみ。デスクトップ PC では `GetDefault` が null。Connected Standby の間も null。一次情報: https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.gyrometerreading / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.magnetometerreading / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.accelerometer.getdefault / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.accelerometerreadingtype"
+      "note": "未実装。単位は度/秒・µT・g。センサー搭載機（2-in-1 等）のみ。デスクトップ PC では `GetDefault` が null。Connected Standby の間も null。一次情報: https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.gyrometerreading / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.magnetometerreading / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.accelerometer.getdefault / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.accelerometerreadingtype",
+      "deferred": "最小化（背景遷移）でセンサーの取得を止める経路が、止める処理（`ReportInterval` を 0 に戻す）の失敗の扱いと、最小化を監視できないときに開始してよいかの 2 点で収束しなかったため保留（#909）。再開時は、この 2 点と最小化の検出元を先に trait doc へ書いてから着手する"
     },
     "web": {
       "status": "possible",
