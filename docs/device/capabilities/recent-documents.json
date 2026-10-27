@@ -45,7 +45,7 @@
         "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-icustomdestinationlist-appendknowncategory",
         "https://learn.microsoft.com/en-us/windows/win32/shell/taskbar-extensions"
       ],
-      "note": "実装済み（#989）。`IShellItem` と `IShellLink` の混在する一覧を両方読む。`SetAppID` は呼ばない（明示 AUMID を持たないため）。Recent フォルダーと Jump List の Recent に反映される（Jump List の表示はファイル型の関連付け・AUMID・カスタム Jump List の有無で変わりうる、未確認）。結果は `Listed`（読み戻した OS の一覧に載った）/ `NotListed`（渡したが一覧に無い。成功の色にしない）/ 失敗。読み戻しの失敗は `NotListed` に畳まない。登録済みをアプリ内に記録せず毎回 OS の一覧を読み、比較は両側を正規化してから行う。守らない範囲: 登録後の OS の非同期反映の時間差、Open Recent・Dock・Jump List の表示そのもの、複数プロセス。範囲外: 任意ファイルの登録、一覧の消去・列挙、Open Recent からの起動の受け口。プライバシー設定・ポリシーで記録が無効なときは一覧が空になり `NotListed`。既知の天井（実機確認待ち）: 関連付けの無い型が Jump List の Recent に載るか",
+      "note": "実装済み（#989）。`IShellItem` と `IShellLink` の混在する一覧を両方読む。プロセスに明示 AUMID（通知・アラームが設定）があれば `SetAppID` で渡して登録側と引き先を揃え、無ければ呼ばない。Recent フォルダーと Jump List の Recent に反映される（Jump List の表示はファイル型の関連付け・AUMID・カスタム Jump List の有無で変わりうる、未確認）。結果は `Listed`（読み戻した OS の一覧に載った）/ `NotListed`（渡したが一覧に無い。成功の色にしない）/ 失敗。読み戻しの失敗は `NotListed` に畳まない。登録済みをアプリ内に記録せず毎回 OS の一覧を読み、比較は両側を正規化してから行う。守らない範囲: 登録後の OS の非同期反映の時間差、Open Recent・Dock・Jump List の表示そのもの、複数プロセス。範囲外: 任意ファイルの登録、一覧の消去・列挙、Open Recent からの起動の受け口。プライバシー設定・ポリシーで記録が無効なときは一覧が空になり `NotListed`。既知の天井（実機確認待ち）: 関連付けの無い型が Jump List の Recent に載るか",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#968）",
       "impl": "crates/fandhe-egui-proxy/src/device/windows_recent_documents.rs + crates/fandhe-egui-proxy/src/device/recent_documents.rs + crates/fandhe-core/src/screens/recent_documents_show.rs + crates/fandhe-device/src/recent_documents.rs、Issue #989"

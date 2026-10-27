@@ -7,8 +7,10 @@
 //! - 登録: `SHAddToRecentDocs(SHARD_PATHW, パス)`。`pv` は必ず非 NULL（NULL は全アプリの履歴を消す）。
 //!   パスは `ShellPath` を `windows_open_in_shell::to_win32_path` で正規化したものだけ
 //! - 読み戻し: `IApplicationDocumentLists::GetList(ADLT_RECENT, 0)`（0 は全件）。返る集合は
-//!   `IShellItem` と `IShellLink` が混在しうるため両方を扱う。`SetAppID` は呼ばない
-//!   （本リポジトリは明示 AUMID を持たず、呼ばなければ OS が推定するため）
+//!   `IShellItem` と `IShellLink` が混在しうるため両方を扱う。`GetList` の前に、
+//!   プロセスの明示 AUMID（通知・アラームが `SetCurrentProcessExplicitAppUserModelID` で設定する
+//!   `APP_AUMID`）があれば `SetAppID` へ渡す。`SHAddToRecentDocs` の書き先と引き先を揃えるため。
+//!   未設定なら呼ばず、OS の推定（登録側と同じ規則）に任せる
 //! - 登録直後に同じ読み戻しを行い、載っていれば `Listed`。登録 API は戻り値を持たず、成功に畳まない
 //!
 //! # 結果の写像
@@ -80,8 +82,9 @@ mod win {
     };
     use windows::Win32::UI::Shell::Common::IObjectArray;
     use windows::Win32::UI::Shell::{
-        ApplicationDocumentLists, IApplicationDocumentLists, IShellItem, IShellLinkW,
-        SHAddToRecentDocs, ADLT_RECENT, SHARD_PATHW, SIGDN_FILESYSPATH,
+        ApplicationDocumentLists, GetCurrentProcessExplicitAppUserModelID,
+        IApplicationDocumentLists, IShellItem, IShellLinkW, SHAddToRecentDocs, ADLT_RECENT,
+        SHARD_PATHW, SIGDN_FILESYSPATH,
     };
 
     use super::super::windows_open_in_shell::to_win32_path;
@@ -144,6 +147,13 @@ mod win {
         let lists: IApplicationDocumentLists =
             unsafe { CoCreateInstance(&ApplicationDocumentLists, None, CLSCTX_INPROC_SERVER) }
                 .map_err(|_| ERR)?;
+        // プロセスに明示 AUMID があるとき、SHAddToRecentDocs はその一覧へ書く。引き先も揃える。
+        // SAFETY: 成功時の PWSTR は呼び出し側の所有。`SetAppID` は引数を保持しないため、直後に 1 回だけ解放する。
+        if let Ok(id) = unsafe { GetCurrentProcessExplicitAppUserModelID() } {
+            let r = unsafe { lists.SetAppID(id) };
+            unsafe { CoTaskMemFree(Some(id.0 as *const c_void)) };
+            r.map_err(|_| ERR)?;
+        }
         // SAFETY: `lists` は有効。0 は全件。
         let arr: IObjectArray = unsafe { lists.GetList(ADLT_RECENT, 0) }.map_err(|_| ERR)?;
         // SAFETY: `arr` は有効。
