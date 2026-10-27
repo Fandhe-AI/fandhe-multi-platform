@@ -104,7 +104,10 @@ static FandheColorPickerDelegate *g_retainedDelegate = nil;
     }
     uint64_t rid = self.requestId;
     self.done = YES;
-    g_retainedDelegate = nil;
+    // 後続の要求が保持枠を引き継いでいる場合は、その強参照を外さない。
+    if (g_retainedDelegate == self) {
+        g_retainedDelegate = nil;
+    }
     // 強参照を外した後は self に触れない。
     fandhe_rust_ios_color_picker_outcome(rid, code, rgb);
 }
@@ -136,6 +139,8 @@ int32_t fandhe_ios_color_picker_present(uint64_t request_id, int32_t initial_rgb
             delegate.requestId = request_id;
             vc.delegate = delegate;
             vc.presentationController.delegate = delegate;
+            // 前の要求が未通知のまま枠を上書きされないよう、先に「選ばずに閉じた」で確定する。
+            [g_retainedDelegate finishWithCode:1 rgb:0];
             g_retainedDelegate = delegate;
             // 提示は非同期に確定するため、成否は completion 内で判定する。
             [top presentViewController:vc
