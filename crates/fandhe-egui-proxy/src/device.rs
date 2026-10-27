@@ -1882,8 +1882,8 @@ pub mod windows_power_state;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_print;
-/// Issue #972: Windows 向け「無線の状態と切り替え」実装のスタブ（実装は #973）。
-/// `device/radio_control.rs` の Windows 経路から呼ばれる。#973 が cfg を変えずに済むよう `any(windows, test)`。
+/// Issue #973: Windows 向け「無線の状態と切り替え」の実装（`Windows.Devices.Radios`）。
+/// `device/radio_control.rs` の Windows 経路から呼ばれる。純関数の単体テストを host で回すため `any(windows, test)`。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_radio_control;
