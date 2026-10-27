@@ -462,6 +462,10 @@ generated_screens! {
     crate::device::wifi_connect::wifi_connect_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "radio_control_show" => fandhe_core::screens::radio_control_show::current_screen,
+    crate::device::radio_control::radio_control_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ml_infer" => fandhe_core::screens::ml_infer::current_screen,
     crate::device::ml_inference::ml_infer_effect,
     effect

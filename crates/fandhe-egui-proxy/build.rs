@@ -322,6 +322,9 @@
 //! - `macos/fandhe_macos_wifi_connect.m`（Issue #791、CoreWLAN の directed scan と
 //!   `associateToNetwork:password:error:` による指定 Wi-Fi への接続。`src/device/macos_wifi_connect.rs`
 //!   から呼ばれる契約）。
+//! - `macos/fandhe_macos_radio_control.m`（Issue #972、CoreWLAN の `powerOn` / `setPower:error:` と
+//!   IOBluetooth の `powerState` による無線の状態取得と Wi-Fi の切り替え。`src/device/macos_radio_control.rs`
+//!   から呼ばれる契約）。
 //! - `macos/fandhe_macos_usb_device.m`（Issue #505、IOKit `IOUSBHostDevice` による USB 機器の
 //!   ベンダー ID・製品 ID・製品名の読み取り）は **macOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルし IOKit をリンクする（`src/device/macos_usb_device.rs` から呼ばれる契約）。
@@ -1803,6 +1806,18 @@ fn compile_macos_wifi_connect() {
     println!("cargo:rustc-link-lib=framework=CoreWLAN");
 }
 
+/// `macos/fandhe_macos_radio_control.m` を `cc` でコンパイルし CoreWLAN・IOBluetooth をリンクする（Issue #972）。
+/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_radio_control.rs` が使う）。
+fn compile_macos_radio_control() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_radio_control.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_radio_control.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_radio_control");
+    println!("cargo:rustc-link-lib=framework=CoreWLAN");
+    println!("cargo:rustc-link-lib=framework=IOBluetooth");
+}
+
 /// `macos/fandhe_macos_music_library.m` を `cc` でコンパイルし iTunesLibrary をリンクする（Issue #482）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_music_library.rs` が使う）。
 fn compile_macos_music_library() {
@@ -2760,6 +2775,8 @@ fn build_macos() {
     compile_macos_wifi_info();
     // `macos/fandhe_macos_wifi_connect.m`（Issue #791）も macOS 専用。CoreWLAN を使う。
     compile_macos_wifi_connect();
+    // `macos/fandhe_macos_radio_control.m`（Issue #972）も macOS 専用。CoreWLAN・IOBluetooth を使う。
+    compile_macos_radio_control();
     // `macos/fandhe_macos_usb_device.m`（Issue #505）も macOS 専用。IOKit を使う。
     compile_macos_usb_device();
     // `macos/fandhe_macos_bluetooth_classic.m`（Issue #659）も macOS 専用。IOBluetooth を使う。
