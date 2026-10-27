@@ -24,24 +24,30 @@
       "note": "未実装。minSdk 24 なので `FLAG_LOCK` の分岐なし。対応・禁止は `isWallpaperSupported` / `isSetWallpaperAllowed` の答えで決め、OS 版や端末種別で事前判定しない。既知の天井: Android 12 以降は壁紙の変更でテーマ色が変わると OS が Activity を作り直し（`configChanges` で止められない）、結果の表示が消えて画面が初期状態へ戻る。作り直し前に届いた結果は表示し、後に届いた結果は破棄する（嘘の成功にはならない）。範囲外: 元の壁紙へ戻す操作、ホームとロックの同時指定、ライブ壁紙"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "`NSWorkspace.setDesktopImageURL(_:for:options:)` を `NSScreen.screens` の全画面へ main スレッドで呼び、`desktopImageURL(for:)` で読み戻す",
       "perm": "不要（sandbox 無しのアプリ）",
       "url": [
         "https://developer.apple.com/documentation/appkit/nsworkspace/setdesktopimageurl(_:for:options:)",
         "https://developer.apple.com/documentation/appkit/nsworkspace/desktopimageurl(for:)"
       ],
-      "note": "未実装。ロック画面の壁紙は公開 API なし（`Unsupported`）。元ファイルは `$HOME/.fandhe/wallpaper/` に置いて消さない（OS は設定したパスを参照し続ける）。全画面の読み戻しが設定した URL と一致したときだけ成功とし、1 画面でも欠ければ失敗。守らない範囲: Space ごとの壁紙、設定後に利用者や他アプリが壁紙を変えること、元ファイルを利用者が消すこと"
+      "note": "実装済み（#970）。ロック画面の壁紙は公開 API なし（`Unsupported`）。元ファイルは `$HOME/.fandhe/wallpaper/` に置いて消さない（OS は設定したパスを参照し続ける）。全画面の読み戻しが設定した URL と一致したときだけ成功とし、1 画面でも欠ければ失敗。守らない範囲: Space ごとの壁紙、設定後に利用者や他アプリが壁紙を変えること、元ファイルを利用者が消すこと",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#964）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_wallpaper.m + crates/fandhe-egui-proxy/src/device/macos_wallpaper.rs + crates/fandhe-egui-proxy/src/device/wallpaper.rs + crates/fandhe-core/src/screens/wallpaper_set.rs + crates/fandhe-device/src/wallpaper.rs、Issue #970"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "Win32 `SystemParametersInfoW(SPI_SETDESKWALLPAPER)`（素の exe）。WinRT `UserProfilePersonalizationSettings` はパッケージのローカルフォルダのファイルを要するため使わない",
       "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-systemparametersinfow",
         "https://learn.microsoft.com/en-us/uwp/api/windows.system.userprofile.userprofilepersonalizationsettings"
       ],
-      "note": "未実装。ロック画面は WinRT `TrySetLockScreenImageAsync` がパッケージ化したアプリ向けで範囲外（`Unsupported`）。元ファイルは `$HOME/.fandhe/wallpaper/` に置いて消さない。既知の天井: 公式は「エラーが無い限り TRUE」とだけ書き、グループポリシー等で反映されない場合は検知できない（守らない範囲）"
+      "note": "実装済み（#970）。ロック画面は WinRT `TrySetLockScreenImageAsync` がパッケージ化したアプリ向けで範囲外（`Unsupported`）。元ファイルは `$HOME/.fandhe/wallpaper/` に置いて消さない。既知の天井: 公式は「エラーが無い限り TRUE」とだけ書き、グループポリシー等で反映されない場合は検知できない（守らない範囲）",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#964）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_wallpaper.rs + crates/fandhe-egui-proxy/src/device/wallpaper.rs + crates/fandhe-core/src/screens/wallpaper_set.rs + crates/fandhe-device/src/wallpaper.rs、Issue #970"
     },
     "web": {
       "status": "no",

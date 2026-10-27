@@ -162,6 +162,10 @@ generated_screens! {
     crate::device::photo_save::photo_save_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "wallpaper_set" => fandhe_core::screens::wallpaper_set::current_screen,
+    crate::device::wallpaper::wallpaper_set_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "text_scale_preview" => fandhe_core::screens::text_scale_preview::current_screen,
     crate::device::text_scale::text_scale_effect,
     effect
