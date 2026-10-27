@@ -120,6 +120,11 @@ mod imp {
                             .map_err(err)
                             .and_then(|s: win::RadioAccessStatus| access_result(s.0))
                             .map(|_| ()),
+                        // エラーは元の HRESULT を取り出して写像する（権限拒否・非対応を FAILED に潰さない）。
+                        (Ok(op), AsyncStatus::Error) => Err(op.GetResults().err().map_or(
+                            DeviceError::Internal(fandhe_device::radio_control::FAILED),
+                            err,
+                        )),
                         _ => Err(DeviceError::Internal(fandhe_device::radio_control::FAILED)),
                     };
                     let _ = tx.send(result);
