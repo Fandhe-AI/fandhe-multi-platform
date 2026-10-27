@@ -107,8 +107,8 @@
 //!   **macOS・iOS 両分岐**（iOS の実体は #536）で feature `device` 有効時に swiftc で静的ライブラリ化し、
 //!   Translation を弱リンクする（`src/device/apple_translation.rs` から呼ばれる契約）。
 //!   swiftc 呼び出しは `compile_apple_swift` を on-device-llm と共用する。
-//! - `apple/fandhe_apple_image_generation.swift`（Issue #975、Image Playground による端末内での画像生成）は
-//!   **macOS 分岐のみ**（iOS の分岐は #976）で feature `device` 有効時に swiftc で静的ライブラリ化し、
+//! - `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS・#976 iOS、Image Playground による端末内での画像生成）は
+//!   macOS・iOS 両分岐で feature `device` 有効時に swiftc で静的ライブラリ化し、
 //!   ImagePlayground を弱リンクする（`src/device/apple_image_generation.rs` から呼ばれる契約）。
 //!   swiftc 呼び出しは `compile_apple_swift` を on-device-llm と共用する。
 //! - `apple/fandhe_apple_spotlight_index.m`（Issue #560、Core Spotlight による OS の検索への登録と、
@@ -677,6 +677,8 @@ fn main() {
     compile_apple_on_device_llm(true);
     // `apple/fandhe_apple_translation.swift`（Issue #535 macOS + #536 iOS）も共用する。
     compile_apple_translation(true);
+    // `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS + #976 iOS）も共用する。
+    compile_apple_image_generation(true);
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
 
@@ -1175,8 +1177,8 @@ fn compile_apple_on_device_llm(ios: bool) {
     );
 }
 
-/// 端末内での画像生成の Swift 薄層 `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS、iOS は #976）。
-/// ImagePlayground を弱リンクする。macOS 分岐（`false`）から呼ぶ。iOS 分岐（`true`）の呼び出しは #976 が足す。
+/// 端末内での画像生成の Swift 薄層 `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS、#976 iOS）。
+/// ImagePlayground を弱リンクする。macOS 分岐（`false`）と iOS 分岐（`true`）の両方から呼ぶ。
 fn compile_apple_image_generation(ios: bool) {
     compile_apple_swift(
         &SwiftLib {
@@ -2704,7 +2706,7 @@ fn build_macos() {
     // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS。iOS は Issue #346 で `build_ios` からも呼ぶ）。
     compile_apple_on_device_llm(false);
     compile_apple_translation(false);
-    // `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS。iOS は #976 で `build_ios` からも呼ぶ）。
+    // `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS。iOS は `build_ios` からも呼ぶ）。
     compile_apple_image_generation(false);
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();

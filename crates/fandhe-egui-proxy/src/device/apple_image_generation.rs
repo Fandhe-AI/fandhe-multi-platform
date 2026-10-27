@@ -1,5 +1,5 @@
 //! macOS / iOS 向け端末内での画像生成実装（Issue #975 macOS、#976 iOS）。
-//! `device/image_generation.rs` の macOS 経路（と #976 が置く iOS 経路）から呼ばれ、
+//! `device/image_generation.rs` の macOS 経路と iOS 経路（`ios_image_generation`）から呼ばれ、
 //! `apple/fandhe_apple_image_generation.swift`（Image Playground の `ImagePlaygroundViewController`。
 //! `build.rs` が feature `device` 有効時に swiftc で静的ライブラリ化）を `unsafe extern "C"` 1 関数で呼ぶ。
 //! Swift からは受け口 2 本（[`on_begin`]・[`on_done`]）の関数ポインタ経由で戻る。`unsafe` はこの
@@ -11,9 +11,6 @@
 //! bridge が担い、ここは生成画面の表示依頼と結果の受け取りだけをする。
 //! 画素はコピーしてから渡し、ポインタを保持しない。画素・プロンプト・OS のエラー文はログに出さない。
 
-// iOS の実体は #976 が置く（それまで iOS は `ios_image_generation` のスタブで、本ファイルは未使用）。
-#![cfg_attr(target_os = "ios", allow(dead_code))]
-
 use std::sync::Arc;
 
 use fandhe_device::image_generation::{
@@ -23,7 +20,7 @@ use fandhe_device::image_generation::{
 use super::image_generation::{complete_from_os, try_begin_present};
 
 // SAFETY: `apple/fandhe_apple_image_generation.swift` が `@_cdecl` で定義する C ABI（`build.rs` が
-// macOS ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は swift 冒頭コメントに集約する。
+// macOS・iOS ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は swift 冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_apple_image_generation_present(
@@ -39,7 +36,7 @@ unsafe extern "C" {
 /// Image Playground の生成画面で画像を得る実装。
 pub(crate) struct AppleImageGenerator;
 
-/// macOS の `ImageGenerator` 実装を返す。
+/// macOS・iOS 共用の `ImageGenerator` 実装を返す。
 pub(crate) fn implementation() -> Arc<dyn ImageGenerator> {
     Arc::new(AppleImageGenerator)
 }
