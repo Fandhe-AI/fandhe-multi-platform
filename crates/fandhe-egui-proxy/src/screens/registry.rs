@@ -130,6 +130,10 @@ generated_screens! {
     crate::device::open_in_shell::open_in_shell_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "recent_documents_show" => fandhe_core::screens::recent_documents_show::current_screen,
+    crate::device::recent_documents::recent_documents_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "passkey_signin" => fandhe_core::screens::passkey_signin::current_screen,
     crate::device::passkey::passkey_signin_effect,
     effect
