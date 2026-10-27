@@ -710,6 +710,9 @@ pub mod device_identifier;
 /// Phase 11 の拡充ループ（親 #1131、Issue #1304）: 端末・OS 情報の effect ドライバ（macOS / Windows
 /// ・iOS・Android 実装、他 OS は `UnsupportedDeviceInfo` 固定）。
 pub mod device_info;
+/// Phase 11 の拡充ループ（親 #186、Issue #958）: デジタル身分証の提示要求の effect ドライバ
+/// （全ネイティブで同期 `Unsupported` が最終形。Web は `fandhe-web-dom`）。
+pub mod digital_credentials;
 /// Phase 11 の拡充ループ（親 #177、Issue #870）: 画面のリフレッシュレート・HDR・広色域の effect
 /// ドライバ（macOS / Windows 実装、iOS・Android は骨格、他 OS は `UnsupportedDisplayRefreshHdr` 固定）。
 pub mod display_refresh_hdr;
