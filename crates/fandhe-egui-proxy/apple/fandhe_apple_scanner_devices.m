@@ -5,7 +5,7 @@
 //
 // `crates/fandhe-egui-proxy/src/device/apple_scanner_devices.rs` から C ABI 経由で呼ばれる。
 // `build.rs` が macOS・iOS ターゲットの feature `device` 有効時に `cc` コンパイルする
-// （Rust 側 cfg と同じ OS 集合に保つ）。写像の SSOT は Rust 側の純関数 `decode`。
+// （Rust 側 cfg と同じ OS 集合に保つ）。写像の SSOT は Rust 側の純関数 `failure_for` / `failure_for_os_code`。
 //
 // 契約（ブロッキング型。Rust のワーカースレッドから呼ぶ。main スレッドから呼ぶと 8）:
 //   fandhe_apple_scanner_devices_import(deadline_ms, discovery_ms, max_bytes, ctx, on_bytes,
@@ -48,9 +48,10 @@ static const int kFandheMaxPixel = 2048;
 @property(nonatomic) uint64_t maxBytes;
 @property(nonatomic, strong, nullable) ICDeviceBrowser *browser;
 @property(nonatomic, strong, nullable) ICCameraDevice *device;
-@property(nonatomic) BOOL downloading;
+// 任意のキューから読み書きされるため atomic にする。
+@property(atomic) BOOL downloading;
 @property(nonatomic) BOOL discoveryEnded;
-@property(nonatomic) BOOL picked;
+@property(atomic) BOOL picked;
 @property(nonatomic) uint32_t found;
 // 以下は `lock` の内側でだけ読み書きする。
 @property(nonatomic) BOOL done;
@@ -301,6 +302,9 @@ static const int kFandheMaxPixel = 2048;
             moreGoing:(BOOL)moreGoing {
     if (device == self.device) {
         [self finish:7 os:0 jpeg:nil];
+    } else if (!self.discoveryEnded) {
+        // 探索窓の間に外れた機器は候補から除く（先頭に選んで OS の失敗になるのを防ぐ）。
+        [_cameras removeObject:(ICCameraDevice *)device];
     }
 }
 
