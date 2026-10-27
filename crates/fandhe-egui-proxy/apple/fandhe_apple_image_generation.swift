@@ -89,9 +89,24 @@ private final class Session: NSObject, ImagePlaygroundViewController.Delegate {
         didCreateImageAt imageURL: URL
     ) {
         let (code, pixels, w, h) = decode(url: imageURL)
-        // 結果にかかわらず一時ファイルを消す。消せなくても通知はする。
-        try? FileManager.default.removeItem(at: imageURL)
-        deliver(code: code, pixels: pixels, width: w, height: h)
+        // 結果にかかわらず一時ファイルを消す。消せなかったときは成功にせず、URL を保持して次回再削除する。
+        if removeTemp(imageURL) {
+            deliver(code: code, pixels: pixels, width: w, height: h)
+        } else {
+            deliver(code: 7)
+        }
+    }
+
+    /// 前回消せなかった一時ファイルを再削除し、`url` も消す。`url` を消せなければ false（URL は保持）。
+    private func removeTemp(_ url: URL) -> Bool {
+        pendingTempURLs.append(url)
+        pendingTempURLs = pendingTempURLs.filter { u in
+            do { try FileManager.default.removeItem(at: u); return false } catch {
+                // 既に無いなら済み。
+                return FileManager.default.fileExists(atPath: u.path)
+            }
+        }
+        return !pendingTempURLs.contains(url)
     }
 
     func imagePlaygroundViewControllerDidCancel(_ imagePlaygroundViewController: ImagePlaygroundViewController) {
@@ -166,6 +181,9 @@ private final class Session: NSObject, ImagePlaygroundViewController.Delegate {
 
 /// 進行中の要求（1 本）。`Session` を強参照で保持する（デリゲートは弱参照のため）。
 @MainActor private var currentSession: AnyObject?
+
+/// 削除に失敗した一時画像。次の結果通知で再削除する（パスはログへ出さない）。
+@MainActor private var pendingTempURLs: [URL] = []
 
 #endif
 
