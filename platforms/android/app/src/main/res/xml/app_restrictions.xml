@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Issue #946: MDM 管理アプリ設定の制限スキーマ。キーは `fandhe_device::managed_app_config` の
+     固定 3 キーと完全一致させる。defaultValue は書かない（OS が返した値だけを画面に出す方針）。
+     切り離し時に削除する。 -->
+<restrictions xmlns:android="http://schemas.android.com/apk/res/android">
+    <restriction
+        android:key="fandheSampleBool"
+        android:restrictionType="bool"
+        android:title="@string/restriction_sample_bool" />
+    <restriction
+        android:key="fandheSampleInteger"
+        android:restrictionType="integer"
+        android:title="@string/restriction_sample_integer" />
+    <restriction
+        android:key="fandheSampleText"
+        android:restrictionType="string"
+        android:title="@string/restriction_sample_text" />
+</restrictions>

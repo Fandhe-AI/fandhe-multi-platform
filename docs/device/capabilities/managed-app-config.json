@@ -17,14 +17,17 @@
       "note": "未実装。未管理端末ではキーが無い（未管理と管理下で設定ゼロは区別できない）。`UserDefaults.didChangeNotification` は自プロセスの変更でしか出ず MDM の更新は拾えないため、変更は押下ごとの再読込で拾う。`ManagedApp` framework（iOS 18.4+、Swift 専用）は採らない。宣言型管理の legacy 設定も同じキーに届く。"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`RestrictionsManager.getApplicationRestrictions()`（制限が無ければ `null`。ディスク I/O のため main スレッドで呼ばない）。`res/xml` に制限スキーマの宣言が必要（`ACTION_APPLICATION_RESTRICTIONS_CHANGED` は動的登録のみ届く。本実装は押下ごとに再読込）",
       "perm": "不要（MDM / EMM 側の配布が前提）",
       "url": [
         "https://developer.android.com/reference/android/content/RestrictionsManager#getApplicationRestrictions()",
         "https://developer.android.com/work/managed-configurations"
       ],
-      "note": "未実装。未管理端末では null。Bundle には管理者が設定したキーだけが入り、XML の `defaultValue` が入る保証は無い。"
+      "note": "実装済み（#946）。`null`・空の Bundle は設定なし。型違いは捨てずに見せ、キーがあって値が null のものも型違いにする。文字列は文字数だけ返し、固定外のキーは件数だけ数える。サービス取得失敗・例外は失敗にして「設定なし」へ畳まない。守らない範囲: 読み取り後の変化の反映（再押下まで）、API 34+ の Supervision 管理者の値、OS 呼び出しが戻らない場合の期限",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#937）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_managed_app_config.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/ManagedAppConfigHelper.java + platforms/android/app/src/main/res/xml/app_restrictions.xml + crates/fandhe-egui-proxy/src/device/managed_app_config.rs + crates/fandhe-core/src/screens/managed_app_config_show.rs + crates/fandhe-device/src/managed_app_config.rs、Issue #946"
     },
     "macos": {
       "status": "done",

@@ -208,9 +208,10 @@ pub mod android_local_fonts;
 /// `device/local_peer.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_local_peer;
-/// Issue #944: Android 向け MDM 管理アプリ設定（b-android #946 まではスタブ）。
-/// `device/managed_app_config.rs` の Android 経路から呼ばれる。
-#[cfg(target_os = "android")]
+/// Issue #946: Android 向け MDM 管理アプリ設定実装（`RestrictionsManager` を JNI で読む）。
+/// `device/managed_app_config.rs` の Android 経路から呼ばれる。ワイヤ文字列の写像はホストでもテストする。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_managed_app_config;
 /// Issue #267: Android 向け音声再生実装。`device/media_playback.rs` の
 /// Android 経路から呼ばれる。
@@ -1359,8 +1360,8 @@ pub mod macos_wifi_info;
 /// C ABI ラッパー）。`device/window_management.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_window_management;
-/// Phase 11 の拡充ループ（親 #185、Issue #944）: MDM 管理アプリ設定の effect ドライバ（macOS 実装、
-/// iOS・Android は b-ios・b-android まで `UnsupportedManagedAppConfig` を返すスタブ、他 OS は固定。Web は対象外）。
+/// Phase 11 の拡充ループ（親 #185、Issue #944）: MDM 管理アプリ設定の effect ドライバ（macOS・Android 実装、
+/// iOS は b-ios まで `UnsupportedManagedAppConfig` を返すスタブ、他 OS は固定。Web は対象外）。
 pub mod managed_app_config;
 /// Phase 11 の拡充ループ（親 #85、Issue #273）: 地図表示の effect ドライバ（macOS / iOS は
 /// pull 型 `bridge`、他 OS は `UnsupportedMapSnapshotter` 固定）。
