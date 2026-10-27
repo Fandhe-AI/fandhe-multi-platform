@@ -1,4 +1,4 @@
-// 端末内での画像生成（Image Playground）の Swift 薄層（Issue #975 macOS、iOS は #976）。
+// 端末内での画像生成（Image Playground）の Swift 薄層（Issue #975 macOS、#976 iOS）。
 //
 // `ImagePlaygroundViewController` は Swift 専用の型を含むため、`build.rs` の
 // `compile_apple_image_generation` が swiftc で静的ライブラリ化し、Rust の
@@ -14,8 +14,15 @@
 //     `ptr` は呼び出しの間だけ有効（RGBA8・行優先・`len == w*h*4`）。
 //
 // コード表（意味の SSOT は Rust の `fandhe_device::image_generation::outcome_from_apple_code`）:
-//   0 生成 / 1 キャンセル / 2 非対応 / 3 表示先なし / 4 復号不可 / 5 大きすぎる / 6 前面でない（iOS 用に予約）/
+//   0 生成 / 1 キャンセル / 2 非対応 / 3 表示先なし / 4 復号不可 / 5 大きすぎる / 6 前面でない（iOS のみ）/
 //   7 その他
+//
+// 提示方法:
+//   - macOS: 親窓の beginSheet。
+//   - iOS: UIKit で最前面の VC から present する。アプリが background なら 6、提示元が無い・他の画面を
+//     出している最中なら 3、提示に失敗したら 7。Inactive（権限ダイアログ・通知センター）は中断扱いにしない。
+//     スワイプで閉じた場合は `presentationControllerDidDismiss` でキャンセル（1）にする。
+//     画面は dismiss が終わってから `done` を呼ぶ（契約「画面を閉じてから done」）。
 //
 // - 寸法は復号の前に ImageIO のプロパティで読んで検査する（0 は 4、`max_side` 超は 5）。縮小して成功にしない。
 // - 描画は白で塗った RGBA8 の bitmap context（premultipliedLast）へ行う。不透明が保証されるため、
@@ -26,8 +33,12 @@
 // - 権限・usage description は追加しない。人物の取り込み（personalization）は無効にする。
 
 import Foundation
-#if canImport(ImagePlayground) && os(macOS)
+#if canImport(ImagePlayground) && (os(macOS) || os(iOS))
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import CoreGraphics
 import ImageIO
 import ImagePlayground
@@ -38,10 +49,10 @@ public typealias FandheImageGenDone = @convention(c) (UInt64, Int32, UnsafePoint
 
 private let maxPromptBytes = 256
 
-#if canImport(ImagePlayground) && os(macOS)
+#if canImport(ImagePlayground) && (os(macOS) || os(iOS))
 
 /// 1 要求ぶんの提示と結果の受け渡し。デリゲートは弱参照のため `currentSession` が保持する。
-@available(macOS 15.4, *)
+@available(macOS 15.4, iOS 18.4, *)
 @MainActor
 private final class Session: NSObject, ImagePlaygroundViewController.Delegate {
     let requestId: UInt64
@@ -49,8 +60,10 @@ private final class Session: NSObject, ImagePlaygroundViewController.Delegate {
     let done: FandheImageGenDone
     var delivered = false
     var vc: ImagePlaygroundViewController?
+    #if os(macOS)
     var sheet: NSWindow?
     weak var parent: NSWindow?
+    #endif
 
     init(requestId: UInt64, maxSide: Int, done: @escaping FandheImageGenDone) {
         self.requestId = requestId
@@ -58,6 +71,7 @@ private final class Session: NSObject, ImagePlaygroundViewController.Delegate {
         self.done = done
     }
 
+    #if os(macOS)
     /// 提示する。`begin` が false なら何もしない（Rust 側で既に確定している）。
     func present(prompt: String, begin: FandheImageGenBegin) {
         guard let parent = NSApplication.shared.keyWindow
@@ -87,6 +101,52 @@ private final class Session: NSObject, ImagePlaygroundViewController.Delegate {
             MainActor.assumeIsolated { self?.deliver(code: 1) }
         }
     }
+    #else
+    /// 提示猶予（秒）。提示を拒まれると completion が来ず Session が残るため、この時間で出ていなければ 7 にする。
+    private static let presentGrace = 5.0
+
+    /// 提示する。`begin` が false なら何もしない（Rust 側で既に確定している）。
+    func present(prompt: String, begin: FandheImageGenBegin) {
+        // Inactive は権限ダイアログ・通知センターでも起きるため中断扱いにしない。background だけ 6 にする。
+        if UIApplication.shared.applicationState == .background {
+            deliver(code: 6)
+            return
+        }
+        guard let top = topmostViewController(), top.view.window != nil, !top.isBeingPresented,
+              !top.isBeingDismissed
+        else {
+            deliver(code: 3)
+            return
+        }
+        guard begin(requestId) else { return }
+        let vc = ImagePlaygroundViewController()
+        vc.concepts = [.text(prompt)]
+        vc.allowedGenerationStyles = [.animation, .illustration, .sketch]
+        vc.selectedGenerationStyle = .illustration
+        // ponytail: 非推奨になる OS がある。18.4 以降で動く唯一の経路のため警告を許容する。
+        vc.personalizationPolicy = .disabled
+        vc.delegate = self
+        vc.presentationController?.delegate = self
+        self.vc = vc
+        top.present(vc, animated: true) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self = self else { return }
+                if self.delivered {
+                    vc.presentingViewController?.dismiss(animated: false)
+                } else if vc.presentingViewController == nil {
+                    self.deliver(code: 7)
+                }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Session.presentGrace) { [weak self] in
+            MainActor.assumeIsolated {
+                if let self = self, !self.delivered, self.vc?.presentingViewController == nil {
+                    self.deliver(code: 7)
+                }
+            }
+        }
+    }
+    #endif
 
     func imagePlaygroundViewController(
         _ imagePlaygroundViewController: ImagePlaygroundViewController,
@@ -121,7 +181,11 @@ private final class Session: NSObject, ImagePlaygroundViewController.Delegate {
     func abandon() {
         if delivered { return }
         delivered = true
+        #if os(macOS)
         close()
+        #else
+        vc?.presentingViewController?.dismiss(animated: false)
+        #endif
         release()
     }
 
@@ -129,15 +193,32 @@ private final class Session: NSObject, ImagePlaygroundViewController.Delegate {
     private func deliver(code: Int32, pixels: [UInt8]? = nil, width: UInt32 = 0, height: UInt32 = 0) {
         if delivered { return }
         delivered = true
-        close()
-        if let pixels = pixels {
-            pixels.withUnsafeBufferPointer { buf in
-                done(requestId, code, buf.baseAddress, buf.count, width, height)
+        // 画面を閉じ終えてから通知する。画素は値で捕まえ、呼び出しの間だけ有効なポインタで渡す。
+        closeThen { [self] in
+            if let pixels = pixels {
+                pixels.withUnsafeBufferPointer { buf in
+                    done(requestId, code, buf.baseAddress, buf.count, width, height)
+                }
+            } else {
+                done(requestId, code, nil, 0, 0, 0)
             }
-        } else {
-            done(requestId, code, nil, 0, 0, 0)
+            release()
         }
-        release()
+    }
+
+    #if os(iOS)
+    /// 出ている VC を dismiss し、終わってから `then` を呼ぶ。出ていなければすぐ呼ぶ。
+    private func closeThen(_ then: @escaping () -> Void) {
+        if let presenter = vc?.presentingViewController {
+            presenter.dismiss(animated: true) { MainActor.assumeIsolated { then() } }
+        } else {
+            then()
+        }
+    }
+    #else
+    private func closeThen(_ then: @escaping () -> Void) {
+        close()
+        then()
     }
 
     private func close() {
@@ -147,12 +228,15 @@ private final class Session: NSObject, ImagePlaygroundViewController.Delegate {
         sheet?.contentViewController = nil
         sheet?.orderOut(nil)
     }
+    #endif
 
     private func release() {
         vc?.delegate = nil
         vc = nil
+        #if os(macOS)
         sheet = nil
         parent = nil
+        #endif
         if currentSession === self { currentSession = nil }
     }
 
@@ -183,6 +267,35 @@ private final class Session: NSObject, ImagePlaygroundViewController.Delegate {
     }
 }
 
+#if os(iOS)
+@available(iOS 18.4, *)
+extension Session: UIAdaptivePresentationControllerDelegate {
+    /// スワイプで閉じられた。既に閉じているため `closeThen` はすぐ `done` を呼ぶ。
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        deliver(code: 1)
+    }
+}
+
+/// 最前面の VC。`ios/fandhe_ios_common.h` の `FandheTopmostViewController` と同じ規則を写したもの
+/// （ObjC ヘッダは単一ファイルの swiftc から import できないため）。
+@MainActor
+private func topmostViewController() -> UIViewController? {
+    var root: UIViewController?
+    for case let scene as UIWindowScene in UIApplication.shared.connectedScenes
+    where scene.activationState == .foregroundActive {
+        root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController
+        if root != nil { break }
+    }
+    if root == nil {
+        // Scene 接続前や scene 外の window 用のフォールバック（deprecated だが共通ヘッダも同じ）。
+        root = UIApplication.shared.windows.first(where: { $0.isKeyWindow })?.rootViewController
+    }
+    var top = root
+    while let next = top?.presentedViewController { top = next }
+    return top
+}
+#endif
+
 /// 進行中の要求（1 本）。`Session` を強参照で保持する（デリゲートは弱参照のため）。
 @MainActor private var currentSession: AnyObject?
 
@@ -203,8 +316,8 @@ public func fandhe_apple_image_generation_present(
     guard maxSide > 0, let prompt = prompt, promptLen > 0, promptLen <= maxPromptBytes,
           let text = String(data: Data(bytes: prompt, count: promptLen), encoding: .utf8)
     else { return 7 }
-    #if canImport(ImagePlayground) && os(macOS)
-    if #available(macOS 15.4, *) {
+    #if canImport(ImagePlayground) && (os(macOS) || os(iOS))
+    if #available(macOS 15.4, iOS 18.4, *) {
         if !ImagePlaygroundViewController.isAvailable { return 2 }
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
@@ -212,14 +325,14 @@ public func fandhe_apple_image_generation_present(
                 let session = Session(requestId: requestId, maxSide: Int(maxSide), done: done)
                 currentSession = session
                 session.present(prompt: text, begin: begin)
-                // 表示せずに終えた（親窓なし・begin が false）場合は保持を解く。
+                // 表示せずに終えた（提示元なし・background・begin が false）場合は保持を解く。
                 if session.vc == nil { currentSession = nil }
             }
         }
         return 0
     }
     #endif
-    // 非対応（OS が古い・SDK に ImagePlayground が無い・iOS は #976 が実装する）。
+    // 非対応（OS が古い・SDK に ImagePlayground が無い）。
     _ = (requestId, text, begin, done)
     return 2
 }

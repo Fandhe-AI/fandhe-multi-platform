@@ -10,7 +10,7 @@
 //! # OS 別の分担（dispatch・bridge・本ファイルは #975 で最終形。後続の子はここを触らない）
 //!
 //! - macOS: `apple_image_generation`（#975。Image Playground の `ImagePlaygroundViewController`）
-//! - iOS: `ios_image_generation`（#976 が UIKit の実体を置く。#975 時点ではスタブ）
+//! - iOS: `ios_image_generation`（#976。macOS と共用の実体を UIKit で提示）
 //! - Android・Windows・Linux: 対応表で `no` のため `UnsupportedImageGenerator` 固定
 //!   （ダミーの成功実装へは倒さない）。Web は対象外
 //!
