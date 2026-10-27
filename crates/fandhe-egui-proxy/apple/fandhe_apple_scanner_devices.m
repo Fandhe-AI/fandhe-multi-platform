@@ -65,9 +65,8 @@ static const int kFandheMaxPixel = 2048;
 @property(nonatomic) BOOL closeRequested;
 @property(nonatomic) BOOL closeSignaled;
 @property(nonatomic) BOOL closeWait;
-// 閉鎖 completion がエラーで返った（`lock` の内側でだけ読み書き）。成功を偽らないために保持する。
-@property(nonatomic) BOOL closeFailed;
-@property(nonatomic) int64_t closeOsCode;
+// セッションが閉じた（または機器が外れた）ことを OS から確認できた。`lock` の内側でだけ読み書きする。
+@property(nonatomic) BOOL closeConfirmed;
 @property(nonatomic) int32_t code;
 @property(nonatomic) int64_t osCode;
 @property(nonatomic, strong, nullable) NSData *jpeg;
@@ -116,13 +115,6 @@ static const int kFandheMaxPixel = 2048;
         *code = self.code;
         *os = self.osCode;
         *jpeg = self.jpeg;
-    }
-}
-
-- (void)snapshotCloseFailed:(BOOL *)failed os:(int64_t *)os {
-    @synchronized(_lock) {
-        *failed = self.closeFailed;
-        *os = self.closeOsCode;
     }
 }
 
@@ -196,7 +188,7 @@ static const int kFandheMaxPixel = 2048;
             [self.device requestCloseSession];
         });
     } else if (signal) {
-        [self signalClosed];
+        [self signalClosed:YES];
     } else if (error != nil) {
         [self failWithError:error];
     }
@@ -206,17 +198,22 @@ static const int kFandheMaxPixel = 2048;
 static FandheScanState *gFandheUnclosed = nil;
 static NSObject *gFandheUnclosedLock = nil;
 
-- (void)signalClosed {
-    BOOL first = NO;
+// 閉鎖待ちを起こす。`confirmed` が真のときだけ閉鎖確認として未閉鎖の記録を外し delegate を手放す。
+- (void)signalClosed:(BOOL)confirmed {
+    BOOL wake = NO;
     @synchronized(_lock) {
         if (!self.closeSignaled) {
             self.closeSignaled = YES;
-            first = YES;
+            wake = YES;
+        }
+        if (confirmed) {
+            self.closeConfirmed = YES;
         }
     }
-    if (first) {
+    if (wake) {
         dispatch_semaphore_signal(self.closeSem);
-        // 遅れて閉鎖が確認できた。未閉鎖の記録を外し、delegate を手放して次の要求を受け付ける。
+    }
+    if (confirmed) {
         @synchronized(gFandheUnclosedLock) {
             if (gFandheUnclosed == self) {
                 gFandheUnclosed = nil;
@@ -225,6 +222,29 @@ static NSObject *gFandheUnclosedLock = nil;
                 });
             }
         }
+    }
+}
+
+// main queue: 未閉鎖の状態を OS の観測で再確認する。閉じていれば確認扱いにし、開いたままなら閉鎖を再要求する。
+- (BOOL)recheckClosed {
+    BOOL stillOpen = NO;
+    @synchronized(_lock) {
+        stillOpen = self.opening || self.device.hasOpenSession;
+    }
+    if (stillOpen) {
+        if (self.device.hasOpenSession) {
+            [self.device requestCloseSession];
+        }
+        return NO;
+    }
+    [self signalClosed:YES];
+    return YES;
+}
+
+// 閉鎖を確認できていない（teardown の後に呼ぶ）。
+- (BOOL)closeUnconfirmed {
+    @synchronized(_lock) {
+        return self.closeWait && !self.closeConfirmed;
     }
 }
 
@@ -403,7 +423,7 @@ static NSObject *gFandheUnclosedLock = nil;
             moreGoing:(BOOL)moreGoing {
     if (device == self.device) {
         [self finish:7 os:0 jpeg:nil];
-        [self signalClosed];
+        [self signalClosed:YES];
     } else if (!self.discoveryEnded) {
         // 探索窓の間に外れた機器は候補から除く（先頭に選んで OS の失敗になるのを防ぐ）。
         [_cameras removeObject:(ICCameraDevice *)device];
@@ -422,7 +442,7 @@ static NSObject *gFandheUnclosedLock = nil;
 - (void)didRemoveDevice:(ICDevice *)device {
     [self finish:7 os:0 jpeg:nil];
     // 外れた機器のセッションは閉鎖の完了が来ない。後片付けの前後どちらで外れても待たせない。
-    [self signalClosed];
+    [self signalClosed:YES];
 }
 
 - (void)device:(ICDevice *)device didOpenSessionWithError:(NSError *)error {
@@ -433,13 +453,8 @@ static NSObject *gFandheUnclosedLock = nil;
 
 - (void)device:(ICDevice *)device didCloseSessionWithError:(NSError *)error {
     if (self.tornDown) {
-        if (error != nil) {
-            @synchronized(_lock) {
-                self.closeFailed = YES;
-                self.closeOsCode = (int64_t)error.code;
-            }
-        }
-        [self signalClosed];
+        // 閉鎖がエラーで返ったときは待機だけ起こし、閉鎖確認としては扱わない（状態と delegate を保持する）。
+        [self signalClosed:error == nil];
         return;
     }
     // 取り込みの途中でセッションが閉じた（確定済みなら無視される）。
@@ -512,8 +527,17 @@ int32_t fandhe_apple_scanner_devices_import(uint64_t deadline_ms, uint64_t disco
             gFandheUnclosedLock = [NSObject new];
         });
         // 前回の閉鎖が未確認の間は OS を触らない（開いたままのセッションへ重ねて開かない）。
+        FandheScanState *prev = nil;
         @synchronized(gFandheUnclosedLock) {
-            if (gFandheUnclosed != nil) {
+            prev = gFandheUnclosed;
+        }
+        if (prev != nil) {
+            // 閉じたかを OS の観測で確かめる。開いたままなら閉鎖を再要求して今回は失敗にする。
+            __block BOOL closed = NO;
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                closed = [prev recheckClosed];
+            });
+            if (!closed) {
                 return 9;
             }
         }
@@ -555,14 +579,17 @@ int32_t fandhe_apple_scanner_devices_import(uint64_t deadline_ms, uint64_t disco
                                 state.closeSem,
                                 dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0;
         }
-        if (closeTimedOut) {
-            // 閉鎖を確認できていない。delegate を残して状態を保持し、確認できるまで次の要求を止める。
+        // 保持の判定と記録を同じ排他区間で行う。signalClosed が先に確認していれば保持せず、必ず delegate を外す。
+        BOOL hold = NO;
+        if (closeTimedOut || [state closeUnconfirmed]) {
             @synchronized(gFandheUnclosedLock) {
-                if ([state needsCloseWait]) {
+                hold = [state closeUnconfirmed];
+                if (hold) {
                     gFandheUnclosed = state;
                 }
             }
-        } else {
+        }
+        if (!hold) {
             dispatch_sync(dispatch_get_main_queue(), ^{
                 state.device.delegate = nil;
             });
@@ -573,21 +600,7 @@ int32_t fandhe_apple_scanner_devices_import(uint64_t deadline_ms, uint64_t disco
         int64_t os = 0;
         NSData *jpeg = nil;
         [state snapshotCode:&code os:&os jpeg:&jpeg];
-        // 機器を閉じ切れていない（閉鎖のエラー・待機の期限切れ）のに成功を返さない。
-        if (code == 0) {
-            BOOL failed = NO;
-            int64_t closeOs = 0;
-            [state snapshotCloseFailed:&failed os:&closeOs];
-            if (failed) {
-                *out_found = state.found;
-                *out_os_code = closeOs;
-                return 9;
-            }
-            if (closeTimedOut) {
-                *out_found = state.found;
-                return 6;
-            }
-        }
+        // 画像を取得済みなら、閉鎖の失敗・待機の期限切れで結果を上書きしない（未閉鎖は gFandheUnclosed が次の要求を止める）。
         *out_found = state.found;
         *out_os_code = os;
         if (code == 0) {
