@@ -57,8 +57,11 @@
       "note": "実装済み（#941）。従来型の簡易ダイアログ（WinUI の ColorPicker は自前のコントロール）。`lpCustColors` は 16 要素の配列が必須。取り消し・エラー時の `rgbResult` は未定義。"
     },
     "web": {
-      "status": "possible",
-      "api": "`<input type=\"color\">`（ブラウザ標準のカラーピッカー）",
+      "status": "done",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#936）",
+      "impl": "crates/fandhe-web-dom/src/color_picker.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-device/src/color_picker.rs、Issue #943",
+      "api": "`<input type=\"color\">`（ブラウザ標準のカラーピッカー）。`showPicker()`（無ければ `click()`）で開き、`change` で確定",
       "perm": "不要",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/color",
@@ -66,7 +69,7 @@
         "https://developer.mozilla.org/en-US/docs/Web/API/HTMLInputElement/showPicker"
       ],
       "safari": "対応",
-      "note": "未実装。UI はブラウザ依存。`alpha`・`colorspace` は付けない（付けると `value` が `#rrggbb` 以外になりうる）。`change` は閉じたときに出るが取り消しの通知は無い（`cancel` は file 型のみ）。"
+      "note": "実装済み（#943）。UI はブラウザ依存。`type` の読み戻しが `color` でなければ非対応。初期色を入れてから購読する。`alpha`・`colorspace` は付けない（付けると `value` が `#rrggbb` 以外になりうる）。`change` は閉じたときに出るが取り消しの通知は無い（`cancel` は file 型のみ）ため、画面の「やめる」で抜ける。`showPicker` の例外は失敗。期限は持たない。"
     }
   },
   "note": "eye-dropper は画面から色を拾うスポイト、これは OS 標準の色選択ダイアログで色を選ばせる。範囲は固定の初期色から 1 色を選び `#rrggbb` で出すまで（アルファ・広色域・色の保存・逐次反映は範囲外）。「選んだか」は OS の選択通知・戻り値・`change` だけで決め、初期色との比較で推測しない。結果は 選んだ色 / 選ばずに閉じた / 非対応 / 失敗 を分ける。守らない範囲: macOS で非アクティブ中の表示、閉じた通知が届かない場合の復旧、Web で色を変えずに閉じた場合と初期色と同じ色を選んだ場合、sRGB 外の色、ブラウザごとの差、複数タブ・複数プロセス・複数窓。選んだ色はログに出さない。"

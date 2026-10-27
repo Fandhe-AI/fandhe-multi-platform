@@ -50,6 +50,8 @@
 //!   [`location`] と同じ理由で純関数のみ `wasm32` gate の外に置く
 //! - [`eye_dropper`]: 「画面のスポイト」画面の Web 経路（Issue #763）。[`location`] と同じ理由で
 //!   純関数（`sRGBHex` → 結果・例外の `name` → 結果）のみ `wasm32` gate の外に置く
+//! - [`color_picker`]: 「システムの色選択ダイアログ」画面の Web 経路（Issue #943）。[`location`] と同じ理由で
+//!   純関数（`change` の値 → 結果）のみ `wasm32` gate の外に置く
 //! - [`local_fonts`]: 「OS 搭載フォント」画面の Web 経路（Issue #1379）。[`location`] と同じ理由で
 //!   純関数（`FontData` の family → 一覧・例外の `name` → 失敗種別）のみ `wasm32` gate の外に置く
 //! - [`multi_display`]: 「複数ディスプレイ」画面の Web 経路（Issue #1344）。[`location`] と同じ理由で
@@ -206,6 +208,9 @@ pub mod accessibility_prefs;
 /// 純関数（`kind` / `label` → 入出力の一覧）は native からもテストできるよう
 /// クレート単位の `wasm32` gate を外す。
 pub mod audio_devices;
+/// 型サンプル「システムの色選択ダイアログ」の Web 経路（Issue #943）。[`location`] と同じ理由で
+/// 純関数（`change` の値 → 結果）は native からもテストできるようクレート単位の `wasm32` gate を外す。
+pub mod color_picker;
 /// 型サンプル「端末・OS 情報」の Web 経路（Issue #1307）。[`location`] と同じ理由で
 /// 純関数（ブラウザの生値 → 表示用の読み取り結果）は native からもテストできるよう
 /// クレート単位の `wasm32` gate を外す。
