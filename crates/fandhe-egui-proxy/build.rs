@@ -116,6 +116,10 @@
 //! - `apple/fandhe_apple_geocoding_search.m`（Issue #691、MapKit `MKGeocodingRequest` による固定住所 1 件の
 //!   座標変換。iOS 分岐も同じ実装）は `src/device/apple_geocoding_search.rs` から呼ばれる契約。
 //!   MapKit・CoreLocation をリンクする。
+//! - `apple/fandhe_apple_scanner_devices.m`（Issue #981、ImageCaptureCore による USB 接続のカメラ機器からの
+//!   画像 1 枚の取り込み。iOS 分岐も同じ実装）は `src/device/apple_scanner_devices.rs` から呼ばれる契約。
+//!   ImageCaptureCore・ImageIO・UniformTypeIdentifiers をリンクする。iOS 側の可用性警告は
+//!   `.m` の `@available` で抑える。
 //! - `apple/fandhe_apple_photo_library.m`（Issue #1254、`PHPhotoLibrary` による画像 1 枚の保存）は
 //!   iOS（Issue #1255）・macOS の両ターゲットで feature `device` 有効時にコンパイルする
 //!   （`src/device/apple_photo_library.rs` から呼ばれる契約）。Photos をリンクする。
@@ -630,6 +634,10 @@ fn main() {
     // （b-ios が本ファイルを触らずに済むよう、iOS 分岐からも (a) で呼んでおく）。
     compile_apple_geocoding_search();
 
+    // `apple/fandhe_apple_scanner_devices.m`（Issue #981 macOS + #982 iOS）も macOS 分岐と共用する
+    // （b-ios が本ファイルを触らずに済むよう、iOS 分岐からも (a) で呼んでおく）。
+    compile_apple_scanner_devices();
+
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）も macOS 分岐と
     // 共用する（上記 doc 参照）。
     compile_apple_mic_record();
@@ -905,6 +913,20 @@ fn compile_apple_geocoding_search() {
 
     println!("cargo:rustc-link-lib=framework=MapKit");
     println!("cargo:rustc-link-lib=framework=CoreLocation");
+}
+
+/// `apple/fandhe_apple_scanner_devices.m` を `cc` でコンパイルし ImageCaptureCore / ImageIO /
+/// UniformTypeIdentifiers をリンクする（Issue #981 macOS・#982 iOS。両分岐から呼ぶ）。
+fn compile_apple_scanner_devices() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_scanner_devices.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_scanner_devices.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_scanner_devices");
+
+    println!("cargo:rustc-link-lib=framework=ImageCaptureCore");
+    println!("cargo:rustc-link-lib=framework=ImageIO");
+    println!("cargo:rustc-link-lib=framework=UniformTypeIdentifiers");
 }
 
 /// `apple/fandhe_apple_calendar.m` を `cc` でコンパイルし EventKit をリンクする
@@ -2646,6 +2668,7 @@ fn build_macos() {
     compile_apple_photo_library();
     compile_apple_map_view();
     compile_apple_geocoding_search();
+    compile_apple_scanner_devices();
 
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）は iOS 分岐と
     // 共用する（上記 doc 参照）。

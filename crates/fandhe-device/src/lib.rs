@@ -212,6 +212,8 @@ pub mod radio_control;
 pub mod removable_storage;
 /// Phase 11（端末機能の拡充ループ、親 #105、Issue #444）: セーフエリア・ディスプレイ切り欠き。
 pub mod safe_area_insets;
+/// Phase 11（端末機能の拡充ループ、親 #192、Issue #981）: 接続したスキャナー・カメラ機器からの取り込み。
+pub mod scanner_devices;
 /// Phase 11（端末機能の拡充ループ、親 #126、Issue #633）: 画面輝度の取得・設定。
 pub mod screen_brightness;
 /// Phase 11（端末機能の拡充ループ、親 #1135、Issue #1335）: 画面の録画・キャプチャ。
