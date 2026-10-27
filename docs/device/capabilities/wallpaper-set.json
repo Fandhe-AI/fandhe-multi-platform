@@ -4,7 +4,7 @@
   "group": "未着手の OS 機能",
   "order": 155,
   "priority": 145,
-  "bundle": "one-shot",
+  "bundle": "request-response",
   "platforms": {
     "ios": {
       "status": "no",
@@ -15,24 +15,33 @@
     },
     "android": {
       "status": "possible",
-      "api": "`WallpaperManager.setBitmap` / `setStream`（`FLAG_SYSTEM` / `FLAG_LOCK` でホームとロック画面を選べる）",
-      "perm": "`SET_WALLPAPER`（normal 権限）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。ロック画面の指定は API 24+"
+      "api": "`WallpaperManager.setStream(PNG, null, false, FLAG_SYSTEM | FLAG_LOCK のどちらか)`（API 24）。戻り値 0 は失敗。事前に `isWallpaperSupported` / `isSetWallpaperAllowed` を読む",
+      "perm": "`SET_WALLPAPER`（normal 権限、実行時の許可ダイアログなし）",
+      "url": [
+        "https://developer.android.com/reference/android/app/WallpaperManager",
+        "https://developer.android.com/reference/android/Manifest.permission#SET_WALLPAPER"
+      ],
+      "note": "未実装。minSdk 24 なので `FLAG_LOCK` の分岐なし。対応・禁止は `isWallpaperSupported` / `isSetWallpaperAllowed` の答えで決め、OS 版や端末種別で事前判定しない。既知の天井: Android 12 以降は壁紙の変更でテーマ色が変わると OS が Activity を作り直し（`configChanges` で止められない）、結果の表示が消えて画面が初期状態へ戻る。作り直し前に届いた結果は表示し、後に届いた結果は破棄する（嘘の成功にはならない）。範囲外: 元の壁紙へ戻す操作、ホームとロックの同時指定、ライブ壁紙"
     },
     "macos": {
       "status": "possible",
-      "api": "AppKit `NSWorkspace.setDesktopImageURL(_:for:options:)`（画面ごとに指定）",
-      "perm": "不要（要確認）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。ロック画面の壁紙は公開 API が見当たらない"
+      "api": "`NSWorkspace.setDesktopImageURL(_:for:options:)` を `NSScreen.screens` の全画面へ main スレッドで呼び、`desktopImageURL(for:)` で読み戻す",
+      "perm": "不要（sandbox 無しのアプリ）",
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nsworkspace/setdesktopimageurl(_:for:options:)",
+        "https://developer.apple.com/documentation/appkit/nsworkspace/desktopimageurl(for:)"
+      ],
+      "note": "未実装。ロック画面の壁紙は公開 API なし（`Unsupported`）。元ファイルは `$HOME/.fandhe/wallpaper/` に置いて消さない（OS は設定したパスを参照し続ける）。全画面の読み戻しが設定した URL と一致したときだけ成功とし、1 画面でも欠ければ失敗。守らない範囲: Space ごとの壁紙、設定後に利用者や他アプリが壁紙を変えること、元ファイルを利用者が消すこと"
     },
     "windows": {
       "status": "possible",
-      "api": "WinRT `UserProfilePersonalizationSettings.TrySetWallpaperImageAsync` / `TrySetLockScreenImageAsync`。非パッケージなら Win32 `SystemParametersInfo(SPI_SETDESKWALLPAPER)`",
-      "perm": "不要（要確認）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.system.userprofile.userprofilepersonalizationsettings",
-      "note": "未実装。URL 未確認（一般知識、要確認）。WinRT 側はパッケージアプリ向けの見込み"
+      "api": "Win32 `SystemParametersInfoW(SPI_SETDESKWALLPAPER)`（素の exe）。WinRT `UserProfilePersonalizationSettings` はパッケージのローカルフォルダのファイルを要するため使わない",
+      "perm": "不要",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-systemparametersinfow",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.system.userprofile.userprofilepersonalizationsettings"
+      ],
+      "note": "未実装。ロック画面は WinRT `TrySetLockScreenImageAsync` がパッケージ化したアプリ向けで範囲外（`Unsupported`）。元ファイルは `$HOME/.fandhe/wallpaper/` に置いて消さない。既知の天井: 公式は「エラーが無い限り TRUE」とだけ書き、グループポリシー等で反映されない場合は検知できない（守らない範囲）"
     },
     "web": {
       "status": "no",

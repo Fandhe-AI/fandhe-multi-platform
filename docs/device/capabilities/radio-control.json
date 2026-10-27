@@ -4,7 +4,7 @@
   "group": "未着手の OS 機能",
   "order": 156,
   "priority": 146,
-  "bundle": "one-shot",
+  "bundle": "request-response",
   "platforms": {
     "ios": {
       "status": "no",
@@ -15,24 +15,44 @@
     },
     "android": {
       "status": "possible",
-      "api": "`BluetoothAdapter.isEnabled` / `WifiManager.isWifiEnabled`（状態の取得）。切り替えは `Settings.Panel.ACTION_INTERNET_CONNECTIVITY` 等の設定パネルへ誘導",
-      "perm": "`BLUETOOTH_CONNECT`（API 31+）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。`setWifiEnabled` は API 29+ で、`BluetoothAdapter.enable()` は API 33+ で一般アプリから使えない。アプリ自身では切り替えられず、ユーザー操作に委ねる形"
+      "api": "読み取りは `BluetoothAdapter.getState` / `WifiManager.getWifiState`。Bluetooth のオンは `ACTION_REQUEST_ENABLE`（OS のダイアログ）、オフは `Settings.ACTION_BLUETOOTH_SETTINGS` を開く。Wi-Fi は `Settings.Panel.ACTION_WIFI`（API 29+）/ `Settings.ACTION_WIFI_SETTINGS`（API 24〜28）を開く",
+      "perm": "`BLUETOOTH_CONNECT`（API 31+、`ACTION_REQUEST_ENABLE` にだけ要る。読み取りは不要）・`ACCESS_WIFI_STATE`（宣言済み）",
+      "url": [
+        "https://developer.android.com/reference/android/net/wifi/WifiManager#setWifiEnabled(boolean)",
+        "https://developer.android.com/reference/android/net/wifi/WifiManager#getWifiState()",
+        "https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#enable()",
+        "https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#isEnabled()",
+        "https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#ACTION_REQUEST_ENABLE",
+        "https://developer.android.com/reference/android/provider/Settings.Panel#ACTION_WIFI"
+      ],
+      "note": "未実装。`setWifiEnabled` は「Q 以上を target するアプリでは常に失敗し false を返す」、`BluetoothAdapter.enable()` / `disable()` は「TIRAMISU 以上を target すると常に失敗」（公式）。アプリ自身では切り替えられず、設定画面を開く（`Opened`）か OS のダイアログに委ねる。`Opened` / `NotChanged` を「切り替えた」と言わず、直後の読み直しの値だけで状態を出す"
     },
     "macos": {
       "status": "possible",
-      "api": "CoreWLAN `CWInterface.setPower(_:)`（Wi-Fi）。Bluetooth の切り替えは公開 API が見当たらない",
-      "perm": "不要（要確認）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。Bluetooth の電源切り替えは未確認"
+      "api": "CoreWLAN `CWInterface.powerOn` / `setPower(_:)`（Wi-Fi）。Bluetooth は `IOBluetoothHostController.powerState` の読み取りのみ（切り替えの公開 API なし）",
+      "perm": "宣言不要。`setPower` は管理者パスワードを求めることがある（公式）",
+      "url": [
+        "https://developer.apple.com/documentation/corewlan/cwinterface/setpower(_:)",
+        "https://developer.apple.com/documentation/corewlan/cwinterface/poweron()",
+        "https://developer.apple.com/documentation/corewlan/cwinterface",
+        "https://developer.apple.com/documentation/iobluetooth/iobluetoothhostcontroller/powerstate"
+      ],
+      "note": "未実装。Bluetooth の切り替えは `Unsupported`（`IOBluetoothPreferenceSetControllerPowerState` は非公開のため使わない）。既知の天井（実機未確認）: `powerState` の読み取りに Bluetooth の TCC が掛かるか、管理者パスワード取り消し時の `NSError` の値"
     },
     "windows": {
       "status": "possible",
       "api": "WinRT `Windows.Devices.Radios.Radio`（`GetRadiosAsync` / `SetStateAsync`、`RequestAccessAsync`）",
-      "perm": "`radios` デバイス capability",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio",
-      "note": "未実装。URL 未確認（一般知識、要確認）。Wi-Fi・Bluetooth・機内モードの無線を同じ API で扱える"
+      "perm": "パッケージ化したアプリは `<DeviceCapability Name=\"radios\"/>`。素の exe は宣言の対象外（読み取りは常に許可、切り替えは実機確認）",
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio.requestaccessasync",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio.setstateasync",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio.getradiosasync",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radioaccessstatus",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radiostate",
+        "https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/app-capability-declarations"
+      ],
+      "note": "未実装。Wi-Fi・Bluetooth の無線を同じ API で扱える。`SetStateAsync` の `Allowed` は「要求を受け付けた」で、最終状態は非同期に移りハードウェアスイッチ・ポリシーが覆しうるため、`State` を読み直して確かめる。`GetRadiosAsync` の空リストは失敗ではなく `NotPresent`。既知の天井（実機未確認）: 素の exe で `RequestAccessAsync` / `SetStateAsync` が `Allowed` を返すか。`DeniedBySystem` に倒れるなら読み取りだけの `done` に note を直す"
     },
     "web": {
       "status": "no",
@@ -42,5 +62,5 @@
       "note": "ブラウザから無線の状態を取得・切り替える API はない"
     }
   },
-  "note": "network-status は接続の有無・種別、wifi-info は SSID・スキャンで、こちらは Wi-Fi・Bluetooth 無線そのものの on/off の取得と切り替え"
+  "note": "network-status は接続の有無・種別、wifi-info は SSID・スキャンで、こちらは Wi-Fi・Bluetooth 無線そのものの on/off の取得と切り替え。OS の答えを写す（事前判定でボタンを隠さない・期限やポーリングを持たない）。`NotPresent` / `Unknown` / 読み取り失敗を `Off` に畳まない。範囲外: 状態変化の購読、機内モード、モバイル通信・NFC。守らない範囲: 読み直し時点で切り替わり途中の値、要求後にハードウェアスイッチ・他アプリが状態を変えること、macOS の管理者パスワード・Windows の同意 UI の待ち時間、複数アダプターで先頭の 1 つだけを扱うこと"
 }
