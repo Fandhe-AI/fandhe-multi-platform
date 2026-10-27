@@ -278,6 +278,9 @@ pub mod contact_pick;
 /// Phase 11 の拡充ループ型サンプル「画面のスポイト」（親 #148、Issue #762）。
 pub mod eye_dropper_pick;
 
+/// Phase 11 の拡充ループ型サンプル「システムの色選択ダイアログ」（親 #184、Issue #941）。
+pub mod color_picker_pick;
+
 /// Phase 11 の拡充ループ型サンプル「ファイル・動画のプレビューとサムネイル」（親 #182、Issue #917）。
 pub mod file_preview_show;
 

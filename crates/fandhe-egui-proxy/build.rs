@@ -272,6 +272,9 @@
 //! - `macos/fandhe_macos_eye_dropper.m`（Issue #762、`NSColorSampler` による画面のスポイト）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_eye_dropper.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_color_picker.m`（Issue #941、`NSColorPanel` によるシステムの色選択ダイアログ）は
+//!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_color_picker.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_file_preview.m`（Issue #917、自前の窓に載せる `QLPreviewView` による固定ファイルの
 //!   プレビュー）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_file_preview.rs` から呼ばれる契約）。QuickLookUI を追加でリンクする。
@@ -1877,6 +1880,16 @@ fn compile_macos_eye_dropper() {
         .compile("fandhe_macos_eye_dropper");
 }
 
+/// `macos/fandhe_macos_color_picker.m` を `cc` でコンパイルする（Issue #941）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_color_picker.rs` が使う）。AppKit は既存のリンクで足りる。
+fn compile_macos_color_picker() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_color_picker.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_color_picker.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_color_picker");
+}
+
 /// `macos/fandhe_macos_file_preview.m` を `cc` でコンパイルし QuickLookUI をリンクする（Issue #917）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_file_preview.rs` が使う）。AppKit は
 /// `build_macos` 側の既存リンクで足りる。
@@ -2650,6 +2663,8 @@ fn build_macos() {
     compile_macos_open_in_shell();
     // `macos/fandhe_macos_eye_dropper.m`（Issue #762）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_eye_dropper();
+    // `macos/fandhe_macos_color_picker.m`（Issue #941）も macOS 専用。AppKit は既存のリンクを使う。
+    compile_macos_color_picker();
     // `macos/fandhe_macos_file_preview.m`（Issue #917）も macOS 専用。QuickLookUI をリンクする。
     compile_macos_file_preview();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。AppKit は既存のリンクを使う。
