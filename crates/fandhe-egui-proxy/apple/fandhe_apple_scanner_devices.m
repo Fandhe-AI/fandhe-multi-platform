@@ -48,6 +48,8 @@ static const int kFandheMaxPixel = 2048;
 @property(nonatomic, strong) dispatch_semaphore_t closeSem;
 @property(nonatomic, strong) NSURL *tempDir;
 @property(nonatomic) uint64_t maxBytes;
+// 呼び出し全体の期限（`clock_gettime_nsec_np(CLOCK_UPTIME_RAW)` 基準の単調時刻）。復号後に再確認する。
+@property(nonatomic) uint64_t deadlineNs;
 @property(nonatomic, strong, nullable) ICDeviceBrowser *browser;
 @property(nonatomic, strong, nullable) ICCameraDevice *device;
 // 任意のキューから読み書きされるため atomic にする。
@@ -200,6 +202,10 @@ static const int kFandheMaxPixel = 2048;
     }
 }
 
+// 閉鎖待ちを打ち切った状態（OS の後片付けが未確認）。確認できるまで次の要求を受け付けない。
+static FandheScanState *gFandheUnclosed = nil;
+static NSObject *gFandheUnclosedLock = nil;
+
 - (void)signalClosed {
     BOOL first = NO;
     @synchronized(_lock) {
@@ -210,6 +216,15 @@ static const int kFandheMaxPixel = 2048;
     }
     if (first) {
         dispatch_semaphore_signal(self.closeSem);
+        // 遅れて閉鎖が確認できた。未閉鎖の記録を外し、delegate を手放して次の要求を受け付ける。
+        @synchronized(gFandheUnclosedLock) {
+            if (gFandheUnclosed == self) {
+                gFandheUnclosed = nil;
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    self.device.delegate = nil;
+                });
+            }
+        }
     }
 }
 
@@ -323,6 +338,11 @@ static const int kFandheMaxPixel = 2048;
         }
         if (out.length > self.maxBytes) {
             [self finish:10 os:0 jpeg:nil];
+            return;
+        }
+        // 復号に時間を取られて期限を過ぎていたら、成功にせず期限切れとして確定する。
+        if (clock_gettime_nsec_np(CLOCK_UPTIME_RAW) > self.deadlineNs) {
+            [self finish:6 os:0 jpeg:nil];
             return;
         }
         [self finish:0 os:0 jpeg:out];
@@ -487,8 +507,20 @@ int32_t fandhe_apple_scanner_devices_import(uint64_t deadline_ms, uint64_t disco
         *out_found = 0;
         *out_os_code = 0;
 
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{
+            gFandheUnclosedLock = [NSObject new];
+        });
+        // 前回の閉鎖が未確認の間は OS を触らない（開いたままのセッションへ重ねて開かない）。
+        @synchronized(gFandheUnclosedLock) {
+            if (gFandheUnclosed != nil) {
+                return 9;
+            }
+        }
+
         FandheScanState *state = [[FandheScanState alloc] init];
         state.maxBytes = max_bytes;
+        state.deadlineNs = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) + deadline_ms * NSEC_PER_MSEC;
         state.tempDir = [NSURL
             fileURLWithPath:[NSTemporaryDirectory()
                                 stringByAppendingPathComponent:
@@ -523,9 +555,18 @@ int32_t fandhe_apple_scanner_devices_import(uint64_t deadline_ms, uint64_t disco
                                 state.closeSem,
                                 dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0;
         }
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            state.device.delegate = nil;
-        });
+        if (closeTimedOut) {
+            // 閉鎖を確認できていない。delegate を残して状態を保持し、確認できるまで次の要求を止める。
+            @synchronized(gFandheUnclosedLock) {
+                if ([state needsCloseWait]) {
+                    gFandheUnclosed = state;
+                }
+            }
+        } else {
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                state.device.delegate = nil;
+            });
+        }
         [[NSFileManager defaultManager] removeItemAtURL:state.tempDir error:nil];
 
         int32_t code = 9;
