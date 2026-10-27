@@ -44,6 +44,8 @@ static const int kFandheMaxPixel = 2048;
 
 @interface FandheScanState : NSObject <ICDeviceBrowserDelegate, ICCameraDeviceDelegate>
 @property(nonatomic, strong) dispatch_semaphore_t sem;
+// セッション閉鎖の完了を呼び出しスレッドへ伝える（`signalClosed` が 1 回だけ起こす）。
+@property(nonatomic, strong) dispatch_semaphore_t closeSem;
 @property(nonatomic, strong) NSURL *tempDir;
 @property(nonatomic) uint64_t maxBytes;
 @property(nonatomic, strong, nullable) ICDeviceBrowser *browser;
@@ -55,6 +57,12 @@ static const int kFandheMaxPixel = 2048;
 @property(nonatomic) uint32_t found;
 // 以下は `lock` の内側でだけ読み書きする。
 @property(nonatomic) BOOL done;
+// 開始要求が未完了（completion 待ち）。teardown が閉鎖を開始完了まで遅らせる根拠。
+@property(nonatomic) BOOL opening;
+@property(nonatomic) BOOL tornDown;
+@property(nonatomic) BOOL closeRequested;
+@property(nonatomic) BOOL closeSignaled;
+@property(nonatomic) BOOL closeWait;
 @property(nonatomic) int32_t code;
 @property(nonatomic) int64_t osCode;
 @property(nonatomic, strong, nullable) NSData *jpeg;
@@ -69,6 +77,7 @@ static const int kFandheMaxPixel = 2048;
     if ((self = [super init])) {
         _lock = [NSObject new];
         _sem = dispatch_semaphore_create(0);
+        _closeSem = dispatch_semaphore_create(0);
         _cameras = [NSMutableArray array];
     }
     return self;
@@ -145,12 +154,50 @@ static const int kFandheMaxPixel = 2048;
         return;
     }
     device.delegate = self;
+    @synchronized(_lock) {
+        self.opening = YES;
+    }
     [device requestOpenSessionWithOptions:nil
                                completion:^(NSError *_Nullable error) {
-                                   if (error != nil) {
-                                       [self failWithError:error];
-                                   }
+                                   [self openDone:error];
                                }];
+}
+
+// 開始 completion。後片付けの後に成功で返ったセッションも、その場で閉じる。
+- (void)openDone:(NSError *)error {
+    BOOL close = NO;
+    BOOL signal = NO;
+    @synchronized(_lock) {
+        self.opening = NO;
+        if (self.tornDown && self.closeWait) {
+            if (error == nil && !self.closeRequested) {
+                self.closeRequested = YES;
+                close = YES;
+            } else if (error != nil) {
+                signal = YES;
+            }
+        }
+    }
+    if (close) {
+        [self.device requestCloseSession];
+    } else if (signal) {
+        [self signalClosed];
+    } else if (error != nil) {
+        [self failWithError:error];
+    }
+}
+
+- (void)signalClosed {
+    BOOL first = NO;
+    @synchronized(_lock) {
+        if (!self.closeSignaled) {
+            self.closeSignaled = YES;
+            first = YES;
+        }
+    }
+    if (first) {
+        dispatch_semaphore_signal(self.closeSem);
+    }
 }
 
 // セッションが開いて内容一覧が揃った後に、最新の画像 1 枚を選んでダウンロードする。
@@ -280,10 +327,31 @@ static const int kFandheMaxPixel = 2048;
             [device cancelDownload];
         }
 #endif
-        device.delegate = nil;
-        if (device.hasOpenSession) {
+        // 閉鎖の完了（didCloseSession）を受けるため、delegate は閉鎖が済むまで外さない。
+        BOOL close = NO;
+        @synchronized(_lock) {
+            self.tornDown = YES;
+            if (device.hasOpenSession) {
+                self.closeWait = YES;
+                if (!self.closeRequested) {
+                    self.closeRequested = YES;
+                    close = YES;
+                }
+            } else if (self.opening) {
+                // 開始が未完了。completion が成功で返ったら `openDone:` が閉じる。
+                self.closeWait = YES;
+            }
+        }
+        if (close) {
             [device requestCloseSession];
         }
+    }
+}
+
+// 閉鎖待ちが必要か（teardown の後に呼ぶ）。
+- (BOOL)needsCloseWait {
+    @synchronized(_lock) {
+        return self.closeWait && !self.closeSignaled;
     }
 }
 
@@ -319,6 +387,10 @@ static const int kFandheMaxPixel = 2048;
 
 - (void)didRemoveDevice:(ICDevice *)device {
     [self finish:7 os:0 jpeg:nil];
+    // 外れた機器のセッションは閉鎖の完了が来ない。
+    if (self.tornDown) {
+        [self signalClosed];
+    }
 }
 
 - (void)device:(ICDevice *)device didOpenSessionWithError:(NSError *)error {
@@ -328,6 +400,10 @@ static const int kFandheMaxPixel = 2048;
 }
 
 - (void)device:(ICDevice *)device didCloseSessionWithError:(NSError *)error {
+    if (self.tornDown) {
+        [self signalClosed];
+        return;
+    }
     // 取り込みの途中でセッションが閉じた（確定済みなら無視される）。
     if (!self.picked || self.downloading) {
         [self finish:7 os:0 jpeg:nil];
@@ -421,6 +497,14 @@ int32_t fandhe_apple_scanner_devices_import(uint64_t deadline_ms, uint64_t disco
         // 全経路の後片付け。期限切れでも UI キューへ post して戻らず、済ませてから返す。
         dispatch_sync(dispatch_get_main_queue(), ^{
             [state teardown];
+        });
+        // 閉鎖 completion（開始中だった要求の完了後の閉鎖を含む）を待つ。上限は機器が応答しない場合の保険。
+        if ([state needsCloseWait]) {
+            dispatch_semaphore_wait(state.closeSem,
+                                    dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+        }
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            state.device.delegate = nil;
         });
         [[NSFileManager defaultManager] removeItemAtURL:state.tempDir error:nil];
 
