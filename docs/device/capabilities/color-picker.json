@@ -7,7 +7,10 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#936）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_color_picker.m + crates/fandhe-egui-proxy/src/device/ios_color_picker.rs + crates/fandhe-egui-proxy/src/device/color_picker.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-device/src/color_picker.rs、Issue #942",
       "api": "UIKit `UIColorPickerViewController`（iOS 14+、`supportsAlpha = NO`）。選択は `colorPickerViewController(_:didSelectColor:continuously:)`、閉じたことは `colorPickerViewControllerDidFinish(_:)` と `presentationControllerDidDismiss(_:)`（スワイプで閉じた場合）",
       "perm": "不要",
       "url": [
@@ -15,7 +18,7 @@
         "https://developer.apple.com/documentation/uikit/uicolorpickerviewcontrollerdelegate",
         "https://developer.apple.com/documentation/uikit/uiadaptivepresentationcontrollerdelegate/presentationcontrollerdiddismiss(_:)"
       ],
-      "note": "未実装。確定・取り消しのボタンは無い。閉じた時点で、OS の選択通知が来ていれば選んだ色、来ていなければ「選ばずに閉じた」。"
+      "note": "実装済み（#942）。確定・取り消しのボタンは無い。閉じた時点で、OS の選択通知が来ていれば選んだ色、来ていなければ「選ばずに閉じた」。"
     },
     "android": {
       "status": "no",
