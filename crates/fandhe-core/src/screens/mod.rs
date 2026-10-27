@@ -197,6 +197,8 @@ pub mod global_hotkey;
 pub mod haptics_tap;
 /// Phase 11 の拡充ループ型サンプル「ホーム画面ウィジェット」（親 #1064、Issue #1065）。
 pub mod home_widget_show;
+/// Phase 11 の拡充ループ型サンプル「端末内での画像生成」（親 #191、Issue #975）。
+pub mod image_generation_show;
 /// Phase 11 の拡充ループ型サンプル「画像の文字認識」（親 #1120、Issue #1250）。
 pub mod image_recognize;
 /// Phase 11 の拡充ループ型サンプル「アプリ内ブラウザ」（親 #135、Issue #701）。

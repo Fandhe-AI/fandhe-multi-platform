@@ -494,6 +494,11 @@ pub mod apple_haptics;
 /// 呼ばれる。ホストの `cargo test` でも検証できるよう `cfg(test)` でも有効にする。
 #[cfg(any(target_os = "macos", test))]
 pub mod apple_home_widget;
+/// Issue #975 macOS・#976 iOS: 端末内での画像生成実装（`apple/fandhe_apple_image_generation.swift` を
+/// 呼ぶ C ABI ラッパー）。`device/image_generation.rs` の macOS 経路と、iOS 経路から呼ばれる。
+/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+pub mod apple_image_generation;
 /// Issue #1250 macOS・#1252 iOS: 文字認識実装（`apple/
 /// fandhe_apple_image_recognition.m` を呼ぶ C ABI ラッパー）。`device/image_recognition.rs` の
 /// macOS 経路と `ios_image_recognition` から呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
@@ -786,6 +791,9 @@ pub mod http_fetch;
 /// Phase 11 の拡充ループ（親 #187、Issue #960）: 人の在席・離席の検知の effect ドライバ（Windows 実装、
 /// 他 OS は `UnsupportedHumanPresence` 固定）。
 pub mod human_presence;
+/// Phase 11 の拡充ループ（親 #191、Issue #975）: 端末内での画像生成の effect ドライバ（macOS 実装、
+/// iOS は #976 が実体を置くまでスタブ、他 OS は `UnsupportedImageGenerator` 固定）。
+pub mod image_generation;
 /// Phase 11 の拡充ループ（親 #1120、Issue #1250）: 画像の文字認識の effect ドライバ
 /// （macOS・Windows / iOS 実装、Android は骨格のスタブ（対応表で `no`）、他 OS は
 /// `UnsupportedTextRecognizer` 固定。Web は対象外）。
@@ -953,6 +961,10 @@ pub mod ios_fullscreen_immersive;
 /// 戻り直後に再描画を起こす）。`device/geocoding_search.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_geocoding_search;
+/// Issue #975: iOS 向け画像生成のスタブ（`Unsupported` を返す。#976 が UIKit の実体へ置き換え）。
+/// `device/image_generation.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_image_generation;
 /// Issue #1252: iOS 向け文字認識（PHPicker + Vision）の effect ドライバ。
 #[cfg(target_os = "ios")]
 pub mod ios_image_recognition;
