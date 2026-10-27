@@ -54,8 +54,20 @@ fn to_outcome(result: Result<ShellOutcome, DeviceError>) -> Result<CoreOutcome, 
 /// シンボリックリンク・ディレクトリなど通常のファイル以外があれば、たどらず書かずに失敗する
 /// （他のファイルを上書きしない。security.md A08）。
 fn prepare_sample_file(base: &Path) -> Result<PathBuf, DeviceError> {
+    prepare_sample_file_in(base, SAMPLE_DIR, SAMPLE_FILE, SAMPLE_CONTENT)
+}
+
+/// [`prepare_sample_file`] の本体。`base/<dir>/<file>` に `content` のサンプルを用意する。
+/// 同じ安全な作成処理（シンボリックリンク拒否・`create_new`）を `device/recent_documents.rs` からも
+/// 使うため括り出してある（Issue #988）。
+pub(crate) fn prepare_sample_file_in(
+    base: &Path,
+    dir: &str,
+    file: &str,
+    content: &str,
+) -> Result<PathBuf, DeviceError> {
     let fail = || DeviceError::Internal("shell sample");
-    let dir = base.join(SAMPLE_DIR);
+    let dir = base.join(dir);
     // 配置先ディレクトリ自体がシンボリックリンクなら、リンク先へ書かないよう拒否する。
     // 作成直後にも再検査し、確認から作成までに差し替えられたものも弾く。
     let is_real_dir = |p: &Path| {
@@ -74,7 +86,7 @@ fn prepare_sample_file(base: &Path) -> Result<PathBuf, DeviceError> {
         }
         Err(_) => return Err(fail()),
     }
-    let file = dir.join(SAMPLE_FILE);
+    let file = dir.join(file);
     match std::fs::symlink_metadata(&file) {
         Ok(meta) if meta.file_type().is_file() => Ok(file),
         Ok(_) => Err(fail()),
@@ -86,7 +98,7 @@ fn prepare_sample_file(base: &Path) -> Result<PathBuf, DeviceError> {
                 .create_new(true)
                 .open(&file)
                 .map_err(|_| fail())?;
-            f.write_all(SAMPLE_CONTENT.as_bytes()).map_err(|_| fail())?;
+            f.write_all(content.as_bytes()).map_err(|_| fail())?;
             Ok(file)
         }
         Err(_) => Err(fail()),
