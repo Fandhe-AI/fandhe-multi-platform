@@ -9,7 +9,7 @@
 //! # dispatch（最終形）
 //!
 //! - macOS・iOS: コールバック型。pull 型 `bridge`（`RequestSlot` の facade）と [`drive_callback`]。
-//!   OS 別の `present` は macOS が `macos_color_picker`、iOS が `ios_color_picker`（(b-ios) #942 が実体を埋める）
+//!   OS 別の `present` は macOS が `macos_color_picker`、iOS が `ios_color_picker`
 //! - Windows: `ColorPicker` トレイトを UI スレッドで同期に呼ぶ [`drive`]（`windows_color_picker`、
 //!   print と同じ同期モーダル）
 //! - Android・Linux: `UnsupportedColorPicker` で `Unsupported` を画面へ出す（成功にしない）
@@ -72,11 +72,10 @@ fn present(request_id: u64) -> Result<(), DeviceError> {
     super::macos_color_picker::present(request_id)
 }
 
-/// 提示を OS 別の実装へ依頼する（iOS は (b-ios) #942 が実体を埋めるまでスタブ）。
+/// 提示を OS 別の実装へ依頼する。
 #[cfg(target_os = "ios")]
 fn present(request_id: u64) -> Result<(), DeviceError> {
-    let _ = request_id;
-    super::ios_color_picker::present()
+    super::ios_color_picker::present(request_id)
 }
 
 /// macOS・iOS の effect ドライバ本体（`eye_dropper::drive_callback` と同型）。

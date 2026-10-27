@@ -872,7 +872,7 @@ pub mod ios_camera_preview_stream;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_capture_protection;
-/// Issue #941: iOS 向けシステムの色選択ダイアログの骨格（実体は #942）。
+/// Issue #942: iOS 向けシステムの色選択ダイアログ実装（`ios/fandhe_ios_color_picker.m` を呼ぶ）。
 /// `device/color_picker.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_color_picker;

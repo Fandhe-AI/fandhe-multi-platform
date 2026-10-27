@@ -285,6 +285,9 @@
 //! - `ios/fandhe_ios_file_preview.m`（Issue #919、`QLPreviewController` による固定ファイルのプレビュー）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_file_preview.rs` から
 //!   呼ばれる契約）。QuickLook を追加でリンクする。
+//! - `ios/fandhe_ios_color_picker.m`（Issue #942、`UIColorPickerViewController` による色選択）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_color_picker.rs` から
+//!   呼ばれる契約）。UIKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_print.m`（Issue #325、`NSPrintPanel` + `NSPrintOperation` による印刷
 //!   ダイアログ）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_print.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -754,6 +757,8 @@ fn main() {
     compile_ios_capture_protection();
     // `ios/fandhe_ios_file_preview.m`（Issue #919）。iOS 分岐のみ。QuickLook をリンクする。
     compile_ios_file_preview();
+    // `ios/fandhe_ios_color_picker.m`（Issue #942）。iOS 分岐のみ。UIKit は既存のリンクで足りる。
+    compile_ios_color_picker();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_midi.m`（Issue #1398 macOS + #1399 iOS）も共用する。CoreMIDI を使う。
@@ -1723,6 +1728,18 @@ fn compile_ios_file_preview() {
         .flag("-fobjc-arc")
         .compile("fandhe_ios_file_preview");
     println!("cargo:rustc-link-lib=framework=QuickLook");
+}
+
+/// `ios/fandhe_ios_color_picker.m` を `cc` でコンパイルする（Issue #942）。**iOS 分岐のみ**から
+/// 呼ばれる（`src/device/ios_color_picker.rs` が使う）。UIKit はリンク済みで追加リンクは無い。
+fn compile_ios_color_picker() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_color_picker.m");
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_common.h");
+    cc::Build::new()
+        .file("ios/fandhe_ios_color_picker.m")
+        .include("ios")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_color_picker");
 }
 
 /// `ios/fandhe_ios_capture_protection.m` を `cc` でコンパイルする（Issue #583）。**iOS 分岐のみ**
