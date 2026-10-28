@@ -298,7 +298,10 @@ final class ScannerDevicesHelper {
         // 参照は登録より先に保存する（登録直後の通知を取りこぼさない）。
         r.receiver = rcv;
         try {
-            ContextCompat.registerReceiver(activity, rcv, new IntentFilter(ACTION_PERMISSION),
+            // data URI 付きの Intent は scheme を宣言しないフィルターに一致しないため scheme を足す。
+            IntentFilter filter = new IntentFilter(ACTION_PERMISSION);
+            filter.addDataScheme("fandhe-scanner-devices");
+            ContextCompat.registerReceiver(activity, rcv, filter,
                     null, handler, ContextCompat.RECEIVER_NOT_EXPORTED);
             // data に要求 id を含め、要求ごとに別の PendingIntent にする（filterEquals は data を比較する）。
             Intent intent = new Intent(ACTION_PERMISSION, permissionData(r.id))
