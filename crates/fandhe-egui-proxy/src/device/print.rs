@@ -29,7 +29,15 @@
 //! 背景にいる間は読み戻しが届かず、期限切れで失敗になる（守らない範囲）。
 
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+#[cfg(any(
+    test,
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "ios",
+    target_os = "android"
+))]
+use std::time::Duration;
+use std::time::Instant;
 
 use fandhe_core::screens::print_page::{
     take_request, CoreOutcome, PrintFailure, PrintPageState, PrintRequestView,
