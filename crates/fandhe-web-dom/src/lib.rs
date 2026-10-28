@@ -386,7 +386,7 @@ pub mod pen_stylus;
 /// 型サンプル「ピクチャ・イン・ピクチャ」の Web 経路（Issue #367）。[`haptics`] と同じ理由で純関数は native からも
 /// テストできるよう gate を外す。
 pub mod picture_in_picture;
-/// 型サンプル「印刷」の Web 経路（Issue #329）。[`haptics`] と同じ理由で gate を外す。
+/// 型サンプル「印刷」の Web 経路（Issue #329）。画面の内容の印刷（Issue #1013）も同居。[`haptics`] と同じ理由で gate を外す。
 pub mod print_page;
 /// 型サンプル「画面の向き」の Web 経路（Issue #658）。[`haptics`] と同じ理由で gate を外す。
 pub mod screen_orientation;

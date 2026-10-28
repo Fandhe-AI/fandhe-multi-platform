@@ -57,14 +57,18 @@
       "impl": "crates/fandhe-egui-proxy/src/device/windows_print.rs + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_screen_page.rs + crates/fandhe-device/src/print.rs、Issue #1010"
     },
     "web": {
-      "status": "possible",
+      "status": "done",
       "api": "`window.print()`。マウント中の画面 DOM の複製を `body` 直下の印刷用ブロックに入れ、`@media print` でそのブロックだけを出す。`print-color-adjust: exact`（`web-sys` 経由）",
       "perm": "不要",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/API/Window/print",
         "https://developer.mozilla.org/en-US/docs/Web/CSS/print-color-adjust"
       ],
-      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは DOM の複製（読み戻しではない）。`print()` は結果を返さないため結果は常に不明。`print-color-adjust` は利用者のブラウザ設定が優先され、効く保証はない"
+      "note": "実装済み（#1013）。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。取り出しはマウント中の画面 DOM の複製（読み戻しではない。複製内の `id` は外す）で、`print` と共用の印刷用ブロックへ入れて `window.print()` を呼ぶ。複製・ブロック作成の失敗は `print()` を呼ばず「画面を取り込めませんでした」、`print()` の例外は失敗、戻れば常に `Unconfirmed`（`Submitted`・`Cancelled` には到達しない）。`window` が無ければ非対応。ブロックは次の要求かマウント破棄まで残す。背景色は `print-color-adjust: exact` で求める。守る範囲: 1 マウント内の要求と完了の順序、嘘の成功の禁止、ブロックの解放。守らない範囲: 紙に出たか、`print-color-adjust` が利用者設定で無視される場合、`<canvas>` の中身、ブラウザごとの改ページ・余白・書体、sandbox で `print()` が黙って無視される場合、複数タブ、egui-proxy の wasm canvas 経路（非対応のまま）",
+      "safari": "MDN では全主要ブラウザが対応。実ブラウザでの確認は #1001",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#1001）",
+      "impl": "crates/fandhe-web-dom/src/print_page.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/print_screen_page.rs + crates/fandhe-device/src/print.rs、Issue #1013"
     }
   },
   "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。`print`（固定の文章）から切り出した行で、OS の印刷ダイアログ・結果の三値・橋渡しは `print` と共用し、違いは印刷する対象（文章 → 今の画面の描画）だけ。範囲: 型サンプル画面の「この画面を印刷する」を押した直後の描画領域を 1 枚の画像（Web は DOM の複製）として、縦横比を保って印刷可能領域に収め、1 ページで OS の印刷ダイアログへ渡す。複数ページ・任意の画面の指定・プレビュー・プリンタ選択・解像度の指定・紙に出たかの追跡は扱わない。結果は `print` の三値（`Submitted`: ジョブを渡した。紙に出たことは意味しない / `Cancelled`: 利用者が閉じた。失敗ではない / `Unconfirmed`: 結果を OS が返さない。Web は常にこれ）。画面を取り込めない（期限内に読み戻しが届かない・寸法不正）失敗はダイアログを出す前に確定し、取り消しと混ぜない。守る: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、Bitmap・DC・印刷用ブロックの解放、画素をログへ出さないこと。守らない: 紙に出たか・ジョブ投入後のプリンタ側の失敗、印刷の色・解像度の正確さ、OS ごとの余白の差、画面を保護中（capture-protection）に読み戻しが黒くなるか、egui の描画領域の外（ステータスバー・ウィンドウ枠）、Web の `print-color-adjust` が無視される場合・`<canvas>` の中身・ブラウザごとの改ページ、複数タブ・複数プロセス、背景にいる間の取り込み（期限切れで失敗になる）"

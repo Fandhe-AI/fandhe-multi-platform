@@ -175,6 +175,7 @@ use fandhe_core::screens::power_state_show::{
 use fandhe_core::screens::print_page::{
     current_screen as current_print_page_screen, PrintPageState,
 };
+use fandhe_core::screens::print_screen_page::current_screen as current_print_screen_page_screen;
 use fandhe_core::screens::safe_area_insets_show::{
     safe_area_insets_show_web_screen, SafeAreaInsetsShowState,
 };
@@ -1392,6 +1393,21 @@ pub fn mount_print_page_screen(root_id: &str) -> Result<(), JsValue> {
         current_print_page_screen(&initial_state),
         initial_state,
         super::print_page::print_page_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「画面の印刷」（親 #341、Issue #1013）をマウントする
+/// 検証専用エントリポイント。`super::print_page::print_screen_page_effect` が画面 DOM の複製を印刷する。
+#[wasm_bindgen]
+pub fn mount_print_screen_page_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = PrintPageState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_print_screen_page_screen(&initial_state),
+        initial_state,
+        super::print_page::print_screen_page_effect,
     )
 }
 
