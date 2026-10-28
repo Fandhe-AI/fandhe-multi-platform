@@ -224,21 +224,31 @@ impl DirFileProvider {
     }
 }
 
-/// ID サブフォルダ `sub` の中身を 1 書類として読む。作りかけ・規則外は `Ok(None)`。
-/// 他経路が同時に消したこと（`NotFound`）も飛ばす。それ以外の I/O エラーは `Err`。
-fn read_doc(id: String, sub: &std::path::Path) -> io::Result<Option<Entry>> {
-    let mut items = match fs::read_dir(sub) {
-        Ok(rd) => rd,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(e),
-    };
+/// 項目がちょうど 1 件ならそれを返す。0 件・2 件以上は `Ok(None)`（作りかけ）。
+/// 1 件目・2 件目のどちらの `Err` も伝播する（読めなかった項目を飛ばして成功にしない）。
+fn single_item<T>(mut items: impl Iterator<Item = io::Result<T>>) -> io::Result<Option<T>> {
     let Some(first) = items.next() else {
         return Ok(None);
     };
     let first = first?;
-    if items.next().is_some() {
-        return Ok(None);
+    match items.next() {
+        None => Ok(Some(first)),
+        Some(Ok(_)) => Ok(None),
+        Some(Err(e)) => Err(e),
     }
+}
+
+/// ID サブフォルダ `sub` の中身を 1 書類として読む。作りかけ・規則外は `Ok(None)`。
+/// 他経路が同時に消したこと（`NotFound`）も飛ばす。それ以外の I/O エラーは `Err`。
+fn read_doc(id: String, sub: &std::path::Path) -> io::Result<Option<Entry>> {
+    let items = match fs::read_dir(sub) {
+        Ok(rd) => rd,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    let Some(first) = single_item(items)? else {
+        return Ok(None);
+    };
     // `DirEntry::metadata` はシンボリックリンクを辿らない。
     let meta = match first.metadata() {
         Ok(m) => m,
@@ -555,6 +565,18 @@ mod tests {
         let got: Vec<_> = v.iter().map(|e| (e.name.as_str(), e.id.as_str())).collect();
         assert_eq!(got, [("a.txt", "ccc"), ("a.txt", "ddd"), ("b.txt", "bbb")]);
         assert_eq!(v[0].size, 1);
+    }
+
+    #[test]
+    fn single_item_propagates_second_error() {
+        let items = vec![Ok(1), Err(io::Error::other("x"))];
+        assert!(single_item(items.into_iter()).is_err());
+        assert_eq!(single_item(vec![Ok(1)].into_iter()).unwrap(), Some(1));
+        assert_eq!(single_item(vec![Ok(1), Ok(2)].into_iter()).unwrap(), None);
+        assert_eq!(
+            single_item(Vec::<io::Result<i32>>::new().into_iter()).unwrap(),
+            None
+        );
     }
 
     #[test]
