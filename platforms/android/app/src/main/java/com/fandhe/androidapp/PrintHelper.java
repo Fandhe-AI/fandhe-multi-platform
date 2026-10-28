@@ -182,8 +182,8 @@ final class PrintHelper {
             float s = Math.min(area.width() / (float) w, area.height() / (float) h);
             float dw = w * s;
             float dh = h * s;
-            float left = area.left + (area.width() - dw) / 2f;
-            float top = area.top + (area.height() - dh) / 2f;
+            float left = (area.width() - dw) / 2f;
+            float top = (area.height() - dh) / 2f;
             page.getCanvas().drawBitmap(bmp, null, new RectF(left, top, left + dw, top + dh),
                     new Paint(Paint.FILTER_BITMAP_FLAG));
         } finally {
@@ -233,18 +233,32 @@ final class PrintHelper {
                 return;
             }
             PrintedPdfDocument pdf = new PrintedPdfDocument(activity, attrs);
+            boolean ok = false;
             try {
                 PdfDocument.Page page = pdf.startPage(0);
-                d.draw(page);
-                pdf.finishPage(page);
+                try {
+                    d.draw(page);
+                } finally {
+                    // 描画の成否によらずページを終える（未終了だと close が IllegalStateException）。
+                    pdf.finishPage(page);
+                }
                 // destination の fd は framework の持ち物なので閉じない（公式サンプルと同じ）。
                 pdf.writeTo(new FileOutputStream(destination.getFileDescriptor()));
-                callback.onWriteFinished(new PageRange[] {PageRange.ALL_PAGES});
+                ok = true;
             } catch (IOException | RuntimeException | OutOfMemoryError e) {
+                ok = false;
+            } finally {
+                try {
+                    pdf.close();
+                } catch (RuntimeException e) {
+                    ok = false;
+                }
+            }
+            if (ok) {
+                callback.onWriteFinished(new PageRange[] {PageRange.ALL_PAGES});
+            } else {
                 writeFailed = true;
                 callback.onWriteFailed(null);
-            } finally {
-                pdf.close();
             }
         }
 
