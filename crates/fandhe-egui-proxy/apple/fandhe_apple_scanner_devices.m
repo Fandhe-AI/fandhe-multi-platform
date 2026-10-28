@@ -75,6 +75,8 @@ static const int kFandheMaxPixel = 2048;
 @property(nonatomic) BOOL closeWait;
 // セッションが閉じた（または機器が外れた）ことを OS から確認できた。`lock` の内側でだけ読み書きする。
 @property(nonatomic) BOOL closeConfirmed;
+// 閉鎖 completion がエラーで返ったときの NSError.code（無ければ 0）。`lock` の内側でだけ読み書きする。
+@property(nonatomic) int64_t closeErrorCode;
 @property(nonatomic) int32_t code;
 @property(nonatomic) int64_t osCode;
 @property(nonatomic, strong, nullable) NSData *jpeg;
@@ -250,6 +252,12 @@ static NSObject *gFandheUnclosedLock = nil;
 }
 
 // 閉鎖を確認できていない（teardown の後に呼ぶ）。
+- (int64_t)closeErrorCodeValue {
+    @synchronized(_lock) {
+        return self.closeErrorCode;
+    }
+}
+
 - (BOOL)closeUnconfirmed {
     @synchronized(_lock) {
         return self.closeWait && !self.closeConfirmed;
@@ -462,6 +470,11 @@ static NSObject *gFandheUnclosedLock = nil;
 - (void)device:(ICDevice *)device didCloseSessionWithError:(NSError *)error {
     if (self.tornDown) {
         // 閉鎖がエラーで返ったときは待機だけ起こし、閉鎖確認としては扱わない（状態と delegate を保持する）。
+        if (error != nil) {
+            @synchronized(_lock) {
+                self.closeErrorCode = (int64_t)error.code;
+            }
+        }
         [self signalClosed:error == nil];
         return;
     }
@@ -608,7 +621,15 @@ int32_t fandhe_apple_scanner_devices_import(uint64_t deadline_ms, uint64_t disco
         int64_t os = 0;
         NSData *jpeg = nil;
         [state snapshotCode:&code os:&os jpeg:&jpeg];
-        // 画像を取得済みなら、閉鎖の失敗・待機の期限切れで結果を上書きしない（未閉鎖は gFandheUnclosed が次の要求を止める）。
+        // 取得済みでも、セッションを閉じられなかった（閉鎖エラー・待機の期限切れ）なら画像を渡さず失敗にする。
+        // 契約は全経路でセッションを閉じることなので、未閉鎖のまま成功を返さない。未閉鎖は gFandheUnclosed が次の要求を止める。
+        // 閉鎖エラーは NSError.code を 9 で返し（Rust 側で写像）、通知が届かない期限切れは 6（TimedOut）。
+        if (code == 0 && hold) {
+            int64_t closeErr = [state closeErrorCodeValue];
+            code = closeErr != 0 ? 9 : 6;
+            os = closeErr;
+            jpeg = nil;
+        }
         *out_found = state.found;
         *out_os_code = os;
         if (code == 0) {
