@@ -345,7 +345,9 @@ void fandhe_ios_ar_read_frame(void *ctx) {
         os_unfair_lock_lock(&gLock);
         ARSession *s = (gActive && !gBackground && gHasValue) ? gSession : nil;
         os_unfair_lock_unlock(&gLock);
-        CVPixelBufferRef pb = s.currentFrame.capturedImage;
+        // ARFrame を変換完了まで強参照し、session 側の差し替えで pixel buffer が解放されるのを防ぐ
+        ARFrame *__attribute__((objc_precise_lifetime)) frame = s.currentFrame;
+        CVPixelBufferRef pb = frame.capturedImage;
         if (pb == NULL ||
             CVPixelBufferGetPixelFormatType(pb) != kCVPixelFormatType_420YpCbCr8BiPlanarFullRange ||
             !CVPixelBufferIsPlanar(pb) || CVPixelBufferGetPlaneCount(pb) != 2) {
