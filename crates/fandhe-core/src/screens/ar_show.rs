@@ -9,9 +9,9 @@
 //! [`apply_ended`] で注入する。`fandhe_device::ar` の型は依存方向の都合でここへ写す。
 //!
 //! 嘘の値を出さない: 位置は `Live` かつ追跡できているときだけ、水平面は数えられる環境だけ数字で出す
-//! （`None` は「数えません」で、0 枚とは出さない）。古い世代の完了は [`ArShowState::session`] で捨てる。
+//! （`None` は「数えません」で、0 枚とは出さない）。カメラ映像も `Live` の間だけ出す。古い世代の完了は [`ArShowState::session`] で捨てる。
 
-use crate::{Screen, WidgetId};
+use crate::{RgbaPixels, Screen, WidgetId};
 
 /// 「開始」ボタン。Web は `Screen` を作り直さず両ボタンを常時出すため `pub`。
 pub const START_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
@@ -35,6 +35,8 @@ pub const NO_READING_TEXT: &str = "取得できません（AR の値が届きま
 pub const FAILED_TEXT: &str = "取得できません";
 /// 水平面を数えない環境（Web）の表示。
 pub const PLANES_UNCOUNTED_TEXT: &str = "水平面: このブラウザでは数えません";
+/// カメラ映像の代替テキスト。
+pub const FRAME_ALT: &str = "AR のカメラ映像";
 /// 注記（座標系）。
 pub const NOTE_TEXT: &str = "位置は開始地点が原点（y 上向き・-z が前方、単位 m）";
 
@@ -111,6 +113,8 @@ pub struct ArShowState {
     pub wanted: bool,
     /// 「開始」のたびに増える世代。遅れて届いた完了を捨てるために使う。
     pub session: u64,
+    /// 最新のカメラ映像。`Live` の間だけ持ち、開始・停止・失敗・値なしで捨てる。
+    pub frame: Option<RgbaPixels>,
 }
 
 /// 「開始」。冪等（実行中の二重押下では世代を進めない）。
@@ -120,6 +124,7 @@ pub fn start(s: &mut ArShowState) {
     }
     s.wanted = true;
     s.view = ArView::Starting;
+    s.frame = None;
     s.session = s.session.wrapping_add(1);
 }
 
@@ -127,6 +132,7 @@ pub fn start(s: &mut ArShowState) {
 pub fn stop(s: &mut ArShowState) {
     s.wanted = false;
     s.view = ArView::Idle;
+    s.frame = None;
 }
 
 /// 読み取り結果を反映する。停止後・世代違いは捨てる。`None` は値なし（開始中へ戻す）。
@@ -134,7 +140,18 @@ pub fn apply_reading(s: &mut ArShowState, session: u64, r: Option<ArReadingView>
     if !s.wanted || s.session != session {
         return;
     }
+    if r.is_none() {
+        s.frame = None;
+    }
     s.view = r.map_or(ArView::Starting, ArView::Live);
+}
+
+/// 映像を反映する。`Live` で世代が一致したときだけ受ける。`None` は直前の映像を消す。
+pub fn apply_frame(s: &mut ArShowState, session: u64, frame: Option<RgbaPixels>) {
+    if !s.wanted || s.session != session || !matches!(s.view, ArView::Live(_)) {
+        return;
+    }
+    s.frame = frame;
 }
 
 /// 失敗を反映する。実行中で世代が一致したときだけ確定し、希望を下ろす（再度「開始」できる）。
@@ -144,6 +161,7 @@ pub fn apply_failure(s: &mut ArShowState, session: u64, f: ArFailureView) {
     }
     s.wanted = false;
     s.view = ArView::Failed(f);
+    s.frame = None;
 }
 
 /// OS 側でセッションが終わった（Web の `end`＝戻る操作）。失敗にせず待機へ戻す。世代違いは捨てる。
@@ -153,6 +171,7 @@ pub fn apply_ended(s: &mut ArShowState, session: u64) {
     }
     s.wanted = false;
     s.view = ArView::Idle;
+    s.frame = None;
 }
 
 fn limited_label(r: LimitedReasonView) -> &'static str {
@@ -232,7 +251,11 @@ pub fn planes_text(s: &ArShowState) -> String {
 
 /// `effect` 区画が要求する `fn(&S) -> Screen<S>` 形の入口。`wanted` に応じてボタンを 1 つだけ出す。
 pub fn current_screen(s: &ArShowState) -> Screen<ArShowState> {
-    let screen = Screen::new("AR 表示")
+    let mut screen = Screen::new("AR 表示");
+    if let (ArView::Live(_), Some(pixels)) = (&s.view, &s.frame) {
+        screen = screen.rgba_image(pixels.clone(), FRAME_ALT);
+    }
+    let screen = screen
         .dynamic_text(main_text)
         .dynamic_text(position_text)
         .dynamic_text(planes_text);
@@ -328,6 +351,92 @@ mod tests {
         assert_eq!(main_text(&s), "追跡: 良好");
         assert_eq!(position_text(&s), "位置: x 0.12 m / y -0.03 m / z -1.20 m");
         assert_eq!(planes_text(&s), "水平面: 2 枚");
+    }
+
+    fn px() -> RgbaPixels {
+        RgbaPixels::new(1, 1, vec![0; 4]).unwrap()
+    }
+
+    fn live_state() -> ArShowState {
+        let mut s = started();
+        apply_reading(&mut s, 1, Some(r(TrackingView::Normal, None, None)));
+        s
+    }
+
+    #[test]
+    fn frame_only_in_live_same_session() {
+        let mut s = started();
+        apply_frame(&mut s, 1, Some(px()));
+        assert!(s.frame.is_none());
+        let mut s = live_state();
+        apply_frame(&mut s, 2, Some(px()));
+        assert!(s.frame.is_none());
+        apply_frame(&mut s, 1, Some(px()));
+        assert!(s.frame.is_some());
+        apply_frame(&mut s, 1, None);
+        assert!(s.frame.is_none());
+        let mut s = live_state();
+        s.wanted = false;
+        apply_frame(&mut s, 1, Some(px()));
+        assert!(s.frame.is_none());
+    }
+
+    #[test]
+    fn frame_cleared_on_every_exit() {
+        let with = || {
+            let mut s = live_state();
+            apply_frame(&mut s, 1, Some(px()));
+            s
+        };
+        let mut s = with();
+        stop(&mut s);
+        assert!(s.frame.is_none());
+        for f in [
+            ArFailureView::PermissionDenied,
+            ArFailureView::Unsupported,
+            ArFailureView::NoReading,
+            ArFailureView::Failed,
+        ] {
+            let mut s = with();
+            apply_failure(&mut s, 1, f);
+            assert!(s.frame.is_none());
+        }
+        let mut s = with();
+        apply_ended(&mut s, 1);
+        assert!(s.frame.is_none());
+        let mut s = with();
+        apply_reading(&mut s, 1, None);
+        assert!(s.frame.is_none());
+        let mut s = with();
+        s.wanted = false;
+        start(&mut s);
+        assert!(s.frame.is_none());
+    }
+
+    #[test]
+    fn image_only_when_live_with_frame_and_above_lines() {
+        let count = |s: &ArShowState| {
+            current_screen(s)
+                .iter()
+                .filter(|n| matches!(n, crate::Node::RgbaImage { .. }))
+                .count()
+        };
+        let mut s = live_state();
+        assert_eq!(count(&s), 0);
+        apply_frame(&mut s, 1, Some(px()));
+        assert_eq!(count(&s), 1);
+        assert!(matches!(
+            current_screen(&s).iter().next(),
+            Some(crate::Node::RgbaImage { .. })
+        ));
+        for v in [
+            ArView::Idle,
+            ArView::Starting,
+            ArView::Failed(ArFailureView::Failed),
+        ] {
+            s.view = v;
+            assert_eq!(count(&s), 0);
+        }
     }
 
     #[test]
