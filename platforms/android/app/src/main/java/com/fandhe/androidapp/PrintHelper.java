@@ -178,6 +178,10 @@ final class PrintHelper {
     private static void drawImage(PdfDocument.Page page, int[] argb, int w, int h) {
         Bitmap bmp = Bitmap.createBitmap(argb, w, h, Bitmap.Config.ARGB_8888);
         try {
+            // Canvas の原点は contentRect の左上（ページの角ではない）。根拠: AOSP の
+            // PdfDocument.cpp は contentRect の幅・高さで原点 (0,0) から記録を始め、書き出し時に
+            // beginPage(.., &contentRect) で印刷可能領域へ配置する。よって left/top は足さず、
+            // area の幅・高さ内の余白だけで中央寄せする（足すと余白の二重加算）。
             Rect area = page.getInfo().getContentRect();
             float s = Math.min(area.width() / (float) w, area.height() / (float) h);
             float dw = w * s;
