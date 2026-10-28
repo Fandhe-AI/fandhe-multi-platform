@@ -101,7 +101,9 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
         int i = rest.indexOf('/');
         if (i <= 0) throw new FileNotFoundException();
         String name = rest.substring(i + 1);
-        if (!validName(name) || !rest.substring(0, i).equals(String.valueOf(genOf(getContext(), name, false)))) {
+        long gen = validName(name) ? genOf(getContext(), name, false) : 0;
+        // 世代 0 は未採番。未採番の同名ファイル全部に一致させないため拒否する。
+        if (gen == 0 || !rest.substring(0, i).equals(String.valueOf(gen))) {
             throw new FileNotFoundException();
         }
         return name;
@@ -315,9 +317,10 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
                     if (mimeType != null && !"application/octet-stream".equals(mimeType)) {
                         prefs(ctx).edit().putString(MIME_KEY + name, mimeType).commit();
                     }
-                    genOf(ctx, name, true);
+                    // 採番を確定してから通知する。通知後に読み直すと 0（未採番）を返しうる。
+                    long gen = genOf(ctx, name, true);
                     notifyChanged(ctx);
-                    return FILE_PREFIX + genOf(ctx, name, false) + "/" + name;
+                    return FILE_PREFIX + gen + "/" + name;
                 }
             } catch (IOException e) {
                 throw new FileNotFoundException();
