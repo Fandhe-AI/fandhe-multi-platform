@@ -525,7 +525,8 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn host_implementation_is_unsupported() {
-        use std::time::Duration;
+        use std::sync::Mutex;
+        use std::time::{Duration, Instant};
         assert!(matches!(
             implementation().transcode(Duration::from_secs(1)),
             Err(fandhe_device::DeviceError::Unsupported(_))
@@ -537,10 +538,14 @@ mod tests {
 mod windows_tests {
     use super::imp::WindowsVideoTranscode;
     use fandhe_device::video_transcode::{
-        check_mp4_video, VideoTranscode, SOURCE_HEIGHT, SOURCE_WIDTH, TIMEOUT,
+        check_mp4_video, VideoTranscode, RELEASE_PENDING, SOURCE_HEIGHT, SOURCE_WIDTH, TIMEOUT,
     };
     use fandhe_device::DeviceError;
-    use std::time::Duration;
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+
+    /// 実装はプロセス共有の状態（CALL / PENDING / LEFTOVERS）を持つため、テストは直列に走らせる。
+    static SERIAL: Mutex<()> = Mutex::new(());
 
     fn leftovers() -> usize {
         let prefix = format!("fandhe-video-transcode-{}-", std::process::id());
@@ -553,10 +558,25 @@ mod windows_tests {
             .unwrap_or(0)
     }
 
+    /// 前回の解放待ち（`RELEASE_PENDING`）が解けるまで、次の要求として呼び直す（最大 10 秒）。
+    /// 期限切れ直後は未解放のまま残りうる（遅延解放の契約）。解放は次の要求で確認される。
+    fn transcode_after_release(remaining: Duration) -> Result<Vec<u8>, DeviceError> {
+        let give_up = Instant::now() + Duration::from_secs(10);
+        loop {
+            match WindowsVideoTranscode.transcode(remaining) {
+                Err(DeviceError::Internal(RELEASE_PENDING)) if Instant::now() < give_up => {
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                r => return r,
+            }
+        }
+    }
+
     /// 成功（検証を通り、元より小さい）か非対応のどちらか。一時ファイルは残らない。
     #[test]
     fn transcodes_or_reports_unsupported() {
-        match WindowsVideoTranscode.transcode(Duration::from_secs(30)) {
+        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        match transcode_after_release(Duration::from_secs(30)) {
             Ok(bytes) => {
                 let info = check_mp4_video(&bytes).expect("mp4 検証");
                 assert!(info.width < SOURCE_WIDTH && info.height < SOURCE_HEIGHT);
@@ -567,14 +587,18 @@ mod windows_tests {
         assert_eq!(leftovers(), 0, "一時ファイルが残っている");
     }
 
-    /// 期限 0 は成功にならず、一時ファイルも残らない。
+    /// 期限 0 は成功にならない。期限切れ直後は未解放で残りうるため、次の要求で再削除されてから
+    /// 一時ファイルが残らないことを確かめる。
     #[test]
     fn zero_deadline_is_not_success() {
-        let r = WindowsVideoTranscode.transcode(Duration::ZERO);
+        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let r = transcode_after_release(Duration::ZERO);
         assert!(matches!(
             r,
             Err(DeviceError::Internal(TIMEOUT)) | Err(DeviceError::Unsupported(_))
         ));
-        assert_eq!(leftovers(), 0, "一時ファイルが残っている");
+        // 次の要求（解放待ちが解けるまで）で再削除される。
+        let _ = transcode_after_release(Duration::from_secs(30));
+        assert_eq!(leftovers(), 0, "次の要求の後も一時ファイルが残っている");
     }
 }
