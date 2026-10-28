@@ -671,10 +671,9 @@ pub mod apple_translation;
 pub mod apple_url_scheme;
 /// Issue #1014: macOS / iOS 向け動画の変換実装（`apple/fandhe_apple_video_transcode.m` の
 /// `AVAssetWriter` + `AVAssetExportSession` を呼ぶ C ABI ラッパー）。`device/video_transcode.rs` の macOS 経路から
-/// 呼ばれる。iOS は #1016 が `ios_video_transcode` で使うまで未使用（そのとき `allow(dead_code)` を外す）。
+/// 呼ばれるほか、iOS では `ios_video_transcode`（#1016）から呼ばれる。
 /// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod apple_video_transcode;
 /// Issue #307（親 #90）: AR 表示の effect ドライバ（iOS は `ios_ar.rs`、
 /// 他 OS は `UnsupportedAr` 固定。Web は `fandhe-web-dom`）。
@@ -1180,7 +1179,7 @@ pub mod ios_uwb_ranging;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_video_capture;
-/// Issue #1014 (a): iOS 向け動画の変換のスタブ（実装は #1016）。
+/// Issue #1016: iOS 向け動画の変換実装（macOS と共用の `AppleVideoTranscode` を返す）。
 /// `device/video_transcode.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_video_transcode;
@@ -1661,7 +1660,7 @@ pub mod uwb_ranging;
 /// macOS・Windows・Linux は `UnsupportedVideoCapturer` 固定）。
 pub mod video_capture;
 /// Phase 11 の拡充ループ（親 #340、Issue #1014）: 動画の変換の effect ドライバ
-/// （macOS 実装、iOS は #1016・Android は #1017・Windows は #1015 が埋めるスタブ、
+/// （macOS・iOS 実装、Android は #1017・Windows は #1015 が埋めるスタブ、
 /// Web は #1018、他 OS は `UnsupportedVideoTranscode` 固定）。
 pub mod video_transcode;
 /// Phase 11 の拡充ループ（親 #166、Issue #785）: システム音量の effect ドライバ
