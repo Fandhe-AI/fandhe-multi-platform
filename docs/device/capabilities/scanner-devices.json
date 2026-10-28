@@ -18,14 +18,17 @@
       "note": "未実装。カメラ機器のみ（スキャナーは API なし）。守る: 失敗・0 件・拒否・ロックを成功に畳まない、セッション・一時ファイル・接続を全経路で閉じる。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）。範囲外: 機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク接続の機器。既知の天井: 取り込みだけで `NSCameraUsageDescription` が要るか（実機未確認）"
     },
     "android": {
-      "status": "possible",
-      "api": "`UsbManager.getDeviceList` から Still Image クラス（`UsbConstants.USB_CLASS_STILL_IMAGE`）の機器を選び、`requestPermission` → `openDevice` → `MtpDevice.open`（API 12）で最新の画像 1 枚を `getObject` で読む",
+      "status": "done",
+      "api": "`UsbManager.getDeviceList` で Still Image クラス（`UsbConstants.USB_CLASS_STILL_IMAGE`）の機器を探す → `hasPermission` / `requestPermission` → `openDevice` → `MtpDevice.open`（API 12）→ `getObjectHandles(storage, 0, 0)` と `getObjectInfo` の作成日時で最新の画像 1 枚 → `getObject` → `BitmapFactory` で長辺 2048 画素以下の JPEG にする",
       "perm": "機器ごとの USB 接続許可（`UsbManager.requestPermission` の実行時ダイアログ）。マニフェストの権限は無い",
       "url": [
         "https://developer.android.com/reference/android/mtp/MtpDevice",
         "https://developer.android.com/develop/connectivity/usb/host"
       ],
-      "note": "未実装。USB の PTP / MTP カメラ機器のみ（スキャナー向けの標準 API はない）。許可は broadcast の extras を信じず `hasPermission` を読み直す。許可ダイアログを閉じる操作は拒否と区別できないので `PermissionDenied`。守る: 失敗・0 件・拒否・ロックを成功に畳まない、セッション・一時ファイル・接続を全経路で閉じる。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）。範囲外: 機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク接続の機器。既知の天井: 機器のロックを判別できない、システムが機器を掴んでいるときの `open` の結果は実機未確認"
+      "note": "実装済み（#983）。探索窓（3 秒）の間 `getDeviceList` を読み直して機器を探し（見つかれば早く打ち切る）、名前の辞書順で先頭の 1 台の最新の画像 1 枚を取り込んで種類と台数と共に表示する。許可は broadcast の extras を信じず `hasPermission` を読み直し、ダイアログを閉じる操作は拒否と区別できないので `PermissionDenied`。取り込み中に機器が外れたことは `getDeviceList` の読み直しで判定して `Interrupted`。0 台・画像 0 件・拒否・上限超過・復号不可・OS の失敗を区別して失敗にし、成功へ畳まない。日時や情報が欠けた要素、ストレージ 0 件（ロックと区別できない）は `Failed`。`MtpDevice`・接続・レシーバーは成功・失敗・期限切れ・中断の全経路で解放し、期限切れでは解放の完了を待ってから `TimedOut` を返す。機器名・シリアル・画像はログへ出さない。守る: 失敗・0 件・拒否・ロックを成功に畳まない、セッション・一時ファイル・接続を全経路で閉じる。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）、期限の後にダイアログで与えた許可（OS に残る）。範囲外: 機器の選択 UI・複数枚・RAW・HEIF・テザー撮影・ネットワーク接続の機器・MTP モード（class 255）だけを名乗る機器。既知の天井: 機器のロックを判別できない、システムが機器を掴んでいるときの `open` の結果は実機未確認、`FLAG_IMMUTABLE` の許可 broadcast が届く条件は実機未確認、EXIF の向きは補正しない",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#967）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/ScannerDevicesHelper.java + crates/fandhe-egui-proxy/src/device/android_scanner_devices.rs + crates/fandhe-egui-proxy/src/device/scanner_devices.rs + crates/fandhe-core/src/screens/scanner_devices_import.rs + crates/fandhe-device/src/scanner_devices.rs、Issue #983"
     },
     "macos": {
       "status": "done",
