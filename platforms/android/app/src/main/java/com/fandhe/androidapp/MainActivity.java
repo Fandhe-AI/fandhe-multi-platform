@@ -554,6 +554,18 @@ public class MainActivity extends GameActivity {
         radioControlHelper.set(requestId, kind, on);
     }
 
+    // 接続した機器からの取り込み（Issue #983）。実装は `ScannerDevicesHelper`。
+    // Rust の `android_scanner_devices.rs` が JNI で呼ぶ。
+    private final ScannerDevicesHelper scannerDevicesHelper = new ScannerDevicesHelper(this);
+
+    void requestScannerDevicesImport(long requestId, long windowMs, int maxBytes) {
+        scannerDevicesHelper.start(requestId, windowMs, maxBytes);
+    }
+
+    void cancelScannerDevicesImport(long requestId) {
+        scannerDevicesHelper.cancel(requestId);
+    }
+
     // 方位（Issue #1406）。実装は `CompassHelper`。Rust の `android_compass.rs` が同期 JNI で呼ぶ。
     private final CompassHelper compassHelper = new CompassHelper(this);
 
@@ -5176,6 +5188,7 @@ public class MainActivity extends GameActivity {
         musicLibraryHelper.onDestroy();
         wifiInfoHelper.onDestroy();
         radioControlHelper.onDestroy();
+        scannerDevicesHelper.onDestroy();
         compassHelper.onDestroy();
         environmentSensorsHelper.onDestroy();
         motionRawSensorsHelper.onDestroy();
