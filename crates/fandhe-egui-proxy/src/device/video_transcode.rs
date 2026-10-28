@@ -11,7 +11,7 @@
 //! # OS 別の分担（dispatch は #1014 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
 //! - macOS: [`super::apple_video_transcode::AppleVideoTranscode`]（#1014）
-//! - iOS: `ios_video_transcode`（#1016 b-ios。いまはスタブ）
+//! - iOS: `ios_video_transcode` 経由で `AppleVideoTranscode`（#1016 b-ios）
 //! - Windows: `windows_video_transcode`（#1015。いまはスタブ）
 //! - Android: `android_video_transcode`（#1017 b-android。いまはスタブ）
 //! - それ以外（Linux）: `UnsupportedVideoTranscode` 固定（ダミーの成功実装へは倒さない）
