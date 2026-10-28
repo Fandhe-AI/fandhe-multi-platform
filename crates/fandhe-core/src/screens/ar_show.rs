@@ -1,6 +1,7 @@
 //! Phase 11 の拡充ループ（親 #90）型サンプル「AR 表示」（Issue #307）。
 //! 「開始」「停止」で AR セッションを始め・止め、追跡状態・開始地点からの位置・水平面の数を
-//! 3 行で出す（カメラ映像は描かない）。`FANDHE_PROXY_APP=ar_show` で選ばれ、`fandhe-egui-proxy` の
+//! 3 行で出す。カメラ映像は `ar-camera-view` の範囲で、同じ画面・同じセッションの映像を
+//! 3 行の上に出す（契約は `fandhe_device::ar` のモジュール doc）。`FANDHE_PROXY_APP=ar_show` で選ばれ、`fandhe-egui-proxy` の
 //! `screens/registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod ar_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
