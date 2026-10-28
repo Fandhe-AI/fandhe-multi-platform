@@ -1,7 +1,12 @@
 //! 印刷（OS の印刷ダイアログを開く）機能の抽象（Phase 11 の拡充ループ、親 #94、Issue #325）。
 //!
-//! 範囲は「固定の短い文章（見出し 1 行 + 本文数行）を 1 ページとして OS の印刷ダイアログに渡す」
-//! ことだけ。複数ページ・画像・PDF・プリンタ列挙・進捗・紙に出たかの追跡は扱わない。
+//! 範囲は次の 2 つ。どちらも 1 ページとして OS の印刷ダイアログに渡す。
+//!
+//! - 固定の短い文章（見出し 1 行 + 本文数行）
+//! - 今の画面の描画を 1 枚の画像として、縦横比を保って印刷可能領域に収めたもの
+//!   （対応表 `print-screen`。ダイアログの出し方・結果の三値・橋渡しは文章と共用する）
+//!
+//! 任意の画像ファイル・複数ページ・PDF・プリンタ列挙・進捗・紙に出たかの追跡は扱わない。
 //! 検証の SSOT は [`PrintRequest::new`]（これ以外では要求を作れない）。画面
 //! （`fandhe_core::screens::print_page`、端末依存ゼロ）へは `fandhe-egui-proxy` の effect
 //! ドライバ（`device/print.rs`）が写像する。
@@ -22,9 +27,13 @@
 //! | Android | `PrintJob` が QUEUED / STARTED / BLOCKED / COMPLETED | CANCELED | 2 秒後も CREATED のまま |
 //! | Web | 到達しない | 到達しない | `window.print()` 呼び出し後は常に |
 //!
+//! 画面の画像の印刷も、各 OS の到達値は文章と同じ（Web は画面 DOM の複製を印刷用ブロックへ入れて
+//! `window.print()` するので、常に `Unconfirmed`）。
+//!
 //! | 状況 | 返す値 |
 //! |---|---|
 //! | 入力不正 | `InvalidInput("print title")` / `InvalidInput("print body")` |
+//! | 画面を取り込めない（期限内に読み戻しが届かない・寸法不正・Web の複製の失敗）。ダイアログを出す前に確定する | `Internal("print capture")` |
 //! | 非対応（Linux ほか） | `Unsupported("print")` |
 //! | ダイアログを出せない（main thread 外・Activity 無しなど） | `Internal("print present")` |
 //! | ジョブ投入・描画の失敗 | `Internal("print failed")` |
