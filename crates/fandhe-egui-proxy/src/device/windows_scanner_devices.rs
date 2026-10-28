@@ -26,7 +26,7 @@
 //! `RoInitialize` は呼ばず（MTA フォールバック）、`unsafe` は使わない。
 //!
 //! 既知の天井: 正常系の機材での実機確認が未了（#967）。WIA エラーの HRESULT を `Failed` に寄せている。
-//! パッケージ無しの exe で `ImageScanner` が使えるかは未確認。`CANCEL_GRACE`・`RECHECK_WINDOW` は仮の値。
+//! パッケージ無しの exe で `ImageScanner` が使えるかは未確認。`RECHECK_WINDOW` は仮の値。
 //! 型検査は `x86_64-pc-windows-gnu` のみ。
 
 use std::sync::Arc;
