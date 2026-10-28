@@ -2,14 +2,10 @@
 //!
 //! 扱う範囲は「アプリ専用フォルダの書類を、一覧する・見本を置く・消す」ところまで。
 //! フォルダを OS のファイル画面（Android の Files アプリ等）へ見せる provider 本体は OS 側
-//! （Android は #1020 の `DocumentsProvider`）が担い、本モジュールはフォルダを引数に取る
+//! （Android は `DocumentsProvider`）が担い、本モジュールはフォルダを引数に取る
 //! 共通実装 [`DirFileProvider`] と契約を持つ。呼び出し元は `fandhe-egui-proxy` の
 //! `device/file_provider.rs`（画面向け effect ドライバ）。対象 OS は Android だけで、
 //! iOS・macOS・Windows は保留、Web は対象外。
-//!
-//! **本書は「再利用しない書類 ID」方式の契約である。現行コードはまだ旧方式（ファイル名を識別キーにし、
-//! フォルダ直下に平らに置く）のままで、#1020 が本書へ合わせて実装する。** 食い違う箇所は各項目に
-//! 「#1020 で実装」と書く。
 //!
 //! # 書類 ID 方式（契約の中心）
 //!
@@ -26,7 +22,7 @@
 //! - **識別と表示の分離**: document ID・URI・Rust API の削除キーは ID。表示名はユーザーに見せるだけで、
 //!   識別には使わない
 //! - **表示名の重複を許す**: ID が違えば別の書類。旧方式の「名前 (n).拡張子」へのずらしは**廃止**する
-//!   （[`dedup_name`]・[`MAX_DEDUP`] は #1020 で削除）。置くは常に新しい ID の書類を作るので、
+//!   （旧方式の `dedup_name`・`MAX_DEDUP` は削除済み）。置くは常に新しい ID の書類を作るので、
 //!   既存の書類は上書きされない
 //! - **古い URI の無効化**: 消えた ID を指す URI は、開くと「無い」になる。同じ表示名で作り直しても
 //!   新しい ID になるので、古い URI の権限は新しい書類に及ばない。このため世代表も、Rust 側と
@@ -56,7 +52,7 @@
 //!   一覧を失敗にするのは I/O エラー（フォルダや項目の `metadata` を読めない等）に限り、
 //!   1 件でもあれば全体を失敗にして、飛ばして成功にしない
 //! - **名前の規則**: 表示名は [`validate_name`] に集約する（`<id>/<表示名>` の 1 要素なのでパスの
-//!   閉じ込めも兼ねる）。ID は英数字のみで、空・長すぎるものを拒否する。Java 側（#1020）も同じ表で検証する
+//!   閉じ込めも兼ねる）。ID は英数字のみで、空・長すぎるものを拒否する。Java 側も同じ表で検証する
 //! - **通知**: ファイル画面への変更通知は書けた後・消せた後だけ行い、失敗しても操作は成功のまま
 //!   `notified = false` で返す（成功と通知失敗を並べて見せる）
 //! - **消す**: ファイルを消してから ID のサブフォルダを消す。サブフォルダの削除失敗は握りつぶさず
@@ -83,26 +79,24 @@ use std::path::PathBuf;
 use crate::DeviceError;
 
 /// アプリ専用フォルダ名。Android は `getFilesDir()/file-provider`（Java 側と一致させる）。
-/// 書類は直下の ID サブフォルダ `<FOLDER_NAME>/<id>/<表示名>` に 1 つずつ置く（#1020 で実装）。
+/// 書類は直下の ID サブフォルダ `<FOLDER_NAME>/<id>/<表示名>` に 1 つずつ置く。
 pub const FOLDER_NAME: &str = "file-provider";
 /// 表示名の UTF-8 バイト数の上限。
 pub const MAX_NAME_BYTES: usize = 255;
-/// 旧方式（表示名の重複を「名前 (n).拡張子」へずらす）の番号の上限。再利用しない書類 ID 方式では
-/// 表示名の重複を許してずらさないため廃止する（#1020 で削除。それまでの現行コードだけが使う）。
-pub const MAX_DEDUP: u32 = 99;
+/// 書類 ID の文字数の上限（英数字のみ）。
+pub const MAX_ID_LEN: usize = 64;
 /// 「既に無い」を表す `Internal` の識別子（`DeviceError` に列挙子を足さない）。
 pub const NOT_FOUND: &str = "file_provider not_found";
-/// 名前（表示名。#1020 以降は ID も）の規則違反を表す `InvalidInput` の識別子。
+/// 名前（表示名と ID）の規則違反を表す `InvalidInput` の識別子。
 pub const INVALID_NAME: &str = "file_provider name";
 const INTERNAL: &str = "file_provider";
 
-/// 一覧の 1 項目（1 書類）。
-///
-/// 契約上は「再利用しない書類 ID」と「表示名」を持つ。現行コードは表示名の `name` だけで、
-/// ID の欄は #1020 で足す。以降、識別（削除・URI）は ID、`name` は表示だけに使う。
+/// 一覧の 1 項目（1 書類）。識別（削除・URI）は `id`、`name` は表示だけに使う。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
-    /// 表示名（`<id>/<表示名>` の表示名。ユーザーに見せるだけで、識別には使わない。重複しうる）。
+    /// 再利用しない書類 ID（英数字のみ。`<id>/<表示名>` の ID）。
+    pub id: String,
+    /// 表示名（ユーザーに見せるだけで、識別には使わない。重複しうる）。
     pub name: String,
     /// バイト数。
     pub size: u64,
@@ -111,12 +105,11 @@ pub struct Entry {
 }
 
 /// 置いた結果。
-///
-/// 契約上は、新しく採番した書類 ID と通知の成否を返す。ID の欄は #1020 で足す。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PutOutcome {
-    /// 置いた書類の表示名。再利用しない書類 ID 方式では渡した名前のまま
-    /// （重複を許しずらさない）。現行コードは重複時にずらした名前を返す（#1020 で廃止）。
+    /// 新しく採番した書類 ID。
+    pub id: String,
+    /// 置いた書類の表示名（渡した名前のまま。重複を許しずらさない）。
     pub name: String,
     /// ファイル画面への変更通知が成功したか。
     pub notified: bool,
@@ -131,21 +124,19 @@ pub struct DeleteOutcome {
 
 /// アプリ専用フォルダの一覧・置く・消す。全メソッドはブロックしうるため、呼び出し側はワーカーで呼ぶ。
 ///
-/// 識別は再利用しない書類 ID で行う（モジュール doc の「書類 ID 方式」）。現行のシグネチャは旧方式の
-/// 名前キーのままで、ID を受け渡す形へは #1020 で変える。
+/// 識別は再利用しない書類 ID で行う（モジュール doc の「書類 ID 方式」）。
 pub trait FileProvider: Send + Sync {
     /// 書類を表示名順（同名は ID 順）で返す。対象は「ID サブフォルダの中身がちょうど 1 つの通常ファイル」
     /// だけで、作りかけ（空・2 つ以上）は出さず失敗にもしない。失敗は I/O エラーに限り、1 件でも
-    /// 読めなければ全体を失敗にする（#1020 で実装。現行は平らなフォルダの通常ファイルを返す）。
+    /// 読めなければ全体を失敗にする。
     fn list(&self) -> Result<Vec<Entry>, DeviceError>;
     /// `base_name` を表示名として、新しい ID の書類を置く。表示名の重複は許し、既存の書類を上書きも
-    /// ずらしもしない。ID は `create_dir` で一意性を確かめて採番する（#1020 で実装。現行は
-    /// 同名があれば「名前 (n).拡張子」へずらす）。
+    /// ずらしもしない。ID は `create_dir` で一意性を確かめて採番する。
     fn put(&self, base_name: &str, content: &[u8]) -> Result<PutOutcome, DeviceError>;
-    /// 書類を消す。削除キーは ID（#1020 で実装。現行は名前をキーにする）。ファイルを消してから
-    /// ID のサブフォルダを消し、サブフォルダの削除失敗は握りつぶさず `Err(Internal)` にする。
-    /// 消した ID は二度と使わない。ID のサブフォルダが無ければ [`NOT_FOUND`]。
-    fn delete(&self, name: &str) -> Result<DeleteOutcome, DeviceError>;
+    /// 書類を消す。削除キーは ID。ファイルを消してから ID のサブフォルダを消し、サブフォルダの
+    /// 削除失敗は握りつぶさず `Err(Internal)` にする。消した ID は二度と使わない。
+    /// ID のサブフォルダが無ければ [`NOT_FOUND`]。
+    fn delete(&self, id: &str) -> Result<DeleteOutcome, DeviceError>;
 }
 
 /// 非対応 OS 用。全メソッドが `Unsupported("file_provider")` を返す。
@@ -158,14 +149,14 @@ impl FileProvider for UnsupportedFileProvider {
     fn put(&self, _base_name: &str, _content: &[u8]) -> Result<PutOutcome, DeviceError> {
         Err(DeviceError::Unsupported("file_provider"))
     }
-    fn delete(&self, _name: &str) -> Result<DeleteOutcome, DeviceError> {
+    fn delete(&self, _id: &str) -> Result<DeleteOutcome, DeviceError> {
         Err(DeviceError::Unsupported("file_provider"))
     }
 }
 
 /// 表示名の規則。空・`.`・`..`・`/`・NUL・制御文字・先頭 `.`・255 バイト超を `InvalidInput` で拒否する。
 /// 表示名は `<id>/<表示名>` のパス 1 要素になるため、パスの閉じ込めも兼ねる。
-/// 一覧に出す条件にも使う（provider 側も同じ表で検証する）。ID の規則（英数字のみ）は別で、#1020 で足す。
+/// 一覧に出す条件にも使う（provider 側も同じ表で検証する）。ID の規則は [`validate_id`]。
 pub fn validate_name(name: &str) -> Result<(), DeviceError> {
     let bad = name.is_empty()
         || name.starts_with('.')
@@ -178,56 +169,46 @@ pub fn validate_name(name: &str) -> Result<(), DeviceError> {
     }
 }
 
-/// 旧方式の重複回避名。`n == 0` は元の名前、それ以外は「名前 (n).拡張子」（拡張子は最後の `.` 以降）。
-/// ずらした名前も [`validate_name`] を通す。再利用しない書類 ID 方式では表示名の重複を許すため
-/// 使わなくなる。#1020 で本関数ごと削除する（それまでは現行の `put` が使う）。
-pub fn dedup_name(base: &str, n: u32) -> Result<String, DeviceError> {
-    let name = if n == 0 {
-        base.to_string()
+/// 書類 ID の規則。空・ASCII 英数字以外・[`MAX_ID_LEN`] 超を `InvalidInput` で拒否する。
+/// `/`・`..`・NUL を含められないため、パスの閉じ込めも兼ねる（Java 側も同じ表で検証する）。
+pub fn validate_id(id: &str) -> Result<(), DeviceError> {
+    if id.is_empty() || id.len() > MAX_ID_LEN || !id.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        Err(DeviceError::InvalidInput(INVALID_NAME))
     } else {
-        // 先頭 `.` は validate_name で弾かれるため、拡張子の位置が 0 になることは無い。
-        match base.rfind('.') {
-            Some(i) => format!("{} ({n}){}", &base[..i], &base[i..]),
-            None => format!("{base} ({n})"),
-        }
-    };
-    validate_name(&name)?;
-    Ok(name)
-}
-
-/// 項目の `io::Result` 列から一覧を作る。1 件でも `Err` なら全体を失敗にする（飛ばして成功にしない）。
-fn collect_entries(
-    items: impl Iterator<Item = io::Result<Option<Entry>>>,
-) -> Result<Vec<Entry>, DeviceError> {
-    let mut out = Vec::new();
-    for item in items {
-        if let Some(e) = item.map_err(|_| DeviceError::Internal(INTERNAL))? {
-            out.push(e);
-        }
+        Ok(())
     }
-    out.sort_by(|a, b| a.name.cmp(&b.name));
-    Ok(out)
 }
 
-/// 書き込み処理 `write` を実行し、失敗したら作りかけ `path` を消してから `Err(Internal)` を返す。
-/// 削除自体が失敗しても `Err` のまま返し、残りは次の一覧に出る。
-fn write_or_cleanup(
-    path: &std::path::Path,
-    write: impl FnOnce() -> io::Result<()>,
-) -> Result<(), DeviceError> {
-    if write().is_err() {
-        let _ = fs::remove_file(path);
-        return Err(DeviceError::Internal(INTERNAL));
+/// 新しい書類 ID（小文字 16 進 32 桁）。
+///
+/// ponytail: `RandomState`（プロセスごとに OS 乱数から鍵を取る SipHash）にカウンタと時刻を混ぜる簡易版。
+/// 暗号論的な予測不能性は契約外（URI の権限は URI 単位で与えられ、ID を推測できても権限は得られない）。
+/// 一意性は呼び出し側の `create_dir` が OS に確かめさせる。必要になれば getrandom 等へ差し替える。
+fn new_id() -> String {
+    use std::hash::{BuildHasher, RandomState};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(0);
+    let n = N.fetch_add(1, Ordering::Relaxed);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let rs = RandomState::new();
+    let mut out = String::with_capacity(32);
+    for salt in 0u8..2 {
+        out.push_str(&format!("{:016x}", rs.hash_one((n, now, salt))));
     }
-    Ok(())
+    out
 }
 
-/// フォルダを引数に取る共通実装。Android（#1020）は `data_dir()/FOLDER_NAME` と JNI の通知を渡し、
+/// ID の採番を作り直す上限。
+const MAX_ID_TRIES: usize = 8;
+
+/// フォルダを引数に取る共通実装。Android は `data_dir()/FOLDER_NAME` と JNI の通知を渡し、
 /// ホストのテストは一時フォルダと偽の notifier を渡す。
 ///
-/// 契約は再利用しない書類 ID 方式（`<dir>/<id>/<表示名>`、モジュール doc）。現行の実装は旧方式
-/// （`<dir>/<名前>` に平らに置き、名前で消す）のままで、#1020 が契約に合わせて書き直す。
-/// Java 側の `DocumentsProvider` とは作成・削除の排他を共有しない（ID が衝突しないため）。
+/// 配置は `<dir>/<id>/<表示名>`（モジュール doc）。Java 側の `DocumentsProvider` とは作成・削除の
+/// 排他を共有しない（ID が衝突しないため）。
 pub struct DirFileProvider {
     dir: PathBuf,
     notify: Box<dyn Fn() -> Result<(), DeviceError> + Send + Sync>,
@@ -243,14 +224,41 @@ impl DirFileProvider {
     }
 }
 
-fn to_entry(item: io::Result<fs::DirEntry>) -> io::Result<Option<Entry>> {
-    let item = item?;
-    // `DirEntry::file_type` / `metadata` はシンボリックリンクを辿らない。
-    let meta = item.metadata()?;
-    if !item.file_type()?.is_file() {
+/// 項目がちょうど 1 件ならそれを返す。0 件・2 件以上は `Ok(None)`（作りかけ）。
+/// 1 件目・2 件目のどちらの `Err` も伝播する（読めなかった項目を飛ばして成功にしない）。
+fn single_item<T>(mut items: impl Iterator<Item = io::Result<T>>) -> io::Result<Option<T>> {
+    let Some(first) = items.next() else {
+        return Ok(None);
+    };
+    let first = first?;
+    match items.next() {
+        None => Ok(Some(first)),
+        Some(Ok(_)) => Ok(None),
+        Some(Err(e)) => Err(e),
+    }
+}
+
+/// ID サブフォルダ `sub` の中身を 1 書類として読む。作りかけ・規則外は `Ok(None)`。
+/// 他経路が同時に消したこと（`NotFound`）も飛ばす。それ以外の I/O エラーは `Err`。
+fn read_doc(id: String, sub: &std::path::Path) -> io::Result<Option<Entry>> {
+    let items = match fs::read_dir(sub) {
+        Ok(rd) => rd,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    let Some(first) = single_item(items)? else {
+        return Ok(None);
+    };
+    // `DirEntry::metadata` はシンボリックリンクを辿らない。
+    let meta = match first.metadata() {
+        Ok(m) => m,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    if !meta.file_type().is_file() {
         return Ok(None);
     }
-    let Ok(name) = item.file_name().into_string() else {
+    let Ok(name) = first.file_name().into_string() else {
         return Ok(None);
     };
     if validate_name(&name).is_err() {
@@ -262,10 +270,55 @@ fn to_entry(item: io::Result<fs::DirEntry>) -> io::Result<Option<Entry>> {
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_millis() as u64);
     Ok(Some(Entry {
+        id,
         name,
         size: meta.len(),
         modified_unix_ms,
     }))
+}
+
+/// 直下の 1 項目を書類候補として読む。ID の規則外・ディレクトリ以外は `Ok(None)`。
+fn to_entry(item: io::Result<fs::DirEntry>) -> io::Result<Option<Entry>> {
+    let item = item?;
+    if !item.file_type()?.is_dir() {
+        return Ok(None);
+    }
+    let Ok(id) = item.file_name().into_string() else {
+        return Ok(None);
+    };
+    if validate_id(&id).is_err() {
+        return Ok(None);
+    }
+    read_doc(id, &item.path())
+}
+
+/// 項目の `io::Result` 列から一覧を作る。1 件でも `Err` なら全体を失敗にする（飛ばして成功にしない）。
+fn collect_entries(
+    items: impl Iterator<Item = io::Result<Option<Entry>>>,
+) -> Result<Vec<Entry>, DeviceError> {
+    let mut out = Vec::new();
+    for item in items {
+        if let Some(e) = item.map_err(|_| DeviceError::Internal(INTERNAL))? {
+            out.push(e);
+        }
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
+    Ok(out)
+}
+
+/// 書き込み `write` を実行し、失敗したら作りかけを書類のファイル→ID のサブフォルダの順に消してから
+/// `Err(Internal)` を返す。後始末自体が失敗しても `Err` のまま返し、残りは一覧に出ない。
+fn write_or_cleanup(
+    file: &std::path::Path,
+    sub: &std::path::Path,
+    write: impl FnOnce() -> io::Result<()>,
+) -> Result<(), DeviceError> {
+    if write().is_err() {
+        let _ = fs::remove_file(file);
+        let _ = fs::remove_dir(sub);
+        return Err(DeviceError::Internal(INTERNAL));
+    }
+    Ok(())
 }
 
 fn map_remove_err(e: &io::Error) -> DeviceError {
@@ -289,40 +342,55 @@ impl FileProvider for DirFileProvider {
     fn put(&self, base_name: &str, content: &[u8]) -> Result<PutOutcome, DeviceError> {
         validate_name(base_name)?;
         fs::create_dir_all(&self.dir).map_err(|_| DeviceError::Internal(INTERNAL))?;
-        for n in 0..=MAX_DEDUP {
-            let name = dedup_name(base_name, n)?;
-            let path = self.dir.join(&name);
-            match fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&path)
-            {
-                Ok(mut f) => {
-                    write_or_cleanup(&path, || {
-                        f.write_all(content)?;
-                        f.sync_all()
-                    })?;
-                    return Ok(PutOutcome {
-                        name,
-                        notified: (self.notify)().is_ok(),
-                    });
-                }
+        for _ in 0..MAX_ID_TRIES {
+            let id = new_id();
+            let sub = self.dir.join(&id);
+            match fs::create_dir(&sub) {
+                Ok(()) => {}
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
                 Err(_) => return Err(DeviceError::Internal(INTERNAL)),
             }
+            let file = sub.join(base_name);
+            let mut f = match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&file)
+            {
+                Ok(f) => f,
+                Err(_) => {
+                    let _ = fs::remove_dir(&sub);
+                    return Err(DeviceError::Internal(INTERNAL));
+                }
+            };
+            write_or_cleanup(&file, &sub, || {
+                f.write_all(content)?;
+                f.sync_all()
+            })?;
+            return Ok(PutOutcome {
+                id,
+                name: base_name.to_string(),
+                notified: (self.notify)().is_ok(),
+            });
         }
         Err(DeviceError::Internal(INTERNAL))
     }
 
-    fn delete(&self, name: &str) -> Result<DeleteOutcome, DeviceError> {
-        validate_name(name)?;
-        let path = self.dir.join(name);
-        // シンボリックリンクを辿らず、通常ファイルだけを消す。
-        let meta = fs::symlink_metadata(&path).map_err(|e| map_remove_err(&e))?;
-        if !meta.is_file() {
+    fn delete(&self, id: &str) -> Result<DeleteOutcome, DeviceError> {
+        validate_id(id)?;
+        let sub = self.dir.join(id);
+        // シンボリックリンクを辿らず、ディレクトリだけを対象にする。
+        let meta = fs::symlink_metadata(&sub).map_err(|e| map_remove_err(&e))?;
+        if !meta.is_dir() {
             return Err(DeviceError::Internal(INTERNAL));
         }
-        fs::remove_file(&path).map_err(|e| map_remove_err(&e))?;
+        for item in fs::read_dir(&sub).map_err(|e| map_remove_err(&e))? {
+            let item = item.map_err(|e| map_remove_err(&e))?;
+            if item.file_type().map_err(|e| map_remove_err(&e))?.is_dir() {
+                return Err(DeviceError::Internal(INTERNAL));
+            }
+            fs::remove_file(item.path()).map_err(|e| map_remove_err(&e))?;
+        }
+        fs::remove_dir(&sub).map_err(|e| map_remove_err(&e))?;
         Ok(DeleteOutcome {
             notified: (self.notify)().is_ok(),
         })
@@ -398,30 +466,34 @@ mod tests {
     }
 
     #[test]
-    fn dedup_names() {
-        assert_eq!(dedup_name("a.txt", 0).unwrap(), "a.txt");
-        assert_eq!(dedup_name("a.txt", 1).unwrap(), "a (1).txt");
-        assert_eq!(dedup_name("noext", 2).unwrap(), "noext (2)");
-        assert_eq!(dedup_name("a.b.txt", 1).unwrap(), "a.b (1).txt");
-        assert!(dedup_name(&"a".repeat(255), 1).is_err());
+    fn validate_id_rules() {
+        let long = "a".repeat(MAX_ID_LEN + 1);
+        for n in ["", "a/b", "..", "a.b", "a_b", "日本", "a\0", long.as_str()] {
+            assert!(
+                matches!(validate_id(n), Err(DeviceError::InvalidInput(INVALID_NAME))),
+                "{n:?}"
+            );
+        }
+        for n in ["abc123", "A", "a".repeat(MAX_ID_LEN).as_str()] {
+            assert!(validate_id(n).is_ok(), "{n:?}");
+        }
+        assert!(validate_id(&new_id()).is_ok());
     }
 
     #[test]
-    fn put_never_overwrites_and_dedups() {
+    fn put_lays_out_id_dir_and_never_overwrites_same_name() {
         let t = Tmp::new("put");
         let (p, calls) = provider(t.0.clone(), true);
-        fs::write(t.0.join("a.txt"), b"old").unwrap();
-        let r = p.put("a.txt", b"new").unwrap();
-        assert_eq!(
-            r,
-            PutOutcome {
-                name: "a (1).txt".into(),
-                notified: true
-            }
-        );
-        assert_eq!(fs::read(t.0.join("a.txt")).unwrap(), b"old");
-        assert_eq!(fs::read(t.0.join("a (1).txt")).unwrap(), b"new");
-        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        let a = p.put("a.txt", b"one").unwrap();
+        let b = p.put("a.txt", b"two").unwrap();
+        assert!(a.notified && a.name == "a.txt");
+        assert_ne!(a.id, b.id);
+        assert_eq!(fs::read(t.0.join(&a.id).join("a.txt")).unwrap(), b"one");
+        assert_eq!(fs::read(t.0.join(&b.id).join("a.txt")).unwrap(), b"two");
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        let v = p.list().unwrap();
+        assert_eq!(v.len(), 2);
+        assert!(v.iter().all(|e| e.name == "a.txt"));
     }
 
     #[test]
@@ -430,23 +502,7 @@ mod tests {
         let (p, _) = provider(t.0.join("sub"), false);
         let r = p.put("a.txt", b"x").unwrap();
         assert!(!r.notified);
-        assert!(t.0.join("sub/a.txt").is_file());
-    }
-
-    #[test]
-    fn put_fails_after_max_dedup_without_new_files() {
-        let t = Tmp::new("max");
-        let (p, _) = provider(t.0.clone(), true);
-        fs::write(t.0.join("a.txt"), b"x").unwrap();
-        for n in 1..=MAX_DEDUP {
-            fs::write(t.0.join(dedup_name("a.txt", n).unwrap()), b"x").unwrap();
-        }
-        let before = fs::read_dir(&t.0).unwrap().count();
-        assert!(matches!(
-            p.put("a.txt", b"y"),
-            Err(DeviceError::Internal(_))
-        ));
-        assert_eq!(fs::read_dir(&t.0).unwrap().count(), before);
+        assert!(t.0.join("sub").join(&r.id).join("a.txt").is_file());
     }
 
     #[test]
@@ -463,13 +519,15 @@ mod tests {
     }
 
     #[test]
-    fn write_failure_removes_partial_file() {
+    fn write_failure_removes_partial_file_then_dir() {
         let t = Tmp::new("wf");
-        let path = t.0.join("x");
-        fs::write(&path, b"partial").unwrap();
-        let r = write_or_cleanup(&path, || Err(io::Error::other("boom")));
+        let sub = t.0.join("abc");
+        fs::create_dir(&sub).unwrap();
+        let file = sub.join("x");
+        fs::write(&file, b"partial").unwrap();
+        let r = write_or_cleanup(&file, &sub, || Err(io::Error::other("boom")));
         assert!(matches!(r, Err(DeviceError::Internal(_))));
-        assert!(!path.exists());
+        assert!(!sub.exists());
     }
 
     #[test]
@@ -483,22 +541,48 @@ mod tests {
     }
 
     #[test]
-    fn list_sorted_and_filters_non_files() {
+    fn list_sorted_by_name_then_id_and_skips_partial() {
         let t = Tmp::new("list");
         let (p, _) = provider(t.0.clone(), true);
-        fs::write(t.0.join("b.txt"), b"bb").unwrap();
-        fs::write(t.0.join("a.txt"), b"a").unwrap();
-        fs::write(t.0.join(".hidden"), b"x").unwrap();
-        fs::create_dir(t.0.join("dir")).unwrap();
+        let mk = |id: &str, files: &[&str]| {
+            fs::create_dir(t.0.join(id)).unwrap();
+            for f in files {
+                fs::write(t.0.join(id).join(f), b"x").unwrap();
+            }
+        };
+        mk("bbb", &["b.txt"]);
+        mk("ddd", &["a.txt"]);
+        mk("ccc", &["a.txt"]);
+        // 作りかけ・規則外は出さず、失敗にもしない。
+        mk("empty", &[]);
+        mk("two", &["a.txt", "b.txt"]);
+        mk("hid", &[".hidden"]);
+        fs::create_dir_all(t.0.join("dirin").join("sub")).unwrap();
+        fs::create_dir_all(t.0.join("bad_id")).unwrap();
+        fs::write(t.0.join("bad_id").join("a.txt"), b"x").unwrap();
+        fs::write(t.0.join("flat.txt"), b"x").unwrap();
         let v = p.list().unwrap();
-        let names: Vec<_> = v.iter().map(|e| e.name.as_str()).collect();
-        assert_eq!(names, ["a.txt", "b.txt"]);
-        assert_eq!(v[1].size, 2);
+        let got: Vec<_> = v.iter().map(|e| (e.name.as_str(), e.id.as_str())).collect();
+        assert_eq!(got, [("a.txt", "ccc"), ("a.txt", "ddd"), ("b.txt", "bbb")]);
+        assert_eq!(v[0].size, 1);
+    }
+
+    #[test]
+    fn single_item_propagates_second_error() {
+        let items = vec![Ok(1), Err(io::Error::other("x"))];
+        assert!(single_item(items.into_iter()).is_err());
+        assert_eq!(single_item(vec![Ok(1)].into_iter()).unwrap(), Some(1));
+        assert_eq!(single_item(vec![Ok(1), Ok(2)].into_iter()).unwrap(), None);
+        assert_eq!(
+            single_item(Vec::<io::Result<i32>>::new().into_iter()).unwrap(),
+            None
+        );
     }
 
     #[test]
     fn collect_entries_fails_whole_on_one_error() {
         let ok = Entry {
+            id: "a".into(),
             name: "a".into(),
             size: 0,
             modified_unix_ms: None,
@@ -516,25 +600,46 @@ mod tests {
         let outside = t.0.join("outside");
         fs::write(&outside, b"keep").unwrap();
         let dir = t.0.join("d");
-        fs::create_dir_all(dir.join("sub")).unwrap();
-        fs::write(dir.join("a.txt"), b"x").unwrap();
         let (p, calls) = provider(dir.clone(), false);
-        assert_eq!(
-            p.delete("a.txt").unwrap(),
-            DeleteOutcome { notified: false }
-        );
+        let r = p.put("a.txt", b"x").unwrap();
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(p.delete(&r.id).unwrap(), DeleteOutcome { notified: false });
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert!(!dir.join(&r.id).exists());
         assert!(matches!(
-            p.delete("a.txt"),
+            p.delete(&r.id),
             Err(DeviceError::Internal(NOT_FOUND))
         ));
-        assert!(matches!(
-            p.delete("../outside"),
-            Err(DeviceError::InvalidInput(_))
-        ));
+        for bad in ["../outside", "a/b", ""] {
+            assert!(matches!(p.delete(bad), Err(DeviceError::InvalidInput(_))));
+        }
         assert!(outside.exists());
-        assert!(matches!(p.delete("sub"), Err(DeviceError::Internal(m)) if m != NOT_FOUND));
-        assert!(dir.join("sub").is_dir());
+        // ID のサブフォルダ内にディレクトリがあれば消さず失敗。通常ファイルは ID の対象外。
+        fs::create_dir_all(dir.join("nested").join("sub")).unwrap();
+        assert!(matches!(p.delete("nested"), Err(DeviceError::Internal(m)) if m != NOT_FOUND));
+        assert!(dir.join("nested").join("sub").is_dir());
+        fs::write(dir.join("flat"), b"x").unwrap();
+        assert!(matches!(p.delete("flat"), Err(DeviceError::Internal(m)) if m != NOT_FOUND));
+        assert!(dir.join("flat").is_file());
+    }
+
+    /// 受入基準: 消した書類の ID は、同じ表示名で作り直しても引き継がれない。
+    #[test]
+    fn deleted_id_is_never_reused_for_same_name() {
+        let t = Tmp::new("reuse");
+        let (p, _) = provider(t.0.clone(), true);
+        let id1 = p.put("a.txt", b"old").unwrap().id;
+        p.delete(&id1).unwrap();
+        let id2 = p.put("a.txt", b"new").unwrap().id;
+        assert_ne!(id1, id2);
+        assert!(!t.0.join(&id1).exists());
+        assert!(matches!(
+            p.delete(&id1),
+            Err(DeviceError::Internal(NOT_FOUND))
+        ));
+        let v = p.list().unwrap();
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].id, id2);
     }
 
     #[test]
