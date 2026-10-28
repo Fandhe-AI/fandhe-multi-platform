@@ -144,6 +144,11 @@ pub mod android_file_association;
 /// `device/file_preview.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_file_preview;
+/// Issue #1019: Android 向け「OS のファイル画面に出る保存先」のスタブ（実体は #1020）。
+/// `device/file_provider.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_file_provider;
 /// Issue #1410: Android 向けフォルダ変更監視実装。`device/file_watch.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -784,6 +789,9 @@ pub mod file_pick;
 /// Phase 11 の拡充ループ（親 #182、Issue #917）: ファイル・動画のプレビューとサムネイルの effect ドライバ
 /// （macOS 実装、iOS / Windows / Android は骨格、他 OS は `UnsupportedFileThumbnailer` 固定）。
 pub mod file_preview;
+/// Phase 11 の拡充ループ（親 #194、Issue #1019）: 自アプリの保存先を OS のファイル画面に出す effect ドライバ
+/// （Android はスタブ、iOS・macOS・Windows は保留、他 OS は `UnsupportedFileProvider` 固定）。
+pub mod file_provider;
 /// Phase 11 の拡充ループ（親 #1143、Issue #1410）: フォルダの変更監視の effect ドライバ（macOS・Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedFileWatch` 固定）。
 pub mod file_watch;
