@@ -8,6 +8,9 @@
 //! を確定する前に必ず `stop()` する（契約表 3・9）。期限は単調時計（`Instant`）由来のミリ秒だけで測る。
 //! 差分: [`ArSample::AwaitingPermission`]（権限ダイアログ待ち）は期限に数えず、起点を捨てて待つ。
 //!
+//! 映像は `Reading` を得た読み取りでだけ `read_frame` で読み、検査して同じ世代の `apply_frame` で送る。
+//! 背景では映像を消す。
+//!
 //! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は `ios_ar.rs`（ARKit、Issue #308。
 //! 非対応端末は `Unsupported`）、Web は `fandhe-web-dom` 側（(c)）、他 OS は対象外で `UnsupportedAr` 固定。
 
@@ -16,14 +19,16 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use fandhe_core::screens::ar_show::{
-    apply_failure, apply_reading, reading_lines, ArFailureView, ArReadingView, ArShowState, ArView,
-    LimitedReasonView, TrackingView,
+    apply_failure, apply_frame, apply_reading, reading_lines, ArFailureView, ArReadingView,
+    ArShowState, ArView, LimitedReasonView, TrackingView,
 };
+use fandhe_core::RgbaPixels;
 #[cfg(not(target_os = "ios"))]
 use fandhe_device::ar::UnsupportedAr;
 use fandhe_device::ar::{
     ArFailure, ArReading, ArSample, ArTracking, LimitedReason, Tracking, READ_INTERVAL,
 };
+use fandhe_device::camera_preview_stream::{ScaledFrame, PREVIEW_MAX_SIDE};
 use fandhe_device::compass::WaitTracker;
 
 use crate::app::CompletionSender;
@@ -72,6 +77,14 @@ fn to_failure(f: ArFailure) -> ArFailureView {
         ArFailure::PermissionDenied => ArFailureView::PermissionDenied,
         ArFailure::Failed => ArFailureView::Failed,
     }
+}
+
+/// OS 由来の映像を検査して画面の画素にする。寸法・長さが外れたら `None`（映像なし）。
+fn to_pixels(f: ScaledFrame) -> Option<RgbaPixels> {
+    if f.width.max(f.height) > PREVIEW_MAX_SIDE {
+        return None;
+    }
+    RgbaPixels::new(f.width, f.height, f.rgba)
 }
 
 /// driver の記憶（プロセス全体で 1 つ）。
@@ -146,6 +159,12 @@ fn drive(
         return;
     }
     if ds.background {
+        // 契約: 背景では映像を捨てる（復帰直後に古い映像を出さない）。
+        if state.frame.is_some() {
+            let _ = sender.send(Box::new(move |s: &mut ArShowState| {
+                apply_frame(s, session, None);
+            }));
+        }
         return;
     }
     if ds.started_session != Some(session) {
@@ -186,9 +205,11 @@ fn drive(
     if resumed {
         ds.tracker.begin(now_ms);
     }
+    let mut frame: Option<RgbaPixels> = None;
     let next: Option<ArReadingView> = match ar.read() {
         Ok(ArSample::Reading(r)) => {
             ds.tracker.observe(true, now_ms);
+            frame = ar.read_frame().and_then(to_pixels);
             Some(to_view(r))
         }
         Ok(ArSample::AwaitingPermission) => {
@@ -221,12 +242,18 @@ fn drive(
         (ArView::Starting, None) => true,
         _ => false,
     };
-    if shown {
-        return;
+    if !shown {
+        let _ = sender.send(Box::new(move |s: &mut ArShowState| {
+            apply_reading(s, session, next);
+        }));
     }
-    let _ = sender.send(Box::new(move |s: &mut ArShowState| {
-        apply_reading(s, session, next);
-    }));
+    // 映像は 3 行とは別に送る。`apply_reading` の後に積むので Live の後に届く。
+    // ponytail: 毎回 Arc を確保して送る（10 fps・長辺 320 なら許容）。負荷が出たら差分送信へ。
+    if frame.is_some() || state.frame.is_some() {
+        let _ = sender.send(Box::new(move |s: &mut ArShowState| {
+            apply_frame(s, session, frame);
+        }));
+    }
 }
 
 /// `registry.rs` の `effect` 区画から `ar_show` 画面用に配線される effect ドライバ。
@@ -272,6 +299,8 @@ mod tests {
         read: StdMutex<Result<ArSample, ArFailure>>,
         starts: AtomicUsize,
         reads: AtomicUsize,
+        frame: StdMutex<Option<ScaledFrame>>,
+        frame_reads: AtomicUsize,
         stops: AtomicUsize,
     }
 
@@ -282,6 +311,8 @@ mod tests {
                 read: StdMutex::new(read),
                 starts: AtomicUsize::new(0),
                 reads: AtomicUsize::new(0),
+                frame: StdMutex::new(None),
+                frame_reads: AtomicUsize::new(0),
                 stops: AtomicUsize::new(0),
             }
         }
@@ -306,6 +337,22 @@ mod tests {
         fn stop(&self) {
             self.stops.fetch_add(1, Ordering::SeqCst);
         }
+        fn read_frame(&self) -> Option<ScaledFrame> {
+            self.frame_reads.fetch_add(1, Ordering::SeqCst);
+            self.frame.lock().unwrap().clone()
+        }
+    }
+
+    fn sf(w: u32, h: u32, len: usize) -> ScaledFrame {
+        ScaledFrame {
+            width: w,
+            height: h,
+            rgba: vec![0; len],
+        }
+    }
+
+    fn set_frame(fake: &Fake, f: Option<ScaledFrame>) {
+        *fake.frame.lock().unwrap() = f;
     }
 
     fn reading(x: f64) -> ArSample {
@@ -579,5 +626,196 @@ mod tests {
         );
         apply_all(&rx, &mut s);
         assert_eq!(s.view, ArView::Failed(ArFailureView::Unsupported));
+    }
+
+    #[test]
+    fn frame_sent_only_with_reading() {
+        let (tx, rx) = channel();
+        let fake = Fake::new(Ok(reading(0.5)));
+        set_frame(&fake, Some(sf(2, 2, 16)));
+        let mut s = wanted();
+        drive(
+            &s,
+            &tx,
+            &fake,
+            Instant::now(),
+            0,
+            &mut DriverState::default(),
+        );
+        apply_all(&rx, &mut s);
+        assert!(s.frame.is_some());
+        assert_eq!(fake.frame_reads.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn frame_not_read_without_reading() {
+        let cases = [
+            Ok(ArSample::Waiting),
+            Ok(ArSample::AwaitingPermission),
+            Err(ArFailure::PermissionDenied),
+            Err(ArFailure::Failed),
+        ];
+        for c in cases {
+            let (tx, rx) = channel();
+            let fake = Fake::new(c);
+            set_frame(&fake, Some(sf(2, 2, 16)));
+            let mut s = wanted();
+            drive(
+                &s,
+                &tx,
+                &fake,
+                Instant::now(),
+                0,
+                &mut DriverState::default(),
+            );
+            apply_all(&rx, &mut s);
+            assert_eq!(fake.frame_reads.load(Ordering::SeqCst), 0);
+            assert!(s.frame.is_none());
+        }
+        // 期限切れ
+        let (tx, rx) = channel();
+        let fake = Fake::new(Ok(ArSample::Waiting));
+        set_frame(&fake, Some(sf(2, 2, 16)));
+        let mut s = wanted();
+        let mut ds = DriverState::default();
+        let t0 = Instant::now();
+        drive(&s, &tx, &fake, t0, 0, &mut ds);
+        drive(
+            &s,
+            &tx,
+            &fake,
+            at(t0, NO_READING_TIMEOUT_MS + 200.0),
+            0,
+            &mut ds,
+        );
+        apply_all(&rx, &mut s);
+        assert_eq!(fake.frame_reads.load(Ordering::SeqCst), 0);
+        assert!(s.frame.is_none());
+    }
+
+    #[test]
+    fn invalid_frame_is_no_video_and_clears_previous() {
+        let (tx, rx) = channel();
+        let fake = Fake::new(Ok(reading(0.5)));
+        set_frame(&fake, Some(sf(2, 2, 16)));
+        let mut s = wanted();
+        let mut ds = DriverState::default();
+        let t0 = Instant::now();
+        drive(&s, &tx, &fake, t0, 0, &mut ds);
+        apply_all(&rx, &mut s);
+        assert!(s.frame.is_some());
+        for (i, bad) in [sf(321, 1, 321 * 4), sf(2, 2, 15), sf(0, 2, 0)]
+            .into_iter()
+            .enumerate()
+        {
+            set_frame(&fake, Some(bad));
+            drive(
+                &s,
+                &tx,
+                &fake,
+                t0 + READ_INTERVAL * (i as u32 * 2 + 1),
+                0,
+                &mut ds,
+            );
+            apply_all(&rx, &mut s);
+            assert!(s.frame.is_none());
+            set_frame(&fake, Some(sf(2, 2, 16)));
+            drive(
+                &s,
+                &tx,
+                &fake,
+                t0 + READ_INTERVAL * (i as u32 * 2 + 2),
+                0,
+                &mut ds,
+            );
+            apply_all(&rx, &mut s);
+            assert!(s.frame.is_some());
+        }
+    }
+
+    #[test]
+    fn frame_updates_even_if_lines_unchanged() {
+        let (tx, rx) = channel();
+        let fake = Fake::new(Ok(reading(0.5)));
+        let mut s = wanted();
+        let mut ds = DriverState::default();
+        let t0 = Instant::now();
+        drive(&s, &tx, &fake, t0, 0, &mut ds);
+        apply_all(&rx, &mut s);
+        assert!(s.frame.is_none());
+        set_frame(&fake, Some(sf(1, 1, 4)));
+        drive(&s, &tx, &fake, t0 + READ_INTERVAL, 0, &mut ds);
+        apply_all(&rx, &mut s);
+        assert!(s.frame.is_some());
+    }
+
+    #[test]
+    fn frame_cleared_when_reading_has_no_frame() {
+        let (tx, rx) = channel();
+        let fake = Fake::new(Ok(reading(0.5)));
+        set_frame(&fake, Some(sf(1, 1, 4)));
+        let mut s = wanted();
+        let mut ds = DriverState::default();
+        let t0 = Instant::now();
+        drive(&s, &tx, &fake, t0, 0, &mut ds);
+        apply_all(&rx, &mut s);
+        assert!(s.frame.is_some());
+        set_frame(&fake, None);
+        drive(&s, &tx, &fake, t0 + READ_INTERVAL, 0, &mut ds);
+        apply_all(&rx, &mut s);
+        assert!(s.frame.is_none());
+    }
+
+    #[test]
+    fn stale_session_frame_is_dropped() {
+        let (tx, rx) = channel();
+        let fake = Fake::new(Ok(reading(0.5)));
+        set_frame(&fake, Some(sf(1, 1, 4)));
+        let mut s = wanted();
+        drive(
+            &s,
+            &tx,
+            &fake,
+            Instant::now(),
+            0,
+            &mut DriverState::default(),
+        );
+        stop(&mut s);
+        start(&mut s);
+        apply_all(&rx, &mut s);
+        assert!(s.frame.is_none());
+    }
+
+    #[test]
+    fn background_clears_frame() {
+        let (tx, rx) = channel();
+        let fake = Fake::new(Ok(reading(0.5)));
+        set_frame(&fake, Some(sf(1, 1, 4)));
+        let mut s = wanted();
+        let mut ds = DriverState::default();
+        let t0 = Instant::now();
+        drive(&s, &tx, &fake, t0, 0, &mut ds);
+        apply_all(&rx, &mut s);
+        assert!(s.frame.is_some());
+        ds.background = true;
+        drive(&s, &tx, &fake, t0 + READ_INTERVAL, 0, &mut ds);
+        apply_all(&rx, &mut s);
+        assert!(s.frame.is_none());
+    }
+
+    #[test]
+    fn unsupported_impl_never_shows_frame() {
+        let (tx, rx) = channel();
+        let mut s = wanted();
+        drive(
+            &s,
+            &tx,
+            &Unsupported,
+            Instant::now(),
+            0,
+            &mut DriverState::default(),
+        );
+        apply_all(&rx, &mut s);
+        assert!(s.frame.is_none());
     }
 }
