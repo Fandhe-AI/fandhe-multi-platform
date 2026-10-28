@@ -9,7 +9,7 @@
 //! # 流れ
 //!
 //! 1. 探索: `DeviceInformation::FindAllAsyncAqsFilter(ImageScanner::GetDeviceSelector())` を
-//!    `DISCOVERY_WINDOW` の間、短い間隔で繰り返す。0 台なら `NoDevice`。使うのは OS の列挙順の先頭
+//!    `DISCOVERY_WINDOW` の間、短い間隔で繰り返す。0 台と確認できたときだけ `NoDevice`（列挙自体が終わらなければ `TimedOut`）。使うのは OS の列挙順の先頭
 //! 2. 開く: `ImageScanner::FromIdAsync`
 //! 3. 計画: Flatbed → Feeder、JPEG → PNG の順で、取り込み元と形式の両方が使えるものを選ぶ
 //! 4. 取り込み: `ScanPreviewToStreamAsync` でメモリのストリームへ 1 枚。Pictures Library へは保存しない
@@ -19,8 +19,8 @@
 //! 取り込み結果が空 → `NoImage`、失敗の後に列挙し直して選んだ機器が消えていれば `Interrupted`
 //! （分からなければ元の失敗）、それ以外の HRESULT（`E_ACCESSDENIED`・WIA のエラーを含む）→ `Failed`。
 //!
-//! 期限は `remaining` から求めた `Instant`（単調時計）。期限切れは `Cancel()` を呼び、OS の完了通知を
-//! 上限付きで待ってから `TimedOut` を返す。ストリームは成功・失敗・期限切れの全経路で閉じる（契約表 9）。
+//! 期限は `remaining` から求めた `Instant`（単調時計）。期限切れは `Cancel()` を呼び、OS の完了通知（終端状態）を
+//! 待ってから `TimedOut` を返す（待つ間も `os_active` が次の要求を止める）。ストリームは成功・失敗・期限切れの全経路で閉じる（契約表 9）。
 //! 機器名・Id・HRESULT・画像の中身はログにも `Debug` にも出さない（契約表 8）。
 //!
 //! `RoInitialize` は呼ばず（MTA フォールバック）、`unsafe` は使わない。
@@ -134,10 +134,6 @@ mod imp {
 
     use super::*;
 
-    /// `Cancel()` 後に OS の完了通知を待つ上限。仮の値で #967 で見直す。
-    /// ponytail: 上限を超えたら待たずに `TimedOut` を返す。ドライバの `os_active` がワーカーの
-    /// 復帰まで次の要求を止める。天井はこの値で、実機で長引くなら見直す。
-    const CANCEL_GRACE: Duration = Duration::from_secs(5);
     /// 探索窓内の再列挙の間隔。
     const POLL: Duration = Duration::from_millis(200);
     /// 失敗の後に機器の有無を確かめ直す上限。仮の値。
@@ -159,6 +155,10 @@ mod imp {
         });
         if op.SetCompleted(&handler).is_err() {
             let _ = op.Cancel();
+            // 完了通知を使えないので、終端状態になるまで状態を引いて待つ（排他と資源を保つ）。
+            while op.Status().is_ok_and(|s| s == AsyncStatus::Started) {
+                std::thread::sleep(Duration::from_millis(50));
+            }
             return Err(ScannerImportFailure::Failed);
         }
         match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
@@ -168,8 +168,11 @@ mod imp {
             Ok(_) => Err(ScannerImportFailure::Failed),
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 let _ = op.Cancel();
-                // 猶予内に Completed が届いても成功にはしない。
-                let _ = rx.recv_timeout(CANCEL_GRACE);
+                // 終端状態（完了・キャンセル確認）が届くまで戻らない。戻ると `os_active` が落ち、
+                // 進行中の旧操作の裏で次の取り込みが始まり、使用中のストリームも閉じられる。
+                // 期限は呼び出し側のスロットが独立に確定するので、ここで待っても応答は遅れない。
+                // 届いた Completed も成功にはしない。
+                let _ = rx.recv();
                 Err(ScannerImportFailure::TimedOut)
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => Err(ScannerImportFailure::Failed),
@@ -234,7 +237,7 @@ mod imp {
             match enumerate(window_end) {
                 Ok(ids) if !ids.is_empty() => return Ok((ids[0].clone(), ids.len() as u32)),
                 Ok(_) => {}
-                Err(ScannerImportFailure::TimedOut) => return Err(exhausted),
+                // 列挙自体が窓内に終わらなかった場合は「0 台」と確認できていないので TimedOut のまま。
                 Err(f) => return Err(f),
             }
             let left = window_end.saturating_duration_since(Instant::now());
