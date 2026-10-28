@@ -233,11 +233,19 @@ mod imp {
         } else {
             ScannerImportFailure::TimedOut
         };
+        // 0 台の列挙結果を一度でも受け取ったか。受け取っていれば窓が尽きた時点で「機器なし」と確定できる。
+        let mut saw_empty = false;
         loop {
+            // 窓の終了後は再列挙しない（待ち時間 0 の列挙は必ず TimedOut になるため）。
+            if saw_empty && Instant::now() >= window_end {
+                return Err(exhausted);
+            }
             match enumerate(window_end) {
                 Ok(ids) if !ids.is_empty() => return Ok((ids[0].clone(), ids.len() as u32)),
-                Ok(_) => {}
-                // 列挙自体が窓内に終わらなかった場合は「0 台」と確認できていないので TimedOut のまま。
+                Ok(_) => saw_empty = true,
+                // 空の結果を確認済みで、最後の列挙が窓の終わりに切られただけなら「機器なし」。
+                Err(ScannerImportFailure::TimedOut) if saw_empty => return Err(exhausted),
+                // 一度も結果を得られないまま列挙が終わらなかった場合は「0 台」と確認できていないので TimedOut。
                 Err(f) => return Err(f),
             }
             let left = window_end.saturating_duration_since(Instant::now());
