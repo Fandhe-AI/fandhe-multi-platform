@@ -44,6 +44,8 @@
 
 use std::time::Duration;
 
+use crate::camera_preview_stream::ScaledFrame;
+
 /// 画面側が OS を読み直す間隔。`fandhe-egui-proxy` と `fandhe-web-dom` が共有する唯一の値。
 pub const READ_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -117,6 +119,14 @@ pub trait ArTracking: Send + Sync {
     fn read(&self) -> Result<ArSample, ArFailure>;
     /// セッションを止め、保持している最新値を捨てる。冪等で失敗しない。
     fn stop(&self);
+    /// 直前の [`ArTracking::read`] が `Ok(ArSample::Reading(_))` を返した同じ読み取りでだけ呼ばれ、
+    /// 同じセッションの最新のカメラ映像を縮小して返す（長辺は
+    /// [`crate::camera_preview_stream::PREVIEW_MAX_SIDE`] 以下、RGBA8）。形式違い・フレームなし・
+    /// 検査不合格は `None`（失敗にも成功にもしない）。OS のフレーム・バッファを呼び出しの外で保持しない。
+    /// 既定は `None`（映像を出さない OS・未実装 OS）。契約の全体はモジュール doc の「カメラ映像」節。
+    fn read_frame(&self) -> Option<ScaledFrame> {
+        None
+    }
 }
 
 /// 対象外 OS・未実装 OS の dispatch 先。ダミーの成功実装へは倒さない。
@@ -167,6 +177,7 @@ mod tests {
         assert_eq!(UnsupportedAr.start(), Err(ArFailure::Unsupported));
         assert_eq!(UnsupportedAr.read(), Err(ArFailure::Unsupported));
         UnsupportedAr.stop();
+        assert!(UnsupportedAr.read_frame().is_none());
     }
 
     #[test]
