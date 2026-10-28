@@ -7,14 +7,17 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "UIKit `UIPrintInteractionController.printingItem`（`UIImage`、iPad は `presentFromRect:inView:`）",
       "perm": "なし",
       "url": [
         "https://developer.apple.com/documentation/uikit/uiprintinteractioncontroller",
         "https://developer.apple.com/documentation/uikit/uiprintinteractioncontroller/printingitem"
       ],
-      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは egui-proxy のフレームの読み戻し（`ViewportCommand::Screenshot`）。提示・結果は `print` の iOS 実装を共用する"
+      "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは egui-proxy のフレームの読み戻し（`ViewportCommand::Screenshot`、世代タグで照合、単調時計で 2 秒の期限）。期限切れ・寸法不正は OS を呼ばず「画面を取り込めませんでした」で確定する。取り込んだ画素は `.m` で return 前にコピーし、`CGImage` → `UIImage` を `printingItem` に渡す。提示・結果コードは `print` と共用し、結果は `Submitted`・`Cancelled`・失敗で、`Unconfirmed` には到達しない。`isPrintingAvailable == NO` は非対応。背景遷移で取り消さない。守らない範囲: 紙に出たか、色・解像度の正確さ、用紙への収まり方の OS 差、背景にいる間の取り込み（期限切れで失敗になる）。権限・usage description 不要。実機確認は #1001",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1001）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_print.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_print.m + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_screen_page.rs + crates/fandhe-device/src/print.rs、Issue #1011"
     },
     "android": {
       "status": "possible",
