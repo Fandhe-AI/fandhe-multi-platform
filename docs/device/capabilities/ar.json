@@ -11,7 +11,7 @@
       "api": "ARKit（`ARSession` + `ARWorldTrackingConfiguration`（水平面検出）、`ARFrame.camera.trackingState` / `transform`、`ARPlaneAnchor`。delegate の最新値を 100 ms ごとに pull）",
       "perm": "`NSCameraUsageDescription`。未決定なら `AVCaptureDevice requestAccessForMediaType` で要求する",
       "url": "https://developer.apple.com/documentation/arkit/arsession",
-      "note": "カメラ映像は描かず、追跡状態・開始地点からの位置・水平面の数だけを出す（A 案）。`ARWorldTrackingConfiguration.isSupported` が NO（シミュレータを含む）なら `Unsupported`。ARError は UnsupportedConfiguration を `Unsupported`、CameraUnauthorized を `PermissionDenied`、他を `Failed` へ写す。背景遷移で値を捨て、中断の後は原点を取り直す。3 秒値が届かなければ `NoReading`。守る範囲: 嘘の値を出さない・二重に開始しない・停止と失敗でセッションを止める・古い世代の通知を捨てる。守らない範囲: 姿勢・画面回転の補正・hit-test・アンカー、OS 間の値の一致、複数プロセス、OS が非同期に確定する中断と表示の時間差。既存カメラは `UIImagePickerController` の単発撮影で、画面は 1 つずつしか出ないため `ARSession` と同時には動かない",
+      "note": "追跡状態・開始地点からの位置・水平面の数を出す。カメラ映像は `ar-camera-view` の範囲で、同じ画面・同じ `ARSession` に出す。`ARWorldTrackingConfiguration.isSupported` が NO（シミュレータを含む）なら `Unsupported`。ARError は UnsupportedConfiguration を `Unsupported`、CameraUnauthorized を `PermissionDenied`、他を `Failed` へ写す。背景遷移で値を捨て、中断の後は原点を取り直す。3 秒値が届かなければ `NoReading`。守る範囲: 嘘の値を出さない・二重に開始しない・停止と失敗でセッションを止める・古い世代の通知を捨てる。守らない範囲: 姿勢・画面回転の補正・hit-test・アンカー、OS 間の値の一致、複数プロセス、OS が非同期に確定する中断と表示の時間差。既存カメラは `UIImagePickerController` の単発撮影で、画面は 1 つずつしか出ないため `ARSession` と同時には動かない",
       "sourceName": [
         "AR 表示"
       ],
@@ -58,5 +58,5 @@
       "implStatus": "実装済み・ヘッドレス Chrome で非対応表示まで確認。ARCore 対応 Android 端末の Chrome での確認は #306"
     }
   },
-  "note": "カメラ映像の表示は `ar-camera-view` に切り出した。iOS は ARKit（`ARSession`、追跡状態・位置・水平面の数を数値で表示。カメラ映像の描画は範囲外）、Web は WebXR（`immersive-ar`、実質 Android Chrome のみ・Safari 非対応）で届く見込み。Android は ARCore が Google Play Services for AR 必須、macOS は ARKit がカメラ AR セッション無し、Windows は Windows Mixed Reality が 24H2 で削除済みのため no。今回の範囲: iOS の ARKit で追跡状態・位置・水平面の数を表示するだけ（映像・アンカー・3D 物体配置は扱わない）。Web（WebXR）は別 PR"
+  "note": "カメラ映像の表示は `ar-camera-view` に切り出した。iOS は ARKit（`ARSession`、追跡状態・位置・水平面の数を数値で表示。カメラ映像は `ar-camera-view` の範囲で、同じ画面・同じセッションに出す）、Web は WebXR（`immersive-ar`、実質 Android Chrome のみ・Safari 非対応）で届く見込み。Android は ARCore が Google Play Services for AR 必須、macOS は ARKit がカメラ AR セッション無し、Windows は Windows Mixed Reality が 24H2 で削除済みのため no。`ar` の範囲: iOS の ARKit で追跡状態・位置・水平面の数を表示する（アンカー・3D 物体配置は扱わない。映像は `ar-camera-view` の範囲で、同じ画面・同じセッションに出す）。Web（WebXR）は別 PR"
 }
