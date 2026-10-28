@@ -305,7 +305,11 @@ pub fn check_decoded(
     let min = frames.iter().map(|f| f.timestamp_us).min().unwrap_or(0);
     let max = frames.iter().map(|f| f.timestamp_us).max().unwrap_or(0);
     let frame_us = 1_000_000 / u64::from(SOURCE_FPS);
-    check_length(Duration::from_micros(max - min + frame_us))
+    // 加算が u64 を超える時刻は復元不能な長さなので MISMATCH にする（折り返しで成功させない）
+    let len = (max - min)
+        .checked_add(frame_us)
+        .ok_or(DeviceError::Internal(MISMATCH))?;
+    check_length(Duration::from_micros(len))
 }
 
 /// テスト・フェイク実装用に、解析に要る最小の MP4 を組む（`ftyp` + `moov/trak…` + `mdat`）。
@@ -521,6 +525,17 @@ mod tests {
         assert!(dur(2_000_000 - 200_000 - 66_666).is_ok());
         assert!(dur(2_000_000 + 200_000 - 66_665).is_err());
         assert!(dur(2_000_000 - 200_000 - 66_667).is_err());
+    }
+
+    #[test]
+    fn check_decoded_rejects_timestamp_overflow() {
+        // max - min + frame_us が u64 を超えても panic・折り返し成功しない
+        let mut f = frames(2, 0, 640, 360);
+        f[1].timestamp_us = u64::MAX - 1_000;
+        assert!(matches!(
+            check_decoded(2, &f, 640, 360),
+            Err(DeviceError::Internal(MISMATCH))
+        ));
     }
 
     #[test]
