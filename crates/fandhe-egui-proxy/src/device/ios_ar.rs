@@ -15,7 +15,17 @@
 //!
 //! - 守る: 非対応端末（シミュレータ含む）・権限拒否・NaN・範囲外・未知の追跡状態を成功値へ畳まない、
 //!   停止後と背景遷移後の古い値を返さない
-//! - 守らない: カメラ映像の描画、姿勢・アンカー・hit-test、OS 間の値の一致、複数プロセス
+//! - 守る（映像）: 形式違い・nil・寸法不整合を画像に見せかけない（映像なし = `None`）
+//! - 守らない: 姿勢・アンカー・hit-test、OS 間の値の一致、複数プロセス、映像の向き・なめらかさ・
+//!   数値と同じフレーム由来であること・色の厳密さ
+//!
+//! # カメラ映像（Issue #1009）
+//!
+//! `read_frame` は driver の 100 ms pull に相乗りして `.m` の `fandhe_ios_ar_read_frame` を呼ぶ。
+//! `.m` は main 限定で `currentFrame.capturedImage`（二面 YCbCr 4:2:0 full range）を lock し、生の面を
+//! `fandhe_rust_ar_frame` へ同期に渡す。Rust 側が [`frame_from_planes`] で RGBA 変換と縮小を行う。
+//! `ARFrame` は呼び出しの外で保持しない。OS コールバックが映像を共有状態へ入れる経路はなく、
+//! 再描画は上記の変化通知と driver の `request_repaint_after` で足りる。
 //!
 //! # 既知の天井
 //!
@@ -23,6 +33,27 @@
 
 #[cfg(any(target_os = "ios", test))]
 use fandhe_device::ar::{checked_reading, ArFailure, ArSample, LimitedReason, Tracking};
+#[cfg(any(target_os = "ios", test))]
+use fandhe_device::camera_preview_stream::ScaledFrame;
+
+/// `.m` が渡した二面（Y と交互配置の CbCr）を RGBA へ変換し長辺 320 以下へ縮める。
+/// 不正な入力（寸法・stride・長さ）はすべて `None`（映像なし）。
+// ponytail: main で毎回元画像（例 1920x1440）の全画素を変換する。負荷が出たら間引き読み
+// （色差面だけ読む・行を飛ばす）へ移す。#1000 の実機確認で判断する。
+#[cfg(any(target_os = "ios", test))]
+fn frame_from_planes(
+    width: u32,
+    height: u32,
+    y: &[u8],
+    y_stride: usize,
+    uv: &[u8],
+    uv_stride: usize,
+) -> Option<ScaledFrame> {
+    let v = uv.get(1..)?;
+    fandhe_device::camera_preview_stream::downscale_yuv420(
+        width, height, y, y_stride, uv, v, uv_stride, 2,
+    )
+}
 
 /// `.m` の start の戻り値を契約へ写す（0 成功 / 1 非対応 / 2 権限拒否 / 他 失敗）。
 #[cfg(any(target_os = "ios", test))]
@@ -81,6 +112,8 @@ mod imp {
 
     use fandhe_device::ar::{ArFailure, ArSample, ArTracking};
 
+    use fandhe_device::camera_preview_stream::ScaledFrame;
+
     use super::{read_result, start_result};
 
     // SAFETY: `ios/fandhe_ios_ar.m`（`build.rs` が iOS ターゲットの feature `device` 有効時に
@@ -90,6 +123,7 @@ mod imp {
         fn fandhe_ios_ar_start() -> i32;
         fn fandhe_ios_ar_read(tracking: *mut i32, pos: *mut f64, planes: *mut i32) -> i32;
         fn fandhe_ios_ar_stop();
+        fn fandhe_ios_ar_read_frame(ctx: *mut std::ffi::c_void);
     }
 
     struct IosAr;
@@ -107,6 +141,15 @@ mod imp {
             // SAFETY: 3 本のポインタは呼び出しの間有効な排他参照（`pos` は 3 要素）で、`.m` は保持しない。
             let code = unsafe { fandhe_ios_ar_read(&mut tracking, pos.as_mut_ptr(), &mut planes) };
             read_result(code, tracking, pos, planes)
+        }
+
+        #[allow(unsafe_code)]
+        fn read_frame(&self) -> Option<ScaledFrame> {
+            let mut out: Option<ScaledFrame> = None;
+            // SAFETY: `out` は呼び出しの間有効な排他参照。`.m` は同期に 0〜1 回 `fandhe_rust_ar_frame` へ
+            // 渡すだけで保持しない。
+            unsafe { fandhe_ios_ar_read_frame((&mut out as *mut Option<ScaledFrame>).cast()) };
+            out
         }
 
         #[allow(unsafe_code)]
@@ -131,6 +174,37 @@ pub(crate) use imp::implementation;
 #[no_mangle]
 extern "C" fn fandhe_rust_ar_changed() {
     crate::ios::request_repaint();
+}
+
+/// 映像の面を受ける（`.m` の `fandhe_ios_ar_read_frame` から同期に呼ばれる）。
+/// `ctx` は `read_frame` の `Option<ScaledFrame>`。lock 中の面を変換して書き込むだけで保持しない。
+#[cfg(target_os = "ios")]
+#[allow(unsafe_code, clippy::too_many_arguments)]
+#[no_mangle]
+extern "C" fn fandhe_rust_ar_frame(
+    ctx: *mut std::ffi::c_void,
+    width: u32,
+    height: u32,
+    y: *const u8,
+    y_len: usize,
+    y_stride: usize,
+    uv: *const u8,
+    uv_len: usize,
+    uv_stride: usize,
+) {
+    if ctx.is_null() || y.is_null() || uv.is_null() {
+        return;
+    }
+    // SAFETY: `.m` は pixel buffer を lock している間だけ呼ぶ。`y` / `uv` は各面の base address で、
+    // 長さは `BytesPerRow * Height`。`ctx` は `read_frame` が渡した排他参照。
+    let (y, uv, out) = unsafe {
+        (
+            std::slice::from_raw_parts(y, y_len),
+            std::slice::from_raw_parts(uv, uv_len),
+            &mut *ctx.cast::<Option<ScaledFrame>>(),
+        )
+    };
+    *out = frame_from_planes(width, height, y, y_stride, uv, uv_stride);
 }
 
 /// 背景遷移の通知。背景中は `NoReading` の待機を止める。
@@ -198,6 +272,29 @@ mod tests {
             panic!()
         };
         assert_eq!(r.position, None);
+    }
+
+    #[test]
+    fn frame_white_2x2() {
+        let f = frame_from_planes(2, 2, &[255; 4], 2, &[128, 128], 2).unwrap();
+        assert_eq!((f.width, f.height), (2, 2));
+        assert_eq!(&f.rgba[..4], &[255, 255, 255, 255]);
+    }
+
+    #[test]
+    fn frame_is_downscaled() {
+        let (y, uv) = (vec![100; 640 * 480], vec![128; 640 * 240]);
+        let f = frame_from_planes(640, 480, &y, 640, &uv, 640).unwrap();
+        assert!(f.width.max(f.height) <= fandhe_device::camera_preview_stream::PREVIEW_MAX_SIDE);
+    }
+
+    #[test]
+    fn frame_rejects_bad_input() {
+        assert!(frame_from_planes(2, 2, &[0; 4], 2, &[], 2).is_none());
+        assert!(frame_from_planes(2, 2, &[0; 3], 2, &[128, 128], 2).is_none());
+        assert!(frame_from_planes(2, 2, &[0; 4], 1, &[128, 128], 2).is_none());
+        assert!(frame_from_planes(0, 2, &[0; 4], 2, &[128, 128], 2).is_none());
+        assert!(frame_from_planes(9000, 2, &[0; 4], 9000, &[128, 128], 2).is_none());
     }
 
     #[test]
