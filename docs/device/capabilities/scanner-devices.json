@@ -46,8 +46,8 @@
       "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_scanner_devices.m + crates/fandhe-egui-proxy/src/device/apple_scanner_devices.rs + crates/fandhe-egui-proxy/src/device/scanner_devices.rs + crates/fandhe-core/src/screens/scanner_devices_import.rs + crates/fandhe-device/src/scanner_devices.rs、Issue #981"
     },
     "windows": {
-      "status": "possible",
-      "api": "`DeviceInformation.FindAllAsync(ImageScanner.GetDeviceSelector())` → `ImageScanner.FromIdAsync` → `ScanPreviewToStreamAsync`（最低解像度で 1 枚）。WIA ドライバーのスキャナーのみ",
+      "status": "done",
+      "api": "`DeviceInformation.FindAllAsyncAqsFilter(ImageScanner.GetDeviceSelector())` → 先頭の 1 台を `ImageScanner.FromIdAsync` → Flatbed → Feeder・JPEG → PNG の順で選び、`ScanPreviewToStreamAsync` でメモリのストリームへ 1 枚。WIA ドライバーのスキャナーのみ",
       "perm": "宣言不要（パッケージ無しの exe。メモリのストリームへ取り込み、Pictures Library へ保存しない）",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.scanners.imagescanner",
@@ -55,7 +55,10 @@
         "https://learn.microsoft.com/en-us/windows/apps/develop/devices-sensors/scan-from-your-app",
         "https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/winrt-api-desktop-app-support"
       ],
-      "note": "未実装。WIA ドライバーのスキャナーのみ（カメラ機器は範囲外）。守る: 失敗・0 件・拒否・ロックを成功に畳まない、セッション・一時ファイル・接続を全経路で閉じる。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）。範囲外: 機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク接続の機器。既知の天井: 正常系の機材が手元に無く実機未確認、WIA エラーの HRESULT。届かないと判明したら `done` を取り下げる"
+      "note": "実装済み（#984）。WIA ドライバーのスキャナーのみ（カメラ機器は範囲外）。探索窓（3 秒）の間に機器を探し（見つかれば早く打ち切る）、OS の列挙順の先頭の 1 台から 1 枚を取り込んで種類と台数と共に表示する。0 台・空・上限超過・復号不可・取り込み中の機器消失（列挙し直して判定）・OS の失敗を区別し、成功に畳まない。HRESULT は `Unsupported` / `Failed` へ写し、`-1` に潰さない。ストリームは全経路で閉じ、期限切れは `Cancel()` の完了を待ってから `TimedOut` にする。機器名・画像はログに出さない。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）。範囲外: 機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク接続の機器。既知の天井: 正常系の機材が手元に無く実機未確認、WIA エラーの HRESULT を `Failed` に寄せている、パッケージ無しの exe で `ImageScanner` が使えるか未確認、`Cancel()` の完了待ちの猶予は仮の値。届かないと判明したら `done` を取り下げる",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#967）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_scanner_devices.rs + crates/fandhe-egui-proxy/src/device/scanner_devices.rs + crates/fandhe-core/src/screens/scanner_devices_import.rs + crates/fandhe-device/src/scanner_devices.rs、Issue #984"
     },
     "web": {
       "status": "no",

@@ -378,6 +378,9 @@ windows = { workspace = true, optional = true, features = [
     # 抜き差しを受ける `DeviceWatcher`（`Devices_Enumeration`）を呼ぶ。新規パッケージは増えない。
     "Devices_Midi",
     "Devices_Enumeration",
+    # Issue #984: `device/windows_scanner_devices.rs` が `ImageScanner`（`Devices_Scanners`）を呼ぶ。
+    # 機器の列挙は上の `Devices_Enumeration`。新規パッケージは増えない。
+    "Devices_Scanners",
     # Issue #506: `device/windows_usb_device.rs` が SetupAPI（`Win32_Devices_DeviceAndDriverInstallation`）で
     # USB 機器を列挙し、`DEVPKEY_*`（`Win32_Devices_Properties`）と `GUID_DEVINTERFACE_USB_DEVICE`
     # （`Win32_Devices_Usb`）を使う。新規パッケージは増えない。
