@@ -74,13 +74,18 @@ final class PrintHelper {
 
     // 1 ページの描画を差し替える（文章 / 画像）。
     private interface PageDrawer {
-        void draw(PdfDocument.Page page);
+        // 描画に使った Bitmap を返す（無ければ null）。PdfDocument は writeTo で再生するため、
+        // 呼び出し側が writeTo 完了後に recycle する。
+        Bitmap draw(PdfDocument.Page page);
     }
 
     // JNI スレッドから呼ばれる。
     void print(long id, String title, String body) {
         request.track(id);
-        activity.runOnUiThread(() -> start(id, page -> draw(page, title, body)));
+        activity.runOnUiThread(() -> start(id, page -> {
+            draw(page, title, body);
+            return null;
+        }));
     }
 
     // JNI スレッドから呼ばれる。
@@ -174,9 +179,10 @@ final class PrintHelper {
         }
     }
 
-    // 画像を印刷可能領域へ縦横比を保って中央寄せで収める。Bitmap はこの呼び出しの中だけで生かす。
-    private static void drawImage(PdfDocument.Page page, int[] argb, int w, int h) {
+    // 画像を印刷可能領域へ縦横比を保って中央寄せで収める。Bitmap は writeTo 完了まで生かす（呼び出し側が recycle）。
+    private static Bitmap drawImage(PdfDocument.Page page, int[] argb, int w, int h) {
         Bitmap bmp = Bitmap.createBitmap(argb, w, h, Bitmap.Config.ARGB_8888);
+        boolean ok = false;
         try {
             // Canvas の原点は contentRect の左上（ページの角ではない）。根拠: AOSP の
             // PdfDocument.cpp は contentRect の幅・高さで原点 (0,0) から記録を始め、書き出し時に
@@ -190,8 +196,12 @@ final class PrintHelper {
             float top = (area.height() - dh) / 2f;
             page.getCanvas().drawBitmap(bmp, null, new RectF(left, top, left + dw, top + dh),
                     new Paint(Paint.FILTER_BITMAP_FLAG));
+            ok = true;
+            return bmp;
         } finally {
-            bmp.recycle();
+            if (!ok) {
+                bmp.recycle();
+            }
         }
     }
 
@@ -238,10 +248,11 @@ final class PrintHelper {
             }
             PrintedPdfDocument pdf = new PrintedPdfDocument(activity, attrs);
             boolean ok = false;
+            Bitmap used = null;
             try {
                 PdfDocument.Page page = pdf.startPage(0);
                 try {
-                    d.draw(page);
+                    used = d.draw(page);
                 } finally {
                     // 描画の成否によらずページを終える（未終了だと close が IllegalStateException）。
                     pdf.finishPage(page);
@@ -256,6 +267,9 @@ final class PrintHelper {
                     pdf.close();
                 } catch (RuntimeException e) {
                     ok = false;
+                }
+                if (used != null) {
+                    used.recycle();
                 }
             }
             if (ok) {
