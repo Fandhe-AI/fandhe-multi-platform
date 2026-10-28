@@ -19,8 +19,13 @@
 //!   `Internal("print failed")`、未知の結果コード → `Internal("print outcome")`
 //! - `Unconfirmed` には到達しない
 //!
+//! 画面の内容の印刷（print-screen、Issue #1010）は `StretchDIBits`（32bpp top-down の DIB、`BI_RGB`）で
+//! 印刷可能領域（`HORZRES` x `VERTRES`）へ縦横比を保って中央寄せで描く。ダイアログ・`StartDocW`・
+//! 解放・写像は `run_job`（`ffi` 内）で文章と共用し、`StretchDIBits` の戻り値 0 / `GDI_ERROR` は失敗にする。
+//!
 //! # 既知の天井
 //!
+//! - 画像: プリンタ解像度・色の正確さは保証しない。`HALFTONE` の指定はしない（縮小の画質は GDI 任せ）
 //! - ponytail: 1 ページのみ。折り返し後の高さが用紙を超えた分は切れる（現在の固定文は収まる）。
 //!   上げ方は `DT_CALCRECT` で行を送って `EndPage` / `StartPage` で改ページする
 //! - 書体 `Yu Gothic UI` が無い環境では GDI が代替書体を選ぶ。書体・余白の差は守らない範囲
@@ -64,15 +69,16 @@ pub(crate) fn start_doc_failure(last_error: u32) -> Result<PrintOutcome, DeviceE
 #[cfg(target_os = "windows")]
 mod ffi {
     use super::{after_dialog, start_doc_failure};
-    use fandhe_device::print::PrintOutcome;
+    use fandhe_device::print::{fit_rect, PrintImage, PrintOutcome};
     use fandhe_device::DeviceError;
     use windows::core::{w, PCWSTR};
     use windows::Win32::Foundation::{GetLastError, GlobalFree, RECT};
     use windows::Win32::Graphics::Gdi::{
-        CreateFontW, DeleteDC, DeleteObject, DrawTextW, GetDeviceCaps, SelectObject,
-        CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DEFAULT_PITCH, DEFAULT_QUALITY, DT_EDITCONTROL,
-        DT_NOPREFIX, DT_WORDBREAK, FF_DONTCARE, FW_BOLD, FW_NORMAL, HDC, HFONT, HGDIOBJ, HORZRES,
-        LOGPIXELSX, LOGPIXELSY, OUT_DEFAULT_PRECIS,
+        CreateFontW, DeleteDC, DeleteObject, DrawTextW, GetDeviceCaps, SelectObject, StretchDIBits,
+        BITMAPINFO, BITMAPINFOHEADER, BI_RGB, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DEFAULT_PITCH,
+        DEFAULT_QUALITY, DIB_RGB_COLORS, DT_EDITCONTROL, DT_NOPREFIX, DT_WORDBREAK, FF_DONTCARE,
+        FW_BOLD, FW_NORMAL, HDC, HFONT, HGDIOBJ, HORZRES, LOGPIXELSX, LOGPIXELSY,
+        OUT_DEFAULT_PRECIS, SRCCOPY, VERTRES,
     };
     use windows::Win32::Storage::Xps::{AbortDoc, EndDoc, EndPage, StartDocW, StartPage, DOCINFOW};
     use windows::Win32::UI::Controls::Dialogs::{
@@ -221,8 +227,93 @@ mod ffi {
         Ok(())
     }
 
+    /// 開始済みのジョブに画面の画像を 1 ページ描いて終える。失敗時は呼び出し側が `AbortDoc` する。
+    /// 印刷可能領域（`HORZRES` x `VERTRES`）へ縦横比を保って中央寄せで収める。
+    ///
+    /// # Safety
+    /// `dc` が有効なプリンタ DC で、`StartDocW` 済みであること。
+    #[allow(unsafe_code)]
+    unsafe fn render_image(dc: HDC, img: &PrintImage) -> Result<(), DeviceError> {
+        // SAFETY: 前提により `dc` は有効で StartDocW 済み。ページ開始の成否は戻り値で検査する。
+        if unsafe { StartPage(dc) } <= 0 {
+            return Err(FAILED);
+        }
+        // SAFETY: `dc` は前提により有効。GetDeviceCaps は値を返すだけ。
+        let area_w = unsafe { GetDeviceCaps(Some(dc), HORZRES) };
+        // SAFETY: 同上。
+        let area_h = unsafe { GetDeviceCaps(Some(dc), VERTRES) };
+        let (w, h) = (img.width() as i32, img.height() as i32);
+        let (x, y, dw, dh) = fit_rect(w, h, area_w, area_h).ok_or(FAILED)?;
+        let bgra = img.to_bgra();
+        let info = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: w,
+                // 負の高さは top-down（先頭行が画面の上）。
+                biHeight: -h,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        // SAFETY: `bgra` は `PrintImage` の不変条件により `w * h * 4` バイトで、32bpp top-down DIB の
+        // 読み取り範囲と一致する。`info` / `bgra` はこの呼び出しの間だけ借用され、`dc` は前提により有効で
+        // ページ開始済み。戻り値は直後に検査する。
+        let copied = unsafe {
+            StretchDIBits(
+                dc,
+                x,
+                y,
+                dw,
+                dh,
+                0,
+                0,
+                w,
+                h,
+                Some(bgra.as_ptr().cast()),
+                &info,
+                DIB_RGB_COLORS,
+                SRCCOPY,
+            )
+        };
+        // 0 と GDI_ERROR（-1）はどちらも失敗。成功を作らない。
+        if copied <= 0 {
+            return Err(FAILED);
+        }
+        // SAFETY: `dc` は有効で、ページは StartPage 済み・未終了。
+        if unsafe { EndPage(dc) } <= 0 {
+            return Err(FAILED);
+        }
+        Ok(())
+    }
+
+    /// 画面の画像を印刷する。ジョブ名は固定で、画素は出さない。
+    #[allow(unsafe_code)]
+    pub(super) fn print_image(img: &PrintImage) -> Result<PrintOutcome, DeviceError> {
+        run_job("fandhe screen", |dc| {
+            // SAFETY: `run_job` が有効なプリンタ DC を `StartDocW` 済みで渡す。
+            unsafe { render_image(dc, img) }
+        })
+    }
+
+    /// 見出しと本文を印刷する。
     #[allow(unsafe_code)]
     pub(super) fn print_text(title: &str, body: &str) -> Result<PrintOutcome, DeviceError> {
+        run_job(title, |dc| {
+            // SAFETY: `run_job` が有効なプリンタ DC を `StartDocW` 済みで渡す。
+            unsafe { render(dc, title, body) }
+        })
+    }
+
+    /// ダイアログ → `StartDocW` → `render` → `EndDoc` の共通部分。DC・`hDevMode`・`hDevNames` は
+    /// ガードで全経路解放し、ジョブ開始後の失敗は `AbortDoc` する。`render` は `StartDocW` 済みの DC を受け取る。
+    #[allow(unsafe_code)]
+    fn run_job(
+        doc_name: &str,
+        render: impl FnOnce(HDC) -> Result<(), DeviceError>,
+    ) -> Result<PrintOutcome, DeviceError> {
         let hwnd = super::super::windows_share::window().ok_or(PRESENT)?;
         // 要素 1 個のバッファ。NULL を渡したときの扱いに依存しない。
         let mut ranges = [PRINTPAGERANGE::default()];
@@ -256,7 +347,7 @@ mod ffi {
             return Err(PRESENT);
         }
 
-        let mut name: Vec<u16> = title.encode_utf16().collect();
+        let mut name: Vec<u16> = doc_name.encode_utf16().collect();
         name.push(0);
         let doc = DOCINFOW {
             cbSize: size_of::<DOCINFOW>() as i32,
@@ -270,8 +361,7 @@ mod ffi {
             let last = unsafe { GetLastError() }.0;
             return start_doc_failure(last);
         }
-        // SAFETY: `dc` は有効で `StartDocW` 済み。
-        if let Err(e) = unsafe { render(dc, title, body) } {
+        if let Err(e) = render(dc) {
             // SAFETY: ジョブ開始後の失敗なので中断して破棄する。
             unsafe { AbortDoc(dc) };
             return Err(e);
@@ -291,6 +381,13 @@ struct WindowsPrint;
 impl fandhe_device::print::Print for WindowsPrint {
     fn print(&self, req: &fandhe_device::print::PrintRequest) -> Result<PrintOutcome, DeviceError> {
         ffi::print_text(req.title(), req.body())
+    }
+
+    fn print_image(
+        &self,
+        img: &fandhe_device::print::PrintImage,
+    ) -> Result<PrintOutcome, DeviceError> {
+        ffi::print_image(img)
     }
 }
 

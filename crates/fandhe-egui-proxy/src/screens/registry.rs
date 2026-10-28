@@ -154,6 +154,10 @@ generated_screens! {
     crate::device::print::print_page_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "print_screen_page" => fandhe_core::screens::print_screen_page::current_screen,
+    crate::device::print::print_screen_page_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "managed_app_config_show" => fandhe_core::screens::managed_app_config_show::current_screen,
     crate::device::managed_app_config::managed_app_config_show_effect,
     effect

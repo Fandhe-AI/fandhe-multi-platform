@@ -28,24 +28,30 @@
       "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは egui-proxy のフレームの読み戻し（`ViewportCommand::Screenshot`）。ダイアログ・結果は `print` の Android 実装を共用する"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "AppKit `NSPrintPanel`（`runModalWithPrintInfo:`）+ `NSPrintOperation`（対象 view は `NSImageView`、パネルなしの `runOperation`）",
       "perm": "なし",
       "url": [
         "https://developer.apple.com/documentation/appkit/nsprintoperation",
         "https://developer.apple.com/documentation/appkit/nsprintoperation/init(view:)"
       ],
-      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは egui-proxy のフレームの読み戻し（`ViewportCommand::Screenshot`）。パネル → パネルなし実行の 2 段構成は `print` と共用する"
+      "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは egui-proxy のフレームの読み戻し（`ViewportCommand::Screenshot`、世代タグで照合、単調時計で 2 秒の期限）。期限切れ・寸法不正は OS を呼ばず「画面を取り込めませんでした」で確定する。取り込んだ画素は `NSBitmapImageRep` → `NSImageView` で印刷可能領域に縦横比を保って収め、パネル → パネルなし実行の 2 段構成は `print` と共用する。結果は `Submitted`・`Cancelled`・失敗で、`Unconfirmed` には到達しない。守らない範囲: 紙に出たか、色・解像度の正確さ、OS ごとの余白の差、背景にいる間の取り込み（期限切れで失敗になる）。UI スレッドで同期に呼ぶ。Mac 目視は #1001",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#1001）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_print.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_print.m + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_screen_page.rs + crates/fandhe-device/src/print.rs、Issue #1010"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "`PrintDlgExW`（`PD_RETURNDC`）+ GDI（`StartDocW` / `StretchDIBits` / `EndDoc`）",
       "perm": "なし（Win32 desktop API。package identity 不要）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/commdlg/nf-commdlg-printdlgexw",
         "https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-stretchdibits"
       ],
-      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは egui-proxy のフレームの読み戻し（`ViewportCommand::Screenshot`）。ダイアログ・DC の解放は `print` と共用する"
+      "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは egui-proxy のフレームの読み戻し（`ViewportCommand::Screenshot`、世代タグで照合、単調時計で 2 秒の期限）。期限切れ・寸法不正は OS を呼ばず「画面を取り込めませんでした」で確定する。取り込んだ画素は `StretchDIBits`（32bpp top-down の DIB）で印刷可能領域に縦横比を保って描く。ダイアログ・DC の解放・結果の写像（`PD_RESULT_CANCEL` / `PD_RESULT_APPLY` と `ERROR_CANCELLED` は `Cancelled`、`StretchDIBits` の 0 / `GDI_ERROR` は失敗）は `print` と共用し、`Unconfirmed` には到達しない。守らない範囲: 紙に出たか、色・解像度の正確さ（`HALFTONE` は使わない）、OS ごとの余白の差、背景にいる間の取り込み（期限切れで失敗になる）。UI スレッドで同期に呼ぶ。Windows 実機確認は #1001",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#1001）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_print.rs + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_screen_page.rs + crates/fandhe-device/src/print.rs、Issue #1010"
     },
     "web": {
       "status": "possible",

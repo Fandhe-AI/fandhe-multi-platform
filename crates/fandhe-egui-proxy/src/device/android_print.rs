@@ -68,6 +68,17 @@ fn call_activity(id: u64, req: &PrintRequest) -> bool {
     .is_ok()
 }
 
+/// 画面の画像（print-screen、親 #341）の印刷依頼。**スタブ**: 実装は b-android（#1012）が
+/// このモジュールと Java 側だけを書き換えて埋める（dispatch は `device/print.rs` で最終形）。
+/// それまでは非対応を返し、成功を作らない。
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub(crate) fn begin_print_image(
+    _request_id: u64,
+    _img: &fandhe_device::print::PrintImage,
+) -> Result<(), DeviceError> {
+    Err(DeviceError::Unsupported("print"))
+}
+
 /// `PrintHelper.nativeOnPrintResult`（Java 側）から呼ばれる JNI エクスポート。
 /// 値・結果は一切ログへ出さない。
 ///
