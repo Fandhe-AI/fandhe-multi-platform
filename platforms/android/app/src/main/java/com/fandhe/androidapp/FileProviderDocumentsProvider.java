@@ -271,7 +271,9 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
     public ParcelFileDescriptor openDocument(String documentId, String mode, CancellationSignal signal)
             throws FileNotFoundException {
         File f = resolve(documentId);
-        int pfdMode = ParcelFileDescriptor.parseMode(mode);
+        // 書き込みモードの MODE_CREATE は外す。resolve の後に削除が割り込んだとき、開く側が同じ
+        // <id>/<表示名> を作り直し、消した ID を古い URI 権限ごと復活させないため。
+        int pfdMode = ParcelFileDescriptor.parseMode(mode) & ~ParcelFileDescriptor.MODE_CREATE;
         if (!mode.contains("w")) {
             return ParcelFileDescriptor.open(f, pfdMode);
         }
