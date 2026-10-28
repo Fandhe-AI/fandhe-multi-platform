@@ -485,6 +485,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::media_playback::release_mount(id);
         super::now_playing::release_mount(id);
         super::media_transcode::release_mount(id);
+        super::video_transcode::release_mount(id);
         super::on_device_llm::release_mount(id);
         super::translation::release_mount(id);
         super::pen_stylus::release_mount(id);
