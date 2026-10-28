@@ -52,7 +52,10 @@ fn decode_reply(reply: &[u8]) -> Result<Vec<u8>, DeviceError> {
 mod imp {
     use std::time::Duration;
 
-    use fandhe_device::video_transcode::{VideoTranscode, TIMEOUT};
+    use fandhe_device::video_transcode::{
+        VideoTranscode, SOURCE_FPS, SOURCE_FRAMES, SOURCE_HEIGHT, SOURCE_WIDTH, TARGET_HEIGHT,
+        TARGET_WIDTH, TIMEOUT,
+    };
     use fandhe_device::DeviceError;
     use jni::objects::{JByteArray, JObject, JValue};
 
@@ -93,8 +96,17 @@ mod imp {
                 let ret = env.call_method(
                     a,
                     jni::jni_str!("videoTranscode"),
-                    jni::jni_sig!((long) -> byte[]),
-                    &[JValue::Long(ms as jni::sys::jlong)],
+                    jni::jni_sig!((int, int, int, int, int, int, long) -> byte[]),
+                    &[
+                        // 寸法・fps・フレーム数は fandhe_device の定数が SSOT（Java へ複製しない）。
+                        JValue::Int(SOURCE_WIDTH as i32),
+                        JValue::Int(SOURCE_HEIGHT as i32),
+                        JValue::Int(SOURCE_FPS as i32),
+                        JValue::Int(SOURCE_FRAMES as i32),
+                        JValue::Int(TARGET_WIDTH as i32),
+                        JValue::Int(TARGET_HEIGHT as i32),
+                        JValue::Long(ms as jni::sys::jlong),
+                    ],
                 )?;
                 let arr = env.cast_local::<JByteArray>(ret.l()?)?;
                 if arr.is_null() {

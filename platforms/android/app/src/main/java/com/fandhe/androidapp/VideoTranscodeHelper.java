@@ -19,7 +19,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 // Rust の `device/android_video_transcode.rs` がドライバのワーカースレッドから
 // `MainActivity.videoTranscode` 経由で同期 JNI で呼ぶ。Java から Rust への native コールバックは無く、
 // JNI 署名の照合先は Java の 1 か所だけ。
-// 扱う範囲は「実行時に作った 1280x720・15 fps・30 フレームの H.264 を 640x360 の mp4 へ 1 回変換する」ことだけ
+// 扱う範囲は「実行時に作った H.264 を小さい解像度の mp4 へ 1 回変換する」ことだけ。寸法・fps・フレーム数は
+// Rust の `fandhe_device::video_transcode` の定数が SSOT で、JNI 引数で受け取る（ここに複製しない）
 // （保存・共有・進捗・取り消しは扱わない）。流れは、符号化器で元動画を作ってメモリに溜め
 // → 復号器で戻し → Java の YUV 間引きで縮小 → 符号化器 → MediaMuxer で mp4。
 // 元動画の絵は `fandhe_device::video_transcode::fill_source_frame_bgra` と同じ縦縞（幅 32 px・
@@ -43,8 +44,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class VideoTranscodeHelper {
     private static final int OK = 0, TIMEOUT = 1, FAILED = 2, UNSUPPORTED = 3, RELEASE_PENDING = 4;
     private static final String AVC = "video/avc";
-    private static final int SW = 1280, SH = 720, FPS = 15, FRAMES = 30;
-    private static final int TW = 640, TH = 360;
     // 出力の上限は Rust 側と同じ（確保の前に長さを検査する）。元動画の符号化結果の上限はこの層だけで持つ。
     private static final int MAX_MP4_BYTES = 4 * 1024 * 1024;
     private static final int MAX_SOURCE_BYTES = 8 * 1024 * 1024;
@@ -72,19 +71,29 @@ final class VideoTranscodeHelper {
     }
 
     private final long deadline;
+    private final int sw, sh, fps, frames, tw, th;
     private MediaMuxer muxer;
     private boolean muxerStarted;
     private boolean releaseFailed;
 
-    private VideoTranscodeHelper(long deadline) {
+    private VideoTranscodeHelper(long deadline, int sw, int sh, int fps, int frames, int tw, int th) {
         this.deadline = deadline;
+        this.sw = sw;
+        this.sh = sh;
+        this.fps = fps;
+        this.frames = frames;
+        this.tw = tw;
+        this.th = th;
     }
 
-    static byte[] transcode(File cacheDir, long remainingMs) {
+    static byte[] transcode(File cacheDir, int sw, int sh, int fps, int frames, int tw, int th,
+            long remainingMs) {
         if (remainingMs <= 0) {
             return code(TIMEOUT);
         }
-        if (cacheDir == null) {
+        // 偶数の正の寸法（4:2:0）と、縮小が 2:1 で割り切れることを前提にする。外れは失敗。
+        if (cacheDir == null || sw <= 0 || sh <= 0 || fps <= 0 || frames <= 0
+                || sw % 2 != 0 || sh % 2 != 0 || tw != sw / 2 || th != sh / 2 || tw % 2 != 0 || th % 2 != 0) {
             return code(FAILED);
         }
         if (!inFlight.compareAndSet(false, true)) {
@@ -94,7 +103,7 @@ final class VideoTranscodeHelper {
             if (!retryLeftovers()) {
                 return code(RELEASE_PENDING);
             }
-            return new VideoTranscodeHelper(System.nanoTime() + remainingMs * 1_000_000L).run(cacheDir);
+            return new VideoTranscodeHelper(System.nanoTime() + remainingMs * 1_000_000L, sw, sh, fps, frames, tw, th).run(cacheDir);
         } finally {
             inFlight.set(false);
         }
@@ -230,11 +239,11 @@ final class VideoTranscodeHelper {
         }
     }
 
-    private static MediaFormat encoderFormat(int w, int h, int bitRate) {
+    private MediaFormat encoderFormat(int w, int h, int bitRate) {
         MediaFormat f = MediaFormat.createVideoFormat(AVC, w, h);
         f.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible);
         f.setInteger(MediaFormat.KEY_BIT_RATE, bitRate);
-        f.setInteger(MediaFormat.KEY_FRAME_RATE, FPS);
+        f.setInteger(MediaFormat.KEY_FRAME_RATE, fps);
         f.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
         return f;
     }
@@ -243,8 +252,8 @@ final class VideoTranscodeHelper {
     private Source encodeSource() {
         MediaCodec enc = null;
         try {
-            enc = create(true, SW, SH);
-            enc.configure(encoderFormat(SW, SH, 2_000_000), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+            enc = create(true, sw, sh);
+            enc.configure(encoderFormat(sw, sh, 2_000_000), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
             enc.start();
             Source src = new Source();
             MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
@@ -252,7 +261,7 @@ final class VideoTranscodeHelper {
             boolean eos = false;
             while (!eos) {
                 checkDeadline();
-                if (fed < FRAMES) {
+                if (fed < frames) {
                     int i = enc.dequeueInputBuffer(POLL_US);
                     if (i >= 0) {
                         Image img = enc.getInputImage(i);
@@ -260,10 +269,10 @@ final class VideoTranscodeHelper {
                             throw new IllegalStateException();
                         }
                         drawSource(img, fed);
-                        long pts = (long) fed * 1_000_000L / FPS;
+                        long pts = (long) fed * 1_000_000L / fps;
                         fed++;
-                        enc.queueInputBuffer(i, 0, SW * SH * 3 / 2, pts,
-                                fed == FRAMES ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
+                        enc.queueInputBuffer(i, 0, sw * sh * 3 / 2, pts,
+                                fed == frames ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
                     }
                 }
                 int o = enc.dequeueOutputBuffer(info, POLL_US);
@@ -302,13 +311,13 @@ final class VideoTranscodeHelper {
     private void convert(Source src, File out) throws IOException {
         MediaCodec dec = null, enc = null;
         try {
-            dec = create(false, SW, SH);
-            enc = create(true, TW, TH);
+            dec = create(false, sw, sh);
+            enc = create(true, tw, th);
             MediaFormat df = src.format;
             df.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible);
             dec.configure(df, null, null, 0);
             dec.start();
-            enc.configure(encoderFormat(TW, TH, 800_000), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+            enc.configure(encoderFormat(tw, th, 800_000), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
             enc.start();
             muxer = new MediaMuxer(out.getAbsolutePath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
 
@@ -359,7 +368,7 @@ final class VideoTranscodeHelper {
                                     }
                                 }
                                 lastPts = di.presentationTimeUs;
-                                enc.queueInputBuffer(encIn, 0, TW * TH * 3 / 2, lastPts, 0);
+                                enc.queueInputBuffer(encIn, 0, tw * th * 3 / 2, lastPts, 0);
                                 encIn = -1;
                             }
                             decOutDone = (di.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
@@ -412,11 +421,11 @@ final class VideoTranscodeHelper {
     }
 
     // 元動画の index 枚目を YUV で描く（縦縞。Rust の fill_source_frame_bgra と同じ位置）。
-    private static void drawSource(Image img, int index) {
+    private void drawSource(Image img, int index) {
         int shift = index * 16;
         Image.Plane[] planes = img.getPlanes();
         for (int p = 0; p < 3; p++) {
-            int pw = p == 0 ? SW : SW / 2, ph = p == 0 ? SH : SH / 2;
+            int pw = p == 0 ? sw : sw / 2, ph = p == 0 ? sh : sh / 2;
             byte on = p == 0 ? Y_ON : p == 1 ? U_ON : V_ON;
             byte off = p == 0 ? Y_OFF : p == 1 ? U_OFF : V_OFF;
             byte[] row = new byte[pw];
@@ -439,20 +448,24 @@ final class VideoTranscodeHelper {
         }
     }
 
-    // 各面を縦横 2:1 で間引く。両側の pixelStride / rowStride を尊重する。
-    private static void scale(Image src, Image dst) {
-        if (src.getWidth() != SW || src.getHeight() != SH) {
+    // 各面を縦横 2:1 で間引く。両側の pixelStride / rowStride とクロップ原点を尊重する。
+    // 復号器の Image 全体寸法（例: 16 の倍数に切り上げた 1280x736）ではなく、getCropRect() の有効領域で検証する。
+    private void scale(Image src, Image dst) {
+        android.graphics.Rect crop = src.getCropRect();
+        if (crop.width() != sw || crop.height() != sh) {
             throw new IllegalStateException();
         }
         Image.Plane[] s = src.getPlanes(), d = dst.getPlanes();
         for (int p = 0; p < 3; p++) {
-            int dw = p == 0 ? TW : TW / 2, dh = p == 0 ? TH : TH / 2;
+            int dw = p == 0 ? tw : tw / 2, dh = p == 0 ? th : th / 2;
+            // 色差面はクロップ原点も 2:1 で縮む。
+            int ox = p == 0 ? crop.left : crop.left / 2, oy = p == 0 ? crop.top : crop.top / 2;
             ByteBuffer sb = s[p].getBuffer(), db = d[p].getBuffer();
             int sr = s[p].getRowStride(), sp = s[p].getPixelStride();
             int dr = d[p].getRowStride(), dp = d[p].getPixelStride();
             for (int y = 0; y < dh; y++) {
                 for (int x = 0; x < dw; x++) {
-                    db.put(y * dr + x * dp, sb.get(2 * y * sr + 2 * x * sp));
+                    db.put(y * dr + x * dp, sb.get((oy + 2 * y) * sr + (ox + 2 * x) * sp));
                 }
             }
         }
