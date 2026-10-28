@@ -50,8 +50,8 @@
       "impl": "crates/fandhe-egui-proxy/src/device/apple_video_transcode.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_video_transcode.m + crates/fandhe-egui-proxy/src/device/video_transcode.rs + crates/fandhe-core/src/screens/video_transcode.rs + crates/fandhe-device/src/video_transcode.rs、Issue #1014"
     },
     "windows": {
-      "status": "possible",
-      "api": "`Windows.Media.Transcoding.MediaTranscoder`。1 段目 `MediaStreamSource`（無圧縮 BGRA）+ `PrepareMediaStreamSourceTranscodeAsync`、2 段目 `PrepareStreamTranscodeAsync`",
+      "status": "done",
+      "api": "`Windows.Media.Transcoding.MediaTranscoder`。1 段目 `MediaStreamSource`（無圧縮 BGRA、1280×720・15 fps）+ `PrepareMediaStreamSourceTranscodeAsync`（`CreateMp4(HD720p)`、`SetAudio(None)`）で元動画を一時ファイルへ、2 段目 `PrepareStreamTranscodeAsync`（`CreateMp4(Vga)`、`SetAudio(None)`）で小さい動画の MP4 へ。期限切れは `Cancel()`",
       "perm": "不要（文書に package identity の要件記載なし。unpackaged の exe で動くかは #310 で確認）",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.transcoding.mediatranscoder",
@@ -59,7 +59,10 @@
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.transcoding.mediatranscoder.preparestreamtranscodeasync",
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.core.mediastreamsource"
       ],
-      "note": "未実装。1 段目で無圧縮のフレームから 1280×720 の H.264 / MP4 を一時ファイルへ書き、2 段目で小さい動画の MP4 へ変換する。2 段目の入力は一時ファイル（メモリ上のストリームを受けないため）。N エディションは `Unsupported`（media-transcode と同じ写像）。unpackaged の exe で動くかは media-transcode と同じく未確認（#310 で確認）"
+      "note": "実装済み（#1015）。1 段目で無圧縮のフレームから 1280×720 の H.264 / MP4 を一時ファイルへ書き、2 段目で小さい動画の MP4 へ変換する。2 段目の入力は一時ファイル（メモリ上のストリームを受けないため）。出力の寸法は OS が決めた値をそのまま出す。成否は OS の完了通知ではなく出力の読み直しで決め、サンプル生成の失敗・`CanTranscode` が false・完了以外の終了は成功にしない。クラスなし・statics なし・`CodecNotFound`（N エディション等）は `Unsupported`（media-transcode と同じ写像）、それ以外は段階別の固定ラベルの失敗（HRESULT・OS の文言は出さない）。期限は 20 秒（実測の根拠が無い仮の値）で、起点は要求を観測した時の単調時計。期限切れは `Cancel()` し、猶予（500 ms）内に止まったと確かめられなければ一時ファイルを消さず未解放として記録し、次の要求は OS を呼ばず失敗にする。一時ファイルは `create_new` で作り、ストリームを閉じてから消す。守る範囲: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、一時ファイル・ストリームの解放。守らない範囲: 所要時間・ビットレート・符号形式の違い、OS が決める出力寸法、複数プロセス。unpackaged の exe で動くかは未確認（#310、実機確認は #1006）",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#1006）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_video_transcode.rs + crates/fandhe-egui-proxy/src/device/video_transcode.rs + crates/fandhe-core/src/screens/video_transcode.rs + crates/fandhe-device/src/video_transcode.rs、Issue #1015"
     },
     "web": {
       "status": "possible",
