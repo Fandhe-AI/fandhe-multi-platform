@@ -112,6 +112,8 @@ final class ScannerDevicesHelper {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final RequestTracker request = new RequestTracker();
     private Req cur;
+    // onDestroy 済みなら、post 済みの begin も開始せず INTERRUPTED で確定する。
+    private boolean destroyed;
 
     ScannerDevicesHelper(ComponentActivity activity) {
         this.activity = activity;
@@ -135,6 +137,7 @@ final class ScannerDevicesHelper {
 
     // MainActivity.onDestroy から UI スレッドで呼ぶ。
     void onDestroy() {
+        destroyed = true;
         Req r = cur;
         if (r != null) {
             abortReq(r, CODE_INTERRUPTED);
@@ -183,6 +186,10 @@ final class ScannerDevicesHelper {
     }
 
     private void begin(Req r) {
+        if (destroyed) {
+            end(r, CODE_INTERRUPTED, null);
+            return;
+        }
         Req prev = cur;
         if (prev != null) {
             // 旧要求の結果は tracker の id 不一致で捨てられる。IO 中なら止めるだけ。
@@ -357,13 +364,16 @@ final class ScannerDevicesHelper {
             }
         }
         // どの I/O 経路の失敗でも、機器が外れていれば切断として報告する（資源解放後に OS 一覧を読み直す）。
-        if (res.code == CODE_FAILED) {
+        // 成功も完了前に確認する。確認自体が失敗したら成功を返さない。
+        if (res.code == CODE_FAILED || res.code == CODE_OK) {
             try {
                 if (!present(um, dev)) {
                     res = new Result(CODE_INTERRUPTED, null);
                 }
             } catch (RuntimeException e) {
-                // 読み直せなければ失敗のまま。
+                if (res.code == CODE_OK) {
+                    res = new Result(CODE_FAILED, null);
+                }
             }
         }
         int abort = r.abort.get();
