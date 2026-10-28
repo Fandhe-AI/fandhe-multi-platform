@@ -7,7 +7,7 @@
   "bundle": "continuous-push",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "`ARSession.currentFrame`（pull、`ar` と同じ 100 ms 間隔）の `ARFrame.capturedImage`（full range の YCbCr 4:2:0）を Rust で RGB へ変換し、長辺 320 以下に縮めて egui の画像（`Node::RgbaImage`）で描く。`ARSCNView` / `ARView` は使わない",
       "perm": "`ar` と同じ。`NSCameraUsageDescription` の文言は「AR 表示」を含み済み",
       "url": [
@@ -16,7 +16,7 @@
         "https://developer.apple.com/documentation/arkit/displaying-an-ar-experience-with-metal",
         "https://developer.apple.com/documentation/arkit/arframe/displaytransformfororientation:viewportsize:"
       ],
-      "note": "未実装。`ar` の `ARSession` と画面（`ar_show`）に映像を足す形で、`ARSession` を 2 本持たない。範囲: 追跡の値が届いている間、同じセッションの最新の映像を長辺 320 ピクセル以下で既存の 3 行（追跡状態・位置・水平面）の上に出す。読み取りは 100 ms の pull に相乗りし（表示は最大 10 fps）、重ねて描くのは既存の数値だけで、3D 物体・水平面の輪郭・アンカーは描かない。映像を出すのは同じ読み取りで `read` が値ありを返したときだけで、形式が二面の YCbCr でない・`currentFrame` が nil・寸法や stride の検査不合格は「映像なし」（失敗にも成功にもしない）。停止・失敗・背景・中断では映像を残さない。`ARSCNView` は SceneKit ごと非推奨で、`ARView`（RealityKit）は `UIView` のため egui の描画面の下に重ねる必要があり、描画面の透過と UIView 階層の変更を伴う設計変更になるので採らない。守る範囲: 1 プロセス内の順序（既存ドライバの 1 本の pull に乗せる）・形式違いや nil を画像に見せかけない・`ARFrame` と pixel buffer を読み取りの呼び出しの中で手放す・古い世代の映像を捨てる。守らない範囲: 映像の向き（`capturedImage` は端末の向きに合わせていない元画像で、回さずに出す）・表示のなめらかさと遅れ・映像と数値が同じフレーム由来であること（1 フレーム程度ずれうる）・色の厳密さと解像度の指定・3D 物体や水平面の描画・複数プロセス。`capturedImage` の定数名が `kCVPixelFormatType_420YpCbCr8BiPlanarFullRange` であること、`currentFrame` を main から読む際のスレッド安全性は公式に記載がなく未確認のため、実装で形式と面の数を確かめ、違えば映像を出さず、読み取りは session を作る main で行う"
+      "note": "実装済み（#1009）。`ar` の `ARSession` と画面（`ar_show`）に映像を足す形で、`ARSession` を 2 本持たない。範囲: 追跡の値が届いている間、同じセッションの最新の映像を長辺 320 ピクセル以下で既存の 3 行（追跡状態・位置・水平面）の上に出す。読み取りは 100 ms の pull に相乗りし（表示は最大 10 fps）、重ねて描くのは既存の数値だけで、3D 物体・水平面の輪郭・アンカーは描かない。映像を出すのは同じ読み取りで `read` が値ありを返したときだけで、形式が二面の YCbCr でない・`currentFrame` が nil・寸法や stride の検査不合格は「映像なし」（失敗にも成功にもしない）。停止・失敗・背景・中断では映像を残さない。`ARSCNView` は SceneKit ごと非推奨で、`ARView`（RealityKit）は `UIView` のため egui の描画面の下に重ねる必要があり、描画面の透過と UIView 階層の変更を伴う設計変更になるので採らない。守る範囲: 1 プロセス内の順序（既存ドライバの 1 本の pull に乗せる）・形式違いや nil を画像に見せかけない・`ARFrame` と pixel buffer を読み取りの呼び出しの中で手放す・古い世代の映像を捨てる。守らない範囲: 映像の向き（`capturedImage` は端末の向きに合わせていない元画像で、回さずに出す）・表示のなめらかさと遅れ・映像と数値が同じフレーム由来であること（1 フレーム程度ずれうる）・色の厳密さと解像度の指定・3D 物体や水平面の描画・複数プロセス。`capturedImage` の定数名が `kCVPixelFormatType_420YpCbCr8BiPlanarFullRange` であること、`currentFrame` を main から読む際のスレッド安全性は公式に記載がなく未確認のため、実装で形式と面の数を確かめ、違えば映像を出さず、読み取りは session を作る main で行う"
     },
     "android": {
       "status": "no",

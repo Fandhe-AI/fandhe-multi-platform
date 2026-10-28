@@ -435,7 +435,7 @@
 //! - `ios/fandhe_ios_pen_stylus.m`（Issue #356、観測専用 `UIGestureRecognizer` による種類・筆圧・傾き）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_pen_stylus.rs` から
 //!   呼ばれる契約）。UIKit は既存のリンクで足りる。
-//! - `ios/fandhe_ios_ar.m`（Issue #308、ARKit の `ARSession` による追跡状態・位置・水平面の数）は
+//! - `ios/fandhe_ios_ar.m`（Issue #308、ARKit の `ARSession` による追跡状態・位置・水平面の数、Issue #1009 でカメラ映像 `capturedImage` の読み取り。CoreVideo を明示リンク）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_ar.rs` から呼ばれる契約）。
 //!   ARKit を追加でリンクする。
 //! - `ios/fandhe_ios_file_watch.m`（Issue #1412、`open(O_EVTONLY)` + `DISPATCH_SOURCE_TYPE_VNODE` による
@@ -2535,6 +2535,7 @@ fn compile_ios_pen_stylus() {
 fn compile_ios_ar() {
     println!("cargo:rerun-if-changed=ios/fandhe_ios_ar.m");
     println!("cargo:rustc-link-lib=framework=ARKit");
+    println!("cargo:rustc-link-lib=framework=CoreVideo");
     cc::Build::new()
         .file("ios/fandhe_ios_ar.m")
         .flag("-fobjc-arc")

@@ -1,6 +1,7 @@
 // AR 表示: iOS 実装（Issue #308、親 #90 の (b-ios)）。ARKit の `ARSession`（ARWorldTrackingConfiguration、
 // 水平面検出）から追跡状態・開始地点からの位置・水平面の数だけを写し、static に保持する（pull 型）。
-// カメラ映像は egui に描かない（A 案）。`ARFrame` は保持せず、数値を写したらすぐ手放す。
+// カメラ映像（Issue #1009、(b-ios)）は `fandhe_ios_ar_read_frame` が `currentFrame.capturedImage` の生の面を
+// Rust へ同期に渡し、RGB 変換と縮小は Rust が行う。`ARFrame` / pixel buffer は呼び出しの中で手放し保持しない。
 //
 // `src/device/ios_ar.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の feature `device` 有効時のみ
 // `cc` コンパイルし ARKit をリンクする。
@@ -13,6 +14,9 @@
 //                                      4 = 許可待ち、5 = 非対応
 //     tracking: 0 NotAvailable / 1 Normal / 10 Initializing / 11 ExcessiveMotion /
 //               12 InsufficientFeatures / 13 Relocalizing / 19 Other
+//   fandhe_ios_ar_read_frame(void *ctx)  main 限定。最新の `capturedImage`（二面 YCbCr 4:2:0 full range）を
+//                                      lock して `fandhe_rust_ar_frame(ctx, ...)` へ同期に 0〜1 回渡す。
+//                                      非 main・停止・背景・nil・形式違い・寸法不整合は何も呼ばない（映像なし）
 //   fandhe_ios_ar_stop()               冪等。保持値と失敗を捨て、セッションを止める
 //   状態が変わった直後に Rust の `fandhe_rust_ar_changed()` を呼ぶ（再描画要求）。背景・前景遷移は
 //   `fandhe_rust_ar_backgrounded` / `fandhe_rust_ar_resumed` で Rust に知らせる。
@@ -37,12 +41,16 @@
 #import <AVFoundation/AVFoundation.h>
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <CoreVideo/CoreVideo.h>
 #import <os/lock.h>
 #include <time.h>
 
 extern void fandhe_rust_ar_changed(void);
 extern void fandhe_rust_ar_backgrounded(void);
 extern void fandhe_rust_ar_resumed(void);
+extern void fandhe_rust_ar_frame(void *ctx, uint32_t width, uint32_t height, const uint8_t *y,
+                                 size_t y_len, size_t y_stride, const uint8_t *uv, size_t uv_len,
+                                 size_t uv_stride);
 
 static os_unfair_lock gLock = OS_UNFAIR_LOCK_INIT;
 static BOOL gActive = NO;
@@ -326,5 +334,38 @@ void fandhe_ios_ar_stop(void) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [old pause];
         });
+    }
+}
+
+void fandhe_ios_ar_read_frame(void *ctx) {
+    if (ctx == NULL || !NSThread.isMainThread) {
+        return;
+    }
+    @autoreleasepool {
+        os_unfair_lock_lock(&gLock);
+        ARSession *s = (gActive && !gBackground && gHasValue) ? gSession : nil;
+        os_unfair_lock_unlock(&gLock);
+        CVPixelBufferRef pb = s.currentFrame.capturedImage;
+        if (pb == NULL ||
+            CVPixelBufferGetPixelFormatType(pb) != kCVPixelFormatType_420YpCbCr8BiPlanarFullRange ||
+            !CVPixelBufferIsPlanar(pb) || CVPixelBufferGetPlaneCount(pb) != 2) {
+            return;
+        }
+        if (CVPixelBufferLockBaseAddress(pb, kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess) {
+            return;
+        }
+        size_t w = CVPixelBufferGetWidthOfPlane(pb, 0);
+        size_t h = CVPixelBufferGetHeightOfPlane(pb, 0);
+        size_t cw = CVPixelBufferGetWidthOfPlane(pb, 1);
+        size_t ch = CVPixelBufferGetHeightOfPlane(pb, 1);
+        const uint8_t *y = CVPixelBufferGetBaseAddressOfPlane(pb, 0);
+        const uint8_t *uv = CVPixelBufferGetBaseAddressOfPlane(pb, 1);
+        size_t ys = CVPixelBufferGetBytesPerRowOfPlane(pb, 0);
+        size_t uvs = CVPixelBufferGetBytesPerRowOfPlane(pb, 1);
+        if (w > 0 && h > 0 && w <= UINT32_MAX && h <= UINT32_MAX && y != NULL && uv != NULL &&
+            cw == (w + 1) / 2 && ch == (h + 1) / 2) {
+            fandhe_rust_ar_frame(ctx, (uint32_t)w, (uint32_t)h, y, ys * h, ys, uv, uvs * ch, uvs);
+        }
+        CVPixelBufferUnlockBaseAddress(pb, kCVPixelBufferLock_ReadOnly);
     }
 }
