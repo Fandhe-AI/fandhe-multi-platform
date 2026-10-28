@@ -16,7 +16,7 @@
 //!
 //! [`implementation`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを埋める
 //! （macOS: `macos_radio_control`（#972）、Windows: `windows_radio_control`（#973）、
-//! Android: `android_radio_control`（#974 が埋めるスタブ））。それ以外（iOS・Linux 等）は
+//! Android: `android_radio_control`（#974））。それ以外（iOS・Linux 等）は
 //! `UnsupportedRadioControl` 固定で、ダミーの成功実装へは倒さない。
 
 use std::sync::mpsc::Receiver;

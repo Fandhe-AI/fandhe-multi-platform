@@ -316,3 +316,6 @@ pub mod web_auth_session_demo;
 
 /// Phase 11 の拡充ループ型サンプル「壁紙・ロック画面の設定」（親 #188、Issue #970）。
 pub mod wallpaper_set;
+
+/// Phase 11 の拡充ループ型サンプル「最近使った項目への登録」（親 #193、Issue #988）。
+pub mod recent_documents_show;

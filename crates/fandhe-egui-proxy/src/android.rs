@@ -303,6 +303,11 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // Issue #970: `wallpaper::bridge::SLOT` も同様に破棄する（#971 が触らずに済むよう本 PR で置く）。
     #[cfg(feature = "device")]
     crate::device::wallpaper::reset_pending_tracking();
+    // Issue #974: `radio_control` の保留中の切り替え要求も同様に破棄する（Java 側 `onDestroy` が
+    // INTERRUPTED で確定し、ここで待機中のワーカーを失敗で戻す。`android_radio_control` の doc 参照）。
+    // Java 側に no-op スタブは置かない（`requestRadioControlSet` を経ないと native は呼ばれない）。
+    #[cfg(feature = "device")]
+    crate::device::android_radio_control::reset_pending_tracking();
     // Issue #1360: `app_badge::bridge::SLOT` も同様に破棄する（`device::app_badge::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::app_badge::reset_pending_tracking();

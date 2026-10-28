@@ -305,8 +305,8 @@ pub mod android_print;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_quick_settings_tile;
-/// Issue #972: Android 向け「無線の状態と切り替え」実装のスタブ（実装は #974）。
-/// `device/radio_control.rs` の Android 経路から呼ばれる。#974 が cfg を変えずに済むよう `any(android, test)`。
+/// Issue #974（骨格は #972）: Android 向け「無線の状態と切り替え」実装（`RadioControlHelper` 経由の JNI）。
+/// `device/radio_control.rs` の Android 経路から呼ばれる。純関数をホストで試すため `any(android, test)`。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_radio_control;
@@ -1311,6 +1311,12 @@ pub mod macos_print;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_radio_control;
+/// Issue #988: macOS 向け「最近使った項目」実装（`macos/fandhe_macos_recent_documents.m` の
+/// `NSDocumentController` を呼ぶ C ABI ラッパー）。`device/recent_documents.rs` の macos 経路から呼ばれる。
+/// 結果コードの写像をホストテストするため test でもコンパイルする。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_recent_documents;
 /// Issue #858: macOS 向け外部ストレージの着脱の実装（`macos/fandhe_macos_removable_storage.m`、NSWorkspace の
 /// 通知と `mountedVolumeURLs` を呼ぶ C ABI ラッパー）。`device/removable_storage.rs` の macOS 経路から呼ばれる。
 /// 生値の写像をホストでテストできるよう cfg は `any(macos, test)`。
@@ -1506,6 +1512,9 @@ pub mod quick_settings_tile;
 /// Phase 11 の拡充ループ（親 #189、Issue #972）: 無線（Wi-Fi・Bluetooth）の状態取得と切り替えの effect ドライバ
 /// （macOS 実装、Windows は #973・Android は #974 が埋めるスタブ。他 OS は `UnsupportedRadioControl` 固定）。
 pub mod radio_control;
+/// Phase 11 の拡充ループ（親 #193、Issue #988）: 「最近使った項目」への登録と読み戻しの effect ドライバ
+/// （macOS・Windows 実装。他 OS は `UnsupportedRecentDocuments` 固定）。
+pub mod recent_documents;
 /// Phase 11 の拡充ループ（親 #175、Issue #858）: 外部ストレージの着脱の effect ドライバ
 /// （macOS・Windows 実装、Android は JNI 実装（#859）。他 OS は `UnsupportedRemovableStorage` 固定）。
 pub mod removable_storage;
@@ -1899,6 +1908,11 @@ pub mod windows_print;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_radio_control;
+/// Issue #989: Windows 向け「最近使った項目」の実装（骨格は #988）。
+/// `device/recent_documents.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_recent_documents;
 /// Issue #858: Windows 向け外部ストレージの着脱の実装（不可視ウィンドウの `WM_DEVICECHANGE` と
 /// `GetLogicalDrives` 系）。`device/removable_storage.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
