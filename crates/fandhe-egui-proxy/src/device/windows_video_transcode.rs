@@ -112,14 +112,14 @@ mod imp {
     /// 同時に 1 本しか OS 操作を走らせない。
     static CALL: Mutex<()> = Mutex::new(());
 
-    /// 完了を確かめられないまま戻った OS 操作の「完了した」旗。完了通知が届いて旗が立つまで
+    /// 完了を確かめられないまま戻った OS 操作の「まだ動いている」判定。すべて false になるまで
     /// 次の要求を受けない。
-    static PENDING: Mutex<Vec<Arc<AtomicBool>>> = Mutex::new(Vec::new());
+    static PENDING: Mutex<Vec<Box<dyn Fn() -> bool + Send>>> = Mutex::new(Vec::new());
 
     /// 終わっていない OS 操作が残っているか（終わったものは外す）。
     fn pending_alive() -> bool {
         let mut g = PENDING.lock().unwrap_or_else(|e| e.into_inner());
-        g.retain(|done| !done.load(Ordering::SeqCst));
+        g.retain(|alive| alive());
         !g.is_empty()
     }
 
@@ -156,14 +156,17 @@ mod imp {
         }
     }
 
-    /// `deadline` まで完了を待つ。期限切れは `cancel()` して猶予だけ待ち、完了が届かなければ
-    /// 旗を `PENDING` に積む。登録失敗は `cancel()` のみ（通知が来ないため追跡できない）。
+    /// `deadline` まで完了を待ち、届いた終了状態（Completed / Error / Canceled）を返す。
+    /// 期限切れは `cancel()` して猶予だけ待ち、完了が届かなければ `PENDING` に積む。
+    /// 通知の登録に失敗したときも `cancel()` し、`status` を猶予だけ見て止まらなければ
+    /// 操作自体を `PENDING` に積む（`status` が `Started` 以外になるまで次の要求を止める）。
     fn wait(
         deadline: Instant,
         label: &'static str,
         register: impl FnOnce(Notify) -> windows::core::Result<()>,
         cancel: impl Fn(),
-    ) -> Result<(), DeviceError> {
+        status: impl Fn() -> windows::core::Result<AsyncStatus> + Send + 'static,
+    ) -> Result<AsyncStatus, DeviceError> {
         let (tx, rx) = mpsc::channel();
         let done = Arc::new(AtomicBool::new(false));
         if register(Notify {
@@ -173,20 +176,47 @@ mod imp {
         .is_err()
         {
             cancel();
+            let running = move || !matches!(status(), Ok(s) if s != AsyncStatus::Started);
+            let grace_end = Instant::now() + CANCEL_GRACE;
+            while running() && Instant::now() < grace_end {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            if running() {
+                PENDING
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push(Box::new(running));
+            }
             return Err(internal(label));
         }
         match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-            Ok(AsyncStatus::Completed) => Ok(()),
-            Ok(_) => Err(internal(label)),
+            Ok(st) => Ok(st),
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 cancel();
                 // OS 側の操作が止まるまで待つ。届かなければ旗を残して次の要求を止める。
                 if rx.recv_timeout(CANCEL_GRACE).is_err() {
-                    PENDING.lock().unwrap_or_else(|e| e.into_inner()).push(done);
+                    PENDING
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .push(Box::new(move || !done.load(Ordering::SeqCst)));
                 }
                 Err(internal(TIMEOUT))
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => Err(internal(label)),
+        }
+    }
+
+    /// 終了状態から結果を決める。Error は `result`（`GetResults()`）が持つ元の HRESULT を
+    /// 同期失敗と同じ `map_err` で写像する。
+    fn settle<T>(
+        st: AsyncStatus,
+        result: windows::core::Result<T>,
+        label: &'static str,
+    ) -> Result<T, DeviceError> {
+        match (st, result) {
+            (AsyncStatus::Completed, Ok(v)) => Ok(v),
+            (AsyncStatus::Completed | AsyncStatus::Error, Err(e)) => Err(map_err(&e, label)),
+            _ => Err(internal(label)),
         }
     }
 
@@ -196,7 +226,8 @@ mod imp {
         label: &'static str,
         op: &IAsyncOperation<T>,
     ) -> Result<T, DeviceError> {
-        wait(
+        let status_op = op.clone();
+        let st = wait(
             deadline,
             label,
             |n| {
@@ -208,8 +239,13 @@ mod imp {
             || {
                 let _ = op.Cancel();
             },
+            move || status_op.Status(),
         )?;
-        op.GetResults().map_err(|e| map_err(&e, label))
+        if matches!(st, AsyncStatus::Completed | AsyncStatus::Error) {
+            settle(st, op.GetResults(), label)
+        } else {
+            Err(internal(label))
+        }
     }
 
     /// 既存パスをファイルストリームとして開く。期限切れ直前に開けていたら閉じる。
@@ -244,7 +280,8 @@ mod imp {
             });
         }
         let action = prepared.TranscodeAsync().map_err(|e| map_err(&e, label))?;
-        wait(
+        let status_action = action.clone();
+        let st = wait(
             deadline,
             label,
             |n| {
@@ -258,7 +295,13 @@ mod imp {
             || {
                 let _ = action.Cancel();
             },
-        )
+            move || status_action.Status(),
+        )?;
+        if matches!(st, AsyncStatus::Completed | AsyncStatus::Error) {
+            settle(st, action.GetResults(), label)
+        } else {
+            Err(internal(label))
+        }
     }
 
     /// 元動画のフレームを順に渡す `MediaStreamSource`。`SOURCE_FRAMES` 枚で EOS にする。
