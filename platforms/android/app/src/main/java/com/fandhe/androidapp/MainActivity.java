@@ -903,6 +903,11 @@ public class MainActivity extends GameActivity {
         printHelper.print(requestId, title, body);
     }
 
+    // 画面の内容の印刷（#1012）も同じヘルパー。画素は ARGB の int[]。
+    void requestPrintImage(long requestId, int[] argb, int width, int height) {
+        printHelper.printImage(requestId, argb, width, height);
+    }
+
     // 画面録画（Issue #1337）。実装は `ScreenCaptureHelper` / `ScreenCaptureService`。
     // Rust の `android_screen_capture.rs` が JNI で呼ぶ。
     private final ScreenCaptureHelper screenCaptureHelper = new ScreenCaptureHelper(this);

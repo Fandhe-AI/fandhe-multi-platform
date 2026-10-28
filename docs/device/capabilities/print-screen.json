@@ -20,7 +20,7 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_print.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_print.m + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_screen_page.rs + crates/fandhe-device/src/print.rs、Issue #1011"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`PrintManager`（API 19+）+ `PrintedPdfDocument` の 1 ページへ `Canvas.drawBitmap`（`androidx.print` の `PrintHelper` は使わない）",
       "perm": "なし",
       "url": [
@@ -28,7 +28,10 @@
         "https://developer.android.com/training/printing/custom-docs",
         "https://developer.android.com/reference/android/graphics/Bitmap"
       ],
-      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは egui-proxy のフレームの読み戻し（`ViewportCommand::Screenshot`）。ダイアログ・結果は `print` の Android 実装を共用する"
+      "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは egui-proxy のフレームの読み戻し（`ViewportCommand::Screenshot`、世代タグで照合、単調時計で 2 秒の期限）。期限切れ・寸法不正は OS を呼ばず「画面を取り込めませんでした」で確定する。取り込んだ画素は ARGB の `int[]` で渡し、`onWrite` の試行ごとに `Bitmap` を作って印刷可能領域に縦横比を保って描き、必ず `recycle` する。ダイアログ・結果の写像（`Submitted` / `Cancelled` / 2 秒後も CREATED のままなら `Unconfirmed` / 失敗）・Activity 再生成時の破棄は `print` と共用する。権限・`<queries>` なし。守らない範囲: 紙に出たか、2 秒を超えてからの状態変化、プリンタ側の失敗、色・解像度の正確さ、OS ごとの余白の差、背景にいる間の取り込み（期限切れで失敗になる）。実機確認は #1001",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#1001）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_print.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/PrintHelper.java + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_screen_page.rs + crates/fandhe-device/src/print.rs、Issue #1012"
     },
     "macos": {
       "status": "done",
