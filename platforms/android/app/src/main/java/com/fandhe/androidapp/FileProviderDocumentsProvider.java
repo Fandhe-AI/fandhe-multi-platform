@@ -140,7 +140,8 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
      * 前回の一覧に居て今は無い名前の URI 権限を失効させ、現在の名前を記録する。document ID は名前だけで
      * 決まるため、削除（Rust 経由を含む）後に同名の別ファイルができても旧権限で読み書きされないようにする。
      * 権限は一覧に出た項目にしか付かないので、一覧・作成・削除・通知の各入口で呼べば取りこぼさない。
-     * 守らない範囲: 削除から次の同期までの短い間。
+     * 同名の再作成は createDocument が作成直後に無条件で失効する。
+     * 守らない範囲: 削除から次の同期までの短い間、Rust 側 put による同名再作成（Rust は直後に notify する）。
      */
     static synchronized void revokeDeleted(Context c) {
         SharedPreferences p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
@@ -266,6 +267,11 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
             try {
                 // O_EXCL 相当。既存は上書きせず次の番号へ。
                 if (new File(d, name).createNewFile()) {
+                    // 直前に同名が削除（Rust 経由を含む）されていても、新規ファイルに旧 URI 権限を残さない。
+                    // 名前集合の差分では「削除→同名再作成」を検出できないため、作成のたびに無条件で失効する。
+                    ctx.revokeUriPermission(
+                            DocumentsContract.buildDocumentUri(authority(ctx), FILE_PREFIX + name),
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                     notifyChanged(ctx);
                     return FILE_PREFIX + name;
                 }
