@@ -138,14 +138,18 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
         return prefs(c).getString(MIME_KEY + name, "application/octet-stream");
     }
 
-    private static void addFile(Context ctx, MatrixCursor c, File f, String name) {
+    /** 世代を確定できないときは行を足さず false（成功 ID を公開しない）。 */
+    private static boolean addFile(Context ctx, MatrixCursor c, File f, String name) {
+        long gen = genOf(ctx, name, true);
+        if (gen == 0) return false;
         c.newRow()
-                .add(Document.COLUMN_DOCUMENT_ID, FILE_PREFIX + genOf(ctx, name, true) + "/" + name)
+                .add(Document.COLUMN_DOCUMENT_ID, FILE_PREFIX + gen + "/" + name)
                 .add(Document.COLUMN_DISPLAY_NAME, name)
                 .add(Document.COLUMN_MIME_TYPE, mimeOf(ctx, name))
                 .add(Document.COLUMN_SIZE, f.length())
                 .add(Document.COLUMN_LAST_MODIFIED, f.lastModified())
                 .add(Document.COLUMN_FLAGS, Document.FLAG_SUPPORTS_WRITE | Document.FLAG_SUPPORTS_DELETE);
+        return true;
     }
 
     private static final String PREFS = "file_provider_known";
@@ -166,7 +170,8 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
         long g = p.getLong(GEN_KEY + name, 0);
         if (g == 0 && create) {
             g = p.getLong(NEXT_KEY, 1);
-            p.edit().putLong(NEXT_KEY, g + 1).putLong(GEN_KEY + name, g).commit();
+            // 保存できなかった採番は無かったことにする（未確定の ID を公開しない）。
+            if (!p.edit().putLong(NEXT_KEY, g + 1).putLong(GEN_KEY + name, g).commit()) return 0;
         }
         return g;
     }
@@ -192,24 +197,26 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
      * 一覧に居ない名前の世代を破棄して権限を失効させ（アプリ外の削除の後始末）、居る名前には世代を割り当てる。
      * 守らない範囲: アプリ外（adb 等）の削除と同名再作成が同期より前に重なる場合。
      */
-    static synchronized void revokeDeleted(Context c) {
+    static synchronized boolean revokeDeleted(Context c) {
         String[] names = dir(c).list();
-        // 一覧が読めなかったときは何も失効しない。
-        if (names == null) return;
+        // 一覧が読めなかったときは何も失効しない。フォルダ未作成（初回）は失効対象なし。
+        if (names == null) return !dir(c).exists();
+        boolean ok = true;
         Set<String> now = new HashSet<>();
         for (String n : names) now.add(n);
         SharedPreferences p = prefs(c);
         for (String key : p.getAll().keySet()) {
             if (!key.startsWith(GEN_KEY)) continue;
             String n = key.substring(GEN_KEY.length());
-            if (!now.contains(n)) revokeName(c, n);
+            if (!now.contains(n) && !revokeName(c, n)) ok = false;
         }
+        return ok;
     }
 
     /** 子の一覧が変わったことを OS のファイル画面へ知らせる。失敗は false。 */
     static boolean notifyChanged(Context c) {
         try {
-            revokeDeleted(c);
+            if (!revokeDeleted(c)) return false;
             c.getContentResolver().notifyChange(
                     DocumentsContract.buildChildDocumentsUri(authority(c), ROOT_DOC_ID), null);
             return true;
@@ -246,7 +253,9 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
                     .add(Document.COLUMN_FLAGS, Document.FLAG_DIR_SUPPORTS_CREATE);
         } else {
             String name = nameOf(documentId);
-            addFile(getContext(), c, regularFile(documentId, name), name);
+            if (!addFile(getContext(), c, regularFile(documentId, name), name)) {
+                throw new FileNotFoundException();
+            }
         }
         return c;
     }
@@ -258,7 +267,7 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
         Context ctx = getContext();
         MatrixCursor c = new MatrixCursor(projection != null ? projection : DOC_COLUMNS);
         File d = dir(ctx);
-        revokeDeleted(ctx);
+        if (!revokeDeleted(ctx)) throw new FileNotFoundException();
         if (d.exists()) {
             String[] names = d.list();
             // 読めないフォルダは 0 件にせず失敗にする。
@@ -271,7 +280,7 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
                     // 項目が 1 件でも読めなければ全体を失敗にする（契約）。
                     throw new FileNotFoundException();
                 }
-                if (validName(n)) addFile(ctx, c, f, n);
+                if (validName(n) && !addFile(ctx, c, f, n)) throw new FileNotFoundException();
             }
         }
         c.setNotificationUri(ctx.getContentResolver(),
@@ -295,6 +304,8 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
         }
     }
 
+    // 世代確認・作成・失効・削除を 1 本の排他にする（static synchronized メソッドと同じクラス monitor）。
+    // 守らない範囲: Rust 側の削除（fileProviderBeforeDelete 経由）とのファイル操作の重なり。
     @Override
     public String createDocument(String parentDocumentId, String mimeType, String displayName)
             throws FileNotFoundException {
@@ -303,27 +314,34 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
             throw new FileNotFoundException();
         }
         Context ctx = getContext();
-        File d = dir(ctx);
-        revokeDeleted(ctx);
-        if (!d.isDirectory() && !d.mkdirs() && !d.isDirectory()) throw new FileNotFoundException();
-        for (int n = 0; n <= MAX_DEDUP; n++) {
-            String name = dedupName(displayName, n);
-            if (!validName(name)) throw new FileNotFoundException();
-            try {
-                // O_EXCL 相当。既存は上書きせず次の番号へ。
-                if (new File(d, name).createNewFile()) {
-                    // 新規ファイルは必ず新しい世代の ID にする（旧 ID の権限・型を引き継がない）。
-                    revokeName(ctx, name);
-                    if (mimeType != null && !"application/octet-stream".equals(mimeType)) {
-                        prefs(ctx).edit().putString(MIME_KEY + name, mimeType).commit();
-                    }
-                    // 採番を確定してから通知する。通知後に読み直すと 0（未採番）を返しうる。
-                    long gen = genOf(ctx, name, true);
-                    notifyChanged(ctx);
-                    return FILE_PREFIX + gen + "/" + name;
+        synchronized (FileProviderDocumentsProvider.class) {
+            File d = dir(ctx);
+            if (!revokeDeleted(ctx)) throw new FileNotFoundException();
+            if (!d.isDirectory() && !d.mkdirs() && !d.isDirectory()) throw new FileNotFoundException();
+            for (int n = 0; n <= MAX_DEDUP; n++) {
+                String name = dedupName(displayName, n);
+                if (!validName(name)) throw new FileNotFoundException();
+                File f = new File(d, name);
+                try {
+                    // O_EXCL 相当。既存は上書きせず次の番号へ。
+                    if (!f.createNewFile()) continue;
+                } catch (IOException e) {
+                    throw new FileNotFoundException();
                 }
-            } catch (IOException e) {
-                throw new FileNotFoundException();
+                // 新規ファイルは必ず新しい世代の ID にする（旧 ID の権限・型を引き継がない）。
+                boolean ok = revokeName(ctx, name);
+                if (ok && mimeType != null && !"application/octet-stream".equals(mimeType)) {
+                    ok = prefs(ctx).edit().putString(MIME_KEY + name, mimeType).commit();
+                }
+                long gen = ok ? genOf(ctx, name, true) : 0;
+                if (gen == 0) {
+                    // 確定できなかった作成は巻き戻す（成功 ID を返さない）。
+                    f.delete();
+                    revokeName(ctx, name);
+                    throw new FileNotFoundException();
+                }
+                notifyChanged(ctx);
+                return FILE_PREFIX + gen + "/" + name;
             }
         }
         throw new FileNotFoundException();
@@ -331,10 +349,14 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
 
     @Override
     public void deleteDocument(String documentId) throws FileNotFoundException {
-        String name = nameOf(documentId);
-        File f = regularFile(documentId, name);
-        revokeName(getContext(), name);
-        if (!f.delete()) throw new FileNotFoundException();
-        notifyChanged(getContext());
+        Context ctx = getContext();
+        synchronized (FileProviderDocumentsProvider.class) {
+            String name = nameOf(documentId);
+            File f = regularFile(documentId, name);
+            // 失効（世代の破棄）が確定しなければ消さない。
+            if (!revokeName(ctx, name)) throw new FileNotFoundException();
+            if (!f.delete()) throw new FileNotFoundException();
+        }
+        notifyChanged(ctx);
     }
 }
