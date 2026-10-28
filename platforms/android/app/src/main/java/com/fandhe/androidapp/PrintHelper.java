@@ -1,8 +1,11 @@
 package com.fandhe.androidapp;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.pdf.PdfDocument;
 import android.os.Bundle;
@@ -37,6 +40,9 @@ import java.io.IOException;
 // ライフサイクル: `request` はインスタンスフィールド。`onDestroy` で結果は届けず破棄し、Rust 側の
 // `reset_pending_tracking()` と id 照合で旧要求を捨てる。破棄後に届く `onFinish` は `complete` が
 // false になり何も送らない。
+// 画面の内容の印刷（#1012）は `printImage`。ARGB の int[] を受け、`onWrite` の試行ごとに Bitmap を作って
+// 印刷可能領域へ縦横比を保って描き、必ず recycle する（色は不透明前提。色の正確さは守らない範囲）。
+// ダイアログ・結果の写像・ライフサイクルは文章の印刷と共用する。画素・例外はログに出さない。
 // 守る範囲: 1 プロセス内の要求順序・取り消しを失敗にしないこと・嘘の成功の禁止・資源の解放。
 // 守らない範囲: 紙に出たか、2 秒を超えてからの状態変化、プリンタ側の失敗。
 // 権限・`<queries>` は宣言しない。ジョブ名は固定で、見出し・本文・例外はログにも OS のキューにも出さない。
@@ -66,10 +72,21 @@ final class PrintHelper {
         this.activity = activity;
     }
 
+    // 1 ページの描画を差し替える（文章 / 画像）。
+    private interface PageDrawer {
+        void draw(PdfDocument.Page page);
+    }
+
     // JNI スレッドから呼ばれる。
     void print(long id, String title, String body) {
         request.track(id);
-        activity.runOnUiThread(() -> start(id, title, body));
+        activity.runOnUiThread(() -> start(id, page -> draw(page, title, body)));
+    }
+
+    // JNI スレッドから呼ばれる。
+    void printImage(long id, int[] argb, int width, int height) {
+        request.track(id);
+        activity.runOnUiThread(() -> start(id, page -> drawImage(page, argb, width, height)));
     }
 
     // UI スレッド。
@@ -86,7 +103,7 @@ final class PrintHelper {
         }
     }
 
-    private void start(long id, String title, String body) {
+    private void start(long id, PageDrawer drawer) {
         // 差し替え済みの旧要求は何もしない。
         if (request.current() != id) {
             return;
@@ -104,7 +121,7 @@ final class PrintHelper {
         writeFailed = false;
         finishedAt = 0L;
         try {
-            job = manager.print("fandhe", new Adapter(id, title, body), null);
+            job = manager.print("fandhe", new Adapter(id, drawer), null);
         } catch (RuntimeException e) {
             finish(id, RESULT_PRESENT_FAILED);
             return;
@@ -157,17 +174,32 @@ final class PrintHelper {
         }
     }
 
+    // 画像を印刷可能領域へ縦横比を保って中央寄せで収める。Bitmap はこの呼び出しの中だけで生かす。
+    private static void drawImage(PdfDocument.Page page, int[] argb, int w, int h) {
+        Bitmap bmp = Bitmap.createBitmap(argb, w, h, Bitmap.Config.ARGB_8888);
+        try {
+            Rect area = page.getInfo().getContentRect();
+            float s = Math.min(area.width() / (float) w, area.height() / (float) h);
+            float dw = w * s;
+            float dh = h * s;
+            float left = area.left + (area.width() - dw) / 2f;
+            float top = area.top + (area.height() - dh) / 2f;
+            page.getCanvas().drawBitmap(bmp, null, new RectF(left, top, left + dw, top + dh),
+                    new Paint(Paint.FILTER_BITMAP_FLAG));
+        } finally {
+            bmp.recycle();
+        }
+    }
+
     // UI スレッドで呼ばれる（コールバックのハンドラ既定）。
     private final class Adapter extends PrintDocumentAdapter {
         private final long id;
-        private final String title;
-        private final String body;
+        private PageDrawer drawer;
         private PrintAttributes attrs;
 
-        Adapter(long id, String title, String body) {
+        Adapter(long id, PageDrawer drawer) {
             this.id = id;
-            this.title = title;
-            this.body = body;
+            this.drawer = drawer;
         }
 
         @Override
@@ -194,15 +226,21 @@ final class PrintHelper {
             }
             // 試行ごとに状態を作り直す。
             writeFailed = false;
+            PageDrawer d = drawer;
+            if (d == null) {
+                writeFailed = true;
+                callback.onWriteFailed(null);
+                return;
+            }
             PrintedPdfDocument pdf = new PrintedPdfDocument(activity, attrs);
             try {
                 PdfDocument.Page page = pdf.startPage(0);
-                draw(page, title, body);
+                d.draw(page);
                 pdf.finishPage(page);
                 // destination の fd は framework の持ち物なので閉じない（公式サンプルと同じ）。
                 pdf.writeTo(new FileOutputStream(destination.getFileDescriptor()));
                 callback.onWriteFinished(new PageRange[] {PageRange.ALL_PAGES});
-            } catch (IOException | RuntimeException e) {
+            } catch (IOException | RuntimeException | OutOfMemoryError e) {
                 writeFailed = true;
                 callback.onWriteFailed(null);
             } finally {
@@ -213,6 +251,8 @@ final class PrintHelper {
         @Override
         public void onFinish() {
             finishedAt = SystemClock.elapsedRealtime();
+            // 印刷フレームワークが adapter を握り続けても画素配列を解放させる。
+            drawer = null;
             evaluate(id);
         }
     }
