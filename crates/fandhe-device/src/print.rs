@@ -71,6 +71,9 @@ use crate::DeviceError;
 const TITLE_MAX_CHARS: usize = 64;
 const BODY_MAX_LINES: usize = 20;
 const LINE_MAX_CHARS: usize = 80;
+/// 画面の画像の一辺の上限（画素）。最悪でも 8192 x 8192 x 4 = 256MB で、読み戻しは
+/// ウィンドウの大きさなので実際の値は小さい。超える寸法は取り込み失敗として扱う。
+pub const IMAGE_MAX_SIDE: u32 = 8192;
 
 /// 印刷の結果。`Submitted` でも紙に出たとは限らない（モジュール doc）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,10 +134,110 @@ impl PrintRequest {
     }
 }
 
+/// 検査済みの画面の画像（RGBA、行は詰めて上から下）。[`PrintImage::new`] でのみ作れる。
+///
+/// 画面の内容の印刷（対応表 `print-screen`）で、egui のフレームの読み戻しを OS の印刷へ渡す入れ物。
+/// 寸法と長さの不変条件（各辺 1〜[`IMAGE_MAX_SIDE`]、`rgba.len() == width * height * 4`）が
+/// OS 呼び出し（FFI のポインタと長さ）の安全の根拠になる。画素はログへ出さない。
+#[derive(Clone, PartialEq, Eq)]
+pub struct PrintImage {
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+}
+
+impl std::fmt::Debug for PrintImage {
+    // 画素を書き出さない（security.md A09）。
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PrintImage({}x{})", self.width, self.height)
+    }
+}
+
+impl PrintImage {
+    /// 幅・高さは各 1〜[`IMAGE_MAX_SIDE`]、`rgba.len()` は `width * height * 4` と一致すること。
+    /// 違反は `Internal("print capture")`（画面を取り込めない扱い。ダイアログを出す前に確定する）。
+    pub fn new(rgba: Vec<u8>, width: u32, height: u32) -> Result<Self, DeviceError> {
+        let side_ok = |v: u32| (1..=IMAGE_MAX_SIDE).contains(&v);
+        let expected = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|n| n.checked_mul(4));
+        if !side_ok(width) || !side_ok(height) || expected != Some(rgba.len()) {
+            return Err(DeviceError::Internal("print capture"));
+        }
+        Ok(Self {
+            rgba,
+            width,
+            height,
+        })
+    }
+
+    /// RGBA の画素列。
+    pub fn rgba(&self) -> &[u8] {
+        &self.rgba
+    }
+
+    /// 幅（画素）。
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    /// 高さ（画素）。
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// BGRA 並びの画素列（Windows の 32bpp top-down DIB 用）。
+    pub fn to_bgra(&self) -> Vec<u8> {
+        let mut v = self.rgba.clone();
+        // 長さは 4 の倍数（不変条件）なので端数は出ない。
+        for px in v.as_chunks_mut::<4>().0 {
+            px.swap(0, 2);
+        }
+        v
+    }
+
+    /// ARGB の `i32` 列（Android `Bitmap.setPixels` 用）。
+    pub fn to_argb(&self) -> Vec<i32> {
+        self.rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|p| i32::from_be_bytes([p[3], p[0], p[1], p[2]]))
+            .collect()
+    }
+}
+
+/// 縦横比を保ち、拡大・縮小とも中央寄せで `area_w x area_h` の領域に収めた矩形
+/// `(x, y, w, h)` を返す。領域・元の寸法が 0 以下なら `None`。収めた幅・高さは 1 以上かつ領域以内。
+pub fn fit_rect(src_w: i32, src_h: i32, area_w: i32, area_h: i32) -> Option<(i32, i32, i32, i32)> {
+    if src_w <= 0 || src_h <= 0 || area_w <= 0 || area_h <= 0 {
+        return None;
+    }
+    let (sw, sh, aw, ah) = (src_w as i64, src_h as i64, area_w as i64, area_h as i64);
+    // 幅基準で収まるか（aw / sw <= ah / sh）を交差乗算で判定する。
+    let (w, h) = if aw * sh <= ah * sw {
+        (aw, (aw * sh / sw).max(1))
+    } else {
+        ((ah * sw / sh).max(1), ah)
+    };
+    Some((
+        ((aw - w) / 2) as i32,
+        ((ah - h) / 2) as i32,
+        w as i32,
+        h as i32,
+    ))
+}
+
 /// 印刷ダイアログを開く。OS ごとの実装は `fandhe-egui-proxy` / `fandhe-web-dom` が持つ。
 pub trait Print: Send + Sync {
     /// 印刷ダイアログを開く。結果の意味と OS ごとの到達値はモジュール doc。
     fn print(&self, req: &PrintRequest) -> Result<PrintOutcome, DeviceError>;
+
+    /// 画面の画像を 1 ページに収めて印刷ダイアログへ渡す（対応表 `print-screen`）。結果の意味は
+    /// [`Print::print`] と同じ。既定は非対応で、対応する OS だけが上書きする。
+    fn print_image(&self, _img: &PrintImage) -> Result<PrintOutcome, DeviceError> {
+        Err(DeviceError::Unsupported("print"))
+    }
 }
 
 /// 非対応 OS 用。常に `Unsupported` を返し、成功を作らない。
@@ -203,6 +306,53 @@ mod tests {
         let req = PrintRequest::new("t", "x").unwrap();
         assert!(matches!(
             UnsupportedPrint.print(&req),
+            Err(DeviceError::Unsupported("print"))
+        ));
+    }
+
+    #[test]
+    fn image_new_checks_bounds() {
+        assert!(PrintImage::new(vec![0; 4], 1, 1).is_ok());
+        for (len, w, h) in [(0, 0, 1), (0, 1, 0), (4, 1, 2), (8, 1, 1), (0, 8193, 1)] {
+            assert!(
+                matches!(
+                    PrintImage::new(vec![0; len], w, h),
+                    Err(DeviceError::Internal("print capture"))
+                ),
+                "{len} {w} {h}"
+            );
+        }
+        // 上限ちょうどは通る。
+        assert!(PrintImage::new(vec![0; 8192 * 8192 * 4], 8192, 8192).is_ok());
+        // 乗算の桁あふれ・巨大寸法は拒否する。
+        assert!(PrintImage::new(vec![], u32::MAX, u32::MAX).is_err());
+    }
+
+    #[test]
+    fn image_conversions() {
+        let img = PrintImage::new(vec![1, 2, 3, 4], 1, 1).unwrap();
+        assert_eq!(img.to_bgra(), vec![3, 2, 1, 4]);
+        assert_eq!(img.to_argb(), vec![i32::from_be_bytes([4, 1, 2, 3])]);
+        assert_eq!(format!("{img:?}"), "PrintImage(1x1)");
+    }
+
+    #[test]
+    fn fit_rect_keeps_aspect_and_centers() {
+        assert_eq!(fit_rect(200, 100, 100, 200), Some((0, 75, 100, 50)));
+        assert_eq!(fit_rect(100, 200, 200, 100), Some((75, 0, 50, 100)));
+        assert_eq!(fit_rect(10, 10, 100, 100), Some((0, 0, 100, 100)));
+        assert_eq!(fit_rect(4, 3, 400, 300), Some((0, 0, 400, 300)));
+        assert_eq!(fit_rect(10000, 1, 100, 100).map(|r| r.3), Some(1));
+        for (a, b, c, d) in [(0, 1, 1, 1), (1, 0, 1, 1), (1, 1, 0, 1), (1, 1, 1, -1)] {
+            assert_eq!(fit_rect(a, b, c, d), None);
+        }
+    }
+
+    #[test]
+    fn unsupported_image_is_never_success() {
+        let img = PrintImage::new(vec![0; 4], 1, 1).unwrap();
+        assert!(matches!(
+            UnsupportedPrint.print_image(&img),
             Err(DeviceError::Unsupported("print"))
         ));
     }

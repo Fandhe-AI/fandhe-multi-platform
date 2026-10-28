@@ -52,6 +52,17 @@ pub(crate) fn begin_print(_request_id: u64, _req: &PrintRequest) -> Result<(), D
     Err(DeviceError::Unsupported("print"))
 }
 
+/// 画面の画像（print-screen、親 #341）の印刷シート表示を依頼する。**スタブ**: 実装は b-ios（#1011）が
+/// このモジュールだけを書き換えて埋める（dispatch は `device/print.rs` で最終形）。それまでは
+/// 非対応を返し、成功を作らない。
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub(crate) fn begin_print_image(
+    _request_id: u64,
+    _img: &fandhe_device::print::PrintImage,
+) -> Result<(), DeviceError> {
+    Err(DeviceError::Unsupported("print"))
+}
+
 /// `.m` 側の completionHandler から呼ばれる。コードの解釈は `print::outcome_from_ios_code`。
 /// 結果を置いた直後に次フレームを起こす（egui は入力が無いと描画せず、画面が処理中のまま止まるため）。
 #[cfg(target_os = "ios")]

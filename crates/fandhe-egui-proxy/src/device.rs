@@ -1520,7 +1520,8 @@ pub mod picture_in_picture;
 pub mod power_state;
 /// Phase 11 の拡充ループ（親 #94、Issue #325）: 印刷ダイアログの effect ドライバ（macOS 実装、
 /// Windows / iOS / Android 実装、他 OS は `UnsupportedPrint` 固定。
-/// Web は `fandhe-web-dom`）。
+/// Web は `fandhe-web-dom`）。画面の内容の印刷（print-screen、親 #341、Issue #1010）の取り込み段と
+/// effect ドライバも同居する（macOS / Windows 実装、iOS / Android はスタブ）。
 pub mod print;
 /// Phase 11 の拡充ループ（親 #139、Issue #719）: クイック設定タイル・コントロールの effect ドライバ
 /// （macOS は App Group の回数ファイル、Android は SharedPreferences の回数、他 OS は `UnsupportedQuickSettingsTile` 固定）。

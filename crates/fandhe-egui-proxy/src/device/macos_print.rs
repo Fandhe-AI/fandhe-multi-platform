@@ -4,6 +4,9 @@
 //! `// SAFETY:` で契約を明記する。`device/print.rs` の macOS 経路から呼ばれ、契約は
 //! `fandhe_device::print`。見出し・本文は `PrintRequest` で検査済みのものだけを渡す。
 //!
+//! 画面の内容の印刷（print-screen、Issue #1010）は `fandhe_macos_print_image`（`NSBitmapImageRep` を
+//! `NSImageView` に入れ、縦横比を保って印刷可能領域に収める）。パネルと結果コードは文章と共用する。
+//!
 //! 結果コードの写像 [`outcome_from_code`] はホストでもテストできるようモジュールは
 //! `cfg(any(macos, test))`。
 //!
@@ -43,6 +46,21 @@ mod ffi {
         ) -> i32;
     }
 
+    // SAFETY: 上と同じ。`.m` は rgba を呼び出し中だけ読み、`len` を再検査する。
+    #[allow(unsafe_code)]
+    extern "C" {
+        fn fandhe_macos_print_image(rgba: *const u8, len: usize, width: u32, height: u32) -> i32;
+    }
+
+    /// 画面の画像を渡して結果コードを返す。
+    #[allow(unsafe_code)]
+    pub(super) fn print_image(img: &fandhe_device::print::PrintImage) -> i32 {
+        let rgba = img.rgba();
+        // SAFETY: `rgba` は `PrintImage` の不変条件（`len == width * height * 4`、各辺 1〜8192）を満たし、
+        // この呼び出しの間だけ生きる。`.m` はポインタを呼び出し中にだけ読み、保持しない。
+        unsafe { fandhe_macos_print_image(rgba.as_ptr(), rgba.len(), img.width(), img.height()) }
+    }
+
     /// 結果コードを返す。`CString` を作れなければ 2（提示不可と同じ扱い。検査で NUL は
     /// 弾かれるため到達しない想定）。
     #[allow(unsafe_code)]
@@ -63,6 +81,13 @@ struct MacPrint;
 impl fandhe_device::print::Print for MacPrint {
     fn print(&self, req: &fandhe_device::print::PrintRequest) -> Result<PrintOutcome, DeviceError> {
         outcome_from_code(ffi::print_text(req.title(), req.body()))
+    }
+
+    fn print_image(
+        &self,
+        img: &fandhe_device::print::PrintImage,
+    ) -> Result<PrintOutcome, DeviceError> {
+        outcome_from_code(ffi::print_image(img))
     }
 }
 

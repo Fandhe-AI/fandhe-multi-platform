@@ -144,6 +144,34 @@ impl<S> CompletionSender<S> {
         (size.x, size.y)
     }
 
+    /// 次のフレームの描画を `tag` 付きで読み戻すよう依頼する（`ViewportCommand::Screenshot`、
+    /// egui 0.33 は要求の次のフレームを撮る）。画面の印刷（`device/print.rs` の print-screen 経路）
+    /// 専用で、タグは [`Self::tagged_screenshot`] で自分の読み戻しだけを選ぶために使う。
+    /// `egui_context()` を流用しないのは、ctx を丸ごと渡す口を増やさないため。
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "ios",
+        target_os = "android"
+    ))]
+    pub(crate) fn request_screenshot(&self, tag: u64) {
+        self.ctx
+            .send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::new(
+                ScreenshotTag(tag),
+            )));
+        self.ctx.request_repaint();
+    }
+
+    /// このフレームに届いた、`tag` 付きの読み戻し（[`Self::request_screenshot`] の応答）を返す。
+    /// 他のタグ・タグ無し（自動撮影）の読み戻しは返さない。
+    #[cfg_attr(
+        not(all(feature = "device", not(target_arch = "wasm32"))),
+        allow(dead_code)
+    )]
+    pub(crate) fn tagged_screenshot(&self, tag: u64) -> Option<Arc<egui::ColorImage>> {
+        self.ctx.input(|i| find_tagged_screenshot(&i.events, tag))
+    }
+
     /// ポインタの主ボタン（左クリック/タップ）がこのフレームで押下中か
     /// （`egui::PointerState::primary_down` への薄い委譲）。Issue #912「文字サイズ追従」の
     /// effect ドライバ（`device/text_scale.rs::drive`）専用。スライダーのドラッグ中は
@@ -317,6 +345,35 @@ pub(crate) fn canvas_released_id(widget_raw: u64) -> egui::Id {
 )]
 fn text_scale_last_applied_id() -> egui::Id {
     egui::Id::new("fandhe_egui_proxy_text_scale_last_applied")
+}
+
+/// 画面の印刷が読み戻しに付けるタグ（`UserData` の中身）。自動撮影の `UserData::default()` と
+/// 取り違えないための私有の型。
+#[cfg_attr(
+    not(all(feature = "device", not(target_arch = "wasm32"))),
+    allow(dead_code)
+)]
+struct ScreenshotTag(u64);
+
+/// `events` から、タグが `tag` に一致する `Event::Screenshot` の画像を探す純関数。
+#[cfg_attr(
+    not(all(feature = "device", not(target_arch = "wasm32"))),
+    allow(dead_code)
+)]
+fn find_tagged_screenshot(events: &[egui::Event], tag: u64) -> Option<Arc<egui::ColorImage>> {
+    events.iter().find_map(|e| match e {
+        egui::Event::Screenshot {
+            user_data, image, ..
+        } if user_data
+            .data
+            .as_ref()
+            .and_then(|d| d.downcast_ref::<ScreenshotTag>())
+            .is_some_and(|t| t.0 == tag) =>
+        {
+            Some(image.clone())
+        }
+        _ => None,
+    })
 }
 
 /// キューに溜まった完了クロージャを非ブロッキングで取り出し、`store.apply` へ順に渡す
@@ -998,5 +1055,29 @@ mod inset_margin_tests {
     fn non_positive_pixels_per_point_falls_back_to_one() {
         let margin = insets_px_to_margin((0.0, 24.0, 0.0, 0.0), 0.0);
         assert_eq!(margin.top, 24);
+    }
+}
+
+#[cfg(test)]
+mod tagged_screenshot_tests {
+    use super::*;
+
+    fn shot(user_data: egui::UserData) -> egui::Event {
+        egui::Event::Screenshot {
+            viewport_id: egui::ViewportId::ROOT,
+            user_data,
+            image: Arc::new(egui::ColorImage::filled([1, 1], egui::Color32::RED)),
+        }
+    }
+
+    #[test]
+    fn only_matching_tag_is_returned() {
+        let events = vec![
+            shot(egui::UserData::default()),
+            shot(egui::UserData::new(ScreenshotTag(1))),
+        ];
+        assert!(find_tagged_screenshot(&events, 2).is_none());
+        assert!(find_tagged_screenshot(&events[..1], 1).is_none());
+        assert!(find_tagged_screenshot(&events, 1).is_some());
     }
 }
