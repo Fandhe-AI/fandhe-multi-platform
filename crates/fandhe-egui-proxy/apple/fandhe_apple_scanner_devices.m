@@ -1,7 +1,8 @@
 // Phase 11 の拡充ループ（親 #192）型サンプル「接続したスキャナー・カメラ機器からの取り込み」:
 // macOS 実装（Issue #981）。iOS 実装（#982）と共用できるよう、ImageCaptureCore / ImageIO /
-// Foundation だけを使い UIKit / AppKit に触れない。iOS の許可（`requestContentsAuthorization`）は
-// #982 が `#if TARGET_OS_IOS` の区画へ足す。
+// Foundation だけを使い AppKit に触れない。iOS 実装（Issue #982）の区画（`#if TARGET_OS_IOS`）だけが、
+// 取り込みの許可（`requestContentsAuthorization`）と背景遷移の検知のために UIKit の通知名と
+// `applicationState` を使う。
 //
 // `crates/fandhe-egui-proxy/src/device/apple_scanner_devices.rs` から C ABI 経由で呼ばれる。
 // `build.rs` が macOS・iOS ターゲットの feature `device` 有効時に `cc` コンパイルする
@@ -34,6 +35,9 @@
 
 #import <Foundation/Foundation.h>
 #import <ImageCaptureCore/ImageCaptureCore.h>
+#if TARGET_OS_IOS
+#import <UIKit/UIKit.h>
+#endif
 #import <ImageIO/ImageIO.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
@@ -68,6 +72,11 @@ static const int kFandheMaxPixel = 2048;
 @property(nonatomic) BOOL discoveryEnded;
 @property(atomic) BOOL picked;
 @property(nonatomic) uint32_t found;
+#if TARGET_OS_IOS
+// 背景遷移の通知の登録トークン（teardown まで握り、全経路で解除する）。main queue でだけ読み書きする。
+@property(nonatomic, strong, nullable) id bgToken;
+#endif
+@property(nonatomic) uint64_t discoveryMs;
 // 以下は `lock` の内側でだけ読み書きする。
 @property(nonatomic) BOOL done;
 // 開始要求が未完了（completion 待ち）。teardown が閉鎖を開始完了まで遅らせる根拠。
@@ -136,7 +145,8 @@ static const int kFandheMaxPixel = 2048;
     [self finish:9 os:(int64_t)(error != nil ? error.code : 0) jpeg:nil];
 }
 
-// main queue: ブラウザを開始し、探索窓の終わりを予約する。後片付けが先に走っていたら何もしない。
+// main queue: 探索を始める。macOS はすぐブラウザを動かす。iOS は先に背景遷移の購読と
+// 取り込みの許可を確かめる。後片付けが先に走っていたら何もしない。
 - (void)startWithDiscoveryMs:(uint64_t)discoveryMs {
     if ([self isDone]) {
         return;
@@ -146,8 +156,70 @@ static const int kFandheMaxPixel = 2048;
     browser.browsedDeviceTypeMask =
         (ICDeviceTypeMask)(ICDeviceTypeMaskCamera | ICDeviceLocationTypeMaskLocal);
     self.browser = browser;
-    [browser start];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(discoveryMs * NSEC_PER_MSEC)),
+    self.discoveryMs = discoveryMs;
+#if TARGET_OS_IOS
+    // 背景遷移は DidEnterBackground だけを見る。許可ダイアログの表示中は WillResignActive が来る
+    // （Inactive になるだけ）ので、正常な許可を中断扱いにしないため購読しない。
+    __weak FandheScanState *weakSelf = self;
+    self.bgToken = [[NSNotificationCenter defaultCenter]
+        addObserverForName:UIApplicationDidEnterBackgroundNotification
+                    object:nil
+                     queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification *_Nonnull __unused note) {
+                    [weakSelf finish:7 os:0 jpeg:nil];
+                }];
+    // 購読の前に背景へ移っていた分を落とさない。
+    if ([UIApplication sharedApplication].applicationState == UIApplicationStateBackground) {
+        [self finish:7 os:0 jpeg:nil];
+        return;
+    }
+    // 許可は OS のステータスを正にする。許可が無いと機器が列挙されるかは未確認のため、先に確かめる。
+    // ステータスは NSString 定数（switch できない）。
+    ICAuthorizationStatus authStatus = browser.contentsAuthorizationStatus;
+    if ([authStatus isEqualToString:ICAuthorizationStatusAuthorized]) {
+        [self beginBrowsing];
+    } else if ([authStatus isEqualToString:ICAuthorizationStatusDenied] ||
+               [authStatus isEqualToString:ICAuthorizationStatusRestricted]) {
+        [self finish:5 os:0 jpeg:nil];
+    } else if ([authStatus isEqualToString:ICAuthorizationStatusNotDetermined]) {
+        [browser requestContentsAuthorizationWithCompletion:^(ICAuthorizationStatus status) {
+            (void)status;
+            // completion のキューは決まっていないため main へ移し、OS のステータスを読み直す。
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self authorizationResolved];
+            });
+        }];
+    } else {
+        // 未知の値は成功にしない。
+        [self finish:9 os:0 jpeg:nil];
+    }
+#else
+    [self beginBrowsing];
+#endif
+}
+
+#if TARGET_OS_IOS
+// main queue: 許可ダイアログの結果。背景遷移・期限切れの後に届いた許可は捨てる。
+// completion の引数ではなく OS のステータスを読み直して決める。閉じられた場合も拒否として扱う。
+- (void)authorizationResolved {
+    if ([self isDone]) {
+        return;
+    }
+    if ([self.browser.contentsAuthorizationStatus isEqualToString:ICAuthorizationStatusAuthorized]) {
+        [self beginBrowsing];
+    } else {
+        [self finish:5 os:0 jpeg:nil];
+    }
+}
+#endif
+
+// main queue: ブラウザを開始し、探索窓の終わりを予約する（探索窓は許可が決まってから数える）。
+- (void)beginBrowsing {
+    if ([self isDone]) {
+        return;
+    }
+    [self.browser start];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(self.discoveryMs * NSEC_PER_MSEC)),
                    dispatch_get_main_queue(), ^{
                        [self endDiscovery];
                    });
@@ -407,11 +479,20 @@ static NSObject *gFandheUnclosedLock = nil;
 
 // main queue: 後片付け。期限切れを含む全経路で呼ぶ。
 - (void)teardown {
+#if TARGET_OS_IOS
+    // 背景遷移の購読を全経路で解除する。
+    if (self.bgToken != nil) {
+        [[NSNotificationCenter defaultCenter] removeObserver:self.bgToken];
+        self.bgToken = nil;
+    }
+#endif
     self.browser.delegate = nil;
     [self.browser stop];
     ICCameraDevice *device = self.device;
     if (device != nil) {
 #if TARGET_OS_OSX
+        // iOS には `cancelDownload` が無い（SDK で unavailable）。iOS はセッションを閉じて止め、
+        // 後片付けの後に届いた完了は `downloadDone:` が一時ディレクトリを消すだけにする。
         if (self.downloading) {
             [device cancelDownload];
         }
@@ -467,6 +548,7 @@ static NSObject *gFandheUnclosedLock = nil;
 }
 
 #if TARGET_OS_OSX
+// iOS には無い delegate のため、iOS の探索は毎回探索窓いっぱいまで待つ。
 // ローカル（USB）機器の列挙が済んだ。0 台でも呼ばれるので、探索窓を待たずに打ち切れる。
 - (void)deviceBrowserDidEnumerateLocalDevices:(ICDeviceBrowser *)browser {
     [self endDiscovery];

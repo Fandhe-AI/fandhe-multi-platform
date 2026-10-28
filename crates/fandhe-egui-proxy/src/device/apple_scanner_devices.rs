@@ -1,5 +1,5 @@
-//! macOS / iOS 共用のスキャナー・カメラ機器からの取り込み（Issue #981 macOS、iOS は #982）。
-//! `device/scanner_devices.rs` の macOS 経路（iOS は `ios_scanner_devices` 経由）から呼ばれ、
+//! macOS / iOS 共用のスキャナー・カメラ機器からの取り込み（Issue #981 macOS、#982 iOS）。
+//! `device/scanner_devices.rs` の macOS 経路（iOS は `ios_scanner_devices` 経由で委譲）から呼ばれ、
 //! `apple/fandhe_apple_scanner_devices.m`（ImageCaptureCore で USB 接続のカメラ機器を探し、最新の
 //! 画像 1 枚を一時ディレクトリへ取り込んで ImageIO で長辺 2048 画素以下の JPEG にする）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。バイト列は `.m` が戻る直前に呼び出しスレッド自身が
@@ -138,7 +138,6 @@ mod os {
 }
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-#[cfg_attr(target_os = "ios", allow(unused_imports))] // iOS は #982 が使う
 pub(crate) use os::AppleScannerDevices;
 
 #[cfg(test)]
