@@ -402,7 +402,7 @@ pub mod android_usb_device;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_video_capture;
-/// Issue #1014 (a): Android 向け動画の変換のスタブ（実装は #1017）。
+/// Issue #1017: Android 向け動画の変換実装（`MediaCodec` + `MediaMuxer`）。
 /// `device/video_transcode.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]

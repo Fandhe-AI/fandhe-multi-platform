@@ -654,6 +654,11 @@ public class MainActivity extends GameActivity {
         return MediaTranscodeHelper.transcode(getCacheDir(), pcmLe, sampleRate, remainingMs);
     }
 
+    // 動画の変換（Issue #1017）。実装は `VideoTranscodeHelper`。Rust の `android_video_transcode.rs` が同期 JNI で呼ぶ。
+    byte[] videoTranscode(long remainingMs) {
+        return VideoTranscodeHelper.transcode(getCacheDir(), remainingMs);
+    }
+
     // 端末・アプリの真正性証明（Issue #678）。実装は `AppAttestHelper`。Rust の `android_app_attest.rs` がワーカースレッドから同期 JNI で呼ぶ。
     byte[] appAttestRandom(int len) {
         return AppAttestHelper.random(len);

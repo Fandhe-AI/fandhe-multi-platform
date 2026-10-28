@@ -13,7 +13,7 @@
 //! - macOS: [`super::apple_video_transcode::AppleVideoTranscode`]（#1014）
 //! - iOS: `ios_video_transcode` 経由で `AppleVideoTranscode`（#1016 b-ios）
 //! - Windows: `windows_video_transcode`（#1015。いまはスタブ）
-//! - Android: `android_video_transcode`（#1017 b-android。いまはスタブ）
+//! - Android: `android_video_transcode`（#1017 b-android）
 //! - それ以外（Linux）: `UnsupportedVideoTranscode` 固定（ダミーの成功実装へは倒さない）
 //!
 //! # 期限（契約表 3）
