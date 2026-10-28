@@ -41,9 +41,10 @@ extern void fandhe_rust_print_outcome(uint64_t request_id, int32_t code);
 }
 @end
 
-// 提示の共通部（文章版・画像版で共用）。`configure` で印刷対象を設定する。main queue 上で呼ぶこと。
+// 提示の共通部（文章版・画像版で共用）。`configure` で印刷対象を設定し、設定できたかを返す。
+// NO なら OS の提示を呼ばず 3（提示不可）で確定する。main queue 上で呼ぶこと。
 static void FandhePrintPresent(uint64_t request_id, NSString *jobName,
-                               void (^configure)(UIPrintInteractionController *pc)) {
+                               BOOL (^configure)(UIPrintInteractionController *pc)) {
     dispatch_async(dispatch_get_main_queue(), ^{
         @autoreleasepool {
             FandhePrintOnce *once = [FandhePrintOnce new];
@@ -62,7 +63,10 @@ static void FandhePrintPresent(uint64_t request_id, NSString *jobName,
             pc.printingItems = nil;
             pc.printFormatter = nil;
             pc.printPageRenderer = nil;
-            configure(pc);
+            if (!configure(pc)) {
+                [once finish:3];
+                return;
+            }
 
             UIPrintInteractionCompletionHandler handler =
                 ^(UIPrintInteractionController *_Nonnull __unused c, BOOL completed, NSError *error) {
@@ -114,6 +118,7 @@ int32_t fandhe_ios_print_present(uint64_t request_id, const char *title, const c
             [[UISimpleTextPrintFormatter alloc] initWithAttributedText:text];
         fmt.perPageContentInsets = UIEdgeInsetsMake(72, 72, 72, 72);
         pc.printFormatter = fmt;
+        return YES;
     });
     return 0;
 }
@@ -150,11 +155,13 @@ int32_t fandhe_ios_print_present_image(uint64_t request_id, const uint8_t *rgba,
         if (dp != NULL) {
             CGDataProviderRelease(dp);
         }
-        if (cg != NULL) {
-            // 生成失敗時は printingItem が nil のまま提示され、UIKit が提示不可（3）で返す。
-            pc.printingItem = [UIImage imageWithCGImage:cg];
-            CGImageRelease(cg);
+        if (cg == NULL) {
+            // 画像を作れないときは印刷対象なしで OS を呼ばず、提示不可（3）で確定する。
+            return NO;
         }
+        pc.printingItem = [UIImage imageWithCGImage:cg];
+        CGImageRelease(cg);
+        return YES;
     });
     return 0;
 }
