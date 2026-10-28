@@ -7,9 +7,9 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "AVFoundation `AVAssetWriter`（実行時に元動画を書く）+ `AVAssetExportSession`（`AVAssetExportPreset640x480`）",
-      "perm": "不要（一時ファイルはアプリのサンドボックス内）",
+      "status": "done",
+      "api": "AVFoundation `AVAssetWriter`（`AVAssetWriterInputPixelBufferAdaptor` で BGRA のフレームを 1 枚ずつ書き、H.264 の MP4 の元動画を一時ファイルへ）+ `AVAssetExportSession`（`AVAssetExportPreset640x480`、MPEG-4）。期限切れは `cancelWriting` / `cancelExport`",
+      "perm": "不要（一時ファイルは `NSTemporaryDirectory`（`std::env::temp_dir`）＝アプリのサンドボックス内。usage description は要らない）",
       "url": [
         "https://developer.apple.com/documentation/avfoundation/avassetexportsession",
         "https://developer.apple.com/documentation/avfoundation/avassetexportsession/exportasynchronously(completionhandler:)",
@@ -18,7 +18,10 @@
         "https://developer.apple.com/documentation/avfoundation/avassetexportpreset640x480",
         "https://developer.apple.com/documentation/avfoundation/avassetwriter"
       ],
-      "note": "未実装。実行時に `AVAssetWriter` で元動画を書き、`AVAssetExportSession` で小さい動画の mp4 へ書き出す。プリセットは小さい動画を拡大しない（公式）。縦横比の扱いは公式に記載が見当たらず未確認のため、出力の寸法は OS が書いた値をそのまま出す。`exportAsynchronouslyWithCompletionHandler:` は iOS 18 / macOS 15 で非推奨だが、deploymentTarget（iOS 17・macOS 11）では使える"
+      "note": "実装済み（#1016、macOS と共用の実装 #1014）。実行時に `AVAssetWriter` で元動画（1280×720・15 fps・30 フレーム・H.264）を一時ファイルへ書き、`AVAssetExportSession` で小さい動画の mp4 へ書き出す。成否は OS の完了通知ではなく出力の読み直しで決め、映像トラックがあり・幅と高さがともに元動画より小さく・長さが元動画 ±200 ms のときだけ成功にする。出力の寸法は OS（プリセット）が書いた値をそのまま出す。失敗は非対応・期限切れ・出力が空・解析できない・縮んでいない・長さの不一致を分ける（OS のエラー文は出さない）。期限は 20 秒（実測の根拠が無い仮の値）で、起点は要求を観測した時の単調時計。一時ファイルを消せなかった場合も出力を読み終えていれば結果は返し、未解放として記録して次の要求の前に再削除と OS 操作の完了を確かめる（確かめられなければ OS を呼ばず失敗にする）。守る範囲: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、一時ファイル・writer・export session の解放。守らない範囲: 所要時間・ビットレート・符号形式の違い、プリセットが決める出力寸法、複数プロセス。`exportAsynchronouslyWithCompletionHandler:` は iOS 18 / macOS 15 で非推奨だが、deploymentTarget（iOS 17・macOS 11）では使える。iOS 固有: 背景遷移では中断せず、OS が書き込み・書き出しを止めた場合は失敗として出し成功にはしない。suspend をはさんで期限を過ぎた場合はドライバが期限切れで確定し、遅れて届いた結果は世代照合で捨てる。守らない範囲に背景へ移ったときの OS の挙動を含む。deploymentTarget が iOS 17 のため OS 版を理由にした `Unsupported` は起きない",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1006）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_video_transcode.rs + crates/fandhe-egui-proxy/src/device/apple_video_transcode.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_video_transcode.m + crates/fandhe-egui-proxy/src/device/video_transcode.rs + crates/fandhe-core/src/screens/video_transcode.rs + crates/fandhe-device/src/video_transcode.rs、Issue #1016"
     },
     "android": {
       "status": "possible",
