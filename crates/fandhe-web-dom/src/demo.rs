@@ -230,6 +230,9 @@ use fandhe_core::screens::user_idle_show::{
 use fandhe_core::screens::video_capture_show::{
     current_screen as current_video_capture_show_screen, VideoCaptureShowState,
 };
+use fandhe_core::screens::video_transcode::{
+    current_screen as current_video_transcode_screen, VideoTranscodeState,
+};
 use fandhe_core::screens::wake_lock_toggle::{
     current_screen as current_wake_lock_toggle_screen, turn_off as wake_lock_turn_off,
     WakeLockToggleState, OFF_BUTTON_ID as WAKE_LOCK_OFF_BUTTON_ID,
@@ -1692,6 +1695,21 @@ pub fn mount_media_transcode_screen(root_id: &str) -> Result<(), JsValue> {
         screen,
         initial_state,
         super::media_transcode::media_transcode_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「動画の変換」（親 #340、Issue #1018）をマウントする
+/// 検証専用エントリポイント。`super::video_transcode::video_transcode_effect` が WebCodecs を駆動する。
+#[wasm_bindgen]
+pub fn mount_video_transcode_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    let initial_state = VideoTranscodeState::default();
+    let screen = current_video_transcode_screen(&initial_state);
+    super::mount::mount_with_effect(
+        root,
+        screen,
+        initial_state,
+        super::video_transcode::video_transcode_effect,
     )
 }
 
