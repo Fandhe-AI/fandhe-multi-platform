@@ -6,7 +6,7 @@
 //!
 //! # スレッド
 //!
-//! macOS の管理者パスワードのダイアログや Windows の同意 UI を待つブロッキング呼び出しになりうるため、
+//! macOS の管理者パスワードのダイアログや Windows の同意 UI（許可要求の開始だけ UI スレッド）を待つブロッキング呼び出しになりうるため、
 //! UI を止めないよう OS を問わずワーカースレッドで呼ぶ。切り替え（`set`）の後は成否によらず同じ
 //! ワーカーで `read` を 1 回呼び、画面は読み直した値だけで状態を出す。完了は画面状態の世代照合つきで
 //! 入れる（古い世代は捨てられる）。要求の追跡は世代照合で足りるため `RequestSlot` は使わない
@@ -15,10 +15,11 @@
 //! # OS 別実装の差し込み口
 //!
 //! [`implementation`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを埋める
-//! （macOS: `macos_radio_control`（#972）、Windows: `windows_radio_control`（#973 が埋めるスタブ）、
+//! （macOS: `macos_radio_control`（#972）、Windows: `windows_radio_control`（#973）、
 //! Android: `android_radio_control`（#974））。それ以外（iOS・Linux 等）は
 //! `UnsupportedRadioControl` 固定で、ダミーの成功実装へは倒さない。
 
+use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 
 use fandhe_core::screens::radio_control_show::{
@@ -98,11 +99,27 @@ fn to_radio_kind(k: Kind) -> RadioKind {
     }
 }
 
-/// 要求 1 件を処理して完了を送る（テストから任意の実装を差し込めるよう切り出す）。
+/// 切り替え前の許可要求の開始関数（UI スレッドで呼ぶ）。結果は戻り値のチャネルへ 1 回流れる。
+type AccessStarter = fn() -> Receiver<Result<(), DeviceError>>;
+
+/// 現在の OS が切り替え前に要する許可要求（Windows のみ）。注入した実装は OS の許可状態に依存しない。
+fn access_starter() -> Option<AccessStarter> {
+    #[cfg(target_os = "windows")]
+    {
+        Some(super::windows_radio_control::begin_access)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        None
+    }
+}
+
+/// 要求 1 件を処理して完了を送る（テストから任意の実装と許可要求を差し込めるよう切り出す）。
 fn drive(
     state: &RadioControlShowState,
     sender: &CompletionSender<RadioControlShowState>,
     radio: Arc<dyn RadioControl>,
+    start_access: Option<AccessStarter>,
 ) {
     let Some(request) = take_request(state) else {
         return;
@@ -111,6 +128,11 @@ fn drive(
 
     // 次の再描画から `take_request` が `None` を返すようにし、二重に OS へ渡さない。
     let _ = sender.send(Box::new(mark_busy));
+
+    // 許可要求（Windows）は UI スレッド（ここ）から始める。ワーカーは結果をチャネルで待つだけ。
+    let access = start_access
+        .filter(|_| matches!(action, Action::Set(_)))
+        .map(|f| f());
 
     let worker_sender = sender.clone();
     let spawned = std::thread::Builder::new()
@@ -125,8 +147,13 @@ fn drive(
                     }));
                 }
                 Action::Set(on) => {
-                    let result = radio
-                        .set(radio_kind, on)
+                    let granted = access.map_or(Ok(()), |rx| {
+                        rx.recv().unwrap_or(Err(DeviceError::Internal(
+                            fandhe_device::radio_control::FAILED,
+                        )))
+                    });
+                    let result = granted
+                        .and_then(|()| radio.set(radio_kind, on))
                         .map(to_switched)
                         .map_err(to_failure);
                     // 成否によらず読み直し、状態が変わっていないことも見せる。
@@ -166,7 +193,7 @@ pub fn radio_control_show_effect(
     state: &RadioControlShowState,
     sender: &CompletionSender<RadioControlShowState>,
 ) {
-    drive(state, sender, implementation());
+    drive(state, sender, implementation(), access_starter());
 }
 
 #[cfg(test)]
@@ -236,7 +263,7 @@ mod tests {
         let (sender, rx) = sender_with_channel();
         let mut state = RadioControlShowState::default();
         press(&mut state);
-        drive(&state, &sender, radio);
+        drive(&state, &sender, radio, None);
         for _ in 0..2 {
             let c = rx
                 .recv_timeout(Duration::from_secs(5))
@@ -250,7 +277,12 @@ mod tests {
     fn drive_is_noop_without_pending_request() {
         let (sender, rx) = sender_with_channel();
         let fake = Fake::new(vec![Ok(RadioState::On)], Ok(SwitchOutcome::Applied));
-        drive(&RadioControlShowState::default(), &sender, fake.clone());
+        drive(
+            &RadioControlShowState::default(),
+            &sender,
+            fake.clone(),
+            None,
+        );
         assert!(rx.try_recv().is_err());
         assert_eq!(fake.read_calls.load(Ordering::SeqCst), 0);
     }
@@ -345,9 +377,9 @@ mod tests {
         let fake = Fake::new(vec![Ok(RadioState::On)], Ok(SwitchOutcome::Applied));
         let mut state = RadioControlShowState::default();
         wifi_read(&mut state);
-        drive(&state, &sender, fake.clone());
+        drive(&state, &sender, fake.clone(), None);
         rx.recv_timeout(Duration::from_secs(5)).expect("mark_busy")(&mut state);
-        drive(&state, &sender, fake.clone());
+        drive(&state, &sender, fake.clone(), None);
         rx.recv_timeout(Duration::from_secs(5)).expect("finish")(&mut state);
         assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
         assert_eq!(fake.read_calls.load(Ordering::SeqCst), 1);
@@ -362,6 +394,7 @@ mod tests {
             &state,
             &sender,
             Fake::new(vec![Ok(RadioState::On)], Ok(SwitchOutcome::Applied)),
+            None,
         );
         rx.recv_timeout(Duration::from_secs(5)).expect("mark_busy")(&mut state);
         // 完了が届く前に世代が進んだ状況を再現する。
