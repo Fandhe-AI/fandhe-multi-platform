@@ -16,6 +16,7 @@ import android.hardware.usb.UsbManager;
 import android.mtp.MtpConstants;
 import android.mtp.MtpDevice;
 import android.mtp.MtpObjectInfo;
+import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -258,6 +259,10 @@ final class ScannerDevicesHelper {
         return false;
     }
 
+    private static Uri permissionData(long id) {
+        return Uri.parse("fandhe-scanner-devices://permission/" + id);
+    }
+
     private static boolean present(UsbManager um, UsbDevice d) {
         return um.getDeviceList().get(d.getDeviceName()) != null;
     }
@@ -270,7 +275,9 @@ final class ScannerDevicesHelper {
         BroadcastReceiver rcv = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                if (cur != r || !ACTION_PERMISSION.equals(intent.getAction())) {
+                // 要求 id を data に埋めた通知だけを処理する（期限切れ旧要求の遅延通知を排除する）。
+                if (cur != r || !ACTION_PERMISSION.equals(intent.getAction())
+                        || !permissionData(r.id).equals(intent.getData())) {
                     return;
                 }
                 stopWatchers(r);
@@ -293,9 +300,11 @@ final class ScannerDevicesHelper {
         try {
             ContextCompat.registerReceiver(activity, rcv, new IntentFilter(ACTION_PERMISSION),
                     null, handler, ContextCompat.RECEIVER_NOT_EXPORTED);
-            Intent intent = new Intent(ACTION_PERMISSION).setPackage(activity.getPackageName());
+            // data に要求 id を含め、要求ごとに別の PendingIntent にする（filterEquals は data を比較する）。
+            Intent intent = new Intent(ACTION_PERMISSION, permissionData(r.id))
+                    .setPackage(activity.getPackageName());
             PendingIntent pi = PendingIntent.getBroadcast(
-                    activity, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+                    activity, (int) r.id, intent, PendingIntent.FLAG_IMMUTABLE);
             um.requestPermission(r.device, pi);
         } catch (RuntimeException e) {
             end(r, CODE_FAILED, null);
