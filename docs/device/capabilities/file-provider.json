@@ -19,7 +19,7 @@
       "note": "未実装。別プロセスの拡張が要り、単一プロセスの Rust 描画アプリには重い。`UIFileSharingEnabled` + `LSSupportsOpeningDocumentsInPlace` で `Documents` を Files に出す方法はあるが、file-association が `LSSupportsOpeningDocumentsInPlace=false` を採っており、`Documents` には file-watch の作業フォルダも置かれる"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`DocumentsProvider`（Storage Access Framework のドキュメントプロバイダー）。Root に `FLAG_LOCAL_ONLY`・`FLAG_SUPPORTS_CREATE`",
       "perm": "`uses-permission` 不要。manifest の `<provider>` に `MANAGE_DOCUMENTS`（システムだけが持てる権限）を書く",
       "url": [
@@ -28,7 +28,10 @@
         "https://developer.android.com/reference/android/provider/DocumentsContract.Root",
         "https://developer.android.com/reference/android/os/ParcelFileDescriptor"
       ],
-      "note": "未実装。JNI ではなく manifest 宣言の Java クラスが要る。範囲は内部ストレージの専用フォルダ `files/file-provider/`（平ら、サブフォルダなし）を、ルート 1 件「Fandhe（この端末内のみ）」として出すこと"
+      "note": "実装済み。JNI ではなく manifest 宣言の Java クラス（DocumentsProvider）で公開し、Rust は置く・消した後の変更通知だけを JNI で頼む。範囲は内部ストレージの専用フォルダ `files/file-provider/`（平ら、サブフォルダなし）を、ルート 1 件「Fandhe（この端末内のみ）」として出すこと",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#1003）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/FileProviderDocumentsProvider.java + crates/fandhe-egui-proxy/src/device/android_file_provider.rs + crates/fandhe-egui-proxy/src/device/file_provider.rs + crates/fandhe-core/src/screens/file_provider_show.rs + crates/fandhe-device/src/file_provider.rs、Issue #1020"
     },
     "macos": {
       "status": "possible",

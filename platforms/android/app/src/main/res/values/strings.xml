@@ -28,4 +28,7 @@
     <string name="restriction_sample_bool">サンプル（真偽）</string>
     <string name="restriction_sample_integer">サンプル（整数）</string>
     <string name="restriction_sample_text">サンプル（文字列）</string>
+    <!-- クラウド保存先として OS のファイル画面に出る（Issue #1020）のルート名。fandhe_core の
+         `screens::file_provider_show::ROOT_TITLE` と一致させる。切り離し時に削除する。 -->
+    <string name="file_provider_root_title">Fandhe（この端末内のみ）</string>
 </resources>

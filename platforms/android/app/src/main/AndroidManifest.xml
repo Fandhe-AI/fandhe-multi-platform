@@ -290,6 +290,23 @@
                 android:resource="@xml/compose_file_paths" />
         </provider>
 
+        <!-- クラウド保存先として OS のファイル画面に出る（Issue #1020）。intent-filter を持つため
+             exported=true だが、MANAGE_DOCUMENTS（システムだけが持てる）を要求するので直接 bind
+             できるのは system だけ。他アプリには SAF が grant した URI 単位でしか見えない
+             （security.md A05 最小公開）。uses-permission は足さない。切り離し時に削除する対象:
+             この provider・FileProviderDocumentsProvider.java・MainActivity の
+             fileProviderNotifyChanged・strings.xml の file_provider_root_title。 -->
+        <provider
+            android:name="com.fandhe.androidapp.FileProviderDocumentsProvider"
+            android:authorities="${applicationId}.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+
         <!-- ホーム画面ウィジェット（Issue #1067）。APPWIDGET_UPDATE は system_server が
              明示コンポーネント宛てに送るため exported=false でも届く想定（他アプリからの
              任意 intent を受けない最小公開、security.md A05）。intent-filter はこの 1 つ

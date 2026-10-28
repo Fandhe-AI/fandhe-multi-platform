@@ -890,6 +890,12 @@ public class MainActivity extends GameActivity {
         return QuickSettingsTileStore.failedPresses();
     }
 
+    // クラウド保存先として OS のファイル画面に出る（Issue #1020）。実装は
+    // `FileProviderDocumentsProvider`。Rust の `android_file_provider.rs` が JNI（署名 `()Z`）で呼ぶ。
+    boolean fileProviderNotifyChanged() {
+        return FileProviderDocumentsProvider.notifyChanged(getApplicationContext());
+    }
+
     // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
     // Rust の `android_print.rs` が JNI で呼ぶ。
     private final PrintHelper printHelper = new PrintHelper(this);
