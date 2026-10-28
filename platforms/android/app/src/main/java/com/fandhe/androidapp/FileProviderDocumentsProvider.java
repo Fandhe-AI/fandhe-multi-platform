@@ -91,11 +91,19 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
                 : String.format(Locale.ROOT, "%s (%d)%s", base.substring(0, i), n, base.substring(i));
     }
 
-    /** doc id から検証済みの名前を取り出す。ルートや不正な id は FileNotFoundException。 */
-    private static String nameOf(String docId) throws FileNotFoundException {
+    /**
+     * doc id（{@code root/<世代>/<名前>}）から検証済みの名前を取り出す。ルート・不正な id・現在の世代と
+     * 一致しない（削除後に同名で作り直されたファイルの旧 id）は FileNotFoundException。
+     */
+    private String nameOf(String docId) throws FileNotFoundException {
         if (docId == null || !docId.startsWith(FILE_PREFIX)) throw new FileNotFoundException();
-        String name = docId.substring(FILE_PREFIX.length());
-        if (!validName(name)) throw new FileNotFoundException();
+        String rest = docId.substring(FILE_PREFIX.length());
+        int i = rest.indexOf('/');
+        if (i <= 0) throw new FileNotFoundException();
+        String name = rest.substring(i + 1);
+        if (!validName(name) || !rest.substring(0, i).equals(String.valueOf(genOf(getContext(), name, false)))) {
+            throw new FileNotFoundException();
+        }
         return name;
     }
 
@@ -108,71 +116,92 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
     }
 
     private File regularFile(String docId) throws FileNotFoundException {
-        File f = new File(dir(getContext()), nameOf(docId));
+        return regularFile(docId, nameOf(docId));
+    }
+
+    private File regularFile(String docId, String name) throws FileNotFoundException {
+        File f = new File(dir(getContext()), name);
         if (!isRegular(f)) throw new FileNotFoundException();
         return f;
     }
 
-    private static String mimeOf(String name) {
+    private static String mimeOf(Context c, String name) {
         int i = name.lastIndexOf('.');
         if (i >= 0) {
             String m = MimeTypeMap.getSingleton()
                     .getMimeTypeFromExtension(name.substring(i + 1).toLowerCase(Locale.ROOT));
             if (m != null) return m;
         }
-        return "application/octet-stream";
+        // 拡張子で決まらないときは createDocument で指定された型を返す。
+        return prefs(c).getString(MIME_KEY + name, "application/octet-stream");
     }
 
-    private static void addFile(MatrixCursor c, File f, String name) {
+    private static void addFile(Context ctx, MatrixCursor c, File f, String name) {
         c.newRow()
-                .add(Document.COLUMN_DOCUMENT_ID, FILE_PREFIX + name)
+                .add(Document.COLUMN_DOCUMENT_ID, FILE_PREFIX + genOf(ctx, name, true) + "/" + name)
                 .add(Document.COLUMN_DISPLAY_NAME, name)
-                .add(Document.COLUMN_MIME_TYPE, mimeOf(name))
+                .add(Document.COLUMN_MIME_TYPE, mimeOf(ctx, name))
                 .add(Document.COLUMN_SIZE, f.length())
                 .add(Document.COLUMN_LAST_MODIFIED, f.lastModified())
                 .add(Document.COLUMN_FLAGS, Document.FLAG_SUPPORTS_WRITE | Document.FLAG_SUPPORTS_DELETE);
     }
 
     private static final String PREFS = "file_provider_known";
-    private static final String KEY_NAMES = "names";
+    private static final String GEN_KEY = "gen/";
+    private static final String MIME_KEY = "mime/";
+    private static final String NEXT_KEY = "next";
+
+    private static SharedPreferences prefs(Context c) {
+        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
 
     /**
-     * 前回の一覧に居て今は無い名前の URI 権限を失効させ、現在の名前を記録する。document ID は名前だけで
-     * 決まるため、削除（Rust 経由を含む）後に同名の別ファイルができても旧権限で読み書きされないようにする。
-     * 権限は一覧に出た項目にしか付かないので、一覧・作成・削除・通知の各入口で呼べば取りこぼさない。
-     * 同名の再作成は createDocument が作成直後に無条件で失効する。
-     * Rust 経由の削除は削除の直前に {@link #revokeName} で失効済み（通知前にプロセスが終了しても残らない）。
-     * 守らない範囲: アプリ外（adb 等）からの削除と同名再作成が、次の同期より前に重なる場合。
+     * 名前ごとの世代。document ID に含め、削除で破棄して再利用しない（単調増加）。同名を作り直すと
+     * 別の ID になるので、旧 ID への URI 権限は新ファイルに及ばない。create == false で未割り当ては 0。
      */
-    private static void revokeAccess(Context c, String n) {
+    static synchronized long genOf(Context c, String name, boolean create) {
+        SharedPreferences p = prefs(c);
+        long g = p.getLong(GEN_KEY + name, 0);
+        if (g == 0 && create) {
+            g = p.getLong(NEXT_KEY, 1);
+            p.edit().putLong(NEXT_KEY, g + 1).putLong(GEN_KEY + name, g).commit();
+        }
+        return g;
+    }
+
+    private static void revokeAccess(Context c, String name, long gen) {
         c.revokeUriPermission(
-                DocumentsContract.buildDocumentUri(authority(c), FILE_PREFIX + n),
+                DocumentsContract.buildDocumentUri(authority(c), FILE_PREFIX + gen + "/" + name),
                 Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
     }
 
-    /** 削除の直前に呼ぶ。失効が済んでから消すので、後から同名が再作成されても旧権限は残らない。 */
-    static boolean revokeName(Context c, String name) {
+    /**
+     * 名前の世代を破棄して旧 URI 権限を失効させる。削除の直前に呼ぶ（Rust 経由を含む）。破棄が済んでから消すので、
+     * 通知前にプロセスが終了しても、同名の再作成は新しい世代になり旧権限は引き継がれない。
+     */
+    static synchronized boolean revokeName(Context c, String name) {
         if (!validName(name)) return false;
-        revokeAccess(c, name);
-        return true;
+        long g = genOf(c, name, false);
+        if (g != 0) revokeAccess(c, name, g);
+        return prefs(c).edit().remove(GEN_KEY + name).remove(MIME_KEY + name).commit();
     }
 
+    /**
+     * 一覧に居ない名前の世代を破棄して権限を失効させ（アプリ外の削除の後始末）、居る名前には世代を割り当てる。
+     * 守らない範囲: アプリ外（adb 等）の削除と同名再作成が同期より前に重なる場合。
+     */
     static synchronized void revokeDeleted(Context c) {
-        SharedPreferences p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        Set<String> old = p.getStringSet(KEY_NAMES, null);
-        Set<String> now = new HashSet<>();
         String[] names = dir(c).list();
-        if (names != null) for (String n : names) now.add(n);
-        // 一覧が読めなかった（names == null）ときは全件失効しない。
-        if (old != null && names != null) {
-            for (String n : old) {
-                if (!now.contains(n)) {
-                    revokeAccess(c, n);
-                }
-            }
+        // 一覧が読めなかったときは何も失効しない。
+        if (names == null) return;
+        Set<String> now = new HashSet<>();
+        for (String n : names) now.add(n);
+        SharedPreferences p = prefs(c);
+        for (String key : p.getAll().keySet()) {
+            if (!key.startsWith(GEN_KEY)) continue;
+            String n = key.substring(GEN_KEY.length());
+            if (!now.contains(n)) revokeName(c, n);
         }
-        // 一覧が読めなかった（names == null）ときは記録を更新しない。
-        if (names != null) p.edit().putStringSet(KEY_NAMES, now).commit();
     }
 
     /** 子の一覧が変わったことを OS のファイル画面へ知らせる。失敗は false。 */
@@ -214,7 +243,8 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
                     .add(Document.COLUMN_MIME_TYPE, Document.MIME_TYPE_DIR)
                     .add(Document.COLUMN_FLAGS, Document.FLAG_DIR_SUPPORTS_CREATE);
         } else {
-            addFile(c, regularFile(documentId), nameOf(documentId));
+            String name = nameOf(documentId);
+            addFile(getContext(), c, regularFile(documentId, name), name);
         }
         return c;
     }
@@ -239,7 +269,7 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
                     // 項目が 1 件でも読めなければ全体を失敗にする（契約）。
                     throw new FileNotFoundException();
                 }
-                if (validName(n)) addFile(c, f, n);
+                if (validName(n)) addFile(ctx, c, f, n);
             }
         }
         c.setNotificationUri(ctx.getContentResolver(),
@@ -280,11 +310,14 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
             try {
                 // O_EXCL 相当。既存は上書きせず次の番号へ。
                 if (new File(d, name).createNewFile()) {
-                    // 直前に同名が削除（Rust 経由を含む）されていても、新規ファイルに旧 URI 権限を残さない。
-                    // 名前集合の差分では「削除→同名再作成」を検出できないため、作成のたびに無条件で失効する。
-                    revokeAccess(ctx, name);
+                    // 新規ファイルは必ず新しい世代の ID にする（旧 ID の権限・型を引き継がない）。
+                    revokeName(ctx, name);
+                    if (mimeType != null && !"application/octet-stream".equals(mimeType)) {
+                        prefs(ctx).edit().putString(MIME_KEY + name, mimeType).commit();
+                    }
+                    genOf(ctx, name, true);
                     notifyChanged(ctx);
-                    return FILE_PREFIX + name;
+                    return FILE_PREFIX + genOf(ctx, name, false) + "/" + name;
                 }
             } catch (IOException e) {
                 throw new FileNotFoundException();
@@ -295,8 +328,9 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
 
     @Override
     public void deleteDocument(String documentId) throws FileNotFoundException {
-        File f = regularFile(documentId);
-        revokeAccess(getContext(), nameOf(documentId));
+        String name = nameOf(documentId);
+        File f = regularFile(documentId, name);
+        revokeName(getContext(), name);
         if (!f.delete()) throw new FileNotFoundException();
         notifyChanged(getContext());
     }
