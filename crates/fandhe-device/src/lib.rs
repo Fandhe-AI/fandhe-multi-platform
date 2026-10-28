@@ -268,6 +268,8 @@ pub mod user_idle;
 pub mod uwb_ranging;
 /// Phase 11（端末機能の拡充ループ、親 #169、Issue #821）: 動画の撮影（OS の撮影 UI を開き、長さ・寸法・サイズを出す）。
 pub mod video_capture;
+/// Phase 11（端末機能の拡充ループ、親 #340、Issue #1014）: 動画の変換（実行時に作った元動画を小さい解像度の MP4 へ書き出す）。
+pub mod video_transcode;
 /// Phase 11（端末機能の拡充ループ、親 #166、Issue #785）: システム音量・消音状態の取得と変更。
 pub mod volume_control;
 /// Phase 11（端末機能の拡充ループ、親 #188、Issue #970）: 壁紙・ロック画面の設定（アプリが作った PNG 1 枚）。
