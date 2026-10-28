@@ -134,6 +134,8 @@ pub mod user_idle_show;
 pub mod uwb_ranging_show;
 /// Phase 11 の拡充ループ型サンプル「動画の撮影」（親 #169、Issue #821）。
 pub mod video_capture_show;
+/// Phase 11 の拡充ループ型サンプル「動画の変換」（親 #340、Issue #1014）。
+pub mod video_transcode;
 /// Phase 11 の拡充ループ型サンプル「システム音量」（親 #166、Issue #785）。
 pub mod volume_control_show;
 
