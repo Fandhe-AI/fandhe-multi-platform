@@ -37,6 +37,14 @@
 #import <ImageIO/ImageIO.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
+// Rust 側 `apple_scanner_devices.rs` の `failure_for_os_code` が数値で写像しているため、SDK の列挙値との
+// 一致をここで固定する。値が変わればビルドが落ちる。
+_Static_assert(ICReturnConnectionDriverExited == -21350, "ICReturnConnectionDriverExited");
+_Static_assert(ICReturnConnectionClosedSessionSuddenly == -21349, "ICReturnConnectionClosedSessionSuddenly");
+_Static_assert(ICReturnConnectionEjectedSuddenly == -21348, "ICReturnConnectionEjectedSuddenly");
+_Static_assert(ICReturnConnectionNotAuthorizedToOpenDevice == -21343, "ICReturnConnectionNotAuthorizedToOpenDevice");
+_Static_assert(ICReturnPTPNotAuthorizedToSendCommand == -21249, "ICReturnPTPNotAuthorizedToSendCommand");
+
 // ダウンロードする元ファイルの上限（縮小前）。超えたら上限超過として扱う。
 static const unsigned long long kFandheMaxSourceBytes = 64ull * 1024ull * 1024ull;
 // 縮小後の長辺（画素）。

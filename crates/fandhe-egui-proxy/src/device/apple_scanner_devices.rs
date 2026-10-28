@@ -17,6 +17,7 @@ use fandhe_device::scanner_devices::ScannerImportFailure;
 /// 契約の失敗種別へ写す。未知のコードと 0（欠けた要素など OS のコードが無い失敗）は `Failed`。
 fn failure_for_os_code(os_code: i64) -> ScannerImportFailure {
     match os_code {
+        // 以下の数値の根拠は `.m` 冒頭の `_Static_assert`（SDK の ICReturnCode との一致）
         // ICReturnDeviceIsPasscodeLocked / ICReturnDeviceNeedsCredentials
         -9943 | -9953 => ScannerImportFailure::DeviceLocked,
         // ICReturnConnectionNotAuthorizedToOpenDevice / ICReturnPTPNotAuthorizedToSendCommand
