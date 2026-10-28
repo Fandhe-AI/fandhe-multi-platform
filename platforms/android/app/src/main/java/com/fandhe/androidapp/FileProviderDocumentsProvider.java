@@ -1,6 +1,8 @@
 package com.fandhe.androidapp;
 
 import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.os.CancellationSignal;
@@ -19,7 +21,9 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * クラウド保存先として OS のファイル画面（Files アプリ・SAF の選択画面）に出る
@@ -129,9 +133,38 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
                 .add(Document.COLUMN_FLAGS, Document.FLAG_SUPPORTS_WRITE | Document.FLAG_SUPPORTS_DELETE);
     }
 
+    private static final String PREFS = "file_provider_known";
+    private static final String KEY_NAMES = "names";
+
+    /**
+     * 前回の一覧に居て今は無い名前の URI 権限を失効させ、現在の名前を記録する。document ID は名前だけで
+     * 決まるため、削除（Rust 経由を含む）後に同名の別ファイルができても旧権限で読み書きされないようにする。
+     * 権限は一覧に出た項目にしか付かないので、一覧・作成・削除・通知の各入口で呼べば取りこぼさない。
+     * 守らない範囲: 削除から次の同期までの短い間。
+     */
+    static synchronized void revokeDeleted(Context c) {
+        SharedPreferences p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        Set<String> old = p.getStringSet(KEY_NAMES, null);
+        Set<String> now = new HashSet<>();
+        String[] names = dir(c).list();
+        if (names != null) for (String n : names) now.add(n);
+        if (old != null) {
+            for (String n : old) {
+                if (!now.contains(n)) {
+                    c.revokeUriPermission(
+                            DocumentsContract.buildDocumentUri(authority(c), FILE_PREFIX + n),
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                }
+            }
+        }
+        // 一覧が読めなかった（names == null）ときは記録を更新しない。
+        if (names != null) p.edit().putStringSet(KEY_NAMES, now).commit();
+    }
+
     /** 子の一覧が変わったことを OS のファイル画面へ知らせる。失敗は false。 */
     static boolean notifyChanged(Context c) {
         try {
+            revokeDeleted(c);
             c.getContentResolver().notifyChange(
                     DocumentsContract.buildChildDocumentsUri(authority(c), ROOT_DOC_ID), null);
             return true;
@@ -179,6 +212,7 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
         Context ctx = getContext();
         MatrixCursor c = new MatrixCursor(projection != null ? projection : DOC_COLUMNS);
         File d = dir(ctx);
+        revokeDeleted(ctx);
         if (d.exists()) {
             String[] names = d.list();
             // 読めないフォルダは 0 件にせず失敗にする。
@@ -224,6 +258,7 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
         }
         Context ctx = getContext();
         File d = dir(ctx);
+        revokeDeleted(ctx);
         if (!d.isDirectory() && !d.mkdirs() && !d.isDirectory()) throw new FileNotFoundException();
         for (int n = 0; n <= MAX_DEDUP; n++) {
             String name = dedupName(displayName, n);
