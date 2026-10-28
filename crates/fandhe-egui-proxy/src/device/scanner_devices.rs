@@ -88,6 +88,8 @@ struct Session {
     slot: &'static RequestSlot<Outcome>,
     /// 進行中の要求を観測した時刻（単調時計）。
     started: Mutex<Option<Instant>>,
+    /// 前回ワーカーの終了待ちで発送できずにいる要求（世代, 観測した時刻）。待機にも期限を適用する起点。
+    waiting: Mutex<Option<(u64, Instant)>>,
     /// OS 操作を持つワーカーが走っている間 true。期限切れ表示でスロットを空にしても、
     /// ワーカー（機器の閉鎖まで済ませてから戻る）が終わるまで次の発送を止める。
     os_active: Arc<AtomicBool>,
@@ -98,6 +100,7 @@ impl Default for Session {
         Self {
             slot: Box::leak(Box::new(RequestSlot::new())),
             started: Mutex::new(None),
+            waiting: Mutex::new(None),
             os_active: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -113,6 +116,7 @@ pub(crate) fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
         s.slot.reset();
         *s.started.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *s.waiting.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }
 
@@ -142,6 +146,10 @@ fn run_worker(imp: &dyn ScannerDevices, started: Instant, deadline: Duration) ->
     let image = result?;
     let decoded =
         decode_for_display(image.photo()).map_err(|_| ScannerImportFailure::Undecodable)?;
+    // 復号に時間を取られて期限を過ぎた成功も成功にしない（成功を返す直前の再確認）。
+    if started.elapsed() > deadline {
+        return Err(ScannerImportFailure::TimedOut);
+    }
     Ok(Imported {
         decoded: Arc::new(decoded),
         kind: image.kind(),
@@ -185,9 +193,30 @@ fn drive(
     deadline: Duration,
 ) {
     let slot = session.slot;
-    if take_request(state).is_some() {
+    if let Some(generation) = take_request(state) {
         // 保留ありは発送済み（`mark_running` の適用待ち）。二重に発送しない。
         if slot.snapshot().is_some() {
+            return;
+        }
+        // 期限の起点は要求を観測した時刻。前回ワーカーの終了待ちの間も同じ起点で測る。
+        let started = {
+            let mut w = session.waiting.lock().unwrap_or_else(|e| e.into_inner());
+            match *w {
+                Some((g, t)) if g == generation => t,
+                _ => {
+                    let t = Instant::now();
+                    *w = Some((generation, t));
+                    t
+                }
+            }
+        };
+        // 待機中に期限が来たら、OS を触らず TimedOut で完了させる。
+        if started.elapsed() >= deadline {
+            *session.waiting.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            let _ = sender.send(Box::new(move |s: &mut ScannerDevicesImportState| {
+                mark_running(s);
+                finish_import(s, generation, Err(CoreFailure::TimedOut));
+            }));
             return;
         }
         // 前回のワーカーが機器を解放し終えるまで発送しない（同じ機器を二重に開かない）。
@@ -195,10 +224,10 @@ fn drive(
             sender.request_repaint_after(POLL_INTERVAL);
             return;
         }
+        *session.waiting.lock().unwrap_or_else(|e| e.into_inner()) = None;
         // 前回の画素を先に解放する（失敗の横に前の画像を残さない）。
         image_store::clear();
         let request_id = slot.begin();
-        let started = Instant::now();
         *session.started.lock().unwrap_or_else(|e| e.into_inner()) = Some(started);
         let _ = sender.send(Box::new(mark_running));
         sender.request_repaint_after(POLL_INTERVAL);
@@ -478,6 +507,33 @@ mod tests {
         std::thread::sleep(Duration::from_millis(250));
         drive(&state, &sender, &imp, &session, Duration::from_secs(30));
         assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok());
+    }
+
+    #[test]
+    fn request_waiting_for_previous_worker_times_out_without_overlapping() {
+        use std::sync::atomic::AtomicUsize;
+        static CALLS: AtomicUsize = AtomicUsize::new(0);
+        struct Hang;
+        impl ScannerDevices for Hang {
+            fn import_one(&self, _: Duration) -> Result_ {
+                CALLS.fetch_add(1, Ordering::SeqCst);
+                std::thread::sleep(Duration::from_millis(500));
+                good()
+            }
+        }
+        let imp: Arc<dyn ScannerDevices> = Arc::new(Hang);
+        let (sender, rx) = channel();
+        let session = Session::default();
+        let mut state = State::default();
+        let deadline = Duration::from_millis(30);
+        request_import(&mut state);
+        pump(&mut state, &sender, &rx, &imp, &session, deadline);
+        assert_eq!(failure(&state), CoreFailure::TimedOut);
+        // ワーカーは戻っていない。再押下も期限で完了し、OS 呼び出しは重ならない。
+        request_import(&mut state);
+        pump(&mut state, &sender, &rx, &imp, &session, deadline);
+        assert_eq!(failure(&state), CoreFailure::TimedOut);
+        assert_eq!(CALLS.load(Ordering::SeqCst), 1);
     }
 
     #[test]
