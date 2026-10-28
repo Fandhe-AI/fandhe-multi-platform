@@ -197,7 +197,7 @@ static int32_t fandhe_write_source(NSURL *url, uint32_t width, uint32_t height, 
             dispatch_semaphore_signal(done);
         }];
         if (!fandhe_wait(done, fandhe_remaining_ns(deadline))) {
-            [writer cancelWriting];
+            // finishWriting 開始後の cancelWriting は例外になるため呼ばず、完了を猶予だけ待つ。
             return fandhe_settle_or_park(done);
         }
         return writer.status == AVAssetWriterStatusCompleted ? 0 : 2;
