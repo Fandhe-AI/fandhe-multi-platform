@@ -144,7 +144,7 @@ pub mod android_file_association;
 /// `device/file_preview.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_file_preview;
-/// Issue #1019: Android 向け「OS のファイル画面に出る保存先」のスタブ（実体は #1020）。
+/// Issue #1020: Android 向け「OS のファイル画面に出る保存先」の実装。
 /// `device/file_provider.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]

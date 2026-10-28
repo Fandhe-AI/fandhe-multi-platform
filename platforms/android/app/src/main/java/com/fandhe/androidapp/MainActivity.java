@@ -5267,4 +5267,11 @@ public class MainActivity extends GameActivity {
             ttsInitState = TTS_STATE_NONE;
         }
     }
+
+    // Rust 側（`device/android_file_provider.rs`、Issue #1020）から JNI 経由で呼ばれる同期メソッド
+    // （ワーカースレッド上）。OS のファイル画面へ一覧の変更を通知する。保留中の要求は持たない。
+    // JNI 署名: ()Z
+    private boolean fileProviderNotifyChanged() {
+        return FileProviderDocumentsProvider.notifyChanged(getApplicationContext());
+    }
 }

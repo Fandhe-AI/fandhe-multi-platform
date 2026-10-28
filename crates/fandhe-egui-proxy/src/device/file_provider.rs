@@ -3,13 +3,12 @@
 //! `take_request` で観測し、`fandhe_device::file_provider::FileProvider` をワーカーで呼んで、
 //! 操作の結果と操作後に読み直した一覧を `CompletionSender` 経由で 1 件にまとめて注入する
 //! （`crate::screens::registry` の `effect` 区画から呼ばれる、`app::EffectFn` 参照）。
-//! 契約の SSOT は `fandhe_device::file_provider`（削除キーは再利用しない書類 ID。現行コードは
-//! 名前をキーに渡しており、ID への切り替えは #1020）。
+//! 契約の SSOT は `fandhe_device::file_provider`（削除キーは再利用しない書類 ID）。
 //!
 //! # OS 別実装の差し込み口
 //!
 //! [`platform`] の cfg 分岐が全対象 OS の最終形。Android は `android_file_provider::implementation()`
-//! を #1020 が埋める。iOS・macOS・Windows は対応表で保留（`DEFERRED`）のため
+//! が実装する。iOS・macOS・Windows は対応表で保留（`DEFERRED`）のため
 //! `UnsupportedFileProvider` 固定で、画面に「保留中」と出る。それ以外は「非対応」。
 //! 後続はこのファイルの dispatch に触らない。
 //!
@@ -70,6 +69,7 @@ enum Done {
 
 fn to_view(e: Entry) -> EntryView {
     EntryView {
+        id: e.id,
         name: e.name,
         size: e.size,
         modified_unix_ms: e.modified_unix_ms,
@@ -103,7 +103,7 @@ fn run(imp: &dyn FileProvider, action: &FileAction) -> Done {
             Err(DeviceError::Unsupported(_)) => return Done::Unsupported,
             Err(e) => put_failure(&e),
         }),
-        FileAction::Delete(name) => Some(match imp.delete(name) {
+        FileAction::Delete(id) => Some(match imp.delete(id) {
             Ok(o) => OpResult::Deleted {
                 notified: o.notified,
             },
@@ -223,6 +223,8 @@ mod tests {
                 .unwrap()
                 .iter()
                 .map(|n| Entry {
+                    // 偽実装は表示名を ID として使う。
+                    id: n.clone(),
                     name: n.clone(),
                     size: 1,
                     modified_unix_ms: None,
@@ -236,14 +238,15 @@ mod tests {
             }
             self.files.lock().unwrap().push(base.to_string());
             Ok(PutOutcome {
+                id: base.to_string(),
                 name: base.to_string(),
                 notified: true,
             })
         }
-        fn delete(&self, name: &str) -> Result<DeleteOutcome, DeviceError> {
+        fn delete(&self, id: &str) -> Result<DeleteOutcome, DeviceError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             let mut f = self.files.lock().unwrap();
-            match f.iter().position(|n| n == name) {
+            match f.iter().position(|n| n == id) {
                 Some(i) => {
                     f.remove(i);
                     Ok(DeleteOutcome { notified: true })

@@ -8,7 +8,7 @@
 //! `fandhe-egui-proxy` の `device/file_provider.rs` が [`take_request`] で要求を観測し、
 //! [`mark_in_flight`] / [`finish`] / [`apply_unsupported`] で結果を注入する。状態・定数・文言は
 //! 全対象 OS 分（Android の操作、iOS・macOS・Windows の「保留中」、その他の「非対応」）をここで
-//! 確定し、後続の OS 実装（#1020）は画面に触らない。
+//! 確定し、OS 実装は画面に触らない。
 //!
 //! # 0 件・失敗・非対応を混同しない理由
 //!
@@ -36,7 +36,7 @@ const ROW_EXTENT: f32 = 24.0;
 
 /// 画面タイトル。
 pub const TITLE: &str = "ファイル画面に出す保存先";
-/// ファイル画面に出る表示名。Android の `strings.xml`（#1020）も同じ文字列を使う。
+/// ファイル画面に出る表示名。Android の `strings.xml` も同じ文字列を使う。
 pub const ROOT_TITLE: &str = "Fandhe（この端末内のみ）";
 /// 範囲の注記。
 pub const NOTE: &str = "この端末内のみ。ネットワーク同期はしない";
@@ -75,7 +75,7 @@ pub const ALREADY_GONE_ERROR: &str = "既にファイルがありません";
 /// 一覧の失敗。
 pub const LIST_FAILED_ERROR: &str = "失敗しました: 一覧の読み取り";
 /// 置けなかった。
-pub const PUT_FAILED_ERROR: &str = "失敗しました: 置けませんでした（同名が多すぎる場合を含む）";
+pub const PUT_FAILED_ERROR: &str = "失敗しました: 置けませんでした";
 /// 名前の規則違反。
 pub const INVALID_NAME_ERROR: &str = "失敗しました: ファイル名が使えません（255 バイトまで）";
 /// 消せなかった。
@@ -86,20 +86,19 @@ pub const DEFERRED_ERROR: &str = "この OS では保留中です";
 pub const UNSUPPORTED_ERROR: &str = "この端末・ブラウザでは使えません";
 
 /// 画面から出す操作。消す対象は押した時点の書類を指すキーで持つ（一覧が変わって別のファイルを消さない）。
-/// 契約上のキーは再利用しない書類 ID で、表示名は同名が重複しうるため識別に使わない
-/// （現行コードは名前を持つ。ID への切り替えは #1020）。
+/// キーは再利用しない書類 ID で、表示名は同名が重複しうるため識別に使わない。
 #[derive(Clone, PartialEq, Eq)]
 pub enum FileAction {
     /// 読み直し。
     Reload,
     /// 見本を置く。
     PutSample,
-    /// キー（契約上は書類 ID。現行コードは名前）の書類を消す。
+    /// 書類 ID の書類を消す。
     Delete(String),
 }
 
 impl std::fmt::Debug for FileAction {
-    /// ファイル名を出さない。
+    /// ID・ファイル名を出さない。
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Reload => f.write_str("Reload"),
@@ -123,7 +122,9 @@ pub enum Phase {
 /// 一覧の 1 行（表示用）。
 #[derive(Clone, PartialEq, Eq)]
 pub struct EntryView {
-    /// 表示名（重複しうる。識別は書類 ID で行い、ID の欄は #1020 で足す）。
+    /// 再利用しない書類 ID（削除の識別に使う。表示しない）。
+    pub id: String,
+    /// 表示名（重複しうる。識別には使わない）。
     pub name: String,
     /// バイト数。
     pub size: u64,
@@ -171,7 +172,7 @@ pub enum OpResult {
 }
 
 impl std::fmt::Debug for View {
-    /// ファイル名を出さない。
+    /// ID・ファイル名を出さない。
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Unread => f.write_str("Unread"),
@@ -251,14 +252,14 @@ pub fn reload(state: &mut FileProviderShowState) {
     request(state, FileAction::Reload);
 }
 
-/// 行ボタンのハンドラ。押した時点の行の名前を操作に持たせる。範囲外・処理中では no-op。
+/// 行ボタンのハンドラ。押した時点の行の書類 ID を操作に持たせる。範囲外・処理中では no-op。
 pub fn delete_row(state: &mut FileProviderShowState, index: usize) {
-    let name = match &state.view {
-        View::Listed(v) => v.get(index).map(|e| e.name.clone()),
+    let id = match &state.view {
+        View::Listed(v) => v.get(index).map(|e| e.id.clone()),
         _ => None,
     };
-    if let Some(name) = name {
-        request(state, FileAction::Delete(name));
+    if let Some(id) = id {
+        request(state, FileAction::Delete(id));
     }
 }
 
@@ -404,6 +405,7 @@ mod tests {
 
     fn ev(name: &str) -> EntryView {
         EntryView {
+            id: format!("id-{name}"),
             name: name.into(),
             size: 10,
             modified_unix_ms: Some(0),
@@ -509,14 +511,14 @@ mod tests {
     }
 
     #[test]
-    fn delete_row_captures_name_and_ignores_out_of_range() {
+    fn delete_row_captures_id_and_ignores_out_of_range() {
         let mut s = listed(&["a", "b"]);
         delete_row(&mut s, 5);
         assert_eq!(s.phase, Phase::Idle);
         delete_row(&mut s, 1);
         assert_eq!(
             take_request(&s).map(|r| r.action),
-            Some(FileAction::Delete("b".into()))
+            Some(FileAction::Delete("id-b".into()))
         );
     }
 
