@@ -20,8 +20,8 @@
 //     out_found   : 探索窓の間に見つかった機器の台数（名前・シリアルは読まない）
 //     out_os_code : 9 のときだけ `NSError.code`（0 は欠けた要素など OS のコードが無い失敗）
 //     0 成功 / 1 非対応 / 2 機器なし / 3 画像なし / 4 ロック中 / 5 権限拒否 / 6 期限切れ /
-//     7 中断（機器が外れた） / 8 main スレッドから呼ばれた / 9 OS の失敗 / 10 上限超過 /
-//     11 画像を復号できない
+//     7 中断（機器が外れた） / 8 main スレッドから呼ばれた / 9 OS の失敗 / 10 上限超過（元ファイルのバイト数・縮小前の総画素数） /
+//     11 画像を復号できない（寸法を読めない場合を含む）
 //
 // スレッド: ImageCaptureCore の操作（ブラウザの開始・セッションの開閉）は main queue で行い、
 // 呼び出しスレッドは semaphore で待つ。完了は `finish` の短いロック区間で 1 回だけ確定し、
@@ -47,6 +47,9 @@ _Static_assert(ICReturnPTPNotAuthorizedToSendCommand == -21249, "ICReturnPTPNotA
 
 // ダウンロードする元ファイルの上限（縮小前）。超えたら上限超過として扱う。
 static const unsigned long long kFandheMaxSourceBytes = 64ull * 1024ull * 1024ull;
+// 縮小前に許す総画素数。Rust 側 `MAX_PHOTO_PIXELS`（64 Mi 画素、RGBA で 256 MiB）と揃える。
+// サムネイル生成は形式によって全画素を一度復号するため、ヘッダの寸法で先に弾く（decompression bomb 対策）。
+static const unsigned long long kFandheMaxSourcePixels = 64ull * 1024ull * 1024ull;
 // 縮小後の長辺（画素）。
 static const int kFandheMaxPixel = 2048;
 
@@ -340,6 +343,23 @@ static NSObject *gFandheUnclosedLock = nil;
         CGImageSourceRef source = CGImageSourceCreateWithURL((__bridge CFURLRef)file, NULL);
         if (source == NULL) {
             [self finish:11 os:0 jpeg:nil];
+            return;
+        }
+        // 復号前にヘッダの寸法だけを読む。読めない寸法は成功へ畳まず復号不可にする。
+        NSDictionary *srcProps = CFBridgingRelease(CGImageSourceCopyPropertiesAtIndex(source, 0, NULL));
+        id wv = srcProps[(__bridge NSString *)kCGImagePropertyPixelWidth];
+        id hv = srcProps[(__bridge NSString *)kCGImagePropertyPixelHeight];
+        if (![wv isKindOfClass:[NSNumber class]] || ![hv isKindOfClass:[NSNumber class]] ||
+            [wv longLongValue] <= 0 || [hv longLongValue] <= 0) {
+            CFRelease(source);
+            [self finish:11 os:0 jpeg:nil];
+            return;
+        }
+        unsigned long long pw = (unsigned long long)[wv longLongValue];
+        unsigned long long ph = (unsigned long long)[hv longLongValue];
+        if (pw > kFandheMaxSourcePixels / ph) {
+            CFRelease(source);
+            [self finish:10 os:0 jpeg:nil];
             return;
         }
         NSDictionary *thumbOptions = @{
