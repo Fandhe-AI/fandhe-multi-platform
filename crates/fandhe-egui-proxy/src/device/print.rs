@@ -47,6 +47,13 @@ use crate::app::CompletionSender;
 use crate::device::request_slot::POLL_INTERVAL;
 
 /// 画面の取り込みを待つ期限（単調時計で測る。契約表 3）。
+#[cfg(any(
+    test,
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "ios",
+    target_os = "android"
+))]
 const CAPTURE_DEADLINE: Duration = Duration::from_secs(2);
 
 /// `DeviceError` を画面用の結果へ写像する。内部構造・入力値は出さず固定文言だけにする
@@ -287,6 +294,13 @@ enum CaptureStep {
 }
 
 /// 取り込み待ちを置く（既にある待ちは新しい要求で置き換える）。
+#[cfg(any(
+    test,
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "ios",
+    target_os = "android"
+))]
 fn arm_capture(slot: &Mutex<Option<PendingCapture>>, generation: u64, now: Instant) {
     *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(PendingCapture {
         generation,
@@ -437,6 +451,8 @@ pub fn print_screen_page_effect(state: &PrintPageState, sender: &CompletionSende
             let request_id = bridge::begin();
             if let Err(e) = begin_print_image(request_id, &img) {
                 bridge::deliver(request_id, Err(e));
+                // 入力が無いと次フレームが来ず Printing のまま止まるため、結果の反映を起こす。
+                sender.request_repaint_after(Duration::ZERO);
             }
         }
     }

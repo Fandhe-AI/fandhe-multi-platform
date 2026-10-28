@@ -148,10 +148,12 @@ impl<S> CompletionSender<S> {
     /// egui 0.33 は要求の次のフレームを撮る）。画面の印刷（`device/print.rs` の print-screen 経路）
     /// 専用で、タグは [`Self::tagged_screenshot`] で自分の読み戻しだけを選ぶために使う。
     /// `egui_context()` を流用しないのは、ctx を丸ごと渡す口を増やさないため。
-    #[cfg_attr(
-        not(all(feature = "device", not(target_arch = "wasm32"))),
-        allow(dead_code)
-    )]
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "ios",
+        target_os = "android"
+    ))]
     pub(crate) fn request_screenshot(&self, tag: u64) {
         self.ctx
             .send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::new(
