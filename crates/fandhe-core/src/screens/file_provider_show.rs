@@ -40,7 +40,7 @@ pub const TITLE: &str = "ファイル画面に出す保存先";
 pub const ROOT_TITLE: &str = "Fandhe（この端末内のみ）";
 /// 範囲の注記。
 pub const NOTE: &str = "この端末内のみ。ネットワーク同期はしない";
-/// 見本のファイル名（重複時は OS 側で「名前 (n).拡張子」へずらす）。
+/// 見本の表示名（同名があってもずらさず、置くたびに新しい書類 ID の別の書類になる。契約は `fandhe_device::file_provider`）。
 pub const SAMPLE_NAME: &str = "fandhe-sample.txt";
 /// 見本の中身（ASCII 固定）。
 pub const SAMPLE_CONTENT: &str = "fandhe file provider sample\n";
@@ -85,14 +85,16 @@ pub const DEFERRED_ERROR: &str = "この OS では保留中です";
 /// その他の非対応。
 pub const UNSUPPORTED_ERROR: &str = "この端末・ブラウザでは使えません";
 
-/// 画面から出す操作。消す対象は押した時点の名前で持つ（一覧が変わって別のファイルを消さない）。
+/// 画面から出す操作。消す対象は押した時点の書類を指すキーで持つ（一覧が変わって別のファイルを消さない）。
+/// 契約上のキーは再利用しない書類 ID で、表示名は同名が重複しうるため識別に使わない
+/// （現行コードは名前を持つ。ID への切り替えは #1020）。
 #[derive(Clone, PartialEq, Eq)]
 pub enum FileAction {
     /// 読み直し。
     Reload,
     /// 見本を置く。
     PutSample,
-    /// 名前のファイルを消す。
+    /// キー（契約上は書類 ID。現行コードは名前）の書類を消す。
     Delete(String),
 }
 
@@ -121,7 +123,7 @@ pub enum Phase {
 /// 一覧の 1 行（表示用）。
 #[derive(Clone, PartialEq, Eq)]
 pub struct EntryView {
-    /// ファイル名。
+    /// 表示名（重複しうる。識別は書類 ID で行い、ID の欄は #1020 で足す）。
     pub name: String,
     /// バイト数。
     pub size: u64,

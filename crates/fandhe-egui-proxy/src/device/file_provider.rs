@@ -3,7 +3,8 @@
 //! `take_request` で観測し、`fandhe_device::file_provider::FileProvider` をワーカーで呼んで、
 //! 操作の結果と操作後に読み直した一覧を `CompletionSender` 経由で 1 件にまとめて注入する
 //! （`crate::screens::registry` の `effect` 区画から呼ばれる、`app::EffectFn` 参照）。
-//! 契約の SSOT は `fandhe_device::file_provider`。
+//! 契約の SSOT は `fandhe_device::file_provider`（削除キーは再利用しない書類 ID。現行コードは
+//! 名前をキーに渡しており、ID への切り替えは #1020）。
 //!
 //! # OS 別実装の差し込み口
 //!
