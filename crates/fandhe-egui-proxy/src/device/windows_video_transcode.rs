@@ -15,7 +15,7 @@
 //!    出力寸法は OS が決める（trait doc の契約）
 //!
 //! 一時ファイルは `video_transcode::temp_pair` で名前を作り、`create_new` で作る（既存のファイルや
-//! リンクを上書きしない）。ストリームを閉じてから `LEFTOVERS` 経由で消す。OS の操作が `Cancel()` 後の
+//! リンクを上書きしない）。ストリームを閉じてから `LEFTOVERS` 経由で消す（`Close()` 失敗も `PENDING` に積み、閉じ直せるまで次の要求を止める。変換が成功していれば結果は返す）。OS の操作が `Cancel()` 後の
 //! 猶予内に止まったと確かめられなければ、消さずに未解放として記録し、次の要求は OS を呼ばず失敗にする。
 //!
 //! 期限は `remaining` から求めた `Instant`（単調時計）。OS 側の操作も期限で `Cancel()` する。
@@ -121,6 +121,18 @@ mod imp {
         let mut g = PENDING.lock().unwrap_or_else(|e| e.into_inner());
         g.retain(|alive| alive());
         !g.is_empty()
+    }
+
+    /// ストリームを閉じる。`Close()` が失敗したら握りつぶさず `PENDING` に積み、閉じ直せるまで
+    /// 次の要求を止める（一時ファイルも消さない）。変換自体が成功していれば結果は返す。
+    fn close_stream(s: &IRandomAccessStream) {
+        if s.Close().is_err() {
+            let s = s.clone();
+            PENDING
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(Box::new(move || s.Close().is_err()));
+        }
     }
 
     fn internal(label: &'static str) -> DeviceError {
@@ -259,7 +271,7 @@ mod imp {
             .map_err(|e| map_err(&e, label))?;
         wait_op(deadline, label, &open).inspect_err(|_| {
             if let Ok(s) = open.GetResults() {
-                let _ = s.Close();
+                close_stream(&s);
             }
         })
     }
@@ -415,7 +427,7 @@ mod imp {
             .map_err(err)
             .and_then(|prep| run_prepared(prep, deadline, "video_transcode transcode"))
             .and_then(|()| take_fault(&fault).map_or(Ok(()), Err));
-        let _ = output.Close();
+        close_stream(&output);
         result
     }
 
@@ -441,7 +453,7 @@ mod imp {
         ) {
             Ok(o) => o,
             Err(e) => {
-                let _ = input.Close();
+                close_stream(&input);
                 return Err(e);
             }
         };
@@ -449,8 +461,8 @@ mod imp {
             .PrepareStreamTranscodeAsync(&input, &output, &profile)
             .map_err(err)
             .and_then(|prep| run_prepared(prep, deadline, "video_transcode transcode"));
-        let _ = output.Close();
-        let _ = input.Close();
+        close_stream(&output);
+        close_stream(&input);
         result
     }
 
@@ -525,8 +537,7 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn host_implementation_is_unsupported() {
-        use std::sync::Mutex;
-        use std::time::{Duration, Instant};
+        use std::time::Duration;
         assert!(matches!(
             implementation().transcode(Duration::from_secs(1)),
             Err(fandhe_device::DeviceError::Unsupported(_))
