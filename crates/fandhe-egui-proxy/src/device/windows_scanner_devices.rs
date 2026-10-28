@@ -122,7 +122,7 @@ fn check_preview(succeeded: bool, size: u64) -> Result<(), ScannerImportFailure>
 
 #[cfg(target_os = "windows")]
 mod imp {
-    use std::sync::mpsc;
+    use std::sync::{mpsc, Mutex};
     use std::time::{Duration, Instant};
 
     use fandhe_device::scanner_devices::{DeviceKind, ImportedImage, DISCOVERY_WINDOW};
@@ -205,8 +205,22 @@ mod imp {
         after_failure(failure, present)
     }
 
-    /// 取り込み先のストリーム。Drop で必ず閉じる（全経路）。
+    /// Close に失敗して解放を確認できていないストリーム。確認できるまで次の取り込みを始めない。
+    static LEAKED: Mutex<Vec<InMemoryRandomAccessStream>> = Mutex::new(Vec::new());
+
+    /// 取り込み先のストリーム。`close` で結果を確かめて閉じる。Drop は補助的な解放だけ。
     struct Stream(InMemoryRandomAccessStream);
+
+    impl Stream {
+        fn close(&self) -> Result<(), ScannerImportFailure> {
+            self.0.Close().map_err(|e| {
+                if let Ok(mut v) = LEAKED.lock() {
+                    v.push(self.0.clone());
+                }
+                os_failure(&e)
+            })
+        }
+    }
 
     impl Drop for Stream {
         fn drop(&mut self) {
@@ -214,10 +228,22 @@ mod imp {
         }
     }
 
+    /// 前回 Close に失敗したストリームを閉じ直す。閉じられなければ `Failed`（保持したまま次要求を止める）。
+    fn release_leaked() -> Result<(), ScannerImportFailure> {
+        let mut v = LEAKED.lock().map_err(|_| ScannerImportFailure::Failed)?;
+        v.retain(|s| s.Close().is_err());
+        if v.is_empty() {
+            Ok(())
+        } else {
+            Err(ScannerImportFailure::Failed)
+        }
+    }
+
     pub(super) struct WindowsScannerDevices;
 
     impl ScannerDevices for WindowsScannerDevices {
         fn import_one(&self, remaining: Duration) -> Result<ImportedImage, ScannerImportFailure> {
+            release_leaked()?;
             let deadline = Instant::now() + remaining;
             let (id, found) = discover(deadline)?;
             scan(&id, found, deadline).map_err(|f| settle(f, &id))
@@ -256,54 +282,68 @@ mod imp {
         }
     }
 
-    fn format_ok(c: &windows::core::Result<impl FormatConfig>, f: ImageScannerFormat) -> bool {
-        c.as_ref().is_ok_and(|c| c.supported(f))
-    }
-
-    /// Flatbed・Feeder の configuration を同じ形で扱う。
-    trait FormatConfig {
-        fn supported(&self, f: ImageScannerFormat) -> bool;
-    }
-
-    impl FormatConfig for windows::Devices::Scanners::ImageScannerFlatbedConfiguration {
-        fn supported(&self, f: ImageScannerFormat) -> bool {
-            self.IsFormatSupported(f).unwrap_or(false)
+    /// 取り込み元 1 つぶんの機能を読む。OS の照会エラーは非対応にせず伝播する（嘘の成功の禁止）。
+    /// configuration は取り込み元とプレビューの両方が使えると確認できてから読む。
+    fn source_caps(
+        scanner: &ImageScanner,
+        src: ImageScannerScanSource,
+    ) -> Result<Caps, ScannerImportFailure> {
+        let e = |e: windows::core::Error| os_failure(&e);
+        let mut caps = Caps {
+            source_supported: scanner.IsScanSourceSupported(src).map_err(e)?,
+            preview_supported: scanner.IsPreviewSupported(src).map_err(e)?,
+            ..Caps::default()
+        };
+        if !(caps.source_supported && caps.preview_supported) {
+            return Ok(caps);
         }
+        let (jpeg, png) = match src {
+            ImageScannerScanSource::Feeder => {
+                let c = scanner.FeederConfiguration().map_err(e)?;
+                (
+                    c.IsFormatSupported(ImageScannerFormat::Jpeg).map_err(e)?,
+                    c.IsFormatSupported(ImageScannerFormat::Png).map_err(e)?,
+                )
+            }
+            _ => {
+                let c = scanner.FlatbedConfiguration().map_err(e)?;
+                (
+                    c.IsFormatSupported(ImageScannerFormat::Jpeg).map_err(e)?,
+                    c.IsFormatSupported(ImageScannerFormat::Png).map_err(e)?,
+                )
+            }
+        };
+        caps.jpeg = jpeg;
+        caps.png = png;
+        Ok(caps)
     }
 
-    impl FormatConfig for windows::Devices::Scanners::ImageScannerFeederConfiguration {
-        fn supported(&self, f: ImageScannerFormat) -> bool {
-            self.IsFormatSupported(f).unwrap_or(false)
-        }
-    }
-
+    /// ストリームを作り、成功・失敗を問わず明示的に閉じる。Close が失敗したら `LEAKED` に保持し、
+    /// 画像は返さない。次の要求は `release_leaked` が解放を確認するまで始まらない（契約表 9）。
     fn scan(
         id: &HSTRING,
         found: u32,
         deadline: Instant,
     ) -> Result<ImportedImage, ScannerImportFailure> {
+        let stream = Stream(InMemoryRandomAccessStream::new().map_err(|e| os_failure(&e))?);
+        let result = scan_inner(id, found, deadline, &stream);
+        match (result, stream.close()) {
+            (Ok(_), Err(f)) => Err(f),
+            (r, _) => r,
+        }
+    }
+
+    fn scan_inner(
+        id: &HSTRING,
+        found: u32,
+        deadline: Instant,
+        stream: &Stream,
+    ) -> Result<ImportedImage, ScannerImportFailure> {
         let e = |e: windows::core::Error| os_failure(&e);
         let scanner = wait_op(deadline, &ImageScanner::FromIdAsync(id).map_err(e)?)?;
 
-        // 読み取りに失敗した項目は false（候補から外れるだけで、成功にはならない）。
-        let flatbed_cfg = scanner.FlatbedConfiguration();
-        let feeder_cfg = scanner.FeederConfiguration();
-        let source_caps = |src: ImageScannerScanSource, jpeg: bool, png: bool| Caps {
-            source_supported: scanner.IsScanSourceSupported(src).unwrap_or(false),
-            preview_supported: scanner.IsPreviewSupported(src).unwrap_or(false),
-            jpeg,
-            png,
-        };
-        let flatbed = source_caps(
-            ImageScannerScanSource::Flatbed,
-            format_ok(&flatbed_cfg, ImageScannerFormat::Jpeg),
-            format_ok(&flatbed_cfg, ImageScannerFormat::Png),
-        );
-        let feeder = source_caps(
-            ImageScannerScanSource::Feeder,
-            format_ok(&feeder_cfg, ImageScannerFormat::Jpeg),
-            format_ok(&feeder_cfg, ImageScannerFormat::Png),
-        );
+        let flatbed = source_caps(&scanner, ImageScannerScanSource::Flatbed)?;
+        let feeder = source_caps(&scanner, ImageScannerScanSource::Feeder)?;
         let (source, format) = pick_plan(flatbed, feeder).ok_or(ScannerImportFailure::Failed)?;
         let os_format = match format {
             Format::Jpeg => ImageScannerFormat::Jpeg,
@@ -311,16 +351,23 @@ mod imp {
         };
         let os_source = match source {
             Source::Flatbed => {
-                flatbed_cfg.map_err(e)?.SetFormat(os_format).map_err(e)?;
+                scanner
+                    .FlatbedConfiguration()
+                    .map_err(e)?
+                    .SetFormat(os_format)
+                    .map_err(e)?;
                 ImageScannerScanSource::Flatbed
             }
             Source::Feeder => {
-                feeder_cfg.map_err(e)?.SetFormat(os_format).map_err(e)?;
+                scanner
+                    .FeederConfiguration()
+                    .map_err(e)?
+                    .SetFormat(os_format)
+                    .map_err(e)?;
                 ImageScannerScanSource::Feeder
             }
         };
 
-        let stream = Stream(InMemoryRandomAccessStream::new().map_err(e)?);
         let op = scanner
             .ScanPreviewToStreamAsync(os_source, &stream.0)
             .map_err(e)?;
