@@ -57,6 +57,9 @@ final class VideoTranscodeHelper {
     private static final AtomicBoolean inFlight = new AtomicBoolean(false);
     // 消せなかった一時ファイル。次の要求の前に消し直す。
     private static final List<File> leftovers = new ArrayList<>();
+    // release() が例外を投げた MediaCodec / MediaMuxer。参照を捨てず次の要求の前に再解放し、
+    // 確認できるまで RELEASE_PENDING を返す（device-bridge-contracts 類型 9）。
+    private static final List<Object> unreleased = new ArrayList<>();
 
     private static final class Timeout extends RuntimeException {}
     private static final class Unsupported extends RuntimeException {}
@@ -105,8 +108,38 @@ final class VideoTranscodeHelper {
                     it.remove();
                 }
             }
-            return leftovers.isEmpty();
+            for (Iterator<Object> it = unreleased.iterator(); it.hasNext(); ) {
+                if (tryRelease(it.next())) {
+                    it.remove();
+                }
+            }
+            return leftovers.isEmpty() && unreleased.isEmpty();
         }
+    }
+
+    private static boolean tryRelease(Object o) {
+        try {
+            if (o instanceof MediaCodec) {
+                ((MediaCodec) o).release();
+            } else {
+                ((MediaMuxer) o).release();
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // 解放し、失敗したら参照を静的リストへ残す。
+    private boolean releaseTracked(Object o) {
+        if (tryRelease(o)) {
+            return true;
+        }
+        synchronized (leftovers) {
+            unreleased.add(o);
+        }
+        releaseFailed = true;
+        return false;
     }
 
     private byte[] run(File cacheDir) {
@@ -146,7 +179,7 @@ final class VideoTranscodeHelper {
                 if (muxerStarted) {
                     try { muxer.stop(); } catch (Exception ignored) { }
                 }
-                try { muxer.release(); } catch (Exception e) { releaseFailed = true; }
+                releaseTracked(muxer);
             }
             if (out != null && !out.delete() && out.exists()) {
                 synchronized (leftovers) {
@@ -171,7 +204,7 @@ final class VideoTranscodeHelper {
             return;
         }
         try { c.stop(); } catch (Exception ignored) { }
-        try { c.release(); } catch (Exception e) { releaseFailed = true; }
+        releaseTracked(c);
     }
 
     // codec を作り、OS に寸法の対応を問う。作れない・偽なら非対応。
@@ -187,7 +220,11 @@ final class VideoTranscodeHelper {
             return c;
         } catch (IOException | IllegalArgumentException | Unsupported e) {
             if (c != null) {
-                try { c.release(); } catch (Exception ignored) { }
+                if (!tryRelease(c)) {
+                    synchronized (leftovers) {
+                        unreleased.add(c);
+                    }
+                }
             }
             throw new Unsupported();
         }
