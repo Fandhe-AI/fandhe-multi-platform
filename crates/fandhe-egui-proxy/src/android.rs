@@ -417,6 +417,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // `device::media_transcode::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::media_transcode::reset_pending_tracking();
+    // Issue #1014: 動画変換の処理済み世代も破棄する（理由は media_transcode と同じ。
+    // `device::video_transcode::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::video_transcode::reset_pending_tracking();
     // Issue #469: PDF 表示の処理済み世代も破棄する（理由は ml_inference と同じ。
     // `device::pdf_viewer::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

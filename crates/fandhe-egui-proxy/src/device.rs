@@ -397,6 +397,11 @@ pub mod android_usb_device;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_video_capture;
+/// Issue #1014 (a): Android 向け動画の変換のスタブ（実装は #1017）。
+/// `device/video_transcode.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_video_transcode;
 /// Issue #785: Android 向けシステム音量実装（#787 が埋めるスタブ）。
 /// `device/volume_control.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
@@ -659,6 +664,13 @@ pub mod apple_translation;
 /// `main.rs`（登録）から使われる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_url_scheme;
+/// Issue #1014: macOS / iOS 向け動画の変換実装（`apple/fandhe_apple_video_transcode.m` の
+/// `AVAssetWriter` + `AVAssetExportSession` を呼ぶ C ABI ラッパー）。`device/video_transcode.rs` の macOS 経路から
+/// 呼ばれる。iOS は #1016 が `ios_video_transcode` で使うまで未使用（そのとき `allow(dead_code)` を外す）。
+/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod apple_video_transcode;
 /// Issue #307（親 #90）: AR 表示の effect ドライバ（iOS は `ios_ar.rs`、
 /// 他 OS は `UnsupportedAr` 固定。Web は `fandhe-web-dom`）。
 pub mod ar;
@@ -1160,6 +1172,10 @@ pub mod ios_uwb_ranging;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_video_capture;
+/// Issue #1014 (a): iOS 向け動画の変換のスタブ（実装は #1016）。
+/// `device/video_transcode.rs` の iOS 経路から呼ばれる。
+#[cfg(target_os = "ios")]
+pub mod ios_video_transcode;
 /// Issue #785: iOS 向けシステム音量実装（#786 が埋めるスタブ）。
 /// `device/volume_control.rs` の iOS 経路から使われる。
 #[cfg(any(target_os = "ios", test))]
@@ -1520,7 +1536,8 @@ pub mod picture_in_picture;
 pub mod power_state;
 /// Phase 11 の拡充ループ（親 #94、Issue #325）: 印刷ダイアログの effect ドライバ（macOS 実装、
 /// Windows / iOS / Android 実装、他 OS は `UnsupportedPrint` 固定。
-/// Web は `fandhe-web-dom`）。
+/// Web は `fandhe-web-dom`）。画面の内容の印刷（print-screen、親 #341、Issue #1010）の取り込み段と
+/// effect ドライバも同居する（macOS / Windows 実装、iOS / Android はスタブ）。
 pub mod print;
 /// Phase 11 の拡充ループ（親 #139、Issue #719）: クイック設定タイル・コントロールの effect ドライバ
 /// （macOS は App Group の回数ファイル、Android は SharedPreferences の回数、他 OS は `UnsupportedQuickSettingsTile` 固定）。
@@ -1635,6 +1652,10 @@ pub mod uwb_ranging;
 /// （iOS は #822・Android は #823 が埋めるスタブ、Web は `fandhe-web-dom`（#824）、
 /// macOS・Windows・Linux は `UnsupportedVideoCapturer` 固定）。
 pub mod video_capture;
+/// Phase 11 の拡充ループ（親 #340、Issue #1014）: 動画の変換の effect ドライバ
+/// （macOS 実装、iOS は #1016・Android は #1017・Windows は #1015 が埋めるスタブ、
+/// Web は #1018、他 OS は `UnsupportedVideoTranscode` 固定）。
+pub mod video_transcode;
 /// Phase 11 の拡充ループ（親 #166、Issue #785）: システム音量の effect ドライバ
 /// （macOS・Windows 実装、iOS は #786・Android は #787 が埋めるスタブ、他 OS は `UnsupportedVolumeControl` 固定）。
 pub mod volume_control;
@@ -2009,6 +2030,11 @@ pub mod windows_usb_device;
 /// `device/user_idle.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_user_idle;
+/// Issue #1014 (a): Windows 向け動画の変換のスタブ（実装は #1015）。
+/// `device/video_transcode.rs` の Windows 経路から呼ばれる。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_video_transcode;
 /// Issue #785: Windows 向けシステム音量実装（`IAudioEndpointVolume`）。
 /// `device/volume_control.rs` の Windows 経路（ワーカー）から呼ばれる。
 #[cfg(target_os = "windows")]

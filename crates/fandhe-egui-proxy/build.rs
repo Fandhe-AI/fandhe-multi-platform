@@ -680,6 +680,8 @@ fn main() {
     compile_apple_ml_inference();
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
+    // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も macOS 分岐と共用する。
+    compile_apple_video_transcode();
     // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
     compile_apple_pdf_viewer();
     // `apple/fandhe_apple_file_preview.m`（Issue #917 macOS + b-ios iOS）も共用する。
@@ -1153,6 +1155,21 @@ fn compile_apple_media_transcode() {
         .flag("-fobjc-arc")
         .compile("fandhe_apple_media_transcode");
     println!("cargo:rustc-link-lib=framework=AVFoundation");
+    println!("cargo:rustc-link-lib=framework=Foundation");
+}
+
+/// `apple/fandhe_apple_video_transcode.m` を `cc` でコンパイルし AVFoundation・CoreMedia・CoreVideo を
+/// リンクする（Issue #1014 macOS、iOS は #1016 が利用、動画の小さい解像度への変換）。
+/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_video_transcode`）と同じ OS 集合に保つ。
+fn compile_apple_video_transcode() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_video_transcode.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_video_transcode.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_video_transcode");
+    println!("cargo:rustc-link-lib=framework=AVFoundation");
+    println!("cargo:rustc-link-lib=framework=CoreMedia");
+    println!("cargo:rustc-link-lib=framework=CoreVideo");
     println!("cargo:rustc-link-lib=framework=Foundation");
 }
 
@@ -2749,6 +2766,8 @@ fn build_macos() {
     compile_apple_spotlight_index();
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
+    // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も共用する。
+    compile_apple_video_transcode();
     // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
     compile_apple_pdf_viewer();
     // `apple/fandhe_apple_file_preview.m`（Issue #917 macOS + b-ios iOS）も共用する。

@@ -154,6 +154,10 @@ generated_screens! {
     crate::device::print::print_page_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "print_screen_page" => fandhe_core::screens::print_screen_page::current_screen,
+    crate::device::print::print_screen_page_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "managed_app_config_show" => fandhe_core::screens::managed_app_config_show::current_screen,
     crate::device::managed_app_config::managed_app_config_show_effect,
     effect
@@ -448,6 +452,10 @@ generated_screens! {
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "media_transcode" => fandhe_core::screens::media_transcode::current_screen,
     crate::device::media_transcode::media_transcode_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "video_transcode" => fandhe_core::screens::video_transcode::current_screen,
+    crate::device::video_transcode::video_transcode_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pdf_first_page" => fandhe_core::screens::pdf_first_page::current_screen,
