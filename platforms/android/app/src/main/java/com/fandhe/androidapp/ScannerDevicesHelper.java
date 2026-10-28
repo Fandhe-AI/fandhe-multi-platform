@@ -356,6 +356,16 @@ final class ScannerDevicesHelper {
                 }
             }
         }
+        // どの I/O 経路の失敗でも、機器が外れていれば切断として報告する（資源解放後に OS 一覧を読み直す）。
+        if (res.code == CODE_FAILED) {
+            try {
+                if (!present(um, dev)) {
+                    res = new Result(CODE_INTERRUPTED, null);
+                }
+            } catch (RuntimeException e) {
+                // 読み直せなければ失敗のまま。
+            }
+        }
         int abort = r.abort.get();
         if (abort != 0) {
             res = new Result(abort, null);
