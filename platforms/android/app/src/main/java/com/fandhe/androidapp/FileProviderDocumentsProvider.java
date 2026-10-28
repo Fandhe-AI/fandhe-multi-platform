@@ -209,11 +209,27 @@ public final class FileProviderDocumentsProvider extends DocumentsProvider {
         MatrixCursor c = new MatrixCursor(projection != null ? projection : ROOT_COLUMNS);
         c.newRow()
                 .add(Root.COLUMN_ROOT_ID, ROOT_ID)
-                .add(Root.COLUMN_FLAGS, Root.FLAG_LOCAL_ONLY | Root.FLAG_SUPPORTS_CREATE)
+                .add(Root.COLUMN_FLAGS, Root.FLAG_LOCAL_ONLY | Root.FLAG_SUPPORTS_CREATE
+                        | Root.FLAG_SUPPORTS_IS_CHILD)
                 .add(Root.COLUMN_TITLE, getContext().getString(R.string.file_provider_root_title))
                 .add(Root.COLUMN_DOCUMENT_ID, ROOT_DOC_ID)
                 .add(Root.COLUMN_MIME_TYPES, "*/*");
         return c;
+    }
+
+    // フォルダ選択（ACTION_OPEN_DOCUMENT_TREE）のツリー権限の検証から呼ばれる。階層はルート直下の
+    // 1 段だけなので、親がルートで、子が今ある書類の ID のときだけ親子と認める。消えた ID は認めない。
+    @Override
+    public boolean isChildDocument(String parentDocumentId, String documentId) {
+        if (!ROOT_DOC_ID.equals(parentDocumentId)) {
+            return false;
+        }
+        try {
+            resolve(documentId);
+            return true;
+        } catch (FileNotFoundException e) {
+            return false;
+        }
     }
 
     @Override
