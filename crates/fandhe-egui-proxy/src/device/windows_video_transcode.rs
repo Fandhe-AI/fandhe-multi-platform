@@ -79,7 +79,7 @@ mod imp {
         SOURCE_WIDTH, TIMEOUT,
     };
     use fandhe_device::DeviceError;
-    use windows::core::HSTRING;
+    use windows::core::{AgileReference, HSTRING};
     use windows::Foundation::{TimeSpan, TypedEventHandler};
     use windows::Media::Core::{
         MediaStreamSample, MediaStreamSource, MediaStreamSourceSampleRequestedEventArgs,
@@ -127,11 +127,16 @@ mod imp {
     /// 次の要求を止める（一時ファイルも消さない）。変換自体が成功していれば結果は返す。
     fn close_stream(s: &IRandomAccessStream) {
         if s.Close().is_err() {
-            let s = s.clone();
+            // `IRandomAccessStream` は `Send` でないため、`AgileReference` で包んで積む。包めなければ
+            // 閉じ直す手段が無いので、未解放のまま次の要求を止め続ける（閉じた扱いにしない）。
+            let alive: Box<dyn Fn() -> bool + Send> = match AgileReference::new(s) {
+                Ok(r) => Box::new(move || r.resolve().map_or(true, |s| s.Close().is_err())),
+                Err(_) => Box::new(|| true),
+            };
             PENDING
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
-                .push(Box::new(move || s.Close().is_err()));
+                .push(alive);
         }
     }
 
