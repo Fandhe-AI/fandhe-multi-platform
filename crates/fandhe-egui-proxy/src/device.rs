@@ -609,9 +609,8 @@ pub mod apple_quick_settings_tile;
 /// （`apple/fandhe_apple_scanner_devices.m` の ImageCaptureCore を呼ぶ C ABI ラッパー）。
 /// `device/scanner_devices.rs` の macOS 経路と iOS 経路から呼ばれる。`build.rs` のコンパイル条件と
 /// 同じ OS 集合に保つ。写像の純関数はホストの `cargo test` でも検査するため `test` でも有効にする。
-/// iOS は #982 が `ios_scanner_devices` から使うまで未使用のため `dead_code` を許す（その時に外す）。
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "ios", target_os = "macos")), allow(dead_code))]
 pub mod apple_scanner_devices;
 /// Issue #1335（macOS）/ #1336（iOS）: macOS 向け ScreenCaptureKit 画面録画（`apple/
 /// fandhe_apple_screen_capture.m` を呼ぶ C ABI ラッパー。iOS は #1336 の ReplayKit）。
@@ -1116,7 +1115,7 @@ pub mod ios_print;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_safe_area_insets;
-/// Issue #981 (a): iOS 向けスキャナー・カメラ機器からの取り込み（#982 が埋めるスタブ）。
+/// Issue #982: iOS 向けスキャナー・カメラ機器からの取り込み（macOS と共用の `apple_scanner_devices` へ委譲し、戻り直後に再描画を起こす）。
 /// `device/scanner_devices.rs` の iOS 経路から使われる。
 #[cfg(target_os = "ios")]
 pub mod ios_scanner_devices;

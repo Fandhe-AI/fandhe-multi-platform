@@ -10,7 +10,7 @@
 //! # OS 別の分担（dispatch は #981 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
 //! - macOS: [`super::apple_scanner_devices::AppleScannerDevices`]（#981。ImageCaptureCore）
-//! - iOS: `ios_scanner_devices`（#982。macOS と共用の実装へ差し替える）
+//! - iOS: `ios_scanner_devices`（#982。macOS と共用の `AppleScannerDevices` へ委譲し、許可・背景遷移は `.m` の iOS 区画）
 //! - Android: `android_scanner_devices`（#983。`UsbManager` + `MtpDevice`）
 //! - Windows: `windows_scanner_devices`（#984。WinRT `ImageScanner`）
 //! - Web・Linux: `UnsupportedScannerDevices` 固定（ダミーの成功実装へは倒さない）

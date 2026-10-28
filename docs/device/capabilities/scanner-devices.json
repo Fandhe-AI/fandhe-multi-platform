@@ -7,15 +7,18 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "ImageCaptureCore `ICDeviceBrowser`（iOS 13+）で USB 接続のカメラ機器を探し、`ICCameraDevice` の最新の画像 1 枚を取り込む。`ICScannerDevice` は macOS のみ",
-      "perm": "iOS 14 以降は `requestContentsAuthorization` の許可。`NSCameraUsageDescription` は既存キーの文言に用途を足す（取り込みだけで要るかは未確認）",
+      "status": "done",
+      "api": "ImageCaptureCore `ICDeviceBrowser`（カメラ・ローカル。`browsedDeviceTypeMask` は iOS 15.2+）で USB 接続のカメラ機器を探し、`ICCameraDevice` のセッションを開いて `mediaFiles` から作成日時が最新の画像 1 枚を `requestDownloadWithOptions` で一時ディレクトリへ取り込み、ImageIO で長辺 2048 画素以下の JPEG にする（`ICScannerDevice` は範囲外）",
+      "perm": "iOS 14 以降は `requestContentsAuthorization` の実行時ダイアログ。`NSCameraUsageDescription` は既存キーの文言に用途を足しただけ（新しいキーは足さない）",
       "url": [
         "https://developer.apple.com/documentation/imagecapturecore/icdevicebrowser/requestcontentsauthorization(completion:)",
         "https://developer.apple.com/documentation/imagecapturecore/icdevicebrowser/browseddevicetypemask",
         "https://developer.apple.com/documentation/imagecapturecore/iccamerafile/requestdownload(options:completion:)"
       ],
-      "note": "未実装。カメラ機器のみ（スキャナーは API なし）。守る: 失敗・0 件・拒否・ロックを成功に畳まない、セッション・一時ファイル・接続を全経路で閉じる。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）。範囲外: 機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク接続の機器。既知の天井: 取り込みだけで `NSCameraUsageDescription` が要るか（実機未確認）"
+      "note": "実装済み（#982）。macOS と共用の `.m` を使い、取り込みの許可を確かめてから探索窓（3 秒）の間に機器を探し、先頭の 1 台の最新の画像 1 枚を取り込んで種類と台数と共に表示する。許可は completion の引数ではなく OS のステータスを読み直して決め、ダイアログを閉じた場合も `PermissionDenied`。背景へ遷移したら `Interrupted`（許可ダイアログ表示中の WillResignActive は見ない）。`cancelDownload` は iOS に無く、ダウンロードはセッションを閉じて止める。`deviceBrowserDidEnumerateLocalDevices:` も iOS に無いため、探索は毎回探索窓いっぱいまで待つ。0 台・画像 0 件・ロック・権限拒否・時間切れ・取り込み中の取り外し・上限超過・復号不可・OS の失敗を区別して失敗にし、成功へ畳まない。日時や UTI が欠けた要素は飛ばさず失敗にする。縮小前の総画素数が 64 Mi 画素を超える画像は復号せず `TooLarge`、寸法を読めない画像は `Undecodable`。一時ディレクトリは要求ごとに UUID 名で作り、全経路でセッション・探索・ダウンロード・通知の登録を解除して削除する。機器名・シリアル・画像・OS の文言はログへ出さない。カメラ機器のみ（スキャナーは API なし）。守る: 失敗・0 件・拒否・ロックを成功に畳まない、セッション・一時ファイル・接続を全経路で閉じる。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）。範囲外: 機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク接続の機器。既知の天井（実機未確認）: 取り込みだけで `NSCameraUsageDescription` が要るか、許可の前に機器が列挙されるか、iPhone を iOS 端末へつないだ場合の扱い",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#967）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_scanner_devices.m + crates/fandhe-egui-proxy/src/device/apple_scanner_devices.rs + crates/fandhe-egui-proxy/src/device/ios_scanner_devices.rs + crates/fandhe-egui-proxy/src/device/scanner_devices.rs + crates/fandhe-core/src/screens/scanner_devices_import.rs + crates/fandhe-device/src/scanner_devices.rs、Issue #982"
     },
     "android": {
       "status": "done",
