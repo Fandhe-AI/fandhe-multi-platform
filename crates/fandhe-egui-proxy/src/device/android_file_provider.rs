@@ -30,10 +30,13 @@ use fandhe_device::DeviceError;
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn FileProvider> {
     match super::android::data_dir() {
-        Some(d) => Arc::new(DirFileProvider::new(
-            d.0.join(FOLDER_NAME),
-            Box::new(|| map_notify(imp::notify_changed())),
-        )),
+        Some(d) => Arc::new(
+            DirFileProvider::new(
+                d.0.join(FOLDER_NAME),
+                Box::new(|| map_notify(imp::notify_changed())),
+            )
+            .with_before_delete(Box::new(|name| map_notify(imp::before_delete(name)))),
+        ),
         None => Arc::new(UnsupportedFileProvider),
     }
 }
@@ -56,8 +59,17 @@ fn map_notify(r: Option<bool>) -> Result<(), DeviceError> {
 #[cfg(target_os = "android")]
 mod imp {
     /// `MainActivity.fileProviderNotifyChanged()` を呼ぶ。JNI 失敗・Java 例外は例外を clear して `None`。
-    #[allow(unsafe_code)]
     pub(super) fn notify_changed() -> Option<bool> {
+        call(None)
+    }
+
+    /// `MainActivity.fileProviderBeforeDelete(String)` を呼ぶ。削除の直前に旧 URI 権限を失効させる。
+    pub(super) fn before_delete(name: &str) -> Option<bool> {
+        call(Some(name))
+    }
+
+    #[allow(unsafe_code)]
+    fn call(arg: Option<&str>) -> Option<bool> {
         let app = crate::android::android_app()?;
         // SAFETY: `android_quick_settings_tile::imp::read` と同一の根拠。`app.vm_as_ptr()` は
         // android-activity が管理する有効な `JavaVM*` で、`app` は本呼び出しの間生存する。
@@ -68,15 +80,26 @@ mod imp {
                 // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない
                 // （`app` の生存中有効）。
                 let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                let result = (|| {
-                    Ok(env
+                let result = (|| match arg {
+                    None => Ok(env
                         .call_method(
                             &activity,
                             jni::jni_str!("fileProviderNotifyChanged"),
                             jni::jni_sig!(() -> boolean),
                             &[],
                         )?
-                        .z()?)
+                        .z()?),
+                    Some(a) => {
+                        let j = env.new_string(a)?;
+                        Ok(env
+                            .call_method(
+                                &activity,
+                                jni::jni_str!("fileProviderBeforeDelete"),
+                                jni::jni_sig!((java.lang.String) -> boolean),
+                                &[jni::objects::JValue::Object(&j)],
+                            )?
+                            .z()?)
+                    }
                 })();
                 if result.is_err() && env.exception_check() {
                     env.exception_clear();

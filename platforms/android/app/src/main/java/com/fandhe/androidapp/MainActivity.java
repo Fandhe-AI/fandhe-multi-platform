@@ -896,6 +896,11 @@ public class MainActivity extends GameActivity {
         return FileProviderDocumentsProvider.notifyChanged(getApplicationContext());
     }
 
+    // 削除の直前に旧 URI 権限を失効させる（Rust の delete から JNI で呼ぶ）。
+    boolean fileProviderBeforeDelete(String name) {
+        return FileProviderDocumentsProvider.revokeName(getApplicationContext(), name);
+    }
+
     // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
     // Rust の `android_print.rs` が JNI で呼ぶ。
     private final PrintHelper printHelper = new PrintHelper(this);

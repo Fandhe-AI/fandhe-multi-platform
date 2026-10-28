@@ -169,7 +169,11 @@ fn write_or_cleanup(
 pub struct DirFileProvider {
     dir: PathBuf,
     notify: Box<dyn Fn() -> Result<(), DeviceError> + Send + Sync>,
+    /// 削除の直前に名前を渡して呼ぶ（旧 URI 権限の失効）。失敗したら削除しない。
+    before_delete: Option<BeforeDelete>,
 }
+
+type BeforeDelete = Box<dyn Fn(&str) -> Result<(), DeviceError> + Send + Sync>;
 
 impl DirFileProvider {
     /// `dir` を保存先、`notify` を変更通知とする。
@@ -177,7 +181,18 @@ impl DirFileProvider {
         dir: PathBuf,
         notify: Box<dyn Fn() -> Result<(), DeviceError> + Send + Sync>,
     ) -> Self {
-        Self { dir, notify }
+        Self {
+            dir,
+            notify,
+            before_delete: None,
+        }
+    }
+
+    /// 削除の直前フックを足す。Android は通知より前に旧 URI 権限を失効させ、削除後に同名ファイルが
+    /// 再作成されても旧権限を引き継がせない（通知前のプロセス終了でも失効が先に済んでいる）。
+    pub fn with_before_delete(mut self, f: BeforeDelete) -> Self {
+        self.before_delete = Some(f);
+        self
     }
 }
 
@@ -259,6 +274,9 @@ impl FileProvider for DirFileProvider {
         let meta = fs::symlink_metadata(&path).map_err(|e| map_remove_err(&e))?;
         if !meta.is_file() {
             return Err(DeviceError::Internal(INTERNAL));
+        }
+        if let Some(f) = &self.before_delete {
+            f(name)?;
         }
         fs::remove_file(&path).map_err(|e| map_remove_err(&e))?;
         Ok(DeleteOutcome {
@@ -473,6 +491,23 @@ mod tests {
         assert!(outside.exists());
         assert!(matches!(p.delete("sub"), Err(DeviceError::Internal(m)) if m != NOT_FOUND));
         assert!(dir.join("sub").is_dir());
+    }
+
+    #[test]
+    fn before_delete_runs_first_and_failure_keeps_file() {
+        let t = Tmp::new("bd");
+        let (p, _) = provider(t.0.clone(), true);
+        let seen = Arc::new(AtomicUsize::new(0));
+        let s2 = seen.clone();
+        let p = p.with_before_delete(Box::new(move |n| {
+            assert_eq!(n, "a.txt");
+            s2.fetch_add(1, Ordering::SeqCst);
+            Err(DeviceError::Internal(INTERNAL))
+        }));
+        p.put("a.txt", b"x").unwrap();
+        assert!(p.delete("a.txt").is_err());
+        assert_eq!(seen.load(Ordering::SeqCst), 1);
+        assert!(t.0.join("a.txt").exists());
     }
 
     #[test]
