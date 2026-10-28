@@ -187,6 +187,12 @@ fn drive(
 
     // 復帰の記録は起点を引き直す読み取りまで消費しない（間隔待ちの early return で失わない）。
     let resumed = ds.resume_seen != resume_epoch;
+    // 背景中に drive が走らず映像を捨てそびれた場合の保険。復帰を観測したら間隔判定より前に一度捨てる。
+    if resumed && state.frame.is_some() {
+        let _ = sender.send(Box::new(move |s: &mut ArShowState| {
+            apply_frame(s, session, None);
+        }));
+    }
     if let Some(prev) = ds.last_read {
         let elapsed = now.saturating_duration_since(prev);
         if elapsed < READ_INTERVAL {
@@ -799,6 +805,24 @@ mod tests {
         assert!(s.frame.is_some());
         ds.background = true;
         drive(&s, &tx, &fake, t0 + READ_INTERVAL, 0, &mut ds);
+        apply_all(&rx, &mut s);
+        assert!(s.frame.is_none());
+    }
+
+    #[test]
+    fn resume_without_background_drive_clears_stale_frame() {
+        let (tx, rx) = channel();
+        let fake = Fake::new(Ok(reading(0.5)));
+        set_frame(&fake, Some(sf(1, 1, 4)));
+        let mut s = wanted();
+        let mut ds = DriverState::default();
+        let t0 = Instant::now();
+        drive(&s, &tx, &fake, t0, 0, &mut ds);
+        apply_all(&rx, &mut s);
+        assert!(s.frame.is_some());
+        // 背景中は drive が走らず、復帰後の最初の drive が間隔待ちでも古い映像を捨てる。
+        set_frame(&fake, None);
+        drive(&s, &tx, &fake, t0 + Duration::from_millis(50), 1, &mut ds);
         apply_all(&rx, &mut s);
         assert!(s.frame.is_none());
     }
