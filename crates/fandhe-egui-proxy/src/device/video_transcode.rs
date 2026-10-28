@@ -82,11 +82,17 @@ fn platform() -> Arc<dyn VideoTranscode> {
 ///
 /// 解放の失敗を握りつぶして「閉じた」扱いにしない（契約表 9）。記録は次の要求の開始前に
 /// [`Self::ensure_released`] が再削除して確かめる。
-#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
+#[cfg_attr(
+    not(any(target_os = "macos", target_os = "ios", target_os = "windows")),
+    allow(dead_code)
+)]
 pub(crate) struct Leftovers(Mutex<Vec<PathBuf>>);
 
 /// プロセス内で 1 つの追跡表（一時ファイルは `temp_dir` の共有領域に置かれるため）。
-#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
+#[cfg_attr(
+    not(any(target_os = "macos", target_os = "ios", target_os = "windows")),
+    allow(dead_code)
+)]
 pub(crate) static LEFTOVERS: Leftovers = Leftovers::new();
 
 /// ファイルを消す。存在しなければ成功扱い。
@@ -97,7 +103,10 @@ fn remove_if_exists(path: &Path) -> bool {
     }
 }
 
-#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
+#[cfg_attr(
+    not(any(target_os = "macos", target_os = "ios", target_os = "windows")),
+    allow(dead_code)
+)]
 impl Leftovers {
     pub(crate) const fn new() -> Self {
         Self(Mutex::new(Vec::new()))
@@ -138,7 +147,10 @@ impl Leftovers {
 
 /// 元動画と出力の一時ファイル `(src, out)` のパスを作る（内部生成のみ。外部入力を含めない）。
 /// `temp_dir()/fandhe-video-transcode-<pid>-<seq>-{src,out}.mp4`。
-#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
+#[cfg_attr(
+    not(any(target_os = "macos", target_os = "ios", target_os = "windows")),
+    allow(dead_code)
+)]
 pub(crate) fn temp_pair() -> (PathBuf, PathBuf) {
     static SEQ: AtomicU64 = AtomicU64::new(0);
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
