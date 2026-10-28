@@ -32,8 +32,7 @@
 //!
 //! # 画面の内容の印刷（print-screen、親 #341、Issue #1013）
 //!
-//! 同じ印刷用ブロック・世代記録・解放経路を共用する。ブロックの中身だけが違い、要求時（ボタンが外れ
-//! status / error が空の状態）のマウント root を `clone_node_with_deep` で複製し、複製の `id` をすべて外して
+//! 同じ印刷用ブロック・世代記録・解放経路を共用する。ブロックの中身だけが違い、要求時のマウント root を `clone_node_with_deep` で複製し、複製から `button` を外し、複製の `id` をすべて外して
 //! （元の DOM との重複を作らない）入れる。取り出しは DOM の複製で、読み戻しではない。
 //! 色見本は `div` の背景色・円で描かれるため複製で写り、`print-color-adjust: exact` で背景色を求める。
 //! 複製・ブロック作成の失敗は `print()` を呼ばず `CAPTURE_FAILED_TEXT` の失敗（印刷開始の失敗とは別文言）。
@@ -183,6 +182,14 @@ mod web {
             .dyn_into::<Element>()
             .map_err(|_| ())?;
         clone.remove_attribute("id").map_err(|_| ())?;
+        // 要求時点の DOM には印刷ボタンが残る（mark_printing による再描画は複製の後）ため、
+        // 複製側から外す。この画面のボタンは印刷ボタンだけ。
+        let buttons = clone.query_selector_all("button").map_err(|_| ())?;
+        for i in 0..buttons.length() {
+            if let Some(el) = buttons.item(i).and_then(|n| n.dyn_into::<Element>().ok()) {
+                el.remove();
+            }
+        }
         let with_id = clone.query_selector_all("[id]").map_err(|_| ())?;
         for i in 0..with_id.length() {
             if let Some(el) = with_id.item(i).and_then(|n| n.dyn_into::<Element>().ok()) {
