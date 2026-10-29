@@ -566,6 +566,17 @@ public class MainActivity extends GameActivity {
         scannerDevicesHelper.cancel(requestId);
     }
 
+    // NFC タグ読み取り（Issue #1045）。実装は `NfcReadHelper`。Rust の `android_nfc.rs` が JNI で呼ぶ。
+    private final NfcReadHelper nfcReadHelper = new NfcReadHelper(this);
+
+    void requestNfcRead(long requestId, int maxBytes) {
+        nfcReadHelper.start(requestId, maxBytes);
+    }
+
+    void cancelNfcRead(long requestId) {
+        nfcReadHelper.cancel(requestId);
+    }
+
     // 方位（Issue #1406）。実装は `CompassHelper`。Rust の `android_compass.rs` が同期 JNI で呼ぶ。
     private final CompassHelper compassHelper = new CompassHelper(this);
 
@@ -2915,6 +2926,7 @@ public class MainActivity extends GameActivity {
         // `removeUpdates` より先に false へ落としておく。
         activityResumed = false;
         penStylusHelper.onPause();
+        nfcReadHelper.onPause();
         webAuthSessionHelper.onPause();
         inAppBrowserHelper.onPause();
         screenCaptureHelper.onPause();
@@ -5199,6 +5211,7 @@ public class MainActivity extends GameActivity {
         wifiInfoHelper.onDestroy();
         radioControlHelper.onDestroy();
         scannerDevicesHelper.onDestroy();
+        nfcReadHelper.onDestroy();
         compassHelper.onDestroy();
         environmentSensorsHelper.onDestroy();
         motionRawSensorsHelper.onDestroy();

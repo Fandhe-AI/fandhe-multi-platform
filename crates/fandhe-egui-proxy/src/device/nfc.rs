@@ -9,7 +9,7 @@
 //!
 //! # OS 別の分担（dispatch は #1044 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
-//! - Android: `android_nfc`（b-android。#1044 では `Unsupported` を返すスタブ）
+//! - Android: `android_nfc`（Issue #1045。`NfcReadHelper` を JNI で橋渡し）
 //! - iOS・Windows: 対応表で保留（スタブのモジュールは作らず `Unsupported` 固定）。macOS は対象外、Linux は非対応
 //! - Web: 本ドライバを通らず `fandhe-web-dom` が受け持つ（`NDEFReader`）
 //!
