@@ -70,6 +70,9 @@ static BOOL g_active = NO;
 static uint64_t g_rid = 0;
 static FandheMacVCPhase g_phase = FandheMacVCPhasePreparing;
 static BOOL g_cancelled = NO;
+// 出口へ入った要求があるか。Finish の 2 回目を弾く（後半が次の要求の置き場・状態を壊さないため）。
+// phase とは別に持つ: 録画の停止経路は phase を Finishing にしてから Read 経由で Finish へ入るため。
+static BOOL g_finish_entered = NO;
 static AVCaptureSession *g_session = nil;
 static AVCaptureMovieFileOutput *g_output = nil;
 static NSURL *g_dir = nil;
@@ -97,6 +100,7 @@ static void FandheMacVCFinishTail(uint64_t rid, int32_t kind, uint64_t size, int
         }
         g_dir = nil;
     }
+    g_finish_entered = NO;
     g_active = NO;
     if (send) {
         fandhe_rust_video_capture_complete(rid, kind, size, dur, w, h, rot);
@@ -106,9 +110,10 @@ static void FandheMacVCFinishTail(uint64_t rid, int32_t kind, uint64_t size, int
 // 唯一の出口（queue 上）。セッションを止めて UI を畳み、置き場を消してから結果を送る。
 static void FandheMacVCFinish(uint64_t rid, int32_t kind, uint64_t size, int64_t dur, int32_t w, int32_t h,
                               int32_t rot, BOOL send) {
-    if (!FandheMacVCIsCurrent(rid)) {
+    if (!FandheMacVCIsCurrent(rid) || g_finish_entered) {
         return;
     }
+    g_finish_entered = YES;
     g_phase = FandheMacVCPhaseFinishing;
     if (g_session != nil) {
         [g_session stopRunning];
