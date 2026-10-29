@@ -5,13 +5,12 @@
 //! `device/app_badge.rs` と同型）。契約と守る範囲は `fandhe_device::compose_mail_sms` の
 //! モジュール doc を参照。
 //!
-//! - iOS / Android / Windows: コールバック型（Windows の添付は modal で戻らない作業スレッド）のため
-//!   pull 型 [`bridge`]（`RequestSlot` の facade）で毎フレーム `drive_callback` が結果を反映する。
-//!   Windows は添付なしの要求も `begin()` を通し、画面に入り直した後の古い完了を id 照合で捨てる。
-//!   **dispatch はここで最終形にしてあり、後続 issue は OS 別モジュールだけを埋める**
-//! - macOS / それ以外: [`ComposeMailSms`] を UI スレッドで同期に呼ぶ（macOS の添付付きも
-//!   `NSSharingService` を同期に呼び、完了は待たない）。Linux は `UnsupportedComposeMailSms` で
-//!   「非対応」を表示する
+//! - iOS / Android: コールバック型のため pull 型 [`bridge`]（`RequestSlot` の facade）で毎フレーム
+//!   `drive_callback` が結果を反映する。**dispatch はここで最終形にしてあり、後続 issue は OS 別
+//!   モジュールだけを埋める**
+//! - macOS / Windows / それ以外: [`ComposeMailSms`] を UI スレッドで同期に呼ぶ（macOS の添付付きも
+//!   `NSSharingService` を同期に呼び、完了は待たない）。Windows の添付付きは #1043 が埋めるまで
+//!   `to_url` が `Unsupported` を返す。Linux は `UnsupportedComposeMailSms` で「非対応」を表示する
 
 use fandhe_core::screens::compose_mail_sms::{
     take_request, ComposeFailure, ComposeMailSmsState, ComposeRequestView, ComposeTarget,
@@ -20,9 +19,9 @@ use fandhe_core::screens::compose_mail_sms::{
 use fandhe_device::compose_mail_sms::{self, ComposeAttachment, ComposeOutcome, ComposeRequest};
 use fandhe_device::DeviceError;
 
-#[cfg(not(any(target_os = "ios", target_os = "android", target_os = "windows")))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use fandhe_core::screens::compose_mail_sms::{finish_compose, mark_composing};
-#[cfg(not(any(target_os = "ios", target_os = "android", target_os = "windows")))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use fandhe_device::compose_mail_sms::ComposeMailSms;
 
 use crate::app::CompletionSender;
@@ -101,8 +100,15 @@ pub(crate) fn outcome_from_android_code(code: i32) -> Result<ComposeOutcome, Dev
 fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, DeviceError> {
     match view.target {
         ComposeTarget::Mail => {
-            let req =
-                ComposeRequest::mail(&view.to, &view.cc, &view.bcc, &view.subject, &view.body)?;
+            // macOS の `NSSharingService` は To しか渡せないため、添付付きは CC / BCC を付けない
+            // （画面にもその旨を出す。黙って落とすのではなく要求の側で外す）。
+            let none: &[String] = &[];
+            let (cc, bcc) = if cfg!(target_os = "macos") && view.attachment.is_some() {
+                (none, none)
+            } else {
+                (&view.cc[..], &view.bcc[..])
+            };
+            let req = ComposeRequest::mail(&view.to, cc, bcc, &view.subject, &view.body)?;
             match &view.attachment {
                 Some(a) => req.with_attachment(ComposeAttachment::new(
                     &a.file_name,
@@ -119,14 +125,9 @@ fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, DeviceErro
     }
 }
 
-/// OS 側コールバックとの橋渡し（iOS / Android / Windows、pull 型、`RequestSlot` の facade）。
-/// 他機能とは共有しない本機能専用の [`SLOT`](bridge::SLOT)。host テストでも使えるよう
-/// `cfg(test)` でもコンパイルする。
-#[cfg(any(target_os = "ios", target_os = "android", target_os = "windows", test))]
-#[cfg_attr(
-    not(any(target_os = "ios", target_os = "android", target_os = "windows")),
-    allow(dead_code)
-)]
+/// OS 側コールバックとの橋渡し（iOS / Android、pull 型、`RequestSlot` の facade）。
+/// 他機能とは共有しない本機能専用の [`SLOT`](bridge::SLOT)。
+#[cfg(any(target_os = "ios", target_os = "android"))]
 pub(crate) mod bridge {
     use fandhe_core::screens::compose_mail_sms::{ComposeFailure, CoreOutcome};
     use fandhe_device::compose_mail_sms::ComposeOutcome;
@@ -176,20 +177,8 @@ fn begin_compose(request_id: u64, req: &ComposeRequest) -> Result<(), DeviceErro
     super::android_compose_mail_sms::begin_compose(request_id, req)
 }
 
-/// Windows: 添付付きは作業スレッド（#1043）へ渡し、添付なしは `ShellExecuteW` を同期に呼んで結果を
-/// すぐ `deliver` する（全要求で `begin()` を通すため、古い id の完了は `deliver` で捨てられる）。
-#[cfg(target_os = "windows")]
-fn begin_compose(request_id: u64, req: &ComposeRequest) -> Result<(), DeviceError> {
-    if req.attachment().is_some() {
-        return super::windows_compose_mail_sms::begin_compose_attachment(request_id, req);
-    }
-    let result = super::windows_compose_mail_sms::implementation().compose(req)?;
-    bridge::deliver(request_id, Ok(result));
-    Ok(())
-}
-
-/// iOS / Android / Windows 版の effect ドライバ本体。
-#[cfg(any(target_os = "ios", target_os = "android", target_os = "windows"))]
+/// iOS / Android 版の effect ドライバ本体。
+#[cfg(any(target_os = "ios", target_os = "android"))]
 fn drive_callback(state: &ComposeMailSmsState, sender: &CompletionSender<ComposeMailSmsState>) {
     use fandhe_core::screens::compose_mail_sms::{finish_compose, mark_composing, ComposePhase};
 
@@ -224,8 +213,8 @@ fn drive_callback(state: &ComposeMailSmsState, sender: &CompletionSender<Compose
     );
 }
 
-/// `registry.rs` から `compose_mail_sms` 画面用に配線される effect ドライバ（iOS / Android / Windows）。
-#[cfg(any(target_os = "ios", target_os = "android", target_os = "windows"))]
+/// `registry.rs` から `compose_mail_sms` 画面用に配線される effect ドライバ（iOS / Android）。
+#[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn compose_mail_sms_effect(
     state: &ComposeMailSmsState,
     sender: &CompletionSender<ComposeMailSmsState>,
@@ -233,8 +222,8 @@ pub fn compose_mail_sms_effect(
     drive_callback(state, sender);
 }
 
-/// 同期経路（macOS・Linux）: 検査してから [`ComposeMailSms`] を呼ぶ。
-#[cfg(not(any(target_os = "ios", target_os = "android", target_os = "windows")))]
+/// 同期経路（macOS・Windows・Linux）: 検査してから [`ComposeMailSms`] を呼ぶ。
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 fn drive(
     state: &ComposeMailSmsState,
     sender: &CompletionSender<ComposeMailSmsState>,
@@ -252,20 +241,22 @@ fn drive(
     }));
 }
 
-/// OS 別の [`ComposeMailSms`] 実装を返す（macOS / それ以外）。
-#[cfg(not(any(target_os = "ios", target_os = "android", target_os = "windows")))]
+/// OS 別の [`ComposeMailSms`] 実装を返す（macOS / Windows / それ以外）。
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 fn platform_compose() -> Box<dyn ComposeMailSms> {
     #[cfg(target_os = "macos")]
     return super::macos_compose_mail_sms::implementation();
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    return super::windows_compose_mail_sms::implementation();
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     return Box::new(fandhe_device::compose_mail_sms::UnsupportedComposeMailSms);
 }
 
-/// `registry.rs` から配線される effect ドライバ（macOS・Linux）。
+/// `registry.rs` から配線される effect ドライバ（macOS・Windows・Linux）。
 ///
 /// ponytail: 作成画面を開くのは OS への URL 1 回の軽い呼び出しなので UI スレッドで同期に呼ぶ。
 /// 戻らない呼び出しが見つかったら、作業スレッド + bridge へ移す。
-#[cfg(not(any(target_os = "ios", target_os = "android", target_os = "windows")))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn compose_mail_sms_effect(
     state: &ComposeMailSmsState,
     sender: &CompletionSender<ComposeMailSmsState>,
@@ -398,7 +389,7 @@ mod tests {
         );
     }
 
-    #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "windows")))]
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     mod sync_path {
         use super::*;
         use fandhe_device::compose_mail_sms::UnsupportedComposeMailSms;
@@ -517,7 +508,7 @@ mod tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(target_os = "ios", target_os = "android")))]
 mod bridge_tests {
     use super::bridge;
     use super::*;

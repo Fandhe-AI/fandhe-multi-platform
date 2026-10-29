@@ -28,12 +28,12 @@
 //! | 入力不正 | `InvalidInput("compose to" / "compose cc" / "compose bcc" / "compose subject" / "compose body")` |
 //! | 入力不正（添付） | `InvalidInput("compose attachment")` |
 //! | 非対応（Linux・Web ほか） | `Unsupported("compose")` |
-//! | 添付付き要求を Web で受けた（URL で添付を渡せない）、Windows で `mapi32.dll` を解決できない・実装が無い | `Unsupported("compose attachment")` |
+//! | 添付付き要求を Web で受けた（URL で添付を渡せない）、Windows で受けた（#1043 までの現状） | `Unsupported("compose attachment")` |
 //! | CC / BCC 付きの添付要求を macOS で受けた（`NSSharingService` に渡す API が無い） | `Unsupported("compose cc")` |
 //! | 添付の一時ファイルを用意できない | `Internal(ATTACHMENT_FILE)`（`"compose attachment file"`） |
 //! | 前回の一時ファイルを消せず、OS を呼ばなかった | `Internal(CLEANUP)`（`"compose cleanup"`） |
-//! | 前の作成画面が開いたまま（Windows） | `Internal(BUSY)`（`"compose busy"`） |
-//! | MAPI が失敗を返した（新しい Outlook など、Windows。`NoHandler` に読み替えない） | `Internal(MAPI)`（`"compose mapi"`） |
+//! | 【#1043 で実装予定・現状どの OS も返さない】前の作成画面が開いたまま（Windows） | `Internal(BUSY)`（`"compose busy"`） |
+//! | 【#1043 で実装予定・現状どの OS も返さない】MAPI が失敗を返した（Windows。`NoHandler` に読み替えない） | `Internal(MAPI)`（`"compose mapi"`） |
 //! | 作成画面を出せない（ウィンドウ・NSURL 生成失敗など） | `Internal("compose ...")` |
 //!
 //! # 宛先の配列（To / CC / BCC）
@@ -53,8 +53,8 @@
 //!
 //! 添付はメールに 1 件、ファイル名 `[A-Za-z0-9._-]` 1〜64 バイト（先頭 `.` 不可）・MIME は
 //! `type/subtype` の 1 組（パラメータ不可）・データ 1 バイト〜1 MiB。0 バイトは嘘の成功を避けるため拒否する。
-//! 出どころは画面側の固定値で、選択ファイルとの連携は扱わない。画面は添付付きの要求から CC / BCC を
-//! 外す（macOS が渡せないため）。`mailto:` は添付を持てないため、
+//! 出どころは画面側の固定値で、選択ファイルとの連携は扱わない。proxy は macOS だけ、添付付きの要求から
+//! CC / BCC を外す（`NSSharingService` が渡せないため。iOS / Android は渡す）。`mailto:` は添付を持てないため、
 //! [`ComposeRequest::to_url`] が `Unsupported("compose attachment")` を返し、添付を黙って落として
 //! 開くことはしない。macOS は `NSSharingService`（`composeEmail`）へ To・件名・本文・添付だけを渡し、
 //! CC / BCC 付きは `Unsupported("compose cc")`、完了は待たず `HandedOff`。Windows は #1043 で Simple MAPI を
@@ -71,9 +71,9 @@
 //! 受け手が後から読むため残す。要求ごとのディレクトリに保存し、次回の添付要求時に 10 分より
 //! 古いものだけを回収する（10 分以内の複数要求では複数件が残る）。OS の cacheDir 掃除でも消える。
 //!
-//! macOS・Windows の添付の一時ファイルは `temp_dir()/fandhe-compose/<pid>-<seq>/` に要求ごとに作る。
-//! macOS は渡した後も残し、次の添付要求で 10 分（単調時計）より古いものを回収する。Windows は戻ったら
-//! すぐ消す。解放に失敗したものは static に積み、次の添付要求の前に消し直す。消せなければ OS を呼ばず
+//! macOS の添付の一時ファイルは `temp_dir()/fandhe-compose/<pid>-<seq>/` に要求ごとに作る。
+//! 渡した後も残し、次の添付要求で 10 分（単調時計）より古いものを回収する。
+//! 解放に失敗したものは static に積み、次の添付要求の前に消し直す。消せなければ OS を呼ばず
 //! `CLEANUP` で失敗する。今回の結果は削除の失敗と独立にそのまま返す。
 //!
 //! 三値（契約表 10）: 開いた（`HandedOff`）/ 利用者が閉じた（`Cancelled`、Windows のみ）/ 失敗。
@@ -133,9 +133,9 @@ const ATTACH_DATA_MAX_BYTES: usize = 1024 * 1024;
 pub const ATTACHMENT_FILE: &str = "compose attachment file";
 /// 前回の一時ファイルを消せず OS を呼ばなかった。
 pub const CLEANUP: &str = "compose cleanup";
-/// 前の作成画面がまだ開いている（Windows）。
+/// 前の作成画面がまだ開いている（Windows。#1043 で使う予定で、現状はどの OS も返さない）。
 pub const BUSY: &str = "compose busy";
-/// MAPI が失敗を返した（Windows）。
+/// MAPI が失敗を返した（Windows。#1043 で使う予定で、現状はどの OS も返さない）。
 pub const MAPI: &str = "compose mapi";
 
 const INVALID_ATTACHMENT: DeviceError = DeviceError::InvalidInput("compose attachment");

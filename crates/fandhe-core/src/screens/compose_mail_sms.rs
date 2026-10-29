@@ -197,22 +197,12 @@ pub fn take_request(state: &ComposeMailSmsState) -> Option<ComposeRequestView> {
     }
     let target = state.target?;
     let own = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-    // 添付付きの要求は CC / BCC を付けない（macOS の `NSSharingService` が To しか渡せず、黙って
-    // 落とさないため要求の側から外す）。
     let with_attachment = state.attachment && target == ComposeTarget::Mail;
     let (to, cc, bcc, subject, body) = match target {
         ComposeTarget::Mail => (
             own(MAIL_TO),
-            if with_attachment {
-                Vec::new()
-            } else {
-                own(MAIL_CC)
-            },
-            if with_attachment {
-                Vec::new()
-            } else {
-                own(MAIL_BCC)
-            },
+            own(MAIL_CC),
+            own(MAIL_BCC),
             MAIL_SUBJECT,
             MAIL_BODY,
         ),
@@ -284,7 +274,7 @@ pub fn current_screen(state: &ComposeMailSmsState) -> Screen<ComposeMailSmsState
         .text(format!("BCC: {}", MAIL_BCC.join(", ")))
         .text(format!("メール件名: {MAIL_SUBJECT}"))
         .text(format!(
-            "添付: {MAIL_ATTACHMENT_NAME}（添付付きは CC / BCC なし）"
+            "添付: {MAIL_ATTACHMENT_NAME}（macOS の添付付きは CC / BCC なし）"
         ))
         .dynamic_text(status_text)
         .error_text(error_text);
@@ -387,11 +377,11 @@ mod tests {
     }
 
     #[test]
-    fn attachment_request_drops_cc_bcc_but_plain_mail_keeps_them() {
+    fn attachment_request_keeps_cc_bcc() {
         let mut s = ComposeMailSmsState::default();
         compose_mail_with_attachment(&mut s);
         let r = take_request(&s).unwrap();
-        assert!(r.cc.is_empty() && r.bcc.is_empty() && !r.to.is_empty());
+        assert_eq!((r.cc.len(), r.bcc.len()), (1, 1));
         let mut t = ComposeMailSmsState::default();
         compose_mail(&mut t);
         let r = take_request(&t).unwrap();
