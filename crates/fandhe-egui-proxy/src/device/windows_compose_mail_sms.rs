@@ -150,9 +150,13 @@ pub(crate) fn run_attachment(
         lock(store).discard(file);
         return Err(DeviceError::Unsupported("compose attachment"));
     };
-    let code = send(&mut mail);
+    // `send` が panic しても一時ファイルを破棄してから失敗を返す（契約表 9）。
+    let code = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| send(&mut mail)));
     lock(store).discard(file);
-    outcome_from_mapi(code)
+    code.map_or(
+        Err(DeviceError::Internal("compose present")),
+        outcome_from_mapi,
+    )
 }
 
 /// 在席フラグ。`Drop` で解除する（panic・スレッド起動失敗でも残さない）。
@@ -440,6 +444,22 @@ mod tests {
             assert_eq!(out.ok(), outcome_from_mapi(code).ok());
             assert!(!seen.unwrap().exists(), "{code}");
         }
+    }
+
+    #[test]
+    fn run_attachment_deletes_file_when_send_panics() {
+        let store = Mutex::new(test_store().0);
+        let r = att_req(&["a@b.c"], &[], &[], "b");
+        let mut seen = None;
+        let out = run_attachment(&r, &store, Instant::now(), |m| {
+            let p = std::path::PathBuf::from(String::from_utf16_lossy(&m.path[..m.path.len() - 1]));
+            seen = p.parent().map(|d| d.to_path_buf());
+            panic!("send failed")
+        });
+        assert!(out.is_err());
+        assert!(!seen.unwrap().exists());
+        let st = lock(&store);
+        assert!(st.stale.is_empty() && st.kept.is_empty());
     }
 
     #[test]
