@@ -8,17 +8,19 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "HomeKit（`HMHomeManager` の `homes` → `HMHome.accessories` → `HMAccessory.name`。読み込み完了は `HMHomeManagerDelegate.homeManagerDidUpdateHomes(_:)`、許可は `authorizationStatus` と `homeManager(_:didUpdate:)`）",
-      "perm": "HomeKit capability（`com.apple.developer.homekit` entitlement。無料の Apple Developer でも付けられる）と Info.plist の `NSHomeKitUsageDescription`（無いと初回の HomeKit 利用でクラッシュする）。初回の `HMHomeManager` 生成で実行時の許可を求める",
+      "api": "HomeKit（`HMHomeManager` を 1 つだけ生成して保持し、`homes` → `HMHome.name` / `HMHome.accessories` → `HMAccessory.name` を読む。読み込み完了は `HMHomeManagerDelegate.homeManagerDidUpdateHomes(_:)`、許可は `authorizationStatus`（`determined` / `authorized` / `restricted`）と `homeManager(_:didUpdate:)`。家・機器の追加と操作はしない）",
+      "perm": "HomeKit capability（`com.apple.developer.homekit` entitlement）を、プロファイル生成専用のホストターゲット `FandheIosApp`（`platforms/apple/project.yml`）の `CODE_SIGN_ENTITLEMENTS` に足す。実機署名はプロファイルから entitlements を抜き出して Rust/winit のバンドルへ付ける既存手順のまま。Apple Developer Program なしの無料の Apple Developer（Personal Team）でも付けられる（公式の対応表）。Info.plist の `NSHomeKitUsageDescription`（無いと初回の HomeKit 利用でクラッシュする）。初回の `HMHomeManager` 生成で OS が実行時の許可を求める（明示の要求 API は無い）",
       "url": [
         "https://developer.apple.com/documentation/homekit/enabling-homekit-in-your-app",
         "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.homekit",
         "https://developer.apple.com/documentation/bundleresources/information-property-list/nshomekitusagedescription",
         "https://developer.apple.com/help/account/reference/supported-capabilities-ios",
-        "https://developer.apple.com/documentation/homekit/hmhomemanager/homes"
+        "https://developer.apple.com/documentation/homekit/hmhomemanager/homes",
+        "https://developer.apple.com/documentation/homekit/hmhomemanager/authorizationstatus",
+        "https://developer.apple.com/documentation/homekit/hmhomemanagerauthorizationstatus",
+        "https://developer.apple.com/documentation/homekit/hmhomemanagerdelegate/homemanagerdidupdatehomes(_:)"
       ],
-      "deferred": "HomeKit capability（entitlement）と Info.plist の `NSHomeKitUsageDescription` を新しく足し、初回の `HMHomeManager` 生成で実行時の許可を新しく求めないと家の情報を読めない（公式: キーが無いと初回の利用でクラッシュする）。実機の署名も、プロファイルを作るホストターゲットに HomeKit capability を足す変更が要る。新しい権限を足さない方針のため保留（alarm の iOS と同じ）。capability は無料の Apple Developer でも付けられ、ベンダーの個別審査は不要で、方針が変われば着手できる",
-      "note": "未実装。`homes` は生成直後は空で、`homeManagerDidUpdateHomes(_:)` の初回呼び出しの後にだけ HomeKit のデータベースの内容になる（公式）。拒否されると以後の呼び出しは `HMError.Code.homeAccessNotAuthorized` で失敗し、利用者は設定アプリでいつでも取り消せる（公式）。家を作っていない端末では一覧が空になる。MatterSupport（iOS 16.1 以上）は機器を自前のエコシステムへ追加する仕組みで、登録済みの機器の一覧は読めない"
+      "note": "未実装。`homes` は生成直後は空で、`homeManagerDidUpdateHomes(_:)` の初回呼び出しの後にだけ HomeKit のデータベースの内容になる（公式）。アクセスできるのは `authorizationStatus` に `authorized` があるときだけ（公式）。`determined` があって `authorized` が無ければ拒否として失敗にし、0 件にしない。家が 0 件（家を作っていない）と、家はあるが機器が 0 件は区別して成功で返す。拒否後は利用者が設定アプリで変えるまで再要求できない（公式）。MatterSupport（iOS 16.1 以上）は機器を自前のエコシステムへ追加する仕組みで、登録済みの機器の一覧は読めない"
     },
     "android": {
       "status": "possible",
@@ -60,5 +62,5 @@
       "note": ""
     }
   },
-  "note": "smart-home は照明・錠などのスマート家電を操作する。iOS は HomeKit、Android は Google Home APIs と系統が別で、共通 trait にするには対象機器の操作を「機器一覧の取得・オンオフ」程度に絞る必要がある。iOS は新しい entitlement・Info.plist のキー・実行時の許可、Android は GMS のライブラリ（Kotlin のランタイムと minSdk・compileSdk の引き上げを含む）が要るため、どちらも保留。条件が揃ったら保留の一覧から見直す。範囲（再開時の案）: 登録済み機器の名前一覧を画面に出す（操作は含めない）。結果は一覧（空を含む）・許可なし・失敗の三値。一覧は OS の読み込み完了の通知（iOS は `homeManagerDidUpdateHomes(_:)`、Android は Flow の値）を待って取り、期限で完了を推測しない。家の構成・機器の状態はアプリ内に保持せず、要求のたびに OS から読み直す。実機（Matter / HomeKit 対応機器か、家を作ったアカウント）が要る"
+  "note": "smart-home は照明・錠などのスマート家電を操作する。iOS は HomeKit、Android は Google Home APIs と系統が別。範囲: 登録済みの家と機器の名前を先頭 20 件まで画面に出す（操作・状態の読み取り・家の追加は含めない）。結果は一覧（家 0 件・機器 0 件を含む）・許可なし・期限切れ・失敗。一覧は OS の読み込み完了の通知を待って取り、期限で完了を推測しない。家の構成はアプリ内に保持せず、要求のたびに OS の `homes` から読み直す。家・機器の名前はログに出さない。Android は GMS のライブラリ（Kotlin のランタイムと minSdk・compileSdk の引き上げを含む）が要るため保留。iOS の実機確認には家を作った iCloud アカウントが要る（機器 0 件の家でも一覧の経路は確かめられる）"
 }
