@@ -3,23 +3,35 @@
   "name": "NFC タグ読み取り",
   "group": "未着手の OS 機能",
   "order": 21,
+  "priority": 156,
+  "bundle": "request-response",
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "CoreNFC（`NFCTagReaderSession`）",
-      "perm": "`NFCReaderUsageDescription` + Near Field Communication Tag Reading capability",
-      "url": "https://developer.apple.com/documentation/corenfc",
-      "note": "未実装",
+      "api": "CoreNFC `NFCNDEFReaderSession`（`invalidateAfterFirstRead`）。`NFCTagReaderSession`（タグ種別ごとの生データ）は範囲外",
+      "perm": "`NFCReaderUsageDescription` + Near Field Communication Tag Reading capability（entitlement `com.apple.developer.nfc.readersession.formats` の `NDEF`）",
+      "url": [
+        "https://developer.apple.com/documentation/corenfc/nfcndefreadersession",
+        "https://developer.apple.com/documentation/corenfc/building-an-nfc-tag-reader-app",
+        "https://developer.apple.com/help/account/reference/supported-capabilities-ios"
+      ],
+      "note": "未実装。端末が対応するかは `readingAvailable` で問う。シミュレータは `readingAvailable` が偽で、成功経路を確かめられない",
+      "deferred": "NFC Tag Reading の capability は有料の Apple Developer Program だけが付けられ（無料の Apple Developer の一覧に無い、公式）、開発者登録が期限切れのため保留（app-attest・wifi-info・cloud-kv-sync の iOS と同じ）。シミュレータは `readingAvailable` が偽で読み取りを確かめられない。ベンダーの個別審査は不要で、登録を再開すれば着手できる",
       "sourceName": [
         "NFC タグ読み取り"
       ]
     },
     "android": {
       "status": "possible",
-      "api": "`NfcAdapter`",
-      "perm": "`<uses-permission android:name=\"android.permission.NFC\" />`",
-      "url": "https://developer.android.com/develop/connectivity/nfc/nfc",
-      "note": "未実装。`uses-feature android:name=\"android.hardware.nfc\"` の要否は端末対応方針次第（`required=\"false\"` 推奨）",
+      "api": "`NfcAdapter.enableReaderMode`（前面の Activity の間だけ）+ `Ndef.getCachedNdefMessage`",
+      "perm": "`<uses-permission android:name=\"android.permission.NFC\" />`（normal、実行時の許可ダイアログなし）+ `<uses-feature android:name=\"android.hardware.nfc\" android:required=\"false\" />`",
+      "url": [
+        "https://developer.android.com/reference/android/nfc/NfcAdapter",
+        "https://developer.android.com/reference/android/nfc/tech/Ndef",
+        "https://developer.android.com/reference/android/Manifest.permission#NFC",
+        "https://developer.android.com/develop/connectivity/nfc/nfc"
+      ],
+      "note": "未実装。NFC が無い端末は `getDefaultAdapter` が null、オフは `isEnabled` が偽で、要求のたびに OS へ問う。reader mode は intent の配送を通らない。`onTagDiscovered` が呼ばれるスレッドは公式に記載が無く未確認。`Ndef.getNdefMessage()`（ブロックする I/O）は使わず検出時に読んだ `getCachedNdefMessage` を使う。新しい権限 `NFC` を足す（nfc-card-emulation の Android の保留文はこの権限が無いことを理由に書いているため、実装後に見直す）",
       "sourceName": [
         "NFC"
       ]
@@ -28,12 +40,30 @@
       "status": "n-a"
     },
     "windows": {
-      "status": "possible"
+      "status": "possible",
+      "api": "`Windows.Networking.Proximity.ProximityDevice`（`GetDefault` が null なら無し、`SubscribeForMessage` で受ける）",
+      "perm": "パッケージの capability `proximity`",
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.networking.proximity.proximitydevice",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.networking.proximity.proximitydevice.subscribeformessage"
+      ],
+      "note": "未実装。UWP アプリでは前面にある間だけ購読が有効（公式）。NFC を内蔵する PC は少なく、USB の PC/SC リーダーが `ProximityDevice` として現れるかは公式に記載が無く未確認。PC/SC（`Windows.Devices.SmartCards` / WinSCard）で読むのはタグ種別ごとの APDU を組む生データの経路で範囲外",
+      "deferred": "`ProximityDevice` は capability `proximity` の宣言が要り、package identity の無い素の実行体（本リポジトリの Windows 版）で使えるかの記述が無く未確認（local-peer-connect の Windows と同じ）。`windows` クレートの feature `Networking_Proximity` も新しく要る。NFC を内蔵する PC は少なく、確かめる機器が無い。素の実行体での可否と確認用の機器が揃えば着手できる"
     },
     "web": {
       "status": "possible",
-      "detail": "できそう（対応ブラウザ限定）"
+      "detail": "できそう（対応ブラウザ限定）",
+      "api": "`NDEFReader.scan()`（`reading` / `readingerror`、`AbortSignal`）",
+      "perm": "権限 `nfc`（利用者操作への応答で求める）、secure context・top-level 文書",
+      "safari": "API なし（MDN）",
+      "url": [
+        "https://w3c-cg.github.io/web-nfc/",
+        "https://developer.mozilla.org/en-US/docs/Web/API/NDEFReader/scan",
+        "https://developer.chrome.com/docs/capabilities/nfc",
+        "https://github.com/mdn/browser-compat-data/blob/main/api/NDEFReader.json"
+      ],
+      "note": "未実装。Chrome for Android 89 から。デスクトップの Chrome・Safari・Firefox には無い（MDN の互換データ）ため `NDEFReader` が無ければ `Unsupported`。文書が非表示の間は NFC が止まる（仕様）。`scan()` は `AbortError` / `InvalidStateError` / `NotAllowedError` / `NotSupportedError` で reject し、UA が NFC を使えないときは `NotReadableError`。NDEF を出さないタグは `readingerror`"
     }
   },
-  "note": "`CoreNFC` / Android NFC API / Windows `Proximity`。macOS は NFC リーダー用の公開 API が無い（対象外）。Web は Web NFC が Chrome for Android 限定でデスクトップブラウザには無いが、BLE・音声認識と同様「対応ブラウザ限定」で API 自体は存在するため「できない（API 非公開）」ではなく「できそう」に分類する"
+  "note": "`CoreNFC` / Android NFC API / Windows `Proximity`。macOS は NFC リーダー用の公開 API が無い（対象外）。Web は Web NFC が Chrome for Android 限定でデスクトップブラウザには無いが、BLE・音声認識と同様「対応ブラウザ限定」で API 自体は存在するため「できない（API 非公開）」ではなく「できそう」に分類する。範囲: NDEF の読み取りのみ。「タグを読む」で期限の間に最初にかざした 1 枚を読み、レコードごとに種類と中身を出す（1 枚読んだら終わり、継続配信にしない）。書き込み・タグ種別ごとの生データ・UID・続けて何枚も読むこと・アプリが閉じている間のタグ検出（intent の配送）は扱わない。タグの識別子（UID、Web の `serialNumber`）は個体識別子に当たるため画面・ログに出さない。対象 OS は Android・Web で、iOS・Windows は保留（deferred）、macOS は対象外。種別: 成功（`Read` / 中身が空の `EmptyTag`）、中断（背面へ移った `Interrupted`。失敗の色にしない）、失敗（`Unreadable` / `TooLarge` / `Disabled` / `PermissionDenied` / `TimedOut` / `Unsupported` / `Failed`）の三値で、空・読めない・NFC オフを成功に畳まない。利用者の取り消しの操作は置かない。OS を正にする: NFC の有無・オン / オフは要求のたびに OS へ問い（`getDefaultAdapter`・`isEnabled`・`'NDEFReader' in window`）、機種判定を置かない。背面へ移ったら OS が読み取りを止めるので、期限まで待たずその時点で `Interrupted` に確定し、経過時間は単調時計で測る。守る範囲: 1 プロセス内の要求と完了の順序（古い要求・期限後の検出を捨てる）、reader mode・`AbortController`・リスナーの解除を成功・失敗・期限切れ・中断の全経路で行うこと。守らない範囲: かざしたが届く前の離脱、2 枚同時にかざしたときにどちらが読まれるか、他アプリ・OS が先にタグを処理した場合、Web の権限プロンプト中に非表示になったときの扱い（ブラウザに従う）、複数プロセス・複数タブ"
 }
