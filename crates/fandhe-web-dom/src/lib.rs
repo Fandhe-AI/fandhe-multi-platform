@@ -116,6 +116,8 @@
 //! - [`memory_pressure`]: 「メモリ逼迫・負荷」画面の Web 経路（親 #179、Issue #914）。Compute Pressure API で CPU 負荷を受ける。純関数のみ `wasm32` gate の外に置く
 //! - [`user_idle`]: 「無操作時間の検知」画面の Web 経路（親 #125、Issue #632）。
 //!   純関数（許可・例外名・状態の写像と effect の判断）のみ `wasm32` gate の外に置く
+//! - [`sleep_lock_events`]: 「スリープ・ロックの通知」画面の Web 経路（親 #167、Issue #1063）。
+//!   Idle Detection の `screenState` でロック・解除を受ける。純関数のみ `wasm32` gate の外に置く
 //! - [`flashlight`]: 「ライト（トーチ）」画面の Web 経路（親 #106、Issue #462）。
 //!   純関数（失敗種別の写像・読み戻し・確認ループの判定）のみ `wasm32` gate の外に置く
 //! - [`motion_raw_sensors`]: 「ジャイロ・磁気・線形加速度」画面の Web 経路（親 #180、Issue #902）。
@@ -402,6 +404,8 @@ pub mod screen_wake_lock;
 pub mod serial_port;
 /// 型サンプル「共有の受け取り」の Web 経路（Issue #608）。[`haptics`] と同じ理由で gate を外す。
 pub mod share_receive;
+/// 型サンプル「スリープ・ロックの通知」の Web 経路（Issue #1063）。[`haptics`] と同じ理由で gate を外す。
+pub mod sleep_lock_events;
 /// 型サンプル「端末内翻訳」の Web 経路（Issue #539）。[`haptics`] と同じ理由で gate を外す。
 pub mod translation;
 /// 型サンプル「カスタム URL scheme」の Web 経路（Issue #1219）。[`haptics`] と同じ理由で gate を外す。

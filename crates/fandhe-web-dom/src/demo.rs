@@ -198,6 +198,9 @@ use fandhe_core::screens::settings::{
 };
 use fandhe_core::screens::share_receive_show::{share_receive_show_screen, ShareReceiveShowState};
 use fandhe_core::screens::share_text::{current_screen as current_share_screen, ShareTextState};
+use fandhe_core::screens::sleep_lock_events_show::{
+    current_screen as current_sleep_lock_events_show_screen, SleepLockEventsShowState,
+};
 use fandhe_core::screens::speech_recognize::{
     current_screen as current_speech_recognize_screen, SpeechRecognizeState,
 };
@@ -554,6 +557,20 @@ pub fn mount_motion_raw_sensors_show_screen(root_id: &str) -> Result<(), JsValue
         screen,
         initial_state,
         super::motion_raw_sensors::motion_raw_sensors_show_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「スリープ・ロックの通知」（Issue #1063）をマウントする検証専用
+/// エントリポイント。`super::sleep_lock_events::sleep_lock_events_show_effect` が Idle Detection API を駆動する。
+#[wasm_bindgen]
+pub fn mount_sleep_lock_events_show_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    let initial_state = SleepLockEventsShowState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_sleep_lock_events_show_screen(&initial_state),
+        initial_state,
+        super::sleep_lock_events::sleep_lock_events_show_effect,
     )
 }
 

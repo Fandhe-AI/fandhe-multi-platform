@@ -126,6 +126,10 @@ pub use web::user_idle_show_effect;
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 
+/// Idle Detection の呼び出し部品を `sleep_lock_events` と共有する（同じ API・同じ許可を使うため）。
+#[cfg(target_arch = "wasm32")]
+pub(crate) use web::{detector_ctor, error_name, get};
+
 #[cfg(target_arch = "wasm32")]
 mod web {
     use std::cell::RefCell;
@@ -172,16 +176,16 @@ mod web {
         ENTRIES.with(|m| m.borrow_mut().get_mut(&id).map(f))
     }
 
-    fn get(o: &JsValue, key: &str) -> JsValue {
+    pub(crate) fn get(o: &JsValue, key: &str) -> JsValue {
         Reflect::get(o, &JsValue::from_str(key)).unwrap_or(JsValue::UNDEFINED)
     }
 
-    fn error_name(e: &JsValue) -> String {
+    pub(crate) fn error_name(e: &JsValue) -> String {
         get(e, "name").as_string().unwrap_or_default()
     }
 
     /// `IdleDetector` コンストラクタ。非 secure context・非対応では `None`。
-    fn detector_ctor() -> Option<Function> {
+    pub(crate) fn detector_ctor() -> Option<Function> {
         let w = web_sys::window()?;
         if !w.is_secure_context() {
             return None;

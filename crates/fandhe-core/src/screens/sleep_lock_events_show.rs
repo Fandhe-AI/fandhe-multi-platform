@@ -26,6 +26,7 @@
 //! Starting/Receiving --「止める」--> Idle（記録は残し「止めました」）
 //! Receiving --mark_failed--> Idle + 「受け取りが止まりました」
 //! Receiving --mark_left--> Idle + 「画面を離れたため止めました」（正常）
+//! Starting --finish_start(Err(PermissionDenied))--> Idle + 「許可されていないため受け取れません」（Web のみ。再開始できる）
 //! ```
 
 use crate::{Screen, WidgetId};
@@ -50,6 +51,8 @@ pub const LEFT_STATUS: &str = "画面を離れたため止めました";
 pub const START_FAILED_TEXT: &str = "受け取りを始められませんでした";
 /// 実行中の失敗。
 pub const RUNTIME_FAILED_TEXT: &str = "受け取りが止まりました";
+/// 許可なし（Web の `idle-detection` の拒否）。
+pub const PERMISSION_DENIED_TEXT: &str = "許可されていないため受け取れません";
 /// 非対応。
 pub const UNSUPPORTED_TEXT: &str = "この環境ではスリープ・ロックの通知を受け取れません";
 /// OS が知らせない種類・読めない状態。
@@ -200,6 +203,8 @@ pub enum Outcome {
     RuntimeFailed,
     /// 非対応。
     Unsupported,
+    /// 許可なし（Web のみ。native は返さない）。
+    PermissionDenied,
 }
 
 /// 開始の失敗の種類。
@@ -207,6 +212,8 @@ pub enum Outcome {
 pub enum StartFailure {
     /// 非対応。
     Unsupported,
+    /// 許可されなかった（Web のみ）。
+    PermissionDenied,
     /// 開始に失敗した。
     Failed,
 }
@@ -298,6 +305,7 @@ pub fn finish_start(
             state.phase = Phase::Idle;
             state.outcome = Some(match f {
                 StartFailure::Unsupported => Outcome::Unsupported,
+                StartFailure::PermissionDenied => Outcome::PermissionDenied,
                 StartFailure::Failed => Outcome::StartFailed,
             });
         }
@@ -408,6 +416,7 @@ pub fn error_text(state: &SleepLockEventsShowState) -> String {
     match (state.phase, state.outcome) {
         (Phase::Idle, Some(Outcome::StartFailed)) => START_FAILED_TEXT.to_string(),
         (Phase::Idle, Some(Outcome::RuntimeFailed)) => RUNTIME_FAILED_TEXT.to_string(),
+        (Phase::Idle, Some(Outcome::PermissionDenied)) => PERMISSION_DENIED_TEXT.to_string(),
         _ => String::new(),
     }
 }
@@ -607,6 +616,24 @@ mod tests {
         assert_eq!(s.outcome, Some(Outcome::Left));
         assert_eq!(error_text(&s), "");
         assert!(status_text(&s).contains(LEFT_STATUS));
+    }
+
+    #[test]
+    fn permission_denied_is_distinct_and_restartable() {
+        let mut s = SleepLockEventsShowState::default();
+        start(&mut s);
+        finish_start(&mut s, 99, Err(StartFailure::PermissionDenied));
+        assert_eq!(s.phase, Phase::Starting);
+        finish_start(&mut s, 1, Err(StartFailure::PermissionDenied));
+        assert_eq!(s.phase, Phase::Idle);
+        assert_eq!(error_text(&s), PERMISSION_DENIED_TEXT);
+        assert!(!error_text(&s).contains(START_FAILED_TEXT));
+        let screen = current_screen(&s);
+        assert!(click_button(&screen, START_LABEL, &mut s));
+        assert_eq!(
+            (s.phase, s.generation, s.outcome),
+            (Phase::Starting, 2, None)
+        );
     }
 
     #[test]
