@@ -12,7 +12,8 @@
 //! - iOS: `ios_video_capture`（#822。`UIImagePickerController`）
 //! - Android: `android_video_capture`（#823。`ACTION_VIDEO_CAPTURE`）
 //! - Web: `fandhe-web-dom` 側（#824）。wasm32 では本ファイルをビルドしない
-//! - macOS・Windows: 保留のため `UnsupportedVideoCapturer` 固定（ダミーの成功実装へは倒さない）。
+//! - macOS: `macos_video_capture`（#1071。AppKit の撮影パネル + `AVCaptureMovieFileOutput`）
+//! - Windows: 保留のため `UnsupportedVideoCapturer` 固定（ダミーの成功実装へは倒さない）。
 //!   Linux は対象外
 //!
 //! # OS 層が呼ぶ受け口
@@ -63,8 +64,12 @@ fn platform() -> Arc<dyn VideoCapturer> {
     {
         super::android_video_capture::implementation()
     }
-    // macOS・Windows は保留、Linux は対象外。Web は `fandhe-web-dom` 側。
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    #[cfg(target_os = "macos")]
+    {
+        super::macos_video_capture::implementation()
+    }
+    // Windows は保留、Linux は対象外。Web は `fandhe-web-dom` 側。
+    #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "macos")))]
     {
         Arc::new(fandhe_device::video_capture::UnsupportedVideoCapturer)
     }
@@ -435,8 +440,8 @@ mod tests {
     }
 
     #[test]
-    fn fallback_platform_is_unsupported_off_ios_and_android() {
-        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    fn fallback_platform_is_unsupported_off_ios_android_macos() {
+        #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "macos")))]
         assert_eq!(
             platform().capture(1, MAX_DURATION_SECS),
             Err(VideoCaptureFailure::Unsupported)

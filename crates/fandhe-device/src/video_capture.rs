@@ -5,7 +5,7 @@
 //! 再生・保存・共有・編集は扱わない。長さの上限は [`MAX_DURATION_SECS`] 秒で、OS の撮影 UI へ渡す。
 //! 担当 OS は iOS（`UIImagePickerController`、#822）、Android（`ACTION_VIDEO_CAPTURE`、#823）、
 //! Web（`<input type="file" capture>`、#824。`fandhe-web-dom` 側。長さの上限は渡せない）、
-//! macOS（`AVCaptureMovieFileOutput` と `AVCaptureVideoPreviewLayer` のパネル。音声は録らない。子 issue）。
+//! macOS（`AVCaptureMovieFileOutput` と `AVCaptureVideoPreviewLayer` のパネル。音声は録らない。#1071）。
 //! Windows は保留で `Unsupported`（保留を解くときは dispatch の変更を別 issue で扱う）。
 //! `fandhe-egui-proxy` の effect ドライバ（`device/video_capture.rs`）が本モジュールの trait を呼び、
 //! OS 層が実装する。Web の子は検査 [`VideoClip::from_os`] を再利用する（本モジュールは wasm32 でも

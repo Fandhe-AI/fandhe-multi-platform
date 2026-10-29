@@ -1426,6 +1426,11 @@ pub mod macos_usb_device;
 /// `device/user_idle.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_user_idle;
+/// Issue #1071: macOS 向け動画の撮影実装（`macos/fandhe_macos_video_capture.m` の撮影パネルを呼ぶ C ABI ラッパー）。
+/// `device/video_capture.rs` の macOS 経路から呼ばれる。
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod macos_video_capture;
 /// Issue #785: macOS 向けシステム音量実装（`macos/fandhe_macos_volume_control.m` の Core Audio を呼ぶ
 /// C ABI ラッパー）。`device/volume_control.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
 /// テストできるよう cfg は `any(macos, test)`。
@@ -1674,8 +1679,8 @@ pub mod user_idle;
 /// 他 OS は `UnsupportedUwbRanging` 固定。Android は GMS 依存のため保留、Web は対象外）。
 pub mod uwb_ranging;
 /// Phase 11 の拡充ループ（親 #169、Issue #821）: 動画の撮影の effect ドライバ
-/// （iOS は #822・Android は #823 が埋めるスタブ、Web は `fandhe-web-dom`（#824）、
-/// macOS・Windows・Linux は `UnsupportedVideoCapturer` 固定）。
+/// （iOS は #822・Android は #823・macOS は #1071、Web は `fandhe-web-dom`（#824）、
+/// Windows・Linux は `UnsupportedVideoCapturer` 固定）。
 pub mod video_capture;
 /// Phase 11 の拡充ループ（親 #340、Issue #1014）: 動画の変換の effect ドライバ
 /// （macOS・iOS 実装、Android は #1017・Windows は #1015 が埋めるスタブ、

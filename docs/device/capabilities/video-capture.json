@@ -41,7 +41,7 @@
       "impl": "crates/fandhe-egui-proxy/src/device/android_video_capture.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/VideoCaptureHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + platforms/android/app/src/main/res/xml/compose_file_paths.xml、Issue #823"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "AVFoundation `AVCaptureSession` + `AVCaptureMovieFileOutput`（`maxRecordedDuration` に上限 30 秒、`startRecordingToOutputFileURL:recordingDelegate:`、完了は `captureOutput:didFinishRecordingToOutputFileAtURL:fromConnections:error:`、エラー付きの完了は `AVErrorRecordingSuccessfullyFinishedKey` で成否を読む）。OS 標準の撮影 UI が無いため、アプリが AppKit のパネル（`NSPanel` に `AVCaptureVideoPreviewLayer` のプレビューと「録画を始める」「止める」「キャンセル」）を組む。撮れた動画は iOS と同じく `AVURLAsset` で長さ・寸法・回転を読む",
       "perm": "`NSCameraUsageDescription`（camera-preview-stream の macOS で足すキーの文言に本機能の画面名を足す）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）。音声は録らないためマイクの宣言・許可は使わない。App Sandbox・Hardened Runtime を使わない素の実行体のため entitlement は不要",
       "url": [
@@ -54,7 +54,10 @@
         "https://developer.apple.com/documentation/avfoundation/avcapturedevice/requestaccess(for:completionhandler:)",
         "https://developer.apple.com/documentation/avfoundation/requesting-authorization-to-capture-and-save-media"
       ],
-      "note": "未実装（保留を解いた）。撮影パネルは要求ごとに開き、閉じてから結果を 1 回だけ返す。録画前に「キャンセル」を押すかパネルを閉じると取り消し。録画中に閉じると録画を止め、完了の delegate を待ってファイルを消してから取り消しにする。成否は完了の delegate だけで決める（エラーが無い、またはエラー付きでも `AVErrorRecordingSuccessfullyFinishedKey` が YES なら撮れた。上限 30 秒で止まった場合はエラー付きで届く（公式））。`AVErrorNoDataCaptured` と 0 バイトは空の失敗。一時ファイルは要求ごとに `mkdtemp`（0700）で作る置き場の中だけに書き、成功・取り消し・失敗の全経路で置き場ごと消す。消せなかったら結果を失敗（その他）にし、次の撮影の前に消し直して、消せなければ次も失敗にする。音声は録らない。ウィンドウが背面でもパネルを出す（前面でない・表示前の中断は使わない）。カメラが無いと非対応、録画前の実行時エラー・カメラの取り外しはその他の失敗。パネルを開いたまま画面を離れてもパネルは残り、後から届いた結果は捨てる。使うカメラは OS の既定"
+      "note": "実装済み（#1071）。撮影パネルは要求ごとに開き、閉じてから結果を 1 回だけ返す。録画前に「キャンセル」を押すかパネルを閉じると取り消し。録画中に閉じると録画を止め、完了の delegate を待ってファイルを消してから取り消しにする。成否は完了の delegate だけで決める（エラーが無い、またはエラー付きでも `AVErrorRecordingSuccessfullyFinishedKey` が YES なら撮れた。上限 30 秒で止まった場合はエラー付きで届く（公式））。`AVErrorNoDataCaptured` と 0 バイトは空の失敗。一時ファイルは要求ごとに `mkdtemp`（0700）で作る置き場の中だけに書き、成功・取り消し・失敗の全経路で置き場ごと消す。消せなかったら結果を失敗（その他）にし、次の撮影の前に消し直して、消せなければ次も失敗にする。音声は録らない。ウィンドウが背面でもパネルを出す（前面でない・表示前の中断は使わない）。カメラが無いと非対応、録画前の実行時エラー・カメラの取り外しはその他の失敗。パネルを開いたまま画面を離れてもパネルは残り、後から届いた結果は捨てる。使うカメラは OS の既定。カメラの許可は毎回 OS に問い、拒否は権限拒否。上限 30 秒は `maxRecordedDuration` で OS が止める。マイクは使わない。Mac 目視は #819 で行う",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#819）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_video_capture.m + crates/fandhe-egui-proxy/src/device/macos_video_capture.rs + crates/fandhe-egui-proxy/src/device/video_capture.rs + crates/fandhe-egui-proxy/macos/Info.plist、Issue #1071"
     },
     "windows": {
       "status": "possible",
