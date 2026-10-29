@@ -199,7 +199,10 @@ use fandhe_core::screens::settings::{
 use fandhe_core::screens::share_receive_show::{share_receive_show_screen, ShareReceiveShowState};
 use fandhe_core::screens::share_text::{current_screen as current_share_screen, ShareTextState};
 use fandhe_core::screens::sleep_lock_events_show::{
-    current_screen as current_sleep_lock_events_show_screen, SleepLockEventsShowState,
+    error_text as sleep_lock_events_error_text, start as sleep_lock_events_start,
+    status_text as sleep_lock_events_status_text, stop as sleep_lock_events_stop,
+    SleepLockEventsShowState, START_LABEL as SLEEP_LOCK_EVENTS_START_LABEL,
+    STOP_LABEL as SLEEP_LOCK_EVENTS_STOP_LABEL, TITLE as SLEEP_LOCK_EVENTS_TITLE,
 };
 use fandhe_core::screens::speech_recognize::{
     current_screen as current_speech_recognize_screen, SpeechRecognizeState,
@@ -562,13 +565,29 @@ pub fn mount_motion_raw_sensors_show_screen(root_id: &str) -> Result<(), JsValue
 
 /// `root_id` が指す要素へ型サンプル「スリープ・ロックの通知」（Issue #1063）をマウントする検証専用
 /// エントリポイント。`super::sleep_lock_events::sleep_lock_events_show_effect` が Idle Detection API を駆動する。
+///
+/// `mount` は `Screen<S>` を再構築しないため、状態でラベルを切り替える `current_screen` の単一ボタンは
+/// 使えない（受信中も「始める」のまま固定される）。開始と停止を別ボタンに固定する。どちらも状態に
+/// 応じて no-op になる（非対応・受信中の開始、待機中の停止）ため、常時表示でも実害はない。
 #[wasm_bindgen]
 pub fn mount_sleep_lock_events_show_screen(root_id: &str) -> Result<(), JsValue> {
     let root = root_element(root_id)?;
     let initial_state = SleepLockEventsShowState::default();
     super::mount::mount_with_effect(
         root,
-        current_sleep_lock_events_show_screen(&initial_state),
+        fandhe_core::Screen::new(SLEEP_LOCK_EVENTS_TITLE)
+            .dynamic_text(sleep_lock_events_status_text)
+            .error_text(sleep_lock_events_error_text)
+            .button(
+                WidgetId::from_raw(1),
+                SLEEP_LOCK_EVENTS_START_LABEL,
+                sleep_lock_events_start,
+            )
+            .button(
+                WidgetId::from_raw(2),
+                SLEEP_LOCK_EVENTS_STOP_LABEL,
+                sleep_lock_events_stop,
+            ),
         initial_state,
         super::sleep_lock_events::sleep_lock_events_show_effect,
     )
