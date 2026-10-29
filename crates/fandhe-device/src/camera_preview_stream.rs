@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得（ズーム操作を含む）の
 //! 契約。`fandhe-egui-proxy` の `device/camera_preview_stream.rs`（effect ドライバ）が
-//! [`CameraPreview::start`] で映像を開始し、各 OS 実装（iOS: #813、Android: #814、macOS: 子 issue。macOS は iOS と同じ `.m` を共有する）が本トレイトを実装する。
+//! [`CameraPreview::start`] で映像を開始し、各 OS 実装（iOS: #813、Android: #814、macOS: #1066。macOS は iOS と同じ `.m` を共有する）が本トレイトを実装する。
 //! Web は `fandhe-web-dom`（#815）が `getUserMedia` を使い、本トレイトは経由せず、純関数
 //! （[`preview_size`]・[`downscale_packed`]・[`zoom_target`]・[`checked_zoom`]）だけを共用する。
 //! Windows は保留（対応表の前提は #809）で、`UnsupportedCameraPreview` 固定。

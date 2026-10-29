@@ -427,7 +427,7 @@
 //!   UWB 測距）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_uwb_ranging.rs`
 //!   から呼ばれる契約）。NearbyInteraction をリンクする。MultipeerConnectivity は local_peer 用にリンク済み。
 //! - `ios/fandhe_ios_camera_preview_stream.m`（Issue #813、`AVCaptureSession` + `AVCaptureVideoDataOutput` による
-//!   カメラのライブ映像・フレーム取得）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   カメラのライブ映像・フレーム取得）は **iOS・macOS 双方**の分岐で feature `device` 有効時にコンパイルする
 //!   （`src/device/ios_camera_preview_stream.rs` から呼ばれる契約）。AVFoundation・CoreMedia・CoreVideo を明示リンクする。
 //! - `ios/fandhe_ios_flashlight.m`（Issue #460、AVFoundation の torch によるライト）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_flashlight.rs`
@@ -755,7 +755,7 @@ fn main() {
     compile_ios_activity_recognition();
     // `ios/fandhe_ios_uwb_ranging.m`（Issue #654）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_uwb_ranging();
-    // `ios/fandhe_ios_camera_preview_stream.m`（Issue #813）。iOS 分岐のみ（macOS は対応表で保留）。
+    // `ios/fandhe_ios_camera_preview_stream.m`（Issue #813）。iOS 分岐。macOS 分岐（`build_macos`）も同じ `.m` を共有する（Issue #1066）。
     compile_ios_camera_preview_stream();
     // `ios/fandhe_ios_flashlight.m`（Issue #460）。iOS 分岐のみ（macOS は対応表で n-a）。
     compile_ios_flashlight();
@@ -2510,7 +2510,7 @@ fn compile_ios_uwb_ranging() {
     println!("cargo:rustc-link-lib=framework=NearbyInteraction");
 }
 
-/// `ios/fandhe_ios_camera_preview_stream.m` を `cc` でコンパイルする（Issue #813）。**iOS 分岐のみ**から
+/// `ios/fandhe_ios_camera_preview_stream.m` を `cc` でコンパイルする（Issue #813、macOS は #1066）。**iOS・macOS 双方**の分岐から
 /// 呼ばれる（`src/device/ios_camera_preview_stream.rs` が使う）。AVFoundation は camera 用にリンク済みだが、
 /// 本機能が使う CoreMedia・CoreVideo と合わせて明示する。
 fn compile_ios_camera_preview_stream() {
@@ -2738,6 +2738,8 @@ fn build_macos() {
     compile_apple_bluetooth_le();
     // `apple/fandhe_apple_ble_peripheral.m`（Issue #778）。macOS・iOS 両分岐から呼ぶ。
     compile_apple_ble_peripheral();
+    // `ios/fandhe_ios_camera_preview_stream.m`（Issue #1066）は iOS 分岐と共有する（`TARGET_OS_IPHONE` で分岐）。
+    compile_ios_camera_preview_stream();
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
