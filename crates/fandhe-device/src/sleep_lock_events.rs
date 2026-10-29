@@ -1,7 +1,9 @@
 //! Phase 11 の拡充ループ（親 #167、Issue #810）: スリープ・画面の消灯と点灯・ロックと解除の
 //! 出来事を OS の通知で受け取る契約。`fandhe-egui-proxy` の `device/sleep_lock_events.rs`
 //! （effect ドライバ）が [`SleepLockEvents::start`] で購読を開始し、各 OS 実装（macOS・Windows: #810、
-//! Android: #811）が本トレイトを実装する。iOS と Web は対応表で保留（`UnsupportedSleepLockEvents`）。
+//! Android: #811）が本トレイトを実装する。iOS は対応表で保留（`UnsupportedSleepLockEvents`）。Web は `fandhe-web-dom` の
+//! `sleep_lock_events` が本トレイトを通らずに同じ結果の種類で実装する（ブラウザの Promise・イベントは
+//! 同期のトレイトに載らない。`EventLog` と本モジュールの純関数は共有する）。
 //!
 //! # 方式: 出来事は OS の通知、今の状態は OS へ問い直す
 //!
@@ -11,6 +13,11 @@
 //! （単調時計はスリープ中に止まる OS があり、スリープをまたぐ経過は正しく測れない）。
 //! 何を知らせ、何を読めるかは OS ごとに違い、[`EventSupport`] で宣言する（画面は OS 名で分岐しない）。
 //!
+//! Web は出来事を `change` の後の `screenState` の読み直しで受け、同じ購読の中で直前に読んだ値との
+//! 違いだけをロック・解除とする（`change` は `userState` の変化でも届き、どちらが変わったかを渡さない
+//! ため）。直前の値は出来事を決めるためだけに使い、今の状態として出さない（今の状態は毎回
+//! `screenState` を読む）。開始前は `screenState` が null で読めない。
+//!
 //! # 結果の種類（契約表 10）
 //!
 //! - 受信中: [`SleepLockEvents::start`] が `Ok` で、guard が生きている間
@@ -19,7 +26,8 @@
 //! - 実行中の失敗: [`Signal::Failed`]（OS の通知ループが止まった等）。成功を装わない
 //! - 非対応: `Err(Unsupported("sleep_lock_events"))`
 //!
-//! `PermissionDenied` は返さない（どの OS も権限不要。iOS・Web は保留）。
+//! native の各 OS は `PermissionDenied` を返さない（権限不要）。Web は `idle-detection` の拒否
+//! （利用者・Permissions Policy の区別なし）を許可なしとして出し、開始失敗に畳まない。
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
 //!
@@ -31,7 +39,10 @@
 //! 守らない範囲: 画面を開く前・止めた後の出来事、Android 14 以上でキャッシュ状態の間に溜められ前面復帰時に
 //! まとめて届く通知の順序と畳み込み（回数が少なく出ることがある）、OS 間で「画面の消灯」「ロック」の
 //! 定義が違うこと、複数プロセス・複数窓、OS 側の通知の遅れ、同一セッションの他プロセスが送る偽の
-//! `WM_WTSSESSION_CHANGE` / `WM_POWERBROADCAST`（記録が増えるだけで、今の状態は OS へ問い直す）。
+//! `WM_WTSSESSION_CHANGE` / `WM_POWERBROADCAST`（記録が増えるだけで、今の状態は OS へ問い直す）、
+//! Web の Chromium 系以外（非対応表示）・iframe 埋め込み・Permissions Policy の拒否と利用者の拒否の区別
+//! （どちらも許可なし）・許可ダイアログの応答待ちの期限・ページが非表示の間に届く `change` の遅れと、
+//! その間にロックと解除が続いたときの取りこぼし・スクリーンセーバーをロックとして数えること。
 //!
 //! # 後続 OS の要点
 //!

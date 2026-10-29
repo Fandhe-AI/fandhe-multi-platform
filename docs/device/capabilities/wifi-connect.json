@@ -21,16 +21,18 @@
     },
     "android": {
       "status": "possible",
-      "api": "`WifiNetworkSpecifier`（API 29+）を付けた `ConnectivityManager.requestNetwork`（結果は `NetworkCallback.onAvailable` / `onUnavailable`）。`WifiNetworkSuggestion`（`WifiManager.addNetworkSuggestions`）は接続の結果を返さない",
-      "perm": "`requestNetwork` は `CHANGE_NETWORK_STATE`（normal、未宣言）または設定の書き込み権限が要る。`CHANGE_WIFI_STATE`・`ACCESS_FINE_LOCATION`・`NEARBY_WIFI_DEVICES` は local-peer-connect・wifi-info で宣言済み",
+      "api": "`WifiNetworkSpecifier`（API 29+。`setSsid` に `setWpa2Passphrase` を足すか、パスワードが空なら暗号なし）を付けた `ConnectivityManager.requestNetwork(request, callback, handler)`（main looper で受ける）。結果は `NetworkCallback.onAvailable` / `onUnavailable`。`WifiNetworkSuggestion`（`WifiManager.addNetworkSuggestions`）は接続の結果を返さないため使わない",
+      "perm": "`android.permission.CHANGE_NETWORK_STATE`（normal。インストール時に付与され、実行時の許可ダイアログは無い。いまの Manifest に無く、実装 PR で uses-permission を足す）。位置情報・`NEARBY_WIFI_DEVICES` は要らない（接続先の承認は OS のダイアログが行う）",
       "url": [
         "https://developer.android.com/develop/connectivity/wifi/wifi-bootstrap",
+        "https://developer.android.com/reference/android/net/wifi/WifiNetworkSpecifier.Builder",
+        "https://developer.android.com/reference/android/Manifest.permission#CHANGE_NETWORK_STATE",
         "https://developer.android.com/develop/connectivity/wifi/wifi-suggest",
-        "https://developer.android.com/develop/connectivity/wifi/wifi-permissions",
-        "https://android.googlesource.com/platform/packages/modules/Connectivity/+/refs/heads/main/framework/src/android/net/ConnectivityManager.java"
+        "https://android.googlesource.com/platform/packages/modules/Connectivity/+/refs/heads/main/framework/src/android/net/ConnectivityManager.java",
+        "https://android.googlesource.com/platform/packages/modules/Wifi/+/refs/heads/main/service/java/com/android/server/wifi/WifiNetworkFactory.java",
+        "https://android.googlesource.com/platform/packages/modules/Wifi/+/refs/heads/main/framework/java/android/net/wifi/WifiNetworkSpecifier.java"
       ],
-      "note": "未実装。Specifier は OS のダイアログで利用者が承認し、拒否・失敗は `onUnavailable` で届く。接続はアプリだけのもので、インターネット接続にはならない（公式）。要求は `unregisterNetworkCallback` かアプリ終了まで生き、外すと OS が接続を手放しうる（AOSP のソース）。API 28 以下（minSdk 24〜28）は対象外。",
-      "deferred": "`requestNetwork` に要る `CHANGE_NETWORK_STATE` の uses-permission を新しく足すことになる（AOSP のソース。いまの Manifest に無い）。また Specifier の接続はアプリ限定で要求を握り続ける間だけ保たれ、Suggestion は接続の結果を返さないため、他の OS と同じ「接続を要求して OS の結果を 1 回受け取る」形にならず、要求の保持とライフサイクルの設計が別に要る。新しい権限・設計を足さない方針のため保留。ベンダーの個別審査は不要"
+      "note": "未実装。OS のダイアログで利用者が承認して接続できると `onAvailable`、拒否・接続の失敗は `onUnavailable` で届く（公式）。Wi-Fi オフ・前景でないアプリからの要求も `onUnavailable` で返り（AOSP の WifiNetworkFactory）、理由を区別できないため、`onUnavailable` の後に Wi-Fi の電源だけを読み直してオフを分け、残りは「接続できませんでした」にする。「見つからない」は返さない。接続はこのアプリだけのもので、インターネット接続にはならない（公式）。要求は `unregisterNetworkCallback` まで生き、どの要求にも合わないネットワークは OS がいつでも切りうる（AOSP の ConnectivityManager）ため、成功した要求は次の接続要求か Activity の破棄（画面回転を含む）まで握る。保留中の要求は Activity の破棄で失敗に確定して取り下げる。Specifier は認証方式を 1 つしか持てないので WPA2-Personal と暗号なしだけを作り、WPA3 だけのネットワークは失敗になる。16 進 64 文字の鍵は ASCII のパスフレーズとして引用符で包まれる（AOSP の WifiNetworkSpecifier）ため OS へ渡さず失敗にする。API 28 以下（minSdk 24〜28）は `Unsupported`。"
     },
     "macos": {
       "status": "done",
@@ -71,5 +73,5 @@
       "note": "ブラウザから OS の Wi-Fi 接続を操作する API はない。"
     }
   },
-  "note": "wifi-info は現在の接続・周辺スキャンの読み取りで、本機能は SSID とパスワードを指定して接続する書き込み側。network-status（接続状態）とも別。今回の範囲: 型サンプル画面で利用者が入力した SSID とパスワードの Wi-Fi へ接続を 1 回要求し、OS が返した結果（接続した / 見つからない / 許可なし / Wi-Fi オフ / 失敗 / 入力不正）を出す。接続の可否を事前に判定せず OS の結果を写す。接続中かどうかをアプリ側に記憶しない（成功はその時点の結果として出すだけで、今の接続は wifi-info で OS に問う）。期限・ポーリングを持たない。macOS は個人用・WPA/WPA2/WPA3 Personal と暗号なしを OS に任せ、Windows は WPA2-Personal（AES）と暗号なしの一時プロファイルだけを作る。SSID・パスワードはログ・エラー・`Debug` に出さず、パスワードは trim しない。扱わない: 切断・保存済みネットワークの削除・エンタープライズ認証・隠しネットワークの指定・接続後のインターネット到達の確認。守らない範囲: 接続した後の切断・別ネットワークへの切り替え、OS 呼び出しが戻らない場合、管理者パスワードのダイアログで待つ時間、Windows で他のアプリが同時に接続を要求したときの通知の取り違え（SSID とプロファイル種別で照合し、取り違えうる範囲は残る）、複数アダプターで 1 つだけを使うこと、複数プロセスからの同時の要求。"
+  "note": "wifi-info は現在の接続・周辺スキャンの読み取りで、本機能は SSID とパスワードを指定して接続する書き込み側。network-status（接続状態）とも別。今回の範囲: 型サンプル画面で利用者が入力した SSID とパスワードの Wi-Fi へ接続を 1 回要求し、OS が返した結果（接続した / 見つからない / 許可なし / Wi-Fi オフ / 失敗 / 入力不正）を出す。接続の可否を事前に判定せず OS の結果を写す。接続中かどうかをアプリ側に記憶しない（成功はその時点の結果として出すだけで、今の接続は wifi-info で OS に問う）。期限・ポーリングを持たない。macOS は個人用・WPA/WPA2/WPA3 Personal と暗号なしを OS に任せ、Windows は WPA2-Personal（AES）と暗号なしの一時プロファイルだけを作る。Android は WPA2-Personal と暗号なしの `WifiNetworkSpecifier` だけを作り、接続はこのアプリだけのもの（インターネットに使われず、Wi-Fi 情報の「今の接続」に出ないことがある）。Android は成功した要求を次の接続要求か Activity の破棄まで握り、それ以外の時点では放さない（接続中かどうかは記憶しない）。SSID・パスワードはログ・エラー・`Debug` に出さず、パスワードは trim しない。扱わない: 切断・保存済みネットワークの削除・エンタープライズ認証・隠しネットワークの指定・接続後のインターネット到達の確認。守らない範囲: 接続した後の切断・別ネットワークへの切り替え、OS 呼び出しが戻らない場合、管理者パスワードのダイアログで待つ時間、Windows で他のアプリが同時に接続を要求したときの通知の取り違え（SSID とプロファイル種別で照合し、取り違えうる範囲は残る）、複数アダプターで 1 つだけを使うこと、複数プロセスからの同時の要求、Android で画面を離れた後も次の要求か Activity の破棄まで接続が残ること・画面回転で接続が切れること・拒否と見つからないと接続の失敗を区別しないこと。"
 }
