@@ -44,6 +44,8 @@ pub(crate) struct Store {
     seq: u64,
     pub(crate) kept: Vec<(PathBuf, Instant)>,
     pub(crate) stale: Vec<PathBuf>,
+    /// `prepare` 済みで `keep` / `discard` 前のディレクトリ（掃除から守る）。
+    live: Vec<PathBuf>,
     pub(crate) remove: fn(&Path) -> io::Result<()>,
 }
 
@@ -78,6 +80,7 @@ impl Store {
             seq: 0,
             kept: Vec::new(),
             stale: Vec::new(),
+            live: Vec::new(),
             remove: remove_dir,
         }
     }
@@ -126,11 +129,15 @@ impl Store {
         // 前のプロセスの残りを毎回掃除する。同時に動く別プロセスが渡した直後のものを消さないよう、
         // 更新時刻が RECYCLE_AFTER 以内のもの・時刻を読めないものは残す（後の要求で期限を再評価する）。
         // 対象はこの機能が作る `<pid>-<seq>` 形式の実ディレクトリ（シンボリックリンク・他の名前は触らない）。
-        // 自プロセスのもの（`<自pid>-`）は kept / 使用中なので触らない。
-        let own_prefix = format!("{}-", std::process::id());
+        // 自プロセスが管理中のもの（kept / 使用中）は触らない。PID が再利用された前プロセスの残りは
+        // 管理外なので、期限を過ぎていれば回収する。
         if let Ok(rd) = std::fs::read_dir(&root) {
             for e in rd.flatten() {
-                if !is_own_dir(&e) || e.file_name().to_string_lossy().starts_with(&own_prefix) {
+                let path = e.path();
+                if !is_own_dir(&e)
+                    || self.live.contains(&path)
+                    || self.kept.iter().any(|(k, _)| *k == path)
+                {
                     continue;
                 }
                 let old_enough = e
@@ -140,16 +147,24 @@ impl Store {
                     .and_then(|t| t.elapsed().ok())
                     .is_some_and(|d| d >= RECYCLE_AFTER);
                 if old_enough {
-                    self.remove_or_stale(e.path());
+                    self.remove_or_stale(path);
                 }
             }
         }
         if !self.stale.is_empty() {
             return Err(DeviceError::Internal(CLEANUP));
         }
-        self.seq += 1;
-        let dir = root.join(format!("{}-{}", std::process::id(), self.seq));
-        std::fs::create_dir(&dir).map_err(|_| fail())?;
+        // PID 再利用で前プロセスの新しい残りと同名になったら、連番を進めて別名を取る。
+        let mut tries = 0;
+        let dir = loop {
+            self.seq += 1;
+            let dir = root.join(format!("{}-{}", std::process::id(), self.seq));
+            match std::fs::create_dir(&dir) {
+                Ok(()) => break dir,
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists && tries < 100 => tries += 1,
+                Err(_) => return Err(fail()),
+            }
+        };
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -168,16 +183,19 @@ impl Store {
             self.remove_or_stale(dir);
             return Err(fail());
         }
+        self.live.push(dir.clone());
         Ok(AttachmentFile { dir, path })
     }
 
     /// 受け手が後から読むため残す。次の添付要求で 10 分を過ぎていれば回収する。
     pub(crate) fn keep(&mut self, f: AttachmentFile, now: Instant) {
+        self.live.retain(|d| *d != f.dir);
         self.kept.push((f.dir, now));
     }
 
     /// すぐ消す。失敗は `stale` に積み、次の添付要求の前に消し直す。
     pub(crate) fn discard(&mut self, f: AttachmentFile) {
+        self.live.retain(|d| *d != f.dir);
         self.remove_or_stale(f.dir);
     }
 }
@@ -266,13 +284,14 @@ mod tests {
     }
 
     #[test]
-    fn write_failure_returns_label_and_leaves_no_dir() {
+    fn reused_pid_leftover_does_not_block_prepare() {
         let (mut s, root) = test_store();
-        std::fs::create_dir_all(&root).unwrap();
-        // 次の `<pid>-<seq>` と同名のファイルを置いて `create_dir` を失敗させる。
-        std::fs::write(root.join(format!("{}-1", std::process::id())), b"x").unwrap();
-        let e = s.prepare(&att(), Instant::now()).unwrap_err();
-        assert!(matches!(e, DeviceError::Internal(l) if l == ATTACHMENT_FILE));
+        let clash = root.join(format!("{}-1", std::process::id()));
+        std::fs::create_dir_all(&clash).unwrap();
+        let f = s.prepare(&att(), Instant::now()).unwrap();
+        assert_ne!(f.dir, clash);
+        assert!(clash.exists());
+        s.discard(f);
         let _ = std::fs::remove_dir_all(root);
     }
 
