@@ -44,7 +44,6 @@ pub(crate) struct Store {
     seq: u64,
     pub(crate) kept: Vec<(PathBuf, Instant)>,
     pub(crate) stale: Vec<PathBuf>,
-    swept: bool,
     pub(crate) remove: fn(&Path) -> io::Result<()>,
 }
 
@@ -79,7 +78,6 @@ impl Store {
             seq: 0,
             kept: Vec::new(),
             stale: Vec::new(),
-            swept: false,
             remove: remove_dir,
         }
     }
@@ -103,6 +101,14 @@ impl Store {
         a: &ComposeAttachment,
         now: Instant,
     ) -> Result<AttachmentFile, DeviceError> {
+        let root = self.root();
+        let fail = || DeviceError::Internal(ATTACHMENT_FILE);
+        std::fs::create_dir_all(&root).map_err(|_| fail())?;
+        // 置き場がシンボリックリンクに差し替えられていないことを、掃除（削除）より先に確かめる。
+        let meta = std::fs::symlink_metadata(&root).map_err(|_| fail())?;
+        if !meta.is_dir() {
+            return Err(fail());
+        }
         let stale = std::mem::take(&mut self.stale);
         for p in stale {
             self.remove_or_stale(p);
@@ -117,33 +123,24 @@ impl Store {
         for (p, _) in old {
             self.remove_or_stale(p);
         }
-        let root = self.root();
-        let fail = || DeviceError::Internal(ATTACHMENT_FILE);
-        std::fs::create_dir_all(&root).map_err(|_| fail())?;
-        // 置き場がシンボリックリンクに差し替えられていないことを、掃除（削除）より先に確かめる。
-        let meta = std::fs::symlink_metadata(&root).map_err(|_| fail())?;
-        if !meta.is_dir() {
-            return Err(fail());
-        }
-        // 前のプロセスの残りは初回だけ掃除する（登録済みのものは触らない）。同時に動く別プロセスが渡した
-        // 直後のものを消さないよう、更新時刻が RECYCLE_AFTER 以内のもの・時刻を読めないものは残す。
+        // 前のプロセスの残りを毎回掃除する。同時に動く別プロセスが渡した直後のものを消さないよう、
+        // 更新時刻が RECYCLE_AFTER 以内のもの・時刻を読めないものは残す（後の要求で期限を再評価する）。
         // 対象はこの機能が作る `<pid>-<seq>` 形式の実ディレクトリ（シンボリックリンク・他の名前は触らない）。
-        if !self.swept {
-            self.swept = true;
-            if let Ok(rd) = std::fs::read_dir(&root) {
-                for e in rd.flatten() {
-                    if !is_own_dir(&e) {
-                        continue;
-                    }
-                    let old_enough = e
-                        .metadata()
-                        .and_then(|m| m.modified())
-                        .ok()
-                        .and_then(|t| t.elapsed().ok())
-                        .is_some_and(|d| d >= RECYCLE_AFTER);
-                    if old_enough && !self.kept.iter().any(|(p, _)| *p == e.path()) {
-                        self.remove_or_stale(e.path());
-                    }
+        // 自プロセスのもの（`<自pid>-`）は kept / 使用中なので触らない。
+        let own_prefix = format!("{}-", std::process::id());
+        if let Ok(rd) = std::fs::read_dir(&root) {
+            for e in rd.flatten() {
+                if !is_own_dir(&e) || e.file_name().to_string_lossy().starts_with(&own_prefix) {
+                    continue;
+                }
+                let old_enough = e
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.elapsed().ok())
+                    .is_some_and(|d| d >= RECYCLE_AFTER);
+                if old_enough {
+                    self.remove_or_stale(e.path());
                 }
             }
         }
@@ -273,7 +270,6 @@ mod tests {
         let (mut s, root) = test_store();
         std::fs::create_dir_all(&root).unwrap();
         // 次の `<pid>-<seq>` と同名のファイルを置いて `create_dir` を失敗させる。
-        s.swept = true;
         std::fs::write(root.join(format!("{}-1", std::process::id())), b"x").unwrap();
         let e = s.prepare(&att(), Instant::now()).unwrap_err();
         assert!(matches!(e, DeviceError::Internal(l) if l == ATTACHMENT_FILE));
@@ -299,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn first_prepare_sweeps_foreign_leftovers_only_once() {
+    fn prepare_sweeps_foreign_leftovers_when_they_become_old() {
         let (mut s, root) = test_store();
         let old = root.join("99999-1");
         std::fs::create_dir_all(&old).unwrap();
@@ -313,10 +309,13 @@ mod tests {
         let f = s.prepare(&att(), Instant::now()).unwrap();
         assert!(!old.exists() && fresh.exists());
         s.keep(f, Instant::now());
-        // 2 回目以降は、登録済みでないものも新たには消さない。
-        std::fs::create_dir_all(&old).unwrap();
+        // 後から古くなったものも、次の要求で回収する。
+        std::fs::File::open(&fresh)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() - RECYCLE_AFTER * 2)
+            .unwrap();
         let g = s.prepare(&att(), Instant::now()).unwrap();
-        assert!(old.exists());
+        assert!(!fresh.exists());
         s.discard(g);
         let _ = std::fs::remove_dir_all(root);
     }
