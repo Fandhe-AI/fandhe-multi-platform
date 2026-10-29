@@ -4,7 +4,7 @@
   "group": "未着手の OS 機能",
   "order": 156,
   "priority": 146,
-  "bundle": "one-shot",
+  "bundle": "request-response",
   "platforms": {
     "ios": {
       "status": "no",
@@ -14,25 +14,54 @@
       "note": "無線の切り替えは不可。Bluetooth の状態読み取りは bluetooth-le の `CBCentralManager.state` で足りる"
     },
     "android": {
-      "status": "possible",
-      "api": "`BluetoothAdapter.isEnabled` / `WifiManager.isWifiEnabled`（状態の取得）。切り替えは `Settings.Panel.ACTION_INTERNET_CONNECTIVITY` 等の設定パネルへ誘導",
-      "perm": "`BLUETOOTH_CONNECT`（API 31+）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。`setWifiEnabled` は API 29+ で、`BluetoothAdapter.enable()` は API 33+ で一般アプリから使えない。アプリ自身では切り替えられず、ユーザー操作に委ねる形"
+      "status": "done",
+      "api": "読み取りは `BluetoothAdapter.getState` / `WifiManager.getWifiState`。Bluetooth のオンは `ACTION_REQUEST_ENABLE`（OS のダイアログ）、オフは `Settings.ACTION_BLUETOOTH_SETTINGS` を開く。Wi-Fi は `Settings.Panel.ACTION_WIFI`（API 29+）/ `Settings.ACTION_WIFI_SETTINGS`（API 24〜28）を開く",
+      "perm": "android.permission.BLUETOOTH_CONNECT（API 31+、`ACTION_REQUEST_ENABLE` にだけ要る。宣言済み）・android.permission.ACCESS_WIFI_STATE（宣言済み）",
+      "url": [
+        "https://developer.android.com/reference/android/net/wifi/WifiManager#setWifiEnabled(boolean)",
+        "https://developer.android.com/reference/android/net/wifi/WifiManager#getWifiState()",
+        "https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#enable()",
+        "https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#isEnabled()",
+        "https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#ACTION_REQUEST_ENABLE",
+        "https://developer.android.com/reference/android/provider/Settings.Panel#ACTION_WIFI"
+      ],
+      "note": "実装済み（#974）。読み取りは `getWifiState` / `getState` を写し、Wi-Fi の切り替えと Bluetooth のオフは設定画面を開いて `Opened`、Bluetooth のオンは `ACTION_REQUEST_ENABLE` で `RESULT_OK` が `Applied`、`RESULT_CANCELED` が `NotChanged`（失敗にしない）。`setWifiEnabled` は「Q 以上を target するアプリでは常に失敗し false を返す」、`BluetoothAdapter.enable()` / `disable()` は「TIRAMISU 以上を target すると常に失敗」（公式）のため使わない。`Disabled` は返さない（相当する OS 値がない）。`Opened` / `NotChanged` を「切り替えた」と言わず、直後の読み直しの値だけで状態を出す。Activity を作り直したら保留中の要求を破棄する。守らない範囲: 設定画面での利用者の操作、読み直し時点で切り替わり途中の値、ダイアログや設定画面の待ち時間。既知の天井（実機未確認）: 端末によって `getState` に許可が要るか、`ACTION_REQUEST_ENABLE` が既にオンの端末で返す値",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#965）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_radio_control.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/RadioControlHelper.java + crates/fandhe-egui-proxy/src/device/radio_control.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-device/src/radio_control.rs、Issue #974"
     },
     "macos": {
-      "status": "possible",
-      "api": "CoreWLAN `CWInterface.setPower(_:)`（Wi-Fi）。Bluetooth の切り替えは公開 API が見当たらない",
-      "perm": "不要（要確認）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。Bluetooth の電源切り替えは未確認"
+      "status": "done",
+      "api": "CoreWLAN `CWInterface.powerOn` / `setPower(_:)`（Wi-Fi）。Bluetooth は `IOBluetoothHostController.powerState` の読み取りのみ（切り替えの公開 API なし）",
+      "perm": "宣言不要。`setPower` は管理者パスワードを求めることがある（公式）",
+      "url": [
+        "https://developer.apple.com/documentation/corewlan/cwinterface/setpower(_:)",
+        "https://developer.apple.com/documentation/corewlan/cwinterface/poweron()",
+        "https://developer.apple.com/documentation/corewlan/cwinterface",
+        "https://developer.apple.com/documentation/iobluetooth/iobluetoothhostcontroller/powerstate"
+      ],
+      "note": "実装済み（#972）。Wi-Fi は `powerOn` で読み `setPower` で切り替え、Bluetooth は `powerState` の読み取りのみで切り替えは `Unsupported`（`IOBluetoothPreferenceSetControllerPowerState` は非公開のため使わない）。切り替えの後は読み直した値を並べ、「切り替えた」と言わない。守らない範囲: 読み直し時点で切り替わり途中の値、要求後に他アプリ・スイッチが状態を変えること、管理者パスワードのダイアログの待ち時間。既知の天井（実機未確認）: `powerState` の読み取りに Bluetooth の TCC が掛かるか、管理者パスワード取り消し時の `NSError` の値（いまは失敗）、`powerOn` は失敗時にも NO を返すため Off と区別できない",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#965）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_radio_control.m + crates/fandhe-egui-proxy/src/device/macos_radio_control.rs + crates/fandhe-egui-proxy/src/device/radio_control.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-device/src/radio_control.rs、Issue #972"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "WinRT `Windows.Devices.Radios.Radio`（`GetRadiosAsync` / `SetStateAsync`、`RequestAccessAsync`）",
-      "perm": "`radios` デバイス capability",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio",
-      "note": "未実装。URL 未確認（一般知識、要確認）。Wi-Fi・Bluetooth・機内モードの無線を同じ API で扱える"
+      "perm": "パッケージ化したアプリは `<DeviceCapability Name=\"radios\"/>`。素の exe は宣言の対象外（読み取りは常に許可、切り替えは実機確認）",
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio.requestaccessasync",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio.setstateasync",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio.getradiosasync",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radioaccessstatus",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radiostate",
+        "https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/app-capability-declarations"
+      ],
+      "note": "実装済み（#973）。`RequestAccessAsync` の後に `GetRadiosAsync` を Kind で絞った先頭 1 つを使い `SetStateAsync` を呼ぶ。Wi-Fi・Bluetooth の無線を同じ API で扱える。`SetStateAsync` の `Allowed` は「要求を受け付けた」で、最終状態は非同期に移りハードウェアスイッチ・ポリシーが覆しうるため、`State` を読み直して確かめる（`Allowed` は `Accepted` で、状態は読み直した値で出す）。`GetRadiosAsync` の空リストは失敗ではなく `NotPresent`。既知の天井（実機未確認）: 素の exe で `RequestAccessAsync` / `SetStateAsync` が `Allowed` を返すか。`DeniedBySystem` に倒れるなら読み取りだけの `done` に note を直す",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#965）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_radio_control.rs + crates/fandhe-egui-proxy/src/device/radio_control.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-device/src/radio_control.rs、Issue #973"
     },
     "web": {
       "status": "no",
@@ -42,5 +71,5 @@
       "note": "ブラウザから無線の状態を取得・切り替える API はない"
     }
   },
-  "note": "network-status は接続の有無・種別、wifi-info は SSID・スキャンで、こちらは Wi-Fi・Bluetooth 無線そのものの on/off の取得と切り替え"
+  "note": "network-status は接続の有無・種別、wifi-info は SSID・スキャンで、こちらは Wi-Fi・Bluetooth 無線そのものの on/off の取得と切り替え。OS の答えを写す（事前判定でボタンを隠さない・期限やポーリングを持たない）。`NotPresent` / `Unknown` / 読み取り失敗を `Off` に畳まない。範囲外: 状態変化の購読、機内モード、モバイル通信・NFC。守らない範囲: 読み直し時点で切り替わり途中の値、要求後にハードウェアスイッチ・他アプリが状態を変えること、macOS の管理者パスワード・Windows の同意 UI の待ち時間、複数アダプターで先頭の 1 つだけを扱うこと"
 }

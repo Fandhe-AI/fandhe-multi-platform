@@ -11,6 +11,10 @@
 //! の旧要求の破棄。守らない範囲: 紙に出たか・ジョブ投入後のプリンタ側の失敗。権限と `<queries>` は
 //! 宣言しない。見出し・本文・結果はログに出さない。
 //!
+//! 画面の印刷（#1012）: `print_screen_page_effect` → 取り込み確定 → `begin_print_image` → JNI
+//! `MainActivity.requestPrintImage(long, int[], int, int)`（署名 `(J[III)V`。Java・`jni_sig!`・本文の
+//! 3 か所で一致させる）→ `PrintHelper.printImage` → 同じ `nativeOnPrintResult`。画素はログに出さない。
+//!
 //! no-op スタブは置かない: Java の native は Rust の `requestPrint` を経た後でしか呼ばれない。
 
 use fandhe_device::print::PrintRequest;
@@ -68,6 +72,67 @@ fn call_activity(id: u64, req: &PrintRequest) -> bool {
     .is_ok()
 }
 
+/// 画面の画像（print-screen、親 #341）の印刷依頼。`device/print.rs` の取り込み確定後に呼ばれる。
+/// `Ok` は受理済みで、結果は文章の印刷と同じ `nativeOnPrintResult` で届く。
+#[cfg(target_os = "android")]
+pub(crate) fn begin_print_image(
+    request_id: u64,
+    img: &fandhe_device::print::PrintImage,
+) -> Result<(), DeviceError> {
+    if call_activity_image(request_id, img) {
+        Ok(())
+    } else {
+        Err(DeviceError::Internal("print present"))
+    }
+}
+
+/// ホストのテストビルド用。dispatch は Android でしか呼ばない。成功を作らない。
+#[cfg(not(target_os = "android"))]
+#[allow(dead_code)]
+pub(crate) fn begin_print_image(
+    _request_id: u64,
+    _img: &fandhe_device::print::PrintImage,
+) -> Result<(), DeviceError> {
+    Err(DeviceError::Unsupported("print"))
+}
+
+/// `MainActivity.requestPrintImage(long, int[], int, int)`（JNI 署名 `(J[III)V`）を呼ぶ。
+/// 画素は ARGB の `int[]`。寸法は `PrintImage` の不変条件で各辺 1〜8192 なので `jint`・`jsize` に
+/// 収まる。画素・寸法はログに出さない。`unsafe` 2 箇所は `call_activity` と同一の根拠。
+#[cfg(target_os = "android")]
+#[allow(unsafe_code)]
+fn call_activity_image(id: u64, img: &fandhe_device::print::PrintImage) -> bool {
+    use super::android::JniCallFailed;
+    let Some(app) = crate::android::android_app() else {
+        return false;
+    };
+    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
+    // `app` は本呼び出しの間生存する。
+    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
+    vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
+        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
+        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
+        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
+        let argb = img.to_argb();
+        let arr = env.new_int_array(argb.len())?;
+        arr.set_region(env, 0, &argb)?;
+        let args = [
+            jni::objects::JValue::Long(id as jni::sys::jlong),
+            jni::objects::JValue::Object(&arr),
+            jni::objects::JValue::Int(img.width() as jni::sys::jint),
+            jni::objects::JValue::Int(img.height() as jni::sys::jint),
+        ];
+        env.call_method(
+            &activity,
+            jni::jni_str!("requestPrintImage"),
+            jni::jni_sig!((long, int[], int, int) -> ()),
+            &args,
+        )?;
+        Ok(())
+    })
+    .is_ok()
+}
+
 /// `PrintHelper.nativeOnPrintResult`（Java 側）から呼ばれる JNI エクスポート。
 /// 値・結果は一切ログへ出さない。
 ///
@@ -101,6 +166,15 @@ mod tests {
         let req = PrintRequest::new("見出し", "本文").unwrap();
         assert!(matches!(
             begin_print(1, &req),
+            Err(DeviceError::Unsupported("print"))
+        ));
+    }
+
+    #[test]
+    fn host_stub_image_never_succeeds() {
+        let img = fandhe_device::print::PrintImage::new(vec![0; 4], 1, 1).unwrap();
+        assert!(matches!(
+            begin_print_image(1, &img),
             Err(DeviceError::Unsupported("print"))
         ));
     }

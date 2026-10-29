@@ -7,32 +7,41 @@
   "bundle": "one-shot",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "AudioToolbox `AudioServicesPlaySystemSound`（`SystemSoundID`）",
-      "perm": "不要",
-      "url": "https://developer.apple.com/documentation/audiotoolbox/audioservicesplaysystemsound(_:)",
-      "note": "未実装。消音スイッチに従う。iOS の公開ID は限られる。URL 未確認（一般知識、要確認）。"
+      "status": "no",
+      "api": "`kSystemSoundID_UserPreferredAlert` は iOS に無い（`TARGET_OS_IPHONE` 外）。OS が用意した警告音・UI 効果音はアプリから使えない。`AudioServicesPlaySystemSound` で鳴らせるのはアプリが `AudioServicesCreateSystemSoundID` に渡した自前のファイルだけ",
+      "perm": "-",
+      "url": "https://developer.apple.com/documentation/audiotoolbox/audioservicesplayalertsound(_:)",
+      "note": "公式に「System-supplied alert sounds and system-supplied user-interface sound effects are not available to your iOS application」とあり、OS 標準の音は鳴らせない。自前の音は音声再生の領域で、本機能の対象外。"
     },
     "android": {
-      "status": "possible",
-      "api": "`RingtoneManager.getRingtone` + `play()`、`ToneGenerator`（ビープ）、`View.playSoundEffect`",
+      "status": "done",
+      "api": "`ToneGenerator(STREAM_NOTIFICATION, MAX_VOLUME)` の `startTone(TONE_PROP_BEEP)`（戻りは boolean）。`RingtoneManager.getRingtone` + `play()`（戻り値なし）と `View.playSoundEffect`（タッチ音の設定に従い戻り値なし）は採らない",
       "perm": "不要",
       "url": "https://developer.android.com/reference/android/media/ToneGenerator",
-      "note": "未実装。音量は通知・ストリームに従う。"
+      "note": "実装済み（#940）。`startTone` の `true` は OS に渡した、`false` は OS は鳴らさなかった（成功にも失敗の色にもしない）。生成に失敗した `ToneGenerator` は保持せず次回作り直し、`onDestroy` で `release()` する。同時に鳴るのは 1 音で、再生中に呼ぶと前の音は止まって置き換わる。ストリーム音量・消音モードとの関係は公式に記載なし（実機で確認）。",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#935）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_system_sound.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/SystemSoundHelper.java + crates/fandhe-egui-proxy/src/device/system_sound.rs + crates/fandhe-core/src/screens/system_sound_beep.rs + crates/fandhe-device/src/system_sound.rs、Issue #940"
     },
     "macos": {
-      "status": "possible",
-      "api": "`NSSound.beep()`、`NSSound(named:)` でシステムサウンド",
+      "status": "done",
+      "api": "`NSBeep()`（Swift は `NSSound.beep()`）。`NSSound(named:)` は今回の範囲外",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/appkit/nssound",
-      "note": "未実装。URL 未確認（一般知識、要確認）。"
+      "url": "https://developer.apple.com/documentation/appkit/nssound/beep()",
+      "note": "実装済み（#939）。音は利用者がシステム設定のサウンドで選ぶ。戻り値は無く、鳴ったかは検知できない（成功は「要求を渡した」まで）。 `Requested` は OS に渡したまで。main スレッド以外から呼ぶと失敗。",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#935）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_system_sound.m + crates/fandhe-egui-proxy/src/device/macos_system_sound.rs + crates/fandhe-egui-proxy/src/device/system_sound.rs + crates/fandhe-core/src/screens/system_sound_beep.rs + crates/fandhe-device/src/system_sound.rs、Issue #939"
     },
     "windows": {
-      "status": "possible",
-      "api": "Win32 `MessageBeep` / `PlaySoundW`（`SND_ALIAS` でシステムサウンド）",
+      "status": "done",
+      "api": "`PlaySoundW(\"SystemDefault\", NULL, SND_ALIAS | SND_ASYNC | SND_NODEFAULT | SND_SYSTEM)`（戻りは TRUE / FALSE）。`MessageBeep` は鳴らせないと既定音・`Beep` へ倒れ、鳴らなかったことが成功に紛れるため採らない",
       "perm": "不要",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messagebeep",
-      "note": "未実装。ユーザーのサウンド設定に従う。"
+      "url": "https://learn.microsoft.com/en-us/previous-versions/dd743680(v=vs.85)",
+      "note": "実装済み（#939）。`SND_NODEFAULT` で音が無いとき既定音へ倒さず黙って戻る。`SND_SYSTEM` でシステム通知音の音量に従う。 `TRUE` は OS に渡した、`FALSE` は OS は鳴らさなかった（成功にも失敗の色にもしない）。",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#935）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_system_sound.rs + crates/fandhe-egui-proxy/src/device/system_sound.rs + crates/fandhe-core/src/screens/system_sound_beep.rs + crates/fandhe-device/src/system_sound.rs、Issue #939"
     },
     "web": {
       "status": "no",
@@ -42,5 +51,5 @@
       "note": "システムサウンドを鳴らす API は無い。Web Audio で自前のビープを合成するのが代替"
     }
   },
-  "note": "音声再生（アプリの音源）ではなく、OS 標準の通知音・ビープ・システムサウンドを鳴らす簡易 API。"
+  "note": "OS 標準のビープを 1 回鳴らすだけ。音の種類・音量・長さ・停止・完了待ちは範囲外。アプリの音源再生ではない。結果は OS の戻り値だけで決め（鳴ったかは推測しない・事前判定しない・既定音へ倒れる API は使わない）、「OS に渡した」「OS が鳴らさなかった」「失敗」「非対応」を分ける。守らない範囲: 実際に聞こえたか（消音・音量 0・サウンド設定）、連打時の聞こえ方、音の種類と長さの OS 差、複数プロセス・複数窓、終了時に鳴っている音の後片付け（OS に任せる）。iOS は OS 標準の音を鳴らせないため非対応。"
 }

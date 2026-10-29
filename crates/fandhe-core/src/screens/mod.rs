@@ -47,6 +47,8 @@ pub mod storage_note;
 
 /// Phase 8 型サンプル「HTTP 取得」（Issue #748）。
 pub mod http_fetch;
+/// Phase 11 型サンプル「人の在席・離席の検知」（Issue #960）。
+pub mod human_presence_read;
 
 /// Phase 10 型サンプル「傾きで玉が転がる」（Issue #830）。
 pub mod tilt_ball;
@@ -132,6 +134,8 @@ pub mod user_idle_show;
 pub mod uwb_ranging_show;
 /// Phase 11 の拡充ループ型サンプル「動画の撮影」（親 #169、Issue #821）。
 pub mod video_capture_show;
+/// Phase 11 の拡充ループ型サンプル「動画の変換」（親 #340、Issue #1014）。
+pub mod video_transcode;
 /// Phase 11 の拡充ループ型サンプル「システム音量」（親 #166、Issue #785）。
 pub mod volume_control_show;
 
@@ -169,6 +173,8 @@ pub mod compose_mail_sms;
 pub mod device_identifier_show;
 /// Phase 11 の拡充ループ型サンプル「端末・OS 情報」（親 #1131、Issue #1304）。
 pub mod device_info_show;
+/// Phase 11 の拡充ループ型サンプル「デジタル身分証の提示要求」（親 #186、Issue #958）。
+pub mod digital_credentials;
 /// Phase 11 の拡充ループ型サンプル「画面のリフレッシュレート・HDR・広色域」（親 #177、Issue #870）。
 pub mod display_refresh_hdr_show;
 /// Phase 11 の拡充ループ型サンプル「書類スキャン」（親 #145、Issue #747）。
@@ -177,6 +183,8 @@ pub mod document_scan_show;
 pub mod environment_sensors_show;
 /// Phase 11 の拡充ループ型サンプル「電話発信・地図など他アプリの起動」（親 #176、Issue #861）。
 pub mod external_app_launch_show;
+/// Phase 11 の拡充ループ型サンプル「クラウド保存先として OS のファイル画面に出る」（親 #194、Issue #1019）。
+pub mod file_provider_show;
 /// Phase 11 の拡充ループ型サンプル「フォルダの変更監視」（親 #1143、Issue #1410）。
 pub mod file_watch_show;
 /// Phase 11 の拡充ループ型サンプル「ライト（トーチ）」（親 #106、Issue #458）。
@@ -193,6 +201,8 @@ pub mod global_hotkey;
 pub mod haptics_tap;
 /// Phase 11 の拡充ループ型サンプル「ホーム画面ウィジェット」（親 #1064、Issue #1065）。
 pub mod home_widget_show;
+/// Phase 11 の拡充ループ型サンプル「端末内での画像生成」（親 #191、Issue #975）。
+pub mod image_generation_show;
 /// Phase 11 の拡充ループ型サンプル「画像の文字認識」（親 #1120、Issue #1250）。
 pub mod image_recognize;
 /// Phase 11 の拡充ループ型サンプル「アプリ内ブラウザ」（親 #135、Issue #701）。
@@ -207,6 +217,8 @@ pub mod launch_at_login_show;
 pub mod live_activity_show;
 /// Phase 11 の拡充ループ型サンプル「OS 搭載フォント」（親 #1145、Issue #1376）。
 pub mod local_fonts_show;
+/// Phase 11 の拡充ループ型サンプル「MDM の管理アプリ設定」（親 #185、Issue #944）。
+pub mod managed_app_config_show;
 /// Phase 11 の拡充ループ型サンプル「地図表示」（親 #85、Issue #273）。
 pub mod map_view_show;
 /// Phase 11 の拡充ループ型サンプル「動画・音声の変換」（親 #91、Issue #311）。
@@ -253,12 +265,16 @@ pub mod pip_show;
 pub mod power_state_show;
 /// Phase 11 の拡充ループ型サンプル「印刷」（親 #94、Issue #325）。
 pub mod print_page;
+/// Phase 11 の拡充ループ型サンプル「画面の印刷」（親 #341、Issue #1010）。
+pub mod print_screen_page;
 /// Phase 11 の拡充ループ型サンプル「セーフエリア」（親 #105、Issue #444）。
 pub mod safe_area_insets_show;
 /// Phase 11 の拡充ループ型サンプル「スペルチェック」（親 #119、Issue #578）。
 pub mod spell_check;
 /// Phase 11 の拡充ループ型サンプル「システムのアクセント色」（親 #103、Issue #421）。
 pub mod system_accent_color_show;
+/// Phase 11 の拡充ループ型サンプル「システムの効果音」（親 #183、Issue #939）。
+pub mod system_sound_beep;
 /// Phase 11 の拡充ループ型サンプル「端末内翻訳」（親 #115、Issue #535）。
 pub mod translation;
 /// Phase 11 の拡充ループ型サンプル「画面スリープの抑止」（親 #1129、Issue #1278）。
@@ -276,11 +292,19 @@ pub mod contact_pick;
 /// Phase 11 の拡充ループ型サンプル「画面のスポイト」（親 #148、Issue #762）。
 pub mod eye_dropper_pick;
 
+/// Phase 11 の拡充ループ型サンプル「システムの色選択ダイアログ」（親 #184、Issue #941）。
+pub mod color_picker_pick;
+
 /// Phase 11 の拡充ループ型サンプル「ファイル・動画のプレビューとサムネイル」（親 #182、Issue #917）。
 pub mod file_preview_show;
 
+/// Phase 11 の拡充ループ型サンプル「無線の状態と切り替え」（親 #189、Issue #972）。
+pub mod radio_control_show;
+
 /// Phase 11 の拡充ループ型サンプル「外部ストレージの着脱」（親 #175、Issue #858）。
 pub mod removable_storage_show;
+/// Phase 11 の拡充ループ型サンプル「スキャナー・カメラ機器からの取り込み」（親 #192、Issue #981）。
+pub mod scanner_devices_import;
 /// Phase 11 の拡充ループ型サンプル「画面の明るさ」（親 #126、Issue #633）。
 pub mod screen_brightness_show;
 /// Phase 11 の拡充ループ型サンプル「画面の録画・キャプチャ」（親 #1135、Issue #1335）。
@@ -297,3 +321,9 @@ pub mod pen_draw;
 
 /// Phase 11 の拡充ループ型サンプル「OAuth 用の Web 認証セッション」（親 #113、Issue #530）。
 pub mod web_auth_session_demo;
+
+/// Phase 11 の拡充ループ型サンプル「壁紙・ロック画面の設定」（親 #188、Issue #970）。
+pub mod wallpaper_set;
+
+/// Phase 11 の拡充ループ型サンプル「最近使った項目への登録」（親 #193、Issue #988）。
+pub mod recent_documents_show;

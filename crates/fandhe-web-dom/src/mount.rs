@@ -454,6 +454,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::audio_devices::release_mount(id);
         super::local_fonts::release_mount(id);
         super::eye_dropper::release_mount(id);
+        super::color_picker::release_mount(id);
         super::camera_preview_stream::release_mount(id);
         super::multi_display::release_mount(id);
         super::window_management::release_mount(id);
@@ -476,6 +477,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::display_refresh_hdr::release_mount(id);
         super::print_page::release_mount(id);
         super::passkey::release_mount(id);
+        super::digital_credentials::release_mount(id);
         super::autofill_otp::release_mount(id);
         super::payment_request::release_mount(id);
         super::file_watch::release_mount(id);
@@ -483,6 +485,7 @@ fn sweep_mounts(new: Option<(u64, &Element)>) {
         super::media_playback::release_mount(id);
         super::now_playing::release_mount(id);
         super::media_transcode::release_mount(id);
+        super::video_transcode::release_mount(id);
         super::on_device_llm::release_mount(id);
         super::translation::release_mount(id);
         super::pen_stylus::release_mount(id);

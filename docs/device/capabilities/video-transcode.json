@@ -7,40 +7,84 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "AVFoundation `AVAssetExportSession`（`AVAssetExportPreset640x480` など低解像度のプリセット）",
-      "perm": "不要（一時ファイルはアプリのサンドボックス内）",
-      "url": "https://developer.apple.com/documentation/avfoundation/avassetexportsession",
-      "note": "未実装。動画 1 本を低解像度の mp4 へ書き出す。素材の動画をネットワークなしで用意する方法が論点"
+      "status": "done",
+      "api": "AVFoundation `AVAssetWriter`（`AVAssetWriterInputPixelBufferAdaptor` で BGRA のフレームを 1 枚ずつ書き、H.264 の MP4 の元動画を一時ファイルへ）+ `AVAssetExportSession`（`AVAssetExportPreset640x480`、MPEG-4）。期限切れは `cancelWriting` / `cancelExport`",
+      "perm": "不要（一時ファイルは `NSTemporaryDirectory`（`std::env::temp_dir`）＝アプリのサンドボックス内。usage description は要らない）",
+      "url": [
+        "https://developer.apple.com/documentation/avfoundation/avassetexportsession",
+        "https://developer.apple.com/documentation/avfoundation/avassetexportsession/exportasynchronously(completionhandler:)",
+        "https://developer.apple.com/documentation/avfoundation/avassetexportsession/export(to:as:isolation:)",
+        "https://developer.apple.com/documentation/avfoundation/avassetexportsession/cancelexport()",
+        "https://developer.apple.com/documentation/avfoundation/avassetexportpreset640x480",
+        "https://developer.apple.com/documentation/avfoundation/avassetwriter"
+      ],
+      "note": "実装済み（#1016、macOS と共用の実装 #1014）。実行時に `AVAssetWriter` で元動画（1280×720・15 fps・30 フレーム・H.264）を一時ファイルへ書き、`AVAssetExportSession` で小さい動画の mp4 へ書き出す。成否は OS の完了通知ではなく出力の読み直しで決め、映像トラックがあり・幅と高さがともに元動画より小さく・長さが元動画 ±200 ms のときだけ成功にする。出力の寸法は OS（プリセット）が書いた値をそのまま出す。失敗は非対応・期限切れ・出力が空・解析できない・縮んでいない・長さの不一致を分ける（OS のエラー文は出さない）。期限は 20 秒（実測の根拠が無い仮の値）で、起点は要求を観測した時の単調時計。一時ファイルを消せなかった場合も出力を読み終えていれば結果は返し、未解放として記録して次の要求の前に再削除と OS 操作の完了を確かめる（確かめられなければ OS を呼ばず失敗にする）。守る範囲: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、一時ファイル・writer・export session の解放。守らない範囲: 所要時間・ビットレート・符号形式の違い、プリセットが決める出力寸法、複数プロセス。`exportAsynchronouslyWithCompletionHandler:` は iOS 18 / macOS 15 で非推奨だが、deploymentTarget（iOS 17・macOS 11）では使える。iOS 固有: 背景遷移では中断せず、OS が書き込み・書き出しを止めた場合は失敗として出し成功にはしない。suspend をはさんで期限を過ぎた場合はドライバが期限切れで確定し、遅れて届いた結果は世代照合で捨てる。守らない範囲に背景へ移ったときの OS の挙動を含む。deploymentTarget が iOS 17 のため OS 版を理由にした `Unsupported` は起きない",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1006）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_video_transcode.rs + crates/fandhe-egui-proxy/src/device/apple_video_transcode.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_video_transcode.m + crates/fandhe-egui-proxy/src/device/video_transcode.rs + crates/fandhe-core/src/screens/video_transcode.rs + crates/fandhe-device/src/video_transcode.rs、Issue #1016"
     },
     "android": {
-      "status": "possible",
-      "api": "Media3 Transformer（`androidx.media3.transformer`。解像度は `Presentation.createForHeight` 等）",
+      "status": "done",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/VideoTranscodeHelper.java + crates/fandhe-egui-proxy/src/device/android_video_transcode.rs + crates/fandhe-egui-proxy/src/device/video_transcode.rs + crates/fandhe-core/src/screens/video_transcode.rs + crates/fandhe-device/src/video_transcode.rs、Issue #1017",
+      "api": "`MediaCodec`（H.264 の符号化器・復号器、`getInputImage` / `getOutputImage`）+ `MediaMuxer`。Media3 Transformer は不採用（Gradle の新規依存を避ける。media-transcode と同じ判断）",
       "perm": "不要（一時ファイルはアプリの `getCacheDir()`）",
-      "url": "https://developer.android.com/media/media3/transformer",
-      "note": "未実装。動画 1 本を低解像度へ書き出す。Gradle の依存追加が要る。素材の動画をネットワークなしで用意する方法が論点"
+      "url": [
+        "https://developer.android.com/reference/android/media/MediaCodec",
+        "https://developer.android.com/reference/android/media/MediaMuxer",
+        "https://developer.android.com/reference/android/media/MediaCodecInfo.VideoCapabilities",
+        "https://developer.android.com/media/media3/transformer/getting-started"
+      ],
+      "note": "実装済み（#1017）。実行時に符号化器で元動画（1280×720・15 fps・30 フレーム・H.264）を作ってメモリに溜め（一時ファイルにしない）、復号 → 縮小（Java の YUV 間引き。`Image` の pixelStride / rowStride を尊重）→ 符号化 → `MediaMuxer` で小さい動画（640×360）の mp4 へ書き出す。Gradle の依存追加は無い。`MediaCodec` に符号化器の入力を縮小する設定は無く（`setVideoScalingMode` は Surface への描画用）、縮小はアプリのコードで行う。`MediaCodecInfo.VideoCapabilities.isSizeSupported` が偽、または codec を作れなければ非対応にする（事前の機種判定は置かない）。成否は Java では決めず、Rust のドライバが出力を読み直して判定する。期限は 20 秒（実測の根拠が無い仮の値）で、Java が単調時計で各ループの周回に確かめ、解放してから期限切れを返す。一時ファイルは `getCacheDir()` に置き、消せなかった場合も出力を読み終えていれば結果は返し、記録して次の要求の前に再削除する（消せなければ OS を呼ばず失敗にする）。Java の実行中フラグは static で、期限後も走る古い呼び出しがあれば新しい要求は失敗にする。守る範囲: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、codec・muxer・一時ファイルの解放、FFI に渡す長さの上限。守らない範囲: 所要時間・ビットレート・符号形式の違い、複数プロセス。`getInputImage` / `getOutputImage` は API 21 で minSdk 24 内。Media3 の頁は不採用の根拠として残す（3 依存の追加が要るため）",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#1006）"
     },
     "macos": {
-      "status": "possible",
-      "api": "AVFoundation `AVAssetExportSession`（低解像度のプリセット）",
+      "status": "done",
+      "api": "AVFoundation `AVAssetWriter`（`AVAssetWriterInputPixelBufferAdaptor` で BGRA のフレームを 1 枚ずつ書き、H.264 の MP4 の元動画を一時ファイルへ）+ `AVAssetExportSession`（`AVAssetExportPreset640x480`、MPEG-4）。期限切れは `cancelWriting` / `cancelExport`",
       "perm": "不要（App Sandbox 無効の素の実行体）",
-      "url": "https://developer.apple.com/documentation/avfoundation/avassetexportsession",
-      "note": "未実装。動画 1 本を低解像度の mp4 へ書き出す。素材の動画をネットワークなしで用意する方法が論点"
+      "url": [
+        "https://developer.apple.com/documentation/avfoundation/avassetexportsession",
+        "https://developer.apple.com/documentation/avfoundation/avassetexportsession/exportasynchronously(completionhandler:)",
+        "https://developer.apple.com/documentation/avfoundation/avassetexportsession/export(to:as:isolation:)",
+        "https://developer.apple.com/documentation/avfoundation/avassetexportsession/cancelexport()",
+        "https://developer.apple.com/documentation/avfoundation/avassetexportpreset640x480",
+        "https://developer.apple.com/documentation/avfoundation/avassetwriter"
+      ],
+      "note": "実装済み（#1014）。実行時に `AVAssetWriter` で元動画（1280×720・15 fps・30 フレーム・H.264）を一時ファイルへ書き、`AVAssetExportSession` で小さい動画の mp4 へ書き出す。成否は OS の完了通知ではなく出力の読み直しで決め、映像トラックがあり・幅と高さがともに元動画より小さく・長さが元動画 ±200 ms のときだけ成功にする。出力の寸法は OS（プリセット）が書いた値をそのまま出す。失敗は非対応・期限切れ・出力が空・解析できない・縮んでいない・長さの不一致を分ける（OS のエラー文は出さない）。期限は 20 秒（実測の根拠が無い仮の値）で、起点は要求を観測した時の単調時計。一時ファイルを消せなかった場合も出力を読み終えていれば結果は返し、未解放として記録して次の要求の前に再削除と OS 操作の完了を確かめる（確かめられなければ OS を呼ばず失敗にする）。守る範囲: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、一時ファイル・writer・export session の解放。守らない範囲: 所要時間・ビットレート・符号形式の違い、プリセットが決める出力寸法、複数プロセス。`exportAsynchronouslyWithCompletionHandler:` は iOS 18 / macOS 15 で非推奨だが、deploymentTarget（iOS 17・macOS 11）では使える。iOS と同じ `.m` を共用する（iOS の接続は #1016）",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#1006）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_video_transcode.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_video_transcode.m + crates/fandhe-egui-proxy/src/device/video_transcode.rs + crates/fandhe-core/src/screens/video_transcode.rs + crates/fandhe-device/src/video_transcode.rs、Issue #1014"
     },
     "windows": {
-      "status": "possible",
-      "api": "`Windows.Media.Transcoding.MediaTranscoder`（`MediaEncodingProfile::CreateMp4` + `VideoEncodingProperties` の解像度指定）",
+      "status": "done",
+      "api": "`Windows.Media.Transcoding.MediaTranscoder`。1 段目 `MediaStreamSource`（無圧縮 BGRA、1280×720・15 fps）+ `PrepareMediaStreamSourceTranscodeAsync`（`CreateMp4(HD720p)`、`SetAudio(None)`）で元動画を一時ファイルへ、2 段目 `PrepareStreamTranscodeAsync`（`CreateMp4(Vga)`、`SetAudio(None)`）で小さい動画の MP4 へ。期限切れは `Cancel()`",
       "perm": "不要（文書に package identity の要件記載なし。unpackaged の exe で動くかは #310 で確認）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.transcoding.mediatranscoder",
-      "note": "未実装。動画 1 本を低解像度へ書き出す。素材の動画をネットワークなしで用意する方法が論点"
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.transcoding.mediatranscoder",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.transcoding.mediatranscoder.preparemediastreamsourcetranscodeasync",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.transcoding.mediatranscoder.preparestreamtranscodeasync",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.core.mediastreamsource"
+      ],
+      "note": "実装済み（#1015）。1 段目で無圧縮のフレームから 1280×720 の H.264 / MP4 を一時ファイルへ書き、2 段目で小さい動画の MP4 へ変換する。2 段目の入力は一時ファイル（メモリ上のストリームを受けないため）。出力の寸法は OS が決めた値をそのまま出す。成否は OS の完了通知ではなく出力の読み直しで決め、サンプル生成の失敗・`CanTranscode` が false・完了以外の終了は成功にしない。クラスなし・statics なし・`CodecNotFound`（N エディション等）は `Unsupported`（media-transcode と同じ写像）、それ以外は段階別の固定ラベルの失敗（HRESULT・OS の文言は出さない）。期限は 20 秒（実測の根拠が無い仮の値）で、起点は要求を観測した時の単調時計。期限切れは `Cancel()` し、猶予（500 ms）内に止まったと確かめられなければ一時ファイルを消さず未解放として記録し、次の要求は OS を呼ばず失敗にする。一時ファイルは `create_new` で作り、ストリームを閉じてから消す。守る範囲: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、一時ファイル・ストリームの解放。守らない範囲: 所要時間・ビットレート・符号形式の違い、OS が決める出力寸法、複数プロセス。unpackaged の exe で動くかは未確認（#310、実機確認は #1006）",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#1006）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_video_transcode.rs + crates/fandhe-egui-proxy/src/device/video_transcode.rs + crates/fandhe-core/src/screens/video_transcode.rs + crates/fandhe-device/src/video_transcode.rs、Issue #1015"
     },
     "web": {
-      "status": "possible",
-      "api": "WebCodecs の `VideoEncoder` / `VideoDecoder`（`isConfigSupported` で対応を確かめる。mux は別途要る）",
+      "status": "done",
+      "api": "WebCodecs の `VideoEncoder` / `VideoDecoder` / `VideoFrame`（BGRA 入力）を `js_sys::Reflect` 経由で呼ぶ。`isConfigSupported` で `avc1.42001f` → `vp09.00.10.08` → `vp8` の順に対応を確かめる。mux は作らない",
       "perm": "不要。secure context 必須",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API",
-      "note": "未実装。動画 1 本を低解像度へ再符号化する。コンテナへの書き出し（mux）をどうするかと、素材の動画をネットワークなしで用意する方法が論点"
+      "url": [
+        "https://www.w3.org/TR/webcodecs/#dom-videoencoderconfig-width",
+        "https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API",
+        "https://github.com/mdn/browser-compat-data/blob/main/api/VideoEncoder.json"
+      ],
+      "note": "実装済み（#1018）。実行時に作った 1280×720・15 fps・30 フレームの元動画を `VideoEncoder` で 640×360 へ再符号化し、`VideoDecoder` で復号し直して確かめる（縮小は符号化器が行う。仕様の MUST scale）。出力はコンテナなしの符号化チャンク。成功の条件は、チャンクが 0 でない・復号できる・表示寸法が 640×360 で元より小さい・長さが元 ±200 ms の中。失敗は非対応（secure context でない・API が無い・どの候補も符号化と復号の両方に対応しない）・期限切れ・出力が空・復号不可・寸法や長さの不一致を区別する。期限は 20 秒（`performance.now()` の単調時計）で、期限後に届いた成功も期限切れにする。`pagehide` は中断で、失敗とは別に表示する。`VideoFrame`・codec・タイマー・リスナーは全経路で解放する。守る範囲は 1 マウント内の順序・嘘の成功の禁止・資源の解放。守らない範囲はブラウザごとのコーデックの有無・ビットレート、複数タブ・複数マウント間の一致。Firefox for Android は `VideoEncoder` が無く非対応になる",
+      "safari": "MDN の互換表では Safari 16.4 から `VideoEncoder` に対応。実ブラウザでの確認は確認用 issue で行う",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#1006）",
+      "impl": "crates/fandhe-web-dom/src/video_transcode.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/video_transcode.rs + crates/fandhe-device/src/video_transcode.rs、Issue #1018"
     }
   },
-  "note": "動画 1 本を低解像度へ書き出す。`media-transcode`（音声の変換）から切り出した行。iOS / macOS は AVAssetExportSession、Android は Media3 Transformer、Windows は MediaTranscoder、Web は WebCodecs。素材の動画をネットワークなしで用意する方法が論点"
+  "note": "動画 1 本を低解像度へ書き出す。`media-transcode`（音声の変換）から切り出した行。iOS / macOS は AVAssetExportSession、Android は MediaCodec + MediaMuxer（Media3 は不採用）、Windows は MediaTranscoder、Web は WebCodecs。素材は実行時に OS の符号化器で作る（1280×720・15 fps・30 フレーム・映像のみ。ネットワーク・同梱ファイル・利用者の動画は使わない）。範囲: 「変換する」で元動画を OS の変換経路で小さい解像度へ 1 回書き出し、出力を読み直して元動画と比べた結果を出す。保存・共有・再生・進捗・取り消し・形式の選択・利用者の動画は範囲外。成功は出力が 0 バイトでなく、映像トラックがあり（Web は復号できる）、幅と高さがともに元動画より小さく、長さが元動画 ±200 ms の中、をすべて満たすときだけ。失敗は非対応・期限切れ・出力が空・解析できない・縮んでいない・長さの不一致を分けて出す（OS のエラー文は出さない）。Web は `pagehide` の中断を失敗と分ける。OS を正にする: 成否は OS の完了通知ではなく OS が書いた出力の読み直しで決め、出力の寸法は OS が書いた値をそのまま出す。対応の有無は OS に問い、事前の機種判定を置かない。経過時間は単調時計で測る。守る範囲: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、一時ファイル・コーデック・export session・MediaStreamSource・VideoFrame の解放（全経路）。一時ファイルを消せなかった場合も出力を読み終えていれば結果は返し、未解放として記録して次の要求の開始前に確かめる。守らない範囲: OS ごとの所要時間・ビットレート・符号形式の違い、Apple のプリセットが決める出力寸法、背景へ移ったときの OS の挙動、複数プロセス・複数タブ、egui-proxy の wasm canvas 経路（非対応のまま）"
 }

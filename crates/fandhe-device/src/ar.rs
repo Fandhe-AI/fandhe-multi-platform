@@ -1,6 +1,7 @@
 //! AR 表示の契約（Issue #307、親 #90）。ARKit / WebXR の追跡状態・開始地点からの位置・水平面の数を
 //! 画面に出すための橋渡しで、`fandhe-egui-proxy` の `device/ar.rs` が開始・停止と間隔つきの
-//! [`ArTracking::read`] を行う（pull 型。OS 側が最新値を持ち、画面側が読む）。カメラ映像は描かない。
+//! [`ArTracking::read`] を行う（pull 型。OS 側が最新値を持ち、画面側が読む）。カメラ映像は `ar-camera-view` の範囲で、同じ画面・
+//! 同じセッションに出す（下の「カメラ映像」）。
 //!
 //! # 契約
 //!
@@ -15,6 +16,17 @@
 //! - **三値**: 利用者の「停止」と Web の `end`（戻る操作）は失敗でなく待機へ戻す。権限拒否・非対応・
 //!   期限切れ（`compass::NO_READING_TIMEOUT_MS` の間値が届かない）・その他の失敗はそれぞれ別表示
 //! - 位置・NSError・OS 固有値をログへ出さない（security.md A09）
+//!
+//! # カメラ映像（`ar-camera-view`、iOS）
+//!
+//! - 映像は [`ArTracking::read`] が値ありを返した同じ読み取りでだけ取る。新しい経路・タイマー・
+//!   OS コールバックのリスナーは足さない
+//! - 取れない形式・未着（二面の YCbCr でない・フレームが無い・寸法や stride の検査不合格）は
+//!   「映像なし」として扱い、失敗にも成功にもしない。形式違いや欠けを画像に見せかけない
+//! - 停止・失敗・背景・中断では映像を捨て、直前の映像を残さない。古い世代の映像も捨てる
+//! - Web は `immersive-ar` のブラウザが映像を合成するため、この契約の映像は出さない
+//! - 守らない範囲: 映像の向き（端末の向きに合わせていない元画像のまま）、表示のなめらかさと遅れ、
+//!   映像と数値が同じフレーム由来であること、色の厳密さ・解像度の指定、3D 物体・水平面の描画
 //!
 //! # 守る範囲と守らない範囲
 //!
@@ -31,6 +43,8 @@
 //! ponytail: 3 機能目で共通モジュールへ移す（現状 2 機能目なので複製せず参照のみ）。
 
 use std::time::Duration;
+
+use crate::camera_preview_stream::ScaledFrame;
 
 /// 画面側が OS を読み直す間隔。`fandhe-egui-proxy` と `fandhe-web-dom` が共有する唯一の値。
 pub const READ_INTERVAL: Duration = Duration::from_millis(100);
@@ -105,6 +119,14 @@ pub trait ArTracking: Send + Sync {
     fn read(&self) -> Result<ArSample, ArFailure>;
     /// セッションを止め、保持している最新値を捨てる。冪等で失敗しない。
     fn stop(&self);
+    /// 直前の [`ArTracking::read`] が `Ok(ArSample::Reading(_))` を返した同じ読み取りでだけ呼ばれ、
+    /// 同じセッションの最新のカメラ映像を縮小して返す（長辺は
+    /// [`crate::camera_preview_stream::PREVIEW_MAX_SIDE`] 以下、RGBA8）。形式違い・フレームなし・
+    /// 検査不合格は `None`（失敗にも成功にもしない）。OS のフレーム・バッファを呼び出しの外で保持しない。
+    /// 既定は `None`（映像を出さない OS・未実装 OS）。契約の全体はモジュール doc の「カメラ映像」節。
+    fn read_frame(&self) -> Option<ScaledFrame> {
+        None
+    }
 }
 
 /// 対象外 OS・未実装 OS の dispatch 先。ダミーの成功実装へは倒さない。
@@ -155,6 +177,7 @@ mod tests {
         assert_eq!(UnsupportedAr.start(), Err(ArFailure::Unsupported));
         assert_eq!(UnsupportedAr.read(), Err(ArFailure::Unsupported));
         UnsupportedAr.stop();
+        assert!(UnsupportedAr.read_frame().is_none());
     }
 
     #[test]

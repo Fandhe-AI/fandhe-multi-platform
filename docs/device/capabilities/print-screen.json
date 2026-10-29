@@ -7,40 +7,72 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "UIKit `UIPrintInteractionController`（`UISimpleTextPrintFormatter`、iPad は `presentFromRect:inView:`）",
+      "status": "done",
+      "api": "UIKit `UIPrintInteractionController.printingItem`（`UIImage`、iPad は `presentFromRect:inView:`）",
       "perm": "なし",
-      "url": "https://developer.apple.com/documentation/uikit/uiprintinteractioncontroller",
-      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の描画内容を印刷用に取り出す方法が論点"
+      "url": [
+        "https://developer.apple.com/documentation/uikit/uiprintinteractioncontroller",
+        "https://developer.apple.com/documentation/uikit/uiprintinteractioncontroller/printingitem"
+      ],
+      "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは egui-proxy のフレームの読み戻し（`ViewportCommand::Screenshot`、世代タグで照合、単調時計で 2 秒の期限）。期限切れ・寸法不正は OS を呼ばず「画面を取り込めませんでした」で確定する。取り込んだ画素は `.m` で return 前にコピーし、`CGImage` → `UIImage` を `printingItem` に渡す。提示・結果コードは `print` と共用し、結果は `Submitted`・`Cancelled`・失敗で、`Unconfirmed` には到達しない。`isPrintingAvailable == NO` は非対応。背景遷移で取り消さない。守らない範囲: 紙に出たか、色・解像度の正確さ、用紙への収まり方の OS 差、背景にいる間の取り込み（期限切れで失敗になる）。権限・usage description 不要。実機確認は #1001",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1001）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_print.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_print.m + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_screen_page.rs + crates/fandhe-device/src/print.rs、Issue #1011"
     },
     "android": {
-      "status": "possible",
-      "api": "`PrintManager`（API 19+）",
+      "status": "done",
+      "api": "`PrintManager`（API 19+）+ `PrintedPdfDocument` の 1 ページへ `Canvas.drawBitmap`（`androidx.print` の `PrintHelper` は使わない）",
       "perm": "なし",
-      "url": "https://developer.android.com/training/printing",
-      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の描画内容を印刷用に取り出す方法が論点"
+      "url": [
+        "https://developer.android.com/training/printing",
+        "https://developer.android.com/training/printing/custom-docs",
+        "https://developer.android.com/reference/android/graphics/Bitmap"
+      ],
+      "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは egui-proxy のフレームの読み戻し（`ViewportCommand::Screenshot`、世代タグで照合、単調時計で 2 秒の期限）。期限切れ・寸法不正は OS を呼ばず「画面を取り込めませんでした」で確定する。取り込んだ画素は ARGB の `int[]` で渡し、`onWrite` の試行ごとに `Bitmap` を作って印刷可能領域に縦横比を保って描き、必ず `recycle` する。ダイアログ・結果の写像（`Submitted` / `Cancelled` / 2 秒後も CREATED のままなら `Unconfirmed` / 失敗）・Activity 再生成時の破棄は `print` と共用する。権限・`<queries>` なし。守らない範囲: 紙に出たか、2 秒を超えてからの状態変化、プリンタ側の失敗、色・解像度の正確さ、OS ごとの余白の差、背景にいる間の取り込み（期限切れで失敗になる）。実機確認は #1001",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#1001）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_print.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/PrintHelper.java + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_screen_page.rs + crates/fandhe-device/src/print.rs、Issue #1012"
     },
     "macos": {
-      "status": "possible",
-      "api": "AppKit `NSPrintPanel`（`runModalWithPrintInfo:`）+ `NSPrintOperation`（パネルなしの `runOperation`）",
+      "status": "done",
+      "api": "AppKit `NSPrintPanel`（`runModalWithPrintInfo:`）+ `NSPrintOperation`（対象 view は `NSImageView`、パネルなしの `runOperation`）",
       "perm": "なし",
-      "url": "https://developer.apple.com/documentation/appkit/nsprintoperation",
-      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の描画内容を印刷用に取り出す方法が論点"
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nsprintoperation",
+        "https://developer.apple.com/documentation/appkit/nsprintoperation/init(view:)"
+      ],
+      "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは egui-proxy のフレームの読み戻し（`ViewportCommand::Screenshot`、世代タグで照合、単調時計で 2 秒の期限）。期限切れ・寸法不正は OS を呼ばず「画面を取り込めませんでした」で確定する。取り込んだ画素は `NSBitmapImageRep` → `NSImageView` で印刷可能領域に縦横比を保って収め、パネル → パネルなし実行の 2 段構成は `print` と共用する。結果は `Submitted`・`Cancelled`・失敗で、`Unconfirmed` には到達しない。守らない範囲: 紙に出たか、色・解像度の正確さ、OS ごとの余白の差、背景にいる間の取り込み（期限切れで失敗になる）。UI スレッドで同期に呼ぶ。Mac 目視は #1001",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#1001）",
+      "impl": "crates/fandhe-egui-proxy/src/device/macos_print.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_print.m + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_screen_page.rs + crates/fandhe-device/src/print.rs、Issue #1010"
     },
     "windows": {
-      "status": "possible",
-      "api": "`PrintDlgExW`（`PD_RETURNDC`）+ GDI（`StartDocW` / `DrawTextW` / `EndDoc`）",
+      "status": "done",
+      "api": "`PrintDlgExW`（`PD_RETURNDC`）+ GDI（`StartDocW` / `StretchDIBits` / `EndDoc`）",
       "perm": "なし（Win32 desktop API。package identity 不要）",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/api/commdlg/nf-commdlg-printdlgexw",
-      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の描画内容を印刷用に取り出す方法が論点"
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/commdlg/nf-commdlg-printdlgexw",
+        "https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-stretchdibits"
+      ],
+      "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の取り出しは egui-proxy のフレームの読み戻し（`ViewportCommand::Screenshot`、世代タグで照合、単調時計で 2 秒の期限）。期限切れ・寸法不正は OS を呼ばず「画面を取り込めませんでした」で確定する。取り込んだ画素は `StretchDIBits`（32bpp top-down の DIB）で印刷可能領域に縦横比を保って描く。ダイアログ・DC の解放・結果の写像（`PD_RESULT_CANCEL` / `PD_RESULT_APPLY` と `ERROR_CANCELLED` は `Cancelled`、`StretchDIBits` の 0 / `GDI_ERROR` は失敗）は `print` と共用し、`Unconfirmed` には到達しない。守らない範囲: 紙に出たか、色・解像度の正確さ（`HALFTONE` は使わない）、OS ごとの余白の差、背景にいる間の取り込み（期限切れで失敗になる）。UI スレッドで同期に呼ぶ。Windows 実機確認は #1001",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#1001）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_print.rs + crates/fandhe-egui-proxy/src/device/print.rs + crates/fandhe-core/src/screens/print_screen_page.rs + crates/fandhe-device/src/print.rs、Issue #1010"
     },
     "web": {
-      "status": "possible",
-      "api": "`window.print()`。`body` 直下の印刷用ブロックと、ブロック内の `@media print` でそのブロックだけを出す（`web-sys` 経由）",
+      "status": "done",
+      "api": "`window.print()`。マウント中の画面 DOM の複製を `body` 直下の印刷用ブロックに入れ、`@media print` でそのブロックだけを出す。`print-color-adjust: exact`（`web-sys` 経由）",
       "perm": "不要",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/print",
-      "note": "未実装。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。画面の描画内容を印刷用に取り出す方法が論点"
+      "url": [
+        "https://developer.mozilla.org/en-US/docs/Web/API/Window/print",
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/print-color-adjust"
+      ],
+      "note": "実装済み（#1013）。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。取り出しはマウント中の画面 DOM の複製（読み戻しではない。複製内の `id` は外す）で、`print` と共用の印刷用ブロックへ入れて `window.print()` を呼ぶ。複製・ブロック作成の失敗は `print()` を呼ばず「画面を取り込めませんでした」、`print()` の例外は失敗、戻れば常に `Unconfirmed`（`Submitted`・`Cancelled` には到達しない）。`window` が無ければ非対応。ブロックは次の要求かマウント破棄まで残す。背景色は `print-color-adjust: exact` で求める。守る範囲: 1 マウント内の要求と完了の順序、嘘の成功の禁止、ブロックの解放。守らない範囲: 紙に出たか、`print-color-adjust` が利用者設定で無視される場合、`<canvas>` の中身、ブラウザごとの改ページ・余白・書体、sandbox で `print()` が黙って無視される場合、複数タブ、egui-proxy の wasm canvas 経路（非対応のまま）",
+      "safari": "MDN では全主要ブラウザが対応。実ブラウザでの確認は #1001",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#1001）",
+      "impl": "crates/fandhe-web-dom/src/print_page.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/print_screen_page.rs + crates/fandhe-device/src/print.rs、Issue #1013"
     }
   },
-  "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。`print`（固定の文章）から切り出した行。画面の描画内容を印刷用に取り出す方法が論点"
+  "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。`print`（固定の文章）から切り出した行で、OS の印刷ダイアログ・結果の三値・橋渡しは `print` と共用し、違いは印刷する対象（文章 → 今の画面の描画）だけ。範囲: 型サンプル画面の「この画面を印刷する」を押した直後の描画領域を 1 枚の画像（Web は DOM の複製）として、縦横比を保って印刷可能領域に収め、1 ページで OS の印刷ダイアログへ渡す。複数ページ・任意の画面の指定・プレビュー・プリンタ選択・解像度の指定・紙に出たかの追跡は扱わない。結果は `print` の三値（`Submitted`: ジョブを渡した。紙に出たことは意味しない / `Cancelled`: 利用者が閉じた。失敗ではない / `Unconfirmed`: 結果を OS が返さない。Web は常にこれ）。画面を取り込めない（期限内に読み戻しが届かない・寸法不正）失敗はダイアログを出す前に確定し、取り消しと混ぜない。守る: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、Bitmap・DC・印刷用ブロックの解放、画素をログへ出さないこと。守らない: 紙に出たか・ジョブ投入後のプリンタ側の失敗、印刷の色・解像度の正確さ、OS ごとの余白の差、画面を保護中（capture-protection）に読み戻しが黒くなるか、egui の描画領域の外（ステータスバー・ウィンドウ枠）、Web の `print-color-adjust` が無視される場合・`<canvas>` の中身・ブラウザごとの改ページ、複数タブ・複数プロセス、背景にいる間の取り込み（期限切れで失敗になる）"
 }

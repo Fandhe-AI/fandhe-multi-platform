@@ -50,6 +50,8 @@
 //!   [`location`] と同じ理由で純関数のみ `wasm32` gate の外に置く
 //! - [`eye_dropper`]: 「画面のスポイト」画面の Web 経路（Issue #763）。[`location`] と同じ理由で
 //!   純関数（`sRGBHex` → 結果・例外の `name` → 結果）のみ `wasm32` gate の外に置く
+//! - [`color_picker`]: 「システムの色選択ダイアログ」画面の Web 経路（Issue #943）。[`location`] と同じ理由で
+//!   純関数（`change` の値 → 結果）のみ `wasm32` gate の外に置く
 //! - [`local_fonts`]: 「OS 搭載フォント」画面の Web 経路（Issue #1379）。[`location`] と同じ理由で
 //!   純関数（`FontData` の family → 一覧・例外の `name` → 失敗種別）のみ `wasm32` gate の外に置く
 //! - [`multi_display`]: 「複数ディスプレイ」画面の Web 経路（Issue #1344）。[`location`] と同じ理由で
@@ -91,6 +93,7 @@
 //! - [`network_status`]: 「ネットワーク接続状態」画面の Web 経路（親 #1130、Issue #1285）。
 //!   純関数（`onLine` / `connection.type` → 表示値）のみ `wasm32` gate の外に置く
 //! - [`media_transcode`]: 「動画・音声の変換」画面の Web 経路（親 #91、Issue #315）。WebCodecs を Reflect で呼ぶ。
+//! - [`video_transcode`]: 「動画の変換」画面の Web 経路（親 #340、Issue #1018）。WebCodecs を Reflect で呼ぶ。
 //! - [`media_playback`]: 「音声の再生」画面の Web 経路（親 #86、Issue #271）。[`location`] と同じ理由で
 //!   純関数（`play()` 拒否の写像・位置の検証・期限・中断判定）のみ `wasm32` gate の外に置く
 //! - [`accessibility_prefs`]: 「アクセシビリティ設定の追従」画面の Web 経路（親 #1132、Issue #1311）。
@@ -206,6 +209,9 @@ pub mod accessibility_prefs;
 /// 純関数（`kind` / `label` → 入出力の一覧）は native からもテストできるよう
 /// クレート単位の `wasm32` gate を外す。
 pub mod audio_devices;
+/// 型サンプル「システムの色選択ダイアログ」の Web 経路（Issue #943）。[`location`] と同じ理由で
+/// 純関数（`change` の値 → 結果）は native からもテストできるようクレート単位の `wasm32` gate を外す。
+pub mod color_picker;
 /// 型サンプル「端末・OS 情報」の Web 経路（Issue #1307）。[`location`] と同じ理由で
 /// 純関数（ブラウザの生値 → 表示用の読み取り結果）は native からもテストできるよう
 /// クレート単位の `wasm32` gate を外す。
@@ -256,6 +262,9 @@ pub mod now_playing;
 
 /// 型サンプル「動画・音声の変換」の Web 経路（Issue #315）。純関数は native からもテストする。
 pub mod media_transcode;
+
+/// 型サンプル「動画の変換」の Web 経路（Issue #1018）。純関数は native からもテストする。
+pub mod video_transcode;
 
 /// 型サンプル「画面の録画・キャプチャ」の Web 経路（Issue #1338）。[`location`] と同じ理由で
 /// 純関数（例外の `name` → 結果種別・録画結果の検証）は native からもテストできるよう
@@ -344,6 +353,8 @@ pub mod barcode_scan;
 pub mod compass;
 /// 型サンプル「メール・SMS の作成」の Web 経路（Issue #1387）。[`haptics`] と同じ理由で gate を外す。
 pub mod compose_mail_sms;
+/// 型サンプル「デジタル身分証の提示要求」の Web 経路（Issue #959）。[`haptics`] と同じ理由で gate を外す。
+pub mod digital_credentials;
 /// 型サンプル「画面のリフレッシュレート・HDR・広色域」の Web 経路（Issue #873）。[`accessibility_prefs`] と同じ理由で gate を外す。
 pub mod display_refresh_hdr;
 /// 型サンプル「他アプリの起動（電話・地図）」の Web 経路（Issue #864）。[`haptics`] と同じ理由で gate を外す。
@@ -379,7 +390,7 @@ pub mod pen_stylus;
 /// 型サンプル「ピクチャ・イン・ピクチャ」の Web 経路（Issue #367）。[`haptics`] と同じ理由で純関数は native からも
 /// テストできるよう gate を外す。
 pub mod picture_in_picture;
-/// 型サンプル「印刷」の Web 経路（Issue #329）。[`haptics`] と同じ理由で gate を外す。
+/// 型サンプル「印刷」の Web 経路（Issue #329）。画面の内容の印刷（Issue #1013）も同居。[`haptics`] と同じ理由で gate を外す。
 pub mod print_page;
 /// 型サンプル「画面の向き」の Web 経路（Issue #658）。[`haptics`] と同じ理由で gate を外す。
 pub mod screen_orientation;

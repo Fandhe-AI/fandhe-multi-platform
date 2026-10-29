@@ -57,6 +57,10 @@ use fandhe_core::screens::checkbox_list::{checkbox_list_screen, CheckboxListStat
 use fandhe_core::screens::clipboard_text::{
     current_screen as current_clipboard_screen, ClipboardTextState,
 };
+use fandhe_core::screens::color_picker_pick::{
+    abandon_pick as abandon_color_pick, current_screen as current_color_picker_screen,
+    ColorPickerState, ABANDON_LABEL as COLOR_PICKER_ABANDON_LABEL,
+};
 use fandhe_core::screens::compass_show::{
     current_screen as current_compass_screen, stop as compass_stop, CompassShowState,
     STOP_BUTTON_ID as COMPASS_STOP_BUTTON_ID, STOP_LABEL as COMPASS_STOP_LABEL,
@@ -69,6 +73,9 @@ use fandhe_core::screens::contact_pick::{
 };
 use fandhe_core::screens::device_info_show::{
     current_screen as current_device_info_screen, DeviceInfoShowState,
+};
+use fandhe_core::screens::digital_credentials::{
+    current_screen as current_digital_credentials_screen, DigitalCredentialsState,
 };
 use fandhe_core::screens::display_refresh_hdr_show::{
     current_screen as current_display_refresh_hdr_show_screen, DisplayRefreshHdrShowState,
@@ -168,6 +175,7 @@ use fandhe_core::screens::power_state_show::{
 use fandhe_core::screens::print_page::{
     current_screen as current_print_page_screen, PrintPageState,
 };
+use fandhe_core::screens::print_screen_page::current_screen as current_print_screen_page_screen;
 use fandhe_core::screens::safe_area_insets_show::{
     safe_area_insets_show_web_screen, SafeAreaInsetsShowState,
 };
@@ -221,6 +229,9 @@ use fandhe_core::screens::user_idle_show::{
 };
 use fandhe_core::screens::video_capture_show::{
     current_screen as current_video_capture_show_screen, VideoCaptureShowState,
+};
+use fandhe_core::screens::video_transcode::{
+    current_screen as current_video_transcode_screen, VideoTranscodeState,
 };
 use fandhe_core::screens::wake_lock_toggle::{
     current_screen as current_wake_lock_toggle_screen, turn_off as wake_lock_turn_off,
@@ -724,6 +735,36 @@ pub fn mount_eye_dropper_screen(root_id: &str) -> Result<(), JsValue> {
         current_eye_dropper_screen(&initial_state),
         initial_state,
         super::eye_dropper::eye_dropper_pick_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「システムの色選択ダイアログ」（Issue #943）をマウントする検証専用
+/// エントリポイント。`super::color_picker::color_picker_pick_effect` を effect として渡す。
+/// 起動時には開かず、ボタン押下（ユーザー操作）の中で `<input type="color">` が開く。
+///
+/// mount は画面を最初に 1 回しか組まず、ボタンは状態で出し分けられない。そのため
+/// `web_screen`（phase で出し分ける）は使わず、「色を選ぶ」と「やめる」を常に両方出す
+/// （`request_pick` は Idle 以外、`abandon_pick` は Requested / Picking 以外で no-op なので挙動は同じ）。
+/// `<input type="color">` には取り消しの通知が無く、色を変えずに閉じると「やめる」でしか抜けられない。
+///
+/// 呼び出し元が渡す `root_id` の要素が見つからない場合はエラーを返す
+/// （panic を API 契約にしない方針、coding-rust.md 準拠）。
+#[wasm_bindgen]
+pub fn mount_color_picker_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = ColorPickerState::default();
+    // WidgetId 2 は共通コア画面の「やめる」と同じ値（1 = 選ぶ、3 = 見本と重複しない）。
+    let screen = current_color_picker_screen(&initial_state).button(
+        fandhe_core::WidgetId::from_raw(2),
+        COLOR_PICKER_ABANDON_LABEL,
+        abandon_color_pick,
+    );
+    super::mount::mount_with_effect(
+        root,
+        screen,
+        initial_state,
+        super::color_picker::color_picker_pick_effect,
     )
 }
 
@@ -1295,6 +1336,24 @@ pub fn mount_translation_screen(root_id: &str) -> Result<(), JsValue> {
     )
 }
 
+/// `root_id` が指す要素へ型サンプル「デジタル身分証の提示要求」（親 #186、Issue #959）をマウントする
+/// 検証専用エントリポイント。`super::digital_credentials::digital_credentials_effect` が
+/// Digital Credentials API を呼ぶ。起動時には要求を出さず、ボタンを押したときに出す。
+/// mount は画面を 1 回しか組まないため処理中もボタンは出たままだが、`request` は Idle 以外で no-op、
+/// 二重発送は effect 側の世代記録が防ぐので挙動は変わらない。
+#[wasm_bindgen]
+pub fn mount_digital_credentials_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = DigitalCredentialsState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_digital_credentials_screen(&initial_state),
+        initial_state,
+        super::digital_credentials::digital_credentials_effect,
+    )
+}
+
 /// `root_id` が指す要素へ型サンプル「パスキー・サインイン連携」（親 #92、Issue #344）をマウントする
 /// 検証専用エントリポイント。`super::passkey::passkey_signin_effect` が WebAuthn を呼ぶ。
 #[wasm_bindgen]
@@ -1337,6 +1396,21 @@ pub fn mount_print_page_screen(root_id: &str) -> Result<(), JsValue> {
         current_print_page_screen(&initial_state),
         initial_state,
         super::print_page::print_page_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「画面の印刷」（親 #341、Issue #1013）をマウントする
+/// 検証専用エントリポイント。`super::print_page::print_screen_page_effect` が画面 DOM の複製を印刷する。
+#[wasm_bindgen]
+pub fn mount_print_screen_page_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = PrintPageState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_print_screen_page_screen(&initial_state),
+        initial_state,
+        super::print_page::print_screen_page_effect,
     )
 }
 
@@ -1621,6 +1695,21 @@ pub fn mount_media_transcode_screen(root_id: &str) -> Result<(), JsValue> {
         screen,
         initial_state,
         super::media_transcode::media_transcode_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「動画の変換」（親 #340、Issue #1018）をマウントする
+/// 検証専用エントリポイント。`super::video_transcode::video_transcode_effect` が WebCodecs を駆動する。
+#[wasm_bindgen]
+pub fn mount_video_transcode_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+    let initial_state = VideoTranscodeState::default();
+    let screen = current_video_transcode_screen(&initial_state);
+    super::mount::mount_with_effect(
+        root,
+        screen,
+        initial_state,
+        super::video_transcode::video_transcode_effect,
     )
 }
 

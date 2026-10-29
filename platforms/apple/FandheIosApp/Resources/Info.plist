@@ -58,7 +58,10 @@
   必須（未設定だと初回起動時に即クラッシュする）。「カメラのライブ映像」画面
   （`FANDHE_PROXY_APP=camera_preview_stream_show`、Issue #813、
   `crates/fandhe-egui-proxy/ios/fandhe_ios_camera_preview_stream.m`）も `AVCaptureSession` で
-  同じ許可を使う。Phase 8 が spec 要件化されず
+  同じ許可を使う。「接続したスキャナー・カメラ機器からの取り込み」画面
+  （`FANDHE_PROXY_APP=scanner_devices_import`、Issue #982、
+  `crates/fandhe-egui-proxy/apple/fandhe_apple_scanner_devices.m`）は文言に用途を足しただけで、
+  取り込みだけで本キーが要るかは未確認（既知の天井）。Phase 8 が spec 要件化されず
   切り離す場合は本キーも削除する（docs/architecture/device-feature-removal.md）。
 
   NSLocationWhenInUseUsageDescription（Issue #889）: 型サンプル「位置情報」画面
@@ -262,7 +265,7 @@
 	<key>MinimumOSVersion</key>
 	<string>17.0</string>
 	<key>NSCameraUsageDescription</key>
-	<string>型サンプル「カメラ撮影」「AR 表示」「書類スキャン」「動画の撮影」「カメラのライブ映像」の動作確認に使います</string>
+	<string>型サンプル「カメラ撮影」「AR 表示」「書類スキャン」「動画の撮影」「カメラのライブ映像」「接続した機器からの取り込み」の動作確認に使います</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>型サンプル「位置情報」の動作確認に使います</string>
 	<key>NSFaceIDUsageDescription</key>

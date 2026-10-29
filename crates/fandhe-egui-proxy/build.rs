@@ -107,6 +107,10 @@
 //!   **macOS・iOS 両分岐**（iOS の実体は #536）で feature `device` 有効時に swiftc で静的ライブラリ化し、
 //!   Translation を弱リンクする（`src/device/apple_translation.rs` から呼ばれる契約）。
 //!   swiftc 呼び出しは `compile_apple_swift` を on-device-llm と共用する。
+//! - `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS・#976 iOS、Image Playground による端末内での画像生成）は
+//!   macOS・iOS 両分岐で feature `device` 有効時に swiftc で静的ライブラリ化し、
+//!   ImagePlayground を弱リンクする（`src/device/apple_image_generation.rs` から呼ばれる契約）。
+//!   swiftc 呼び出しは `compile_apple_swift` を on-device-llm と共用する。
 //! - `apple/fandhe_apple_spotlight_index.m`（Issue #560、Core Spotlight による OS の検索への登録と、
 //!   macOS の `continueUserActivity` 受信）は **macOS・iOS 両分岐**（iOS の実体は #561）で
 //!   feature `device` 有効時にコンパイルし CoreSpotlight をリンクする
@@ -116,6 +120,10 @@
 //! - `apple/fandhe_apple_geocoding_search.m`（Issue #691、MapKit `MKGeocodingRequest` による固定住所 1 件の
 //!   座標変換。iOS 分岐も同じ実装）は `src/device/apple_geocoding_search.rs` から呼ばれる契約。
 //!   MapKit・CoreLocation をリンクする。
+//! - `apple/fandhe_apple_scanner_devices.m`（Issue #981、ImageCaptureCore による USB 接続のカメラ機器からの
+//!   画像 1 枚の取り込み。iOS 分岐も同じ実装）は `src/device/apple_scanner_devices.rs` から呼ばれる契約。
+//!   ImageCaptureCore・ImageIO・UniformTypeIdentifiers をリンクする。iOS 側の可用性警告は
+//!   `.m` の `@available` で抑える。
 //! - `apple/fandhe_apple_photo_library.m`（Issue #1254、`PHPhotoLibrary` による画像 1 枚の保存）は
 //!   iOS（Issue #1255）・macOS の両ターゲットで feature `device` 有効時にコンパイルする
 //!   （`src/device/apple_photo_library.rs` から呼ばれる契約）。Photos をリンクする。
@@ -243,6 +251,12 @@
 //! - `macos/fandhe_macos_app_badge.m`（Issue #1360、`NSDockTile.badgeLabel` によるバッジ設定）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/macos_app_badge.rs`
 //!   から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_system_sound.m`（Issue #939、`NSBeep` による警告音 1 回）は **macOS 分岐のみ**で
+//!   feature `device` 有効時にコンパイルする（`src/device/macos_system_sound.rs` から呼ばれる契約）。
+//!   AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_wallpaper.m`（Issue #970、`NSWorkspace.setDesktopImageURL` による壁紙設定と読み戻し）は
+//!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/macos_wallpaper.rs` から呼ばれる契約）。
+//!   AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_app_progress_attention.m`（Issue #860、`NSDockTile.contentView` による進捗バーと
 //!   `requestUserAttention` による注意喚起）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_app_progress_attention.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
@@ -266,12 +280,18 @@
 //! - `macos/fandhe_macos_global_hotkey.m`（Issue #766、Carbon の `RegisterEventHotKey` による固定
 //!   組み合わせ 1 つの登録・解除・押下通知。`src/device/macos_global_hotkey.rs` から呼ばれる契約）。
 //!   `Carbon.framework` をリンクする。
+//! - `macos/fandhe_macos_recent_documents.m`（Issue #988、`NSDocumentController` による「最近使った項目」への
+//!   登録と読み戻し）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_recent_documents.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_open_in_shell.m`（Issue #749、`NSWorkspace` による既定アプリで開く・
 //!   Finder で選択表示）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_open_in_shell.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_eye_dropper.m`（Issue #762、`NSColorSampler` による画面のスポイト）は
 //!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_eye_dropper.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_color_picker.m`（Issue #941、`NSColorPanel` によるシステムの色選択ダイアログ）は
+//!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
+//!   （`src/device/macos_color_picker.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_file_preview.m`（Issue #917、自前の窓に載せる `QLPreviewView` による固定ファイルの
 //!   プレビュー）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_file_preview.rs` から呼ばれる契約）。QuickLookUI を追加でリンクする。
@@ -279,9 +299,16 @@
 //! - `ios/fandhe_ios_file_preview.m`（Issue #919、`QLPreviewController` による固定ファイルのプレビュー）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_file_preview.rs` から
 //!   呼ばれる契約）。QuickLook を追加でリンクする。
+//! - `ios/fandhe_ios_color_picker.m`（Issue #942、`UIColorPickerViewController` による色選択）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_color_picker.rs` から
+//!   呼ばれる契約）。UIKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_print.m`（Issue #325、`NSPrintPanel` + `NSPrintOperation` による印刷
 //!   ダイアログ）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_print.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
+//! - `macos/fandhe_macos_managed_app_config.m`（Issue #944、`CFPreferences` による MDM 管理アプリ設定の
+//!   読み取り。強制された値だけを数値と記号のワイヤ文字列にして返す）は **macOS 分岐のみ**で feature
+//!   `device` 有効時にコンパイルする（`src/device/macos_managed_app_config.rs` から呼ばれる契約）。
+//!   CoreFoundation をリンクする。
 //! - `macos/fandhe_macos_device_info.m`（Issue #1304、`NSProcessInfo` + `sysctl` + `NSURL` による
 //!   端末・OS 情報の同期読み取り）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_device_info.rs` から呼ばれる契約）。Foundation は既存のリンクで足りる。
@@ -308,6 +335,9 @@
 //!   CoreWLAN をリンクする（`src/device/macos_wifi_info.rs` から呼ばれる契約）。
 //! - `macos/fandhe_macos_wifi_connect.m`（Issue #791、CoreWLAN の directed scan と
 //!   `associateToNetwork:password:error:` による指定 Wi-Fi への接続。`src/device/macos_wifi_connect.rs`
+//!   から呼ばれる契約）。
+//! - `macos/fandhe_macos_radio_control.m`（Issue #972、CoreWLAN の `powerOn` / `setPower:error:` と
+//!   IOBluetooth の `powerState` による無線の状態取得と Wi-Fi の切り替え。`src/device/macos_radio_control.rs`
 //!   から呼ばれる契約）。
 //! - `macos/fandhe_macos_usb_device.m`（Issue #505、IOKit `IOUSBHostDevice` による USB 機器の
 //!   ベンダー ID・製品 ID・製品名の読み取り）は **macOS 分岐のみ**で feature `device` 有効時に
@@ -363,6 +393,9 @@
 //! - `ios/fandhe_ios_device_info.m`（Issue #1305、`NSProcessInfo` と `sysctl` による端末・OS 情報）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_device_info.rs`
 //!   から呼ばれる契約）。Foundation は既存のリンクで足りる。
+//! - `ios/fandhe_ios_managed_app_config.m`（Issue #945、`NSUserDefaults` の MDM 管理設定辞書の読み取り）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_managed_app_config.rs`
+//!   から呼ばれる契約）。Foundation / CoreFoundation は既存のリンクで足りる。
 //! - `ios/fandhe_ios_safe_area_insets.m`（Issue #445、key window の `safeAreaInsets` の同期読み取り）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_safe_area_insets.rs`
 //!   から呼ばれる契約）。UIKit は既存のリンクで足りる。
@@ -402,7 +435,7 @@
 //! - `ios/fandhe_ios_pen_stylus.m`（Issue #356、観測専用 `UIGestureRecognizer` による種類・筆圧・傾き）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_pen_stylus.rs` から
 //!   呼ばれる契約）。UIKit は既存のリンクで足りる。
-//! - `ios/fandhe_ios_ar.m`（Issue #308、ARKit の `ARSession` による追跡状態・位置・水平面の数）は
+//! - `ios/fandhe_ios_ar.m`（Issue #308、ARKit の `ARSession` による追跡状態・位置・水平面の数、Issue #1009 でカメラ映像 `capturedImage` の読み取り。CoreVideo を明示リンク）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_ar.rs` から呼ばれる契約）。
 //!   ARKit を追加でリンクする。
 //! - `ios/fandhe_ios_file_watch.m`（Issue #1412、`open(O_EVTONLY)` + `DISPATCH_SOURCE_TYPE_VNODE` による
@@ -608,6 +641,10 @@ fn main() {
     // （b-ios が本ファイルを触らずに済むよう、iOS 分岐からも (a) で呼んでおく）。
     compile_apple_geocoding_search();
 
+    // `apple/fandhe_apple_scanner_devices.m`（Issue #981 macOS + #982 iOS）も macOS 分岐と共用する
+    // （b-ios が本ファイルを触らずに済むよう、iOS 分岐からも (a) で呼んでおく）。
+    compile_apple_scanner_devices();
+
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）も macOS 分岐と
     // 共用する（上記 doc 参照）。
     compile_apple_mic_record();
@@ -643,6 +680,8 @@ fn main() {
     compile_apple_ml_inference();
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
+    // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も macOS 分岐と共用する。
+    compile_apple_video_transcode();
     // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
     compile_apple_pdf_viewer();
     // `apple/fandhe_apple_file_preview.m`（Issue #917 macOS + b-ios iOS）も共用する。
@@ -651,6 +690,8 @@ fn main() {
     compile_apple_on_device_llm(true);
     // `apple/fandhe_apple_translation.swift`（Issue #535 macOS + #536 iOS）も共用する。
     compile_apple_translation(true);
+    // `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS + #976 iOS）も共用する。
+    compile_apple_image_generation(true);
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
 
@@ -690,6 +731,8 @@ fn main() {
     compile_ios_device_identifier();
     // `ios/fandhe_ios_device_info.m`（Issue #1305）。iOS 分岐のみ。
     compile_ios_device_info();
+    // `ios/fandhe_ios_managed_app_config.m`（Issue #945）。iOS 分岐のみ。
+    compile_ios_managed_app_config();
     // `ios/fandhe_ios_safe_area_insets.m`（Issue #445）。iOS 分岐のみ。
     compile_ios_safe_area_insets();
     // `ios/fandhe_ios_audio_devices.m`（Issue #1331）。iOS 分岐のみ。
@@ -744,6 +787,8 @@ fn main() {
     compile_ios_capture_protection();
     // `ios/fandhe_ios_file_preview.m`（Issue #919）。iOS 分岐のみ。QuickLook をリンクする。
     compile_ios_file_preview();
+    // `ios/fandhe_ios_color_picker.m`（Issue #942）。iOS 分岐のみ。UIKit は既存のリンクで足りる。
+    compile_ios_color_picker();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_midi.m`（Issue #1398 macOS + #1399 iOS）も共用する。CoreMIDI を使う。
@@ -879,6 +924,20 @@ fn compile_apple_geocoding_search() {
 
     println!("cargo:rustc-link-lib=framework=MapKit");
     println!("cargo:rustc-link-lib=framework=CoreLocation");
+}
+
+/// `apple/fandhe_apple_scanner_devices.m` を `cc` でコンパイルし ImageCaptureCore / ImageIO /
+/// UniformTypeIdentifiers をリンクする（Issue #981 macOS・#982 iOS。両分岐から呼ぶ）。
+fn compile_apple_scanner_devices() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_scanner_devices.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_scanner_devices.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_scanner_devices");
+
+    println!("cargo:rustc-link-lib=framework=ImageCaptureCore");
+    println!("cargo:rustc-link-lib=framework=ImageIO");
+    println!("cargo:rustc-link-lib=framework=UniformTypeIdentifiers");
 }
 
 /// `apple/fandhe_apple_calendar.m` を `cc` でコンパイルし EventKit をリンクする
@@ -1099,6 +1158,21 @@ fn compile_apple_media_transcode() {
     println!("cargo:rustc-link-lib=framework=Foundation");
 }
 
+/// `apple/fandhe_apple_video_transcode.m` を `cc` でコンパイルし AVFoundation・CoreMedia・CoreVideo を
+/// リンクする（Issue #1014 macOS、iOS は #1016 が利用、動画の小さい解像度への変換）。
+/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_video_transcode`）と同じ OS 集合に保つ。
+fn compile_apple_video_transcode() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_video_transcode.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_video_transcode.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_video_transcode");
+    println!("cargo:rustc-link-lib=framework=AVFoundation");
+    println!("cargo:rustc-link-lib=framework=CoreMedia");
+    println!("cargo:rustc-link-lib=framework=CoreVideo");
+    println!("cargo:rustc-link-lib=framework=Foundation");
+}
+
 /// `apple/fandhe_apple_ml_inference.m` を `cc` でコンパイルし CoreML をリンクする
 /// （Issue #289 macOS、iOS は b-ios が利用、機械学習モデル推論）。
 /// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_ml_inference`）と
@@ -1140,6 +1214,22 @@ fn compile_apple_on_device_llm(ios: bool) {
             framework: "FoundationModels",
             require_env: "FANDHE_REQUIRE_ON_DEVICE_LLM",
             tag: "on_device_llm",
+        },
+        ios,
+    );
+}
+
+/// 端末内での画像生成の Swift 薄層 `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS、#976 iOS）。
+/// ImagePlayground を弱リンクする。macOS 分岐（`false`）と iOS 分岐（`true`）の両方から呼ぶ。
+fn compile_apple_image_generation(ios: bool) {
+    compile_apple_swift(
+        &SwiftLib {
+            src: "apple/fandhe_apple_image_generation.swift",
+            lib: "fandhe_apple_image_generation",
+            module: "FandheImageGenerationBridge",
+            framework: "ImagePlayground",
+            require_env: "FANDHE_REQUIRE_IMAGE_GENERATION",
+            tag: "image_generation",
         },
         ios,
     );
@@ -1412,6 +1502,17 @@ fn compile_macos_app_shortcuts() {
         .compile("fandhe_macos_app_shortcuts");
 }
 
+/// `macos/fandhe_macos_managed_app_config.m` を `cc` でコンパイルし CoreFoundation をリンクする
+/// （Issue #944）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_managed_app_config.rs` が使う）。
+fn compile_macos_managed_app_config() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_managed_app_config.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_managed_app_config.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_managed_app_config");
+    println!("cargo:rustc-link-lib=framework=CoreFoundation");
+}
+
 /// `macos/fandhe_macos_screen_wake_lock.m` を `cc` でコンパイルし IOKit をリンクする
 /// （Issue #1278）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_screen_wake_lock.rs` が使う）。
 fn compile_macos_screen_wake_lock() {
@@ -1647,6 +1748,26 @@ fn compile_macos_app_badge() {
         .compile("fandhe_macos_app_badge");
 }
 
+/// `macos/fandhe_macos_system_sound.m` を `cc` でコンパイルする（Issue #939）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_system_sound.rs` が使う）。AppKit は既存のリンクで足りる。
+fn compile_macos_system_sound() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_system_sound.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_system_sound.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_system_sound");
+}
+
+/// `macos/fandhe_macos_wallpaper.m` を `cc` でコンパイルする（Issue #970）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_wallpaper.rs` が使う）。AppKit は既存のリンクで足りる。
+fn compile_macos_wallpaper() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_wallpaper.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_wallpaper.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_wallpaper");
+}
+
 /// `macos/fandhe_macos_launch_at_login.m` を `cc` でコンパイルする（Issue #696）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_launch_at_login.rs` が使う）。ServiceManagement をリンクする
 /// （システムフレームワークで旧 OS にも存在するため強リンクでよい。API は `@available` で守る）。
@@ -1692,6 +1813,18 @@ fn compile_ios_file_preview() {
         .flag("-fobjc-arc")
         .compile("fandhe_ios_file_preview");
     println!("cargo:rustc-link-lib=framework=QuickLook");
+}
+
+/// `ios/fandhe_ios_color_picker.m` を `cc` でコンパイルする（Issue #942）。**iOS 分岐のみ**から
+/// 呼ばれる（`src/device/ios_color_picker.rs` が使う）。UIKit はリンク済みで追加リンクは無い。
+fn compile_ios_color_picker() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_color_picker.m");
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_common.h");
+    cc::Build::new()
+        .file("ios/fandhe_ios_color_picker.m")
+        .include("ios")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_color_picker");
 }
 
 /// `ios/fandhe_ios_capture_protection.m` を `cc` でコンパイルする（Issue #583）。**iOS 分岐のみ**
@@ -1748,6 +1881,18 @@ fn compile_macos_wifi_connect() {
         .flag("-fobjc-arc")
         .compile("fandhe_macos_wifi_connect");
     println!("cargo:rustc-link-lib=framework=CoreWLAN");
+}
+
+/// `macos/fandhe_macos_radio_control.m` を `cc` でコンパイルし CoreWLAN・IOBluetooth をリンクする（Issue #972）。
+/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_radio_control.rs` が使う）。
+fn compile_macos_radio_control() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_radio_control.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_radio_control.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_radio_control");
+    println!("cargo:rustc-link-lib=framework=CoreWLAN");
+    println!("cargo:rustc-link-lib=framework=IOBluetooth");
 }
 
 /// `macos/fandhe_macos_music_library.m` を `cc` でコンパイルし iTunesLibrary をリンクする（Issue #482）。
@@ -1840,6 +1985,16 @@ fn compile_macos_global_hotkey() {
     println!("cargo:rustc-link-lib=framework=Carbon");
 }
 
+/// `macos/fandhe_macos_recent_documents.m` を `cc` でコンパイルする（Issue #988）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_recent_documents.rs` が使う）。AppKit は既存のリンクで足りる。
+fn compile_macos_recent_documents() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_recent_documents.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_recent_documents.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_recent_documents");
+}
+
 /// `macos/fandhe_macos_open_in_shell.m` を `cc` でコンパイルする（Issue #749）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_open_in_shell.rs` が使う）。AppKit は `build_macos` 側の
 /// 既存リンクで足りるため追加リンクは無い。
@@ -1860,6 +2015,16 @@ fn compile_macos_eye_dropper() {
         .file("macos/fandhe_macos_eye_dropper.m")
         .flag("-fobjc-arc")
         .compile("fandhe_macos_eye_dropper");
+}
+
+/// `macos/fandhe_macos_color_picker.m` を `cc` でコンパイルする（Issue #941）。**macOS 分岐のみ**
+/// から呼ばれる（`src/device/macos_color_picker.rs` が使う）。AppKit は既存のリンクで足りる。
+fn compile_macos_color_picker() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_color_picker.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_color_picker.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_color_picker");
 }
 
 /// `macos/fandhe_macos_file_preview.m` を `cc` でコンパイルし QuickLookUI をリンクする（Issue #917）。
@@ -2226,6 +2391,16 @@ fn compile_ios_device_info() {
         .compile("fandhe_ios_device_info");
 }
 
+/// `ios/fandhe_ios_managed_app_config.m` を `cc` でコンパイルする（Issue #945）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_managed_app_config.rs` が使う）。Foundation はリンク済み。
+fn compile_ios_managed_app_config() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_managed_app_config.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_managed_app_config.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_managed_app_config");
+}
+
 /// `ios/fandhe_ios_safe_area_insets.m` を `cc` でコンパイルする（Issue #445）。**iOS 分岐のみ**
 /// から呼ばれる（`src/device/ios_safe_area_insets.rs` が使う）。UIKit はリンク済み。
 fn compile_ios_safe_area_insets() {
@@ -2377,6 +2552,7 @@ fn compile_ios_pen_stylus() {
 fn compile_ios_ar() {
     println!("cargo:rerun-if-changed=ios/fandhe_ios_ar.m");
     println!("cargo:rustc-link-lib=framework=ARKit");
+    println!("cargo:rustc-link-lib=framework=CoreVideo");
     cc::Build::new()
         .file("ios/fandhe_ios_ar.m")
         .flag("-fobjc-arc")
@@ -2545,6 +2721,7 @@ fn build_macos() {
     compile_apple_photo_library();
     compile_apple_map_view();
     compile_apple_geocoding_search();
+    compile_apple_scanner_devices();
 
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）は iOS 分岐と
     // 共用する（上記 doc 参照）。
@@ -2583,10 +2760,14 @@ fn build_macos() {
     // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS。iOS は Issue #346 で `build_ios` からも呼ぶ）。
     compile_apple_on_device_llm(false);
     compile_apple_translation(false);
+    // `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS。iOS は `build_ios` からも呼ぶ）。
+    compile_apple_image_generation(false);
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
+    // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も共用する。
+    compile_apple_video_transcode();
     // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
     compile_apple_pdf_viewer();
     // `apple/fandhe_apple_file_preview.m`（Issue #917 macOS + b-ios iOS）も共用する。
@@ -2619,6 +2800,10 @@ fn build_macos() {
     compile_macos_window_management();
     // `macos/fandhe_macos_app_badge.m`（Issue #1360）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_app_badge();
+    // `macos/fandhe_macos_system_sound.m`（Issue #939）も macOS 専用。AppKit は既存のリンクを使う。
+    compile_macos_system_sound();
+    // `macos/fandhe_macos_wallpaper.m`（Issue #970）も macOS 専用。AppKit は既存のリンクを使う。
+    compile_macos_wallpaper();
     // `macos/fandhe_macos_app_progress_attention.m`（Issue #860）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_app_progress_attention();
     // `macos/fandhe_macos_launch_at_login.m`（Issue #696）も macOS 専用。ServiceManagement をリンクする。
@@ -2633,8 +2818,12 @@ fn build_macos() {
     compile_macos_global_hotkey();
     // `macos/fandhe_macos_open_in_shell.m`（Issue #749）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_open_in_shell();
+    // `macos/fandhe_macos_recent_documents.m`（Issue #988）も macOS 専用。AppKit は既存のリンクを使う。
+    compile_macos_recent_documents();
     // `macos/fandhe_macos_eye_dropper.m`（Issue #762）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_eye_dropper();
+    // `macos/fandhe_macos_color_picker.m`（Issue #941）も macOS 専用。AppKit は既存のリンクを使う。
+    compile_macos_color_picker();
     // `macos/fandhe_macos_file_preview.m`（Issue #917）も macOS 専用。QuickLookUI をリンクする。
     compile_macos_file_preview();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。AppKit は既存のリンクを使う。
@@ -2683,6 +2872,8 @@ fn build_macos() {
     compile_macos_wifi_info();
     // `macos/fandhe_macos_wifi_connect.m`（Issue #791）も macOS 専用。CoreWLAN を使う。
     compile_macos_wifi_connect();
+    // `macos/fandhe_macos_radio_control.m`（Issue #972）も macOS 専用。CoreWLAN・IOBluetooth を使う。
+    compile_macos_radio_control();
     // `macos/fandhe_macos_usb_device.m`（Issue #505）も macOS 専用。IOKit を使う。
     compile_macos_usb_device();
     // `macos/fandhe_macos_bluetooth_classic.m`（Issue #659）も macOS 専用。IOBluetooth を使う。
@@ -2692,6 +2883,8 @@ fn build_macos() {
     compile_macos_pen_stylus();
     // `macos/fandhe_macos_screen_wake_lock.m`（Issue #1278）も macOS 専用。IOKit を使う。
     compile_macos_screen_wake_lock();
+    // `macos/fandhe_macos_managed_app_config.m`（Issue #944）も macOS 専用。CoreFoundation を使う。
+    compile_macos_managed_app_config();
     // `apple/fandhe_apple_screen_capture.m`（Issue #1335）の macOS 側（ScreenCaptureKit）。
     compile_apple_screen_capture(false);
 

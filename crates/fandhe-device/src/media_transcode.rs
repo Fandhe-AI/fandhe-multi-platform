@@ -116,19 +116,19 @@ impl M4aInfo {
 }
 
 /// box の `(型, 本体)`。
-type BoxEntry<'a> = ([u8; 4], &'a [u8]);
+pub(crate) type BoxEntry<'a> = ([u8; 4], &'a [u8]);
 
 fn unreadable() -> DeviceError {
     DeviceError::Internal(UNREADABLE)
 }
 
-fn be32(b: &[u8], at: usize) -> Option<u32> {
+pub(crate) fn be32(b: &[u8], at: usize) -> Option<u32> {
     Some(u32::from_be_bytes(
         b.get(at..at.checked_add(4)?)?.try_into().ok()?,
     ))
 }
 
-fn be64(b: &[u8], at: usize) -> Option<u64> {
+pub(crate) fn be64(b: &[u8], at: usize) -> Option<u64> {
     Some(u64::from_be_bytes(
         b.get(at..at.checked_add(8)?)?.try_into().ok()?,
     ))
@@ -136,7 +136,7 @@ fn be64(b: &[u8], at: usize) -> Option<u64> {
 
 /// 並んだ box を `(型, 本体)` の列にする。size が 1 なら 64bit の largesize、0 なら末尾まで。
 /// header 長未満・残りを超える size は失敗（panic しない）。
-fn boxes(mut data: &[u8]) -> Result<Vec<BoxEntry<'_>>, DeviceError> {
+pub(crate) fn boxes(mut data: &[u8]) -> Result<Vec<BoxEntry<'_>>, DeviceError> {
     let mut out = Vec::new();
     while !data.is_empty() {
         let size = be32(data, 0).ok_or_else(unreadable)?;
@@ -159,12 +159,48 @@ fn boxes(mut data: &[u8]) -> Result<Vec<BoxEntry<'_>>, DeviceError> {
     Ok(out)
 }
 
-fn child<'a>(data: &'a [u8], kind: &[u8; 4]) -> Result<&'a [u8], DeviceError> {
+pub(crate) fn child<'a>(data: &'a [u8], kind: &[u8; 4]) -> Result<&'a [u8], DeviceError> {
     boxes(data)?
         .into_iter()
         .find(|(k, _)| k == kind)
         .map(|(_, body)| body)
         .ok_or_else(unreadable)
+}
+
+/// `stsz` が示すサンプルのデータ量が `mdat`（トップレベルの合計）に収まることを確かめる。
+/// 音声データ本体が無い・参照範囲より小さい出力は成功にしない。動画の読み直しも共用する。
+pub(crate) fn check_samples_fit(
+    stsz: &[u8],
+    sample_count: u32,
+    top: &[BoxEntry<'_>],
+) -> Result<(), DeviceError> {
+    let sample_size = be32(stsz, 4).ok_or_else(unreadable)?;
+    // サンプルが参照するデータ量（固定長なら size * count、可変長なら表の総和）。
+    let sample_bytes = if sample_size != 0 {
+        u64::from(sample_size) * u64::from(sample_count)
+    } else {
+        let table = stsz.get(12..).ok_or_else(unreadable)?;
+        let n = usize::try_from(sample_count).map_err(|_| unreadable())?;
+        if table.len() / 4 < n {
+            return Err(unreadable());
+        }
+        table
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .take(n)
+            .map(|c| u64::from(u32::from_be_bytes([c[0], c[1], c[2], c[3]])))
+            .sum()
+    };
+    let mdat_len: u64 = top
+        .iter()
+        .filter(|(k, _)| k == b"mdat")
+        .map(|(_, b)| b.len() as u64)
+        .sum();
+    if sample_bytes == 0 || sample_bytes > mdat_len {
+        return Err(unreadable());
+    }
+    Ok(())
 }
 
 /// m4a（ISO BMFF）を解析し、符号形式・長さ・サンプル数を取り出す。ブランドは見ない
@@ -196,37 +232,11 @@ pub fn parse_m4a(bytes: &[u8]) -> Result<M4aInfo, DeviceError> {
         .and_then(|t| t.try_into().ok())
         .ok_or_else(unreadable)?;
     let stsz = child(stbl, b"stsz")?;
-    let sample_size = be32(stsz, 4).ok_or_else(unreadable)?;
     let sample_count = be32(stsz, 8).ok_or_else(unreadable)?;
     if timescale == 0 || sample_count == 0 {
         return Err(unreadable());
     }
-    // サンプルが参照するデータ量（固定長なら size * count、可変長なら表の総和）。
-    let sample_bytes = if sample_size != 0 {
-        u64::from(sample_size) * u64::from(sample_count)
-    } else {
-        let table = stsz.get(12..).ok_or_else(unreadable)?;
-        let n = usize::try_from(sample_count).map_err(|_| unreadable())?;
-        if table.len() / 4 < n {
-            return Err(unreadable());
-        }
-        table
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .take(n)
-            .map(|c| u64::from(u32::from_be_bytes([c[0], c[1], c[2], c[3]])))
-            .sum()
-    };
-    // 音声データ本体（mdat）が無い・サンプルの参照範囲より小さい出力は成功にしない。
-    let mdat_len: u64 = top
-        .iter()
-        .filter(|(k, _)| k == b"mdat")
-        .map(|(_, b)| b.len() as u64)
-        .sum();
-    if sample_bytes == 0 || sample_bytes > mdat_len {
-        return Err(unreadable());
-    }
+    check_samples_fit(stsz, sample_count, &top)?;
     Ok(M4aInfo {
         codec,
         timescale,
@@ -259,6 +269,14 @@ pub fn check_m4a(bytes: &[u8], input: Duration) -> Result<Duration, DeviceError>
     check_duration(info.length(), input)
 }
 
+/// box を 1 つ組む（`size` + 型 + 本体）。テスト・フェイク用の MP4 組み立てが共用する。
+pub(crate) fn bx(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {
+    let mut v = ((body.len() + 8) as u32).to_be_bytes().to_vec();
+    v.extend_from_slice(kind);
+    v.extend_from_slice(body);
+    v
+}
+
 /// テスト・フェイク実装用に、解析に要る最小の m4a を組む（`ftyp` + `moov/trak/mdia/{mdhd, minf/stbl/{stsd, stsz}}`）。
 /// 実際に再生できる音声ではない（`mdat` は `samples` バイトの 0）。`version1` は `mdhd` を 64bit 形式にする。
 pub fn minimal_m4a(
@@ -268,12 +286,6 @@ pub fn minimal_m4a(
     samples: u32,
     version1: bool,
 ) -> Vec<u8> {
-    fn bx(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {
-        let mut v = ((body.len() + 8) as u32).to_be_bytes().to_vec();
-        v.extend_from_slice(kind);
-        v.extend_from_slice(body);
-        v
-    }
     let mut mdhd = Vec::new();
     if version1 {
         mdhd.extend_from_slice(&[1, 0, 0, 0]);

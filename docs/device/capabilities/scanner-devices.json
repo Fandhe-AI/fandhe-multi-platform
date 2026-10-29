@@ -7,32 +7,61 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "ImageCaptureCore `ICDeviceBrowser`（接続したカメラ機器からの取り込み）",
-      "perm": "不要（要確認）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。iOS で使える範囲（カメラのみでスキャナーは不可の見込み）は未確認"
+      "status": "done",
+      "api": "ImageCaptureCore `ICDeviceBrowser`（カメラ・ローカル。`browsedDeviceTypeMask` は iOS 15.2+）で USB 接続のカメラ機器を探し、`ICCameraDevice` のセッションを開いて `mediaFiles` から作成日時が最新の画像 1 枚を `requestDownloadWithOptions` で一時ディレクトリへ取り込み、ImageIO で長辺 2048 画素以下の JPEG にする（`ICScannerDevice` は範囲外）",
+      "perm": "iOS 14 以降は `requestContentsAuthorization` の実行時ダイアログ。`NSCameraUsageDescription` は既存キーの文言に用途を足しただけ（新しいキーは足さない）",
+      "url": [
+        "https://developer.apple.com/documentation/imagecapturecore/icdevicebrowser/requestcontentsauthorization(completion:)",
+        "https://developer.apple.com/documentation/imagecapturecore/icdevicebrowser/browseddevicetypemask",
+        "https://developer.apple.com/documentation/imagecapturecore/iccamerafile/requestdownload(options:completion:)"
+      ],
+      "note": "実装済み（#982）。macOS と共用の `.m` を使い、取り込みの許可を確かめてから探索窓（3 秒）の間に機器を探し、先頭の 1 台の最新の画像 1 枚を取り込んで種類と台数と共に表示する。許可は completion の引数ではなく OS のステータスを読み直して決め、ダイアログを閉じた場合も `PermissionDenied`。背景へ遷移したら `Interrupted`（許可ダイアログ表示中の WillResignActive は見ない）。`cancelDownload` は iOS に無く、ダウンロードはセッションを閉じて止める。`deviceBrowserDidEnumerateLocalDevices:` も iOS に無いため、探索は毎回探索窓いっぱいまで待つ。0 台・画像 0 件・ロック・権限拒否・時間切れ・取り込み中の取り外し・上限超過・復号不可・OS の失敗を区別して失敗にし、成功へ畳まない。日時や UTI が欠けた要素は飛ばさず失敗にする。縮小前の総画素数が 64 Mi 画素を超える画像は復号せず `TooLarge`、寸法を読めない画像は `Undecodable`。一時ディレクトリは要求ごとに UUID 名で作り、全経路でセッション・探索・ダウンロード・通知の登録を解除して削除する。機器名・シリアル・画像・OS の文言はログへ出さない。カメラ機器のみ（スキャナーは API なし）。守る: 失敗・0 件・拒否・ロックを成功に畳まない、セッション・一時ファイル・接続を全経路で閉じる。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）。範囲外: 機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク接続の機器。既知の天井（実機未確認）: 取り込みだけで `NSCameraUsageDescription` が要るか、許可の前に機器が列挙されるか、iPhone を iOS 端末へつないだ場合の扱い",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#967）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_scanner_devices.m + crates/fandhe-egui-proxy/src/device/apple_scanner_devices.rs + crates/fandhe-egui-proxy/src/device/ios_scanner_devices.rs + crates/fandhe-egui-proxy/src/device/scanner_devices.rs + crates/fandhe-core/src/screens/scanner_devices_import.rs + crates/fandhe-device/src/scanner_devices.rs、Issue #982"
     },
     "android": {
-      "status": "possible",
-      "api": "`android.mtp.MtpDevice`（USB のカメラ機器）。スキャナー向けの標準 API はない",
-      "perm": "USB 機器のアクセス許可（`UsbManager`）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。スキャナーは対象外の見込み"
+      "status": "done",
+      "api": "`UsbManager.getDeviceList` で Still Image クラス（`UsbConstants.USB_CLASS_STILL_IMAGE`）の機器を探す → `hasPermission` / `requestPermission` → `openDevice` → `MtpDevice.open`（API 12）→ `getObjectHandles(storage, 0, 0)` と `getObjectInfo` の作成日時で最新の画像 1 枚 → `getObject` → `BitmapFactory` で長辺 2048 画素以下の JPEG にする",
+      "perm": "機器ごとの USB 接続許可（`UsbManager.requestPermission` の実行時ダイアログ）。マニフェストの権限は無い",
+      "url": [
+        "https://developer.android.com/reference/android/mtp/MtpDevice",
+        "https://developer.android.com/develop/connectivity/usb/host"
+      ],
+      "note": "実装済み（#983）。探索窓（3 秒）の間 `getDeviceList` を読み直して機器を探し（見つかれば早く打ち切る）、名前の辞書順で先頭の 1 台の最新の画像 1 枚を取り込んで種類と台数と共に表示する。許可は broadcast の extras を信じず `hasPermission` を読み直し、ダイアログを閉じる操作は拒否と区別できないので `PermissionDenied`。取り込み中に機器が外れたことは `getDeviceList` の読み直しで判定して `Interrupted`。0 台・画像 0 件・拒否・上限超過・復号不可・OS の失敗を区別して失敗にし、成功へ畳まない。日時や情報が欠けた要素、ストレージ 0 件（ロックと区別できない）は `Failed`。`MtpDevice`・接続・レシーバーは成功・失敗・期限切れ・中断の全経路で解放し、期限切れでは解放の完了を待ってから `TimedOut` を返す。機器名・シリアル・画像はログへ出さない。守る: 失敗・0 件・拒否・ロックを成功に畳まない、セッション・一時ファイル・接続を全経路で閉じる。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）、期限の後にダイアログで与えた許可（OS に残る）。範囲外: 機器の選択 UI・複数枚・RAW・HEIF・テザー撮影・ネットワーク接続の機器・MTP モード（class 255）だけを名乗る機器。既知の天井: 機器のロックを判別できない、システムが機器を掴んでいるときの `open` の結果は実機未確認、`FLAG_IMMUTABLE` の許可 broadcast が届く条件は実機未確認、EXIF の向きは補正しない",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#967）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/ScannerDevicesHelper.java + crates/fandhe-egui-proxy/src/device/android_scanner_devices.rs + crates/fandhe-egui-proxy/src/device/scanner_devices.rs + crates/fandhe-core/src/screens/scanner_devices_import.rs + crates/fandhe-device/src/scanner_devices.rs、Issue #983"
     },
     "macos": {
-      "status": "possible",
-      "api": "ImageCaptureCore `ICDeviceBrowser` / `ICScannerDevice` / `ICCameraDevice`",
-      "perm": "不要（サンドボックス時は USB 等の entitlement、要確認）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。スキャナーとカメラの両方を扱える"
+      "status": "done",
+      "api": "ImageCaptureCore `ICDeviceBrowser`（カメラ・ローカル）で USB 接続のカメラ機器を探し、`ICCameraDevice` のセッションを開いて `mediaFiles` から作成日時が最新の画像 1 枚を `requestDownloadWithOptions` で一時ディレクトリへ取り込み、ImageIO で長辺 2048 画素以下の JPEG にする（`ICScannerDevice` は範囲外）",
+      "perm": "不要（App Sandbox 無効・Hardened Runtime 無しの実行体）。Hardened Runtime を有効にするなら Photos Library entitlement、sandbox 化するなら macOS 14 以降 `com.apple.security.device.usb`",
+      "url": [
+        "https://developer.apple.com/documentation/imagecapturecore",
+        "https://developer.apple.com/documentation/imagecapturecore/icdevicebrowser",
+        "https://developer.apple.com/documentation/imagecapturecore/iccameradevice",
+        "https://developer.apple.com/documentation/imagecapturecore/icscannerdevice"
+      ],
+      "note": "実装済み（#981）。探索窓（3 秒）の間に機器を探し（USB の列挙が済めば早く打ち切る）、先頭の 1 台の最新の画像 1 枚を取り込んで種類と台数と共に表示する。0 台・画像 0 件・ロック・権限拒否・時間切れ・取り込み中の取り外し・上限超過・復号不可・OS の失敗を区別して失敗にし、成功へ畳まない。日時や UTI が欠けた要素は飛ばさず失敗にする。`NSError` のコードは契約の失敗種別へ写し、`-1` へ潰さない。縮小前の総画素数が 64 Mi 画素（写真選択の `MAX_PHOTO_PIXELS` と同値、RGBA で 256 MiB）を超える画像は復号せず `TooLarge`、寸法を読めない画像は `Undecodable`。一時ディレクトリは要求ごとに UUID 名で作り、成功・失敗・期限切れ・中断の全経路でセッション・探索・ダウンロードを解除して削除する。機器名・シリアル・画像・OS の文言はログへ出さない。正常系と機器のロック中の挙動は Mac 目視（#967）で確かめる。カメラ機器のみ（macOS のスキャナーは範囲外）。守る: 失敗・0 件・拒否・ロックを成功に畳まない、セッション・一時ファイル・接続を全経路で閉じる。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）。範囲外: 機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク接続の機器。既知の天井: TCC の確認が出るか（実機未確認）",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#967）",
+      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_scanner_devices.m + crates/fandhe-egui-proxy/src/device/apple_scanner_devices.rs + crates/fandhe-egui-proxy/src/device/scanner_devices.rs + crates/fandhe-core/src/screens/scanner_devices_import.rs + crates/fandhe-device/src/scanner_devices.rs、Issue #981"
     },
     "windows": {
-      "status": "possible",
-      "api": "WinRT `Windows.Devices.Scanners.ImageScanner`。互換性が要るなら Win32 の WIA（`IWiaDevMgr2`）",
-      "perm": "不要（要確認）",
-      "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.scanners.imagescanner",
-      "note": "未実装。URL 未確認（一般知識、要確認）。WinRT 側はフラットベッドスキャナー中心"
+      "status": "done",
+      "api": "`DeviceInformation.FindAllAsyncAqsFilter(ImageScanner.GetDeviceSelector())` → 先頭の 1 台を `ImageScanner.FromIdAsync` → Flatbed → Feeder・JPEG → PNG の順で選び、`ScanPreviewToStreamAsync` でメモリのストリームへ 1 枚。WIA ドライバーのスキャナーのみ",
+      "perm": "宣言不要（パッケージ無しの exe。メモリのストリームへ取り込み、Pictures Library へ保存しない）",
+      "url": [
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.scanners.imagescanner",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.devices.scanners.imagescanner.scanpreviewtostreamasync",
+        "https://learn.microsoft.com/en-us/windows/apps/develop/devices-sensors/scan-from-your-app",
+        "https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/winrt-api-desktop-app-support"
+      ],
+      "note": "実装済み（#984）。WIA ドライバーのスキャナーのみ（カメラ機器は範囲外）。探索窓（3 秒）の間に機器を探し（見つかれば早く打ち切る）、OS の列挙順の先頭の 1 台から 1 枚を取り込んで種類と台数と共に表示する。0 台・空・上限超過・復号不可・取り込み中の機器消失（列挙し直して判定）・OS の失敗を区別し、成功に畳まない。HRESULT は `Unsupported` / `Failed` へ写し、`-1` に潰さない。ストリームは全経路で閉じ、期限切れは `Cancel()` の完了を待ってから `TimedOut` にする。機器名・画像はログに出さない。守らない範囲: 探索窓（3 秒）後に現れた機器、複数台のうち先頭以外、他アプリが同じ機器を同時に開いていることによる失敗（`Failed`）。範囲外: 機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク接続の機器。既知の天井: 正常系の機材が手元に無く実機未確認、WIA エラーの HRESULT を `Failed` に寄せている、パッケージ無しの exe で `ImageScanner` が使えるか未確認、`Cancel()` の完了待ちの猶予は仮の値。届かないと判明したら `done` を取り下げる",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#967）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_scanner_devices.rs + crates/fandhe-egui-proxy/src/device/scanner_devices.rs + crates/fandhe-core/src/screens/scanner_devices_import.rs + crates/fandhe-device/src/scanner_devices.rs、Issue #984"
     },
     "web": {
       "status": "no",
@@ -42,5 +71,5 @@
       "note": "接続したスキャナーを扱う標準 API はない（WebUSB は機器ごとの独自実装になる）"
     }
   },
-  "note": "document-scan はスマホのカメラで書類を撮る方式だが、こちらは USB やネットワークで接続したフラットベッドスキャナー・カメラ機器から画像を取り込む別機能"
+  "note": "document-scan はスマホのカメラで書類を撮る方式だが、こちらは USB やネットワークで接続したフラットベッドスキャナー・カメラ機器から画像を取り込む別機能。OS ごとに扱える機器が違う（Apple・Android はカメラ機器、Windows はスキャナー）。macOS のスキャナー・Windows のカメラ機器・ネットワーク接続の機器は範囲外"
 }

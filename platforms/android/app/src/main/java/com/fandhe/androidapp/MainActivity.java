@@ -542,6 +542,30 @@ public class MainActivity extends GameActivity {
         wifiInfoHelper.cancel(requestId);
     }
 
+    // 無線の状態取得と切り替え（Issue #974）。実装は `RadioControlHelper`（ランチャーを STARTED 前に登録）。
+    // Rust の `android_radio_control.rs` が JNI で呼ぶ。
+    private final RadioControlHelper radioControlHelper = new RadioControlHelper(this);
+
+    int radioControlRead(int kind) {
+        return radioControlHelper.read(kind);
+    }
+
+    void requestRadioControlSet(long requestId, int kind, boolean on) {
+        radioControlHelper.set(requestId, kind, on);
+    }
+
+    // 接続した機器からの取り込み（Issue #983）。実装は `ScannerDevicesHelper`。
+    // Rust の `android_scanner_devices.rs` が JNI で呼ぶ。
+    private final ScannerDevicesHelper scannerDevicesHelper = new ScannerDevicesHelper(this);
+
+    void requestScannerDevicesImport(long requestId, long windowMs, int maxBytes) {
+        scannerDevicesHelper.start(requestId, windowMs, maxBytes);
+    }
+
+    void cancelScannerDevicesImport(long requestId) {
+        scannerDevicesHelper.cancel(requestId);
+    }
+
     // 方位（Issue #1406）。実装は `CompassHelper`。Rust の `android_compass.rs` が同期 JNI で呼ぶ。
     private final CompassHelper compassHelper = new CompassHelper(this);
 
@@ -628,6 +652,11 @@ public class MainActivity extends GameActivity {
     // 音声変換（Issue #314）。実装は `MediaTranscodeHelper`。Rust の `android_media_transcode.rs` がワーカースレッドから同期 JNI で呼ぶ。
     byte[] mediaTranscode(byte[] pcmLe, int sampleRate, long remainingMs) {
         return MediaTranscodeHelper.transcode(getCacheDir(), pcmLe, sampleRate, remainingMs);
+    }
+
+    // 動画の変換（Issue #1017）。実装は `VideoTranscodeHelper`。Rust の `android_video_transcode.rs` が同期 JNI で呼ぶ。
+    byte[] videoTranscode(int sw, int sh, int fps, int frames, int tw, int th, long remainingMs) {
+        return VideoTranscodeHelper.transcode(getCacheDir(), sw, sh, fps, frames, tw, th, remainingMs);
     }
 
     // 端末・アプリの真正性証明（Issue #678）。実装は `AppAttestHelper`。Rust の `android_app_attest.rs` がワーカースレッドから同期 JNI で呼ぶ。
@@ -874,6 +903,11 @@ public class MainActivity extends GameActivity {
         printHelper.print(requestId, title, body);
     }
 
+    // 画面の内容の印刷（#1012）も同じヘルパー。画素は ARGB の int[]。
+    void requestPrintImage(long requestId, int[] argb, int width, int height) {
+        printHelper.printImage(requestId, argb, width, height);
+    }
+
     // 画面録画（Issue #1337）。実装は `ScreenCaptureHelper` / `ScreenCaptureService`。
     // Rust の `android_screen_capture.rs` が JNI で呼ぶ。
     private final ScreenCaptureHelper screenCaptureHelper = new ScreenCaptureHelper(this);
@@ -968,6 +1002,14 @@ public class MainActivity extends GameActivity {
 
     int flashlightRead() {
         return flashlightHelper.read();
+    }
+
+    // システムの効果音（Issue #940）。実装は `SystemSoundHelper`。Rust の `android_system_sound.rs` が
+    // egui スレッドから同期で JNI 呼び出しする（0=要求した／1=鳴らさなかった／2=失敗）。
+    private final SystemSoundHelper systemSoundHelper = new SystemSoundHelper();
+
+    int systemSoundBeep() {
+        return systemSoundHelper.beep();
     }
 
     // システム音量（Issue #787）。実装は `VolumeControlHelper`。Rust の `android_volume_control.rs` が
@@ -3996,6 +4038,12 @@ public class MainActivity extends GameActivity {
         PhotoSaveHelper.save(getApplicationContext().getContentResolver(), requestId, png);
     }
 
+    // 壁紙・ロック画面の設定（Issue #971）。Rust 側 `device/android_wallpaper.rs` から JNI で
+    // 呼ばれる。実処理は `WallpaperHelper`（Activity を握らない。再生成時の破棄は Rust 側 reset と対）。
+    private void requestWallpaperSet(long requestId, byte[] png, int target) {
+        WallpaperHelper.set(getApplicationContext(), requestId, png, target);
+    }
+
     // Rust 側 bridge モジュール（`device/notification.rs`）の `present`（Android 分岐）から
     // JNI 経由で呼ばれる（Issue #1006）。`requestBiometric` と同じ「即時 return・結果は
     // 非同期通知」の形。`title`/`body` は Rust 側 `NotificationRequest::new`（空・NUL・
@@ -4781,6 +4829,13 @@ public class MainActivity extends GameActivity {
         return AudioDevicesHelper.list(getApplicationContext());
     }
 
+    // Rust 側（`device/android_managed_app_config.rs`、Issue #946）からワーカースレッドが JNI 経由で
+    // 押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
+    // `ManagedAppConfigHelper` 冒頭を参照。失敗は null。ディスク I/O を伴うので UI スレッドから呼ばない。
+    private String managedAppConfigRead() {
+        return ManagedAppConfigHelper.read(getApplicationContext());
+    }
+
     // Rust 側（`device/android_usb_device.rs`、Issue #507）から JNI 経由で egui スレッドが
     // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
     // `UsbDeviceHelper` 冒頭を参照。失敗は null、USB ホスト非搭載は空文字。
@@ -5142,6 +5197,8 @@ public class MainActivity extends GameActivity {
         bluetoothClassicHelper.onDestroy();
         musicLibraryHelper.onDestroy();
         wifiInfoHelper.onDestroy();
+        radioControlHelper.onDestroy();
+        scannerDevicesHelper.onDestroy();
         compassHelper.onDestroy();
         environmentSensorsHelper.onDestroy();
         motionRawSensorsHelper.onDestroy();
@@ -5163,6 +5220,7 @@ public class MainActivity extends GameActivity {
         screenOrientationHelper.onDestroy();
         captureProtectionHelper.onDestroy();
         flashlightHelper.onDestroy();
+        systemSoundHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず
         // 直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。
@@ -5218,5 +5276,12 @@ public class MainActivity extends GameActivity {
             tts = null;
             ttsInitState = TTS_STATE_NONE;
         }
+    }
+
+    // Rust 側（`device/android_file_provider.rs`、Issue #1020）から JNI 経由で呼ばれる同期メソッド
+    // （ワーカースレッド上）。OS のファイル画面へ一覧の変更を通知する。保留中の要求は持たない。
+    // JNI 署名: ()Z
+    private boolean fileProviderNotifyChanged() {
+        return FileProviderDocumentsProvider.notifyChanged(getApplicationContext());
     }
 }

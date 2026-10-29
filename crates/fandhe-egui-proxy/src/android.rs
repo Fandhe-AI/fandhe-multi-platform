@@ -300,6 +300,14 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // 旧要求の遅延完了を id 不一致で無視させる（`device::photo_save::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::photo_save::reset_pending_tracking();
+    // Issue #970: `wallpaper::bridge::SLOT` も同様に破棄する（#971 が触らずに済むよう本 PR で置く）。
+    #[cfg(feature = "device")]
+    crate::device::wallpaper::reset_pending_tracking();
+    // Issue #974: `radio_control` の保留中の切り替え要求も同様に破棄する（Java 側 `onDestroy` が
+    // INTERRUPTED で確定し、ここで待機中のワーカーを失敗で戻す。`android_radio_control` の doc 参照）。
+    // Java 側に no-op スタブは置かない（`requestRadioControlSet` を経ないと native は呼ばれない）。
+    #[cfg(feature = "device")]
+    crate::device::android_radio_control::reset_pending_tracking();
     // Issue #1360: `app_badge::bridge::SLOT` も同様に破棄する（`device::app_badge::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::app_badge::reset_pending_tracking();
@@ -378,6 +386,13 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // `device::geocoding_search::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::geocoding_search::reset_pending_tracking();
+    // Issue #981: 機器からの取り込みの処理済み世代も破棄する（理由は geocoding_search と同じ。
+    // `device::scanner_devices::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::scanner_devices::reset_pending_tracking();
+    // Issue #983: Android の橋渡し側 slot も破棄する（`android_scanner_devices` の doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::android_scanner_devices::reset_pending_tracking();
     // Issue #677: 端末・アプリの真正性証明の処理済み世代も破棄する（理由は translation と同じ。
     // `device::app_attest::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -402,6 +417,10 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // `device::media_transcode::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::media_transcode::reset_pending_tracking();
+    // Issue #1014: 動画変換の処理済み世代も破棄する（理由は media_transcode と同じ。
+    // `device::video_transcode::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::video_transcode::reset_pending_tracking();
     // Issue #469: PDF 表示の処理済み世代も破棄する（理由は ml_inference と同じ。
     // `device::pdf_viewer::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

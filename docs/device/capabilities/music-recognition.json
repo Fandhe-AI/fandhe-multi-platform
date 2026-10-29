@@ -8,24 +8,39 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "ShazamKit（`SHManagedSession` / `SHSession`）",
-      "perm": "マイク（`NSMicrophoneUsageDescription`）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。App Services の ShazamKit を開発者ポータルで有効にする必要がある（要確認）"
+      "api": "`SHSession`（`matchStreamingBuffer:atTime:` + `SHSessionDelegate`。Objective-C で呼べる、iOS 15+）。`SHManagedSession` は iOS 17+ の Swift 専用",
+      "perm": "マイク（`NSMicrophoneUsageDescription`、宣言済み）。entitlement なし。App ID で ShazamKit の App Service の有効化が要る",
+      "url": [
+        "https://developer.apple.com/documentation/shazamkit/shsession",
+        "https://developer.apple.com/help/account/configure-app-services/shazamkit",
+        "https://developer.apple.com/help/account/membership/program-enrollment",
+        "https://developer.apple.com/forums/thread/837008"
+      ],
+      "note": "未実装。曲名が無い media item は一致に数えず `NoMatch`。不一致・オフラインを一致と見せない",
+      "deferred": "Shazam カタログとの照合は App ID で ShazamKit の App Service を有効にする必要があり（公式）、portal での App ID 登録は有料の Apple Developer Program が前提。開発者登録が期限切れのため保留（app-attest・cloud-kv-sync と同じ）。ベンダーの個別審査は不要で、登録を再開すれば着手できる。entitlement・Info.plist の追加は無い"
     },
     "android": {
       "status": "possible",
-      "api": "ShazamKit for Android（Apple 配布の SDK）",
-      "perm": "`RECORD_AUDIO`",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。Apple の開発者トークンが要る。SDK の提供状況は要確認"
+      "api": "ShazamKit for Android（Apple 配布の AAR、minSdk 21）。`ShazamKit.createShazamCatalog(DeveloperTokenProvider)`",
+      "perm": "`RECORD_AUDIO`（宣言済み）+ `INTERNET`。Apple の developer token（media identifier と Media Services 秘密鍵で署名する JWT）が要る",
+      "url": [
+        "https://developer.apple.com/shazamkit/android/",
+        "https://developer.apple.com/help/account/capabilities/create-a-media-identifier-and-private-key"
+      ],
+      "note": "未実装。SDK は Maven に無い手入れの AAR で、推移依存に kotlinx-coroutines・okhttp・retrofit が入る",
+      "deferred": "Shazam カタログの利用に Apple の developer token が要り、秘密鍵をアプリに埋め込めないため token を配る受け口が要る（設計の変更）。SDK は Maven に無い手入れの AAR で、推移依存に kotlinx-coroutines・okhttp・retrofit が入る。開発者登録が期限切れのため保留。ベンダーの個別審査は不要で、登録の再開・token の配り方・依存の追加が決まれば着手できる"
     },
     "macos": {
       "status": "possible",
-      "api": "ShazamKit（`SHManagedSession` / `SHSession`）",
-      "perm": "マイク（`NSMicrophoneUsageDescription`）",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。macOS 12+ の見込み"
+      "api": "`SHSession`（`matchStreamingBuffer:atTime:` + `SHSessionDelegate`、macOS 12+）。`SHManagedSession` は macOS 14+ の Swift 専用",
+      "perm": "マイク（`NSMicrophoneUsageDescription`、宣言済み）。entitlement なし。App ID で ShazamKit の App Service の有効化が要る",
+      "url": [
+        "https://developer.apple.com/documentation/shazamkit",
+        "https://developer.apple.com/documentation/shazamkit/shsession",
+        "https://developer.apple.com/help/account/configure-app-services/shazamkit"
+      ],
+      "note": "未実装。素の実行体で照合が通るかの公式記述は無い",
+      "deferred": "iOS と同じく App ID 側の ShazamKit 有効化が要り、開発者登録が期限切れのため保留。加えていまのデスクトップ版は bundle ID・Team 署名を持たない素の実行体で、照合の許可を App ID に結び付けられない。登録の再開と .app 化・署名の手順が揃えば着手できる"
     },
     "windows": {
       "status": "no",

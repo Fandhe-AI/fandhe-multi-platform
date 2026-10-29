@@ -180,6 +180,10 @@
          通常権限で実行時許可は無い。切り離し時に削除する。 -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Phase 11（Issue #971）: 壁紙設定画面が `WallpaperManager.setStream` を呼ぶ。
+         通常権限で実行時許可は無い。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+
     <!-- Phase 11（Issue #1337）: 画面録画画面が `MediaProjection` を型 mediaProjection の
          フォアグラウンドサービスで使う。通常権限 2 つのみ（`RECORD_AUDIO`・`SYSTEM_ALERT_WINDOW`
          は追加しない。音声は録らない）。実行ごとに OS の同意ダイアログが出る。切り離し時に
@@ -286,6 +290,21 @@
                 android:resource="@xml/compose_file_paths" />
         </provider>
 
+        <!-- クラウド保存先として OS のファイル画面に出る DocumentsProvider（Issue #1020）。
+             exported=true は DocumentsProvider の要件だが、MANAGE_DOCUMENTS を要求するので
+             bind できるのは system だけ（他アプリは SAF が URI 単位で与える権限でしか触れない、
+             security.md A05 の最小公開）。新しい権限は足さない。切り離し時に削除する。 -->
+        <provider
+            android:name="com.fandhe.androidapp.FileProviderDocumentsProvider"
+            android:authorities="${applicationId}.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+
         <!-- ホーム画面ウィジェット（Issue #1067）。APPWIDGET_UPDATE は system_server が
              明示コンポーネント宛てに送るため exported=false でも届く想定（他アプリからの
              任意 intent を受けない最小公開、security.md A05）。intent-filter はこの 1 つ
@@ -335,6 +354,10 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+        <!-- Issue #946: MDM / EMM が管理アプリ設定を配るための制限スキーマ宣言。切り離し時に削除する。 -->
+        <meta-data
+            android:name="android.content.APP_RESTRICTIONS"
+            android:resource="@xml/app_restrictions" />
     </application>
 
 </manifest>

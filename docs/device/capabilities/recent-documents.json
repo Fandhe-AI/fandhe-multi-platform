@@ -21,18 +21,34 @@
       "note": "OS 共通の「最近使った項目」へ登録する API は無い（SAF の最近一覧はシステム側が管理）"
     },
     "macos": {
-      "status": "possible",
-      "api": "AppKit `NSDocumentController.noteNewRecentDocumentURL(_:)`",
-      "perm": "不要",
-      "url": "",
-      "note": "未実装。URL 未確認（一般知識、要確認）。メニュー・Dock の「最近使った項目」に反映される"
+      "status": "done",
+      "api": "`NSDocumentController.shared.noteNewRecentDocumentURL(_:)` で登録し、`recentDocumentURLs` で読み戻す。main thread で呼ぶ",
+      "perm": "なし（素の実行体・パッケージ ID 不要。新しい entitlement・Info.plist キー・capability なし）",
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nsdocumentcontroller/notenewrecentdocumenturl(_:)",
+        "https://developer.apple.com/documentation/appkit/nsdocumentcontroller/recentdocumenturls",
+        "https://developer.apple.com/documentation/appkit/nsdocumentcontroller/maximumrecentdocumentcount"
+      ],
+      "note": "実装済み（#988）。アプリの最近使った書類の一覧（`recentDocumentURLs`）に載る。Open Recent メニュー・Dock の表示は素の実行体では未確認。結果は `Listed`（読み戻した OS の一覧に載った）/ `NotListed`（渡したが一覧に無い。成功の色にしない）/ 失敗。読み戻しの失敗は `NotListed` に畳まない。登録済みをアプリ内に記録せず毎回 OS の一覧を読み、比較は両側を正規化してから行う。守らない範囲: 登録後の OS の非同期反映の時間差、Open Recent・Dock・Jump List の表示そのもの、複数プロセス。範囲外: 任意ファイルの登録、一覧の消去・列挙、Open Recent からの起動の受け口。既知の天井（Mac 目視待ち）: 素の実行体で一覧に載るか、`CFBundleDocumentTypes` 未宣言の型を無視するか。常に `NotListed` と分かったら `done` を取り下げて起案し直す",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#968）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_recent_documents.m + crates/fandhe-egui-proxy/src/device/macos_recent_documents.rs + crates/fandhe-egui-proxy/src/device/recent_documents.rs + crates/fandhe-core/src/screens/recent_documents_show.rs + crates/fandhe-device/src/recent_documents.rs、Issue #988"
     },
     "windows": {
-      "status": "possible",
-      "api": "Win32 `SHAddToRecentDocs`。WinRT なら `StorageApplicationPermissions.MostRecentlyUsedList`",
-      "perm": "不要",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shaddtorecentdocs",
-      "note": "未実装。URL 未確認（一般知識、要確認）。ジャンプリストの「最近」に反映される"
+      "status": "done",
+      "api": "`SHAddToRecentDocs(SHARD_PATHW, パス)` で登録し、`IApplicationDocumentLists::GetList(ADLT_RECENT)` で読み戻す。`pv` に NULL を渡さない（全アプリの利用履歴を消す）。`MostRecentlyUsedList` はアプリ内の一覧で OS の最近使った項目ではないため不採用",
+      "perm": "なし（素の実行体・パッケージ ID 不要。新しい entitlement・Info.plist キー・capability なし）",
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shaddtorecentdocs",
+        "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-iapplicationdocumentlists",
+        "https://learn.microsoft.com/en-us/windows/win32/shell/appids",
+        "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-icustomdestinationlist-appendknowncategory",
+        "https://learn.microsoft.com/en-us/windows/win32/shell/taskbar-extensions"
+      ],
+      "note": "実装済み（#989）。`IShellItem` と `IShellLink` の混在する一覧を両方読む。プロセスに明示 AUMID（通知・アラームが設定）があれば `SetAppID` で渡して登録側と引き先を揃え、無ければ呼ばない。Recent フォルダーと Jump List の Recent に反映される（Jump List の表示はファイル型の関連付け・AUMID・カスタム Jump List の有無で変わりうる、未確認）。結果は `Listed`（読み戻した OS の一覧に載った）/ `NotListed`（渡したが一覧に無い。成功の色にしない）/ 失敗。読み戻しの失敗は `NotListed` に畳まない。登録済みをアプリ内に記録せず毎回 OS の一覧を読み、比較は両側を正規化してから行う。守らない範囲: 登録後の OS の非同期反映の時間差、Open Recent・Dock・Jump List の表示そのもの、複数プロセス。範囲外: 任意ファイルの登録、一覧の消去・列挙、Open Recent からの起動の受け口。プライバシー設定・ポリシーで記録が無効なときは一覧が空になり `NotListed`。既知の天井（実機確認待ち）: 関連付けの無い型が Jump List の Recent に載るか",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#968）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_recent_documents.rs + crates/fandhe-egui-proxy/src/device/recent_documents.rs + crates/fandhe-core/src/screens/recent_documents_show.rs + crates/fandhe-device/src/recent_documents.rs、Issue #989"
     },
     "web": {
       "status": "no",
@@ -42,5 +58,5 @@
       "note": "「最近使った項目」へ登録する標準 API はない"
     }
   },
-  "note": "file-picker はファイルを選ぶ機能で、こちらは OS の「最近使った項目」（Dock・ジャンプリスト）に開いたファイルを登録する機能"
+  "note": "file-picker はファイルを選ぶ機能で、こちらは OS の「最近使った項目」（Dock・ジャンプリスト）に開いたファイルを登録する機能。型サンプルは一時フォルダーのサンプルを登録し、OS の一覧を読み戻して載ったかを確かめる"
 }

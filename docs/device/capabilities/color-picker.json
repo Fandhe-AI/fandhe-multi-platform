@@ -7,11 +7,18 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "UIKit `UIColorPickerViewController`（iOS 14+）",
+      "status": "done",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#936）",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_color_picker.m + crates/fandhe-egui-proxy/src/device/ios_color_picker.rs + crates/fandhe-egui-proxy/src/device/color_picker.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-device/src/color_picker.rs、Issue #942",
+      "api": "UIKit `UIColorPickerViewController`（iOS 14+、`supportsAlpha = NO`）。選択は `colorPickerViewController(_:didSelectColor:continuously:)`、閉じたことは `colorPickerViewControllerDidFinish(_:)` と `presentationControllerDidDismiss(_:)`（スワイプで閉じた場合）",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/uikit/uicolorpickerviewcontroller",
-      "note": "未実装。結果は delegate で受ける。キャンセルは閉じた通知のみ。"
+      "url": [
+        "https://developer.apple.com/documentation/uikit/uicolorpickerviewcontroller",
+        "https://developer.apple.com/documentation/uikit/uicolorpickerviewcontrollerdelegate",
+        "https://developer.apple.com/documentation/uikit/uiadaptivepresentationcontrollerdelegate/presentationcontrollerdiddismiss(_:)"
+      ],
+      "note": "実装済み（#942）。確定・取り消しのボタンは無い。閉じた時点で、OS の選択通知が来ていれば選んだ色、来ていなければ「選ばずに閉じた」。"
     },
     "android": {
       "status": "no",
@@ -21,27 +28,49 @@
       "note": "OS 標準の色選択ダイアログは無い（Material の色選択は自前実装・サードパーティ）"
     },
     "macos": {
-      "status": "possible",
-      "api": "AppKit `NSColorPanel.shared`（`NSColorPanelColorDidChangeNotification`）",
+      "status": "done",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#936）",
+      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_color_picker.m + crates/fandhe-egui-proxy/src/device/macos_color_picker.rs + crates/fandhe-egui-proxy/src/device/color_picker.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-device/src/color_picker.rs、Issue #941",
+      "api": "AppKit `NSColorPanel.shared`（`NSColorPanelColorDidChangeNotification`）、閉じたことは `NSWindowWillCloseNotification`（object = パネル）",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/appkit/nscolorpanel",
-      "note": "未実装。共有パネルで、選択は連続通知。"
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nscolorpanel",
+        "https://developer.apple.com/documentation/appkit/nscolorpanel/colordidchangenotification",
+        "https://developer.apple.com/documentation/appkit/nswindow/willclosenotification",
+        "https://developer.apple.com/documentation/appkit/nswindow/hidesondeactivate"
+      ],
+      "note": "実装済み（#941）。共有パネルで確定ボタンは無く、確定は閉じたとき。色の変化通知はプログラムでの設定でも出るため、初期色を入れてから購読する。`hidesOnDeactivate` が既定 YES で、非アクティブ時は閉じずに隠れる（閉じた通知は出ない）。"
     },
     "windows": {
-      "status": "possible",
-      "api": "Win32 共通ダイアログ `ChooseColorW`",
+      "status": "done",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#936）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_color_picker.rs + crates/fandhe-egui-proxy/src/device/color_picker.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-device/src/color_picker.rs、Issue #941",
+      "api": "Win32 共通ダイアログ `ChooseColorW`（OK で非 0、取り消し・エラーは 0 で `CommDlgExtendedError` が 0 なら取り消し）。色は `COLORREF`（`0x00bbggrr`）",
       "perm": "不要",
-      "url": "https://learn.microsoft.com/en-us/windows/win32/dlgbox/color-dialog-box",
-      "note": "未実装。従来型の簡易ダイアログ。WinUI の ColorPicker は自前のコントロール。"
+      "url": [
+        "https://learn.microsoft.com/en-us/windows/win32/dlgbox/color-dialog-box",
+        "https://learn.microsoft.com/en-us/windows/win32/api/commdlg/ns-commdlg-choosecolorw",
+        "https://learn.microsoft.com/en-us/windows/win32/gdi/colorref"
+      ],
+      "note": "実装済み（#941）。従来型の簡易ダイアログ（WinUI の ColorPicker は自前のコントロール）。`lpCustColors` は 16 要素の配列が必須。取り消し・エラー時の `rgbResult` は未定義。"
     },
     "web": {
-      "status": "possible",
-      "api": "`<input type=\"color\">`（ブラウザ標準のカラーピッカー）",
+      "status": "done",
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#936）",
+      "impl": "crates/fandhe-web-dom/src/color_picker.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-device/src/color_picker.rs、Issue #943",
+      "api": "`<input type=\"color\">`（ブラウザ標準のカラーピッカー）。`showPicker()`（無ければ `click()`）で開き、`change` で確定",
       "perm": "不要",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/color",
+      "url": [
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/color",
+        "https://developer.mozilla.org/en-US/docs/Web/API/HTMLInputElement/cancel_event",
+        "https://developer.mozilla.org/en-US/docs/Web/API/HTMLInputElement/showPicker"
+      ],
       "safari": "対応",
-      "note": "未実装。UI はブラウザ依存。アルファは `alpha` 属性（新しめ、要確認）。"
+      "note": "実装済み（#943）。UI はブラウザ依存。`type` の読み戻しが `color` でなければ非対応。初期色を入れてから購読する。`alpha`・`colorspace` は付けない（付けると `value` が `#rrggbb` 以外になりうる）。`change` は閉じたときに出るが取り消しの通知は無い（`cancel` は file 型のみ）ため、画面の「やめる」で抜ける。`showPicker` の例外は失敗。期限は持たない。"
     }
   },
-  "note": "eye-dropper は画面から色を拾うスポイト、これは OS 標準の色選択ダイアログ（パレット・スライダー）で色を選ばせる。"
+  "note": "eye-dropper は画面から色を拾うスポイト、これは OS 標準の色選択ダイアログで色を選ばせる。範囲は固定の初期色から 1 色を選び `#rrggbb` で出すまで（アルファ・広色域・色の保存・逐次反映は範囲外）。「選んだか」は OS の選択通知・戻り値・`change` だけで決め、初期色との比較で推測しない。結果は 選んだ色 / 選ばずに閉じた / 非対応 / 失敗 を分ける。守らない範囲: macOS で非アクティブ中の表示、閉じた通知が届かない場合の復旧、Web で色を変えずに閉じた場合と初期色と同じ色を選んだ場合、sRGB 外の色、ブラウザごとの差、複数タブ・複数プロセス・複数窓。選んだ色はログに出さない。"
 }

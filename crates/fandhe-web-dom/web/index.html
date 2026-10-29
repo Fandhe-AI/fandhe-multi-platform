@@ -90,6 +90,7 @@
         mount_audio_devices_show_screen,
         mount_local_fonts_show_screen,
         mount_eye_dropper_screen,
+        mount_color_picker_screen,
         mount_multi_display_show_screen,
         mount_window_management_show_screen,
         mount_accessibility_prefs_show_screen,
@@ -105,14 +106,17 @@
         mount_midi_show_screen,
         mount_audio_play_screen,
         mount_media_transcode_screen,
+        mount_video_transcode_screen,
         mount_print_page_screen,
+        mount_print_screen_page_screen,
         mount_passkey_signin_screen,
+        mount_digital_credentials_screen,
         mount_payment_request_screen,
         mount_on_device_llm_screen,
         mount_translation_screen,
       } from "./fandhe_web_dom.js";
       await init();
-      // 検証用の画面切替（Issue #915/#936/#958/#981/#985/#987/#989/#991/#993/#1007/#1017/#1027/#1037/#1047/#1063/#1223/#1091/#1094/#1103/#1277/#1307/#1311/#423/#1315/#1344/#1333/#1338/#1363/#1387/#1379/#1414/#1401/#271/#315/#329/#344/#347/#367/#389/#393/#419/#539/#559/#587/#608/#632/#672/#824）。既定（?screen 未指定）は従来どおり sample。
+      // 検証用の画面切替（Issue #915/#936/#958/#981/#985/#987/#989/#991/#993/#1007/#1017/#1027/#1037/#1047/#1063/#1223/#1091/#1094/#1103/#1277/#1307/#1311/#423/#1315/#1344/#1333/#1338/#1363/#1387/#1379/#1414/#1401/#271/#315/#1018/#329/#1013/#344/#347/#367/#389/#393/#419/#539/#559/#587/#608/#632/#672/#824）。既定（?screen 未指定）は従来どおり sample。
       const params = new URLSearchParams(location.search);
       // 共有ターゲット（Issue #608）: GET はクエリが置き換わるため screen ではなく
       // パラメーター名で振り分ける。screen の指定があればそちらを優先する。
@@ -123,14 +127,20 @@
         mount_translation_screen("fandhe-dom-root");
       } else if (screen === "on_device_llm") {
         mount_on_device_llm_screen("fandhe-dom-root");
+      } else if (screen === "digital_credentials") {
+        mount_digital_credentials_screen("fandhe-dom-root");
       } else if (screen === "passkey_signin") {
         mount_passkey_signin_screen("fandhe-dom-root");
       } else if (screen === "payment_request") {
         mount_payment_request_screen("fandhe-dom-root");
       } else if (screen === "print_page") {
         mount_print_page_screen("fandhe-dom-root");
+      } else if (screen === "print_screen_page") {
+        mount_print_screen_page_screen("fandhe-dom-root");
       } else if (screen === "media_transcode") {
         mount_media_transcode_screen("fandhe-dom-root");
+      } else if (screen === "video_transcode") {
+        mount_video_transcode_screen("fandhe-dom-root");
       } else if (screen === "audio_play") {
         mount_audio_play_screen("fandhe-dom-root");
       } else if (screen === "midi_show") {
@@ -147,6 +157,8 @@
         mount_app_badge_set_screen("fandhe-dom-root");
       } else if (screen === "eye_dropper") {
         mount_eye_dropper_screen("fandhe-dom-root");
+      } else if (screen === "color_picker") {
+        mount_color_picker_screen("fandhe-dom-root");
       } else if (screen === "local_fonts_show") {
         mount_local_fonts_show_screen("fandhe-dom-root");
       } else if (screen === "audio_devices_show") {
