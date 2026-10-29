@@ -300,7 +300,7 @@ pub fn parse_ndef(bytes: &[u8]) -> Result<NfcReadOutcome, NfcReadFailure> {
         let payload = take(&mut pos, payload_len)?;
         let rec = match tnf {
             0 => {
-                if type_len != 0 || payload_len != 0 {
+                if type_len != 0 || id_len != 0 || payload_len != 0 {
                     return Err(NfcReadFailure::Unreadable);
                 }
                 None
@@ -322,11 +322,16 @@ pub fn parse_ndef(bytes: &[u8]) -> Result<NfcReadOutcome, NfcReadFailure> {
                 type_name: utf8(type_name)?,
                 len: payload.len(),
             }),
-            // TNF 5（Unknown）。
-            _ => Some(NdefRecordView::Other {
-                type_name: String::new(),
-                len: payload.len(),
-            }),
+            // TNF 5（Unknown）。型名は持てない。
+            _ => {
+                if type_len != 0 {
+                    return Err(NfcReadFailure::Unreadable);
+                }
+                Some(NdefRecordView::Other {
+                    type_name: String::new(),
+                    len: payload.len(),
+                })
+            }
         };
         records.extend(rec);
         if me {
@@ -459,6 +464,8 @@ mod tests {
             short(6, b"x", b"y"),
             short(7, b"x", b"y"),
             short(0, b"", b"y"),
+            vec![0xD8, 0, 0, 1, b'x'],
+            vec![0xD5, 1, 0, b'x'],
             vec![],
         ] {
             assert_eq!(parse_ndef(&m), Err(F::Unreadable), "{m:?}");
