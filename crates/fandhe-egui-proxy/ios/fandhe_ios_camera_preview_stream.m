@@ -1,8 +1,13 @@
-// カメラのライブ映像・フレーム取得: iOS 実装（Issue #813、親 #168）。
+// カメラのライブ映像・フレーム取得: iOS・macOS 共有実装（iOS: Issue #813、macOS: Issue #1066、親 #168）。
+// macOS は同じ AVFoundation 経路を共有し、iOS 専用の箇所（ズーム、中断の理由、背景遷移、UIKit）だけを
+// `#if TARGET_OS_IPHONE` で分ける。macOS の差分: ズームは Rust 側が OS を呼ばずに `Unsupported` を返す
+// （`videoZoomFactor` が無い。フレームは has_zoom = false）、中断はすべて Interrupted、背景停止なし、
+// カメラの取り外し（`AVCaptureDeviceWasDisconnectedNotification`）を開始後は RuntimeFailed・開始前は
+// StartFailed(カメラなし) で報告する。
 // `AVCaptureSession` + `AVCaptureVideoDataOutput`（32BGRA）で背面カメラ（無ければ既定のカメラ）の
 // フレームを受け、`videoZoomFactor` でズームする。
 //
-// `src/device/ios_camera_preview_stream.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
+// `src/device/ios_camera_preview_stream.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS・macOS 分岐の
 // feature `device` 有効時のみ `cc` コンパイルする（AVFoundation / CoreMedia / CoreVideo をリンク）。
 // 契約の SSOT は `fandhe_device::camera_preview_stream`。
 //
@@ -60,7 +65,9 @@
 #import <CoreMedia/CoreMedia.h>
 #import <CoreVideo/CoreVideo.h>
 #import <Foundation/Foundation.h>
+#if TARGET_OS_IPHONE
 #import <UIKit/UIKit.h>
+#endif
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -137,9 +144,16 @@ static dispatch_queue_t videoQueue(void) {
         size_t len = 0;
         if (base != NULL && width <= UINT32_MAX && height <= UINT32_MAX &&
             !__builtin_mul_overflow(stride, height, &len)) {
-            double zoom = self.device.videoZoomFactor;
+#if TARGET_OS_IPHONE
+            float zoom = (float)self.device.videoZoomFactor;
+            bool hasZoom = true;
+#else
+            // macOS にはズーム倍率が無い（値を捏造しない）。
+            float zoom = 0;
+            bool hasZoom = false;
+#endif
             fandhe_rust_camera_preview_stream_frame(self.cid, base, len, (uint32_t)width,
-                                                    (uint32_t)height, stride, (float)zoom, true);
+                                                    (uint32_t)height, stride, zoom, hasZoom);
         }
         CVPixelBufferUnlockBaseAddress(image, kCVPixelBufferLock_ReadOnly);
     }
@@ -237,11 +251,11 @@ static AVCaptureDevice *pick_device(void) {
     return dev;
 }
 
-static void observe(FandheCamPreviewCtx *ctx, NSNotificationName name,
+static void observe(FandheCamPreviewCtx *ctx, NSNotificationName name, id object,
                     void (^handler)(NSNotification *note)) {
     id token = [[NSNotificationCenter defaultCenter]
         addObserverForName:name
-                    object:ctx.session
+                    object:object
                      queue:nil
                 usingBlock:^(NSNotification *note __unused) {
                     dispatch_async(sessionQueue(), ^{
@@ -316,24 +330,27 @@ static void configure_and_start(FandheCamPreviewCtx *ctx) {
         ctx.delegate = delegate;
 
         // 通知の購読（session ごとに object を指定し、teardown で外す）。
-        observe(ctx, AVCaptureSessionDidStartRunningNotification, ^(NSNotification *note __unused) {
+        observe(ctx, AVCaptureSessionDidStartRunningNotification, ctx.session, ^(NSNotification *note __unused) {
             ctx.reportedRunning = YES;
             fandhe_rust_camera_preview_stream_event(ctx.cid, kEvRunning, 0);
         });
-        observe(ctx, AVCaptureSessionWasInterruptedNotification, ^(NSNotification *note __unused) {
+        observe(ctx, AVCaptureSessionWasInterruptedNotification, ctx.session, ^(NSNotification *note __unused) {
+#if TARGET_OS_IPHONE
             NSNumber *reason = note.userInfo[AVCaptureSessionInterruptionReasonKey];
             if (reason != nil && reason.integerValue ==
                                      AVCaptureSessionInterruptionReasonVideoDeviceNotAvailableInBackground) {
                 send_terminal(ctx, kEvStoppedBackground, 0);
-            } else {
-                fandhe_rust_camera_preview_stream_event(ctx.cid, kEvInterrupted, 0);
+                return;
             }
+#endif
+            // macOS は中断の理由を取れないため、すべて Interrupted（背景停止はない）。
+            fandhe_rust_camera_preview_stream_event(ctx.cid, kEvInterrupted, 0);
         });
-        observe(ctx, AVCaptureSessionInterruptionEndedNotification, ^(NSNotification *note __unused) {
+        observe(ctx, AVCaptureSessionInterruptionEndedNotification, ctx.session, ^(NSNotification *note __unused) {
             ctx.reportedRunning = YES;
             fandhe_rust_camera_preview_stream_event(ctx.cid, kEvRunning, 0);
         });
-        observe(ctx, AVCaptureSessionRuntimeErrorNotification, ^(NSNotification *note __unused) {
+        observe(ctx, AVCaptureSessionRuntimeErrorNotification, ctx.session, ^(NSNotification *note __unused) {
             if (ctx.reportedRunning) {
                 send_terminal(ctx, kEvRuntimeFailed, 0);
             } else {
@@ -341,6 +358,16 @@ static void configure_and_start(FandheCamPreviewCtx *ctx) {
                 send_terminal(ctx, kEvStartFailed, map_av_error(err));
             }
         });
+#if !TARGET_OS_IPHONE
+        // カメラの取り外し（macOS）。開始後は RuntimeFailed、開始前は StartFailed(カメラなし)。
+        observe(ctx, AVCaptureDeviceWasDisconnectedNotification, device, ^(NSNotification *note __unused) {
+            if (ctx.reportedRunning) {
+                send_terminal(ctx, kEvRuntimeFailed, 0);
+            } else {
+                send_terminal(ctx, kEvStartFailed, kDetailNoCamera);
+            }
+        });
+#endif
 
         // 開始・失敗の確定は上の通知だけで行う。`startRunning` の戻り後に `isRunning` を読んで
         // 失敗と推測しない（同期ブロック中に届いた RuntimeError の写像を潰すため）。
@@ -348,7 +375,8 @@ static void configure_and_start(FandheCamPreviewCtx *ctx) {
     }
 }
 
-// 背景遷移の購読（1 回だけ登録。main で受けて queue へ移す）。
+// 背景遷移の購読（iOS のみ。1 回だけ登録。main で受けて queue へ移す）。
+#if TARGET_OS_IPHONE
 static void ensure_background_observer(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
@@ -367,12 +395,15 @@ static void ensure_background_observer(void) {
                     }];
     });
 }
+#endif
 
 int32_t fandhe_ios_camera_preview_stream_start(uint64_t id) {
     if (id == 0) {
         return 1;
     }
+#if TARGET_OS_IPHONE
     ensure_background_observer();
+#endif
     atomic_store(&g_active_id, id);
     dispatch_async(sessionQueue(), ^{
         // 前の文脈が残っていれば通知なしで解放する（呼び出し側は 1 件ずつ止めてから始める契約）。
@@ -402,6 +433,7 @@ int32_t fandhe_ios_camera_preview_stream_start(uint64_t id) {
     return 0;
 }
 
+#if TARGET_OS_IPHONE
 int32_t fandhe_ios_camera_preview_stream_set_zoom(uint64_t id, int32_t step) {
     if (id == 0 || atomic_load(&g_active_id) != id) {
         return 1;
@@ -438,6 +470,7 @@ int32_t fandhe_ios_camera_preview_stream_set_zoom(uint64_t id, int32_t step) {
     });
     return 0;
 }
+#endif
 
 void fandhe_ios_camera_preview_stream_stop(uint64_t id) {
     uint64_t expected = id;

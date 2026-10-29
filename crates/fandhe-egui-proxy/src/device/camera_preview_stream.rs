@@ -9,7 +9,8 @@
 //!
 //! [`platform_camera_preview`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（iOS: `ios_camera_preview_stream`（#813）、Android:
-//! `android_camera_preview_stream`（#814））。macOS・Windows は保留で、Linux 等と同じく
+//! `android_camera_preview_stream`（#814）、macOS: iOS と同じ `ios_camera_preview_stream`（#1066））。
+//! Windows は保留で、Linux 等と同じく
 //! `UnsupportedCameraPreview` 固定（ダミーの成功実装へは倒さない）。Web は本ドライバを通らない
 //! （#815 の `fandhe-web-dom`）。OS のコールバックは [`register`] で得た `id` を持ち、
 //! [`deliver_frame`] / [`deliver_event`] を呼ぶ。
@@ -39,7 +40,7 @@ use fandhe_core::screens::camera_preview_stream_show::{
     ZoomStepView,
 };
 use fandhe_core::RgbaPixels;
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+#[cfg(not(any(target_os = "ios", target_os = "android", target_os = "macos")))]
 use fandhe_device::camera_preview_stream::UnsupportedCameraPreview;
 use fandhe_device::camera_preview_stream::{
     checked_zoom, CameraPreview, PreviewEvent, PreviewFrame, PreviewSession, PreviewSink,
@@ -56,7 +57,7 @@ const MAX_PENDING_EVENTS: usize = 32;
 
 /// 現在のプラットフォームに応じた `CameraPreview` 実装を返す（状態を持たないため呼び出しごとに構築）。
 fn platform_camera_preview() -> Arc<dyn CameraPreview> {
-    #[cfg(target_os = "ios")]
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
     {
         super::ios_camera_preview_stream::implementation()
     }
@@ -64,7 +65,7 @@ fn platform_camera_preview() -> Arc<dyn CameraPreview> {
     {
         super::android_camera_preview_stream::implementation()
     }
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "macos")))]
     {
         Arc::new(UnsupportedCameraPreview)
     }
@@ -93,14 +94,14 @@ pub(crate) fn unregister(id: u64) {
     lock(&SINKS).remove(&id);
 }
 
-#[allow(dead_code)] // deliver_* 経由で iOS（#813）が使う。Android 実装（#814）が来るまで他 OS では未使用。
+#[allow(dead_code)] // deliver_* 経由で iOS（#813）・macOS（#1066）・Android（#814）が使う。他 OS では未使用。
 fn lookup(id: u64) -> Option<Arc<dyn PreviewSink>> {
     lock(&SINKS).get(&id).cloned()
 }
 
 /// フレームを届ける。ロックの内側では sink を呼ばず、登録表に無い `id`（停止後の遅れた呼び出し）は捨てる。
 /// iOS・Android の OS 実装（#813・#814）の受け口から呼ばれる。
-#[allow(dead_code)] // iOS（#813）が使う。Android 実装（#814）が来るまで他 OS では未使用。
+#[allow(dead_code)] // iOS（#813）・macOS（#1066）・Android（#814）が使う。他 OS では未使用。
 pub(crate) fn deliver_frame(id: u64, frame: PreviewFrame) {
     if let Some(sink) = lookup(id) {
         sink.frame(frame);
@@ -108,7 +109,7 @@ pub(crate) fn deliver_frame(id: u64, frame: PreviewFrame) {
 }
 
 /// 通知を届ける。扱いは [`deliver_frame`] と同じ。
-#[allow(dead_code)] // iOS（#813）が使う。Android 実装（#814）が来るまで他 OS では未使用。
+#[allow(dead_code)] // iOS（#813）・macOS（#1066）・Android（#814）が使う。他 OS では未使用。
 pub(crate) fn deliver_event(id: u64, event: PreviewEvent) {
     if let Some(sink) = lookup(id) {
         sink.event(event);
@@ -445,11 +446,12 @@ mod tests {
     struct FakeSession {
         drops: Arc<AtomicUsize>,
         zooms: Arc<AtomicUsize>,
+        zoom_err: Option<ZoomFailure>,
     }
     impl PreviewSession for FakeSession {
         fn set_zoom(&self, _: ZoomStep) -> Result<(), ZoomFailure> {
             self.zooms.fetch_add(1, Ordering::SeqCst);
-            Ok(())
+            self.zoom_err.map_or(Ok(()), Err)
         }
     }
     impl Drop for FakeSession {
@@ -464,6 +466,7 @@ mod tests {
         sink: Mutex<Option<Arc<dyn PreviewSink>>>,
         drops: Arc<AtomicUsize>,
         zooms: Arc<AtomicUsize>,
+        zoom_err: Option<ZoomFailure>,
         starts: AtomicUsize,
     }
     impl Fake {
@@ -484,10 +487,16 @@ mod tests {
             Ok(Box::new(FakeSession {
                 drops: self.drops.clone(),
                 zooms: self.zooms.clone(),
+                zoom_err: self.zoom_err,
             }))
         }
     }
 
+    // 実ホストの dispatch を呼ぶ検証（macOS・iOS・Android 以外）でだけ使う。
+    #[cfg_attr(
+        any(target_os = "ios", target_os = "android", target_os = "macos"),
+        allow(dead_code)
+    )]
     struct NopSink;
     impl PreviewSink for NopSink {
         fn frame(&self, _: PreviewFrame) {}
@@ -593,7 +602,9 @@ mod tests {
             e.state.phase,
             PreviewPhase::Failed(FailureView::Unsupported)
         );
-        // 実際のホスト dispatch も同じ（iOS・Android 以外は Unsupported 固定）。
+        // 実際のホスト dispatch も同じ（iOS・Android・macOS 以外は Unsupported 固定）。
+        // macOS ホストは実 AVFoundation を呼び許可を要求するため呼ばない。
+        #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "macos")))]
         assert!(matches!(
             platform_camera_preview().start(Arc::new(NopSink)),
             Err(PreviewStartError::Unsupported)
@@ -730,6 +741,29 @@ mod tests {
         assert!(e.state.zoom_request.is_none());
     }
 
+    /// macOS 相当（ズーム非対応）。成功へ畳まず、値も捏造しない。
+    #[test]
+    fn unsupported_zoom_is_not_success_and_shows_no_value() {
+        let mut e = Env::new(Fake {
+            zoom_err: Some(ZoomFailure::Unsupported),
+            ..Fake::default()
+        });
+        start(&mut e.state);
+        e.tick();
+        e.fake.sink().event(PreviewEvent::Running);
+        e.fake.sink().frame(frame(None));
+        e.tick();
+        assert_eq!(e.state.zoom, ZoomView::Unavailable);
+        zoom_two(&mut e.state);
+        e.tick();
+        assert_eq!(
+            e.state.zoom_status.as_deref(),
+            Some(fandhe_core::screens::camera_preview_stream_show::ZOOM_UNSUPPORTED_STATUS)
+        );
+        assert!(e.state.zoom_request.is_none());
+        assert_eq!(e.state.zoom, ZoomView::Unavailable);
+    }
+
     #[test]
     fn overflowing_events_keep_terminal() {
         let mut e = Env::live();
@@ -762,6 +796,7 @@ mod tests {
         let session = FakeSession {
             drops: drops.clone(),
             zooms: Arc::new(AtomicUsize::new(0)),
+            zoom_err: None,
         };
         *lock(&ACTIVE) = Some(Active {
             generation: 1,
