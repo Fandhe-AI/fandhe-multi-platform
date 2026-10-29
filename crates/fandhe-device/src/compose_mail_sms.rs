@@ -1,7 +1,7 @@
 //! メール・SMS の作成画面を OS で開く機能の抽象（Phase 11 の拡充ループ、親 #1142、Issue #1384）。
 //!
 //! 範囲は「宛先・件名・本文を渡して OS の作成画面を開く」ことだけ。メールは To（複数）・CC・BCC を
-//! 渡せる（Issue #33）。添付はメールに 1 件だけ（Issue #32、[`ComposeAttachment`]、iOS / Android / macOS。Windows は #1043 で対応予定で、現状は `Unsupported`）で、
+//! 渡せる（Issue #33）。添付はメールに 1 件だけ（Issue #32、[`ComposeAttachment`]、iOS / Android / macOS / Windows）で、
 //! SMS の添付・複数宛先は扱わない。検証の SSOT は
 //! [`ComposeRequest::mail`] / [`ComposeRequest::sms`]（これ以外では要求を作れない）で、
 //! Web と、添付なしの macOS / Windows が共用する URL の組み立ても [`ComposeRequest::to_url`] に置く。
@@ -20,7 +20,7 @@
 //! - `NoHandler`: メール / SMS を扱えるアプリや設定が無い。失敗ではない
 //!
 //! OS ごとに到達する値: macOS は `HandedOff` / `NoHandler`、Windows は `HandedOff` / `NoHandler`
-//! （添付付きの `Cancelled` は #1043 で対応予定で、現状は届かない）、iOS は `Queued` / `Saved` /
+//! （添付付きは `HandedOff` / `Cancelled`）、iOS は `Queued` / `Saved` /
 //! `Cancelled` / `NoHandler`、Android は `HandedOff` / `NoHandler`。
 //!
 //! | 状況 | 返す値 |
@@ -28,12 +28,12 @@
 //! | 入力不正 | `InvalidInput("compose to" / "compose cc" / "compose bcc" / "compose subject" / "compose body")` |
 //! | 入力不正（添付） | `InvalidInput("compose attachment")` |
 //! | 非対応（Linux・Web ほか） | `Unsupported("compose")` |
-//! | 添付付き要求を Web で受けた（URL で添付を渡せない）、Windows で受けた（#1043 までの現状） | `Unsupported("compose attachment")` |
+//! | 添付付き要求を Web で受けた（URL で添付を渡せない） | `Unsupported("compose attachment")` |
 //! | CC / BCC 付きの添付要求を macOS で受けた（`NSSharingService` に渡す API が無い） | `Unsupported("compose cc")` |
 //! | 添付の一時ファイルを用意できない | `Internal(ATTACHMENT_FILE)`（`"compose attachment file"`） |
 //! | 前回の一時ファイルを消せず、OS を呼ばなかった | `Internal(CLEANUP)`（`"compose cleanup"`） |
-//! | 【#1043 で実装予定・現状どの OS も返さない】前の作成画面が開いたまま（Windows） | `Internal(BUSY)`（`"compose busy"`） |
-//! | 【#1043 で実装予定・現状どの OS も返さない】MAPI が失敗を返した（Windows。`NoHandler` に読み替えない） | `Internal(MAPI)`（`"compose mapi"`） |
+//! | 前の作成画面が開いたまま（Windows） | `Internal(BUSY)`（`"compose busy"`） |
+//! | MAPI が失敗を返した（Windows。`NoHandler` に読み替えない） | `Internal(MAPI)`（`"compose mapi"`） |
 //! | 作成画面を出せない（ウィンドウ・NSURL 生成失敗など） | `Internal("compose ...")` |
 //!
 //! # 宛先の配列（To / CC / BCC）
@@ -57,8 +57,8 @@
 //! CC / BCC を外す（`NSSharingService` が渡せないため。iOS / Android は渡す）。`mailto:` は添付を持てないため、
 //! [`ComposeRequest::to_url`] が `Unsupported("compose attachment")` を返し、添付を黙って落として
 //! 開くことはしない。macOS は `NSSharingService`（`composeEmail`）へ To・件名・本文・添付だけを渡し、
-//! CC / BCC 付きは `Unsupported("compose cc")`、完了は待たず `HandedOff`。Windows は #1043 で Simple MAPI を
-//! 作業スレッドで呼ぶ予定（現状は `Unsupported`）。方針は、`MAPI_E_USER_ABORT` は `Cancelled`、返ったらすぐ一時ファイルを消す。iOS は `addAttachmentData`（一時ファイルなし）、Android は `FileProvider` の
+//! CC / BCC 付きは `Unsupported("compose cc")`、完了は待たず `HandedOff`。Windows は Simple MAPI（`MAPISendMailW`、#1043）を
+//! 作業スレッドで呼び、`MAPI_USER_ABORT` は `Cancelled`、返ったらすぐ一時ファイルを消す。CC / BCC は渡す。iOS は `addAttachmentData`（一時ファイルなし）、Android は `FileProvider` の
 //! content URI（`cache/compose/` に要求ごとに残し、10 分超の古いものだけ回収する）で渡す。
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
@@ -137,9 +137,9 @@ const ATTACH_DATA_MAX_BYTES: usize = 1024 * 1024;
 pub const ATTACHMENT_FILE: &str = "compose attachment file";
 /// 前回の一時ファイルを消せず OS を呼ばなかった。
 pub const CLEANUP: &str = "compose cleanup";
-/// 前の作成画面がまだ開いている（Windows。#1043 で使う予定で、現状はどの OS も返さない）。
+/// 前の作成画面がまだ開いている（Windows の添付付き）。
 pub const BUSY: &str = "compose busy";
-/// MAPI が失敗を返した（Windows。#1043 で使う予定で、現状はどの OS も返さない）。
+/// MAPI が失敗を返した（Windows の添付付き。`NoHandler` に読み替えない）。
 pub const MAPI: &str = "compose mapi";
 
 const INVALID_ATTACHMENT: DeviceError = DeviceError::InvalidInput("compose attachment");

@@ -470,6 +470,10 @@ windows = { workspace = true, optional = true, features = [
     "Win32_UI_Input_Pointer",
     # `GetModuleHandleW`（`RegisterClassW` の `hInstance` 解決）に使う。
     "Win32_System_LibraryLoader",
+    # Issue #1043: `device/windows_compose_mail_sms.rs` が `MAPISendMailW` の引数型
+    # （`MapiMessageW` / `MapiRecipDescW` / `MapiFileDescW`）と定数（`Win32_System_Mapi`）を使う。
+    # 関数自体は `mapi32.dll` を `LoadLibraryExW` で解決する。新規パッケージは増えない。
+    "Win32_System_Mapi",
     # Issue #1044: `device/windows_background_task.rs` が `ITaskService`/
     # `ITaskFolder`/`ITaskDefinition`/`ITimeTrigger`/`IExecAction` 等（Task
     # Scheduler 2.0 COM）を呼ぶために使う。`ITaskService::Connect`/

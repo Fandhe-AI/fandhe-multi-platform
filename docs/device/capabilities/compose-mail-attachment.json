@@ -44,7 +44,7 @@
       "impl": "crates/fandhe-egui-proxy/src/device/macos_compose_mail_sms.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_compose_mail_sms.m + crates/fandhe-egui-proxy/src/device/compose_attachment_file.rs + crates/fandhe-device/src/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs、Issue #1042"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "Simple MAPI `MAPISendMailW`（`mapi32.dll` を `LoadLibraryExW(LOAD_LIBRARY_SEARCH_SYSTEM32)` + `GetProcAddress` で解決、`MAPI_DIALOG | MAPI_LOGON_UI`、作業スレッドで呼ぶ）",
       "perm": "なし",
       "url": [
@@ -54,7 +54,10 @@
         "https://support.microsoft.com/en-us/office/windows-mail-calendar-and-people-become-outlook-773ecb94-5b16-4155-96e1-bc9afdc08e31",
         "https://learn.microsoft.com/en-us/previous-versions/office/office-12/dd162409(v=office.12)"
       ],
-      "note": "未実装。新しい Outlook は MAPI 連携に未対応（公式の既知の問題）。既定が新しい Outlook だと `MAPI_E_FAILURE` が返るという報告があり、固定文言の失敗として出す（`NoHandler` に読み替えない）。classic Outlook・Thunderbird 等の MAPI 対応アプリが既定なら作成画面が開く。`MAPI_DIALOG` の作成画面は modal で利用者が閉じるまで戻らないため作業スレッドで呼び、`MAPI_E_USER_ABORT` は `Cancelled`（失敗にしない）。添付は関数が返る前にメッセージへコピーされる（公式）ので、返った直後に一時ファイルを消す。既定のメールアプリが無いときは OS がメッセージを出して失敗を返す（公式・アーカイブ文書）。作業スレッドからの呼び出しと COM の apartment の要否は公式に記載が無く未確認（実機で確かめる）。CC / BCC は `MapiRecipDescW` の `ulRecipClass` で渡せる"
+      "note": "新しい Outlook は MAPI 連携に未対応（公式の既知の問題）。既定が新しい Outlook だと `MAPI_E_FAILURE` が返るという報告があり、固定文言の失敗として出す（`NoHandler` に読み替えない）。classic Outlook・Thunderbird 等の MAPI 対応アプリが既定なら作成画面が開く。`MAPI_DIALOG` の作成画面は modal で利用者が閉じるまで戻らないため作業スレッドで呼び、`MAPI_E_USER_ABORT` は `Cancelled`（失敗にしない）。添付は関数が返る前にメッセージへコピーされる（公式）ので、返った直後に一時ファイルを消す。既定のメールアプリが無いときは OS がメッセージを出して失敗を返す（公式・アーカイブ文書）。作業スレッドからの呼び出しと COM の apartment の要否は公式に記載が無く未確認（実機で確かめる）。CC / BCC は `MapiRecipDescW` の `ulRecipClass` で渡せる。実装上の事実: 作業スレッドで STA の COM を初期化して呼ぶ（要否は公式に無いため安全側、実機で確かめる）。`ulUIParam` は 0 で、作成画面はアプリの窓に従属しない（別スレッドの modal の親に UI スレッドの HWND を渡さない）。MIME type は MAPI に渡さず（`lpFileType` は null）受け手は拡張子で判断する。宛先は `lpszName` = アドレス、`lpszAddress` = `SMTP:` + アドレス（旧 Outlook / Thunderbird での効き方は実機で確かめる）。前の作成画面が開いている間の添付要求は `Internal(BUSY)`。`mapi32.dll` を解決できなければ `Internal(MAPI)`。戻った直後に一時ファイルを消し、削除に失敗したものは次の添付要求の前に消し直す。ビルド確認はローカルでは gnu ターゲットまで",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#1039）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_attachment_file.rs + crates/fandhe-device/src/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs、Issue #1043"
     },
     "web": {
       "status": "no",
@@ -64,5 +67,5 @@
       "note": "添付付き要求は遷移せず `Unsupported` を表示する。Web Share API の files は共有シート（share-sheet）の範囲"
     }
   },
-  "note": "compose-mail-sms（Issue #32 で添付だけを分離）の添付版。添付はメールに 1 件、ファイル名 `[A-Za-z0-9._-]` 64 バイト以下・MIME は `type/subtype`・データ 1 バイト〜1 MiB（0 バイトは拒否）。出どころは画面側の固定値（`fandhe-sample.txt`）で、file-picker の選択ファイルとの連携は未対応。Windows（#1043 まで）・Web で添付付きの要求を受けたら `Unsupported` を返す（添付を黙って落とさない）。macOS の添付付きの要求は CC / BCC を付けない（macOS の proxy が外す。コア画面の要求と iOS / Android は CC / BCC を保持する）。範囲: 添付はメール 1 件・画面の固定値のまま。file-picker 連携・SMS への添付・複数添付・送信の確認は扱わず、添付なしの要求の経路（`mailto:`）は変えない。種別: 作成画面を開く依頼を OS が受けた（`HandedOff`。開いたか・送ったかは分からない）、利用者が閉じた（`Cancelled`、Windows のみ。macOS は取り消しを知る手段が無い）、失敗の三値で、取れない・欠けた結果を成功に畳まない。OS を正にする: 開けるかは OS に問い（macOS `canPerformWithItems:`、Windows は呼んだ戻り値）、既定のメールアプリ名・レジストリ・新しい Outlook の有無を事前に判定せず、完了の通知が無い macOS で推測のタイマーから「キャンセル」「送った」を作らない。守る範囲: 1 プロセス内の要求と完了の順序、入力不正を OS へ渡さないこと、CC / BCC・添付を黙って落とさないこと、`HandedOff` を送信済みと見せないこと、一時ファイルの解放（全経路）と解放失敗の追跡（削除に失敗したパスは次の添付要求の前に消し直し、消せなければ OS を呼ばず失敗で返す）。守らない範囲: 作成画面を開いた後の利用者の操作、Mail 以外が既定の macOS の挙動差、`didShareItems:` / `didFail` の到着、受け手が 10 分を超えて読まずに次の添付要求が来た場合の macOS の古い添付（各 1 MiB 以下）、新しい Outlook や MAPI の初回設定ウィザードなど OS・メールアプリが出す画面、Windows の作成画面を開いたまま画面を離れた場合、複数プロセス・複数窓、前のプロセスが残した macOS の添付（OS の一時領域の掃除に任せる。各 1 MiB 以下）。"
+  "note": "compose-mail-sms（Issue #32 で添付だけを分離）の添付版。添付はメールに 1 件、ファイル名 `[A-Za-z0-9._-]` 64 バイト以下・MIME は `type/subtype`・データ 1 バイト〜1 MiB（0 バイトは拒否）。出どころは画面側の固定値（`fandhe-sample.txt`）で、file-picker の選択ファイルとの連携は未対応。Web で添付付きの要求を受けたら `Unsupported` を返す（添付を黙って落とさない）。macOS の添付付きの要求は CC / BCC を付けない（macOS の proxy が外す。コア画面の要求と iOS / Android は CC / BCC を保持する）。範囲: 添付はメール 1 件・画面の固定値のまま。file-picker 連携・SMS への添付・複数添付・送信の確認は扱わず、添付なしの要求の経路（`mailto:`）は変えない。種別: 作成画面を開く依頼を OS が受けた（`HandedOff`。開いたか・送ったかは分からない）、利用者が閉じた（`Cancelled`、Windows のみ。macOS は取り消しを知る手段が無い）、失敗の三値で、取れない・欠けた結果を成功に畳まない。OS を正にする: 開けるかは OS に問い（macOS `canPerformWithItems:`、Windows は呼んだ戻り値）、既定のメールアプリ名・レジストリ・新しい Outlook の有無を事前に判定せず、完了の通知が無い macOS で推測のタイマーから「キャンセル」「送った」を作らない。守る範囲: 1 プロセス内の要求と完了の順序、入力不正を OS へ渡さないこと、CC / BCC・添付を黙って落とさないこと、`HandedOff` を送信済みと見せないこと、一時ファイルの解放（全経路）と解放失敗の追跡（削除に失敗したパスは次の添付要求の前に消し直し、消せなければ OS を呼ばず失敗で返す）。守らない範囲: 作成画面を開いた後の利用者の操作、Mail 以外が既定の macOS の挙動差、`didShareItems:` / `didFail` の到着、受け手が 10 分を超えて読まずに次の添付要求が来た場合の macOS の古い添付（各 1 MiB 以下）、新しい Outlook や MAPI の初回設定ウィザードなど OS・メールアプリが出す画面、Windows の作成画面を開いたまま画面を離れた場合、複数プロセス・複数窓、前のプロセスが残した macOS の添付（OS の一時領域の掃除に任せる。各 1 MiB 以下）。"
 }
