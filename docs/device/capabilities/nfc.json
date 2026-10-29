@@ -34,7 +34,7 @@
         "https://developer.android.com/reference/android/Manifest.permission#NFC",
         "https://developer.android.com/develop/connectivity/nfc/nfc"
       ],
-      "note": "実装済み（#1045）。要求のたびに `getDefaultAdapter`（null は `Unsupported`）と `isEnabled`（偽は `Disabled`）を OS へ問う。reader mode は intent の配送を通らず、前面の間だけ有効。検出時に読んだ `getCachedNdefMessage` だけを使い（ブロックする `getNdefMessage` と UID は使わない）、message が null でも NDEF の容量（`getMaxSize`）があれば空のタグ（`EmptyTag`）、容量が取れない null は `Failed`、NDEF でないタグは `Unreadable`。`onPause` で解除して `Interrupted` にする。成功・失敗・期限切れ・中断の全経路で `disableReaderMode` を済ませてから確定し、解除の失敗は `Failed`。守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止・reader mode の解除。守らない範囲: かざしたが届く前の離脱、2 枚同時にかざしたときの選択、他アプリ・OS が先にタグを処理した場合。`onTagDiscovered` が呼ばれるスレッドは公式に記載が無く未確認のため結果は main へ post して確定する。実機は未確認（#1040）。新しい権限 `NFC` を足した（nfc-card-emulation の Android の保留文はこの権限が無いことを理由に書いているため、見直しが要る）",
+      "note": "実装済み（#1045）。要求のたびに `getDefaultAdapter`（null は `Unsupported`）と `isEnabled`（偽は `Disabled`）を OS へ問う。reader mode は intent の配送を通らず、前面の間だけ有効。検出時に読んだ `getCachedNdefMessage` だけを使い（ブロックする `getNdefMessage` と UID は使わない）、null は OS の値が得られなかった `Failed`（空の NDEF は 0 レコードの message を共通パーサーが `EmptyTag` にする）、NDEF でないタグは `Unreadable`。`onPause` で解除して `Interrupted` にする。成功・失敗・期限切れ・中断の全経路で `disableReaderMode` を済ませてから確定し、解除の失敗は `Failed`。守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止・reader mode の解除。守らない範囲: かざしたが届く前の離脱、2 枚同時にかざしたときの選択、他アプリ・OS が先にタグを処理した場合。`onTagDiscovered` が呼ばれるスレッドは公式に記載が無く未確認のため結果は main へ post して確定する。実機は未確認（#1040）。新しい権限 `NFC` を足した（nfc-card-emulation の Android の保留文はこの権限が無いことを理由に書いているため、見直しが要る）",
       "sourceName": [
         "NFC"
       ]

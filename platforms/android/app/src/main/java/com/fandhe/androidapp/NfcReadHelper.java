@@ -203,9 +203,8 @@ final class NfcReadHelper {
             } else {
                 NdefMessage msg = ndef.getCachedNdefMessage();
                 if (msg == null) {
-                    // 検出時に message が無い。NDEF の容量があれば空 NDEF タグ（EmptyTag の成功）、
-                    // 容量が取れなければ OS の値が得られなかった失敗として扱う。
-                    code = ndef.getMaxSize() > 0 ? CODE_EMPTY : CODE_FAILED;
+                    // OS の値が得られなかった失敗。空 NDEF の判定は共通パーサー（0 レコード）に委ねる。
+                    code = CODE_FAILED;
                 } else {
                     byte[] raw = msg.toByteArray();
                     if (raw.length > r.maxBytes) {

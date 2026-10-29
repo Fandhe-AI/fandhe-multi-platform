@@ -64,13 +64,13 @@ fn decode(code: i32, ndef: Option<Vec<u8>>) -> Outcome {
 }
 
 /// 要求 1 件を出して結果を待つ。`start` は OS へ要求を渡す（false は呼び出し失敗）。
-/// `remaining` を過ぎたら `cancel` を 1 回呼び、Java が解除を済ませた最終通知を待って `TimedOut` を返す。
+/// `remaining` を過ぎたら `cancel` を成功するまで呼び、Java が解除を済ませた最終通知を待って `TimedOut` を返す。
 /// reset や差し替えで slot が他の要求のものになったら、その slot は消さずに戻る。
 fn read_with(
     slot: &RequestSlot<Reply>,
     remaining: Duration,
     start: impl FnOnce(u64) -> bool,
-    cancel: impl FnOnce(u64) -> bool,
+    mut cancel: impl FnMut(u64) -> bool,
 ) -> Outcome {
     let begin = Instant::now();
     let id = slot.begin();
@@ -78,8 +78,8 @@ fn read_with(
         slot.clear(id);
         return Err(NfcReadFailure::Failed);
     }
-    let mut cancel = Some(cancel);
     let mut timed_out = false;
+    let mut cancelled = false;
     loop {
         match slot.snapshot() {
             Some((cur, Some((code, ndef)))) if cur == id => {
@@ -95,13 +95,12 @@ fn read_with(
             Some((cur, None)) if cur == id => {
                 if !timed_out && begin.elapsed() >= remaining {
                     timed_out = true;
-                    if let Some(cancel) = cancel.take() {
-                        // ponytail: JNI が失敗したら解除の完了を待てない（天井）。待たずに戻す。
-                        if !cancel(id) {
-                            slot.clear(id);
-                            return Err(NfcReadFailure::TimedOut);
-                        }
-                    }
+                }
+                // 取消の呼び出しが失敗したら slot を消さず、成功するまで毎回再試行する（reader mode の
+                // 解除を追跡し続ける）。reset・Java 側の onPause 等で確定すれば抜ける。
+                // ponytail: 失敗し続けるとワーカーは最終通知まで戻らない（天井）。
+                if timed_out && !cancelled {
+                    cancelled = cancel(id);
                 }
                 std::thread::sleep(POLL_INTERVAL);
             }
@@ -382,10 +381,24 @@ mod tests {
     }
 
     #[test]
-    fn cancel_call_failure_returns_timed_out_immediately() {
+    fn cancel_call_failure_is_retried_and_slot_kept() {
         let slot = RequestSlot::<Reply>::new();
-        let r = read_with(&slot, SHORT, |_| true, |_| false);
+        let mut calls = 0;
+        let r = read_with(
+            &slot,
+            SHORT,
+            |_| true,
+            |id| {
+                calls += 1;
+                if calls < 3 {
+                    return false;
+                }
+                slot.deliver(id, (CODE_CANCELLED, None));
+                true
+            },
+        );
         assert_eq!(r.err(), Some(F::TimedOut));
+        assert_eq!(calls, 3);
         assert!(slot.snapshot().is_none());
     }
 }
