@@ -42,10 +42,10 @@ pub(crate) struct Store {
     /// `None` は `temp_dir()/fandhe-compose`。
     pub(crate) root: Option<PathBuf>,
     seq: u64,
+    /// 渡した後に残している、このプロセスが作ったディレクトリと渡した時刻。
     pub(crate) kept: Vec<(PathBuf, Instant)>,
+    /// 削除に失敗した、このプロセスが作ったディレクトリ。
     pub(crate) stale: Vec<PathBuf>,
-    /// `prepare` 済みで `keep` / `discard` 前のディレクトリ（掃除から守る）。
-    live: Vec<PathBuf>,
     pub(crate) remove: fn(&Path) -> io::Result<()>,
 }
 
@@ -59,20 +59,6 @@ fn remove_dir(p: &Path) -> io::Result<()> {
     }
 }
 
-/// この機能が作った `<数字>-<数字>` 形式の実ディレクトリか（`DirEntry::file_type` はリンクを辿らない）。
-fn is_own_dir(e: &std::fs::DirEntry) -> bool {
-    let name = e.file_name();
-    let ok_name = name.to_str().is_some_and(|n| {
-        n.split_once('-').is_some_and(|(a, b)| {
-            !a.is_empty()
-                && !b.is_empty()
-                && a.bytes().all(|c| c.is_ascii_digit())
-                && b.bytes().all(|c| c.is_ascii_digit())
-        })
-    });
-    ok_name && e.file_type().is_ok_and(|t| t.is_dir())
-}
-
 impl Store {
     pub(crate) const fn new() -> Self {
         Store {
@@ -80,7 +66,6 @@ impl Store {
             seq: 0,
             kept: Vec::new(),
             stale: Vec::new(),
-            live: Vec::new(),
             remove: remove_dir,
         }
     }
@@ -116,9 +101,6 @@ impl Store {
         for p in stale {
             self.remove_or_stale(p);
         }
-        if !self.stale.is_empty() {
-            return Err(DeviceError::Internal(CLEANUP));
-        }
         let (old, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.kept)
             .into_iter()
             .partition(|(_, t)| now.saturating_duration_since(*t) >= RECYCLE_AFTER);
@@ -126,35 +108,10 @@ impl Store {
         for (p, _) in old {
             self.remove_or_stale(p);
         }
-        // 前のプロセスの残りを毎回掃除する。同時に動く別プロセスが渡した直後のものを消さないよう、
-        // 更新時刻が RECYCLE_AFTER 以内のもの・時刻を読めないものは残す（後の要求で期限を再評価する）。
-        // 対象はこの機能が作る `<pid>-<seq>` 形式の実ディレクトリ（シンボリックリンク・他の名前は触らない）。
-        // 自プロセスが管理中のもの（kept / 使用中）は触らない。PID が再利用された前プロセスの残りは
-        // 管理外なので、期限を過ぎていれば回収する。
-        if let Ok(rd) = std::fs::read_dir(&root) {
-            for e in rd.flatten() {
-                let path = e.path();
-                if !is_own_dir(&e)
-                    || self.live.contains(&path)
-                    || self.kept.iter().any(|(k, _)| *k == path)
-                {
-                    continue;
-                }
-                let old_enough = e
-                    .metadata()
-                    .and_then(|m| m.modified())
-                    .ok()
-                    .and_then(|t| t.elapsed().ok())
-                    .is_some_and(|d| d >= RECYCLE_AFTER);
-                if old_enough {
-                    self.remove_or_stale(path);
-                }
-            }
-        }
         if !self.stale.is_empty() {
             return Err(DeviceError::Internal(CLEANUP));
         }
-        // PID 再利用で前プロセスの新しい残りと同名になったら、連番を進めて別名を取る。
+        // 既存のディレクトリは再利用しない。PID 再利用で前プロセスの残りと同名になったら連番を進めて別名を取る。
         let mut tries = 0;
         let dir = loop {
             self.seq += 1;
@@ -165,6 +122,11 @@ impl Store {
                 Err(_) => return Err(fail()),
             }
         };
+        // 作った直後に実ディレクトリであること（シンボリックリンクでない）を確かめてから中へ書く。
+        if !std::fs::symlink_metadata(&dir).is_ok_and(|m| m.is_dir()) {
+            self.remove_or_stale(dir);
+            return Err(fail());
+        }
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -183,19 +145,16 @@ impl Store {
             self.remove_or_stale(dir);
             return Err(fail());
         }
-        self.live.push(dir.clone());
         Ok(AttachmentFile { dir, path })
     }
 
     /// 受け手が後から読むため残す。次の添付要求で 10 分を過ぎていれば回収する。
     pub(crate) fn keep(&mut self, f: AttachmentFile, now: Instant) {
-        self.live.retain(|d| *d != f.dir);
         self.kept.push((f.dir, now));
     }
 
     /// すぐ消す。失敗は `stale` に積み、次の添付要求の前に消し直す。
     pub(crate) fn discard(&mut self, f: AttachmentFile) {
-        self.live.retain(|d| *d != f.dir);
         self.remove_or_stale(f.dir);
     }
 }
@@ -314,27 +273,39 @@ mod tests {
     }
 
     #[test]
-    fn prepare_sweeps_foreign_leftovers_when_they_become_old() {
+    fn files_outside_own_list_are_never_touched() {
         let (mut s, root) = test_store();
-        let old = root.join("99999-1");
-        std::fs::create_dir_all(&old).unwrap();
-        std::fs::File::open(&old)
+        // 別プロセスが残したもの（古くても、自プロセスの一覧に無ければ走査も回収もしない）。
+        let foreign = root.join("99999-1");
+        std::fs::create_dir_all(&foreign).unwrap();
+        std::fs::File::open(&foreign)
             .unwrap()
             .set_modified(std::time::SystemTime::now() - RECYCLE_AFTER * 2)
             .unwrap();
-        // 別プロセスが渡した直後のもの（更新時刻が新しい）は消さない。
-        let fresh = root.join("99998-1");
-        std::fs::create_dir_all(&fresh).unwrap();
-        let f = s.prepare(&att(), Instant::now()).unwrap();
-        assert!(!old.exists() && fresh.exists());
-        s.keep(f, Instant::now());
-        // 後から古くなったものも、次の要求で回収する。
-        std::fs::File::open(&fresh)
-            .unwrap()
-            .set_modified(std::time::SystemTime::now() - RECYCLE_AFTER * 2)
-            .unwrap();
-        let g = s.prepare(&att(), Instant::now()).unwrap();
-        assert!(!fresh.exists());
+        let t0 = Instant::now();
+        let f = s.prepare(&att(), t0).unwrap();
+        s.keep(f, t0);
+        let g = s.prepare(&att(), t0 + RECYCLE_AFTER * 2).unwrap();
+        assert!(foreign.exists());
+        s.discard(g);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn failed_recycle_of_old_kept_is_retained_and_blocks_next_prepare() {
+        let (mut s, root) = test_store();
+        let t0 = Instant::now();
+        let f = s.prepare(&att(), t0).unwrap();
+        let dir = f.dir.clone();
+        s.keep(f, t0);
+        s.remove = fail_remove;
+        let e = s.prepare(&att(), t0 + RECYCLE_AFTER).unwrap_err();
+        assert!(matches!(e, DeviceError::Internal(l) if l == CLEANUP));
+        assert_eq!(s.stale, vec![dir.clone()]);
+        assert!(s.kept.is_empty() && dir.exists());
+        s.remove = remove_dir;
+        let g = s.prepare(&att(), t0 + RECYCLE_AFTER).unwrap();
+        assert!(!dir.exists() && s.stale.is_empty());
         s.discard(g);
         let _ = std::fs::remove_dir_all(root);
     }

@@ -7,7 +7,7 @@
 //! 添付付きの要求（Issue #1042）は URL で渡せないため、`NSSharingService`（composeEmail）へ To・件名・
 //! 本文・添付だけを渡す（[`compose_attachment`]）。CC / BCC 付きは渡す API が無く、黙って落とさず
 //! `Unsupported("compose cc")`。一時ファイルは `compose_attachment_file` が持ち、`HandedOff` では
-//! 受け手が後から読むため残して 10 分で回収、それ以外は即消す。
+//! 受け手が後から読むため残して同じプロセスの次の添付要求で 10 分超を回収、それ以外は即消す。
 //!
 //! 結果コードの写像 [`outcome_from_code`] はホストでもテストできるようモジュールは
 //! `cfg(any(macos, test))`。
