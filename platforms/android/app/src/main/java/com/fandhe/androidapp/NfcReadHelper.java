@@ -203,8 +203,9 @@ final class NfcReadHelper {
             } else {
                 NdefMessage msg = ndef.getCachedNdefMessage();
                 if (msg == null) {
-                    // OS が値を返さなかった。空 NDEF（0 レコード）の判定は Rust の共通パーサーに委ね、成功に畳まない。
-                    code = CODE_FAILED;
+                    // 検出時に message が無い。NDEF の容量があれば空 NDEF タグ（EmptyTag の成功）、
+                    // 容量が取れなければ OS の値が得られなかった失敗として扱う。
+                    code = ndef.getMaxSize() > 0 ? CODE_EMPTY : CODE_FAILED;
                 } else {
                     byte[] raw = msg.toByteArray();
                     if (raw.length > r.maxBytes) {

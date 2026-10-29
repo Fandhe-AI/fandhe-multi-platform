@@ -19,12 +19,12 @@
 //! | 非対応 | `NfcAdapter` が無い | `NDEFReader` が無い・非セキュア文脈 | `Unsupported` |
 //! | NFC がオフ | `isEnabled()` が偽 | — | `Disabled` |
 //! | 権限の拒否 | 権限が無い | `NotAllowedError` | `PermissionDenied` |
-//! | タグが空 | NDEF が 0 レコード | レコード 0 件 | `EmptyTag`（成功） |
+//! | タグが空 | NDEF が 0 レコード、または容量ありで message が `null` | レコード 0 件 | `EmptyTag`（成功） |
 //! | 読めないタグ | NDEF でない・解析不能 | 同左 | `Unreadable` |
 //! | 上限超過 | [`MAX_NDEF_BYTES`] 超 | 同左 | `TooLarge` |
 //! | 期限切れ | Rust の期限 | 同左 | `TimedOut` |
 //! | 読み取り中の中断 | `onPause` 等 | ページ非表示・abort | `Interrupted` |
-//! | OS の失敗・未知のコード | 例外・`null` | その他の例外 | `Failed` |
+//! | OS の失敗・未知のコード | 例外・容量の無い `null` | その他の例外 | `Failed` |
 //!
 //! - **OS を正にする**: NFC の有無・オン / オフは要求のたびに OS へ問う。機種判定は置かない。
 //! - **期限**（契約表 3）: 起点は要求を観測した時の `Instant`（単調時計）で、`read_one` へは
