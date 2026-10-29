@@ -1,5 +1,5 @@
 //! メール作成画面へ渡す添付の一時ファイルの置き場（Issue #1042、親 #156）。
-//! `device/macos_compose_mail_sms.rs`（`NSSharingService`、渡した後も残す）と、後続 #1043 の
+//! `device/macos_compose_mail_sms.rs`（`NSSharingService`、渡した後も残す）と、#1043 の
 //! `device/windows_compose_mail_sms.rs`（Simple MAPI、戻ったらすぐ消す）が共用する。契約は
 //! `fandhe_device::compose_mail_sms` のモジュール doc。
 //!
@@ -189,6 +189,7 @@ impl Store {
     }
 
     /// 受け手が後から読むため残す。次の添付要求で 10 分を過ぎていれば回収する。
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // Windows は `discard` だけ使う
     pub(crate) fn keep(&mut self, f: AttachmentFile, now: Instant) {
         self.kept.push((f.dir, now));
     }
@@ -200,6 +201,7 @@ impl Store {
 }
 
 /// `STORE` のロックを取る。poison は中身を使い続ける（`request_slot.rs` と同じ）。
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))] // Windows は引数つきの `Mutex<Store>` を直接ロックする
 pub(crate) fn lock() -> std::sync::MutexGuard<'static, Store> {
     STORE.lock().unwrap_or_else(|e| e.into_inner())
 }

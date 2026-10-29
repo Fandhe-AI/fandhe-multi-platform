@@ -9,8 +9,9 @@
 //!   `drive_callback` が結果を反映する。**dispatch はここで最終形にしてあり、後続 issue は OS 別
 //!   モジュールだけを埋める**
 //! - macOS / Windows / それ以外: [`ComposeMailSms`] を UI スレッドで同期に呼ぶ（macOS の添付付きも
-//!   `NSSharingService` を同期に呼び、完了は待たない）。Windows の添付付きは #1043 が埋めるまで
-//!   `to_url` が `Unsupported` を返す。Linux は `UnsupportedComposeMailSms` で「非対応」を表示する
+//!   `NSSharingService` を同期に呼び、完了は待たない）。Windows の添付付きは modal の Simple MAPI を
+//!   作業スレッドで呼び、結果を `CompletionSender` で後から届ける（#1043、`windows_compose_mail_sms`）。
+//!   Linux は `UnsupportedComposeMailSms` で「非対応」を表示する
 
 use fandhe_core::screens::compose_mail_sms::{
     take_request, ComposeFailure, ComposeMailSmsState, ComposeRequestView, ComposeTarget,
@@ -233,9 +234,35 @@ fn drive(
         return;
     };
     let _ = sender.send(Box::new(mark_composing));
-    let result = build_request(&view).and_then(|r| composer.compose(&r));
-    let outcome = to_outcome(result);
     let generation = view.generation;
+    let req = build_request(&view);
+    // Windows の添付付きは Simple MAPI の modal を作業スレッドで開き、結果は後から届ける
+    // （UI スレッドを止めない。在席フラグと一時ファイルは `windows_compose_mail_sms` が持つ）。
+    #[cfg(target_os = "windows")]
+    let req = match req {
+        Ok(r) if r.attachment().is_some() => {
+            let s = sender.clone();
+            let started = super::windows_compose_mail_sms::begin_attachment(r, move |res| {
+                finish(&s, generation, res)
+            });
+            if let Err(e) = started {
+                finish(sender, generation, Err(e));
+            }
+            return;
+        }
+        other => other,
+    };
+    finish(sender, generation, req.and_then(|r| composer.compose(&r)));
+}
+
+/// 結果を画面用に写像して、世代つきで完了キューへ送る（`finish_compose` が古い世代を捨てる）。
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+fn finish(
+    sender: &CompletionSender<ComposeMailSmsState>,
+    generation: u64,
+    result: Result<ComposeOutcome, DeviceError>,
+) {
+    let outcome = to_outcome(result);
     let _ = sender.send(Box::new(move |s: &mut ComposeMailSmsState| {
         finish_compose(s, generation, outcome);
     }));
