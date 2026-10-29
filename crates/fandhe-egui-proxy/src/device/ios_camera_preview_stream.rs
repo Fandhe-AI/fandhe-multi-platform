@@ -1,4 +1,4 @@
-//! iOS 向けカメラのライブ映像実装（Issue #813、親 #168）。`ios/fandhe_ios_camera_preview_stream.m`
+//! iOS・macOS 向けカメラのライブ映像実装（iOS: Issue #813、macOS: Issue #1066、親 #168）。`ios/fandhe_ios_camera_preview_stream.m`
 //! （`AVCaptureSession` + `AVCaptureVideoDataOutput`。`build.rs` が iOS ターゲットの feature `device` 有効時に
 //! コンパイルする）を `extern "C"` 3 関数で呼び、`.m` からの通知・フレームは `#[no_mangle]` の受け口 3 つで
 //! 受ける。`device/camera_preview_stream.rs` の iOS 経路（`platform_camera_preview`）が [`implementation`] を
@@ -17,8 +17,12 @@
 //!    `.m` は範囲を OS から読み、目標値を Rust に決めてもらってから `videoZoomFactor` へ設定する
 //! 4. 停止（session の drop）: `unregister` → `.m` の stop（OS 停止・delegate の終了待ち・解放を完了して戻る）
 //!
+//! macOS は同じ `.m` を共有する。違い: ズームは `set_zoom` が OS を呼ばず同期で `Unsupported`（フレームの
+//! ズーム値は `None`）、中断はすべて `Interrupted`、背景停止なし、カメラの取り外しは開始後 `RuntimeFailed`。
+//! ズーム範囲の受け口（`zoom_target`）は iOS 限定。
+//!
 //! 縮小は [`frame_from_raw`] が `downscale_packed`（BGRA）で行う。ホストでテストできるよう純関数は
-//! 常時コンパイルし、FFI は `cfg(ios)` に閉じる。
+//! 常時コンパイルし、FFI は `cfg(ios / macos)` に閉じる。
 //!
 //! # 守る範囲・守らない範囲
 //!
@@ -32,16 +36,17 @@
 //! - 32BGRA が出力の対応形式に含まれるか、preset 640x480 が通るか
 //! - 中断の理由が届く順、`startRunning` の同期ブロック中に画面を離れたときの停止の待ち
 //! - シミュレータにはカメラが無く、開始失敗（カメラなし）になる
+//! - macOS: 内蔵カメラで preset 640x480 と 32BGRA が通るか、他アプリと同時に使ったときの中断、素の実行体で TCC の許可が出るか
 
 use fandhe_device::camera_preview_stream::{
     downscale_packed, zoom_target, PackedLayout, PreviewFrame, PreviewStartError, StartFailure,
     ZoomFailure, ZoomStep,
 };
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 use fandhe_device::camera_preview_stream::{CameraPreview, PreviewSession};
 
 /// `.m` の start / set_zoom の受理コード。0 だけが受理。
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "ios", target_os = "macos")), allow(dead_code))]
 const ACCEPTED: i32 = 0;
 
 /// 目標倍率の判定結果コード（0 成功 / 1 非対応 / 2 失敗）。
@@ -53,7 +58,7 @@ const ZOOM_UNSUPPORTED: i32 = 1;
 const ZOOM_FAILED: i32 = 2;
 
 /// `.m` の start の戻り値を契約へ写す（0 受理 / 他 受理されない）。`Ok` へ畳まない。
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "ios", target_os = "macos")), allow(dead_code))]
 fn start_result(code: i32) -> Result<(), PreviewStartError> {
     if code == ACCEPTED {
         Ok(())
@@ -90,9 +95,9 @@ fn zoom_target_code(step: i32, min: f32, max: f32) -> (i32, f32) {
 }
 
 /// OS バッファ（32BGRA、行パディング付き）を縮めて `PreviewFrame` にする。
-/// 寸法 0・上限超・stride 不足・長さ不足は `None`（捨てる）。ズーム値は生のまま渡し、
-/// 検証は driver の `checked_zoom` が 1 か所で行う。
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+/// 寸法 0・上限超・stride 不足・長さ不足は `None`（捨てる）。ズーム値は生のまま渡し
+/// （macOS は常に `None`）、検証は driver の `checked_zoom` が 1 か所で行う。
+#[cfg_attr(not(any(target_os = "ios", target_os = "macos")), allow(dead_code))]
 fn frame_from_raw(
     data: &[u8],
     width: u32,
@@ -109,23 +114,25 @@ fn frame_from_raw(
     })
 }
 
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 mod imp {
     use std::sync::Arc;
 
+    #[cfg(target_os = "ios")]
+    use super::zoom_accept_result;
     use super::{
-        start_result, zoom_accept_result, CameraPreview, PreviewSession, PreviewStartError,
-        ZoomFailure, ZoomStep,
+        start_result, CameraPreview, PreviewSession, PreviewStartError, ZoomFailure, ZoomStep,
     };
     use crate::device::camera_preview_stream::{register, unregister};
     use fandhe_device::camera_preview_stream::PreviewSink;
 
-    // SAFETY: `ios/fandhe_ios_camera_preview_stream.m`（`build.rs` が iOS ターゲットの feature `device` 有効時に
+    // SAFETY: `ios/fandhe_ios_camera_preview_stream.m`（`build.rs` が iOS・macOS ターゲットの feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     extern "C" {
-        fn fandhe_ios_camera_preview_stream_start(id: u64) -> i32;
+        #[cfg(target_os = "ios")]
         fn fandhe_ios_camera_preview_stream_set_zoom(id: u64, step: i32) -> i32;
+        fn fandhe_ios_camera_preview_stream_start(id: u64) -> i32;
         fn fandhe_ios_camera_preview_stream_stop(id: u64);
     }
 
@@ -156,6 +163,13 @@ mod imp {
     }
 
     impl PreviewSession for IosPreviewSession {
+        #[cfg(target_os = "macos")]
+        fn set_zoom(&self, _step: ZoomStep) -> Result<(), ZoomFailure> {
+            // macOS は `videoZoomFactor` が無い。OS を呼ばず同期で非対応を返す（成功へ畳まない）。
+            Err(ZoomFailure::Unsupported)
+        }
+
+        #[cfg(target_os = "ios")]
         #[allow(unsafe_code)]
         fn set_zoom(&self, step: ZoomStep) -> Result<(), ZoomFailure> {
             let step = match step {
@@ -178,18 +192,18 @@ mod imp {
         }
     }
 
-    /// iOS の `CameraPreview` 実装を返す（`device/camera_preview_stream.rs` の iOS 経路から呼ばれる）。
+    /// iOS・macOS の `CameraPreview` 実装を返す（`device/camera_preview_stream.rs` の iOS・macOS 経路から呼ばれる）。
     pub(crate) fn implementation() -> Arc<dyn CameraPreview> {
         Arc::new(IosCameraPreview)
     }
 }
 
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 pub(crate) use imp::implementation;
 
 /// `.m` の通知を届ける受け口（コードの表は `fandhe_device::camera_preview_stream::event_from_code`）。
 /// 任意のスレッドから呼ばれ、panic しない。
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 #[allow(unsafe_code)]
 #[no_mangle]
 extern "C" fn fandhe_rust_camera_preview_stream_event(id: u64, code: i32, detail: i32) {
@@ -200,7 +214,7 @@ extern "C" fn fandhe_rust_camera_preview_stream_event(id: u64, code: i32, detail
 /// `.m` のフレームを縮めて届ける受け口。`data` は `CVPixelBufferLockBaseAddress` 中の先頭で、
 /// この呼び出しの間だけ有効。不正な入力は捨てる。任意のスレッド（`.m` の video queue）から呼ばれ、
 /// panic しない。
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 #[allow(unsafe_code)]
 #[no_mangle]
 extern "C" fn fandhe_rust_camera_preview_stream_frame(
@@ -321,6 +335,14 @@ mod tests {
         assert_eq!(f.zoom, Some(2.5));
         assert_eq!(
             frame_from_raw(&data, 4, 2, 20, None).expect("frame").zoom,
+            None
+        );
+        // macOS（ズームなし）は縮小後も `None` のまま（値を捏造しない）。
+        let big = bgra(640, 480, 640 * 4, [0, 0, 0, 255]);
+        assert_eq!(
+            frame_from_raw(&big, 640, 480, 640 * 4, None)
+                .expect("frame")
+                .zoom,
             None
         );
     }

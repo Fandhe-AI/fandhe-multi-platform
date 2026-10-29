@@ -731,7 +731,7 @@ pub mod calendar;
 pub mod call_ui;
 pub mod camera_capture;
 /// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得の effect ドライバ
-/// （iOS #813・Android #814 は後続で実装、macOS・Windows は保留で他 OS と同じく `UnsupportedCameraPreview`
+/// （iOS #813・Android #814・macOS #1066 は実装済み、Windows は保留で他 OS と同じく `UnsupportedCameraPreview`
 /// 固定。Web は `fandhe-web-dom`、#815）。
 pub mod camera_preview_stream;
 /// Phase 11 の拡充ループ（親 #120、Issue #582）: 画面キャプチャの防止・検知の effect ドライバ
@@ -933,10 +933,10 @@ pub mod ios_ble_peripheral;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_call_ui;
-/// Issue #812: iOS 向けカメラのライブ映像実装のスタブ（#813 が埋める）。
-/// `device/camera_preview_stream.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+/// Issue #813・#1066: iOS・macOS 向けカメラのライブ映像実装（`ios/fandhe_ios_camera_preview_stream.m` を共有）。
+/// `device/camera_preview_stream.rs` の iOS・macOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", target_os = "macos", test))]
+#[cfg_attr(not(any(target_os = "ios", target_os = "macos")), allow(dead_code))]
 pub mod ios_camera_preview_stream;
 /// Issue #583: iOS 向け画面キャプチャの検知（`ios/fandhe_ios_capture_protection.m` を呼ぶ）。
 /// `device/capture_protection.rs` の iOS 経路から使われる。

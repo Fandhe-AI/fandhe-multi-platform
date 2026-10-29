@@ -274,9 +274,61 @@ pub fn event_from_apple_code(code: i32) -> Option<SleepLockEvent> {
     }
 }
 
+/// Web の Idle Detection `screenState`（`locked` / `unlocked`）→ ロック状態。null・未知の値は
+/// `None`（捏造しない。呼び出し側は読み取り失敗として扱う）。
+pub fn lock_state_from_idle_screen_state(v: Option<&str>) -> Option<LockState> {
+    match v {
+        Some("locked") => Some(LockState::Locked),
+        Some("unlocked") => Some(LockState::Unlocked),
+        _ => None,
+    }
+}
+
+/// Web の `change` の後に読んだ `screenState` から出来事を決める。`prev` は同じ購読の中で最後に
+/// 読んだ値で、判定にだけ使う（今の状態として出さない）。`prev` が無い・同じ値・`Unknown` を含む
+/// 遷移は `None`（`userState` だけの変化や、読めない期間をまたぐ差を出来事にしない）。
+pub fn event_from_lock_transition(
+    prev: Option<LockState>,
+    now: LockState,
+) -> Option<SleepLockEvent> {
+    match (prev?, now) {
+        (LockState::Unlocked, LockState::Locked) => Some(SleepLockEvent::Locked),
+        (LockState::Locked, LockState::Unlocked) => Some(SleepLockEvent::Unlocked),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn idle_screen_state_maps_known_only() {
+        assert_eq!(
+            lock_state_from_idle_screen_state(Some("locked")),
+            Some(LockState::Locked)
+        );
+        assert_eq!(
+            lock_state_from_idle_screen_state(Some("unlocked")),
+            Some(LockState::Unlocked)
+        );
+        for v in [None, Some(""), Some("dim")] {
+            assert_eq!(lock_state_from_idle_screen_state(v), None);
+        }
+    }
+
+    #[test]
+    fn lock_transition_events() {
+        use LockState::*;
+        let f = event_from_lock_transition;
+        assert_eq!(f(Some(Unlocked), Locked), Some(SleepLockEvent::Locked));
+        assert_eq!(f(Some(Locked), Unlocked), Some(SleepLockEvent::Unlocked));
+        assert_eq!(f(None, Locked), None);
+        assert_eq!(f(Some(Locked), Locked), None);
+        assert_eq!(f(Some(Unlocked), Unlocked), None);
+        assert_eq!(f(Some(Unknown), Locked), None);
+        assert_eq!(f(Some(Locked), Unknown), None);
+    }
 
     #[test]
     fn log_numbers_from_one_and_keeps_latest_eight() {

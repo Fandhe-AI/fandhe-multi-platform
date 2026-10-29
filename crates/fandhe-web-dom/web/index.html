@@ -64,6 +64,7 @@
         mount_usb_device_show_screen,
         mount_serial_port_show_screen,
         mount_user_idle_show_screen,
+        mount_sleep_lock_events_show_screen,
         mount_app_lifecycle_show_screen,
         mount_memory_pressure_show_screen,
         mount_motion_raw_sensors_show_screen,
@@ -232,6 +233,8 @@
         mount_motion_raw_sensors_show_screen("fandhe-dom-root");
       } else if (screen === "user_idle_show") {
         mount_user_idle_show_screen("fandhe-dom-root");
+      } else if (screen === "sleep_lock_events_show") {
+        mount_sleep_lock_events_show_screen("fandhe-dom-root");
       } else if (screen === "ble_scan") {
         mount_ble_scan_screen("fandhe-dom-root");
       } else if (screen === "background_download") {

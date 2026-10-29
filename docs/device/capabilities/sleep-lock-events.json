@@ -66,7 +66,7 @@
       "impl": "crates/fandhe-egui-proxy/src/device/windows_sleep_lock_events.rs + crates/fandhe-egui-proxy/src/device/sleep_lock_events.rs + crates/fandhe-core/src/screens/sleep_lock_events_show.rs + crates/fandhe-device/src/sleep_lock_events.rs、Issue #810"
     },
     "web": {
-      "status": "possible",
+      "status": "done",
       "api": "Idle Detection API。`IdleDetector.requestPermission()` を押下の中で呼ぶ → `new IdleDetector()` → `change` 購読 → `start({ threshold: 60000, signal })`。出来事は `change` ごとに `screenState` を読み、同じ購読で前に読んだ値から `locked` / `unlocked` へ変わったときだけロック・解除とする（`userState` だけの変化は数えない）。今のロック状態は `screenState`。pagehide で abort して止める。スリープ・復帰・画面の消灯・点灯の通知は無い",
       "perm": "`idle-detection`（user-idle の Web と同じ許可。origin 単位で、許可済みなら再び尋ねない）+ Permissions Policy `idle-detection`（既定 `'self'`）。secure context 必須",
       "url": [
@@ -78,7 +78,10 @@
         "https://w3c.github.io/permissions/#dfn-request-permission-to-use"
       ],
       "safari": "非対応（Idle Detection API）。visibilitychange は対応",
-      "note": "未実装。Chromium 系のみ（Chrome 94〜）。Idle Detection API は experimental で Baseline ではない（MDN）。`locked` はスクリーンセーバーも含む（仕様の定義）。`screenState` は `start()` 前は null のため、受け取りを始めるまでロック状態は「不明」と出す。`change` は `userState` の変化でも届き、どちらが変わったかは渡されないため、同じ購読の中で直前に読んだ `screenState` との違いでロック・解除を決める（今の状態の表示は毎回 `screenState` を読み直す）。null・未知の値は読み取り失敗とし、次に読めた値は基準にするだけで出来事にしない。許可の拒否は「許可されていない」と出し、開始失敗と分ける。`visibilitychange` では止めない（ロックで非表示になるのは受け取りたい場面そのもの）"
+      "detail": "できている（実ブラウザ確認待ち）",
+      "implStatus": "実ブラウザ確認待ち（#806）",
+      "impl": "crates/fandhe-web-dom/src/sleep_lock_events.rs + crates/fandhe-web-dom/src/user_idle.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/sleep_lock_events_show.rs + crates/fandhe-device/src/sleep_lock_events.rs、Issue #1063",
+      "note": "実装済み（Issue #1063）。Chromium 系のみ（Chrome 94〜）。Idle Detection API は experimental で Baseline ではない（MDN）。`locked` はスクリーンセーバーも含む（仕様の定義）。`screenState` は `start()` 前は null のため、受け取りを始めるまでロック状態は「不明」と出す。`change` は `userState` の変化でも届き、どちらが変わったかは渡されないため、同じ購読の中で直前に読んだ `screenState` との違いでロック・解除を決める（今の状態の表示は毎回 `screenState` を読み直す）。null・未知の値は読み取り失敗とし、次に読めた値は基準にするだけで出来事にしない。許可の拒否は「許可されていない」と出し、開始失敗と分ける。開始の解決前に届いた `change` は基準を置くだけで出来事にしない。pagehide で止め（正常）、bfcache から戻っても自動で再開しない。`start()` の呼び出しを起点に 10 秒の期限を置く。`visibilitychange` では止めない（ロックで非表示になるのは受け取りたい場面そのもの）"
     }
   },
   "note": "power-state の省電力・熱とは別で、スリープ・ロック・解除の出来事を受け取る。screen-wake-lock（スリープの抑止）とも逆向きで、本機能は通知の受信のみ。app-lifecycle（アプリの前面・背景）とも別で、端末側の出来事だけを扱う。今回の範囲: 画面を開いている間に OS から届いた出来事（システムのスリープ・復帰、画面の消灯・点灯、ロック・解除のうち OS が知らせるもの）を受信順の番号つきで直近 8 件と、種類ごとの回数を並べ、OS が今の状態を返せるもの（Windows のロック、Android の画面点灯・ロック、Web のロック（受け取り中のみ））は画面を開いた時と出来事が届くたびに読み直して出す。OS が知らせない種類は「この OS では取れない」と出す（macOS のロック、Android のシステムのスリープ・ロックした瞬間、Windows の画面の消灯、Web のスリープ・復帰・画面の消灯と点灯）。受け取りは「受け取りを始める」「止める」で切り替え、画面を離れたら止める。結果は 受信中 / 停止（利用者の操作・画面を離れた、正常）/ 開始失敗 / 許可なし（Web のみ） / 実行中の失敗 / 非対応。OS を正にする: 出来事は OS の通知だけで受け、ロック中かどうかをアプリ内に覚えて二重に持たない（今の状態は読める OS で読むたびに OS へ問う）。タイマーで状態を推測しない。経過時間・時刻は出さない（単調時計はスリープ中に止まる OS があり、スリープをまたぐ経過は正しく測れない）。購読の解除は止める・画面を離れる・開始の途中で失敗した経路のすべてで行い、解除後に遅れて届いた通知は捨てる。守らない範囲: 画面を開く前・止めた後の出来事、Android 14 以上でキャッシュ状態の間に溜められ前面へ戻った時にまとめて届く通知の順序と畳み込み（回数が実際より少なく出ることがある）、OS 間の「画面の消灯」「ロック」の定義の差、複数プロセス・複数窓、通知が届くまでの OS 側の遅れ、Web の Chromium 系以外（非対応表示）・iframe 埋め込み・Permissions Policy の拒否と利用者の拒否の区別（どちらも許可なし）・許可ダイアログの応答待ちの期限・ページが非表示の間に届く `change` の遅れと、その間にロックと解除が続いたときの取りこぼし・スクリーンセーバーをロックとして数えること。"
