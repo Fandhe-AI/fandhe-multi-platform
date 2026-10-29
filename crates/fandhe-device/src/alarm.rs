@@ -1,10 +1,11 @@
 //! アラーム・正確な時刻の予約の抽象（Phase 11 の拡充ループ、親 #140、Issue #721）。
 //!
 //! 扱う範囲は「壁時計の絶対時刻を 1 件予約する → アプリが閉じていても OS がその
-//! 時刻に知らせる」の 1 本道に限る。実装は Windows（`ScheduledToastNotification`、
-//! `scenario="alarm"` のトースト）・iOS（AlarmKit）・Android
-//! （`AlarmManager.setAlarmClock`）で、`fandhe-egui-proxy` の `device/alarm.rs` が
-//! 呼ぶ。その他の OS は [`UnsupportedAlarm`] 固定（対応表 `docs/device/capabilities/
+//! 時刻に知らせる」の 1 本道に限る。現在の実装は Windows（`ScheduledToastNotification`、
+//! `scenario="alarm"` のトースト）だけで、`fandhe-egui-proxy` の `device/alarm.rs` が
+//! 呼ぶ。iOS（AlarmKit）・Android（`AlarmManager.setAlarmClock`）は実装予定で、
+//! 下の契約のうち両 OS の項は実装時に守る条件として先に書いている。実装するまでは、
+//! それ以外の OS と同じく [`UnsupportedAlarm`] 固定（対応表 `docs/device/capabilities/
 //! alarm.json`）。
 //!
 //! # 契約（各実装・呼び出し元が守る不変条件）
