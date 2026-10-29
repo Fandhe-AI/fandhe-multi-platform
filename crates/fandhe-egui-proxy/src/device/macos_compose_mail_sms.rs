@@ -214,7 +214,8 @@ mod tests {
             assert_eq!(calls.len(), 1);
             assert!(st.kept.is_empty() && st.stale.is_empty());
             // 作った `<pid>-<seq>` ディレクトリは残らない。
-            assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
+            let own = st.root.as_ref().unwrap();
+            assert_eq!(std::fs::read_dir(own).unwrap().count(), 0);
             let _ = std::fs::remove_dir_all(root);
         }
     }
