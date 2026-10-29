@@ -77,10 +77,22 @@ impl Store {
         }
     }
 
-    /// root を返す。無ければ親の下に新しく作る（既存は受け入れない）。
+    /// root を返す。`prepare` の先頭（どの削除より前）で呼ぶ。覚えた root は毎回 `symlink_metadata` で確かめる。
+    /// 実ディレクトリならそのまま返す。消えていれば（OS の一時領域の掃除等）中の `kept` / `stale` も無いので
+    /// 空にして新しく作り直す。シンボリックリンク・ファイルへ差し替わった、または取得失敗なら、
+    /// そのパス経由では何も消さず `CLEANUP` を返す（差し替え先を消さないため）。
+    /// root が無ければ親の下に新しく作る（既存は受け入れない）。
     fn ensure_root(&mut self) -> Result<PathBuf, DeviceError> {
         if let Some(r) = &self.root {
-            return Ok(r.clone());
+            match std::fs::symlink_metadata(r) {
+                Ok(m) if m.is_dir() => return Ok(r.clone()),
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                    self.root = None;
+                    self.kept.clear();
+                    self.stale.clear();
+                }
+                _ => return Err(DeviceError::Internal(CLEANUP)),
+            }
         }
         let fail = || DeviceError::Internal(ATTACHMENT_FILE);
         let parent = self.parent.clone().unwrap_or_else(std::env::temp_dir);
@@ -365,5 +377,42 @@ mod tests {
         assert!(!dir.exists() && s.stale.is_empty());
         s.discard(g);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn vanished_root_is_recreated_and_lists_are_cleared() {
+        let (mut s, parent) = test_store();
+        let t0 = Instant::now();
+        let f = s.prepare(&att(), t0).unwrap();
+        s.keep(f, t0);
+        s.stale.push(PathBuf::from("gone"));
+        std::fs::remove_dir_all(s.root.as_ref().unwrap()).unwrap();
+        let g = s.prepare(&att(), t0).unwrap();
+        let root = s.root.clone().unwrap();
+        assert!(g.dir.starts_with(&root) && root.is_dir());
+        assert!(s.kept.is_empty() && s.stale.is_empty());
+        s.discard(g);
+        let _ = std::fs::remove_dir_all(parent);
+    }
+
+    /// root がシンボリックリンクに差し替わったら、リンク先を消さずに `CLEANUP` で止める。
+    #[cfg(unix)]
+    #[test]
+    fn swapped_root_stops_with_cleanup_and_spares_link_target() {
+        let (mut s, parent) = test_store();
+        let t0 = Instant::now();
+        let f = s.prepare(&att(), t0).unwrap();
+        s.keep(f, t0);
+        let root = s.root.clone().unwrap();
+        let target = parent.join("target");
+        let victim = target.join("1-1");
+        std::fs::create_dir_all(&victim).unwrap();
+        std::fs::remove_dir_all(&root).unwrap();
+        std::os::unix::fs::symlink(&target, &root).unwrap();
+        // 回収対象の時間を過ぎていても、リンク経由では何も消さない。
+        let e = s.prepare(&att(), t0 + RECYCLE_AFTER).unwrap_err();
+        assert!(matches!(e, DeviceError::Internal(l) if l == CLEANUP));
+        assert!(victim.exists());
+        let _ = std::fs::remove_dir_all(parent);
     }
 }
