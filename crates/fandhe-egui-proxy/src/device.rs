@@ -261,7 +261,7 @@ pub mod android_music_library;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_network_status;
-/// Issue #1044: Android 向け NFC タグ読み取りの骨格（実体は b-android）。
+/// Issue #1045: Android 向け NFC タグ読み取り実装（`NfcReadHelper` を JNI で橋渡し）。
 /// `device/nfc.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]

@@ -176,6 +176,12 @@
          required=false と同じ根拠、切り離し時に削除する）。機器は開かないので権限は足さない。 -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
+    <!-- NFC タグ読み取り（Issue #1045）。通常権限で実行時許可は無い。NFC 非搭載端末をストアの自動
+         フィルタから除外しないため uses-feature は required=false。reader mode だけを使い、
+         intent-filter・exported コンポーネントは足さない。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
+
     <!-- Phase 11（Issue #1092）: 触覚フィードバック画面が `Vibrator` で振動を要求する。
          通常権限で実行時許可は無い。切り離し時に削除する。 -->
     <uses-permission android:name="android.permission.VIBRATE" />
