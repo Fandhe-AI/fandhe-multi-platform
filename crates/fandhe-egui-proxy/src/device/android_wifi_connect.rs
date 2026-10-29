@@ -28,7 +28,6 @@ use super::request_slot::{RequestSlot, POLL_INTERVAL};
 enum Fail {
     Unsupported,
     RadioOff,
-    PermissionDenied,
     Failed,
 }
 
@@ -37,7 +36,6 @@ impl From<Fail> for DeviceError {
         match f {
             Fail::Unsupported => DeviceError::Unsupported(FEATURE),
             Fail::RadioOff => DeviceError::Disabled(RADIO_OFF),
-            Fail::PermissionDenied => DeviceError::PermissionDenied(FEATURE),
             Fail::Failed => DeviceError::Internal(CONNECT_FAILED),
         }
     }
@@ -51,7 +49,6 @@ fn decode(code: i32) -> Outcome {
         0 => Ok(()),
         1 => Err(Fail::Unsupported),
         2 => Err(Fail::RadioOff),
-        4 => Err(Fail::PermissionDenied),
         _ => Err(Fail::Failed),
     }
 }
@@ -186,7 +183,6 @@ mod tests {
         assert_eq!(decode(1), Err(Fail::Unsupported));
         assert_eq!(decode(2), Err(Fail::RadioOff));
         assert_eq!(decode(3), Err(Fail::Failed));
-        assert_eq!(decode(4), Err(Fail::PermissionDenied));
         assert_eq!(decode(99), Err(Fail::Failed));
         assert_eq!(decode(-1), Err(Fail::Failed));
     }
