@@ -59,7 +59,7 @@
   OS がプロセスを終了させる）で追加している。読み取りのみ。App Sandbox 無効の素の実行体のため
   `com.apple.security.assets.music.read-only` の entitlement は不要。
 
-  `NSCameraUsageDescription`（Issue #1066）も同じ理由（`AVCaptureDevice` の許可要求かセッション開始で
+  `NSCameraUsageDescription`（Issue #1066・#1071）も同じ理由（`AVCaptureDevice` の許可要求かセッション開始で
   TCC がカメラの許可を判定し、このキーが無いと OS がプロセスを終了させる）で追加している。
   App Sandbox・Hardened Runtime を使わない素の実行体のため entitlement は不要。
 
@@ -96,7 +96,7 @@
 	<key>NSAppleMusicUsageDescription</key>
 	<string>型サンプル「音楽ライブラリ」の動作確認に使います</string>
 	<key>NSCameraUsageDescription</key>
-	<string>型サンプル「カメラのライブ映像」の動作確認に使います</string>
+	<string>型サンプル「カメラのライブ映像」「動画の撮影」の動作確認に使います</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

@@ -1,5 +1,5 @@
 //! Phase 11（端末機能の拡充ループ、親 #169）型サンプル「動画の撮影」（Issue #821）。
-//! OS の撮影画面で動画を撮り、撮れた動画の長さ・寸法・ファイルサイズを表示する 1 画面。
+//! 撮影画面で動画を撮り、撮れた動画の長さ・寸法・ファイルサイズを表示する 1 画面。
 //! `FANDHE_PROXY_APP=video_capture_show` で選ばれ、
 //! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod video_capture_show;` と対）。
@@ -33,7 +33,7 @@ pub const TITLE: &str = "動画の撮影";
 /// ボタンの文言。
 pub const CAPTURE_LABEL: &str = "動画を撮る";
 /// 未操作時の案内。
-pub const IDLE_HINT: &str = "OS の撮影画面で最長 30 秒の動画を撮り、長さ・寸法・サイズを表示します（対応は iOS・Android・Web。macOS・Windows では使えません。デスクトップのブラウザではファイル選択になります）";
+pub const IDLE_HINT: &str = "撮影画面で最長 30 秒の動画を撮り、長さ・寸法・サイズを表示します（対応は iOS・Android・macOS・Web。Windows では使えません。デスクトップのブラウザではファイル選択になります）";
 /// 処理中の案内。
 pub const RUNNING_STATUS: &str = "撮影画面を開いています…";
 /// 取り消したときの文言（エラーではなく状態として出す）。
@@ -67,7 +67,7 @@ pub const DURATION_UNKNOWN: &str = "長さを読めません";
 /// 動画の出どころ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClipOrigin {
-    /// OS の撮影 UI で撮った（iOS・Android）。
+    /// 撮影 UI で撮った（iOS・Android・macOS）。
     Recorded,
     /// ファイル入力で受け取った（Web。撮影か既存ファイルかを区別できない）。
     Received,

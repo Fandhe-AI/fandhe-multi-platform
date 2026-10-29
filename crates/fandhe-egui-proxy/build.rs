@@ -100,6 +100,9 @@
 //! - `ios/fandhe_ios_video_capture.m`（Issue #822、`UIImagePickerController` による動画の撮影）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルし CoreMedia をリンクする
 //!   （`src/device/ios_video_capture.rs` から呼ばれる契約）。
+//! - `macos/fandhe_macos_video_capture.m`（Issue #1071、AppKit の撮影パネル + AVCaptureMovieFileOutput による動画の撮影）は
+//!   **macOS 分岐のみ**で feature `device` 有効時にコンパイルし AVFoundation・CoreMedia・QuartzCore をリンクする
+//!   （`src/device/macos_video_capture.rs` から呼ばれる契約）。
 //! - `apple/fandhe_apple_on_device_llm.swift`（Issue #345、FoundationModels による端末内 LLM）は
 //!   **macOS・iOS 両分岐**（iOS は Issue #346）で feature `device` 有効時に swiftc で静的ライブラリ化し、
 //!   FoundationModels を弱リンクする（`src/device/apple_on_device_llm.rs` から呼ばれる契約）。
@@ -2027,6 +2030,19 @@ fn compile_macos_color_picker() {
         .compile("fandhe_macos_color_picker");
 }
 
+/// `macos/fandhe_macos_video_capture.m` を `cc` でコンパイルし AVFoundation・CoreMedia・QuartzCore をリンクする
+/// （Issue #1071）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_video_capture.rs` が使う）。
+fn compile_macos_video_capture() {
+    println!("cargo:rerun-if-changed=macos/fandhe_macos_video_capture.m");
+    cc::Build::new()
+        .file("macos/fandhe_macos_video_capture.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_macos_video_capture");
+    println!("cargo:rustc-link-lib=framework=AVFoundation");
+    println!("cargo:rustc-link-lib=framework=CoreMedia");
+    println!("cargo:rustc-link-lib=framework=QuartzCore");
+}
+
 /// `macos/fandhe_macos_file_preview.m` を `cc` でコンパイルし QuickLookUI をリンクする（Issue #917）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_file_preview.rs` が使う）。AppKit は
 /// `build_macos` 側の既存リンクで足りる。
@@ -2826,6 +2842,8 @@ fn build_macos() {
     compile_macos_eye_dropper();
     // `macos/fandhe_macos_color_picker.m`（Issue #941）も macOS 専用。AppKit は既存のリンクを使う。
     compile_macos_color_picker();
+    // `macos/fandhe_macos_video_capture.m`（Issue #1071）も macOS 専用。AVFoundation 等をリンクする。
+    compile_macos_video_capture();
     // `macos/fandhe_macos_file_preview.m`（Issue #917）も macOS 専用。QuickLookUI をリンクする。
     compile_macos_file_preview();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。AppKit は既存のリンクを使う。
