@@ -8,8 +8,18 @@
       "status": "possible",
       "api": "WatchConnectivity（`WCSession`）",
       "perm": "不要",
-      "url": "https://developer.apple.com/documentation/watchconnectivity/wcsession",
-      "note": "未実装。`platforms/apple/FandheWatchApp` は watchOS 単体アプリで、iPhone 側との通信は持たない",
+      "url": [
+        "https://developer.apple.com/documentation/watchconnectivity/wcsession",
+        "https://developer.apple.com/documentation/watchconnectivity",
+        "https://developer.apple.com/documentation/watchconnectivity/wcsession/isreachable",
+        "https://developer.apple.com/documentation/watchconnectivity/wcsession/sendmessage(_:replyhandler:errorhandler:)",
+        "https://developer.apple.com/documentation/watchconnectivity/wcerror/code",
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/wkcompanionappbundleidentifier",
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/wkwatchonly",
+        "https://developer.apple.com/documentation/watchos-apps/creating-independent-watchos-apps"
+      ],
+      "note": "未実装。`platforms/apple/FandheWatchApp` は watchOS 単体アプリ（`WKWatchOnly`）で、iPhone 側との通信は持たない。`isReachable` は watch 側が前面で動いているときだけ真（公式）で、確認には watch 側の操作も要る。シミュレータのペア（iPhone + Watch）で `sendMessage` が通るかは公式に記載が無く未確認",
+      "deferred": "WatchConnectivity の相手は対になる watchOS アプリだけで、今の FandheWatchApp は watch-only（`WKWatchOnly`、`WCErrorCode.watchOnlyApp`）のため相手になれない。watch アプリの companion 化（`WKCompanionAppBundleIdentifier`・bundle id の変更）と watch 側の返信コード、手組みの iOS バンドルへ watch アプリを同梱する手順（file-provider・quick-settings-tile と同じビルド構成の問題）が要る。companion 化は watchOS 版の構成（TASK-3.4）に触る。シミュレータのペアで届くかは公式に記載が無く、有料の開発者登録が期限切れで実機でも確かめられないため保留。ベンダーの個別審査は不要で、watchOS 版の構成変更と確認手段が揃えば着手できる",
       "sourceName": [
         "watch 連携（iPhone ↔ Apple Watch のデータ受け渡し）"
       ]
@@ -18,8 +28,13 @@
       "status": "possible",
       "api": "Wearable Data Layer API（`com.google.android.gms:play-services-wearable`）",
       "perm": "なし",
-      "url": "https://developer.android.com/training/wearables/data/data-layer",
-      "note": "未実装。別途 Google Play services SDK 依存の追加が必要",
+      "url": [
+        "https://developer.android.com/training/wearables/data/data-layer",
+        "https://developer.android.com/training/wearables/data/overview",
+        "https://developer.android.com/training/wearables/get-started/connect-phone"
+      ],
+      "note": "未実装。`GoogleApiAvailability` で Google Play services が使えるかを確かめてから呼ぶ（公式）。スマホ側と Wear OS 側のアプリはパッケージ名と署名を一致させる必要があり、Wear OS 用の別モジュール（別 APK）が要る。確認はエミュレータのペアでもできる（スマホ側は Android 11 以上・Play ストア入りのイメージ）",
+      "deferred": "Data Layer API は `play-services-wearable`（Google Play services）を新しく足し、端末にも Google Play services が要る。GMS に依存しない方針のため保留（activity-recognition・in-app-review と同じ）。加えてパッケージ名と署名が同じ Wear OS 用のアプリ（別モジュール）が要る。方針が変われば着手できる",
       "sourceName": [
         "watch 連携（スマホ ↔ Wear OS のデータ受け渡し）"
       ]
@@ -50,5 +65,5 @@
       ]
     }
   },
-  "note": "iOS `WatchConnectivity`（`WCSession`）/ Android Wearable Data Layer API。`platforms/apple/FandheWatchApp` は watchOS 単体アプリで iPhone 側との通信を持たない。macOS / Windows / Web にはウォッチ連携の標準 API が無い"
+  "note": "iOS `WatchConnectivity`（`WCSession`）/ Android Wearable Data Layer API。`platforms/apple/FandheWatchApp` は watchOS 単体アプリで iPhone 側との通信を持たない。macOS / Windows / Web にはウォッチ連携の標準 API が無い。両 OS とも保留（deferred）で、priority は付けない。保留の理由は iOS が watchOS 版の構成（companion 化）と同梱手順・確認手段、Android が GMS 依存と Wear OS 用の別モジュール。再開時の範囲案（iOS のみ）: local-peer-connect と同じ形で、iPhone の画面に `isSupported`・`activationState`・`isPaired`・`isWatchAppInstalled`・`isReachable` を OS から問い直して並べ、「watch へ送る」で 200 バイト以内の固定文字列を `sendMessage(_:replyHandler:errorHandler:)` で 1 回送り、watch 側が返した文字列を出す（往復は 1 回だけ。`updateApplicationContext`・`transferUserInfo`・`transferFile`・complication・watch から送り始める向き・複数の Apple Watch の切り替え・Wear OS は扱わない）。種別は成功 / 失敗 / 非対応の三値で、`activated` でない間の状態を「いいえ」に畳まず、`sendMessage` が戻ったことを成功にせず返信の中身で決める。守る範囲: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、`WCSession` の delegate を差し替えないこと。守らない範囲: watch 側が背面に回ったときの到達（失敗で返す）、複数の Apple Watch の切り替え中の送信、メッセージが届いたが返信が戻らなかった場合の二重受信、シミュレータと実機の挙動の差"
 }
