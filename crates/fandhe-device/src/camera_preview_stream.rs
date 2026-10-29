@@ -1,9 +1,9 @@
 //! Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得（ズーム操作を含む）の
 //! 契約。`fandhe-egui-proxy` の `device/camera_preview_stream.rs`（effect ドライバ）が
-//! [`CameraPreview::start`] で映像を開始し、各 OS 実装（iOS: #813、Android: #814）が本トレイトを実装する。
+//! [`CameraPreview::start`] で映像を開始し、各 OS 実装（iOS: #813、Android: #814、macOS: 子 issue。macOS は iOS と同じ `.m` を共有する）が本トレイトを実装する。
 //! Web は `fandhe-web-dom`（#815）が `getUserMedia` を使い、本トレイトは経由せず、純関数
 //! （[`preview_size`]・[`downscale_packed`]・[`zoom_target`]・[`checked_zoom`]）だけを共用する。
-//! macOS・Windows は保留（対応表の前提は #809）で、`UnsupportedCameraPreview` 固定。
+//! Windows は保留（対応表の前提は #809）で、`UnsupportedCameraPreview` 固定。
 //!
 //! # 結果の種類（契約表 10）
 //!
@@ -34,6 +34,15 @@
 //! 守らない範囲: フレームの間隔・時刻、前面・背面の切り替え、露出・焦点・ライト、複数カメラ・複数画面、
 //! OS が止めた後の自動再開（iOS の中断終了を除く）、端末の向きの追従、OS 側の非同期確定との時間差による
 //! 一時的な表示の食い違い。
+//!
+//! # macOS の違い
+//!
+//! - ズーム: OS に API が無い（`videoZoomFactor` は macOS で使えない）。[`PreviewSession::set_zoom`] は
+//!   OS を呼ばず同期で `Err(ZoomFailure::Unsupported)` を返し、[`PreviewFrame::zoom`] は常に `None`
+//! - 背景: ウィンドウが背面・最小化でも映像を続け、[`StopReason::Backgrounded`] を送らない
+//! - 中断: 中断の理由が取れないため、OS の中断はすべて [`PreviewEvent::Interrupted`]。中断の終了で
+//!   [`PreviewEvent::Running`] へ戻る
+//! - カメラの取り外し（`AVCaptureDeviceWasDisconnectedNotification`）は [`PreviewEvent::RuntimeFailed`]
 //!
 //! # 後続 OS の要点
 //!
@@ -323,7 +332,7 @@ impl PreviewEvent {
     }
 }
 
-/// `.m`（iOS）と JNI（Android）が共有するイベントコードの写像（契約表 5: 数値表は 1 か所）。
+/// `.m`（iOS・macOS）と JNI（Android）が共有するイベントコードの写像（契約表 5: 数値表は 1 か所）。
 ///
 /// | code | 意味 | detail |
 /// | --- | --- | --- |
