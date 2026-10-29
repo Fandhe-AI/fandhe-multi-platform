@@ -375,6 +375,8 @@ pub mod memory_pressure;
 pub mod motion_raw_sensors;
 /// 型サンプル「ネットワーク接続状態」の Web 経路（Issue #1285）。[`haptics`] と同じ理由で gate を外す。
 pub mod network_status;
+/// 型サンプル「NFC タグ読み取り」の Web 経路（Issue #1046）。[`haptics`] と同じ理由で gate を外す。
+pub mod nfc;
 /// 型サンプル「単語分割」の Web 経路（Issue #1094）。[`haptics`] と同じ理由で純関数は native からも
 /// テストできるようクレート単位の `wasm32` gate を外す。
 pub mod nlp;
