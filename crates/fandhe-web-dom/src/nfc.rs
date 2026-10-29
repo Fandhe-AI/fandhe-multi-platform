@@ -42,13 +42,25 @@ use fandhe_device::nfc::{
 
 /// Web NFC の `NDEFRecord` から必要な値だけを写したもの。`id` と UID は読まない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub(crate) struct WebRecord {
     pub(crate) record_type: String,
     pub(crate) media_type: Option<String>,
     pub(crate) encoding: Option<String>,
     pub(crate) lang: Option<String>,
     pub(crate) data: Vec<u8>,
+}
+
+/// タグの中身を出さない Debug（契約表 8）。種類とバイト数だけを出し、`data`・`lang` 等の中身は出さない。
+impl std::fmt::Debug for WebRecord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "WebRecord({}, len={})",
+            self.record_type,
+            self.data.len()
+        )
+    }
 }
 
 /// ペイロード長の合計が上限を超えるか。中身をコピーする前に `byteLength` だけで判定する。
@@ -527,6 +539,19 @@ pub(crate) use web::release_mount;
 mod tests {
     use super::*;
     use NfcReadFailure as F;
+
+    #[test]
+    fn web_record_debug_hides_contents() {
+        let r = WebRecord {
+            record_type: "text".into(),
+            lang: Some("secretlang".into()),
+            data: b"secret".to_vec(),
+            ..Default::default()
+        };
+        let s = format!("{r:?}");
+        assert!(!s.contains("secret") && !s.contains("115"), "{s}");
+        assert!(s.contains("len=6"));
+    }
 
     fn rec(t: &str, data: &[u8]) -> WebRecord {
         WebRecord {
