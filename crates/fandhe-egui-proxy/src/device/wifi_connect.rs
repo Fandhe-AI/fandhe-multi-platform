@@ -15,8 +15,9 @@
 //! # OS 別実装の差し込み口
 //!
 //! [`implementation`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを埋める
-//! （macOS: `macos_wifi_connect`（#791）、Windows: `windows_wifi_connect`（#792 が埋めるスタブ））。
-//! それ以外（iOS・Android は対応表で `deferred`・Linux 等）は `UnsupportedWifiConnect` 固定で、
+//! （macOS: `macos_wifi_connect`（#791）、Windows: `windows_wifi_connect`（#792）、
+//! Android: `android_wifi_connect`（#1064 のスタブ、#1065 が埋める））。Android の JNI 照合は OS 別モジュールの
+//! 内部で行う。それ以外（iOS は対応表で `deferred`・Linux 等）は `UnsupportedWifiConnect` 固定で、
 //! ダミーの成功実装へは倒さない。
 
 use std::sync::Arc;
@@ -25,7 +26,7 @@ use fandhe_core::screens::wifi_connect_show::{
     finish_connect, mark_connecting, take_request, ConnectFailure, PermissionHint,
     WifiConnectShowState,
 };
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
 use fandhe_device::wifi_connect::UnsupportedWifiConnect;
 use fandhe_device::wifi_connect::{validate, WifiConnect, NOT_FOUND, UNSUPPORTED_SECURITY};
 use fandhe_device::DeviceError;
@@ -46,7 +47,11 @@ fn implementation() -> Arc<dyn WifiConnect> {
             {
                 super::windows_wifi_connect::implementation()
             }
-            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            #[cfg(target_os = "android")]
+            {
+                super::android_wifi_connect::implementation()
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
             {
                 Arc::new(UnsupportedWifiConnect)
             }
@@ -310,7 +315,7 @@ mod tests {
         assert_eq!(state.outcome, None);
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
     #[test]
     fn unsupported_os_implementation_is_unsupported() {
         let req = validate("home", "").expect("検査を通る");
