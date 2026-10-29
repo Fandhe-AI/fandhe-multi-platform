@@ -51,8 +51,8 @@
       "deferred": "`ProximityDevice` は capability `proximity` の宣言が要り、package identity の無い素の実行体（本リポジトリの Windows 版）で使えるかの記述が無く未確認（local-peer-connect の Windows と同じ）。`windows` クレートの feature `Networking_Proximity` も新しく要る。NFC を内蔵する PC は少なく、確かめる機器が無い。素の実行体での可否と確認用の機器が揃えば着手できる"
     },
     "web": {
-      "status": "possible",
-      "detail": "できそう（対応ブラウザ限定）",
+      "status": "done",
+      "detail": "できている（実ブラウザ確認待ち）",
       "api": "`NDEFReader.scan()`（`reading` / `readingerror`、`AbortSignal`）",
       "perm": "権限 `nfc`（利用者操作への応答で求める）、secure context・top-level 文書",
       "safari": "API なし（MDN）",
@@ -62,7 +62,9 @@
         "https://developer.chrome.com/docs/capabilities/nfc",
         "https://github.com/mdn/browser-compat-data/blob/main/api/NDEFReader.json"
       ],
-      "note": "未実装。Chrome for Android 89 から。デスクトップの Chrome・Safari・Firefox には無い（MDN の互換データ）ため `NDEFReader` が無ければ `Unsupported`。文書が非表示の間は NFC が止まる（仕様）。`scan()` は `AbortError` / `InvalidStateError` / `NotAllowedError` / `NotSupportedError` で reject し、UA が NFC を使えないときは `NotReadableError`。NDEF を出さないタグは `readingerror`"
+      "note": "実装済み（`?screen=nfc_read`）。要求のたびに `window` が secure context か・`NDEFReader` があるかを問い、無ければ `Unsupported`。リスナー（`reading` / `readingerror` / `visibilitychange` / `pagehide`）と期限タイマーを先に登録してから、click の同期チェーンで `scan({ signal })` を呼ぶ。非表示・`pagehide` は期限まで待たず `Interrupted`。期限は `performance.now()`（単調時計）で測り、確定の前に解除と `abort()` を済ませる。サイズ上限はメッセージの生バイトが無いためペイロード長の合計で近似する。UID（`serialNumber`）と record の `id` は読まない。実ブラウザ（Chrome for Android）での読み取りは未確認（#1040）。Chrome for Android 89 から。デスクトップの Chrome・Safari・Firefox には無い（MDN の互換データ）ため `NDEFReader` が無ければ `Unsupported`。文書が非表示の間は NFC が止まる（仕様）。`scan()` は `AbortError` / `InvalidStateError` / `NotAllowedError` / `NotSupportedError` で reject し、UA が NFC を使えないときは `NotReadableError`。NDEF を出さないタグは `readingerror`",
+      "implStatus": "実ブラウザ確認待ち（#1040）",
+      "impl": "crates/fandhe-web-dom/src/nfc.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/nfc_read.rs + crates/fandhe-device/src/nfc.rs、Issue #1046"
     }
   },
   "note": "`CoreNFC` / Android NFC API / Windows `Proximity`。macOS は NFC リーダー用の公開 API が無い（対象外）。Web は Web NFC が Chrome for Android 限定でデスクトップブラウザには無いが、BLE・音声認識と同様「対応ブラウザ限定」で API 自体は存在するため「できない（API 非公開）」ではなく「できそう」に分類する。範囲: NDEF の読み取りのみ。「タグを読む」で期限の間に最初にかざした 1 枚を読み、レコードごとに種類と中身を出す（1 枚読んだら終わり、継続配信にしない）。書き込み・タグ種別ごとの生データ・UID・続けて何枚も読むこと・アプリが閉じている間のタグ検出（intent の配送）は扱わない。タグの識別子（UID、Web の `serialNumber`）は個体識別子に当たるため画面・ログに出さない。対象 OS は Android・Web で、iOS・Windows は保留（deferred）、macOS は対象外。種別: 成功（`Read` / 中身が空の `EmptyTag`）、中断（背面へ移った `Interrupted`。失敗の色にしない）、失敗（`Unreadable` / `TooLarge` / `Disabled` / `PermissionDenied` / `TimedOut` / `Unsupported` / `Failed`）の三値で、空・読めない・NFC オフを成功に畳まない。利用者の取り消しの操作は置かない。OS を正にする: NFC の有無・オン / オフは要求のたびに OS へ問い（`getDefaultAdapter`・`isEnabled`・`'NDEFReader' in window`）、機種判定を置かない。背面へ移ったら OS が読み取りを止めるので、期限まで待たずその時点で `Interrupted` に確定し、経過時間は単調時計で測る。守る範囲: 1 プロセス内の要求と完了の順序（古い要求・期限後の検出を捨てる）、reader mode・`AbortController`・リスナーの解除を成功・失敗・期限切れ・中断の全経路で行うこと。守らない範囲: かざしたが届く前の離脱、2 枚同時にかざしたときにどちらが読まれるか、他アプリ・OS が先にタグを処理した場合、Web の権限プロンプト中に非表示になったときの扱い（ブラウザに従う）、複数プロセス・複数タブ"

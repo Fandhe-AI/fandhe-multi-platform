@@ -148,6 +148,7 @@ use fandhe_core::screens::multi_display_show::{
 use fandhe_core::screens::network_status_show::{
     network_status_show_screen, NetworkStatusShowState,
 };
+use fandhe_core::screens::nfc_read::{current_screen as current_nfc_read_screen, NfcReadState};
 use fandhe_core::screens::nlp_segment::{
     current_screen as current_nlp_segment_screen, NlpSegmentState,
 };
@@ -1351,6 +1352,22 @@ pub fn mount_digital_credentials_screen(root_id: &str) -> Result<(), JsValue> {
         current_digital_credentials_screen(&initial_state),
         initial_state,
         super::digital_credentials::digital_credentials_effect,
+    )
+}
+
+/// `root_id` が指す要素へ型サンプル「NFC タグ読み取り」（親 #157、Issue #1046）をマウントする
+/// 検証専用エントリポイント。`super::nfc::nfc_read_effect` が Web NFC を呼ぶ。起動時には要求を出さず、
+/// ボタンを押したときに出す（`scan()` を利用者操作の同期チェーンで呼ぶため）。
+#[wasm_bindgen]
+pub fn mount_nfc_read_screen(root_id: &str) -> Result<(), JsValue> {
+    let root = root_element(root_id)?;
+
+    let initial_state = NfcReadState::default();
+    super::mount::mount_with_effect(
+        root,
+        current_nfc_read_screen(&initial_state),
+        initial_state,
+        super::nfc::nfc_read_effect,
     )
 }
 
