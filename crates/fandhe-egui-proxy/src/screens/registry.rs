@@ -518,6 +518,10 @@ generated_screens! {
     crate::device::geocoding_search::geocoding_search_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "nfc_read" => fandhe_core::screens::nfc_read::current_screen,
+    crate::device::nfc::nfc_read_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "scanner_devices_import" => fandhe_core::screens::scanner_devices_import::current_screen,
     crate::device::scanner_devices::scanner_devices_import_effect,
     effect
