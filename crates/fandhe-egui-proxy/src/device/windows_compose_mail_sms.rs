@@ -2,7 +2,8 @@
 //! `sms:` URL を開き、既定のハンドラの作成画面を出す。`device/compose_mail_sms.rs` の Windows 経路から呼ばれ、
 //! 契約は `fandhe_device::compose_mail_sms`。渡すのは `ComposeRequest::to_url` が組み立てた
 //! `mailto:` / `sms:` URL の 2 種だけで、scheme は固定。任意の scheme・パス・引数を渡す経路は作らない。
-//! 添付付きの要求は URL で渡せないため `to_url` が `Unsupported` を返し、ここで拒否する（Issue #32）。
+//! 添付付きの要求は URL で渡せないため [`begin_compose_attachment`] で受ける。Simple MAPI の本体は
+//! #1043 が埋めるまで `Unsupported("compose attachment")` を返すスタブ（Issue #1042 は骨格のみ）。
 //! Windows 本体は `sms:` のハンドラを同梱しない。登録したアプリ（スマートフォン連携など）があれば
 //! 開き、無ければ `SE_ERR_NOASSOC` → `NoHandler`。WinRT の `ChatMessageManager` は制限付き
 //! capability とパッケージ ID が要るため採らない（#31）。
@@ -75,6 +76,17 @@ pub(crate) fn open_url(url: &str) -> isize {
     result.0 as isize
 }
 
+/// 添付付きの要求を受ける入口（`device/compose_mail_sms.rs` の Windows `begin_compose` から呼ばれる）。
+/// 骨格のため常に `Unsupported("compose attachment")` を返し、成功を作らない。#1043 が Simple MAPI の
+/// 作業スレッド実装（結果は `bridge::deliver(request_id, ..)` で返す）に置き換える。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(crate) fn begin_compose_attachment(
+    _request_id: u64,
+    _req: &fandhe_device::compose_mail_sms::ComposeRequest,
+) -> Result<(), DeviceError> {
+    Err(DeviceError::Unsupported("compose attachment"))
+}
+
 /// Windows の `ComposeMailSms` 実装を返す（`device/compose_mail_sms.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "windows")]
 pub(crate) fn implementation() -> Box<dyn fandhe_device::compose_mail_sms::ComposeMailSms> {
@@ -84,6 +96,17 @@ pub(crate) fn implementation() -> Box<dyn fandhe_device::compose_mail_sms::Compo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn attachment_stub_never_succeeds() {
+        let req =
+            fandhe_device::compose_mail_sms::ComposeRequest::mail(&["a@b.c"], &[], &[], "s", "b")
+                .unwrap();
+        assert!(matches!(
+            begin_compose_attachment(1, &req),
+            Err(DeviceError::Unsupported("compose attachment"))
+        ));
+    }
 
     #[test]
     fn shell_code_table() {

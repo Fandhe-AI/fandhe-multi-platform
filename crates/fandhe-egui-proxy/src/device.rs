@@ -740,8 +740,14 @@ pub mod companion_device;
 /// Issue #1404（親 #1154）: 方位（コンパス）の effect ドライバ（Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedCompass` 固定。Web は `fandhe-web-dom`）。
 pub mod compass;
-/// Phase 11（親 #1142、Issue #1384）: メール・SMS 作成画面の effect ドライバ（macOS / Windows は同期、
-/// iOS / Android は pull 型 `bridge`、他 OS は
+/// Issue #1042（親 #156）: メール添付の一時ファイルの置き場（macOS は渡した後も残して 10 分で回収、
+/// Windows は #1043 が戻ったらすぐ消す）。`macos_compose_mail_sms` / `windows_compose_mail_sms` が共用する。
+/// Windows は #1043 まで未使用。
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub mod compose_attachment_file;
+/// Phase 11（親 #1142、Issue #1384）: メール・SMS 作成画面の effect ドライバ（macOS は同期、
+/// Windows / iOS / Android は pull 型 `bridge`、他 OS は
 /// `UnsupportedComposeMailSms` 固定。Web は `fandhe-web-dom`）。
 pub mod compose_mail_sms;
 /// Phase 11 の拡充ループ（親 #1117、Issue #1220・#1221・#1222）: 連絡先選択の effect ドライバ

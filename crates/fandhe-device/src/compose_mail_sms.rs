@@ -1,11 +1,12 @@
 //! メール・SMS の作成画面を OS で開く機能の抽象（Phase 11 の拡充ループ、親 #1142、Issue #1384）。
 //!
 //! 範囲は「宛先・件名・本文を渡して OS の作成画面を開く」ことだけ。メールは To（複数）・CC・BCC を
-//! 渡せる（Issue #33）。添付はメールに 1 件だけ（Issue #32、[`ComposeAttachment`]、iOS / Android のみ）で、
+//! 渡せる（Issue #33）。添付はメールに 1 件だけ（Issue #32、[`ComposeAttachment`]、iOS / Android / macOS / Windows）で、
 //! SMS の添付・複数宛先は扱わない。検証の SSOT は
 //! [`ComposeRequest::mail`] / [`ComposeRequest::sms`]（これ以外では要求を作れない）で、
-//! macOS・Windows・Web が共用する URL の組み立ても [`ComposeRequest::to_url`] に置く。
-//! iOS / Android は URL を使わず OS の作成画面（MessageUI / Intent）へ値を直接渡す。
+//! Web と、添付なしの macOS / Windows が共用する URL の組み立ても [`ComposeRequest::to_url`] に置く。
+//! iOS / Android と、添付付きの macOS / Windows は URL を使わず OS の作成画面（MessageUI / Intent /
+//! `NSSharingService` / Simple MAPI）へ値を直接渡す。
 //! 画面（`fandhe_core::screens::compose_mail_sms`、端末依存ゼロ）へは `fandhe-egui-proxy` の
 //! effect ドライバが写像する。
 //!
@@ -14,11 +15,12 @@
 //! - `Queued`: 送信待ちに入った（iOS の `MFMailComposeResultSent` / `MFMessageComposeResultSent`）。
 //!   **送信済みではない**
 //! - `Saved`: 下書きとして保存された（iOS のメール）
-//! - `Cancelled`: 利用者が作成画面を閉じた。失敗ではない
+//! - `Cancelled`: 利用者が作成画面を閉じた。失敗ではない（取り消しを知れるのは iOS と Windows の添付だけ）
 //! - `HandedOff`: OS が依頼を受理しただけ。開いたか・送ったかは分からない（macOS・Windows・Android）
 //! - `NoHandler`: メール / SMS を扱えるアプリや設定が無い。失敗ではない
 //!
-//! OS ごとに到達する値: macOS・Windows は `HandedOff` / `NoHandler`、iOS は `Queued` / `Saved` /
+//! OS ごとに到達する値: macOS は `HandedOff` / `NoHandler`、Windows は `HandedOff` / `NoHandler` と
+//! （添付付きのみ）`Cancelled`、iOS は `Queued` / `Saved` /
 //! `Cancelled` / `NoHandler`、Android は `HandedOff` / `NoHandler`。
 //!
 //! | 状況 | 返す値 |
@@ -26,7 +28,12 @@
 //! | 入力不正 | `InvalidInput("compose to" / "compose cc" / "compose bcc" / "compose subject" / "compose body")` |
 //! | 入力不正（添付） | `InvalidInput("compose attachment")` |
 //! | 非対応（Linux・Web ほか） | `Unsupported("compose")` |
-//! | 添付付き要求を macOS・Windows・Web で受けた（URL で添付を渡せない） | `Unsupported("compose attachment")` |
+//! | 添付付き要求を Web で受けた（URL で添付を渡せない）、Windows で `mapi32.dll` を解決できない・実装が無い | `Unsupported("compose attachment")` |
+//! | CC / BCC 付きの添付要求を macOS で受けた（`NSSharingService` に渡す API が無い） | `Unsupported("compose cc")` |
+//! | 添付の一時ファイルを用意できない | `Internal(ATTACHMENT_FILE)`（`"compose attachment file"`） |
+//! | 前回の一時ファイルを消せず、OS を呼ばなかった | `Internal(CLEANUP)`（`"compose cleanup"`） |
+//! | 前の作成画面が開いたまま（Windows） | `Internal(BUSY)`（`"compose busy"`） |
+//! | MAPI が失敗を返した（新しい Outlook など、Windows。`NoHandler` に読み替えない） | `Internal(MAPI)`（`"compose mapi"`） |
 //! | 作成画面を出せない（ウィンドウ・NSURL 生成失敗など） | `Internal("compose ...")` |
 //!
 //! # 宛先の配列（To / CC / BCC）
@@ -36,7 +43,7 @@
 //! （黙って切り詰めない）。宛先に `,` `;` `&` `?` `\n` などの区切りは現れないので、区切りによる
 //! 宛先・パラメータ・ヘッダの差し込みは起きない。SMS の宛先は従来どおり 0〜1 件。
 //!
-//! - macOS・Windows・Web: `mailto:{to,to}?cc=..&bcc=..&subject=..&body=..`。宛先は 1 件ずつ
+//! - Web と、添付なしの macOS / Windows: `mailto:{to,to}?cc=..&bcc=..&subject=..&body=..`。宛先は 1 件ずつ
 //!   percent-encode し、リテラルの `,` で連結する（RFC 6068）。CC / BCC が空ならパラメータを出さない
 //! - iOS・Android: URL を組み立てず配列で渡す。FFI / JNI の境界では各リストを `\n` で連結した
 //!   1 本の文字列で渡し、受け側で配列に戻す（`\n` は検証で必ず拒否されるため宛先の中に現れない。
@@ -46,9 +53,12 @@
 //!
 //! 添付はメールに 1 件、ファイル名 `[A-Za-z0-9._-]` 1〜64 バイト（先頭 `.` 不可）・MIME は
 //! `type/subtype` の 1 組（パラメータ不可）・データ 1 バイト〜1 MiB。0 バイトは嘘の成功を避けるため拒否する。
-//! 出どころは画面側の固定値で、選択ファイルとの連携は扱わない。`mailto:` は添付を持てないため、
+//! 出どころは画面側の固定値で、選択ファイルとの連携は扱わない。画面は添付付きの要求から CC / BCC を
+//! 外す（macOS が渡せないため）。`mailto:` は添付を持てないため、
 //! [`ComposeRequest::to_url`] が `Unsupported("compose attachment")` を返し、添付を黙って落として
-//! 開くことはしない。iOS は `addAttachmentData`（一時ファイルなし）、Android は `FileProvider` の
+//! 開くことはしない。macOS は `NSSharingService`（`composeEmail`）へ To・件名・本文・添付だけを渡し、
+//! CC / BCC 付きは `Unsupported("compose cc")`、完了は待たず `HandedOff`。Windows は Simple MAPI を
+//! 作業スレッドで呼び、`MAPI_E_USER_ABORT` は `Cancelled`、返ったらすぐ一時ファイルを消す。iOS は `addAttachmentData`（一時ファイルなし）、Android は `FileProvider` の
 //! content URI（`cache/compose/` に要求ごとに残し、10 分超の古いものだけ回収する）で渡す。
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
@@ -61,7 +71,18 @@
 //! 受け手が後から読むため残す。要求ごとのディレクトリに保存し、次回の添付要求時に 10 分より
 //! 古いものだけを回収する（10 分以内の複数要求では複数件が残る）。OS の cacheDir 掃除でも消える。
 //!
-//! 守らない: 複数プロセスからの同時操作、受け手が 10 分を超えて読まずに別の添付要求が来た場合の
+//! macOS・Windows の添付の一時ファイルは `temp_dir()/fandhe-compose/<pid>-<seq>/` に要求ごとに作る。
+//! macOS は渡した後も残し、次の添付要求で 10 分（単調時計）より古いものを回収する。Windows は戻ったら
+//! すぐ消す。解放に失敗したものは static に積み、次の添付要求の前に消し直す。消せなければ OS を呼ばず
+//! `CLEANUP` で失敗する。今回の結果は削除の失敗と独立にそのまま返す。
+//!
+//! 三値（契約表 10）: 開いた（`HandedOff`）/ 利用者が閉じた（`Cancelled`、Windows のみ）/ 失敗。
+//! 想定どおりの終了を失敗にしない。macOS は取り消しの通知が無いため、推測のタイマーで
+//! `Cancelled` や送信済みを作らない。
+//!
+//! 守らない: Mail 以外が既定の macOS の挙動差、`didShareItems:` の到着、新しい Outlook や MAPI の
+//! 設定画面、作成画面を開いたまま画面を離れた場合（結果は id 照合で捨てる）、複数プロセス・複数窓、
+//! 複数プロセスからの同時操作、受け手が 10 分を超えて読まずに別の添付要求が来た場合の
 //! 古い添付の読み出し（各 1 MiB 以下）、作成画面を開いた後に利用者が何をしたか
 //! （`HandedOff` では確認できない）、既定のメールアプリ未設定時の OS 側の挙動の差。
 //!
@@ -107,6 +128,15 @@ const RECIPIENTS_MAX_PER_FIELD: usize = 10;
 const ATTACH_NAME_MAX_BYTES: usize = 64;
 const ATTACH_MIME_MAX_BYTES: usize = 127;
 const ATTACH_DATA_MAX_BYTES: usize = 1024 * 1024;
+
+/// 添付の一時ファイルを用意できなかった（`Internal` の固定ラベル。OS 実装が共用する SSOT）。
+pub const ATTACHMENT_FILE: &str = "compose attachment file";
+/// 前回の一時ファイルを消せず OS を呼ばなかった。
+pub const CLEANUP: &str = "compose cleanup";
+/// 前の作成画面がまだ開いている（Windows）。
+pub const BUSY: &str = "compose busy";
+/// MAPI が失敗を返した（Windows）。
+pub const MAPI: &str = "compose mapi";
 
 const INVALID_ATTACHMENT: DeviceError = DeviceError::InvalidInput("compose attachment");
 
@@ -348,7 +378,7 @@ impl ComposeRequest {
         &self.body
     }
 
-    /// `mailto:`（RFC 6068）/ `sms:`（RFC 5724）の URL を組み立てる。macOS・Windows・Web が共用する。
+    /// `mailto:`（RFC 6068）/ `sms:`（RFC 5724）の URL を組み立てる。Web と、添付なしの macOS / Windows が共用する。
     /// 本文の改行は `\r\n` に正規化してから encode する。URL は添付を持てないため、
     /// 添付付きは `Unsupported("compose attachment")`（添付を黙って落とさない）。
     pub fn to_url(&self) -> Result<String, DeviceError> {

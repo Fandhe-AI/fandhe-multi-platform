@@ -271,7 +271,7 @@
 //! - `macos/fandhe_macos_in_app_review.m`（Issue #563、`SKStoreReviewController requestReview` による
 //!   レビュー依頼）は **macOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/macos_in_app_review.rs` から呼ばれる契約）。StoreKit を追加でリンクする。
-//! - `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384、`NSWorkspace openURL:` による
+//! - `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384・#1042、`NSWorkspace openURL:` と添付付きの `NSSharingService` による
 //!   `mailto:` / `sms:` の作成画面表示）は **macOS 分岐のみ**で feature `device` 有効時に
 //!   コンパイルする（`src/device/macos_compose_mail_sms.rs` から呼ばれる契約）。AppKit は既存のリンクで足りる。
 //! - `macos/fandhe_macos_external_app_launch.m`（Issue #861、`NSWorkspace openURL:` による固定の
