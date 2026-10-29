@@ -58,6 +58,20 @@ fn remove_dir(p: &Path) -> io::Result<()> {
     }
 }
 
+/// この機能が作った `<数字>-<数字>` 形式の実ディレクトリか（`DirEntry::file_type` はリンクを辿らない）。
+fn is_own_dir(e: &std::fs::DirEntry) -> bool {
+    let name = e.file_name();
+    let ok_name = name.to_str().is_some_and(|n| {
+        n.split_once('-').is_some_and(|(a, b)| {
+            !a.is_empty()
+                && !b.is_empty()
+                && a.bytes().all(|c| c.is_ascii_digit())
+                && b.bytes().all(|c| c.is_ascii_digit())
+        })
+    });
+    ok_name && e.file_type().is_ok_and(|t| t.is_dir())
+}
+
 impl Store {
     pub(crate) const fn new() -> Self {
         Store {
@@ -104,12 +118,23 @@ impl Store {
             self.remove_or_stale(p);
         }
         let root = self.root();
+        let fail = || DeviceError::Internal(ATTACHMENT_FILE);
+        std::fs::create_dir_all(&root).map_err(|_| fail())?;
+        // 置き場がシンボリックリンクに差し替えられていないことを、掃除（削除）より先に確かめる。
+        let meta = std::fs::symlink_metadata(&root).map_err(|_| fail())?;
+        if !meta.is_dir() {
+            return Err(fail());
+        }
         // 前のプロセスの残りは初回だけ掃除する（登録済みのものは触らない）。同時に動く別プロセスが渡した
         // 直後のものを消さないよう、更新時刻が RECYCLE_AFTER 以内のもの・時刻を読めないものは残す。
+        // 対象はこの機能が作る `<pid>-<seq>` 形式の実ディレクトリ（シンボリックリンク・他の名前は触らない）。
         if !self.swept {
             self.swept = true;
             if let Ok(rd) = std::fs::read_dir(&root) {
                 for e in rd.flatten() {
+                    if !is_own_dir(&e) {
+                        continue;
+                    }
                     let old_enough = e
                         .metadata()
                         .and_then(|m| m.modified())
@@ -124,13 +149,6 @@ impl Store {
         }
         if !self.stale.is_empty() {
             return Err(DeviceError::Internal(CLEANUP));
-        }
-        let fail = || DeviceError::Internal(ATTACHMENT_FILE);
-        std::fs::create_dir_all(&root).map_err(|_| fail())?;
-        // 置き場がシンボリックリンクに差し替えられていないことを確かめる。
-        let meta = std::fs::symlink_metadata(&root).map_err(|_| fail())?;
-        if !meta.is_dir() {
-            return Err(fail());
         }
         self.seq += 1;
         let dir = root.join(format!("{}-{}", std::process::id(), self.seq));
@@ -227,6 +245,27 @@ mod tests {
         assert!(!dir.exists());
         s.discard(g);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_root_is_rejected_without_deleting_target() {
+        let (mut s, root) = test_store();
+        let target = root.with_extension("target");
+        let victim = target.join("1-1");
+        std::fs::create_dir_all(&victim).unwrap();
+        std::fs::write(victim.join("x"), b"x").unwrap();
+        let old = std::time::SystemTime::now() - Duration::from_secs(3600);
+        std::fs::File::open(&victim)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        std::os::unix::fs::symlink(&target, &root).unwrap();
+        let e = s.prepare(&att(), Instant::now()).unwrap_err();
+        assert!(matches!(e, DeviceError::Internal(l) if l == ATTACHMENT_FILE));
+        assert!(victim.join("x").exists());
+        let _ = std::fs::remove_file(&root);
+        let _ = std::fs::remove_dir_all(target);
     }
 
     #[test]
