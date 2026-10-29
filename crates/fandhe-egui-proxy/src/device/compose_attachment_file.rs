@@ -104,12 +104,19 @@ impl Store {
             self.remove_or_stale(p);
         }
         let root = self.root();
-        // 前のプロセスの残りは初回だけ掃除する（登録済みのものは触らない）。
+        // 前のプロセスの残りは初回だけ掃除する（登録済みのものは触らない）。同時に動く別プロセスが渡した
+        // 直後のものを消さないよう、更新時刻が RECYCLE_AFTER 以内のもの・時刻を読めないものは残す。
         if !self.swept {
             self.swept = true;
             if let Ok(rd) = std::fs::read_dir(&root) {
                 for e in rd.flatten() {
-                    if !self.kept.iter().any(|(p, _)| *p == e.path()) {
+                    let old_enough = e
+                        .metadata()
+                        .and_then(|m| m.modified())
+                        .ok()
+                        .and_then(|t| t.elapsed().ok())
+                        .is_some_and(|d| d >= RECYCLE_AFTER);
+                    if old_enough && !self.kept.iter().any(|(p, _)| *p == e.path()) {
                         self.remove_or_stale(e.path());
                     }
                 }
@@ -257,8 +264,15 @@ mod tests {
         let (mut s, root) = test_store();
         let old = root.join("99999-1");
         std::fs::create_dir_all(&old).unwrap();
+        std::fs::File::open(&old)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() - RECYCLE_AFTER * 2)
+            .unwrap();
+        // 別プロセスが渡した直後のもの（更新時刻が新しい）は消さない。
+        let fresh = root.join("99998-1");
+        std::fs::create_dir_all(&fresh).unwrap();
         let f = s.prepare(&att(), Instant::now()).unwrap();
-        assert!(!old.exists());
+        assert!(!old.exists() && fresh.exists());
         s.keep(f, Instant::now());
         // 2 回目以降は、登録済みでないものも新たには消さない。
         std::fs::create_dir_all(&old).unwrap();

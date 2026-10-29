@@ -30,6 +30,9 @@
 #import <AppKit/AppKit.h>
 #include <stdint.h>
 
+// 作成画面が閉じるまで service が解放されないよう、直近の 1 件を保持する（公式に保持要否の記載が無いため安全側）。
+static NSSharingService *s_compose_service = nil;
+
 int32_t fandhe_macos_compose_open_url(const char *url) {
     @autoreleasepool {
         if (![NSThread isMainThread] || url == NULL) {
@@ -69,6 +72,7 @@ int32_t fandhe_macos_compose_attachment(const char *to_nl, const char *subject, 
         }
         svc.recipients = t.length == 0 ? @[] : [t componentsSeparatedByString:@"\n"];
         svc.subject = sub;
+        s_compose_service = svc;
         [svc performWithItems:items];
         return 0;
     }

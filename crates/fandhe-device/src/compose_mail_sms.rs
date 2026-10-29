@@ -1,7 +1,7 @@
 //! メール・SMS の作成画面を OS で開く機能の抽象（Phase 11 の拡充ループ、親 #1142、Issue #1384）。
 //!
 //! 範囲は「宛先・件名・本文を渡して OS の作成画面を開く」ことだけ。メールは To（複数）・CC・BCC を
-//! 渡せる（Issue #33）。添付はメールに 1 件だけ（Issue #32、[`ComposeAttachment`]、iOS / Android / macOS / Windows）で、
+//! 渡せる（Issue #33）。添付はメールに 1 件だけ（Issue #32、[`ComposeAttachment`]、iOS / Android / macOS。Windows は #1043 で対応予定で、現状は `Unsupported`）で、
 //! SMS の添付・複数宛先は扱わない。検証の SSOT は
 //! [`ComposeRequest::mail`] / [`ComposeRequest::sms`]（これ以外では要求を作れない）で、
 //! Web と、添付なしの macOS / Windows が共用する URL の組み立ても [`ComposeRequest::to_url`] に置く。
@@ -19,8 +19,8 @@
 //! - `HandedOff`: OS が依頼を受理しただけ。開いたか・送ったかは分からない（macOS・Windows・Android）
 //! - `NoHandler`: メール / SMS を扱えるアプリや設定が無い。失敗ではない
 //!
-//! OS ごとに到達する値: macOS は `HandedOff` / `NoHandler`、Windows は `HandedOff` / `NoHandler` と
-//! （添付付きのみ）`Cancelled`、iOS は `Queued` / `Saved` /
+//! OS ごとに到達する値: macOS は `HandedOff` / `NoHandler`、Windows は `HandedOff` / `NoHandler`
+//! （添付付きの `Cancelled` は #1043 で対応予定で、現状は届かない）、iOS は `Queued` / `Saved` /
 //! `Cancelled` / `NoHandler`、Android は `HandedOff` / `NoHandler`。
 //!
 //! | 状況 | 返す値 |
@@ -57,8 +57,8 @@
 //! 外す（macOS が渡せないため）。`mailto:` は添付を持てないため、
 //! [`ComposeRequest::to_url`] が `Unsupported("compose attachment")` を返し、添付を黙って落として
 //! 開くことはしない。macOS は `NSSharingService`（`composeEmail`）へ To・件名・本文・添付だけを渡し、
-//! CC / BCC 付きは `Unsupported("compose cc")`、完了は待たず `HandedOff`。Windows は Simple MAPI を
-//! 作業スレッドで呼び、`MAPI_E_USER_ABORT` は `Cancelled`、返ったらすぐ一時ファイルを消す。iOS は `addAttachmentData`（一時ファイルなし）、Android は `FileProvider` の
+//! CC / BCC 付きは `Unsupported("compose cc")`、完了は待たず `HandedOff`。Windows は #1043 で Simple MAPI を
+//! 作業スレッドで呼ぶ予定（現状は `Unsupported`）。方針は、`MAPI_E_USER_ABORT` は `Cancelled`、返ったらすぐ一時ファイルを消す。iOS は `addAttachmentData`（一時ファイルなし）、Android は `FileProvider` の
 //! content URI（`cache/compose/` に要求ごとに残し、10 分超の古いものだけ回収する）で渡す。
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
