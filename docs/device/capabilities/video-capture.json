@@ -42,17 +42,19 @@
     },
     "macos": {
       "status": "possible",
-      "api": "AVFoundation `AVCaptureSession` + `AVCaptureMovieFileOutput`（`startRecordingToOutputFileURL:recordingDelegate:`、完了は `captureOutput:didFinishRecordingToOutputFileAtURL:fromConnections:error:`）。OS 標準の動画撮影 UI は無い",
-      "perm": "`NSCameraUsageDescription`（未宣言。埋め込み Info.plist に新しく足す必要がある）・`NSMicrophoneUsageDescription`（宣言済み）、実行時のカメラ・マイクの許可。Sandbox 時は `com.apple.security.device.camera` / `audio-input`",
+      "api": "AVFoundation `AVCaptureSession` + `AVCaptureMovieFileOutput`（`maxRecordedDuration` に上限 30 秒、`startRecordingToOutputFileURL:recordingDelegate:`、完了は `captureOutput:didFinishRecordingToOutputFileAtURL:fromConnections:error:`、エラー付きの完了は `AVErrorRecordingSuccessfullyFinishedKey` で成否を読む）。OS 標準の撮影 UI が無いため、アプリが AppKit のパネル（`NSPanel` に `AVCaptureVideoPreviewLayer` のプレビューと「録画を始める」「止める」「キャンセル」）を組む。撮れた動画は iOS と同じく `AVURLAsset` で長さ・寸法・回転を読む",
+      "perm": "`NSCameraUsageDescription`（camera-preview-stream の macOS で足すキーの文言に本機能の画面名を足す）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）。音声は録らないためマイクの宣言・許可は使わない。App Sandbox・Hardened Runtime を使わない素の実行体のため entitlement は不要",
       "url": [
         "https://developer.apple.com/documentation/avfoundation/avcapturemoviefileoutput",
         "https://developer.apple.com/documentation/avfoundation/avcapturefileoutput/startrecording(to:recordingdelegate:)",
         "https://developer.apple.com/documentation/avfoundation/avcapturefileoutputrecordingdelegate/fileoutput(_:didfinishrecordingto:from:error:)",
+        "https://developer.apple.com/documentation/avfoundation/avcapturefileoutput/maxrecordedduration",
+        "https://developer.apple.com/documentation/avfoundation/averrorrecordingsuccessfullyfinishedkey",
+        "https://developer.apple.com/documentation/avfoundation/avcapturevideopreviewlayer",
         "https://developer.apple.com/documentation/avfoundation/avcapturedevice/requestaccess(for:completionhandler:)",
         "https://developer.apple.com/documentation/avfoundation/requesting-authorization-to-capture-and-save-media"
       ],
-      "deferred": "カメラの利用目的（`NSCameraUsageDescription`）が macOS の埋め込み Info.plist に無く、新しい権限の宣言になる（camera-capture の macOS はダミー実装で実カメラを使っていない）。OS 標準の撮影 UI も無いため、プレビュー・録画の開始と停止の画面を自前で組む設計が要る。camera-preview-stream の macOS と同じく、カメラの宣言を足す方針が決まったら見直す",
-      "note": "未実装。完了の delegate は録画要求ごとに必ず呼ばれ、データが書けなかった場合も呼ばれる（公式）。`maxRecordedDuration` に達すると録画が止まり、delegate にエラー付きで届く（公式）。そのため成否はエラーの有無だけで決められず、`AVErrorRecordingSuccessfullyFinishedKey` を見る必要がある（キーの存在は公式、扱いは未確認）。出力先に既存のファイルがあると失敗する（公式）。利用目的の記述が無いと許可の要求で終了させられる（公式）"
+      "note": "未実装（保留を解いた）。撮影パネルは要求ごとに開き、閉じてから結果を 1 回だけ返す。録画前に「キャンセル」を押すかパネルを閉じると取り消し。録画中に閉じると録画を止め、完了の delegate を待ってファイルを消してから取り消しにする。成否は完了の delegate だけで決める（エラーが無い、またはエラー付きでも `AVErrorRecordingSuccessfullyFinishedKey` が YES なら撮れた。上限 30 秒で止まった場合はエラー付きで届く（公式））。`AVErrorNoDataCaptured` と 0 バイトは空の失敗。一時ファイルは要求ごとに `mkdtemp`（0700）で作る置き場の中だけに書き、成功・取り消し・失敗の全経路で置き場ごと消す。消せなかったら結果を失敗（その他）にし、次の撮影の前に消し直して、消せなければ次も失敗にする。音声は録らない。ウィンドウが背面でもパネルを出す（前面でない・表示前の中断は使わない）。カメラが無いと非対応、録画前の実行時エラー・カメラの取り外しはその他の失敗。パネルを開いたまま画面を離れてもパネルは残り、後から届いた結果は捨てる。使うカメラは OS の既定"
     },
     "windows": {
       "status": "possible",
@@ -86,5 +88,5 @@
       "impl": "crates/fandhe-web-dom/src/video_capture.rs + crates/fandhe-web-dom/src/file_picker.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html、Issue #824"
     }
   },
-  "note": "camera-capture は静止画 1 枚、本機能は動画ファイル。mic-record（音声のみ）・screen-capture（画面の録画）・camera-preview-stream（ファイルにしない生フレーム）とも別。今回の範囲: 「動画を撮る」で OS の撮影 UI（iOS は撮影画面、Android はカメラアプリ、Web はブラウザのファイル入力）を開き、撮れた動画の長さ・表示の寸法・ファイルサイズを出す。長さの上限 30 秒を OS の撮影 UI に渡す（Web は渡せない）。動画の再生・保存・共有は範囲外。結果は 撮れた / 取り消した（利用者が撮影 UI を閉じた、失敗にしない）/ 失敗（権限拒否・カメラアプリなし・前面でない・中断・空のファイル・読めない動画・その他）/ 非対応。OS を正にする: 撮れたかどうかは OS の完了通知（delegate・Activity の結果・`change` / `cancel`）だけで決め、タイマー・期限で推測しない。長さ・寸法・サイズは OS がファイルに書いたメタデータとファイルの大きさから読み、アプリ内で数えない（OS が長さを返さなければ「長さを読めない」と出す）。寸法は OS が返した回転（0 / 90 / 180 / 270）を当てた表示の向きで出す。撮影 UI の一時ファイルは読み終えたら成功・取り消し・失敗の全経路で消す（Android は次の撮影の前にも置き場を空にする）。守らない範囲: 動画の中身、OS の撮影 UI の見た目・画質・形式、撮影中に背景へ移ったときの OS の挙動、撮影 UI が閉じないまま完了通知が届かない場合（期限を持たないため画面は撮影中のまま）、デスクトップのブラウザで既存のファイルが選ばれること、`EXTRA_OUTPUT` を無視するカメラアプリ、複数タブ・複数プロセス、撮影中のプロセス死（Android は次回の撮影の前に置き場を空にして回収する）。"
+  "note": "camera-capture は静止画 1 枚、本機能は動画ファイル。mic-record（音声のみ）・screen-capture（画面の録画）・camera-preview-stream（ファイルにしない生フレーム）とも別。今回の範囲: 「動画を撮る」で 撮影 UI（iOS は OS の撮影画面、Android はカメラアプリ、Web はブラウザのファイル入力、macOS はアプリが組む撮影パネル）を開き、撮れた動画の長さ・表示の寸法・ファイルサイズを出す。長さの上限 30 秒を OS に渡す（macOS は録画の出力の上限、Web は渡せない）。動画の再生・保存・共有は範囲外。結果は 撮れた / 取り消した（利用者が撮影 UI を閉じた、失敗にしない）/ 失敗（権限拒否・カメラアプリなし・前面でない・中断・空のファイル・読めない動画・その他）/ 非対応。OS を正にする: 撮れたかどうかは OS の完了通知（delegate・Activity の結果・`change` / `cancel`）だけで決め、タイマー・期限で推測しない。長さ・寸法・サイズは OS がファイルに書いたメタデータとファイルの大きさから読み、アプリ内で数えない（OS が長さを返さなければ「長さを読めない」と出す）。寸法は OS が返した回転（0 / 90 / 180 / 270）を当てた表示の向きで出す。撮影 UI の一時ファイルは読み終えたら成功・取り消し・失敗の全経路で消す（Android は次の撮影の前にも置き場を空にする）。守らない範囲: 動画の中身、OS の撮影 UI の見た目・画質・形式、撮影中に背景へ移ったときの OS の挙動、撮影 UI が閉じないまま完了通知が届かない場合（期限を持たないため画面は撮影中のまま）、デスクトップのブラウザで既存のファイルが選ばれること、`EXTRA_OUTPUT` を無視するカメラアプリ、複数タブ・複数プロセス、撮影中のプロセス死（Android は次回の撮影の前に置き場を空にして回収する）。"
 }

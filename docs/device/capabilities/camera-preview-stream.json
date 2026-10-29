@@ -42,16 +42,19 @@
     },
     "macos": {
       "status": "possible",
-      "api": "AVFoundation `AVCaptureSession` + `AVCaptureVideoDataOutput`（iOS と同じ）。`videoZoomFactor` / `videoMaxZoomFactor` は公式の対応 OS に macOS が無い（Mac Catalyst のみ）",
-      "perm": "`NSCameraUsageDescription`（未宣言。埋め込み Info.plist に新しく足す必要がある）、Hardened Runtime / Sandbox 時は `com.apple.security.device.camera`",
+      "api": "AVFoundation `AVCaptureSession` + `AVCaptureVideoDataOutput`（iOS と同じ `.m` を共有。`sessionPreset` = `vga640x480`（通らなければ既定）、32BGRA、`setSampleBufferDelegate:queue:` に serial queue）。中断は `AVCaptureSessionWasInterruptedNotification` / `InterruptionEndedNotification`、実行時の失敗は `AVCaptureSessionRuntimeErrorNotification`、カメラの取り外しは `AVCaptureDeviceWasDisconnectedNotification`。ズームの API（`videoZoomFactor`・`minAvailableVideoZoomFactor`・`maxAvailableVideoZoomFactor`）は macOS では使えない",
+      "perm": "`NSCameraUsageDescription`（埋め込み Info.plist に新しく足す。文言に本機能の画面名を含む）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）。App Sandbox・Hardened Runtime を使わない素の実行体のため `com.apple.security.device.camera` は不要",
       "url": [
         "https://developer.apple.com/documentation/avfoundation/avcapturevideodataoutput",
         "https://developer.apple.com/documentation/bundleresources/information-property-list/nscamerausagedescription",
         "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.device.camera",
-        "https://developer.apple.com/documentation/avfoundation/avcapturedevice/videozoomfactor"
+        "https://developer.apple.com/documentation/avfoundation/avcapturedevice/videozoomfactor",
+        "https://developer.apple.com/documentation/avfoundation/avcapturesessioninterruptionreasonkey",
+        "https://developer.apple.com/documentation/avfoundation/avcapturesession/wasinterruptednotification",
+        "https://developer.apple.com/documentation/avfoundation/avcapturedevice/wasdisconnectednotification",
+        "https://developer.apple.com/documentation/avfoundation/avcapturedevice/requestaccess(for:completionhandler:)"
       ],
-      "deferred": "カメラの利用目的（`NSCameraUsageDescription`）が macOS の埋め込み Info.plist に無く、新しい権限の宣言になる（camera-capture の macOS はダミー実装で実カメラを使っていない）。ズームも公式の対応 OS に macOS が無い。カメラの宣言を足す方針が決まったら、iOS と同じ `.m` を共有して見直す",
-      "note": "未実装。`NSCameraUsageDescription` が無いと許可の要求かセッション開始で例外になる（公式）。中断の通知は macOS 10.14 以上にあるが、中断の理由の列挙は macOS が公式の対応 OS に無い"
+      "note": "未実装（保留を解いた）。iOS と同じ `.m` を共有し、iOS 専用の箇所（ズーム・中断の理由・背景遷移）だけを分ける。ズームは公式の対応 OS に macOS が無いため、要求には常に「この環境では使えない」を返し、フレームのズーム値は出さない。macOS ではウィンドウが背面・最小化でも映像を続け、背景へ移ったことによる停止は起きない（停止は「止める」・画面を離れる・失敗だけ）。中断の理由（`AVCaptureSessionInterruptionReasonKey`）は macOS で使えないため、OS の中断はすべて中断中にし、中断の終了で映像中へ戻る。カメラの取り外しは実行中の失敗。`NSCameraUsageDescription` が無いと許可の要求かセッション開始で終了させられる（公式）。使うカメラは OS の既定（Mac に背面カメラは無い）。天井: 640x480 の preset と 32BGRA が内蔵カメラで通るか、他のアプリと同時に使ったときに中断が届くかは Mac 目視（#808）で確かめる"
     },
     "windows": {
       "status": "possible",
