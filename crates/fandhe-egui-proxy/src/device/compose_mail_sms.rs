@@ -5,18 +5,18 @@
 //! `device/app_badge.rs` と同型）。契約と守る範囲は `fandhe_device::compose_mail_sms` の
 //! モジュール doc を参照。
 //!
-//! - iOS（b-ios）/ Android（b-android）: コールバック型のため pull 型 [`bridge`]（`RequestSlot`
-//!   の facade）で毎フレーム `drive_callback` が結果を反映する。各 OS モジュールが実装済み。
-//!   **dispatch はここで最終形にしてあり、
-//!   後続 issue は OS 別モジュールだけを埋める**
-//! - macOS / Windows / それ以外: [`ComposeMailSms`] を UI スレッドで同期に呼ぶ。Linux は
-//!   `UnsupportedComposeMailSms` で「非対応」を表示する
+//! - iOS / Android: コールバック型のため pull 型 [`bridge`]（`RequestSlot` の facade）で毎フレーム
+//!   `drive_callback` が結果を反映する。**dispatch はここで最終形にしてあり、後続 issue は OS 別
+//!   モジュールだけを埋める**
+//! - macOS / Windows / それ以外: [`ComposeMailSms`] を UI スレッドで同期に呼ぶ（macOS の添付付きも
+//!   `NSSharingService` を同期に呼び、完了は待たない）。Windows の添付付きは #1043 が埋めるまで
+//!   `to_url` が `Unsupported` を返す。Linux は `UnsupportedComposeMailSms` で「非対応」を表示する
 
 use fandhe_core::screens::compose_mail_sms::{
     take_request, ComposeFailure, ComposeMailSmsState, ComposeRequestView, ComposeTarget,
     CoreOutcome,
 };
-use fandhe_device::compose_mail_sms::{ComposeAttachment, ComposeOutcome, ComposeRequest};
+use fandhe_device::compose_mail_sms::{self, ComposeAttachment, ComposeOutcome, ComposeRequest};
 use fandhe_device::DeviceError;
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
@@ -45,6 +45,22 @@ fn to_outcome(result: Result<ComposeOutcome, DeviceError>) -> Result<CoreOutcome
                 "compose body" => "本文",
                 "compose attachment" => "添付",
                 _ => "入力",
+            }
+            .to_string(),
+        )),
+        Err(DeviceError::Internal(label)) => Err(ComposeFailure::Failed(
+            match label {
+                l if l == compose_mail_sms::ATTACHMENT_FILE => {
+                    "添付の一時ファイルを用意できませんでした"
+                }
+                l if l == compose_mail_sms::CLEANUP => {
+                    "前回の添付の一時ファイルを消せなかったため、作成画面を開きませんでした"
+                }
+                l if l == compose_mail_sms::BUSY => "前の作成画面がまだ開いています",
+                l if l == compose_mail_sms::MAPI => {
+                    "既定のメールアプリで添付付きの作成を開けませんでした（新しい Outlook は非対応）"
+                }
+                _ => "OS の作成画面を開けませんでした",
             }
             .to_string(),
         )),
@@ -84,8 +100,15 @@ pub(crate) fn outcome_from_android_code(code: i32) -> Result<ComposeOutcome, Dev
 fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, DeviceError> {
     match view.target {
         ComposeTarget::Mail => {
-            let req =
-                ComposeRequest::mail(&view.to, &view.cc, &view.bcc, &view.subject, &view.body)?;
+            // macOS の `NSSharingService` は To しか渡せないため、添付付きは CC / BCC を付けない
+            // （画面にもその旨を出す。黙って落とすのではなく要求の側で外す）。
+            let none: &[String] = &[];
+            let (cc, bcc) = if cfg!(target_os = "macos") && view.attachment.is_some() {
+                (none, none)
+            } else {
+                (&view.cc[..], &view.bcc[..])
+            };
+            let req = ComposeRequest::mail(&view.to, cc, bcc, &view.subject, &view.body)?;
             match &view.attachment {
                 Some(a) => req.with_attachment(ComposeAttachment::new(
                     &a.file_name,
@@ -283,6 +306,26 @@ mod tests {
             to_outcome(Err(DeviceError::Internal("compose present"))),
             Err(ComposeFailure::Failed(_))
         ));
+    }
+
+    #[test]
+    fn to_outcome_maps_attachment_labels_to_fixed_text() {
+        for l in [
+            compose_mail_sms::ATTACHMENT_FILE,
+            compose_mail_sms::CLEANUP,
+            compose_mail_sms::BUSY,
+            compose_mail_sms::MAPI,
+        ] {
+            let Err(ComposeFailure::Failed(m)) = to_outcome(Err(DeviceError::Internal(l))) else {
+                panic!("{l}");
+            };
+            assert!(!m.contains("compose") && !m.is_empty());
+            assert_ne!(m, "OS の作成画面を開けませんでした");
+        }
+        assert_eq!(
+            to_outcome(Err(DeviceError::Unsupported("compose cc"))),
+            Ok(CoreOutcome::Unsupported)
+        );
     }
 
     #[test]

@@ -197,6 +197,7 @@ pub fn take_request(state: &ComposeMailSmsState) -> Option<ComposeRequestView> {
     }
     let target = state.target?;
     let own = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let with_attachment = state.attachment && target == ComposeTarget::Mail;
     let (to, cc, bcc, subject, body) = match target {
         ComposeTarget::Mail => (
             own(MAIL_TO),
@@ -215,7 +216,7 @@ pub fn take_request(state: &ComposeMailSmsState) -> Option<ComposeRequestView> {
         bcc,
         subject: subject.to_string(),
         body: body.to_string(),
-        attachment: (state.attachment && target == ComposeTarget::Mail).then(|| AttachmentView {
+        attachment: with_attachment.then(|| AttachmentView {
             file_name: MAIL_ATTACHMENT_NAME.to_string(),
             mime_type: MAIL_ATTACHMENT_MIME.to_string(),
             data: MAIL_ATTACHMENT_DATA.to_vec(),
@@ -272,7 +273,9 @@ pub fn current_screen(state: &ComposeMailSmsState) -> Screen<ComposeMailSmsState
         .text(format!("CC: {}", MAIL_CC.join(", ")))
         .text(format!("BCC: {}", MAIL_BCC.join(", ")))
         .text(format!("メール件名: {MAIL_SUBJECT}"))
-        .text(format!("添付: {MAIL_ATTACHMENT_NAME}"))
+        .text(format!(
+            "添付: {MAIL_ATTACHMENT_NAME}（macOS の添付付きは CC / BCC なし）"
+        ))
         .dynamic_text(status_text)
         .error_text(error_text);
     if state.phase != ComposePhase::Idle {
@@ -371,6 +374,18 @@ mod tests {
         assert!(take_request(&s).is_none());
         compose_mail(&mut s);
         assert_eq!(s.phase, ComposePhase::Composing);
+    }
+
+    #[test]
+    fn attachment_request_keeps_cc_bcc() {
+        let mut s = ComposeMailSmsState::default();
+        compose_mail_with_attachment(&mut s);
+        let r = take_request(&s).unwrap();
+        assert_eq!((r.cc.len(), r.bcc.len()), (1, 1));
+        let mut t = ComposeMailSmsState::default();
+        compose_mail(&mut t);
+        let r = take_request(&t).unwrap();
+        assert_eq!((r.cc.len(), r.bcc.len()), (1, 1));
     }
 
     #[test]
