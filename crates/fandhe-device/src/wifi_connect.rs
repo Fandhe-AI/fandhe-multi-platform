@@ -2,7 +2,7 @@
 //! （Phase 11 の拡充ループ、対応表 `docs/device/capabilities/wifi-connect.json`、親 #165、Issue #791）。
 //!
 //! `fandhe-egui-proxy` の `device/wifi_connect.rs` がワーカースレッドで [`WifiConnect::connect`] を
-//! 呼ぶ（ブロッキングの契約）。対象は macOS（#791）と Windows（#792）。iOS・Android は対応表で
+//! 呼ぶ（ブロッキングの契約）。対象は macOS（#791）・Windows（#792）・Android（API 29 以上）。iOS は対応表で
 //! `deferred`、Web は `no`。入力は [`validate`] を通した [`ConnectRequest`] だけが OS へ渡る。
 //! 今つながっている Wi-Fi を読む `wifi_info` とは別で、本機能は書き込み側。
 //!
@@ -24,12 +24,20 @@
 //! - **OS を正にする**。接続できるかを事前に判定せず要求を出し、OS の戻り値を写す。電源・許可を
 //!   OS に読み直すのは、失敗したときに理由を分けるためだけに限る
 //! - 「接続した」は、その要求に対する OS の結果にすぎない。いま接続中だとは主張せず、アプリ側に
-//!   接続中の記憶を持たない（今の接続は `wifi_info` で OS に問う）
+//!   接続中の記憶を持たない（今の接続は `wifi_info` で OS に問う）。Android の `Ok(())` は、このアプリだけが
+//!   使える接続を OS が張ったという意味で、端末全体の接続ではなくインターネットにも使われない。
+//!   `wifi_info` の今の接続に出ないことがある
+//! - **要求の保持（Android のみ）**: OS は接続要求を解放するまで接続を保ち、解放すると接続を切りうる。
+//!   成功した要求は、次の [`WifiConnect::connect`] の直前か Activity の破棄（画面回転を含む）で解放し、
+//!   それ以外では放さない。保留中（OS の結果を待っている）の要求は、Activity の破棄で
+//!   `Internal(`[`CONNECT_FAILED`]`)` に確定して取り下げる。握るのは OS の要求だけで、接続中かどうかは記憶しない
 //! - 期限とポーリングを持たない。待ちが終わるのは、OS の結果が返るかアプリが終了するときだけ
 //! - **三値**（類型 10）: 利用者が取り消せるのは macOS の管理者パスワードのダイアログだけ。OS が
 //!   この取り消しを識別できる値で返すかは未確認のため、いまは [`CONNECT_FAILED`] に含めて失敗として
 //!   出す（画面の文言は利用者を責めない言い方にする）。識別できる値が見つかれば後で分ける
-//!   （Mac 目視 #782 の確認項目）
+//!   （Mac 目視 #782 の確認項目）。Android は拒否・見つからない・接続の失敗・前景でない要求がすべて同じ
+//!   `onUnavailable` で届くため、Wi-Fi の電源を読み直してオフだけを分け、残りは [`CONNECT_FAILED`] にする
+//!   （[`NOT_FOUND`] は返さない）
 //! - SSID・パスワード・OS のエラー値（`CWErr` / `NSError` / HRESULT）をログ・エラー・`Debug` に出さない
 //!   （[`WifiSsid`]・[`WifiPassword`] の `Debug` は伏せ字で、`Display` は無い）
 //! - 失敗・見つからない・許可なし・電源オフ・設定を受け付けただけの状態を「接続した」に畳まない。
@@ -45,6 +53,8 @@
 //! - 管理者パスワードのダイアログで待つ時間
 //! - Windows で他のアプリが同時に接続を要求したときの通知の取り違え
 //! - 複数アダプターで 1 つだけを使うこと、複数プロセスからの同時の要求
+//! - Android で画面を離れた後も、次の要求か Activity の破棄まで接続が残ること
+//! - Android で画面回転（Activity の再生成）により接続が切れること
 //! - メモリ上のパスワードの消去（保証しない）
 //!
 //! # OS ごとの写像
@@ -56,6 +66,11 @@
 //!   の通知を待つ。登録 → 接続 → 解除 → context の解放 → ハンドルを閉じる、の順を全経路で守る。
 //!   プロファイル XML は SSID を 16 進で入れ、パスワードは XML エスケープする。WPA2-Personal（AES）と
 //!   暗号なしだけを扱う
+//! - Android: `WifiNetworkSpecifier`（`setSsid` + `setWpa2Passphrase`、パスワードが空なら暗号なし）で
+//!   `requestNetwork` を出し、最初に届いた `onAvailable` を `Ok(())`、`onUnavailable` を失敗にする。
+//!   API 28 以下は `Unsupported`。16 進 64 文字の鍵は Specifier が ASCII のパスフレーズとして扱うため
+//!   OS へ渡さず [`CONNECT_FAILED`]。WPA3 だけのネットワークは [`CONNECT_FAILED`]。要求の生成・登録で
+//!   例外（`TooManyRequestsException`・`SecurityException` 等）が出たら [`CONNECT_FAILED`]
 
 use crate::DeviceError;
 
