@@ -468,6 +468,9 @@ mod tests {
             }
         }
 
+        // Windows の添付付きは `drive` が実 MAPI（`begin_attachment`）へ直行し composer を使わないため、
+        // 実ダイアログを開かないようこのテストは Windows で走らせない（MAPI 経路は windows_compose_mail_sms のテストが持つ）。
+        #[cfg(not(target_os = "windows"))]
         #[test]
         fn attachment_over_url_path_shows_unsupported() {
             let mut s = ComposeMailSmsState::default();
