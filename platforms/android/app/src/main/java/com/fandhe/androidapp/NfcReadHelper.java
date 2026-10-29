@@ -22,7 +22,8 @@ import androidx.lifecycle.Lifecycle;
 // スレッド: 状態の更新は main looper 1 本。`onTagDiscovered` の呼ばれるスレッドは公式に記載が無いため、
 // どのスレッドでも安全なよう結果を main へ post してから確定する。
 // 結果の確定は必ず `disableReaderMode` を済ませてから `finish` で 1 回だけ行う（`RequestTracker.complete`
-// が id 照合の first-wins）。解除が例外を投げたら取れた結果は捨てて FAILED にする。
+// が id 照合の first-wins）。解除が例外を投げたら取れた結果は捨てて FAILED にし、未解放を static に記録して
+// onPause / 次の要求の前に再試行する（解除できるまで次の要求は FAILED で断る）。
 // ライフサイクル: `onPause` で解除して INTERRUPTED で確定する（OS は resume で reader mode を付け直すため
 // 明示的に解除する。NFC は normal 権限で許可ダイアログが無く、pause を正常な許可の中断と取り違えない）。
 // `onDestroy` も INTERRUPTED。再生成後の新インスタンスは空の tracker から始まり旧結果は捨てられる。
@@ -66,6 +67,11 @@ final class NfcReadHelper {
     private Req cur;
     private boolean destroyed;
 
+    // 解除に失敗した reader mode の記録。要求より長く生きるよう static に置く（Activity 再生成後の
+    // 新インスタンスも見られる）。解除が確認できるまで次の要求を受け付けない。main スレッドのみ触る。
+    private static NfcAdapter unreleasedAdapter;
+    private static android.app.Activity unreleasedActivity;
+
     NfcReadHelper(ComponentActivity activity) {
         this.activity = activity;
     }
@@ -92,6 +98,7 @@ final class NfcReadHelper {
         if (r != null) {
             end(r, CODE_INTERRUPTED, null);
         }
+        retryUnreleased();
     }
 
     // MainActivity.onDestroy から UI スレッドで呼ぶ。
@@ -113,15 +120,37 @@ final class NfcReadHelper {
             cur = null;
         }
         if (r.adapter != null) {
-            try {
-                r.adapter.disableReaderMode(activity);
-            } catch (RuntimeException e) {
+            if (!release(r.adapter, activity)) {
+                unreleasedAdapter = r.adapter;
+                unreleasedActivity = activity;
                 code = CODE_FAILED;
                 ndef = null;
             }
             r.adapter = null;
         }
         finish(r.id, code, ndef);
+    }
+
+    private static boolean release(NfcAdapter adapter, android.app.Activity act) {
+        try {
+            adapter.disableReaderMode(act);
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    // 未解放の記録があれば解除を再試行する。確認できたら記録を消して true、まだなら false。
+    private static boolean retryUnreleased() {
+        if (unreleasedAdapter == null) {
+            return true;
+        }
+        if (release(unreleasedAdapter, unreleasedActivity)) {
+            unreleasedAdapter = null;
+            unreleasedActivity = null;
+            return true;
+        }
+        return false;
     }
 
     private void begin(Req r) {
@@ -134,6 +163,10 @@ final class NfcReadHelper {
         if (prev != null) {
             // 旧要求の結果は tracker の id 不一致で捨てられる。
             end(prev, CODE_INTERRUPTED, null);
+        }
+        if (!retryUnreleased()) {
+            finish(r.id, CODE_FAILED, null);
+            return;
         }
         try {
             NfcAdapter adapter = NfcAdapter.getDefaultAdapter(activity);
@@ -170,7 +203,8 @@ final class NfcReadHelper {
             } else {
                 NdefMessage msg = ndef.getCachedNdefMessage();
                 if (msg == null) {
-                    code = CODE_EMPTY;
+                    // OS が値を返さなかった。空 NDEF（0 レコード）の判定は Rust の共通パーサーに委ね、成功に畳まない。
+                    code = CODE_FAILED;
                 } else {
                     byte[] raw = msg.toByteArray();
                     if (raw.length > r.maxBytes) {

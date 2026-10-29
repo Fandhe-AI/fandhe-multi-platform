@@ -84,11 +84,12 @@ fn read_with(
         match slot.snapshot() {
             Some((cur, Some((code, ndef)))) if cur == id => {
                 slot.clear(id);
-                // 期限の後に届いた結果は、成功でも成功として受け取らない。
-                return if timed_out {
+                // 期限の後に届いた成功と取り消しの最終通知は TimedOut。それ以外の失敗は実際の理由を通す。
+                let outcome = decode(code, ndef);
+                return if timed_out && (code == CODE_CANCELLED || outcome.is_ok()) {
                     Err(NfcReadFailure::TimedOut)
                 } else {
-                    decode(code, ndef)
+                    outcome
                 };
             }
             Some((cur, None)) if cur == id => {
@@ -363,6 +364,21 @@ mod tests {
             },
         );
         assert_eq!(r.err(), Some(F::TimedOut));
+    }
+
+    #[test]
+    fn failure_after_deadline_keeps_real_reason() {
+        let slot = RequestSlot::<Reply>::new();
+        let r = read_with(
+            &slot,
+            SHORT,
+            |_| true,
+            |id| {
+                slot.deliver(id, (CODE_FAILED, None));
+                true
+            },
+        );
+        assert_eq!(r.err(), Some(F::Failed));
     }
 
     #[test]
