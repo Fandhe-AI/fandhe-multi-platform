@@ -7,7 +7,7 @@
 //! OS 呼び出しは `fandhe-egui-proxy` の `device/wifi_connect.rs` が [`take_request`] で要求を観測し
 //! [`finish_connect`] で結果を注入する（`wifi_info_show.rs` と同型）。
 //!
-//! 全対象 OS（macOS / Windows）の文言・状態をここで確定済みで、後続の OS 実装は本画面を触らない。
+//! 全対象 OS（macOS / Windows / Android）の文言・状態をここで確定済みで、後続の OS 実装は本画面を触らない。
 //! 起動時には接続しない。
 //!
 //! # 秘密値の扱い
@@ -31,7 +31,7 @@ const CONNECT_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 /// 画面タイトル。
 pub const TITLE: &str = "指定した Wi-Fi への接続";
 /// 画面の説明。
-pub const NOTE: &str = "入力した SSID とパスワードの Wi-Fi へ 1 回接続を要求し、OS の結果を表示します。パスワードは表示が伏せられません。暗号なしの Wi-Fi はパスワードを空にしてください。今の接続は「Wi-Fi 情報」で確認できます";
+pub const NOTE: &str = "入力した SSID とパスワードの Wi-Fi へ 1 回接続を要求し、OS の結果を表示します。パスワードは表示が伏せられません。暗号なしの Wi-Fi はパスワードを空にしてください。今の接続は「Wi-Fi 情報」で確認できます（Android ではこのアプリだけの接続で、Wi-Fi 情報に出ないことがあります）";
 /// SSID 入力欄のラベル。
 pub const SSID_LABEL: &str = "SSID";
 /// パスワード入力欄のラベル。
