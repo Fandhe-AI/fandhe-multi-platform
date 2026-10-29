@@ -460,8 +460,11 @@ mod tests {
         }
 
         /// 実際の `to_url` を通す（URL 経路の OS 実装と同じ。添付は `Unsupported` になる）。
+        /// 使うのは Windows で走らせない添付のテストだけ。
+        #[cfg(not(target_os = "windows"))]
         struct UrlOnly;
 
+        #[cfg(not(target_os = "windows"))]
         impl ComposeMailSms for UrlOnly {
             fn compose(&self, r: &ComposeRequest) -> Result<ComposeOutcome, DeviceError> {
                 r.to_url().map(|_| ComposeOutcome::HandedOff)
