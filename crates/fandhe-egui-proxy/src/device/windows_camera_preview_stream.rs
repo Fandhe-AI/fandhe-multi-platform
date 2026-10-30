@@ -332,8 +332,14 @@ impl Worker {
                 }
             }
             Cmd::Zoom(id, step) => {
-                if let Some(s) = self.cur(id).filter(|s| s.started) {
-                    if let Err(f) = apply_zoom(s, step) {
+                if let Some(s) = self.cur(id) {
+                    // 開始確定前の要求は黙って捨てず、失敗として通知する。
+                    let r = if s.started {
+                        apply_zoom(s, step)
+                    } else {
+                        Err(ZoomFailure::Failed)
+                    };
+                    if let Err(f) = r {
                         deliver_event(id, PreviewEvent::ZoomFailed(f));
                     }
                 }
@@ -526,6 +532,8 @@ impl Worker {
             .filter(|z| z.Supported().unwrap_or(false));
         s.started = true;
         deliver_event(id, PreviewEvent::Running);
+        // 開始確定前に届いた状態通知は無視されているため、現在の状態で一度評価し直す。
+        self.stream_state(id);
     }
 
     fn stream_state(&mut self, id: u64) {
@@ -548,10 +556,13 @@ impl Worker {
     }
 
     fn frame(&mut self, id: u64) {
-        let Some(s) = self.cur(id).filter(|s| s.started) else {
-            return;
-        };
+        let Some(s) = self.cur(id) else { return };
+        // FrameArrived は開始確定より先に届きうる。started 判定より前に畳み込み旗を戻し、
+        // 以後の FrameReady が積まれなくなる停止を防ぐ。
         s.frame_flag.store(false, Ordering::SeqCst);
+        if !s.started {
+            return;
+        }
         let Some(reader) = &s.reader else { return };
         // 新しいフレームが無い（null）回は何もしない。失敗扱いにもしない。
         let Ok(fr) = reader.TryAcquireLatestFrame() else {
