@@ -56,10 +56,7 @@ private struct FandheAlarmMetadata: AlarmMetadata {}
 @available(iOS 26.0, *)
 private func presentation() -> AlarmPresentation {
     let title: LocalizedStringResource = "Fandhe のアラーム"
-    if #available(iOS 26.1, *) {
-        return AlarmPresentation(alert: .init(title: title))
-    }
-    // 26.0 は stopButton が必須。
+    // stopButton 付きは 26.0 / 26.1 以降の両 SDK で型検査が通る（省略版は 26.1 SDK のみ）。
     let stop = AlarmButton(text: "停止", textColor: .white, systemImageName: "stop.circle")
     return AlarmPresentation(alert: .init(title: title, stopButton: stop))
 }
