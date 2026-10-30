@@ -147,6 +147,10 @@
   種別は `fandhe_device::uwb_ranging::SERVICE_TYPE` と一致させる。最小権限（security.md A05）とし、
   entitlement・multicast entitlement・`UIBackgroundModes` は足さない（測距は前面の間だけ）。
 
+  NSAlarmKitUsageDescription（Issue #1077）: 型サンプル「アラーム」（`FANDHE_PROXY_APP=alarm_show`）が
+  AlarmKit で予約するために必須。無い・空だと予約できない。最小権限（security.md A05）とし、
+  entitlement・Widget Extension は足さない（固定時刻の一回きりでカウントダウン表示を持たない）。
+
   BGTaskSchedulerPermittedIdentifiers / UIBackgroundModes（Issue #1045）: 型サンプル
   「バックグラウンド処理」画面（`FANDHE_PROXY_APP=background_task`）が
   `BGTaskScheduler`（`crates/fandhe-egui-proxy/ios/fandhe_ios_background_task.m`）で
@@ -290,6 +294,8 @@
 	<string>型サンプル「歩数」「気圧」「行動認識」の動作確認に使います</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>型サンプル「写真の保存」の動作確認に使います</string>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>型サンプル「アラーム」の動作確認に使います</string>
 	<key>NSAppleMusicUsageDescription</key>
 	<string>型サンプル「音楽ライブラリ」の動作確認に使います</string>
 	<key>NSLocalNetworkUsageDescription</key>

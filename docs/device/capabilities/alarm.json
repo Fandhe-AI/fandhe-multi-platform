@@ -7,7 +7,7 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "AlarmKit（`AlarmManager.shared.schedule(id:configuration:)` に `Alarm.Schedule.fixed(Date)`、一覧は `alarms`、取り消しは `cancel(id:)`。iOS 26 以上の Swift 専用 API を `@_cdecl` の Swift 薄層で包む）",
       "perm": "Info.plist の `NSAlarmKitUsageDescription`（無い・空だと予約できない）と実行時の許可（`requestAuthorization()`）。entitlement は不要",
       "url": [
@@ -17,7 +17,10 @@
         "https://developer.apple.com/documentation/alarmkit/alarmmanager",
         "https://developer.apple.com/documentation/alarmkit/alarmpresentation/alert-swift.struct"
       ],
-      "note": "未実装。iOS 26 未満は非対応として失敗にする。許可が未決定なら予約の操作で許可ダイアログを出し、応答を待つ。拒否済みなら許可を求め直さず失敗にする（設定アプリで許可する）。固定時刻の一回きりのアラームなので Widget Extension・Live Activity は足さない（公式: カウントダウン表示を持つ場合に Widget Extension を求める）。アラームは集中モード・消音モードを越えて鳴る（公式）。鳴っている間（`alerting`）は OS の一覧に残るので予約中と表示する"
+      "note": "実装済み（#1077）。iOS 26 未満・旧 SDK でビルドした場合は非対応として失敗にする。許可が未決定なら予約の操作で許可ダイアログを出し、応答を期限なしで待つ（中断できないため）。拒否済みなら許可を求め直さず失敗にする（設定アプリで許可する）。固定時刻の一回きりのアラームなので Widget Extension・Live Activity は足さない（公式: カウントダウン表示を持つ場合に Widget Extension を求める）。アラームは集中モード・消音モードを越えて鳴る（公式）。鳴っている間（`alerting`）は OS の一覧に残るので予約中と表示する。二重予約は置き換えで、古い予約を消せなければ新しい予約は作らない。予約の後に一覧を読み直し、自分の予約が無ければ成功にせず失敗にする。表示は iOS 26.1 以上と 26.0 で作り方が違う（26.0 は停止ボタンを渡す）。守らない範囲: 鳴ったかどうかの検知、スヌーズ・繰り返し、カウントダウン表示。【推測】許可ダイアログの出方、鳴動の挙動、`Info.plist` のキーの効きは #711 の iOS 実機確認で確かめる",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#711）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_alarm.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_alarm.swift + crates/fandhe-egui-proxy/src/device/alarm.rs + crates/fandhe-core/src/screens/alarm_show.rs + crates/fandhe-device/src/alarm.rs、Issue #1077"
     },
     "android": {
       "status": "possible",
