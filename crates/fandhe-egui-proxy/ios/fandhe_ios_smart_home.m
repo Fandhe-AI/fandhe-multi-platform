@@ -27,7 +27,9 @@
 //
 // スレッド: HMHomeManager・delegate・本ファイルの静的状態は main queue だけが触る。delegate が
 // どの queue で呼ばれるかはヘッダに明記が無いため、delegate 側で必ず `dispatch_async(main)` に載せ直す。
-// ワーカーは semaphore で待つだけで、期限切れの戻り前に `dispatch_sync(main)` で待ち登録を外す。
+// ワーカーは semaphore で待つだけ。期限切れは要求の atomic な取消旗を立てて即座に戻り、main queue を待たない
+// （main が詰まっていても期限内に戻り、g_in_flight も戻る時点で解除される）。main 側の遅延した登録・評価は
+// 実行時に取消旗を見て、立っていれば何もしない。
 // ワーカーはロックを持たず（旗は atomic のみ）、main は本関数を待たないのでデッドロックしない。
 // 期限後に届いた結果は ctx にだけ書かれ、呼び出し元の buf・out_* へは触れない。
 // manager と delegate はプロセスで 1 つ、意図して解放しない（初回の要求で生成）。
@@ -64,6 +66,8 @@ static NSString *FandheCleanField(NSString *s) {
 @property(nonatomic) int32_t code;
 @property(nonatomic) NSUInteger homeCount;
 @property(nonatomic) BOOL overflow;
+// 期限切れでワーカーが戻ったら立てる（atomic）。main 側の遅延処理は実行時に見て、立っていれば何もしない。
+@property(atomic) BOOL cancelled;
 @property(nonatomic, strong) NSMutableArray<NSArray<NSString *> *> *rows;
 @end
 @implementation FandheSmartHomeWaiter
@@ -81,6 +85,10 @@ static FandheSmartHomeWaiter *g_waiter = nil;
 static void FandheEvaluate(void) {
     FandheSmartHomeWaiter *ctx = g_waiter;
     if (ctx == nil || g_manager == nil) {
+        return;
+    }
+    if (ctx.cancelled) {
+        g_waiter = nil;
         return;
     }
     HMHomeManagerAuthorizationStatus status = g_manager.authorizationStatus;
@@ -158,17 +166,17 @@ int32_t fandhe_ios_smart_home_list(uint64_t timeout_ms, uint8_t *buf, size_t cap
                 g_manager = [HMHomeManager new];
                 g_manager.delegate = g_delegate;
             }
+            if (ctx.cancelled) {
+                return;
+            }
             g_waiter = ctx;
             FandheEvaluate();
         });
 
         if (dispatch_semaphore_wait(ctx.sem, deadline) != 0) {
-            // 期限切れ。戻る前に待ち登録を外す。確定済みでも期限後の結果は成功にしない。
-            dispatch_sync(dispatch_get_main_queue(), ^{
-                if (g_waiter == ctx) {
-                    g_waiter = nil;
-                }
-            });
+            // 期限切れ。main queue を待たず、要求を取消済みにして戻る。
+            // 登録前なら main 側が登録を飛ばし、登録後なら次の評価か次の要求の登録で外れる。
+            ctx.cancelled = YES;
             result = 3;
         } else if (ctx.code != 0) {
             result = ctx.code;
