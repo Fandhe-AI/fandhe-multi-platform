@@ -57,12 +57,22 @@ pub enum ReadPhase {
 }
 
 /// 読み取りの成功値（`fandhe_device::health_data::HealthSteps` から写す責務は effect 側）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum StepsReading {
     /// 今日の歩数（0 を含む）。
     Steps(u64),
     /// 記録が見えない。
     NoVisibleData,
+}
+
+/// 歩数は健康情報のため Debug 出力へ出さない（`HealthSteps` と同じ方針）。
+impl std::fmt::Debug for StepsReading {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Steps(_) => f.write_str("Steps(<redacted>)"),
+            Self::NoVisibleData => f.write_str("NoVisibleData"),
+        }
+    }
 }
 
 /// 失敗の種別（`fandhe_device::health_data::HealthDataFailure` から写す責務は effect 側）。
@@ -79,7 +89,7 @@ pub enum ReadFailure {
 }
 
 /// 画面の状態。
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Clone, PartialEq, Eq, Default)]
 pub struct HealthStepsReadState {
     /// 操作の進行状態。
     pub phase: ReadPhase,
@@ -91,6 +101,19 @@ pub struct HealthStepsReadState {
     pub status: String,
     /// 失敗理由（`TextRole::Error` で表示）。成功・取り消し・記録なしは空。
     pub error: String,
+}
+
+/// 歩数を含む `steps` と `status` は Debug 出力へ出さない（有無だけ示す）。
+impl std::fmt::Debug for HealthStepsReadState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HealthStepsReadState")
+            .field("phase", &self.phase)
+            .field("generation", &self.generation)
+            .field("steps", &self.steps.map(|_| "<redacted>"))
+            .field("status", &"<redacted>")
+            .field("error", &self.error)
+            .finish()
+    }
 }
 
 /// effect ドライバへ渡す要求（[`take_request`] の戻り値）。
@@ -185,6 +208,15 @@ mod tests {
         read(&mut state);
         mark_reading(&mut state);
         state
+    }
+
+    #[test]
+    fn debug_hides_steps() {
+        let mut state = HealthStepsReadState::default();
+        read(&mut state);
+        finish_read(&mut state, 1, Ok(StepsReading::Steps(12345)));
+        assert!(!format!("{state:?}").contains("12345"));
+        assert!(!format!("{:?}", StepsReading::Steps(12345)).contains("12345"));
     }
 
     #[test]
