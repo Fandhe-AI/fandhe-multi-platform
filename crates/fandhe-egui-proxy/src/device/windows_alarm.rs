@@ -77,16 +77,6 @@ pub(crate) fn filetime_ticks_to_unix_ms(ticks: i64) -> Option<u64> {
     u64::try_from(since_epoch / TICKS_PER_MS).ok()
 }
 
-/// 予約時刻が現在より未来であることを確かめる。過去・現在は `InvalidInput`
-/// （`AddToSchedule` も過去の時刻では失敗する、公式）。
-pub(crate) fn validate_fire_at(fire_at_unix_ms: u64, now_unix_ms: u64) -> Result<(), DeviceError> {
-    if fire_at_unix_ms <= now_unix_ms {
-        Err(DeviceError::InvalidInput("alarm time"))
-    } else {
-        Ok(())
-    }
-}
-
 /// 予約一覧の Id が本アプリの予約か。
 fn is_alarm_id(id: &str) -> bool {
     id == ALARM_ID
@@ -98,7 +88,6 @@ pub(super) use imp::WindowsAlarm;
 #[cfg(target_os = "windows")]
 mod imp {
     use std::sync::Mutex;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use fandhe_device::alarm::{Alarm, AlarmState};
     use fandhe_device::DeviceError;
@@ -109,12 +98,13 @@ mod imp {
         ScheduledToastNotification, ToastNotificationManager, ToastNotifier,
     };
 
+    use super::super::alarm::{now_unix_ms, validate_fire_at};
     use super::super::windows_notification::{
         ensure_app_aumid, setting_result_for, ComInit, APP_AUMID,
     };
     use super::{
-        filetime_ticks_to_unix_ms, is_alarm_id, unix_ms_to_filetime_ticks, validate_fire_at,
-        ALARM_ID, TOAST_BODY, TOAST_TITLE, TOAST_XML,
+        filetime_ticks_to_unix_ms, is_alarm_id, unix_ms_to_filetime_ticks, ALARM_ID, TOAST_BODY,
+        TOAST_TITLE, TOAST_XML,
     };
 
     /// WinRT による `Alarm` 実装。`lock` は schedule・cancel・state を直列化する。
@@ -128,13 +118,6 @@ mod imp {
                 lock: Mutex::new(()),
             }
         }
-    }
-
-    fn now_unix_ms() -> Result<u64, DeviceError> {
-        let d = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| DeviceError::Internal("alarm clock"))?;
-        u64::try_from(d.as_millis()).map_err(|_| DeviceError::Internal("alarm clock"))
     }
 
     /// 登録済み AUMID の送り手を作る（通知設定は確かめない）。予約一覧の読み取りと
@@ -311,19 +294,6 @@ mod tests {
             unix_ms_to_filetime_ticks(i64::MAX as u64),
             Err(DeviceError::InvalidInput("alarm time"))
         ));
-    }
-
-    #[test]
-    fn past_and_present_times_are_rejected() {
-        assert!(matches!(
-            validate_fire_at(100, 200),
-            Err(DeviceError::InvalidInput("alarm time"))
-        ));
-        assert!(matches!(
-            validate_fire_at(200, 200),
-            Err(DeviceError::InvalidInput("alarm time"))
-        ));
-        assert!(validate_fire_at(201, 200).is_ok());
     }
 
     #[test]

@@ -27,8 +27,9 @@
 //!
 //! # 実装
 //!
-//! Windows は [`super::windows_alarm::WindowsAlarm`]。それ以外は
-//! [`fandhe_device::alarm::UnsupportedAlarm`] 固定で、`Unsupported` は固定文言に
+//! Windows は [`super::windows_alarm::WindowsAlarm`]。iOS は `ios_alarm`（#1076 のスタブ、
+//! #1077 が実体に差し替える）、Android は `android_alarm`（同、#1078）。それ以外
+//! （macOS・Linux 等）は [`fandhe_device::alarm::UnsupportedAlarm`] 固定で、`Unsupported` は固定文言に
 //! 畳む（[`to_message`]）。
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -37,7 +38,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use fandhe_core::screens::alarm_show::{
     apply_check_failure, apply_snapshot, finish_action, mark_in_flight, take_request, Action,
-    AlarmShowState, Phase, ScheduleView,
+    AlarmShowState, Phase, ScheduleView, PERMISSION_DENIED_TEXT,
 };
 use fandhe_device::alarm::{Alarm, AlarmState};
 use fandhe_device::DeviceError;
@@ -56,6 +57,8 @@ const DELAY: Duration = Duration::from_secs(60);
 fn to_message(e: DeviceError) -> String {
     match e {
         DeviceError::Unsupported(_) => "この環境ではアラームを予約できません".to_string(),
+        // OS のエラー文は出さず固定文言へ畳む（security.md A09）。
+        DeviceError::PermissionDenied(_) => PERMISSION_DENIED_TEXT.to_string(),
         other => other.to_string(),
     }
 }
@@ -84,8 +87,21 @@ fn to_observation(state: Result<AlarmState, DeviceError>) -> Observation {
     }
 }
 
+/// 予約時刻が現在より未来であることを確かめる。過去・現在は `InvalidInput`
+/// （`AddToSchedule` も過去の時刻では失敗する、公式）。Windows・iOS・Android の `schedule` が
+/// OS を呼ぶ前に `validate_fire_at(fire_at, now_unix_ms()?)` で検査する共通の道具。
+// 他 OS の実体（#1077・#1078）が使うまで、ホストのビルドでは未使用になる。
+#[allow(dead_code)]
+pub(super) fn validate_fire_at(fire_at_unix_ms: u64, now_unix_ms: u64) -> Result<(), DeviceError> {
+    if fire_at_unix_ms <= now_unix_ms {
+        Err(DeviceError::InvalidInput("alarm time"))
+    } else {
+        Ok(())
+    }
+}
+
 /// 現在の壁時計（UNIX ms）。エポックより前・範囲外は `Internal`。
-fn now_unix_ms() -> Result<u64, DeviceError> {
+pub(super) fn now_unix_ms() -> Result<u64, DeviceError> {
     let d = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|_| DeviceError::Internal("alarm clock"))?;
@@ -93,7 +109,8 @@ fn now_unix_ms() -> Result<u64, DeviceError> {
 }
 
 /// 現在のプラットフォームに応じた `Alarm` 実装を返す。Windows は
-/// [`super::windows_alarm::WindowsAlarm`]、それ以外は `UnsupportedAlarm`
+/// [`super::windows_alarm::WindowsAlarm`]、iOS・Android は OS 別モジュール
+/// （`ios_alarm`・`android_alarm`）、それ以外は `UnsupportedAlarm`
 /// （ダミーの成功実装へは倒さない。`device-bridge-contracts.md`「6. 嘘の成功」）。
 fn implementation() -> Arc<dyn Alarm> {
     use std::sync::OnceLock;
@@ -104,7 +121,15 @@ fn implementation() -> Arc<dyn Alarm> {
             {
                 Arc::new(super::windows_alarm::WindowsAlarm::new()) as Arc<dyn Alarm>
             }
-            #[cfg(not(target_os = "windows"))]
+            #[cfg(target_os = "ios")]
+            {
+                super::ios_alarm::implementation()
+            }
+            #[cfg(target_os = "android")]
+            {
+                super::android_alarm::implementation()
+            }
+            #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
             {
                 Arc::new(fandhe_device::alarm::UnsupportedAlarm) as Arc<dyn Alarm>
             }
@@ -303,7 +328,8 @@ fn drive_effect(
 mod tests {
     use super::*;
     use fandhe_core::screens::alarm_show::{
-        cancel, error_text, schedule, status_text, CANCELLED_STATUS, SCHEDULED_STATUS,
+        cancel, error_text, schedule, status_text, CANCELLED_STATUS, FAILED_PREFIX,
+        SCHEDULED_STATUS,
     };
 
     fn sender_with_channel() -> (
@@ -415,8 +441,45 @@ mod tests {
     #[test]
     fn permission_denied_reaches_screen_as_failure() {
         let state = run_schedule(fake(Outcome::PermissionDenied));
-        assert!(error_text(&state).starts_with("失敗しました: "));
+        assert_eq!(
+            error_text(&state),
+            format!("{FAILED_PREFIX}{PERMISSION_DENIED_TEXT}")
+        );
         assert_eq!(status_text(&state), "");
+        assert!(!matches!(
+            state.schedule_view,
+            ScheduleView::Scheduled { .. }
+        ));
+    }
+
+    #[test]
+    fn permission_denied_message_is_fixed() {
+        assert_eq!(
+            to_message(DeviceError::PermissionDenied("alarm")),
+            PERMISSION_DENIED_TEXT
+        );
+    }
+
+    #[test]
+    fn past_and_present_times_are_rejected() {
+        assert!(matches!(
+            validate_fire_at(100, 200),
+            Err(DeviceError::InvalidInput("alarm time"))
+        ));
+        assert!(matches!(
+            validate_fire_at(200, 200),
+            Err(DeviceError::InvalidInput("alarm time"))
+        ));
+        assert!(validate_fire_at(201, 200).is_ok());
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
+    #[test]
+    fn fallback_implementation_is_unsupported() {
+        assert!(matches!(
+            implementation().state(),
+            Err(DeviceError::Unsupported(_))
+        ));
     }
 
     #[test]

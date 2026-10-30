@@ -24,7 +24,7 @@ pub mod accessibility_prefs;
 /// 他 OS は `UnsupportedActivityRecognizer` 固定）。
 pub mod activity_recognition;
 /// Phase 11 の拡充ループ（親 #140、Issue #721）: アラーム・正確な時刻の予約の effect
-/// ドライバ（Windows 実装、他 OS は `Unsupported` 固定）。
+/// ドライバ（Windows 実装、iOS・Android は #1077・#1078 が埋めるスタブ、他 OS は `Unsupported` 固定）。
 pub mod alarm;
 #[cfg(target_os = "android")]
 pub mod android;
@@ -33,6 +33,11 @@ pub mod android;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_accessibility_prefs;
+/// Issue #1076: Android 向けアラーム実装のスタブ（実装は #1078）。`device/alarm.rs` の Android 経路から呼ばれる。
+/// #1078 が cfg を変えずに済むよう `any(android, test)`。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_alarm;
 /// Issue #677 / #678（親 #132）: Android 向け端末・アプリの真正性証明（`AppAttestHelper.java` を同期 JNI で
 /// 呼び、Key Attestation のチェーンを取る）。`device/app_attest.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -882,6 +887,11 @@ pub mod ios_accessibility_prefs;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_activity_recognition;
+/// Issue #1076: iOS 向けアラーム実装のスタブ（実装は #1077）。`device/alarm.rs` の iOS 経路から呼ばれる。
+/// #1077 が cfg を変えずに済むよう `any(ios, test)`。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_alarm;
 /// Issue #1361: iOS 向けバッジ設定実装（`ios/fandhe_ios_app_badge.m` を呼ぶ C ABI ラッパー）。`device/app_badge.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
