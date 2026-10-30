@@ -3,8 +3,8 @@
 //!
 //! 扱う範囲は「今日 0 時から現在までの歩数の合計をヘルスストアから 1 回読む」ことだけ。
 //! 機能名は「読み書き」だが、書き込み・他のデータ型・期間指定・背景配信は扱わない。
-//! 対象は iOS（HealthKit。実体は #1090）。Android は保留（Jetpack 依存と Play の申告が要る）、
-//! macOS・Windows・Web は対象外。
+//! 対象は iOS（HealthKit）と Android（API 34 以上のフレームワーク API `HealthConnectManager`。
+//! 実体は #1100）。macOS・Windows・Web は対象外。
 //! `fandhe-egui-proxy` の `device/health_data.rs` がワーカースレッドで [`HealthData::read_today_steps`]
 //! を呼ぶ（ブロッキングの契約）。
 //!
@@ -35,9 +35,32 @@
 //! 中断扱いにしない（期限だけで決める）。
 //! 守らない: 拒否と記録なしの区別、pedometer の値との一致（HealthKit は集約値）、読み取った直後に
 //! 追加された記録、日付をまたぐ瞬間の要求、期限後に許可シートで選ばれた結果（次の要求で反映）、
-//! 複数プロセス、Android。
+//! 複数プロセス。Android 固有の守らない範囲は「Android の写像」節に書く。
 //!
 //! 使わない entitlement（`healthkit.access`・`background-delivery`）は足さない方針。
+//!
+//! # Android の写像（#1100 が従う契約）
+//!
+//! - API 33 以下、または `HealthConnectManager` を取得できない場合は `Unsupported`（コード 2）。
+//!   Jetpack の `connect-client` は使わない
+//! - 許可が得られない場合（拒否・許可画面を閉じた・拒否済みで画面が出ない）と読み取り時の
+//!   `SecurityException` は区別せず `NoVisibleData`（コード 1）。「許可なし」の種別は作らず、
+//!   0 歩にも失敗にもしない。iOS と同じ向きで、レビューの指摘で反転させない。したがって
+//!   Android は `Canceled` を返さない（三値の取り消しは iOS 専用）
+//! - `aggregate`（`StepsRecord.STEPS_COUNT_TOTAL`）が null（記録なし）なら `NoVisibleData`、
+//!   値があれば `Steps`（値域は [`decode_code`] / [`steps_from`] で検査）
+//! - それ以外の例外（`HealthConnectException` 等）と JNI の失敗は `Failed`
+//! - 期限: [`READ_TIMEOUT`] を許可画面の待ちと集計の待ちで共有し、起点は Rust 側の入口（単調時計）。
+//!   `aggregate` に取り消し API は無いため、期限後に届いた結果は要求 id の照合（`RequestTracker`）で
+//!   捨て、成功にしない。資源は保持しない
+//! - ライフサイクル: 許可画面の表示に伴う `onPause` / `onStop` では中断扱いにせず期限だけで決める。
+//!   Activity 破棄時の保留中の要求は `Failed` で確定する。許可画面の結果は次の要求で反映される。
+//!   保留中の再要求は `Failed`
+//! - 歩数・例外メッセージを logcat・`Debug` に出さない
+//! - コード表の正は [`decode_code`]。Java 側は同じ番号を定数で持ち、その doc で本関数を参照する
+//! - 守らない範囲（Android 固有）: 期限後に届いた `aggregate` の結果、既定で許可時点の 30 日前
+//!   までしか読めないこと（今日の分には影響しない）
+//! - `READ_HEALTH_DATA_IN_BACKGROUND`・`READ_HEALTH_DATA_HISTORY` の権限は足さない方針
 
 use std::fmt;
 use std::time::Duration;
@@ -106,7 +129,7 @@ pub fn steps_from(raw: f64) -> Result<u64, HealthDataFailure> {
     Ok(rounded as u64)
 }
 
-/// FFI の戻りコードを結果へ写す唯一の箇所（`ios/fandhe_ios_health_data.m` が同じ番号で返す）。
+/// FFI の戻りコードを結果へ写す唯一の箇所（`ios/fandhe_ios_health_data.m` と Android の Java 側が同じ番号で返す）。
 /// `steps` は `code == 0` のときだけ読む。0 は歩数、1 は記録なし、2 は非対応、3 は期限切れ、
 /// 4 は取り消し、それ以外（5・負値・未知）は `Failed`。
 pub fn decode_code(code: i32, steps: f64) -> Result<HealthSteps, HealthDataFailure> {

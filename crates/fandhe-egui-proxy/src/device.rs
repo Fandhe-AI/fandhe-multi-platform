@@ -191,6 +191,11 @@ pub mod android_gamepad;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_geocoding_search;
+/// Issue #1099: Android 向けヘルスデータ（今日の歩数）の骨格（#1100 が Health Connect 実装に
+/// 置き換える）。`device/health_data.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_health_data;
 /// Issue #1067: ホーム画面ウィジェットの Android 実装（`AppWidgetProvider` + SharedPreferences
 /// を呼ぶ Java 側 `MainActivity` の JNI 受け口）。`device/home_widget.rs` の Android 経路から
 /// 使われる。写像の純関数はホストでテストできるよう cfg は `any(android, test)`。
@@ -862,7 +867,7 @@ pub mod global_hotkey;
 /// iOS/Android は #1092）。
 pub mod haptics;
 /// Phase 11 の拡充ループ（親 #149、Issue #1089）: ヘルスデータ（今日の歩数）の effect ドライバ
-/// （iOS は骨格のスタブで #1090 が埋める。他 OS は `UnsupportedHealthData` 固定）。
+/// （iOS・Android は OS 別モジュール。他 OS は `UnsupportedHealthData` 固定）。
 pub mod health_data;
 /// Phase 11 の拡充ループ（親 #1064、Issue #1065）: ホーム画面ウィジェットの effect
 /// ドライバ（macOS 実装、iOS・Android は #1066・#1067）。
