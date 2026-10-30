@@ -552,8 +552,19 @@ fn publish(
     });
     match adv {
         Ok(()) => Ok(running),
-        Err(e) => Err((reason_of(&e), Some(running))),
+        Err(e) => {
+            // 広告は開始していない（パラメータ生成・開始呼び出しの失敗）。解放で StopAdvertising を
+            // 呼んで失敗し、Running が未解放のまま残るのを避ける。
+            let mut running = running;
+            running.adv_stopped = adv_stopped_after_start_failure();
+            Err((reason_of(&e), Some(running)))
+        }
     }
+}
+
+/// 広告開始の失敗経路で `adv_stopped` に入れる値。開始していないので停止済み扱い。
+fn adv_stopped_after_start_failure() -> bool {
+    true
 }
 
 /// 読み取り要求に応答する（WinRT のスレッドプールで動く。ワーカーではないので deferral 内の
@@ -607,6 +618,12 @@ mod tests {
             EndReason::PermissionDenied
         );
         assert_eq!(adapter_reason(&e(E_FAIL)), EndReason::Failed);
+    }
+
+    #[test]
+    fn start_failure_needs_no_stop_advertising() {
+        // 広告開始に失敗した部分 Running は StopAdvertising を呼ばせない（解放が詰まらない）。
+        assert!(adv_stopped_after_start_failure());
     }
 
     #[test]
