@@ -8,27 +8,29 @@
   "platforms": {
     "ios": {
       "status": "possible",
-      "api": "AlarmKit（`AlarmManager.schedule(id:configuration:)`、iOS 26 以上。Swift 専用 API）",
-      "perm": "Info.plist の `NSAlarmKitUsageDescription`（無い・空だと予約できない）と実行時の許可（`requestAuthorization()`）",
+      "api": "AlarmKit（`AlarmManager.shared.schedule(id:configuration:)` に `Alarm.Schedule.fixed(Date)`、一覧は `alarms`、取り消しは `cancel(id:)`。iOS 26 以上の Swift 専用 API を `@_cdecl` の Swift 薄層で包む）",
+      "perm": "Info.plist の `NSAlarmKitUsageDescription`（無い・空だと予約できない）と実行時の許可（`requestAuthorization()`）。entitlement は不要",
       "url": [
         "https://developer.apple.com/documentation/alarmkit",
         "https://developer.apple.com/documentation/alarmkit/scheduling-an-alarm-with-alarmkit",
-        "https://developer.apple.com/documentation/bundleresources/information-property-list/nsalarmkitusagedescription"
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/nsalarmkitusagedescription",
+        "https://developer.apple.com/documentation/alarmkit/alarmmanager",
+        "https://developer.apple.com/documentation/alarmkit/alarmpresentation/alert-swift.struct"
       ],
-      "deferred": "Info.plist に `NSAlarmKitUsageDescription` を足し、実行時の許可を新しく求めないと予約できない（公式: キーが無い・空だとアラームを予約できない）。AlarmKit は iOS 26 以上の Swift 専用 API で、Swift の薄層と AlarmKit の弱リンクも足す。新しい権限を足さない方針のため保留。ベンダーの個別審査は不要で、方針が変われば着手できる",
-      "note": "未実装。entitlement・capability の記載は公式に無い。固定時刻の一回きりのアラームなら Widget Extension は不要（公式: カウントダウン表示を持つ場合に Widget Extension を求める）。アラームは集中モード・消音モードを越えて鳴る（公式）"
+      "note": "未実装。iOS 26 未満は非対応として失敗にする。許可が未決定なら予約の操作で許可ダイアログを出し、応答を待つ。拒否済みなら許可を求め直さず失敗にする（設定アプリで許可する）。固定時刻の一回きりのアラームなので Widget Extension・Live Activity は足さない（公式: カウントダウン表示を持つ場合に Widget Extension を求める）。アラームは集中モード・消音モードを越えて鳴る（公式）。鳴っている間（`alerting`）は OS の一覧に残るので予約中と表示する"
     },
     "android": {
       "status": "possible",
-      "api": "`AlarmManager.setAlarmClock` / `setExactAndAllowWhileIdle`（`PendingIntent` で `BroadcastReceiver` を起こす）",
-      "perm": "`SCHEDULE_EXACT_ALARM`（API 31 以上を target にすると必須。API 33 以上を target にした新規インストールでは既定で拒否）または `USE_EXACT_ALARM`（時計・カレンダーアプリに限る Play のポリシー対象）。再起動後の再登録は `RECEIVE_BOOT_COMPLETED`",
+      "api": "`AlarmManager.setAlarmClock`（`PendingIntent`〔`FLAG_ONE_SHOT`〕で自アプリの `BroadcastReceiver` を起こし、アラーム用チャンネルの通知を鳴らす）。予約の有無は同じ `PendingIntent` を `FLAG_NO_CREATE` で引けるかで読む",
+      "perm": "`android.permission.SCHEDULE_EXACT_ALARM`（API 31 以上で必須。target 33 以上の新規インストールでは既定で拒否、利用者が設定の『アラームとリマインダー』で許可する）。通知を出すため `android.permission.POST_NOTIFICATIONS`（宣言済み）。`USE_EXACT_ALARM`・`RECEIVE_BOOT_COMPLETED` は足さない",
       "url": [
         "https://developer.android.com/develop/background-work/services/alarms",
         "https://developer.android.com/about/versions/14/changes/schedule-exact-alarms",
-        "https://developer.android.com/reference/android/app/AlarmManager"
+        "https://developer.android.com/reference/android/app/AlarmManager",
+        "https://developer.android.com/reference/android/provider/Settings#ACTION_REQUEST_SCHEDULE_EXACT_ALARM",
+        "https://developer.android.com/reference/android/app/PendingIntent#FLAG_ONE_SHOT"
       ],
-      "deferred": "アプリを閉じていても鳴らすには `PendingIntent` 経由の正確なアラームが要り、`setAlarmClock` を含めて `SCHEDULE_EXACT_ALARM` か `USE_EXACT_ALARM` の宣言が無いと `SecurityException` になる（API 31 以上を target、本アプリは 35）。前者は新規インストールで既定拒否、後者は Play のポリシーで時計・カレンダーアプリに限られる。権限なしの `OnAlarmListener` は鳴るまでプロセスが生きている必要があり、`setWindow` は 10 分以上の幅になる。新しい権限・受信側コンポーネントを足さない方針のため保留。ベンダーの個別審査は不要で、方針が変われば着手できる",
-      "note": "未実装。既定では端末の電源を切るとすべてのアラームが消え、再登録には `RECEIVE_BOOT_COMPLETED` の受信が要る（公式）。`SCHEDULE_EXACT_ALARM` を取り消されるとアプリが止まり、予約済みの正確なアラームも消える（公式）"
+      "note": "未実装。正確なアラームの許可が無いときは、予約の操作で設定の許可画面を開き、その場では失敗（権限なし）を返す（許可した後にもう一度押す）。通知が無効なら予約しない。鳴る時刻は OS から読めないため、予約時に記録した値を表示する（予約の有無は OS が持つ `PendingIntent` で判定する）。電源を切ると予約は消え、再起動後の再登録はしない（`RECEIVE_BOOT_COMPLETED` を足さない）。許可を取り消すとアプリが止まり予約も消える（公式）"
     },
     "macos": {
       "status": "no",
@@ -60,5 +62,5 @@
       "note": "時刻指定の通知（Notification Triggers の `TimestampTrigger`）は Chrome のオリジントライアルで終わり、出荷されていない（Chrome の解説ページの状態表で Launch が未着手）"
     }
   },
-  "note": "alarm は指定時刻にアプリが閉じていても起こす。notification（既存 id）との違い: 通知は今すぐ見せるだけ、こちらは時刻を予約して鳴らす。background-task（既存 id）の処理の実行とも別。iOS は新しい Info.plist のキーと実行時の許可、Android は新しい権限が要るため保留。範囲: Windows で 1 分後の時刻に 1 件だけ予約し、時刻になるとアラーム音付きのトーストが出る。予約・取り消し・予約中かの表示まで。守らない範囲: 鳴ったかどうかの検知（予約の一覧から消えたことしか分からない）、スヌーズ・繰り返し、電源断が 5 分を超えたときの配信、システム時刻の変更、複数プロセス"
+  "note": "alarm は指定時刻にアプリが閉じていても起こす。notification（既存 id）との違い: 通知は今すぐ見せるだけ、こちらは時刻を予約して鳴らす。background-task（既存 id）の処理の実行とも別。範囲: Windows・iOS・Android で 1 分後の時刻に 1 件だけ予約し、時刻になると OS がアラーム音で知らせる。予約・取り消し・予約中かの表示まで。守らない範囲: 鳴ったかどうかの検知（予約の一覧から消えたことしか分からない）、スヌーズ・繰り返し、電源断の間の配信（Windows は猶予 5 分を超えた場合、Android は電源断で予約が消え再登録しない）、iOS のカウントダウン・スヌーズ表示、システム時刻の変更、複数プロセス"
 }
