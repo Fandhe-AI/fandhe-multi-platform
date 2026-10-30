@@ -1194,7 +1194,7 @@ pub mod ios_screen_orientation;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_wake_lock;
-/// Issue #1079・#1080: iOS 向けスマートホーム実装（骨格のスタブ。#1080 が HomeKit の実体を入れる）。`device/smart_home.rs` の iOS 経路から呼ばれる。
+/// Issue #1079・#1080: iOS 向けスマートホーム実装（`ios/fandhe_ios_smart_home.m` の HomeKit を呼ぶ C ABI ラッパー）。`device/smart_home.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_smart_home;

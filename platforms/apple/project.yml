@@ -177,6 +177,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.iosapp
         PRODUCT_NAME: FandheIosApp
         CODE_SIGN_STYLE: Automatic
+        # Issue #1080: HomeKit capability（`com.apple.developer.homekit`）をプロファイル生成用に
+        # 足す。実機署名は従来どおり、プロファイルから entitlements を抜き出して Rust/winit の
+        # バンドルへ付ける手順のまま。
+        CODE_SIGN_ENTITLEMENTS: FandheIosApp/Resources/FandheIosApp.entitlements
 
   FandheWatchApp:
     type: application
