@@ -146,6 +146,9 @@ impl Session {
     fn release(&mut self) -> bool {
         let mut ok = self.detach();
         if let Some(r) = &self.reader {
+            if !ok {
+                return false;
+            }
             if !self.reader_stopped {
                 // 解放の順序のため、ワーカー上で完了を待つ（UI は待たない）。
                 match r.StopAsync().and_then(|op| op.get()) {
@@ -161,7 +164,9 @@ impl Session {
                 }
             }
         }
-        if !self.capture_closed {
+        // 子（ハンドラ・reader）の解除・停止・Close が全部済んでから親を閉じる。
+        // 先に閉じると、未解除の項目が閉鎖済みエラーになり再試行が成立しない。
+        if ok && !self.capture_closed {
             if self.capture.Close().is_ok() {
                 self.capture_closed = true;
             } else {
@@ -290,6 +295,8 @@ struct Worker {
     current: Option<Session>,
     /// 解放に失敗して残った分。要求より長く生き、次の開始の前に再試行する（契約表 9）。
     leftover: Option<Session>,
+    /// 停止後に届いた reader で、Close に失敗した分。次の開始の前に再試行する（契約表 9）。
+    stray: Vec<MediaFrameReader>,
 }
 
 fn run_worker(rx: mpsc::Receiver<Cmd>, tx: Sender<Cmd>) {
@@ -367,6 +374,11 @@ impl Worker {
                 deliver_event(id, PreviewEvent::StartFailed(StartFailure::Other));
                 return;
             }
+        }
+        self.stray.retain(|r| r.Close().is_err());
+        if !self.stray.is_empty() {
+            deliver_event(id, PreviewEvent::StartFailed(StartFailure::Other));
+            return;
         }
         let Ok(capture) = MediaCapture::new() else {
             deliver_event(id, PreviewEvent::StartFailed(StartFailure::Other));
@@ -475,6 +487,15 @@ impl Worker {
         result: windows::core::Result<MediaFrameReader>,
         tx: &Sender<Cmd>,
     ) {
+        if self.cur(id).is_none() {
+            // 停止・差し替え後に届いた reader。drop では Close にならないので明示的に閉じる。
+            if let Ok(r) = result {
+                if r.Close().is_err() {
+                    self.stray.push(r);
+                }
+            }
+            return;
+        }
         let Some(s) = self.cur(id) else { return };
         s.op = None;
         let reader = match result {
@@ -564,21 +585,34 @@ impl Worker {
             return;
         }
         let Some(reader) = &s.reader else { return };
-        // 新しいフレームが無い（null）回は何もしない。失敗扱いにもしない。
-        let Ok(fr) = reader.TryAcquireLatestFrame() else {
-            return;
+        // null（空エラー code 0）は「新しいフレームなし」。それ以外のエラーは実際の失敗。
+        let fr = match reader.TryAcquireLatestFrame() {
+            Ok(f) => f,
+            Err(e) if e.code().0 == 0 => return,
+            Err(_) => {
+                self.end(id, PreviewEvent::RuntimeFailed);
+                return;
+            }
         };
-        let bmp = fr.VideoMediaFrame().and_then(|v| v.SoftwareBitmap()).ok();
-        let (frame, mut closed) = match &bmp {
-            Some(b) => convert(b, s.zoom.as_ref()),
-            None => (None, true),
+        let bmp = fr.VideoMediaFrame().and_then(|v| v.SoftwareBitmap());
+        let (frame, mut ok) = match &bmp {
+            Ok(b) => {
+                let (f, closed) = convert(b, s.zoom.as_ref());
+                {
+                    let ok = f.is_some() && closed;
+                    (f, ok)
+                }
+            }
+            // ビットマップが無いフレーム（null）は届けるものがないだけ。
+            Err(e) if e.code().0 == 0 => (None, true),
+            Err(_) => (None, false),
         };
-        if let Some(b) = &bmp {
-            closed &= b.Close().is_ok();
+        if let Ok(b) = &bmp {
+            ok &= b.Close().is_ok();
         }
-        closed &= fr.Close().is_ok();
-        if !closed {
-            // 閉じられないと供給が止まる。失敗として確定する（握りつぶさない）。
+        ok &= fr.Close().is_ok();
+        if !ok {
+            // 取得・変換・コピーの失敗、または閉じられず供給が止まる場合は失敗として確定する。
             self.end(id, PreviewEvent::RuntimeFailed);
             return;
         }
@@ -645,7 +679,7 @@ fn apply_zoom(s: &Session, step: ZoomStep) -> Result<(), ZoomFailure> {
         .map_err(|_| ZoomFailure::Failed)
 }
 
-/// `SoftwareBitmap` を縮小済みの `PreviewFrame` にする。2 つ目は、変換で作った分を含め閉じられたか。
+/// `SoftwareBitmap` を縮小済みの `PreviewFrame` にする。`None` は変換・読み出しの失敗。2 つ目は、変換で作った分を含め閉じられたか。
 fn convert(bmp: &SoftwareBitmap, zoom: Option<&ZoomControl>) -> (Option<PreviewFrame>, bool) {
     let (src, converted) = if bmp.BitmapPixelFormat().ok() == Some(BitmapPixelFormat::Bgra8) {
         (None, None)
