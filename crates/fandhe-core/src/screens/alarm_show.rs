@@ -35,18 +35,21 @@ pub const SCHEDULE_LABEL: &str = "1 分後にアラームを予約";
 pub const CANCEL_LABEL: &str = "予約を取り消す";
 /// 予約に成功したときの案内。「鳴った」とは言わない。
 pub const SCHEDULED_STATUS: &str =
-    "1 分後にアラームを予約しました（時刻になるとアラーム音付きの通知が出ます）";
+    "1 分後にアラームを予約しました（時刻になると OS がアラームで知らせます）";
 /// 取り消しに成功したときの案内（未予約での取り消しも契約上 `Ok`）。
 pub const CANCELLED_STATUS: &str = "予約を取り消しました";
 /// 取り消し操作なしに予約が一覧から消えたときの案内。
 pub const CLEARED_STATUS: &str =
     "予約の一覧から消えました（時刻が来たか、OS 側で取り消されました）";
+/// 権限拒否（iOS の許可ダイアログでの拒否・拒否済み、Android の正確なアラームの許可なし・通知無効）の固定文言。
+pub const PERMISSION_DENIED_TEXT: &str =
+    "アラームの許可がありません。設定で許可してからもう一度押してください";
 /// 失敗時の案内の接頭辞（`{接頭辞}{エラー文字列}` の形で表示する）。
 pub const FAILED_PREFIX: &str = "失敗しました: ";
 /// 予約一覧の取得に失敗したときの併記文言（OS のエラー文は出さない）。
 pub const CHECK_FAILED_TEXT: &str = "予約状態を確認できませんでした";
 /// 画面に常時出す補足。
-pub const NOTE: &str = "Windows の通知設定がオフだと予約できません。時刻は UTC で表示します。";
+pub const NOTE: &str = "通知やアラームの許可が無いと予約できません。iOS は 26 以上が対象です。時刻は UTC で表示します。";
 
 /// ボタン操作の種別。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
