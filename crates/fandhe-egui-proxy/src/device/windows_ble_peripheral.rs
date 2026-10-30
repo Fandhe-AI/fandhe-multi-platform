@@ -78,6 +78,8 @@ fn wait<T: RuntimeType + 'static>(op: IAsyncOperation<T>) -> windows::core::Resu
     {
         let mut cur = CURRENT_OP.lock().unwrap_or_else(|e| e.into_inner());
         if CANCEL.load(Ordering::SeqCst) {
+            // 起動済みの OS 側の処理も止める（落とすだけだと完了して資源が残りうる）。
+            let _ = op.Cancel();
             return Err(HRESULT(0x8000_4004_u32 as i32).into()); // E_ABORT
         }
         let handle = op.clone();
@@ -87,6 +89,10 @@ fn wait<T: RuntimeType + 'static>(op: IAsyncOperation<T>) -> windows::core::Resu
     }
     let r = op.get();
     *CURRENT_OP.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    // 中止要求と完了が競合して成功が届いたら、生成結果は捨てて中止として扱う（呼び出し側は何も保持しない）。
+    if r.is_ok() && CANCEL.load(Ordering::SeqCst) {
+        return Err(HRESULT(0x8000_4004_u32 as i32).into());
+    }
     r
 }
 
@@ -297,7 +303,7 @@ fn run_worker(rx: mpsc::Receiver<Cmd>, tx: Sender<Cmd>) {
 fn radio_is_off(adapter: &BluetoothAdapter) -> bool {
     adapter
         .GetRadioAsync()
-        .and_then(|op| op.get())
+        .and_then(wait)
         .and_then(|radio| radio.State())
         .is_ok_and(|s| s == RadioState::Off || s == RadioState::Disabled)
 }
