@@ -478,6 +478,10 @@ generated_screens! {
     crate::device::music_library::music_library_list_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "smart_home_list" => fandhe_core::screens::smart_home_list::current_screen,
+    crate::device::smart_home::smart_home_list_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wifi_info_show" => fandhe_core::screens::wifi_info_show::current_screen,
     crate::device::wifi_info::wifi_info_show_effect,
     effect
