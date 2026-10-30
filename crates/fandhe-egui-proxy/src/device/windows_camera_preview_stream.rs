@@ -43,7 +43,7 @@ use windows::core::{IInspectable, Interface, Ref, HRESULT, HSTRING};
 use windows::Devices::Enumeration::{
     DeviceClass, DeviceInformation, DeviceInformationCollection, Panel,
 };
-use windows::Foundation::TypedEventHandler;
+use windows::Foundation::{IClosable, TypedEventHandler};
 use windows::Graphics::Imaging::{BitmapPixelFormat, SoftwareBitmap};
 use windows::Media::Capture::Frames::{
     MediaFrameReader, MediaFrameReaderAcquisitionMode, MediaFrameReaderStartStatus,
@@ -326,8 +326,9 @@ struct Worker {
     current: Option<Session>,
     /// 解放に失敗して残った分。要求より長く生き、次の開始の前に再試行する（契約表 9）。
     leftover: Option<Session>,
-    /// 停止後に届いた reader で、Close に失敗した分。次の開始の前に再試行する（契約表 9）。
-    stray: Vec<MediaFrameReader>,
+    /// Close に失敗した reader・フレーム資源（停止後に届いた reader、`MediaFrameReference`、
+    /// `SoftwareBitmap`）。次の開始の前に再試行し、残れば開始失敗にする（契約表 9）。
+    stray: Vec<IClosable>,
 }
 
 fn run_worker(rx: mpsc::Receiver<Cmd>, tx: Sender<Cmd>) {
@@ -582,7 +583,7 @@ impl Worker {
             // 停止・差し替え後に届いた reader。drop では Close にならないので明示的に閉じる。
             if let Ok(r) = result {
                 if r.Close().is_err() {
-                    self.stray.push(r);
+                    self.stray.extend(r.cast::<IClosable>().ok());
                 }
             }
             return;
@@ -686,22 +687,27 @@ impl Worker {
             }
         };
         let bmp = fr.VideoMediaFrame().and_then(|v| v.SoftwareBitmap());
-        let (frame, mut closed, bad) = match &bmp {
+        let (frame, mut leaked, bad) = match &bmp {
             Ok(b) => {
                 let (f, c) = convert(b, s.zoom.as_ref());
                 let bad = f.is_none();
-                (f, c, bad)
+                (f, c.into_iter().collect::<Vec<_>>(), bad)
             }
             // ビットマップが無いフレーム（null）は届けるものがないだけ。
-            Err(e) if e.code().0 == 0 => (None, true, false),
-            Err(_) => (None, true, true),
+            Err(e) if e.code().0 == 0 => (None, Vec::new(), false),
+            Err(_) => (None, Vec::new(), true),
         };
         if let Ok(b) = &bmp {
-            closed &= b.Close().is_ok();
+            if b.Close().is_err() {
+                leaked.extend(b.cast::<IClosable>().ok());
+            }
         }
-        closed &= fr.Close().is_ok();
-        if !closed {
-            // 閉じられないと供給が止まるため、失敗として確定する。
+        if fr.Close().is_err() {
+            leaked.extend(fr.cast::<IClosable>().ok());
+        }
+        if !leaked.is_empty() {
+            // 閉じられないと供給が止まる。保持して次の開始前に再試行し、失敗として確定する。
+            self.stray.extend(leaked);
             self.end(id, PreviewEvent::RuntimeFailed);
             return;
         }
@@ -772,14 +778,17 @@ fn apply_zoom(s: &Session, step: ZoomStep) -> Result<(), ZoomFailure> {
         .map_err(|_| ZoomFailure::Failed)
 }
 
-/// `SoftwareBitmap` を縮小済みの `PreviewFrame` にする。`None` は変換・読み出しの失敗。2 つ目は、変換で作った分を含め閉じられたか。
-fn convert(bmp: &SoftwareBitmap, zoom: Option<&ZoomControl>) -> (Option<PreviewFrame>, bool) {
+/// `SoftwareBitmap` を縮小済みの `PreviewFrame` にする。`None` は変換・読み出しの失敗。2 つ目は、変換で作って Close に失敗した `SoftwareBitmap`（呼び出し側が保持して再試行する）。
+fn convert(
+    bmp: &SoftwareBitmap,
+    zoom: Option<&ZoomControl>,
+) -> (Option<PreviewFrame>, Option<IClosable>) {
     let (src, converted) = if bmp.BitmapPixelFormat().ok() == Some(BitmapPixelFormat::Bgra8) {
         (None, None)
     } else {
         match SoftwareBitmap::Convert(bmp, BitmapPixelFormat::Bgra8) {
             Ok(c) => (Some(c.clone()), Some(c)),
-            Err(_) => return (None, true),
+            Err(_) => return (None, None),
         }
     };
     let frame = read_bgra(src.as_ref().unwrap_or(bmp)).and_then(|(w, h, data)| {
@@ -798,8 +807,10 @@ fn convert(bmp: &SoftwareBitmap, zoom: Option<&ZoomControl>) -> (Option<PreviewF
             zoom: zoom.and_then(|z| z.Value().ok()).and_then(checked_zoom),
         })
     });
-    let closed = converted.is_none_or(|c| c.Close().is_ok());
-    (frame, closed)
+    let leaked = converted
+        .filter(|c| c.Close().is_err())
+        .and_then(|c| c.cast::<IClosable>().ok());
+    (frame, leaked)
 }
 
 /// Bgra8 の `SoftwareBitmap` を `(幅, 高さ, 画素)` で読む。寸法は確保の前に検証する（契約表 5）。
