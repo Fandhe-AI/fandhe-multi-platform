@@ -120,6 +120,11 @@ pub fn apply_read(
     };
 }
 
+/// 未受信（購読前・購読解除後）に戻す。前回値を残さない。
+pub fn apply_pending(state: &mut FoldablePostureShowState) {
+    state.view = FoldablePostureView::Reading;
+}
+
 const BAND: ColorValue = ColorValue::rgb(0x9A, 0x9A, 0x9A);
 const PANEL: ColorValue = ColorValue::rgb(0x2F, 0x80, 0xED);
 
@@ -244,7 +249,7 @@ pub fn error_text(state: &FoldablePostureShowState) -> String {
 pub const FAILED_LABEL: &str = "折りたたみの姿勢の取得";
 
 /// 注記（ネイティブ用）。
-pub const NOTE: &str = "枠を端末の画面に見立て、折れていて折れ目が分かるときは折れ目に沿って 2 枚に分けて描きます。閉じた状態とヒンジの角度は扱いません。1 秒ごとに読み直します。";
+pub const NOTE: &str = "枠を端末の画面に見立て、折れていて折れ目が分かるときは折れ目に沿って 2 枚に分けて描きます。閉じた状態とヒンジの角度は扱いません。折りたためない端末や、窓が折れ目をまたがないときは「平ら」・折れ目「不明」と表示されます。1 秒ごとに読み直します。";
 
 /// Web 用の注記。
 pub const WEB_NOTE: &str = "Chromium 系ブラウザの Device Posture API と Viewport Segments API を読んでいます。折りたためない端末でも「平ら」と表示されます。";
@@ -284,6 +289,16 @@ pub fn current_screen(_state: &FoldablePostureShowState) -> Screen<FoldablePostu
 mod tests {
     use super::*;
     use crate::render_headless;
+
+    #[test]
+    fn apply_pending_returns_to_reading() {
+        let mut s = state(FoldablePostureView::Read(PostureReading {
+            posture: Posture::Folded,
+            fold: FoldInfo::Unknown,
+        }));
+        apply_pending(&mut s);
+        assert_eq!(s.view, FoldablePostureView::Reading);
+    }
 
     fn state(view: FoldablePostureView) -> FoldablePostureShowState {
         FoldablePostureShowState { view }
