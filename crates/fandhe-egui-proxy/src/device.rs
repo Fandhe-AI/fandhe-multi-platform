@@ -855,6 +855,9 @@ pub mod global_hotkey;
 /// （macOS/Windows 実装、他 OS は `UnsupportedHaptics` 固定。Web は `fandhe-web-dom`、
 /// iOS/Android は #1092）。
 pub mod haptics;
+/// Phase 11 の拡充ループ（親 #149、Issue #1089）: ヘルスデータ（今日の歩数）の effect ドライバ
+/// （iOS は骨格のスタブで #1090 が埋める。他 OS は `UnsupportedHealthData` 固定）。
+pub mod health_data;
 /// Phase 11 の拡充ループ（親 #1064、Issue #1065）: ホーム画面ウィジェットの effect
 /// ドライバ（macOS 実装、iOS・Android は #1066・#1067）。
 pub mod home_widget;
@@ -1037,6 +1040,11 @@ pub mod ios_fullscreen_immersive;
 /// 戻り直後に再描画を起こす）。`device/geocoding_search.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_geocoding_search;
+/// Issue #1089・#1090: iOS 向けヘルスデータ（歩数）実装（骨格のスタブ。#1090 が HealthKit の実体を入れる）。
+/// `device/health_data.rs` の iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_health_data;
 /// Issue #976: iOS 向け画像生成（macOS と共用の `AppleImageGenerator` を返す）。
 /// `device/image_generation.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
