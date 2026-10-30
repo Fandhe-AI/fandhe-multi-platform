@@ -50,15 +50,14 @@
     "windows": {
       "status": "possible",
       "api": "WinRT `GattServiceProvider.CreateAsync` / `CreateCharacteristicAsync` / `StartAdvertising`（`AdvertisementStatusChanged` で状態を受ける）+ `GattLocalCharacteristic.ReadRequested`",
-      "perm": "パッケージ版は `Package.appxmanifest` の `bluetooth` capability が必須（公式）。素の Win32 実行体での要否は公式に記述なし。`windows` クレートの feature `Devices_Bluetooth_GenericAttributeProfile` が未導入",
+      "perm": "パッケージ版は `Package.appxmanifest` の `bluetooth` capability が必須（公式）。素の Win32 実行体（unpackaged）での要否は公式に記述なしで未確認。`windows` クレートの feature `Devices_Bluetooth_GenericAttributeProfile` は導入済み",
       "url": [
         "https://learn.microsoft.com/en-us/windows/uwp/devices-sensors/gatt-server",
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattserviceprovider",
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattserviceprovideradvertisementstatus",
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.bluetoothadapter.isperipheralrolesupported"
       ],
-      "note": "未実装。結果は `GattServiceProviderResult.Error`（`BluetoothError`）と `AdvertisementStatus`（Created / Stopped / Started / Aborted / StartedWithoutAllAdvertisementData）で届く。`ReadRequested` のハンドラが無いと読み取り要求は `UnlikelyError` で即完了する（公式）。アダプターの周辺機器役対応は `BluetoothAdapter.IsPeripheralRoleSupported`",
-      "deferred": "`windows` クレートの feature `Devices_Bluetooth_GenericAttributeProfile` を新しく足す必要があり、公式は `bluetooth` capability の宣言を必須と書く一方、package identity の無い素の Win32 実行体で使えるかの記述が無い。新しい依存（feature）を足さない方針と、パッケージ化前提の確認が要るため保留（in-app-review・local-peer-connect の Windows と同じ）。ベンダーの個別審査は不要で、feature の追加を決めて素の実行体での可否を確かめれば着手できる"
+      "note": "未実装。unpackaged で GATT サーバーが使えるかは未確認で、実機で確かめる（既存の bluetooth-le の Windows と同じ前提）。結果は `GattServiceProviderResult.Error`（`BluetoothError`）と `AdvertisementStatus`（Created / Stopped / Started / Aborted / StartedWithoutAllAdvertisementData）で届く。`ReadRequested` のハンドラが無いと読み取り要求は `UnlikelyError` で即完了する（公式）ため、ハンドラは公開前に登録し、停止時に全て解除する。アダプターの周辺機器役対応は `BluetoothAdapter.IsPeripheralRoleSupported`"
     },
     "web": {
       "status": "no",

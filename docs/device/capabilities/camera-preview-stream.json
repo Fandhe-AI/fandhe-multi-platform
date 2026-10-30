@@ -62,7 +62,7 @@
     "windows": {
       "status": "possible",
       "api": "WinRT `MediaCapture`（`MemoryPreference::Cpu`、`SharingMode`）+ `MediaFrameReader`（`AcquisitionMode` = Realtime、`FrameArrived` 内で `TryAcquireLatestFrame`）、`VideoMediaFrame.SoftwareBitmap`。ズームは `VideoDeviceController.ZoomControl`",
-      "perm": "unpackaged の実行では宣言不要の見込み（設定の「デスクトップ アプリにカメラへのアクセスを許可する」に従う）。パッケージ時は `webcam` capability",
+      "perm": "unpackaged の実行では宣言不要の見込み（設定の「デスクトップ アプリにカメラへのアクセスを許可する」に従う）。パッケージ時は `webcam` capability。`windows` クレートの feature `Media_Capture_Frames`・`Media_Devices` は導入済み",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacapture",
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.frames.mediaframereader",
@@ -70,8 +70,7 @@
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacaptureinitializationsettings.memorypreference",
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.devices.zoomcontrol"
       ],
-      "deferred": "`windows` クレートに feature（`Media_Capture_Frames`・`Media_Devices`）を足す必要がある。加えて `MediaCapture.InitializeAsync` は初回を STA の UI スレッドで呼ぶよう公式に書かれており、既存の WinRT 呼び出し（作業スレッドから MTA で呼ぶ方式）と合わない。UI スレッドで初期化する設計の変更が要るため保留。カメラの利用（mic-record と同じ作業スレッド方式で動くか）を確かめてから見直す",
-      "note": "未実装。`MemoryPreference` が Cpu でないと `SoftwareBitmap` が null になりうる（公式）。`TryAcquireLatestFrame` で得た `SoftwareBitmap` を Dispose しないと、上限を超えたところでフレームの供給が止まる（公式）。Realtime はハンドラの実行中に届いたフレームを捨てる（公式、1709 以上）。PC の Web カメラはズームに対応しないものが多い見込み（未確認）"
+      "note": "未実装。`MediaCapture.InitializeAsync` は初回を STA（UI スレッド）で呼ぶよう公式に書かれ、MTA は未定義の可能性がある（公式）。既存の mic-record は作業スレッド（MTA）で呼んでおり、カメラで動くかは未確認。まず同じ方式で書き、実機で失敗したら UI スレッドでの初期化へ寄せる。`MemoryPreference` が Cpu でないと `SoftwareBitmap` が null になりうる（公式）。`TryAcquireLatestFrame` で得た `SoftwareBitmap` を Dispose しないと、上限を超えたところでフレームの供給が止まる（公式）。Realtime はハンドラの実行中に届いたフレームを捨てる（公式、1709 以上）。PC の Web カメラはズームに対応しないものが多い見込み（未確認）"
     },
     "web": {
       "status": "done",

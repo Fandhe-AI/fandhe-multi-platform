@@ -190,4 +190,9 @@ dependencies {
     // androidx.browser を直接 import するため明示依存にする
     // （バージョン選定根拠は versions.env の ANDROIDX_BROWSER_VERSION コメント参照）。
     implementation("androidx.browser:browser:${androidVersion("ANDROIDX_BROWSER_VERSION")}")
+    // FoldablePostureHelper の折りたたみ姿勢（`WindowInfoTracker` の `FoldingFeature`、
+    // `WindowInfoTrackerCallbackAdapter`）が androidx.window を直接 import するため明示依存にする
+    // （バージョン選定根拠は versions.env の WINDOW_VERSION コメント参照）。
+    implementation("androidx.window:window:${androidVersion("WINDOW_VERSION")}")
+    implementation("androidx.window:window-java:${androidVersion("WINDOW_VERSION")}")
 }

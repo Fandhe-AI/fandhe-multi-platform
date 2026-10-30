@@ -333,6 +333,13 @@ windows = { workspace = true, optional = true, features = [
     "Media_Capture",
     # Issue #955: `MediaEncodingProfile::CreateM4a`（AAC エンコード設定）に使う。
     "Media_MediaProperties",
+    # `device/windows_ble_peripheral.rs`（ble-peripheral）が `GattServiceProvider` /
+    # `GattLocalCharacteristic`（`Devices_Bluetooth_GenericAttributeProfile`）を呼ぶ。新規パッケージは増えない。
+    "Devices_Bluetooth_GenericAttributeProfile",
+    # `device/windows_camera_preview_stream.rs`（camera-preview-stream）が `MediaFrameReader`
+    # （`Media_Capture_Frames`）と `ZoomControl`（`Media_Devices`）を呼ぶ。新規パッケージは増えない。
+    "Media_Capture_Frames",
+    "Media_Devices",
     # Issue #381: `device/windows_now_playing.rs`（#385）が `SystemMediaTransportControls`（`Media`）を呼ぶ。
     # 依存は `Foundation` のみで新規パッケージは増えない。
     "Media",
