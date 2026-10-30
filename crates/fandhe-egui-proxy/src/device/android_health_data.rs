@@ -72,12 +72,32 @@ fn read_with(
 #[cfg(target_os = "android")]
 static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
+/// 要求の実行中フラグ。使用中に来た新要求は slot に触れず `Failed` で拒否する
+/// （先行要求の slot を `begin` で上書きして正常結果を失わせない）。
+#[cfg(target_os = "android")]
+static BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// `BUSY` を Drop で必ず下ろす。
+#[cfg(target_os = "android")]
+struct BusyGuard;
+
+#[cfg(target_os = "android")]
+impl Drop for BusyGuard {
+    fn drop(&mut self) {
+        BUSY.store(false, std::sync::atomic::Ordering::Release);
+    }
+}
+
 #[cfg(target_os = "android")]
 struct AndroidHealthData;
 
 #[cfg(target_os = "android")]
 impl HealthData for AndroidHealthData {
     fn read_today_steps(&self, timeout: Duration) -> Outcome {
+        if BUSY.swap(true, std::sync::atomic::Ordering::AcqRel) {
+            return Err(HealthDataFailure::Failed);
+        }
+        let _guard = BusyGuard;
         read_with(
             &SLOT,
             timeout,

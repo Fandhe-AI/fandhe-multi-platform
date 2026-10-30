@@ -69,7 +69,8 @@ final class HealthDataHelper {
     }
 
     // Rust 側の期限切れから呼ばれる。資源は無いので追跡 id を消すだけ（以後の結果は捨てられる）。
-    void cancel(long id) {
+    // start の「取り消し確認〜追跡登録」と同じロックで直列化する（確認後の cancel で古い要求が復活しない）。
+    synchronized void cancel(long id) {
         cancelledId = Math.max(cancelledId, id);
         request.complete(id);
     }
@@ -86,7 +87,7 @@ final class HealthDataHelper {
         return activity.isFinishing() || activity.isDestroyed();
     }
 
-    private void start(long id) {
+    private synchronized void start(long id) {
         if (id <= latestId) {
             return;
         }
