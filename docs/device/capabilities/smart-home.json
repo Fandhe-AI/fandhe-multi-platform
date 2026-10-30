@@ -7,7 +7,10 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1055）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_smart_home.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_smart_home.m + crates/fandhe-egui-proxy/src/device/smart_home.rs + crates/fandhe-core/src/screens/smart_home_list.rs + crates/fandhe-device/src/smart_home.rs、Issue #1080",
       "api": "HomeKit（`HMHomeManager` を 1 つだけ生成して保持し、`homes` → `HMHome.name` / `HMHome.accessories` → `HMAccessory.name` を読む。読み込み完了は `HMHomeManagerDelegate.homeManagerDidUpdateHomes(_:)`、許可は `authorizationStatus`（`determined` / `authorized` / `restricted`）と `homeManager(_:didUpdate:)`。家・機器の追加と操作はしない）",
       "perm": "HomeKit capability（`com.apple.developer.homekit` entitlement）を、プロファイル生成専用のホストターゲット `FandheIosApp`（`platforms/apple/project.yml`）の `CODE_SIGN_ENTITLEMENTS` に足す。実機署名はプロファイルから entitlements を抜き出して Rust/winit のバンドルへ付ける既存手順のまま。Apple Developer Program なしの無料の Apple Developer（Personal Team）でも付けられる（公式の対応表）。Info.plist の `NSHomeKitUsageDescription`（無いと初回の HomeKit 利用でクラッシュする）。初回の `HMHomeManager` 生成で OS が実行時の許可を求める（明示の要求 API は無い）",
       "url": [
@@ -20,7 +23,7 @@
         "https://developer.apple.com/documentation/homekit/hmhomemanagerauthorizationstatus",
         "https://developer.apple.com/documentation/homekit/hmhomemanagerdelegate/homemanagerdidupdatehomes(_:)"
       ],
-      "note": "未実装。`homes` は生成直後は空で、`homeManagerDidUpdateHomes(_:)` の初回呼び出しの後にだけ HomeKit のデータベースの内容になる（公式）。アクセスできるのは `authorizationStatus` に `authorized` があるときだけ（公式）。`determined` があって `authorized` が無ければ拒否として失敗にし、0 件にしない。家が 0 件（家を作っていない）と、家はあるが機器が 0 件は区別して成功で返す。拒否後は利用者が設定アプリで変えるまで再要求できない（公式）。MatterSupport（iOS 16.1 以上）は機器を自前のエコシステムへ追加する仕組みで、登録済みの機器の一覧は読めない"
+      "note": "実装済み（#1080）。許可（`authorizationStatus` に `authorized`）と読み込み完了（`homeManagerDidUpdateHomes(_:)`）がそろうまで読まず、許可の前に届いた通知は読み込み完了にしない。`determined` があって `authorized` が無ければ拒否として失敗（0 件にしない）。期限は 30 秒で許可ダイアログの待ちを含み、期限切れは失敗。家 0 件と、家はあるが機器 0 件は区別して成功で返す。要求のたびに `homes` を読み直し、`HMHomeManager` はプロセスで 1 つ（初回の要求で生成）。家・機器の名前はログに出さない。拒否後は利用者が設定アプリで変えるまで再要求できない（公式）。実機の許可ダイアログ・拒否・家 0 件・シミュレータ（entitlement 無し）の挙動は【推測】で #1055 で確かめる。MatterSupport（iOS 16.1 以上）は機器を自前のエコシステムへ追加する仕組みで、登録済みの機器の一覧は読めない"
     },
     "android": {
       "status": "possible",

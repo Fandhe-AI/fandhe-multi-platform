@@ -126,6 +126,12 @@
   fandhe_ios_music_library.m`）で曲のタイトルとアーティストを読むために必須。
   未設定だと許可要求時にクラッシュする。entitlement は不要で、MusicKit は使わない（security.md A05）。
 
+  NSHomeKitUsageDescription（Issue #1080）: 型サンプル「スマートホーム操作」画面
+  （`FANDHE_PROXY_APP=smart_home_list`）が HomeKit の `HMHomeManager`（`crates/fandhe-egui-proxy/ios/
+  fandhe_ios_smart_home.m`）で家と機器の名前を読むために必須。未設定だと初回の HomeKit 利用で
+  クラッシュする。機器の操作・家の追加はしないので、説明は読み取りに限る（security.md A05）。
+  対応する entitlement `com.apple.developer.homekit` は `FandheIosApp.entitlements` で宣言する。
+
   NSLocalNetworkUsageDescription / NSBonjourServices（Issue #488）: 型サンプル「LAN のサービス探索」
   （`FANDHE_PROXY_APP=lan_discover`）が `nw_browser`
   （`crates/fandhe-egui-proxy/apple/fandhe_apple_lan_discovery.m` は iOS/macOS 共用）で
@@ -298,6 +304,8 @@
 	<string>型サンプル「アラーム」の動作確認に使います</string>
 	<key>NSAppleMusicUsageDescription</key>
 	<string>型サンプル「音楽ライブラリ」の動作確認に使います</string>
+	<key>NSHomeKitUsageDescription</key>
+	<string>型サンプル「スマートホーム操作」の動作確認に使います</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>型サンプル「LAN のサービス探索」「近くの端末との直接通信」「UWB による距離」の動作確認に使います</string>
 	<key>NSNearbyInteractionUsageDescription</key>
