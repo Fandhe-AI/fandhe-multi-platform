@@ -321,6 +321,9 @@ pub mod sleep_lock_events_show;
 /// Phase 11 の拡充ループ型サンプル「ペン・筆圧で描く」（親 #95、Issue #355）。
 pub mod pen_draw;
 
+/// Phase 11 の拡充ループ型サンプル「アプリの言語」（親 #137、Issue #1073）。
+pub mod per_app_language_show;
+
 /// Phase 11 の拡充ループ型サンプル「OAuth 用の Web 認証セッション」（親 #113、Issue #530）。
 pub mod web_auth_session_demo;
 

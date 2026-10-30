@@ -291,6 +291,11 @@ pub mod android_pedometer;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_pen_stylus;
+/// Issue #1073（骨格）/ #1075（実装）: Android 向けアプリ別の言語設定。`device/per_app_language.rs` の
+/// Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_per_app_language;
 /// Issue #1254（骨格）/ #1256（実装）: Android 向け写真ライブラリ保存実装。
 /// `device/photo_save.rs` の Android 経路から呼ばれる。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -611,6 +616,11 @@ pub mod apple_on_device_llm;
 /// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_pdf_viewer;
+/// Issue #1073: macOS / iOS 向けアプリ別の言語設定（`apple/fandhe_apple_per_app_language.m` を呼ぶ
+/// C ABI ラッパー）。`device/per_app_language.rs` の macOS / iOS 経路から呼ばれる。
+/// 純関数をホストの `cargo test` で検査するため cfg に `test` を含める。
+#[cfg(any(target_os = "ios", target_os = "macos", test))]
+pub mod apple_per_app_language;
 /// Issue #1254（macOS）/ #1255（iOS）: iOS / macOS 向け写真ライブラリ保存実装
 /// （`apple/fandhe_apple_photo_library.m` を呼ぶ C ABI ラッパー。iOS は実装済み）。
 /// `device/photo_save.rs` の iOS / macOS 経路から呼ばれる。
@@ -1128,6 +1138,11 @@ pub mod ios_pedometer;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_pen_stylus;
+/// Issue #1073（骨格）/ #1074（実装）: iOS 向けアプリ別の言語設定。`device/per_app_language.rs` の
+/// iOS 経路から呼ばれる。
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub mod ios_per_app_language;
 /// Issue #365: iOS 向けピクチャ・イン・ピクチャ実装（macOS と共用の `apple_picture_in_picture` へ委譲）。
 /// `device/picture_in_picture.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1549,6 +1564,9 @@ pub mod pedometer;
 /// 他 OS は `UnsupportedPenStylus` 固定。
 /// Web は `fandhe-web-dom`）。
 pub mod pen_stylus;
+/// Phase 11 の拡充ループ（親 #137、Issue #1073）: アプリ別の言語設定の effect ドライバ（macOS 実装、
+/// iOS（#1074）・Android（#1075）は `Unsupported` のスタブ、他 OS は `UnsupportedPerAppLanguage` 固定）。
+pub mod per_app_language;
 /// Phase 11 の拡充ループ（親 #1101、Issue #1103/#1104）: 写真選択の effect ドライバ（macOS /
 /// Windows は `PhotoPicker` 実装、iOS/Android は pull 型 `bridge`、Linux は
 /// `UnsupportedPhotoPicker` 固定。Web は `fandhe-web-dom`）。選んだ画像は復号を確かめてから

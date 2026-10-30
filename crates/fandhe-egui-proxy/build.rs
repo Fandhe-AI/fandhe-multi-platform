@@ -812,6 +812,8 @@ fn main() {
     compile_apple_now_playing();
     // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308 macOS + #1309 iOS）も共用する。
     compile_apple_accessibility_prefs();
+    // `apple/fandhe_apple_per_app_language.m`（Issue #1073）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
+    compile_apple_per_app_language();
     // `apple/fandhe_apple_screen_capture.m`（Issue #1336）の iOS 側（ReplayKit）。
     compile_apple_screen_capture(true);
 }
@@ -1388,6 +1390,16 @@ fn compile_apple_accessibility_prefs() {
         .file("apple/fandhe_apple_accessibility_prefs.m")
         .flag("-fobjc-arc")
         .compile("fandhe_apple_accessibility_prefs");
+}
+
+/// `apple/fandhe_apple_per_app_language.m` を `cc` でコンパイルする（Issue #1073 macOS、
+/// #1074 iOS 共用）。Foundation は各分岐の既存リンクで足りる。
+fn compile_apple_per_app_language() {
+    println!("cargo:rerun-if-changed=apple/fandhe_apple_per_app_language.m");
+    cc::Build::new()
+        .file("apple/fandhe_apple_per_app_language.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_apple_per_app_language");
 }
 
 /// `apple/fandhe_apple_network_status.m` を `cc` でコンパイルし Network をリンクする
@@ -2794,6 +2806,8 @@ fn build_macos() {
     compile_apple_network_status();
     // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308）。iOS 分岐と共用する。
     compile_apple_accessibility_prefs();
+    // `apple/fandhe_apple_per_app_language.m`（Issue #1073）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
+    compile_apple_per_app_language();
     // `macos/fandhe_macos_background_task.m`（Issue #1043）は macOS 専用（doc 参照）。
     compile_macos_background_task();
     // `macos/fandhe_macos_url_scheme.m`（Issue #1215）も macOS 専用。
