@@ -114,6 +114,8 @@ enum Cmd {
         status: i32,
         error: i32,
     },
+    /// 読み取り成功の通知。状態通知と同じ直列経路を通し、公開開始（Started）より先に数えない。
+    Read(u64),
 }
 
 /// ワーカーのローカル状態。解放に失敗した分は残り、次の機会に再試行する。
@@ -271,6 +273,11 @@ fn run_worker(rx: mpsc::Receiver<Cmd>, tx: Sender<Cmd>) {
                 };
                 let _ = reply.send(result);
             }
+            Cmd::Read(session) => {
+                if running.as_ref().is_some_and(|r| r.session == session) {
+                    SESSION.deliver(session, PeripheralEvent::Read);
+                }
+            }
             Cmd::Status {
                 session,
                 status,
@@ -357,11 +364,12 @@ fn begin(session: u64, tx: &Sender<Cmd>) -> Result<Running, (EndReason, Option<R
         .map_err(|e| fail(reason_of(&e)))?;
 
     // 公開の前にハンドラを登録する。
+    let read_tx = tx.clone();
     let read_token = char
         .ReadRequested(&TypedEventHandler::new(
             move |_: Ref<'_, GattLocalCharacteristic>,
                   args: Ref<'_, GattReadRequestedEventArgs>| {
-                handle_read(session, args.ok()?)
+                handle_read(session, &read_tx, args.ok()?)
             },
         ))
         .map_err(|e| fail(reason_of(&e)))?;
@@ -423,7 +431,11 @@ fn begin(session: u64, tx: &Sender<Cmd>) -> Result<Running, (EndReason, Option<R
 }
 
 /// 読み取り要求に応答する（WinRT のスレッドプールで動く）。成功した応答だけを数える。
-fn handle_read(session: u64, args: &GattReadRequestedEventArgs) -> windows::core::Result<()> {
+fn handle_read(
+    session: u64,
+    tx: &Sender<Cmd>,
+    args: &GattReadRequestedEventArgs,
+) -> windows::core::Result<()> {
     let deferral = args.GetDeferral()?;
     let responded = (|| -> windows::core::Result<bool> {
         let request = args.GetRequestAsync()?.get()?;
@@ -442,7 +454,7 @@ fn handle_read(session: u64, args: &GattReadRequestedEventArgs) -> windows::core
     // 全経路で完了させ、その失敗も見る。
     let completed = deferral.Complete();
     if matches!(responded, Ok(true)) && completed.is_ok() {
-        SESSION.deliver(session, PeripheralEvent::Read);
+        let _ = tx.send(Cmd::Read(session));
     }
     responded.and(completed)
 }
