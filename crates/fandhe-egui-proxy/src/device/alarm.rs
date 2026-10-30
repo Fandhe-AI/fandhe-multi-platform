@@ -27,8 +27,8 @@
 //!
 //! # 実装
 //!
-//! Windows は [`super::windows_alarm::WindowsAlarm`]。iOS は `ios_alarm`（#1076 のスタブ、
-//! #1077 が実体に差し替える）、Android は `android_alarm`（同、#1078）。それ以外
+//! Windows は [`super::windows_alarm::WindowsAlarm`]。iOS は `ios_alarm`（AlarmKit を呼ぶ
+//! Swift の C ABI ラッパー）、Android は `android_alarm`（同、#1078）。それ以外
 //! （macOS・Linux 等）は [`fandhe_device::alarm::UnsupportedAlarm`] 固定で、`Unsupported` は固定文言に
 //! 畳む（[`to_message`]）。
 

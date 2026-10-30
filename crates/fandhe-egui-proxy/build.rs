@@ -451,6 +451,9 @@
 //!   ActivityKit によるライブアクティビティ）は **iOS 分岐のみ**で feature `device` 有効時に swiftc で
 //!   静的ライブラリ化する（`src/device/ios_live_activity.rs` から呼ばれる契約）。ActivityKit と
 //!   Swift ランタイムの検索パスを追加でリンクする。
+//! - `ios/fandhe_ios_alarm.swift`（Issue #1077、AlarmKit による正確な時刻の予約）は **iOS 分岐のみ**で
+//!   feature `device` 有効時に swiftc で静的ライブラリ化し、AlarmKit を弱リンクする
+//!   （`src/device/ios_alarm.rs` から呼ばれる契約）。
 //! - `ios/fandhe_ios_scene.m`（Issue #27、UIScene 化シム）は **iOS 分岐のみ**で feature・計測ビルドに
 //!   関係なく常にコンパイルする（Info.plist の `UIApplicationSceneManifest` が参照するため）。
 //! - `ios/fandhe_ios_multi_display.m`（Issue #27、scene の `UIScreen` による複数ディスプレイ）は
@@ -776,6 +779,8 @@ fn main() {
     compile_ios_call_ui();
     // `ios/fandhe_ios_live_activity.swift`（Issue #295）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_live_activity();
+    // `ios/fandhe_ios_alarm.swift`（Issue #1077）。iOS 分岐のみ。AlarmKit を弱リンクする。
+    compile_ios_alarm();
     // `ios/fandhe_ios_web_auth_session.m`（Issue #532）。iOS 分岐のみ。
     compile_ios_web_auth_session();
     // `ios/fandhe_ios_in_app_browser.m`（Issue #702）。iOS 分岐のみ。SafariServices をリンクする。
@@ -1194,7 +1199,7 @@ fn compile_apple_ml_inference() {
 
 /// Swift 薄層 1 本ぶんのビルド指定（`compile_apple_swift` への入力）。
 struct SwiftLib {
-    /// `apple/` 配下の Swift ソース（`crates/fandhe-egui-proxy` からの相対パス）。
+    /// `apple/`・`ios/` 配下の Swift ソース（`crates/fandhe-egui-proxy` からの相対パス）。
     src: &'static str,
     /// 静的ライブラリ名（`lib` 接頭辞と `.a` を除く）。
     lib: &'static str,
@@ -1253,6 +1258,22 @@ fn compile_apple_translation(ios: bool) {
             tag: "translation",
         },
         ios,
+    );
+}
+
+/// アラーム・正確な時刻の予約の Swift 薄層 `ios/fandhe_ios_alarm.swift`（Issue #1077）。
+/// AlarmKit（iOS 26 以降）を弱リンクする。iOS 分岐のみから呼ぶ（`src/device/ios_alarm.rs` が使う）。
+fn compile_ios_alarm() {
+    compile_apple_swift(
+        &SwiftLib {
+            src: "ios/fandhe_ios_alarm.swift",
+            lib: "fandhe_ios_alarm",
+            module: "FandheIosAlarmBridge",
+            framework: "AlarmKit",
+            require_env: "FANDHE_REQUIRE_ALARM",
+            tag: "alarm",
+        },
+        true,
     );
 }
 
