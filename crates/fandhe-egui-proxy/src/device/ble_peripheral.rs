@@ -326,7 +326,7 @@ mod tests {
         emit(&f, PeripheralEvent::Advertising);
         drain(&mut s, &rx);
         assert_eq!(s.phase, PeripheralPhase::Advertising);
-        assert_eq!(s.local_name, LOCAL_NAME);
+        assert_eq!(s.local_name, advertised_name());
         emit(&f, PeripheralEvent::Ended(EndReason::PermissionDenied));
         drain(&mut s, &rx);
         assert_eq!(s.phase, PeripheralPhase::Idle);

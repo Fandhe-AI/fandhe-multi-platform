@@ -32,6 +32,7 @@
 //! unpackaged の exe で GATT サーバーが使えるかは未確認（実機確認は #776）。型検査は
 //! `x86_64-pc-windows-gnu` のみ。
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, OnceLock};
 
@@ -61,6 +62,10 @@ const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
 
 /// 現在の公開の session と通知先（OS のハンドラとワーカーが共有する受け口）。
 static SESSION: SessionSlot = SessionSlot::new();
+
+/// キューに積まれた・処理中の `Cmd::Start` の数。0 でなければ `stop` は応答を待たない
+/// （開始手順の `.get()` 待ちで UI スレッドを止めないため）。
+static PENDING_STARTS: AtomicUsize = AtomicUsize::new(0);
 
 /// ワーカーへの命令。開始・停止・OS の状態通知はすべてここを順に通る。
 enum Cmd {
@@ -131,8 +136,7 @@ fn reason_of(e: &windows::core::Error) -> EndReason {
     }
 }
 
-/// Windows 実装。`stop` は進行中の開始手順（OS の非同期処理の `.get()` 数回）が終わるまで待つ。
-// ponytail: 天井は開始手順の完了待ち。長引くと分かったら SetCompleted による非同期化へ移す。
+/// Windows 実装。開始手順の保留中の `stop` は応答を待たずに戻る（`PENDING_STARTS`）。
 struct WindowsBlePeripheral;
 
 static WORKER: OnceLock<Option<Sender<Cmd>>> = OnceLock::new();
@@ -154,8 +158,10 @@ fn worker() -> Option<&'static Sender<Cmd>> {
 impl BlePeripheral for WindowsBlePeripheral {
     fn start(&self, session: u64, on_event: OnEvent) -> Result<StartOutcome, DeviceError> {
         SESSION.set(session, on_event);
+        PENDING_STARTS.fetch_add(1, Ordering::SeqCst);
         let sent = worker().is_some_and(|tx| tx.send(Cmd::Start(session)).is_ok());
         if !sent {
+            PENDING_STARTS.fetch_sub(1, Ordering::SeqCst);
             SESSION.clear();
             return Err(DeviceError::Internal("ble_peripheral start"));
         }
@@ -171,6 +177,11 @@ impl BlePeripheral for WindowsBlePeripheral {
         let (reply_tx, reply_rx) = mpsc::channel();
         if tx.send(Cmd::Stop(reply_tx)).is_err() {
             return Err(DeviceError::Internal("ble_peripheral stop"));
+        }
+        // 開始手順が未完了なら待たない。Stop は開始の後に順に処理され、公開を解放する
+        // （解放に失敗したら未解放として持ち越し、次の Start / Stop で再試行する）。
+        if PENDING_STARTS.load(Ordering::SeqCst) > 0 {
+            return Ok(StopOutcome::Stopped);
         }
         reply_rx
             .recv()
@@ -191,12 +202,15 @@ fn run_worker(rx: mpsc::Receiver<Cmd>, tx: Sender<Cmd>) {
                 // 前の公開は完了通知なしで置き換える。解放に失敗したら開始しない（契約表 9）。
                 if let Some(old) = running.as_mut() {
                     if old.release().is_err() {
+                        PENDING_STARTS.fetch_sub(1, Ordering::SeqCst);
                         SESSION.deliver(session, PeripheralEvent::Ended(EndReason::Failed));
                         continue;
                     }
                     running = None;
                 }
-                match begin(session, &tx) {
+                let started = begin(session, &tx);
+                PENDING_STARTS.fetch_sub(1, Ordering::SeqCst);
+                match started {
                     Ok(r) => running = Some(r),
                     Err((reason, partial)) => {
                         // 部分的に確保した分を解放する。失敗したら未解放として持ち越す。
@@ -238,9 +252,8 @@ fn run_worker(rx: mpsc::Receiver<Cmd>, tx: Sender<Cmd>) {
                         if reason == EndReason::Failed && radio_is_off(&r.adapter) {
                             reason = EndReason::BluetoothOff;
                         }
-                        if r.release().is_err() {
-                            reason = EndReason::Failed;
-                        } else {
+                        // 確定した reason は保つ。解放に失敗した分は未解放のまま持ち越す。
+                        if r.release().is_ok() {
                             running = None;
                         }
                         SESSION.deliver(session, PeripheralEvent::Ended(reason));
