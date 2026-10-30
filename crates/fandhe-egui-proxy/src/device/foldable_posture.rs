@@ -12,7 +12,7 @@
 //! `Ok(None)`（未受信）は画面を「読み取り中」に戻し、再描画を予約する。
 //!
 //! dispatch（[`implementation`]）は**最終形**。Android は `android_foldable_posture`
-//! （#1098 が埋めるスタブ）、他のネイティブ OS は対応表で未評価・対象外・できないのため
+//! （#1098 で実装済み）、他のネイティブ OS は対応表で未評価・対象外・できないのため
 //! `UnsupportedFoldablePosture` に固定する。iOS が `possible` になったら別の (a) で分岐を足す。
 //! Web は `fandhe-web-dom` が担う。
 

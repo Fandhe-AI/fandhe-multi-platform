@@ -1011,6 +1011,14 @@ public class MainActivity extends GameActivity {
         return captureProtectionHelper.screenshotCount();
     }
 
+    // 折りたたみの姿勢・ヒンジ（Issue #1098）。実装は `FoldablePostureHelper`。Rust の
+    // `android_foldable_posture.rs` が egui スレッドから同期で JNI 呼び出しする。
+    private final FoldablePostureHelper foldablePostureHelper = new FoldablePostureHelper(this);
+
+    int[] foldablePostureRead() {
+        return foldablePostureHelper.read();
+    }
+
     // ライト（トーチ）（Issue #461）。実装は `FlashlightHelper`。Rust の `android_flashlight.rs` が
     // egui スレッドから同期で JNI 呼び出しする。
     private final FlashlightHelper flashlightHelper = new FlashlightHelper(this);
@@ -1049,6 +1057,7 @@ public class MainActivity extends GameActivity {
         appLifecycleHelper.onStart();
         flashlightHelper.onStart();
         captureProtectionHelper.onStart();
+        foldablePostureHelper.onStart();
     }
 
     @Override
@@ -1056,6 +1065,7 @@ public class MainActivity extends GameActivity {
         appLifecycleHelper.onStop();
         flashlightHelper.onStop();
         captureProtectionHelper.onStop();
+        foldablePostureHelper.onStop();
         super.onStop();
     }
 
@@ -5262,6 +5272,7 @@ public class MainActivity extends GameActivity {
         screenBrightnessHelper.onDestroy();
         screenOrientationHelper.onDestroy();
         captureProtectionHelper.onDestroy();
+        foldablePostureHelper.onDestroy();
         flashlightHelper.onDestroy();
         systemSoundHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
