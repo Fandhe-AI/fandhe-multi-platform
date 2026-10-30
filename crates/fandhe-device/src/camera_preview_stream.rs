@@ -3,7 +3,8 @@
 //! [`CameraPreview::start`] で映像を開始し、各 OS 実装（iOS: #813、Android: #814、macOS: #1066。macOS は iOS と同じ `.m` を共有する）が本トレイトを実装する。
 //! Web は `fandhe-web-dom`（#815）が `getUserMedia` を使い、本トレイトは経由せず、純関数
 //! （[`preview_size`]・[`downscale_packed`]・[`zoom_target`]・[`checked_zoom`]）だけを共用する。
-//! Windows は保留（対応表の前提は #809）で、`UnsupportedCameraPreview` 固定。
+//! Windows は #1102（WinRT `MediaCapture` + `MediaFrameReader`）で、写像の純関数
+//! （[`start_failure_from_windows_hresult`] 等）だけを本モジュールに置く。
 //!
 //! # 結果の種類（契約表 10）
 //!
@@ -43,6 +44,22 @@
 //! - 中断: 中断の理由が取れないため、OS の中断はすべて [`PreviewEvent::Interrupted`]。中断の終了で
 //!   [`PreviewEvent::Running`] へ戻る
 //! - カメラの取り外し（`AVCaptureDeviceWasDisconnectedNotification`）は [`PreviewEvent::RuntimeFailed`]
+//!
+//! # Windows の違い
+//!
+//! - ズーム: `VideoDeviceController.ZoomControl` を使う。`Supported` が false のカメラ（PC の Web
+//!   カメラに多い）への要求は、同期ではなく非同期の [`PreviewEvent::ZoomFailed`]
+//!   （[`ZoomFailure::Unsupported`]）で返す。`Configure` の失敗・範囲不正は [`ZoomFailure::Failed`]
+//! - 背景: ウィンドウが最小化・背面でも映像を続け、[`StopReason::Backgrounded`] を送らない
+//! - 中断: `CameraStreamState::BlockedForPrivacy` が [`PreviewEvent::Interrupted`]、`Streaming` への
+//!   復帰が [`PreviewEvent::Running`]。`Shutdown` と `MediaCapture.Failed` は [`PreviewEvent::RuntimeFailed`]
+//! - 開始失敗: `InitializeWithSettingsAsync` の HRESULT は [`start_failure_from_windows_hresult`]、
+//!   `MediaFrameReader.StartAsync` の status は [`start_failure_from_windows_reader_status`] で写す。
+//!   開始の確定は status が `Success` のとき
+//! - 解放: 解放呼び出し（`Remove*` / `StopAsync` / `Close`）の失敗は握りつぶさず、次の開始の前に
+//!   再試行する。再試行も失敗したら新しい開始を `StartFailed(Other)` にする（嘘の成功にしない）
+//! - 守らない範囲: 初期化は STA 指定の公式文書に対し MTA のワーカーで呼ぶ（実機で確認する）。
+//!   初期化の途中に `Close` したときの挙動、1080p 以上の解像度でのワーカーの負荷
 //!
 //! # 後続 OS の要点
 //!
@@ -365,6 +382,57 @@ pub fn event_from_code(code: i32, detail: i32) -> PreviewEvent {
     }
 }
 
+// ---- Windows の写像（Issue #1102）---------------------------------------------------------
+
+/// `InitializeWithSettingsAsync` の HRESULT を開始失敗へ写す（Windows 実装用。数値表は 1 か所）。
+///
+/// | HRESULT | 意味 | 写像 |
+/// | --- | --- | --- |
+/// | `0x80070005` | `E_ACCESSDENIED`（プライバシー設定で拒否） | `PermissionDenied` |
+/// | `0xC00DABE0` | `MF_E_NO_CAPTURE_DEVICES_AVAILABLE` | `NoCamera` |
+/// | 他 | 意味を確かめていない値 | `Other` |
+pub fn start_failure_from_windows_hresult(code: i32) -> StartFailure {
+    match code as u32 {
+        0x8007_0005 => StartFailure::PermissionDenied,
+        0xC00D_ABE0 => StartFailure::NoCamera,
+        _ => StartFailure::Other,
+    }
+}
+
+/// `MediaFrameReaderStartStatus` を開始失敗へ写す。`Success`（0）は `None`（開始の確定）。
+/// 1 `UnknownFailure` / 2 `DeviceNotAvailable` / 3 `OutputFormatNotSupported` /
+/// 4 `ExclusiveControlNotAvailable`。未知の値は `Other`（成功へは倒さない）。
+pub fn start_failure_from_windows_reader_status(status: i32) -> Option<StartFailure> {
+    match status {
+        0 => None,
+        2 => Some(StartFailure::NoCamera),
+        4 => Some(StartFailure::InUse),
+        _ => Some(StartFailure::Other),
+    }
+}
+
+/// `CameraStreamState` を映像の状態変化へ写す。`None` は何もしない（0 `NotStreaming` は自分の停止でも
+/// 届く、4 `Throttled` は映像が続く）。1 `Streaming` は `Running`（呼び出し側が開始確定後の復帰
+/// だけを通す）、2 `BlockedForPrivacy` は `Interrupted`、3 `Shutdown` と未知の値は `RuntimeFailed`。
+pub fn event_from_windows_stream_state(state: i32) -> Option<PreviewEvent> {
+    match state {
+        0 | 4 => None,
+        1 => Some(PreviewEvent::Running),
+        2 => Some(PreviewEvent::Interrupted),
+        _ => Some(PreviewEvent::RuntimeFailed),
+    }
+}
+
+/// OS が返した寸法 `width` x `height` の Bgra8 バッファ長（バイト）。0 以下・[`MAX_SOURCE_SIDE`] 超・
+/// あふれは `None`。`Buffer::Create` の前に検証する（巨大確保による DoS を防ぐ。契約表 5）。
+pub fn windows_bgra_len(width: i32, height: i32) -> Option<u32> {
+    let (w, h) = (u32::try_from(width).ok()?, u32::try_from(height).ok()?);
+    if !dims_ok(w, h) {
+        return None;
+    }
+    w.checked_mul(h)?.checked_mul(4)
+}
+
 // ---- トレイト -------------------------------------------------------------------------------
 
 /// OS からのフレーム・通知の受け口。任意のスレッドから呼ばれうる。
@@ -576,6 +644,64 @@ mod tests {
                 "{code}"
             );
         }
+    }
+
+    #[test]
+    fn windows_mappings_never_fold_to_success() {
+        assert_eq!(
+            start_failure_from_windows_hresult(0x8007_0005_u32 as i32),
+            StartFailure::PermissionDenied
+        );
+        assert_eq!(
+            start_failure_from_windows_hresult(0xC00D_ABE0_u32 as i32),
+            StartFailure::NoCamera
+        );
+        assert_eq!(
+            start_failure_from_windows_hresult(0x1234),
+            StartFailure::Other
+        );
+        assert_eq!(start_failure_from_windows_reader_status(0), None);
+        assert_eq!(
+            start_failure_from_windows_reader_status(2),
+            Some(StartFailure::NoCamera)
+        );
+        assert_eq!(
+            start_failure_from_windows_reader_status(4),
+            Some(StartFailure::InUse)
+        );
+        for s in [1, 3, 99, -1] {
+            assert_eq!(
+                start_failure_from_windows_reader_status(s),
+                Some(StartFailure::Other),
+                "{s}"
+            );
+        }
+        assert_eq!(event_from_windows_stream_state(0), None);
+        assert_eq!(event_from_windows_stream_state(4), None);
+        assert_eq!(
+            event_from_windows_stream_state(1),
+            Some(PreviewEvent::Running)
+        );
+        assert_eq!(
+            event_from_windows_stream_state(2),
+            Some(PreviewEvent::Interrupted)
+        );
+        for s in [3, 5, -1] {
+            assert_eq!(
+                event_from_windows_stream_state(s),
+                Some(PreviewEvent::RuntimeFailed),
+                "{s}"
+            );
+        }
+    }
+
+    #[test]
+    fn windows_bgra_len_bounds() {
+        assert_eq!(windows_bgra_len(640, 480), Some(640 * 480 * 4));
+        assert_eq!(windows_bgra_len(0, 480), None);
+        assert_eq!(windows_bgra_len(640, -1), None);
+        assert_eq!(windows_bgra_len(MAX_SOURCE_SIDE as i32 + 1, 1), None);
+        assert!(windows_bgra_len(MAX_SOURCE_SIDE as i32, MAX_SOURCE_SIDE as i32).is_some());
     }
 
     #[test]

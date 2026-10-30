@@ -9,8 +9,8 @@
 //!
 //! [`platform_camera_preview`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（iOS: `ios_camera_preview_stream`（#813）、Android:
-//! `android_camera_preview_stream`（#814）、macOS: iOS と同じ `ios_camera_preview_stream`（#1066））。
-//! Windows は保留で、Linux 等と同じく
+//! `android_camera_preview_stream`（#814）、macOS: iOS と同じ `ios_camera_preview_stream`（#1066）、
+//! Windows: `windows_camera_preview_stream`（#1102）。Linux 等は
 //! `UnsupportedCameraPreview` 固定（ダミーの成功実装へは倒さない）。Web は本ドライバを通らない
 //! （#815 の `fandhe-web-dom`）。OS のコールバックは [`register`] で得た `id` を持ち、
 //! [`deliver_frame`] / [`deliver_event`] を呼ぶ。
@@ -40,7 +40,12 @@ use fandhe_core::screens::camera_preview_stream_show::{
     ZoomStepView,
 };
 use fandhe_core::RgbaPixels;
-#[cfg(not(any(target_os = "ios", target_os = "android", target_os = "macos")))]
+#[cfg(not(any(
+    target_os = "ios",
+    target_os = "android",
+    target_os = "macos",
+    target_os = "windows"
+)))]
 use fandhe_device::camera_preview_stream::UnsupportedCameraPreview;
 use fandhe_device::camera_preview_stream::{
     checked_zoom, CameraPreview, PreviewEvent, PreviewFrame, PreviewSession, PreviewSink,
@@ -65,7 +70,16 @@ fn platform_camera_preview() -> Arc<dyn CameraPreview> {
     {
         super::android_camera_preview_stream::implementation()
     }
-    #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "macos")))]
+    #[cfg(target_os = "windows")]
+    {
+        super::windows_camera_preview_stream::implementation()
+    }
+    #[cfg(not(any(
+        target_os = "ios",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "windows"
+    )))]
     {
         Arc::new(UnsupportedCameraPreview)
     }
@@ -492,9 +506,14 @@ mod tests {
         }
     }
 
-    // 実ホストの dispatch を呼ぶ検証（macOS・iOS・Android 以外）でだけ使う。
+    // 実ホストの dispatch を呼ぶ検証（macOS・iOS・Android・Windows 以外）でだけ使う。
     #[cfg_attr(
-        any(target_os = "ios", target_os = "android", target_os = "macos"),
+        any(
+            target_os = "ios",
+            target_os = "android",
+            target_os = "macos",
+            target_os = "windows"
+        ),
         allow(dead_code)
     )]
     struct NopSink;
@@ -602,9 +621,14 @@ mod tests {
             e.state.phase,
             PreviewPhase::Failed(FailureView::Unsupported)
         );
-        // 実際のホスト dispatch も同じ（iOS・Android・macOS 以外は Unsupported 固定）。
-        // macOS ホストは実 AVFoundation を呼び許可を要求するため呼ばない。
-        #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "macos")))]
+        // 実際のホスト dispatch も同じ（iOS・Android・macOS・Windows 以外は Unsupported 固定）。
+        // macOS・Windows ホストは実カメラを呼び許可を要求するため呼ばない。
+        #[cfg(not(any(
+            target_os = "ios",
+            target_os = "android",
+            target_os = "macos",
+            target_os = "windows"
+        )))]
         assert!(matches!(
             platform_camera_preview().start(Arc::new(NopSink)),
             Err(PreviewStartError::Unsupported)
