@@ -20,13 +20,32 @@
 //! - `change` イベントは購読せず [`READ_INTERVAL`] ごとに読み直す（非表示の文書には届かず、
 //!   bfcache から戻ったときに古い値が残るため）
 //!
+//! - **未受信**: [`FoldablePostureSource::read`] の `Ok(None)`。画面は「読み取り中」に戻り、
+//!   前回値を残さない。ネイティブ OS 実装だけが返す（Web は [`reading_from_raw`] を直接使う）
+//!
+//! # Android の写像（Issue #1097 で確定、実装は #1098）
+//!
+//! Jetpack WindowManager の `WindowLayoutInfo` を `onStart` で購読し `onStop` で解除する。
+//!
+//! | Android 側の状態 | 結果 |
+//! |---|---|
+//! | 未購読・最初の通知前・`onStop` の後 | `Ok(None)` |
+//! | `FoldingFeature` が無い | `Ok(Some { Flat, FoldInfo::Unknown })`（「折れ目なし」とは言わない） |
+//! | `FoldingFeature` 1 つ。state `FLAT` / `HALF_OPENED` | `Flat` / `Folded` |
+//! | 同上の `orientation` と `bounds` | `FoldInfo::Known`。単位は dp（物理 px ÷ density）。`extent` は窓の幅（縦の折れ目）か高さ（横の折れ目）、`start` は窓の左端・上端から帯の始まりまで |
+//! | `FoldingFeature` が 2 つ以上 | `fold` は `Unknown`。1 つでも `HALF_OPENED` があれば `Folded` |
+//! | 未知の state・orientation／非有限・負・[`MAX_EXTENT`] 超・窓外の bounds／density ≤ 0 | `Internal`。クランプしない。検査は f32 へ丸める前に行う |
+//! | JNI 例外・Activity なし | `Internal` |
+//!
 //! # 守る範囲と守らない範囲（契約表 11）
 //!
-//! 守る: 取れないときに「平ら」や折れ目なしへ倒さないこと、1 ページ内の読み取り、
-//! Web 側のタイマーとリスナーの解放。
+//! 守る: 取れないときに「平ら」や折れ目なしへ倒さないこと、未受信を「平ら」にしないこと、
+//! `onStop` 後に前回値を返さないこと、1 ページ内の読み取り、Web 側のタイマーとリスナーの解放、
+//! Android の購読の解除。
 //! 守らない: 反映の遅れ（[`READ_INTERVAL`] + 1 フレーム。背景タブではさらに遅れる）、
-//! 折りたためない端末と広げた端末の区別、複数タブ間の食い違い、ページの zoom が 1 でないとき
-//! の位置のずれ、Safari の設定に依存する差。
+//! 折りたためない端末・閉じた端末・広げた端末の区別、複数タブ間の食い違い、ページの zoom が 1 でないとき
+//! の位置のずれ、Safari の設定に依存する差、Activity 再生成の直後に値が一時的に未受信へ戻ること、
+//! ヒンジの角度。
 
 use std::time::Duration;
 
@@ -105,16 +124,17 @@ pub struct SegmentRect {
 
 /// 姿勢と折れ目を 1 回読む。UI スレッドで同期に呼ばれるため短時間で戻ること。
 pub trait FoldablePostureSource: Send + Sync {
-    /// 現在の姿勢と折れ目を返す。失敗後に直前の値を返し続けてはならない。
-    fn read(&self) -> Result<PostureReading, DeviceError>;
+    /// 現在の姿勢と折れ目を返す。`Ok(None)` は「未受信」（購読前・最初の通知前・購読解除後）で、
+    /// 「平ら」でも失敗でもない。失敗・未受信の後に直前の値を返し続けてはならない。
+    fn read(&self) -> Result<Option<PostureReading>, DeviceError>;
 }
 
-/// 常に非対応を返す実装（ネイティブ全 OS の dispatch 先）。
+/// 常に非対応を返す実装（Android 以外のネイティブ OS の dispatch 先、Android スタブの中身）。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct UnsupportedFoldablePosture;
 
 impl FoldablePostureSource for UnsupportedFoldablePosture {
-    fn read(&self) -> Result<PostureReading, DeviceError> {
+    fn read(&self) -> Result<Option<PostureReading>, DeviceError> {
         Err(DeviceError::Unsupported("foldable_posture"))
     }
 }

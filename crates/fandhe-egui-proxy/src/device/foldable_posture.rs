@@ -9,26 +9,35 @@
 //! `Unsupported` のときは予約しない（ネイティブの非対応はプロセス中に変わらず、
 //! 失敗状態のまま再描画し続けないため）。
 //!
-//! dispatch（[`implementation`]）は**最終形**。ネイティブは全 OS が対応表で保留・未評価・
-//! 対象外・できないのいずれかなので `UnsupportedFoldablePosture` に固定する。将来ネイティブを
-//! 足すときは `implementation()` に cfg の分岐を足す。Web は `fandhe-web-dom` が担う。
+//! `Ok(None)`（未受信）は画面を「読み取り中」に戻し、再描画を予約する。
+//!
+//! dispatch（[`implementation`]）は**最終形**。Android は `android_foldable_posture`
+//! （#1098 が埋めるスタブ）、他のネイティブ OS は対応表で未評価・対象外・できないのため
+//! `UnsupportedFoldablePosture` に固定する。iOS が `possible` になったら別の (a) で分岐を足す。
+//! Web は `fandhe-web-dom` が担う。
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use fandhe_core::screens::foldable_posture_show::{
-    self as core_screen, apply_read, FoldablePostureShowState, ReadFailure, FAILED_LABEL,
+    self as core_screen, apply_pending, apply_read, FoldablePostureShowState, ReadFailure,
+    FAILED_LABEL,
 };
-use fandhe_device::foldable_posture::{
-    self as dev, FoldablePostureSource, UnsupportedFoldablePosture, READ_INTERVAL,
-};
+use fandhe_device::foldable_posture::{self as dev, FoldablePostureSource, READ_INTERVAL};
 use fandhe_device::DeviceError;
 
 use crate::app::CompletionSender;
 
-/// 現在のプラットフォームに応じた実装を返す。全ネイティブ OS で非対応。
+/// 現在のプラットフォームに応じた実装を返す。Android 以外のネイティブ OS は非対応。
 fn implementation() -> Arc<dyn FoldablePostureSource> {
-    Arc::new(UnsupportedFoldablePosture)
+    #[cfg(target_os = "android")]
+    {
+        super::android_foldable_posture::implementation()
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        Arc::new(fandhe_device::foldable_posture::UnsupportedFoldablePosture)
+    }
 }
 
 fn map_posture(p: dev::Posture) -> core_screen::Posture {
@@ -55,16 +64,30 @@ fn map_fold(f: dev::FoldInfo) -> core_screen::FoldInfo {
 
 /// 契約の結果を画面の入力へ写す。`Unsupported` 以外の失敗は固定文言へ畳み、
 /// OS 固有値を画面へ漏らさない（security.md A09）。
+/// `Ok(None)`（未受信）は `Ok(None)` のまま返し、呼び出し側が「読み取り中」へ戻す。
 fn to_result(
-    r: Result<dev::PostureReading, DeviceError>,
-) -> Result<core_screen::PostureReading, ReadFailure> {
+    r: Result<Option<dev::PostureReading>, DeviceError>,
+) -> Result<Option<core_screen::PostureReading>, ReadFailure> {
     match r {
-        Ok(r) => Ok(core_screen::PostureReading {
+        Ok(None) => Ok(None),
+        Ok(Some(r)) => Ok(Some(core_screen::PostureReading {
             posture: map_posture(r.posture),
             fold: map_fold(r.fold),
-        }),
+        })),
         Err(DeviceError::Unsupported(_)) => Err(ReadFailure::Unsupported),
         Err(_) => Err(ReadFailure::Failed(FAILED_LABEL.to_string())),
+    }
+}
+
+/// 読み取り結果を画面状態へ反映する。未受信は「読み取り中」へ戻す。
+fn apply(
+    s: &mut FoldablePostureShowState,
+    r: Result<Option<core_screen::PostureReading>, ReadFailure>,
+) {
+    match r {
+        Ok(None) => apply_pending(s),
+        Ok(Some(v)) => apply_read(s, Ok(v)),
+        Err(e) => apply_read(s, Err(e)),
     }
 }
 
@@ -116,11 +139,11 @@ fn drive(
 
     if let Some(result) = result {
         let mut next = state.clone();
-        apply_read(&mut next, result.clone());
+        apply(&mut next, result.clone());
         // 同じ状態のまま毎フレーム送らない。
         if next != *state {
             let _ = sender.send(Box::new(move |s: &mut FoldablePostureShowState| {
-                apply_read(s, result.clone())
+                apply(s, result.clone())
             }));
         }
     }
@@ -153,6 +176,7 @@ pub fn foldable_posture_show_effect(
 mod tests {
     use super::*;
     use core_screen::FoldablePostureView as View;
+    use fandhe_device::foldable_posture::UnsupportedFoldablePosture;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     type Rx = std::sync::mpsc::Receiver<crate::app::Completion<FoldablePostureShowState>>;
@@ -164,27 +188,27 @@ mod tests {
     }
 
     struct Fake {
-        result: Result<dev::PostureReading, DeviceError>,
+        result: Result<Option<dev::PostureReading>, DeviceError>,
         reads: AtomicUsize,
     }
 
     impl Fake {
-        fn new(result: Result<dev::PostureReading, DeviceError>) -> Self {
+        fn new(result: Result<Option<dev::PostureReading>, DeviceError>) -> Self {
             Self {
                 result,
                 reads: AtomicUsize::new(0),
             }
         }
         fn reading(posture: dev::Posture) -> Self {
-            Self::new(Ok(dev::PostureReading {
+            Self::new(Ok(Some(dev::PostureReading {
                 posture,
                 fold: dev::FoldInfo::Unknown,
-            }))
+            })))
         }
     }
 
     impl FoldablePostureSource for Fake {
-        fn read(&self) -> Result<dev::PostureReading, DeviceError> {
+        fn read(&self) -> Result<Option<dev::PostureReading>, DeviceError> {
             self.reads.fetch_add(1, Ordering::SeqCst);
             match &self.result {
                 Ok(r) => Ok(*r),
@@ -343,6 +367,48 @@ mod tests {
     }
 
     #[test]
+    fn pending_returns_to_reading_and_reschedules() {
+        let (tx, rx) = sender_with_channel();
+        let mut state = FoldablePostureShowState::default();
+        let t0 = Instant::now();
+        let mut timing = Timing::default();
+        drive(
+            &state,
+            &tx,
+            &Fake::reading(dev::Posture::Folded),
+            t0,
+            &mut timing,
+        );
+        apply_all(&rx, &mut state);
+        assert!(matches!(state.view, View::Read(_)));
+        let w = drive(
+            &state,
+            &tx,
+            &Fake::new(Ok(None)),
+            t0 + READ_INTERVAL,
+            &mut timing,
+        );
+        apply_all(&rx, &mut state);
+        assert_eq!(state.view, View::Reading);
+        assert!(w.is_some());
+    }
+
+    #[test]
+    fn pending_while_reading_sends_nothing() {
+        let (tx, rx) = sender_with_channel();
+        let state = FoldablePostureShowState::default();
+        let w = drive(
+            &state,
+            &tx,
+            &Fake::new(Ok(None)),
+            Instant::now(),
+            &mut Timing::default(),
+        );
+        assert!(rx.try_recv().is_err());
+        assert!(w.is_some());
+    }
+
+    #[test]
     fn internal_failure_reschedules() {
         let (tx, _rx) = sender_with_channel();
         let state = FoldablePostureShowState::default();
@@ -367,7 +433,7 @@ mod tests {
                 extent: 3.0,
             }),
         };
-        let out = to_result(Ok(r)).unwrap();
+        let out = to_result(Ok(Some(r))).unwrap().unwrap();
         assert_eq!(out.posture, core_screen::Posture::Folded);
         assert!(matches!(
             out.fold,

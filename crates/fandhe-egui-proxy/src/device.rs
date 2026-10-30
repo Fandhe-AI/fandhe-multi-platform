@@ -169,6 +169,11 @@ pub mod android_flashlight;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_focus_mode_status;
+/// Issue #1097: Android 向け折りたたみ姿勢のスタブ（`Unsupported` を返す）。実装は #1098。
+/// `device/foldable_posture.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_foldable_posture;
 /// Issue #1314: Android 向け全画面表示実装（`FullscreenHelper` との JNI 橋渡し）。
 /// `device/fullscreen_immersive.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -832,7 +837,8 @@ pub mod flashlight;
 /// Android は JNI 実装、他 OS は `UnsupportedFocusStatus` 固定）。
 pub mod focus_mode_status;
 /// Phase 11 の拡充ループ（親 #141、Issue #723）: 折りたたみの姿勢の effect ドライバ
-/// （全ネイティブ OS は `UnsupportedFoldablePosture` 固定。Web は `fandhe-web-dom`）。
+/// （Android は OS 別モジュール（#1098 が埋めるスタブ）、他ネイティブ OS は
+/// `UnsupportedFoldablePosture` 固定。Web は `fandhe-web-dom`）。
 pub mod foldable_posture;
 /// Phase 11 の拡充ループ（親 #1133、Issue #1312）: 全画面表示の effect ドライバ（macOS/Windows は
 /// eframe の viewport コマンド、iOS/Android は OS 別モジュール、他 OS は
