@@ -137,6 +137,10 @@
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
+    <!-- Issue #1078: アラーム（AlarmManager.setAlarmClock）。API 31 以上で必須（利用者が設定で許可）。
+         USE_EXACT_ALARM・RECEIVE_BOOT_COMPLETED は足さない。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <!-- Phase 11（Issue #1249）: 歩数画面が `TYPE_STEP_COUNTER` を読む。API 29 以上でのみ
          実行時許可の対象（API 28 以下は許可不要）。切り離し時に削除する。 -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
@@ -351,6 +355,12 @@
              だけが届くため exported=false、intent-filter なし。切り離し時に削除する。 -->
         <receiver
             android:name="com.fandhe.androidapp.CallUiActionReceiver"
+            android:exported="false" />
+
+        <!-- Issue #1078: アラームの時刻に通知を鳴らす受け口。自アプリの明示 Intent（FLAG_IMMUTABLE）
+             だけが届くため exported=false、intent-filter なし。切り離し時に削除する。 -->
+        <receiver
+            android:name="com.fandhe.androidapp.AlarmReceiver"
             android:exported="false" />
 
         <!-- Issue #720: クイック設定タイル。intent-filter を持つため exported=true だが、

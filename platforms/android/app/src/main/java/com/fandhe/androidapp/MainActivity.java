@@ -4849,6 +4849,20 @@ public class MainActivity extends GameActivity {
         return PerAppLanguageHelper.read(getApplicationContext());
     }
 
+    // Rust 側（`device/android_alarm.rs`、Issue #1078）から JNI 経由でワーカースレッドが同期で呼ぶ
+    // 3 本。シグネチャは `(J)I` / `()I` / `()J`。結果コードは `AlarmHelper` 冒頭を参照。
+    private int alarmSchedule(long fireAtMs) {
+        return AlarmHelper.schedule(this, fireAtMs);
+    }
+
+    private int alarmCancel() {
+        return AlarmHelper.cancel(getApplicationContext());
+    }
+
+    private long alarmState() {
+        return AlarmHelper.state(getApplicationContext());
+    }
+
     // Rust 側（`device/android_audio_devices.rs`、Issue #1332）から JNI 経由で egui スレッドが
     // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
     // `AudioDevicesHelper` 冒頭を参照。失敗は null。
