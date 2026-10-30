@@ -132,6 +132,12 @@
   クラッシュする。機器の操作・家の追加はしないので、説明は読み取りに限る（security.md A05）。
   対応する entitlement `com.apple.developer.homekit` は `FandheIosApp.entitlements` で宣言する。
 
+  NSHealthShareUsageDescription（Issue #1090）: 型サンプル「ヘルスデータ読み書き」画面が HealthKit
+  （`crates/fandhe-egui-proxy/ios/fandhe_ios_health_data.m`）で今日の歩数の合計を読むために必須。
+  未設定だと許可の要求でクラッシュする。書き込みはしないので NSHealthUpdateUsageDescription は足さない
+  （security.md A05）。対応する entitlement `com.apple.developer.healthkit` は `FandheIosApp.entitlements`
+  で宣言する。
+
   NSLocalNetworkUsageDescription / NSBonjourServices（Issue #488）: 型サンプル「LAN のサービス探索」
   （`FANDHE_PROXY_APP=lan_discover`）が `nw_browser`
   （`crates/fandhe-egui-proxy/apple/fandhe_apple_lan_discovery.m` は iOS/macOS 共用）で
@@ -306,6 +312,8 @@
 	<string>型サンプル「音楽ライブラリ」の動作確認に使います</string>
 	<key>NSHomeKitUsageDescription</key>
 	<string>型サンプル「スマートホーム操作」の動作確認に使います</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>型サンプル「ヘルスデータ読み書き」の動作確認で、今日の歩数を読むために使います</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>型サンプル「LAN のサービス探索」「近くの端末との直接通信」「UWB による距離」の動作確認に使います</string>
 	<key>NSNearbyInteractionUsageDescription</key>

@@ -370,6 +370,9 @@
 //! - `ios/fandhe_ios_smart_home.m`（Issue #1080、HomeKit `HMHomeManager` による家と機器の名前の読み取り）は
 //!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_smart_home.rs`
 //!   から呼ばれる契約）。HomeKit をリンクする。
+//! - `ios/fandhe_ios_health_data.m`（Issue #1090、HealthKit による今日の歩数の合計の読み取り）は
+//!   **iOS 分岐のみ**で feature `device` 有効時にコンパイルする（`src/device/ios_health_data.rs`
+//!   から呼ばれる契約）。HealthKit をリンクする。
 //! - `ios/fandhe_ios_screen_wake_lock.m`（Issue #1279、`UIApplication.idleTimerDisabled` による
 //!   画面スリープの抑止）は **iOS 分岐のみ**で feature `device` 有効時にコンパイルする
 //!   （`src/device/ios_screen_wake_lock.rs` から呼ばれる契約）。UIKit は既存のリンクで足りる。
@@ -754,6 +757,8 @@ fn main() {
     compile_ios_music_library();
     // `ios/fandhe_ios_smart_home.m`（Issue #1080）。iOS 分岐のみ。
     compile_ios_smart_home();
+    // `ios/fandhe_ios_health_data.m`（Issue #1090）。iOS 分岐のみ（macOS は対応表で n-a）。
+    compile_ios_health_data();
     // `ios/fandhe_ios_volume_control.m`（Issue #786）。iOS 分岐のみ。
     compile_ios_volume_control();
     // `ios/fandhe_ios_compass.m`（Issue #1405）。iOS 分岐のみ（macOS は対応表で no）。
@@ -2263,6 +2268,17 @@ fn compile_ios_smart_home() {
         .flag("-fobjc-arc")
         .compile("fandhe_ios_smart_home");
     println!("cargo:rustc-link-lib=framework=HomeKit");
+}
+
+/// `ios/fandhe_ios_health_data.m` を `cc` でコンパイルし HealthKit をリンクする（Issue #1090）。**iOS 分岐のみ**
+/// から呼ばれる（`src/device/ios_health_data.rs` が使う）。
+fn compile_ios_health_data() {
+    println!("cargo:rerun-if-changed=ios/fandhe_ios_health_data.m");
+    cc::Build::new()
+        .file("ios/fandhe_ios_health_data.m")
+        .flag("-fobjc-arc")
+        .compile("fandhe_ios_health_data");
+    println!("cargo:rustc-link-lib=framework=HealthKit");
 }
 
 /// `ios/fandhe_ios_screen_wake_lock.m` を `cc` でコンパイルする（Issue #1279）。**iOS 分岐のみ**

@@ -7,7 +7,7 @@
   "bundle": "request-response",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "done",
       "api": "HealthKit（`HKHealthStore` をプロセスで 1 つ保持。可否は `isHealthDataAvailable()`、許可は `requestAuthorization(toShare:read:completion:)`（書き込みの型は空、読み取りは `stepCount` のみ）、今日 0 時から現在までの歩数の合計は `HKStatisticsQuery` の `.cumulativeSum` → `sumQuantity()`。期限切れは `stop(_:)` で取り消す。書き込み・履歴・背景配信はしない）",
       "perm": "HealthKit capability（`com.apple.developer.healthkit` entitlement）を、プロファイル生成専用のホストターゲット `FandheIosApp`（`platforms/apple/project.yml`）の `CODE_SIGN_ENTITLEMENTS` の entitlements ファイルに足す。実機署名はプロファイルから entitlements を抜き出して Rust/winit のバンドルへ付ける既存手順のまま。Apple Developer Program なしの無料の Apple Developer（Personal Team）でも付けられる（公式の対応表）。Info.plist の `NSHealthShareUsageDescription`（読み取り。無いと許可の要求でクラッシュする）。書き込みをしないので `NSHealthUpdateUsageDescription` は足さない。必須の端末機能ではないので `UIRequiredDeviceCapabilities` に `healthkit` を足さない。臨床記録用の `com.apple.developer.healthkit.access` と背景配信用の `com.apple.developer.healthkit.background-delivery` は使わない",
       "url": [
@@ -22,7 +22,10 @@
         "https://developer.apple.com/documentation/healthkit/hkstatisticsquery",
         "https://developer.apple.com/documentation/healthkit/hkerror/code/errornodata"
       ],
-      "note": "未実装。読み取りの許可は拒否されてもアプリから判別できず、拒否された型は「データが無い」ように見える（公式）。`requestAuthorization` の `success` は許可の有無を表さない（公式）。そのため「許可なし」の種別を作らず、`HKStatisticsQuery` の `errorNoData`（と `sumQuantity()` が nil）は 0 歩にも失敗にもせず「記録が見えない（記録が無いか、読み取りを許可していない）」として返す。端末ロック中は `errorDatabaseInaccessible` で失敗。値はヘルスケアに集約された合計（他のアプリ・Apple Watch の記録を含む）で、pedometer（CoreMotion の端末センサー値）とは一致しない。審査ガイドライン 5.1.3 等で、ヘルスデータの広告・マーケティング利用と iCloud への保存を禁じる"
+      "note": "期限は 30 秒で、許可シートの待ちと集計の待ちで共有する。期限切れは `stopQuery` してから失敗（期限切れ）にする。読み取りの許可は拒否されてもアプリから判別できず、`requestAuthorization` の `success` は許可の有無を表さない（公式）。そのため「許可なし」の種別を作らず、`HKStatisticsQuery` の `errorNoData` と `sumQuantity()` が nil の場合は 0 歩にも失敗にもせず「記録が見えない（記録が無いか、読み取りを許可していない）」として返す。許可シートの取り消し（`HKErrorUserCanceled`）は取り消し。端末ロック中（`errorDatabaseInaccessible`）・entitlement 不足は失敗。許可シートの応答待ち中の再要求は失敗にする。値はヘルスケアに集約された合計（他のアプリ・Apple Watch の記録を含む）で、pedometer（CoreMotion の端末センサー値）とは一致しない。歩数と NSError はログに出さない。実機での挙動は【推測】で #1059 で確かめる。審査ガイドライン 5.1.3 等で、ヘルスデータの広告・マーケティング利用と iCloud への保存を禁じる",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1059）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_health_data.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_health_data.m + crates/fandhe-egui-proxy/src/device/health_data.rs + crates/fandhe-core/src/screens/health_steps_read.rs + crates/fandhe-device/src/health_data.rs、Issue #1090"
     },
     "android": {
       "status": "possible",

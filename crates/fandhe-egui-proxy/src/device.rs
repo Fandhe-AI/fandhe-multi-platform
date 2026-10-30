@@ -1040,7 +1040,7 @@ pub mod ios_fullscreen_immersive;
 /// 戻り直後に再描画を起こす）。`device/geocoding_search.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_geocoding_search;
-/// Issue #1089・#1090: iOS 向けヘルスデータ（歩数）実装（骨格のスタブ。#1090 が HealthKit の実体を入れる）。
+/// Issue #1089・#1090: iOS 向けヘルスデータ（歩数）実装（HealthKit の C ABI ラッパー）。
 /// `device/health_data.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
