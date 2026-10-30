@@ -317,6 +317,8 @@ pub mod screen_orientation_show;
 pub mod serial_port_show;
 /// Phase 11 の拡充ループ型サンプル「スリープ・ロックの通知」（親 #167、Issue #810）。
 pub mod sleep_lock_events_show;
+/// Phase 11 の拡充ループ型サンプル「スマートホーム」（親 #147、Issue #1079）。
+pub mod smart_home_list;
 
 /// Phase 11 の拡充ループ型サンプル「ペン・筆圧で描く」（親 #95、Issue #355）。
 pub mod pen_draw;
