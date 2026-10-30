@@ -29,8 +29,8 @@
     },
     "android": {
       "status": "possible",
-      "api": "Health Connect（Jetpack の `androidx.health.connect:connect-client` の `HealthConnectClient`、または API 34 以上のフレームワーク API `android.health.connect.HealthConnectManager`）。可否は `getSdkStatus`、歩数の合計は `aggregate()`",
-      "perm": "データ型ごとの `android.permission.health.READ_STEPS` 等の宣言（実行時の許可は Health Connect の許可画面）、`<queries>` に `com.google.android.apps.healthdata`、権限の理由（プライバシーポリシー）を出す Activity（Android 13 以下は `ACTION_SHOW_PERMISSIONS_RATIONALE`、14 以上は `VIEW_PERMISSION_USAGE` + `HEALTH_PERMISSIONS` の activity-alias）。公開には Play Console のヘルスアプリ申告が要る",
+      "api": "Android 14（API 34）以上のフレームワーク API `android.health.connect.HealthConnectManager`（可否は `HealthConnectManager.getHealthConnectSdkStatus` 相当、歩数の合計は `aggregate()` の `StepsRecord`）。API 33 以下は `Unsupported`。Jetpack の `androidx.health.connect:connect-client` は使わない（1.1.0 は minCompileSdk=36 で compileSdk 35 と合わない）",
+      "perm": "`android.permission.health.READ_STEPS`（実行時の許可は Health Connect の許可画面）、`<queries>` に `com.google.android.apps.healthdata`、権限の理由を出す Activity（`VIEW_PERMISSION_USAGE` + `HEALTH_PERMISSIONS` の activity-alias）。依存の追加なし。公開には Play Console のヘルスアプリ申告が要る",
       "url": [
         "https://developer.android.com/health-and-fitness/health-connect/get-started",
         "https://developer.android.com/health-and-fitness/guides/health-connect/develop/get-started",
@@ -39,8 +39,7 @@
         "https://developer.android.com/jetpack/androidx/releases/health-connect",
         "https://support.google.com/googleplay/android-developer/answer/9888170"
       ],
-      "deferred": "Health Connect の権限（`android.permission.health.READ_STEPS` 等）と権限の理由を出す Activity・`<queries>` を新しく足し、Health Connect の許可画面で実行時の許可を新しく求めないと読めない。新しい権限を足さない方針のため保留（alarm の Android と同じ）。Jetpack の `connect-client` は新しい依存で、推移依存に kotlin-stdlib・kotlinx-coroutines・guava が入り、1.1.0 以降は compileSdk 36 が要る（いまは Kotlin なし・compileSdk 35）。依存を足さないフレームワーク API は API 34 以上に限られ、13 以下は別アプリ（Health Connect）が前提。公開には Play Console のヘルスアプリ申告（Google の審査）とプライバシーポリシーが要る。方針が変われば着手できる",
-      "note": "未実装。Android 14 以上は OS 組み込み、13 以下は Play ストアの Health Connect アプリ（Android 9 以上）を別途入れる。既定で読めるのは最初に許可した時点の 30 日前まで（`READ_HEALTH_DATA_HISTORY` で延長）。背景の読み取りは `READ_HEALTH_DATA_IN_BACKGROUND` が別に要る。権限が無い読み取りは `SecurityException`（フレームワーク API）。端末の歩数だけなら pedometer（`TYPE_STEP_COUNTER`）で取得済み"
+      "note": "未実装。API 34 以上は OS 組み込みのフレームワーク API で読む。API 33 以下は Health Connect が別アプリ（Play ストア）のため扱わず `Unsupported` にする（minSdk 24）。既定で読めるのは最初に許可した時点の 30 日前まで（`READ_HEALTH_DATA_HISTORY` で延長）。背景の読み取りは `READ_HEALTH_DATA_IN_BACKGROUND` が別に要るため扱わない。権限が無い読み取りは `SecurityException`。端末の歩数だけなら pedometer（`TYPE_STEP_COUNTER`）で取得済み"
     },
     "macos": {
       "status": "n-a",
@@ -54,5 +53,5 @@
       "status": "n-a"
     }
   },
-  "note": "`HealthKit` / Android Health Connect。macOS/Windows/Web にはヘルスデータストア相当の標準 API が無い。範囲: 今日 0 時から現在までの歩数の合計をヘルスストアから 1 回読む（書き込み・他の型・履歴・背景配信は含めない）。結果は歩数（0 を含む）・記録が見えない・取り消し・利用不可・期限切れ・失敗。iOS の読み取り拒否はアプリから判別できないため「許可なし」の種別を作らず、「記録が見えない」は記録が無い場合と区別しない（0 歩にも失敗にもしない）。完了は OS の completion で決め、期限で推測しない。許可の状態はアプリ内に保持せず、要求のたびに OS に許可を求め直す（決定済みならシートは出ない）。歩数はログに出さない。Android は Health Connect の Jetpack 依存（Kotlin のランタイムと compileSdk の引き上げを含む）と Play の申告が要るため保留"
+  "note": "`HealthKit` / Android Health Connect。macOS/Windows/Web にはヘルスデータストア相当の標準 API が無い。範囲: 今日 0 時から現在までの歩数の合計をヘルスストアから 1 回読む（書き込み・他の型・履歴・背景配信は含めない）。結果は歩数（0 を含む）・記録が見えない・取り消し・利用不可・期限切れ・失敗。iOS の読み取り拒否はアプリから判別できないため「許可なし」の種別を作らず、「記録が見えない」は記録が無い場合と区別しない（0 歩にも失敗にもしない）。完了は OS の completion で決め、期限で推測しない。許可の状態はアプリ内に保持せず、要求のたびに OS に許可を求め直す（決定済みならシートは出ない）。歩数はログに出さない。Android は API 34 以上のフレームワーク API で実装予定（33 以下は非対応、Jetpack 依存なし）。公開には Play の申告が要る"
 }
