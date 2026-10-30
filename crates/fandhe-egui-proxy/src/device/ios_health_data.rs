@@ -1,36 +1,77 @@
-//! iOS 向けヘルスデータ（歩数）実装のスタブ（Issue #1089、親 #149）。`device/health_data.rs` の iOS
-//! 経路の dispatch 先で、後続の子 #1090 が実体を入れるまで常に `Unsupported` を返す
-//! （ダミーの成功値へは倒さない）。
+//! iOS 向けヘルスデータ（歩数）実装（Issue #1090、契約と dispatch は #1089、親 #149）。
+//! `device/health_data.rs` の iOS 経路から呼ばれ、`ios/fandhe_ios_health_data.m`（HealthKit の
+//! `HKStatisticsQuery`）を C ABI 経由で呼ぶ。契約の正は `fandhe_device::health_data`。
+//! 戻りコード（0 歩数 / 1 記録なし / 2 非対応 / 3 期限切れ / 4 取り消し / 5 失敗）の写像は
+//! `decode_code` に任せ、値域の検査もそこで行う。
 //!
-//! 後続が埋める範囲: `ios/fandhe_ios_health_data.m`。FFI は
-//! `fandhe_ios_health_data_read(uint64_t timeout_ms, double *out_steps) -> int32_t` で、戻りコードは
-//! `fandhe_device::health_data::decode_code` の表に従う。`@autoreleasepool`、static の `HKHealthStore`、
-//! 許可待ちと集計待ちで期限を共有（`dispatch_time`）、期限切れで `stopQuery:`、許可待ちの旗による
-//! 多重起動の拒否、`HKErrorDomain` を確かめてからコードを見る。加えて `build.rs` の iOS 分岐での
-//! HealthKit のリンク、`NSHealthShareUsageDescription`、`FandheIosApp.entitlements` への
-//! `com.apple.developer.healthkit`。
-//! 後続は本ファイルの `#[cfg(target_os = "ios")]` の項目と OS 固有の付帯物だけを触る。
-//! dispatch・画面・fallback 行・`device.rs` の `pub mod` 列は触らない。
+//! 守る範囲: 1 プロセス内の多重起動の拒否（許可シートが残る間を含む）、期限の共有（単調時計）、
+//! 期限切れでの `stopQuery`、失敗・拒否を 0 歩へ畳まないこと。守らない範囲: 期限後に許可シートで
+//! 選ばれた結果は次の要求で反映される。
+//! 再描画: OS の completion / handler は semaphore で同じワーカーへ結果を戻すだけで、egui の共有状態を
+//! 書かない。結果はワーカーの戻り値として `CompletionSender::send`（直後に `ctx.request_repaint()`）を
+//! 通るため、`crate::ios::request_repaint` の明示呼び出しは要らない（pedometer と同じ根拠）。
+//!
+//! 未確認（#1059 で実機確認）: 許可シートの挙動、拒否が「記録が見えない」になること、0 歩、端末ロック中、
+//! シミュレータ（entitlement 無し）で成功にならないこと。
 
 use std::sync::Arc;
 
-use fandhe_device::health_data::{HealthData, UnsupportedHealthData};
+#[cfg(target_os = "ios")]
+use std::time::Duration;
 
-/// ヘルスデータの実装を返す（実体は #1090）。
+use fandhe_device::health_data::HealthData;
+#[cfg(not(target_os = "ios"))]
+use fandhe_device::health_data::UnsupportedHealthData;
+#[cfg(target_os = "ios")]
+use fandhe_device::health_data::{decode_code, HealthDataFailure, HealthSteps};
+
+// SAFETY: `ios/fandhe_ios_health_data.m` が定義する C ABI（`build.rs` が iOS ターゲットのみ・
+// feature `device` 有効時のみコンパイル・リンクする）。契約は同 .m 冒頭コメント。
+#[cfg(target_os = "ios")]
+#[allow(unsafe_code)]
+unsafe extern "C" {
+    fn fandhe_ios_health_data_read(timeout_ms: u64, out_steps: *mut f64) -> i32;
+}
+
+/// HealthKit による `HealthData` 実装。
+#[cfg(target_os = "ios")]
+struct IosHealthData;
+
+#[cfg(target_os = "ios")]
+impl HealthData for IosHealthData {
+    #[allow(unsafe_code)]
+    fn read_today_steps(&self, timeout: Duration) -> Result<HealthSteps, HealthDataFailure> {
+        let timeout_ms = u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX);
+        let mut steps: f64 = 0.0;
+        // SAFETY: `steps` はこの呼び出しの間だけ有効なスタック変数。`.m` は戻る前に呼び出しスレッド上で
+        // のみ書き込み、遅れて来る OS コールバックは自身の `__block` 領域にしか触れない。
+        // 戻りコードが 0 以外のとき `steps` は読まれない。
+        let code = unsafe { fandhe_ios_health_data_read(timeout_ms, &mut steps) };
+        decode_code(code, steps)
+    }
+}
+
+/// ヘルスデータの実装を返す。ホストの test ビルドでは非対応を返す。
 pub(crate) fn implementation() -> Arc<dyn HealthData> {
-    Arc::new(UnsupportedHealthData)
+    #[cfg(target_os = "ios")]
+    {
+        Arc::new(IosHealthData)
+    }
+    #[cfg(not(target_os = "ios"))]
+    {
+        Arc::new(UnsupportedHealthData)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use fandhe_device::health_data::HealthDataFailure;
-    use std::time::Duration;
-
+    #[cfg(not(target_os = "ios"))]
     #[test]
-    fn stub_never_succeeds() {
+    fn host_build_is_unsupported() {
+        use fandhe_device::health_data::HealthDataFailure;
+        use std::time::Duration;
         assert_eq!(
-            implementation().read_today_steps(Duration::from_millis(1)),
+            super::implementation().read_today_steps(Duration::from_millis(1)),
             Err(HealthDataFailure::Unsupported)
         );
     }
