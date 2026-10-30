@@ -427,8 +427,8 @@ pub mod android_wallpaper;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_web_auth_session;
-/// Issue #1064: Android 向け「指定した Wi-Fi への接続」実装のスタブ（実装は #1065）。
-/// `device/wifi_connect.rs` の Android 経路から呼ばれる。#1065 が cfg を変えずに済むよう `any(android, test)`。
+/// Issue #1065: Android 向け「指定した Wi-Fi への接続」実装（`WifiConnectHelper` を JNI 経由で呼ぶ）。
+/// `device/wifi_connect.rs` の Android 経路から呼ばれる。ホストのテストビルドにも載せるため `any(android, test)`。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_wifi_connect;
@@ -1695,8 +1695,7 @@ pub mod wallpaper;
 /// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS・Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
 pub mod web_auth_session;
-/// Phase 11 の拡充ループ（親 #165、Issue #791）: 指定した Wi-Fi への接続の effect ドライバ（macOS・Windows 実装、Android は #1065 が
-/// 埋めるスタブ（#1064）、iOS（deferred）・他 OS は `UnsupportedWifiConnect` 固定。Web は対象外）。
+/// Phase 11 の拡充ループ（親 #165、Issue #791）: 指定した Wi-Fi への接続の effect ドライバ（macOS・Windows 実装、Android 実装（#1065）、iOS（deferred）・他 OS は `UnsupportedWifiConnect` 固定。Web は対象外）。
 pub mod wifi_connect;
 /// Phase 11 の拡充ループ（親 #111、Issue #514）: Wi-Fi 情報の effect ドライバ（macOS・Windows・Android 実装、
 /// iOS（deferred）・他 OS は `UnsupportedWifiInfo` 固定。Web は対象外）。

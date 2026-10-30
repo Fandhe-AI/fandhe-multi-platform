@@ -16,7 +16,7 @@
 //!
 //! [`implementation`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを埋める
 //! （macOS: `macos_wifi_connect`（#791）、Windows: `windows_wifi_connect`（#792）、
-//! Android: `android_wifi_connect`（#1064 のスタブ、#1065 が埋める））。Android の JNI 照合は OS 別モジュールの
+//! Android: `android_wifi_connect`（#1065））。Android の JNI 照合は OS 別モジュールの
 //! 内部で行う。それ以外（iOS は対応表で `deferred`・Linux 等）は `UnsupportedWifiConnect` 固定で、
 //! ダミーの成功実装へは倒さない。
 
