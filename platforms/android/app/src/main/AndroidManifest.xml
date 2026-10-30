@@ -216,11 +216,16 @@
          allowBackup=true 時のクラウドバックアップのみで、device-to-device transfer は
          Android 12 以降でのみ存在する機能のため、minSdk 24 の範囲では
          allowBackup="false" が唯一かつ十分な防御になる。 -->
+    <!-- アプリ別の言語設定の対応言語宣言（Issue #1075）。利用者が選ぶまで既定の挙動は変わらない。
+         values-en は無いので en を選んでも文言は日本語のまま。READ_APP_SPECIFIC_LOCALES は他アプリ用で不要。
+         AppCompat の AppCompatDelegate と AGP の generateLocaleConfig は使わない。切り離し時は属性と
+         res/xml/locale_config.xml を削除する。 -->
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@android:drawable/sym_def_app_icon"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locale_config"
         android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/AppTheme">
 
