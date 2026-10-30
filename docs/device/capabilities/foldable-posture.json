@@ -14,14 +14,17 @@
       "note": "旧#1108 で調査中"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "Jetpack WindowManager（`androidx.window:window` + `window-java` 1.5.1。`WindowInfoTrackerCallbackAdapter` で `WindowInfoTracker` の `FoldingFeature` を受ける：折れ目の位置 `bounds`・向き `orientation`・姿勢 `state`（`FLAT` / `HALF_OPENED`））",
       "perm": "不要。依存は `androidx.window:window:1.5.1` と `window-java:1.5.1`（`scripts/android/versions.env` の `WINDOW_VERSION`）。minCompileSdk=34 で compileSdk 35 のまま使える",
       "url": [
         "https://developer.android.com/develop/ui/compose/layouts/adaptive/foldables/make-your-app-fold-aware",
         "https://developer.android.com/jetpack/androidx/releases/window"
       ],
-      "note": "未実装。`FoldingFeature` は窓と交わる折れ目だけを報告し（窓が折れ目をまたがなければ空）、ヒンジの角度は公開しない。閉じた状態を表す値は無い。Java から受けるには 1.5 系では `window-java` の `WindowInfoTrackerCallbackAdapter` を使う。推移依存の kotlin-stdlib・kotlinx-coroutines は既存の依存（work-runtime 経由）で解決済み。依存なしの代替は無い: `Sensor.TYPE_HINGE_ANGLE` は角度だけで折れ目の位置・向きが取れず、`DeviceStateManager` は SystemApi で一般のアプリは使えない"
+      "note": "実装済み（#1098）。`onStart` で購読し `onStop` で解除、未受信は読み取り中で「平ら」にしない。折れ目 0 件は姿勢が平らで折れ目は不明、2 件以上は折れ目不明で 1 つでも半開きなら折れている。壊れた値・窓外の bounds は失敗。守らない範囲は反映の遅れ（1 秒 + 1 フレーム）、再生成直後の一時的な未受信、閉じた端末と広げた端末の区別。`FoldingFeature` は窓と交わる折れ目だけを報告し（窓が折れ目をまたがなければ空）、ヒンジの角度は公開しない。閉じた状態を表す値は無い。Java から受けるには 1.5 系では `window-java` の `WindowInfoTrackerCallbackAdapter` を使う。推移依存の kotlin-stdlib・kotlinx-coroutines は既存の依存（work-runtime 経由）で解決済み。依存なしの代替は無い: `Sensor.TYPE_HINGE_ANGLE` は角度だけで折れ目の位置・向きが取れず、`DeviceStateManager` は SystemApi で一般のアプリは使えない",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#715）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_foldable_posture.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/FoldablePostureHelper.java + crates/fandhe-egui-proxy/src/device/foldable_posture.rs + crates/fandhe-core/src/screens/foldable_posture_show.rs + crates/fandhe-device/src/foldable_posture.rs、Issue #1098"
     },
     "macos": {
       "status": "n-a",
@@ -50,5 +53,5 @@
       "impl": "crates/fandhe-web-dom/src/foldable_posture.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/src/dom_tree.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/foldable_posture_show.rs + crates/fandhe-device/src/foldable_posture.rs、Issue #724"
     }
   },
-  "note": "Web（Chromium）が主。Android は androidx.window を足して実装予定、iOS は 旧#1108 で調査中のため unrated。macOS は n-a、Windows は no 寄り。safe-area-insets・screen-orientation（別 id）との違い: 折れ目と姿勢を扱う。今回の範囲: 姿勢（平ら / 折れている / 不明）と折れ目の位置・向きを一定間隔で読み直して表示し、折れていて折れ目が分かるときは画面を折れ目に沿って 2 分割で描く。閉じた状態とヒンジの角度は扱わない（Web・Android とも API に無い）。守る範囲: 取れないときに「平ら」や折れ目なしへ倒さないこと、1 ページ内の読み取り、タイマーとリスナーの解放。守らない範囲: 反映の遅れ（読み直しの間隔 + 1 フレーム。背景タブはさらに遅れる）、折りたためない端末と広げた端末の区別、複数タブ間の食い違い、ページの zoom が 1 でないときの位置のずれ"
+  "note": "Web（Chromium）が主。Android は androidx.window で実装済み（#1098）、iOS は 旧#1108 で調査中のため unrated。macOS は n-a、Windows は no 寄り。safe-area-insets・screen-orientation（別 id）との違い: 折れ目と姿勢を扱う。今回の範囲: 姿勢（平ら / 折れている / 不明）と折れ目の位置・向きを一定間隔で読み直して表示し、折れていて折れ目が分かるときは画面を折れ目に沿って 2 分割で描く。閉じた状態とヒンジの角度は扱わない（Web・Android とも API に無い）。守る範囲: 取れないときに「平ら」や折れ目なしへ倒さないこと、1 ページ内の読み取り、タイマーとリスナーの解放。守らない範囲: 反映の遅れ（読み直しの間隔 + 1 フレーム。背景タブはさらに遅れる）、折りたためない端末と広げた端末の区別、複数タブ間の食い違い、ページの zoom が 1 でないときの位置のずれ"
 }

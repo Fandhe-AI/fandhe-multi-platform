@@ -169,7 +169,7 @@ pub mod android_flashlight;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_focus_mode_status;
-/// Issue #1097: Android 向け折りたたみ姿勢のスタブ（`Unsupported` を返す）。実装は #1098。
+/// Issue #1098: Android 向け折りたたみ姿勢の実装（`FoldablePostureHelper` との JNI 橋渡し）。
 /// `device/foldable_posture.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
