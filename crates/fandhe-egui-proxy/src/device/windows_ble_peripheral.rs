@@ -19,6 +19,7 @@
 //!
 //! # 並行性（契約表 11）
 //!
+//! 開始手順の WinRT 待ちは `stop` が `Cancel` で中止するため、開始が未完了でも `stop` は実際の解放結果を短時間で返す。
 //! 開始・停止・OS の状態通知は直列キュー（[`Cmd`]）1 本に集約し、状態（[`Running`]）はワーカーの
 //! ローカル変数にだけ置く（ロックを持たない）。古い世代の通知は `session` で照合して捨てる。
 //! 解放（`Remove*` / `StopAdvertising`）は戻り値を 1 件ずつ見て、失敗したら [`Running`] を
@@ -32,11 +33,11 @@
 //! unpackaged の exe で GATT サーバーが使えるかは未確認（実機確認は #776）。型検査は
 //! `x86_64-pc-windows-gnu` のみ。
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
-use windows::core::{Ref, GUID};
+use windows::core::{Ref, RuntimeType, GUID, HRESULT};
 use windows::Devices::Bluetooth::BluetoothAdapter;
 use windows::Devices::Bluetooth::GenericAttributeProfile::{
     GattCharacteristicProperties, GattLocalCharacteristic, GattLocalCharacteristicParameters,
@@ -47,6 +48,7 @@ use windows::Devices::Bluetooth::GenericAttributeProfile::{
 use windows::Devices::Radios::RadioState;
 use windows::Foundation::TypedEventHandler;
 use windows::Storage::Streams::DataWriter;
+use windows_future::IAsyncOperation;
 
 use fandhe_device::ble_peripheral::{
     end_reason_from_windows_bluetooth_error, event_from_windows_advertisement_status,
@@ -63,9 +65,39 @@ const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
 /// 現在の公開の session と通知先（OS のハンドラとワーカーが共有する受け口）。
 static SESSION: SessionSlot = SessionSlot::new();
 
-/// キューに積まれた・処理中の `Cmd::Start` の数。0 でなければ `stop` は応答を待たない
-/// （開始手順の `.get()` 待ちで UI スレッドを止めないため）。
-static PENDING_STARTS: AtomicUsize = AtomicUsize::new(0);
+/// `stop` が立てる中止要求。開始手順の WinRT 非同期待ち（[`wait`]）を中断させ、`Cmd::Stop` の処理で
+/// 下ろす。これにより開始が未完了でも `stop` は短時間で実際の解放結果を返せる（UI を長く止めず、
+/// 解放の成否を確かめる前に成功を返さない）。
+static CANCEL: AtomicBool = AtomicBool::new(false);
+
+/// いま待っている開始手順の非同期操作（`stop` が `Cancel` する先）。
+static CURRENT_OP: Mutex<Option<Box<dyn Fn() + Send>>> = Mutex::new(None);
+
+/// 非同期操作の完了を待つ。中止要求があれば待たずに、待っている最中なら `Cancel` で失敗にする。
+fn wait<T: RuntimeType + 'static>(op: IAsyncOperation<T>) -> windows::core::Result<T> {
+    {
+        let mut cur = CURRENT_OP.lock().unwrap_or_else(|e| e.into_inner());
+        if CANCEL.load(Ordering::SeqCst) {
+            return Err(HRESULT(0x8000_4004_u32 as i32).into()); // E_ABORT
+        }
+        let handle = op.clone();
+        *cur = Some(Box::new(move || {
+            let _ = handle.Cancel();
+        }));
+    }
+    let r = op.get();
+    *CURRENT_OP.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    r
+}
+
+/// 開始手順の待ちを中止する。
+fn cancel_pending() {
+    let cur = CURRENT_OP.lock().unwrap_or_else(|e| e.into_inner());
+    CANCEL.store(true, Ordering::SeqCst);
+    if let Some(cancel) = cur.as_ref() {
+        cancel();
+    }
+}
 
 /// ワーカーへの命令。開始・停止・OS の状態通知はすべてここを順に通る。
 enum Cmd {
@@ -136,7 +168,7 @@ fn reason_of(e: &windows::core::Error) -> EndReason {
     }
 }
 
-/// Windows 実装。開始手順の保留中の `stop` は応答を待たずに戻る（`PENDING_STARTS`）。
+/// Windows 実装。開始手順の保留中の `stop` は待ちを中止（[`cancel_pending`]）してから解放結果を待つ。
 struct WindowsBlePeripheral;
 
 static WORKER: OnceLock<Option<Sender<Cmd>>> = OnceLock::new();
@@ -158,10 +190,8 @@ fn worker() -> Option<&'static Sender<Cmd>> {
 impl BlePeripheral for WindowsBlePeripheral {
     fn start(&self, session: u64, on_event: OnEvent) -> Result<StartOutcome, DeviceError> {
         SESSION.set(session, on_event);
-        PENDING_STARTS.fetch_add(1, Ordering::SeqCst);
         let sent = worker().is_some_and(|tx| tx.send(Cmd::Start(session)).is_ok());
         if !sent {
-            PENDING_STARTS.fetch_sub(1, Ordering::SeqCst);
             SESSION.clear();
             return Err(DeviceError::Internal("ble_peripheral start"));
         }
@@ -175,14 +205,11 @@ impl BlePeripheral for WindowsBlePeripheral {
             return Ok(StopOutcome::NotRunning);
         };
         let (reply_tx, reply_rx) = mpsc::channel();
+        // 先にキューへ積み、その後で開始手順の待ちを中止する（中止された開始の直後に Stop が処理される）。
         if tx.send(Cmd::Stop(reply_tx)).is_err() {
             return Err(DeviceError::Internal("ble_peripheral stop"));
         }
-        // 開始手順が未完了なら待たない。Stop は開始の後に順に処理され、公開を解放する
-        // （解放に失敗したら未解放として持ち越し、次の Start / Stop で再試行する）。
-        if PENDING_STARTS.load(Ordering::SeqCst) > 0 {
-            return Ok(StopOutcome::Stopped);
-        }
+        cancel_pending();
         reply_rx
             .recv()
             .unwrap_or(Err(DeviceError::Internal("ble_peripheral stop")))
@@ -202,14 +229,12 @@ fn run_worker(rx: mpsc::Receiver<Cmd>, tx: Sender<Cmd>) {
                 // 前の公開は完了通知なしで置き換える。解放に失敗したら開始しない（契約表 9）。
                 if let Some(old) = running.as_mut() {
                     if old.release().is_err() {
-                        PENDING_STARTS.fetch_sub(1, Ordering::SeqCst);
                         SESSION.deliver(session, PeripheralEvent::Ended(EndReason::Failed));
                         continue;
                     }
                     running = None;
                 }
                 let started = begin(session, &tx);
-                PENDING_STARTS.fetch_sub(1, Ordering::SeqCst);
                 match started {
                     Ok(r) => running = Some(r),
                     Err((reason, partial)) => {
@@ -224,6 +249,8 @@ fn run_worker(rx: mpsc::Receiver<Cmd>, tx: Sender<Cmd>) {
                 }
             }
             Cmd::Stop(reply) => {
+                // 中止された開始は終わっている。以後の Start を巻き込まないよう下ろす。
+                CANCEL.store(false, Ordering::SeqCst);
                 let result = match running.as_mut() {
                     None => Ok(StopOutcome::NotRunning),
                     Some(r) => match r.release() {
@@ -277,7 +304,7 @@ fn radio_is_off(adapter: &BluetoothAdapter) -> bool {
 fn begin(session: u64, tx: &Sender<Cmd>) -> Result<Running, (EndReason, Option<Running>)> {
     let fail = |r: EndReason| (r, None);
     let adapter = BluetoothAdapter::GetDefaultAsync()
-        .and_then(|op| op.get())
+        .and_then(wait)
         .map_err(|e| {
             // アダプタ無し（null）は windows クレートが空エラー（code 0）にして返す。
             if e.code().0 == 0 {
@@ -294,7 +321,7 @@ fn begin(session: u64, tx: &Sender<Cmd>) -> Result<Running, (EndReason, Option<R
     }
 
     let created = GattServiceProvider::CreateAsync(guid(SERVICE_UUID).map_err(fail)?)
-        .and_then(|op| op.get())
+        .and_then(wait)
         .map_err(|e| fail(reason_of(&e)))?;
     let code = created.Error().map_err(|e| fail(reason_of(&e)))?.0;
     if code != 0 {
@@ -311,7 +338,7 @@ fn begin(session: u64, tx: &Sender<Cmd>) -> Result<Running, (EndReason, Option<R
     let char_result = provider
         .Service()
         .and_then(|s| s.CreateCharacteristicAsync(char_uuid, &params))
-        .and_then(|op| op.get())
+        .and_then(wait)
         .map_err(|e| fail(reason_of(&e)))?;
     let code = char_result.Error().map_err(|e| fail(reason_of(&e)))?.0;
     if code != 0 {
