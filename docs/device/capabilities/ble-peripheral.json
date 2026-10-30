@@ -57,7 +57,7 @@
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattserviceprovideradvertisementstatus",
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.bluetoothadapter.isperipheralrolesupported"
       ],
-      "note": "未実装。unpackaged で GATT サーバーが使えるかは未確認で、実機で確かめる（既存の bluetooth-le の Windows と同じ前提）。結果は `GattServiceProviderResult.Error`（`BluetoothError`）と `AdvertisementStatus`（Created / Stopped / Started / Aborted / StartedWithoutAllAdvertisementData）で届く。`ReadRequested` のハンドラが無いと読み取り要求は `UnlikelyError` で即完了する（公式）ため、ハンドラは公開前に登録し、停止時に全て解除する。アダプターの周辺機器役対応は `BluetoothAdapter.IsPeripheralRoleSupported`"
+      "note": "未実装。実装方針: ワーカーは OS を待たず、開始手順（アダプター取得・ラジオ取得・サービス生成・特性生成）は各段の完了コールバックから専用キューへ積んで進める。途中の停止は保留中の操作を取り消してすぐ戻り、Started より前に応答した読み取りは Started の確定後に数える。unpackaged で GATT サーバーが使えるかは未確認で、実機で確かめる（既存の bluetooth-le の Windows と同じ前提）。結果は `GattServiceProviderResult.Error`（`BluetoothError`）と `AdvertisementStatus`（Created / Stopped / Started / Aborted / StartedWithoutAllAdvertisementData）で届く。`ReadRequested` のハンドラが無いと読み取り要求は `UnlikelyError` で即完了する（公式）ため、ハンドラは公開前に登録し、停止時に全て解除する。アダプターの周辺機器役対応は `BluetoothAdapter.IsPeripheralRoleSupported`"
     },
     "web": {
       "status": "no",
