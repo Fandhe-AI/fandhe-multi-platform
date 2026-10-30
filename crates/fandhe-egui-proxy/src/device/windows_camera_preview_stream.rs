@@ -23,8 +23,8 @@
 //! 開始・停止・ズーム・各段の完了・OS の通知は直列キュー 1 本に集約し、状態はワーカーのローカル
 //! 変数にだけ置く。セッションは `id`（ドライバの登録表が発行）で照合し、古い `id` の完了は捨てる。
 //! 停止（[`WindowsSession`] の drop）は、登録解除 → `Stop` を積んでハンドラの解除と保留操作の
-//! `Cancel` を待つ → 以後コールバックは走らない。`StopAsync` / `Close` はその後ワーカー上で行い、
-//! UI は待たない。解放呼び出しの失敗は握りつぶさず、未解放として [`Worker::leftover`] に残し、
+//! `Cancel` を待つ → 以後コールバックは走らない。`StopAsync` は完了を待たず `Cmd::StopDone` で
+//! 受けて続きを行い、UI もワーカーも塞がない（停止中の再開始は完了まで保留する）。解放呼び出しの失敗は握りつぶさず、未解放として [`Worker::leftover`] に残し、
 //! 次の開始の前に再試行する（それも失敗なら新しい開始を `StartFailed(Other)` にする）。
 //!
 //! 画素・HRESULT・デバイス Id はログにもエラー文言にも出さない（security.md A09）。
@@ -84,6 +84,8 @@ enum Cmd {
     Initialized(u64, windows::core::Result<()>),
     Reader(u64, windows::core::Result<MediaFrameReader>),
     ReaderStarted(u64, windows::core::Result<MediaFrameReaderStartStatus>),
+    /// 解放中の `StopAsync` の完了（ワーカーは待たず、完了をここで受ける）。
+    StopDone(u64, windows::core::Result<()>),
     FrameReady(u64),
     StreamState(u64),
     CaptureFailed(u64),
@@ -109,6 +111,22 @@ struct Session {
     reader_stopped: bool,
     reader_closed: bool,
     capture_closed: bool,
+    /// `StopAsync` の完了待ち（待つのは `Cmd::StopDone` で、ワーカーは塞がない）。
+    stopping: bool,
+    /// 連続して処理に失敗したフレーム数。成功で 0 に戻る。
+    bad_frames: u32,
+}
+
+/// 連続でこの数のフレーム処理に失敗したら `RuntimeFailed`。単発の失敗はフレームを捨てて続ける。
+const MAX_BAD_FRAMES: u32 = 30;
+
+/// [`Session::release`] の結果。
+#[derive(PartialEq)]
+enum Rel {
+    Done,
+    Failed,
+    /// `StopAsync` の完了待ち。`Cmd::StopDone` で続きを行う。
+    Pending,
 }
 
 impl Session {
@@ -142,19 +160,26 @@ impl Session {
         ok
     }
 
-    /// 全項目を解放する。1 件でも失敗したら `false` で、残りは次回に再試行する。
-    fn release(&mut self) -> bool {
+    /// 全項目を解放する。失敗は `Failed` で、残りは次回に再試行する。`StopAsync` は待たず
+    /// `Pending` を返し、完了は `Cmd::StopDone` で受けて続きを行う。
+    fn release(&mut self, tx: &Sender<Cmd>) -> Rel {
+        if self.stopping {
+            return Rel::Pending;
+        }
         let mut ok = self.detach();
         if let Some(r) = &self.reader {
             if !ok {
-                return false;
+                return Rel::Failed;
             }
             if !self.reader_stopped {
-                // 解放の順序のため、ワーカー上で完了を待つ（UI は待たない）。
-                match r.StopAsync().and_then(|op| op.get()) {
-                    Ok(()) => self.reader_stopped = true,
-                    Err(_) => ok = false,
-                }
+                let id = self.id;
+                return match spawn_action(r.StopAsync(), tx, move |res| Cmd::StopDone(id, res)) {
+                    Ok(_) => {
+                        self.stopping = true;
+                        Rel::Pending
+                    }
+                    Err(_) => Rel::Failed,
+                };
             }
             if self.reader_stopped && !self.reader_closed {
                 if r.Close().is_ok() {
@@ -173,7 +198,11 @@ impl Session {
                 ok = false;
             }
         }
-        ok
+        if ok {
+            Rel::Done
+        } else {
+            Rel::Failed
+        }
     }
 }
 
@@ -290,8 +319,10 @@ pub(crate) fn implementation() -> Arc<dyn CameraPreview> {
     Arc::new(WindowsCameraPreview)
 }
 
-#[derive(Default)]
 struct Worker {
+    tx: Sender<Cmd>,
+    /// 解放の完了待ち（`leftover` が `StopAsync` 中）で、保留している開始の `id`。
+    deferred: Option<u64>,
     current: Option<Session>,
     /// 解放に失敗して残った分。要求より長く生き、次の開始の前に再試行する（契約表 9）。
     leftover: Option<Session>,
@@ -300,7 +331,13 @@ struct Worker {
 }
 
 fn run_worker(rx: mpsc::Receiver<Cmd>, tx: Sender<Cmd>) {
-    let mut w = Worker::default();
+    let mut w = Worker {
+        tx: tx.clone(),
+        deferred: None,
+        current: None,
+        leftover: None,
+        stray: Vec::new(),
+    };
     while let Ok(cmd) = rx.recv() {
         w.step(cmd, &tx);
     }
@@ -314,9 +351,48 @@ impl Worker {
     /// 現在のセッションを解放する。失敗は `leftover` に残す。
     fn dispose(&mut self) {
         if let Some(mut s) = self.current.take() {
-            if !s.release() {
+            if s.release(&self.tx) != Rel::Done {
                 self.leftover = Some(s);
             }
+        }
+    }
+
+    /// `StopAsync` の完了。解放を続け、保留中の開始があれば再開する（解放が済まなければ失敗にする）。
+    fn stop_done(&mut self, id: u64, res: windows::core::Result<()>) {
+        let Some(mut s) = self.leftover.take() else {
+            return;
+        };
+        if s.id != id {
+            self.leftover = Some(s);
+            return;
+        }
+        s.stopping = false;
+        if res.is_ok() {
+            s.reader_stopped = true;
+        }
+        if res.is_err() || s.release(&self.tx) != Rel::Done {
+            self.leftover = Some(s);
+        }
+        if let Some(next) = self.deferred.take() {
+            if self.leftover.is_none() {
+                let tx = self.tx.clone();
+                self.begin(next, &tx);
+            } else {
+                deliver_event(next, PreviewEvent::StartFailed(StartFailure::Other));
+            }
+        }
+    }
+
+    /// 連続失敗の計数。単発の失敗は捨てて続け、閾値に達したら失敗として確定する。
+    fn note_frame(&mut self, id: u64, bad: bool) {
+        let Some(s) = self.cur(id) else { return };
+        if !bad {
+            s.bad_frames = 0;
+            return;
+        }
+        s.bad_frames += 1;
+        if s.bad_frames >= MAX_BAD_FRAMES {
+            self.end(id, PreviewEvent::RuntimeFailed);
         }
     }
 
@@ -330,6 +406,9 @@ impl Worker {
         match cmd {
             Cmd::Start(id) => self.begin(id, tx),
             Cmd::Stop(id, ack) => {
+                if self.deferred == Some(id) {
+                    self.deferred = None;
+                }
                 if let Some(s) = self.cur(id) {
                     s.detach();
                 }
@@ -355,6 +434,7 @@ impl Worker {
             Cmd::Initialized(id, result) => self.after_init(id, result, tx),
             Cmd::Reader(id, result) => self.after_reader(id, result, tx),
             Cmd::ReaderStarted(id, result) => self.after_started(id, result),
+            Cmd::StopDone(id, result) => self.stop_done(id, result),
             Cmd::FrameReady(id) => self.frame(id),
             Cmd::StreamState(id) => self.stream_state(id),
             Cmd::CaptureFailed(id) => {
@@ -369,10 +449,21 @@ impl Worker {
         // 前の分を片付けてから開始する。解放できないまま開始しない（契約表 9）。
         self.dispose();
         if let Some(mut old) = self.leftover.take() {
-            if !old.release() {
-                self.leftover = Some(old);
-                deliver_event(id, PreviewEvent::StartFailed(StartFailure::Other));
-                return;
+            let r = old.release(tx);
+            self.leftover = (r != Rel::Done).then_some(old);
+            match r {
+                Rel::Done => {}
+                // 停止の完了を待ち、済んでから開始する（UI もワーカーも塞がない）。
+                Rel::Pending => {
+                    if let Some(prev) = self.deferred.replace(id) {
+                        deliver_event(prev, PreviewEvent::StartFailed(StartFailure::Other));
+                    }
+                    return;
+                }
+                Rel::Failed => {
+                    deliver_event(id, PreviewEvent::StartFailed(StartFailure::Other));
+                    return;
+                }
             }
         }
         self.stray.retain(|r| r.Close().is_err());
@@ -392,7 +483,7 @@ impl Worker {
         let Ok(op) = op else {
             // 起動できなかった MediaCapture は閉じて確かめる。
             let mut s = new_session(id, capture, None);
-            if !s.release() {
+            if s.release(tx) != Rel::Done {
                 self.leftover = Some(s);
             }
             deliver_event(id, PreviewEvent::StartFailed(StartFailure::Other));
@@ -590,32 +681,32 @@ impl Worker {
             Ok(f) => f,
             Err(e) if e.code().0 == 0 => return,
             Err(_) => {
-                self.end(id, PreviewEvent::RuntimeFailed);
+                self.note_frame(id, true);
                 return;
             }
         };
         let bmp = fr.VideoMediaFrame().and_then(|v| v.SoftwareBitmap());
-        let (frame, mut ok) = match &bmp {
+        let (frame, mut closed, bad) = match &bmp {
             Ok(b) => {
-                let (f, closed) = convert(b, s.zoom.as_ref());
-                {
-                    let ok = f.is_some() && closed;
-                    (f, ok)
-                }
+                let (f, c) = convert(b, s.zoom.as_ref());
+                let bad = f.is_none();
+                (f, c, bad)
             }
             // ビットマップが無いフレーム（null）は届けるものがないだけ。
-            Err(e) if e.code().0 == 0 => (None, true),
-            Err(_) => (None, false),
+            Err(e) if e.code().0 == 0 => (None, true, false),
+            Err(_) => (None, true, true),
         };
         if let Ok(b) = &bmp {
-            ok &= b.Close().is_ok();
+            closed &= b.Close().is_ok();
         }
-        ok &= fr.Close().is_ok();
-        if !ok {
-            // 取得・変換・コピーの失敗、または閉じられず供給が止まる場合は失敗として確定する。
+        closed &= fr.Close().is_ok();
+        if !closed {
+            // 閉じられないと供給が止まるため、失敗として確定する。
             self.end(id, PreviewEvent::RuntimeFailed);
             return;
         }
+        // 取得・変換・コピーの失敗は、そのフレームを捨てて続ける（連続失敗のみ確定）。
+        self.note_frame(id, bad);
         if let Some(f) = frame {
             deliver_frame(id, f);
         }
@@ -638,6 +729,8 @@ fn new_session(id: u64, capture: MediaCapture, op: Option<IAsyncInfo>) -> Sessio
         reader_stopped: false,
         reader_closed: false,
         capture_closed: false,
+        stopping: false,
+        bad_frames: 0,
     }
 }
 
