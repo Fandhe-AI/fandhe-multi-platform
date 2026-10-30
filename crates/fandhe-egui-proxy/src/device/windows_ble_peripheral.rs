@@ -3,15 +3,20 @@
 //! 読み取り専用の特性 1 つを公開する。契約と守る範囲は `fandhe_device::ble_peripheral` のモジュール
 //! doc、状態の写像（`BluetoothError` / アドバタイズ status → 事象）はそこの純関数が SSOT。
 //!
-//! # 流れ（専用ワーカースレッド上で同期的に）
+//! # 流れ（専用ワーカーの待たない状態機械）
 //!
-//! 1. `BluetoothAdapter::GetDefaultAsync().get()`: null（code 0）と `IsPeripheralRoleSupported() ==
+//! 開始手順の各段は WinRT の非同期操作で、完了を `SetCompleted` から [`Cmd`] としてキューへ積む
+//! （`windows_pedometer.rs` と同じ形）。ワーカーが待つのは `rx.recv()` だけで、ワーカー上で
+//! `.get()` は使わない。
+//!
+//! 1. `BluetoothAdapter::GetDefaultAsync`: null（code 0）と `IsPeripheralRoleSupported() ==
 //!    false` は `Unsupported`、`E_ACCESSDENIED` は `PermissionDenied`、その他は `Failed`
-//! 2. `GattServiceProvider::CreateAsync` → `CreateCharacteristicAsync`（Read・Plain）。
+//! 2. `GetRadioAsync`（ラジオ状態の補正用。取れなくても開始は止めない）
+//! 3. `GattServiceProvider::CreateAsync` → `CreateCharacteristicAsync`（Read・Plain）。
 //!    結果の `BluetoothError` は `end_reason_from_windows_bluetooth_error` で写す
-//! 3. **公開の前に** `ReadRequested` / `AdvertisementStatusChanged` を登録する（ハンドラが無いと
+//! 4. **公開の前に** `ReadRequested` / `AdvertisementStatusChanged` を登録する（ハンドラが無いと
 //!    読み取りは `UnlikelyError` で即完了するため）
-//! 4. `StartAdvertisingWithParameters(IsConnectable, IsDiscoverable)`。「公開中」は開始呼び出しの
+//! 5. `StartAdvertisingWithParameters(IsConnectable, IsDiscoverable)`。「公開中」は開始呼び出しの
 //!    成功ではなく `AdvertisementStatusChanged` の Started で確定する（嘘の成功を作らない）
 //!
 //! Windows ではローカル名を指定できない（`IsDiscoverable` で OS が端末名を載せる）。中断
@@ -19,11 +24,13 @@
 //!
 //! # 並行性（契約表 11）
 //!
-//! 開始手順の WinRT 待ちは `stop` が `Cancel` で中止するため、開始が未完了でも `stop` は実際の解放結果を短時間で返す。
-//! 開始・停止・OS の状態通知は直列キュー（[`Cmd`]）1 本に集約し、状態（[`Running`]）はワーカーの
-//! ローカル変数にだけ置く（ロックを持たない）。古い世代の通知は `session` で照合して捨てる。
+//! 開始・停止・各段の完了・OS の状態通知・読み取りは直列キュー（[`Cmd`]）1 本に集約し、状態
+//! （[`State`]）はワーカーのローカル変数にだけ置く（ロックを持たない）。開始手順の途中の `stop` は
+//! 保留中の操作を `Cancel` して `Stopped` を即返す（OS を待たない）。取り消しと競合して後から届いた
+//! 完了は `session` で照合して捨てる（公開もハンドラ登録もまだなので、参照を捨てれば解放になる）。
 //! 解放（`Remove*` / `StopAdvertising`）は戻り値を 1 件ずつ見て、失敗したら [`Running`] を
-//! 未解放のまま持ち続けて次の Start / Stop で再試行する（要求より長く生きる場所に置く）。
+//! 未解放のまま持ち続けて次の Start / Stop で再試行する。公開の確定（Started）より前に応答した
+//! 読み取りは [`Running::early_reads`] に溜め、確定後にまとめて通知する。
 //!
 //! 中心役の識別子・読み取りの中身・HRESULT はログにも画面にも出さない（security.md A09）。
 //! `unsafe` と `RoInitialize` は使わない。
@@ -33,22 +40,22 @@
 //! unpackaged の exe で GATT サーバーが使えるかは未確認（実機確認は #776）。型検査は
 //! `x86_64-pc-windows-gnu` のみ。
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
-use windows::core::{Ref, RuntimeType, GUID, HRESULT};
+use windows::core::{Interface, Ref, RuntimeType, GUID, HRESULT};
 use windows::Devices::Bluetooth::BluetoothAdapter;
 use windows::Devices::Bluetooth::GenericAttributeProfile::{
     GattCharacteristicProperties, GattLocalCharacteristic, GattLocalCharacteristicParameters,
-    GattProtectionLevel, GattProtocolError, GattReadRequestedEventArgs, GattServiceProvider,
+    GattLocalCharacteristicResult, GattProtectionLevel, GattProtocolError,
+    GattReadRequestedEventArgs, GattServiceProvider,
     GattServiceProviderAdvertisementStatusChangedEventArgs,
-    GattServiceProviderAdvertisingParameters,
+    GattServiceProviderAdvertisingParameters, GattServiceProviderResult,
 };
-use windows::Devices::Radios::RadioState;
+use windows::Devices::Radios::{Radio, RadioState};
 use windows::Foundation::TypedEventHandler;
 use windows::Storage::Streams::DataWriter;
-use windows_future::IAsyncOperation;
+use windows_future::{AsyncOperationCompletedHandler, AsyncStatus, IAsyncInfo, IAsyncOperation};
 
 use fandhe_device::ble_peripheral::{
     end_reason_from_windows_bluetooth_error, event_from_windows_advertisement_status,
@@ -61,77 +68,61 @@ use super::ble_peripheral::SessionSlot;
 
 /// `E_ACCESSDENIED`。
 const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
+/// `E_FAIL`（完了が成功以外で、OS が理由を返さないときの代用）。
+const E_FAIL: i32 = 0x8000_4005_u32 as i32;
 
 /// 現在の公開の session と通知先（OS のハンドラとワーカーが共有する受け口）。
 static SESSION: SessionSlot = SessionSlot::new();
 
-/// `stop` が立てる中止要求。開始手順の WinRT 非同期待ち（[`wait`]）を中断させ、`Cmd::Stop` の処理で
-/// 下ろす。これにより開始が未完了でも `stop` は短時間で実際の解放結果を返せる（UI を長く止めず、
-/// 解放の成否を確かめる前に成功を返さない）。
-static CANCEL: AtomicBool = AtomicBool::new(false);
-
-/// いま待っている開始手順の非同期操作（`stop` が `Cancel` する先）。
-static CURRENT_OP: Mutex<Option<Box<dyn Fn() + Send>>> = Mutex::new(None);
-
-/// 非同期操作の完了を待つ。中止要求があれば待たずに、待っている最中なら `Cancel` で失敗にする。
-fn wait<T: RuntimeType + 'static>(op: IAsyncOperation<T>) -> windows::core::Result<T> {
-    {
-        let mut cur = CURRENT_OP.lock().unwrap_or_else(|e| e.into_inner());
-        if CANCEL.load(Ordering::SeqCst) {
-            // 起動済みの OS 側の処理も止める（落とすだけだと完了して資源が残りうる）。
-            let _ = op.Cancel();
-            return Err(HRESULT(0x8000_4004_u32 as i32).into()); // E_ABORT
-        }
-        let handle = op.clone();
-        *cur = Some(Box::new(move || {
-            let _ = handle.Cancel();
-        }));
-    }
-    let r = op.get();
-    *CURRENT_OP.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    // 中止要求と完了が競合して成功が届いたら、生成結果は捨てて中止として扱う（呼び出し側は何も保持しない）。
-    if r.is_ok() && CANCEL.load(Ordering::SeqCst) {
-        return Err(HRESULT(0x8000_4004_u32 as i32).into());
-    }
-    r
-}
-
-/// 開始手順の待ちを中止する。
-fn cancel_pending() {
-    let cur = CURRENT_OP.lock().unwrap_or_else(|e| e.into_inner());
-    CANCEL.store(true, Ordering::SeqCst);
-    if let Some(cancel) = cur.as_ref() {
-        cancel();
-    }
-}
-
-/// 世代別の未処理の読み取り件数（世代, 件数）。0 → 1 のときだけ `Cmd::Read` を積み、
-/// 読み取りの連発でキューが伸びて Stop が遅れることを防ぐ。古い世代の読み取りは捨てる。
-static READS: Mutex<(u64, u64)> = Mutex::new((0, 0));
-
-/// ワーカーへの命令。開始・停止・OS の状態通知はすべてここを順に通る。
+/// ワーカーへの命令。開始・停止・各段の完了・OS の通知はすべてここを順に通る。
 enum Cmd {
     Start(u64),
     Stop(Sender<Result<StopOutcome, DeviceError>>),
+    Adapter(u64, windows::core::Result<BluetoothAdapter>),
+    Radio(u64, windows::core::Result<Radio>),
+    Provider(u64, windows::core::Result<GattServiceProviderResult>),
+    Char(u64, windows::core::Result<GattLocalCharacteristicResult>),
     Status {
         session: u64,
         status: i32,
         error: i32,
     },
-    /// 読み取り成功の通知（件数は [`READS`] に集約）。状態通知と同じ直列経路を通し、公開開始（Started）より先に数えない。
+    /// offset 0 の読み取り成功 1 件。
     Read(u64),
 }
 
-/// ワーカーのローカル状態。解放に失敗した分は残り、次の機会に再試行する。
+/// 開始手順の途中で確保済みの部品。公開もハンドラ登録もまだなので、捨てれば解放になる。
+#[derive(Default)]
+struct Held {
+    radio: Option<Radio>,
+    provider: Option<GattServiceProvider>,
+}
+
+enum State {
+    Idle,
+    /// 開始手順の途中。`op` は保留中の非同期操作（`stop` / 再 Start が `Cancel` する先）。
+    Opening {
+        session: u64,
+        op: IAsyncInfo,
+        held: Held,
+    },
+    Running(Running),
+}
+
+/// 公開済み（または解放待ち）の状態。解放に失敗した分は残り、次の機会に再試行する。
 struct Running {
     session: u64,
     provider: GattServiceProvider,
-    adapter: BluetoothAdapter,
+    radio: Option<Radio>,
     // 解放済みの項目は None / true にして、再試行で二重に外さない。
     read_token: Option<i64>,
     status_token: Option<i64>,
     char: GattLocalCharacteristic,
     adv_stopped: bool,
+    /// Started が届いたか。
+    advertising: bool,
+    /// Started より前に応答した読み取りの件数（確定後にまとめて通知する）。
+    early_reads: u64,
 }
 
 impl Running {
@@ -166,6 +157,14 @@ impl Running {
             Err(())
         }
     }
+
+    /// 保持しているラジオが切れているか（同期プロパティの読み取りで、待たない）。
+    fn radio_is_off(&self) -> bool {
+        self.radio
+            .as_ref()
+            .and_then(|r| r.State().ok())
+            .is_some_and(|s| s == RadioState::Off || s == RadioState::Disabled)
+    }
 }
 
 fn guid(s: &str) -> Result<GUID, EndReason> {
@@ -180,7 +179,41 @@ fn reason_of(e: &windows::core::Error) -> EndReason {
     }
 }
 
-/// Windows 実装。開始手順の保留中の `stop` は待ちを中止（[`cancel_pending`]）してから解放結果を待つ。
+/// アダプター取得の失敗。アダプター無し（null）は windows クレートが空エラー（code 0）にして返す。
+fn adapter_reason(e: &windows::core::Error) -> EndReason {
+    if e.code().0 == 0 {
+        EndReason::Unsupported
+    } else {
+        reason_of(e)
+    }
+}
+
+/// 非同期操作の完了を `wrap` で [`Cmd`] にしてキューへ積む。待たない。保留操作を返す（`Cancel` 用）。
+fn spawn<T: RuntimeType + 'static>(
+    op: windows::core::Result<IAsyncOperation<T>>,
+    tx: &Sender<Cmd>,
+    wrap: impl Fn(windows::core::Result<T>) -> Cmd + Send + 'static,
+) -> windows::core::Result<IAsyncInfo> {
+    let op = op?;
+    let tx = tx.clone();
+    op.SetCompleted(&AsyncOperationCompletedHandler::new(move |op, status| {
+        let result = match (op.ok(), status) {
+            (Ok(op), AsyncStatus::Completed) => op.GetResults(),
+            // 失敗・取り消しは成功にしない（理由が取れなければ E_FAIL）。
+            (Ok(op), _) => Err(op
+                .GetResults()
+                .err()
+                .unwrap_or_else(|| HRESULT(E_FAIL).into())),
+            _ => Err(HRESULT(E_FAIL).into()),
+        };
+        // 受信側（ワーカー）が終わっていても無視してよい。
+        let _ = tx.send(wrap(result));
+        Ok(())
+    }))?;
+    op.cast()
+}
+
+/// Windows 実装。開始手順の途中の `stop` は保留操作を `Cancel` して即 `Stopped` を返す。
 struct WindowsBlePeripheral;
 
 static WORKER: OnceLock<Option<Sender<Cmd>>> = OnceLock::new();
@@ -217,13 +250,10 @@ impl BlePeripheral for WindowsBlePeripheral {
             return Ok(StopOutcome::NotRunning);
         };
         let (reply_tx, reply_rx) = mpsc::channel();
-        // 先に中止要求を立ててから Stop を積む。要求を下ろすのは Stop の処理（ワーカー側）で、必ずその後になる。
-        // 下ろした後に要求が残って次の Start を E_ABORT にすることがない（キュー順で Stop が最後に効く）。
-        cancel_pending();
         if tx.send(Cmd::Stop(reply_tx)).is_err() {
-            CANCEL.store(false, Ordering::SeqCst);
             return Err(DeviceError::Internal("ble_peripheral stop"));
         }
+        // ワーカーは OS を待たないので、Stop には即座に返事が返る。
         reply_rx
             .recv()
             .unwrap_or(Err(DeviceError::Internal("ble_peripheral stop")))
@@ -236,139 +266,215 @@ pub(crate) fn implementation() -> Arc<dyn BlePeripheral> {
 }
 
 fn run_worker(rx: mpsc::Receiver<Cmd>, tx: Sender<Cmd>) {
-    let mut running: Option<Running> = None;
+    let mut state = State::Idle;
     while let Ok(cmd) = rx.recv() {
-        match cmd {
-            Cmd::Start(session) => {
-                // 前の公開は完了通知なしで置き換える。解放に失敗したら開始しない（契約表 9）。
-                if let Some(old) = running.as_mut() {
-                    if old.release().is_err() {
-                        SESSION.deliver(session, PeripheralEvent::Ended(EndReason::Failed));
-                        continue;
-                    }
-                    running = None;
+        state = step(state, cmd, &tx);
+    }
+}
+
+/// 開始手順の 1 段。現在の Opening の session と一致するときだけ `f` で次の操作を出し、
+/// 失敗は `Ended` で確定して Idle へ戻る。一致しない（古い）完了は捨てる。
+fn stage(
+    state: State,
+    session: u64,
+    f: impl FnOnce(&mut Held) -> Result<IAsyncInfo, EndReason>,
+) -> State {
+    match state {
+        State::Opening {
+            session: current,
+            mut held,
+            ..
+        } if current == session => match f(&mut held) {
+            Ok(op) => State::Opening { session, op, held },
+            Err(reason) => {
+                SESSION.deliver(session, PeripheralEvent::Ended(reason));
+                State::Idle
+            }
+        },
+        other => other,
+    }
+}
+
+fn step(state: State, cmd: Cmd, tx: &Sender<Cmd>) -> State {
+    match cmd {
+        Cmd::Start(session) => {
+            // 前の状態を片付けてから開始する（完了通知なしで置き換える）。
+            match state {
+                State::Idle => {}
+                State::Opening { op, .. } => {
+                    let _ = op.Cancel();
                 }
-                let started = begin(session, &tx);
-                match started {
-                    Ok(r) => running = Some(r),
-                    Err((reason, partial)) => {
-                        // 部分的に確保した分を解放する。失敗したら未解放として持ち越す。
-                        if let Some(mut p) = partial {
+                State::Running(mut old) => {
+                    if old.release().is_err() {
+                        // 解放できないまま開始しない（契約表 9）。未解放は持ち越す。
+                        SESSION.deliver(session, PeripheralEvent::Ended(EndReason::Failed));
+                        return State::Running(old);
+                    }
+                }
+            }
+            match spawn(BluetoothAdapter::GetDefaultAsync(), tx, move |r| {
+                Cmd::Adapter(session, r)
+            }) {
+                Ok(op) => State::Opening {
+                    session,
+                    op,
+                    held: Held::default(),
+                },
+                Err(e) => {
+                    SESSION.deliver(session, PeripheralEvent::Ended(adapter_reason(&e)));
+                    State::Idle
+                }
+            }
+        }
+        Cmd::Adapter(session, result) => stage(state, session, |_| {
+            let adapter = result.map_err(|e| adapter_reason(&e))?;
+            if !adapter
+                .IsPeripheralRoleSupported()
+                .map_err(|e| reason_of(&e))?
+            {
+                return Err(EndReason::Unsupported);
+            }
+            spawn(adapter.GetRadioAsync(), tx, move |r| Cmd::Radio(session, r))
+                .map_err(|e| reason_of(&e))
+        }),
+        Cmd::Radio(session, result) => stage(state, session, |held| {
+            // ラジオが取れなくても開始は止めない（状態補正ができないだけ）。
+            held.radio = result.ok();
+            let uuid = guid(SERVICE_UUID)?;
+            spawn(GattServiceProvider::CreateAsync(uuid), tx, move |r| {
+                Cmd::Provider(session, r)
+            })
+            .map_err(|e| reason_of(&e))
+        }),
+        Cmd::Provider(session, result) => stage(state, session, |held| {
+            let created = result.map_err(|e| reason_of(&e))?;
+            let code = created.Error().map_err(|e| reason_of(&e))?.0;
+            if code != 0 {
+                return Err(end_reason_from_windows_bluetooth_error(code));
+            }
+            let provider = created.ServiceProvider().map_err(|e| reason_of(&e))?;
+            let params = GattLocalCharacteristicParameters::new().map_err(|e| reason_of(&e))?;
+            params
+                .SetCharacteristicProperties(GattCharacteristicProperties::Read)
+                .and_then(|_| params.SetReadProtectionLevel(GattProtectionLevel::Plain))
+                .map_err(|e| reason_of(&e))?;
+            let char_uuid = guid(CHARACTERISTIC_UUID)?;
+            let op = provider
+                .Service()
+                .and_then(|s| s.CreateCharacteristicAsync(char_uuid, &params));
+            held.provider = Some(provider);
+            spawn(op, tx, move |r| Cmd::Char(session, r)).map_err(|e| reason_of(&e))
+        }),
+        Cmd::Char(session, result) => match state {
+            State::Opening {
+                session: current,
+                mut held,
+                ..
+            } if current == session => match publish(session, &mut held, result, tx) {
+                Ok(r) => State::Running(r),
+                Err((reason, partial)) => {
+                    SESSION.deliver(session, PeripheralEvent::Ended(reason));
+                    // 部分的に確保した分の解放に失敗したら未解放として持ち越す。
+                    match partial {
+                        Some(mut p) => {
                             if p.release().is_err() {
-                                running = Some(p);
+                                State::Running(p)
+                            } else {
+                                State::Idle
                             }
                         }
-                        SESSION.deliver(session, PeripheralEvent::Ended(reason));
+                        None => State::Idle,
                     }
                 }
+            },
+            other => other,
+        },
+        Cmd::Stop(reply) => match state {
+            State::Idle => {
+                let _ = reply.send(Ok(StopOutcome::NotRunning));
+                State::Idle
             }
-            Cmd::Stop(reply) => {
-                // 中止された開始は終わっている。以後の Start を巻き込まないよう下ろす。
-                CANCEL.store(false, Ordering::SeqCst);
-                let result = match running.as_mut() {
-                    None => Ok(StopOutcome::NotRunning),
-                    Some(r) => match r.release() {
-                        Ok(()) => {
-                            running = None;
-                            Ok(StopOutcome::Stopped)
-                        }
-                        Err(()) => Err(DeviceError::Internal("ble_peripheral stop")),
-                    },
-                };
-                let _ = reply.send(result);
+            State::Opening { op, .. } => {
+                // Cancel の結果は見ない。競合して後から届く完了は session 照合で捨てる。
+                let _ = op.Cancel();
+                let _ = reply.send(Ok(StopOutcome::Stopped));
+                State::Idle
             }
-            Cmd::Read(session) => {
-                let n = {
-                    let mut g = READS.lock().unwrap_or_else(|e| e.into_inner());
-                    if g.0 == session {
-                        std::mem::take(&mut g.1)
-                    } else {
-                        0
-                    }
-                };
-                if running.as_ref().is_some_and(|r| r.session == session) {
-                    for _ in 0..n {
+            State::Running(mut r) => match r.release() {
+                Ok(()) => {
+                    let _ = reply.send(Ok(StopOutcome::Stopped));
+                    State::Idle
+                }
+                Err(()) => {
+                    let _ = reply.send(Err(DeviceError::Internal("ble_peripheral stop")));
+                    State::Running(r)
+                }
+            },
+        },
+        Cmd::Read(session) => {
+            let mut state = state;
+            if let State::Running(r) = &mut state {
+                if r.session == session {
+                    if r.advertising {
                         SESSION.deliver(session, PeripheralEvent::Read);
+                    } else {
+                        r.early_reads += 1;
                     }
                 }
             }
-            Cmd::Status {
-                session,
-                status,
-                error,
-            } => {
+            state
+        }
+        Cmd::Status {
+            session,
+            status,
+            error,
+        } => {
+            let mut state = state;
+            let mut released = false;
+            if let State::Running(r) = &mut state {
                 // 古い世代の通知は捨てる。
-                let Some(r) = running.as_mut().filter(|r| r.session == session) else {
-                    continue;
-                };
-                match event_from_windows_advertisement_status(status, error) {
-                    None => {}
-                    Some(PeripheralEvent::Ended(mut reason)) => {
-                        // Success と一緒に届いた Aborted 等は、確定時点でラジオを 1 回観測して直す。
-                        if reason == EndReason::Failed && radio_is_off(&r.adapter) {
-                            reason = EndReason::BluetoothOff;
+                if r.session == session {
+                    match event_from_windows_advertisement_status(status, error) {
+                        None => {}
+                        Some(PeripheralEvent::Ended(mut reason)) => {
+                            // Success と一緒に届いた Aborted 等は、保持ラジオを 1 回読んで直す。
+                            if reason == EndReason::Failed && r.radio_is_off() {
+                                reason = EndReason::BluetoothOff;
+                            }
+                            // 確定した reason は保つ。解放に失敗した分は未解放のまま持ち越す。
+                            released = r.release().is_ok();
+                            SESSION.deliver(session, PeripheralEvent::Ended(reason));
                         }
-                        // 確定した reason は保つ。解放に失敗した分は未解放のまま持ち越す。
-                        if r.release().is_ok() {
-                            running = None;
+                        Some(PeripheralEvent::Advertising) => {
+                            r.advertising = true;
+                            SESSION.deliver(session, PeripheralEvent::Advertising);
+                            for _ in 0..std::mem::take(&mut r.early_reads) {
+                                SESSION.deliver(session, PeripheralEvent::Read);
+                            }
                         }
-                        SESSION.deliver(session, PeripheralEvent::Ended(reason));
+                        Some(ev) => SESSION.deliver(session, ev),
                     }
-                    Some(ev) => SESSION.deliver(session, ev),
                 }
+            }
+            if released {
+                State::Idle
+            } else {
+                state
             }
         }
     }
 }
 
-fn radio_is_off(adapter: &BluetoothAdapter) -> bool {
-    adapter
-        .GetRadioAsync()
-        .and_then(wait)
-        .and_then(|radio| radio.State())
-        .is_ok_and(|s| s == RadioState::Off || s == RadioState::Disabled)
-}
-
-/// 公開を始める。失敗時は理由と、部分的に確保した分（解放が要るもの）を返す。
-fn begin(session: u64, tx: &Sender<Cmd>) -> Result<Running, (EndReason, Option<Running>)> {
+/// 特性の生成結果から、ハンドラ登録と広告開始までを同期で行う（どれも待たない呼び出し）。
+/// 失敗時は理由と、部分的に確保した分（解放が要るもの）を返す。
+fn publish(
+    session: u64,
+    held: &mut Held,
+    result: windows::core::Result<GattLocalCharacteristicResult>,
+    tx: &Sender<Cmd>,
+) -> Result<Running, (EndReason, Option<Running>)> {
     let fail = |r: EndReason| (r, None);
-    let adapter = BluetoothAdapter::GetDefaultAsync()
-        .and_then(wait)
-        .map_err(|e| {
-            // アダプタ無し（null）は windows クレートが空エラー（code 0）にして返す。
-            if e.code().0 == 0 {
-                fail(EndReason::Unsupported)
-            } else {
-                fail(reason_of(&e))
-            }
-        })?;
-    if !adapter
-        .IsPeripheralRoleSupported()
-        .map_err(|e| fail(reason_of(&e)))?
-    {
-        return Err(fail(EndReason::Unsupported));
-    }
-
-    let created = GattServiceProvider::CreateAsync(guid(SERVICE_UUID).map_err(fail)?)
-        .and_then(wait)
-        .map_err(|e| fail(reason_of(&e)))?;
-    let code = created.Error().map_err(|e| fail(reason_of(&e)))?.0;
-    if code != 0 {
-        return Err(fail(end_reason_from_windows_bluetooth_error(code)));
-    }
-    let provider = created.ServiceProvider().map_err(|e| fail(reason_of(&e)))?;
-
-    let params = GattLocalCharacteristicParameters::new().map_err(|e| fail(reason_of(&e)))?;
-    params
-        .SetCharacteristicProperties(GattCharacteristicProperties::Read)
-        .and_then(|_| params.SetReadProtectionLevel(GattProtectionLevel::Plain))
-        .map_err(|e| fail(reason_of(&e)))?;
-    let char_uuid = guid(CHARACTERISTIC_UUID).map_err(fail)?;
-    let char_result = provider
-        .Service()
-        .and_then(|s| s.CreateCharacteristicAsync(char_uuid, &params))
-        .and_then(wait)
-        .map_err(|e| fail(reason_of(&e)))?;
+    let char_result = result.map_err(|e| fail(reason_of(&e)))?;
     let code = char_result.Error().map_err(|e| fail(reason_of(&e)))?.0;
     if code != 0 {
         return Err(fail(end_reason_from_windows_bluetooth_error(code)));
@@ -376,8 +482,10 @@ fn begin(session: u64, tx: &Sender<Cmd>) -> Result<Running, (EndReason, Option<R
     let char = char_result
         .Characteristic()
         .map_err(|e| fail(reason_of(&e)))?;
+    let provider = held.provider.take().ok_or(fail(EndReason::Failed))?;
+    let radio = held.radio.take();
 
-    // 公開の前にハンドラを登録する。
+    // 公開の前にハンドラを登録する（無いと読み取りは UnlikelyError で即完了する）。
     let read_tx = tx.clone();
     let read_token = char
         .ReadRequested(&TypedEventHandler::new(
@@ -413,11 +521,13 @@ fn begin(session: u64, tx: &Sender<Cmd>) -> Result<Running, (EndReason, Option<R
                     Some(Running {
                         session,
                         provider,
-                        adapter,
+                        radio,
                         read_token: Some(read_token),
                         status_token: None,
                         char,
                         adv_stopped: true,
+                        advertising: false,
+                        early_reads: 0,
                     }),
                 )),
             };
@@ -427,11 +537,13 @@ fn begin(session: u64, tx: &Sender<Cmd>) -> Result<Running, (EndReason, Option<R
     let running = Running {
         session,
         provider,
-        adapter,
+        radio,
         read_token: Some(read_token),
         status_token: Some(status_token),
         char,
         adv_stopped: false,
+        advertising: false,
+        early_reads: 0,
     };
     let adv = GattServiceProviderAdvertisingParameters::new().and_then(|p| {
         p.SetIsConnectable(true)?;
@@ -444,7 +556,8 @@ fn begin(session: u64, tx: &Sender<Cmd>) -> Result<Running, (EndReason, Option<R
     }
 }
 
-/// 読み取り要求に応答する（WinRT のスレッドプールで動く）。成功した応答だけを数える。
+/// 読み取り要求に応答する（WinRT のスレッドプールで動く。ワーカーではないので deferral 内の
+/// `.get()` は許す）。成功した応答のうち offset 0 だけをキューへ積んで数える（macOS と同じ）。
 fn handle_read(
     session: u64,
     tx: &Sender<Cmd>,
@@ -463,28 +576,14 @@ fn handle_read(
         let writer = DataWriter::new()?;
         writer.WriteBytes(&value[offset..])?;
         request.RespondWithValue(&writer.DetachBuffer()?)?;
-        Ok(true)
+        Ok(offset == 0)
     })();
     // 全経路で完了させ、その失敗も見る。
     let completed = deferral.Complete();
     if matches!(responded, Ok(true)) && completed.is_ok() {
-        let first = {
-            let mut g = READS.lock().unwrap_or_else(|e| e.into_inner());
-            if session > g.0 {
-                *g = (session, 0);
-            }
-            if g.0 == session {
-                g.1 += 1;
-                g.1 == 1
-            } else {
-                false
-            }
-        };
-        if first {
-            let _ = tx.send(Cmd::Read(session));
-        }
+        let _ = tx.send(Cmd::Read(session));
     }
-    responded.and(completed)
+    responded.map(|_| ()).and(completed)
 }
 
 #[cfg(test)]
@@ -496,5 +595,24 @@ mod tests {
         assert!(guid(SERVICE_UUID).is_ok());
         assert!(guid(CHARACTERISTIC_UUID).is_ok());
         assert!(guid("not-a-guid").is_err());
+    }
+
+    #[test]
+    fn adapter_failures_map_without_success() {
+        // アダプター無し（null → code 0）は非対応、権限拒否は権限拒否、その他は失敗。
+        let e = |c: i32| windows::core::Error::from(HRESULT(c));
+        assert_eq!(adapter_reason(&e(0)), EndReason::Unsupported);
+        assert_eq!(
+            adapter_reason(&e(E_ACCESSDENIED)),
+            EndReason::PermissionDenied
+        );
+        assert_eq!(adapter_reason(&e(E_FAIL)), EndReason::Failed);
+    }
+
+    #[test]
+    fn stale_completion_is_dropped() {
+        // Idle へ届いた古い完了は状態を変えず、次の操作も出さない（成功を作らない）。
+        let st = stage(State::Idle, 1, |_| panic!("次の段を出してはいけない"));
+        assert!(matches!(st, State::Idle));
     }
 }
