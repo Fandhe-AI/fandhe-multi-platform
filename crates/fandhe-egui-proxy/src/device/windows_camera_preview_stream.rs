@@ -104,6 +104,8 @@ struct Session {
     /// `FrameArrived` の畳み込み用。ワーカーが下ろしてからフレームを取る。
     frame_flag: Arc<AtomicBool>,
     zoom: Option<ZoomControl>,
+    /// ズーム制御の取得に失敗した（非対応 `zoom == None` とは別。契約表 6）。
+    zoom_err: bool,
     /// `StartAsync` が `Success` で確定したか。
     started: bool,
     /// 中断中か（`Streaming` への復帰を `Running` として通すため）。
@@ -133,8 +135,13 @@ impl Session {
     /// ハンドラの解除と保留操作の取り消し。以後コールバックは `Cmd` を積むだけで無害になる。
     fn detach(&mut self) -> bool {
         let mut ok = true;
-        if let Some(op) = self.op.take() {
-            let _ = op.Cancel();
+        // Cancel に失敗したら参照を手放さず、未解放として再試行できるようにする（契約表 9）。
+        if let Some(op) = &self.op {
+            if op.Cancel().is_ok() {
+                self.op = None;
+            } else {
+                ok = false;
+            }
         }
         if let Some(t) = self.failed_token {
             if self.capture.RemoveFailed(t).is_ok() {
@@ -637,12 +644,15 @@ impl Worker {
             return;
         }
         // 開始の確定。ズームは対応するカメラだけ保持する。
-        s.zoom = s
+        match s
             .capture
             .VideoDeviceController()
             .and_then(|c| c.ZoomControl())
-            .ok()
-            .filter(|z| z.Supported().unwrap_or(false));
+            .and_then(|z| z.Supported().map(|sup| sup.then_some(z)))
+        {
+            Ok(z) => s.zoom = z,
+            Err(_) => s.zoom_err = true,
+        }
         s.started = true;
         deliver_event(id, PreviewEvent::Running);
         // 開始確定前に届いた状態通知は無視されているため、現在の状態で一度評価し直す。
@@ -651,7 +661,9 @@ impl Worker {
 
     fn stream_state(&mut self, id: u64) {
         let Some(s) = self.cur(id) else { return };
+        // 状態が取れないのに無視すると失敗を見逃すため、実行中の失敗として確定する（契約表 6）。
         let Ok(state) = s.capture.CameraStreamState() else {
+            self.end(id, PreviewEvent::RuntimeFailed);
             return;
         };
         match event_from_windows_stream_state(state.0) {
@@ -730,6 +742,7 @@ fn new_session(id: u64, capture: MediaCapture, op: Option<IAsyncInfo>) -> Sessio
         frame_token: None,
         frame_flag: Arc::new(AtomicBool::new(false)),
         zoom: None,
+        zoom_err: false,
         started: false,
         interrupted: false,
         reader_stopped: false,
@@ -767,6 +780,9 @@ fn color_source(capture: &MediaCapture) -> windows::core::Result<MediaFrameSourc
 }
 
 fn apply_zoom(s: &Session, step: ZoomStep) -> Result<(), ZoomFailure> {
+    if s.zoom_err {
+        return Err(ZoomFailure::Failed);
+    }
     let z = s.zoom.as_ref().ok_or(ZoomFailure::Unsupported)?;
     let range = z.Min().ok().zip(z.Max().ok());
     let target = zoom_target(step, range)?;
