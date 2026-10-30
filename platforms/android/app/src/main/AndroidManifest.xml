@@ -210,6 +210,12 @@
     <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
     <uses-permission android:name="android.permission.DETECT_SCREEN_RECORDING" />
 
+    <!-- Issue #1100: ヘルスデータ画面が Health Connect の歩数を読む（API 34 以上のフレームワーク API）。
+         実行時の許可は Health Connect の許可画面。背景・履歴・書き込みの権限は足さない。
+         API 34 以上は OS 組み込みのため `<queries>` は足さない。切り離し時にこの行と下の
+         HealthPermissionsRationaleActivity・activity-alias を削除する。 -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+
     <!-- 資格情報の安全な保存（Issue #924）: `allowBackup="false"` はクラウドバックアップを
          止めるが、Android 12（API 31）以降の端末間移行（device-to-device transfer）は
          一部メーカー端末で allowBackup の値に関係なく動作するため、
@@ -339,6 +345,24 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/home_widget_info" />
         </receiver>
+        <!-- Issue #1100: Health Connect の許可画面から開かれる権限の理由画面。実体は exported=false、
+             alias は START_VIEW_PERMISSION_USAGE（システム専用）を要求するので起動できるのは
+             システムだけ（security.md A05）。固定文言のみ表示し、Intent の extras は読まない。
+             切り離し時に両方を削除する。 -->
+        <activity
+            android:name="com.fandhe.androidapp.HealthPermissionsRationaleActivity"
+            android:exported="false" />
+        <activity-alias
+            android:name="com.fandhe.androidapp.ViewPermissionUsageActivity"
+            android:exported="true"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
+            android:targetActivity="com.fandhe.androidapp.HealthPermissionsRationaleActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- Issue #278: 通話 UI 統合の self-managed ConnectionService。intent-filter を持つため
              exported=true だが、BIND_TELECOM_CONNECTION_SERVICE を要求するので bind できるのは
              Telecom だけ。切り離し時に削除する。 -->
