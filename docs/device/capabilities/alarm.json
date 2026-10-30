@@ -20,7 +20,7 @@
       "note": "未実装。iOS 26 未満は非対応として失敗にする。許可が未決定なら予約の操作で許可ダイアログを出し、応答を待つ。拒否済みなら許可を求め直さず失敗にする（設定アプリで許可する）。固定時刻の一回きりのアラームなので Widget Extension・Live Activity は足さない（公式: カウントダウン表示を持つ場合に Widget Extension を求める）。アラームは集中モード・消音モードを越えて鳴る（公式）。鳴っている間（`alerting`）は OS の一覧に残るので予約中と表示する"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`AlarmManager.setAlarmClock`（`PendingIntent`〔`FLAG_ONE_SHOT`〕で自アプリの `BroadcastReceiver` を起こし、アラーム用チャンネルの通知を鳴らす）。予約の有無は同じ `PendingIntent` を `FLAG_NO_CREATE` で引けるかで読む",
       "perm": "`android.permission.SCHEDULE_EXACT_ALARM`（API 31 以上で必須。target 33 以上の新規インストールでは既定で拒否、利用者が設定の『アラームとリマインダー』で許可する）。通知を出すため `android.permission.POST_NOTIFICATIONS`（宣言済み）。`USE_EXACT_ALARM`・`RECEIVE_BOOT_COMPLETED` は足さない",
       "url": [
@@ -30,7 +30,10 @@
         "https://developer.android.com/reference/android/provider/Settings#ACTION_REQUEST_SCHEDULE_EXACT_ALARM",
         "https://developer.android.com/reference/android/app/PendingIntent#FLAG_ONE_SHOT"
       ],
-      "note": "未実装。正確なアラームの許可が無いときは、予約の操作で設定の許可画面を開き、その場では失敗（権限なし）を返す（許可した後にもう一度押す）。通知が無効なら予約しない。鳴る時刻は OS から読めないため、予約時に記録した値を表示する（予約の有無は OS が持つ `PendingIntent` で判定する）。電源を切ると予約は消え、再起動後の再登録はしない（`RECEIVE_BOOT_COMPLETED` を足さない）。許可を取り消すとアプリが止まり予約も消える（公式）"
+      "note": "実装済み（#1078）。通知が無効（アプリ全体・アラーム用チャンネルとも）なら予約せず、画面も開かず失敗（権限なし）を返す。API 31 以上で正確なアラームの許可が無いときは、設定の許可画面を開き、その場では失敗（権限なし）を返す（許可した後にもう一度押す）。置き換えは古い予約を取り消してから作り、失敗時は新しい予約と記録を消して古い予約は戻さない。鳴る時刻は OS から読めないため予約時に記録した値を表示し、予約の有無は `FLAG_NO_CREATE` で引いた `PendingIntent` を正にする（引けなければ未予約、引けても記録が無ければ失敗）。鳴った後は `FLAG_ONE_SHOT` で自動的に取り消される。API 26 未満はチャンネルを作らない。電源を切ると予約は消え、再起動後の再登録はしない（`RECEIVE_BOOT_COMPLETED` を足さない）。許可を取り消すとアプリが止まり予約も消える（公式）。【推測】`FLAG_NO_CREATE` での引き当てと、鳴った後に引けなくなることは #711 の Android 実機確認で確かめる。守らない範囲: スヌーズ・繰り返し、通知からアプリを開くこと、許可後の自動再予約、システム時刻の変更、複数プロセス",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#711）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_alarm.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/AlarmHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/AlarmReceiver.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + platforms/android/app/src/main/res/values/strings.xml + crates/fandhe-egui-proxy/src/device/alarm.rs + crates/fandhe-core/src/screens/alarm_show.rs + crates/fandhe-device/src/alarm.rs、Issue #1078"
     },
     "macos": {
       "status": "no",

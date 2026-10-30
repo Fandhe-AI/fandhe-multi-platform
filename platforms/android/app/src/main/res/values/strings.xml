@@ -31,4 +31,8 @@
     <!-- ファイル画面に出る保存先の表示名（Issue #1020）。`fandhe_core::screens::file_provider_show::ROOT_TITLE`
          と一致させる。切り離し時に削除する。 -->
     <string name="file_provider_root_title">Fandhe（この端末内のみ）</string>
+    <!-- アラーム（Issue #1078）の通知チャンネル名と通知文。切り離し時に削除する。 -->
+    <string name="alarm_channel_name">アラーム</string>
+    <string name="alarm_notification_title">Fandhe のアラーム</string>
+    <string name="alarm_notification_text">予約した時刻になりました</string>
 </resources>
