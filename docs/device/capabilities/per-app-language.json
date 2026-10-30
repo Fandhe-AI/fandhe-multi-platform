@@ -7,16 +7,19 @@
   "bundle": "one-shot",
   "platforms": {
     "ios": {
-      "status": "possible",
-      "api": "`Bundle.main.preferredLocalizations` の先頭（宣言した対応言語と利用者の希望から OS が決めた、アプリが使う言語）。設定アプリのこのアプリの「言語」で利用者が選ぶ（iOS 13+）",
-      "perm": "なし。`platforms/apple/FandheIosApp/Resources/Info.plist` に対応言語 `CFBundleLocalizations`（`ja`・`en`）を宣言する。`CFBundleDevelopmentRegion` と `.lproj` は足さない",
+      "status": "done",
+      "api": "`Bundle.main.preferredLocalizations` の先頭（`apple/fandhe_apple_per_app_language.m` が固定長バッファへ NUL 終端の UTF-8 で書く）。設定アプリのこのアプリの「言語」で利用者が選ぶ（iOS 13+）",
+      "perm": "なし。`platforms/apple/FandheIosApp/Resources/Info.plist` に対応言語 `CFBundleLocalizations`（`ja`・`en`）を宣言した。`CFBundleDevelopmentRegion` と `.lproj` は足さない",
       "url": [
         "https://developer.apple.com/documentation/foundation/bundle/preferredlocalizations",
         "https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundlelocalizations",
         "https://developer.apple.com/videos/play/wwdc2019/403/",
         "https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundledevelopmentregion"
       ],
-      "note": "未実装。宣言は `ja`（アプリ自身の文言の言語）と `en`（未宣言時の既定）の 2 つ。宣言後は日本語を優先する端末で OS が描く UI（共有シート等）が日本語になる見込み。設定アプリに「言語」が出るのは端末の優先言語が 2 つ以上のとき（WWDC19）。言語を変えるとアプリは再起動する（WWDC19）。`Locale.preferredLanguages` はアプリの対応言語に関係なく利用者の希望一覧を返すため使わない。アプリ別の設定か OS 全体の設定かを区別する公開 API は確認できていないため区別しない（不明と表示）"
+      "note": "実装済み（#1074）。出どころは常に不明（Apple にアプリ別 / OS 全体を区別する公開 API が無い）。nil・空・`UTF8String` が NULL・長すぎる値・不正なタグ（ASCII 英数字・`-`・`_` 以外、35 文字超）は失敗で、「言語なし」の成功にしない。タグ検査は Rust 側（`clean_tag`）が正。守る範囲: 嘘の値を出さない・1 プロセス内の取得・押下ごとに OS へ聞く。守らない範囲: 読み取り後の変更の反映（再読込まで）、アプリ自身の文言の切り替え、アプリ内からの言語変更、アプリ別 / OS 全体の区別、宣言で OS が描く UI の言語が変わること、OS 間のタグ表記の揃い、複数プロセス、OS 呼び出しが戻らない場合の期限。UI スレッドで同期 1 回だけ読む（並行経路なし）。宣言は `ja`（アプリ自身の文言の言語）と `en`（未宣言時の既定）の 2 つ。設定アプリに「言語」が出るのは端末の優先言語が 2 つ以上のとき（WWDC19）。言語を変えるとアプリは再起動する（WWDC19）。`Locale.preferredLanguages` はアプリの対応言語に関係なく利用者の希望一覧を返すため使わない。実機での確かめは #1054",
+      "detail": "できている（iOS 実機確認待ち）",
+      "implStatus": "iOS 実機確認待ち（#1054）",
+      "impl": "crates/fandhe-egui-proxy/src/device/ios_per_app_language.rs + crates/fandhe-egui-proxy/src/device/apple_per_app_language.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_per_app_language.m + crates/fandhe-egui-proxy/src/device/per_app_language.rs + crates/fandhe-core/src/screens/per_app_language_show.rs + crates/fandhe-device/src/per_app_language.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue #1074"
     },
     "android": {
       "status": "possible",

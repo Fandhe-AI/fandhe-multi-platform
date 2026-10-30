@@ -616,7 +616,7 @@ pub mod apple_on_device_llm;
 /// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_pdf_viewer;
-/// Issue #1073: macOS / iOS 向けアプリ別の言語設定（`apple/fandhe_apple_per_app_language.m` を呼ぶ
+/// Issue #1073 / #1074: macOS / iOS 向けアプリ別の言語設定（`apple/fandhe_apple_per_app_language.m` を呼ぶ
 /// C ABI ラッパー）。`device/per_app_language.rs` の macOS / iOS 経路から呼ばれる。
 /// 純関数をホストの `cargo test` で検査するため cfg に `test` を含める。
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
@@ -1565,7 +1565,7 @@ pub mod pedometer;
 /// Web は `fandhe-web-dom`）。
 pub mod pen_stylus;
 /// Phase 11 の拡充ループ（親 #137、Issue #1073）: アプリ別の言語設定の effect ドライバ（macOS 実装、
-/// iOS（#1074）・Android（#1075）は `Unsupported` のスタブ、他 OS は `UnsupportedPerAppLanguage` 固定）。
+/// iOS は macOS と共用の Apple 実装（#1074）、Android（#1075）は `Unsupported` のスタブ、他 OS は `UnsupportedPerAppLanguage` 固定）。
 pub mod per_app_language;
 /// Phase 11 の拡充ループ（親 #1101、Issue #1103/#1104）: 写真選択の effect ドライバ（macOS /
 /// Windows は `PhotoPicker` 実装、iOS/Android は pull 型 `bridge`、Linux は

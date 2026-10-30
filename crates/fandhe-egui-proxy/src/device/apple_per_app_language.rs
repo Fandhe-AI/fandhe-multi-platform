@@ -8,14 +8,10 @@
 //!
 //! `.m` は `Bundle.main.preferredLocalizations` の先頭を NUL 終端の UTF-8 で書く。
 //! status 非 0（nil・空・収まらない）・NUL 無し・UTF-8 でない・`clean_tag` で不正は `Internal`
-//! （成功にしない、契約表 6）。成功は常に `LanguageSource::Unknown`（Apple にアプリ別 / OS 全体を
+//! （成功にしない、契約表 6）。`UTF8String` が NULL の場合も `.m` は -1 を返し、同じく `Internal`。成功は常に `LanguageSource::Unknown`（Apple にアプリ別 / OS 全体を
 //! 区別する公開 API が無い）。値をログへ出さない。
 //!
 //! 読み取りは同期で購読を持たず、保持する資源も無い（契約表 1・2・3 は該当なし）。
-
-// ホストの test ビルドでは純関数がテストからのみ使われる。iOS は #1074 が実装を差し替えるまで
-// `ios_per_app_language` のスタブが使うため、未使用扱いになる。
-#![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 
 use std::ffi::CStr;
 
