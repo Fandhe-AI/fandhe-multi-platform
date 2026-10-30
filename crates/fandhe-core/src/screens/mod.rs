@@ -199,6 +199,8 @@ pub mod fullscreen_toggle;
 pub mod global_hotkey;
 /// Phase 11 の拡充ループ型サンプル「触覚フィードバック」（親 #1090、Issue #1091）。
 pub mod haptics_tap;
+/// Phase 11 の拡充ループ型サンプル「ヘルスケアの歩数」（親 #149、Issue #1089）。
+pub mod health_steps_read;
 /// Phase 11 の拡充ループ型サンプル「ホーム画面ウィジェット」（親 #1064、Issue #1065）。
 pub mod home_widget_show;
 /// Phase 11 の拡充ループ型サンプル「端末内での画像生成」（親 #191、Issue #975）。
