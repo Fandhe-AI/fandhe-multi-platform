@@ -48,7 +48,7 @@
       "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_ble_peripheral.m + crates/fandhe-egui-proxy/src/device/apple_ble_peripheral.rs + crates/fandhe-egui-proxy/src/device/ble_peripheral.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-device/src/ble_peripheral.rs、Issue #778"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "WinRT `GattServiceProvider.CreateAsync` / `CreateCharacteristicAsync` / `StartAdvertising`（`AdvertisementStatusChanged` で状態を受ける）+ `GattLocalCharacteristic.ReadRequested`",
       "perm": "パッケージ版は `Package.appxmanifest` の `bluetooth` capability が必須（公式）。素の Win32 実行体（unpackaged）での要否は公式に記述なしで未確認。`windows` クレートの feature `Devices_Bluetooth_GenericAttributeProfile` は導入済み",
       "url": [
@@ -57,7 +57,10 @@
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattserviceprovideradvertisementstatus",
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.bluetoothadapter.isperipheralrolesupported"
       ],
-      "note": "未実装。unpackaged で GATT サーバーが使えるかは未確認で、実機で確かめる（既存の bluetooth-le の Windows と同じ前提）。結果は `GattServiceProviderResult.Error`（`BluetoothError`）と `AdvertisementStatus`（Created / Stopped / Started / Aborted / StartedWithoutAllAdvertisementData）で届く。`ReadRequested` のハンドラが無いと読み取り要求は `UnlikelyError` で即完了する（公式）ため、ハンドラは公開前に登録し、停止時に全て解除する。アダプターの周辺機器役対応は `BluetoothAdapter.IsPeripheralRoleSupported`"
+      "note": "実装済み（#1101）。ローカル名は指定できず、`IsDiscoverable` により OS が端末名を載せる（画面には「OS が決める」と出す）。サービス UUID が載るのは discoverable と connectable を両方 true にしたときだけ（公式）。StartedWithoutAllAdvertisementData も公開中に含める（OS が載せる中身を削っただけ）。読み取りは `ReadRequested` で応答し、成功した応答だけを数える（範囲外の offset は InvalidOffset で返し数えない）。Aborted・Stopped は `BluetoothError` で区分し、Success のままなら失敗にする。背景遷移による中断は無い。unpackaged で GATT サーバーが使えるかと、Bluetooth オフでの確定は実機確認で確かめる（#776。問題があれば done を取り下げる）",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#776）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_ble_peripheral.rs + crates/fandhe-egui-proxy/src/device/ble_peripheral.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-device/src/ble_peripheral.rs、Issue #1101"
     },
     "web": {
       "status": "no",

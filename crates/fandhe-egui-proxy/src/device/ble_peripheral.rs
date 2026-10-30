@@ -7,8 +7,8 @@
 //! `start` は非ブロッキング、`stop` は `.m` の専用キューへの短い同期呼び出しなので UI スレッドで
 //! 同期に呼ぶ。待ち・期限・`request_repaint_after` は持たない（事象は OS の通知 →
 //! `CompletionSender::send` が UI を起こす）。**macOS は `apple_ble_peripheral`、iOS は #779 で
-//! `ios_ble_peripheral.rs` から `apple_ble_peripheral` へ委譲済み**。Android・Windows は対応表で保留のため
-//! `UnsupportedBlePeripheral`（非対応表示）に入る。
+//! `ios_ble_peripheral.rs` から `apple_ble_peripheral` へ委譲済み**。Windows は `windows_ble_peripheral`（Issue #1101）。
+//! Android は対応表で保留のため `UnsupportedBlePeripheral`（非対応表示）に入る。
 //!
 //! 読み取りは「世代つきのまとめ送り」にする: 未適用件数を数え、0 → 1 になったときだけ完了を
 //! 1 件送る。読み取りが大量に届いても完了キューが伸びない。
@@ -19,9 +19,12 @@ use std::sync::{Arc, Mutex, OnceLock};
 use fandhe_core::screens::ble_peripheral::{
     apply_event, apply_reads, finish_start, finish_stop, mark_in_flight, take_action,
     BlePeripheralState, EndKind, PeripheralAction, PeripheralFailure, ScreenEvent, StartResult,
-    StopResult,
+    StopResult, OS_CHOSEN_NAME_LABEL,
 };
-#[cfg(any(not(any(target_os = "macos", target_os = "ios")), test))]
+#[cfg(any(
+    not(any(target_os = "macos", target_os = "ios", target_os = "windows")),
+    test
+))]
 use fandhe_device::ble_peripheral::UnsupportedBlePeripheral;
 use fandhe_device::ble_peripheral::{
     BlePeripheral, EndReason, OnEvent, PeripheralEvent, StartOutcome, StopOutcome, LOCAL_NAME,
@@ -34,13 +37,19 @@ use crate::app::CompletionSender;
 /// 現在の公開の session と通知先を持つ受け口。OS 実装（`.m` のコールバック）が事象を渡す入口で、
 /// どの OS でもコンパイルし Linux CI でもテストする。判定と取り出しだけをロックの内側で行い、
 /// `OnEvent` はロックの外で呼ぶ（契約表 2）。
-#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
+#[cfg_attr(
+    not(any(target_os = "macos", target_os = "ios", target_os = "windows")),
+    allow(dead_code)
+)]
 #[derive(Default)]
 pub(crate) struct SessionSlot {
     inner: Mutex<Option<(u64, OnEvent)>>,
 }
 
-#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
+#[cfg_attr(
+    not(any(target_os = "macos", target_os = "ios", target_os = "windows")),
+    allow(dead_code)
+)]
 impl SessionSlot {
     /// 空の受け口。
     pub(crate) const fn new() -> Self {
@@ -77,6 +86,16 @@ impl SessionSlot {
         if let Some(on_event) = target {
             on_event(event);
         }
+    }
+}
+
+/// 画面に出す広告名。Windows はローカル名を指定できず OS が端末名を載せるため、事実と違う
+/// 名前を出さずに「OS が決める」旨の文言にする。
+fn advertised_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        OS_CHOSEN_NAME_LABEL
+    } else {
+        LOCAL_NAME
     }
 }
 
@@ -132,7 +151,7 @@ fn make_on_event(sender: CompletionSender<BlePeripheralState>, session: u64) -> 
                     s,
                     session,
                     ScreenEvent::Advertising {
-                        local_name: LOCAL_NAME.to_string(),
+                        local_name: advertised_name().to_string(),
                         service_uuid: SERVICE_UUID.to_string(),
                     },
                 );
@@ -184,7 +203,9 @@ fn platform_ble_peripheral() -> &'static Arc<dyn BlePeripheral> {
         return super::apple_ble_peripheral::implementation();
         #[cfg(target_os = "ios")]
         return super::ios_ble_peripheral::implementation();
-        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        #[cfg(target_os = "windows")]
+        return super::windows_ble_peripheral::implementation();
+        #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "windows")))]
         return Arc::new(UnsupportedBlePeripheral);
     })
 }
@@ -481,6 +502,15 @@ mod tests {
         slot.clear();
         slot.deliver(8, PeripheralEvent::Advertising);
         assert_eq!(log.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn advertised_name_is_local_name_off_windows() {
+        if cfg!(target_os = "windows") {
+            assert_eq!(advertised_name(), OS_CHOSEN_NAME_LABEL);
+        } else {
+            assert_eq!(advertised_name(), LOCAL_NAME);
+        }
     }
 
     #[test]

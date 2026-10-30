@@ -52,6 +52,8 @@ pub const PERMISSION_DENIED_ERROR: &str = "Bluetooth の許可がありません
 pub const START_FAILED_ERROR: &str = "公開できませんでした";
 /// 停止の失敗。
 pub const STOP_FAILED_ERROR: &str = "停止できませんでした";
+/// ローカル名を指定できない OS（Windows）で、名前の代わりに画面へ出す文言。
+pub const OS_CHOSEN_NAME_LABEL: &str = "端末の Bluetooth 名（OS が決める）";
 
 const START_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 const STOP_BUTTON_ID: WidgetId = WidgetId::from_raw(2);

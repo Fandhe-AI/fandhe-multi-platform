@@ -7,6 +7,11 @@
 //! 利用者・ネットワークから受け取らない。`fandhe-egui-proxy` の effect ドライバが本 trait を呼び、
 //! 事象は [`OnEvent`] 経由で画面へ反映される。macOS は CoreBluetooth `CBPeripheralManager`
 //! （Issue #778）。iOS は同じ `.m` を共用するが、背景遷移の扱いを含め b-ios（#779）で委譲する。
+//! Windows は WinRT `GattServiceProvider`（Issue #1101）。次の違いだけが macOS・iOS と異なり、
+//! 契約の 7 区分と守る範囲は同じ。(1) ローカル名を指定できず、`IsDiscoverable` により OS が端末名を
+//! 載せる（画面には「OS が決める」と出す）。(2) 中断（[`EndReason::Interrupted`]）は出さない。
+//! (3) OS の状態は `AdvertisementStatusChanged` の status と `BluetoothError` を
+//! [`event_from_windows_advertisement_status`] / [`end_reason_from_windows_bluetooth_error`] で写す。
 //!
 //! # 結果の種類（契約表 10）
 //!
@@ -141,6 +146,39 @@ pub fn event_from_apple_code(code: i32) -> PeripheralEvent {
     }
 }
 
+/// WinRT `BluetoothError` の値 → 公開が終わった理由（Windows）。数値の対応は
+/// `bluetooth_le::error_from_bluetooth_error` と揃える。Success(0) と未知の値は `Failed` に倒し、
+/// 成功を作らない。
+pub fn end_reason_from_windows_bluetooth_error(code: i32) -> EndReason {
+    match code {
+        // RadioNotAvailable
+        1 => EndReason::BluetoothOff,
+        // DisabledByPolicy / DisabledByUser / ConsentRequired
+        5 | 7 | 8 => EndReason::PermissionDenied,
+        // NotSupported / TransportNotSupported
+        6 | 9 => EndReason::Unsupported,
+        _ => EndReason::Failed,
+    }
+}
+
+/// WinRT `GattServiceProviderAdvertisementStatus`（`status`）と `BluetoothError`（`error`）→ 事象
+/// （Windows）。`None` は「まだ何も言えない」（Created）。Started と
+/// StartedWithoutAllAdvertisementData は公開中（後者は OS が載せる中身を削っただけで、
+/// 公開は始まっている）。Stopped / Aborted は `error` で理由を区分し、Success でも成功にしない。
+pub fn event_from_windows_advertisement_status(status: i32, error: i32) -> Option<PeripheralEvent> {
+    match status {
+        // Created
+        0 => None,
+        // Started / StartedWithoutAllAdvertisementData
+        2 | 4 => Some(PeripheralEvent::Advertising),
+        // Stopped / Aborted
+        1 | 3 => Some(PeripheralEvent::Ended(
+            end_reason_from_windows_bluetooth_error(error),
+        )),
+        _ => Some(PeripheralEvent::Ended(EndReason::Failed)),
+    }
+}
+
 /// `.m` の停止の戻り値（0 が停止、1 が未起動）→ 結果。それ以外は失敗。
 pub fn stop_outcome_from_apple(code: i32) -> Result<StopOutcome, DeviceError> {
     match code {
@@ -229,6 +267,59 @@ mod tests {
                 stop_outcome_from_apple(code),
                 Err(DeviceError::Internal("ble_peripheral stop"))
             ));
+        }
+    }
+
+    #[test]
+    fn windows_error_codes_map() {
+        use EndReason::*;
+        assert_eq!(end_reason_from_windows_bluetooth_error(1), BluetoothOff);
+        for c in [5, 7, 8] {
+            assert_eq!(end_reason_from_windows_bluetooth_error(c), PermissionDenied);
+        }
+        for c in [6, 9] {
+            assert_eq!(end_reason_from_windows_bluetooth_error(c), Unsupported);
+        }
+        for c in [0, 2, 3, 4, 10, -1, i32::MAX] {
+            assert_eq!(end_reason_from_windows_bluetooth_error(c), Failed);
+        }
+    }
+
+    #[test]
+    fn windows_status_maps_and_never_fakes_success() {
+        let ended = |r| Some(PeripheralEvent::Ended(r));
+        assert_eq!(event_from_windows_advertisement_status(0, 0), None);
+        assert_eq!(
+            event_from_windows_advertisement_status(2, 0),
+            Some(PeripheralEvent::Advertising)
+        );
+        assert_eq!(
+            event_from_windows_advertisement_status(4, 0),
+            Some(PeripheralEvent::Advertising)
+        );
+        // Success 付きの Aborted / Stopped は失敗。
+        assert_eq!(
+            event_from_windows_advertisement_status(3, 0),
+            ended(EndReason::Failed)
+        );
+        assert_eq!(
+            event_from_windows_advertisement_status(1, 0),
+            ended(EndReason::Failed)
+        );
+        assert_eq!(
+            event_from_windows_advertisement_status(3, 1),
+            ended(EndReason::BluetoothOff)
+        );
+        assert_eq!(
+            event_from_windows_advertisement_status(1, 5),
+            ended(EndReason::PermissionDenied)
+        );
+        // 未知の status は公開中にならない。
+        for st in [-1, 5, 99, i32::MAX] {
+            assert_eq!(
+                event_from_windows_advertisement_status(st, 0),
+                ended(EndReason::Failed)
+            );
         }
     }
 
