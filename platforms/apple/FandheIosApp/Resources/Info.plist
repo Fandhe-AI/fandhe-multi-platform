@@ -33,6 +33,11 @@
   （`UIApplication openURL:`）は範囲外のため `LSApplicationQueriesSchemes` は足さない
   （security.md A05）。
 
+  CFBundleLocalizations（Issue #1074）: 型サンプル「アプリの言語」のため、対応言語 `ja`・`en` を
+  宣言する。設定アプリのこのアプリの「言語」に出る選択肢と `Bundle.main.preferredLocalizations`
+  の結果がこれで決まる。`CFBundleDevelopmentRegion` と `.lproj` は足さない（既定の挙動を変える
+  範囲を広げない）。macOS 版（`crates/fandhe-egui-proxy/macos/Info.plist`）と同じ値。
+
   UIApplicationShortcutItems（Issue #425）: 型サンプル「URL scheme 受信」画面
   （`FANDHE_PROXY_APP=url_scheme_show`）のホーム画面長押しメニュー項目を静的に宣言する。
   登録はインストール時に OS が行い、表示できたかはアプリから確かめられないため、画面には
@@ -185,6 +190,11 @@
 	<string>com.fandhe.iosapp</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>ja</string>
+		<string>en</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>FandheIosApp</string>
 	<key>CFBundlePackageType</key>

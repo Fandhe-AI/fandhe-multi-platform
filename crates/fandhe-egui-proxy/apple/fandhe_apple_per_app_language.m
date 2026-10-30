@@ -7,7 +7,7 @@
 // 契約:
 //   int32_t fandhe_apple_per_app_language_read(uint8_t *out, int32_t cap)
 //     `[[NSBundle mainBundle] preferredLocalizations].firstObject` を `out` に NUL 終端の UTF-8 で書く。
-//     戻り値: 0 = 成功、-1 = nil・空、-2 = `cap - 1` バイトに収まらない（`out` は書かない）。
+//     戻り値: 0 = 成功、-1 = nil・空・`UTF8String` が NULL、-2 = `cap - 1` バイトに収まらない（`out` は書かない）。
 //
 // 購読しない・static を持たない・ログを出さない（値は呼び出しごとに OS から読む）。
 

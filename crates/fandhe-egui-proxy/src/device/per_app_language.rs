@@ -8,7 +8,7 @@
 //! # OS 別実装の差し込み口
 //!
 //! [`platform_per_app_language`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を
-//! 持つモジュールだけを埋める（macOS: `apple_per_app_language`、iOS: `ios_per_app_language`（#1074）、
+//! 持つモジュールだけを埋める（macOS: `apple_per_app_language`、iOS: `ios_per_app_language`（#1074、macOS と共用の実装へ委譲）、
 //! Android: `android_per_app_language`（#1075））。それ以外は `UnsupportedPerAppLanguage` 固定で、
 //! ダミーの成功実装へは倒さない。
 //!
