@@ -205,11 +205,13 @@ impl BlePeripheral for WindowsBlePeripheral {
             return Ok(StopOutcome::NotRunning);
         };
         let (reply_tx, reply_rx) = mpsc::channel();
-        // 先にキューへ積み、その後で開始手順の待ちを中止する（中止された開始の直後に Stop が処理される）。
+        // 先に中止要求を立ててから Stop を積む。要求を下ろすのは Stop の処理（ワーカー側）で、必ずその後になる。
+        // 下ろした後に要求が残って次の Start を E_ABORT にすることがない（キュー順で Stop が最後に効く）。
+        cancel_pending();
         if tx.send(Cmd::Stop(reply_tx)).is_err() {
+            CANCEL.store(false, Ordering::SeqCst);
             return Err(DeviceError::Internal("ble_peripheral stop"));
         }
-        cancel_pending();
         reply_rx
             .recv()
             .unwrap_or(Err(DeviceError::Internal("ble_peripheral stop")))
