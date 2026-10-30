@@ -402,6 +402,10 @@ generated_screens! {
     crate::device::pen_stylus::pen_draw_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "per_app_language_show" => fandhe_core::screens::per_app_language_show::current_screen,
+    crate::device::per_app_language::per_app_language_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "fullscreen_toggle" => fandhe_core::screens::fullscreen_toggle::current_screen,
     crate::device::fullscreen_immersive::fullscreen_toggle_effect,
     effect

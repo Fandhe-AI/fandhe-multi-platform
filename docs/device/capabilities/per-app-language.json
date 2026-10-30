@@ -29,14 +29,17 @@
       "note": "未実装。OS のアプリ別言語設定は Android 13（API 33）から。minSdk 24 のため API 32 以下は `Unsupported`。空の LocaleList は「アプリ別の設定なし（OS 全体に従う）」で失敗ではない。`ja` は `res/values/strings.xml` の最終代替。`values-en` は置かないので `en` を選んでもアプリの文言は日本語のまま。宣言は利用者が選ぶまで既定の挙動を変えない。AppCompat の `AppCompatDelegate`（アプリ内で保存する後方互換）と AGP の `generateLocaleConfig` は使わない。`MainActivity` の `configChanges` に `locale` があり、言語変更で Activity は再生成されない"
     },
     "macos": {
-      "status": "possible",
-      "api": "`Bundle.main.preferredLocalizations` の先頭。システム設定 → 一般 → 言語と地域 → アプリケーションで利用者が選ぶ",
+      "status": "done",
+      "api": "`Bundle.main.preferredLocalizations` の先頭（`apple/fandhe_apple_per_app_language.m` が固定長バッファへ NUL 終端の UTF-8 で書く）。システム設定 → 一般 → 言語と地域 → アプリケーションで利用者が選ぶ",
       "perm": "なし。`crates/fandhe-egui-proxy/macos/Info.plist` に `CFBundleLocalizations`（`ja`・`en`）を宣言する（`.app` 化スクリプトも同じファイルを写す）",
       "url": [
         "https://developer.apple.com/documentation/foundation/bundle/preferredlocalizations",
         "https://support.apple.com/guide/mac-help/change-the-language-your-mac-uses-mh26684/mac"
       ],
-      "note": "未実装。システム設定のアプリ一覧は `.app` を選ぶため、目視は `scripts/apple/bundle-macos-url-scheme.sh --screen per_app_language_show` の `.app` で行う。素の実行体（Info.plist 埋め込み）で宣言が効くかは未確認。反映にはアプリの再起動が要る場合がある（Apple サポート）。アプリ別 / OS 全体は区別しない（不明と表示）"
+      "note": "実装済み（#1073）。出どころは常に不明（Apple にアプリ別 / OS 全体を区別する公開 API が無い）。nil・空・長すぎる値・不正なタグ（ASCII 英数字・`-`・`_` 以外、35 文字超）は失敗で、「言語なし」の成功にしない。タグ検査は Rust 側（`clean_tag`）が正。守る範囲: 嘘の値を出さない・1 プロセス内の取得・押下ごとに OS へ聞く。守らない範囲: 読み取り後の変更の反映（再読込まで）、アプリ自身の文言の切り替え、アプリ内からの言語変更、アプリ別 / OS 全体の区別、宣言で OS が描く UI の言語が変わること、OS 間のタグ表記の揃い、複数プロセス、OS 呼び出しが戻らない場合の期限。UI スレッドで同期 1 回だけ読む（並行経路なし）。システム設定から変えた言語が反映されるか、素の実行体（Info.plist 埋め込み）で宣言が効くかは Mac 目視（#1054）で確かめる。反映にはアプリの再起動が要る場合がある（Apple サポート）",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#1054）",
+      "impl": "crates/fandhe-egui-proxy/src/device/apple_per_app_language.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_per_app_language.m + crates/fandhe-egui-proxy/src/device/per_app_language.rs + crates/fandhe-core/src/screens/per_app_language_show.rs + crates/fandhe-device/src/per_app_language.rs + crates/fandhe-egui-proxy/macos/Info.plist、Issue #1073"
     },
     "windows": {
       "status": "no",

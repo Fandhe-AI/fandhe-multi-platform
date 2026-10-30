@@ -72,6 +72,11 @@
   LaunchServices に登録された .app でしか効かず、素の実行体に埋め込んでも scheme は
   届かないため。Mac 目視用の `scripts/apple/bundle-macos-url-scheme.sh` が、この
   ファイルをコピーした .app の Info.plist へ `CFBundleURLTypes` と `LSEnvironment` を足す。
+
+  `CFBundleLocalizations`（Issue #1073、`ja`・`en`）は型サンプル「アプリの言語」のために宣言している。
+  システム設定の「アプリケーション」ごとの言語に、このアプリの対応言語を出すための宣言で、
+  `Bundle.main.preferredLocalizations` の結果を決める。`CFBundleDevelopmentRegion` は足さない
+  （既定の挙動を変える範囲を広げない）。`.app` 化スクリプトも同じファイルを写す。
 -->
 <plist version="1.0">
 <dict>
@@ -97,6 +102,11 @@
 	<string>型サンプル「音楽ライブラリ」の動作確認に使います</string>
 	<key>NSCameraUsageDescription</key>
 	<string>型サンプル「カメラのライブ映像」「動画の撮影」の動作確認に使います</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>ja</string>
+		<string>en</string>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

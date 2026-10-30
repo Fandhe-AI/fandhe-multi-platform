@@ -50,6 +50,10 @@
 #                   素の cargo run ではサービスに出ず、画面は「まだ受け取っていません」のまま
 #   サービスに出ないとき: 一度ログアウト/ログインするか、/System/Library/CoreServices/pbs -flush
 #                   でサービスのキャッシュを捨てる（反映が遅れることがある）
+#
+# Issue #1073（親 #137）: アプリ別の言語設定の Mac 目視（#1054）にも同じ .app を使う。
+# --screen per_app_language_show で作り、システム設定 → 一般 → 言語と地域 → アプリケーションで
+# このアプリの言語を変えて再起動し、「言語を読む」でタグが変わるかを確かめる。
 set -euo pipefail
 
 if [ "$(uname)" != "Darwin" ]; then
@@ -70,8 +74,8 @@ while [ $# -gt 0 ]; do
 done
 # 画面名は許可リストで照合する（plist の JSON へ未検証の文字列を入れない。A03）。
 case "$screen" in
-  url_scheme_show|file_association_show|share_receive_show) ;;
-  *) echo "未対応の画面名です: --screen は url_scheme_show / file_association_show / share_receive_show" >&2; exit 2 ;;
+  url_scheme_show|file_association_show|share_receive_show|per_app_language_show) ;;
+  *) echo "未対応の画面名です: --screen は url_scheme_show / file_association_show / share_receive_show / per_app_language_show" >&2; exit 2 ;;
 esac
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
