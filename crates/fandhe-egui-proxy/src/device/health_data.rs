@@ -16,15 +16,16 @@
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`implementation`] の cfg 分岐が最終形。iOS は `ios_health_data`（#1090 が埋める）、
-//! それ以外は `UnsupportedHealthData` 固定でダミーの成功実装へは倒さない。Android は保留のため入れない。
+//! [`implementation`] の cfg 分岐が最終形。iOS は `ios_health_data`、Android は
+//! `android_health_data`（#1100 が埋める。それまでは非対応）、それ以外は `UnsupportedHealthData`
+//! 固定でダミーの成功実装へは倒さない。
 
 use std::sync::Arc;
 
 use fandhe_core::screens::health_steps_read::{
     finish_read, mark_reading, take_request, HealthStepsReadState, ReadFailure, StepsReading,
 };
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use fandhe_device::health_data::UnsupportedHealthData;
 use fandhe_device::health_data::{HealthData, HealthDataFailure, HealthSteps, READ_TIMEOUT};
 
@@ -40,7 +41,11 @@ fn implementation() -> Arc<dyn HealthData> {
             {
                 super::ios_health_data::implementation()
             }
-            #[cfg(not(target_os = "ios"))]
+            #[cfg(target_os = "android")]
+            {
+                super::android_health_data::implementation()
+            }
+            #[cfg(not(any(target_os = "ios", target_os = "android")))]
             {
                 Arc::new(UnsupportedHealthData)
             }
@@ -55,7 +60,7 @@ fn to_failure(e: HealthDataFailure) -> ReadFailure {
         HealthDataFailure::Unsupported => ReadFailure::Unsupported,
         HealthDataFailure::Canceled => ReadFailure::Canceled,
         HealthDataFailure::Timeout => ReadFailure::Timeout,
-        HealthDataFailure::Failed => ReadFailure::Failed("ヘルスケアの歩数の読み取り".to_string()),
+        HealthDataFailure::Failed => ReadFailure::Failed("歩数の読み取り".to_string()),
     }
 }
 
@@ -99,9 +104,7 @@ fn drive(
             finish_read(
                 s,
                 generation,
-                Err(ReadFailure::Failed(
-                    "ヘルスケアの歩数の読み取り".to_string(),
-                )),
+                Err(ReadFailure::Failed("歩数の読み取り".to_string())),
             );
         }));
     }
@@ -243,7 +246,7 @@ mod tests {
         assert_eq!(state.steps, None);
     }
 
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     #[test]
     fn unsupported_os_implementation_is_unsupported() {
         assert_eq!(

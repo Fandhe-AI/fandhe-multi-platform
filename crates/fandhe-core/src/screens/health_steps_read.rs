@@ -9,7 +9,7 @@
 //! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の
 //! `device/health_data.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する。
 //!
-//! 全対象 OS（現状 iOS のみ）の文言・状態をここで定義済みで、後続の OS 実装は本画面を触らない。
+//! 全対象 OS（iOS・Android）の文言・状態をここで定義済みで、後続の OS 実装は本画面を触らない。
 //! 許可は読み取りボタンの押下時に OS がシートで求めるため、登録・解除ボタンは無い。
 //! 起動時に読みに行かない（予期しない許可シートを避ける）。
 //!
@@ -34,11 +34,11 @@ pub const READ_LABEL: &str = "今日の歩数を読む";
 /// 読み取り中の案内。
 pub const READING_STATUS: &str = "読み取り中…（初回は許可の確認が表示されます）";
 /// 記録が見えないときの案内（失敗の色にしない。0 歩とは別物）。
-pub const NO_VISIBLE_DATA_STATUS: &str = "今日の歩数の記録が見えません（記録が無いか、ヘルスケアで読み取りを許可していません。設定アプリのヘルスケアから変えられます）";
+pub const NO_VISIBLE_DATA_STATUS: &str = "今日の歩数の記録が見えません（記録が無いか、歩数の読み取りを許可していません。iOS は設定アプリのヘルスケア、Android は設定のヘルスコネクトから変えられます）";
 /// 取り消し（許可シートを閉じた）の案内。中立表示。
 pub const CANCELED_STATUS: &str = "取り消しました";
 /// 非対応のときの案内。
-pub const UNSUPPORTED_STATUS: &str = "この端末ではヘルスケアの歩数を読めません";
+pub const UNSUPPORTED_STATUS: &str = "この端末ではヘルスデータの歩数を読めません";
 /// 期限内に結果が届かなかったときの案内。
 pub const TIMEOUT_STATUS: &str = "応答がありませんでした";
 /// 失敗時の案内の接頭辞（`{接頭辞}{エラー文字列}` の形で表示する）。
