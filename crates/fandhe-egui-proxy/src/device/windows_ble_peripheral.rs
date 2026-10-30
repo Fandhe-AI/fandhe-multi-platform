@@ -105,6 +105,10 @@ fn cancel_pending() {
     }
 }
 
+/// 世代別の未処理の読み取り件数（世代, 件数）。0 → 1 のときだけ `Cmd::Read` を積み、
+/// 読み取りの連発でキューが伸びて Stop が遅れることを防ぐ。古い世代の読み取りは捨てる。
+static READS: Mutex<(u64, u64)> = Mutex::new((0, 0));
+
 /// ワーカーへの命令。開始・停止・OS の状態通知はすべてここを順に通る。
 enum Cmd {
     Start(u64),
@@ -114,7 +118,7 @@ enum Cmd {
         status: i32,
         error: i32,
     },
-    /// 読み取り成功の通知。状態通知と同じ直列経路を通し、公開開始（Started）より先に数えない。
+    /// 読み取り成功の通知（件数は [`READS`] に集約）。状態通知と同じ直列経路を通し、公開開始（Started）より先に数えない。
     Read(u64),
 }
 
@@ -274,8 +278,18 @@ fn run_worker(rx: mpsc::Receiver<Cmd>, tx: Sender<Cmd>) {
                 let _ = reply.send(result);
             }
             Cmd::Read(session) => {
+                let n = {
+                    let mut g = READS.lock().unwrap_or_else(|e| e.into_inner());
+                    if g.0 == session {
+                        std::mem::take(&mut g.1)
+                    } else {
+                        0
+                    }
+                };
                 if running.as_ref().is_some_and(|r| r.session == session) {
-                    SESSION.deliver(session, PeripheralEvent::Read);
+                    for _ in 0..n {
+                        SESSION.deliver(session, PeripheralEvent::Read);
+                    }
                 }
             }
             Cmd::Status {
@@ -454,7 +468,21 @@ fn handle_read(
     // 全経路で完了させ、その失敗も見る。
     let completed = deferral.Complete();
     if matches!(responded, Ok(true)) && completed.is_ok() {
-        let _ = tx.send(Cmd::Read(session));
+        let first = {
+            let mut g = READS.lock().unwrap_or_else(|e| e.into_inner());
+            if session > g.0 {
+                *g = (session, 0);
+            }
+            if g.0 == session {
+                g.1 += 1;
+                g.1 == 1
+            } else {
+                false
+            }
+        };
+        if first {
+            let _ = tx.send(Cmd::Read(session));
+        }
     }
     responded.and(completed)
 }
