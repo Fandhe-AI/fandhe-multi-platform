@@ -24,7 +24,7 @@ pub mod accessibility_prefs;
 /// 他 OS は `UnsupportedActivityRecognizer` 固定）。
 pub mod activity_recognition;
 /// Phase 11 の拡充ループ（親 #140、Issue #721）: アラーム・正確な時刻の予約の effect
-/// ドライバ（Windows 実装、iOS・Android は #1077・#1078 が埋めるスタブ、他 OS は `Unsupported` 固定）。
+/// ドライバ（Windows 実装、iOS は AlarmKit、Android は #1078 が埋めるスタブ、他 OS は `Unsupported` 固定）。
 pub mod alarm;
 #[cfg(target_os = "android")]
 pub mod android;
@@ -887,8 +887,8 @@ pub mod ios_accessibility_prefs;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_activity_recognition;
-/// Issue #1076: iOS 向けアラーム実装のスタブ（実装は #1077）。`device/alarm.rs` の iOS 経路から呼ばれる。
-/// #1077 が cfg を変えずに済むよう `any(ios, test)`。
+/// Issue #1077: iOS 向けアラーム実装（AlarmKit を呼ぶ Swift の C ABI ラッパー）。`device/alarm.rs` の iOS 経路から呼ばれる。
+/// ホストのテストでも戻りコード写像を検証できるよう `any(ios, test)`。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_alarm;
