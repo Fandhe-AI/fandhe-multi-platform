@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NFC カードエミュレーション（Issue #1129）。AID の正は Rust の `fandhe_device::nfc_card_emulation::AID` で、
+     ここへの複製は android_nfc_card_emulation.rs のテストで一致を固定する。切り離し時に削除する。 -->
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/nfc_card_emulation_service_description"
+    android:requireDeviceUnlock="false">
+    <aid-group
+        android:category="other"
+        android:description="@string/nfc_card_emulation_aid_group_description">
+        <aid-filter android:name="F046414E44484501" />
+    </aid-group>
+</host-apdu-service>

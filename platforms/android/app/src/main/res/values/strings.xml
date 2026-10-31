@@ -39,4 +39,7 @@
     <string name="car_display_title">Fandhe</string>
     <string name="car_display_row_title">メッセージ</string>
     <string name="car_display_unset">未設定</string>
+    <!-- NFC カードエミュレーション（Issue #1129）の説明文。切り離し時に削除する。 -->
+    <string name="nfc_card_emulation_service_description">Fandhe NFC カードエミュレーション</string>
+    <string name="nfc_card_emulation_aid_group_description">Fandhe 固定応答</string>
 </resources>
