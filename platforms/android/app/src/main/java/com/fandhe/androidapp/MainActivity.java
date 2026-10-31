@@ -485,6 +485,18 @@ public class MainActivity extends GameActivity {
         pedometerHelper.cancel(requestId);
     }
 
+    // ヘルスデータ（今日の歩数、Issue #1100）。実装は `HealthDataHelper`（フィールド初期化子で
+    // 生成し、STARTED 前に許可ランチャーを登録する）。Rust の `android_health_data.rs` が JNI で呼ぶ。
+    private final HealthDataHelper healthDataHelper = new HealthDataHelper(this);
+
+    void requestHealthDataRead(long requestId) {
+        healthDataHelper.read(requestId);
+    }
+
+    void cancelHealthDataRead(long requestId) {
+        healthDataHelper.cancel(requestId);
+    }
+
     // 端末内翻訳（Issue #537）。実装は `TranslationHelper`。Rust の `android_translation.rs` が JNI で呼ぶ。
     private final TranslationHelper translationHelper = new TranslationHelper(this);
 
@@ -5240,6 +5252,7 @@ public class MainActivity extends GameActivity {
         inAppBrowserHelper.onDestroy();
         companionDeviceHelper.onDestroy();
         pedometerHelper.onDestroy();
+        healthDataHelper.onDestroy();
         translationHelper.onDestroy();
         geocodingHelper.onDestroy();
         spellCheckHelper.onDestroy();

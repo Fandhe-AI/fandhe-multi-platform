@@ -28,9 +28,9 @@
       "impl": "crates/fandhe-egui-proxy/src/device/ios_health_data.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_health_data.m + crates/fandhe-egui-proxy/src/device/health_data.rs + crates/fandhe-core/src/screens/health_steps_read.rs + crates/fandhe-device/src/health_data.rs、Issue #1090"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "Android 14（API 34）以上のフレームワーク API `android.health.connect.HealthConnectManager`（可否は `HealthConnectManager.getHealthConnectSdkStatus` 相当、歩数の合計は `aggregate()` の `StepsRecord`）。API 33 以下は `Unsupported`。Jetpack の `androidx.health.connect:connect-client` は使わない（1.1.0 は minCompileSdk=36 で compileSdk 35 と合わない）",
-      "perm": "`android.permission.health.READ_STEPS`（実行時の許可は Health Connect の許可画面）、`<queries>` に `com.google.android.apps.healthdata`、権限の理由を出す Activity（`VIEW_PERMISSION_USAGE` + `HEALTH_PERMISSIONS` の activity-alias）。依存の追加なし。公開には Play Console のヘルスアプリ申告が要る",
+      "perm": "`android.permission.health.READ_STEPS`（実行時の許可は Health Connect の許可画面）、権限の理由を出す Activity（`HealthPermissionsRationaleActivity` と、`VIEW_PERMISSION_USAGE` + `HEALTH_PERMISSIONS` の activity-alias。alias は `START_VIEW_PERMISSION_USAGE` を要求しシステムだけが起動できる）。API 34 以上は OS 組み込みのため `<queries>` は足さない。依存の追加なし。`READ_HEALTH_DATA_IN_BACKGROUND`・`READ_HEALTH_DATA_HISTORY` は足さない。公開には Play Console のヘルスアプリ申告が要る",
       "url": [
         "https://developer.android.com/health-and-fitness/health-connect/get-started",
         "https://developer.android.com/health-and-fitness/guides/health-connect/develop/get-started",
@@ -39,7 +39,10 @@
         "https://developer.android.com/jetpack/androidx/releases/health-connect",
         "https://support.google.com/googleplay/android-developer/answer/9888170"
       ],
-      "note": "未実装。API 34 以上は OS 組み込みのフレームワーク API で読む。API 33 以下は Health Connect が別アプリ（Play ストア）のため扱わず `Unsupported` にする（minSdk 24）。既定で読めるのは最初に許可した時点の 30 日前まで（`READ_HEALTH_DATA_HISTORY` で延長）。背景の読み取りは `READ_HEALTH_DATA_IN_BACKGROUND` が別に要るため扱わない。権限が無い読み取りは `SecurityException`。端末の歩数だけなら pedometer（`TYPE_STEP_COUNTER`）で取得済み"
+      "note": "期限は 30 秒で、許可画面の待ちと集計の待ちで共有し、起点は Rust 側の入口（単調時計）。API 34 以上は OS 組み込みのフレームワーク API の `aggregate`（`StepsRecord.STEPS_COUNT_TOTAL`、今日 0 時から現在）で読む。API 33 以下と `HealthConnectManager` を取得できない端末は `Unsupported`（Health Connect が別アプリのため扱わない。minSdk 24）。許可が得られない場合（拒否・許可画面を閉じた・拒否済みで画面が出ない）と読み取り時の `SecurityException`・`ERROR_SECURITY` は区別せず「記録が見えない」とし、`aggregate` の値が null（記録なし）も同じ。0 歩にも失敗にもしない。Android は取り消しを返さない（三値の取り消しは iOS 専用）。それ以外の例外（`HealthConnectException` 等）・JNI の失敗・Activity 破棄時の保留中の要求・保留中の再要求は失敗。許可画面に伴う `onPause` / `onStop` では中断せず期限だけで決める。`aggregate` に取り消し API は無いため、期限切れ・差し替え後に届いた結果は要求 id の照合で捨てる（守らない範囲）。既定で読めるのは最初に許可した時点の 30 日前までだが今日の分には影響しない。背景の読み取りは扱わない。歩数と例外メッセージはログに出さない。公開には Play のヘルスアプリ申告が要る。実機での挙動は【推測】で #1059 で確かめる。端末の歩数だけなら pedometer（`TYPE_STEP_COUNTER`）で取得済み",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#1059）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_health_data.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/HealthDataHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/HealthPermissionsRationaleActivity.java + crates/fandhe-egui-proxy/src/device/health_data.rs + crates/fandhe-core/src/screens/health_steps_read.rs + crates/fandhe-device/src/health_data.rs、Issue #1100"
     },
     "macos": {
       "status": "n-a",
@@ -53,5 +56,5 @@
       "status": "n-a"
     }
   },
-  "note": "`HealthKit` / Android Health Connect。macOS/Windows/Web にはヘルスデータストア相当の標準 API が無い。範囲: 今日 0 時から現在までの歩数の合計をヘルスストアから 1 回読む（書き込み・他の型・履歴・背景配信は含めない）。結果は歩数（0 を含む）・記録が見えない・取り消し・利用不可・期限切れ・失敗。iOS の読み取り拒否はアプリから判別できないため「許可なし」の種別を作らず、「記録が見えない」は記録が無い場合と区別しない（0 歩にも失敗にもしない）。完了は OS の completion で決め、期限で推測しない。許可の状態はアプリ内に保持せず、要求のたびに OS に許可を求め直す（決定済みならシートは出ない）。歩数はログに出さない。Android は API 34 以上のフレームワーク API で実装予定（33 以下は非対応、Jetpack 依存なし）。公開には Play の申告が要る"
+  "note": "`HealthKit` / Android Health Connect。macOS/Windows/Web にはヘルスデータストア相当の標準 API が無い。範囲: 今日 0 時から現在までの歩数の合計をヘルスストアから 1 回読む（書き込み・他の型・履歴・背景配信は含めない）。結果は歩数（0 を含む）・記録が見えない・取り消し・利用不可・期限切れ・失敗。iOS の読み取り拒否はアプリから判別できないため「許可なし」の種別を作らず、「記録が見えない」は記録が無い場合と区別しない（0 歩にも失敗にもしない）。完了は OS の completion で決め、期限で推測しない。許可の状態はアプリ内に保持せず、要求のたびに OS に許可を求め直す（決定済みならシートは出ない）。歩数はログに出さない。Android は API 34 以上のフレームワーク API で実装済み（33 以下は非対応、Jetpack 依存なし）。公開には Play の申告が要る"
 }
