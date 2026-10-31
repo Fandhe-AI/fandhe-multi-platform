@@ -239,6 +239,8 @@ pub mod multi_display_show;
 pub mod music_library_list;
 /// Phase 11 の拡充ループ型サンプル「ネットワーク接続状態」（親 #1130、Issue #1282）。
 pub mod network_status_show;
+/// Phase 11 の拡充ループ型サンプル「NFC カードエミュレーション」（親 #151、Issue #1128）。
+pub mod nfc_card_emulation_show;
 /// Phase 11 の拡充ループ型サンプル「NFC タグ読み取り」（親 #157、Issue #1044）。
 pub mod nfc_read;
 /// Phase 11 の拡充ループ型サンプル「単語分割」（親 #1093、Issue #1094）。
