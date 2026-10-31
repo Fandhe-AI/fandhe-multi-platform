@@ -772,8 +772,10 @@ fn apply_zoom(s: &Session, step: ZoomStep) -> Result<(), ZoomFailure> {
         Ok(None) => return Err(ZoomFailure::Unsupported),
         Ok(Some(z)) => z,
     };
-    let range = z.Min().ok().zip(z.Max().ok());
-    let target = zoom_target(step, range)?;
+    // 範囲の取得失敗は Unsupported ではなく Failed（Unsupported は Supported == false のみ）。
+    let min = z.Min().map_err(|_| ZoomFailure::Failed)?;
+    let max = z.Max().map_err(|_| ZoomFailure::Failed)?;
+    let target = zoom_target(step, Some((min, max)))?;
     let settings = ZoomSettings::new().map_err(|_| ZoomFailure::Failed)?;
     settings
         .SetMode(ZoomTransitionMode::Auto)
