@@ -34,7 +34,7 @@
         "https://developer.android.com/training/wearables/get-started/connect-phone"
       ],
       "note": "未実装。`GoogleApiAvailability` で Google Play services が使えるかを確かめてから呼ぶ（公式）。スマホ側と Wear OS 側のアプリはパッケージ名と署名を一致させる必要があり、Wear OS 用の別モジュール（別 APK）が要る。確認はエミュレータのペアでもできる（スマホ側は Android 11 以上・Play ストア入りのイメージ）",
-      "deferred": "Data Layer API は `play-services-wearable`（Google Play services）を新しく足し、端末にも Google Play services が要る。GMS に依存しない方針のため保留（activity-recognition・in-app-review と同じ）。加えてパッケージ名と署名が同じ Wear OS 用のアプリ（別モジュール）が要る。方針が変われば着手できる",
+      "deferred": "Data Layer API は `play-services-wearable`（Google Play services）を新しく足し、端末にも Google Play services が要る。加えてパッケージ名と署名が同じ Wear OS 用のアプリ（別モジュール）と、確かめるための Wear OS 端末（またはエミュレーターのペアリング）が要るため保留。Wear 機を用意し別モジュールを足す方針が決まれば着手できる",
       "sourceName": [
         "watch 連携（スマホ ↔ Wear OS のデータ受け渡し）"
       ]

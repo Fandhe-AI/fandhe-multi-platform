@@ -110,6 +110,11 @@
         android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- BLE ペリフェラル（広告と GATT サーバー、ble-peripheral）。API 31 以上でアドバタイズに常に要る
+         実行時の権限（「付近のデバイス」グループで BLUETOOTH_CONNECT と許可ダイアログは 1 回）。
+         API 30 以下の広告は上の `BLUETOOTH`/`BLUETOOTH_ADMIN` で足りるため maxSdkVersion は付けない
+         （API 31 以上で効く権限なので API 30 以下では無視される）。切り離し時に削除する。 -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <!-- BLE 非搭載端末（Android TV 等）をストアの自動フィルタから除外しないための明示
@@ -188,6 +193,10 @@
          intent-filter・exported コンポーネントは足さない。切り離し時に削除する。 -->
     <uses-permission android:name="android.permission.NFC" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
+    <!-- NFC カードエミュレーション（HCE、nfc-card-emulation）。HCE 非対応端末を自動フィルタから除外しない
+         ため required=false（nfc と同じ根拠）。HostApduService の service 本体は実装 PR で足す。
+         切り離し時に削除する。 -->
+    <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />
 
     <!-- Phase 11（Issue #1092）: 触覚フィードバック画面が `Vibrator` で振動を要求する。
          通常権限で実行時許可は無い。切り離し時に削除する。 -->

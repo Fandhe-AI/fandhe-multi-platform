@@ -28,7 +28,7 @@
         "https://developer.android.com/google/play/billing/integrate",
         "https://developer.android.com/google/play/billing/test"
       ],
-      "deferred": "推移依存に Google Play services（play-services-base・basement・location・tasks）と datatransport が入る。GMS に依存しない方針のため保留。確認には Play Console へのアプリ・商品の登録とライセンステスターも要る",
+      "deferred": "推移依存に Google Play services（play-services-base・basement・location・tasks）と datatransport が入る。確認には Play Console へのアプリ・商品の登録とライセンステスターが要り、Play Console の開発者登録は有料のため保留",
       "note": "未実装",
       "sourceName": [
         "アプリ内課金"

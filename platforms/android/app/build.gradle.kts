@@ -205,4 +205,11 @@ dependencies {
             because("guava 31.1-android に GHSA-5mg8-w23w-74h3・GHSA-7g45-4rm6-3mm3・GHSA-xxph-c9ww-hj94")
         }
     }
+    // Google Play services（GMS が使えない端末では各機能が Unsupported を返す）。
+    // activity-recognition は遷移 API（`ActivityRecognition`）、document-scan は ML Kit Document Scanner、
+    // payment-request は Google Pay API（`PaymentsClient`）を直接 import する予定のため明示依存にする
+    // （バージョン選定根拠は versions.env の PLAY_SERVICES_* コメント参照）。
+    implementation("com.google.android.gms:play-services-location:${androidVersion("PLAY_SERVICES_LOCATION_VERSION")}")
+    implementation("com.google.android.gms:play-services-wallet:${androidVersion("PLAY_SERVICES_WALLET_VERSION")}")
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:${androidVersion("PLAY_SERVICES_MLKIT_DOCUMENT_SCANNER_VERSION")}")
 }

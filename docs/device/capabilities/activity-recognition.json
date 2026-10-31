@@ -23,13 +23,12 @@
     "android": {
       "status": "possible",
       "api": "Activity Recognition Transition API（`play-services-location`、GMS 依存）",
-      "perm": "API 29+ は実行時の `android.permission.ACTIVITY_RECOGNITION`。API 28 以下は GMS 側の `com.google.android.gms.permission.ACTIVITY_RECOGNITION`",
+      "perm": "API 29+ は実行時の `android.permission.ACTIVITY_RECOGNITION`（Manifest に宣言済み）。API 28 以下は GMS 側の `com.google.android.gms.permission.ACTIVITY_RECOGNITION`（ただし minSdk は 24 のため、API 24〜28 の端末が対象になる）。GMS が無い・使えない端末では `Unsupported` を返す（`GoogleApiAvailability.isGooglePlayServicesAvailable` が SUCCESS のときだけ使い、更新ダイアログは出さない）。依存は `scripts/android/versions.env` の `PLAY_SERVICES_LOCATION_VERSION`（21.4.0。AAR の minSdk 23 で、いまの minSdk 24 のまま使える）",
       "url": [
         "https://developer.android.com/develop/sensors-and-location/location/transitions",
         "https://android-developers.googleblog.com/2019/11/privacy-protections-for-physical.html"
       ],
-      "note": "未実装。Activity Recognition は Google Play services（`play-services-location`）だけが提供する。AOSP の `ActivityRecognitionHardware` は `@hide` で `LOCATION_HARDWARE` 権限を要し、一般のアプリは使えない。`ACTIVITY_RECOGNITION` 権限は歩数センサー等と共通の実行時許可で、分類 API ではない。GMS 非搭載端末では使えない",
-      "deferred": "GMS に依存しない方針のため保留（in-app-review・payment-request と同じ）。Play services だけが提供するランタイム機能で、方針が変われば着手できる"
+      "note": "未実装。Activity Recognition は Google Play services（`play-services-location`）だけが提供する。AOSP の `ActivityRecognitionHardware` は `@hide` で `LOCATION_HARDWARE` 権限を要し、一般のアプリは使えない。`ACTIVITY_RECOGNITION` 権限は歩数センサー等と共通の実行時許可で、分類 API ではない。GMS 非搭載端末では使えない（`Unsupported`）"
     },
     "macos": {
       "status": "n-a",
@@ -53,5 +52,5 @@
       "note": "ブラウザに行動認識の標準 API はない"
     }
   },
-  "note": "iOS は CoreMotion、Android は Play services の遷移 API が唯一の提供元で GMS に依存しないため保留（deferred）。Windows は ActivitySensor（搭載機種のみ）。macOS・Web は概念がなく n-a。pedometer（既存 id）との違い: pedometer は歩数・距離などの集計値で、行動認識は「歩行 / 走行 / 自転車 / 乗り物 / 静止」の分類。今回の範囲: 現在の行動種別と確度を 1 行表示し、種別が変わるたびに画面内の履歴へ足す（上限 20 件）。背景での受信と過去の履歴の取得は扱わない。守る範囲: 1 プロセス内の開始・停止・受信の順序（世代照合）、嘘の値を出さないこと（非搭載・拒否・未取得・判定なしを「静止」等へ畳まない）、二重に購読しないこと、停止・背景遷移・失敗の全経路で購読とリスナーを解除すること。守らない範囲: OS 間で分類が一致すること、判定の遅れ（OS 側の推定に数秒〜数十秒かかる）、250 ms 以内の多重の遷移、Windows の `Idle` / `Fidgeting` の区別、背景中の行動、過去の履歴、複数プロセス"
+  "note": "iOS は CoreMotion、Android は Play services の遷移 API が唯一の提供元で、GMS が無い・使えない端末では `Unsupported`。Windows は ActivitySensor（搭載機種のみ）。macOS・Web は概念がなく n-a。pedometer（既存 id）との違い: pedometer は歩数・距離などの集計値で、行動認識は「歩行 / 走行 / 自転車 / 乗り物 / 静止」の分類。今回の範囲: 現在の行動種別と確度を 1 行表示し、種別が変わるたびに画面内の履歴へ足す（上限 20 件）。背景での受信と過去の履歴の取得は扱わない。守る範囲: 1 プロセス内の開始・停止・受信の順序（世代照合）、嘘の値を出さないこと（非搭載・拒否・未取得・判定なしを「静止」等へ畳まない）、二重に購読しないこと、停止・背景遷移・失敗の全経路で購読とリスナーを解除すること。守らない範囲: OS 間で分類が一致すること、判定の遅れ（OS 側の推定に数秒〜数十秒かかる）、250 ms 以内の多重の遷移、Windows の `Idle` / `Fidgeting` の区別、背景中の行動、過去の履歴、複数プロセス"
 }

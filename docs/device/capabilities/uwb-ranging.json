@@ -30,7 +30,7 @@
         "https://developer.android.com/develop/connectivity/ranging"
       ],
       "note": "未実装。対応端末が限られる。Jetpack UWB 1.0.0 は推移依存に `play-services-nearby`・`play-services-base`・`kotlinx-coroutines-play-services` を持つ（POM で確認）。`android.ranging` は GMS 不要だが compileSdk 36 が要る（現行は 35 固定）",
-      "deferred": "Jetpack UWB は Google Play services（`play-services-nearby`）に依存し、GMS に依存しない方針のため保留（activity-recognition・in-app-review と同じ）。`android.ranging`（Android 16）は GMS 不要だが compileSdk 36 が要る。compileSdk を上げるか GMS 方針が変われば着手できる。検証に UWB 搭載の Android 2 台が要る"
+      "deferred": "Jetpack UWB は Google Play services（`play-services-nearby`）に依存する。`android.ranging`（Android 16）は GMS 不要だが compileSdk 36 が要り、いまの compileSdk 35 では組めない。検証に UWB 搭載の Android 2 台が要り手元に無いため保留。compileSdk を上げるか、UWB 搭載機を 2 台用意できれば着手できる"
     },
     "macos": {
       "status": "no",

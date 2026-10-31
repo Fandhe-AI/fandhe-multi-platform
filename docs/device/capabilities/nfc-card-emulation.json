@@ -20,14 +20,13 @@
     "android": {
       "status": "possible",
       "api": "`HostApduService`（HCE、API 19+）の `processCommandApdu` / `onDeactivated`。AID は `res/xml` の `<host-apdu-service>`（`<aid-group android:category=\"other\">` と `<aid-filter>`）で静的に登録する",
-      "perm": "`android.permission.NFC`（protection level は normal。HCE のサービスとして登録するのに要る（公式））。Manifest に `<service>`（exported=true、intent-filter は `android.nfc.cardemulation.action.HOST_APDU_SERVICE`、meta-data `android.nfc.cardemulation.host_apdu_service`）を置き、`android:permission` に `BIND_NFC_SERVICE`（bind できるのはシステムだけになる）を書く。`uses-feature android.hardware.nfc.hce`（required=false）",
+      "perm": "`android.permission.NFC`（protection level は normal。HCE のサービスとして登録するのに要る（公式）。nfc で #1045 に宣言済み）。Manifest に `<service>`（exported=true、intent-filter は `android.nfc.cardemulation.action.HOST_APDU_SERVICE`、meta-data `android.nfc.cardemulation.host_apdu_service`）を置き、`android:permission` に `BIND_NFC_SERVICE`（bind できるのはシステムだけになる）を書く。`uses-feature android.hardware.nfc.hce`（required=false。宣言済み）。`<service>` と AID の XML（`F0` 始まりの偶数桁、category は other）は実装 PR で足す",
       "url": [
         "https://developer.android.com/develop/connectivity/nfc/hce",
         "https://developer.android.com/reference/android/nfc/cardemulation/HostApduService",
         "https://developer.android.com/reference/android/nfc/cardemulation/CardEmulation",
         "https://developer.android.com/reference/android/Manifest.permission#NFC"
       ],
-      "deferred": "HCE のサービスとして登録するには `android.permission.NFC` の宣言が要り（公式: \"Your application also needs to hold the NFC permission to register as an HCE service.\"）、いまの Manifest には無い（nfc のタグ読み取りも未実装）。あわせて受信側コンポーネント（`HostApduService` の `<service>`）と AID 登録の XML を足す。実行時の許可ダイアログは出ない normal の権限だが、新しい権限・受信側コンポーネントを足さない方針のため保留（alarm の Android と同じ）。ベンダーの個別審査・GMS は不要で、方針が変われば（または nfc で `NFC` 権限を足せば）着手できる",
       "note": "未実装。`processCommandApdu` はアプリの main thread で呼ばれ、すぐ返せないときは null を返して `sendResponseApdu` を使う（公式）。リーダーが別の AID を選ぶかリンクが切れると `onDeactivated`（`DEACTIVATION_DESELECTED` / `DEACTIVATION_LINK_LOSS`）が来る。同じ AID を複数のサービスが登録していると OS が利用者に選ばせ、前面アプリの `setPreferredService` はその解決より優先される（公式）。Android 9 以下は画面オフで HCE が動かず、10 以上は Secure NFC がオンだと画面オフで使えない（公式）。確かめるには HCE 対応の Android 実機と、ISO 14443-4 の読み取り側（別の Android 端末のリーダーモードか PC/SC リーダー）が要る"
     },
     "macos": {
@@ -53,5 +52,5 @@
       "note": "Web NFC は読み書きのみで、カードの模擬には使えない。"
     }
   },
-  "note": "nfc（既存 id）はタグの読み取りで、本機能は端末自身がカードとして読まれる側の別機能。Android は新しい権限（`NFC`）と受信側コンポーネントが要るため保留、iOS は Apple の承認制（EEA 限定・用途の条件あり）で申請待ち。範囲（再開時の案）: Android で固定の独自 AID（`F0` で始まる）への SELECT に固定の文字列を返し、読み取られた回数を画面に出す（実カードの模擬・決済は扱わない）。回数は応答を返したサービスが 1 か所（SharedPreferences）に書き、画面は要求のたびにそこを読む（quick-settings-tile と同じ）。NFC のオン・オフと AID の既定の振り先は、画面が読むたびに OS（`NfcAdapter.isEnabled`・`CardEmulation.isDefaultServiceForAid`）へ問い、アプリ内に持たない。守らない範囲: 他アプリが同じ AID を登録したときの振り先（OS が利用者に選ばせる）、画面オフ・ロック中に届かないこと、読み取り側の再試行で同じ読み取りが複数回に数えられること"
+  "note": "nfc（既存 id）はタグの読み取りで、本機能は端末自身がカードとして読まれる側の別機能。Android は受信側コンポーネント（`HostApduService`）を足して実装予定（`NFC` 権限は宣言済み）、iOS は Apple の承認制（EEA 限定・用途の条件あり）で申請待ち。範囲: Android で固定の独自 AID（`F0` で始まる）への SELECT に固定の文字列を返し、読み取られた回数を画面に出す（実カードの模擬・決済は扱わない）。回数は応答を返したサービスが 1 か所（SharedPreferences）に書き、画面は要求のたびにそこを読む（quick-settings-tile と同じ）。NFC のオン・オフと AID の既定の振り先は、画面が読むたびに OS（`NfcAdapter.isEnabled`・`CardEmulation.isDefaultServiceForAid`）へ問い、アプリ内に持たない。守らない範囲: 他アプリが同じ AID を登録したときの振り先（OS が利用者に選ばせる）、画面オフ・ロック中に届かないこと、読み取り側の再試行で同じ読み取りが複数回に数えられること"
 }

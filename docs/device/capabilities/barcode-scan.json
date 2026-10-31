@@ -24,7 +24,7 @@
         "https://dl.google.com/android/maven2/com/google/mlkit/barcode-scanning/17.3.0/barcode-scanning-17.3.0.pom",
         "https://dl.google.com/android/maven2/com/google/android/gms/play-services-code-scanner/16.1.0/play-services-code-scanner-16.1.0.pom"
       ],
-      "note": "ML Kit の bundled 版（17.3.0）も POM が `play-services-basement` / `play-services-mlkit-barcode-scanning` を直接依存に持ち、Google code scanner（16.1.0）は `play-services-base` / `basement` / `tasks` に依存する。GMS に依存しない方針に合わないため見送る（image-recognition の Android と同じ判断）。AOSP に画像のバーコード検出の公開 API はない。ZXing 等の同梱 OSS は OS の端末機能ではないので判定に使わない",
+      "note": "ML Kit の bundled 版（17.3.0）も POM が `play-services-basement` / `play-services-mlkit-barcode-scanning` を直接依存に持ち、Google code scanner（16.1.0）は `play-services-base` / `basement` / `tasks` に依存する。GMS 依存になるため見送る（image-recognition の Android と同じ判断。GMS が無い・使えない端末で `Unsupported` とする条件なら GMS 依存を許す方針になったが、本セルは見直していない）。AOSP に画像のバーコード検出の公開 API はない。ZXing 等の同梱 OSS は OS の端末機能ではないので判定に使わない",
       "detail": "できない（OS 標準のバーコード検出 API が無く、ML Kit・Google code scanner は GMS 依存。同梱 OSS は OS 機能ではない）"
     },
     "macos": {
