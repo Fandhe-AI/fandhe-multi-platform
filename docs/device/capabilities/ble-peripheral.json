@@ -23,7 +23,7 @@
       "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_ble_peripheral.m + crates/fandhe-egui-proxy/src/device/ios_ble_peripheral.rs + crates/fandhe-egui-proxy/src/device/apple_ble_peripheral.rs + crates/fandhe-egui-proxy/src/device/ble_peripheral.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-device/src/ble_peripheral.rs、Issue #779"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "`BluetoothLeAdvertiser.startAdvertising`（結果は `AdvertiseCallback`）+ `BluetoothManager.openGattServer`（`BluetoothGattServerCallback.onCharacteristicReadRequest` → `sendResponse`）",
       "perm": "API 31+ は `BLUETOOTH_ADVERTISE`（実行時の許可。Manifest に宣言済み）と `BLUETOOTH_CONNECT`（bluetooth-le で宣言済み）。両方とも「付近のデバイス」グループで許可ダイアログは 1 回。API 30 以下は `BLUETOOTH` / `BLUETOOTH_ADMIN`（宣言済み、`maxSdkVersion=30`）で足りる。ベンダーの個別審査・GMS は不要",
       "url": [
@@ -31,7 +31,10 @@
         "https://android.googlesource.com/platform/packages/modules/Bluetooth/+/refs/heads/main/framework/java/android/bluetooth/le/AdvertiseCallback.java",
         "https://android.googlesource.com/platform/packages/modules/Bluetooth/+/refs/heads/main/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java"
       ],
-      "note": "未実装（権限の宣言までは済み）。`startAdvertising` はすぐ戻り、結果は `onStartSuccess` / `onStartFailure`（`DATA_TOO_LARGE`・`TOO_MANY_ADVERTISERS`・`ALREADY_STARTED`・`INTERNAL_ERROR`・`FEATURE_UNSUPPORTED`）で届く。`BLUETOOTH_ADVERTISE` は常に検査される（AOSP のソース）。`getBluetoothLeAdvertiser()` は Bluetooth オフ・アドバタイズ非対応で null（AOSP のソース）。GATT サーバーは接続・切断を `onConnectionStateChange` で通知する"
+      "note": "実装済み（#1123）。`startAdvertising` はすぐ戻り、結果は `onStartSuccess` / `onStartFailure`（`DATA_TOO_LARGE`・`TOO_MANY_ADVERTISERS`・`ALREADY_STARTED`・`INTERNAL_ERROR`・`FEATURE_UNSUPPORTED`）で届く。「公開中」は `onStartSuccess` のときだけ出し、`FEATURE_UNSUPPORTED` は非対応、ほかの errorCode は失敗に写す。`BLUETOOTH_ADVERTISE` は常に検査される（AOSP のソース）。`getBluetoothLeAdvertiser()` は Bluetooth オフ・アドバタイズ非対応で null（AOSP のソース）で、読み直した state がオフならオフ、そうでなければ非対応にする。ローカル名は指定できず、アドバタイズ本体はサービス UUID だけを載せ、端末名は scan response に OS が載せる（画面には「OS が決める」と出す）。許可は毎回要求する（許可済みならダイアログは出ない）。`onStop` で資源を解放して中断にし、自動では再開しない（許可ダイアログは `onPause` しか起こさないため `onPause` は見ない）。Bluetooth の state が TURNING_OFF / OFF になったら解放してオフで確定する。読み取りは offset 0 で `sendResponse` が true を返した応答だけを数える（範囲外の offset は `GATT_INVALID_OFFSET` で返し数えない）。端末名が長く scan response が `DATA_TOO_LARGE` になると失敗になる（守らない範囲）。許可ダイアログ後の公開、中心役アプリからの読み取り、`onStop` での中断、Bluetooth オフでの確定は実機確認で確かめる（#776。問題があれば done を取り下げる）",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#776）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_ble_peripheral.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/BlePeripheralHelper.java + crates/fandhe-egui-proxy/src/device/ble_peripheral.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-device/src/ble_peripheral.rs、Issue #1123"
     },
     "macos": {
       "status": "done",
@@ -69,5 +72,5 @@
       "note": "Web Bluetooth は中心役（接続する側）のみで、GATT サーバーとしてアドバタイズする API はない。"
     }
   },
-  "note": "bluetooth-le は周辺機器を探して接続する中心役（スキャン）だが、本機能は自分が周辺機器になって広告し GATT サーバーを公開する逆の役。今回の範囲: 「公開」ボタンで固定のサービス UUID 1 つと読み取り専用の特性 1 つ（固定の短い文字列を返す）を登録し、ローカル名とサービス UUID をアドバタイズする。「停止」ボタン・アプリ終了・iOS の背景遷移で止める。画面はアドバタイズ中かどうかと、今回の公開で読み取られた回数を出す（接続数は Apple に通知が無いため出さない）。書き込み・通知（購読）・ペアリング・背景でのアドバタイズは扱わない。結果は公開中 / 停止（利用者の操作）/ 中断（iOS の背景遷移・失敗とは別の文言）/ Bluetooth オフ / 権限拒否 / 非対応 / 失敗。OS を正にする: 公開できるかを事前に判定せず、state の通知（poweredOn 待ち・unauthorized・poweredOff・unsupported）とサービス登録・アドバタイズ開始のコールバックの結果を写す。「公開中」は開始のコールバックが成功を返したときだけ表示し、アプリ側に別の「アドバタイズ中」の記憶を持たない。公開後に state が poweredOn を外れたら OS が止めたものとして確定し、自動で再開しない。タイマーで推測しない（期限・ポーリングなし。許可ダイアログの回答待ちに期限は無く、停止・終了で止まる）。守らない範囲: 他アプリが同時にアドバタイズしているときの見え方、OS がアドバタイズの間隔や載せる中身（overflow 領域）を変える影響、中心役が読み取らずに接続だけした場合の検出、複数プロセスでの同時公開、終了処理と重なった読み取りの数え漏れ、`stopAdvertising` 直後に OS 側で止まるまでの時間差。中心役の識別子・読み取りの中身はログに出さない。"
+  "note": "bluetooth-le は周辺機器を探して接続する中心役（スキャン）だが、本機能は自分が周辺機器になって広告し GATT サーバーを公開する逆の役。今回の範囲: 「公開」ボタンで固定のサービス UUID 1 つと読み取り専用の特性 1 つ（固定の短い文字列を返す）を登録し、ローカル名とサービス UUID をアドバタイズする。「停止」ボタン・アプリ終了・iOS の背景遷移・Android の `onStop` で止める。画面はアドバタイズ中かどうかと、今回の公開で読み取られた回数を出す（接続数は Apple に通知が無いため出さない）。書き込み・通知（購読）・ペアリング・背景でのアドバタイズは扱わない。結果は公開中 / 停止（利用者の操作）/ 中断（iOS の背景遷移・Android の `onStop`・失敗とは別の文言）/ Bluetooth オフ / 権限拒否 / 非対応 / 失敗。OS を正にする: 公開できるかを事前に判定せず、state の通知（poweredOn 待ち・unauthorized・poweredOff・unsupported）とサービス登録・アドバタイズ開始のコールバックの結果を写す。「公開中」は開始のコールバックが成功を返したときだけ表示し、アプリ側に別の「アドバタイズ中」の記憶を持たない。公開後に state が poweredOn を外れたら OS が止めたものとして確定し、自動で再開しない。タイマーで推測しない（期限・ポーリングなし。許可ダイアログの回答待ちに期限は無く、停止・終了で止まる）。守らない範囲: 他アプリが同時にアドバタイズしているときの見え方、OS がアドバタイズの間隔や載せる中身（overflow 領域）を変える影響、中心役が読み取らずに接続だけした場合の検出、複数プロセスでの同時公開、終了処理と重なった読み取りの数え漏れ、`stopAdvertising` 直後に OS 側で止まるまでの時間差。中心役の識別子・読み取りの中身はログに出さない。"
 }

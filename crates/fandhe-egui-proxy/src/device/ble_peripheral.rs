@@ -8,7 +8,7 @@
 //! 同期に呼ぶ。待ち・期限・`request_repaint_after` は持たない（事象は OS の通知 →
 //! `CompletionSender::send` が UI を起こす）。**macOS は `apple_ble_peripheral`、iOS は #779 で
 //! `ios_ble_peripheral.rs` から `apple_ble_peripheral` へ委譲済み**。Windows は `windows_ble_peripheral`（Issue #1101）。
-//! Android は `android_ble_peripheral`（#1123 が埋めるまでスタブで `Unsupported`）。
+//! Android は `android_ble_peripheral`（Issue #1123、`BlePeripheralHelper` と JNI）。
 //!
 //! 読み取りは「世代つきのまとめ送り」にする: 未適用件数を数え、0 → 1 になったときだけ完了を
 //! 1 件送る。読み取りが大量に届いても完了キューが伸びない。
