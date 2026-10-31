@@ -90,7 +90,8 @@ final class BlePeripheralHelper {
     private long permissionToken;
 
     // 以下は bg 専用。current == 0 は動いていない（token は 1 から払い出される）。
-    private long current;
+    // main の permissionStep も停止済み世代の判定に読むので volatile（書くのは bg のみ）。
+    private volatile long current;
     private UUID serviceUuid;
     private UUID characteristicUuid;
     private byte[] value;
@@ -119,12 +120,9 @@ final class BlePeripheralHelper {
         } catch (IllegalArgumentException | NullPointerException e) {
             return 1;
         }
-        if (unreleased) {
-            return 1;
-        }
         final byte[] bytes = (text == null ? "" : text).getBytes(StandardCharsets.UTF_8);
         boolean posted = bg.post(() -> {
-            // 進行中の公開は通知なしで置き換える（trait 契約）。
+            // 進行中の公開は通知なしで置き換える。前回の解放失敗が残っていれば、ここで回収し直す。
             if (!teardown()) {
                 // 旧公開の資源を回収できない。新しい公開は始めず、失敗として通知する。
                 current = 0;
@@ -184,6 +182,9 @@ final class BlePeripheralHelper {
         bg.post(() -> {
             if (current != 0) {
                 end(current, CODE_INTERRUPTED);
+            } else if (unreleased) {
+                // 解放失敗の資源を、画面が終わる前にもう一度回収する。
+                teardown();
             }
         });
     }
@@ -191,6 +192,10 @@ final class BlePeripheralHelper {
     // ---- main: 実行時許可 ----
 
     private void permissionStep(long token) {
+        if (token != current) {
+            // 積まれた後に stop・置き換えで停止済みの世代。許可を求めない。
+            return;
+        }
         if (!activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED)) {
             bg.post(() -> end(token, CODE_INTERRUPTED));
             return;
