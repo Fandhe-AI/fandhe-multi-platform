@@ -16,7 +16,7 @@
 //!
 //! # 実装のある OS
 //!
-//! Android は [`android_nfc_card_emulation`](super::android_nfc_card_emulation)（骨格、実体は #1129）。
+//! Android は [`android_nfc_card_emulation`](super::android_nfc_card_emulation)（実体は #1129）。
 //! iOS は Apple の entitlement 承認待ちで dispatch に入れない。他 OS は `UnsupportedCardEmulation` 固定。
 
 use std::sync::{Arc, Mutex, OnceLock};
