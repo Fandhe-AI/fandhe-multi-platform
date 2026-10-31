@@ -926,6 +926,16 @@ public class MainActivity extends GameActivity {
         return QuickSettingsTileStore.failedPresses();
     }
 
+    // 車載ディスプレイ（Issue #1117）。実装は `CarDisplayScreen`。Rust の
+    // `android_car_display.rs` が JNI（署名 `(Ljava/lang/String;)V` と `()Z`）で呼ぶ。
+    void carDisplaySetText(String text) {
+        CarDisplayScreen.setText(text);
+    }
+
+    boolean carDisplayIsShowing() {
+        return CarDisplayScreen.isShowing();
+    }
+
     // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
     // Rust の `android_print.rs` が JNI で呼ぶ。
     private final PrintHelper printHelper = new PrintHelper(this);

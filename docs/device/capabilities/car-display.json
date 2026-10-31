@@ -19,7 +19,7 @@
       "approval": "CarPlay の entitlement を Apple へ申請し、承認されること。種別（音声・通信・ナビ・駐車・EV 充電・料理の注文など）ごとに申請し、CarPlay Entitlement Addendum に同意する。Apple が種別ごとの基準で審査する（公式）。固定の文字を出すだけの型サンプルはどの種別にも当たらない"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "Android for Cars App Library（`androidx.car.app`）の `CarAppService`・`Session`・`Screen`。`Screen.onGetTemplate` が返す `PaneTemplate` をホスト（Android Auto）が描く。見出しと行の title は固定し、行の本文に共通コアの文言を出す。文言の差し替えは `Screen.invalidate()`",
       "perm": "`uses-permission` は不要。Manifest に置くもの: exported の `<service>`（action `androidx.car.app.CarAppService`、category `androidx.car.app.category.IOT`）、meta-data `androidx.car.app.minCarApiLevel`（7）、`com.google.android.gms.car.application`（`res/xml/automotive_app_desc.xml`）。接続できるホストは `createHostValidator` で絞る（debuggable だけ全ホストを許し、それ以外は同梱の許可リスト `androidx.car.app.R.array.hosts_allowlist_sample`）。依存は `scripts/android/versions.env` の `CAR_APP_VERSION`（1.7.0。minCompileSdk=34 で compileSdk 35 のまま使える）。推移依存の guava は `GUAVA_VERSION` へ引き上げる",
       "url": [
@@ -32,7 +32,10 @@
         "https://developer.android.com/training/cars/apps/library/template-restrictions",
         "https://developer.android.com/reference/androidx/car/app/validation/HostValidator"
       ],
-      "note": "未実装。描けるのはホストのテンプレートだけで、egui は出せない。1 つの作業で出せるテンプレートは 5 つまでで、`PaneTemplate` は見出しと行の title が同じなら行の本文の差し替えを数えない（公式）。`Screen.invalidate()` は STARTED 未満では効かず、ホストは連続更新を間引く。`Session` のライフサイクル通知は main thread で来る（公式）。Android Automotive OS は別の APK が要るため扱わない。確認は Android 9 以上の端末に Android Auto を入れ、開発者モードでヘッドユニットのサーバーを起こし、PC の DHU から `adb forward tcp:5277 tcp:5277` でつなぐ（公式）。実車には Play など信頼できる配布元から入れる必要がある（公式）"
+      "note": "実装済み（実機確認は #1114）。`CarDisplayService` / `CarDisplayScreen` と `MainActivity` の受け口 2 本（JNI）。文言はプロセス内 static に置き、未設定は strings の「未設定」。状態は STARTED 以上の Screen の有無で決め、古い Screen の onStop は新しい表示を消さない。JNI の失敗と Activity の不在は Internal。描けるのはホストのテンプレートだけで、egui は出せない。1 つの作業で出せるテンプレートは 5 つまでで、`PaneTemplate` は見出しと行の title が同じなら行の本文の差し替えを数えない（公式）。`Screen.invalidate()` は STARTED 未満では効かず、ホストは連続更新を間引く。`Session` のライフサイクル通知は main thread で来る（公式）。Android Automotive OS は別の APK が要るため扱わない。確認は Android 9 以上の端末に Android Auto を入れ、開発者モードでヘッドユニットのサーバーを起こし、PC の DHU から `adb forward tcp:5277 tcp:5277` でつなぐ（公式）。実車には Play など信頼できる配布元から入れる必要がある（公式）",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#1114）",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_car_display.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/CarDisplayService.java + platforms/android/app/src/main/java/com/fandhe/androidapp/CarDisplayScreen.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + platforms/android/app/src/main/res/xml/automotive_app_desc.xml + crates/fandhe-egui-proxy/src/device/car_display.rs + crates/fandhe-core/src/screens/car_display_show.rs + crates/fandhe-device/src/car_display.rs、Issue #1117"
     },
     "macos": {
       "status": "n-a",
@@ -47,5 +50,5 @@
       "note": "車載の概念なし"
     }
   },
-  "note": "car-display は車載画面に OS のテンプレート UI を出す。egui 描画は使えない。Android は Car App Library を足して実装予定、iOS は Apple の承認制（種別ごとの entitlement）で申請待ち。範囲: Android Auto（DHU）の車載画面に `PaneTemplate` を 1 画面出し、共通コアが選んだ 1 行（40 文字以内）を出す（Android Automotive OS・実車・ストア配布は扱わない）。文言はプロセス内の Java static に置き、出ていなくても受け付けは成功する（約束するのは受け付けたことまで）。状態は「出ている / 出ていない」の 2 つで、取れないときに「出ていない」へ倒さない。守る範囲: 1 プロセス内で後から渡した文言が出ること、失敗を成功にしないこと、文言をログに出さないこと、古い画面の停止が新しい画面の表示中を消さないこと。守らない範囲: プロセス終了後の文言（未設定に戻る）、反映の遅れ、DHU と実車の差、Android Auto の接続そのもの"
+  "note": "car-display は車載画面に OS のテンプレート UI を出す。egui 描画は使えない。Android は Car App Library で実装済み（実機確認は #1114）、iOS は Apple の承認制（種別ごとの entitlement）で申請待ち。範囲: Android Auto（DHU）の車載画面に `PaneTemplate` を 1 画面出し、共通コアが選んだ 1 行（40 文字以内）を出す（Android Automotive OS・実車・ストア配布は扱わない）。文言はプロセス内の Java static に置き、出ていなくても受け付けは成功する（約束するのは受け付けたことまで）。状態は「出ている / 出ていない」の 2 つで、取れないときに「出ていない」へ倒さない。守る範囲: 1 プロセス内で後から渡した文言が出ること、失敗を成功にしないこと、文言をログに出さないこと、古い画面の停止が新しい画面の表示中を消さないこと。守らない範囲: プロセス終了後の文言（未設定に戻る）、反映の遅れ、DHU と実車の差、Android Auto の接続そのもの"
 }
