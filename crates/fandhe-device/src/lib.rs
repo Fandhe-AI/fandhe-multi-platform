@@ -66,6 +66,8 @@ pub mod camera;
 pub mod camera_preview_stream;
 /// Phase 11（端末機能の拡充ループ、親 #120、Issue #582）: 画面キャプチャの防止・検知。
 pub mod capture_protection;
+/// Phase 11（端末機能の拡充ループ、親 #152、Issue #1116）: 車載ディスプレイの 1 行テキスト。
+pub mod car_display;
 /// Phase 11（端末機能の拡充ループ、Issue #859）: クリップボード読み書き。
 pub mod clipboard;
 /// Phase 11（端末機能の拡充ループ、親 #184、Issue #941）: システムの色選択ダイアログ（固定の初期色から 1 色を選ばせ `#rrggbb` で返す）。
