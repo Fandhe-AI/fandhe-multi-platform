@@ -3,9 +3,8 @@
 //!
 //! 扱う範囲は「OS のスキャン UI を出し、返ってきた 1 ページ目の画像を表示する」ことまで。
 //! 2 ページ目以降・PDF 化・文字認識・保存・共有は扱わない。対象は iOS（`VisionKit` の
-//! `VNDocumentCameraViewController`、実体は #748）のみ。Android は GMS 依存のため保留
-//! （OS 別モジュールを置かず `Unsupported`。保留を解くときは dispatch の変更を別 issue で扱う）、
-//! macOS・Windows は `no`、Web は対象外。`fandhe-egui-proxy` の effect ドライバ
+//! `VNDocumentCameraViewController`、実体は #748）と Android（ML Kit Document Scanner、
+//! 実体は #1125。#1124 ではスタブ）。macOS・Windows は `no`、Web は対象外。`fandhe-egui-proxy` の effect ドライバ
 //! （`device/document_scan.rs`）が本モジュールの trait を呼び、OS 層が実装する。
 //!
 //! # 契約
@@ -15,19 +14,19 @@
 //!   失敗（[`DocumentScanFailure`] の理由別、非対応を含む）
 //! - **失敗の理由**（写像表。iOS 欄は #748 への指示）:
 //!
-//! | 状況 | iOS | 返す値 |
-//! | --- | --- | --- |
-//! | 非対応 | `isSupported == NO`、または fallback の OS | `Unsupported` |
-//! | カメラ権限の拒否・制限 | `AVCaptureDevice` が denied / restricted、またはダイアログで拒否 | `PermissionDenied` |
-//! | 0 ページ | `pageCount == 0` | `Empty` |
-//! | 画像が上限超過 | — | `TooLarge` |
-//! | 画像が 0 バイト・形式不明・復号不可 | — | `Undecodable` |
-//! | 前面でない | — | `NotForeground` |
-//! | 表示前の期限切れ | Rust の期限 | `TimedOut` |
-//! | 表示前の中断（背景遷移等） | — | `Interrupted` |
-//! | `didFailWithError`・未知のコード | — | `Internal` |
-//! | 利用者が閉じた | `documentCameraViewControllerDidCancel` | `Ok(Cancelled)` |
-//! | スキャンした | `didFinishWithScan` | `Ok(Scanned(page))` |
+//! | 状況 | iOS | Android | 返す値 |
+//! | --- | --- | --- | --- |
+//! | 非対応 | `isSupported == NO`、または fallback の OS | GMS 判定（`isGooglePlayServicesAvailable`）が SUCCESS 以外、または `getStartScanIntent` の失敗が `MlKitException.UNSUPPORTED`（低 RAM 等） | `Unsupported` |
+//! | カメラ権限の拒否・制限 | `AVCaptureDevice` が denied / restricted、またはダイアログで拒否 | 出さない（撮影 UI とカメラは Play services 側が扱う） | `PermissionDenied` |
+//! | 0 ページ | `pageCount == 0` | `RESULT_OK` で結果が null、またはページが 0 | `Empty` |
+//! | 画像が上限超過 | — | 受け口で `MAX_PAGE_BYTES` を超える | `TooLarge` |
+//! | 画像が 0 バイト・形式不明・復号不可 | — | URI を読めない、または復号できない | `Undecodable` |
+//! | 前面でない | — | 受付時に Activity が RESUMED でない | `NotForeground` |
+//! | 表示前の期限切れ | Rust の期限 | Rust の期限 | `TimedOut` |
+//! | 表示前の中断（背景遷移等） | — | `onDestroy` の時点で要求が保留中 | `Interrupted` |
+//! | 内部エラー・未知のコード | `didFailWithError` 等 | その他の例外・未知のコード・launch の失敗 | `Internal` |
+//! | 利用者が閉じた | `documentCameraViewControllerDidCancel` | `RESULT_CANCELED` | `Ok(Cancelled)` |
+//! | スキャンした | `didFinishWithScan` | `RESULT_OK` と 1 ページ目 | `Ok(Scanned(page))` |
 //!
 //! - **期限**（契約表 3）: 撮影 UI（権限ダイアログを含む最初の UI）が出るまでの
 //!   [`PRESENT_DEADLINE`]。起点は要求を観測した時の `Instant`（単調時計）。UI が出始めた後は
@@ -39,7 +38,10 @@
 //!   `try_begin_present`）を記録した要求にだけ認める。記録のない要求の成功値は `Internal`。
 //!   成功として見せてよいのは 2 段の検査（[`ScannedPage::from_os`] と橋渡し層での復号）を
 //!   通った画像だけ
-//! - **OS 層の義務**（契約表 1・5・9）:
+//! - **OS 層の義務**（契約表 1・5・9）。共通:
+//!   - 結果の受け渡し領域は成功・失敗・キャンセルの全経路で解放し、`complete_from_os` は 1 要求につき
+//!     1 回だけ呼ぶ。画像は長辺 2048 画素以下に縮めて JPEG で渡す。画像と OS の文言はログに出さない
+//! - **OS 層の義務** iOS:
 //!   - delegate の 3 経路（完了・キャンセル・失敗）すべてで撮影 UI を閉じる
 //!   - 結果の受け渡し領域（`NSData` 等）は成功・失敗・キャンセルの全経路で解放する
 //!   - `complete_from_os` は 1 要求につき 1 回だけ呼ぶ
@@ -52,6 +54,14 @@
 //!   - 提示の完了コールバックが猶予（5 秒）内に来なければ `Internal` で確定する。この失敗だけは
 //!     撮影 UI が出ていない前提で先に返し、遅れて出た UI は提示の完了後に閉じる
 //!   - `imageOfPageAtIndex:` の前に `pageCount` を確かめる
+//! - **OS 層の義務** Android（#1125 が trait doc を変えずに実装する）:
+//!   - `try_begin_present` が true のときだけ launch する。`getStartScanIntent` の Task は main executor で受ける
+//!   - オプションは `setGalleryImportAllowed(false)`・`setPageLimit(1)`・JPEG。更新ダイアログは出さない
+//!   - 結果の処理（読み込み・縮小・`Bitmap` の recycle）は main 以外の単一スレッドで行う
+//!   - ページのファイルは読み終えた後、自アプリの `cacheDir` 配下にあるときだけ消す（他所は消さない）。
+//!     消せなかったら結果を返さず `Internal`（契約表 9）
+//!   - 期限の既知の天井: `PRESENT_DEADLINE`（10 秒）には GMS 判定と `getStartScanIntent`
+//!     （初回のモジュールダウンロードを含む）が入る。初回は `TimedOut` になりうる
 //! - **秘密値**（契約表 8）: 画像の中身と OS のエラー文をログ・画面のエラー文・`Debug` に出さない
 //!
 //! # 守る範囲と守らない範囲（契約表 11）
@@ -59,7 +69,8 @@
 //! 守る範囲: 1 プロセス内での要求と結果の順序、嘘の成功の禁止（非対応・権限拒否・0 ページ・
 //! 復号できない画像を成功にしない）、撮影 UI を閉じることと受け渡し領域の解放を全経路で行うこと。
 //! 守らない範囲: 撮影 UI の表示中に Rust 側から閉じること、OS ごとの補正結果の違い、複数プロセス、
-//! プロセスが落ちた後の結果、2 ページ目以降。
+//! プロセスが落ちた後の結果、2 ページ目以降、Play services 側 UI の挙動、GMS 非搭載端末での
+//! 公式文書にない挙動、初回モジュールダウンロードの所要時間。
 
 use std::fmt;
 use std::time::Duration;
