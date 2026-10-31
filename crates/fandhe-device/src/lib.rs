@@ -182,6 +182,8 @@ pub mod music_library;
 pub mod network_status;
 /// Phase 11（端末機能の拡充ループ、親 #157、Issue #1044）: NFC タグ（NDEF）の読み取り。
 pub mod nfc;
+/// Phase 11（端末機能の拡充ループ、親 #151、Issue #1128）: NFC カードエミュレーション（HCE）の状態。
+pub mod nfc_card_emulation;
 /// Phase 11（端末機能の拡充ループ）: 単語分割。
 pub mod nlp;
 /// Phase 11（端末機能の拡充ループ、親 #1003、Issue #1004）: ローカル通知。

@@ -538,6 +538,10 @@ generated_screens! {
     crate::device::nfc::nfc_read_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "nfc_card_emulation_show" => fandhe_core::screens::nfc_card_emulation_show::current_screen,
+    crate::device::nfc_card_emulation::nfc_card_emulation_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "scanner_devices_import" => fandhe_core::screens::scanner_devices_import::current_screen,
     crate::device::scanner_devices::scanner_devices_import_effect,
     effect
