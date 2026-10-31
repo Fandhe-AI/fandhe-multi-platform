@@ -103,6 +103,11 @@ pub mod android_camera_preview_stream;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_capture_protection;
+/// Issue #1116: Android 向け車載ディスプレイの骨格（#1117 が Car App Library 実装に置き換える）。
+/// `device/car_display.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_car_display;
 /// Issue #740 / #741（親 #143）: Android 向け付属機器のペアリング（`CompanionDeviceManager`）の骨格。
 /// `device/companion_device.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -763,6 +768,9 @@ pub mod camera_preview_stream;
 /// （Windows は防止のみ、iOS は検知のみ（#583）、Android は防止・検知（#584）、他 OS は
 /// `UnsupportedCaptureProtection` 固定）。
 pub mod capture_protection;
+/// Phase 11 の拡充ループ（親 #152、Issue #1116）: 車載ディスプレイの effect ドライバ。
+/// Android は骨格のスタブ（#1117 が埋める）、他 OS は `UnsupportedCarDisplay` 固定。
+pub mod car_display;
 pub mod clipboard;
 /// Phase 11 の拡充ループ（親 #184、Issue #941）: システムの色選択ダイアログの effect ドライバ
 /// （macOS・iOS は pull 型 `bridge`、Windows は同期モーダル、他 OS は `UnsupportedColorPicker` 固定。

@@ -161,6 +161,8 @@ pub mod calendar_add;
 pub mod call_ui_show;
 /// Phase 11 の拡充ループ型サンプル「画面キャプチャの防止・検知」（親 #120、Issue #582）。
 pub mod capture_protection_show;
+/// Phase 11 の拡充ループ型サンプル「車載ディスプレイ」（親 #152、Issue #1116）。
+pub mod car_display_show;
 /// Phase 11 の拡充ループ型サンプル「外部機器への再生」（親 #99、Issue #386）。
 pub mod cast_show;
 /// Phase 11 の拡充ループ型サンプル「付属機器のペアリング」（親 #143、Issue #740）。

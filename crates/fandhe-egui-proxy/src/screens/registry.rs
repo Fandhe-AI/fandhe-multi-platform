@@ -230,6 +230,10 @@ generated_screens! {
     crate::device::home_widget::home_widget_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "car_display_show" => fandhe_core::screens::car_display_show::current_screen,
+    crate::device::car_display::car_display_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ble_scan" => fandhe_core::screens::ble_scan::current_screen,
     crate::device::bluetooth_le::ble_scan_effect,
     effect

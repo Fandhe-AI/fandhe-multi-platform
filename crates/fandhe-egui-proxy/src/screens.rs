@@ -330,6 +330,13 @@ mod tests {
         assert!(registered_names().contains(&"home_widget_show"));
     }
 
+    /// `effect` 区画（Issue #1116）で登録した car_display_show 画面が現れることを検証する。
+    #[test]
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    fn car_display_show_is_registered() {
+        assert!(registered_names().contains(&"car_display_show"));
+    }
+
     /// マクロが各行の `#[cfg(...)]` 属性を透過することを検証する（Issue #746）。
     /// device 画面（#747〜#749）は
     /// `#[cfg(all(feature = "device", not(target_arch = "wasm32")))]` を行頭に付けて
