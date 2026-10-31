@@ -364,7 +364,7 @@ impl Worker {
     }
 
     /// `closing` に一致した完了。結果は捨てるが、届いた reader は閉じる段へ回し、`StopDone` の
-    /// 成功だけ段を進める（失敗は段を変えず、次の再試行に持ち越す）。
+    /// 成功だけ段を進める（失敗は段を変えず、`advance` も呼ばず、次の `start` の再試行に持ち越す）。
     fn closing_done(&mut self, cmd: Cmd) {
         let Some(s) = self.closing.as_mut() else {
             return;
@@ -376,6 +376,12 @@ impl Worker {
                 if let Some(ReaderSlot::NeedsStop(r)) = s.reader.take() {
                     s.reader = Some(ReaderSlot::NeedsClose(r));
                 }
+            }
+            // StopAsync の失敗: reader は NeedsStop のまま持ち越す。ここで advance すると
+            // StopAsync を再発行して自己ループするので、再試行は次の Start（`start`）まで待つ。
+            Cmd::StopDone(_, Err(_)) => {
+                self.resume_deferred();
+                return;
             }
             _ => {}
         }
