@@ -60,17 +60,23 @@
       "note": "実装済み（#1066）。iOS と同じ `.m` を共有し、iOS 専用の箇所（ズーム・中断の理由・背景遷移）だけを分ける。ズームは公式の対応 OS に macOS が無いため、要求には常に「この環境では使えない」を返し、フレームのズーム値は出さない。macOS ではウィンドウが背面・最小化でも映像を続け、背景へ移ったことによる停止は起きない（停止は「止める」・画面を離れる・失敗だけ）。中断の理由（`AVCaptureSessionInterruptionReasonKey`）は macOS で使えないため、OS の中断はすべて中断中にし、中断の終了で映像中へ戻る。カメラの取り外しは実行中の失敗。`NSCameraUsageDescription` が無いと許可の要求かセッション開始で終了させられる（公式）。使うカメラは OS の既定（Mac に背面カメラは無い）。天井: 640x480 の preset と 32BGRA が内蔵カメラで通るか、他のアプリと同時に使ったときに中断が届くかは Mac 目視（#808）で確かめる。素の実行体で許可ダイアログが出るか、`startRunning` の同期ブロック中に止めたとき stop がその間待つかも同じく確かめる"
     },
     "windows": {
-      "status": "possible",
-      "api": "WinRT `MediaCapture`（`MemoryPreference::Cpu`、`SharingMode`）+ `MediaFrameReader`（`AcquisitionMode` = Realtime、`FrameArrived` 内で `TryAcquireLatestFrame`）、`VideoMediaFrame.SoftwareBitmap`。ズームは `VideoDeviceController.ZoomControl`",
-      "perm": "unpackaged の実行では宣言不要の見込み（設定の「デスクトップ アプリにカメラへのアクセスを許可する」に従う）。パッケージ時は `webcam` capability。`windows` クレートの feature `Media_Capture_Frames`・`Media_Devices` は導入済み",
+      "status": "done",
+      "api": "WinRT `MediaCapture`（`InitializeWithSettingsAsync`、`StreamingCaptureMode::Video`・`MemoryPreference::Cpu`・`SharingMode::ExclusiveControl`）+ `MediaFrameReader`（`CreateFrameReaderWithSubtypeAsync(Bgra8)`、`AcquisitionMode` = Realtime、`FrameArrived` → `TryAcquireLatestFrame`、`StartAsync` の status で開始を確定）、`VideoMediaFrame.SoftwareBitmap` を `CopyToBuffer` で読む。ズームは `VideoDeviceController.ZoomControl`（`Supported` / `Min` / `Max` / `Configure(ZoomSettings)`）。中断・失敗は `MediaCapture.CameraStreamStateChanged` / `Failed`。背面のカメラは `DeviceInformation` の `EnclosureLocation.Panel`",
+      "perm": "unpackaged の実行では宣言不要の見込み（設定の「デスクトップ アプリにカメラへのアクセスを許可する」に従い、拒否は開始失敗（権限）になる）。パッケージ時は `webcam` capability（対象外）。`windows` クレートの feature は導入済みで追加なし",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacapture",
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.frames.mediaframereader",
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.frames.mediaframereader.tryacquirelatestframe",
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacaptureinitializationsettings.memorypreference",
-        "https://learn.microsoft.com/en-us/uwp/api/windows.media.devices.zoomcontrol"
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.devices.zoomcontrol",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacapture.camerastreamstatechanged",
+        "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.frames.mediaframereaderstartstatus",
+        "https://learn.microsoft.com/en-us/windows/win32/medfound/media-foundation-error-codes"
       ],
-      "note": "未実装。契約は trait doc の「Windows の違い」。実装方針: 受付は専用スレッド 1 本で OS の完了を待たず、開始途中の停止は保留中の操作を `Cancel` してすぐ戻り、完了（取り消しを含む）を受けてから reader → `MediaCapture` の順に `Close` する。解放（`Remove*`・`StopAsync`・`Close`）の失敗は持ち越して次の開始の前に再試行し、失敗したら開始失敗にする。個々のフレームの取得・変換・コピーの失敗はそのフレームを捨てて続け、フレーム資源の `Close` 失敗だけ実行中の失敗にする。`MediaCapture.InitializeAsync` は初回を STA（UI スレッド）で呼ぶよう公式に書かれ、MTA は未定義の可能性がある（公式）。既存の mic-record は作業スレッド（MTA）で呼んでおり、カメラで動くかは未確認。まず同じ方式で書き、実機で失敗したら UI スレッドでの初期化へ寄せる。`MemoryPreference` が Cpu でないと `SoftwareBitmap` が null になりうる（公式）。`TryAcquireLatestFrame` で得た `SoftwareBitmap` を Dispose しないと、上限を超えたところでフレームの供給が止まる（公式）。Realtime はハンドラの実行中に届いたフレームを捨てる（公式、1709 以上）。PC の Web カメラはズームに対応しないものが多い見込み（未確認）"
+      "note": "実装済み（#1102）。受付は専用ワーカー 1 本で OS の完了を待たない（完了は `SetCompleted` から積む）。開始の確定は `MediaFrameReader.StartAsync` の status が `Success` のときで、初期化の成功だけでは映像中にしない。開始失敗は `InitializeWithSettingsAsync` の HRESULT（`E_ACCESSDENIED` は権限、`MF_E_NO_CAPTURE_DEVICES_AVAILABLE` はカメラなし、他は Other）と status（`ExclusiveControlNotAvailable` は使用中、`DeviceNotAvailable` はカメラなし）を `fandhe-device` の純関数で写し、未知の値は成功へ倒さない。実行中は `CameraStreamState` で、`BlockedForPrivacy` が中断中、`Streaming` への復帰が映像中、`Shutdown`・`MediaCapture.Failed`・状態の取得失敗が実行中の失敗。ウィンドウが最小化・背面でも映像を続け、背景停止は起きない。ズームは対応するカメラだけで、`Supported` が false のカメラへの要求は非同期の「この環境では使えない」、制御の取得や `Configure` の失敗は「失敗」。個々のフレームの取得・変換・コピーの失敗はそのフレームを捨てて続ける（閾値は置かない）。`MediaFrameReference` と `SoftwareBitmap` の `Close` の失敗だけ実行中の失敗にする（閉じないとフレームの供給が止まる。公式）。停止は保留中の操作を `Cancel`（戻り値は見ない）して即戻り、完了（取り消しを含む）を受けてから `Remove*` → `StopAsync` → reader の `Close` → `MediaCapture` の `Close` の順に解放する。どの段の失敗も未解放として残して次の開始の前に再試行し、前の解放が完了待ちの間の開始は待たせ、再試行でも済まなければ開始失敗にする。天井: `InitializeAsync` は公式には STA 指定で、本実装は mic-record と同じく MTA のワーカーで呼ぶ（実機で失敗したら UI スレッドでの初期化へ寄せる）。初期化中の `Cancel` の挙動、`BlockedForPrivacy` から `Streaming` へ戻るときの通知の順序、1080p 以上での縮小の負荷は実機未確認（#808）。ワーカーの状態機械は WinRT に依存するためホストの単体テストは無い（写像の純関数だけテスト）。PC の Web カメラはズームに対応しないものが多い見込み。型検査は `x86_64-pc-windows-gnu` のみ",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#808）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_camera_preview_stream.rs + crates/fandhe-egui-proxy/src/device/camera_preview_stream.rs + crates/fandhe-device/src/camera_preview_stream.rs、Issue #1102"
     },
     "web": {
       "status": "done",

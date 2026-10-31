@@ -756,7 +756,7 @@ pub mod calendar;
 pub mod call_ui;
 pub mod camera_capture;
 /// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得の effect ドライバ
-/// （iOS #813・Android #814・macOS #1066 は実装済み、Windows は保留で他 OS と同じく `UnsupportedCameraPreview`
+/// （iOS #813・Android #814・macOS #1066 は実装済み、Windows #1102 も実装済みで、他 OS は `UnsupportedCameraPreview`
 /// 固定。Web は `fandhe-web-dom`、#815）。
 pub mod camera_preview_stream;
 /// Phase 11 の拡充ループ（親 #120、Issue #582）: 画面キャプチャの防止・検知の effect ドライバ
@@ -1828,6 +1828,10 @@ pub mod windows_bluetooth_classic;
 /// ラッパー）。`device/bluetooth_le.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_bluetooth_le;
+/// Issue #1102: Windows 向けカメラのライブ映像実装（WinRT `MediaCapture` + `MediaFrameReader`）。
+/// `device/camera_preview_stream.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_camera_preview_stream;
 /// Issue #582: Windows 向け画面キャプチャの防止実装（`SetWindowDisplayAffinity`）。
 /// `device/capture_protection.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
