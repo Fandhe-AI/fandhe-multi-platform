@@ -436,6 +436,9 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // `device::file_preview::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::file_preview::reset_pending_tracking();
+    // Issue #1123: Android の BLE 周辺機器役の通知先も破棄する（`android_ble_peripheral` の doc 参照）。
+    #[cfg(feature = "device")]
+    crate::device::android_ble_peripheral::reset_pending_tracking();
 
     let native_options = eframe::NativeOptions {
         android_app: Some(app),
