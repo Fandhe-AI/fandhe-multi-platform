@@ -291,7 +291,7 @@ pub mod android_network_status;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_nfc;
-/// Issue #1128: Android 向け NFC カードエミュレーション（HCE）の骨格。
+/// Issue #1128: Android 向け NFC カードエミュレーション（HCE）の実装。
 /// `device/nfc_card_emulation.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
