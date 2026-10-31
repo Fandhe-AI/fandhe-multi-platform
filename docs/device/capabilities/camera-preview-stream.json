@@ -70,7 +70,7 @@
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacaptureinitializationsettings.memorypreference",
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.devices.zoomcontrol"
       ],
-      "note": "未実装。`MediaCapture.InitializeAsync` は初回を STA（UI スレッド）で呼ぶよう公式に書かれ、MTA は未定義の可能性がある（公式）。既存の mic-record は作業スレッド（MTA）で呼んでおり、カメラで動くかは未確認。まず同じ方式で書き、実機で失敗したら UI スレッドでの初期化へ寄せる。`MemoryPreference` が Cpu でないと `SoftwareBitmap` が null になりうる（公式）。`TryAcquireLatestFrame` で得た `SoftwareBitmap` を Dispose しないと、上限を超えたところでフレームの供給が止まる（公式）。Realtime はハンドラの実行中に届いたフレームを捨てる（公式、1709 以上）。PC の Web カメラはズームに対応しないものが多い見込み（未確認）"
+      "note": "未実装。契約は trait doc の「Windows の違い」。実装方針: 受付は専用スレッド 1 本で OS の完了を待たず、開始途中の停止は保留中の操作を `Cancel` してすぐ戻り、完了（取り消しを含む）を受けてから reader → `MediaCapture` の順に `Close` する。解放（`Remove*`・`StopAsync`・`Close`）の失敗は持ち越して次の開始の前に再試行し、失敗したら開始失敗にする。個々のフレームの取得・変換・コピーの失敗はそのフレームを捨てて続け、フレーム資源の `Close` 失敗だけ実行中の失敗にする。`MediaCapture.InitializeAsync` は初回を STA（UI スレッド）で呼ぶよう公式に書かれ、MTA は未定義の可能性がある（公式）。既存の mic-record は作業スレッド（MTA）で呼んでおり、カメラで動くかは未確認。まず同じ方式で書き、実機で失敗したら UI スレッドでの初期化へ寄せる。`MemoryPreference` が Cpu でないと `SoftwareBitmap` が null になりうる（公式）。`TryAcquireLatestFrame` で得た `SoftwareBitmap` を Dispose しないと、上限を超えたところでフレームの供給が止まる（公式）。Realtime はハンドラの実行中に届いたフレームを捨てる（公式、1709 以上）。PC の Web カメラはズームに対応しないものが多い見込み（未確認）"
     },
     "web": {
       "status": "done",
