@@ -28,7 +28,7 @@ pub const TITLE: &str = "書類スキャン";
 /// ボタンの文言。
 pub const SCAN_LABEL: &str = "書類をスキャン";
 /// 未操作時の案内。
-pub const IDLE_HINT: &str = "OS の撮影画面で書類を撮影し、補正された 1 ページ目を表示します（対応は iOS と Android。Android は Google Play services が必要です。2 ページ目以降は表示しません。macOS・Windows では使えません）";
+pub const IDLE_HINT: &str = "OS の撮影画面で書類を撮影し、補正された 1 ページ目を表示します（対応は iOS のみ。Android は未対応で、Google Play services を使う実装の追加後に対応します。2 ページ目以降は表示しません。macOS・Windows では使えません）";
 /// 処理中の案内。
 pub const RUNNING_STATUS: &str = "撮影画面を開いています…";
 /// キャンセルしたときの文言（エラーではなく状態として出す）。
