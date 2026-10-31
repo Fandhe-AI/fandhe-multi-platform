@@ -13,6 +13,20 @@
 //! (3) OS の状態は `AdvertisementStatusChanged` の status と `BluetoothError` を
 //! [`event_from_windows_advertisement_status`] / [`end_reason_from_windows_bluetooth_error`] で写す。
 //!
+//! Android は `BluetoothLeAdvertiser` と `BluetoothGattServer`（Issue #1122 で契約を置き、実装は #1123）。
+//! 次の違いだけが macOS・iOS と異なり、契約の 7 区分と守る範囲は同じ。
+//! (1) ローカル名を指定できない。アドバタイズ本体はサービス UUID だけを載せ、端末名は scan response の
+//! `setIncludeDeviceName(true)` で載せる（128 bit UUID と flags と独自名では legacy の 31B を超えるため）。
+//! 画面には Windows と同じく「OS が決める」と出す。
+//! (2) 中断（[`EndReason::Interrupted`]）は `onStop` で資源を解放して出す。iOS の背景遷移と同じ区分で、
+//! 自動では再開しない。
+//! (3) 開始失敗は `AdvertiseCallback.onStartFailure` の errorCode を
+//! [`end_reason_from_android_advertise_error`] で写す。Bluetooth の state（`ACTION_STATE_CHANGED` の
+//! TURNING_OFF / OFF）は `BluetoothOff`、実行時許可の拒否は `PermissionDenied`、adapter が null・
+//! `getBluetoothLeAdvertiser()` が null・`isMultipleAdvertisementSupported` が false のいずれかは
+//! （Bluetooth オフでない場合に限り）`Unsupported` に写す。事象は同じ `CODE_*` で受け、
+//! [`event_from_apple_code`] で写す。
+//!
 //! # 結果の種類（契約表 10）
 //!
 //! 画面に出す結果は次の 7 種。中断を失敗に、失敗を公開中に畳まない。
@@ -21,7 +35,7 @@
 //! |---|---|
 //! | 公開中 | 開始のコールバックが成功を返した（[`PeripheralEvent::Advertising`]） |
 //! | 停止（利用者） | [`BlePeripheral::stop`] が [`StopOutcome::Stopped`] を返した |
-//! | 中断（iOS の背景遷移） | [`EndReason::Interrupted`] |
+//! | 中断（iOS の背景遷移・Android の `onStop`） | [`EndReason::Interrupted`] |
 //! | Bluetooth オフ | [`EndReason::BluetoothOff`] |
 //! | 権限拒否 | [`EndReason::PermissionDenied`] |
 //! | 非対応 | [`EndReason::Unsupported`]、または非対応 OS の `Err(Unsupported("ble_peripheral"))` |
@@ -43,7 +57,9 @@
 //! # スレッド
 //!
 //! 各 OS 実装は受付を専用の直列キュー 1 本に集約する（Apple は dispatch の serial queue で
-//! main queue は使わない。Windows は `mpsc` と専用スレッド）。そのキュー上で OS の完了を待たない。
+//! main queue は使わない。Windows は `mpsc` と専用スレッド。Android は `HandlerThread` 1 本で、
+//! `AdvertiseCallback`・`BluetoothGattServerCallback`（binder スレッド）・state の broadcast はそのキューへ
+//! post する）。そのキュー上で OS の完了を待たない。
 //! 完了はコールバックからキューへ積む。`start` は非ブロッキング、`stop` はキューへの短い同期呼び出しで、
 //! 開始手順が途中でも待たず、保留中の OS 操作を取り消して戻る。呼び出し元は Rust 側のロックを握ったまま
 //! `stop` を呼ばない（契約表 11）。
@@ -54,7 +70,8 @@
 //! （offset が 0 でない要求）は応答するが数えない。Windows は公開の確定（`Started`）と読み取り要求が
 //! OS の別スレッドから届くため、確定する前（[`PeripheralEvent::Advertising`] より前）に応答した読み取りを
 //! 捨てず、確定したあとにまとめて数える。Apple は届いた順に数え、[`PeripheralEvent::Advertising`] より
-//! 前に [`PeripheralEvent::Read`] が届くことがある。
+//! 前に [`PeripheralEvent::Read`] が届くことがある。Android も届いた順に数え、offset 0 で
+//! `sendResponse` が true を返したものだけを 1 件とする（同様に `Advertising` より前に届きうる）。
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
 //!
@@ -62,13 +79,18 @@
 //! 全終了経路での解放、古い世代（session）の事象を捨てること、中心役の識別子と読み取りの中身を
 //! ログ・画面に出さないこと、開始手順の途中の `stop` が保留中の OS 操作を取り消して
 //! [`StopOutcome::Stopped`] を返すこと、取り消しと競合して後から届いた生成結果を世代で照合して捨てること、
-//! Windows で公開が確定する前に応答した読み取りを確定後にまとめて数えること。
+//! Windows で公開が確定する前に応答した読み取りを確定後にまとめて数えること、
+//! Android で許可ダイアログ中の `stop`・`onStop` を確定させること、後から届いた許可結果を session で
+//! 照合して捨てること、失敗した段でも GATT server を close すること、解放の例外で `BluetoothOff` を
+//! `Failed` に上書きしないこと。
 //!
 //! 守らない: 他アプリの同時アドバタイズ、OS によるアドバタイズの間隔・中身の変更、
 //! 読み取らない接続の検出、複数プロセスでの同時公開、終了処理と重なった読み取りの数え漏れ、
 //! `stopAdvertising` 後に OS 側で止まるまでの時間差、取り消しを無視して完了した OS 側の
 //! 非同期操作が OS の中で片付くまでの時間差、読み取り要求の到着レート（ATT の往復で上限が決まり、
-//! 件数の通知は 1 件ずつキューへ積む）、Apple で公開の確定より先に届いた読み取りの通知順。
+//! 件数の通知は 1 件ずつキューへ積む）、Apple で公開の確定より先に届いた読み取りの通知順、
+//! Android で端末名が長く scan response が `DATA_TOO_LARGE` になる場合（`Failed` になる）、
+//! 背景でのアドバタイズ、Activity 再生成をまたぐ公開の継続。
 
 use std::sync::Arc;
 
@@ -83,7 +105,7 @@ pub const LOCAL_NAME: &str = "FandheDemo";
 /// 特性が返す固定の値（短い ASCII）。
 pub const READ_VALUE: &str = "hello";
 
-/// `.m` の事象コード: 公開中（開始のコールバック成功）。
+/// `.m`・Android の Java が渡す事象コード: 公開中（開始のコールバック成功）。
 pub const CODE_ADVERTISING: i32 = 0;
 /// `.m` の事象コード: 読み取り 1 件。
 pub const CODE_READ: i32 = 1;
@@ -95,7 +117,7 @@ pub const CODE_PERMISSION_DENIED: i32 = 3;
 pub const CODE_UNSUPPORTED: i32 = 4;
 /// `.m` の事象コード: 失敗。
 pub const CODE_FAILED: i32 = 5;
-/// `.m` の事象コード: 中断（iOS の背景遷移。b-ios が発火）。
+/// `.m`・Android の Java が渡す事象コード: 中断（iOS の背景遷移・Android の `onStop`）。
 pub const CODE_INTERRUPTED: i32 = 6;
 
 /// 公開が終わった理由。
@@ -109,7 +131,7 @@ pub enum EndReason {
     Unsupported,
     /// 失敗（登録・開始の失敗、開始後のリセット、未知のコード）。
     Failed,
-    /// 中断（iOS の背景遷移。失敗とは別の区分）。
+    /// 中断（iOS の背景遷移・Android の `onStop`。失敗とは別の区分）。
     Interrupted,
 }
 
@@ -157,6 +179,17 @@ pub fn event_from_apple_code(code: i32) -> PeripheralEvent {
         CODE_INTERRUPTED => PeripheralEvent::Ended(EndReason::Interrupted),
         // CODE_FAILED と未知のコード。
         _ => PeripheralEvent::Ended(EndReason::Failed),
+    }
+}
+
+/// Android `AdvertiseCallback.onStartFailure` の errorCode → 公開が終わった理由。値は AOSP の
+/// `AdvertiseCallback` の定数（SUCCESS=0・DATA_TOO_LARGE=1・TOO_MANY_ADVERTISERS=2・ALREADY_STARTED=3・
+/// INTERNAL_ERROR=4・FEATURE_UNSUPPORTED=5）。FEATURE_UNSUPPORTED だけ `Unsupported`。
+/// ほかは未知の値を含め `Failed` に倒し、成功を作らない。
+pub fn end_reason_from_android_advertise_error(code: i32) -> EndReason {
+    match code {
+        5 => EndReason::Unsupported,
+        _ => EndReason::Failed,
     }
 }
 
@@ -229,6 +262,21 @@ impl BlePeripheral for UnsupportedBlePeripheral {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn android_advertise_error_codes_map() {
+        assert_eq!(
+            end_reason_from_android_advertise_error(5),
+            EndReason::Unsupported
+        );
+        for code in [0, 1, 2, 3, 4, 6, -1, i32::MIN, i32::MAX] {
+            assert_eq!(
+                end_reason_from_android_advertise_error(code),
+                EndReason::Failed,
+                "{code}"
+            );
+        }
+    }
 
     #[test]
     fn known_codes_map() {

@@ -8,7 +8,7 @@
 //! 同期に呼ぶ。待ち・期限・`request_repaint_after` は持たない（事象は OS の通知 →
 //! `CompletionSender::send` が UI を起こす）。**macOS は `apple_ble_peripheral`、iOS は #779 で
 //! `ios_ble_peripheral.rs` から `apple_ble_peripheral` へ委譲済み**。Windows は `windows_ble_peripheral`（Issue #1101）。
-//! Android は対応表で保留のため `UnsupportedBlePeripheral`（非対応表示）に入る。
+//! Android は `android_ble_peripheral`（#1123 が埋めるまでスタブで `Unsupported`）。
 //!
 //! 読み取りは「世代つきのまとめ送り」にする: 未適用件数を数え、0 → 1 になったときだけ完了を
 //! 1 件送る。読み取りが大量に届いても完了キューが伸びない。
@@ -22,7 +22,12 @@ use fandhe_core::screens::ble_peripheral::{
     StopResult, OS_CHOSEN_NAME_LABEL,
 };
 #[cfg(any(
-    not(any(target_os = "macos", target_os = "ios", target_os = "windows")),
+    not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    )),
     test
 ))]
 use fandhe_device::ble_peripheral::UnsupportedBlePeripheral;
@@ -89,10 +94,10 @@ impl SessionSlot {
     }
 }
 
-/// 画面に出す広告名。Windows はローカル名を指定できず OS が端末名を載せるため、事実と違う
+/// 画面に出す広告名。Windows・Android はローカル名を指定できず OS が端末名を載せるため、事実と違う
 /// 名前を出さずに「OS が決める」旨の文言にする。
 fn advertised_name() -> &'static str {
-    if cfg!(target_os = "windows") {
+    if cfg!(any(target_os = "windows", target_os = "android")) {
         OS_CHOSEN_NAME_LABEL
     } else {
         LOCAL_NAME
@@ -205,7 +210,14 @@ fn platform_ble_peripheral() -> &'static Arc<dyn BlePeripheral> {
         return super::ios_ble_peripheral::implementation();
         #[cfg(target_os = "windows")]
         return super::windows_ble_peripheral::implementation();
-        #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "windows")))]
+        #[cfg(target_os = "android")]
+        return super::android_ble_peripheral::implementation();
+        #[cfg(not(any(
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "windows",
+            target_os = "android"
+        )))]
         return Arc::new(UnsupportedBlePeripheral);
     })
 }
@@ -505,8 +517,8 @@ mod tests {
     }
 
     #[test]
-    fn advertised_name_is_local_name_off_windows() {
-        if cfg!(target_os = "windows") {
+    fn advertised_name_is_os_chosen_on_windows_and_android() {
+        if cfg!(any(target_os = "windows", target_os = "android")) {
             assert_eq!(advertised_name(), OS_CHOSEN_NAME_LABEL);
         } else {
             assert_eq!(advertised_name(), LOCAL_NAME);
