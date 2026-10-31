@@ -21,7 +21,7 @@
 /// 他 OS は `UnsupportedAccessibilityPrefs` 固定。Web は `fandhe-web-dom`）。
 pub mod accessibility_prefs;
 /// Issue #613（親 #124）: 行動認識（歩行・乗車等）の effect ドライバ（Windows 実装、iOS 実装、
-/// 他 OS は `UnsupportedActivityRecognizer` 固定）。
+/// Android は b-android が埋めるスタブ、他 OS は `UnsupportedActivityRecognizer` 固定）。
 pub mod activity_recognition;
 /// Phase 11 の拡充ループ（親 #140、Issue #721）: アラーム・正確な時刻の予約の effect
 /// ドライバ（Windows 実装、iOS は AlarmKit、Android は #1078 が埋めるスタブ、他 OS は `Unsupported` 固定）。
@@ -33,6 +33,10 @@ pub mod android;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_accessibility_prefs;
+/// Issue #1126: Android 向け行動認識の骨格（実体は b-android）。`device/activity_recognition.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_activity_recognition;
 /// Issue #1076: Android 向けアラーム実装のスタブ（実装は #1078）。`device/alarm.rs` の Android 経路から呼ばれる。
 /// #1078 が cfg を変えずに済むよう `any(android, test)`。
 #[cfg(any(target_os = "android", test))]

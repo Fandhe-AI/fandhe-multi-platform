@@ -13,8 +13,8 @@
 //! [`FirstReadingDeadline`] だけが持つ（OS 側に別の期限を持たせない）。許可待ちは数えない。
 //!
 //! dispatch（[`implementation`]）は全対象 OS の最終形。Windows は `windows_activity_recognition.rs`、
-//! iOS は `ios_activity_recognition.rs`、Android（GMS 非依存の方針で保留）・
-//! macOS・Linux は `UnsupportedActivityRecognizer`。
+//! iOS は `ios_activity_recognition.rs`、Android は `android_activity_recognition.rs`
+//! （Issue #1126: 骨格。実体は b-android が埋める）、macOS・Linux は `UnsupportedActivityRecognizer`。
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -24,7 +24,7 @@ use fandhe_core::screens::activity_recognition_show::{
     apply_failure, apply_poll, ActivityFailureView, ActivityKindView, ActivityPollView,
     ActivityReadingView, ActivityRecognitionShowState, ConfidenceView,
 };
-#[cfg(not(any(target_os = "windows", target_os = "ios")))]
+#[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
 use fandhe_device::activity_recognition::UnsupportedActivityRecognizer;
 use fandhe_device::activity_recognition::{
     ActivityFailure, ActivityKind, ActivityPoll, ActivityRecognizer, Confidence,
@@ -48,7 +48,11 @@ fn implementation() -> Arc<dyn ActivityRecognizer> {
             {
                 super::ios_activity_recognition::implementation()
             }
-            #[cfg(not(any(target_os = "windows", target_os = "ios")))]
+            #[cfg(target_os = "android")]
+            {
+                super::android_activity_recognition::implementation()
+            }
+            #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
             {
                 Arc::new(UnsupportedActivityRecognizer)
             }
@@ -130,14 +134,16 @@ static RESUME_EPOCH: AtomicU64 = AtomicU64::new(0);
 static BACKGROUND: AtomicBool = AtomicBool::new(false);
 
 /// 背景遷移を記録する。iOS の実装（#614）が `ios_activity_recognition.rs` の C ABI 受け口から呼ぶ。
-#[cfg(any(target_os = "ios", test))]
+#[cfg(any(target_os = "ios", target_os = "android", test))]
+#[cfg_attr(target_os = "android", allow(dead_code))] // Android（b-android）の受け口が使う
 pub(crate) fn note_backgrounded() {
     BACKGROUND.store(true, Ordering::SeqCst);
 }
 
 /// 背景からの復帰を記録する（呼び元は [`note_backgrounded`] と同じ）。
 /// 復帰回数を先に増やしてから背景フラグを下ろす（フラグが下りた時点で起点の引き直しが見える）。
-#[cfg(any(target_os = "ios", test))]
+#[cfg(any(target_os = "ios", target_os = "android", test))]
+#[cfg_attr(target_os = "android", allow(dead_code))] // Android（b-android）の受け口が使う
 pub(crate) fn note_resumed() {
     RESUME_EPOCH.fetch_add(1, Ordering::SeqCst);
     BACKGROUND.store(false, Ordering::SeqCst);

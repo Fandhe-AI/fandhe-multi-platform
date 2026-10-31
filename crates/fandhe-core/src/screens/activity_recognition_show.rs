@@ -10,7 +10,7 @@
 //!
 //! 嘘の行動を出さない: 初期・待機・許可待ち・失敗・非対応は種別を持たない（[`ActivityView::Live`]
 //! だけが持つ）。判定なしは「静止」と見せない。古い世代の完了は [`ActivityRecognitionShowState::session`]
-//! で捨てる。文言は全対象 OS（Windows・iOS）の分をここで定義する。
+//! で捨てる。文言は全対象 OS（Windows・iOS・Android）の分をここで定義する。
 
 use crate::{Screen, WidgetId};
 
@@ -26,8 +26,9 @@ pub const STOP_LABEL: &str = "停止";
 pub const IDLE_TEXT: &str = "開始を押すと現在の行動を表示します";
 /// 判定中の案内。
 pub const WAITING_TEXT: &str = "行動を判定中…";
-/// 許可待ち（iOS の「モーションとフィットネス」）。
-pub const AWAITING_PERMISSION_TEXT: &str = "「モーションとフィットネス」の許可を待っています";
+/// 許可待ち（iOS の「モーションとフィットネス」、Android の「身体活動」）。
+pub const AWAITING_PERMISSION_TEXT: &str =
+    "「モーションとフィットネス」/「身体活動」の許可を待っています";
 /// 非対応。
 pub const UNSUPPORTED_TEXT: &str = "この環境では行動認識を使えません";
 /// 権限拒否。
