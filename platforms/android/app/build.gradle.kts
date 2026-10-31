@@ -195,4 +195,14 @@ dependencies {
     // （バージョン選定根拠は versions.env の WINDOW_VERSION コメント参照）。
     implementation("androidx.window:window:${androidVersion("WINDOW_VERSION")}")
     implementation("androidx.window:window-java:${androidVersion("WINDOW_VERSION")}")
+    // CarDisplayService（car-display）が Car App Library の `CarAppService`・`Screen`・`PaneTemplate` を
+    // 直接 import するため明示依存にする（バージョン選定根拠は versions.env の CAR_APP_VERSION コメント参照）。
+    implementation("androidx.car.app:app:${androidVersion("CAR_APP_VERSION")}")
+    // Car App Library の推移依存 guava 31.1-android には OSV の勧告があるため、勧告のない版へ引き上げる
+    // （選定根拠は versions.env の GUAVA_VERSION コメント参照）。
+    constraints {
+        implementation("com.google.guava:guava:${androidVersion("GUAVA_VERSION")}") {
+            because("guava 31.1-android に GHSA-5mg8-w23w-74h3・GHSA-7g45-4rm6-3mm3・GHSA-xxph-c9ww-hj94")
+        }
+    }
 }
