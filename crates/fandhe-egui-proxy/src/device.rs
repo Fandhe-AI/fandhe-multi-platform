@@ -291,7 +291,7 @@ pub mod android_network_status;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_nfc;
-/// Issue #1128: Android 向け NFC カードエミュレーション（HCE）の骨格。
+/// Issue #1128: Android 向け NFC カードエミュレーション（HCE）の実装。
 /// `device/nfc_card_emulation.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -1579,7 +1579,7 @@ pub mod network_status;
 /// （Android は後続の子が埋めるスタブ、他 OS は `UnsupportedNfcReader` 固定。Web は `fandhe-web-dom`）。
 pub mod nfc;
 /// Phase 11 の拡充ループ（親 #151、Issue #1128）: NFC カードエミュレーションの effect ドライバ
-/// （Android は #1129 が埋める骨格、他 OS は `UnsupportedCardEmulation` 固定）。
+/// （Android は #1129 の実装、他 OS は `UnsupportedCardEmulation` 固定）。
 pub mod nfc_card_emulation;
 /// Phase 11 の拡充ループ（親 #1093、Issue #1094）: 単語分割の effect ドライバ
 /// （macOS / iOS / Windows / Android 実装、他 OS は `UnsupportedWordSegmenter` 固定。Web は
