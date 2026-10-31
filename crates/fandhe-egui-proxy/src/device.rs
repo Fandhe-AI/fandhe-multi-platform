@@ -82,6 +82,11 @@ pub mod android_background_task;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_background_upload;
+/// Issue #1122（親 #164）: Android 向け BLE の周辺機器役の骨格（`Unsupported` のスタブ。#1123 が
+/// 実装に置き換える）。`device/ble_peripheral.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_ble_peripheral;
 /// Issue #659: Android 向け Bluetooth Classic の骨格（`Unsupported` のスタブ。#661 が
 /// `BluetoothClassicHelper.java` と JNI で埋める）。`device/bluetooth_classic.rs` の Android 経路から呼ばれる。
 /// 後続の子がホストテストを足すときに本行の cfg を広げずに済むよう test でもコンパイルする。
@@ -743,8 +748,8 @@ pub mod barcode_scan;
 /// （macOS/iOS/Android/Windows 実装）。
 pub mod biometric_auth;
 /// Phase 11 の拡充ループ（親 #164、Issue #778）: BLE の周辺機器役の effect ドライバ
-/// （macOS・iOS 実装。Android・Windows は対応表で保留のため
-/// 他 OS は `UnsupportedBlePeripheral` 固定）。
+/// （macOS・iOS・Windows 実装。Android は骨格で #1123 が実装。他 OS は
+/// `UnsupportedBlePeripheral` 固定）。
 pub mod ble_peripheral;
 /// Phase 11 の拡充ループ（親 #130、Issue #659）: Bluetooth Classic の一覧・検索の effect ドライバ
 /// （macOS 実装。Windows・Android は骨格のスタブで #660 / #661 が埋める。他 OS は `UnsupportedBluetoothClassic` 固定）。

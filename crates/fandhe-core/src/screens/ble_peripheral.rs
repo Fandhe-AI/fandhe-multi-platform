@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #164）型サンプル「BLE の周辺機器役」（Issue #778）。
 //! 「公開」ボタンで固定のサービス UUID と読み取り専用の特性を登録してアドバタイズし、
-//! 今回の公開で読み取られた回数を画面に出す。「停止」ボタン・アプリ終了・iOS の背景遷移で止める。
+//! 今回の公開で読み取られた回数を画面に出す。「停止」ボタン・アプリ終了・iOS の背景遷移・Android の `onStop` で止める。
 //! `FANDHE_PROXY_APP=ble_peripheral` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod ble_peripheral;` と対）。
 //!
@@ -8,7 +8,7 @@
 //! 置き場」節の制約どおり）。OS への依頼・事象の受け取りは `fandhe-egui-proxy` の effect ドライバ
 //! （`device/ble_peripheral.rs`）が [`take_action`] で要求を観測して行い、[`finish_start`] /
 //! [`finish_stop`] / [`apply_event`] / [`apply_reads`] で結果を注入する。本画面は二重押し防止・
-//! 世代の照合・結果の種類ごとの文言だけを持つ。全対象 OS 分（iOS の背景遷移による中断を含む）の
+//! 世代の照合・結果の種類ごとの文言だけを持つ。全対象 OS 分（iOS の背景遷移・Android の `onStop` による中断を含む）の
 //! 状態・文言を本ファイルで定義し、b-ios（#779）は画面を変えない。
 //!
 //! # 状態機械
@@ -40,7 +40,7 @@ pub const ADVERTISING_STATUS: &str = "公開中";
 pub const BUSY_STATUS: &str = "処理中…";
 /// 利用者の停止で止まった（通常色）。
 pub const STOPPED_NOTICE: &str = "停止しました";
-/// iOS の背景遷移で止めた（通常色。失敗とは別の文言）。
+/// iOS の背景遷移・Android の `onStop` で止めた（通常色。失敗とは別の文言）。
 pub const INTERRUPTED_NOTICE: &str = "アプリが背景へ移ったため止めました";
 /// 非対応環境の案内（通常色）。
 pub const UNSUPPORTED_NOTICE: &str = "この環境では使えません";
@@ -111,7 +111,7 @@ pub enum EndKind {
     Unsupported,
     /// 失敗。
     Failed,
-    /// 中断（iOS の背景遷移）。
+    /// 中断（iOS の背景遷移・Android の `onStop`）。
     Interrupted,
 }
 
