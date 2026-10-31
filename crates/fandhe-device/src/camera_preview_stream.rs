@@ -44,6 +44,27 @@
 //!   [`PreviewEvent::Running`] へ戻る
 //! - カメラの取り外し（`AVCaptureDeviceWasDisconnectedNotification`）は [`PreviewEvent::RuntimeFailed`]
 //!
+//! # Windows の違い
+//!
+//! 実装は未着手。契約だけ先に置く（実装 PR は本節を根拠にする）。受付は専用スレッド 1 本の状態機械で、
+//! そのスレッド上で OS の完了を待たない（完了は `SetCompleted` から積む）。
+//!
+//! - 開始手順の途中の停止は、保留中の OS 操作を `Cancel` して即座に戻る。drop は OS を待たない
+//! - `Cancel` の戻り値は見ない。完了（取り消しを含む）は `SetCompleted` で必ず 1 回届くので、それを受けてから
+//!   `MediaFrameReader` → `MediaCapture` の順に `Close` する。取り消しと競合して届いた reader もここで閉じる
+//! - 解放呼び出し（`Remove*`・`StopAsync`・`Close`）の失敗は未解放として持ち越す。次の開始の前に再試行し、
+//!   それも失敗したら開始失敗（[`StartFailure::Other`]）にする
+//! - 前の解放が OS の完了待ちの間に来た開始は、完了まで開始待ちにする
+//! - 実行中の失敗は `MediaCapture.Failed`、`CameraStreamState` の `Shutdown`、状態の取得失敗で確定する
+//! - ズーム制御は、取得の失敗を [`ZoomFailure::Failed`]、`Supported == false` を [`ZoomFailure::Unsupported`] にする
+//! - 個々のフレームの取得・変換・コピーの失敗は、そのフレームを捨てて続ける。フレームの間隔の欠けとして扱い
+//!   （iOS・Android と同じ）、件数の閾値は置かない
+//! - フレーム単位の資源（`MediaFrameReference`・`SoftwareBitmap`）の `Close` 失敗は個別に再試行せず、
+//!   実行中の失敗（[`PreviewEvent::RuntimeFailed`]）として session ごと解放する
+//!
+//! Windows で守らない範囲: 開始途中の停止から OS の取り消しが完了するまでの時間差、MTA での初期化の可否
+//! （#808 の実機確認しだい）、1080p 以上での負荷。
+//!
 //! # 後続 OS の要点
 //!
 //! OS 資源は生ポインタではなく `id`（ドライバの登録表が発行）で持つ。停止は「登録解除 → OS 停止 →
@@ -368,6 +389,9 @@ pub fn event_from_code(code: i32, detail: i32) -> PreviewEvent {
 // ---- トレイト -------------------------------------------------------------------------------
 
 /// OS からのフレーム・通知の受け口。任意のスレッドから呼ばれうる。
+///
+/// 受け口の中で session を drop しない（受信口に書いて wake するだけ。drop は停止と解放を行うため、
+/// コールバックの中で呼ぶと自分自身の終了待ちになりうる）。
 pub trait PreviewSink: Send + Sync {
     /// フレームを渡す。呼び出し側が縮小済み（長辺 [`PREVIEW_MAX_SIDE`] 以下）であること。
     fn frame(&self, frame: PreviewFrame);

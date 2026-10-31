@@ -1814,6 +1814,10 @@ pub mod windows_background_task;
 /// Windows Hello ラッパー）。`device/biometric_auth.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_biometric;
+/// Issue #1101: Windows 向け BLE の周辺機器役（WinRT `GattServiceProvider`）。
+/// `device/ble_peripheral.rs` の Windows 経路から呼ばれる。
+#[cfg(target_os = "windows")]
+pub mod windows_ble_peripheral;
 /// Issue #659: Windows 向け Bluetooth Classic の骨格（`Unsupported` のスタブ。#660 が
 /// `BluetoothFindFirstDevice` で埋める）。`device/bluetooth_classic.rs` の Windows 経路から呼ばれる。
 /// 後続の子がホストテストを足すときに本行の cfg を広げずに済むよう test でもコンパイルする。
