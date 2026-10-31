@@ -25,14 +25,13 @@
     "android": {
       "status": "possible",
       "api": "`BluetoothLeAdvertiser.startAdvertising`（結果は `AdvertiseCallback`）+ `BluetoothManager.openGattServer`（`BluetoothGattServerCallback.onCharacteristicReadRequest` → `sendResponse`）",
-      "perm": "API 31+ は `BLUETOOTH_ADVERTISE`（実行時の許可、未宣言）と `BLUETOOTH_CONNECT`（bluetooth-le で宣言済み）。API 30 以下は `BLUETOOTH` / `BLUETOOTH_ADMIN`（宣言済み、`maxSdkVersion=30`）",
+      "perm": "API 31+ は `BLUETOOTH_ADVERTISE`（実行時の許可。Manifest に宣言済み）と `BLUETOOTH_CONNECT`（bluetooth-le で宣言済み）。両方とも「付近のデバイス」グループで許可ダイアログは 1 回。API 30 以下は `BLUETOOTH` / `BLUETOOTH_ADMIN`（宣言済み、`maxSdkVersion=30`）で足りる。ベンダーの個別審査・GMS は不要",
       "url": [
         "https://developer.android.com/develop/connectivity/bluetooth/bt-permissions",
         "https://android.googlesource.com/platform/packages/modules/Bluetooth/+/refs/heads/main/framework/java/android/bluetooth/le/AdvertiseCallback.java",
         "https://android.googlesource.com/platform/packages/modules/Bluetooth/+/refs/heads/main/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java"
       ],
-      "note": "未実装。`startAdvertising` はすぐ戻り、結果は `onStartSuccess` / `onStartFailure`（`DATA_TOO_LARGE`・`TOO_MANY_ADVERTISERS`・`ALREADY_STARTED`・`INTERNAL_ERROR`・`FEATURE_UNSUPPORTED`）で届く。`BLUETOOTH_ADVERTISE` は常に検査される（AOSP のソース）。`getBluetoothLeAdvertiser()` は Bluetooth オフ・アドバタイズ非対応で null（AOSP のソース）。GATT サーバーは接続・切断を `onConnectionStateChange` で通知する",
-      "deferred": "API 31 以上でアドバタイズするには `BLUETOOTH_ADVERTISE` の uses-permission を新しく足し、実行時の許可を新しく求める必要がある（公式: 実行時の権限。いまの Manifest は bluetooth-le の `BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT` だけ）。新しい権限を足さない方針のため保留（nfc-card-emulation の Android と同じ）。GATT サーバー側の `BLUETOOTH_CONNECT` は宣言済み。ベンダーの個別審査・GMS は不要で、方針が変われば着手できる"
+      "note": "未実装（権限の宣言までは済み）。`startAdvertising` はすぐ戻り、結果は `onStartSuccess` / `onStartFailure`（`DATA_TOO_LARGE`・`TOO_MANY_ADVERTISERS`・`ALREADY_STARTED`・`INTERNAL_ERROR`・`FEATURE_UNSUPPORTED`）で届く。`BLUETOOTH_ADVERTISE` は常に検査される（AOSP のソース）。`getBluetoothLeAdvertiser()` は Bluetooth オフ・アドバタイズ非対応で null（AOSP のソース）。GATT サーバーは接続・切断を `onConnectionStateChange` で通知する"
     },
     "macos": {
       "status": "done",

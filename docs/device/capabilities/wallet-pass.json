@@ -29,7 +29,7 @@
         "https://developers.google.com/wallet/generic/getting-started/auth/android",
         "https://developers.google.com/wallet/generic/use-cases/jwt"
       ],
-      "deferred": "Google Wallet Android SDK は Google Play services のライブラリ（`play-services-pay`）で、GMS に依存しない方針のため保留（payment-request・in-app-review と同じ）。SDK を使わずに保存リンク（`https://pay.google.com/gp/v/save/<JWT>`）を開く方法は、JWT を Google Cloud のサービスアカウント鍵で署名する必要があり、秘密値の扱いが増える。どちらの経路も発行者アカウントとパスの Class の作成が前提。ベンダーの個別審査は不要（デモモードのまま試せる見込み）で、方針と発行者アカウントが揃えば着手できる",
+      "deferred": "Google Wallet Android SDK は Google Play services のライブラリ（`play-services-pay`）。SDK を使わずに保存リンク（`https://pay.google.com/gp/v/save/<JWT>`）を開く方法は、JWT を Google Cloud のサービスアカウント鍵で署名する必要があり、秘密値の扱いが増える。どちらの経路も発行者アカウントとパスの Class の作成が前提のため保留。ベンダーの個別審査は不要（デモモードのまま試せる見込み）で、発行者アカウントと署名鍵の扱いが揃えば着手できる",
       "note": "未実装。GMS 非搭載端末では使えない。公開前（デモモード）のパスは名前に「[TEST ONLY]」が付く（公式）"
     },
     "macos": {

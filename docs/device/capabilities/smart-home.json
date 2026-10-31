@@ -36,7 +36,7 @@
         "https://developers.home.google.com/apis/android/structure",
         "https://developers.home.google.com/apis/android/sample-app/build"
       ],
-      "deferred": "Home APIs の SDK は Google Play services のライブラリ（`com.google.android.gms:play-services-home` と `play-services-home-types`）で、Google Home Developers にサインインしてダウンロードし手元に置く配布（公開の Maven に無い）。GMS に依存しない方針のため保留（game-center・in-app-review と同じ）。公式サンプルは Kotlin・kotlinx-coroutines・minSdk 29・compileSdk 36 で、いまの Gradle 構成（Kotlin なし・minSdk 24・compileSdk 35）にも合わない。確かめるには OAuth クライアントの登録と Google Home に家を作ったアカウントが要る。テストは Developer Console の登録なしでできる（100 ユーザーまで）が、公開には Developer Console の承認が要る（登録の受付は未開始）",
+      "deferred": "Home APIs の SDK は Google Play services のライブラリ（`com.google.android.gms:play-services-home` と `play-services-home-types`）で、Google Home Developers にサインインしてダウンロードし手元に置く配布（公開の Maven に無い）ため、ビルドの再現とサプライチェーンの確認を CI で行えず保留（game-center・in-app-review と同じ GMS 依存だが、保留の理由は SDK の配布形態）。公式サンプルは Kotlin・kotlinx-coroutines・minSdk 29・compileSdk 36 で、いまの Gradle 構成（Kotlin なし・minSdk 24・compileSdk 35）にも合わない。確かめるには OAuth クライアントの登録と Google Home に家を作ったアカウントが要る。テストは Developer Console の登録なしでできる（100 ユーザーまで）が、公開には Developer Console の承認が要る（登録の受付は未開始）",
       "note": "未実装。`structures()` は初期化直後に正しい一覧を返さないことがあり、接続断・許可の取り消しでも空になる（公式。公式例は 5 秒の期限付きで空でない一覧を待つ）。許可の状態は `GRANTED` / `NOT_GRANTED` / `PERMISSIONS_STATE_UNAVAILABLE` / `PERMISSIONS_STATE_UNINITIALIZED`、要求の結果は `SUCCESS` / `CANCELLED` / `ERROR`（公式）。公式サンプルは実機（Android 10 以上）を推奨し、Matter 機器の操作には Home APIs 対応の Google のハブが要る"
     },
     "macos": {

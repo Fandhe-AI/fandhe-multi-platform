@@ -29,7 +29,7 @@
         "https://dl.google.com/dl/android/maven2/com/google/android/play/age-signals/0.0.4/age-signals-0.0.4.pom"
       ],
       "note": "未実装。値が返るのは対象地域の利用者だけ（2026-03 からブラジル、2026-05-28 以降に作られた米テキサス州のアカウント）。広告・分析への利用は利用規約で禁止。エラーは 11 種（-1〜-10・-100）",
-      "deferred": "Play Age Signals は推移依存に Google Play services（`play-services-basement`・`play-services-tasks`）が入る。GMS に依存しない方針のため保留（in-app-review と同じ）。確かめるには Play から入れた版（内部テストトラック等）も要る"
+      "deferred": "Play Age Signals は推移依存に Google Play services（`play-services-basement`・`play-services-tasks`）が入る。Play から入れた版（内部テストトラック等）でしか確かめられず、版も beta のため保留（in-app-review と同じ）"
     },
     "macos": {
       "status": "possible",

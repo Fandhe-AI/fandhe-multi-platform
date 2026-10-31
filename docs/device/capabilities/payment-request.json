@@ -20,14 +20,13 @@
     },
     "android": {
       "status": "possible",
-      "api": "Google Pay API（GMS 依存）",
-      "perm": "実行時の権限なし。manifest に `com.google.android.gms.wallet.api.enabled` の meta-data が要る（要確認）",
+      "api": "Google Pay API（`play-services-wallet` の `PaymentsClient`、GMS 依存）。環境は TEST 固定",
+      "perm": "実行時の権限なし。manifest に `com.google.android.gms.wallet.api.enabled` の meta-data が要る（要確認。`play-services-wallet` 20.0.0 の AAR の manifest には含まれない）。GMS が無い・使えない端末では `Unsupported` を返す（`GoogleApiAvailability.isGooglePlayServicesAvailable` が SUCCESS のときだけ使い、更新ダイアログは出さない）。依存は `scripts/android/versions.env` の `PLAY_SERVICES_WALLET_VERSION`（20.0.0。AAR の minSdk 23 で、いまの minSdk 24 のまま使える）",
       "url": [
         "https://developers.google.com/pay/api/android/guides/setup",
         "https://developers.google.com/pay/api/android/guides/test-and-deploy/integration-checklist"
       ],
-      "note": "未実装",
-      "deferred": "Google Pay API は GMS（`play-services-wallet`）に依存する。GMS に依存しない方針のため保留（in-app-purchase・media-cast・on-device-llm と同じ）。TEST 環境ならダミーのカードで確かめられ、本番は Google の承認が要る"
+      "note": "未実装。`isReadyToPay` が偽なら `Unsupported`。本番環境（PRODUCTION）と merchantId は持たない"
     },
     "macos": {
       "status": "possible",
@@ -63,5 +62,5 @@
       "impl": "crates/fandhe-web-dom/src/payment_request.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/payment_request.rs + crates/fandhe-device/src/payment_request.rs、Issue #542"
     }
   },
-  "note": "in-app-purchase（ストア課金）との違い: 本機能は物・サービスの代金を決済する側で、ストア課金の対象外のもの。今回の範囲: Web（Chrome の Google Pay、TEST 環境）で固定金額の決済シートを出し、結果（テストで承認・キャンセル・失敗・使えない）を画面に出すだけ。実決済はしない（本番環境の設定を型に持たず、merchantId なし・gateway は Google のサンプル値 `example`、返ったトークンは読まずに捨てる）。iOS・macOS・Android は保留（開発者登録・GMS の都合）。守る範囲: 1 マウント内の要求と完了の順序、嘘の成功の禁止、課金できるトークンを作らないこと。守らない範囲: 利用者の取り消しとアプリの中断（API がどちらも AbortError で返す）の区別、複数タブ"
+  "note": "in-app-purchase（ストア課金）との違い: 本機能は物・サービスの代金を決済する側で、ストア課金の対象外のもの。今回の範囲: Web（Chrome の Google Pay、TEST 環境）で固定金額の決済シートを出し、結果（テストで承認・キャンセル・失敗・使えない）を画面に出すだけ。実決済はしない（本番環境の設定を型に持たず、merchantId なし・gateway は Google のサンプル値 `example`、返ったトークンは読まずに捨てる）。iOS・macOS は保留（開発者登録の都合）。Android は Google Pay API の TEST 環境で実装予定。守る範囲: 1 マウント内の要求と完了の順序、嘘の成功の禁止、課金できるトークンを作らないこと。守らない範囲: 利用者の取り消しとアプリの中断（API がどちらも AbortError で返す）の区別、複数タブ"
 }

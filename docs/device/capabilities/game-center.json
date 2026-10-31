@@ -28,7 +28,7 @@
         "https://developer.android.com/games/pgs/android/android-start",
         "https://developer.android.com/games/pgs/console/setup"
       ],
-      "deferred": "Play Games Services v2 の SDK は Google Play services のライブラリ（`play-services-games-v2`）で、GMS に依存しない方針のため保留（in-app-review・activity-recognition と同じ）。確かめるには Play Console でのゲーム登録・OAuth クライアント・テスター登録も要る。ベンダーの個別審査は不要で、方針が変われば着手できる",
+      "deferred": "Play Games Services v2 の SDK は Google Play services のライブラリ（`play-services-games-v2`）。ゲームの登録・OAuth クライアント・テスター登録に Play Console が要り、その開発者登録は有料のため保留。ベンダーの個別審査は不要で、Play Console の登録が済めば着手できる",
       "note": "未実装。GMS 非搭載端末では使えない。未公開のゲームはテスターに登録したアカウントでしか動かない（公式）"
     },
     "macos": {

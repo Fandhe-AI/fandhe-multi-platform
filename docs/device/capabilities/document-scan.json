@@ -23,13 +23,12 @@
     "android": {
       "status": "possible",
       "api": "ML Kit Document Scanner（`com.google.android.gms:play-services-mlkit-document-scanner`、GMS 依存）",
-      "perm": "カメラ権限の記載なし（撮影 UI は Google Play services 側）",
+      "perm": "カメラ権限は不要（撮影 UI は Google Play services 側）。GMS が無い・使えない端末では `Unsupported` を返す（`GoogleApiAvailability.isGooglePlayServicesAvailable` が SUCCESS のときだけ使い、更新ダイアログは出さない）。依存は `scripts/android/versions.env` の `PLAY_SERVICES_MLKIT_DOCUMENT_SCANNER_VERSION`（16.0.0。AAR の minSdk 23 で、いまの minSdk 24 のまま使える）",
       "url": [
         "https://developers.google.com/ml-kit/vision/doc-scanner/android",
         "https://dl.google.com/android/maven2/com/google/android/gms/play-services-mlkit-document-scanner/16.0.0/play-services-mlkit-document-scanner-16.0.0.pom"
       ],
-      "note": "未実装。16.0.0 の POM は `play-services-base`・`play-services-basement`・`play-services-tasks` と Firebase の部品を直接依存に持つ。公式文書はモデル・スキャン処理・UI を Google Play services が動的にダウンロードするとし、端末の RAM が 1.7 GB 未満なら `UNSUPPORTED` を返すとしている。GMS 非搭載端末での扱いは公式文書に書かれていない。AOSP に書類スキャンの公開 API はない",
-      "deferred": "ML Kit Document Scanner は Google Play services だけが提供するランタイム機能で、GMS（`play-services-base` 等）を新しい依存に足す。GMS に依存しない方針のため保留（activity-recognition・in-app-review・uwb-ranging と同じ）。方針が変われば着手できる"
+      "note": "未実装。16.0.0 の POM は `play-services-base`・`play-services-basement`・`play-services-tasks` と Firebase の部品を直接依存に持つ。公式文書はモデル・スキャン処理・UI を Google Play services が動的にダウンロードするとし、端末の RAM が 1.7 GB 未満なら `UNSUPPORTED` を返すとしている。GMS 非搭載端末での扱いは公式文書に書かれていない。AOSP に書類スキャンの公開 API はない。`MlKitException` の `UNSUPPORTED` も `Unsupported` に写す"
     },
     "macos": {
       "status": "no",
@@ -53,5 +52,5 @@
       "note": "標準 API なし。カメラ映像と自前処理は OS の端末機能ではないので判定に使わない"
     }
   },
-  "note": "barcode-scan とは別: 本機能は紙の書類を撮影して補正した画像を得る。camera-capture（通常の撮影）とも別で、書類の検出・台形補正は OS の撮影 UI が行う。iOS は VisionKit、Android は Play services だけが提供するため GMS に依存しない方針で保留（deferred）。macOS・Windows・Web は no。今回の範囲: スキャン UI を出し、返ってきた 1 ページ目の画像を画面に表示するだけ（2 ページ目以降・PDF 化・文字認識・保存・共有は扱わない）。結果は「表示した / キャンセル / 失敗 / 非対応」で、キャンセルは失敗として見せない。守る範囲: 1 プロセス内の要求と結果の順序（古い要求の結果は世代で捨てる）、嘘の成功の禁止（非対応・権限拒否・0 ページ・復号できない画像を成功にしない）、撮影 UI を閉じることと画像の受け渡し領域の解放を全経路で行うこと。守らない範囲: 撮影 UI の表示中に Rust 側から閉じること、OS ごとの補正結果の違い、複数プロセス、プロセス死後の結果。画像の中身はログに出さない"
+  "note": "barcode-scan とは別: 本機能は紙の書類を撮影して補正した画像を得る。camera-capture（通常の撮影）とも別で、書類の検出・台形補正は OS の撮影 UI が行う。iOS は VisionKit、Android は Play services だけが提供するため、GMS が無い・使えない端末では `Unsupported`。macOS・Windows・Web は no。今回の範囲: スキャン UI を出し、返ってきた 1 ページ目の画像を画面に表示するだけ（2 ページ目以降・PDF 化・文字認識・保存・共有は扱わない）。結果は「表示した / キャンセル / 失敗 / 非対応」で、キャンセルは失敗として見せない。守る範囲: 1 プロセス内の要求と結果の順序（古い要求の結果は世代で捨てる）、嘘の成功の禁止（非対応・権限拒否・0 ページ・復号できない画像を成功にしない）、撮影 UI を閉じることと画像の受け渡し領域の解放を全経路で行うこと。守らない範囲: 撮影 UI の表示中に Rust 側から閉じること、OS ごとの補正結果の違い、複数プロセス、プロセス死後の結果。画像の中身はログに出さない"
 }

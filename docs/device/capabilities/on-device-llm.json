@@ -22,7 +22,7 @@
       "perm": "記載なし（要確認）",
       "url": "https://developers.google.com/ml-kit/genai",
       "note": "未実装。GMS ではなく OS の AICore に依存する（報告より）。対応機種のみで多くの端末では使えない",
-      "deferred": "ML Kit GenAI（Gemini Nano）は AICore に依存し、推移依存に Google Play services が入る。beta・対応機種限定。GMS に依存しない方針のため保留"
+      "deferred": "ML Kit GenAI（Gemini Nano）は AICore に依存し、推移依存に Google Play services が入る。beta で、対応機種限定のため保留（対応機種が用意できれば着手できる）"
     },
     "macos": {
       "status": "done",

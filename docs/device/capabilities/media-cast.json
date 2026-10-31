@@ -24,7 +24,7 @@
         "https://developers.google.com/cast/docs/android_sender",
         "https://developer.android.com/media/routing/mediarouter"
       ],
-      "deferred": "Google Cast への送出には Cast SDK（play-services-cast-framework）が要り、推移依存に Google Play services（base・basement・tasks・flags）と datatransport が入る。GMS に依存しない方針のため保留。受信機は URL から音源を取りに行くため、実行時に生成した音声を送るにはアプリ内の HTTP 配信も要る。Default Media Receiver ならアプリの登録・ベンダーの審査は不要",
+      "deferred": "Google Cast への送出には Cast SDK（play-services-cast-framework）が要り、推移依存に Google Play services（base・basement・tasks・flags）と datatransport が入る。確かめる受信機（Chromecast 等）が手元に無いため保留。受信機は URL から音源を取りに行くため、実行時に生成した音声を送るにはアプリ内の HTTP 配信も要る。Default Media Receiver ならアプリの登録・ベンダーの審査は不要",
       "note": "未実装。androidx.mediarouter 単体は GMS 非依存だが、Google Cast 機器に対応するなら Cast SDK を使うよう案内されている"
     },
     "macos": {

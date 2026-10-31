@@ -25,7 +25,7 @@
       "perm": "なし（報告に記載なし、要確認）",
       "url": "https://developer.android.com/guide/playcore/in-app-review",
       "note": "未実装。GMS（Google Play 開発者サービス）依存。Play 配信ビルドでのみ検証可能。表示は Google 側のクォータで制限され、表示されたかは取れない",
-      "deferred": "Play In-App Review（`com.google.android.play:review`）は推移依存に Google Play services（`play-services-basement`・`play-services-tasks`）が入る。GMS に依存しない方針のため保留（in-app-purchase・payment-request と同じ）。確かめるには Play ストアから入れた版（内部テストトラック等）も要る"
+      "deferred": "Play In-App Review（`com.google.android.play:review`）は推移依存に Google Play services（`play-services-basement`・`play-services-tasks`）が入る。レビューの表示は Play ストアから入れた版（内部テストトラック等）でないと確かめられないため保留（保留の理由は GMS 依存ではなく Play 配布）"
     },
     "macos": {
       "status": "done",
