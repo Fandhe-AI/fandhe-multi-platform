@@ -4,7 +4,7 @@
 //! [`POLL_INTERVAL`] ごとに `state` で読んで `CompletionSender` 経由で返す
 //! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる）。
 //!
-//! 実装の選択: Android は [`super::android_car_display`]（現状は骨格のスタブ、#1117 が埋める）、
+//! 実装の選択: Android は [`super::android_car_display`]（Car App Library 実装、#1117）、
 //! 他 OS は `UnsupportedCarDisplay` 固定（iOS の CarPlay は承認待ちで dispatch に入れない）。
 //!
 //! # 並行性

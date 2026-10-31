@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 車載ディスプレイ（Issue #1117）。Android Auto にテンプレートアプリとして登録する。
+     AndroidManifest の meta-data `com.google.android.gms.car.application` から参照する。切り離し時に削除する。 -->
+<automotiveApp>
+    <uses name="template" />
+</automotiveApp>

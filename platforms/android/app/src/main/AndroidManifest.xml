@@ -402,6 +402,24 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+        <!-- Issue #1117: 車載ディスプレイ（Android Auto）。ホストが bind するため exported="true" が必要で、
+             接続元は CarDisplayService.createHostValidator で絞る。uses-permission は不要。
+             切り離し時にこの service・meta-data 2 つ・res/xml/automotive_app_desc.xml・
+             strings.xml の car_display_*・Java 2 ファイルを削除する。 -->
+        <service
+            android:name="com.fandhe.androidapp.CarDisplayService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.car.app.CarAppService" />
+                <category android:name="androidx.car.app.category.IOT" />
+            </intent-filter>
+        </service>
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="7" />
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
         <!-- Issue #946: MDM / EMM が管理アプリ設定を配るための制限スキーマ宣言。切り離し時に削除する。 -->
         <meta-data
             android:name="android.content.APP_RESTRICTIONS"
