@@ -98,6 +98,8 @@ final class BlePeripheralHelper {
     private BluetoothLeAdvertiser advertiser;
     private AdvertiseCallback advertiseCallback;
     private BroadcastReceiver receiver;
+    // 解放に失敗した資源が残っている間 true。start() が読むので volatile。回収できるまで新しい公開を受け付けない。
+    private volatile boolean unreleased;
 
     BlePeripheralHelper(ComponentActivity activity) {
         this.activity = activity;
@@ -117,10 +119,18 @@ final class BlePeripheralHelper {
         } catch (IllegalArgumentException | NullPointerException e) {
             return 1;
         }
+        if (unreleased) {
+            return 1;
+        }
         final byte[] bytes = (text == null ? "" : text).getBytes(StandardCharsets.UTF_8);
         boolean posted = bg.post(() -> {
             // 進行中の公開は通知なしで置き換える（trait 契約）。
-            teardown();
+            if (!teardown()) {
+                // 旧公開の資源を回収できない。新しい公開は始めず、失敗として通知する。
+                current = 0;
+                nativeOnBlePeripheralEvent(token, CODE_FAILED);
+                return;
+            }
             current = token;
             serviceUuid = svc;
             characteristicUuid = chr;
@@ -137,7 +147,9 @@ final class BlePeripheralHelper {
         boolean posted = bg.post(() -> {
             try {
                 if (current == 0) {
-                    result[0] = STOP_NOT_RUNNING;
+                    // 停止済みでも、前回の解放失敗が残っていれば回収し直す。
+                    result[0] = !unreleased ? STOP_NOT_RUNNING
+                            : teardown() ? STOP_STOPPED : STOP_FAILED;
                 } else {
                     current = 0;
                     result[0] = teardown() ? STOP_STOPPED : STOP_FAILED;
@@ -371,39 +383,47 @@ final class BlePeripheralHelper {
         return true;
     }
 
-    // 何度呼んでも安全。各解放を個別に捕まえ、きれいに解放できたかを返す。失敗した段でも GATT server は close する。
+    // 何度呼んでも安全。各解放を個別に捕まえ、きれいに解放できたかを返す。失敗した資源は参照を残し（unreleased = true）、
+    // 次の stop() の teardown で回収し直す。失敗した段より後の資源も解放を試みる。
     @SuppressLint("MissingPermission")
     private boolean teardown() {
         boolean clean = true;
         if (advertiser != null && advertiseCallback != null) {
             try {
                 advertiser.stopAdvertising(advertiseCallback);
+                advertiser = null;
+                advertiseCallback = null;
             } catch (IllegalStateException e) {
                 // adapter がオフ。OS が片付け済み。
+                advertiser = null;
+                advertiseCallback = null;
             } catch (RuntimeException e) {
                 clean = false;
             }
+        } else {
+            advertiser = null;
+            advertiseCallback = null;
         }
-        advertiser = null;
-        advertiseCallback = null;
         if (gattServer != null) {
             try {
                 gattServer.close();
+                gattServer = null;
             } catch (RuntimeException e) {
                 clean = false;
             }
-            gattServer = null;
         }
         if (receiver != null) {
             try {
                 activity.unregisterReceiver(receiver);
+                receiver = null;
             } catch (IllegalArgumentException e) {
                 // 解除済みは無視する。
+                receiver = null;
             } catch (RuntimeException e) {
                 clean = false;
             }
-            receiver = null;
         }
+        unreleased = !clean;
         return clean;
     }
 
