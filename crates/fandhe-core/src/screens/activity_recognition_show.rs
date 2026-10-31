@@ -26,7 +26,8 @@ pub const STOP_LABEL: &str = "停止";
 pub const IDLE_TEXT: &str = "開始を押すと現在の行動を表示します";
 /// 判定中の案内。
 pub const WAITING_TEXT: &str = "行動を判定中…";
-/// 許可待ち（iOS の「モーションとフィットネス」、Android の「身体活動」）。
+/// 許可待ち（iOS の「モーションとフィットネス」、Android の「身体活動」）。許可ダイアログを持つ OS だけが
+/// `AwaitingPermission` を出すため、Windows 等でこの文言が出ることはなく、両名の併記で足りる。
 pub const AWAITING_PERMISSION_TEXT: &str =
     "「モーションとフィットネス」/「身体活動」の許可を待っています";
 /// 非対応。
