@@ -42,7 +42,12 @@ final class CarDisplayScreen extends Screen {
                     stale = !java.util.Objects.equals(drawn, text);
                 }
                 if (stale) {
-                    invalidate();
+                    try {
+                        invalidate();
+                    } catch (RuntimeException ignored) {
+                        // HostException 等。observer の外へ投げると同じプロセスの MainActivity ごと落ちる。
+                        // 文言は保存済みで、次の onGetTemplate で反映される。
+                    }
                 }
             }
 
