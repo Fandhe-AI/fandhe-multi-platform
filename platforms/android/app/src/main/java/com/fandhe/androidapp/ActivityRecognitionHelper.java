@@ -46,9 +46,9 @@ import java.util.List;
 //   `reconcile()` を呼ぶだけで、reconcile が冪等に購読・解除・許可要求を決める。
 //
 // 守る範囲: 嘘の値を出さない・二重に購読しない・停止/背景/破棄/失敗で解除を発行する。解除（removeActivityUpdates）の
-// 失敗（Task 失敗・同期例外）は `unreleased`（main thread の boolean 1 つ）に記録し、成功を確認するまで下ろさない。
-// `unreleased` の間は `reconcile()` が解除を再発行し、新しい購読は受け付けない。`wanted` のあいだ read は Failed を返し、
-// 成功と偽らない。再試行のきっかけは start・onStart・onStop・許可結果・Task 完了・Receiver の配送という既存の入口だけで、
+// は発行した時点で `unreleased`（main thread）を立て、その Task の成功を確認するまで下ろさない。解除 Task が未完了の間は
+// 新しい購読も解除の二重発行もせず、失敗（Task 失敗・同期例外）で完了したあとは `reconcile()` が再発行する。
+// 失敗が確定している間（`wanted`）は read が Failed を返し、成功と偽らない（完了待ちの間は待機）。開始 Task の失敗でも解除を発行する。再試行のきっかけは start・onStart・onStop・許可結果・Task 完了・Receiver の配送という既存の入口だけで、
 // 自前のタイマーや再試行回数は持たない。プロセス再起動後に残った購読も、固定 PendingIntent の次の配送を受けた
 // `onResult` が、`wanted` が下りているか前景でなければ解除して値を捨てる。
 // 守らない範囲: 入口がまったく来ない間の再試行（プロセス終了時に OS が購読を残しうるが、固定 PendingIntent なので
@@ -91,6 +91,8 @@ final class ActivityRecognitionHelper {
     private static long seq;
     // main thread。解除が成功と確認できていない。成功でだけ false に戻す。Activity 再生成をまたぐため static。
     private static boolean unreleased;
+    // main thread。発行済みで未完了の解除 Task。null でなければ完了待ち（二重発行しない）。
+    private static Task<Void> releasing;
 
     // JNI（egui スレッド）が読む不変スナップショット。
     private static final class Snapshot {
@@ -199,7 +201,14 @@ final class ActivityRecognitionHelper {
     // 冪等。購読・解除・許可要求の判断はここだけで行う。
     private void reconcile() {
         boolean hold = wanted && foreground && !destroyed && failure == 0 && !unreleased;
-        if (hold) {
+        if (!hold && active) {
+            active = false;
+            requestTask = null;
+            latest = null;
+            release(activity.getApplicationContext());
+        } else if (unreleased) {
+            release(activity.getApplicationContext()); // 完了待ちなら何もせず、失敗が確定していれば再発行する
+        } else if (hold) {
             if (activity.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION)
                     != PackageManager.PERMISSION_GRANTED) {
                 if (!permissionPending) {
@@ -214,13 +223,6 @@ final class ActivityRecognitionHelper {
             } else if (!active) {
                 subscribe();
             }
-        } else if (active) {
-            active = false;
-            requestTask = null;
-            latest = null;
-            release(activity.getApplicationContext());
-        } else if (unreleased) {
-            release(activity.getApplicationContext()); // 解除が確認できるまで再発行する
         }
         publish();
     }
@@ -235,8 +237,10 @@ final class ActivityRecognitionHelper {
             t.addOnCompleteListener(ContextCompat.getMainExecutor(app), done -> onRequestDone(done));
         } catch (SecurityException e) {
             failure = ST_DENIED;
+            release(app);
         } catch (RuntimeException e) {
             failure = ST_FAILED;
+            release(app);
         }
     }
 
@@ -249,6 +253,7 @@ final class ActivityRecognitionHelper {
             requestTask = null;
             latest = null;
             failure = e instanceof SecurityException ? ST_DENIED : ST_FAILED;
+            release(activity.getApplicationContext()); // OS 側に購読が残る可能性を否定できない
         }
         reconcile();
     }
@@ -256,7 +261,7 @@ final class ActivityRecognitionHelper {
     private void publish() {
         long[] v;
         if (failure != 0) v = new long[] {failure, 0};
-        else if (unreleased && wanted) v = new long[] {ST_FAILED, 0};
+        else if (unreleased && releasing == null && wanted) v = new long[] {ST_FAILED, 0};
         else if (permissionPending) v = new long[] {ST_AWAITING, 0};
         else if (!wanted || !foreground || latest == null) v = new long[] {ST_WAITING, 0};
         else {
@@ -273,7 +278,11 @@ final class ActivityRecognitionHelper {
         if (intent == null) return;
         Context app = context.getApplicationContext();
         ActivityRecognitionHelper h = current;
-        if (h == null || !h.active || !h.wanted || !h.foreground) {
+        if (h != null && h.active && !(h.wanted && h.foreground)) {
+            h.reconcile(); // 解除を発行して値を捨てる
+            return;
+        }
+        if (h == null || !h.active) {
             release(app);
             return;
         }
@@ -292,32 +301,30 @@ final class ActivityRecognitionHelper {
         h.publish();
     }
 
-    // 固定 PendingIntent で解除する。失敗（Task 失敗・同期例外）は unreleased に記録し、成功でだけ下ろす。
-    // 成功後、再び購読していなければ PendingIntent を cancel する。成功時は reconcile で購読の再開を試みる
-    // （失敗時は reconcile を呼ばない。自前の再試行ループを作らない）。main thread で呼ぶ。
+    // 固定 PendingIntent で解除する。発行時に unreleased を立て、Task の成功でだけ下ろして pi.cancel() する
+    // （unreleased の間は新しい購読をしないので、cancel が新しい購読を壊さない）。完了待ちの間は何もしない。
+    // 成功時は reconcile で購読の再開を試みる。失敗時は unreleased を残して reconcile を呼ばない
+    // （自前の再試行ループを作らない。次の入口が再発行する）。main thread で呼ぶ。
     private static void release(Context app) {
+        if (releasing != null) return;
+        unreleased = true;
         PendingIntent pi = pendingIntent(app);
         try {
-            ActivityRecognition.getClient(app).removeActivityUpdates(pi)
-                    .addOnCompleteListener(ContextCompat.getMainExecutor(app), t -> {
-                        ActivityRecognitionHelper h = current;
-                        boolean resubscribed = h != null && h.active; // 同じ PI への再要求が前の購読を置き換え済み
-                        if (t.isSuccessful()) {
-                            unreleased = false;
-                            if (!resubscribed) pi.cancel();
-                            if (h != null) h.reconcile();
-                        } else if (!resubscribed) {
-                            markUnreleased();
-                        }
-                    });
+            Task<Void> task = ActivityRecognition.getClient(app).removeActivityUpdates(pi);
+            releasing = task;
+            task.addOnCompleteListener(ContextCompat.getMainExecutor(app), t -> {
+                releasing = null;
+                if (t.isSuccessful()) {
+                    unreleased = false;
+                    pi.cancel();
+                }
+                ActivityRecognitionHelper h = current;
+                if (h == null) return;
+                if (unreleased) h.publish(); else h.reconcile();
+            });
         } catch (RuntimeException e) {
-            markUnreleased();
+            releasing = null;
         }
-    }
-
-    private static void markUnreleased() {
-        unreleased = true;
-        if (current != null) current.publish();
     }
 
     // GMS が extras を書き込むため API 31 以上は FLAG_MUTABLE。明示コンポーネント宛てなので他アプリには横取りされない。
