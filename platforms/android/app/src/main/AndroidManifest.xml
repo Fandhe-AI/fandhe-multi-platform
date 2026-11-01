@@ -194,8 +194,8 @@
     <uses-permission android:name="android.permission.NFC" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
     <!-- NFC カードエミュレーション（HCE、nfc-card-emulation）。HCE 非対応端末を自動フィルタから除外しない
-         ため required=false（nfc と同じ根拠）。HostApduService の service 本体は実装 PR で足す。
-         切り離し時に削除する。 -->
+         ため required=false（nfc と同じ根拠）。HostApduService の service は下の NfcCardEmulationService（Issue #1129）。
+         切り離し時にこの行と下の service を削除する。 -->
     <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />
 
     <!-- Phase 11（Issue #1092）: 触覚フィードバック画面が `Vibrator` で振動を要求する。
@@ -429,6 +429,22 @@
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
+        <!-- Issue #1129: NFC カードエミュレーション（HCE）。システムが bind するため exported="true" だが、
+             BIND_NFC_SERVICE（システムだけが持つ権限）を要求するので bind できるのはシステムだけ。
+             固定の独自 AID への SELECT に固定の応答を返すだけで、秘密を返さないため requireDeviceUnlock=false。
+             uses-permission は足さない。切り離し時にこの service・res/xml/apduservice.xml・
+             strings.xml の nfc_card_emulation_*・Java 2 ファイルを削除する。 -->
+        <service
+            android:name="com.fandhe.androidapp.NfcCardEmulationService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.cardemulation.host_apdu_service"
+                android:resource="@xml/apduservice" />
+        </service>
         <!-- Issue #946: MDM / EMM が管理アプリ設定を配るための制限スキーマ宣言。切り離し時に削除する。 -->
         <meta-data
             android:name="android.content.APP_RESTRICTIONS"

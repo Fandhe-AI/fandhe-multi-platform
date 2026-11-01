@@ -6,7 +6,8 @@
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
 //! 置き場」節の制約どおり）。OS 呼び出しは `fandhe-egui-proxy` の effect ドライバ
 //! （`device/payment_request.rs`）が [`take_request`] で要求を観測して行い、[`finish`] で結果を注入する。
-//! Web 分の状態・文言もここで定義済みで、後続の子（Web）は画面に触らない。
+//! Web・Android 分の状態・文言もここで定義済みで、後続の子（Web・Android）は画面に触らない。
+//! Android の GMS なしと `isReadyToPay` false は [`CoreOutcome::Unsupported`] に寄せ、状態は増やさない。
 //!
 //! # 決済の成立と言わない理由
 //!
@@ -26,7 +27,7 @@ pub const TEST_AUTHORIZED_STATUS: &str =
 /// キャンセル・中断の案内（通常色）。
 pub const CANCELLED_STATUS: &str = "キャンセルされたか、中断されました";
 /// 非対応環境の案内。ネイティブと Web で共有する。
-pub const UNSUPPORTED_STATUS: &str = "この環境では決済シートを使えません（Web は Chrome の Google Pay（テスト環境）のみ。iOS・macOS・Android は開発者登録・GMS の都合で保留中）";
+pub const UNSUPPORTED_STATUS: &str = "この環境では決済シートを使えません（Web は Chrome、Android は Google Play 開発者サービスのある端末の Google Pay（いずれもテスト環境）。iOS・macOS は開発者登録の都合で保留中）";
 /// 失敗の接頭辞。
 pub const FAILED_PREFIX: &str = "失敗しました: ";
 

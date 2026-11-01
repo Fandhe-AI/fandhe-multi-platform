@@ -936,6 +936,12 @@ public class MainActivity extends GameActivity {
         return CarDisplayScreen.isShowing();
     }
 
+    // NFC カードエミュレーション（Issue #1129）。実装は `NfcCardEmulationHelper`。Rust の
+    // `android_nfc_card_emulation.rs` が JNI（署名 `(Ljava/lang/String;)[J`）で呼ぶ。
+    long[] nfcCardEmulationStatus(String aid) {
+        return NfcCardEmulationHelper.status(getApplicationContext(), aid);
+    }
+
     // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
     // Rust の `android_print.rs` が JNI で呼ぶ。
     private final PrintHelper printHelper = new PrintHelper(this);
