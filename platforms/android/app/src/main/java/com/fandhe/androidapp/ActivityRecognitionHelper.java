@@ -177,6 +177,7 @@ final class ActivityRecognitionHelper {
     // LOCK の内側で呼ぶ。許可を確かめ、未許可ならダイアログ、許可済みなら購読する。背景中は onStart まで待つ。
     private void begin() {
         if (stopped || destroyed) return;
+        if (activeGen != 0) return; // 有効な世代があれば再登録しない（許可結果と onStart の二重通知）
         if (!unreleased.isEmpty()) {
             if (!inflight.isEmpty()) {
                 // 解除の完了待ち。完了通知で begin を再開する
@@ -225,7 +226,7 @@ final class ActivityRecognitionHelper {
             if (!granted) {
                 failure = ST_DENIED;
             } else if (!stopped) {
-                subscribe(); // 背景中に届いた結果は購読せず onStart に任せる
+                begin(); // 解除完了待ち・有効世代の防御を通す。背景中に届いた結果は購読せず onStart に任せる
             }
         }
     }
