@@ -305,6 +305,11 @@ pub mod android_now_playing;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_open_system_settings;
+/// Issue #1130（親 #114）: Android 向け決済シートの骨格（`Unsupported` のスタブ。#1131 が
+/// Google Pay API で埋める）。`device/payment_request.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_payment_request;
 /// Issue #472: Android 向け PDF 表示の実装（`PdfRenderer`）。
 /// `device/pdf_viewer.rs` の Android 経路から呼ばれる。応答の解読をホストでテストするため test でも載せる。
 #[cfg(any(target_os = "android", test))]
@@ -1605,8 +1610,9 @@ pub mod open_system_settings;
 /// Phase 11 の拡充ループ（親 #92、Issue #342）: パスキーの effect ドライバ（Windows はワーカー +
 /// pull 型 bridge、実装は #343 が埋める。他 OS は `UnsupportedPasskey` 固定。Web は `fandhe-web-dom`）。
 pub mod passkey;
-/// Phase 11 の拡充ループ（親 #114、Issue #541）: 決済シートの effect ドライバ（全ネイティブで
-/// `UnsupportedPaymentSheet` 固定の同期経路が最終形。Web は `fandhe-web-dom`）。
+/// Phase 11 の拡充ループ（親 #114、Issue #541・#1130）: 決済シートの effect ドライバ（Android は
+/// pull 型 bridge、他のネイティブは `UnsupportedPaymentSheet` 固定の同期経路。dispatch は最終形。
+/// Web は `fandhe-web-dom`）。
 pub mod payment_request;
 /// Phase 11 の拡充ループ（親 #107、Issue #469）: PDF 表示（1 ページ目の画像化）の effect ドライバ
 /// （macOS・iOS / Windows / Android 実装、他 OS は `UnsupportedPdfPageRenderer` 固定）。
