@@ -47,8 +47,8 @@ import java.util.UUID;
 // 前プロセスの孤児購読は、その購読の配送が届いたとき token 不一致として同じ data で remove・cancel して回収する
 // （配送が来ない孤児は回収できない。守らない範囲）。
 // 解除（removeActivityUpdates）は発行時から `unreleased` に記録し、成功通知でだけ消す。Task 実行中は新しい購読を
-// 保留し（完了後に begin を再開）、失敗が確定していれば再試行しつつ failure を立てる（解除が確認できるまで購読しない）。
-// 解除の失敗は停止後も 5 秒間隔で最大 3 回再試行し、尽きたら PendingIntent を cancel して配送を止める。
+// 保留する（完了後に begin を再開）。解除の失敗は停止後も 5 秒間隔で最大 3 回再試行し、尽きたら PendingIntent を
+// cancel して記録を捨てる（新しい購読は妨げない）。実行中の解除に重ねた要求は rerun に記録し、完了時に再発行する。
 //
 // ライフサイクル: `onStop` で購読を解除して最新値を捨て、`onStart` で新世代として張り直す
 // （許可ダイアログが起こす onPause とは独立）。背景中に届いた許可結果ではここでは購読せず onStart に任せる。
@@ -100,6 +100,8 @@ final class ActivityRecognitionHelper {
     private static final Map<String, Integer> removeAttempts = new HashMap<>();
     // LOCK の内側。解除の Task が全部完了したとき 1 度だけ走らせる、保留中の begin。
     private static Runnable afterRemovals;
+    // LOCK の内側。解除の Task 実行中に重ねて要求された解除。完了時に 1 回だけ再発行する。
+    private static final Set<String> rerun = new HashSet<>();
 
     private final ComponentActivity activity;
     private final ActivityResultLauncher<String> permissionLauncher;
@@ -187,16 +189,12 @@ final class ActivityRecognitionHelper {
     private void begin() {
         if (stopped || destroyed) return;
         if (activeGen != 0) return; // 有効な世代があれば再登録しない（許可結果と onStart の二重通知）
-        if (!unreleased.isEmpty()) {
-            if (!inflight.isEmpty()) {
-                // 解除の完了待ち。完了通知で begin を再開する
-                afterRemovals = () -> {
-                    if (wanted && !destroyed && failure == 0) begin();
-                };
-                return;
-            }
-            retryFailedRemovals(activity.getApplicationContext());
-            failure = ST_FAILED; // 解除未確認のまま新しい購読を張らない。Rust が stop → 再 start したとき再試行の結果を見る
+        if (!inflight.isEmpty()) {
+            // 解除の Task 実行中。完了通知で begin を再開する。
+            // 失敗が確定した未解放の購読は遅延再試行が回収する。権限取り消し後などで解除できなくても、新しい購読は妨げない
+            afterRemovals = () -> {
+                if (wanted && !destroyed && failure == 0) begin();
+            };
             return;
         }
         if (activity.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION)
@@ -327,7 +325,10 @@ final class ActivityRecognitionHelper {
     // 消して cancel する。失敗（Task 失敗・同期例外）は unreleased に残る。LOCK の内側で呼ぶ。
     private static void removeUpdates(Context app, String token, long g) {
         final String key = token + "/" + g;
-        if (!inflight.add(key)) return;
+        if (!inflight.add(key)) {
+            rerun.add(key); // 発行済みの解除が登録完了より先に終わる場合に備え、完了時にもう一度解除する
+            return;
+        }
         unreleased.add(key);
         final PendingIntent pi = pendingIntent(app, token, g);
         try {
@@ -335,11 +336,14 @@ final class ActivityRecognitionHelper {
                     .addOnCompleteListener(t -> {
                         synchronized (LOCK) {
                             inflight.remove(key);
-                            if (t.isSuccessful()) {
+                            if (t.isSuccessful() && rerun.remove(key)) {
+                                removeUpdates(app, token, g);
+                            } else if (t.isSuccessful()) {
                                 unreleased.remove(key);
                                 removeAttempts.remove(key);
                                 pi.cancel();
                             } else {
+                                rerun.remove(key);
                                 onRemovalFailed(app, token, g, key, pi);
                             }
                             runAfterRemovals();
@@ -347,16 +351,19 @@ final class ActivityRecognitionHelper {
                     });
         } catch (RuntimeException e) {
             inflight.remove(key);
+            rerun.remove(key);
             onRemovalFailed(app, token, g, key, pi);
         }
     }
 
     // LOCK の内側で呼ぶ。解除の失敗後、以後 start も配送も無くても回収できるよう、遅延再試行を数回行う。
-    // 上限を超えたら PendingIntent だけ cancel して配送を止める（unreleased は残し、新しい購読は引き続き保留する）。
+    // 上限を超えたら PendingIntent を cancel して配送を止め、記録を捨てる（権限が無く解除できない鍵で新しい購読を妨げない）。
     private static void onRemovalFailed(Context app, String token, long g, String key, PendingIntent pi) {
         int n = removeAttempts.containsKey(key) ? removeAttempts.get(key) : 0;
         if (n >= MAX_REMOVE_RETRIES) {
             pi.cancel();
+            unreleased.remove(key);
+            removeAttempts.remove(key);
             return;
         }
         removeAttempts.put(key, n + 1);
@@ -373,19 +380,6 @@ final class ActivityRecognitionHelper {
         Runnable r = afterRemovals;
         afterRemovals = null;
         r.run();
-    }
-
-    // LOCK の内側で呼ぶ。完了済みで未確認の解除を作り直して再試行する（結果は完了コールバックが反映する）。
-    private static void retryFailedRemovals(Context app) {
-        for (String key : new HashSet<>(unreleased)) {
-            if (inflight.contains(key)) continue;
-            int i = key.lastIndexOf('/');
-            try {
-                removeUpdates(app, key.substring(0, i), Long.parseLong(key.substring(i + 1)));
-            } catch (RuntimeException e) {
-                // 次の begin で再試行する
-            }
-        }
     }
 
     // GMS が extras を書き込むため API 31 以上は FLAG_MUTABLE。明示コンポーネント宛てなので他アプリには横取りされない。
