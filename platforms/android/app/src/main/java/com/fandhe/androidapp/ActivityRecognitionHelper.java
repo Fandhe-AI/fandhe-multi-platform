@@ -15,7 +15,12 @@ import com.google.android.gms.location.ActivityRecognition;
 import com.google.android.gms.location.ActivityRecognitionResult;
 import com.google.android.gms.location.DetectedActivity;
 
+import android.net.Uri;
+
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 // 行動認識（歩行・乗車等、Issue #1127、親 #124）の Android 実装ヘルパー。MainActivity から生成・委譲される
 // （Rust の `device/android_activity_recognition.rs` が egui スレッドから `MainActivity.activityRecognitionStart` /
@@ -34,7 +39,11 @@ import java.util.List;
 //
 // 世代: 購読のたびに `gen` を進め、PendingIntent の requestCode と extra を世代ごとに分ける。
 // 遅れて届いた旧世代の完了・配送は照合して捨て、その世代の購読だけを remove する（新しい購読を消さない）。
-// プロセス死後に GMS へ残った孤児購読も、届いた配送が現世代と違うことで remove・cancel して回収する。
+// PendingIntent の Intent data にプロセス固有の token（起動ごとの UUID）と世代を含め、再起動後の同じ世代番号と区別する。
+// 前プロセスの孤児購読は、その購読の配送が届いたとき token 不一致として同じ data で remove・cancel して回収する
+// （配送が来ない孤児は回収できない。守らない範囲）。
+// 解除（removeActivityUpdates）が失敗した購読は `failedRemovals` に残し、次の begin で再試行しつつ failure を立てる
+// （解除が確認できるまで正常な購読を受け付けない）。
 //
 // ライフサイクル: `onStop` で購読を解除して最新値を捨て、`onStart` で新世代として張り直す
 // （許可ダイアログが起こす onPause とは独立）。背景中に届いた許可結果ではここでは購読せず onStart に任せる。
@@ -60,7 +69,8 @@ final class ActivityRecognitionHelper {
     private static final long DETECTION_INTERVAL_MS = 1000L;
     // Rust `decode_read` の上限（2 + 2×16）と合わせる。
     private static final int MAX_PAIRS = 16;
-    private static final String EXTRA_GEN = "com.fandhe.androidapp.activityrecognition.GEN";
+    // プロセス固有の識別子。PendingIntent の同一性（Intent data）に含める。
+    private static final String PROCESS_TOKEN = UUID.randomUUID().toString();
 
     private static native void nativeOnBackgrounded();
     private static native void nativeOnResumed();
@@ -75,6 +85,8 @@ final class ActivityRecognitionHelper {
     private static long seq;                  // LOCK の内側。受理した配送ごとに +1、巻き戻さない
     private static long[] latest;             // LOCK の内側。(type, conf) の組。null=値なし
     private static long latestSeq;
+    // LOCK の内側。解除に失敗した購読の識別 "token/gen"。確認できるまで残す。
+    private static final Set<String> failedRemovals = new HashSet<>();
 
     private final ComponentActivity activity;
     private final ActivityResultLauncher<String> permissionLauncher;
@@ -161,15 +173,37 @@ final class ActivityRecognitionHelper {
     // LOCK の内側で呼ぶ。許可を確かめ、未許可ならダイアログ、許可済みなら購読する。背景中は onStart まで待つ。
     private void begin() {
         if (stopped || destroyed) return;
+        if (!failedRemovals.isEmpty()) {
+            retryFailedRemovals(activity.getApplicationContext());
+            failure = ST_FAILED; // 解除未確認のまま新しい購読を張らない。Rust が stop → 再 start したとき再試行済み
+            return;
+        }
         if (activity.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION)
                 != PackageManager.PERMISSION_GRANTED) {
             if (!awaiting) {
                 awaiting = true;
-                activity.runOnUiThread(() -> permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION));
+                activity.runOnUiThread(this::launchPermission);
             }
             return;
         }
         subscribe();
+    }
+
+    // main looper。キュー待ちの間に stop / onStop / onDestroy が走った場合は起動せず待ちを解く。
+    private void launchPermission() {
+        synchronized (LOCK) {
+            if (!awaiting) return;
+            if (!wanted || stopped || destroyed) {
+                awaiting = false; // 再開は onStart の begin が行う
+                return;
+            }
+            try {
+                permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION);
+            } catch (RuntimeException e) {
+                awaiting = false;
+                failure = ST_FAILED;
+            }
+        }
     }
 
     // 許可ダイアログ自体が Activity を pause させるため、resumed では分岐しない。
@@ -191,7 +225,7 @@ final class ActivityRecognitionHelper {
         final long g = ++gen;
         activeGen = g;
         final Context app = activity.getApplicationContext();
-        PendingIntent pi = pendingIntent(app, g);
+        PendingIntent pi = pendingIntent(app, PROCESS_TOKEN, g);
         try {
             ActivityRecognition.getClient(app)
                     .requestActivityUpdates(DETECTION_INTERVAL_MS, pi)
@@ -207,7 +241,7 @@ final class ActivityRecognitionHelper {
     // LOCK の内側で呼ぶ。
     private void unsubscribe() {
         if (activeGen != 0) {
-            removeUpdates(activity.getApplicationContext(), activeGen);
+            removeUpdates(activity.getApplicationContext(), PROCESS_TOKEN, activeGen);
             activeGen = 0;
         }
         latest = null;
@@ -218,13 +252,13 @@ final class ActivityRecognitionHelper {
         if (activeGen != g) return;
         activeGen = 0;
         failure = code;
-        removeUpdates(app, g);
+        removeUpdates(app, PROCESS_TOKEN, g);
     }
 
     // 登録の完了が遅れて届いた場合、旧世代・停止済みならその世代だけを remove する。
     private void onRequestSucceeded(Context app, long g) {
         synchronized (LOCK) {
-            if (activeGen != g || !wanted) removeUpdates(app, g);
+            if (activeGen != g || !wanted) removeUpdates(app, PROCESS_TOKEN, g);
         }
     }
 
@@ -238,11 +272,19 @@ final class ActivityRecognitionHelper {
     static void onResult(Context context, Intent intent) {
         if (intent == null) return;
         Context app = context.getApplicationContext();
-        long g = intent.getLongExtra(EXTRA_GEN, -1L);
+        Uri data = intent.getData();
+        if (data == null || data.getHost() == null || data.getLastPathSegment() == null) return;
+        String token = data.getHost();
+        long g;
+        try {
+            g = Long.parseLong(data.getLastPathSegment());
+        } catch (NumberFormatException e) {
+            return;
+        }
         synchronized (LOCK) {
             if (g <= 0) return;
-            if (g != activeGen) {
-                removeUpdates(app, g);
+            if (!PROCESS_TOKEN.equals(token) || g != activeGen) {
+                removeUpdates(app, token, g);
                 return;
             }
             if (!ActivityRecognitionResult.hasResult(intent)) return;
@@ -260,20 +302,46 @@ final class ActivityRecognitionHelper {
         }
     }
 
-    // 同じ requestCode の PendingIntent を作り直して購読を解除し、完了後に cancel する。
-    private static void removeUpdates(Context app, long g) {
-        final PendingIntent pi = pendingIntent(app, g);
+    // 同じ PendingIntent（token・世代）を作り直して購読を解除する。成功を確認してから cancel し、
+    // 失敗（Task 失敗・同期例外）は failedRemovals に残す。LOCK の内側で呼ぶ。
+    private static void removeUpdates(Context app, String token, long g) {
+        final String key = token + "/" + g;
+        final PendingIntent pi = pendingIntent(app, token, g);
         try {
             ActivityRecognition.getClient(app).removeActivityUpdates(pi)
-                    .addOnCompleteListener(t -> pi.cancel());
+                    .addOnCompleteListener(t -> {
+                        synchronized (LOCK) {
+                            if (t.isSuccessful()) {
+                                failedRemovals.remove(key);
+                                pi.cancel();
+                            } else {
+                                failedRemovals.add(key);
+                            }
+                        }
+                    });
         } catch (RuntimeException e) {
-            pi.cancel();
+            failedRemovals.add(key);
+        }
+    }
+
+    // LOCK の内側で呼ぶ。失敗として残した解除を作り直して再試行する（結果は完了コールバックが反映する）。
+    private static void retryFailedRemovals(Context app) {
+        for (String key : new HashSet<>(failedRemovals)) {
+            int i = key.lastIndexOf('/');
+            try {
+                failedRemovals.remove(key);
+                removeUpdates(app, key.substring(0, i), Long.parseLong(key.substring(i + 1)));
+            } catch (RuntimeException e) {
+                failedRemovals.add(key);
+            }
         }
     }
 
     // GMS が extras を書き込むため API 31 以上は FLAG_MUTABLE。明示コンポーネント宛てなので他アプリには横取りされない。
-    private static PendingIntent pendingIntent(Context app, long g) {
-        Intent i = new Intent(app, ActivityRecognitionReceiver.class).putExtra(EXTRA_GEN, g);
+    // data にプロセス token と世代を入れ、再起動後に同じ世代番号でも別の PendingIntent になるようにする。
+    private static PendingIntent pendingIntent(Context app, String token, long g) {
+        Intent i = new Intent(app, ActivityRecognitionReceiver.class)
+                .setData(Uri.parse("fandhe-activity://" + token + "/" + g));
         int flags = PendingIntent.FLAG_UPDATE_CURRENT
                 | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0);
         return PendingIntent.getBroadcast(app, (int) g, i, flags);
