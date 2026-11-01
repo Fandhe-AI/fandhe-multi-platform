@@ -42,8 +42,8 @@ import java.util.UUID;
 // PendingIntent の Intent data にプロセス固有の token（起動ごとの UUID）と世代を含め、再起動後の同じ世代番号と区別する。
 // 前プロセスの孤児購読は、その購読の配送が届いたとき token 不一致として同じ data で remove・cancel して回収する
 // （配送が来ない孤児は回収できない。守らない範囲）。
-// 解除（removeActivityUpdates）が失敗した購読は `failedRemovals` に残し、次の begin で再試行しつつ failure を立てる
-// （解除が確認できるまで正常な購読を受け付けない）。
+// 解除（removeActivityUpdates）は発行時から `unreleased` に記録し、成功通知でだけ消す。Task 実行中は新しい購読を
+// 保留し（完了後に begin を再開）、失敗が確定していれば再試行しつつ failure を立てる（解除が確認できるまで購読しない）。
 //
 // ライフサイクル: `onStop` で購読を解除して最新値を捨て、`onStart` で新世代として張り直す
 // （許可ダイアログが起こす onPause とは独立）。背景中に届いた許可結果ではここでは購読せず onStart に任せる。
@@ -85,8 +85,12 @@ final class ActivityRecognitionHelper {
     private static long seq;                  // LOCK の内側。受理した配送ごとに +1、巻き戻さない
     private static long[] latest;             // LOCK の内側。(type, conf) の組。null=値なし
     private static long latestSeq;
-    // LOCK の内側。解除に失敗した購読の識別 "token/gen"。確認できるまで残す。
-    private static final Set<String> failedRemovals = new HashSet<>();
+    // LOCK の内側。解除が確認できていない購読の識別 "token/gen"。解除を発行した時点で入れ、成功通知でだけ消す。
+    private static final Set<String> unreleased = new HashSet<>();
+    // LOCK の内側。unreleased のうち解除の Task が未完了のもの。
+    private static final Set<String> inflight = new HashSet<>();
+    // LOCK の内側。解除の Task が全部完了したとき 1 度だけ走らせる、保留中の begin。
+    private static Runnable afterRemovals;
 
     private final ComponentActivity activity;
     private final ActivityResultLauncher<String> permissionLauncher;
@@ -173,9 +177,16 @@ final class ActivityRecognitionHelper {
     // LOCK の内側で呼ぶ。許可を確かめ、未許可ならダイアログ、許可済みなら購読する。背景中は onStart まで待つ。
     private void begin() {
         if (stopped || destroyed) return;
-        if (!failedRemovals.isEmpty()) {
+        if (!unreleased.isEmpty()) {
+            if (!inflight.isEmpty()) {
+                // 解除の完了待ち。完了通知で begin を再開する
+                afterRemovals = () -> {
+                    if (wanted && !destroyed && failure == 0) begin();
+                };
+                return;
+            }
             retryFailedRemovals(activity.getApplicationContext());
-            failure = ST_FAILED; // 解除未確認のまま新しい購読を張らない。Rust が stop → 再 start したとき再試行済み
+            failure = ST_FAILED; // 解除未確認のまま新しい購読を張らない。Rust が stop → 再 start したとき再試行の結果を見る
             return;
         }
         if (activity.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION)
@@ -302,37 +313,47 @@ final class ActivityRecognitionHelper {
         }
     }
 
-    // 同じ PendingIntent（token・世代）を作り直して購読を解除する。成功を確認してから cancel し、
-    // 失敗（Task 失敗・同期例外）は failedRemovals に残す。LOCK の内側で呼ぶ。
+    // 同じ PendingIntent（token・世代）を作り直して購読を解除する。発行時に unreleased へ記録し、成功を確認してから
+    // 消して cancel する。失敗（Task 失敗・同期例外）は unreleased に残る。LOCK の内側で呼ぶ。
     private static void removeUpdates(Context app, String token, long g) {
         final String key = token + "/" + g;
+        if (!inflight.add(key)) return;
+        unreleased.add(key);
         final PendingIntent pi = pendingIntent(app, token, g);
         try {
             ActivityRecognition.getClient(app).removeActivityUpdates(pi)
                     .addOnCompleteListener(t -> {
                         synchronized (LOCK) {
+                            inflight.remove(key);
                             if (t.isSuccessful()) {
-                                failedRemovals.remove(key);
+                                unreleased.remove(key);
                                 pi.cancel();
-                            } else {
-                                failedRemovals.add(key);
                             }
+                            runAfterRemovals();
                         }
                     });
         } catch (RuntimeException e) {
-            failedRemovals.add(key);
+            inflight.remove(key);
         }
     }
 
-    // LOCK の内側で呼ぶ。失敗として残した解除を作り直して再試行する（結果は完了コールバックが反映する）。
+    // LOCK の内側で呼ぶ。解除が全部終わっていれば保留中の begin を 1 度だけ走らせる。
+    private static void runAfterRemovals() {
+        if (!inflight.isEmpty() || afterRemovals == null) return;
+        Runnable r = afterRemovals;
+        afterRemovals = null;
+        r.run();
+    }
+
+    // LOCK の内側で呼ぶ。完了済みで未確認の解除を作り直して再試行する（結果は完了コールバックが反映する）。
     private static void retryFailedRemovals(Context app) {
-        for (String key : new HashSet<>(failedRemovals)) {
+        for (String key : new HashSet<>(unreleased)) {
+            if (inflight.contains(key)) continue;
             int i = key.lastIndexOf('/');
             try {
-                failedRemovals.remove(key);
                 removeUpdates(app, key.substring(0, i), Long.parseLong(key.substring(i + 1)));
             } catch (RuntimeException e) {
-                failedRemovals.add(key);
+                // 次の begin で再試行する
             }
         }
     }
