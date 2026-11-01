@@ -171,6 +171,11 @@ final class PaymentRequestHelper {
             finish(id, KIND_FAILED, 0, false);
             return;
         }
+        // 待機中にホームへ移動した場合に背景で決済シートを出さない。
+        if (!activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
+            finish(id, KIND_FAILED, 0, false);
+            return;
+        }
         try {
             launcher.launch(new IntentSenderRequest.Builder(
                     ((ResolvableApiException) e).getResolution()).build());
@@ -190,6 +195,12 @@ final class PaymentRequestHelper {
         launchedId = RequestTracker.NONE;
         boolean hasData = false;
         Intent data = result.getData();
+        // 起動失敗（SendIntentException）は RESULT_CANCELED で返るため、取り消しと区別して失敗にする。
+        if (data != null && data.hasExtra(
+                ActivityResultContracts.StartIntentSenderForResult.EXTRA_SEND_INTENT_EXCEPTION)) {
+            finish(id, KIND_FAILED, 0, false);
+            return;
+        }
         if (data != null) {
             try {
                 hasData = PaymentData.getFromIntent(data) != null;
