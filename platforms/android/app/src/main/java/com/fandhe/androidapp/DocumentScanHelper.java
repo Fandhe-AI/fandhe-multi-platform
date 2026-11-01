@@ -16,8 +16,6 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.Lifecycle;
 
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.mlkit.common.MlKitException;
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions;
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning;
@@ -130,9 +128,8 @@ final class DocumentScanHelper {
         // Activity が生きているうちに保持する。変換中に破棄されても deleteAll が WeakReference に依存しない。
         cacheDir();
         try {
-            // 更新ダイアログは出さない。SUCCESS 以外（無い・古い・無効）は非対応。
-            if (GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(activity)
-                    != ConnectionResult.SUCCESS) {
+            // SUCCESS 以外（無い・古い・無効）は非対応（GmsAvailability の doc 参照）。
+            if (!GmsAvailability.isAvailable(activity)) {
                 finish(id, KIND_UNSUPPORTED, 0, null);
                 return;
             }
