@@ -12,19 +12,14 @@ import android.os.Looper;
 import androidx.activity.ComponentActivity;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.core.content.ContextCompat;
 
 import com.google.android.gms.location.ActivityRecognition;
 import com.google.android.gms.location.ActivityRecognitionResult;
 import com.google.android.gms.location.DetectedActivity;
+import com.google.android.gms.tasks.Task;
 
-import android.net.Uri;
-
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 
 // 行動認識（歩行・乗車等、Issue #1127、親 #124）の Android 実装ヘルパー。MainActivity から生成・委譲される
 // （Rust の `device/android_activity_recognition.rs` が egui スレッドから `MainActivity.activityRecognitionStart` /
@@ -37,26 +32,29 @@ import java.util.UUID;
 //   activityRecognitionRead : long[] {status, seq, type0, conf0, type1, conf1, ...}
 //     status 0=待機 / 1=値あり / 2=許可拒否 / 3=失敗 / 4=許可ダイアログ待ち / -1=購読が失われた
 //
-// スレッド: start/read/stop は egui スレッド、Receiver・Task コールバック・許可結果・ライフサイクルは main looper。
-// 状態はすべて static `LOCK` の内側で読み書きする。GMS 呼び出しは即戻るため LOCK 内で発行し、
-// native 通知は LOCK の外で呼ぶ。main への同期待ちは作らない。
+// 設計（OS を正にして状態を減らす）:
+// - PendingIntent は 1 つに固定する（requestCode 定数・明示コンポーネント・data なし）。Play services は購読を
+//   PendingIntent 単位で持ち、同じ PendingIntent への requestActivityUpdates は前の購読を置き換える。同じ
+//   requestCode と Intent（filterEquals）の PendingIntent はプロセス再起動後も同一として照合される。
+//   このため世代番号・未解放の記録・解除の再試行は持たない。
+//   https://developers.google.com/android/reference/com/google/android/gms/location/ActivityRecognitionClient
+//   https://developer.android.com/reference/android/app/PendingIntent （同一性は Intent.filterEquals と requestCode）
+// - 状態は main thread だけで読み書きする（Activity のライフサイクル・Task listener（main executor）・
+//   BroadcastReceiver.onReceive はすべて main）。Rust ワーカーが JNI で読む値は不変の `Snapshot` を volatile で公開する。
+//   start / stop は egui スレッドから main へ post するだけで、main への同期待ちは作らない。
+// - 望む状態は `wanted` 1 つ。start / stop / onStart / onStop / 許可結果 / Task 完了は状態を更新して
+//   `reconcile()` を呼ぶだけで、reconcile が冪等に購読・解除・許可要求を決める。
 //
-// 世代: 購読のたびに `gen` を進め、PendingIntent の requestCode と extra を世代ごとに分ける。
-// 遅れて届いた旧世代の完了・配送は照合して捨て、その世代の購読だけを remove する（新しい購読を消さない）。
-// PendingIntent の Intent data にプロセス固有の token（起動ごとの UUID）と世代を含め、再起動後の同じ世代番号と区別する。
-// 前プロセスの孤児購読は、その購読の配送が届いたとき token 不一致として同じ data で remove・cancel して回収する
-// （配送が来ない孤児は回収できない。守らない範囲）。
-// 解除（removeActivityUpdates）は発行時から `unreleased` に記録し、成功通知でだけ消す。Task 実行中は新しい購読を
-// 保留する（完了後に begin を再開）。解除の失敗は停止後も 5 秒間隔で最大 3 回再試行し、尽きたら PendingIntent を
-// cancel して記録を捨てる（新しい購読は妨げない）。実行中の解除に重ねた要求は rerun に記録し、完了時に再発行する。
+// 守る範囲: 嘘の値を出さない・二重に購読しない・停止/背景/破棄/失敗で解除を発行する。解除（removeActivityUpdates）の
+// 失敗は状態上「購読していない」とし、残った購読は次の配送を受けた `onResult` が、`wanted` が下りているか前景でなければ
+// 同じ固定 PendingIntent で解除して値を捨てる（プロセス再起動後に残った購読も同じ経路）。回収は次の配送までの遅れが
+// あるだけで、データの消失・資源の漏れ・嘘の成功にはならない。
+// 守らない範囲: GMS 側の配信間隔と遅延、配送が来ない孤児購読の即時回収、背景中の受信、過去の履歴、
+// start / stop を同一ミリ秒で往復したときの Snapshot の一時的な食い違い。種別・確度はログに出さない。実機確認は #603。
 //
-// ライフサイクル: `onStop` で購読を解除して最新値を捨て、`onStart` で新世代として張り直す
-// （許可ダイアログが起こす onPause とは独立）。背景中に届いた許可結果ではここでは購読せず onStart に任せる。
-// `onDestroy`（再生成を含む）は購読を解除し、新インスタンスの read は -1 を返す（Rust は失敗扱いで stop する）。
+// ライフサイクル: `onStop` で解除して最新値を捨て、`onStart` で張り直す（許可ダイアログが起こす onPause とは独立）。
+// `onDestroy`（再生成を含む）は解除し、新インスタンスの read は -1 を返す（Rust は失敗扱いで stop する）。
 // 期限は Rust driver の `FirstReadingDeadline` だけが持つ。
-//
-// 守る範囲: 嘘の値を出さない・二重に購読しない・停止/背景/破棄/失敗/旧世代で remove と cancel を呼ぶ。
-// 守らない範囲: GMS 側の配信間隔と遅延、背景中の受信、過去の履歴。種別・確度はログに出さない。実機確認は #603。
 final class ActivityRecognitionHelper {
     static final int START_OK = 0;
     static final int START_UNSUPPORTED = 1;
@@ -74,321 +72,237 @@ final class ActivityRecognitionHelper {
     private static final long DETECTION_INTERVAL_MS = 1000L;
     // Rust `decode_read` の上限（2 + 2×16）と合わせる。
     private static final int MAX_PAIRS = 16;
-    // プロセス固有の識別子。PendingIntent の同一性（Intent data）に含める。
-    private static final int MAX_REMOVE_RETRIES = 3;
-    private static final long REMOVE_RETRY_DELAY_MS = 5000L;
-    private static final String PROCESS_TOKEN = UUID.randomUUID().toString();
+    // 固定 PendingIntent の requestCode。
+    private static final int REQUEST_CODE = 0x4152; // "AR"
 
     private static native void nativeOnBackgrounded();
     private static native void nativeOnResumed();
 
-    private static final Object LOCK = new Object();
+    // Rust から start が 1 度でも呼ばれたか。呼ばれる前は native を呼ばない（feature `device` 無効でも安全）。
+    private static volatile boolean nativeReady;
     // start 成功〜stop までの購読意思（Activity 再生成をまたぐ）。新インスタンスの read が LOST かの区別に使う。
     private static volatile boolean subscribed;
-    // Rust から start が 1 度でも呼ばれたか。呼ばれる前は native を呼ばない（feature `device` 無効でも安全）。
-    private static boolean nativeReady;       // LOCK の内側
-    private static long gen;                  // LOCK の内側。購読のたびに +1
-    private static long activeGen;            // LOCK の内側。0=購読なし
-    private static long seq;                  // LOCK の内側。受理した配送ごとに +1、巻き戻さない
-    private static long[] latest;             // LOCK の内側。(type, conf) の組。null=値なし
-    private static long latestSeq;
-    // LOCK の内側。解除が確認できていない購読の識別 "token/gen"。解除を発行した時点で入れ、成功通知でだけ消す。
-    private static final Set<String> unreleased = new HashSet<>();
-    // LOCK の内側。unreleased のうち解除の Task が未完了のもの。
-    private static final Set<String> inflight = new HashSet<>();
-    // LOCK の内側。解除の失敗ごとの再試行回数。
-    private static final Map<String, Integer> removeAttempts = new HashMap<>();
-    // LOCK の内側。解除の Task が全部完了したとき 1 度だけ走らせる、保留中の begin。
-    private static Runnable afterRemovals;
-    // LOCK の内側。解除の Task 実行中に重ねて要求された解除。完了時に 1 回だけ再発行する。
-    private static final Set<String> rerun = new HashSet<>();
+    // main thread。現在の Activity のヘルパー。Receiver が状態を参照する。
+    private static ActivityRecognitionHelper current;
+    // main thread。受理した配送ごとに +1、巻き戻さない。
+    private static long seq;
+
+    // JNI（egui スレッド）が読む不変スナップショット。
+    private static final class Snapshot {
+        final long[] values; // {status, seq, type0, conf0, ...}
+
+        Snapshot(long[] values) {
+            this.values = values;
+        }
+    }
+
+    private static final Snapshot WAITING = new Snapshot(new long[] {ST_WAITING, 0});
 
     private final ComponentActivity activity;
     private final ActivityResultLauncher<String> permissionLauncher;
-    private boolean wanted;     // LOCK の内側
-    private boolean stopped;    // onStop〜onStart の間
-    private boolean destroyed;
-    private boolean awaiting;   // 許可ダイアログ待ち
-    private long failure;       // 0 または ST_DENIED / ST_FAILED
+    private final Handler main = new Handler(Looper.getMainLooper());
+
+    // egui スレッドと main の境界。
+    private volatile boolean started;   // start〜stop/destroy
+    private volatile boolean destroyed;
+    private volatile Snapshot snapshot = WAITING;
+
+    // 以下は main thread だけで読み書きする。
+    private boolean wanted;
+    private boolean foreground;
+    private boolean active;             // requestActivityUpdates を発行済みで、解除を発行していない
+    private boolean permissionPending;
+    private long failure;               // 0 または ST_DENIED / ST_FAILED
+    private long[] latest;              // (type, conf) の組。null=値なし
+    private long latestSeq;
+    private Task<Void> requestTask;     // 現在の要求。遅れて届いた別の要求の完了を区別する
 
     // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
     ActivityRecognitionHelper(ComponentActivity activity) {
         this.activity = activity;
         this.permissionLauncher = activity.registerForActivityResult(
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
+        current = this;
     }
+
+    // --- egui スレッド ---
 
     int start() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || !GmsAvailability.isAvailable(activity)) {
             return START_UNSUPPORTED;
         }
-        synchronized (LOCK) {
-            nativeReady = true;
-            if (destroyed) return START_FAILED;
-            subscribed = true;
-            if (wanted) return START_OK;
-            wanted = true;
-            failure = 0;
-            begin();
-            return START_OK;
-        }
+        nativeReady = true;
+        if (destroyed) return START_FAILED;
+        subscribed = true;
+        started = true;
+        main.post(() -> {
+            if (destroyed) return;
+            if (!wanted) {
+                wanted = true;
+                failure = 0;
+            }
+            reconcile();
+        });
+        return START_OK;
     }
 
     long[] read() {
-        synchronized (LOCK) {
-            if (!wanted) return new long[] {(subscribed || destroyed) ? ST_LOST : ST_WAITING, 0};
-            if (failure != 0) return new long[] {failure, 0};
-            if (awaiting) return new long[] {ST_AWAITING, 0};
-            if (stopped || latest == null) return new long[] {ST_WAITING, 0};
-            long[] out = new long[2 + latest.length];
-            out[0] = ST_READING;
-            out[1] = latestSeq;
-            System.arraycopy(latest, 0, out, 2, latest.length);
-            return out;
-        }
+        if (!started) return new long[] {(subscribed || destroyed) ? ST_LOST : ST_WAITING, 0};
+        return snapshot.values;
     }
 
     void stop() {
-        synchronized (LOCK) {
-            subscribed = false;
+        subscribed = false;
+        started = false;
+        main.post(() -> {
             wanted = false;
             failure = 0;
-            unsubscribe();
-        }
+            reconcile();
+        });
     }
 
+    // --- main thread ---
+
     void onStart() {
-        boolean notify;
-        synchronized (LOCK) {
-            stopped = false;
-            if (wanted && !destroyed && failure == 0) begin();
-            notify = nativeReady;
-        }
-        if (notify) nativeOnResumed();
+        foreground = true;
+        reconcile();
+        if (nativeReady) nativeOnResumed();
     }
 
     void onStop() {
-        boolean notify;
-        synchronized (LOCK) {
-            stopped = true;
-            unsubscribe();
-            notify = nativeReady;
-        }
-        if (notify) nativeOnBackgrounded();
+        foreground = false;
+        reconcile();
+        if (nativeReady) nativeOnBackgrounded();
     }
 
     void onDestroy() {
-        synchronized (LOCK) {
-            destroyed = true;
-            wanted = false;
-            unsubscribe();
-        }
+        destroyed = true;
+        started = false;
+        wanted = false;
+        reconcile();
+        if (current == this) current = null;
     }
 
-    // LOCK の内側で呼ぶ。許可を確かめ、未許可ならダイアログ、許可済みなら購読する。背景中は onStart まで待つ。
-    private void begin() {
-        if (stopped || destroyed) return;
-        if (activeGen != 0) return; // 有効な世代があれば再登録しない（許可結果と onStart の二重通知）
-        if (!inflight.isEmpty()) {
-            // 解除の Task 実行中。完了通知で begin を再開する。
-            // 失敗が確定した未解放の購読は遅延再試行が回収する。権限取り消し後などで解除できなくても、新しい購読は妨げない
-            afterRemovals = () -> {
-                if (wanted && !destroyed && failure == 0) begin();
-            };
-            return;
-        }
-        if (activity.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION)
-                != PackageManager.PERMISSION_GRANTED) {
-            if (!awaiting) {
-                awaiting = true;
-                activity.runOnUiThread(this::launchPermission);
-            }
-            return;
-        }
-        subscribe();
-    }
-
-    // main looper。キュー待ちの間に stop / onStop / onDestroy が走った場合は起動せず待ちを解く。
-    private void launchPermission() {
-        synchronized (LOCK) {
-            if (!awaiting) return;
-            if (!wanted || stopped || destroyed) {
-                awaiting = false; // 再開は onStart の begin が行う
-                return;
-            }
-            try {
-                permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION);
-            } catch (RuntimeException e) {
-                awaiting = false;
-                failure = ST_FAILED;
-            }
-        }
-    }
-
-    // 許可ダイアログ自体が Activity を pause させるため、resumed では分岐しない。
     private void onPermissionResult(boolean granted) {
-        synchronized (LOCK) {
-            awaiting = false;
-            if (!wanted || destroyed) return;
-            if (!granted) {
-                failure = ST_DENIED;
-            } else if (!stopped) {
-                begin(); // 解除完了待ち・有効世代の防御を通す。背景中に届いた結果は購読せず onStart に任せる
+        permissionPending = false;
+        if (wanted && !granted) failure = ST_DENIED;
+        reconcile();
+    }
+
+    // 冪等。購読・解除・許可要求の判断はここだけで行う。
+    private void reconcile() {
+        boolean hold = wanted && foreground && !destroyed && failure == 0;
+        if (hold) {
+            if (activity.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION)
+                    != PackageManager.PERMISSION_GRANTED) {
+                if (!permissionPending) {
+                    permissionPending = true;
+                    try {
+                        permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION);
+                    } catch (RuntimeException e) {
+                        permissionPending = false;
+                        failure = ST_FAILED;
+                    }
+                }
+            } else if (!active) {
+                subscribe();
             }
+        } else if (active) {
+            active = false;
+            requestTask = null;
+            latest = null;
+            release(activity.getApplicationContext());
         }
+        publish();
     }
 
-    // LOCK の内側で呼ぶ。新世代で購読する。
     private void subscribe() {
-        unsubscribe();
-        final long g = ++gen;
-        activeGen = g;
-        final Context app = activity.getApplicationContext();
-        PendingIntent pi = pendingIntent(app, PROCESS_TOKEN, g);
+        Context app = activity.getApplicationContext();
         try {
-            ActivityRecognition.getClient(app)
-                    .requestActivityUpdates(DETECTION_INTERVAL_MS, pi)
-                    .addOnSuccessListener(v -> onRequestSucceeded(app, g))
-                    .addOnFailureListener(e -> onRequestFailed(app, g, e));
+            Task<Void> t = ActivityRecognition.getClient(app)
+                    .requestActivityUpdates(DETECTION_INTERVAL_MS, pendingIntent(app));
+            active = true;
+            requestTask = t;
+            t.addOnCompleteListener(ContextCompat.getMainExecutor(app), done -> onRequestDone(done));
         } catch (SecurityException e) {
-            fail(app, g, ST_DENIED);
+            failure = ST_DENIED;
         } catch (RuntimeException e) {
-            fail(app, g, ST_FAILED);
+            failure = ST_FAILED;
         }
     }
 
-    // LOCK の内側で呼ぶ。
-    private void unsubscribe() {
-        if (activeGen != 0) {
-            removeUpdates(activity.getApplicationContext(), PROCESS_TOKEN, activeGen);
-            activeGen = 0;
+    // 完了時に reconcile を呼ぶので、成功前に wanted が下りていた場合もここで解除に吸収される。
+    private void onRequestDone(Task<Void> t) {
+        if (t != requestTask) return; // 解除済みの要求の完了
+        if (!t.isSuccessful()) {
+            Exception e = t.getException();
+            active = false;
+            requestTask = null;
+            latest = null;
+            failure = e instanceof SecurityException ? ST_DENIED : ST_FAILED;
         }
-        latest = null;
+        reconcile();
     }
 
-    // LOCK の内側で呼ぶ。現世代の失敗だけを状態へ入れ、その購読を回収する。
-    private void fail(Context app, long g, long code) {
-        if (activeGen != g) return;
-        activeGen = 0;
-        failure = code;
-        removeUpdates(app, PROCESS_TOKEN, g);
-    }
-
-    // 登録の完了が遅れて届いた場合、旧世代・停止済みならその世代だけを remove する。
-    private void onRequestSucceeded(Context app, long g) {
-        synchronized (LOCK) {
-            if (activeGen != g || !wanted) removeUpdates(app, PROCESS_TOKEN, g);
+    private void publish() {
+        long[] v;
+        if (failure != 0) v = new long[] {failure, 0};
+        else if (permissionPending) v = new long[] {ST_AWAITING, 0};
+        else if (!wanted || !foreground || latest == null) v = new long[] {ST_WAITING, 0};
+        else {
+            v = new long[2 + latest.length];
+            v[0] = ST_READING;
+            v[1] = latestSeq;
+            System.arraycopy(latest, 0, v, 2, latest.length);
         }
+        snapshot = new Snapshot(v);
     }
 
-    private void onRequestFailed(Context app, long g, Exception e) {
-        synchronized (LOCK) {
-            fail(app, g, e instanceof SecurityException ? ST_DENIED : ST_FAILED);
-        }
-    }
-
-    // 配送先。世代が現在と違えば値を捨て、その世代の購読を回収する（孤児購読を含む）。
+    // 配送先（main thread）。購読していない・望まれていない状態の配送は、残った購読とみなして解除し値を捨てる。
     static void onResult(Context context, Intent intent) {
         if (intent == null) return;
         Context app = context.getApplicationContext();
-        Uri data = intent.getData();
-        if (data == null || data.getHost() == null || data.getLastPathSegment() == null) return;
-        String token = data.getHost();
-        long g;
-        try {
-            g = Long.parseLong(data.getLastPathSegment());
-        } catch (NumberFormatException e) {
+        ActivityRecognitionHelper h = current;
+        if (h == null || !h.active || !h.wanted || !h.foreground) {
+            release(app);
             return;
         }
-        synchronized (LOCK) {
-            if (g <= 0) return;
-            if (!PROCESS_TOKEN.equals(token) || g != activeGen) {
-                removeUpdates(app, token, g);
-                return;
-            }
-            if (!ActivityRecognitionResult.hasResult(intent)) return;
-            ActivityRecognitionResult r = ActivityRecognitionResult.extractResult(intent);
-            if (r == null) return;
-            List<DetectedActivity> list = r.getProbableActivities();
-            int n = Math.min(list.size(), MAX_PAIRS);
-            long[] pairs = new long[n * 2];
-            for (int i = 0; i < n; i++) {
-                pairs[2 * i] = list.get(i).getType();
-                pairs[2 * i + 1] = list.get(i).getConfidence();
-            }
-            latest = pairs;
-            latestSeq = ++seq;
+        if (!ActivityRecognitionResult.hasResult(intent)) return;
+        ActivityRecognitionResult r = ActivityRecognitionResult.extractResult(intent);
+        if (r == null) return;
+        List<DetectedActivity> list = r.getProbableActivities();
+        int n = Math.min(list.size(), MAX_PAIRS);
+        long[] pairs = new long[n * 2];
+        for (int i = 0; i < n; i++) {
+            pairs[2 * i] = list.get(i).getType();
+            pairs[2 * i + 1] = list.get(i).getConfidence();
         }
+        h.latest = pairs;
+        h.latestSeq = ++seq;
+        h.publish();
     }
 
-    // 同じ PendingIntent（token・世代）を作り直して購読を解除する。発行時に unreleased へ記録し、成功を確認してから
-    // 消して cancel する。失敗（Task 失敗・同期例外）は unreleased に残る。LOCK の内側で呼ぶ。
-    private static void removeUpdates(Context app, String token, long g) {
-        final String key = token + "/" + g;
-        if (!inflight.add(key)) {
-            rerun.add(key); // 発行済みの解除が登録完了より先に終わる場合に備え、完了時にもう一度解除する
-            return;
-        }
-        unreleased.add(key);
-        final PendingIntent pi = pendingIntent(app, token, g);
+    // 固定 PendingIntent で解除する。失敗は握りつぶす（購読は残りうるが、次の配送の onResult が回収する）。
+    // 成功後、再び購読していなければ PendingIntent を cancel する。main thread で呼ぶ。
+    private static void release(Context app) {
+        PendingIntent pi = pendingIntent(app);
         try {
             ActivityRecognition.getClient(app).removeActivityUpdates(pi)
-                    .addOnCompleteListener(t -> {
-                        synchronized (LOCK) {
-                            inflight.remove(key);
-                            if (t.isSuccessful() && rerun.remove(key)) {
-                                removeUpdates(app, token, g);
-                            } else if (t.isSuccessful()) {
-                                unreleased.remove(key);
-                                removeAttempts.remove(key);
-                                pi.cancel();
-                            } else {
-                                rerun.remove(key);
-                                onRemovalFailed(app, token, g, key, pi);
-                            }
-                            runAfterRemovals();
-                        }
+                    .addOnCompleteListener(ContextCompat.getMainExecutor(app), t -> {
+                        ActivityRecognitionHelper h = current;
+                        if (t.isSuccessful() && (h == null || !h.active)) pi.cancel();
                     });
         } catch (RuntimeException e) {
-            inflight.remove(key);
-            rerun.remove(key);
-            onRemovalFailed(app, token, g, key, pi);
+            // 次の配送で回収する。
         }
-    }
-
-    // LOCK の内側で呼ぶ。解除の失敗後、以後 start も配送も無くても回収できるよう、遅延再試行を数回行う。
-    // 上限を超えたら PendingIntent を cancel して配送を止め、記録を捨てる（権限が無く解除できない鍵で新しい購読を妨げない）。
-    private static void onRemovalFailed(Context app, String token, long g, String key, PendingIntent pi) {
-        int n = removeAttempts.containsKey(key) ? removeAttempts.get(key) : 0;
-        if (n >= MAX_REMOVE_RETRIES) {
-            pi.cancel();
-            unreleased.remove(key);
-            removeAttempts.remove(key);
-            return;
-        }
-        removeAttempts.put(key, n + 1);
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            synchronized (LOCK) {
-                if (unreleased.contains(key)) removeUpdates(app, token, g);
-            }
-        }, REMOVE_RETRY_DELAY_MS);
-    }
-
-    // LOCK の内側で呼ぶ。解除が全部終わっていれば保留中の begin を 1 度だけ走らせる。
-    private static void runAfterRemovals() {
-        if (!inflight.isEmpty() || afterRemovals == null) return;
-        Runnable r = afterRemovals;
-        afterRemovals = null;
-        r.run();
     }
 
     // GMS が extras を書き込むため API 31 以上は FLAG_MUTABLE。明示コンポーネント宛てなので他アプリには横取りされない。
-    // data にプロセス token と世代を入れ、再起動後に同じ世代番号でも別の PendingIntent になるようにする。
-    private static PendingIntent pendingIntent(Context app, String token, long g) {
-        Intent i = new Intent(app, ActivityRecognitionReceiver.class)
-                .setData(Uri.parse("fandhe-activity://" + token + "/" + g));
+    // requestCode・Intent を固定し、常に同一の PendingIntent として照合させる。
+    private static PendingIntent pendingIntent(Context app) {
+        Intent i = new Intent(app, ActivityRecognitionReceiver.class);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT
                 | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0);
-        return PendingIntent.getBroadcast(app, (int) g, i, flags);
+        return PendingIntent.getBroadcast(app, REQUEST_CODE, i, flags);
     }
 }
