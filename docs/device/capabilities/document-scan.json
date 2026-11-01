@@ -21,14 +21,17 @@
       "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_document_scan.m + crates/fandhe-egui-proxy/src/device/ios_document_scan.rs、Issue #748"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "ML Kit Document Scanner（`com.google.android.gms:play-services-mlkit-document-scanner`、GMS 依存）",
       "perm": "カメラ権限は不要（撮影 UI は Google Play services 側）。GMS が無い・使えない端末では `Unsupported` を返す（`GoogleApiAvailability.isGooglePlayServicesAvailable` が SUCCESS のときだけ使い、更新ダイアログは出さない）。依存は `scripts/android/versions.env` の `PLAY_SERVICES_MLKIT_DOCUMENT_SCANNER_VERSION`（16.0.0。AAR の minSdk 23 で、いまの minSdk 24 のまま使える）",
       "url": [
         "https://developers.google.com/ml-kit/vision/doc-scanner/android",
         "https://dl.google.com/android/maven2/com/google/android/gms/play-services-mlkit-document-scanner/16.0.0/play-services-mlkit-document-scanner-16.0.0.pom"
       ],
-      "note": "未実装。16.0.0 の POM は `play-services-base`・`play-services-basement`・`play-services-tasks` と Firebase の部品を直接依存に持つ。公式文書はモデル・スキャン処理・UI を Google Play services が動的にダウンロードするとし、端末の RAM が 1.7 GB 未満なら `UNSUPPORTED` を返すとしている。GMS 非搭載端末での扱いは公式文書に書かれていない。AOSP に書類スキャンの公開 API はない。`MlKitException` の `UNSUPPORTED` も `Unsupported` に写す"
+      "note": "実装済み（#1125）。撮影 UI の起動前に前面と `GoogleApiAvailability.isGooglePlayServicesAvailable`（SUCCESS 以外は非対応。更新ダイアログは出さない）を確かめ、`MlKitException.UNSUPPORTED` も `Unsupported` に写す。オプションはギャラリー取り込みなし・1 ページ・JPEG。キャンセルは失敗にしない。1 ページ目を長辺 2048 以下の JPEG にし、上限超過は `TooLarge`、復号できない画像は `Undecodable`、0 ページは `Empty`。ページのファイルは自アプリの cacheDir 配下のものだけ消し、消せなければ画像を返さず `Internal`。Activity 再生成時は保留中の要求を破棄し、旧結果は新しい要求を消費しない。期限は 10 秒（単調時計）で、GMS 判定と初回のモジュールダウンロードは期限内に入る既知の天井。公式文書より、端末の RAM が 1.7 GB 未満なら `UNSUPPORTED`。守らない範囲: 2 ページ目以降・PDF・撮影 UI の表示中のプロセス死・複数プロセス。Android 実機での確認は #739",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#739）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/DocumentScanHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_document_scan.rs + crates/fandhe-egui-proxy/src/device/document_scan.rs + crates/fandhe-core/src/screens/document_scan_show.rs + crates/fandhe-device/src/document_scan.rs、Issue #1125"
     },
     "macos": {
       "status": "no",
