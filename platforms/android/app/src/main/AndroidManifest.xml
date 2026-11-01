@@ -390,6 +390,12 @@
             android:name="com.fandhe.androidapp.CallUiActionReceiver"
             android:exported="false" />
 
+        <!-- Issue #1127: 行動認識の配送先。自アプリの明示 PendingIntent だけが届くため exported=false、
+             intent-filter なし。権限 ACTIVITY_RECOGNITION は宣言済み。切り離し時に削除する。 -->
+        <receiver
+            android:name="com.fandhe.androidapp.ActivityRecognitionReceiver"
+            android:exported="false" />
+
         <!-- Issue #1078: アラームの時刻に通知を鳴らす受け口。自アプリの明示 Intent（FLAG_IMMUTABLE）
              だけが届くため exported=false、intent-filter なし。切り離し時に削除する。 -->
         <receiver

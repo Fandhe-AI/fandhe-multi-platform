@@ -597,6 +597,22 @@ public class MainActivity extends GameActivity {
         nfcReadHelper.cancel(requestId);
     }
 
+    // 行動認識（Issue #1127）。実装は `ActivityRecognitionHelper`（フィールド初期化子で生成し、STARTED 前に
+    // 許可ランチャーを登録する）。Rust の `android_activity_recognition.rs` が同期 JNI で呼ぶ。
+    private final ActivityRecognitionHelper activityRecognitionHelper = new ActivityRecognitionHelper(this);
+
+    int activityRecognitionStart() {
+        return activityRecognitionHelper.start();
+    }
+
+    long[] activityRecognitionRead() {
+        return activityRecognitionHelper.read();
+    }
+
+    void activityRecognitionStop() {
+        activityRecognitionHelper.stop();
+    }
+
     // 方位（Issue #1406）。実装は `CompassHelper`。Rust の `android_compass.rs` が同期 JNI で呼ぶ。
     private final CompassHelper compassHelper = new CompassHelper(this);
 
@@ -1093,6 +1109,7 @@ public class MainActivity extends GameActivity {
         flashlightHelper.onStart();
         captureProtectionHelper.onStart();
         foldablePostureHelper.onStart();
+        activityRecognitionHelper.onStart();
     }
 
     @Override
@@ -1102,6 +1119,7 @@ public class MainActivity extends GameActivity {
         captureProtectionHelper.onStop();
         foldablePostureHelper.onStop();
         blePeripheralHelper.onStop();
+        activityRecognitionHelper.onStop();
         super.onStop();
     }
 
@@ -5304,6 +5322,7 @@ public class MainActivity extends GameActivity {
         scannerDevicesHelper.onDestroy();
         nfcReadHelper.onDestroy();
         compassHelper.onDestroy();
+        activityRecognitionHelper.onDestroy();
         environmentSensorsHelper.onDestroy();
         motionRawSensorsHelper.onDestroy();
         mediaPlaybackHelper.onDestroy();
