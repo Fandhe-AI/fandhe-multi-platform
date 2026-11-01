@@ -82,8 +82,7 @@ pub mod android_background_task;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_background_upload;
-/// Issue #1122（親 #164）: Android 向け BLE の周辺機器役の骨格（`Unsupported` のスタブ。#1123 が
-/// 実装に置き換える）。`device/ble_peripheral.rs` の Android 経路から呼ばれる。
+/// Issue #1123（親 #164）: Android 向け BLE の周辺機器役の実装（骨格は #1122）。`device/ble_peripheral.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_ble_peripheral;

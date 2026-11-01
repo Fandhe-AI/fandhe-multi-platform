@@ -1094,6 +1094,7 @@ public class MainActivity extends GameActivity {
         flashlightHelper.onStop();
         captureProtectionHelper.onStop();
         foldablePostureHelper.onStop();
+        blePeripheralHelper.onStop();
         super.onStop();
     }
 
@@ -1127,6 +1128,18 @@ public class MainActivity extends GameActivity {
     // ペアリング済み一覧（シグネチャ `()Ljava/lang/String;`）。詰め方は `BluetoothClassicHelper.paired` 冒頭を参照。
     private String bluetoothClassicPaired() {
         return BluetoothClassicHelper.paired(getApplicationContext());
+    }
+
+    // BLE の周辺機器役（Issue #1123）。実装は `BlePeripheralHelper`（許可ランチャーを STARTED 前に登録）。
+    // Rust の `android_ble_peripheral.rs` が JNI で呼ぶ。戻り値の意味は `BlePeripheralHelper.start` / `stop` を参照。
+    private final BlePeripheralHelper blePeripheralHelper = new BlePeripheralHelper(this);
+
+    int blePeripheralStart(long token, String serviceUuid, String characteristicUuid, String value) {
+        return blePeripheralHelper.start(token, serviceUuid, characteristicUuid, value);
+    }
+
+    int blePeripheralStop() {
+        return blePeripheralHelper.stop();
     }
 
     // 近くの端末との直接通信（Issue #513）。実装は `LocalPeerHelper`（許可ランチャーを STARTED 前に登録）。
@@ -5275,6 +5288,7 @@ public class MainActivity extends GameActivity {
         lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();
         bluetoothClassicHelper.onDestroy();
+        blePeripheralHelper.onDestroy();
         musicLibraryHelper.onDestroy();
         wifiInfoHelper.onDestroy();
         wifiConnectHelper.onDestroy();
