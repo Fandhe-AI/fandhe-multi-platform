@@ -449,6 +449,11 @@
         <meta-data
             android:name="android.content.APP_RESTRICTIONS"
             android:resource="@xml/app_restrictions" />
+        <!-- Issue #1131: Google Pay API（play-services-wallet）の有効化。AAR の manifest には含まれない。
+             決済リクエストを切り離すときに削除する。 -->
+        <meta-data
+            android:name="com.google.android.gms.wallet.api.enabled"
+            android:value="true" />
     </application>
 
 </manifest>

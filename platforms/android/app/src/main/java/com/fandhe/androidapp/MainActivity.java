@@ -915,6 +915,13 @@ public class MainActivity extends GameActivity {
         documentScanHelper.scan(requestId, maxBytes);
     }
 
+    // 物・サービスの決済（Issue #1131）。実装は `PaymentRequestHelper`（結果ランチャーを STARTED 前に登録）。
+    private final PaymentRequestHelper paymentRequestHelper = new PaymentRequestHelper(this);
+
+    void requestPayment(long requestId, boolean pay, String isReadyToPayJson, String paymentDataRequestJson) {
+        paymentRequestHelper.request(requestId, pay, isReadyToPayJson, paymentDataRequestJson);
+    }
+
     // アプリ内ブラウザ（Issue #703）。実装は `InAppBrowserHelper`。
     // Rust の `android_in_app_browser.rs` が JNI で呼ぶ。
     private final InAppBrowserHelper inAppBrowserHelper = new InAppBrowserHelper(this);
@@ -5288,6 +5295,7 @@ public class MainActivity extends GameActivity {
         inAppBrowserHelper.onDestroy();
         companionDeviceHelper.onDestroy();
         documentScanHelper.onDestroy();
+        paymentRequestHelper.onDestroy();
         pedometerHelper.onDestroy();
         healthDataHelper.onDestroy();
         translationHelper.onDestroy();
