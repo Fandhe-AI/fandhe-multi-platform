@@ -194,7 +194,8 @@ pub fn confidence_from_percent(p: i32) -> Option<Confidence> {
 
 /// Android の `getProbableActivities()`（確度の高い順）を `(type, confidence)` の組で受け、
 /// 先頭から種別と確度を決める。空・確度が範囲外・未知のコードは `None`（静止へ畳まない）。
-/// 先頭が ON_FOOT のときは配列内の WALKING / RUNNING の確度の大きい方（同点は歩行、無ければ Unknown）。
+/// 先頭が ON_FOOT のときは配列内の WALKING / RUNNING の確度の大きい方（同点は歩行、無ければ Unknown）を選び、
+/// 確度も選んだ要素自身のもの（ON_FOOT の確度は使わない）。
 /// `ActivityRecognitionResult` の `read` が通す。
 pub fn classify_detected(probable: &[(i32, i32)]) -> Option<(ActivityKind, Confidence)> {
     if probable
@@ -205,6 +206,7 @@ pub fn classify_detected(probable: &[(i32, i32)]) -> Option<(ActivityKind, Confi
     }
     let &(top, top_conf) = probable.first()?;
     let conf = confidence_from_percent(top_conf)?;
+    let mut conf = conf;
     let kind = match top {
         ANDROID_IN_VEHICLE => ActivityKind::Automotive,
         ANDROID_ON_BICYCLE => ActivityKind::Cycling,
@@ -214,10 +216,21 @@ pub fn classify_detected(probable: &[(i32, i32)]) -> Option<(ActivityKind, Confi
         ANDROID_UNKNOWN | ANDROID_TILTING => ActivityKind::Unknown,
         ANDROID_ON_FOOT => {
             let best = |t: i32| probable.iter().find(|&&(k, _)| k == t).map(|&(_, c)| c);
+            // 具体化した種別は、選んだ要素自身の確度を返す（ON_FOOT の確度を流用しない）。
+            let pick = |c: i32| confidence_from_percent(c).unwrap_or(conf);
             match (best(ANDROID_WALKING), best(ANDROID_RUNNING)) {
-                (Some(w), Some(r)) if r > w => ActivityKind::Running,
-                (Some(_), _) => ActivityKind::Walking,
-                (None, Some(_)) => ActivityKind::Running,
+                (Some(w), Some(r)) if r > w => {
+                    conf = pick(r);
+                    ActivityKind::Running
+                }
+                (Some(w), _) => {
+                    conf = pick(w);
+                    ActivityKind::Walking
+                }
+                (None, Some(r)) => {
+                    conf = pick(r);
+                    ActivityKind::Running
+                }
                 (None, None) => ActivityKind::Unknown,
             }
         }
@@ -331,6 +344,15 @@ mod tests {
         assert_eq!(k(&[(2, 90), (8, 60), (7, 30)]), Some(Running));
         assert_eq!(k(&[(2, 90), (7, 30), (8, 30)]), Some(Walking));
         assert_eq!(k(&[(2, 90), (3, 10)]), Some(Unknown));
+        // 具体化した種別の確度は選んだ要素のもの
+        assert_eq!(
+            classify_detected(&[(2, 90), (7, 30), (8, 20)]),
+            Some((Walking, Confidence::Low))
+        );
+        assert_eq!(
+            classify_detected(&[(2, 90), (8, 60), (7, 30)]),
+            Some((Running, Confidence::Medium))
+        );
     }
 
     #[test]
