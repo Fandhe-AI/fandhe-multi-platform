@@ -46,10 +46,13 @@ import java.util.List;
 //   `reconcile()` を呼ぶだけで、reconcile が冪等に購読・解除・許可要求を決める。
 //
 // 守る範囲: 嘘の値を出さない・二重に購読しない・停止/背景/破棄/失敗で解除を発行する。解除（removeActivityUpdates）の
-// 失敗は状態上「購読していない」とし、残った購読は次の配送を受けた `onResult` が、`wanted` が下りているか前景でなければ
-// 同じ固定 PendingIntent で解除して値を捨てる（プロセス再起動後に残った購読も同じ経路）。回収は次の配送までの遅れが
-// あるだけで、データの消失・資源の漏れ・嘘の成功にはならない。
-// 守らない範囲: GMS 側の配信間隔と遅延、配送が来ない孤児購読の即時回収、背景中の受信、過去の履歴、
+// 失敗（Task 失敗・同期例外）は `unreleased`（main thread の boolean 1 つ）に記録し、成功を確認するまで下ろさない。
+// `unreleased` の間は `reconcile()` が解除を再発行し、新しい購読は受け付けない。`wanted` のあいだ read は Failed を返し、
+// 成功と偽らない。再試行のきっかけは start・onStart・onStop・許可結果・Task 完了・Receiver の配送という既存の入口だけで、
+// 自前のタイマーや再試行回数は持たない。プロセス再起動後に残った購読も、固定 PendingIntent の次の配送を受けた
+// `onResult` が、`wanted` が下りているか前景でなければ解除して値を捨てる。
+// 守らない範囲: 入口がまったく来ない間の再試行（プロセス終了時に OS が購読を残しうるが、固定 PendingIntent なので
+// 次回起動の reconcile と配送で回収する）、GMS 側の配信間隔と遅延、背景中の受信、過去の履歴、
 // start / stop を同一ミリ秒で往復したときの Snapshot の一時的な食い違い。種別・確度はログに出さない。実機確認は #603。
 //
 // ライフサイクル: `onStop` で解除して最新値を捨て、`onStart` で張り直す（許可ダイアログが起こす onPause とは独立）。
@@ -86,6 +89,8 @@ final class ActivityRecognitionHelper {
     private static ActivityRecognitionHelper current;
     // main thread。受理した配送ごとに +1、巻き戻さない。
     private static long seq;
+    // main thread。解除が成功と確認できていない。成功でだけ false に戻す。Activity 再生成をまたぐため static。
+    private static boolean unreleased;
 
     // JNI（egui スレッド）が読む不変スナップショット。
     private static final class Snapshot {
@@ -135,6 +140,7 @@ final class ActivityRecognitionHelper {
         if (destroyed) return START_FAILED;
         subscribed = true;
         started = true;
+        snapshot = WAITING; // 前回の値・失敗を返さない（started を立てるのと同じ同期区間）
         main.post(() -> {
             if (destroyed) return;
             if (!wanted) {
@@ -154,6 +160,7 @@ final class ActivityRecognitionHelper {
     void stop() {
         subscribed = false;
         started = false;
+        snapshot = WAITING;
         main.post(() -> {
             wanted = false;
             failure = 0;
@@ -191,7 +198,7 @@ final class ActivityRecognitionHelper {
 
     // 冪等。購読・解除・許可要求の判断はここだけで行う。
     private void reconcile() {
-        boolean hold = wanted && foreground && !destroyed && failure == 0;
+        boolean hold = wanted && foreground && !destroyed && failure == 0 && !unreleased;
         if (hold) {
             if (activity.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION)
                     != PackageManager.PERMISSION_GRANTED) {
@@ -212,6 +219,8 @@ final class ActivityRecognitionHelper {
             requestTask = null;
             latest = null;
             release(activity.getApplicationContext());
+        } else if (unreleased) {
+            release(activity.getApplicationContext()); // 解除が確認できるまで再発行する
         }
         publish();
     }
@@ -247,6 +256,7 @@ final class ActivityRecognitionHelper {
     private void publish() {
         long[] v;
         if (failure != 0) v = new long[] {failure, 0};
+        else if (unreleased && wanted) v = new long[] {ST_FAILED, 0};
         else if (permissionPending) v = new long[] {ST_AWAITING, 0};
         else if (!wanted || !foreground || latest == null) v = new long[] {ST_WAITING, 0};
         else {
@@ -282,19 +292,32 @@ final class ActivityRecognitionHelper {
         h.publish();
     }
 
-    // 固定 PendingIntent で解除する。失敗は握りつぶす（購読は残りうるが、次の配送の onResult が回収する）。
-    // 成功後、再び購読していなければ PendingIntent を cancel する。main thread で呼ぶ。
+    // 固定 PendingIntent で解除する。失敗（Task 失敗・同期例外）は unreleased に記録し、成功でだけ下ろす。
+    // 成功後、再び購読していなければ PendingIntent を cancel する。成功時は reconcile で購読の再開を試みる
+    // （失敗時は reconcile を呼ばない。自前の再試行ループを作らない）。main thread で呼ぶ。
     private static void release(Context app) {
         PendingIntent pi = pendingIntent(app);
         try {
             ActivityRecognition.getClient(app).removeActivityUpdates(pi)
                     .addOnCompleteListener(ContextCompat.getMainExecutor(app), t -> {
                         ActivityRecognitionHelper h = current;
-                        if (t.isSuccessful() && (h == null || !h.active)) pi.cancel();
+                        boolean resubscribed = h != null && h.active; // 同じ PI への再要求が前の購読を置き換え済み
+                        if (t.isSuccessful()) {
+                            unreleased = false;
+                            if (!resubscribed) pi.cancel();
+                            if (h != null) h.reconcile();
+                        } else if (!resubscribed) {
+                            markUnreleased();
+                        }
                     });
         } catch (RuntimeException e) {
-            // 次の配送で回収する。
+            markUnreleased();
         }
+    }
+
+    private static void markUnreleased() {
+        unreleased = true;
+        if (current != null) current.publish();
     }
 
     // GMS が extras を書き込むため API 31 以上は FLAG_MUTABLE。明示コンポーネント宛てなので他アプリには横取りされない。
