@@ -7,7 +7,7 @@
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は
 //! 本モジュール外（`fandhe-egui-proxy` の `device/document_scan.rs`）が [`take_request`] で要求を
 //! 観測し、[`mark_running`]・[`finish_scan`] で状態を進める。全対象 OS の分の状態・文言は
-//! ここで定義するため、OS 別の子 issue（#748・#1125）はこのファイルを触らない。
+//! ここで定義するため、OS 別の子 issue（#748・#1125）は対応 OS の案内文（`IDLE_HINT`）以外このファイルを触らない。
 //!
 //! キャンセルは失敗ではなく状態として出す（契約表 10）。画像の中身と OS のエラー文は
 //! エラー文に含めない（契約表 8）。画像の画素は持たず、`image_store` への識別子だけを持つ。
@@ -28,7 +28,7 @@ pub const TITLE: &str = "書類スキャン";
 /// ボタンの文言。
 pub const SCAN_LABEL: &str = "書類をスキャン";
 /// 未操作時の案内。
-pub const IDLE_HINT: &str = "OS の撮影画面で書類を撮影し、補正された 1 ページ目を表示します（対応は iOS のみ。Android は未対応で、Google Play services を使う実装の追加後に対応します。2 ページ目以降は表示しません。macOS・Windows では使えません）";
+pub const IDLE_HINT: &str = "OS の撮影画面で書類を撮影し、補正された 1 ページ目を表示します（対応は iOS と Android。Android は Google Play services が必要です。2 ページ目以降は表示しません。macOS・Windows では使えません）";
 /// 処理中の案内。
 pub const RUNNING_STATUS: &str = "撮影画面を開いています…";
 /// キャンセルしたときの文言（エラーではなく状態として出す）。

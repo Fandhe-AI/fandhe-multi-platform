@@ -908,6 +908,13 @@ public class MainActivity extends GameActivity {
         companionDeviceHelper.pick(requestId);
     }
 
+    // 書類スキャン（Issue #1125）。実装は `DocumentScanHelper`（結果ランチャーを STARTED 前に登録）。
+    private final DocumentScanHelper documentScanHelper = new DocumentScanHelper(this);
+
+    void requestDocumentScan(long requestId, int maxBytes) {
+        documentScanHelper.scan(requestId, maxBytes);
+    }
+
     // アプリ内ブラウザ（Issue #703）。実装は `InAppBrowserHelper`。
     // Rust の `android_in_app_browser.rs` が JNI で呼ぶ。
     private final InAppBrowserHelper inAppBrowserHelper = new InAppBrowserHelper(this);
@@ -5280,6 +5287,7 @@ public class MainActivity extends GameActivity {
         super.onDestroy();
         inAppBrowserHelper.onDestroy();
         companionDeviceHelper.onDestroy();
+        documentScanHelper.onDestroy();
         pedometerHelper.onDestroy();
         healthDataHelper.onDestroy();
         translationHelper.onDestroy();

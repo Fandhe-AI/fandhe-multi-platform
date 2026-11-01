@@ -10,7 +10,7 @@
 //! # OS 別の分担（dispatch・bridge・本ファイルは #747・#1124 で最終形。後続の子はここを触らない）
 //!
 //! - iOS: `ios_document_scan`（#748。`VNDocumentCameraViewController`）
-//! - Android: `android_document_scan`（#1125。ML Kit Document Scanner。#1124 ではスタブ）
+//! - Android: `android_document_scan`（#1125。ML Kit Document Scanner）
 //! - macOS・Windows・Linux: 対応表で `no` のため `UnsupportedDocumentScanner` 固定
 //!   （ダミーの成功実装へは倒さない）。Web は対象外
 //!
