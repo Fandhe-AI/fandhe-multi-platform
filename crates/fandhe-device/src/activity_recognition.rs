@@ -27,7 +27,27 @@
 //! 背景中の行動、過去の履歴、複数プロセス、iOS のフィットネストラッキング設定を切ったときの扱い。
 //!
 //! 契約表 11（並行経路）への対応: 経路は画面の driver 1 本に集約され、購読の開始・停止は
-//! `wanted` の立ち上がり・立ち下がりでだけ行う。
+//! `wanted` の立ち上がり・立ち下がりでだけ行う。Android も同じで、受信は Receiver から static へ
+//! 入れ、`read` が pull する。
+//!
+//! # Android
+//!
+//! 骨格段階: 現状の Android 実装は [`ActivityFailure::Unsupported`] を返すスタブで、下記は b-android
+//! 実装後に満たす契約（実装時に実体と突き合わせる）。
+//!
+//! Play services の `ActivityRecognitionClient.requestActivityUpdates(interval, PendingIntent)` を使う
+//! （Transition API は確度が無く遷移時しか通知しないため採らない）。
+//!
+//! - API 28 以下、または `GoogleApiAvailability` の判定が SUCCESS 以外のとき、`start` は
+//!   [`ActivityFailure::Unsupported`]（更新ダイアログは出さない）
+//! - 実行時の `ACTIVITY_RECOGNITION`（身体活動）許可を待つ間は [`ActivityPoll::AwaitingPermission`]
+//!   （期限に数えない）。拒否と `SecurityException` は [`ActivityFailure::PermissionDenied`]、
+//!   `ApiException` などは [`ActivityFailure::Failed`]
+//! - 背景遷移（`onStop`）で購読を解除して最新値を捨て、復帰（`onStart`）で張り直す
+//! - OS の整数コードの写像は [`classify_detected`] が正。Java は生のコードを渡すだけで複製しない
+//! - 最初の 1 件の期限は全 OS 共通の [`NO_READING_TIMEOUT_MS`]。Android で 5 秒以内に届くかは
+//!   実機未確認で、既知の天井として扱う
+//! - 守らない: GMS 側の配信間隔と遅延、PendingIntent 経由の配送遅れ
 
 use std::time::Duration;
 
@@ -85,7 +105,7 @@ pub struct ActivityReading {
 pub enum ActivityPoll {
     /// 購読中でまだ値が無い（未開始・停止後・無効サンプルを捨てた後を含む）。
     Waiting,
-    /// OS の許可ダイアログの応答待ち（iOS の「モーションとフィットネス」）。期限に数えない。
+    /// OS の許可ダイアログの応答待ち（iOS の「モーションとフィットネス」、Android の「身体活動」）。期限に数えない。
     AwaitingPermission,
     /// 最新の行動。
     Reading(ActivityReading),
@@ -94,7 +114,7 @@ pub enum ActivityPoll {
 /// 行動認識の失敗種別。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivityFailure {
-    /// センサーが無い・API が無い・OS 版が足りない。
+    /// センサーが無い・API が無い・OS 版が足りない（Android は GMS が無い・使えない、API 28 以下を含む）。
     Unsupported,
     /// 利用者または OS 設定が利用を拒否した。
     PermissionDenied,
@@ -150,6 +170,73 @@ pub fn classify_flags(
     } else {
         ActivityKind::Unknown
     }
+}
+
+// Android `DetectedActivity` の型コード（正は Rust 側。Java は生のコードを渡す）。
+const ANDROID_IN_VEHICLE: i32 = 0;
+const ANDROID_ON_BICYCLE: i32 = 1;
+const ANDROID_ON_FOOT: i32 = 2;
+const ANDROID_STILL: i32 = 3;
+const ANDROID_UNKNOWN: i32 = 4;
+const ANDROID_TILTING: i32 = 5;
+const ANDROID_WALKING: i32 = 7;
+const ANDROID_RUNNING: i32 = 8;
+
+/// Android の確度（0〜100）を [`Confidence`] へ写す。範囲外は `None`（捨てる）。
+pub fn confidence_from_percent(p: i32) -> Option<Confidence> {
+    match p {
+        0..=49 => Some(Confidence::Low),
+        50..=74 => Some(Confidence::Medium),
+        75..=100 => Some(Confidence::High),
+        _ => None,
+    }
+}
+
+/// Android の `getProbableActivities()`（確度の高い順）を `(type, confidence)` の組で受け、
+/// 先頭から種別と確度を決める。空・確度が範囲外・未知のコードは `None`（静止へ畳まない）。
+/// 先頭が ON_FOOT のときは配列内の WALKING / RUNNING の確度の大きい方（同点は歩行、無ければ Unknown）を選び、
+/// 確度も選んだ要素自身のもの（ON_FOOT の確度は使わない）。
+/// `ActivityRecognitionResult` の `read` が通す。
+pub fn classify_detected(probable: &[(i32, i32)]) -> Option<(ActivityKind, Confidence)> {
+    if probable
+        .iter()
+        .any(|&(_, c)| confidence_from_percent(c).is_none())
+    {
+        return None;
+    }
+    let &(top, top_conf) = probable.first()?;
+    let conf = confidence_from_percent(top_conf)?;
+    let mut conf = conf;
+    let kind = match top {
+        ANDROID_IN_VEHICLE => ActivityKind::Automotive,
+        ANDROID_ON_BICYCLE => ActivityKind::Cycling,
+        ANDROID_RUNNING => ActivityKind::Running,
+        ANDROID_WALKING => ActivityKind::Walking,
+        ANDROID_STILL => ActivityKind::Stationary,
+        ANDROID_UNKNOWN | ANDROID_TILTING => ActivityKind::Unknown,
+        ANDROID_ON_FOOT => {
+            let best = |t: i32| probable.iter().find(|&&(k, _)| k == t).map(|&(_, c)| c);
+            // 具体化した種別は、選んだ要素自身の確度を返す（ON_FOOT の確度を流用しない）。
+            let pick = |c: i32| confidence_from_percent(c).unwrap_or(conf);
+            match (best(ANDROID_WALKING), best(ANDROID_RUNNING)) {
+                (Some(w), Some(r)) if r > w => {
+                    conf = pick(r);
+                    ActivityKind::Running
+                }
+                (Some(w), _) => {
+                    conf = pick(w);
+                    ActivityKind::Walking
+                }
+                (None, Some(r)) => {
+                    conf = pick(r);
+                    ActivityKind::Running
+                }
+                (None, None) => ActivityKind::Unknown,
+            }
+        }
+        _ => return None,
+    };
+    Some((kind, conf))
 }
 
 /// [`ActivityPoll`] の種別（期限判定に渡す、値を持たない写し）。
@@ -229,6 +316,71 @@ impl FirstReadingDeadline {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detected_simple_codes() {
+        use ActivityKind::*;
+        for (code, kind) in [
+            (0, Automotive),
+            (1, Cycling),
+            (3, Stationary),
+            (4, Unknown),
+            (5, Unknown),
+            (7, Walking),
+            (8, Running),
+        ] {
+            assert_eq!(
+                classify_detected(&[(code, 80)]),
+                Some((kind, Confidence::High))
+            );
+        }
+    }
+
+    #[test]
+    fn detected_on_foot() {
+        use ActivityKind::*;
+        let k = |v: &[(i32, i32)]| classify_detected(v).map(|r| r.0);
+        assert_eq!(k(&[(2, 90), (7, 60), (8, 30)]), Some(Walking));
+        assert_eq!(k(&[(2, 90), (8, 60), (7, 30)]), Some(Running));
+        assert_eq!(k(&[(2, 90), (7, 30), (8, 30)]), Some(Walking));
+        assert_eq!(k(&[(2, 90), (3, 10)]), Some(Unknown));
+        // 具体化した種別の確度は選んだ要素のもの
+        assert_eq!(
+            classify_detected(&[(2, 90), (7, 30), (8, 20)]),
+            Some((Walking, Confidence::Low))
+        );
+        assert_eq!(
+            classify_detected(&[(2, 90), (8, 60), (7, 30)]),
+            Some((Running, Confidence::Medium))
+        );
+    }
+
+    #[test]
+    fn detected_rejects_bad_input() {
+        assert_eq!(classify_detected(&[]), None);
+        for code in [6, 9, -1] {
+            assert_eq!(classify_detected(&[(code, 50)]), None);
+        }
+        assert_eq!(classify_detected(&[(7, 80), (3, 101)]), None);
+        assert_eq!(classify_detected(&[(7, -1)]), None);
+    }
+
+    #[test]
+    fn confidence_boundaries() {
+        use Confidence::*;
+        for (p, c) in [
+            (0, Low),
+            (49, Low),
+            (50, Medium),
+            (74, Medium),
+            (75, High),
+            (100, High),
+        ] {
+            assert_eq!(confidence_from_percent(p), Some(c));
+        }
+        assert_eq!(confidence_from_percent(-1), None);
+        assert_eq!(confidence_from_percent(101), None);
+    }
 
     #[test]
     fn classify_priority() {
