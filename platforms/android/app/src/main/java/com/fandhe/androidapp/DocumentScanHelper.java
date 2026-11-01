@@ -127,6 +127,8 @@ final class DocumentScanHelper {
             finish(id, KIND_NOT_FOREGROUND, 0, null);
             return;
         }
+        // Activity が生きているうちに保持する。変換中に破棄されても deleteAll が WeakReference に依存しない。
+        cacheDir();
         try {
             // 更新ダイアログは出さない。SUCCESS 以外（無い・古い・無効）は非対応。
             if (GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(activity)
