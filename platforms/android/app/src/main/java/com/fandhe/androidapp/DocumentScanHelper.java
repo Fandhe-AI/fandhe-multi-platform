@@ -83,8 +83,9 @@ final class DocumentScanHelper {
     private static native void nativeOnDocumentScanResult(long requestId, int kind, int pageCount, byte[] jpeg);
 
     private final WeakReference<ComponentActivity> activityRef;
-    // Activity が GC された後も削除対象を判定できるよう、生成時に cacheDir を保持する。
-    private final File cacheDir;
+    // コンストラクタは Activity.attach 前（フィールド初期化子）に呼ばれ getCacheDir が使えないため、初回使用時に取得して保持する。
+    // Activity が GC された後も削除対象を判定できるようにするため。
+    private volatile File cacheDir;
     private final RequestTracker request = new RequestTracker();
     // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
     private final ActivityResultLauncher<IntentSenderRequest> launcher;
@@ -98,7 +99,6 @@ final class DocumentScanHelper {
 
     DocumentScanHelper(ComponentActivity activity) {
         this.activityRef = new WeakReference<>(activity);
-        this.cacheDir = activity.getCacheDir();
         this.launcher = activity.registerForActivityResult(
                 new ActivityResultContracts.StartIntentSenderForResult(), this::onActivityResult);
     }
@@ -166,7 +166,7 @@ final class DocumentScanHelper {
             return;
         }
         ComponentActivity activity = activityRef.get();
-        if (activity == null) {
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
             finish(id, KIND_INTERRUPTED, 0, null);
             return;
         }
@@ -199,7 +199,16 @@ final class DocumentScanHelper {
         launchedId = RequestTracker.NONE;
         int code = result.getResultCode();
         if (code == Activity.RESULT_CANCELED) {
-            finish(id, KIND_CANCELLED, 0, null);
+            if (uris == null || uris.isEmpty()) {
+                finish(id, KIND_CANCELLED, 0, null);
+            } else {
+                // キャンセル結果にページファイルが入る場合も、削除を完了してから通知する。
+                try {
+                    worker.execute(() -> convertCancelled(id, uris));
+                } catch (RuntimeException e) {
+                    finish(id, KIND_INTERRUPTED, 0, null);
+                }
+            }
         } else if (code != Activity.RESULT_OK) {
             deleteAsync(uris);
             finish(id, KIND_INTERNAL, 0, null);
@@ -257,6 +266,17 @@ final class DocumentScanHelper {
             }
         }
         nativeOnDocumentScanResult(id, kind, kind == KIND_SCANNED ? uris.size() : 0, jpeg);
+    }
+
+    // worker スレッド。キャンセル結果のページファイルを消してから通知する。消せなければ INTERNAL。
+    private void convertCancelled(long id, List<Uri> uris) {
+        int kind = deleteAll(uris) ? KIND_CANCELLED : KIND_INTERNAL;
+        synchronized (this) {
+            if (!request.complete(id)) {
+                return;
+            }
+        }
+        nativeOnDocumentScanResult(id, kind, 0, null);
     }
 
     // 長辺 MAX_SIDE 以下の JPEG にする。{kind, bytes} を返す。復号不可は UNDECODABLE、上限超過・OOM は TOO_LARGE。
@@ -328,13 +348,17 @@ final class DocumentScanHelper {
     // 消そうとして残ったら false。
     private boolean deleteAll(List<Uri> uris) {
         boolean ok = true;
+        File dir = cacheDir();
+        if (dir == null) {
+            return false;
+        }
         for (Uri u : uris) {
             try {
                 if (!"file".equals(u.getScheme()) || u.getPath() == null) {
                     continue;
                 }
                 File f = new File(u.getPath()).getCanonicalFile();
-                String root = cacheDir.getCanonicalPath() + File.separator;
+                String root = dir.getCanonicalPath() + File.separator;
                 if (!f.getPath().startsWith(root)) {
                     continue;
                 }
@@ -346,6 +370,19 @@ final class DocumentScanHelper {
             }
         }
         return ok;
+    }
+
+    // 初回に Activity から取得して保持する。Activity が既に無く未取得なら null。
+    private File cacheDir() {
+        File d = cacheDir;
+        if (d == null) {
+            ComponentActivity a = activityRef.get();
+            if (a != null) {
+                d = a.getCacheDir();
+                cacheDir = d;
+            }
+        }
+        return d;
     }
 
     private void deleteAsync(List<Uri> uris) {
