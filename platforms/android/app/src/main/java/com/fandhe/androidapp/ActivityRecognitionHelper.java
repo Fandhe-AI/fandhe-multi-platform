@@ -6,6 +6,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.activity.ComponentActivity;
 import androidx.activity.result.ActivityResultLauncher;
@@ -17,8 +19,10 @@ import com.google.android.gms.location.DetectedActivity;
 
 import android.net.Uri;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -44,6 +48,7 @@ import java.util.UUID;
 // （配送が来ない孤児は回収できない。守らない範囲）。
 // 解除（removeActivityUpdates）は発行時から `unreleased` に記録し、成功通知でだけ消す。Task 実行中は新しい購読を
 // 保留し（完了後に begin を再開）、失敗が確定していれば再試行しつつ failure を立てる（解除が確認できるまで購読しない）。
+// 解除の失敗は停止後も 5 秒間隔で最大 3 回再試行し、尽きたら PendingIntent を cancel して配送を止める。
 //
 // ライフサイクル: `onStop` で購読を解除して最新値を捨て、`onStart` で新世代として張り直す
 // （許可ダイアログが起こす onPause とは独立）。背景中に届いた許可結果ではここでは購読せず onStart に任せる。
@@ -70,6 +75,8 @@ final class ActivityRecognitionHelper {
     // Rust `decode_read` の上限（2 + 2×16）と合わせる。
     private static final int MAX_PAIRS = 16;
     // プロセス固有の識別子。PendingIntent の同一性（Intent data）に含める。
+    private static final int MAX_REMOVE_RETRIES = 3;
+    private static final long REMOVE_RETRY_DELAY_MS = 5000L;
     private static final String PROCESS_TOKEN = UUID.randomUUID().toString();
 
     private static native void nativeOnBackgrounded();
@@ -89,6 +96,8 @@ final class ActivityRecognitionHelper {
     private static final Set<String> unreleased = new HashSet<>();
     // LOCK の内側。unreleased のうち解除の Task が未完了のもの。
     private static final Set<String> inflight = new HashSet<>();
+    // LOCK の内側。解除の失敗ごとの再試行回数。
+    private static final Map<String, Integer> removeAttempts = new HashMap<>();
     // LOCK の内側。解除の Task が全部完了したとき 1 度だけ走らせる、保留中の begin。
     private static Runnable afterRemovals;
 
@@ -328,14 +337,34 @@ final class ActivityRecognitionHelper {
                             inflight.remove(key);
                             if (t.isSuccessful()) {
                                 unreleased.remove(key);
+                                removeAttempts.remove(key);
                                 pi.cancel();
+                            } else {
+                                onRemovalFailed(app, token, g, key, pi);
                             }
                             runAfterRemovals();
                         }
                     });
         } catch (RuntimeException e) {
             inflight.remove(key);
+            onRemovalFailed(app, token, g, key, pi);
         }
+    }
+
+    // LOCK の内側で呼ぶ。解除の失敗後、以後 start も配送も無くても回収できるよう、遅延再試行を数回行う。
+    // 上限を超えたら PendingIntent だけ cancel して配送を止める（unreleased は残し、新しい購読は引き続き保留する）。
+    private static void onRemovalFailed(Context app, String token, long g, String key, PendingIntent pi) {
+        int n = removeAttempts.containsKey(key) ? removeAttempts.get(key) : 0;
+        if (n >= MAX_REMOVE_RETRIES) {
+            pi.cancel();
+            return;
+        }
+        removeAttempts.put(key, n + 1);
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            synchronized (LOCK) {
+                if (unreleased.contains(key)) removeUpdates(app, token, g);
+            }
+        }, REMOVE_RETRY_DELAY_MS);
     }
 
     // LOCK の内側で呼ぶ。解除が全部終わっていれば保留中の begin を 1 度だけ走らせる。
