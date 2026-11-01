@@ -436,6 +436,9 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // `device::file_preview::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::file_preview::reset_pending_tracking();
+    // Issue #1130: 決済シートの保留中の要求を破棄し、旧 request_id の完了を不一致で捨てさせる。
+    #[cfg(feature = "device")]
+    crate::device::payment_request::reset_pending_tracking();
 
     let native_options = eframe::NativeOptions {
         android_app: Some(app),
