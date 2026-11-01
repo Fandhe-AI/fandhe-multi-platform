@@ -32,8 +32,7 @@
 //!
 //! # Android
 //!
-//! 骨格段階: 現状の Android 実装は [`ActivityFailure::Unsupported`] を返すスタブで、下記は b-android
-//! 実装後に満たす契約（実装時に実体と突き合わせる）。
+//! 実装済み（#1127）。実体は `ActivityRecognitionHelper`（Java）と `android_activity_recognition.rs`。
 //!
 //! Play services の `ActivityRecognitionClient.requestActivityUpdates(interval, PendingIntent)` を使う
 //! （Transition API は確度が無く遷移時しか通知しないため採らない）。

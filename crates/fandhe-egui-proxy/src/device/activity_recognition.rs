@@ -14,7 +14,7 @@
 //!
 //! dispatch（[`implementation`]）は全対象 OS の最終形。Windows は `windows_activity_recognition.rs`、
 //! iOS は `ios_activity_recognition.rs`、Android は `android_activity_recognition.rs`
-//! （Issue #1126: 骨格。実体は b-android が埋める）、macOS・Linux は `UnsupportedActivityRecognizer`。
+//! （Issue #1127）、macOS・Linux は `UnsupportedActivityRecognizer`。
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -135,7 +135,6 @@ static BACKGROUND: AtomicBool = AtomicBool::new(false);
 
 /// 背景遷移を記録する。iOS の実装（#614）が `ios_activity_recognition.rs` の C ABI 受け口から呼ぶ。
 #[cfg(any(target_os = "ios", target_os = "android", test))]
-#[cfg_attr(target_os = "android", allow(dead_code))] // Android（b-android）の受け口が使う
 pub(crate) fn note_backgrounded() {
     BACKGROUND.store(true, Ordering::SeqCst);
 }
@@ -143,7 +142,6 @@ pub(crate) fn note_backgrounded() {
 /// 背景からの復帰を記録する（呼び元は [`note_backgrounded`] と同じ）。
 /// 復帰回数を先に増やしてから背景フラグを下ろす（フラグが下りた時点で起点の引き直しが見える）。
 #[cfg(any(target_os = "ios", target_os = "android", test))]
-#[cfg_attr(target_os = "android", allow(dead_code))] // Android（b-android）の受け口が使う
 pub(crate) fn note_resumed() {
     RESUME_EPOCH.fetch_add(1, Ordering::SeqCst);
     BACKGROUND.store(false, Ordering::SeqCst);
