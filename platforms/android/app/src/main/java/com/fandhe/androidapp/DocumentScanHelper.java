@@ -83,6 +83,8 @@ final class DocumentScanHelper {
     private static native void nativeOnDocumentScanResult(long requestId, int kind, int pageCount, byte[] jpeg);
 
     private final WeakReference<ComponentActivity> activityRef;
+    // Activity が GC された後も削除対象を判定できるよう、生成時に cacheDir を保持する。
+    private final File cacheDir;
     private final RequestTracker request = new RequestTracker();
     // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
     private final ActivityResultLauncher<IntentSenderRequest> launcher;
@@ -96,6 +98,7 @@ final class DocumentScanHelper {
 
     DocumentScanHelper(ComponentActivity activity) {
         this.activityRef = new WeakReference<>(activity);
+        this.cacheDir = activity.getCacheDir();
         this.launcher = activity.registerForActivityResult(
                 new ActivityResultContracts.StartIntentSenderForResult(), this::onActivityResult);
     }
@@ -324,15 +327,14 @@ final class DocumentScanHelper {
     // 自アプリの cacheDir 配下の file URI だけを消す。他所のファイルは消さない（成功扱い）。
     // 消そうとして残ったら false。
     private boolean deleteAll(List<Uri> uris) {
-        ComponentActivity activity = activityRef.get();
         boolean ok = true;
         for (Uri u : uris) {
             try {
-                if (!"file".equals(u.getScheme()) || u.getPath() == null || activity == null) {
+                if (!"file".equals(u.getScheme()) || u.getPath() == null) {
                     continue;
                 }
                 File f = new File(u.getPath()).getCanonicalFile();
-                String root = activity.getCacheDir().getCanonicalPath() + File.separator;
+                String root = cacheDir.getCanonicalPath() + File.separator;
                 if (!f.getPath().startsWith(root)) {
                     continue;
                 }
