@@ -144,6 +144,11 @@ pub mod android_device_info;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_display_refresh_hdr;
+/// Issue #1124: Android 向け書類スキャンの骨格（`Unsupported` 固定。#1125 が ML Kit 実体へ置き換え）。
+/// `device/document_scan.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_document_scan;
 /// Issue #609: Android 向け気圧・照度・近接センサー実装。
 /// `device/environment_sensors.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -825,8 +830,8 @@ pub mod digital_credentials;
 /// Phase 11 の拡充ループ（親 #177、Issue #870）: 画面のリフレッシュレート・HDR・広色域の effect
 /// ドライバ（macOS / Windows 実装、iOS・Android は骨格、他 OS は `UnsupportedDisplayRefreshHdr` 固定）。
 pub mod display_refresh_hdr;
-/// Phase 11（親 #145、Issue #747）: 書類スキャンの effect ドライバ（iOS は後続 #748 が実装、
-/// 他 OS は `UnsupportedDocumentScanner` 固定。Android は GMS 依存のため保留、Web は対象外）。
+/// Phase 11（親 #145、Issue #747）: 書類スキャンの effect ドライバ（iOS は #748、Android は #1124 の骨格を
+/// #1125 が実装。macOS・Windows・Linux は `UnsupportedDocumentScanner` 固定、Web は対象外）。
 pub mod document_scan;
 /// Phase 11 の拡充ループ（親 #1013、Issue #1014・#1015）: ドラッグ & ドロップ受け取りの
 /// effect ドライバ（macOS/Windows は egui `RawInput::hovered_files`/`dropped_files` を

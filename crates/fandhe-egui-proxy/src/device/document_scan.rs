@@ -7,11 +7,10 @@
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
 //!
-//! # OS 別の分担（dispatch・bridge・本ファイルは #747 で最終形。後続の子はここを触らない）
+//! # OS 別の分担（dispatch・bridge・本ファイルは #747・#1124 で最終形。後続の子はここを触らない）
 //!
 //! - iOS: `ios_document_scan`（#748。`VNDocumentCameraViewController`）
-//! - Android: GMS 依存のため保留。OS 別モジュールを置かず fallback に含める。保留を解くときは
-//!   dispatch の変更を別 issue で扱う
+//! - Android: `android_document_scan`（#1125。ML Kit Document Scanner。#1124 ではスタブ）
 //! - macOS・Windows・Linux: 対応表で `no` のため `UnsupportedDocumentScanner` 固定
 //!   （ダミーの成功実装へは倒さない）。Web は対象外
 //!
@@ -76,8 +75,12 @@ fn platform() -> Arc<dyn DocumentScanner> {
     {
         super::ios_document_scan::implementation()
     }
-    // Android は GMS 依存のため保留、macOS・Windows・Linux は対応表で no。
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(target_os = "android")]
+    {
+        super::android_document_scan::implementation()
+    }
+    // macOS・Windows・Linux は対応表で no。
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
         Arc::new(fandhe_device::document_scan::UnsupportedDocumentScanner)
     }
@@ -225,14 +228,14 @@ fn bridge() -> &'static Bridge {
 }
 
 /// OS 層が撮影 UI を出す直前に呼ぶ。`false` なら出さない（モジュール doc 参照）。
-// iOS 以外のビルドでは未使用（iOS は `ios_document_scan` の受け口が呼ぶ）。
+// iOS の受け口、Android は #1125 の JNI 受け口が呼ぶ。デスクトップとスタブのうちは未使用。
 #[allow(dead_code)]
 pub(crate) fn try_begin_present(request_id: u64) -> bool {
     bridge().try_begin_present(request_id)
 }
 
 /// OS 層が結果を 1 回だけ送る受け口（モジュール doc 参照）。
-// iOS 以外のビルドでは未使用（iOS は `ios_document_scan` の受け口が呼ぶ）。
+// iOS の受け口、Android は #1125 の JNI 受け口が呼ぶ。デスクトップとスタブのうちは未使用。
 #[allow(dead_code)]
 pub(crate) fn complete_from_os(
     request_id: u64,
@@ -243,7 +246,7 @@ pub(crate) fn complete_from_os(
 
 /// 画面の作り直し時に保留中の要求を破棄する。画面状態は `default()`（世代 0）に戻るため、
 /// 保留が残ると次の要求が発送されず飲み込まれる。旧要求の遅延完了は id 不一致で捨てられる。
-// Android の再生成経路向け（保留中）。iOS には再生成経路がなく未使用。
+// Android の再生成経路（`android_main`）が呼ぶ。iOS・デスクトップには再生成経路がなく未使用。
 #[allow(dead_code)]
 pub(crate) fn reset_pending_tracking() {
     if let Some(b) = BRIDGE.get() {
@@ -405,6 +408,10 @@ mod tests {
         PermissionDenied,
         /// 表示を始めずに中断を送る。
         Interrupt,
+        /// 表示を始めず、非同期に失敗を送る（Android の GMS 判定・前面判定の失敗）。
+        AsyncFail(DocumentScanFailure),
+        /// 表示を始めた後に中断を送る（Android の `onDestroy` で保留中）。
+        PresentThenInterrupt,
     }
 
     struct Fake {
@@ -459,6 +466,16 @@ mod tests {
                 }
                 Mode::Interrupt => {
                     b.complete_from_os(request_id, Err(DocumentScanFailure::Interrupted));
+                }
+                Mode::AsyncFail(f) => {
+                    std::thread::spawn(move || b.complete_from_os(request_id, Err(f)));
+                }
+                Mode::PresentThenInterrupt => {
+                    std::thread::spawn(move || {
+                        if b.try_begin_present(request_id) {
+                            b.complete_from_os(request_id, Err(DocumentScanFailure::Interrupted));
+                        }
+                    });
                 }
             }
             Ok(())
@@ -529,8 +546,8 @@ mod tests {
     }
 
     #[test]
-    fn fallback_platform_is_unsupported_off_ios() {
-        #[cfg(not(target_os = "ios"))]
+    fn fallback_platform_is_unsupported_off_ios_and_android() {
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
         assert_eq!(platform().scan(1), Err(DocumentScanFailure::Unsupported));
     }
 
@@ -567,6 +584,28 @@ mod tests {
     fn interrupted_is_a_failure() {
         let (s, _) = run(Mode::Interrupt, LONG);
         assert_eq!(s.result, Some(Err(CoreFailure::Interrupted)));
+    }
+
+    #[test]
+    fn async_failures_without_present_are_failures_with_no_image() {
+        for (f, expect) in [
+            (DocumentScanFailure::Unsupported, CoreFailure::Unsupported),
+            (
+                DocumentScanFailure::NotForeground,
+                CoreFailure::NotForeground,
+            ),
+        ] {
+            let (s, _) = run(Mode::AsyncFail(f), LONG);
+            assert_eq!(s.result, Some(Err(expect)));
+            assert_eq!(image_source(&s), "");
+        }
+    }
+
+    #[test]
+    fn interrupt_after_present_is_a_failure() {
+        let (s, _) = run(Mode::PresentThenInterrupt, LONG);
+        assert_eq!(s.result, Some(Err(CoreFailure::Interrupted)));
+        assert_eq!(image_source(&s), "");
     }
 
     #[test]
