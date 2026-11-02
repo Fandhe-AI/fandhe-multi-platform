@@ -39,6 +39,19 @@
 //! - Windows（#899）: WinRT `Windows.Devices.Sensors` の `Gyrometer`（°/s）・`Magnetometer`（µT）などを
 //!   `GetDefault` で取る。`GetCurrentReading` が null なら値なし、null の `GetDefault` は
 //!   `NotPresent`、`E_ACCESSDENIED` は `PermissionDenied`。線形加速度の取り方は #899 で確定する
+//!   - **`ReportInterval` は設定しない**（既定のまま。戻す処理が要らず、停止失敗の経路が無い）。停止・最小化・
+//!     破棄は WinRT オブジェクトの drop だけで行う
+//!   - **最小化の検出**は `windows_environment_sensors.rs` の `ensure_minimize_watcher`（`IsIconic` を 200ms 周期）。
+//!     HWND 不明・ウォッチャーの起動失敗なら `start` は `Failed` にし、何も保持しない
+//!   - **最小化**: ウォッチャーがロックの内側で suspended を立て、保持を take して drop する
+//!   - **復元**: ウォッチャーは suspended を下ろし「取り直し要」の印を立てるだけ。`GetDefault` は UI スレッドの
+//!     次の `read` で行い、失敗はその `read` が `Err`。ウォッチャー側では OS を呼ばない
+//!   - **非表示（最小化）中の `read`** は `Ok(None)`
+//!   - 守る範囲: 最小化中に OS のセンサーを握り続けない、検出できないまま開始しない、復元後に古い保持を使わない。
+//!     守らない範囲: ウォッチャーの周期（200ms）ぶんの検出の遅れ、Connected Standby 中の null（`NotPresent` または
+//!     値なしに写す）、複数プロセスが同じセンサーを使うこと。実機で確かめる点は、センサーオブジェクトを別スレッドで
+//!     drop してよいか（agile か）と、既定の間隔で `GetCurrentReading` が値を返すか
+//!   - 一次情報: https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.gyrometer.reportinterval
 //! - iOS（#900）: `CMMotionManager`（`g_motion_manager` を `tilt` と共有）。ジャイロは rad/s、磁気は µT、
 //!   線形加速度は `userAcceleration`（g）。`timestamp` と `systemUptime` を比べて古い値を捨てる。
 //!   `is*Available` が false なら `NotPresent`

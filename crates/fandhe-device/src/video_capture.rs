@@ -6,7 +6,20 @@
 //! 担当 OS は iOS（`UIImagePickerController`、#822）、Android（`ACTION_VIDEO_CAPTURE`、#823）、
 //! Web（`<input type="file" capture>`、#824。`fandhe-web-dom` 側。長さの上限は渡せない）、
 //! macOS（`AVCaptureMovieFileOutput` と `AVCaptureVideoPreviewLayer` のパネル。音声は録らない。#1071）。
-//! Windows は保留で `Unsupported`（保留を解くときは dispatch の変更を別 issue で扱う）。
+//! Windows は保留を外した（第 5 周）。未実装の間は `Unsupported` で、実装は別 issue（dispatch の変更を含む）。
+//! Windows の方針（`MediaCapture` で組む。Windows App SDK の `CameraCaptureUI` は採らない）:
+//!
+//! - 撮影 UI は macOS と同じ egui の撮影パネル（開始・停止・キャンセル）。プレビューは出さない
+//! - 30 秒の上限（[`MAX_DURATION_SECS`]）は単調時計（`Instant`）で測り、上限で自動停止する。壁時計を使わない
+//! - 一時ファイルは要求ごとに新しい置き場へ `create_new` で作る。削除に失敗したら読めた結果があっても
+//!   `Internal` にし、置き場を要求より長く生きる場所に記録して次の要求の前に消し直す（macOS と同じ。契約表 9）
+//! - `InitializeWithSettingsAsync`・`StartRecordToStorageFileAsync`・`StopRecordAsync`・`GetVideoPropertiesAsync` は
+//!   `SetCompleted` のコールバックから直列キューへ積み、開始の各段を世代で照合して進める。ワーカー上で `.get()`
+//!   しない。キャンセルは `Cancel` して即座に戻り、取り消しを含む完了が届いてから `MediaCapture` を `Close` する
+//!   （camera-preview-stream の Windows #1112 と同じ形。契約表 11）
+//! - 追加するのは `windows` クレートの feature だけで、新しい依存は足さない
+//! - 守らない範囲: 撮影パネルの見た目・画質、音声（録らない）、複数プロセス。権限拒否（`E_ACCESSDENIED`）は
+//!   `PermissionDenied` に写す
 //! `fandhe-egui-proxy` の effect ドライバ（`device/video_capture.rs`）が本モジュールの trait を呼び、
 //! OS 層が実装する。Web の子は検査 [`VideoClip::from_os`] を再利用する（本モジュールは wasm32 でも
 //! ビルドできる純粋なコードに保つ）。
