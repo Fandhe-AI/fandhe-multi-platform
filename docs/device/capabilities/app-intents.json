@@ -30,14 +30,17 @@
       "note": "未実装。OS 側の仕組みで、公式文書は Google Play services への依存に触れていない。登録の確認は `adb shell cmd app_function list-app-functions`（公式）"
     },
     "macos": {
-      "status": "possible",
+      "status": "done",
       "api": "App Intents（`AppIntent` / `AppShortcutsProvider`。macOS 13 以上）",
       "perm": "権限ダイアログなし。entitlement は不要と認識",
       "url": [
         "https://developer.apple.com/documentation/appintents",
         "https://developer.apple.com/videos/play/wwdc2022/10032/"
       ],
-      "note": "未実装（第 5 周で保留を外す）。公開する主体はホストアプリ（`FandheWidgetHost`）で、`AppIntent` と `AppShortcutsProvider` を足す（別ターゲット案は App Group が要らない利点があるが、既存ホストへの追加を採る）。`perform` は `fandhe://intent/show` を開き、url-scheme（done）の受け口を再利用する。新しい trait・effect は作らない。守る範囲: 嘘の成功を出さない（`fandhe://` を開けなければ `perform` は失敗を返す）。守らない範囲: ショートカット App・Siri 側の表示と候補の出方（OS 任せ）、アプリが起動していない間の状態。"
+      "note": "実装済み（#1148）。公開する主体はホストアプリ（`FandheWidgetHost`）で、`AppIntent`（`FandheShowIntent`）と `AppShortcutsProvider` を足した。`perform` は `NSWorkspace` で `fandhe://intent/show` を開き、開けない（受け手が無い等）ときは throw する（成功にしない）。`promptsUserIfNeeded` を false にして「アプリケーションを選択」シートを出さず、別アプリを選ばれて成功になるのを防ぐ。受け手は url-scheme（done）の .app（`scripts/apple/bundle-macos-url-scheme.sh`）で、画面は `url_scheme_show`。新しい trait・effect は作っていない。守る範囲: 嘘の成功を出さない。守らない範囲: ショートカット App・Siri 側の表示と候補の出方（OS 任せ）、アプリが起動していない間の状態、他アプリが同じ URL を送った場合との区別、ホストの終了（起動後 1 秒）を `perform` が超えたときの中断（失敗扱いになる）。Mac 目視で見る点（#1147）: (1) ショートカット App に「Fandhe に表示」が出る (2) 実行すると `url_scheme_show` 画面に URL と案内文が出る (3) 受け手の .app が無い状態で実行するとショートカットが失敗になり成功表示が出ない",
+      "detail": "できている（Mac 目視待ち）",
+      "implStatus": "Mac 目視待ち（#1147）",
+      "impl": "platforms/apple/FandheWidgetHost/Sources/FandheWidgetHost/FandheShowIntent.swift + platforms/apple/FandheWidgetHost/Sources/FandheWidgetHost/main.swift + crates/fandhe-core/src/screens/url_scheme_show.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + scripts/apple/build-macos-widget-host.sh、Issue #1148"
     },
     "windows": {
       "status": "no",
@@ -54,5 +57,5 @@
       "note": "Web にアシスタントへ機能を公開する API はない"
     }
   },
-  "note": "spotlight-index・share-receive とは別: 本機能は音声・ショートカットから呼ばれる『アクション』を公開する。app-shortcuts（ホーム画面の長押し・Dock・ジャンプリスト）とも別。どの OS も新しいビルド構成か依存が要るため（iOS・macOS は Xcode によるメタデータ抽出、Android は Android 16 と Kotlin・KSP）、iOS・Android・macOS は保留、Windows・Web はできない。条件が揃ったら保留の一覧から見直す。範囲（再開時の案）: 固定のアクション 1 つ（画面に文字列を出す）を公開し、呼び出し時に画面へ反映するだけ。反映の経路は url-scheme の受け口を再利用する（app-shortcuts と同じ）"
+  "note": "spotlight-index・share-receive とは別: 本機能は音声・ショートカットから呼ばれる『アクション』を公開する。app-shortcuts（ホーム画面の長押し・Dock・ジャンプリスト）とも別。どの OS も新しいビルド構成か依存が要るため（iOS・macOS は Xcode によるメタデータ抽出、Android は Android 16 と Kotlin・KSP）、iOS・Android は保留、macOS は既存ホストアプリで実装（#1148）、Windows・Web はできない。条件が揃ったら保留の一覧から見直す。範囲（再開時の案）: 固定のアクション 1 つ（画面に文字列を出す）を公開し、呼び出し時に画面へ反映するだけ。反映の経路は url-scheme の受け口を再利用する（app-shortcuts と同じ）"
 }
