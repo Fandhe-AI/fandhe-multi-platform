@@ -34,6 +34,7 @@
 //! 最小化で気圧の受信記録を捨てて `note_backgrounded`、復元で `note_resumed` を呼び、
 //! `InvalidateRect` で 1 フレーム起こす（背景のまま走るフレームが再描画を予約せず、ポーリングが
 //! 止まるのを防ぐ。契約表 4）。背景中に OS 側の購読は止めない。
+//! このウォッチャーは motion-raw-sensors（#1145、`windows_motion_raw_sensors`）と共用し、同じ辺で通知する。
 //!
 //! HRESULT・センサー値・デバイス ID・セレクタ文字列はログにも画面にも出さない（security.md A09）。
 //! `unsafe` は `IsIconic` / `InvalidateRect` の呼び出し 2 箇所に限る。
@@ -603,13 +604,17 @@ mod imp {
     // ---- 最小化ウォッチャー ----
 
     /// ウォッチャーを 1 回だけ起動する。ウィンドウ未取得なら起動せず次回に再試行する。
-    fn ensure_minimize_watcher() {
+    /// motion-raw-sensors（#1145）と共用する。動いていれば true、HWND 不明・起動失敗は false。
+    pub(crate) fn ensure_minimize_watcher() -> bool {
         static STARTED: AtomicBool = AtomicBool::new(false);
-        if STARTED.load(Ordering::Acquire)
-            || super::super::windows_share::window().is_none()
-            || STARTED.swap(true, Ordering::AcqRel)
-        {
-            return;
+        if STARTED.load(Ordering::Acquire) {
+            return true;
+        }
+        if super::super::windows_share::window().is_none() {
+            return false;
+        }
+        if STARTED.swap(true, Ordering::AcqRel) {
+            return true;
         }
         let spawned = std::thread::Builder::new()
             .name("fandhe-environment-sensors-minimize".into())
@@ -617,6 +622,7 @@ mod imp {
         if spawned.is_err() {
             STARTED.store(false, Ordering::Release);
         }
+        spawned.is_ok()
     }
 
     fn watch_minimize() {
@@ -627,9 +633,11 @@ mod imp {
                     Some(Edge::Minimized) => {
                         drop_pressure_received();
                         super::super::environment_sensors::note_backgrounded();
+                        super::super::windows_motion_raw_sensors::note_minimized();
                     }
                     Some(Edge::Restored) => {
                         super::super::environment_sensors::note_resumed();
+                        super::super::windows_motion_raw_sensors::note_restored();
                         wake_frame(hwnd);
                     }
                     None => {}
@@ -662,7 +670,7 @@ mod imp {
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) use imp::implementation;
+pub(crate) use imp::{ensure_minimize_watcher, implementation};
 
 #[cfg(test)]
 mod tests {
