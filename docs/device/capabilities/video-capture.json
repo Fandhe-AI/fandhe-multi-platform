@@ -71,8 +71,7 @@
         "https://learn.microsoft.com/en-us/uwp/api/windows.storage.fileproperties.videoproperties",
         "https://learn.microsoft.com/en-us/windows/apps/develop/camera/camera-privacy-setting"
       ],
-      "deferred": "WinRT の `Windows.Media.Capture.CameraCaptureUI` は UWP 限定で、デスクトップアプリは Windows App SDK 版を使うよう公式に書かれており、Windows App SDK は新しい依存になる。`MediaCapture` で自前に組むと、撮影の画面（プレビュー・開始と停止）の設計に加え、`InitializeAsync` の初回を STA の UI スレッドで呼ぶ設計の変更（既存の WinRT 呼び出しは作業スレッドから MTA で呼ぶ）と、`windows` クレートの feature（`Storage_FileProperties`）の追加が要る。camera-preview-stream の Windows と同じく、カメラの利用方式が決まったら見直す",
-      "note": "未実装。Windows App SDK 版の `CaptureFileAsync` はキャンセルとエラーをどちらも null で返し区別しない（公式）。unpackaged の Win32 で動くか、導入された版は公式に明記が無い。`VideoProperties` は `Duration` / `Width` / `Height` / `Orientation` を返す（公式）。`MediaCapture` の単一録画の上限は約 3 時間（公式）"
+      "note": "未実装（第 5 周で保留を外す）。方針: Windows App SDK 版の `CameraCaptureUI` は採らず、WinRT `MediaCapture` で組む（新しい依存を足さず、`windows` クレートの feature 追加だけ）。撮影 UI は macOS と同じ egui の撮影パネル（開始・停止・キャンセル）で、プレビューは出さない。30 秒の上限は単調時計で測る。一時ファイルは要求ごとに `create_new` で作り、削除に失敗したら `Internal` にして次の要求の前に消し直す。`InitializeWithSettingsAsync`・`StartRecordToStorageFileAsync`・`StopRecordAsync`・`GetVideoPropertiesAsync` は `SetCompleted` から直列キューへ積み、世代で照合する。キャンセルは `Cancel` して完了後に `Close` し、ワーカー上で `.get()` しない（camera-preview-stream の Windows #1112 と同じ形）。詳細は `crates/fandhe-device/src/video_capture.rs` の doc。 補足: Windows App SDK 版の `CaptureFileAsync` はキャンセルとエラーをどちらも null で返し区別しない（公式）。unpackaged の Win32 で動くか、導入された版は公式に明記が無い。`VideoProperties` は `Duration` / `Width` / `Height` / `Orientation` を返す（公式）。`MediaCapture` の単一録画の上限は約 3 時間（公式）"
     },
     "web": {
       "status": "done",

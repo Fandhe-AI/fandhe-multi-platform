@@ -15,7 +15,7 @@
         "https://developer.apple.com/videos/play/wwdc2022/10032/",
         "https://developer.apple.com/videos/play/wwdc2025/275/"
       ],
-      "deferred": "App Intents はビルド時に Swift コンパイラの出力から Xcode がメタデータを抽出し、アプリの bundle に置く方式で、システムはこれを読んで Shortcuts・Siri に出す。iOS 版は cargo の成果物を手組みで .app にしており Xcode のビルドを通らないため、抽出の手順をビルドに足すビルド構成の変更（設計変更）が要る。抽出ツール（`appintentsmetadataprocessor`）は Xcode 内部のツールで公開の手順が無いため、ビルド構成の設計が決まるまで保留",
+      "deferred": "見送り。メタデータ抽出が Xcode のビルドに限られ、手組みの .app では足せない点は変わらない。直す道は 2 つで、(1) `AppIntent` を Xcode のターゲットへ置くには iOS ビルドを xcodebuild へ移す設計変更が要る、(2) cargo の成果物のまま「URL を開く」系にするなら OpenURLIntent は universal link（https）を前提とし、Associated Domains とドメインの用意（有料の Apple Developer Program の機能とドメイン）が要る。どちらも今周の範囲（無料・設計判断だけ）に入らないため見送り。一次情報: https://developer.apple.com/documentation/appintents/openurlintent / https://developer.apple.com/forums/thread/762586",
       "note": "未実装。Swift 専用の宣言型 API。Swift の薄層を swiftc で静的ライブラリにして Rust から呼ぶ前例はある（翻訳・端末内 LLM・ライブアクティビティ）が、App Intents は型の定義そのものをメタデータとして抽出させる必要がある。静的ライブラリ・Swift Package に置く場合は `AppIntentsPackage`（iOS 17 以上）で app 側から参照する（公式）。ショートカット App の「URL を開く」から `fandhe://` を開く経路は url-scheme（done）で既にあるが、本機能のアクション公開には当たらない"
     },
     "android": {
@@ -26,7 +26,7 @@
         "https://developer.android.com/ai/appfunctions",
         "https://developer.android.com/jetpack/androidx/releases/appfunctions"
       ],
-      "deferred": "Android 16（API 36）以上でしか動かず、compileSdk を 35 から上げる必要がある。Jetpack ライブラリは experimental preview で、注釈処理に KSP（Kotlin Symbol Processing）を使い、Kotlin ソースを持たない現在の Gradle 構成に Kotlin・KSP のプラグインと新しい依存を足すことになる。呼び出し側は `EXECUTE_APP_FUNCTIONS` を持つエージェント等に限られ、Gemini との連携は限定公開。ビルド構成の変更と新しい依存を足すため保留。API が安定し、compileSdk と Kotlin の導入を決めたら着手できる",
+      "deferred": "見送り。API 36（Android 16）以上でしか動かず compileSdk を 35 から 36 以上へ上げる必要がある。`androidx.appfunctions` は 1.0.0-beta で、注釈処理に KSP を使うため Kotlin ソースを持たない現在の Gradle 構成に Kotlin・KSP のプラグインを足すことになる。beta の API を新しい依存として採る判断になるため見送り。API が安定し、compileSdk と Kotlin の導入を決めたら着手できる。一次情報: https://developer.android.com/jetpack/androidx/releases/appfunctions",
       "note": "未実装。OS 側の仕組みで、公式文書は Google Play services への依存に触れていない。登録の確認は `adb shell cmd app_function list-app-functions`（公式）"
     },
     "macos": {
@@ -37,8 +37,7 @@
         "https://developer.apple.com/documentation/appintents",
         "https://developer.apple.com/videos/play/wwdc2022/10032/"
       ],
-      "deferred": "iOS と同じく、Xcode がビルド時にメタデータを抽出してアプリの bundle に置く方式。デスクトップ版は cargo で作る素の実行体で bundle を持たず（.app 化は url-scheme の Mac 目視用スクリプトだけ）、Xcode のビルドも通らないため、.app 化とメタデータ抽出をビルドに足す設計変更が要る。ビルド構成の設計が決まるまで保留",
-      "note": "未実装"
+      "note": "未実装（第 5 周で保留を外す）。公開する主体はホストアプリ（`FandheWidgetHost`）で、`AppIntent` と `AppShortcutsProvider` を足す（別ターゲット案は App Group が要らない利点があるが、既存ホストへの追加を採る）。`perform` は `fandhe://intent/show` を開き、url-scheme（done）の受け口を再利用する。新しい trait・effect は作らない。守る範囲: 嘘の成功を出さない（`fandhe://` を開けなければ `perform` は失敗を返す）。守らない範囲: ショートカット App・Siri 側の表示と候補の出方（OS 任せ）、アプリが起動していない間の状態。"
     },
     "windows": {
       "status": "no",
