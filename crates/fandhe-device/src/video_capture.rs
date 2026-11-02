@@ -6,8 +6,7 @@
 //! 担当 OS は iOS（`UIImagePickerController`、#822）、Android（`ACTION_VIDEO_CAPTURE`、#823）、
 //! Web（`<input type="file" capture>`、#824。`fandhe-web-dom` 側。長さの上限は渡せない）、
 //! macOS（`AVCaptureMovieFileOutput` と `AVCaptureVideoPreviewLayer` のパネル。音声は録らない。#1071）。
-//! Windows は保留を外した（第 5 周）。未実装の間は `Unsupported` で、実装は別 issue（dispatch の変更を含む）。
-//! Windows の方針（`MediaCapture` で組む。Windows App SDK の `CameraCaptureUI` は採らない）:
+//! Windows は WinRT `MediaCapture` で組む（#1150。Windows App SDK の `CameraCaptureUI` は採らない）:
 //!
 //! - 撮影 UI は macOS と同じ egui の撮影パネル（開始・停止・キャンセル）。プレビューは出さない
 //! - 30 秒の上限（[`MAX_DURATION_SECS`]）は単調時計（`Instant`）で測り、上限で自動停止する。壁時計を使わない
@@ -44,7 +43,8 @@
 //! | 8 | メタデータ（寸法・向き）を読めない | `Unreadable` |
 //! | 9・未知のコード | その他 | `Internal` |
 //!
-//! macOS は 4・5・6 を使わない。2 は「カメラが無い」、9 は録画前の実行時エラー・カメラの取り外し・
+//! macOS は 4・5・6 を使わない。Windows は数値表を通さず `VideoClip::from_os` を Rust で直接通し、4・5・6 を使わない
+//! （カメラ無し = `MF_E_NO_CAPTURE_DEVICES_AVAILABLE` は 2、拒否 = `E_ACCESSDENIED` は 3）。2 は「カメラが無い」、9 は録画前の実行時エラー・カメラの取り外し・
 //! 一時ファイルを消せない場合を含む
 //!
 //! - **同時 1 件と世代**（契約表 2）: 処理中の再押下は無視する。古い要求の完了は要求 id と

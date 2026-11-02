@@ -1768,8 +1768,8 @@ pub mod user_idle;
 /// 他 OS は `UnsupportedUwbRanging` 固定。Android は GMS 依存のため保留、Web は対象外）。
 pub mod uwb_ranging;
 /// Phase 11 の拡充ループ（親 #169、Issue #821）: 動画の撮影の effect ドライバ
-/// （iOS は #822・Android は #823・macOS は #1071、Web は `fandhe-web-dom`（#824）、
-/// Windows・Linux は `UnsupportedVideoCapturer` 固定）。
+/// （iOS は #822・Android は #823・macOS は #1071・Windows は #1150、Web は `fandhe-web-dom`（#824）、
+/// Linux は `UnsupportedVideoCapturer` 固定）。
 pub mod video_capture;
 /// Phase 11 の拡充ループ（親 #340、Issue #1014）: 動画の変換の effect ドライバ
 /// （macOS・iOS 実装、Android は #1017・Windows は #1015 が埋めるスタブ、
@@ -2156,6 +2156,11 @@ pub mod windows_usb_device;
 /// `device/user_idle.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_user_idle;
+/// Issue #1150: Windows 向け動画の撮影実装（WinRT `MediaCapture` + アプリが組む撮影パネル）。
+/// `device/video_capture.rs` の Windows 経路から呼ばれる。純関数と一時置き場はホストでも試す。
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub mod windows_video_capture;
 /// Issue #1014 (a): Windows 向け動画の変換のスタブ（実装は #1015）。
 /// `device/video_transcode.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

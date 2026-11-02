@@ -177,11 +177,12 @@ impl Session {
     }
 }
 
-/// `IAsyncOperation` の完了を `wrap` で [`Cmd`] にしてキューへ積む。待たない。
-fn spawn<T: RuntimeType + 'static>(
+/// `IAsyncOperation` の完了を `wrap` で命令（`C`）にしてキューへ積む。待たない。
+/// `windows_video_capture` も同じ形で共用する（命令型だけが違う）。
+pub(super) fn spawn<C: Send + 'static, T: RuntimeType + 'static>(
     op: windows::core::Result<IAsyncOperation<T>>,
-    tx: &Sender<Cmd>,
-    wrap: impl Fn(windows::core::Result<T>) -> Cmd + Send + 'static,
+    tx: &Sender<C>,
+    wrap: impl Fn(windows::core::Result<T>) -> C + Send + 'static,
 ) -> windows::core::Result<IAsyncInfo> {
     let op = op?;
     let tx = tx.clone();
@@ -203,10 +204,10 @@ fn spawn<T: RuntimeType + 'static>(
 }
 
 /// `IAsyncAction` 版の [`spawn`]。
-fn spawn_action(
+pub(super) fn spawn_action<C: Send + 'static>(
     op: windows::core::Result<IAsyncAction>,
-    tx: &Sender<Cmd>,
-    wrap: impl Fn(windows::core::Result<()>) -> Cmd + Send + 'static,
+    tx: &Sender<C>,
+    wrap: impl Fn(windows::core::Result<()>) -> C + Send + 'static,
 ) -> windows::core::Result<IAsyncInfo> {
     let op = op?;
     let tx = tx.clone();

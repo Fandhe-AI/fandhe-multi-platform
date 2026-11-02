@@ -11,7 +11,12 @@
 //! Web はファイル入力経由で「撮った動画」か「既存の動画」かを区別できないため、
 //! [`ClipOrigin::Received`]（「受け取った動画」）で表示する。
 //!
-//! 期限は持たない（OS の応答を正とする）。キャンセルは失敗ではなく状態として出す（契約表 10）。
+//! Windows は OS の撮影 UI が無いため、アプリが組む撮影パネル（準備完了・録画中のボタン）を
+//! `Running` 中の画面に出す（Issue #1150）。パネルの状態（[`PanelPhase`]）は OS 層（ワーカー）が
+//! 観測した事実を effect が [`set_panel`] で写したもので、ボタンは命令（[`PanelCommand`]）を
+//! 立てるだけ。状態を進めるのは OS の観測であり、画面側では進めない。
+//!
+//! 期限は持たない（OS の応答を正とする。Windows の録画 30 秒は OS 層が測る）。キャンセルは失敗ではなく状態として出す（契約表 10）。
 //! 動画の中身・パス・OS のエラー文は持たない（契約表 8）。
 //!
 //! ```text
@@ -23,6 +28,9 @@
 use crate::{Screen, WidgetId};
 
 const CAPTURE_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
+const START_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
+const STOP_BUTTON_ID: WidgetId = WidgetId::from_raw(3);
+const CANCEL_BUTTON_ID: WidgetId = WidgetId::from_raw(4);
 
 /// 長さの上限（秒、案内文言用）。`fandhe_device::video_capture::MAX_DURATION_SECS` と一致させる
 /// （core は device を import しないため、一致は `fandhe-egui-proxy` のテストで縛る）。
@@ -33,9 +41,22 @@ pub const TITLE: &str = "動画の撮影";
 /// ボタンの文言。
 pub const CAPTURE_LABEL: &str = "動画を撮る";
 /// 未操作時の案内。
-pub const IDLE_HINT: &str = "撮影画面で最長 30 秒の動画を撮り、長さ・寸法・サイズを表示します（対応は iOS・Android・macOS・Web。Windows では使えません。デスクトップのブラウザではファイル選択になります）";
+pub const IDLE_HINT: &str = "撮影画面で最長 30 秒の動画を撮り、長さ・寸法・サイズを表示します（対応は iOS・Android・macOS・Windows・Web。デスクトップのブラウザではファイル選択になります）";
 /// 処理中の案内。
 pub const RUNNING_STATUS: &str = "撮影画面を開いています…";
+/// 撮影パネルの準備完了時の案内（Windows）。
+pub const PANEL_READY_STATUS: &str =
+    "カメラの準備ができました。録画を始めてください（最長 30 秒・音声は録りません）";
+/// 録画中の案内（Windows）。
+pub const PANEL_RECORDING_STATUS: &str = "録画中です（30 秒で自動で止まります）";
+/// 開始中・停止中の案内（Windows）。
+pub const PANEL_BUSY_STATUS: &str = "処理しています…";
+/// 録画を始めるボタンの文言。
+pub const START_RECORDING_LABEL: &str = "録画を始める";
+/// 録画を止めるボタンの文言。
+pub const STOP_LABEL: &str = "止める";
+/// 撮影を取り消すボタンの文言。
+pub const CANCEL_LABEL: &str = "キャンセル";
 /// 取り消したときの文言（エラーではなく状態として出す）。
 pub const CANCELLED_STATUS: &str = "撮影を取り消しました";
 /// 失敗時の案内の接頭辞（`{接頭辞}{メッセージ}` の形で表示する）。
@@ -67,7 +88,7 @@ pub const DURATION_UNKNOWN: &str = "長さを読めません";
 /// 動画の出どころ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClipOrigin {
-    /// 撮影 UI で撮った（iOS・Android・macOS）。
+    /// 撮影 UI で撮った（iOS・Android・macOS・Windows）。
     Recorded,
     /// ファイル入力で受け取った（Web。撮影か既存ファイルかを区別できない）。
     Received,
@@ -118,6 +139,28 @@ pub enum CoreOutcome {
     Cancelled,
 }
 
+/// 撮影パネルの状態（Windows）。OS 層が観測した事実を写したもの。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PanelPhase {
+    /// カメラの準備ができ、録画の開始待ち（「録画を始める」「キャンセル」）。
+    Ready,
+    /// 録画中（「止める」「キャンセル」）。
+    Recording,
+    /// 開始中・停止中（ボタンなし）。
+    Busy,
+}
+
+/// 撮影パネルのボタンが立てる命令。OS 層（ワーカー）が状態と照合して受け付けるか捨てる。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PanelCommand {
+    /// 録画を始める。
+    Start,
+    /// 録画を止める。
+    Stop,
+    /// 取り消す。
+    Cancel,
+}
+
 /// 操作の進行状態。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Phase {
@@ -139,6 +182,10 @@ pub struct VideoCaptureShowState {
     pub generation: u64,
     /// 直近の結果。未完了なら `None`。
     pub result: Option<Result<CoreOutcome, CoreFailure>>,
+    /// 撮影パネルの状態（Windows）。`Running` の間だけ `Some`。
+    pub panel: Option<PanelPhase>,
+    /// 押されたが effect がまだ OS 層へ渡していないパネルの命令。
+    pub panel_command: Option<PanelCommand>,
 }
 
 fn is_busy(state: &VideoCaptureShowState) -> bool {
@@ -180,7 +227,62 @@ pub fn finish_capture(
     }
     state.phase = Phase::Idle;
     state.result = Some(result);
+    state.panel = None;
+    state.panel_command = None;
     true
+}
+
+/// 撮影パネルの状態を写す。「`Running` かつ同じ世代」のときだけ適用し、反映したかを返す。
+pub fn set_panel(
+    state: &mut VideoCaptureShowState,
+    generation: u64,
+    panel: Option<PanelPhase>,
+) -> bool {
+    if state.phase != Phase::Running || state.generation != generation {
+        return false;
+    }
+    state.panel = panel;
+    true
+}
+
+/// 「録画を始める」。パネルが `Ready` のときだけ命令を立てる。
+pub fn press_start(state: &mut VideoCaptureShowState) {
+    if state.panel == Some(PanelPhase::Ready) {
+        state.panel_command = Some(PanelCommand::Start);
+    }
+}
+
+/// 「止める」。パネルが `Recording` のときだけ命令を立てる。
+pub fn press_stop(state: &mut VideoCaptureShowState) {
+    if state.panel == Some(PanelPhase::Recording) {
+        state.panel_command = Some(PanelCommand::Stop);
+    }
+}
+
+/// 「キャンセル」。パネルが `Ready` / `Recording` のときだけ命令を立てる。
+pub fn press_cancel(state: &mut VideoCaptureShowState) {
+    if matches!(state.panel, Some(PanelPhase::Ready | PanelPhase::Recording)) {
+        state.panel_command = Some(PanelCommand::Cancel);
+    }
+}
+
+/// effect ドライバが未転送の命令を、世代つきで観測する（状態は変えない）。
+pub fn take_panel_command(state: &VideoCaptureShowState) -> Option<(u64, PanelCommand)> {
+    (state.phase == Phase::Running)
+        .then_some(state.panel_command)
+        .flatten()
+        .map(|c| (state.generation, c))
+}
+
+/// 転送済みの命令を消す。世代と命令が一致するときだけ（後から立った別の命令は消さない）。
+pub fn clear_panel_command(
+    state: &mut VideoCaptureShowState,
+    generation: u64,
+    command: PanelCommand,
+) {
+    if state.generation == generation && state.panel_command == Some(command) {
+        state.panel_command = None;
+    }
 }
 
 /// 長さの表示（ミリ秒 → 「12.3 秒」）。読めなければ [`DURATION_UNKNOWN`]。
@@ -231,6 +333,14 @@ fn clip_status(clip: &ShownClip) -> String {
 
 /// 状態の案内文言（処理中、撮れた、取り消し）。
 pub fn status_text(state: &VideoCaptureShowState) -> String {
+    if state.phase == Phase::Running {
+        match state.panel {
+            Some(PanelPhase::Ready) => return PANEL_READY_STATUS.to_string(),
+            Some(PanelPhase::Recording) => return PANEL_RECORDING_STATUS.to_string(),
+            Some(PanelPhase::Busy) => return PANEL_BUSY_STATUS.to_string(),
+            None => {}
+        }
+    }
     if is_busy(state) {
         return RUNNING_STATUS.to_string();
     }
@@ -259,12 +369,24 @@ pub fn error_text(state: &VideoCaptureShowState) -> String {
     format!("{FAILED_PREFIX}{message}")
 }
 
-/// 画面を組み立てる。ボタンは処理中以外のときだけ出す（取り消しボタンは置かない）。
+/// 画面を組み立てる。通常のボタンは処理中以外のときだけ出す。`Running` 中は撮影パネルの状態に
+/// 応じたボタン（Windows）だけを出す。
 pub fn current_screen(state: &VideoCaptureShowState) -> Screen<VideoCaptureShowState> {
     let screen = Screen::new(TITLE)
         .text(IDLE_HINT)
         .dynamic_text(status_text)
         .error_text(error_text);
+    if state.phase == Phase::Running {
+        return match state.panel {
+            Some(PanelPhase::Ready) => screen
+                .button(START_BUTTON_ID, START_RECORDING_LABEL, press_start)
+                .button(CANCEL_BUTTON_ID, CANCEL_LABEL, press_cancel),
+            Some(PanelPhase::Recording) => screen
+                .button(STOP_BUTTON_ID, STOP_LABEL, press_stop)
+                .button(CANCEL_BUTTON_ID, CANCEL_LABEL, press_cancel),
+            _ => screen,
+        };
+    }
     if is_busy(state) {
         return screen;
     }
@@ -432,5 +554,62 @@ mod tests {
         assert_eq!(count(&s), 0);
         finish_capture(&mut s, 1, Err(CoreFailure::Interrupted));
         assert_eq!(count(&s), 1);
+    }
+
+    #[test]
+    fn panel_buttons_follow_phase() {
+        let count = |s: &VideoCaptureShowState| current_screen(s).len() - 3;
+        let mut s = running();
+        assert_eq!(count(&s), 0);
+        assert!(set_panel(&mut s, 1, Some(PanelPhase::Ready)));
+        assert_eq!(count(&s), 2);
+        assert_eq!(status_text(&s), PANEL_READY_STATUS);
+        set_panel(&mut s, 1, Some(PanelPhase::Recording));
+        assert_eq!(count(&s), 2);
+        assert_eq!(status_text(&s), PANEL_RECORDING_STATUS);
+        set_panel(&mut s, 1, Some(PanelPhase::Busy));
+        assert_eq!(count(&s), 0);
+        assert_eq!(status_text(&s), PANEL_BUSY_STATUS);
+    }
+
+    #[test]
+    fn commands_only_when_phase_matches() {
+        let mut s = running();
+        press_start(&mut s);
+        press_stop(&mut s);
+        press_cancel(&mut s);
+        assert_eq!(s.panel_command, None);
+        set_panel(&mut s, 1, Some(PanelPhase::Ready));
+        press_stop(&mut s);
+        assert_eq!(s.panel_command, None);
+        press_start(&mut s);
+        assert_eq!(take_panel_command(&s), Some((1, PanelCommand::Start)));
+        // 別の命令は消さない
+        clear_panel_command(&mut s, 1, PanelCommand::Cancel);
+        assert_eq!(s.panel_command, Some(PanelCommand::Start));
+        clear_panel_command(&mut s, 1, PanelCommand::Start);
+        assert_eq!(s.panel_command, None);
+        set_panel(&mut s, 1, Some(PanelPhase::Recording));
+        press_start(&mut s);
+        assert_eq!(s.panel_command, None);
+        press_stop(&mut s);
+        assert_eq!(s.panel_command, Some(PanelCommand::Stop));
+        set_panel(&mut s, 1, Some(PanelPhase::Busy));
+        press_cancel(&mut s);
+        assert_eq!(s.panel_command, Some(PanelCommand::Stop));
+    }
+
+    #[test]
+    fn stale_set_panel_is_ignored_and_finish_clears_panel() {
+        let mut s = running();
+        assert!(!set_panel(&mut s, 9, Some(PanelPhase::Ready)));
+        assert_eq!(s.panel, None);
+        set_panel(&mut s, 1, Some(PanelPhase::Ready));
+        press_cancel(&mut s);
+        assert!(finish_capture(&mut s, 1, Ok(CoreOutcome::Cancelled)));
+        assert_eq!((s.panel, s.panel_command), (None, None));
+        assert_eq!(take_panel_command(&s), None);
+        // Running でなければ写さない
+        assert!(!set_panel(&mut s, 1, Some(PanelPhase::Ready)));
     }
 }

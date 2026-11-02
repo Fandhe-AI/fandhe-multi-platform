@@ -13,8 +13,16 @@
 //! - Android: `android_video_capture`（#823。`ACTION_VIDEO_CAPTURE`）
 //! - Web: `fandhe-web-dom` 側（#824）。wasm32 では本ファイルをビルドしない
 //! - macOS: `macos_video_capture`（#1071。AppKit の撮影パネル + `AVCaptureMovieFileOutput`）
-//! - Windows: 保留のため `UnsupportedVideoCapturer` 固定（ダミーの成功実装へは倒さない）。
-//!   Linux は対象外
+//! - Windows: `windows_video_capture`（#1150。WinRT `MediaCapture` + アプリが組む撮影パネル）。
+//!   Linux は対象外で `UnsupportedVideoCapturer` 固定（ダミーの成功実装へは倒さない）
+//!
+//! # 撮影パネル（Windows）の経路
+//!
+//! パネルの状態は OS を正にする。ワーカーが [`set_panel`] で bridge へ書いた状態を、`drive` が
+//! 画面へ写す（`set_panel` の completion）。ボタンが立てた命令は `drive` が `forward`
+//! （本番は `windows_video_capture::panel_command`）で現在の要求 id とともにワーカーへ渡し、
+//! 渡した後に命令を消す。消える前の次フレームで同じ命令が再転送されうるため、ワーカーが状態と
+//! 照合して重複を捨てる。trait `VideoCapturer` は変えない（契約変更を避ける）
 //!
 //! # OS 層が呼ぶ受け口
 //!
@@ -41,8 +49,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use fandhe_core::screens::video_capture_show::VideoCaptureShowState;
 use fandhe_core::screens::video_capture_show::{
-    finish_capture, mark_running, take_request, ClipOrigin, CoreFailure, CoreOutcome, Phase,
-    ShownClip,
+    clear_panel_command, finish_capture, mark_running, set_panel as set_screen_panel,
+    take_panel_command, take_request, ClipOrigin, CoreFailure, CoreOutcome, PanelCommand,
+    PanelPhase, Phase, ShownClip,
 };
 use fandhe_device::video_capture::{
     VideoCaptureFailure, VideoCaptureOutcome, VideoCapturer, MAX_DURATION_SECS,
@@ -68,8 +77,17 @@ fn platform() -> Arc<dyn VideoCapturer> {
     {
         super::macos_video_capture::implementation()
     }
-    // Windows は保留、Linux は対象外。Web は `fandhe-web-dom` 側。
-    #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "macos")))]
+    #[cfg(target_os = "windows")]
+    {
+        super::windows_video_capture::implementation()
+    }
+    // Linux は対象外。Web は `fandhe-web-dom` 側。
+    #[cfg(not(any(
+        target_os = "ios",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "windows"
+    )))]
     {
         Arc::new(fandhe_device::video_capture::UnsupportedVideoCapturer)
     }
@@ -80,6 +98,8 @@ struct Active {
     request_id: u64,
     /// OS が撮影 UI を出し始めたことを `try_begin_present` で記録済みか。
     presenting: bool,
+    /// OS 層が書いた撮影パネルの状態（Windows）。OS を正にして画面へ写す。
+    panel: Option<PanelPhase>,
 }
 
 /// 要求の追跡と表示開始の記録。テストが並列で干渉しないよう static から切り出して
@@ -113,6 +133,7 @@ impl Bridge {
         *active = Some(Active {
             request_id,
             presenting: false,
+            panel: None,
         });
         request_id
     }
@@ -129,6 +150,27 @@ impl Bridge {
         }
         a.presenting = true;
         true
+    }
+
+    /// 撮影パネルの状態を書く。現在の要求で、表示開始を記録済みのときだけ書く（古い id・表示前は捨てる）。
+    #[allow(dead_code)] // Windows 以外のビルドでは単体テストだけが呼ぶ。
+    fn set_panel(&self, request_id: u64, panel: Option<PanelPhase>) {
+        let mut active = self.lock();
+        if let Some(a) = active
+            .as_mut()
+            .filter(|a| a.request_id == request_id && a.presenting)
+        {
+            a.panel = panel;
+        }
+    }
+
+    /// 表示中の要求 id と、その撮影パネルの状態。
+    fn panel(&self) -> Option<(u64, Option<PanelPhase>)> {
+        let active = self.lock();
+        active
+            .as_ref()
+            .filter(|a| a.presenting)
+            .map(|a| (a.request_id, a.panel))
     }
 
     /// OS 層からの唯一の結果の受け口。古い id・確定済みの完了は捨てる。
@@ -173,6 +215,12 @@ pub(crate) fn complete_from_os(request_id: u64, result: Outcome) {
     bridge().complete_from_os(request_id, result);
 }
 
+/// OS 層が撮影パネルの状態を書く受け口（Windows。モジュール doc 参照）。
+#[allow(dead_code)]
+pub(crate) fn set_panel(request_id: u64, panel: Option<PanelPhase>) {
+    bridge().set_panel(request_id, panel);
+}
+
 /// 画面の作り直し時に保留中の要求を破棄する。画面状態は `default()`（世代 0）に戻るため、
 /// 保留が残ると次の要求が発送されず飲み込まれる。旧要求の遅延完了は id 不一致で捨てられる。
 // Android の再生成経路（`android.rs`）から呼ばれる。Android 以外では未使用。
@@ -211,6 +259,7 @@ fn drive(
     sender: &CompletionSender<VideoCaptureShowState>,
     imp: &Arc<dyn VideoCapturer>,
     bridge: &Bridge,
+    forward: fn(u64, PanelCommand),
 ) {
     if take_request(state).is_some() {
         // 保留ありは発送済み（`mark_running` の適用待ち）。二重に発送しない。
@@ -226,6 +275,22 @@ fn drive(
         return;
     }
     let generation = state.generation;
+    if let Some((g, cmd)) = take_panel_command(state) {
+        // 現在の表示中の要求へ渡し、渡した命令を画面から消す。
+        if let Some((id, _)) = bridge.panel() {
+            forward(id, cmd);
+        }
+        let _ = sender.send(Box::new(move |s: &mut VideoCaptureShowState| {
+            clear_panel_command(s, g, cmd)
+        }));
+    }
+    if let Some((_, panel)) = bridge.panel() {
+        if panel != state.panel {
+            let _ = sender.send(Box::new(move |s: &mut VideoCaptureShowState| {
+                set_screen_panel(s, generation, panel);
+            }));
+        }
+    }
     let slot = bridge.slot;
     let Some((pending_id, _)) = slot.snapshot() else {
         return;
@@ -269,7 +334,21 @@ pub fn video_capture_show_effect(
     sender: &CompletionSender<VideoCaptureShowState>,
 ) {
     static IMPL: OnceLock<Arc<dyn VideoCapturer>> = OnceLock::new();
-    drive(state, sender, IMPL.get_or_init(platform), bridge());
+    drive(
+        state,
+        sender,
+        IMPL.get_or_init(platform),
+        bridge(),
+        forward_panel_command,
+    );
+}
+
+/// 撮影パネルの命令を OS 層へ渡す本番の転送先。Windows 以外にパネルは無い。
+fn forward_panel_command(request_id: u64, command: PanelCommand) {
+    #[cfg(target_os = "windows")]
+    super::windows_video_capture::panel_command(request_id, command);
+    #[cfg(not(target_os = "windows"))]
+    let _ = (request_id, command);
 }
 
 #[cfg(test)]
@@ -292,6 +371,14 @@ mod tests {
 
     fn new_bridge() -> &'static Bridge {
         Box::leak(Box::new(Bridge::new()))
+    }
+
+    fn no_forward(_: u64, _: PanelCommand) {}
+
+    static FORWARDED: Mutex<Vec<(u64, PanelCommand)>> = Mutex::new(Vec::new());
+
+    fn record_forward(id: u64, cmd: PanelCommand) {
+        FORWARDED.lock().unwrap().push((id, cmd));
     }
 
     fn clip() -> VideoClip {
@@ -397,7 +484,7 @@ mod tests {
     ) {
         let end = Instant::now() + Duration::from_secs(5);
         loop {
-            drive(state, sender, imp, bridge);
+            drive(state, sender, imp, bridge, no_forward);
             while let Ok(c) = rx.try_recv() {
                 c(state);
             }
@@ -424,7 +511,13 @@ mod tests {
         let bridge = new_bridge();
         let imp: Arc<dyn VideoCapturer> = fake(Mode::Silent, bridge);
         let (sender, rx) = channel();
-        drive(&VideoCaptureShowState::default(), &sender, &imp, bridge);
+        drive(
+            &VideoCaptureShowState::default(),
+            &sender,
+            &imp,
+            bridge,
+            no_forward,
+        );
         assert!(rx.try_recv().is_err());
     }
 
@@ -440,8 +533,13 @@ mod tests {
     }
 
     #[test]
-    fn fallback_platform_is_unsupported_off_ios_android_macos() {
-        #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "macos")))]
+    fn fallback_platform_is_unsupported_off_supported_os() {
+        #[cfg(not(any(
+            target_os = "ios",
+            target_os = "android",
+            target_os = "macos",
+            target_os = "windows"
+        )))]
         assert_eq!(
             platform().capture(1, MAX_DURATION_SECS),
             Err(VideoCaptureFailure::Unsupported)
@@ -532,6 +630,83 @@ mod tests {
         assert!(!bridge.try_begin_present(id2));
     }
 
+    /// 表示中の要求を作って画面を `Running` まで進める。
+    fn presenting_screen(
+        bridge: &'static Bridge,
+    ) -> (
+        VideoCaptureShowState,
+        CompletionSender<VideoCaptureShowState>,
+        Rx,
+        Arc<dyn VideoCapturer>,
+        u64,
+    ) {
+        let imp: Arc<dyn VideoCapturer> = fake(Mode::Silent, bridge);
+        let (sender, rx) = channel();
+        let mut state = VideoCaptureShowState::default();
+        request_capture(&mut state);
+        drive(&state, &sender, &imp, bridge, no_forward);
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        let id = bridge.slot.snapshot().unwrap().0;
+        assert!(bridge.try_begin_present(id));
+        (state, sender, rx, imp, id)
+    }
+
+    #[test]
+    fn panel_state_is_mirrored_to_screen_and_stale_or_early_writes_dropped() {
+        let bridge = new_bridge();
+        let id = bridge.begin();
+        // 表示前の書き込みは捨てる
+        bridge.set_panel(id, Some(PanelPhase::Ready));
+        assert_eq!(bridge.panel(), None);
+        assert!(bridge.try_begin_present(id));
+        // 古い id は捨てる
+        bridge.set_panel(id + 1, Some(PanelPhase::Ready));
+        assert_eq!(bridge.panel(), Some((id, None)));
+        bridge.set_panel(id, Some(PanelPhase::Ready));
+
+        let bridge = new_bridge();
+        let (mut state, sender, rx, imp, id) = presenting_screen(bridge);
+        bridge.set_panel(id, Some(PanelPhase::Recording));
+        drive(&state, &sender, &imp, bridge, no_forward);
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        assert_eq!(state.panel, Some(PanelPhase::Recording));
+    }
+
+    #[test]
+    fn panel_command_is_forwarded_with_current_id_and_cleared() {
+        let bridge = new_bridge();
+        let (mut state, sender, rx, imp, id) = presenting_screen(bridge);
+        bridge.set_panel(id, Some(PanelPhase::Ready));
+        drive(&state, &sender, &imp, bridge, no_forward);
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        fandhe_core::screens::video_capture_show::press_start(&mut state);
+        assert!(state.panel_command.is_some());
+        FORWARDED.lock().unwrap().clear();
+        drive(&state, &sender, &imp, bridge, record_forward);
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        assert_eq!(*FORWARDED.lock().unwrap(), vec![(id, PanelCommand::Start)]);
+        assert_eq!(state.panel_command, None);
+    }
+
+    #[test]
+    fn cancel_during_panel_is_cancelled_not_failure() {
+        let bridge = new_bridge();
+        let (mut state, sender, rx, imp, id) = presenting_screen(bridge);
+        bridge.set_panel(id, Some(PanelPhase::Ready));
+        bridge.complete_from_os(id, Ok(VideoCaptureOutcome::Cancelled));
+        pump(&mut state, &sender, &rx, &imp, bridge);
+        assert_eq!(state.result, Some(Ok(CoreOutcome::Cancelled)));
+        assert_eq!(state.panel, None);
+    }
+
     #[test]
     fn stale_generation_completion_is_ignored() {
         let mut state = VideoCaptureShowState::default();
@@ -549,8 +724,8 @@ mod tests {
         let (sender, rx) = channel();
         let mut state = VideoCaptureShowState::default();
         request_capture(&mut state);
-        drive(&state, &sender, &imp, bridge);
-        drive(&state, &sender, &imp, bridge);
+        drive(&state, &sender, &imp, bridge, no_forward);
+        drive(&state, &sender, &imp, bridge, no_forward);
         assert_eq!(f.calls.load(Ordering::SeqCst), 1);
         let mut n = 0;
         while rx.try_recv().is_ok() {
@@ -567,7 +742,7 @@ mod tests {
         let (sender, rx) = channel();
         let mut state = VideoCaptureShowState::default();
         request_capture(&mut state);
-        drive(&state, &sender, &imp, bridge);
+        drive(&state, &sender, &imp, bridge, no_forward);
         while let Ok(c) = rx.try_recv() {
             c(&mut state);
         }
@@ -576,7 +751,7 @@ mod tests {
         bridge.complete_from_os(id, Ok(VideoCaptureOutcome::Cancelled));
         // 世代がずれた画面（再生成など）へ完了が届く。
         state.generation += 1;
-        drive(&state, &sender, &imp, bridge);
+        drive(&state, &sender, &imp, bridge, no_forward);
         while let Ok(c) = rx.try_recv() {
             c(&mut state);
         }
@@ -588,7 +763,7 @@ mod tests {
         // 次の要求が発送される。
         let mut fresh = VideoCaptureShowState::default();
         request_capture(&mut fresh);
-        drive(&fresh, &sender, &imp, bridge);
+        drive(&fresh, &sender, &imp, bridge, no_forward);
         assert_eq!(f.calls.load(Ordering::SeqCst), 2);
     }
 
@@ -600,7 +775,7 @@ mod tests {
         let (sender, rx) = channel();
         let mut state = VideoCaptureShowState::default();
         request_capture(&mut state);
-        drive(&state, &sender, &imp, bridge);
+        drive(&state, &sender, &imp, bridge, no_forward);
         let old_id = bridge.slot.snapshot().unwrap().0;
         bridge.reset();
         bridge.complete_from_os(old_id, Ok(VideoCaptureOutcome::Cancelled));
@@ -608,7 +783,7 @@ mod tests {
         let mut fresh = VideoCaptureShowState::default();
         request_capture(&mut fresh);
         while rx.try_recv().is_ok() {}
-        drive(&fresh, &sender, &imp, bridge);
+        drive(&fresh, &sender, &imp, bridge, no_forward);
         assert_eq!(f.calls.load(Ordering::SeqCst), 2);
     }
 
