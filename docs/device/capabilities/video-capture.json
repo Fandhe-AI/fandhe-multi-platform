@@ -60,7 +60,7 @@
       "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_video_capture.m + crates/fandhe-egui-proxy/src/device/macos_video_capture.rs + crates/fandhe-egui-proxy/src/device/video_capture.rs + crates/fandhe-egui-proxy/macos/Info.plist、Issue #1071"
     },
     "windows": {
-      "status": "possible",
+      "status": "done",
       "api": "Windows App SDK `Microsoft.Windows.Media.Capture.CameraCaptureUI`（`CaptureFileAsync(CameraCaptureUIMode.Video)`、`AppWindow.Id` が要る）。自前で組むなら WinRT `MediaCapture.StartRecordToStorageFileAsync`（`MediaEncodingProfile.CreateMp4`）+ `StorageFile.Properties.GetVideoPropertiesAsync`",
       "perm": "unpackaged の実行では宣言不要の見込み（設定の「デスクトップ アプリにカメラへのアクセスを許可する」に従い、拒否は `E_ACCESSDENIED`）。パッケージ時は `webcam` / `microphone` capability",
       "url": [
@@ -71,7 +71,10 @@
         "https://learn.microsoft.com/en-us/uwp/api/windows.storage.fileproperties.videoproperties",
         "https://learn.microsoft.com/en-us/windows/apps/develop/camera/camera-privacy-setting"
       ],
-      "note": "未実装（第 5 周で保留を外す）。方針: Windows App SDK 版の `CameraCaptureUI` は採らず、WinRT `MediaCapture` で組む（新しい依存を足さず、`windows` クレートの feature 追加だけ）。撮影 UI は macOS と同じ egui の撮影パネル（開始・停止・キャンセル）で、プレビューは出さない。30 秒の上限は単調時計で測る。一時ファイルは要求ごとに `create_new` で作り、削除に失敗したら `Internal` にして次の要求の前に消し直す。`InitializeWithSettingsAsync`・`StartRecordToStorageFileAsync`・`StopRecordAsync`・`GetVideoPropertiesAsync` は `SetCompleted` から直列キューへ積み、世代で照合する。キャンセルは `Cancel` して完了後に `Close` し、ワーカー上で `.get()` しない（camera-preview-stream の Windows #1112 と同じ形）。詳細は `crates/fandhe-device/src/video_capture.rs` の doc。 補足: Windows App SDK 版の `CaptureFileAsync` はキャンセルとエラーをどちらも null で返し区別しない（公式）。unpackaged の Win32 で動くか、導入された版は公式に明記が無い。`VideoProperties` は `Duration` / `Width` / `Height` / `Orientation` を返す（公式）。`MediaCapture` の単一録画の上限は約 3 時間（公式）"
+      "note": "実装済み（#1150）。Windows App SDK 版の `CameraCaptureUI` は採らず、WinRT `MediaCapture`（映像のみ。音声は録らず、マイクの許可を求めない）で組んだ。撮影 UI は core 画面の撮影パネル（「録画を始める」「止める」「キャンセル」）で、プレビューは出さない。パネルの状態はワーカーが OS の完了を観測してから書き、ボタンは命令を立てるだけで、ワーカーが段と照合して重複・遅れた命令を捨てる。上限 30 秒は録画の開始から単調時計（`Instant`）で測って自動で止める。録画前の「キャンセル」と録画中の「キャンセル」はどちらも取り消し（録画中は止めてからファイルを消す）で、失敗にしない。長さ・寸法・向きは `GetVideoPropertiesAsync`（`Duration` / `Width` / `Height` / `Orientation`）、サイズはファイルの大きさから読み、0 バイトは空の失敗、読めないものは読めない動画の失敗。`E_ACCESSDENIED` は権限拒否、`MF_E_NO_CAPTURE_DEVICES_AVAILABLE` は非対応（カメラが無い）、それ以外はその他の失敗。一時ファイルは要求ごとに新しい置き場へ `create_new` で作り、成功・取り消し・失敗の全経路で、保留中の操作を `Cancel` して完了が届いてから `RemoveFailed`・`MediaCapture::Close`・置き場の削除の順に解放する。消せなかったら結果を失敗（その他）にし、置き場を記録して次の撮影の前に消し直し、消せなければ次も失敗にする。各段の完了は `SetCompleted` から直列キューへ積み、要求 id で照合する（ワーカー上で `.get()` しない）。守らない範囲: `InitializeAsync` を MTA のワーカーで呼ぶ点（camera-preview-stream の Windows と同じ。実機で失敗したら UI スレッドでの初期化へ寄せる）、撮影パネルの見た目・画質、使うカメラ（OS の既定）、複数プロセス、撮影中のプロセス死、取り消しを含む完了が届かない場合の画面表示。補足: Windows App SDK 版の `CaptureFileAsync` はキャンセルとエラーをどちらも null で返し区別しない（公式）。`MediaCapture` の単一録画の上限は約 3 時間（公式）。実機確認は #819",
+      "detail": "できている（Windows 実機確認待ち）",
+      "implStatus": "Windows 実機確認待ち（#819）",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_video_capture.rs + crates/fandhe-egui-proxy/src/device/video_capture.rs + crates/fandhe-core/src/screens/video_capture_show.rs + crates/fandhe-egui-proxy/Cargo.toml、Issue #1150"
     },
     "web": {
       "status": "done",
@@ -90,5 +93,5 @@
       "impl": "crates/fandhe-web-dom/src/video_capture.rs + crates/fandhe-web-dom/src/file_picker.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html、Issue #824"
     }
   },
-  "note": "camera-capture は静止画 1 枚、本機能は動画ファイル。mic-record（音声のみ）・screen-capture（画面の録画）・camera-preview-stream（ファイルにしない生フレーム）とも別。今回の範囲: 「動画を撮る」で 撮影 UI（iOS は OS の撮影画面、Android はカメラアプリ、Web はブラウザのファイル入力、macOS はアプリが組む撮影パネル）を開き、撮れた動画の長さ・表示の寸法・ファイルサイズを出す。長さの上限 30 秒を OS に渡す（macOS は録画の出力の上限、Web は渡せない）。動画の再生・保存・共有は範囲外。結果は 撮れた / 取り消した（利用者が撮影 UI を閉じた、失敗にしない）/ 失敗（権限拒否・カメラアプリなし・前面でない・中断・空のファイル・読めない動画・その他）/ 非対応。OS を正にする: 撮れたかどうかは OS の完了通知（delegate・Activity の結果・`change` / `cancel`）だけで決め、タイマー・期限で推測しない。長さ・寸法・サイズは OS がファイルに書いたメタデータとファイルの大きさから読み、アプリ内で数えない（OS が長さを返さなければ「長さを読めない」と出す）。寸法は OS が返した回転（0 / 90 / 180 / 270）を当てた表示の向きで出す。撮影 UI の一時ファイルは読み終えたら成功・取り消し・失敗の全経路で消す（Android は次の撮影の前にも置き場を空にする）。守らない範囲: 動画の中身、OS の撮影 UI の見た目・画質・形式、撮影中に背景へ移ったときの OS の挙動、撮影 UI が閉じないまま完了通知が届かない場合（期限を持たないため画面は撮影中のまま）、デスクトップのブラウザで既存のファイルが選ばれること、`EXTRA_OUTPUT` を無視するカメラアプリ、複数タブ・複数プロセス、撮影中のプロセス死（Android は次回の撮影の前に置き場を空にして回収する）。"
+  "note": "camera-capture は静止画 1 枚、本機能は動画ファイル。mic-record（音声のみ）・screen-capture（画面の録画）・camera-preview-stream（ファイルにしない生フレーム）とも別。今回の範囲: 「動画を撮る」で 撮影 UI（iOS は OS の撮影画面、Android はカメラアプリ、Web はブラウザのファイル入力、macOS と Windows はアプリが組む撮影パネル）を開き、撮れた動画の長さ・表示の寸法・ファイルサイズを出す。長さの上限 30 秒を OS に渡す（macOS は録画の出力の上限、Windows は単調時計で測って自動停止、Web は渡せない）。動画の再生・保存・共有は範囲外。結果は 撮れた / 取り消した（利用者が撮影 UI を閉じた、失敗にしない）/ 失敗（権限拒否・カメラアプリなし・前面でない・中断・空のファイル・読めない動画・その他）/ 非対応。OS を正にする: 撮れたかどうかは OS の完了通知（delegate・Activity の結果・`change` / `cancel`）だけで決め、タイマー・期限で推測しない。長さ・寸法・サイズは OS がファイルに書いたメタデータとファイルの大きさから読み、アプリ内で数えない（OS が長さを返さなければ「長さを読めない」と出す）。寸法は OS が返した回転（0 / 90 / 180 / 270）を当てた表示の向きで出す。撮影 UI の一時ファイルは読み終えたら成功・取り消し・失敗の全経路で消す（Android は次の撮影の前にも置き場を空にする）。守らない範囲: 動画の中身、OS の撮影 UI の見た目・画質・形式、撮影中に背景へ移ったときの OS の挙動、撮影 UI が閉じないまま完了通知が届かない場合（期限を持たないため画面は撮影中のまま）、デスクトップのブラウザで既存のファイルが選ばれること、`EXTRA_OUTPUT` を無視するカメラアプリ、複数タブ・複数プロセス、撮影中のプロセス死（Android は次回の撮影の前に置き場を空にして回収する）。"
 }
