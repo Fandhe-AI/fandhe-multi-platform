@@ -19,14 +19,17 @@
       "deferred": "Apple Pay の検証には Merchant ID の登録と entitlement `com.apple.developer.in-app-payments`（有効な Apple Developer Program が前提）と Sandbox テスターが要る。開発者登録が期限切れで、アプリも手組みのバンドルのため保留。ベンダーの個別審査は不要で、開発者登録が揃えば着手できる"
     },
     "android": {
-      "status": "possible",
+      "status": "done",
       "api": "Google Pay API（`play-services-wallet` の `PaymentsClient`、GMS 依存）。環境は TEST 固定",
-      "perm": "実行時の権限なし。manifest に `com.google.android.gms.wallet.api.enabled` の meta-data が要る（要確認。`play-services-wallet` 20.0.0 の AAR の manifest には含まれない）。GMS が無い・使えない端末では `Unsupported` を返す（`GoogleApiAvailability.isGooglePlayServicesAvailable` が SUCCESS のときだけ使い、更新ダイアログは出さない）。依存は `scripts/android/versions.env` の `PLAY_SERVICES_WALLET_VERSION`（20.0.0。AAR の minSdk 23 で、いまの minSdk 24 のまま使える）",
+      "perm": "実行時の権限なし。manifest に `com.google.android.gms.wallet.api.enabled` の meta-data を追加済み（`play-services-wallet` 20.0.0 の AAR の manifest には含まれない）。GMS が無い・使えない端末では `Unsupported` を返す（`GoogleApiAvailability.isGooglePlayServicesAvailable` が SUCCESS のときだけ使い、更新ダイアログは出さない）。依存は `scripts/android/versions.env` の `PLAY_SERVICES_WALLET_VERSION`（20.0.0。AAR の minSdk 23 で、いまの minSdk 24 のまま使える）",
       "url": [
         "https://developers.google.com/pay/api/android/guides/setup",
         "https://developers.google.com/pay/api/android/guides/test-and-deploy/integration-checklist"
       ],
-      "note": "未実装。`isReadyToPay` が偽なら `Unsupported`。本番環境（PRODUCTION）と merchantId は持たない"
+      "note": "実装済み（#1131）。環境は `ENVIRONMENT_TEST` 固定で、本番環境（PRODUCTION）と merchantId は持たない。要求 JSON は Rust の定数を JNI で渡す。GMS なし・決済時に `isReadyToPay` が偽は `Unsupported`、確認時に偽は「使えない」。`isReadyToPay` や `loadPaymentData` の Task 失敗は失敗にする（「使えない」に畳まない）。`RESULT_OK` でも決済データが無ければ失敗、キャンセルは失敗にしない。返った決済データは読まず・保持せず・ログに出さない。背景では決済シートを出さない。Activity 再生成時は保留中の要求を破棄し、旧結果は新しい要求を消費しない。成功まで通すには Google アカウントでのログインが要る。守る範囲: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、課金できるトークンを作らないこと。守らない範囲: プロセス死をまたぐ結果、GMS の Task が返らない場合の処理中表示、複数プロセス。Android 実機での確認は #540",
+      "detail": "できている（Android 実機確認待ち）",
+      "implStatus": "Android 実機確認待ち（#540）",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/PaymentRequestHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-egui-proxy/src/device/android_payment_request.rs + crates/fandhe-egui-proxy/src/device/payment_request.rs + crates/fandhe-core/src/screens/payment_request.rs + crates/fandhe-device/src/payment_request.rs、Issue #1131"
     },
     "macos": {
       "status": "possible",
@@ -62,5 +65,5 @@
       "impl": "crates/fandhe-web-dom/src/payment_request.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/payment_request.rs + crates/fandhe-device/src/payment_request.rs、Issue #542"
     }
   },
-  "note": "in-app-purchase（ストア課金）との違い: 本機能は物・サービスの代金を決済する側で、ストア課金の対象外のもの。今回の範囲: Web（Chrome の Google Pay、TEST 環境）で固定金額の決済シートを出し、結果（テストで承認・キャンセル・失敗・使えない）を画面に出すだけ。実決済はしない（本番環境の設定を型に持たず、merchantId なし・gateway は Google のサンプル値 `example`、返ったトークンは読まずに捨てる）。iOS・macOS は保留（開発者登録の都合）。Android は Google Pay API の TEST 環境で実装予定。守る範囲: 1 マウント内の要求と完了の順序、嘘の成功の禁止、課金できるトークンを作らないこと。守らない範囲: 利用者の取り消しとアプリの中断（API がどちらも AbortError で返す）の区別、複数タブ"
+  "note": "in-app-purchase（ストア課金）との違い: 本機能は物・サービスの代金を決済する側で、ストア課金の対象外のもの。今回の範囲: Web（Chrome の Google Pay、TEST 環境）で固定金額の決済シートを出し、結果（テストで承認・キャンセル・失敗・使えない）を画面に出すだけ。実決済はしない（本番環境の設定を型に持たず、merchantId なし・gateway は Google のサンプル値 `example`、返ったトークンは読まずに捨てる）。iOS・macOS は保留（開発者登録の都合）。Android は Google Pay API の TEST 環境で実装済み（実機確認は #540）。守る範囲: 1 マウント内の要求と完了の順序、嘘の成功の禁止、課金できるトークンを作らないこと。守らない範囲: 利用者の取り消しとアプリの中断（API がどちらも AbortError で返す）の区別、複数タブ"
 }

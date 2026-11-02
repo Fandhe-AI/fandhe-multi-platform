@@ -313,8 +313,8 @@ pub mod android_now_playing;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_open_system_settings;
-/// Issue #1130（親 #114）: Android 向け決済シートの骨格（`Unsupported` のスタブ。#1131 が
-/// Google Pay API で埋める）。`device/payment_request.rs` の Android 経路から呼ばれる。
+/// Issue #1131（親 #114）: Android 向け決済シート（Google Pay API、TEST 環境）の実装。
+/// `device/payment_request.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_payment_request;

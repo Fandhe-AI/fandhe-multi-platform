@@ -4,9 +4,9 @@
 //! （`screens/registry.rs` の `effect` 区画から呼ばれる契約）。契約と守る範囲は
 //! `fandhe_device::payment_request` のモジュール doc を参照。
 //!
-//! - Android（Issue #1130 で骨格、実装は #1131）: コールバック型のため pull 型 [`bridge`]
-//!   （`RequestSlot` の facade）で毎フレーム [`drive_callback`] が結果を反映する。#1131 が埋めるまで
-//!   `android_payment_request::begin` は `Unsupported` を返し「使えない」を表示する
+//! - Android（Issue #1130 で骨格、#1131 で実装）: コールバック型のため pull 型 [`bridge`]
+//!   （`RequestSlot` の facade）で毎フレーム [`drive_callback`] が結果を反映する。
+//!   `android_payment_request::begin` が Google Pay API（TEST）を JNI で呼ぶ
 //! - それ以外のネイティブ（macOS・Linux・Windows・iOS）は対応表で保留または非対応のため、同期で
 //!   [`UnsupportedPaymentSheet`] を呼び「使えない」を表示する
 //!
@@ -43,7 +43,7 @@ fn pay_outcome(result: Result<PaymentOutcome, DeviceError>) -> Result<CoreOutcom
 }
 
 /// OS 側コールバックとの橋渡し（Android、pull 型、`RequestSlot` の facade）。
-/// `deliver_*` は #1131 の JNI 受け口が呼ぶ。
+/// `deliver_*` は `android_payment_request` の JNI 受け口が呼ぶ。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) mod bridge {
@@ -56,13 +56,11 @@ pub(crate) mod bridge {
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
     /// 「使えるか」の結果を置く。不一致・未登録・既に結果ありは捨てて `false`。
-    #[cfg_attr(target_os = "android", allow(dead_code))] // #1131 の JNI 受け口が呼ぶまで未使用
     pub(crate) fn deliver_check(request_id: u64, result: Result<bool, DeviceError>) -> bool {
         SLOT.deliver(request_id, check_outcome(result))
     }
 
     /// 「決済シート」の結果を置く。規則は [`deliver_check`] と同じ。
-    #[cfg_attr(target_os = "android", allow(dead_code))] // #1131 の JNI 受け口が呼ぶまで未使用
     pub(crate) fn deliver_pay(
         request_id: u64,
         result: Result<PaymentOutcome, DeviceError>,
@@ -270,7 +268,7 @@ mod tests {
     }
 
     #[test]
-    fn android_stub_shows_unsupported_never_success() {
+    fn host_begin_shows_unsupported_never_success() {
         use crate::device::android_payment_request::begin;
         for press in [screen::check, screen::pay] {
             static SLOT: crate::device::request_slot::RequestSlot<bridge::Outcome> =
