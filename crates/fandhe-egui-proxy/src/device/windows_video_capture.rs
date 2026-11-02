@@ -578,7 +578,18 @@ mod imp {
                     j.op = Some(op);
                     j.stage = Stage::Reading;
                 }
-                Err(_) => self.finish(id, Err(VideoCaptureFailure::Unreadable)),
+                Err(_) => {
+                    // 0 バイトはメタデータが読めなくても Empty（数値表: 0 バイトは Empty）。
+                    let empty = self
+                        .cur(id)
+                        .is_some_and(|j| j.clip.as_ref().and_then(|c| c.size().ok()) == Some(0));
+                    let f = if empty {
+                        VideoCaptureFailure::Empty
+                    } else {
+                        VideoCaptureFailure::Unreadable
+                    };
+                    self.finish(id, Err(f))
+                }
             }
         }
 
@@ -595,6 +606,8 @@ mod imp {
                     p.rotation,
                 )
                 .map(VideoCaptureOutcome::Captured),
+                // 0 バイトはメタデータの成否によらず Empty。
+                (_, Some(0)) => Err(VideoCaptureFailure::Empty),
                 _ => Err(VideoCaptureFailure::Unreadable),
             };
             self.finish(id, outcome);
