@@ -80,6 +80,11 @@ if [[ ! -d "${appex}" ]]; then
   echo "[build-macos-widget-host] エラー: 拡張が同梱されていません: ${appex}" >&2
   exit 1
 fi
+# App Intents（Issue #1148）のメタデータは Xcode のビルドでだけ抽出される。無ければ公開されない。
+if [[ ! -d "${app_path}/Contents/Resources/Metadata.appintents" ]]; then
+  echo "[build-macos-widget-host] エラー: App Intents のメタデータがありません: ${app_path}/Contents/Resources/Metadata.appintents" >&2
+  exit 1
+fi
 echo "[build-macos-widget-host] ビルド確認 OK: ${app_path}"
 
 if [[ "${install}" -eq 1 ]]; then
@@ -94,4 +99,5 @@ if [[ "${install}" -eq 1 ]]; then
   echo "[build-macos-widget-host] 画面側: FANDHE_DEVELOPMENT_TEAM=<Team ID> FANDHE_PROXY_APP=home_widget_show cargo run -p fandhe-egui-proxy ..."
   echo "[build-macos-widget-host] コントロールの追加（macOS 26 以降）: コントロールセンターまたはメニューバーの編集 → 「Fandhe カウント」を追加して押す"
   echo "[build-macos-widget-host] 画面側: FANDHE_DEVELOPMENT_TEAM=<Team ID> FANDHE_PROXY_APP=quick_settings_tile_show cargo run -p fandhe-egui-proxy ..."
+  echo "[build-macos-widget-host] ショートカット: ショートカット App で「Fandhe に表示」を探す（受け手の .app は scripts/apple/bundle-macos-url-scheme.sh で用意）"
 fi

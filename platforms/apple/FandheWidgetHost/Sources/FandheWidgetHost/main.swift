@@ -3,6 +3,10 @@
 // `open -n -g -b com.fandhe.widgethost` で起こしたら、`WidgetCenter.reloadAllTimelines()`
 // を呼んで自分で終了する。`reloadAllTimelines` は拡張を含むアプリから呼ぶ必要があり、
 // 素の実行体（Rust バイナリ）からは呼べないための迂回。
+// Issue #1148: App Intents（FandheShowIntent.swift）の公開主体も兼ねる。intent 経由で
+// 起動されたときもこの「1 秒後に終了」が走るため、perform が 1 秒を超えると中断され
+// Shortcuts 側は失敗になる（嘘の成功にはならない）。
+// ponytail: 1 秒上限。Mac 目視で足りなければ applicationShouldTerminate で実行中の intent を待つ。
 // 保存はここでは行わない（Rust が App Group コンテナのファイルへ直接書く）。
 import AppKit
 import WidgetKit

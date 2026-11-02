@@ -157,6 +157,25 @@ mod tests {
     use super::*;
     use fandhe_device::url_scheme::{InboxSnapshot, UrlInbox, SCHEME};
 
+    #[test]
+    fn intent_url_passes_scheme_validation() {
+        use fandhe_core::screens::url_scheme_show::INTENT_URL;
+        assert!(fandhe_device::url_scheme::validate_url(INTENT_URL, SCHEME).is_ok());
+    }
+
+    /// Swift 側（macOS の App Intents、Issue #1148）が画面側の定数と同じ文字列を持つ。
+    #[test]
+    fn intent_swift_matches_screen_constants() {
+        use fandhe_core::screens::url_scheme_show::{INTENT_TITLE, INTENT_URL};
+        let swift = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../platforms/apple/FandheWidgetHost/Sources/FandheWidgetHost/FandheShowIntent.swift"
+        ));
+        assert!(swift.contains(&format!("\"{INTENT_URL}\"")));
+        assert!(swift.contains(&format!("\"{INTENT_TITLE}\"")));
+        assert!(swift.contains("AppShortcutsProvider"));
+    }
+
     struct InboxBacked(UrlInbox);
     impl UrlScheme for InboxBacked {
         fn snapshot(&self) -> Result<InboxSnapshot, DeviceError> {

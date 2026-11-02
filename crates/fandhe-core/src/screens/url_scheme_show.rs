@@ -12,6 +12,8 @@
 //! 要求の受け渡しは `background_task` と同型の `Phase` / 世代番号）。
 //! 登録 UI の状態は 1 系統で、Windows と Web（`fandhe-web-dom`）が共用する。
 //!
+//! Issue #1148: macOS の App Intents も同じ受け口へ固定 URL（[`INTENT_URL`]）を入れる。
+//!
 //! 「使えない」と「まだ届いていない」は別の状態（[`UrlSchemeView::Unsupported`] と
 //! [`UrlSchemeView::Waiting`]）で、文言も分ける。弾いた URL は中身を表示せず件数だけ出す。
 
@@ -24,6 +26,12 @@ pub const SHORTCUT_TITLE: &str = "デモを開く";
 pub const SHORTCUT_URL: &str = "fandhe://shortcut/open-demo";
 /// ショートカットが開く URL（Web。`registerProtocolHandler` が `web+` 接頭辞を要するため）。
 pub const WEB_SHORTCUT_URL: &str = "web+fandhe://shortcut/open-demo";
+
+/// macOS の App Intents（ショートカット App・Siri）のアクション名（SSOT。Issue #1148）。
+/// Swift 側 `FandheShowIntent.swift` の `title` と一致させる（`device/url_scheme.rs` のテストが検査）。
+pub const INTENT_TITLE: &str = "Fandhe に表示";
+/// App Intents の `perform` が開く URL（受信は既存の `UrlInbox`）。Swift 側と一致させる。
+pub const INTENT_URL: &str = "fandhe://intent/show";
 
 /// ショートカット登録の表示区分（effect ドライバが一度だけ注入する）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -322,6 +330,8 @@ pub fn shortcut_text(state: &UrlSchemeShowState) -> String {
     };
     if same(SHORTCUT_URL) || same(WEB_SHORTCUT_URL) {
         format!("最後に受けた URL はショートカット『{SHORTCUT_TITLE}』のものです")
+    } else if same(INTENT_URL) {
+        format!("最後に受けた URL はショートカット App の操作『{INTENT_TITLE}』のものです")
     } else {
         String::new()
     }
@@ -401,6 +411,21 @@ mod tests {
         assert!(with("fandhe://shortcut/open-demo2").is_empty());
         assert!(with("fandhe://shortcut/Open-demo").is_empty());
         assert!(with("fandhe://other").is_empty());
+    }
+
+    #[test]
+    fn intent_text_matches_exact_url_only() {
+        let with = |url: &str| {
+            let mut s = UrlSchemeShowState::default();
+            apply_snapshot(&mut s, 1, Some((url.to_string(), 0)), 0);
+            shortcut_text(&s)
+        };
+        let text = with("FANDHE://intent/show");
+        assert!(text.contains(INTENT_TITLE));
+        assert_ne!(text, with(SHORTCUT_URL));
+        assert!(with("fandhe://intent/show2").is_empty());
+        assert!(with("fandhe://intent/Show").is_empty());
+        assert!(with("fandhe://intent/").is_empty());
     }
 
     #[test]
