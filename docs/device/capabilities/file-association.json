@@ -22,7 +22,7 @@
       "perm": "なし",
       "url": "https://developer.android.com/guide/components/intents-filters",
       "note": "未実装。content URI が届くため読み取りは ContentResolver を使う。未マージの実装は PR #436",
-      "deferred": "送り手の ContentProvider が読み取りを止めると、Java の read を中断できず fd・一時ファイル・スレッドが回収できない（資源の漏れは守らない範囲にできない）。回収できる読み取りの設計が決まるまで保留（#451）"
+      "deferred": "送り手の ContentProvider が読み取りを止めると、Java の read を中断できず fd・一時ファイル・スレッドが回収できない（資源の漏れは守らない範囲にできない）。kill でも回収できない場合があると分かり、別プロセスで読み proxy fd は読まない設計を docs/architecture/android-file-association-read.md に書いた。設計の未確認事項の確認と実装が済むまで保留（#451）"
     },
     "macos": {
       "status": "done",
