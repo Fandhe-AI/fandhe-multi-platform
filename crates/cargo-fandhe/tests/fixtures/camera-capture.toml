@@ -1,18 +1,15 @@
-# 先行 5 機能の宣言（consumer-app-structure.md §5）。形式の確認用で、現行の設定との突き合わせは #1161。
+# 先行 5 機能の宣言（consumer-app-structure.md §5）。現行の設定と突き合わせ済み（capability-declaration.md §6）。
 [package.metadata.fandhe]
 id = "camera-capture"
 
 [package.metadata.fandhe.ios]
 usage-descriptions = ["NSCameraUsageDescription"]
-
-[package.metadata.fandhe.macos]
-usage-descriptions = ["NSCameraUsageDescription"]
-entitlements = { "com.apple.security.device.camera" = true }
+frameworks = ["AVFoundation"]
 
 [package.metadata.fandhe.android]
 permissions = [{ name = "android.permission.CAMERA" }]
 features = [
   { name = "android.hardware.camera", required = false },
   { name = "android.hardware.camera.autofocus", required = false },
-  { name = "android.hardware.camera.front", required = false },
+  { name = "android.hardware.camera.any", required = false },
 ]

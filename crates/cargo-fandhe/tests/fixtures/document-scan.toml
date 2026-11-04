@@ -2,10 +2,12 @@
 id = "document-scan"
 
 # NSCameraUsageDescription は camera-capture と共有する（統合で 1 つになる）。
+# AVFoundation も持つ。単独で選んでもリンクが切れないようにする（camera 頼みにしない）。
 [package.metadata.fandhe.ios]
 usage-descriptions = ["NSCameraUsageDescription"]
-frameworks = ["VisionKit"]
+frameworks = ["AVFoundation", "VisionKit"]
 
 [package.metadata.fandhe.android]
-# 版は versions.env と揃えている。正本の扱いは #1161 で決める。
+# 版は scripts/android/versions.env と一致させる（突き合わせテストが保証）。
 gradle = ["com.google.android.gms:play-services-mlkit-document-scanner:16.0.0"]
+java = ["android/java"]

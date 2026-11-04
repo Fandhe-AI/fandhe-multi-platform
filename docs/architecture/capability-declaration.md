@@ -1,6 +1,6 @@
 # 機能の宣言の形式と検証
 
-状態: 形式と検証を実装済み。生成（`cargo fandhe gen`）は #1176、現行設定との突き合わせは #1161。
+状態: 形式と検証を実装済み。先行 5 機能の宣言は現行設定と突き合わせ済み（§6）。生成（`cargo fandhe gen`）は #1176。
 対応: REQ-21 / TASK-21.2、Issue #1160。上位の方針は `consumer-app-structure.md` の 4 節。
 
 ## 1. 概要
@@ -141,4 +141,38 @@ identity = true
 | `windows.capabilities` | #1208 で必要になれば足す |
 | 形式の版番号 | 未知キーの拒否で足りる。要否は #1224 で判断する |
 | 到達判定（対象アプリが使う機能だけを生成に入れる） | `cargo fandhe gen`（#1176）で扱う。実装は次を満たす: `cargo tree` の文字列解析に頼らず、`cargo metadata` の `resolve` の package ID で対応付ける / feature の統合が他の workspace member から混ざらない / 対象 OS 限定の依存（`[target.'cfg(...)'.dependencies]`）を含める / 取得元違いの同名同版を区別する / default-members に左右されない |
-| Gradle の版の正本 | `versions.env` との二重管理は #1194 までの併存。移行は #1161 以降 |
+| Gradle の版の正本 | #1194 までは `scripts/android/versions.env` が手書きビルドの正本で、宣言の版は突き合わせテストで一致を保証する |
+
+## 6. 現行設定との突き合わせ
+
+先行 5 機能（`crates/cargo-fandhe/tests/fixtures/*.toml`）の宣言を、現行の設定と突き合わせました（#1161、REQ-21 / TASK-21.2）。`crates/cargo-fandhe/tests/declarations.rs` の「現行設定との突き合わせ」節が、次を毎回の `cargo test` で確かめます。
+
+| 宣言 | 比較先 |
+|------|-------|
+| Android の権限・feature・コンポーネント・MainActivity の intent-filter | `platforms/android/app/src/main/AndroidManifest.xml`（属性・filter・meta-data の過不足を含む）。camera の feature 群、HCE の feature 群、`ACTION_SEND` の filter は逆方向も確かめる |
+| Gradle の版 | `build.gradle.kts` の `androidVersion("KEY")` を辿り、`scripts/android/versions.env` の値と一致 |
+| iOS の `usage-descriptions`・`frameworks` | `FandheIosApp/Resources/Info.plist` のキー、`fandhe-egui-proxy/build.rs` のリンク指定 |
+| macOS の `NSServices` | `scripts/apple/bundle-macos-url-scheme.sh` の JSON |
+| macOS の Widget 拡張 | `platforms/apple/project.yml`、entitlements、拡張の `Info.plist`、Swift の `import` |
+
+規則: 宣言は、その機能がいま実際に必要とするものだけを書きます。未実装の OS の欄（iOS の共有拡張 #1211・Widget 拡張 #1212、Windows のパッケージ ID #1208）は、実装する issue で足します。残すと生成で実体のない拡張と権限が出て、最小権限が崩れるためです。形式の確認は JSON を使うテストで保ちます。
+
+### 差分として残すもの
+
+| 項目 | 宣言しない・値が違う理由 | 扱う issue |
+|------|----------------------|-----------|
+| `android.hardware.nfc` | `nfc`（タグ読み取り）の宣言で、HCE の宣言ではない | 対象外 |
+| `androidx.activity`・`androidx.core` | MainActivity が直接 import する共通依存 | #1166 |
+| `GmsAvailability.java` | document-scan 以外の GMS 機能も使う共有コード | #1166・#1171 |
+| UIKit・Foundation・CoreGraphics | 全機能の基盤リンクで機能固有ではない | #1168 |
+| `NSPortName` | 宣言は `$(EXECUTABLE_NAME)`、スクリプトは実行体名へ置換。同じ意味 | #1176 で展開方法を決める |
+| `FandheWidgetHost` | 素の実行体に拡張を載せるホストアプリ。生成では利用者の `.app` が親になる | #1174・#1176 |
+| `FandheCountControl.swift`・`AppIntents` | quick-settings-tile の分。同じ拡張ターゲットに同居している | #1174 で分離 |
+| `FandheAppGroupIdentifier` | 現行どおり `$(TeamIdentifierPrefix)com.fandhe.widget` を literal で宣言。記号名との一本化は未決 | #1176 |
+| `NSMenuItem.default` | 現行どおり literal。利用者が差し替える手段は未決 | #1173・#1176 |
+| `CFBundle*` 等の定型キー | 生成側のテンプレートの責務 | #1176 |
+| Java の `com.fandhe.androidapp` パッケージ | 現行に一致させる。固定パッケージへの移行は別 issue | #1167 |
+| Web の `share_target`、Windows の `webcam` | 形式に欄がない。カメラの Windows 実装はダミー | #1185・#1208 |
+| 対応表 JSON の macOS カメラの `perm` 文 | 計画情報で設定の実体ではない | #1195 |
+
+突き合わせテストの寿命: #1170〜#1174 で宣言の読み先を各機能 crate へ切り替え、#1176 の生成結果の比較に置き換わった時点か #1194 で撤去します。
