@@ -420,6 +420,28 @@ fn workspace_merges_only_dependencies_reachable_from_app() {
 }
 
 #[test]
+fn workspace_reach_ignores_default_members() {
+    let mk = |v: &str| {
+        format!("[package.metadata.fandhe]\nid = \"{v}\"\n[package.metadata.fandhe.ios]\ninfo-plist = {{ K = \"{v}\" }}\n")
+    };
+    let c = |dir: &str, name: &str, decl: String| (dir.to_string(), name.to_string(), decl);
+    let m = make_ws(
+        "ws-defmem",
+        &[c("a", "third-a", mk("a")), c("b", "third-b", mk("b"))],
+    );
+    let root = m.parent().unwrap();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/lib.rs"), "").unwrap();
+    // app は a・b の両方に依存する。default-members が b だけでも a が統合に入り競合する。
+    fs::write(
+        &m,
+        "[package]\nname = \"app\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[dependencies]\nthird-a = { path = \"c/a\" }\nthird-b = { path = \"c/b\" }\n[workspace]\nmembers = [\"c/*\"]\ndefault-members = [\"c/b\"]\n",
+    )
+    .unwrap();
+    assert!(errors(check_workspace(Some(&m))).contains("K"));
+}
+
+#[test]
 fn workspace_merges_target_specific_dependencies_of_other_os() {
     let mk = |v: &str| {
         format!("[package.metadata.fandhe]\nid = \"{v}\"\n[package.metadata.fandhe.ios]\ninfo-plist = {{ K = \"{v}\" }}\n")

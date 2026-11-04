@@ -111,14 +111,16 @@ fn reachable(
     meta: &Value,
     manifest: Option<&Path>,
 ) -> Result<Option<BTreeSet<(String, String)>>, String> {
-    if meta["resolve"]["root"].as_str().is_none() {
+    let Some(root) = meta["resolve"]["root"].as_str() else {
         return Ok(None);
-    }
+    };
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let mut cmd = Command::new(cargo);
     cmd.args([
         "tree", "-e", "normal", "--target", "all", "--prefix", "none", "--format", "{p}",
     ]);
+    // default-members があっても root package の依存だけを辿るよう、package を明示する。
+    cmd.args(["--package", root]);
     if let Some(m) = manifest {
         cmd.arg("--manifest-path").arg(m);
     }
