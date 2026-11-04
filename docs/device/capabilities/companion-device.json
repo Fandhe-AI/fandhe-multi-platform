@@ -15,7 +15,7 @@
         "https://developer.apple.com/documentation/accessorysetupkit/discovering-and-configuring-accessories",
         "https://developer.apple.com/videos/play/wwdc2024/10203/"
       ],
-      "deferred": "AccessorySetupKit を使うと宣言したアプリでは、CoreBluetooth の状態は付属機器を登録するまで poweredOn にならず、スキャン結果も登録済みの機器だけになる（公式: WWDC24「Meet AccessorySetupKit」）。宣言はアプリ単位の Info.plist に入るため、実装済みの bluetooth-le（周辺の BLE 機器を一覧するスキャン）を壊す。避けるには別アプリ（別ターゲット）に分けるなど設計を変える必要があるため保留。ほかに、配備対象（iOS 17）より新しい iOS 18 の framework の弱リンクと、条件に合う広告を出す相手機器が要る。ベンダーの個別審査は不要で、bluetooth-le との共存の方針が決まれば着手できる",
+      "deferred": "AccessorySetupKit を使うと宣言したアプリでは、CoreBluetooth の状態は付属機器を登録するまで poweredOn にならず、スキャン結果も登録済みの機器だけになる（公式: WWDC24「Meet AccessorySetupKit」）。宣言はアプリ単位の Info.plist に入るため、実装済みの bluetooth-le（周辺の BLE 機器を一覧するスキャン）を壊す。避けるには別アプリ（別ターゲット）に分けるなど設計を変える必要があるため保留。ほかに、配備対象（iOS 17）より新しい iOS 18 の framework の弱リンクと、条件に合う広告を出す相手機器が要る。ベンダーの個別審査は不要で、bluetooth-le との共存の方針が決まれば着手できる。`cargo-fandhe gen` が `companion-device` と `bluetooth-le` の同時選択を生成時に拒否できるようになるまで着手しない",
       "note": "未実装。iOS / iPadOS のみ（Apple 公式表記）。探す条件（service UUID か company identifier）は Info.plist に宣言した値と一致させる必要がある"
     },
     "android": {

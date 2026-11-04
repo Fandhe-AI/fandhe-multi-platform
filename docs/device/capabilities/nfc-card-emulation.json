@@ -7,15 +7,14 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "no",
       "api": "CoreNFC `CardSession`（iOS 17.4+。EEA 外での開発・テストは iOS 18.2+）",
       "perm": "HCE の entitlement（Apple の承認制）",
       "url": [
         "https://developer.apple.com/documentation/corenfc/cardsession",
         "https://developer.apple.com/support/hce-transactions-in-apps/"
       ],
-      "note": "未実装。シミュレータでは使えない（NFC リーダーが無い。公式）。提示前に `CardSession.isEligible` で利用できるかを確かめる（公式の推奨）。macOS 版は無い（Apple 公式表記で iOS / iPadOS / Mac Catalyst のみ）。",
-      "approval": "HCE の entitlement を Apple へ申請し、承認されること。申請は組織で登録した Apple Developer Program の Account Holder が行い、EEA に拠点があること・EEA の利用者向けであること・決済・鍵・社員証・会員・チケット・交通などの用途のいずれかに当たることが条件（公式）。固定の応答を返すだけの型サンプルは用途に当たらない"
+      "note": "未実装。シミュレータでは使えない（NFC リーダーが無い。公式）。提示前に `CardSession.isEligible` で利用できるかを確かめる（公式の推奨）。macOS 版は無い（Apple 公式表記で iOS / iPadOS / Mac Catalyst のみ）。本リポジトリでは entitlement なしでは動作を確かめられない（シミュレータでは使えない。公式）ため、確かめていない橋渡しは出さない。entitlement を持つ利用者の環境で確認できたら `possible` へ戻す"
     },
     "android": {
       "status": "done",
@@ -55,5 +54,5 @@
       "note": "Web NFC は読み書きのみで、カードの模擬には使えない。"
     }
   },
-  "note": "nfc（既存 id）はタグの読み取りで、本機能は端末自身がカードとして読まれる側の別機能。Android は受信側コンポーネント（`HostApduService`）を足して実装済み（`NFC` 権限は宣言済み）、iOS は Apple の承認制（EEA 限定・用途の条件あり）で申請待ち。範囲: Android で固定の独自 AID（`F0` で始まる）への SELECT に固定の文字列を返し、読み取られた回数を画面に出す（実カードの模擬・決済は扱わない）。回数と最後の応答時刻はプロセス内の static に持ち、画面は読むたびにそこを読む。NFC のオン・オフと AID の既定の振り先は、画面が読むたびに OS（`NfcAdapter.isEnabled`・`CardEmulation.isDefaultServiceForAid`）へ問い、アプリ内に持たない。守らない範囲: 他アプリが同じ AID を登録したときの振り先（OS が利用者に選ばせる）、画面オフ・ロック中に届かないこと、読み取り側の再試行で同じ読み取りが複数回に数えられること、プロセス終了で回数が 0 に戻ること"
+  "note": "nfc（既存 id）はタグの読み取りで、本機能は端末自身がカードとして読まれる側の別機能。Android は受信側コンポーネント（`HostApduService`）を足して実装済み（`NFC` 権限は宣言済み）、iOS は Apple の承認制（EEA 限定・用途の条件あり）で、本リポジトリでは確かめられないため対応しない。範囲: Android で固定の独自 AID（`F0` で始まる）への SELECT に固定の文字列を返し、読み取られた回数を画面に出す（実カードの模擬・決済は扱わない）。回数と最後の応答時刻はプロセス内の static に持ち、画面は読むたびにそこを読む。NFC のオン・オフと AID の既定の振り先は、画面が読むたびに OS（`NfcAdapter.isEnabled`・`CardEmulation.isDefaultServiceForAid`）へ問い、アプリ内に持たない。守らない範囲: 他アプリが同じ AID を登録したときの振り先（OS が利用者に選ばせる）、画面オフ・ロック中に届かないこと、読み取り側の再試行で同じ読み取りが複数回に数えられること、プロセス終了で回数が 0 に戻ること"
 }

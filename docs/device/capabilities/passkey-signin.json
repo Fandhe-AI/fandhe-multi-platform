@@ -20,7 +20,7 @@
       "perm": "なし（要確認）。サーバー側の Digital Asset Links（`assetlinks.json`）が要る",
       "url": "https://developer.android.com/identity/sign-in/credential-manager",
       "note": "未実装。GMS（Google Play 開発者サービス）依存。API 34 未満は Play services 経由（報告より）。パスキー専用の手順は https://developer.android.com/identity/sign-in/passkeys にもある",
-      "deferred": "RP ID のドメイン（Digital Asset Links の assetlinks.json の配置先）が未定のため保留。ベンダーの個別審査は不要で、ドメインが決まれば着手できる"
+      "deferred": "RP ID のドメイン（Digital Asset Links の assetlinks.json の配置先）が未定のため保留。ベンダーの個別審査は不要で、ドメインが決まれば着手できる。検証用ドメインは本リポジトリの確認用で、利用者の RP ID は `cargo-fandhe gen` の必須入力にし、既定ドメインを持たない"
     },
     "macos": {
       "status": "possible",

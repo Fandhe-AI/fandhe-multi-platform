@@ -47,10 +47,11 @@
       "api": "Widgets Platform（Windows Widgets）",
       "perm": "Widget サービスの登録（アプリマニフェスト側の宣言）",
       "url": "https://learn.microsoft.com/en-us/windows/apps/develop/widgets/",
-      "note": "未実装。package identity（MSIX / sparse package）必須のため今回保留（10/4 オーナー判断）",
+      "note": "未実装",
       "sourceName": [
         "ウィジェット"
-      ]
+      ],
+      "deferred": "package identity（MSIX / sparse package）と Windows App SDK が必須のため保留。sparse package で足りるかは未確認。identity を導入すると決めたら着手できる"
     },
     "web": {
       "status": "n-a",
