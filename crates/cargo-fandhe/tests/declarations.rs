@@ -486,3 +486,17 @@ fn rejects_qualified_usage_description_keys_in_plist() {
     let ok = json!({"id":"x","ios":{"info-plist":{"NSSomething-iphoneos":"v"}}});
     assert_eq!(problems(ok), "");
 }
+
+#[test]
+fn merge_distinguishes_dotted_key_from_nested_path() {
+    let a = decl(json!({"id":"a","ios":{"info-plist":{"K.X":1}}}));
+    let b = decl(json!({"id":"b","ios":{"info-plist":{"K":{"X":1}}}}));
+    let c = decl(json!({"id":"c","ios":{"info-plist":{"K":{"X":2}}}}));
+    let errs = merge(&[("a", &a), ("b", &b), ("c", &c)]).unwrap_err();
+    assert_eq!(errs.len(), 1);
+    let e = &errs[0];
+    assert_eq!(
+        (e.field.as_str(), e.a.as_str(), e.b.as_str()),
+        ("ios.info-plist.K.X", "b", "c")
+    );
+}

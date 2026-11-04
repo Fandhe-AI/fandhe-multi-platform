@@ -55,6 +55,10 @@ pub struct Merged {
     pub extension_sources: Vec<(String, String, String, String)>,
 }
 
+/// 所有者表と `merge_value` の path の内部区切り。キーに `.` を含み得るので（`K.X` と `K` → `X` を区別する）、
+/// validate が制御文字を拒否済みの U+001F を使う。`MergeError.field` へ出すときだけ `.` へ置換する。
+const SEP: char = '\u{1f}';
+
 /// 値の葉ごとに「最初に書いた機能」を記録する。深い位置の競合で正しい 2 機能を報告するため。
 fn record(path: &str, v: &Value, owners: &mut BTreeMap<String, String>, id: &str) {
     // オブジェクト位置にも記録する（スカラーとの型不一致で先行機能を報告するため）。
@@ -63,7 +67,7 @@ fn record(path: &str, v: &Value, owners: &mut BTreeMap<String, String>, id: &str
         .or_insert_with(|| id.to_string());
     if let Value::Object(m) = v {
         m.iter()
-            .for_each(|(k, c)| record(&format!("{path}.{k}"), c, owners, id));
+            .for_each(|(k, c)| record(&format!("{path}{SEP}{k}"), c, owners, id));
     }
 }
 
@@ -92,7 +96,7 @@ fn merge_value(
         (Value::Object(x), Value::Object(y)) => {
             let mut out = x.clone();
             for (k, v) in y {
-                let child = format!("{path}.{k}");
+                let child = format!("{path}{SEP}{k}");
                 let merged = match out.get(k) {
                     Some(cur) => merge_value(cur, v, &child, owners, id, errs),
                     None => {
@@ -125,7 +129,7 @@ fn merge_map(
                 let mut leaves = Vec::new();
                 let m = merge_value(cur, v, k, owners, id, &mut leaves);
                 errs.extend(leaves.into_iter().map(|(leaf, detail)| MergeError {
-                    field: format!("{field}.{leaf}"),
+                    field: format!("{field}.{}", leaf.replace(SEP, ".")),
                     a: owners.get(&leaf).cloned().unwrap_or_default(),
                     b: id.to_string(),
                     detail,
