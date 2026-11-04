@@ -1,0 +1,13 @@
+[package]
+name = "fandhe-runtime"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の実行基盤（起床と完了通知。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# drain_completions が StateStore を使う。egui には依存しない（docs/architecture/consumer-app-structure.md §3・§7）。
+fandhe-core = { path = "../fandhe-core" }
