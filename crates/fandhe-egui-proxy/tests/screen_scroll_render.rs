@@ -171,6 +171,10 @@ fn touch_scroll_reaches_everything(height: f32, outer_scrolls: bool) {
         }
         swipe(&mut harness, egui::pos2(700.0, 40.0), 100.0);
     }
+    assert!(
+        visible(&harness, "ボタン0"),
+        "ボタン0 がクリップ内に戻らない"
+    );
 }
 
 #[test]
