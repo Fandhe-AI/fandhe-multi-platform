@@ -289,7 +289,7 @@ fn rejects_gradle_and_paths() {
     ] {
         assert_rejected(android(json!({"gradle":[bad]})), "gradle[0]");
     }
-    for bad in ["../x", "/abs", "a\\b", "C:/x", ""] {
+    for bad in ["../x", "/abs", "a\\b", "C:/x", "", "a\nb"] {
         assert_rejected(android(json!({"java":[bad]})), "java[0]");
     }
 }
@@ -417,6 +417,29 @@ fn workspace_merges_only_dependencies_reachable_from_app() {
     .unwrap();
     let r = check_workspace(Some(&m));
     assert!(r.is_ok(), "{:?}", r.err());
+}
+
+#[test]
+fn workspace_merges_target_specific_dependencies_of_other_os() {
+    let mk = |v: &str| {
+        format!("[package.metadata.fandhe]\nid = \"{v}\"\n[package.metadata.fandhe.ios]\ninfo-plist = {{ K = \"{v}\" }}\n")
+    };
+    let c = |dir: &str, name: &str, decl: String| (dir.to_string(), name.to_string(), decl);
+    // a は host に無い OS 限定の依存。host 限定の依存解決だと統合から漏れて b との競合が見えない。
+    let m = make_ws(
+        "ws-target",
+        &[c("a", "third-a", mk("a")), c("b", "third-b", mk("b"))],
+    );
+    let root = m.parent().unwrap();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/lib.rs"), "").unwrap();
+    fs::write(
+        &m,
+        "[package]\nname = \"app\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[dependencies]\nthird-b = { path = \"c/b\" }\n[target.'cfg(target_os = \"nonexistent-os\")'.dependencies]\nthird-a = { path = \"c/a\" }\n[workspace]\nmembers = [\"c/*\"]\n",
+    )
+    .unwrap();
+    let r = check_workspace(Some(&m));
+    assert!(r.is_err(), "target 限定の依存も統合されるはず");
 }
 
 #[test]

@@ -104,6 +104,7 @@ pub fn check_workspace(manifest: Option<&Path>) -> Result<Merged, Vec<String>> {
 }
 
 /// root package から通常依存（build・dev を除く）で到達する `(name, version)`。root が無ければ `None`。
+/// `--target all` で `[target.'cfg(...)'.dependencies]` の依存（Android 専用機能等）も全対象ぶん集める。
 /// `cargo metadata` の resolve は workspace 全体の feature を統合するため辿らない。
 /// `cargo tree` は対象 package の feature 選択だけで解決する（別 member が有効にした feature の辺が混ざらない）。
 fn reachable(
@@ -116,7 +117,7 @@ fn reachable(
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let mut cmd = Command::new(cargo);
     cmd.args([
-        "tree", "-e", "normal", "--prefix", "none", "--format", "{p}",
+        "tree", "-e", "normal", "--target", "all", "--prefix", "none", "--format", "{p}",
     ]);
     if let Some(m) = manifest {
         cmd.arg("--manifest-path").arg(m);

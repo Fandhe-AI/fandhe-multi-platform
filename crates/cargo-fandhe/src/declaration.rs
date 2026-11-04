@@ -214,6 +214,7 @@ fn is_rel_path(s: &str) -> bool {
     !s.is_empty()
         && !s.starts_with('/')
         && !s.contains(['\\', ':'])
+        && !s.chars().any(char::is_control)
         && s.split('/').all(|seg| seg != "..")
 }
 
