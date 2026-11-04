@@ -60,13 +60,7 @@ const MAX_IMAGE_BYTES: usize = 64 * 1024 * 1024;
 /// ため、本モジュール内に閉じた変換先として用意する。`pub(crate)`: `android_background_task.rs`
 /// も同じ JNI 呼び出し形（`AndroidClipboard::request` と同型）で再利用する
 /// （Issue #1046、二重実装を避ける）。
-pub(crate) struct JniCallFailed;
-
-impl From<jni::errors::Error> for JniCallFailed {
-    fn from(_: jni::errors::Error) -> Self {
-        JniCallFailed
-    }
-}
+pub(crate) use fandhe_platform_android::JniCallFailed;
 
 /// `Camera::capture()` を Java 側 `MainActivity.requestCameraCapture()` へ委譲する実装
 /// （Issue #750）。`device/camera_capture.rs` の `platform_camera()` から Android

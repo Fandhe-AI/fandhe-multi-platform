@@ -25,7 +25,7 @@ OS の null を空と失敗のどちらへ写すかが 2 回反転し（#1050）
 request/response 型（要求 1 件を出して 1 件の結果を待つ橋渡し）は、同じ仕組みを新しく書かず
 次を使う。
 
-- Rust 側の要求追跡: `crates/fandhe-egui-proxy/src/device/request_slot.rs` の `RequestSlot` /
+- Rust 側の要求追跡: `crates/fandhe-runtime/src/request_slot.rs` の `RequestSlot` /
   `poll_and_finish`（#943）
 - Android 側の要求 id 追跡: `platforms/android/app/src/main/java/com/fandhe/androidapp/RequestTracker.java`（#944）
 

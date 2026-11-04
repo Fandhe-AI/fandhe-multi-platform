@@ -34,7 +34,7 @@ crates.io では、公開する crate の通常依存も公開が要るためで
 | `#[fandhe::main]` 用の proc-macro crate（`fandhe-macros`、名前は仮） | 各 OS の入口を生成。proc-macro は別 crate が必須 | する | #1200 |
 | `cargo-fandhe` | Rust 製 CLI（`gen`・`run`・`build`） | する | #1176・#1201 |
 | `fandhe-core` | UI DSL・状態管理 | する | 既存 |
-| `fandhe-runtime` | 起床・完了通知・`Renderer` trait。egui 非依存 | する | #1162・#1163 |
+| `fandhe-runtime` | 起床・完了通知・要求追跡（`RequestSlot`）・`Renderer` trait。egui 非依存 | する | #1162・#1163 |
 | `fandhe-render-egui` | egui 実装。公開 API に eframe の型を出さない | する | #1164 |
 | `fandhe-fonts` | `fandhe-render-egui` の依存 | する | 既存 |
 | `fandhe-platform-android` / `-apple` / `-windows` / `-web` | 機能をまたいで共有する OS 層 | する | #1166・#1168・#1184・#1185 |

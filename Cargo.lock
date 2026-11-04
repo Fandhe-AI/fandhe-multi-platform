@@ -1089,6 +1089,7 @@ dependencies = [
  "fandhe-core",
  "fandhe-device",
  "fandhe-fonts",
+ "fandhe-platform-android",
  "fandhe-prototype",
  "fandhe-runtime",
  "image",
@@ -1114,6 +1115,14 @@ name = "fandhe-fonts"
 version = "0.1.0"
 dependencies = [
  "ab_glyph",
+]
+
+[[package]]
+name = "fandhe-platform-android"
+version = "0.2.0"
+dependencies = [
+ "android-activity",
+ "jni 0.22.4",
 ]
 
 [[package]]

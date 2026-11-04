@@ -10,7 +10,7 @@
 //!
 //! request/response 型（要求 1 件を出して 1 件の結果を待つ）で、橋渡し層
 //! （`fandhe-egui-proxy` の `device/`・`fandhe-web-dom`）は
-//! `crates/fandhe-egui-proxy/src/device/request_slot.rs` の `RequestSlot` を使って
+//! `crates/fandhe-runtime/src/request_slot.rs` の `RequestSlot` を使って
 //! 要求追跡を行う前提。各 OS 実装が集めた生の結果は [`normalize_scan`] で契約の形
 //! （重複まとめ・RSSI 降順・件数上限）に整える。
 //!

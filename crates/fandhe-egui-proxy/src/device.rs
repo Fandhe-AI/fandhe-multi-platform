@@ -1668,8 +1668,8 @@ pub mod recent_documents;
 /// （macOS・Windows 実装、Android は JNI 実装（#859）。他 OS は `UnsupportedRemovableStorage` 固定）。
 pub mod removable_storage;
 /// request/response 型端末機能共通の要求追跡（Issue #943、親 #941）。share /
-/// biometric_auth / file_pick の `bridge` facade から使う。4 OS
-/// （macOS/iOS/Android/Windows）以外では利用者が無いため `dead_code` を許容する。
+/// biometric_auth / file_pick の `bridge` facade から使う。
+/// `RequestSlot` / `poll_and_finish` の実体は `fandhe-runtime`（Issue #1166）。呼び出し側のパスを保つ再公開。
 #[cfg_attr(
     not(any(
         target_os = "macos",
@@ -1677,9 +1677,9 @@ pub mod removable_storage;
         target_os = "android",
         target_os = "windows"
     )),
-    allow(dead_code)
+    allow(unused_imports)
 )]
-pub(crate) mod request_slot;
+pub(crate) use fandhe_runtime::request_slot;
 /// Phase 11 の拡充ループ（親 #105、Issue #444）: セーフエリアの effect ドライバ
 /// （macOS・iOS / Android 実装、他 OS は `UnsupportedSafeArea` 固定）。
 pub mod safe_area_insets;

@@ -65,7 +65,10 @@ cd -- "${REPO_ROOT}"
 # 採用する（`macos_secure_input` モジュールのみ Carbon FFI（SecureEventInput）で
 # `unsafe` が不可避なため、`ImePurpose::Password` の学習・予測変換抑止を代替担保する
 # Issue #586 で追加。fandhe-swiftui-bridge と同じ理由・同じ方式）。
-FORBID_EXEMPT_CRATES=("fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime")
+#
+# fandhe-platform-android: クレートルートは forbid ではなく `#![deny(unsafe_code)]`。
+# `with_activity`（JavaVM と Activity の取得）だけが `unsafe` を許可する（Issue #1166）。
+FORBID_EXEMPT_CRATES=("fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android")
 
 is_forbid_exempt() {
   local target="$1"

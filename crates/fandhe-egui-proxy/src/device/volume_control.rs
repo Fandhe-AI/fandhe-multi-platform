@@ -168,7 +168,7 @@ struct Done {
     out: Output,
 }
 
-/// 音量の要求 1 件の追跡（プロセスで 1 個、`device/request_slot.rs`）。
+/// 音量の要求 1 件の追跡（プロセスで 1 個、`fandhe-runtime/src/request_slot.rs`）。
 static SLOT: RequestSlot<Done> = RequestSlot::new();
 
 /// 完了結果を `SLOT` に置き、次のフレームで反映されるよう再描画を予約する。

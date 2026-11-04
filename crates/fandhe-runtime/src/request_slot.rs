@@ -11,15 +11,15 @@
 //! 変換（`to_outcome`）は facade 側に残す（`RequestSlot` は変換済みの値を
 //! 格納するだけ）。
 //!
-//! 4 OS（macOS/iOS/Android/Windows）以外では利用者が無いため、`mod request_slot;`
-//! 宣言（`device.rs`）に `allow(dead_code)` を付けて許容する。
+//! レンダラ非依存のため `fandhe-runtime` に置く（Issue #1166）。`fandhe-egui-proxy` の
+//! 機能実装と、今後の機能 crate（`fandhe-platform-*` を使う側）が共通で使う。
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// share / biometric_auth の `drive_callback` 後半で共通のポーリング間隔
 /// （旧: 各モジュールが個別に持っていた `POLL_INTERVAL`）。
-pub(crate) const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+pub const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// OS へ渡した要求と、届いた結果。
 struct Pending<O> {
@@ -34,15 +34,16 @@ struct Pending<O> {
 /// 採番は機能（`RequestSlot` インスタンス）ごとに独立させる。グローバル 1 本の
 /// カウンタにまとめない: OS 側（Java の `static long` 等）が見る request_id の
 /// 系列を機能をまたいで変えないため（既存 3 実装の挙動を保つ）。
-pub(crate) struct RequestSlot<O> {
+pub struct RequestSlot<O> {
     pending: Mutex<Option<Pending<O>>>,
     /// 0 は「未要求」の番兵として使わない（既存 3 実装と同じ）。
     next_request_id: AtomicU64,
 }
 
 impl<O> RequestSlot<O> {
-    /// static 初期化用。
-    pub(crate) const fn new() -> Self {
+    /// static 初期化用。`const fn` で使うため `Default` は実装しない。
+    #[allow(clippy::new_without_default)]
+    pub const fn new() -> Self {
         Self {
             pending: Mutex::new(None),
             next_request_id: AtomicU64::new(1),
@@ -54,7 +55,7 @@ impl<O> RequestSlot<O> {
     }
 
     /// 提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
-    pub(crate) fn begin(&self) -> u64 {
+    pub fn begin(&self) -> u64 {
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
         *self.lock() = Some(Pending {
             request_id,
@@ -65,7 +66,7 @@ impl<O> RequestSlot<O> {
 
     /// OS からの結果を置く（任意スレッド）。`request_id` 不一致・未登録（プロセス死後の
     /// 再配送等）・既に結果あり（重複通知）は捨てて `false`。
-    pub(crate) fn deliver(&self, request_id: u64, outcome: O) -> bool {
+    pub fn deliver(&self, request_id: u64, outcome: O) -> bool {
         let mut pending = self.lock();
         let Some(p) = pending.as_mut().filter(|p| p.request_id == request_id) else {
             return false;
@@ -78,7 +79,7 @@ impl<O> RequestSlot<O> {
     }
 
     /// 現在の要求と、届いていれば結果（クローン）。effect ドライバが毎フレーム観測する。
-    pub(crate) fn snapshot(&self) -> Option<(u64, Option<O>)>
+    pub fn snapshot(&self) -> Option<(u64, Option<O>)>
     where
         O: Clone,
     {
@@ -89,7 +90,7 @@ impl<O> RequestSlot<O> {
 
     /// 完了クロージャが画面へ反映できたときだけ呼ぶ。`request_id` が現在の要求と
     /// 一致するときのみ消す。
-    pub(crate) fn clear(&self, request_id: u64) {
+    pub fn clear(&self, request_id: u64) {
         let mut pending = self.lock();
         if pending.as_ref().is_some_and(|p| p.request_id == request_id) {
             *pending = None;
@@ -99,7 +100,7 @@ impl<O> RequestSlot<O> {
     /// 期限切れの確定用。`request_id` が現在の要求で、かつ結果が未着のときだけ消して `true`。
     /// 判定と除去を同じロック内で行い、`snapshot` 後に `deliver` が着地した結果を消さない
     /// （`false` なら呼び出し側は失敗を確定せず、後続の `poll_and_finish` に任せる）。
-    pub(crate) fn clear_if_pending(&self, request_id: u64) -> bool {
+    pub fn clear_if_pending(&self, request_id: u64) -> bool {
         let mut pending = self.lock();
         if pending
             .as_ref()
@@ -115,7 +116,7 @@ impl<O> RequestSlot<O> {
     /// （`biometric_auth::reset_pending_tracking` の唯一の呼び出し元、PR #917 の
     /// codex-review 指摘由来）。share / file_pick は呼ばない（既存挙動を変えない）。
     #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-    pub(crate) fn reset(&self) {
+    pub fn reset(&self) {
         *self.lock() = None;
     }
 }
@@ -128,9 +129,9 @@ impl<O> RequestSlot<O> {
 /// 復元）を持ち、かつ待機中に `request_repaint_after` を呼ばない設計（再描画は
 /// JNI/FFI の受け口が行う）のため、寄せるとポーリングが増えて挙動が変わる
 /// （Issue #943 実装計画 §3.4）。
-pub(crate) fn poll_and_finish<S: 'static, O: Clone + Send + 'static>(
+pub fn poll_and_finish<S: 'static, O: Clone + Send + 'static>(
     slot: &'static RequestSlot<O>,
-    sender: &crate::app::CompletionSender<S>,
+    sender: &crate::CompletionSender<S>,
     on_waiting: impl FnOnce(u64),
     apply: impl FnOnce(&mut S, O) -> bool + Send + 'static,
 ) {
@@ -258,13 +259,22 @@ mod tests {
     /// 直列化する（`RequestSlot` 単体のテストはローカルインスタンスのため不要）。
     static POLL_TEST_LOCK: Mutex<()> = Mutex::new(());
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl crate::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     fn sender_with_channel() -> (
-        crate::app::CompletionSender<u8>,
-        std::sync::mpsc::Receiver<crate::app::Completion<u8>>,
+        crate::CompletionSender<u8>,
+        std::sync::mpsc::Receiver<crate::Completion<u8>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (
+            crate::CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     #[test]

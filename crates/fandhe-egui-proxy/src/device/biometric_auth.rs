@@ -12,7 +12,7 @@
 //! `LAContext.evaluatePolicy`（macOS/iOS）・`BiometricPrompt.AuthenticationCallback`
 //! （Android）・`UserConsentVerifier`（Windows、`IAsyncOperation` の完了ハンドラ）は
 //! いずれも reply が非同期に届くため、`BiometricAuth` トレイトを通さずコアの状態機械へ
-//! 直接書き戻す（`device/share.rs` と同型）。[`bridge`] は `device/request_slot.rs::
+//! 直接書き戻す（`device/share.rs` と同型）。[`bridge`] は `fandhe-runtime/src/request_slot.rs::
 //! RequestSlot` の facade で、`CompletionSender` も画面の `generation` も保持しない
 //! pull 型: OS 側コールバックは結果を置くだけで、画面への反映は毎フレーム
 //! [`drive_callback`] が **その時点の** `sender`/`state` を使って行う
@@ -159,7 +159,7 @@ pub(crate) fn outcome_from_verification(code: i32) -> Result<DeviceAuthOutcome, 
 }
 
 /// macOS/iOS/Android/Windows 共通: OS 側コールバックとの橋渡し（pull 型、
-/// `device/request_slot.rs::RequestSlot` の facade。モジュール doc 参照）。
+/// `fandhe-runtime/src/request_slot.rs::RequestSlot` の facade。モジュール doc 参照）。
 #[cfg(any(
     target_os = "macos",
     target_os = "ios",
@@ -679,7 +679,7 @@ mod tests {
 }
 
 /// [`bridge`] の単体テスト。要求の追跡そのもの（採番・first-wins・照合・
-/// Android 再生成時の `reset` 回帰、PR #917）は `device/request_slot.rs::RequestSlot`
+/// Android 再生成時の `reset` 回帰、PR #917）は `fandhe-runtime/src/request_slot.rs::RequestSlot`
 /// 側で検証済みのため、ここでは facade が担う「`deliver` 境界での `to_outcome`
 /// 変換」だけを固定する（Issue #943 で 3 機能の `bridge_tests` を統合、`share.rs` も
 /// 同型）。OS 側実装（`.m`/`.java`/`windows_biometric.rs`）のビルドを要さず host 上の

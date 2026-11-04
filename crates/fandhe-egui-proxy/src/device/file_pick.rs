@@ -25,7 +25,7 @@
 //!
 //! # pull 型（改訂 4）: `bridge` は sender も generation も持たない
 //!
-//! [`bridge`] は `device/request_slot.rs::RequestSlot` の facade で、
+//! [`bridge`] は `fandhe-runtime/src/request_slot.rs::RequestSlot` の facade で、
 //! `CompletionSender` も画面の `generation` も保持しない **pull 型**。
 //! OS コールバックは結果を置くだけで、画面への反映は毎フレーム
 //! [`drive_mobile_with`] が **その時点の** `ProxyApp` の `sender`/`state` を使って行う
@@ -640,7 +640,7 @@ mod next_action_tests {
 }
 
 /// [`bridge`] の単体テスト。要求の追跡そのもの（採番・first-wins・照合）は
-/// `device/request_slot.rs::RequestSlot` 側で検証済みのため、ここでは facade が
+/// `fandhe-runtime/src/request_slot.rs::RequestSlot` 側で検証済みのため、ここでは facade が
 /// 担う「`deliver` 境界での `to_outcome` 変換」だけを固定する（Issue #943 で
 /// 3 機能の `bridge_tests` を統合、`share.rs`/`biometric_auth.rs` も同型）。
 /// OS 側実装（`.m`/JNI）のビルドを要さず host 上の `cargo test` で回せる。

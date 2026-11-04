@@ -21,25 +21,9 @@
 //! 切替自体は #242 で完了済みだが、accesskit feature の有効化・動作整合は
 //! 別 issue #243 / TASK-9.3-S2 のスコープ）。
 
-/// `android_main` が受け取った [`AndroidApp`] を保持し、`device/android.rs`
-/// （Issue #750。`DataDir` 解決・カメラ Intent 中継の JNI 呼び出し）から
-/// 読み出せるようにする（Phase 8 固有ではない汎用の 3 行で、切り離し時は残置してよい。
-/// docs/architecture/device-feature-removal.md参照）。
-///
-/// `OnceLock` ではなく `Mutex` にするのは、Manifest の `configChanges` で止められない再生成
-/// （例: 壁紙によるテーマ色変更、Issue #73・#259）で OS が `Activity` を破棄・再生成すると `android_main` が
-/// 新しい [`AndroidApp`] で再度呼ばれるため（codex-review 指摘、PR #790）。`set_android_app`
-/// が呼ばれるたびに保持内容を差し替え、破棄済み `Activity` を指す古い値を残さない。
-///
-/// [`AndroidApp`]: winit::platform::android::activity::AndroidApp
-///
-/// `frame-metrics` feature 有効時（計測専用ビルド、`crate::frame_metrics::run_android` が
-/// 別の `android_main` 定義を使う）は `set_android_app` が呼ばれないため `android_app()` は
-/// 常に `None` を返す。Issue #796（ソフトキーボード文字入力の `TextInputState` ポーリング、
-/// `poll_soft_keyboard`）でも `device/android.rs` と同じく `android_app()` を使うため、
-/// cfg は付けない（従来の `feature = "device"` 限定を撤廃）。
-static ANDROID_APP: std::sync::Mutex<Option<winit::platform::android::activity::AndroidApp>> =
-    std::sync::Mutex::new(None);
+/// `AndroidApp` の保持（`set_android_app` / `android_app`）の実体は `fandhe-platform-android`
+/// （Issue #1166）。呼び出し側のパス `crate::android::android_app` を保つ再公開。
+pub(crate) use fandhe_platform_android::{android_app, set_android_app};
 
 /// 現在表示中の画面が傾き（`tilt_ball`）を使うかどうか（codex-review 指摘 P2、Issue #831）。
 /// `Java` 側の `motionListener` は画面に関わらず常にセンサを登録して通知するため、
@@ -119,28 +103,6 @@ pub(crate) fn active_screen_uses_drag_drop() -> bool {
 /// （通常到達しない）は何もしない。
 pub(crate) fn request_repaint() {
     fandhe_runtime::request_repaint();
-}
-
-/// [`ANDROID_APP`] の保持内容を差し替える。`android_main`（`frame-metrics` 無効時）が
-/// `eframe::run_native` を呼ぶ前に毎回呼ぶ（`Activity` 再生成のたびに `android_main` が
-/// 再実行されるため、初回だけでなく毎回上書きする）。
-pub(crate) fn set_android_app(app: winit::platform::android::activity::AndroidApp) {
-    let mut slot = ANDROID_APP.lock().unwrap_or_else(|e| e.into_inner());
-    *slot = Some(app);
-}
-
-/// [`ANDROID_APP`] を読む。`android_main`（`frame-metrics` 無効時）が
-/// `eframe::run_native` を呼ぶ前に `set_android_app` 済みのため、その `android_main` 内で
-/// 構築される [`crate::ProxyApp`] 等から発火する effect
-/// （`device::camera_capture::camera_capture_effect` 等）や [`poll_soft_keyboard`] が
-/// 呼ばれる時点では必ず `Some` になる。`AndroidApp` は `Arc` 内部実装で `Clone` が安価
-/// （android-activity 0.6.1 の型定義参照）なため、`Mutex` 保持のまま `'static` 参照を
-/// 返すことはできず所有値を複製して返す。
-pub(crate) fn android_app() -> Option<winit::platform::android::activity::AndroidApp> {
-    ANDROID_APP
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone()
 }
 
 /// Android 向け Vulkan 固定バックエンド設定を返す。

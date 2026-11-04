@@ -9,7 +9,7 @@
 //! # macOS: pull 型 `bridge`
 //!
 //! `NSColorSampler` のハンドラは非同期に届くため、`EyeDropper` トレイトを通さず
-//! `device/request_slot.rs::RequestSlot` の facade で受ける。画面への反映は毎フレーム
+//! `fandhe-runtime/src/request_slot.rs::RequestSlot` の facade で受ける。画面への反映は毎フレーム
 //! [`drive_callback`] が行う。
 //!
 //! # macOS 以外

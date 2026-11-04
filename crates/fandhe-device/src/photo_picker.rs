@@ -8,7 +8,7 @@
 //!
 //! request/response 型（要求 1 件を出して 1 件の結果を待つ）。OS がコールバック型のため
 //! [`file_picker`](crate::file_picker) と同じく、橋渡し層（`fandhe-egui-proxy` の `device/`・
-//! `fandhe-web-dom`）が `crates/fandhe-egui-proxy/src/device/request_slot.rs` の
+//! `fandhe-web-dom`）が `crates/fandhe-runtime/src/request_slot.rs` の
 //! `RequestSlot` で要求を追跡し、OS コールバックから結果を書き戻す前提。[`PhotoPicker`] の
 //! 同期 API はデスクトップ向けで、モバイル / Web は本モジュールの型・定数・
 //! [`validate_photo`] だけを共有する。バイト列の読み取りは

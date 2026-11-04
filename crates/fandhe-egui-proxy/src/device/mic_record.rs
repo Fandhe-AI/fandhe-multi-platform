@@ -20,7 +20,7 @@
 //! 直接書き戻す（`fandhe_device::mic_record` モジュール doc 参照。Windows の
 //! `WindowsMicRecorder` はエンジンとしてのみ `MicRecorder` を実装し、駆動は
 //! `device/windows_mic_record.rs::present`/`request_stop` が担う）。[`bridge`] は
-//! `device/request_slot.rs::RequestSlot` の facade で、`CompletionSender` も
+//! `fandhe-runtime/src/request_slot.rs::RequestSlot` の facade で、`CompletionSender` も
 //! 画面の `generation` も保持しない pull 型。1 回の録音セッション（開始 →
 //! 自動停止・明示停止・ライフサイクル中断のいずれか片方が届く）につき
 //! `deliver` は 1 回だけ呼ばれる契約（`RequestSlot` の first-wins）。
@@ -197,7 +197,7 @@ pub(crate) fn recording_from_capture(
 }
 
 /// macOS/iOS/Android/Windows 経路: OS 側コールバックとの橋渡し（pull 型、
-/// `device/request_slot.rs::RequestSlot` の facade。モジュール doc 参照）。
+/// `fandhe-runtime/src/request_slot.rs::RequestSlot` の facade。モジュール doc 参照）。
 #[cfg(any(
     target_os = "macos",
     target_os = "ios",
