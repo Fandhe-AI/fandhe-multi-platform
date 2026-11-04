@@ -24,6 +24,7 @@ paths:
 - Windows・macOS の実機が要る確認は CI に置かず、手元で行う
 - Windows 専用コードの型検査は `cargo clippy` ジョブの windows-gnu クロス clippy（mingw 導入込み）で行う。実機と MSVC の確認は手元
 - Android の Java は `android クロスビルド` の `bundleRelease`（`compileReleaseJavaWithJavac` を含む）で検査する
+- iOS 専用コード（`cfg(target_os = "ios")`）の型検査は CI に置かず、`scripts/ios/check-lib.sh` で手元で行う（依存の build script が `xcrun` を要し ubuntu では通らない。`docs/operations/ios-build-pipeline.md` §8）
 
 ## 必須チェックと集約ジョブ
 

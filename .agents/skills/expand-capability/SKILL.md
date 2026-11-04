@@ -490,7 +490,7 @@ KNOWN_CONFLICTING="1260" scripts/device/wait-pr-ready.sh 1247 1248 1249  # 報�
   Step 6 のキャプチャと Step 7 の確認用 issue への追記はマージ後でよい
 - CI はホスト・Android・Windows（windows-gnu の clippy）をビルドするが、iOS はビルドしない。PR が iOS の cfg を触っていれば、
   マージ前に PR の head を一時 worktree（`git worktree add --detach <W> refs/remotes/pr/<N>`）へ取り、
-  `cargo clippy --target aarch64-apple-ios --lib -p fandhe-egui-proxy` を通す
+  その worktree の `scripts/ios/check-lib.sh` で通す（PR head に無い古いブランチは main を取り込んでから）。fix ループが指摘を直した push も iOS は CI で検証されない
 - `READY` 直後の `guarded-merge.sh` が一度だけ「条件未達」を返すことがある（10 周目に 3 回。数十秒後の再実行で通った）。
   数十秒おいて `guarded-merge.sh` を再実行する。続けて未達なら、出力の内訳（`checks=` 等）を見て止まる条件に従う
 - `CONFLICTING` が出たら Step 4「兄弟 PR の競合」

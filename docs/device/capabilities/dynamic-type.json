@@ -26,7 +26,7 @@
       "api": "`Configuration.fontScale`",
       "perm": "なし",
       "url": "https://developer.android.com/guide/topics/resources/more-resources#Dimension",
-      "note": "実装済み（旧#914）。`MainActivity.textScaleFactor()` が `getResources().getConfiguration().fontScale` をそのまま返す同期 getter（他機能のような mailbox は不要）。`AndroidManifest.xml` の `configChanges` に `fontScale` を含めていないため、文字サイズ変更時は Activity が再生成され（`onCreate` からの再実行）、画面状態が作り直されて自然に再読みされる（天井として記録: 再生成の一瞬は前の値のまま）。実機未確認",
+      "note": "実装済み（旧#914）。`MainActivity.textScaleFactor()` が `getResources().getConfiguration().fontScale` をそのまま返す同期 getter（他機能のような mailbox は不要）。`AndroidManifest.xml` の `configChanges` に `fontScale` を含めており、文字サイズ変更で Activity は再生成されない（#73）。OS 値は `Unread` 時に 1 回読むだけで稼働中の変更には追従しない（天井として記録: 再起動か画面の開き直しで反映。iOS・Windows と同じ）。実機未確認",
       "sourceName": [
         "文字サイズ設定の追従（Android の Dynamic Type 相当）"
       ],
