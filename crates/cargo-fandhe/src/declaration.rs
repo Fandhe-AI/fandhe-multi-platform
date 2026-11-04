@@ -474,9 +474,9 @@ fn validate_android(c: &mut Ctx, a: &Android) {
     for (i, k) in a.components.iter().enumerate() {
         let p = format!("android.components[{i}]");
         c.check(
-            is_java_name(&k.name),
+            is_java_name(&k.name) && k.name.contains('.'),
             &format!("{p}.name"),
-            format!("`{}` は完全修飾名にしてください（先頭 `.` の相対名は利用者の applicationId で解決されて壊れます）", k.name),
+            format!("`{}` は完全修飾名にしてください（先頭 `.` の相対名・ドットなしの単一名は利用者の applicationId で解決されて壊れます）", k.name),
         );
         for (key, v) in &k.attributes {
             c.check(

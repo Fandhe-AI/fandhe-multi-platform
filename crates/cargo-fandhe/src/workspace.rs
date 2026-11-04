@@ -12,13 +12,15 @@ use crate::merge::{merge, Merged};
 
 const CAP_PREFIX: &str = "fandhe-cap-";
 
-/// `manifest` の workspace にある全 crate の宣言を検証し、統合まで通す。
+/// `manifest` の workspace と、その解決済み依存にある全 crate の宣言を検証し、統合まで通す。
 /// 問題は 1 件ずつの文字列（crate 名つき）で全件返す。
 pub fn check_workspace(manifest: Option<&Path>) -> Result<Merged, Vec<String>> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let mut cmd = Command::new(cargo);
     // 引数は配列で渡し、シェルを介さない。
-    cmd.args(["metadata", "--no-deps", "--format-version", "1"]);
+    // `--no-deps` は付けない: workspace 外の path 依存・公開された `fandhe-cap-*` も解決済みの
+    // 依存として packages に入り、宣言が集まる（consumer-app-structure.md §4）。
+    cmd.args(["metadata", "--format-version", "1"]);
     if let Some(m) = manifest {
         cmd.arg("--manifest-path").arg(m);
     }
@@ -37,7 +39,12 @@ pub fn check_workspace(manifest: Option<&Path>) -> Result<Merged, Vec<String>> {
     let mut problems = Vec::new();
     let mut decls: Vec<(String, Declaration)> = Vec::new();
     let mut ids: BTreeMap<String, String> = BTreeMap::new();
+    let mut seen = std::collections::BTreeSet::new();
     for pkg in meta["packages"].as_array().into_iter().flatten() {
+        // 同じ package が複数回現れても 1 度だけ見る。
+        if !seen.insert(pkg["id"].as_str().unwrap_or("?").to_string()) {
+            continue;
+        }
         let name = pkg["name"].as_str().unwrap_or("?");
         let decl = &pkg["metadata"]["fandhe"];
         if decl.is_null() {

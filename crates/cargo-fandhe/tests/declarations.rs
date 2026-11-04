@@ -296,6 +296,7 @@ fn rejects_gradle_and_paths() {
 
 #[test]
 fn rejects_component_details() {
+    assert_rejected(comp(json!({"name":"MyService"})), "完全修飾名");
     assert_rejected(comp(json!({"attributes":{"name":"x"}})), "attributes.name");
     assert_rejected(comp(json!({"attributes":{"a:b":"x"}})), "attributes.a:b");
     assert_rejected(comp(json!({"attributes":{"label":"a\nb"}})), "制御文字");
@@ -370,4 +371,26 @@ fn workspace_reports_merge_conflict_across_crates() {
         &[c("a", "third-a", mk("a")), c("b", "third-b", mk("b"))],
     );
     assert!(errors(check_workspace(Some(&m))).contains("食い違"));
+}
+
+#[test]
+fn workspace_checks_declarations_of_path_dependencies_outside_workspace() {
+    // workspace 外の path 依存（公開 crate と同じ立場）の不正な宣言も拾う。
+    let m = make_ws(
+        "ws-outside",
+        &[(
+            "app".into(),
+            "app".into(),
+            "[dependencies]\nfandhe-cap-ext = { path = \"../../ext\" }\n".into(),
+        )],
+    );
+    let ext = m.parent().unwrap().join("ext");
+    fs::create_dir_all(ext.join("src")).unwrap();
+    fs::write(ext.join("src/lib.rs"), "").unwrap();
+    fs::write(
+        ext.join("Cargo.toml"),
+        "[package]\nname = \"fandhe-cap-ext\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[package.metadata.fandhe]\nid = \"WRONG\"\n",
+    )
+    .unwrap();
+    assert!(errors(check_workspace(Some(&m))).contains("fandhe-cap-ext"));
 }
