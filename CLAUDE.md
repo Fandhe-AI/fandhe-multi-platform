@@ -16,7 +16,7 @@ fandhe-multi-platform/
 ├── README.md                    # プロジェクト概要・セットアップ手順
 ├── AGENTS.md                    # レビュー観点集（ai-review（provider: codex）が PR の base コミットの本書を基準に読む）
 ├── skills-lock.json             # 導入スキルの記録（skills add の履歴）
-├── Cargo.toml                   # workspace ルート（8 クレート構成）
+├── Cargo.toml                   # workspace ルート（9 クレート構成）
 ├── Makefile                     # よく使うコマンドの薄い入口（実体は scripts/ か cargo 1 行。.claude/rules/makefile.md、make skill）
 ├── lefthook.yml                 # Git hooks 設定（pre-commit・commit-msg）
 ├── Dockerfile                   # 開発用コンテナ定義（共通コア・Linux・wasm32）
@@ -24,6 +24,7 @@ fandhe-multi-platform/
 ├── .editorconfig                # エディタ設定（改行・インデント・末尾空白の統一）
 │
 ├── crates/
+│   ├── cargo-fandhe/            # 機能宣言（[package.metadata.fandhe]）の検証・統合。`cargo fandhe check`（#1160、forbid(unsafe_code)）
 │   ├── fandhe-core/             # 共通コア（UI DSL・状態管理・AI 型安全 DSL、forbid(unsafe_code)）
 │   │   ├── src/lib.rs           # 役割要約・モジュール地図（ui / state / token / screens）
 │   │   └── src/screens/         # AI が生成した画面モジュールの置き場（`ui/mod.rs` には手を入れない）
