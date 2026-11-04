@@ -26,7 +26,7 @@
         "https://developer.android.com/ai/appfunctions",
         "https://developer.android.com/jetpack/androidx/releases/appfunctions"
       ],
-      "deferred": "見送り。API 36（Android 16）以上でしか動かず compileSdk を 35 から 36 以上へ上げる必要がある。`androidx.appfunctions` は 1.0.0-beta で、注釈処理に KSP を使うため Kotlin ソースを持たない現在の Gradle 構成に Kotlin・KSP のプラグインを足すことになる。beta の API を新しい依存として採る判断になるため見送り。API が安定し、compileSdk と Kotlin の導入を決めたら着手できる。一次情報: https://developer.android.com/jetpack/androidx/releases/appfunctions",
+      "deferred": "見送り。API 36（Android 16）以上でしか動かず compileSdk を 35 から 36 以上へ上げる必要がある。`androidx.appfunctions` は 1.0.0-beta で、注釈処理に KSP を使うため Kotlin ソースを持たない現在の Gradle 構成に Kotlin・KSP のプラグインを足すことになる。beta の API を新しい依存として採る判断になるため見送り。API が安定し、compileSdk と Kotlin の導入を決めたら着手できる。一次情報: https://developer.android.com/jetpack/androidx/releases/appfunctions。要求（compileSdk・Kotlin・KSP のプラグイン）は機能 crate の宣言に置き、この機能を選んだ利用者にだけ課す",
       "note": "未実装。OS 側の仕組みで、公式文書は Google Play services への依存に触れていない。登録の確認は `adb shell cmd app_function list-app-functions`（公式）"
     },
     "macos": {

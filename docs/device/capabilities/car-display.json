@@ -7,7 +7,7 @@
   "bundle": "os-callback",
   "platforms": {
     "ios": {
-      "status": "possible",
+      "status": "no",
       "api": "CarPlay framework（`CPTemplateApplicationScene` と `CPInterfaceController` に `CPTemplate` を渡す）",
       "perm": "CarPlay の entitlement（アプリの種別ごとに別。`com.apple.developer.carplay-audio`・`-communication`・`-maps`・`-parking`・`-charging`・`-quick-ordering` など）",
       "url": [
@@ -15,8 +15,7 @@
         "https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements",
         "https://developer.apple.com/documentation/carplay/using-the-carplay-simulator"
       ],
-      "note": "未実装。シミュレータの CarPlay ウィンドウ（I/O > External Displays > CarPlay）でも、entitlement が無いアプリは表示されない（公式）。テンプレートの中身はアプリが決め、文字の大きさ・色・タッチ領域などは OS が決める（公式）。",
-      "approval": "CarPlay の entitlement を Apple へ申請し、承認されること。種別（音声・通信・ナビ・駐車・EV 充電・料理の注文など）ごとに申請し、CarPlay Entitlement Addendum に同意する。Apple が種別ごとの基準で審査する（公式）。固定の文字を出すだけの型サンプルはどの種別にも当たらない"
+      "note": "未実装。シミュレータの CarPlay ウィンドウ（I/O > External Displays > CarPlay）でも、entitlement が無いアプリは表示されない（公式）。テンプレートの中身はアプリが決め、文字の大きさ・色・タッチ領域などは OS が決める（公式）。本リポジトリでは entitlement なしでは動作を確かめられない（entitlement が無いアプリはシミュレータにも表示されない。公式）ため、確かめていない橋渡しは出さない。entitlement を持つ利用者の環境で確認できたら `possible` へ戻す"
     },
     "android": {
       "status": "done",
@@ -50,5 +49,5 @@
       "note": "車載の概念なし"
     }
   },
-  "note": "car-display は車載画面に OS のテンプレート UI を出す。egui 描画は使えない。Android は Car App Library で実装済み（実機確認は #1114）、iOS は Apple の承認制（種別ごとの entitlement）で申請待ち。範囲: Android Auto（DHU）の車載画面に `PaneTemplate` を 1 画面出し、共通コアが選んだ 1 行（40 文字以内）を出す（Android Automotive OS・実車・ストア配布は扱わない）。文言はプロセス内の Java static に置き、出ていなくても受け付けは成功する（約束するのは受け付けたことまで）。状態は「出ている / 出ていない」の 2 つで、取れないときに「出ていない」へ倒さない。守る範囲: 1 プロセス内で後から渡した文言が出ること、失敗を成功にしないこと、文言をログに出さないこと、古い画面の停止が新しい画面の表示中を消さないこと。守らない範囲: プロセス終了後の文言（未設定に戻る）、反映の遅れ、DHU と実車の差、Android Auto の接続そのもの"
+  "note": "car-display は車載画面に OS のテンプレート UI を出す。egui 描画は使えない。Android は Car App Library で実装済み（実機確認は #1114）、iOS は Apple の承認制（種別ごとの entitlement）で、本リポジトリでは確かめられないため対応しない。範囲: Android Auto（DHU）の車載画面に `PaneTemplate` を 1 画面出し、共通コアが選んだ 1 行（40 文字以内）を出す（Android Automotive OS・実車・ストア配布は扱わない）。文言はプロセス内の Java static に置き、出ていなくても受け付けは成功する（約束するのは受け付けたことまで）。状態は「出ている / 出ていない」の 2 つで、取れないときに「出ていない」へ倒さない。守る範囲: 1 プロセス内で後から渡した文言が出ること、失敗を成功にしないこと、文言をログに出さないこと、古い画面の停止が新しい画面の表示中を消さないこと。守らない範囲: プロセス終了後の文言（未設定に戻る）、反映の遅れ、DHU と実車の差、Android Auto の接続そのもの"
 }
