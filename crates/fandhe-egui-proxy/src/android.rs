@@ -26,8 +26,8 @@
 /// 読み出せるようにする（Phase 8 固有ではない汎用の 3 行で、切り離し時は残置してよい。
 /// docs/architecture/device-feature-removal.md参照）。
 ///
-/// `OnceLock` ではなく `Mutex` にするのは、Manifest の `configChanges` 外の再構成
-/// （例: `uiMode` 変更）で OS が `Activity` を破棄・再生成すると `android_main` が
+/// `OnceLock` ではなく `Mutex` にするのは、Manifest の `configChanges` で止められない再生成
+/// （例: 壁紙によるテーマ色変更、Issue #73・#259）で OS が `Activity` を破棄・再生成すると `android_main` が
 /// 新しい [`AndroidApp`] で再度呼ばれるため（codex-review 指摘、PR #790）。`set_android_app`
 /// が呼ばれるたびに保持内容を差し替え、破棄済み `Activity` を指す古い値を残さない。
 ///
@@ -50,7 +50,7 @@ static ANDROID_APP: std::sync::Mutex<Option<winit::platform::android::activity::
 /// [`request_repaint`] を呼んで確実に再開させる。
 ///
 /// `OnceLock` ではなく `Mutex` にするのは、[`ANDROID_APP`] と同じ理由（codex-review 指摘、
-/// Issue #831）。`configChanges` 外の再構成で `Activity` が再生成されると `android_main` が
+/// Issue #831）。`configChanges` で止められない再生成で `Activity` が再生成されると `android_main` が
 /// 新しい `egui::Context` を伴って再度呼ばれる。`OnceLock` のまま 2 回目以降の `set` を
 /// 無視すると、破棄済み `Activity` に紐づく古い `Context` へ `request_repaint` し続け、
 /// 再生成後の新しい画面が起きない（Cursor Bugbot 同一指摘 discussion_r3978309491）。
@@ -195,7 +195,7 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // Issue #750 / PR #790 codex-review 指摘: `device/android.rs` が `DataDir` 解決・
     // カメラ Intent 中継のために `AndroidApp` を必要とするため、`NativeOptions` へ move
     // する前に static へ複製する（`AndroidApp` は `Arc` 内部実装で `Clone` が安価、
-    // android-activity 0.6.1 の型定義参照）。`configChanges` 外の再構成で `android_main`
+    // android-activity 0.6.1 の型定義参照）。`configChanges` で止められない再生成で `android_main`
     // が新しい `AndroidApp` で再度呼ばれた場合は毎回上書きする（古い破棄済み `Activity` を
     // 指したまま残さない。`set_android_app` doc 参照）。Issue #796 の `poll_soft_keyboard` も
     // `device` feature 無効時（`android_app()` の cfg 撤廃済み）に本 static を必要とするため、

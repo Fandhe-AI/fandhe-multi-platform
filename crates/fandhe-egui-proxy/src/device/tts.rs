@@ -66,8 +66,8 @@
 //!
 //! [`run_speak`] が `wait_outcome` を待つために切り出す別スレッドは、要求元の
 //! `ProxyApp` が持つ `CompletionSender` を clone して持ち出す（push 型）。Android で
-//! Activity が再生成される（`configChanges` 外の uiMode / locale 変更。回転は
-//! 抑止済み）と `ProxyApp` ごと作り直されるため、持ち出し済み sender は旧
+//! Activity が再生成される（`configChanges` で止められない再生成。回転や
+//! uiMode / locale は抑止済み）と `ProxyApp` ごと作り直されるため、持ち出し済み sender は旧
 //! チャンネルを指したまま実送信は `let _ =` で無視される。
 //!
 //! `crate::device::file_pick`（#871）と異なり pull 型へは寄せない判断をした。
