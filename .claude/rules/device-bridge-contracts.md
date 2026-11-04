@@ -178,3 +178,4 @@ push 前に自己点検する。各項目は実装者が○×を付けられる�
 ## 運用
 
 push 前に本表の全項目を確認し、該当しない項目は「該当なし」と PR 本文に書く。
+iOS の cfg を触る PR は push 前に `scripts/ios/check-lib.sh` も通す（CI では検査されない。`docs/operations/ios-build-pipeline.md` §8）。

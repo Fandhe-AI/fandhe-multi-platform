@@ -33,15 +33,14 @@ REQ-11 受け入れ基準「単一コマンドから iOS シミュレータ版 `
 | 項目 | Linux（本開発環境） | macOS（実機検証に必須） |
 |------|---------------------|--------------------------|
 | `cargo build --target aarch64-apple-ios-sim` | 不可（Apple SDK リンカが必要） | 可 |
-| `cargo check --target aarch64-apple-ios-sim` | 可（`xcrun` が無いと live-activity の Swift 薄層生成を警告付きでスキップ。本番は `FANDHE_REQUIRE_LIVE_ACTIVITY=1` で失敗させる） | 可 |
+| `cargo check --target aarch64-apple-ios-sim` | `fandhe-egui-proxy` は不可（依存 `ring` の build script が `xcrun` で iOS SDK を探して失敗する。macOS 上で `xcrun` を失敗させた模擬での確認で、実 Linux では未確認）。SDK の要らないクレートは可 | 可 |
 | バンドル組み立て・`.ipa` 化ロジックの構造検証 | 可（`FANDHE_IOS_APP_BINARY` によるスタブ注入） | 可 |
 | `codesign`（ad-hoc 署名） | 不可（`FANDHE_IOS_SKIP_SIGN=1` で構造検証専用にスキップ可能） | 可（既定で実行） |
 | `xcrun simctl install`/`launch` | 不可 | 可 |
 | `xcodegen` / `xcodebuild`（ライブアクティビティ拡張のビルド、Issue #295） | 不可（`FANDHE_IOS_APP_BINARY` 注入時は拡張を同梱せず、実行時は `Unsupported`） | 必須（無ければ build フェーズが失敗する） |
 | `zip` コマンド | 通常なし（python3 `zipfile` へ自動フォールバック） | 標準搭載 |
 
-Linux 環境では `rustup target add aarch64-apple-ios-sim` の上で `cargo check` までは
-可能だが、実バイナリ生成・署名・シミュレータへのインストールは原理的に実行できない。
+Linux 環境では `fandhe-egui-proxy` の `cargo check` も iOS SDK が要るため通らない（上表）。実バイナリ生成・署名・シミュレータへのインストールは原理的に実行できない。
 これらは「3. macOS 実機検証手順（人間担当）」に従うこと。
 
 ## 3. 環境変数インターフェース
@@ -187,3 +186,25 @@ exit 1 になる。CLI 経由の場合はこの export を CLI 側が自動で�
 - 本環境（Linux）では macOS 実機でのビルド・署名の実実行・`simctl install`/`launch` に
   よる実インストール・起動確認ができない（§5 参照、人間担当）。Linux 上での署名
   フェーズの呼び出しロジック・分岐は fake codesign shim による検証で担保している。
+
+## 8. iOS 向け lib の型検査（定型手順）
+
+`cfg(target_os = "ios")` のコードは ubuntu の CI でコンパイルされない。手元で次の 1 コマンドを実行する。
+
+```bash
+scripts/ios/check-lib.sh
+```
+
+- 実行環境: macOS と Xcode（iphoneos SDK）。無ければ失敗で終わり、成功扱いにしない
+- CI に載せない理由: `.claude/rules/ci.md` の runner 方針（GitHub ホストが原則）と、依存の build script が `xcrun` を要し ubuntu では通らないこと
+- 実行する条件: 次のいずれかを変更した PR
+  - `cfg(target_os = "ios")` を含むコード
+  - `crates/fandhe-egui-proxy/ios/`・`apple/`、`src/device/` の iOS・Apple 実装
+  - `crates/fandhe-egui-proxy/build.rs`
+  - iOS に効く依存（`Cargo.toml`・`Cargo.lock`）
+- 実行するタイミング: push の前、指摘を直した push の後、マージ前の PR head
+- 検査の範囲: `aarch64-apple-ios` の lib の型検査と clippy（`-D warnings`）、build script による ObjC・Swift のコンパイル
+- 検査しないもの: リンク、テスト、実行時の挙動（シミュレータは `verify-simulator-render.sh`、実機は人間担当）、手元より古い Xcode での互換性
+- 検査対象: スクリプトが置かれた worktree。PR head を見るときは、その worktree 内のスクリプトを実行する。別の worktree のスクリプトを呼ぶとその worktree を検査する
+- `CARGO_TARGET_DIR`: 指定すれば他の検査と出力先を分けられる
+- 外部 PR: build script と proc macro が手元で実行されるため、fork の head は差分を読んでから実行する

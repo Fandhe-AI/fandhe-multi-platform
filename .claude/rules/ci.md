@@ -22,6 +22,7 @@ paths:
 
 - 本リポジトリは **public**。`ci.yml`・`update-external.yml`・`ai-review.yml` の preflight / post_feedback は `ubuntu-latest`、codex review のみ self-hosted（上記の例外）
 - Windows・macOS の実機が要る確認は CI に置かず、手元で行う
+- iOS 専用コード（`cfg(target_os = "ios")`）の型検査も CI に置かず、`scripts/ios/check-lib.sh` で手元で行う（依存の build script が `xcrun` を要し ubuntu では通らない。`docs/operations/ios-build-pipeline.md` §8）
 
 ## 必須チェックと集約ジョブ
 
