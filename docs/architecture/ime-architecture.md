@@ -687,8 +687,8 @@ Issue #4）、Linux: `Disabled`/`Enabled` が同期発火。いずれも正当�
 ## 6. トレードオフ・代替案
 
 - **egui 既存 IME サポートの流用案（不採用）**: `fandhe-egui-proxy` は egui 自体の IME 処理
-  （`egui::Event::Ime` 相当）に委ねているが、これは検証用プロキシであり独自レンダラ方式の
-  本番プラットフォーム（macOS/iOS/Android/デスクトップ）には適用できない。egui の IME 処理は
+  （`egui::Event::Ime` 相当）に委ねている（egui バックエンドではこれを使う）が、独自レンダラ方式の
+  プラットフォーム（macOS/iOS/Android/デスクトップ）には適用できない。egui の IME 処理は
   egui 内部の `TextEdit` ウィジェットに閉じており、`fandhe-core` の `Widget<S>` 抽象と
   互換性がない（責務分界が異なる）。よって不採用とし、winit の `Ime::*` イベントを
   直接ハンドリングする方針（§4.4）を採る。

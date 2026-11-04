@@ -51,6 +51,8 @@ PoC-7 の判定を維持する。
 - 本リポジトリの現状（`crates/fandhe-core`、TASK-1.1 完了分）は `Screen<S>`/`Node<S>` のコア型定義に留まり、
   本書が扱う基盤クレートへの依存はまだ導入されていません。本書は導入前の事前整理として位置づけます。
 
+基盤クレートへの直接統合は、第 2 バックエンド着手時に行う（[consumer-app-structure.md](consumer-app-structure.md)）。
+
 ## 4. 欠落 5 領域 → 実装タスク対応表
 
 PoC-7（`docs/spec/03-poc/crate-ecosystem/README.md` L40〜48）が特定した欠落 5 領域と、担当タスクの対応は

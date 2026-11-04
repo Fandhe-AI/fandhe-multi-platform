@@ -1,7 +1,7 @@
 //! Web ターゲット向け DOM 出力レンダラ（TASK-4.4-S2 / REQ-4 / M3）。
 //!
 //! PoC-5（`docs/spec/03-poc/web-wasm/README.md`）で、独自レンダラ方式
-//! （wasm + WebGL2 canvas、`fandhe-egui-proxy` の `web.rs` が検証専用プロキシとして
+//! （wasm + WebGL2 canvas、`fandhe-egui-proxy` の `web.rs` が egui バックエンドとして
 //! 先行実装）ではブラウザ標準のアクセシビリティツリーに要素が一切公開されないこと
 //! （AccessKit に Web バックエンドが存在しない構造的制約）が実証済みである。
 //! 本クレートは、アクセシビリティ・SEO が重要な画面向けに `fandhe-core` の

@@ -2,7 +2,7 @@
 name = "fandhe-egui-proxy"
 version = "0.1.0"
 edition = "2021"
-description = "TASK-1.2（REQ-1 / M2）検証専用プロキシ。fandhe-core の Screen<S>/Node<S> を egui/eframe で実描画し、要素欠落 0 件を確認するためのクレート（本実装レンダラではない）"
+description = "fandhe-core の Screen<S>/Node<S> を egui/eframe で実描画し、端末機能の橋渡しを担う v1 既定バックエンドの現行実装（REQ-21 で分割予定）"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
 publish = false
@@ -96,7 +96,7 @@ image = { workspace = true }
 # lint・ユニットテスト対象になる（ワークスペースルート Cargo.toml のコメント参照）。
 accesskit = { workspace = true }
 
-# TASK-6.2-S1（REQ-6、docs/architecture/feature-audit.md 4 節・8 節）: 検証専用プロキシである
+# TASK-6.2-S1（REQ-6、docs/architecture/feature-audit.md 4 節・8 節）: v1 既定バックエンドの
 # 本クレートの通常ビルドから accesskit（AT-SPI/UIA/NSAccessibility 連携一式）を外し、
 # TASK-6.3 のメモリ比較計測のベースラインとする。監査は「製品ビルドでは維持」と判定して
 # いるが、テスト（egui_kittest、下記 dev-dependencies）に限って再有効化される構成とする。

@@ -70,7 +70,7 @@ PoC-5 の結論（「Web は DOM 出力を採る、または独自レンダラ�
 
 | 出力方式 | `RenderMode` | 用途 | 実装 |
 |---|---|---|---|
-| 独自レンダラ（WASM＋WebGL2/canvas） | `Canvas`（既定値） | 性能優先の画面 | 実描画検証は `fandhe-egui-proxy`（検証専用プロキシ、`dom-output-architecture.md` §2.1）。本実装レンダラは未実装 |
+| 独自レンダラ（WASM＋WebGL2/canvas） | `Canvas`（既定値） | 性能優先の画面 | egui バックエンドの現行実装は `fandhe-egui-proxy`（`consumer-app-structure.md`、`dom-output-architecture.md` §2.1） |
 | DOM 出力 | `Dom` | アクセシビリティ・SEO が重要な画面 | `fandhe-web-dom` |
 
 画面単位の選択導線は `crates/fandhe-core/src/ui/render_mode.rs` の `RenderMode` /

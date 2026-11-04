@@ -78,7 +78,7 @@ CLAUDE.md の日本語運用・レビュー体制の外で規約が守られな�
 
 ## 4. 適用範囲
 
-- 本規約は `crates/fandhe-egui-proxy`（TASK-1.2 の実描画検証プロキシ）の Web エントリに
+- 本規約は `crates/fandhe-egui-proxy`（egui バックエンドの現行実装、`consumer-app-structure.md`）の Web エントリに
   現在適用されている。
 - 今後の Web 実装（TASK-4.4 の DOM 出力導線、TASK-8.x のウィジェット層の Web 埋め込み等）で
   新規に canvas を DOM へ追加する場合も、本規約（インライン style 明示 + 構造的ガードの

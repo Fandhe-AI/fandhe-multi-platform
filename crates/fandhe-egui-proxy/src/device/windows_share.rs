@@ -46,7 +46,7 @@ use fandhe_device::share::ShareRequest;
 use fandhe_device::DeviceError;
 
 /// [`remember_window`] が控える HWND（プロセス内で 1 ウィンドウのみを前提にする、
-/// `ProxyApp` は 1 プロセス 1 ウィンドウの検証用プロキシのため）。
+/// `ProxyApp` は 1 プロセス 1 ウィンドウのため）。
 static WINDOW: OnceLock<isize> = OnceLock::new();
 
 /// 直近の `present` が登録したハンドラ一式。次回 `present` 前に解除しないと、
