@@ -502,3 +502,30 @@ fn merge_distinguishes_dotted_key_from_nested_path() {
         ("ios.info-plist.K.X", "b", "c")
     );
 }
+
+#[test]
+fn extension_usage_descriptions_validated_and_merged_by_equality() {
+    let ext = |u: Value| {
+        json!({"id":"x","ios":{"extensions":[{"name":"E","bundle-suffix":"ext","deployment-target":"17.0",
+            "sources":["apple/widget"],"usage-descriptions":u,"info-plist":{"NSExtension":{}}}]}})
+    };
+    assert_eq!(problems(ext(json!(["NSCameraUsageDescription"]))), "");
+    assert_rejected(ext(json!(["NSCamera"])), "usage-descriptions[0]");
+
+    let with = |id: &str, u: Value| {
+        decl(
+            ext(u)
+                .as_object()
+                .cloned()
+                .map(|mut o| {
+                    o.insert("id".into(), json!(id));
+                    Value::Object(o)
+                })
+                .unwrap(),
+        )
+    };
+    let a = with("a", json!(["NSCameraUsageDescription"]));
+    let b = with("b", json!([]));
+    let errs = merge(&[("a", &a), ("b", &b)]).unwrap_err();
+    assert_eq!(errs[0].field, "ios.extensions.E");
+}

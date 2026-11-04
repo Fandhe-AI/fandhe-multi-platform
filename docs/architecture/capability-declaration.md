@@ -79,7 +79,7 @@ identity = true
 | `frameworks` | リンクする framework | |
 | `entitlements` | entitlements | App Group は書かず `app-groups` を使う |
 | `app-groups` | `application-groups` entitlement | 記号名。OS ごとの正式 ID へ生成時に展開する |
-| `extensions` | Apple の拡張ターゲット | `sources` は crate からの相対パス |
+| `extensions` | Apple の拡張ターゲット | `sources` は crate からの相対パス。`usage-descriptions` も書ける（本体と同じくキーだけで、文言の生成は #1176） |
 | `permissions` | `<uses-permission>` | `max-sdk` は `maxSdkVersion` |
 | `features` | `<uses-feature>` | `required` は省略不可 |
 | `gradle` | 依存の宣言 | `group:artifact:version` の固定版 |
@@ -100,7 +100,7 @@ identity = true
 問題は 1 件で止めず、欄のパスつきで全件を返します。
 
 - `id` は kebab-case です。`fandhe-cap-*` の crate は名前と `id` が一致し、宣言が必須です。`id` は重複できません
-- `usage-descriptions` の各キーは `UsageDescription` で終わります。`info-plist` に同名のキーを置くと、`-iphoneos`・`~ipad` 等の修飾子つき（`NSCameraUsageDescription~ipad`）も含めて拒否します（拡張も同じ）
+- `usage-descriptions` の各キーは `UsageDescription` で終わります（拡張の `usage-descriptions` も同じ）。`info-plist` に同名のキーを置くと、`-iphoneos`・`~ipad` 等の修飾子つき（`NSCameraUsageDescription~ipad`）も含めて拒否します（拡張も同じ）
 - `entitlements` に `com.apple.security.application-groups` を直接書くと拒否します
 - `app-groups` は記号名（小文字英数字とハイフン）です。`group.`・`$`・`.` を含む正式 ID は拒否します
 - 拡張は `NSExtension` が必須で、`deployment-target` は `数字.数字`、`sources` は 1 件以上です

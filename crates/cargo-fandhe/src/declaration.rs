@@ -54,6 +54,9 @@ pub struct Extension {
     pub deployment_target: String,
     /// crate からの相対パス。
     pub sources: Vec<String>,
+    /// 拡張の Info.plist の `*UsageDescription` のキーだけ。文言は利用者が書く（生成は #1176）。
+    #[serde(default)]
+    pub usage_descriptions: Vec<String>,
     #[serde(default)]
     pub frameworks: Vec<String>,
     #[serde(default)]
@@ -302,6 +305,16 @@ impl Ctx {
             );
         }
     }
+    /// Apple 本体と拡張の `usage-descriptions` 共通の検証。
+    fn usage_descriptions(&mut self, field: &str, keys: &[String]) {
+        for (i, k) in keys.iter().enumerate() {
+            self.check(
+                is_ident(k) && k.ends_with("UsageDescription"),
+                &format!("{field}[{i}]"),
+                format!("`{k}` は `*UsageDescription` のキーにしてください"),
+            );
+        }
+    }
     fn app_groups(&mut self, field: &str, groups: &[String]) {
         for (i, g) in groups.iter().enumerate() {
             self.check(
@@ -389,13 +402,7 @@ pub fn validate(d: &Declaration) -> Vec<Problem> {
 }
 
 fn validate_apple(c: &mut Ctx, os: &str, a: &Apple) {
-    for (i, k) in a.usage_descriptions.iter().enumerate() {
-        c.check(
-            is_ident(k) && k.ends_with("UsageDescription"),
-            &format!("{os}.usage-descriptions[{i}]"),
-            format!("`{k}` は `*UsageDescription` のキーにしてください"),
-        );
-    }
+    c.usage_descriptions(&format!("{os}.usage-descriptions"), &a.usage_descriptions);
     c.idents(&format!("{os}.frameworks"), &a.frameworks);
     c.app_groups(&format!("{os}.app-groups"), &a.app_groups);
     c.plist(&format!("{os}.info-plist"), &a.info_plist);
@@ -427,6 +434,7 @@ fn validate_apple(c: &mut Ctx, os: &str, a: &Apple) {
             "1 件以上が必要です",
         );
         c.paths(&format!("{p}.sources"), &e.sources);
+        c.usage_descriptions(&format!("{p}.usage-descriptions"), &e.usage_descriptions);
         c.idents(&format!("{p}.frameworks"), &e.frameworks);
         c.app_groups(&format!("{p}.app-groups"), &e.app_groups);
         c.plist(&format!("{p}.info-plist"), &e.info_plist);
