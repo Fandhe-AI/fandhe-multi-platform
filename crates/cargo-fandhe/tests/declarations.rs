@@ -559,7 +559,10 @@ fn repo(rel: &str) -> String {
 }
 
 fn declared(id: &str) -> Declaration {
-    let decls = check_workspace(Some(&fixtures_ws(&format!("xc-{id}"), &[id]))).unwrap();
+    // 並行テストが同じ id を呼んでも workspace を壊し合わないよう、呼び出しごとに一意な名前にする
+    static SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let decls = check_workspace(Some(&fixtures_ws(&format!("xc-{id}-{n}"), &[id]))).unwrap();
     decls.into_iter().next().unwrap()
 }
 
