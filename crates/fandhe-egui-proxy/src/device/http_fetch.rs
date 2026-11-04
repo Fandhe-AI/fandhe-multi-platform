@@ -205,7 +205,7 @@ mod tests {
         let port = spawn_fixed_json_server(r#"["x","y"]"#);
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, ctx);
+        let sender = crate::app::egui_sender(tx, ctx);
         let mut state = HttpFetchState::default();
         start_fetch(&mut state);
         assert_eq!(state.phase, FetchPhase::Requested);
@@ -233,7 +233,7 @@ mod tests {
 
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, ctx);
+        let sender = crate::app::egui_sender(tx, ctx);
         let mut state = HttpFetchState::default();
         start_fetch(&mut state);
 
@@ -251,7 +251,7 @@ mod tests {
     fn spawn_fetch_is_noop_when_not_requested() {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel::<crate::app::Completion<HttpFetchState>>();
-        let sender = CompletionSender::new(tx, ctx);
+        let sender = crate::app::egui_sender(tx, ctx);
         let state = HttpFetchState::default();
 
         spawn_fetch(&state, &sender, "http://127.0.0.1:1/");

@@ -414,6 +414,7 @@ pub fn screen_orientation_show_effect(
     state: &ScreenOrientationShowState,
     sender: &CompletionSender<ScreenOrientationShowState>,
 ) {
+    use crate::app::EguiSenderExt as _;
     let mut driver = DRIVER.lock().unwrap_or_else(|p| p.into_inner());
     drive(
         state,
@@ -450,7 +451,7 @@ mod tests {
     fn sender_with_channel() -> (CompletionSender<ScreenOrientationShowState>, Rx) {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, ctx), rx)
+        (crate::app::egui_sender(tx, ctx), rx)
     }
 
     fn apply_all(rx: &Rx, s: &mut ScreenOrientationShowState) {

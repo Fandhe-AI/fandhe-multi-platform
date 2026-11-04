@@ -489,7 +489,7 @@ mod tests {
                 active: Mutex::new(None),
                 fake,
                 state: FileWatchShowState::default(),
-                sender: CompletionSender::new(tx, egui::Context::default()),
+                sender: crate::app::egui_sender(tx, egui::Context::default()),
                 rx,
                 picked: Mutex::new(None),
                 pick_result: Mutex::new(Ok(None)),

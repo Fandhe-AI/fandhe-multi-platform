@@ -459,7 +459,7 @@ mod tests {
             Self {
                 fake,
                 cast,
-                sender: CompletionSender::new(tx, egui::Context::default()),
+                sender: crate::app::egui_sender(tx, egui::Context::default()),
                 rx,
                 session: Session::default(),
                 state: CastShowState::default(),

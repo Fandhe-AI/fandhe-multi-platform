@@ -338,7 +338,7 @@ mod tests {
     ) {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, ctx), rx)
+        (crate::app::egui_sender(tx, ctx), rx)
     }
 
     /// 呼び出しごとの結果を固定する偽実装（`DeviceError` は `Clone` ではないため
@@ -695,7 +695,7 @@ mod tests {
         let rec = delays.clone();
         ctx.set_request_repaint_callback(move |info| rec.lock().unwrap().push(info.delay));
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, ctx), rx, delays)
+        (crate::app::egui_sender(tx, ctx), rx, delays)
     }
 
     #[test]

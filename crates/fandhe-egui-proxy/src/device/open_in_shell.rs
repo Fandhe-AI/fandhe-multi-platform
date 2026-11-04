@@ -217,7 +217,7 @@ mod tests {
             ShellAction::Reveal => screen::reveal_in_manager(&mut s),
         }
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive(&s, &sender, base, imp);
         while let Ok(apply) = rx.try_recv() {
             apply(&mut s);
@@ -263,7 +263,7 @@ mod tests {
         let base = temp_base("none");
         let s = OpenInShellState::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive(&s, &sender, &base, &f);
         // 届くのは OS 区分の注入だけ（要求が無いので完了は届かない）。
         let mut applied = OpenInShellState::default();
@@ -348,7 +348,7 @@ mod tests {
         let f = fake(|| Ok(ShellOutcome::HandedOff));
         let s = OpenInShellState::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive(&s, &sender, &base, &f);
         let mut applied = OpenInShellState::default();
         while let Ok(apply) = rx.try_recv() {
@@ -357,7 +357,7 @@ mod tests {
         assert_eq!(applied.platform, platform_kind());
         // 注入済みなら再送しない。
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive(&applied, &sender, &base, &f);
         assert!(rx.try_recv().is_err());
         let _ = std::fs::remove_dir_all(&base);

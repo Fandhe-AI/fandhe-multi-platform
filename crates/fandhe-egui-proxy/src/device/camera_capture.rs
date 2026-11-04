@@ -365,7 +365,7 @@ mod tests {
     #[test]
     fn spawn_capture_ignores_non_requested_state() {
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         let state = CameraCaptureState::default(); // Idle
         spawn_capture(
             &state,
@@ -381,7 +381,7 @@ mod tests {
     #[test]
     fn spawn_capture_drives_requested_to_captured_via_dummy_camera() {
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         let state = CameraCaptureState {
             phase: CapturePhase::Requested,
         };
@@ -413,7 +413,7 @@ mod tests {
     #[test]
     fn spawn_capture_drives_requested_to_failed_on_permission_denied() {
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         let state = CameraCaptureState {
             phase: CapturePhase::Requested,
         };
@@ -444,7 +444,7 @@ mod tests {
     #[test]
     fn spawn_capture_drives_requested_to_idle_on_cancel() {
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         let state = CameraCaptureState {
             phase: CapturePhase::Requested,
         };

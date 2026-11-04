@@ -251,7 +251,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<PdfFirstPageState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     fn page(pages: u32, w: u32, h: u32, len: usize) -> Result<PdfFirstPage, DeviceError> {

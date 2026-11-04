@@ -129,6 +129,7 @@ fn drive(
     if *last == Some(target) {
         return false;
     }
+    use crate::app::EguiSenderExt as _;
     sender.set_zoom_factor(target);
     *last = Some(target);
     true
@@ -141,6 +142,7 @@ pub fn text_scale_effect(
 ) {
     // `egui::Context` 単位のキャッシュ（モジュール doc 参照）を読み出し・
     // `drive` に渡し、変わっていれば書き戻す。
+    use crate::app::EguiSenderExt as _;
     let mut last = sender.text_scale_last_applied();
     let dragging = sender.pointer_primary_down();
     if drive(state, sender, shared_text_scale(), &mut last, dragging) {
@@ -161,7 +163,7 @@ mod tests {
     ) {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, ctx), rx)
+        (crate::app::egui_sender(tx, ctx), rx)
     }
 
     struct MockTextScale(Result<f32, DeviceError>);
@@ -266,6 +268,8 @@ mod tests {
         assert_eq!(SCALE_MIN, fandhe_device::text_scale::SCALE_MIN);
         assert_eq!(SCALE_MAX, fandhe_device::text_scale::SCALE_MAX);
     }
+
+    use crate::app::EguiSenderExt as _;
 
     /// codex-review 指摘 P2（PR #920）の回帰チェック: `text_scale_effect` が使う
     /// 「直近に適用した値」キャッシュは `egui::Context` 単位に分離されている必要がある。

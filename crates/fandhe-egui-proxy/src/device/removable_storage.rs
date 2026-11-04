@@ -452,7 +452,7 @@ mod tests {
                 active: Mutex::new(None),
                 fake,
                 state: RemovableStorageShowState::default(),
-                sender: CompletionSender::new(tx, egui::Context::default()),
+                sender: crate::app::egui_sender(tx, egui::Context::default()),
                 rx,
             }
         }

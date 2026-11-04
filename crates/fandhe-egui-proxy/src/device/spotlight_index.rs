@@ -225,7 +225,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<SpotlightIndexState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 指定の結果を返し、`sleep` だけ待つフェイク。OS 呼び出し回数を数える。

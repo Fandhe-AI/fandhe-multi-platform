@@ -210,7 +210,7 @@ mod tests {
     fn sender_with_channel() -> (CompletionSender<GeofenceShowState>, Rx) {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, ctx), rx)
+        (crate::app::egui_sender(tx, ctx), rx)
     }
 
     fn fix_at(lat: f64, accuracy_m: f64) -> Fix {

@@ -267,7 +267,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<AudioDevicesShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 起動時の要求を `drive_sync` し、届いた完了をすべて適用した状態を返す。

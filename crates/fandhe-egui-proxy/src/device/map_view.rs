@@ -329,7 +329,7 @@ mod tests {
             let mut s = MapViewShowState::default();
             request(&mut s, 0);
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = CompletionSender::new(tx, egui::Context::default());
+            let sender = crate::app::egui_sender(tx, egui::Context::default());
             drive(
                 &s,
                 &sender,

@@ -319,7 +319,7 @@ mod tests {
                 screen::open_map(&mut s);
             }
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = CompletionSender::new(tx, egui::Context::default());
+            let sender = crate::app::egui_sender(tx, egui::Context::default());
             drive(&s, &sender, launcher);
             while let Ok(apply) = rx.try_recv() {
                 apply(&mut s);
@@ -332,7 +332,7 @@ mod tests {
             let f = fake(|| Ok(LaunchOutcome::HandedOff));
             let s = ExternalAppLaunchState::default();
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = CompletionSender::new(tx, egui::Context::default());
+            let sender = crate::app::egui_sender(tx, egui::Context::default());
             drive(&s, &sender, &f);
             assert!(rx.try_recv().is_err());
             assert_eq!(f.calls.load(Ordering::SeqCst), 0);

@@ -394,6 +394,7 @@ fn drive_screen(
     target_os = "android"
 ))]
 fn on_screen_request(generation: u64, sender: &CompletionSender<PrintPageState>) {
+    use crate::app::EguiSenderExt as _;
     arm_capture(&CAPTURE, generation, Instant::now());
     sender.request_screenshot(generation);
 }
@@ -418,6 +419,7 @@ pub fn print_screen_page_effect(state: &PrintPageState, sender: &CompletionSende
         on_screen_request(view.generation, sender);
         return;
     }
+    use crate::app::EguiSenderExt as _;
     let shot = sender.tagged_screenshot(state.generation);
     drive_screen(
         state,
@@ -444,6 +446,7 @@ pub fn print_screen_page_effect(state: &PrintPageState, sender: &CompletionSende
         return;
     }
     let generation = state.generation;
+    use crate::app::EguiSenderExt as _;
     let shot = sender.tagged_screenshot(generation);
     match capture_step(&CAPTURE, generation, Instant::now(), shot.as_deref()) {
         // 取り込みは済んでいる。OS のダイアログの結果を待つ。
@@ -676,7 +679,7 @@ mod tests {
             let mut s = PrintPageState::default();
             screen::print(&mut s);
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = CompletionSender::new(tx, egui::Context::default());
+            let sender = crate::app::egui_sender(tx, egui::Context::default());
             drive(&s, &sender, printer);
             while let Ok(apply) = rx.try_recv() {
                 apply(&mut s);
@@ -689,7 +692,7 @@ mod tests {
             let f = fake(|| Ok(PrintOutcome::Submitted));
             let s = PrintPageState::default();
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = CompletionSender::new(tx, egui::Context::default());
+            let sender = crate::app::egui_sender(tx, egui::Context::default());
             drive(&s, &sender, &f);
             assert!(rx.try_recv().is_err());
             assert_eq!(f.calls.load(Ordering::SeqCst), 0);
@@ -774,7 +777,7 @@ mod tests {
             let t0 = Instant::now();
             let slot = pending_slot(s.generation, t0);
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = CompletionSender::new(tx, egui::Context::default());
+            let sender = crate::app::egui_sender(tx, egui::Context::default());
             drive_screen(&s, &sender, printer, &slot, t0 + elapsed, shot);
             while let Ok(apply) = rx.try_recv() {
                 apply(&mut s);
@@ -848,7 +851,7 @@ mod tests {
             let t0 = Instant::now();
             let slot = pending_slot(s.generation.wrapping_sub(1), t0);
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = CompletionSender::new(tx, egui::Context::default());
+            let sender = crate::app::egui_sender(tx, egui::Context::default());
             drive_screen(&s, &sender, &f, &slot, t0, Some(&red(1, 1)));
             assert!(rx.try_recv().is_err());
             assert_eq!(f.calls.load(Ordering::SeqCst), 0);

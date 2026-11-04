@@ -110,6 +110,7 @@ pub fn safe_area_insets_show_effect(
     state: &SafeAreaInsetsShowState,
     sender: &CompletionSender<SafeAreaInsetsShowState>,
 ) {
+    use crate::app::EguiSenderExt as _;
     let mut timing = TIMING
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -134,7 +135,7 @@ mod tests {
     fn sender_with_channel() -> (CompletionSender<SafeAreaInsetsShowState>, Rx) {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, ctx), rx)
+        (crate::app::egui_sender(tx, ctx), rx)
     }
 
     struct Fake {

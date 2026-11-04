@@ -193,7 +193,7 @@ mod tests {
         std::sync::mpsc::Receiver<crate::app::Completion<GlobalHotkeyState>>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 1 回ドライバを回し、届いた完了をすべて適用する。

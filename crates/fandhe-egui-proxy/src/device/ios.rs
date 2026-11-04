@@ -657,7 +657,7 @@ extern "C" fn fandhe_rust_file_picker_outcome(
     // 改訂 4: pull 型 bridge は sender も画面の `generation` も持たないため、
     // 結果を置いただけでは次の描画が起きる保証が無い（`file_pick.rs::drive_mobile`
     // は毎フレームの effect 呼び出しでしか拾えない）。無条件に呼んで確実に起こす
-    // （`crate::ios::EGUI_CTX` doc 参照）。
+    // （`crate::ios::request_repaint` doc 参照）。
     crate::ios::request_repaint();
 }
 

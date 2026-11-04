@@ -13,7 +13,7 @@
 //! # デスクトップ（macOS/Windows）と iOS/Android で経路が分かれる理由
 //!
 //! iOS/Android では egui-winit がドラッグ & ドロップイベントを一切発火させないため
-//! （[`crate::app::CompletionSender::file_drag`] は常に空を返す）、[`drive`]（本
+//! （[`crate::app::EguiSenderExt::file_drag`] は常に空を返す）、[`drive`]（本
 //! モジュールの経路）をそのまま流用できない。[`drag_drop_effect`] は
 //! `target_os` に応じて [`drive`]（デスクトップ）と [`drive_events`] +
 //! [`super::drop_session`]（iOS は `super::ios_drag_drop` 経由で `UIDropInteraction`
@@ -159,6 +159,7 @@ pub fn drag_drop_effect(state: &DragDropState, sender: &CompletionSender<DragDro
     }
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
+        use crate::app::EguiSenderExt as _;
         let (hovering, dropped) = sender.file_drag();
         drive(state, sender, hovering, dropped);
     }
@@ -434,7 +435,7 @@ mod tests {
     ) {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, ctx), rx)
+        (crate::app::egui_sender(tx, ctx), rx)
     }
 
     fn write_temp_file(contents: &[u8]) -> std::path::PathBuf {

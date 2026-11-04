@@ -136,7 +136,7 @@ mod tests {
         std::sync::mpsc::Receiver<crate::app::Completion<DisplayRefreshHdrShowState>>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 要求を立てて `drive` し、届いた完了をすべて適用した状態を返す。

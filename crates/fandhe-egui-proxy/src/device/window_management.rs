@@ -140,10 +140,12 @@ impl<R: NativeReads> WindowManager for ViewportWindowManager<R> {
 fn implementation<S>(sender: &CompletionSender<S>) -> Arc<dyn WindowManager> {
     #[cfg(target_os = "macos")]
     {
+        use crate::app::EguiSenderExt as _;
         super::macos_window_management::implementation(sender.egui_context())
     }
     #[cfg(target_os = "windows")]
     {
+        use crate::app::EguiSenderExt as _;
         super::windows_window_management::implementation(sender.egui_context())
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -379,7 +381,7 @@ mod tests {
 
     fn sender_with_channel() -> (CompletionSender<WindowManagementState>, Rx) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     const AREA: WindowFrame = WindowFrame {

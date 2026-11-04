@@ -193,7 +193,7 @@ mod tests {
     fn sender_with_channel() -> (CompletionSender<CaptureProtectionShowState>, Rx) {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, ctx), rx)
+        (crate::app::egui_sender(tx, ctx), rx)
     }
 
     /// 成功なら保護状態を要求どおりに更新し、失敗なら変えない Fake。

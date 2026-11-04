@@ -93,6 +93,7 @@ pub fn app_progress_attention_show_effect(
     state: &AppProgressAttentionState,
     sender: &CompletionSender<AppProgressAttentionState>,
 ) {
+    use crate::app::EguiSenderExt as _;
     let focused = sender.focused();
     if take_progress_request(state).is_none() && take_attention_request(state, focused).is_none() {
         return;
@@ -144,7 +145,7 @@ mod tests {
     /// 1 フレーム回して、完了通知を状態へ反映する。
     fn frame(s: &mut AppProgressAttentionState, imp: &dyn AppProgressAttention, focused: bool) {
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive(s, &sender, imp, focused);
         while let Ok(apply) = rx.try_recv() {
             apply(s);

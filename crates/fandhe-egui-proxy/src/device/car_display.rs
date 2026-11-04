@@ -226,7 +226,7 @@ mod tests {
 
     fn sender_with_channel() -> (CompletionSender<St>, Receiver<Completion<St>>) {
         let (tx, rx) = channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     fn drain_wait(rx: &Receiver<Completion<St>>, state: &mut St, want: usize) -> usize {

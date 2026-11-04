@@ -270,7 +270,7 @@ mod tests {
         use fandhe_core::screens::contact_pick::{request_pick, PickPhase};
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, ctx);
+        let sender = crate::app::egui_sender(tx, ctx);
         let mut state = ContactPickState::default();
         request_pick(&mut state);
         contact_pick_effect(&state, &sender);

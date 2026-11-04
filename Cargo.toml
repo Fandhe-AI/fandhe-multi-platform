@@ -12,6 +12,8 @@ members = [
     # 同梱資産クレート。`fandhe-egui-proxy` の native 分岐からのみ参照される
     # （wasm32 では埋め込まない、下記コメント・crates/fandhe-fonts/src/lib.rs 参照）。
     "crates/fandhe-fonts",
+    # TASK-21.2（Issue #1162）: 起床と完了通知のレンダラ非依存クレート（egui に依存しない）。
+    "crates/fandhe-runtime",
     "crates/fandhe-prototype",
     "crates/fandhe-swiftui-bridge",
     "crates/fandhe-web-dom",

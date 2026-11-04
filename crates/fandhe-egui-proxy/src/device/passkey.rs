@@ -227,7 +227,7 @@ mod tests {
             let mut s = PasskeySigninState::default();
             press(&mut s);
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = CompletionSender::new(tx, egui::Context::default());
+            let sender = crate::app::egui_sender(tx, egui::Context::default());
             drive_sync(&s, &sender, p);
             while let Ok(apply) = rx.try_recv() {
                 apply(&mut s);
@@ -261,7 +261,7 @@ mod tests {
         fn no_request_never_calls_os() {
             let s = PasskeySigninState::default();
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = CompletionSender::new(tx, egui::Context::default());
+            let sender = crate::app::egui_sender(tx, egui::Context::default());
             drive_sync(&s, &sender, &Fail);
             assert!(rx.try_recv().is_err());
         }

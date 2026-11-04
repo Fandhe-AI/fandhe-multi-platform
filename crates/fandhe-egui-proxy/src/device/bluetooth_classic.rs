@@ -480,7 +480,7 @@ mod tests {
     fn run_paired(classic: &dyn BluetoothClassic) -> BluetoothClassicShowState {
         let ctx = egui::Context::default();
         let (tx, rx) = mpsc::channel();
-        let sender = CompletionSender::new(tx, ctx);
+        let sender = crate::app::egui_sender(tx, ctx);
         let mut state = BluetoothClassicShowState::default();
         drive_paired_sync(&state, &sender, classic);
         while let Ok(c) = rx.try_recv() {
@@ -519,7 +519,7 @@ mod tests {
     fn fallback_discover_completes_with_unsupported() {
         let ctx = egui::Context::default();
         let (tx, rx) = mpsc::channel();
-        let sender = CompletionSender::new(tx, ctx);
+        let sender = crate::app::egui_sender(tx, ctx);
         let mut state = BluetoothClassicShowState::default();
         start_discover(&mut state);
         drive_discover_sync(&state, &sender, &UnsupportedBluetoothClassic);
@@ -537,7 +537,7 @@ mod tests {
         start_discover(&mut state);
         let ctx = egui::Context::default();
         let (tx, rx) = mpsc::channel();
-        let sender = CompletionSender::new(tx, ctx);
+        let sender = crate::app::egui_sender(tx, ctx);
         drive_paired_sync(&state, &sender, &UnsupportedBluetoothClassic);
         while let Ok(c) = rx.try_recv() {
             c(&mut state);

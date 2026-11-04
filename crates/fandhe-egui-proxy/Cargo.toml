@@ -83,6 +83,8 @@ cc = { workspace = true }
 # 依存方向はプロキシ → fandhe-core の一方向（coding-rust.md 準拠）。
 # 共通コアへ egui 依存を持ち込まない検証用の最適化レイヤという位置づけ。
 fandhe-core = { path = "../fandhe-core" }
+# TASK-21.2（Issue #1162）: 起床と完了通知（CompletionSender・EffectFn）の置き場。
+fandhe-runtime = { path = "../fandhe-runtime" }
 # プロトタイプアプリ（一覧・詳細・設定の 3 画面、TASK-2.2-S5 / #52）を実描画対象にする
 # ための依存。依存方向はここでもプロキシ → 共通コード（fandhe-prototype）の
 # 一方向を維持する（fandhe-prototype 側は本クレートを一切参照しない）。

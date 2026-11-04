@@ -314,7 +314,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<LocalFontsShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 要求済みの状態を作る（画面はボタン押下で要求を立てる）。

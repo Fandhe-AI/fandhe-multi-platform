@@ -193,7 +193,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<OnDeviceLlmState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 指定の結果を返し、`sleep` だけ待つフェイク。

@@ -376,7 +376,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<FilePreviewState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// テストごとに独立した Session（static は共有されるので leak して使う）。

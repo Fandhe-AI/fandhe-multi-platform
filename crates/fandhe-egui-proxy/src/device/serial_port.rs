@@ -281,7 +281,7 @@ mod tests {
     ) {
         let ctx = egui::Context::default();
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, ctx), rx)
+        (crate::app::egui_sender(tx, ctx), rx)
     }
 
     /// 台本どおりに返す偽のポート群。

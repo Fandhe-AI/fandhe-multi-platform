@@ -195,7 +195,7 @@ mod tests {
         use fandhe_core::screens::eye_dropper_pick::{request_pick, PickPhase, UNSUPPORTED_TEXT};
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, ctx);
+        let sender = crate::app::egui_sender(tx, ctx);
         let mut state = EyeDropperState::default();
         request_pick(&mut state);
         eye_dropper_pick_effect(&state, &sender);

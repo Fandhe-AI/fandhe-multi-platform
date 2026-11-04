@@ -261,7 +261,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<TranscodeState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 入力と同じ長さ（5 秒）の最小の m4a。
