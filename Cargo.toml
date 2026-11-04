@@ -17,6 +17,8 @@ members = [
     "crates/fandhe-fonts",
     # TASK-21.2（Issue #1162）: 起床と完了通知のレンダラ非依存クレート（egui に依存しない）。
     "crates/fandhe-runtime",
+    # TASK-21.2（Issue #1166）: Android の共通層（AndroidApp の保持・JNI 定型）。egui に依存しない。
+    "crates/fandhe-platform-android",
     # TASK-21.2（Issue #1168）: Apple（iOS / macOS）の共通層。機能 crate が ObjC / Swift 薄層を
     # 自分の中に持てるよう、共有ヘッダ・build script helper・main thread 判定を置く。
     "crates/fandhe-platform-apple",
@@ -100,6 +102,10 @@ ureq = { version = "3", default-features = false, features = ["rustls"] }
 # 既に解決されている 0.22.4 と同一インスタンスへ揃うため、本行を追加しても新規パッケージは
 # 増えない（`cargo build -p fandhe-egui-proxy` 後の `git diff Cargo.lock` で確認済み）。
 jni = "0.22"
+
+# Issue #1166: `fandhe-platform-android` が `AndroidApp` の型を得る。winit 経由で既に 0.6.1 が
+# 解決済みの推移依存を直接依存へ昇格するだけで、新規パッケージは増えない。
+android-activity = "0.6"
 
 # TASK-1.2（REQ-1 / M2）: fandhe-egui-proxy（実描画検証専用プロキシ、本実装レンダラではない）
 # が利用する egui/eframe 系一式。

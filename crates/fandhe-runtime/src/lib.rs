@@ -10,8 +10,11 @@
 //! - レンダラ実装は [`RepaintWaker`] を実装して [`CompletionSender`] へ渡す
 //! - OS コールバックのように sender を持たない経路は [`request_repaint`] で起こす
 //!   （レンダラ実装が起動時に [`set_repaint_waker`] で登録する）
+//! - [`request_slot`] は request/response 型の端末機能が使う「要求 1 件の追跡」
 
 #![forbid(unsafe_code)]
+
+pub mod request_slot;
 
 use std::any::Any;
 use std::sync::mpsc::{Receiver, SendError, Sender};

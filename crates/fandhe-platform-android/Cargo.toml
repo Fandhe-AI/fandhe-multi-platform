@@ -1,0 +1,17 @@
+[package]
+name = "fandhe-platform-android"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の Android 共通層（AndroidApp の保持と JNI 呼び出しの定型。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+# Android 以外では空のクレート（lib.rs の cfg）。依存も Android に限る。
+[target.'cfg(target_os = "android")'.dependencies]
+# AndroidApp の型を得る。winit を経由せず直接依存し、機能 crate の依存グラフに窓層を入れない。
+# 版は winit が要求するものと同じ 1 つに解決される（版がずれれば set_android_app が型不一致で落ちる）。
+# game-activity を自分で宣言するのは、無いと android-activity がビルドできないため。
+android-activity = { workspace = true, features = ["game-activity"] }
+jni = { workspace = true }

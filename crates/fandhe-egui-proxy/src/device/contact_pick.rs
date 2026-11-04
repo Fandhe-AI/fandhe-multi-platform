@@ -9,7 +9,7 @@
 //! # macOS / iOS: pull 型 `bridge`
 //!
 //! `CNContactPicker`（macOS）/ `CNContactPickerViewController`（iOS、Issue #1221）のデリゲートは非同期に届くため、`ContactPicker` トレイトを通さず
-//! `biometric_auth` と同じ `device/request_slot.rs::RequestSlot` の facade で受ける。
+//! `biometric_auth` と同じ `fandhe-runtime/src/request_slot.rs::RequestSlot` の facade で受ける。
 //! 画面への反映は毎フレーム [`drive_callback`] が行う。
 //!
 //! # Android（Issue #1222）

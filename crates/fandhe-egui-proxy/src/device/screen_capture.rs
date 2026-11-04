@@ -122,7 +122,7 @@ fn to_outcome(
     }
 }
 
-/// OS 側コールバックとの橋渡し（`device/request_slot.rs::RequestSlot` の facade）。
+/// OS 側コールバックとの橋渡し（`fandhe-runtime/src/request_slot.rs::RequestSlot` の facade）。
 /// 1 回の録画につき `deliver` は 1 回だけ有効（first-wins）。
 #[cfg(any(
     target_os = "macos",

@@ -34,9 +34,10 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
      を削除し、`#[cfg(not(target_os = "android"))]` の条件分岐で分けていた
      `DUMMY_WIDTH`/`DUMMY_HEIGHT`/`use ... DummyCamera` の cfg も外す）。`CaptureMailbox`
      はターゲット非依存の汎用機能のため残置してよい
-   - `crates/fandhe-egui-proxy/src/android.rs` の `ANDROID_APP` static・
-     `set_android_app()`/`android_app()`・`android_main` 内の `set_android_app(app.clone())`
-     の呼び出しは Phase 8 固有ではない汎用配線のため残置可（削除しても実害はない）
+   - `AndroidApp` の保持（`ANDROID_APP` static・`set_android_app()`/`android_app()`）は
+     `crates/fandhe-platform-android` へ移った（#1166）。`crates/fandhe-egui-proxy/src/android.rs` はその再公開で、
+     `android_main` 内の `set_android_app(app.clone())` の呼び出しとともに Phase 8 固有ではない
+     汎用配線のため残置可（削除しても実害はない）
    - `crates/fandhe-egui-proxy/Cargo.toml` の android target 分岐の `jni` 依存行、
      ルート `Cargo.toml` の `[workspace.dependencies]` の `jni` 行を削除する
    - `platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java` の

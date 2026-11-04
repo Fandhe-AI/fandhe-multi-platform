@@ -25,23 +25,17 @@ use fandhe_device::DeviceError;
 struct AndroidFlashlight;
 
 /// `MainActivity.flashlightSet(boolean)`（`Some(on)`）または `flashlightRead()`（`None`）を
-/// JNI で呼ぶ。`None` は呼び出し失敗。`unsafe` 2 箇所は `android_screen_wake_lock.rs` と同一の根拠。
+/// JNI で呼ぶ。`None` は呼び出し失敗。JavaVM と Activity の取得は `fandhe_platform_android::with_activity`
+/// に任せ、ここは `unsafe` を持たない。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_activity(set: Option<bool>) -> Option<i32> {
     use super::android::JniCallFailed;
     let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<i32, JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
+    fandhe_platform_android::with_activity(&app, |env, activity| -> Result<i32, JniCallFailed> {
         match set {
             Some(on) => Ok(env
                 .call_method(
-                    &activity,
+                    activity,
                     jni::jni_str!("flashlightSet"),
                     jni::jni_sig!((boolean) -> int),
                     &[jni::objects::JValue::Bool(on)],
@@ -49,7 +43,7 @@ fn call_activity(set: Option<bool>) -> Option<i32> {
                 .i()?),
             None => Ok(env
                 .call_method(
-                    &activity,
+                    activity,
                     jni::jni_str!("flashlightRead"),
                     jni::jni_sig!(() -> int),
                     &[],

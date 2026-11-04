@@ -280,6 +280,9 @@ wgpu = { workspace = true, features = ["vulkan"] }
 # ため JNI は不要。libc は android-activity 等の推移的依存で既にワークスペースへ解決済み
 # （Cargo.lock 実査済み）であり、新規に依存グラフを増やさない。
 libc = "0.2"
+# Issue #1166: AndroidApp の保持と JNI 定型を切り出した共通層（egui 非依存）。device feature 無効でも
+# `android_app()` を使うため optional にしない。
+fandhe-platform-android = { path = "../fandhe-platform-android" }
 # `NativeOptions.android_app` の型（`winit::platform::android::activity::AndroidApp`）を
 # 参照するために必要。eframe が推移的に要求する winit と同一インスタンスへ
 # 解決される（workspace 一元管理、ルート Cargo.toml のコメント参照）。

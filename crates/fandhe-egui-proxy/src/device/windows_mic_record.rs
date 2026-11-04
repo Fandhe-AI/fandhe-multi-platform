@@ -10,7 +10,7 @@
 //! `device/mic_record.rs` の非 macOS/Windows 経路（`drive`）は `start`→`stop` を
 //! 同一フレーム内で連続呼び出しするため、実録音を通すと 0 ms で停止し
 //! `build_recording` の `duration_ms == 0` 拒否で必ず `Err` になる。Windows は
-//! macOS と同じ pull 型 `bridge`（`device/request_slot.rs::RequestSlot`）へ乗せ、
+//! macOS と同じ pull 型 `bridge`（`fandhe-runtime/src/request_slot.rs::RequestSlot`）へ乗せ、
 //! `present`/`request_stop` を `device/mic_record.rs::drive_callback` の
 //! Windows 分岐から呼ぶ（`biometric_auth.rs` の Windows 分岐と同型）。
 //!

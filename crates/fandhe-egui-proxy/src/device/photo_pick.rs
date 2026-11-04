@@ -21,7 +21,7 @@
 //! iOS / Android（Issue #1104）は `PhotoPicker` トレイトを通らない。OS のピッカー
 //! （`PHPickerViewController` / `PickVisualMedia`）はコールバック型で、同期 `pick()` に
 //! 直すとスレッド待ちが要るため、`biometric_auth` と同じ pull 型 [`bridge`]
-//! （`device/request_slot.rs::RequestSlot`）で結果を受ける。復号確認は OS コールバックの
+//! （`fandhe-runtime/src/request_slot.rs::RequestSlot`）で結果を受ける。復号確認は OS コールバックの
 //! スレッド側（[`bridge::deliver`]）で済ませ、egui の UI スレッドでは復号しない。
 //! 保留中の要求は Activity 再生成で **復元せず破棄**する（契約: `photo_picker` モジュール doc。
 //! `file_pick` の復元方式は採らない。`android_main` が [`reset_pending_tracking`] を呼ぶ）。
@@ -184,7 +184,7 @@ fn mobile_outcome(
     }
 }
 
-/// iOS / Android の OS コールバックとの橋渡し（pull 型、`device/request_slot.rs::RequestSlot`
+/// iOS / Android の OS コールバックとの橋渡し（pull 型、`fandhe-runtime/src/request_slot.rs::RequestSlot`
 /// の facade。モジュール doc 参照）。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub(crate) mod bridge {

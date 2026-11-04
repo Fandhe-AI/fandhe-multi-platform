@@ -13,7 +13,7 @@
 //! `Intent.createChooser`（Android）/ `DataTransferManager`（Windows）はいずれも
 //! delegate・コールバック型（提示 → 結果を非同期通知）のため、`Share` トレイトを
 //! 通さずコアの状態機械へ直接書き戻す（`device/file_pick.rs` の iOS/Android 経路と
-//! 同型）。[`bridge`] は `device/request_slot.rs::RequestSlot` の facade で、
+//! 同型）。[`bridge`] は `fandhe-runtime/src/request_slot.rs::RequestSlot` の facade で、
 //! `CompletionSender` も画面の `generation` も保持しない pull 型: OS 側コールバックは
 //! 結果を置くだけで、画面への反映は毎フレーム [`drive_callback`] が **その時点の**
 //! `sender`/`state` を使って行う（`RequestSlot`/`poll_and_finish` のモジュール doc
@@ -114,7 +114,7 @@ pub(crate) fn outcome_from_code(code: i32) -> Result<DeviceShareOutcome, DeviceE
 }
 
 /// macOS/iOS/Android/Windows 共通: OS 側コールバックとの橋渡し（pull 型、
-/// `device/request_slot.rs::RequestSlot` の facade。モジュール doc 参照）。
+/// `fandhe-runtime/src/request_slot.rs::RequestSlot` の facade。モジュール doc 参照）。
 #[cfg(any(
     target_os = "macos",
     target_os = "ios",
@@ -533,7 +533,7 @@ mod tests {
 }
 
 /// [`bridge`] の単体テスト。要求の追跡そのもの（採番・first-wins・照合）は
-/// `device/request_slot.rs::RequestSlot` 側で検証済みのため、ここでは facade が
+/// `fandhe-runtime/src/request_slot.rs::RequestSlot` 側で検証済みのため、ここでは facade が
 /// 担う「`deliver` 境界での `to_outcome` 変換」だけを固定する（Issue #943 で
 /// 3 機能の `bridge_tests` を統合、`biometric_auth.rs` も同型）。OS 側実装
 /// （`.m`/`.java`/Windows COM interop）のビルドを要さず host 上の `cargo test` で
