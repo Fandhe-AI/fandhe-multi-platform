@@ -201,6 +201,7 @@ scripts/ios/check-lib.sh
   - `cfg(target_os = "ios")` を含むコード
   - `crates/fandhe-egui-proxy/ios/`・`apple/`、`src/device/` の iOS・Apple 実装
   - `crates/fandhe-egui-proxy/build.rs`
+  - `crates/fandhe-platform-apple/`（build script の helper・共有ヘッダ・`is_main_thread`）
   - iOS に効く依存（`Cargo.toml`・`Cargo.lock`）
 - 実行するタイミング: push の前、指摘を直した push の後、マージ前の PR head
 - 検査の範囲: `aarch64-apple-ios` の lib の型検査と clippy（`-D warnings`）、build script による ObjC・Swift のコンパイル

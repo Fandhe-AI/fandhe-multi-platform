@@ -147,6 +147,13 @@ graph TD
   機能 crate を別々に上げられる形が推し案です
 - 機能と OS ごとの対応水準（#1220）と、公式で保証する範囲（#1221）
 - 端末機能の画面（`fandhe-core/src/screens/`）の置き場（#1165・#1170 系）
+- `fandhe-platform-apple` の弱リンク・`-rpath`・clang_rt の届け方（#1168 の後続）。
+  `cargo:rustc-link-arg` は、出した package 自身の bin・cdylib・テストにしか効かず、依存元へ伝わりません
+  （Cargo の build-scripts 文書の `rustc-link-arg` 節）。`rustc-link-lib` は rlib 経由で伝わります。
+  Swift 薄層（`compile_swift`）と弱リンクの framework（`weak_link_framework`）はこの制約を受けるため、
+  rlib の機能 crate の `build.rs` から呼ぶと最終成果物へ届きません。先行 5 機能は Swift 薄層も弱リンクも
+  使わないので影響せず、該当機能を移すときに解決します。現状の呼び出し元は最終成果物を作る
+  `fandhe-egui-proxy` 自身のため、動作は変わりません
 - Linux の `fandhe-platform-*` は作りません。対応表に Linux の列が無いためです。必要になったら足します
 - 名前の確定と予約（#1215）、Windows のパッケージ ID（#1208）。
   `windows-package-identity-consideration.md` は提案のままです
