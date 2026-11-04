@@ -72,12 +72,12 @@ name = "fandhe-egui-proxy-desktop"
 path = "src/main.rs"
 
 [build-dependencies]
-# Issue #751: `build.rs` が iOS 向け ObjC 実装（`ios/fandhe_ios_camera.m`）を
-# コンパイルするために使う。build-dependency はホスト（ビルドを実行する環境）で
-# 評価されるため target cfg を付けられず、無条件にここへ置く。iOS 以外の
-# ターゲットでは `build.rs` が起動直後に return する no-op のため、依存自体は
+# Issue #751・#1168: `build.rs` が iOS / macOS 向け ObjC・Swift 実装をコンパイルするために使う
+# helper（`fandhe-platform-apple` の `build` モジュール。`cc` を内包する）。build-dependency は
+# ホスト（ビルドを実行する環境）で評価されるため target cfg を付けられず、無条件にここへ置く。
+# iOS・macOS 以外のターゲットでは `build.rs` が起動直後に return する no-op のため、依存自体は
 # 解決されてもコンパイルは発生しない。
-cc = { workspace = true }
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
 
 [dependencies]
 # 依存方向はプロキシ → fandhe-core の一方向（coding-rust.md 準拠）。
@@ -209,6 +209,9 @@ eframe = { workspace = true, default-features = false, features = ["accesskit"] 
 # dev-dependencies の egui_kittest との feature 統合で `cargo test` 時のみ有効化される）。
 wgpu = { workspace = true }
 eframe = { workspace = true, default-features = false, features = ["wgpu"] }
+# TASK-21.2（Issue #1168）: `device/ios.rs` が main thread 判定（`is_main_thread`）に使う。
+# build 依存の feature `build` は有効にしない（通常のビルドへ `cc` を持ち込まない）。
+fandhe-platform-apple = { path = "../fandhe-platform-apple" }
 #
 # 注: `cargo tree -i x11rb`（iOS ターゲット）で x11rb が現れるが、これは本分岐の
 # feature（x11/wayland を含まない）由来ではなく、egui-winit の依存 arboard が

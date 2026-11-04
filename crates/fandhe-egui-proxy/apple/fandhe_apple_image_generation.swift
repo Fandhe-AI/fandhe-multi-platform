@@ -276,7 +276,7 @@ extension Session: UIAdaptivePresentationControllerDelegate {
     }
 }
 
-/// 最前面の VC。`ios/fandhe_ios_common.h` の `FandheTopmostViewController` と同じ規則を写したもの
+/// 最前面の VC。`fandhe_ios_common.h`（`crates/fandhe-platform-apple/include/`）の `FandheTopmostViewController` と同じ規則を写したもの
 /// （ObjC ヘッダは単一ファイルの swiftc から import できないため）。
 @MainActor
 private func topmostViewController() -> UIViewController? {
