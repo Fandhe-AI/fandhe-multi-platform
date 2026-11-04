@@ -192,7 +192,7 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
 fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // Issue #750 / PR #790 codex-review 指摘: `device/android.rs` が `DataDir` 解決・
     // カメラ Intent 中継のために `AndroidApp` を必要とするため、`NativeOptions` へ move
-    // する前に 起床口として登録する（`AndroidApp` は `Arc` 内部実装で `Clone` が安価、
+    // する前に static へ複製する（`AndroidApp` は `Arc` 内部実装で `Clone` が安価、
     // android-activity 0.6.1 の型定義参照）。`configChanges` で止められない再生成で `android_main`
     // が新しい `AndroidApp` で再度呼ばれた場合は毎回上書きする（古い破棄済み `Activity` を
     // 指したまま残さない。`set_android_app` doc 参照）。Issue #796 の `poll_soft_keyboard` も
