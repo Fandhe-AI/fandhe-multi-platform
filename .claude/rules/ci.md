@@ -22,6 +22,8 @@ paths:
 
 - 本リポジトリは **public**。`ci.yml`・`update-external.yml`・`ai-review.yml` の preflight / post_feedback は `ubuntu-latest`、codex review のみ self-hosted（上記の例外）
 - Windows・macOS の実機が要る確認は CI に置かず、手元で行う
+- Windows 専用コードの型検査は `cargo clippy` ジョブの windows-gnu クロス clippy（mingw 導入込み）で行う。実機と MSVC の確認は手元
+- Android の Java は `android クロスビルド` の `bundleRelease`（`compileReleaseJavaWithJavac` を含む）で検査する
 
 ## 必須チェックと集約ジョブ
 
@@ -44,7 +46,7 @@ paths:
 4. `actions/checkout` は既存と同じ SHA 固定・`persist-credentials: false`。履歴が不要なら `fetch-depth` は既定（1）のまま。submodule は取得しない
 5. ロジックを YAML に書き込まず `scripts/` のスクリプトや `make` ターゲットを呼ぶ（`.claude/rules/makefile.md`）
 6. lefthook と同じ検査を二重に置かない（`.claude/rules/git-hooks.md`。CI 側が正）
-7. 所要時間の目安: fmt/clippy/capabilities は 1 分未満、test は約 3〜5 分、android クロスビルドは約 10〜23 分。これを大きく超える追加は理由を PR 本文に書く
+7. 所要時間の目安: fmt/capabilities は 1 分未満、clippy は約 2〜3 分、test は約 3〜5 分、android クロスビルドは約 10〜23 分。これを大きく超える追加は理由を PR 本文に書く
 8. キャッシュを使う場合は「キャッシュ方針」に従う（効果を実測し、保存は main への push のみ。確認結果を PR 本文に書く）
 
 ## キャッシュ方針

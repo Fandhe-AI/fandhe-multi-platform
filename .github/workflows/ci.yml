@@ -184,6 +184,23 @@ jobs:
         if: steps.detect.outputs.has_cargo == 'true'
         run: cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown --all-features -- -D warnings
 
+      # Windows 専用コード（cfg(target_os = "windows")）はホストの clippy では外れる。
+      # 型検査は MSVC や Windows runner が要らない windows-gnu で行う（実機確認は手元）。
+      # ring の build.rs が C をコンパイルするため、check / clippy でも mingw の gcc が要る。
+      # --all-targets は #1037 が解決するまで付けない。--all-features はコードを外す計測 feature を含むため使わない。
+      # ジョブ名は変えない（ruleset の必須チェック「cargo clippy」をそのまま使う）。
+      - name: Ensure Windows cross toolchain
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: |
+          set -euo pipefail
+          rustup target add x86_64-pc-windows-gnu
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64
+
+      - name: cargo clippy (windows-gnu, fandhe-egui-proxy・fandhe-device)
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: cargo clippy -p fandhe-egui-proxy -p fandhe-device --features fandhe-egui-proxy/device --target x86_64-pc-windows-gnu -- -D warnings
+
   # --------------------------------------------------
   # cargo test（結合テスト・ユニットテスト・doc test）
   # --------------------------------------------------
@@ -344,6 +361,8 @@ jobs:
       # 組み込む。keystore シークレットは CI に設定しないため（TASK-11.2-S3 / #227
       # 未マージ、及び security.md A02 方針）、本ステップは常に未署名の .aab を
       # 生成する（build-aab.sh 内蔵の「未署名であること」検証を参照）。
+      # bundleRelease は compileReleaseJavaWithJavac を含むため、このステップが Android の Java の
+      # コンパイル検査を兼ねる（ソースセットは src/main のみ。debug 版を足しても検査範囲は増えない）。
       - name: cargo-ndk 成果物を Gradle 統合し未署名 .aab を生成
         run: bash scripts/android/build-aab.sh
 
