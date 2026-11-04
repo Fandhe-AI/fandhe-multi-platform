@@ -19,6 +19,9 @@ members = [
     "crates/fandhe-runtime",
     # TASK-21.2（Issue #1166）: Android の共通層（AndroidApp の保持・JNI 定型）。egui に依存しない。
     "crates/fandhe-platform-android",
+    # TASK-21.2（Issue #1168）: Apple（iOS / macOS）の共通層。機能 crate が ObjC / Swift 薄層を
+    # 自分の中に持てるよう、共有ヘッダ・build script helper・main thread 判定を置く。
+    "crates/fandhe-platform-apple",
     "crates/fandhe-prototype",
     "crates/fandhe-swiftui-bridge",
     "crates/fandhe-web-dom",
@@ -29,9 +32,9 @@ members = [
 
 # 依存クレートは coding-rust.md の規約に従い workspace で一元管理する。
 [workspace.dependencies]
-# Phase 8（Issue #751）: `fandhe-egui-proxy/build.rs` が iOS 向け ObjC 実装
-# （`ios/fandhe_ios_camera.m`）をコンパイルするための build-dependency。
-# 既に workspace 依存グラフ内で解決済み（Cargo.lock 実査済み、1.4.2）の推移依存を
+# Phase 8（Issue #751）: iOS / macOS 向け ObjC 実装のコンパイルに使う。呼び出しは
+# `fandhe-platform-apple`（feature `build`、Issue #1168）に集約しており、`fandhe-egui-proxy/build.rs`
+# は直接使わない。既に workspace 依存グラフ内で解決済み（Cargo.lock 実査済み、1.4.2）の推移依存を
 # 直接依存へ昇格するのみで新規 crate の追加ではない。切り離し手順は
 # docs/architecture/device-feature-removal.md 参照（Phase 8 撤去時に本行も削除する）。
 cc = "1"

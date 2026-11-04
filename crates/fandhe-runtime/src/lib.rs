@@ -1,10 +1,12 @@
-//! 起床と完了通知（TASK-21.2、Issue #1162）。
+//! 起床と完了通知・描画契約（TASK-21.2、Issue #1162・#1163）。
 //!
 //! 機能 crate が egui に依存しないよう、「別スレッドの完了結果を UI スレッドへ渡し、
 //! 描画ループを起こす」責務だけをレンダラ非依存で切り出した crate。依存方向は
 //! `fandhe-egui-proxy`（レンダラ実装）→ 本 crate → `fandhe-core` の一方向で、
 //! 本 crate は egui / eframe / winit を参照しない。
 //!
+//! - レンダラ差し替えの契約は [`Renderer`]（1 フレーム分の画面描画）。描画命令
+//!   [`PaintCommand`] は定義を `fandhe-core` に残したまま再公開する
 //! - レンダラ実装は [`RepaintWaker`] を実装して [`CompletionSender`] へ渡す
 //! - OS コールバックのように sender を持たない経路は [`request_repaint`] で起こす
 //!   （レンダラ実装が起動時に [`set_repaint_waker`] で登録する）
@@ -19,7 +21,26 @@ use std::sync::mpsc::{Receiver, SendError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use fandhe_core::StateStore;
+/// 描画命令。定義は `fandhe-core`（`Widget::paint` が返すため）にあり、ここは再公開のみ。
+pub use fandhe_core::PaintCommand;
+use fandhe_core::{Screen, StateStore};
+
+/// レンダラ差し替えの契約。1 フレーム分の `screen` を描き、UI イベントを `store.dispatch` へ流す。
+///
+/// 実装は `fandhe-egui-proxy` の `EguiRenderer` など。`PaintCommand`（`Widget::paint` が返す
+/// 描画命令）をどこまで使うかは実装に任せる。`fandhe_core::RendererLifecycle`（Web の
+/// canvas / DOM の排他起動）とは別物。
+///
+/// - UI スレッドから 1 フレームに 1 回呼ぶ。`Send` / `Sync` は要求しない
+/// - 状態は `store.state()` で読み、UI イベントによる書き込みは `store.dispatch` だけで行う
+///   （`&mut S` を外へ出さない）
+/// - [`drain_completions`] は `render` の前に、[`EffectFn`] は後に、描画ループ側が呼ぶ。
+///   `render` の仕事に含めない
+/// - 起床は別契約の [`RepaintWaker`] を実装して担う
+pub trait Renderer<S> {
+    /// 1 フレーム分の画面を描く。
+    fn render(&mut self, screen: &Screen<S>, store: &mut StateStore<S>);
+}
 
 /// 描画ループの起床口。レンダラ実装（egui 等）が実装する。
 ///
@@ -126,6 +147,31 @@ mod tests {
     struct Counter {
         count: u32,
         note: String,
+    }
+
+    #[test]
+    fn paint_command_is_reexported_from_core() {
+        let c: PaintCommand = fandhe_core::PaintCommand::Rect;
+        assert_eq!(c, PaintCommand::Rect);
+    }
+
+    /// egui なしで `Renderer` を実装でき、`dyn` 越しに呼べる。
+    struct Headless(Vec<String>);
+
+    impl Renderer<Counter> for Headless {
+        fn render(&mut self, screen: &Screen<Counter>, store: &mut StateStore<Counter>) {
+            self.0 = fandhe_core::render_headless(screen, store.state());
+        }
+    }
+
+    #[test]
+    fn renderer_is_implementable_without_egui() {
+        let screen = Screen::new("題").text("本文");
+        let mut store = StateStore::new(Counter::default());
+        let mut r = Headless(Vec::new());
+        let dynr: &mut dyn Renderer<Counter> = &mut r;
+        dynr.render(&screen, &mut store);
+        assert_eq!(r.0, vec!["# 題".to_string(), "本文".to_string()]);
     }
 
     #[derive(Default)]

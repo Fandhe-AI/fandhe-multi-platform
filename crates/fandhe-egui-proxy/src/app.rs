@@ -27,7 +27,7 @@ use crate::tv_sample::{tv_sample_screen, TvState};
 /// （`ProxyAppDyn::set_inset_margin_supplier` / `android.rs` 参照、Issue #715）。
 pub(crate) type InsetMarginSupplier = Box<dyn Fn(&egui::Context) -> egui::Margin>;
 
-use fandhe_runtime::{drain_completions, RepaintWaker};
+use fandhe_runtime::{drain_completions, Renderer, RepaintWaker};
 /// 起床と完了通知の型は egui 非依存の `fandhe-runtime` が持つ（Issue #1162）。
 /// `crate::app::CompletionSender` などの既存パスを保つための再公開。
 pub use fandhe_runtime::{Completion, CompletionSender, EffectFn};
@@ -636,7 +636,7 @@ impl eframe::App for PrototypeApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let screen = fandhe_prototype::current_screen(self.store.state());
         egui::CentralPanel::default().show(ctx, |ui| {
-            crate::render_screen_with_recyclers(ui, &screen, &mut self.store, &mut self.recyclers);
+            crate::EguiRenderer::new(ui, &mut self.recyclers).render(&screen, &mut self.store);
         });
     }
 }
@@ -779,7 +779,7 @@ impl<S: 'static> eframe::App for ProxyApp<S> {
         let screen = self.source.build(self.store.state());
 
         central_panel_with_insets(ctx, &self.inset_margin).show(ctx, |ui| {
-            crate::render_screen_with_recyclers(ui, &screen, &mut self.store, &mut self.recyclers);
+            crate::EguiRenderer::new(ui, &mut self.recyclers).render(&screen, &mut self.store);
         });
 
         // OS の戻る操作（Esc/Android バックキー）は、描画中のボタン処理で

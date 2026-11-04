@@ -57,6 +57,9 @@ use fandhe_device::motion::Motion;
 use fandhe_device::text_scale::TextScale;
 use fandhe_device::tts::Tts;
 use fandhe_device::{DataDir, DeviceError, Image};
+// main thread 判定は Apple 共通層（`fandhe-platform-apple`）が持つ。UIKit を触る呼び出し
+// （`fandhe_ios_motion_read` 等）の前に、ワーカースレッドからの誤用をここで弾く（codex-review 指摘 P1、PR #844）。
+use fandhe_platform_apple::is_main_thread;
 
 /// iOS アプリコンテナ内 `Documents/` を `DataDir` として返す（`storage::FsStorage::new`
 /// へ渡す契約、`device.rs::storage_note_state` から呼ばれる）。
@@ -181,30 +184,6 @@ impl Camera for IosCamera {
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_ios_motion_read(out_x: *mut f32, out_y: *mut f32) -> i32;
-}
-
-// SAFETY: `pthread_main_np` は libSystem（Darwin の全バイナリに常時リンク済み）が
-// 提供する引数無しの単純な問い合わせ関数で、呼び出しスレッドを変更しない
-// （呼び出し元スレッドが main スレッドなら非 0 を返す）。
-#[allow(unsafe_code)]
-unsafe extern "C" {
-    fn pthread_main_np() -> i32;
-}
-
-/// 呼び出しスレッドが main スレッドかどうかを返す。
-///
-/// `fandhe_ios_motion_read` は `UIApplication.connectedScenes` を読む
-/// （`fandhe_ios_motion.m` 冒頭コメント）ため main スレッド専用の呼び出し契約を
-/// 持つが、[`IosMotion`] は `Motion: Send + Sync` の公開型で誰でも構築でき、
-/// ワーカースレッドから呼ばれる誤用をコンパイラは検出できない。FFI 呼び出し前に
-/// スレッドを検査し、main スレッド以外では [`DeviceError::Internal`] を返して
-/// unsafe な前提を呼び出し側へ漏らさない（coding-rust.md の FFI 例外規定、
-/// codex-review 指摘 P1、PR #844）。
-#[allow(unsafe_code)]
-fn is_main_thread() -> bool {
-    // SAFETY: 上記 `pthread_main_np` 宣言のコメント参照。副作用も前提条件も無く
-    // 常に安全に呼び出せる。
-    unsafe { pthread_main_np() != 0 }
 }
 
 /// iOS 実センサ実装（`CMMotionManager` の gravity、Issue #832）。

@@ -16,7 +16,7 @@ fandhe-multi-platform/
 ├── README.md                    # プロジェクト概要・セットアップ手順
 ├── AGENTS.md                    # レビュー観点集（ai-review（provider: codex）が PR の base コミットの本書を基準に読む）
 ├── skills-lock.json             # 導入スキルの記録（skills add の履歴）
-├── Cargo.toml                   # workspace ルート（9 クレート構成）
+├── Cargo.toml                   # workspace ルート（10 クレート構成）
 ├── Makefile                     # よく使うコマンドの薄い入口（実体は scripts/ か cargo 1 行。.claude/rules/makefile.md、make skill）
 ├── lefthook.yml                 # Git hooks 設定（pre-commit・commit-msg）
 ├── Dockerfile                   # 開発用コンテナ定義（共通コア・Linux・wasm32）
@@ -32,8 +32,9 @@ fandhe-multi-platform/
 │   ├── fandhe-egui-proxy/       # egui による実描画バックエンド（デスクトップ・Android・iOS・Web）
 │   ├── fandhe-fonts/            # CJK フォント資産（Noto Sans JP 埋め込み）
 │   ├── fandhe-platform-android/ # Android 共通層（AndroidApp の保持・JNI 定型 `with_activity`、egui 非依存、TASK-21.2 / #1166）
+│   ├── fandhe-platform-apple/   # Apple（iOS / macOS）共通層（build script helper・共有ヘッダ・is_main_thread、TASK-21.2 / #1168）
 │   ├── fandhe-prototype/        # プロトタイプアプリ共通コード（TASK-2.2）
-│   ├── fandhe-runtime/          # 起床と完了通知・要求追跡（CompletionSender・EffectFn・RequestSlot、egui 非依存、TASK-21.2 / #1162）
+│   ├── fandhe-runtime/          # 起床と完了通知・要求追跡（CompletionSender・EffectFn・RequestSlot）と Renderer trait（egui 非依存、TASK-21.2 / #1162・#1163）
 │   ├── fandhe-swiftui-bridge/   # SwiftUI 統合レイヤ（codec・ffi・error）
 │   ├── fandhe-web-dom/          # Web ターゲット向け DOM 出力レンダラ（HTML・SEO・a11y）
 │   └── fandhe-winit-ime/        # IME 統合レイヤ（winit ← → fandhe-core）
