@@ -40,7 +40,7 @@ pub fn check_workspace(manifest: Option<&Path>) -> Result<Merged, Vec<String>> {
         .map_err(|e| vec![format!("cargo metadata の出力を読めません: {e}")])?;
 
     let mut problems = Vec::new();
-    let mut decls: Vec<(String, String, Declaration)> = Vec::new();
+    let mut decls: Vec<((String, String), String, Declaration)> = Vec::new();
     let mut ids: BTreeMap<String, String> = BTreeMap::new();
     let mut seen = std::collections::BTreeSet::new();
     for pkg in meta["packages"].as_array().into_iter().flatten() {
@@ -49,7 +49,6 @@ pub fn check_workspace(manifest: Option<&Path>) -> Result<Merged, Vec<String>> {
             continue;
         }
         let name = pkg["name"].as_str().unwrap_or("?");
-        let pkg_id = pkg["id"].as_str().unwrap_or("?");
         let decl = &pkg["metadata"]["fandhe"];
         if decl.is_null() {
             if name.starts_with(CAP_PREFIX) {
@@ -88,47 +87,60 @@ pub fn check_workspace(manifest: Option<&Path>) -> Result<Merged, Vec<String>> {
             problems.push(format!("{name}: id `{}` が {prev} と重複しています", d.id));
         }
         if problems.len() == before {
-            decls.push((pkg_id.to_string(), d.id.clone(), d));
+            let ver = pkg["version"].as_str().unwrap_or("?").to_string();
+            decls.push(((name.to_string(), ver), d.id.clone(), d));
         }
     }
     if !problems.is_empty() {
         return Err(problems);
     }
-    let reach = reachable(&meta);
+    let reach = reachable(&meta, manifest).map_err(|e| vec![e])?;
     let refs: Vec<(&str, &Declaration)> = decls
         .iter()
-        .filter(|(pid, _, _)| reach.as_ref().is_none_or(|r| r.contains(pid.as_str())))
+        .filter(|(pid, _, _)| reach.as_ref().is_none_or(|r| r.contains(pid)))
         .map(|(_, i, d)| (i.as_str(), d))
         .collect();
     merge(&refs).map_err(|e| vec![e.to_string()])
 }
 
-/// root package から通常依存（build・dev を除く）で到達する package id。root が無ければ `None`。
-fn reachable(meta: &Value) -> Option<BTreeSet<&str>> {
-    let root = meta["resolve"]["root"].as_str()?;
-    let nodes: BTreeMap<&str, &Value> = meta["resolve"]["nodes"]
-        .as_array()?
-        .iter()
-        .filter_map(|n| Some((n["id"].as_str()?, n)))
-        .collect();
-    let mut seen = BTreeSet::from([root]);
-    let mut stack = vec![root];
-    while let Some(id) = stack.pop() {
-        for d in nodes
-            .get(id)
-            .and_then(|n| n["deps"].as_array())
-            .into_iter()
-            .flatten()
-        {
-            let normal = d["dep_kinds"]
-                .as_array()
-                .is_none_or(|ks| ks.iter().any(|k| k["kind"].is_null()));
-            if let Some(p) = d["pkg"].as_str().filter(|_| normal) {
-                if seen.insert(p) {
-                    stack.push(p);
-                }
-            }
-        }
+/// root package から通常依存（build・dev を除く）で到達する `(name, version)`。root が無ければ `None`。
+/// `cargo metadata` の resolve は workspace 全体の feature を統合するため辿らない。
+/// `cargo tree` は対象 package の feature 選択だけで解決する（別 member が有効にした feature の辺が混ざらない）。
+fn reachable(
+    meta: &Value,
+    manifest: Option<&Path>,
+) -> Result<Option<BTreeSet<(String, String)>>, String> {
+    if meta["resolve"]["root"].as_str().is_none() {
+        return Ok(None);
     }
-    Some(seen)
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let mut cmd = Command::new(cargo);
+    cmd.args([
+        "tree", "-e", "normal", "--prefix", "none", "--format", "{p}",
+    ]);
+    if let Some(m) = manifest {
+        cmd.arg("--manifest-path").arg(m);
+    }
+    let out = cmd
+        .output()
+        .map_err(|e| format!("cargo tree を実行できません: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "cargo tree が失敗しました: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    // 行は `name vX.Y.Z (path)` / `name vX.Y.Z` / `... (*)`。
+    Ok(Some(
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter_map(|l| {
+                let mut it = l.split_whitespace();
+                Some((
+                    it.next()?.to_string(),
+                    it.next()?.trim_start_matches('v').to_string(),
+                ))
+            })
+            .collect(),
+    ))
 }

@@ -420,6 +420,45 @@ fn workspace_merges_only_dependencies_reachable_from_app() {
 }
 
 #[test]
+fn workspace_ignores_features_enabled_by_other_members() {
+    let mk = |v: &str| {
+        format!("[package.metadata.fandhe]\nid = \"{v}\"\n[package.metadata.fandhe.ios]\ninfo-plist = {{ K = \"{v}\" }}\n")
+    };
+    let c = |dir: &str, name: &str, decl: String| (dir.to_string(), name.to_string(), decl);
+    // 別 member（other）が app の feature x（third-b を引く）を有効にしても、app 単体の選択には含まれない。
+    let m = make_ws(
+        "ws-feature",
+        &[
+            c("a", "third-a", mk("a")),
+            c("b", "third-b", mk("b")),
+            c(
+                "other",
+                "other",
+                "[dependencies]\napp = { path = \"../..\", features = [\"x\"] }\n".into(),
+            ),
+        ],
+    );
+    let root = m.parent().unwrap();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/lib.rs"), "").unwrap();
+    fs::write(
+        &m,
+        "[package]\nname = \"app\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[dependencies]\nthird-a = { path = \"c/a\" }\nthird-b = { path = \"c/b\", optional = true }\n[features]\nx = [\"dep:third-b\"]\n[workspace]\nresolver = \"2\"\nmembers = [\"c/*\"]\n",
+    )
+    .unwrap();
+    let r = check_workspace(Some(&m));
+    assert!(r.is_ok(), "{:?}", r.err());
+}
+
+#[test]
+fn merge_reports_owner_of_object_vs_scalar_conflict() {
+    let d = |id: &str, v: Value| decl(json!({"id":id,"ios":{"info-plist":{"K":v}}}));
+    let (a, b) = (d("a", json!({"X":1})), d("b", json!("s")));
+    let e = merge(&[("a", &a), ("b", &b)]).unwrap_err();
+    assert!(e.a == "a" && e.b == "b", "{e}");
+}
+
+#[test]
 fn merge_reports_nested_conflict_owners() {
     let d = |id: &str, v: Value| decl(json!({"id":id,"ios":{"info-plist":{"K":v}}}));
     let (a, b, c) = (

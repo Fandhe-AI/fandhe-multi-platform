@@ -116,7 +116,7 @@ identity = true
 ## 4. 統合規則
 
 機能を id 順に処理し、結果を決定的にします。
-検証は解決済みの全 crate に行い、統合は対象アプリ（root package）から通常依存で到達する crate に限ります。
+検証は解決済みの全 crate に行い、統合は対象アプリ（root package）から通常依存で到達する crate に限ります。到達の判定は `cargo tree` を使い、別の workspace member が有効にした feature の辺は辿りません。
 仮想 workspace では対象が決まらないため、宣言を持つ全 crate を統合します。
 競合は、競合した葉のパスと、その葉を最初に書いた機能を報告します。
 

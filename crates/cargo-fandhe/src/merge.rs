@@ -51,21 +51,19 @@ pub struct Merged {
     pub macos: AppleMerged,
     pub android: AndroidMerged,
     pub windows_identity: bool,
-    /// (機能 id, 拡張名, crate からの相対パス)。
-    pub extension_sources: Vec<(String, String, String)>,
+    /// (機能 id, OS, 拡張名, crate からの相対パス)。
+    pub extension_sources: Vec<(String, String, String, String)>,
 }
 
 /// 値の葉ごとに「最初に書いた機能」を記録する。深い位置の競合で正しい 2 機能を報告するため。
 fn record(path: &str, v: &Value, owners: &mut BTreeMap<String, String>, id: &str) {
-    match v {
-        Value::Object(m) => m
-            .iter()
-            .for_each(|(k, c)| record(&format!("{path}.{k}"), c, owners, id)),
-        _ => {
-            owners
-                .entry(path.to_string())
-                .or_insert_with(|| id.to_string());
-        }
+    // オブジェクト位置にも記録する（スカラーとの型不一致で先行機能を報告するため）。
+    owners
+        .entry(path.to_string())
+        .or_insert_with(|| id.to_string());
+    if let Value::Object(m) = v {
+        m.iter()
+            .for_each(|(k, c)| record(&format!("{path}.{k}"), c, owners, id));
     }
 }
 
@@ -190,8 +188,12 @@ pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, MergeError> {
                     }
                 }
                 for s in &e.sources {
-                    out.extension_sources
-                        .push((id.to_string(), e.name.clone(), s.clone()));
+                    out.extension_sources.push((
+                        id.to_string(),
+                        os.to_string(),
+                        e.name.clone(),
+                        s.clone(),
+                    ));
                 }
             }
         }
