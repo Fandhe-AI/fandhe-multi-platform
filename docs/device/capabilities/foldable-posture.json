@@ -7,11 +7,15 @@
   "bundle": "continuous-push",
   "platforms": {
     "ios": {
-      "status": "unrated",
-      "api": "-",
+      "status": "possible",
+      "api": "UIKit の `UIHingeInteraction` / `UIHinge`（`angle` はラジアン、`status`）。iOS 27.1 で公開。iPadOS・Mac Catalyst・tvOS・visionOS 27.1 も対象",
       "perm": "-",
-      "url": "",
-      "note": "旧#1108 で調査中"
+      "url": [
+        "https://developer.apple.com/documentation/uikit/uihingeinteraction",
+        "https://developer.apple.com/documentation/uikit/uihinge"
+      ],
+      "note": "未実装。折れ目の位置を返す Web / Android と、角度・状態を返す iOS でモデルが違う。`UIHinge.Status` の case 一覧とシミュレータで hinge が出るかは未確認",
+      "deferred": "iOS 27.1 以上の SDK（Xcode 27.1 以上）と実機が要る。Web / Android の「折れ目の位置」モデルと iOS の「角度・状態」モデルの写像を trait doc で決めれば着手できる"
     },
     "android": {
       "status": "done",
@@ -53,5 +57,5 @@
       "impl": "crates/fandhe-web-dom/src/foldable_posture.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/src/dom_tree.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/foldable_posture_show.rs + crates/fandhe-device/src/foldable_posture.rs、Issue #724"
     }
   },
-  "note": "Web（Chromium）が主。Android は androidx.window で実装済み（#1098）、iOS は 旧#1108 で調査中のため unrated。macOS は n-a、Windows は no 寄り。safe-area-insets・screen-orientation（別 id）との違い: 折れ目と姿勢を扱う。今回の範囲: 姿勢（平ら / 折れている / 不明）と折れ目の位置・向きを一定間隔で読み直して表示し、折れていて折れ目が分かるときは画面を折れ目に沿って 2 分割で描く。閉じた状態とヒンジの角度は扱わない（Web・Android とも API に無い）。守る範囲: 取れないときに「平ら」や折れ目なしへ倒さないこと、1 ページ内の読み取り、タイマーとリスナーの解放。守らない範囲: 反映の遅れ（読み直しの間隔 + 1 フレーム。背景タブはさらに遅れる）、折りたためない端末と広げた端末の区別、複数タブ間の食い違い、ページの zoom が 1 でないときの位置のずれ"
+  "note": "Web（Chromium）が主。Android は androidx.window で実装済み（#1098）、iOS は iOS 27.1 の `UIHinge` で作れる見込みで保留。macOS は n-a、Windows は no 寄り。safe-area-insets・screen-orientation（別 id）との違い: 折れ目と姿勢を扱う。今回の範囲: 姿勢（平ら / 折れている / 不明）と折れ目の位置・向きを一定間隔で読み直して表示し、折れていて折れ目が分かるときは画面を折れ目に沿って 2 分割で描く。閉じた状態とヒンジの角度は扱わない（Web・Android とも API に無い）。守る範囲: 取れないときに「平ら」や折れ目なしへ倒さないこと、1 ページ内の読み取り、タイマーとリスナーの解放。守らない範囲: 反映の遅れ（読み直しの間隔 + 1 フレーム。背景タブはさらに遅れる）、折りたためない端末と広げた端末の区別、複数タブ間の食い違い、ページの zoom が 1 でないときの位置のずれ"
 }

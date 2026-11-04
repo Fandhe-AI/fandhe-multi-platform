@@ -62,7 +62,7 @@
         "https://learn.microsoft.com/en-us/windows/win32/bits/iis-requirements-for-bits-uploads",
         "https://learn.microsoft.com/en-us/windows/win32/bits/bits-upload-protocol"
       ],
-      "deferred": "`BackgroundUploader` は「Background transfers require package identity; unpackaged apps cannot use this API.」（Microsoft の文書）で、本リポジトリの Windows 版は unpackaged のため使えない。BITS の送信は `BITS_POST` と `BITS-Packet-Type` ヘッダの専用プロトコル（1 セッション 1 ファイル）で、受け口に IIS の BITS 拡張相当が要り、普通の HTTP の PUT・POST の受け口では動かない。確認用の受け口に専用プロトコルを実装するか、MSIX 化（package identity）が要り、どちらも設計の変更になるため保留。MSIX 化の方針が決まったら `BackgroundUploader` で見直す",
+      "deferred": "`BackgroundUploader` は「Background transfers require package identity; unpackaged apps cannot use this API.」（Microsoft の文書）で、本リポジトリの Windows 版は unpackaged のため使えない。BITS の送信は `BITS_POST` と `BITS-Packet-Type` ヘッダの専用プロトコル（1 セッション 1 ファイル）で、受け口に IIS の BITS 拡張相当が要り、普通の HTTP の PUT・POST の受け口では動かない。確認用の受け口に専用プロトコルを実装するか、MSIX 化（package identity）が要り、どちらも設計の変更になるため保留。MSIX 化の方針が決まったら `BackgroundUploader` で見直す。identity 導入時に使う自己署名証明書の秘密鍵は `cargo-fandhe` が利用者ごとに生成し、リポジトリにも crate にも入れない",
       "note": "未実装。`BackgroundUploader` は upload がアプリの終了後も残り、起動時に `GetCurrentUploadsAsync` で列挙して `AttachAsync` で再び結び付ける（公式）。BITS は開始したユーザーがログオンしている間、アプリが終了しても続く（公式）。download の Windows（background-download）は BITS の `BG_JOB_TYPE_DOWNLOAD` で、普通の HTTP サーバーで動く"
     },
     "web": {
@@ -77,7 +77,7 @@
         "https://caniuse.com/background-sync"
       ],
       "safari": "非対応（Background Fetch・Background Sync とも。Firefox も非対応）",
-      "deferred": "転送をブラウザに任せられるのは Background Fetch だけ。仕様は本文付きの要求を許すが、Chrome の公式記事は「本文の無い要求だけを受け付ける」と書いたまま（2018 年）で、現行の Chrome が送信に対応するかは公式文書で確かめられない。Chrome は CORS の preflight が要る要求も受け付けないため、受け口はページと同じオリジンに置く必要があり、確認用の配信サーバー（GET だけを返す）に送信の受け口を足す設計の変更になる。Background Sync は転送の代行ではなく本機能に当たらない。Chrome の送信への対応が公式に確かめられたら見直す",
+      "deferred": "転送をブラウザに任せられるのは Background Fetch だけ。仕様は本文付きの要求を許すが、Chrome の公式記事は「本文の無い要求だけを受け付ける」と書いたまま（2018 年）で、現行の Chrome が送信に対応するかは公式文書で確かめられない。Chrome は CORS の preflight が要る要求も受け付けないため、受け口はページと同じオリジンに置く必要があり、確認用の配信サーバー（GET だけを返す）に送信の受け口を足す設計の変更になる。Background Sync は転送の代行ではなく本機能に当たらない。Chrome の送信への対応が公式に確かめられたら見直す。確認用サーバーの受け口は受けた本文を保存せず捨てる（公開の配信サーバーに任意ファイルの置き場を作らない）",
       "note": "未実装。Background Fetch・Background Sync とも experimental で Baseline ではない（MDN）。download の Web（background-download）は同じ Background Fetch で本文の無い GET"
     }
   },

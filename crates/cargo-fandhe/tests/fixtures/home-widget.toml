@@ -1,0 +1,26 @@
+[package.metadata.fandhe]
+id = "home-widget"
+
+# Apple の拡張は iOS が #1212。Windows のパッケージ ID は #1208。形式の確認用。
+[package.metadata.fandhe.ios]
+app-groups = ["widget"]
+
+[[package.metadata.fandhe.ios.extensions]]
+name = "FandheTextWidget"
+bundle-suffix = "text"
+deployment-target = "14.0"
+sources = ["apple/widget"]
+frameworks = ["WidgetKit", "SwiftUI"]
+app-groups = ["widget"]
+info-plist = { NSExtension = { NSExtensionPointIdentifier = "com.apple.widgetkit-extension" } }
+
+[package.metadata.fandhe.windows]
+identity = true
+
+[[package.metadata.fandhe.android.components]]
+kind = "receiver"
+name = "com.fandhe.androidapp.TextWidgetProvider"
+exported = false
+attributes = { label = "@string/fandhe_widget_label" }
+intent-filters = [{ actions = ["android.appwidget.action.APPWIDGET_UPDATE"] }]
+meta-data = [{ name = "android.appwidget.provider", resource = "@xml/fandhe_text_widget_info" }]

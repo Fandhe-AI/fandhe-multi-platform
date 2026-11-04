@@ -34,9 +34,13 @@
       "status": "possible",
       "api": "AppKit `NSTextContent.contentType = .oneTimeCode`",
       "perm": "なし（通常の SMS コード）",
-      "url": "https://developer.apple.com/documentation/appkit/nstextcontenttype",
-      "note": "未実装。macOS で SMS のコード自動入力は一般的でない",
-      "deferred": "見送り。winit の `NSView` は `NSTextContent` を採用しておらず、実行時に `NSTextContent` を足す案は公式文書に根拠が無い。隠し `NSTextField` を使う方式はデスクトップのキー入力・IME の経路の作り直しになるため見送り"
+      "url": [
+        "https://developer.apple.com/documentation/appkit/nstextcontenttype",
+        "https://developer.apple.com/documentation/bundleresources/information-property-list/nsautofillrequirestextcontenttypeforonetimecodeonmac",
+        "https://developer.apple.com/documentation/security/enabling-autofill-for-domain-bound-sms-codes"
+      ],
+      "note": "未実装。macOS 26 以降は文字入力に対応する全アプリで Security Code AutoFill が有効になり、`NSTextContent` の採用は不要（限定したいときだけ `NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac`。公式）。macOS 26 未満は従来どおり `NSTextContent` の採用が要る",
+      "deferred": "winit の `NSView`（`NSTextInputClient`）が macOS 26 の「text-input experience が active」と認識されるかの実機確認が条件（公式に定義が無く未確認）。macOS 26 未満は winit の `NSView` が `NSTextContent` を採用しておらず、実行時に足す案も公式文書に根拠が無いため、扱いを別に決める。隠し `NSTextField` はデスクトップのキー入力・IME の経路の作り直しになるため採らない。「出た」ことをアプリは観測できないので、成功を主張しない契約にする"
     },
     "windows": {
       "status": "no",

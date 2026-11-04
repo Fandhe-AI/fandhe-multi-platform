@@ -28,7 +28,7 @@
         "https://developer.android.com/about/versions/12/behavior-changes-all",
         "https://developer.android.com/training/app-links"
       ],
-      "deferred": "検証用ドメイン（`assetlinks.json` の配置先）が未定のため保留（passkey-signin の Android と同じ）。Android 12 以上は、アプリが承認されていないドメインの web intent を既定のブラウザへ渡すため（公式）、検証なしの https の intent-filter ではアプリに届かない。ベンダーの個別審査は不要で、ドメインが決まれば着手できる",
+      "deferred": "検証用ドメイン（`assetlinks.json` の配置先）が未定のため保留（passkey-signin の Android と同じ）。Android 12 以上は、アプリが承認されていないドメインの web intent を既定のブラウザへ渡すため（公式）、検証なしの https の intent-filter ではアプリに届かない。ベンダーの個別審査は不要で、ドメインが決まれば着手できる。検証用ドメインは本リポジトリの確認用で、利用者の host は `cargo-fandhe gen` の必須入力にし、既定ドメインを持たない",
       "note": "未実装。前提: 検証用ドメインの `https://<domain>/.well-known/assetlinks.json` に署名証明書の SHA-256 を載せ、`application/json`・リダイレクトなしで配信する（debug と release で鍵が違うので両方。Play App Signing では手元の keytool の値と一致しない）（公式）。autoVerify は API 23 以上（minSdk 24 は全域）。公式は App Links を「Google services のある端末」で対応としている。Android 12 以上は `adb shell pm verify-app-links --re-verify` で手動検証し `pm get-app-links` で状態を見る。Android 15 以上は定期再検証で反映に最大 7 日（公式）。下敷き: url-scheme の Android（`singleTask`・`deliverUrlIntent`）。ただし `deliverUrlIntent` は `ACTION_VIEW` をすべて url-scheme の受信箱へ渡しているため、https を足すときは振り分けが要る"
     },
     "macos": {
