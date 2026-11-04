@@ -36,7 +36,7 @@ TASK-8.6（Issue #212）が別途担当するため、本文書では重複管�
 **PoC-2 制約の現行版での再現確認**: 未実施。本リポジトリの開発環境は Linux（macOS 実機・SDK
 なし）であり、TASK-3.1 で局所導入した Rust 1.96.0 ＋ 4 ターゲット（`aarch64-apple-watchos` /
 `-watchos-sim` / `aarch64-apple-visionos` / `-visionos-sim`）を用いて
-`fandhe-egui-proxy`（wgpu 依存の検証専用プロキシ）の visionOS 向けクロスビルドを試行したが、
+`fandhe-egui-proxy`（wgpu 依存の egui バックエンド）の visionOS 向けクロスビルドを試行したが、
 `wayland-sys`（Linux 専用の依存経路）のビルドスクリプトが `pkg-config` のクロスコンパイル
 未設定で失敗し、`libloading`/`dlopen` 定数の制約そのものを再現するところまで到達できなかった
 （環境起因の失敗であり、PoC-2 制約の解消・継続いずれの確認にもならない）。したがって

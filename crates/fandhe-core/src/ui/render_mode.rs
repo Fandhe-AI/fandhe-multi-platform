@@ -3,7 +3,7 @@
 //! `docs/architecture/dom-output-architecture.md` §2.5 が設計した「`Screen<S>` を保持する側
 //! （アプリ・プロトタイプ層）が画面登録時に指定する列挙型」を実装したもの。
 //! 同書 §4 が「S3 着手時に確定する」とした `RenderMode` の配置先は、依存ゼロの純データ enum
-//! であり `fandhe-egui-proxy` / `fandhe-dom-renderer` のどちらにも依存させたくないという
+//! であり `fandhe-egui-proxy` / `fandhe-web-dom` のどちらにも依存させたくないという
 //! 制約から本クレート（`fandhe-core::ui`）に確定した。
 //!
 //! [`ModeSwitcher`] は同書 §2.5 の 3 規約（共存方式・排他起動・停止→起動の順序）のうち
@@ -28,7 +28,7 @@ pub enum RenderMode {
 
 /// 1 つのレンダラの起動・停止をレンダラ非依存に抽象化するトレイト。
 ///
-/// `fandhe-dom-renderer`（DOM 側の activate = マウント/イベントリスナー登録、
+/// `fandhe-web-dom`（DOM 側の activate = マウント/イベントリスナー登録、
 /// deactivate = アンマウント/リスナー解除）・`fandhe-egui-proxy` 呼び出し側
 /// （canvas 側の activate = `eframe::WebRunner` 起動、deactivate = 停止）が
 /// それぞれ実装する想定（設計書 §3.3）。[`ModeSwitcher`] はこのトレイトを介して
@@ -72,7 +72,7 @@ where
     /// 保証するため、構築時に両レンダラへ `deactivate` を呼んでから `current` を `None` にする
     /// （Issue #81 レビュー指摘対応）。`deactivate` は「起動していないなら何もしない」冪等な
     /// 実装であることを [`RendererLifecycle`] の契約として前提にする。将来
-    /// `fandhe-dom-renderer` 側で wasm32 結線（`RendererLifecycle` 実装）を追加する際も、
+    /// `fandhe-web-dom` 側で wasm32 結線（`RendererLifecycle` 実装）を追加する際も、
     /// この冪等性を満たすように実装すること。
     pub fn new(mut canvas: C, mut dom: D) -> Self {
         canvas.deactivate();
@@ -101,7 +101,7 @@ where
 
     /// DOM 側レンダラへの可変参照を返す。
     ///
-    /// `canvas_mut` と対になる脱出口。`fandhe-dom-renderer` 側が
+    /// `canvas_mut` と対になる脱出口。`fandhe-web-dom` 側が
     /// 状態ディスパッチ後の DOM 再描画をこの参照経由で駆動する想定（設計書 §3.3）。
     pub fn dom_mut(&mut self) -> &mut D {
         &mut self.dom

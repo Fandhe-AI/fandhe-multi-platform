@@ -33,7 +33,7 @@ repo_root="$(cd "${script_dir}/../.." && pwd)"
 # 現時点で iOS ターゲット向けにビルド可能なのは、プラットフォーム依存コードを
 # 持たない共通コア（fandhe-core）と、それのみに依存する FFI ブリッジ層
 # （fandhe-swiftui-bridge、TASK-3.2-S2）のみ（fandhe-egui-proxy は wgpu 依存で
-# iOS 未対応の検証専用プロキシのため対象外）。
+# wgpu 依存の egui バックエンドで、実描画は verify-simulator-render.sh 等で確認するため対象外）。
 packages="${FANDHE_IOS_PACKAGES:-fandhe-core fandhe-swiftui-bridge}"
 targets="${FANDHE_IOS_TARGETS:-aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios}"
 

@@ -50,7 +50,7 @@ S15・#196 → `ime-ios-uikit-text-input.md` と同じパターンを踏襲す�
   winit の `android-native-activity` feature）を採用している。理由は「OS 同梱のグルーコードで
   起動でき、Java/Gradle 側の追加実装が不要」（同 Cargo.toml コメント）。
 - `ime-architecture.md` §3.3 のとおり `fandhe-egui-proxy` は egui 自体の IME 処理
-  （`egui::Event::Ime` 相当）に委ねる検証用プロキシであり、本設計（本番の独自レンダラ方式
+  （`egui::Event::Ime` 相当）に委ねる egui バックエンドの実装であり、本設計（第 2 バックエンド候補の独自レンダラ方式
   プラットフォーム統合レイヤ）の対象読者ではない。ただし **Android の起動方式
   （NativeActivity か GameActivity か）はプロセス全体の構成**であり、S19 が本設計に基づいて
   独自レンダラ方式の Android 実装を追加する際、`fandhe-egui-proxy` とは別プロセス

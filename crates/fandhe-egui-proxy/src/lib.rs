@@ -1,13 +1,13 @@
-//! fandhe-egui-proxy: TASK-1.2（REQ-1 / M2）の実描画検証専用プロキシクレート。
+//! fandhe-egui-proxy: `fandhe-core` の宣言を egui で描画する、v1 既定バックエンドの現行実装。
 //!
-//! `fandhe-core` の `Screen<S>` / `Node<S>` 宣言的 UI 記述を egui ウィジェットへ
-//! マッピングし、デスクトップ相当（native / glow）・Web（wasm32 / WebGL2）の
-//! 2 環境で実際にレンダリングして「視覚的要素欠落 0 件」を確認するために存在する。
+//! `Screen<S>` / `Node<S>` 宣言的 UI 記述を egui ウィジェットへマッピングし、デスクトップ相当
+//! （native / glow）・Web（wasm32 / WebGL2）・iOS・Android で実描画する。端末機能の橋渡しと
+//! 実機確認用のアプリも現時点ではここにある。REQ-21 で `fandhe-runtime`・`fandhe-render-egui`・
+//! `fandhe-gallery`・`fandhe-platform-*` へ分割する予定で、設計は
+//! `docs/architecture/consumer-app-structure.md` にある。
 //!
-//! **本クレートは正式なレンダラ（wgpu / taffy / cosmic-text、REQ-8 系）ではない。**
-//! `fandhe-core` は依存ゼロ・`forbid(unsafe_code)` の共通コアであり、egui/eframe への
-//! 依存はこのプロキシ側にのみ閉じる（依存方向はプロキシ → コアの一方向、
-//! `.claude/rules/coding-rust.md` 準拠）。呼び出し元は `main.rs`（デスクトップ相当の
+//! egui/eframe への依存はこの層に閉じ、依存方向は本クレート → `fandhe-core` の一方向
+//! （`.claude/rules/coding-rust.md` 準拠）。呼び出し元は `main.rs`（デスクトップ相当の
 //! 自動起動・自動撮影）と `web.rs`（wasm エントリ）、`ios.rs`（iOS 向け wgpu/Metal エントリ、
 //! TASK-1.3-S2）、`android.rs`（Android `android_main` エントリ、TASK-1.5-S2）、
 //! および `tests/desktop_render.rs`（egui_kittest による要素欠落チェック）。

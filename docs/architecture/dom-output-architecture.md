@@ -34,7 +34,7 @@ L66〜78）の受け入れ基準「アクセシビリティ・SEO が重要な�
   `Button` / `List` の 4 バリアント）・`state::{StateStore, Event}` によるイベント→状態更新の
   配線・`Screen::visit_expanded` による `List` 込みの深さ優先走査基盤・`render_headless` による
   テキスト表現マッピングを提供する（依存クレートゼロ・`#![forbid(unsafe_code)]`）。
-  `crates/fandhe-egui-proxy` は実描画検証専用のプロキシ（本実装レンダラではない）であり、
+  `crates/fandhe-egui-proxy` は v1 既定バックエンド（egui）の現行実装であり（[consumer-app-structure.md](consumer-app-structure.md)）、
   `src/web.rs` が `<canvas id="fandhe-proxy-canvas">` へ `eframe::WebRunner`（WebGL2/`glow`
   バックエンド）をアタッチしている。DOM 出力レンダラはこれとは別の新設クレートとして設計する
   （§2 参照）。
@@ -54,8 +54,8 @@ L66〜78）の受け入れ基準「アクセシビリティ・SEO が重要な�
 
 ### 2.1 クレート配置・依存方向
 
-- DOM 出力レンダラは新設クレート **`fandhe-dom-renderer`** とする。プラットフォーム最適化レイヤ
-  側の配置とし、依存方向は「`fandhe-dom-renderer` → `fandhe-core`」の一方向（coding-rust.md
+- DOM 出力レンダラは新設クレート **`fandhe-web-dom`** とする。プラットフォーム最適化レイヤ
+  側の配置とし、依存方向は「`fandhe-web-dom` → `fandhe-core`」の一方向（coding-rust.md
   「共通コアからプラットフォーム固有クレートへ依存しない」に準拠。`fandhe-egui-proxy` /
   `fandhe-swiftui-bridge` と同型の関係）。
 - `wasm32-unknown-unknown` ターゲット限定のクレートとし、`#![forbid(unsafe_code)]` を付ける
@@ -67,8 +67,8 @@ L66〜78）の受け入れ基準「アクセシビリティ・SEO が重要な�
   `HtmlElement` / `Node`（DOM の `Node`。`fandhe_core::Node<S>` とは別物であり、コード中では
   `web_sys::Node` と完全修飾して区別する）/ `Text` 等）は S2 実装時に必要最小限を追加する
   （coding-rust.md「feature フラグは加法的」・security.md「A06 脆弱な依存」の最小 feature 方針）。
-- `fandhe-egui-proxy` は実描画検証専用プロキシであり拡張しない（本実装レンダラの追加先は
-  新設クレートのみとし、検証用コードと本実装を混在させない）。
+- DOM 出力は `fandhe-egui-proxy` に混ぜず別クレートに置く（egui への依存を DOM 出力側へ持ち込まないため。
+  構造全体は [consumer-app-structure.md](consumer-app-structure.md)）。
 
 ### 2.2 Node → HTML マッピング表
 
@@ -139,7 +139,7 @@ DOM イベント（input/click）
 
 ```rust
 /// 画面の出力方式。`fandhe-egui-proxy`（独自レンダラ）と
-/// `fandhe-dom-renderer`（DOM 出力）のいずれで描画するかを画面単位に指定する。
+/// `fandhe-web-dom`（DOM 出力）のいずれで描画するかを画面単位に指定する。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RenderMode {
     /// 独自レンダラ（WASM＋WebGL2/canvas）。性能優先の画面向け。既定値。
@@ -176,7 +176,7 @@ pub enum RenderMode {
   **配置規約**: `RendererLifecycle` / `ModeSwitcher` はレンダラ非依存であるため
   `fandhe-core::ui`（`crates/fandhe-core/src/ui/render_mode.rs`）に置く。wasm32 結線部
   （DOM 側 activate/deactivate の実配線・canvas 側 `eframe::WebRunner` 停止・ルート要素の
-  `display` 切替）は `fandhe-dom-renderer` 側で `RendererLifecycle` を実装する形で
+  `display` 切替）は `fandhe-web-dom` 側で `RendererLifecycle` を実装する形で
   追加する（未完了事項として §4 参照）。
 
 ### 2.6 セキュリティの扱い
@@ -217,7 +217,7 @@ DOM 出力へそのまま拡張する）。本方針は `security-auditor` の�
   （REQ-5 参照）での実用性は未検証。
 - **wasm32 結線部の実配線**: DOM 側 activate/deactivate（マウント/イベントリスナー解除 API
   呼び出し）・canvas 側 `eframe::WebRunner` 停止・ルート要素の `display` 切替は
-  `fandhe-dom-renderer` 側で `RendererLifecycle` を実装する形で追加する。実ブラウザでの
+  `fandhe-web-dom` 側で `RendererLifecycle` を実装する形で追加する。実ブラウザでの
   表示切替の目視確認もこの結線後に行う。
 - **スタイル適用**: デザイントークン（TASK-8.4、`docs/spec/05-tasks.md` L274）との将来的な接続は
   本書のスコープ外。TASK-8.4 の着手状況は本書では確認していない。

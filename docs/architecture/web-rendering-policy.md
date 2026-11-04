@@ -9,8 +9,8 @@ WebGPU→WebGL2 の自動フォールバックは実装しない」（L75、条�
 - **`docs/spec/` との関係**: `docs/spec/` は読み取り専用サブモジュールのため、本書は本リポジトリ側
   （`docs/architecture/`）の新規ドキュメントとして作成しています（`state-access-api-tradeoff.md` /
   `responsibility-boundary.md` と同じ置き場・体裁）。spec 自体の変更はこのリポジトリでは行いません。
-- **対象クレート**: `crates/fandhe-egui-proxy`（TASK-1.2 の実描画検証用プロキシ。本実装レンダラでは
-  ないが、wasm32 分岐のバックエンド選択方針は本実装レンダラへも踏襲する前提）。
+- **対象クレート**: `crates/fandhe-egui-proxy`（egui バックエンドの現行実装、`consumer-app-structure.md`。
+  wasm32 分岐のバックエンド選択方針は第 2 バックエンドでも踏襲する前提）。
 
 ## 2. 決定
 

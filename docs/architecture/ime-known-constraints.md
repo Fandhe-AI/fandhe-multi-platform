@@ -60,8 +60,8 @@
   設計判断）。**egui-proxy での迂回は 2026-09-07 に実機確認済み**:
   #795（PR #798）で egui-proxy の iOS 経路に ObjC ランタイムのバイパス方式を組み込み、
   零サイズの `UITextField` を first responder にすることで日本語の変換・確定・Backspace を
-  egui のテキスト欄に到達させることを確認。ただし **egui-proxy は検証用プロキシに過ぎず**、
-  本実装レンダラ層（REQ-8）では winit の制約が依然残る。**S15（#196）が独自 `UITextInput`
+  egui のテキスト欄に到達させることを確認。egui バックエンドではこの迂回を使う。
+  独自レンダラ（第 2 バックエンド候補、`consumer-app-structure.md`）を作る場合は winit の制約が依然残る。**S15（#196）が独自 `UITextInput`
   ビュー実装の詳細設計を具体化済み**（`ImeRequest::SetCursorArea` の pull 型アダプタ変換・
   `UITextInputStringTokenizer` 既定実装の採用・`Enabled`/`Disabled` イベントを UIKit から
   発火しない契約。`docs/architecture/ime-ios-uikit-text-input.md` §4.1・§9 参照）。本実装
@@ -87,8 +87,8 @@
   **egui-proxy での迂回は 2026-09-07 に実機確認済み**: #796（PR #797）で egui-proxy の
   Android 経路に GameActivity の `GameTextInput` ポーリング機構を組み込み、毎フレーム状態を
   確認して日本語 12 キー入力（「あいう」→「愛兎」確定）・英字・Backspace を egui のテキスト
-  欄に到達させることを確認。ただし **egui-proxy は検証用プロキシに過ぎず**、本実装レンダラ層
-  （REQ-8）では winit の制約が依然残る。なお、複数文字が 1 回の `KeyEvent` にまとまって
+  欄に到達させることを確認。egui バックエンドではこの迂回を使う。独自レンダラ
+  （第 2 バックエンド候補、`consumer-app-structure.md`）を作る場合は winit の制約が依然残る。なお、複数文字が 1 回の `KeyEvent` にまとまって
   届いた場合に分割されず原子的に挿入される契約は結合テストで確認済み。
 
 ### 3.3 `SetPurpose`（`ImePurpose::Password`）の学習・予測変換抑止がプラットフォーム間で不均一
