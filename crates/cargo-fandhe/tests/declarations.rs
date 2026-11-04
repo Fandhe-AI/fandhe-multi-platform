@@ -297,6 +297,8 @@ fn rejects_gradle_and_paths() {
         "g:a:${v}",
         "g:a",
         "g:a:1.0:x",
+        "g:a:1.0-SNAPSHOT",
+        "g:a:1.0-snapshot",
     ] {
         assert_rejected(android(json!({"gradle":[bad]})), "gradle[0]");
     }

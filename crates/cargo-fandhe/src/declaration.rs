@@ -244,10 +244,11 @@ fn is_gradle(s: &str) -> bool {
             && p.chars()
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
     };
-    // 版は数字始まり。`+`・`latest`・範囲・変数は文字集合で落ちる。
+    // 版は数字始まり。`+`・`latest`・範囲・変数は文字集合で落ちる。SNAPSHOT は版文字列のまま中身が変わるので固定版でない。
     parts.len() == 3
         && parts.iter().all(|p| ok(p))
         && parts[2].starts_with(|c: char| c.is_ascii_digit())
+        && !parts[2].to_ascii_uppercase().ends_with("-SNAPSHOT")
 }
 
 fn is_deployment_target(s: &str) -> bool {
@@ -465,7 +466,7 @@ fn validate_android(c: &mut Ctx, a: &Android) {
         c.check(
             is_gradle(g),
             &format!("android.gradle[{i}]"),
-            format!("`{g}` は `group:artifact:version` の固定版（数字始まり。`+`・`latest`・範囲・変数は不可）にしてください"),
+            format!("`{g}` は `group:artifact:version` の固定版（数字始まり。`+`・`latest`・範囲・変数・`-SNAPSHOT` は不可）にしてください"),
         );
     }
     c.paths("android.java", &a.java);

@@ -105,7 +105,7 @@ identity = true
 - `app-groups` は記号名（小文字英数字とハイフン）です。`group.`・`$`・`.` を含む正式 ID は拒否します
 - 拡張は `NSExtension` が必須で、`deployment-target` は `数字.数字`、`sources` は 1 件以上です
 - 権限・feature・コンポーネントの `name` はドット区切りの識別子です。先頭 `.` の相対名は、利用者の applicationId で解決されて壊れるため拒否します
-- `gradle` は 3 部で、版は数字始まりの固定版です（`+`・`latest`・範囲・変数は拒否）
+- `gradle` は 3 部で、版は数字始まりの固定版です（`+`・`latest`・範囲・変数・`-SNAPSHOT` は拒否）
 - `attributes` のキーは英字のみで、`name`・`exported` は置けません
 - `meta-data` は `resource`（`@` 始まり）か `value` のどちらか一方です
 - パスは相対のみです（空・絶対・`..`・`\`・`:` は拒否）。実在と、symlink 解決後に crate 内に収まることも確かめます
