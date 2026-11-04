@@ -54,7 +54,7 @@
         "https://learn.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfregistersyncroot",
         "https://learn.microsoft.com/en-us/uwp/api/windows.storage.provider.storageprovidersyncrootmanager"
       ],
-      "deferred": "package identity が前提で home-widget の Windows と同じ理由。MSIX / sparse package の導入を決めれば着手できる",
+      "deferred": "package identity が前提で home-widget の Windows と同じ理由。MSIX / sparse package の導入を決めれば着手できる。sync root の登録 id は利用者のアプリ id から生成し、アンインストール時と起動時に `CfUnregisterSyncRoot` で回収する経路を持つ",
       "note": "未実装。エクスプローラーに同期フォルダとして出る。NTFS 限定。中身の供給はアプリ接続中のみ。異常終了で登録が残る"
     },
     "web": {

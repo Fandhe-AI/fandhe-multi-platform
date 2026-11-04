@@ -579,6 +579,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo-fandhe"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "cc"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

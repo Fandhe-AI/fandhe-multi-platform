@@ -13,9 +13,10 @@
       "url": [
         "https://developer.apple.com/documentation/uikit/uiapplication/protecteddatawillbecomeunavailablenotification",
         "https://developer.apple.com/documentation/uikit/uiapplication/protecteddatadidbecomeavailablenotification",
-        "https://developer.apple.com/documentation/uikit/uiapplication/isprotecteddataavailable"
+        "https://developer.apple.com/documentation/uikit/uiapplication/isprotecteddataavailable",
+        "https://developer.apple.com/documentation/uikit/uiapplicationdelegate/applicationprotecteddatawillbecomeunavailable(_:)"
       ],
-      "deferred": "ロックやスリープを直接知らせる公開 API は無く、公開されているのは保護ファイルが使えなくなる直前・使えるようになった時の通知だけ（ロックの近似）。利用者が端末をロックする時点でアプリは前面に無く、背景で停止している間にこの通知を受け取れるかは公式文書に書かれていない。確実に受けるには背景実行モード（`UIBackgroundModes`）の追加が要り、新しい権限・設計の変更になるため保留。背景実行の方針が決まったら見直す",
+      "deferred": "ロックやスリープを直接知らせる公開 API は無い。公開されているのは、保護ファイルが使えなくなる直前・使えるようになった時の通知（ロックの近似）と、今の状態を読む `isProtectedDataAvailable`。本機能の契約は OS ごとの部分対応を許すため、iOS はロック（近似）・解除・今の状態だけ対応し、スリープ・消灯は「取れない」と出す。背景・停止中のアプリにこの通知が届くかは公式文書に書かれておらず未確認で、実機で確かめてから着手する（まず `beginBackgroundTask` で確かめる。`UIBackgroundModes` は足さない。審査事由になり、この機能を選んだ利用者全員に及ぶため）。届かない場合は前面でロックされた場合の近似に限ると doc に書き、背景での未達は守らない範囲にする",
       "note": "未実装。公式: 通知はデータ保護が有効で端末がロックされる直前・解除後に届き、`isProtectedDataAvailable` はロック中なら false、ロック解除済みかデータ保護が無効なら true。発火までの遅れ・パスコード未設定時の扱いは公式文書に記載が無い"
     },
     "android": {
