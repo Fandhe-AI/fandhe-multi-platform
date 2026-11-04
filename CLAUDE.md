@@ -16,7 +16,7 @@ fandhe-multi-platform/
 ├── README.md                    # プロジェクト概要・セットアップ手順
 ├── AGENTS.md                    # レビュー観点集（ai-review（provider: codex）が PR の base コミットの本書を基準に読む）
 ├── skills-lock.json             # 導入スキルの記録（skills add の履歴）
-├── Cargo.toml                   # workspace ルート（9 クレート構成）
+├── Cargo.toml                   # workspace ルート（10 クレート構成）
 ├── Makefile                     # よく使うコマンドの薄い入口（実体は scripts/ か cargo 1 行。.claude/rules/makefile.md、make skill）
 ├── lefthook.yml                 # Git hooks 設定（pre-commit・commit-msg）
 ├── Dockerfile                   # 開発用コンテナ定義（共通コア・Linux・wasm32）
@@ -31,6 +31,7 @@ fandhe-multi-platform/
 │   ├── fandhe-device/           # 端末機能（保存・HTTP・カメラ）の抽象と共通実装（Phase 8 / #746、feature `device` で切り離し可能）
 │   ├── fandhe-egui-proxy/       # egui による実描画バックエンド（デスクトップ・Android・iOS・Web）
 │   ├── fandhe-fonts/            # CJK フォント資産（Noto Sans JP 埋め込み）
+│   ├── fandhe-platform-apple/   # Apple（iOS / macOS）共通層（build script helper・共有ヘッダ・is_main_thread、TASK-21.2 / #1168）
 │   ├── fandhe-prototype/        # プロトタイプアプリ共通コード（TASK-2.2）
 │   ├── fandhe-runtime/          # 起床と完了通知（CompletionSender・EffectFn）と Renderer trait（egui 非依存、TASK-21.2 / #1162・#1163）
 │   ├── fandhe-swiftui-bridge/   # SwiftUI 統合レイヤ（codec・ffi・error）

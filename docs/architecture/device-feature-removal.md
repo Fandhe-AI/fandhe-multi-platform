@@ -86,7 +86,10 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
    - `crates/fandhe-egui-proxy/ios/fandhe_ios_camera.m`・`crates/fandhe-egui-proxy/build.rs`
    - `crates/fandhe-egui-proxy/src/device/ios.rs`（`device.rs` の `pub mod ios;` 行込み）
    - ルート `Cargo.toml` の `[workspace.dependencies]` の `cc = "1"`、
-     `crates/fandhe-egui-proxy/Cargo.toml` の `[build-dependencies]` の `cc`
+     `crates/fandhe-egui-proxy/Cargo.toml` の `[build-dependencies]` の `fandhe-platform-apple`
+     （`cc` は `crates/fandhe-platform-apple/` の optional 依存。`build.rs` の ObjC コンパイルは
+     その `build` モジュールの helper 経由）と `[target.'cfg(target_os = "ios")'.dependencies]` の
+     `fandhe-platform-apple`（`is_main_thread` の呼び出しは `src/device/ios.rs` とともに消える）
    - `platforms/apple/FandheIosApp/Resources/Info.plist` の `NSCameraUsageDescription`
    - `crates/fandhe-egui-proxy/src/lib.rs` の iOS 分岐の `deny(unsafe_code)` 緩和
      （`#![cfg_attr(any(target_os = "android", target_os = "ios"), deny(unsafe_code))]` を
