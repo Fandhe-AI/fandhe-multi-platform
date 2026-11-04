@@ -177,7 +177,7 @@ Windows がプロセス間転送・レジストリ等で 2h を明らかに超�
   後続の子は自分の OS のモジュールだけを埋め、dispatch・fallback 行・`pub mod` 列を触らない。
   スタブは嘘の成功ではない（明示の `Unsupported` を返す）。スタブの OS は対応表で `possible` のまま、`impl` に書かない。
   スタブを置いた OS のクロスビルド（`cargo build --target ...` / `cargo ndk`）を (a) の受け入れ条件にする
-  （CI が見るのはホストと Android だけで、iOS・Windows のスタブは CI で検証されない）
+  （CI が見るのはホスト・Android・Windows で、iOS のスタブは CI で検証されない）
 - (a) は **共通コア画面（`crates/fandhe-core/src/screens/`）の状態・定数・文言を全対象 OS 分**定義する。
   OS 固有の操作 UI（登録・解除ボタン等）も含む。後続の子は共通コア画面を触らない
   （url-scheme では Windows と Web が別設計の登録状態を同時に足して衝突した。#1241）
@@ -488,11 +488,9 @@ KNOWN_CONFLICTING="1260" scripts/device/wait-pr-ready.sh 1247 1248 1249  # 報�
 - `READY` が出たら、Step 4 の判断（P0・セキュリティ・設計変更の指摘が出ていないか）と Step 5（表の更新確認）を
   済ませてから、`guarded-merge.sh <PR>` をもう一度実行し、最終行の `gh pr merge` を直接打つ。
   Step 6 のキャプチャと Step 7 の確認用 issue への追記はマージ後でよい
-- CI はホストと Android しかビルドしない（Windows・iOS は #408 で追跡中）。PR が Windows・iOS の cfg を触っていれば、
+- CI はホスト・Android・Windows（windows-gnu の clippy）をビルドするが、iOS はビルドしない。PR が iOS の cfg を触っていれば、
   マージ前に PR の head を一時 worktree（`git worktree add --detach <W> refs/remotes/pr/<N>`）へ取り、
-  Windows は `cargo clippy --target x86_64-pc-windows-gnu -p fandhe-egui-proxy`、iOS はその worktree の
-  `scripts/ios/check-lib.sh` で通す（PR head に無い古いブランチは main を取り込んでから。ターゲットごとに `CARGO_TARGET_DIR` を分ける）。fix ループが指摘を直した push も CI では検証されない
-  （video-transcode の Windows #1026 は、`Send` でない COM の型を static に積む修正がコンパイルできないまま READY になった）
+  その worktree の `scripts/ios/check-lib.sh` で通す（PR head に無い古いブランチは main を取り込んでから）。fix ループが指摘を直した push も iOS は CI で検証されない
 - `READY` 直後の `guarded-merge.sh` が一度だけ「条件未達」を返すことがある（10 周目に 3 回。数十秒後の再実行で通った）。
   数十秒おいて `guarded-merge.sh` を再実行する。続けて未達なら、出力の内訳（`checks=` 等）を見て止まる条件に従う
 - `CONFLICTING` が出たら Step 4「兄弟 PR の競合」
