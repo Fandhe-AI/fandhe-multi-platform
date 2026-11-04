@@ -394,3 +394,42 @@ fn workspace_checks_declarations_of_path_dependencies_outside_workspace() {
     .unwrap();
     assert!(errors(check_workspace(Some(&m))).contains("fandhe-cap-ext"));
 }
+
+#[test]
+fn workspace_merges_only_dependencies_reachable_from_app() {
+    let mk = |v: &str| {
+        format!("[package.metadata.fandhe]\nid = \"{v}\"\n[package.metadata.fandhe.ios]\ninfo-plist = {{ K = \"{v}\" }}\n")
+    };
+    let c = |dir: &str, name: &str, decl: String| (dir.to_string(), name.to_string(), decl);
+    // app は a だけに依存する。b は a と競合するが app から到達しないので統合に入らない。
+    let m = make_ws(
+        "ws-reach",
+        &[c("a", "third-a", mk("a")), c("b", "third-b", mk("b"))],
+    );
+    // root を app パッケージにする（仮想 workspace では対象が決まらない）。
+    let root = m.parent().unwrap();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/lib.rs"), "").unwrap();
+    fs::write(
+        &m,
+        "[package]\nname = \"app\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[dependencies]\nthird-a = { path = \"c/a\" }\n[workspace]\nmembers = [\"c/*\"]\n",
+    )
+    .unwrap();
+    let r = check_workspace(Some(&m));
+    assert!(r.is_ok(), "{:?}", r.err());
+}
+
+#[test]
+fn merge_reports_nested_conflict_owners() {
+    let d = |id: &str, v: Value| decl(json!({"id":id,"ios":{"info-plist":{"K":v}}}));
+    let (a, b, c) = (
+        d("a", json!({"X":1})),
+        d("b", json!({"Y":1})),
+        d("c", json!({"Y":2})),
+    );
+    let e = merge(&[("a", &a), ("b", &b), ("c", &c)]).unwrap_err();
+    assert!(
+        e.field == "ios.info-plist.K.Y" && e.a == "b" && e.b == "c",
+        "{e}"
+    );
+}

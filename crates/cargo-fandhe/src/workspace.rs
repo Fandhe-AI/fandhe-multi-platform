@@ -1,7 +1,7 @@
 //! workspace 全体の検査。`cargo metadata` の JSON を入力にして、TOML の解釈は cargo に任せる。
 //! 呼び出し元は `cargo fandhe check`（`main.rs`）と CI の `cargo test`（実 workspace への検査）。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -12,7 +12,10 @@ use crate::merge::{merge, Merged};
 
 const CAP_PREFIX: &str = "fandhe-cap-";
 
-/// `manifest` の workspace と、その解決済み依存にある全 crate の宣言を検証し、統合まで通す。
+/// `manifest` の workspace と、その解決済み依存にある全 crate の宣言を検証する。
+/// 統合は `manifest` が指すアプリ（root package）から通常依存で到達する crate に限る
+/// （選ばなかった機能の権限を入れない。consumer-app-structure.md §4）。
+/// 仮想 workspace（root package なし）では対象アプリが決まらないため、宣言を持つ全 crate を統合する。
 /// 問題は 1 件ずつの文字列（crate 名つき）で全件返す。
 pub fn check_workspace(manifest: Option<&Path>) -> Result<Merged, Vec<String>> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
@@ -37,7 +40,7 @@ pub fn check_workspace(manifest: Option<&Path>) -> Result<Merged, Vec<String>> {
         .map_err(|e| vec![format!("cargo metadata の出力を読めません: {e}")])?;
 
     let mut problems = Vec::new();
-    let mut decls: Vec<(String, Declaration)> = Vec::new();
+    let mut decls: Vec<(String, String, Declaration)> = Vec::new();
     let mut ids: BTreeMap<String, String> = BTreeMap::new();
     let mut seen = std::collections::BTreeSet::new();
     for pkg in meta["packages"].as_array().into_iter().flatten() {
@@ -46,6 +49,7 @@ pub fn check_workspace(manifest: Option<&Path>) -> Result<Merged, Vec<String>> {
             continue;
         }
         let name = pkg["name"].as_str().unwrap_or("?");
+        let pkg_id = pkg["id"].as_str().unwrap_or("?");
         let decl = &pkg["metadata"]["fandhe"];
         if decl.is_null() {
             if name.starts_with(CAP_PREFIX) {
@@ -84,12 +88,47 @@ pub fn check_workspace(manifest: Option<&Path>) -> Result<Merged, Vec<String>> {
             problems.push(format!("{name}: id `{}` が {prev} と重複しています", d.id));
         }
         if problems.len() == before {
-            decls.push((d.id.clone(), d));
+            decls.push((pkg_id.to_string(), d.id.clone(), d));
         }
     }
     if !problems.is_empty() {
         return Err(problems);
     }
-    let refs: Vec<(&str, &Declaration)> = decls.iter().map(|(i, d)| (i.as_str(), d)).collect();
+    let reach = reachable(&meta);
+    let refs: Vec<(&str, &Declaration)> = decls
+        .iter()
+        .filter(|(pid, _, _)| reach.as_ref().is_none_or(|r| r.contains(pid.as_str())))
+        .map(|(_, i, d)| (i.as_str(), d))
+        .collect();
     merge(&refs).map_err(|e| vec![e.to_string()])
+}
+
+/// root package から通常依存（build・dev を除く）で到達する package id。root が無ければ `None`。
+fn reachable(meta: &Value) -> Option<BTreeSet<&str>> {
+    let root = meta["resolve"]["root"].as_str()?;
+    let nodes: BTreeMap<&str, &Value> = meta["resolve"]["nodes"]
+        .as_array()?
+        .iter()
+        .filter_map(|n| Some((n["id"].as_str()?, n)))
+        .collect();
+    let mut seen = BTreeSet::from([root]);
+    let mut stack = vec![root];
+    while let Some(id) = stack.pop() {
+        for d in nodes
+            .get(id)
+            .and_then(|n| n["deps"].as_array())
+            .into_iter()
+            .flatten()
+        {
+            let normal = d["dep_kinds"]
+                .as_array()
+                .is_none_or(|ks| ks.iter().any(|k| k["kind"].is_null()));
+            if let Some(p) = d["pkg"].as_str().filter(|_| normal) {
+                if seen.insert(p) {
+                    stack.push(p);
+                }
+            }
+        }
+    }
+    Some(seen)
 }
