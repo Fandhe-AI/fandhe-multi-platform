@@ -442,3 +442,25 @@ fn merge_reports_all_conflicts_inside_one_object() {
     assert_eq!(fields, ["ios.info-plist.K.X", "ios.info-plist.K.Y"]);
     assert!(errs.iter().all(|e| e.a == "a" && e.b == "b"));
 }
+
+#[test]
+fn merge_reports_conflicts_across_three_features_in_one_object() {
+    let d = |id: &str, k: Value| decl(json!({"id":id,"ios":{"info-plist":{"K":k}}}));
+    let (a, b, c) = (
+        d("a", json!({"X":1})),
+        d("b", json!({"X":2,"Y":1})),
+        d("c", json!({"Y":2})),
+    );
+    let errs = merge(&[("a", &a), ("b", &b), ("c", &c)]).unwrap_err();
+    let got: Vec<_> = errs
+        .iter()
+        .map(|e| (e.field.as_str(), e.a.as_str(), e.b.as_str()))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            ("ios.info-plist.K.X", "a", "b"),
+            ("ios.info-plist.K.Y", "b", "c")
+        ]
+    );
+}

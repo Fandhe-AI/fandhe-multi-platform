@@ -68,16 +68,18 @@ fn record(path: &str, v: &Value, owners: &mut BTreeMap<String, String>, id: &str
 }
 
 /// 同じキーの値を統合する。同値はそのまま、配列は和集合（出現順）、オブジェクトは再帰。
-/// それ以外の不一致は、競合した葉のパスと両側の値を全件 `Err` で返す。
+/// それ以外の不一致は競合した葉のパスと両側の値を `errs` へ積み、先に書いた側の値を残す。
+/// 競合があっても残りのキーは統合し続ける（呼び出し側が `errs` を見て `Err` にするので、残した値は外へ出ない）。
 fn merge_value(
     a: &Value,
     b: &Value,
     path: &str,
     owners: &mut BTreeMap<String, String>,
     id: &str,
-) -> Result<Value, Vec<(String, String)>> {
+    errs: &mut Vec<(String, String)>,
+) -> Value {
     match (a, b) {
-        _ if a == b => Ok(a.clone()),
+        _ if a == b => a.clone(),
         (Value::Array(x), Value::Array(y)) => {
             let mut out = x.clone();
             for v in y {
@@ -85,22 +87,14 @@ fn merge_value(
                     out.push(v.clone());
                 }
             }
-            Ok(Value::Array(out))
+            Value::Array(out)
         }
         (Value::Object(x), Value::Object(y)) => {
             let mut out = x.clone();
-            // 同じオブジェクト内の競合も最初の 1 件で止めず集める。
-            let mut errs = Vec::new();
             for (k, v) in y {
                 let child = format!("{path}.{k}");
                 let merged = match out.get(k) {
-                    Some(cur) => match merge_value(cur, v, &child, owners, id) {
-                        Ok(m) => m,
-                        Err(e) => {
-                            errs.extend(e);
-                            continue;
-                        }
-                    },
+                    Some(cur) => merge_value(cur, v, &child, owners, id, errs),
                     None => {
                         record(&child, v, owners, id);
                         v.clone()
@@ -108,13 +102,12 @@ fn merge_value(
                 };
                 out.insert(k.clone(), merged);
             }
-            if errs.is_empty() {
-                Ok(Value::Object(out))
-            } else {
-                Err(errs)
-            }
+            Value::Object(out)
         }
-        _ => Err(vec![(path.to_string(), format!("{a} と {b}"))]),
+        _ => {
+            errs.push((path.to_string(), format!("{a} と {b}")));
+            a.clone()
+        }
     }
 }
 
@@ -128,18 +121,17 @@ fn merge_map(
 ) {
     for (k, v) in from {
         let merged = match into.get(k) {
-            Some(cur) => match merge_value(cur, v, k, owners, id) {
-                Ok(m) => m,
-                Err(leaves) => {
-                    errs.extend(leaves.into_iter().map(|(leaf, detail)| MergeError {
-                        field: format!("{field}.{leaf}"),
-                        a: owners.get(&leaf).cloned().unwrap_or_default(),
-                        b: id.to_string(),
-                        detail,
-                    }));
-                    continue;
-                }
-            },
+            Some(cur) => {
+                let mut leaves = Vec::new();
+                let m = merge_value(cur, v, k, owners, id, &mut leaves);
+                errs.extend(leaves.into_iter().map(|(leaf, detail)| MergeError {
+                    field: format!("{field}.{leaf}"),
+                    a: owners.get(&leaf).cloned().unwrap_or_default(),
+                    b: id.to_string(),
+                    detail,
+                }));
+                m
+            }
             None => {
                 record(k, v, owners, id);
                 v.clone()
