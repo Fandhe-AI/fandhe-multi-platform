@@ -218,6 +218,12 @@ fn is_rel_path(s: &str) -> bool {
         && s.split('/').all(|seg| seg != "..")
 }
 
+/// Info.plist のキーから端末修飾子（`key-<platform>~<device>` の `-…`・`~…`）を落とす。
+/// `info-plist` の説明文拒否判定が使う。修飾子つきでも説明文を機能側に埋め込ませないため。
+fn strip_qualifier(k: &str) -> &str {
+    &k[..k.find(['-', '~']).unwrap_or(k.len())]
+}
+
 fn no_ctrl(s: &str) -> bool {
     !s.chars().any(char::is_control)
 }
@@ -307,9 +313,9 @@ impl Ctx {
     fn plist(&mut self, field: &str, m: &Map<String, Value>) {
         for (k, v) in m {
             self.check(
-                !k.ends_with("UsageDescription"),
+                !strip_qualifier(k).ends_with("UsageDescription"),
                 &format!("{field}.{k}"),
-                "説明文は既定値を持たず利用者が書きます。`usage-descriptions` にキーだけを書いてください",
+                "説明文は既定値を持たず利用者が書きます（`-iphoneos`・`~ipad` 等の修飾子つきも同じ）。`usage-descriptions` にキーだけを書いてください",
             );
             self.check(
                 no_ctrl(k) && json_no_ctrl(v),

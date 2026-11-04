@@ -464,3 +464,25 @@ fn merge_reports_conflicts_across_three_features_in_one_object() {
         ]
     );
 }
+
+#[test]
+fn rejects_qualified_usage_description_keys_in_plist() {
+    for k in [
+        "NSCameraUsageDescription~ipad",
+        "NSCameraUsageDescription-iphoneos",
+        "NSCameraUsageDescription-iphoneos~ipad",
+    ] {
+        let body = json!({k: "既定文言"});
+        assert_rejected(
+            json!({"id":"x","ios":{"info-plist":body.clone()}}),
+            "説明文",
+        );
+        assert_rejected(
+            json!({"id":"x","ios":{"extensions":[{"name":"E","bundle-suffix":"ext","deployment-target":"17.0","sources":["apple/widget"],
+                "info-plist":{"NSExtension":{},k:"既定文言"}}]}}),
+            "説明文",
+        );
+    }
+    let ok = json!({"id":"x","ios":{"info-plist":{"NSSomething-iphoneos":"v"}}});
+    assert_eq!(problems(ok), "");
+}

@@ -100,7 +100,7 @@ identity = true
 問題は 1 件で止めず、欄のパスつきで全件を返します。
 
 - `id` は kebab-case です。`fandhe-cap-*` の crate は名前と `id` が一致し、宣言が必須です。`id` は重複できません
-- `usage-descriptions` の各キーは `UsageDescription` で終わります。`info-plist` に同名のキーを置くと拒否します（拡張も同じ）
+- `usage-descriptions` の各キーは `UsageDescription` で終わります。`info-plist` に同名のキーを置くと、`-iphoneos`・`~ipad` 等の修飾子つき（`NSCameraUsageDescription~ipad`）も含めて拒否します（拡張も同じ）
 - `entitlements` に `com.apple.security.application-groups` を直接書くと拒否します
 - `app-groups` は記号名（小文字英数字とハイフン）です。`group.`・`$`・`.` を含む正式 ID は拒否します
 - 拡張は `NSExtension` が必須で、`deployment-target` は `数字.数字`、`sources` は 1 件以上です
