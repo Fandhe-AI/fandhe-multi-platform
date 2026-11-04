@@ -4897,10 +4897,9 @@ public class MainActivity extends GameActivity {
     // `Configuration.fontScale` は「システム標準の何倍か」を表す倍率で、Rust 側の
     // `TextScale` 契約（`fandhe_device::text_scale` モジュール doc）とそのまま一致する。
     //
-    // 文字サイズ変更時、`AndroidManifest.xml` の `configChanges` に `fontScale` を
-    // 含めていないため Activity は再生成される（`onCreate` から再実行）。これにより
-    // 次回呼び出し時の `getResources()` は新しい設定を反映済みで、明示的な
-    // `onConfigurationChanged` の追加は不要（実装計画 §7、天井は
+    // `AndroidManifest.xml` の `configChanges` に `fontScale` を含めているため、文字サイズ変更で
+    // Activity は再生成されない（Issue #73）。Rust 側は `OsScale::Unread` のとき 1 回読むだけで、
+    // 稼働中の変更には追従しない（再起動で反映。天井は
     // `docs/device/capabilities/dynamic-type.json` の `note` に記録）。
     private float textScaleFactor() {
         return getResources().getConfiguration().fontScale;
