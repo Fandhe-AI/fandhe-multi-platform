@@ -57,6 +57,7 @@ declare -a cargo_ndk_args=(
   --platform "${ANDROID_MIN_API}"
   build
   -p fandhe-core
+  -p fandhe-platform-android
 )
 if [ "${RELEASE}" -eq 1 ]; then
   cargo_ndk_args+=(--release)
