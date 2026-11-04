@@ -158,6 +158,11 @@ Codex code review は既定で P0/P1 を報告・ブロック対象とするた�
   Issue 化せず放置しない・現在の PR へ混入させない
   （[out-of-scope-tracking.md](.claude/rules/out-of-scope-tracking.md)）: **P2**
 
+- **利用者向け構造**: 機能 crate・宣言の正本・生成・レンダラ分離・egui を既定とする判断は
+  [consumer-app-structure.md](docs/architecture/consumer-app-structure.md) を正とする。
+  #1194 までの新旧構造の併存は欠陥として指摘しない。
+  同書の判断を覆す変更は、先に同書を更新する docs PR で行う。
+
 ## 運用上の注記
 
 - rustfmt / clippy / cargo test / Android クロスビルド等は既存 CI
