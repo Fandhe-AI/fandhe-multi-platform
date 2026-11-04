@@ -116,8 +116,7 @@ identity = true
 ## 4. 統合規則
 
 機能を id 順に処理し、結果を決定的にします。
-検証は解決済みの全 crate に行い、統合は対象アプリ（root package）から通常依存で到達する crate に限ります。到達の判定は `cargo tree` を使い、別の workspace member が有効にした feature の辺は辿りません。対象 OS は絞らず（`--target all`）、`[target.'cfg(...)'.dependencies]` の依存（Android 専用機能等）も統合に入れます。
-仮想 workspace では対象が決まらないため、宣言を持つ全 crate を統合します。
+`cargo fandhe check` は解決済みの全 crate の宣言を検証するだけで、統合はしません。統合規則は純粋関数（`merge`）で、検証済みの宣言の一覧を受け取ります。どの機能を統合に入れるか（到達判定）は 5 節のとおり #1176 の担当です。
 競合は、競合した葉のパスと、その葉を最初に書いた機能を報告します。
 
 | 欄 | 規則 |
@@ -141,4 +140,5 @@ identity = true
 | `web` の欄 | 本 issue の範囲外。Web の共通層の分離（#1185）で決める |
 | `windows.capabilities` | #1208 で必要になれば足す |
 | 形式の版番号 | 未知キーの拒否で足りる。要否は #1224 で判断する |
+| 到達判定（対象アプリが使う機能だけを生成に入れる） | `cargo fandhe gen`（#1176）で扱う。実装は次を満たす: `cargo tree` の文字列解析に頼らず、`cargo metadata` の `resolve` の package ID で対応付ける / feature の統合が他の workspace member から混ざらない / 対象 OS 限定の依存（`[target.'cfg(...)'.dependencies]`）を含める / 取得元違いの同名同版を区別する / default-members に左右されない |
 | Gradle の版の正本 | `versions.env` との二重管理は #1194 までの併存。移行は #1161 以降 |

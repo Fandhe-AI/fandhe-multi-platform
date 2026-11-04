@@ -68,14 +68,14 @@ fn record(path: &str, v: &Value, owners: &mut BTreeMap<String, String>, id: &str
 }
 
 /// 同じキーの値を統合する。同値はそのまま、配列は和集合（出現順）、オブジェクトは再帰。
-/// それ以外の不一致は競合した葉のパスを `Err` で返す。
+/// それ以外の不一致は、競合した葉のパスと両側の値を全件 `Err` で返す。
 fn merge_value(
     a: &Value,
     b: &Value,
     path: &str,
     owners: &mut BTreeMap<String, String>,
     id: &str,
-) -> Result<Value, String> {
+) -> Result<Value, Vec<(String, String)>> {
     match (a, b) {
         _ if a == b => Ok(a.clone()),
         (Value::Array(x), Value::Array(y)) => {
@@ -89,10 +89,18 @@ fn merge_value(
         }
         (Value::Object(x), Value::Object(y)) => {
             let mut out = x.clone();
+            // 同じオブジェクト内の競合も最初の 1 件で止めず集める。
+            let mut errs = Vec::new();
             for (k, v) in y {
                 let child = format!("{path}.{k}");
                 let merged = match out.get(k) {
-                    Some(cur) => merge_value(cur, v, &child, owners, id)?,
+                    Some(cur) => match merge_value(cur, v, &child, owners, id) {
+                        Ok(m) => m,
+                        Err(e) => {
+                            errs.extend(e);
+                            continue;
+                        }
+                    },
                     None => {
                         record(&child, v, owners, id);
                         v.clone()
@@ -100,9 +108,13 @@ fn merge_value(
                 };
                 out.insert(k.clone(), merged);
             }
-            Ok(Value::Object(out))
+            if errs.is_empty() {
+                Ok(Value::Object(out))
+            } else {
+                Err(errs)
+            }
         }
-        _ => Err(path.to_string()),
+        _ => Err(vec![(path.to_string(), format!("{a} と {b}"))]),
     }
 }
 
@@ -118,13 +130,13 @@ fn merge_map(
         let merged = match into.get(k) {
             Some(cur) => match merge_value(cur, v, k, owners, id) {
                 Ok(m) => m,
-                Err(leaf) => {
-                    errs.push(MergeError {
+                Err(leaves) => {
+                    errs.extend(leaves.into_iter().map(|(leaf, detail)| MergeError {
                         field: format!("{field}.{leaf}"),
                         a: owners.get(&leaf).cloned().unwrap_or_default(),
                         b: id.to_string(),
-                        detail: format!("{cur} と {v}"),
-                    });
+                        detail,
+                    }));
                     continue;
                 }
             },

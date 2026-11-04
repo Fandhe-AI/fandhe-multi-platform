@@ -65,7 +65,7 @@ fn fixtures_ws(tag: &str, ids: &[&str]) -> PathBuf {
     make_ws(tag, &crates)
 }
 
-fn errors(r: Result<cargo_fandhe::Merged, Vec<String>>) -> String {
+fn errors(r: Result<Vec<Declaration>, Vec<String>>) -> String {
     r.expect_err("拒否されるはず").join("\n")
 }
 
@@ -77,7 +77,10 @@ fn decl(v: Value) -> Declaration {
 
 #[test]
 fn five_fixtures_pass_through_cargo_metadata_and_merge() {
-    let m = check_workspace(Some(&fixtures_ws("ws-five", &IDS))).unwrap();
+    let decls = check_workspace(Some(&fixtures_ws("ws-five", &IDS))).unwrap();
+    assert_eq!(decls.len(), IDS.len());
+    let refs: Vec<_> = decls.iter().map(|d| (d.id.as_str(), d)).collect();
+    let m = merge(&refs).unwrap();
     // camera-capture と document-scan が共有する説明文キーは 1 つ。
     assert_eq!(m.ios.usage_descriptions.len(), 1);
     assert!(m.ios.frameworks.contains("VisionKit"));
@@ -89,15 +92,23 @@ fn five_fixtures_pass_through_cargo_metadata_and_merge() {
     assert_eq!(m.android.gradle.len(), 1);
     assert!(m.android.permissions.contains_key("android.permission.NFC"));
     assert!(m.windows_identity);
+    // 拡張の取り込み元は OS の所属を保持する。
+    assert!(m
+        .extension_sources
+        .iter()
+        .all(|(_, os, _, _)| os == "ios" || os == "macos"));
+    assert!(!m.extension_sources.is_empty());
 }
 
 #[test]
 fn camera_and_document_scan_share_usage_description() {
-    let m = check_workspace(Some(&fixtures_ws(
+    let decls = check_workspace(Some(&fixtures_ws(
         "ws-share",
         &["camera-capture", "document-scan"],
     )))
     .unwrap();
+    let refs: Vec<_> = decls.iter().map(|d| (d.id.as_str(), d)).collect();
+    let m = merge(&refs).unwrap();
     assert_eq!(m.ios.usage_descriptions.len(), 1);
 }
 
@@ -291,7 +302,15 @@ fn rejects_gradle_and_paths() {
     }
     for bad in ["../x", "/abs", "a\\b", "C:/x", "", "a\nb"] {
         assert_rejected(android(json!({"java":[bad]})), "java[0]");
+        assert_rejected(android(json!({"res":[bad]})), "res[0]");
     }
+    // Apple 拡張の sources も同じ相対パス規則
+    let ext = |src: &str| {
+        json!({"id":"x","ios":{"extensions":[{"name":"Ext","bundle-suffix":"ext",
+            "deployment-target":"14.0","sources":[src],"info-plist":{"NSExtension":{}}}]}})
+    };
+    assert_rejected(ext("a\nb"), "sources[0]");
+    assert_rejected(ext("a\u{7}b"), "sources[0]");
 }
 
 #[test]
@@ -361,19 +380,6 @@ fn workspace_rejects_name_mismatch_missing_declaration_duplicate_and_unknown_key
 }
 
 #[test]
-fn workspace_reports_merge_conflict_across_crates() {
-    let mk = |v: &str| {
-        format!("[package.metadata.fandhe]\nid = \"{v}\"\n[package.metadata.fandhe.ios]\ninfo-plist = {{ K = \"{v}\" }}\n")
-    };
-    let c = |dir: &str, name: &str, decl: String| (dir.to_string(), name.to_string(), decl);
-    let m = make_ws(
-        "ws-conflict",
-        &[c("a", "third-a", mk("a")), c("b", "third-b", mk("b"))],
-    );
-    assert!(errors(check_workspace(Some(&m))).contains("食い違"));
-}
-
-#[test]
 fn workspace_checks_declarations_of_path_dependencies_outside_workspace() {
     // workspace 外の path 依存（公開 crate と同じ立場）の不正な宣言も拾う。
     let m = make_ws(
@@ -393,106 +399,6 @@ fn workspace_checks_declarations_of_path_dependencies_outside_workspace() {
     )
     .unwrap();
     assert!(errors(check_workspace(Some(&m))).contains("fandhe-cap-ext"));
-}
-
-#[test]
-fn workspace_merges_only_dependencies_reachable_from_app() {
-    let mk = |v: &str| {
-        format!("[package.metadata.fandhe]\nid = \"{v}\"\n[package.metadata.fandhe.ios]\ninfo-plist = {{ K = \"{v}\" }}\n")
-    };
-    let c = |dir: &str, name: &str, decl: String| (dir.to_string(), name.to_string(), decl);
-    // app は a だけに依存する。b は a と競合するが app から到達しないので統合に入らない。
-    let m = make_ws(
-        "ws-reach",
-        &[c("a", "third-a", mk("a")), c("b", "third-b", mk("b"))],
-    );
-    // root を app パッケージにする（仮想 workspace では対象が決まらない）。
-    let root = m.parent().unwrap();
-    fs::create_dir_all(root.join("src")).unwrap();
-    fs::write(root.join("src/lib.rs"), "").unwrap();
-    fs::write(
-        &m,
-        "[package]\nname = \"app\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[dependencies]\nthird-a = { path = \"c/a\" }\n[workspace]\nmembers = [\"c/*\"]\n",
-    )
-    .unwrap();
-    let r = check_workspace(Some(&m));
-    assert!(r.is_ok(), "{:?}", r.err());
-}
-
-#[test]
-fn workspace_reach_ignores_default_members() {
-    let mk = |v: &str| {
-        format!("[package.metadata.fandhe]\nid = \"{v}\"\n[package.metadata.fandhe.ios]\ninfo-plist = {{ K = \"{v}\" }}\n")
-    };
-    let c = |dir: &str, name: &str, decl: String| (dir.to_string(), name.to_string(), decl);
-    let m = make_ws(
-        "ws-defmem",
-        &[c("a", "third-a", mk("a")), c("b", "third-b", mk("b"))],
-    );
-    let root = m.parent().unwrap();
-    fs::create_dir_all(root.join("src")).unwrap();
-    fs::write(root.join("src/lib.rs"), "").unwrap();
-    // app は a・b の両方に依存する。default-members が b だけでも a が統合に入り競合する。
-    fs::write(
-        &m,
-        "[package]\nname = \"app\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[dependencies]\nthird-a = { path = \"c/a\" }\nthird-b = { path = \"c/b\" }\n[workspace]\nmembers = [\"c/*\"]\ndefault-members = [\"c/b\"]\n",
-    )
-    .unwrap();
-    assert!(errors(check_workspace(Some(&m))).contains("K"));
-}
-
-#[test]
-fn workspace_merges_target_specific_dependencies_of_other_os() {
-    let mk = |v: &str| {
-        format!("[package.metadata.fandhe]\nid = \"{v}\"\n[package.metadata.fandhe.ios]\ninfo-plist = {{ K = \"{v}\" }}\n")
-    };
-    let c = |dir: &str, name: &str, decl: String| (dir.to_string(), name.to_string(), decl);
-    // a は host に無い OS 限定の依存。host 限定の依存解決だと統合から漏れて b との競合が見えない。
-    let m = make_ws(
-        "ws-target",
-        &[c("a", "third-a", mk("a")), c("b", "third-b", mk("b"))],
-    );
-    let root = m.parent().unwrap();
-    fs::create_dir_all(root.join("src")).unwrap();
-    fs::write(root.join("src/lib.rs"), "").unwrap();
-    fs::write(
-        &m,
-        "[package]\nname = \"app\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[dependencies]\nthird-b = { path = \"c/b\" }\n[target.'cfg(target_os = \"nonexistent-os\")'.dependencies]\nthird-a = { path = \"c/a\" }\n[workspace]\nmembers = [\"c/*\"]\n",
-    )
-    .unwrap();
-    let r = check_workspace(Some(&m));
-    assert!(r.is_err(), "target 限定の依存も統合されるはず");
-}
-
-#[test]
-fn workspace_ignores_features_enabled_by_other_members() {
-    let mk = |v: &str| {
-        format!("[package.metadata.fandhe]\nid = \"{v}\"\n[package.metadata.fandhe.ios]\ninfo-plist = {{ K = \"{v}\" }}\n")
-    };
-    let c = |dir: &str, name: &str, decl: String| (dir.to_string(), name.to_string(), decl);
-    // 別 member（other）が app の feature x（third-b を引く）を有効にしても、app 単体の選択には含まれない。
-    let m = make_ws(
-        "ws-feature",
-        &[
-            c("a", "third-a", mk("a")),
-            c("b", "third-b", mk("b")),
-            c(
-                "other",
-                "other",
-                "[dependencies]\napp = { path = \"../..\", features = [\"x\"] }\n".into(),
-            ),
-        ],
-    );
-    let root = m.parent().unwrap();
-    fs::create_dir_all(root.join("src")).unwrap();
-    fs::write(root.join("src/lib.rs"), "").unwrap();
-    fs::write(
-        &m,
-        "[package]\nname = \"app\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[dependencies]\nthird-a = { path = \"c/a\" }\nthird-b = { path = \"c/b\", optional = true }\n[features]\nx = [\"dep:third-b\"]\n[workspace]\nresolver = \"2\"\nmembers = [\"c/*\"]\n",
-    )
-    .unwrap();
-    let r = check_workspace(Some(&m));
-    assert!(r.is_ok(), "{:?}", r.err());
 }
 
 #[test]
@@ -525,4 +431,14 @@ fn merge_collects_all_conflicts() {
     let d = |id: &str, x: &str, y: &str| decl(json!({"id":id,"ios":{"info-plist":{"X":x,"Y":y}}}));
     let (a, b) = (d("a", "1", "1"), d("b", "2", "2"));
     assert_eq!(merge(&[("a", &a), ("b", &b)]).unwrap_err().len(), 2);
+}
+
+#[test]
+fn merge_reports_all_conflicts_inside_one_object() {
+    let d = |id: &str, n: i32| decl(json!({"id":id,"ios":{"info-plist":{"K":{"X":n,"Y":n}}}}));
+    let (a, b) = (d("a", 1), d("b", 2));
+    let errs = merge(&[("a", &a), ("b", &b)]).unwrap_err();
+    let fields: Vec<_> = errs.iter().map(|e| e.field.as_str()).collect();
+    assert_eq!(fields, ["ios.info-plist.K.X", "ios.info-plist.K.Y"]);
+    assert!(errs.iter().all(|e| e.a == "a" && e.b == "b"));
 }

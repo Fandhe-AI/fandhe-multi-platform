@@ -24,7 +24,7 @@ fandhe-multi-platform/
 ├── .editorconfig                # エディタ設定（改行・インデント・末尾空白の統一）
 │
 ├── crates/
-│   ├── cargo-fandhe/            # 機能宣言（[package.metadata.fandhe]）の検証・統合。`cargo fandhe check`（#1160、forbid(unsafe_code)）
+│   ├── cargo-fandhe/            # 機能宣言（[package.metadata.fandhe]）の検証と統合規則。`cargo fandhe check`（#1160、forbid(unsafe_code)）
 │   ├── fandhe-core/             # 共通コア（UI DSL・状態管理・AI 型安全 DSL、forbid(unsafe_code)）
 │   │   ├── src/lib.rs           # 役割要約・モジュール地図（ui / state / token / screens）
 │   │   └── src/screens/         # AI が生成した画面モジュールの置き場（`ui/mod.rs` には手を入れない）

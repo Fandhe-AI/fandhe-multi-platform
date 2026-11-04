@@ -2,7 +2,7 @@
 name = "cargo-fandhe"
 version = "0.1.0"
 edition = "2021"
-description = "機能 crate の [package.metadata.fandhe] 宣言の形式検証と統合（cargo fandhe check）。生成（gen）は #1176 で足す"
+description = "機能 crate の [package.metadata.fandhe] 宣言の形式検証（cargo fandhe check）と統合規則。到達判定と生成（gen）は #1176 で足す"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
 # 公開への切り替えは #1216、名前の確定は #1215（consumer-app-structure.md §3）。
