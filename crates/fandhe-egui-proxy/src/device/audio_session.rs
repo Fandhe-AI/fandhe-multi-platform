@@ -396,7 +396,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<AudioSessionShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     fn pump(state: &mut AudioSessionShowState, rx: &Rx) {

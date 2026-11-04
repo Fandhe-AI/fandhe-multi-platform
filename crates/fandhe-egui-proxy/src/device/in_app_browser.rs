@@ -283,7 +283,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<InAppBrowserShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     fn new_bridge(deadline: Duration) -> &'static Bridge {

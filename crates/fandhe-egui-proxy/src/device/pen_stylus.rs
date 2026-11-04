@@ -187,6 +187,7 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `pen_draw` 画面用に配線される effect ドライバ。
 pub fn pen_draw_effect(state: &PenDrawState, sender: &CompletionSender<PenDrawState>) {
+    use crate::app::EguiSenderExt as _;
     let pointer = sender.canvas_pointer(fandhe_core::screens::pen_draw::CANVAS_ID);
     let pressed = sender.canvas_pressed(fandhe_core::screens::pen_draw::CANVAS_ID);
     let released = sender.canvas_released(fandhe_core::screens::pen_draw::CANVAS_ID);
@@ -213,7 +214,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<PenDrawState>, Rx) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     fn apply_all(rx: &Rx, s: &mut PenDrawState) -> usize {

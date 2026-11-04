@@ -119,7 +119,7 @@ mod tests {
     ) {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, ctx), rx)
+        (crate::app::egui_sender(tx, ctx), rx)
     }
 
     struct Fake(Result<Vec<String>, fn() -> DeviceError>);

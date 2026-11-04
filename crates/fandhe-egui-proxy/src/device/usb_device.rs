@@ -140,7 +140,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<UsbDeviceShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     fn run(state: &mut UsbDeviceShowState, devices: &dyn UsbDevices) {

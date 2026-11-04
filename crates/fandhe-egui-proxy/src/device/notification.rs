@@ -363,7 +363,7 @@ mod tests {
     ) {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, ctx), rx)
+        (crate::app::egui_sender(tx, ctx), rx)
     }
 
     /// 常に `Submitted` を返すモック（正常系の写像を確認する）。

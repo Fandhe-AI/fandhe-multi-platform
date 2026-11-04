@@ -428,7 +428,7 @@ mod tests {
             let (tx, rx) = std::sync::mpsc::channel();
             Self {
                 state: WebAuthSessionDemoState::default(),
-                sender: CompletionSender::new(tx, egui::Context::default()),
+                sender: crate::app::egui_sender(tx, egui::Context::default()),
                 rx,
             }
         }

@@ -159,7 +159,7 @@ mod tests {
     ) {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, ctx), rx)
+        (crate::app::egui_sender(tx, ctx), rx)
     }
 
     /// インメモリモック（`fandhe-device` 側テストと同じ最小形）。

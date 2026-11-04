@@ -454,7 +454,7 @@ mod tests {
         start_capture(&mut state);
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, ctx);
+        let sender = crate::app::egui_sender(tx, ctx);
         drive(
             &state,
             &sender,

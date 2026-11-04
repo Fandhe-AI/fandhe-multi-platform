@@ -15,8 +15,8 @@
 //! 本モジュール自体は `lib.rs` 側の `#[cfg(target_os = "ios")] pub mod ios;` で
 //! ゲートされるため、モジュール内でのターゲット条件の再指定はしない。
 
-/// `run` が組み立てる `eframe::App` の `egui::Context`（`cc.egui_ctx.clone()`）を
-/// 保持する（改訂 4、`android.rs::EGUI_CTX` と同型）。`device/ios.rs` の
+/// `run` が組み立てる `eframe::App` の `egui::Context` を `EguiWaker` として
+/// 起床口に登録する（改訂 4、`android.rs` と同型）。`device/ios.rs` の
 /// `fandhe_rust_file_picker_outcome`（`UIDocumentPickerViewController` の delegate
 /// コールバック、UI スレッド外）は `bridge::deliver` で結果を置くだけでは egui の
 /// 描画ループを起こせない（`file_pick.rs::drive_mobile` は pull 型で `sender` も
@@ -25,14 +25,11 @@
 ///
 /// `frame-metrics` 版の `run`（`frame_metrics::run_ios` へ委譲）では設定しない。
 /// 計測専用で file_pick 画面を使わないため。
-static EGUI_CTX: std::sync::Mutex<Option<egui::Context>> = std::sync::Mutex::new(None);
-
-/// [`EGUI_CTX`] を読み、確保済みなら `request_repaint` を呼ぶ。`run` 実行前
+///
+/// `fandhe_runtime::request_repaint` で登録済みの起床口を起こす（`EguiWaker`）。`run` 実行前
 /// （通常到達しない）は何もしない。
 pub(crate) fn request_repaint() {
-    if let Some(ctx) = EGUI_CTX.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-        ctx.request_repaint();
-    }
+    fandhe_runtime::request_repaint();
 }
 
 /// iOS 向けに wgpu（Metal）バックエンドを明示指定した `NativeOptions` を構築する。
@@ -92,8 +89,10 @@ pub fn run() -> eframe::Result<()> {
         metal_native_options(),
         Box::new(move |cc| {
             // 改訂 4: ファイル選択 FFI 受け口からの `request_repaint` 経路確保のため
-            // static へ複製する（[`EGUI_CTX`] doc 参照）。
-            *EGUI_CTX.lock().unwrap_or_else(|e| e.into_inner()) = Some(cc.egui_ctx.clone());
+            // 起床口として登録する（[`request_repaint`] doc 参照）。
+            fandhe_runtime::set_repaint_waker(std::sync::Arc::new(crate::app::EguiWaker(
+                cc.egui_ctx.clone(),
+            )));
             let app =
                 crate::cold_start::ColdStartProbe::new(crate::ProxyApp::new(cc), start, false);
             Ok(Box::new(app) as Box<dyn eframe::App>)
@@ -130,8 +129,10 @@ pub fn run() -> eframe::Result<()> {
         metal_native_options(),
         Box::new(move |cc| {
             // 改訂 4: ファイル選択 FFI 受け口からの `request_repaint` 経路確保のため
-            // static へ複製する（[`EGUI_CTX`] doc 参照）。
-            *EGUI_CTX.lock().unwrap_or_else(|e| e.into_inner()) = Some(cc.egui_ctx.clone());
+            // 起床口として登録する（[`request_repaint`] doc 参照）。
+            fandhe_runtime::set_repaint_waker(std::sync::Arc::new(crate::app::EguiWaker(
+                cc.egui_ctx.clone(),
+            )));
             let app: Box<dyn eframe::App> = match crate::screens::selected_app_name()
                 .and_then(|name| crate::build_app(&name, cc))
             {

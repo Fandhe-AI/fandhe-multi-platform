@@ -211,7 +211,7 @@ mod tests {
         use fandhe_core::screens::color_picker_pick::{request_pick, PickPhase, UNSUPPORTED_TEXT};
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, ctx);
+        let sender = crate::app::egui_sender(tx, ctx);
         let mut state = ColorPickerState::default();
         request_pick(&mut state);
         color_picker_pick_effect(&state, &sender);

@@ -240,7 +240,7 @@ mod tests {
 
     fn sender_with_channel() -> (CompletionSender<St>, Receiver<Completion<St>>) {
         let (tx, rx) = channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 既定の待ち時間内に届いた完了をすべて状態へ適用し、適用数を返す。

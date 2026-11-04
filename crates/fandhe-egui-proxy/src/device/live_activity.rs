@@ -186,7 +186,7 @@ mod tests {
         std::sync::mpsc::Receiver<crate::app::Completion<St>>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 1 回の `drive` で送られた完了を全部状態へ適用する。

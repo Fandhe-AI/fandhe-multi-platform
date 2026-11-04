@@ -264,7 +264,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<FileProviderShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 要求を 1 件ドライブし、完了が揃うまで待って適用する。

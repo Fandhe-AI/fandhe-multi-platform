@@ -168,7 +168,7 @@ mod tests {
         std::sync::mpsc::Receiver<crate::app::Completion<LaunchAtLoginShowState>>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// `drive` を 1 回呼び、届いた完了（OS 区分の注入・起動済みマーク・結果）をすべて適用する。

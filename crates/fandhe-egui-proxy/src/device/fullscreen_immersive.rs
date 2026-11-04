@@ -70,6 +70,7 @@ impl Fullscreen for ViewportFullscreen {
 fn implementation<S>(sender: &CompletionSender<S>) -> Arc<dyn Fullscreen> {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     {
+        use crate::app::EguiSenderExt as _;
         Arc::new(ViewportFullscreen {
             ctx: sender.egui_context(),
         })
@@ -259,7 +260,7 @@ mod tests {
 
     fn sender_with_channel() -> (CompletionSender<FullscreenToggleState>, Rx) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 0 = 通常, 1 = 全画面, 2 = 読めない。

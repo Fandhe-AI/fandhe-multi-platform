@@ -561,7 +561,7 @@ mod tests {
             let (tx, rx) = std::sync::mpsc::channel();
             Self {
                 state: FlashlightToggleState::default(),
-                tx: CompletionSender::new(tx, ctx),
+                tx: crate::app::egui_sender(tx, ctx),
                 rx,
                 timing: Timing::default(),
                 t0: Instant::now(),

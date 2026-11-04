@@ -119,7 +119,7 @@ mod tests {
     fn run_hint(autofill: &dyn AutofillOtp) -> OtpInputState {
         let mut s = OtpInputState::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive_hint(&s, &sender, autofill);
         while let Ok(apply) = rx.try_recv() {
             apply(&mut s);
@@ -133,7 +133,7 @@ mod tests {
         let mut s = OtpInputState::default();
         mark_hint_applying(&mut s);
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive_hint(&s, &sender, &f);
         assert!(rx.try_recv().is_err());
         assert_eq!(f.calls.load(Ordering::SeqCst), 0);
@@ -191,7 +191,7 @@ mod tests {
         set_sms_wait_available(&mut s, true);
         start_wait(&mut s);
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive_wait(&s, &sender);
         while let Ok(apply) = rx.try_recv() {
             apply(&mut s);

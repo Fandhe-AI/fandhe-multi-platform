@@ -362,7 +362,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<VideoTranscodeState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 元動画の半分の寸法・同じ長さの最小の MP4。

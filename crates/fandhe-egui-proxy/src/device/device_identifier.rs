@@ -118,7 +118,7 @@ mod tests {
         std::sync::mpsc::Receiver<crate::app::Completion<DeviceIdentifierShowState>>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     fn run(ident: &dyn DeviceIdentifier) -> DeviceIdentifierShowState {

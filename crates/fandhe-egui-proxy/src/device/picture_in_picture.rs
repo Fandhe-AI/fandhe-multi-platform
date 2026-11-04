@@ -434,7 +434,7 @@ mod tests {
             Self {
                 fake,
                 pip,
-                sender: CompletionSender::new(tx, egui::Context::default()),
+                sender: crate::app::egui_sender(tx, egui::Context::default()),
                 rx,
                 session: Session::default(),
                 state: PipShowState::default(),

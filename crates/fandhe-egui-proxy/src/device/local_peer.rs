@@ -411,7 +411,7 @@ mod tests {
     fn unsupported_os_shows_unsupported_not_empty() {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, ctx);
+        let sender = crate::app::egui_sender(tx, ctx);
         let mut state = PeerConnectState::default();
         start_exchange(&mut state);
         peer_connect_effect(&state, &sender);

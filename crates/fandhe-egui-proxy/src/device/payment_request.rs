@@ -206,7 +206,7 @@ mod tests {
         let mut s = PaymentRequestState::default();
         press(&mut s);
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive_sync(&s, &sender, sheet);
         while let Ok(apply) = rx.try_recv() {
             apply(&mut s);
@@ -256,7 +256,7 @@ mod tests {
         begin: fn(u64, PaymentAction) -> Result<(), DeviceError>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive_callback(s, &sender, slot, begin);
         while let Ok(apply) = rx.try_recv() {
             apply(s);
@@ -385,7 +385,7 @@ mod tests {
     fn no_request_never_calls_os() {
         let s = PaymentRequestState::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive_sync(&s, &sender, &Stub(|| Ok(PaymentOutcome::TestAuthorized)));
         assert!(rx.try_recv().is_err());
     }

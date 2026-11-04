@@ -288,7 +288,7 @@ mod tests {
                 fake: Fake::default(),
                 cmds: SharedOsCommand::new(),
                 session: Session::default(),
-                sender: CompletionSender::new(tx, egui::Context::default()),
+                sender: crate::app::egui_sender(tx, egui::Context::default()),
                 rx,
                 state,
             }

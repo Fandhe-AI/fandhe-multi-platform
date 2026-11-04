@@ -475,7 +475,7 @@ mod tests {
     fn unsupported_os_shows_unsupported_not_empty() {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, ctx);
+        let sender = crate::app::egui_sender(tx, ctx);
         let mut state = LanDiscoverState::default();
         start_browse(&mut state);
         lan_discover_effect(&state, &sender);

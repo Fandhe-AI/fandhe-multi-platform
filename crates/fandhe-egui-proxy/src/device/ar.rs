@@ -291,7 +291,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<ArShowState>, Rx) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     fn apply_all(rx: &Rx, s: &mut ArShowState) {

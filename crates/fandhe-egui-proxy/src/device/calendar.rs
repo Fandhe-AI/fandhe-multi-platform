@@ -309,7 +309,7 @@ mod tests {
 
         fn run(state: &mut CalendarAddState) {
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = CompletionSender::new(tx, egui::Context::default());
+            let sender = crate::app::egui_sender(tx, egui::Context::default());
             drive(
                 state,
                 &sender,

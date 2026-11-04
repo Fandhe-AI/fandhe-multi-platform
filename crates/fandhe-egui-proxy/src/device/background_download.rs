@@ -223,7 +223,7 @@ mod tests {
         std::sync::mpsc::Receiver<crate::app::Completion<BackgroundDownloadState>>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 結果を固定で返すモック。`unsupported` のとき 3 メソッドとも `Unsupported`。

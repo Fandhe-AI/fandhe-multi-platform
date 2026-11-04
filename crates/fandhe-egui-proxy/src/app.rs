@@ -27,92 +27,49 @@ use crate::tv_sample::{tv_sample_screen, TvState};
 /// （`ProxyAppDyn::set_inset_margin_supplier` / `android.rs` 参照、Issue #715）。
 pub(crate) type InsetMarginSupplier = Box<dyn Fn(&egui::Context) -> egui::Margin>;
 
-/// 外部 I/O（保存・HTTP・カメラ等、Phase 8。`fandhe-device` は未実装）の完了結果を
-/// `StateStore::apply`（`fandhe_core::state::store` 参照、Issue #745）へ渡すクロージャ。
-///
-/// 別スレッド（I/O 完了通知元）から [`ProxyApp::completion_sender`] 経由でチャンネルへ
-/// 送られ、UI スレッドの [`drain_completions`] が `update` のフレーム先頭で取り出して
-/// 実行する契約。`Send` 境界により、生成元スレッドが異なっても UI スレッドへ安全に
-/// 渡せることを型で保証する。
-pub type Completion<S> = Box<dyn FnOnce(&mut S) + Send>;
+use fandhe_runtime::{drain_completions, RepaintWaker};
+/// 起床と完了通知の型は egui 非依存の `fandhe-runtime` が持つ（Issue #1162）。
+/// `crate::app::CompletionSender` などの既存パスを保つための再公開。
+pub use fandhe_runtime::{Completion, CompletionSender, EffectFn};
 
-/// 画面非依存の汎用 I/O 起動フック（Phase 8、Issue #748）。`ProxyApp::update` の
-/// フレーム末尾（`dispatch_back_if_requested` の後）で `effect(store.state(), &sender)`
-/// として毎フレーム呼ばれる契約。`&S` の借用のみを受け取り状態を直接変更しないため
-/// （変更は必ず [`CompletionSender::send`] → `apply` 経由、`version` はここでは進まない）、
-/// 「起動が必要か」を状態側のフラグ（例: `fandhe_core::screens::http_fetch::FetchPhase::
-/// Requested`）で表現する画面と組み合わせて使う設計。`registry.rs` の `effect` 区画
-/// （`generated_screens!` マクロ）が画面ごとのドライバ関数をここへ配線する。
-pub type EffectFn<S> = fn(&S, &CompletionSender<S>);
+/// egui の描画ループを起こす [`RepaintWaker`] 実装。`ProxyApp` と iOS / Android の起床口
+/// （`fandhe_runtime::set_repaint_waker`）が使う。
+pub(crate) struct EguiWaker(pub(crate) egui::Context);
 
-/// [`ProxyApp::completion_sender`] が返す送信ハンドル（Issue #745、codex-review /
-/// Cursor Bugbot 指摘 P1 の是正）。
-///
-/// 素の `mpsc::Sender` をそのまま渡すと、送信先の UI（eframe）が入力待ちでアイドル
-/// 状態のとき `update` 自体が呼ばれず、次の入力が来るまで [`drain_completions`] が
-/// 実行されない（自動撮影を無効にした通常起動では入力がない限りフレームが進まない）。
-/// このラッパーは `send` の中で `egui::Context::request_repaint` を呼び、
-/// キュー投入と UI 起床を一体化することでこの構造的欠陥を塞ぐ。
-pub struct CompletionSender<S> {
+impl RepaintWaker for EguiWaker {
+    fn wake(&self) {
+        self.0.request_repaint();
+    }
+    fn wake_after(&self, delay: std::time::Duration) {
+        self.0.request_repaint_after(delay);
+    }
+}
+
+/// テスト専用の直接構築。`device/*` の effect ドライバ単体テストが、自前の
+/// `mpsc::channel` と `egui::Context::default()` から [`CompletionSender`] を作るために使う。
+#[cfg(test)]
+pub(crate) fn egui_sender<S>(
     tx: std::sync::mpsc::Sender<Completion<S>>,
     ctx: egui::Context,
+) -> CompletionSender<S> {
+    CompletionSender::new(tx, Arc::new(EguiWaker(ctx)))
 }
 
-// `#[derive(Clone)]` は `S: Clone` を要求してしまうが、複製が必要なのは
-// `tx`（`mpsc::Sender` は常に `Clone`）と `ctx`（内部 `Arc` で常に `Clone`）
-// のみで、`S` 自体を複製するわけではない。手動実装で不要な境界を外し、
-// `SampleState` 等の非 `Clone` 状態型でも I/O スレッドへハンドルを複製できるようにする
-// （cursor[bot] / codex-review 指摘、Issue #745 是正）。
-impl<S> Clone for CompletionSender<S> {
-    fn clone(&self) -> Self {
-        Self {
-            tx: self.tx.clone(),
-            ctx: self.ctx.clone(),
-        }
-    }
-}
-
-impl<S> CompletionSender<S> {
-    /// テスト専用の直接構築（Issue #748）。通常経路は [`ProxyApp::completion_sender`]
-    /// のみで、本体コードから直接構築することはない（`device/http_fetch.rs` /
-    /// `device/camera_capture.rs` の単体テストが `egui::Context::default()` +
-    /// 自前 `mpsc::channel` から effect ドライバ単体を検証するために使う）。
-    #[cfg(test)]
-    pub(crate) fn new(tx: std::sync::mpsc::Sender<Completion<S>>, ctx: egui::Context) -> Self {
-        Self { tx, ctx }
-    }
-
-    /// 完了クロージャをキューへ積み、直後に `request_repaint` で UI スレッドを
-    /// 起こす。戻り値・エラー型は `mpsc::Sender::send` に合わせている
-    /// （受信側 `ProxyApp` がドロップ済みの場合のみ `Err`）。
-    pub fn send(
-        &self,
-        completion: Completion<S>,
-    ) -> Result<(), std::sync::mpsc::SendError<Completion<S>>> {
-        self.tx.send(completion)?;
-        self.ctx.request_repaint();
-        Ok(())
-    }
-
-    /// キューへは何も積まず、`duration` 経過後に 1 回だけ `update` を起こす予約のみ行う
-    /// （`egui::Context::request_repaint_after` への薄い委譲）。
-    ///
-    /// [`send`](Self::send) は完了と同時に即座に起床させる契約だが、こちらは
-    /// 「今は送るものが無いが、外部状態（センサ等）が変わっていないか後で
-    /// 再確認したい」場合に使う。pull 方式のセンサ実装（`device/tilt.rs` の
-    /// iOS 経路、Issue #832 是正）が、静止判定で送信をスキップした後も定期的に
-    /// センサ値を pull し直すために呼ぶ想定。
-    pub fn request_repaint_after(&self, duration: std::time::Duration) {
-        self.ctx.request_repaint_after(duration);
-    }
+/// [`CompletionSender`] が持つ egui 固有の読み書き口。起床以外の egui 依存が解消するまでの
+/// 暫定の橋渡しで、機能 crate からは使えない（一覧は Issue #1162 のコメント参照）。
+/// `sender.focused()` のような呼び出し側の書き方は従来のまま。
+pub(crate) trait EguiSenderExt {
+    /// sender の起床口が持つ `egui::Context`。
+    fn egui_ctx(&self) -> &egui::Context;
 
     /// `egui::Context` の複製を返す。全画面表示（`device/fullscreen_immersive.rs`）が
     /// `ViewportCommand::Fullscreen` の送信と `viewport().fullscreen` の読み戻しに使う専用の口で、
     /// セーフエリア（`device/safe_area_insets.rs`）が Android の px→dp 換算に使う。
     /// 他の機能での流用はしない（ctx を丸ごと渡す口になるため）。
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn egui_context(&self) -> egui::Context {
-        self.ctx.clone()
+    #[cfg_attr(not(feature = "device"), allow(dead_code))]
+    fn egui_context(&self) -> egui::Context {
+        self.egui_ctx().clone()
     }
 
     /// このフレームでウィンドウがフォーカスを持っているか（`egui::RawInput::focused`
@@ -128,8 +85,8 @@ impl<S> CompletionSender<S> {
         not(all(feature = "device", not(target_arch = "wasm32"))),
         allow(dead_code)
     )]
-    pub(crate) fn focused(&self) -> bool {
-        self.ctx.input(|i| i.raw.focused)
+    fn focused(&self) -> bool {
+        self.egui_ctx().input(|i| i.raw.focused)
     }
 
     /// このフレームのビューポート（描画領域）の大きさ（`egui::InputState::viewport_rect` への
@@ -139,8 +96,8 @@ impl<S> CompletionSender<S> {
         not(all(feature = "device", not(target_arch = "wasm32"))),
         allow(dead_code)
     )]
-    pub(crate) fn viewport_size(&self) -> (f32, f32) {
-        let size = self.ctx.input(|i| i.viewport_rect().size());
+    fn viewport_size(&self) -> (f32, f32) {
+        let size = self.egui_ctx().input(|i| i.viewport_rect().size());
         (size.x, size.y)
     }
 
@@ -154,12 +111,13 @@ impl<S> CompletionSender<S> {
         target_os = "ios",
         target_os = "android"
     ))]
-    pub(crate) fn request_screenshot(&self, tag: u64) {
-        self.ctx
+    #[cfg_attr(not(feature = "device"), allow(dead_code))]
+    fn request_screenshot(&self, tag: u64) {
+        self.egui_ctx()
             .send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::new(
                 ScreenshotTag(tag),
             )));
-        self.ctx.request_repaint();
+        self.egui_ctx().request_repaint();
     }
 
     /// このフレームに届いた、`tag` 付きの読み戻し（[`Self::request_screenshot`] の応答）を返す。
@@ -168,8 +126,9 @@ impl<S> CompletionSender<S> {
         not(all(feature = "device", not(target_arch = "wasm32"))),
         allow(dead_code)
     )]
-    pub(crate) fn tagged_screenshot(&self, tag: u64) -> Option<Arc<egui::ColorImage>> {
-        self.ctx.input(|i| find_tagged_screenshot(&i.events, tag))
+    fn tagged_screenshot(&self, tag: u64) -> Option<Arc<egui::ColorImage>> {
+        self.egui_ctx()
+            .input(|i| find_tagged_screenshot(&i.events, tag))
     }
 
     /// ポインタの主ボタン（左クリック/タップ）がこのフレームで押下中か
@@ -183,8 +142,8 @@ impl<S> CompletionSender<S> {
         not(all(feature = "device", not(target_arch = "wasm32"))),
         allow(dead_code)
     )]
-    pub(crate) fn pointer_primary_down(&self) -> bool {
-        self.ctx.input(|i| i.pointer.primary_down())
+    fn pointer_primary_down(&self) -> bool {
+        self.egui_ctx().input(|i| i.pointer.primary_down())
     }
 
     /// キャンバス `id` 上で主ボタンを押下中のポインタ位置（キャンバス左上原点）。押していなければ
@@ -195,8 +154,8 @@ impl<S> CompletionSender<S> {
         not(all(feature = "device", not(target_arch = "wasm32"))),
         allow(dead_code)
     )]
-    pub(crate) fn canvas_pointer(&self, id: fandhe_core::WidgetId) -> Option<(f32, f32)> {
-        self.ctx
+    fn canvas_pointer(&self, id: fandhe_core::WidgetId) -> Option<(f32, f32)> {
+        self.egui_ctx()
             .data(|d| d.get_temp::<Option<(f32, f32)>>(canvas_pointer_id(id.raw())))
             .flatten()
     }
@@ -207,8 +166,8 @@ impl<S> CompletionSender<S> {
         not(all(feature = "device", not(target_arch = "wasm32"))),
         allow(dead_code)
     )]
-    pub(crate) fn canvas_released(&self, id: fandhe_core::WidgetId) -> Option<(f32, f32)> {
-        self.ctx
+    fn canvas_released(&self, id: fandhe_core::WidgetId) -> Option<(f32, f32)> {
+        self.egui_ctx()
             .data(|d| d.get_temp::<Option<(f32, f32)>>(canvas_released_id(id.raw())))
             .flatten()
     }
@@ -220,8 +179,8 @@ impl<S> CompletionSender<S> {
         not(all(feature = "device", not(target_arch = "wasm32"))),
         allow(dead_code)
     )]
-    pub(crate) fn canvas_pressed(&self, id: fandhe_core::WidgetId) -> bool {
-        self.ctx
+    fn canvas_pressed(&self, id: fandhe_core::WidgetId) -> bool {
+        self.egui_ctx()
             .data(|d| d.get_temp::<bool>(canvas_pressed_id(id.raw())))
             .unwrap_or(false)
     }
@@ -238,15 +197,15 @@ impl<S> CompletionSender<S> {
         not(all(feature = "device", not(target_arch = "wasm32"))),
         allow(dead_code)
     )]
-    pub(crate) fn set_zoom_factor(&self, zoom: f32) {
-        self.ctx.set_zoom_factor(zoom);
+    fn set_zoom_factor(&self, zoom: f32) {
+        self.egui_ctx().set_zoom_factor(zoom);
         // set_zoom_factor 自体は repaint を要求しない（egui::Context::set_zoom_factor の
         // 実装詳細）。effect はフレーム末尾で呼ばれるため（本モジュール doc）、ここで
         // request_repaint しないと「次パスで zoom を反映する」ための次フレームが
         // 入力待ちのアイドル状態のまま起こらず、スライダー/OS 値が変わっても描画に
         // 反映されないまま止まる（Cursor Bugbot 指摘、PR #920 是正。send が同じ理由で
         // request_repaint する設計と揃える）。
-        self.ctx.request_repaint();
+        self.egui_ctx().request_repaint();
     }
 
     /// device/text_scale.rs::drive が「直前に set_zoom_factor を適用した値」を
@@ -271,8 +230,8 @@ impl<S> CompletionSender<S> {
         not(all(feature = "device", not(target_arch = "wasm32"))),
         allow(dead_code)
     )]
-    pub(crate) fn text_scale_last_applied(&self) -> Option<f32> {
-        self.ctx
+    fn text_scale_last_applied(&self) -> Option<f32> {
+        self.egui_ctx()
             .data_mut(|d| d.get_persisted::<f32>(text_scale_last_applied_id()))
     }
 
@@ -281,8 +240,8 @@ impl<S> CompletionSender<S> {
         not(all(feature = "device", not(target_arch = "wasm32"))),
         allow(dead_code)
     )]
-    pub(crate) fn set_text_scale_last_applied(&self, zoom: f32) {
-        self.ctx
+    fn set_text_scale_last_applied(&self, zoom: f32) {
+        self.egui_ctx()
             .data_mut(|d| d.insert_persisted(text_scale_last_applied_id(), zoom));
     }
 
@@ -309,8 +268,8 @@ impl<S> CompletionSender<S> {
         ),
         allow(dead_code)
     )]
-    pub(crate) fn file_drag(&self) -> (bool, Vec<Option<std::path::PathBuf>>) {
-        self.ctx.input(|i| {
+    fn file_drag(&self) -> (bool, Vec<Option<std::path::PathBuf>>) {
+        self.egui_ctx().input(|i| {
             (
                 !i.raw.hovered_files.is_empty(),
                 i.raw.dropped_files.iter().map(|f| f.path.clone()).collect(),
@@ -319,20 +278,30 @@ impl<S> CompletionSender<S> {
     }
 }
 
+impl<S> EguiSenderExt for CompletionSender<S> {
+    fn egui_ctx(&self) -> &egui::Context {
+        let waker: &dyn std::any::Any = self.waker();
+        &waker
+            .downcast_ref::<EguiWaker>()
+            .expect("本 crate の CompletionSender は EguiWaker でのみ構築される")
+            .0
+    }
+}
+
 /// `CanvasWidget` のポインタ位置を `ctx.data` に置くときの `egui::Id`（`lib.rs` が書き、
-/// [`CompletionSender::canvas_pointer`] が読む）。
+/// [`EguiSenderExt::canvas_pointer`] が読む）。
 pub(crate) fn canvas_pointer_id(widget_raw: u64) -> egui::Id {
     egui::Id::new(("fandhe_canvas_pointer", widget_raw))
 }
 
 /// `CanvasWidget` の「このフレームに押された」を `ctx.data` に置くときの `egui::Id`
-/// （`lib.rs` が書き、[`CompletionSender::canvas_pressed`] が読む）。
+/// （`lib.rs` が書き、[`EguiSenderExt::canvas_pressed`] が読む）。
 pub(crate) fn canvas_pressed_id(widget_raw: u64) -> egui::Id {
     egui::Id::new(("fandhe_canvas_pressed", widget_raw))
 }
 
 /// `CanvasWidget` の「このフレームに接触が終わった位置」を `ctx.data` に置くときの `egui::Id`
-/// （`lib.rs` が書き、[`CompletionSender::canvas_released`] が読む）。
+/// （`lib.rs` が書き、[`EguiSenderExt::canvas_released`] が読む）。
 pub(crate) fn canvas_released_id(widget_raw: u64) -> egui::Id {
     egui::Id::new(("fandhe_canvas_released", widget_raw))
 }
@@ -374,22 +343,6 @@ fn find_tagged_screenshot(events: &[egui::Event], tag: u64) -> Option<Arc<egui::
         }
         _ => None,
     })
-}
-
-/// キューに溜まった完了クロージャを非ブロッキングで取り出し、`store.apply` へ順に渡す
-/// （FIFO、Issue #745）。`ProxyApp::update` のフレーム先頭から呼ばれる想定だが、
-/// GPU（`eframe::App`）を要さない純粋なロジックとして独立させ、ユニットテストで
-/// 直接検証できるようにしている。
-///
-/// キューが空の場合は `try_recv` が即座に `Err` を返すため何もしない（`version` は
-/// 進まない）。送信側の不具合で完了が大量に滞留した場合、1 フレームでの drain 処理
-/// 時間が伸びメモリも増加しうるが、`std::sync::mpsc::channel`（無制限キュー）を使う
-/// 制約として許容する（Phase 8 で実際の送信元が実装された段階で必要なら
-/// `sync_channel` への変更を検討。out-of-scope-tracking.md 対象になり得る）。
-fn drain_completions<S>(store: &mut StateStore<S>, rx: &std::sync::mpsc::Receiver<Completion<S>>) {
-    while let Ok(completion) = rx.try_recv() {
-        store.apply(completion);
-    }
 }
 
 /// window insets（物理 px、left/top/right/bottom）を `CentralPanel` の内側余白
@@ -475,10 +428,9 @@ pub struct ProxyApp<S = SampleState> {
     /// 外部 I/O 完了キューの受信側（Issue #745）。`update` のフレーム先頭で
     /// [`drain_completions`] へ渡す（単一コンシューマ、UI スレッド限定）。
     completions_rx: std::sync::mpsc::Receiver<Completion<S>>,
-    /// [`CompletionSender::send`] が `request_repaint` を呼ぶために保持する
-    /// egui コンテキスト（Issue #745 是正）。`egui::Context` は内部 `Arc` で
-    /// 安価に `Clone` できるため、`CreationContext` から複製して持つだけで済む。
-    egui_ctx: egui::Context,
+    /// [`CompletionSender::send`] が描画ループを起こすための起床口（Issue #745 是正）。
+    /// `completion_sender` は毎フレーム呼ばれうるため、構築時に 1 度だけ作って共有する。
+    waker: Arc<EguiWaker>,
     /// 画面非依存の汎用 I/O 起動フック（Issue #748）。`registry.rs` の `effect` 区画から
     /// [`Self::with_effect`] 経由で注入される。既定 `None`（大半の画面は端末 I/O を
     /// 持たないため、フックなしのまま何もしない）。
@@ -588,7 +540,7 @@ impl<S> ProxyApp<S> {
             inset_margin: None,
             completions_tx,
             completions_rx,
-            egui_ctx: cc.egui_ctx.clone(),
+            waker: Arc::new(EguiWaker(cc.egui_ctx.clone())),
             effect: None,
         }
     }
@@ -611,10 +563,7 @@ impl<S> ProxyApp<S> {
     /// の UI でも送信直後に `update` が呼ばれ、フレーム先頭で [`drain_completions`] が
     /// 取り出して `StateStore::apply` へ渡す。
     pub fn completion_sender(&self) -> CompletionSender<S> {
-        CompletionSender {
-            tx: self.completions_tx.clone(),
-            ctx: self.egui_ctx.clone(),
-        }
+        CompletionSender::new(self.completions_tx.clone(), self.waker.clone())
     }
 
     /// window insets 供給関数を注入する（Issue #579、`android.rs` からのみ呼ばれる）。
@@ -907,75 +856,22 @@ fn shutdown_devices() {}
 
 #[cfg(test)]
 mod completion_queue_tests {
-    use super::{drain_completions, Completion, CompletionSender};
-    use fandhe_core::StateStore;
+    use super::{egui_sender, Completion, EguiSenderExt};
 
     /// テスト用の最小状態: カウンタとメモ欄を持つ（`fandhe_core::state::store::tests`
     /// の `Counter` と同じ構成、GPU 不要でロジックのみ検証する）。
     #[derive(Default)]
     struct Counter {
         count: u32,
-        note: String,
     }
 
-    /// キューに積んだ完了クロージャが `apply` され、`version` が進むことを確認する。
+    /// `egui_ctx` の downcast が実際の `EguiWaker` へ届くこと（`&Arc<dyn _>` を
+    /// `&dyn Any` へ誤って強制すると実行時に失敗する）を固定する。
     #[test]
-    fn drain_completions_applies_queued_completion_and_bumps_version() {
-        let mut store = StateStore::new(Counter::default());
-        let (tx, rx) = std::sync::mpsc::channel::<Completion<Counter>>();
-        tx.send(Box::new(|state: &mut Counter| state.count += 1))
-            .expect("受信側が生きているため送信は成功する");
-
-        drain_completions(&mut store, &rx);
-
-        assert_eq!(store.state().count, 1);
-        assert_eq!(store.version(), 1);
-    }
-
-    /// 複数の完了が FIFO 順（送信順）で適用されることを確認する。
-    #[test]
-    fn drain_completions_applies_multiple_completions_in_order() {
-        let mut store = StateStore::new(Counter::default());
-        let (tx, rx) = std::sync::mpsc::channel::<Completion<Counter>>();
-        tx.send(Box::new(|state: &mut Counter| state.note.push('a')))
-            .expect("受信側が生きているため送信は成功する");
-        tx.send(Box::new(|state: &mut Counter| state.note.push('b')))
-            .expect("受信側が生きているため送信は成功する");
-
-        drain_completions(&mut store, &rx);
-
-        assert_eq!(store.state().note, "ab");
-        assert_eq!(store.version(), 2);
-    }
-
-    /// キューが空の場合は何もせず、`version` も変化しないことを確認する。
-    #[test]
-    fn drain_completions_is_noop_when_queue_empty() {
-        let mut store = StateStore::new(Counter::default());
-        let (_tx, rx) = std::sync::mpsc::channel::<Completion<Counter>>();
-
-        drain_completions(&mut store, &rx);
-
-        assert_eq!(store.version(), 0);
-    }
-
-    /// 別スレッドから送信した完了も UI スレッド側の `drain_completions` で反映できる
-    /// ことを確認する（`Completion<S>` の `Send` 境界の実挙動確認、Issue #745）。
-    #[test]
-    fn completion_sender_can_send_from_another_thread() {
-        let mut store = StateStore::new(Counter::default());
-        let (tx, rx) = std::sync::mpsc::channel::<Completion<Counter>>();
-
-        let handle = std::thread::spawn(move || {
-            tx.send(Box::new(|state: &mut Counter| state.count += 1))
-                .expect("受信側が生きているため送信は成功する");
-        });
-        handle.join().expect("送信スレッドは panic せず完了する");
-
-        drain_completions(&mut store, &rx);
-
-        assert_eq!(store.state().count, 1);
-        assert_eq!(store.version(), 1);
+    fn egui_sender_ext_reaches_context() {
+        let (tx, _rx) = std::sync::mpsc::channel::<Completion<Counter>>();
+        let sender = egui_sender(tx, egui::Context::default());
+        let _ = sender.focused(); // downcast に失敗すると panic する
     }
 
     /// [`CompletionSender::send`] が `request_repaint` を呼び、アイドル中（入力待ち）の
@@ -993,7 +889,7 @@ mod completion_queue_tests {
         ctx.set_request_repaint_callback(move |_| {
             repaint_requested_writer.store(true, std::sync::atomic::Ordering::SeqCst);
         });
-        let sender = CompletionSender { tx, ctx };
+        let sender = egui_sender(tx, ctx);
 
         assert!(!repaint_requested.load(std::sync::atomic::Ordering::SeqCst));
 

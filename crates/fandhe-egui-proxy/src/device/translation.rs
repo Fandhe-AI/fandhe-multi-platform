@@ -214,7 +214,7 @@ mod tests {
 
     fn channel() -> (CompletionSender<TranslationState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (CompletionSender::new(tx, egui::Context::default()), rx)
+        (crate::app::egui_sender(tx, egui::Context::default()), rx)
     }
 
     /// 指定の結果を返し、`sleep` だけ待つフェイク。受け取った訳先を記録する。

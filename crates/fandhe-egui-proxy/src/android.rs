@@ -41,22 +41,6 @@
 static ANDROID_APP: std::sync::Mutex<Option<winit::platform::android::activity::AndroidApp>> =
     std::sync::Mutex::new(None);
 
-/// `android_main` が組み立てる `eframe::App` の `egui::Context`（`cc.egui_ctx.clone()`）を
-/// 保持する（Issue #831 codex-review 指摘 PRRT_kwDOTl73E86hCOSM）。`device/android.rs` の
-/// `nativeOnMotionChanged` は UI スレッド外（Java 側センサコールバック）から
-/// [`crate::device::tilt::shared_motion`] へ傾きを push するだけでは egui の描画ループを
-/// 起こせない（`tilt_ball_effect` の自走は非ゼロ傾きの `drive` 呼び出しが前提で、
-/// 描画が一度止まると次に呼ばれる保証がない）ため、値更新のたびに
-/// [`request_repaint`] を呼んで確実に再開させる。
-///
-/// `OnceLock` ではなく `Mutex` にするのは、[`ANDROID_APP`] と同じ理由（codex-review 指摘、
-/// Issue #831）。`configChanges` で止められない再生成で `Activity` が再生成されると `android_main` が
-/// 新しい `egui::Context` を伴って再度呼ばれる。`OnceLock` のまま 2 回目以降の `set` を
-/// 無視すると、破棄済み `Activity` に紐づく古い `Context` へ `request_repaint` し続け、
-/// 再生成後の新しい画面が起きない（Cursor Bugbot 同一指摘 discussion_r3978309491）。
-/// `android_main` の呼び出しのたびに保持内容を差し替える。
-static EGUI_CTX: std::sync::Mutex<Option<egui::Context>> = std::sync::Mutex::new(None);
-
 /// 現在表示中の画面が傾き（`tilt_ball`）を使うかどうか（codex-review 指摘 P2、Issue #831）。
 /// `Java` 側の `motionListener` は画面に関わらず常にセンサを登録して通知するため、
 /// 素直に毎回 `request_repaint` すると傾きを使わない画面でも `SENSOR_DELAY_GAME` の
@@ -115,12 +99,26 @@ pub(crate) fn active_screen_uses_drag_drop() -> bool {
     ACTIVE_SCREEN_USES_DRAG_DROP.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-/// [`EGUI_CTX`] を読み、確保済みなら `request_repaint` を呼ぶ。`android_main` 実行前
+/// `android_main` が組み立てる `eframe::App` の `egui::Context` を `EguiWaker` として
+/// 起床口に登録する（Issue #831 codex-review 指摘 PRRT_kwDOTl73E86hCOSM）。`device/android.rs` の
+/// `nativeOnMotionChanged` は UI スレッド外（Java 側センサコールバック）から
+/// [`crate::device::tilt::shared_motion`] へ傾きを push するだけでは egui の描画ループを
+/// 起こせない（`tilt_ball_effect` の自走は非ゼロ傾きの `drive` 呼び出しが前提で、
+/// 描画が一度止まると次に呼ばれる保証がない）ため、値更新のたびに
+/// [`request_repaint`] を呼んで確実に再開させる。
+///
+/// `OnceLock` ではなく `Mutex` にするのは、[`ANDROID_APP`] と同じ理由（codex-review 指摘、
+/// Issue #831）。`configChanges` で止められない再生成で `Activity` が再生成されると `android_main` が
+/// 新しい `egui::Context` を伴って再度呼ばれる。`OnceLock` のまま 2 回目以降の `set` を
+/// 無視すると、破棄済み `Activity` に紐づく古い `Context` へ `request_repaint` し続け、
+/// 再生成後の新しい画面が起きない（Cursor Bugbot 同一指摘 discussion_r3978309491）。
+/// `android_main` の呼び出しのたびに保持内容を差し替える。
+/// `set_repaint_waker` も同じく毎回差し替える。
+///
+/// `fandhe_runtime::request_repaint` で登録済みの起床口を起こす（`EguiWaker`）。`android_main` 実行前
 /// （通常到達しない）は何もしない。
 pub(crate) fn request_repaint() {
-    if let Some(ctx) = EGUI_CTX.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-        ctx.request_repaint();
-    }
+    fandhe_runtime::request_repaint();
 }
 
 /// [`ANDROID_APP`] の保持内容を差し替える。`android_main`（`frame-metrics` 無効時）が
@@ -194,7 +192,7 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
 fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // Issue #750 / PR #790 codex-review 指摘: `device/android.rs` が `DataDir` 解決・
     // カメラ Intent 中継のために `AndroidApp` を必要とするため、`NativeOptions` へ move
-    // する前に static へ複製する（`AndroidApp` は `Arc` 内部実装で `Clone` が安価、
+    // する前に 起床口として登録する（`AndroidApp` は `Arc` 内部実装で `Clone` が安価、
     // android-activity 0.6.1 の型定義参照）。`configChanges` で止められない再生成で `android_main`
     // が新しい `AndroidApp` で再度呼ばれた場合は毎回上書きする（古い破棄済み `Activity` を
     // 指したまま残さない。`set_android_app` doc 参照）。Issue #796 の `poll_soft_keyboard` も
@@ -500,9 +498,11 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
         native_options,
         Box::new(move |cc| {
             // Issue #831 codex-review 指摘: センサ JNI コールバックからの
-            // `request_repaint` 経路確保のため static へ複製する（[`EGUI_CTX`] doc 参照）。
+            // `request_repaint` 経路確保のため 起床口として登録する（[`request_repaint`] doc 参照）。
             // `Activity` 再生成のたびに上書きし、古い Context を残さない。
-            *EGUI_CTX.lock().unwrap_or_else(|e| e.into_inner()) = Some(cc.egui_ctx.clone());
+            fandhe_runtime::set_repaint_waker(std::sync::Arc::new(crate::app::EguiWaker(
+                cc.egui_ctx.clone(),
+            )));
             let app: Box<dyn eframe::App> = if use_tv_focus {
                 Box::new(
                     crate::TvFocusApp::new(cc).with_inset_margin_supplier(android_inset_margin),

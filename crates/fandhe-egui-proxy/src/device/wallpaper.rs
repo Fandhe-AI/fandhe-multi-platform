@@ -230,7 +230,7 @@ mod tests {
         let mut s = WallpaperSetState::default();
         set_home(&mut s);
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive(&s, &sender, &fandhe_device::wallpaper::UnsupportedWallpaper);
         while let Ok(apply) = rx.try_recv() {
             apply(&mut s);

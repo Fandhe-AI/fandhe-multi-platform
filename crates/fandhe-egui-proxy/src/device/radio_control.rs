@@ -252,7 +252,7 @@ mod tests {
     ) {
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (CompletionSender::new(tx, ctx), rx)
+        (crate::app::egui_sender(tx, ctx), rx)
     }
 
     /// 要求を立てて `drive` し、届いた完了（mark_busy と結果）をすべて適用した状態を返す。

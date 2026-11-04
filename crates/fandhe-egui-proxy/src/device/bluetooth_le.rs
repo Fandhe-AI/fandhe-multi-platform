@@ -576,7 +576,7 @@ mod tests {
 
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, ctx);
+        let sender = crate::app::egui_sender(tx, ctx);
         let mut state = BleScanState::default();
         start_scan(&mut state);
         ble_scan_effect(&state, &sender);

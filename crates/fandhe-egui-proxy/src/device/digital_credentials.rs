@@ -86,7 +86,7 @@ mod tests {
         let mut s = DigitalCredentialsState::default();
         screen::request(&mut s);
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive_sync(&s, &sender, result);
         while let Ok(apply) = rx.try_recv() {
             apply(&mut s);
@@ -114,7 +114,7 @@ mod tests {
     fn no_request_sends_nothing() {
         let s = DigitalCredentialsState::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = CompletionSender::new(tx, egui::Context::default());
+        let sender = crate::app::egui_sender(tx, egui::Context::default());
         drive_sync(&s, &sender, || Ok(CredentialOutcome::Responded));
         assert!(rx.try_recv().is_err());
     }
