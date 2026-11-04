@@ -134,7 +134,7 @@ fn merge_unions_arrays_and_rejects_conflicts() {
 
     let a = decl(json!({"id":"a","ios":{"info-plist":{"K":"1"}}}));
     let b = decl(json!({"id":"b","ios":{"info-plist":{"K":"2"}}}));
-    let e = merge(&[("a", &a), ("b", &b)]).unwrap_err();
+    let e = merge(&[("a", &a), ("b", &b)]).unwrap_err().remove(0);
     assert!(
         e.field == "ios.info-plist.K" && e.a == "a" && e.b == "b",
         "{e}"
@@ -499,7 +499,7 @@ fn workspace_ignores_features_enabled_by_other_members() {
 fn merge_reports_owner_of_object_vs_scalar_conflict() {
     let d = |id: &str, v: Value| decl(json!({"id":id,"ios":{"info-plist":{"K":v}}}));
     let (a, b) = (d("a", json!({"X":1})), d("b", json!("s")));
-    let e = merge(&[("a", &a), ("b", &b)]).unwrap_err();
+    let e = merge(&[("a", &a), ("b", &b)]).unwrap_err().remove(0);
     assert!(e.a == "a" && e.b == "b", "{e}");
 }
 
@@ -511,9 +511,18 @@ fn merge_reports_nested_conflict_owners() {
         d("b", json!({"Y":1})),
         d("c", json!({"Y":2})),
     );
-    let e = merge(&[("a", &a), ("b", &b), ("c", &c)]).unwrap_err();
+    let e = merge(&[("a", &a), ("b", &b), ("c", &c)])
+        .unwrap_err()
+        .remove(0);
     assert!(
         e.field == "ios.info-plist.K.Y" && e.a == "b" && e.b == "c",
         "{e}"
     );
+}
+
+#[test]
+fn merge_collects_all_conflicts() {
+    let d = |id: &str, x: &str, y: &str| decl(json!({"id":id,"ios":{"info-plist":{"X":x,"Y":y}}}));
+    let (a, b) = (d("a", "1", "1"), d("b", "2", "2"));
+    assert_eq!(merge(&[("a", &a), ("b", &b)]).unwrap_err().len(), 2);
 }

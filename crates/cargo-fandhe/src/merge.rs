@@ -112,15 +112,22 @@ fn merge_map(
     field: &str,
     owners: &mut BTreeMap<String, String>,
     id: &str,
-) -> Result<(), MergeError> {
+    errs: &mut Vec<MergeError>,
+) {
     for (k, v) in from {
         let merged = match into.get(k) {
-            Some(cur) => merge_value(cur, v, k, owners, id).map_err(|leaf| MergeError {
-                field: format!("{field}.{leaf}"),
-                a: owners.get(&leaf).cloned().unwrap_or_default(),
-                b: id.to_string(),
-                detail: format!("{cur} と {v}"),
-            })?,
+            Some(cur) => match merge_value(cur, v, k, owners, id) {
+                Ok(m) => m,
+                Err(leaf) => {
+                    errs.push(MergeError {
+                        field: format!("{field}.{leaf}"),
+                        a: owners.get(&leaf).cloned().unwrap_or_default(),
+                        b: id.to_string(),
+                        detail: format!("{cur} と {v}"),
+                    });
+                    continue;
+                }
+            },
             None => {
                 record(k, v, owners, id);
                 v.clone()
@@ -128,14 +135,15 @@ fn merge_map(
         };
         into.insert(k.clone(), merged);
     }
-    Ok(())
 }
 
 /// 宣言を統合する。`decls` は `(id, 宣言)`。id 順に並べ替えて処理する。
-pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, MergeError> {
+pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, Vec<MergeError>> {
     let mut sorted: Vec<_> = decls.to_vec();
     sorted.sort_by_key(|(id, _)| *id);
     let mut out = Merged::default();
+    // 競合は最初の 1 件で止めず全件集める（capability-declaration.md §3）。
+    let mut errs: Vec<MergeError> = Vec::new();
     // 欄ごとの「最初にそのキーを書いた機能」。エラーに 2 機能を出すために持つ。
     let mut owners: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
 
@@ -160,13 +168,14 @@ pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, MergeError> {
                     &field,
                     owners.entry(field.clone()).or_default(),
                     id,
-                )?;
+                    &mut errs,
+                );
             }
             for e in &a.extensions {
                 let key = format!("{os}.extensions.{}", e.name);
                 match dst.extensions.get(&e.name) {
                     Some(cur) if cur != e => {
-                        return Err(MergeError {
+                        errs.push(MergeError {
                             field: key.clone(),
                             a: owners
                                 .entry(key)
@@ -176,7 +185,7 @@ pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, MergeError> {
                                 .unwrap_or_default(),
                             b: id.to_string(),
                             detail: "同名の拡張で内容が違います".into(),
-                        })
+                        });
                     }
                     Some(_) => {}
                     None => {
@@ -222,7 +231,7 @@ pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, MergeError> {
                 let key = format!("android.components.{}", k.name);
                 match dst.components.get(&k.name) {
                     Some(cur) if cur != k => {
-                        return Err(MergeError {
+                        errs.push(MergeError {
                             field: key.clone(),
                             a: owners
                                 .entry(key)
@@ -232,7 +241,7 @@ pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, MergeError> {
                                 .unwrap_or_default(),
                             b: id.to_string(),
                             detail: "同名のコンポーネントで内容が違います".into(),
-                        })
+                        });
                     }
                     Some(_) => {}
                     None => {
@@ -251,5 +260,9 @@ pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, MergeError> {
         }
         out.windows_identity |= d.windows.as_ref().is_some_and(|w| w.identity);
     }
-    Ok(out)
+    if errs.is_empty() {
+        Ok(out)
+    } else {
+        Err(errs)
+    }
 }
