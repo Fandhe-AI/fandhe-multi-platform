@@ -31,7 +31,7 @@ fandhe-multi-platform/
 │   ├── fandhe-egui-proxy/       # egui による実描画バックエンド（デスクトップ・Android・iOS・Web）
 │   ├── fandhe-fonts/            # CJK フォント資産（Noto Sans JP 埋め込み）
 │   ├── fandhe-prototype/        # プロトタイプアプリ共通コード（TASK-2.2）
-│   ├── fandhe-runtime/          # 起床と完了通知（CompletionSender・EffectFn、egui 非依存、TASK-21.2 / #1162）
+│   ├── fandhe-runtime/          # 起床と完了通知（CompletionSender・EffectFn）と Renderer trait（egui 非依存、TASK-21.2 / #1162・#1163）
 │   ├── fandhe-swiftui-bridge/   # SwiftUI 統合レイヤ（codec・ffi・error）
 │   ├── fandhe-web-dom/          # Web ターゲット向け DOM 出力レンダラ（HTML・SEO・a11y）
 │   └── fandhe-winit-ime/        # IME 統合レイヤ（winit ← → fandhe-core）

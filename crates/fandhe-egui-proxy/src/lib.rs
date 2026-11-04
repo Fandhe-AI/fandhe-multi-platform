@@ -295,6 +295,29 @@ pub fn render_screen_with_recyclers<S: 'static>(
     }
 }
 
+/// [`fandhe_runtime::Renderer`] の egui 実装。1 フレーム限りのアダプタで、
+/// [`render_screen_with_recyclers`] へ委譲する（描画ロジックはそちらにある）。
+///
+/// `egui::Ui` は `CentralPanel::show` のクロージャ内でしか得られないため、フレームごとに
+/// 作る。`recyclers` は呼び出し側（[`app::ProxyApp`] 等）がフレームをまたいで保持する。
+pub struct EguiRenderer<'a, S> {
+    ui: &'a mut egui::Ui,
+    recyclers: &'a mut VirtualListRecyclers<S>,
+}
+
+impl<'a, S> EguiRenderer<'a, S> {
+    /// 今フレームの `ui` と、フレーム跨ぎで保持している `recyclers` から作る。
+    pub fn new(ui: &'a mut egui::Ui, recyclers: &'a mut VirtualListRecyclers<S>) -> Self {
+        Self { ui, recyclers }
+    }
+}
+
+impl<S: 'static> fandhe_runtime::Renderer<S> for EguiRenderer<'_, S> {
+    fn render(&mut self, screen: &Screen<S>, store: &mut StateStore<S>) {
+        render_screen_with_recyclers(self.ui, screen, store, self.recyclers);
+    }
+}
+
 /// 縦 `VirtualList` の内側スクロールの高さ上限。外側（画面ルート）スクロールで
 /// 見えている高さを使い、窓が極端に低くても数行分は確保する（Issue #77）。
 fn virtual_list_max_height(ui: &egui::Ui, item_extent: f32) -> f32 {
