@@ -9,7 +9,7 @@ import android.service.quicksettings.TileService;
 // タップのたびに `QuickSettingsTileStore.increment` で回数を 1 増やし、アプリ画面が
 // Rust（`android_quick_settings_tile.rs`）経由で読む。アプリのプロセスが無ければ OS がこの
 // サービスのために起こすが、MainActivity は読み込まれない。切り離し時は Manifest の宣言ごと削除する。
-public class QuickSettingsTileService extends TileService {
+public final class QuickSettingsTileService extends TileService {
     @Override
     public void onClick() {
         super.onClick();

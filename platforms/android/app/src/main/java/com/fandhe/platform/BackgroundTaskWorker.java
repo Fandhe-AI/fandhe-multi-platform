@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-public class BackgroundTaskWorker extends Worker {
+public final class BackgroundTaskWorker extends Worker {
     // Rust 側 `fandhe_device::background_task::RECORD_KEY`
     // （"background-task.last-run"）を `fandhe_device::storage` の非公開
     // `encode_key`（各バイトを小文字 16 進 2 桁）で符号化した固定値（SSOT は

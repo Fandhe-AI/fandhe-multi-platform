@@ -20,7 +20,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-public class BackgroundUploadWorker extends Worker {
+public final class BackgroundUploadWorker extends Worker {
     static final String KEY_URL = "url";
     static final String KEY_SENT = "sent";
     static final String KEY_TOTAL = "total";
