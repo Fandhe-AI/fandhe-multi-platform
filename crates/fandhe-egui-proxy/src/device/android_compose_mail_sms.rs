@@ -108,7 +108,7 @@ fn call_activity(id: u64, req: &ComposeRequest) -> bool {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_ComposeHelper_nativeOnComposeResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_ComposeHelper_nativeOnComposeResult<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,

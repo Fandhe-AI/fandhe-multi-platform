@@ -25,7 +25,7 @@
       "note": "実装済み（旧#1284）。`ConnectivityManager.getActiveNetwork` / `getNetworkCapabilities` を Rust 側から JNI で 1 秒間隔に同期で 1 回読む（`registerDefaultNetworkCallback` は購読しない。コールバック・要求 id・保留状態を持たないので、Activity 再生成で破棄すべき要求も無い）。アクティブなネットワークがあれば接続あり、無ければ接続なし、取得失敗・想定外の結果コードは `Internal`。種別は Wi-Fi → 携帯 → 有線 → その他（VPN・Bluetooth 等）、従量制は `NET_CAPABILITY_NOT_METERED` の有無。守る範囲: 嘘の「接続あり」を出さないこと（失敗・Activity 未確立・未定義コードは接続ありにしない）、1 プロセス内の取得、接続詳細をログへ出さないこと。守らない範囲: インターネット到達性（`VALIDATED` は見ない・captive portal・VPN）、変化の反映遅れ（最大 1 秒）。既知の天井: `TEMPORARILY_NOT_METERED`（API 30）は見ない。Android 実機確認は #18 で済み",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_network_status.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/NetworkStatusHelper.java + crates/fandhe-egui-proxy/src/device/network_status.rs + crates/fandhe-core/src/screens/network_status_show.rs + crates/fandhe-device/src/network_status.rs、Issue 旧#1284",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_network_status.rs + platforms/android/app/src/main/java/com/fandhe/platform/NetworkStatusHelper.java + crates/fandhe-egui-proxy/src/device/network_status.rs + crates/fandhe-core/src/screens/network_status_show.rs + crates/fandhe-device/src/network_status.rs、Issue 旧#1284",
       "verified": true
     },
     "macos": {

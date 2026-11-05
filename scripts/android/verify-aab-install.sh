@@ -67,7 +67,7 @@ application_id="com.fandhe.androidapp"
 # GameActivity 方式（TASK-9.3-S1 / #242 で NativeActivity から確定。
 # platforms/android/app/src/main/AndroidManifest.xml SSOT、verify-android-launch.sh と
 # 同じ値）。
-activity_name="com.fandhe.androidapp.MainActivity"
+activity_name="com.fandhe.platform.MainActivity"
 aab_path="${repo_root}/platforms/android/app/build/outputs/bundle/release/app-release.aab"
 apks_out_dir="${repo_root}/target/android/verify-aab-install"
 apks_path="${apks_out_dir}/app.apks"

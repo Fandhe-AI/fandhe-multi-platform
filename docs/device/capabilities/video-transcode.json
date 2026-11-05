@@ -25,7 +25,7 @@
     },
     "android": {
       "status": "done",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/VideoTranscodeHelper.java + crates/fandhe-egui-proxy/src/device/android_video_transcode.rs + crates/fandhe-egui-proxy/src/device/video_transcode.rs + crates/fandhe-core/src/screens/video_transcode.rs + crates/fandhe-device/src/video_transcode.rs、Issue #1017",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/VideoTranscodeHelper.java + crates/fandhe-egui-proxy/src/device/android_video_transcode.rs + crates/fandhe-egui-proxy/src/device/video_transcode.rs + crates/fandhe-core/src/screens/video_transcode.rs + crates/fandhe-device/src/video_transcode.rs、Issue #1017",
       "api": "`MediaCodec`（H.264 の符号化器・復号器、`getInputImage` / `getOutputImage`）+ `MediaMuxer`。Media3 Transformer は不採用（Gradle の新規依存を避ける。media-transcode と同じ判断）",
       "perm": "不要（一時ファイルはアプリの `getCacheDir()`）",
       "url": [

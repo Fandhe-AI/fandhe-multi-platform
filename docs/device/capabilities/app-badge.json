@@ -24,7 +24,7 @@
       "note": "実装済み（旧#1362）。バッジ専用 API はないため無音の通知を 1 件出す（通知が 1 件増える）。表示はドットと長押しメニューの件数で、アイコン上の数字はランチャー依存で保証しない。API 24〜25 は Unsupported。0 は消去で許可を求めない。結果は Submitted までで Cancelled は出さない。Activity 再生成時は保留中の要求を破棄する。守る範囲: 1 プロセス内の要求順序・拒否/通知オフ/チャンネルブロックを成功に畳まないこと。守らない範囲: 通知のスワイプ等で OS 側が消えたときの画面表示値との食い違い。実機確認で、件数の入力欄が描画されず確認できなかった（#74）。",
       "detail": "できている（実機確認で不具合あり）",
       "implStatus": "実装済み（実機確認で不具合あり）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_app_badge.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/AppBadgeHelper.java + crates/fandhe-egui-proxy/src/device/app_badge.rs + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue 旧#1362"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_app_badge.rs + platforms/android/app/src/main/java/com/fandhe/platform/AppBadgeHelper.java + crates/fandhe-egui-proxy/src/device/app_badge.rs + crates/fandhe-core/src/screens/app_badge_set.rs + crates/fandhe-device/src/app_badge.rs、Issue 旧#1362"
     },
     "macos": {
       "status": "done",

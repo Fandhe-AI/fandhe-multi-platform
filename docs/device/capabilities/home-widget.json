@@ -26,7 +26,7 @@
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_home_widget.rs + crates/fandhe-egui-proxy/src/device/home_widget.rs + crates/fandhe-device/src/home_widget.rs + crates/fandhe-core/src/screens/home_widget_show.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/HomeWidgetProvider.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + platforms/android/app/src/main/res/xml/home_widget_info.xml + platforms/android/app/src/main/res/layout/home_widget.xml、Issue 旧#1067"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_home_widget.rs + crates/fandhe-egui-proxy/src/device/home_widget.rs + crates/fandhe-device/src/home_widget.rs + crates/fandhe-core/src/screens/home_widget_show.rs + platforms/android/app/src/main/java/com/fandhe/platform/HomeWidgetProvider.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + platforms/android/app/src/main/res/xml/home_widget_info.xml + platforms/android/app/src/main/res/layout/home_widget.xml、Issue 旧#1067"
     },
     "macos": {
       "status": "done",

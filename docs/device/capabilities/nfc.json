@@ -25,7 +25,7 @@
       "status": "done",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#1040）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/NfcReadHelper.java + crates/fandhe-egui-proxy/src/device/android_nfc.rs + crates/fandhe-egui-proxy/src/device/nfc.rs + crates/fandhe-core/src/screens/nfc_read.rs + crates/fandhe-device/src/nfc.rs、Issue #1045",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/NfcReadHelper.java + crates/fandhe-egui-proxy/src/device/android_nfc.rs + crates/fandhe-egui-proxy/src/device/nfc.rs + crates/fandhe-core/src/screens/nfc_read.rs + crates/fandhe-device/src/nfc.rs、Issue #1045",
       "api": "`NfcAdapter.enableReaderMode`（前面の Activity の間だけ）+ `Ndef.getCachedNdefMessage`",
       "perm": "`<uses-permission android:name=\"android.permission.NFC\" />`（normal、実行時の許可ダイアログなし）+ `<uses-feature android:name=\"android.hardware.nfc\" android:required=\"false\" />`",
       "url": [

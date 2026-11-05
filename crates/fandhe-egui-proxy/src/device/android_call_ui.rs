@@ -184,7 +184,7 @@ fn call_activity(call_id: u64, report: bool) -> Option<i32> {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_CallUiHelper_nativeOnCallUiEvent<'caller>(
+extern "system" fn Java_com_fandhe_platform_CallUiHelper_nativeOnCallUiEvent<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     call_id: jni::sys::jlong,

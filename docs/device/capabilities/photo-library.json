@@ -28,7 +28,7 @@
       "note": "実装済み（旧#1256）。API 29+（Android 10+）のみ `MediaStore.Images.Media` へ保存し、API 24〜28 は非対応（Unsupported）。`DISPLAY_NAME`・`MIME_TYPE=image/png`・`RELATIVE_PATH=Pictures`・`IS_PENDING=1` で insert して書き込み、`IS_PENDING=0` の update が 1 行に効いたときだけ成功にする。書き込みか確定に失敗したら insert した行を delete し、delete も失敗したら別のエラー（cleanup）で返す。権限は追加しない。I/O は単一スレッドの直列キューに集約し、Java は `PhotoSaveHelper` に分けて `MainActivity` には呼び出し 1 メソッドだけ足した。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、完了を 1 回だけ反映。守らない範囲: 複数プロセスの同時保存、保存後の編集・削除、Activity 再生成やアプリ終了と重なった保存の表示。アルバムの作成・一覧・削除は扱わない。ギャラリーに入ること・API 28 以下で非対応と出ることの目視は #14 で済み",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-device/src/photo_library.rs + crates/fandhe-egui-proxy/src/device/android_photo_library.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/PhotoSaveHelper.java + crates/fandhe-egui-proxy/src/device/photo_save.rs + crates/fandhe-core/src/screens/photo_save.rs、Issue 旧#1256",
+      "impl": "crates/fandhe-device/src/photo_library.rs + crates/fandhe-egui-proxy/src/device/android_photo_library.rs + platforms/android/app/src/main/java/com/fandhe/platform/PhotoSaveHelper.java + crates/fandhe-egui-proxy/src/device/photo_save.rs + crates/fandhe-core/src/screens/photo_save.rs、Issue 旧#1256",
       "sourceName": [
         "メディアライブラリアクセス"
       ],

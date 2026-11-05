@@ -183,9 +183,7 @@ pub(crate) fn present_preview(
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_FilePreviewHelper_nativeOnFilePreviewResult<
-    'caller,
->(
+extern "system" fn Java_com_fandhe_platform_FilePreviewHelper_nativeOnFilePreviewResult<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,

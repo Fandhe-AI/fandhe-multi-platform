@@ -32,7 +32,7 @@
       "note": "実装済み（#904）。null・空・例外は失敗。Android 8+ は署名鍵・ユーザー・端末の組ごとの値で、同じ署名鍵ならアンインストール・再インストールで変わらない。Android 7（minSdk 24〜25）は署名鍵で分かれず、端末・ユーザーで共通。工場出荷リセット・署名鍵の変更で変わる。Play のポリシー上、広告 ID・個人の機微データと結び付けない。広告 ID は対象外。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#889）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_device_identifier.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/DeviceIdentifierHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/device_identifier.rs + crates/fandhe-core/src/screens/device_identifier_show.rs + crates/fandhe-device/src/device_identifier.rs、Issue #904"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_device_identifier.rs + platforms/android/app/src/main/java/com/fandhe/platform/DeviceIdentifierHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/device_identifier.rs + crates/fandhe-core/src/screens/device_identifier_show.rs + crates/fandhe-device/src/device_identifier.rs、Issue #904"
     },
     "macos": {
       "status": "no",

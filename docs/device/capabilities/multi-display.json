@@ -24,7 +24,7 @@
       "note": "実装済み（旧#1343）。1 秒の同期 pull で、`DisplayListener`・`Presentation` は使わない。保留中の要求・id・コールバックを持たないので、Activity 再生成で破棄するものは無い。守る範囲: 嘘の値を出さない・主画面を決められなければ全て false・個体識別子を取らない・1 プロセス内の取得・形が不正なら一部だけ返さず失敗にする。守らない範囲: OS 間の粒度の一致、反映遅れ（最大 1 秒）、仮想ディスプレイと `getRealMetrics` の論理サイズが物理パネルと違うこと、複数プロセス、画面の位置・並び。Android 実機確認は #25 で済み",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み（外部ディスプレイはシミュレートで確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_multi_display.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MultiDisplayHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/multi_display.rs + crates/fandhe-core/src/screens/multi_display_show.rs + crates/fandhe-device/src/multi_display.rs、Issue 旧#1343",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_multi_display.rs + platforms/android/app/src/main/java/com/fandhe/platform/MultiDisplayHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/multi_display.rs + crates/fandhe-core/src/screens/multi_display_show.rs + crates/fandhe-device/src/multi_display.rs、Issue 旧#1343",
       "verified": true
     },
     "macos": {

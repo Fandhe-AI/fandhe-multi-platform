@@ -33,7 +33,7 @@
       "note": "実装済み（#872）。minSdk 24 のため API 24・25 の広色域は「この OS（版）では取れない」。`getHdrCapabilities()` は API 34 で非推奨だが動く。窓の画面は `getWindowManager().getDefaultDisplay()`（`Activity.getDisplay()` は API 30+ のため使わない）。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#868）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/DisplayRefreshHdrHelper.java + crates/fandhe-egui-proxy/src/device/android_display_refresh_hdr.rs + crates/fandhe-egui-proxy/src/device/display_refresh_hdr.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #872"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/DisplayRefreshHdrHelper.java + crates/fandhe-egui-proxy/src/device/android_display_refresh_hdr.rs + crates/fandhe-egui-proxy/src/device/display_refresh_hdr.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #872"
     },
     "macos": {
       "status": "done",

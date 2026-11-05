@@ -32,7 +32,7 @@
         "音声認識"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/device/speech_recognition.rs + crates/fandhe-device/src/speech_recognition.rs、Issue 旧#1026"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/device/speech_recognition.rs + crates/fandhe-device/src/speech_recognition.rs、Issue 旧#1026"
     },
     "macos": {
       "status": "done",

@@ -21,7 +21,7 @@
       "note": "実装済み（#507）。接続中の USB 機器のベンダー ID・製品 ID・製品名を先頭 64 件まで表示し、「再取得」で読み直す。0 件は成功として別に出し、USB ホスト非搭載は非対応、失敗は区別して失敗として出す。シリアル番号・デバイスパス・製造者名は読まない。製品名が取れない機器は名前なしで件数に数える。UI スレッドで同期に 1 回だけ読み、保留中の要求を持たない（Activity 再生成で破棄するものが無い）。守らない範囲: 抜き差しの反映（再取得まで）、OTG 非対応端末、製品名を読むのに許可が要る端末で名前が空になること、OS 呼び出しが戻らない場合の期限。実機確認は #504 で行う。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#504）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_usb_device.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/UsbDeviceHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/usb_device.rs + crates/fandhe-core/src/screens/usb_device_show.rs + crates/fandhe-device/src/usb_device.rs、Issue #507"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_usb_device.rs + platforms/android/app/src/main/java/com/fandhe/platform/UsbDeviceHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/usb_device.rs + crates/fandhe-core/src/screens/usb_device_show.rs + crates/fandhe-device/src/usb_device.rs、Issue #507"
     },
     "macos": {
       "status": "done",

@@ -21,7 +21,7 @@
       "note": "API 30 以下は既定色に倒さず「取得できません（非対応）」を出す。リファレンス: https://developer.android.com/reference/android/R.color#system_accent1_500 。守らない範囲: AOSP の既定値を本物と区別しない、反映は最大 1 秒 + 1 フレーム、壁紙変更後の反映は実機未確認（#415）",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#415）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_system_accent_color.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/SystemAccentColorHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/system_accent_color.rs + crates/fandhe-core/src/screens/system_accent_color_show.rs + crates/fandhe-device/src/system_accent_color.rs、Issue #422"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_system_accent_color.rs + platforms/android/app/src/main/java/com/fandhe/platform/SystemAccentColorHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/system_accent_color.rs + crates/fandhe-core/src/screens/system_accent_color_show.rs + crates/fandhe-device/src/system_accent_color.rs、Issue #422"
     },
     "macos": {
       "status": "done",

@@ -149,7 +149,7 @@ mod imp {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_DocumentScanHelper_nativeTryBeginPresent<'caller>(
+extern "system" fn Java_com_fandhe_platform_DocumentScanHelper_nativeTryBeginPresent<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -172,7 +172,7 @@ extern "system" fn Java_com_fandhe_androidapp_DocumentScanHelper_nativeTryBeginP
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_DocumentScanHelper_nativeOnDocumentScanResult<
+extern "system" fn Java_com_fandhe_platform_DocumentScanHelper_nativeOnDocumentScanResult<
     'caller,
 >(
     mut unowned_env: jni::EnvUnowned<'caller>,

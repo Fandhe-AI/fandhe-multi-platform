@@ -204,7 +204,7 @@ fn call_set(id: u64, kind: i32, on: bool) -> bool {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_RadioControlHelper_nativeOnRadioControlResult<
+extern "system" fn Java_com_fandhe_platform_RadioControlHelper_nativeOnRadioControlResult<
     'caller,
 >(
     _env: jni::EnvUnowned<'caller>,

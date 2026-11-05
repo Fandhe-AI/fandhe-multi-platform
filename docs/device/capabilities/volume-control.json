@@ -32,7 +32,7 @@
       "note": "実装済み（#787）。1 秒ごとに読み直し、読み戻した値を表示する。`isVolumeFixed()` が真のときは「＋」「－」を出さない。上限・下限で値が変わらないときは失敗にしない。`adjustStreamVolume` は 1 段階ずつ変え、段の幅と上下限は OS が決める。音量固定の端末（`isVolumeFixed()` が真）では変更が効かない（公式）。公式は `adjustStreamVolume` を「全体の音声設定を置き換えるアプリか電話アプリ向け」と書く。音量の変化を知らせる公開の通知（broadcast・listener）は無い。対象はメディア音量（`STREAM_MUSIC`）だけで、着信音・通知音量は扱わない",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#780）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/VolumeControlHelper.java + crates/fandhe-egui-proxy/src/device/android_volume_control.rs + crates/fandhe-egui-proxy/src/device/volume_control.rs + crates/fandhe-core/src/screens/volume_control_show.rs + crates/fandhe-device/src/volume_control.rs、Issue #787"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/VolumeControlHelper.java + crates/fandhe-egui-proxy/src/device/android_volume_control.rs + crates/fandhe-egui-proxy/src/device/volume_control.rs + crates/fandhe-core/src/screens/volume_control_show.rs + crates/fandhe-device/src/volume_control.rs、Issue #787"
     },
     "macos": {
       "status": "done",

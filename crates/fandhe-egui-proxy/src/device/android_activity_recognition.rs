@@ -189,7 +189,7 @@ pub(crate) fn implementation() -> Arc<dyn ActivityRecognizer> {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_ActivityRecognitionHelper_nativeOnBackgrounded(
+extern "system" fn Java_com_fandhe_platform_ActivityRecognitionHelper_nativeOnBackgrounded(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) {
@@ -199,11 +199,11 @@ extern "system" fn Java_com_fandhe_androidapp_ActivityRecognitionHelper_nativeOn
 /// 前景復帰の通知（Java `ActivityRecognitionHelper.onStart`）。期限の起点を引き直し、次フレームを起こす。
 ///
 /// # Safety
-/// [`Java_com_fandhe_androidapp_ActivityRecognitionHelper_nativeOnBackgrounded`] と同一の根拠。
+/// [`Java_com_fandhe_platform_ActivityRecognitionHelper_nativeOnBackgrounded`] と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_ActivityRecognitionHelper_nativeOnResumed(
+extern "system" fn Java_com_fandhe_platform_ActivityRecognitionHelper_nativeOnResumed(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) {

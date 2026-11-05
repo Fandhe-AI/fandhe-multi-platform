@@ -219,7 +219,7 @@ fn call_activity(call: Call) -> Option<i32> {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_SleepLockEventsHelper_nativeOnSleepLockEvent<
+extern "system" fn Java_com_fandhe_platform_SleepLockEventsHelper_nativeOnSleepLockEvent<
     'caller,
 >(
     _env: jni::EnvUnowned<'caller>,

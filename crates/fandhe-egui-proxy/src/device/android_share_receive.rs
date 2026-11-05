@@ -3,7 +3,7 @@
 //!
 //! 他アプリの共有シート（`ACTION_SEND` + `text/plain` + `EXTRA_TEXT`）から届いたテキストを、
 //! Java 側 `ShareReceiveHelper.deliver`（`MainActivity` の `onCreate` / `onNewIntent` から
-//! 呼ばれる）が [`Java_com_fandhe_androidapp_ShareReceiveHelper_nativeOnShareReceived`] 経由で
+//! 呼ばれる）が [`Java_com_fandhe_platform_ShareReceiveHelper_nativeOnShareReceived`] 経由で
 //! 渡す。受け口 [`INBOX`] はプロセス全体の static で、UI ができる前（コールドスタート）に
 //! 届いた分もここに溜まる。検査・保持は共通層 `fandhe_device::share_receive::ShareInbox` に
 //! 一本化し、本モジュールは JNI の橋渡しだけを持つ。本文は秘密値を含みうるためログへ出さない。
@@ -39,7 +39,7 @@ fn deliver(inbox: &ShareInbox, text: Option<&str>, now_ms: u64) {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_ShareReceiveHelper_nativeOnShareReceived<'caller>(
+extern "system" fn Java_com_fandhe_platform_ShareReceiveHelper_nativeOnShareReceived<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     text: jni::objects::JString<'caller>,

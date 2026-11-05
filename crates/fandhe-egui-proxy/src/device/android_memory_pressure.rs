@@ -186,7 +186,7 @@ fn call_activity(call: Call) -> Option<i32> {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MemoryPressureHelper_nativeOnMemoryTrim<'caller>(
+extern "system" fn Java_com_fandhe_platform_MemoryPressureHelper_nativeOnMemoryTrim<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     id: jni::sys::jlong,

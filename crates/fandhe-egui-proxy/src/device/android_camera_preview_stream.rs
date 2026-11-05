@@ -275,7 +275,7 @@ fn call_activity(call: Call) -> Option<Ret> {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_CameraPreviewHelper_nativeOnCameraPreviewEvent<
+extern "system" fn Java_com_fandhe_platform_CameraPreviewHelper_nativeOnCameraPreviewEvent<
     'caller,
 >(
     _env: jni::EnvUnowned<'caller>,
@@ -299,7 +299,7 @@ extern "system" fn Java_com_fandhe_androidapp_CameraPreviewHelper_nativeOnCamera
 #[cfg(target_os = "android")]
 #[allow(unsafe_code, clippy::too_many_arguments)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_CameraPreviewHelper_nativeOnCameraPreviewFrame<
+extern "system" fn Java_com_fandhe_platform_CameraPreviewHelper_nativeOnCameraPreviewFrame<
     'caller,
 >(
     mut unowned_env: jni::EnvUnowned<'caller>,

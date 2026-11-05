@@ -5,7 +5,7 @@
 // GameActivity 方式（NativeActivity から変更）。実描画は `fandhe-egui-proxy`
 // （crates/fandhe-egui-proxy/src/android.rs）が cdylib（`libfandhe_egui_proxy.so`）として
 // 提供し、本モジュールは最小の Java サブクラス
-// （src/main/java/com/fandhe/androidapp/MainActivity.java、GameActivity 継承）経由で
+// （src/main/java/com/fandhe/platform/MainActivity.java、GameActivity 継承）経由で
 // それを起動する薄いラッパー。GameActivity は NativeActivity と異なりサブクラス化と
 // ネイティブライブラリの明示ロードが必須のため、`hasCode="false"` 前提は撤回した
 // （追加コードは MainActivity.java と補助クラス RequestTracker.java に閉じる）。
@@ -28,7 +28,7 @@ plugins {
 }
 
 android {
-    namespace = "com.fandhe.androidapp"
+    namespace = "com.fandhe.platform"
     compileSdk = 35
     // AGP 9.3.1 が要求する最小 build-tools バージョン（36.0.0）を明記する
     // （scripts/android/versions.env の BUILD_TOOLS_PACKAGE と一致させること。

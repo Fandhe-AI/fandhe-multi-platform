@@ -24,7 +24,7 @@
       "status": "done",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#602）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_environment_sensors.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/EnvironmentSensorsHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-egui-proxy/src/device/environment_sensors.rs + crates/fandhe-core/src/screens/environment_sensors_show.rs + crates/fandhe-device/src/environment_sensors.rs、Issue #611",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_environment_sensors.rs + platforms/android/app/src/main/java/com/fandhe/platform/EnvironmentSensorsHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-egui-proxy/src/device/environment_sensors.rs + crates/fandhe-core/src/screens/environment_sensors_show.rs + crates/fandhe-device/src/environment_sensors.rs、Issue #611",
       "api": "`SensorManager` の `TYPE_PRESSURE` / `TYPE_LIGHT` / `TYPE_PROXIMITY`",
       "perm": "不要（`HIGH_SAMPLING_RATE_SENSORS` は 200 Hz を超える motion / position センサーにだけ要る）",
       "url": [

@@ -31,7 +31,7 @@
       ],
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-device/src/contact_picker.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/device/contact_pick.rs + crates/fandhe-core/src/screens/contact_pick.rs、Issue 旧#1222",
+      "impl": "crates/fandhe-device/src/contact_picker.rs + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/device/contact_pick.rs + crates/fandhe-core/src/screens/contact_pick.rs、Issue 旧#1222",
       "verified": true
     },
     "macos": {

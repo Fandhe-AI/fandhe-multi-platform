@@ -24,7 +24,7 @@
       "note": "実装済み（#472）。埋め込みのサンプル PDF（3 ページ、コードで生成）の 1 ページ目を長辺 1024px 以内の RGBA に描き、総ページ数と一緒に出す。成功は寸法・長さ・ページ数の検査を通ったものだけ。壊れている・暗号化・0 ページ・寸法不正・期限切れ（10 秒）は失敗として区別する。取り消しの操作と権限は無いので、キャンセル・権限拒否の失敗系は無い。守らない範囲: 任意の PDF・`/Rotate`、暗号化 PDF の実 API での確認、期限後も OS 側の描画が走り切ること、色の正確さ・所要時間。Android 実機確認は #468。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#468）",
-      "impl": "`crates/fandhe-egui-proxy/src/device/android_pdf_viewer.rs` + `platforms/android/app/src/main/java/com/fandhe/androidapp/PdfPageHelper.java` + `crates/fandhe-egui-proxy/src/device/pdf_viewer.rs` + `crates/fandhe-core/src/screens/pdf_first_page.rs` + `crates/fandhe-device/src/pdf_viewer.rs`、Issue #472"
+      "impl": "`crates/fandhe-egui-proxy/src/device/android_pdf_viewer.rs` + `platforms/android/app/src/main/java/com/fandhe/platform/PdfPageHelper.java` + `crates/fandhe-egui-proxy/src/device/pdf_viewer.rs` + `crates/fandhe-core/src/screens/pdf_first_page.rs` + `crates/fandhe-device/src/pdf_viewer.rs`、Issue #472"
     },
     "macos": {
       "status": "done",

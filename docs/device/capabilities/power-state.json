@@ -25,7 +25,7 @@
       "note": "実装済み（旧#1276）。`EXTRA_PRESENT` が false なら `Battery::Absent`（0% にしない）、sticky intent や extra が無ければ不明。充電状態は CHARGING / DISCHARGING / FULL を写し、NOT_CHARGING（接続中だが充電していない）と UNKNOWN は放電中と偽らず不明。熱は NONE / LIGHT・MODERATE / SEVERE / CRITICAL・EMERGENCY・SHUTDOWN を 通常 / やや高い / 高い / 危険 へ写し、API 28 以下は不明。Activity 準備前や JNI 失敗は `Internal`（成功へ畳まない）。守る範囲: 1 プロセス内の取得・電池なし／不明／0% の区別・失敗を成功値へ畳まないこと。守らない範囲: OS 間の値の一致、変化の反映遅れ（読み取り間隔 1 秒ぶん）、複数プロセス。1 秒間隔の pull で、receiver 登録や熱状態リスナーなど OS の変化通知は購読しない（保留要求なし、並行経路なし）。Android 実機の確認は #16 で済み",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_power_state.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/PowerStateHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/power_state.rs + crates/fandhe-core/src/screens/power_state_show.rs + crates/fandhe-device/src/power_state.rs、Issue 旧#1276",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_power_state.rs + platforms/android/app/src/main/java/com/fandhe/platform/PowerStateHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/power_state.rs + crates/fandhe-core/src/screens/power_state_show.rs + crates/fandhe-device/src/power_state.rs、Issue 旧#1276",
       "verified": true
     },
     "macos": {

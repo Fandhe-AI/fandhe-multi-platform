@@ -25,7 +25,7 @@
       "note": "実装済み（旧#1337）。同意ダイアログ（`createScreenCaptureIntent`）の結果を受け、型 mediaProjection のフォアグラウンドサービスで `MediaProjection` + `MediaRecorder`（H.264 / MP4、音声なし、長辺 1280 以下）へ録画する。一時 mp4（cacheDir の固定名）のバイト数・mime・録画時間だけを Rust へ返し、映像は JNI を越えない。録画は 10 秒で自動停止。状態は main looper に閉じ、確定は 1 か所・first-wins、一時ファイル・recorder・VirtualDisplay・projection・サービスは全経路で解放。同意の拒否・閉じた・開始前の停止はキャンセル、TV 等で同意 UI が無ければ Unsupported。背景遷移・Activity 破棄は失敗（書き出し済みでも成功にしない。同意ダイアログ表示中の onPause は破棄しない）。OS・利用者による停止（通知領域等）は明示停止と同じ書き出しを試み、動画が得られれば成功。0 データでの停止は失敗。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・資源の解放・毎回同意。守らない範囲: 映像の中身、OS 同意 UI の見た目、複数プロセス、プロセス死。既知の天井: Android 14+ の同意画面で他アプリを選ぶと自アプリが背景へ移り中断（失敗）になる／端末のエンコーダが解像度を拒否すれば失敗／Android 15+ で画面ロックにより OS が止めた場合は得られた分を成功として返す。実機確認は #24 で済み",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_screen_capture.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/ScreenCaptureHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/ScreenCaptureService.java + crates/fandhe-egui-proxy/src/device/screen_capture.rs + crates/fandhe-core/src/screens/screen_capture.rs + crates/fandhe-device/src/screen_capture.rs、Issue 旧#1337",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_screen_capture.rs + platforms/android/app/src/main/java/com/fandhe/platform/ScreenCaptureHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/ScreenCaptureService.java + crates/fandhe-egui-proxy/src/device/screen_capture.rs + crates/fandhe-core/src/screens/screen_capture.rs + crates/fandhe-device/src/screen_capture.rs、Issue 旧#1337",
       "verified": true
     },
     "macos": {

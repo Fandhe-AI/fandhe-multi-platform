@@ -31,7 +31,7 @@
         "文字サイズ設定の追従（Android の Dynamic Type 相当）"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs（`AndroidTextScale`）、Issue 旧#914"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs（`AndroidTextScale`）、Issue 旧#914"
     },
     "macos": {
       "status": "no",

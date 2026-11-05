@@ -1,7 +1,7 @@
 //! Android 向けカスタム URL scheme 受信（Issue #1218）。`device/url_scheme.rs::
 //! platform_url_scheme` の Android 分岐から使われ、Java 側 `MainActivity` の
 //! `deliverUrlIntent`（`onCreate` の `getIntent()` / `onNewIntent`）が
-//! [`Java_com_fandhe_androidapp_MainActivity_nativeOnUrlSchemeReceived`] を呼ぶ。
+//! [`Java_com_fandhe_platform_MainActivity_nativeOnUrlSchemeReceived`] を呼ぶ。
 //!
 //! 受け口 [`INBOX`] はプロセス全体の static で、UI ができる前（コールドスタート）に
 //! 届いた URL もここに溜まる。検査・保持は共通側の `fandhe_device::url_scheme::UrlInbox`
@@ -31,7 +31,7 @@ fn now_ms() -> u64 {
 /// JNI 命名規約上の固定シンボル名であり、`nativeOnClipboardResult` と同じ根拠。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnUrlSchemeReceived<'caller>(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnUrlSchemeReceived<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     url: jni::objects::JString<'caller>,

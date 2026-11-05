@@ -146,9 +146,7 @@ fn call_activity(id: u64, ssid: &str, password: Option<&str>, hex_key: bool) -> 
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_WifiConnectHelper_nativeOnWifiConnectResult<
-    'caller,
->(
+extern "system" fn Java_com_fandhe_platform_WifiConnectHelper_nativeOnWifiConnectResult<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,

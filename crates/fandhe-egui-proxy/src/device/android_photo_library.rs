@@ -73,7 +73,7 @@ pub(crate) fn begin_save(request_id: u64, image: &PngImage) -> Result<(), Device
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_PhotoSaveHelper_nativeOnPhotoSaveResult(
+extern "system" fn Java_com_fandhe_platform_PhotoSaveHelper_nativeOnPhotoSaveResult(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,

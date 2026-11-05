@@ -190,7 +190,7 @@ pub(crate) fn implementation() -> Arc<dyn EnvironmentSensors> {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_EnvironmentSensorsHelper_nativeOnForegroundChanged(
+extern "system" fn Java_com_fandhe_platform_EnvironmentSensorsHelper_nativeOnForegroundChanged(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     foreground: jni::sys::jboolean,

@@ -40,7 +40,7 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
      汎用配線のため残置可（削除しても実害はない）
    - `crates/fandhe-egui-proxy/Cargo.toml` の android target 分岐の `jni` 依存行、
      ルート `Cargo.toml` の `[workspace.dependencies]` の `jni` 行を削除する
-   - `platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java` の
+   - `platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java` の
      `requestCameraPermission`/`takePicturePreview`（`ActivityResultLauncher` 2 つ）・
      `nativeOnCameraResult` native 宣言・`requestCameraCapture`/`launchCameraCapture`/
      `deliverBitmap` メソッドを削除する
@@ -67,7 +67,7 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
    - `platforms/android/app/build.gradle.kts` の `androidx.activity:activity` 依存行、
      `scripts/android/versions.env` の `ANDROIDX_ACTIVITY_VERSION` 行を削除する
    - バックグラウンド処理（親 #1042、Issue #1046）: `platforms/android/app/src/main/
-     java/com/fandhe/androidapp/BackgroundTaskWorker.java`・`crates/fandhe-egui-proxy/
+     java/com/fandhe/platform/BackgroundTaskWorker.java`・`crates/fandhe-egui-proxy/
      src/device/android_background_task.rs`（`device.rs` の `pub mod
      android_background_task;` 行込み）を削除し、`device/background_task.rs::
      implementation()` の Android 分岐を外す。`MainActivity.java` の
@@ -76,7 +76,7 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
      `platforms/android/app/build.gradle.kts` の `androidx.work:work-runtime`
      依存行、`scripts/android/versions.env` の `WORK_RUNTIME_VERSION` 行を削除する
    - ホーム画面ウィジェット（親 #1064、Issue #1067）: `platforms/android/app/src/main/
-     java/com/fandhe/androidapp/HomeWidgetProvider.java`・`res/layout/home_widget.xml`・
+     java/com/fandhe/platform/HomeWidgetProvider.java`・`res/layout/home_widget.xml`・
      `res/xml/home_widget_info.xml`・`crates/fandhe-egui-proxy/src/device/
      android_home_widget.rs`（`device.rs` の `pub mod android_home_widget;` 行込み）を削除し、
      `device/home_widget.rs::implementation()` の Android 分岐を外す。`res/values/strings.xml`

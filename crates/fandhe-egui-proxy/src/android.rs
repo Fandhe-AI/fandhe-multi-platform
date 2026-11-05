@@ -65,7 +65,7 @@ pub(crate) fn active_screen_uses_gamepad() -> bool {
 
 /// 現在表示中の画面が `drag_drop` かどうか（Issue #1016）。`ACTIVE_SCREEN_USES_TILT`/
 /// `_GAMEPAD` と同じ理由・同じ契約: `MainActivity.java` の `dragListener` は
-/// `ACTION_DRAG_STARTED` のたびに [`Java_com_fandhe_androidapp_MainActivity_nativeDragDropIsActive`]
+/// `ACTION_DRAG_STARTED` のたびに [`Java_com_fandhe_platform_MainActivity_nativeDragDropIsActive`]
 /// で問い合わせ、`false` ならそのドラッグの以降のイベント（Hover/Begin/Wants/Item）を
 /// 一切送らない（表示していない画面が他画面宛てのドロップを受け取らないための
 /// ゲート、契約表 1）。
@@ -623,7 +623,7 @@ pub(crate) fn window_insets_px() -> Option<[i32; 4]> {
 }
 
 /// `MainActivity.nativeOnWindowInsetsChanged`（Java 側）から呼ばれる JNI エクスポート関数。
-/// シンボル名はパッケージ名 `com.fandhe.androidapp` とクラス名 `MainActivity` に
+/// シンボル名はパッケージ名 `com.fandhe.platform` とクラス名 `MainActivity` に
 /// 固定で紐づく（JNI 命名規約。`platforms/android/app/.../MainActivity.java` 側のクラス移動・
 /// rename 時は本関数名も追随が必要）。
 ///
@@ -639,7 +639,7 @@ pub(crate) fn window_insets_px() -> Option<[i32; 4]> {
 /// （`android_main`・`read_debug_proxy_app_property` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnWindowInsetsChanged(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnWindowInsetsChanged(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     left: i32,
@@ -741,7 +741,7 @@ fn read_debug_proxy_app_property() -> String {
 #[cfg(not(feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnMotionChanged(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnMotionChanged(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     _x: f32,
@@ -761,7 +761,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnMotionChanged
 #[cfg(not(feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnUrlSchemeReceived(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnUrlSchemeReceived(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     _url: *mut core::ffi::c_void,
@@ -780,7 +780,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnUrlSchemeRece
 #[cfg(not(feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_ShareReceiveHelper_nativeOnShareReceived(
+extern "system" fn Java_com_fandhe_platform_ShareReceiveHelper_nativeOnShareReceived(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     _text: *mut core::ffi::c_void,
@@ -800,7 +800,7 @@ extern "system" fn Java_com_fandhe_androidapp_ShareReceiveHelper_nativeOnShareRe
 #[cfg(not(feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_EnvironmentSensorsHelper_nativeOnForegroundChanged(
+extern "system" fn Java_com_fandhe_platform_EnvironmentSensorsHelper_nativeOnForegroundChanged(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     _foreground: u8,
@@ -835,38 +835,38 @@ extern "system" fn Java_com_fandhe_androidapp_EnvironmentSensorsHelper_nativeOnF
 #[cfg(not(feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanBegin(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) {
 }
 
-/// [`Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
+/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
 #[cfg(not(feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanId(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanId(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     _device_id: i32,
 ) {
 }
 
-/// [`Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
+/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
 #[cfg(not(feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanEnd(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanEnd(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) {
 }
 
-/// [`Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
+/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
 #[cfg(not(feature = "device"))]
 #[allow(unsafe_code, clippy::too_many_arguments)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadMotion(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadMotion(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     _device_id: i32,
@@ -886,11 +886,11 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadMotion
 ) {
 }
 
-/// [`Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
+/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
 #[cfg(not(feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadKey(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadKey(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     _device_id: i32,
@@ -925,7 +925,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadKey(
 /// シンボル名は JNI 命名規約上の固定名（`nativeOnMotionChanged` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeDragDropIsActive(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeDragDropIsActive(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) -> u8 {
@@ -943,7 +943,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeDragDropIsActiv
 #[cfg(not(feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_FullscreenHelper_nativeOnFullscreenChanged(
+extern "system" fn Java_com_fandhe_platform_FullscreenHelper_nativeOnFullscreenChanged(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     _state: i32,
@@ -961,7 +961,7 @@ extern "system" fn Java_com_fandhe_androidapp_FullscreenHelper_nativeOnFullscree
 #[cfg(not(feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_PenStylusHelper_nativeOnPenSample(
+extern "system" fn Java_com_fandhe_platform_PenStylusHelper_nativeOnPenSample(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     _tool_type: i32,
@@ -978,7 +978,7 @@ extern "system" fn Java_com_fandhe_androidapp_PenStylusHelper_nativeOnPenSample(
 #[cfg(not(feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_PenStylusHelper_nativeOnPenClear(
+extern "system" fn Java_com_fandhe_platform_PenStylusHelper_nativeOnPenClear(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) {

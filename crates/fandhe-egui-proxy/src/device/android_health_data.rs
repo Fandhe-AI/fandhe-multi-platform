@@ -157,7 +157,7 @@ fn call_activity(cancel: bool, id: u64) -> bool {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_HealthDataHelper_nativeOnHealthDataResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_HealthDataHelper_nativeOnHealthDataResult<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,

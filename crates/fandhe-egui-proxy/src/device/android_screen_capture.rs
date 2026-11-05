@@ -104,7 +104,7 @@ pub(crate) fn capturer() -> &'static dyn fandhe_device::screen_capture::ScreenCa
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_ScreenCaptureHelper_nativeOnScreenCaptureStarted<
+extern "system" fn Java_com_fandhe_platform_ScreenCaptureHelper_nativeOnScreenCaptureStarted<
     'caller,
 >(
     _env: jni::EnvUnowned<'caller>,
@@ -123,7 +123,7 @@ extern "system" fn Java_com_fandhe_androidapp_ScreenCaptureHelper_nativeOnScreen
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_ScreenCaptureHelper_nativeOnScreenCaptureResult<
+extern "system" fn Java_com_fandhe_platform_ScreenCaptureHelper_nativeOnScreenCaptureResult<
     'caller,
 >(
     _env: jni::EnvUnowned<'caller>,
