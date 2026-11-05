@@ -78,7 +78,8 @@ pub fn text_role_color(role: TextRole, dark_mode: bool) -> Option<egui::Color32>
 /// `Error` かつ macOS/Android/Windows では AX ノードを live region（`Live::Polite`）として
 /// 公開し、スクリーンリーダーがテキスト変化を能動的に読み上げられるようにする
 /// （既存 `Node::Widget` の AX 補正と同じ `cfg`、`lib.rs` 参照。Issue #1001 で Windows を追加）。
-pub(crate) fn styled_label(ui: &mut egui::Ui, role: TextRole, text: String) -> egui::Response {
+#[doc(hidden)]
+pub fn styled_label(ui: &mut egui::Ui, role: TextRole, text: String) -> egui::Response {
     let color = text_role_color(role, ui.visuals().dark_mode);
     let response = match color {
         Some(color) => ui.label(egui::RichText::new(text).color(color)),

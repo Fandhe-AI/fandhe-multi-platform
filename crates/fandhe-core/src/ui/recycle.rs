@@ -29,7 +29,7 @@
 //! `fandhe-egui-proxy::VirtualListRecyclers<S>` が呼び出し側（`ProxyApp` /
 //! `PrototypeApp` 等のアプリ構造体）のフィールドとしてフレームをまたいで保持し、
 //! `render_screen_with_recyclers` へ明示的に渡す設計を採る
-//! （`crates/fandhe-egui-proxy/src/recyclers.rs` モジュール doc 参照）。
+//! （`crates/fandhe-render-egui/src/recyclers.rs` モジュール doc 参照）。
 
 use std::collections::BTreeMap;
 use std::ops::Range;

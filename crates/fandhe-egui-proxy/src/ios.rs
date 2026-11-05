@@ -32,33 +32,6 @@ pub(crate) fn request_repaint() {
     fandhe_runtime::request_repaint();
 }
 
-/// iOS 向けに wgpu（Metal）バックエンドを明示指定した `NativeOptions` を構築する。
-///
-/// `wgpu::Backends::METAL` のみを許可することで、iOS では選択され得ない Vulkan / GL 等の
-/// バックエンドへ `wgpu` が誤ってフォールバックしないようにする（初期化失敗時の原因切り分けを
-/// 容易にする狙い。iOS 実機/シミュレータは Metal のみが有効なため機能面での制約にはならない）。
-pub fn metal_native_options() -> eframe::NativeOptions {
-    let wgpu_setup = eframe::egui_wgpu::WgpuSetupCreateNew {
-        instance_descriptor: eframe::wgpu::InstanceDescriptor {
-            backends: eframe::wgpu::Backends::METAL,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    eframe::NativeOptions {
-        // iOS はフルスクリーン前提のため、デスクトップ側（main.rs）のような
-        // 固定ウィンドウサイズ指定は行わず、既定のビューポート設定に委ねる。
-        viewport: egui::ViewportBuilder::default(),
-        renderer: eframe::Renderer::Wgpu,
-        wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
-            wgpu_setup: eframe::egui_wgpu::WgpuSetup::CreateNew(wgpu_setup),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-}
-
 /// iOS 向けエントリポイント。`ProxyApp::new` を wgpu（Metal）バックエンドで起動する。
 ///
 /// 呼び出し元は `main.rs` の iOS 向け `fn main` のみを想定する
@@ -82,22 +55,21 @@ pub fn metal_native_options() -> eframe::NativeOptions {
 /// （`Cargo.toml` の `[features]` コメント参照。通常のビルドでは両 feature とも
 /// 無効のため、本番経路には影響しない）。
 #[cfg(feature = "cold-start-probe")]
-pub fn run() -> eframe::Result<()> {
+pub fn run() -> Result<(), fandhe_render_egui::LaunchError> {
+    crate::register_teardown_hooks();
     let start = std::time::Instant::now();
-    eframe::run_native(
-        "fandhe-egui-proxy",
-        metal_native_options(),
-        Box::new(move |cc| {
-            // 改訂 4: ファイル選択 FFI 受け口からの `request_repaint` 経路確保のため
-            // 起床口として登録する（[`request_repaint`] doc 参照）。
-            fandhe_runtime::set_repaint_waker(std::sync::Arc::new(crate::app::EguiWaker(
-                cc.egui_ctx.clone(),
-            )));
-            let app =
-                crate::cold_start::ColdStartProbe::new(crate::ProxyApp::new(cc), start, false);
-            Ok(Box::new(app) as Box<dyn eframe::App>)
-        }),
-    )
+    fandhe_render_egui::launch::run_ios("fandhe-egui-proxy", move |lc| {
+        // 改訂 4: ファイル選択 FFI 受け口からの `request_repaint` 経路確保のため
+        // 起床口として登録する（[`request_repaint`] doc 参照）。
+        fandhe_runtime::set_repaint_waker(std::sync::Arc::new(crate::app::EguiWaker::new(
+            lc.egui_ctx().clone(),
+        )));
+        Box::new(crate::cold_start::ColdStartProbe::new(
+            crate::ProxyApp::new(lc.egui_ctx()),
+            start,
+            false,
+        ))
+    })
 }
 
 /// TASK-5.3（REQ-5 / M4、Issue #238）: `frame-metrics` feature 有効時（かつ
@@ -105,7 +77,7 @@ pub fn run() -> eframe::Result<()> {
 /// 委譲する。既存の `ProxyApp` 経路（両 feature 無効時）は変更しない
 /// （`frame_metrics.rs` モジュール doc 参照）。
 #[cfg(all(feature = "frame-metrics", not(feature = "cold-start-probe")))]
-pub fn run() -> eframe::Result<()> {
+pub fn run() -> Result<(), fandhe_render_egui::LaunchError> {
     crate::frame_metrics::run_ios()
 }
 
@@ -123,23 +95,21 @@ pub fn run() -> eframe::Result<()> {
 /// 経由しない（計測結果への影響を避ける）。計測ビルドでは文字入力モジュール自体を
 /// コンパイルしない（`lib.rs` の cfg と `build.rs` 参照、Issue #19）。
 #[cfg(not(any(feature = "cold-start-probe", feature = "frame-metrics")))]
-pub fn run() -> eframe::Result<()> {
-    eframe::run_native(
-        "fandhe-egui-proxy",
-        metal_native_options(),
-        Box::new(move |cc| {
-            // 改訂 4: ファイル選択 FFI 受け口からの `request_repaint` 経路確保のため
-            // 起床口として登録する（[`request_repaint`] doc 参照）。
-            fandhe_runtime::set_repaint_waker(std::sync::Arc::new(crate::app::EguiWaker(
-                cc.egui_ctx.clone(),
-            )));
-            let app: Box<dyn eframe::App> = match crate::screens::selected_app_name()
-                .and_then(|name| crate::build_app(&name, cc))
-            {
-                Some(app) => app,
-                None => Box::new(crate::ProxyApp::new(cc)),
-            };
-            Ok(Box::new(crate::ios_text_input::TextInputApp::new(app)))
-        }),
-    )
+pub fn run() -> Result<(), fandhe_render_egui::LaunchError> {
+    crate::register_teardown_hooks();
+    fandhe_render_egui::launch::run_ios("fandhe-egui-proxy", move |lc| {
+        let ctx = lc.egui_ctx();
+        // 改訂 4: ファイル選択 FFI 受け口からの `request_repaint` 経路確保のため
+        // 起床口として登録する（[`request_repaint`] doc 参照）。
+        fandhe_runtime::set_repaint_waker(std::sync::Arc::new(crate::app::EguiWaker::new(
+            ctx.clone(),
+        )));
+        let app: Box<dyn fandhe_render_egui::EguiApp> = match crate::screens::selected_app_name()
+            .and_then(|name| crate::build_app(&name, ctx))
+        {
+            Some(app) => app,
+            None => Box::new(crate::ProxyApp::new(ctx)),
+        };
+        Box::new(crate::ios_text_input::TextInputApp::new(app))
+    })
 }

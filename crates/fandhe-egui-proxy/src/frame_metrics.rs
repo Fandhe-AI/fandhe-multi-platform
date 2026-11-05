@@ -222,7 +222,7 @@ impl FrameMetricsCollector {
     }
 }
 
-/// 計測ワークロードを描画しつつフレーム間隔を収集する `eframe::App` 実装。
+/// 計測ワークロードを描画しつつフレーム間隔を収集する `EguiApp` 実装。
 ///
 /// `main.rs` / `ios.rs` / `android.rs` の feature 分岐からのみ構築される
 /// （モジュール doc の「feature ゲート契約」参照）。
@@ -238,8 +238,8 @@ pub struct FrameMetricsApp {
 impl FrameMetricsApp {
     /// 計測アプリを構築する。`result_path` は Android のみ結果 JSON の書き出し先を指定する
     /// （デスクトップ/iOS は `None`、オーバーレイと stderr のみで結果を提示する）。
-    pub fn new(cc: &eframe::CreationContext<'_>, result_path: Option<std::path::PathBuf>) -> Self {
-        crate::font::install_cjk_font(&cc.egui_ctx);
+    pub fn new(ctx: &egui::Context, result_path: Option<std::path::PathBuf>) -> Self {
+        crate::font::install_cjk_font(ctx);
         Self {
             screen: frame_metrics_screen(),
             store: StateStore::new(FrameMetricsState::default()),
@@ -264,8 +264,8 @@ impl FrameMetricsApp {
     }
 }
 
-impl eframe::App for FrameMetricsApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+impl fandhe_render_egui::EguiApp for FrameMetricsApp {
+    fn update(&mut self, ctx: &egui::Context) {
         // vsync ペーシング下で連続再描画を駆動する（外部入力が無い環境
         // ＝実機・Xvfb でも再描画イベントが自然発生しないため必須）。
         ctx.request_repaint();
@@ -304,16 +304,11 @@ impl eframe::App for FrameMetricsApp {
 /// 呼び出し元は `main.rs` の feature 分岐（`frame-metrics` 有効時）のみ
 /// （モジュール doc の「feature ゲート契約」参照）。
 #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
-pub fn run_desktop() -> eframe::Result<()> {
-    let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([480.0, 640.0]),
-        ..Default::default()
-    };
-
-    eframe::run_native(
+pub fn run_desktop() -> Result<(), fandhe_render_egui::LaunchError> {
+    fandhe_render_egui::launch::run_desktop(
         "fandhe-egui-proxy-frame-metrics",
-        native_options,
-        Box::new(|cc| Ok(Box::new(FrameMetricsApp::new(cc, None)) as Box<dyn eframe::App>)),
+        Some([480.0, 640.0]),
+        |lc| Box::new(FrameMetricsApp::new(lc.egui_ctx(), None)),
     )
 }
 
@@ -321,18 +316,17 @@ pub fn run_desktop() -> eframe::Result<()> {
 ///
 /// 呼び出し元は `ios.rs` の `run` 内 feature 分岐のみ。
 #[cfg(target_os = "ios")]
-pub fn run_ios() -> eframe::Result<()> {
-    eframe::run_native(
-        "fandhe-egui-proxy-frame-metrics",
-        crate::ios::metal_native_options(),
-        Box::new(|cc| Ok(Box::new(FrameMetricsApp::new(cc, None)) as Box<dyn eframe::App>)),
-    )
+pub fn run_ios() -> Result<(), fandhe_render_egui::LaunchError> {
+    fandhe_render_egui::launch::run_ios("fandhe-egui-proxy-frame-metrics", |lc| {
+        Box::new(FrameMetricsApp::new(lc.egui_ctx(), None))
+    })
 }
 
 /// Android（wgpu/Vulkan、NativeActivity）向けの計測アプリ起動エントリ。
 ///
 /// 呼び出し元は `android.rs` の `android_main` feature 分岐のみ。`android.rs` と同様に
-/// Vulkan 固定（REQ-1）を維持する。`AndroidApp::internal_data_path()` 配下へ結果 JSON を
+/// Vulkan 固定（REQ-1）を維持する（`fandhe_render_egui::launch::run_android` が固定する）。
+/// `AndroidApp::internal_data_path()` 配下へ結果 JSON を
 /// 書き出す（`adb shell run-as <package> cat files/frame-metrics.json` で回収する運用、
 /// `scripts/android/measure-frame-rate.sh` 参照）。取得できない場合は空パス
 /// （カレントディレクトリ相対）へフォールバックし、書き込み失敗は
@@ -345,34 +339,11 @@ pub fn run_android(app: winit::platform::android::activity::AndroidApp) {
         .unwrap_or_default()
         .join("frame-metrics.json");
 
-    let native_options = eframe::NativeOptions {
-        android_app: Some(app),
-        renderer: eframe::Renderer::Wgpu,
-        wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
-            wgpu_setup: eframe::egui_wgpu::WgpuSetup::CreateNew(
-                eframe::egui_wgpu::WgpuSetupCreateNew {
-                    instance_descriptor: eframe::wgpu::InstanceDescriptor {
-                        backends: eframe::wgpu::Backends::VULKAN,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-            ),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    if let Err(err) = eframe::run_native(
-        "fandhe-egui-proxy-frame-metrics",
-        native_options,
-        Box::new(move |cc| {
-            Ok(
-                Box::new(FrameMetricsApp::new(cc, Some(result_path.clone())))
-                    as Box<dyn eframe::App>,
-            )
-        }),
-    ) {
+    if let Err(err) =
+        fandhe_render_egui::launch::run_android(app, "fandhe-egui-proxy-frame-metrics", move |lc| {
+            Box::new(FrameMetricsApp::new(lc.egui_ctx(), Some(result_path)))
+        })
+    {
         eprintln!("[fandhe-egui-proxy][frame-metrics] Android 起動に失敗: {err:?}");
     }
 }

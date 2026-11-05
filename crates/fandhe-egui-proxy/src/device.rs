@@ -2203,8 +2203,8 @@ use fandhe_device::{storage::Storage, DeviceError};
 /// のは本クレート側の責務）。`DeviceError` の内部構造（`std::io::Error` 等）は
 /// `fandhe-core` 側へ漏らさず、`Display` の文言のみを転送する
 /// （`DeviceError` の内部構造を漏らさない、security.md A09 準拠）。
-/// アプリ終了時に端末リソースを解放する（`ProxyApp::on_exit` から呼ばれる契約、
-/// `app.rs` の `eframe::App::on_exit` 実装 doc 参照）。プロセスが終了すると
+/// アプリ終了時に端末リソースを解放する（`ProxyApp::on_exit` が `register_teardown_hooks` 経由で呼ぶ契約、
+/// `fandhe-render-egui` の `app.rs` の `EguiApp::on_exit` 実装 doc 参照）。プロセスが終了すると
 /// `static` の `Drop` は走らないため、生きている間に明示停止が要るリソースを
 /// ここへ集約する。現状は TTS の子プロセス停止のみ（Issue #865 の codex-review
 /// P1 指摘: 共有 TTS を `static OnceLock` で保持しているため `Drop` が実行されず、

@@ -21,11 +21,7 @@ struct Entry {
 static SLOT: Mutex<Option<Entry>> = Mutex::new(None);
 
 /// 識別子つきで画素を置く。前の画像（画素・テクスチャ）は置き換えで解放される。
-#[cfg_attr(
-    not(any(test, all(feature = "device", not(target_arch = "wasm32")))),
-    allow(dead_code)
-)]
-pub(crate) fn put(source: String, image: egui::ColorImage) {
+pub fn put(source: String, image: egui::ColorImage) {
     if let Ok(mut slot) = SLOT.lock() {
         *slot = Some(Entry {
             source,
@@ -36,11 +32,7 @@ pub(crate) fn put(source: String, image: egui::ColorImage) {
 }
 
 /// 保持中の画像を解放する。
-#[cfg_attr(
-    not(any(test, all(feature = "device", not(target_arch = "wasm32")))),
-    allow(dead_code)
-)]
-pub(crate) fn clear() {
+pub fn clear() {
     if let Ok(mut slot) = SLOT.lock() {
         *slot = None;
     }
