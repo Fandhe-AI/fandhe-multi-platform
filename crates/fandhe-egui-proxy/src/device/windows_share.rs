@@ -17,7 +17,7 @@
 //! # ウィンドウの捕捉
 //!
 //! `remember_window` は `ProxyApp::with_source`（`app.rs`）から構築時に 1 度だけ呼ばれ、
-//! `eframe::CreationContext`（`HasWindowHandle` 実装）から得た HWND を static へ控える。
+//! `fandhe_render_egui::LaunchContext`（`HasWindowHandle` 実装）から得た HWND を static へ控える。
 //! effect ドライバ（`device/share.rs`）は `CreationContext` に触れられないため、この
 //! static 経由でしか HWND を得られない。
 //!
@@ -66,11 +66,12 @@ thread_local! {
     static HELD: RefCell<Option<Held>> = const { RefCell::new(None) };
 }
 
-/// `ProxyApp::with_source`（`app.rs`）から構築時に 1 度だけ呼ばれる契約。HWND を
+/// 起動クロージャ（`main.rs`）から構築時に 1 度だけ呼ばれる契約。`window` は
+/// `fandhe_render_egui::LaunchContext`（`HasWindowHandle` 実装）。HWND を
 /// 取得できない場合（`HandleError` またはウィンドウ以外のハンドル種別）は何もせず、
 /// [`present`] 側が「ウィンドウ不在」として `DeviceError::Internal` へ畳む。
-pub(crate) fn remember_window(cc: &eframe::CreationContext<'_>) {
-    let Ok(handle) = cc.window_handle() else {
+pub fn remember_window(window: &impl HasWindowHandle) {
+    let Ok(handle) = window.window_handle() else {
         return;
     };
     if let RawWindowHandle::Win32(h) = handle.as_raw() {

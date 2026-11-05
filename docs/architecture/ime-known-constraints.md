@@ -246,7 +246,7 @@
   `ime_cursor_range`（`Enabled`/`Preedit` 受信時のみ更新）が既定値のまま残り、カーソルが
   先頭以外のときに `Commit` が無言で破棄されていたが（Issue #616 症状 B）、`Commit` 直前へ
   同一文字列の `Preedit` を合成注入して同期する対処で解消した（#663、
-  `crates/fandhe-egui-proxy/src/lib.rs` の `inject_preedit_before_ime_commit`）。
+  `crates/fandhe-render-egui/src/render.rs` の `inject_preedit_before_ime_commit`）。
 - **状態**: 確認済み・対応不要（Enabled/Disabled 発火タイミング自体）。egui プロキシ経路は
   #663 で対応済み。実機（ibus-mozc/fcitx5-mozc）検証は Issue #588 の対象。
 

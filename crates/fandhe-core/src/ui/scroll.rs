@@ -14,7 +14,7 @@
 //! [`total_content_extent`]（`ScrollArea` へ渡す総高さ）と
 //! [`clamp_scroll_offset`]（`ScrollArea` から得たオフセットの防御的クランプ）を呼ぶ。
 //! `render_screen` 側の `egui::ScrollArea::show_viewport` 統合は Issue #487（親 issue #83
-//! の残課題）で完了した（`crates/fandhe-egui-proxy/src/lib.rs` の `render_virtual_list`
+//! の残課題）で完了した（`crates/fandhe-render-egui/src/render.rs` の `render_virtual_list`
 //! 参照。両関数を `clamp_scroll_offset` → `compute_visible_range` の順で呼ぶ契約は
 //! `virtual_list.rs` モジュール doc も参照）。
 //!

@@ -82,7 +82,7 @@ macro_rules! generated_screens {
         /// 未登録名は `None`（呼び出し元は既定の sample 画面へフォールバックする契約）。
         pub fn build_app(
             name: &str,
-            cc: &eframe::CreationContext<'_>,
+            ctx: &egui::Context,
         ) -> Option<Box<dyn $crate::app::ProxyAppDyn>> {
             match name {
                 $(
@@ -90,7 +90,7 @@ macro_rules! generated_screens {
                     $name => {
                         let screen = $builder();
                         Some(Box::new($crate::app::ProxyApp::with_screen(
-                            cc,
+                            ctx,
                             screen,
                             Default::default(),
                         )) as Box<dyn $crate::app::ProxyAppDyn>)
@@ -100,7 +100,7 @@ macro_rules! generated_screens {
                     $(#[$nav_attr])*
                     $nav_name => {
                         Some(Box::new($crate::app::ProxyApp::with_screen_fn(
-                            cc,
+                            ctx,
                             $current,
                             Default::default(),
                         )) as Box<dyn $crate::app::ProxyAppDyn>)
@@ -111,7 +111,7 @@ macro_rules! generated_screens {
                     $init_name => {
                         let screen = $init_builder();
                         Some(Box::new($crate::app::ProxyApp::with_screen(
-                            cc,
+                            ctx,
                             screen,
                             $init_state(),
                         )) as Box<dyn $crate::app::ProxyAppDyn>)
@@ -122,7 +122,7 @@ macro_rules! generated_screens {
                     $fx_name => {
                         Some(Box::new(
                             $crate::app::ProxyApp::with_screen_fn(
-                                cc,
+                                ctx,
                                 $fx_current,
                                 Default::default(),
                             )

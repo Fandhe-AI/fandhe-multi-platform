@@ -1100,6 +1100,7 @@ dependencies = [
  "fandhe-platform-android",
  "fandhe-platform-apple",
  "fandhe-prototype",
+ "fandhe-render-egui",
  "fandhe-runtime",
  "image",
  "jni 0.22.4",
@@ -1146,6 +1147,29 @@ name = "fandhe-prototype"
 version = "0.1.0"
 dependencies = [
  "fandhe-core",
+]
+
+[[package]]
+name = "fandhe-render-egui"
+version = "0.2.0"
+dependencies = [
+ "accesskit",
+ "accesskit_winit",
+ "eframe",
+ "egui",
+ "egui_kittest",
+ "fandhe-core",
+ "fandhe-fonts",
+ "fandhe-runtime",
+ "image",
+ "ordered-float",
+ "raw-window-handle",
+ "thiserror 2.0.20",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
+ "winit",
 ]
 
 [[package]]

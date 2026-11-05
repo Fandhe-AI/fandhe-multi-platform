@@ -1,7 +1,7 @@
 //! コールドスタート計測用の共通ラッパー（`cold-start-probe` feature、既定 off）。
 //!
 //! `t0`（呼び出し元の `run()`/`main()` 冒頭）から `t1`（初回フレームで
-//! `eframe::App::update` が完了した時点、＝ファーストフレームの UI 構築完了時点）までの
+//! `EguiApp::update` が完了した時点、＝ファーストフレームの UI 構築完了時点）までの
 //! 経過時間を `COLD_START_MS=<value>;` の形式で標準エラー出力へ書き込む
 //! （TASK-5.1 / REQ-5、Issue #236）。もともと `ios.rs` にのみ実装されていたが、
 //! macOS デスクトップ計測（TASK-5.1 / Issue #593）でも同じ計測定義・出力形式が必要になり、
@@ -14,7 +14,7 @@
 //! （Issue #593 依頼事項 2）。`close_after_log` で呼び出し側から選べるようにする。
 
 #[cfg(feature = "cold-start-probe")]
-pub struct ColdStartProbe<A: eframe::App> {
+pub struct ColdStartProbe<A: fandhe_render_egui::EguiApp> {
     inner: A,
     start: std::time::Instant,
     logged: bool,
@@ -24,7 +24,7 @@ pub struct ColdStartProbe<A: eframe::App> {
 }
 
 #[cfg(feature = "cold-start-probe")]
-impl<A: eframe::App> ColdStartProbe<A> {
+impl<A: fandhe_render_egui::EguiApp> ColdStartProbe<A> {
     /// `start`（`t0`）と計測対象アプリ `inner` をラップする。
     pub fn new(inner: A, start: std::time::Instant, close_after_log: bool) -> Self {
         Self {
@@ -37,11 +37,11 @@ impl<A: eframe::App> ColdStartProbe<A> {
 }
 
 #[cfg(feature = "cold-start-probe")]
-impl<A: eframe::App> eframe::App for ColdStartProbe<A> {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+impl<A: fandhe_render_egui::EguiApp> fandhe_render_egui::EguiApp for ColdStartProbe<A> {
+    fn update(&mut self, ctx: &egui::Context) {
         // 先に委譲することで、`inner.update`（`render_screen` 等によるファーストフレームの
         // UI 構築）の完了後に計測する（t1 定義。委譲前に記録すると過小計上になる）。
-        eframe::App::update(&mut self.inner, ctx, frame);
+        self.inner.update(ctx);
         if !self.logged {
             let elapsed_ms = self.start.elapsed().as_millis();
             // 末尾に `;` を付けて行の終端を明示する。疑似 TTY 経由の記録では pty の

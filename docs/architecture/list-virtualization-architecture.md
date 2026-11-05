@@ -42,7 +42,7 @@ S2〜S5 は本文書の型シグネチャ・境界条件・テスト観点を前
    ノードを挿入順に走査し、`List` に遭遇するたびに `expand(state)` を呼んで
    **子ノード全件を毎回 `Vec` として新規生成**し、深さ優先で再帰的に訪問する。
    ネストした `List` にも対応するが、可視範囲という概念自体が存在しない。
-3. **`fandhe-egui-proxy::render_screen`**（`crates/fandhe-egui-proxy/src/lib.rs`
+3. **`fandhe-egui-proxy::render_screen`**（`crates/fandhe-render-egui/src/render.rs`
    L64-109）: `visit_expanded` の結果を **毎フレーム全ノードぶん** egui ウィジェットへ
    マッピングする（`Node::Text` → `ui.label`、`Node::TextField` → `ui.text_edit_singleline`
    等）。`ScrollArea` 等のビューポート概念には未対応。

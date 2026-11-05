@@ -36,7 +36,7 @@
 //!   要求しないため egui 側の永続領域（`'static` 前提）へ `ListRecycler<S>` を直接
 //!   保持できない制約（`render_virtual_list` の doc 参照）は、呼び出し側
 //!   （`fandhe-egui-proxy` の `VirtualListRecyclers<S>`）がフレームをまたいで保持する
-//!   設計で解消している（`crates/fandhe-egui-proxy/src/recyclers.rs` 参照）
+//!   設計で解消している（`crates/fandhe-render-egui/src/recyclers.rs` 参照）
 //! - [`scroll::total_content_extent`][] / [`scroll::clamp_scroll_offset`][]: リストの
 //!   スクロール幾何ヘルパー（TASK-5.5-S5 / REQ-5、Issue #88）。`fandhe-egui-proxy::
 //!   render_screen` への実配線（Issue #487）は `render_virtual_list` が

@@ -5,7 +5,7 @@
 
 use egui_kittest::kittest::Queryable;
 use fandhe_core::{Screen, StateStore, WidgetId};
-use fandhe_egui_proxy::{EguiRenderer, VirtualListRecyclers};
+use fandhe_render_egui::{EguiRenderer, VirtualListRecyclers};
 use fandhe_runtime::Renderer;
 
 #[derive(Default)]

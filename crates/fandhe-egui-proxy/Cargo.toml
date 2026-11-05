@@ -2,7 +2,7 @@
 name = "fandhe-egui-proxy"
 version = "0.1.0"
 edition = "2021"
-description = "fandhe-core の Screen<S>/Node<S> を egui/eframe で実描画し、端末機能の橋渡しを担う v1 既定バックエンドの現行実装（REQ-21 で分割予定）"
+description = "端末機能の配線・実機確認アプリ・各 OS の入口を持つ v1 既定バックエンドの現行実装（描画と起動は fandhe-render-egui へ移した。REQ-21 で分割予定）"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
 publish = false
@@ -85,6 +85,9 @@ fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"
 fandhe-core = { path = "../fandhe-core" }
 # TASK-21.2（Issue #1162）: 起床と完了通知（CompletionSender・EffectFn）の置き場。
 fandhe-runtime = { path = "../fandhe-runtime" }
+# Issue #1164: 描画（Node → egui）とアプリ起動（eframe・バックエンド選択）の置き場。依存方向は
+# 本クレート → fandhe-render-egui → fandhe-runtime → fandhe-core の一方向。
+fandhe-render-egui = { path = "../fandhe-render-egui" }
 # プロトタイプアプリ（一覧・詳細・設定の 3 画面、TASK-2.2-S5 / #52）を実描画対象にする
 # ための依存。依存方向はここでもプロキシ → 共通コード（fandhe-prototype）の
 # 一方向を維持する（fandhe-prototype 側は本クレートを一切参照しない）。
@@ -145,40 +148,8 @@ serde_json = { workspace = true, optional = true }
 # （eframe "glow" のみ）には不要のため、この native 分岐に置く。
 ordered-float = { workspace = true }
 
-[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")))'.dependencies]
-# glow バックエンド + Linux ネイティブウィンドウ（X11 / Wayland）で
-# デスクトップ相当（macOS/Windows/Linux 共通）の実起動を確認する。
-# iOS / Android はこの分岐から除外し、それぞれ下の `cfg(target_os = "ios")`
-# （wgpu/Metal、TASK-1.3-S1）・`cfg(target_os = "android")`（wgpu/Vulkan、TASK-1.5-S2）
-# 分岐へ切り出す（REQ-1 / M3、docs/architecture/responsibility-boundary.md のバックエンド
-# 選択マトリクスに準拠）。
-#
-# TASK-6.2-S1（REQ-6）: 通常ビルドから "accesskit" を外す。dev-dependencies の
-# egui_kittest（"wgpu" feature）は egui 側の "accesskit" feature を無条件に有効化するため、
-# resolver = "2" の feature 統合により `cargo test` 時は本 target 分岐の eframe にも
-# accesskit 機能が加算される（PR #306 是正の E0027 はテストビルドでのみ再現し得る問題であり、
-# dev-dependencies 側の eframe（下記）で "accesskit" を明示することで解消する。通常
-# ビルド（`cargo build`）には dev-dependencies の feature が統合されないため、本分岐の
-# eframe には "accesskit" を含めない）。
-#
-# TASK-9.1-S1（REQ-9 / M3、Issue #214）・Issue #1001: macOS / Windows は下記
-# `cfg(target_os = "macos")` / `cfg(target_os = "windows")` 分岐で "accesskit" を
-# 再加算する（本分岐自体には含めない。Linux のみ本ベースラインのまま）。
-eframe = { workspace = true, default-features = false, features = ["glow", "x11", "wayland"] }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-# TASK-9.1-S1（REQ-9 / M3、Issue #214）: macOS 通常ビルドで eframe の "accesskit" feature を
-# 有効化し、NSAccessibility（accesskit_macos）まで依存チェーンを成立させる
-# （eframe accesskit → egui/egui-winit accesskit → accesskit_winit →
-# `cfg(target_os = "macos")` で accesskit_macos。レジストリソース実査で確認済み）。
-# cargo は同一依存の複数 target 分岐の feature を union するため、上の
-# `cfg(not(any(wasm32, ios, android)))` 分岐（glow/x11/wayland）と合成され、
-# macOS 実行バイナリのみ glow + accesskit の組み合わせになる（Linux は accesskit なしを維持）。
-# `src/lib.rs` の `Node::Widget` アーム（`cfg(target_os = "macos")`）が
-# `egui::Context::accesskit_node_builder` を呼ぶために必要（S2、Issue #215 実装済み）。
-# eframe 側のイベントループが AX ツリー公開を自動配線するため、本クレート側の追加コードは
-# このアプリ側依存の追加のみで足りる。
-eframe = { workspace = true, default-features = false, features = ["accesskit"] }
+# eframe（glow / wgpu / accesskit の target 別 feature 構成）は fandhe-render-egui へ移した（Issue #1164）。
+# 本クレートは eframe に直接依存しない。
 
 [target.'cfg(target_os = "ios")'.dependencies]
 # iOS（実機 aarch64-apple-ios・シミュレータ aarch64-apple-ios-sim / x86_64-apple-ios を
@@ -208,7 +179,6 @@ eframe = { workspace = true, default-features = false, features = ["accesskit"] 
 # TASK-6.2-S1（REQ-6）: "accesskit" は通常ビルドから外す（native 分岐と同じ理由。
 # dev-dependencies の egui_kittest との feature 統合で `cargo test` 時のみ有効化される）。
 wgpu = { workspace = true }
-eframe = { workspace = true, default-features = false, features = ["wgpu"] }
 # TASK-21.2（Issue #1168）: `device/ios.rs` が main thread 判定（`is_main_thread`）に使う。
 # build 依存の feature `build` は有効にしない（通常のビルドへ `cc` を持ち込まない）。
 fandhe-platform-apple = { path = "../fandhe-platform-apple" }
@@ -250,7 +220,6 @@ fandhe-platform-apple = { path = "../fandhe-platform-apple" }
 # 拒否する制約、`eframe-0.33.3/src/lib.rs` 参照）は構造的に回避済みで、
 # "android-game-activity" との併用は許可されている（`cargo ndk check --all-features`
 # で compile_error! 非発火を実機確認）。
-eframe = { workspace = true, default-features = false, features = ["wgpu", "android-game-activity", "accesskit"] }
 # egui-winit の "accesskit" feature は accesskit_winit の `accesskit_android`
 # （Android 専用 optional target 依存、既定 off）までは有効化しないため（ルート
 # Cargo.toml の accesskit_winit コメント参照）、本クレートから同一バージョンの
@@ -308,7 +277,6 @@ ttf-parser = { workspace = true, optional = true }
 # target_os = "android", target_os = "windows"))`）が `egui::Context::accesskit_node_builder`
 # を呼ぶために必要。eframe 側のイベントループが AX ツリー公開を自動配線するため、
 # 本クレート側の追加コードはこのアプリ側依存の追加のみで足りる。
-eframe = { workspace = true, default-features = false, features = ["accesskit"] }
 # Issue #898: `device/windows_share.rs` が `IDataTransferManagerInterop::GetForWindow` /
 # `ShowShareUIForWindow`（`Win32_UI_Shell`）でウィンドウ束縛して `DataTransferManager`
 # （`ApplicationModel_DataTransfer`）を呼ぶ。`Foundation` は `TypedEventHandler` /
@@ -580,7 +548,7 @@ windows = { workspace = true, optional = true, features = [
     # 「ディスクを挿入してください」ダイアログを抑止する。新規パッケージは増えない（Cargo.lock は不変）。
     "Win32_System_Diagnostics_Debug",
 ] }
-# Issue #898: `device/windows_share.rs::remember_window` が `eframe::CreationContext`
+# Issue #898: `device/windows_share.rs::remember_window` が `LaunchContext`
 # から HWND を取り出すために使う（`raw-window-handle` の `HasWindowHandle` トレイト）。
 raw-window-handle = { workspace = true, optional = true }
 # Issue #907: `device/windows_biometric.rs` が Windows Hello の完了
@@ -599,7 +567,6 @@ windows-core = { workspace = true, optional = true }
 #
 # TASK-6.2-S1（REQ-6）: "accesskit" は通常ビルドから外す（native 分岐と同じ理由。
 # dev-dependencies の egui_kittest との feature 統合で `cargo test` 時のみ有効化される）。
-eframe = { workspace = true, default-features = false, features = ["glow"] }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 # coding-rust.md 準拠: workspace 一元管理へ昇格（Issue #875 で fandhe-web-dom 側にも

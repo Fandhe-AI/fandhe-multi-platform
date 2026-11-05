@@ -9,7 +9,7 @@
 //! Clone + Send + Sync` を要求するネイティブ実装のため、`Widget<S>` へ
 //! `Send + Sync` を追加するという `fandhe-core` 側のより大きな破壊的変更なしには
 //! egui 側へ `ListRecycler<S>` を保持できない。そこで本モジュールは egui の永続領域を
-//! 使わず、呼び出し側（[`crate::app::ProxyApp`] / [`crate::app::PrototypeApp`] /
+//! 使わず、呼び出し側（[`crate::app::ProxyApp`] / `PrototypeApp` /
 //! 結合テストハーネス）がフィールドとして保持し、[`crate::render_screen_with_recyclers`]
 //! へ明示的に渡す設計を採る（egui 永続領域案は不採用。out-of-scope-tracking.md 対象の
 //! 再検討事項として記録済み）。

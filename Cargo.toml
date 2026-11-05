@@ -17,6 +17,8 @@ members = [
     "crates/fandhe-fonts",
     # TASK-21.2（Issue #1162）: 起床と完了通知のレンダラ非依存クレート（egui に依存しない）。
     "crates/fandhe-runtime",
+    # TASK-21.2（Issue #1164）: egui による描画とアプリ起動。eframe の型を公開しない。
+    "crates/fandhe-render-egui",
     # TASK-21.2（Issue #1166）: Android の共通層（AndroidApp の保持・JNI 定型）。egui に依存しない。
     "crates/fandhe-platform-android",
     # TASK-21.2（Issue #1168）: Apple（iOS / macOS）の共通層。機能 crate が ObjC / Swift 薄層を

@@ -23,7 +23,7 @@ fn cache_id() -> egui::Id {
 }
 
 /// フレーム冒頭で、直前のパスで描画されなかったエントリを解放する。
-pub(crate) fn begin_frame(ctx: &egui::Context) {
+pub fn begin_frame(ctx: &egui::Context) {
     let now = ctx.cumulative_pass_nr();
     ctx.data_mut(|d| {
         if let Some(cache) = d.get_temp::<Cache>(cache_id()) {
@@ -34,15 +34,14 @@ pub(crate) fn begin_frame(ctx: &egui::Context) {
     });
 }
 
-/// テスト用: キャッシュ中のエントリ数。
-#[cfg(test)]
-pub(crate) fn cached_len(ctx: &egui::Context) -> usize {
+/// テスト用: キャッシュ中のエントリ数（旧構造のテストからも使うため公開）。
+pub fn cached_len(ctx: &egui::Context) -> usize {
     ctx.data(|d| d.get_temp::<Cache>(cache_id()))
         .map_or(0, |c| c.len())
 }
 
 /// 画素を実描画する。`alt` は AccessKit の Image ノードのラベルになる。
-pub(crate) fn show(ui: &mut egui::Ui, pixels: &RgbaPixels, alt: &str, path: &[usize]) {
+pub fn show(ui: &mut egui::Ui, pixels: &RgbaPixels, alt: &str, path: &[usize]) {
     let ctx = ui.ctx().clone();
     let now = ctx.cumulative_pass_nr();
     let id = egui::Id::new(("fandhe-rgba-image", path));
