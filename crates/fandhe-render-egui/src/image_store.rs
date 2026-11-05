@@ -19,10 +19,19 @@ struct Cached {
 
 static CACHE: Mutex<Option<Cached>> = Mutex::new(None);
 
+/// 保管所の `clear` から呼ばれ、GPU 側のテクスチャを捨てる（画像が描かれなくなっても解放される）。
+fn drop_cache() {
+    *CACHE.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
 /// `source` と識別子が一致するときだけテクスチャを返す（通し番号が変わったら GPU へ上げ直す）。
 /// 一致しないときは `None` を返し、保持中のテクスチャは捨てない。
 pub(crate) fn texture(ctx: &egui::Context, source: &str) -> Option<egui::TextureHandle> {
-    let (serial, pixels) = fandhe_runtime::image_store::get(source)?;
+    fandhe_runtime::image_store::set_on_clear(drop_cache);
+    let Some((serial, pixels)) = fandhe_runtime::image_store::get(source) else {
+        // 保管所が空・別識別子へ変わった場合の取りこぼしに備え、一致しないときは触らない（clear のフックが捨てる）。
+        return None;
+    };
     let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(c) = cache
         .as_ref()
@@ -77,5 +86,6 @@ mod tests {
 
         clear();
         assert!(texture(&ctx, "photo:2").is_none());
+        assert!(CACHE.lock().unwrap().is_none(), "clear で GPU 側も捨てる");
     }
 }

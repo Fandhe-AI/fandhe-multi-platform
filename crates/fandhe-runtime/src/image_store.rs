@@ -41,9 +41,23 @@ pub fn put(source: String, pixels: RgbaPixels) {
     });
 }
 
-/// 保持中の画像を解放する。
+/// [`clear`] のたびに呼ばれる、レンダラ側の GPU 資源を捨てるフック（レンダラが 1 つ登録する）。
+static ON_CLEAR: Mutex<Option<fn()>> = Mutex::new(None);
+
+/// [`clear`] で呼ぶフックを登録する。レンダラが GPU へ上げた分を、画像ウィジェットが
+/// 描かれなくなっても確実に解放するために使う。
+pub fn set_on_clear(hook: fn()) {
+    *ON_CLEAR.lock().unwrap_or_else(|e| e.into_inner()) = Some(hook);
+}
+
+/// 保持中の画像を解放する。登録済みのフックでレンダラ側のテクスチャも捨てさせる。
 pub fn clear() {
     lock().1 = None;
+    // 保管所のロックを手放してから呼ぶ（フックが `get` を呼んでも詰まらない）。
+    let hook = *ON_CLEAR.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(h) = hook {
+        h();
+    }
 }
 
 /// `source` と識別子が一致するときだけ `(置いた通し番号, 画素)` を返す。
