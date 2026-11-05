@@ -51,6 +51,13 @@ pub(crate) fn reachable(meta: &Value) -> BTreeSet<String> {
     for (id, node) in &nodes {
         let Some(pkg) = pkgs.get(id) else { continue };
         let mut list = Vec::new();
+        // rename 付き項目が占有する辺名。rename 無し項目が同じ package の別辺（別バージョン）を拾わないために除く。
+        let rename_names: BTreeSet<String> = pkg["dependencies"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|d| d["rename"].as_str().map(|r| r.replace('-', "_")))
+            .collect();
         for d in pkg["dependencies"].as_array().into_iter().flatten() {
             if !d["kind"].is_null() {
                 continue;
@@ -67,10 +74,13 @@ pub(crate) fn reachable(meta: &Value) -> BTreeSet<String> {
                 // rename 無しは辺の name がライブラリ名（[lib] name で変わる）なので、解決先の package 名で照合する。
                 let same = match &renamed {
                     Some(r) => e["name"].as_str() == Some(r),
-                    None => e["pkg"]
-                        .as_str()
-                        .and_then(|p| pkgs.get(p))
-                        .is_some_and(|p| p["name"].as_str() == pname),
+                    None => {
+                        !e["name"].as_str().is_some_and(|n| rename_names.contains(n))
+                            && e["pkg"]
+                                .as_str()
+                                .and_then(|p| pkgs.get(p))
+                                .is_some_and(|p| p["name"].as_str() == pname)
+                    }
                 };
                 same && e["dep_kinds"]
                     .as_array()
@@ -279,6 +289,32 @@ mod tests {
             ],
         );
         assert!(reachable(&m).contains("fandhe-cap-cam"));
+    }
+
+    #[test]
+    fn unrenamed_dep_skips_edge_claimed_by_renamed_sibling() {
+        let mut old = dep("helper", false, N, N);
+        old["rename"] = json!("a_old");
+        let m = meta(
+            vec![
+                pkg("app", json!({}), vec![old, dep("helper", false, N, N)]),
+                pkg("helper 1", json!({}), vec![]),
+                pkg("helper 2", json!({}), vec![]),
+            ],
+            vec![
+                (
+                    "app",
+                    vec![
+                        edge("a_old", "helper 1", N, N),
+                        edge("helper", "helper 2", N, N),
+                    ],
+                ),
+                ("helper 1", vec![]),
+                ("helper 2", vec![]),
+            ],
+        );
+        let r = reachable(&m);
+        assert!(r.contains("helper 1") && r.contains("helper 2"));
     }
 
     #[test]
