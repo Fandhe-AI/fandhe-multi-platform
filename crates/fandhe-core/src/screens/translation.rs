@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #115）型サンプル「端末内翻訳」（Issue #535）。
 //! 固定の日本語の原文を、選んだ言語へ端末内で 1 回訳して表示する 1 画面。使えない端末・言語の
 //! 組み合わせでは理由つきの失敗を出す。`FANDHE_PROXY_APP=translation` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod translation;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は

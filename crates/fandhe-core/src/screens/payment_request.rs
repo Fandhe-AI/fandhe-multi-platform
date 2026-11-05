@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #114）型サンプル「物・サービスの決済」（Issue #541）。
 //! 「支払いに使えるか調べる」「決済シートを出す」の 2 ボタンだけの 1 画面。
-//! `FANDHE_PROXY_APP=payment_request` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の
+//! `FANDHE_PROXY_APP=payment_request` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod payment_request;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの

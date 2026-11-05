@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #921）型サンプル「資格情報」（Issue #922）。
 //! キー + 値の入力欄 + 「保存」「読み出し」「削除」→ OS のセキュアストア（macOS/iOS
 //! Keychain 等）へ保存・読み出し・削除する 1 画面。`FANDHE_PROXY_APP=credential_vault`
-//! で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から
+//! で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から
 //! 呼ばれる（`screens/mod.rs` の `pub mod credential_vault;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

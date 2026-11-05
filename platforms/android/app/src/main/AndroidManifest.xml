@@ -6,7 +6,7 @@
 
   GameActivity 方式（NativeActivity から変更。`accesskit_android` が GameActivity
   限定であるため、REQ-9 の TalkBack 対応（S2/S3）の前提条件。
-  crates/fandhe-egui-proxy/src/android.rs のコメント・Cargo.toml の
+  crates/fandhe-gallery/src/lib.rs の android_main のコメント・Cargo.toml の
   cfg(target_os = "android") 依存セクション参照）。GameActivity は NativeActivity と
   異なりサブクラス化が必須のため、最小の Java サブクラス
   （src/main/java/com/fandhe/platform/MainActivity.java）を追加し `hasCode="false"` は
@@ -271,12 +271,12 @@
                  切り離し時は launchMode と下の fandhe intent-filter を削除する。 -->
 
             <!-- cargo-ndk が出力する cdylib のライブラリ名（先頭 "lib"・末尾 ".so" を除いた形）。
-                 crates/fandhe-egui-proxy/Cargo.toml の [lib] name = "fandhe_egui_proxy" と対応。
+                 crates/fandhe-gallery/Cargo.toml の [lib] name = "fandhe_gallery" と対応。
                  GameActivity 自体はこの meta-data を自動ロードに使わないが、値は
                  MainActivity.java の System.loadLibrary 引数と一致させる SSOT として維持する。 -->
             <meta-data
                 android:name="android.app.lib_name"
-                android:value="fandhe_egui_proxy" />
+                android:value="fandhe_gallery" />
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

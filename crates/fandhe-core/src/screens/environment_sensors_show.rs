@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #123）型サンプル「気圧・照度・近接」（Issue #609）。
 //! 気圧・照度の組と近接の組、それぞれ「開始」「停止」で購読を始め・止め、3 行に現在値を出す。
-//! `FANDHE_PROXY_APP=environment_sensors_show` で選ばれ、`fandhe-egui-proxy` の `screens/registry.rs` の
+//! `FANDHE_PROXY_APP=environment_sensors_show` で選ばれ、`fandhe-gallery` の `screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod environment_sensors_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は

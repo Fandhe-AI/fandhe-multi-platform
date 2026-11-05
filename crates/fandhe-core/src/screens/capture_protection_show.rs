@@ -2,7 +2,7 @@
 //! ボタンで撮影・録画に写さない防止を掛ける / 外し、**実際に保護されているか**と、録画・
 //! ミラーリング中か、スクリーンショットの回数を表示する 1 画面。
 //! `FANDHE_PROXY_APP=capture_protection_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod capture_protection_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない。時刻も持たず、読み取り間隔は effect 側が測る）。

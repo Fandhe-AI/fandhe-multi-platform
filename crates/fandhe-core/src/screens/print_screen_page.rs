@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #341）型サンプル「画面の印刷」（Issue #1010）。
 //! 押した直後の描画領域を 1 枚の画像として取り込み、1 ページに収めて OS の印刷ダイアログへ渡す
 //! 1 ボタンの 1 画面。`FANDHE_PROXY_APP=print_screen_page` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod print_screen_page;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。状態・遷移

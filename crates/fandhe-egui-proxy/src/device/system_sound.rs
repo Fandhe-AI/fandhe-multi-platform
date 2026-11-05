@@ -1,7 +1,7 @@
 //! Phase 11（親 #183、Issue #939）「システムの効果音・ビープ」の effect ドライバ。
 //! `fandhe_core::screens::system_sound_beep`（端末依存ゼロ）の要求を観測し、
 //! `fandhe_device::system_sound::SystemSound` で OS 標準の警告音 1 回を要求して
-//! `CompletionSender` 経由で結果を返す（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約）。契約の SSOT は
 //! `fandhe_device::system_sound`。
 //!

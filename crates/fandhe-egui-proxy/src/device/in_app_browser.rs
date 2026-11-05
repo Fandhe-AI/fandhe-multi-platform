@@ -1,7 +1,7 @@
 //! Phase 11 型サンプル「アプリ内ブラウザ」（親 #135、Issue #701）の effect ドライバ。
 //! `fandhe_core::screens::in_app_browser_show`（端末依存ゼロ）の要求を観測し、
 //! `fandhe_device::in_app_browser::InAppBrowser` に URL の表示を依頼して、OS 層から届く結果を
-//! `CompletionSender` 経由で画面へ返す（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で画面へ返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約（結果の三値・
 //! 期限・守る範囲）の SSOT は `fandhe_device::in_app_browser`。
 //!

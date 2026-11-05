@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #164）型サンプル「BLE の周辺機器役」（Issue #778）。
 //! 「公開」ボタンで固定のサービス UUID と読み取り専用の特性を登録してアドバタイズし、
 //! 今回の公開で読み取られた回数を画面に出す。「停止」ボタン・アプリ終了・iOS の背景遷移・Android の `onStop` で止める。
-//! `FANDHE_PROXY_APP=ble_peripheral` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=ble_peripheral` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod ble_peripheral;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの

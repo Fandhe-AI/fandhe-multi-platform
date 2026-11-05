@@ -1,7 +1,7 @@
 //! Phase 8（端末機能、親 #752）の型サンプル「カメラ撮影」（Issue #749）。「撮影」ボタン
 //! → 端末カメラ起動 → サムネイル表示 + 「撮り直す」、権限拒否・未対応環境では文言表示の
 //! みで済ませる 1 画面。`FANDHE_PROXY_APP=camera_capture` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼び出される
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼び出される
 //! （`screens/mod.rs` の `pub mod camera_capture;` と対）。
 //!
 //! 状態機械: `Idle` → （撮影ボタン）→ `Requested` → （effect ドライバが撮影開始を
@@ -224,7 +224,7 @@ fn expand_thumbnail(state: &CameraCaptureState) -> Vec<Node<CameraCaptureState>>
 
 /// カメラ撮影画面。`state.phase` に応じてボタンを出し分ける
 /// （`Idle`: 「撮影」、`Captured`/`Failed`: 「撮り直す」、`Requested`/`Capturing`:
-/// ボタンなし＝二重起動を UI 側からも防ぐ）。`crates/fandhe-egui-proxy/src/screens/
+/// ボタンなし＝二重起動を UI 側からも防ぐ）。`crates/fandhe-gallery/src/screens/
 /// registry.rs` の `effect` 区画から `fn(&S) -> Screen<S>` として毎フレーム呼ばれる契約
 /// （`docs/ai/SCHEMA.md` パターン 9）。
 pub fn current_screen(state: &CameraCaptureState) -> Screen<CameraCaptureState> {

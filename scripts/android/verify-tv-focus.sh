@@ -73,8 +73,8 @@ repo_root="$(cd -- "${script_dir}/../.." >/dev/null 2>&1 && pwd -P)"
 # 本スクリプトはヘッドレスエミュレータを自前で起動するため追加する。
 export PATH="${ANDROID_HOME}/emulator:${PATH}"
 
-package="fandhe-egui-proxy"
-lib_name="fandhe_egui_proxy"
+package="fandhe-gallery"
+lib_name="fandhe_gallery"
 application_id="com.fandhe.androidapp"
 activity_name="com.fandhe.platform.MainActivity"
 gradle_project_dir="${repo_root}/platforms/android"

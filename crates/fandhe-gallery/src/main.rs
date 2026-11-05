@@ -1,5 +1,10 @@
-//! デスクトップ相当（native, glow バックエンド）の起動エントリ（TASK-1.2）。
+//! 画面カタログ `fandhe-gallery` のデスクトップ（macOS・Windows・Linux）・iOS の実行体（TASK-1.2。
+//! Issue #1165 で `fandhe-egui-proxy` から移した）。
 //!
+//! 画面の登録は本 crate の `screens`、端末機能の配線・各 OS の入口は `fandhe-egui-proxy`、
+//! 描画と起動は `fandhe-render-egui` が持つ。本ファイルはそれらを繋ぐだけにする。
+//!
+//! デスクトップ相当（native, glow バックエンド）の起動エントリ。
 //! `FANDHE_PROXY_AUTOSHOT=<path>` を指定すると、数フレーム後に
 //! `ViewportCommand::Screenshot` を要求し、応答を受け取り次第 PNG として `<path>` へ
 //! 保存してウィンドウを閉じる（`xvfb-run` 上での実描画確認・エビデンス取得用、
@@ -7,15 +12,14 @@
 //! 検証手順から手動実行する）。未指定時は通常のインタラクティブ起動になる。
 //!
 //! wasm32 / Android ターゲットでは本 bin はビルド対象に含めるが中身は no-op とし、
-//! 実際のエントリはそれぞれ `web.rs`（`wasm_bindgen(start)`）・`android.rs`
-//! （`android_main`、TASK-1.5-S2）が担う。Android は実行ファイル形式の `main` ではなく
+//! 実際のエントリはそれぞれ `lib.rs`（`wasm_bindgen(start)`・`android_main`、TASK-1.5-S2）が担う。Android は実行ファイル形式の `main` ではなく
 //! `android-activity` が探す固定シンボルを要求するため、この bin ターゲット自体は
 //! cargo-ndk の検証コマンド（`--lib` 指定）ではビルド対象外になる想定だが、
 //! ワークスペース全体のビルド（`cargo build --workspace`）に混ざっても壊れないよう
 //! no-op 化しておく。
 //!
 //! iOS ターゲットでは glow バックエンドが非対応のため、本 bin の中身は
-//! `ios.rs` の wgpu（Metal）向けエントリ（`fandhe_egui_proxy::ios::run`）へ委譲する
+//! `fandhe-egui-proxy` の wgpu（Metal）向けエントリ（`fandhe_egui_proxy::ios::run`）へ委譲する
 //! （TASK-1.3-S2）。自動撮影（`FANDHE_PROXY_AUTOSHOT`）は iOS 側へは配線しない。
 //!
 //! Issue #1215: macOS ターゲット（feature `device` 有効時）では、通常の画面起動の
@@ -50,10 +54,10 @@
 //! 既存テスト `tests/desktop_render.rs` の前提を壊さない）、自動撮影
 //! （`FANDHE_PROXY_AUTOSHOT`）は sample 側のみへ配線する（プロトタイプ側は対象外）。
 //!
-//! `FANDHE_PROXY_APP` に `prototype`/`tv-focus` 以外の値（`screens.rs` の
+//! `FANDHE_PROXY_APP` に `prototype`/`tv-focus` 以外の値（本 crate の `screens.rs` の
 //! `generated_screens!` レジストリ登録名。例: `schema_example`）を指定すると、
 //! 画面レジストリに登録した画面（`fandhe_core::screens::*`）を
-//! [`fandhe_egui_proxy::build_app`] 経由で描画する
+//! [`fandhe_gallery::build_app`] 経由で描画する
 //! （Issue #715）。未登録名の場合は標準エラーへ 1 行警告を出し、sample へ倒す。
 // fandhe-prototype:end
 
@@ -231,7 +235,7 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
                 // 配線できるようにする。未登録名は sample へ倒し、経緯を stderr へ残す。
                 let mut app = requested_app
                     .as_deref()
-                    .and_then(|name| fandhe_egui_proxy::build_app(name, ctx))
+                    .and_then(|name| fandhe_gallery::build_app(name, ctx))
                     .unwrap_or_else(|| {
                         if let Some(name) = requested_app.as_deref() {
                             eprintln!(
@@ -260,8 +264,8 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
 
 #[cfg(any(target_arch = "wasm32", target_os = "android"))]
 fn main() {
-    // wasm32 の実エントリは web.rs（wasm_bindgen(start)）、
-    // Android の実エントリは android.rs（android_main）。
+    // wasm32 の実エントリは lib.rs（wasm_bindgen(start)、egui-proxy の web::start を呼ぶ）、
+    // Android の実エントリは lib.rs（android_main、egui-proxy の android::run を呼ぶ）。
 }
 
 #[cfg(target_os = "ios")]
@@ -295,5 +299,5 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     fandhe_egui_proxy::device::apple_spotlight_index::register();
 
     // iOS の実エントリは ios.rs（wgpu/Metal バックエンド初期化、TASK-1.3-S2）。
-    fandhe_egui_proxy::ios::run()
+    fandhe_egui_proxy::ios::run(fandhe_gallery::build_app)
 }

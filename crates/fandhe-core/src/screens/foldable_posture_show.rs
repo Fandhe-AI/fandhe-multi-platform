@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #141）型サンプル「折りたたみの姿勢」（Issue #723）。
-//! `FANDHE_PROXY_APP=foldable_posture_show` で選ばれ、`fandhe-egui-proxy` の
+//! `FANDHE_PROXY_APP=foldable_posture_show` で選ばれ、`fandhe-gallery` の
 //! `screens/registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の
 //! `pub mod foldable_posture_show;` と対）。Web は [`foldable_posture_show_web_screen`] を
 //! `fandhe-web-dom` の mount が使う。

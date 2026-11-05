@@ -50,7 +50,7 @@
       "url": "https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/aa767914(v=vs.85)",
       "note": "実装済み（Issue 旧#1216）。登録先は `HKCU\\Software\\Classes\\fandhe`（既定値 `URL:fandhe Protocol`、値 `URL Protocol`、`shell\\open\\command` の既定値 `\"<exe>\" \"%1\"`）。起動のたびに黙って書かず、型サンプル画面の「登録する」「登録を解除する」ボタンで操作する。URL は起動引数で届き、ちょうど 1 引数・有効な Unicode のものだけを scheme・長さ・制御文字の検査へ回し、引数が割れた場合は拒否として数える。起動済みの場合は名前付き mutex（`Local\\`）で既存インスタンスを見つけ、named pipe（セッション別・`FILE_FLAG_FIRST_PIPE_INSTANCE`・リモート拒否・相手のセッションを照合）で URL を送って新プロセスを終了する。受理は終了コード 0、検査で弾かれたら 2、転送失敗は 1（成功として扱わない）。守る範囲: 1 プロセス内の受信順・不正 URL の非表示・転送失敗を成功にしないこと・pipe の先取り防止。守らない範囲: 同一ユーザー・同一セッションの別プロセスによる pipe の占有や妨害、セッション間の転送、他アプリが同じ scheme を登録した場合の上書き、exe 移動後の自動再登録。Windows 実機確認は未実施（#8 で追う）",
       "implStatus": "Windows 実機確認待ち（#8）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-egui-proxy/src/main.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + crates/fandhe-device/src/url_scheme.rs、Issue 旧#1216"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-gallery/src/main.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + crates/fandhe-device/src/url_scheme.rs、Issue 旧#1216"
     },
     "web": {
       "status": "done",

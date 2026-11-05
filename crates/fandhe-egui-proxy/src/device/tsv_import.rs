@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ型サンプル「TSV 読み込み」（親 #979、Issue #980）の effect ドライバ。
 //! `fandhe_core::screens::tsv_import`（端末依存ゼロ）の要求を観測し、選択された
-//! ファイルのバイト列を `CompletionSender` 経由で返す（`crate::screens::registry` の
+//! ファイルのバイト列を `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の
 //! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約）。
 //!
 //! ライフサイクル処理（デスクトップの同期呼び出し・モバイルの pull 型 Restore 分岐）は

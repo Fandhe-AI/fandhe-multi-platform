@@ -15,10 +15,10 @@
 #
 # 使い方:
 #   powershell -ExecutionPolicy Bypass -File scripts/windows/measure-cold-start.ps1 `
-#     -TargetBin target/release/fandhe-egui-proxy-desktop.exe [-Trials 5]
+#     -TargetBin target/release/fandhe-gallery-desktop.exe [-Trials 5]
 #
 #   事前に `cold-start-probe` feature を有効にしてビルドしておくこと:
-#     cargo build -p fandhe-egui-proxy --bin fandhe-egui-proxy-desktop `
+#     cargo build -p fandhe-gallery --bin fandhe-gallery-desktop `
 #       --release --features cold-start-probe
 #
 # 出力: 標準出力へ CSV（列: run,cold_start_ms）、標準エラーへ中央値・平均値。

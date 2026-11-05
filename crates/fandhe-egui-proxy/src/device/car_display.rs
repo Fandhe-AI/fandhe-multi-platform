@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::car_display_show`（端末依存ゼロ）の `pending` 要求を観測して
 //! `fandhe_device::car_display::CarDisplay::set_text` を呼び、車載画面が出ているかを
 //! [`POLL_INTERVAL`] ごとに `state` で読んで `CompletionSender` 経由で返す
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる）。
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる）。
 //!
 //! 実装の選択: Android は [`super::android_car_display`]（Car App Library 実装、#1117）、
 //! 他 OS は `UnsupportedCarDisplay` 固定（iOS の CarPlay は承認待ちで dispatch に入れない）。

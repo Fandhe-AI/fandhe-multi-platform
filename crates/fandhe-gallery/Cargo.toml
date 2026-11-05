@@ -1,0 +1,46 @@
+[package]
+name = "fandhe-gallery"
+version = "0.1.0"
+edition = "2021"
+description = "画面カタログ。全機能の画面を登録し、実機確認・撮影に使う非公開アプリ（各 OS の最終成果物を持つ）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 配布しない。`docs/architecture/consumer-app-structure.md` §3。
+publish = false
+
+# 計測・デバッグ用の feature は、すべて `fandhe-egui-proxy` の同名 feature へ転送する
+# （入口の切替は egui-proxy の `ios.rs`・`frame_metrics.rs` が持つ）。既定は `device` のみで、
+# `debug-proxy-app`（画面切替の setprop 経路）・`frame-metrics`・`cold-start-probe` は既定 off のまま
+# ストア提出物に混ざらない（security.md A05）。
+[features]
+default = ["device"]
+device = ["fandhe-egui-proxy/device"]
+frame-metrics = ["fandhe-egui-proxy/frame-metrics"]
+cold-start-probe = ["fandhe-egui-proxy/cold-start-probe"]
+debug-proxy-app = ["fandhe-egui-proxy/debug-proxy-app"]
+
+# Android は cdylib（`android_main`）、Web は wasm の cdylib（`#[wasm_bindgen(start)]`）を使う。
+# rlib は bin（`main.rs`）が `build_app` を使うために要る。
+[lib]
+name = "fandhe_gallery"
+crate-type = ["cdylib", "rlib"]
+
+# デスクトップ・iOS の実行体。bin 名を lib 名と分けるのは、wasm32 で bin/cdylib の出力ファイル名が
+# 衝突すると（どちらも `fandhe_gallery.wasm` に正規化される）wasm-bindgen が bin 側の空の wasm を
+# 処理して失敗するため（旧 `fandhe-egui-proxy-desktop` と同じ理由、TASK-1.2）。
+[[bin]]
+name = "fandhe-gallery-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+# Apple のリンク指定（弱リンク・rpath・Info.plist 埋め込み）を `fandhe-egui-proxy` から受け取って出し直す。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+[dependencies]
+fandhe-core = { path = "../fandhe-core" }
+fandhe-egui-proxy = { path = "../fandhe-egui-proxy", default-features = false }
+fandhe-render-egui = { path = "../fandhe-render-egui" }
+egui = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { workspace = true }

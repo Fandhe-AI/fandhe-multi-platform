@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #1137）型サンプル「MIDI 入力」（Issue #1398）。
 //! 「受信開始」を押すと接続中の MIDI 入力から届いたノートオン / オフを新しい順に一覧へ出す 1 画面。
-//! `FANDHE_PROXY_APP=midi_show` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の
+//! `FANDHE_PROXY_APP=midi_show` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod midi_show;` と対）。範囲はノートオン / オフの
 //! 表示のみで、出力・SysEx・CC・デバイス名は扱わない。
 //!

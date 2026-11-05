@@ -1,7 +1,7 @@
 //! Phase 8（端末機能の型検証、親 #752）の型サンプル「メモ保存」（Issue #747）。
 //! 1 行入力 + 保存ボタン + 保存済み一覧という最小構成で、ローカル保存が
 //! 再起動後も残ることを示す参照実装。`FANDHE_PROXY_APP=storage_note` で
-//! `fandhe-egui-proxy` の `screens/registry.rs` の `init` 区画から呼ばれる。
+//! `fandhe-gallery` の `screens/registry.rs` の `init` 区画から呼ばれる。
 //!
 //! # 端末保存との接続方式
 //!

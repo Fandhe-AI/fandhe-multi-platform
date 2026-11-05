@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #125）型サンプル「無操作時間の検知」（Issue #631）の effect ドライバ。
 //! `fandhe_device::user_idle::UserIdle` を 1 秒間隔で UI スレッドから同期 pull し、
 //! `fandhe_core::screens::user_idle_show`（端末依存ゼロ）へ結果を `CompletionSender` 経由で渡す
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::user_idle`。
 //!
 //! # OS 別実装の差し込み口

@@ -2,7 +2,7 @@
 //! 「監視を開始」でアプリ専用の作業フォルダ 1 つの直下のファイルを見張り、作成・更新・削除を
 //! 新しい順の一覧に出す 1 画面。確認用に「ファイルを作る / 更新する / 削除する」ボタンで作業フォルダを
 //! 自分で変えられる。`FANDHE_PROXY_APP=file_watch_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod file_watch_show;` と対）。
 //! 「フォルダを選ぶ」で利用者が選んだフォルダへ監視先を切り替えられる（Issue #37。デスクトップのみ。
 //! 他 OS は「選べません」を出す）。選んだフォルダのパスはドライバが持ち、本状態には表示名と照合用 id だけを

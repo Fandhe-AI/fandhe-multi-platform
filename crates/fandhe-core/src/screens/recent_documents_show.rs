@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #193）型サンプル「最近使った項目への登録」（Issue #988）。
 //! 一時フォルダーのサンプルファイルを OS の「最近使った項目」へ登録する / 一覧に載っているかを
 //! 確かめる 2 ボタンだけの 1 画面。`FANDHE_PROXY_APP=recent_documents_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod recent_documents_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの

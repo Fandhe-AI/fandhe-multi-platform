@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #127）型サンプル「ウィンドウ管理」（Issue #636）。
 //! ウィンドウの位置・大きさ・最前面を **OS から読み戻した値** で表示し、ボタンで左上へ移動・
 //! 既定サイズへ復帰・最前面の ON / OFF を行う 1 画面。
-//! `FANDHE_PROXY_APP=window_management_show` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=window_management_show` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod window_management_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは本モジュール外

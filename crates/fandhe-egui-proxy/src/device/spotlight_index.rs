@@ -1,7 +1,7 @@
 //! Phase 11（親 #117）型サンプル「OS の検索への登録」（Issue #560）の effect ドライバ。
 //! `fandhe_core::screens::spotlight_index`（端末依存ゼロ）の要求を観測し、ワーカースレッドで
 //! `fandhe_device::spotlight_index::SpotlightIndex` を呼んで `CompletionSender` 経由で結果を返す
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
 //! `fandhe_device::spotlight_index`。あわせて `url_scheme` の受け口を読み、OS の検索から開かれた
 //! 項目の URL（`fandhe://spotlight/<id>`）を画面へ渡す。

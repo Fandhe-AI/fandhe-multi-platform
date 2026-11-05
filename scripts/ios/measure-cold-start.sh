@@ -150,7 +150,7 @@ log "実機接続確認 OK"
 # 実装する（シミュレータ検証（TASK-1.4）・実機計測（本 issue）は目的が異なり、
 # 署名要件（ad-hoc / 実署名）も非対称なため、無理に共通化しない判断）。
 fandhe_target="aarch64-apple-ios"
-fandhe_bin_name="fandhe-egui-proxy-desktop"
+fandhe_bin_name="fandhe-gallery-desktop"
 fandhe_app_name="FandheIosApp"
 fandhe_info_plist_src="${repo_root}/platforms/apple/FandheIosApp/Resources/Info.plist"
 [ -f "${fandhe_info_plist_src}" ] || fail "Info.plist が見つかりません: ${fandhe_info_plist_src}"
@@ -176,9 +176,9 @@ rustup target add "${fandhe_target}" >/dev/null
 # 本スクリプトから明示的に有効化する。無効のままだと `ios.rs` の `run()` は
 # `ColdStartProbe` を経由せず `COLD_START_MS=` を出力しないため（Review 指摘対応）、
 # 計測を行う本スクリプトの実行時のみ opt-in する。
-log "cargo build -p fandhe-egui-proxy --bin ${fandhe_bin_name} --target ${fandhe_target} --profile release --features fandhe-egui-proxy/cold-start-probe"
-cargo build --manifest-path "${repo_root}/Cargo.toml" -p fandhe-egui-proxy --bin "${fandhe_bin_name}" \
-  --target "${fandhe_target}" --profile release --features fandhe-egui-proxy/cold-start-probe
+log "cargo build -p fandhe-gallery --bin ${fandhe_bin_name} --target ${fandhe_target} --profile release --features fandhe-gallery/cold-start-probe"
+cargo build --manifest-path "${repo_root}/Cargo.toml" -p fandhe-gallery --bin "${fandhe_bin_name}" \
+  --target "${fandhe_target}" --profile release --features fandhe-gallery/cold-start-probe
 
 fandhe_built_binary="${repo_root}/target/${fandhe_target}/release/${fandhe_bin_name}"
 [ -f "${fandhe_built_binary}" ] || fail "ビルド成果物が見つかりません: ${fandhe_built_binary}"

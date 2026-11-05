@@ -2,7 +2,7 @@
 //! 「削除」ボタンを押すと、背後の一覧を残したまま前面に確認パネル
 //! （「○○を削除しますか？」+ キャンセル / 削除）が現れ、キャンセル・削除・
 //! Esc（`.on_back()`）・パネル外タップのいずれでも閉じる 1 画面。
-//! `FANDHE_PROXY_APP=confirm_dialog` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=confirm_dialog` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! から呼び出される（`screens/mod.rs` の `pub mod confirm_dialog;` と対）。
 //!
 //! ## `DialogWidget` 方式（Issue #739）
@@ -22,7 +22,7 @@
 //! 開閉状態の SSOT は引き続きアプリ状態 `S`（[`is_confirming`] が
 //! `state.pending` から導出、[`set_confirming`] が閉方向のみ書き込む）。
 //! `confirm_dialog_screen(state) -> Screen<ConfirmDialogState>` のシグネチャ・
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `nav` 契約は変更しない
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `nav` 契約は変更しない
 //! （registry 側の変更は不要）。
 //!
 //! 確認文言（「○○を削除しますか？」）は `DialogWidget` 本体の `body` ではなく、
@@ -182,7 +182,7 @@ fn expand_confirm(state: &ConfirmDialogState) -> Vec<Node<ConfirmDialogState>> {
 
 /// 確認ダイアログ画面。一覧区画を常に描画したうえで、その後ろに確認パネル
 /// （`Node::Widget(DialogWidget)`）を重ねる（モジュール doc 参照）。
-/// `crates/fandhe-egui-proxy/src/screens/registry.rs` の `nav` 区画から
+/// `crates/fandhe-gallery/src/screens/registry.rs` の `nav` 区画から
 /// `fn(&S) -> Screen<S>` として呼ばれる契約（`screens/list_detail.rs::current_screen`
 /// と同型、`docs/ai/SCHEMA.md` パターン 8）。
 ///

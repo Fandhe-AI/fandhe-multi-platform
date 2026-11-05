@@ -10,7 +10,7 @@
 
 ## 1. 位置付けとスコープ
 
-`scripts/ios/build-simulator-app.sh` は、`fandhe-egui-proxy`（iOS エントリ実装済み）を
+`scripts/ios/build-simulator-app.sh` は、`fandhe-gallery`（iOS エントリは `fandhe-egui-proxy::ios::run`）を
 iOS シミュレータターゲットへビルドし、シミュレータ版アプリバンドル（`.app`）へ
 ad-hoc 署名を施した上で `Payload/` 構造の `.ipa`（zip）を組み立てる。位置引数による
 フェーズ選択（`build`/`bundle`/`sign`/`ipa`/`verify`。引数なしは従来どおり全フェーズ実行）

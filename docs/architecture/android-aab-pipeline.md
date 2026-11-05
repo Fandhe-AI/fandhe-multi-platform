@@ -21,9 +21,9 @@ REQ-11（`docs/spec/04-requirements.md` 147〜156 行）の受け入れ基準「
   - `scripts/android/build-android.sh`: cargo-ndk ラッパー。現状は `fandhe-core`（rlib のみ）を
     3 ABI（arm64-v8a / armeabi-v7a / x86_64）向けにビルドする。ヘッダコメントに「対象パッケージが
     増えた際は本スクリプトの `-p` 指定を拡張する」旨が明記済み。
-  - `crates/fandhe-egui-proxy`: `crate-type = ["cdylib", "rlib"]`。`cfg(target_os = "android")`
+  - `crates/fandhe-gallery`: `crate-type = ["cdylib", "rlib"]`。`cfg(target_os = "android")`
     分岐で `android-activity`（**NativeActivity 方式**、GameActivity は不採用）+ wgpu
-    `Backends::VULKAN` に固定している（TASK-1.5-S2、`src/android.rs` の `android_main`）。
+    `Backends::VULKAN` に固定している（TASK-1.5-S2、`src/lib.rs` の `android_main`。Issue #1165 で egui-proxy から移した）。
   - `platforms/apple/`: iOS/watchOS/visionOS の Gradle 相当（Xcode プロジェクト）が
     `FandheIosApp` 等の単位で配置済み。Android 側の `platforms/android/` はミラー構成として新設する。
   - `.github/workflows/ci.yml`: `android-env` / `android-build` ジョブが CI runner・
@@ -42,18 +42,18 @@ flowchart LR
 
 ### Phase 1: cargo-ndk クロスビルド
 
-- 対象クレート: `fandhe-core`（rlib）ではなく **`fandhe-egui-proxy`**（cdylib）。
-- `scripts/android/build-android.sh` の `-p fandhe-core` を `-p fandhe-egui-proxy` へ拡張する
+- 対象クレート: `fandhe-core`（rlib）ではなく **`fandhe-gallery`**（cdylib）。
+- `scripts/android/build-android.sh` の `-p fandhe-core` を `-p fandhe-gallery` へ拡張する
   （ヘッダコメントに明記済みの拡張点。S2 で実施）。既存スクリプトを流用し、新規スクリプトを
   並置しない（後述 3 節「既存 `build-android.sh` との関係」参照）。
 - 出力: `cargo ndk -o <jniLibs 相当ディレクトリ>` により ABI 別ディレクトリ
-  （`arm64-v8a/` / `armeabi-v7a/` / `x86_64/`）へ `libfandhe_egui_proxy.so` が生成される
+  （`arm64-v8a/` / `armeabi-v7a/` / `x86_64/`）へ `libfandhe_gallery.so` が生成される
   （`[lib] name = "fandhe_egui_proxy"`、`Cargo.toml` 記載どおり）。
 - 3 ABI・`--platform "${ANDROID_MIN_API}"`（24）は `build-android.sh` の既存実装をそのまま流用する。
 
 ### Phase 2: Gradle プロジェクトへの `.so` 統合
 
-- 配置規約: `app/src/main/jniLibs/<abi>/libfandhe_egui_proxy.so`
+- 配置規約: `app/src/main/jniLibs/<abi>/libfandhe_gallery.so`
   （Gradle/AGP の既定 `jniLibs.srcDirs` 規約に準拠。追加の `sourceSets` 設定を不要にする）。
 - Phase 1 の cargo-ndk 出力ディレクトリ構成（ABI 名がそのままディレクトリ名になる）は
   Android の `jniLibs/<abi>/` 命名規約と一致するため、Phase 1 → Phase 2 は単純なディレクトリコピー
@@ -82,7 +82,7 @@ flowchart LR
 - **既存 `build-android.sh` との関係**: `build-aab.sh` は独立スクリプトとして新設し、
   内部で `build-android.sh` 相当の cargo-ndk 呼び出し（Phase 1）→ Gradle 統合（Phase 2）→
   `.aab` 生成（Phase 3）を一貫して行う。`build-android.sh` を「fandhe-core rlib のみを検証する
-  軽量スクリプト」として現状のまま残し、`build-aab.sh` は `fandhe-egui-proxy` 向けの
+  軽量スクリプト」として現状のまま残し、`build-aab.sh` は `fandhe-gallery` 向けの
   cargo-ndk 呼び出しを独自に持つ（`-p` 指定が異なるパッケージ・成果物種別（rlib vs cdylib）を
   対象とするため、共通化すると条件分岐が増え可読性が落ちると判断）。cargo-ndk 呼び出しを
   共通化するかどうかは実装側の裁量とし、本書は「2 つのスクリプトが並存する」
@@ -141,10 +141,10 @@ flowchart LR
   - `versions.env` へ S2 で追加する項目（本書での確定事項、実際の追記は S2 が行う）:
     `AGP_VERSION="9.3.0"`、`ANDROID_APP_ID`（Manifest の `package` 属性・アプリケーション ID、
     例: `com.fandhe.egui_proxy`。ストア提出時の一意性が必要になるため S2 実装時に確定する）。
-- **fandhe-egui-proxy との契約**: Gradle 側は `.so` を `jniLibs/` へ配置するのみで、
+- **fandhe-gallery との契約**: Gradle 側は `.so` を `jniLibs/` へ配置するのみで、
   Rust 側のシンボル解決・エントリポイント（`android_main`）には関与しない
   （`android-activity` クレートが `dlopen`/`dlsym` 相当の解決を担う。契約の詳細は
-  `crates/fandhe-egui-proxy/src/android.rs` のモジュールコメント参照）。
+  `crates/fandhe-gallery/src/lib.rs` と `crates/fandhe-egui-proxy/src/android.rs` のモジュールコメント参照）。
 
 ## 5. 開発署名設計（S3 への引き継ぎ）
 
@@ -174,7 +174,7 @@ flowchart LR
 - `scripts/android/verify-android-artifacts.sh` は現状 `fandhe-core` の rlib のみを検証対象とする
   （ヘッダコメントに `.so` 検証追加が引き継ぎ事項として明記済み、TASK-1.5-S3）。本パイプライン
   完成後、同スクリプトへ以下を追加する方針とする（実装は S4）:
-  - `.so`（3 ABI 分の `libfandhe_egui_proxy.so` 存在確認）
+  - `.so`（3 ABI 分の `libfandhe_gallery.so` 存在確認）
   - `.aab`（`platforms/android/FandheAndroidApp/app/build/outputs/bundle/release/app-release.aab`
     の存在確認・zip 構造としての妥当性確認）
 - **bundletool によるインストール検証（エミュレータへのインストール・起動確認）は

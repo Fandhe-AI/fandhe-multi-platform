@@ -31,13 +31,13 @@ iOS / Android / Android TV / iPad / watchOS / Vision Pro / macOS / Windows / Lin
 デスクトップでサンプル画面を起動します。
 
 ```bash
-cargo run -p fandhe-egui-proxy
+cargo run -p fandhe-gallery
 ```
 
 プロトタイプアプリを起動する場合:
 
 ```bash
-FANDHE_PROXY_APP=prototype cargo run -p fandhe-egui-proxy
+FANDHE_PROXY_APP=prototype cargo run -p fandhe-gallery
 ```
 
 ヘッドレスでウィジェットカタログを標準出力へ出力する場合:

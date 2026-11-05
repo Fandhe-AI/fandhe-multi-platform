@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #1142）型サンプル「メール・SMS の作成」（Issue #1384）。
 //! 固定の宛先・件名・本文で OS の作成画面を開く 2 ボタンだけの 1 画面。
-//! `FANDHE_PROXY_APP=compose_mail_sms` で選ばれ、`crates/fandhe-egui-proxy/src/screens/
+//! `FANDHE_PROXY_APP=compose_mail_sms` で選ばれ、`crates/fandhe-gallery/src/screens/
 //! registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod compose_mail_sms;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの

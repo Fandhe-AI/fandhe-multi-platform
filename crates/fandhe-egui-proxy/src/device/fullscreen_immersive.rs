@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::fullscreen_toggle`（端末依存ゼロ）の要求を観測し、
 //! `fandhe_device::fullscreen_immersive::Fullscreen` で切り替えを依頼して、毎フレーム
 //! 読み戻した実際の状態が目標に一致したら成功として `CompletionSender` 経由で返す
-//! （`crate::screens::registry` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約（依頼と完了の分離・エラー種別・守る範囲）の SSOT は `fandhe_device::fullscreen_immersive`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象。Web は本経路を通らず

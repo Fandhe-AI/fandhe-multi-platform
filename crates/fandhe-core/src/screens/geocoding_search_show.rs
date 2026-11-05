@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #133）型サンプル「住所の座標変換」（Issue #691）。
 //! 画面に埋め込んだ固定の公開住所 1 件を OS の地理コードで座標へ変換し、先頭候補の緯度・経度と
 //! 候補数を表示する 1 画面。`FANDHE_PROXY_APP=geocoding_search_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod geocoding_search_show;` と対）。経路・地点検索・逆ジオコーディング・
 //! 利用者の入力・現在地は扱わない。
 //!

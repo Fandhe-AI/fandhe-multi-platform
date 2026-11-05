@@ -2,7 +2,7 @@
 //! 「推論する」で固定の線形モデルに固定入力を渡して 1 回推論し、出力・期待値・所要時間を
 //! 表示する 1 画面。「壊れたモデルで試す」は OS がモデルを拒否することを確かめるための
 //! 失敗系のボタン。`FANDHE_PROXY_APP=ml_infer` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod ml_infer;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は

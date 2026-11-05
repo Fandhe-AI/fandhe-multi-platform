@@ -14,10 +14,10 @@
 #
 # 使い方:
 #   powershell -ExecutionPolicy Bypass -File scripts/windows/measure-frame-rate.ps1 `
-#     -TargetBin target/release/fandhe-egui-proxy-desktop.exe [-TimeoutSeconds 120]
+#     -TargetBin target/release/fandhe-gallery-desktop.exe [-TimeoutSeconds 120]
 #
 #   事前に `frame-metrics` feature を有効にしてビルドしておくこと:
-#     cargo build -p fandhe-egui-proxy --bin fandhe-egui-proxy-desktop `
+#     cargo build -p fandhe-gallery --bin fandhe-gallery-desktop `
 #       --release --features frame-metrics
 #
 # 出力: 標準出力へ結果 JSON 1 行、標準エラーへ要約と計測環境（ディスプレイの

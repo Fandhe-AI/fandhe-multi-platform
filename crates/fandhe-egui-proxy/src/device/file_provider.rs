@@ -2,7 +2,7 @@
 //! の effect ドライバ。`fandhe_core::screens::file_provider_show`（端末依存ゼロ）の要求を
 //! `take_request` で観測し、`fandhe_device::file_provider::FileProvider` をワーカーで呼んで、
 //! 操作の結果と操作後に読み直した一覧を `CompletionSender` 経由で 1 件にまとめて注入する
-//! （`crate::screens::registry` の `effect` 区画から呼ばれる、`app::EffectFn` 参照）。
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる、`app::EffectFn` 参照）。
 //! 契約の SSOT は `fandhe_device::file_provider`（削除キーは再利用しない書類 ID）。
 //!
 //! # OS 別実装の差し込み口

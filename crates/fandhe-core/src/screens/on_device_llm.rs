@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #93）型サンプル「端末内 LLM」（Issue #345）。
 //! 「質問する」で固定の短いプロンプトを端末内のモデルへ 1 回渡し、応答の全文を表示する 1 画面。
 //! 使えない端末では理由つきの失敗を出す。`FANDHE_PROXY_APP=on_device_llm` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod on_device_llm;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は

@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #157）型サンプル「NFC タグ読み取り」（Issue #1044）。
 //! かざした NFC タグの NDEF を 1 枚読み、レコードの種類と内容を表示する 1 画面。
-//! `FANDHE_PROXY_APP=nfc_read` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の
+//! `FANDHE_PROXY_APP=nfc_read` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod nfc_read;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は

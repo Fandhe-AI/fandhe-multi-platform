@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #1128）型サンプル「電源状態」（Issue #1274）の effect ドライバ。
 //! `fandhe_device::power_state::PowerState` を 1 秒間隔で UI スレッドから同期 pull し、
 //! `fandhe_core::screens::power_state_show`（端末依存ゼロ）へ結果を `CompletionSender` 経由で
-//! 渡す（`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
+//! 渡す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::power_state`。
 //!
 //! # OS 別実装の差し込み口

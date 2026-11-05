@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #1133）型サンプル「全画面表示」（Issue #1312）。
 //! ボタンで全画面 / 通常を切り替え、**実際の状態**を表示する 1 画面。
-//! `FANDHE_PROXY_APP=fullscreen_toggle` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=fullscreen_toggle` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod fullscreen_toggle;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは本モジュール外

@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #183）「システムの効果音・ビープ」（Issue #939）。
 //! 「ビープ」ボタン → OS 標準の警告音を 1 回要求し、結果（OS に渡した / 鳴らされなかった /
 //! 非対応 / 失敗）を表示する 1 画面。`FANDHE_PROXY_APP=system_sound_beep` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる。
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは
 //! `fandhe-egui-proxy` の `device/system_sound.rs` が [`take_request`] で要求を観測し

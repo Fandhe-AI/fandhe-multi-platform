@@ -11,6 +11,9 @@ members = [
     # 削除するだけで切り離せる構成にしている（切り離し手順は docs/architecture/device-feature-removal.md 参照）。
     "crates/fandhe-device",
     "crates/fandhe-egui-proxy",
+    # TASK-21.2（Issue #1165）: 画面カタログ（全機能の実機確認・撮影用）の非公開アプリ。
+    # 画面の登録と各 OS の最終成果物（デスクトップ・iOS の実行体、Android・Web の cdylib）を持つ。
+    "crates/fandhe-gallery",
     # TASK-10.1（REQ-10 / M3、Issue #218）: CJK 対応フォント（Noto Sans JP）の
     # 同梱資産クレート。`fandhe-egui-proxy` の native 分岐からのみ参照される
     # （wasm32 では埋め込まない、下記コメント・crates/fandhe-fonts/src/lib.rs 参照）。

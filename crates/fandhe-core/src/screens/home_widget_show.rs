@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #1064）型サンプル「ホーム画面ウィジェット」
 //! （Issue #1065）。現在の保存値を表示し、候補ボタンで 1 行テキストを保存する 1 画面。
-//! `FANDHE_PROXY_APP=home_widget_show` で選ばれ、`crates/fandhe-egui-proxy/src/screens/
+//! `FANDHE_PROXY_APP=home_widget_show` で選ばれ、`crates/fandhe-gallery/src/screens/
 //! registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の
 //! `pub mod home_widget_show;` と対）。
 //!

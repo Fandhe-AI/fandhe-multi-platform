@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #896）型サンプル「共有」（Issue #897 macOS →
 //! #898 Windows → #899 iOS/Android 横展開）の effect ドライバ。
 //! `fandhe_core::screens::share_text`（端末依存ゼロ）の要求を観測し、結果を
-//! `CompletionSender` 経由で返す（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

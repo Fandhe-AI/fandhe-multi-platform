@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #102、Issue #416）型サンプル「ファイルの関連付け」の
 //! effect ドライバ。`fandhe_core::screens::file_association_show`（端末依存ゼロ）へ、
 //! `fandhe_device::file_association::FileAssociation` が持つ受信状態を注入する
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`device/url_scheme.rs` と同型）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

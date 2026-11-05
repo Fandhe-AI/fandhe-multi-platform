@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #1154）型サンプル「方位（コンパス）」（Issue #1404）。
 //! 「開始」「停止」で購読を始め・止め、現在の方位（整数の度）と 8 方位の文字を 1 画面に出す。
-//! `FANDHE_PROXY_APP=compass_show` で選ばれ、`fandhe-egui-proxy` の `screens/registry.rs` の
+//! `FANDHE_PROXY_APP=compass_show` で選ばれ、`fandhe-gallery` の `screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod compass_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は

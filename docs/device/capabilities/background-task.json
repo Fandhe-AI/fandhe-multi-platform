@@ -16,7 +16,7 @@
         "バックグラウンド処理"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_background_task.m + crates/fandhe-egui-proxy/src/device/ios_background_task.rs + crates/fandhe-egui-proxy/src/device/background_task.rs + crates/fandhe-egui-proxy/src/main.rs、Issue 旧#1045"
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_background_task.m + crates/fandhe-egui-proxy/src/device/ios_background_task.rs + crates/fandhe-egui-proxy/src/device/background_task.rs + crates/fandhe-gallery/src/main.rs、Issue 旧#1045"
     },
     "android": {
       "status": "done",
@@ -55,7 +55,7 @@
         "バックグラウンド処理"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_background_task.rs + crates/fandhe-egui-proxy/src/device/background_task.rs + crates/fandhe-egui-proxy/src/main.rs + crates/fandhe-egui-proxy/src/device.rs + crates/fandhe-egui-proxy/src/device/windows_notification.rs + crates/fandhe-core/src/screens/background_task.rs、Issue 旧#1044"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_background_task.rs + crates/fandhe-egui-proxy/src/device/background_task.rs + crates/fandhe-gallery/src/main.rs + crates/fandhe-egui-proxy/src/device.rs + crates/fandhe-egui-proxy/src/device/windows_notification.rs + crates/fandhe-core/src/screens/background_task.rs、Issue 旧#1044"
     },
     "web": {
       "status": "done",

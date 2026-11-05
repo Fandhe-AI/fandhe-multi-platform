@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #1013）型サンプル「ドラッグ & ドロップ」（Issue #1014）の
 //! effect ドライバ。`fandhe_core::screens::drag_drop`（端末依存ゼロ）へ、egui が
-//! 観測したホバー/ドロップのイベントを橋渡しする（`crate::screens::registry` の
+//! 観測したホバー/ドロップのイベントを橋渡しする（`fandhe-gallery` の `screens/registry.rs` の
 //! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn`
 //! 参照）。
 //!

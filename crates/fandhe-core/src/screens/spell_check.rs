@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #119）型サンプル「スペルチェック」（Issue #578）。
 //! 入力した短い文を OS の辞書で 1 回検査し、誤り語の位置・語・修正候補を一覧する 1 画面。
 //! 辞書の無い言語は「誤り 0 件」ではなく失敗として出す。`FANDHE_PROXY_APP=spell_check` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod spell_check;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は

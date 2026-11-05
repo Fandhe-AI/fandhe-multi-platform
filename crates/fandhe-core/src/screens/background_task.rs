@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #1042）型サンプル「バックグラウンド処理」
 //! （Issue #1043）。「予約する」「予約を取り消す」の 2 ボタン + 予約状態・最後の
 //! 実行結果の表示を持つ 1 画面。`FANDHE_PROXY_APP=background-task` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod background_task;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #1056）型サンプル「ジオフェンス」（Issue #1057）の effect
 //! ドライバ。`fandhe_core::screens::geofence_show`（端末依存ゼロ）へ、location の最新 Fix を
 //! `fandhe_device::geofence::GeofenceTracker` で判定した結果のスナップショットを渡す
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! オーナー判断（10/4）により OS の領域監視 API は使わず、[`super::location::shared_location`]

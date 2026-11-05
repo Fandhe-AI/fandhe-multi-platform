@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #1135）型サンプル「画面の録画・キャプチャ」（Issue #1335）。
 //! 「録画開始」→ 録画中（経過秒数）→「停止」または [`MAX_CAPTURE_MS`] 到達で自動停止 →
 //! 結果（バイト数・mime・録画時間）または失敗理由・Unsupported を表示する 1 画面。
-//! `FANDHE_PROXY_APP=screen_capture` で選ばれ、`fandhe-egui-proxy` の `screens/registry.rs`
+//! `FANDHE_PROXY_APP=screen_capture` で選ばれ、`fandhe-gallery` の `screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod screen_capture;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。実際の録画・同意 UI は

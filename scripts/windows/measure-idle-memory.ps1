@@ -21,12 +21,12 @@
 #
 # 使い方:
 #   powershell -ExecutionPolicy Bypass -File scripts/windows/measure-idle-memory.ps1 `
-#     -TargetBin target/release/fandhe-egui-proxy-desktop.exe `
+#     -TargetBin target/release/fandhe-gallery-desktop.exe `
 #     [-BaselineBin <path>] [-Trials 5] [-WaitSeconds 3]
 #
 #   対象は `cold-start-probe` feature を**無効**にしてビルドすること（同 feature の
 #   有効ビルドは初回フレーム後に自動終了するため、アイドル計測が成立しない）:
-#     cargo build -p fandhe-egui-proxy --bin fandhe-egui-proxy-desktop --release
+#     cargo build -p fandhe-gallery --bin fandhe-gallery-desktop --release
 #
 # 出力: 標準出力へ CSV（列: target,run,ws_kb_at_<待機秒>s,ws_kb_at_10s,
 #       priv_kb_at_<待機秒>s,priv_kb_at_10s）、標準エラーへ待機時点・10 秒時点それぞれの

@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #1059、Issue #1060）型サンプル「BLE スキャン」の effect
 //! ドライバ。`fandhe_core::screens::ble_scan`（端末依存ゼロ）の要求を観測し、結果を
-//! `CompletionSender` 経由で返す（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約の SSOT は `fandhe_device::bluetooth_le`（10 秒・上限 50 件・`normalize_scan`）。
 //!

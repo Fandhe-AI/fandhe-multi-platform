@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #143）型サンプル「付属機器のペアリング」（Issue #740）。
 //! OS の機器選択画面で BLE 機器を 1 台選び、その名前（または名前がなかったこと）を表示する 1 画面。
 //! `FANDHE_PROXY_APP=companion_device_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod companion_device_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は

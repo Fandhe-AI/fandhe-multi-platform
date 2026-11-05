@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #132）型サンプル「端末・アプリの真正性証明」（Issue #677）。
 //! 端末の鍵の証明データ（Android の Key Attestation）を 1 回取得し、件数と合計サイズだけを表示する
 //! 1 画面。`FANDHE_PROXY_APP=app_attest_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod app_attest_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は

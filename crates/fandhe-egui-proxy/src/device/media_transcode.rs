@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #91）型サンプル「動画・音声の変換」（Issue #311）の effect ドライバ。
 //! `fandhe_core::screens::media_transcode`（端末依存ゼロ）の要求を観測し、ワーカースレッドで
 //! `fandhe_device::media_transcode::MediaTranscode` を呼んで `CompletionSender` 経由で結果を返す
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
 //! `fandhe_device::media_transcode`。
 //!

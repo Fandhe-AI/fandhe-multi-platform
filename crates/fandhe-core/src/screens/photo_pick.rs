@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #1101）型サンプル「写真選択」（Issue #1103）。
 //! 「写真を選ぶ」ボタン → OS の画像選択 → 選んだ画像を実画素で表示する 1 画面。
-//! `FANDHE_PROXY_APP=photo_pick` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=photo_pick` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画（デスクトップ）と `fandhe-web-dom` の `demo.rs`（Web）から呼ばれる
 //! （`screens/mod.rs` の `pub mod photo_pick;` と対）。
 //!

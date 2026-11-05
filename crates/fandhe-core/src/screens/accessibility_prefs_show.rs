@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #1132）型サンプル「アクセシビリティ設定の追従」（Issue #1308）。
-//! `FANDHE_PROXY_APP=accessibility_prefs_show` で選ばれ、`fandhe-egui-proxy` の
+//! `FANDHE_PROXY_APP=accessibility_prefs_show` で選ばれ、`fandhe-gallery` の
 //! `screens/registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の
 //! `pub mod accessibility_prefs_show;` と対）。
 //!

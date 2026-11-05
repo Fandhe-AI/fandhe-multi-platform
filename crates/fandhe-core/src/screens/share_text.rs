@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #896）型サンプル「共有」（Issue #897）。
 //! テキスト欄 + URL 欄 + 「共有」ボタン → OS の共有シートが開き、結果（共有した/
 //! キャンセル/共有先なし/失敗）を表示する 1 画面。`FANDHE_PROXY_APP=share_text` で
-//! 選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から
+//! 選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から
 //! 呼ばれる（`screens/mod.rs` の `pub mod share_text;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

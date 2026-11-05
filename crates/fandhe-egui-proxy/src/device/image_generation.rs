@@ -1,7 +1,7 @@
 //! Phase 11 型サンプル「端末内での画像生成」（親 #191、Issue #975）の effect ドライバ。
 //! `fandhe_core::screens::image_generation_show`（端末依存ゼロ）の要求を観測し、
 //! `fandhe_device::image_generation::ImageGenerator` に生成画面の表示を依頼して、
-//! OS 層から届く結果を `CompletionSender` 経由で画面へ返す（`crate::screens::registry` の
+//! OS 層から届く結果を `CompletionSender` 経由で画面へ返す（`fandhe-gallery` の `screens/registry.rs` の
 //! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約（結果の三値・期限・守る範囲）の SSOT は `fandhe_device::image_generation`。
 //!

@@ -1,7 +1,7 @@
 //! Phase 11（親 #189）型サンプル「無線の状態と切り替え」（Issue #972）の effect ドライバ。
 //! `fandhe_core::screens::radio_control_show`（端末依存ゼロ）の要求を観測し、`RadioControl` で
 //! 状態を 1 回読む / 切り替えを 1 回要求し、`CompletionSender` 経由で結果を返す
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、
 //! `app::EffectFn` 参照）。契約の SSOT は `fandhe_device::radio_control`。
 //!
 //! # スレッド

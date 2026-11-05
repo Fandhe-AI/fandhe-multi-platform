@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #1116）型サンプル「カスタム URL scheme」（Issue #1215）。
 //! `FANDHE_PROXY_APP=url_scheme_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod url_scheme_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS から届いた URL の検査・保持は

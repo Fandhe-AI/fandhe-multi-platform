@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #112）型サンプル「USB 機器」（Issue #505）。
 //! 画面を開くと接続中の USB 機器（ベンダー ID・製品 ID・製品名）を OS から 1 回読んで一覧にし、
 //! 「再取得」で読み直す 1 画面。`FANDHE_PROXY_APP=usb_device_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod usb_device_show;` と対）。機器は開かず、読み書きも扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは

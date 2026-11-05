@@ -27,7 +27,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
-crate_dir="${repo_root}/crates/fandhe-egui-proxy"
+crate_dir="${repo_root}/crates/fandhe-gallery"
 dist_dir="${crate_dir}/web/dist"
 font_src="${FANDHE_PROXY_CJK_FONT:-${repo_root}/crates/fandhe-fonts/assets/NotoSansJP-Regular.otf}"
 release_build="${FANDHE_WASM_RELEASE:-0}"
@@ -35,21 +35,21 @@ release_build="${FANDHE_WASM_RELEASE:-0}"
 if [[ "${release_build}" == "1" ]]; then
   echo "[build-wasm-proxy] cargo build --release --lib --target wasm32-unknown-unknown"
   cargo build --manifest-path "${repo_root}/Cargo.toml" \
-    -p fandhe-egui-proxy \
+    -p fandhe-gallery \
     --release \
     --lib \
     --target wasm32-unknown-unknown
-  wasm_path="${repo_root}/target/wasm32-unknown-unknown/release/fandhe_egui_proxy.wasm"
+  wasm_path="${repo_root}/target/wasm32-unknown-unknown/release/fandhe_gallery.wasm"
 else
   echo "[build-wasm-proxy] cargo build --lib --target wasm32-unknown-unknown"
   # `--lib` で cdylib（wasm-bindgen が処理する対象、crates/fandhe-egui-proxy/Cargo.toml の
-  # [lib] 参照）のみをビルドする。native 用 bin（fandhe-egui-proxy-desktop）は wasm32 では
+  # [lib] 参照）のみをビルドする。native 用 bin（fandhe-gallery-desktop）は wasm32 では
   # no-op であり、同時ビルドしても使わないため除外する。
   cargo build --manifest-path "${repo_root}/Cargo.toml" \
-    -p fandhe-egui-proxy \
+    -p fandhe-gallery \
     --lib \
     --target wasm32-unknown-unknown
-  wasm_path="${repo_root}/target/wasm32-unknown-unknown/debug/fandhe_egui_proxy.wasm"
+  wasm_path="${repo_root}/target/wasm32-unknown-unknown/debug/fandhe_gallery.wasm"
 fi
 
 if [[ ! -f "${wasm_path}" ]]; then
@@ -59,10 +59,10 @@ fi
 
 echo "[build-wasm-proxy] wasm-bindgen --target web"
 mkdir -p "${dist_dir}"
-wasm-bindgen --target web --out-dir "${dist_dir}" --out-name fandhe_egui_proxy "${wasm_path}"
+wasm-bindgen --target web --out-dir "${dist_dir}" --out-name fandhe_gallery "${wasm_path}"
 
 if [[ "${release_build}" == "1" ]]; then
-  bindgen_wasm="${dist_dir}/fandhe_egui_proxy_bg.wasm"
+  bindgen_wasm="${dist_dir}/fandhe_gallery_bg.wasm"
   if [[ ! -f "${bindgen_wasm}" ]]; then
     echo "[build-wasm-proxy] エラー: wasm-bindgen 成果物が見つからない: ${bindgen_wasm}" >&2
     exit 1

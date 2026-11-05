@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ型サンプル「画面の向き」（親 #128、Issue #655）。
 //! 現在の向き（縦・横と角度）を表示し、縦固定・横固定・解除を切り替える 1 画面。
 //! `FANDHE_PROXY_APP=screen_orientation_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod screen_orientation_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの

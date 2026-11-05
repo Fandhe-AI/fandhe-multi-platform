@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #124）型サンプル「行動認識（歩行・乗車等）」（Issue #613）。
 //! 「開始」「停止」で購読を始め・止め、現在の行動種別と確度、種別が変わった履歴（上限
 //! [`HISTORY_LIMIT`] 件）を 1 画面に出す。`FANDHE_PROXY_APP=activity_recognition_show` で選ばれ、
-//! `fandhe-egui-proxy` の `screens/registry.rs` の `effect` 区画から呼ばれる
+//! `fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod activity_recognition_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は

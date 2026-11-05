@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #122）型サンプル「共有の受け取り」（Issue #606）の effect
 //! ドライバ。`fandhe_core::screens::share_receive_show`（端末依存ゼロ）へ、
 //! `fandhe_device::share_receive::ShareReceive` が持つ受信状態と受け取り方の案内を注入する
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`device/url_scheme.rs::drive` と同型）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

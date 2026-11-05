@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ型サンプル「ドラッグ & ドロップ」（親 #1013、Issue #1014）。
 //! ウィンドウ全体をドロップ領域とし、Finder/エクスプローラーからファイルを落とすと
 //! 名前とサイズの一覧を表示する 1 画面。`FANDHE_PROXY_APP=drag_drop` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod drag_drop;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。実際のホバー/ドロップの

@@ -1,7 +1,7 @@
 //! 一覧→詳細の画面遷移スタック（[`crate::ui::ScreenStack`]）を用いた型サンプル
 //! 「一覧→詳細」（Issue #730。#726 の最小サンプルを実アプリ型へ拡張）。
 //!
-//! 文言はダミー、画面レジストリ `crates/fandhe-egui-proxy/src/screens.rs` の
+//! 文言はダミー、画面レジストリ `crates/fandhe-gallery/src/screens.rs` の
 //! `nav "list_detail"` から `FANDHE_PROXY_APP=list_detail` で起動できる。
 //!
 //! 商品 20 件の一覧（[`crate::ui::Node::VirtualList`] + 行タップで詳細へ遷移）と、

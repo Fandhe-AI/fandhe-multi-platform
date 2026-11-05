@@ -1,7 +1,7 @@
 //! Phase 11（親 #864）型サンプル「読み上げ」（Issue #865）の effect ドライバ。
 //! `fandhe_core::screens::tts_speak`（端末依存ゼロ）の発話・停止要求を観測し、
 //! `fandhe_device::tts::Tts` で OS の音声合成を呼び、`CompletionSender` 経由で
-//! 結果を返す（`crate::screens::registry` の `effect` 区画から
+//! 結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

@@ -14,7 +14,7 @@
 - `ProxyApp::with_screen_fn`（`app.rs`）: `ScreenStack<S>` のような状態駆動の画面遷移向けに、
   毎フレーム `fn(&S) -> Screen<S>` を呼び直してアプリを構築するエントリ
 - `generated_screens!` マクロ（`screens.rs`）に `nav "<name>" => 関数,` 区画を追加。
-  `crates/fandhe-egui-proxy/src/screens/registry.rs` へ `nav "list_detail"` を登録した
+  `crates/fandhe-gallery/src/screens/registry.rs` へ `nav "list_detail"` を登録した
 
 ### 変更
 

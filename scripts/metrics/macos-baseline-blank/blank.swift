@@ -4,7 +4,7 @@
 // `baseline-blank/blank.swift`（空の NSWindow のみの Cocoa アプリ）を、本リポジトリ管理下に
 // 再作成したもの（spec サブモジュールは変更しない方針のため、本ファイルは独立した複製）。
 // `scripts/metrics/baseline-blank`（Linux 向け winit 版）の macOS 対応物であり、
-// `fandhe-egui-proxy-desktop` の TASK-6.3（#93）feature 絞り込み前後の macOS 実測再計測に使う。
+// `fandhe-gallery-desktop` の TASK-6.3（#93）feature 絞り込み前後の macOS 実測再計測に使う。
 //
 // AppKit のみで構成し、SwiftUI・Rust コア（FandheSwiftUIBridge）には依存しない
 // （「ウィンドウ生成のみ」の最小構成というベースラインの前提を崩さないため）。

@@ -1,7 +1,7 @@
 //! Phase 11（親 #133）型サンプル「住所の座標変換」（Issue #691）の effect ドライバ。
 //! `fandhe_core::screens::geocoding_search_show`（端末依存ゼロ）の要求を観測し、ワーカースレッドで
 //! `fandhe_device::geocoding_search::ForwardGeocoder` を呼んで `CompletionSender` 経由で結果を返す
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
 //! `fandhe_device::geocoding_search`。
 //!

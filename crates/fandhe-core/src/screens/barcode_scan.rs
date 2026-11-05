@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ）型サンプル「バーコード・QR 読み取り」（Issue #557、親 #116）。
 //! 「写真を選んでコードを読む」ボタン → OS の画像選択 → 選んだ 1 枚のバーコード・QR を読んで
 //! 中身の文字列を一覧表示する 1 画面（URL でも自動で開かない）。`FANDHE_PROXY_APP=barcode_scan` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod barcode_scan;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは本モジュール外

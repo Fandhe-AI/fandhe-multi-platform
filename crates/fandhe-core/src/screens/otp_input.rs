@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ型サンプル「ワンタイムコードの入力」（親 #121、Issue #585、a）。
-//! `FANDHE_PROXY_APP=otp_input` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の
+//! `FANDHE_PROXY_APP=otp_input` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod otp_input;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。ヒントの OS 呼び出しは effect ドライバ

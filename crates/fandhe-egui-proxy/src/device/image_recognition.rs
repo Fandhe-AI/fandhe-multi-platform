@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::image_recognize`（端末依存ゼロ）の要求を観測し、写真選択
 //! （`device/photo_pick.rs` と同じ `PhotoPicker`）で選ばせた画像 1 枚を
 //! `fandhe_device::image_recognition::TextRecognizer` で OCR して `CompletionSender` 経由で
-//! 結果を返す（`crate::screens::registry` の `effect` 区画から
+//! 結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。Web は対象外

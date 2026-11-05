@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #147）型サンプル「スマートホーム」（Issue #1079）。
 //! 「家と機器の一覧を読む」ボタン → 端末に登録済みの家の数と機器の名前を OS の返す順で先頭 20 件だけ
 //! 読んで一覧にする 1 画面。`FANDHE_PROXY_APP=smart_home_list` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod smart_home_list;` と対）。機器の操作・状態は扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

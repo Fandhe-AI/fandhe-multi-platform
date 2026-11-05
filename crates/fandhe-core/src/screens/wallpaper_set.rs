@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #188）型サンプル「壁紙・ロック画面の設定」（Issue #970）。
 //! 説明文と「ホーム画面の壁紙にする」「ロック画面の壁紙にする」ボタンだけの 1 画面。
-//! `FANDHE_PROXY_APP=wallpaper_set` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=wallpaper_set` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod wallpaper_set;` と対）。
 //! 設定する画像は effect ドライバ（`device/wallpaper.rs`）が自前で生成するため入力欄を持たない。
 //!

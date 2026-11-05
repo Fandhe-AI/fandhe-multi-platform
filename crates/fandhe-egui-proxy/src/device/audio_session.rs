@@ -2,7 +2,7 @@
 //! effect ドライバ。`fandhe_core::screens::audio_session_show`（端末依存ゼロ）の要求を
 //! `take_command` で観測し、`fandhe_device::audio_session::AudioSession` でセッションを開始 / 停止し、
 //! 届いた出来事と読み戻した状態を `CompletionSender` 経由で注入する
-//! （`crate::screens::registry` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約の SSOT は `fandhe_device::audio_session`。
 //!
 //! # OS 別実装の差し込み口

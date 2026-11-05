@@ -15,16 +15,23 @@
 //!   `src/device/*` がビルドされないため、リンクエラーを避けて素通りする。
 //! - framework は `.m` / Swift ごとに自己完結して宣言する（他の単位のリンクに頼らない）。
 //!   各 `compile_*` の doc に、対象 OS・呼び出し元・Issue 番号を書く。
-//! - macOS の `Info.plist` 埋め込み（`-sectcreate`）は最終実行体の設定のため、ここに残す。
-//! - Swift 薄層の弱リンク・`-rpath`・clang_rt は `rustc-link-arg` で出す。依存元へ伝わらないため、
-//!   最終成果物を作る本 crate が呼ぶ必要がある（`fandhe-platform-apple` の `build` モジュール doc 参照）。
+//! - macOS の `Info.plist` 埋め込み（`-sectcreate`）は最終実行体の設定。`fandhe-gallery` へ転送する。
+//! - Swift 薄層の弱リンク・`-rpath`・clang_rt・`-sectcreate` は `rustc-link-arg` では依存元へ伝わらない。
+//!   最終成果物は `fandhe-gallery` へ移ったため、`links` メタデータで転送し、gallery の `build.rs` が
+//!   出し直す（`fandhe-platform-apple` の `build` モジュール doc 参照）。
 
 use fandhe_platform_apple::build::{
-    compile_objc, compile_swift, target_is_ios, target_is_macos, ui_framework, weak_link_framework,
-    SwiftLib,
+    bin_link_arg, compile_objc, compile_swift, export_link_args, target_is_ios, target_is_macos,
+    ui_framework, weak_link_framework, SwiftLib,
 };
 
 fn main() {
+    build();
+    // 最終成果物（`fandhe-gallery`）へ Apple のリンク指定を転送する（`Cargo.toml` の `links`）。
+    export_link_args();
+}
+
+fn build() {
     if target_is_macos() {
         build_macos();
         return;
@@ -1776,15 +1783,15 @@ fn build_macos() {
     // `apple/fandhe_apple_screen_capture.m`（Issue #1335）の macOS 側（ScreenCaptureKit）。
     compile_apple_screen_capture();
 
-    // 素の実行体（`[[bin]] fandhe-egui-proxy-desktop`）へ `macos/Info.plist`
+    // 素の実行体（`fandhe-gallery` の bin）へ `macos/Info.plist`
     // （`CFBundleIdentifier` + `NSLocationUsageDescription`）を埋め込む。macOS 10.15+
     // は Info.plist を持たない実行体に CoreLocation の許可プロンプトを一切出さない
-    // ため（CoreLocationCLI の既知要件、実装計画 §3.2）。`rustc-link-arg-bins` は
-    // `[[bin]]` のみを対象にし、テスト実行体・rlib（`tests/desktop_render.rs` 等）には
-    // 影響しない。
+    // ため（CoreLocationCLI の既知要件、実装計画 §3.2）。最終実行体は `fandhe-gallery` へ移ったので、
+    // 本 crate は bin 専用の指定として記録するだけにし、gallery の `build.rs` が
+    // `import_link_args` で `rustc-link-arg-bins` に出し直す（テスト実行体・rlib には影響しない）。
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
     println!("cargo:rerun-if-changed=macos/Info.plist");
-    println!(
-        "cargo:rustc-link-arg-bins=-Wl,-sectcreate,__TEXT,__info_plist,{manifest_dir}/macos/Info.plist"
-    );
+    bin_link_arg(&format!(
+        "-Wl,-sectcreate,__TEXT,__info_plist,{manifest_dir}/macos/Info.plist"
+    ));
 }

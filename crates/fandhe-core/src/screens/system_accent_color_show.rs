@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #103）型サンプル「システムのアクセント色」（Issue #421）。
-//! `FANDHE_PROXY_APP=system_accent_color_show` で選ばれ、`fandhe-egui-proxy` の
+//! `FANDHE_PROXY_APP=system_accent_color_show` で選ばれ、`fandhe-gallery` の
 //! `screens/registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の
 //! `pub mod system_accent_color_show;` と対）。Web は [`system_accent_color_show_web_screen`] を
 //! `fandhe-web-dom` の mount が使う。

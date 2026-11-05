@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #1131）型サンプル「端末・OS 情報」（Issue #1304）の effect ドライバ。
 //! `fandhe_core::screens::device_info_show`（端末依存ゼロ）の要求を `take_request` で観測し、
 //! `fandhe_device::device_info::DeviceInfo` を UI スレッドから同期で 1 回だけ読んで、結果を
-//! `CompletionSender` 経由で注入する（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で注入する（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は
 //! `fandhe_device::device_info`。
 //!

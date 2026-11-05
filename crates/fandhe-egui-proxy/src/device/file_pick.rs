@@ -1,6 +1,6 @@
 //! Phase 11（親 #871）型サンプル「ファイル選択」（Issue #872 / #873 / #874）の effect ドライバ。
 //! `fandhe_core::screens::file_pick`（端末依存ゼロ）の要求を観測し、結果を
-//! `CompletionSender` 経由で返す（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

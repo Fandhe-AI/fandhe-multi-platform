@@ -2,7 +2,7 @@
 // `MainActivity.backgroundTaskSchedule()` が `enqueueUniqueWork(...,
 // ExistingWorkPolicy.REPLACE, ...)` で予約する唯一の Worker クラス。
 //
-// プロセスが冷えた状態（Activity も fandhe_egui_proxy の cdylib も動いていない）で
+// プロセスが冷えた状態（Activity も fandhe_gallery の cdylib も動いていない）で
 // 起動されうるため、`android_main` 前提の JNI 経路
 // （`crate::android::android_app()`）は使えない。本クラスは Rust 側
 // `fandhe_device::background_task::RECORD_KEY`/`encode_record` と同じ形式・保存先

@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #1145）型サンプル「OS 搭載フォント」（Issue #1376）。
 //! 「一覧を取得」ボタンで端末にあるフォントのファミリー名を OS から 1 回読んで一覧にし、
 //! 「再取得」で読み直す 1 画面。`FANDHE_PROXY_APP=local_fonts_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod local_fonts_show;` と対）。範囲は名前の一覧のみで、選んで描画に
 //! 使うことは扱わない。
 //!

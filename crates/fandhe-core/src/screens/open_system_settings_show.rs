@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #171）型サンプル「OS の設定画面を開く」（Issue #798）。
 //! 自アプリの設定・通知の設定を開く 2 ボタンだけの 1 画面。
-//! `FANDHE_PROXY_APP=open_system_settings_show` で選ばれ、`crates/fandhe-egui-proxy/src/screens/
+//! `FANDHE_PROXY_APP=open_system_settings_show` で選ばれ、`crates/fandhe-gallery/src/screens/
 //! registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod open_system_settings_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの

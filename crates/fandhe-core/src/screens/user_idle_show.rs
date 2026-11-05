@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #125）型サンプル「無操作時間の検知」（Issue #631）。
-//! `FANDHE_PROXY_APP=user_idle_show` で選ばれ、`fandhe-egui-proxy` の `screens/registry.rs` の
+//! `FANDHE_PROXY_APP=user_idle_show` で選ばれ、`fandhe-gallery` の `screens/registry.rs` の
 //! `effect` 区画（native）と `fandhe-web-dom`（Web、#632）から呼ばれる。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。native は

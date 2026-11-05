@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #105）型サンプル「セーフエリア」（Issue #444）。
-//! `FANDHE_PROXY_APP=safe_area_insets_show` で選ばれ、`fandhe-egui-proxy` の
+//! `FANDHE_PROXY_APP=safe_area_insets_show` で選ばれ、`fandhe-gallery` の
 //! `screens/registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の
 //! `pub mod safe_area_insets_show;` と対）。Web は [`safe_area_insets_show_web_screen`] を
 //! `fandhe-web-dom` の mount が使う。

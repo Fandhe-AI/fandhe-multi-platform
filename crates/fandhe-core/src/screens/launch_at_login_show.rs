@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #134）型サンプル「ログイン時の自動起動」（Issue #696）。
 //! `FANDHE_PROXY_APP=launch_at_login_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod launch_at_login_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS の呼び出しと

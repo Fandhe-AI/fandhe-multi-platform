@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #180）型サンプル「ジャイロ・磁気・線形加速度」（Issue #898）。
 //! 「開始」「停止」の 1 組で 3 種類（角速度・磁場・線形加速度）の購読を始め・止め、3 行に現在値を出す。
-//! `FANDHE_PROXY_APP=motion_raw_sensors_show` で選ばれ、`fandhe-egui-proxy` の `screens/registry.rs` の
+//! `FANDHE_PROXY_APP=motion_raw_sensors_show` で選ばれ、`fandhe-gallery` の `screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod motion_raw_sensors_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は

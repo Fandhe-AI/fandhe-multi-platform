@@ -4,7 +4,7 @@ TASK-5.2（REQ-5 / REQ-6 実施後、Issue #237）のメモリ増分実機計測
 
 ## 位置づけ
 
-配布用アプリ（`platforms/android`、NativeActivity + `fandhe-egui-proxy` の cdylib）とは
+配布用アプリ（`platforms/android`、NativeActivity + `fandhe-gallery` の cdylib）とは
 **意図的に分離**した検証専用プロジェクト。`platforms/android/settings.gradle.kts` へは
 モジュールとして追加しない。debug 署名のみで、`INTERNET` 等の権限は要求しない
 （`.claude/rules/security.md` A05 対策）。

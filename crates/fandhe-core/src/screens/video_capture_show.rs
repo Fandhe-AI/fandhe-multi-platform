@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #169）型サンプル「動画の撮影」（Issue #821）。
 //! 撮影画面で動画を撮り、撮れた動画の長さ・寸法・ファイルサイズを表示する 1 画面。
 //! `FANDHE_PROXY_APP=video_capture_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod video_capture_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しは

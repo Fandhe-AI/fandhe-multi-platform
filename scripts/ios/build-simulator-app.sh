@@ -78,8 +78,8 @@ unset CDPATH
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
 repo_root="$(cd -- "${script_dir}/../.." >/dev/null 2>&1 && pwd -P)"
 
-package="fandhe-egui-proxy"
-bin_name="fandhe-egui-proxy-desktop"
+package="fandhe-gallery"
+bin_name="fandhe-gallery-desktop"
 app_name="FandheIosApp"
 target="${FANDHE_IOS_SIM_TARGET:-aarch64-apple-ios-sim}"
 profile="${FANDHE_IOS_PROFILE:-release}"

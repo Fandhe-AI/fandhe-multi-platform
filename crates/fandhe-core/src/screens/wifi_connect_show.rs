@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #165）型サンプル「指定した Wi-Fi への接続」（Issue #791）。
 //! SSID とパスワードを入力して「接続」を押すと、その Wi-Fi への接続を 1 回要求し、OS の結果を出す
-//! 1 画面。`FANDHE_PROXY_APP=wifi_connect_show` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! 1 画面。`FANDHE_PROXY_APP=wifi_connect_show` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod wifi_connect_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの置き場」節）。

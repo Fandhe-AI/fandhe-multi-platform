@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ型サンプル「ペン・筆圧で描く」（親 #95、Issue #355）。
 //! キャンバスをなぞると線が描かれ、ペンの筆圧で太さが変わる。ポインタの種類・筆圧・傾きを
-//! 3 行で表示する。`FANDHE_PROXY_APP=pen_draw` で選ばれ、`fandhe-egui-proxy` の
+//! 3 行で表示する。`FANDHE_PROXY_APP=pen_draw` で選ばれ、`fandhe-gallery` の
 //! `screens/registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod pen_draw;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。位置は

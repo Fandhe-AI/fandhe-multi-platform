@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ型サンプル「システムの色選択ダイアログ」（親 #184、Issue #941 (a)）の
 //! effect ドライバ。`fandhe_core::screens::color_picker_pick`（端末依存ゼロ）の要求を観測し、
-//! 結果を `CompletionSender` 経由で返す（`crate::screens::registry` の `effect` 区画から
+//! 結果を `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は
 //! `fandhe_device::color_picker` のモジュール doc。
 //!

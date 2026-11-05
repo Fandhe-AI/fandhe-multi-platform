@@ -1,7 +1,7 @@
 //! Phase 11（親 #187）型サンプル「人の在席・離席の検知」（Issue #960）の effect ドライバ。
 //! `fandhe_core::screens::human_presence_read`（端末依存ゼロ）の要求を観測し、
 //! `fandhe_device::human_presence::HumanPresence` で在席を 1 回読んで `CompletionSender` 経由で
-//! 結果を返す（`crate::screens::registry` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
+//! 結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約の SSOT は `fandhe_device::human_presence`。
 //!
 //! # スレッド

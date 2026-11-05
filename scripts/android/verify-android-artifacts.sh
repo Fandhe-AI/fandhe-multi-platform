@@ -12,7 +12,7 @@
 #
 # TASK-11.2-S4（REQ-11 / M3、Issue #228）: fandhe-egui-proxy（cdylib、TASK-1.5-S2）の
 # .so 検証を追加した（下記 PACKAGES 参照）。fandhe-core は rlib のみ、fandhe-egui-proxy は
-# 3 ABI 分の libfandhe_egui_proxy.so を検証する。cargo-ndk 呼び出しは package ごとに
+# 3 ABI 分の libfandhe_gallery.so を検証する。cargo-ndk 呼び出しは package ごとに
 # 対象成果物種別（rlib / so）が異なるため、本スクリプトの単一ループで両方を処理する
 # （新規スクリプトを並置しない）。
 #
@@ -80,21 +80,21 @@ command -v cargo-ndk >/dev/null 2>&1 || fail "cargo-ndk が見つかりません
 
 # 検証対象パッケージ・ABI・成果物名。
 # fandhe-core: 共通コア（#![forbid(unsafe_code)]・プラットフォーム非依存）の rlib のみ。
-# fandhe-egui-proxy: crate-type = ["cdylib", "rlib"]（TASK-1.5-S2）。Android 分岐は
+# fandhe-gallery: crate-type = ["cdylib", "rlib"]（TASK-1.5-S2。Issue #1165 で fandhe-egui-proxy から移した）。Android 分岐は
 # `android-activity` の NativeActivity 方式 + wgpu Backends::VULKAN 固定
-# （crates/fandhe-egui-proxy/src/android.rs）で cdylib（libfandhe_egui_proxy.so）を
+# （crates/fandhe-gallery/src/lib.rs の android_main）で cdylib（libfandhe_gallery.so）を
 # 生成する。--lib（後述 cargo ndk 呼び出し）を付けて `[[bin]]
-# fandhe-egui-proxy-desktop`（src/main.rs、native/デスクトップ向け。Android では
+# fandhe-gallery-desktop`（src/main.rs、native/デスクトップ向け。Android では
 # no-op 化済み、src/main.rs 冒頭コメント参照）をビルド対象から除外する。TASK-11.2-S4 で
 # `--lib` 無指定でも当該 bin は no-op 化により実際にはビルドが壊れないことを実機確認
 # 済みだが、本検証スクリプトは cdylib/rlib 成果物の生成確認のみが責務のため、対象外の
 # bin ビルドを含めない最小構成として --lib を明示する（設計判断）。
 # ここに新たな package を追加する場合は package_artifact_suffixes にも同名キーで
 # 対応する成果物種別（rlib / so、スペース区切りで複数可）を追加する。
-packages="fandhe-core fandhe-egui-proxy"
+packages="fandhe-core fandhe-gallery"
 declare -A package_artifact_suffixes=(
   [fandhe-core]="rlib"
-  [fandhe-egui-proxy]="so"
+  [fandhe-gallery]="so"
 )
 # ABI（cargo-ndk -t 引数）と rustup/cargo の triple の対応表。
 # triple 列は versions.env の RUST_ANDROID_TARGETS を単一の SSOT として参照する
@@ -118,7 +118,7 @@ cd "${repo_root}"
 # まとめる、の 3 段階で対策したが、CI runner の実 CI ではいずれも
 # `target/<triple>/release/libfandhe_core.rlib` が見つからない事象を解消できな
 # かった（fandhe-core は fandhe-egui-proxy の依存クレートでもあるため、直前の
-# ステップ（build-aab.sh の `-p fandhe-egui-proxy -o <jniLibs dir>` 呼び出し）が
+# ステップ（build-aab.sh の `-p fandhe-gallery -o <jniLibs dir>` 呼び出し）が
 # メインの `target/` に対して行った処理の影響を受けていると推測されるが、
 # CI runner 環境でしか再現せず、cargo・cargo-ndk 側の詳細な原因は
 # 特定できていない）。
@@ -184,6 +184,21 @@ for package in ${packages}; do
   done
 done
 
+# --- 固定シンボルの書き出し検証（Issue #1165） ---
+# `android_main`（android-activity が探す）と `Java_com_fandhe_platform_*`（JNI）は、cdylib を作る
+# fandhe-gallery の依存 rlib（fandhe-egui-proxy・fandhe-platform-android）が持つ。rlib のシンボルが
+# cdylib へ書き出されないと、起動時に UnsatisfiedLinkError / android_main 未解決で落ちるため、
+# ビルドが通ってもここで定義の有無を確かめる。
+llvm_nm="$(ls "${ANDROID_NDK_HOME}"/toolchains/llvm/prebuilt/*/bin/llvm-nm 2>/dev/null | head -n 1)"
+[ -n "${llvm_nm}" ] || fail "NDK の llvm-nm が見つかりません: ${ANDROID_NDK_HOME}"
+for triple in ${triples}; do
+  so="${verify_target_dir}/${triple}/${profile}/libfandhe_gallery.so"
+  symbols="$("${llvm_nm}" -D --defined-only "${so}")"
+  grep -q ' android_main$' <<<"${symbols}" || fail "${so} に android_main の定義がありません"
+  grep -q ' Java_com_fandhe_platform_' <<<"${symbols}" || fail "${so} に Java_com_fandhe_platform_* の定義がありません"
+  log "シンボル確認 OK: ${so}"
+done
+
 log "完了: ${triples}"
 
 # --- .aab 検証（--aab 指定時のみ） -------------------------------------------
@@ -193,7 +208,7 @@ log "完了: ${triples}"
 if [ "${aab}" -eq 1 ]; then
   gradle_project_dir="${repo_root}/platforms/android"
   aab_path="${gradle_project_dir}/app/build/outputs/bundle/release/app-release.aab"
-  lib_name="fandhe_egui_proxy"
+  lib_name="fandhe_gallery"
 
   if [ ! -f "${aab_path}" ]; then
     fail ".aab が見つかりません: ${aab_path}（先に bash scripts/android/build-aab.sh を実行してください）"

@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #1117）型サンプル「連絡先選択」（Issue #1220 macOS）の
 //! effect ドライバ。`fandhe_core::screens::contact_pick`（端末依存ゼロ）の要求を観測し、
-//! 結果を `CompletionSender` 経由で返す（`crate::screens::registry` の `effect` 区画から
+//! 結果を `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約本体は
 //! `fandhe_device::contact_picker` のモジュール doc。
 //!

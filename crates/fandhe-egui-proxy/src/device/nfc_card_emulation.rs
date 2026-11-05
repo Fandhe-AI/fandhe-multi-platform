@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #151、Issue #1128）型サンプル「NFC カードエミュレーション」の
 //! effect ドライバ。`fandhe_core::screens::nfc_card_emulation_show`（端末依存ゼロ）へ、
 //! `fandhe_device::nfc_card_emulation::CardEmulation` が読んだ HCE の状態と AID を注入する
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約）。
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる（`device.rs` モジュール doc と同じ）。
 //!

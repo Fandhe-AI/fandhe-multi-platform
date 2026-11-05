@@ -1,7 +1,7 @@
 //! Phase 11（親 #140、Issue #721）型サンプル「アラーム・正確な時刻の予約」の
 //! effect ドライバ。`fandhe_core::screens::alarm_show`（端末依存ゼロ）のボタン要求を
 //! 観測して `fandhe_device::alarm::Alarm` を呼び、`CompletionSender` 経由で結果を
-//! 返す（`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
+//! 返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
 //! として呼ばれる契約、`device/background_task.rs` と同型）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

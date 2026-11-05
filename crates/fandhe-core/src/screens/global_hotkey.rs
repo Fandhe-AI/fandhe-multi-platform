@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #150）型サンプル「グローバルホットキー」（Issue #766）。
 //! 固定のキー組み合わせ 1 つを「登録」ボタンで登録し、押されるたびに画面の回数を 1 増やす。
 //! 「解除」ボタンとアプリ終了で登録を外す。`FANDHE_PROXY_APP=global_hotkey` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod global_hotkey;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの

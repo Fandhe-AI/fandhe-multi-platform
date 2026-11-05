@@ -1,9 +1,9 @@
 //! `crates/fandhe-core/src/screens/` へ登録された画面を、端末アプリが実行時に
-//! 名前で選んで描画するためのレジストリ（Issue #715）。
+//! 名前で選んで描画するためのレジストリ（Issue #715。Issue #1165 で `fandhe-egui-proxy` から移した）。
 //!
 //! [`generated_screens!`] マクロで「画面名 → 画面ビルダー関数」を列挙し、[`build_app`] が
-//! 名前から [`crate::ProxyApp`]（型消去済み、[`crate::ProxyAppDyn`]）を構築する。
-//! 呼び出し元は `main.rs`（デスクトップ相当）・`web.rs`・`ios.rs`・`android.rs` の各エントリで、
+//! 名前から [`fandhe_egui_proxy::ProxyApp`]（型消去済み、[`fandhe_egui_proxy::ProxyAppDyn`]）を構築する。
+//! 呼び出し元は本 crate の `main.rs`（デスクトップ・iOS）・`lib.rs`（Android・Web）の各エントリで、
 //! 未登録名・未指定時は `None` を返し、呼び出し元が既定の `ProxyApp::<SampleState>::new`
 //! （sample 画面）へフォールバックする契約にする。
 //!
@@ -21,8 +21,8 @@
 ///
 /// `nav "名前" => パス::関数,`（`関数: fn(&S) -> Screen<S>`、Issue #726）の区画も併記できる。
 /// `ScreenStack<S>` のような状態駆動の画面遷移は固定 1 画面を保持できないため、
-/// [`crate::app::ProxyApp::with_screen_fn`] 経由で毎フレーム引き直す
-/// （`crate::app::ScreenSource::FromState` 参照。両区画で画面名が重複しなければ併記可能）。
+/// [`fandhe_egui_proxy::app::ProxyApp::with_screen_fn`] 経由で毎フレーム引き直す
+/// （`fandhe_egui_proxy::app::ScreenSource::FromState` 参照。両区画で画面名が重複しなければ併記可能）。
 ///
 /// `init "名前" => 画面ビルダー, 状態ファクトリ,`（Issue #747）の区画は状態を
 /// `Default::default()` ではなく明示的な状態ファクトリ（`fn() -> S`）から構築したい
@@ -32,9 +32,9 @@
 ///
 /// `effect "名前" => パス::current_screen , パス::driver ,`（Issue #748/#749）の区画は
 /// `nav` の後に併記できる。`current_screen: fn(&S) -> Screen<S>` は `nav` 区画と同じ
-/// 状態駆動画面で、`driver: fn(&S, &CompletionSender<S>)`（[`crate::app::EffectFn`]）を
+/// 状態駆動画面で、`driver: fn(&S, &CompletionSender<S>)`（[`fandhe_egui_proxy::app::EffectFn`]）を
 /// `ProxyApp::with_effect` 経由で追加配線する（画面のボタン → 端末 I/O 起動、
-/// `crate::app::ProxyApp::update` のフレーム末尾から毎フレーム呼ばれる）。同区画には
+/// `fandhe_egui_proxy::app::ProxyApp::update` のフレーム末尾から毎フレーム呼ばれる）。同区画には
 /// 複数行を並べてよい（HTTP 取得・カメラ撮影のように独立した状態駆動画面を並記する
 /// 用途、Issue #749）。
 ///
@@ -83,51 +83,51 @@ macro_rules! generated_screens {
         pub fn build_app(
             name: &str,
             ctx: &egui::Context,
-        ) -> Option<Box<dyn $crate::app::ProxyAppDyn>> {
+        ) -> Option<Box<dyn fandhe_egui_proxy::app::ProxyAppDyn>> {
             match name {
                 $(
                     $(#[$attr])*
                     $name => {
                         let screen = $builder();
-                        Some(Box::new($crate::app::ProxyApp::with_screen(
+                        Some(Box::new(fandhe_egui_proxy::app::ProxyApp::with_screen(
                             ctx,
                             screen,
                             Default::default(),
-                        )) as Box<dyn $crate::app::ProxyAppDyn>)
+                        )) as Box<dyn fandhe_egui_proxy::app::ProxyAppDyn>)
                     }
                 )*
                 $(
                     $(#[$nav_attr])*
                     $nav_name => {
-                        Some(Box::new($crate::app::ProxyApp::with_screen_fn(
+                        Some(Box::new(fandhe_egui_proxy::app::ProxyApp::with_screen_fn(
                             ctx,
                             $current,
                             Default::default(),
-                        )) as Box<dyn $crate::app::ProxyAppDyn>)
+                        )) as Box<dyn fandhe_egui_proxy::app::ProxyAppDyn>)
                     }
                 )*
                 $(
                     $(#[$init_attr])*
                     $init_name => {
                         let screen = $init_builder();
-                        Some(Box::new($crate::app::ProxyApp::with_screen(
+                        Some(Box::new(fandhe_egui_proxy::app::ProxyApp::with_screen(
                             ctx,
                             screen,
                             $init_state(),
-                        )) as Box<dyn $crate::app::ProxyAppDyn>)
+                        )) as Box<dyn fandhe_egui_proxy::app::ProxyAppDyn>)
                     }
                 )*
                 $(
                     $(#[$fx_attr])*
                     $fx_name => {
                         Some(Box::new(
-                            $crate::app::ProxyApp::with_screen_fn(
+                            fandhe_egui_proxy::app::ProxyApp::with_screen_fn(
                                 ctx,
                                 $fx_current,
                                 Default::default(),
                             )
                             .with_effect($fx_driver),
-                        ) as Box<dyn $crate::app::ProxyAppDyn>)
+                        ) as Box<dyn fandhe_egui_proxy::app::ProxyAppDyn>)
                     }
                 )*
                 _ => None,
@@ -138,20 +138,6 @@ macro_rules! generated_screens {
 
 mod registry;
 pub use registry::{build_app, registered_names};
-
-/// 描画対象の画面名を解決する（Issue #715）。
-///
-/// 実行時 `FANDHE_PROXY_APP` を優先し、未設定（または空文字列）ならビルド時
-/// `option_env!` を見る（wasm32 / Android 等、実行時の環境変数注入手段が乏しいターゲット向け。
-/// Android はさらに `adb shell setprop` 経由のフォールバック（`debug-proxy-app` feature 有効時のみ）を
-/// `android.rs` 側で本関数の後段に持つ）。固定文字列との比較のみに使い、パス・コマンド・クエリへは
-/// 展開しない（A03 インジェクション対策、security.md 準拠）。
-pub fn selected_app_name() -> Option<String> {
-    std::env::var("FANDHE_PROXY_APP")
-        .ok()
-        .filter(|value| !value.is_empty())
-        .or_else(|| option_env!("FANDHE_PROXY_APP").map(str::to_string))
-}
 
 #[cfg(test)]
 mod tests {
@@ -389,7 +375,11 @@ mod tests {
             fandhe_core::Screen::new("dummy")
         }
 
-        fn dummy_driver(_state: &DummyState, _sender: &crate::app::CompletionSender<DummyState>) {}
+        fn dummy_driver(
+            _state: &DummyState,
+            _sender: &fandhe_egui_proxy::app::CompletionSender<DummyState>,
+        ) {
+        }
 
         generated_screens! {
             effect

@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #182）型サンプル「ファイル・動画のプレビューとサムネイル」
 //! （Issue #917）の effect ドライバ。`fandhe_core::screens::file_preview_show`（端末依存ゼロ）の
 //! 要求を観測し、サムネイルはワーカースレッドで `fandhe_device::file_preview::FileThumbnailer` を、
-//! プレビューは各 OS の `present` を呼ぶ（`crate::screens::registry` の `effect` 区画から
+//! プレビューは各 OS の `present` を呼ぶ（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・
 //! 期限・守る範囲）の SSOT は `fandhe_device::file_preview`。
 //!

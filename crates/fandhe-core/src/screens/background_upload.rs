@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #170、Issue #835）型サンプル「バックグラウンド送信」。
 //! 「送信を始める」「取り消し」の 2 ボタンと状態 1 行を持つ 1 画面。`FANDHE_PROXY_APP=background_upload`
-//! で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod background_upload;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは `fandhe-egui-proxy` の

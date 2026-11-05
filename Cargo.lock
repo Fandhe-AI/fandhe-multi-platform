@@ -1128,6 +1128,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-gallery"
+version = "0.1.0"
+dependencies = [
+ "egui",
+ "fandhe-core",
+ "fandhe-egui-proxy",
+ "fandhe-platform-apple",
+ "fandhe-render-egui",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "fandhe-platform-android"
 version = "0.2.0"
 dependencies = [

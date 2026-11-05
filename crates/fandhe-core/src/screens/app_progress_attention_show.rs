@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #174）型サンプル「Dock・タスクバーの進捗表示と注意喚起」
 //! （Issue #860）。進捗（0〜100 %）の入力欄と「設定する」「消す」、注意喚起の「背面に回ったら
 //! 注意を引く」「取り消す」だけの 1 画面。`FANDHE_PROXY_APP=app_progress_attention_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod app_progress_attention_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md` の制約どおり）。

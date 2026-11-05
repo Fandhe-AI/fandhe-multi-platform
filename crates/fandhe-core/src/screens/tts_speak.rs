@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #864）型サンプル「読み上げ」（Issue #865）。
 //! 入力欄 + 「読み上げ」→ OS の音声合成で発話、「停止」→ 発話を止める 1 画面。
 //! `FANDHE_PROXY_APP=tts_speak` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod tts_speak;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

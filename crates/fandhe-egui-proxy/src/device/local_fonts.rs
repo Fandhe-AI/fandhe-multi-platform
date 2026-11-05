@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #1145）型サンプル「OS 搭載フォント」（Issue #1376）の effect ドライバ。
 //! `fandhe_core::screens::local_fonts_show`（端末依存ゼロ）の要求を `take_request` で観測し、
 //! `fandhe_device::local_fonts::LocalFonts` を呼んで、結果を `CompletionSender` 経由で注入する
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる
 //! 契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::local_fonts`。
 //!
 //! # OS 別実装の差し込み口

@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #1093）型サンプル「単語分割」（Issue #1094）。
 //! 入力欄 + 「分割」ボタン → OS の単語分割を呼び、件数と一覧（または失敗）を表示する 1 画面。
-//! `FANDHE_PROXY_APP=nlp_segment` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=nlp_segment` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod nlp_segment;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

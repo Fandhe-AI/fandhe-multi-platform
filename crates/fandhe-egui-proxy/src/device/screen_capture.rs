@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #1135、Issue #1335）: 画面の録画・キャプチャの effect ドライバ。
 //! `fandhe_core::screens::screen_capture`（端末依存ゼロ）の要求を観測し、OS の録画エンジン
 //! （`fandhe_device::screen_capture::ScreenCapturer`）へ依頼して、結果を状態機械へ書き戻す
-//! （`crate::screens::registry` の `effect` 区画から呼ばれる、`app::EffectFn` 参照）。
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる、`app::EffectFn` 参照）。
 //! 契約（三値・守る範囲）の SSOT は `fandhe_device::screen_capture` のモジュール doc。
 //!
 //! # 4 OS は pull 型、それ以外は同期

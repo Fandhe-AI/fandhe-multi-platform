@@ -3,7 +3,7 @@
 //! myIme 設定画面が要する「辞書を複数選んでオン・オフする」形の実証。
 //!
 //! `FANDHE_PROXY_APP=checkbox-list` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` から呼び出されるほか、
+//! `crates/fandhe-gallery/src/screens/registry.rs` から呼び出されるほか、
 //! `crates/fandhe-web-dom/src/demo.rs` の `mount_checkbox_list_screen` からも
 //! 同じ [`checkbox_list_screen`] を使う（`screens/mod.rs` の `pub mod checkbox_list;` と対）。
 //!
@@ -162,7 +162,7 @@ pub fn summary(state: &CheckboxListState) -> String {
     format!("有効: {count} / {DICTIONARY_COUNT} 件（{joined}）")
 }
 
-/// チェックボックス一覧画面を組み立てる。`crates/fandhe-egui-proxy/src/screens/registry.rs`
+/// チェックボックス一覧画面を組み立てる。`crates/fandhe-gallery/src/screens/registry.rs`
 /// から `FANDHE_PROXY_APP=checkbox-list` で、`fandhe-web-dom` の
 /// `mount_checkbox_list_screen` から Web で、それぞれ呼び出される公開エントリポイント。
 pub fn checkbox_list_screen() -> Screen<CheckboxListState> {
