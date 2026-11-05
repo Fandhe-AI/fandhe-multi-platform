@@ -248,13 +248,6 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/AppTheme">
 
-        <!-- パッケージ移動前に登録済みのショートカット（AppShortcutsHelper.install）が指す旧名の起動先。
-             旧名のまま新 MainActivity を起動できるようにする互換用 alias。 -->
-        <activity-alias
-            android:name="com.fandhe.androidapp.MainActivity"
-            android:targetActivity="com.fandhe.platform.MainActivity"
-            android:exported="true" />
-
         <activity
             android:name="com.fandhe.platform.MainActivity"
             android:exported="true"
@@ -312,6 +305,13 @@
             </intent-filter>
         </activity>
 
+        <!-- パッケージ移動前に登録済みのショートカット（AppShortcutsHelper.install）が指す旧名の起動先。
+             旧名のまま新 MainActivity を起動できる互換用 alias。targetActivity より後ろに置く必要がある。 -->
+        <activity-alias
+            android:name="com.fandhe.androidapp.MainActivity"
+            android:targetActivity="com.fandhe.platform.MainActivity"
+            android:exported="true" />
+
         <!-- Issue #1337: 画面録画の MediaProjection を持つ。自アプリの明示 Intent だけで起動する
              ため exported=false。切り離し時に削除する。 -->
         <service
@@ -363,7 +363,7 @@
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/home_widget_info" />
+                android:resource="@xml/home_widget_info_legacy" />
         </receiver>
         <receiver
             android:name="com.fandhe.platform.HomeWidgetProvider"
