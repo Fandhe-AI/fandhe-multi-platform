@@ -15,7 +15,7 @@ import androidx.core.app.NotificationCompat;
 // アラーム（Issue #1078）の時刻に `AlarmHelper` の PendingIntent から起こされ、アラーム用チャンネルの
 // 通知を鳴らすだけの受け口。exported=false・intent-filter なし。自アプリの明示 Intent
 // （FLAG_IMMUTABLE）だけが届き、extras は読まない。Activity の生死とは無関係に動く。
-public class AlarmReceiverextends BroadcastReceiver {
+public class AlarmReceiver extends BroadcastReceiver {
     private static final int NOTIFICATION_ID = 1078;
 
     @Override
