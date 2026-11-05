@@ -14,7 +14,7 @@ publish = false
 # ストア提出物に混ざらない（security.md A05）。
 [features]
 default = ["device"]
-device = ["fandhe-egui-proxy/device", "dep:fandhe-cap-camera-capture"]
+device = ["fandhe-egui-proxy/device", "dep:fandhe-cap-camera-capture", "dep:fandhe-cap-nfc-card-emulation"]
 frame-metrics = ["fandhe-egui-proxy/frame-metrics"]
 cold-start-probe = ["fandhe-egui-proxy/cold-start-probe"]
 debug-proxy-app = ["fandhe-egui-proxy/debug-proxy-app"]
@@ -46,6 +46,7 @@ egui = { workspace = true }
 # 画面の effect ドライバとして使う。wasm32 の Web 実装は `fandhe-web-dom` 側のため入れない。
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
+fandhe-cap-nfc-card-emulation = { path = "../fandhe-cap-nfc-card-emulation", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { workspace = true }

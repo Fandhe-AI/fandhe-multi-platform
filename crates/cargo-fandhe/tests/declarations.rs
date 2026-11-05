@@ -918,7 +918,7 @@ fn macos_services_and_widget_extension_match_current_settings() {
 }
 
 #[test]
-fn android_java_dirs_of_feature_crates_are_in_gradle_sources() {
+fn android_java_and_res_dirs_of_feature_crates_are_in_gradle_sources() {
     let gradle = repo("platforms/android/app/build.gradle.kts");
     for id in IDS {
         let crate_dir = format!("crates/fandhe-cap-{id}");
@@ -929,11 +929,16 @@ fn android_java_dirs_of_feature_crates_are_in_gradle_sources() {
         {
             continue;
         }
-        for dir in declared(id).android.map(|a| a.java).unwrap_or_default() {
-            assert!(
-                gradle.contains(&format!("{crate_dir}/{dir}")),
-                "{id}: java {dir} が build.gradle.kts の srcDirs にない"
-            );
+        let Some(android) = declared(id).android else {
+            continue;
+        };
+        for (kind, dirs) in [("java", android.java), ("res", android.res)] {
+            for dir in dirs {
+                assert!(
+                    gradle.contains(&format!("{crate_dir}/{dir}")),
+                    "{id}: {kind} {dir} が build.gradle.kts の srcDirs にない"
+                );
+            }
         }
     }
 }

@@ -952,7 +952,7 @@ public class MainActivity extends GameActivity {
     }
 
     // NFC カードエミュレーション（Issue #1129）。実装は `NfcCardEmulationHelper`。Rust の
-    // `android_nfc_card_emulation.rs` が JNI（署名 `(Ljava/lang/String;)[J`）で呼ぶ。
+    // `crates/fandhe-cap-nfc-card-emulation/src/android.rs` が JNI（署名 `(Ljava/lang/String;)[J`）で呼ぶ。
     long[] nfcCardEmulationStatus(String aid) {
         return NfcCardEmulationHelper.status(getApplicationContext(), aid);
     }
