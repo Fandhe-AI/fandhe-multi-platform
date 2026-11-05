@@ -75,6 +75,10 @@ android {
             // 対象範囲外の API 移行としてここでは非推奨警告を許容する）。
             @Suppress("DEPRECATION")
             jniLibs.srcDirs("../../../target/android/jniLibs")
+            // 機能 crate が持つ Java（宣言の `java` パスと一致させる）。手書きの Gradle 設定は
+            // 生成へ置き換わる（#1194）までの併存。TASK-21.3 / Issue #1171: document-scan。
+            @Suppress("DEPRECATION")
+            java.srcDir("../../../crates/fandhe-cap-document-scan/android/java")
         }
     }
 

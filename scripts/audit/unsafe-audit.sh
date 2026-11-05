@@ -74,7 +74,10 @@ cd -- "${REPO_ROOT}"
 # fandhe-gallery: クレートルートは Android のみ `deny(unsafe_code)` で、`android_main` の
 # `#[no_mangle]` 1 関数にだけ `#[allow(unsafe_code)]` を付ける（android-activity の固定シンボルは
 # 最終成果物の cdylib が持つ必要がある。Issue #1165）。
-FORBID_EXEMPT_CRATES=("fandhe-gallery" "fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android" "fandhe-platform-apple")
+# fandhe-cap-document-scan: クレートルートは iOS・Android のみ `deny(unsafe_code)`（それ以外の OS は
+# forbid）。iOS の FFI（`ios.rs`）と Android の JNI エクスポート（`android.rs`）にだけ SAFETY 付きで
+# `allow` を付ける（機能 crate に OS 実装を持たせるため。TASK-21.3 / Issue #1171）。
+FORBID_EXEMPT_CRATES=("fandhe-gallery" "fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android" "fandhe-platform-apple" "fandhe-cap-document-scan")
 
 is_forbid_exempt() {
   local target="$1"

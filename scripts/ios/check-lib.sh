@@ -29,4 +29,4 @@ rustup target add "${target}" >/dev/null
 echo "[check-lib:ios] 検査対象: ${repo_root}"
 # --all-features は計測 feature がコードを外すため使わない（既定の device を検査する）。
 # fandhe-platform-apple は iOS 専用の `is_main_thread`（unsafe）を持つため、同じターゲットで検査する。
-cargo clippy --locked -p fandhe-gallery -p fandhe-egui-proxy -p fandhe-render-egui -p fandhe-platform-apple --lib --target "${target}" -- -D warnings
+cargo clippy --locked -p fandhe-gallery -p fandhe-egui-proxy -p fandhe-render-egui -p fandhe-platform-apple -p fandhe-cap-document-scan --lib --target "${target}" -- -D warnings

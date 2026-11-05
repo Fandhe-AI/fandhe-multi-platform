@@ -145,13 +145,13 @@ identity = true
 
 ## 6. 現行設定との突き合わせ
 
-先行 5 機能（`crates/cargo-fandhe/tests/fixtures/*.toml`）の宣言を、現行の設定と突き合わせました（#1161、REQ-21 / TASK-21.2）。`crates/cargo-fandhe/tests/declarations.rs` の「現行設定との突き合わせ」節が、次を毎回の `cargo test` で確かめます。
+先行 5 機能の宣言（機能 crate へ移した分は `crates/fandhe-cap-*/Cargo.toml`、未移行は `crates/cargo-fandhe/tests/fixtures/*.toml`。document-scan は #1171 で移行済み）を、現行の設定と突き合わせました（#1161、REQ-21 / TASK-21.2）。`crates/cargo-fandhe/tests/declarations.rs` の「現行設定との突き合わせ」節が、次を毎回の `cargo test` で確かめます。
 
 | 宣言 | 比較先 |
 |------|-------|
 | Android の権限・feature・コンポーネント・MainActivity の intent-filter | `platforms/android/app/src/main/AndroidManifest.xml`（属性・filter・meta-data の過不足を含む）。camera の feature 群、HCE の feature 群、`ACTION_SEND` の filter は逆方向も確かめる |
 | Gradle の版 | `build.gradle.kts` の `androidVersion("KEY")` を辿り、`scripts/android/versions.env` の値と一致 |
-| iOS の `usage-descriptions`・`frameworks` | `FandheIosApp/Resources/Info.plist` のキー、`fandhe-egui-proxy/build.rs` のリンク指定 |
+| iOS の `usage-descriptions`・`frameworks` | `FandheIosApp/Resources/Info.plist` のキー、機能 crate があればその `build.rs`、無ければ `fandhe-egui-proxy/build.rs` のリンク指定 |
 | macOS の `NSServices` | `scripts/apple/bundle-macos-url-scheme.sh` の JSON |
 | macOS の Widget 拡張 | `platforms/apple/project.yml`、entitlements、拡張の `Info.plist`、Swift の `import` |
 
@@ -163,7 +163,7 @@ identity = true
 |------|----------------------|-----------|
 | `android.hardware.nfc` | `nfc`（タグ読み取り）の宣言で、HCE の宣言ではない | 対象外 |
 | `androidx.activity`・`androidx.core` | MainActivity が直接 import する共通依存 | #1166 |
-| `GmsAvailability.java` | document-scan 以外の GMS 機能も使う共有コード | #1166・#1171 |
+| `GmsAvailability.java` | document-scan 以外の GMS 機能も使う共有コード。`platforms/android/app` に共有のまま残す | #1183 |
 | UIKit・Foundation・CoreGraphics | 全機能の基盤リンクで機能固有ではない | #1168 |
 | `NSPortName` | 宣言は `$(EXECUTABLE_NAME)`、スクリプトは実行体名へ置換。同じ意味 | #1176 で展開方法を決める |
 | `FandheWidgetHost` | 素の実行体に拡張を載せるホストアプリ。生成では利用者の `.app` が親になる | #1174・#1176 |

@@ -14,7 +14,7 @@ publish = false
 # ストア提出物に混ざらない（security.md A05）。
 [features]
 default = ["device"]
-device = ["fandhe-egui-proxy/device"]
+device = ["fandhe-egui-proxy/device", "dep:fandhe-cap-document-scan"]
 frame-metrics = ["fandhe-egui-proxy/frame-metrics"]
 cold-start-probe = ["fandhe-egui-proxy/cold-start-probe"]
 debug-proxy-app = ["fandhe-egui-proxy/debug-proxy-app"]
@@ -41,6 +41,10 @@ fandhe-core = { path = "../fandhe-core" }
 fandhe-egui-proxy = { path = "../fandhe-egui-proxy", default-features = false }
 fandhe-render-egui = { path = "../fandhe-render-egui" }
 egui = { workspace = true }
+
+# TASK-21.3（Issue #1171）: 機能 crate。feature `device` のときだけ依存に足す（wasm32 は対象外）。
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+fandhe-cap-document-scan = { path = "../fandhe-cap-document-scan", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { workspace = true }

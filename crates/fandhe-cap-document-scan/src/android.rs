@@ -1,13 +1,13 @@
 //! Android 向け書類スキャン（ML Kit Document Scanner、親 #145、Issue #1125。契約は
-//! `fandhe_device::document_scan`）。`device/document_scan.rs` の Android 経路（dispatch）から
+//! crate ルート `lib.rs`）。`driver.rs` の Android 経路（dispatch）から
 //! [`implementation`] が呼ばれる。Java 側 `DocumentScanHelper` が Google Play services の撮影 UI を出し、
 //! 1 ページ目を長辺 2048 以下の JPEG にして返す。
 //!
 //! 流れ: `scan` → JNI `MainActivity.requestDocumentScan(id, maxBytes)` → Java が UI スレッドで前面・
 //! Google Play services を確認し、撮影 UI の起動直前に `nativeTryBeginPresent`（本ファイルの export が
-//! `document_scan::try_begin_present` を呼ぶ）で期限切れ・差し替えと排他にする → 結果を worker で JPEG 化し
+//! `driver::try_begin_present` を呼ぶ）で期限切れ・差し替えと排他にする → 結果を worker で JPEG 化し
 //! ページのファイルを消してから `nativeOnDocumentScanResult(id, kind, pageCount, jpeg)` →
-//! [`map_result`] が契約の結果へ写して `document_scan::complete_from_os` へ 1 回だけ渡す。
+//! [`map_result`] が契約の結果へ写して `driver::complete_from_os` へ 1 回だけ渡す。
 //!
 //! 結果コードの写像（Java `DocumentScanHelper.KIND_*` と同じ値）: `KIND_SCANNED` は
 //! `ScannedPage::from_os`（1 段目の検査）を通した成功、`KIND_CANCELLED` は `Ok(Cancelled)`、
@@ -17,18 +17,16 @@
 //! 上限バイト数は `MAX_PAGE_BYTES` を正とし、Java へ引数で渡す（複製しない）。
 //!
 //! 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止・Activity 再生成時の旧要求の破棄
-//! （`android.rs` が `reset_pending_tracking` を呼ぶ）と、旧要求のページファイルの削除。
+//! （アプリの `android_main` が `reset_pending_tracking` を呼ぶ）と、旧要求のページファイルの削除。
 //! 守らない範囲: 2 ページ目以降・PDF・撮影 UI の表示中のプロセス死・複数プロセス・初回のモジュール
 //! ダウンロードが期限（10 秒）を超えること。画像と OS の文言はログに出さない。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `requestDocumentScan` を経た後でしか呼ばれない
-//! （`android_companion_device.rs` と同じ判断）。
+//! （他の Android 機能と同じ判断）。
 
 use std::sync::Arc;
 
-use fandhe_device::document_scan::{
-    DocumentScanFailure, DocumentScanOutcome, DocumentScanner, ScannedPage,
-};
+use crate::{DocumentScanFailure, DocumentScanOutcome, DocumentScanner, ScannedPage};
 
 /// 結果コード（Java 側 `DocumentScanHelper.KIND_*` と対）。
 const KIND_SCANNED: i32 = 0;
@@ -86,36 +84,20 @@ impl DocumentScanner for AndroidDocumentScanner {
 
 #[cfg(target_os = "android")]
 mod imp {
-    use fandhe_device::document_scan::MAX_PAGE_BYTES;
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity};
     use jni::objects::JValue;
 
-    use super::super::android::JniCallFailed;
     use super::DocumentScanFailure;
+    use crate::MAX_PAGE_BYTES;
 
-    /// `MainActivity` のメソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`（呼び出しの例外は握る）。
-    #[allow(unsafe_code)]
-    fn call_activity<T>(
-        f: impl FnOnce(&mut jni::Env, &jni::objects::JObject) -> Result<T, JniCallFailed>,
-    ) -> Option<T> {
-        let app = crate::android::android_app()?;
-        // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-        // `app` は本呼び出しの間生存する。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-        vm.attach_current_thread(|env: &mut jni::Env| -> Result<T, JniCallFailed> {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-            let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-            f(env, &activity)
-        })
-        .ok()
-    }
-
+    /// 受理は `MainActivity.requestDocumentScan` を呼ぶところまで。Activity 未確立は `NotForeground`、
+    /// JNI 失敗（呼び出しの例外を含む）は `Internal`。
     pub(super) fn scan(id: u64) -> Result<(), DocumentScanFailure> {
-        if crate::android::android_app().is_none() {
+        let Some(app) = android_app() else {
             return Err(DocumentScanFailure::NotForeground);
-        }
+        };
         let max_bytes = i32::try_from(MAX_PAGE_BYTES).unwrap_or(i32::MAX);
-        call_activity(|env, a| {
+        with_activity(&app, |env, a| -> Result<(), JniCallFailed> {
             env.call_method(
                 a,
                 jni::jni_str!("requestDocumentScan"),
@@ -124,7 +106,7 @@ mod imp {
             )?;
             Ok(())
         })
-        .ok_or(DocumentScanFailure::Internal)
+        .map_err(|_| DocumentScanFailure::Internal)
     }
 }
 
@@ -148,7 +130,7 @@ mod imp {
 /// （既存の JNI エクスポートと同じ根拠）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_DocumentScanHelper_nativeTryBeginPresent<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -156,7 +138,7 @@ extern "system" fn Java_com_fandhe_platform_DocumentScanHelper_nativeTryBeginPre
 ) -> jni::sys::jboolean {
     // JVM 境界を越えて panic させない（`with_env` が `catch_unwind` 済み）。
     let outcome = unowned_env.with_env(|_env| -> Result<bool, jni::errors::Error> {
-        Ok(super::document_scan::try_begin_present(request_id as u64))
+        Ok(crate::driver::try_begin_present(request_id as u64))
     });
     matches!(outcome.into_outcome(), jni::Outcome::Ok(true))
 }
@@ -171,7 +153,7 @@ extern "system" fn Java_com_fandhe_platform_DocumentScanHelper_nativeTryBeginPre
 /// 既存の JNI エクスポートと同じ根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_DocumentScanHelper_nativeOnDocumentScanResult<
     'caller,
 >(
@@ -186,21 +168,18 @@ extern "system" fn Java_com_fandhe_platform_DocumentScanHelper_nativeOnDocumentS
         let mut kind = kind;
         let bytes = if jpeg.is_null() {
             None
-        } else if jpeg.len(env)? > fandhe_device::document_scan::MAX_PAGE_BYTES {
+        } else if jpeg.len(env)? > crate::MAX_PAGE_BYTES {
             kind = KIND_TOO_LARGE;
             None
         } else {
             Some(env.convert_byte_array(&jpeg)?)
         };
-        super::document_scan::complete_from_os(
-            request_id as u64,
-            map_result(kind, page_count, bytes),
-        );
+        crate::driver::complete_from_os(request_id as u64, map_result(kind, page_count, bytes));
         Ok(())
     });
     let _ = outcome.into_outcome();
     // 入力が無いと egui が描画せず「処理中」で止まるため次フレームを起こす。
-    crate::android::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]
@@ -259,7 +238,7 @@ mod tests {
             Err(F::Undecodable)
         );
         let mut big = PNG_HEAD.to_vec();
-        big.resize(fandhe_device::document_scan::MAX_PAGE_BYTES + 1, 0);
+        big.resize(crate::MAX_PAGE_BYTES + 1, 0);
         assert_eq!(map_result(KIND_SCANNED, 1, Some(big)), Err(F::TooLarge));
         for head in [PNG_HEAD.to_vec(), JPEG_HEAD.to_vec()] {
             let Ok(DocumentScanOutcome::Scanned(p)) = map_result(KIND_SCANNED, 3, Some(head))

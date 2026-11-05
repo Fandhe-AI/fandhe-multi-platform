@@ -5,12 +5,12 @@
 //! （`screens/mod.rs` の `pub mod document_scan_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は
-//! 本モジュール外（`fandhe-egui-proxy` の `device/document_scan.rs`）が [`take_request`] で要求を
+//! 本モジュール外（機能 crate `fandhe-cap-document-scan` の `src/driver.rs`）が [`take_request`] で要求を
 //! 観測し、[`mark_running`]・[`finish_scan`] で状態を進める。全対象 OS の分の状態・文言は
 //! ここで定義するため、OS 別の子 issue（#748・#1125）は対応 OS の案内文（`IDLE_HINT`）以外このファイルを触らない。
 //!
 //! キャンセルは失敗ではなく状態として出す（契約表 10）。画像の中身と OS のエラー文は
-//! エラー文に含めない（契約表 8）。画像の画素は持たず、`image_store` への識別子だけを持つ。
+//! エラー文に含めない（契約表 8）。画像の画素は持たず、`fandhe_runtime::image_store` への識別子だけを持つ。
 //!
 //! ```text
 //! Idle --ボタン--> Requested (generation += 1, 前回の結果を消す)
@@ -80,7 +80,7 @@ pub struct ShownPage {
     pub page_count: u32,
 }
 
-/// スキャンできなかった理由（`fandhe_device::document_scan::DocumentScanFailure` から写す責務は
+/// スキャンできなかった理由（`fandhe_cap_document_scan::DocumentScanFailure` から写す責務は
 /// effect 側）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreFailure {

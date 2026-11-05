@@ -1,8 +1,8 @@
-//! iOS 向け書類スキャン実装（親 #145、Issue #748）。`device/document_scan.rs` の iOS 経路（dispatch）から
+//! iOS 向け書類スキャン実装（親 #145、Issue #748）。`driver.rs` の iOS 経路（dispatch）から
 //! [`implementation`] が呼ばれ、`ios/fandhe_ios_document_scan.m`（VisionKit
-//! `VNDocumentCameraViewController`。`build.rs` が feature `device` 有効時にコンパイルして VisionKit を
+//! `VNDocumentCameraViewController`。本 crate の `build.rs` が iOS のときにコンパイルして VisionKit を
 //! リンクする）を `unsafe extern "C"` で呼ぶ。`unsafe` はこの FFI 宣言と受け口に閉じ、各所に
-//! `// SAFETY:` を書く（coding-rust.md の FFI 例外規定）。契約の SSOT は `fandhe_device::document_scan`。
+//! `// SAFETY:` を書く（coding-rust.md の FFI 例外規定）。契約の SSOT は crate ルート（`lib.rs`）。
 //!
 //! 期限（撮影 UI を出すまでの 10 秒）・世代照合・二重完了の破棄・画像の復号検査は effect ドライバの
 //! `bridge` が担い、ここは撮影 UI の表示依頼・結果の受け取り・完了コードの写像だけをする。
@@ -11,7 +11,7 @@
 //! - 表示直前（権限ダイアログより前）に `try_begin_present` で現在の要求かを確かめ、期限切れ後は
 //!   表示しない（2・3）。
 //! - 完了は `.m` が撮影 UI を閉じた後に 1 回だけ渡す。受け口は結果を渡した直後に
-//!   `crate::ios::request_repaint` で次フレームを起こす（4・5）。
+//!   `fandhe_runtime::request_repaint` で次フレームを起こす（4・5）。
 //! - 非対応・権限拒否・0 ページ・内部エラー・未知のコードは成功に畳まない（6）。キャンセルは失敗にしない（10）。
 //! - 画像は受け口の中で上限を確かめてからコピーし、ポインタを保持しない（9）。
 //! - 画像の中身・OS のエラー文はログに出さない（8）。新しい権限・依存は足さない。
@@ -21,14 +21,12 @@
 
 use std::sync::Arc;
 
-use fandhe_device::document_scan::{
-    DocumentScanFailure, DocumentScanOutcome, DocumentScanner, ScannedPage,
-};
+use crate::{DocumentScanFailure, DocumentScanOutcome, DocumentScanner, ScannedPage};
 
-#[cfg(not(target_os = "ios"))]
-use fandhe_device::document_scan::UnsupportedDocumentScanner;
 #[cfg(target_os = "ios")]
-use fandhe_device::document_scan::MAX_PAGE_BYTES;
+use crate::MAX_PAGE_BYTES;
+#[cfg(not(target_os = "ios"))]
+use crate::UnsupportedDocumentScanner;
 
 // SAFETY: `ios/fandhe_ios_document_scan.m` が定義する C ABI。契約は `.m` ファイル冒頭コメントに集約する。
 #[cfg(target_os = "ios")]
@@ -102,11 +100,15 @@ pub(crate) fn implementation() -> Arc<dyn DocumentScanner> {
 }
 
 /// `.m` が撮影 UI を出す直前に呼ぶ。1 = 表示してよい、0 = 表示しない（期限切れ・古い要求）。
+///
+/// # Safety
+/// 引数は値渡しの `u64` のみでポインタを受けない。`unsafe` 操作を含まず、`unsafe(no_mangle)` は
+/// `.m` が参照する固定シンボル名のためだけに必要（本 crate の iOS リンク単位で重複しない）。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_document_scan_try_begin_present(request_id: u64) -> i32 {
-    i32::from(super::document_scan::try_begin_present(request_id))
+    i32::from(crate::driver::try_begin_present(request_id))
 }
 
 /// `.m` が結果を 1 回だけ渡す受け口。渡した直後に再描画を要求する（入力がないと egui が止まる）。
@@ -116,7 +118,7 @@ extern "C" fn fandhe_rust_document_scan_try_begin_present(request_id: u64) -> i3
 /// `bytes` は NULL か、`len` バイトが読める領域で、この呼び出しの間だけ有効。戻る前にコピーする。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_document_scan_complete(
     request_id: u64,
     code: i32,
@@ -133,11 +135,11 @@ extern "C" fn fandhe_rust_document_scan_complete(
     } else {
         None
     };
-    super::document_scan::complete_from_os(
+    crate::driver::complete_from_os(
         request_id,
         outcome_from_ios(code, copied, over_limit, page_count),
     );
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]

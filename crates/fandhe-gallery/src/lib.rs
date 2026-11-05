@@ -48,6 +48,11 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
 #[allow(unsafe_code)]
 #[no_mangle]
 fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
+    // Activity 再生成では画面状態が作り直される（世代 0）。保留中の書類スキャン要求が残ると
+    // 次の要求が飲み込まれるため、新しい画面状態を作る前に破棄する（TASK-21.3 / Issue #1171。
+    // 以前は egui-proxy の `android::run` が呼んでいた。機能 crate を egui-proxy が知らないようにするため移した）。
+    #[cfg(feature = "device")]
+    fandhe_cap_document_scan::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 

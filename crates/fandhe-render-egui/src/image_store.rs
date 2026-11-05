@@ -1,65 +1,59 @@
-//! `ImageWidget` の実画素を egui へ届ける 1 枠の保管所（Issue #1103、写真選択）。
+//! `ImageWidget` の実画素を egui のテクスチャとして描く側の窓口（Issue #1103、写真選択ほか）。
 //!
-//! `fandhe-core` の `ImageWidget` は不透明なソース識別子しか持たない（実デコードを
-//! しない契約）。effect ドライバ（`device/photo_pick.rs`）が復号確認済みの画素を
-//! [`put`] で識別子付きで置き、`lib.rs` の `Node::Widget` 分岐が [`texture`] で識別子が
-//! 一致するときだけテクスチャを引いて描く。識別子が一致しない画素は描かない
-//! （古い結果が新しい表示へ混ざらない、`ImageWidget` のソース照合と同じ判断）。
-//!
-//! ponytail: 1 画面で 1 枚まで（`static` の 1 枠）。複数枚を同時に出す画面ができたら
-//! 識別子をキーにしたマップへ上げる。
+//! 画素の保管所そのものはレンダラ非依存の `fandhe_runtime::image_store` にあり、effect ドライバ
+//! （`fandhe-egui-proxy` の写真選択、機能 crate の書類スキャン等）が [`put`] / [`clear`] で置く。
+//! 本モジュールは `lib.rs` の `Node::Widget` 分岐が [`texture`] で識別子が一致するときだけ
+//! テクスチャを引くための、GPU へ上げる処理（通し番号が変わったときだけ再アップロード）を持つ。
+//! 識別子が一致しない画素は描かない（古い結果が新しい表示へ混ざらない）。
 
 use std::sync::Mutex;
 
-struct Entry {
+pub use fandhe_runtime::image_store::{clear, put};
+
+/// GPU へ上げ済みのテクスチャと、その元になった保管所の通し番号。
+struct Cached {
+    serial: u64,
     source: String,
-    /// 未アップロードの画素。初回の [`texture`] で GPU へ上げて空にする。
-    pending: Option<egui::ColorImage>,
-    texture: Option<egui::TextureHandle>,
+    texture: egui::TextureHandle,
 }
 
-static SLOT: Mutex<Option<Entry>> = Mutex::new(None);
+static CACHE: Mutex<Option<Cached>> = Mutex::new(None);
 
-/// 識別子つきで画素を置く。前の画像（画素・テクスチャ）は置き換えで解放される。
-pub fn put(source: String, image: egui::ColorImage) {
-    if let Ok(mut slot) = SLOT.lock() {
-        *slot = Some(Entry {
-            source,
-            pending: Some(image),
-            texture: None,
-        });
-    }
-}
-
-/// 保持中の画像を解放する。
-pub fn clear() {
-    if let Ok(mut slot) = SLOT.lock() {
-        *slot = None;
-    }
-}
-
-/// `source` と識別子が一致するときだけテクスチャを返す（初回に GPU へ上げる）。
-/// ロックが poison していたら `None`（描かない）。
+/// `source` と識別子が一致するときだけテクスチャを返す（通し番号が変わったら GPU へ上げ直す）。
+/// 一致しないときは `None` を返し、保持中のテクスチャは捨てない。
 pub(crate) fn texture(ctx: &egui::Context, source: &str) -> Option<egui::TextureHandle> {
-    let mut slot = SLOT.lock().ok()?;
-    let entry = slot.as_mut().filter(|e| e.source == source)?;
-    if entry.texture.is_none() {
-        let image = entry.pending.take()?;
-        entry.texture = Some(ctx.load_texture(
-            format!("fandhe-image-{source}"),
-            image,
-            egui::TextureOptions::LINEAR,
-        ));
+    let (serial, pixels) = fandhe_runtime::image_store::get(source)?;
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(c) = cache
+        .as_ref()
+        .filter(|c| c.serial == serial && c.source == source)
+    {
+        return Some(c.texture.clone());
     }
-    entry.texture.clone()
+    let image = egui::ColorImage::from_rgba_unmultiplied(
+        [pixels.width() as usize, pixels.height() as usize],
+        pixels.rgba(),
+    );
+    let texture = ctx.load_texture(
+        format!("fandhe-image-{source}"),
+        image,
+        egui::TextureOptions::LINEAR,
+    );
+    *cache = Some(Cached {
+        serial,
+        source: source.to_string(),
+        texture: texture.clone(),
+    });
+    Some(texture)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fandhe_core::RgbaPixels;
 
-    fn img() -> egui::ColorImage {
-        egui::ColorImage::from_rgba_unmultiplied([2, 2], &[255; 16])
+    fn img() -> RgbaPixels {
+        RgbaPixels::new(2, 2, vec![255u8; 16]).unwrap()
     }
 
     /// static の 1 枠を共有するため、1 テストにまとめて並列実行の干渉を避ける。
