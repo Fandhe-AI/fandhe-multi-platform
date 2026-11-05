@@ -25,7 +25,7 @@ fandhe-multi-platform/
 │
 ├── crates/
 │   ├── cargo-fandhe/            # 機能宣言（[package.metadata.fandhe]）の検証と統合規則。`cargo fandhe check`（#1160、forbid(unsafe_code)）
-│   ├── fandhe-cap-*/            # 端末機能 1 つにつき 1 crate（契約・OS 別実装・宣言。egui 非依存。現在 camera-capture・nfc-card-emulation、TASK-21.3 / #1170・#1172）
+│   ├── fandhe-cap-*/            # 端末機能 1 つにつき 1 crate（契約・OS 別実装・宣言。egui 非依存。現在 camera-capture・nfc-card-emulation・share-receive、TASK-21.3 / #1170・#1172・#1173）
 │   ├── fandhe-core/             # 共通コア（UI DSL・状態管理・AI 型安全 DSL、forbid(unsafe_code)）
 │   │   ├── src/lib.rs           # 役割要約・モジュール地図（ui / state / token / screens）
 │   │   └── src/screens/         # AI が生成した画面モジュールの置き場（`ui/mod.rs` には手を入れない）

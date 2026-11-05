@@ -99,7 +99,7 @@ plutil -insert CFBundleURLTypes -json \
 plutil -insert CFBundleDocumentTypes -json \
   '[{"CFBundleTypeName":"Plain Text","CFBundleTypeRole":"Viewer","LSHandlerRank":"Alternate","LSItemContentTypes":["public.plain-text"]}]' "$plist"
 # サービスメニュー（Issue #606）。NSMenuItem.default は SERVICE_MENU_TITLE、NSMessage は
-# macos/fandhe_macos_share_receive.m の receiveSharedText:userData:error: と対。
+# crates/fandhe-cap-share-receive/macos/fandhe_macos_share_receive.m の receiveSharedText:userData:error: と対。
 plutil -insert NSServices -json \
   "[{\"NSMenuItem\":{\"default\":\"Fandhe で受け取る\"},\"NSMessage\":\"receiveSharedText\",\"NSPortName\":\"$exe\",\"NSSendTypes\":[\"public.utf8-plain-text\"]}]" "$plist"
 # $screen は上の許可リストを通った固定の識別子だけ。
