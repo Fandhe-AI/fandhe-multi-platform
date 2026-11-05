@@ -15,11 +15,30 @@ const IDS: [&str; 5] = [
     "home-widget",
 ];
 
+/// 機能 crate（`crates/fandhe-cap-<id>`）があればその `Cargo.toml` の宣言部分、
+/// 無ければ `tests/fixtures/<id>.toml` を返す（機能 crate へ移した機能から fixture を消していく）。
 fn fixture(id: &str) -> String {
-    fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("tests/fixtures/{id}.toml")),
-    )
-    .unwrap()
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let krate = manifest.join(format!("../fandhe-cap-{id}/Cargo.toml"));
+    if let Ok(toml) = fs::read_to_string(&krate) {
+        let mut out = String::new();
+        let mut inside = false;
+        for line in toml.lines() {
+            if line.starts_with("[package.metadata.fandhe")
+                || line.starts_with("[[package.metadata.fandhe")
+            {
+                inside = true;
+            } else if line.starts_with('[') {
+                inside = false;
+            }
+            if inside {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+        return out;
+    }
+    fs::read_to_string(manifest.join(format!("tests/fixtures/{id}.toml"))).unwrap()
 }
 
 /// `[package]` と宣言の断片から成る機能 crate を `root/c/<dir>` に作る。参照先のディレクトリも作る。
@@ -580,8 +599,7 @@ fn extension_usage_descriptions_validated_and_merged_by_equality() {
 }
 
 // ---- 現行設定との突き合わせ（capability-declaration.md §6）----
-// 寿命: 宣言の読み先は機能 crate へ移した id から順に実 crate になる（document-scan は #1171 で移行済み。
-// 残りは #1170・#1172〜#1174）。#1176 の生成比較に置き換わった時点か #1194 で撤去する。
+// 寿命: 機能 crate へ移した機能は `fixture` が crate の Cargo.toml を読む（#1170〜#1174）。#1176 の生成比較に置き換わった時点か #1194 で撤去する。
 
 fn repo(rel: &str) -> String {
     fs::read_to_string(
@@ -844,9 +862,8 @@ fn android_gradle_versions_match_versions_env() {
 #[test]
 fn ios_declarations_match_current_settings() {
     let plist = repo("platforms/apple/FandheIosApp/Resources/Info.plist");
-    let proxy_build_rs = repo("crates/fandhe-egui-proxy/build.rs");
     for id in IDS {
-        // 機能 crate へ移した id は、その crate の build.rs が framework の正本。
+        // 機能 crate へ移した機能は crate の build.rs、それ以外は egui-proxy の build.rs と比べる。
         let own = format!("crates/fandhe-cap-{id}/build.rs");
         let build_rs = if Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
@@ -855,7 +872,7 @@ fn ios_declarations_match_current_settings() {
         {
             repo(&own)
         } else {
-            proxy_build_rs.clone()
+            repo("crates/fandhe-egui-proxy/build.rs")
         };
         let Some(ios) = declared(id).ios else {
             continue;
@@ -932,5 +949,31 @@ fn macos_services_and_widget_extension_match_current_settings() {
             swift.contains(&format!("import {f}")),
             "{f} を import していない"
         );
+    }
+}
+
+#[test]
+fn android_java_and_res_dirs_of_feature_crates_are_in_gradle_sources() {
+    let gradle = repo("platforms/android/app/build.gradle.kts");
+    for id in IDS {
+        let crate_dir = format!("crates/fandhe-cap-{id}");
+        if !Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(&crate_dir)
+            .exists()
+        {
+            continue;
+        }
+        let Some(android) = declared(id).android else {
+            continue;
+        };
+        for (kind, dirs) in [("java", android.java), ("res", android.res)] {
+            for dir in dirs {
+                assert!(
+                    gradle.contains(&format!("{crate_dir}/{dir}")),
+                    "{id}: {kind} {dir} が build.gradle.kts の srcDirs にない"
+                );
+            }
+        }
     }
 }

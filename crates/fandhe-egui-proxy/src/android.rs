@@ -742,7 +742,7 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnUrlSchemeReceiv
 /// `device` feature 無効ビルド向けの `nativeOnShareReceived` no-op フォールバック
 /// （Issue #607）。`ShareReceiveHelper.deliver` は feature を知らず `MainActivity` の
 /// `onCreate` / `onNewIntent` から必ず呼ぶため、スタブが無いと feature 無効ビルドで
-/// `UnsatisfiedLinkError` になる。署名は Java 宣言・`device/android_share_receive.rs` の
+/// `UnsatisfiedLinkError` になる。署名は Java 宣言・`crates/fandhe-cap-share-receive/src/android.rs` の
 /// 実体と 3 か所で一致させる（`(String) -> void`）。
 ///
 /// # Safety

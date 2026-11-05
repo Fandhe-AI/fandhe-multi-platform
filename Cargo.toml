@@ -6,6 +6,15 @@ members = [
     "crates/cargo-fandhe",
     # TASK-21.3（Issue #1171）: 機能 crate（書類スキャン）。契約・effect ドライバ・OS 実装・機能宣言を持つ。
     "crates/fandhe-cap-document-scan",
+    # TASK-21.3（Issue #1173）: 共有の受け取り（share-receive）の機能 crate。契約・effect ドライバ・
+    # Android/macOS 実装・宣言を 1 crate に集める。
+    "crates/fandhe-cap-share-receive",
+    # TASK-21.3（Issue #1170）: カメラ撮影の機能 crate（契約・OS 別実装・宣言）。egui に依存しない。
+    # 機能 crate は `fandhe-cap-<id>` の名前で 1 機能 1 crate（docs/architecture/consumer-app-structure.md §5）。
+    "crates/fandhe-cap-camera-capture",
+    # TASK-21.3（Issue #1172）: NFC カードエミュレーションの機能 crate（契約・Android 実装・宣言）。egui に依存しない。
+    # 機能 crate は `fandhe-cap-<id>` の名前で 1 機能 1 crate（docs/architecture/consumer-app-structure.md §5）。
+    "crates/fandhe-cap-nfc-card-emulation",
     "crates/fandhe-core",
     # Phase 8（端末機能の型検証、親 #752 / Issue #746）: 端末機能（保存・HTTP・カメラ）の
     # 抽象と共通実装を置くクレート。`fandhe-egui-proxy` の feature `device`（既定 on）から

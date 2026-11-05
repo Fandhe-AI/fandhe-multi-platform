@@ -24,16 +24,13 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
    `#[cfg(all(feature = "device", not(target_arch = "wasm32")))]` 付き `init`/`effect` 行
    （`storage_note`/`http_fetch`/`camera_capture`）を削除する
 5. Android（#750）:
-   - `crates/fandhe-egui-proxy/src/device/android.rs`（`DataDir` 解決・`AndroidCamera`・
-     `nativeOnCameraResult` の JNI エクスポート）を削除する
+   - `crates/fandhe-egui-proxy/src/device/android.rs`（`DataDir` 解決など。カメラの `AndroidCamera`・
+     `nativeOnCameraResult` は機能 crate `fandhe-cap-camera-capture` へ移した。#1170）を削除する
    - `crates/fandhe-egui-proxy/src/device.rs` の `#[cfg(target_os = "android")] pub mod android;`
      行と `storage_note_state` の Android 分岐（`use fandhe_device::storage::FsStorage;` を
      含む `#[cfg(target_os = "android")] { ... }` ブロック）を削除する（iOS 分岐のみ残す）
-   - `crates/fandhe-egui-proxy/src/device/camera_capture.rs` の `platform_camera()` を
-     `DummyCamera` 直書きへ戻す（Android 分岐 `Arc::new(crate::device::android::AndroidCamera::new())`
-     を削除し、`#[cfg(not(target_os = "android"))]` の条件分岐で分けていた
-     `DUMMY_WIDTH`/`DUMMY_HEIGHT`/`use ... DummyCamera` の cfg も外す）。`CaptureMailbox`
-     はターゲット非依存の汎用機能のため残置してよい
+   - カメラ撮影は機能 crate `crates/fandhe-cap-camera-capture` にある。撤去するときは crate ごと削除し、
+     ルート `Cargo.toml` の members・`fandhe-gallery` の依存と registry の `camera_capture` 行を外す
    - `AndroidApp` の保持（`ANDROID_APP` static・`set_android_app()`/`android_app()`）は
      `crates/fandhe-platform-android` へ移った（#1166）。`crates/fandhe-egui-proxy/src/android.rs` はその再公開で、
      `android_main` 内の `set_android_app(app.clone())` の呼び出しとともに Phase 8 固有ではない
@@ -41,9 +38,8 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
    - `crates/fandhe-egui-proxy/Cargo.toml` の android target 分岐の `jni` 依存行、
      ルート `Cargo.toml` の `[workspace.dependencies]` の `jni` 行を削除する
    - `platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java` の
-     `requestCameraPermission`/`takePicturePreview`（`ActivityResultLauncher` 2 つ）・
-     `nativeOnCameraResult` native 宣言・`requestCameraCapture`/`launchCameraCapture`/
-     `deliverBitmap` メソッドを削除する
+     `cameraCaptureHelper` フィールドと `requestCameraCapture`・`onCreate`/`onSaveInstanceState` の委譲を削除する
+     （実体は `CameraCaptureHelper.java`、機能 crate 側）
    - `crates/fandhe-egui-proxy/src/device/tilt.rs` の `gravity_to_tilt`（Issue #831）・
      `crates/fandhe-egui-proxy/src/device/android.rs` の `nativeOnMotionChanged` JNI
      エクスポートを削除する（`shared_motion`/`drive` 等ターゲット非依存の部分は残置）
@@ -84,7 +80,7 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
      `<receiver>`、`MainActivity.java` の `homeWidgetSetText`/`homeWidgetCurrentText`
      メソッドを削除する
    iOS（#751）: 以下を削除・復元する
-   - `crates/fandhe-egui-proxy/ios/fandhe_ios_camera.m`・`crates/fandhe-egui-proxy/build.rs`
+   - `crates/fandhe-egui-proxy/build.rs`（カメラは機能 crate `crates/fandhe-cap-camera-capture` へ移した。#1170）
    - `crates/fandhe-egui-proxy/src/device/ios.rs`（`device.rs` の `pub mod ios;` 行込み）
    - ルート `Cargo.toml` の `[workspace.dependencies]` の `cc = "1"`、
      `crates/fandhe-egui-proxy/Cargo.toml` の `[build-dependencies]` の `fandhe-platform-apple`

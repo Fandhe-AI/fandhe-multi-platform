@@ -59,6 +59,9 @@ declare -a cargo_ndk_args=(
   -p fandhe-core
   -p fandhe-platform-android
   -p fandhe-cap-document-scan
+  -p fandhe-cap-share-receive
+  -p fandhe-cap-camera-capture
+  -p fandhe-cap-nfc-card-emulation
   -p fandhe-render-egui
 )
 if [ "${RELEASE}" -eq 1 ]; then

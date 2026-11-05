@@ -1,5 +1,5 @@
 //! Phase 8（端末機能、親 #752）の画面ごとの effect ドライバの置き場（Issue #746/#747/
-//! #748/#749）。`fandhe-device` のトレイト（`Storage`/`Http`/`Camera`）を実際に呼び出し、
+//! #748/#749）。`fandhe-device` のトレイト（`Storage`/`Http` 等）を実際に呼び出し、
 //! 結果を `CompletionSender`（`crate::app`）経由で画面状態へ渡すのはこのモジュール以下に
 //! 限る（`fandhe-core` は端末依存ゼロ、`docs/ai/SCHEMA.md`「新規画面ファイルの置き場」節
 //! 参照）。
@@ -14,7 +14,7 @@
 //! 行から [`storage_note_state`] が呼ばれ、`generated_screens!` マクロが構築時に
 //! 1 度だけ実行する（`screens.rs` の `init` 区画 doc 参照）。Issue #748（HTTP 取得）・
 //! #749（カメラ撮影）・#830（傾きで玉が転がる）の effect ドライバはそれぞれ
-//! [`http_fetch`] / [`camera_capture`] / [`tilt`] サブモジュールに置く
+//! [`http_fetch`] / [`tilt`] サブモジュールに置く（カメラ撮影は機能 crate `fandhe-cap-camera-capture`、#1170）
 //! （`registry.rs` の `effect` 区画から配線される）。
 
 /// Issue #1308: アクセシビリティ設定（視差軽減・コントラスト）の effect ドライバ（Windows / macOS / iOS / Android 実装、
@@ -294,11 +294,6 @@ pub mod android_network_status;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_nfc;
-/// Issue #1128: Android 向け NFC カードエミュレーション（HCE）の実装。
-/// `device/nfc_card_emulation.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_nfc_card_emulation;
 /// Issue #383: Android 向けロック画面・OS のメディア操作実装（`MediaSession` + `Notification.MediaStyle` を JNI で操作）。
 /// `device/now_playing.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -398,11 +393,6 @@ pub mod android_screen_orientation;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_wake_lock;
-/// Issue #606: Android 向け共有の受け取り実装。
-/// `device/share_receive.rs::platform_share_receive` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_share_receive;
 /// Issue #810: Android 向けスリープ・ロックの通知の骨格（`Unsupported` のスタブ。#811 が埋める）。
 /// `device/sleep_lock_events.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
@@ -777,7 +767,6 @@ pub mod calendar;
 /// Phase 11 の拡充ループ（親 #87、Issue #276）: 通話 UI 統合の effect ドライバ（iOS・Android 実装、
 /// 他 OS は `UnsupportedCallUi` 固定）。
 pub mod call_ui;
-pub mod camera_capture;
 /// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得の effect ドライバ
 /// （iOS #813・Android #814・macOS #1066 は実装済み、Windows #1102 も実装済みで、他 OS は `UnsupportedCameraPreview`
 /// 固定。Web は `fandhe-web-dom`、#815）。
@@ -1459,10 +1448,6 @@ pub mod macos_screen_wake_lock;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_serial_port;
-/// Issue #606: macOS 向け共有の受け取り実装（`macos/fandhe_macos_share_receive.m` のサービスメニュー受信を
-/// 呼ぶ C ABI ラッパー）。`device/share_receive.rs` の macOS 経路と `main.rs`（登録）から使われる。
-#[cfg(target_os = "macos")]
-pub mod macos_share_receive;
 /// Issue #810: macOS 向けスリープ・ロックの通知実装（`macos/fandhe_macos_sleep_lock_events.m`、
 /// NSWorkspace の通知を呼ぶ C ABI ラッパー）。`device/sleep_lock_events.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -1578,9 +1563,6 @@ pub mod network_status;
 /// Phase 11 の拡充ループ（親 #157、Issue #1044）: NFC タグ読み取りの effect ドライバ
 /// （Android は後続の子が埋めるスタブ、他 OS は `UnsupportedNfcReader` 固定。Web は `fandhe-web-dom`）。
 pub mod nfc;
-/// Phase 11 の拡充ループ（親 #151、Issue #1128）: NFC カードエミュレーションの effect ドライバ
-/// （Android は #1129 の実装、他 OS は `UnsupportedCardEmulation` 固定）。
-pub mod nfc_card_emulation;
 /// Phase 11 の拡充ループ（親 #1093、Issue #1094）: 単語分割の effect ドライバ
 /// （macOS / iOS / Windows / Android 実装、他 OS は `UnsupportedWordSegmenter` 固定。Web は
 /// `fandhe-web-dom`）。
@@ -1698,9 +1680,6 @@ pub mod serial_port;
 /// Phase 11 の拡充ループ（親 #896、Issue #897/#898/#899）: 共有シートの effect ドライバ
 /// （macOS/iOS/Android/Windows 実装）。
 pub mod share;
-/// Phase 11 の拡充ループ（親 #122、Issue #606）: 共有の受け取りの effect ドライバ（macOS・Android 実装、
-/// 他 OS は `UnsupportedShareReceive` 固定。Web は `fandhe-web-dom`）。
-pub mod share_receive;
 /// Phase 11 の拡充ループ（親 #167、Issue #810）: スリープ・ロックの通知の effect ドライバ
 /// （macOS・Windows 実装、Android は骨格のスタブで #811 が埋める。他 OS は `UnsupportedSleepLockEvents` 固定）。
 pub mod sleep_lock_events;

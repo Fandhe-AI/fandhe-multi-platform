@@ -4,8 +4,8 @@
 //! （`screens/mod.rs` の `pub mod share_receive_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS から届いたテキストの検査・保持は
-//! `fandhe_device::share_receive`、スナップショットを本モジュールへ注入するのは
-//! `fandhe-egui-proxy` の effect ドライバ（`device/share_receive.rs`）の責務。
+//! `fandhe_cap_share_receive`、スナップショットを本モジュールへ注入するのは
+//! `fandhe-cap-share-receive` の effect ドライバ（`share_receive_show_effect`）の責務。
 //!
 //! 全対象 OS（macOS・Android・Web）分の状態・定数・文言を本モジュールで持つ。本機能には
 //! OS 固有の登録・解除ボタンが無く（macOS は plist、Android・Web は manifest の宣言で済む）、

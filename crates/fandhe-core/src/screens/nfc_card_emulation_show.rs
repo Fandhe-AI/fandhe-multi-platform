@@ -5,8 +5,8 @@
 //! （`screens/mod.rs` の `pub mod nfc_card_emulation_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。状態の読み出しは
-//! `fandhe_device::nfc_card_emulation`、結果を本モジュールへ注入するのは `fandhe-egui-proxy` の
-//! effect ドライバ（`device/nfc_card_emulation.rs`）の責務。ドライバは読み出しを高々 1 件に絞り、
+//! `fandhe-cap-nfc-card-emulation` の `CardEmulation`、結果を本モジュールへ注入するのは同 crate の
+//! effect ドライバ（`src/lib.rs`）の責務。ドライバは読み出しを高々 1 件に絞り、
 //! 世代番号つきで [`finish_read`] へ届ける。
 //!
 //! 全対象 OS 分の状態・文言を本モジュールで持つ。操作ボタンは無い（AID は manifest で静的に登録）ため、

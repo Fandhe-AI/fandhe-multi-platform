@@ -196,6 +196,10 @@ for triple in ${triples}; do
   symbols="$("${llvm_nm}" -D --defined-only "${so}")"
   grep -q ' android_main$' <<<"${symbols}" || fail "${so} に android_main の定義がありません"
   grep -q ' Java_com_fandhe_platform_' <<<"${symbols}" || fail "${so} に Java_com_fandhe_platform_* の定義がありません"
+  # 機能 crate（fandhe-cap-share-receive）の JNI 実体。ShareReceiveHelper が無条件に呼ぶ。
+  grep -q ' Java_com_fandhe_platform_ShareReceiveHelper_nativeOnShareReceived$' <<<"${symbols}" || fail "${so} に nativeOnShareReceived の定義がありません"
+  grep -q ' Java_com_fandhe_platform_CameraCaptureHelper_nativeOnCameraResult$' <<<"${symbols}" || fail "${so} に CameraCaptureHelper の nativeOnCameraResult の定義がありません"
+  grep -q ' Java_com_fandhe_platform_DocumentScanHelper_nativeOnDocumentScanResult$' <<<"${symbols}" || fail "${so} に DocumentScanHelper の nativeOnDocumentScanResult の定義がありません"
   log "シンボル確認 OK: ${so}"
 done
 

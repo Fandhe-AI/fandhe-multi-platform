@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- NFC カードエミュレーション（Issue #1129）の説明文。apduservice.xml が参照する。切り離し時にこの crate ごと削除する。 -->
+    <string name="nfc_card_emulation_service_description">Fandhe NFC カードエミュレーション</string>
+    <string name="nfc_card_emulation_aid_group_description">Fandhe 固定応答</string>
+</resources>

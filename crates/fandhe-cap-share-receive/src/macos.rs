@@ -1,14 +1,13 @@
-//! macOS 向け共有の受け取り（Issue #606）。`device/share_receive.rs::platform_share_receive` の
-//! macOS 経路と `main.rs`（登録）から使われる。`macos/fandhe_macos_share_receive.m` が
-//! サービスメニューの要求（`NSServices`）を受け、[`fandhe_rust_share_receive_received`] を
-//! 呼ぶ（`build.rs` がコンパイルする）。
+//! macOS 向け共有の受け取り（Issue #606）。`lib.rs` の `platform_share_receive` の
+//! macOS 経路と `fandhe-gallery` の `main.rs`（登録）から使われる。`macos/fandhe_macos_share_receive.m` が
+//! サービスメニューの要求（`NSServices`）を受け、`fandhe_rust_share_receive_received` を
+//! 呼ぶ（本 crate の `build.rs` がコンパイルする）。
 //!
 //! 受け口 [`INBOX`] はプロセス全体の static で、UI ができる前（コールドスタート）に届いた
-//! テキストもここに溜まる。検査・保持は共通側の `fandhe_device::share_receive::ShareInbox` に
+//! テキストもここに溜まる。検査・保持は共通側の [`ShareInbox`] に
 //! 任せ、本モジュールは FFI の橋渡し（`unsafe` 2 箇所）だけを持つ。本文はログへ出さない。
 
-use fandhe_device::share_receive::{ShareInbox, ShareReceive, ShareSnapshot};
-use fandhe_device::DeviceError;
+use crate::{ShareInbox, ShareReceive, ShareReceiveError, ShareSnapshot, now_ms};
 
 // SAFETY: `macos/fandhe_macos_share_receive.m` が定義する C ABI（`build.rs` が macOS で
 // コンパイル・リンクする）。契約は `.m` ファイル冒頭コメントに集約する。
@@ -28,19 +27,11 @@ pub fn register() {
     unsafe { fandhe_macos_share_receive_register() }
 }
 
-/// 受信時刻（UNIX ms）。表示用なので壁時計でよい（経過時間の計測には使わない）。
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
-}
-
 /// `.m` 側の provider から呼ばれる。`ptr` は UTF-8 バイト列（`len` バイト）で、呼び出し中
 /// だけ有効。null または `len == 0` は「文字列が取れなかった/空」として拒否に数える。
 /// 戻り値は 0 = 受理、1 = 拒否（`.m` 側がサービスへ固定文言のエラーを返す判断に使う）。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_share_receive_received(ptr: *const u8, len: usize) -> i32 {
     let bytes = if ptr.is_null() || len == 0 {
         None
@@ -59,7 +50,7 @@ extern "C" fn fandhe_rust_share_receive_received(ptr: *const u8, len: usize) -> 
 pub(crate) struct MacosShareReceive;
 
 impl ShareReceive for MacosShareReceive {
-    fn snapshot(&self) -> Result<ShareSnapshot, DeviceError> {
+    fn snapshot(&self) -> Result<ShareSnapshot, ShareReceiveError> {
         Ok(INBOX.snapshot())
     }
 }

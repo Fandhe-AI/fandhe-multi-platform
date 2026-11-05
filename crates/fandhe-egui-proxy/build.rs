@@ -60,12 +60,6 @@ fn build() {
         return;
     }
 
-    // `ios/fandhe_ios_camera.m`（Issue #751、実カメラ）。
-    compile_objc(
-        "ios/fandhe_ios_camera.m",
-        &["AVFoundation", "CoreGraphics", "UIKit"],
-    );
-
     // `ios/fandhe_ios_motion.m`（Issue #832、実センサ傾き）。
     compile_objc("ios/fandhe_ios_motion.m", &["CoreMotion", "UIKit"]);
 
@@ -731,15 +725,6 @@ fn compile_apple_local_peer() {
 /// **macOS 分岐のみ**から呼ばれる（`NSBackgroundActivityScheduler` は macOS 専用、doc 参照）。
 fn compile_macos_background_task() {
     compile_objc("macos/fandhe_macos_background_task.m", &["Foundation"]);
-}
-
-/// `macos/fandhe_macos_share_receive.m` を `cc` でコンパイルする（Issue #606）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_share_receive.rs` が使う）。
-fn compile_macos_share_receive() {
-    compile_objc(
-        "macos/fandhe_macos_share_receive.m",
-        &["AppKit", "Foundation"],
-    );
 }
 
 /// `macos/fandhe_macos_url_scheme.m` を `cc` でコンパイルする（Issue #1215）。
@@ -1662,8 +1647,6 @@ fn build_macos() {
     compile_macos_background_task();
     // `macos/fandhe_macos_url_scheme.m`（Issue #1215）も macOS 専用。
     compile_macos_url_scheme();
-    // `macos/fandhe_macos_share_receive.m`（Issue #606）も macOS 専用。
-    compile_macos_share_receive();
     // `macos/fandhe_macos_app_shortcuts.m`（Issue #424）も macOS 専用。
     compile_macos_app_shortcuts();
     // `macos/fandhe_macos_power_state.m`（Issue #1274）も macOS 専用。
