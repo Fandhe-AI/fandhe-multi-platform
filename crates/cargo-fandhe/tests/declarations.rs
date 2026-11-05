@@ -821,7 +821,8 @@ fn ios_declarations_match_current_settings() {
         }
         for f in &ios.frameworks {
             assert!(
-                build_rs.contains(&format!("framework={f}")),
+                // リンク指定は fandhe-platform-apple へ移ったため、build.rs の `compile_objc` に渡す一覧の記載で突き合わせる。
+                build_rs.contains(&format!("\"{f}\"")),
                 "{id}: {f} が build.rs にない"
             );
         }
