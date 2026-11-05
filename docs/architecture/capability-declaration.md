@@ -145,7 +145,7 @@ identity = true
 
 ## 6. 現行設定との突き合わせ
 
-先行 5 機能の宣言を（機能 crate へ移した機能は `crates/fandhe-cap-<id>/Cargo.toml`、それ以外は `crates/cargo-fandhe/tests/fixtures/*.toml`。camera-capture は #1170、document-scan は #1171、nfc-card-emulation は #1172、share-receive は #1173 で crate へ移した）、現行の設定と突き合わせました（#1161、REQ-21 / TASK-21.2）。`crates/cargo-fandhe/tests/declarations.rs` の「現行設定との突き合わせ」節が、次を毎回の `cargo test` で確かめます。
+先行 5 機能の宣言を（機能 crate へ移した機能は `crates/fandhe-cap-<id>/Cargo.toml`、それ以外は `crates/cargo-fandhe/tests/fixtures/*.toml`。camera-capture は #1170、document-scan は #1171、nfc-card-emulation は #1172、share-receive は #1173、home-widget は #1174 で crate へ移した）、現行の設定と突き合わせました（#1161、REQ-21 / TASK-21.2）。`crates/cargo-fandhe/tests/declarations.rs` の「現行設定との突き合わせ」節が、次を毎回の `cargo test` で確かめます。
 
 | 宣言 | 比較先 |
 |------|-------|
@@ -168,7 +168,7 @@ identity = true
 | UIKit・Foundation・CoreGraphics | 全機能の基盤リンクで機能固有ではない | #1168 |
 | `NSPortName` | 宣言は `$(EXECUTABLE_NAME)`、スクリプトは実行体名へ置換。同じ意味 | #1176 で展開方法を決める |
 | `FandheWidgetHost` | 素の実行体に拡張を載せるホストアプリ。生成では利用者の `.app` が親になる | #1174・#1176 |
-| `FandheCountControl.swift`・`AppIntents` | quick-settings-tile の分。同じ拡張ターゲットに同居している | #1174 で分離 |
+| `FandheCountControl.swift`・`AppIntents` | quick-settings-tile の分。ソースは home-widget から分離済み（#1174）。束ねる入口 `FandheWidgets.swift` は platforms 側に残り、生成は #1176 | #1176 |
 | `FandheAppGroupIdentifier` | 現行どおり `$(TeamIdentifierPrefix)com.fandhe.widget` を literal で宣言。記号名との一本化は未決 | #1176 |
 | `NSMenuItem.default` | 現行どおり literal。利用者が差し替える手段は未決 | #1173・#1176 |
 | `CFBundle*` 等の定型キー | 生成側のテンプレートの責務 | #1176 |

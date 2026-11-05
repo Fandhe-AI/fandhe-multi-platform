@@ -209,11 +209,6 @@ pub mod android_geocoding_search;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_health_data;
-/// Issue #1067: ホーム画面ウィジェットの Android 実装（`AppWidgetProvider` + SharedPreferences
-/// を呼ぶ Java 側 `MainActivity` の JNI 受け口）。`device/home_widget.rs` の Android 経路から
-/// 使われる。写像の純関数はホストでテストできるよう cfg は `any(android, test)`。
-#[cfg(any(target_os = "android", test))]
-pub mod android_home_widget;
 /// Issue #1250: Android 向け文字認識の骨格（#1253 が ML Kit 実装に置き換える）。
 /// `device/image_recognition.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
@@ -557,11 +552,6 @@ pub mod apple_geocoding_search;
 /// コンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_haptics;
-/// Issue #1065（macOS）: ホーム画面ウィジェットの Apple 向け実装（App Group コンテナ
-/// のファイル + ホストアプリ経由の再描画要求）。`device/home_widget.rs` の macOS 経路から
-/// 呼ばれる。ホストの `cargo test` でも検証できるよう `cfg(test)` でも有効にする。
-#[cfg(any(target_os = "macos", test))]
-pub mod apple_home_widget;
 /// Issue #975 macOS・#976 iOS: 端末内での画像生成実装（`apple/fandhe_apple_image_generation.swift` を
 /// 呼ぶ C ABI ラッパー）。`device/image_generation.rs` の macOS 経路と、iOS 経路から呼ばれる。
 /// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
@@ -881,9 +871,6 @@ pub mod haptics;
 /// Phase 11 の拡充ループ（親 #149、Issue #1089）: ヘルスデータ（今日の歩数）の effect ドライバ
 /// （iOS・Android は OS 別モジュール。他 OS は `UnsupportedHealthData` 固定）。
 pub mod health_data;
-/// Phase 11 の拡充ループ（親 #1064、Issue #1065）: ホーム画面ウィジェットの effect
-/// ドライバ（macOS 実装、iOS・Android は #1066・#1067）。
-pub mod home_widget;
 pub mod http_fetch;
 /// Phase 11 の拡充ループ（親 #187、Issue #960）: 人の在席・離席の検知の effect ドライバ（Windows 実装、
 /// 他 OS は `UnsupportedHumanPresence` 固定）。

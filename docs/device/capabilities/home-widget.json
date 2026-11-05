@@ -26,7 +26,7 @@
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_home_widget.rs + crates/fandhe-egui-proxy/src/device/home_widget.rs + crates/fandhe-device/src/home_widget.rs + crates/fandhe-core/src/screens/home_widget_show.rs + platforms/android/app/src/main/java/com/fandhe/platform/HomeWidgetProvider.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + platforms/android/app/src/main/res/xml/home_widget_info.xml + platforms/android/app/src/main/res/layout/home_widget.xml、Issue 旧#1067"
+      "impl": "crates/fandhe-cap-home-widget/src/android.rs + crates/fandhe-cap-home-widget/src/lib.rs + crates/fandhe-core/src/screens/home_widget_show.rs + crates/fandhe-cap-home-widget/android/java/com/fandhe/platform/HomeWidgetProvider.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-cap-home-widget/android/res/xml/home_widget_info.xml + crates/fandhe-cap-home-widget/android/res/layout/home_widget.xml、Issue 旧#1067"
     },
     "macos": {
       "status": "done",
@@ -39,7 +39,7 @@
       ],
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-device/src/home_widget.rs + crates/fandhe-egui-proxy/src/device/apple_home_widget.rs + crates/fandhe-egui-proxy/src/device/home_widget.rs + crates/fandhe-core/src/screens/home_widget_show.rs + platforms/apple/FandheTextWidget/Sources/FandheTextWidget/FandheTextWidget.swift + platforms/apple/FandheWidgetHost/Sources/FandheWidgetHost/main.swift + platforms/apple/project.yml + scripts/apple/build-macos-widget-host.sh、Issue 旧#1065",
+      "impl": "crates/fandhe-cap-home-widget/src/lib.rs + crates/fandhe-cap-home-widget/src/macos.rs + crates/fandhe-core/src/screens/home_widget_show.rs + crates/fandhe-cap-home-widget/apple/widget/FandheTextWidget.swift + platforms/apple/FandheWidgetHost/Sources/FandheWidgetHost/main.swift + platforms/apple/project.yml + scripts/apple/build-macos-widget-host.sh、Issue 旧#1065",
       "verified": true
     },
     "windows": {

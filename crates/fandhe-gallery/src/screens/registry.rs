@@ -227,7 +227,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "home_widget_show" => fandhe_core::screens::home_widget_show::current_screen,
-    fandhe_egui_proxy::device::home_widget::home_widget_show_effect,
+    fandhe_cap_home_widget::home_widget_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "car_display_show" => fandhe_core::screens::car_display_show::current_screen,

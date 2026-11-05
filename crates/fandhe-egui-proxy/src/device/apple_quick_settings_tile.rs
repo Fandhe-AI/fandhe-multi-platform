@@ -16,7 +16,7 @@
 //!
 //! - コントロールは macOS 26 以降にしか置けない（互換モードで 16 と報告される場合も 26 扱い）。26 未満・判定不能なら [`macos_default`] は
 //!   `None` を返し、呼び出し側が `UnsupportedQuickSettingsTile` へ倒す（0 回と見せない）
-//! - Team ID は home-widget と同じ `apple_home_widget::macos_app_group_dir` から取る。取れなければ `None`
+//! - Team ID は home-widget と同じ `fandhe_platform_apple::macos_app_group_dir("widget")` から取る。取れなければ `None`
 
 use std::path::PathBuf;
 
@@ -83,7 +83,7 @@ pub fn macos_default() -> Option<AppGroupQuickSettingsTile> {
     if !supports_controls(major) {
         return None;
     }
-    let dir = super::apple_home_widget::macos_app_group_dir()?;
+    let dir = fandhe_platform_apple::macos_app_group_dir("widget")?;
     Some(AppGroupQuickSettingsTile::new(dir))
 }
 

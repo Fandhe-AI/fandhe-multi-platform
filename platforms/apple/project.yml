@@ -253,8 +253,9 @@ targets:
   # --- Issue #1065（親 #1064）: ホーム画面ウィジェット（macOS）---
   # 小さなホストアプリ + WidgetKit 拡張。どちらも FandheSwiftUIBridge（XCFramework）へは
   # 依存せず、Rust 側は App Group コンテナのファイルへ直接書く
-  # （`crates/fandhe-egui-proxy/src/device/apple_home_widget.rs`）。拡張の Swift ソースは
-  # iOS（#1066）でも共有できる場所に置く。App Group ID は
+  # （`crates/fandhe-cap-home-widget/src/macos.rs`）。ウィジェット本体の Swift は機能 crate
+  # （`crates/fandhe-cap-home-widget/apple/widget`、Issue #1174）にあり、束ねる入口 `FandheWidgets.swift`
+  # とコントロール（quick-settings-tile）は本ディレクトリに残す（生成は #1176）。App Group ID は
   # `$(TeamIdentifierPrefix)com.fandhe.widget`（Team ID は書かない、署名チームは
   # `DEVELOPMENT_TEAM` を xcodebuild の引数で注入する。`scripts/apple/build-macos-widget-host.sh`）。
   FandheWidgetHost:
@@ -280,6 +281,7 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: FandheTextWidget/Sources/FandheTextWidget
+      - path: ../../crates/fandhe-cap-home-widget/apple/widget
     settings:
       base:
         GENERATE_INFOPLIST_FILE: NO

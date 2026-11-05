@@ -89,6 +89,10 @@ android {
             java.srcDirs("../../../crates/fandhe-cap-document-scan/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-share-receive/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-home-widget/android/java")
+            @Suppress("DEPRECATION")
+            res.srcDirs("../../../crates/fandhe-cap-home-widget/android/res")
         }
     }
 

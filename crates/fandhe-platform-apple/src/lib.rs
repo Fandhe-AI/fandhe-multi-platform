@@ -7,6 +7,8 @@
 //!   build 依存として使う。Linux・Windows のホストでもコンパイルされるため、本 crate 全体は
 //!   `cfg` で囲わない。
 //! - [`is_main_thread`]: main thread 限定の OS 呼び出しの前に使う判定（iOS・macOS のみ）。
+//! - [`app_group_id`]・`macos_app_group_dir`: 拡張を持つ機能（home-widget・quick-settings-tile）が共有する
+//!   App Group の ID / コンテナパスの組み立てと Team ID 検証。
 //!
 //! 起動経路（`ios_scene`・`ios_text_input`）は winit の補完であり、本 crate には置かない。
 
@@ -40,4 +42,57 @@ mod main_thread {
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub fn is_main_thread() -> bool {
     main_thread::is_main_thread()
+}
+
+/// Team ID（`[A-Z0-9]{10}`）と App Group 名（`[a-z]+`）から App Group ID `<Team ID>.com.fandhe.<group>` を作る。
+///
+/// 形式違いは `None`。ホーム画面ウィジェットとクイック設定タイル・コントロールなど、拡張を持つ機能が
+/// 同じ検証（パストラバーサル防止、security.md A01/A03）を複製せずに使う。`group` は宣言の `app-groups` に
+/// 対応する固定値だけを渡す前提（利用者入力を渡さない）。
+pub fn app_group_id(team: &str, group: &str) -> Option<String> {
+    let team_ok = team.len() == 10
+        && team
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit());
+    let group_ok = !group.is_empty() && group.bytes().all(|b| b.is_ascii_lowercase());
+    (team_ok && group_ok).then(|| format!("{team}.com.fandhe.{group}"))
+}
+
+/// macOS の App Group コンテナのパスを組む。Team ID（`FANDHE_DEVELOPMENT_TEAM`、実行時 → ビルド時）・
+/// ホームが取れなければ `None`（呼び出し側が `Unsupported` へ倒す。ダミー成功にしない）。
+#[cfg(target_os = "macos")]
+pub fn macos_app_group_dir(group: &str) -> Option<std::path::PathBuf> {
+    let team = std::env::var("FANDHE_DEVELOPMENT_TEAM")
+        .ok()
+        .or_else(|| option_env!("FANDHE_DEVELOPMENT_TEAM").map(str::to_string))?;
+    let id = app_group_id(&team, group)?;
+    #[allow(deprecated)]
+    let home = std::env::home_dir()?;
+    Some(home.join("Library/Group Containers").join(id))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn app_group_id_validates_team_and_group() {
+        assert_eq!(
+            app_group_id("ABCDE12345", "widget").as_deref(),
+            Some("ABCDE12345.com.fandhe.widget")
+        );
+        for bad in [
+            "",
+            "abcde12345",
+            "ABCDE1234",
+            "ABCDE123456",
+            "../ABCDEFG",
+            "ABCDE/2345",
+        ] {
+            assert!(app_group_id(bad, "widget").is_none(), "{bad}");
+        }
+        for bad in ["", "Widget", "../x", "a.b", "w1"] {
+            assert!(app_group_id("ABCDE12345", bad).is_none(), "{bad}");
+        }
+    }
 }

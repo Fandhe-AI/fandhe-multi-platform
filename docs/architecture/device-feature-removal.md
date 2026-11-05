@@ -71,14 +71,14 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
      `backgroundTaskCancel` メソッドを削除する。
      `platforms/android/app/build.gradle.kts` の `androidx.work:work-runtime`
      依存行、`scripts/android/versions.env` の `WORK_RUNTIME_VERSION` 行を削除する
-   - ホーム画面ウィジェット（親 #1064、Issue #1067）: `platforms/android/app/src/main/
-     java/com/fandhe/platform/HomeWidgetProvider.java`・`res/layout/home_widget.xml`・
-     `res/xml/home_widget_info.xml`・`crates/fandhe-egui-proxy/src/device/
-     android_home_widget.rs`（`device.rs` の `pub mod android_home_widget;` 行込み）を削除し、
-     `device/home_widget.rs::implementation()` の Android 分岐を外す。`res/values/strings.xml`
-     の `home_widget_label`/`home_widget_description`、`AndroidManifest.xml` の
-     `<receiver>`、`MainActivity.java` の `homeWidgetSetText`/`homeWidgetCurrentText`
-     メソッドを削除する
+   - ホーム画面ウィジェット（親 #1064、Issue #1067・#1174）: 機能 crate `crates/fandhe-cap-home-widget/`
+     （Android の Java・res と macOS の Swift・Rust を含む）を削除し、ルート `Cargo.toml` の `members`、
+     `crates/fandhe-gallery/Cargo.toml` の feature `device` と optional 依存、`registry.rs` の
+     `home_widget_show` の effect 行、`scripts/android/build-android.sh` の `-p fandhe-cap-home-widget`、
+     `platforms/android/app/build.gradle.kts` の srcDirs 2 行、`AndroidManifest.xml` の `<receiver>`、
+     `MainActivity.java` の `homeWidgetSetText`/`homeWidgetCurrentText` メソッドを削除する。
+     macOS は `platforms/apple/project.yml` の `FandheTextWidget.sources` の crate パス行と
+     `FandheWidgets.swift` の `FandheTextWidget()` を外す
    iOS（#751）: 以下を削除・復元する
    - `crates/fandhe-egui-proxy/build.rs`（カメラは機能 crate `crates/fandhe-cap-camera-capture` へ移した。#1170）
    - `crates/fandhe-egui-proxy/src/device/ios.rs`（`device.rs` の `pub mod ios;` 行込み）

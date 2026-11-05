@@ -1,0 +1,51 @@
+[package]
+name = "fandhe-cap-home-widget"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform のホームウィジェット（home-widget）の機能 crate（契約・Android/macOS 実装・宣言・Swift。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数（finish_load / finish_set 等）を使う。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# App Group ID / コンテナパスの組み立てと Team ID 検証（quick-settings-tile と共有）。
+fandhe-platform-apple = { path = "../fandhe-platform-apple" }
+
+# 機能宣言（capability-declaration.md）。現行の設定と突き合わせ済み（cargo-fandhe の tests/declarations.rs）。
+# iOS の拡張は #1212、Windows のパッケージ ID は #1208 で実装時に足す（未実装の欄は宣言しない）。
+[package.metadata.fandhe]
+id = "home-widget"
+
+[[package.metadata.fandhe.macos.extensions]]
+name = "FandheTextWidget"
+bundle-suffix = "text"
+deployment-target = "14.0"
+sources = ["apple/widget"]
+frameworks = ["WidgetKit", "SwiftUI"]
+app-groups = ["widget"]
+entitlements = { "com.apple.security.app-sandbox" = true }
+info-plist = { FandheAppGroupIdentifier = "$(TeamIdentifierPrefix)com.fandhe.widget", NSExtension = { NSExtensionPointIdentifier = "com.apple.widgetkit-extension" } }
+
+[package.metadata.fandhe.android]
+java = ["android/java"]
+res = ["android/res"]
+
+[[package.metadata.fandhe.android.components]]
+kind = "receiver"
+name = "com.fandhe.platform.HomeWidgetProvider"
+exported = false
+attributes = { label = "@string/home_widget_label" }
+intent-filters = [{ actions = ["android.appwidget.action.APPWIDGET_UPDATE"] }]
+meta-data = [{ name = "android.appwidget.provider", resource = "@xml/home_widget_info" }]

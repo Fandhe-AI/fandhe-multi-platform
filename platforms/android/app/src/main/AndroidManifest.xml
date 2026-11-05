@@ -345,7 +345,8 @@
              明示コンポーネント宛てに送るため exported=false でも届く想定（他アプリからの
              任意 intent を受けない最小公開、security.md A05）。intent-filter はこの 1 つ
              だけ、新しい権限は追加しない。実機でウィジェット一覧に出ない場合は要再確認
-             （device-check-pending）。切り離し時に削除する。 -->
+             （device-check-pending）。切り離し時にこの receiver と
+             `crates/fandhe-cap-home-widget/`（Java・res）を削除する。 -->
         <receiver
             android:name="com.fandhe.platform.HomeWidgetProvider"
             android:exported="false"
