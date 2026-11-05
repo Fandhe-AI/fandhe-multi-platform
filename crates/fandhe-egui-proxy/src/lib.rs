@@ -25,7 +25,7 @@
 //! 緩める（他ターゲットは `forbid` を維持し、`coding-rust.md` の FFI 例外規定に従う）。
 //!
 //! iOS も同じ理由で `deny` へ緩める（Issue #751）: `device/ios.rs` が UIKit 実装
-//! （`ios/fandhe_ios_camera.m`、`build.rs` でコンパイルする C ABI 1 点）を呼ぶために
+//! （`ios/fandhe_ios_motion.m` 等、`build.rs` でコンパイルする C ABI）を呼ぶために
 //! `unsafe extern "C"` 宣言が必要で、`unsafe` は当該 FFI 呼び出し 1 関数に閉じ
 //! `// SAFETY:` を付与する（`android.rs` の Android 分岐と同型）。
 //!

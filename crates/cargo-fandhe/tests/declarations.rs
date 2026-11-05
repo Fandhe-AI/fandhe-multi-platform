@@ -827,8 +827,18 @@ fn android_gradle_versions_match_versions_env() {
 #[test]
 fn ios_declarations_match_current_settings() {
     let plist = repo("platforms/apple/FandheIosApp/Resources/Info.plist");
-    let build_rs = repo("crates/fandhe-egui-proxy/build.rs");
     for id in IDS {
+        // 機能 crate へ移した機能は crate の build.rs、それ以外は egui-proxy の build.rs と比べる。
+        let own = format!("crates/fandhe-cap-{id}/build.rs");
+        let build_rs = if Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(&own)
+            .exists()
+        {
+            repo(&own)
+        } else {
+            repo("crates/fandhe-egui-proxy/build.rs")
+        };
         let Some(ios) = declared(id).ios else {
             continue;
         };

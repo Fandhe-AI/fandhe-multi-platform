@@ -146,7 +146,9 @@ graph TD
 - 版の方針（#1224）。0.x の間は全 crate で揃えます。1.0 以降は `fandhe-runtime` の契約を安定させ、
   機能 crate を別々に上げられる形が推し案です
 - 機能と OS ごとの対応水準（#1220）と、公式で保証する範囲（#1221）
-- 端末機能の画面（`fandhe-core/src/screens/`）の置き場（#1165・#1170 系）
+- 端末機能の画面（`fandhe-core/src/screens/`）の置き場（#1165・#1170 系）。camera-capture（#1170）では、画面の状態機械を
+  `fandhe-core` に残しました（`fandhe-web-dom` と flashlight も同じ型を使うため）。契約の型（`Camera`・`Image`・`CameraError`）は
+  `fandhe-device` と共有せず機能 crate 内に置きました（`Image`・`DeviceError` は他機能と共有のため `fandhe-device` に残る）。最終判断は #1183
 - `fandhe-platform-apple` の弱リンク・`-rpath`・clang_rt の届け方（#1168 の後続）。
   `cargo:rustc-link-arg` は、出した package 自身の bin・cdylib・テストにしか効かず、依存元へ伝わりません
   （Cargo の build-scripts 文書の `rustc-link-arg` 節）。`rustc-link-lib` は rlib 経由で伝わります。

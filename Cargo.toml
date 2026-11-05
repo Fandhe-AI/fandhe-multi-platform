@@ -4,6 +4,9 @@ members = [
     # Issue #1160: 機能宣言（[package.metadata.fandhe]）の形式検証と統合。`cargo fandhe check`。
     # 公開の切り替えは #1216（docs/architecture/capability-declaration.md）。
     "crates/cargo-fandhe",
+    # TASK-21.3（Issue #1170）: カメラ撮影の機能 crate（契約・OS 別実装・宣言）。egui に依存しない。
+    # 機能 crate は `fandhe-cap-<id>` の名前で 1 機能 1 crate（docs/architecture/consumer-app-structure.md §5）。
+    "crates/fandhe-cap-camera-capture",
     # TASK-21.3（Issue #1172）: NFC カードエミュレーションの機能 crate（契約・Android 実装・宣言）。egui に依存しない。
     # 機能 crate は `fandhe-cap-<id>` の名前で 1 機能 1 crate（docs/architecture/consumer-app-structure.md §5）。
     "crates/fandhe-cap-nfc-card-emulation",

@@ -83,6 +83,8 @@ android {
             java.srcDirs("../../../crates/fandhe-cap-nfc-card-emulation/android/java")
             @Suppress("DEPRECATION")
             res.srcDirs("../../../crates/fandhe-cap-nfc-card-emulation/android/res")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-camera-capture/android/java")
         }
     }
 
