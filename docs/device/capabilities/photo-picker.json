@@ -16,7 +16,7 @@
         "写真選択（既存写真の取り込み）"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_photo_picker.m + crates/fandhe-egui-proxy/src/device/ios.rs（present_photo_picker / fandhe_rust_photo_picker_outcome） + crates/fandhe-egui-proxy/src/device/photo_pick.rs（bridge） + crates/fandhe-egui-proxy/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue 旧#1104",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_photo_picker.m + crates/fandhe-egui-proxy/src/device/ios.rs（present_photo_picker / fandhe_rust_photo_picker_outcome） + crates/fandhe-egui-proxy/src/device/photo_pick.rs（bridge） + crates/fandhe-render-egui/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue 旧#1104",
       "detail": "できている（未確認）"
     },
     "android": {
@@ -30,7 +30,7 @@
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java（pickPhoto / requestPhotoPick / deliverPickedPhoto） + crates/fandhe-egui-proxy/src/device/android.rs（request_photo_pick / nativeOnPhotoPickerResult） + crates/fandhe-egui-proxy/src/device/photo_pick.rs（bridge） + crates/fandhe-egui-proxy/src/android.rs（reset_pending_tracking） + crates/fandhe-egui-proxy/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue 旧#1104"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java（pickPhoto / requestPhotoPick / deliverPickedPhoto） + crates/fandhe-egui-proxy/src/device/android.rs（request_photo_pick / nativeOnPhotoPickerResult） + crates/fandhe-egui-proxy/src/device/photo_pick.rs（bridge） + crates/fandhe-egui-proxy/src/android.rs（reset_pending_tracking） + crates/fandhe-render-egui/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue 旧#1104"
     },
     "macos": {
       "status": "done",
@@ -40,7 +40,7 @@
       "note": "実装済み（旧#1103）。`file-picker` と同じ `rfd` の `NSOpenPanel` を main スレッドで同期に開き、選ばれたパスを `read_picked`（8 MiB 上限）で読む。契約の 2 段検査: 1 段目は `validate_photo`（0 バイト・形式不明は `Internal`、上限超は `InvalidInput`）、2 段目は egui-proxy が `image` で実際に復号し、通ったものだけ画面に実画素で表示する（復号不能は `Internal`、キャンセルは `Cancelled` で失敗にしない）。復号は辺 16384・確保 256 MiB の上限付きで、表示は 1024px 以下へ縮めた複製。守る範囲: 1 プロセス内で要求を出す順序（世代照合）、0 バイト・形式不明・8 MiB 超・復号不能・キャンセル・非対応を成功に見せないこと、新しい要求で表示中の画像を消すこと。守らない範囲: 複数プロセス・複数タブの同時操作、選択後に元ファイルが差し替わること。既知の天井: デスクトップは PNG / JPEG のみ（GIF / WebP は `image` の feature 追加で依存パッケージが増えるため対象外、選ぶと失敗表示）、写真ライブラリ UI（`PHPicker`）は使わない、表示は 1 画面 1 枚。10/7 に Mac 目視済み（JPEG 2048×2048 を選んで表示、ダイアログのキャンセル → 「選択しませんでした」）。画像以外のファイルはダイアログで選べないため、失敗系の目視は単体テストで代替",
       "detail": "できている（実機）",
       "implStatus": "実装済み・Mac 目視済み（失敗系は単体テストで代替）",
-      "impl": "crates/fandhe-device/src/photo_picker.rs（RfdPhotoPicker）+ crates/fandhe-egui-proxy/src/device/photo_pick.rs + crates/fandhe-egui-proxy/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue 旧#1103"
+      "impl": "crates/fandhe-device/src/photo_picker.rs（RfdPhotoPicker）+ crates/fandhe-egui-proxy/src/device/photo_pick.rs + crates/fandhe-render-egui/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue 旧#1103"
     },
     "windows": {
       "status": "done",
@@ -50,7 +50,7 @@
       "note": "実装済み（旧#1103）。`file-picker` と同じ PowerShell 子プロセス経路（終了コードで選択 0 / キャンセル 2 / 失敗それ以外を区別。`rfd` は失敗をキャンセルへ化けさせるため使わない）に、固定定数のフィルタ `Images (*.png;*.jpg;*.jpeg)|...` を渡す（外部入力はスクリプトへ連結しない）。2 段検査と表示は macOS と同じ。守る範囲: 1 プロセス内で要求を出す順序（世代照合）、0 バイト・形式不明・8 MiB 超・復号不能・キャンセル・非対応を成功に見せないこと、新しい要求で表示中の画像を消すこと。守らない範囲: 複数プロセス・複数タブの同時操作、選択後に元ファイルが差し替わること。既知の天井: PNG / JPEG のみ、表示は 1 画面 1 枚。Windows 実機での確認は人間確認待ち（ビルド環境がなく、この PR では Windows 向けのビルド確認も未実施）",
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-device/src/photo_picker.rs（RfdPhotoPicker）+ crates/fandhe-device/src/file_picker.rs（windows_pick_command のフィルタ引数）+ crates/fandhe-egui-proxy/src/device/photo_pick.rs + crates/fandhe-egui-proxy/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue 旧#1103"
+      "impl": "crates/fandhe-device/src/photo_picker.rs（RfdPhotoPicker）+ crates/fandhe-device/src/file_picker.rs（windows_pick_command のフィルタ引数）+ crates/fandhe-egui-proxy/src/device/photo_pick.rs + crates/fandhe-render-egui/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue 旧#1103"
     },
     "web": {
       "status": "done",

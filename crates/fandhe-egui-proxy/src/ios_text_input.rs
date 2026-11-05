@@ -278,23 +278,23 @@ mod platform {
         fn fandhe_ios_text_input_clear();
     }
 
-    /// [`crate::ios::run`] が組み立てる実描画 `Box<dyn eframe::App>` を包み、`update` の
+    /// [`crate::ios::run`] が組み立てる実描画 `Box<dyn EguiApp>` を包み、`update` の
     /// 先頭で ObjC 側の `WinitUIView` メソッド差し込み（`.m` 側で冪等、`WinitUIView` 未登録
     /// なら次フレームも無害に再試行される契約）・[`egui::Context`] の保存・[`QUEUE`] の
     /// 消化を行い、`inner.update` に委譲した後で focus 遷移検知を行う
     /// （`android.rs::SoftKeyboardApp` と同じ役割の iOS 版。処理順序はモジュール doc 参照）。
     pub(crate) struct TextInputApp {
-        inner: Box<dyn eframe::App>,
+        inner: Box<dyn fandhe_render_egui::EguiApp>,
     }
 
     impl TextInputApp {
-        pub(crate) fn new(inner: Box<dyn eframe::App>) -> Self {
+        pub(crate) fn new(inner: Box<dyn fandhe_render_egui::EguiApp>) -> Self {
             Self { inner }
         }
     }
 
-    impl eframe::App for TextInputApp {
-        fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    impl fandhe_render_egui::EguiApp for TextInputApp {
+        fn update(&mut self, ctx: &egui::Context) {
             // SAFETY: 上記 `unsafe extern "C"` ブロックの SAFETY コメント参照。
             // `update` は eframe のメインスレッド上でのみ呼ばれる（Xcode/`main.rs`
             // 経由のアプリライフサイクルの契約）。`.m` 側は冪等（`WinitUIView` 差し込み
@@ -323,7 +323,7 @@ mod platform {
                 request_repaint();
             }
 
-            self.inner.update(ctx, frame);
+            self.inner.update(ctx);
 
             // egui 内部の focus 遷移（A → B、フィールド間を resign/become の往復なしに
             // 直接移る場合）を検知し、前のフィールドの内容を引き継がない（モジュール doc

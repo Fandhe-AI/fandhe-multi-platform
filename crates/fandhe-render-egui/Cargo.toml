@@ -1,0 +1,81 @@
+[package]
+name = "fandhe-render-egui"
+version = "0.2.0"
+# 移した元（fandhe-egui-proxy）に合わせる。2024 への移行は rustfmt と意味論の差分が混ざるため別件にする。
+edition = "2021"
+description = "fandhe-core の Screen<S>/Node<S> を egui で実描画し、各 OS 向けの起動までを担うレンダラ（eframe の型を公開しない）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+# TASK-21.2（Issue #1164）: egui による描画とアプリ起動の置き場。端末機能の配線は持たない。
+# 依存方向は fandhe-render-egui → fandhe-runtime → fandhe-core の一方向
+# （docs/architecture/consumer-app-structure.md §3・§7）。eframe は `launch.rs` の中だけで使い、
+# 公開 API に型を出さない。
+
+[dependencies]
+fandhe-core = { path = "../fandhe-core" }
+# 起床と完了通知（CompletionSender・EffectFn）、Renderer trait。
+fandhe-runtime = { path = "../fandhe-runtime" }
+egui = { workspace = true }
+image = { workspace = true }
+# ウィジェット → AX ノードマッピング（`src/accessibility.rs`）が使うコア型のみの依存。
+# プラットフォームアダプタは含まないため、eframe 側の "accesskit" feature の有無に関わらず
+# 全ターゲットで常時コンパイル・テスト対象になる。
+accesskit = { workspace = true }
+thiserror = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# CJK 対応フォント（Noto Sans JP）の同梱資産。`src/font.rs` の native 版が埋め込む。
+# Web は配信サイズ（REQ-4）のため埋め込まず fetch 方式を維持する。
+fandhe-fonts = { path = "../fandhe-fonts" }
+# wgpu-hal（"vulkan" / "dx12" feature）が推移的に要求する `ordered-float` を rustc 1.88.0 で
+# 解決可能な 5.4 以下へ固定するための直接依存。本クレート自身は使用しない
+# （理由と撤去条件はルート Cargo.toml の `ordered-float` コメント参照）。
+ordered-float = { workspace = true }
+
+# eframe の feature 構成は移す前の fandhe-egui-proxy と同一（target 分岐ごとの理由はそちらの履歴参照）。
+# デスクトップ（macOS / Windows / Linux 共通）: glow + X11 / Wayland。iOS・Android は除外する。
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")))'.dependencies]
+eframe = { workspace = true, default-features = false, features = ["glow", "x11", "wayland"] }
+
+# macOS / Windows: AX ツリー公開（NSAccessibility / UI Automation）のため "accesskit" を加算する。
+# Linux は accesskit なしのベースラインを維持する。
+[target.'cfg(target_os = "macos")'.dependencies]
+eframe = { workspace = true, default-features = false, features = ["accesskit"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+eframe = { workspace = true, default-features = false, features = ["accesskit"] }
+# `LaunchContext` が `HasWindowHandle` を実装して HWND を渡すために使う（eframe の型は出さない）。
+raw-window-handle = { workspace = true }
+
+# iOS: glow は非対応のため wgpu（Metal）。"metal" は eframe の "wgpu" feature だけでは有効にならないため
+# wgpu へ直接依存して feature を加算する。
+[target.'cfg(target_os = "ios")'.dependencies]
+wgpu = { workspace = true }
+eframe = { workspace = true, default-features = false, features = ["wgpu"] }
+
+# Android: GameActivity + wgpu（Vulkan）。"vulkan" は wgpu へ直接依存して加算する。
+# `accesskit_winit` の `accesskit_android` を足すと TalkBack へ AX ツリーが公開される。
+[target.'cfg(target_os = "android")'.dependencies]
+eframe = { workspace = true, default-features = false, features = ["wgpu", "android-game-activity", "accesskit"] }
+accesskit_winit = { workspace = true, features = ["accesskit_android"] }
+wgpu = { workspace = true, features = ["vulkan"] }
+# `run_android` が受け取る `AndroidApp` の型（`winit::platform::android::activity::AndroidApp`）。
+winit = { workspace = true, features = ["android-game-activity"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# WebGPU は採用しない（WebGL2 固定、docs/architecture/web-rendering-policy.md）。
+eframe = { workspace = true, default-features = false, features = ["glow"] }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+web-sys = { workspace = true, features = ["HtmlCanvasElement"] }
+
+[target.'cfg(not(target_os = "android"))'.dev-dependencies]
+# egui_kittest（AccessKit ベース）で要素欠落を機械的に検証する。Android は egui/accesskit の
+# 不整合（E0027）を避けるため対象外（移す前の fandhe-egui-proxy と同じ判断）。
+egui_kittest = { workspace = true, features = ["wgpu"] }
+# egui_kittest が無条件に有効化する egui 側の "accesskit" と、eframe 側の実装との不整合を避けるため、
+# テストビルド時にだけ eframe の "accesskit" を明示する。
+eframe = { workspace = true, default-features = false, features = ["accesskit"] }

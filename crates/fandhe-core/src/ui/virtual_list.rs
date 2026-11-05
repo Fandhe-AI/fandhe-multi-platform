@@ -11,7 +11,7 @@
 //! ビューポート実寸・現在のスクロールオフセットを取得し、本関数へ渡して
 //! 描画すべき index 範囲を得る想定であり、`fandhe-egui-proxy::render_screen` への
 //! 実配線は Issue #487（親 issue #83 の残課題）で完了した
-//! （`crates/fandhe-egui-proxy/src/lib.rs` の `render_virtual_list` 参照）。
+//! （`crates/fandhe-render-egui/src/render.rs` の `render_virtual_list` 参照）。
 //!
 //! **呼び出し側の前提（S5 / `scroll` モジュールとの契約）**: `scroll_offset` は
 //! 呼び出し側が [`crate::clamp_scroll_offset`] で事前にクランプ済みであることを

@@ -1,7 +1,7 @@
 //! Web（wasm32-unknown-unknown）のブートストラップ（TASK-1.2）。
 //!
-//! `web/index.html` の `<canvas id="fandhe-proxy-canvas">` へ `eframe::WebRunner` を
-//! アタッチする。`scripts/web/build-wasm-proxy.sh` が `wasm-bindgen --target web` で
+//! `web/index.html` の `<canvas id="fandhe-proxy-canvas">` へ `fandhe_render_egui::launch::start_web`（eframe の WebRunner）を
+//! 通してアタッチする。`scripts/web/build-wasm-proxy.sh` が `wasm-bindgen --target web` で
 //! 生成した glue コードから本モジュールの [`start`] が呼ばれる想定
 //! （`#[wasm_bindgen(start)]`）。
 //!
@@ -43,51 +43,36 @@ pub fn start() -> Result<(), JsValue> {
         .dyn_into::<web_sys::HtmlCanvasElement>()
         .map_err(|_| JsValue::from_str("#fandhe-proxy-canvas は canvas 要素である必要がある"))?;
 
-    // TASK-4.1（REQ-4 / M3、条件 4）: `WebRunner.start()` の前に必ず通す構造的ガード。
+    // TASK-4.1（REQ-4 / M3、条件 4）: `WebRunner.start()`（`start_web`）の前に必ず通す構造的ガード。
     // 詳細は `ensure_canvas_css_size` のドキュメンテーションコメント参照。
     ensure_canvas_css_size(&canvas);
 
     wasm_bindgen_futures::spawn_local(async move {
         let font_bytes = fetch_font_bytes(CJK_FONT_URL).await;
 
-        let runner = eframe::WebRunner::new();
-        let start_result = runner
-            .start(
-                canvas,
-                // WebGL2 固定（TASK-4.3 / REQ-4 / 条件 4）。`WebOptions::default()` の
-                // 既定値 `WebGlContextOption::BestFirst` は WebGL2 コンテキスト生成に
-                // 失敗した場合 WebGL1 へ暗黙フォールバックする（eframe
-                // `web_painter_glow.rs` 参照）。PoC-5（`docs/spec/03-poc/web-wasm/README.md`
-                // 検証方法4）で WebGPU→WebGL2 の自動フォールバックが `panic!` で失敗する
-                // ことを確認済みであり、条件4は「自動フォールバックは実装しない」
-                // ことを要求しているため、WebGL1 への暗黙フォールバックも同様に無効化し
-                // WebGL2 を明示的に固定する。方針の背景・再評価条件は
-                // `docs/architecture/web-rendering-policy.md` を参照。
-                eframe::WebOptions {
-                    webgl_context_option: eframe::WebGlContextOption::WebGl2,
-                    ..Default::default()
-                },
-                Box::new(move |cc| {
-                    if let Some(bytes) = font_bytes.clone() {
-                        crate::font::apply_font_bytes(&cc.egui_ctx, bytes);
-                    }
-                    // Issue #715: `FANDHE_PROXY_APP`（wasm ではビルド時 `option_env!`
-                    // 経由、`screens::selected_app_name` 参照）で選んだ画面をレジストリ
-                    // （`screens::build_app`）から解決する。未指定・未登録は既定の
-                    // sample 画面（`ProxyApp::new`）へフォールバックする。
-                    let app: Box<dyn eframe::App> = match crate::screens::selected_app_name()
-                        .and_then(|name| crate::build_app(&name, cc))
-                    {
-                        Some(app) => app,
-                        None => Box::new(crate::ProxyApp::new(cc)),
-                    };
-                    Ok(app)
-                }),
-            )
-            .await;
+        // WebGL2 固定・WebRunner の起動は `fandhe_render_egui::launch::start_web` が持つ。
+        let start_result = fandhe_render_egui::launch::start_web(canvas, move |lc| {
+            let ctx = lc.egui_ctx();
+            if let Some(bytes) = font_bytes {
+                crate::font::apply_font_bytes(ctx, bytes);
+            }
+            // Issue #715: `FANDHE_PROXY_APP`（wasm ではビルド時 `option_env!`
+            // 経由、`screens::selected_app_name` 参照）で選んだ画面をレジストリ
+            // （`screens::build_app`）から解決する。未指定・未登録は既定の
+            // sample 画面（`ProxyApp::new`）へフォールバックする。
+            let app: Box<dyn fandhe_render_egui::EguiApp> =
+                match crate::screens::selected_app_name()
+                    .and_then(|name| crate::build_app(&name, ctx))
+                {
+                    Some(app) => app,
+                    None => Box::new(crate::ProxyApp::new(ctx)),
+                };
+            app
+        })
+        .await;
 
         if let Err(err) = start_result {
-            web_sys::console::error_1(&format!("eframe の起動に失敗した: {err:?}").into());
+            web_sys::console::error_1(&format!("eframe の起動に失敗した: {err}").into());
         }
     });
 

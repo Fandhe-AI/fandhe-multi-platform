@@ -71,32 +71,25 @@
     not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")),
     feature = "cold-start-probe"
 ))]
-fn main() -> eframe::Result<()> {
+fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     let start = std::time::Instant::now();
-    // 計測条件を通常起動と揃えるため、`NativeOptions` は下の通常分岐と同一内容を組む
-    // （ウィンドウサイズは `DEFAULT_INNER_SIZE`・バックエンドは eframe 既定）。分岐ごとに `fn main` が
-    // 独立しているため設定そのものは共有できず、ここで同じ内容を再掲している。
-    // iOS 側 `ios::run` の `metal_native_options` のような専用バックエンド指定は
-    // デスクトップでは不要。
-    let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size(fandhe_core::screens::window_management_show::DEFAULT_INNER_SIZE),
-        ..Default::default()
-    };
-    eframe::run_native(
+    fandhe_egui_proxy::register_teardown_hooks();
+    // 計測条件を通常起動と揃えるため、ウィンドウサイズは下の通常分岐と同一
+    // （`DEFAULT_INNER_SIZE`・バックエンドは eframe 既定）。
+    // iOS 側 `ios::run` のような専用バックエンド指定はデスクトップでは不要。
+    fandhe_render_egui::launch::run_desktop(
         "fandhe-egui-proxy",
-        native_options,
-        Box::new(move |cc| {
+        Some(fandhe_core::screens::window_management_show::DEFAULT_INNER_SIZE),
+        move |lc| {
             // 計測後に自動でウィンドウを閉じてプロセスを終了させる
             // （`close_after_log = true`。複数回試行して中央値を取る計測運用のため、
             // 手動でウィンドウを閉じる必要があると使えない。Issue #593 依頼事項 2）。
-            let app = fandhe_egui_proxy::cold_start::ColdStartProbe::new(
-                fandhe_egui_proxy::ProxyApp::new(cc),
+            Box::new(fandhe_egui_proxy::cold_start::ColdStartProbe::new(
+                fandhe_egui_proxy::ProxyApp::new(lc.egui_ctx()),
                 start,
                 true,
-            );
-            Ok(Box::new(app) as Box<dyn eframe::App>)
-        }),
+            ))
+        },
     )
 }
 
@@ -105,7 +98,7 @@ fn main() -> eframe::Result<()> {
     feature = "frame-metrics",
     not(feature = "cold-start-probe")
 ))]
-fn main() -> eframe::Result<()> {
+fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     fandhe_egui_proxy::frame_metrics::run_desktop()
 }
 
@@ -114,7 +107,7 @@ fn main() -> eframe::Result<()> {
     not(feature = "frame-metrics"),
     not(feature = "cold-start-probe")
 ))]
-fn main() -> eframe::Result<()> {
+fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
 
@@ -212,23 +205,25 @@ fn main() -> eframe::Result<()> {
     let save_failed = Arc::new(AtomicBool::new(false));
     let save_failed_for_closure = Arc::clone(&save_failed);
 
-    let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size(fandhe_core::screens::window_management_show::DEFAULT_INNER_SIZE),
-        ..Default::default()
-    };
+    // ProxyApp の終了・破棄時に端末リソースを解放する（描画層へ登録する、lib.rs 参照）。
+    fandhe_egui_proxy::register_teardown_hooks();
 
-    eframe::run_native(
+    fandhe_render_egui::launch::run_desktop(
         "fandhe-egui-proxy",
-        native_options,
-        Box::new(move |cc| {
+        Some(fandhe_core::screens::window_management_show::DEFAULT_INNER_SIZE),
+        move |lc| {
+            let ctx = lc.egui_ctx();
+            // Issue #898: Windows 共有シート・生体認証が要求する HWND は起動時のコンテキストからしか
+            // 得られない。effect ドライバは触れないため、構築時に 1 度だけ static へ控える。
+            #[cfg(all(target_os = "windows", feature = "device"))]
+            fandhe_egui_proxy::device::windows_share::remember_window(lc);
             // TASK-2.3（#54）計測マーカー: プロトタイプアプリ分岐
             // （if use_prototype { ... }、TASK-2.2-S5 / #52）。
             // fandhe-prototype:begin
-            let app: Box<dyn eframe::App> = if use_prototype {
-                Box::new(fandhe_egui_proxy::PrototypeApp::new(cc))
+            let app: Box<dyn fandhe_render_egui::EguiApp> = if use_prototype {
+                Box::new(fandhe_egui_proxy::PrototypeApp::new(ctx))
             } else if use_tv_focus {
-                Box::new(fandhe_egui_proxy::TvFocusApp::new(cc))
+                Box::new(fandhe_egui_proxy::TvFocusApp::new(ctx))
             } else {
                 // Issue #715: レジストリ（`screens::build_app`）経由の画面名選択と、
                 // 既定の sample 画面を `ProxyAppDyn` の同一経路へ統一し、
@@ -236,14 +231,14 @@ fn main() -> eframe::Result<()> {
                 // 配線できるようにする。未登録名は sample へ倒し、経緯を stderr へ残す。
                 let mut app = requested_app
                     .as_deref()
-                    .and_then(|name| fandhe_egui_proxy::build_app(name, cc))
+                    .and_then(|name| fandhe_egui_proxy::build_app(name, ctx))
                     .unwrap_or_else(|| {
                         if let Some(name) = requested_app.as_deref() {
                             eprintln!(
                                 "[fandhe-egui-proxy] 未登録の画面名 '{name}'、sample を表示する。"
                             );
                         }
-                        Box::new(fandhe_egui_proxy::ProxyApp::new(cc))
+                        Box::new(fandhe_egui_proxy::ProxyApp::new(ctx))
                     });
                 if let Some(path) = autoshot_path {
                     app.set_autoshot(std::path::PathBuf::from(path), save_failed_for_closure);
@@ -251,8 +246,8 @@ fn main() -> eframe::Result<()> {
                 app
             };
             // fandhe-prototype:end
-            Ok(app)
-        }),
+            app
+        },
     )?;
 
     if is_autoshot && save_failed.load(Ordering::SeqCst) {
@@ -270,7 +265,7 @@ fn main() {
 }
 
 #[cfg(target_os = "ios")]
-fn main() -> eframe::Result<()> {
+fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     // Issue #27: UIScene 化シム（`ios/fandhe_ios_scene.m`）をリンクに残す。本番・計測の全経路をここで覆う。
     fandhe_egui_proxy::ios_scene::install();
 

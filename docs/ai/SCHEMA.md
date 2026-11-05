@@ -1042,7 +1042,7 @@ std::thread::spawn(move || {
 ```
 
 参照実装は `crates/fandhe-core/src/state/store.rs` の `StateStore::apply`、
-`crates/fandhe-egui-proxy/src/app.rs` の `drain_completions` / `ProxyApp::completion_sender`。
+`crates/fandhe-render-egui/src/app.rs` の `drain_completions` / `ProxyApp::completion_sender`。
 
 画面のボタン → 端末 I/O 起動を配線するには、`registry.rs` の `effect` 区画
 （`generated_screens!` マクロ、Issue #748）を使う。`nav "<name>" => current_screen,` と同じ

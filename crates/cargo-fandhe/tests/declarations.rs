@@ -821,7 +821,7 @@ fn ios_declarations_match_current_settings() {
         }
         for f in &ios.frameworks {
             assert!(
-                build_rs.contains(&format!("framework={f}")),
+                build_rs.contains(&format!("\"{f}\"")),
                 "{id}: {f} が build.rs にない"
             );
         }

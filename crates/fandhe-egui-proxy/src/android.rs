@@ -105,18 +105,6 @@ pub(crate) fn request_repaint() {
     fandhe_runtime::request_repaint();
 }
 
-/// Android 向け Vulkan 固定バックエンド設定を返す。
-///
-/// `android_main`（feature 無効時）から呼ばれる。`NativeOptions` 構築処理から
-/// 値を切り出すことで、REQ-1（Android = Vulkan）の充足を単体テストで検証できるようにしている。
-/// `frame-metrics` feature 有効時は `crate::frame_metrics::run_android` が Vulkan 固定を
-/// 独自に持つため（dead_code 警告を避けるため cfg で揃える）、本関数もその feature では
-/// コンパイル対象外にする。
-#[cfg(not(feature = "frame-metrics"))]
-fn android_wgpu_backends() -> eframe::wgpu::Backends {
-    eframe::wgpu::Backends::VULKAN
-}
-
 /// Android アプリのエントリポイント。
 ///
 /// `android-activity`（GameActivity 方式、TASK-9.3-S1 / #242）が
@@ -407,24 +395,6 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     #[cfg(feature = "device")]
     crate::device::payment_request::reset_pending_tracking();
 
-    let native_options = eframe::NativeOptions {
-        android_app: Some(app),
-        renderer: eframe::Renderer::Wgpu,
-        wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
-            wgpu_setup: eframe::egui_wgpu::WgpuSetup::CreateNew(
-                eframe::egui_wgpu::WgpuSetupCreateNew {
-                    instance_descriptor: eframe::wgpu::InstanceDescriptor {
-                        backends: android_wgpu_backends(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-            ),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
     // TASK-17.2（REQ-17）/ Issue #715: `FANDHE_PROXY_APP=<名前>` で描画対象を切り替える
     // （`main.rs`/`web.rs`/`ios.rs` と同じ契約、A03 対策・security.md 準拠の固定文字列
     // 比較のみ）。解決は `ios.rs` と同じく [`crate::screens::selected_app_name`] へ委ねる
@@ -455,42 +425,39 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // （`ACTIVE_SCREEN_USES_DRAG_DROP` doc 参照）。
     set_active_screen_uses_drag_drop(requested_name == "drag_drop");
 
-    if let Err(err) = eframe::run_native(
-        "fandhe-egui-proxy",
-        native_options,
-        Box::new(move |cc| {
-            // Issue #831 codex-review 指摘: センサ JNI コールバックからの
-            // `request_repaint` 経路確保のため 起床口として登録する（[`request_repaint`] doc 参照）。
-            // `Activity` 再生成のたびに上書きし、古い Context を残さない。
-            fandhe_runtime::set_repaint_waker(std::sync::Arc::new(crate::app::EguiWaker(
-                cc.egui_ctx.clone(),
-            )));
-            let app: Box<dyn eframe::App> = if use_tv_focus {
-                Box::new(
-                    crate::TvFocusApp::new(cc).with_inset_margin_supplier(android_inset_margin),
-                )
-            } else if requested_name.is_empty() {
-                Box::new(crate::ProxyApp::new(cc).with_inset_margin_supplier(android_inset_margin))
-            } else {
-                match crate::build_app(&requested_name, cc) {
-                    Some(mut dyn_app) => {
-                        dyn_app.set_inset_margin_supplier(Box::new(android_inset_margin));
-                        dyn_app
-                    }
-                    None => {
-                        eprintln!(
-                            "[fandhe-egui-proxy] 未登録の画面名 '{requested_name}'、sample を表示する。"
-                        );
-                        Box::new(
-                            crate::ProxyApp::new(cc)
-                                .with_inset_margin_supplier(android_inset_margin),
-                        )
-                    }
+    // 解放処理を描画層へ登録する（`Activity` 再生成で再実行されても 2 回目以降は無視される）。
+    crate::register_teardown_hooks();
+    // バックエンドは Vulkan 固定（REQ-1）。`run_android` が持つ。
+    if let Err(err) = fandhe_render_egui::launch::run_android(app, "fandhe-egui-proxy", move |lc| {
+        let ctx = lc.egui_ctx();
+        // Issue #831 codex-review 指摘: センサ JNI コールバックからの
+        // `request_repaint` 経路確保のため 起床口として登録する（[`request_repaint`] doc 参照）。
+        // `Activity` 再生成のたびに上書きし、古い Context を残さない。
+        fandhe_runtime::set_repaint_waker(std::sync::Arc::new(crate::app::EguiWaker::new(
+            ctx.clone(),
+        )));
+        let app: Box<dyn fandhe_render_egui::EguiApp> = if use_tv_focus {
+            Box::new(crate::TvFocusApp::new(ctx).with_inset_margin_supplier(android_inset_margin))
+        } else if requested_name.is_empty() {
+            Box::new(crate::ProxyApp::new(ctx).with_inset_margin_supplier(android_inset_margin))
+        } else {
+            match crate::build_app(&requested_name, ctx) {
+                Some(mut dyn_app) => {
+                    dyn_app.set_inset_margin_supplier(Box::new(android_inset_margin));
+                    dyn_app
                 }
-            };
-            Ok(Box::new(SoftKeyboardApp { inner: app }))
-        }),
-    ) {
+                None => {
+                    eprintln!(
+                        "[fandhe-egui-proxy] 未登録の画面名 '{requested_name}'、sample を表示する。"
+                    );
+                    Box::new(
+                        crate::ProxyApp::new(ctx).with_inset_margin_supplier(android_inset_margin),
+                    )
+                }
+            }
+        };
+        Box::new(SoftKeyboardApp { inner: app })
+    }) {
         // Android では標準エラー出力が logcat に直結しないため、本来は android_logger 等の
         // 追加導入が必要だが、ログ連携は対象外とする（#243）
         // （out-of-scope-tracking.md に基づき PR 側で報告する）。
@@ -498,19 +465,19 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     }
 }
 
-/// [`android_main`] が組み立てる実描画 `Box<dyn eframe::App>` を包み、`update` の先頭で
+/// [`android_main`] が組み立てる実描画 `Box<dyn EguiApp>` を包み、`update` の先頭で
 /// [`poll_soft_keyboard`] を呼んでからフレーム本体（`inner`）に委譲する（Issue #796）。
 /// `update` 以外の `eframe::App` メソッドは呼び出し元の各 App 型が上書きしていないため
 /// （`ProxyApp`/`TvFocusApp`/レジストリ経由の型消去 App、いずれも `update` のみ実装）、
 /// 委譲は `update` だけで足りる。
 struct SoftKeyboardApp {
-    inner: Box<dyn eframe::App>,
+    inner: Box<dyn fandhe_render_egui::EguiApp>,
 }
 
-impl eframe::App for SoftKeyboardApp {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+impl fandhe_render_egui::EguiApp for SoftKeyboardApp {
+    fn update(&mut self, ctx: &egui::Context) {
         poll_soft_keyboard(ctx);
-        self.inner.update(ctx, frame);
+        self.inner.update(ctx);
     }
 }
 
@@ -1020,17 +987,6 @@ extern "system" fn Java_com_fandhe_platform_PenStylusHelper_nativeOnPenClear(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// REQ-1（Android = Vulkan）の充足を機械的に検証する。
-    /// 実機起動の確認自体は TASK-1.6（#230、人間担当）のスコープであり、
-    /// ここでは初期化コードが Vulkan 以外へフォールバックしないことのみを保証する。
-    /// `frame-metrics` feature 有効時は `android_wgpu_backends` 自体が
-    /// コンパイル対象外になるため（上記 cfg 参照）、本テストも同様に除外する。
-    #[cfg(not(feature = "frame-metrics"))]
-    #[test]
-    fn vulkan_backend_is_fixed() {
-        assert_eq!(android_wgpu_backends(), eframe::wgpu::Backends::VULKAN);
-    }
 
     /// `read_debug_proxy_app_property` はエミュレータ実機での
     /// `adb shell setprop` 前提の関数であり、ホスト側単体テストでは値の内容を
