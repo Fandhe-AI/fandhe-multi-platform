@@ -39,10 +39,14 @@ public class HomeWidgetProvider extends AppWidgetProvider {
 
     /** 全ウィジェットへ再描画を要求する。ウィジェットが 0 個なら空振りする。 */
     static void requestUpdate(Context context) {
-        AppWidgetManager.getInstance(context)
-                .updateAppWidget(
-                        new ComponentName(context, HomeWidgetProvider.class),
-                        buildViews(context));
+        AppWidgetManager manager = AppWidgetManager.getInstance(context);
+        RemoteViews views = buildViews(context);
+        manager.updateAppWidget(new ComponentName(context, HomeWidgetProvider.class), views);
+        // 移動前の旧名で配置済みのウィジェットも更新する（互換用。無ければ空振り）。
+        manager.updateAppWidget(
+                new ComponentName(
+                        context.getPackageName(), "com.fandhe.androidapp.HomeWidgetProvider"),
+                views);
     }
 
     @Override
