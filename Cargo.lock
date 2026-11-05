@@ -1062,6 +1062,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-nfc-card-emulation"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-core"
 version = "0.2.0"
 dependencies = [
@@ -1132,6 +1143,7 @@ name = "fandhe-gallery"
 version = "0.1.0"
 dependencies = [
  "egui",
+ "fandhe-cap-nfc-card-emulation",
  "fandhe-core",
  "fandhe-egui-proxy",
  "fandhe-platform-apple",

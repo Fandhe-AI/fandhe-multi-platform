@@ -75,6 +75,14 @@ android {
             // 対象範囲外の API 移行としてここでは非推奨警告を許容する）。
             @Suppress("DEPRECATION")
             jniLibs.srcDirs("../../../target/android/jniLibs")
+
+            // 機能 crate が持つ Java・res（宣言の `[package.metadata.fandhe.android] java` / `res`）。生成
+            // （`cargo fandhe gen`、#1176）が入るまでは手で並べる。cargo-fandhe の突き合わせテストが、
+            // 宣言とここの srcDirs の一致を確かめる。
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-nfc-card-emulation/android/java")
+            @Suppress("DEPRECATION")
+            res.srcDirs("../../../crates/fandhe-cap-nfc-card-emulation/android/res")
         }
     }
 
