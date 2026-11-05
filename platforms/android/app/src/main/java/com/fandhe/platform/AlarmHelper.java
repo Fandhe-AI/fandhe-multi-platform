@@ -50,6 +50,21 @@ public final class AlarmHelper {
                 c, REQUEST_CODE, i, create ? BASE_FLAGS : BASE_FLAGS | PendingIntent.FLAG_NO_CREATE);
     }
 
+    // パッケージ移動前の予約（旧名 receiver 宛て）。照合・取消のみ行い、新規には作らない。
+    private static PendingIntent legacyIntent(Context c) {
+        Intent i = new Intent(c, com.fandhe.androidapp.AlarmReceiver.class);
+        return PendingIntent.getBroadcast(
+                c, REQUEST_CODE, i, BASE_FLAGS | PendingIntent.FLAG_NO_CREATE);
+    }
+
+    private static void cancelLegacy(Context c, AlarmManager am) {
+        PendingIntent old = legacyIntent(c);
+        if (old != null) {
+            if (am != null) am.cancel(old);
+            old.cancel();
+        }
+    }
+
     static void ensureChannel(Context c) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationManager nm = c.getSystemService(NotificationManager.class);
@@ -110,6 +125,7 @@ public final class AlarmHelper {
                 am.cancel(old);
                 old.cancel();
             }
+            cancelLegacy(c, am);
             SharedPreferences sp = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             if (!sp.edit().putLong(KEY_FIRE_AT, fireAtMs).commit()) return FAILED;
             PendingIntent pi = receiverIntent(c, true);
@@ -149,6 +165,7 @@ public final class AlarmHelper {
                 if (am != null) am.cancel(pi);
                 pi.cancel();
             }
+            cancelLegacy(c, am);
             boolean ok = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                     .edit().remove(KEY_FIRE_AT).commit();
             return ok ? OK : FAILED;
@@ -160,7 +177,7 @@ public final class AlarmHelper {
     static synchronized long state(Context c) {
         try {
             SharedPreferences sp = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            if (receiverIntent(c, false) == null) {
+            if (receiverIntent(c, false) == null && legacyIntent(c) == null) {
                 // 鳴った・電源断・許可の取り消しのいずれでも OS 側に無い。
                 sp.edit().remove(KEY_FIRE_AT).commit();
                 return 0L;

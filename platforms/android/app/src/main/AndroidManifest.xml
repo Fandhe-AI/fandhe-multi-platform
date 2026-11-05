@@ -421,6 +421,9 @@
         <!-- Issue #1078: アラームの時刻に通知を鳴らす受け口。自アプリの明示 Intent（FLAG_IMMUTABLE）
              だけが届くため exported=false、intent-filter なし。切り離し時に削除する。 -->
         <receiver
+            android:name="com.fandhe.androidapp.AlarmReceiver"
+            android:exported="false" />
+        <receiver
             android:name="com.fandhe.platform.AlarmReceiver"
             android:exported="false" />
 
@@ -429,6 +432,16 @@
              システムだけ（security.md A05）。uses-permission は足さない。ACTIVE_TILE は付けない
              （非アクティブモード）。切り離し時にこの service と strings.xml の
              quick_settings_tile_label、res/drawable/ic_quick_settings_tile.xml を削除する。 -->
+        <service
+            android:name="com.fandhe.androidapp.QuickSettingsTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_quick_settings_tile"
+            android:label="@string/quick_settings_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
         <service
             android:name="com.fandhe.platform.QuickSettingsTileService"
             android:exported="true"
