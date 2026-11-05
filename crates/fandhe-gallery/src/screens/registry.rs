@@ -563,7 +563,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "share_receive_show" => fandhe_core::screens::share_receive_show::current_screen,
-    fandhe_egui_proxy::device::share_receive::share_receive_show_effect,
+    fandhe_cap_share_receive::share_receive_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "url_scheme_show" => fandhe_core::screens::url_scheme_show::current_screen,

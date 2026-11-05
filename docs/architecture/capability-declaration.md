@@ -145,7 +145,7 @@ identity = true
 
 ## 6. 現行設定との突き合わせ
 
-先行 5 機能（`crates/cargo-fandhe/tests/fixtures/*.toml`）の宣言を、現行の設定と突き合わせました（#1161、REQ-21 / TASK-21.2）。`crates/cargo-fandhe/tests/declarations.rs` の「現行設定との突き合わせ」節が、次を毎回の `cargo test` で確かめます。
+先行 5 機能（`crates/cargo-fandhe/tests/fixtures/*.toml`。機能 crate へ移した機能は crate の `Cargo.toml` の `[package.metadata.fandhe]`。現在は share-receive の `crates/fandhe-cap-share-receive`、#1173）の宣言を、現行の設定と突き合わせました（#1161、REQ-21 / TASK-21.2）。`crates/cargo-fandhe/tests/declarations.rs` の「現行設定との突き合わせ」節が、次を毎回の `cargo test` で確かめます。
 
 | 宣言 | 比較先 |
 |------|-------|

@@ -75,6 +75,9 @@ android {
             // 対象範囲外の API 移行としてここでは非推奨警告を許容する）。
             @Suppress("DEPRECATION")
             jniLibs.srcDirs("../../../target/android/jniLibs")
+            // 機能 crate が持つ Java（`fandhe-cap-*/android/java`）。宣言の `java` と一致させる
+            // （`cargo-fandhe` のテストが突き合わせる）。
+            java.srcDir("../../../crates/fandhe-cap-share-receive/android/java")
         }
     }
 

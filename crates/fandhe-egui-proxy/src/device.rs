@@ -403,11 +403,6 @@ pub mod android_screen_orientation;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_wake_lock;
-/// Issue #606: Android 向け共有の受け取り実装。
-/// `device/share_receive.rs::platform_share_receive` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_share_receive;
 /// Issue #810: Android 向けスリープ・ロックの通知の骨格（`Unsupported` のスタブ。#811 が埋める）。
 /// `device/sleep_lock_events.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
@@ -1472,10 +1467,6 @@ pub mod macos_screen_wake_lock;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_serial_port;
-/// Issue #606: macOS 向け共有の受け取り実装（`macos/fandhe_macos_share_receive.m` のサービスメニュー受信を
-/// 呼ぶ C ABI ラッパー）。`device/share_receive.rs` の macOS 経路と `main.rs`（登録）から使われる。
-#[cfg(target_os = "macos")]
-pub mod macos_share_receive;
 /// Issue #810: macOS 向けスリープ・ロックの通知実装（`macos/fandhe_macos_sleep_lock_events.m`、
 /// NSWorkspace の通知を呼ぶ C ABI ラッパー）。`device/sleep_lock_events.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -1711,9 +1702,6 @@ pub mod serial_port;
 /// Phase 11 の拡充ループ（親 #896、Issue #897/#898/#899）: 共有シートの effect ドライバ
 /// （macOS/iOS/Android/Windows 実装）。
 pub mod share;
-/// Phase 11 の拡充ループ（親 #122、Issue #606）: 共有の受け取りの effect ドライバ（macOS・Android 実装、
-/// 他 OS は `UnsupportedShareReceive` 固定。Web は `fandhe-web-dom`）。
-pub mod share_receive;
 /// Phase 11 の拡充ループ（親 #167、Issue #810）: スリープ・ロックの通知の effect ドライバ
 /// （macOS・Windows 実装、Android は骨格のスタブで #811 が埋める。他 OS は `UnsupportedSleepLockEvents` 固定）。
 pub mod sleep_lock_events;

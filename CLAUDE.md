@@ -33,6 +33,7 @@ fandhe-multi-platform/
 │   ├── fandhe-gallery/          # 画面カタログ（非公開）。画面の登録と各 OS の最終成果物（デスクトップ・iOS の bin、Android・Web の cdylib）、TASK-21.2 / #1165
 │   ├── fandhe-fonts/            # CJK フォント資産（Noto Sans JP 埋め込み）
 │   ├── fandhe-platform-android/ # Android 共通層（AndroidApp の保持・JNI 定型 `with_activity`、egui 非依存、TASK-21.2 / #1166）
+│   ├── fandhe-cap-share-receive/ # 機能 crate: 共有の受け取り（契約・effect ドライバ・Android/macOS 実装・宣言、TASK-21.3 / #1173）
 │   ├── fandhe-platform-apple/   # Apple（iOS / macOS）共通層（build script helper・共有ヘッダ・is_main_thread、TASK-21.2 / #1168）
 │   ├── fandhe-prototype/        # プロトタイプアプリ共通コード（TASK-2.2）
 │   ├── fandhe-render-egui/      # egui による実描画（Node → egui）とアプリ起動（デスクトップ・Android・iOS・Web）。eframe の型を公開しない（TASK-21.2 / #1164、forbid(unsafe_code)）

@@ -6,8 +6,8 @@
 // `NSServices` は LaunchServices に登録された .app でしか効かないため、`scripts/apple/
 // bundle-macos-url-scheme.sh` が .app 化の際に足す（素の実行体にはサービスが出ない）。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_share_receive.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `crates/fandhe-cap-share-receive/src/macos.rs` から C ABI 経由で呼ばれる。
+// 同 crate の `build.rs` が macOS ターゲットでのみコンパイルする。
 //
 // 契約:
 //   fandhe_macos_share_receive_register(void) -> void
@@ -19,7 +19,7 @@
 //     差し替えると壊れる。delegate には触れない。`servicesProvider` が provider を retain するかに
 //     依らず、static の強参照で保持するため問題ない。
 //   fandhe_rust_share_receive_received(const uint8_t *ptr, size_t len) -> int32_t
-//     Rust 側（`macos_share_receive.rs`）が公開する `extern "C"` 関数。テキストを UTF-8 で
+//     Rust 側（`src/macos.rs`）が公開する `extern "C"` 関数。テキストを UTF-8 で
 //     渡す。文字列が取れなかったときは (NULL, 0)。ポインタは呼び出し中だけ有効で、Rust 側は
 //     呼び出しの中で検査・コピーまで完了する。戻り値は 0 = 受理、1 = 拒否。
 //

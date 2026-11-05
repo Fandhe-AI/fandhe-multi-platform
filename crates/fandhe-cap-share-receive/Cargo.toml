@@ -1,0 +1,37 @@
+[package]
+name = "fandhe-cap-share-receive"
+version = "0.2.0"
+edition = "2024"
+description = "共有の受け取り（他アプリから共有されたテキスト 1 件）の機能 crate。契約・effect ドライバ・Android/macOS 実装・宣言を 1 crate に集める"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+publish = false
+
+[dependencies]
+# 画面の状態関数（`share_receive_show`）。端末依存ゼロの共通コア。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知（`CompletionSender`）。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+# JNI の受け口（`ShareReceiveHelper.nativeOnShareReceived`）だけを持つ。Activity は呼ばない。
+[target.'cfg(target_os = "android")'.dependencies]
+jni = { workspace = true }
+
+# macOS の ObjC（`macos/*.m`）のコンパイルに使う。
+[build-dependencies]
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（`cargo fandhe check` が検証し、統合規則に従って各 OS の設定へ反映する）。
+# iOS の共有拡張は #1211 で実装時に足す（未実装の欄は宣言しない）。
+[package.metadata.fandhe]
+id = "share-receive"
+
+[package.metadata.fandhe.macos]
+info-plist = { NSServices = [{ NSMenuItem = { default = "Fandhe で受け取る" }, NSMessage = "receiveSharedText", NSPortName = "$(EXECUTABLE_NAME)", NSSendTypes = ["public.utf8-plain-text"] }] }
+
+[package.metadata.fandhe.android]
+java = ["android/java"]
+main-activity-intent-filters = [
+  { actions = ["android.intent.action.SEND"], categories = ["android.intent.category.DEFAULT"], data = [{ mimeType = "text/plain" }] },
+]

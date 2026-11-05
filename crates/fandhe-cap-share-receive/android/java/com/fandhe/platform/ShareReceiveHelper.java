@@ -6,8 +6,8 @@ import android.content.Intent;
 // Rust 側の受け口へ渡す。
 //
 // 呼び出し元: `MainActivity` の `onCreate`（コールドスタート）と `onNewIntent`（起動中）。
-// 呼び出し先: `crates/fandhe-egui-proxy/src/device/android_share_receive.rs` の JNI 実体
-// （feature `device` 無効時の no-op は `android.rs`）。JNI 署名は本ファイルの宣言・no-op
+// 呼び出し先: `crates/fandhe-cap-share-receive/src/android.rs` の JNI 実体
+// （feature `device` 無効時の no-op は `crates/fandhe-egui-proxy/src/android.rs`）。JNI 署名は本ファイルの宣言・no-op
 // スタブ・Rust 実体の 3 か所で `(String) -> void` に一致させる。
 //
 // 検査（長さ・制御文字・UTF-8）は Rust 側の共通層に一本化し、ここでは文字列を加工しない

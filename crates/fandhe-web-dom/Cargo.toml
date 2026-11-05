@@ -23,6 +23,9 @@ fandhe-core = { path = "../fandhe-core" }
 # fandhe-egui-proxy と同様の関係）の依存であり、共通コアとの一方向性は崩さない
 # （coding-rust.md 準拠）。
 fandhe-device = { path = "../fandhe-device" }
+# Issue #1173: 共有の受け取りの契約（`ShareInbox`・`validate_text`）の正本。wasm32 では
+# `fandhe-core`・`fandhe-runtime`・`thiserror` しか引かない（Android/macOS の実装は cfg で外れる）。
+fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # 実 DOM 構築（mount.rs）専用。native ビルド（dom_tree.rs / html.rs のみを使う

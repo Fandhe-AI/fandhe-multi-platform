@@ -2,8 +2,8 @@
 //!
 //! `fandhe_core::screens::share_receive_show`（端末依存ゼロ）の画面を
 //! [`super::mount::mount_with_effect`] の effect として駆動する。呼び出し元は `demo.rs` の
-//! `mount_share_receive_show_screen`。受信の検査・保持は `fandhe_device::share_receive`
-//! （契約の SSOT）をそのまま使う。Web は `fandhe-device` の trait を通らない
+//! `mount_share_receive_show_screen`。受信の検査・保持は `fandhe_cap_share_receive`
+//! （契約の SSOT）をそのまま使う。Web は `ShareReceive` trait を通らない
 //! （`url_scheme.rs` と同じ理由）。
 //!
 //! - 受け方: manifest の `share_target`（`method: GET`、Service Worker なし）。インストール済み PWA が
@@ -68,10 +68,10 @@ pub fn cleaned_url(pathname: &str) -> String {
 mod web {
     use std::sync::Once;
 
+    use fandhe_cap_share_receive::ShareInbox;
     use fandhe_core::screens::share_receive_show::{
         apply_snapshot, apply_unsupported, set_guide, ShareGuide, ShareReceiveShowState,
     };
-    use fandhe_device::share_receive::ShareInbox;
     use wasm_bindgen::JsValue;
 
     use super::{cleaned_url, shared_payload};
@@ -150,7 +150,7 @@ pub use web::share_receive_show_effect;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::share_receive::{ShareInbox, MAX_TEXT_BYTES};
+    use fandhe_cap_share_receive::{ShareInbox, MAX_TEXT_BYTES};
 
     #[test]
     fn no_keys_is_none() {

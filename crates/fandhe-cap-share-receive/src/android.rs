@@ -1,27 +1,20 @@
-//! Android 向け共有の受け取り（Issue #607、親 #122）。`device/share_receive.rs::
-//! platform_share_receive` の Android 経路から呼ばれる。
+//! Android 向け共有の受け取り（Issue #607、親 #122）。`lib.rs` の `platform_share_receive` の
+//! Android 経路から呼ばれる。
 //!
 //! 他アプリの共有シート（`ACTION_SEND` + `text/plain` + `EXTRA_TEXT`）から届いたテキストを、
 //! Java 側 `ShareReceiveHelper.deliver`（`MainActivity` の `onCreate` / `onNewIntent` から
 //! 呼ばれる）が [`Java_com_fandhe_platform_ShareReceiveHelper_nativeOnShareReceived`] 経由で
 //! 渡す。受け口 [`INBOX`] はプロセス全体の static で、UI ができる前（コールドスタート）に
-//! 届いた分もここに溜まる。検査・保持は共通層 `fandhe_device::share_receive::ShareInbox` に
+//! 届いた分もここに溜まる。検査・保持は共通層 [`ShareInbox`] に
 //! 一本化し、本モジュールは JNI の橋渡しだけを持つ。本文は秘密値を含みうるためログへ出さない。
-//! feature `device` 無効ビルド向けの no-op は `crate::android` に置く。
+//! feature `device` 無効ビルド向けの no-op は `fandhe-egui-proxy` の `android.rs` に置く
+//! （`MainActivity` が `deliver` を無条件に呼ぶため、本 crate がリンクされない構成でも
+//! `UnsatisfiedLinkError` にしない）。
 
-use fandhe_device::share_receive::{ShareInbox, ShareReceive, ShareSnapshot};
-use fandhe_device::DeviceError;
+use crate::{ShareInbox, ShareReceive, ShareReceiveError, ShareSnapshot};
 
 /// 受信した共有テキストの受け口（プロセス全体で 1 つ）。
 static INBOX: ShareInbox = ShareInbox::new();
-
-/// 受信時刻（UNIX ms）。エポック前なら 0。表示用の壁時計で、経過時間の計測には使わない。
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
-}
 
 /// 受け口へ 1 件渡す。`None`（null・変換失敗・Java 側で拒否した入力）は拒否として数える。
 /// `Err` は件数に反映済みで、本文を出さないため握って捨てる。
@@ -34,11 +27,11 @@ fn deliver(inbox: &ShareInbox, text: Option<&str>, now_ms: u64) {
 ///
 /// # Safety
 /// この関数自体は `unsafe` 操作を含まない。`EnvUnowned::with_env` が JNI アタッチメントの
-/// 安全な取り扱い（`catch_unwind` による panic の遮断込み）を担う。`#[no_mangle]` は
+/// 安全な取り扱い（`catch_unwind` による panic の遮断込み）を担う。`#[unsafe(no_mangle)]` は
 /// JNI 命名規約上の固定シンボル名であり、`nativeOnUrlSchemeReceived` と同じ根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_ShareReceiveHelper_nativeOnShareReceived<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -50,7 +43,7 @@ extern "system" fn Java_com_fandhe_platform_ShareReceiveHelper_nativeOnShareRece
         } else {
             text.try_to_string(env).ok()
         };
-        deliver(&INBOX, value.as_deref(), now_ms());
+        deliver(&INBOX, value.as_deref(), crate::now_ms());
         Ok(())
     });
     let _ = outcome.into_outcome();
@@ -60,7 +53,7 @@ extern "system" fn Java_com_fandhe_platform_ShareReceiveHelper_nativeOnShareRece
 pub(crate) struct AndroidShareReceive;
 
 impl ShareReceive for AndroidShareReceive {
-    fn snapshot(&self) -> Result<ShareSnapshot, DeviceError> {
+    fn snapshot(&self) -> Result<ShareSnapshot, ShareReceiveError> {
         Ok(INBOX.snapshot())
     }
 }

@@ -15,11 +15,16 @@ const IDS: [&str; 5] = [
     "home-widget",
 ];
 
+/// 機能 crate へ移した機能は crate の `Cargo.toml`（`[package.metadata.fandhe]` 以降）を、
+/// それ以外は `tests/fixtures/<id>.toml` を宣言の正本として読む。
 fn fixture(id: &str) -> String {
-    fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("tests/fixtures/{id}.toml")),
-    )
-    .unwrap()
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let manifest = root.join(format!("../fandhe-cap-{id}/Cargo.toml"));
+    if let Ok(text) = fs::read_to_string(&manifest) {
+        let at = text.find("[package.metadata.fandhe]").unwrap();
+        return text[at..].to_string();
+    }
+    fs::read_to_string(root.join(format!("tests/fixtures/{id}.toml"))).unwrap()
 }
 
 /// `[package]` と宣言の断片から成る機能 crate を `root/c/<dir>` に作る。参照先のディレクトリも作る。
@@ -885,5 +890,26 @@ fn macos_services_and_widget_extension_match_current_settings() {
             swift.contains(&format!("import {f}")),
             "{f} を import していない"
         );
+    }
+}
+
+/// 機能 crate が宣言した Java の置き場は、Gradle の `java.srcDir` に入っている
+/// （手書きビルドの間は宣言を読まないため、両者のずれをここで検出する。生成は #1176）。
+#[test]
+fn android_java_dirs_of_feature_crates_are_in_gradle_sources() {
+    let gradle = repo("platforms/android/app/build.gradle.kts");
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    for entry in fs::read_dir(&crates).unwrap().flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let Some(id) = name.strip_prefix("fandhe-cap-") else {
+            continue;
+        };
+        for dir in declared(id).android.map(|a| a.java).unwrap_or_default() {
+            let want = format!("crates/{name}/{dir}");
+            assert!(
+                gradle.contains(&want),
+                "{want} が build.gradle.kts の srcDir に無い"
+            );
+        }
     }
 }
