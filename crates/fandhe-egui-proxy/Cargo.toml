@@ -246,9 +246,9 @@ fandhe-platform-android = { path = "../fandhe-platform-android" }
 # 参照するために必要。eframe が推移的に要求する winit と同一インスタンスへ
 # 解決される（workspace 一元管理、ルート Cargo.toml のコメント参照）。
 winit = { workspace = true, features = ["android-game-activity"] }
-# Issue #750: `device/android.rs` の `AndroidCamera` が `AndroidApp::vm_as_ptr()` /
-# `activity_as_ptr()` を `jni::JavaVM` へ橋渡しして `MainActivity.requestCameraCapture()` を
-# 呼ぶために使う。`android-activity`（上記）の直接依存として既に 0.22.4 が解決済みのため
+# Issue #750: `device/android.rs` の各機能が `AndroidApp::vm_as_ptr()` /
+# `activity_as_ptr()` を `jni::JavaVM` へ橋渡しして `MainActivity` のメソッドを呼ぶために使う
+# （カメラ撮影は機能 crate `fandhe-cap-camera-capture` へ移した、Issue #1170）。`android-activity`（上記）の直接依存として既に 0.22.4 が解決済みのため
 # 新規パッケージは増えない（ルート Cargo.toml の `jni` コメント参照）。
 jni = { workspace = true, optional = true }
 # Issue #1378: `device/android_local_fonts.rs` が `name` テーブルを読む（ルート Cargo.toml 参照）。

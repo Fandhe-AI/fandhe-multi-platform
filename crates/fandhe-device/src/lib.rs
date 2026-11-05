@@ -61,7 +61,6 @@ pub mod bluetooth_le;
 pub mod calendar;
 /// Phase 11（端末機能の拡充ループ、親 #87、Issue #276）: 疑似着信の OS 着信 UI への表示と結果の取得。
 pub mod call_ui;
-pub mod camera;
 /// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得（ズーム操作を含む）。
 pub mod camera_preview_stream;
 /// Phase 11（端末機能の拡充ループ、親 #120、Issue #582）: 画面キャプチャの防止・検知。
@@ -182,8 +181,6 @@ pub mod music_library;
 pub mod network_status;
 /// Phase 11（端末機能の拡充ループ、親 #157、Issue #1044）: NFC タグ（NDEF）の読み取り。
 pub mod nfc;
-/// Phase 11（端末機能の拡充ループ、親 #151、Issue #1128）: NFC カードエミュレーション（HCE）の状態。
-pub mod nfc_card_emulation;
 /// Phase 11（端末機能の拡充ループ）: 単語分割。
 pub mod nlp;
 /// Phase 11（端末機能の拡充ループ、親 #1003、Issue #1004）: ローカル通知。
@@ -311,7 +308,7 @@ pub enum DeviceError {
     /// `http` モジュールの通信・許可 URL 検証・応答上限超過などの失敗。
     #[error("HTTP エラー: {0}")]
     Http(String),
-    /// `camera::Camera::capture` が返す画像サイズが許容範囲外（0 または上限超過）。
+    /// 撮影画像のサイズが許容範囲外（0 または上限超過）。カメラ撮影は機能 crate `fandhe-cap-camera-capture` が自前の `CameraError` で返し、本バリアントは他機能（地図・PDF 等）の画像で使う。
     #[error("画像サイズが不正または大きすぎます: {0}x{1}")]
     InvalidImageSize(u32, u32),
     /// 現在のプラットフォームでは該当機能を提供できない（例: `FsStorage::desktop_default` の
@@ -353,7 +350,7 @@ pub enum DeviceError {
 
 /// カメラ実装が返す静止画（RGBA・行優先・パディングなし）。
 ///
-/// `rgba.len()` は常に `width * height * 4` になる契約（`camera` モジュールのテスト参照）。
+/// `rgba.len()` は常に `width * height * 4` になる契約（`fandhe-cap-camera-capture` の `DummyCamera` のテスト参照）。
 #[derive(Debug, Clone)]
 pub struct Image {
     /// 画像の幅（ピクセル）。

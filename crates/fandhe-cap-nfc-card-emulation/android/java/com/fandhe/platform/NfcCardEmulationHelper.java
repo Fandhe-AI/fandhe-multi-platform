@@ -10,7 +10,7 @@ import android.os.SystemClock;
 // NFC カードエミュレーション（HCE、nfc-card-emulation、Issue #1129）の状態置き場と読み出し。
 // 応答回数と最後の応答時刻はプロセス内 static に持つ（SharedPreferences は使わない。Rust 側 trait doc の
 // 契約「回数はこのプロセス内」に揃える）。`NfcCardEmulationService` が `recordResponse` で書き、
-// Rust の `android_nfc_card_emulation.rs` が `MainActivity.nfcCardEmulationStatus` 経由で `status` を読む。
+// Rust の `crates/fandhe-cap-nfc-card-emulation/src/android.rs` が `MainActivity.nfcCardEmulationStatus` 経由で `status` を読む。
 // 書き込みと読み出しは同じ LOCK の内側で行い、回数と時刻の組を分裂させない。
 final class NfcCardEmulationHelper {
     // `status` の戻り値 long[5] の配置（SSOT。Rust の `decode_status` はこの配置で解釈する）:

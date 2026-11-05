@@ -60,12 +60,6 @@ fn build() {
         return;
     }
 
-    // `ios/fandhe_ios_camera.m`（Issue #751、実カメラ）。
-    compile_objc(
-        "ios/fandhe_ios_camera.m",
-        &["AVFoundation", "CoreGraphics", "UIKit"],
-    );
-
     // `ios/fandhe_ios_motion.m`（Issue #832、実センサ傾き）。
     compile_objc("ios/fandhe_ios_motion.m", &["CoreMotion", "UIKit"]);
 

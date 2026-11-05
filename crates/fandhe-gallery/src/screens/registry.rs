@@ -35,7 +35,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "camera_capture" => fandhe_core::screens::camera_capture::current_screen,
-    fandhe_egui_proxy::device::camera_capture::camera_capture_effect,
+    fandhe_cap_camera_capture::camera_capture_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "tilt_ball" => fandhe_core::screens::tilt_ball::current_screen,
@@ -539,7 +539,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nfc_card_emulation_show" => fandhe_core::screens::nfc_card_emulation_show::current_screen,
-    fandhe_egui_proxy::device::nfc_card_emulation::nfc_card_emulation_show_effect,
+    fandhe_cap_nfc_card_emulation::nfc_card_emulation_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "scanner_devices_import" => fandhe_core::screens::scanner_devices_import::current_screen,

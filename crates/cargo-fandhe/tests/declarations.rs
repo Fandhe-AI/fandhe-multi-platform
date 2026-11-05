@@ -15,16 +15,30 @@ const IDS: [&str; 5] = [
     "home-widget",
 ];
 
-/// 機能 crate へ移した機能は crate の `Cargo.toml`（`[package.metadata.fandhe]` 以降）を、
-/// それ以外は `tests/fixtures/<id>.toml` を宣言の正本として読む。
+/// 機能 crate（`crates/fandhe-cap-<id>`）があればその `Cargo.toml` の宣言部分、
+/// 無ければ `tests/fixtures/<id>.toml` を返す（機能 crate へ移した機能から fixture を消していく）。
 fn fixture(id: &str) -> String {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let manifest = root.join(format!("../fandhe-cap-{id}/Cargo.toml"));
-    if let Ok(text) = fs::read_to_string(&manifest) {
-        let at = text.find("[package.metadata.fandhe]").unwrap();
-        return text[at..].to_string();
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let krate = manifest.join(format!("../fandhe-cap-{id}/Cargo.toml"));
+    if let Ok(toml) = fs::read_to_string(&krate) {
+        let mut out = String::new();
+        let mut inside = false;
+        for line in toml.lines() {
+            if line.starts_with("[package.metadata.fandhe")
+                || line.starts_with("[[package.metadata.fandhe")
+            {
+                inside = true;
+            } else if line.starts_with('[') {
+                inside = false;
+            }
+            if inside {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+        return out;
     }
-    fs::read_to_string(root.join(format!("tests/fixtures/{id}.toml"))).unwrap()
+    fs::read_to_string(manifest.join(format!("tests/fixtures/{id}.toml"))).unwrap()
 }
 
 /// `[package]` と宣言の断片から成る機能 crate を `root/c/<dir>` に作る。参照先のディレクトリも作る。
@@ -552,7 +566,7 @@ fn extension_usage_descriptions_validated_and_merged_by_equality() {
 }
 
 // ---- 現行設定との突き合わせ（capability-declaration.md §6）----
-// 寿命: #1170〜#1174 で宣言の読み先を crate へ移し、#1176 の生成比較に置き換わった時点か #1194 で撤去する。
+// 寿命: 機能 crate へ移した機能は `fixture` が crate の Cargo.toml を読む（#1170〜#1174）。#1176 の生成比較に置き換わった時点か #1194 で撤去する。
 
 fn repo(rel: &str) -> String {
     fs::read_to_string(
@@ -813,8 +827,18 @@ fn android_gradle_versions_match_versions_env() {
 #[test]
 fn ios_declarations_match_current_settings() {
     let plist = repo("platforms/apple/FandheIosApp/Resources/Info.plist");
-    let build_rs = repo("crates/fandhe-egui-proxy/build.rs");
     for id in IDS {
+        // 機能 crate へ移した機能は crate の build.rs、それ以外は egui-proxy の build.rs と比べる。
+        let own = format!("crates/fandhe-cap-{id}/build.rs");
+        let build_rs = if Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(&own)
+            .exists()
+        {
+            repo(&own)
+        } else {
+            repo("crates/fandhe-egui-proxy/build.rs")
+        };
         let Some(ios) = declared(id).ios else {
             continue;
         };
@@ -893,23 +917,28 @@ fn macos_services_and_widget_extension_match_current_settings() {
     }
 }
 
-/// 機能 crate が宣言した Java の置き場は、Gradle の `java.srcDir` に入っている
-/// （手書きビルドの間は宣言を読まないため、両者のずれをここで検出する。生成は #1176）。
 #[test]
-fn android_java_dirs_of_feature_crates_are_in_gradle_sources() {
+fn android_java_and_res_dirs_of_feature_crates_are_in_gradle_sources() {
     let gradle = repo("platforms/android/app/build.gradle.kts");
-    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    for entry in fs::read_dir(&crates).unwrap().flatten() {
-        let name = entry.file_name().to_string_lossy().to_string();
-        let Some(id) = name.strip_prefix("fandhe-cap-") else {
+    for id in IDS {
+        let crate_dir = format!("crates/fandhe-cap-{id}");
+        if !Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(&crate_dir)
+            .exists()
+        {
+            continue;
+        }
+        let Some(android) = declared(id).android else {
             continue;
         };
-        for dir in declared(id).android.map(|a| a.java).unwrap_or_default() {
-            let want = format!("crates/{name}/{dir}");
-            assert!(
-                gradle.contains(&want),
-                "{want} が build.gradle.kts の srcDir に無い"
-            );
+        for (kind, dirs) in [("java", android.java), ("res", android.res)] {
+            for dir in dirs {
+                assert!(
+                    gradle.contains(&format!("{crate_dir}/{dir}")),
+                    "{id}: {kind} {dir} が build.gradle.kts の srcDirs にない"
+                );
+            }
         }
     }
 }

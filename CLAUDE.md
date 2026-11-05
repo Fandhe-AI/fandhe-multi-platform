@@ -25,6 +25,7 @@ fandhe-multi-platform/
 │
 ├── crates/
 │   ├── cargo-fandhe/            # 機能宣言（[package.metadata.fandhe]）の検証と統合規則。`cargo fandhe check`（#1160、forbid(unsafe_code)）
+│   ├── fandhe-cap-*/            # 端末機能 1 つにつき 1 crate（契約・OS 別実装・宣言。egui 非依存。現在 camera-capture・nfc-card-emulation・share-receive、TASK-21.3 / #1170・#1172・#1173）
 │   ├── fandhe-core/             # 共通コア（UI DSL・状態管理・AI 型安全 DSL、forbid(unsafe_code)）
 │   │   ├── src/lib.rs           # 役割要約・モジュール地図（ui / state / token / screens）
 │   │   └── src/screens/         # AI が生成した画面モジュールの置き場（`ui/mod.rs` には手を入れない）
@@ -33,7 +34,6 @@ fandhe-multi-platform/
 │   ├── fandhe-gallery/          # 画面カタログ（非公開）。画面の登録と各 OS の最終成果物（デスクトップ・iOS の bin、Android・Web の cdylib）、TASK-21.2 / #1165
 │   ├── fandhe-fonts/            # CJK フォント資産（Noto Sans JP 埋め込み）
 │   ├── fandhe-platform-android/ # Android 共通層（AndroidApp の保持・JNI 定型 `with_activity`、egui 非依存、TASK-21.2 / #1166）
-│   ├── fandhe-cap-share-receive/ # 機能 crate: 共有の受け取り（契約・effect ドライバ・Android/macOS 実装・宣言、TASK-21.3 / #1173）
 │   ├── fandhe-platform-apple/   # Apple（iOS / macOS）共通層（build script helper・共有ヘッダ・is_main_thread、TASK-21.2 / #1168）
 │   ├── fandhe-prototype/        # プロトタイプアプリ共通コード（TASK-2.2）
 │   ├── fandhe-render-egui/      # egui による実描画（Node → egui）とアプリ起動（デスクトップ・Android・iOS・Web）。eframe の型を公開しない（TASK-21.2 / #1164、forbid(unsafe_code)）
