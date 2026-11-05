@@ -32,6 +32,15 @@ crate-type = ["cdylib", "rlib"]
 name = "fandhe-gallery-desktop"
 path = "src/main.rs"
 
+# `cargo fandhe gen`（#1176）の入力。説明文は利用者（このアプリ）が書く。機能 crate は文言の既定値を持たない。
+# 現行の手書き設定（Info.plist 等）との二重管理は、設定を生成へ切り替える #1194 までの間だけ。
+# 文言は現行の `FandheIosApp/Resources/Info.plist` と同じ（一致は cargo-fandhe の tests/gen.rs が保証）。
+[package.metadata.fandhe-app]
+app-group-prefix = "com.fandhe"
+
+[package.metadata.fandhe-app.ios.usage-descriptions]
+NSCameraUsageDescription = "型サンプル「カメラ撮影」「AR 表示」「書類スキャン」「動画の撮影」「カメラのライブ映像」「接続した機器からの取り込み」の動作確認に使います"
+
 [build-dependencies]
 # Apple のリンク指定（弱リンク・rpath・Info.plist 埋め込み）を `fandhe-egui-proxy` から受け取って出し直す。
 fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }

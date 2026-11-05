@@ -599,7 +599,9 @@ fn extension_usage_descriptions_validated_and_merged_by_equality() {
 }
 
 // ---- 現行設定との突き合わせ（capability-declaration.md §6）----
-// 寿命: 機能 crate へ移した機能は `fixture` が crate の Cargo.toml を読む（#1170〜#1174）。#1176 の生成比較に置き換わった時点か #1194 で撤去する。
+// Manifest・srcDirs・NSServices・拡張の plist/entitlements は生成物との比較へ移した（tests/gen.rs、#1176）。
+// ここに残すのは生成しない項目（framework のリンク・Gradle の版・Xcode の拡張ターゲット・Swift の import）。
+// 寿命: #1194（設定を生成へ切り替え）と #1212（Xcode ターゲット生成）で撤去する。
 
 fn repo(rel: &str) -> String {
     fs::read_to_string(
@@ -618,218 +620,6 @@ fn declared(id: &str) -> Declaration {
         .into_iter()
         .next()
         .unwrap()
-}
-
-type Attrs = std::collections::BTreeMap<String, String>;
-type Tag = (String, Attrs);
-
-/// XML のコメントを除く。
-fn strip_comments(xml: &str) -> String {
-    let mut out = String::new();
-    let mut rest = xml;
-    while let Some(i) = rest.find("<!--") {
-        out += &rest[..i];
-        rest = &rest[i..];
-        rest = &rest[rest.find("-->").expect("コメントが閉じていない") + 3..];
-    }
-    out + rest
-}
-
-/// タグを出現順に (名前, 属性) へ分ける。閉じタグは名前が `/` で始まり、自己閉じは閉じタグを補う。
-fn tags(xml: &str) -> Vec<Tag> {
-    let xml = strip_comments(xml);
-    let mut v = vec![];
-    for chunk in xml.split('<').skip(1) {
-        let Some((body, _)) = chunk.split_once('>') else {
-            continue;
-        };
-        if body.starts_with('?') {
-            continue;
-        }
-        let selfclose = body.ends_with('/');
-        let body = body.trim_end_matches('/');
-        let name_end = body.find(char::is_whitespace).unwrap_or(body.len());
-        let mut attrs = Attrs::new();
-        let mut rest = &body[name_end..];
-        while let Some((k, r)) = rest.split_once("=\"") {
-            let (val, r) = r.split_once('"').expect("属性値が閉じていない");
-            attrs.insert(
-                k.trim().trim_start_matches("android:").to_string(),
-                val.to_string(),
-            );
-            rest = r;
-        }
-        let name = body[..name_end].to_string();
-        v.push((name.clone(), attrs));
-        if selfclose {
-            v.push((format!("/{name}"), Attrs::new()));
-        }
-    }
-    v
-}
-
-fn parse_filter(it: &mut std::slice::Iter<Tag>) -> cargo_fandhe::declaration::IntentFilter {
-    let mut f = cargo_fandhe::declaration::IntentFilter {
-        actions: vec![],
-        categories: vec![],
-        data: vec![],
-    };
-    for (n, a) in it.by_ref() {
-        match n.as_str() {
-            "/intent-filter" => break,
-            "action" => f.actions.push(a["name"].clone()),
-            "category" => f.categories.push(a["name"].clone()),
-            "data" => f.data.push(cargo_fandhe::declaration::IntentData {
-                scheme: a.get("scheme").cloned(),
-                host: a.get("host").cloned(),
-                mime_type: a.get("mimeType").cloned(),
-                path_prefix: a.get("pathPrefix").cloned(),
-            }),
-            other if other.starts_with('/') => {}
-            other => panic!("想定外のタグ {other}"),
-        }
-    }
-    f
-}
-
-/// Manifest から宣言と同じ `kind`・`name` の要素を、宣言と同じ型で取り出す。
-fn manifest_component(
-    t: &[Tag],
-    c: &cargo_fandhe::declaration::Component,
-) -> cargo_fandhe::declaration::Component {
-    let kind = format!("{:?}", c.kind).to_lowercase();
-    let start = t
-        .iter()
-        .position(|(n, a)| *n == kind && a.get("name") == Some(&c.name))
-        .unwrap_or_else(|| panic!("Manifest に {} がない", c.name));
-    let mut attrs = t[start].1.clone();
-    let exported = attrs.remove("exported").expect("exported がない") == "true";
-    attrs.remove("name");
-    let mut out = cargo_fandhe::declaration::Component {
-        kind: c.kind.clone(),
-        name: c.name.clone(),
-        exported,
-        attributes: attrs,
-        intent_filters: vec![],
-        meta_data: vec![],
-    };
-    let close = format!("/{kind}");
-    let mut it = t[start + 1..].iter();
-    while let Some((n, a)) = it.next() {
-        if *n == close {
-            break;
-        }
-        match n.as_str() {
-            "intent-filter" => out.intent_filters.push(parse_filter(&mut it)),
-            "meta-data" => out.meta_data.push(cargo_fandhe::declaration::MetaData {
-                name: a["name"].clone(),
-                resource: a.get("resource").cloned(),
-                value: a.get("value").cloned(),
-            }),
-            _ => {}
-        }
-    }
-    out
-}
-
-/// MainActivity の intent-filter を Manifest の出現順に返す。
-fn main_activity_filters(t: &[Tag]) -> Vec<cargo_fandhe::declaration::IntentFilter> {
-    let main = t
-        .iter()
-        .position(|(n, a)| n == "activity" && a["name"].ends_with(".MainActivity"))
-        .expect("MainActivity がない");
-    let mut it = t[main + 1..].iter();
-    let mut out = vec![];
-    while let Some((n, _)) = it.next() {
-        match n.as_str() {
-            "/activity" => break,
-            "intent-filter" => out.push(parse_filter(&mut it)),
-            _ => {}
-        }
-    }
-    out
-}
-
-fn manifest_tags() -> Vec<Tag> {
-    tags(&repo("platforms/android/app/src/main/AndroidManifest.xml"))
-}
-
-#[test]
-fn android_permissions_features_and_components_match_manifest() {
-    let t = manifest_tags();
-    let main = main_activity_filters(&t);
-    for id in IDS {
-        let Some(a) = declared(id).android else {
-            continue;
-        };
-        for p in &a.permissions {
-            let ok = p.max_sdk.is_none()
-                && t.iter().any(|(k, m)| {
-                    k == "uses-permission"
-                        && m["name"] == p.name
-                        && !m.contains_key("maxSdkVersion")
-                });
-            assert!(ok, "{id}: {} が Manifest と違う", p.name);
-        }
-        for f in &a.features {
-            let ok = t.iter().any(|(k, m)| {
-                k == "uses-feature"
-                    && m["name"] == f.name
-                    && m["required"] == f.required.to_string()
-            });
-            assert!(ok, "{id}: {} が Manifest と違う", f.name);
-        }
-        for c in &a.components {
-            assert_eq!(&manifest_component(&t, c), c, "{id}: {}", c.name);
-        }
-        for f in &a.main_activity_intent_filters {
-            assert!(
-                main.contains(f),
-                "{id}: MainActivity の filter が Manifest にない"
-            );
-        }
-    }
-}
-
-#[test]
-fn manifest_has_no_undeclared_camera_nfc_hce_or_send_entries() {
-    let t = manifest_tags();
-    let set = |prefix: &str| -> std::collections::BTreeSet<String> {
-        t.iter()
-            .filter(|(k, a)| k == "uses-feature" && a["name"].starts_with(prefix))
-            .map(|(_, a)| a["name"].clone())
-            .collect()
-    };
-    let decl_set = |id: &str, prefix: &str| -> std::collections::BTreeSet<String> {
-        declared(id)
-            .android
-            .unwrap()
-            .features
-            .into_iter()
-            .map(|f| f.name)
-            .filter(|n| n.starts_with(prefix))
-            .collect()
-    };
-    assert_eq!(
-        set("android.hardware.camera"),
-        decl_set("camera-capture", "android.hardware.camera")
-    );
-    // android.hardware.nfc は nfc（タグ読み取り）の宣言で、HCE の宣言ではない。
-    let mut nfc = set("android.hardware.nfc");
-    assert!(nfc.remove("android.hardware.nfc"));
-    assert_eq!(nfc, decl_set("nfc-card-emulation", "android.hardware.nfc"));
-    // MainActivity の SEND の filter は share-receive の宣言と一致する。
-    let sends: Vec<_> = main_activity_filters(&t)
-        .into_iter()
-        .filter(|f| f.actions.iter().any(|a| a == "android.intent.action.SEND"))
-        .collect();
-    assert_eq!(
-        sends,
-        declared("share-receive")
-            .android
-            .unwrap()
-            .main_activity_intent_filters
-    );
 }
 
 #[test]
@@ -893,23 +683,7 @@ fn ios_declarations_match_current_settings() {
 }
 
 #[test]
-fn macos_services_and_widget_extension_match_current_settings() {
-    // NSServices: bundle-macos-url-scheme.sh の plutil -json 引数（`\"` と `$exe` を戻す）と比較する。
-    let sh = repo("scripts/apple/bundle-macos-url-scheme.sh");
-    let line = sh
-        .lines()
-        .find(|l| l.contains("\\\"NSMessage\\\""))
-        .expect("NSServices の行がない");
-    let json_text = line
-        .trim()
-        .trim_start_matches('"')
-        .trim_end_matches("\" \"$plist\"")
-        .replace("\\\"", "\"")
-        .replace("$exe", "$(EXECUTABLE_NAME)");
-    let want: Value = serde_json::from_str(&json_text).unwrap();
-    let got = declared("share-receive").macos.unwrap().info_plist["NSServices"].clone();
-    assert_eq!(got, want);
-
+fn widget_extension_matches_project_yml_and_swift() {
     // Widget 拡張。
     let ext = declared("home-widget").macos.unwrap().extensions.remove(0);
     let yml = repo("platforms/apple/project.yml");
@@ -925,19 +699,6 @@ fn macos_services_and_widget_extension_match_current_settings() {
         "PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.widgethost.{}",
         ext.bundle_suffix
     )));
-    let ent = repo("platforms/apple/FandheTextWidget/Resources/FandheTextWidget.entitlements");
-    for k in ext.entitlements.keys() {
-        assert!(
-            ent.contains(&format!("<key>{k}</key>")),
-            "{k} が entitlements にない"
-        );
-    }
-    for g in &ext.app_groups {
-        assert!(ent.contains(&format!("$(TeamIdentifierPrefix)com.fandhe.{g}</string>")));
-    }
-    let info = repo("platforms/apple/FandheTextWidget/Resources/Info.plist");
-    assert!(info.contains("com.apple.widgetkit-extension"));
-    assert!(info.contains("<key>FandheAppGroupIdentifier</key>"));
     // Swift 本体は機能 crate の `sources` にあり、project.yml がそのパスを拡張の sources に含める（#1174）。
     let mut swift = String::new();
     for src in &ext.sources {
@@ -957,31 +718,5 @@ fn macos_services_and_widget_extension_match_current_settings() {
             swift.contains(&format!("import {f}")),
             "{f} を import していない"
         );
-    }
-}
-
-#[test]
-fn android_java_and_res_dirs_of_feature_crates_are_in_gradle_sources() {
-    let gradle = repo("platforms/android/app/build.gradle.kts");
-    for id in IDS {
-        let crate_dir = format!("crates/fandhe-cap-{id}");
-        if !Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join(&crate_dir)
-            .exists()
-        {
-            continue;
-        }
-        let Some(android) = declared(id).android else {
-            continue;
-        };
-        for (kind, dirs) in [("java", android.java), ("res", android.res)] {
-            for dir in dirs {
-                assert!(
-                    gradle.contains(&format!("{crate_dir}/{dir}")),
-                    "{id}: {kind} {dir} が build.gradle.kts の srcDirs にない"
-                );
-            }
-        }
     }
 }
