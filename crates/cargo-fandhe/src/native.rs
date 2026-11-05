@@ -476,14 +476,31 @@ pub(crate) fn render(
 ) -> Result<BTreeMap<String, String>, Vec<String>> {
     let mut errs: Vec<String> = Vec::new();
     let mut files = BTreeMap::new();
-    let merged = |set: &[&Found], errs: &mut Vec<String>| {
-        let refs: Vec<_> = set.iter().map(|f| (f.decl.id.as_str(), &f.decl)).collect();
+    // 対象 OS 以外の欄を落としてから統合する（未到達 OS の欄の競合で全体を失敗させない）。
+    let merged = |os: &str, set: &[&Found], errs: &mut Vec<String>| {
+        let decls: Vec<_> = set
+            .iter()
+            .map(|f| {
+                let mut d = f.decl.clone();
+                if os != "ios" {
+                    d.ios = None;
+                }
+                if os != "macos" {
+                    d.macos = None;
+                }
+                if os != "android" {
+                    d.android = None;
+                }
+                d
+            })
+            .collect();
+        let refs: Vec<_> = decls.iter().map(|d| (d.id.as_str(), d)).collect();
         merge(&refs)
             .map_err(|e| errs.extend(e.into_iter().map(|e| e.to_string())))
             .ok()
     };
 
-    if let Some(m) = merged(android, &mut errs).map(|m| m.android) {
+    if let Some(m) = merged("android", android, &mut errs).map(|m| m.android) {
         if m != AndroidMerged::default() {
             let dirs: BTreeMap<&str, &Path> = android
                 .iter()
@@ -501,7 +518,7 @@ pub(crate) fn render(
         }
     }
     for (os, set) in [("ios", ios), ("macos", macos)] {
-        let Some(m) = merged(set, &mut errs).map(|m| if os == "ios" { m.ios } else { m.macos })
+        let Some(m) = merged(os, set, &mut errs).map(|m| if os == "ios" { m.ios } else { m.macos })
         else {
             continue;
         };
@@ -684,6 +701,18 @@ mod tests {
         assert!(files["android/AndroidManifest.xml"]
             .contains("android:label=\"x&quot;&lt;&amp;&gt;y\""));
         assert_eq!(groovy_str("a'b\\c"), "'a\\'b\\\\c'");
+    }
+
+    #[test]
+    fn other_os_field_conflict_does_not_fail_target_os() {
+        let a = found(
+            json!({"id": "a", "android": {"permissions": [{"name": "p"}]}, "ios": {"info-plist": {"K": "1"}}}),
+        );
+        let b = found(
+            json!({"id": "b", "android": {"permissions": [{"name": "q"}]}, "ios": {"info-plist": {"K": "2"}}}),
+        );
+        let files = render(&[&a, &b], &[], &[], &cfg(json!({}))).unwrap();
+        assert!(files.contains_key("android/AndroidManifest.xml"));
     }
 
     #[test]

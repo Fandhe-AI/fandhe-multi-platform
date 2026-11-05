@@ -61,14 +61,22 @@ pub(crate) fn reachable(meta: &Value) -> BTreeSet<String> {
                 .unwrap_or("")
                 .to_string();
             let target = d["target"].as_str();
-            let lib = alias.replace('-', "_");
+            let renamed = d["rename"].as_str().map(|r| r.replace('-', "_"));
+            let pname = d["name"].as_str();
             let hit = node["deps"].as_array().into_iter().flatten().find(|e| {
-                e["name"].as_str() == Some(&lib)
-                    && e["dep_kinds"]
-                        .as_array()
-                        .into_iter()
-                        .flatten()
-                        .any(|k| k["kind"].is_null() && k["target"].as_str() == target)
+                // rename 無しは辺の name がライブラリ名（[lib] name で変わる）なので、解決先の package 名で照合する。
+                let same = match &renamed {
+                    Some(r) => e["name"].as_str() == Some(r),
+                    None => e["pkg"]
+                        .as_str()
+                        .and_then(|p| pkgs.get(p))
+                        .is_some_and(|p| p["name"].as_str() == pname),
+                };
+                same && e["dep_kinds"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .any(|k| k["kind"].is_null() && k["target"].as_str() == target)
             });
             if let Some(pid) = hit.and_then(|e| e["pkg"].as_str()) {
                 list.push((
@@ -182,7 +190,9 @@ mod tests {
                "uses_default_features": true, "target": target, "kind": kind})
     }
     fn pkg(id: &str, features: Value, deps: Vec<Value>) -> Value {
-        json!({"id": id, "features": features, "dependencies": deps})
+        // package 名は ID の先頭語（テスト用の約束）。
+        let name = id.split(' ').next().unwrap_or(id);
+        json!({"id": id, "name": name, "features": features, "dependencies": deps})
     }
     fn edge(name: &str, pkg: &str, target: Value, kind: Value) -> Value {
         json!({"name": name, "pkg": pkg, "dep_kinds": [{"kind": kind, "target": target}]})
@@ -254,6 +264,21 @@ mod tests {
             ],
         );
         assert!(reachable(&m).contains("cap"));
+    }
+
+    #[test]
+    fn lib_name_differing_from_package_name_is_followed() {
+        let m = meta(
+            vec![
+                pkg("app", json!({}), vec![dep("fandhe-cap-cam", false, N, N)]),
+                pkg("fandhe-cap-cam", json!({}), vec![]),
+            ],
+            vec![
+                ("app", vec![edge("camera_impl", "fandhe-cap-cam", N, N)]),
+                ("fandhe-cap-cam", vec![]),
+            ],
+        );
+        assert!(reachable(&m).contains("fandhe-cap-cam"));
     }
 
     #[test]
