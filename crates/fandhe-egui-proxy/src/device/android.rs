@@ -1,6 +1,5 @@
-//! Phase 8（端末機能、Issue #750）: Android 向け `DataDir` 解決とカメラ Intent 中継の
-//! JNI 経由呼び出し。呼び出し元は `crate::device`（`storage_note_state` の Android 分岐）と
-//! `crate::device::camera_capture`（`platform_camera` の Android 分岐）で、いずれも
+//! Phase 8（端末機能、Issue #750）: Android 向け `DataDir` 解決と各機能の JNI 経由呼び出し
+//! （カメラ撮影は機能 crate `fandhe-cap-camera-capture` へ移した、Issue #1170）。呼び出し元は `crate::device`（`storage_note_state` の Android 分岐）などで、
 //! `feature = "device"` 有効時のみコンパイル対象になる（`device.rs` の `mod` 宣言参照）。
 //!
 //! `AndroidApp` の取得は `crate::android::android_app()`（`android_main` が `eframe` へ
@@ -13,7 +12,6 @@ use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use fandhe_core::screens::drag_drop::DropItem;
-use fandhe_device::camera::Camera;
 use fandhe_device::clipboard::Clipboard;
 use fandhe_device::file_picker::{PickedFile, MAX_FILE_BYTES};
 use fandhe_device::haptics::Haptics;
@@ -22,9 +20,7 @@ use fandhe_device::secure_credential::{validate_key, validate_secret, Secret, Se
 use fandhe_device::share::ShareRequest;
 use fandhe_device::text_scale::TextScale;
 use fandhe_device::tts::Tts;
-use fandhe_device::{DataDir, DeviceError, Image};
-
-use super::camera_capture::CaptureMailbox;
+use fandhe_device::{DataDir, DeviceError};
 
 /// アプリ内部ストレージのパス（`getFilesDir()` 相当）を返す。`android-activity` の
 /// `AndroidApp::internal_data_path()` が `GameActivity.internalDataPath` を返す
@@ -37,23 +33,6 @@ pub fn data_dir() -> Option<DataDir> {
         .map(DataDir)
 }
 
-/// 撮影 1 件を仲介する mailbox（プロセス内で単一飛行、`CaptureMailbox` 参照）。
-/// Activity 再生成時に届く完了は旧 `ProxyApp` の `CompletionSender` へ送られ
-/// 捨てられるが、Java `onCreate` が status 7 で中断決着させるため新画面が
-/// 引き継ぐべき実結果は存在しない（#881、`device/camera_capture.rs` モジュール
-/// doc 参照）。
-static CAPTURE_MAILBOX: CaptureMailbox = CaptureMailbox::new();
-
-/// JNI コールバック待ちの上限（ponytail: カメラアプリの起動・撮影・戻りは通常数秒
-/// 〜数十秒で終わる。ユーザーがカメラアプリを開いたまま放置するケースへの安全弁で、
-/// 値自体に強い実測根拠はない。実機で `Capturing` 固着の報告が出たら見直す）。
-const CAPTURE_TIMEOUT: Duration = Duration::from_secs(300);
-
-/// `nativeOnCameraResult` が JByteArray の長さを検査する上限。`fandhe_device::camera` の
-/// `MAX_IMAGE_BYTES`（非公開定数）と同値（64 MiB）を本モジュールで複製する
-/// （`fandhe-device` は変更しない方針、#750 実装計画 §4 参照）。
-const MAX_IMAGE_BYTES: usize = 64 * 1024 * 1024;
-
 /// JNI 呼び出し中のエラーを一時的にまとめる内部専用の型。`jni::errors::Error` から
 /// `From` 変換できる必要がある（`JavaVM::attach_current_thread` の型制約）が、
 /// `fandhe_device::DeviceError` はこの変換を持たない（`fandhe-device` を変更しない方針）
@@ -61,198 +40,6 @@ const MAX_IMAGE_BYTES: usize = 64 * 1024 * 1024;
 /// も同じ JNI 呼び出し形（`AndroidClipboard::request` と同型）で再利用する
 /// （Issue #1046、二重実装を避ける）。
 pub(crate) use fandhe_platform_android::JniCallFailed;
-
-/// `Camera::capture()` を Java 側 `MainActivity.requestCameraCapture()` へ委譲する実装
-/// （Issue #750）。`device/camera_capture.rs` の `platform_camera()` から Android
-/// ターゲットでのみ構築される。
-pub struct AndroidCamera;
-
-impl AndroidCamera {
-    /// `AndroidCamera` を構築する。内部状態は持たず、`capture()` の都度
-    /// `crate::android::android_app()` から最新の `AndroidApp` を取得するため、
-    /// 構築タイミングは呼び出し側（`camera_capture::platform_camera`）が任意に選べる。
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for AndroidCamera {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Camera for AndroidCamera {
-    // 本体内の 2 箇所の `unsafe`（`JavaVM::from_raw` / `env.as_cast_raw`）は各 `// SAFETY:`
-    // コメント参照。`#[allow(unsafe_code)]` はこの 1 メソッドに閉じ、`unsafe` を安全な
-    // `Camera` トレイト実装の外へ漏らさない（`.claude/rules/coding-rust.md` の FFI 例外規定）。
-    #[allow(unsafe_code)]
-    fn capture(&self) -> Result<Image, DeviceError> {
-        // codex-review 指摘（PR #790）: 要求 ID を発行し、JNI 往復
-        // （`requestCameraCapture(long)` → Java 側が保持 → `nativeOnCameraResult` で
-        // 返却）に乗せて運ぶ。`deliver` はこの ID が一致する結果のみ受理するため、
-        // タイムアウト後に届いた古い要求のコールバックが新しい要求の結果と
-        // 取り違えられない（`CaptureMailbox` doc 参照）。
-        let Some(request_id) = CAPTURE_MAILBOX.begin() else {
-            // UI 側は Requested → Capturing の二段階状態機械のため通常はここへ
-            // 到達しないが、多重呼び出しに対する防御として単一飛行を守る。
-            return Err(DeviceError::Unsupported("camera_busy"));
-        };
-
-        let Some(app) = crate::android::android_app() else {
-            CAPTURE_MAILBOX.cancel(request_id);
-            return Err(DeviceError::Unsupported("android_app_unavailable"));
-        };
-
-        // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` を返す。
-        // `android_app()` は `crate::android::set_android_app` が保持する最新の
-        // `AndroidApp`（`Activity` 再生成時は都度差し替え済み、PR #790 codex-review 指摘）を
-        // 複製して返すため、ここで得た `app` は呼び出し時点で有効な `Activity` を指す
-        // （android-activity 0.6.1 の `vm_as_ptr`/`activity_as_ptr` ドキュメント参照、
-        // #750 実装計画 §2）。呼び出し中に OS が `Activity` を破棄しても `capture()` 内での
-        // 完結（JNI 呼び出し → mailbox 待ち）はローカル変数 `app` が生存を保つため、
-        // 途中で無効化される心配はない。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-        let request_result =
-            vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
-                let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                // SAFETY: `activity_as_ptr()` は `AndroidApp` が保持する未所有の JNI
-                // グローバル参照で、`AndroidApp` の生存期間中（上記と同じ根拠）有効。
-                // `Cast` は所有権を持たないラッパーのため、delete を試みない
-                // （jni クレートの `as_cast_raw` ドキュメント「Don't wrap as Global/Auto」参照）。
-                let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                env.call_method(
-                    &activity,
-                    jni::jni_str!("requestCameraCapture"),
-                    jni::jni_sig!((long) -> ()),
-                    &[jni::objects::JValue::Long(request_id as jni::sys::jlong)],
-                )?;
-                Ok(())
-            });
-
-        if request_result.is_err() {
-            // JNI 呼び出し自体が失敗した（メソッド未検出・例外送出等）。コールバックは
-            // 来ないため `deliver` を待たず即座にスロットを解放する。
-            CAPTURE_MAILBOX.cancel(request_id);
-            return Err(DeviceError::Unsupported("jni_call_failed"));
-        }
-
-        CAPTURE_MAILBOX.wait(request_id, CAPTURE_TIMEOUT)
-    }
-}
-
-/// Java 側から届いた撮影結果を `Image` へ変換する（`nativeOnCameraResult` 本体）。
-/// `status` の意味は `MainActivity.requestCameraCapture`（Java 側実装）と対で決める:
-/// 0 = 成功、1 = 権限拒否、2 = カメラアプリなし、3 = キャンセル、
-/// 4 = 旧要求が未完了のため Java 側が新要求を拒否（`awaitingCameraResult` doc 参照、
-/// codex-review 指摘 PR #790）、5 = 画像サイズが上限超過（Java 側 `deliverBitmap` の
-/// 配列確保前検査で検出）、6 = `launch()` 自体が想定外の実行時例外で失敗
-/// （cursor Bugbot 指摘 PR #790）、7 = Activity 再生成により中断（進行中の撮影要求が
-/// 再生成前の Activity インスタンスに紐づいていたため結果を引き継げない。`MainActivity`
-/// の `onCreate` 復元処理 doc 参照、cursor Bugbot 指摘 PR #790）。それ以外は未知の失敗。
-fn decode_capture_result(
-    env: &jni::Env,
-    rgba: &jni::objects::JByteArray,
-    width: jni::sys::jint,
-    height: jni::sys::jint,
-    status: jni::sys::jint,
-) -> Result<Image, DeviceError> {
-    let fallback_size = (width.max(0) as u32, height.max(0) as u32);
-    match status {
-        0 => {}
-        1 => return Err(DeviceError::PermissionDenied("camera")),
-        2 => return Err(DeviceError::Unsupported("camera_app_not_found")),
-        3 => return Err(DeviceError::Unsupported("camera_cancelled")),
-        4 => return Err(DeviceError::Unsupported("camera_busy")),
-        5 => {
-            return Err(DeviceError::InvalidImageSize(
-                fallback_size.0,
-                fallback_size.1,
-            ))
-        }
-        6 => return Err(DeviceError::Unsupported("camera_launch_failed")),
-        7 => return Err(DeviceError::Unsupported("camera_interrupted_by_recreation")),
-        _ => return Err(DeviceError::Unsupported("camera_unknown_status")),
-    }
-
-    let (width, height) = match (u32::try_from(width), u32::try_from(height)) {
-        (Ok(w), Ok(h)) if w > 0 && h > 0 => (w, h),
-        _ => {
-            return Err(DeviceError::InvalidImageSize(
-                fallback_size.0,
-                fallback_size.1,
-            ))
-        }
-    };
-
-    // 変換前（`convert_byte_array` が Vec を確保する前）に配列長を検査する
-    // （security.md A05、メモリ枯渇防止。`fandhe_device::camera::MAX_IMAGE_BYTES` と
-    // 同値、上記 `MAX_IMAGE_BYTES` コメント参照）。
-    let len = rgba
-        .len(env)
-        .map_err(|_| DeviceError::InvalidImageSize(width, height))?;
-    if len > MAX_IMAGE_BYTES {
-        return Err(DeviceError::InvalidImageSize(width, height));
-    }
-
-    let expected_len = (width as usize)
-        .checked_mul(height as usize)
-        .and_then(|n| n.checked_mul(4))
-        .ok_or(DeviceError::InvalidImageSize(width, height))?;
-    if len != expected_len {
-        return Err(DeviceError::InvalidImageSize(width, height));
-    }
-
-    let bytes = env
-        .convert_byte_array(rgba)
-        .map_err(|_| DeviceError::InvalidImageSize(width, height))?;
-
-    Ok(Image {
-        width,
-        height,
-        rgba: bytes,
-    })
-}
-
-/// `MainActivity.nativeOnCameraResult`（Java 側）から呼ばれる JNI エクスポート関数。
-/// シンボル名はパッケージ名 `com.fandhe.platform` とクラス名 `MainActivity` に
-/// 固定で紐づく（`android.rs` の `nativeOnWindowInsetsChanged` と同じ JNI 命名規約）。
-///
-/// [`decode_capture_result`] で `Image`/`DeviceError` へ変換し、[`CAPTURE_MAILBOX`] へ
-/// 届ける（`AndroidCamera::capture` の `wait` がこれを受け取る）。`request_id` は
-/// `AndroidCamera::capture` が発行し `requestCameraCapture(long)` へ渡した値を
-/// `MainActivity` がそのまま持ち回って返したもの（codex-review 指摘、PR #790）。
-/// `deliver` が ID 不一致を無視するため、タイムアウト後に届いた古い要求のコールバックが
-/// 新しい要求の結果を上書きしない。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`EnvUnowned::with_env` が JNI アタッチメントの
-/// 安全な取り扱い（`catch_unwind` によるパニックの遮断込み）を担う。`#[no_mangle]` は
-/// JNI 命名規約上の固定シンボル名であり、本クレートは cdylib として 1 つの Android
-/// 実行単位にのみリンクされるため他シンボルと衝突しない（`android_main` と同じ根拠、
-/// `.claude/rules/coding-rust.md` の FFI 例外規定準拠）。
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnCameraResult<'caller>(
-    mut unowned_env: jni::EnvUnowned<'caller>,
-    _class: jni::objects::JClass<'caller>,
-    request_id: jni::sys::jlong,
-    rgba: jni::objects::JByteArray<'caller>,
-    width: jni::sys::jint,
-    height: jni::sys::jint,
-    status: jni::sys::jint,
-) {
-    let outcome = unowned_env.with_env(|env| -> Result<(), jni::errors::Error> {
-        let result = decode_capture_result(env, &rgba, width, height, status);
-        CAPTURE_MAILBOX.deliver(request_id as u64, result);
-        Ok(())
-    });
-    // JVM 境界を越えて panic させない（`with_env` が `catch_unwind` 済み）。本関数は
-    // Java 側へ戻り値も例外も返さない契約のため、結果は握りつぶす（`decode_capture_result`
-    // 自体は `jni::errors::Error` を返さない設計のため通常この分岐には到達しない）。
-    let _ = outcome.into_outcome();
-}
 
 /// `MainActivity.nativeOnMotionChanged`（Java 側）から呼ばれる JNI エクスポート関数
 /// （Issue #831、Phase 10 型サンプル「傾けると玉が転がる」の Android 実センサ経路）。
@@ -535,7 +322,7 @@ impl AndroidClipboard {
     /// Java 側 `MainActivity.clipboardRequest(long, int, String)` を呼び、結果を待つ。
     /// `op` は [`CLIPBOARD_OP_READ`] / [`CLIPBOARD_OP_WRITE`]。
     // 本体内の 2 箇所の `unsafe`（`JavaVM::from_raw` / `as_cast_raw`）は各 `// SAFETY:`
-    // コメント参照。`AndroidCamera::capture` と同じ根拠・同じ形に揃えている。
+    // コメント参照。`fandhe-cap-camera-capture` の `AndroidCamera::capture` と同じ根拠・同じ形に揃えている。
     #[allow(unsafe_code)]
     fn request(&self, op: i32, text: &str) -> Result<Option<String>, DeviceError> {
         let Some(request_id) = CLIPBOARD_MAILBOX.begin() else {
@@ -549,7 +336,7 @@ impl AndroidClipboard {
             return Err(DeviceError::Unsupported("clipboard"));
         };
 
-        // SAFETY: `AndroidCamera::capture` と同一の根拠。`app.vm_as_ptr()` は
+        // SAFETY: `fandhe-cap-camera-capture` の `AndroidCamera::capture` と同一の根拠。`app.vm_as_ptr()` は
         // android-activity が管理する有効な `JavaVM*` を返し、`android_app()` は
         // 最新の `AndroidApp` を複製して返すため、ここで得た `app` は呼び出し時点で
         // 有効な `Activity` を指す。呼び出し中（JNI 呼び出し → mailbox 待ち）は
@@ -562,7 +349,7 @@ impl AndroidClipboard {
                 // 空文字列を渡し、Java 側は `op` で無視する）。
                 let j_text = env.new_string(text)?;
                 let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                // SAFETY: `AndroidCamera::capture` と同一の根拠。`activity_as_ptr()` は
+                // SAFETY: `fandhe-cap-camera-capture` の `AndroidCamera::capture` と同一の根拠。`activity_as_ptr()` は
                 // `AndroidApp` が保持する未所有の JNI グローバル参照で、`AndroidApp` の
                 // 生存期間中有効。`Cast` は所有権を持たないラッパーのため delete を
                 // 試みない。
@@ -784,7 +571,7 @@ impl AndroidTts {
             return Err(DeviceError::Unsupported("tts"));
         };
 
-        // SAFETY: `AndroidCamera::capture`/`AndroidClipboard::request` と同一の根拠。
+        // SAFETY: `AndroidClipboard::request`（および `fandhe-cap-camera-capture` の `AndroidCamera::capture`）と同一の根拠。
         // `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` を返し、
         // `android_app()` は最新の `AndroidApp` を複製して返すため、ここで得た
         // `app` は呼び出し時点で有効な `Activity` を指す。呼び出し中（JNI 呼び出し

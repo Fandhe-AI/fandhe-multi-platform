@@ -35,7 +35,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "camera_capture" => fandhe_core::screens::camera_capture::current_screen,
-    fandhe_egui_proxy::device::camera_capture::camera_capture_effect,
+    fandhe_cap_camera_capture::camera_capture_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "tilt_ball" => fandhe_core::screens::tilt_ball::current_screen,

@@ -143,21 +143,6 @@ public class MainActivity extends GameActivity {
             int left, int top, int right, int bottom);
 
     // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
-    // （Issue #750、Phase 8 の端末機能に限り追加。切り離し時に削除する）。
-    // requestId: `requestCameraCapture(long)` が受け取った値をそのまま返す
-    // （codex-review 指摘、PR #790。Rust 側の mailbox が要求 ID の一致を検査し、
-    // タイムアウト後に届いた古い要求のコールバックを新しい要求の結果と取り違えないため）。
-    // status: 0=成功／1=権限拒否／2=カメラアプリなし／3=キャンセル／4=旧要求が未完了のため拒否／
-    // 5=画像サイズが上限超過（Rust 側 `decode_capture_result` と対で決める、codex-review 指摘 PR #790）／
-    // 6=launch() 自体が想定外の実行時例外で失敗／7=Activity 再生成により中断
-    // （再生成前から保留中だった権限ダイアログ・カメラアプリの結果を、新インスタンスの
-    // launcher コールバックが実際に受け取り得るため、先回りして決着させ、後から届く
-    // 実結果は `pendingCaptureInterrupted` で破棄する。`onCreate` の復元処理 doc 参照。
-    // cursor Bugbot 指摘、PR #790）。
-    private static native void nativeOnCameraResult(
-            long requestId, byte[] rgba, int width, int height, int status);
-
-    // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
     // （Issue #831、Phase 10 型サンプル「傾けると玉が転がる」の Android 実センサ経路に
     // 限り追加。Phase 8 の feature `device` 切り離し時に削除する。docs/architecture/
     // device-feature-removal.md 参照）。
@@ -396,7 +381,7 @@ public class MainActivity extends GameActivity {
     // 連絡先アプリを開いてから結果コールバックが来るまで true（Issue #1222）。static なので
     // Activity 再生成をまたいで残り、旧ピッカーの結果が新インスタンスへ届くまで新しい起動を断る。
     // 断らないと、再生成後に始めた要求 B の id を旧要求 A の結果が消費して B の成功に見える
-    // （`awaitingCameraResult` と同じ理由）。読み書きは UI スレッドだけで行う。
+    // （`CameraCaptureHelper` の `awaitingCameraResult` と同じ理由）。読み書きは UI スレッドだけで行う。
     private static boolean contactPickerOpen = false;
 
     // 変換前の元データに許す上限（バイト）。Rust 側 `MAX_PHOTO_BYTES` と揃える。
@@ -1531,7 +1516,7 @@ public class MainActivity extends GameActivity {
     // `micLock` の内側でのみ読み書きする状態（ライフサイクル・並行性の契約を単一
     // ロックへ集約する、device-bridge-contracts.md 参照）。フィールド初期化子で
     // 参照する `requestMicPermission`（下記）より先に宣言する（javac の前方参照
-    // 制限、`awaitingCameraResult`/`requestCameraPermission` の宣言順と同じ）。
+    // 制限、`CameraCaptureHelper` の `awaitingCameraResult`/`requestCameraPermission` の宣言順と同じ）。
     private final Object micLock = new Object();
     private MediaRecorder micRecorder;
     private File micTempFile;
@@ -1545,7 +1530,7 @@ public class MainActivity extends GameActivity {
     // `locationStartRequestPending` と同型）。`micLock` の内側でのみ読み書きする。
     private boolean micStartPendingResume;
 
-    // マイク録音の実行時許可要求（`requestCameraPermission`/`requestLocationPermission`
+    // マイク録音の実行時許可要求（`CameraCaptureHelper` の `requestCameraPermission`/`requestLocationPermission`
     // と同型）。許可が下りたら `startMicRecorder` を呼ぶ。
     private final ActivityResultLauncher<String> requestMicPermission =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
@@ -1759,116 +1744,14 @@ public class MainActivity extends GameActivity {
     // Rust 側はキャンセルを失敗として扱わない（`decode_tts_result` 参照）。
     private static final int TTS_STATUS_CANCELLED = 7;
 
-    // `nativeOnCameraResult` の JByteArray 確保前検査（`device/android.rs` の
-    // `MAX_IMAGE_BYTES` と同値、64 MiB）を Java 側の配列確保前にも適用する
-    // （codex-review 指摘、PR #790。大寸法 Bitmap で Rust 検査前に Java 側だけで
-    // 追加配列を確保して OutOfMemoryError になるのを防ぐ）。
-    private static final long MAX_IMAGE_BYTES = 64L * 1024 * 1024;
-
-    // Activity 再生成後も撮影要求の状態を復元するための Bundle キー（Issue #750 / PR #790）。
-    private static final String STATE_PENDING_CAPTURE_REQUEST_ID = "pendingCaptureRequestId";
-    private static final String STATE_AWAITING_CAMERA_RESULT = "awaitingCameraResult";
-    private static final String STATE_PENDING_CAPTURE_INTERRUPTED = "pendingCaptureInterrupted";
-
-    // 進行中の撮影要求の ID（`requestCameraCapture(long)` で設定、Issue #750 / PR #790）。
-    // GameActivity は 1 Activity インスタンスにつき 1 撮影のみ許容する契約
-    // （Rust 側 `CaptureMailbox` の単一飛行）のため、フィールド 1 個で足りる。
-    // onSaveInstanceState/onCreate で保存・復元する（Activity 再生成で新インスタンスの
-    // 初期値（`RequestTracker.NONE`）に戻ると、復元後に届く Android の ActivityResult が
-    // 誤った ID で配送されるため）。id の保持・照合そのものは `RequestTracker`
-    // （Issue #944）へ委譲する。
-    private final RequestTracker pendingCaptureRequest = new RequestTracker();
-
-    // true の間は Android 側のコールバック（権限ダイアログ・カメラアプリ）待ちで、
-    // 旧要求の結果が未回収であることを示す（codex-review 指摘、PR #790）。
-    // Rust 側 `CaptureMailbox` はタイムアウトで Idle に戻り新要求 B の `begin()` を
-    // 許可し得るが、Java 側でまだ旧要求 A の ActivityResult を待っている間に
-    // `requestCameraCapture(B)` が呼ばれると、後から届く A の結果が
-    // `pendingCaptureRequest`（B に上書き済み）で配送され、B の結果として誤って
-    // 受理されてしまう。このフラグが true の間は新要求を即座に拒否することで防ぐ。
-    // `pendingCaptureInterrupted` が true の間もこのフラグは true のまま維持する
-    // （中断決着後も、旧コールバックが実際に届いて消費されるまで新要求を拒否し
-    // 続けるため。onCreate の復元処理・両コールバックの doc 参照。個別 ID 識別ではなく
-    // 「旧コールバック消費まで新要求拒否」で誤配送を防ぐ設計、codex-review 指摘 PR #790）。
-    // 呼び出しスレッド（Rust 側 worker）と UI スレッドの双方から読み書きされるため
-    // volatile にする。
-    private volatile boolean awaitingCameraResult;
-
-    // Activity 再生成で status 7 として中断決着させた「旧」要求に対し、後から
-    // AndroidX ActivityResultRegistry が再配送してくる許可ダイアログ・カメラアプリの
-    // 結果を無視して破棄するためのフラグ（codex-review / cursor Bugbot 指摘、PR #790）。
-    // `registerForActivityResult` は Activity 再生成後も同一キーで新インスタンスへ
-    // 再登録され、システム側に残っていた保留中の結果はその新インスタンスのコールバックへ
-    // 配送される契約（androidx.activity:activity の ActivityResultRegistry 仕様。
-    // 「新インスタンスには何も紐づかない」という前提は誤りだった）。
-    // 中断時にこのフラグを立て、コールバック側で最初にこれを検査して消費（クリアして
-    // return）することで、既に status 7 で決着済みの要求について
-    // 二重の nativeOnCameraResult 配送・意図しないカメラアプリ再起動・新しい要求 ID への
-    // 誤配送を防ぐ。
-    //
-    // このフラグを「新要求開始時」に早期クリアしない（旧: `requestCameraCapture` で
-    // 無条件クリアしていたが、旧要求 A の実コールバックが未着のまま新要求 B が始まると
-    // A の遅延結果が B の ID で誤配送される競合があった。codex-review 指摘 PR #790）。
-    // 代わりに `awaitingCameraResult` を true のまま維持して新要求そのものを
-    // `requestCameraCapture` の入口で拒否し、このフラグは旧コールバックが実際に
-    // 届いて消費された時点でのみクリアする。
-    // Activity が複数回連続で再生成されても中断状態を失わないよう Bundle へ保存・復元する
-    // （cursor Bugbot 指摘、PR #790。未保存だと 2 回目以降の再生成で中断状態が消え、
-    // 旧許可コールバックがカメラを誤って再起動しうる）。
-    // onCreate・両コールバックいずれも UI スレッドからのみ読み書きするため
-    // 追加の同期は不要（旧: `requestCameraCapture` の worker スレッドからも書き込んで
-    // いたが、上記の再設計でその書き込みは不要になった）。
-    private boolean pendingCaptureInterrupted;
-
-    // `registerForActivityResult` は `onCreate` 完了前（フィールド初期化子）に呼ぶ契約
-    // （AndroidX ActivityResultRegistry の制約）。CAMERA 権限のランタイム要求と、
-    // 標準カメラアプリ（ACTION_IMAGE_CAPTURE）のサムネイル起動をそれぞれ担う。
-    private final ActivityResultLauncher<String> requestCameraPermission =
-            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
-                if (pendingCaptureInterrupted) {
-                    // 再生成前に status 7 で決着済みの旧要求への遅延配送（doc 参照）。
-                    // 許可の可否に関わらずここで消費し、以後の分岐へ進めない。
-                    // ここで初めて awaitingCameraResult を解除し、新要求を受け付け
-                    // 可能にする（`pendingCaptureInterrupted` doc 参照）。
-                    pendingCaptureInterrupted = false;
-                    awaitingCameraResult = false;
-                    return;
-                }
-                if (granted) {
-                    launchCameraCapture();
-                } else {
-                    // `pendingCaptureRequest` は awaitingCameraResult を解除する前に
-                    // ローカル変数へ退避する（codex-review 指摘、PR #790）。解除後は
-                    // worker スレッドの次要求が `requestCameraCapture` でこのフィールドを
-                    // 上書きし得るため、フィールドを直接 `nativeOnCameraResult` へ渡すと
-                    // 別要求の ID を誤って配送する競合が生じる。
-                    long resultRequestId = pendingCaptureRequest.current();
-                    awaitingCameraResult = false;
-                    nativeOnCameraResult(resultRequestId, null, 0, 0, 1);
-                }
-            });
-
-    private final ActivityResultLauncher<Void> takePicturePreview =
-            registerForActivityResult(new ActivityResultContracts.TakePicturePreview(), bitmap -> {
-                if (pendingCaptureInterrupted) {
-                    // 許可コールバック側と同じ理由（doc 参照）。
-                    pendingCaptureInterrupted = false;
-                    awaitingCameraResult = false;
-                    return;
-                }
-                if (bitmap == null) {
-                    // ユーザーがカメラアプリを戻る操作でキャンセルした場合。
-                    // ID 退避の理由は requestCameraPermission コールバック側コメント参照。
-                    long resultRequestId = pendingCaptureRequest.current();
-                    awaitingCameraResult = false;
-                    nativeOnCameraResult(resultRequestId, null, 0, 0, 3);
-                    return;
-                }
-                deliverBitmap(bitmap);
-            });
+    // カメラ撮影（Issue #750 / #1170）。実装は機能 crate `fandhe-cap-camera-capture` の `CameraCaptureHelper`
+    // （権限・撮影ランチャーを STARTED 前に登録、再生成時の中断決着、`nativeOnCameraResult`）。
+    // Rust の `AndroidCamera::capture` が `requestCameraCapture(long)` を JNI で呼ぶ。
+    // `registerForActivityResult` の登録キーは生成順の連番のため、この位置（旧 launcher フィールドと同じ）から動かさない。
+    private final CameraCaptureHelper cameraCaptureHelper = new CameraCaptureHelper(this);
 
     // Storage Access Framework の「開く」ダイアログ（Issue #874）。`ACTION_OPEN_DOCUMENT`
-    // + `CATEGORY_OPENABLE` を組み立てる `OpenDocument` contract を使う（`takePicturePreview`
+    // + `CATEGORY_OPENABLE` を組み立てる `OpenDocument` contract を使う（`CameraCaptureHelper` の `takePicturePreview`
     // と同じく `registerForActivityResult` はフィールド初期化子で呼ぶ契約）。
     //
     // Activity 再生成後も同一キーで再登録されるため、`ActivityResultRegistry` は
@@ -1973,7 +1856,7 @@ public class MainActivity extends GameActivity {
     // それらより前で宣言する必要がある（javac の forward reference 制限、PR #894）。
     private boolean activityResumed;
 
-    // 位置情報のランタイム許可要求（Issue #890、`requestCameraPermission` と同型）。
+    // 位置情報のランタイム許可要求（Issue #890、`CameraCaptureHelper` の `requestCameraPermission` と同型）。
     // 位置情報画面は `ACCESS_COARSE_LOCATION` のみを要求する（最小権限、security.md A05）。
     // ジオフェンス（Issue #1058）が半径より良い精度を要るため `locationPreciseWanted` が立った
     // ときだけ `ACCESS_FINE_LOCATION` を COARSE と同時に要求する（Android 12 以降は FINE の
@@ -2567,43 +2450,13 @@ public class MainActivity extends GameActivity {
         locationManager = getSystemService(LocationManager.class);
         inputManager = getSystemService(InputManager.class);
 
-        // Activity 再生成後の状態復元（Issue #750 / PR #790）。
-        // `registerForActivityResult` は再生成後の新インスタンスでも同一キーで
-        // 再登録されるため、旧インスタンスで保留中だった権限ダイアログ・カメラアプリの
-        // 結果は新インスタンスのコールバックへ実際に配送され得る契約
-        // （androidx.activity:activity の ActivityResultRegistry 仕様）。よって
-        // awaitingCameraResult を false へ戻して新要求を即座に受け付け可能にしてはならない:
-        // 戻すと、まだ Android 側に残っている旧要求の実コールバックが後から届いた際、
-        // その時点で新要求 B が既に始まっていれば `pendingCaptureRequest` が B の値へ
-        // 上書き済みとなり、旧要求 A の結果が B の結果として誤って配送される
-        // （codex-review 指摘、PR #790）。
-        // 代わりに、中断された要求があれば復元直後に status 7 で即座に決着させつつ
-        // （Rust 側 `CaptureMailbox::wait` の 300 秒タイムアウトを待たせない）、
-        // `awaitingCameraResult` は true のまま維持して新要求を拒否し続ける。
-        // 解除は `pendingCaptureInterrupted` doc 参照の各コールバックが旧結果を
-        // 実際に消費した時点でのみ行う。
-        //
-        // `pendingCaptureInterrupted` 自体も Bundle へ保存・復元する（cursor Bugbot
-        // 指摘、PR #790）。未保存だと、旧コールバック未消費のまま Activity が連続で
-        // 再生成された場合に中断状態が失われ、(1) 同じ要求へ status 7 を多重通知し、
-        // (2) 「まだ中断済み」の事実を見失い awaitingCameraResult のブロックが
-        // 意図せず解除される。既に中断決着済み（pendingCaptureInterrupted 復元値が
-        // true）なら、今回の再生成では再通知しない。
-        if (savedInstanceState != null) {
-            pendingCaptureRequest.track(savedInstanceState.getLong(STATE_PENDING_CAPTURE_REQUEST_ID, RequestTracker.NONE));
-            awaitingCameraResult = savedInstanceState.getBoolean(STATE_AWAITING_CAMERA_RESULT);
-            pendingCaptureInterrupted = savedInstanceState.getBoolean(STATE_PENDING_CAPTURE_INTERRUPTED);
-            if (awaitingCameraResult && !pendingCaptureInterrupted) {
-                pendingCaptureInterrupted = true;
-                nativeOnCameraResult(pendingCaptureRequest.current(), null, 0, 0, 7);
-            }
-
-            // ファイル選択（Issue #874）は `filePickRequest` を Bundle へ保存・復元
-            // しない（案 B の決定事項）。`filePickRequest` は static のため Activity
-            // 再生成を跨いで値を保持しており（`filePickRequest` doc 参照）、
-            // Bundle 経由の復元は不要。`pickDocument` が再生成後の新インスタンスへ届く
-            // 実際の結果は、この static requestId との一致で正しく処理される。
-        }
+        // Activity 再生成後の状態復元。撮影要求の復元は `CameraCaptureHelper.onCreate`（機能 crate 側）。
+        cameraCaptureHelper.onCreate(savedInstanceState);
+        // ファイル選択（Issue #874）は `filePickRequest` を Bundle へ保存・復元
+        // しない（案 B の決定事項）。`filePickRequest` は static のため Activity
+        // 再生成を跨いで値を保持しており（`filePickRequest` doc 参照）、
+        // Bundle 経由の復元は不要。`pickDocument` が再生成後の新インスタンスへ届く
+        // 実際の結果は、この static requestId との一致で正しく処理される。
 
         // systemBars（ステータスバー・ナビゲーションバー）と displayCutout（ノッチ等）を
         // 物理 px で取得し、native 側 static へ渡す。insets は消費せず（`insets` を
@@ -2626,14 +2479,11 @@ public class MainActivity extends GameActivity {
         getWindow().getDecorView().setOnDragListener(dragListener);
     }
 
-    // Activity 再生成前に撮影要求の状態を保存する（`onCreate` の復元と対、Issue #750 /
-    // PR #790 codex-review 指摘）。
+    // Activity 再生成前に撮影要求の状態を保存する（`onCreate` の復元と対、Issue #750 / #1170）。
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
-        outState.putLong(STATE_PENDING_CAPTURE_REQUEST_ID, pendingCaptureRequest.current());
-        outState.putBoolean(STATE_AWAITING_CAMERA_RESULT, awaitingCameraResult);
-        outState.putBoolean(STATE_PENDING_CAPTURE_INTERRUPTED, pendingCaptureInterrupted);
+        cameraCaptureHelper.onSaveInstanceState(outState);
     }
 
     // BLE スキャン（Issue #1062、`device/bluetooth_le.rs` の Android 経路）。
@@ -3513,105 +3363,11 @@ public class MainActivity extends GameActivity {
         }
     }
 
-    // Rust 側の worker スレッド（`device/android.rs` の `AndroidCamera::capture`）から
-    // JNI 経由で呼ばれる（Issue #750）。UI 操作を伴うため `runOnUiThread` へ委譲する。
-    // `requestId` は先に `pendingCaptureRequest` へ保持してから `nativeOnCameraResult`
-    // へ返す（`runOnUiThread` はワーカースレッドの呼び出しと非同期のため、フィールドへの
-    // 書き込みをコールバック登録より先に済ませておく）。
+    // Rust 側の worker スレッド（`fandhe-cap-camera-capture` の `AndroidCamera::capture`）から
+    // JNI 経由で呼ばれる（Issue #750）。名前と署名は Rust 側が固定で参照するため変えない。実処理は
+    // `CameraCaptureHelper.request`。
     private void requestCameraCapture(long requestId) {
-        if (awaitingCameraResult) {
-            // 旧要求の Android コールバック（権限ダイアログ・カメラアプリ）が未回収
-            // （`awaitingCameraResult` doc 参照、codex-review 指摘 PR #790）。
-            // `pendingCaptureRequest` を上書きすると旧要求の遅延結果がこの新要求の
-            // ID で誤って配送されるため、ここで即座に拒否する
-            // （`runOnUiThread` を経由しない。UI 操作を伴わないため）。
-            nativeOnCameraResult(requestId, null, 0, 0, 4);
-            return;
-        }
-        // この時点で `awaitingCameraResult` は false（上の分岐で保証済み）であり、
-        // それは `pendingCaptureInterrupted` も false であることを含意する
-        // （`pendingCaptureInterrupted` は常に `awaitingCameraResult` の部分集合として
-        // 維持され、解除は必ず両方同時に行う。doc 参照）。よってここで
-        // `pendingCaptureInterrupted` を触る必要はない。
-        pendingCaptureRequest.track(requestId);
-        awaitingCameraResult = true;
-        runOnUiThread(() -> {
-            try {
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                        == PackageManager.PERMISSION_GRANTED) {
-                    launchCameraCapture();
-                } else {
-                    requestCameraPermission.launch(Manifest.permission.CAMERA);
-                }
-            } catch (RuntimeException e) {
-                // `launch()` 自体が例外を送出した場合（onSaveInstanceState 後の呼び出し等、
-                // ActivityResultRegistry の状態不整合）に awaitingCameraResult が true の
-                // まま恒久的に固着し、以後すべての要求が status 4 で拒否され続けるのを防ぐ
-                // （cursor Bugbot 指摘、PR #790）。ID 退避の理由は requestCameraPermission
-                // コールバック側コメント参照。
-                long resultRequestId = pendingCaptureRequest.current();
-                awaitingCameraResult = false;
-                nativeOnCameraResult(resultRequestId, null, 0, 0, 6);
-            }
-        });
-    }
-
-    private void launchCameraCapture() {
-        try {
-            takePicturePreview.launch(null);
-        } catch (ActivityNotFoundException e) {
-            // 標準カメラアプリが端末に存在しない（エミュレータ等）。
-            long resultRequestId = pendingCaptureRequest.current();
-            awaitingCameraResult = false;
-            nativeOnCameraResult(resultRequestId, null, 0, 0, 2);
-        } catch (RuntimeException e) {
-            // `requestCameraPermission` の granted コールバック経由でここへ来た場合は
-            // 上位（requestCameraCapture の runOnUiThread）の try/catch を経由しないため、
-            // ここでも launch() 失敗によるフラグ固着を防ぐ必要がある（cursor Bugbot 指摘、
-            // PR #790。ID 退避の理由は requestCameraPermission コールバック側コメント参照）。
-            long resultRequestId = pendingCaptureRequest.current();
-            awaitingCameraResult = false;
-            nativeOnCameraResult(resultRequestId, null, 0, 0, 6);
-        }
-    }
-
-    // `Bitmap.getPixels` の ARGB_8888 int[] を RGBA byte[]（fandhe_device::Image と同じ
-    // 行優先・パディングなしレイアウト）へ詰め替えて native 側へ渡す。
-    private void deliverBitmap(Bitmap bitmap) {
-        // ID 退避の理由は requestCameraPermission コールバック側コメント参照
-        // （codex-review 指摘、PR #790）。
-        long resultRequestId = pendingCaptureRequest.current();
-        awaitingCameraResult = false;
-        int width = bitmap.getWidth();
-        int height = bitmap.getHeight();
-
-        // 配列確保前にサイズを検証する（codex-review 指摘、PR #790）。`long` で計算し、
-        // `int` オーバーフロー（`width * height` や `* 4`）を経由せず Rust 側
-        // `MAX_IMAGE_BYTES`（64 MiB）と同じ上限を先に確認する。外部カメラアプリが
-        // 返す Bitmap の寸法は検証していないため、大寸法（例: 4097x4096）だと
-        // Rust 側の検査（`decode_capture_result`）に届く前に Java 側だけで
-        // 128 MiB 超の int[]/byte[] を確保してしまい、ヒープの小さい端末で
-        // OutOfMemoryError になり得る。
-        long pixelCount = (long) width * (long) height;
-        long byteCount = pixelCount * 4;
-        if (byteCount > MAX_IMAGE_BYTES) {
-            nativeOnCameraResult(resultRequestId, null, width, height, 5);
-            return;
-        }
-
-        int[] argb = new int[width * height];
-        bitmap.getPixels(argb, 0, width, 0, 0, width, height);
-
-        byte[] rgba = new byte[width * height * 4];
-        for (int i = 0; i < argb.length; i++) {
-            int pixel = argb[i];
-            int offset = i * 4;
-            rgba[offset] = (byte) ((pixel >> 16) & 0xFF); // R
-            rgba[offset + 1] = (byte) ((pixel >> 8) & 0xFF); // G
-            rgba[offset + 2] = (byte) (pixel & 0xFF); // B
-            rgba[offset + 3] = (byte) ((pixel >> 24) & 0xFF); // A
-        }
-        nativeOnCameraResult(resultRequestId, rgba, width, height, 0);
+        cameraCaptureHelper.request(requestId);
     }
 
     // Rust 側 bridge モジュール（`device/file_pick.rs`）の `drive`（Android 分岐）から

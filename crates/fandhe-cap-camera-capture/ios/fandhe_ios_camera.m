@@ -1,14 +1,14 @@
 // Phase 8（端末機能の型検証、Issue #751）: iOS 側の実カメラ実装。
 //
-// `crates/fandhe-egui-proxy/src/device/ios.rs`（`IosCamera`）から C ABI 経由で
+// `crates/fandhe-cap-camera-capture/src/ios.rs`（`IosCamera`）から C ABI 経由で
 // 呼ばれる。UIKit（`UIImagePickerController`）・AVFoundation（権限確認）は Rust
 // バインディングを持たないため、この 1 ファイルの ObjC コードに実装を閉じ、
 // `unsafe extern "C"` 宣言 1 点のみを Rust 側へ公開する（`lib.rs` の
 // iOS `deny(unsafe_code)` 緩和と対になる、coding-rust.md の FFI 例外規定）。
 //
-// `build.rs` が iOS ターゲット（`CARGO_CFG_TARGET_OS == "ios"`）かつ feature
-// `device` 有効時のみ `cc` でコンパイルし、`fandhe_ios_camera` という静的ライブラリへ
-// リンクする（他ターゲットのビルドには一切関与しない）。
+// 本 crate の `build.rs` が iOS ターゲット（`CARGO_CFG_TARGET_OS == "ios"`）のときのみ
+// `fandhe-platform-apple` の helper（`compile_objc`）でコンパイルし、`fandhe_ios_camera`
+// という静的ライブラリへリンクする（他ターゲットのビルドには一切関与しない）。
 //
 // 契約（`ios.rs` のコメントと対）:
 //   fandhe_ios_camera_capture(max_edge, &out_rgba, &out_w, &out_h) -> 0 で成功。
@@ -18,7 +18,7 @@
 //   4 = 内部エラー（main スレッドから呼ばれた・二重呼び出し・画像変換失敗・
 //   rootViewController 不在・提示失敗またはタイムアウト）。
 //
-// UIKit は main スレッド必須のため、呼び出し元（`ios.rs`、`fandhe-device` の
+// UIKit は main スレッド必須のため、呼び出し元（`src/ios.rs`、本 crate の
 // `Camera::capture` 契約上ワーカースレッドから同期呼び出しされる）をこの関数内で
 // ブロックし、`dispatch_async(main)` で UI 操作を実行してセマフォで完了を待つ。
 

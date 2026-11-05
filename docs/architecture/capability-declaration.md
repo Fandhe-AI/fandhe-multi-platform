@@ -145,13 +145,14 @@ identity = true
 
 ## 6. 現行設定との突き合わせ
 
-先行 5 機能（`crates/cargo-fandhe/tests/fixtures/*.toml`）の宣言を、現行の設定と突き合わせました（#1161、REQ-21 / TASK-21.2）。`crates/cargo-fandhe/tests/declarations.rs` の「現行設定との突き合わせ」節が、次を毎回の `cargo test` で確かめます。
+先行 5 機能の宣言を（機能 crate へ移した機能は `crates/fandhe-cap-<id>/Cargo.toml`、それ以外は `crates/cargo-fandhe/tests/fixtures/*.toml`。camera-capture は #1170 で crate へ移した）、現行の設定と突き合わせました（#1161、REQ-21 / TASK-21.2）。`crates/cargo-fandhe/tests/declarations.rs` の「現行設定との突き合わせ」節が、次を毎回の `cargo test` で確かめます。
 
 | 宣言 | 比較先 |
 |------|-------|
 | Android の権限・feature・コンポーネント・MainActivity の intent-filter | `platforms/android/app/src/main/AndroidManifest.xml`（属性・filter・meta-data の過不足を含む）。camera の feature 群、HCE の feature 群、`ACTION_SEND` の filter は逆方向も確かめる |
 | Gradle の版 | `build.gradle.kts` の `androidVersion("KEY")` を辿り、`scripts/android/versions.env` の値と一致 |
-| iOS の `usage-descriptions`・`frameworks` | `FandheIosApp/Resources/Info.plist` のキー、`fandhe-egui-proxy/build.rs` のリンク指定 |
+| iOS の `usage-descriptions`・`frameworks` | `FandheIosApp/Resources/Info.plist` のキー、機能 crate の `build.rs`（無ければ `fandhe-egui-proxy/build.rs`）のリンク指定 |
+| Android の `java`（機能 crate の Java ディレクトリ） | `build.gradle.kts` の `sourceSets.main` の srcDirs に `crates/fandhe-cap-<id>/<dir>` があること（生成は #1176） |
 | macOS の `NSServices` | `scripts/apple/bundle-macos-url-scheme.sh` の JSON |
 | macOS の Widget 拡張 | `platforms/apple/project.yml`、entitlements、拡張の `Info.plist`、Swift の `import` |
 
