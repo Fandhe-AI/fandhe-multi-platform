@@ -519,7 +519,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "document_scan_show" => fandhe_core::screens::document_scan_show::current_screen,
-    fandhe_egui_proxy::device::document_scan::document_scan_show_effect,
+    fandhe_cap_document_scan::document_scan_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "image_generation_show" => fandhe_core::screens::image_generation_show::current_screen,

@@ -18,7 +18,7 @@
       "note": "実装済み（#748）。提示前に `isSupported`・前面・カメラ権限・表示先を確かめ、シミュレータなど非対応の機器では非対応として返す。撮影 UI を出すまでの期限は 10 秒（単調時計）で、期限切れ後は表示しない。delegate の 3 経路（完了・キャンセル・失敗）すべてで撮影 UI を閉じてから結果を返す。1 ページ目を JPEG にして渡し、画像は表示前に復号して確かめる。キャンセルは失敗にしない。守らない範囲: 撮影 UI の表示中に Rust 側から閉じること・OS ごとの補正結果の違い・複数プロセス・プロセス死後の結果。iOS 実機での確認は #739",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#739）",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_document_scan.m + crates/fandhe-egui-proxy/src/device/ios_document_scan.rs、Issue #748"
+      "impl": "crates/fandhe-cap-document-scan/ios/fandhe_ios_document_scan.m + crates/fandhe-cap-document-scan/src/ios.rs、Issue #748"
     },
     "android": {
       "status": "done",
@@ -31,7 +31,7 @@
       "note": "実装済み（#1125）。撮影 UI の起動前に前面と `GoogleApiAvailability.isGooglePlayServicesAvailable`（SUCCESS 以外は非対応。更新ダイアログは出さない）を確かめ、`MlKitException.UNSUPPORTED` も `Unsupported` に写す。オプションはギャラリー取り込みなし・1 ページ・JPEG。キャンセルは失敗にしない。1 ページ目を長辺 2048 以下の JPEG にし、上限超過は `TooLarge`、復号できない画像は `Undecodable`、0 ページは `Empty`。ページのファイルは自アプリの cacheDir 配下のものだけ消し、消せなければ画像を返さず `Internal`。Activity 再生成時は保留中の要求を破棄し、旧結果は新しい要求を消費しない。期限は 10 秒（単調時計）で、GMS 判定と初回のモジュールダウンロードは期限内に入る既知の天井。公式文書より、端末の RAM が 1.7 GB 未満なら `UNSUPPORTED`。守らない範囲: 2 ページ目以降・PDF・撮影 UI の表示中のプロセス死・複数プロセス。Android 実機での確認は #739",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#739）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/DocumentScanHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_document_scan.rs + crates/fandhe-egui-proxy/src/device/document_scan.rs + crates/fandhe-core/src/screens/document_scan_show.rs + crates/fandhe-device/src/document_scan.rs、Issue #1125"
+      "impl": "crates/fandhe-cap-document-scan/android/java/com/fandhe/platform/DocumentScanHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-cap-document-scan/src/android.rs + crates/fandhe-cap-document-scan/src/driver.rs + crates/fandhe-core/src/screens/document_scan_show.rs + crates/fandhe-cap-document-scan/src/lib.rs、Issue #1125"
     },
     "macos": {
       "status": "no",

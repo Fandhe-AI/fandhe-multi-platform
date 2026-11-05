@@ -1,18 +1,18 @@
-//! Phase 11 型サンプル「書類スキャン」（親 #145、Issue #747）の effect ドライバ。
+//! Phase 11 型サンプル「書類スキャン」（親 #145、Issue #747）の effect ドライバ（機能 crate
+//! `fandhe-cap-document-scan` の中核、TASK-21.3 / Issue #1171）。
 //! `fandhe_core::screens::document_scan_show`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::document_scan::DocumentScanner` に撮影 UI の表示を依頼して、
-//! OS 層から届く結果を `CompletionSender` 経由で画面へ返す（`fandhe-gallery` の `screens/registry.rs` の
-//! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約（結果の三値・期限・守る範囲）の SSOT は `fandhe_device::document_scan`。
-//!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
+//! [`DocumentScanner`] に撮影 UI の表示を依頼して、OS 層から届く結果を
+//! `fandhe_runtime::CompletionSender` 経由で画面へ返す（`fandhe-gallery` の `screens/registry.rs` の
+//! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`fandhe_runtime::EffectFn` 参照）。
+//! 契約（結果の三値・期限・守る範囲）の SSOT は crate ルート（`lib.rs`）。
+//! 復号確認済みの画素は `fandhe_runtime::image_store` へ置き、レンダラが識別子で引いて描く。
 //!
 //! # OS 別の分担（dispatch・bridge・本ファイルは #747・#1124 で最終形。後続の子はここを触らない）
 //!
-//! - iOS: `ios_document_scan`（#748。`VNDocumentCameraViewController`）
-//! - Android: `android_document_scan`（#1125。ML Kit Document Scanner）
+//! - iOS: `ios`（#748。`VNDocumentCameraViewController`）
+//! - Android: `android`（#1125。ML Kit Document Scanner）
 //! - macOS・Windows・Linux: 対応表で `no` のため `UnsupportedDocumentScanner` 固定
-//!   （ダミーの成功実装へは倒さない）。Web は対象外
+//!   （ダミーの成功実装へは倒さない）。Web は対象外（gallery が wasm32 では本 crate を依存に入れない）
 //!
 //! # OS 層が呼ぶ受け口
 //!
@@ -36,21 +36,72 @@
 //!
 //! 画像の中身と OS のエラー文はログに出さない。失敗は理由の種別だけを持つ。
 
+use std::io::Cursor;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
+use fandhe_core::RgbaPixels;
 use fandhe_core::screens::document_scan_show::DocumentScanShowState;
 use fandhe_core::screens::document_scan_show::{
-    finish_scan, mark_running, take_request, CoreFailure, CoreOutcome, Phase, ShownPage,
+    CoreFailure, CoreOutcome, Phase, ShownPage, finish_scan, mark_running, take_request,
 };
-use fandhe_device::document_scan::{
-    DocumentScanFailure, DocumentScanOutcome, DocumentScanner, PRESENT_DEADLINE,
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
+use fandhe_runtime::{CompletionSender, image_store};
+
+use crate::{
+    DocumentScanFailure, DocumentScanOutcome, DocumentScanner, PRESENT_DEADLINE, PageFormat,
+    ScannedPage,
 };
 
-use super::photo_pick::{decode_for_display, Decoded};
-use super::request_slot::{poll_and_finish, RequestSlot, POLL_INTERVAL};
-use crate::app::CompletionSender;
-use crate::image_store;
+/// 復号を許す辺の最大（画素）。
+const MAX_SIDE: u32 = 16384;
+/// 復号中の確保上限（バイト）。
+const MAX_ALLOC: u64 = 256 * 1024 * 1024;
+/// 表示用の複製の辺の上限（画素）。`RgbaPixels` の上限（2048）に収まる。
+// ponytail: 写真選択（egui-proxy の photo_pick）と同じ値・同じ縮小処理を複製している。共有の置き場は #1183 で決める。
+const DISPLAY_SIDE: u32 = 1024;
+
+/// 復号確認を通った 1 ページ目。
+struct Decoded {
+    image: RgbaPixels,
+    format: &'static str,
+    size: usize,
+    width: u32,
+    height: u32,
+}
+
+/// 2 段目の検査: 実際に復号できるかを確かめ、表示用の画素を作る。失敗は `None`
+/// （画像の中身・エラー文は持ち出さない）。
+fn decode_for_display(page: &ScannedPage) -> Option<Decoded> {
+    let (format, name) = match page.format() {
+        PageFormat::Png => (image::ImageFormat::Png, "PNG"),
+        PageFormat::Jpeg => (image::ImageFormat::Jpeg, "JPEG"),
+    };
+    let mut reader = image::ImageReader::with_format(Cursor::new(page.bytes()), format);
+    // `Limits` は non_exhaustive のため、既定値から書き換える。
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(MAX_SIDE);
+    limits.max_image_height = Some(MAX_SIDE);
+    limits.max_alloc = Some(MAX_ALLOC);
+    reader.limits(limits);
+    let decoded = reader.decode().ok()?;
+    let (width, height) = (decoded.width(), decoded.height());
+    // thumbnail は小さい画像を拡大しうるため、大きいときだけ縮める。
+    let shown = if width > DISPLAY_SIDE || height > DISPLAY_SIDE {
+        decoded.thumbnail(DISPLAY_SIDE, DISPLAY_SIDE)
+    } else {
+        decoded
+    };
+    let rgba = shown.to_rgba8();
+    let image = RgbaPixels::new(rgba.width(), rgba.height(), rgba.into_raw())?;
+    Some(Decoded {
+        image,
+        format: name,
+        size: page.bytes().len(),
+        width,
+        height,
+    })
+}
 
 /// 復号済みの 1 ページ目とページ数。`RequestSlot` が `Clone` を要るため画素は `Arc` で持つ。
 #[derive(Clone)]
@@ -73,16 +124,16 @@ type Outcome = Result<CoreScan, DocumentScanFailure>;
 fn platform() -> Arc<dyn DocumentScanner> {
     #[cfg(target_os = "ios")]
     {
-        super::ios_document_scan::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_document_scan::implementation()
+        crate::android::implementation()
     }
     // macOS・Windows・Linux は対応表で no。
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
-        Arc::new(fandhe_device::document_scan::UnsupportedDocumentScanner)
+        Arc::new(crate::UnsupportedDocumentScanner)
     }
 }
 
@@ -170,12 +221,12 @@ impl Bridge {
             Ok(DocumentScanOutcome::Cancelled) => Ok(CoreScan::Cancelled),
             Ok(DocumentScanOutcome::Scanned(page)) => {
                 // 2 段目の検査。復号できない画像は成功にしない。
-                match decode_for_display(page.photo()) {
-                    Ok(d) => Ok(CoreScan::Scanned(ScanDecoded {
+                match decode_for_display(&page) {
+                    Some(d) => Ok(CoreScan::Scanned(ScanDecoded {
                         decoded: Arc::new(d),
                         page_count: page.page_count(),
                     })),
-                    Err(_) => Err(DocumentScanFailure::Undecodable),
+                    None => Err(DocumentScanFailure::Undecodable),
                 }
             }
             Err(f) => Err(f),
@@ -206,11 +257,9 @@ impl Bridge {
         let due = active
             .as_ref()
             .is_some_and(|a| !a.presenting && a.started.elapsed() >= self.deadline);
-        if due {
-            if let Some(a) = active.take() {
-                self.slot
-                    .deliver(a.request_id, Err(DocumentScanFailure::TimedOut));
-            }
+        if due && let Some(a) = active.take() {
+            self.slot
+                .deliver(a.request_id, Err(DocumentScanFailure::TimedOut));
         }
     }
 
@@ -246,9 +295,9 @@ pub(crate) fn complete_from_os(
 
 /// 画面の作り直し時に保留中の要求を破棄する。画面状態は `default()`（世代 0）に戻るため、
 /// 保留が残ると次の要求が発送されず飲み込まれる。旧要求の遅延完了は id 不一致で捨てられる。
-// Android の再生成経路（`android_main`）が呼ぶ。iOS・デスクトップには再生成経路がなく未使用。
-#[allow(dead_code)]
-pub(crate) fn reset_pending_tracking() {
+/// Android の再生成経路（アプリの `android_main`）が、新しい画面状態を作る前に呼ぶ。
+/// iOS・デスクトップには再生成経路がなく呼ばなくてよい。
+pub fn reset_pending_tracking() {
     if let Some(b) = BRIDGE.get() {
         b.reset();
     }
@@ -348,7 +397,8 @@ fn apply_outcome(s: &mut DocumentScanShowState, generation: u64, outcome: Outcom
     finish_scan(s, generation, result)
 }
 
-/// `registry.rs` の `effect` 区画から `document_scan_show` 画面用に配線される effect ドライバ。
+/// `registry.rs` の `effect` 区画から `document_scan_show` 画面用に配線される effect ドライバ
+/// （`fandhe_runtime::EffectFn` の形）。
 pub fn document_scan_show_effect(
     state: &DocumentScanShowState,
     sender: &CompletionSender<DocumentScanShowState>,
@@ -360,19 +410,26 @@ pub fn document_scan_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::UnsupportedDocumentScanner;
     use fandhe_core::screens::document_scan_show::{
         error_text, image_source, request_scan, status_text,
     };
-    use fandhe_device::document_scan::{ScannedPage, UnsupportedDocumentScanner};
-    use std::io::Cursor;
+    use fandhe_runtime::{Completion, RepaintWaker};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
 
-    type Rx = mpsc::Receiver<crate::app::Completion<DocumentScanShowState>>;
+    type Rx = mpsc::Receiver<Completion<DocumentScanShowState>>;
+
+    /// 起床を何もしない（テストは `rx` を直接読む）。
+    struct NoopWaker;
+    impl RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
 
     fn channel() -> (CompletionSender<DocumentScanShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     fn new_bridge(deadline: Duration) -> &'static Bridge {

@@ -1,0 +1,42 @@
+[package]
+name = "fandhe-cap-document-scan"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の機能 crate: 書類スキャン（iOS の VisionKit・Android の ML Kit Document Scanner）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+# TASK-21.3（Issue #1171）: 利用者が使う機能だけを依存に足せる構造の先行機能（document-scan）。
+# 契約・effect ドライバ・iOS の FFI と ObjC・Android の JNI と Java・機能宣言をこの crate に持つ。
+# 依存は fandhe-core / fandhe-runtime / fandhe-platform-* のみで、egui・winit・fandhe-device・
+# fandhe-egui-proxy には依存しない（docs/architecture/consumer-app-structure.md §7）。
+
+# 機能宣言（docs/architecture/capability-declaration.md）。`cargo fandhe check` とテストが検証する。
+[package.metadata.fandhe]
+id = "document-scan"
+
+# NSCameraUsageDescription は camera-capture と共有する（統合で 1 つになる）。
+# AVFoundation も持つ。単独で選んでもリンクが切れないようにする（camera 頼みにしない）。
+[package.metadata.fandhe.ios]
+usage-descriptions = ["NSCameraUsageDescription"]
+frameworks = ["AVFoundation", "VisionKit"]
+
+[package.metadata.fandhe.android]
+# 版は scripts/android/versions.env と一致させる（突き合わせテストが保証）。
+gradle = ["com.google.android.gms:play-services-mlkit-document-scanner:16.0.0"]
+java = ["android/java"]
+
+[dependencies]
+fandhe-core = { path = "../fandhe-core" }
+fandhe-runtime = { path = "../fandhe-runtime" }
+# 2 段目の検査（復号確認）と表示用の縮小。jpeg は Cargo.lock 済みの zune-jpeg で、新しいパッケージは増えない。
+image = { workspace = true, features = ["jpeg"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+[build-dependencies]
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }

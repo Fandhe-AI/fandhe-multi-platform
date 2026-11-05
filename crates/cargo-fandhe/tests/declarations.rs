@@ -78,6 +78,43 @@ fn fixtures_ws(tag: &str, ids: &[&str]) -> PathBuf {
     make_ws(tag, &crates)
 }
 
+/// 実 workspace の機能 crate（`crates/fandhe-cap-*`）が持つ宣言。機能 crate へ移した id は fixture を
+/// 持たず、ここから読む（#1170〜#1174 が順に移す）。全テストで 1 回だけ `cargo metadata` を通す。
+fn real_decls() -> &'static [Declaration] {
+    static REAL: std::sync::OnceLock<Vec<Declaration>> = std::sync::OnceLock::new();
+    REAL.get_or_init(|| {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.toml");
+        check_workspace(Some(&manifest)).unwrap()
+    })
+}
+
+/// `id` の宣言を実 crate から引く。fixture のうちは `None`。
+fn real_decl(id: &str) -> Option<Declaration> {
+    real_decls().iter().find(|d| d.id == id).cloned()
+}
+
+/// `ids` の宣言を集める。実 crate に移した id はそれを使い、残りは fixture から作った一時 workspace を
+/// 通す。順序は `ids` に揃える。
+fn decls_for(tag: &str, ids: &[&str]) -> Vec<Declaration> {
+    let rest: Vec<&str> = ids
+        .iter()
+        .copied()
+        .filter(|id| real_decl(id).is_none())
+        .collect();
+    let fixture_decls = if rest.is_empty() {
+        Vec::new()
+    } else {
+        check_workspace(Some(&fixtures_ws(tag, &rest))).unwrap()
+    };
+    ids.iter()
+        .map(|id| {
+            real_decl(id)
+                .or_else(|| fixture_decls.iter().find(|d| d.id == *id).cloned())
+                .unwrap_or_else(|| panic!("{id} の宣言がない"))
+        })
+        .collect()
+}
+
 fn errors(r: Result<Vec<Declaration>, Vec<String>>) -> String {
     r.expect_err("拒否されるはず").join("\n")
 }
@@ -90,7 +127,7 @@ fn decl(v: Value) -> Declaration {
 
 #[test]
 fn five_fixtures_pass_through_cargo_metadata_and_merge() {
-    let decls = check_workspace(Some(&fixtures_ws("ws-five", &IDS))).unwrap();
+    let decls = decls_for("ws-five", &IDS);
     assert_eq!(decls.len(), IDS.len());
     let refs: Vec<_> = decls.iter().map(|d| (d.id.as_str(), d)).collect();
     let m = merge(&refs).unwrap();
@@ -137,11 +174,7 @@ fn planned_ios_extensions_and_windows_identity_are_expressible() {
 
 #[test]
 fn camera_and_document_scan_share_usage_description() {
-    let decls = check_workspace(Some(&fixtures_ws(
-        "ws-share",
-        &["camera-capture", "document-scan"],
-    )))
-    .unwrap();
+    let decls = decls_for("ws-share", &["camera-capture", "document-scan"]);
     let refs: Vec<_> = decls.iter().map(|d| (d.id.as_str(), d)).collect();
     let m = merge(&refs).unwrap();
     assert_eq!(m.ios.usage_descriptions.len(), 1);
@@ -581,8 +614,10 @@ fn declared(id: &str) -> Declaration {
     // 並行テストが同じ id を呼んでも workspace を壊し合わないよう、呼び出しごとに一意な名前にする
     static SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let decls = check_workspace(Some(&fixtures_ws(&format!("xc-{id}-{n}"), &[id]))).unwrap();
-    decls.into_iter().next().unwrap()
+    decls_for(&format!("xc-{id}-{n}"), &[id])
+        .into_iter()
+        .next()
+        .unwrap()
 }
 
 type Attrs = std::collections::BTreeMap<String, String>;

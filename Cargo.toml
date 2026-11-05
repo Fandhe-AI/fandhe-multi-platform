@@ -4,6 +4,8 @@ members = [
     # Issue #1160: 機能宣言（[package.metadata.fandhe]）の形式検証と統合。`cargo fandhe check`。
     # 公開の切り替えは #1216（docs/architecture/capability-declaration.md）。
     "crates/cargo-fandhe",
+    # TASK-21.3（Issue #1171）: 機能 crate（書類スキャン）。契約・effect ドライバ・OS 実装・機能宣言を持つ。
+    "crates/fandhe-cap-document-scan",
     # TASK-21.3（Issue #1173）: 共有の受け取り（share-receive）の機能 crate。契約・effect ドライバ・
     # Android/macOS 実装・宣言を 1 crate に集める。
     "crates/fandhe-cap-share-receive",

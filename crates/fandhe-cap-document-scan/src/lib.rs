@@ -1,11 +1,19 @@
+//! 機能 crate「書類スキャン」（document-scan）。契約（本ファイル）・effect ドライバ（`driver`）・
+//! iOS の FFI（`ios`、`ios/*.m`）・Android の JNI（`android`、`android/java/*`）・機能宣言
+//! （`Cargo.toml` の `[package.metadata.fandhe]`）をこの crate に持つ（TASK-21.3 / Issue #1171、
+//! 構造の設計は `docs/architecture/consumer-app-structure.md`）。
+//! 利用側は [`document_scan_show_effect`] を画面（`fandhe_core::screens::document_scan_show`）の
+//! effect として登録する。Activity 再生成では Android の入口から [`reset_pending_tracking`] を呼ぶ。
+//! egui・winit・`fandhe-device` には依存しない。
+//!
 //! 書類スキャンの抽象（Phase 11 の拡充ループ、対応表
 //! `docs/device/capabilities/document-scan.json`、親 #145、Issue #747）。
 //!
 //! 扱う範囲は「OS のスキャン UI を出し、返ってきた 1 ページ目の画像を表示する」ことまで。
 //! 2 ページ目以降・PDF 化・文字認識・保存・共有は扱わない。対象は iOS（`VisionKit` の
 //! `VNDocumentCameraViewController`、実体は #748）と Android（ML Kit Document Scanner、
-//! 実体は #1125。#1124 ではスタブ）。macOS・Windows は `no`、Web は対象外。`fandhe-egui-proxy` の effect ドライバ
-//! （`device/document_scan.rs`）が本モジュールの trait を呼び、OS 層が実装する。
+//! 実体は #1125。#1124 ではスタブ）。macOS・Windows は `no`、Web は対象外。effect ドライバ
+//! （`driver.rs`）が本モジュールの trait を呼び、OS 層が実装する。
 //!
 //! # 契約
 //!
@@ -47,7 +55,7 @@
 //!   - `complete_from_os` は 1 要求につき 1 回だけ呼ぶ
 //!   - UI の提示は main queue で行う
 //!   - 権限の応答時にアプリが前面になければ、UI を出さず `Interrupted` を返す
-//!   - 結果を共有状態へ入れた直後に `crate::ios::request_repaint` を呼ぶ
+//!   - 結果を共有状態へ入れた直後に `fandhe_runtime::request_repaint` を呼ぶ
 //!   - `UIImage` は長辺 2048 画素以下に縮めてから JPEG へ変換して渡す（親 #145 の実装方針。
 //!     もともと 2048 以下なら描き直さない）。縮小は OS 層の義務で、Rust 側では縮めない
 //!   - 結果は撮影 UI が閉じたのを確かめてから返す（遷移中は遷移の完了を待って閉じる）
@@ -72,23 +80,52 @@
 //! プロセスが落ちた後の結果、2 ページ目以降、Play services 側 UI の挙動、GMS 非搭載端末での
 //! 公式文書にない挙動、初回モジュールダウンロードの所要時間。
 
+// unsafe は iOS の FFI（`ios.rs`）と Android の JNI エクスポート（`android.rs`）だけ。
+// それ以外の OS では禁止し、モバイルでは SAFETY コメント付きの最小範囲にだけ `allow` する。
+#![cfg_attr(
+    not(any(target_os = "android", target_os = "ios")),
+    forbid(unsafe_code)
+)]
+#![cfg_attr(any(target_os = "android", target_os = "ios"), deny(unsafe_code))]
+
 use std::fmt;
 use std::time::Duration;
 
-use crate::photo_picker::{PickedPhoto, validate_photo};
+mod driver;
+pub use driver::{document_scan_show_effect, reset_pending_tracking};
+
+// OS 別の実体。ホストのテストでも写像（純関数）を検査するため `test` でも載せる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+mod android;
+#[cfg(any(target_os = "ios", test))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+mod ios;
 
 /// 要求を観測してから撮影 UI を出すまでの期限（Rust のドライバだけが持つ）。
 /// 仮の値で、実機確認（#739）で見直す。
 pub const PRESENT_DEADLINE: Duration = Duration::from_secs(10);
 
-/// 1 ページの画像のバイト数上限。写真選択の上限（SSOT）を参照し、値を複製しない。
-pub const MAX_PAGE_BYTES: usize = crate::photo_picker::MAX_PHOTO_BYTES;
+/// 1 ページの画像のバイト数上限。本 crate を正とし、Android へは `requestDocumentScan` の引数で渡す
+/// （Java 側に複製しない）。値は写真選択の上限（8 MiB）と同じ。
+// ponytail: 写真選択（fandhe-device）と同じ値・同じ復号上限を別々に持つ。共有の置き場は #1183 で決める。
+pub const MAX_PAGE_BYTES: usize = 8 * 1024 * 1024;
+
+/// 1 ページ目の画像形式。OS 層は JPEG（Android・iOS とも）か PNG で渡す。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageFormat {
+    /// JPEG。
+    Jpeg,
+    /// PNG。
+    Png,
+}
 
 /// スキャンした 1 ページ目。[`ScannedPage::from_os`] を通ったものだけが作れる。
 /// `Debug` は画像のバイト列を出さない。
 #[derive(Clone, PartialEq, Eq)]
 pub struct ScannedPage {
-    photo: PickedPhoto,
+    bytes: Vec<u8>,
+    format: PageFormat,
     page_count: u32,
 }
 
@@ -104,38 +141,44 @@ impl ScannedPage {
         if page_count == 0 {
             return Err(DocumentScanFailure::Empty);
         }
-        // 上限超過だけを `TooLarge` にする。`validate_photo` の他の `InvalidInput`
-        // （0 バイト・形式不明など）は復号できない画像として扱う。
+        // 上限超過だけを `TooLarge` にする。0 バイト・JPEG/PNG 以外（GIF/WebP を含む。
+        // 本 crate は復号しない）は復号できない画像として扱う。
         if bytes.len() > MAX_PAGE_BYTES {
             return Err(DocumentScanFailure::TooLarge);
         }
-        match validate_photo(bytes) {
-            Ok(photo) => Ok(ScannedPage { photo, page_count }),
-            Err(_) => Err(DocumentScanFailure::Undecodable),
-        }
+        let format = match image::guess_format(&bytes) {
+            Ok(image::ImageFormat::Jpeg) => PageFormat::Jpeg,
+            Ok(image::ImageFormat::Png) => PageFormat::Png,
+            _ => return Err(DocumentScanFailure::Undecodable),
+        };
+        Ok(ScannedPage {
+            bytes,
+            format,
+            page_count,
+        })
     }
 
-    /// 1 ページ目の画像。
-    pub fn photo(&self) -> &PickedPhoto {
-        &self.photo
+    /// 1 ページ目の画像のバイト列。
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    /// 1 ページ目の画像形式（先頭バイトで判定済み）。
+    pub fn format(&self) -> PageFormat {
+        self.format
     }
 
     /// スキャン全体のページ数（1 以上）。
     pub fn page_count(&self) -> u32 {
         self.page_count
     }
-
-    /// 画像を取り出す。
-    pub fn into_photo(self) -> PickedPhoto {
-        self.photo
-    }
 }
 
 impl fmt::Debug for ScannedPage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ScannedPage")
-            .field("format", &self.photo.format)
-            .field("len", &self.photo.bytes.len())
+            .field("format", &self.format)
+            .field("len", &self.bytes.len())
             .field("page_count", &self.page_count)
             .finish()
     }
@@ -174,7 +217,7 @@ pub enum DocumentScanFailure {
 }
 
 /// 書類スキャンの OS 実装。`scan` は「受理」だけを同期で返し、結果は OS 層が
-/// `fandhe-egui-proxy` の bridge（`complete_from_os`）へ 1 回だけ非同期に届ける。
+/// `driver` の bridge（`complete_from_os`）へ 1 回だけ非同期に届ける。
 pub trait DocumentScanner: Send + Sync {
     /// `request_id` の要求として撮影 UI の表示を OS へ依頼する。
     /// 表示の直前に bridge の `try_begin_present` を呼び、`false` なら表示しない。
@@ -254,7 +297,8 @@ mod tests {
     fn png_and_jpeg_heads_pass_stage_one() {
         let p = ScannedPage::from_os(PNG_HEAD.to_vec(), 3).unwrap();
         assert_eq!(p.page_count(), 3);
-        assert_eq!(p.photo().bytes, PNG_HEAD.to_vec());
+        assert_eq!(p.bytes(), PNG_HEAD.as_slice());
+        assert_eq!(p.format(), PageFormat::Png);
         assert!(ScannedPage::from_os(vec![0xFF, 0xD8, 0xFF], 1).is_ok());
     }
 

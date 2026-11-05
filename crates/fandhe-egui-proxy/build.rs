@@ -269,8 +269,6 @@ fn build() {
     compile_ios_web_auth_session();
     // `ios/fandhe_ios_in_app_browser.m`（Issue #702）。iOS 分岐のみ。SafariServices をリンクする。
     compile_ios_in_app_browser();
-    // `ios/fandhe_ios_document_scan.m`（Issue #748）。iOS 分岐のみ。VisionKit をリンクする。
-    compile_ios_document_scan();
     // `ios/fandhe_ios_video_capture.m`（Issue #822）。iOS 分岐のみ。CoreMedia をリンクする。
     compile_ios_video_capture();
     // `ios/fandhe_ios_in_app_review.m`（Issue #564）。iOS 分岐のみ。StoreKit をリンクする。
@@ -1313,15 +1311,6 @@ fn compile_ios_in_app_browser() {
     compile_objc(
         "ios/fandhe_ios_in_app_browser.m",
         &["SafariServices", "UIKit"],
-    );
-}
-
-/// `ios/fandhe_ios_document_scan.m` を `cc` でコンパイルし VisionKit をリンクする（Issue #748）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_document_scan.rs` が使う）。
-fn compile_ios_document_scan() {
-    compile_objc(
-        "ios/fandhe_ios_document_scan.m",
-        &["AVFoundation", "UIKit", "VisionKit"],
     );
 }
 

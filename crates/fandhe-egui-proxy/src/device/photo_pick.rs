@@ -87,7 +87,7 @@ pub(crate) fn implementation() -> Arc<dyn PhotoPicker> {
 
 /// 復号確認を通った画像。
 pub(crate) struct Decoded {
-    pub(crate) image: egui::ColorImage,
+    pub(crate) image: fandhe_core::RgbaPixels,
     pub(crate) format: &'static str,
     pub(crate) size: usize,
     pub(crate) width: u32,
@@ -129,9 +129,11 @@ pub(crate) fn decode_for_display(photo: &PickedPhoto) -> Result<Decoded, DeviceE
         decoded
     };
     let rgba = shown.to_rgba8();
-    let size = [rgba.width() as usize, rgba.height() as usize];
+    // 表示辺 DISPLAY_SIDE 以下なので `RGBA_MAX_SIDE` に収まる。外れたら成功にせず失敗にする。
+    let image = fandhe_core::RgbaPixels::new(rgba.width(), rgba.height(), rgba.into_raw())
+        .ok_or(DeviceError::Internal("photo_picker decode"))?;
     Ok(Decoded {
-        image: egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw()),
+        image,
         format: format_name(photo.format),
         size: photo.bytes.len(),
         width,
@@ -358,7 +360,7 @@ mod tests {
     fn valid_png_decodes_within_display_side() {
         let d = decode_for_display(&photo(png(8, 4))).unwrap();
         assert_eq!((d.width, d.height), (8, 4));
-        assert_eq!(d.image.size, [8, 4]);
+        assert_eq!((d.image.width(), d.image.height()), (8, 4));
         assert_eq!(d.format, "PNG");
     }
 
@@ -366,7 +368,7 @@ mod tests {
     fn large_image_is_shrunk_for_display_but_reports_original_size() {
         let d = decode_for_display(&photo(png(2048, 16))).unwrap();
         assert_eq!((d.width, d.height), (2048, 16));
-        assert!(d.image.size[0] <= DISPLAY_SIDE as usize);
+        assert!(d.image.width() <= DISPLAY_SIDE);
     }
 
     #[test]

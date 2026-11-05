@@ -58,6 +58,7 @@ declare -a cargo_ndk_args=(
   build
   -p fandhe-core
   -p fandhe-platform-android
+  -p fandhe-cap-document-scan
   -p fandhe-cap-share-receive
   -p fandhe-cap-camera-capture
   -p fandhe-cap-nfc-card-emulation

@@ -10,10 +10,12 @@
 //! - レンダラ実装は [`RepaintWaker`] を実装して [`CompletionSender`] へ渡す
 //! - OS コールバックのように sender を持たない経路は [`request_repaint`] で起こす
 //!   （レンダラ実装が起動時に [`set_repaint_waker`] で登録する）
+//! - [`image_store`] は effect ドライバが復号済みの画素を描画側へ渡す 1 枠の保管所
 //! - [`request_slot`] は request/response 型の端末機能が使う「要求 1 件の追跡」
 
 #![forbid(unsafe_code)]
 
+pub mod image_store;
 pub mod request_slot;
 
 use std::any::Any;
