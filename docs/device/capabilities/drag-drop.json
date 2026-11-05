@@ -27,7 +27,7 @@
       "api": "`View.startDragAndDrop` / `OnDragListener`（`DragEvent`）",
       "perm": "なし",
       "url": "https://developer.android.com/develop/ui/views/touch-and-input/drag-drop",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-egui-proxy/src/device/drop_session.rs + crates/fandhe-egui-proxy/src/device/drag_drop.rs、Issue 旧#1016",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-egui-proxy/src/device/drop_session.rs + crates/fandhe-egui-proxy/src/device/drag_drop.rs、Issue 旧#1016",
       "note": "受け取り側のみ（送り側は対象外）。ドロップ領域は DecorView 全体。フォルダ・8 MiB 超・読めない・32 件超・0 件は失敗、領域外へ出た/ドロップ無しの ACTION_DRAG_ENDED はキャンセルとして扱う。分割画面・デスクトップモードでの他アプリ間ドロップの可否は実機で確認する。実機未確認",
       "sourceName": [
         "ドラッグ & ドロップ"

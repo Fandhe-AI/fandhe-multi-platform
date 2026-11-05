@@ -147,7 +147,7 @@ declare -a APP_APK_PATHS=(
   "${repo_root}/scripts/metrics/android-memory/native-sample/build/outputs/apk/debug/native-sample-debug.apk"
 )
 declare -a APP_ACTIVITIES=(
-  "com.fandhe.androidapp.MainActivity"
+  "com.fandhe.platform.MainActivity"
   "com.fandhe.metrics.baseline.BaselineActivity"
   "com.fandhe.metrics.nativesample.NativeSampleActivity"
 )

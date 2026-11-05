@@ -90,7 +90,7 @@ fn call_activity(id: u64, page: SettingsPage) -> bool {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_SystemSettingsHelper_nativeOnOpenSettingsResult<
+extern "system" fn Java_com_fandhe_platform_SystemSettingsHelper_nativeOnOpenSettingsResult<
     'caller,
 >(
     _env: jni::EnvUnowned<'caller>,

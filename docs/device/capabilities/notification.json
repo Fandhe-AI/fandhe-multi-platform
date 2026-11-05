@@ -39,7 +39,7 @@
         "プッシュ通知"
       ],
       "implStatus": "ローカル通知は実装済み（実機未確認）。プッシュ通知（FCM）は未実装",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/device/notification.rs、Issue 旧#1006"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/device/notification.rs、Issue 旧#1006"
     },
     "macos": {
       "status": "done",

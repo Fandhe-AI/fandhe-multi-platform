@@ -151,9 +151,7 @@ mod imp {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_CompanionDeviceHelper_nativeTryBeginPresent<
-    'caller,
->(
+extern "system" fn Java_com_fandhe_platform_CompanionDeviceHelper_nativeTryBeginPresent<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -177,7 +175,7 @@ extern "system" fn Java_com_fandhe_androidapp_CompanionDeviceHelper_nativeTryBeg
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_CompanionDeviceHelper_nativeOnCompanionDeviceResult<
+extern "system" fn Java_com_fandhe_platform_CompanionDeviceHelper_nativeOnCompanionDeviceResult<
     'caller,
 >(
     mut unowned_env: jni::EnvUnowned<'caller>,

@@ -216,7 +216,7 @@ fn decode_capture_result(
 }
 
 /// `MainActivity.nativeOnCameraResult`（Java 側）から呼ばれる JNI エクスポート関数。
-/// シンボル名はパッケージ名 `com.fandhe.androidapp` とクラス名 `MainActivity` に
+/// シンボル名はパッケージ名 `com.fandhe.platform` とクラス名 `MainActivity` に
 /// 固定で紐づく（`android.rs` の `nativeOnWindowInsetsChanged` と同じ JNI 命名規約）。
 ///
 /// [`decode_capture_result`] で `Image`/`DeviceError` へ変換し、[`CAPTURE_MAILBOX`] へ
@@ -234,7 +234,7 @@ fn decode_capture_result(
 /// `.claude/rules/coding-rust.md` の FFI 例外規定準拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnCameraResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnCameraResult<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -287,7 +287,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnCameraResult<
 /// （`nativeOnWindowInsetsChanged`・`nativeOnCameraResult` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnMotionChanged(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnMotionChanged(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     x: f32,
@@ -632,7 +632,7 @@ fn decode_clipboard_result(
 /// 同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnClipboardResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnClipboardResult<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -693,7 +693,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnClipboardResu
 //   この呼び出しを識別する世代 id」）ため、2 つの mailbox は同じ ID 空間
 //   （[`AndroidTts::next_id`]）を共有する。
 //
-// [`Java_com_fandhe_androidapp_MainActivity_nativeOnTtsResult`] は「この ID の
+// [`Java_com_fandhe_platform_MainActivity_nativeOnTtsResult`] は「この ID の
 // 最終結果がどちらの mailbox 宛か」を判定せず、まず `TTS_ACCEPT_MAILBOX` へ
 // 届けを試み（STOP の最終結果はここで受理される）、一致しなければ
 // `TTS_OUTCOME_MAILBOX` へ回す（SPEAK が既に受理済みで、こちらが本来の宛先）。
@@ -925,7 +925,7 @@ fn decode_tts_result(status: jni::sys::jint) -> Result<(), DeviceError> {
 /// `nativeOnTtsResult`（下記）と同じ根拠。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnTtsAccepted(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnTtsAccepted(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,
@@ -967,7 +967,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnTtsAccepted(
 /// （`nativeOnCameraResult`・`nativeOnClipboardResult` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnTtsResult(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnTtsResult(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,
@@ -1451,7 +1451,7 @@ mod tts_tests {
 
         // `jni::sys::jlong`/`jint` はそれぞれ `i64`/`i32` の型エイリアスのため
         // 素の整数値で呼び出せる。
-        super::Java_com_fandhe_androidapp_MainActivity_nativeOnTtsResult(
+        super::Java_com_fandhe_platform_MainActivity_nativeOnTtsResult(
             std::ptr::null_mut(),
             std::ptr::null_mut(),
             id as i64,
@@ -1484,7 +1484,7 @@ mod tts_tests {
         super::TTS_ACCEPT_MAILBOX.begin_at_if_idle(id);
         super::TTS_OUTCOME_MAILBOX.begin_at(id);
 
-        super::Java_com_fandhe_androidapp_MainActivity_nativeOnTtsResult(
+        super::Java_com_fandhe_platform_MainActivity_nativeOnTtsResult(
             std::ptr::null_mut(),
             std::ptr::null_mut(),
             id as i64,
@@ -1512,7 +1512,7 @@ mod tts_tests {
         super::TTS_ACCEPT_MAILBOX.begin_at_if_idle(id);
         // STOP は `TTS_OUTCOME_MAILBOX` を登録しない（`AndroidTts::stop` 参照）。
 
-        super::Java_com_fandhe_androidapp_MainActivity_nativeOnTtsResult(
+        super::Java_com_fandhe_platform_MainActivity_nativeOnTtsResult(
             std::ptr::null_mut(),
             std::ptr::null_mut(),
             id as i64,
@@ -1666,7 +1666,7 @@ fn sanitize_picked_name(raw: &str) -> Option<String> {
 /// DISPLAY_NAME を使う。
 ///
 /// `fd` の所有権を受け取り、この関数内で読み切って close する（呼び出し元の
-/// [`Java_com_fandhe_androidapp_MainActivity_nativeOnFilePickerResult`] の
+/// [`Java_com_fandhe_platform_MainActivity_nativeOnFilePickerResult`] の
 /// `# Safety` 節参照）。
 // 本体内の 1 箇所の `unsafe`（`OwnedFd::from_raw_fd`）は関数 doc の SAFETY 記述参照。
 #[allow(unsafe_code)]
@@ -1739,7 +1739,7 @@ fn decode_file_pick_result(
 /// 同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnFilePickerResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnFilePickerResult<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -1817,7 +1817,7 @@ pub(crate) fn request_photo_pick(request_id: u64) -> bool {
 /// で、`nativeOnFilePickerResult` と同じ根拠で他シンボルと衝突しない。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnPhotoPickerResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnPhotoPickerResult<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -1882,7 +1882,7 @@ pub(crate) fn request_contact_pick(request_id: u64) -> bool {
 /// ため `deliver` の成否に関わらず再描画を要求する。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnContactPickerResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnContactPickerResult<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -2015,7 +2015,7 @@ fn decode_location_failure(code: jni::sys::jint) -> fandhe_device::location::Loc
 /// （`nativeOnMotionChanged`・`nativeOnCameraResult` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnLocationChanged(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnLocationChanged(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     latitude: f64,
@@ -2038,7 +2038,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnLocationChang
 /// `nativeOnLocationChanged` と同一の根拠（生ポインタへのアクセスを行わない）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnLocationFailure(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnLocationFailure(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     code: jni::sys::jint,
@@ -2059,7 +2059,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnLocationFailu
 /// `nativeOnLocationChanged` と同一の根拠（生ポインタへのアクセスを行わない）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnLocationRetrying(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnLocationRetrying(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) {
@@ -2173,7 +2173,7 @@ pub(crate) fn request_share(request_id: u64, request: &ShareRequest) -> bool {
 /// リンクされるため他シンボルと衝突しない（`nativeOnFilePickerResult` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnShareResult(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnShareResult(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,
@@ -2256,7 +2256,7 @@ pub(crate) fn request_biometric(request_id: u64, reason: &str) -> bool {
 /// リンクされるため他シンボルと衝突しない（`nativeOnShareResult` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnBiometricResult(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnBiometricResult(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,
@@ -2393,7 +2393,7 @@ fn decode_mic_record_result(
 /// リンクされるため他シンボルと衝突しない（`nativeOnBiometricResult` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnMicRecordStarted(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnMicRecordStarted(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,
@@ -2423,7 +2423,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnMicRecordStar
 /// 同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnMicRecordResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnMicRecordResult<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -2583,7 +2583,7 @@ fn decode_speech_result(
 /// リンクされるため他シンボルと衝突しない（`nativeOnMicRecordStarted` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnSpeechStarted(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnSpeechStarted(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,
@@ -2613,7 +2613,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnSpeechStarted
 /// 同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnSpeechResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnSpeechResult<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -2643,7 +2643,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnSpeechResult<
 /// リンクされるため他シンボルと衝突しない（`nativeOnBiometricResult` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnSpeechError(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnSpeechError(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,
@@ -2741,7 +2741,7 @@ pub(crate) fn read_ble_string(
 /// 実行単位にのみリンクされるため他シンボルと衝突しない（`nativeOnSpeechResult` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnBleScanResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnBleScanResult<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -2777,7 +2777,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnBleScanResult
 /// リンクされるため他シンボルと衝突しない（`nativeOnSpeechError` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnBleScanFinished(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnBleScanFinished(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,
@@ -2868,7 +2868,7 @@ pub(crate) fn request_notification(request_id: u64, title: &str, body: &str) -> 
 /// リンクされるため他シンボルと衝突しない（`nativeOnBiometricResult` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnNotificationResult(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnNotificationResult(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,
@@ -2945,7 +2945,7 @@ pub(crate) fn request_calendar_insert(
 /// （`nativeOnNotificationResult` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnCalendarResult(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnCalendarResult(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,
@@ -3022,7 +3022,7 @@ fn decode_drag_drop_item(
 /// リンクされるため他シンボルと衝突しない（`nativeOnFilePickerResult` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnDragDropHover(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnDragDropHover(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     entered: jni::sys::jboolean,
@@ -3037,7 +3037,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnDragDropHover
 ///
 /// iOS の `fandhe_rust_drag_drop_begin`（out パラメータで `to_load` も返す）と異なり、
 /// `to_load` は返さない: Java 側の読み取りスレッドは `total` 件すべてについて
-/// [`Java_com_fandhe_androidapp_MainActivity_nativeDragDropWants`] へ 1 件ずつ問い合わせ、
+/// [`Java_com_fandhe_platform_MainActivity_nativeDragDropWants`] へ 1 件ずつ問い合わせ、
 /// 上限超過分・旧世代はそこで `false` として打ち切られる（実装計画 §3-1 ステップ 5、
 /// `drop_session::wants` doc 参照）。
 ///
@@ -3045,7 +3045,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnDragDropHover
 /// この関数自体は `unsafe` 操作を含まない（`nativeOnDragDropHover` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnDragDropBegin(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnDragDropBegin(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     total: jni::sys::jint,
@@ -3066,7 +3066,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnDragDropBegin
 /// この関数自体は `unsafe` 操作を含まない（`nativeOnDragDropHover` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeDragDropWants(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeDragDropWants(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     session: jni::sys::jlong,
@@ -3108,7 +3108,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeDragDropWants(
 /// 同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnDragDropItem<'caller>(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnDragDropItem<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     session: jni::sys::jlong,

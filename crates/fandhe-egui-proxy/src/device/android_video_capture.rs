@@ -94,7 +94,7 @@ pub(crate) fn implementation() -> Arc<dyn VideoCapturer> {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_VideoCaptureHelper_nativeTryBeginPresent<'caller>(
+extern "system" fn Java_com_fandhe_platform_VideoCaptureHelper_nativeTryBeginPresent<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -114,7 +114,7 @@ extern "system" fn Java_com_fandhe_androidapp_VideoCaptureHelper_nativeTryBeginP
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_VideoCaptureHelper_nativeOnVideoCaptureResult<
+extern "system" fn Java_com_fandhe_platform_VideoCaptureHelper_nativeOnVideoCaptureResult<
     'caller,
 >(
     _env: jni::EnvUnowned<'caller>,

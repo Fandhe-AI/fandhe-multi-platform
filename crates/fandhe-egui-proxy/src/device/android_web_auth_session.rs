@@ -208,7 +208,7 @@ mod imp {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_WebAuthSessionHelper_nativeOnWebAuthSessionResult<
+extern "system" fn Java_com_fandhe_platform_WebAuthSessionHelper_nativeOnWebAuthSessionResult<
     'caller,
 >(
     mut unowned_env: jni::EnvUnowned<'caller>,

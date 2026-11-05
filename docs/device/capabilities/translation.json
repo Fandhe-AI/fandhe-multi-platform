@@ -24,7 +24,7 @@
       "note": "実装済み（#537）。固定の日本語文を ja → en に 1 回訳す。API 31 未満・翻訳サービスなしは Unsupported、言語の組み合わせ非対応は失敗、言語パック未導入・取得中も失敗として出し、ダウンロードは始めない。端末によって翻訳サービスの有無が違う。期限は 30 秒（Rust のドライバだけが持つ）。Activity 再生成で保留中の要求を中断扱いで破棄する。守る範囲は 1 プロセス内の順序・嘘の成功の禁止・資源の解放で、期限後も OS 側の翻訳が走り切ることは守らない。Android 実機の確認は #529 で行う",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#529）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_translation.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/TranslationHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/translation.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-device/src/translation.rs、Issue #537"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_translation.rs + platforms/android/app/src/main/java/com/fandhe/platform/TranslationHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/translation.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-device/src/translation.rs、Issue #537"
     },
     "macos": {
       "status": "done",

@@ -31,7 +31,7 @@
       "note": "実装済み（#1125）。撮影 UI の起動前に前面と `GoogleApiAvailability.isGooglePlayServicesAvailable`（SUCCESS 以外は非対応。更新ダイアログは出さない）を確かめ、`MlKitException.UNSUPPORTED` も `Unsupported` に写す。オプションはギャラリー取り込みなし・1 ページ・JPEG。キャンセルは失敗にしない。1 ページ目を長辺 2048 以下の JPEG にし、上限超過は `TooLarge`、復号できない画像は `Undecodable`、0 ページは `Empty`。ページのファイルは自アプリの cacheDir 配下のものだけ消し、消せなければ画像を返さず `Internal`。Activity 再生成時は保留中の要求を破棄し、旧結果は新しい要求を消費しない。期限は 10 秒（単調時計）で、GMS 判定と初回のモジュールダウンロードは期限内に入る既知の天井。公式文書より、端末の RAM が 1.7 GB 未満なら `UNSUPPORTED`。守らない範囲: 2 ページ目以降・PDF・撮影 UI の表示中のプロセス死・複数プロセス。Android 実機での確認は #739",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#739）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/DocumentScanHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_document_scan.rs + crates/fandhe-egui-proxy/src/device/document_scan.rs + crates/fandhe-core/src/screens/document_scan_show.rs + crates/fandhe-device/src/document_scan.rs、Issue #1125"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/DocumentScanHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_document_scan.rs + crates/fandhe-egui-proxy/src/device/document_scan.rs + crates/fandhe-core/src/screens/document_scan_show.rs + crates/fandhe-device/src/document_scan.rs、Issue #1125"
     },
     "macos": {
       "status": "no",

@@ -100,7 +100,7 @@ fn call_activity(id: u64, target: LaunchTarget) -> bool {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_ExternalAppLaunchHelper_nativeOnExternalAppLaunchResult<
+extern "system" fn Java_com_fandhe_platform_ExternalAppLaunchHelper_nativeOnExternalAppLaunchResult<
     'caller,
 >(
     _env: jni::EnvUnowned<'caller>,

@@ -31,7 +31,7 @@
         "クリップボード"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-egui-proxy/src/device/android.rs`（`AndroidClipboard`）+ `platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java`、Issue 旧#859"
+      "impl": "`crates/fandhe-egui-proxy/src/device/android.rs`（`AndroidClipboard`）+ `platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java`、Issue 旧#859"
     },
     "macos": {
       "status": "done",

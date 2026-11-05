@@ -76,7 +76,7 @@ pub(crate) fn implementation() -> Arc<dyn PenStylus> {
 #[cfg(all(target_os = "android", feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_PenStylusHelper_nativeOnPenSample(
+extern "system" fn Java_com_fandhe_platform_PenStylusHelper_nativeOnPenSample(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     tool_type: i32,
@@ -99,7 +99,7 @@ extern "system" fn Java_com_fandhe_androidapp_PenStylusHelper_nativeOnPenSample(
 #[cfg(all(target_os = "android", feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_PenStylusHelper_nativeOnPenClear(
+extern "system" fn Java_com_fandhe_platform_PenStylusHelper_nativeOnPenClear(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) {

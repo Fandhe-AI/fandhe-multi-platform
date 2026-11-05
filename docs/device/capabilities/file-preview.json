@@ -28,7 +28,7 @@
       "perm": "不要（`<queries>` も不要。読み取りは Intent 単位の一時許可）",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#890）",
-      "impl": "`crates/fandhe-egui-proxy/src/device/android_file_preview.rs` + `platforms/android/app/src/main/java/com/fandhe/androidapp/FilePreviewHelper.java` + `crates/fandhe-egui-proxy/src/device/file_preview.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-device/src/file_preview.rs`、Issue #920",
+      "impl": "`crates/fandhe-egui-proxy/src/device/android_file_preview.rs` + `platforms/android/app/src/main/java/com/fandhe/platform/FilePreviewHelper.java` + `crates/fandhe-egui-proxy/src/device/file_preview.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-device/src/file_preview.rs`、Issue #920",
       "url": [
         "https://developer.android.com/reference/android/media/ThumbnailUtils#createImageThumbnail(java.io.File,%20android.util.Size,%20android.os.CancellationSignal)",
         "https://developer.android.com/reference/androidx/core/content/FileProvider",

@@ -28,7 +28,7 @@
       "note": "実装済み（旧#1226）。`Intent.ACTION_INSERT` でカレンダーアプリの編集画面を開くだけで、権限・`<queries>` は宣言しない（予定ストアには直接触れない）。入力は Rust 側 `EventDraft::parse` に一本化し、通らない入力は OS へ渡さない。編集画面へ渡せたら「OS に渡しただけ」（`HandedToOs`）を返し、保存したとは見せない（編集画面からの戻りは保存の有無を表さないため待たない）。カレンダーアプリが無い端末（`ActivityNotFoundException`）・非前景／破棄中・その他の起動失敗は失敗に倒す。Activity 再生成時は保留要求を復元せず破棄し、旧要求の遅延結果は要求 id の照合で捨てる。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、完了を 1 回だけ反映。守らない範囲: 複数プロセスの同時操作、編集画面で保存されたかの確認、夏時間の存在しない／重なる時刻（OS の正規化に任せる）。既知の天井: 件名 200 文字、端末のローカル時刻のみ、終日・繰り返し・通知は扱わない。編集画面が開くこと・アプリ無効時の失敗表示・背景から起動しないことの目視は #10 で済み",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java（requestCalendarInsert） + crates/fandhe-egui-proxy/src/device/android.rs（request_calendar_insert / nativeOnCalendarResult） + crates/fandhe-egui-proxy/src/device/calendar.rs + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-device/src/calendar.rs + crates/fandhe-core/src/screens/calendar_add.rs、Issue 旧#1226",
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java（requestCalendarInsert） + crates/fandhe-egui-proxy/src/device/android.rs（request_calendar_insert / nativeOnCalendarResult） + crates/fandhe-egui-proxy/src/device/calendar.rs + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-device/src/calendar.rs + crates/fandhe-core/src/screens/calendar_add.rs、Issue 旧#1226",
       "sourceName": [
         "連絡先・カレンダー"
       ],

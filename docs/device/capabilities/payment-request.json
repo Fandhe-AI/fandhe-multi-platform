@@ -29,7 +29,7 @@
       "note": "実装済み（#1131）。環境は `ENVIRONMENT_TEST` 固定で、本番環境（PRODUCTION）と merchantId は持たない。要求 JSON は Rust の定数を JNI で渡す。GMS なし・決済時に `isReadyToPay` が偽は `Unsupported`、確認時に偽は「使えない」。`isReadyToPay` や `loadPaymentData` の Task 失敗は失敗にする（「使えない」に畳まない）。`RESULT_OK` でも決済データが無ければ失敗、キャンセルは失敗にしない。返った決済データは読まず・保持せず・ログに出さない。背景では決済シートを出さない。Activity 再生成時は保留中の要求を破棄し、旧結果は新しい要求を消費しない。成功まで通すには Google アカウントでのログインが要る。守る範囲: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、課金できるトークンを作らないこと。守らない範囲: プロセス死をまたぐ結果、GMS の Task が返らない場合の処理中表示、複数プロセス。Android 実機での確認は #540",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#540）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/PaymentRequestHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-egui-proxy/src/device/android_payment_request.rs + crates/fandhe-egui-proxy/src/device/payment_request.rs + crates/fandhe-core/src/screens/payment_request.rs + crates/fandhe-device/src/payment_request.rs、Issue #1131"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/PaymentRequestHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-egui-proxy/src/device/android_payment_request.rs + crates/fandhe-egui-proxy/src/device/payment_request.rs + crates/fandhe-core/src/screens/payment_request.rs + crates/fandhe-device/src/payment_request.rs、Issue #1131"
     },
     "macos": {
       "status": "possible",

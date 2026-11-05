@@ -74,7 +74,7 @@ pub(crate) fn present(
 /// 実行単位にのみリンクされるため他シンボルと衝突しない（`nativeOnLanService` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_LocalPeerHelper_nativeOnLocalPeerMessage<'caller>(
+extern "system" fn Java_com_fandhe_platform_LocalPeerHelper_nativeOnLocalPeerMessage<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -105,7 +105,7 @@ extern "system" fn Java_com_fandhe_androidapp_LocalPeerHelper_nativeOnLocalPeerM
 /// リンクされるため他シンボルと衝突しない（`nativeOnLanFinished` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_LocalPeerHelper_nativeOnLocalPeerFinished(
+extern "system" fn Java_com_fandhe_platform_LocalPeerHelper_nativeOnLocalPeerFinished(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,

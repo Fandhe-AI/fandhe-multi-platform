@@ -28,7 +28,7 @@
       "note": "実装済み（#974）。読み取りは `getWifiState` / `getState` を写し、Wi-Fi の切り替えと Bluetooth のオフは設定画面を開いて `Opened`、Bluetooth のオンは `ACTION_REQUEST_ENABLE` で `RESULT_OK` が `Applied`、`RESULT_CANCELED` が `NotChanged`（失敗にしない）。`setWifiEnabled` は「Q 以上を target するアプリでは常に失敗し false を返す」、`BluetoothAdapter.enable()` / `disable()` は「TIRAMISU 以上を target すると常に失敗」（公式）のため使わない。`Disabled` は返さない（相当する OS 値がない）。`Opened` / `NotChanged` を「切り替えた」と言わず、直後の読み直しの値だけで状態を出す。Activity を作り直したら保留中の要求を破棄する。守らない範囲: 設定画面での利用者の操作、読み直し時点で切り替わり途中の値、ダイアログや設定画面の待ち時間。既知の天井（実機未確認）: 端末によって `getState` に許可が要るか、`ACTION_REQUEST_ENABLE` が既にオンの端末で返す値",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#965）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_radio_control.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/RadioControlHelper.java + crates/fandhe-egui-proxy/src/device/radio_control.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-device/src/radio_control.rs、Issue #974"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_radio_control.rs + platforms/android/app/src/main/java/com/fandhe/platform/RadioControlHelper.java + crates/fandhe-egui-proxy/src/device/radio_control.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-device/src/radio_control.rs、Issue #974"
     },
     "macos": {
       "status": "done",

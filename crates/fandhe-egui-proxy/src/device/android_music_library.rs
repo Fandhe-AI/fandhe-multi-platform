@@ -154,7 +154,7 @@ fn call_activity(cancel: bool, id: u64) -> bool {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MusicLibraryHelper_nativeOnMusicLibraryResult<
+extern "system" fn Java_com_fandhe_platform_MusicLibraryHelper_nativeOnMusicLibraryResult<
     'caller,
 >(
     mut unowned_env: jni::EnvUnowned<'caller>,

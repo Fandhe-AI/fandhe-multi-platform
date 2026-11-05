@@ -248,9 +248,7 @@ const NAME_MAX_UNITS: i32 = 255;
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_BluetoothClassicHelper_nativeOnClassicFound<
-    'caller,
->(
+extern "system" fn Java_com_fandhe_platform_BluetoothClassicHelper_nativeOnClassicFound<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -283,7 +281,7 @@ extern "system" fn Java_com_fandhe_androidapp_BluetoothClassicHelper_nativeOnCla
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_BluetoothClassicHelper_nativeOnClassicFinished(
+extern "system" fn Java_com_fandhe_platform_BluetoothClassicHelper_nativeOnClassicFinished(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,

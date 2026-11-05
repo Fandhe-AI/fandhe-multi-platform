@@ -171,7 +171,6 @@ identity = true
 | `FandheAppGroupIdentifier` | 現行どおり `$(TeamIdentifierPrefix)com.fandhe.widget` を literal で宣言。記号名との一本化は未決 | #1176 |
 | `NSMenuItem.default` | 現行どおり literal。利用者が差し替える手段は未決 | #1173・#1176 |
 | `CFBundle*` 等の定型キー | 生成側のテンプレートの責務 | #1176 |
-| Java の `com.fandhe.androidapp` パッケージ | 現行に一致させる。固定パッケージへの移行は別 issue | #1167 |
 | Web の `share_target`、Windows の `webcam` | 形式に欄がない。カメラの Windows 実装はダミー | #1185・#1208 |
 | 対応表 JSON の macOS カメラの `perm` 文 | 計画情報で設定の実体ではない | #1195 |
 

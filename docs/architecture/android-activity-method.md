@@ -65,7 +65,7 @@ S2（#243）、TalkBack 実機検証は S3（#244、人間担当）へ委ねる�
   static 初期化子に書く必要がある（
   <https://developer.android.com/games/agdk/game-activity/get-started>
   「Implement GameActivity in your game」節、取得日 2026-08-01）。
-  → `platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java` を追加。
+  → `platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java` を追加。
 - **`android.app.lib_name` meta-data は維持**: GameActivity でも同じ規約で解決される
   （同ガイド「Add your native library to AndroidManifest.xml if your library name is not
   the default name」節）。ただし GameActivity 自体は自動ロードに使わないため、
@@ -111,8 +111,8 @@ fail-closed）。AGP のみ plugins DSL の制約で注釈による手動同期�
 | `crates/fandhe-egui-proxy/Cargo.toml` | Android 分岐の eframe/winit feature を `android-native-activity` → `android-game-activity` へ切替。accesskit は本 issue では有効化しない |
 | `crates/fandhe-winit-ime/Cargo.toml` | Android 分岐の winit feature を `android-game-activity` へ切替（workspace 統一） |
 | `platforms/android/app/build.gradle.kts` | `androidx.games:games-activity` / `androidx.appcompat:appcompat` / `androidx.core:core` 依存追加（バージョンは `versions.env` を SSOT としてパース参照）、Java compileOptions 追加 |
-| `platforms/android/app/src/main/AndroidManifest.xml` | `android:name` を `com.fandhe.androidapp.MainActivity` へ、`android:theme` 追加、`hasCode="false"` 撤回 |
-| `platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java`（新規） | `GameActivity` を継承し `System.loadLibrary("fandhe_egui_proxy")` を行うサブクラス。WindowInsets の JNI 中継（Issue #579）もここに置く |
+| `platforms/android/app/src/main/AndroidManifest.xml` | `android:name` を `com.fandhe.platform.MainActivity` へ、`android:theme` 追加、`hasCode="false"` 撤回 |
+| `platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java`（新規） | `GameActivity` を継承し `System.loadLibrary("fandhe_egui_proxy")` を行うサブクラス。WindowInsets の JNI 中継（Issue #579）もここに置く |
 | `platforms/android/app/src/main/res/values/themes.xml`（新規） | `Theme.AppCompat.NoActionBar` を継承する `AppTheme` |
 | `scripts/android/versions.env` | `GAMES_ACTIVITY_VERSION` / `APPCOMPAT_VERSION` 追加 |
 

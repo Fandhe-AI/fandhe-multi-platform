@@ -227,7 +227,7 @@ fn call_cancel(id: u64) -> bool {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_ScannerDevicesHelper_nativeOnScannerDevicesResult<
+extern "system" fn Java_com_fandhe_platform_ScannerDevicesHelper_nativeOnScannerDevicesResult<
     'caller,
 >(
     mut unowned_env: jni::EnvUnowned<'caller>,

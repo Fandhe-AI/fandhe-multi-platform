@@ -25,7 +25,7 @@
       "note": "実装済み（旧#1280）。UI スレッドで `addFlags` / `clearFlags` し、読み戻したフラグで判定する。egui スレッドは最長 1 秒待ち、期限切れは失敗にして遅れて適用しない。Activity の作り直しでは要求を捨てる（Rust 側の画面も未要求へ戻る）。守る範囲: 1 プロセス内の順序・失敗を成功と見せないこと・期限後に適用しないこと。守らない範囲: 背景にいる間は効かないこと・他要因との一時的な食い違い（プロセス終了は OS が片付ける）。実機確認は #17 で済み",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_screen_wake_lock.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/ScreenWakeLockHelper.java + crates/fandhe-egui-proxy/src/device/screen_wake_lock.rs + crates/fandhe-core/src/screens/wake_lock_toggle.rs + crates/fandhe-device/src/screen_wake_lock.rs、Issue 旧#1280",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_screen_wake_lock.rs + platforms/android/app/src/main/java/com/fandhe/platform/ScreenWakeLockHelper.java + crates/fandhe-egui-proxy/src/device/screen_wake_lock.rs + crates/fandhe-core/src/screens/wake_lock_toggle.rs + crates/fandhe-device/src/screen_wake_lock.rs、Issue 旧#1280",
       "verified": true
     },
     "macos": {

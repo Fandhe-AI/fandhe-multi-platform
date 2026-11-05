@@ -102,7 +102,7 @@ fn call_activity(id: u64, value: i32) -> bool {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_AppBadgeHelper_nativeOnAppBadgeResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_AppBadgeHelper_nativeOnAppBadgeResult<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,

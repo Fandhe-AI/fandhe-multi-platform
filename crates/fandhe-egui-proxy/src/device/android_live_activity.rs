@@ -174,7 +174,7 @@ fn call_dismiss_all() -> bool {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_LiveActivityHelper_nativeOnLiveActivityResult<
+extern "system" fn Java_com_fandhe_platform_LiveActivityHelper_nativeOnLiveActivityResult<
     'caller,
 >(
     _env: jni::EnvUnowned<'caller>,

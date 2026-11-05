@@ -25,7 +25,7 @@
       "note": "実装済み（旧#1306）。機種は `MANUFACTURER` + `MODEL`（`unknown` は不明扱い）。メモリはカーネル予約分が引かれるため広告上の RAM 容量より小さい。空き容量はデータ領域の見積りで、0 バイトは有効値。個体識別子（`ANDROID_ID`・シリアル・広告 ID・MAC）と端末名は取らない。守る範囲: 1 プロセス内の取得・不明／0 バイト／失敗の区別・失敗を成功値へ畳まないこと・個体識別子を取らないこと。守らない範囲: OS 間の表記や粒度の一致、空き容量の厳密さ、読み取り後の変化の反映（再読込まで）。ボタン押下時に UI スレッドで同期 1 回だけ読む（保留中の要求・コールバックを持たず、Activity 再生成で破棄するものは無い）。Android 実機の確認は #20 で済み",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_device_info.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/DeviceInfoHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/device_info.rs + crates/fandhe-core/src/screens/device_info_show.rs + crates/fandhe-device/src/device_info.rs、Issue 旧#1306",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_device_info.rs + platforms/android/app/src/main/java/com/fandhe/platform/DeviceInfoHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/device_info.rs + crates/fandhe-core/src/screens/device_info_show.rs + crates/fandhe-device/src/device_info.rs、Issue 旧#1306",
       "verified": true
     },
     "macos": {

@@ -176,7 +176,7 @@ mod imp {
     /// （既存の JNI エクスポートと同じ根拠）。
     #[allow(unsafe_code)]
     #[no_mangle]
-    extern "system" fn Java_com_fandhe_androidapp_AudioSessionHelper_nativeOnAudioSessionEvent<
+    extern "system" fn Java_com_fandhe_platform_AudioSessionHelper_nativeOnAudioSessionEvent<
         'caller,
     >(
         _env: jni::EnvUnowned<'caller>,

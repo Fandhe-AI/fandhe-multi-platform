@@ -11,7 +11,7 @@
 //! Activity も cdylib も動いていない冷えたプロセスで `Worker` を起動しうるため、
 //! `android_main` 前提の `crate::android::android_app()` が `None` になる。この
 //! プロセスで記録を書くと取りこぼすため、Java 側の `BackgroundTaskWorker`
-//! （`platforms/android/app/src/main/java/com/fandhe/androidapp/BackgroundTaskWorker.java`）
+//! （`platforms/android/app/src/main/java/com/fandhe/platform/BackgroundTaskWorker.java`）
 //! が `fandhe_device::background_task::RECORD_KEY`/`encode_record` と同じ形式・
 //! 保存先（`getFilesDir()` 直下、[`super::android::data_dir`] と同じパス）へ直接
 //! 書き込む。本モジュールは Rust プロセスが動いている間の `schedule`/`cancel`

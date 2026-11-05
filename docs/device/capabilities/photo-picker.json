@@ -30,7 +30,7 @@
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java（pickPhoto / requestPhotoPick / deliverPickedPhoto） + crates/fandhe-egui-proxy/src/device/android.rs（request_photo_pick / nativeOnPhotoPickerResult） + crates/fandhe-egui-proxy/src/device/photo_pick.rs（bridge） + crates/fandhe-egui-proxy/src/android.rs（reset_pending_tracking） + crates/fandhe-egui-proxy/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue 旧#1104"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java（pickPhoto / requestPhotoPick / deliverPickedPhoto） + crates/fandhe-egui-proxy/src/device/android.rs（request_photo_pick / nativeOnPhotoPickerResult） + crates/fandhe-egui-proxy/src/device/photo_pick.rs（bridge） + crates/fandhe-egui-proxy/src/android.rs（reset_pending_tracking） + crates/fandhe-egui-proxy/src/image_store.rs + crates/fandhe-core/src/screens/photo_pick.rs、Issue 旧#1104"
     },
     "macos": {
       "status": "done",

@@ -34,7 +34,7 @@
         "https://developer.android.com/reference/android/media/AudioManager#ACTION_AUDIO_BECOMING_NOISY",
         "https://developer.android.com/reference/android/media/AudioManager#getMode()"
       ],
-      "impl": "crates/fandhe-egui-proxy/src/device/android_audio_session.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/AudioSessionHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java、Issue #842",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_audio_session.rs + platforms/android/app/src/main/java/com/fandhe/platform/AudioSessionHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java、Issue #842",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#838）",
       "note": "選べる種別は StopOthers（`AUDIOFOCUS_GAIN`）と DuckOthers（`GAIN_TRANSIENT_MAY_DUCK`）。Android の「他と混ぜる」は「フォーカスを要求しない」ことにあたり要求の API が無いので、MixWithOthers は選べない。API 24・25 は非対応（read は動く）。背景へ遷移しても止めず、`onDestroy` で解除して停止を失敗にしない。生成時の id と現在の購読を照合して古い通知を捨てる。`requestAudioFocus` の戻り値は GRANTED / FAILED / DELAYED で、DELAYED は `setAcceptsDelayedFocusGain(true)` のときだけ（公式）。Android 15（API 35）以上を target にするアプリは、最前面か foreground service でないと FAILED（公式。本アプリは targetSdk 35）。今フォーカスを持っているかを OS に問う公開 API は見当たらない。Android 8 以降は条件を満たすとシステムが自動で音量を下げ、そのときアプリにコールバックは来ない。Android 12 以降は他アプリが GAIN を要求すると、media / game の保持者をフェードアウトさせてから LOSS を通知する（公式）。`AudioFocusRequest` は API 26 からで、minSdk 24 の端末（API 24・25）は旧 `requestAudioFocus(listener, streamType, durationHint)`（API 26 で deprecated）しか無い"

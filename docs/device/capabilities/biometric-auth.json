@@ -31,7 +31,7 @@
         "生体認証"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs、Issue 旧#908"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs、Issue 旧#908"
     },
     "macos": {
       "status": "done",

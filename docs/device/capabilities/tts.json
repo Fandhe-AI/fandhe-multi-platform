@@ -33,7 +33,7 @@
         "読み上げ（TTS、任意テキストの音声合成）"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-egui-proxy/src/device/android.rs`（`AndroidTts`）+ `platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java`、Issue 旧#866"
+      "impl": "`crates/fandhe-egui-proxy/src/device/android.rs`（`AndroidTts`）+ `platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java`、Issue 旧#866"
     },
     "macos": {
       "status": "done",

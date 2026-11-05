@@ -28,7 +28,7 @@
       "url": "https://developer.android.com/training/app-links/deep-linking",
       "note": "実装済み（Issue 旧#1218）。MainActivity を `launchMode=\"singleTask\"` にして起動中の URL を `onNewIntent` で受ける（standard だと外部アプリからの ACTION_VIEW ごとに新インスタンスができる）。`onCreate` の `getIntent()` は `savedInstanceState` なし・履歴（Recents）起動でないときだけ届け、二重配送を防ぐ。守らない範囲: プロセス死亡後の復元で前回の URL は再表示しない。起動中に URL を受けると自タスクで MainActivity の上にある外部 Activity（カメラ・SAF・共有シート等）は閉じられ、既存のキャンセル経路で確定する。検査は共通層で行い、弾いたものは件数だけ数える。`autoVerify` / `assetlinks.json` は独自 scheme には不要。実機確認は #8 で済み",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "platforms/android/app/src/main/AndroidManifest.xml + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-device/src/url_scheme.rs、Issue 旧#1218",
+      "impl": "platforms/android/app/src/main/AndroidManifest.xml + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-device/src/url_scheme.rs、Issue 旧#1218",
       "verified": true
     },
     "macos": {

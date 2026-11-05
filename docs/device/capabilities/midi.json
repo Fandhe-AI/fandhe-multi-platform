@@ -24,7 +24,7 @@
       "note": "実装済み（旧#1400）。範囲は USB 等で `getDevices` に出る MIDI 入力から届いたノートオン / オフを新しい順に一覧へ出すことのみ（出力・SysEx・CC・MIDI 2.0・デバイス名・タイムスタンプ・BLE の接続は範囲外）。接続中の入力が 0 台でも成功で、非搭載（`FEATURE_MIDI` なし）は Unsupported、失敗とは別の表示。値域外・壊れたバイト列は丸めず捨てる。演奏内容と例外メッセージはログに出さない。守る範囲: 1 プロセス内の順序、失敗を成功値へ畳まないこと、停止・Activity 再生成後の通知の破棄（世代で照合）、開いたポートの解放。守らない範囲: `onPause` 後の背景受信の停止制御、抜き差し確定との時間差による入力数表示の一時的な食い違い。並行経路の集約先は Java の制御ロック 1 本（`MidiHelper.lock`）と Rust の 1 ロック（`ROUTER`）。作り直し時は Java の `onDestroy` と Rust の `reset_pending_tracking` で保留を破棄する。実機確認は #35",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#35）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_midi.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MidiHelper.java + crates/fandhe-egui-proxy/src/device/midi.rs + crates/fandhe-core/src/screens/midi_show.rs + crates/fandhe-device/src/midi.rs、Issue 旧#1400"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_midi.rs + platforms/android/app/src/main/java/com/fandhe/platform/MidiHelper.java + crates/fandhe-egui-proxy/src/device/midi.rs + crates/fandhe-core/src/screens/midi_show.rs + crates/fandhe-device/src/midi.rs、Issue 旧#1400"
     },
     "macos": {
       "status": "done",

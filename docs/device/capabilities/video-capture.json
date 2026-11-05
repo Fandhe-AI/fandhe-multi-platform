@@ -38,7 +38,7 @@
       "note": "実装済み（#823）。CAMERA の許可を求めてから `ACTION_VIDEO_CAPTURE` を起動し、上限 30 秒を `EXTRA_DURATION_LIMIT` に渡す。出力先は `cache/video_capture/` を `FileProvider` で渡し、撮影の前に置き場を空にして、成功・取り消し・失敗・破棄の全経路で消す。`resolveActivity` で事前判定せず、`ActivityNotFoundException` を「カメラアプリなし」に写す。長さ・寸法・回転は `MediaMetadataRetriever`（minSdk 24 のため `close()` ではなく `release()`）、サイズはファイルの大きさから読み、回転が無いときは 0 として扱う。期限・タイマーは持たず、完了は Activity の結果だけで決める。守らない範囲: `EXTRA_OUTPUT` を無視して別の場所へ保存するカメラアプリ（空のファイルとして失敗にする）、撮影中の背景遷移の扱い（OS 任せ）、撮影中のプロセス死（次回の撮影の前に回収）。`RECORD_AUDIO` が録画の音声に要らないことの明文は未確認。実機確認は #819",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#819）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_video_capture.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/VideoCaptureHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + platforms/android/app/src/main/res/xml/compose_file_paths.xml、Issue #823"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_video_capture.rs + platforms/android/app/src/main/java/com/fandhe/platform/VideoCaptureHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + platforms/android/app/src/main/res/xml/compose_file_paths.xml、Issue #823"
     },
     "macos": {
       "status": "done",

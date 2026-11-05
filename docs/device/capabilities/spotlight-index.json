@@ -24,7 +24,7 @@
       "note": "固定のメモ 1 件の登録と自ドメイン（`com.fandhe.demo.spotlight`）の全削除まで（Issue #562）。API 31 未満は非対応。期限は 10 秒で Rust のドライバだけが持ち、Activity の再生成では Rust 側の保留を破棄する。受信経路は無い。守らない範囲: ランチャー・システム検索に実際に出るか・タップで起動されるか（OEM 次第）・反映の時間差・期限切れ後に OS 側で済んでいた場合の食い違い",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#555）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_spotlight_index.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/SpotlightIndexHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/spotlight_index.rs + crates/fandhe-core/src/screens/spotlight_index.rs + crates/fandhe-device/src/spotlight_index.rs、Issue #562"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_spotlight_index.rs + platforms/android/app/src/main/java/com/fandhe/platform/SpotlightIndexHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/spotlight_index.rs + crates/fandhe-core/src/screens/spotlight_index.rs + crates/fandhe-device/src/spotlight_index.rs、Issue #562"
     },
     "macos": {
       "status": "done",

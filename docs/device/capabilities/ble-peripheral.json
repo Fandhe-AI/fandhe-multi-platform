@@ -34,7 +34,7 @@
       "note": "実装済み（#1123）。`startAdvertising` はすぐ戻り、結果は `onStartSuccess` / `onStartFailure`（`DATA_TOO_LARGE`・`TOO_MANY_ADVERTISERS`・`ALREADY_STARTED`・`INTERNAL_ERROR`・`FEATURE_UNSUPPORTED`）で届く。「公開中」は `onStartSuccess` のときだけ出し、`FEATURE_UNSUPPORTED` は非対応、ほかの errorCode は失敗に写す。`BLUETOOTH_ADVERTISE` は常に検査される（AOSP のソース）。`getBluetoothLeAdvertiser()` は Bluetooth オフ・アドバタイズ非対応で null（AOSP のソース）で、読み直した state がオフならオフ、そうでなければ非対応にする。ローカル名は指定できず、アドバタイズ本体はサービス UUID だけを載せ、端末名は scan response に OS が載せる（画面には「OS が決める」と出す）。許可は毎回要求する（許可済みならダイアログは出ない）。`onStop` で資源を解放して中断にし、自動では再開しない（許可ダイアログは `onPause` しか起こさないため `onPause` は見ない）。Bluetooth の state が TURNING_OFF / OFF になったら解放してオフで確定する。読み取りは offset 0 で `sendResponse` が true を返した応答だけを数える（範囲外の offset は `GATT_INVALID_OFFSET` で返し数えない）。端末名が長く scan response が `DATA_TOO_LARGE` になると失敗になる（守らない範囲）。許可ダイアログ後の公開、中心役アプリからの読み取り、`onStop` での中断、Bluetooth オフでの確定は実機確認で確かめる（#776。問題があれば done を取り下げる）",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#776）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_ble_peripheral.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/BlePeripheralHelper.java + crates/fandhe-egui-proxy/src/device/ble_peripheral.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-device/src/ble_peripheral.rs、Issue #1123"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_ble_peripheral.rs + platforms/android/app/src/main/java/com/fandhe/platform/BlePeripheralHelper.java + crates/fandhe-egui-proxy/src/device/ble_peripheral.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-device/src/ble_peripheral.rs、Issue #1123"
     },
     "macos": {
       "status": "done",

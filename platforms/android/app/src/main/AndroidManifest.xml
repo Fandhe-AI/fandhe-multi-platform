@@ -9,7 +9,7 @@
   crates/fandhe-egui-proxy/src/android.rs のコメント・Cargo.toml の
   cfg(target_os = "android") 依存セクション参照）。GameActivity は NativeActivity と
   異なりサブクラス化が必須のため、最小の Java サブクラス
-  （src/main/java/com/fandhe/androidapp/MainActivity.java）を追加し `hasCode="false"` は
+  （src/main/java/com/fandhe/platform/MainActivity.java）を追加し `hasCode="false"` は
   撤回した。`android.app.lib_name` は GameActivity でも同じ規約で解決される
   （developer.android.com/games/agdk/game-activity/get-started 参照、取得日 2026-08-01）ため
   値・役割は変更しない。cdylib のロード自体は MainActivity.java の static 初期化子が担う
@@ -249,7 +249,7 @@
         android:theme="@style/AppTheme">
 
         <activity
-            android:name="com.fandhe.androidapp.MainActivity"
+            android:name="com.fandhe.platform.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:supportsPictureInPicture="true"
@@ -308,7 +308,7 @@
         <!-- Issue #1337: 画面録画の MediaProjection を持つ。自アプリの明示 Intent だけで起動する
              ため exported=false。切り離し時に削除する。 -->
         <service
-            android:name="com.fandhe.androidapp.ScreenCaptureService"
+            android:name="com.fandhe.platform.ScreenCaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
@@ -331,7 +331,7 @@
              bind できるのは system だけ（他アプリは SAF が URI 単位で与える権限でしか触れない、
              security.md A05 の最小公開）。新しい権限は足さない。切り離し時に削除する。 -->
         <provider
-            android:name="com.fandhe.androidapp.FileProviderDocumentsProvider"
+            android:name="com.fandhe.platform.FileProviderDocumentsProvider"
             android:authorities="${applicationId}.documents"
             android:exported="true"
             android:grantUriPermissions="true"
@@ -347,7 +347,7 @@
              だけ、新しい権限は追加しない。実機でウィジェット一覧に出ない場合は要再確認
              （device-check-pending）。切り離し時に削除する。 -->
         <receiver
-            android:name="com.fandhe.androidapp.HomeWidgetProvider"
+            android:name="com.fandhe.platform.HomeWidgetProvider"
             android:exported="false"
             android:label="@string/home_widget_label">
             <intent-filter>
@@ -362,13 +362,13 @@
              システムだけ（security.md A05）。固定文言のみ表示し、Intent の extras は読まない。
              切り離し時に両方を削除する。 -->
         <activity
-            android:name="com.fandhe.androidapp.HealthPermissionsRationaleActivity"
+            android:name="com.fandhe.platform.HealthPermissionsRationaleActivity"
             android:exported="false" />
         <activity-alias
-            android:name="com.fandhe.androidapp.ViewPermissionUsageActivity"
+            android:name="com.fandhe.platform.ViewPermissionUsageActivity"
             android:exported="true"
             android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
-            android:targetActivity="com.fandhe.androidapp.HealthPermissionsRationaleActivity">
+            android:targetActivity="com.fandhe.platform.HealthPermissionsRationaleActivity">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
@@ -379,7 +379,7 @@
              exported=true だが、BIND_TELECOM_CONNECTION_SERVICE を要求するので bind できるのは
              Telecom だけ。切り離し時に削除する。 -->
         <service
-            android:name="com.fandhe.androidapp.CallUiConnectionService"
+            android:name="com.fandhe.platform.CallUiConnectionService"
             android:exported="true"
             android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
             <intent-filter>
@@ -390,19 +390,19 @@
         <!-- Issue #278: 着信通知の応答・拒否ボタンの受け口。自アプリの明示 Intent（FLAG_IMMUTABLE）
              だけが届くため exported=false、intent-filter なし。切り離し時に削除する。 -->
         <receiver
-            android:name="com.fandhe.androidapp.CallUiActionReceiver"
+            android:name="com.fandhe.platform.CallUiActionReceiver"
             android:exported="false" />
 
         <!-- Issue #1127: 行動認識の配送先。自アプリの明示 PendingIntent だけが届くため exported=false、
              intent-filter なし。権限 ACTIVITY_RECOGNITION は宣言済み。切り離し時に削除する。 -->
         <receiver
-            android:name="com.fandhe.androidapp.ActivityRecognitionReceiver"
+            android:name="com.fandhe.platform.ActivityRecognitionReceiver"
             android:exported="false" />
 
         <!-- Issue #1078: アラームの時刻に通知を鳴らす受け口。自アプリの明示 Intent（FLAG_IMMUTABLE）
              だけが届くため exported=false、intent-filter なし。切り離し時に削除する。 -->
         <receiver
-            android:name="com.fandhe.androidapp.AlarmReceiver"
+            android:name="com.fandhe.platform.AlarmReceiver"
             android:exported="false" />
 
         <!-- Issue #720: クイック設定タイル。intent-filter を持つため exported=true だが、
@@ -411,7 +411,7 @@
              （非アクティブモード）。切り離し時にこの service と strings.xml の
              quick_settings_tile_label、res/drawable/ic_quick_settings_tile.xml を削除する。 -->
         <service
-            android:name="com.fandhe.androidapp.QuickSettingsTileService"
+            android:name="com.fandhe.platform.QuickSettingsTileService"
             android:exported="true"
             android:icon="@drawable/ic_quick_settings_tile"
             android:label="@string/quick_settings_tile_label"
@@ -425,7 +425,7 @@
              切り離し時にこの service・meta-data 2 つ・res/xml/automotive_app_desc.xml・
              strings.xml の car_display_*・Java 2 ファイルを削除する。 -->
         <service
-            android:name="com.fandhe.androidapp.CarDisplayService"
+            android:name="com.fandhe.platform.CarDisplayService"
             android:exported="true">
             <intent-filter>
                 <action android:name="androidx.car.app.CarAppService" />
@@ -444,7 +444,7 @@
              uses-permission は足さない。切り離し時にこの service・res/xml/apduservice.xml・
              strings.xml の nfc_card_emulation_*・Java 2 ファイルを削除する。 -->
         <service
-            android:name="com.fandhe.androidapp.NfcCardEmulationService"
+            android:name="com.fandhe.platform.NfcCardEmulationService"
             android:exported="true"
             android:permission="android.permission.BIND_NFC_SERVICE">
             <intent-filter>

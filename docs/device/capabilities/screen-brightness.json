@@ -31,7 +31,7 @@
       "note": "実装済み（#635）。UI スレッドで `screenBrightness` を設定して読み戻す。最長 1 秒待ち、期限後は適用しない。Activity 再生成で要求を持ち越し、実終了で捨てる。上書きしていない間の現在値は出さない（システム値は 1〜255 で端末の曲線と一致しない）。背景ではウィンドウが前面にいないため OS が利用者の値で表示する。守る範囲: 1 プロセス内の順序・失敗を成功と見せないこと・範囲外の値を OS に渡さないこと。守らない範囲: 複数ウィンドウ・分割画面、自動輝度や利用者の操作による一時的な食い違い",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#628）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_screen_brightness.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/ScreenBrightnessHelper.java + crates/fandhe-egui-proxy/src/device/screen_brightness.rs + crates/fandhe-core/src/screens/screen_brightness_show.rs + crates/fandhe-device/src/screen_brightness.rs、Issue #635"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_screen_brightness.rs + platforms/android/app/src/main/java/com/fandhe/platform/ScreenBrightnessHelper.java + crates/fandhe-egui-proxy/src/device/screen_brightness.rs + crates/fandhe-core/src/screens/screen_brightness_show.rs + crates/fandhe-device/src/screen_brightness.rs、Issue #635"
     },
     "macos": {
       "status": "no",

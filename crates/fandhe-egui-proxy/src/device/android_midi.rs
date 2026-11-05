@@ -223,7 +223,7 @@ fn call_activity(epoch: Option<u64>) -> Option<i32> {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MidiHelper_nativeOnMidiStarted<'caller>(
+extern "system" fn Java_com_fandhe_platform_MidiHelper_nativeOnMidiStarted<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     epoch: jni::sys::jlong,
@@ -238,7 +238,7 @@ extern "system" fn Java_com_fandhe_androidapp_MidiHelper_nativeOnMidiStarted<'ca
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MidiHelper_nativeOnMidiSources<'caller>(
+extern "system" fn Java_com_fandhe_platform_MidiHelper_nativeOnMidiSources<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     epoch: jni::sys::jlong,
@@ -254,7 +254,7 @@ extern "system" fn Java_com_fandhe_androidapp_MidiHelper_nativeOnMidiSources<'ca
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MidiHelper_nativeOnMidiData<'caller>(
+extern "system" fn Java_com_fandhe_platform_MidiHelper_nativeOnMidiData<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     epoch: jni::sys::jlong,
@@ -282,7 +282,7 @@ extern "system" fn Java_com_fandhe_androidapp_MidiHelper_nativeOnMidiData<'calle
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MidiHelper_nativeOnMidiFlush<'caller>(
+extern "system" fn Java_com_fandhe_platform_MidiHelper_nativeOnMidiFlush<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     epoch: jni::sys::jlong,

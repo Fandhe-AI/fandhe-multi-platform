@@ -27,7 +27,7 @@
       ],
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#710）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_quick_settings_tile.rs + crates/fandhe-egui-proxy/src/device/quick_settings_tile.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/QuickSettingsTileService.java + platforms/android/app/src/main/java/com/fandhe/androidapp/QuickSettingsTileStore.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java、Issue #720",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_quick_settings_tile.rs + crates/fandhe-egui-proxy/src/device/quick_settings_tile.rs + platforms/android/app/src/main/java/com/fandhe/platform/QuickSettingsTileService.java + platforms/android/app/src/main/java/com/fandhe/platform/QuickSettingsTileStore.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java、Issue #720",
       "note": "実装済み（#720）。`TileService.onClick` が SharedPreferences（`fandhe_quick_settings_tile` の `count`、ASCII 10 進数）の回数を `commit()` で増やし（同一プロセス内は synchronized で排他、壊れた内容・溢れ・保存失敗は数えない）、アプリ（Rust）が JNI で読む。保存に失敗した押下はプロセス内の失敗件数として画面に出る。未保存は 0 回、壊れた内容は「回数を読み出せません」で 0 にしない。守らない範囲: ポーリング間隔（1 秒）ぶんの表示の遅れ、プロセス終了で失敗件数が消えること、タイル側への回数の表示。実機で見る点: (1) クイック設定の編集に「Fandhe カウント」が出る (2) 押すと回数が増える (3) アプリを止めている間に押した分が次の起動で数えられる (4) ロック画面から押しても数えられる"
     },
     "macos": {

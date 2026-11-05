@@ -27,7 +27,7 @@ request/response 型（要求 1 件を出して 1 件の結果を待つ橋渡し
 
 - Rust 側の要求追跡: `crates/fandhe-runtime/src/request_slot.rs` の `RequestSlot` /
   `poll_and_finish`（#943）
-- Android 側の要求 id 追跡: `platforms/android/app/src/main/java/com/fandhe/androidapp/RequestTracker.java`（#944）
+- Android 側の要求 id 追跡: `platforms/android/app/src/main/java/com/fandhe/platform/RequestTracker.java`（#944）
 
 継続配信型（location / gamepad / tilt のように結果が繰り返し届く機能）と camera は別型として扱う
 （採用しない理由は各モジュールの doc コメントを参照）。

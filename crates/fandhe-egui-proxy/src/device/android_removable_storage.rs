@@ -262,7 +262,7 @@ fn call_activity(call: Call) -> Option<JniRet> {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_RemovableStorageHelper_nativeOnRemovableStorageEvent<
+extern "system" fn Java_com_fandhe_platform_RemovableStorageHelper_nativeOnRemovableStorageEvent<
     'caller,
 >(
     mut env: jni::EnvUnowned<'caller>,

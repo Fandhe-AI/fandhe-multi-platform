@@ -241,9 +241,7 @@ pub(crate) fn implementation() -> Arc<dyn NowPlaying> {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_NowPlayingHelper_nativeOnNowPlayingCommand<
-    'caller,
->(
+extern "system" fn Java_com_fandhe_platform_NowPlayingHelper_nativeOnNowPlayingCommand<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     code: jni::sys::jint,
@@ -269,7 +267,7 @@ extern "system" fn Java_com_fandhe_androidapp_NowPlayingHelper_nativeOnNowPlayin
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_NowPlayingHelper_nativeOnNowPlayingFailed<'caller>(
+extern "system" fn Java_com_fandhe_platform_NowPlayingHelper_nativeOnNowPlayingFailed<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     session_id: jni::sys::jlong,

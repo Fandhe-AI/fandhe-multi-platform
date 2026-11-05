@@ -24,7 +24,7 @@
       "note": "実装済み（旧#1332）。範囲は接続中の入出力デバイス名の一覧のみ（出力先の選択・切り替え・音量は範囲外）。デバイス ID・アドレス（MAC）は取らない・保持しない・ログに出さない。名前は制御文字除去と 128 文字、各方向 64 件まで（超過分は捨てる）。内蔵機器は機種名で並ぶ。守る範囲: 0 件と取得不可の区別・失敗を成功値へ畳まないこと・ID と MAC を取らないこと。守らない範囲: OS 間の名前の表記の一致、読み取り後の接続・取り外しの反映（再取得まで）、複数プロセス間の一致。UI スレッドで同期 1 回だけ読み、保留中の要求を持たない（Activity 再生成で破棄するものが無い）。Android 実機の確認は #23 で済み",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_audio_devices.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/AudioDevicesHelper.java + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/audio_devices.rs + crates/fandhe-core/src/screens/audio_devices_show.rs + crates/fandhe-device/src/audio_devices.rs、Issue 旧#1332",
+      "impl": "crates/fandhe-egui-proxy/src/device/android_audio_devices.rs + platforms/android/app/src/main/java/com/fandhe/platform/AudioDevicesHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/audio_devices.rs + crates/fandhe-core/src/screens/audio_devices_show.rs + crates/fandhe-device/src/audio_devices.rs、Issue 旧#1332",
       "verified": true
     },
     "macos": {

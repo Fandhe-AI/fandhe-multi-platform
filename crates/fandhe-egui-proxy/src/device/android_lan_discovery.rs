@@ -65,7 +65,7 @@ pub(crate) fn present(request_id: u64, duration: Duration) -> Result<(), DeviceE
 /// 実行単位にのみリンクされるため他シンボルと衝突しない（`nativeOnBleScanResult` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_LanDiscoveryHelper_nativeOnLanService<'caller>(
+extern "system" fn Java_com_fandhe_platform_LanDiscoveryHelper_nativeOnLanService<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -95,7 +95,7 @@ extern "system" fn Java_com_fandhe_androidapp_LanDiscoveryHelper_nativeOnLanServ
 /// リンクされるため他シンボルと衝突しない（`nativeOnBleScanFinished` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_LanDiscoveryHelper_nativeOnLanFinished(
+extern "system" fn Java_com_fandhe_platform_LanDiscoveryHelper_nativeOnLanFinished(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     request_id: jni::sys::jlong,

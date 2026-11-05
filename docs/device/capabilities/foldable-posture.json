@@ -28,7 +28,7 @@
       "note": "実装済み（#1098）。`onStart` で購読し `onStop` で解除、未受信は読み取り中で「平ら」にしない。折れ目 0 件は姿勢が平らで折れ目は不明、2 件以上は折れ目不明で 1 つでも半開きなら折れている。壊れた値・窓外の bounds は失敗。守らない範囲は反映の遅れ（1 秒 + 1 フレーム）、再生成直後の一時的な未受信、閉じた端末と広げた端末の区別。`FoldingFeature` は窓と交わる折れ目だけを報告し（窓が折れ目をまたがなければ空）、ヒンジの角度は公開しない。閉じた状態を表す値は無い。Java から受けるには 1.5 系では `window-java` の `WindowInfoTrackerCallbackAdapter` を使う。推移依存の kotlin-stdlib・kotlinx-coroutines は既存の依存（work-runtime 経由）で解決済み。依存なしの代替は無い: `Sensor.TYPE_HINGE_ANGLE` は角度だけで折れ目の位置・向きが取れず、`DeviceStateManager` は SystemApi で一般のアプリは使えない",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#715）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_foldable_posture.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/FoldablePostureHelper.java + crates/fandhe-egui-proxy/src/device/foldable_posture.rs + crates/fandhe-core/src/screens/foldable_posture_show.rs + crates/fandhe-device/src/foldable_posture.rs、Issue #1098"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_foldable_posture.rs + platforms/android/app/src/main/java/com/fandhe/platform/FoldablePostureHelper.java + crates/fandhe-egui-proxy/src/device/foldable_posture.rs + crates/fandhe-core/src/screens/foldable_posture_show.rs + crates/fandhe-device/src/foldable_posture.rs、Issue #1098"
     },
     "macos": {
       "status": "n-a",

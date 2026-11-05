@@ -131,7 +131,7 @@ fn call_request(id: u64, pay: bool, is_ready_json: &str, payment_json: Option<&s
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_PaymentRequestHelper_nativeOnCheckResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_PaymentRequestHelper_nativeOnCheckResult<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,
@@ -147,11 +147,11 @@ extern "system" fn Java_com_fandhe_androidapp_PaymentRequestHelper_nativeOnCheck
 /// 決済データの中身は受け取らない（有無だけ）。
 ///
 /// # Safety
-/// [`Java_com_fandhe_androidapp_PaymentRequestHelper_nativeOnCheckResult`] と同一の根拠。
+/// [`Java_com_fandhe_platform_PaymentRequestHelper_nativeOnCheckResult`] と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_PaymentRequestHelper_nativeOnPayResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_PaymentRequestHelper_nativeOnPayResult<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,

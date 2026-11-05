@@ -143,7 +143,7 @@ fn call_activity_image(id: u64, img: &fandhe_device::print::PrintImage) -> bool 
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_PrintHelper_nativeOnPrintResult<'caller>(
+extern "system" fn Java_com_fandhe_platform_PrintHelper_nativeOnPrintResult<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
     request_id: jni::sys::jlong,

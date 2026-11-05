@@ -177,7 +177,7 @@ impl BlePeripheral for AndroidPeripheral {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_BlePeripheralHelper_nativeOnBlePeripheralEvent(
+extern "system" fn Java_com_fandhe_platform_BlePeripheralHelper_nativeOnBlePeripheralEvent(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     token: jni::sys::jlong,
@@ -192,11 +192,11 @@ extern "system" fn Java_com_fandhe_androidapp_BlePeripheralHelper_nativeOnBlePer
 /// `fandhe_device::ble_peripheral::end_reason_from_android_advertise_error` で写す。
 ///
 /// # Safety
-/// [`Java_com_fandhe_androidapp_BlePeripheralHelper_nativeOnBlePeripheralEvent`] と同一の根拠。
+/// [`Java_com_fandhe_platform_BlePeripheralHelper_nativeOnBlePeripheralEvent`] と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_BlePeripheralHelper_nativeOnBlePeripheralStartFailure(
+extern "system" fn Java_com_fandhe_platform_BlePeripheralHelper_nativeOnBlePeripheralStartFailure(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     token: jni::sys::jlong,

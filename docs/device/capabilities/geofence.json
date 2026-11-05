@@ -29,7 +29,7 @@
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs` + `platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java`、Issue 旧#1058"
+      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs` + `platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java`、Issue 旧#1058"
     },
     "macos": {
       "status": "done",

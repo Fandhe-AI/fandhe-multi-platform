@@ -21,7 +21,7 @@
       "note": "実装済み（#940）。`startTone` の `true` は OS に渡した、`false` は OS は鳴らさなかった（成功にも失敗の色にもしない）。生成に失敗した `ToneGenerator` は保持せず次回作り直し、`onDestroy` で `release()` する。同時に鳴るのは 1 音で、再生中に呼ぶと前の音は止まって置き換わる。ストリーム音量・消音モードとの関係は公式に記載なし（実機で確認）。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#935）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_system_sound.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/SystemSoundHelper.java + crates/fandhe-egui-proxy/src/device/system_sound.rs + crates/fandhe-core/src/screens/system_sound_beep.rs + crates/fandhe-device/src/system_sound.rs、Issue #940"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_system_sound.rs + platforms/android/app/src/main/java/com/fandhe/platform/SystemSoundHelper.java + crates/fandhe-egui-proxy/src/device/system_sound.rs + crates/fandhe-core/src/screens/system_sound_beep.rs + crates/fandhe-device/src/system_sound.rs、Issue #940"
     },
     "macos": {
       "status": "done",

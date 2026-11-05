@@ -25,7 +25,7 @@
       "note": "実装済み（#516）。読む前に機能有無・許可・位置情報サービス・Wi-Fi の電源を判定し、空の一覧を成功にしない。「おおよそ」のみの許可は拒否扱いで Android 用の案内が出る。許可ダイアログへの応答を含めて 30 秒で失敗にし、Activity 破棄で中断する。API 31 以降の接続情報の SSID は #510 で実機確認する。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#510）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_wifi_info.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/WifiInfoHelper.java + crates/fandhe-egui-proxy/src/device/wifi_info.rs + crates/fandhe-core/src/screens/wifi_info_show.rs + crates/fandhe-device/src/wifi_info.rs、Issue #516"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_wifi_info.rs + platforms/android/app/src/main/java/com/fandhe/platform/WifiInfoHelper.java + crates/fandhe-egui-proxy/src/device/wifi_info.rs + crates/fandhe-core/src/screens/wifi_info_show.rs + crates/fandhe-device/src/wifi_info.rs、Issue #516"
     },
     "macos": {
       "status": "done",

@@ -48,7 +48,7 @@ fandhe_application_id="com.fandhe.androidapp"
 # 起動する。NativeActivity のままでは `am start -W -S` が実コンポーネントを解決できず
 # TotalTime 抽出に失敗するため、verify-android-launch.sh と同一の値を使う
 # （Bugbot 指摘対応）。
-fandhe_activity_name="com.fandhe.androidapp.MainActivity"
+fandhe_activity_name="com.fandhe.platform.MainActivity"
 fandhe_gradle_project_dir="${repo_root}/platforms/android"
 fandhe_jnilibs_out_dir="${repo_root}/target/android/jniLibs"
 # 署名済み（app-release.apk）を前提とする。未署名 APK（app-release-unsigned.apk）は

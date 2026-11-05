@@ -76,7 +76,7 @@ fn store_state(raw: i32) -> bool {
 #[cfg(all(target_os = "android", feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_FullscreenHelper_nativeOnFullscreenChanged(
+extern "system" fn Java_com_fandhe_platform_FullscreenHelper_nativeOnFullscreenChanged(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     state: i32,

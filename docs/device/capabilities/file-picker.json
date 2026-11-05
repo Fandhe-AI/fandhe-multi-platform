@@ -32,7 +32,7 @@
         "任意ファイル選択・保存"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-egui-proxy/src/device/file_pick.rs`（`bridge` モジュール）+ `crates/fandhe-egui-proxy/src/device/android.rs`（`request_file_pick`/`decode_file_pick_result`）+ `platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java`、Issue 旧#874"
+      "impl": "`crates/fandhe-egui-proxy/src/device/file_pick.rs`（`bridge` モジュール）+ `crates/fandhe-egui-proxy/src/device/android.rs`（`request_file_pick`/`decode_file_pick_result`）+ `platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java`、Issue 旧#874"
     },
     "macos": {
       "status": "done",

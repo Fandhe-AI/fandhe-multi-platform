@@ -257,7 +257,7 @@ impl BackgroundUpload for AndroidBackgroundUpload {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_BackgroundUploadHelper_nativeOnBackgroundUploadChanged<
+extern "system" fn Java_com_fandhe_platform_BackgroundUploadHelper_nativeOnBackgroundUploadChanged<
     'caller,
 >(
     _env: jni::EnvUnowned<'caller>,

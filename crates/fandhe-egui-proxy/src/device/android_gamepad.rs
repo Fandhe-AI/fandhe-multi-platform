@@ -450,8 +450,8 @@ impl fandhe_device::gamepad::Gamepad for AndroidGamepad {
 /// `MainActivity.nativeOnGamepadPresenceScanBegin`（Java 側）から呼ばれる JNI
 /// エクスポート関数（Issue #935）。`reportGamepadPresence()` が `InputDevice.getDeviceIds()`
 /// の再走査を開始したことを通知する。以降の deviceId は
-/// [`Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanId`] で 1 件ずつ
-/// 届き、[`Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanEnd`] で
+/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanId`] で 1 件ずつ
+/// 届き、[`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanEnd`] で
 /// 確定する（モジュール doc「接続状態はレベルトリガ」参照）。
 ///
 /// `JNIEnv`/`jclass` は本関数内で一切使わず、生ポインタへのアクセスを行わないため
@@ -466,7 +466,7 @@ impl fandhe_device::gamepad::Gamepad for AndroidGamepad {
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanBegin(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) {
@@ -479,11 +479,11 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresen
 /// `MainActivity.nativeOnGamepadPresenceScanId`（Java 側）から呼ばれる JNI
 /// エクスポート関数（Issue #935）。走査中に見つかったゲームパッド/ジョイスティック
 /// ソースの `device_id` を 1 件通知する。安全性根拠は
-/// [`Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ。
+/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanId(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanId(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     device_id: i32,
@@ -497,11 +497,11 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresen
 /// `MainActivity.nativeOnGamepadPresenceScanEnd`（Java 側）から呼ばれる JNI
 /// エクスポート関数（Issue #935）。走査結果を確定する（`AndroidGamepadState::presence_scan_end`
 /// 参照）。安全性根拠は
-/// [`Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ。
+/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanEnd(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanEnd(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) {
@@ -518,7 +518,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresen
 
 /// `MainActivity.nativeOnGamepadMotion`（Java 側）から呼ばれる JNI エクスポート関数
 /// （Issue #935）。`dispatchGenericMotionEvent` が最新サンプルのみ（履歴サンプルは
-/// 読まない）を中継する。安全性根拠は [`Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanBegin`]
+/// 読まない）を中継する。安全性根拠は [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`]
 /// と同じ。
 ///
 /// `request_repaint` は (1) `gamepad_show` 画面を表示中（[`crate::android::active_screen_uses_gamepad`]）
@@ -530,7 +530,7 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresen
 #[cfg(target_os = "android")]
 #[allow(unsafe_code, clippy::too_many_arguments)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadMotion(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadMotion(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     device_id: i32,
@@ -576,11 +576,11 @@ extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadMotion
 
 /// `MainActivity.nativeOnGamepadKey`（Java 側）から呼ばれる JNI エクスポート関数
 /// （Issue #935）。`dispatchKeyEvent` の DOWN/UP を中継する。安全性根拠は
-/// [`Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ。
+/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
-extern "system" fn Java_com_fandhe_androidapp_MainActivity_nativeOnGamepadKey(
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadKey(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     device_id: i32,

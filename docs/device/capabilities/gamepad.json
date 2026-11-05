@@ -31,7 +31,7 @@
         "ゲームコントローラ"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_gamepad.rs + platforms/android/app/src/main/java/com/fandhe/androidapp/MainActivity.java + crates/fandhe-egui-proxy/src/device/gamepad.rs、Issue 旧#935"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_gamepad.rs + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/gamepad.rs、Issue 旧#935"
     },
     "macos": {
       "status": "done",
