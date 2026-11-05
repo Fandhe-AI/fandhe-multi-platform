@@ -12,7 +12,7 @@
 //! （0 に戻さない）。
 //!
 //! JNI の署名は Java 側（`MainActivity`）と本ファイルの 2 か所で一致させる。no-op スタブは置かない
-//! （Java に `native` 宣言は無く、呼び出しは Rust から Java への一方向だけ。`android_home_widget` と同じ）。
+//! （Java に `native` 宣言は無く、呼び出しは Rust から Java への一方向だけ。`fandhe_platform_android::with_activity` 経由の機能 crate（home-widget 等）と同じ）。
 //!
 //! `android_app()` が `None`（Activity が未確立・破棄直後）のときは `Unsupported` ではなく
 //! `Internal` を返す。ドライバは `Unsupported` を受けると読み出しを恒久的にやめるため、一時的な
@@ -74,7 +74,7 @@ mod imp {
         let Some(app) = crate::android::android_app() else {
             return Err(INTERNAL);
         };
-        // SAFETY: `android_home_widget::with_activity` と同一の根拠。`app.vm_as_ptr()` は
+        // SAFETY: `fandhe_platform_android::with_activity` と同一の根拠。`app.vm_as_ptr()` は
         // android-activity が管理する有効な `JavaVM*` で、`app` は本呼び出しの間生存する。
         let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
         vm.attach_current_thread(

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   Issue #1065: macOS ホストアプリ（WidgetKit 拡張の同梱と reloadAllTimelines 用）の Info.plist。
-  CFBundleIdentifier は Rust 側 `apple_home_widget::HOST_BUNDLE_ID` と一致させる。
+  CFBundleIdentifier は Rust 側 `crates/fandhe-cap-home-widget/src/macos.rs` の `HOST_BUNDLE_ID` と一致させる。
   LSUIElement で Dock・メニューバーに出さない。権限・ATS 例外は足さない（security.md A05）。
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

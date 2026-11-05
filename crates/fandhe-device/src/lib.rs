@@ -125,8 +125,6 @@ pub mod global_hotkey;
 pub mod haptics;
 /// Phase 11（端末機能の拡充ループ、親 #149、Issue #1089）: ヘルスデータ（今日の歩数を 1 回読む）。
 pub mod health_data;
-/// Phase 11（端末機能の拡充ループ）: ホーム画面ウィジェットの 1 行テキスト。
-pub mod home_widget;
 pub mod http;
 /// Phase 11（端末機能の拡充ループ、親 #187、Issue #960）: 人の在席・離席の検知（現在値を 1 回読む）。
 pub mod human_presence;

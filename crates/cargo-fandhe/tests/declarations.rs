@@ -938,12 +938,20 @@ fn macos_services_and_widget_extension_match_current_settings() {
     let info = repo("platforms/apple/FandheTextWidget/Resources/Info.plist");
     assert!(info.contains("com.apple.widgetkit-extension"));
     assert!(info.contains("<key>FandheAppGroupIdentifier</key>"));
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../platforms/apple/FandheTextWidget/Sources/FandheTextWidget");
-    let swift: String = fs::read_dir(dir)
-        .unwrap()
-        .map(|e| fs::read_to_string(e.unwrap().path()).unwrap())
-        .collect();
+    // Swift 本体は機能 crate の `sources` にあり、project.yml がそのパスを拡張の sources に含める（#1174）。
+    let mut swift = String::new();
+    for src in &ext.sources {
+        assert!(
+            block.contains(&format!("../../crates/fandhe-cap-home-widget/{src}")),
+            "{src} が project.yml の FandheTextWidget sources にない"
+        );
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../fandhe-cap-home-widget")
+            .join(src);
+        for e in fs::read_dir(dir).unwrap() {
+            swift.push_str(&fs::read_to_string(e.unwrap().path()).unwrap());
+        }
+    }
     for f in &ext.frameworks {
         assert!(
             swift.contains(&format!("import {f}")),

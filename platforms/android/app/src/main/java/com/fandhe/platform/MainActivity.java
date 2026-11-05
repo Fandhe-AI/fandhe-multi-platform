@@ -4952,10 +4952,10 @@ public class MainActivity extends GameActivity {
         }
     }
 
-    // Rust 側（`device/android_home_widget.rs::call_set`、Issue #1067）から JNI 経由で呼ばれる
+    // Rust 側（`crates/fandhe-cap-home-widget/src/android.rs::call_set`、Issue #1067）から JNI 経由で呼ばれる
     // 同期メソッド（ワーカースレッド上）。SharedPreferences へ `commit()` で保存し、成否を
     // 返す（`apply()` は非同期で直後の読み出しが古くなりうるため使わない）。契約上 `true` は
-    // 「保存できた」ことだけを約束し、再描画要求はベストエフォート（`fandhe_device::home_widget`、
+    // 「保存できた」ことだけを約束し、再描画要求はベストエフォート（`fandhe_cap_home_widget`、
     // macOS 実装と同じ）。ウィジェット 0 個の空振りも更新要求の例外も `commit()` 成功なら `true`。
     // 保存値はログへ出さない。
     // JNI 署名: (Ljava/lang/String;)Z
@@ -4978,7 +4978,7 @@ public class MainActivity extends GameActivity {
         return true;
     }
 
-    // Rust 側（`android_home_widget.rs::call_get`）から JNI 経由で呼ばれる。未保存は null。
+    // Rust 側（`crates/fandhe-cap-home-widget/src/android.rs::call_get`）から JNI 経由で呼ばれる。未保存は null。
     // JNI 署名: ()Ljava/lang/String;
     private String homeWidgetCurrentText() {
         return HomeWidgetProvider.readText(getApplicationContext());

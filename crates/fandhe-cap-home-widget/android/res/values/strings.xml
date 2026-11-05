@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ホーム画面ウィジェット（Issue #1067）の一覧表示名・説明。切り離し時にこの crate ごと削除する。 -->
+    <string name="home_widget_label">Fandhe テキスト</string>
+    <string name="home_widget_description">アプリで保存した 1 行の文字を表示します。</string>
+</resources>

@@ -75,7 +75,7 @@ mod imp {
         ) -> Result<T, super::super::android::JniCallFailed>,
     ) -> Option<T> {
         let app = crate::android::android_app()?;
-        // SAFETY: `android_home_widget` の `with_activity` と同一の根拠。`app.vm_as_ptr()` は
+        // SAFETY: `fandhe_platform_android::with_activity` と同一の根拠。`app.vm_as_ptr()` は
         // android-activity が管理する有効な `JavaVM*` で、`app` は本呼び出しの間生存する。
         let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
         vm.attach_current_thread(|env: &mut jni::Env| {

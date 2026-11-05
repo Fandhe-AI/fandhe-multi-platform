@@ -141,6 +141,11 @@ ordered-float = { workspace = true }
 # eframe（glow / wgpu / accesskit の target 別 feature 構成）は fandhe-render-egui へ移した（Issue #1164）。
 # 本クレートは eframe に直接依存しない。
 
+# Issue #1174: quick-settings-tile（`device/apple_quick_settings_tile.rs`）が home-widget と同じ App Group の
+# コンテナパスを組むのに使う（Team ID 検証を複製しない）。
+[target.'cfg(target_os = "macos")'.dependencies]
+fandhe-platform-apple = { path = "../fandhe-platform-apple" }
+
 [target.'cfg(target_os = "ios")'.dependencies]
 # iOS（実機 aarch64-apple-ios・シミュレータ aarch64-apple-ios-sim / x86_64-apple-ios を
 # `target_os = "ios"` で一括捕捉）向けバックエンド分岐（TASK-1.3-S1 / REQ-1 / M3）。

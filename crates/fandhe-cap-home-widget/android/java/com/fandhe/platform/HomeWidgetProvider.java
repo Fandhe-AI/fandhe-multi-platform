@@ -11,12 +11,12 @@ import android.widget.RemoteViews;
  * 保存した 1 行テキストを表示するだけの最小実装（Glance は依存が増えるため使わない）。
  *
  * <p>保存先は SharedPreferences（{@link #PREFS_NAME} / {@link #KEY_TEXT}）。書き込みは
- * Rust 側（`device/android_home_widget.rs`）から JNI 経由で呼ばれる
+ * Rust 側（`crates/fandhe-cap-home-widget/src/android.rs`）から JNI 経由で呼ばれる
  * `MainActivity.homeWidgetSetText` が行い、本クラスは読み出しと再描画要求を担う。
  * `android:process` を指定していないため、アプリ本体と同じプロセスで動く。
- * 反映は OS 側で非同期（契約は `fandhe_device::home_widget::HomeWidget` 参照）。
+ * 反映は OS 側で非同期（契約は `fandhe_cap_home_widget::HomeWidget` 参照）。
  *
- * <p>切り離し時に削除する（docs/architecture/device-feature-removal.md参照）。
+ * <p>切り離し時は crate ごと削除する（docs/architecture/device-feature-removal.md 参照）。
  */
 public class HomeWidgetProvider extends AppWidgetProvider {
     static final String PREFS_NAME = "fandhe_home_widget";

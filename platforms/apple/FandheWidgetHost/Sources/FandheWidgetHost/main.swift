@@ -1,5 +1,5 @@
 // Issue #1065: WidgetKit 拡張（FandheTextWidget）を同梱するための最小ホストアプリ。
-// 役割は 1 つだけで、Rust 側（fandhe-egui-proxy の apple_home_widget）が
+// 役割は 1 つだけで、Rust 側（fandhe-cap-home-widget の macos.rs）が
 // `open -n -g -b com.fandhe.widgethost` で起こしたら、`WidgetCenter.reloadAllTimelines()`
 // を呼んで自分で終了する。`reloadAllTimelines` は拡張を含むアプリから呼ぶ必要があり、
 // 素の実行体（Rust バイナリ）からは呼べないための迂回。

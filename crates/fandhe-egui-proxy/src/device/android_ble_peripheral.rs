@@ -71,7 +71,7 @@ struct AndroidPeripheral;
 #[cfg(target_os = "android")]
 impl AndroidPeripheral {
     /// Activity インスタンスへ `f` を実行する共通処理（唯一の `unsafe` 集約点）。
-    /// `android_home_widget` と同形。`android_app()` が `None` なら `Unsupported`、JNI 失敗は `Internal`
+    /// `fandhe_platform_android::with_activity` と同形。`android_app()` が `None` なら `Unsupported`、JNI 失敗は `Internal`
     /// （Java 例外は clear し文言は読まない）。
     #[allow(unsafe_code)]
     fn with_activity<T>(
@@ -83,7 +83,7 @@ impl AndroidPeripheral {
         let Some(app) = crate::android::android_app() else {
             return Err(DeviceError::Unsupported("ble_peripheral"));
         };
-        // SAFETY: `AndroidHomeWidget::with_activity` と同一の根拠。`app.vm_as_ptr()` は
+        // SAFETY: `fandhe_platform_android::with_activity` と同一の根拠。`app.vm_as_ptr()` は
         // android-activity が管理する有効な `JavaVM*` を返し、`android_app()` は最新の
         // `AndroidApp` を複製して返すため、`app` は呼び出し時点で有効な `Activity` を指す。
         let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
