@@ -1,7 +1,7 @@
 //! Phase 11（親 #1119）型サンプル「歩数」（Issue #1247）の effect ドライバ。
 //! `fandhe_core::screens::pedometer_read`（端末依存ゼロ）の要求を観測し、
 //! `fandhe_device::pedometer::Pedometer` で累積歩数を 1 回取得して `CompletionSender` 経由で
-//! 結果を返す（`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
+//! 結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
 //! として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::pedometer`。
 //!
 //! # スレッド

@@ -1,7 +1,7 @@
 //! `fandhe_core::screens::http_fetch`（Issue #748）の effect ドライバ。画面の
 //! `FetchPhase::Requested` を観測し、`fandhe_device::http::UreqHttp` で
 //! ローカル検証用ダミー API を別スレッドから取得、`CompletionSender` 経由で
-//! `mark_loading` / `finish_fetch` を送る（`crate::screens::registry` の `effect` 区画
+//! `mark_loading` / `finish_fetch` を送る（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画
 //! から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! 依存方向はこのモジュール → `fandhe_device` の一方向（`fandhe-core` は端末依存ゼロ）。

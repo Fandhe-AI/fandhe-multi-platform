@@ -2,7 +2,7 @@
 //! effect ドライバ。`fandhe_core::screens::text_scale_preview`（端末依存ゼロ）へ
 //! OS 値の読み取り結果を渡しつつ、スライダー値（実描画へ反映する倍率）を
 //! `CompletionSender::set_zoom_factor` 経由で毎フレーム実描画へ適用する
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
 //! として呼ばれる契約、`device/tilt.rs` と同型）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

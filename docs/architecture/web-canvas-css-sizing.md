@@ -10,7 +10,7 @@ CSS サイズ明示が Safari 対策として必須であることを、リポ�
 - `docs/spec/` は読み取り専用サブモジュールのため、本書は本リポジトリ側
   （`docs/architecture/`）の新規ドキュメントとして作成しています。
 - 前提: PoC-5（`docs/spec/03-poc/web-wasm/README.md` 発見事項1）、TASK-1.2（PR #306。
-  `crates/fandhe-egui-proxy` の Web エントリ）。
+  `crates/fandhe-egui-proxy` の `web::start`。`fandhe-gallery` の `start` が呼ぶ）。
 
 ## 2. 背景（PoC-5 発見事項・バグの機序）
 
@@ -56,7 +56,7 @@ PoC-5 は対策として
 
 規約は 2 箇所で強制する。
 
-1. **ホストページ側（HTML）**: `crates/fandhe-egui-proxy/web/index.html` の
+1. **ホストページ側（HTML）**: `crates/fandhe-gallery/web/index.html` の
    `#fandhe-proxy-canvas` へ `style="width:...px;height:...px"` を明示する（本来の対策
    そのもの、PoC-5 で確認済みの形式と一致）。
 2. **Rust ブートストラップ側（構造的ガード）**: `crates/fandhe-egui-proxy/src/web.rs` の

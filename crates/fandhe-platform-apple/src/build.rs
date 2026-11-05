@@ -17,6 +17,11 @@
 //! `rustc-link-lib` は rlib 経由で伝わる。したがって [`weak_link_framework`]・[`compile_swift`]
 //! が出す弱リンク・`-rpath`・clang_rt は、rlib の機能 crate の `build.rs` から呼ぶと最終成果物に
 //! 届かない。これらを使う機能を移すときは、最終成果物を作る package 側で同じ指定を出す。
+//!
+//! 指定を複製せずに届けるため、リンク指定は [`export_link_args`] が Cargo の `links` メタデータとして
+//! 公開し、最終成果物の package が [`import_link_args`] で `rustc-link-arg` へ出し直す。
+//! 指定を出す側の package は `Cargo.toml` に `links = "<名前>"` を持ち、`build.rs` の最後で
+//! `export_link_args()` を呼ぶ。最終成果物側は `import_link_args("<名前>")` を呼ぶ。
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -60,9 +65,89 @@ pub fn link_frameworks(frameworks: &[&str]) {
 
 /// framework を弱リンクする（`-Wl,-weak_framework`）。実行体の最低 OS より新しい framework 用。
 ///
-/// `rustc-link-arg` を出すため、依存元へは伝わらない（モジュール doc の「制約」）。
+/// `rustc-link-arg` を出すため、依存元へは自動では伝わらない（モジュール doc の「制約」）。
+/// 転送するため [`export_link_args`] 用にも記録する。
 pub fn weak_link_framework(framework: &str) {
-    println!("cargo:rustc-link-arg=-Wl,-weak_framework,{framework}");
+    link_arg(&format!("-Wl,-weak_framework,{framework}"));
+}
+
+/// 転送対象のリンク指定（全成果物向け・bin 専用）。[`export_link_args`] が読む。
+static LINK_ARGS: Mutex<(Vec<String>, Vec<String>)> = Mutex::new((Vec::new(), Vec::new()));
+
+/// `rustc-link-arg` を出し、転送用に記録する。
+fn link_arg(arg: &str) {
+    println!("cargo:rustc-link-arg={arg}");
+    let mut args = LINK_ARGS.lock().expect("リンク指定の表が壊れている");
+    if !args.0.iter().any(|a| a == arg) {
+        args.0.push(arg.to_string());
+    }
+}
+
+/// bin 専用のリンク指定（`-sectcreate` など）を転送用に記録する。
+///
+/// 自 package の bin のためには出さない（呼び出し元に bin があるなら、自分で
+/// `cargo:rustc-link-arg-bins` も出すこと）。最終成果物の package が [`import_link_args`] で
+/// `rustc-link-arg-bins` として出し直す。
+pub fn bin_link_arg(arg: &str) {
+    LINK_ARGS
+        .lock()
+        .expect("リンク指定の表が壊れている")
+        .1
+        .push(arg.to_string());
+}
+
+/// 記録したリンク指定を、`links` メタデータとして公開する。`build.rs` の最後で呼ぶ。
+///
+/// 非 Apple ターゲットでも件数 0 を出す（取り込み側が「欠落」と「0 件」を区別できるように）。
+///
+/// # Panics
+///
+/// 指定に改行が含まれるとき（Cargo の指示行を壊すため）。
+pub fn export_link_args() {
+    let (all, bins) = &*LINK_ARGS.lock().expect("リンク指定の表が壊れている");
+    for (prefix, args) in [("link_arg", all), ("bin_link_arg", bins)] {
+        println!("cargo:{prefix}_count={}", args.len());
+        for (i, arg) in args.iter().enumerate() {
+            assert!(
+                !arg.contains(['\n', '\r']),
+                "リンク指定に改行は使えない: {arg:?}"
+            );
+            println!("cargo:{prefix}_{i}={arg}");
+        }
+    }
+}
+
+/// 依存元 package が [`export_link_args`] で公開したリンク指定を、自分の成果物のために出し直す。
+/// 最終成果物（bin・cdylib）を作る package の `build.rs` から呼ぶ。`links` は依存元の
+/// `Cargo.toml` の `links` の値。
+///
+/// Apple ターゲットで公開が見つからないときは panic する。黙って素通りすると、起動時に
+/// 壊れる実行体を成功として作るため。それ以外のターゲットでは何もしない。
+///
+/// # Panics
+///
+/// Apple ターゲットで `links` のメタデータが無いとき、件数と指定が食い違うとき。
+pub fn import_link_args(links: &str) {
+    if !(target_is_ios() || target_is_macos()) {
+        return;
+    }
+    let base = format!("DEP_{}_", links.to_uppercase().replace('-', "_"));
+    for (prefix, directive) in [
+        ("link_arg", "rustc-link-arg"),
+        ("bin_link_arg", "rustc-link-arg-bins"),
+    ] {
+        let key = format!("{base}{}_COUNT", prefix.to_uppercase());
+        println!("cargo:rerun-if-env-changed={key}");
+        let count: usize = std::env::var(&key)
+            .unwrap_or_else(|_| panic!("{key} が無い: {links} が export_link_args を呼んでいない"))
+            .parse()
+            .unwrap_or_else(|_| panic!("{key} が数値でない"));
+        for i in 0..count {
+            let key = format!("{base}{}_{i}", prefix.to_uppercase());
+            let arg = std::env::var(&key).unwrap_or_else(|_| panic!("{key} が無い"));
+            println!("cargo:{directive}={arg}");
+        }
+    }
 }
 
 /// `src`（呼び出し元 crate のルートからの相対パス）の `.m` を `-fobjc-arc` でコンパイルし、
@@ -141,8 +226,8 @@ fn swift_target(target: &str) -> Option<(&'static str, &'static str, &'static st
 /// Apple ツール（`xcrun`）が無いホストでは警告を出してスキップする（型検査専用。リンクは失敗する）。
 /// `spec.require_env`=1（本番・配布ビルド）ではスキップせず panic する。
 ///
-/// `rustc-link-arg`（弱リンク・`-rpath`・clang_rt）を出すため、依存元へは伝わらない
-/// （モジュール doc の「制約」）。
+/// `rustc-link-arg`（弱リンク・`-rpath`・clang_rt）を出すため、依存元へは自動では伝わらない
+/// （モジュール doc の「制約」）。[`export_link_args`] 用にも記録する。
 ///
 /// # Panics
 ///
@@ -249,13 +334,13 @@ pub fn compile_swift(spec: &SwiftLib) {
             bin.display()
         );
     }
-    println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift");
+    link_arg("-Wl,-rpath,/usr/lib/swift");
     // Swift の `#available` は `__isPlatformVersionAtLeast`（compiler-rt）を参照する。macOS は rustc が
     // clang_rt を自動リンクするが iOS は無いため、iOS では明示的にリンクする（Issue #346）。
     if sdk != "macosx" {
         let resource_dir = xcrun(&["--sdk", sdk, "clang", "--print-resource-dir"]);
         let rt = if sdk == "iphoneos" { "ios" } else { "iossim" };
-        println!("cargo:rustc-link-arg={resource_dir}/lib/darwin/libclang_rt.{rt}.a");
+        link_arg(&format!("{resource_dir}/lib/darwin/libclang_rt.{rt}.a"));
     }
 }
 
@@ -282,6 +367,21 @@ mod tests {
     fn swift_target_は未対応を拒否する() {
         assert!(swift_target("aarch64-linux-android").is_none());
         assert!(swift_target("").is_none());
+    }
+
+    #[test]
+    fn import_は非_apple_では何もしない() {
+        // テストは Apple ホストでも走るため、環境変数を触らずに済む経路だけを見る。
+        if !(target_is_ios() || target_is_macos()) {
+            import_link_args("no_such_links");
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "改行")]
+    fn export_は改行を含む指定を拒否する() {
+        bin_link_arg("a\nb");
+        export_link_args();
     }
 
     #[test]

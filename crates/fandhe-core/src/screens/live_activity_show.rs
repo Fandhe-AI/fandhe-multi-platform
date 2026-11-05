@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #88）型サンプル「ライブアクティビティ」（Issue #294）。
 //! 数値 1 つを OS のライブ表示（iOS はロック画面と Dynamic Island、Android は進行中通知）に出し、
 //! 「開始」「更新」「終了」の 3 操作だけを行う 1 画面。`FANDHE_PROXY_APP=live_activity_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod live_activity_show;` と対）。同時に出すのは 1 件で、push 更新・
 //! 複数同時・アプリ内ボタンは扱わない。
 //!

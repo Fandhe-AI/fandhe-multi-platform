@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #905）型サンプル「生体認証」（Issue #906）。
 //! 「認証する」ボタン → OS の生体認証 UI が開き、結果（認証した/キャンセル/使えない/
 //! 失敗）を表示する 1 画面。`FANDHE_PROXY_APP=biometric_check` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod biometric_check;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

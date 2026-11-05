@@ -1,7 +1,7 @@
 //! Phase 11（親 #858）型サンプル「クリップボード」（Issue #859）の effect ドライバ。
 //! `fandhe_core::screens::clipboard_text`（端末依存ゼロ）の `pending` 要求を観測し、
 //! `fandhe_device::clipboard::Clipboard` で OS のクリップボードを読み書きして
-//! `CompletionSender` 経由で結果を返す（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

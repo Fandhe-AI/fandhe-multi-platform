@@ -1,6 +1,6 @@
 //! M7（#724）の型サンプル「設定画面」（Issue #727）。通知トグル・文字サイズ調整・
 //! テーマ選択・初期値リセットの操作結果を画面下部へ集約表示する 1 画面。
-//! `FANDHE_PROXY_APP=settings` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=settings` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! から呼び出される（`screens/mod.rs` の `pub mod settings;` と対）。
 //!
 //! `Screen::toggle_switch` / `slider` / `radio_button`（`ui/screen.rs`）が組み立てる
@@ -166,7 +166,7 @@ pub fn summary(state: &SettingsState) -> String {
     )
 }
 
-/// 設定画面を組み立てる。`crates/fandhe-egui-proxy/src/screens/registry.rs` から
+/// 設定画面を組み立てる。`crates/fandhe-gallery/src/screens/registry.rs` から
 /// `FANDHE_PROXY_APP=settings` で呼び出されるほか、`tests/settings.rs` から
 /// ヘッドレス結合テストに利用される公開エントリポイント。
 pub fn settings_screen() -> Screen<SettingsState> {

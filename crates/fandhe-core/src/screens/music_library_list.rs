@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #108）型サンプル「音楽ライブラリ」（Issue #482）。
 //! 「曲の一覧を読む」ボタン → 端末内の曲のタイトルとアーティストを OS の返す順で先頭 20 件だけ
 //! 読んで一覧にする 1 画面。`FANDHE_PROXY_APP=music_library_list` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod music_library_list;` と対）。再生・アートワーク・総件数は扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

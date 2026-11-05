@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::wake_lock_toggle`（端末依存ゼロ）の要求を観測し、
 //! `fandhe_device::screen_wake_lock::ScreenWakeLock` で抑止を取る / 外し、直後に
 //! [`ScreenWakeLock::is_held`] で実際に効いているかを読み戻して `CompletionSender` 経由で
-//! 返す（`crate::screens::registry` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
+//! 返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約（冪等・エラー種別・守る範囲）の SSOT は `fandhe_device::screen_wake_lock`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。Web（wasm32）は

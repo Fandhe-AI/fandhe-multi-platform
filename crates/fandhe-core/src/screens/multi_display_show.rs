@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #1134）型サンプル「複数ディスプレイ」（Issue #1341）。
-//! `FANDHE_PROXY_APP=multi_display_show` で選ばれ、`fandhe-egui-proxy` の `screens/registry.rs`
+//! `FANDHE_PROXY_APP=multi_display_show` で選ばれ、`fandhe-gallery` の `screens/registry.rs`
 //! の `effect` 区画（native）と `fandhe-web-dom` の `demo.rs`（Web）から呼ばれる。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は

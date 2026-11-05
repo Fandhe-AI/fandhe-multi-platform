@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #181）型サンプル「アプリ・端末の識別子」（Issue #903）。
 //! 「識別子を読む」ボタン → OS の識別子を 1 回読み、**末尾 4 文字と文字数だけ**を表示する 1 画面。
-//! `FANDHE_PROXY_APP=device_identifier_show` で選ばれ、`fandhe-egui-proxy` の `screens/registry.rs` の
+//! `FANDHE_PROXY_APP=device_identifier_show` で選ばれ、`fandhe-gallery` の `screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは

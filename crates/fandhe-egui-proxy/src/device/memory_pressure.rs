@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #179）型サンプル「メモリ逼迫・負荷」（Issue #911）の effect ドライバ。
 //! `fandhe_core::screens::memory_pressure_show`（端末依存ゼロ）の要求を `take_init` / `take_start` で
 //! 観測し、`fandhe_device::memory_pressure::MemoryPressure` を呼んで、結果を `CompletionSender` 経由で
-//! 注入する（`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる
+//! 注入する（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる
 //! 契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::memory_pressure`。
 //!
 //! # OS 別実装の差し込み口

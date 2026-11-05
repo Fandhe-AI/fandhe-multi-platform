@@ -41,8 +41,8 @@ repo_root="$(cd -- "${script_dir}/../.." >/dev/null 2>&1 && pwd -P)"
 # shellcheck disable=SC1091
 . "${script_dir}/android-env.sh"
 
-fandhe_package="fandhe-egui-proxy"
-fandhe_lib_name="fandhe_egui_proxy"
+fandhe_package="fandhe-gallery"
+fandhe_lib_name="fandhe_gallery"
 fandhe_application_id="com.fandhe.androidapp"
 # TASK-9.3-S1（#242）以降 platforms/android は GameActivity（MainActivity.java）を
 # 起動する。NativeActivity のままでは `am start -W -S` が実コンポーネントを解決できず

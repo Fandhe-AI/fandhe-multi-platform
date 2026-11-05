@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #134）型サンプル「ログイン時の自動起動」（Issue #696）の effect
 //! ドライバ。`fandhe_core::screens::launch_at_login_show`（端末依存ゼロ）の要求を観測し、
 //! `fandhe_device::launch_at_login::LaunchAtLogin` を別スレッドで呼んで結果を `CompletionSender`
-//! 経由で返す（`crate::screens::registry` の `effect` 区画から呼ばれる契約、
+//! 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、
 //! `device/url_scheme.rs::drive_registration` と同型）。契約と守る範囲は
 //! `fandhe_device::launch_at_login` のモジュール doc を参照。
 //!

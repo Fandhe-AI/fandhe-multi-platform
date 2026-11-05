@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #192）型サンプル「接続した機器からの取り込み」（Issue #981）。
 //! USB 等で接続したカメラ機器・スキャナーから画像を 1 枚取り込み、表示する 1 画面。
 //! `FANDHE_PROXY_APP=scanner_devices_import` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod scanner_devices_import;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は

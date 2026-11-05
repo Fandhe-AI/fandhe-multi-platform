@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #1038）型サンプル「システムトレイ」
 //! （Issue #1039）。「出す」ボタン → メニューバー / 通知領域にアイコンを表示し、
 //! メニュー選択で画面の文言を切り替える 1 画面。`FANDHE_PROXY_APP=system_tray` で
-//! 選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から
+//! 選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から
 //! 呼ばれる（`screens/mod.rs` の `pub mod system_tray;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

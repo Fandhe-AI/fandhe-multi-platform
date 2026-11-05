@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ型サンプル「クラウド保存先として OS のファイル画面に出る」
 //! （親 #194、Issue #1019）。アプリ専用フォルダのファイルを一覧し、固定の見本を置き、
 //! 行ごとに消す。`FANDHE_PROXY_APP=file_provider_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod file_provider_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは

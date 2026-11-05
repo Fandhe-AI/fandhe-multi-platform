@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #1136）型サンプル「音声デバイス」（Issue #1330）。
 //! 画面を開くと接続中の音声入力・出力デバイスの名前を OS から 1 回読んで一覧にし、「再取得」で
 //! 読み直す 1 画面。`FANDHE_PROXY_APP=audio_devices_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod audio_devices_show;` と対）。範囲は一覧のみで、出力先の選択・
 //! 切り替え・音量は扱わない。
 //!

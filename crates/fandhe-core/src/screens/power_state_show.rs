@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #1128）型サンプル「電源状態」（Issue #1274）。
 //! 電池残量・充電状態・省電力モード・熱状態を 1 画面に並べる。`FANDHE_PROXY_APP=power_state_show`
-//! で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod power_state_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

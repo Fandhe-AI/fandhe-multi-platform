@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #111）型サンプル「Wi-Fi 情報」（Issue #514）。
 //! 「読む」ボタン → 今つないでいる Wi-Fi の名前（SSID）と電波強度（dBm）、OS が持つ直近のスキャン結果
 //! から周辺のネットワークを強い順に 5 件まで出す 1 画面。`FANDHE_PROXY_APP=wifi_info_show` で
-//! 選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! 選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod wifi_info_show;` と対）。自分からのスキャン・BSSID は扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

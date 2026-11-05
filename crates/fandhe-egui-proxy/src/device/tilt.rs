@@ -1,7 +1,7 @@
 //! Phase 10（親 #827）型サンプル「傾きで玉が転がる」（Issue #830）の effect ドライバ。
 //! `fandhe_core::screens::tilt_ball::{TiltBallState, step}`（端末依存ゼロ）へ、
 //! `fandhe_device::motion::Motion` から読んだ傾き値と実測 `dt` を渡して毎フレーム
-//! 物理を進める（`crate::screens::registry` の `effect` 区画から `fn(&S,
+//! 物理を進める（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S,
 //! &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #1130）型サンプル「ネットワーク接続状態」（Issue #1282）。
-//! `FANDHE_PROXY_APP=network_status_show` で選ばれ、`fandhe-egui-proxy` の
+//! `FANDHE_PROXY_APP=network_status_show` で選ばれ、`fandhe-gallery` の
 //! `screens/registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の
 //! `pub mod network_status_show;` と対）。
 //!

@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #1143）型サンプル「フォルダの変更監視」（Issue #1410）の effect ドライバ。
 //! `fandhe_core::screens::file_watch_show`（端末依存ゼロ）の要求を `take_start` / `take_op` で観測し、
 //! `fandhe_device::file_watch::FileWatch` を呼んで、結果を `CompletionSender` 経由で注入する
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる
 //! 契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::file_watch`。
 //!
 //! # OS 別実装の差し込み口

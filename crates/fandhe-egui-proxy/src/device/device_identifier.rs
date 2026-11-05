@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::device_identifier_show`（端末依存ゼロ）の要求を `take_request` で観測し、
 //! `fandhe_device::device_identifier::DeviceIdentifier` を UI スレッドから同期で 1 回だけ読んで、
 //! 伏せた結果（末尾 4 文字と文字数）だけを `CompletionSender` 経由で注入する
-//! （`crate::screens::registry` の `effect` 区画から呼ばれる）。契約の SSOT は
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる）。契約の SSOT は
 //! `fandhe_device::device_identifier`。
 //!
 //! # OS 別実装の差し込み口

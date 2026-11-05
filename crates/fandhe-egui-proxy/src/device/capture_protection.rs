@@ -3,7 +3,7 @@
 //! `fandhe_device::capture_protection::CaptureProtection` で防止を掛ける / 外し、直後に
 //! [`CaptureProtection::is_protected`] で実際の状態を読み戻して `CompletionSender` 経由で返す。
 //! 要求がないときは [`READ_INTERVAL`] ごとの間隔付き pull で保護状態・録画・スクショ回数を更新する
-//! （`crate::screens::registry` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約（エラー種別・守る範囲）の SSOT は `fandhe_device::capture_protection`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。

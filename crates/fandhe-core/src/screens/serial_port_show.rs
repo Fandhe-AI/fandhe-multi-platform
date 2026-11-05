@@ -2,7 +2,7 @@
 //! macOS・Windows ではポートを OS から列挙して一覧にし、選んだポートを固定設定で開いて
 //! 固定の 1 行を送り、返ってきた 1 行を表示する。Web では利用者がブラウザのダイアログで 1 つ
 //! 選び、同じ往復を行う（[`PortMode::BrowserPicker`]）。`FANDHE_PROXY_APP=serial_port_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod serial_port_show;` と対）。設定の変更・連続受信・任意文字列の
 //! 送信は扱わない。
 //!

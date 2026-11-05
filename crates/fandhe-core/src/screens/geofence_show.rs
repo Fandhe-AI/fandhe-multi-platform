@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #1056）型サンプル「ジオフェンス」（Issue #1057）。
-//! `FANDHE_PROXY_APP=geofence_show` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=geofence_show` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod geofence_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

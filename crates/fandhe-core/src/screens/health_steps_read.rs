@@ -2,7 +2,7 @@
 //! 「今日の歩数を読む」ボタン → ヘルスストアから今日の歩数を 1 回読み、結果
 //! （歩数/記録が見えない/取り消し/非対応/期限切れ/失敗）を表示する 1 画面。
 //! `FANDHE_PROXY_APP=health_steps_read` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod health_steps_read;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

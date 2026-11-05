@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #932）型サンプル「ゲームコントローラ」（Issue #933）の
 //! effect ドライバ。`fandhe_core::screens::gamepad_show`（端末依存ゼロ）へ、
 //! `fandhe_device::gamepad::Gamepad` から読んだ最新スナップショットを渡す
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

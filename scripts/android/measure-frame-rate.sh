@@ -36,8 +36,8 @@ repo_root="$(cd -- "${script_dir}/../.." >/dev/null 2>&1 && pwd -P)"
 # shellcheck disable=SC1091
 . "${script_dir}/lib/sf-layer.sh"
 
-package="fandhe-egui-proxy"
-lib_name="fandhe_egui_proxy"
+package="fandhe-gallery"
+lib_name="fandhe_gallery"
 application_id="com.fandhe.androidapp"
 activity_name="com.fandhe.platform.MainActivity"
 gradle_project_dir="${repo_root}/platforms/android"

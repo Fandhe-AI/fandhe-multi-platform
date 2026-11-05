@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #97）型サンプル「ピクチャ・イン・ピクチャ」（Issue #364）。
 //! 「小窓にする」「小窓をやめる」の 2 ボタンで、実行時に生成した単色映像（5 色を 1 秒ごとに切り替え）を
 //! OS の小窓へ出す 1 画面。`FANDHE_PROXY_APP=pip_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod pip_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは

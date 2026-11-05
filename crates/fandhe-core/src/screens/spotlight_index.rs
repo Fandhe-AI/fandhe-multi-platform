@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #117）型サンプル「OS の検索への登録」（Issue #560）。
 //! 固定のメモ 1 件を OS の検索へ登録・自ドメインの全削除をする 1 画面。OS の検索結果から開かれたら
 //! `fandhe://spotlight/<id>` として届く URL の id を表示する（Android は受信経路なし）。
-//! `FANDHE_PROXY_APP=spotlight_index` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の
+//! `FANDHE_PROXY_APP=spotlight_index` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod spotlight_index;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は

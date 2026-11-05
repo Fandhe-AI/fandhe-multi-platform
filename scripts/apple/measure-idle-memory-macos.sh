@@ -3,7 +3,7 @@
 # 再計測スクリプト。
 #
 # 位置づけ: TASK-6.3（#93）が
-# 申し送った「macOS 実機（またはプロキシ環境）で fandhe-egui-proxy-desktop の feature
+# 申し送った「macOS 実機（またはプロキシ環境）で fandhe-gallery-desktop の feature
 # 絞り込み前後のアイドル時メモリを PoC-4 と同一手法（`ps -o rss=`、空 NSWindow
 # ベースライン差し引き）で再計測する」を実施するためのスクリプト。
 # `scripts/metrics/measure-idle-memory.sh`（Linux・Xvfb 版）の macOS 対応物であり、

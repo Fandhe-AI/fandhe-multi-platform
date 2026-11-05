@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ型サンプル「BLE スキャン」（親 #1059、Issue #1060）。
 //! 「スキャン（10 秒）」ボタン → 周辺の BLE 機器を約 10 秒スキャンし、名前と電波強度
 //! （RSSI）を一覧表示する 1 画面。`FANDHE_PROXY_APP=ble_scan` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod ble_scan;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

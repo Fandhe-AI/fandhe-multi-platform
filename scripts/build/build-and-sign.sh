@@ -73,7 +73,7 @@ options:
 環境変数（CLI オプション > 環境変数 > 既定値の優先順位）:
   FANDHE_IOS_SIM_TARGET   既定: aarch64-apple-ios-sim
                           （scripts/ios/build-simulator-app.sh と同名・同既定値。
-                          対象パッケージは fandhe-egui-proxy 固定）
+                          対象パッケージは fandhe-gallery 固定）
   FANDHE_IOS_PROFILE      既定: release（release または debug のみ対応）
   FANDHE_IOS_APP_BINARY   既定: 空（cargo build を実行）。非空の場合は build_app_bundle が
                           ビルドをスキップし、指定パスのバイナリをそのまま使う
@@ -380,7 +380,7 @@ delegate_phase() {
 }
 
 cross_build_rust() {
-  log "cross_build_rust: sim_target=${FANDHE_IOS_SIM_TARGET} package=fandhe-egui-proxy profile=${build_mode}"
+  log "cross_build_rust: sim_target=${FANDHE_IOS_SIM_TARGET} package=fandhe-gallery profile=${build_mode}"
   delegate_phase "build" "${EXIT_BUILD}"
 }
 

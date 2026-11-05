@@ -3,7 +3,7 @@
 //! `fandhe_device::photo_picker::PhotoPicker` で画像を 1 枚選ばせ、**実際に復号できることを
 //! 確かめてから**（契約の 2 段目、`photo_picker` モジュール doc）画素を
 //! [`crate::image_store`] へ置き、`CompletionSender` 経由で成功を返す
-//! （`crate::screens::registry` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。Web（wasm32）は
 //! 本経路を通らず `fandhe-web-dom` の `file_picker.rs` が `createImageBitmap` で復号を確かめる。

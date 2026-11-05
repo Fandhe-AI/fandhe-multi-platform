@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #1116）型サンプル「カスタム URL scheme」（Issue #1215）の
 //! effect ドライバ。`fandhe_core::screens::url_scheme_show`（端末依存ゼロ）へ、
 //! `fandhe_device::url_scheme::UrlScheme` が持つ受信状態を注入する
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`device/gamepad.rs::drive` と同型）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

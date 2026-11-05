@@ -78,7 +78,7 @@ FANDHE_ANDROID_KEYSTORE_PASSWORD=xxxx \
   scripts/android/build-aab.sh                                  # 開発署名済み .aab
 ```
 
-`fandhe-egui-proxy`（cdylib、TASK-1.5-S2 の Vulkan バックエンド分岐を含む）を 3 ABI 向けに
+`fandhe-gallery`（cdylib、TASK-1.5-S2 の Vulkan バックエンド分岐を含む。Issue #1165 で egui-proxy から移した）を 3 ABI 向けに
 `cargo ndk` でビルドし、`target/android/jniLibs/` へ配置した上で
 `gradle -p platforms/android :app:bundleRelease` を実行して
 `platforms/android/app/build/outputs/bundle/release/app-release.aab` を生成する。
@@ -98,16 +98,16 @@ scripts/android/verify-android-artifacts.sh --release --aab     # release + .aab
 ```
 
 `--release`/`--aab` なしの `.so` 検証部分は、内部で `fandhe-core`（rlib）・
-`fandhe-egui-proxy`（cdylib）の両方を 3 ABI 向けに単一の
-`cargo ndk ... build -p fandhe-core -p fandhe-egui-proxy --lib --target-dir
+`fandhe-gallery`（cdylib）の両方を 3 ABI 向けに単一の
+`cargo ndk ... build -p fandhe-core -p fandhe-gallery --lib --target-dir
 target/android-verify` 呼び出しでビルドし、以下の成果物存在を確認する
 （`--target-dir` で専用ディレクトリを使う理由は 4.6 節参照）。
 
 - `target/android-verify/<triple>/<profile>/libfandhe_core.rlib`
-- `target/android-verify/<triple>/<profile>/libfandhe_egui_proxy.so`
+- `target/android-verify/<triple>/<profile>/libfandhe_gallery.so`
 
-`--lib` を明示することで、`fandhe-egui-proxy` が併せ持つ `[[bin]]
-fandhe-egui-proxy-desktop`（native/デスクトップ向け、Android 非対応）をビルド対象から
+`--lib` を明示することで、`fandhe-gallery` が併せ持つ `[[bin]]
+fandhe-gallery-desktop`（native/デスクトップ向け、Android 非対応）をビルド対象から
 除外する。成果物が期待パスに見つからない場合は `fail()` により標準エラーへメッセージを
 出力し、非 0 で終了する。
 
@@ -118,7 +118,7 @@ fandhe-egui-proxy-desktop`（native/デスクトップ向け、Android 非対応
 - `.aab` の存在（未生成時は「先に `build-aab.sh` を実行してください」と案内して非 0 終了）
 - zip 構造妥当性（`unzip -l` / `python3 -m zipfile` フォールバック）
 - `base/manifest/AndroidManifest.xml` の収載
-- 3 ABI 分の `base/lib/<abi>/libfandhe_egui_proxy.so` の収載
+- 3 ABI 分の `base/lib/<abi>/libfandhe_gallery.so` の収載
 
 `build-aab.sh` 自身も生成直後に同様の検証を内蔵しているが、`--aab` は
 「生成済み成果物への独立した事後検証」として役割を分けている（生成ロジックの
@@ -178,8 +178,8 @@ REQ-11 が「開発用署名鍵」を明示するため、`FANDHE_ANDROID_KEYSTO
 target/android-verify` でメインの `target/` から隔離したディレクトリを使う。
 メインの `target/` を共有すると `target/<triple>/release/libfandhe_core.rlib` が
 見つからない事象が CI runner 環境で再現する（`fandhe-core` は
-`fandhe-egui-proxy` の依存クレートでもあり、直前のステップ（`build-aab.sh` の
-`-p fandhe-egui-proxy -o <jniLibs dir>` 呼び出し）の影響を受けていると推測されるが、
+`fandhe-gallery` の依存クレートでもあり、直前のステップ（`build-aab.sh` の
+`-p fandhe-gallery -o <jniLibs dir>` 呼び出し）の影響を受けていると推測されるが、
 cargo・cargo-ndk 側の詳細な原因は特定できていない。参照: PR #483）。他ステップが
 一切触れない専用ディレクトリへ隔離することで、本スクリプト自身が要求したビルド結果
 のみが確実に存在する状態を保証する。`target/android-verify` 自体は本スクリプトの
@@ -194,7 +194,7 @@ cargo・cargo-ndk 側の詳細な原因は特定できていない。参照: PR 
 1. `bash scripts/android/build-aab.sh`（未署名 `.aab` 生成。keystore シークレットは CI に
    設定しないため、常に未署名経路を通る）
 2. `bash scripts/android/verify-android-artifacts.sh --release --aab`（`.aab` の独立した
-   事後検証。4.6 節の対策により、直前の `build-aab.sh` が `fandhe-egui-proxy` のみを
+   事後検証。4.6 節の対策により、直前の `build-aab.sh` が `fandhe-gallery` のみを
    ビルドしたことに起因する fandhe-core の release 成果物欠落を回避する。参照: PR #483）
 
 `android-build` ジョブの `timeout-minutes` は 90 とする（初回実行時に AGP・Gradle

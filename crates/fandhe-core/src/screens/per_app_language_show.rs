@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #137）型サンプル「アプリの言語」（Issue #1073）。
 //! 「言語を読む」ボタン → OS から「アプリが使う言語のタグ」と「設定の出どころ」を 1 回読んで表示し、
 //! 設定の場所を文章で案内する 1 画面。`FANDHE_PROXY_APP=per_app_language_show` で選ばれ、
-//! `fandhe-egui-proxy` の `screens/registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の
+//! `fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の
 //! `pub mod` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは

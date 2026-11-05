@@ -133,7 +133,7 @@ public class MainActivity extends GameActivity {
         // ライブラリ名は AndroidManifest.xml の android.app.lib_name meta-data
         // （値 "fandhe_egui_proxy"）および crates/fandhe-egui-proxy/Cargo.toml の
         // [lib] name と一致させること（3 箇所の SSOT はこのライブラリ名文字列）。
-        System.loadLibrary("fandhe_egui_proxy");
+        System.loadLibrary("fandhe_gallery");
     }
 
     // Rust 側（crates/fandhe-egui-proxy/src/android.rs）の JNI エクスポート関数。

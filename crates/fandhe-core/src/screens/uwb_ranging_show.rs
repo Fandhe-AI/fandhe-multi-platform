@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #129）型サンプル「UWB による距離・方向」（Issue #653）。
 //! 端末の測距能力（距離・方向を測れるか）を常に出し、「開始」で近くの相手を探して token を交換し、
 //! 相手までの距離（m）を出し続ける。`FANDHE_PROXY_APP=uwb_ranging_show` で選ばれ、
-//! `fandhe-egui-proxy` の `screens/registry.rs` の `effect` 区画から呼ばれる
+//! `fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod uwb_ranging_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は

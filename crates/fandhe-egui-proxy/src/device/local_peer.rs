@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #110、Issue #511）型サンプル「近くの端末との直接通信」の effect
 //! ドライバ。`fandhe_core::screens::peer_connect`（端末依存ゼロ）の要求を観測し、結果を
-//! `CompletionSender` 経由で返す（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約の SSOT は `fandhe_device::local_peer`（30 秒の窓・200 バイト・`sanitize_received`・
 //! `should_invite`・`decode_code`）。`device/lan_discovery.rs` と同型の pull 型。

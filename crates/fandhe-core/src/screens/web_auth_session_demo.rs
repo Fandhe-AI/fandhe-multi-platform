@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #113）型サンプル「OAuth 用の Web 認証セッション」（Issue #530）。
 //! 「認可画面を開く」「取り消す」の 2 ボタンだけの 1 画面。`FANDHE_PROXY_APP=web_auth_session_demo` で
-//! 選ばれ、`fandhe-egui-proxy` の `screens/registry.rs` の `effect` 区画から呼ばれる
+//! 選ばれ、`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod web_auth_session_demo;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS の認証 UI・デモ認可サーバー・

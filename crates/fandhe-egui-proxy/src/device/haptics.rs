@@ -1,7 +1,7 @@
 //! Phase 11（親 #1090）型サンプル「触覚フィードバック」（Issue #1091）の effect ドライバ。
 //! `fandhe_core::screens::haptics_tap`（端末依存ゼロ）の要求を観測し、
 //! `fandhe_device::haptics::Haptics` で OS へ軽い振動 1 回を要求して `CompletionSender`
-//! 経由で結果を返す（`crate::screens::registry` の `effect` 区画から
+//! 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

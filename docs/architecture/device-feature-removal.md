@@ -20,7 +20,7 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
    他画面が使う可能性がある汎用機能のため `screens.rs` に残置してよい。`app.rs` の
    `EffectFn`/`with_effect` は #745 の apply API と同様、Phase 8 に依存しない汎用
    フックのため残置してよい）
-4. `crates/fandhe-egui-proxy/src/screens/registry.rs` の
+4. `crates/fandhe-gallery/src/screens/registry.rs` の
    `#[cfg(all(feature = "device", not(target_arch = "wasm32")))]` 付き `init`/`effect` 行
    （`storage_note`/`http_fetch`/`camera_capture`）を削除する
 5. Android（#750）:

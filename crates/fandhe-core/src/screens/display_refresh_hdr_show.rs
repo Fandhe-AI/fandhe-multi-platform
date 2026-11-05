@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #177）型サンプル「画面のリフレッシュレート・HDR・広色域」
 //! （Issue #870）。「画面の表示能力を読む」ボタン → OS から今と最大のリフレッシュレート・HDR・
 //! 広色域を 1 回読み、4 行で表示する 1 画面。`FANDHE_PROXY_APP=display_refresh_hdr_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod display_refresh_hdr_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

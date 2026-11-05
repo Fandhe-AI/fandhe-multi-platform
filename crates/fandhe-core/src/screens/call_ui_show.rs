@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #87）型サンプル「通話 UI 統合」（Issue #276）。
 //! 「着信を模擬する」を押すと OS の着信 UI に疑似着信を 1 件出し、応答・拒否・終了の結果を表示する 1 画面。
-//! `FANDHE_PROXY_APP=call_ui_show` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の
+//! `FANDHE_PROXY_APP=call_ui_show` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod call_ui_show;` と対）。範囲は疑似着信 1 件のみで、
 //! 音声・発信・履歴・複数通話・電話番号の入力は扱わない。
 //!

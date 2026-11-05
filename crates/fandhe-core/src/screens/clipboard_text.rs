@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #858）型サンプル「クリップボード」（Issue #859）。
 //! 入力欄 + 「コピー」→ OS のクリップボードへ書き、「貼り付け」→ 読み戻して表示する
 //! 往復 1 画面。`FANDHE_PROXY_APP=clipboard_text` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod clipboard_text;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

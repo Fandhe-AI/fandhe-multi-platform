@@ -14,12 +14,12 @@
 # 追加の npm 依存もシステムパッケージも不要（security.md A06 準拠、依存追加なし）。
 #
 # 使い方: scripts/web/measure-dist-size.sh [dist ディレクトリ]
-#   省略時は crates/fandhe-egui-proxy/web/dist を対象にする。
+#   省略時は crates/fandhe-gallery/web/dist を対象にする。
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
-dist_dir="${1:-${repo_root}/crates/fandhe-egui-proxy/web/dist}"
+dist_dir="${1:-${repo_root}/crates/fandhe-gallery/web/dist}"
 
 if [[ ! -d "${dist_dir}" ]]; then
   echo "[measure-dist-size] エラー: ${dist_dir} が無い。先に build-wasm-proxy.sh を実行すること。" >&2

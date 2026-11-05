@@ -5,7 +5,7 @@
 //! wgpu（Metal）バックエンドへ切り替える。本モジュールはその切り替え先の初期化コードを担い、
 //! `Cargo.toml` 側のターゲット条件分岐（`cfg(target_os = "ios")`、TASK-1.3-S1 / #40）と対になる。
 //!
-//! 呼び出し元は `main.rs` の iOS 向け `fn main`（本モジュールの [`run`] へ委譲するのみ）。
+//! 呼び出し元は `fandhe-gallery` の `main.rs` の iOS 向け `fn main`（本モジュールの [`run`] へ委譲するのみ）。登録の解決関数は引数で受ける。
 //! デスクトップ用の `FANDHE_PROXY_AUTOSHOT`（環境変数経由の自動撮影）経路はここでは配線しない
 //! （外部入力面を増やさない方針。security.md A03 対策）。
 //!
@@ -55,7 +55,7 @@ pub(crate) fn request_repaint() {
 /// （`Cargo.toml` の `[features]` コメント参照。通常のビルドでは両 feature とも
 /// 無効のため、本番経路には影響しない）。
 #[cfg(feature = "cold-start-probe")]
-pub fn run() -> Result<(), fandhe_render_egui::LaunchError> {
+pub fn run(_build_app: crate::BuildAppFn) -> Result<(), fandhe_render_egui::LaunchError> {
     crate::register_teardown_hooks();
     let start = std::time::Instant::now();
     fandhe_render_egui::launch::run_ios("fandhe-egui-proxy", move |lc| {
@@ -77,14 +77,14 @@ pub fn run() -> Result<(), fandhe_render_egui::LaunchError> {
 /// 委譲する。既存の `ProxyApp` 経路（両 feature 無効時）は変更しない
 /// （`frame_metrics.rs` モジュール doc 参照）。
 #[cfg(all(feature = "frame-metrics", not(feature = "cold-start-probe")))]
-pub fn run() -> Result<(), fandhe_render_egui::LaunchError> {
+pub fn run(_build_app: crate::BuildAppFn) -> Result<(), fandhe_render_egui::LaunchError> {
     crate::frame_metrics::run_ios()
 }
 
 /// iOS 向けエントリポイント（本番経路。両計測用 feature 無効時、既定）。
 ///
 /// 計測専用ラッパー（`ColdStartProbe` / `frame_metrics::run_ios`）を経由せず、
-/// レジストリ（`screens::build_app`、Issue #715）で解決した画面（未指定・未登録時は
+/// レジストリ（引数 `build_app`、gallery の `screens::build_app`、Issue #715）で解決した画面（未指定・未登録時は
 /// `ProxyApp::new` の sample 画面）を直接起動する。ストア配布ビルドは既定でこの実装が
 /// 使われ、計測用の `eprintln!`（`COLD_START_MS=`）等は一切コンパイルに含まれない
 /// （Review 指摘対応）。
@@ -95,7 +95,7 @@ pub fn run() -> Result<(), fandhe_render_egui::LaunchError> {
 /// 経由しない（計測結果への影響を避ける）。計測ビルドでは文字入力モジュール自体を
 /// コンパイルしない（`lib.rs` の cfg と `build.rs` 参照、Issue #19）。
 #[cfg(not(any(feature = "cold-start-probe", feature = "frame-metrics")))]
-pub fn run() -> Result<(), fandhe_render_egui::LaunchError> {
+pub fn run(build_app: crate::BuildAppFn) -> Result<(), fandhe_render_egui::LaunchError> {
     crate::register_teardown_hooks();
     fandhe_render_egui::launch::run_ios("fandhe-egui-proxy", move |lc| {
         let ctx = lc.egui_ctx();
@@ -104,12 +104,11 @@ pub fn run() -> Result<(), fandhe_render_egui::LaunchError> {
         fandhe_runtime::set_repaint_waker(std::sync::Arc::new(crate::app::EguiWaker::new(
             ctx.clone(),
         )));
-        let app: Box<dyn fandhe_render_egui::EguiApp> = match crate::screens::selected_app_name()
-            .and_then(|name| crate::build_app(&name, ctx))
-        {
-            Some(app) => app,
-            None => Box::new(crate::ProxyApp::new(ctx)),
-        };
+        let app: Box<dyn fandhe_render_egui::EguiApp> =
+            match crate::selected_app_name().and_then(|name| build_app(&name, ctx)) {
+                Some(app) => app,
+                None => Box::new(crate::ProxyApp::new(ctx)),
+            };
         Box::new(crate::ios_text_input::TextInputApp::new(app))
     })
 }

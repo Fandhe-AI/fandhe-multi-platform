@@ -7,7 +7,7 @@
 
 本書は、利用者が使う端末機能だけを選んでアプリを作れる構造への移行方針を記録します。
 
-- 本書を入れた時点で `crates/` は未移行です。構造の実装は #1155 配下の後続 issue で進めます
+- 本書を入れた時点で `crates/` は未移行です。構造の実装は #1155 配下の後続 issue で進めます（`fandhe-gallery` は #1165 で追加済み）
 - 本書より古い文書と食い違う場合は、本書を正とします
 - 古い文書の「独自レンダラ」は、第 2 バックエンドの候補と読み替えます
 - #1194 までは旧構造（`feature device`、手書きの設定、`fandhe-egui-proxy/src/device/`）が併存します。
@@ -40,7 +40,7 @@ crates.io では、公開する crate の通常依存も公開が要るためで
 | `fandhe-platform-android` / `-apple` / `-windows` / `-web` | 機能をまたいで共有する OS 層 | する | #1166・#1168・#1184・#1185 |
 | `fandhe-cap-<id>` | 1 機能 1 crate。OS 別実装・ObjC・Java・`build.rs`・宣言を同居 | する | #1170〜#1174、第 5 Phase |
 | `fandhe-web-dom` | Web の DOM 出力 | する | 既存 |
-| `fandhe-gallery` | 全機能を載せるカタログ（実機確認用の bin） | しない | #1165 |
+| `fandhe-gallery` | 全機能を載せるカタログ（実機確認用）。画面の登録と各 OS の最終成果物（デスクトップ・iOS の bin、Android・Web の cdylib）を持つ。#1194 までは端末機能を `fandhe-egui-proxy` に依存する | しない | #1165（追加済み） |
 | `fandhe-prototype` | 検証用プロトタイプ | しない | 既存 |
 | `fandhe-winit-ime` | 入口から到達しない。第 2 バックエンド着手時に判断 | しない | 既存 |
 | `fandhe-swiftui-bridge` | watchOS / visionOS 用。入口から到達しない | しない | 既存 |

@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #92）型サンプル「パスキー・サインイン連携」（Issue #342）。
 //! 「パスキーを登録」「パスキーでサインイン」の 2 ボタンだけの 1 画面。
-//! `FANDHE_PROXY_APP=passkey_signin` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の
+//! `FANDHE_PROXY_APP=passkey_signin` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod passkey_signin;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの

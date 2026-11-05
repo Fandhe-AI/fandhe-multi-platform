@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #1117）型サンプル「連絡先選択」（Issue #1220）。
 //! 「連絡先を選ぶ」ボタン → OS の連絡先ピッカー → 選んだ 1 件の表示名を出す 1 画面。
-//! `FANDHE_PROXY_APP=contact_pick` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=contact_pick` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod contact_pick;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。画面状態に持つのは表示名だけで、

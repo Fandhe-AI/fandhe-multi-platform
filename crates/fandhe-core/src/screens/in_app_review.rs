@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ型サンプル「アプリ内レビュー依頼」（Issue #563）。ボタン 1 つだけの 1 画面。
-//! `FANDHE_PROXY_APP=in_app_review` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の
+//! `FANDHE_PROXY_APP=in_app_review` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod in_app_review;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは effect ドライバ

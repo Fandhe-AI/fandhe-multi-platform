@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #87）型サンプル「通話 UI 統合」（Issue #276）の effect ドライバ。
 //! `fandhe_core::screens::call_ui_show`（端末依存ゼロ）の要求を `take_command` で観測し、
 //! `fandhe_device::call_ui::CallUi` で疑似着信を出し / 取り消し、届いた通知を `CompletionSender` 経由で
-//! 注入する（`crate::screens::registry` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
+//! 注入する（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約の SSOT は `fandhe_device::call_ui`。
 //!
 //! # OS 別実装の差し込み口

@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #86）型サンプル「音声の再生」（Issue #267）。
 //! 「再生」「一時停止」「停止」の 3 ボタンで、同梱の短い音声 1 本を鳴らす 1 画面。
-//! `FANDHE_PROXY_APP=audio_play` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の
+//! `FANDHE_PROXY_APP=audio_play` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod audio_play;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは

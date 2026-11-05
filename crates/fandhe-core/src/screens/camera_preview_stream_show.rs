@@ -2,7 +2,7 @@
 //! 「映像を始める」で背面カメラのライブ映像を受け取り、最新 1 枚を縮めて表示し、受け取ったフレーム数・
 //! 元の寸法・OS から読んだズーム値を出す。ズームは「1 倍」「2 倍」で切り替える。
 //! `FANDHE_PROXY_APP=camera_preview_stream_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod camera_preview_stream_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは `fandhe-egui-proxy` の

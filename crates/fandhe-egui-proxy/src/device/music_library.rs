@@ -1,7 +1,7 @@
 //! Phase 11（親 #108）型サンプル「音楽ライブラリ」（Issue #482）の effect ドライバ。
 //! `fandhe_core::screens::music_library_list`（端末依存ゼロ）の要求を観測し、
 //! `fandhe_device::music_library::MusicLibrary` で曲のタイトルとアーティストを読んで
-//! `CompletionSender` 経由で結果を返す（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約の SSOT は `fandhe_device::music_library`。
 //!

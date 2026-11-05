@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #1129）型サンプル「画面スリープの抑止」（Issue #1278）。
 //! ボタンで抑止を ON / OFF し、**実際に効いているか**を表示する 1 画面。
-//! `FANDHE_PROXY_APP=wake_lock_toggle` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=wake_lock_toggle` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod wake_lock_toggle;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

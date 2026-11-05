@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #172）型サンプル「音声の割り込み・セッション種別」（Issue #840）。
 //! セッション種別（他の音を止める / 下げる / 混ぜる）を選んで「開始」を押すと OS に音声セッションを
 //! 有効化し、割り込み・フォーカスの出来事を新しい順に一覧へ出す 1 画面。
-//! `FANDHE_PROXY_APP=audio_session_show` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の
+//! `FANDHE_PROXY_APP=audio_session_show` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod audio_session_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは

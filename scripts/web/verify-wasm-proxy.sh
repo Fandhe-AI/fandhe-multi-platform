@@ -18,7 +18,7 @@ out_png="$1"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
-dist_dir="${repo_root}/crates/fandhe-egui-proxy/web/dist"
+dist_dir="${repo_root}/crates/fandhe-gallery/web/dist"
 port=8781
 host="127.0.0.1"
 

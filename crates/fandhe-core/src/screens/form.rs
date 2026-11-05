@@ -1,6 +1,6 @@
 //! M7（#724）の型サンプル「フォーム」（Issue #728）。「入力 → 送信 → 検証エラー表示 →
 //! 成功表示」という実アプリ定番の流れを、`ui` の既存部品の組み合わせだけで構築できることを
-//! 示す参照実装。`FANDHE_PROXY_APP=form` で `fandhe-egui-proxy` の
+//! 示す参照実装。`FANDHE_PROXY_APP=form` で `fandhe-gallery` の
 //! `screens/registry.rs` から呼ばれる。
 //!
 //! フレームワーク制約の回避（詳細は Issue #728 のコメント参照）:

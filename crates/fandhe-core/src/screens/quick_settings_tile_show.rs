@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #139）型サンプル「クイック設定タイル・コントロール」（Issue #719）。
 //! OS のシステム UI に置いた 1 操作のボタンが押された回数を表示する 1 画面。
 //! `FANDHE_PROXY_APP=quick_settings_tile_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod quick_settings_tile_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。回数の読み出しは

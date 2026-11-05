@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #97）型サンプル「ピクチャ・イン・ピクチャ」（Issue #364）の effect ドライバ。
 //! `fandhe_core::screens::pip_show`（端末依存ゼロ）の要求を `take_command` で観測し、
 //! `fandhe_device::picture_in_picture::PictureInPicture` を操作して、状態を `CompletionSender` 経由で
-//! 注入する（`crate::screens::registry` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
+//! 注入する（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約の SSOT は `fandhe_device::picture_in_picture`。
 //!
 //! # OS 別実装の差し込み口

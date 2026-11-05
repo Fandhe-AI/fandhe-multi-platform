@@ -2,7 +2,7 @@
 //! 「録音開始」ボタン → 録音中（経過秒数を表示）→「停止」ボタンまたは
 //! [`MAX_RECORD_MS`] 到達で自動停止 → 結果（サイズ・mime・長さ）または失敗理由・
 //! Unsupported を表示する 1 画面。`FANDHE_PROXY_APP=mic_record` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod mic_record;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ型サンプル「近くの端末との直接通信」（親 #110、Issue #511）。
 //! 「交換（30 秒）」ボタン → 同じアプリを開いた近くの端末と約 30 秒の窓で互いを見つけ、固定文字列を
 //! 1 回ずつ送り合い、相手の表示名と受け取った文字列を出す 1 画面。`FANDHE_PROXY_APP=peer_connect` で
-//! 選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! 選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod peer_connect;` と対）。3 台以上・ファイル転送は扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

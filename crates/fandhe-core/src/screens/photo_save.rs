@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #1121）型サンプル「写真の保存」（Issue #1254）。
 //! 説明文と「画像を 1 枚保存」ボタンだけの 1 画面。`FANDHE_PROXY_APP=photo_save` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod photo_save;` と対）。入力欄を持たないのは、保存する画像を
 //! effect ドライバ（`device/photo_save.rs`）が自前で生成するため（OS 固有の操作 UI も無い）。
 //!

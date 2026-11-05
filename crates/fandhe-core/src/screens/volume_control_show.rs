@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ型サンプル「システム音量」（親 #166、Issue #785）。
 //! 既定の出力の音量と消音状態を表示し、「＋」「－」で 1 段階ずつ変える 1 画面。
 //! `FANDHE_PROXY_APP=volume_control_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod volume_control_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの

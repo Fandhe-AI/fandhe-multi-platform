@@ -41,7 +41,7 @@
       "url": "https://learn.microsoft.com/en-us/windows/win32/shell/fa-file-types",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#414）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_file_association.rs + crates/fandhe-egui-proxy/src/device/windows_url_scheme.rs + crates/fandhe-egui-proxy/src/device/file_association.rs + crates/fandhe-egui-proxy/src/main.rs + crates/fandhe-device/src/file_association.rs + crates/fandhe-core/src/screens/file_association_show.rs、Issue #420",
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_file_association.rs + crates/fandhe-egui-proxy/src/device/windows_url_scheme.rs + crates/fandhe-egui-proxy/src/device/file_association.rs + crates/fandhe-gallery/src/main.rs + crates/fandhe-device/src/file_association.rs + crates/fandhe-core/src/screens/file_association_show.rs、Issue #420",
       "note": "実装済み（#420）。エクスプローラーの「プログラムから開く」で `.txt` を渡すと、名前・サイズ・先頭 16 バイト・受信時刻を出す。起動のたびに黙って書かず、画面のボタンで登録・解除する。起動済みなら url-scheme の named pipe（種別 `F`）で既存インスタンスへ転送する。守る範囲: 1 プロセス内の受信順、不正なパス（UNC・`\\\\?\\`・相対・`\"`・拡張子違い）の非表示、コールドスタート分、転送の失敗を成功にしないこと。守らない範囲: UserChoice が勝つこと、他アプリによる上書き、exe を動かした後に登録し直さないこと、同じセッションの別プロセスによる pipe の妨害、ポーリング間隔の間に届いた複数件は最後の 1 件だけ出ること、遅いボリュームでの同期読み取り、解除後に残る空のキー"
     },
     "web": {

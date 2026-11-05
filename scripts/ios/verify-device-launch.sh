@@ -143,7 +143,7 @@ mkdir -p "${out_dir}"
 app_name="FandheIosApp"
 bundle_id="com.fandhe.iosapp"
 fandhe_target="aarch64-apple-ios"
-fandhe_bin_name="fandhe-egui-proxy-desktop"
+fandhe_bin_name="fandhe-gallery-desktop"
 info_plist_src="${repo_root}/platforms/apple/FandheIosApp/Resources/Info.plist"
 [[ -f "${info_plist_src}" ]] || fail "Info.plist が見つかりません: ${info_plist_src}"
 
@@ -914,8 +914,8 @@ phase_build() {
     log "計測用 feature を有効化します: ${cargo_features}"
   fi
 
-  log "cargo build -p fandhe-egui-proxy --bin ${fandhe_bin_name} --target ${fandhe_target} --profile release${cargo_features:+ --features ${cargo_features}}"
-  cargo build --manifest-path "${repo_root}/Cargo.toml" -p fandhe-egui-proxy --bin "${fandhe_bin_name}" \
+  log "cargo build -p fandhe-gallery --bin ${fandhe_bin_name} --target ${fandhe_target} --profile release${cargo_features:+ --features ${cargo_features}}"
+  cargo build --manifest-path "${repo_root}/Cargo.toml" -p fandhe-gallery --bin "${fandhe_bin_name}" \
     --target "${fandhe_target}" --profile release "${feature_args[@]+"${feature_args[@]}"}"
 
   local built_binary="${repo_root}/target/${fandhe_target}/release/${fandhe_bin_name}"

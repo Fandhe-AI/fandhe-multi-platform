@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #178）型サンプル「アプリの前面・背面」（Issue #893）の effect ドライバ。
 //! `fandhe_core::screens::app_lifecycle_show`（端末依存ゼロ）の要求を `take_init` / `take_start` で
 //! 観測し、`fandhe_device::app_lifecycle::AppLifecycle` を呼んで、結果を `CompletionSender` 経由で
-//! 注入する（`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる
+//! 注入する（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる
 //! 契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::app_lifecycle`。
 //!
 //! # OS 別実装の差し込み口

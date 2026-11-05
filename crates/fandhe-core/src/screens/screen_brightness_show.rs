@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ型サンプル「画面の明るさ」（親 #126、Issue #633）。
 //! アプリが前面にいる間だけ、スライダーで画面輝度を上書きし、「元に戻す」で解除する 1 画面。
 //! `FANDHE_PROXY_APP=screen_brightness_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod screen_brightness_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの

@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #100、Issue #390）型サンプル「バックグラウンドダウンロード」の
 //! effect ドライバ。`fandhe_core::screens::background_download`（端末依存ゼロ）のボタン要求を観測して
 //! `fandhe_device::background_download::BackgroundDownload` を呼び、`CompletionSender` 経由で結果を返す
-//! （`crate::screens::registry` の `effect` 区画から呼ばれる契約。`device/background_task.rs` と同型）。
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約。`device/background_task.rs` と同型）。
 //!
 //! # OS 実装の差し込み口
 //!

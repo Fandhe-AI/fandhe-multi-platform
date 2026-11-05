@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::window_management_show`（端末依存ゼロ）の要求を観測し、
 //! `fandhe_device::window_management::WindowManager` で位置・大きさ・最前面の変更を依頼して、
 //! 毎フレーム読み戻した実際の状態が目標に一致したら成功として `CompletionSender` 経由で返す
-//! （`crate::screens::registry` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約（依頼と完了の分離・全画面中の拒否・エラー種別・守る範囲）の SSOT は
 //! `fandhe_device::window_management`。
 //!

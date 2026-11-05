@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ型サンプル「システムの色選択ダイアログ」（親 #184、Issue #941）。
 //! 「色を選ぶ」ボタン → OS の色選択 UI → 選んだ色を見本と `#rrggbb` で出す 1 画面。
-//! `FANDHE_PROXY_APP=color_picker` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=color_picker` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod color_picker_pick;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。橋渡し層が `DeviceError` を

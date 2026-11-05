@@ -3,7 +3,7 @@
 //! `PickPhase`/世代番号の状態機械）→ [`crate::tsv::parse_tsv`] で解析 → 行数・列数・
 //! 先頭数行を表示する 1 画面。ファイル選択が使えない環境向けに、同梱のサンプル TSV
 //! （[`SAMPLE_TSV`]）を解析するボタンも置く。`FANDHE_PROXY_APP=tsv_import` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod tsv_import;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。実際のダイアログ表示・

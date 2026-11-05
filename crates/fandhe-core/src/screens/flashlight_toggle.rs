@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #106）型サンプル「ライト（トーチ）」（Issue #458）。
 //! ボタンでライトを点灯 / 消灯し、**実際に点いているか**を表示する 1 画面。
-//! `FANDHE_PROXY_APP=flashlight_toggle` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=flashlight_toggle` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod flashlight_toggle;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない。時刻も持たず、期限は effect 側が測る）。

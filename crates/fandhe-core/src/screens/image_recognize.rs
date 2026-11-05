@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #1120）型サンプル「画像の文字認識」（Issue #1250）。
 //! 「写真を選んで文字を読む」ボタン → OS の画像選択 → 選んだ 1 枚の文字を OCR して
 //! 行の一覧を表示する 1 画面。`FANDHE_PROXY_APP=image_recognize` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod image_recognize;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは本モジュール外

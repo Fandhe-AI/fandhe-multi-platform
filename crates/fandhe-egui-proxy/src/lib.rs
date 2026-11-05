@@ -1,29 +1,28 @@
-//! fandhe-egui-proxy: 端末機能の配線・実機確認用アプリ・各 OS の入口を持つ、v1 既定バックエンドの
-//! 現行実装。
+//! fandhe-egui-proxy: 端末機能の配線と各 OS の入口を持つ、v1 既定バックエンドの現行実装。
 //!
 //! 描画（`Node` → egui の変換）とアプリ起動（eframe・バックエンドの選択）は
-//! `fandhe-render-egui` へ移した（Issue #1164）。ここに残るのは端末機能の配線（`device/`）、
-//! 画面カタログ（[`screens`]）、TV フォーカス・ソフトキーボードの橋渡し、各 OS の入口
-//! （`main.rs`・`web.rs`・`ios.rs`・`android.rs`）、計測専用アプリで、REQ-21 で
-//! `fandhe-gallery`・`fandhe-platform-*` などへ順に分ける予定（設計は
+//! `fandhe-render-egui` へ移した（Issue #1164）。画面の登録と各 OS の最終成果物
+//! （デスクトップ・iOS の実行体、Android・Web の cdylib）は非公開アプリ `fandhe-gallery` へ
+//! 出した（Issue #1165）。ここに残るのは端末機能の配線（`device/`）、TV フォーカス・
+//! ソフトキーボードの橋渡し、各 OS の入口関数（`ios::run`・`web::start`・`android::run`）、
+//! 計測専用アプリで、REQ-21 で `fandhe-platform-*` などへ順に分ける予定（設計は
 //! `docs/architecture/consumer-app-structure.md`）。移した項目は従来のパス
 //! （`fandhe_egui_proxy::render_screen`・`app::ProxyApp` 等）で再公開しており、#1194 で本クレートごと撤去する。
 //!
-//! 依存方向は本クレート → `fandhe-render-egui` → `fandhe-runtime` → `fandhe-core` の一方向
-//! （`.claude/rules/coding-rust.md` 準拠）。eframe には直接依存しない。
+//! 依存方向は `fandhe-gallery` → 本クレート → `fandhe-render-egui` → `fandhe-runtime` → `fandhe-core` の
+//! 一方向（`.claude/rules/coding-rust.md` 準拠）。eframe には直接依存しない。
 //!
-//! [`screens`]（`generated_screens!` マクロ）は `fandhe-core` の `screens/` に置いた
-//! 画面（`fandhe_core::screens::*`）を、端末アプリが実行時に名前
-//! （環境変数 `FANDHE_PROXY_APP`）で選んで描画するためのレジストリ（Issue #715）。
-//! web / iOS / Android のエントリも [`build_app`] を経由して名前選択に対応する
-//! （未登録名・未指定時は既定の [`app::ProxyApp::new`]（sample 画面）へフォールバックする）。
+//! 画面名（環境変数 `FANDHE_PROXY_APP`、[`selected_app_name`]）から画面を作る登録
+//! （`generated_screens!`、`fandhe_core::screens::*`）は gallery が持つ。各 OS の入口は
+//! 登録の解決関数 [`BuildAppFn`] を引数で受け取る（未登録名・未指定時は既定の
+//! [`app::ProxyApp::new`]（sample 画面）へフォールバックする）。
 //!
-//! Android 向け `android_main`（`android.rs`）は `android-activity` の
-//! NativeActivity グルーが要求する固定シンボル名を `#[no_mangle]` で公開する必要があり、
-//! `#![forbid(unsafe_code)]` と両立できない（`#[no_mangle]` は `unsafe_code` lint 対象）。
-//! Android ターゲットのみ `forbid` を `deny` へ緩め、`android.rs` 側の当該関数 1 箇所に
-//! `#[allow(unsafe_code)]` を最小範囲で付与する（他ターゲットは `forbid` を維持し、
-//! `coding-rust.md` の FFI 例外規定に従う）。
+//! `android_main` は固定シンボル名の `#[no_mangle]` で `forbid(unsafe_code)` と両立しないため
+//! `fandhe-gallery` が置き、本クレートの `android::run` を呼ぶ。本クレートは rlib のみで、
+//! `android_main` と `#[wasm_bindgen(start)]` を持たない。
+//!
+//! Android ターゲットは、`device/` の JNI 呼び出しが `unsafe` を要するため `forbid` を `deny` へ
+//! 緩める（他ターゲットは `forbid` を維持し、`coding-rust.md` の FFI 例外規定に従う）。
 //!
 //! iOS も同じ理由で `deny` へ緩める（Issue #751）: `device/ios.rs` が UIKit 実装
 //! （`ios/fandhe_ios_camera.m`、`build.rs` でコンパイルする C ABI 1 点）を呼ぶために
@@ -106,8 +105,6 @@ pub mod cold_start;
 )]
 pub(crate) use fandhe_render_egui::image_store;
 pub(crate) use fandhe_render_egui::rgba_image;
-// Issue #715: 生成画面を名前で選ぶレジストリ（モジュール冒頭 doc 参照）。
-pub mod screens;
 // Issue #796 / #795: ソフトキーボードの状態バッファ（Android `TextInputState` /
 // iOS `UITextField.text` + `markedTextRange`）を egui イベント列へ変換する純関数群。
 // winit / android-activity / UIKit の型に依存させず `(&str, Option<(usize, usize)>)` の
@@ -169,7 +166,27 @@ pub use fandhe_render_egui::{
     dispatch_back_if_requested, render_screen, render_screen_with_recyclers, save_color_image,
     EguiRenderer, VirtualListRecyclers,
 };
-pub use screens::build_app;
+
+/// 画面名から実描画アプリを組み立てる登録の解決関数。未登録名は `None`。
+///
+/// 画面の登録は `fandhe-gallery` が持ち（Issue #1165）、各 OS の入口（[`ios::run`]・
+/// [`web::start`]・[`android::run`]）へ引数で渡す。依存の向きを gallery → 本 crate の
+/// 一方向に保つための逆転で、本 crate は登録の中身を知らない。
+pub type BuildAppFn = fn(&str, &egui::Context) -> Option<Box<dyn ProxyAppDyn>>;
+
+/// 描画対象の画面名を解決する（Issue #715）。
+///
+/// 実行時 `FANDHE_PROXY_APP` を優先し、未設定（または空文字列）ならビルド時
+/// `option_env!` を見る（wasm32 / Android 等、実行時の環境変数注入手段が乏しいターゲット向け。
+/// Android はさらに `adb shell setprop` 経由のフォールバック（`debug-proxy-app` feature 有効時のみ）を
+/// `android.rs` 側で本関数の後段に持つ）。固定文字列との比較のみに使い、パス・コマンド・クエリへは
+/// 展開しない（A03 インジェクション対策、security.md 準拠）。
+pub fn selected_app_name() -> Option<String> {
+    std::env::var("FANDHE_PROXY_APP")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .or_else(|| option_env!("FANDHE_PROXY_APP").map(str::to_string))
+}
 
 /// 端末リソースの終了・破棄時の解放処理を、描画層（`fandhe-render-egui`）へ登録する。
 ///

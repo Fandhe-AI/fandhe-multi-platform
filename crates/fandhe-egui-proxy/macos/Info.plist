@@ -5,7 +5,7 @@
   登録された `.app` でしか効かないため（`CFBundleURLTypes` と同じ理由）、`scripts/apple/
   bundle-macos-url-scheme.sh` が `.app` 化の際に足す。配布用のキーは増やさない。
 
-  デスクトップ相当 macOS 実行体（`fandhe-egui-proxy-desktop`、素の実行体・非バンドル）
+  デスクトップ相当 macOS 実行体（`fandhe-gallery-desktop`、素の実行体・非バンドル）
   向けの Info.plist（Phase 11 の拡充ループ、Issue #889）。
 
   macOS 10.15+ は CFBundleIdentifier + NSLocationUsageDescription を持つ Info.plist が

@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #151、Issue #1128）型サンプル「NFC カードエミュレーション」。
 //! 端末が NFC カードとして読まれる側（HCE）の状態を表示する 1 画面。
 //! `FANDHE_PROXY_APP=nfc_card_emulation_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod nfc_card_emulation_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。状態の読み出しは

@@ -2,9 +2,9 @@
 # TASK-5.2（REQ-5 / REQ-6 実施後、Issue #237）: Android 実機（Pixel 10a）での
 # アイドル時メモリ増分計測スクリプト。
 #
-# 位置づけ: TASK-6.3（#93）が Linux プロキシ（fandhe-egui-proxy-desktop）で計測した
+# 位置づけ: TASK-6.3（#93）が Linux プロキシ（fandhe-gallery-desktop）で計測した
 # アイドル時メモリを、実機・実 UI フレームワーク比較へ発展させる。本スクリプトは
-# 配布用アプリ（platforms/android/app、GameActivity + fandhe-egui-proxy。
+# 配布用アプリ（platforms/android/app、GameActivity + fandhe-gallery。
 # TASK-9.3-S1 / #242 で NativeActivity から確定）と、
 # 検証専用の 2 アプリ（scripts/metrics/android-memory/baseline・native-sample、
 # 配布ビルドから分離。README 参照）の計 3 アプリを対象に、
@@ -25,7 +25,7 @@
 # assembleDebug を都度実行する）。
 #
 # fandhe（platforms/android/app）は GameActivity（MainActivity.java）+
-# fandhe-egui-proxy の cdylib（libfandhe_egui_proxy.so）を起動する薄いラッパーであり
+# fandhe-egui-proxy の cdylib（libfandhe_gallery.so）を起動する薄いラッパーであり
 # （TASK-9.3-S1 / #242、README 参照）、gradle :app:assembleDebug だけでは jniLibs（.so）は
 # 生成されず、verify-android-launch.sh と同様に本スクリプトが cargo ndk で先に
 # ビルドして target/android/jniLibs へ配置する（Bugbot 指摘対応、Issue #237）。
@@ -59,8 +59,8 @@ keep_app="${FANDHE_ANDROID_KEEP_APP:-}"
 
 # fandhe（platforms/android/app）のネイティブライブラリビルドに用いる定数
 # （verify-android-launch.sh と同じ package/lib_name/jniLibs 出力先）。
-fandhe_cargo_package="fandhe-egui-proxy"
-fandhe_lib_name="fandhe_egui_proxy"
+fandhe_cargo_package="fandhe-gallery"
+fandhe_lib_name="fandhe_gallery"
 jnilibs_out_dir="${repo_root}/target/android/jniLibs"
 
 # A03（インジェクション）対策: 試行回数は数値のみ許容する。
@@ -86,7 +86,7 @@ adb_cmd() {
 # --- フェーズ 1: 前提検査（fail-fast） ---------------------------------------
 command -v gradle >/dev/null 2>&1 || fail "gradle が見つかりません（PATH に GRADLE_HOME/bin が含まれているか確認してください）"
 command -v adb >/dev/null 2>&1 || fail "adb が見つかりません（PATH に ANDROID_HOME/platform-tools が含まれているか確認してください）"
-# fandhe（platforms/android/app）の libfandhe_egui_proxy.so クロスビルドに必要
+# fandhe（platforms/android/app）の libfandhe_gallery.so クロスビルドに必要
 # （verify-android-launch.sh と同じ前提検査）。
 command -v cargo >/dev/null 2>&1 || fail "cargo が見つかりません（rustup 導入後に再実行してください）"
 command -v cargo-ndk >/dev/null 2>&1 || fail "cargo-ndk が見つかりません（scripts/android/setup-android-env.sh を先に実行してください）"
@@ -127,7 +127,7 @@ declare -a APP_IDS=(
   "com.fandhe.metrics.nativesample"
 )
 declare -a APP_LABELS=(
-  "fandhe（GameActivity + fandhe-egui-proxy）"
+  "fandhe（GameActivity + fandhe-gallery）"
   "baseline（空 Activity）"
   "native-sample（Jetpack Compose）"
 )
@@ -154,7 +154,7 @@ declare -a APP_ACTIVITIES=(
 
 # --- フェーズ 3.5: fandhe（platforms/android/app）のネイティブライブラリビルド ---
 # gradle :app:assembleDebug は Java/Kotlin ソースを持たない薄いラッパーのビルドのみ
-# 行い、libfandhe_egui_proxy.so は生成しない。verify-android-launch.sh と同じ手順
+# 行い、libfandhe_gallery.so は生成しない。verify-android-launch.sh と同じ手順
 # （cargo ndk → target/android/jniLibs 配置）を先に実行し、GameActivity が
 # 起動時にロードするライブラリを用意する（Bugbot 指摘対応、Issue #237）。
 cd "${repo_root}"

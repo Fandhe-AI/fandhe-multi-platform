@@ -1,7 +1,7 @@
 //! Phase 11（親 #89）型サンプル「機械学習モデル推論」（Issue #289）の effect ドライバ。
 //! `fandhe_core::screens::ml_infer`（端末依存ゼロ）の要求を観測し、ワーカースレッドで
 //! `fandhe_device::ml_inference::MlInference` を呼んで `CompletionSender` 経由で結果を返す
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
 //! `fandhe_device::ml_inference`。
 //!

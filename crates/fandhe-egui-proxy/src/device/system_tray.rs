@@ -1,7 +1,7 @@
 //! Phase 11（親 #1038）型サンプル「システムトレイ」（Issue #1039）の effect ドライバ。
 //! `fandhe_core::screens::system_tray`（端末依存ゼロ）の `pending` 要求を観測し、
 //! `fandhe_device::system_tray::SystemTray` で OS へアイコンの表示 / 非表示を依頼して
-//! `CompletionSender` 経由で結果を返す（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`device/notification.rs` と同型）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

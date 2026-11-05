@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #1064、Issue #1065）型サンプル「ホーム画面ウィジェット」の
 //! effect ドライバ。`fandhe_core::screens::home_widget_show`（端末依存ゼロ）の `pending`
 //! 要求を観測し、`fandhe_device::home_widget::HomeWidget` で保存・読み出しして
-//! `CompletionSender` 経由で結果を返す（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる、`device/secure_credential.rs` と同型）。
 //!
 //! 実装の選択: macOS は [`super::apple_home_widget`]（Team ID が取れなければ

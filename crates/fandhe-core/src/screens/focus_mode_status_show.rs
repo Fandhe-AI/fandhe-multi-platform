@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ型サンプル「集中モードの状態」（親 #104、Issue #438）。
-//! `FANDHE_PROXY_APP=focus_mode_status_show` で選ばれ、`fandhe-egui-proxy` の
+//! `FANDHE_PROXY_APP=focus_mode_status_show` で選ばれ、`fandhe-gallery` の
 //! `screens/registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の
 //! `pub mod focus_mode_status_show;` と対）。
 //!

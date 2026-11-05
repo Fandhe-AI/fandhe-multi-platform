@@ -8,7 +8,7 @@
 # Linux ヘッドレス環境向けに踏襲する。
 #
 # 呼び出し文脈: メモリ比較の検証記録（非公開）の作成時に、
-# fandhe-egui-proxy-desktop（対象）・scripts/metrics/baseline-blank（ベースライン）の
+# fandhe-gallery-desktop（対象）・scripts/metrics/baseline-blank（ベースライン）の
 # 両方に対して個別に実行し、CSV 出力をレポートへ転記する。measure-code-ratio.sh・
 # unsafe-audit.sh と同方針で、現時点では CI へは組み込まない（ローカル実行のみ）。
 #

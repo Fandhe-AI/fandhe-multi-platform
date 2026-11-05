@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #107）型サンプル「PDF 表示」（Issue #469）。
 //! 「サンプル PDF を表示」でアプリに埋め込んだ 3 ページの PDF の 1 ページ目を画像にして表示し、
 //! 総ページ数を添える 1 画面。`FANDHE_PROXY_APP=pdf_first_page` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod pdf_first_page;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は

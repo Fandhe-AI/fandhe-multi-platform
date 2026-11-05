@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #189）型サンプル「無線の状態と切り替え」（Issue #972）。
 //! Wi-Fi・Bluetooth の 2 行それぞれに「状態を読む」「オンにする」「オフにする」を置き、押すと 1 回だけ
 //! OS に問い合わせ・要求して結果を出す 1 画面。`FANDHE_PROXY_APP=radio_control_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod radio_control_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの置き場」節）。

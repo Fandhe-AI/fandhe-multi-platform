@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # TASK-11.2-S2（REQ-11 / M3、Issue #226、親: TASK-11.2 系列 / #224）:
-# cargo-ndk が生成する Android 向け cdylib（libfandhe_egui_proxy.so、
+# cargo-ndk が生成する Android 向け cdylib（libfandhe_gallery.so、
 # crates/fandhe-egui-proxy/src/android.rs の android_main エントリ。Activity 方式は
 # TASK-9.3-S1 / Issue #242 で GameActivity に確定、docs/architecture/android-activity-method.md
 # 参照）を
@@ -68,8 +68,8 @@ repo_root="$(cd -- "${script_dir}/../.." >/dev/null 2>&1 && pwd -P)"
 # shellcheck disable=SC1091
 . "${script_dir}/android-env.sh"
 
-package="fandhe-egui-proxy"
-lib_name="fandhe_egui_proxy"
+package="fandhe-gallery"
+lib_name="fandhe_gallery"
 gradle_project_dir="${repo_root}/platforms/android"
 jnilibs_out_dir="${repo_root}/target/android/jniLibs"
 aab_path="${gradle_project_dir}/app/build/outputs/bundle/release/app-release.aab"

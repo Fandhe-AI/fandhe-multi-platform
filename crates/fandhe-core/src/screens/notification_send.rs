@@ -2,7 +2,7 @@
 //! タイトル欄 + 本文欄 + 「通知する」ボタン → OS へローカル通知の表示を依頼し、
 //! 結果（表示した/送信した/キャンセル/失敗）を表示する 1 画面。
 //! `FANDHE_PROXY_APP=notification_send` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod notification_send;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

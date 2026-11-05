@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #887）型サンプル「位置情報」（Issue #888）。
 //! `FANDHE_PROXY_APP=location_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod location_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

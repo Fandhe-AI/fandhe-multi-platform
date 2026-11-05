@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #187）型サンプル「人の在席・離席の検知」（Issue #960）。
 //! 「いま在席しているかを読む」ボタン → OS から在席を 1 回読み、結果（在席/離席/判定不能/
 //! 非対応/権限拒否/未取得/失敗）を表示する 1 画面。`FANDHE_PROXY_APP=human_presence_read` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod human_presence_read;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは `fandhe-egui-proxy` の

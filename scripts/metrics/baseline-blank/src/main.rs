@@ -2,13 +2,13 @@
 //!
 //! `docs/spec/03-poc/performance/README.md`（PoC-4）が macOS で使った
 //! 「空の `NSWindow` のみを表示する最小 Cocoa アプリ」（`blank.swift`）の Linux 対応物。
-//! `fandhe-egui-proxy-desktop`（glow バックエンド、egui/eframe 一式）の
+//! `fandhe-gallery-desktop`（glow バックエンド、egui/eframe 一式）の
 //! アイドル時 RSS からウィンドウ生成そのもののコストを差し引くための参照点として、
 //! `scripts/metrics/measure-idle-memory.sh` から起動される。
 //!
 //! **計測上の注意**:
 //! 本アプリは winit のみでウィンドウを生成し、GL/Vulkan コンテキストは一切初期化しない。
-//! 一方 `fandhe-egui-proxy-desktop` は glow（OpenGL、`LIBGL_ALWAYS_SOFTWARE=1` で llvmpipe
+//! 一方 `fandhe-gallery-desktop` は glow（OpenGL、`LIBGL_ALWAYS_SOFTWARE=1` で llvmpipe
 //! ソフトウェアラスタライザ経由）で描画コンテキストを持つため、本ベースラインとの RSS 差分
 //! （増分）には「egui/eframe 固有のメモリ」に加えて「GL コンテキスト・llvmpipe 自体の
 //! メモリ」が混在する。このため増分は参考指標とし、各リビジョンの生 RSS を主指標として扱う
@@ -36,7 +36,7 @@ impl ApplicationHandler for BlankApp {
         // ウィンドウ生成直後からプロセスが生存し続ける必要がある。ただし `Poll` は
         // イベント待機せず CPU をフル使用してビジーループしてしまい、「idle RSS」の
         // ベースラインが実際には idle でなくなる（autoshot オフ時にイベント待機する
-        // fandhe-egui-proxy-desktop との非対称性も生じる、Bugbot 指摘: Busy-loop baseline
+        // fandhe-gallery-desktop との非対称性も生じる、Bugbot 指摘: Busy-loop baseline
         // not idle）。`Wait` はイベントが来るまでスレッドをブロックしつつプロセス自体は
         // 生存させ続けるため、真に idle な状態でベースラインを維持できる。
         event_loop.set_control_flow(ControlFlow::Wait);

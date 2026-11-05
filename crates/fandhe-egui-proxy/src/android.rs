@@ -4,9 +4,9 @@
 //!
 //! `android-activity`（GameActivity 方式。`Cargo.toml` の
 //! `cfg(target_os = "android")` 依存セクション参照）が期待する固定シンボル名
-//! `android_main` を公開し、`platforms/android/app` の `MainActivity`
-//! （`GameActivity` サブクラス、`System.loadLibrary` で本 cdylib をロード）から
-//! 起動される。他プラットフォーム（デスクトップ = glow、Web = wasm32/glow、
+//! `android_main` は `fandhe-gallery`（cdylib）が持ち（Issue #1165）、`platforms/android/app` の
+//! `MainActivity`（`GameActivity` サブクラス、`System.loadLibrary` で gallery の cdylib をロード）から
+//! 起動されたあと、本モジュールの [`run`] を呼ぶ。他プラットフォーム（デスクトップ = glow、Web = wasm32/glow、
 //! iOS = wgpu/Metal、`main.rs` / `web.rs` 参照）と同様、実描画は `ProxyApp`
 //! （`app.rs`）へ委譲する。GameActivity への切替は本関数のシグネチャ・処理内容に
 //! 影響しない（`android-activity` が `AndroidApp` 型で両バックエンドの差異を吸収する）。
@@ -20,6 +20,9 @@
 //! `accesskit` feature を有効化せず非対応のままとしている（GameActivity 方式への
 //! 切替自体は #242 で完了済みだが、accesskit feature の有効化・動作整合は
 //! 別 issue #243 / TASK-9.3-S2 のスコープ）。
+
+/// gallery の `android_main` が `winit` に直接依存せずに済むよう、`run` の引数型を再公開する。
+pub use winit::platform::android::activity::AndroidApp;
 
 /// `AndroidApp` の保持（`set_android_app` / `android_app`）の実体は `fandhe-platform-android`
 /// （Issue #1166）。呼び出し側のパス `crate::android::android_app` を保つ再公開。
@@ -105,41 +108,14 @@ pub(crate) fn request_repaint() {
     fandhe_runtime::request_repaint();
 }
 
-/// Android アプリのエントリポイント。
+/// Android アプリの本体。`fandhe-gallery` の `android_main`（`android-activity` が探す固定シンボル）から
+/// 呼ばれる。
 ///
-/// `android-activity`（GameActivity 方式、TASK-9.3-S1 / #242）が
-/// ライブラリロード後にこのシンボル名を検索して呼び出す（OS 側グルーコードとの契約であり、
-/// Rust 側から能動的に呼ばれることはない）。`#[no_mangle]` はこの 1 関数に閉じ、`unsafe` を
-/// 公開 API 側へ漏らさない（`.claude/rules/coding-rust.md` の FFI 例外規定準拠）。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` により Rust の名前修飾を
-/// 無効化するが、シンボル名 `android_main` は `android-activity` の規約上の固定名
-/// （winit の `android-game-activity` feature 経由で `android_activity` crate が
-/// 探索する）であり、本クレートは cdylib として 1 つの Android 実行単位にのみ
-/// リンクされるため他シンボルと衝突しない。
-// TASK-5.3（REQ-5 / M4、Issue #238）: `frame-metrics` feature 有効時は
-// `crate::frame_metrics::run_android`（計測専用アプリ）へ委譲する。既存の `ProxyApp`
-// 経路（feature 無効時）は変更しない（`frame_metrics.rs` モジュール doc 参照）。
-// `#[no_mangle]` の固定シンボル名は 1 バイナリにつき 1 定義のみ許されるため、
-// feature の有無で定義自体を排他的に切り替える（両方が同時にコンパイル対象になると
-// シンボル重複でリンクエラーになる）。
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない（モジュール冒頭のシンボル名固定の説明を参照）。
-#[cfg(feature = "frame-metrics")]
-#[allow(unsafe_code)]
-#[no_mangle]
-fn android_main(app: winit::platform::android::activity::AndroidApp) {
-    crate::frame_metrics::run_android(app);
-}
-
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない（上の `frame-metrics` 有効時の
-/// `android_main` と同じ根拠。モジュール冒頭のシンボル名固定の説明を参照）。
-#[cfg(not(feature = "frame-metrics"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-fn android_main(app: winit::platform::android::activity::AndroidApp) {
+/// `#[no_mangle]` の `android_main` は最終成果物（cdylib）を作る gallery が 1 つだけ持つ
+/// （rlib の本 crate が持つとシンボルが重複し、cdylib への書き出し範囲も不定になる）。
+/// 画面の登録は `build_app` で受け取る（[`crate::BuildAppFn`]）。`frame-metrics` 有効時の
+/// 計測専用アプリは gallery が [`crate::frame_metrics::run_android`] を直接呼ぶ。
+pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Issue #750 / PR #790 codex-review 指摘: `device/android.rs` が `DataDir` 解決・
     // カメラ Intent 中継のために `AndroidApp` を必要とするため、`NativeOptions` へ move
     // する前に static へ複製する（`AndroidApp` は `Arc` 内部実装で `Clone` が安価、
@@ -410,8 +386,7 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // では常に空文字列となって既定経路へ落ちる（Issue #718、security.md A05）。
     // `tv-focus` は専用の `TvFocusApp` へ、それ以外はレジストリ（`crate::build_app`）
     // 経由で解決する。
-    let requested_name =
-        crate::screens::selected_app_name().unwrap_or_else(read_debug_proxy_app_property);
+    let requested_name = crate::selected_app_name().unwrap_or_else(read_debug_proxy_app_property);
     let use_tv_focus = requested_name == "tv-focus";
     // codex-review 指摘 P2（Issue #831）: 傾き画面以外でのセンサ再描画を抑えるため、
     // 起動画面決定と同時にゲートを設定する（`ACTIVE_SCREEN_USES_TILT` doc 参照）。
@@ -441,7 +416,7 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
         } else if requested_name.is_empty() {
             Box::new(crate::ProxyApp::new(ctx).with_inset_margin_supplier(android_inset_margin))
         } else {
-            match crate::build_app(&requested_name, ctx) {
+            match build_app(&requested_name, ctx) {
                 Some(mut dyn_app) => {
                     dyn_app.set_inset_margin_supplier(Box::new(android_inset_margin));
                     dyn_app

@@ -1,5 +1,5 @@
 //! Phase 10（親 #827）型サンプル「傾きで玉が転がる」（Issue #830）。
-//! `FANDHE_PROXY_APP=tilt_ball` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=tilt_ball` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼び出される（`screens/mod.rs` の `pub mod tilt_ball;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

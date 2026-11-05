@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ型サンプル「LAN のサービス探索」（親 #109、Issue #486）。
 //! 「探索（10 秒）」ボタン → 同じネットワークで `_http._tcp`（mDNS / Bonjour）を公開している
 //! 機器を約 10 秒探し、名前とアドレスを一覧表示する 1 画面。`FANDHE_PROXY_APP=lan_discover` で
-//! 選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! 選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod lan_discover;` と対）。接続・公開は扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #131、Issue #670）型サンプル「シリアルポート」の effect ドライバ。
 //! `fandhe_core::screens::serial_port_show`（端末依存ゼロ）の要求を観測し、結果を
-//! `CompletionSender` 経由で返す（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約の SSOT は `fandhe_device::serial_port`（固定設定・3 秒の期限・`round_trip`）。
 //!

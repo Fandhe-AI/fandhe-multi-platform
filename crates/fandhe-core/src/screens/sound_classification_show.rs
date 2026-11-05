@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #142）型サンプル「環境音の分類」（Issue #725）。
 //! 「開始」「停止」でマイクの聞き取りを始め・止め、まわりの音の分類結果（上位 3 件のラベルと
 //! 信頼度）を 1 画面に出す。`FANDHE_PROXY_APP=sound_classification_show` で選ばれ、
-//! `fandhe-egui-proxy` の `screens/registry.rs` の `effect` 区画から呼ばれる
+//! `fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod sound_classification_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は

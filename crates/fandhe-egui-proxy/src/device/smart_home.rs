@@ -1,7 +1,7 @@
 //! Phase 11（親 #147）型サンプル「スマートホーム」（Issue #1079）の effect ドライバ。
 //! `fandhe_core::screens::smart_home_list`（端末依存ゼロ）の要求を観測し、
 //! `fandhe_device::smart_home::SmartHome` で家と機器の名前を読んで
-//! `CompletionSender` 経由で結果を返す（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約の SSOT は `fandhe_device::smart_home`。
 //!

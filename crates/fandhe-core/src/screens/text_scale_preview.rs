@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #911）型サンプル「文字サイズ追従」（Issue #912）。
 //! `FANDHE_PROXY_APP=text_scale_preview` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod text_scale_preview;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

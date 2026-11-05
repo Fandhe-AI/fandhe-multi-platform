@@ -8,7 +8,7 @@
 #
 # 呼び出し文脈: バイナリサイズ検証記録（非公開）の作成時に、
 # `scripts/android/build-aab.sh` が生成する `.aab`・cargo-ndk 出力の ABI 別
-# `libfandhe_egui_proxy.so` に対して個別に実行し、CSV 出力をレポートへ転記する。
+# `libfandhe_gallery.so` に対して個別に実行し、CSV 出力をレポートへ転記する。
 # measure-idle-memory.sh・measure-code-ratio.sh と同方針で、現時点では CI へは
 # 組み込まない（ローカル実行のみ）。
 #

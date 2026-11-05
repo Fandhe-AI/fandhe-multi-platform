@@ -9,7 +9,7 @@
  *     （security.md A06「脆弱な依存」対策・依存追加なし。Node 22 以降で WebSocket は
  *     グローバル安定 API）。
  *   - TTI・フレームタイムは外部プロセスの evaluate ではなく、対象ページの
- *     `crates/fandhe-egui-proxy/web/index.html` に埋め込んだページ内計装
+ *     `crates/fandhe-gallery/web/index.html` に埋め込んだページ内計装
  *     （window.__fandheMeasure、`?measure=1` 時のみ有効）が計算済みの値を
  *     Runtime.evaluate で読み出すだけにする（CDP 経由の rAF ポーリングより計装面が
  *     小さく、実機 Safari 等でも同じ値をコンソールから確認できる一貫性がある）。

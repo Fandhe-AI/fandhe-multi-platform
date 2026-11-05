@@ -3,7 +3,7 @@
 //! 受信順の番号つきで直近 8 件と種類ごとの回数を出す。今のボリューム一覧（名前・種類・状態）は
 //! 画面を開いた時・通知が届くたび・「再取得」で OS から読み直して丸ごと置き換える 1 画面。
 //! `FANDHE_PROXY_APP=removable_storage_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod removable_storage_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

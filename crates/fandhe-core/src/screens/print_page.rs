@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #94）型サンプル「印刷」（Issue #325）。
 //! 固定の短い文章を OS の印刷ダイアログへ渡す 1 ボタンだけの 1 画面。
-//! `FANDHE_PROXY_APP=print_page` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の
+//! `FANDHE_PROXY_APP=print_page` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod print_page;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの

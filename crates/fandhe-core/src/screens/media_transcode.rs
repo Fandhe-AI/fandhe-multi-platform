@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #91）型サンプル「動画・音声の変換」（Issue #311）。
 //! 「変換する」で実行時に作った 5 秒の音声を AAC へ 1 回変換し、入力と出力の大きさ・長さを
 //! 表示する 1 画面。`FANDHE_PROXY_APP=media_transcode` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod media_transcode;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は

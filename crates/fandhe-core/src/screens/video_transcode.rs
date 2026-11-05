@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #340）型サンプル「動画の変換」（Issue #1014）。
 //! 「変換する」で実行時に作った 2 秒の元動画（1280×720）を小さい解像度の MP4 へ 1 回書き出し、
 //! 元動画と出力の寸法・長さ・大きさを表示する 1 画面。`FANDHE_PROXY_APP=video_transcode` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod video_transcode;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は

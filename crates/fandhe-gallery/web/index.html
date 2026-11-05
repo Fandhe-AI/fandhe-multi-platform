@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  TASK-1.2（REQ-1 / M2）検証用の最小ページ。fandhe-egui-proxy の wasm ビルドを
+  TASK-1.2（REQ-1 / M2）検証用の最小ページ。fandhe-gallery の wasm ビルドを
   canvas へ描画するためだけの検証用ページであり、配布物ではない
   （scripts/web/build-wasm-proxy.sh が dist/ へ組み立てる一部として使われる）。
   フォント（fonts/noto-sans-jp-regular.otf）は build-wasm-proxy.sh が
@@ -26,7 +26,7 @@
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
-    <title>fandhe-egui-proxy（TASK-1.2 検証用）</title>
+    <title>fandhe-gallery（TASK-1.2 検証用）</title>
     <style>
       html,
       body {
@@ -144,7 +144,7 @@
       })();
     </script>
     <script type="module">
-      import init from "./fandhe_egui_proxy.js";
+      import init from "./fandhe_gallery.js";
       await init();
     </script>
   </body>

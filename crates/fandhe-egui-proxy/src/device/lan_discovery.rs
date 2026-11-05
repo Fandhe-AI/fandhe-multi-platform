@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #109、Issue #486）型サンプル「LAN のサービス探索」の effect
 //! ドライバ。`fandhe_core::screens::lan_discover`（端末依存ゼロ）の要求を観測し、結果を
-//! `CompletionSender` 経由で返す（`crate::screens::registry` の `effect` 区画から
+//! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約の SSOT は `fandhe_device::lan_discovery`（`_http._tcp`・10 秒・上限 50 件・
 //! `normalize_services`・`decode_code`）。`device/bluetooth_le.rs` と同型の pull 型。

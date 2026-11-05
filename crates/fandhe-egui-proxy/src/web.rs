@@ -3,7 +3,7 @@
 //! `web/index.html` の `<canvas id="fandhe-proxy-canvas">` へ `fandhe_render_egui::launch::start_web`（eframe の WebRunner）を
 //! 通してアタッチする。`scripts/web/build-wasm-proxy.sh` が `wasm-bindgen --target web` で
 //! 生成した glue コードから本モジュールの [`start`] が呼ばれる想定
-//! （`#[wasm_bindgen(start)]`）。
+//! （`fandhe-gallery` の `#[wasm_bindgen(start)]` から呼ぶ）。
 //!
 //! CJK フォント（`sample_screen()` の日本語ラベル向け）は `fonts/` 配信ディレクトリから
 //! `fetch` で取得し、取得できた場合のみ `font::apply_font_bytes` で差し替える。
@@ -21,8 +21,9 @@ use wasm_bindgen::JsCast;
 /// 取得失敗として扱い、既定フォントで続行する）。
 const CJK_FONT_URL: &str = "fonts/noto-sans-jp-regular.otf";
 
-#[wasm_bindgen(start)]
-pub fn start() -> Result<(), JsValue> {
+/// Web のブートストラップ本体。`fandhe-gallery` の `#[wasm_bindgen(start)]` から呼ばれる
+/// （wasm の start 関数は最終成果物の cdylib が 1 つだけ持つ。Issue #1165）。`build_app` は画面の登録。
+pub fn start(build_app: crate::BuildAppFn) -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
 
     // DOM 取得は `start()` の戻り値である `Result<(), JsValue>` へそのまま伝播できるよう、
@@ -58,12 +59,10 @@ pub fn start() -> Result<(), JsValue> {
             }
             // Issue #715: `FANDHE_PROXY_APP`（wasm ではビルド時 `option_env!`
             // 経由、`screens::selected_app_name` 参照）で選んだ画面をレジストリ
-            // （`screens::build_app`）から解決する。未指定・未登録は既定の
+            // （`build_app`）から解決する。未指定・未登録は既定の
             // sample 画面（`ProxyApp::new`）へフォールバックする。
             let app: Box<dyn fandhe_render_egui::EguiApp> =
-                match crate::screens::selected_app_name()
-                    .and_then(|name| crate::build_app(&name, ctx))
-                {
+                match crate::selected_app_name().and_then(|name| build_app(&name, ctx)) {
                     Some(app) => app,
                     None => Box::new(crate::ProxyApp::new(ctx)),
                 };

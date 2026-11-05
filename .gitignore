@@ -6,11 +6,11 @@
 # scripts/web/build-wasm-proxy.sh が組み立てるたびに再生成される生成物であり、
 # フォントバイナリ（TASK-10.1 以降は crates/fandhe-fonts 同梱資産からのコピー）を
 # 含むためコミットしない。同梱資産自体は crates/fandhe-fonts/assets/ に別途コミット済み。
-crates/fandhe-egui-proxy/web/dist/
+crates/fandhe-gallery/web/dist/
 
 # TASK-4.4-S4（REQ-4 / Issue #82）: scripts/web/build-wasm-dom.sh が組み立てる
 # fandhe-web-dom の wasm-bindgen 生成物。ソースからの再生成のみを正とし、
-# 生成物自体はコミットしない（上記 fandhe-egui-proxy/web/dist/ と同方針）。
+# 生成物自体はコミットしない（上記 fandhe-gallery/web/dist/ と同方針）。
 crates/fandhe-web-dom/web/dist/
 
 # TASK-3.4-S2（REQ-3 / M3）: scripts/apple/build-bridge-xcframework.sh が生成する

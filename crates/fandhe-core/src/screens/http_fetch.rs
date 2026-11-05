@@ -1,6 +1,6 @@
 //! Phase 8（親 #752）型サンプル「HTTP 取得」（Issue #748）。「取得」ボタン →
 //! 取得中表示 → 一覧、失敗時はエラー文言 + 再試行の 3 状態を持つ 1 画面。
-//! `FANDHE_PROXY_APP=http_fetch` で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs`
+//! `FANDHE_PROXY_APP=http_fetch` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼び出される（`screens/mod.rs` の `pub mod http_fetch;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
@@ -115,7 +115,7 @@ pub fn expand_items(state: &HttpFetchState) -> Vec<Node<HttpFetchState>> {
 
 /// HTTP 取得画面。フェーズに応じて操作ボタンを組み替える（`Fixed` 画面はボタンを
 /// 条件表示できない制約、`screens/confirm_dialog.rs` と同型の `nav` 方式、Issue #726）。
-/// `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から
+/// `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から
 /// `fn(&S) -> Screen<S>` として呼ばれる契約。
 pub fn current_screen(state: &HttpFetchState) -> Screen<HttpFetchState> {
     let screen = Screen::new("HTTP 取得")

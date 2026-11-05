@@ -131,7 +131,7 @@ PoC-3 は macOS 単体 `.app` の生成も行っていますが、本 CLI の `i
 本タスク系列のスコープ外です。
 
 > **注記**: 本 CLI は `swiftc`/`xcrun` を使わず、`cargo build --target aarch64-apple-ios-sim` の成果物
-> （`fandhe-egui-proxy` パッケージの `fandhe-egui-proxy-desktop` バイナリ）を直接バンドルする。
+> （`fandhe-egui-proxy` パッケージの `fandhe-gallery-desktop` バイナリ）を直接バンドルする。
 > 上表の PoC-3 側「swiftc ビルド」は PoC-3 の手順であり、本 CLI は cargo build のみで完結する。
 > `check_environment` の必須コマンドもこれに合わせ `cargo`/`rustup`/`python3`/`codesign` とする。
 

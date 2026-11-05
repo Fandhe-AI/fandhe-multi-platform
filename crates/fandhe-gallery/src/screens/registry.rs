@@ -26,566 +26,566 @@ generated_screens! {
     nav "confirm_dialog" => fandhe_core::screens::confirm_dialog::confirm_dialog_screen,
 
     init #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
-    "storage_note" => fandhe_core::screens::storage_note::storage_note_screen, crate::device::storage_note_state,
+    "storage_note" => fandhe_core::screens::storage_note::storage_note_screen, fandhe_egui_proxy::device::storage_note_state,
 
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "http_fetch" => fandhe_core::screens::http_fetch::current_screen,
-    crate::device::http_fetch::http_fetch_effect,
+    fandhe_egui_proxy::device::http_fetch::http_fetch_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "camera_capture" => fandhe_core::screens::camera_capture::current_screen,
-    crate::device::camera_capture::camera_capture_effect,
+    fandhe_egui_proxy::device::camera_capture::camera_capture_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "tilt_ball" => fandhe_core::screens::tilt_ball::current_screen,
-    crate::device::tilt::tilt_ball_effect,
+    fandhe_egui_proxy::device::tilt::tilt_ball_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "clipboard_text" => fandhe_core::screens::clipboard_text::current_screen,
-    crate::device::clipboard::clipboard_text_effect,
+    fandhe_egui_proxy::device::clipboard::clipboard_text_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "tts_speak" => fandhe_core::screens::tts_speak::current_screen,
-    crate::device::tts::tts_speak_effect,
+    fandhe_egui_proxy::device::tts::tts_speak_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_pick" => fandhe_core::screens::file_pick::current_screen,
-    crate::device::file_pick::file_pick_effect,
+    fandhe_egui_proxy::device::file_pick::file_pick_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "photo_pick" => fandhe_core::screens::photo_pick::current_screen,
-    crate::device::photo_pick::photo_pick_effect,
+    fandhe_egui_proxy::device::photo_pick::photo_pick_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "contact_pick" => fandhe_core::screens::contact_pick::current_screen,
-    crate::device::contact_pick::contact_pick_effect,
+    fandhe_egui_proxy::device::contact_pick::contact_pick_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "eye_dropper" => fandhe_core::screens::eye_dropper_pick::current_screen,
-    crate::device::eye_dropper::eye_dropper_pick_effect,
+    fandhe_egui_proxy::device::eye_dropper::eye_dropper_pick_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "color_picker" => fandhe_core::screens::color_picker_pick::current_screen,
-    crate::device::color_picker::color_picker_pick_effect,
+    fandhe_egui_proxy::device::color_picker::color_picker_pick_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "location_show" => fandhe_core::screens::location_show::current_screen,
-    crate::device::location::location_effect,
+    fandhe_egui_proxy::device::location::location_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "geofence_show" => fandhe_core::screens::geofence_show::current_screen,
-    crate::device::geofence::geofence_effect,
+    fandhe_egui_proxy::device::geofence::geofence_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "share_text" => fandhe_core::screens::share_text::current_screen,
-    crate::device::share::share_text_effect,
+    fandhe_egui_proxy::device::share::share_text_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "biometric_check" => fandhe_core::screens::biometric_check::current_screen,
-    crate::device::biometric_auth::biometric_check_effect,
+    fandhe_egui_proxy::device::biometric_auth::biometric_check_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "calendar_add" => fandhe_core::screens::calendar_add::current_screen,
-    crate::device::calendar::calendar_add_effect,
+    fandhe_egui_proxy::device::calendar::calendar_add_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "alarm_show" => fandhe_core::screens::alarm_show::current_screen,
-    crate::device::alarm::alarm_show_effect,
+    fandhe_egui_proxy::device::alarm::alarm_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "launch_at_login_show" => fandhe_core::screens::launch_at_login_show::current_screen,
-    crate::device::launch_at_login::launch_at_login_show_effect,
+    fandhe_egui_proxy::device::launch_at_login::launch_at_login_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "app_badge_set" => fandhe_core::screens::app_badge_set::current_screen,
-    crate::device::app_badge::app_badge_set_effect,
+    fandhe_egui_proxy::device::app_badge::app_badge_set_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "app_progress_attention_show" => fandhe_core::screens::app_progress_attention_show::current_screen,
-    crate::device::app_progress_attention::app_progress_attention_show_effect,
+    fandhe_egui_proxy::device::app_progress_attention::app_progress_attention_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "compose_mail_sms" => fandhe_core::screens::compose_mail_sms::current_screen,
-    crate::device::compose_mail_sms::compose_mail_sms_effect,
+    fandhe_egui_proxy::device::compose_mail_sms::compose_mail_sms_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "open_system_settings_show" => fandhe_core::screens::open_system_settings_show::current_screen,
-    crate::device::open_system_settings::open_system_settings_show_effect,
+    fandhe_egui_proxy::device::open_system_settings::open_system_settings_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "external_app_launch_show" => fandhe_core::screens::external_app_launch_show::current_screen,
-    crate::device::external_app_launch::external_app_launch_show_effect,
+    fandhe_egui_proxy::device::external_app_launch::external_app_launch_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ble_peripheral" => fandhe_core::screens::ble_peripheral::current_screen,
-    crate::device::ble_peripheral::ble_peripheral_effect,
+    fandhe_egui_proxy::device::ble_peripheral::ble_peripheral_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "global_hotkey" => fandhe_core::screens::global_hotkey::current_screen,
-    crate::device::global_hotkey::global_hotkey_effect,
+    fandhe_egui_proxy::device::global_hotkey::global_hotkey_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "open_in_shell" => fandhe_core::screens::open_in_shell::current_screen,
-    crate::device::open_in_shell::open_in_shell_effect,
+    fandhe_egui_proxy::device::open_in_shell::open_in_shell_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "recent_documents_show" => fandhe_core::screens::recent_documents_show::current_screen,
-    crate::device::recent_documents::recent_documents_show_effect,
+    fandhe_egui_proxy::device::recent_documents::recent_documents_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "passkey_signin" => fandhe_core::screens::passkey_signin::current_screen,
-    crate::device::passkey::passkey_signin_effect,
+    fandhe_egui_proxy::device::passkey::passkey_signin_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "payment_request" => fandhe_core::screens::payment_request::current_screen,
-    crate::device::payment_request::payment_request_effect,
+    fandhe_egui_proxy::device::payment_request::payment_request_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "digital_credentials" => fandhe_core::screens::digital_credentials::current_screen,
-    crate::device::digital_credentials::digital_credentials_effect,
+    fandhe_egui_proxy::device::digital_credentials::digital_credentials_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "web_auth_session_demo" => fandhe_core::screens::web_auth_session_demo::current_screen,
-    crate::device::web_auth_session::web_auth_session_demo_effect,
+    fandhe_egui_proxy::device::web_auth_session::web_auth_session_demo_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "print_page" => fandhe_core::screens::print_page::current_screen,
-    crate::device::print::print_page_effect,
+    fandhe_egui_proxy::device::print::print_page_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "print_screen_page" => fandhe_core::screens::print_screen_page::current_screen,
-    crate::device::print::print_screen_page_effect,
+    fandhe_egui_proxy::device::print::print_screen_page_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "managed_app_config_show" => fandhe_core::screens::managed_app_config_show::current_screen,
-    crate::device::managed_app_config::managed_app_config_show_effect,
+    fandhe_egui_proxy::device::managed_app_config::managed_app_config_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "map_view_show" => fandhe_core::screens::map_view_show::current_screen,
-    crate::device::map_view::map_view_show_effect,
+    fandhe_egui_proxy::device::map_view::map_view_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "photo_save" => fandhe_core::screens::photo_save::current_screen,
-    crate::device::photo_save::photo_save_effect,
+    fandhe_egui_proxy::device::photo_save::photo_save_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wallpaper_set" => fandhe_core::screens::wallpaper_set::current_screen,
-    crate::device::wallpaper::wallpaper_set_effect,
+    fandhe_egui_proxy::device::wallpaper::wallpaper_set_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "text_scale_preview" => fandhe_core::screens::text_scale_preview::current_screen,
-    crate::device::text_scale::text_scale_effect,
+    fandhe_egui_proxy::device::text_scale::text_scale_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "credential_vault" => fandhe_core::screens::credential_vault::current_screen,
-    crate::device::secure_credential::credential_vault_effect,
+    fandhe_egui_proxy::device::secure_credential::credential_vault_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "serial_port_show" => fandhe_core::screens::serial_port_show::current_screen,
-    crate::device::serial_port::serial_port_show_effect,
+    fandhe_egui_proxy::device::serial_port::serial_port_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "gamepad_show" => fandhe_core::screens::gamepad_show::current_screen,
-    crate::device::gamepad::gamepad_show_effect,
+    fandhe_egui_proxy::device::gamepad::gamepad_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "mic_record" => fandhe_core::screens::mic_record::current_screen,
-    crate::device::mic_record::mic_record_effect,
+    fandhe_egui_proxy::device::mic_record::mic_record_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "screen_capture" => fandhe_core::screens::screen_capture::current_screen,
-    crate::device::screen_capture::screen_capture_effect,
+    fandhe_egui_proxy::device::screen_capture::screen_capture_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "tsv_import" => fandhe_core::screens::tsv_import::current_screen,
-    crate::device::tsv_import::tsv_import_effect,
+    fandhe_egui_proxy::device::tsv_import::tsv_import_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "notification_send" => fandhe_core::screens::notification_send::current_screen,
-    crate::device::notification::notification_send_effect,
+    fandhe_egui_proxy::device::notification::notification_send_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "drag_drop" => fandhe_core::screens::drag_drop::current_screen,
-    crate::device::drag_drop::drag_drop_effect,
+    fandhe_egui_proxy::device::drag_drop::drag_drop_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "speech_recognize" => fandhe_core::screens::speech_recognize::current_screen,
-    crate::device::speech_recognition::speech_recognize_effect,
+    fandhe_egui_proxy::device::speech_recognition::speech_recognize_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "sound_classification_show" => fandhe_core::screens::sound_classification_show::current_screen,
-    crate::device::sound_classification::sound_classification_show_effect,
+    fandhe_egui_proxy::device::sound_classification::sound_classification_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "system_tray" => fandhe_core::screens::system_tray::current_screen,
-    crate::device::system_tray::system_tray_effect,
+    fandhe_egui_proxy::device::system_tray::system_tray_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "background-task" => fandhe_core::screens::background_task::current_screen,
-    crate::device::background_task::background_task_effect,
+    fandhe_egui_proxy::device::background_task::background_task_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "home_widget_show" => fandhe_core::screens::home_widget_show::current_screen,
-    crate::device::home_widget::home_widget_show_effect,
+    fandhe_egui_proxy::device::home_widget::home_widget_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "car_display_show" => fandhe_core::screens::car_display_show::current_screen,
-    crate::device::car_display::car_display_show_effect,
+    fandhe_egui_proxy::device::car_display::car_display_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ble_scan" => fandhe_core::screens::ble_scan::current_screen,
-    crate::device::bluetooth_le::ble_scan_effect,
+    fandhe_egui_proxy::device::bluetooth_le::ble_scan_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "bluetooth_classic_show" => fandhe_core::screens::bluetooth_classic_show::current_screen,
-    crate::device::bluetooth_classic::bluetooth_classic_show_effect,
+    fandhe_egui_proxy::device::bluetooth_classic::bluetooth_classic_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "lan_discover" => fandhe_core::screens::lan_discover::current_screen,
-    crate::device::lan_discovery::lan_discover_effect,
+    fandhe_egui_proxy::device::lan_discovery::lan_discover_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "peer_connect" => fandhe_core::screens::peer_connect::current_screen,
-    crate::device::local_peer::peer_connect_effect,
+    fandhe_egui_proxy::device::local_peer::peer_connect_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "haptics_tap" => fandhe_core::screens::haptics_tap::current_screen,
-    crate::device::haptics::haptics_tap_effect,
+    fandhe_egui_proxy::device::haptics::haptics_tap_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "system_sound_beep" => fandhe_core::screens::system_sound_beep::current_screen,
-    crate::device::system_sound::system_sound_beep_effect,
+    fandhe_egui_proxy::device::system_sound::system_sound_beep_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "human_presence_read" => fandhe_core::screens::human_presence_read::current_screen,
-    crate::device::human_presence::human_presence_read_effect,
+    fandhe_egui_proxy::device::human_presence::human_presence_read_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "health_steps_read" => fandhe_core::screens::health_steps_read::current_screen,
-    crate::device::health_data::health_steps_read_effect,
+    fandhe_egui_proxy::device::health_data::health_steps_read_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pedometer_read" => fandhe_core::screens::pedometer_read::current_screen,
-    crate::device::pedometer::pedometer_read_effect,
+    fandhe_egui_proxy::device::pedometer::pedometer_read_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "audio_play" => fandhe_core::screens::audio_play::current_screen,
-    crate::device::media_playback::audio_play_effect,
+    fandhe_egui_proxy::device::media_playback::audio_play_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "background_download" => fandhe_core::screens::background_download::current_screen,
-    crate::device::background_download::background_download_effect,
+    fandhe_egui_proxy::device::background_download::background_download_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "background_upload" => fandhe_core::screens::background_upload::current_screen,
-    crate::device::background_upload::background_upload_effect,
+    fandhe_egui_proxy::device::background_upload::background_upload_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pip_show" => fandhe_core::screens::pip_show::current_screen,
-    crate::device::picture_in_picture::pip_show_effect,
+    fandhe_egui_proxy::device::picture_in_picture::pip_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "cast_show" => fandhe_core::screens::cast_show::current_screen,
-    crate::device::media_cast::cast_show_effect,
+    fandhe_egui_proxy::device::media_cast::cast_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "midi_show" => fandhe_core::screens::midi_show::current_screen,
-    crate::device::midi::midi_show_effect,
+    fandhe_egui_proxy::device::midi::midi_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "live_activity_show" => fandhe_core::screens::live_activity_show::current_screen,
-    crate::device::live_activity::live_activity_show_effect,
+    fandhe_egui_proxy::device::live_activity::live_activity_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "call_ui_show" => fandhe_core::screens::call_ui_show::current_screen,
-    crate::device::call_ui::call_ui_show_effect,
+    fandhe_egui_proxy::device::call_ui::call_ui_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "audio_devices_show" => fandhe_core::screens::audio_devices_show::current_screen,
-    crate::device::audio_devices::audio_devices_show_effect,
+    fandhe_egui_proxy::device::audio_devices::audio_devices_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "local_fonts_show" => fandhe_core::screens::local_fonts_show::current_screen,
-    crate::device::local_fonts::local_fonts_show_effect,
+    fandhe_egui_proxy::device::local_fonts::local_fonts_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "camera_preview_stream_show" => fandhe_core::screens::camera_preview_stream_show::current_screen,
-    crate::device::camera_preview_stream::camera_preview_stream_show_effect,
+    fandhe_egui_proxy::device::camera_preview_stream::camera_preview_stream_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_provider_show" => fandhe_core::screens::file_provider_show::current_screen,
-    crate::device::file_provider::file_provider_show_effect,
+    fandhe_egui_proxy::device::file_provider::file_provider_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_watch_show" => fandhe_core::screens::file_watch_show::current_screen,
-    crate::device::file_watch::file_watch_show_effect,
+    fandhe_egui_proxy::device::file_watch::file_watch_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "app_lifecycle_show" => fandhe_core::screens::app_lifecycle_show::current_screen,
-    crate::device::app_lifecycle::app_lifecycle_show_effect,
+    fandhe_egui_proxy::device::app_lifecycle::app_lifecycle_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "memory_pressure_show" => fandhe_core::screens::memory_pressure_show::current_screen,
-    crate::device::memory_pressure::memory_pressure_show_effect,
+    fandhe_egui_proxy::device::memory_pressure::memory_pressure_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "sleep_lock_events_show" => fandhe_core::screens::sleep_lock_events_show::current_screen,
-    crate::device::sleep_lock_events::sleep_lock_events_show_effect,
+    fandhe_egui_proxy::device::sleep_lock_events::sleep_lock_events_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "removable_storage_show" => fandhe_core::screens::removable_storage_show::current_screen,
-    crate::device::removable_storage::removable_storage_show_effect,
+    fandhe_egui_proxy::device::removable_storage::removable_storage_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "device_info_show" => fandhe_core::screens::device_info_show::current_screen,
-    crate::device::device_info::device_info_show_effect,
+    fandhe_egui_proxy::device::device_info::device_info_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "device_identifier_show" => fandhe_core::screens::device_identifier_show::current_screen,
-    crate::device::device_identifier::device_identifier_show_effect,
+    fandhe_egui_proxy::device::device_identifier::device_identifier_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "display_refresh_hdr_show" => fandhe_core::screens::display_refresh_hdr_show::current_screen,
-    crate::device::display_refresh_hdr::display_refresh_hdr_show_effect,
+    fandhe_egui_proxy::device::display_refresh_hdr::display_refresh_hdr_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "multi_display_show" => fandhe_core::screens::multi_display_show::current_screen,
-    crate::device::multi_display::multi_display_show_effect,
+    fandhe_egui_proxy::device::multi_display::multi_display_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "power_state_show" => fandhe_core::screens::power_state_show::current_screen,
-    crate::device::power_state::power_state_show_effect,
+    fandhe_egui_proxy::device::power_state::power_state_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "user_idle_show" => fandhe_core::screens::user_idle_show::current_screen,
-    crate::device::user_idle::user_idle_show_effect,
+    fandhe_egui_proxy::device::user_idle::user_idle_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "accessibility_prefs_show" => fandhe_core::screens::accessibility_prefs_show::current_screen,
-    crate::device::accessibility_prefs::accessibility_prefs_show_effect,
+    fandhe_egui_proxy::device::accessibility_prefs::accessibility_prefs_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "system_accent_color_show" => fandhe_core::screens::system_accent_color_show::current_screen,
-    crate::device::system_accent_color::system_accent_color_show_effect,
+    fandhe_egui_proxy::device::system_accent_color::system_accent_color_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "safe_area_insets_show" => fandhe_core::screens::safe_area_insets_show::current_screen,
-    crate::device::safe_area_insets::safe_area_insets_show_effect,
+    fandhe_egui_proxy::device::safe_area_insets::safe_area_insets_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "foldable_posture_show" => fandhe_core::screens::foldable_posture_show::current_screen,
-    crate::device::foldable_posture::foldable_posture_show_effect,
+    fandhe_egui_proxy::device::foldable_posture::foldable_posture_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "focus_mode_status_show" => fandhe_core::screens::focus_mode_status_show::current_screen,
-    crate::device::focus_mode_status::focus_mode_status_show_effect,
+    fandhe_egui_proxy::device::focus_mode_status::focus_mode_status_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "compass_show" => fandhe_core::screens::compass_show::current_screen,
-    crate::device::compass::compass_show_effect,
+    fandhe_egui_proxy::device::compass::compass_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "environment_sensors_show" => fandhe_core::screens::environment_sensors_show::current_screen,
-    crate::device::environment_sensors::environment_sensors_show_effect,
+    fandhe_egui_proxy::device::environment_sensors::environment_sensors_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "motion_raw_sensors_show" => fandhe_core::screens::motion_raw_sensors_show::current_screen,
-    crate::device::motion_raw_sensors::motion_raw_sensors_show_effect,
+    fandhe_egui_proxy::device::motion_raw_sensors::motion_raw_sensors_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "activity_recognition_show" => fandhe_core::screens::activity_recognition_show::current_screen,
-    crate::device::activity_recognition::activity_recognition_show_effect,
+    fandhe_egui_proxy::device::activity_recognition::activity_recognition_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ar_show" => fandhe_core::screens::ar_show::current_screen,
-    crate::device::ar::ar_show_effect,
+    fandhe_egui_proxy::device::ar::ar_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "network_status_show" => fandhe_core::screens::network_status_show::current_screen,
-    crate::device::network_status::network_status_show_effect,
+    fandhe_egui_proxy::device::network_status::network_status_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pen_draw" => fandhe_core::screens::pen_draw::current_screen,
-    crate::device::pen_stylus::pen_draw_effect,
+    fandhe_egui_proxy::device::pen_stylus::pen_draw_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "per_app_language_show" => fandhe_core::screens::per_app_language_show::current_screen,
-    crate::device::per_app_language::per_app_language_show_effect,
+    fandhe_egui_proxy::device::per_app_language::per_app_language_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "fullscreen_toggle" => fandhe_core::screens::fullscreen_toggle::current_screen,
-    crate::device::fullscreen_immersive::fullscreen_toggle_effect,
+    fandhe_egui_proxy::device::fullscreen_immersive::fullscreen_toggle_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "window_management_show" => fandhe_core::screens::window_management_show::current_screen,
-    crate::device::window_management::window_management_show_effect,
+    fandhe_egui_proxy::device::window_management::window_management_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wake_lock_toggle" => fandhe_core::screens::wake_lock_toggle::current_screen,
-    crate::device::screen_wake_lock::wake_lock_toggle_effect,
+    fandhe_egui_proxy::device::screen_wake_lock::wake_lock_toggle_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "screen_brightness_show" => fandhe_core::screens::screen_brightness_show::current_screen,
-    crate::device::screen_brightness::screen_brightness_show_effect,
+    fandhe_egui_proxy::device::screen_brightness::screen_brightness_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "volume_control_show" => fandhe_core::screens::volume_control_show::current_screen,
-    crate::device::volume_control::volume_control_show_effect,
+    fandhe_egui_proxy::device::volume_control::volume_control_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "screen_orientation_show" => fandhe_core::screens::screen_orientation_show::current_screen,
-    crate::device::screen_orientation::screen_orientation_show_effect,
+    fandhe_egui_proxy::device::screen_orientation::screen_orientation_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "uwb_ranging_show" => fandhe_core::screens::uwb_ranging_show::current_screen,
-    crate::device::uwb_ranging::uwb_ranging_show_effect,
+    fandhe_egui_proxy::device::uwb_ranging::uwb_ranging_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "flashlight_toggle" => fandhe_core::screens::flashlight_toggle::current_screen,
-    crate::device::flashlight::flashlight_toggle_effect,
+    fandhe_egui_proxy::device::flashlight::flashlight_toggle_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nlp_segment" => fandhe_core::screens::nlp_segment::current_screen,
-    crate::device::nlp::nlp_segment_effect,
+    fandhe_egui_proxy::device::nlp::nlp_segment_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "barcode_scan" => fandhe_core::screens::barcode_scan::current_screen,
-    crate::device::barcode_scan::barcode_scan_effect,
+    fandhe_egui_proxy::device::barcode_scan::barcode_scan_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "otp_input" => fandhe_core::screens::otp_input::current_screen,
-    crate::device::autofill_otp::autofill_otp_effect,
+    fandhe_egui_proxy::device::autofill_otp::autofill_otp_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "in_app_review" => fandhe_core::screens::in_app_review::current_screen,
-    crate::device::in_app_review::in_app_review_effect,
+    fandhe_egui_proxy::device::in_app_review::in_app_review_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "image_recognize" => fandhe_core::screens::image_recognize::current_screen,
-    crate::device::image_recognition::image_recognize_effect,
+    fandhe_egui_proxy::device::image_recognition::image_recognize_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "media_transcode" => fandhe_core::screens::media_transcode::current_screen,
-    crate::device::media_transcode::media_transcode_effect,
+    fandhe_egui_proxy::device::media_transcode::media_transcode_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "video_transcode" => fandhe_core::screens::video_transcode::current_screen,
-    crate::device::video_transcode::video_transcode_effect,
+    fandhe_egui_proxy::device::video_transcode::video_transcode_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pdf_first_page" => fandhe_core::screens::pdf_first_page::current_screen,
-    crate::device::pdf_viewer::pdf_first_page_effect,
+    fandhe_egui_proxy::device::pdf_viewer::pdf_first_page_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "usb_device_show" => fandhe_core::screens::usb_device_show::current_screen,
-    crate::device::usb_device::usb_device_show_effect,
+    fandhe_egui_proxy::device::usb_device::usb_device_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "music_library_list" => fandhe_core::screens::music_library_list::current_screen,
-    crate::device::music_library::music_library_list_effect,
+    fandhe_egui_proxy::device::music_library::music_library_list_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "smart_home_list" => fandhe_core::screens::smart_home_list::current_screen,
-    crate::device::smart_home::smart_home_list_effect,
+    fandhe_egui_proxy::device::smart_home::smart_home_list_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wifi_info_show" => fandhe_core::screens::wifi_info_show::current_screen,
-    crate::device::wifi_info::wifi_info_show_effect,
+    fandhe_egui_proxy::device::wifi_info::wifi_info_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wifi_connect_show" => fandhe_core::screens::wifi_connect_show::current_screen,
-    crate::device::wifi_connect::wifi_connect_show_effect,
+    fandhe_egui_proxy::device::wifi_connect::wifi_connect_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "radio_control_show" => fandhe_core::screens::radio_control_show::current_screen,
-    crate::device::radio_control::radio_control_show_effect,
+    fandhe_egui_proxy::device::radio_control::radio_control_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ml_infer" => fandhe_core::screens::ml_infer::current_screen,
-    crate::device::ml_inference::ml_infer_effect,
+    fandhe_egui_proxy::device::ml_inference::ml_infer_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "on_device_llm" => fandhe_core::screens::on_device_llm::current_screen,
-    crate::device::on_device_llm::on_device_llm_effect,
+    fandhe_egui_proxy::device::on_device_llm::on_device_llm_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "app_attest_show" => fandhe_core::screens::app_attest_show::current_screen,
-    crate::device::app_attest::app_attest_show_effect,
+    fandhe_egui_proxy::device::app_attest::app_attest_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "companion_device_show" => fandhe_core::screens::companion_device_show::current_screen,
-    crate::device::companion_device::companion_device_show_effect,
+    fandhe_egui_proxy::device::companion_device::companion_device_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "document_scan_show" => fandhe_core::screens::document_scan_show::current_screen,
-    crate::device::document_scan::document_scan_show_effect,
+    fandhe_egui_proxy::device::document_scan::document_scan_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "image_generation_show" => fandhe_core::screens::image_generation_show::current_screen,
-    crate::device::image_generation::image_generation_show_effect,
+    fandhe_egui_proxy::device::image_generation::image_generation_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "in_app_browser_show" => fandhe_core::screens::in_app_browser_show::current_screen,
-    crate::device::in_app_browser::in_app_browser_show_effect,
+    fandhe_egui_proxy::device::in_app_browser::in_app_browser_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "geocoding_search_show" => fandhe_core::screens::geocoding_search_show::current_screen,
-    crate::device::geocoding_search::geocoding_search_show_effect,
+    fandhe_egui_proxy::device::geocoding_search::geocoding_search_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nfc_read" => fandhe_core::screens::nfc_read::current_screen,
-    crate::device::nfc::nfc_read_effect,
+    fandhe_egui_proxy::device::nfc::nfc_read_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nfc_card_emulation_show" => fandhe_core::screens::nfc_card_emulation_show::current_screen,
-    crate::device::nfc_card_emulation::nfc_card_emulation_show_effect,
+    fandhe_egui_proxy::device::nfc_card_emulation::nfc_card_emulation_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "scanner_devices_import" => fandhe_core::screens::scanner_devices_import::current_screen,
-    crate::device::scanner_devices::scanner_devices_import_effect,
+    fandhe_egui_proxy::device::scanner_devices::scanner_devices_import_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "translation" => fandhe_core::screens::translation::current_screen,
-    crate::device::translation::translation_effect,
+    fandhe_egui_proxy::device::translation::translation_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "spell_check" => fandhe_core::screens::spell_check::current_screen,
-    crate::device::spell_check::spell_check_effect,
+    fandhe_egui_proxy::device::spell_check::spell_check_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "spotlight_index" => fandhe_core::screens::spotlight_index::current_screen,
-    crate::device::spotlight_index::spotlight_index_effect,
+    fandhe_egui_proxy::device::spotlight_index::spotlight_index_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "quick_settings_tile_show" => fandhe_core::screens::quick_settings_tile_show::current_screen,
-    crate::device::quick_settings_tile::quick_settings_tile_show_effect,
+    fandhe_egui_proxy::device::quick_settings_tile::quick_settings_tile_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "share_receive_show" => fandhe_core::screens::share_receive_show::current_screen,
-    crate::device::share_receive::share_receive_show_effect,
+    fandhe_egui_proxy::device::share_receive::share_receive_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "url_scheme_show" => fandhe_core::screens::url_scheme_show::current_screen,
-    crate::device::url_scheme::url_scheme_show_effect,
+    fandhe_egui_proxy::device::url_scheme::url_scheme_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_preview" => fandhe_core::screens::file_preview_show::current_screen,
-    crate::device::file_preview::file_preview_effect,
+    fandhe_egui_proxy::device::file_preview::file_preview_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_association_show" => fandhe_core::screens::file_association_show::current_screen,
-    crate::device::file_association::file_association_show_effect,
+    fandhe_egui_proxy::device::file_association::file_association_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "capture_protection_show" => fandhe_core::screens::capture_protection_show::current_screen,
-    crate::device::capture_protection::capture_protection_show_effect,
+    fandhe_egui_proxy::device::capture_protection::capture_protection_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "video_capture_show" => fandhe_core::screens::video_capture_show::current_screen,
-    crate::device::video_capture::video_capture_show_effect,
+    fandhe_egui_proxy::device::video_capture::video_capture_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "audio_session_show" => fandhe_core::screens::audio_session_show::current_screen,
-    crate::device::audio_session::audio_session_show_effect,
+    fandhe_egui_proxy::device::audio_session::audio_session_show_effect,
 }

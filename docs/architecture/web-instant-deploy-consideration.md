@@ -28,12 +28,12 @@
   出所は Google Play Developer Program Policy「Device and Network Abuse」で、Google Play からの
   配信を除き実行コード（dex・JAR・`.so` 等）のダウンロード・自己更新を禁止するストアポリシーです
   （<https://support.google.com/googleplay/android-developer/answer/9888379>）。本フレームワークの
-  `fandhe-egui-proxy` cdylib（`.so`）はこのポリシーの対象に該当します。iOS と異なり OS 側の技術的な
+  `fandhe-gallery` cdylib（`.so`）はこのポリシーの対象に該当します。iOS と異なり OS 側の技術的な
   阻止機構ではなくストアポリシー由来の制約である点に注意してください。
   - 両プラットフォームとも、変更の反映には再ビルド・再署名・再審査が必須という結論自体は共通です
   （TASK-16.1 / Issue #276）。
 - **Web**: `wasm32-unknown-unknown` ターゲットにはストア審査が存在しません。配信物は
-  `scripts/web/build-wasm-proxy.sh` が組み立てる `crates/fandhe-egui-proxy/web/dist/`（`.wasm` +
+  `scripts/web/build-wasm-proxy.sh` が組み立てる `crates/fandhe-gallery/web/dist/`（`.wasm` +
   wasm-bindgen JS + `index.html` + フォント）であり、`scripts/web/serve-brotli.mjs` 相当の静的配信で
   成立します。この「審査が存在しない」性質が、Web 限定で即時反映を検討できる根拠です。
 - **AI が生成した変更の反映経路の現状**: 生成 → 人間レビュー → マージというリポジトリへの反映までは

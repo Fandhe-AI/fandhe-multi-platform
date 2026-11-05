@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #887）型サンプル「位置情報」（Issue #888、Android は #890）の
 //! effect ドライバ。`fandhe_core::screens::location_show`（端末依存ゼロ）へ、
 //! `fandhe_device::location::SharedLocation` から読んだ最新の測位結果を渡す
-//! （`crate::screens::registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
+//! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
 //! として呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる

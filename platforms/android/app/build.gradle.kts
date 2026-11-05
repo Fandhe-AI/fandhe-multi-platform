@@ -2,8 +2,8 @@
 // Activity 方式は TASK-9.3-S1 / REQ-9 / M4、Issue #242 で GameActivity へ変更。
 // 決定記録: docs/architecture/android-activity-method.md）。
 //
-// GameActivity 方式（NativeActivity から変更）。実描画は `fandhe-egui-proxy`
-// （crates/fandhe-egui-proxy/src/android.rs）が cdylib（`libfandhe_egui_proxy.so`）として
+// GameActivity 方式（NativeActivity から変更）。実描画は `fandhe-gallery`
+// （crates/fandhe-gallery/src/lib.rs の android_main。端末機能は fandhe-egui-proxy）が cdylib（`libfandhe_gallery.so`）として
 // 提供し、本モジュールは最小の Java サブクラス
 // （src/main/java/com/fandhe/platform/MainActivity.java、GameActivity 継承）経由で
 // それを起動する薄いラッパー。GameActivity は NativeActivity と異なりサブクラス化と

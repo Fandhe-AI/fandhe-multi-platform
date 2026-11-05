@@ -1,7 +1,7 @@
 //! Phase 11（親 #1093）型サンプル「単語分割」（Issue #1094）の effect ドライバ。
 //! `fandhe_core::screens::nlp_segment`（端末依存ゼロ）の要求を観測し、
 //! `fandhe_device::nlp::WordSegmenter` で OS の単語分割を呼んで `CompletionSender` 経由で
-//! 結果を返す（`crate::screens::registry` の `effect` 区画から
+//! 結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる（`device.rs`

@@ -1,7 +1,7 @@
 //! Phase 11（親 #1042）型サンプル「バックグラウンド処理」（Issue #1043）の
 //! effect ドライバ。`fandhe_core::screens::background_task`（端末依存ゼロ）の
 //! ボタン要求を観測して `fandhe_device::background_task::BackgroundTask` を呼び、
-//! `CompletionSender` 経由で結果を返す（`crate::screens::registry` の `effect`
+//! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect`
 //! 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`device/
 //! notification.rs::drive` と同型）。
 //!

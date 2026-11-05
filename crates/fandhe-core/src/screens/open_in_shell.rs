@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #146）型サンプル「既定アプリで開く・ファイルマネージャーで
 //! 表示」（Issue #749）。一時フォルダーのサンプルファイルを開く / Finder・Explorer で表示する
 //! 2 ボタンだけの 1 画面。`FANDHE_PROXY_APP=open_in_shell` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod open_in_shell;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの

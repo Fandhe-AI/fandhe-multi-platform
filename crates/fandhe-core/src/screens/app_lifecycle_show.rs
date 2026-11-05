@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #178）型サンプル「アプリの前面・背面」（Issue #893）。
 //! 「受け取りを始める」で OS のアプリの前面・背面・凍結の通知を購読し、受信順の番号つきで直近 8 件と
 //! 種類ごとの回数を出す 1 画面。`FANDHE_PROXY_APP=app_lifecycle_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod app_lifecycle_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

@@ -1064,7 +1064,7 @@ std::thread::spawn(move || {
 描画/dispatch → driver 呼び出し」が契約）。参照実装は
 `crates/fandhe-core/src/screens/http_fetch.rs`（状態機械）と
 `crates/fandhe-egui-proxy/src/device/http_fetch.rs`（`driver` 本体）、
-`crates/fandhe-egui-proxy/src/screens/registry.rs`（`effect` 行の書式）。
+`crates/fandhe-gallery/src/screens/registry.rs`（`effect` 行の書式）。
 
 取得先はビルド時 `FANDHE_ITEMS_URL` で差し替え可能（実機テスト用、Issue #660）。
 `fandhe-device` の `Http` 実装が許可する平文 http はループバックと私設 IPv4
@@ -1087,7 +1087,7 @@ std::thread::spawn(move || {
 起動でき、保存したメモは `$HOME/.fandhe` 配下に残るため再起動後も一覧に残る。
 
 「ボタン → 端末 I/O 起動 → 完了反映」型の画面は、上記の素の `Completion<S>` 送信に加えて
-`crates/fandhe-egui-proxy/src/screens.rs` の `generated_screens!` マクロが持つ `effect` 区画
+`crates/fandhe-gallery/src/screens.rs` の `generated_screens!` マクロが持つ `effect` 区画
 （`app::EffectFn<S> = fn(&S, &CompletionSender<S>)`、`ProxyApp::with_effect` 経由で注入）を
 使う。「起動要求が来たか」を状態側のフラグ（例:
 `fandhe_core::screens::camera_capture::CapturePhase::Requested`）で表現し、`effect`
@@ -1156,7 +1156,7 @@ crates/fandhe-core/tests/<name>.rs             # 結合テスト（パターン 
      のみで I/O を持たないため「端末依存」には当たらず、画面ファイルと一緒に削除できる
   2. `fandhe-egui-proxy` 側の `device.rs` が `fandhe-device` の実装を newtype で
      そのトレイトへ橋渡しし、状態ファクトリ（`fn() -> S`）を提供する
-  3. `crates/fandhe-egui-proxy/src/screens/registry.rs` の `init "<name>" => 画面ビルダー,
+  3. `crates/fandhe-gallery/src/screens/registry.rs` の `init "<name>" => 画面ビルダー,
      状態ファクトリ,` 行（`generated_screens!` マクロの `init` 区画、下記参照）が
      `Default::default()` の代わりにその状態ファクトリで状態を構築する。構築時に
      端末保存領域から読み込む等の副作用を伴う初期化を、`fandhe-core` に
@@ -1164,7 +1164,7 @@ crates/fandhe-core/tests/<name>.rs             # 結合テスト（パターン 
 - フレーム末尾での非同期な端末 I/O 起動（HTTP 取得等）は `registry.rs` の `effect` 区画
   （パターン 9、Issue #748）で行う
 
-新規画面を追加する場合は、`crates/fandhe-egui-proxy/src/screens/registry.rs`（画面レジストリ、
+新規画面を追加する場合は、`crates/fandhe-gallery/src/screens/registry.rs`（画面レジストリ、
 Issue #715）へも 1 行足す。`generated_screens!` マクロは `"<name>" => <path>,` の並びを
 先に、`nav "<name>" => <path>,` の並びをその後にしか受け付けない（順序が逆になるとマクロが
 パターンマッチできずビルドが壊れる）。そのため `"<name>" => fandhe_core::screens::<name>::

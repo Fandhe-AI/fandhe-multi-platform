@@ -2,7 +2,7 @@
 //! 画面を開くとペアリング済みの Bluetooth Classic 機器を OS から 1 回読んで一覧にし、
 //! 「検索（12 秒）」で周辺の機器を固定窓で 1 回検索して同じ一覧へ足す 1 画面。
 //! `FANDHE_PROXY_APP=bluetooth_classic_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod bluetooth_classic_show;` と対）。接続・ペアリング・機器のアドレス表示は
 //! 扱わない。
 //!

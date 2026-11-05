@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #167）型サンプル「スリープ・ロックの通知」（Issue #810）。
 //! 「受け取りを始める」で OS のスリープ・復帰・画面の消灯と点灯・ロックと解除の通知を購読し、
 //! 受信順の番号つきで直近 8 件と種類ごとの回数を出す 1 画面。`FANDHE_PROXY_APP=sleep_lock_events_show`
-//! で選ばれ、`crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod sleep_lock_events_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`

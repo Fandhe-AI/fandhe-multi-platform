@@ -1,7 +1,7 @@
 //! Phase 11（端末機能の拡充ループ、親 #99）型サンプル「外部機器への再生」（Issue #386）。
 //! 「再生」「停止」「出力先を選ぶ」の 3 ボタンで、実行時に生成した音をループ再生し、OS の出力先
 //! （AirPlay・Cast 等）へ切り替える 1 画面。`FANDHE_PROXY_APP=cast_show` で選ばれ、
-//! `crates/fandhe-egui-proxy/src/screens/registry.rs` の `effect` 区画から呼ばれる
+//! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod cast_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは

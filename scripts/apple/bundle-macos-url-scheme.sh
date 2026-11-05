@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Issue #1215（親 #1116）: カスタム URL scheme（fandhe://）の Mac 目視用に、デスクトップ実行体
-# （fandhe-egui-proxy-desktop）を最小の .app に包み、LaunchServices に登録する。
+# （fandhe-gallery-desktop）を最小の .app に包み、LaunchServices に登録する。
 #
 # なぜ必要か: CFBundleURLTypes は LaunchServices に登録された .app でしか効かない。素の実行体に
 # macos/Info.plist を埋め込んでも scheme は届かない。そのため macos/Info.plist（SSOT）を
@@ -81,9 +81,9 @@ esac
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 app="$root/target/macos-url-scheme/FandheUrlScheme.app"
 plist="$app/Contents/Info.plist"
-exe=fandhe-egui-proxy-desktop
+exe=fandhe-gallery-desktop
 
-(cd "$root" && cargo build -p fandhe-egui-proxy --bin "$exe")
+(cd "$root" && cargo build -p fandhe-gallery --bin "$exe")
 
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS"
