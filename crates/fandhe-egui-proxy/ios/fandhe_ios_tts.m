@@ -7,7 +7,7 @@
 //
 // `build.rs` が iOS ターゲット（`CARGO_CFG_TARGET_OS == "ios"`）かつ feature `device`
 // 有効時のみ `cc` でコンパイルする（他ターゲットのビルドには一切関与しない）。
-// AVFoundation は `fandhe_ios_camera.m` 側で既にリンク済みのため追加リンクは無い。
+// AVFoundation は `build.rs` の `compile_objc` で本ファイル自身が宣言してリンクする。
 //
 // 契約（`ios.rs` の `IosTts` doc と対）:
 //   fandhe_ios_tts_speak(text, request_generation) -> 0 で成功（発話を開始した）。

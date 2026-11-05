@@ -71,10 +71,12 @@ cd -- "${REPO_ROOT}"
 # fandhe-platform-apple: クレートルートは forbid 属性ではなく `#![deny(unsafe_code)]` を
 # 採用する（`main_thread` モジュールのみ `pthread_main_np` の FFI 宣言と呼び出しで `unsafe` が
 # 不可避なため。fandhe-egui-proxy の `device/ios.rs` から移した 1 組で、TASK-21.2 / Issue #1168）。
+# fandhe-cap-camera-capture: Android・iOS のみ `deny(unsafe_code)` へ緩める（cfg_attr）。Android の JNI エクスポート
+# `#[unsafe(no_mangle)]` 1 関数と iOS の ObjC 呼び出し（FFI）にだけ `#[allow(unsafe_code)]` を付ける（Issue #1170）。
 # fandhe-gallery: クレートルートは Android のみ `deny(unsafe_code)` で、`android_main` の
 # `#[no_mangle]` 1 関数にだけ `#[allow(unsafe_code)]` を付ける（android-activity の固定シンボルは
 # 最終成果物の cdylib が持つ必要がある。Issue #1165）。
-FORBID_EXEMPT_CRATES=("fandhe-gallery" "fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android" "fandhe-platform-apple")
+FORBID_EXEMPT_CRATES=("fandhe-gallery" "fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android" "fandhe-platform-apple" "fandhe-cap-camera-capture")
 
 is_forbid_exempt() {
   local target="$1"

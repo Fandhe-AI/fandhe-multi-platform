@@ -4,6 +4,9 @@ members = [
     # Issue #1160: 機能宣言（[package.metadata.fandhe]）の形式検証と統合。`cargo fandhe check`。
     # 公開の切り替えは #1216（docs/architecture/capability-declaration.md）。
     "crates/cargo-fandhe",
+    # TASK-21.3（Issue #1170）: カメラ撮影の機能 crate（契約・OS 別実装・宣言）。egui に依存しない。
+    # 機能 crate は `fandhe-cap-<id>` の名前で 1 機能 1 crate（docs/architecture/consumer-app-structure.md §5）。
+    "crates/fandhe-cap-camera-capture",
     "crates/fandhe-core",
     # Phase 8（端末機能の型検証、親 #752 / Issue #746）: 端末機能（保存・HTTP・カメラ）の
     # 抽象と共通実装を置くクレート。`fandhe-egui-proxy` の feature `device`（既定 on）から

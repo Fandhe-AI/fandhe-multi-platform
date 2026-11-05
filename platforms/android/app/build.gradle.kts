@@ -75,6 +75,12 @@ android {
             // 対象範囲外の API 移行としてここでは非推奨警告を許容する）。
             @Suppress("DEPRECATION")
             jniLibs.srcDirs("../../../target/android/jniLibs")
+
+            // 機能 crate が持つ Java（宣言の `[package.metadata.fandhe.android] java`）。生成（`cargo fandhe gen`、
+            // #1176）が入るまでは手で並べる。cargo-fandhe の突き合わせテストが、宣言の `java` と
+            // ここの srcDirs の一致を確かめる。
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-camera-capture/android/java")
         }
     }
 

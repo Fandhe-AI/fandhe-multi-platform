@@ -1,5 +1,5 @@
 //! Phase 8（端末機能、親 #752）の画面ごとの effect ドライバの置き場（Issue #746/#747/
-//! #748/#749）。`fandhe-device` のトレイト（`Storage`/`Http`/`Camera`）を実際に呼び出し、
+//! #748/#749）。`fandhe-device` のトレイト（`Storage`/`Http` 等）を実際に呼び出し、
 //! 結果を `CompletionSender`（`crate::app`）経由で画面状態へ渡すのはこのモジュール以下に
 //! 限る（`fandhe-core` は端末依存ゼロ、`docs/ai/SCHEMA.md`「新規画面ファイルの置き場」節
 //! 参照）。
@@ -14,7 +14,7 @@
 //! 行から [`storage_note_state`] が呼ばれ、`generated_screens!` マクロが構築時に
 //! 1 度だけ実行する（`screens.rs` の `init` 区画 doc 参照）。Issue #748（HTTP 取得）・
 //! #749（カメラ撮影）・#830（傾きで玉が転がる）の effect ドライバはそれぞれ
-//! [`http_fetch`] / [`camera_capture`] / [`tilt`] サブモジュールに置く
+//! [`http_fetch`] / [`tilt`] サブモジュールに置く（カメラ撮影は機能 crate `fandhe-cap-camera-capture`、#1170）
 //! （`registry.rs` の `effect` 区画から配線される）。
 
 /// Issue #1308: アクセシビリティ設定（視差軽減・コントラスト）の effect ドライバ（Windows / macOS / iOS / Android 実装、
@@ -782,7 +782,6 @@ pub mod calendar;
 /// Phase 11 の拡充ループ（親 #87、Issue #276）: 通話 UI 統合の effect ドライバ（iOS・Android 実装、
 /// 他 OS は `UnsupportedCallUi` 固定）。
 pub mod call_ui;
-pub mod camera_capture;
 /// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得の effect ドライバ
 /// （iOS #813・Android #814・macOS #1066 は実装済み、Windows #1102 も実装済みで、他 OS は `UnsupportedCameraPreview`
 /// 固定。Web は `fandhe-web-dom`、#815）。

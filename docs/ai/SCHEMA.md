@@ -1094,15 +1094,15 @@ std::thread::spawn(move || {
 ドライバがフレーム末尾で毎回それを見て起動する二段階遷移（`Requested` → ドライバ検知
 → `Capturing`）にするのが契約（同一フレーム内の二重起動観測を避けるため）。
 参照実装は `crates/fandhe-core/src/screens/camera_capture.rs`（状態機械・
-`CameraCaptureState`）と `crates/fandhe-egui-proxy/src/device/camera_capture.rs`
-（`camera_capture_effect`、`fandhe-device` の `Camera` トレイトを呼ぶ側）。
+`CameraCaptureState`）と `crates/fandhe-cap-camera-capture/src/lib.rs`
+（`camera_capture_effect`、機能 crate 内の `Camera` トレイトを呼ぶ側。Issue #1170 で移した）。
 
 **Android の配線先（Issue #750）**: `DataDir`（「メモ保存」の保存先）は
 `crates/fandhe-egui-proxy/src/device/android.rs` の `data_dir()` が
 `AndroidApp::internal_data_path()`（`getFilesDir()` 相当）を返す。カメラは
-`AndroidCamera`（同ファイル）が JNI 経由で `MainActivity.requestCameraCapture()` を呼び、
-Java 側の `ActivityResultContracts.TakePicturePreview` が撮影した `Bitmap` を
-`nativeOnCameraResult` へ渡す往復（`platforms/android/app/.../MainActivity.java`）で
+`AndroidCamera`（`fandhe-cap-camera-capture/src/android.rs`）が JNI 経由で `MainActivity.requestCameraCapture()` を呼び、
+`CameraCaptureHelper`（同 crate の `android/java`）の `ActivityResultContracts.TakePicturePreview` が撮影した `Bitmap` を
+`nativeOnCameraResult` へ渡す往復で
 `Camera::capture` を実現する。新規画面が Android 固有の端末実装を要る場合はこの
 `device/android.rs` 配下に閉じ、`fandhe-core` へは持ち込まない。
 
