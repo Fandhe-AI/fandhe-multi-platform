@@ -25,13 +25,7 @@ fn fixture(id: &str) -> String {
 /// `[package]` と宣言の断片から成る機能 crate を `root/c/<dir>` に作る。参照先のディレクトリも作る。
 fn make_crate(root: &Path, dir: &str, name: &str, decl: &str) {
     let d = root.join("c").join(dir);
-    for p in [
-        "src",
-        "android/java",
-        "android/res",
-        "apple/share",
-        "apple/widget",
-    ] {
+    for p in ["src", "android/java", "android/res", "apple/widget"] {
         fs::create_dir_all(d.join(p)).unwrap();
     }
     fs::write(d.join("src/lib.rs"), "").unwrap();
@@ -84,20 +78,42 @@ fn five_fixtures_pass_through_cargo_metadata_and_merge() {
     // camera-capture と document-scan が共有する説明文キーは 1 つ。
     assert_eq!(m.ios.usage_descriptions.len(), 1);
     assert!(m.ios.frameworks.contains("VisionKit"));
-    assert_eq!(m.ios.extensions.len(), 2);
+    assert!(m.ios.frameworks.contains("AVFoundation"));
+    assert_eq!(m.ios.frameworks.len(), 2);
+    assert!(m.ios.extensions.is_empty());
+    assert_eq!(m.macos.extensions.len(), 1);
     assert!(m.macos.info_plist.contains_key("NSServices"));
     assert_eq!(m.android.features.len(), 4);
     assert!(m.android.features.values().all(|r| !r));
     assert_eq!(m.android.components.len(), 2);
     assert_eq!(m.android.gradle.len(), 1);
     assert!(m.android.permissions.contains_key("android.permission.NFC"));
-    assert!(m.windows_identity);
+    assert!(!m.windows_identity);
     // 拡張の取り込み元は OS の所属を保持する。
     assert!(m
         .extension_sources
         .iter()
-        .all(|(_, os, _, _)| os == "ios" || os == "macos"));
+        .all(|(_, os, _, _)| os == "macos"));
     assert!(!m.extension_sources.is_empty());
+}
+
+#[test]
+fn planned_ios_extensions_and_windows_identity_are_expressible() {
+    // 実装前の iOS 拡張・Windows の宣言は fixtures から外したので、形式の確認はここで保つ。
+    let d = decl(
+        json!({"id":"x","windows":{"identity":true},"ios":{"app-groups":["share"],
+        "extensions":[
+          {"name":"FandheShareExtension","bundle-suffix":"share","deployment-target":"15.0",
+           "sources":["apple/widget"],"frameworks":["UniformTypeIdentifiers"],"app-groups":["share"],
+           "info-plist":{"NSExtension":{"NSExtensionPointIdentifier":"com.apple.share-services"}}},
+          {"name":"FandheTextWidget","bundle-suffix":"text","deployment-target":"14.0",
+           "sources":["apple/widget"],"frameworks":["WidgetKit","SwiftUI"],"app-groups":["widget"],
+           "info-plist":{"NSExtension":{"NSExtensionPointIdentifier":"com.apple.widgetkit-extension"}}}]}}),
+    );
+    assert!(validate(&d).is_empty());
+    let m = merge(&[("x", &d)]).unwrap();
+    assert_eq!(m.ios.extensions.len(), 2);
+    assert!(m.windows_identity);
 }
 
 #[test]
@@ -528,4 +544,346 @@ fn extension_usage_descriptions_validated_and_merged_by_equality() {
     let b = with("b", json!([]));
     let errs = merge(&[("a", &a), ("b", &b)]).unwrap_err();
     assert_eq!(errs[0].field, "ios.extensions.E");
+}
+
+// ---- 現行設定との突き合わせ（capability-declaration.md §6）----
+// 寿命: #1170〜#1174 で宣言の読み先を crate へ移し、#1176 の生成比較に置き換わった時点か #1194 で撤去する。
+
+fn repo(rel: &str) -> String {
+    fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(rel),
+    )
+    .unwrap_or_else(|e| panic!("{rel}: {e}"))
+}
+
+fn declared(id: &str) -> Declaration {
+    // 並行テストが同じ id を呼んでも workspace を壊し合わないよう、呼び出しごとに一意な名前にする
+    static SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let decls = check_workspace(Some(&fixtures_ws(&format!("xc-{id}-{n}"), &[id]))).unwrap();
+    decls.into_iter().next().unwrap()
+}
+
+type Attrs = std::collections::BTreeMap<String, String>;
+type Tag = (String, Attrs);
+
+/// XML のコメントを除く。
+fn strip_comments(xml: &str) -> String {
+    let mut out = String::new();
+    let mut rest = xml;
+    while let Some(i) = rest.find("<!--") {
+        out += &rest[..i];
+        rest = &rest[i..];
+        rest = &rest[rest.find("-->").expect("コメントが閉じていない") + 3..];
+    }
+    out + rest
+}
+
+/// タグを出現順に (名前, 属性) へ分ける。閉じタグは名前が `/` で始まり、自己閉じは閉じタグを補う。
+fn tags(xml: &str) -> Vec<Tag> {
+    let xml = strip_comments(xml);
+    let mut v = vec![];
+    for chunk in xml.split('<').skip(1) {
+        let Some((body, _)) = chunk.split_once('>') else {
+            continue;
+        };
+        if body.starts_with('?') {
+            continue;
+        }
+        let selfclose = body.ends_with('/');
+        let body = body.trim_end_matches('/');
+        let name_end = body.find(char::is_whitespace).unwrap_or(body.len());
+        let mut attrs = Attrs::new();
+        let mut rest = &body[name_end..];
+        while let Some((k, r)) = rest.split_once("=\"") {
+            let (val, r) = r.split_once('"').expect("属性値が閉じていない");
+            attrs.insert(
+                k.trim().trim_start_matches("android:").to_string(),
+                val.to_string(),
+            );
+            rest = r;
+        }
+        let name = body[..name_end].to_string();
+        v.push((name.clone(), attrs));
+        if selfclose {
+            v.push((format!("/{name}"), Attrs::new()));
+        }
+    }
+    v
+}
+
+fn parse_filter(it: &mut std::slice::Iter<Tag>) -> cargo_fandhe::declaration::IntentFilter {
+    let mut f = cargo_fandhe::declaration::IntentFilter {
+        actions: vec![],
+        categories: vec![],
+        data: vec![],
+    };
+    for (n, a) in it.by_ref() {
+        match n.as_str() {
+            "/intent-filter" => break,
+            "action" => f.actions.push(a["name"].clone()),
+            "category" => f.categories.push(a["name"].clone()),
+            "data" => f.data.push(cargo_fandhe::declaration::IntentData {
+                scheme: a.get("scheme").cloned(),
+                host: a.get("host").cloned(),
+                mime_type: a.get("mimeType").cloned(),
+                path_prefix: a.get("pathPrefix").cloned(),
+            }),
+            other if other.starts_with('/') => {}
+            other => panic!("想定外のタグ {other}"),
+        }
+    }
+    f
+}
+
+/// Manifest から宣言と同じ `kind`・`name` の要素を、宣言と同じ型で取り出す。
+fn manifest_component(
+    t: &[Tag],
+    c: &cargo_fandhe::declaration::Component,
+) -> cargo_fandhe::declaration::Component {
+    let kind = format!("{:?}", c.kind).to_lowercase();
+    let start = t
+        .iter()
+        .position(|(n, a)| *n == kind && a.get("name") == Some(&c.name))
+        .unwrap_or_else(|| panic!("Manifest に {} がない", c.name));
+    let mut attrs = t[start].1.clone();
+    let exported = attrs.remove("exported").expect("exported がない") == "true";
+    attrs.remove("name");
+    let mut out = cargo_fandhe::declaration::Component {
+        kind: c.kind.clone(),
+        name: c.name.clone(),
+        exported,
+        attributes: attrs,
+        intent_filters: vec![],
+        meta_data: vec![],
+    };
+    let close = format!("/{kind}");
+    let mut it = t[start + 1..].iter();
+    while let Some((n, a)) = it.next() {
+        if *n == close {
+            break;
+        }
+        match n.as_str() {
+            "intent-filter" => out.intent_filters.push(parse_filter(&mut it)),
+            "meta-data" => out.meta_data.push(cargo_fandhe::declaration::MetaData {
+                name: a["name"].clone(),
+                resource: a.get("resource").cloned(),
+                value: a.get("value").cloned(),
+            }),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// MainActivity の intent-filter を Manifest の出現順に返す。
+fn main_activity_filters(t: &[Tag]) -> Vec<cargo_fandhe::declaration::IntentFilter> {
+    let main = t
+        .iter()
+        .position(|(n, a)| n == "activity" && a["name"].ends_with(".MainActivity"))
+        .expect("MainActivity がない");
+    let mut it = t[main + 1..].iter();
+    let mut out = vec![];
+    while let Some((n, _)) = it.next() {
+        match n.as_str() {
+            "/activity" => break,
+            "intent-filter" => out.push(parse_filter(&mut it)),
+            _ => {}
+        }
+    }
+    out
+}
+
+fn manifest_tags() -> Vec<Tag> {
+    tags(&repo("platforms/android/app/src/main/AndroidManifest.xml"))
+}
+
+#[test]
+fn android_permissions_features_and_components_match_manifest() {
+    let t = manifest_tags();
+    let main = main_activity_filters(&t);
+    for id in IDS {
+        let Some(a) = declared(id).android else {
+            continue;
+        };
+        for p in &a.permissions {
+            let ok = p.max_sdk.is_none()
+                && t.iter().any(|(k, m)| {
+                    k == "uses-permission"
+                        && m["name"] == p.name
+                        && !m.contains_key("maxSdkVersion")
+                });
+            assert!(ok, "{id}: {} が Manifest と違う", p.name);
+        }
+        for f in &a.features {
+            let ok = t.iter().any(|(k, m)| {
+                k == "uses-feature"
+                    && m["name"] == f.name
+                    && m["required"] == f.required.to_string()
+            });
+            assert!(ok, "{id}: {} が Manifest と違う", f.name);
+        }
+        for c in &a.components {
+            assert_eq!(&manifest_component(&t, c), c, "{id}: {}", c.name);
+        }
+        for f in &a.main_activity_intent_filters {
+            assert!(
+                main.contains(f),
+                "{id}: MainActivity の filter が Manifest にない"
+            );
+        }
+    }
+}
+
+#[test]
+fn manifest_has_no_undeclared_camera_nfc_hce_or_send_entries() {
+    let t = manifest_tags();
+    let set = |prefix: &str| -> std::collections::BTreeSet<String> {
+        t.iter()
+            .filter(|(k, a)| k == "uses-feature" && a["name"].starts_with(prefix))
+            .map(|(_, a)| a["name"].clone())
+            .collect()
+    };
+    let decl_set = |id: &str, prefix: &str| -> std::collections::BTreeSet<String> {
+        declared(id)
+            .android
+            .unwrap()
+            .features
+            .into_iter()
+            .map(|f| f.name)
+            .filter(|n| n.starts_with(prefix))
+            .collect()
+    };
+    assert_eq!(
+        set("android.hardware.camera"),
+        decl_set("camera-capture", "android.hardware.camera")
+    );
+    // android.hardware.nfc は nfc（タグ読み取り）の宣言で、HCE の宣言ではない。
+    let mut nfc = set("android.hardware.nfc");
+    assert!(nfc.remove("android.hardware.nfc"));
+    assert_eq!(nfc, decl_set("nfc-card-emulation", "android.hardware.nfc"));
+    // MainActivity の SEND の filter は share-receive の宣言と一致する。
+    let sends: Vec<_> = main_activity_filters(&t)
+        .into_iter()
+        .filter(|f| f.actions.iter().any(|a| a == "android.intent.action.SEND"))
+        .collect();
+    assert_eq!(
+        sends,
+        declared("share-receive")
+            .android
+            .unwrap()
+            .main_activity_intent_filters
+    );
+}
+
+#[test]
+fn android_gradle_versions_match_versions_env() {
+    let env = repo("scripts/android/versions.env");
+    let gradle = repo("platforms/android/app/build.gradle.kts");
+    for id in IDS {
+        for g in declared(id).android.map(|a| a.gradle).unwrap_or_default() {
+            let (ga, ver) = g.rsplit_once(':').unwrap();
+            let line = gradle
+                .lines()
+                .find(|l| l.contains(&format!("\"{ga}:${{androidVersion(\"")))
+                .unwrap_or_else(|| panic!("{ga} が build.gradle.kts にない"));
+            let key = line
+                .split("androidVersion(\"")
+                .nth(1)
+                .unwrap()
+                .split('"')
+                .next()
+                .unwrap();
+            let want = format!("{key}=\"{ver}\"");
+            assert!(
+                env.lines().any(|l| l == want),
+                "{id}: {want} が versions.env にない"
+            );
+        }
+    }
+}
+
+#[test]
+fn ios_declarations_match_current_settings() {
+    let plist = repo("platforms/apple/FandheIosApp/Resources/Info.plist");
+    let build_rs = repo("crates/fandhe-egui-proxy/build.rs");
+    for id in IDS {
+        let Some(ios) = declared(id).ios else {
+            continue;
+        };
+        for k in &ios.usage_descriptions {
+            assert!(
+                plist.contains(&format!("<key>{k}</key>")),
+                "{id}: {k} が Info.plist にない"
+            );
+        }
+        for f in &ios.frameworks {
+            assert!(
+                build_rs.contains(&format!("framework={f}")),
+                "{id}: {f} が build.rs にない"
+            );
+        }
+    }
+}
+
+#[test]
+fn macos_services_and_widget_extension_match_current_settings() {
+    // NSServices: bundle-macos-url-scheme.sh の plutil -json 引数（`\"` と `$exe` を戻す）と比較する。
+    let sh = repo("scripts/apple/bundle-macos-url-scheme.sh");
+    let line = sh
+        .lines()
+        .find(|l| l.contains("\\\"NSMessage\\\""))
+        .expect("NSServices の行がない");
+    let json_text = line
+        .trim()
+        .trim_start_matches('"')
+        .trim_end_matches("\" \"$plist\"")
+        .replace("\\\"", "\"")
+        .replace("$exe", "$(EXECUTABLE_NAME)");
+    let want: Value = serde_json::from_str(&json_text).unwrap();
+    let got = declared("share-receive").macos.unwrap().info_plist["NSServices"].clone();
+    assert_eq!(got, want);
+
+    // Widget 拡張。
+    let ext = declared("home-widget").macos.unwrap().extensions.remove(0);
+    let yml = repo("platforms/apple/project.yml");
+    let block = yml
+        .split("  FandheTextWidget:\n")
+        .nth(1)
+        .unwrap()
+        .split("\n\n")
+        .next()
+        .unwrap();
+    assert!(block.contains(&format!("deploymentTarget: \"{}\"", ext.deployment_target)));
+    assert!(block.contains(&format!(
+        "PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.widgethost.{}",
+        ext.bundle_suffix
+    )));
+    let ent = repo("platforms/apple/FandheTextWidget/Resources/FandheTextWidget.entitlements");
+    for k in ext.entitlements.keys() {
+        assert!(
+            ent.contains(&format!("<key>{k}</key>")),
+            "{k} が entitlements にない"
+        );
+    }
+    for g in &ext.app_groups {
+        assert!(ent.contains(&format!("$(TeamIdentifierPrefix)com.fandhe.{g}</string>")));
+    }
+    let info = repo("platforms/apple/FandheTextWidget/Resources/Info.plist");
+    assert!(info.contains("com.apple.widgetkit-extension"));
+    assert!(info.contains("<key>FandheAppGroupIdentifier</key>"));
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../platforms/apple/FandheTextWidget/Sources/FandheTextWidget");
+    let swift: String = fs::read_dir(dir)
+        .unwrap()
+        .map(|e| fs::read_to_string(e.unwrap().path()).unwrap())
+        .collect();
+    for f in &ext.frameworks {
+        assert!(
+            swift.contains(&format!("import {f}")),
+            "{f} を import していない"
+        );
+    }
 }

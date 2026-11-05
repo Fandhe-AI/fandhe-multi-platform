@@ -1,23 +1,12 @@
 [package.metadata.fandhe]
 id = "share-receive"
 
-# iOS の欄は実装前（#1211）。形式の確認用。
-[package.metadata.fandhe.ios]
-app-groups = ["share"]
-
-[[package.metadata.fandhe.ios.extensions]]
-name = "FandheShareExtension"
-bundle-suffix = "share"
-deployment-target = "15.0"
-sources = ["apple/share"]
-frameworks = ["UniformTypeIdentifiers"]
-app-groups = ["share"]
-info-plist = { NSExtension = { NSExtensionPointIdentifier = "com.apple.share-services" } }
-
+# iOS の共有拡張は #1211 で実装時に足す（未実装の欄は宣言しない）。
 [package.metadata.fandhe.macos]
-info-plist = { NSServices = [{ NSMessage = "receiveShared", NSPortName = "$(EXECUTABLE_NAME)", NSSendTypes = ["public.utf8-plain-text"] }] }
+info-plist = { NSServices = [{ NSMenuItem = { default = "Fandhe で受け取る" }, NSMessage = "receiveSharedText", NSPortName = "$(EXECUTABLE_NAME)", NSSendTypes = ["public.utf8-plain-text"] }] }
 
 [package.metadata.fandhe.android]
+java = ["android/java"]
 main-activity-intent-filters = [
   { actions = ["android.intent.action.SEND"], categories = ["android.intent.category.DEFAULT"], data = [{ mimeType = "text/plain" }] },
 ]
