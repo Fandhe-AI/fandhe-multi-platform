@@ -1,6 +1,6 @@
 //! Phase 11（端末機能の拡充ループ、親 #1118）型サンプル「予定の追加」（Issue #1224）。
 //! 件名・開始・終了の入力欄と「予定を追加」ボタンだけの 1 画面。
-//! `FANDHE_PROXY_APP=calendar_add` で選ばれ、`crates/fandhe-egui-proxy/src/screens/
+//! `FANDHE_PROXY_APP=calendar_add` で選ばれ、`crates/fandhe-gallery/src/screens/
 //! registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod calendar_add;`
 //! と対）。
 //!

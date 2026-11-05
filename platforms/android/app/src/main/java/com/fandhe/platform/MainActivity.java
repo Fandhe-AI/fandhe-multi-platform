@@ -1,6 +1,6 @@
 // GameActivity サブクラス（TASK-9.3-S1 / REQ-9 / M4、Issue #242）。
 //
-// android-activity（"android-game-activity" feature、crates/fandhe-egui-proxy・
+// android-activity（"android-game-activity" feature、crates/fandhe-gallery・
 // fandhe-winit-ime の Cargo.toml 参照）は GameActivity バックエンドを使うが、
 // GameActivity 自体は Java/Kotlin 側でサブクラス化しないと動作しない
 // （com.google.androidgamesdk.GameActivity は抽象的な起動口のみを提供し、
@@ -25,8 +25,8 @@
 // `GameActivity*` 構造体ポインタを要求するが、Rust 公開 API（`activity_as_ptr()` =
 // JNI jobject）からは得られないため、Java 側で `WindowInsetsCompat` を取得し
 // native メソッドで Rust 側 static へ橋渡しする以外に手段がない）。
-// これ以外の実描画・入力処理はすべて cdylib 側（fandhe-egui-proxy が公開する
-// android_main、crates/fandhe-egui-proxy/src/android.rs 参照）に委譲する
+// これ以外の実描画・入力処理はすべて cdylib 側（fandhe-gallery が公開する
+// android_main、crates/fandhe-gallery/src/lib.rs 参照）に委譲する
 // （Java/Kotlin コードを最小限に保つ方針は維持）。
 // AndroidManifest.xml の android:name はこのクラスを指す。
 package com.fandhe.platform;
@@ -131,7 +131,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class MainActivity extends GameActivity {
     static {
         // ライブラリ名は AndroidManifest.xml の android.app.lib_name meta-data
-        // （値 "fandhe_egui_proxy"）および crates/fandhe-egui-proxy/Cargo.toml の
+        // （値 "fandhe_gallery"）および crates/fandhe-gallery/Cargo.toml の
         // [lib] name と一致させること（3 箇所の SSOT はこのライブラリ名文字列）。
         System.loadLibrary("fandhe_gallery");
     }

@@ -224,7 +224,7 @@ fn expand_thumbnail(state: &CameraCaptureState) -> Vec<Node<CameraCaptureState>>
 
 /// カメラ撮影画面。`state.phase` に応じてボタンを出し分ける
 /// （`Idle`: 「撮影」、`Captured`/`Failed`: 「撮り直す」、`Requested`/`Capturing`:
-/// ボタンなし＝二重起動を UI 側からも防ぐ）。`crates/fandhe-egui-proxy/src/screens/
+/// ボタンなし＝二重起動を UI 側からも防ぐ）。`crates/fandhe-gallery/src/screens/
 /// registry.rs` の `effect` 区画から `fn(&S) -> Screen<S>` として毎フレーム呼ばれる契約
 /// （`docs/ai/SCHEMA.md` パターン 9）。
 pub fn current_screen(state: &CameraCaptureState) -> Screen<CameraCaptureState> {
