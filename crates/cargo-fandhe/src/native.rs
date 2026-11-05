@@ -604,7 +604,10 @@ pub fn write(gen_dir: &Path, files: &BTreeMap<String, String>) -> Result<(), Str
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(format!("{} を調べられません: {e}", gen_dir.display())),
     }
-    for (rel, body) in files {
+    // 印を最初に書く。途中で失敗しても印付きで残り、次回の gen が作り直せる。
+    let mut entries: Vec<_> = files.iter().collect();
+    entries.sort_by_key(|(rel, _)| rel.as_str() != MARKER);
+    for (rel, body) in entries {
         if rel.split('/').any(|s| s.is_empty() || s == "..") {
             return Err(format!("不正な出力パス `{rel}`"));
         }
