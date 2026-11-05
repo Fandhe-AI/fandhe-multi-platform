@@ -19,6 +19,22 @@ struct Entry {
     default: bool,
 }
 
+/// package の lib target 名（無ければ package 名）。ハイフンは `_` に直す。
+fn lib_name(p: &Value) -> String {
+    let lib = p["targets"].as_array().into_iter().flatten().find(|t| {
+        strs(&t["kind"]).iter().any(|k| {
+            matches!(
+                k.as_str(),
+                "lib" | "rlib" | "dylib" | "cdylib" | "staticlib" | "proc-macro"
+            )
+        })
+    });
+    lib.and_then(|t| t["name"].as_str())
+        .or(p["name"].as_str())
+        .unwrap_or("")
+        .replace('-', "_")
+}
+
 fn strs(v: &Value) -> Vec<String> {
     v.as_array()
         .into_iter()
@@ -51,13 +67,6 @@ pub(crate) fn reachable(meta: &Value) -> BTreeSet<String> {
     for (id, node) in &nodes {
         let Some(pkg) = pkgs.get(id) else { continue };
         let mut list = Vec::new();
-        // rename 付き項目が占有する辺名。rename 無し項目が同じ package の別辺（別バージョン）を拾わないために除く。
-        let rename_names: BTreeSet<String> = pkg["dependencies"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|d| d["rename"].as_str().map(|r| r.replace('-', "_")))
-            .collect();
         for d in pkg["dependencies"].as_array().into_iter().flatten() {
             if !d["kind"].is_null() {
                 continue;
@@ -71,16 +80,17 @@ pub(crate) fn reachable(meta: &Value) -> BTreeSet<String> {
             let renamed = d["rename"].as_str().map(|r| r.replace('-', "_"));
             let pname = d["name"].as_str();
             let hit = node["deps"].as_array().into_iter().flatten().find(|e| {
-                // rename 無しは辺の name がライブラリ名（[lib] name で変わる）なので、解決先の package 名で照合する。
+                // rename 無しは辺の name が解決先 package の lib 名（[lib] name で変わる）なので、それと一致する辺を採る。
+                // package 名だけで照合すると、同じ package の別バージョンを rename した辺と取り違える。
                 let same = match &renamed {
                     Some(r) => e["name"].as_str() == Some(r),
-                    None => {
-                        !e["name"].as_str().is_some_and(|n| rename_names.contains(n))
-                            && e["pkg"]
-                                .as_str()
-                                .and_then(|p| pkgs.get(p))
-                                .is_some_and(|p| p["name"].as_str() == pname)
-                    }
+                    None => e["pkg"]
+                        .as_str()
+                        .and_then(|p| pkgs.get(p))
+                        .is_some_and(|p| {
+                            p["name"].as_str() == pname
+                                && e["name"].as_str() == Some(lib_name(p).as_str())
+                        }),
                 };
                 same && e["dep_kinds"]
                     .as_array()
@@ -281,7 +291,11 @@ mod tests {
         let m = meta(
             vec![
                 pkg("app", json!({}), vec![dep("fandhe-cap-cam", false, N, N)]),
-                pkg("fandhe-cap-cam", json!({}), vec![]),
+                {
+                    let mut p = pkg("fandhe-cap-cam", json!({}), vec![]);
+                    p["targets"] = json!([{"kind": ["lib"], "name": "camera_impl"}]);
+                    p
+                },
             ],
             vec![
                 ("app", vec![edge("camera_impl", "fandhe-cap-cam", N, N)]),

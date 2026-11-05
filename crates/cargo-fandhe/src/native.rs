@@ -590,7 +590,6 @@ pub fn generate(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
 /// （選ばなくなった機能の拡張ディレクトリが残って成果物に混ざるのを防ぐ）。
 /// symlink と、印の無い既存ディレクトリ（利用者のもの）は拒否する。
 pub fn write(gen_dir: &Path, files: &BTreeMap<String, String>) -> Result<(), String> {
-    let mut created = false;
     match fs::symlink_metadata(gen_dir) {
         Ok(md) if md.file_type().is_symlink() => {
             return Err(format!("{} は symlink です。書き出しません", gen_dir.display()))
@@ -601,8 +600,10 @@ pub fn write(gen_dir: &Path, files: &BTreeMap<String, String>) -> Result<(), Str
                 gen_dir.display()
             ))
         }
-        Ok(_) => fs::remove_dir_all(gen_dir).map_err(|e| format!("{} を消せません: {e}", gen_dir.display()))?,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => created = true,
+        Ok(_) => {
+            fs::remove_dir_all(gen_dir).map_err(|e| format!("{} を消せません: {e}", gen_dir.display()))?;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(format!("{} を調べられません: {e}", gen_dir.display())),
     }
     // 印を最初に書く。途中で失敗しても印付きで残り、次回の gen が作り直せる。
@@ -620,8 +621,8 @@ pub fn write(gen_dir: &Path, files: &BTreeMap<String, String>) -> Result<(), Str
                 fs::write(&path, body).map_err(|e| format!("{} を書けません: {e}", path.display()))
             });
         if let Err(e) = res {
-            // 今回作った gen/ に印が無いまま残ると次回が利用者のディレクトリとして拒否するため片付ける。
-            if created && !gen_dir.join(MARKER).is_file() {
+            // ここへ来る gen/ は新規か印付きを消した後の自前分。印が無いまま残ると次回が利用者のものとして拒否するため片付ける。
+            if !gen_dir.join(MARKER).is_file() {
                 let _ = fs::remove_dir_all(gen_dir);
             }
             return Err(e);
