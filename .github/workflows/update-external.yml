@@ -72,6 +72,8 @@ jobs:
       # auto-merge はマージ可否を左右する設定のため、組織変数を呼び出し側で解決して渡す。
       # 未設定（null/空）を有効と解釈する composite action の非対称設計に合わせ、
       # 明示的に 'false' へフォールバックしオプトイン運用とする。
+      # .gitmodules の docs/spec は update = none（#1256）。それでも日次の追従を続けるため checkout で上書きする。
+      submodule-force-checkout: true
       submodule-auto-merge: ${{ vars.SUBMODULE_AUTO_MERGE || 'false' }}
       submodule-auto-merge-allowlist: ${{ vars.SUBMODULE_AUTO_MERGE_ALLOWLIST }}
       skills-auto-merge: ${{ vars.SKILLS_AUTO_MERGE || 'false' }}
