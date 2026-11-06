@@ -20,7 +20,7 @@ struct Entry {
 }
 
 /// package の lib target 名（無ければ package 名）。ハイフンは `_` に直す。
-fn lib_name(p: &Value) -> String {
+pub(crate) fn lib_name(p: &Value) -> String {
     let lib = p["targets"].as_array().into_iter().flatten().find(|t| {
         strs(&t["kind"]).iter().any(|k| {
             matches!(

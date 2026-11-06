@@ -170,15 +170,15 @@ identity = true
 | 項目 | 宣言しない・値が違う理由 | 扱う issue |
 |------|----------------------|-----------|
 | `android.hardware.nfc` | `nfc`（タグ読み取り）の宣言で、HCE の宣言ではない | 対象外 |
-| `androidx.activity`・`androidx.core` | MainActivity が直接 import する共通依存 | #1166 |
+| `androidx.activity`・`androidx.core` | MainActivity が直接 import する共通依存。`fandhe-platform-android` の宣言（`gradle`）で決着。`fandhe-cap-*` 以外の共通層 crate も宣言を持てる（id は対応表の外） | 決着（#1259） |
 | `GmsAvailability.java` | document-scan 以外の GMS 機能も使う共有コード。`platforms/android/app` に共有のまま残す | #1183 |
 | UIKit・Foundation・CoreGraphics | 全機能の基盤リンクで機能固有ではない | #1168 |
-| `NSPortName` | 宣言は `$(EXECUTABLE_NAME)`、スクリプトは実行体名へ置換。生成はビルド設定変数のまま出す（Xcode が展開する） | 決着（#1176） |
+| `NSPortName` | 宣言は `$(EXECUTABLE_NAME)`、スクリプトは実行体名へ置換。生成はビルド設定変数のまま出す（Xcode が展開する）。iOS 本体の `CFBundle*` は確定値（下の行）だが、macOS は宣言が変数に依存するため変数のまま | 決着（#1176） |
 | `FandheWidgetHost` | 素の実行体に拡張を載せるホストアプリ。生成では利用者の `.app` が親になる | #1212 |
 | `FandheCountControl.swift`・`AppIntents` | quick-settings-tile の分。ソースは home-widget から分離済み（#1174）。束ねる入口 `FandheWidgets.swift` は platforms 側に残る（Xcode ターゲットの生成は #1212） | #1212 |
 | `FandheAppGroupIdentifier` | 現行どおり `$(TeamIdentifierPrefix)com.fandhe.widget` を literal で宣言。記号名との一本化は未決。生成も literal のまま出す | 未決 |
 | `NSMenuItem.default` | 現行どおり literal。利用者が差し替える手段は未決。生成も literal のまま出す | 未決 |
-| `CFBundle*` 等の定型キー | 生成側のテンプレートの責務。ビルド設定変数 7 キーを出す | 決着（#1176） |
+| `CFBundle*` 等の定型キー | 生成側のテンプレートの責務。iOS 本体は確定値（実行体名・bundle id・版・`MinimumOSVersion`・`UIDeviceFamily`・`UILaunchScreen`）、macOS と拡張はビルド設定変数 7 キーを出す | 決着（#1176・#1259） |
 | Web の `share_target`、Windows の `webcam` | 形式に欄がない。カメラの Windows 実装はダミー | #1185・#1208 |
 | 対応表 JSON の macOS カメラの `perm` 文 | 計画情報で設定の実体ではない | #1195 |
 
@@ -202,15 +202,24 @@ NSCameraUsageDescription = "撮影に使います"  # 有効な機能が要求�
 [package.metadata.fandhe-app.macos.usage-descriptions]
 ```
 
+```toml
+[package.metadata.fandhe-app.ios]
+bundle-id = "com.example.app"               # iOS の Info.plist を出すので必須（macOS はまだ使えずエラー）
+```
+
+殻に要る値は、アプリの crate からも取ります。Android は `cdylib` を含む lib target が要り（無ければエラー）、iOS は bin target がちょうど 1 つと、数字とドットだけの version が要ります。
+
 説明文が欠けると、OS・機能 id・キーを示してエラーにします。`usage-descriptions` は本体と拡張で共有します。
 
 ### 出力
 
 | パス（`gen/` 配下） | 内容 |
 |------|------|
-| `android/AndroidManifest.xml` | manifest merger 用の overlay（権限・feature・コンポーネント・MainActivity への intent-filter の追記） |
-| `android/fandhe.gradle` | `apply from:` 用。機能 crate の `java`・`res` を srcDirs に足し、`gradle` の依存を `implementation` で足す |
-| `ios/Info.plist`・`macos/Info.plist` | ビルド設定変数の定型 7 キー、説明文、`info-plist` |
+| `android/AndroidManifest.xml` | manifest merger 用の overlay（権限・feature・コンポーネント、MainActivity の宣言＝`exported`・`launchMode=singleTask`・`configChanges`・`android.app.lib_name`・MAIN/LAUNCHER と機能の intent-filter） |
+| `android/fandhe.gradle` | `apply from:` 用。常に出す。gen の `android/java` と機能 crate の `java`・`res` を srcDirs に足し、gen の Manifest を全 variant の overlay として登録し（`androidComponents`）、`gradle` の依存（基盤を含む）を `implementation` で足す |
+| `android/java/com/fandhe/platform/FandheLibrary.java` | `NAME` に cdylib 名（`[lib] name`）を持つ。殻は `System.loadLibrary(FandheLibrary.NAME)` と書き、ライブラリ名の正本を `[lib] name` 1 か所にする |
+| `ios/Info.plist` | 確定値の定型キー（上記）、説明文、`info-plist`。機能が無くても出す |
+| `macos/Info.plist` | ビルド設定変数の定型 7 キー、説明文、`info-plist` |
 | `ios/App.entitlements`・`macos/App.entitlements` | `entitlements` と、展開した App Group（ios は `group.<prefix>.<名>`、macos は `$(TeamIdentifierPrefix)<prefix>.<名>`） |
 | `<os>/extensions/<name>/Info.plist`・`<name>.entitlements` | 拡張ごとの plist と entitlements |
 | `.fandhe-gen` | 生成物の印 |
@@ -225,4 +234,4 @@ NSCameraUsageDescription = "撮影に使います"  # 有効な機能が要求�
 
 ### 範囲外
 
-framework のリンクと Xcode のターゲット（#1212）、Windows の identity（#1208）、手書き設定の置き換え（#1194）、`run`/`build` への組み込み（#1201）、追記と `--eject`（#1202）。
+`CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、applicationId・compileSdk・`<application>` の属性、macOS・拡張の Info.plist の確定値化、framework のリンクと Xcode のターゲット（#1212）、Windows の identity（#1208）、手書き設定の置き換え（#1194）、`run`/`build` への組み込み（#1201）、追記と `--eject`（#1202）。
