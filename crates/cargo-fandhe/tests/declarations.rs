@@ -721,3 +721,19 @@ fn widget_extension_matches_project_yml_and_swift() {
         );
     }
 }
+
+/// 基盤の Gradle 依存（games-activity 4.4.0）は android-activity 0.6 系に対応する版（#1259）。
+/// 上げるときは `fandhe-platform-android` の宣言と `scripts/android/versions.env` を一緒に直す。
+#[test]
+fn games_activity_version_matches_android_activity_in_lock() {
+    let lock =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.lock")).unwrap();
+    let after = lock
+        .split("name = \"android-activity\"\nversion = \"")
+        .nth(1)
+        .unwrap();
+    assert!(
+        after.starts_with("0.6."),
+        "android-activity が 0.6 系でなくなった。games-activity の版（platform-android の宣言と versions.env）を合わせ直すこと"
+    );
+}

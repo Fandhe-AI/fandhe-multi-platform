@@ -5,10 +5,18 @@
 //! 各 OS の文法（XML・plist・Groovy）へ直列化する層で、値はすべて出力先の文法でエスケープする
 //! （宣言は第三者の crate からも来る。security.md A03）。
 //!
+//! 殻（Android の Gradle・Manifest、iOS の Info.plist）が要る値のうち、機能の宣言とアプリの crate から
+//! 決まるものもここで出す（#1259）。基盤の Gradle 依存は `fandhe-platform-android` の宣言から、
+//! MainActivity の宣言（exported・launchMode・configChanges・ライブラリ名・LAUNCHER）と
+//! `FandheLibrary.NAME`、iOS の確定値の Info.plist（実行体名・bundle id・版・`UIDeviceFamily` 等）は
+//! アプリの crate（lib/bin target・version）と `fandhe-app.ios.bundle-id` から出す。
+//!
 //! 出力先は `<アプリの crate>/gen/` に固定する（consumer-app-structure.md §4、gitignore する）。
 //! Info.plist の説明文（`*UsageDescription`）は既定値を持たず、アプリ側の
 //! `[package.metadata.fandhe-app]` に無ければエラーにする（既定文言のまま審査に出る事故を防ぐ）。
-//! 範囲外: Xcode のターゲット・framework のリンク（#1212）、Windows の identity（#1208）、
+//! 範囲外: `CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、
+//! applicationId・compileSdk・`<application>` の属性、macOS・拡張の Info.plist の確定値化、
+//! Xcode のターゲット・framework のリンク（#1212）、Windows の identity（#1208）、
 //! 既存設定からの切り替え（#1194）、run/build への組み込み（#1201）。
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -19,12 +27,19 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::merge::{merge, AndroidMerged, AppleMerged};
-use crate::reach::reachable;
+use crate::reach::{lib_name, reachable};
 use crate::workspace::{collect, run_metadata, Found};
 
 /// 生成物の印。これがある `gen/` だけを次回の生成で置き換える（利用者のディレクトリを消さない）。
 const MARKER: &str = ".fandhe-gen";
 const MAIN_ACTIVITY: &str = "com.fandhe.platform.MainActivity";
+/// Android の MainActivity が受け取る設定変更。受け取らないと Activity が作り直され、winit が古い描画スレッドを
+/// 残して黒画面・ANR になる（#73）。Rust の実行層の前提でアプリ固有ではない。古い端末では未知の flag は無視される。
+const MAIN_ACTIVITY_CONFIG_CHANGES: &str = "orientation|screenSize|keyboardHidden|uiMode|fontScale|density|locale|layoutDirection|smallestScreenSize|screenLayout|colorMode|fontWeightAdjustment|keyboard|navigation|touchscreen|mcc|mnc|grammaticalGender";
+/// iOS の最低対応版。`.cargo/config.toml` の `IPHONEOS_DEPLOYMENT_TARGET` と揃える（一致は tests/gen.rs が保証する）。
+const IOS_MIN_VERSION: &str = "17.0";
+/// ライブラリ名を Java から参照させるクラス（アプリは `System.loadLibrary(FandheLibrary.NAME)` と書く）。
+const LIBRARY_CLASS_PATH: &str = "android/java/com/fandhe/platform/FandheLibrary.java";
 /// OS ごとに `cargo metadata --filter-platform` へ渡す triple（対象 OS に限った依存の cfg 評価は cargo に任せる）。
 const ANDROID_TRIPLE: &str = "aarch64-linux-android";
 const IOS_TRIPLE: &str = "aarch64-apple-ios";
@@ -57,6 +72,55 @@ pub(crate) struct AppConfig {
 struct OsConfig {
     #[serde(default)]
     usage_descriptions: BTreeMap<String, String>,
+    /// iOS のバンドル ID（`CFBundleIdentifier`）。iOS の Info.plist を出すとき必須。macOS はまだ使わない。
+    bundle_id: Option<String>,
+}
+
+/// アプリの crate の情報（`cargo metadata` の root package）。殻に要る値の出どころ。
+#[derive(Debug, Clone)]
+pub(crate) struct AppInfo {
+    pub name: String,
+    pub version: String,
+    /// `cdylib` を含む lib target の名前（Android の `.so` の元）。無ければ `None`。
+    pub cdylib: Option<String>,
+    pub bins: Vec<String>,
+    /// 生成先（`<アプリの crate>/gen`）の絶対パス。Gradle から参照する。
+    pub gen_dir: PathBuf,
+}
+
+impl AppInfo {
+    fn from_package(pkg: &Value, gen_dir: PathBuf) -> Self {
+        let targets: Vec<&Value> = pkg["targets"].as_array().into_iter().flatten().collect();
+        let has = |t: &Value, key: &str, want: &str| {
+            t[key]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|k| k.as_str() == Some(want))
+        };
+        let cdylib = targets
+            .iter()
+            .any(|t| has(t, "crate_types", "cdylib"))
+            .then(|| lib_name(pkg));
+        AppInfo {
+            name: pkg["name"].as_str().unwrap_or_default().to_string(),
+            version: pkg["version"].as_str().unwrap_or_default().to_string(),
+            cdylib,
+            bins: targets
+                .iter()
+                .filter(|t| has(t, "kind", "bin"))
+                .filter_map(|t| t["name"].as_str().map(String::from))
+                .collect(),
+            gen_dir,
+        }
+    }
+}
+
+/// ドット区切り（2 セグメント以上）の英数字とハイフン。App Group の接頭辞と bundle id が共用する。
+fn is_reverse_dns(p: &str) -> bool {
+    p.split('.').count() >= 2
+        && p.split('.')
+            .all(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
 }
 
 fn is_ident(s: &str) -> bool {
@@ -74,13 +138,17 @@ impl AppConfig {
         };
         let mut errs = Vec::new();
         if let Some(p) = &cfg.app_group_prefix {
-            let ok = p.split('.').count() >= 2
-                && p.split('.').all(|s| {
-                    !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
-                });
-            if !ok {
+            if !is_reverse_dns(p) {
                 errs.push(format!("fandhe-app.app-group-prefix: `{p}` はドット区切り（2 セグメント以上）の英数字とハイフンにしてください"));
             }
+        }
+        if let Some(b) = &cfg.ios.bundle_id {
+            if !is_reverse_dns(b) {
+                errs.push(format!("fandhe-app.ios.bundle-id: `{b}` はドット区切り（2 セグメント以上）の英数字とハイフンにしてください"));
+            }
+        }
+        if cfg.macos.bundle_id.is_some() {
+            errs.push("fandhe-app.macos.bundle-id: macOS ではまだ使いません（Info.plist は Xcode の変数のままです）".to_string());
         }
         for (os, c) in [("ios", &cfg.ios), ("macos", &cfg.macos)] {
             for (k, t) in &c.usage_descriptions {
@@ -204,7 +272,8 @@ fn filter_xml(f: &crate::declaration::IntentFilter, pad: &str, out: &mut String)
 }
 
 /// manifest merger 用の overlay。`package` 属性は持たず、アプリ本体の Manifest へ足される。
-fn android_manifest(m: &AndroidMerged) -> Result<String, String> {
+/// MainActivity の宣言は常に出す（`MAIN_ACTIVITY` は cargo-fandhe の契約）。機能の intent-filter はその後に続ける。
+fn android_manifest(m: &AndroidMerged, lib: &str) -> Result<String, String> {
     let mut o = String::from(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- cargo fandhe gen が生成。編集しない -->\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n",
     );
@@ -224,18 +293,25 @@ fn android_manifest(m: &AndroidMerged) -> Result<String, String> {
             xml_attr("required", &req.to_string())
         ));
     }
-    if !m.main_activity_intent_filters.is_empty() || !m.components.is_empty() {
+    {
         o.push_str("    <application>\n");
-        if !m.main_activity_intent_filters.is_empty() {
-            o.push_str(&format!(
-                "        <activity{}>\n",
-                xml_attr("name", MAIN_ACTIVITY)
-            ));
-            for f in &m.main_activity_intent_filters {
-                filter_xml(f, "            ", &mut o);
-            }
-            o.push_str("        </activity>\n");
+        o.push_str(&format!(
+            "        <activity{}{}{}{}>\n",
+            xml_attr("name", MAIN_ACTIVITY),
+            xml_attr("exported", "true"),
+            xml_attr("launchMode", "singleTask"),
+            xml_attr("configChanges", MAIN_ACTIVITY_CONFIG_CHANGES)
+        ));
+        o.push_str(&format!(
+            "            <meta-data{}{} />\n",
+            xml_attr("name", "android.app.lib_name"),
+            xml_attr("value", lib)
+        ));
+        o.push_str("            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n");
+        for f in &m.main_activity_intent_filters {
+            filter_xml(f, "            ", &mut o);
         }
+        o.push_str("        </activity>\n");
         for (name, c) in &m.components {
             let kind = format!("{:?}", c.kind).to_lowercase();
             let mut attrs = xml_attr("name", name) + &xml_attr("exported", &c.exported.to_string());
@@ -269,37 +345,40 @@ fn android_manifest(m: &AndroidMerged) -> Result<String, String> {
 }
 
 /// Gradle の apply 用スクリプト。srcDirs は crate の絶対パス（区切りは `/` に正規化）。
-fn android_gradle(m: &AndroidMerged, dirs: &BTreeMap<&str, &Path>) -> Option<String> {
+/// 常に出す: gen の Java（`FandheLibrary`）と Manifest を取り込む配線が要るため。
+/// Manifest はアプリ本体の Manifest を残したまま、全 variant の overlay として manifest merger に載せる。
+fn android_gradle(m: &AndroidMerged, dirs: &BTreeMap<&str, &Path>, gen_dir: &Path) -> String {
+    let norm = |p: &Path| groovy_str(&p.to_string_lossy().replace('\\', "/"));
     let src = |items: &[(String, String)]| -> Vec<String> {
         items
             .iter()
-            .filter_map(|(id, rel)| {
-                let p = dirs.get(id.as_str())?.join(rel);
-                Some(groovy_str(&p.to_string_lossy().replace('\\', "/")))
-            })
+            .filter_map(|(id, rel)| Some(norm(&dirs.get(id.as_str())?.join(rel))))
             .collect()
     };
     let (java, res) = (src(&m.java), src(&m.res));
-    if java.is_empty() && res.is_empty() && m.gradle.is_empty() {
-        return None;
-    }
     let mut o = String::from("// cargo fandhe gen が生成。編集しない\n");
-    if !java.is_empty() || !res.is_empty() {
-        o.push_str("android {\n    sourceSets {\n        main {\n");
-        if !java.is_empty() {
-            o.push_str(&format!(
-                "            java.srcDirs += [{}]\n",
-                java.join(", ")
-            ));
-        }
-        if !res.is_empty() {
-            o.push_str(&format!(
-                "            res.srcDirs += [{}]\n",
-                res.join(", ")
-            ));
-        }
-        o.push_str("        }\n    }\n}\n");
+    o.push_str("android {\n    sourceSets {\n        main {\n");
+    o.push_str(&format!(
+        "            java.srcDir {}\n",
+        norm(&gen_dir.join("android/java"))
+    ));
+    if !java.is_empty() {
+        o.push_str(&format!(
+            "            java.srcDirs += [{}]\n",
+            java.join(", ")
+        ));
     }
+    if !res.is_empty() {
+        o.push_str(&format!(
+            "            res.srcDirs += [{}]\n",
+            res.join(", ")
+        ));
+    }
+    o.push_str("        }\n    }\n}\n");
+    o.push_str(&format!(
+        "androidComponents {{\n    onVariants(selector().all()) {{ variant ->\n        variant.sources.manifests.addStaticManifestFile({})\n    }}\n}}\n",
+        norm(&gen_dir.join("android/AndroidManifest.xml"))
+    ));
     if !m.gradle.is_empty() {
         o.push_str("dependencies {\n");
         for g in &m.gradle {
@@ -307,7 +386,14 @@ fn android_gradle(m: &AndroidMerged, dirs: &BTreeMap<&str, &Path>) -> Option<Str
         }
         o.push_str("}\n");
     }
-    Some(o)
+    o
+}
+
+/// ライブラリ名の定数クラス。manifest の `android.app.lib_name` と `[lib] name` の 3 か所一致を 1 か所の正本にする。
+fn library_class(lib: &str) -> String {
+    format!(
+        "// cargo fandhe gen が生成。編集しない\npackage com.fandhe.platform;\n\n/** アプリの cdylib 名（`[lib] name`）。`System.loadLibrary(FandheLibrary.NAME)` に使う。 */\npublic final class FandheLibrary {{\n    private FandheLibrary() {{}}\n\n    public static final String NAME = \"{lib}\";\n}}\n"
+    )
 }
 
 // ---- Apple ----
@@ -361,11 +447,12 @@ impl AppleCtx<'_> {
 
     fn plist(
         &self,
+        base: Map<String, Value>,
         keys: &BTreeSet<String>,
         info: &Map<String, Value>,
         errs: &mut Vec<String>,
     ) -> Map<String, Value> {
-        let mut m = plist_template();
+        let mut m = base;
         m.extend(info.clone());
         for k in keys {
             match self.cfg.usage_descriptions.get(k) {
@@ -412,15 +499,61 @@ impl AppleCtx<'_> {
     }
 }
 
+/// iOS 本体の土台。Xcode の変数ではなく確定値を書く（Xcode を通さない組み立てでもそのまま使える）。
+/// `CFBundleSupportedPlatforms` は組み立て時の値（シミュレータか実機か）のため出さない（#1201）。
+fn ios_base(app: &AppInfo, cfg: &OsConfig) -> Result<Map<String, Value>, Vec<String>> {
+    let mut errs = Vec::new();
+    let bundle = cfg.bundle_id.clone().unwrap_or_else(|| {
+        errs.push("ios: Info.plist に bundle id が要ります。[package.metadata.fandhe-app.ios] に bundle-id を書いてください".into());
+        String::new()
+    });
+    if app.bins.len() != 1 {
+        errs.push(format!(
+            "ios: 実行体（bin target）がちょうど 1 つ要りますが {} 個あります: [{}]",
+            app.bins.len(),
+            app.bins.join(", ")
+        ));
+    }
+    // CFBundleShortVersionString は数字とドットだけ。pre-release・build metadata は載せられない。
+    let v = &app.version;
+    if v.is_empty()
+        || !v
+            .split('.')
+            .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+    {
+        errs.push(format!("ios: version `{v}` は数字とドットだけの版にしてください（pre-release・build metadata は使えません）"));
+    }
+    if !errs.is_empty() {
+        return Err(errs);
+    }
+    let s = |x: &str| Value::String(x.to_string());
+    Ok([
+        ("CFBundleExecutable", s(&app.bins[0])),
+        ("CFBundleIdentifier", s(&bundle)),
+        ("CFBundleInfoDictionaryVersion", s("6.0")),
+        ("CFBundleName", s(&app.name)),
+        ("CFBundlePackageType", s("APPL")),
+        ("CFBundleShortVersionString", s(v)),
+        ("CFBundleVersion", s(v)),
+        ("MinimumOSVersion", s(IOS_MIN_VERSION)),
+        ("UIDeviceFamily", Value::Array(vec![1.into(), 2.into()])),
+        ("UILaunchScreen", Value::Object(Map::new())),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v))
+    .collect())
+}
+
 fn apple_files(
     ctx: &AppleCtx,
+    base: Map<String, Value>,
     m: &AppleMerged,
     files: &mut BTreeMap<String, String>,
     errs: &mut Vec<String>,
 ) {
     let os = ctx.os;
     let mut local = Vec::new();
-    let plist = ctx.plist(&m.usage_descriptions, &m.info_plist, &mut local);
+    let plist = ctx.plist(base, &m.usage_descriptions, &m.info_plist, &mut local);
     let ent = ctx.entitlements(&m.entitlements, &m.app_groups, os, &mut local);
     let mut outs = vec![(format!("{os}/Info.plist"), plist_doc(&plist, "Info.plist"))];
     if !ent.is_empty() {
@@ -431,6 +564,7 @@ fn apple_files(
     }
     for (name, e) in &m.extensions {
         let plist = ctx.plist(
+            plist_template(),
             &e.usage_descriptions.iter().cloned().collect(),
             &e.info_plist,
             &mut local,
@@ -473,6 +607,7 @@ pub(crate) fn render(
     ios: &[&Found],
     macos: &[&Found],
     cfg: &AppConfig,
+    app: &AppInfo,
 ) -> Result<BTreeMap<String, String>, Vec<String>> {
     let mut errs: Vec<String> = Vec::new();
     let mut files = BTreeMap::new();
@@ -501,19 +636,30 @@ pub(crate) fn render(
     };
 
     if let Some(m) = merged("android", android, &mut errs).map(|m| m.android) {
-        if m != AndroidMerged::default() {
-            let dirs: BTreeMap<&str, &Path> = android
-                .iter()
-                .map(|f| (f.decl.id.as_str(), f.dir.as_path()))
-                .collect();
-            match android_manifest(&m) {
-                Ok(s) => {
-                    files.insert("android/AndroidManifest.xml".to_string(), s);
-                }
-                Err(e) => errs.push(format!("android: {e}")),
+        match &app.cdylib {
+            None => errs.push(format!(
+                "android: {} に cdylib の lib target がありません。Cargo.toml の [lib] に crate-type = [\"cdylib\", ...] を足してください",
+                app.name
+            )),
+            Some(lib) if !is_ident(lib) => {
+                errs.push(format!("android: lib 名 `{lib}` は英数字と `_` の識別子にしてください"))
             }
-            if let Some(g) = android_gradle(&m, &dirs) {
-                files.insert("android/fandhe.gradle".to_string(), g);
+            Some(lib) => {
+                let dirs: BTreeMap<&str, &Path> = android
+                    .iter()
+                    .map(|f| (f.decl.id.as_str(), f.dir.as_path()))
+                    .collect();
+                match android_manifest(&m, lib) {
+                    Ok(s) => {
+                        files.insert("android/AndroidManifest.xml".to_string(), s);
+                    }
+                    Err(e) => errs.push(format!("android: {e}")),
+                }
+                files.insert(
+                    "android/fandhe.gradle".to_string(),
+                    android_gradle(&m, &dirs, &app.gen_dir),
+                );
+                files.insert(LIBRARY_CLASS_PATH.to_string(), library_class(lib));
             }
         }
     }
@@ -522,16 +668,27 @@ pub(crate) fn render(
         else {
             continue;
         };
-        if m == AppleMerged::default() {
-            continue;
-        }
+        let base = if os == "ios" {
+            match ios_base(app, &cfg.ios) {
+                Ok(b) => b,
+                Err(e) => {
+                    errs.extend(e);
+                    continue;
+                }
+            }
+        } else {
+            if m == AppleMerged::default() {
+                continue;
+            }
+            plist_template()
+        };
         let ctx = AppleCtx {
             os,
             cfg: if os == "ios" { &cfg.ios } else { &cfg.macos },
             prefix: cfg.app_group_prefix.as_deref(),
             found: set,
         };
-        apple_files(&ctx, &m, &mut files, &mut errs);
+        apple_files(&ctx, base, &m, &mut files, &mut errs);
     }
     errs.sort();
     errs.dedup();
@@ -549,7 +706,7 @@ pub(crate) fn render(
 /// 宣言・入力に問題が 1 件でもあれば何も返さない（check と同じ厳しさ）。書き出しは [`write`]。
 pub fn generate(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
     let mut sets: Vec<Vec<Found>> = Vec::new();
-    let mut app: Option<(PathBuf, Value)> = None;
+    let mut app: Option<(PathBuf, Value, Value)> = None;
     for triple in [ANDROID_TRIPLE, IOS_TRIPLE, MACOS_TRIPLE] {
         let meta = run_metadata(manifest, Some(triple))?;
         if app.is_none() {
@@ -566,7 +723,11 @@ pub fn generate(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
                 .as_str()
                 .and_then(|p| Path::new(p).parent())
                 .ok_or_else(|| vec!["manifest_path を読めません".to_string()])?;
-            app = Some((dir.to_path_buf(), pkg["metadata"]["fandhe-app"].clone()));
+            app = Some((
+                dir.to_path_buf(),
+                pkg["metadata"]["fandhe-app"].clone(),
+                pkg.clone(),
+            ));
         }
         let reach = reachable(&meta);
         sets.push(
@@ -576,10 +737,11 @@ pub fn generate(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
                 .collect(),
         );
     }
-    let (dir, cfg) = app.expect("ループで必ず設定される");
+    let (dir, cfg, pkg) = app.expect("ループで必ず設定される");
     let cfg = AppConfig::parse(&cfg)?;
+    let info = AppInfo::from_package(&pkg, dir.join("gen"));
     let r = |i: usize| sets[i].iter().collect::<Vec<_>>();
-    let files = render(&r(0), &r(1), &r(2), &cfg)?;
+    let files = render(&r(0), &r(1), &r(2), &cfg, &info)?;
     Ok(Generated {
         gen_dir: dir.join("gen"),
         files,
@@ -647,6 +809,17 @@ mod tests {
     fn cfg(v: Value) -> AppConfig {
         AppConfig::parse(&v).unwrap()
     }
+    /// bundle id だけを持つ最小の設定に、足りない欄を足して使う。
+    const BID: &str = "com.example.app";
+    fn app() -> AppInfo {
+        AppInfo {
+            name: "my-app".into(),
+            version: "1.2.3".into(),
+            cdylib: Some("my_app".into()),
+            bins: vec!["my-app-bin".into()],
+            gen_dir: PathBuf::from("/a/gen"),
+        }
+    }
     fn err(r: Result<BTreeMap<String, String>, Vec<String>>) -> String {
         r.expect_err("拒否されるはず").join("\n")
     }
@@ -656,7 +829,13 @@ mod tests {
         let f = found(
             json!({"id": "cam", "ios": {"usage-descriptions": ["NSCameraUsageDescription"]}}),
         );
-        let e = err(render(&[], &[&f], &[], &cfg(json!(null))));
+        let e = err(render(
+            &[],
+            &[&f],
+            &[],
+            &cfg(json!({"ios": {"bundle-id": BID}})),
+            &app(),
+        ));
         assert!(
             e.contains("ios") && e.contains("cam") && e.contains("NSCameraUsageDescription"),
             "{e}"
@@ -668,7 +847,7 @@ mod tests {
         let ext = json!({"name": "W", "bundle-suffix": "w", "deployment-target": "14.0", "sources": ["a"],
             "usage-descriptions": ["NSCameraUsageDescription"], "info-plist": {"NSExtension": {}}});
         let f = found(json!({"id": "w", "macos": {"extensions": [ext]}}));
-        let e = err(render(&[], &[], &[&f], &cfg(json!(null))));
+        let e = err(render(&[], &[], &[&f], &cfg(json!(null)), &app()));
         assert!(
             e.contains("macos") && e.contains("NSCameraUsageDescription"),
             "{e}"
@@ -683,6 +862,9 @@ mod tests {
             json!({"ios": {"usage-descriptions": {"Camera": "a"}}}),
             json!({"app-group-prefix": "com"}),
             json!({"app-group-prefix": "com.x y"}),
+            json!({"ios": {"bundle-id": "com"}}),
+            json!({"ios": {"bundle-id": "com.a b"}}),
+            json!({"macos": {"bundle-id": "com.example.app"}}),
             json!({"unknown": 1}),
         ] {
             assert!(AppConfig::parse(&v).is_err(), "{v}");
@@ -694,10 +876,11 @@ mod tests {
         let f = found(
             json!({"id": "g", "ios": {"app-groups": ["widget"]}, "macos": {"app-groups": ["widget"]}}),
         );
-        let e = err(render(&[], &[&f], &[], &cfg(json!(null))));
+        let ios = json!({"bundle-id": BID});
+        let e = err(render(&[], &[&f], &[], &cfg(json!({"ios": ios})), &app()));
         assert!(e.contains("app-group-prefix"), "{e}");
-        let c = cfg(json!({"app-group-prefix": "com.fandhe"}));
-        let files = render(&[], &[&f], &[&f], &c).unwrap();
+        let c = cfg(json!({"app-group-prefix": "com.fandhe", "ios": ios}));
+        let files = render(&[], &[&f], &[&f], &c, &app()).unwrap();
         assert!(files["ios/App.entitlements"].contains("<string>group.com.fandhe.widget</string>"));
         assert!(files["macos/App.entitlements"]
             .contains("<string>$(TeamIdentifierPrefix)com.fandhe.widget</string>"));
@@ -709,9 +892,9 @@ mod tests {
             "ios": {"usage-descriptions": ["NSCameraUsageDescription"]},
             "android": {"components": [{"kind": "service", "name": "a.B", "exported": false,
                 "attributes": {"label": "x\"<&>y"}}], "gradle": ["g:a:1.0"]}}));
-        let c =
-            cfg(json!({"ios": {"usage-descriptions": {"NSCameraUsageDescription": "<b>&'\""}}}));
-        let files = render(&[&f], &[&f], &[], &c).unwrap();
+        let c = cfg(json!({"ios": {"bundle-id": BID,
+            "usage-descriptions": {"NSCameraUsageDescription": "<b>&'\""}}}));
+        let files = render(&[&f], &[&f], &[], &c, &app()).unwrap();
         assert!(files["ios/Info.plist"].contains("&lt;b&gt;&amp;&apos;&quot;"));
         assert!(files["android/AndroidManifest.xml"]
             .contains("android:label=\"x&quot;&lt;&amp;&gt;y\""));
@@ -726,15 +909,72 @@ mod tests {
         let b = found(
             json!({"id": "b", "android": {"permissions": [{"name": "q"}]}, "ios": {"info-plist": {"K": "2"}}}),
         );
-        let files = render(&[&a, &b], &[], &[], &cfg(json!({}))).unwrap();
+        let files = render(&[&a, &b], &[], &[], &ios_cfg(), &app()).unwrap();
         assert!(files.contains_key("android/AndroidManifest.xml"));
     }
 
     #[test]
     fn plist_rejects_null() {
         let f = found(json!({"id": "n", "ios": {"info-plist": {"K": null}}}));
-        let e = err(render(&[], &[&f], &[], &cfg(json!(null))));
+        let e = err(render(
+            &[],
+            &[&f],
+            &[],
+            &cfg(json!({"ios": {"bundle-id": BID}})),
+            &app(),
+        ));
         assert!(e.contains("null"), "{e}");
+    }
+
+    fn ios_cfg() -> AppConfig {
+        cfg(json!({"ios": {"bundle-id": BID}}))
+    }
+
+    #[test]
+    fn shell_values_are_emitted_even_without_features() {
+        let files = render(&[], &[], &[], &ios_cfg(), &app()).unwrap();
+        let m = &files["android/AndroidManifest.xml"];
+        assert!(m.contains("android:name=\"com.fandhe.platform.MainActivity\""));
+        assert!(m.contains("android:exported=\"true\""));
+        assert!(m.contains("android:launchMode=\"singleTask\""));
+        assert!(m.contains("android:name=\"android.app.lib_name\" android:value=\"my_app\""));
+        assert!(m.contains("android.intent.category.LAUNCHER"));
+        let g = &files["android/fandhe.gradle"];
+        assert!(g.contains("java.srcDir '/a/gen/android/java'"), "{g}");
+        assert!(
+            g.contains("addStaticManifestFile('/a/gen/android/AndroidManifest.xml')"),
+            "{g}"
+        );
+        assert!(files[LIBRARY_CLASS_PATH].contains("NAME = \"my_app\""));
+        let p = &files["ios/Info.plist"];
+        assert!(!p.contains("$("), "{p}");
+        for k in [
+            "<string>my-app-bin</string>",
+            "<string>com.example.app</string>",
+            "<string>1.2.3</string>",
+            "<string>17.0</string>",
+            "<key>UILaunchScreen</key>",
+            "<integer>2</integer>",
+        ] {
+            assert!(p.contains(k), "{k}");
+        }
+        assert!(!p.contains("CFBundleSupportedPlatforms"));
+    }
+
+    #[test]
+    fn shell_inputs_are_validated() {
+        let ok = ios_cfg();
+        let with = |f: &dyn Fn(&mut AppInfo)| {
+            let mut a = app();
+            f(&mut a);
+            err(render(&[], &[], &[], &ok, &a))
+        };
+        assert!(with(&|a| a.cdylib = None).contains("cdylib"));
+        assert!(with(&|a| a.bins.clear()).contains("bin target"));
+        assert!(with(&|a| a.bins.push("b".into())).contains("bin target"));
+        assert!(with(&|a| a.version = "1.0.0-rc.1".into()).contains("pre-release"));
+        let e = err(render(&[], &[], &[], &cfg(json!(null)), &app()));
+        assert!(e.contains("bundle-id"), "{e}");
     }
 
     #[test]

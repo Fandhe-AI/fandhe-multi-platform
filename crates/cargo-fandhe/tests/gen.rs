@@ -238,7 +238,41 @@ fn android_manifest_overlay_matches_current_manifest() {
     };
     assert_eq!(send(&gen).len(), 1);
     assert_eq!(send(&gen), send(&cur));
-    assert_eq!(main_activity_filters(&gen).len(), 1);
+    // MAIN/LAUNCHER と SEND の 2 つ（MAIN は殻の値として gen が出す）。
+    assert_eq!(main_activity_filters(&gen).len(), 2);
+
+    // MainActivity の宣言（#1259）は gallery の現行 Manifest と同じ（gallery 固有の PiP は gen の対象外）。
+    let main = |t: &[Tag]| -> (Attrs, Attrs) {
+        let (_, a) = t
+            .iter()
+            .find(|(n, a)| n == "activity" && a["name"].ends_with(".MainActivity"))
+            .unwrap();
+        let (_, m) = t
+            .iter()
+            .find(|(n, a)| n == "meta-data" && a["name"] == "android.app.lib_name")
+            .unwrap();
+        (a.clone(), m.clone())
+    };
+    let (mut ga, gm) = main(&gen);
+    let (ca, cm) = main(&cur);
+    for k in ["name", "exported", "launchMode", "configChanges"] {
+        assert_eq!(ga.remove(k), ca.get(k).cloned(), "{k}");
+    }
+    assert!(ga.is_empty(), "{ga:?}");
+    assert_eq!(gm, cm);
+    assert_eq!(gm["value"], "fandhe_gallery");
+    assert!(
+        gallery()["android/java/com/fandhe/platform/FandheLibrary.java"]
+            .contains("NAME = \"fandhe_gallery\"")
+    );
+    // LAUNCHER の filter は現行と同じ。
+    let launcher = |t: &[Tag]| {
+        main_activity_filters(t)
+            .into_iter()
+            .find(|f| f.actions.iter().any(|a| a == "android.intent.action.MAIN"))
+    };
+    assert_eq!(launcher(&gen), launcher(&cur));
+    assert!(launcher(&gen).is_some());
 }
 
 /// `fandhe.gradle` の `java.srcDirs += [...]` などの引用符内を取り出す。
@@ -318,6 +352,49 @@ fn plist_keys(plist: &str) -> BTreeSet<String> {
         .skip(1)
         .map(|s| s.split("</key>").next().unwrap().to_string())
         .collect()
+}
+
+/// `<key>K</key>` の次の `<array>` の要素（`<string>`・`<integer>`）を連結して返す。
+fn plist_array(plist: &str, key: &str) -> String {
+    let body = plist.split(&format!("<key>{key}</key>")).nth(1).unwrap();
+    let body = body
+        .split("<array>")
+        .nth(1)
+        .unwrap()
+        .split("</array>")
+        .next()
+        .unwrap();
+    body.split_whitespace().collect()
+}
+
+#[test]
+fn ios_shell_values_match_current_info_plist() {
+    let gen = &gallery()["ios/Info.plist"];
+    let cur = repo("platforms/apple/FandheIosApp/Resources/Info.plist");
+    assert!(!gen.contains("$("), "Xcode 変数が残っている");
+    assert_eq!(
+        plist_string(gen, "MinimumOSVersion"),
+        plist_string(&cur, "MinimumOSVersion")
+    );
+    // 最低対応版は .cargo/config.toml の IPHONEOS_DEPLOYMENT_TARGET とも揃える。
+    assert!(repo(".cargo/config.toml").contains(&format!(
+        "IPHONEOS_DEPLOYMENT_TARGET = {{ value = \"{}\"",
+        plist_string(gen, "MinimumOSVersion")
+    )));
+    assert_eq!(
+        plist_array(gen, "UIDeviceFamily"),
+        plist_array(&cur, "UIDeviceFamily")
+    );
+    assert!(gen.contains("<key>UILaunchScreen</key>"));
+    assert_eq!(
+        plist_string(gen, "CFBundleIdentifier"),
+        plist_string(&cur, "CFBundleIdentifier")
+    );
+    assert_eq!(
+        plist_string(gen, "CFBundleExecutable"),
+        "fandhe-gallery-desktop"
+    );
+    assert!(!gen.contains("CFBundleSupportedPlatforms"));
 }
 
 #[test]
@@ -407,6 +484,8 @@ fn write_crate(root: &Path, dir: &str, toml: &str) {
     let d = root.join("c").join(dir);
     fs::create_dir_all(d.join("src")).unwrap();
     fs::write(d.join("src/lib.rs"), "").unwrap();
+    // アプリ（root）は bin が 1 つ要る（iOS の実行体）。他の crate には無害。
+    fs::write(d.join("src/main.rs"), "fn main() {}\n").unwrap();
     fs::write(d.join("Cargo.toml"), toml).unwrap();
 }
 
@@ -428,6 +507,17 @@ fn make_ws(tag: &str, app: &str, crates: &[(&str, String)]) -> PathBuf {
 
 fn pkg(name: &str, rest: &str) -> String {
     format!("[package]\nname = \"{name}\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n{rest}")
+}
+
+/// アプリの crate。殻に要る cdylib の lib target と bundle id を持つ（`rest` は追加の TOML）。
+fn app_pkg(rest: &str) -> String {
+    pkg(
+        "app",
+        &format!(
+            "[lib]\ncrate-type = [\"cdylib\", \"rlib\"]\n\n\
+             [package.metadata.fandhe-app.ios]\nbundle-id = \"com.example.app\"\n\n{rest}"
+        ),
+    )
 }
 
 /// Android の権限と iOS の説明文キーを持つ機能 crate。
@@ -459,10 +549,7 @@ fn missing_usage_description_is_an_error() {
             (&dir, toml),
             (
                 "app",
-                pkg(
-                    "app",
-                    "[dependencies]\nfandhe-cap-cam = { path = \"../fandhe-cap-cam\" }\n",
-                ),
+                app_pkg("[dependencies]\nfandhe-cap-cam = { path = \"../fandhe-cap-cam\" }\n"),
             ),
         ],
     );
@@ -472,8 +559,7 @@ fn missing_usage_description_is_an_error() {
         "{e}"
     );
     // 説明文を書けば通り、文言がそのまま出る。
-    let app = pkg(
-        "app",
+    let app = app_pkg(
         "[dependencies]\nfandhe-cap-cam = { path = \"../fandhe-cap-cam\" }\n\
          [package.metadata.fandhe-app.ios.usage-descriptions]\nNSCameraUsageDescription = \"写真を撮ります\"\n",
     );
@@ -490,10 +576,7 @@ fn invalid_declaration_in_dependency_is_an_error() {
         "fandhe-cap-bad",
         "[package.metadata.fandhe]\nid = \"Bad_ID\"\n",
     );
-    let app = pkg(
-        "app",
-        "[dependencies]\nfandhe-cap-bad = { path = \"../fandhe-cap-bad\" }\n",
-    );
+    let app = app_pkg("[dependencies]\nfandhe-cap-bad = { path = \"../fandhe-cap-bad\" }\n");
     let m = make_ws("baddecl", "app", &[("fandhe-cap-bad", bad), ("app", app)]);
     let e = errs(generate(Some(&m)));
     assert!(e.contains("fandhe-cap-bad"), "{e}");
@@ -502,8 +585,7 @@ fn invalid_declaration_in_dependency_is_an_error() {
 #[test]
 fn features_enabled_by_another_member_do_not_leak_into_the_app() {
     let (dir, toml) = cap("cam");
-    let app = pkg(
-        "app",
+    let app = app_pkg(
         "[features]\nextra = [\"dep:fandhe-cap-cam\"]\n[dependencies]\n\
          fandhe-cap-cam = { path = \"../fandhe-cap-cam\", optional = true }\n",
     );
@@ -518,29 +600,29 @@ fn features_enabled_by_another_member_do_not_leak_into_the_app() {
         &[(&dir, toml.clone()), ("app", app.clone()), ("other", other)],
     );
     let g = generate(Some(&m)).unwrap();
-    assert_eq!(g.files.keys().collect::<Vec<_>>(), [".fandhe-gen"]);
+    assert!(!g.files["android/AndroidManifest.xml"].contains("android.permission.CAMERA"));
+    assert!(!g.files["ios/Info.plist"].contains("NSCameraUsageDescription"));
 
     // 対照: app 自身の default が有効にすれば出る（説明文は書く）。
     let app = app.replace("[features]\n", "[features]\ndefault = [\"extra\"]\n")
         + "[package.metadata.fandhe-app.ios.usage-descriptions]\nNSCameraUsageDescription = \"x\"\n";
     let m = make_ws("leak-ctl", "app", &[(&dir, toml), ("app", app)]);
-    assert!(generate(Some(&m))
-        .unwrap()
-        .files
-        .contains_key("android/AndroidManifest.xml"));
+    assert!(
+        generate(Some(&m)).unwrap().files["android/AndroidManifest.xml"]
+            .contains("android.permission.CAMERA")
+    );
 }
 
 #[test]
 fn target_specific_dependency_reaches_only_its_os() {
     let (dir, toml) = cap("cam");
     // Android にだけ依存する。iOS には届かないので、iOS の説明文が無くてもエラーにならない。
-    let app = pkg(
-        "app",
+    let app = app_pkg(
         "[target.'cfg(target_os = \"android\")'.dependencies]\n\
          fandhe-cap-cam = { path = \"../fandhe-cap-cam\" }\n",
     );
     let m = make_ws("target", "app", &[(&dir, toml), ("app", app)]);
     let g = generate(Some(&m)).unwrap();
-    assert!(g.files.contains_key("android/AndroidManifest.xml"));
-    assert!(!g.files.keys().any(|k| k.starts_with("ios/")));
+    assert!(g.files["android/AndroidManifest.xml"].contains("android.permission.CAMERA"));
+    assert!(!g.files["ios/Info.plist"].contains("NSCameraUsageDescription"));
 }
