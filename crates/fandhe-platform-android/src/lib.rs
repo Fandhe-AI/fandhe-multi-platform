@@ -7,6 +7,10 @@
 //! - [`set_android_app`] / [`android_app`]: `android_main` が受け取る [`AndroidApp`] の保持
 //! - [`JniCallFailed`]: JNI 呼び出し中のエラーの受け皿
 //! - [`with_activity`]: JavaVM への attach と Activity 取得の定型（`unsafe` はここに閉じる）
+//! - [`with_activity_class`]: 上に加え、機能の Java クラスを解決して static メソッドを呼ぶ定型
+//!
+//! Java 側の共有クラス（`RequestTracker`・`FeatureLifecycleProvider`、`android/java`）も本 crate が持つ。
+//! 機能 crate の宣言ではなくこの crate の宣言（`[package.metadata.fandhe]`）が srcDirs に載せる。
 //!
 //! Android 以外では空（`cfg` で全体を除外）。
 
@@ -75,5 +79,25 @@ pub fn with_activity<T, E: From<jni::errors::Error>>(
         // （jni の `as_cast_raw` 文書「Don't wrap as Global/Auto」参照）。
         let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
         f(env, &activity)
+    })
+}
+
+/// [`with_activity`] に加えて、機能の Java クラスをアプリの class loader で解決し、`f` に渡す。
+///
+/// 機能の Rust は利用者の `MainActivity` のメソッドを呼ばず、機能 crate の Java が持つ static メソッドを
+/// 呼ぶ（Activity は第 1 引数で渡す）。これで利用者の Activity に受け口を書かせずに済む。
+/// ネイティブスレッドからの `FindClass` はシステム class loader を使いアプリのクラスを見つけられないため、
+/// Activity の class loader（`LoaderContext::FromObject`）で解決する。`class_name` は呼び出し側の固定の
+/// 文字列リテラル（`"com.fandhe.platform.X"` のドット区切り）だけを渡し、外部入力を混ぜない。
+/// 呼び出し元は各機能 crate の `android.rs`（効果ドライバのワーカースレッド）。
+pub fn with_activity_class<T, E: From<jni::errors::Error>>(
+    app: &AndroidApp,
+    class_name: &jni::strings::JNIStr,
+    f: impl FnOnce(&mut jni::Env, &jni::objects::JObject, &jni::objects::JClass) -> Result<T, E>,
+) -> Result<T, E> {
+    with_activity(app, |env, activity| {
+        let class =
+            jni::refs::LoaderContext::FromObject(activity).load_class(env, class_name, false)?;
+        f(env, activity, &class)
     })
 }

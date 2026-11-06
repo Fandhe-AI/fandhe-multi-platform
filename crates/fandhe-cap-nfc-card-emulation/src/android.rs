@@ -4,12 +4,12 @@
 //!
 //! 流れ: OS は `android/res/xml/apduservice.xml` の AID への SELECT を `NfcCardEmulationService`
 //! （`HostApduService`）へ振り、サービスが固定の応答を返して `NfcCardEmulationHelper.recordResponse` が
-//! プロセス内 static に回数と時刻を記録する。Rust は `MainActivity.nfcCardEmulationStatus(aid)` を
-//! JNI で呼び、`long[5] = [state, nfcEnabled, defaultForAid, responses, sinceLastMs]`
+//! プロセス内 static に回数と時刻を記録する。Rust は `NfcCardEmulationHelper.status(Context, aid)`（static。
+//! 利用者の `MainActivity` に受け口は要らない、#1257）を JNI で呼び、`long[5] = [state, nfcEnabled, defaultForAid, responses, sinceLastMs]`
 //! （配置の正は Java の `NfcCardEmulationHelper`）を [`decode_status`] で契約の型へ写す。
 //!
-//! JNI の署名は Java 側（`MainActivity`）と本ファイルの 2 か所で一致させる:
-//! `nfcCardEmulationStatus (Ljava/lang/String;)[J`。Java に `native` 宣言は無く Rust から Java への
+//! JNI の署名は Java 側（`NfcCardEmulationHelper`）と本ファイルの 2 か所で一致させる:
+//! `status (Landroid/content/Context;Ljava/lang/String;)[J`。Java に `native` 宣言は無く Rust から Java への
 //! 一方向なので no-op スタブは置かない。AID の正は [`crate::AID`] だけで、
 //! `apduservice.xml` への複製はテストで固定する。AndroidApp の取得と JavaVM への attach は
 //! `fandhe-platform-android` の `with_activity` に任せ、本ファイルに `unsafe` は無い。
@@ -78,36 +78,43 @@ fn decode_status(raw: Option<&[i64]>) -> Result<HceStatus, CardEmulationError> {
 
 #[cfg(target_os = "android")]
 mod imp {
-    use fandhe_platform_android::{JniCallFailed, android_app, with_activity};
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
 
-    /// `nfcCardEmulationStatus` を呼んで `long[5]` を読む。失敗は `None`。
+    /// `NfcCardEmulationHelper.status` を呼んで `long[5]` を読む。失敗は `None`。
     /// Java 例外は clear し、文言は読まない。
     pub(super) fn read_status(aid: &str) -> Option<[i64; super::STATUS_LEN]> {
         let app = android_app()?;
-        with_activity(&app, |env, activity| -> Result<_, JniCallFailed> {
-            let result = (|| {
-                use jni::objects::JLongArray;
-                let j_aid = env.new_string(aid)?;
-                let ret = env.call_method(
-                    activity,
-                    jni::jni_str!("nfcCardEmulationStatus"),
-                    jni::jni_sig!((java.lang.String) -> long[]),
-                    &[jni::objects::JValue::Object(&j_aid)],
-                )?;
-                let arr = env.cast_local::<JLongArray>(ret.l()?)?;
-                if arr.is_null() || arr.len(env)? != super::STATUS_LEN {
-                    return Ok(None);
+        with_activity_class(
+            &app,
+            jni::jni_str!("com.fandhe.platform.NfcCardEmulationHelper"),
+            |env, activity, class| -> Result<_, JniCallFailed> {
+                let result = (|| {
+                    use jni::objects::JLongArray;
+                    let j_aid = env.new_string(aid)?;
+                    let ret = env.call_static_method(
+                        class,
+                        jni::jni_str!("status"),
+                        jni::jni_sig!((android.content.Context, java.lang.String) -> long[]),
+                        &[
+                            jni::objects::JValue::Object(activity),
+                            jni::objects::JValue::Object(&j_aid),
+                        ],
+                    )?;
+                    let arr = env.cast_local::<JLongArray>(ret.l()?)?;
+                    if arr.is_null() || arr.len(env)? != super::STATUS_LEN {
+                        return Ok(None);
+                    }
+                    let mut v = [0i64; super::STATUS_LEN];
+                    arr.get_region(env, 0, &mut v)?;
+                    Ok::<_, jni::errors::Error>(Some(v))
+                })();
+                if result.is_err() && env.exception_check() {
+                    // 例外は自動クリアされない（jni 0.22）。後続 JNI に影響させない。
+                    env.exception_clear();
                 }
-                let mut v = [0i64; super::STATUS_LEN];
-                arr.get_region(env, 0, &mut v)?;
-                Ok::<_, jni::errors::Error>(Some(v))
-            })();
-            if result.is_err() && env.exception_check() {
-                // 例外は自動クリアされない（jni 0.22）。後続 JNI に影響させない。
-                env.exception_clear();
-            }
-            Ok(result?)
-        })
+                Ok(result?)
+            },
+        )
         .ok()
         .flatten()
     }

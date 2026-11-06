@@ -86,6 +86,19 @@ graph TD
   既定の文言のまま審査に出る事故を避けるためです
 - Java はソース配布にします（#1216 で同梱を確かめます）。アプリの applicationId と独立した固定パッケージ `com.fandhe.platform`（仮名、公開前に確定）へ移しました（#1167）。
   JNI シンボルが利用者の applicationId に依存しないようにするためです
+- 利用者の `MainActivity` に機能固有のコードを書かせません（#1257）。機能の追加・削除は依存の追加・削除だけで済ませます。
+  - Rust から Java へは、機能 crate の Java が持つ static メソッドを JNI で直接呼びます（`fandhe-platform-android` の
+    `with_activity_class` が Activity の class loader でクラスを解決します。ネイティブスレッドの `FindClass` はアプリのクラスを見つけられません）。
+    Activity は第 1 引数で渡します。Activity ごとの状態は helper の表（`WeakHashMap`、破棄時に外す）に持ち、表に無ければ
+    Java が `false` を返して Rust が失敗として返します（成功へ畳みません）
+  - Activity のライフサイクルへの参加は、機能ごとの非公開 `ContentProvider`（共通層の `FeatureLifecycleProvider` を継承）が
+    行います。provider は OS がプロセス開始時に生成し、`ActivityLifecycleCallbacks` で `GameActivity` の生成・状態保存・破棄だけを
+    機能の helper へ流します。provider は宣言の `android.components`（`kind = "provider"`、`authorities` は
+    `${applicationId}.fandhe.<id>`）で出ます。`registerForActivityResult` は登録キーを明示し、生成順への依存を残しません
+  - 利用者の `MainActivity` に要るのは `GameActivity` の継承と、`static` 初期化子での `System.loadLibrary` だけです
+  - 採らなかった案: `gen` が委譲コードを生成する（出力と宣言の欄が増える）、共通の基底 Activity に集める（機能の一覧を知る手段が別に要る）、
+    単一 provider に meta-data を集める（同名コンポーネントの異なる定義を拒否する現行の統合規則に欄の追加が要る）
+  - 機能が数十に増えて起動時間が問題になれば、`androidx.startup` 型の単一 provider へ寄せます（Phase 5 で計測してから）
 - 細かい形式と検証・統合の規則は `capability-declaration.md` に定めました（#1160）。
   本書は 5 節の表で「形式が表せなければならない種類」だけを定めます
 

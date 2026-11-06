@@ -16,6 +16,8 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.Lifecycle;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.mlkit.common.MlKitException;
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions;
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning;
@@ -27,15 +29,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-// 書類スキャン（Issue #1125、親 #145 の b-android）の Android 実装ヘルパー。範囲は ML Kit Document Scanner
+// 書類スキャン（Issue #1125、親 #145 の b-android、#1257）の Android 実装ヘルパー。範囲は ML Kit Document Scanner
 // （Google Play services 提供の撮影 UI）を出し、返った 1 ページ目を長辺 2048 以下の JPEG にして Rust へ返すこと。
-// MainActivity から生成・委譲される。Rust の `device/android_document_scan.rs` が
-// `MainActivity.requestDocumentScan(id, maxBytes)` を JNI で呼び、結果を `nativeOnDocumentScanResult` で受けて
-// `document_scan::complete_from_os` へ渡す。撮影 UI を起動する直前に `nativeTryBeginPresent` で Rust 側の
+// 利用者の `MainActivity` には何も書かせない。Rust の `src/android.rs` が static の
+// `scan(Activity, id, maxBytes)` を JNI で呼び、結果を `nativeOnDocumentScanResult` で受けて
+// `document_scan::complete_from_os` へ渡す。Activity への参加は `DocumentScanLifecycle`
+// （非公開 ContentProvider、`FeatureLifecycleProvider` 継承）が行い、生成時に `attach`、破棄時に `detach` を呼ぶ。
+// Activity ごとの helper は `HELPERS` に持つ（Rust のワーカーと UI スレッドの両方から触るので同期化し、
+// 破棄時に必ず外す）。表に無い Activity への要求は false を返し、Rust が `NotForeground` として返す。撮影 UI を起動する直前に `nativeTryBeginPresent` で Rust 側の
 // 期限切れ・差し替えと排他にする。
 //
 // 流れ: scan（JNI スレッド）→ start（UI スレッド。前面確認・GMS 判定）→ getStartScanIntent（Task を
@@ -76,6 +84,12 @@ final class DocumentScanHelper {
     private static final int MAX_SIDE = 2048;
     private static final int JPEG_QUALITY = 80;
 
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, DocumentScanHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    private static final String KEY_SCAN = "fandhe.document-scan.scan";
+
     private static native boolean nativeTryBeginPresent(long requestId);
 
     private static native void nativeOnDocumentScanResult(long requestId, int kind, int pageCount, byte[] jpeg);
@@ -85,7 +99,7 @@ final class DocumentScanHelper {
     // Activity が GC された後も削除対象を判定できるようにするため。
     private volatile File cacheDir;
     private final RequestTracker request = new RequestTracker();
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
+    // ランチャーの登録は STARTED より前に呼ぶ契約のため、`attach`（`Activity.onCreate` 内）で生成する。
     private final ActivityResultLauncher<IntentSenderRequest> launcher;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -95,14 +109,46 @@ final class DocumentScanHelper {
     private int maxBytes;
     private boolean destroyed;
 
-    DocumentScanHelper(ComponentActivity activity) {
+    private DocumentScanHelper(ComponentActivity activity) {
         this.activityRef = new WeakReference<>(activity);
-        this.launcher = activity.registerForActivityResult(
-                new ActivityResultContracts.StartIntentSenderForResult(), this::onActivityResult);
+        this.launcher = activity.getActivityResultRegistry().register(
+                KEY_SCAN, activity, new ActivityResultContracts.StartIntentSenderForResult(),
+                this::onActivityResult);
     }
 
-    // JNI スレッドから呼ばれる。
-    void scan(long id, int maxBytes) {
+    // Activity の生成時（`DocumentScanLifecycle` から）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new DocumentScanHelper(activity));
+    }
+
+    // Activity の破棄時（`DocumentScanLifecycle` から）。保留中の要求を中断で確定し、表から外す。
+    static void detach(Activity activity) {
+        DocumentScanHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // JNI スレッド（Rust のワーカー）から呼ばれる入口。helper が無い（生成前・破棄後・対象外の Activity）
+    // なら false を返し、Rust が失敗として返す（結果の native は呼ばれない）。
+    static boolean scan(Activity activity, long id, int maxBytes) {
+        DocumentScanHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            return false;
+        }
+        helper.begin(id, maxBytes);
+        return true;
+    }
+
+    // Google Play services が使えるか。SUCCESS だけを可とし、それ以外（無い・古い・無効）は非対応にする。
+    // 更新ダイアログは出さない。共通層へ置かない理由は、GMS を使わない機能を選んだ利用者に
+    // Play services の依存を乗せないため。
+    private static boolean isGmsAvailable(android.content.Context ctx) {
+        return GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(ctx)
+                == ConnectionResult.SUCCESS;
+    }
+
+    private void begin(long id, int maxBytes) {
         synchronized (this) {
             request.track(id);
             launchedId = RequestTracker.NONE;
@@ -128,8 +174,8 @@ final class DocumentScanHelper {
         // Activity が生きているうちに保持する。変換中に破棄されても deleteAll が WeakReference に依存しない。
         cacheDir();
         try {
-            // SUCCESS 以外（無い・古い・無効）は非対応（GmsAvailability の doc 参照）。
-            if (!GmsAvailability.isAvailable(activity)) {
+            // SUCCESS 以外（無い・古い・無効）は非対応（isGmsAvailable の doc 参照）。
+            if (!isGmsAvailable(activity)) {
                 finish(id, KIND_UNSUPPORTED, 0, null);
                 return;
             }
@@ -403,7 +449,7 @@ final class DocumentScanHelper {
         }
     }
 
-    synchronized void onDestroy() {
+    private synchronized void onDestroy() {
         destroyed = true;
         long id = request.current();
         if (id != RequestTracker.NONE) {

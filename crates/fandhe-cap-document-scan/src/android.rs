@@ -3,7 +3,8 @@
 //! [`implementation`] が呼ばれる。Java 側 `DocumentScanHelper` が Google Play services の撮影 UI を出し、
 //! 1 ページ目を長辺 2048 以下の JPEG にして返す。
 //!
-//! 流れ: `scan` → JNI `MainActivity.requestDocumentScan(id, maxBytes)` → Java が UI スレッドで前面・
+//! 流れ: `scan` → JNI `DocumentScanHelper.scan(Activity, id, maxBytes)`（static。利用者の `MainActivity` に
+//! 受け口は要らない。Activity への参加は `DocumentScanLifecycle`、#1257）→ Java が UI スレッドで前面・
 //! Google Play services を確認し、撮影 UI の起動直前に `nativeTryBeginPresent`（本ファイルの export が
 //! `driver::try_begin_present` を呼ぶ）で期限切れ・差し替えと排他にする → 結果を worker で JPEG 化し
 //! ページのファイルを消してから `nativeOnDocumentScanResult(id, kind, pageCount, jpeg)` →
@@ -12,6 +13,8 @@
 //! 結果コードの写像（Java `DocumentScanHelper.KIND_*` と同じ値）: `KIND_SCANNED` は
 //! `ScannedPage::from_os`（1 段目の検査）を通した成功、`KIND_CANCELLED` は `Ok(Cancelled)`、
 //! 他は同名の失敗、`KIND_INTERNAL` と未知のコードは `Internal`（成功へ倒さない）。
+//! JNI 署名（Java 宣言と本ファイルの 2 か所で一致させる）: `scan (Landroid/app/Activity;JI)Z`。`false` は
+//! Activity に helper が無いことで、`NotForeground` として返す。
 //! `PermissionDenied` は Android では返さない（撮影 UI は Play services 側でカメラ権限が不要）。
 //! `TimedOut` は bridge の期限だけが確定する。成功値は bridge が表示開始を記録した要求にしか認めない。
 //! 上限バイト数は `MAX_PAGE_BYTES` を正とし、Java へ引数で渡す（複製しない）。
@@ -21,7 +24,7 @@
 //! 守らない範囲: 2 ページ目以降・PDF・撮影 UI の表示中のプロセス死・複数プロセス・初回のモジュール
 //! ダウンロードが期限（10 秒）を超えること。画像と OS の文言はログに出さない。
 //!
-//! no-op スタブは置かない: Java の native は Rust の `requestDocumentScan` を経た後でしか呼ばれない
+//! no-op スタブは置かない: Java の native は Rust の `scan` を経た後でしか呼ばれない
 //! （他の Android 機能と同じ判断）。
 
 use std::sync::Arc;
@@ -84,29 +87,42 @@ impl DocumentScanner for AndroidDocumentScanner {
 
 #[cfg(target_os = "android")]
 mod imp {
-    use fandhe_platform_android::{JniCallFailed, android_app, with_activity};
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
     use jni::objects::JValue;
 
     use super::DocumentScanFailure;
     use crate::MAX_PAGE_BYTES;
 
-    /// 受理は `MainActivity.requestDocumentScan` を呼ぶところまで。Activity 未確立は `NotForeground`、
-    /// JNI 失敗（呼び出しの例外を含む）は `Internal`。
+    /// 受理は `DocumentScanHelper.scan` が true を返すところまで。Activity 未確立と helper 無しは
+    /// `NotForeground`、JNI 失敗（呼び出しの例外を含む）は `Internal`。
     pub(super) fn scan(id: u64) -> Result<(), DocumentScanFailure> {
         let Some(app) = android_app() else {
             return Err(DocumentScanFailure::NotForeground);
         };
         let max_bytes = i32::try_from(MAX_PAGE_BYTES).unwrap_or(i32::MAX);
-        with_activity(&app, |env, a| -> Result<(), JniCallFailed> {
-            env.call_method(
-                a,
-                jni::jni_str!("requestDocumentScan"),
-                jni::jni_sig!((long, int) -> ()),
-                &[JValue::Long(id as jni::sys::jlong), JValue::Int(max_bytes)],
-            )?;
+        let accepted = with_activity_class(
+            &app,
+            jni::jni_str!("com.fandhe.platform.DocumentScanHelper"),
+            |env, a, class| -> Result<bool, JniCallFailed> {
+                let ret = env.call_static_method(
+                    class,
+                    jni::jni_str!("scan"),
+                    jni::jni_sig!((android.app.Activity, long, int) -> boolean),
+                    &[
+                        JValue::Object(a),
+                        JValue::Long(id as jni::sys::jlong),
+                        JValue::Int(max_bytes),
+                    ],
+                )?;
+                Ok(ret.z()?)
+            },
+        )
+        .map_err(|_| DocumentScanFailure::Internal)?;
+        if accepted {
             Ok(())
-        })
-        .map_err(|_| DocumentScanFailure::Internal)
+        } else {
+            Err(DocumentScanFailure::NotForeground)
+        }
     }
 }
 

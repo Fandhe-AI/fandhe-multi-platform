@@ -37,9 +37,9 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
      汎用配線のため残置可（削除しても実害はない）
    - `crates/fandhe-egui-proxy/Cargo.toml` の android target 分岐の `jni` 依存行、
      ルート `Cargo.toml` の `[workspace.dependencies]` の `jni` 行を削除する
-   - `platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java` の
-     `cameraCaptureHelper` フィールドと `requestCameraCapture`・`onCreate`/`onSaveInstanceState` の委譲を削除する
-     （実体は `CameraCaptureHelper.java`、機能 crate 側）
+   - camera-capture の Android 配線: `MainActivity.java` に残るものは無い（#1257 で除いた）。Activity への参加は
+     機能 crate の `CameraCaptureLifecycle`（非公開 provider）なので、`AndroidManifest.xml` の `<provider>` 1 件を
+     crate ごと削除すればよい
    - `crates/fandhe-egui-proxy/src/device/tilt.rs` の `gravity_to_tilt`（Issue #831）・
      `crates/fandhe-egui-proxy/src/device/android.rs` の `nativeOnMotionChanged` JNI
      エクスポートを削除する（`shared_motion`/`drive` 等ターゲット非依存の部分は残置）
@@ -75,8 +75,8 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
      （Android の Java・res と macOS の Swift・Rust を含む）を削除し、ルート `Cargo.toml` の `members`、
      `crates/fandhe-gallery/Cargo.toml` の feature `device` と optional 依存、`registry.rs` の
      `home_widget_show` の effect 行、`scripts/android/build-android.sh` の `-p fandhe-cap-home-widget`、
-     `platforms/android/app/build.gradle.kts` の srcDirs 2 行、`AndroidManifest.xml` の `<receiver>`、
-     `MainActivity.java` の `homeWidgetSetText`/`homeWidgetCurrentText` メソッドを削除する。
+     `platforms/android/app/build.gradle.kts` の srcDirs 2 行、`AndroidManifest.xml` の `<receiver>` を削除する
+     （`MainActivity.java` に受け口は無い。#1257 で `HomeWidgetProvider` の static へ移した）。
      macOS は `platforms/apple/project.yml` の `FandheTextWidget.sources` の crate パス行と
      `FandheWidgets.swift` の `FandheTextWidget()` を外す
    iOS（#751）: 以下を削除・復元する

@@ -8,7 +8,7 @@
 // （src/main/java/com/fandhe/platform/MainActivity.java、GameActivity 継承）経由で
 // それを起動する薄いラッパー。GameActivity は NativeActivity と異なりサブクラス化と
 // ネイティブライブラリの明示ロードが必須のため、`hasCode="false"` 前提は撤回した
-// （追加コードは MainActivity.java と補助クラス RequestTracker.java に閉じる）。
+// （追加コードは MainActivity.java と、共通層・機能 crate の android/java に閉じる）。
 //
 // sub-issue 間のスコープ境界（重要）:
 //   - 開発署名鍵による署名（signingConfigs）は本ファイルで実装済み（TASK-11.2-S3 /
@@ -75,6 +75,11 @@ android {
             // 対象範囲外の API 移行としてここでは非推奨警告を許容する）。
             @Suppress("DEPRECATION")
             jniLibs.srcDirs("../../../target/android/jniLibs")
+
+            // 共通層 fandhe-platform-android の Java（RequestTracker・FeatureLifecycleProvider）。機能 crate の
+            // helper が同じパッケージから使う。複製せず crate の置き場を直接読む。
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-platform-android/android/java")
 
             // 機能 crate が持つ Java・res（宣言の `[package.metadata.fandhe.android] java` / `res`）。生成
             // （`cargo fandhe gen`、#1176）が入るまでは手で並べる。cargo-fandhe の突き合わせテストが、

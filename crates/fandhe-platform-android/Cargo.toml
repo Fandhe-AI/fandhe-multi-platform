@@ -15,3 +15,12 @@ publish = false
 # game-activity を自分で宣言するのは、無いと android-activity がビルドできないため。
 android-activity = { workspace = true, features = ["game-activity"] }
 jni = { workspace = true }
+
+# 共通層も機能宣言を持つ（`fandhe-cap-*` 以外は id と crate 名の一致を求められない）。Java の共有クラス
+# （RequestTracker・FeatureLifecycleProvider）を `cargo fandhe gen` の srcDirs に載せるため。
+# 機能 crate は Android の依存にこの crate を持つので、到達判定に入る。
+[package.metadata.fandhe]
+id = "platform-android"
+
+[package.metadata.fandhe.android]
+java = ["android/java"]

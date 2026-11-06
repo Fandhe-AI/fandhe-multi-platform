@@ -28,6 +28,14 @@ frameworks = ["AVFoundation", "VisionKit"]
 gradle = ["com.google.android.gms:play-services-mlkit-document-scanner:16.0.0"]
 java = ["android/java"]
 
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+# Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.DocumentScanLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.document-scan" }
+
 [dependencies]
 fandhe-core = { path = "../fandhe-core" }
 fandhe-runtime = { path = "../fandhe-runtime" }

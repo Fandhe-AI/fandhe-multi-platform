@@ -17,8 +17,10 @@
 // Phase 11（Issue #935）のゲームコントローラ（`InputManager`/`dispatchKeyEvent`/
 // `dispatchGenericMotionEvent`）中継、Phase 11（Issue #1218）のカスタム URL scheme
 // （`fandhe://`、`onCreate` の `getIntent()` / `onNewIntent`）受信中継、
-// Phase 11（Issue #607）の共有テキスト受信（`ShareReceiveHelper.deliver` を同じ経路から呼ぶ）
 // （いずれも feature `device` 切り離し時に削除）。
+// 機能 crate へ移した 5 機能（カメラ撮影・書類スキャン・NFC カードエミュレーション・ホーム画面ウィジェット・
+// 共有テキスト受信）の JNI 入口と Activity への参加は、各 crate の Java（static 入口と非公開 provider）が持つ
+// ためここには無い（Issue #1257）。
 // window insets 中継の経緯（Issue #579: `AndroidApp::content_rect()` は GameActivity
 // 経路（android-activity 0.6.1、Pixel 10a / Android 16 実機）で insets を反映せず常に
 // 画面全体を返すことを logcat で実測確認した。`GameActivity_getWindowInsets` C API は
@@ -909,13 +911,6 @@ public class MainActivity extends GameActivity {
         companionDeviceHelper.pick(requestId);
     }
 
-    // 書類スキャン（Issue #1125）。実装は `DocumentScanHelper`（結果ランチャーを STARTED 前に登録）。
-    private final DocumentScanHelper documentScanHelper = new DocumentScanHelper(this);
-
-    void requestDocumentScan(long requestId, int maxBytes) {
-        documentScanHelper.scan(requestId, maxBytes);
-    }
-
     // 物・サービスの決済（Issue #1131）。実装は `PaymentRequestHelper`（結果ランチャーを STARTED 前に登録）。
     private final PaymentRequestHelper paymentRequestHelper = new PaymentRequestHelper(this);
 
@@ -949,12 +944,6 @@ public class MainActivity extends GameActivity {
 
     boolean carDisplayIsShowing() {
         return CarDisplayScreen.isShowing();
-    }
-
-    // NFC カードエミュレーション（Issue #1129）。実装は `NfcCardEmulationHelper`。Rust の
-    // `crates/fandhe-cap-nfc-card-emulation/src/android.rs` が JNI（署名 `(Ljava/lang/String;)[J`）で呼ぶ。
-    long[] nfcCardEmulationStatus(String aid) {
-        return NfcCardEmulationHelper.status(getApplicationContext(), aid);
     }
 
     // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
@@ -1744,11 +1733,9 @@ public class MainActivity extends GameActivity {
     // Rust 側はキャンセルを失敗として扱わない（`decode_tts_result` 参照）。
     private static final int TTS_STATUS_CANCELLED = 7;
 
-    // カメラ撮影（Issue #750 / #1170）。実装は機能 crate `fandhe-cap-camera-capture` の `CameraCaptureHelper`
-    // （権限・撮影ランチャーを STARTED 前に登録、再生成時の中断決着、`nativeOnCameraResult`）。
-    // Rust の `AndroidCamera::capture` が `requestCameraCapture(long)` を JNI で呼ぶ。
-    // `registerForActivityResult` の登録キーは生成順の連番のため、この位置（旧 launcher フィールドと同じ）から動かさない。
-    private final CameraCaptureHelper cameraCaptureHelper = new CameraCaptureHelper(this);
+    // カメラ撮影・書類スキャン・NFC カードエミュレーション・ホーム画面ウィジェット・共有受信の 5 機能は、
+    // 機能 crate が JNI の入口（static）と Activity への参加（非公開 provider）を持つため、ここには何も書かない
+    // （#1257、docs/architecture/consumer-app-structure.md §Android の MainActivity）。
 
     // Storage Access Framework の「開く」ダイアログ（Issue #874）。`ACTION_OPEN_DOCUMENT`
     // + `CATEGORY_OPENABLE` を組み立てる `OpenDocument` contract を使う（`CameraCaptureHelper` の `takePicturePreview`
@@ -2335,7 +2322,6 @@ public class MainActivity extends GameActivity {
         }
         setIntent(intent);
         deliverUrlIntent(intent);
-        ShareReceiveHelper.deliver(intent);
     }
 
     /**
@@ -2379,7 +2365,7 @@ public class MainActivity extends GameActivity {
         installAccessibilityOffGuard();
         fullscreenHelper.register();
 
-        // コールドスタートの URL・共有テキストを届ける。二重配送を避けるため、再生成（savedInstanceState
+        // コールドスタートの URL を届ける（共有テキストは機能 crate の `ShareReceiveLifecycle` が届ける）。二重配送を避けるため、再生成（savedInstanceState
         // あり）と履歴（Recents）からの再起動（元のインテントが再送される）では届けない。
         // 同一プロセス内の再生成は Rust 側 static の受信箱が保持しているので表示は保たれる。
         // 守らない範囲: プロセス死亡後の復元では前回の URL を再表示しない（新プロセスの
@@ -2387,7 +2373,6 @@ public class MainActivity extends GameActivity {
         if (savedInstanceState == null
                 && (getIntent().getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) {
             deliverUrlIntent(getIntent());
-            ShareReceiveHelper.deliver(getIntent());
         }
 
         // `onCreate` のたびに作り直す（`biometricPrompt` doc 参照）。
@@ -2450,8 +2435,6 @@ public class MainActivity extends GameActivity {
         locationManager = getSystemService(LocationManager.class);
         inputManager = getSystemService(InputManager.class);
 
-        // Activity 再生成後の状態復元。撮影要求の復元は `CameraCaptureHelper.onCreate`（機能 crate 側）。
-        cameraCaptureHelper.onCreate(savedInstanceState);
         // ファイル選択（Issue #874）は `filePickRequest` を Bundle へ保存・復元
         // しない（案 B の決定事項）。`filePickRequest` は static のため Activity
         // 再生成を跨いで値を保持しており（`filePickRequest` doc 参照）、
@@ -2477,13 +2460,6 @@ public class MainActivity extends GameActivity {
         // 付け先」: SurfaceView ではなく DecorView。実機で届かない場合は
         // `mSurfaceView` への付け替えを検討する、実機確認時の確認事項）。
         getWindow().getDecorView().setOnDragListener(dragListener);
-    }
-
-    // Activity 再生成前に撮影要求の状態を保存する（`onCreate` の復元と対、Issue #750 / #1170）。
-    @Override
-    protected void onSaveInstanceState(Bundle outState) {
-        super.onSaveInstanceState(outState);
-        cameraCaptureHelper.onSaveInstanceState(outState);
     }
 
     // BLE スキャン（Issue #1062、`device/bluetooth_le.rs` の Android 経路）。
@@ -3363,13 +3339,6 @@ public class MainActivity extends GameActivity {
         }
     }
 
-    // Rust 側の worker スレッド（`fandhe-cap-camera-capture` の `AndroidCamera::capture`）から
-    // JNI 経由で呼ばれる（Issue #750）。名前と署名は Rust 側が固定で参照するため変えない。実処理は
-    // `CameraCaptureHelper.request`。
-    private void requestCameraCapture(long requestId) {
-        cameraCaptureHelper.request(requestId);
-    }
-
     // Rust 側 bridge モジュール（`device/file_pick.rs`）の `drive`（Android 分岐）から
     // JNI 経由で呼ばれる（Issue #874、案 B）。`android_main` は Java の UI スレッドとは
     // 別のネイティブスレッドで走るため、`ActivityResultLauncher` の起動を
@@ -3777,7 +3746,7 @@ public class MainActivity extends GameActivity {
                 try {
                     requestMicPermission.launch(Manifest.permission.RECORD_AUDIO);
                 } catch (RuntimeException e) {
-                    // `launch()` 自体が例外を送出した場合（`requestCameraCapture` と同じ
+                    // `launch()` 自体が例外を送出した場合（`CameraCaptureHelper.begin` と同じ
                     // 理由）。コールバックは二度と来ないため、ここで直接失敗を通知する。
                     micRecordRequest.take();
                     nativeOnMicRecordResult(requestId, MIC_RESULT_INTERNAL_ERROR, null, null, 0);
@@ -4518,7 +4487,7 @@ public class MainActivity extends GameActivity {
                 }
             } catch (RuntimeException e) {
                 // `launch()` 自体が例外を送出した場合（`onSaveInstanceState` 後の
-                // 呼び出し等、`requestCameraCapture` と同じ理由）。
+                // 呼び出し等、`CameraCaptureHelper.begin` と同じ理由）。
                 awaitingLocationPermission = false;
                 notifyLocationFailure(LOCATION_FAILURE_FAILED);
             }
@@ -4952,38 +4921,6 @@ public class MainActivity extends GameActivity {
         }
     }
 
-    // Rust 側（`crates/fandhe-cap-home-widget/src/android.rs::call_set`、Issue #1067）から JNI 経由で呼ばれる
-    // 同期メソッド（ワーカースレッド上）。SharedPreferences へ `commit()` で保存し、成否を
-    // 返す（`apply()` は非同期で直後の読み出しが古くなりうるため使わない）。契約上 `true` は
-    // 「保存できた」ことだけを約束し、再描画要求はベストエフォート（`fandhe_cap_home_widget`、
-    // macOS 実装と同じ）。ウィジェット 0 個の空振りも更新要求の例外も `commit()` 成功なら `true`。
-    // 保存値はログへ出さない。
-    // JNI 署名: (Ljava/lang/String;)Z
-    private boolean homeWidgetSetText(String text) {
-        Context app = getApplicationContext();
-        boolean committed =
-                app.getSharedPreferences(HomeWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE)
-                        .edit()
-                        .putString(HomeWidgetProvider.KEY_TEXT, text)
-                        .commit();
-        if (!committed) {
-            return false;
-        }
-        try {
-            HomeWidgetProvider.requestUpdate(app);
-        } catch (RuntimeException e) {
-            // 再描画要求の失敗は保存成功を覆さない（例外の型名だけ記録し、保存値は出さない）。
-            android.util.Log.w("FandheHomeWidget", "requestUpdate failed: " + e.getClass().getSimpleName());
-        }
-        return true;
-    }
-
-    // Rust 側（`crates/fandhe-cap-home-widget/src/android.rs::call_get`）から JNI 経由で呼ばれる。未保存は null。
-    // JNI 署名: ()Ljava/lang/String;
-    private String homeWidgetCurrentText() {
-        return HomeWidgetProvider.readText(getApplicationContext());
-    }
-
     // Rust 側（`device/android_background_task.rs::AndroidBackgroundTask::call_schedule`、
     // Issue #1046）から JNI 経由で呼ばれる同期メソッド。処理 1 件を一意名で予約する。
     // 二重予約は常に置き換える（`ExistingWorkPolicy.REPLACE`、
@@ -5067,7 +5004,6 @@ public class MainActivity extends GameActivity {
         super.onDestroy();
         inAppBrowserHelper.onDestroy();
         companionDeviceHelper.onDestroy();
-        documentScanHelper.onDestroy();
         paymentRequestHelper.onDestroy();
         pedometerHelper.onDestroy();
         healthDataHelper.onDestroy();

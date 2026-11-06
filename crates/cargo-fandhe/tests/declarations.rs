@@ -141,7 +141,8 @@ fn five_fixtures_pass_through_cargo_metadata_and_merge() {
     assert!(m.macos.info_plist.contains_key("NSServices"));
     assert_eq!(m.android.features.len(), 4);
     assert!(m.android.features.values().all(|r| !r));
-    assert_eq!(m.android.components.len(), 2);
+    // HomeWidgetProvider・NfcCardEmulationService と、3 機能の Lifecycle provider（#1257）。
+    assert_eq!(m.android.components.len(), 5);
     assert_eq!(m.android.gradle.len(), 1);
     assert!(m.android.permissions.contains_key("android.permission.NFC"));
     assert!(!m.windows_identity);

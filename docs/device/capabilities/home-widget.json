@@ -20,7 +20,7 @@
       "api": "`AppWidgetProvider` + `RemoteViews` + SharedPreferences（`commit()`）+ `AppWidgetManager.updateAppWidget`（Glance は依存が増えるため不使用）",
       "perm": "なし（新規権限なし）。Manifest に `<receiver>`（exported=false、intent-filter は `APPWIDGET_UPDATE` のみ）",
       "url": "https://developer.android.com/develop/ui/views/appwidgets/overview",
-      "note": "実装済み（Issue 旧#1067）。`HomeWidgetProvider`（`updatePeriodMillis=0`）と `MainActivity` の JNI 受け口 2 本（`homeWidgetSetText` / `homeWidgetCurrentText`）を追加。保存は `commit()` の成否を返し、失敗は Err。保存成功なら再描画要求の失敗・ウィジェット 0 個でも Ok（反映は OS 側で非同期）。未保存は null で空文字と区別する。実機確認は未実施（`device-check-pending`）。確認手順: `FANDHE_PROXY_APP=home_widget_show` でビルド → ホーム画面にウィジェット「Fandhe テキスト」を置く（未設定と出る）→ ボタンを押すと文字が変わる → アプリ再起動後も値が読める。receiver の exported=false でウィジェット一覧に出ない場合は要再確認",
+      "note": "実装済み（Issue 旧#1067）。`HomeWidgetProvider`（`updatePeriodMillis=0`）と、その static メソッド 2 本（`setText` / `readText`。Rust が JNI で直接呼ぶ。利用者の `MainActivity` に受け口は要らない）を追加。保存は `commit()` の成否を返し、失敗は Err。保存成功なら再描画要求の失敗・ウィジェット 0 個でも Ok（反映は OS 側で非同期）。未保存は null で空文字と区別する。実機確認は未実施（`device-check-pending`）。確認手順: `FANDHE_PROXY_APP=home_widget_show` でビルド → ホーム画面にウィジェット「Fandhe テキスト」を置く（未設定と出る）→ ボタンを押すと文字が変わる → アプリ再起動後も値が読める。receiver の exported=false でウィジェット一覧に出ない場合は要再確認",
       "sourceName": [
         "ホーム画面ウィジェット"
       ],

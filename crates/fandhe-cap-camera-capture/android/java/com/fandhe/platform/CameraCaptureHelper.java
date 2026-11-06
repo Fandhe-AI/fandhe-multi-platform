@@ -1,6 +1,7 @@
 package com.fandhe.platform;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -11,15 +12,24 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 
-// カメラ撮影（camera-capture、Issue #750 / #1170）の Android 実装ヘルパー。MainActivity から生成・委譲される。
-// 機能 crate `fandhe-cap-camera-capture` が持つ Java で、Rust の `src/android.rs`（`AndroidCamera::capture`）が
-// `MainActivity.requestCameraCapture(long)` を JNI で呼び、結果を本クラスの `nativeOnCameraResult`
-// （Rust の `Java_com_fandhe_platform_CameraCaptureHelper_nativeOnCameraResult`）で受ける。
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
+
+// カメラ撮影（camera-capture、Issue #750 / #1170 / #1257）の Android 実装ヘルパー。
+// 機能 crate `fandhe-cap-camera-capture` が持つ Java で、利用者の `MainActivity` には何も書かせない。
+// Rust の `src/android.rs`（`AndroidCamera::capture`）が static の `request(Activity, long)` を JNI で呼び、
+// 結果を本クラスの `nativeOnCameraResult`（Rust の `Java_com_fandhe_platform_CameraCaptureHelper_nativeOnCameraResult`）で受ける。
 //
-// MainActivity に残るのは生成と委譲だけ（`request`・`onCreate`・`onSaveInstanceState`）。
-// `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子から
-// 生成してコンストラクタで登録する（登録キーは生成順の連番で決まるため、生成位置を動かさない）。
-// 共有の `RequestTracker`（app 側）を同じパッケージから使う。単体での自立は #1183 / #1176 の範囲。
+// Activity への参加は `CameraCaptureLifecycle`（非公開の ContentProvider、`FeatureLifecycleProvider` 継承）が行う。
+// Activity の生成時に `attach`（ランチャー登録と再生成後の復元）、状態保存時に `save`、破棄時に `detach` を呼ぶ。
+// `registerForActivityResult` は STARTED より前に呼ぶ契約なので `attach` は `Activity.onCreate` 内で呼ばれる。
+// 登録キーは明示する（連番キーだと生成順への依存が残るため）。
+// 共有の `RequestTracker` は共通層 `fandhe-platform-android` の Java を同じパッケージから使う。
+//
+// Activity ごとの helper は `HELPERS` に持つ。Rust のワーカースレッド（`request`）と UI スレッド
+// （ライフサイクル）の両方から触るため同期化し、破棄時に必ず外す（Activity を保持し続けない）。
+// 表に無い Activity への要求は受け付けず false を返す（Rust が成功へ畳まず失敗として返す）。
 //
 // status（Rust 側 `decode_capture_result` と対）:
 //   0=成功／1=権限拒否／2=カメラアプリなし／3=キャンセル／4=旧要求が未完了のため拒否／
@@ -48,6 +58,13 @@ final class CameraCaptureHelper {
     // タイムアウト後に届いた古い要求のコールバックを新しい要求の結果と取り違えないため）。
     private static native void nativeOnCameraResult(
             long requestId, byte[] rgba, int width, int height, int status);
+
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, CameraCaptureHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    private static final String KEY_PERMISSION = "fandhe.camera-capture.permission";
+    private static final String KEY_TAKE_PICTURE = "fandhe.camera-capture.take-picture";
 
     private final ComponentActivity activity;
 
@@ -80,10 +97,10 @@ final class CameraCaptureHelper {
     private final ActivityResultLauncher<String> requestCameraPermission;
     private final ActivityResultLauncher<Void> takePicturePreview;
 
-    CameraCaptureHelper(ComponentActivity activity) {
+    private CameraCaptureHelper(ComponentActivity activity) {
         this.activity = activity;
-        this.requestCameraPermission = activity.registerForActivityResult(
-                new ActivityResultContracts.RequestPermission(), granted -> {
+        this.requestCameraPermission = activity.getActivityResultRegistry().register(
+                KEY_PERMISSION, activity, new ActivityResultContracts.RequestPermission(), granted -> {
                     if (pendingCaptureInterrupted) {
                         // 再生成前に status 7 で決着済みの旧要求への遅延配送。許可の可否に関わらずここで
                         // 消費し、以後の分岐へ進めない。ここで初めて awaitingCameraResult を解除し、
@@ -104,8 +121,8 @@ final class CameraCaptureHelper {
                         nativeOnCameraResult(resultRequestId, null, 0, 0, 1);
                     }
                 });
-        this.takePicturePreview = activity.registerForActivityResult(
-                new ActivityResultContracts.TakePicturePreview(), bitmap -> {
+        this.takePicturePreview = activity.getActivityResultRegistry().register(
+                KEY_TAKE_PICTURE, activity, new ActivityResultContracts.TakePicturePreview(), bitmap -> {
                     if (pendingCaptureInterrupted) {
                         // 許可コールバック側と同じ理由。
                         pendingCaptureInterrupted = false;
@@ -124,14 +141,47 @@ final class CameraCaptureHelper {
                 });
     }
 
-    // Activity 再生成後の状態復元（MainActivity.onCreate から委譲）。`awaitingCameraResult` を false へ
+    // Activity の生成時（`CameraCaptureLifecycle` から、`Activity.onCreate` 内で呼ばれる）。ランチャーを登録し、
+    // 再生成後なら保存した要求の状態を復元する。
+    static void attach(ComponentActivity activity, Bundle savedInstanceState) {
+        CameraCaptureHelper helper = new CameraCaptureHelper(activity);
+        HELPERS.put(activity, helper);
+        helper.onCreate(savedInstanceState);
+    }
+
+    // Activity の状態保存時（`CameraCaptureLifecycle` から）。
+    static void save(Activity activity, Bundle outState) {
+        CameraCaptureHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onSaveInstanceState(outState);
+        }
+    }
+
+    // Activity の破棄時（`CameraCaptureLifecycle` から）。表から外して Activity を手放す。
+    static void detach(Activity activity) {
+        HELPERS.remove(activity);
+    }
+
+    // Rust 側の worker スレッド（`AndroidCamera::capture`）から JNI で呼ばれる入口。`activity` は Rust が
+    // 保持する現在の Activity。helper が無い（生成前・破棄後・対象外の Activity）なら false を返し、
+    // Rust が失敗として返す（`nativeOnCameraResult` は呼ばれない）。
+    static boolean request(Activity activity, long requestId) {
+        CameraCaptureHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            return false;
+        }
+        helper.begin(requestId);
+        return true;
+    }
+
+    // Activity 再生成後の状態復元（`attach` から）。`awaitingCameraResult` を false へ
     // 戻して新要求を即座に受け付け可能にしてはならない（クラス冒頭コメント参照）。中断された要求が
     // あれば復元直後に status 7 で即座に決着させつつ、`awaitingCameraResult` は true のまま維持して
     // 新要求を拒否し続ける。解除は各コールバックが旧結果を実際に消費した時点でのみ行う。
     // `pendingCaptureInterrupted` 自体も復元する。未保存だと、旧コールバック未消費のまま連続で再生成
     // された場合に中断状態が失われ、(1) 同じ要求へ status 7 を多重通知し、(2) awaitingCameraResult の
     // ブロックが意図せず解除される。既に中断決着済みなら今回の再生成では再通知しない。
-    void onCreate(Bundle savedInstanceState) {
+    private void onCreate(Bundle savedInstanceState) {
         if (savedInstanceState == null) {
             return;
         }
@@ -147,17 +197,16 @@ final class CameraCaptureHelper {
     }
 
     // Activity 再生成前に撮影要求の状態を保存する（`onCreate` の復元と対）。
-    void onSaveInstanceState(Bundle outState) {
+    private void onSaveInstanceState(Bundle outState) {
         outState.putLong(STATE_PENDING_CAPTURE_REQUEST_ID, pendingCaptureRequest.current());
         outState.putBoolean(STATE_AWAITING_CAMERA_RESULT, awaitingCameraResult);
         outState.putBoolean(STATE_PENDING_CAPTURE_INTERRUPTED, pendingCaptureInterrupted);
     }
 
-    // Rust 側の worker スレッド（`AndroidCamera::capture`）から `MainActivity.requestCameraCapture` 経由で
-    // 呼ばれる。UI 操作を伴うため `runOnUiThread` へ委譲する。`requestId` は先に `pendingCaptureRequest`
+    // `request` から呼ばれる。UI 操作を伴うため `runOnUiThread` へ委譲する。`requestId` は先に `pendingCaptureRequest`
     // へ保持してから `nativeOnCameraResult` へ返す（`runOnUiThread` はワーカースレッドの呼び出しと
     // 非同期のため、フィールドへの書き込みをコールバック登録より先に済ませておく）。
-    void request(long requestId) {
+    private void begin(long requestId) {
         if (awaitingCameraResult) {
             // 旧要求の Android コールバック（権限ダイアログ・カメラアプリ）が未回収。
             // `pendingCaptureRequest` を上書きすると旧要求の遅延結果がこの新要求の ID で誤って

@@ -5,7 +5,8 @@ import android.content.Intent;
 // 共有の受け取り（Issue #607、親 #122）。他アプリの共有シートから届いたテキスト 1 件を
 // Rust 側の受け口へ渡す。
 //
-// 呼び出し元: `MainActivity` の `onCreate`（コールドスタート）と `onNewIntent`（起動中）。
+// 呼び出し元: `ShareReceiveLifecycle`（非公開 provider。コールドスタートは Activity の生成時、起動中は
+// `addOnNewIntentListener`）。利用者の `MainActivity` には何も書かせない（#1257）。
 // 呼び出し先: `crates/fandhe-cap-share-receive/src/android.rs` の JNI 実体
 // （feature `device` 無効時の no-op は `crates/fandhe-egui-proxy/src/android.rs`）。JNI 署名は本ファイルの宣言・no-op
 // スタブ・Rust 実体の 3 か所で `(String) -> void` に一致させる。

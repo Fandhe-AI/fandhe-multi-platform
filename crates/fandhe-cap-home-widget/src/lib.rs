@@ -1,7 +1,7 @@
 //! ホーム画面ウィジェットに表示する 1 行テキストの機能 crate（REQ-21 / TASK-21.3、Issue #1174）。
 //!
 //! 契約（[`HomeWidget`]・[`HomeWidgetError`]・[`validate_text`]・[`UnsupportedHomeWidget`]）、
-//! Android 実装（JNI 経由で `MainActivity.homeWidgetSetText` など）、macOS 実装（App Group コンテナ +
+//! Android 実装（JNI 経由で `HomeWidgetProvider.setText` など）、macOS 実装（App Group コンテナ +
 //! WidgetKit 拡張）、画面の状態機械（`fandhe_core::screens::home_widget_show`）へ橋渡しする effect
 //! ドライバ（[`home_widget_show_effect`]）、機能宣言（`Cargo.toml` の `[package.metadata.fandhe]`）、
 //! Android の Java・res（`android/`）、macOS 拡張の Swift（`apple/widget/`）を 1 つに集める。

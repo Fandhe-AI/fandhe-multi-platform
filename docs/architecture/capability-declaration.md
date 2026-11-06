@@ -171,7 +171,8 @@ identity = true
 |------|----------------------|-----------|
 | `android.hardware.nfc` | `nfc`（タグ読み取り）の宣言で、HCE の宣言ではない | 対象外 |
 | `androidx.activity`・`androidx.core` | MainActivity が直接 import する共通依存 | #1166 |
-| `GmsAvailability.java` | document-scan 以外の GMS 機能も使う共有コード。`platforms/android/app` に共有のまま残す | #1183 |
+| `GmsAvailability.java` | document-scan 以外の GMS 機能（行動認識・決済）も使う共有コード。`platforms/android/app` に共有のまま残す。共通層（`fandhe-platform-android`）へ移さないのは、GMS を使わない機能だけを選んだ利用者に Play services の依存を乗せないため。document-scan は同じ判定を `DocumentScanHelper` の private メソッドに持つ（#1257）。残る 2 機能を crate へ移すときに同じ形にする | #1183 |
+| `RequestTracker.java`・`FeatureLifecycleProvider.java` | 全機能が使う Java の共有クラス。共通層 `fandhe-platform-android` が `android/java` として持ち、その crate の宣言（`id = "platform-android"`。`fandhe-cap-*` 以外は id と crate 名の一致を求めない）が srcDirs に載る。機能 crate は Android の依存に共通層を持つので到達判定に入る（#1257） | 決着（#1257） |
 | UIKit・Foundation・CoreGraphics | 全機能の基盤リンクで機能固有ではない | #1168 |
 | `NSPortName` | 宣言は `$(EXECUTABLE_NAME)`、スクリプトは実行体名へ置換。生成はビルド設定変数のまま出す（Xcode が展開する） | 決着（#1176） |
 | `FandheWidgetHost` | 素の実行体に拡張を載せるホストアプリ。生成では利用者の `.app` が親になる | #1212 |

@@ -1,13 +1,17 @@
-//! Android 向けカメラ実装。`MainActivity.requestCameraCapture(long)` を JNI で呼び、結果を
-//! `CameraCaptureHelper.nativeOnCameraResult`（Java 側）から受ける。
+//! Android 向けカメラ実装。`CameraCaptureHelper.request(Activity, long)`（機能 crate の Java の static メソッド）を
+//! JNI で呼び、結果を `CameraCaptureHelper.nativeOnCameraResult`（Java 側）から受ける。利用者の
+//! `MainActivity` に受け口は要らない（#1257。Activity への参加は `CameraCaptureLifecycle`）。
 //!
 //! 呼び出し元は `crate::platform_camera`（`cfg(target_os = "android")` 分岐）。`AndroidApp` の取得と
-//! JavaVM への attach・Activity の取得は `fandhe-platform-android` の `with_activity` に任せ、
+//! JavaVM への attach・Activity とクラスの取得は `fandhe-platform-android` の `with_activity_class` に任せ、
 //! 本モジュールに `unsafe` を残すのは JNI エクスポート関数 1 つだけにする。
+//!
+//! JNI 署名（Java 宣言と本ファイルの 2 か所で一致させる）: `request (Landroid/app/Activity;J)Z`。
+//! `false` は Activity に helper が無い（生成前・破棄後）ことで、成功にせず失敗として返す。
 
 use std::time::Duration;
 
-use fandhe_platform_android::{JniCallFailed, android_app, with_activity};
+use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
 
 use crate::mailbox::CaptureMailbox;
 use crate::{Camera, CameraError, Image, MAX_IMAGE_BYTES};
@@ -23,7 +27,7 @@ static CAPTURE_MAILBOX: CaptureMailbox = CaptureMailbox::new();
 /// 値自体に強い実測根拠はない。実機で `Capturing` 固着の報告が出たら見直す）。
 const CAPTURE_TIMEOUT: Duration = Duration::from_secs(300);
 
-/// `Camera::capture()` を Java 側 `MainActivity.requestCameraCapture()` へ委譲する実装（Issue #750）。
+/// `Camera::capture()` を Java 側 `CameraCaptureHelper.request` へ委譲する実装（Issue #750 / #1257）。
 pub struct AndroidCamera;
 
 impl AndroidCamera {
@@ -42,7 +46,7 @@ impl Default for AndroidCamera {
 
 impl Camera for AndroidCamera {
     fn capture(&self) -> Result<Image, CameraError> {
-        // 要求 ID を発行し、JNI 往復（`requestCameraCapture(long)` → Java 側が保持 →
+        // 要求 ID を発行し、JNI 往復（`request(Activity, long)` → Java 側が保持 →
         // `nativeOnCameraResult` で返却）に乗せて運ぶ。`deliver` はこの ID が一致する結果のみ
         // 受理するため、タイムアウト後に届いた古い要求のコールバックが新しい要求の結果と
         // 取り違えられない（`CaptureMailbox` doc 参照、codex-review 指摘 PR #790）。
@@ -57,21 +61,36 @@ impl Camera for AndroidCamera {
             return Err(CameraError::Unsupported("android_app_unavailable"));
         };
 
-        let request_result = with_activity(&app, |env, activity| -> Result<(), JniCallFailed> {
-            env.call_method(
-                activity,
-                jni::jni_str!("requestCameraCapture"),
-                jni::jni_sig!((long) -> ()),
-                &[jni::objects::JValue::Long(request_id as jni::sys::jlong)],
-            )?;
-            Ok(())
-        });
+        let accepted = with_activity_class(
+            &app,
+            jni::jni_str!("com.fandhe.platform.CameraCaptureHelper"),
+            |env, activity, class| -> Result<bool, JniCallFailed> {
+                let ret = env.call_static_method(
+                    class,
+                    jni::jni_str!("request"),
+                    jni::jni_sig!((android.app.Activity, long) -> boolean),
+                    &[
+                        jni::objects::JValue::Object(activity),
+                        jni::objects::JValue::Long(request_id as jni::sys::jlong),
+                    ],
+                )?;
+                Ok(ret.z()?)
+            },
+        );
 
-        if request_result.is_err() {
-            // JNI 呼び出し自体が失敗した（メソッド未検出・例外送出等）。コールバックは
-            // 来ないため `deliver` を待たず即座にスロットを解放する。
-            CAPTURE_MAILBOX.cancel(request_id);
-            return Err(CameraError::Unsupported("jni_call_failed"));
+        match accepted {
+            Ok(true) => {}
+            Ok(false) => {
+                // Activity に helper が無い。コールバックは来ないのでスロットを解放する。
+                CAPTURE_MAILBOX.cancel(request_id);
+                return Err(CameraError::Unsupported("camera_not_ready"));
+            }
+            Err(_) => {
+                // JNI 呼び出し自体が失敗した（クラス・メソッド未検出・例外送出等）。コールバックは
+                // 来ないため `deliver` を待たず即座にスロットを解放する。
+                CAPTURE_MAILBOX.cancel(request_id);
+                return Err(CameraError::Unsupported("jni_call_failed"));
+            }
         }
 
         CAPTURE_MAILBOX.wait(request_id, CAPTURE_TIMEOUT)
@@ -155,7 +174,7 @@ fn decode_capture_result(
 ///
 /// [`decode_capture_result`] で `Image`/`CameraError` へ変換し、[`CAPTURE_MAILBOX`] へ
 /// 届ける（`AndroidCamera::capture` の `wait` がこれを受け取る）。`request_id` は
-/// `AndroidCamera::capture` が発行し `requestCameraCapture(long)` へ渡した値を Java 側が
+/// `AndroidCamera::capture` が発行し `CameraCaptureHelper.request` へ渡した値を Java 側が
 /// そのまま持ち回って返したもの。`deliver` が ID 不一致を無視するため、タイムアウト後に
 /// 届いた古い要求のコールバックが新しい要求の結果を上書きしない。
 ///
