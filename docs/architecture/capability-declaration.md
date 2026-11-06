@@ -209,6 +209,8 @@ bundle-id = "com.example.app"               # iOS の Info.plist を出すので
 
 殻に要る値は、アプリの crate からも取ります。Android は `cdylib` を含む lib target が要り（無ければエラー）、iOS は bin target がちょうど 1 つと、数字とドットだけの version が要ります。
 
+これらは全 OS の殻を出す前提の必須条件です。`cargo fandhe gen` は Android と iOS の両方を常に出すため、片方の OS だけを対象にする絞り込みは範囲外です（`cdylib`・bin・`ios.bundle-id` のどれが欠けても gen 全体がエラーになります）。
+
 説明文が欠けると、OS・機能 id・キーを示してエラーにします。`usage-descriptions` は本体と拡張で共有します。
 
 ### 出力
