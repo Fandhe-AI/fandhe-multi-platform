@@ -38,6 +38,9 @@ path = "src/main.rs"
 [package.metadata.fandhe-app]
 app-group-prefix = "com.fandhe"
 
+[package.metadata.fandhe-app.ios]
+bundle-id = "com.fandhe.iosapp"
+
 [package.metadata.fandhe-app.ios.usage-descriptions]
 NSCameraUsageDescription = "型サンプル「カメラ撮影」「AR 表示」「書類スキャン」「動画の撮影」「カメラのライブ映像」「接続した機器からの取り込み」の動作確認に使います"
 
