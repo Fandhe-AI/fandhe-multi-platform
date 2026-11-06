@@ -86,7 +86,7 @@ final class CallUiHelper {
 
     CallUiHelper(ComponentActivity activity) {
         this.activity = activity;
-        this.permissionLauncher = activity.registerForActivityResult(
+        this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:CallUiHelper:1", activity,
                 new ActivityResultContracts.RequestPermission(), granted -> { });
     }
 

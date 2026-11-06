@@ -106,7 +106,7 @@ final class BlePeripheralHelper {
         this.activity = activity;
         thread.start();
         bg = new Handler(thread.getLooper());
-        permissionLauncher = activity.registerForActivityResult(
+        permissionLauncher = activity.getActivityResultRegistry().register("fandhe:BlePeripheralHelper:1", activity,
                 new ActivityResultContracts.RequestMultiplePermissions(), this::onPermissionResult);
     }
 

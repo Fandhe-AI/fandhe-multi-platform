@@ -56,7 +56,7 @@ final class PedometerHelper implements SensorEventListener {
 
     PedometerHelper(ComponentActivity activity) {
         this.activity = activity;
-        this.permissionLauncher = activity.registerForActivityResult(
+        this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:PedometerHelper:1", activity,
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
     }
 

@@ -93,7 +93,7 @@ final class BluetoothClassicHelper {
 
     BluetoothClassicHelper(ComponentActivity activity) {
         this.activity = activity;
-        this.permissionLauncher = activity.registerForActivityResult(
+        this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:BluetoothClassicHelper:1", activity,
                 new ActivityResultContracts.RequestMultiplePermissions(), this::onPermissionResult);
     }
 

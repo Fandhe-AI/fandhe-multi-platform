@@ -1253,7 +1253,7 @@ public class MainActivity extends GameActivity {
     // 投稿は背景でも正当な操作であり、`micStartPendingResume` のような保留は不要
     // （実装計画 §4 参照）。
     private final ActivityResultLauncher<String> requestNotificationPermission =
-            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+            getActivityResultRegistry().register("fandhe:MainActivity:1", this, new ActivityResultContracts.RequestPermission(), granted -> {
                 long id = notificationRequest.take();
                 if (id == RequestTracker.NONE) {
                     // 既に破棄済み（Activity 再生成等）。
@@ -1522,7 +1522,7 @@ public class MainActivity extends GameActivity {
     // マイク録音の実行時許可要求（`CameraCaptureHelper` の `requestCameraPermission`/`requestLocationPermission`
     // と同型）。許可が下りたら `startMicRecorder` を呼ぶ。
     private final ActivityResultLauncher<String> requestMicPermission =
-            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+            getActivityResultRegistry().register("fandhe:MainActivity:2", this, new ActivityResultContracts.RequestPermission(), granted -> {
                 synchronized (micLock) {
                     long id = micRecordRequest.current();
                     if (id == RequestTracker.NONE) {
@@ -1665,7 +1665,7 @@ public class MainActivity extends GameActivity {
     // 音声認識の実行時許可要求（`requestMicPermission` と同型）。許可が下りたら
     // `startSpeechRecognizer` を呼ぶ。
     private final ActivityResultLauncher<String> requestSpeechPermission =
-            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+            getActivityResultRegistry().register("fandhe:MainActivity:3", this, new ActivityResultContracts.RequestPermission(), granted -> {
                 synchronized (speechLock) {
                     long id = speechPermissionRequestId;
                     speechPermissionRequestId = RequestTracker.NONE;
@@ -1751,7 +1751,7 @@ public class MainActivity extends GameActivity {
     // 「追跡中か」以上の判定をしない（中断・再生成用の static フラグ・Bundle 保存は
     // 案 B では持たない、仕様書「決定事項」参照）。
     private final ActivityResultLauncher<String[]> pickDocument =
-            registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+            getActivityResultRegistry().register("fandhe:MainActivity:4", this, new ActivityResultContracts.OpenDocument(), uri -> {
                 long requestId = filePickRequest.take();
                 if (requestId == RequestTracker.NONE) {
                     return;
@@ -1772,7 +1772,7 @@ public class MainActivity extends GameActivity {
     // 配送し得るが、`photoPickRequest.take()` が NONE なら捨て、そうでなくても Rust 側の
     // id 照合で捨てられる（`pickDocument` と同じ理由）。
     private final ActivityResultLauncher<PickVisualMediaRequest> pickPhoto =
-            registerForActivityResult(new ActivityResultContracts.PickVisualMedia(), uri -> {
+            getActivityResultRegistry().register("fandhe:MainActivity:5", this, new ActivityResultContracts.PickVisualMedia(), uri -> {
                 long requestId = photoPickRequest.take();
                 if (requestId == RequestTracker.NONE) {
                     return;
@@ -1790,7 +1790,7 @@ public class MainActivity extends GameActivity {
     // は不要。Activity 再生成後に旧要求の結果が配送されても、`take()` が NONE なら捨て、
     // そうでなくても Rust 側の id 照合で捨てられる（`pickPhoto` と同じ理由）。
     private final ActivityResultLauncher<Void> pickContact =
-            registerForActivityResult(new ActivityResultContracts.PickContact(), uri -> {
+            getActivityResultRegistry().register("fandhe:MainActivity:6", this, new ActivityResultContracts.PickContact(), uri -> {
                 contactPickerOpen = false;
                 long requestId = contactPickRequest.take();
                 if (requestId == RequestTracker.NONE) {
@@ -1814,7 +1814,7 @@ public class MainActivity extends GameActivity {
     // 待つ。`complete` が false なら broadcast 側が既に処理済みのため、遅延 Runnable は
     // 空振りする（両方 UI スレッドなのでロック不要）。
     private final ActivityResultLauncher<Intent> shareChooser =
-            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+            getActivityResultRegistry().register("fandhe:MainActivity:7", this, new ActivityResultContracts.StartActivityForResult(), result -> {
                 long id = shareRequest.current();
                 if (id == RequestTracker.NONE) {
                     // broadcast が先に届いて既に消費済み（`shareChosenReceiver` 参照）。
@@ -1858,7 +1858,7 @@ public class MainActivity extends GameActivity {
     // `awaitingLocationPermission` を解除済みのため次の `onResume` が通常どおり
     // `nativeOnLocationFailure` を送る（cursor Bugbot 指摘の解消経路と同じ）。
     private final ActivityResultLauncher<String[]> requestLocationPermission =
-            registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
+            getActivityResultRegistry().register("fandhe:MainActivity:8", this, new ActivityResultContracts.RequestMultiplePermissions(), result -> {
                 awaitingLocationPermission = false;
                 if (!activityResumed) {
                     return;
@@ -2532,7 +2532,7 @@ public class MainActivity extends GameActivity {
     }
 
     private final ActivityResultLauncher<String[]> requestBlePermission =
-            registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
+            getActivityResultRegistry().register("fandhe:MainActivity:9", this, new ActivityResultContracts.RequestMultiplePermissions(), result -> {
                 boolean granted = true;
                 for (String p : blePermissions()) {
                     granted &= Boolean.TRUE.equals(result.get(p));
