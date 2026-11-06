@@ -59,8 +59,13 @@ git clone https://github.com/Fandhe-AI/fandhe-multi-platform.git
 仕様書サブモジュール（`docs/spec/`）は非公開のため任意です。アクセス権がある場合のみ、次を実行します。
 
 ```bash
-git submodule update --init
+git submodule update --init --checkout docs/spec
 ```
+
+`.gitmodules` で `docs/spec` に `update = none` を付けています。本体を cargo の git 依存で取り込む利用者が、
+非公開の submodule の取得で失敗しないようにするためです。そのため素の `git submodule update --init` や
+`--recurse-submodules` は `docs/spec` を飛ばします。素の `git submodule update` でも更新したい場合は、
+クローンごとに 1 回 `git config submodule.docs/spec.update checkout` を実行します。
 
 ### 最短セットアップ
 
@@ -70,7 +75,7 @@ make setup
 
 `make setup` は以下を実行します。
 
-- `git submodule update --init` でサブモジュール（`docs/spec/`）の取得を試みる（非公開のため、取得できなくても警告して続行）
+- `git submodule update --init --checkout docs/spec` でサブモジュール（`docs/spec/`）の取得を試みる（非公開のため、取得できなくても警告して続行）
 - `rustup target add wasm32-unknown-unknown` で Web（wasm32）ターゲットを追加
 - lefthook が導入済みなら `lefthook install` を実行し、未導入なら導入方法を案内
 
@@ -141,7 +146,7 @@ Linux ホストでは `make docker-build` がホストの UID/GID を自動検�
 
 ```bash
 # アクセス権がある場合のみ
-git submodule update --init
+git submodule update --init --checkout docs/spec
 ```
 
 サブモジュール取得時のみ参照できるドキュメント:

@@ -6,7 +6,7 @@ fandhe-multi-platform は Rust 製のマルチプラットフォーム対応フ�
 
 設計思想: (1) ネイティブ同等のパフォーマンス、(2) Rust の特性活用（メモリ安全性・型安全性）、(3) AI 開発への最適化（AI 型安全 DSL）。
 
-仕様書は [Fandhe-AI/fandhe-multi-platform-spec](https://github.com/Fandhe-AI/fandhe-multi-platform-spec) で管理し（非公開）、`docs/spec/` にサブモジュールとして取り込んでいる（アクセス権がある場合のみ `git submodule update --init`。ビルドには不要）。開発は `docs/spec/06-roadmap.md` のマイルストーン M1〜M6 に従う。
+仕様書は [Fandhe-AI/fandhe-multi-platform-spec](https://github.com/Fandhe-AI/fandhe-multi-platform-spec) で管理し（非公開）、`docs/spec/` にサブモジュールとして取り込んでいる（アクセス権がある場合のみ `git submodule update --init --checkout docs/spec`。ビルドには不要）。開発は `docs/spec/06-roadmap.md` のマイルストーン M1〜M6 に従う。
 
 ## Repository Structure
 

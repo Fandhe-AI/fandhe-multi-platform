@@ -14,8 +14,9 @@ cd "${ROOT_DIR}"
 
 # docs/spec は非公開リポジトリ。取得できない環境（外部の利用者等）でも
 # ビルド・テストには不要なため、警告だけ出して続行する。
+# .gitmodules が update = none のため、--checkout で上書きして取得する（#1256）。
 # GIT_TERMINAL_PROMPT=0: 認証情報の対話入力で止まらないようにする。
-if ! GIT_TERMINAL_PROMPT=0 git submodule update --init; then
+if ! GIT_TERMINAL_PROMPT=0 git submodule update --init --checkout docs/spec; then
   echo "警告: docs/spec サブモジュール（非公開の仕様書）を取得できませんでした。ビルド・テストには不要なため続行します。" >&2
 fi
 rustup target add wasm32-unknown-unknown
