@@ -62,7 +62,7 @@ final class ScreenCaptureHelper {
     // フィールド初期化子から本クラスを生成してここで登録する。
     ScreenCaptureHelper(ComponentActivity activity) {
         this.activity = activity;
-        this.consentLauncher = activity.registerForActivityResult(
+        this.consentLauncher = activity.getActivityResultRegistry().register("fandhe:ScreenCaptureHelper:1", activity,
                 new ActivityResultContracts.StartActivityForResult(), this::onConsent);
     }
 

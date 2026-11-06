@@ -102,7 +102,7 @@ final class CompanionDeviceHelper {
 
     CompanionDeviceHelper(ComponentActivity activity) {
         this.activityRef = new WeakReference<>(activity);
-        this.launcher = activity.registerForActivityResult(
+        this.launcher = activity.getActivityResultRegistry().register("fandhe:CompanionDeviceHelper:1", activity,
                 new ActivityResultContracts.StartIntentSenderForResult(), this::onActivityResult);
     }
 

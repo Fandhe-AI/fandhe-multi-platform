@@ -1100,7 +1100,7 @@ std::thread::spawn(move || {
 **Android の配線先（Issue #750）**: `DataDir`（「メモ保存」の保存先）は
 `crates/fandhe-egui-proxy/src/device/android.rs` の `data_dir()` が
 `AndroidApp::internal_data_path()`（`getFilesDir()` 相当）を返す。カメラは
-`AndroidCamera`（`fandhe-cap-camera-capture/src/android.rs`）が JNI 経由で `MainActivity.requestCameraCapture()` を呼び、
+`AndroidCamera`（`fandhe-cap-camera-capture/src/android.rs`）が JNI 経由で `CameraCaptureHelper.request(Activity, long)`（機能 crate の Java の static メソッド。利用者の `MainActivity` に受け口は要らない、#1257）を呼び、
 `CameraCaptureHelper`（同 crate の `android/java`）の `ActivityResultContracts.TakePicturePreview` が撮影した `Bitmap` を
 `nativeOnCameraResult` へ渡す往復で
 `Camera::capture` を実現する。新規画面が Android 固有の端末実装を要る場合はこの

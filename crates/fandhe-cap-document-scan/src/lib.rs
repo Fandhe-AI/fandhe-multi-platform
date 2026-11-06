@@ -106,7 +106,7 @@ mod ios;
 /// 仮の値で、実機確認（#739）で見直す。
 pub const PRESENT_DEADLINE: Duration = Duration::from_secs(10);
 
-/// 1 ページの画像のバイト数上限。本 crate を正とし、Android へは `requestDocumentScan` の引数で渡す
+/// 1 ページの画像のバイト数上限。本 crate を正とし、Android へは `DocumentScanHelper.scan` の引数で渡す
 /// （Java 側に複製しない）。値は写真選択の上限（8 MiB）と同じ。
 // ponytail: 写真選択（fandhe-device）と同じ値・同じ復号上限を別々に持つ。共有の置き場は #1183 で決める。
 pub const MAX_PAGE_BYTES: usize = 8 * 1024 * 1024;

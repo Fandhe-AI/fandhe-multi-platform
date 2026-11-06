@@ -71,7 +71,7 @@ final class PaymentRequestHelper {
 
     PaymentRequestHelper(ComponentActivity activity) {
         this.activityRef = new WeakReference<>(activity);
-        this.launcher = activity.registerForActivityResult(
+        this.launcher = activity.getActivityResultRegistry().register("fandhe:PaymentRequestHelper:1", activity,
                 new ActivityResultContracts.StartIntentSenderForResult(), this::onActivityResult);
     }
 

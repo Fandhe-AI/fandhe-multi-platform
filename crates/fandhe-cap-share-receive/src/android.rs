@@ -2,13 +2,13 @@
 //! Android 経路から呼ばれる。
 //!
 //! 他アプリの共有シート（`ACTION_SEND` + `text/plain` + `EXTRA_TEXT`）から届いたテキストを、
-//! Java 側 `ShareReceiveHelper.deliver`（`MainActivity` の `onCreate` / `onNewIntent` から
-//! 呼ばれる）が [`Java_com_fandhe_platform_ShareReceiveHelper_nativeOnShareReceived`] 経由で
+//! Java 側 `ShareReceiveHelper.deliver`（非公開 provider `ShareReceiveLifecycle` が Activity の
+//! 生成時と `onNewIntent` から呼ぶ。利用者の `MainActivity` には何も書かせない、#1257）が [`Java_com_fandhe_platform_ShareReceiveHelper_nativeOnShareReceived`] 経由で
 //! 渡す。受け口 [`INBOX`] はプロセス全体の static で、UI ができる前（コールドスタート）に
 //! 届いた分もここに溜まる。検査・保持は共通層 [`ShareInbox`] に
 //! 一本化し、本モジュールは JNI の橋渡しだけを持つ。本文は秘密値を含みうるためログへ出さない。
 //! feature `device` 無効ビルド向けの no-op は `fandhe-egui-proxy` の `android.rs` に置く
-//! （`MainActivity` が `deliver` を無条件に呼ぶため、本 crate がリンクされない構成でも
+//! （`ShareReceiveLifecycle` が `deliver` を無条件に呼ぶため、本 crate がリンクされない構成でも
 //! `UnsatisfiedLinkError` にしない）。
 
 use crate::{ShareInbox, ShareReceive, ShareReceiveError, ShareSnapshot};

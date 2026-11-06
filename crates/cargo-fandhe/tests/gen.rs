@@ -224,7 +224,10 @@ fn android_manifest_overlay_matches_current_manifest() {
             n += 1;
         }
     }
-    assert_eq!(n, 2, "HomeWidgetProvider と NfcCardEmulationService");
+    assert_eq!(
+        n, 5,
+        "HomeWidgetProvider・NfcCardEmulationService と、camera-capture・document-scan・share-receive の Lifecycle provider"
+    );
 
     // MainActivity の SEND の filter は両側で一致する（fandhe scheme など他の filter は機能の宣言ではない）。
     let send = |t: &[Tag]| -> Vec<IntentFilter> {
@@ -282,7 +285,7 @@ fn gradle_dirs(gradle: &str, kind: &str) -> BTreeSet<String> {
         .skip(1)
         .step_by(2)
         // crate の絶対パスを `crates/...` からの相対へ揃える。
-        .map(|p| p[p.find("crates/fandhe-cap-").expect("機能 crate のパス")..].to_string())
+        .map(|p| p[p.rfind("crates/fandhe-").expect("crate のパス")..].to_string())
         .collect()
 }
 
@@ -293,7 +296,7 @@ fn gradle_srcdirs_and_dependencies_match_build_gradle() {
     for kind in ["java", "res"] {
         let cur: BTreeSet<String> = kts
             .lines()
-            .filter(|l| l.contains(&format!("{kind}.srcDirs(")) && l.contains("crates/fandhe-cap-"))
+            .filter(|l| l.contains(&format!("{kind}.srcDirs(")) && l.contains("crates/fandhe-"))
             .map(|l| {
                 let p = l.split('"').nth(1).unwrap();
                 p[p.find("crates/").unwrap()..].to_string()

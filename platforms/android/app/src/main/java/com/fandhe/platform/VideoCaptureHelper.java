@@ -86,9 +86,9 @@ final class VideoCaptureHelper {
 
     VideoCaptureHelper(ComponentActivity activity) {
         this.activity = activity;
-        this.permissionLauncher = activity.registerForActivityResult(
+        this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:VideoCaptureHelper:1", activity,
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
-        this.videoLauncher = activity.registerForActivityResult(
+        this.videoLauncher = activity.getActivityResultRegistry().register("fandhe:VideoCaptureHelper:2", activity,
                 new ActivityResultContracts.StartActivityForResult(), this::onVideoResult);
     }
 

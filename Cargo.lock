@@ -1113,6 +1113,7 @@ name = "fandhe-cap-share-receive"
 version = "0.2.0"
 dependencies = [
  "fandhe-core",
+ "fandhe-platform-android",
  "fandhe-platform-apple",
  "fandhe-runtime",
  "jni 0.22.4",

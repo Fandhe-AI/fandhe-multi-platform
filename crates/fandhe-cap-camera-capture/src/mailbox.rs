@@ -28,7 +28,7 @@ enum MailboxSlot {
 /// 単一飛行: `begin` が `None` を返した場合、呼び出し元は新規の撮影を開始せず
 /// エラーを返す契約（`android.rs` の `AndroidCamera::capture` 参照）。
 ///
-/// 要求 ID: `begin` が返す ID を呼び出し元が JNI 往復（`requestCameraCapture` /
+/// 要求 ID: `begin` が返す ID を呼び出し元が JNI 往復（`CameraCaptureHelper.request` /
 /// `nativeOnCameraResult` 引数）に乗せて運び、`cancel`/`deliver`/`wait` はすべて同じ ID を
 /// 要求する。これにより「要求 A が `wait` タイムアウトで `Idle` に戻った後、要求 B が `begin` して
 /// から A の遅延コールバックが届く」順序でも、`deliver` は ID 不一致で無視され、B が A の古い

@@ -17,6 +17,9 @@ thiserror = { workspace = true }
 # JNI の受け口（`ShareReceiveHelper.nativeOnShareReceived`）だけを持つ。Activity は呼ばない。
 [target.'cfg(target_os = "android")'.dependencies]
 jni = { workspace = true }
+# Rust からは使わない。Java の基底クラス FeatureLifecycleProvider と RequestTracker を持つ共通層を、
+# `cargo fandhe gen` の到達判定に入れる（ShareReceiveLifecycle のコンパイルに必要）ための依存。
+fandhe-platform-android = { path = "../fandhe-platform-android" }
 
 # macOS の ObjC（`macos/*.m`）のコンパイルに使う。
 [build-dependencies]
@@ -35,3 +38,11 @@ java = ["android/java"]
 main-activity-intent-filters = [
   { actions = ["android.intent.action.SEND"], categories = ["android.intent.category.DEFAULT"], data = [{ mimeType = "text/plain" }] },
 ]
+
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+# Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.ShareReceiveLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.share-receive" }

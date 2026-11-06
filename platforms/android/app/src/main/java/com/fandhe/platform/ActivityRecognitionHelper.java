@@ -127,7 +127,7 @@ final class ActivityRecognitionHelper {
     // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
     ActivityRecognitionHelper(ComponentActivity activity) {
         this.activity = activity;
-        this.permissionLauncher = activity.registerForActivityResult(
+        this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:ActivityRecognitionHelper:1", activity,
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
         current = this;
     }

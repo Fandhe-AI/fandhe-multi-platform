@@ -68,9 +68,9 @@ final class RadioControlHelper {
 
     RadioControlHelper(ComponentActivity activity) {
         this.activity = activity;
-        this.permissionLauncher = activity.registerForActivityResult(
+        this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:RadioControlHelper:1", activity,
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
-        this.enableLauncher = activity.registerForActivityResult(
+        this.enableLauncher = activity.getActivityResultRegistry().register("fandhe:RadioControlHelper:2", activity,
                 new ActivityResultContracts.StartActivityForResult(), result -> {
                     long id = request.current();
                     if (id == RequestTracker.NONE) {

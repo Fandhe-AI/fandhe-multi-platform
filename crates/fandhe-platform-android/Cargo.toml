@@ -16,14 +16,17 @@ publish = false
 android-activity = { workspace = true, features = ["game-activity"] }
 jni = { workspace = true }
 
-# `cargo fandhe gen` の入力（Android の殻が要る基盤の Gradle 依存。アプリは自分で書かない、#1259）。
-# 機能 crate は Android でこの crate に依存するため、アプリの到達判定に必ず入る。
-# games-activity の版は android-activity 0.6 系（Cargo.lock）が対応する 4.4.0 に合わせる。
-# 版の正本は scripts/android/versions.env で、一致は cargo-fandhe の tests/gen.rs が保証する。
+# `cargo fandhe gen` の入力。共通層も機能宣言を持つ（`fandhe-cap-*` 以外は id と crate 名の一致を求められない）。
+# 機能 crate は Android の依存にこの crate を持つので、アプリの到達判定に必ず入る。
+# - java: Java の共有クラス（RequestTracker・FeatureLifecycleProvider）を srcDirs に載せる（#1257）
+# - gradle: Android の殻が要る基盤の Gradle 依存。アプリは自分で書かない（#1259）。
+#   games-activity の版は android-activity 0.6 系（Cargo.lock）が対応する 4.4.0 に合わせる。
+#   版の正本は scripts/android/versions.env で、一致は cargo-fandhe の tests/gen.rs が保証する
 [package.metadata.fandhe]
 id = "platform-android"
 
 [package.metadata.fandhe.android]
+java = ["android/java"]
 gradle = [
     "androidx.games:games-activity:4.4.0",
     "androidx.appcompat:appcompat:1.7.1",

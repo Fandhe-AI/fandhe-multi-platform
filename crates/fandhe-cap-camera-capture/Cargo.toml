@@ -39,3 +39,11 @@ features = [
   { name = "android.hardware.camera.any", required = false },
 ]
 java = ["android/java"]
+
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+# Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.CameraCaptureLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.camera-capture" }

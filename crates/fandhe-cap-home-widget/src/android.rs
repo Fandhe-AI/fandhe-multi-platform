@@ -5,8 +5,8 @@
 //!
 //! # 保存主体
 //!
-//! 保存・読み出し・再描画要求はすべて Java 側が行う（`MainActivity.homeWidgetSetText` /
-//! `homeWidgetCurrentText`、`HomeWidgetProvider`）。保存先は SharedPreferences
+//! 保存・読み出し・再描画要求はすべて Java 側が行う（`HomeWidgetProvider.setText` /
+//! `readText`。利用者の `MainActivity` に受け口は要らない、#1257）。保存先は SharedPreferences
 //! `fandhe_home_widget` の `text` キー。本モジュールは JNI 越しの橋渡しと、入力検証
 //! （`validate_text`、JNI より前）・戻り値の写像だけを担う。
 //!
@@ -19,8 +19,10 @@
 //!
 //! # JNI 署名（Java 側と 2 か所で一致させる。native 宣言は無いので no-op スタブは不要）
 //!
-//! - `private boolean homeWidgetSetText(String)`
-//! - `private String homeWidgetCurrentText()`（未保存は null ↔ `None`）
+//! `HomeWidgetProvider` の static メソッド（第 1 引数は Activity を渡す）:
+//!
+//! - `setText (Landroid/content/Context;Ljava/lang/String;)Z`
+//! - `readText (Landroid/content/Context;)Ljava/lang/String;`（未保存は null ↔ `None`）
 //!
 //! # 守る範囲・守らない範囲
 //!
@@ -52,42 +54,50 @@ impl AndroidHomeWidget {
         f: impl FnOnce(
             &mut jni::Env,
             &jni::objects::JObject,
+            &jni::objects::JClass,
         ) -> Result<T, fandhe_platform_android::JniCallFailed>,
     ) -> Result<T, HomeWidgetError> {
         let Some(app) = fandhe_platform_android::android_app() else {
             return Err(HomeWidgetError::Unsupported);
         };
-        fandhe_platform_android::with_activity(&app, |env, activity| {
-            let result = f(env, activity);
-            if result.is_err() && env.exception_check() {
-                // 例外は自動クリアされない（jni 0.22）。後続 JNI に影響させない。
-                env.exception_clear();
-            }
-            result
-        })
+        fandhe_platform_android::with_activity_class(
+            &app,
+            jni::jni_str!("com.fandhe.platform.HomeWidgetProvider"),
+            |env, activity, class| {
+                let result = f(env, activity, class);
+                if result.is_err() && env.exception_check() {
+                    // 例外は自動クリアされない（jni 0.22）。後続 JNI に影響させない。
+                    env.exception_clear();
+                }
+                result
+            },
+        )
         .map_err(|_| HomeWidgetError::Internal)
     }
 
     fn call_set(text: &str) -> Result<bool, HomeWidgetError> {
-        Self::with_activity(|env, activity| {
+        Self::with_activity(|env, activity, class| {
             let j_text = env.new_string(text)?;
-            let ret = env.call_method(
-                activity,
-                jni::jni_str!("homeWidgetSetText"),
-                jni::jni_sig!((java.lang.String) -> boolean),
-                &[jni::objects::JValue::Object(&j_text)],
+            let ret = env.call_static_method(
+                class,
+                jni::jni_str!("setText"),
+                jni::jni_sig!((android.content.Context, java.lang.String) -> boolean),
+                &[
+                    jni::objects::JValue::Object(activity),
+                    jni::objects::JValue::Object(&j_text),
+                ],
             )?;
             Ok(ret.z()?)
         })
     }
 
     fn call_get() -> Result<Option<String>, HomeWidgetError> {
-        Self::with_activity(|env, activity| {
-            let ret = env.call_method(
-                activity,
-                jni::jni_str!("homeWidgetCurrentText"),
-                jni::jni_sig!(() -> java.lang.String),
-                &[],
+        Self::with_activity(|env, activity, class| {
+            let ret = env.call_static_method(
+                class,
+                jni::jni_str!("readText"),
+                jni::jni_sig!((android.content.Context) -> java.lang.String),
+                &[jni::objects::JValue::Object(activity)],
             )?;
             let jstring = env.cast_local::<jni::objects::JString>(ret.l()?)?;
             if jstring.is_null() {

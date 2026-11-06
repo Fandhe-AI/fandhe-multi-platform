@@ -21,7 +21,7 @@ pub mod screens;
 pub use screens::{build_app, registered_names};
 
 /// `device` feature 無効ビルド向けの `nativeOnShareReceived` no-op フォールバック（#1258）。
-/// `MainActivity` は feature を知らず `ShareReceiveHelper.deliver` を必ず呼ぶため、実体を持つ
+/// `ShareReceiveLifecycle`（#1257）は feature を知らず `ShareReceiveHelper.deliver` を必ず呼ぶため、実体を持つ
 /// `fandhe-cap-share-receive`（`device` 有効時のみ依存）が無いと `UnsatisfiedLinkError` になる。
 /// 実体との二重定義を避けるため cfg は `device` 無効のときだけ。署名は Java 宣言・実体と一致
 /// （`(String) -> void`）。
