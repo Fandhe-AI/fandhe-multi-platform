@@ -1,3 +1,6 @@
+# docs/spec は非公開。update = none で cargo の git 依存取得（submodule の再帰取得）から外し、
+# 認証のない環境でも依存を解決できるようにする（#1256）。取得手順は README「クローンと初期化」を参照。
 [submodule "docs/spec"]
 	path = docs/spec
 	url = https://github.com/Fandhe-AI/fandhe-multi-platform-spec.git
+	update = none
