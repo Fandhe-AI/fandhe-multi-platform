@@ -238,3 +238,25 @@ bundle-id = "com.example.app"               # iOS の Info.plist を出すので
 ### 範囲外
 
 `CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、applicationId・compileSdk・`<application>` の属性、macOS・拡張の Info.plist の確定値化、framework のリンクと Xcode のターゲット（#1212）、Windows の identity（#1208）、手書き設定の置き換え（#1194）、`run`/`build` への組み込み（#1201）、追記と `--eject`（#1202）。
+
+## 8. 選ばなかった機能の検査（`cargo fandhe verify-scope`）
+
+成果物に、選ばなかった機能の権限・entitlement・framework・Gradle 依存・コンポーネントが混ざっていないことを確かめます（#1178）。
+
+```sh
+cargo fandhe verify-scope --catalog <全機能を含む Cargo.toml> \
+  [--manifest-path <アプリの Cargo.toml>] --os android|ios|macos <観測ファイル>...
+```
+
+- 禁止集合は「カタログの宣言 − アプリが到達した宣言」から作ります。到達判定は `gen` と同じです
+- 到達した機能と同じ値を宣言する未選択機能の値は、正当に現れるため禁止にしません
+- 観測ファイルは成果物から外部ツールで取り出したテキストです。いずれかの禁止値が現れたら、機能 id・種別・値を出して終了コード 1 で終わります
+- 照合はトークン境界つきです。`android.hardware.camera` は `android.hardware.camera.autofocus` に、`group:artifact` は `group:artifact-ktx` に一致しません
+- 観測テキストが空なら失敗します（ツールの失敗の見逃し防止）。未選択の機能が 0 件なら検査対象なしで成功します
+- 対象は次の値です
+  - Android: 権限名、`uses-feature` 名、コンポーネント名、Gradle の `group:artifact`
+  - iOS・macOS: entitlement キー（App Group は `com.apple.security.application-groups`）、framework 名、`*UsageDescription` キー、`info-plist` のキー、拡張（`<name>.appex`）
+- 観測ファイルの集め方は `scripts/audit/verify-capability-scope.sh` が担います（aapt2・codesign・otool・plutil。Gradle の依存ツリーは任意）
+- 判定ロジックは `cargo test -p cargo-fandhe` で守ります。実成果物への実行は CI の必須経路には載せていません
+
+範囲外: `main-activity-intent-filters`（他 library の manifest にも正当に現れるため。漏れは機能のコンポーネント名で検出します）、Windows の identity（#1208）、AAB の直接検査。

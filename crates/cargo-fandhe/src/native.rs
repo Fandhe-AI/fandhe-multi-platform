@@ -41,10 +41,10 @@ const IOS_MIN_VERSION: &str = "17.0";
 /// ライブラリ名を Java から参照させるクラス（アプリは `System.loadLibrary(FandheLibrary.NAME)` と書く）。
 const LIBRARY_CLASS_PATH: &str = "android/java/com/fandhe/platform/FandheLibrary.java";
 /// OS ごとに `cargo metadata --filter-platform` へ渡す triple（対象 OS に限った依存の cfg 評価は cargo に任せる）。
-const ANDROID_TRIPLE: &str = "aarch64-linux-android";
-const IOS_TRIPLE: &str = "aarch64-apple-ios";
-const MACOS_TRIPLE: &str = "aarch64-apple-darwin";
-const APP_GROUPS_KEY: &str = "com.apple.security.application-groups";
+pub(crate) const ANDROID_TRIPLE: &str = "aarch64-linux-android";
+pub(crate) const IOS_TRIPLE: &str = "aarch64-apple-ios";
+pub(crate) const MACOS_TRIPLE: &str = "aarch64-apple-darwin";
+pub(crate) const APP_GROUPS_KEY: &str = "com.apple.security.application-groups";
 
 /// 生成結果。`files` のキーは `gen_dir` からの相対パス（区切りは `/`）。
 #[derive(Debug)]

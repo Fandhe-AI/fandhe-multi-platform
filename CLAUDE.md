@@ -24,7 +24,7 @@ fandhe-multi-platform/
 ├── .editorconfig                # エディタ設定（改行・インデント・末尾空白の統一）
 │
 ├── crates/
-│   ├── cargo-fandhe/            # 機能宣言（[package.metadata.fandhe]）の検証と統合規則。`cargo fandhe check`（#1160）・`cargo fandhe gen`（#1176、ネイティブ設定の生成）、forbid(unsafe_code)
+│   ├── cargo-fandhe/            # 機能宣言（[package.metadata.fandhe]）の検証と統合規則。`cargo fandhe check`（#1160）・`cargo fandhe gen`（#1176、ネイティブ設定の生成）・`cargo fandhe verify-scope`（#1178、選ばなかった機能の混入検査）、forbid(unsafe_code)
 │   ├── fandhe-cap-*/            # 端末機能 1 つにつき 1 crate（契約・OS 別実装・宣言。egui 非依存。現在 camera-capture・document-scan・home-widget・nfc-card-emulation・share-receive、TASK-21.3 / #1170・#1171・#1172・#1173・#1174）
 │   ├── fandhe-core/             # 共通コア（UI DSL・状態管理・AI 型安全 DSL、forbid(unsafe_code)）
 │   │   ├── src/lib.rs           # 役割要約・モジュール地図（ui / state / token / screens）
@@ -58,7 +58,7 @@ fandhe-multi-platform/
 │   ├── android/                 # Android ビルド・テスト・検証スクリプト
 │   │                             # setup・build・verify・計測（フレームレート・メモリ等）
 │   ├── apple/                   # Apple（watchOS・visionOS・iOS・macOS）ビルド・Rust ブリッジ
-│   ├── audit/                   # コード品質監査（unsafe-audit.sh）
+│   ├── audit/                   # コード品質監査（unsafe-audit.sh）・成果物への未選択機能の混入検査（verify-capability-scope.sh）
 │   ├── build/                   # プラットフォーム横断ビルド・ストア提出パイプライン
 │   ├── ios/                     # iOS シミュレータ向けビルド・実描画確認スクリプト
 │   ├── device/                  # 端末機能の対応表生成・人手確認の issue 操作
