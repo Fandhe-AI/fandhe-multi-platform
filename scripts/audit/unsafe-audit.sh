@@ -105,7 +105,7 @@ find_safety_justification_above() {
   local line_no="${start_line_no}" content trimmed depth=0
 
   while [ "${line_no}" -ge 1 ] && [ "${depth}" -lt 30 ]; do
-    content="$(sed -n "${line_no}p" -- "${file}")"
+    content="$(sed -n "${line_no}p" "${file}")"
     trimmed="${content#"${content%%[![:space:]]*}"}"
     case "${trimmed}" in
       *'// SAFETY:'*) return 0 ;;
@@ -127,7 +127,7 @@ judge_unsafe_match() {
   local file="$1" line_no="$2"
   local line_content trimmed_content
 
-  line_content="$(sed -n "${line_no}p" -- "${file}")"
+  line_content="$(sed -n "${line_no}p" "${file}")"
   # コメント行（trim 後に // から始まる行。#![forbid(unsafe_code)] や
   # 「unsafe は禁止」のような日本語コメント中の言及を誤検出しないため）は
   # 使用箇所としてカウントしない。
