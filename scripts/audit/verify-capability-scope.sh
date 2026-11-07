@@ -26,12 +26,15 @@ die() {
   exit 1
 }
 
+# cd 後も同じ場所を指すよう、呼び出し元のカレントからの相対パスを絶対化する
+abs() { [[ "$1" = /* ]] && echo "$1" || echo "${PWD}/$1"; }
+
 catalog=()
 manifest=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --catalog) [[ $# -ge 2 ]] || die "--catalog に値が要ります"; catalog=(--catalog "$2"); shift 2 ;;
-    --manifest-path) [[ $# -ge 2 ]] || die "--manifest-path に値が要ります"; manifest=(--manifest-path "$2"); shift 2 ;;
+    --catalog) [[ $# -ge 2 ]] || die "--catalog に値が要ります"; catalog=(--catalog "$(abs "$2")"); shift 2 ;;
+    --manifest-path) [[ $# -ge 2 ]] || die "--manifest-path に値が要ります"; manifest=(--manifest-path "$(abs "$2")"); shift 2 ;;
     *) break ;;
   esac
 done

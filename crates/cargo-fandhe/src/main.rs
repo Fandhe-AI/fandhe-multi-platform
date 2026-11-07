@@ -27,7 +27,7 @@ fn verify_scope(args: &[&str]) -> ExitCode {
                     _ => os = Some(v.to_string()),
                 }
             }
-            f if !f.starts_with("--") => files.push(f),
+            f if !f.starts_with('-') => files.push(f),
             _ => {
                 eprintln!("{USAGE}");
                 return ExitCode::from(2);
