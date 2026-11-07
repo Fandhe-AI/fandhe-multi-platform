@@ -6,6 +6,7 @@
 //! - [`check_workspace`] - `cargo metadata` で解決した全 crate の宣言を検証する（統合・到達判定はしない）
 //! - `reach` モジュール - アプリが依存として解決した機能 crate の到達判定（feature の活性化を自前で辿る）
 //! - `native` モジュール - 到達した機能の宣言だけからネイティブ設定（Manifest・Gradle・Info.plist・entitlements）を生成する（`cargo fandhe gen`。`gen` は 2024 edition の予約語のため別名）
+//! - `scope` モジュール - 選ばなかった機能の宣言が成果物に無いことの照合（`cargo fandhe verify-scope`、#1178）
 //!
 //! 形式の仕様は `docs/architecture/capability-declaration.md`。
 //! 値は XML・plist・Gradle へ展開されるため、エスケープは生成側（`native`）の責務とし、
@@ -17,9 +18,11 @@ pub mod declaration;
 pub mod merge;
 pub mod native;
 mod reach;
+mod scope;
 mod workspace;
 
 pub use declaration::{check_paths, parse, validate, Declaration, Problem};
 pub use merge::{merge, Merged};
 pub use native::{generate, write, Generated};
+pub use scope::{verify_scope, ScopeReport};
 pub use workspace::check_workspace;
