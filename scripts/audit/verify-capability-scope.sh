@@ -15,7 +15,7 @@
 # 集める観測:
 #   android: aapt2 dump xmltree（AndroidManifest.xml）、任意で Gradle の依存ツリー
 #   ios/macos: codesign の entitlements、otool -L、plutil -p Info.plist、PlugIns/ の一覧
-#              （拡張の appex も同じ観測を足す）。未署名で entitlements が取れなければ警告して続行
+#              （拡張の appex も同じ観測を足す）。未署名なら警告して続行（それ以外の取得失敗は失敗）
 # 秘密情報は扱わない（引数はファイルパスのみ）。一時ファイルは mktemp -d 配下に作り終了時に削除する。
 set -euo pipefail
 
@@ -38,6 +38,8 @@ while [[ $# -gt 0 ]]; do
     *) break ;;
   esac
 done
+# 省略時はリポジトリルートへ cd する前に、呼び出し元カレントのアプリを確定する
+[[ ${#manifest[@]} -gt 0 ]] || manifest=(--manifest-path "${PWD}/Cargo.toml")
 os="${1:-}"
 [[ -n "${os}" ]] || die "OS（android / ios / macos）を指定してください"
 shift
@@ -99,8 +101,13 @@ observe_bundle() {
   local name
   name="$(plutil -extract CFBundleExecutable raw -o - "${plist}")" || die "CFBundleExecutable を読めません"
   otool -L "${exe}/${name}" >>"${obs}" || die "otool が失敗しました"
-  codesign -d --entitlements :- "${bundle}" >>"${obs}" 2>/dev/null ||
-    echo "警告: ${bundle} の entitlements を取れません（未署名）。Info.plist と framework だけ照合します" >&2
+  local cs_err="${work}/codesign.err"
+  if ! codesign -d --entitlements :- "${bundle}" >>"${obs}" 2>"${cs_err}"; then
+    # 未署名だけを許容する。署名破損・読み取り失敗は禁止値検査をすり抜けるので失敗にする
+    grep -q "not signed at all" "${cs_err}" ||
+      die "${bundle} の entitlements を取れません: $(tr '\n' ' ' <"${cs_err}")"
+    echo "警告: ${bundle} は未署名です。Info.plist と framework だけ照合します" >&2
+  fi
 }
 
 observe_apple() {

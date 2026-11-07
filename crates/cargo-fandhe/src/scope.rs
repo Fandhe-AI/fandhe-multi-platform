@@ -27,6 +27,9 @@ pub struct ScopeReport {
 /// 値の持ち主（機能 id）と種別。違反メッセージに使う。
 type Owner = (String, &'static str);
 
+/// 機能固有でなく、クリーンな成果物にも OS・署名が付ける entitlement。禁止集合に入れない。
+const GENERIC_KEYS: &[&str] = &["com.apple.security.app-sandbox"];
+
 fn apple_tokens(a: &Apple, out: &mut Vec<(&'static str, String)>) {
     let groups = |g: &[String], out: &mut Vec<(&'static str, String)>| {
         if !g.is_empty() {
@@ -101,7 +104,7 @@ pub(crate) fn forbidden_tokens(
         .filter(|d| !reached_ids.contains(d.id.as_str()))
     {
         for (kind, v) in tokens(d, os) {
-            if !allowed.contains(&v) {
+            if !allowed.contains(&v) && !GENERIC_KEYS.contains(&v.as_str()) {
                 out.entry(v).or_insert((d.id.clone(), kind));
             }
         }
@@ -154,6 +157,12 @@ pub fn verify_scope(
     };
     let all = collect(&run_metadata(catalog, None)?)?;
     let meta = run_metadata(app, Some(triple))?;
+    if meta["resolve"]["root"].as_str().is_none() {
+        return Err(vec![
+            "アプリの Cargo.toml を指定してください（virtual workspace では到達集合を作れません）"
+                .into(),
+        ]);
+    }
     let reach = reachable(&meta);
     let app_found = collect(&meta)?;
     let reached: Vec<&Declaration> = app_found
