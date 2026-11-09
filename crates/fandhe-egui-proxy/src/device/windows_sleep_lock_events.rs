@@ -247,6 +247,11 @@ mod win {
     }
 
     /// ウィンドウプロシージャ。出来事に写せるものだけを `fire` し、すぐ戻る。
+    ///
+    /// # Safety
+    ///
+    /// 専用スレッドで作ったウィンドウのプロシージャとして OS だけが呼ぶ。引数は OS が渡した
+    /// 有効な値で、本関数はポインタを辿らず `DefWindowProcW` へそのまま渡すだけ。
     #[allow(unsafe_code)]
     unsafe extern "system" fn wnd_proc(
         hwnd: HWND,

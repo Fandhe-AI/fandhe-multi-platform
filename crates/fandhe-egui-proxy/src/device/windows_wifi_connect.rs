@@ -382,6 +382,11 @@ mod ffi {
     }
 
     /// OS スレッドから呼ばれる ACM 通知コールバック。パニックを境界の外へ出さない。
+    ///
+    /// # Safety
+    ///
+    /// `data` は OS がコールバックの間だけ有効な通知データを指す。`ctx` は登録時に渡した
+    /// `Arc::into_raw` のポインタで、登録解除の完了まで解放されない。どちらも NULL なら何もしない。
     #[allow(unsafe_code)]
     unsafe extern "system" fn callback(data: *mut L2_NOTIFICATION_DATA, ctx: *mut c_void) {
         if data.is_null() || ctx.is_null() {

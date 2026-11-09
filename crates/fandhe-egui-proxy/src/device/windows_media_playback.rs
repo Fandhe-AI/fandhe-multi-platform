@@ -426,8 +426,8 @@ mod win {
                 if event == MF_MEDIA_ENGINE_EVENT_NOTIFYSTABLESTATE.0 as u32 {
                     // param1 は受け手がシグナルすべきイベントハンドル。立てないと Media Engine が
                     // 安定状態への移行待ちから進めず、停止・解放（Shutdown）が処理されない。
-                    // SAFETY: MF が渡す有効なイベントハンドル。SetEvent は呼び出し中だけ使う。
                     if param1 != 0 {
+                        // SAFETY: MF が渡す有効なイベントハンドル。SetEvent は呼び出し中だけ使う。
                         unsafe { SetEvent(HANDLE(param1 as *mut c_void)) }?;
                     }
                     return Ok(());
