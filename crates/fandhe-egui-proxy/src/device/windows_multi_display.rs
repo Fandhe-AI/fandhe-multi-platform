@@ -53,6 +53,12 @@ mod win {
 
     pub(super) struct WindowsMultiDisplay;
 
+    /// `EnumDisplayMonitors` のコールバック。モニターを `data` の `Vec` へ積む。
+    ///
+    /// # Safety
+    ///
+    /// `data` は `monitors()` が渡した `&mut Vec<HMONITOR>` を指し、`EnumDisplayMonitors` の
+    /// 呼び出し中に同期で呼ばれること。
     unsafe extern "system" fn collect(
         monitor: HMONITOR,
         _dc: HDC,

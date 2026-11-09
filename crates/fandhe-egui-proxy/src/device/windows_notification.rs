@@ -241,6 +241,7 @@ fn ensure_shortcut(path: &Path, exe: &Path) -> Result<bool, DeviceError> {
     } else {
         MOVE_FILE_FLAGS(0)
     };
+    // SAFETY: 2 つの `HSTRING` は呼び出しの間だけ生存し、`MoveFileExW` は文字列を保持しない。
     let move_result = unsafe {
         MoveFileExW(
             &HSTRING::from(tmp_path.as_path()),

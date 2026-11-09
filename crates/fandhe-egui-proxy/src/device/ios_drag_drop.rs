@@ -284,6 +284,7 @@ unsafe extern "C" fn fandhe_rust_drag_drop_item(
     // それぞれの長さぶん有効な読み取り専用バッファを指す。`from_utf8` が失敗すれば
     // `None`（表示名なし/読めない扱い）として扱う（信頼境界の入力検証、A03）。
     let suggested_name = unsafe { bytes_to_str(name_ptr, name_len) }.unwrap_or("");
+    // SAFETY: 上と同じ契約（null でなければ `path_len` バイトの読み取り専用バッファ）。
     let path = unsafe { bytes_to_str(path_ptr, path_len) };
 
     let item = build_item(code, path, suggested_name);

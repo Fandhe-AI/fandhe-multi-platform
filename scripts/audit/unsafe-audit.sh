@@ -25,6 +25,14 @@
 #      挟んで `/// # Safety` ドキュメンテーションコメントで安全性契約を記述する
 #      構成にも対応するため、直前 1 行だけでなくコメント・属性ブロック全体を探索する。
 #      TASK-3.2-S2 / #59 の Review 指摘対応）。
+#      `unsafe` が複数行の式の 2 行目以降にある場合は、その文の先頭行の直前に隣接する
+#      ブロックも探す（受け付ける範囲は statement_start_line の注釈を参照。空行・別の文を
+#      挟んだ離れた SAFETY は根拠とみなさない）。
+#   5. 次の形は根拠を要する使用として数えない（誤検知の除外、is_non_use_form）:
+#      `unsafe extern "C" {` 宣言ブロック、`#[unsafe(...)]` 属性、関数ポインタ型
+#      （`unsafe extern "system" fn(` のように `fn` の直後が `(`）。
+#
+# `--self-test`: 上記の判定を固定の入力で確かめて終わる（cargo 不要）。
 #
 # 違反判定（exit 1）:
 #   - クレートルートに `#![forbid(unsafe_code)]` が無い（FORBID_EXEMPT_CRATES 記載クレートを除く）
@@ -119,6 +127,40 @@ find_safety_justification_above() {
   return 1
 }
 
+# 根拠を要する「unsafe の使用」ではない形（誤検知）なら 0 を返す。引数は trim 済みの行。
+#   - `unsafe extern "C" {`        Rust 2024 必須の宣言ブロック（個々の呼び出し側が根拠を持つ）
+#   - `#[unsafe(no_mangle)]` 等    属性の安全性宣言（対象関数の `# Safety` / SAFETY 側で扱う）
+#   - `unsafe extern "C" fn(...)`  関数ポインタ型（`fn` の直後が `(`。関数定義は `fn 名前(` なので区別できる）
+is_non_use_form() {
+  local t="$1"
+  local q='"[^"]*"'
+  [[ "${t}" =~ ^(pub(\([a-z:]+\))?[[:space:]]+)?unsafe[[:space:]]+extern([[:space:]]+${q})?[[:space:]]*\{ ]] && return 0
+  [[ "${t}" =~ ^#!?\[unsafe\( ]] && return 0
+  [[ "${t}" =~ unsafe[[:space:]]+(extern([[:space:]]+${q})?[[:space:]]+)?fn[[:space:]]*\( ]] && return 0
+  return 1
+}
+
+# `unsafe` を含む行が属する文の先頭行の「1 行上」を返す（SAFETY 探索の開始行）。
+# 式が複数行にまたがり `unsafe` が 2 行目以降にある場合、`// SAFETY:` は文の先頭
+# （例: `let x =` の直前）に付くため、直前の連続ブロックから外れる。
+# 上へたどるのは、直上行が式の途中（空行・コメント・属性でなく、行末が `;` `{` `}` でもない）
+# の間だけ。最大 15 行。受け付ける形は「文の先頭行の直前に SAFETY ブロックが隣接している」
+# 場合のみで、空行や別の文を挟んだ離れた SAFETY は従来どおり根拠とみなさない。
+statement_start_line() {
+  local file="$1" line_no="$2"
+  local prev=$((line_no - 1)) content trimmed depth=0
+  while [ "${prev}" -ge 1 ] && [ "${depth}" -lt 15 ]; do
+    content="$(sed -n "${prev}p" "${file}")"
+    trimmed="${content#"${content%%[![:space:]]*}"}"
+    case "${trimmed}" in
+      '' | '//'* | '#['* | '/*'* | '*'* | *';' | *'{' | *'}') break ;;
+    esac
+    prev=$((prev - 1))
+    depth=$((depth + 1))
+  done
+  echo "${prev}"
+}
+
 # grep -n の 1 マッチ（file:line_no）を判定する共通処理。呼び出し元スコープの
 # crate_unsafe_count / total_unsafe_count / violation_count を更新する。
 # ディレクトリ走査（grep -rn）・単一ファイル走査（build.rs 向け grep -n）の
@@ -136,15 +178,77 @@ judge_unsafe_match() {
     '//'*) return 0 ;;
   esac
 
+  if is_non_use_form "${trimmed_content}"; then
+    return 0
+  fi
+
   crate_unsafe_count=$((crate_unsafe_count + 1))
   total_unsafe_count=$((total_unsafe_count + 1))
   echo "  unsafe 検出: ${file}:${line_no}: ${line_content}"
 
-  if ! find_safety_justification_above "${file}" "$((line_no - 1))"; then
+  if ! find_safety_justification_above "${file}" "$(statement_start_line "${file}" "${line_no}")"; then
     echo "  違反: ${file}:${line_no} の unsafe に直前の // SAFETY: コメントがありません" >&2
     violation_count=$((violation_count + 1))
   fi
 }
+
+crate_unsafe_count=0
+total_unsafe_count=0
+violation_count=0
+
+# `--self-test`: 判定ロジックだけを固定の入力で確かめて終わる（cargo 不要）。
+if [ "${1:-}" = "--self-test" ]; then
+  fixture_dir="$(mktemp -d)"
+  trap 'rm -rf -- "${fixture_dir}"' EXIT
+  # 受け付けるべき形（違反 0 のはず）
+  cat >"${fixture_dir}/ok.rs" <<'EOF'
+unsafe extern "C" {
+}
+#[unsafe(no_mangle)]
+type F = unsafe extern "system" fn(u32) -> u32;
+// SAFETY: 理由。
+unsafe { a() };
+// SAFETY: 理由。
+let x = foo(
+    1,
+    unsafe { b() },
+);
+/// # Safety
+/// 理由。
+#[allow(unsafe_code)]
+unsafe extern "system" fn cb() {}
+EOF
+  # 受け付けてはいけない形（違反はちょうど 3 件のはず）
+  cat >"${fixture_dir}/ng.rs" <<'EOF'
+unsafe { a() };
+// SAFETY: 離れた根拠。
+let y = 1;
+unsafe { b() };
+// SAFETY: 空行を挟む。
+
+let z = foo(
+    unsafe { c() },
+);
+EOF
+  for f in ok ng; do
+    n=0
+    while IFS= read -r l; do
+      n=$((n + 1))
+      case "${l}" in *unsafe*) ;; *) continue ;; esac
+      judge_unsafe_match "${fixture_dir}/${f}.rs" "${n}" >/dev/null 2>&1
+      if [ "${f}" = ok ] && [ "${violation_count}" -ne 0 ]; then
+        echo "self-test 失敗: ok.rs:${n} が違反扱い" >&2
+        exit 1
+      fi
+    done <"${fixture_dir}/${f}.rs"
+  done
+  if [ "${violation_count}" -ne 3 ]; then
+    echo "self-test 失敗: ng.rs の違反が ${violation_count} 件（期待 3 件）" >&2
+    exit 1
+  fi
+  echo "self-test: OK"
+  exit 0
+fi
 
 if ! command -v cargo >/dev/null 2>&1; then
   echo "エラー: cargo が見つかりません。Rust ツールチェーンを導入してください。" >&2

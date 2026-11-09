@@ -61,15 +61,25 @@ bash scripts/audit/unsafe-audit.sh
    見出しのいずれかが見つかるかを確認する（`.claude/rules/coding-rust.md` の SAFETY コメント
    必須規約に対応。`pub unsafe extern "C" fn` のように `#[no_mangle]` 等の属性行を挟んで
    `/// # Safety` ドキュメンテーションコメントが続く構成にも対応する）。
+   - **複数行の式**: `unsafe` が式の 2 行目以降にあるときは、直上行が式の途中である間
+     （空行・コメント・属性でなく、行末が `;` `{` `}` でもない行。最大 15 行）だけ上へたどり、
+     その文の先頭行の直前に隣接する SAFETY ブロックも根拠として受け付ける。
+     受け付けるのは「SAFETY ブロックの直後から、`unsafe` を含む文が始まる」形のみ。
+     空行・別の文・ブロックの区切り（`;` `{` `}`）を挟んだ離れた SAFETY は根拠とみなさない。
+     同じ文の中に `unsafe` が複数あれば同じ SAFETY が共有される。別の文の `unsafe` は
+     それぞれに SAFETY を付ける。
+5. 次の形は根拠を要する使用として数えない（誤検知の除外）: `unsafe extern "C" {` 宣言ブロック
+   （個々の呼び出し側が根拠を持つ）、`#[unsafe(no_mangle)]` 等の `#[unsafe(...)]` 属性、
+   関数ポインタ型（`unsafe extern "system" fn(` のように `fn` の直後が `(`。関数定義は `fn 名前(`
+   なので区別できる）。`unsafe extern "..." fn 名前(` の関数定義は対象のままで、`# Safety` が要る。
+
+判定ロジックだけの確認は `scripts/audit/unsafe-audit.sh --self-test`（固定の入力、cargo 不要）。
 
 違反判定（exit 1）: クレートルートに `#![forbid(unsafe_code)]` が無い場合（`FORBID_EXEMPT_CRATES` 記載
 クレートを除く）、または `unsafe` が検出されかつ直前のコメント・属性ブロックに `// SAFETY:` /
 `# Safety` のいずれも無い場合。
 
-**macOS ホストでの実行注意**: macOS 標準の BSD `sed` は `sed -n "Np" -- file` の `--` 区切りを
-受け付けず失敗する（スクリプトは GNU sed を前提とした呼び出しを行う）。macOS で実行する場合は
-Linux（CI ランナー・`compose.yaml` の `dev` サービス）で実行するか、`--` を除去する GNU 互換の
-`sed` ラッパーを用意して `PATH` の先頭に置くこと。
+**macOS ホストでの実行**: BSD `sed` / `grep` でも最後まで走る（#1264）。
 
 手動での再現（クロスチェック用）:
 

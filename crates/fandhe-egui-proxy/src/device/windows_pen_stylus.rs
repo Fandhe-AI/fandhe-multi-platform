@@ -237,6 +237,11 @@ mod imp {
     }
 
     /// 観測専用のサブクラスプロシージャ。常に `DefSubclassProc` へ流し、メッセージを消費しない。
+    ///
+    /// # Safety
+    ///
+    /// `SetWindowSubclass` へ登録して OS だけが呼ぶ。引数は OS が渡した有効なウィンドウ・
+    /// メッセージ値で、本関数自身はポインタを辿らない（ポインタ入力の読み取りは `read_pointer` 側）。
     #[allow(unsafe_code)]
     unsafe extern "system" fn subclass_proc(
         hwnd: HWND,

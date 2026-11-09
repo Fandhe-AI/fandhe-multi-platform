@@ -40,6 +40,7 @@ extern "C" fn push_payload(ctx: *mut c_void, payload: *const u8, len: usize) {
     let bytes: &[u8] = if len == 0 {
         &[]
     } else {
+        // SAFETY: `len > 0` のとき `payload` は `len` バイトの有効な領域（上記の契約）。
         unsafe { std::slice::from_raw_parts(payload, len) }
     };
     out.push(String::from_utf8_lossy(bytes).into_owned());
