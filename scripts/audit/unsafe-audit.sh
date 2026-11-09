@@ -132,12 +132,15 @@ find_safety_justification_above() {
 #   - `#[unsafe(no_mangle)]` 等    属性の安全性宣言（対象関数の `# Safety` / SAFETY 側で扱う）
 #   - `unsafe extern "C" fn(...)`  関数ポインタ型（`fn` の直後が `(`。関数定義は `fn 名前(` なので区別できる）
 is_non_use_form() {
-  local t="$1"
-  local q='"[^"]*"'
-  [[ "${t}" =~ ^(pub(\([a-z:]+\))?[[:space:]]+)?unsafe[[:space:]]+extern([[:space:]]+${q})?[[:space:]]*\{ ]] && return 0
-  [[ "${t}" =~ ^#!?\[unsafe\( ]] && return 0
-  [[ "${t}" =~ unsafe[[:space:]]+(extern([[:space:]]+${q})?[[:space:]]+)?fn[[:space:]]*\( ]] && return 0
-  return 1
+  # 該当する `unsafe` トークンだけを行から取り除き、他の `unsafe` が残れば通常どおり判定する
+  # （同じ行に本物の `unsafe { }` や `unsafe fn 名前(` があるのに丸ごと除外しない = fail-closed）。
+  local rest
+  rest="$(printf '%s\n' "$1" | sed -E \
+    -e 's/^(pub(\([a-z:]+\))?[[:space:]]+)?unsafe[[:space:]]+extern([[:space:]]+"[^"]*")?[[:space:]]*\{//' \
+    -e 's/^#!?\[unsafe\(//' \
+    -e 's/unsafe[[:space:]]+(extern([[:space:]]+"[^"]*")?[[:space:]]+)?fn[[:space:]]*\(/FNPTR(/g')"
+  printf '%s\n' "${rest}" | grep -qw 'unsafe' && return 1
+  return 0
 }
 
 # `unsafe` を含む行が属する文の先頭行の「1 行上」を返す（SAFETY 探索の開始行）。
@@ -217,8 +220,13 @@ let x = foo(
 /// 理由。
 #[allow(unsafe_code)]
 unsafe extern "system" fn cb() {}
+// SAFETY: 理由。
+let f = unsafe { std::mem::transmute::<usize, unsafe fn()>(address) };
+/// # Safety
+/// 理由。
+unsafe fn invoke(f: unsafe fn()) {}
 EOF
-  # 受け付けてはいけない形（違反はちょうど 3 件のはず）
+  # 受け付けてはいけない形（違反はちょうど 5 件のはず）
   cat >"${fixture_dir}/ng.rs" <<'EOF'
 unsafe { a() };
 // SAFETY: 離れた根拠。
@@ -229,6 +237,8 @@ unsafe { b() };
 let z = foo(
     unsafe { c() },
 );
+let f = unsafe { std::mem::transmute::<usize, unsafe fn()>(address) };
+unsafe fn invoke(f: unsafe fn()) {}
 EOF
   for f in ok ng; do
     n=0
@@ -242,8 +252,8 @@ EOF
       fi
     done <"${fixture_dir}/${f}.rs"
   done
-  if [ "${violation_count}" -ne 3 ]; then
-    echo "self-test 失敗: ng.rs の違反が ${violation_count} 件（期待 3 件）" >&2
+  if [ "${violation_count}" -ne 5 ]; then
+    echo "self-test 失敗: ng.rs の違反が ${violation_count} 件（期待 5 件）" >&2
     exit 1
   fi
   echo "self-test: OK"

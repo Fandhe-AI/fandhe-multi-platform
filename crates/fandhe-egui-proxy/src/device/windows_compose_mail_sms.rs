@@ -253,9 +253,10 @@ mod ffi {
         // SAFETY: 固定の DLL 名を System32 からのみ読み込む（DLL planting 対策）。
         let module =
             unsafe { LoadLibraryExW(w!("mapi32.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32) }.ok()?;
-        // SAFETY: `module` は上で得た有効なハンドル。名前は NUL 終端のリテラル。戻りの関数ポインタは
-        // MS Learn の `MAPISendMailW` の宣言（`SendMailW` 型、いずれも system ABI）と同じ ABI・引数型へ変換する。
+        // SAFETY: `module` は上で得た有効なハンドル。名前は NUL 終端のリテラル。
         let p = unsafe { GetProcAddress(module, s!("MAPISendMailW")) }?;
+        // SAFETY: `p` は `MAPISendMailW` の実アドレス。MS Learn の宣言（`SendMailW` 型、いずれも
+        // system ABI）と同じ ABI・引数型へ変換する。`FreeLibrary` しないため以後も有効。
         Some(unsafe { std::mem::transmute::<unsafe extern "system" fn() -> isize, SendMailW>(p) })
     }
 
