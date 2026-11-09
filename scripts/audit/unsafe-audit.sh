@@ -115,10 +115,16 @@ find_safety_justification_above() {
   while [ "${line_no}" -ge 1 ] && [ "${depth}" -lt 30 ]; do
     content="$(sed -n "${line_no}p" "${file}")"
     trimmed="${content#"${content%%[![:space:]]*}"}"
+    # 根拠として読むのはコメントだけの行（`//` `/*` `*` で始まる行）に限る。コード行の
+    # 行末コメントや文字列内の `// SAFETY:` は根拠にしない。属性だけの行（`#[...]`）は
+    # 透過する。それ以外（空行・コード行）に当たったら打ち切る。
     case "${trimmed}" in
-      *'// SAFETY:'*) return 0 ;;
-      *'# Safety'*) return 0 ;;
-      '///'* | '//'* | '#['*) : ;; # コメント・属性行は透過して 1 行上へ
+      '//'* | '/*'* | '*'*)
+        case "${trimmed}" in
+          *'// SAFETY:'* | *'# Safety'*) return 0 ;;
+        esac
+        ;;
+      '#['*']') : ;;
       *) return 1 ;;
     esac
     line_no=$((line_no - 1))
@@ -143,7 +149,8 @@ is_non_use_form() {
   return 0
 }
 
-# `unsafe` を含む行が属する文の先頭行の「1 行上」を返す（SAFETY 探索の開始行）。
+# `unsafe` を含む行が属する文の「先頭行」を返す（呼び出し側がその 1 行上から SAFETY を探す。
+# 根拠として読むのはコメントだけの行・属性だけの行に限り、コード行は決して読まない）。
 # 式が複数行にまたがり `unsafe` が 2 行目以降にある場合、`// SAFETY:` は文の先頭
 # （例: `let x =` の直前）に付くため、直前の連続ブロックから外れる。
 # 上へたどるのは、直上行が式の途中（空行・コメント・属性でなく、行末が `;` `{` `}` でもない）
@@ -167,7 +174,8 @@ statement_start_line() {
     prev=$((prev - 1))
     depth=$((depth + 1))
   done
-  echo "${prev}"
+  # 文の先頭行（止まった境界行の次）を返す。境界行そのものは返さない。
+  echo "$((prev + 1))"
 }
 
 # grep -n の 1 マッチ（file:line_no）を判定する共通処理。呼び出し元スコープの
@@ -195,7 +203,7 @@ judge_unsafe_match() {
   total_unsafe_count=$((total_unsafe_count + 1))
   echo "  unsafe 検出: ${file}:${line_no}: ${line_content}"
 
-  if ! find_safety_justification_above "${file}" "$(statement_start_line "${file}" "${line_no}")"; then
+  if ! find_safety_justification_above "${file}" "$(($(statement_start_line "${file}" "${line_no}") - 1))"; then
     echo "  違反: ${file}:${line_no} の unsafe に直前の // SAFETY: コメントがありません" >&2
     violation_count=$((violation_count + 1))
   fi
@@ -232,7 +240,7 @@ let f = unsafe { std::mem::transmute::<usize, unsafe fn()>(address) };
 /// 理由。
 unsafe fn invoke(f: unsafe fn()) {}
 EOF
-  # 受け付けてはいけない形（違反はちょうど 6 件のはず）
+  # 受け付けてはいけない形（違反はちょうど 14 件のはず）
   cat >"${fixture_dir}/ng.rs" <<'EOF'
 unsafe { a() };
 // SAFETY: 離れた根拠。
@@ -248,6 +256,33 @@ unsafe fn invoke(f: unsafe fn()) {}
 // SAFETY: a の根拠。
 unsafe { a() }; // 補足
 unsafe { b() };
+let prior = 0; // SAFETY: prior only
+let value =
+    unsafe { operation() };
+let s = "// SAFETY: x";
+unsafe { c1() };
+foo(); /* SAFETY: x */
+unsafe { c2() };
+// SAFETY: 直前のブロックの前。
+if x {
+    other();
+}
+unsafe { c3() };
+// SAFETY: 別の項目。
+#[derive(Debug)]
+struct S;
+unsafe { c4() };
+// SAFETY: a2 の根拠。
+unsafe { a2() };
+let r = outer(
+    inner(
+        unsafe { c5() },
+    ),
+);
+foo();
+unsafe { c6() } // SAFETY: 同じ行の末尾は受け付けない
+let t = "# Safety";
+unsafe { c7() };
 EOF
   for f in ok ng; do
     n=0
@@ -261,8 +296,8 @@ EOF
       fi
     done <"${fixture_dir}/${f}.rs"
   done
-  if [ "${violation_count}" -ne 6 ]; then
-    echo "self-test 失敗: ng.rs の違反が ${violation_count} 件（期待 6 件）" >&2
+  if [ "${violation_count}" -ne 14 ]; then
+    echo "self-test 失敗: ng.rs の違反が ${violation_count} 件（期待 14 件）" >&2
     exit 1
   fi
   echo "self-test: OK"
