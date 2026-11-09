@@ -37,50 +37,81 @@ L104〜113）の受け入れ基準 1「共通コア・最適化レイヤーの�
 
 ## 3. 監査手順
 
-再現可能な監査は `scripts/audit/unsafe-audit.sh` で行う。
+監査は 2 つに分かれる。`forbid(unsafe_code)` の適用と `unsafe` の一覧は `scripts/audit/unsafe-audit.sh`、
+SAFETY コメントの有無は clippy の lint が検査する（Issue #1269）。
+
+### 3.1 一覧とクレートルートの検査（スクリプト）
 
 ```bash
 bash scripts/audit/unsafe-audit.sh
 ```
 
-スクリプトの処理内容:
-
 1. `cargo metadata --no-deps --format-version 1` と `jq` で workspace メンバーのクレート名・
-   クレートルート（`lib.rs`/`main.rs` 等の `src_path`）・クレートディレクトリを構造的に取得する。
-2. 各クレートルートに forbid 属性（`unsafe_code` を上書き不可で禁止するもの）が付与されているかを
-   検査する（スクリプト冒頭の `FORBID_EXEMPT_CRATES` に列挙したクレートは対象外。coding-rust.md が
-   forbid を求めるのは共通コアのみのため、FFI 境界を持つプラットフォーム統合レイヤーのクレートを
-   追加する際はこのリストへ明示的に登録する運用とする。登録クレートはスクリプトの
-   `FORBID_EXEMPT_CRATES` を参照）。
+   クレートルート・クレートディレクトリを取得する。
+2. 各クレートルートに `#![forbid(unsafe_code)]` が付与されているかを検査する
+   （スクリプト冒頭の `FORBID_EXEMPT_CRATES` に列挙したクレートは対象外。FFI 境界を持つクレートを
+   追加する際はこのリストへ明示的に登録する）。
 3. 各クレートの `src/` `tests/` `examples/` `benches/` 配下、および crate root 直下の `build.rs` から
-   `unsafe` トークンを単語境界一致（`grep -w`）で検出する。コメント行（trim 後に `//` から始まる行。
-   `#![forbid(unsafe_code)]` の行や、日本語コメント中で `unsafe` という語だけに言及している行を
-   使用箇所として誤カウントしないための除外）は検出対象から除く。
-4. 検出した `unsafe` について、直前の連続するコメント・属性行（`//`/`///`/`#[...]`）を上方向へ
-   最大 30 行たどり、`// SAFETY:`（本規約の既定の書式）または rustdoc の `# Safety` セクション
-   見出しのいずれかが見つかるかを確認する（`.claude/rules/coding-rust.md` の SAFETY コメント
-   必須規約に対応。`pub unsafe extern "C" fn` のように `#[no_mangle]` 等の属性行を挟んで
-   `/// # Safety` ドキュメンテーションコメントが続く構成にも対応する）。
+   `unsafe` トークンを検出して一覧にする（コメント行は除く）。件数は参考値で、判定には使わない。
 
-違反判定（exit 1）: クレートルートに `#![forbid(unsafe_code)]` が無い場合（`FORBID_EXEMPT_CRATES` 記載
-クレートを除く）、または `unsafe` が検出されかつ直前のコメント・属性ブロックに `// SAFETY:` /
-`# Safety` のいずれも無い場合。
+違反（exit 1）は forbid の未適用のみ。macOS 標準の BSD ツールでも最後まで走る（#1264）。
 
-**macOS ホストでの実行注意**: macOS 標準の BSD `sed` は `sed -n "Np" -- file` の `--` 区切りを
-受け付けず失敗する（スクリプトは GNU sed を前提とした呼び出しを行う）。macOS で実行する場合は
-Linux（CI ランナー・`compose.yaml` の `dev` サービス）で実行するか、`--` を除去する GNU 互換の
-`sed` ラッパーを用意して `PATH` の先頭に置くこと。
+### 3.2 SAFETY の検査（clippy）
 
-手動での再現（クロスチェック用）:
+ルート `Cargo.toml` の `[workspace.lints]` に次を `deny` で定義し、全クレートが `[lints] workspace = true`
+で継承する。ルートの `clippy.toml` の `check-private-items = true` で、非公開の `unsafe fn` も対象にする。
+
+| lint | 見るもの |
+| --- | --- |
+| `clippy::undocumented_unsafe_blocks` | `unsafe {}` ブロックと `unsafe impl` に `SAFETY:` コメントがあるか |
+| `clippy::missing_safety_doc` | `unsafe fn` に `/// # Safety` があるか |
+| `unsafe_op_in_unsafe_fn`（rustc） | `unsafe fn` の本体でも `unsafe {}` で囲んでいるか |
+
+行単位の文字列照合は、別の文の SAFETY を借りる穴を塞げなかったため廃止した。
+`clippy::unnecessary_safety_comment`（`unsafe extern {}` のコメントを誤検知する）と
+`multiple_unsafe_ops_per_block` は有効にしない。
+
+#### 受け付ける形
+
+- `unsafe {}` ブロックと `unsafe impl`: `SAFETY:` を含むコメントを、ブロックの直前、またはブロックを含む
+  文（式文・`let`・`match` のアーム）の直前に置く。属性と空行を間に挟んでよい。
+- `match` のアームと `if` / `else` の枝は、それぞれに自分のコメントが要る。
+- 1 つの文に含まれる複数のブロックは、その文の直前の 1 つのコメントで足りる。
+- `unsafe fn` は、非公開・FFI コールバックも含めて `/// # Safety` が要る。
+- 要らないもの: `unsafe extern "C" {}` ブロック（Rust 2024）、`#[unsafe(no_mangle)]` 等の属性、
+  関数ポインタ型（`unsafe extern "system" fn(...)`）。
+
+#### clippy でも見られない形（レビューで見る）
+
+- 文字列リテラルの中の `SAFETY:`
+- 中身のない `SAFETY:`
+- `macro_rules!` の中の `unsafe`
+
+#### 実行するターゲット
+
+`cfg` で除外されたコードは、そのターゲットで clippy を走らせないと検査されない。次の組み合わせを
+手元で実行し、lint の指摘が 0 件であることを確かめる。CI でターゲット別に走らせる作業は #1273 で、
+それまでは変更したコードの対象ターゲットを手元で実行する（`-D warnings` は #1037 の既知の警告で
+失敗しうるため、lint の指摘だけを見る）。
 
 ```bash
-grep -rn --include="*.rs" -w "unsafe" crates/
+# ホスト（CI の ubuntu でも同じ）
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+# Windows
+cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu
+# Android（NDK の環境変数は scripts/android/android-env.sh を source）
+cargo ndk -t arm64-v8a clippy --workspace --all-features
+# iOS（macOS のみ）
+cargo clippy --workspace --target aarch64-apple-ios
+cargo clippy --workspace --target aarch64-apple-ios --all-features
+# Web
+cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown -- -D warnings
 ```
 
 ## 4. 監査結果一覧表
 
 | クレート | `forbid(unsafe_code)` 適用（スクリプト判定） | `unsafe` 検出件数 | SAFETY コメント要否 | 判定 |
-|---------|---------------------------|-------------------|---------------------|------|
+| --- | --- | --- | --- | --- |
 | `fandhe-core` | 適用済み（`crates/fandhe-core/src/lib.rs` の crate root、`#![forbid(unsafe_code)]`） | 0 件 | 該当なし | 合格 |
 | `fandhe-device` | 適用済み（`crates/fandhe-device/src/lib.rs`、`#![forbid(unsafe_code)]`） | 0 件 | 該当なし | 合格 |
 | `fandhe-fonts` | 適用済み（`crates/fandhe-fonts/src/lib.rs`、`#![forbid(unsafe_code)]`） | 0 件 | 該当なし | 合格 |
@@ -92,8 +123,8 @@ grep -rn --include="*.rs" -w "unsafe" crates/
 | `fandhe-platform-apple` | 未適用（`FORBID_EXEMPT_CRATES` により免除。クレートルートは `#![deny(unsafe_code)]` を採用し、`main_thread` モジュールのみ `unsafe` を許容する。`crates/fandhe-egui-proxy/src/device/ios.rs` から移した `pthread_main_np` の宣言と呼び出し、TASK-21.2 / Issue #1168） | 2 件（`src/lib.rs` の `unsafe extern "C"` 宣言 1 + `pthread_main_np` 呼び出し 1。iOS・macOS ターゲットのみ） | 2 件とも直前に `// SAFETY:` コメントあり | 合格 |
 | `fandhe-cap-camera-capture` | 未適用（`FORBID_EXEMPT_CRATES` により免除。クレートルートは Android・iOS のみ `deny(unsafe_code)` へ緩める `cfg_attr`。Issue #1170） | 5 件（iOS: `src/ios.rs` の `unsafe extern "C"` 宣言 1 + `fandhe_ios_camera_capture` 呼び出し 1 + `free_captured_buffer` 内の解放呼び出し 1 + `std::slice::from_raw_parts` 1／Android: `src/android.rs` の `#[unsafe(no_mangle)]` JNI エクスポート 1。JavaVM と Activity の `unsafe` は `fandhe-platform-android` の `with_activity` に集約済み） | 4 件は直前に `// SAFETY:` コメントあり、`no_mangle` 1 件は `# Safety` 節あり | 合格 |
 | `fandhe-swiftui-bridge` | 未適用（`FORBID_EXEMPT_CRATES` により免除。クレートルートは `#![deny(unsafe_code)]` を採用し、設計文書 §3.1「unsafe 境界の規約」のとおり `ffi` モジュールのみ `unsafe` を許容し他モジュールは禁止する） | 29 件（`src/ffi/mod.rs` 25 件 = 公開 `unsafe extern "C" fn` 4 + 本体内の `unsafe` ブロック 6（196・227・275・278・309・347 行）+ `#[cfg(test)]` 内の呼び出し 15 件、`src/ffi/buffer.rs` 4 件。スクリプトは `src/` 配下を一律に走査する仕様のためテストコードも件数に含む） | 29 件とも直前のコメント・属性ブロックに `// SAFETY:` または `# Safety` あり | 合格 |
-| `fandhe-platform-android` | 未適用（`FORBID_EXEMPT_CRATES` により免除。クレートルートは `#![deny(unsafe_code)]`、`with_activity` のみ `unsafe` を許容。Android 以外ではクレート全体が `cfg` で空） | 2 件（`with_activity` の `JavaVM::from_raw` と `as_cast_raw`。ホストでは検出されうる） | 2 件とも直前に `// SAFETY:` コメントあり | Issue #1166 追加分。スクリプトの実行結果は CI で確認する（手元 macOS では sed の引数エラーで完走しない） |
-| `fandhe-cap-share-receive` | 未適用（`FORBID_EXEMPT_CRATES` により免除。クレートルートは Android・macOS のみ `deny(unsafe_code)` へ緩め、他の OS では `forbid(unsafe_code)` を保つ。`fandhe-egui-proxy` の `device/android_share_receive.rs`・`device/macos_share_receive.rs` から移した。TASK-21.3 / Issue #1173） | 5 件（`src/android.rs` の JNI 実体 `#[unsafe(no_mangle)]` 1、`src/macos.rs` の `unsafe extern "C"` 宣言 1 + `register` 内の呼び出し 1 + `#[unsafe(no_mangle)]` 1 + `std::slice::from_raw_parts` 1） | 5 件とも直前に `// SAFETY:` コメントまたは `# Safety` あり | 手元 macOS ではスクリプトが完走しない場合があるため CI で確認する |
+| `fandhe-platform-android` | 未適用（`FORBID_EXEMPT_CRATES` により免除。クレートルートは `#![deny(unsafe_code)]`、`with_activity` のみ `unsafe` を許容。Android 以外ではクレート全体が `cfg` で空） | 2 件（`with_activity` の `JavaVM::from_raw` と `as_cast_raw`。ホストでは検出されうる） | 2 件とも直前に `// SAFETY:` コメントあり | Issue #1166 追加分 |
+| `fandhe-cap-share-receive` | 未適用（`FORBID_EXEMPT_CRATES` により免除。クレートルートは Android・macOS のみ `deny(unsafe_code)` へ緩め、他の OS では `forbid(unsafe_code)` を保つ。`fandhe-egui-proxy` の `device/android_share_receive.rs`・`device/macos_share_receive.rs` から移した。TASK-21.3 / Issue #1173） | 5 件（`src/android.rs` の JNI 実体 `#[unsafe(no_mangle)]` 1、`src/macos.rs` の `unsafe extern "C"` 宣言 1 + `register` 内の呼び出し 1 + `#[unsafe(no_mangle)]` 1 + `std::slice::from_raw_parts` 1） | 5 件とも直前に `// SAFETY:` コメントまたは `# Safety` あり | スクリプトで確認する |
 | `fandhe-winit-ime` | 適用済み（`FORBID_EXEMPT_CRATES` 登録済みだが、`grep -qF` によるコメント一致でスクリプトは「適用済み」と判定する。クレートルートの実属性は `#![deny(unsafe_code)]`、`macos_secure_input` モジュールのみ `unsafe` を許容） | 3 件（`macos_secure_input.rs` の `EnableSecureEventInput`/`DisableSecureEventInput`/`IsSecureEventInputEnabled` 呼び出し。macOS 以外のターゲットではモジュール自体が `cfg` で除外されるため検出されない） | 3 件とも直前に `// SAFETY:` コメントあり | 合格 |
 
 **集計（Issue #790 の Android 実装と Issue #791 の iOS 実装を統合した時点の再監査、2026-09-06）**:
@@ -101,9 +132,7 @@ grep -rn --include="*.rs" -w "unsafe" crates/
 登録による免除で deny 採用、違反ではない）、`unsafe` 検出件数（合計）39 件（Issue #746 時点の
 33 件から、`fandhe-egui-proxy` の `device/android.rs`（Issue #750、`jni::JavaVM::from_raw`・
 `Env::as_cast_raw`）2 件と `device/ios.rs`（Issue #751、4 件）が両方とも純増し、合計 6 件増加）。
-`bash scripts/audit/unsafe-audit.sh` は macOS ホスト実行時に `--` 非対応の BSD sed で失敗する
-既知の制約（本書「3. 監査手順」の「macOS ホストでの実行注意」参照）があり、GNU sed 環境
-（Linux ランナー）での再実行は CI（GitHub Actions）に委ねる。
+`bash scripts/audit/unsafe-audit.sh` は macOS（BSD ツール）でも完走する（#1264）。SAFETY の検査は §3.2 の clippy が担う。
 
 **スクリプト判定の補足**: `fandhe-egui-proxy` と `fandhe-winit-ime` の「適用済み」は、クレートルートの
 `lib.rs` 冒頭のドキュメンテーションコメント（または `examples/*.rs` の `#![forbid(unsafe_code)]`）への
@@ -136,7 +165,7 @@ workspace メンバー自身のコードに限定）。既知脆弱性確認（`
 ## 7. REQ-7 受け入れ基準・M2 完了基準との整合確認
 
 | 基準 | 内容 | 本書での対応 |
-|------|------|-------------|
+| --- | --- | --- |
 | REQ-7 受け入れ基準 1（`04-requirements.md` L109） | 共通コア・最適化レイヤーのすべてのコードが Rust で実装され、`unsafe` ブロックの使用箇所が一覧化・監査される | 本書の「2. 監査対象」「4. 監査結果一覧表」で対応（**本書のスコープ**） |
 | REQ-7 受け入れ基準 2（`04-requirements.md` L110） | 全対象プラットフォームの Rust ターゲットへ `rustup target add` のみでコンパイルできることを確認する | TASK-7.2（`05-tasks.md` L244〜249）のスコープ（本書のスコープ外。別イシューで対応） |
 | `06-roadmap.md` M2 完了基準（L53） | `unsafe` ブロックの使用箇所が全コードから一覧化・監査されている（TASK-7.1） | 本書と `scripts/audit/unsafe-audit.sh` の作成をもって TASK-7.1 の成果物とする |

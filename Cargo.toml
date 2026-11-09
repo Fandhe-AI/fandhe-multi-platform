@@ -49,6 +49,15 @@ members = [
     "crates/fandhe-winit-ime",
 ]
 
+# SAFETY コメントの検査は clippy の lint に任せる（docs/architecture/unsafe-audit.md、Issue #1269）。
+# 非公開の `unsafe fn` も対象にする設定はルートの clippy.toml（check-private-items）。
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
 # 依存クレートは coding-rust.md の規約に従い workspace で一元管理する。
 [workspace.dependencies]
 # Phase 8（Issue #751）: iOS / macOS 向け ObjC 実装のコンパイルに使う。呼び出しは

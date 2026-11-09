@@ -11,3 +11,6 @@ publish = false
 [dependencies]
 # drain_completions が StateStore を使う。egui には依存しない（docs/architecture/consumer-app-structure.md §3・§7）。
 fandhe-core = { path = "../fandhe-core" }
+
+[lints]
+workspace = true

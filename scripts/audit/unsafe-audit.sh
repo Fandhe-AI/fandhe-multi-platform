@@ -18,18 +18,17 @@
 #      から `unsafe` トークンを単語境界一致（grep -w）で検出する。コメント行
 #      （trim 後に `//` から始まる行。`#![forbid(unsafe_code)]` の行を含む）は
 #      「使用箇所」として数えない。
-#   4. 検出した `unsafe` について、直前の連続するコメント・属性行を上方向へたどり
-#      `// SAFETY:`（本規約の既定の書式）または rustdoc の `# Safety` セクション
-#      見出しのいずれかが見つかるかを確認する（.claude/rules/coding-rust.md の
-#      SAFETY コメント必須規約に対応。`pub unsafe extern "C" fn` のように属性行を
-#      挟んで `/// # Safety` ドキュメンテーションコメントで安全性契約を記述する
-#      構成にも対応するため、直前 1 行だけでなくコメント・属性ブロック全体を探索する。
-#      TASK-3.2-S2 / #59 の Review 指摘対応）。
+#
+# SAFETY コメントの有無はこのスクリプトでは判定しない。clippy の lint が構文を読んで検査する
+# （workspace の `[workspace.lints]`: `undocumented_unsafe_blocks`・`missing_safety_doc`・
+# `unsafe_op_in_unsafe_fn`、非公開の `unsafe fn` は `clippy.toml` の `check-private-items`。
+# Issue #1269、受け付ける形は docs/architecture/unsafe-audit.md）。行単位の照合は別の文の
+# SAFETY を借りる穴を塞げないため廃止した。
 #
 # 違反判定（exit 1）:
 #   - クレートルートに `#![forbid(unsafe_code)]` が無い（FORBID_EXEMPT_CRATES 記載クレートを除く）
-#   - `unsafe` が検出され、直前のコメント・属性ブロックに `// SAFETY:` / `# Safety`
-#     のいずれも無い
+#
+# macOS 標準の BSD ツール（sed 等）でも最後まで走ること（#1264）。GNU 専用の書き方を足さない。
 #
 # 出力: クレートごとに forbid 適用有無・unsafe 検出件数・各検出箇所（ファイル:行）を表示し、
 # 最後に集計（forbid 適用クレート数 / 全クレート数、unsafe 総検出件数）を出力する。
@@ -93,34 +92,8 @@ is_forbid_exempt() {
   return 1
 }
 
-# 直前の連続するコメント行・属性行（`//`/`///` 行、`#[...]` 行）を上方向へ
-# たどり、`// SAFETY:`（本規約の既定の書式）または `# Safety`（rustdoc の
-# 安全性セクション見出し。`pub unsafe extern "C" fn` の直前に `#[no_mangle]` 等の
-# 属性行を挟んでドキュメンテーションコメントが続く構成に対応するための許容）の
-# いずれかを含む行が見つかれば安全性根拠ありとみなす。コメント・属性行以外
-# （空行・コード行）に到達したら探索を打ち切る（無関係な離れた行のコメントを
-# 誤って安全性根拠とみなさないため）。上限 30 行は無限ループ防止の安全弁。
-find_safety_justification_above() {
-  local file="$1" start_line_no="$2"
-  local line_no="${start_line_no}" content trimmed depth=0
-
-  while [ "${line_no}" -ge 1 ] && [ "${depth}" -lt 30 ]; do
-    content="$(sed -n "${line_no}p" "${file}")"
-    trimmed="${content#"${content%%[![:space:]]*}"}"
-    case "${trimmed}" in
-      *'// SAFETY:'*) return 0 ;;
-      *'# Safety'*) return 0 ;;
-      '///'* | '//'* | '#['*) : ;; # コメント・属性行は透過して 1 行上へ
-      *) return 1 ;;
-    esac
-    line_no=$((line_no - 1))
-    depth=$((depth + 1))
-  done
-  return 1
-}
-
 # grep -n の 1 マッチ（file:line_no）を判定する共通処理。呼び出し元スコープの
-# crate_unsafe_count / total_unsafe_count / violation_count を更新する。
+# crate_unsafe_count / total_unsafe_count を更新する。
 # ディレクトリ走査（grep -rn）・単一ファイル走査（build.rs 向け grep -n）の
 # 両方から同一ロジックで呼べるようにするための切り出し。
 judge_unsafe_match() {
@@ -139,11 +112,6 @@ judge_unsafe_match() {
   crate_unsafe_count=$((crate_unsafe_count + 1))
   total_unsafe_count=$((total_unsafe_count + 1))
   echo "  unsafe 検出: ${file}:${line_no}: ${line_content}"
-
-  if ! find_safety_justification_above "${file}" "$((line_no - 1))"; then
-    echo "  違反: ${file}:${line_no} の unsafe に直前の // SAFETY: コメントがありません" >&2
-    violation_count=$((violation_count + 1))
-  fi
 }
 
 if ! command -v cargo >/dev/null 2>&1; then
@@ -161,6 +129,7 @@ forbid_ok_count=0
 total_unsafe_count=0
 
 echo "=== unsafe 監査（対象: workspace 全クレート） ==="
+echo "（SAFETY コメントの検査は clippy の lint が行う。docs/architecture/unsafe-audit.md 参照）"
 echo "対象コミット: $(git rev-parse HEAD 2>/dev/null || echo '不明（git 管理外）')"
 echo
 

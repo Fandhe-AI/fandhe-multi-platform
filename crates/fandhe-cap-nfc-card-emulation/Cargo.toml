@@ -37,3 +37,6 @@ exported = true
 attributes = { permission = "android.permission.BIND_NFC_SERVICE" }
 intent-filters = [{ actions = ["android.nfc.cardemulation.action.HOST_APDU_SERVICE"] }]
 meta-data = [{ name = "android.nfc.cardemulation.host_apdu_service", resource = "@xml/apduservice" }]
+
+[lints]
+workspace = true

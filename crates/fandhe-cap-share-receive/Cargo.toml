@@ -46,3 +46,6 @@ kind = "provider"
 name = "com.fandhe.platform.ShareReceiveLifecycle"
 exported = false
 attributes = { authorities = "${applicationId}.fandhe.share-receive" }
+
+[lints]
+workspace = true
