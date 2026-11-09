@@ -165,6 +165,8 @@ statement_start_line() {
   while [ "${prev}" -ge 1 ] && [ "${depth}" -lt 15 ]; do
     content="$(sed -n "${prev}p" "${file}")"
     trimmed="${content#"${content%%[![:space:]]*}"}"
+    # 行末の空白（CR を含む）も除く。残すと `; ` で終わる文を式の途中と取り違える
+    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
     case "${trimmed}" in
       '' | '//'* | '#['* | '/*'* | '*'* | *';' | *'{' | *'}') break ;;
       # 行末コメント付きの行は文末か判別できない（文字列内の `//` との区別も含む）ので、
@@ -240,7 +242,7 @@ let f = unsafe { std::mem::transmute::<usize, unsafe fn()>(address) };
 /// 理由。
 unsafe fn invoke(f: unsafe fn()) {}
 EOF
-  # 受け付けてはいけない形（違反はちょうど 14 件のはず）
+  # 受け付けてはいけない形（違反はちょうど 16 件のはず（後ろの printf の 2 件を含む））
   cat >"${fixture_dir}/ng.rs" <<'EOF'
 unsafe { a() };
 // SAFETY: 離れた根拠。
@@ -284,6 +286,8 @@ unsafe { c6() } // SAFETY: 同じ行の末尾は受け付けない
 let t = "# Safety";
 unsafe { c7() };
 EOF
+  # 行末に空白・タブ・CR が付いた文の次の unsafe（heredoc では行末の空白が消えやすいので printf で書く）
+  printf '// SAFETY: e の根拠。\nunsafe { e() }; \nunsafe { f1() };\n// SAFETY: g の根拠。\nunsafe { g() };\t\r\nunsafe { f2() };\n' >>"${fixture_dir}/ng.rs"
   for f in ok ng; do
     n=0
     while IFS= read -r l; do
@@ -296,8 +300,8 @@ EOF
       fi
     done <"${fixture_dir}/${f}.rs"
   done
-  if [ "${violation_count}" -ne 14 ]; then
-    echo "self-test 失敗: ng.rs の違反が ${violation_count} 件（期待 14 件）" >&2
+  if [ "${violation_count}" -ne 16 ]; then
+    echo "self-test 失敗: ng.rs の違反が ${violation_count} 件（期待 16 件）" >&2
     exit 1
   fi
   echo "self-test: OK"
