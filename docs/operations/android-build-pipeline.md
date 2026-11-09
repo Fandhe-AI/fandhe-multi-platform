@@ -214,3 +214,7 @@ cargo・cargo-ndk 側の詳細な原因は特定できていない。参照: PR 
 - Android エミュレータ環境（`emulator` パッケージ・system-images）は、本ホストに
   KVM が無く実用速度で動作しない（TASK-1.6 / #230）ため対象外とする。実機
   （Pixel 10a）を主経路とする。
+- Android 16（API 36.x）のエミュレーターでは、起動直後にアプリのプロセスが SIGSEGV で落ちる（#1270）。
+  落ちるのはイメージに同梱された guest 側の Vulkan ドライバ（`vulkan.ranchu.so` の `on_vkQueueSubmit`）で、
+  `-gpu` の指定（host・swiftshader_indirect・guest）を変えても避けられない。wgpu を GLES にすると動くため、
+  エミュレーター側の制約とみている。エミュレーターで確かめるときは API 34 のイメージを使う。
