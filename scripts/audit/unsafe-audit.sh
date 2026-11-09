@@ -149,6 +149,9 @@ is_non_use_form() {
 # 上へたどるのは、直上行が式の途中（空行・コメント・属性でなく、行末が `;` `{` `}` でもない）
 # の間だけ。最大 15 行。受け付ける形は「文の先頭行の直前に SAFETY ブロックが隣接している」
 # 場合のみで、空行や別の文を挟んだ離れた SAFETY は従来どおり根拠とみなさない。
+# 行末に `//` / `/* */` コメントを持つ行は、文末かの判別が曖昧なので境界として止める
+# （式の途中にコメントを挟む複数行の式は受け付けない。SAFETY を式の直前ではなく
+# `unsafe` の直前に付ける）。
 statement_start_line() {
   local file="$1" line_no="$2"
   local prev=$((line_no - 1)) content trimmed depth=0
@@ -157,6 +160,9 @@ statement_start_line() {
     trimmed="${content#"${content%%[![:space:]]*}"}"
     case "${trimmed}" in
       '' | '//'* | '#['* | '/*'* | '*'* | *';' | *'{' | *'}') break ;;
+      # 行末コメント付きの行は文末か判別できない（文字列内の `//` との区別も含む）ので、
+      # 境界として止める（fail-closed: 直前の文の SAFETY を借りない）。
+      *'//'* | *'/*'*) break ;;
     esac
     prev=$((prev - 1))
     depth=$((depth + 1))
@@ -226,7 +232,7 @@ let f = unsafe { std::mem::transmute::<usize, unsafe fn()>(address) };
 /// 理由。
 unsafe fn invoke(f: unsafe fn()) {}
 EOF
-  # 受け付けてはいけない形（違反はちょうど 5 件のはず）
+  # 受け付けてはいけない形（違反はちょうど 6 件のはず）
   cat >"${fixture_dir}/ng.rs" <<'EOF'
 unsafe { a() };
 // SAFETY: 離れた根拠。
@@ -239,6 +245,9 @@ let z = foo(
 );
 let f = unsafe { std::mem::transmute::<usize, unsafe fn()>(address) };
 unsafe fn invoke(f: unsafe fn()) {}
+// SAFETY: a の根拠。
+unsafe { a() }; // 補足
+unsafe { b() };
 EOF
   for f in ok ng; do
     n=0
@@ -252,8 +261,8 @@ EOF
       fi
     done <"${fixture_dir}/${f}.rs"
   done
-  if [ "${violation_count}" -ne 5 ]; then
-    echo "self-test 失敗: ng.rs の違反が ${violation_count} 件（期待 5 件）" >&2
+  if [ "${violation_count}" -ne 6 ]; then
+    echo "self-test 失敗: ng.rs の違反が ${violation_count} 件（期待 6 件）" >&2
     exit 1
   fi
   echo "self-test: OK"
