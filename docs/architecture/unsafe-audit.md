@@ -89,10 +89,19 @@ bash scripts/audit/unsafe-audit.sh
 
 #### 実行するターゲット
 
-`cfg` で除外されたコードは、そのターゲットで clippy を走らせないと検査されない。次の組み合わせを
-手元で実行し、lint の指摘が 0 件であることを確かめる。CI でターゲット別に走らせる作業は #1273 で、
-それまでは変更したコードの対象ターゲットを手元で実行する（`-D warnings` は #1037 の既知の警告で
-失敗しうるため、lint の指摘だけを見る）。
+`cfg` で除外されたコードは、そのターゲットで clippy を走らせないと検査されない。次の構成を CI
+（`.github/workflows/ci.yml`）で必須にしている（Issue #1273 の内容を #1274 で入れた）。新しい `cfg` の
+target を足すときは、この一覧と CI のジョブにも足す。
+
+| 構成 | CI のジョブ |
+|------|-------------|
+| ホスト（Linux）`--all-targets --all-features` | `cargo clippy` |
+| `x86_64-pc-windows-gnu` `--workspace --all-targets` | `cargo clippy` |
+| `wasm32-unknown-unknown`（`fandhe-web-dom`） | `cargo clippy` |
+| `aarch64-linux-android` `--all-features`（`cargo ndk`） | `android クロスビルド` |
+| macOS ホスト `--all-targets --all-features`、`aarch64-apple-ios`（既定 feature と `--all-features`） | `cargo clippy (apple)` |
+
+手元で再現するコマンド:
 
 ```bash
 # ホスト（CI の ubuntu でも同じ）
@@ -101,7 +110,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu
 # Android（NDK の環境変数は scripts/android/android-env.sh を source）
 cargo ndk -t arm64-v8a clippy --workspace --all-features
-# iOS（macOS のみ）
+# Apple（macOS のみ。ホストは上のホストと同じコマンド）
 cargo clippy --workspace --target aarch64-apple-ios
 cargo clippy --workspace --target aarch64-apple-ios --all-features
 # Web
