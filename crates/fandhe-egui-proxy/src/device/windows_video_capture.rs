@@ -696,15 +696,18 @@ mod tests {
         assert_eq!(duration_ms_from_ticks(9_999), None);
     }
 
-    fn base() -> PathBuf {
-        let base = std::env::temp_dir().join(format!("fandhe-vc-test-{}", std::process::id()));
+    /// テストごとの専用の置き場。テストは並行に走るため、置き場を共有すると
+    /// 先に終わったテストの `remove_dir_all` が他のテストのファイルを消す（#1275）。
+    fn base(test: &str) -> PathBuf {
+        let base =
+            std::env::temp_dir().join(format!("fandhe-vc-test-{}-{test}", std::process::id()));
         fs::create_dir_all(&base).unwrap();
         base
     }
 
     #[test]
     fn temp_clip_is_fresh_per_request_and_removed() {
-        let base = base();
+        let base = base("temp_clip_is_fresh_per_request_and_removed");
         let a = TempClip::create_in(&base).unwrap();
         let b = TempClip::create_in(&base).unwrap();
         assert_ne!(a.path(), b.path());
@@ -719,7 +722,7 @@ mod tests {
 
     #[test]
     fn existing_directory_name_is_never_reused() {
-        let base = base();
+        let base = base("existing_directory_name_is_never_reused");
         let a = TempClip::create_in(&base).unwrap();
         // 次に採番される名前を先に作っておく（差し替えの疑い）。
         let next = TEMP_SEQ.load(Ordering::Relaxed);
@@ -737,7 +740,7 @@ mod tests {
 
     #[test]
     fn leftovers_are_retried_and_cleared() {
-        let base = base();
+        let base = base("leftovers_are_retried_and_cleared");
         let dir = base.join("left");
         fs::create_dir(&dir).unwrap();
         let mut left = vec![dir.clone(), base.join("already-gone")];
@@ -750,7 +753,7 @@ mod tests {
     #[test]
     fn zero_byte_clip_is_empty_not_success() {
         use fandhe_device::video_capture::VideoClip;
-        let base = base();
+        let base = base("zero_byte_clip_is_empty_not_success");
         let c = TempClip::create_in(&base).unwrap();
         assert_eq!(
             VideoClip::from_os(c.size().unwrap(), Some(1000), 1920, 1080, 0),
