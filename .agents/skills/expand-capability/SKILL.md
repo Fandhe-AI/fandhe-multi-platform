@@ -129,7 +129,7 @@ gh issue list --state open --search "${ID} in:title" --limit 30 --json number,bo
 5 OS を 1 PR に詰めると diff が 20 ファイル超になり codex の指摘が積まれる（#860 は 23 ファイル・5 件）ため、
 **1 子 issue = 1 PR ≈ 2h** の粒度で切ります。
 
-既定の分割（`possible` でない OS と、`approval` 付きの申請待ちセル・`deferred` 付きの保留セルは含めない）:
+既定の分割（`possible` でない OS と、`approval` 付きの申請待ちセル・`deferred` 付きの保留セル・`parked` 付きの別枠セルは含めない）:
 
 | 子 | 中身 | 担当 builder | JSON の更新 | 依存 |
 |----|------|-------------|------------|------|
@@ -157,7 +157,7 @@ Windows がプロセス間転送・レジストリ等で 2h を明らかに超�
 
 各子 issue に含めるもの:
 
-- 対象レイヤと対象 OS。受け入れ条件は「**`possible` かつ `approval`・`deferred` なしだった対象 OS だけ** を `done` に更新し `impl` に
+- 対象レイヤと対象 OS。受け入れ条件は「**`possible` かつ `approval`・`deferred`・`parked` なしだった対象 OS だけ** を `done` に更新し `impl` に
   実装パスを入れる」「他の OS のセル（申請待ちを含む）は触らない」「`--check` が通る」
 - (b)(c) は本文に **`dependsOn: #<(a) の番号>`** を明記する（implement-issue-tree が読む）
 - **子より先に Step 7 の確認用 issue を起票**し、その番号を下の `implStatus` と `dependsOn` に使う。
@@ -366,7 +366,7 @@ Java を触ったら `gradle :app:compileDebugJavaWithJavac` を通してから 
 
 ### Step 5: 表の更新を確認する
 
-`no` / `n-a` の OS と `approval` 付きの申請待ちセル、`deferred` 付きの保留セルは**対象外**です（申請待ち・保留は `possible` と `approval` / `deferred` を保ったまま残す）。`done` になっているべきなのは、**その子 issue の対象 OS** だけです
+`no` / `n-a` の OS と `approval` 付きの申請待ちセル、`deferred` 付きの保留セル、`parked` 付きの別枠セルは**対象外**です（申請待ち・保留・別枠は `possible` と `approval` / `deferred` / `parked` を保ったまま残す）。`done` になっているべきなのは、**その子 issue の対象 OS** だけです
 （(a) なら macos / windows。(a) の PR で ios が `possible` のままなのは正常だが、(b) の PR で ios が
 `possible` のままなら実装漏れ）。
 
@@ -429,7 +429,7 @@ md 側はリンクになります。
 
 - タイトル: `chore(device): <機能名> の人手の確認（<id>）`、ラベル `device-check-pending`
   （ラベルはリポジトリに先に作っておく。無いと起票が失敗して止まる）
-- 本文: 先頭に目印 `<!-- human-check: <id> -->`（スクリプトが足す）。対象 OS（Step 2 で `possible` かつ `approval`・`deferred` なしの OS）の分だけ
+- 本文: 先頭に目印 `<!-- human-check: <id> -->`（スクリプトが足す）。対象 OS（Step 2 で `possible` かつ `approval`・`deferred`・`parked` なしの OS）の分だけ
   チェックリストを持つ
   - [ ] Mac 目視（正常系・失敗系。契約表の 6 類型）とキャプチャ保存（Step 6）
   - [ ] iOS 実機 / [ ] Android 実機 / [ ] Windows 実機
