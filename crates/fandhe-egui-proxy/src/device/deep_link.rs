@@ -16,7 +16,8 @@
 //!
 //! # 実装のある OS
 //!
-//! 分岐は Android だけ（`android_deep_link`。static の受信箱と JNI の受け口を持つ、Issue #1279）。iOS・macOS は対応表で保留中のため fallback の
+//! 分岐は Android だけ（`android_deep_link`。static の受信箱と JNI の受け口を持つ、
+//! Issue #1279）。iOS・macOS は対応表で保留中のため fallback の
 //! [`UnsupportedDeepLink`] に入る。保留が外れたときは、その再着手の (a) で分岐を足す。
 
 use std::time::Duration;
