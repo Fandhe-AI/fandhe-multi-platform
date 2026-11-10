@@ -16,3 +16,6 @@ build = ["dep:cc"]
 [dependencies]
 # build 依存として host（Linux・Windows 含む）でもコンパイルされるため、依存は `cc` のみ・optional。
 cc = { workspace = true, optional = true }
+
+[lints]
+workspace = true

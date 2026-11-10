@@ -364,6 +364,7 @@ mod com {
         let principal = unsafe { def.Principal() }?;
         // SAFETY: `principal` は直前に取得した有効な COM ポインタ。定数のみ渡す。
         unsafe { principal.SetLogonType(TASK_LOGON_INTERACTIVE_TOKEN) }?;
+        // SAFETY: 上と同じ `principal`。定数のみ渡す。
         unsafe { principal.SetRunLevel(TASK_RUNLEVEL_LUA) }?;
 
         // Settings: 取りこぼし防止・残骸防止（モジュール doc「残骸の防止」参照）。
@@ -372,9 +373,13 @@ mod com {
         // SAFETY: `settings` は直前に取得した有効な COM ポインタ。定数・固定
         // 文字列のみ渡す。
         unsafe { settings.SetStartWhenAvailable(VARIANT_TRUE) }?;
+        // SAFETY: 上と同じ `settings`。定数のみ渡す。
         unsafe { settings.SetDisallowStartIfOnBatteries(VARIANT_FALSE) }?;
+        // SAFETY: 上と同じ `settings`。定数のみ渡す。
         unsafe { settings.SetStopIfGoingOnBatteries(VARIANT_FALSE) }?;
+        // SAFETY: 上と同じ `settings`。固定文字列のみ渡す。
         unsafe { settings.SetExecutionTimeLimit(&BSTR::from("PT1M")) }?;
+        // SAFETY: 上と同じ `settings`。固定文字列のみ渡す。
         unsafe { settings.SetDeleteExpiredTaskAfter(&BSTR::from("PT0S")) }?;
 
         // Trigger: 1 回だけのタイムトリガー。
@@ -387,6 +392,7 @@ mod com {
         // SAFETY: `time_trigger` は直前に取得した有効な COM ポインタ。文字列は
         // 自分で組み立てた固定書式（`start_boundary`）。
         unsafe { time_trigger.SetStartBoundary(&BSTR::from(start)) }?;
+        // SAFETY: 上と同じ `time_trigger`。文字列は `start_boundary` の固定書式。
         unsafe { time_trigger.SetEndBoundary(&BSTR::from(end)) }?;
 
         // Action: 自分自身を専用引数で起動する。
@@ -399,6 +405,7 @@ mod com {
         // （`register`）が `current_exe()` から得た絶対パス、引数は固定フラグのみ
         // （security.md A03、モジュール doc 参照）。
         unsafe { exec.SetPath(&path_to_bstr(exe)) }?;
+        // SAFETY: 上と同じ `exec`。引数は固定フラグのみ。
         unsafe { exec.SetArguments(&BSTR::from(task_arguments())) }?;
 
         // SAFETY: `folder`/`def` はいずれも有効な COM ポインタ。userid/password/

@@ -33,3 +33,6 @@ gradle = [
     "androidx.core:core:1.13.0",
     "androidx.activity:activity:1.8.0",
 ]
+
+[lints]
+workspace = true

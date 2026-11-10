@@ -42,3 +42,6 @@ winit = { workspace = true, features = ["x11", "wayland", "wayland-dlopen"] }
 # §4.1 で GameActivity + GameTextInput 直接操作方式が別途採用され、本クレートとは独立した
 # 経路として設計されている）。この経路差の解消は本クレートのスコープ外。
 winit = { workspace = true, features = ["android-game-activity"] }
+
+[lints]
+workspace = true

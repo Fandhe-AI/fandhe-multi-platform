@@ -1,0 +1,2 @@
+# 非公開の `unsafe fn` にも `# Safety` を求める（missing_safety_doc）。Issue #1269。
+check-private-items = true

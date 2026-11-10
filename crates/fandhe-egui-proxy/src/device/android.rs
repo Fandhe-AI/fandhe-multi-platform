@@ -2780,6 +2780,7 @@ fn decode_drag_drop_item(
     // close しない契約（`decode_file_pick_result` と同一の根拠）。負の値（fd なし、
     // フォルダ/読めない経路）は所有権を取らない。
     let file = (fd >= 0).then(|| {
+        // SAFETY: 上記のとおり `fd >= 0` は所有権を手放された有効な fd で、ここで 1 回だけ所有に取る。
         let owned = unsafe { OwnedFd::from_raw_fd(fd) };
         std::fs::File::from(owned)
     });

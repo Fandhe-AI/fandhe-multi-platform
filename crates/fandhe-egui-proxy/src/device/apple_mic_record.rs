@@ -99,6 +99,7 @@ extern "C" fn fandhe_rust_mic_record_finished(
             // コピーする（上記 doc 参照）。
             let owned_bytes =
                 unsafe { std::slice::from_raw_parts(bytes, bytes_len as usize) }.to_vec();
+            // SAFETY: 上と同じ契約（`code == 0` のとき `mime` は NUL 終端 UTF-8 を指す）。
             let mime_str = unsafe { CStr::from_ptr(mime) }
                 .to_string_lossy()
                 .into_owned();

@@ -65,3 +65,6 @@ fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive", optional = tr
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { workspace = true }
+
+[lints]
+workspace = true

@@ -47,3 +47,6 @@ kind = "provider"
 name = "com.fandhe.platform.CameraCaptureLifecycle"
 exported = false
 attributes = { authorities = "${applicationId}.fandhe.camera-capture" }
+
+[lints]
+workspace = true

@@ -150,7 +150,9 @@ mod win {
         // プロセスに明示 AUMID があるとき、SHAddToRecentDocs はその一覧へ書く。引き先も揃える。
         // SAFETY: 成功時の PWSTR は呼び出し側の所有。`SetAppID` は引数を保持しないため、直後に 1 回だけ解放する。
         if let Ok(id) = unsafe { GetCurrentProcessExplicitAppUserModelID() } {
+            // SAFETY: `lists` は有効な COM ポインタ、`id` は上で取得した有効な PWSTR。
             let r = unsafe { lists.SetAppID(id) };
+            // SAFETY: `id` は上の所有を引き継いだ PWSTR で、`SetAppID` の後にここで 1 回だけ解放する。
             unsafe { CoTaskMemFree(Some(id.0 as *const c_void)) };
             r.map_err(|_| ERR)?;
         }

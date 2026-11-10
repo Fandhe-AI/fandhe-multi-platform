@@ -48,3 +48,6 @@ jni = { workspace = true }
 
 [build-dependencies]
 fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+[lints]
+workspace = true
