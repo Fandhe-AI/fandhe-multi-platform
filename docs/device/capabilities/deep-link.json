@@ -29,8 +29,8 @@
         "https://developer.android.com/training/app-links"
       ],
       "note": "実装済み（#1279）。振り分け: `MainActivity.deliverUrlIntent` が `DeepLinkHelper.deliver` を呼び、scheme が https の `ACTION_VIEW` は deep-link の受信箱へ、それ以外（`fandhe://`・http）は url-scheme の受信箱へ渡す。許可ホストはビルド時の環境変数 `FANDHE_ANDROID_DEEP_LINK_HOST` で渡す（値は本リポジトリに書かない）。Gradle は設定時だけ `autoVerify` の https intent-filter を重ね（未設定なら出さない。形式が不正ならビルドを止める）、Rust は同じ変数を `option_env!` で読み、無い・不正なら届いた URL を全件拒否する（件数だけ数える）。検査は Rust の `fandhe_device::deep_link` に一本化。二重配送の防ぎ方は url-scheme と同じ（再生成・履歴起動では配らない）。守る範囲と守らない範囲は `fandhe_device::deep_link` の doc のとおり。前提: 検証用ドメインの `https://<domain>/.well-known/assetlinks.json` に署名証明書の SHA-256 を載せ、`application/json`・リダイレクトなしで配信する（debug と release で鍵が違うので両方。Play App Signing では手元の keytool の値と一致しない）（公式）。autoVerify は API 23 以上（minSdk 24 は全域）。公式は App Links を「Google services のある端末」で対応としている。Android 12 以上は `adb shell pm verify-app-links --re-verify` で手動検証し `pm get-app-links` で状態を見る。Android 15 以上は定期再検証で反映に最大 7 日（公式）。 確認用ドメイン: 確認するときだけ一時的な静的ホスティングに `assetlinks.json` を置き、終わったら消す（#1236）。ドメインは本リポジトリに書かない。まず adb のテスト用承認（`pm set-app-links` 等。使える条件は公式文書で確かめる）でドメインなしに届くことを確かめ、OS の検証まで通すときだけ一時ドメインを使う。一時ドメインの配置はアカウントの操作が要るため人手で行う",
-      "detail": "できている（Android 実機確認待ち）",
-      "implStatus": "Android 実機確認待ち（#1277）",
+      "detail": "できている（実機）",
+      "implStatus": "実装済み・実機確認済み",
       "impl": "platforms/android/app/src/main/java/com/fandhe/platform/DeepLinkHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + platforms/android/app/src/deeplink/AndroidManifest.xml + platforms/android/app/build.gradle.kts + crates/fandhe-egui-proxy/src/device/android_deep_link.rs + crates/fandhe-egui-proxy/src/device/deep_link.rs + crates/fandhe-core/src/screens/deep_link_show.rs + crates/fandhe-device/src/deep_link.rs、Issue #1279"
     },
     "macos": {
@@ -58,5 +58,6 @@
       "status": "n-a"
     }
   },
-  "note": "url-scheme との違い: url-scheme はアプリ固有の scheme（`fandhe://`）で、宣言だけで受けられる（ドメインの検証なし・他アプリも同じ scheme を宣言できる）。本機能は https の URL を、ドメイン所有者がサーバーに置いた関連付けファイル（iOS / macOS は `apple-app-site-association`、Android は `assetlinks.json`）で OS が検証した場合にだけアプリへ渡す。iOS / macOS は Associated Domains capability が有料の開発者登録限定で登録が期限切れ、検証用ドメインも未定のため保留（passkey-signin と同じ理由）。Android は実装済みで実機確認待ち。Windows は `windows.appUriHandler` が package identity 必須のため no。Web は https URL 自体がリンクで、アプリ側で受ける概念が無いため n-a。範囲（再開時の案）: 検証済みドメインの https URL で起動し、受け取った URL 文字列を画面に出すだけ（ルーティングは扱わない）。受け口・検査・最新 1 件の保持は url-scheme の受信箱と同じ契約で、検査の scheme を https とホストの一致に替える。検証の可否は OS が決めるため、アプリ側で事前判定も記憶もせず、届いた URL だけを数える。結果は受信（URL）・拒否（件数のみ）・非対応の 3 種で、ポーリングやタイマーで到着を推測しない"
+  "note": "url-scheme との違い: url-scheme はアプリ固有の scheme（`fandhe://`）で、宣言だけで受けられる（ドメインの検証なし・他アプリも同じ scheme を宣言できる）。本機能は https の URL を、ドメイン所有者がサーバーに置いた関連付けファイル（iOS / macOS は `apple-app-site-association`、Android は `assetlinks.json`）で OS が検証した場合にだけアプリへ渡す。iOS / macOS は Associated Domains capability が有料の開発者登録限定で登録が期限切れ、検証用ドメインも未定のため保留（passkey-signin と同じ理由）。Android は実装済みで実機確認待ち。Windows は `windows.appUriHandler` が package identity 必須のため no。Web は https URL 自体がリンクで、アプリ側で受ける概念が無いため n-a。範囲（再開時の案）: 検証済みドメインの https URL で起動し、受け取った URL 文字列を画面に出すだけ（ルーティングは扱わない）。受け口・検査・最新 1 件の保持は url-scheme の受信箱と同じ契約で、検査の scheme を https とホストの一致に替える。検証の可否は OS が決めるため、アプリ側で事前判定も記憶もせず、届いた URL だけを数える。結果は受信（URL）・拒否（件数のみ）・非対応の 3 種で、ポーリングやタイマーで到着を推測しない",
+  "capture": "captures/deep-link.png"
 }
