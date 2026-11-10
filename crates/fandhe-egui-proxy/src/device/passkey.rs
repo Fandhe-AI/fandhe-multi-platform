@@ -73,7 +73,8 @@ pub(crate) mod bridge {
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
-    /// 依頼直前に呼ぶ。戻り値の `request_id` をワーカーへ渡す。
+    /// 依頼直前に呼ぶ。戻り値の `request_id` をワーカーへ渡す（Windows 用。Android は `SLOT` を直接使う）。
+    #[cfg(any(target_os = "windows", test))]
     pub(crate) fn begin() -> u64 {
         SLOT.begin()
     }

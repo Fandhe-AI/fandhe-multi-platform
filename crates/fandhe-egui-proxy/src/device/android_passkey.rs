@@ -12,8 +12,8 @@
 //!
 //! 写像: kind 0 の応答は `verify_response`（challenge・type・UP/UV/AT・署名の有無）を通ったものだけが成功。
 //! Android では clientDataJSON をプロバイダが組み立てて返すため、`check_client_data` は取り違えの検出として働く
-//! （origin の `android:apk-key-hash:…` は照合しない）。authenticatorData が応答 JSON に無いプロバイダでは
-//! `InvalidInput("passkey flags")` になる（嘘の成功にはしない。attestationObject の CBOR は解析しない既知の天井）。
+//! （origin の `android:apk-key-hash:…` は照合しない）。登録の authData は `attestationObject`（CBOR）から、
+//! サインインは `authenticatorData` から取り出す。取れなければ `InvalidInput("passkey flags")`（嘘の成功にはしない）。
 //!
 //! ライフサイクル: Activity 再生成（`onDestroy`）で Java が追跡を外して `CancellationSignal` を取り消し、結果は送らない。
 //! Rust 側は `passkey::reset_pending_tracking()` が slot と [`PENDING`] を捨てる。id は単調増加で、旧結果は
@@ -152,6 +152,73 @@ fn b64(v: &serde_json::Value, path: &[&str]) -> Option<Vec<u8>> {
     base64url_decode(cur.as_str()?.trim_end_matches('='))
 }
 
+/// CBOR の先頭ヘッダを読み、(major type, 引数, 読み進めた長さ) を返す。不定長・予約値は `None`。
+fn cbor_head(b: &[u8]) -> Option<(u8, u64, usize)> {
+    let first = *b.first()?;
+    let n = match first & 0x1f {
+        v @ 0..=23 => return Some((first >> 5, u64::from(v), 1)),
+        24 => 1,
+        25 => 2,
+        26 => 4,
+        27 => 8,
+        _ => return None,
+    };
+    let arg = b
+        .get(1..=n)?
+        .iter()
+        .fold(0u64, |acc, x| (acc << 8) | u64::from(*x));
+    Some((first >> 5, arg, 1 + n))
+}
+
+/// CBOR の 1 要素を読み飛ばし、その長さを返す。深さは `depth` で制限する。
+fn cbor_skip(b: &[u8], depth: u8) -> Option<usize> {
+    let (major, arg, mut off) = cbor_head(b)?;
+    match major {
+        0 | 1 | 7 => {}
+        2 | 3 => off = off.checked_add(usize::try_from(arg).ok()?)?,
+        4 | 5 => {
+            if depth == 0 {
+                return None;
+            }
+            let count = if major == 5 { arg.checked_mul(2)? } else { arg };
+            for _ in 0..count {
+                off += cbor_skip(b.get(off..)?, depth - 1)?;
+            }
+        }
+        6 => off += cbor_skip(b.get(off..)?, depth.checked_sub(1)?)?,
+        _ => return None,
+    }
+    (off <= b.len()).then_some(off)
+}
+
+/// attestationObject（キー `fmt`・`attStmt`・`authData` の CBOR マップ）から `authData` を取り出す。
+fn auth_data_from_attestation(b: &[u8]) -> Option<Vec<u8>> {
+    let (major, count, mut off) = cbor_head(b)?;
+    if major != 5 {
+        return None;
+    }
+    for _ in 0..count {
+        let (km, klen, koff) = cbor_head(b.get(off..)?)?;
+        let key_end = off
+            .checked_add(koff)?
+            .checked_add(usize::try_from(klen).ok()?)?;
+        let key = b.get(off + koff..key_end)?;
+        let is_text = km == 3;
+        off = key_end;
+        let (vm, vlen, voff) = cbor_head(b.get(off..)?)?;
+        if is_text && key == b"authData" {
+            if vm != 2 {
+                return None;
+            }
+            let start = off.checked_add(voff)?;
+            let end = start.checked_add(usize::try_from(vlen).ok()?)?;
+            return b.get(start..end).map(<[u8]>::to_vec);
+        }
+        off += cbor_skip(b.get(off..)?, 8)?;
+    }
+    None
+}
+
 /// 応答 JSON（`registrationResponseJson` / `authenticationResponseJson`）を整合確認して結果にする。
 fn parse_response(
     op: PasskeyOp,
@@ -165,7 +232,14 @@ fn parse_response(
     let v: serde_json::Value = serde_json::from_str(json).map_err(|_| BAD_CLIENT_DATA)?;
     let raw_id = b64(&v, &["rawId"]).unwrap_or_default();
     let client_data = b64(&v, &["response", "clientDataJSON"]).ok_or(BAD_CLIENT_DATA)?;
-    let auth_data = b64(&v, &["response", "authenticatorData"]).ok_or(BAD_FLAGS)?;
+    // 登録応答の authData は attestationObject（CBOR）の中。サインインは authenticatorData を直接持つ。
+    let auth_data = match op {
+        PasskeyOp::Register => {
+            b64(&v, &["response", "attestationObject"]).and_then(|a| auth_data_from_attestation(&a))
+        }
+        PasskeyOp::SignIn => b64(&v, &["response", "authenticatorData"]),
+    }
+    .ok_or(BAD_FLAGS)?;
     let signature = b64(&v, &["response", "signature"]);
     let summary = verify_response(
         op,
@@ -383,7 +457,23 @@ mod tests {
         }
         let mut resp = serde_json::json!({ "clientDataJSON": base64url_encode(cd.as_bytes()) });
         if with_auth {
-            resp["authenticatorData"] = base64url_encode(&ad).into();
+            if p.op == PasskeyOp::Register {
+                // {"fmt":"none","attStmt":{},"authData":<bstr>}
+                let mut ao = vec![0xa3, 0x63];
+                ao.extend_from_slice(b"fmt");
+                ao.extend_from_slice(&[0x64]);
+                ao.extend_from_slice(b"none");
+                ao.push(0x67);
+                ao.extend_from_slice(b"attStmt");
+                ao.push(0xa0);
+                ao.push(0x68);
+                ao.extend_from_slice(b"authData");
+                ao.extend_from_slice(&[0x58, ad.len() as u8]);
+                ao.extend_from_slice(&ad);
+                resp["attestationObject"] = base64url_encode(&ao).into();
+            } else {
+                resp["authenticatorData"] = base64url_encode(&ad).into();
+            }
         }
         if with_sig {
             resp["signature"] = base64url_encode(&[1, 2, 3]).into();
