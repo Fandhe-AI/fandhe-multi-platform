@@ -28,7 +28,7 @@
         "https://developer.android.com/reference/android/view/autofill/AutofillManager"
       ],
       "note": "未実装。描画面を自動入力フレームワークへ仮想ビューとして公開する設計が要る。SMS User Consent / SMS Retriever は GMS 依存のため採らない（https://developers.google.com/identity/sms-retriever/user-consent/overview）",
-      "deferred": "GameActivity の描画面を自動入力へ仮想ビューとして公開する設計が要る。`createSurfaceView()` の差し替えは全画面の IME・a11y に効くため、別の設計 issue で決めるまで保留。SMS User Consent / SMS Retriever は GMS 依存のため採らない"
+      "deferred": "GameActivity の描画面を自動入力へ仮想ビューとして公開する設計が要る。`createSurfaceView()` の差し替えは全画面の IME・a11y に効くため、別の設計 issue で決めるまで保留。SMS User Consent / SMS Retriever は GMS 依存のため採らない。設計は #1286 で決める"
     },
     "macos": {
       "status": "possible",

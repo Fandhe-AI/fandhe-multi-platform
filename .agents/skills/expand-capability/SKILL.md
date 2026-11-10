@@ -81,7 +81,7 @@ user-invocable: true
 機能 id を渡された場合はそれを使います。指定がなければ **`priority` 昇順で未完了のもの**を取ります。
 
 「未完了」= `possible` の OS が 1 つ以上残っている機能です。`approval`（OS ベンダーへの申請・承認が要る）
-が付いたセルは数えません（`deferred`＝⏸保留、依存・提供状況の都合で止めているセルも同じ）。申請できる状態になったら、生成した `capabilities.md` の「申請待ち」節から見直して `approval` を外します（保留は「保留」節から見直して `deferred` を外す）。`priority` が無い機能は
+が付いたセルは数えません（`deferred`＝⏸保留、依存・提供状況の都合で止めているセルも同じ）。申請できる状態になったら、生成した `capabilities.md` の「申請待ち」節から見直して `approval` を外します（保留は「保留」節から見直して `deferred` を外し、別枠は「別枠」節から見直して `parked` を外す）。`priority` が無い機能は
 後回し判断済み（2 OS しか揃わない・別 Extension が要る・上流待ち 等）なので候補に入れません。
 
 ```bash
@@ -91,7 +91,7 @@ rows = []
 for f in sorted(glob.glob('docs/device/capabilities/[!_]*.json')):
     d = json.load(open(f))
     if 'priority' not in d: continue
-    todo = [k for k, v in d['platforms'].items() if v.get('status') == 'possible' and not v.get('approval') and not v.get('deferred')]
+    todo = [k for k, v in d['platforms'].items() if v.get('status') == 'possible' and not v.get('approval') and not v.get('deferred') and not v.get('parked')]
     if todo: rows.append((d['priority'], d['id'], d.get('bundle', '(束なし)'), todo))
 for p, i, b, todo in sorted(rows):
     print(f'{p:3} {i:20} {b:18} {len(todo)} OS {todo}')

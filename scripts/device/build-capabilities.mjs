@@ -91,6 +91,9 @@ function validate(features, meta) {
       } else if (p.deferred !== undefined && (typeof p.deferred !== "string" || !p.deferred || p.status !== "possible" || p.approval !== undefined)) {
         // deferred = 依存・提供状況などの都合で実装を止めているセル。approval とは同時に付けない。
         errors.push(`${at}: platforms.${os}.deferred は status=possible のセルにのみ文字列で書き、approval と併用しない`);
+      } else if (p.parked !== undefined && (typeof p.parked !== "string" || !p.parked || p.status !== "possible" || p.approval !== undefined || p.deferred !== undefined)) {
+        // parked = 機材・相手が手元に無く、確かめられないため別枠にしたセル。進捗の分母から外す。approval・deferred とは併用しない。
+        errors.push(`${at}: platforms.${os}.parked は status=possible のセルにのみ文字列で書き、approval・deferred と併用しない`);
       }
       for (const u of badUrls(p)) {
         errors.push(`${at}: platforms.${os}.url は https:// で始まる必要がある (${JSON.stringify(u)})`);
@@ -191,6 +194,7 @@ const excludedCount = excluded.reduce((n, c) => n + c.items.length, 0);
 /** 状態 → バッジの CSS クラス。凡例（生成時）とセル描画（ブラウザ側）で同じ対応表を使う。 */
 const APPROVAL_MARK = "🔒申請待ち";
 const DEFERRED_MARK = "⏸保留";
+const PARKED_MARK = "📦別枠";
 const STATUS_CLASS = { done: "s-done", possible: "s-possible", no: "s-no", "n-a": "s-na", unrated: "s-unrated" };
 const GENERATED = "このファイルは生成物です。編集は `docs/device/capabilities/<id>.json`（共通定義は `_meta.json`）に対して行い、`node scripts/device/build-capabilities.mjs` で再生成してください。キャプチャは画像を埋め込まず相対参照するため、配布時は `captures/` ディレクトリを添えてください。";
 
@@ -211,7 +215,7 @@ function urls(p) {
 /** 表示用の状態ラベル。detail（元セルの原文）があればそちらを優先して情報を落とさない。 */
 function cellText(p) {
   const t = p.detail ?? statusLabels[p.status] ?? p.status;
-  const mark = p.approval ? APPROVAL_MARK : p.deferred ? DEFERRED_MARK : null;
+  const mark = p.approval ? APPROVAL_MARK : p.deferred ? DEFERRED_MARK : p.parked ? PARKED_MARK : null;
   return mark ? `${t}（${mark}）` : t;
 }
 
@@ -223,17 +227,26 @@ const approvals = features.flatMap((f) =>
 const deferreds = features.flatMap((f) =>
   platforms.filter((o) => f.platforms[o].deferred).map((o) => ({ f, os: o, text: f.platforms[o].deferred })));
 
-/** 「できている」の集計。分母は対象外・未評価を除いた、その OS で評価済みの機能数。 */
+/** 別枠のセル（parked あり）の一覧。機材・相手が揃ったときの見直し対象。 */
+const parkeds = features.flatMap((f) =>
+  platforms.filter((o) => f.platforms[o].parked).map((o) => ({ f, os: o, text: f.platforms[o].parked })));
+
+/** 「できている」の集計。分母は対象外・未評価・別枠を除いた、その OS で評価済みの機能数。別枠は件数だけ併記する。 */
 function tally(os) {
   let done = 0;
   let rated = 0;
+  let parked = 0;
   for (const f of features) {
     const s = f.platforms[os].status;
     if (s === "n-a" || s === "unrated") continue;
+    if (f.platforms[os].parked) {
+      parked += 1;
+      continue;
+    }
     rated += 1;
     if (s === "done") done += 1;
   }
-  return { done, rated };
+  return { done, rated, parked };
 }
 
 /**
@@ -274,12 +287,12 @@ function buildMarkdown() {
   L.push(notes.reading, "");
 
   L.push("## 2. 進捗", "");
-  L.push("| OS | できている / 評価済み |", "| --- | --- |");
+  L.push("| OS | できている / 評価済み | 別枠 |", "| --- | --- | --- |");
   for (const os of platforms) {
-    const { done, rated } = tally(os);
-    L.push(`| ${md(platformLabels[os])} | ${done} / ${rated} |`);
+    const { done, rated, parked } = tally(os);
+    L.push(`| ${md(platformLabels[os])} | ${done} / ${rated} | ${parked} 件 |`);
   }
-  L.push("", `全 ${features.length} 機能。「評価済み」は対象外・未評価を除いた数。対象の全 OS（できない・対象外を除く）で動く機能は ${allOsDone}。`, "");
+  L.push("", `全 ${features.length} 機能。「評価済み」は対象外・未評価・別枠（機材・相手待ち）を除いた数。対象の全 OS（できない・対象外を除く）で動く機能は ${allOsDone}。`, "");
 
   L.push("## 3. 対応表", "");
   const groups = [...new Set(features.map((f) => f.group))];
@@ -309,7 +322,7 @@ function buildMarkdown() {
     L.push("| --- | --- | --- | --- | --- | --- |");
     for (const os of platforms) {
       const p = f.platforms[os];
-      const notesCol = [p.approval ? `申請: ${p.approval}` : null, p.deferred ? `保留: ${p.deferred}` : null, p.implStatus ? `実態: ${p.implStatus}` : null, p.note,
+      const notesCol = [p.approval ? `申請: ${p.approval}` : null, p.deferred ? `保留: ${p.deferred}` : null, p.parked ? `別枠: ${p.parked}` : null, p.implStatus ? `実態: ${p.implStatus}` : null, p.note,
         p.safari ? `Safari: ${p.safari}` : null, p.impl ? `根拠: ${p.impl}` : null]
         .filter(Boolean).join(" / ");
       L.push(
@@ -348,6 +361,13 @@ function buildMarkdown() {
     for (const a of deferreds) L.push(`| ${md(a.f.name)} | ${md(platformLabels[a.os])} | ${md(a.text)} |`);
     L.push("");
   }
+  if (parkeds.length) {
+    L.push(`## 10. 別枠（機材・相手待ち）（${parkeds.length} 件）`, "");
+    L.push(`確かめる機材や相手が手元に無く、一旦無視するセル（表では「${PARKED_MARK}」）。進捗の分母から外し、expand-capability の候補からも外れる。機材・相手が揃ったら、この一覧から見直す。`, "");
+    L.push("| 機能 | OS | 待っているもの |", "| --- | --- | --- |");
+    for (const a of parkeds) L.push(`| ${md(a.f.name)} | ${md(platformLabels[a.os])} | ${md(a.text)} |`);
+    L.push("");
+  }
   return `${L.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n`;
 }
 
@@ -363,8 +383,8 @@ function buildHtml() {
   const embedded = JSON.stringify(data).replace(/</g, "\\u003c");
   const summary = platforms
     .map((os) => {
-      const { done, rated } = tally(os);
-      return `<div class="stat"><b>${esc(platformLabels[os])}</b><span>${done} / ${rated}</span></div>`;
+      const { done, rated, parked } = tally(os);
+      return `<div class="stat"><b>${esc(platformLabels[os])}</b><span>${done} / ${rated}</span>${parked ? `<small>別枠 ${parked} 件</small>` : ""}</div>`;
     })
     .join("");
   return `<!doctype html>
@@ -387,6 +407,7 @@ p.lead { color:var(--mut); margin:0 0 20px; white-space:pre-line; }
 .stats { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
 .stat { border:1px solid var(--bd); border-radius:8px; padding:8px 14px; }
 .stat b { display:block; font-size:12px; color:var(--mut); font-weight:600; }
+.stat small { display:block; font-size:11px; color:var(--mut); }
 .stat span { font-size:18px; font-variant-numeric:tabular-nums; }
 .bar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:16px;
   padding:12px; border:1px solid var(--bd); border-radius:8px; }
@@ -459,6 +480,12 @@ ${deferreds.length ? `<details class="legend" id="deferred"><summary>保留（${
 ${deferreds.map((x) => `<tr><td>${esc(x.f.name)}</td><td>${esc(platformLabels[x.os])}</td><td>${esc(x.text)}</td></tr>`).join("\n")}
 </tbody></table>
 </details>` : ""}
+${parkeds.length ? `<details class="legend" id="parked"><summary>別枠（機材・相手待ち）（${parkeds.length} 件）</summary>
+<p>確かめる機材や相手が手元に無く、一旦無視するセル（表では「${PARKED_MARK}」）。進捗の分母から外し、expand-capability の候補からも外れる。機材・相手が揃ったら、この一覧から見直す。</p>
+<table><thead><tr><th>機能</th><th>OS</th><th>待っているもの</th></tr></thead><tbody>
+${parkeds.map((x) => `<tr><td>${esc(x.f.name)}</td><td>${esc(platformLabels[x.os])}</td><td>${esc(x.text)}</td></tr>`).join("\n")}
+</tbody></table>
+</details>` : ""}
 <div class="bar">
   <label>検索 <input type="search" id="q" placeholder="機能名・API・備考"></label>
   <label>区分 <select id="g"><option value="">すべて</option></select></label>
@@ -477,6 +504,7 @@ const { platforms: OS, platformLabels: PL, statusLabels: SL, features: F } = D;
 const CLS = ${JSON.stringify(STATUS_CLASS)};
 const AM = ${JSON.stringify(APPROVAL_MARK)};
 const DM = ${JSON.stringify(DEFERRED_MARK)};
+const PM = ${JSON.stringify(PARKED_MARK)};
 const el = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
@@ -498,8 +526,8 @@ function cell(p) {
   // url は単一なら文字列、複数ソースが統合された機能では配列
   const links = (p.url ? (Array.isArray(p.url) ? p.url : [p.url]) : [])
     .map((u) => '<a href="' + esc(u) + '" rel="noreferrer">' + esc(u) + '</a>').join('<br>');
-  const ap = p.approval ? '<span class="d" title="' + esc(p.approval) + '">' + AM + '</span>' : p.deferred ? '<span class="d" title="' + esc(p.deferred) + '">' + DM + '</span>' : '';
-  const rows = [['申請', esc(p.approval)], ['保留', esc(p.deferred)], ['実態', esc(p.implStatus)], ['API', esc(p.api)], ['権限', esc(p.perm)],
+  const ap = p.approval ? '<span class="d" title="' + esc(p.approval) + '">' + AM + '</span>' : p.deferred ? '<span class="d" title="' + esc(p.deferred) + '">' + DM + '</span>' : p.parked ? '<span class="d" title="' + esc(p.parked) + '">' + PM + '</span>' : '';
+  const rows = [['申請', esc(p.approval)], ['保留', esc(p.deferred)], ['別枠', esc(p.parked)], ['実態', esc(p.implStatus)], ['API', esc(p.api)], ['権限', esc(p.perm)],
     ['ドキュメント', links], ['備考', esc(p.note)], ['Safari', esc(p.safari)], ['根拠', esc(p.impl)]]
     .filter(([, v]) => v);
   const more = rows.length

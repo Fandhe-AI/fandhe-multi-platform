@@ -22,7 +22,7 @@
       "perm": "記載なし（要確認）",
       "url": "https://developers.google.com/ml-kit/genai",
       "note": "未実装。GMS ではなく OS の AICore に依存する（報告より）。対応機種のみで多くの端末では使えない",
-      "deferred": "ML Kit GenAI（Gemini Nano）は AICore に依存し、推移依存に Google Play services が入る。beta で、対応機種限定のため保留（対応機種が用意できれば着手できる）。版を固定し、非対応機では OS の判定（`checkFeatureStatus` 相当）で `Unsupported` を返す"
+      "deferred": "手元の Android 実機に AICore があり、Gemini Nano が使えるかを先に確かめて着手する（beta、版固定）。ML Kit GenAI（Gemini Nano）は AICore に依存し、推移依存に Google Play services が入る。対応機種限定のため、非対応機では OS の判定（`checkFeatureStatus` 相当）で `Unsupported` を返す。"
     },
     "macos": {
       "status": "done",
@@ -43,7 +43,7 @@
         "https://learn.microsoft.com/en-us/windows/ai/apis/get-started"
       ],
       "note": "未実装。Copilot+ PC の NPU、または対応 GPU の Windows 11 で動くと文書にある。他の端末では使えない。Phi Silica は Aion Instruct に置き換わる（公式）",
-      "deferred": "Microsoft の公式文書（2026-10-16 更新）で、Phi Silica は Aion Instruct に置き換わり、Aion Instruct は Limited Access Feature の申請が不要とある。Aion Instruct は 2026-11 に Insider へ、2027-01 に一般配布の予定で、同時に Phi Silica は削除される。一般配布後に、Windows App SDK、パッケージマニフェストの `systemAIModels` capability（package identity）、対応機（Copilot+ PC または対応 GPU）がそろえば着手できる。GPU 版は数 GB のモデルを Windows Update 経由で取得するため、サンプルの既定で `EnsureReadyAsync` を呼ばず、`GetReadyState` が `NotReady` なら利用者の同意を取る（公式の推奨 UX）"
+      "parked": "Aion Instruct の一般配布（2027-01 予定）と、Copilot+ PC または対応 GPU の機材を待つ。Microsoft の公式文書（2026-10-16 更新）で、Phi Silica は Aion Instruct に置き換わり、Aion Instruct は Limited Access Feature の申請が不要とある。Aion Instruct は 2026-11 に Insider へ、2027-01 に一般配布の予定で、同時に Phi Silica は削除される。一般配布後に、Windows App SDK、パッケージマニフェストの `systemAIModels` capability（package identity）、対応機（Copilot+ PC または対応 GPU）がそろえば着手できる。GPU 版は数 GB のモデルを Windows Update 経由で取得するため、サンプルの既定で `EnsureReadyAsync` を呼ばず、`GetReadyState` が `NotReady` なら利用者の同意を取る（公式の推奨 UX）"
     },
     "web": {
       "status": "done",

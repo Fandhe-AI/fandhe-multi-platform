@@ -62,7 +62,7 @@
         "https://learn.microsoft.com/en-us/windows/win32/bits/iis-requirements-for-bits-uploads",
         "https://learn.microsoft.com/en-us/windows/win32/bits/bits-upload-protocol"
       ],
-      "deferred": "`BackgroundUploader` は「Background transfers require package identity; unpackaged apps cannot use this API.」（Microsoft の文書）で、本リポジトリの Windows 版は unpackaged のため使えない。BITS の送信は `BITS_POST` と `BITS-Packet-Type` ヘッダの専用プロトコル（1 セッション 1 ファイル）で、受け口に IIS の BITS 拡張相当が要り、普通の HTTP の PUT・POST の受け口では動かない。確認用の受け口に専用プロトコルを実装するか、MSIX 化（package identity）が要り、どちらも設計の変更になるため保留。MSIX 化の方針が決まったら `BackgroundUploader` で見直す。identity 導入時に使う自己署名証明書の秘密鍵は `cargo-fandhe` が利用者ごとに生成し、リポジトリにも crate にも入れない",
+      "deferred": "方針: 配布は Microsoft Store（MSIX）を本命とし、確認は自己署名のフル MSIX を opt-in 経路で足す（既定ビルドは素の exe のまま）。着手は素の exe の Windows 実機確認の後（docs/architecture/windows-package-identity-consideration.md）。以下は package identity を要する理由。`BackgroundUploader` は「Background transfers require package identity; unpackaged apps cannot use this API.」（Microsoft の文書）で、本リポジトリの Windows 版は unpackaged のため使えない。BITS の送信は `BITS_POST` と `BITS-Packet-Type` ヘッダの専用プロトコル（1 セッション 1 ファイル）で、受け口に IIS の BITS 拡張相当が要り、普通の HTTP の PUT・POST の受け口では動かない。確認用の受け口に専用プロトコルを実装するか、MSIX 化（package identity）が要り、どちらも設計の変更になるため保留。MSIX 化の方針が決まったら `BackgroundUploader` で見直す。identity 導入時に使う自己署名証明書の秘密鍵は `cargo-fandhe` が利用者ごとに生成し、リポジトリにも crate にも入れない",
       "note": "未実装。`BackgroundUploader` は upload がアプリの終了後も残り、起動時に `GetCurrentUploadsAsync` で列挙して `AttachAsync` で再び結び付ける（公式）。BITS は開始したユーザーがログオンしている間、アプリが終了しても続く（公式）。download の Windows（background-download）は BITS の `BG_JOB_TYPE_DOWNLOAD` で、普通の HTTP サーバーで動く"
     },
     "web": {
