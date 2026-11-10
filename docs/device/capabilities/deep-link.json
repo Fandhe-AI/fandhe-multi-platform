@@ -58,6 +58,6 @@
       "status": "n-a"
     }
   },
-  "note": "url-scheme との違い: url-scheme はアプリ固有の scheme（`fandhe://`）で、宣言だけで受けられる（ドメインの検証なし・他アプリも同じ scheme を宣言できる）。本機能は https の URL を、ドメイン所有者がサーバーに置いた関連付けファイル（iOS / macOS は `apple-app-site-association`、Android は `assetlinks.json`）で OS が検証した場合にだけアプリへ渡す。iOS / macOS は Associated Domains capability が有料の開発者登録限定で登録が期限切れ、検証用ドメインも未定のため保留（passkey-signin と同じ理由）。Android は実装済みで実機確認待ち。Windows は `windows.appUriHandler` が package identity 必須のため no。Web は https URL 自体がリンクで、アプリ側で受ける概念が無いため n-a。範囲（再開時の案）: 検証済みドメインの https URL で起動し、受け取った URL 文字列を画面に出すだけ（ルーティングは扱わない）。受け口・検査・最新 1 件の保持は url-scheme の受信箱と同じ契約で、検査の scheme を https とホストの一致に替える。検証の可否は OS が決めるため、アプリ側で事前判定も記憶もせず、届いた URL だけを数える。結果は受信（URL）・拒否（件数のみ）・非対応の 3 種で、ポーリングやタイマーで到着を推測しない",
+  "note": "url-scheme との違い: url-scheme はアプリ固有の scheme（`fandhe://`）で、宣言だけで受けられる（ドメインの検証なし・他アプリも同じ scheme を宣言できる）。本機能は https の URL を、ドメイン所有者がサーバーに置いた関連付けファイル（iOS / macOS は `apple-app-site-association`、Android は `assetlinks.json`）で OS が検証した場合にだけアプリへ渡す。iOS / macOS は Associated Domains capability が有料の開発者登録限定で登録が期限切れ、検証用ドメインも未定のため保留（passkey-signin と同じ理由）。Android は実装済みで実機確認済み。Windows は `windows.appUriHandler` が package identity 必須のため no。Web は https URL 自体がリンクで、アプリ側で受ける概念が無いため n-a。範囲（再開時の案）: 検証済みドメインの https URL で起動し、受け取った URL 文字列を画面に出すだけ（ルーティングは扱わない）。受け口・検査・最新 1 件の保持は url-scheme の受信箱と同じ契約で、検査の scheme を https とホストの一致に替える。検証の可否は OS が決めるため、アプリ側で事前判定も記憶もせず、届いた URL だけを数える。結果は受信（URL）・拒否（件数のみ）・非対応の 3 種で、ポーリングやタイマーで到着を推測しない",
   "capture": "captures/deep-link.png"
 }
