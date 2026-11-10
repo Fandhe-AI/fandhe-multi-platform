@@ -56,7 +56,7 @@
         "https://learn.microsoft.com/en-us/uwp/api/windows.services.store",
         "https://learn.microsoft.com/en-us/windows/uwp/monetize/in-app-purchases-and-trials"
       ],
-      "approval": "Windows.Services.Store の課金は、MSIX にしたアプリを Partner Center へ提出して Store の認証（Microsoft の審査）を通し、Store から入れた版の license で確かめる必要がある（テスト用のシミュレータなし）。前提の素の exe には package identity も無い。課金 crate は Store 提出前提と doc に明記し、レシート検証はサーバー側で行う（iOS / Android の done と同じ契約）。Partner Center の資格情報をフレームワークは持たない",
+      "approval": "方針: 配布は Microsoft Store（MSIX）を本命とし、Store の登録（Partner Center）待ち。Store 登録はオーナーの了承を確認してから進める。Windows.Services.Store の課金は、MSIX にしたアプリを Partner Center へ提出して Store の認証（Microsoft の審査）を通し、Store から入れた版の license で確かめる必要がある（テスト用のシミュレータなし）。前提の素の exe には package identity も無い。課金 crate は Store 提出前提と doc に明記し、レシート検証はサーバー側で行う（iOS / Android の done と同じ契約）。Partner Center の資格情報をフレームワークは持たない",
       "note": "未実装。課金 UI・レシート検証は最小権限（決済に必要な情報のみ）で扱う",
       "sourceName": [
         "ストア課金"

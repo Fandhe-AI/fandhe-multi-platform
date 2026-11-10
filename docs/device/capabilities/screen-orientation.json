@@ -49,7 +49,7 @@
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/ne-winuser-orientation_preference"
       ],
       "note": "公開 API はあるが、効く条件（前面のときだけか、全画面が要るか、タブレットモードが要るか）が公式に未記載。回転センサ付きの端末で確認するまで保留。取得は `EnumDisplaySettings` の `dmDisplayOrientation` か winit のモニター情報が候補",
-      "deferred": "API はあるが効く条件が公式に未記載で、回転センサ付きの Windows 端末での確認が要るため保留。確認できれば着手できる"
+      "parked": "回転センサ付きの Windows 端末が手元に無い。API はあるが効く条件が公式に未記載で、回転センサ付きの Windows 端末での確認が要るため保留。確認できれば着手できる"
     },
     "web": {
       "status": "done",

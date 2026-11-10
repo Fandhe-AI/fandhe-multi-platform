@@ -15,7 +15,7 @@
         "https://developer.apple.com/videos/play/wwdc2022/10032/",
         "https://developer.apple.com/videos/play/wwdc2025/275/"
       ],
-      "deferred": "見送り。メタデータ抽出が Xcode のビルドに限られ、手組みの .app では足せない点は変わらない。直す道は 2 つで、(1) `AppIntent` を Xcode のターゲットへ置くには iOS ビルドを xcodebuild へ移す設計変更が要る、(2) cargo の成果物のまま「URL を開く」系にするなら OpenURLIntent は universal link（https）を前提とし、Associated Domains とドメインの用意（有料の Apple Developer Program の機能とドメイン）が要る。どちらも今周の範囲（無料・設計判断だけ）に入らないため見送り。一次情報: https://developer.apple.com/documentation/appintents/openurlintent / https://developer.apple.com/forums/thread/762586",
+      "deferred": "有料の Apple 開発者登録待ち。見送り。メタデータ抽出が Xcode のビルドに限られ、手組みの .app では足せない点は変わらない。直す道は 2 つで、(1) `AppIntent` を Xcode のターゲットへ置くには iOS ビルドを xcodebuild へ移す設計変更が要る、(2) cargo の成果物のまま「URL を開く」系にするなら OpenURLIntent は universal link（https）を前提とし、Associated Domains とドメインの用意（有料の Apple Developer Program の機能とドメイン）が要る。どちらも今周の範囲（無料・設計判断だけ）に入らないため見送り。一次情報: https://developer.apple.com/documentation/appintents/openurlintent / https://developer.apple.com/forums/thread/762586",
       "note": "未実装。Swift 専用の宣言型 API。Swift の薄層を swiftc で静的ライブラリにして Rust から呼ぶ前例はある（翻訳・端末内 LLM・ライブアクティビティ）が、App Intents は型の定義そのものをメタデータとして抽出させる必要がある。静的ライブラリ・Swift Package に置く場合は `AppIntentsPackage`（iOS 17 以上）で app 側から参照する（公式）。ショートカット App の「URL を開く」から `fandhe://` を開く経路は url-scheme（done）で既にあるが、本機能のアクション公開には当たらない"
     },
     "android": {

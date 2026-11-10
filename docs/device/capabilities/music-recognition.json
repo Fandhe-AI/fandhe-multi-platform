@@ -28,7 +28,7 @@
         "https://developer.apple.com/help/account/capabilities/create-a-media-identifier-and-private-key"
       ],
       "note": "未実装。SDK は Maven に無い手入れの AAR で、推移依存に kotlinx-coroutines・okhttp・retrofit が入る",
-      "deferred": "Shazam カタログの利用に Apple の developer token が要り、秘密鍵をアプリに埋め込めないため token を配る受け口が要る（設計の変更）。SDK は Maven に無い手入れの AAR で、推移依存に kotlinx-coroutines・okhttp・retrofit が入る。開発者登録が期限切れのため保留。ベンダーの個別審査は不要で、登録の再開・token の配り方・依存の追加が決まれば着手できる。安全条件: `DeveloperTokenProvider` は利用者のサーバーが返す token を受け取る形に限り、鍵・JWT の既定値を持たない（設定が無ければ `Unsupported` 系で止める）。AAR は利用者が Apple から取得して置き、crate に同梱しない（再配布条件は未確認）。`CustomCatalog` には token の記述が公式に無く、確認用はそちらで通せる見込み（未確認）"
+      "deferred": "有料の Apple 開発者登録（現在は期限切れ）待ち。Shazam カタログの利用に Apple の developer token が要り、秘密鍵をアプリに埋め込めないため token を配る受け口が要る（設計の変更）。SDK は Maven に無い手入れの AAR で、推移依存に kotlinx-coroutines・okhttp・retrofit が入る。開発者登録が期限切れのため保留。ベンダーの個別審査は不要で、登録の再開・token の配り方・依存の追加が決まれば着手できる。安全条件: `DeveloperTokenProvider` は利用者のサーバーが返す token を受け取る形に限り、鍵・JWT の既定値を持たない（設定が無ければ `Unsupported` 系で止める）。AAR は利用者が Apple から取得して置き、crate に同梱しない（再配布条件は未確認）。`CustomCatalog` には token の記述が公式に無く、確認用はそちらで通せる見込み（未確認）"
     },
     "macos": {
       "status": "possible",

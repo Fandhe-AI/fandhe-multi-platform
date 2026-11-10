@@ -19,7 +19,7 @@
         "https://developer.apple.com/documentation/watchos-apps/creating-independent-watchos-apps"
       ],
       "note": "未実装。`platforms/apple/FandheWatchApp` は watchOS 単体アプリ（`WKWatchOnly`）で、iPhone 側との通信は持たない。`isReachable` は watch 側が前面で動いているときだけ真（公式）で、確認には watch 側の操作も要る。シミュレータのペア（iPhone + Watch）で `sendMessage` が通るかは公式に記載が無く未確認",
-      "deferred": "WatchConnectivity の相手は対になる watchOS アプリだけで、今の FandheWatchApp は watch-only（`WKWatchOnly`、`WCErrorCode.watchOnlyApp`）のため相手になれない。watch アプリの companion 化（`WKCompanionAppBundleIdentifier`・bundle id の変更）と watch 側の返信コード、手組みの iOS バンドルへ watch アプリを同梱する手順（file-provider・quick-settings-tile と同じビルド構成の問題）が要る。companion 化は watchOS 版の構成（TASK-3.4）に触る。シミュレータのペアで届くかは公式に記載が無く、有料の開発者登録が期限切れで実機でも確かめられないため保留。ベンダーの個別審査は不要で、watchOS 版の構成変更と確認手段が揃えば着手できる",
+      "deferred": "有料の Apple 開発者登録（現在は期限切れ）待ち。WatchConnectivity の相手は対になる watchOS アプリだけで、今の FandheWatchApp は watch-only（`WKWatchOnly`、`WCErrorCode.watchOnlyApp`）のため相手になれない。watch アプリの companion 化（`WKCompanionAppBundleIdentifier`・bundle id の変更）と watch 側の返信コード、手組みの iOS バンドルへ watch アプリを同梱する手順（file-provider・quick-settings-tile と同じビルド構成の問題）が要る。companion 化は watchOS 版の構成（TASK-3.4）に触る。シミュレータのペアで届くかは公式に記載が無く、有料の開発者登録が期限切れで実機でも確かめられないため保留。ベンダーの個別審査は不要で、watchOS 版の構成変更と確認手段が揃えば着手できる",
       "sourceName": [
         "watch 連携（iPhone ↔ Apple Watch のデータ受け渡し）"
       ]
@@ -34,10 +34,10 @@
         "https://developer.android.com/training/wearables/get-started/connect-phone"
       ],
       "note": "未実装。`GoogleApiAvailability` で Google Play services が使えるかを確かめてから呼ぶ（公式）。スマホ側と Wear OS 側のアプリはパッケージ名と署名を一致させる必要があり、Wear OS 用の別モジュール（別 APK）が要る。確認はエミュレータのペアでもできる（スマホ側は Android 11 以上・Play ストア入りのイメージ）",
-      "deferred": "Data Layer API は `play-services-wearable`（Google Play services）を新しく足し、端末にも Google Play services が要る。加えてパッケージ名と署名が同じ Wear OS 用のアプリ（別モジュール）と、確かめるための Wear OS 端末（またはエミュレーターのペアリング）が要るため保留。Wear 機を用意し別モジュールを足す方針が決まれば着手できる。`cargo-fandhe gen` が Wear OS 用モジュールを生成し、署名の一致は利用者の keystore に依存させる（フレームワークは鍵を持たない）",
       "sourceName": [
         "watch 連携（スマホ ↔ Wear OS のデータ受け渡し）"
-      ]
+      ],
+      "parked": "Wear OS 端末（またはペアリング済みエミュレーター）が手元に無い。Data Layer API は `play-services-wearable`（Google Play services）を新しく足し、端末にも Google Play services が要る。加えてパッケージ名と署名が同じ Wear OS 用のアプリ（別モジュール）と、確かめるための Wear OS 端末（またはエミュレーターのペアリング）が要るため保留。Wear 機を用意し別モジュールを足す方針が決まれば着手できる。`cargo-fandhe gen` が Wear OS 用モジュールを生成し、署名の一致は利用者の keystore に依存させる（フレームワークは鍵を持たない）"
     },
     "macos": {
       "status": "n-a",

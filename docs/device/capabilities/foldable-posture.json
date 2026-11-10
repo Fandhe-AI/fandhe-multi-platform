@@ -15,7 +15,7 @@
         "https://developer.apple.com/documentation/uikit/uihinge"
       ],
       "note": "未実装。折れ目の位置を返す Web / Android と、角度・状態を返す iOS でモデルが違う。`UIHinge.Status` の case 一覧とシミュレータで hinge が出るかは未確認",
-      "deferred": "iOS 27.1 以上の SDK（Xcode 27.1 以上）と実機が要る。Web / Android の「折れ目の位置」モデルと iOS の「角度・状態」モデルの写像を trait doc で決めれば着手できる"
+      "parked": "折りたたみ対応の iOS 機器（iOS 27.1 以上）が手元に無い。iOS 27.1 以上の SDK（Xcode 27.1 以上）と実機が要る。Web / Android の「折れ目の位置」モデルと iOS の「角度・状態」モデルの写像を trait doc で決めれば着手できる"
     },
     "android": {
       "status": "done",

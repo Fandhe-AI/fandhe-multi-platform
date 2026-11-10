@@ -51,7 +51,7 @@
         "https://learn.microsoft.com/en-us/uwp/api/windows.networking.proximity.proximitydevice.subscribeformessage"
       ],
       "note": "未実装。UWP アプリでは前面にある間だけ購読が有効（公式）。NFC を内蔵する PC は少なく、USB の PC/SC リーダーが `ProximityDevice` として現れるかは公式に記載が無く未確認。PC/SC（`Windows.Devices.SmartCards` / WinSCard）で読むのはタグ種別ごとの APDU を組む生データの経路で範囲外",
-      "deferred": "`ProximityDevice` は capability `proximity` の宣言が要り、package identity の無い素の実行体（本リポジトリの Windows 版）で使えるかの記述が無く未確認（local-peer-connect の Windows と同じ）。`windows` クレートの feature `Networking_Proximity` も新しく要る。NFC を内蔵する PC は少なく、確かめる機器が無い。素の実行体での可否と確認用の機器が揃えば着手できる。`windows` クレートの feature は機能 crate 側で有効化し、この機能を選ばない利用者のビルドには入れない"
+      "deferred": "方針: 配布は Microsoft Store（MSIX）を本命とし、確認は自己署名のフル MSIX を opt-in 経路で足す（既定ビルドは素の exe のまま）。着手は素の exe の Windows 実機確認の後（docs/architecture/windows-package-identity-consideration.md）。以下は package identity を要する理由。`ProximityDevice` は capability `proximity` の宣言が要り、package identity の無い素の実行体（本リポジトリの Windows 版）で使えるかの記述が無く未確認（local-peer-connect の Windows と同じ）。`windows` クレートの feature `Networking_Proximity` も新しく要る。NFC を内蔵する PC は少なく、確かめる機器が無い。素の実行体での可否と確認用の機器が揃えば着手できる。`windows` クレートの feature は機能 crate 側で有効化し、この機能を選ばない利用者のビルドには入れない"
     },
     "web": {
       "status": "done",
