@@ -7,7 +7,8 @@
 //! （[`check_client_data`]・[`verify_response`]）。画面（`fandhe_core::screens::passkey_signin`、
 //! 端末依存ゼロ）へは `fandhe-egui-proxy` の effect ドライバ（`device/passkey.rs`）が写像する。
 //! Windows（#343）・Web（#344）が [`Passkey`] を実装し、写像の純関数（[`outcome_from_dom_error`]・
-//! base64url・検証）を共有する。iOS・macOS・Android は対応表で保留（`deferred`）のため配線しない。
+//! base64url・検証）を共有する。Android（#1280）は Credential Manager がコールバック型のため `Passkey` を実装せず、
+//! 同じ写像・検証を使って bridge へ直接届ける。iOS・macOS は対応表で保留（`deferred`）のため配線しない。
 //!
 //! # 結果の種類（[`PasskeyOutcome`]）
 //!
@@ -18,7 +19,7 @@
 //!
 //! | 状況 | 返す値 |
 //! |---|---|
-//! | 認証器なし・secure context 外・OS が古い | `Unsupported("passkey")` |
+//! | 認証器なし・secure context 外・OS が古い・Android で RP ID 未設定／不正・資格情報プロバイダなし | `Unsupported("passkey")` |
 //! | challenge 不一致・`type` 違い・JSON 不正・サイズ超過 | `InvalidInput("passkey client data")` |
 //! | UP / UV / AT の欠落・authenticatorData が短い・登録で attestedCredentialData が欠ける、または credentialIdLength と長さが合わない | `InvalidInput("passkey flags")` |
 //! | 資格情報 ID が空 | `InvalidInput("passkey credential")` |
@@ -33,14 +34,14 @@
 //! # 期限・ライフサイクル（契約表 1・3）
 //!
 //! Rust 側で独自の期限は掛けない（利用者操作の UI で、OS 側の期限に従う）。Web は `AbortController` で
-//! 取り消し、取り消し後に届いた応答は世代の照合で捨てる。Windows はアプリ側から取り消す契機を持たない
+//! 取り消し、取り消し後に届いた応答は世代の照合で捨てる。Android は `onDestroy` で `CancellationSignal` を取り消す。Windows はアプリ側から取り消す契機を持たない
 //! （画面を離れる経路がなく、アプリ終了との重なりは守らない範囲）。OS の UI での取り消しは `NotAllowed` で届く。
 //!
 //! # clientDataJSON の照合の限界
 //!
 //! Windows の OS は clientDataJSON を返さず、アプリが組み立てて渡したものをそのまま使う。
 //! そのため [`check_client_data`] は Windows では循環照合になり、要求の取り違えの検出にならない。
-//! 取り違えは世代照合（`RequestSlot`）で防ぐ。Web は OS が返した値を照合するため検出として働く。
+//! 取り違えは世代照合（`RequestSlot`）で防ぐ。Web・Android は OS（プロバイダ）が返した値を照合するため検出として働く。
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
 //!
