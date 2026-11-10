@@ -230,6 +230,11 @@ unsafe fn wstr(p: PWSTR) -> Option<String> {
 }
 
 /// OS のスレッドプールから呼ばれる。`rec` は成否に関わらず最後に解放する。
+///
+/// # Safety
+///
+/// `DnsServiceBrowse` のコールバックとして OS だけが呼ぶ。`rec` は NULL か、`DnsFree` まで有効な
+/// レコードリストで、所有権は本関数に移る（最後に 1 回だけ解放する）。
 #[allow(unsafe_code)]
 unsafe extern "system" fn on_browse(status: u32, context: *const c_void, rec: *const DNS_RECORDW) {
     let request_id = context as usize as u64;
@@ -239,6 +244,7 @@ unsafe extern "system" fn on_browse(status: u32, context: *const c_void, rec: *c
         // SAFETY: OS が渡したレコードリストは `pNext` で NULL まで連なり、`DnsFree` まで有効。
         // 共用体は `wType` が示す要素だけを読む。
         while let Some(r) = unsafe { cur.as_ref() } {
+            // SAFETY: `r` は上で辿った有効なレコード。`copy_record` は共用体のうち `wType` が示す要素だけを読む。
             if let Some(rr) = unsafe { copy_record(r) } {
                 records.push(rr);
             }

@@ -258,6 +258,11 @@ mod win {
     }
 
     /// ウィンドウプロシージャ。出来事に写せるものだけを `fire` し、すぐ戻る。
+    ///
+    /// # Safety
+    ///
+    /// 専用スレッドで作ったウィンドウのプロシージャとして OS だけが呼ぶ。引数は OS が渡した
+    /// 有効な値で、`WM_DEVICECHANGE` の lParam だけ「非 NULL なら `DEV_BROADCAST_HDR` 以上」を前提に読む。
     #[allow(unsafe_code)]
     unsafe extern "system" fn wnd_proc(
         hwnd: HWND,

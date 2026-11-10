@@ -5,7 +5,7 @@
 - 共通コアのクレートには `#![forbid(unsafe_code)]` を付ける
 - FFI 境界（プラットフォーム統合レイヤ）で `unsafe` が不可避な場合:
   - 最小範囲の関数・モジュールに閉じる
-  - `// SAFETY:` コメントで安全性根拠を必ず明記する
+  - `// SAFETY:` コメントで安全性根拠を必ず明記する（clippy の lint が検査する。形は `docs/architecture/unsafe-audit.md` §3.2）
   - 安全な公開 API でラップし、`unsafe` を呼び出し側へ漏らさない
 
 ## エラーハンドリング

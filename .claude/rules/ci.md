@@ -9,7 +9,8 @@ paths:
 ## ランナー（必須）
 
 - GitHub Actions のジョブは GitHub ホストランナー（`ubuntu-latest`）で実行する。public リポジトリでは標準ランナーが無料で、fork PR のコードを社内の runner で動かさないため（組織のランナー方針: Fandhe-AI/actions の `docs/runner-policy.md`）。reviewer / linter が `runs-on` を検査する
-- 例外は `ai-review.yml` の codex review ジョブのみ（呼び出し先の既定で codex 専用 self-hosted runner。マシンのログインに依存するため）。wrapper に `runs-on` を書かない。fork PR は呼び出し先の preflight・wrapper の `if`・GitHub の fork PR 承認ポリシー（`all_external_contributors`）で止める。これ以外に self-hosted を足さない
+- 例外 1: `ci.yml` の `cargo clippy (apple)` ジョブは `macos-latest`。public リポジトリの GitHub ホスト runner のため費用がかからず、Apple 限定コード（`build.rs` が ObjC・Swift をビルドし `xcrun` を要する）の SAFETY lint に macOS が要る
+- 例外 2: `ai-review.yml` の codex review ジョブのみ（呼び出し先の既定で codex 専用 self-hosted runner。マシンのログインに依存するため）。wrapper に `runs-on` を書かない。fork PR は呼び出し先の preflight・wrapper の `if`・GitHub の fork PR 承認ポリシー（`all_external_contributors`）で止める。これ以外に self-hosted を足さない
 
 ## 運用
 
@@ -22,15 +23,17 @@ paths:
 
 - 本リポジトリは **public**。`ci.yml`・`update-external.yml`・`ai-review.yml` の preflight / post_feedback は `ubuntu-latest`、codex review のみ self-hosted（上記の例外）
 - Windows・macOS の実機が要る確認は CI に置かず、手元で行う
-- Windows 専用コードの型検査は `cargo clippy` ジョブの windows-gnu クロス clippy（mingw 導入込み）で行う。実機と MSVC の確認は手元
+- Windows 専用コードの型検査は `cargo clippy` ジョブの windows-gnu クロス clippy（`--workspace --all-targets`、mingw 導入込み）で行う。実機と MSVC の確認は手元
+- Android 限定コードの clippy は `android クロスビルド` ジョブの `cargo ndk clippy` で行う
+- Apple 限定コード（macOS ホスト・`aarch64-apple-ios` の既定 feature と `--all-features`）の clippy は `cargo clippy (apple)` ジョブ（macOS runner）で行う
 - Android の Java は `android クロスビルド` の `bundleRelease`（`compileReleaseJavaWithJavac` を含む）で検査する
-- iOS 専用コード（`cfg(target_os = "ios")`）の型検査は CI に置かず、`scripts/ios/check-lib.sh` で手元で行う（依存の build script が `xcrun` を要し ubuntu では通らない。`docs/operations/ios-build-pipeline.md` §8）
+- iOS 専用コードの lint は `cargo clippy (apple)` で CI でも見る。リンクを含む型検査は `scripts/ios/check-lib.sh` で手元でも行う（`docs/operations/ios-build-pipeline.md` §8）
 
 ## 必須チェックと集約ジョブ
 
-- ruleset `main-protection` の required status checks は次のジョブ名（`name:`）を参照する: `cargo fmt --check` / `cargo clippy` / `cargo test` / `android NDK/Gradle 導入` / `android クロスビルド` / `ci-complete` / `codex / preflight` / `codex / review` / `codex / post_feedback` / `Cursor Bugbot`
+- ruleset `main-protection` の required status checks は次のジョブ名（`name:`）を参照する: `cargo fmt --check` / `cargo clippy` / `cargo test` / `android NDK/Gradle 導入` / `android クロスビルド` / `cargo clippy (apple)` / `ci-complete` / `codex / preflight` / `codex / review` / `codex / post_feedback` / `Cursor Bugbot`
 - これらのジョブ名を変える・ジョブを削除するときは ruleset 側の更新が先に必要（人間の作業。勝手に変えるとマージ不能になる）
-- ジョブを追加したら `ci.yml` の `ci-complete` の `needs` と判定ループに必ず追加する（skipped は `changes` が `heavy=false` を返した test / android-* のみ許容）
+- ジョブを追加したら `ci.yml` の `ci-complete` の `needs` と判定ループに必ず追加する（skipped は `changes` が `heavy=false` を返した test / android-* / clippy-apple のみ許容）
 
 ## 発火条件の方針
 

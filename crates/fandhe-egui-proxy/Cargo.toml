@@ -601,3 +601,6 @@ egui_kittest = { workspace = true, features = ["wgpu"] }
 # （resolver = "2" の feature 統合は `cargo test` 等の対象ビルドにのみ及び、`cargo build` の
 # 通常ビルドには波及しない）。Android は上記と同じ理由でこの target cfg から除外済み。
 eframe = { workspace = true, default-features = false, features = ["accesskit"] }
+
+[lints]
+workspace = true

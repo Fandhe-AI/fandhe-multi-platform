@@ -31,8 +31,8 @@ use std::sync::Arc;
 
 #[cfg_attr(not(any(target_os = "android", test)), allow(unused_imports))]
 use fandhe_device::volume_control::{
-    classify_step, validate_level, StepDirection, StepOutcome, UnsupportedVolumeControl,
-    VolumeControl, VolumeControlMode, VolumeReading,
+    classify_step, validate_level, StepDirection, StepOutcome, VolumeControl, VolumeControlMode,
+    VolumeReading,
 };
 use fandhe_device::DeviceError;
 
@@ -196,7 +196,7 @@ pub(crate) fn implementation() -> Arc<dyn VolumeControl> {
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn VolumeControl> {
-    Arc::new(UnsupportedVolumeControl)
+    Arc::new(fandhe_device::volume_control::UnsupportedVolumeControl)
 }
 
 #[cfg(test)]

@@ -257,6 +257,7 @@ pub(crate) fn implementation() -> Arc<dyn MemoryPressure> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(target_os = "windows"))]
     use super::*;
 
     #[cfg(not(target_os = "windows"))]

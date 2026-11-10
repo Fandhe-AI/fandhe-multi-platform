@@ -37,3 +37,6 @@ token-file = ["dep:serde_json"]
 [dev-dependencies]
 # TASK-13.1-S3: tests/compile_fail.rs（クロージャ環境キャプチャ拒否の compile-fail 検証）が使用する。
 trybuild.workspace = true
+
+[lints]
+workspace = true

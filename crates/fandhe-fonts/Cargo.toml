@@ -20,3 +20,6 @@ publish = false
 # owned_ttf_parser は CFF をコア機能として扱うため ab_glyph で問題なく
 # 解釈できることを検証時に確認済み）。
 ab_glyph = { workspace = true }
+
+[lints]
+workspace = true

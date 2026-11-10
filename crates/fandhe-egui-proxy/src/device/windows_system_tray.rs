@@ -421,6 +421,11 @@ fn add_icon(hwnd: HWND, title: &str) -> bool {
 /// （`hide` が `SendMessageW` の間 `CURRENT` を握ったまま同期的に本関数の戻りを
 /// 待つため、ここで `CURRENT` を取ろうとするとデッドロックする、モジュール doc
 /// 「待ち時間切れを持たない理由」参照）。
+///
+/// # Safety
+///
+/// アイコン専用ウィンドウのプロシージャとして OS だけが呼ぶ。引数は OS が渡した有効な値で、
+/// `hwnd` はこのスレッドが所有するウィンドウ。本関数の各 Win32 呼び出しは同じ `hwnd` に限る。
 #[allow(unsafe_code)]
 unsafe extern "system" fn wnd_proc(
     hwnd: HWND,
@@ -511,9 +516,10 @@ fn show_popup_menu(hwnd: HWND) {
     let mut point = Default::default();
     // SAFETY: `point` はこのスコープのローカル変数。
     let _ = unsafe { GetCursorPos(&mut point) };
-    // SAFETY: `hwnd` はこのスレッドが所有するウィンドウ。`TPM_RETURNCMD` により
-    // 選択された項目 id（`index + 1`）が戻り値として返る（0 は未選択）。
+    // SAFETY: `hwnd` はこのスレッドが所有するウィンドウ。メニュー表示前に前面化する定型手順。
     let _ = unsafe { SetForegroundWindow(hwnd) };
+    // SAFETY: `menu` は直前に作った有効なメニュー、`hwnd` はこのスレッドが所有するウィンドウ。
+    // `TPM_RETURNCMD` により選択された項目 id（`index + 1`）が戻り値として返る（0 は未選択）。
     let cmd = unsafe {
         TrackPopupMenu(
             menu,

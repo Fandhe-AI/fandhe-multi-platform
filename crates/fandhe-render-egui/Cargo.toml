@@ -79,3 +79,6 @@ egui_kittest = { workspace = true, features = ["wgpu"] }
 # egui_kittest が無条件に有効化する egui 側の "accesskit" と、eframe 側の実装との不整合を避けるため、
 # テストビルド時にだけ eframe の "accesskit" を明示する。
 eframe = { workspace = true, default-features = false, features = ["accesskit"] }
+
+[lints]
+workspace = true

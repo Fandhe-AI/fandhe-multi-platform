@@ -54,3 +54,6 @@ rfd = { workspace = true }
 # 使っている 0.2 系と同じで、新規パッケージは増えない。
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[lints]
+workspace = true

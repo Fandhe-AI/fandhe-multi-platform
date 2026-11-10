@@ -86,7 +86,7 @@ fandhe-multi-platform/
 │
 ├── .github/
 │   ├── CODEOWNERS               # ビルド基盤パス（Dockerfile・compose.yaml・Makefile・.github/ 等）への変更に人間レビューを必須化
-│   └── workflows/               # CI ワークフロー（GitHub ホスト ubuntu-latest。codex review のみ self-hosted）
+│   └── workflows/               # CI ワークフロー（GitHub ホスト ubuntu-latest、Apple 限定コードの clippy のみ macos-latest。codex review のみ self-hosted）
 │
 └── .claude/
     ├── agents/                  # カテゴリ別 subagent 定義ファイル
@@ -183,7 +183,7 @@ main はオーケストレーションに徹し、調査・実装・レビュー
 - **日本語運用**: やりとり・報告・コメントは日本語（`japanese-style.md`）
 - **Conventional Commits 厳守**: コミットは create-commit スキル経由。lefthook による自動検査（pre-commit: fmt チェック + .env 混入防止 / commit-msg: Conventional Commits 形式）を通す。clippy・test は CI（`ci.yml`）で実行しフックには置かない（`git-hooks.md`）。**`--no-verify` 禁止**
 - **旧 Issue 番号**: 初回コミット `chore: 初回公開` に由来するコード・文書中の `#N` は旧リポジトリ（非公開・アーカイブ）の番号で、本リポジトリの Issue を指さない
-- **CI は GitHub ホスト（ubuntu-latest）が原則**: codex review ジョブのみ self-hosted（`ci.md`）
+- **CI は GitHub ホスト（ubuntu-latest）が原則**: Apple 限定コードの clippy のみ macos-latest、codex review ジョブのみ self-hosted（`ci.md`）
 - **セキュリティレビュー**: PR 作成前に security-auditor（OWASP Top 10）を通す
 - **ユーザー承認フロー**: implement-issue は計画承認後に実装。スコープ外 Issue の起票・既存ファイルの上書きは承認後のみ
 - **spec 準拠**: 要件・タスクは `docs/spec/`（REQ-N / TASK-N.M）に紐付けて進める。spec の変更はこのリポジトリでは行わない

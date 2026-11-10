@@ -49,3 +49,6 @@ exported = false
 attributes = { label = "@string/home_widget_label" }
 intent-filters = [{ actions = ["android.appwidget.action.APPWIDGET_UPDATE"] }]
 meta-data = [{ name = "android.appwidget.provider", resource = "@xml/home_widget_info" }]
+
+[lints]
+workspace = true

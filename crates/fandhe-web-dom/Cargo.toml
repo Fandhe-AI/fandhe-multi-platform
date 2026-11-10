@@ -225,3 +225,6 @@ web-sys = { workspace = true, features = [
 [dev-dependencies]
 # png_data_url の往復テスト用（native テストのみ。lockfile 済みの版で新規パッケージは増えない）。
 image = { workspace = true }
+
+[lints]
+workspace = true

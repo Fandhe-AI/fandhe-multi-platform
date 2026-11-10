@@ -11,3 +11,6 @@ publish = false
 # 共通コアのみに依存する（coding-rust.md の依存方向: 最適化レイヤ → コアの一方向）。
 # 外部依存を追加しないことで REQ-2 の共通コード比率計測に無関係なノイズを増やさない。
 fandhe-core = { path = "../fandhe-core" }
+
+[lints]
+workspace = true
