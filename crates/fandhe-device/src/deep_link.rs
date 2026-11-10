@@ -31,8 +31,9 @@
 //!
 //! # 各 OS の届き方
 //!
-//! - Android: `getIntent()` / `onNewIntent` の `ACTION_VIEW` で https のもの。カスタム scheme
-//!   （url-scheme）との振り分けは Issue #1279 の範囲
+//! - Android: `getIntent()` / `onNewIntent` の `ACTION_VIEW` で https のもの
+//!   （`DeepLinkHelper.deliver` が振り分け、https 以外は url-scheme の受信箱へ）。許可ホストは
+//!   ビルド時の環境変数 `FANDHE_ANDROID_DEEP_LINK_HOST` で渡し、無ければ全件拒否（Issue #1279）
 //! - iOS・macOS: 保留中。届き方は対応表の api 欄を参照
 //!
 //! # 守る範囲と守らない範囲（`AGENTS.md`「端末機能の並行性は守備範囲で判定する」）

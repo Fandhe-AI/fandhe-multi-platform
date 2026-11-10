@@ -739,6 +739,25 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnUrlSchemeReceiv
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeOnDeepLinkReceived` no-op フォールバック
+/// （Issue #1279）。`MainActivity` が feature を知らず https の `ACTION_VIEW` で
+/// `DeepLinkHelper.deliver` を呼ぶため、スタブが無いと feature 無効ビルドで
+/// `UnsatisfiedLinkError` になる。署名は Java 宣言・`device/android_deep_link.rs` の実体と
+/// 3 か所で一致させる。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
+/// シンボル名は JNI 命名規約上の固定名（`nativeOnUrlSchemeReceived` と同じ根拠）。
+#[cfg(not(feature = "device"))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_DeepLinkHelper_nativeOnDeepLinkReceived(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _url: *mut core::ffi::c_void,
+) {
+}
+
 /// `device` feature 無効ビルド向けの `nativeOnForegroundChanged` no-op フォールバック
 /// （Issue #611）。`EnvironmentSensorsHelper.onPause` / `onResume` は feature を知らず
 /// `MainActivity` のライフサイクルから無条件に呼ぶため、スタブが無いと feature 無効ビルドで

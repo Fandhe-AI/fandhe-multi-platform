@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ディープリンク（App Links、Issue #1279）の intent-filter。build.gradle.kts が環境変数
+  FANDHE_ANDROID_DEEP_LINK_HOST を設定されたときだけ、この manifest を main に重ねる
+  （未設定なら filter を出さない。host なしの https 宣言は全 https リンクを受けてしまうため）。
+  ${fandheDeepLinkHost} は同じ環境変数の値（形式検査済み）。path は絞らない。
+  受信した URL の検査は Rust 側（fandhe_device::deep_link）に一本化している。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name="com.fandhe.platform.MainActivity">
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="${fandheDeepLinkHost}" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

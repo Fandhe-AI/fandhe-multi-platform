@@ -15,7 +15,7 @@ use fandhe_device::DeviceError;
 static INBOX: UrlInbox = UrlInbox::new();
 
 /// 受信時刻（UNIX ms）。エポック前なら 0。
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
