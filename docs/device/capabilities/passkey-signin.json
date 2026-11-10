@@ -19,8 +19,7 @@
       "api": "`androidx.credentials`（Credential Manager の `CreatePublicKeyCredentialRequest` / `GetPublicKeyCredentialOption`）、GMS 依存",
       "perm": "なし（要確認）。サーバー側の Digital Asset Links（`assetlinks.json`）が要る",
       "url": "https://developer.android.com/identity/sign-in/credential-manager",
-      "note": "未実装。GMS（Google Play 開発者サービス）依存。API 34 未満は Play services 経由（報告より）。パスキー専用の手順は https://developer.android.com/identity/sign-in/passkeys にもある",
-      "deferred": "RP ID のドメイン（Digital Asset Links の assetlinks.json の配置先）が未定のため保留。ベンダーの個別審査は不要で、ドメインが決まれば着手できる。検証用ドメインは本リポジトリの確認用で、利用者の RP ID は `cargo-fandhe gen` の必須入力にし、既定ドメインを持たない"
+      "note": "未実装。GMS（Google Play 開発者サービス）依存。API 34 未満は Play services 経由（報告より）。パスキー専用の手順は https://developer.android.com/identity/sign-in/passkeys にもある。RP ID のドメイン: 確認するときだけ一時的な静的ホスティングに `assetlinks.json` を置き、終わったら消す（#1236）。ドメインは本リポジトリに書かず、確認時に `cargo-fandhe gen` へ渡す。利用者の RP ID も `cargo-fandhe gen` の必須入力で、既定ドメインを持たない。RP ID に使う前に、ドメインが Public Suffix List 上で独立した登録可能ドメインになるかを確かめる。一時ドメインの配置は人手で行い、確認で作ったパスキーは終了時に削除する"
     },
     "macos": {
       "status": "possible",
