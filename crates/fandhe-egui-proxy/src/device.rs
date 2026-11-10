@@ -129,6 +129,11 @@ pub mod android_compass;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_compose_mail_sms;
+/// Issue #1278: Android 向けディープリンク（App Links）受信のスタブ（実体は #1279）。
+/// `device/deep_link.rs` の Android 経路から呼ばれる。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub mod android_deep_link;
 /// Issue #904: Android 向けアプリ・端末の識別子実装（`DeviceIdentifierHelper` を JNI で呼ぶ）。
 /// `device/device_identifier.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -793,6 +798,9 @@ pub mod compose_mail_sms;
 /// （macOS / iOS / Android は pull 型 `bridge`、他 OS は兄弟 issue が入るまで
 /// `UnsupportedContactPicker` 固定）。
 pub mod contact_pick;
+/// Phase 11 の拡充ループ（親 #153、Issue #1278）: ディープリンク受信の effect ドライバ
+/// （Android 分岐はスタブ、他 OS は `UnsupportedDeepLink` 固定）。
+pub mod deep_link;
 /// Phase 11 の拡充ループ（親 #181、Issue #903）: アプリ・端末の識別子の effect ドライバ（iOS・Android 実装、他 OS は `UnsupportedDeviceIdentifier` 固定）。
 pub mod device_identifier;
 /// Phase 11 の拡充ループ（親 #1131、Issue #1304）: 端末・OS 情報の effect ドライバ（macOS / Windows

@@ -121,12 +121,23 @@ impl UrlInbox {
         scheme: &str,
         now_ms: u64,
     ) -> Result<(), DeviceError> {
+        self.receive_with(bytes, "url_scheme", now_ms, |s| validate_url(s, scheme))
+    }
+
+    /// [`receive_bytes`](Self::receive_bytes) の検査差し替え版。`deep_link` が https + ホスト
+    /// 一致の検査を渡すために使う。`label` は `None`・不正な UTF-8 のときの `InvalidInput` に
+    /// 載せる固定文字列（URL を載せない）。
+    pub fn receive_with(
+        &self,
+        bytes: Option<&[u8]>,
+        label: &'static str,
+        now_ms: u64,
+        validate: impl FnOnce(&str) -> Result<(), DeviceError>,
+    ) -> Result<(), DeviceError> {
         let checked = bytes
-            .ok_or(DeviceError::InvalidInput("url_scheme"))
-            .and_then(|b| {
-                std::str::from_utf8(b).map_err(|_| DeviceError::InvalidInput("url_scheme"))
-            })
-            .and_then(|s| validate_url(s, scheme).map(|()| s));
+            .ok_or(DeviceError::InvalidInput(label))
+            .and_then(|b| std::str::from_utf8(b).map_err(|_| DeviceError::InvalidInput(label)))
+            .and_then(|s| validate(s).map(|()| s));
         let mut inner = self.guard();
         inner.seq += 1;
         match checked {

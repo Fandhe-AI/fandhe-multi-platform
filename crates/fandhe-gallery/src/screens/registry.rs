@@ -570,6 +570,10 @@ generated_screens! {
     fandhe_egui_proxy::device::url_scheme::url_scheme_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    "deep_link_show" => fandhe_core::screens::deep_link_show::current_screen,
+    fandhe_egui_proxy::device::deep_link::deep_link_show_effect,
+    effect
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_preview" => fandhe_core::screens::file_preview_show::current_screen,
     fandhe_egui_proxy::device::file_preview::file_preview_effect,
     effect
