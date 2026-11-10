@@ -2308,6 +2308,8 @@ public class MainActivity extends GameActivity {
         if (WebAuthSessionHelper.isCallback(intent)) {
             return;
         }
+        // https の App Links は deep-link 受信箱へ、それ以外（fandhe://・http）は url-scheme へ（Issue #1279）。
+        if (DeepLinkHelper.deliver(intent)) return;
         nativeOnUrlSchemeReceived(intent.getDataString());
     }
 

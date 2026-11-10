@@ -50,6 +50,7 @@ REQ-11 受け入れ基準「単一コマンドから Android `.aab`（開発用�
 | `ANDROID_MIN_API` | `24`（`versions.env`） | cargo-ndk `--platform` フラグに渡す Android 最小 API レベル |
 | `FANDHE_ANDROID_PROFILE` | `release`（`build-aab.sh` のみ） | `release` のみ対応。デバッグ署名鍵付きの `bundleDebug` を既定経路にしないための意図的な制限（security.md A05 対策） |
 | `FANDHE_ANDROID_ABIS` | `"arm64-v8a armeabi-v7a x86_64"`（`build-aab.sh` のみ、空白区切り） | cargo-ndk へ渡す ABI 一覧。同じ一覧が `-PfandheAndroidAbis` として Gradle 側の `ndk.abiFilters` にも反映される |
+| `FANDHE_ANDROID_DEEP_LINK_HOST` | 未設定 | ディープリンク（App Links）で受ける https のホスト。設定時だけ `autoVerify` の intent-filter を manifest に重ね、Rust の許可ホストにも使う。未設定なら filter なし・URL は全件拒否。形式が不正ならビルド失敗 |
 
 `FANDHE_ANDROID_KEYSTORE` / `FANDHE_ANDROID_KEYSTORE_PASSWORD` / `FANDHE_ANDROID_KEY_ALIAS` /
 `FANDHE_ANDROID_KEY_PASSWORD`（`build-aab.sh` / `verify-aab-install.sh` 共通の

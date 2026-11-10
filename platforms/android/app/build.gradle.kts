@@ -158,6 +158,25 @@ android {
     }
 }
 
+// ディープリンク（App Links、Issue #1279）。許可ホストはビルド時の環境変数
+// FANDHE_ANDROID_DEEP_LINK_HOST で渡す（Rust 側 `option_env!` も同じ変数を読む。値は書かない）。
+// 設定時だけ src/deeplink/AndroidManifest.xml（autoVerify の https intent-filter）を重ねる。
+// 未設定なら filter を出さない（host なしの https 宣言は全 https を受けるため）。形式の正は
+// `fandhe_device::deep_link::validate_host`。ずれても Rust が拒否する側（fail-closed）に倒れる。
+// 不正な形式は XML への注入を避けるためビルドを止める（値はメッセージに出さない）。
+val deepLinkHost: String? = System.getenv("FANDHE_ANDROID_DEEP_LINK_HOST")?.takeIf { it.isNotEmpty() }
+if (deepLinkHost != null) {
+    if (!Regex("^[a-z0-9-]+(\\.[a-z0-9-]+)*$").matches(deepLinkHost)) {
+        throw GradleException("FANDHE_ANDROID_DEEP_LINK_HOST の形式が不正です")
+    }
+    android.defaultConfig.manifestPlaceholders["fandheDeepLinkHost"] = deepLinkHost
+    androidComponents {
+        onVariants(selector().all()) { variant ->
+            variant.sources.manifests.addStaticManifestFile("src/deeplink/AndroidManifest.xml")
+        }
+    }
+}
+
 // AndroidX 依存のバージョン SSOT（scripts/android/versions.env）を直接読む。
 // KEY="value" 形式の行をパースして参照する（ハードコード複製によるドリフト防止、
 // Issue #579）。キーが見つからない場合は error() でビルドを止める（fail-closed）。
