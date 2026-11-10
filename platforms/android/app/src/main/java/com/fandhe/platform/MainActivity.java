@@ -918,6 +918,18 @@ public class MainActivity extends GameActivity {
         paymentRequestHelper.request(requestId, pay, isReadyToPayJson, paymentDataRequestJson);
     }
 
+    // パスキー（Issue #1280）。実装は `PasskeyHelper`。Rust の `android_passkey.rs` が JNI で呼ぶ
+    // （`passkeyRandom` は同期、`requestPasskey` は結果を `nativeOnPasskeyResult` で返す）。
+    private final PasskeyHelper passkeyHelper = new PasskeyHelper(this);
+
+    byte[] passkeyRandom(int len) {
+        return PasskeyHelper.random(len);
+    }
+
+    void requestPasskey(long requestId, boolean register, String requestJson) {
+        passkeyHelper.request(requestId, register, requestJson);
+    }
+
     // アプリ内ブラウザ（Issue #703）。実装は `InAppBrowserHelper`。
     // Rust の `android_in_app_browser.rs` が JNI で呼ぶ。
     private final InAppBrowserHelper inAppBrowserHelper = new InAppBrowserHelper(this);
@@ -5005,6 +5017,7 @@ public class MainActivity extends GameActivity {
         inAppBrowserHelper.onDestroy();
         companionDeviceHelper.onDestroy();
         paymentRequestHelper.onDestroy();
+        passkeyHelper.onDestroy();
         pedometerHelper.onDestroy();
         healthDataHelper.onDestroy();
         translationHelper.onDestroy();

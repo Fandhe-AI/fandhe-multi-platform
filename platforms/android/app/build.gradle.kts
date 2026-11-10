@@ -232,6 +232,11 @@ dependencies {
     // activity-recognition は遷移 API（`ActivityRecognition`）、document-scan は ML Kit Document Scanner、
     // payment-request は Google Pay API（`PaymentsClient`）を直接 import する予定のため明示依存にする
     // （バージョン選定根拠は versions.env の PLAY_SERVICES_* コメント参照）。
+    // passkey-signin は Credential Manager（`CredentialManager`）を直接 import するため明示依存にする。
+    // API 34 未満は credentials-play-services-auth が Play services 経由で実体を提供する
+    // （バージョン選定根拠は versions.env の CREDENTIALS_VERSION コメント参照）。
+    implementation("androidx.credentials:credentials:${androidVersion("CREDENTIALS_VERSION")}")
+    implementation("androidx.credentials:credentials-play-services-auth:${androidVersion("CREDENTIALS_VERSION")}")
     implementation("com.google.android.gms:play-services-location:${androidVersion("PLAY_SERVICES_LOCATION_VERSION")}")
     implementation("com.google.android.gms:play-services-wallet:${androidVersion("PLAY_SERVICES_WALLET_VERSION")}")
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:${androidVersion("PLAY_SERVICES_MLKIT_DOCUMENT_SCANNER_VERSION")}")

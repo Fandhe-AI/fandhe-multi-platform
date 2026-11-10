@@ -8,7 +8,9 @@
 //!   pull 型 [`bridge`]（`RequestSlot` の facade）で毎フレーム反映する。実装は
 //!   `windows_passkey::implementation()`（#343 で実装済み。**dispatch はここで最終形にしてあり、
 //!   後続 issue は OS 別モジュールだけを埋める**）
-//! - macOS / Linux / iOS / Android: 対応表で保留または非対応のため、同期で `UnsupportedPasskey`
+//! - Android（#1280）: Credential Manager はコールバック型のため、`Passkey` trait は実装せず、
+//!   `android_passkey::begin` が JNI で依頼して結果を同じ [`bridge`] へ [`drive_callback`] が毎フレーム反映する
+//! - macOS / Linux / iOS: 対応表で保留または非対応のため、同期で `UnsupportedPasskey`
 //!   を呼び「使えない」を表示する。Web は `fandhe-web-dom`（#344）
 
 use fandhe_core::screens::passkey_signin::{
@@ -53,10 +55,13 @@ fn to_outcome(result: Result<PasskeyOutcome, DeviceError>) -> Result<CoreOutcome
     }
 }
 
-/// ワーカースレッドと UI スレッドの橋渡し（Windows、pull 型、`RequestSlot` の facade）。
-/// 他機能とは共有しない本機能専用の [`SLOT`](bridge::SLOT)。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+/// ワーカースレッド・OS コールバックと UI スレッドの橋渡し（Windows・Android、pull 型、
+/// `RequestSlot` の facade）。他機能とは共有しない本機能専用の [`SLOT`](bridge::SLOT)。
+#[cfg(any(target_os = "windows", target_os = "android", test))]
+#[cfg_attr(
+    not(any(target_os = "windows", target_os = "android")),
+    allow(dead_code)
+)]
 pub(crate) mod bridge {
     use fandhe_core::screens::passkey_signin::CoreOutcome;
     use fandhe_device::passkey::PasskeyOutcome;
@@ -78,6 +83,72 @@ pub(crate) mod bridge {
     pub(crate) fn deliver(request_id: u64, result: Result<PasskeyOutcome, DeviceError>) -> bool {
         SLOT.deliver(request_id, super::to_outcome(result))
     }
+
+    /// Activity 再生成直後に呼ぶ。保留中の要求は復元せず破棄し、旧 `request_id` の完了を無視させる。
+    #[cfg(target_os = "android")]
+    pub(crate) fn reset() {
+        SLOT.reset()
+    }
+}
+
+/// `android_main` から呼ぶ。slot と `android_passkey` の保留を捨てる（Java 側は `onDestroy` で追跡を外し済み）。
+#[cfg(target_os = "android")]
+pub(crate) fn reset_pending_tracking() {
+    bridge::reset();
+    super::android_passkey::reset();
+}
+
+/// Android 版の effect ドライバ本体。`begin` が `Err` なら依頼自体の失敗としてその場で結果を置く
+/// （RP ID 未設定・不正は `Unsupported`、OS を呼ばずに「使えない」になる）。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+fn drive_callback(
+    state: &PasskeySigninState,
+    sender: &CompletionSender<PasskeySigninState>,
+    slot: &'static crate::device::request_slot::RequestSlot<bridge::Outcome>,
+    begin: fn(u64, PasskeyOp) -> Result<(), DeviceError>,
+) {
+    use fandhe_core::screens::passkey_signin::{finish, mark_running, PasskeyPhase};
+
+    if let Some(view) = take_request(state) {
+        // `mark_running` の反映前に次フレームが同じ要求を観測しても、二重に OS の UI を出さない。
+        if slot.snapshot().is_some() {
+            return;
+        }
+        let _ = sender.send(Box::new(mark_running));
+        let request_id = slot.begin();
+        if let Err(e) = begin(request_id, op_of(view.action)) {
+            slot.deliver(request_id, to_outcome(Err(e)));
+        }
+        return;
+    }
+    if state.phase != PasskeyPhase::Running {
+        return;
+    }
+    let generation = state.generation;
+    super::request_slot::poll_and_finish(
+        slot,
+        sender,
+        |_request_id| {},
+        move |s: &mut PasskeySigninState, outcome| {
+            // 反映できたとき（`Idle` へ戻っていないとき）だけ `true` を返す。
+            if s.phase != PasskeyPhase::Idle {
+                finish(s, generation, outcome);
+                true
+            } else {
+                false
+            }
+        },
+    );
+}
+
+/// `registry.rs` から配線される effect ドライバ（Android: pull 型 bridge）。
+#[cfg(target_os = "android")]
+pub fn passkey_signin_effect(
+    state: &PasskeySigninState,
+    sender: &CompletionSender<PasskeySigninState>,
+) {
+    drive_callback(state, sender, &bridge::SLOT, super::android_passkey::begin);
 }
 
 /// Windows 版の effect ドライバ。要求を観測したらワーカーで OS の UI を出し、保留中は毎フレーム結果を拾う。
@@ -129,8 +200,9 @@ pub fn passkey_signin_effect(
     );
 }
 
-/// 同期経路（macOS・Linux・iOS・Android）: [`Passkey`] を呼んで結果を反映する。
-#[cfg(not(target_os = "windows"))]
+/// 同期経路（macOS・Linux・iOS）: [`Passkey`] を呼んで結果を反映する。
+#[cfg(any(not(any(target_os = "windows", target_os = "android")), test))]
+#[cfg_attr(any(target_os = "windows", target_os = "android"), allow(dead_code))]
 fn drive_sync(
     state: &PasskeySigninState,
     sender: &CompletionSender<PasskeySigninState>,
@@ -149,9 +221,9 @@ fn drive_sync(
     }));
 }
 
-/// `registry.rs` から配線される effect ドライバ（Windows 以外）。保留・非対応の OS では
+/// `registry.rs` から配線される effect ドライバ（Windows・Android 以外）。保留・非対応の OS では
 /// 常に「使えない」を表示する。
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "windows", target_os = "android")))]
 pub fn passkey_signin_effect(
     state: &PasskeySigninState,
     sender: &CompletionSender<PasskeySigninState>,
@@ -217,7 +289,84 @@ mod tests {
         bridge::SLOT.clear(id);
     }
 
-    #[cfg(not(target_os = "windows"))]
+    mod callback_path {
+        use super::*;
+        use crate::device::request_slot::RequestSlot;
+        use fandhe_core::screens::passkey_signin as screen;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        /// 独立 slot で 1 フレーム進め、送られた更新を状態へ適用する。
+        fn frame(
+            s: &mut PasskeySigninState,
+            slot: &'static RequestSlot<bridge::Outcome>,
+            begin: fn(u64, PasskeyOp) -> Result<(), DeviceError>,
+        ) {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let sender = crate::app::egui_sender(tx, egui::Context::default());
+            drive_callback(s, &sender, slot, begin);
+            while let Ok(apply) = rx.try_recv() {
+                apply(s);
+            }
+        }
+
+        static CALLS: AtomicUsize = AtomicUsize::new(0);
+        fn ok_begin(_id: u64, _op: PasskeyOp) -> Result<(), DeviceError> {
+            CALLS.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        fn unsupported_begin(_id: u64, _op: PasskeyOp) -> Result<(), DeviceError> {
+            Err(DeviceError::Unsupported("passkey"))
+        }
+        fn failing_begin(_id: u64, _op: PasskeyOp) -> Result<(), DeviceError> {
+            Err(DeviceError::Internal("passkey failed"))
+        }
+
+        #[test]
+        fn accepted_request_runs_then_delivered_result_is_applied_once() {
+            static SLOT: RequestSlot<bridge::Outcome> = RequestSlot::new();
+            let mut s = PasskeySigninState::default();
+            screen::sign_in(&mut s);
+            frame(&mut s, &SLOT, ok_begin);
+            assert_eq!(s.phase, screen::PasskeyPhase::Running);
+            let (id, _) = SLOT.snapshot().expect("begin 済み");
+            // 保留中に再度観測しても begin は二度呼ばれない。
+            let before = CALLS.load(Ordering::SeqCst);
+            frame(&mut s, &SLOT, ok_begin);
+            assert_eq!(CALLS.load(Ordering::SeqCst), before);
+            assert!(SLOT.deliver(id, to_outcome(Ok(PasskeyOutcome::NotAllowed))));
+            frame(&mut s, &SLOT, ok_begin);
+            assert_ne!(s.phase, screen::PasskeyPhase::Running);
+            assert!(SLOT.snapshot().is_none());
+        }
+
+        #[test]
+        fn begin_error_shows_unsupported_or_failure() {
+            static SLOT_U: RequestSlot<bridge::Outcome> = RequestSlot::new();
+            let mut s = PasskeySigninState::default();
+            screen::register(&mut s);
+            frame(&mut s, &SLOT_U, unsupported_begin);
+            frame(&mut s, &SLOT_U, unsupported_begin);
+            assert_eq!(s.status, screen::UNSUPPORTED_STATUS);
+            assert!(s.registered.is_none());
+
+            static SLOT_F: RequestSlot<bridge::Outcome> = RequestSlot::new();
+            let mut s = PasskeySigninState::default();
+            screen::sign_in(&mut s);
+            frame(&mut s, &SLOT_F, failing_begin);
+            frame(&mut s, &SLOT_F, failing_begin);
+            assert!(s.status.is_empty() && s.error.starts_with(screen::FAILED_PREFIX));
+        }
+
+        #[test]
+        fn result_after_reset_is_dropped() {
+            static SLOT: RequestSlot<bridge::Outcome> = RequestSlot::new();
+            let id = SLOT.begin();
+            SLOT.reset();
+            assert!(!SLOT.deliver(id, to_outcome(Ok(PasskeyOutcome::NotAllowed))));
+        }
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "android")))]
     mod sync_path {
         use super::*;
         use fandhe_core::screens::passkey_signin as screen;
