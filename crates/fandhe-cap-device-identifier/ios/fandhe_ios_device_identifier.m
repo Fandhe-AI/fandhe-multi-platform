@@ -2,7 +2,7 @@
 // （IDFV）を同期で 1 回読み、NUL 終端の UTF-8 として呼び出し元のバッファへ書く。
 // 広告 ID（IDFA）は読まず、権限・usage description・privacy manifest は要らない。
 //
-// `src/device/ios_device_identifier.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
+// `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
 // feature `device` 有効時にのみコンパイルする（Foundation・UIKit はリンク済み）。
 //
 // 契約:

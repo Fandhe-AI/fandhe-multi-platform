@@ -4,7 +4,7 @@
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは
-//! `device/device_identifier.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する
+//! `fandhe-cap-device-identifier` の `driver.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する
 //! （`device_info_show.rs` と同型。読み取りは全 OS で同期のため読み取り中の相は置かない）。
 //!
 //! 全対象 OS の文言・状態をここで確定済みで、後続の OS 実装（#904）は本画面を触らない。

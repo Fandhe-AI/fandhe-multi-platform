@@ -72,7 +72,7 @@ impl DeviceIdentifier for IosDeviceIdentifier {
     }
 }
 
-/// iOS の `DeviceIdentifier` 実装を返す（`device/device_identifier.rs` の dispatch から呼ばれる）。
+/// iOS の `DeviceIdentifier` 実装を返す（`driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "ios")]
 pub(crate) fn implementation() -> Box<dyn DeviceIdentifier> {
     Box::new(IosDeviceIdentifier)

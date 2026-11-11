@@ -12,7 +12,7 @@
 //!
 //! - [`IdentifierRead::Identifier`]: OS の値
 //! - [`IdentifierRead::NotYetAvailable`]: iOS の `identifierForVendor` が nil（ロック直後など）。失敗にしない
-//! - `Err(DeviceIdentifierError::Internal(..))`: Android の null・空・例外、JNI 失敗、iOS の空文字
+//! - `Err(DeviceIdentifierError::Internal)`: Android の null・空・例外、JNI 失敗、iOS の空文字
 //! - `Err(DeviceIdentifierError::Unsupported)`: 非対応 OS と実装前のスタブ
 //!
 //! キャンセルと権限ダイアログの経路は無い。

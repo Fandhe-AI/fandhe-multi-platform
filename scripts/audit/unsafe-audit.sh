@@ -86,7 +86,10 @@ has_forbid_attr() {
   # cfg_attr は複数行に分かれるため、コメント行を除いた全体から探す。
   local body
   body="$(grep -vE '^[[:space:]]*//' -- "$1" || true)"
-  [[ "${body}" == *'forbid(unsafe_code)'* ]]
+  # 単独の #![forbid(..)]、または not(..) 条件つき cfg_attr（他 OS の forbid を保つ形）だけ通す。
+  local flat
+  flat="$(printf '%s' "${body}" | tr -d '[:space:]')"
+  [[ "${flat}" == *'#![forbid(unsafe_code)]'* || "${flat}" =~ cfg_attr\(not\(.*\),forbid\(unsafe_code\)\) ]]
 }
 
 is_forbid_exempt() {
