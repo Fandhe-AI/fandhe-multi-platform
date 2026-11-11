@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   checkId, stemOf, pascalOf, moveTargets, rewriteSource, usedErrorVariants, unmappedVariants,
-  renderErrorRs, replaceBlock, featureLines, gradleLines,
+  renderErrorRs, replaceBlock, featureLines, gradleLines, renderUnsafeAttr, renderBuildRs,
 } from "./migrate-capability.mjs";
 
 test("checkId: 不正な id を拒む", () => {
@@ -84,4 +84,31 @@ test("gradleLines: java と res がある分だけ出す", () => {
     'java.srcDirs("../../../crates/fandhe-cap-a/android/java")',
     'res.srcDirs("../../../crates/fandhe-cap-b/android/res")',
   ]);
+});
+
+test("rewriteSource: --module で id と違う stem の契約パスも書き換える", () => {
+  assert.equal(
+    rewriteSource("use fandhe_device::text_scale::TextScale;", "dynamic-type", "text_scale"),
+    "use crate::contract::TextScale;",
+  );
+});
+
+test("renderUnsafeAttr: OS 1 つは not(target_os)、2 つ以上は not(any(..))（unsafe-audit.sh の has_forbid_attr が通す形）", () => {
+  assert.equal(renderUnsafeAttr([]), "#![forbid(unsafe_code)]");
+  const one = renderUnsafeAttr(["ios"]);
+  assert.ok(one.includes('#![cfg_attr(not(target_os = "ios"), forbid(unsafe_code))]'));
+  assert.ok(one.includes('#![cfg_attr(target_os = "ios", deny(unsafe_code))]'));
+  assert.ok(!one.includes("any("));
+  assert.ok(renderUnsafeAttr(["ios", "android"]).includes('not(any(target_os = "ios", target_os = "android"))'));
+});
+
+test("renderBuildRs: .m は置き場の OS でだけ、その OS の framework でコンパイルする", () => {
+  const mac = renderBuildRs(["macos/fandhe_macos_x.m"]);
+  assert.ok(mac.includes("if target_is_macos() {"));
+  assert.ok(mac.includes('compile_objc("macos/fandhe_macos_x.m", &["AppKit", "Foundation"]);'));
+  assert.ok(!mac.includes("target_is_ios") && !mac.includes("UIKit"));
+  const ios = renderBuildRs(["ios/fandhe_ios_x.m"]);
+  assert.ok(ios.includes("if target_is_ios() {") && ios.includes('&["Foundation", "UIKit"]') && !ios.includes("AppKit"));
+  const both = renderBuildRs(["ios/a.m", "macos/b.m"]);
+  assert.ok(both.includes("use fandhe_platform_apple::build::{compile_objc, target_is_ios, target_is_macos};"));
 });

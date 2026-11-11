@@ -58,8 +58,7 @@ export function moveTargets(id, stem) {
 }
 
 /** 移動した Rust ソースの機械的な書き換え。返すのは書き換え後の本文。 */
-export function rewriteSource(src, id) {
-  const stem = stemOf(id);
+export function rewriteSource(src, id, stem = stemOf(id)) {
   const err = `${pascalOf(id)}Error`;
   const rules = [
     [/crate::app::\{CompletionSender, Completion\}/g, "fandhe_runtime::{Completion, CompletionSender}"],
@@ -143,6 +142,27 @@ ${java ? '\n[package.metadata.fandhe.android]\njava = ["android/java"]\n' : ""}
 [lints]
 workspace = true
 `;
+}
+
+/** crate ルートの unsafe 属性。unsafe-audit.sh の has_forbid_attr が通す形（OS 1 つは not(target_os)、2 つ以上は not(any(..))）に合わせる。 */
+export function renderUnsafeAttr(oses) {
+  if (!oses.length) return "#![forbid(unsafe_code)]";
+  const cfgs = oses.map((o) => `target_os = "${o}"`);
+  const list = cfgs.join(", ");
+  const [off, on] = cfgs.length === 1 ? [`not(${list})`, list] : [`not(any(${list}))`, `any(${list})`];
+  return `// unsafe は OS 実装の FFI・JNI エクスポートに限る（\`// SAFETY:\` を付ける）。該当 OS だけ deny へ緩める。\n#![cfg_attr(${off}, forbid(unsafe_code))]\n#![cfg_attr(${on}, deny(unsafe_code))]`;
+}
+
+/** 移した .m（crate ルートからの相対パス）を、置き場の OS（ios/・macos/・apple/）のときだけコンパイルする build.rs。 */
+export function renderBuildRs(ms) {
+  const cond = { ios: "target_is_ios()", macos: "target_is_macos()", apple: "target_is_ios() || target_is_macos()" };
+  const fw = { ios: '&["Foundation", "UIKit"]', macos: '&["AppKit", "Foundation"]', apple: '&["Foundation", ui_framework()]' };
+  const dirs = Object.keys(cond).filter((d) => ms.some((m) => m.startsWith(`${d}/`)));
+  const imports = ["compile_objc", ...(dirs.includes("apple") ? ["ui_framework"] : []), ...(dirs.includes("macos") || dirs.includes("apple") ? ["target_is_macos"] : []), ...(dirs.includes("ios") || dirs.includes("apple") ? ["target_is_ios"] : [])].sort();
+  const body = dirs
+    .map((d) => `    if ${cond[d]} {\n${ms.filter((m) => m.startsWith(`${d}/`)).map((m) => `        compile_objc("${m}", ${fw[d]});`).join("\n")}\n    }`)
+    .join("\n");
+  return `//! ObjC 実装のコンパイル。コンパイルとリンクの手順は \`fandhe-platform-apple\`（feature \`build\`）の helper に集約している。\n//! framework の宣言は \`Cargo.toml\` の \`[package.metadata.fandhe.ios]\`（macOS は \`.macos\`）と一致させる。\n\nuse fandhe_platform_apple::build::{${imports.join(", ")}};\n\nfn main() {\n${body}\n}\n`;
 }
 
 /** n 番目の目印（BEGIN/END fandhe-cap）の間を makeLines(インデント) で置き換える。目印が無ければ例外。 */
@@ -274,17 +294,14 @@ function scaffold(R, id, stem, dry) {
     const src = read(R, t);
     usedErrorVariants(src).forEach((v) => variants.add(v));
     if (/\bunsafe\b/.test(src.replace(/\/\/.*$/gm, ""))) unsafeOs.add(t.match(/src\/([a-z]+)\.rs$/)?.[1] ?? "android");
-    writeFileSync(join(R, t), rewriteSource(src, id));
+    writeFileSync(join(R, t), rewriteSource(src, id, stem));
   }
   const has = (re) => moves.some(([, t]) => re.test(t));
   writeFileSync(join(R, crate, "Cargo.toml"), renderCargoToml(id, { android: has(/\/src\/android\.rs$/), apple: has(/\.m$/), java: has(/\.java$/) }));
   writeFileSync(join(R, crate, "src/error.rs"), renderErrorRs(id, [...variants]));
   if (has(/\.m$/)) {
     const ms = moves.filter(([, t]) => t.endsWith(".m")).map(([, t]) => t.slice(crate.length + 1));
-    writeFileSync(
-      join(R, crate, "build.rs"),
-      `//! ObjC 実装のコンパイル。コンパイルとリンクの手順は \`fandhe-platform-apple\`（feature \`build\`）の helper に集約している。\n//! framework の宣言は \`Cargo.toml\` の \`[package.metadata.fandhe.ios]\` と一致させる。\n\nuse fandhe_platform_apple::build::{compile_objc, target_is_ios};\n\nfn main() {\n    if target_is_ios() {\n${ms.map((m) => `        compile_objc("${m}", &["Foundation", "UIKit"]);`).join("\n")}\n    }\n}\n`,
-    );
+    writeFileSync(join(R, crate, "build.rs"), renderBuildRs(ms));
   }
   // mod の cfg は旧 device.rs の宣言に付いていた属性をそのまま使う。
   const deviceRs = existsSync(join(R, "crates/fandhe-egui-proxy/src/device.rs")) ? read(R, "crates/fandhe-egui-proxy/src/device.rs").split("\n") : [];
@@ -295,10 +312,7 @@ function scaffold(R, id, stem, dry) {
     for (let k = i - 1; i >= 0 && k >= 0 && /^\s*(#\[|\/\/\/)/.test(deviceRs[k]); k--) if (deviceRs[k].trim().startsWith("#[")) attrs.unshift(deviceRs[k].trim());
     modLines.push(...(attrs.length ? attrs : [`#[cfg(target_os = "${os}")]`]), `mod ${os};`);
   }
-  const osCfg = [...unsafeOs].map((o) => `target_os = "${o}"`).join(", ");
-  const unsafeAttr = unsafeOs.size
-    ? `// unsafe は OS 実装の FFI・JNI エクスポートに限る（\`// SAFETY:\` を付ける）。該当 OS だけ deny へ緩める。\n#![cfg_attr(not(any(${osCfg})), forbid(unsafe_code))]\n#![cfg_attr(any(${osCfg}), deny(unsafe_code))]`
-    : "#![forbid(unsafe_code)]";
+  const unsafeAttr = renderUnsafeAttr([...unsafeOs]);
   writeFileSync(
     join(R, crate, "src/lib.rs"),
     `//! ${id} の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。TODO: 役割・呼び出し元・守る範囲 / 守らない範囲を書く。\n//!\n//! 契約（\`contract\`）・失敗の種類（\`error\`）・effect ドライバ（\`driver\`）・OS 実装を 1 つに集める。\n//! 画面の状態型を参照してよいのは \`driver\` だけ。入口 \`platform_${stem}()\` は状態型に依存しないため、\n//! フレームワークの外のアプリも使える。\n\n${unsafeAttr}\n\nmod contract;\nmod driver;\nmod error;\n${modLines.join("\n")}\n\npub use contract::*;\npub use driver::*;\npub use error::${pascalOf(id)}Error;\n`,
