@@ -54,6 +54,14 @@ bash scripts/audit/unsafe-audit.sh
 3. 各クレートの `src/` `tests/` `examples/` `benches/` 配下、および crate root 直下の `build.rs` から
    `unsafe` トークンを検出して一覧にする（コメント行は除く）。件数は参考値で、判定には使わない。
 
+   `fandhe-cap-*`（機能 crate）は `FORBID_EXEMPT_CRATES` に載せず、`has_forbid_attr` で厳格に判定する。
+   通す形は、行頭の内側属性で次のいずれか（コメントは `//`・`/* */` とも除いた上で、rustfmt の折り返しは許す）。
+   `#![forbid(unsafe_code)]`、または `#![cfg_attr(not(target_os = "X"), forbid(unsafe_code))]`
+   / `#![cfg_attr(not(any(target_os = "X", target_os = "Y", ..)), forbid(unsafe_code))]`。
+   後者 2 つは同じ条件の `#![cfg_attr(<条件>, deny(unsafe_code))]` が同じファイルに要る。
+   feature 条件・外側属性 `#[..]`・コメント内の記述は「適用済み」にしない。自己チェックは
+   `scripts/audit/tests/has-forbid-attr-test.sh`（Issue #1183）。
+
 違反（exit 1）は forbid の未適用のみ。macOS 標準の BSD ツールでも最後まで走る（#1264）。
 
 ### 3.2 SAFETY の検査（clippy）
@@ -136,6 +144,7 @@ cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown -- -D warnings
 | `fandhe-platform-web` | 適用済み（`crates/fandhe-platform-web/src/lib.rs`、`#![forbid(unsafe_code)]`、TASK-21.4 / Issue #1185） | 0 件 | 該当なし | 合格 |
 | `fandhe-platform-windows` | 未適用（`FORBID_EXEMPT_CRATES` により免除。クレートルートは `#![deny(unsafe_code)]`、`ComInit` の 2 呼び出しのみ `unsafe` を許容。Windows 以外ではクレート全体が `cfg` で空） | 2 件（`ComInit::new` の `CoInitializeEx` と `Drop` の `CoUninitialize`） | 2 件とも直前に `// SAFETY:` コメントあり | Issue #1184 追加分 |
 | `fandhe-cap-share-receive` | 未適用（`FORBID_EXEMPT_CRATES` により免除。クレートルートは Android・macOS のみ `deny(unsafe_code)` へ緩め、他の OS では `forbid(unsafe_code)` を保つ。`fandhe-egui-proxy` の `device/android_share_receive.rs`・`device/macos_share_receive.rs` から移した。TASK-21.3 / Issue #1173） | 5 件（`src/android.rs` の JNI 実体 `#[unsafe(no_mangle)]` 1、`src/macos.rs` の `unsafe extern "C"` 宣言 1 + `register` 内の呼び出し 1 + `#[unsafe(no_mangle)]` 1 + `std::slice::from_raw_parts` 1） | 5 件とも直前に `// SAFETY:` コメントまたは `# Safety` あり | スクリプトで確認する |
+| `fandhe-cap-device-identifier` | 規則で適用（`fandhe-cap-*` は `FORBID_EXEMPT_CRATES` に載せず、クレートルートの `forbid(unsafe_code)` 属性（`cfg_attr` 可）の有無で判定する。iOS のみ `deny(unsafe_code)` へ緩め、他の OS では `forbid` を保つ。Issue #1183） | 3 件（`src/ios.rs` の `unsafe extern "C"` 宣言 1 + 呼び出し 1。Android は JNI を `with_activity_class` に任せ `unsafe` を持たない。移行前の Android 2 件は消えた） | 直前に `// SAFETY:` コメントあり | 合格 |
 | `fandhe-winit-ime` | 適用済み（`FORBID_EXEMPT_CRATES` 登録済みだが、`grep -qF` によるコメント一致でスクリプトは「適用済み」と判定する。クレートルートの実属性は `#![deny(unsafe_code)]`、`macos_secure_input` モジュールのみ `unsafe` を許容） | 3 件（`macos_secure_input.rs` の `EnableSecureEventInput`/`DisableSecureEventInput`/`IsSecureEventInputEnabled` 呼び出し。macOS 以外のターゲットではモジュール自体が `cfg` で除外されるため検出されない） | 3 件とも直前に `// SAFETY:` コメントあり | 合格 |
 
 **集計（Issue #790 の Android 実装と Issue #791 の iOS 実装を統合した時点の再監査、2026-09-06）**:

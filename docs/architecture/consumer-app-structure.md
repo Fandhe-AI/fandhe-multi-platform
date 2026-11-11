@@ -45,7 +45,7 @@ crates.io では、公開する crate の通常依存も公開が要るためで
 | `fandhe-winit-ime` | 入口から到達しない。第 2 バックエンド着手時に判断 | しない | 既存 |
 | `fandhe-swiftui-bridge` | watchOS / visionOS 用。入口から到達しない | しない | 既存 |
 | `fandhe-egui-proxy` | 上記へ分解して消す | 消滅 | #1164〜#1168・#1194 |
-| `fandhe-device` | trait は各機能 crate へ移す。共有コードは #1183 で決める | 消滅見込み | #1183 |
+| `fandhe-device` | 機能 crate へ移した後に残る、OS に触れない共有の型・検証・定数・符号化（宣言は持たない）。縮小して残す。名前は #1215 で決める。残りの整理は #1194 | する（機能 crate の通常依存になるため） | #1183・#1194 |
 
 依存は `fandhe-core` へ向かう一方向です。
 
@@ -154,17 +154,44 @@ graph TD
   - watchOS / visionOS は REQ-3 の別構成のままです（`req3-implementation-policy.md`）
   - IME は egui 経由の迂回を使います（`ime-known-constraints.md`）
 
-## 8. 未決事項
+## 8. 機能 crate が共有するコードの扱い（#1183）
+
+先行 5 機能の実績に合わせ、後から機械的に動かし直せる側を選びました。移す手順は
+`docs/operations/capability-crate-migration.md`、道具は `scripts/device/migrate-capability.mjs` です。
+
+| 種類 | 行き先 |
+|------|--------|
+| 1 機能だけが使う契約・型 | その機能 crate |
+| エラー型 | 共有しない。crate ごとに `<Pascal>Error` を持ち、使うバリアントだけを写す。表示文言は `DeviceError` と同じ書き出しにしてテストで固定する |
+| 他機能の OS 機能を実際に使う（例: `geofence` → `location`、`background_task` → `storage`） | 機能 crate から機能 crate へ依存する。依存先の宣言も一緒に入るため、権限の実態と合う |
+| OS に触れない型・検証・定数・符号化を 2 機能以上が使う（例: `url_scheme`・`photo_picker::PickedPhoto`・`http::check_url`） | `fandhe-device` に残す。機能 crate 同士で依存させない（使わない機能の権限・コンポーネントが宣言に混ざるため） |
+| OS 層の定型（JNI・main thread・再描画・保存先の解決） | `fandhe-platform-<os>`・`fandhe-runtime` |
+
+- 利用者は `fandhe-device` に直接依存しません。使うのは機能 crate で、共有型は機能 crate が再公開します
+- `fandhe-device` は `forbid(unsafe_code)` を保ち、OS API を呼びません。`DeviceError` の削除と残ったモジュールの整理は #1194 です
+
+### 8.1 画面と effect ドライバの置き場
+
+- 画面の状態機械は `fandhe-core/src/screens/` に残します（`fandhe-web-dom` が同じ型を使うため。移行を挙動の変わらない移動に保ちます）
+- effect ドライバは機能 crate の `src/driver.rs` に置きます。`fandhe_core::screens` を参照してよいのは `driver.rs` だけです。
+  契約と OS 実装は画面の状態型に依存させません
+- 入口 crate `fandhe`（#1199）からは契約だけを再公開し、ドライバは再公開しません
+
+### 8.2 汎用の機能と、フレームワークの外からの使い方
+
+- HTTP・保存・クリップボードも他と同じ 1 機能 1 crate にします（`fandhe-cap-http-get`・`fandhe-cap-local-storage-kv`・`fandhe-cap-clipboard`）
+- 全機能 crate は、画面の状態型に依存しない入口 `pub fn platform_<stem>()` と trait を crate ルートから公開します。
+  フレームワークの外のアプリはこれを使い、effect は自分の状態型で書きます（実例: `fandhe-cap-device-identifier`）
+- 保存先の解決（Android の `data_dir`・iOS の `documents_dir`・デスクトップの既定）は `fandhe-cap-local-storage-kv` が持ちます。
+  他機能は「OS 機能を実際に使う」場合として依存します
+
+## 9. 未決事項
 
 いずれも本書では決めません。担当 issue を併記します。
 
-- `fandhe-device` の共有コードの行き先（#1183）
 - 版の方針（#1224）。0.x の間は全 crate で揃えます。1.0 以降は `fandhe-runtime` の契約を安定させ、
   機能 crate を別々に上げられる形が推し案です
 - 機能と OS ごとの対応水準（#1220）と、公式で保証する範囲（#1221）
-- 端末機能の画面（`fandhe-core/src/screens/`）の置き場（#1165・#1170 系）。camera-capture（#1170）では、画面の状態機械を
-  `fandhe-core` に残しました（`fandhe-web-dom` と flashlight も同じ型を使うため）。契約の型（`Camera`・`Image`・`CameraError`）は
-  `fandhe-device` と共有せず機能 crate 内に置きました（`Image`・`DeviceError` は他機能と共有のため `fandhe-device` に残る）。最終判断は #1183
 - `fandhe-platform-apple` の弱リンク・`-rpath`・clang_rt の届け方（#1168 の後続）。
   `cargo:rustc-link-arg` は、出した package 自身の bin・cdylib・テストにしか効かず、依存元へ伝わりません
   （Cargo の build-scripts 文書の `rustc-link-arg` 節）。`rustc-link-lib` は rlib 経由で伝わります。

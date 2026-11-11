@@ -18,7 +18,7 @@
       "note": "実装済み（#904）。nil は失敗にせず「後で取り直す」、空は失敗、main thread 以外から呼ばれた場合も失敗。同じベンダーのアプリが他に無い状態で全て消すと変わる。nil は再起動後・初回ロック解除前などで返りうる（取り直しは利用者の押し直し）。Xcode のテストビルド・ad-hoc 配布でも変わりうる。ATT は不要（同じ提供元の範囲。他社のアプリ・サイトをまたぐ追跡に組み合わせない）。プライバシー表示の Device ID は端末の外へ送る場合のみ申告対象。",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#889）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_device_identifier.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_device_identifier.m + crates/fandhe-egui-proxy/src/device/device_identifier.rs + crates/fandhe-core/src/screens/device_identifier_show.rs + crates/fandhe-device/src/device_identifier.rs、Issue #904"
+      "impl": "crates/fandhe-cap-device-identifier/src/ios.rs + crates/fandhe-cap-device-identifier/ios/fandhe_ios_device_identifier.m + crates/fandhe-cap-device-identifier/src/driver.rs + crates/fandhe-core/src/screens/device_identifier_show.rs + crates/fandhe-cap-device-identifier/src/contract.rs、Issue #904・#1183"
     },
     "android": {
       "status": "done",
@@ -32,7 +32,7 @@
       "note": "実装済み（#904）。null・空・例外は失敗。Android 8+ は署名鍵・ユーザー・端末の組ごとの値で、同じ署名鍵ならアンインストール・再インストールで変わらない。Android 7（minSdk 24〜25）は署名鍵で分かれず、端末・ユーザーで共通。工場出荷リセット・署名鍵の変更で変わる。Play のポリシー上、広告 ID・個人の機微データと結び付けない。広告 ID は対象外。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#889）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_device_identifier.rs + platforms/android/app/src/main/java/com/fandhe/platform/DeviceIdentifierHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/device_identifier.rs + crates/fandhe-core/src/screens/device_identifier_show.rs + crates/fandhe-device/src/device_identifier.rs、Issue #904"
+      "impl": "crates/fandhe-cap-device-identifier/src/android.rs + crates/fandhe-cap-device-identifier/android/java/com/fandhe/platform/DeviceIdentifierHelper.java + crates/fandhe-cap-device-identifier/src/driver.rs + crates/fandhe-core/src/screens/device_identifier_show.rs + crates/fandhe-cap-device-identifier/src/contract.rs、Issue #904・#1183"
     },
     "macos": {
       "status": "no",

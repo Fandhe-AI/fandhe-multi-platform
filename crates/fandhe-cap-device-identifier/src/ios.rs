@@ -1,8 +1,7 @@
-//! iOS 向けアプリ・端末の識別子実装（Issue #904、親 #181）。`device/device_identifier.rs` の
+//! iOS 向けアプリ・端末の識別子実装（Issue #904、親 #181）。`driver.rs` の
 //! iOS 経路（`platform_device_identifier`）から呼ばれる。`ios/fandhe_ios_device_identifier.m`
-//! （`UIDevice.identifierForVendor`、`build.rs` が iOS ターゲットの feature `device` 有効時に
-//! コンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。dispatch・共通コア画面・`registry.rs` は
-//! 変えない。契約は `fandhe_device::device_identifier`。
+//! （`UIDevice.identifierForVendor`、本 crate の `build.rs` が iOS ターゲットでコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。dispatch・共通コア画面・`registry.rs` は
+//! 変えない。契約は `crate::contract`。
 //!
 //! `.m` の戻り値コードとバッファは [`from_raw`] で契約の値へ写す（ホストでテストできるよう
 //! モジュールは `cfg(any(ios, test))`）。
@@ -13,7 +12,7 @@
 //!
 //! # 再描画・ライフサイクル
 //!
-//! OS コールバックを持たず結果を共有状態へ書く経路が無いため、`crate::ios::request_repaint` は
+//! OS コールバックを持たず結果を共有状態へ書く経路が無いため、`fandhe_runtime::request_repaint` は
 //! 呼ばない。再描画は `drive` の完了通知（`CompletionSender::send`）が起こす。同期の一発読みで
 //! 保留中の要求を持たないので、バックグラウンド遷移などで破棄するものは無い。
 //!
@@ -24,13 +23,13 @@
 //! 実機の目視確認は #889。
 
 #[cfg(target_os = "ios")]
-use fandhe_device::device_identifier::DeviceIdentifier;
-use fandhe_device::device_identifier::{DeviceId, IdentifierRead};
-use fandhe_device::DeviceError;
+use crate::contract::DeviceIdentifier;
+use crate::contract::{DeviceId, IdentifierRead};
+use crate::error::DeviceIdentifierError;
 
 /// `.m` の戻り値コードとバッファを契約の値へ写す。
-fn from_raw(code: i32, buf: &[u8]) -> Result<IdentifierRead, DeviceError> {
-    const FAILED: DeviceError = DeviceError::Internal("device_identifier read");
+fn from_raw(code: i32, buf: &[u8]) -> Result<IdentifierRead, DeviceIdentifierError> {
+    const FAILED: DeviceIdentifierError = DeviceIdentifierError::Internal;
     match code {
         0 => {
             let s = std::ffi::CStr::from_bytes_until_nul(buf)
@@ -46,10 +45,10 @@ fn from_raw(code: i32, buf: &[u8]) -> Result<IdentifierRead, DeviceError> {
 
 #[cfg(target_os = "ios")]
 mod ffi {
-    // SAFETY: `ios/fandhe_ios_device_identifier.m`（`build.rs` が iOS ターゲットの feature `device`
-    // 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
+    // SAFETY: `ios/fandhe_ios_device_identifier.m`（本 crate の `build.rs` が iOS ターゲットで
+    // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_ios_device_identifier_read(out: *mut u8, cap: usize) -> i32;
     }
 
@@ -66,14 +65,14 @@ struct IosDeviceIdentifier;
 
 #[cfg(target_os = "ios")]
 impl DeviceIdentifier for IosDeviceIdentifier {
-    fn read(&self) -> Result<IdentifierRead, DeviceError> {
+    fn read(&self) -> Result<IdentifierRead, DeviceIdentifierError> {
         let mut buf = [0u8; 64];
         let code = ffi::read(&mut buf);
         from_raw(code, &buf)
     }
 }
 
-/// iOS の `DeviceIdentifier` 実装を返す（`device/device_identifier.rs` の dispatch から呼ばれる）。
+/// iOS の `DeviceIdentifier` 実装を返す（`driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "ios")]
 pub(crate) fn implementation() -> Box<dyn DeviceIdentifier> {
     Box::new(IosDeviceIdentifier)
@@ -112,7 +111,7 @@ mod tests {
         for c in [1, 2, 4, 99] {
             assert!(matches!(
                 from_raw(c, &buf(b"x")),
-                Err(DeviceError::Internal(_))
+                Err(DeviceIdentifierError::Internal)
             ));
         }
     }

@@ -58,13 +58,19 @@ declare -a cargo_ndk_args=(
   build
   -p fandhe-core
   -p fandhe-platform-android
-  -p fandhe-cap-document-scan
-  -p fandhe-cap-share-receive
-  -p fandhe-cap-camera-capture
-  -p fandhe-cap-nfc-card-emulation
-  -p fandhe-cap-home-widget
   -p fandhe-render-egui
 )
+# 機能 crate（crates/fandhe-cap-*）はディレクトリから導出する。1 機能ごとの行追加は並列の移行作業で衝突するため。
+cap_found=0
+for cap_dir in "${REPO_ROOT}"/crates/fandhe-cap-*/; do
+  [ -f "${cap_dir}Cargo.toml" ] || continue
+  cargo_ndk_args+=(-p "$(basename "${cap_dir}")")
+  cap_found=1
+done
+if [ "${cap_found}" -eq 0 ]; then
+  echo "[build-android] エラー: crates/fandhe-cap-* が見つからない" >&2
+  exit 1
+fi
 if [ "${RELEASE}" -eq 1 ]; then
   cargo_ndk_args+=(--release)
 fi

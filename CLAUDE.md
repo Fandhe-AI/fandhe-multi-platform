@@ -25,7 +25,7 @@ fandhe-multi-platform/
 │
 ├── crates/
 │   ├── cargo-fandhe/            # 機能宣言（[package.metadata.fandhe]）の検証と統合規則。`cargo fandhe check`（#1160）・`cargo fandhe gen`（#1176、ネイティブ設定の生成）・`cargo fandhe verify-scope`（#1178、選ばなかった機能の混入検査）、forbid(unsafe_code)
-│   ├── fandhe-cap-*/            # 端末機能 1 つにつき 1 crate（契約・OS 別実装・宣言。egui 非依存。現在 camera-capture・document-scan・home-widget・nfc-card-emulation・share-receive、TASK-21.3 / #1170・#1171・#1172・#1173・#1174）
+│   ├── fandhe-cap-*/            # 端末機能 1 つにつき 1 crate（契約・OS 別実装・宣言。egui 非依存。`crates/fandhe-cap-*` を workspace の glob で拾う。移行手順は `docs/operations/capability-crate-migration.md`、TASK-21.3・21.4）
 │   ├── fandhe-core/             # 共通コア（UI DSL・状態管理・AI 型安全 DSL、forbid(unsafe_code)）
 │   │   ├── src/lib.rs           # 役割要約・モジュール地図（ui / state / token / screens）
 │   │   └── src/screens/         # AI が生成した画面モジュールの置き場（`ui/mod.rs` には手を入れない）
@@ -63,7 +63,7 @@ fandhe-multi-platform/
 │   ├── audit/                   # コード品質監査（unsafe-audit.sh）・成果物への未選択機能の混入検査（verify-capability-scope.sh）
 │   ├── build/                   # プラットフォーム横断ビルド・ストア提出パイプライン
 │   ├── ios/                     # iOS シミュレータ向けビルド・実描画確認スクリプト
-│   ├── device/                  # 端末機能の対応表生成・人手確認の issue 操作
+│   ├── device/                  # 端末機能の対応表生成・人手確認の issue 操作・機能 crate への移行ツール（migrate-capability.mjs）
 │   ├── metrics/                 # 行数計測・メモリ計測・バイナリサイズ計測（計測専用 Gradle プロジェクト含む）
 │   ├── pr/                      # PR マージガード（guarded-merge.sh・merge-guard-hook.sh）
 │   ├── web/                     # Web（wasm32）ビルド・検証・性能計測スクリプト
