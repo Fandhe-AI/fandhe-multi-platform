@@ -70,18 +70,24 @@ cd -- "${REPO_ROOT}"
 # fandhe-platform-apple: クレートルートは forbid 属性ではなく `#![deny(unsafe_code)]` を
 # 採用する（`main_thread` モジュールのみ `pthread_main_np` の FFI 宣言と呼び出しで `unsafe` が
 # 不可避なため。fandhe-egui-proxy の `device/ios.rs` から移した 1 組で、TASK-21.2 / Issue #1168）。
-# fandhe-cap-camera-capture: Android・iOS のみ `deny(unsafe_code)` へ緩める（cfg_attr）。Android の JNI エクスポート
-# `#[unsafe(no_mangle)]` 1 関数と iOS の ObjC 呼び出し（FFI）にだけ `#[allow(unsafe_code)]` を付ける（Issue #1170）。
-# fandhe-cap-share-receive: Android・macOS ターゲットのみ `forbid` を `deny` へ緩める
-# （`cfg_attr`）。unsafe は Android の JNI 実体（`#[unsafe(no_mangle)]` 1 関数）と、macOS の
-# FFI 宣言・呼び出し・`from_raw_parts` に限る（共有の受け取り、TASK-21.3 / Issue #1173）。
+# fandhe-cap-*（機能 crate）: 1 機能ごとに本一覧へ足すと並列の移行作業で衝突するため、名前の接頭辞で扱う
+# （Issue #1183）。ただしクレートルートに `#![forbid(unsafe_code)]` か `#![cfg_attr(.., forbid(unsafe_code))]`
+# の属性が必要（コメント行中の言及は数えない）。OS 限定で `deny` へ緩める crate も、他の OS では forbid を保つ。
 # fandhe-gallery: クレートルートは Android のみ `deny(unsafe_code)` で、`android_main` の
 # `#[no_mangle]` 1 関数にだけ `#[allow(unsafe_code)]` を付ける（android-activity の固定シンボルは
 # 最終成果物の cdylib が持つ必要がある。Issue #1165）。
 # fandhe-cap-document-scan: クレートルートは iOS・Android のみ `deny(unsafe_code)`（それ以外の OS は
 # forbid）。iOS の FFI（`ios.rs`）と Android の JNI エクスポート（`android.rs`）にだけ SAFETY 付きで
 # `allow` を付ける（機能 crate に OS 実装を持たせるため。TASK-21.3 / Issue #1171）。
-FORBID_EXEMPT_CRATES=("fandhe-gallery" "fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android" "fandhe-platform-apple" "fandhe-cap-camera-capture" "fandhe-cap-share-receive" "fandhe-cap-document-scan")
+FORBID_EXEMPT_CRATES=("fandhe-gallery" "fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android" "fandhe-platform-apple")
+
+# 機能 crate のクレートルートに forbid の属性行（コメントでない行）があるか。
+has_forbid_attr() {
+  # cfg_attr は複数行に分かれるため、コメント行を除いた全体から探す。
+  local body
+  body="$(grep -vE '^[[:space:]]*//' -- "$1" || true)"
+  [[ "${body}" == *'forbid(unsafe_code)'* ]]
+}
 
 is_forbid_exempt() {
   local target="$1"
@@ -170,7 +176,8 @@ while IFS=$'\t' read -r pkg_name crate_roots crate_dir; do
   crate_forbid_ok=0
   while IFS= read -r -d $'\x1f' root_path || [ -n "${root_path}" ]; do
     [ -z "${root_path}" ] && continue
-    if [ -f "${root_path}" ] && grep -qF '#![forbid(unsafe_code)]' -- "${root_path}"; then
+    if [ -f "${root_path}" ] && { grep -qF '#![forbid(unsafe_code)]' -- "${root_path}" ||
+      { [[ "${pkg_name}" == fandhe-cap-* ]] && has_forbid_attr "${root_path}"; }; }; then
       crate_forbid_ok=1
       echo "  forbid(unsafe_code): 適用済み（${root_path}）"
     fi
