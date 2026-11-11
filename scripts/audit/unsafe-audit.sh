@@ -71,8 +71,8 @@ cd -- "${REPO_ROOT}"
 # 採用する（`main_thread` モジュールのみ `pthread_main_np` の FFI 宣言と呼び出しで `unsafe` が
 # 不可避なため。fandhe-egui-proxy の `device/ios.rs` から移した 1 組で、TASK-21.2 / Issue #1168）。
 # fandhe-cap-*（機能 crate）: 1 機能ごとに本一覧へ足すと並列の移行作業で衝突するため、名前の接頭辞で扱う
-# （Issue #1183）。ただしクレートルートに `#![forbid(unsafe_code)]` か `#![cfg_attr(.., forbid(unsafe_code))]`
-# の属性が必要（コメント行中の言及は数えない）。OS 限定で `deny` へ緩める crate も、他の OS では forbid を保つ。
+# （Issue #1183）。ただしクレートルートに `has_forbid_attr` が通す形の
+# forbid 属性が必要（コメント中の言及は数えない）。OS 限定で `deny` へ緩める crate も、他の OS では forbid を保つ。
 # fandhe-gallery: クレートルートは Android のみ `deny(unsafe_code)` で、`android_main` の
 # `#[no_mangle]` 1 関数にだけ `#[allow(unsafe_code)]` を付ける（android-activity の固定シンボルは
 # 最終成果物の cdylib が持つ必要がある。Issue #1165）。
@@ -81,15 +81,45 @@ cd -- "${REPO_ROOT}"
 # `allow` を付ける（機能 crate に OS 実装を持たせるため。TASK-21.3 / Issue #1171）。
 FORBID_EXEMPT_CRATES=("fandhe-gallery" "fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android" "fandhe-platform-apple")
 
-# 機能 crate のクレートルートに forbid の属性行（コメントでない行）があるか。
+# 機能 crate（fandhe-cap-*）のクレートルートに有効な forbid 属性があるか。
+# 通す形は次の 3 つだけ。いずれも行頭（先頭空白可）の内側属性 `#![...]` で、空白の揺れ
+# （rustfmt の複数行折り返しを含む）は許す。コメント（`//`・入れ子可の `/* */`）は先に除く。
+#   1. `#![forbid(unsafe_code)]`
+#   2. `#![cfg_attr(not(target_os = "X"), forbid(unsafe_code))]`
+#   3. `#![cfg_attr(not(any(target_os = "X", target_os = "Y", ..)), forbid(unsafe_code))]`
+# 2・3 は同じファイルに対の `#![cfg_attr(<同じ条件>, deny(unsafe_code))]` が必要
+# （feature 条件や外側属性 `#[..]` で forbid が外れる形を「適用済み」にしないため。#1183）。
 has_forbid_attr() {
-  # cfg_attr は複数行に分かれるため、コメント行を除いた全体から探す。
-  local body
-  body="$(grep -vE '^[[:space:]]*//' -- "$1" || true)"
-  # 単独の #![forbid(..)]、または not(..) 条件つき cfg_attr（他 OS の forbid を保つ形）だけ通す。
-  local flat
-  flat="$(printf '%s' "${body}" | tr -d '[:space:]')"
-  [[ "${flat}" == *'#![forbid(unsafe_code)]'* || "${flat}" =~ cfg_attr\(not\(.*\),forbid\(unsafe_code\)\) ]]
+  # 行頭が `#![` の属性を、コメントと空白を除いて 1 属性 1 行にする。
+  local attrs
+  attrs="$(awk '
+    { line = $0; out = ""; n = length(line); i = 1
+      while (i <= n) {
+        c2 = substr(line, i, 2)
+        if (depth > 0) { if (c2 == "/*") { depth++; i += 2 } else if (c2 == "*/") { depth--; i += 2 } else i++ }
+        else if (c2 == "/*") { depth++; i += 2 }
+        else if (c2 == "//") break
+        else { out = out substr(line, i, 1); i++ }
+      }
+      gsub(/[ \t\r]+/, "", out)
+      if (acc != "") acc = acc out
+      else if (out ~ /^#!\[/) acc = out
+      if (acc != "" && acc ~ /\]$/) { print acc; acc = "" }
+    }' "$1")"
+  local fb='forbid\(unsafe_code\)'
+  local one='^#!\[cfg_attr\(not\(target_os="([a-z0-9]+)"\),'"${fb}"'\)\]$'
+  local many='^#!\[cfg_attr\(not\(any\((target_os="[a-z0-9]+"(,target_os="[a-z0-9]+")+)\)\),'"${fb}"'\)\]$'
+  local attr
+  while IFS= read -r attr; do
+    if [ "${attr}" = '#![forbid(unsafe_code)]' ]; then
+      return 0
+    elif [[ "${attr}" =~ ${one} ]]; then
+      printf '%s\n' "${attrs}" | grep -qxF "#![cfg_attr(target_os=\"${BASH_REMATCH[1]}\",deny(unsafe_code))]" && return 0
+    elif [[ "${attr}" =~ ${many} ]]; then
+      printf '%s\n' "${attrs}" | grep -qxF "#![cfg_attr(any(${BASH_REMATCH[1]}),deny(unsafe_code))]" && return 0
+    fi
+  done <<< "${attrs}"
+  return 1
 }
 
 is_forbid_exempt() {
@@ -179,8 +209,14 @@ while IFS=$'\t' read -r pkg_name crate_roots crate_dir; do
   crate_forbid_ok=0
   while IFS= read -r -d $'\x1f' root_path || [ -n "${root_path}" ]; do
     [ -z "${root_path}" ] && continue
-    if [ -f "${root_path}" ] && { grep -qF '#![forbid(unsafe_code)]' -- "${root_path}" ||
-      { [[ "${pkg_name}" == fandhe-cap-* ]] && has_forbid_attr "${root_path}"; }; }; then
+    # 機能 crate は厳格な属性判定のみ。他は従来どおり文字列一致（コメント内の一致は免除登録で扱う）。
+    if [ -f "${root_path}" ] && {
+      if [[ "${pkg_name}" == fandhe-cap-* ]]; then
+        has_forbid_attr "${root_path}"
+      else
+        grep -qF '#![forbid(unsafe_code)]' -- "${root_path}"
+      fi
+    }; then
       crate_forbid_ok=1
       echo "  forbid(unsafe_code): 適用済み（${root_path}）"
     fi

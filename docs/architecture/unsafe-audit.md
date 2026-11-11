@@ -54,6 +54,14 @@ bash scripts/audit/unsafe-audit.sh
 3. 各クレートの `src/` `tests/` `examples/` `benches/` 配下、および crate root 直下の `build.rs` から
    `unsafe` トークンを検出して一覧にする（コメント行は除く）。件数は参考値で、判定には使わない。
 
+   `fandhe-cap-*`（機能 crate）は `FORBID_EXEMPT_CRATES` に載せず、`has_forbid_attr` で厳格に判定する。
+   通す形は、行頭の内側属性で次のいずれか（コメントは `//`・`/* */` とも除いた上で、rustfmt の折り返しは許す）。
+   `#![forbid(unsafe_code)]`、または `#![cfg_attr(not(target_os = "X"), forbid(unsafe_code))]`
+   / `#![cfg_attr(not(any(target_os = "X", target_os = "Y", ..)), forbid(unsafe_code))]`。
+   後者 2 つは同じ条件の `#![cfg_attr(<条件>, deny(unsafe_code))]` が同じファイルに要る。
+   feature 条件・外側属性 `#[..]`・コメント内の記述は「適用済み」にしない。自己チェックは
+   `scripts/audit/tests/has-forbid-attr-test.sh`（Issue #1183）。
+
 違反（exit 1）は forbid の未適用のみ。macOS 標準の BSD ツールでも最後まで走る（#1264）。
 
 ### 3.2 SAFETY の検査（clippy）
