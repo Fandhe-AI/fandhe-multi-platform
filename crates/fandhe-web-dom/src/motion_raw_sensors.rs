@@ -2,7 +2,7 @@
 //!
 //! `fandhe_core::screens::motion_raw_sensors_show`（端末依存ゼロ）の画面を
 //! [`super::mount::mount_with_effect`] の effect として駆動する。呼び出し元は `demo.rs` の
-//! エントリポイントと `mount::sweep_mounts`。`MotionRawSensors` trait は `Send + Sync` で JS の
+//! エントリポイントと `mount::release_features`。`MotionRawSensors` trait は `Send + Sync` で JS の
 //! `Closure` を持てないため通さず、core の `apply_reading` / `apply_failure` へ直接流す
 //! （compass / memory_pressure と同じ扱い）。`fandhe-egui-proxy` の wasm canvas 経路は対象外
 //! （`UnsupportedMotionRawSensors` のまま）。
@@ -152,7 +152,7 @@ pub(crate) fn view_same(a: &Option<RawReadingView>, b: &Option<RawReadingView>) 
 #[cfg(target_arch = "wasm32")]
 pub use web::motion_raw_sensors_show_effect;
 
-/// マウント破棄時にリスナーとタイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時にリスナーとタイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

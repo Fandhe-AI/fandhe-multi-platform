@@ -18,7 +18,7 @@
 //!
 //! `mount.rs` は描画のたびに DOM を全再構築するため、`<input>` も作り直される。属性は effect が
 //! 描画のたびに付け直す。属性の変更は `MutationObserver`（`childList` のみ）に拾われないため、
-//! 付け直しが `sweep_mounts` を走らせることはない。`apply` は呼ばないので再描画のループにもならない。
+//! 付け直しが `release_features` を走らせることはない。`apply` は呼ばないので再描画のループにもならない。
 //! 候補が出るかは OS・ブラウザ・SMS の文面しだいで保証しない。
 //!
 //! # 結果の写像（三値）
@@ -198,7 +198,7 @@ mod web {
         }
     }
 
-    /// マウント破棄時（`mount::sweep_mounts` から）に待ち受けを取り消し、記録を解放する。
+    /// マウント破棄時（`mount::release_features` から）に待ち受けを取り消し、記録を解放する。
     pub(crate) fn release_mount(mount_id: u64) {
         HINT_DISPATCHED.with(|h| h.borrow_mut().remove(&mount_id));
         if let Some(e) = WAITS.with(|w| w.borrow_mut().remove(&mount_id)) {
@@ -500,7 +500,7 @@ mod web {
 #[cfg(target_arch = "wasm32")]
 pub use web::otp_input_effect;
 
-/// マウント破棄時に待ち受けを取り消す。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に待ち受けを取り消す。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

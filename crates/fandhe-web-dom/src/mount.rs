@@ -54,116 +54,11 @@ use web_sys::{CompositionEvent, Document, Element, HtmlElement, HtmlInputElement
 use super::dom_tree::{render, DomNode, EventHook, WidgetValueKind};
 use super::ime::{composition_phase_from_event_type, ime_event_from_composition};
 
-/// 型消去した「再レンダリングを 1 回実行する」関数。イベントハンドラが
-/// 状態更新後にこれを呼び出すことで全再構築の再描画をトリガーする。
-type RenderTrigger = Rc<dyn Fn() -> Result<(), JsValue>>;
-
-/// 再描画の直後に呼ばれる effect（モジュール doc「effect フック」節参照）。
-/// 状態を直接は変更できず、結果の書き戻しは [`Applier::apply`] を通す
-/// （`fandhe-egui-proxy::app::EffectFn` と同じ形）。
-pub type WebEffect<S> = fn(&S, &Applier<S>);
-
-/// effect が状態を更新して再描画を起こすためのハンドル。
-///
-/// 非同期処理（`navigator.clipboard` の Promise 等）へ move できるよう [`Clone`] を
-/// 実装する（`Rc` の複製のみで、状態は共有される）。
-pub struct Applier<S> {
-    state: Rc<RefCell<S>>,
-    render: RenderTrigger,
-    mount_id: u64,
-}
-
-impl<S> Clone for Applier<S> {
-    fn clone(&self) -> Self {
-        Self {
-            state: self.state.clone(),
-            render: self.render.clone(),
-            mount_id: self.mount_id,
-        }
-    }
-}
-
-impl<S: 'static> Applier<S> {
-    /// このハンドルが属するマウントの識別子（[`mount_with_effect`] 呼び出しごとに一意）。
-    ///
-    /// effect は `fn` ポインタで自前の状態を持てないため、「この画面が処理中か」を
-    /// effect 側で覚えたい場合はこの ID をキーにする。同じページへ同じ画面を 2 つ
-    /// マウントしたときに、一方の飛行中状態がもう一方を止めてしまうのを防ぐ
-    /// （codex-review 指摘 P1、PR #860。`fandhe-web-dom` の `clipboard` モジュール参照）。
-    pub fn mount_id(&self) -> u64 {
-        self.mount_id
-    }
-
-    /// `update` で状態を書き換えてから再描画する。
-    ///
-    /// 再描画は `state` を不変借用するため、`update` の可変借用を先に落としてから
-    /// 呼ぶ（同一スコープで重ねると `RefCell` が実行時 panic する）。再描画の失敗は
-    /// ブラウザコンソールへ出すに留める（panic を API 契約にしない、coding-rust.md）。
-    ///
-    /// effect は `&S`（借用中の状態）を受け取るため、effect から**同期的に**本メソッドを
-    /// 呼ぶと可変借用が取れない。その場合は panic させず、マイクロタスクへ退避して
-    /// 借用が落ちた後に適用する（`try_borrow_mut` の失敗分岐）。これにより
-    /// 「apply は非同期継続からのみ呼ぶ」という暗黙の契約を呼び出し側に強制せずに済む。
-    pub fn apply(&self, update: impl FnOnce(&mut S) + 'static) {
-        // 破棄済みマウント（同じ root へ再マウント・root の DOM 離脱）への書き戻しは捨てる。
-        // 飛行中の非同期継続が新しい画面を旧画面で上書きしないため（契約表 1・2、PR #1105）。
-        if !is_live(self.mount_id) {
-            return;
-        }
-        let Ok(mut state) = self.state.try_borrow_mut() else {
-            // effect 実行中（`render_once` が `state` を借用中）からの同期呼び出し。
-            // マイクロタスクへ逃がすと借用が落ちた後に実行され、`try_borrow_mut` が通る。
-            let deferred = self.clone();
-            wasm_bindgen_futures::spawn_local(async move {
-                deferred.apply(update);
-            });
-            return;
-        };
-        update(&mut state);
-        drop(state);
-        if let Err(e) = (self.render)() {
-            web_sys::console::error_1(&e);
-        }
-    }
-}
-
-impl<S: 'static> Applier<S> {
-    /// `update` で状態を書き換え、DOM は**作り直さず**に `patch` で既存の要素へ直接反映する。
-    ///
-    /// 全再構築はボタンを含む要素を毎回作り直すため、mousedown と mouseup の間に挟まると
-    /// `click` が発火しない。映像フレームのように高頻度で届く更新は、ボタン等を残したまま
-    /// 一部の要素だけを書き換える（Issue #815）。`patch` は root 要素と更新後の状態を受け取り、
-    /// 反映できたら `true` を返す。`false`（対象要素が無い等、構造が変わる更新）のときは
-    /// [`Applier::apply`] と同じ全再構築へ倒す。effect は呼ばない（要求の観測が要る更新には使わない）。
-    pub fn apply_in_place(
-        &self,
-        update: impl FnOnce(&mut S) + 'static,
-        patch: impl FnOnce(&Element, &S) -> bool + 'static,
-    ) {
-        if !is_live(self.mount_id) {
-            return;
-        }
-        let Ok(mut state) = self.state.try_borrow_mut() else {
-            let deferred = self.clone();
-            wasm_bindgen_futures::spawn_local(async move {
-                deferred.apply_in_place(update, patch);
-            });
-            return;
-        };
-        update(&mut state);
-        let patched = match root_of(self.mount_id) {
-            Some(root) => patch(&root, &state),
-            None => false,
-        };
-        drop(state);
-        if patched {
-            return;
-        }
-        if let Err(e) = (self.render)() {
-            web_sys::console::error_1(&e);
-        }
-    }
-}
+// `Applier`・マウントの生存管理・`query_permission` は `fandhe-platform-web`（Web 共通層、#1185）へ
+// 切り出した。未移行の機能モジュールが `crate::mount::…` のまま使えるよう再公開する。
+pub(crate) use fandhe_platform_web::{is_live, query_permission, root_of};
+use fandhe_platform_web::{on_mount_release, register_mount, RenderTrigger};
+pub use fandhe_platform_web::{Applier, WebEffect};
 
 /// `handler_index` 順に並んだ `Node::Button::on_click` の共有ベクタ
 /// （`clippy::type_complexity` 対策の型エイリアス、実体は [`super::dom_tree::Rendered`] と同じ）。
@@ -305,18 +200,10 @@ pub fn mount_with_effect<S: 'static>(
 ) -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
 
-    // マウントごとに一意な ID を採番する（[`Applier::mount_id`] 参照）。wasm32 は
-    // シングルスレッドのため `Cell` で足りる。
-    thread_local! {
-        static NEXT_MOUNT_ID: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
-    }
-    let mount_id = NEXT_MOUNT_ID.with(|c| {
-        let id = c.get();
-        c.set(id.wrapping_add(1));
-        id
-    });
-
-    release_replaced_mounts(&root, mount_id);
+    // 未移行の機能の解放関数を登録してから、マウントの採番・旧マウントの解放を行う
+    // （登録が後だと、この呼び出しで破棄される旧マウントの解放が漏れる）。
+    on_mount_release("fandhe-web-dom", release_features);
+    let mount_id = register_mount(&root);
 
     let document = web_sys::window()
         .ok_or_else(|| JsValue::from_str("window が取得できない"))?
@@ -394,14 +281,14 @@ pub fn mount_with_effect<S: 'static>(
             // effect には借用中の `&S` を渡すため、effect 内から `Applier::apply` が
             // 同期的に呼ばれた場合は `apply` 側がマイクロタスクへ退避して二重借用を
             // 避ける（`Applier::apply` の doc 参照）。
-            let applier = Applier {
-                state: state.clone(),
-                render: render_slot
+            let applier = Applier::new(
+                state.clone(),
+                render_slot
                     .borrow()
                     .clone()
                     .ok_or_else(|| JsValue::from_str("render_slot が未初期化"))?,
                 mount_id,
-            };
+            );
             {
                 let state_ref = state.borrow();
                 effect(&state_ref, &applier);
@@ -414,140 +301,62 @@ pub fn mount_with_effect<S: 'static>(
     render_once()
 }
 
-thread_local! {
-    /// これまでにマウントした `(mount_id, root)`。
-    static MOUNTS: RefCell<Vec<(u64, Element)>> = const { RefCell::new(Vec::new()) };
-    /// DOM 離脱の監視（[`MutationObserver`]）を張ったか。
-    static OBSERVING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// 破棄済みマウント（同じ `root` への再マウント・`root` の DOM 離脱）の資源を解放する
-/// （写真選択の `blob:` URL、契約表 1・9）。`new` があれば新マウントとして登録する。
-/// マウント破棄 API が無いため、再マウント時と、`document` 全体の `MutationObserver`
-/// 経由（次のマウントが無くても離脱を検知する）で呼ぶ。
-fn sweep_mounts(new: Option<(u64, &Element)>) {
-    let gone: Vec<u64> = MOUNTS.with(|m| {
-        let mut m = m.borrow_mut();
-        let mut gone = Vec::new();
-        m.retain(|(id, el)| {
-            let dead =
-                new.is_some_and(|(_, root)| el.is_same_node(Some(root))) || !el.is_connected();
-            if dead {
-                gone.push(*id);
-            }
-            !dead
-        });
-        if let Some((id, root)) = new {
-            m.push((id, root.clone()));
-        }
-        gone
-    });
-    for id in gone {
-        super::file_picker::release_mount(id);
-        super::network_status::release_mount(id);
-        super::compass::release_mount(id);
-        super::ar::release_mount(id);
-        super::screen_wake_lock::release_mount(id);
-        super::flashlight::release_mount(id);
-        super::power_state::release_mount(id);
-        super::device_info::release_mount(id);
-        super::audio_devices::release_mount(id);
-        super::local_fonts::release_mount(id);
-        super::eye_dropper::release_mount(id);
-        super::color_picker::release_mount(id);
-        super::camera_preview_stream::release_mount(id);
-        super::multi_display::release_mount(id);
-        super::window_management::release_mount(id);
-        super::accessibility_prefs::release_mount(id);
-        super::system_accent_color::release_mount(id);
-        super::safe_area_insets::release_mount(id);
-        super::foldable_posture::release_mount(id);
-        super::file_association::release_mount(id);
-        super::fullscreen_immersive::release_mount(id);
-        super::screen_orientation::release_mount(id);
-        super::picture_in_picture::release_mount(id);
-        super::media_cast::release_mount(id);
-        super::screen_capture::release_mount(id);
-        super::app_badge::release_mount(id);
-        super::app_lifecycle::release_mount(id);
-        super::memory_pressure::release_mount(id);
-        super::motion_raw_sensors::release_mount(id);
-        super::compose_mail_sms::release_mount(id);
-        super::external_app_launch::release_mount(id);
-        super::display_refresh_hdr::release_mount(id);
-        super::print_page::release_mount(id);
-        super::passkey::release_mount(id);
-        super::digital_credentials::release_mount(id);
-        super::nfc::release_mount(id);
-        super::autofill_otp::release_mount(id);
-        super::payment_request::release_mount(id);
-        super::file_watch::release_mount(id);
-        super::midi::release_mount(id);
-        super::media_playback::release_mount(id);
-        super::now_playing::release_mount(id);
-        super::media_transcode::release_mount(id);
-        super::video_transcode::release_mount(id);
-        super::on_device_llm::release_mount(id);
-        super::translation::release_mount(id);
-        super::pen_stylus::release_mount(id);
-        super::background_download::release_mount(id);
-        super::user_idle::release_mount(id);
-        super::sleep_lock_events::release_mount(id);
-        super::serial_port::release_mount(id);
-        super::video_capture::release_mount(id);
-    }
-}
-
-/// `mount_id` のマウントがまだ有効か（[`sweep_mounts`] で破棄されていないか）。
-///
-/// 非同期継続が結果を反映・資源を確保する直前に確かめる。`root` は document に
-/// 接続済みであることが前提（未接続の root は DOM 変化のたびに破棄扱いになる）。
-pub(crate) fn is_live(mount_id: u64) -> bool {
-    MOUNTS.with(|m| m.borrow().iter().any(|(id, _)| *id == mount_id))
-}
-
-/// マウント先の要素（WebXR の `dom-overlay` の root）。破棄済みなら `None`。
-pub(crate) fn root_of(mount_id: u64) -> Option<Element> {
-    MOUNTS.with(|m| {
-        m.borrow()
-            .iter()
-            .find(|(id, _)| *id == mount_id)
-            .map(|(_, el)| el.clone())
-    })
-}
-
-fn release_replaced_mounts(root: &Element, new_id: u64) {
-    sweep_mounts(Some((new_id, root)));
-    if OBSERVING.with(|o| o.replace(true)) {
-        return;
-    }
-    let Some(target) = web_sys::window()
-        .and_then(|w| w.document())
-        .and_then(|d| d.document_element())
-    else {
-        OBSERVING.with(|o| o.set(false));
-        return;
-    };
-    let callback = Closure::wrap(
-        Box::new(move |_: js_sys::Array, _: web_sys::MutationObserver| {
-            sweep_mounts(None);
-        }) as Box<dyn FnMut(js_sys::Array, web_sys::MutationObserver)>,
-    );
-    let observer =
-        web_sys::MutationObserver::new(callback.as_ref().unchecked_ref()).and_then(|o| {
-            let init = web_sys::MutationObserverInit::new();
-            init.set_child_list(true);
-            init.set_subtree(true);
-            o.observe_with_options(&target, &init).map(|()| o)
-        });
-    if let Ok(observer) = observer {
-        // 監視はページ寿命と同じ。observer 自身も手放すと JS 側で回収されて監視が止まる
-        // ため、callback と合わせて 1 度だけ意図的にリークする（リークは 1 組で済む）。
-        std::mem::forget(observer);
-        callback.forget();
-    } else {
-        OBSERVING.with(|o| o.set(false));
-    }
+/// 未移行の機能（`fandhe-web-dom` に実装が残っているもの）の破棄時の解放をまとめて呼ぶ。
+/// 機能を crate へ移すときは、その行をここから消し、機能側の effect の入口で
+/// `fandhe_platform_web::on_mount_release` に登録する。
+fn release_features(mount_id: u64) {
+    super::file_picker::release_mount(mount_id);
+    super::network_status::release_mount(mount_id);
+    super::compass::release_mount(mount_id);
+    super::ar::release_mount(mount_id);
+    super::screen_wake_lock::release_mount(mount_id);
+    super::flashlight::release_mount(mount_id);
+    super::power_state::release_mount(mount_id);
+    super::device_info::release_mount(mount_id);
+    super::audio_devices::release_mount(mount_id);
+    super::local_fonts::release_mount(mount_id);
+    super::eye_dropper::release_mount(mount_id);
+    super::color_picker::release_mount(mount_id);
+    super::camera_preview_stream::release_mount(mount_id);
+    super::multi_display::release_mount(mount_id);
+    super::window_management::release_mount(mount_id);
+    super::accessibility_prefs::release_mount(mount_id);
+    super::system_accent_color::release_mount(mount_id);
+    super::safe_area_insets::release_mount(mount_id);
+    super::foldable_posture::release_mount(mount_id);
+    super::file_association::release_mount(mount_id);
+    super::fullscreen_immersive::release_mount(mount_id);
+    super::screen_orientation::release_mount(mount_id);
+    super::picture_in_picture::release_mount(mount_id);
+    super::media_cast::release_mount(mount_id);
+    super::screen_capture::release_mount(mount_id);
+    super::app_badge::release_mount(mount_id);
+    super::app_lifecycle::release_mount(mount_id);
+    super::memory_pressure::release_mount(mount_id);
+    super::motion_raw_sensors::release_mount(mount_id);
+    super::compose_mail_sms::release_mount(mount_id);
+    super::external_app_launch::release_mount(mount_id);
+    super::display_refresh_hdr::release_mount(mount_id);
+    super::print_page::release_mount(mount_id);
+    super::passkey::release_mount(mount_id);
+    super::digital_credentials::release_mount(mount_id);
+    super::nfc::release_mount(mount_id);
+    super::autofill_otp::release_mount(mount_id);
+    super::payment_request::release_mount(mount_id);
+    super::file_watch::release_mount(mount_id);
+    super::midi::release_mount(mount_id);
+    super::media_playback::release_mount(mount_id);
+    super::now_playing::release_mount(mount_id);
+    super::media_transcode::release_mount(mount_id);
+    super::video_transcode::release_mount(mount_id);
+    super::on_device_llm::release_mount(mount_id);
+    super::translation::release_mount(mount_id);
+    super::pen_stylus::release_mount(mount_id);
+    super::background_download::release_mount(mount_id);
+    super::user_idle::release_mount(mount_id);
+    super::sleep_lock_events::release_mount(mount_id);
+    super::serial_port::release_mount(mount_id);
+    super::video_capture::release_mount(mount_id);
 }
 
 /// [`build_element`] が使うハンドラ一式（`clippy::too_many_arguments` 対策の
@@ -858,29 +667,4 @@ fn trigger_rerender(render_slot: &Rc<RefCell<Option<RenderTrigger>>>) {
             web_sys::console::error_1(&format!("再レンダリングに失敗した: {err:?}").into());
         }
     }
-}
-
-/// `navigator.permissions.query({name})` の `PermissionStatus` を返す（端末機能の Web 経路で共用）。
-///
-/// API が無い・名前を受け付けない（reject）・結果が object でない環境は `None`。
-/// 呼び出し側は `None` を「許可状態は不明」として扱い、拒否とは見なさない。
-pub(crate) async fn query_permission(name: &str) -> Option<JsValue> {
-    let get =
-        |t: &JsValue, k: &str| js_sys::Reflect::get(t, &k.into()).unwrap_or(JsValue::UNDEFINED);
-    let navigator: JsValue = web_sys::window()?.navigator().into();
-    let permissions = get(&navigator, "permissions");
-    let query = get(&permissions, "query");
-    if !query.is_function() {
-        return None;
-    }
-    let desc = js_sys::Object::new();
-    js_sys::Reflect::set(&desc, &"name".into(), &name.into()).ok()?;
-    let promise = query
-        .unchecked_into::<js_sys::Function>()
-        .call1(&permissions, &desc)
-        .ok()?
-        .dyn_into::<js_sys::Promise>()
-        .ok()?;
-    let status = wasm_bindgen_futures::JsFuture::from(promise).await.ok()?;
-    status.is_object().then_some(status)
 }

@@ -146,6 +146,9 @@ graph TD
   runtime へ移すと依存が循環するためです
 - egui は v1 の既定バックエンドです。現行の Mac・iOS・Android・Web の実描画と全端末機能の確認がこの上に載っています
 - 独自レンダラ（`wgpu`）は第 2 バックエンドの候補です。M4 の実機計測で性能要件を満たせないときに着手します
+- Web の機能実装は `fandhe-platform-web` の `Applier` と解放フック（`on_mount_release`）を使い、`fandhe-web-dom` に依存しません。
+  `web-sys` の feature は使う crate が自分の `Cargo.toml` に書きます。#1194 までは未移行の機能が `fandhe-web-dom` に残り、
+  その解放は `fandhe-web-dom` がまとめて登録します（#1185）
 - 引き継ぐ制約
   - Web の canvas は支援技術へ公開されないので、DOM 出力（`fandhe-web-dom`）を残します（`dom-output-architecture.md`）
   - watchOS / visionOS は REQ-3 の別構成のままです（`req3-implementation-policy.md`）

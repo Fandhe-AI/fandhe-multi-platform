@@ -1219,6 +1219,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-platform-web"
+version = "0.2.0"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "fandhe-prototype"
 version = "0.1.0"
 dependencies = [
@@ -1273,6 +1283,7 @@ dependencies = [
  "fandhe-cap-share-receive",
  "fandhe-core",
  "fandhe-device",
+ "fandhe-platform-web",
  "image",
  "js-sys",
  "wasm-bindgen",

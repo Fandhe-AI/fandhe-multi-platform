@@ -50,7 +50,7 @@ pub(crate) fn reading_from(on_line: bool, conn_type: Option<&str>) -> Reading {
 #[cfg(target_arch = "wasm32")]
 pub use web::network_status_show_effect;
 
-/// マウント破棄時にタイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時にタイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

@@ -13,8 +13,8 @@
 //! 本 crate → `fandhe-core`（画面の状態関数）・`fandhe-runtime`（`CompletionSender`）の一方向。
 //! egui には依存しない。呼び出し元は `fandhe-gallery`（effect の登録と macOS の provider 登録）と
 //! `fandhe-web-dom`（Web は契約 [`ShareInbox`] / [`validate_text`] だけを使う。Web の実装本体は
-//! DOM の `mount::Applier` に依存するため、`fandhe-platform-web`（#1185）ができるまで
-//! `fandhe-web-dom` に残す）。`RequestSlot` 型（要求 1 件に結果 1 件）ではなく、OS が任意の
+//! 共通層は `fandhe-platform-web`（#1185）へ切り出し済みだが、Web の実装は
+//! `fandhe-web-dom` に残っており、移動は manifest の `share_target` の扱い（#1238）と合わせる）。`RequestSlot` 型（要求 1 件に結果 1 件）ではなく、OS が任意の
 //! タイミングで書き込む継続配信型として扱う（`url_scheme` と同型）。
 //!
 //! # 対象 OS

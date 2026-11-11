@@ -2,7 +2,7 @@
 //!
 //! `fandhe_core::screens::app_lifecycle_show` の画面を [`super::mount::mount_with_effect`] の
 //! effect として駆動する。呼び出し元は `demo.rs` のエントリポイントと、破棄時の解放を担う
-//! `mount::sweep_mounts`。`fandhe-device` の `AppLifecycle` trait は経由しない
+//! `mount::release_features`。`fandhe-device` の `AppLifecycle` trait は経由しない
 //! （`OnSignal` / `SubscriptionGuard` が `Send + Sync` を要し、`Closure` を持てないため。
 //! 他の Web モジュールと同じ扱い）。結果の契約は trait doc に従い、`fandhe_device::app_lifecycle` から
 //! 使い回すのは `EventLog` と `LifecycleEvent` だけ。
@@ -117,7 +117,7 @@ pub(crate) fn kind_from_device(e: LifecycleEvent) -> EventKind {
 #[cfg(target_arch = "wasm32")]
 pub use web::app_lifecycle_show_effect;
 
-/// マウント破棄時にリスナーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時にリスナーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

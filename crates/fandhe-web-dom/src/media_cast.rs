@@ -151,7 +151,7 @@ pub(crate) fn is_late(started_ms: f64, now_ms: f64, deadline: Duration) -> bool 
 #[cfg(target_arch = "wasm32")]
 pub use web::cast_show_effect;
 
-/// マウント破棄時に要素・URL・リスナー・タイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に要素・URL・リスナー・タイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 
@@ -339,7 +339,7 @@ mod web {
         }
     }
 
-    /// マウント破棄時（`mount::sweep_mounts` から）に解放する。
+    /// マウント破棄時（`mount::release_features` から）に解放する。
     pub(crate) fn release_mount(mount: u64) {
         if let Some(m) = MOUNTS.with(|m| m.borrow_mut().remove(&mount)) {
             if let Some(s) = m.session {

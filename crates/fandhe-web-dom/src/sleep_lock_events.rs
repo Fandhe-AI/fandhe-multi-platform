@@ -2,7 +2,7 @@
 //!
 //! `fandhe_core::screens::sleep_lock_events_show` の画面を [`super::mount::mount_with_effect`] の
 //! effect として駆動する。呼び出し元は `demo.rs` のエントリポイントと、破棄時の解放を担う
-//! `mount::sweep_mounts`。`fandhe-device` の `SleepLockEvents` trait は経由しない（ブラウザの
+//! `mount::release_features`。`fandhe-device` の `SleepLockEvents` trait は経由しない（ブラウザの
 //! Promise・イベントは同期のトレイトに載らない）。結果の種類は trait doc に従い、
 //! `fandhe_device::sleep_lock_events` から使い回すのは `EventLog` と純関数だけ。
 //!
@@ -138,7 +138,7 @@ pub(crate) fn kind_from_device(e: SleepLockEvent) -> EventKind {
 #[cfg(target_arch = "wasm32")]
 pub use web::sleep_lock_events_show_effect;
 
-/// マウント破棄時に購読・リスナー・タイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に購読・リスナー・タイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

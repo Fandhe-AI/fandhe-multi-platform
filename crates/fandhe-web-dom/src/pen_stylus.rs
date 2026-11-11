@@ -126,7 +126,7 @@ pub(crate) fn apply_ops(s: &mut PenDrawState, ops: &[Op]) {
 #[cfg(target_arch = "wasm32")]
 pub use web::pen_draw_effect;
 
-/// マウント破棄時にリスナー・rAF・キャプチャを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時にリスナー・rAF・キャプチャを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

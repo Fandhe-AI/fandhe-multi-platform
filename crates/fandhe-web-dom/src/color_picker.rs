@@ -100,7 +100,7 @@ mod web {
         // Closure はここで drop される。確定は spawn_local 経由なので、実行中の closure 自身ではない。
     }
 
-    /// マウント破棄時（`mount::sweep_mounts` から）に `<input>`・リスナーを解放する。
+    /// マウント破棄時（`mount::release_features` から）に `<input>`・リスナーを解放する。
     pub(crate) fn release_mount(mount_id: u64) {
         if let Some(e) = ACTIVE.with(|a| a.borrow_mut().remove(&mount_id)) {
             teardown(e);
@@ -239,7 +239,7 @@ mod web {
 #[cfg(target_arch = "wasm32")]
 pub use web::color_picker_pick_effect;
 
-/// マウント破棄時に `<input>`・リスナーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に `<input>`・リスナーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

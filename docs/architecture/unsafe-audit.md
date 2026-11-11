@@ -1,3 +1,4 @@
+| `fandhe-platform-web` | 適用済み（`crates/fandhe-platform-web/src/lib.rs`、`#![forbid(unsafe_code)]`、TASK-21.4 / Issue #1185） | 0 件 | 該当なし | 合格 |
 # `unsafe` ブロック監査（本実装版）
 
 ## 1. 目的・位置づけ

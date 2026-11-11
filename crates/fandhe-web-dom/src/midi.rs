@@ -118,7 +118,7 @@ pub(crate) fn rows_from_bytes(parser: &mut MidiParser, bytes: &[u8]) -> Vec<Midi
 #[cfg(target_arch = "wasm32")]
 pub use web::midi_show_effect;
 
-/// マウント破棄時にハンドラと発送記録を解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時にハンドラと発送記録を解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 
@@ -256,7 +256,7 @@ mod web {
         drop(s);
     }
 
-    /// マウント破棄時（`mount::sweep_mounts` から）に解放する。
+    /// マウント破棄時（`mount::release_features` から）に解放する。
     pub(crate) fn release_mount(mount: u64) {
         DISPATCHED.with(|d| d.borrow_mut().remove(&mount));
         CURRENT.with(|d| d.borrow_mut().remove(&mount));
