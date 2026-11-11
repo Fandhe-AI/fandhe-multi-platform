@@ -3,7 +3,7 @@
 //! 同期で 1 回ずつ呼ぶ（package identity・管理者権限は不要）。契約は
 //! `fandhe_device::display_refresh_hdr`。
 //!
-//! - 画面: メインウィンドウ（`windows_share::window()`）の `MonitorFromWindow(NEAREST)`
+//! - 画面: メインウィンドウ（`fandhe_platform_windows::window()`）の `MonitorFromWindow(NEAREST)`
 //! - 今の Hz と解像度: `EnumDisplaySettingsW(ENUM_CURRENT_SETTINGS)` の `dmDisplayFrequency` /
 //!   `dmPelsWidth` / `dmPelsHeight`。0 と 1（ドライバ既定を表す値）は「取れない」
 //! - 最大 Hz: 同関数のモード列挙のうち、今の解像度と同じモードの `dmDisplayFrequency` の最大
@@ -145,8 +145,8 @@ mod win {
     impl DisplayRefreshHdr for WindowsDisplayRefreshHdr {
         fn read(&self) -> Result<DisplayCapabilities, DeviceError> {
             let fail = || DeviceError::Internal("display_refresh_hdr read");
-            let hwnd = super::super::windows_share::window().ok_or_else(fail)?;
-            // SAFETY: `hwnd` は `windows_share::window()` が返したメインウィンドウ。
+            let hwnd = fandhe_platform_windows::window().ok_or_else(fail)?;
+            // SAFETY: `hwnd` は `fandhe_platform_windows::window()` が返したメインウィンドウ。
             // 戻りのモニタハンドルはこの関数の中だけで使う。
             let hmon = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
             if hmon.is_invalid() {

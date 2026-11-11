@@ -39,7 +39,7 @@ use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator};
 use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
-use super::windows_notification::ComInit;
+use fandhe_platform_windows::ComInit;
 
 /// 出力機器が無いときの `GetDefaultAudioEndpoint` の戻り（`E_NOTFOUND`）。
 const E_NOTFOUND: i32 = 0x8007_0490_u32 as i32;
@@ -94,7 +94,7 @@ fn no_device() -> VolumeReading {
 
 impl VolumeControl for WindowsVolumeControl {
     fn read(&self) -> Result<VolumeReading, DeviceError> {
-        let _com = ComInit::new("volume-control read")?;
+        let _com = ComInit::new().map_err(|_| DeviceError::Internal("volume-control read"))?;
         match default_endpoint_volume()? {
             Some(v) => read_from(&v),
             None => Ok(no_device()),
@@ -103,7 +103,7 @@ impl VolumeControl for WindowsVolumeControl {
 
     #[allow(unsafe_code)]
     fn step(&self, direction: StepDirection) -> Result<StepOutcome, DeviceError> {
-        let _com = ComInit::new("volume-control step")?;
+        let _com = ComInit::new().map_err(|_| DeviceError::Internal("volume-control step"))?;
         let Some(volume) = default_endpoint_volume()? else {
             return Ok(StepOutcome::NotChangeable(no_device()));
         };

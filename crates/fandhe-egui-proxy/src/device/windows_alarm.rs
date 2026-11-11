@@ -98,10 +98,10 @@ mod imp {
         ScheduledToastNotification, ToastNotificationManager, ToastNotifier,
     };
 
+    use fandhe_platform_windows::ComInit;
+
     use super::super::alarm::{now_unix_ms, validate_fire_at};
-    use super::super::windows_notification::{
-        ensure_app_aumid, setting_result_for, ComInit, APP_AUMID,
-    };
+    use super::super::windows_notification::{ensure_app_aumid, setting_result_for, APP_AUMID};
     use super::{
         filetime_ticks_to_unix_ms, is_alarm_id, unix_ms_to_filetime_ticks, ALARM_ID, TOAST_BODY,
         TOAST_TITLE, TOAST_XML,
@@ -183,7 +183,7 @@ mod imp {
                 .map_err(|_| DeviceError::Internal("alarm lock"))?;
             validate_fire_at(fire_at_unix_ms, now_unix_ms()?)?;
             let ticks = unix_ms_to_filetime_ticks(fire_at_unix_ms)?;
-            let _com = ComInit::new("alarm com init")?;
+            let _com = ComInit::new().map_err(|_| DeviceError::Internal("alarm com init"))?;
             let notifier = open_notifier()?;
 
             // XML と予約オブジェクトは古い予約を消す前に作り切る。以降で失敗しうるのは
@@ -223,7 +223,7 @@ mod imp {
                 .lock
                 .lock()
                 .map_err(|_| DeviceError::Internal("alarm lock"))?;
-            let _com = ComInit::new("alarm com init")?;
+            let _com = ComInit::new().map_err(|_| DeviceError::Internal("alarm com init"))?;
             let notifier = open_list_notifier()?;
             for old in own_entries(&notifier)? {
                 notifier
@@ -238,7 +238,7 @@ mod imp {
                 .lock
                 .lock()
                 .map_err(|_| DeviceError::Internal("alarm lock"))?;
-            let _com = ComInit::new("alarm com init")?;
+            let _com = ComInit::new().map_err(|_| DeviceError::Internal("alarm com init"))?;
             let notifier = open_list_notifier()?;
             let entries = own_entries(&notifier)?;
             let Some(first) = entries.first() else {

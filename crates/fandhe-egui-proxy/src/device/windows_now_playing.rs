@@ -91,7 +91,7 @@ mod imp {
         /// SMTC を取得して handler と有効化を済ませる。途中で失敗したら確保済みの分を解放して返す。
         #[allow(unsafe_code)]
         fn acquire() -> Result<Held, DeviceError> {
-            let hwnd = super::super::windows_share::window().ok_or(ERR)?;
+            let hwnd = fandhe_platform_windows::window().ok_or(ERR)?;
             let interop = windows::core::factory::<
                 SystemMediaTransportControls,
                 ISystemMediaTransportControlsInterop,

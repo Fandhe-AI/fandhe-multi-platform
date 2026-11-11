@@ -49,8 +49,8 @@
 //! （`IUserConsentVerifierInterop::RequestVerificationForWindowAsync` 1 呼び出し）も
 //! 同じ緩和へ相乗りした。Issue #1033 で `device/windows_notification.rs`
 //! （スタートメニューへ `.lnk` を作って AUMID を登録する `IShellLinkW`/
-//! `IPropertyStore`/`IPersistFile`/`CoInitializeEx` 系の呼び出し）も同じ緩和へ
-//! 相乗りした。
+//! `IPropertyStore`/`IPersistFile` 系の呼び出し）も同じ緩和へ相乗りした。
+//! Windows の `CoInitializeEx` ガードと HWND の保持は Issue #1184 で `fandhe-platform-windows` へ移した。
 //!
 // TASK-2.3（#54）計測マーカー: 以下はプロトタイプ描画対象切替（TASK-2.2-S5 / #52）に
 // 関するモジュール doc。プラットフォーム別コードとして計上する。

@@ -219,8 +219,8 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
             let ctx = lc.egui_ctx();
             // Issue #898: Windows 共有シート・生体認証が要求する HWND は起動時のコンテキストからしか
             // 得られない。effect ドライバは触れないため、構築時に 1 度だけ static へ控える。
-            #[cfg(all(target_os = "windows", feature = "device"))]
-            fandhe_egui_proxy::device::windows_share::remember_window(lc);
+            #[cfg(target_os = "windows")]
+            fandhe_platform_windows::remember_window(lc);
             // TASK-2.3（#54）計測マーカー: プロトタイプアプリ分岐
             // （if use_prototype { ... }、TASK-2.2-S5 / #52）。
             // fandhe-prototype:begin

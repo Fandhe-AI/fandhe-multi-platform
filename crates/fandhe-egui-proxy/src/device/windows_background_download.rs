@@ -432,7 +432,7 @@ mod worker {
 
     fn run(rx: mpsc::Receiver<Cmd>, shared: Arc<Mutex<Shared>>) {
         // COM のガードはジョブより後に解放する（先に宣言し、`w` を先に drop する）。
-        let com_guard = super::super::windows_notification::ComInit::new("background download");
+        let com_guard = fandhe_platform_windows::ComInit::new();
         let mut w = Worker {
             mgr: com_guard.is_ok().then(|| com::manager().ok()).flatten(),
             tracked: None,

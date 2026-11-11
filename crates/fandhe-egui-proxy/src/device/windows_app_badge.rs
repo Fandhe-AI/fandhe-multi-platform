@@ -1,7 +1,7 @@
 //! Windows 向けバッジ実装（Issue #1360、#29）。`ITaskbarList3::SetOverlayIcon` でメインウィンドウの
 //! タスクバーボタンに件数（1〜9999）を数字入りの 16x16 アイコンとして重ねる（0 は外す）。
 //! タスクバー進捗（`SetProgressValue`）は使わず、`set` は進捗を触らない（併用しない）。
-//! HWND は `device/windows_share.rs::window()` と共通。`device/app_badge.rs` の Windows 経路から
+//! HWND は `fandhe_platform_windows::window()` と共通。`device/app_badge.rs` の Windows 経路から
 //! 呼ばれ、契約は `fandhe_device::app_badge`。
 //!
 //! 入力の検証・HWND の有無の判定・アイコンのピクセル生成は純関数（[`plan`]・[`render`]・
@@ -150,7 +150,7 @@ mod com {
         // SAFETY: `list` は直前に取得した有効な COM ポインタ（`Drop` で Release される）。
         unsafe { list.HrInit() }?;
         match step {
-            // SAFETY: `hwnd` は `windows_share::window()` が返したメインウィンドウ。
+            // SAFETY: `hwnd` は `fandhe_platform_windows::window()` が返したメインウィンドウ。
             // 空の `HICON` と null の説明文はオーバーレイを外す指定。
             Step::Clear => unsafe { list.SetOverlayIcon(hwnd, HICON::default(), PCWSTR::null()) },
             Step::Overlay(n) => {
@@ -187,7 +187,7 @@ impl fandhe_device::app_badge::AppBadge for WindowsAppBadge {
         &self,
         value: BadgeValue,
     ) -> Result<fandhe_device::app_badge::BadgeOutcome, DeviceError> {
-        let hwnd = super::windows_share::window();
+        let hwnd = fandhe_platform_windows::window();
         let step = plan(value, hwnd.is_some())?;
         let Some(hwnd) = hwnd else {
             return Err(DeviceError::Internal("app_badge window"));

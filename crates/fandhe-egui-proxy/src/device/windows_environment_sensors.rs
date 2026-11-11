@@ -610,7 +610,7 @@ mod imp {
         if STARTED.load(Ordering::Acquire) {
             return true;
         }
-        if super::super::windows_share::window().is_none() {
+        if fandhe_platform_windows::window().is_none() {
             return false;
         }
         if STARTED.swap(true, Ordering::AcqRel) {
@@ -628,7 +628,7 @@ mod imp {
     fn watch_minimize() {
         let mut edge = MinimizeEdge::default();
         loop {
-            if let Some(hwnd) = super::super::windows_share::window() {
+            if let Some(hwnd) = fandhe_platform_windows::window() {
                 match edge.update(is_minimized(hwnd)) {
                     Some(Edge::Minimized) => {
                         drop_pressure_received();
