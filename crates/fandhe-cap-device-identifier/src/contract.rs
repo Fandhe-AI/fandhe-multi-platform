@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #181、Issue #903）: アプリ・端末の識別子（iOS の IDFV、Android の
-//! `ANDROID_ID`）を 1 回読み、伏せて表示するための契約。`fandhe-egui-proxy` の
-//! `device/device_identifier.rs` が「識別子を読む」押下時に [`DeviceIdentifier::read`] を 1 回だけ呼び、
+//! `ANDROID_ID`）を 1 回読み、伏せて表示するための契約。`driver.rs`
+//! （移行前は `fandhe-egui-proxy` の `device/device_identifier.rs`）が「識別子を読む」押下時に [`DeviceIdentifier::read`] を 1 回だけ呼び、
 //! OS 実装（iOS・Android: #904）が本トレイトを実装する。macOS・Windows・Linux・Web は
 //! 対応表で `no` のため [`UnsupportedDeviceIdentifier`] 固定。
 //!
@@ -12,8 +12,8 @@
 //!
 //! - [`IdentifierRead::Identifier`]: OS の値
 //! - [`IdentifierRead::NotYetAvailable`]: iOS の `identifierForVendor` が nil（ロック直後など）。失敗にしない
-//! - `Err(DeviceError::Internal(..))`: Android の null・空・例外、JNI 失敗、iOS の空文字
-//! - `Err(DeviceError::Unsupported("device_identifier"))`: 非対応 OS と実装前のスタブ
+//! - `Err(DeviceIdentifierError::Internal(..))`: Android の null・空・例外、JNI 失敗、iOS の空文字
+//! - `Err(DeviceIdentifierError::Unsupported)`: 非対応 OS と実装前のスタブ
 //!
 //! キャンセルと権限ダイアログの経路は無い。
 //!
@@ -42,16 +42,16 @@
 //!
 //! 権限・usage description・`<queries>`・privacy manifest は足さない。`ANDROID_ID` は minSdk 24 の全域で使える。
 
-use crate::DeviceError;
+use crate::error::DeviceIdentifierError;
 
 /// 読み取った識別子。全体を取り出す経路を持たない（漏れる経路を作らない）。
 pub struct DeviceId(String);
 
 impl DeviceId {
     /// 空文字だけを拒む。trim・大文字化・形式検査はしない。
-    pub fn new(value: String) -> Result<Self, DeviceError> {
+    pub fn new(value: String) -> Result<Self, DeviceIdentifierError> {
         if value.is_empty() {
-            return Err(DeviceError::Internal("device_identifier empty"));
+            return Err(DeviceIdentifierError::Internal);
         }
         Ok(Self(value))
     }
@@ -89,15 +89,15 @@ pub enum IdentifierRead {
 /// 識別子の読み取り（契約はモジュール doc）。
 pub trait DeviceIdentifier: Send + Sync {
     /// OS の値を 1 回読む。
-    fn read(&self) -> Result<IdentifierRead, DeviceError>;
+    fn read(&self) -> Result<IdentifierRead, DeviceIdentifierError>;
 }
 
 /// 非対応 OS・実装前のスタブ。常に `Unsupported`。
 pub struct UnsupportedDeviceIdentifier;
 
 impl DeviceIdentifier for UnsupportedDeviceIdentifier {
-    fn read(&self) -> Result<IdentifierRead, DeviceError> {
-        Err(DeviceError::Unsupported("device_identifier"))
+    fn read(&self) -> Result<IdentifierRead, DeviceIdentifierError> {
+        Err(DeviceIdentifierError::Unsupported)
     }
 }
 
@@ -111,7 +111,7 @@ mod tests {
     fn empty_is_internal() {
         assert!(matches!(
             DeviceId::new(String::new()),
-            Err(DeviceError::Internal(_))
+            Err(DeviceIdentifierError::Internal)
         ));
     }
 
@@ -141,7 +141,7 @@ mod tests {
     fn unsupported_never_succeeds() {
         assert!(matches!(
             UnsupportedDeviceIdentifier.read(),
-            Err(DeviceError::Unsupported("device_identifier"))
+            Err(DeviceIdentifierError::Unsupported)
         ));
     }
 }

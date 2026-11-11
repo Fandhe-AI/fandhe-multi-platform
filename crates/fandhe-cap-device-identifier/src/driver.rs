@@ -1,28 +1,28 @@
 //! Phase 11 の拡充ループ（親 #181、Issue #903）型サンプル「アプリ・端末の識別子」の effect ドライバ。
 //! `fandhe_core::screens::device_identifier_show`（端末依存ゼロ）の要求を `take_request` で観測し、
-//! `fandhe_device::device_identifier::DeviceIdentifier` を UI スレッドから同期で 1 回だけ読んで、
+//! `DeviceIdentifier`（`crate::contract`） を UI スレッドから同期で 1 回だけ読んで、
 //! 伏せた結果（末尾 4 文字と文字数）だけを `CompletionSender` 経由で注入する
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる）。契約の SSOT は
-//! `fandhe_device::device_identifier`。
+//! `crate::contract`。機能 crate へ移行済み（Issue #1183）で、`fandhe_core::screens` を参照してよいのは本ファイルだけ。
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`platform_device_identifier`] の cfg 分岐が全対象 OS の最終形で、iOS（`ios_device_identifier`、
-//! `UIDevice.identifierForVendor`）と Android（`android_device_identifier`、`Settings.Secure.ANDROID_ID`）
+//! [`platform_device_identifier`] の cfg 分岐が全対象 OS の最終形で、iOS（`crate::ios`、
+//! `UIDevice.identifierForVendor`）と Android（`crate::android`、`Settings.Secure.ANDROID_ID`）
 //! は #904 で実体になっている。
 //! それ以外（macOS・Windows・Linux・Web）は対応表で `no` のため `Unsupported` 固定で、成功には届かない。
 //! 識別子の全体（`DeviceId`）はここで捨てて画面へ渡さない。ログ出力はしない。
 
-use fandhe_core::screens::device_identifier_show::{
-    finish_read, take_request, DeviceIdentifierShowState, IdScope, IdentifierReading, ReadFailure,
-    ReadOutcome,
-};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-use fandhe_device::device_identifier::UnsupportedDeviceIdentifier;
-use fandhe_device::device_identifier::{DeviceIdentifier, IdentifierRead};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedDeviceIdentifier;
+use crate::contract::{DeviceIdentifier, IdentifierRead};
+use crate::error::DeviceIdentifierError;
+use fandhe_core::screens::device_identifier_show::{
+    DeviceIdentifierShowState, IdScope, IdentifierReading, ReadFailure, ReadOutcome, finish_read,
+    take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 画面に出す範囲。iOS / Android 以外は `Unsupported` 固定で表示に届かない。
 #[cfg(target_os = "android")]
@@ -30,15 +30,16 @@ const SCOPE: IdScope = IdScope::SigningKeyUserDevice;
 #[cfg(not(target_os = "android"))]
 const SCOPE: IdScope = IdScope::Vendor;
 
-/// 現在のプラットフォームに応じた実装を返す（状態を持たないため呼び出しごとに構築）。
-fn platform_device_identifier() -> Box<dyn DeviceIdentifier> {
+/// 現在のプラットフォームに応じた実装を返す（状態を持たないため呼び出しごとに構築）。画面の状態型に
+/// 依存しない入口で、フレームワークの外のアプリも自分の状態型の effect から使える。
+pub fn platform_device_identifier() -> Box<dyn DeviceIdentifier> {
     #[cfg(target_os = "ios")]
     {
-        super::ios_device_identifier::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_device_identifier::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
@@ -64,7 +65,7 @@ fn drive(
             scope,
         })),
         Ok(IdentifierRead::NotYetAvailable) => Ok(ReadOutcome::NotYetAvailable),
-        Err(DeviceError::Unsupported(_)) => Err(ReadFailure::Unsupported),
+        Err(DeviceIdentifierError::Unsupported) => Err(ReadFailure::Unsupported),
         // 画面へは固定文言のみ（OS の生コードは出さない）。
         Err(_) => Err(ReadFailure::Failed("識別子の読み取り".to_string())),
     };
@@ -84,13 +85,23 @@ pub fn device_identifier_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::device_identifier_show::{read, ReadPhase, UNSUPPORTED_STATUS};
-    use fandhe_device::device_identifier::{DeviceId, UnsupportedDeviceIdentifier as Unsupported};
+    use crate::contract::{DeviceId, UnsupportedDeviceIdentifier as Unsupported};
+    use fandhe_core::screens::device_identifier_show::{ReadPhase, UNSUPPORTED_STATUS, read};
+    use fandhe_runtime::RepaintWaker;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
 
     const FAKE: &str = "00000000-0000-0000-0000-00000000ABCD";
 
-    type ReadFn = fn() -> Result<IdentifierRead, DeviceError>;
+    type ReadFn = fn() -> Result<IdentifierRead, DeviceIdentifierError>;
 
     struct Fake {
         result: ReadFn,
@@ -107,7 +118,7 @@ mod tests {
     }
 
     impl DeviceIdentifier for Fake {
-        fn read(&self) -> Result<IdentifierRead, DeviceError> {
+        fn read(&self) -> Result<IdentifierRead, DeviceIdentifierError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             (self.result)()
         }
@@ -115,10 +126,10 @@ mod tests {
 
     fn channel() -> (
         CompletionSender<DeviceIdentifierShowState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<DeviceIdentifierShowState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<DeviceIdentifierShowState>>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     fn run(ident: &dyn DeviceIdentifier) -> DeviceIdentifierShowState {
@@ -180,9 +191,9 @@ mod tests {
     #[test]
     fn failures_never_succeed() {
         let cases: [ReadFn; 3] = [
-            || Err(DeviceError::Internal("x")),
-            || Err(DeviceError::PermissionDenied("x")),
-            || Err(DeviceError::Cancelled("x")),
+            || Err(DeviceIdentifierError::Internal),
+            || Err(DeviceIdentifierError::PermissionDenied),
+            || Err(DeviceIdentifierError::Cancelled),
         ];
         for f in cases {
             let state = run(&Fake::new(f));

@@ -33,6 +33,7 @@ test("rewriteSource: 共通部品・エラー型・契約パスの置換", () =>
     [
       "use crate::app::CompletionSender;",
       "use fandhe_device::DeviceError;",
+      "use crate::DeviceError;",
       "use fandhe_device::device_identifier::{DeviceId};",
       "use crate::device::android::JniCallFailed;",
       'Err(DeviceError::Internal("x"))',
@@ -46,6 +47,7 @@ test("rewriteSource: 共通部品・エラー型・契約パスの置換", () =>
     out,
     [
       "use fandhe_runtime::CompletionSender;",
+      "use crate::error::DeviceIdentifierError;",
       "use crate::error::DeviceIdentifierError;",
       "use crate::contract::{DeviceId};",
       "use fandhe_platform_android::JniCallFailed;",

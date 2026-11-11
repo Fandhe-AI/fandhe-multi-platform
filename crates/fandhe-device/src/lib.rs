@@ -81,8 +81,6 @@ pub mod compose_mail_sms;
 pub mod contact_picker;
 /// Phase 11（端末機能の拡充ループ、親 #153、Issue #1278）: ディープリンク（Universal Links / App Links）の受信。
 pub mod deep_link;
-/// Phase 11（端末機能の拡充ループ、親 #181、Issue #903）: アプリ・端末の識別子（IDFV / ANDROID_ID を伏せて 1 回読む）。
-pub mod device_identifier;
 /// Phase 11（端末機能の拡充ループ、親 #1131、Issue #1304）: 端末・OS 情報（機種・OS 版・空き容量）。
 pub mod device_info;
 /// Phase 11（端末機能の拡充ループ、親 #186、Issue #958）: デジタル身分証の提示要求（検証側・応答の中身は読まない）。

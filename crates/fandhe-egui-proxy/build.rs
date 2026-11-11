@@ -213,8 +213,6 @@ fn build() {
     compile_ios_open_system_settings();
     // `ios/fandhe_ios_external_app_launch.m`（Issue #862）。iOS 分岐のみ。
     compile_ios_external_app_launch();
-    // `ios/fandhe_ios_device_identifier.m`（Issue #904）。iOS 分岐のみ。
-    compile_ios_device_identifier();
     // `ios/fandhe_ios_device_info.m`（Issue #1305）。iOS 分岐のみ。
     compile_ios_device_info();
     // `ios/fandhe_ios_managed_app_config.m`（Issue #945）。iOS 分岐のみ。
@@ -1350,15 +1348,6 @@ fn compile_ios_print() {
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_power_state.rs` が使う）。
 fn compile_ios_power_state() {
     compile_objc("ios/fandhe_ios_power_state.m", &["Foundation", "UIKit"]);
-}
-
-/// `ios/fandhe_ios_device_identifier.m` を `cc` でコンパイルする（Issue #904）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_device_identifier.rs` が使う）。
-fn compile_ios_device_identifier() {
-    compile_objc(
-        "ios/fandhe_ios_device_identifier.m",
-        &["Foundation", "UIKit"],
-    );
 }
 
 /// `ios/fandhe_ios_app_lifecycle.m` を `cc` でコンパイルする（Issue #894）。

@@ -1074,6 +1074,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-device-identifier"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-document-scan"
 version = "0.2.0"
 dependencies = [
@@ -1192,6 +1204,7 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "fandhe-cap-camera-capture",
+ "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
  "fandhe-cap-home-widget",
  "fandhe-cap-nfc-card-emulation",

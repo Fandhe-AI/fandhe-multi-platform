@@ -69,7 +69,7 @@ export function rewriteSource(src, id) {
     [/crate::android::android_app\b/g, "fandhe_platform_android::android_app"],
     [/(?:super|crate::device)::android::JniCallFailed\b/g, "fandhe_platform_android::JniCallFailed"],
     [new RegExp(`fandhe_device::${stem}::`, "g"), "crate::contract::"],
-    [/use fandhe_device::DeviceError;/g, `use crate::error::${err};`],
+    [/use (?:fandhe_device|crate)::DeviceError;/g, `use crate::error::${err};`],
     [/\bfandhe_device::DeviceError\b/g, `crate::error::${err}`],
     // 引数つきの固定バリアントは単位バリアントへ（文言は error.rs 側が持つ）。
     [new RegExp(`\\bDeviceError::(${Object.keys(ERROR_VARIANTS).join("|")})\\((?:"[^"]*"|_)\\)`, "g"), `${err}::$1`],
@@ -308,7 +308,7 @@ function scaffold(R, id, stem, dry) {
   console.log(`  - 未写像の DeviceError バリアント: ${unmappedVariants([...variants]).join(", ") || "なし"}`);
   for (const [, t] of moves.filter(([, t]) => t.endsWith(".rs"))) {
     read(R, t).split("\n").forEach((l, i) => {
-      if (/(crate::(?!contract|error)|super::|fandhe_device::|egui)/.test(l)) console.log(`  - ${t}:${i + 1}: ${l.trim().slice(0, 100)}`);
+      if (/(crate::(?!contract|error)|super::(?!\*|from_)|fandhe_device::|egui)/.test(l)) console.log(`  - ${t}:${i + 1}: ${l.trim().slice(0, 100)}`);
     });
   }
   console.log("  - JNI が MainActivity のインスタンスメソッドを呼ぶなら Helper の static 呼び出し（with_activity_class）へ直す");

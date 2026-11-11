@@ -4657,12 +4657,6 @@ public class MainActivity extends GameActivity {
         return DeviceInfoHelper.read(getApplicationContext());
     }
 
-    // Rust 側（`device/android_device_identifier.rs`、Issue #904）から JNI 経由で egui スレッドが
-    // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。失敗は null。
-    private String deviceIdentifierRead() {
-        return DeviceIdentifierHelper.read(getApplicationContext());
-    }
-
     // Rust 側（`device/android_per_app_language.rs`、Issue #1075）から JNI 経由で egui スレッドが
     // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。符号化は
     // `PerAppLanguageHelper` 冒頭を参照。失敗は null。

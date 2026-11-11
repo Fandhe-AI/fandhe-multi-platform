@@ -343,7 +343,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "device_identifier_show" => fandhe_core::screens::device_identifier_show::current_screen,
-    fandhe_egui_proxy::device::device_identifier::device_identifier_show_effect,
+    fandhe_cap_device_identifier::device_identifier_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "display_refresh_hdr_show" => fandhe_core::screens::display_refresh_hdr_show::current_screen,

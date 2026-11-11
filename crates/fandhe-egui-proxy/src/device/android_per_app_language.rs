@@ -54,7 +54,7 @@ mod jni_impl {
     pub(super) struct AndroidPerAppLanguage;
 
     impl PerAppLanguage for AndroidPerAppLanguage {
-        /// 2 箇所の `unsafe` は `AndroidDeviceIdentifier::read` と同じ根拠・同じ形。
+        /// 2 箇所の `unsafe` は `AndroidTextScale::scale_factor` と同じ根拠・同じ形。
         #[allow(unsafe_code)]
         fn read(&self) -> Result<AppLanguage, DeviceError> {
             const FAILED: DeviceError = DeviceError::Internal("per_app_language read");
