@@ -236,7 +236,7 @@ impl MusicLibrary for WindowsMusicLibrary {
             .name("music-library".into())
             .spawn(move || {
                 let result = (|| {
-                    let _com = super::windows_notification::ComInit::new("music_library")
+                    let _com = fandhe_platform_windows::ComInit::new()
                         .map_err(|_| MusicLibraryFailure::Failed)?;
                     let root = super::windows_photo_library::known_folder(
                         &windows::Win32::UI::Shell::FOLDERID_Music,

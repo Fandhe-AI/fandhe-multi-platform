@@ -191,7 +191,7 @@ mod win {
     use fandhe_device::midi::NoteEvent;
 
     use super::*;
-    use crate::device::windows_notification::ComInit;
+    use fandhe_platform_windows::ComInit;
 
     /// `REGDB_E_CLASSNOTREG`（WinRT クラスが登録されていない環境）。
     const CLASS_NOT_REG: i32 = 0x8004_0154_u32 as i32;
@@ -455,7 +455,7 @@ mod win {
 
     fn worker(rx: mpsc::Receiver<Cmd>, tx: mpsc::Sender<Cmd>) {
         // 失敗しても worker は続け、以後の `Start` を `Failed` にする（成功へ倒さない）。
-        let com = ComInit::new("midi start");
+        let com = ComInit::new();
         let mut session: Option<Session> = None;
         while let Ok(cmd) = rx.recv() {
             match cmd {

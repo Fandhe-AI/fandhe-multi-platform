@@ -2,7 +2,7 @@
 //! `device/pen_stylus.rs` の dispatch から呼ばれ、effect ドライバが UI スレッドから `latest()` を pull する。
 //!
 //! winit 0.30 は `WM_POINTER*` を `WindowEvent::Touch` に変換するとき、種類（ペン・指）と傾きを捨て、
-//! メッセージ自体も消費する。そこでメインウィンドウ（`windows_share::window()`）へ `SetWindowSubclass` で
+//! メッセージ自体も消費する。そこでメインウィンドウ（`fandhe_platform_windows::window()`）へ `SetWindowSubclass` で
 //! 観測専用のサブクラスを 1 回だけ付け、主ポインタ 1 本の種類・筆圧・傾きを `SharedPen` へ置く。
 //! 位置は従来どおり egui のポインタから取る。サブクラスは常に `DefSubclassProc` へ流し、メッセージを消費しない。
 //!
@@ -188,8 +188,8 @@ mod imp {
             return Ok(());
         }
         let err = || DeviceError::Internal("pen_stylus");
-        let hwnd = super::super::windows_share::window().ok_or_else(err)?;
-        // SAFETY: `hwnd` は `windows_share::window()` が返したメインウィンドウ。
+        let hwnd = fandhe_platform_windows::window().ok_or_else(err)?;
+        // SAFETY: `hwnd` は `fandhe_platform_windows::window()` が返したメインウィンドウ。
         // 引数は値渡しで、ポインタを保持しない。
         let owner = unsafe { wm::GetWindowThreadProcessId(hwnd, None) };
         // SAFETY: 引数なしの読み取り専用呼び出し。

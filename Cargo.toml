@@ -41,6 +41,8 @@ members = [
     # TASK-21.2（Issue #1168）: Apple（iOS / macOS）の共通層。機能 crate が ObjC / Swift 薄層を
     # 自分の中に持てるよう、共有ヘッダ・build script helper・main thread 判定を置く。
     "crates/fandhe-platform-apple",
+    # TASK-21.4（Issue #1184）: Windows の共通層（メインウィンドウの HWND の保持・COM 初期化ガード）。
+    "crates/fandhe-platform-windows",
     "crates/fandhe-prototype",
     "crates/fandhe-swiftui-bridge",
     "crates/fandhe-web-dom",

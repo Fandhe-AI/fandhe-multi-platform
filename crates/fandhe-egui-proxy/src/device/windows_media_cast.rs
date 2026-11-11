@@ -354,7 +354,7 @@ mod win {
     use fandhe_device::media_cast::MediaCast;
 
     use super::*;
-    use crate::device::windows_notification::ComInit;
+    use fandhe_platform_windows::ComInit;
 
     /// `REGDB_E_CLASSNOTREG`（WinRT クラスが活性化できない環境）。
     const CLASS_NOT_REG: i32 = 0x8004_0154_u32 as i32;
@@ -449,7 +449,7 @@ mod win {
 
         fn show_picker(&self, generation: u64) -> Result<(), DeviceError> {
             with_shared(|s| s.check(generation))?;
-            let hwnd = super::super::windows_share::window()
+            let hwnd = fandhe_platform_windows::window()
                 .ok_or(DeviceError::Internal("media_cast window"))?;
             let tx = queue().ok_or(DeviceError::Internal("media_cast"))?.clone();
             with_shared(|s| s.on_picker_shown(generation))?;
@@ -549,7 +549,7 @@ mod win {
     #[allow(unsafe_code)]
     fn init_picker_window(picker: &CastingDevicePicker, hwnd: HWND) -> windows::core::Result<()> {
         let init: IInitializeWithWindow = picker.cast()?;
-        // SAFETY: `hwnd` は `windows_share::window()`（`remember_window` が控えた有効なウィンドウ）
+        // SAFETY: `hwnd` は `fandhe_platform_windows::window()`（`remember_window` が控えた有効なウィンドウ）
         // 由来で、`init` は直前に取得した有効な COM ポインタ（`windows_screen_capture.rs` と同じ根拠）。
         unsafe { init.Initialize(hwnd) }
     }
@@ -769,7 +769,7 @@ mod win {
 
     fn worker(rx: mpsc::Receiver<Cmd>, tx: mpsc::Sender<Cmd>) {
         // 失敗しても worker は続け、以後の `Prepare` を `Failed` にする（成功へ倒さない）。
-        let com = ComInit::new("media_cast");
+        let com = ComInit::new();
         let mut res: Option<Res> = None;
         // 接続ごとの連番（ワーカー 1 本なので競合しない）。`release` を挟んでも戻さない。
         let mut conn_seq: u64 = 0;

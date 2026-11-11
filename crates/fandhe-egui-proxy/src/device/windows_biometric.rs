@@ -63,12 +63,13 @@ thread_local! {
 /// 呼び出し元が `bridge::deliver` する（完了ハンドラは二度と呼ばれないため）。
 #[allow(unsafe_code)]
 pub(crate) fn present(request_id: u64, reason: &str) -> Result<(), DeviceError> {
-    let hwnd = super::windows_share::window().ok_or(DeviceError::Internal("biometric window"))?;
+    let hwnd =
+        fandhe_platform_windows::window().ok_or(DeviceError::Internal("biometric window"))?;
     let interop: IUserConsentVerifierInterop =
         windows::core::factory::<UserConsentVerifier, IUserConsentVerifierInterop>()
             .map_err(|_| DeviceError::Internal("biometric factory"))?;
 
-    // SAFETY: `hwnd` は `windows_share::window()`（`remember_window` が
+    // SAFETY: `hwnd` は `fandhe_platform_windows::window()`（`remember_window` が
     // `eframe::CreationContext` から得た HWND、`ProxyApp` の生存中はウィンドウも
     // 生存する）を経由した有効なハンドルで、`interop` は上で取得した有効な COM
     // ポインタ（`windows_share::present` と同じ安全性根拠）。

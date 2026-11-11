@@ -25,11 +25,11 @@ default = ["device"]
 # Issue #750: Android のカメラ実装（`device/android.rs`）が JNI 経由で `MainActivity` を
 # 呼び出すため `dep:jni` を追加する。`jni` は android target 分岐（下記）にのみ optional
 # 依存として置かれており、Android 以外では `device` feature を有効にしても入らない。
-# Issue #898: `windows`/`raw-window-handle` も同じパターンで Windows target 分岐にのみ
+# Issue #898: `windows`/`fandhe-platform-windows`（#1184 で `raw-window-handle` から置換）も同じパターンで Windows target 分岐にのみ
 # optional 依存として置く（Windows 以外では `device` feature を有効にしても入らない）。
 # Issue #907: `windows-future`（`IAsyncOperation`/`AsyncOperationCompletedHandler` の
 # 型名）も同じ Windows target 分岐にのみ置く。
-device = ["dep:fandhe-device", "dep:serde_json", "dep:jni", "dep:windows", "dep:raw-window-handle", "dep:windows-future", "dep:windows-core", "dep:ttf-parser"]
+device = ["dep:fandhe-device", "dep:serde_json", "dep:jni", "dep:windows", "dep:fandhe-platform-windows", "dep:windows-future", "dep:windows-core", "dep:ttf-parser"]
 
 frame-metrics = []
 
@@ -543,9 +543,9 @@ windows = { workspace = true, optional = true, features = [
     # 「ディスクを挿入してください」ダイアログを抑止する。新規パッケージは増えない（Cargo.lock は不変）。
     "Win32_System_Diagnostics_Debug",
 ] }
-# Issue #898: `device/windows_share.rs::remember_window` が `LaunchContext`
-# から HWND を取り出すために使う（`raw-window-handle` の `HasWindowHandle` トレイト）。
-raw-window-handle = { workspace = true, optional = true }
+# TASK-21.4（Issue #1184）: メインウィンドウの HWND の保持と COM 初期化ガードは Windows 共通層。
+# `windows` の feature は共通層が最小限を宣言し、機能側が各自の分を足す。
+fandhe-platform-windows = { path = "../fandhe-platform-windows", optional = true }
 # Issue #907: `device/windows_biometric.rs` が Windows Hello の完了
 # （`IAsyncOperation<UserConsentVerificationResult>`/`AsyncOperationCompletedHandler`）を
 # 受けるために使う（ルート Cargo.toml の `windows-future` コメント参照）。

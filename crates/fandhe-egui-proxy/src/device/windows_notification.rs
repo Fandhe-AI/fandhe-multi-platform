@@ -32,7 +32,7 @@
 //!   出ないことがある。この状態も区別できないため [`Notifier::notify`] は
 //!   常に `Submitted` を返す（`Shown` は返さない、下記参照）
 //!
-//! `unsafe` は COM・Win32 呼び出し（[`ComInit`]、[`ensure_shortcut`]、
+//! `unsafe` は COM・Win32 呼び出し（[`ensure_shortcut`]、
 //! [`show_toast`] 内の `SetCurrentProcessExplicitAppUserModelID`）に限り、
 //! 各呼び出しの直前に `// SAFETY:` を付けて最小範囲の関数に閉じる
 //! （`lib.rs` の Windows `deny(unsafe_code)` 緩和・coding-rust.md の FFI 例外規定準拠。
@@ -48,6 +48,7 @@ use std::path::{Path, PathBuf};
 
 use fandhe_device::notification::{NotificationRequest, Notifier, NotifyOutcome};
 use fandhe_device::DeviceError;
+use fandhe_platform_windows::ComInit;
 use windows::core::{Interface, HSTRING};
 use windows::Data::Xml::Dom::XmlDocument;
 use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
@@ -59,8 +60,7 @@ use windows::Win32::System::Com::StructuredStorage::{
     PropVariantChangeType, PropVariantToBSTR, PROPVARIANT, PROPVAR_CHANGE_FLAGS,
 };
 use windows::Win32::System::Com::{
-    CoCreateInstance, CoInitializeEx, CoUninitialize, IPersistFile, CLSCTX_INPROC_SERVER,
-    COINIT_MULTITHREADED, STGM_READ,
+    CoCreateInstance, IPersistFile, CLSCTX_INPROC_SERVER, STGM_READ,
 };
 use windows::Win32::System::Variant::VT_LPWSTR;
 use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
@@ -117,49 +117,6 @@ fn shortcut_path(appdata: &OsStr) -> PathBuf {
     path.push("Programs");
     path.push(SHORTCUT_FILE);
     path
-}
-
-/// COM 初期化の RAII ガード。`notify` は `device/notification.rs::bridge` が都度
-/// 立てる専用スレッドで動く（他スレッドと COM 初期化状態を共有しない）ため、
-/// 呼び出しのたびに初期化し、関数末尾で対にして解放する。`CoInitializeEx` が
-/// 失敗した場合は `Err` を返して呼び出し元で停止する（後続の COM 操作を
-/// 未初期化のまま続けない。codex 指摘 P1、PR #1035）。
-///
-/// Issue #1044: `windows_background_task.rs` も同じ RAII を再利用する
-/// （COM 初期化ガードを機能ごとに複製しない）。`new` の `feature` は失敗時の
-/// `DeviceError::Internal` のラベルに使う（呼び出し元ごとに文言を変える）。
-pub(super) struct ComInit {
-    should_uninit: bool,
-}
-
-impl ComInit {
-    #[allow(unsafe_code)]
-    pub(super) fn new(feature: &'static str) -> Result<Self, DeviceError> {
-        // SAFETY: `CoInitializeEx` は呼び出しスレッドに対する初期化要求であり、
-        // 失敗時（`RPC_E_CHANGED_MODE` 等）もプロセス状態を破壊しない。
-        let hr = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
-        if hr.is_ok() {
-            // `should_uninit` を成功時（`S_OK`/`S_FALSE`）のみ真にすることで、
-            // 対になる `CoUninitialize` を失敗時には呼ばない（二重 uninit を避ける）。
-            Ok(Self {
-                should_uninit: true,
-            })
-        } else {
-            Err(DeviceError::Internal(feature))
-        }
-    }
-}
-
-impl Drop for ComInit {
-    #[allow(unsafe_code)]
-    fn drop(&mut self) {
-        if self.should_uninit {
-            // SAFETY: `should_uninit` は `new` 内の `CoInitializeEx` が成功した
-            // 場合のみ真になり、同一スレッド・同一 `ComInit` の生存中に 1 度だけ
-            // 呼ばれる（`Drop` は 1 度しか走らない）。
-            unsafe { CoUninitialize() };
-        }
-    }
 }
 
 /// `path` にショートカットが無ければ、`exe` を指す `.lnk` を作って
@@ -415,7 +372,7 @@ impl Notifier for WindowsToastNotifier {
         // COM 初期化はこのガードが生存する間だけ有効（宣言順が Drop 順を決めるため、
         // COM オブジェクトより先に宣言し、関数末尾で最後に解放する）。初期化自体が
         // 失敗したら後続の COM 操作へ進まず、ここで止める。
-        let _com = ComInit::new("notification com init")?;
+        let _com = ComInit::new().map_err(|_| DeviceError::Internal("notification com init"))?;
 
         // `ensure_shortcut` の失敗（作成そのものの失敗）はここで作りかけのファイルを
         // 自前で消して `Err` を返す（内部で完結、下記参照）。一方 `show_toast` の

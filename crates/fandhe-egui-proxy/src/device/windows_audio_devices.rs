@@ -41,7 +41,7 @@ use windows::Win32::System::Com::StructuredStorage::PropVariantClear;
 use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL, STGM_READ};
 use windows::Win32::System::Variant::VT_LPWSTR;
 
-use super::windows_notification::ComInit;
+use fandhe_platform_windows::ComInit;
 
 struct WindowsAudioDevices;
 
@@ -88,7 +88,7 @@ fn direction(enumerator: &IMMDeviceEnumerator, flow: EDataFlow) -> AudioDirectio
 impl AudioDevices for WindowsAudioDevices {
     #[allow(unsafe_code)]
     fn list(&self) -> Result<AudioDeviceList, DeviceError> {
-        let _com = ComInit::new("audio_devices list")?;
+        let _com = ComInit::new().map_err(|_| DeviceError::Internal("audio_devices list"))?;
         // SAFETY: COM を初期化済みのスレッドで、クラス ID とインターフェースは windows クレートの定義。
         let enumerator: IMMDeviceEnumerator =
             unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) }

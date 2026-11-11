@@ -70,6 +70,9 @@ cd -- "${REPO_ROOT}"
 # fandhe-platform-apple: クレートルートは forbid 属性ではなく `#![deny(unsafe_code)]` を
 # 採用する（`main_thread` モジュールのみ `pthread_main_np` の FFI 宣言と呼び出しで `unsafe` が
 # 不可避なため。fandhe-egui-proxy の `device/ios.rs` から移した 1 組で、TASK-21.2 / Issue #1168）。
+# fandhe-platform-windows: クレートルートは forbid ではなく `#![deny(unsafe_code)]`。
+# `ComInit` の `CoInitializeEx` / `CoUninitialize` の 2 呼び出しだけが `unsafe` を許可する
+# （fandhe-egui-proxy の `windows_notification.rs` から移した 1 組で、TASK-21.4 / Issue #1184）。
 # fandhe-cap-camera-capture: Android・iOS のみ `deny(unsafe_code)` へ緩める（cfg_attr）。Android の JNI エクスポート
 # `#[unsafe(no_mangle)]` 1 関数と iOS の ObjC 呼び出し（FFI）にだけ `#[allow(unsafe_code)]` を付ける（Issue #1170）。
 # fandhe-cap-share-receive: Android・macOS ターゲットのみ `forbid` を `deny` へ緩める
@@ -81,7 +84,7 @@ cd -- "${REPO_ROOT}"
 # fandhe-cap-document-scan: クレートルートは iOS・Android のみ `deny(unsafe_code)`（それ以外の OS は
 # forbid）。iOS の FFI（`ios.rs`）と Android の JNI エクスポート（`android.rs`）にだけ SAFETY 付きで
 # `allow` を付ける（機能 crate に OS 実装を持たせるため。TASK-21.3 / Issue #1171）。
-FORBID_EXEMPT_CRATES=("fandhe-gallery" "fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android" "fandhe-platform-apple" "fandhe-cap-camera-capture" "fandhe-cap-share-receive" "fandhe-cap-document-scan")
+FORBID_EXEMPT_CRATES=("fandhe-gallery" "fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android" "fandhe-platform-apple" "fandhe-platform-windows" "fandhe-cap-camera-capture" "fandhe-cap-share-receive" "fandhe-cap-document-scan")
 
 is_forbid_exempt() {
   local target="$1"
