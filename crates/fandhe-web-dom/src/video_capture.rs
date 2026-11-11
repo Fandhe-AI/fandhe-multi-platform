@@ -7,7 +7,7 @@
 //! `size` と、object URL を入れた `<video>` の `loadedmetadata`（`duration` /
 //! `videoWidth` / `videoHeight`）から長さ・寸法・サイズを出す。
 //! 呼び出し元は `demo.rs`（`mount_video_capture_show_screen`）、解放の契機は
-//! `mount.rs::sweep_mounts`（`release_mount`）。
+//! `mount.rs::release_features`（`release_mount`）。
 //!
 //! Web は `fandhe-device` の `VideoCapturer` トレイトを通らない（`file_picker.rs` と同じ分担）。
 //! 検査の SSOT は [`fandhe_device::video_capture::VideoClip::from_os`] で、複製しない。

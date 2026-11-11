@@ -1,7 +1,7 @@
 //! Windows 向けアプリの前面・背面の通知実装（Issue #893、契約は `fandhe_device::app_lifecycle`）。
 //! `device/app_lifecycle.rs` の dispatch から UI スレッドで呼ばれる。
 //!
-//! メインウィンドウ（`windows_share::window()`）へ `SetWindowSubclass` で観測専用のサブクラスを付け、
+//! メインウィンドウ（`fandhe_platform_windows::window()`）へ `SetWindowSubclass` で観測専用のサブクラスを付け、
 //! `WM_ACTIVATEAPP`（操作の対象になった・外れた）と `WM_SIZE`（最小化・最小化からの復帰）を
 //! `fandhe_device::app_lifecycle::event_from_windows` で出来事にする（`windows_pen_stylus.rs` と同じ手法）。
 //! サブクラスは常に `DefSubclassProc` へ流し、メッセージを消費しない。refdata は購読 `id` で、
@@ -79,7 +79,7 @@ mod imp {
     /// ウィンドウが UI スレッドのものか。サブクラスは所有スレッドからしか付け外しできない。
     #[allow(unsafe_code)]
     fn on_window_thread(hwnd: HWND) -> bool {
-        // SAFETY: `hwnd` は `windows_share::window()` が返したメインウィンドウ。引数は値渡し。
+        // SAFETY: `hwnd` は `fandhe_platform_windows::window()` が返したメインウィンドウ。引数は値渡し。
         let owner = unsafe { wm::GetWindowThreadProcessId(hwnd, None) };
         // SAFETY: 引数なしの読み取り専用呼び出し。
         owner == unsafe { GetCurrentThreadId() }
@@ -171,7 +171,7 @@ mod imp {
         #[allow(unsafe_code)]
         fn start(&self, on_signal: OnSignal) -> Result<Box<dyn SubscriptionGuard>, DeviceError> {
             let err = || DeviceError::Internal("app_lifecycle start");
-            let hwnd = super::super::windows_share::window().ok_or_else(err)?;
+            let hwnd = fandhe_platform_windows::window().ok_or_else(err)?;
             if !on_window_thread(hwnd) || INSTALLED_ID.load(Ordering::Acquire) != 0 {
                 return Err(err());
             }
@@ -197,7 +197,7 @@ mod imp {
         #[allow(unsafe_code)]
         fn read_current(&self) -> Result<CurrentState, DeviceError> {
             let err = || DeviceError::Internal("app_lifecycle read");
-            let hwnd = super::super::windows_share::window().ok_or_else(err)?;
+            let hwnd = fandhe_platform_windows::window().ok_or_else(err)?;
             // SAFETY: 引数なしの読み取り専用呼び出し。
             let fg = unsafe { wm::GetForegroundWindow() };
             let fg_pid = if fg.0.is_null() {

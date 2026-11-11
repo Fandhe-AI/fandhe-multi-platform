@@ -16,10 +16,10 @@
 //!
 //! # ウィンドウの捕捉
 //!
-//! `remember_window` は `ProxyApp::with_source`（`app.rs`）から構築時に 1 度だけ呼ばれ、
-//! `fandhe_render_egui::LaunchContext`（`HasWindowHandle` 実装）から得た HWND を static へ控える。
+//! メインウィンドウの HWND は `fandhe-platform-windows` が保持する（`fandhe-gallery` の起動
+//! クロージャが `remember_window` で 1 度だけ控え、本モジュールは `window()` で読む）。
 //! effect ドライバ（`device/share.rs`）は `CreationContext` に触れられないため、この
-//! static 経由でしか HWND を得られない。
+//! 共通層経由でしか HWND を得られない。
 //!
 //! # キャンセル検知の天井
 //!
@@ -30,24 +30,16 @@
 //! 到着だけを `bridge::deliver` へ伝える）。
 
 use std::cell::RefCell;
-use std::ffi::c_void;
-use std::sync::OnceLock;
 
-use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use windows::core::{Ref, HSTRING};
 use windows::ApplicationModel::DataTransfer::{
     DataRequestedEventArgs, DataTransferManager, TargetApplicationChosenEventArgs,
 };
 use windows::Foundation::{TypedEventHandler, Uri};
-use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::Shell::IDataTransferManagerInterop;
 
 use fandhe_device::share::ShareRequest;
 use fandhe_device::DeviceError;
-
-/// [`remember_window`] が控える HWND（プロセス内で 1 ウィンドウのみを前提にする、
-/// `ProxyApp` は 1 プロセス 1 ウィンドウのため）。
-static WINDOW: OnceLock<isize> = OnceLock::new();
 
 /// 直近の `present` が登録したハンドラ一式。次回 `present` 前に解除しないと、
 /// `DataTransferManager` は hwnd ごとに同一インスタンスが返るため登録が累積する。
@@ -66,27 +58,6 @@ thread_local! {
     static HELD: RefCell<Option<Held>> = const { RefCell::new(None) };
 }
 
-/// 起動クロージャ（`main.rs`）から構築時に 1 度だけ呼ばれる契約。`window` は
-/// `fandhe_render_egui::LaunchContext`（`HasWindowHandle` 実装）。HWND を
-/// 取得できない場合（`HandleError` またはウィンドウ以外のハンドル種別）は何もせず、
-/// [`present`] 側が「ウィンドウ不在」として `DeviceError::Internal` へ畳む。
-pub fn remember_window(window: &impl HasWindowHandle) {
-    let Ok(handle) = window.window_handle() else {
-        return;
-    };
-    if let RawWindowHandle::Win32(h) = handle.as_raw() {
-        let _ = WINDOW.set(h.hwnd.get());
-    }
-}
-
-/// [`remember_window`] が控えた HWND を返す（未取得なら `None`）。Issue #907:
-/// `device/windows_biometric.rs::present` も同じ HWND を使うため（Windows Hello の
-/// 認証ダイアログをメインウィンドウへ束縛する）、`WINDOW` static へのアクセスを
-/// ここへ一本化する。
-pub(crate) fn window() -> Option<HWND> {
-    WINDOW.get().map(|&raw| HWND(raw as *mut c_void))
-}
-
 /// `device/share.rs` の Windows 経路から呼ばれる。`request_id` は
 /// `device/share::bridge::begin` が払い出したプロセス内一意な ID（`bridge::deliver` の
 /// 照合キー）。同期的に失敗した場合は `Err` を返し、呼び出し元が `bridge::deliver` する
@@ -96,7 +67,7 @@ pub(crate) fn present(request_id: u64, request: &ShareRequest) -> Result<(), Dev
     if !matches!(DataTransferManager::IsSupported(), Ok(true)) {
         return Err(DeviceError::Unsupported("share"));
     }
-    let Some(hwnd) = window() else {
+    let Some(hwnd) = fandhe_platform_windows::window() else {
         return Err(DeviceError::Internal("share window"));
     };
 

@@ -202,7 +202,7 @@ mod web {
         }
     }
 
-    /// マウント破棄時の後片付け。`mount::sweep_mounts` から呼ばれる。
+    /// マウント破棄時の後片付け。`mount::release_features` から呼ばれる。
     pub(crate) fn release_mount(id: u64) {
         let owned = ENTRY.with(|c| {
             let mut s = c.borrow_mut();

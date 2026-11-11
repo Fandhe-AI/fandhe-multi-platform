@@ -1,7 +1,7 @@
 //! Windows 向け進捗表示・注意喚起実装（Issue #860）。`ITaskbarList3::SetProgressValue` /
 //! `SetProgressState(TBPF_NOPROGRESS)` でメインウィンドウのタスクバーボタンに進捗（0〜100 %）を
 //! 出す／消し、注意喚起は `FlashWindowEx`（`FLASHW_ALL | FLASHW_TIMERNOFG`、前面に戻るまで点滅）。
-//! HWND は `device/windows_share.rs::window()` と共通。`device/app_progress_attention.rs` の
+//! HWND は `fandhe_platform_windows::window()` と共通。`device/app_progress_attention.rs` の
 //! Windows 経路から呼ばれ、契約は `fandhe_device::app_progress_attention`。
 //!
 //! HWND の有無の判定は純関数 [`plan`] にまとめ、ホストでもテストできるようモジュールは
@@ -50,7 +50,7 @@ mod com {
     /// 進捗（%）を設定する。値の範囲は呼び出し前に `ProgressValue` で検証済み。
     pub(super) fn set_progress(hwnd: HWND, percent: u32) -> windows::core::Result<()> {
         let list = taskbar()?;
-        // SAFETY: `hwnd` は `windows_share::window()` が返したメインウィンドウ、`list` は有効な COM ポインタ。
+        // SAFETY: `hwnd` は `fandhe_platform_windows::window()` が返したメインウィンドウ、`list` は有効な COM ポインタ。
         unsafe { list.SetProgressValue(hwnd, u64::from(percent), 100) }
     }
 
@@ -83,7 +83,7 @@ struct WindowsAppProgressAttention;
 impl WindowsAppProgressAttention {
     /// HWND を取り、無ければ `Internal`。
     fn hwnd() -> Result<windows::Win32::Foundation::HWND, DeviceError> {
-        let hwnd = super::windows_share::window();
+        let hwnd = fandhe_platform_windows::window();
         plan(hwnd.is_some())?;
         hwnd.ok_or(DeviceError::Internal("app_progress_attention window"))
     }

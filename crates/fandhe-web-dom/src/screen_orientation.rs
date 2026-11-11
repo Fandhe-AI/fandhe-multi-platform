@@ -139,7 +139,7 @@ pub(crate) fn lock_type_str(o: Orientation) -> &'static str {
 #[cfg(target_arch = "wasm32")]
 pub use web::screen_orientation_show_effect;
 
-/// マウント破棄時にリスナー・タイマー・固定を解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時にリスナー・タイマー・固定を解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

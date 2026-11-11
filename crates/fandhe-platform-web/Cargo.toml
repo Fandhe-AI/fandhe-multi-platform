@@ -1,0 +1,30 @@
+[package]
+name = "fandhe-platform-web"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の Web 共通層（状態の書き戻し・マウントの生存管理と解放・権限の問い合わせ・クエリの復号。DOM レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+# wasm32 以外では純関数（query_param_bytes）だけの crate。ブラウザ API の依存は wasm32 に限る。
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { workspace = true }
+# Applier::apply が effect 実行中の同期呼び出しをマイクロタスクへ退避するため、query_permission が Promise を待つために使う。
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+# この crate が使う分だけ宣言する。機能 crate は自分が使う feature を自分の Cargo.toml に書く（Cargo が和集合にする）。
+web-sys = { workspace = true, features = [
+    "Window",
+    "Document",
+    "Element",
+    "Node",
+    "Navigator",
+    "MutationObserver",
+    "MutationObserverInit",
+    "console",
+] }
+
+[lints]
+workspace = true

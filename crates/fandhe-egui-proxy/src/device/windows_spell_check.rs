@@ -286,7 +286,8 @@ impl SpellChecker for WindowsSpellChecker {
     ) -> Result<SpellReport, DeviceError> {
         let deadline_at = Instant::now() + remaining;
         // ワーカースレッドで MTA を初期化する（Drop で対称に uninit）。
-        let _com = super::windows_notification::ComInit::new("spell_check")?;
+        let _com = fandhe_platform_windows::ComInit::new()
+            .map_err(|_| DeviceError::Internal("spell_check"))?;
         let (resolved, raw) = os::run(text, language, deadline_at)?;
         build_report(text, &resolved, raw, false)
     }

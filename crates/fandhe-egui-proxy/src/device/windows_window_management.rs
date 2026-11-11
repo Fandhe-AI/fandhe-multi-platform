@@ -10,7 +10,7 @@
 //! - 作業領域: `MonitorFromWindow` + `GetMonitorInfoW` の `rcWork`。winit が per-monitor v2 DPI
 //!   aware にするため物理 px で、`pixels_per_point` で割って egui point にする
 //!   （`snapshot().outer` と同じ座標系）
-//! - HWND は `windows_share::window()`。`unsafe` は呼び出し 1 つずつに閉じ `// SAFETY:` を付ける
+//! - HWND は `fandhe_platform_windows::window()`。`unsafe` は呼び出し 1 つずつに閉じ `// SAFETY:` を付ける
 //! - UI スレッドから同期で呼ぶ。OS のエラーコード・座標・画面の大きさはログにも画面にも出さない
 //!
 //! # 既知の天井
@@ -90,10 +90,10 @@ mod native {
     impl NativeReads for WindowsReads {
         #[allow(unsafe_code)]
         fn always_on_top(&self) -> Option<bool> {
-            let hwnd = super::super::windows_share::window()?;
+            let hwnd = fandhe_platform_windows::window()?;
             // SAFETY: 引数なしでスレッドのエラー値を 0 にするだけ。UI スレッドから同期で呼ぶ。
             unsafe { SetLastError(WIN32_ERROR(0)) };
-            // SAFETY: `hwnd` は `windows_share::window()`（`remember_window` が控えた HWND、
+            // SAFETY: `hwnd` は `fandhe_platform_windows::window()`（`remember_window` が控えた HWND、
             // `ProxyApp` の生存中はウィンドウも生存する）経由の有効なハンドル。値を返すだけで
             // ポインタを保持しない。
             let value = unsafe { GetWindowLongW(hwnd, GWL_EXSTYLE) };
@@ -104,7 +104,7 @@ mod native {
 
         #[allow(unsafe_code)]
         fn work_area(&self, ctx: &egui::Context) -> Option<WindowFrame> {
-            let hwnd = super::super::windows_share::window()?;
+            let hwnd = fandhe_platform_windows::window()?;
             // SAFETY: `hwnd` は有効なウィンドウハンドル（`always_on_top` と同じ根拠）。
             // 戻りのモニタハンドルは保持しない。
             let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };

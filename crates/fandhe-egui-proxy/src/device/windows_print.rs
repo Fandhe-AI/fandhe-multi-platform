@@ -314,7 +314,7 @@ mod ffi {
         doc_name: &str,
         render: impl FnOnce(HDC) -> Result<(), DeviceError>,
     ) -> Result<PrintOutcome, DeviceError> {
-        let hwnd = super::super::windows_share::window().ok_or(PRESENT)?;
+        let hwnd = fandhe_platform_windows::window().ok_or(PRESENT)?;
         // 要素 1 個のバッファ。NULL を渡したときの扱いに依存しない。
         let mut ranges = [PRINTPAGERANGE::default()];
         let mut pd = PRINTDLGEXW {
@@ -334,7 +334,7 @@ mod ffi {
             ..Default::default()
         };
         // SAFETY: `pd` / `ranges` はこの呼び出しの間だけ生きるローカル値。`hwnd` は
-        // `windows_share::window()` が返したメインウィンドウ（`ProxyApp` が生きている間は有効）。
+        // `fandhe_platform_windows::window()` が返したメインウィンドウ（`ProxyApp` が生きている間は有効）。
         let res = unsafe { PrintDlgExW(&mut pd) };
         // 成否にかかわらず、返ったハンドルはガードで解放する。
         let pd = DialogResult(pd);

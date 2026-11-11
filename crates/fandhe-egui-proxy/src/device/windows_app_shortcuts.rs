@@ -50,7 +50,8 @@ mod win {
         DestinationList, EnumerableObjectCollection, ICustomDestinationList, IShellLinkW, ShellLink,
     };
 
-    use super::super::windows_notification::{lpwstr_variant, ComInit};
+    use super::super::windows_notification::lpwstr_variant;
+    use fandhe_platform_windows::ComInit;
 
     const FAILED: DeviceError = DeviceError::Internal("app_shortcuts jump list");
 
@@ -65,7 +66,8 @@ mod win {
         #[allow(unsafe_code)]
         fn install(&self) -> Result<Registration, DeviceError> {
             // COM 初期化はこのガードが生存する間だけ有効（COM オブジェクトより先に宣言し最後に解放）。
-            let _com = ComInit::new("app_shortcuts com init")?;
+            let _com =
+                ComInit::new().map_err(|_| DeviceError::Internal("app_shortcuts com init"))?;
             let exe =
                 std::env::current_exe().map_err(|_| DeviceError::Internal("app_shortcuts"))?;
             // SAFETY: `DestinationList`/`CLSCTX_INPROC_SERVER` は定数。COM 初期化済みスレッド上で呼ぶ。

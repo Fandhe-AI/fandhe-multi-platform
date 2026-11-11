@@ -18,6 +18,7 @@
 //! - [`mount`]: `wasm32` 専用。`DomNode` を `web-sys` 経由で実 DOM へ構築し、
 //!   `Button` / `TextField` のイベントを状態 `S` へ配線する（[`ime`] の変換関数経由で
 //!   composition イベントも配線する）
+//!   `Applier` と生存管理は `fandhe-platform-web`（Web 共通層、#1185）の再公開
 //! - [`clipboard`]: `wasm32` 専用。「クリップボード」画面の Web 経路（Issue #859）
 //! - [`tts`]: `wasm32` 専用。「読み上げ」画面の Web 経路（Issue #867）
 //! - [`file_picker`]: `wasm32` 専用。「ファイル選択」画面の Web 経路（Issue #875）。

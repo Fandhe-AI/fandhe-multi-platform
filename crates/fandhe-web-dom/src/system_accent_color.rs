@@ -74,7 +74,7 @@ pub(crate) fn classify(inline: &str, computed: Option<&str>) -> Result<Rgb, Read
 #[cfg(target_arch = "wasm32")]
 pub use web::system_accent_color_show_effect;
 
-/// マウント破棄時にタイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時にタイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

@@ -2,7 +2,7 @@
 //!
 //! `fandhe_core::screens::foldable_posture_show`（端末依存ゼロ）の画面を
 //! [`super::mount::mount_with_effect`] の effect として駆動する。`demo.rs` のエントリポイントが
-//! effect を渡し、`mount::sweep_mounts` が破棄時に `release_mount` を呼ぶ。
+//! effect を渡し、`mount::release_features` が破棄時に `release_mount` を呼ぶ。
 //! 値の取得は Device Posture API（`navigator.devicePosture.type`）と Viewport Segments API
 //! （`window.viewport.segments`）を `js_sys::Reflect` で読む（web-sys に型が無い）。
 //! 共有するのは `fandhe_device::foldable_posture` の `READ_INTERVAL` と契約の写像
@@ -108,7 +108,7 @@ pub(crate) fn classify(
 #[cfg(target_arch = "wasm32")]
 pub use web::foldable_posture_show_effect;
 
-/// マウント破棄時にタイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時にタイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

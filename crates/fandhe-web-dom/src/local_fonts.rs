@@ -91,7 +91,7 @@ mod web {
         static DISPATCHED: RefCell<HashMap<u64, u64>> = RefCell::new(HashMap::new());
     }
 
-    /// マウント破棄時（`mount::sweep_mounts` から）に発送記録を解放する。
+    /// マウント破棄時（`mount::release_features` から）に発送記録を解放する。
     pub(crate) fn release_mount(mount_id: u64) {
         DISPATCHED.with(|d| d.borrow_mut().remove(&mount_id));
     }
@@ -175,7 +175,7 @@ mod web {
 #[cfg(target_arch = "wasm32")]
 pub use web::local_fonts_show_effect;
 
-/// マウント破棄時に発送記録を解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に発送記録を解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

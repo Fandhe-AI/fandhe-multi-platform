@@ -71,33 +71,6 @@ pub(crate) fn handler_url(origin: &str, pathname: &str) -> String {
     format!("{origin}{pathname}{HANDLER_QUERY}")
 }
 
-/// クエリ文字列から `key` の値を、置換なしのパーセントデコードで元のバイト列として取り出す。
-/// 厳密な UTF-8 検査は受け口（`receive_bytes`）に任せ、ここでは bytes を壊さない。
-#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-pub(crate) fn query_param_bytes(search: &str, key: &str) -> Option<Vec<u8>> {
-    let q = search.strip_prefix('?').unwrap_or(search);
-    let raw = q.split('&').find_map(|kv| {
-        let (k, v) = kv.split_once('=').unwrap_or((kv, ""));
-        (k == key).then_some(v)
-    })?;
-    let b = raw.as_bytes();
-    let hex = |c: u8| (c as char).to_digit(16).map(|d| d as u8);
-    let mut out = Vec::with_capacity(b.len());
-    let mut i = 0;
-    while i < b.len() {
-        match b[i] {
-            b'+' => out.push(b' '),
-            b'%' if i + 2 < b.len() && hex(b[i + 1]).is_some() && hex(b[i + 2]).is_some() => {
-                out.push(hex(b[i + 1])? << 4 | hex(b[i + 2])?);
-                i += 2;
-            }
-            c => out.push(c),
-        }
-        i += 1;
-    }
-    Some(out)
-}
-
 #[cfg(target_arch = "wasm32")]
 mod web {
     use std::sync::Once;
@@ -126,7 +99,7 @@ mod web {
                 return;
             };
             // UrlSearchParams は不正 UTF-8 を U+FFFD へ置換して検査をすり抜けるため使わない。
-            if let Some(raw) = super::query_param_bytes(&search, "url") {
+            if let Some(raw) = fandhe_platform_web::query_param_bytes(&search, "url") {
                 // 弾いた場合も件数へ反映済みのため結果は捨てる。
                 let _ = INBOX.receive_bytes(Some(&raw), WEB_SCHEME, js_sys::Date::now() as u64);
             }
@@ -209,6 +182,8 @@ pub use web::url_scheme_show_effect;
 
 #[cfg(test)]
 mod tests {
+    use fandhe_platform_web::query_param_bytes;
+
     use super::*;
 
     #[test]
@@ -229,16 +204,6 @@ mod tests {
             classify_register(true, true, false),
             Ok(ActionOutcome::AwaitingConfirmation)
         );
-    }
-
-    #[test]
-    fn query_param_keeps_invalid_utf8_bytes() {
-        let v = query_param_bytes("?screen=x&url=web%2Bfandhe%3A%FF", "url").unwrap();
-        assert_eq!(v, b"web+fandhe:\xFF");
-        assert!(std::str::from_utf8(&v).is_err());
-        assert_eq!(query_param_bytes("?a=1", "url"), None);
-        assert_eq!(query_param_bytes("?url=a%2", "url").unwrap(), b"a%2");
-        assert_eq!(query_param_bytes("?url=a%41", "url").unwrap(), b"aA");
     }
 
     #[test]

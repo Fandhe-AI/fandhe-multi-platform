@@ -50,7 +50,7 @@ const TIMEOUT_MS: u32 = 60_000;
 /// `isize` で控え、ワーカーで組み直す。
 pub(crate) fn implementation() -> Box<dyn Passkey> {
     Box::new(WindowsPasskey {
-        hwnd: super::windows_share::window().map(|h| h.0 as isize),
+        hwnd: fandhe_platform_windows::window().map(|h| h.0 as isize),
     })
 }
 

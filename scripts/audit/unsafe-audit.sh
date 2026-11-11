@@ -70,6 +70,9 @@ cd -- "${REPO_ROOT}"
 # fandhe-platform-apple: クレートルートは forbid 属性ではなく `#![deny(unsafe_code)]` を
 # 採用する（`main_thread` モジュールのみ `pthread_main_np` の FFI 宣言と呼び出しで `unsafe` が
 # 不可避なため。fandhe-egui-proxy の `device/ios.rs` から移した 1 組で、TASK-21.2 / Issue #1168）。
+# fandhe-platform-windows: クレートルートは forbid ではなく `#![deny(unsafe_code)]`。
+# `ComInit` の `CoInitializeEx` / `CoUninitialize` の 2 呼び出しだけが `unsafe` を許可する
+# （fandhe-egui-proxy の `windows_notification.rs` から移した 1 組で、TASK-21.4 / Issue #1184）。
 # fandhe-cap-*（機能 crate）: 1 機能ごとに本一覧へ足すと並列の移行作業で衝突するため、名前の接頭辞で扱う
 # （Issue #1183）。ただしクレートルートに `has_forbid_attr` が通す形の
 # forbid 属性が必要（コメント中の言及は数えない）。OS 限定で `deny` へ緩める crate も、他の OS では forbid を保つ。
@@ -79,7 +82,7 @@ cd -- "${REPO_ROOT}"
 # fandhe-cap-document-scan: クレートルートは iOS・Android のみ `deny(unsafe_code)`（それ以外の OS は
 # forbid）。iOS の FFI（`ios.rs`）と Android の JNI エクスポート（`android.rs`）にだけ SAFETY 付きで
 # `allow` を付ける（機能 crate に OS 実装を持たせるため。TASK-21.3 / Issue #1171）。
-FORBID_EXEMPT_CRATES=("fandhe-gallery" "fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android" "fandhe-platform-apple")
+FORBID_EXEMPT_CRATES=("fandhe-gallery" "fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android" "fandhe-platform-apple" "fandhe-platform-windows")
 
 # 機能 crate（fandhe-cap-*）のクレートルートに有効な forbid 属性があるか。
 # 通す形は次の 3 つだけ。いずれも行頭（先頭空白可）の内側属性 `#![...]` で、空白の揺れ

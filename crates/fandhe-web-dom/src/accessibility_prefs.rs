@@ -64,7 +64,7 @@ pub(crate) fn frame_dt(prev_ms: Option<f64>, now_ms: f64, default: f32, max: f32
 #[cfg(target_arch = "wasm32")]
 pub use web::accessibility_prefs_show_effect;
 
-/// マウント破棄時にタイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時にタイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

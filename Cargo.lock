@@ -1170,6 +1170,7 @@ dependencies = [
  "fandhe-fonts",
  "fandhe-platform-android",
  "fandhe-platform-apple",
+ "fandhe-platform-windows",
  "fandhe-prototype",
  "fandhe-render-egui",
  "fandhe-runtime",
@@ -1178,7 +1179,6 @@ dependencies = [
  "js-sys",
  "libc",
  "ordered-float",
- "raw-window-handle",
  "serde_json",
  "ttf-parser",
  "wasm-bindgen",
@@ -1212,6 +1212,7 @@ dependencies = [
  "fandhe-core",
  "fandhe-egui-proxy",
  "fandhe-platform-apple",
+ "fandhe-platform-windows",
  "fandhe-render-egui",
  "wasm-bindgen",
 ]
@@ -1229,6 +1230,24 @@ name = "fandhe-platform-apple"
 version = "0.2.0"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "fandhe-platform-web"
+version = "0.2.0"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "fandhe-platform-windows"
+version = "0.2.0"
+dependencies = [
+ "raw-window-handle",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -1286,6 +1305,7 @@ dependencies = [
  "fandhe-cap-share-receive",
  "fandhe-core",
  "fandhe-device",
+ "fandhe-platform-web",
  "image",
  "js-sys",
  "wasm-bindgen",

@@ -14,7 +14,7 @@
 //!
 //! # 録画対象は毎回ピッカーで選ばせる
 //!
-//! `GraphicsCapturePicker`（`windows_share::window()` の HWND で初期化）を毎回出す。
+//! `GraphicsCapturePicker`（`fandhe_platform_windows::window()` の HWND で初期化）を毎回出す。
 //! プログラムからモニターを黙って取る `CreateForMonitor` は使わない。ピッカーを閉じた
 //! （項目が null）・選択前に停止が押された場合は `Cancelled`。
 //!
@@ -156,8 +156,8 @@ impl ScreenCapturer for WindowsScreenCapturer {
         if !GraphicsCaptureSession::IsSupported().unwrap_or(false) {
             return Err(DeviceError::Unsupported("screen_capture"));
         }
-        let hwnd =
-            super::windows_share::window().ok_or(DeviceError::Internal("screen_capture window"))?;
+        let hwnd = fandhe_platform_windows::window()
+            .ok_or(DeviceError::Internal("screen_capture window"))?;
         {
             let mut guard = lock_session();
             if guard.is_some() {
@@ -553,7 +553,7 @@ fn build_source(
 #[allow(unsafe_code)]
 fn init_picker_window(picker: &GraphicsCapturePicker, hwnd: HWND) -> windows::core::Result<()> {
     let init: IInitializeWithWindow = picker.cast()?;
-    // SAFETY: `hwnd` は `windows_share::window()`（`remember_window` が控えた有効なウィンドウ）
+    // SAFETY: `hwnd` は `fandhe_platform_windows::window()`（`remember_window` が控えた有効なウィンドウ）
     // 由来で、`init` は直前に取得した有効な COM ポインタ（`windows_biometric.rs` と同じ根拠）。
     unsafe { init.Initialize(hwnd) }
 }

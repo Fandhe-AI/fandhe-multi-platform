@@ -37,8 +37,8 @@ fn contains_bytes(hay: &[u8], needle: &[u8]) -> bool {
 /// 不正 UTF-8 は受け口（`receive_bytes`）に拒否させる。上限もここでは切り詰めない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub fn shared_payload(search: &str) -> Option<Vec<u8>> {
-    let text = crate::url_scheme::query_param_bytes(search, SHARE_TEXT_PARAM);
-    let url = crate::url_scheme::query_param_bytes(search, SHARE_URL_PARAM);
+    let text = fandhe_platform_web::query_param_bytes(search, SHARE_TEXT_PARAM);
+    let url = fandhe_platform_web::query_param_bytes(search, SHARE_URL_PARAM);
     if text.is_none() && url.is_none() {
         return None;
     }

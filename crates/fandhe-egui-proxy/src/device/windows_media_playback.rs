@@ -297,7 +297,7 @@ mod win {
     use fandhe_device::media_playback::POLL_INTERVAL;
 
     use super::*;
-    use crate::device::windows_notification::ComInit;
+    use fandhe_platform_windows::ComInit;
 
     /// `REGDB_E_CLASSNOTREG`（Media Engine が登録されていない環境）。
     const CLASS_NOT_REG: i32 = 0x8004_0154_u32 as i32;
@@ -640,7 +640,7 @@ mod win {
 
     fn worker(rx: mpsc::Receiver<Cmd>, tx: mpsc::Sender<Cmd>) {
         // 失敗しても worker は続け、以後の `Load` を `Failed` にする（成功へ倒さない）。
-        let com = ComInit::new("media_playback");
+        let com = ComInit::new();
         // 外側 None = 未試行。MFStartup は最初の Load で 1 回だけ。
         let mut mf: Option<Option<Mf>> = None;
         let mut engine: Option<(u64, IMFMediaEngineEx)> = None;

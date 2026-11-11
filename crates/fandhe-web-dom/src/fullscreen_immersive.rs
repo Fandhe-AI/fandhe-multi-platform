@@ -66,7 +66,7 @@ pub(crate) fn reached(target: bool, observed: Option<bool>) -> bool {
 #[cfg(target_arch = "wasm32")]
 pub use web::fullscreen_toggle_effect;
 
-/// マウント破棄時にリスナーとタイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時にリスナーとタイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 
