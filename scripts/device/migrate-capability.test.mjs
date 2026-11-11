@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   checkId, stemOf, pascalOf, moveTargets, rewriteSource, usedErrorVariants, unmappedVariants,
-  renderErrorRs, replaceBlock, featureLines, gradleLines, renderUnsafeAttr, renderBuildRs,
+  renderErrorRs, replaceBlock, featureLines, gradleLines, renderUnsafeAttr, renderBuildRs, unsafeOsesOf,
 } from "./migrate-capability.mjs";
 
 test("checkId: 不正な id を拒む", () => {
@@ -111,4 +111,23 @@ test("renderBuildRs: .m は置き場の OS でだけ、その OS の framework �
   assert.ok(ios.includes("if target_is_ios() {") && ios.includes('&["Foundation", "UIKit"]') && !ios.includes("AppKit"));
   const both = renderBuildRs(["ios/a.m", "macos/b.m"]);
   assert.ok(both.includes("use fandhe_platform_apple::build::{compile_objc, target_is_ios, target_is_macos};"));
+});
+
+test("unsafeOsesOf: apple は ios と macos の両方、OS 名はそのまま、OS に写せない名前は例外（apple を target_os と取り違えない）", () => {
+  assert.deepEqual(unsafeOsesOf("apple"), ["ios", "macos"]);
+  assert.deepEqual(unsafeOsesOf("android"), ["android"]);
+  assert.throws(() => unsafeOsesOf("contract"), /target_os へ写せない/);
+  assert.throws(() => unsafeOsesOf("driver"));
+  const attr = renderUnsafeAttr(unsafeOsesOf("apple"));
+  assert.ok(attr.includes('not(any(target_os = "ios", target_os = "macos"))'));
+  assert.ok(!attr.includes('"apple"'));
+});
+
+test("renderErrorRs: 写像するバリアントが 0 件ならテストを出さない（空配列は型を推論できずコンパイルできない）", () => {
+  for (const vs of [[], ["Io"]]) {
+    const rs = renderErrorRs("foo-bar", vs);
+    assert.ok(!rs.includes("messages_are_fixed"));
+    assert.ok(!rs.includes("for (e, expected) in [\n        ]"));
+  }
+  assert.ok(renderErrorRs("foo-bar", ["Internal"]).includes("messages_are_fixed"));
 });

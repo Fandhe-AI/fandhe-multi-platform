@@ -85,6 +85,8 @@ export function usedErrorVariants(src) {
 /** error.rs に写せないバリアント（手作業の対象）。 */
 export const unmappedVariants = (vs) => vs.filter((v) => !(v in ERROR_VARIANTS));
 
+const hasUnsafe = (src) => /\bunsafe\b/.test(src.replace(/\/\/.*$/gm, ""));
+
 export function renderErrorRs(id, variants) {
   const name = `${pascalOf(id)}Error`;
   const vs = variants.filter((v) => v in ERROR_VARIANTS);
@@ -92,16 +94,9 @@ export function renderErrorRs(id, variants) {
     .map((v) => `    /// \`DeviceError::${v}\` に相当する。\n    #[error("${ERROR_VARIANTS[v]}: ${id}")]\n    ${v},`)
     .join("\n");
   const fixed = vs.map((v) => `            (${name}::${v}, "${ERROR_VARIANTS[v]}: ${id}"),`).join("\n");
-  return `//! ${id} の失敗の種類。画面の状態型にも \`fandhe-device\` にも依存しないよう、機能 crate ごとに持つ（Issue #1183）。
-//! 表示文言は移行前の \`DeviceError\` と同じ書き出しで、OS の文言は持たない（ログ・\`Debug\` に出さない契約）。
-
-/// ${id} の失敗。使うバリアントだけを持つ。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum ${name} {
-${body}
-}
-
-#[cfg(test)]
+  // 写像するバリアントが 0 件だと配列が空になり型を推論できずコンパイルできない。そのときはテストを出さない。
+  const tests = vs.length
+    ? `#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -114,7 +109,17 @@ ${fixed}
         }
     }
 }
-`;
+`
+    : "";
+  return `//! ${id} の失敗の種類。画面の状態型にも \`fandhe-device\` にも依存しないよう、機能 crate ごとに持つ（Issue #1183）。
+//! 表示文言は移行前の \`DeviceError\` と同じ書き出しで、OS の文言は持たない（ログ・\`Debug\` に出さない契約）。
+
+/// ${id} の失敗。使うバリアントだけを持つ。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum ${name} {
+${body}
+}
+${tests ? `\n${tests}` : ""}`;
 }
 
 export function renderCargoToml(id, { android, apple, java }) {
@@ -142,6 +147,13 @@ ${java ? '\n[package.metadata.fandhe.android]\njava = ["android/java"]\n' : ""}
 [lints]
 workspace = true
 `;
+}
+
+/** OS 実装のファイル名（src/<name>.rs）から、unsafe を緩める target_os の値へ。apple は ios と macos の両方。写せない名前は例外。 */
+export function unsafeOsesOf(name) {
+  if (name === "apple") return ["ios", "macos"];
+  if (["android", "ios", "macos", "windows"].includes(name)) return [name];
+  throw new Error(`src/${name}.rs に unsafe がある。OS 実装のファイルではないため target_os へ写せない。unsafe を OS 実装へ移すか、lib.rs の属性を手で決める`);
 }
 
 /** crate ルートの unsafe 属性。unsafe-audit.sh の has_forbid_attr が通す形（OS 1 つは not(target_os)、2 つ以上は not(any(..))）に合わせる。 */
@@ -282,6 +294,10 @@ function scaffold(R, id, stem, dry) {
     ...nativeFiles(R, stem).map(([d, f]) => [`crates/fandhe-egui-proxy/${d}/${f}`, `${crate}/${d}/${f}`]),
   ];
   if (!moves.some(([, t]) => /\/(contract|driver)\.rs$/.test(t))) throw new Error(`stem=${stem} の契約も driver も見つからない。--module を確認する`);
+  // 移す前に検査する（途中で止まって git mv だけ済んだ状態を残さない）。
+  for (const [f, t] of moves.filter(([, t]) => t.endsWith(".rs") && !t.endsWith("/src/lib.rs"))) {
+    if (hasUnsafe(read(R, f))) unsafeOsesOf(t.match(/src\/([^/]+)\.rs$/)?.[1] ?? t);
+  }
   for (const [f, t] of moves) console.log(`${dry ? "[dry-run] " : ""}git mv ${f} ${t}`);
   if (dry) return;
   for (const [f, t] of moves) {
@@ -293,7 +309,7 @@ function scaffold(R, id, stem, dry) {
   for (const [, t] of moves.filter(([, t]) => t.endsWith(".rs"))) {
     const src = read(R, t);
     usedErrorVariants(src).forEach((v) => variants.add(v));
-    if (/\bunsafe\b/.test(src.replace(/\/\/.*$/gm, ""))) unsafeOs.add(t.match(/src\/([a-z]+)\.rs$/)?.[1] ?? "android");
+    if (hasUnsafe(src)) unsafeOsesOf(t.match(/src\/([^/]+)\.rs$/)[1]).forEach((o) => unsafeOs.add(o));
     writeFileSync(join(R, t), rewriteSource(src, id, stem));
   }
   const has = (re) => moves.some(([, t]) => re.test(t));
@@ -312,7 +328,7 @@ function scaffold(R, id, stem, dry) {
     for (let k = i - 1; i >= 0 && k >= 0 && /^\s*(#\[|\/\/\/)/.test(deviceRs[k]); k--) if (deviceRs[k].trim().startsWith("#[")) attrs.unshift(deviceRs[k].trim());
     modLines.push(...(attrs.length ? attrs : [`#[cfg(target_os = "${os}")]`]), `mod ${os};`);
   }
-  const unsafeAttr = renderUnsafeAttr([...unsafeOs]);
+  const unsafeAttr = renderUnsafeAttr([...unsafeOs].sort());
   writeFileSync(
     join(R, crate, "src/lib.rs"),
     `//! ${id} の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。TODO: 役割・呼び出し元・守る範囲 / 守らない範囲を書く。\n//!\n//! 契約（\`contract\`）・失敗の種類（\`error\`）・effect ドライバ（\`driver\`）・OS 実装を 1 つに集める。\n//! 画面の状態型を参照してよいのは \`driver\` だけ。入口 \`platform_${stem}()\` は状態型に依存しないため、\n//! フレームワークの外のアプリも使える。\n\n${unsafeAttr}\n\nmod contract;\nmod driver;\nmod error;\n${modLines.join("\n")}\n\npub use contract::*;\npub use driver::*;\npub use error::${pascalOf(id)}Error;\n`,
