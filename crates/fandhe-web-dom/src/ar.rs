@@ -143,7 +143,7 @@ fn failure_view(f: ArFailure) -> ArFailureView {
 #[cfg(target_arch = "wasm32")]
 pub use web::ar_show_effect;
 
-/// マウント破棄時にセッションとタイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時にセッションとタイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

@@ -5,7 +5,7 @@
 //! Web Serial API（`navigator.serial`）で「利用者がダイアログで 1 つ選ぶ → 固定設定で開く →
 //! `fandhe\n` を送る → LF までの 1 行を受ける → 毎回閉じる」を行って画面へ書き戻す。
 //! 呼び出し元は `demo.rs` の `mount_serial_port_show_screen`、破棄時の解放は
-//! `mount::sweep_mounts` から [`release_mount`]。契約の SSOT は `fandhe_device::serial_port`
+//! `mount::release_features` から [`release_mount`]。契約の SSOT は `fandhe_device::serial_port`
 //! （定数・[`LineAssembler`]・失敗種別）。Web は `SerialPorts` トレイトと `round_trip` を通らない
 //! （ブロッキング契約と合わないため）ので、本モジュールが DOM レンダラ側の対応実装にあたる。
 //!
@@ -934,7 +934,7 @@ mod web {
         ok
     }
 
-    /// マウント破棄時に進行中の往復を中断する。`mount::sweep_mounts` から呼ばれる。
+    /// マウント破棄時に進行中の往復を中断する。`mount::release_features` から呼ばれる。
     /// 資源の解放（close まで）は非同期手順が行い、結果は apply されない。
     pub(crate) fn release_mount(mount_id: u64) {
         let Some(entry) = MOUNTS.with(|m| m.borrow_mut().remove(&mount_id)) else {
@@ -955,7 +955,7 @@ mod web {
 #[cfg(target_arch = "wasm32")]
 pub use web::serial_port_show_effect;
 
-/// マウント破棄時に進行中の往復を中断する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に進行中の往復を中断する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

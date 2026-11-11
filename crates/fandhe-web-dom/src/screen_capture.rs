@@ -214,7 +214,7 @@ mod web {
         }
     }
 
-    /// `sweep_mounts` から呼ばれる。マウント破棄済みなので結果は届けず解放だけする。
+    /// `release_features` から呼ばれる。マウント破棄済みなので結果は届けず解放だけする。
     pub(crate) fn release_mount(mount_id: u64) {
         release(mount_id);
     }

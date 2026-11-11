@@ -67,7 +67,7 @@ pub(crate) fn color_at(elapsed_ms: f64) -> [u8; 3] {
 #[cfg(target_arch = "wasm32")]
 pub use web::pip_show_effect;
 
-/// マウント破棄時に小窓・映像・リスナー・タイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に小窓・映像・リスナー・タイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

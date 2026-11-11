@@ -1,7 +1,7 @@
 //! 型サンプル「無操作時間の検知」の Web 経路（親 #125、Issue #632）。
 //!
 //! `fandhe_core::screens::user_idle_show` の画面を [`super::mount::mount_with_effect`] の
-//! effect として駆動する。`demo.rs` のエントリポイントと `mount::sweep_mounts`（破棄時の解放）から
+//! effect として駆動する。`demo.rs` のエントリポイントと `mount::release_features`（破棄時の解放）から
 //! 呼ばれる。`fandhe-device` の trait と `fandhe-egui-proxy` の registry は native 専用のため
 //! 通らない（Web は本モジュールが `pending_request` を観測し結果を `finish_request` で返す）。
 //!
@@ -122,7 +122,7 @@ pub(crate) fn decide(
 #[cfg(target_arch = "wasm32")]
 pub use web::user_idle_show_effect;
 
-/// マウント破棄時に検知・リスナー・タイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に検知・リスナー・タイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

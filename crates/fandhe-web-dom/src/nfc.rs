@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::nfc_read`（端末依存ゼロ）の要求を [`super::mount::mount_with_effect`] の
 //! effect として観測し、Web NFC（`NDEFReader.scan()`）で最初にかざした 1 枚の NDEF を読んで
 //! `finish_read` へ書き戻す。呼び出し元は `demo.rs` の `mount_nfc_read_screen` と、
-//! マウント破棄時の `mount::sweep_mounts`（[`release_mount`]）。
+//! マウント破棄時の `mount::release_features`（[`release_mount`]）。
 //!
 //! # ブロッキング trait を通らない理由
 //!
@@ -310,7 +310,7 @@ mod web {
         }
     }
 
-    /// マウント破棄時（`mount::sweep_mounts` から）に解除して記録を消す。画面へは書き戻さない。
+    /// マウント破棄時（`mount::release_features` から）に解除して記録を消す。画面へは書き戻さない。
     pub(crate) fn release_mount(mount: u64) {
         if let Some(e) = ENTRIES.with(|m| m.borrow_mut().remove(&mount)) {
             if let Some(a) = e.active {
@@ -531,7 +531,7 @@ mod web {
 #[cfg(target_arch = "wasm32")]
 pub use web::nfc_read_effect;
 
-/// マウント破棄時に飛行中の読み取りを解除する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に飛行中の読み取りを解除する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

@@ -71,7 +71,7 @@ pub(crate) fn is_current(live: bool, entry_epoch: u64, started_epoch: u64, desir
 #[cfg(target_arch = "wasm32")]
 pub use web::wake_lock_toggle_effect;
 
-/// マウント破棄時に sentinel とリスナーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に sentinel とリスナーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

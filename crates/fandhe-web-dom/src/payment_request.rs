@@ -128,7 +128,7 @@ mod web {
         }
     }
 
-    /// マウント破棄時（`mount::sweep_mounts` から）に飛行中の要求を取り消し、記録を解放する。
+    /// マウント破棄時（`mount::release_features` から）に飛行中の要求を取り消し、記録を解放する。
     pub(crate) fn release_mount(mount_id: u64) {
         if let Some((_, Some(req))) = DISPATCHED.with(|d| d.borrow_mut().remove(&mount_id)) {
             abort_req(&req);
@@ -300,7 +300,7 @@ mod web {
 #[cfg(target_arch = "wasm32")]
 pub use web::payment_request_effect;
 
-/// マウント破棄時に飛行中の要求を取り消す。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に飛行中の要求を取り消す。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

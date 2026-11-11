@@ -140,7 +140,7 @@ pub(crate) fn settle_stopped(outcome: Confirmed) -> Confirmed {
 #[cfg(target_arch = "wasm32")]
 pub use web::flashlight_toggle_effect;
 
-/// マウント破棄時にトラックとリスナー・タイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時にトラックとリスナー・タイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

@@ -155,7 +155,7 @@ mod web {
         }
     }
 
-    /// マウント破棄時（`mount::sweep_mounts` から）に起動記録を解放する。
+    /// マウント破棄時（`mount::release_features` から）に起動記録を解放する。
     /// 失敗で止まったマウントの記録もここで消え、同じ root への再マウントで蓄積しない。
     pub(crate) fn release_mount(mount_id: u64) {
         stop(mount_id);
@@ -281,7 +281,7 @@ mod web {
 #[cfg(target_arch = "wasm32")]
 pub use web::power_state_show_effect;
 
-/// マウント破棄時に起動記録を解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に起動記録を解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

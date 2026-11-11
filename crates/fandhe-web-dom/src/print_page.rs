@@ -125,7 +125,7 @@ mod web {
             RefCell::new(HashMap::new());
     }
 
-    /// マウント破棄時（`mount::sweep_mounts` から）に記録とブロックを解放する。
+    /// マウント破棄時（`mount::release_features` から）に記録とブロックを解放する。
     pub(crate) fn release_mount(mount_id: u64) {
         if let Some((_, Some(block))) = DISPATCHED.with(|d| d.borrow_mut().remove(&mount_id)) {
             block.remove();
@@ -287,7 +287,7 @@ mod web {
 #[cfg(target_arch = "wasm32")]
 pub use web::{print_page_effect, print_screen_page_effect};
 
-/// マウント破棄時に記録とブロックを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に記録とブロックを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

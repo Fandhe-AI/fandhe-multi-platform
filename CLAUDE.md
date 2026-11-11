@@ -35,6 +35,7 @@ fandhe-multi-platform/
 │   ├── fandhe-fonts/            # CJK フォント資産（Noto Sans JP 埋め込み）
 │   ├── fandhe-platform-android/ # Android 共通層（AndroidApp の保持・JNI 定型 `with_activity`、egui 非依存、TASK-21.2 / #1166）
 │   ├── fandhe-platform-apple/   # Apple（iOS / macOS）共通層（build script helper・共有ヘッダ・is_main_thread、TASK-21.2 / #1168）
+│   ├── fandhe-platform-web/     # Web 共通層（Applier・マウントの生存管理と解放・権限の問い合わせ・クエリの復号、DOM レンダラ非依存、TASK-21.4 / #1185）
 │   ├── fandhe-platform-windows/ # Windows 共通層（メインウィンドウ HWND の保持・COM 初期化ガード `ComInit`、egui 非依存、TASK-21.4 / #1184）
 │   ├── fandhe-prototype/        # プロトタイプアプリ共通コード（TASK-2.2）
 │   ├── fandhe-render-egui/      # egui による実描画（Node → egui）とアプリ起動（デスクトップ・Android・iOS・Web）。eframe の型を公開しない（TASK-21.2 / #1164、forbid(unsafe_code)）

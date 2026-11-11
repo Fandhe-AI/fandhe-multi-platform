@@ -247,7 +247,7 @@ pub(crate) fn confirm_step(
 #[cfg(target_arch = "wasm32")]
 pub use web::{web_initial_state, window_management_show_effect};
 
-/// マウント破棄時にタイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時にタイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 

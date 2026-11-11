@@ -135,7 +135,7 @@ pub(crate) fn failure_from_error_name(name: Option<&str>) -> VideoTranscodeFailu
 #[cfg(target_arch = "wasm32")]
 pub use web::video_transcode_effect;
 
-/// マウント破棄時に codec・リスナー・タイマーを解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に codec・リスナー・タイマーを解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 
@@ -267,7 +267,7 @@ mod web {
         }
     }
 
-    /// マウント破棄時（`mount::sweep_mounts` から）に解放する。
+    /// マウント破棄時（`mount::release_features` から）に解放する。
     pub(crate) fn release_mount(mount: u64) {
         if let Some(s) = SESSIONS.with(|m| m.borrow_mut().remove(&mount)) {
             teardown(s);

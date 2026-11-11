@@ -26,13 +26,15 @@ fandhe-device = { path = "../fandhe-device" }
 # Issue #1173: 共有の受け取りの契約（`ShareInbox`・`validate_text`）の正本。wasm32 では
 # `fandhe-core`・`fandhe-runtime`・`thiserror` しか引かない（Android/macOS の実装は cfg で外れる）。
 fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive" }
+# Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。
+fandhe-platform-web = { path = "../fandhe-platform-web" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # 実 DOM 構築（mount.rs）専用。native ビルド（dom_tree.rs / html.rs のみを使う
 # native テスト）ではこの分岐は評価されない。
 wasm-bindgen = { workspace = true }
 # Phase 11（Issue #859）: `navigator.clipboard` の Promise を待つ（`clipboard` モジュール）と、
-# `mount::Applier::apply` が effect 実行中の同期呼び出しをマイクロタスクへ退避するために使う。
+# 各機能が Promise を待つために使う（`Applier::apply` の退避は `fandhe-platform-web` 側）。
 # workspace 既定（0.4）で、egui-proxy の web 分岐が既に引いているため新規パッケージは増えない。
 wasm-bindgen-futures = { workspace = true }
 console_error_panic_hook = { workspace = true }
@@ -75,7 +77,7 @@ web-sys = { workspace = true, features = [
     "ImageBitmap",
     "Url",
     "BlobPropertyBag",
-    # root の DOM 離脱検知（`mount.rs` の `sweep_mounts`）。
+    # DOM 離脱検知は `fandhe-platform-web`。ここでは `autofill_otp` が使う。
     "MutationObserver",
     "MutationObserverInit",
     # Issue #891: 位置情報（`location` モジュール、Geolocation API）。

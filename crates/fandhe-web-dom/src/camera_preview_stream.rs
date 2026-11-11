@@ -22,7 +22,7 @@
 //! | 背景へ移る | 映像開始後の `visibilitychange`（`document.hidden`） | `apply_stopped(Backgrounded)`。戻っても再開しない |
 //! | 画面を離れる | `pagehide`（bfcache を含む） | `apply_stopped(LeftScreen)`。`pageshow` でも再開しない |
 //! | 利用者の停止 | effect の照合（世代・phase の不一致） | 解放だけ行う（画面は `Stopped(User)` 済み） |
-//! | マウント破棄 | `mount::sweep_mounts` → [`release_mount`] | 解放だけ行う |
+//! | マウント破棄 | `mount::release_features` → [`release_mount`] | 解放だけ行う |
 //!
 //! ズームは範囲外（`panTiltZoom` の許可を新しく求めることになるため）。ズーム要求には
 //! `Unsupported` を返し、表示値は `apply_frame` の `zoom = None` で「この環境では使えない」になる。
@@ -293,7 +293,7 @@ mod web {
         Some(out)
     }
 
-    /// マウント破棄時（`mount::sweep_mounts` から）に解放する。マウントは死んでいるので apply しない。
+    /// マウント破棄時（`mount::release_features` から）に解放する。マウントは死んでいるので apply しない。
     pub(crate) fn release_mount(mount_id: u64) {
         release(mount_id);
     }
@@ -855,7 +855,7 @@ mod web {
 #[cfg(target_arch = "wasm32")]
 pub use web::camera_preview_stream_show_effect;
 
-/// マウント破棄時に解放する。`mount::sweep_mounts` から呼ばれる。
+/// マウント破棄時に解放する。`mount::release_features` から呼ばれる。
 #[cfg(target_arch = "wasm32")]
 pub(crate) use web::release_mount;
 
