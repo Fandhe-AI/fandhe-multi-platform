@@ -1,0 +1,19 @@
+[package]
+name = "fandhe-platform-windows"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の Windows 共通層（メインウィンドウの HWND の保持と COM 初期化ガード。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+# Windows 以外では空のクレート（lib.rs の cfg）。依存も Windows に限る。
+# `windows` の feature は共通層が使う分だけ。機能 crate は自分が呼ぶ API の feature を自分で宣言する。
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Com"] }
+# 起動コンテキスト（HasWindowHandle 実装）から HWND を取り出す。winit は経由しない。
+raw-window-handle = { workspace = true }
+
+[lints]
+workspace = true

@@ -43,10 +43,10 @@ impl CaptureProtection for WindowsCaptureProtection {
 
     #[allow(unsafe_code)]
     fn set_protected(&self, on: bool) -> Result<(), DeviceError> {
-        let hwnd = super::windows_share::window()
+        let hwnd = fandhe_platform_windows::window()
             .ok_or(DeviceError::Internal("capture-protection window"))?;
         let affinity = if on { WDA_EXCLUDEFROMCAPTURE } else { WDA_NONE };
-        // SAFETY: `hwnd` は `windows_share::window()`（`remember_window` が控えた HWND、
+        // SAFETY: `hwnd` は `fandhe_platform_windows::window()`（`remember_window` が控えた HWND、
         // `ProxyApp` の生存中はウィンドウも生存する）を経由した有効なハンドルで、
         // ウィンドウを作った UI スレッドから呼ぶ（モジュール doc）。
         unsafe { SetWindowDisplayAffinity(hwnd, affinity) }
@@ -55,7 +55,7 @@ impl CaptureProtection for WindowsCaptureProtection {
 
     #[allow(unsafe_code)]
     fn is_protected(&self) -> Option<bool> {
-        let hwnd = super::windows_share::window()?;
+        let hwnd = fandhe_platform_windows::window()?;
         let mut raw: u32 = 0;
         // SAFETY: `hwnd` は有効なウィンドウハンドル（`set_protected` と同じ根拠）。出力先 `raw` は
         // この呼び出しの間だけ有効なスタック上の `u32` への可変参照。

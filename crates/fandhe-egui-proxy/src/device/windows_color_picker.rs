@@ -29,7 +29,7 @@ impl ColorPicker for WindowsColorPicker {
     #[allow(unsafe_code)]
     fn pick(&self) -> Result<PickedColor, DeviceError> {
         let hwnd =
-            super::windows_share::window().ok_or(DeviceError::Internal("color_picker owner"))?;
+            fandhe_platform_windows::window().ok_or(DeviceError::Internal("color_picker owner"))?;
         let mut custom = [COLORREF(0); 16];
         let mut cc = CHOOSECOLORW {
             lStructSize: size_of::<CHOOSECOLORW>() as u32,
@@ -41,7 +41,7 @@ impl ColorPicker for WindowsColorPicker {
         };
         // SAFETY: `cc` / `custom` はこの呼び出しの間だけ生きるローカル値で、他から参照されない。
         // `lStructSize` は構造体の大きさ、`lpCustColors` は必須の 16 要素。`hwnd` は
-        // `windows_share::window()` が返したメインウィンドウ（`ProxyApp` が生きている間は有効）。
+        // `fandhe_platform_windows::window()` が返したメインウィンドウ（`ProxyApp` が生きている間は有効）。
         let ok = unsafe { ChooseColorW(&mut cc) }.as_bool();
         // 0 のときだけ拡張エラーを読む（取り消しとエラーの区別）。
         let ext = if ok {

@@ -427,18 +427,16 @@ mod com {
     /// `WindowsBackgroundTask::register_fn`（`schedule()` から呼ばれる）。
     pub(super) fn register(scheduled_at_ms: u64) -> Result<(), i32> {
         let exe = std::env::current_exe().map_err(|_| E_FAIL)?;
-        // SAFETY: 呼び出しスレッドへの COM 初期化要求。`windows_notification::
+        // SAFETY: 呼び出しスレッドへの COM 初期化要求。`fandhe_platform_windows::
         // ComInit` を再利用し、Drop で対になる `CoUninitialize` を呼ぶ
         // （モジュール doc 参照）。
-        let _com = super::super::windows_notification::ComInit::new("background task schedule")
-            .map_err(|_| E_FAIL)?;
+        let _com = fandhe_platform_windows::ComInit::new().map_err(|_| E_FAIL)?;
         register_inner(scheduled_at_ms, &exe).map_err(|e| e.code().0)
     }
 
     /// `WindowsBackgroundTask::delete_fn`（`cancel()` から呼ばれる）。
     pub(super) fn delete() -> Result<(), i32> {
-        let _com = super::super::windows_notification::ComInit::new("background task cancel")
-            .map_err(|_| E_FAIL)?;
+        let _com = fandhe_platform_windows::ComInit::new().map_err(|_| E_FAIL)?;
         delete_inner().map_err(|e| e.code().0)
     }
 

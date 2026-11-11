@@ -43,6 +43,8 @@ members = [
     "crates/fandhe-platform-apple",
     # TASK-21.4（Issue #1185）: Web の共通層（Applier・マウントの生存管理と解放・権限の問い合わせ）。DOM レンダラに依存しない。
     "crates/fandhe-platform-web",
+    # TASK-21.4（Issue #1184）: Windows の共通層（メインウィンドウの HWND の保持・COM 初期化ガード）。
+    "crates/fandhe-platform-windows",
     "crates/fandhe-prototype",
     "crates/fandhe-swiftui-bridge",
     "crates/fandhe-web-dom",

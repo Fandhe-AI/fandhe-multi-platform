@@ -37,7 +37,7 @@ crates.io では、公開する crate の通常依存も公開が要るためで
 | `fandhe-runtime` | 起床・完了通知・要求追跡（`RequestSlot`）・画素の受け渡し枠（`image_store`）・`Renderer` trait。egui 非依存 | する | #1162・#1163 |
 | `fandhe-render-egui` | egui 実装。公開 API に eframe の型を出さない | する | #1164 |
 | `fandhe-fonts` | `fandhe-render-egui` の依存 | する | 既存 |
-| `fandhe-platform-android` / `-apple` / `-windows` / `-web` | 機能をまたいで共有する OS 層 | する | #1166・#1168・#1184・#1185 |
+| `fandhe-platform-android` / `-apple` / `-windows` / `-web` | 機能をまたいで共有する OS 層。`-windows` は HWND の保持と COM 初期化ガードだけを持ち、`windows` crate の feature は共通層が最小限（`Win32_Foundation`・`Win32_System_Com`）、各機能 crate が自分の分を宣言する | する | #1166・#1168・#1184・#1185 |
 | `fandhe-cap-<id>` | 1 機能 1 crate。OS 別実装・ObjC・Java・`build.rs`・宣言を同居 | する | #1170〜#1174、第 5 Phase |
 | `fandhe-web-dom` | Web の DOM 出力 | する | 既存 |
 | `fandhe-gallery` | 全機能を載せるカタログ（実機確認用）。画面の登録と各 OS の最終成果物（デスクトップ・iOS の bin、Android・Web の cdylib）を持つ。#1194 までは端末機能を `fandhe-egui-proxy` に依存する | しない | #1165（追加済み） |

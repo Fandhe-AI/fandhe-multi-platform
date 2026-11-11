@@ -455,7 +455,7 @@ static CONFIRMED_OFF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicB
 fn start_minimize_watcher(sender: &CompletionSender<FlashlightToggleState>) {
     use windows::Win32::UI::WindowsAndMessaging::IsIconic;
     static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    if super::windows_share::window().is_none() || STARTED.swap(true, Ordering::AcqRel) {
+    if fandhe_platform_windows::window().is_none() || STARTED.swap(true, Ordering::AcqRel) {
         return;
     }
     let sender = sender.clone();
@@ -464,7 +464,7 @@ fn start_minimize_watcher(sender: &CompletionSender<FlashlightToggleState>) {
         .spawn(move || {
             let mut was_minimized = false;
             loop {
-                if let Some(hwnd) = super::windows_share::window() {
+                if let Some(hwnd) = fandhe_platform_windows::window() {
                     // SAFETY: `hwnd` は `remember_window` が控えたメインウィンドウで、プロセス生存中は有効。
                     // `IsIconic` は無効な HWND でも FALSE を返すだけで副作用がない。
                     let minimized = unsafe { IsIconic(hwnd) }.as_bool();
