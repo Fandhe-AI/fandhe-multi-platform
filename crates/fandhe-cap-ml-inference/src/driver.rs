@@ -37,7 +37,10 @@ use fandhe_core::screens::ml_infer::{
 use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `MlInference` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn MlInference> {
+///
+/// 画面の状態型に依存しない入口。フレームワークの外のアプリはこれで OS 実装を取得し、effect を自分で書く
+/// （`docs/architecture/consumer-app-structure.md` §8.2）。
+pub fn platform_ml_inference() -> Arc<dyn MlInference> {
     #[cfg(target_os = "macos")]
     {
         Arc::new(crate::apple::AppleMlInference)
@@ -198,7 +201,7 @@ fn drive(
 /// `registry.rs` の `effect` 区画から `ml_infer` 画面用に配線される effect ドライバ。
 pub fn ml_infer_effect(state: &MlInferState, sender: &CompletionSender<MlInferState>) {
     static IMPL: std::sync::OnceLock<Arc<dyn MlInference>> = std::sync::OnceLock::new();
-    let imp = IMPL.get_or_init(platform);
+    let imp = IMPL.get_or_init(platform_ml_inference);
     drive(
         state,
         sender,
@@ -435,7 +438,7 @@ mod tests {
             target_os = "android"
         )))]
         assert!(matches!(
-            platform().infer(DemoModel::Valid, DEMO_INPUT, Duration::ZERO),
+            platform_ml_inference().infer(DemoModel::Valid, DEMO_INPUT, Duration::ZERO),
             Err(MlInferenceError::Unsupported)
         ));
     }

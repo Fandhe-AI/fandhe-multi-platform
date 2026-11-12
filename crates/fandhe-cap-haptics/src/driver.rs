@@ -34,7 +34,10 @@ use fandhe_core::screens::haptics_tap::{
 use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `Haptics` 実装を返す（プロセスで 1 個）。
-fn implementation() -> Arc<dyn Haptics> {
+///
+/// 画面の状態型に依存しない入口。フレームワークの外のアプリはこれで OS 実装を取得し、effect を自分で書く
+/// （`docs/architecture/consumer-app-structure.md` §8.2）。
+pub fn platform_haptics() -> Arc<dyn Haptics> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn Haptics>> = OnceLock::new();
     INSTANCE
@@ -125,7 +128,7 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `haptics_tap` 画面用に配線される effect ドライバ。
 pub fn haptics_tap_effect(state: &HapticsTapState, sender: &CompletionSender<HapticsTapState>) {
-    drive(state, sender, implementation());
+    drive(state, sender, platform_haptics());
 }
 
 /// Java 側 `HapticsHelper.tap` の戻り値（0 = 要求を渡した / 1 = 振動子なし /
@@ -237,7 +240,7 @@ mod tests {
     #[test]
     fn unsupported_os_implementation_is_unsupported() {
         assert!(matches!(
-            implementation().tap(),
+            platform_haptics().tap(),
             Err(HapticsError::Unsupported)
         ));
     }

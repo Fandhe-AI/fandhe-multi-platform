@@ -113,6 +113,36 @@ pub(crate) mod bridge {
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
+    type Waiter = std::sync::mpsc::Sender<Result<AddEventOutcome, CalendarError>>;
+
+    /// 画面を経ない呼び出し（`platform_calendar`）の待ち合わせ。画面の [`SLOT`] とは別に持ち、
+    /// 互いの保留を上書きしない。ID は [`SLOT`] の払い出しと衝突しないよう上位ビットを立てる。
+    static WAITERS: std::sync::Mutex<Vec<(u64, Waiter)>> = std::sync::Mutex::new(Vec::new());
+    static NEXT_EXTERNAL_ID: std::sync::atomic::AtomicU64 =
+        std::sync::atomic::AtomicU64::new(1 << 62);
+
+    /// 待ち合わせを登録して `(request_id, 受信側)` を返す。
+    pub(crate) fn begin_external() -> (
+        u64,
+        std::sync::mpsc::Receiver<Result<AddEventOutcome, CalendarError>>,
+    ) {
+        let id = NEXT_EXTERNAL_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let (tx, rx) = std::sync::mpsc::channel();
+        WAITERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push((id, tx));
+        (id, rx)
+    }
+
+    /// 登録済みの待ち合わせを外す（依頼自体が同期的に失敗したとき）。
+    pub(crate) fn cancel_external(request_id: u64) {
+        WAITERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|(id, _)| *id != request_id);
+    }
+
     /// 提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
     pub(crate) fn begin() -> u64 {
         SLOT.begin()
@@ -121,6 +151,15 @@ pub(crate) mod bridge {
     /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果あり
     /// は捨てて `false`（先に届いたものだけを採る）。
     pub(crate) fn deliver(request_id: u64, result: Result<AddEventOutcome, CalendarError>) -> bool {
+        let waiter = {
+            let mut w = WAITERS.lock().unwrap_or_else(|e| e.into_inner());
+            w.iter()
+                .position(|(id, _)| *id == request_id)
+                .map(|i| w.remove(i).1)
+        };
+        if let Some(tx) = waiter {
+            return tx.send(result).is_ok();
+        }
         SLOT.deliver(request_id, super::to_outcome(result))
     }
 
@@ -129,7 +168,9 @@ pub(crate) mod bridge {
     /// [`deliver`] を無視させる（`notification::bridge::reset` と同じ位置づけ）。
     #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     pub(crate) fn reset() {
-        SLOT.reset()
+        SLOT.reset();
+        // 待っている呼び出しは送信側を捨てて起こす（受信側は失敗として戻る）。
+        WAITERS.lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 }
 
@@ -149,6 +190,40 @@ fn present(request_id: u64, draft: &EventDraft) -> bool {
 #[cfg(target_os = "android")]
 fn present(request_id: u64, draft: &EventDraft) -> bool {
     crate::android::request_calendar_insert(request_id, draft)
+}
+
+/// 画面の状態型に依存しない入口。現在の OS の `CalendarEvents` 実装を返す
+/// （`docs/architecture/consumer-app-structure.md` §8.2）。
+///
+/// macOS / iOS / Android は OS 側がコールバックで結果を返すため、画面の bridge を経ずに独自の待ち合わせで
+/// 完了まで `add_event` を block する（固定タイムアウトなし）。UI スレッド（iOS / macOS のメイン）から呼ばない。
+/// Activity 再生成で待っている呼び出しは `Internal("calendar reset")` で戻る。それ以外の OS は常に `Unsupported`。
+pub fn platform_calendar() -> std::sync::Arc<dyn crate::contract::CalendarEvents> {
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+    {
+        std::sync::Arc::new(CallbackCalendar)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
+    {
+        std::sync::Arc::new(crate::contract::UnsupportedCalendar)
+    }
+}
+
+/// コールバック型 OS 向けの同期ラッパ（[`platform_calendar`]）。
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+struct CallbackCalendar;
+
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+impl crate::contract::CalendarEvents for CallbackCalendar {
+    fn add_event(&self, draft: &EventDraft) -> Result<AddEventOutcome, CalendarError> {
+        let (request_id, rx) = bridge::begin_external();
+        if !present(request_id, draft) {
+            bridge::cancel_external(request_id);
+            return Err(CalendarError::Internal("calendar present"));
+        }
+        rx.recv()
+            .unwrap_or(Err(CalendarError::Internal("calendar reset")))
+    }
 }
 
 /// macOS / iOS / Android 版の effect ドライバ本体。

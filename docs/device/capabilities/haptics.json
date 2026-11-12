@@ -24,7 +24,7 @@
       "api": "`Vibrator`（`VibrationEffect.createOneShot` は API 26+、`createPredefined(EFFECT_CLICK)` は API 29+、API 31+ は `VibratorManager.getDefaultVibrator()`）",
       "perm": "`<uses-permission android:name=\"android.permission.VIBRATE\" />`（通常権限、実行時許可なし）",
       "url": "https://developer.android.com/reference/android/os/Vibrator",
-      "note": "実装済み（旧#1092）。`HapticsHelper.tap(Context)`（JNI 署名 `()I`）を egui スレッドから同期で呼ぶ（Java → Rust の native コールバックは無い）。minSdk 24 のため API 31+ は `VibratorManager.getDefaultVibrator()`、それ未満は `VIBRATOR_SERVICE`。`hasVibrator()` が false なら `Unsupported`（成功にしない）、振動は API 26+ が `VibrationEffect.createOneShot(15ms)`、24〜25 は非推奨の `vibrate(15)`（15ms は Web 実装に揃えた）。`SecurityException` 等の `RuntimeException` は `Internal`。`Ok` は「要求を渡した」止まりで、サイレント・システム触覚オフでは無反応でも検知できない。manifest に `VIBRATE`（通常権限）を追加。Pixel 実機での振動確認と、振動子の無い端末（Android TV 等）での `Unsupported` 表示確認は人間確認待ち",
+      "note": "実装済み（旧#1092）。`HapticsHelper.tap(Context)`（JNI 署名 `(Landroid/content/Context;)I`）を egui スレッドから同期で呼ぶ（Java → Rust の native コールバックは無い）。minSdk 24 のため API 31+ は `VibratorManager.getDefaultVibrator()`、それ未満は `VIBRATOR_SERVICE`。`hasVibrator()` が false なら `Unsupported`（成功にしない）、振動は API 26+ が `VibrationEffect.createOneShot(15ms)`、24〜25 は非推奨の `vibrate(15)`（15ms は Web 実装に揃えた）。`SecurityException` 等の `RuntimeException` は `Internal`。`Ok` は「要求を渡した」止まりで、サイレント・システム触覚オフでは無反応でも検知できない。manifest に `VIBRATE`（通常権限）を追加。Pixel 実機での振動確認と、振動子の無い端末（Android TV 等）での `Unsupported` 表示確認は人間確認待ち",
       "sourceName": [
         "バイブレーション"
       ],

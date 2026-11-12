@@ -104,6 +104,10 @@ fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive", optional = tr
 [target.'cfg(target_os = "windows")'.dependencies]
 fandhe-platform-windows = { path = "../fandhe-platform-windows" }
 
+# Android の共通層。通知の片付け等が `AndroidApp` を要するため、`android_main` が片付けの前に自分で登録する。
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { workspace = true }
 

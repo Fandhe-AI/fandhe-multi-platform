@@ -1347,6 +1347,7 @@ dependencies = [
  "fandhe-cap-share-receive",
  "fandhe-core",
  "fandhe-egui-proxy",
+ "fandhe-platform-android",
  "fandhe-platform-apple",
  "fandhe-platform-windows",
  "fandhe-render-egui",

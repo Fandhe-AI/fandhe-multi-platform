@@ -67,6 +67,9 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
 #[allow(unsafe_code)]
 #[no_mangle]
 fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
+    // 片付けの前に新しい `AndroidApp` を登録する。通知の閉じ込み等は `android_app()` を使うため、
+    // 新プロセスで未登録のまま呼ぶと何も消えない（`run` 内の登録と同じ値で、そちらは上書きになるだけ）。
+    fandhe_platform_android::set_android_app(app.clone());
     // Activity 再生成では画面状態が作り直される（世代 0）。保留中の書類スキャン要求が残ると
     // 次の要求が飲み込まれるため、新しい画面状態を作る前に破棄する（TASK-21.3 / Issue #1171。
     // 以前は egui-proxy の `android::run` が呼んでいた。機能 crate を egui-proxy が知らないようにするため移した）。

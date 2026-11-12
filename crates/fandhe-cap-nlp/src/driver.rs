@@ -35,7 +35,10 @@ use fandhe_core::screens::nlp_segment::{
 use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `WordSegmenter` 実装を返す（プロセスで 1 個）。
-fn implementation() -> Arc<dyn WordSegmenter> {
+///
+/// 画面の状態型に依存しない入口。フレームワークの外のアプリはこれで OS 実装を取得し、effect を自分で書く
+/// （`docs/architecture/consumer-app-structure.md` §8.2）。
+pub fn platform_nlp() -> Arc<dyn WordSegmenter> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn WordSegmenter>> = OnceLock::new();
     INSTANCE
@@ -104,7 +107,7 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `nlp_segment` 画面用に配線される effect ドライバ。
 pub fn nlp_segment_effect(state: &NlpSegmentState, sender: &CompletionSender<NlpSegmentState>) {
-    drive(state, sender, implementation());
+    drive(state, sender, platform_nlp());
 }
 
 #[cfg(test)]
@@ -203,7 +206,7 @@ mod tests {
     fn real_implementation_rejects_over_limit_input() {
         let state = run(
             &"a".repeat(crate::contract::MAX_INPUT_CHARS + 1),
-            implementation(),
+            platform_nlp(),
         );
         assert_eq!(state.error, INVALID_INPUT_STATUS);
     }
@@ -217,7 +220,7 @@ mod tests {
     )))]
     #[test]
     fn fallback_implementation_is_unsupported() {
-        let state = run("", implementation());
+        let state = run("", platform_nlp());
         assert_eq!(state.error, UNSUPPORTED_STATUS);
     }
 
