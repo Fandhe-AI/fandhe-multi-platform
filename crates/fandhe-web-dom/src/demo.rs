@@ -1023,7 +1023,7 @@ pub fn mount_tsv_import_screen(root_id: &str) -> Result<(), JsValue> {
 }
 
 /// `root_id` が指す要素へ型サンプル「HTTP 取得（GET 限定）」（Issue #985）をマウントする
-/// 検証専用エントリポイント。`super::http_fetch::http_fetch_effect` を effect として
+/// 検証専用エントリポイント。`fandhe_cap_http_get::http_fetch_effect` を effect として
 /// 渡すため、ブラウザの `fetch`（Fetch API）経由の GET 取得が動く。
 ///
 /// 画面は `current_screen(&HttpFetchState::default())`（= 要求なしの状態、「取得」
@@ -1043,7 +1043,7 @@ pub fn mount_http_fetch_screen(root_id: &str) -> Result<(), JsValue> {
         root,
         current_http_fetch_screen(&initial_state),
         initial_state,
-        super::http_fetch::http_fetch_effect,
+        fandhe_cap_http_get::http_fetch_effect,
     )
 }
 

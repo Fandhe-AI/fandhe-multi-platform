@@ -872,7 +872,6 @@ pub mod haptics;
 /// Phase 11 の拡充ループ（親 #149、Issue #1089）: ヘルスデータ（今日の歩数）の effect ドライバ
 /// （iOS・Android は OS 別モジュール。他 OS は `UnsupportedHealthData` 固定）。
 pub mod health_data;
-pub mod http_fetch;
 /// Phase 11 の拡充ループ（親 #187、Issue #960）: 人の在席・離席の検知の effect ドライバ（Windows 実装、
 /// 他 OS は `UnsupportedHumanPresence` 固定）。
 pub mod human_presence;

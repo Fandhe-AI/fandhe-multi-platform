@@ -1110,6 +1110,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-http-get"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-web",
+ "fandhe-runtime",
+ "js-sys",
+ "serde_json",
+ "thiserror 2.0.20",
+ "ureq",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "fandhe-cap-nfc-card-emulation"
 version = "0.2.0"
 dependencies = [
@@ -1163,7 +1180,6 @@ dependencies = [
  "rfd",
  "serde_json",
  "thiserror 2.0.20",
- "ureq",
 ]
 
 [[package]]
@@ -1219,6 +1235,7 @@ dependencies = [
  "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
  "fandhe-cap-home-widget",
+ "fandhe-cap-http-get",
  "fandhe-cap-nfc-card-emulation",
  "fandhe-cap-share-receive",
  "fandhe-cap-system-tray",
@@ -1315,6 +1332,7 @@ name = "fandhe-web-dom"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "fandhe-cap-http-get",
  "fandhe-cap-share-receive",
  "fandhe-core",
  "fandhe-device",
