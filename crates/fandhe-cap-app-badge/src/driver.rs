@@ -51,11 +51,6 @@ pub(crate) mod bridge {
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
-    /// 依頼直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
-    pub(crate) fn begin() -> u64 {
-        SLOT.begin()
-    }
-
     /// OS からの結果を置く。`request_id` 不一致・未登録・既に結果ありは
     /// 捨てて `false`（先に届いたものだけを採る）。
     pub(crate) fn deliver(
@@ -75,7 +70,8 @@ pub(crate) mod bridge {
 }
 
 /// バッジ設定を依頼して要求 id を返す。保留は 1 件だけで、進行中に新しい依頼を出すと `Internal`
-/// （画面経由の依頼と slot を共有し、先行を置き換えない。失敗時の clear で既存依頼を壊さない）。
+/// （画面経由の依頼と slot を共有し、どちらも先行を置き換えない。画面側は「処理中」の失敗を表示する。
+/// 失敗時の clear で既存依頼を壊さない）。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 fn begin_set_badge(value: BadgeValue) -> Result<u64, AppBadgeError> {
     let Some(request_id) = bridge::SLOT.try_begin() else {
@@ -138,6 +134,15 @@ fn begin_set(request_id: u64, value: BadgeValue) -> Result<(), AppBadgeError> {
     crate::android::begin_set(request_id, value)
 }
 
+/// 画面用 effect が追う自分の分の要求（公開入口 [`platform_app_badge`] と slot を共有するため）。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
+
+/// 公開入口などの先行が進行中で、画面の依頼を受けられないときの表示。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+const BUSY_MESSAGE: &str = "他のバッジ設定が処理中です。完了後にもう一度お試しください";
+
 /// iOS / Android 版の effect ドライバ本体。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 fn drive_callback(state: &AppBadgeSetState, sender: &CompletionSender<AppBadgeSetState>) {
@@ -145,7 +150,14 @@ fn drive_callback(state: &AppBadgeSetState, sender: &CompletionSender<AppBadgeSe
 
     if let Some(request) = take_request(state) {
         let _ = sender.send(Box::new(mark_setting));
-        let request_id = bridge::begin();
+        let generation = request.generation;
+        // 先行（公開入口の待ちなど）を置き換えず、画面には失敗として返す（黙って捨てない）。
+        let Some(request_id) = SCREEN_OWNER.begin(&bridge::SLOT) else {
+            let _ = sender.send(Box::new(move |s: &mut AppBadgeSetState| {
+                finish_set(s, generation, Err(BUSY_MESSAGE.to_string()));
+            }));
+            return;
+        };
         // 範囲外の値は OS へ渡さずその場で画面へ返す。
         let accepted = BadgeValue::new(request.value).and_then(|v| begin_set(request_id, v));
         if let Err(e) = accepted {
@@ -158,8 +170,9 @@ fn drive_callback(state: &AppBadgeSetState, sender: &CompletionSender<AppBadgeSe
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &SCREEN_OWNER,
         sender,
         |_request_id| {},
         move |s: &mut AppBadgeSetState, (value, result)| {
@@ -170,6 +183,9 @@ fn drive_callback(state: &AppBadgeSetState, sender: &CompletionSender<AppBadgeSe
             } else {
                 false
             }
+        },
+        move |s: &mut AppBadgeSetState| {
+            finish_set(s, generation, Err(BUSY_MESSAGE.to_string()));
         },
     );
 }
@@ -411,7 +427,7 @@ mod bridge_tests {
     #[test]
     fn stale_request_id_is_dropped_and_second_deliver_ignored() {
         let _g = BRIDGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let id = bridge::begin();
+        let id = bridge::SLOT.begin();
         assert!(!bridge::deliver(id + 1000, 1, Ok(BadgeOutcome::Submitted)));
         assert!(bridge::SLOT.snapshot().is_some_and(|(_, r)| r.is_none()));
         assert!(bridge::deliver(id, 1, Err(AppBadgeError::PermissionDenied)));
@@ -424,16 +440,35 @@ mod bridge_tests {
     #[test]
     fn wait_returns_delivered_result_and_reset_unblocks() {
         let _g = BRIDGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let id = bridge::begin();
+        let id = bridge::SLOT.begin();
         let t = std::thread::spawn(move || wait_set_badge(id));
         std::thread::sleep(std::time::Duration::from_millis(50));
         assert!(bridge::deliver(id, 1, Ok(BadgeOutcome::Cancelled)));
         assert_eq!(t.join().unwrap(), Ok(BadgeOutcome::Cancelled));
 
-        let id = bridge::begin();
+        let id = bridge::SLOT.begin();
         let t = std::thread::spawn(move || wait_set_badge(id));
         std::thread::sleep(std::time::Duration::from_millis(50));
         bridge::SLOT.reset();
         assert_eq!(t.join().unwrap(), Err(AppBadgeError::Internal));
+    }
+
+    #[test]
+    fn screen_does_not_replace_public_request_and_public_does_not_replace_screen() {
+        let _g = BRIDGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::SLOT.reset();
+        // 公開入口の待ちが進行中のとき、画面の登録は拒否され、公開側の id はそのまま。
+        let public = bridge::SLOT.try_begin().expect("空き");
+        assert!(SCREEN_OWNER.begin(&bridge::SLOT).is_none());
+        assert!(bridge::SLOT.snapshot().is_some_and(|(id, _)| id == public));
+        bridge::SLOT.clear(public);
+        // 画面の要求が進行中のとき、公開入口は置き換えず拒否する。
+        let screen = SCREEN_OWNER.begin(&bridge::SLOT).expect("空き");
+        assert_eq!(
+            begin_set_badge(BadgeValue::new(1).unwrap()),
+            Err(AppBadgeError::Internal)
+        );
+        assert!(bridge::SLOT.snapshot().is_some_and(|(id, _)| id == screen));
+        bridge::SLOT.reset();
     }
 }

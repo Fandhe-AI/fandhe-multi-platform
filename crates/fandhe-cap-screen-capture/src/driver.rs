@@ -138,10 +138,6 @@ pub(crate) mod bridge {
     /// 進めないための合図。
     static STARTED_REQUEST_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-    pub(crate) fn begin() -> u64 {
-        SLOT.begin()
-    }
-
     /// ネイティブが録画を開始した瞬間に呼ぶ（任意スレッド）。
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub(crate) fn mark_started(request_id: u64) {
@@ -150,10 +146,6 @@ pub(crate) mod bridge {
 
     pub(crate) fn has_started(request_id: u64) -> bool {
         STARTED_REQUEST_ID.load(std::sync::atomic::Ordering::Relaxed) == request_id
-    }
-
-    pub(crate) fn current_request_id() -> Option<u64> {
-        SLOT.snapshot().map(|(request_id, _)| request_id)
     }
 
     /// 結果を置く。`request_id` 不一致・未登録・既に結果ありは捨てて `false`。
@@ -256,6 +248,26 @@ pub fn poll_capture(
     Some(result)
 }
 
+/// 画面用 effect が追う自分の分の要求（公開入口 [`begin_capture`] と slot を共有するため）。
+/// 停止・経過時間の対象 id もこちらを使い、公開入口の録画を巻き込まない。
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "windows",
+    target_os = "android"
+))]
+static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
+
+/// 公開入口などの先行が進行中で、画面の依頼を受けられないときの表示。
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "windows",
+    target_os = "android"
+))]
+const BUSY_MESSAGE: &str = "他の画面録画が処理中です。完了後にもう一度お試しください";
+
 /// 4 OS 経路の effect ドライバ本体。
 #[cfg(any(
     target_os = "macos",
@@ -264,9 +276,16 @@ pub fn poll_capture(
     target_os = "android"
 ))]
 fn drive_callback(state: &ScreenCaptureState, sender: &CompletionSender<ScreenCaptureState>) {
-    if take_start_request(state).is_some() {
+    if let Some(request) = take_start_request(state) {
         let _ = sender.send(Box::new(mark_recording));
-        let request_id = bridge::begin();
+        let generation = request.generation;
+        // 先行（公開入口の録画など）を置き換えず、画面には失敗として返す（黙って捨てない）。
+        let Some(request_id) = SCREEN_OWNER.begin(&bridge::SLOT) else {
+            let _ = sender.send(Box::new(move |s: &mut ScreenCaptureState| {
+                finish_capture(s, generation, Err(BUSY_MESSAGE.to_string()));
+            }));
+            return;
+        };
         let max = std::time::Duration::from_millis(MAX_CAPTURE_MS);
         if let Err(e) = platform_screen_capture().start(request_id, max) {
             // 依頼自体が失敗した（コールバックは二度と来ない）。
@@ -278,14 +297,16 @@ fn drive_callback(state: &ScreenCaptureState, sender: &CompletionSender<ScreenCa
     if take_stop_request(state).is_some() {
         let _ = sender.send(Box::new(mark_stopping));
         // 停止依頼が届かなくても（既に終了済み等）自動停止か既存の結果配送が追随する。
-        if let Some(request_id) = bridge::current_request_id() {
+        let request_id = SCREEN_OWNER.current();
+        if request_id != 0 {
             let _ = platform_screen_capture().stop(request_id);
         }
         return;
     }
 
     // 経過秒数は画面側の時刻で進める。同意ダイアログ中（未開始）は進めない。
-    let started = bridge::current_request_id().is_some_and(bridge::has_started);
+    let mine = SCREEN_OWNER.current();
+    let started = mine != 0 && bridge::has_started(mine);
     let dt_ms = fandhe_runtime::tick::measure_dt_ms(
         &LAST_TICK,
         state.phase == CapturePhase::Recording && started,
@@ -298,8 +319,9 @@ fn drive_callback(state: &ScreenCaptureState, sender: &CompletionSender<ScreenCa
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &SCREEN_OWNER,
         sender,
         |_request_id| {},
         move |s: &mut ScreenCaptureState, raw| {
@@ -310,6 +332,9 @@ fn drive_callback(state: &ScreenCaptureState, sender: &CompletionSender<ScreenCa
             } else {
                 false
             }
+        },
+        move |s: &mut ScreenCaptureState| {
+            finish_capture(s, generation, Err(BUSY_MESSAGE.to_string()));
         },
     );
 }
@@ -419,6 +444,25 @@ mod tests {
         bridge::reset();
     }
 
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    ))]
+    #[test]
+    fn screen_request_does_not_replace_public_capture_and_owner_is_separate() {
+        let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        // 公開入口の録画が進行中のとき、画面の登録は拒否され、公開側の id はそのまま。
+        let public = bridge::SLOT.try_begin().expect("空き");
+        assert!(SCREEN_OWNER.begin(&bridge::SLOT).is_none());
+        assert!(bridge::SLOT.snapshot().is_some_and(|(id, _)| id == public));
+        // 画面の停止・経過時間の対象は公開側の id を指さない。
+        assert_ne!(SCREEN_OWNER.current(), public);
+        bridge::reset();
+    }
+
     #[test]
     fn hresult_access_denied_is_permission_denied() {
         assert!(matches!(
@@ -497,7 +541,7 @@ mod tests {
     fn stale_request_id_deliver_is_dropped() {
         let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         bridge::reset();
-        let id = bridge::begin();
+        let id = bridge::SLOT.begin();
         assert!(!bridge::deliver(
             id + 1,
             build_capture_result(10, "video/mp4".into(), 1_000)

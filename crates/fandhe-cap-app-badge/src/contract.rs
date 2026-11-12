@@ -73,7 +73,8 @@ pub enum BadgeOutcome {
 }
 
 /// バッジを設定する。デスクトップでは UI スレッドから同期で、ボタン押下ごとに 1 回呼ばれる
-/// （画面の effect はモバイルでは非同期の橋渡しを使う）。モバイルの `platform_app_badge()` は OS の完了まで block する。
+/// （画面の effect はモバイルでは非同期の橋渡しを使う）。画面の effect と `platform_app_badge()` は
+/// モバイルで 1 つの slot を共有し、併用時は先行を置き換えず後続を拒否する（画面側には「処理中」の失敗を表示する）。モバイルの `platform_app_badge()` は OS の完了まで block する。
 pub trait AppBadge: Send + Sync {
     /// 値を設定する（0 は消去）。契約は本モジュール doc。
     fn set(&self, value: BadgeValue) -> Result<BadgeOutcome, AppBadgeError>;

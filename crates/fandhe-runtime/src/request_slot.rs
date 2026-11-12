@@ -165,6 +165,73 @@ pub fn poll_and_finish<S: 'static, O: Clone + Send + 'static>(
     }));
 }
 
+/// 画面用 effect が [`RequestSlot`] の要求のうち「自分の分」を追うための印。
+///
+/// 画面と公開入口（画面の状態型に依存しない入口）が同じ slot を共有する機能で、画面側が公開入口の
+/// 進行中の要求を置き換えたり、公開入口の結果を取って `clear` したりしないために使う。
+/// 画面側は [`SlotOwner::begin`] で依頼を登録し、反映は [`poll_and_finish_owned`] で自分の id の結果だけを取る。
+pub struct SlotOwner(AtomicU64);
+
+impl SlotOwner {
+    pub const fn new() -> Self {
+        Self(AtomicU64::new(0))
+    }
+
+    /// 進行中の要求が無いときだけ登録して `request_id` を返し、自分の分として覚える。
+    /// 先行（公開入口・別の画面要求）が進行中なら `None`（置き換えない）。呼び出し側は画面へ「処理中」の失敗を返す。
+    pub fn begin<O>(&self, slot: &RequestSlot<O>) -> Option<u64> {
+        let request_id = slot.try_begin()?;
+        self.0.store(request_id, Ordering::Release);
+        Some(request_id)
+    }
+
+    /// 自分の分の `request_id`（無ければ `0`）。
+    pub fn current(&self) -> u64 {
+        self.0.load(Ordering::Acquire)
+    }
+
+    fn release(&self, request_id: u64) {
+        let _ = self
+            .0
+            .compare_exchange(request_id, 0, Ordering::AcqRel, Ordering::Acquire);
+    }
+}
+
+impl Default for SlotOwner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// [`poll_and_finish`] の自分の分だけ版。`owner` の id が slot の現在の要求のときだけ結果を取って反映する。
+/// 自分の分が無ければ何もしない。slot の要求が別の id に置き換わっていたら（自分の要求は失われた）、
+/// 結果を取らず `on_lost` を送って失敗を確定させる。
+pub fn poll_and_finish_owned<S: 'static, O: Clone + Send + 'static>(
+    slot: &'static RequestSlot<O>,
+    owner: &'static SlotOwner,
+    sender: &crate::CompletionSender<S>,
+    on_waiting: impl FnOnce(u64),
+    apply: impl FnOnce(&mut S, O) -> bool + Send + 'static,
+    on_lost: impl FnOnce(&mut S) + Send + 'static,
+) {
+    let mine = owner.current();
+    if mine == 0 {
+        return;
+    }
+    if slot.snapshot().is_some_and(|(id, _)| id != mine) {
+        owner.release(mine);
+        let _ = sender.send(Box::new(on_lost));
+        return;
+    }
+    poll_and_finish(slot, sender, on_waiting, move |s, outcome| {
+        let done = apply(s, outcome);
+        if done {
+            owner.release(mine);
+        }
+        done
+    });
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -386,5 +453,22 @@ mod tests {
         apply(&mut state);
         assert_eq!(state, 9);
         assert_eq!(POLL_SLOT.snapshot(), None, "apply=true なので clear される");
+    }
+
+    #[test]
+    fn owner_does_not_replace_pending_and_is_lost_when_replaced() {
+        static SLOT: RequestSlot<u8> = RequestSlot::new();
+        static OWNER: SlotOwner = SlotOwner::new();
+        // 公開入口側の依頼が進行中なら、画面側は置き換えられない。
+        let public = SLOT.try_begin().expect("空き");
+        assert!(OWNER.begin(&SLOT).is_none());
+        assert_eq!(OWNER.current(), 0);
+        assert!(SLOT.snapshot().is_some_and(|(id, _)| id == public));
+        SLOT.deliver(public, 1);
+        // 結果が置かれた後は画面側が登録でき、以後の要求は自分の id になる。
+        let mine = OWNER.begin(&SLOT).expect("空き");
+        assert_eq!(OWNER.current(), mine);
+        assert_ne!(mine, public);
+        SLOT.reset();
     }
 }

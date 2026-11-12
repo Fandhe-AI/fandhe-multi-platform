@@ -162,25 +162,39 @@ pub fn reset_pending_tracking() {
     crate::android::reset();
 }
 
+/// 画面用 effect が追う自分の分の要求（公開入口 [`platform_passkey`] と slot を共有するため）。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
+
+/// 公開入口などの先行が進行中で、画面の依頼を受けられないときの表示。
+#[cfg(any(target_os = "android", test))]
+const BUSY_MESSAGE: &str = "他のパスキー操作が処理中です。完了後にもう一度お試しください";
+
 /// Android 版の effect ドライバ本体。`begin` が `Err` なら依頼自体の失敗としてその場で結果を置く
-/// （RP ID 未設定・不正は `Unsupported`、OS を呼ばずに「使えない」になる）。
+/// （RP ID 未設定・不正は `Unsupported`、OS を呼ばずに「使えない」になる）。先行（公開入口の待ち）が
+/// 進行中なら置き換えず、画面には失敗として返す。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 fn drive_callback(
     state: &PasskeySigninState,
     sender: &CompletionSender<PasskeySigninState>,
     slot: &'static fandhe_runtime::request_slot::RequestSlot<bridge::Outcome>,
+    owner: &'static fandhe_runtime::request_slot::SlotOwner,
     begin: fn(u64, PasskeyOp) -> Result<(), PasskeySigninError>,
 ) {
     use fandhe_core::screens::passkey_signin::{PasskeyPhase, finish, mark_running};
 
     if let Some(view) = take_request(state) {
-        // `mark_running` の反映前に次フレームが同じ要求を観測しても、二重に OS の UI を出さない。
-        if slot.snapshot().is_some() {
-            return;
-        }
         let _ = sender.send(Box::new(mark_running));
-        let request_id = slot.begin();
+        let generation = view.generation;
+        let Some(request_id) = owner.begin(slot) else {
+            let _ = sender.send(Box::new(move |s: &mut PasskeySigninState| {
+                finish(s, generation, Err(BUSY_MESSAGE.to_string()));
+            }));
+            return;
+        };
         if let Err(e) = begin(request_id, op_of(view.action)) {
             slot.deliver(request_id, Err(e));
         }
@@ -190,8 +204,9 @@ fn drive_callback(
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         slot,
+        owner,
         sender,
         |_request_id| {},
         move |s: &mut PasskeySigninState, raw| {
@@ -203,6 +218,9 @@ fn drive_callback(
                 false
             }
         },
+        move |s: &mut PasskeySigninState| {
+            finish(s, generation, Err(BUSY_MESSAGE.to_string()));
+        },
     );
 }
 
@@ -212,7 +230,13 @@ pub fn passkey_signin_effect(
     state: &PasskeySigninState,
     sender: &CompletionSender<PasskeySigninState>,
 ) {
-    drive_callback(state, sender, &bridge::SLOT, crate::android::begin);
+    drive_callback(
+        state,
+        sender,
+        &bridge::SLOT,
+        &SCREEN_OWNER,
+        crate::android::begin,
+    );
 }
 
 /// Windows 版の effect ドライバ。要求を観測したらワーカーで OS の UI を出し、保留中は毎フレーム結果を拾う。
@@ -362,18 +386,19 @@ mod tests {
     mod callback_path {
         use super::*;
         use fandhe_core::screens::passkey_signin as screen;
-        use fandhe_runtime::request_slot::RequestSlot;
+        use fandhe_runtime::request_slot::{RequestSlot, SlotOwner};
         use std::sync::atomic::{AtomicUsize, Ordering};
 
         /// 独立 slot で 1 フレーム進め、送られた更新を状態へ適用する。
         fn frame(
             s: &mut PasskeySigninState,
             slot: &'static RequestSlot<bridge::Outcome>,
+            owner: &'static SlotOwner,
             begin: fn(u64, PasskeyOp) -> Result<(), PasskeySigninError>,
         ) {
             let (tx, rx) = std::sync::mpsc::channel();
             let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
-            drive_callback(s, &sender, slot, begin);
+            drive_callback(s, &sender, slot, owner, begin);
             while let Ok(apply) = rx.try_recv() {
                 apply(s);
             }
@@ -394,17 +419,18 @@ mod tests {
         #[test]
         fn accepted_request_runs_then_delivered_result_is_applied_once() {
             static SLOT: RequestSlot<bridge::Outcome> = RequestSlot::new();
+            static OWNER: SlotOwner = SlotOwner::new();
             let mut s = PasskeySigninState::default();
             screen::sign_in(&mut s);
-            frame(&mut s, &SLOT, ok_begin);
+            frame(&mut s, &SLOT, &OWNER, ok_begin);
             assert_eq!(s.phase, screen::PasskeyPhase::Running);
             let (id, _) = SLOT.snapshot().expect("begin 済み");
             // 保留中に再度観測しても begin は二度呼ばれない。
             let before = CALLS.load(Ordering::SeqCst);
-            frame(&mut s, &SLOT, ok_begin);
+            frame(&mut s, &SLOT, &OWNER, ok_begin);
             assert_eq!(CALLS.load(Ordering::SeqCst), before);
             assert!(SLOT.deliver(id, Ok(PasskeyOutcome::NotAllowed)));
-            frame(&mut s, &SLOT, ok_begin);
+            frame(&mut s, &SLOT, &OWNER, ok_begin);
             assert_ne!(s.phase, screen::PasskeyPhase::Running);
             assert!(SLOT.snapshot().is_none());
         }
@@ -412,19 +438,42 @@ mod tests {
         #[test]
         fn begin_error_shows_unsupported_or_failure() {
             static SLOT_U: RequestSlot<bridge::Outcome> = RequestSlot::new();
+            static OWNER_U: SlotOwner = SlotOwner::new();
             let mut s = PasskeySigninState::default();
             screen::register(&mut s);
-            frame(&mut s, &SLOT_U, unsupported_begin);
-            frame(&mut s, &SLOT_U, unsupported_begin);
+            frame(&mut s, &SLOT_U, &OWNER_U, unsupported_begin);
+            frame(&mut s, &SLOT_U, &OWNER_U, unsupported_begin);
             assert_eq!(s.status, screen::UNSUPPORTED_STATUS);
             assert!(s.registered.is_none());
 
             static SLOT_F: RequestSlot<bridge::Outcome> = RequestSlot::new();
+            static OWNER_F: SlotOwner = SlotOwner::new();
             let mut s = PasskeySigninState::default();
             screen::sign_in(&mut s);
-            frame(&mut s, &SLOT_F, failing_begin);
-            frame(&mut s, &SLOT_F, failing_begin);
+            frame(&mut s, &SLOT_F, &OWNER_F, failing_begin);
+            frame(&mut s, &SLOT_F, &OWNER_F, failing_begin);
             assert!(s.status.is_empty() && s.error.starts_with(screen::FAILED_PREFIX));
+        }
+
+        #[test]
+        fn public_request_is_not_replaced_and_not_taken_by_screen() {
+            static SLOT: RequestSlot<bridge::Outcome> = RequestSlot::new();
+            static OWNER: SlotOwner = SlotOwner::new();
+            // 公開入口の待ちが進行中のとき、画面の要求は OS を呼ばず「処理中」の失敗になる。
+            let public = SLOT.try_begin().expect("空き");
+            let before = CALLS.load(Ordering::SeqCst);
+            let mut s = PasskeySigninState::default();
+            screen::sign_in(&mut s);
+            frame(&mut s, &SLOT, &OWNER, ok_begin);
+            assert_eq!(CALLS.load(Ordering::SeqCst), before);
+            assert_eq!(s.phase, screen::PasskeyPhase::Idle);
+            assert!(s.error.contains(BUSY_MESSAGE));
+            // 公開側の id は置き換わらず、結果も画面に取られない。
+            assert!(SLOT.deliver(public, Ok(PasskeyOutcome::NotAllowed)));
+            frame(&mut s, &SLOT, &OWNER, ok_begin);
+            let (id, ready) = SLOT.snapshot().expect("公開側の保留が残る");
+            assert_eq!(id, public);
+            assert!(ready.is_some());
         }
 
         #[test]
