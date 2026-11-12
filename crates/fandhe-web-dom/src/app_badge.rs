@@ -28,8 +28,8 @@
 //! 守らない: PWA 未インストール時の無表示、UA による 99+ 等への丸め、複数タブ間の一致、
 //! OS や利用者がバッジを消したときの表示値との食い違い、Promise が解決しない場合の期限。
 
+use fandhe_cap_app_badge::BadgeValue;
 use fandhe_core::screens::app_badge_set::{CoreOutcome, OUT_OF_RANGE_MESSAGE};
-use fandhe_device::app_badge::BadgeValue;
 
 /// 想定外の失敗の固定文言（例外の内容は含めない）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]

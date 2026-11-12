@@ -153,9 +153,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // （`device::mic_record::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::mic_record::reset_pending_tracking();
-    // Issue #1335: `screen_capture::bridge` も同じ理由で再生成前に捨てる。
-    #[cfg(feature = "device")]
-    crate::device::screen_capture::reset_pending_tracking();
     // Issue #1026: `speech_recognition::bridge::SLOT`/`STARTED_REQUEST_ID` も同じ理由で
     // プロセス static のため Activity 再生成をまたいで残る。新しい画面
     // `SpeechRecognizeState::default()`（`Idle`）を構築する前にここで捨て、再生成前に
@@ -226,9 +223,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Java 側に no-op スタブは置かない（`requestRadioControlSet` を経ないと native は呼ばれない）。
     #[cfg(feature = "device")]
     crate::device::android_radio_control::reset_pending_tracking();
-    // Issue #1360: `app_badge::bridge::SLOT` も同様に破棄する（`device::app_badge::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::app_badge::reset_pending_tracking();
     // Issue #1384: `compose_mail_sms::bridge::SLOT` も同様に破棄する（`device::compose_mail_sms::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::compose_mail_sms::reset_pending_tracking();
@@ -261,11 +255,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // 旧要求の遅延完了を id 不一致で捨てさせる（`device::video_capture::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::video_capture::reset_pending_tracking();
-    // Issue #1400: MIDI の購読（Rust 側 epoch・sink）とドライバの処理済み世代も破棄する。画面状態は
-    // 再生成で generation 0 に戻るため、残すと次の「受信開始」が処理済みとして飲み込まれる
-    // （`device::midi::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::midi::reset_pending_tracking();
     // Issue #267: 音声再生も同様。画面状態が generation 0 に戻るため、処理済み世代を捨て再生を止める
     // （`device::media_playback::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -278,10 +267,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // （`device::picture_in_picture::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::picture_in_picture::reset_pending_tracking();
-    // Issue #345: 端末内 LLM の処理済み世代も破棄する（理由は ml_inference と同じ。
-    // `device::on_device_llm::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::on_device_llm::reset_pending_tracking();
     // Issue #535: 端末内翻訳の処理済み世代も破棄する（理由は on_device_llm と同じ。
     // `device::translation::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -312,10 +297,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device::spotlight_index::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::spotlight_index::reset_pending_tracking();
-    // Issue #311: 音声変換の処理済み世代も破棄する（理由は ml_inference と同じ。
-    // `device::media_transcode::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::media_transcode::reset_pending_tracking();
     // Issue #1014: 動画変換の処理済み世代も破棄する（理由は media_transcode と同じ。
     // `device::video_transcode::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -330,9 +311,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Issue #1130: 決済シートの保留中の要求を破棄し、旧 request_id の完了を不一致で捨てさせる。
     #[cfg(feature = "device")]
     crate::device::payment_request::reset_pending_tracking();
-    // Issue #1280: パスキーの保留中の要求を破棄し、旧 request_id の完了を不一致で捨てさせる。
-    #[cfg(feature = "device")]
-    crate::device::passkey::reset_pending_tracking();
 
     // TASK-17.2（REQ-17）/ Issue #715: `FANDHE_PROXY_APP=<名前>` で描画対象を切り替える
     // （`main.rs`/`web.rs`/`ios.rs` と同じ契約、A03 対策・security.md 準拠の固定文字列

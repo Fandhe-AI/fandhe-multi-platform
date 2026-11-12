@@ -1062,6 +1062,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-accessibility-prefs"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-app-attest"
 version = "0.2.0"
 dependencies = [
@@ -1073,6 +1086,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-app-badge"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-ar"
 version = "0.2.0"
 dependencies = [
@@ -1081,6 +1108,21 @@ dependencies = [
  "fandhe-platform-apple",
  "fandhe-runtime",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-audio-devices"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -1141,6 +1183,20 @@ dependencies = [
  "fandhe-runtime",
  "image",
  "jni 0.22.4",
+]
+
+[[package]]
+name = "fandhe-cap-file-watch"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "libc",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -1233,6 +1289,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-local-fonts"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-fonts",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "ttf-parser",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-media-cast"
 version = "0.2.0"
 dependencies = [
@@ -1247,6 +1319,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-media-transcode"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
+name = "fandhe-cap-midi"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-ml-inference"
 version = "0.2.0"
 dependencies = [
@@ -1254,6 +1357,19 @@ dependencies = [
  "fandhe-platform-apple",
  "fandhe-runtime",
  "libc",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-multi-display"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
 ]
@@ -1278,6 +1394,31 @@ dependencies = [
  "fandhe-platform-apple",
  "fandhe-runtime",
  "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-on-device-llm"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-passkey-signin"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "serde_json",
  "thiserror 2.0.20",
  "windows 0.61.3",
 ]
@@ -1345,6 +1486,21 @@ dependencies = [
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-screen-capture"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
 ]
 
 [[package]]
@@ -1491,6 +1647,7 @@ dependencies = [
  "egui",
  "egui_kittest",
  "fandhe-cap-media-cast",
+ "fandhe-cap-midi",
  "fandhe-cap-serial-port",
  "fandhe-cap-system-tray",
  "fandhe-core",
@@ -1508,7 +1665,6 @@ dependencies = [
  "libc",
  "ordered-float",
  "serde_json",
- "ttf-parser",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -1531,13 +1687,17 @@ name = "fandhe-gallery"
 version = "0.1.0"
 dependencies = [
  "egui",
+ "fandhe-cap-accessibility-prefs",
  "fandhe-cap-app-attest",
+ "fandhe-cap-app-badge",
  "fandhe-cap-ar",
+ "fandhe-cap-audio-devices",
  "fandhe-cap-calendar",
  "fandhe-cap-call-ui",
  "fandhe-cap-camera-capture",
  "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
+ "fandhe-cap-file-watch",
  "fandhe-cap-focus-mode-status",
  "fandhe-cap-geocoding-search",
  "fandhe-cap-haptics",
@@ -1545,15 +1705,22 @@ dependencies = [
  "fandhe-cap-http-get",
  "fandhe-cap-in-app-review",
  "fandhe-cap-live-activity",
+ "fandhe-cap-local-fonts",
  "fandhe-cap-media-cast",
+ "fandhe-cap-media-transcode",
+ "fandhe-cap-midi",
  "fandhe-cap-ml-inference",
+ "fandhe-cap-multi-display",
  "fandhe-cap-nfc-card-emulation",
  "fandhe-cap-nlp",
+ "fandhe-cap-on-device-llm",
+ "fandhe-cap-passkey-signin",
  "fandhe-cap-pdf-viewer",
  "fandhe-cap-pedometer",
  "fandhe-cap-per-app-language",
  "fandhe-cap-power-state",
  "fandhe-cap-screen-brightness",
+ "fandhe-cap-screen-capture",
  "fandhe-cap-screen-wake-lock",
  "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
@@ -1657,17 +1824,29 @@ name = "fandhe-web-dom"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "fandhe-cap-accessibility-prefs",
+ "fandhe-cap-app-badge",
  "fandhe-cap-ar",
+ "fandhe-cap-audio-devices",
+ "fandhe-cap-file-watch",
  "fandhe-cap-http-get",
+ "fandhe-cap-local-fonts",
  "fandhe-cap-media-cast",
+ "fandhe-cap-media-transcode",
+ "fandhe-cap-midi",
+ "fandhe-cap-multi-display",
  "fandhe-cap-nlp",
+ "fandhe-cap-on-device-llm",
+ "fandhe-cap-passkey-signin",
  "fandhe-cap-power-state",
+ "fandhe-cap-screen-capture",
  "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-usb-device",
  "fandhe-core",
  "fandhe-device",
+ "fandhe-platform-apple",
  "fandhe-platform-web",
  "image",
  "js-sys",

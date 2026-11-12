@@ -46,9 +46,9 @@
 //!
 //! 例外の詳細（`message`）は画面にも `console` にも出さない（security.md A09）。
 
+use fandhe_cap_multi_display::MultiDisplayError;
+use fandhe_cap_multi_display::{validate, ScreenInfo};
 use fandhe_core::screens::multi_display_show::{ReadFailure, ScreenRow};
-use fandhe_device::multi_display::{validate, ScreenInfo};
-use fandhe_device::DeviceError;
 
 /// 読み取りに失敗したときの固定文言（egui-proxy と同じ。例外の `message` は出さない）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -86,7 +86,7 @@ pub(crate) fn screen_from_raw(
 /// 契約の結果を画面の入力へ写す（egui-proxy と同じ写像）。失敗は固定文言へ畳む。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn to_result(
-    r: Result<Vec<ScreenInfo>, DeviceError>,
+    r: Result<Vec<ScreenInfo>, MultiDisplayError>,
 ) -> Result<Vec<ScreenRow>, ReadFailure> {
     match r {
         Ok(v) => Ok(v
@@ -99,7 +99,7 @@ pub(crate) fn to_result(
                 name: s.name,
             })
             .collect()),
-        Err(DeviceError::Unsupported(_)) => Err(ReadFailure::Unsupported),
+        Err(MultiDisplayError::Unsupported) => Err(ReadFailure::Unsupported),
         Err(_) => Err(ReadFailure::Failed(READ_FAILED.to_string())),
     }
 }
@@ -125,10 +125,10 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_multi_display::READ_INTERVAL;
     use fandhe_core::screens::multi_display_show::{
         apply_read, finish_request, take_request, MultiDisplayShowState, ReadFailure, ScreenRow,
     };
-    use fandhe_device::multi_display::READ_INTERVAL;
     use js_sys::{Array, Function, Reflect};
     use wasm_bindgen::prelude::*;
 
@@ -423,11 +423,11 @@ mod tests {
     #[test]
     fn to_result_maps_errors() {
         assert_eq!(
-            to_result(Err(DeviceError::Unsupported("multi_display"))),
+            to_result(Err(MultiDisplayError::Unsupported)),
             Err(ReadFailure::Unsupported)
         );
         assert_eq!(
-            to_result(Err(DeviceError::Internal("x"))),
+            to_result(Err(MultiDisplayError::Internal)),
             Err(ReadFailure::Failed(READ_FAILED.to_string()))
         );
     }

@@ -12,11 +12,13 @@
 //!   （レンダラ実装が起動時に [`set_repaint_waker`] で登録する）
 //! - [`image_store`] は effect ドライバが復号済みの画素を描画側へ渡す 1 枠の保管所
 //! - [`request_slot`] は request/response 型の端末機能が使う「要求 1 件の追跡」
+//! - [`tick`] は時間で進む画面の effect ドライバが共用する、フレームごとの経過時間の実測
 
 #![forbid(unsafe_code)]
 
 pub mod image_store;
 pub mod request_slot;
+pub mod tick;
 
 use std::any::Any;
 use std::sync::mpsc::{Receiver, SendError, Sender};

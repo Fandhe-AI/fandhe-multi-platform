@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。値の範囲検証と OS 呼び出しは effect ドライバ
-//! （`device/app_badge.rs`）が [`take_request`] で要求を観測して行い、[`finish_set`] で結果を注入する。
+//! （`fandhe-cap-app-badge/src/driver.rs`）が [`take_request`] で要求を観測して行い、[`finish_set`] で結果を注入する。
 //! 全 OS 分の文言は (a) で確定し、後続の OS 別 PR は共通ファイルに触れない。
 //!
 //! # 結果を混同しない理由

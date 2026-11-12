@@ -6,9 +6,6 @@
     <!-- ローカル通知（Issue #1006）の通知チャンネル表示名（システム設定 > アプリ >
          通知 に出る名前）。切り離し時に削除する。 -->
     <string name="notification_channel_name">通知</string>
-    <!-- アプリアイコンのバッジ（Issue #1362）用チャンネル名と通知本文。切り離し時に削除する。 -->
-    <string name="app_badge_channel_name">アイコンのバッジ</string>
-    <string name="app_badge_notification_text">アイコンのバッジ用の通知です。</string>
     <string name="now_playing_channel_name">再生中</string>
     <!-- クイック設定タイル（Issue #720）の表示名。fandhe_core の
          `screens::quick_settings_tile_show::TILE_LABEL` と一致させる。切り離し時に削除する。 -->

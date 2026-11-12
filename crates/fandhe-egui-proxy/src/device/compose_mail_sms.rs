@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::compose_mail_sms`（端末依存ゼロ）の要求を観測し、値を
 //! `fandhe_device::compose_mail_sms::ComposeRequest` で検査してから OS へ渡し、結果を
 //! `CompletionSender` 経由で返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約、
-//! `device/app_badge.rs` と同型）。契約と守る範囲は `fandhe_device::compose_mail_sms` の
+//! `fandhe-cap-app-badge/src/driver.rs` と同型）。契約と守る範囲は `fandhe_device::compose_mail_sms` の
 //! モジュール doc を参照。
 //!
 //! - iOS / Android: コールバック型のため pull 型 [`bridge`]（`RequestSlot` の facade）で毎フレーム

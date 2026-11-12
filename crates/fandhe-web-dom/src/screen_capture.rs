@@ -7,7 +7,7 @@
 //!
 //! Web は `fandhe-device` の `ScreenCapturer` トレイトを通らない（`mic_record.rs` と同じ理由）。
 //! ただし結果の不変条件（0 バイト・0 ミリ秒は失敗）だけは
-//! [`fandhe_device::screen_capture::build_capture_result`] を SSOT として共有する。
+//! [`fandhe_cap_screen_capture::build_capture_result`] を SSOT として共有する。
 //! 映像のバイト列は読まない。使うのは `Blob.size` だけ（契約の「映像は読み込まない」）。
 //!
 //! # 守る範囲 / 守らない範囲
@@ -35,8 +35,8 @@
 //!
 //! 例外は `name` だけを読む。`message`・トラックのラベル・映像の中身は出力も保存もしない。
 
+use fandhe_cap_screen_capture::build_capture_result;
 use fandhe_core::screens::screen_capture::{CaptureOutcome, CaptureSummary};
-use fandhe_device::screen_capture::build_capture_result;
 
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_imports))]
 use super::mic_record::resolve_mime;

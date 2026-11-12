@@ -2,7 +2,7 @@
 //! effect ドライバ。`fandhe_core::screens::app_progress_attention_show`（端末依存ゼロ）の要求を
 //! 観測し、進捗は `fandhe_device::app_progress_attention::ProgressValue` で検査してから OS へ渡し、
 //! 結果を `CompletionSender` 経由で返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約、
-//! `device/app_badge.rs` の同期経路と同型）。契約と守る範囲は
+//! `fandhe-cap-app-badge/src/driver.rs` の同期経路と同型）。契約と守る範囲は
 //! `fandhe_device::app_progress_attention` のモジュール doc を参照。
 //!
 //! - macOS / Windows: [`AppProgressAttention`] を UI スレッドで同期に呼ぶ

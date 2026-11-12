@@ -1,0 +1,204 @@
+package com.fandhe.platform;
+
+import android.Manifest;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.content.pm.PackageManager;
+import android.os.Build;
+
+import androidx.activity.ComponentActivity;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
+import androidx.lifecycle.Lifecycle;
+
+// アプリアイコンのバッジ画面（Issue #1362、親 #1141）の Android 実装ヘルパー。`AppBadgeLifecycle` から
+// 生成・委譲される（Rust の `fandhe-cap-app-badge/src/android.rs` が `static メソッド set(Activity, long, int)` を
+// JNI で呼び、結果を `nativeOnAppBadgeResult` で受ける）。
+//
+// Android にバッジ専用 API は無いため、`setNumber(n)` を付けた無音の通知を固定 tag/ID で 1 件出す。
+// 0 は許可を問わず `cancel` で消す。API 26 未満は OS がドットを出さないので UNSUPPORTED。
+//
+// ライフサイクル: `detach`（`Activity.onDestroy`）で許可ダイアログ待ちの要求を RESULT_INTERRUPTED で確定する。
+// `request` と `pendingValue` はインスタンスフィールドなので、再生成後の新インスタンスは NONE から始まり
+// 旧ダイアログの結果を拾わない。旧インスタンスの Runnable は入口の破棄判定で FAILED を返し、その結果も
+// Rust 側の `reset_pending_tracking()` と id 照合で捨てられる。
+//
+// 結果コードの SSOT はここで、Rust 側 `android_app_badge.rs::decode` が同じ値で写像する。
+// 値・例外メッセージはログに出さない。全処理は UI スレッドで直列化する。
+final class AppBadgeHelper {
+    static final int RESULT_SUBMITTED = 0;
+    static final int RESULT_UNSUPPORTED = 1;
+    static final int RESULT_PERMISSION_DENIED = 2;
+    static final int RESULT_FAILED = 3;
+    // 許可ダイアログ待ちの間に Activity が破棄された。Rust 側は未知のコードとして Internal へ写す。
+    static final int RESULT_INTERRUPTED = 4;
+
+    private static final String TAG = "fandhe_app_badge";
+    private static final int NOTIFICATION_ID = 1;
+    private static final String CHANNEL_ID = "fandhe_app_badge";
+
+    private static native void nativeOnAppBadgeResult(long requestId, int value, int code);
+
+    private final ComponentActivity activity;
+    private final RequestTracker request = new RequestTracker();
+    private int pendingValue; // 許可ダイアログ中の値（UI スレッド専用）。
+    private boolean detached; // `onDestroy` 済み（UI スレッド専用。破棄後に来た要求を開始させない）。
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`AppBadgeLifecycle`
+    // （`FeatureLifecycleProvider`）が `Activity.onCreate` の中で `attach` を呼び、ここで登録する。
+    private final ActivityResultLauncher<String> permissionLauncher;
+
+    // Activity ごとの helper。再生成後は新しい Activity に新しい helper が付き、旧 Activity の分は破棄時に外す。
+    private static final java.util.Map<android.app.Activity, AppBadgeHelper> HELPERS =
+            new java.util.WeakHashMap<>();
+
+    static synchronized void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new AppBadgeHelper(activity));
+    }
+
+    static void detach(android.app.Activity activity) {
+        AppBadgeHelper helper;
+        synchronized (AppBadgeHelper.class) {
+            helper = HELPERS.remove(activity);
+        }
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // JNI スレッドから呼ばれる入口。helper が無い（想定外の Activity）ときは失敗で確定し、結果が来ないまま待たせない。
+    static void set(android.app.Activity activity, long id, int value) {
+        AppBadgeHelper helper;
+        synchronized (AppBadgeHelper.class) {
+            helper = HELPERS.get(activity);
+        }
+        if (helper == null) {
+            nativeOnAppBadgeResult(id, value, RESULT_FAILED);
+            return;
+        }
+        helper.set(id, value);
+    }
+
+    private AppBadgeHelper(ComponentActivity activity) {
+        this.activity = activity;
+        this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:AppBadgeHelper:1", activity,
+                new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
+    }
+
+    // JNI スレッドから呼ばれる（static 入口 `set(Activity, long, int)` 経由）。
+    private void set(long id, int value) {
+        activity.runOnUiThread(() -> start(id, value));
+    }
+
+    private boolean destroyed() {
+        return activity.isFinishing() || activity.isDestroyed();
+    }
+
+    private void finish(long id, int value, int code) {
+        nativeOnAppBadgeResult(id, value, code);
+    }
+
+    private void start(long id, int value) {
+        if (detached || destroyed()) {
+            finish(id, value, RESULT_FAILED);
+            return;
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            finish(id, value, RESULT_UNSUPPORTED);
+            return;
+        }
+        if (value == 0) {
+            try {
+                NotificationManagerCompat.from(activity).cancel(TAG, NOTIFICATION_ID);
+                finish(id, value, RESULT_SUBMITTED);
+            } catch (RuntimeException e) {
+                finish(id, value, RESULT_FAILED);
+            }
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED) {
+            // 非前景ではダイアログを出せない。
+            if (!activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
+                finish(id, value, RESULT_FAILED);
+                return;
+            }
+            request.track(id);
+            pendingValue = value;
+            try {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+            } catch (RuntimeException e) {
+                request.take();
+                finish(id, value, RESULT_FAILED);
+            }
+            return;
+        }
+        post(id, value);
+    }
+
+    // `detach` から UI スレッド（`Activity.onDestroy`）で呼ぶ。許可ダイアログ待ちの要求があれば中断で確定する
+    // （待ち続ける呼び出しを残さない）。`take` は first-wins のため、結果を届け済みの要求には二重に届けない。
+    private void onDestroy() {
+        detached = true;
+        long id = request.take();
+        if (id != RequestTracker.NONE) {
+            finish(id, pendingValue, RESULT_INTERRUPTED);
+        }
+    }
+
+    private void onPermissionResult(boolean granted) {
+        long id = request.take();
+        if (id == RequestTracker.NONE) {
+            return;
+        }
+        int value = pendingValue;
+        if (destroyed()) {
+            finish(id, value, RESULT_FAILED);
+        } else if (!granted) {
+            finish(id, value, RESULT_PERMISSION_DENIED);
+        } else {
+            post(id, value);
+        }
+    }
+
+    // API 26+ でのみ呼ばれる（start の入口で弾く）。IPC の例外で UI スレッドを落とさない。
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
+    private void post(long id, int value) {
+        try {
+            NotificationManagerCompat nm = NotificationManagerCompat.from(activity);
+            if (!nm.areNotificationsEnabled()) {
+                finish(id, value, RESULT_PERMISSION_DENIED);
+                return;
+            }
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID,
+                    activity.getString(R.string.app_badge_channel_name),
+                    NotificationManager.IMPORTANCE_LOW);
+            channel.setShowBadge(true);
+            nm.createNotificationChannel(channel);
+            NotificationChannel actual = nm.getNotificationChannel(CHANNEL_ID);
+            if (actual != null && actual.getImportance() == NotificationManager.IMPORTANCE_NONE) {
+                finish(id, value, RESULT_PERMISSION_DENIED);
+                return;
+            }
+            // contentIntent は付けない（exported な入口を増やさない）。
+            NotificationCompat.Builder b = new NotificationCompat.Builder(activity, CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.sym_def_app_icon)
+                    .setContentTitle(activity.getString(R.string.app_name))
+                    .setContentText(activity.getString(R.string.app_badge_notification_text))
+                    .setNumber(value)
+                    .setSilent(true)
+                    .setOnlyAlertOnce(true)
+                    .setOngoing(false);
+            nm.notify(TAG, NOTIFICATION_ID, b.build());
+            finish(id, value, RESULT_SUBMITTED);
+        } catch (SecurityException e) {
+            finish(id, value, RESULT_PERMISSION_DENIED);
+        } catch (RuntimeException e) {
+            finish(id, value, RESULT_FAILED);
+        }
+    }
+}

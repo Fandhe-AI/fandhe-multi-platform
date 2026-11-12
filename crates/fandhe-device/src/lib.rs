@@ -17,22 +17,16 @@
 //! #745 の API が確定してから #747〜#749 側で行う。
 #![forbid(unsafe_code)]
 
-/// Phase 11（端末機能の拡充ループ、親 #1132、Issue #1308）: アクセシビリティ設定（視差軽減・コントラスト）。
-pub mod accessibility_prefs;
 /// Phase 11（端末機能の拡充ループ、親 #124、Issue #613）: 行動認識（歩行・走行・乗り物など）。
 pub mod activity_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #140、Issue #721）: アラーム・正確な時刻の予約（Windows 実装、他 OS は `Unsupported` 固定）。
 pub mod alarm;
-/// Phase 11（端末機能の拡充ループ、親 #1141、Issue #1360）: アプリアイコンのバッジ（Windows はタスクバーのオーバーレイ数字）。
-pub mod app_badge;
 /// Phase 11 の拡充ループ（親 #178、Issue #893）: アプリの前面・背面・凍結の通知。
 pub mod app_lifecycle;
 /// Phase 11 の拡充ループ（親 #174、Issue #860）: Dock・タスクバーの進捗表示と注意喚起。
 pub mod app_progress_attention;
 /// Phase 11（端末機能の拡充ループ、親 #101、Issue #424）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録。
 pub mod app_shortcuts;
-/// Phase 11（端末機能の拡充ループ、親 #1136、Issue #1330）: 音声デバイスの一覧（入力・出力の名前）。
-pub mod audio_devices;
 /// Phase 11 の拡充ループ（親 #172、Issue #840）: 音声の割り込み・セッション種別（他の音を止める・下げる・混ぜる）。
 pub mod audio_session;
 /// Phase 11（端末機能の拡充ループ、親 #121、Issue #585）: ワンタイムコード（OTP）の自動入力のヒント。
@@ -95,8 +89,6 @@ pub mod file_picker;
 pub mod file_preview;
 /// Phase 11 の拡充ループ（親 #194、Issue #1019）: 自アプリの保存先を OS のファイル画面に出す（一覧・置く・消すの契約と共通実装）。
 pub mod file_provider;
-/// Phase 11 の拡充ループ（親 #1143、Issue #1410）: 作業フォルダ直下のファイルの作成・更新・削除の監視。
-pub mod file_watch;
 /// Phase 11 の拡充ループ（親 #106、Issue #458）: ライト（トーチ）の点灯 / 消灯。
 pub mod flashlight;
 /// Phase 11 の拡充ループ（親 #141、Issue #723）: 折りたたみ端末の姿勢と折れ目。
@@ -124,8 +116,6 @@ pub mod in_app_browser;
 pub mod lan_discovery;
 /// Phase 11（端末機能の拡充ループ、親 #134、Issue #696）: ログイン時の自動起動（有効化・無効化・状態の読み戻し）。
 pub mod launch_at_login;
-/// Phase 11（端末機能の拡充ループ、親 #1145、Issue #1376）: OS 搭載フォントのファミリー名の一覧。
-pub mod local_fonts;
 /// Phase 11（端末機能の拡充ループ、親 #110、Issue #511）: 近くの端末との直接通信（同じアプリを開いた 2 台が固定文字列を 1 回ずつ送り合う）。
 pub mod local_peer;
 /// Phase 11（端末機能の拡充ループ、親 #887、Issue #888）: 継続 push 型の位置情報取得。
@@ -136,19 +126,15 @@ pub mod managed_app_config;
 pub mod map_view;
 /// Phase 11（端末機能の拡充ループ、親 #86、Issue #267）: 音声 1 本の再生・一時停止・停止。
 pub mod media_playback;
-/// Phase 11（端末機能の拡充ループ、親 #91、Issue #311）: 音声 1 本の AAC（m4a）への変換と出力の検証。
+/// Issue #1188: MP4 box 読みの共有部品（音声変換は機能 crate `fandhe-cap-media-transcode`、動画変換 `video_transcode` が使う）。
 pub mod media_transcode;
 /// Phase 11 の拡充ループ（親 #179、Issue #911）: メモリ逼迫・負荷の通知。
 pub mod memory_pressure;
 /// Phase 11（端末機能の拡充ループ、親 #953、Issue #954）: マイク録音。
 pub mod mic_record;
-/// Phase 11（端末機能の拡充ループ、親 #1137、Issue #1398）: MIDI 入力（ノートオン / オフ）。
-pub mod midi;
 pub mod motion;
 /// Phase 11（端末機能の拡充ループ、親 #180、Issue #898）: ジャイロ・磁気・線形加速度の生値。
 pub mod motion_raw_sensors;
-/// Phase 11（端末機能の拡充ループ、親 #1134、Issue #1341）: 複数ディスプレイ・外部ディスプレイの一覧。
-pub mod multi_display;
 /// Phase 11（端末機能の拡充ループ、親 #108、Issue #482）: 音楽ライブラリ（曲のタイトルとアーティストの先頭 20 件）。
 pub mod music_library;
 /// Phase 11（端末機能の拡充ループ、親 #1130、Issue #1282）: ネットワーク接続状態（有無・種別・従量制）。
@@ -159,13 +145,11 @@ pub mod nfc;
 pub mod notification;
 /// Phase 11（端末機能の拡充ループ、親 #98、Issue #381）: ロック画面・OS のメディア操作（再生中の表示と再生・一時停止の受け取り）。
 pub mod now_playing;
-/// Phase 11（端末機能の拡充ループ、親 #93、Issue #345）: 端末内 LLM（固定プロンプトの応答 1 回）。
-pub mod on_device_llm;
 /// Phase 11（端末機能の拡充ループ、親 #146、Issue #749）: 既定アプリで開く・ファイルマネージャーで選択表示。
 pub mod open_in_shell;
 /// Phase 11（端末機能の拡充ループ、親 #171、Issue #798）: OS の設定画面を開く（固定の 2 頁）。
 pub mod open_system_settings;
-/// Phase 11（端末機能の拡充ループ、親 #92、Issue #342）: パスキーの登録・サインイン要求（サーバー検証なし）。
+/// Issue #1188: base64url の共有部品（パスキー本体は機能 crate `fandhe-cap-passkey-signin`）。
 pub mod passkey;
 /// Phase 11（端末機能の拡充ループ、親 #114、Issue #541）: 物・サービスの決済シート（Google Pay TEST 環境、課金なし）。
 pub mod payment_request;
@@ -191,8 +175,6 @@ pub mod removable_storage;
 pub mod safe_area_insets;
 /// Phase 11（端末機能の拡充ループ、親 #192、Issue #981）: 接続したスキャナー・カメラ機器からの取り込み。
 pub mod scanner_devices;
-/// Phase 11（端末機能の拡充ループ、親 #1135、Issue #1335）: 画面の録画・キャプチャ。
-pub mod screen_capture;
 /// Phase 11（端末機能の拡充ループ、親 #128、Issue #655）: 画面向きの取得・固定。
 pub mod screen_orientation;
 /// Phase 11（端末機能の拡充ループ、親 #921、Issue #922）: 資格情報の安全な保存。

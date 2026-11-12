@@ -630,11 +630,6 @@ public class MainActivity extends GameActivity {
         filePreviewHelper.preview(requestId, kind, data);
     }
 
-    // 音声変換（Issue #314）。実装は `MediaTranscodeHelper`。Rust の `android_media_transcode.rs` がワーカースレッドから同期 JNI で呼ぶ。
-    byte[] mediaTranscode(byte[] pcmLe, int sampleRate, long remainingMs) {
-        return MediaTranscodeHelper.transcode(getCacheDir(), pcmLe, sampleRate, remainingMs);
-    }
-
     // 動画の変換（Issue #1017）。実装は `VideoTranscodeHelper`。Rust の `android_video_transcode.rs` が同期 JNI で呼ぶ。
     byte[] videoTranscode(int sw, int sh, int fps, int frames, int tw, int th, long remainingMs) {
         return VideoTranscodeHelper.transcode(getCacheDir(), sw, sh, fps, frames, tw, th, remainingMs);
@@ -647,17 +642,6 @@ public class MainActivity extends GameActivity {
 
     int spotlightRemoveAll(String domain, long remainingMs) {
         return SpotlightIndexHelper.removeAll(getApplicationContext(), domain, remainingMs);
-    }
-
-    // MIDI 入力（Issue #1400）。実装は `MidiHelper`。Rust の `android_midi.rs` が JNI で呼ぶ。
-    private final MidiHelper midiHelper = new MidiHelper(this);
-
-    int midiStart(long epoch) {
-        return midiHelper.start(epoch);
-    }
-
-    void midiStop() {
-        midiHelper.stop();
     }
 
     // スリープ・画面ロック・解除の通知（Issue #811）。実装は `SleepLockEventsHelper`。
@@ -764,14 +748,6 @@ public class MainActivity extends GameActivity {
         return cameraPreviewHelper.setZoom(id, ratio);
     }
 
-    // アプリアイコンのバッジ（Issue #1362）。実装は `AppBadgeHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_app_badge.rs` が JNI で呼ぶ。
-    private final AppBadgeHelper appBadgeHelper = new AppBadgeHelper(this);
-
-    void requestAppBadge(long requestId, int value) {
-        appBadgeHelper.set(requestId, value);
-    }
-
     // メール・SMS 作成画面（Issue #1386）。実装は `ComposeHelper`。
     // Rust の `android_compose_mail_sms.rs` が JNI で呼ぶ。
     private final ComposeHelper composeHelper = new ComposeHelper(this);
@@ -832,18 +808,6 @@ public class MainActivity extends GameActivity {
         paymentRequestHelper.request(requestId, pay, isReadyToPayJson, paymentDataRequestJson);
     }
 
-    // パスキー（Issue #1280）。実装は `PasskeyHelper`。Rust の `android_passkey.rs` が JNI で呼ぶ
-    // （`passkeyRandom` は同期、`requestPasskey` は結果を `nativeOnPasskeyResult` で返す）。
-    private final PasskeyHelper passkeyHelper = new PasskeyHelper(this);
-
-    byte[] passkeyRandom(int len) {
-        return PasskeyHelper.random(len);
-    }
-
-    void requestPasskey(long requestId, boolean register, String requestJson) {
-        passkeyHelper.request(requestId, register, requestJson);
-    }
-
     // アプリ内ブラウザ（Issue #703）。実装は `InAppBrowserHelper`。
     // Rust の `android_in_app_browser.rs` が JNI で呼ぶ。
     private final InAppBrowserHelper inAppBrowserHelper = new InAppBrowserHelper(this);
@@ -883,18 +847,6 @@ public class MainActivity extends GameActivity {
     // 画面の内容の印刷（#1012）も同じヘルパー。画素は ARGB の int[]。
     void requestPrintImage(long requestId, int[] argb, int width, int height) {
         printHelper.printImage(requestId, argb, width, height);
-    }
-
-    // 画面録画（Issue #1337）。実装は `ScreenCaptureHelper` / `ScreenCaptureService`。
-    // Rust の `android_screen_capture.rs` が JNI で呼ぶ。
-    private final ScreenCaptureHelper screenCaptureHelper = new ScreenCaptureHelper(this);
-
-    void requestScreenCaptureStart(long requestId, int maxMs) {
-        screenCaptureHelper.start(requestId, maxMs);
-    }
-
-    void requestScreenCaptureStop(long requestId) {
-        screenCaptureHelper.stop(requestId);
     }
 
     // 動画の撮影（Issue #823）。実装は `VideoCaptureHelper`。Rust の
@@ -2745,7 +2697,6 @@ public class MainActivity extends GameActivity {
         nfcReadHelper.onPause();
         webAuthSessionHelper.onPause();
         inAppBrowserHelper.onPause();
-        screenCaptureHelper.onPause();
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
         bluetoothClassicHelper.onPause();
@@ -4507,13 +4458,6 @@ public class MainActivity extends GameActivity {
         return AlarmHelper.state(getApplicationContext());
     }
 
-    // Rust 側（`device/android_audio_devices.rs`、Issue #1332）から JNI 経由で egui スレッドが
-    // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
-    // `AudioDevicesHelper` 冒頭を参照。失敗は null。
-    private String audioDevicesList() {
-        return AudioDevicesHelper.list(getApplicationContext());
-    }
-
     // Rust 側（`device/android_managed_app_config.rs`、Issue #946）からワーカースレッドが JNI 経由で
     // 押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
     // `ManagedAppConfigHelper` 冒頭を参照。失敗は null。ディスク I/O を伴うので UI スレッドから呼ばない。
@@ -4521,25 +4465,11 @@ public class MainActivity extends GameActivity {
         return ManagedAppConfigHelper.read(getApplicationContext());
     }
 
-    // Rust 側（`device/android_local_fonts.rs`、Issue #1378）から JNI 経由で egui スレッドが
-    // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()[Ljava/lang/Object;`）。詰め方は
-    // `LocalFontsHelper` 冒頭を参照。API 29 未満は長さ 0、失敗は null。
-    private Object[] localFontsList() {
-        return LocalFontsHelper.list();
-    }
-
     // Rust 側（`device/android_display_refresh_hdr.rs`、Issue #872）から JNI 経由で egui
     // スレッドが押下ごとに呼ぶ同期メソッド（シグネチャ `()[F`）。詰め方は
     // `DisplayRefreshHdrHelper` 冒頭を参照。失敗は null。
     private float[] displayRefreshHdrRead() {
         return DisplayRefreshHdrHelper.read(this);
-    }
-
-    // Rust 側（`device/android_multi_display.rs`、Issue #1343）から JNI 経由で egui スレッドが
-    // 1 秒ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
-    // `MultiDisplayHelper` 冒頭を参照。失敗は null。
-    private String multiDisplayRead() {
-        return MultiDisplayHelper.read(getApplicationContext());
     }
 
     // 資格情報保存（Issue #924）の op 定数。Rust 側 `device/android.rs::
@@ -4728,12 +4658,6 @@ public class MainActivity extends GameActivity {
         return NetworkStatusHelper.read(getApplicationContext());
     }
 
-    // Rust 側（`AndroidAccessibilityPrefs::call_read`、JNI 署名 `()I`）から 1 秒間隔で呼ばれる
-    // 同期メソッド（Issue #1310）。結果コードの意味は `AccessibilityPrefsHelper` を参照。
-    private int accessibilityPrefsRead() {
-        return AccessibilityPrefsHelper.read(getApplicationContext());
-    }
-
     // Rust 側（`AndroidAppShortcuts::call_install`、JNI 署名 `(Ljava/lang/String;Ljava/lang/String;)I`）
     // からワーカースレッドで呼ばれる同期メソッド（Issue #426）。結果コードは `AppShortcutsHelper` を参照。
     private int appShortcutsInstall(String label, String url) {
@@ -4761,7 +4685,6 @@ public class MainActivity extends GameActivity {
         inAppBrowserHelper.onDestroy();
         companionDeviceHelper.onDestroy();
         paymentRequestHelper.onDestroy();
-        passkeyHelper.onDestroy();
         healthDataHelper.onDestroy();
         translationHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
@@ -4780,14 +4703,12 @@ public class MainActivity extends GameActivity {
         motionRawSensorsHelper.onDestroy();
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
-        midiHelper.onDestroy();
         sleepLockEventsHelper.onDestroy();
         appLifecycleHelper.onDestroy();
         memoryPressureHelper.onDestroy();
         removableStorageHelper.onDestroy();
         audioSessionHelper.onDestroy();
         cameraPreviewHelper.onDestroy();
-        screenCaptureHelper.onDestroy();
         videoCaptureHelper.onDestroy();
         printHelper.onDestroy();
         screenOrientationHelper.onDestroy();

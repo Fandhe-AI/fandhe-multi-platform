@@ -28,10 +28,8 @@
 //! 守らない: ブラウザごとのコーデックの有無・ビットレート、複数タブ・複数マウント間の一致、
 //! egui-proxy の wasm canvas 経路。例外の `message` は画面にも console にも出さない（security.md A09）。
 
+use fandhe_cap_media_transcode::{check_duration, input_duration, SAMPLE_RATE, TRANSCODE_DEADLINE};
 use fandhe_core::screens::media_transcode::{TranscodeFailure, TranscodeFormat, TranscodeOutput};
-use fandhe_device::media_transcode::{
-    check_duration, input_duration, SAMPLE_RATE, TRANSCODE_DEADLINE,
-};
 
 /// 変換失敗の固定文言（`fandhe-egui-proxy` の `to_failure` と同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -106,12 +104,12 @@ mod web {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    use fandhe_cap_media_transcode::{SAMPLE_RATE, TRANSCODE_DEADLINE};
     use fandhe_core::screens::media_transcode::{
         finish_transcode, interrupt_transcode, mark_running, take_request, TranscodeFailure,
         TranscodeOutput, TranscodeState,
     };
     use fandhe_device::media_playback::demo_pcm;
-    use fandhe_device::media_transcode::{SAMPLE_RATE, TRANSCODE_DEADLINE};
     use js_sys::{Array, Function, Int16Array, Object, Promise, Reflect};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::{spawn_local, JsFuture};

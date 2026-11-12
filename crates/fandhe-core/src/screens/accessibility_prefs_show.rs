@@ -4,8 +4,8 @@
 //! `pub mod accessibility_prefs_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
-//! `fandhe-egui-proxy` の `device/accessibility_prefs.rs`（Web は `fandhe-web-dom`）が一定間隔で
-//! 行い、[`apply_read`] で結果を注入する。`fandhe_device::accessibility_prefs` の型は
+//! `fandhe-cap-accessibility-prefs`（`src/driver.rs`）（Web は `fandhe-web-dom`）が一定間隔で
+//! 行い、[`apply_read`] で結果を注入する。`fandhe_cap_accessibility_prefs` の型は
 //! 依存方向の都合でここに写し取る。
 //!
 //! 視差軽減が「オン」のときだけ丸を止め、コントラスト増加が「オン」のときだけ枠を太くする。
@@ -35,7 +35,7 @@ pub const CYCLE_SECS: f32 = 3.0;
 
 const CANVAS_ID: WidgetId = WidgetId::from_raw(1);
 
-/// OS から読めた値（`fandhe_device::accessibility_prefs::AccessibilityPrefs` の写し）。
+/// OS から読めた値（`fandhe_cap_accessibility_prefs::AccessibilityPrefs` の写し）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Prefs {
     /// 視差軽減がオンか（`None` は不明）。

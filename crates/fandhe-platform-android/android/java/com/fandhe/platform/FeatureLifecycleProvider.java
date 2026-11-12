@@ -22,7 +22,7 @@ import com.google.androidgamesdk.GameActivity;
 // OS が生成するので、利用者のコードは何も呼ばない。
 //
 // 動き: provider の `onCreate` で `Application.registerActivityLifecycleCallbacks` に自分を登録し、
-// Rust を載せた Activity（`GameActivity` のサブクラス）の生成・状態保存・破棄だけをサブクラスの
+// Rust を載せた Activity（`GameActivity` のサブクラス）の生成・状態保存・前面への復帰・前面離脱・破棄だけをサブクラスの
 // `onHost*` へ流す。他の Activity（Health Connect の理由画面など）には helper を付けない。
 // `onHostCreated` は `Activity.onCreate` の中（`ComponentActivity` の保存状態の復元後・STARTED より前）で
 // 呼ばれる。`registerForActivityResult` を呼べるのは STARTED より前だけなので、ランチャーの登録はここで行う。
@@ -43,6 +43,21 @@ public abstract class FeatureLifecycleProvider extends ContentProvider
 
     /** Activity の破棄時。helper の表から外し、保持している資源を解放する。 */
     protected void onHostDestroyed(ComponentActivity activity) {}
+
+    /**
+     * Activity が前面へ戻った時（`Activity.onResume()` の中、つまり `super.onResume()` の中）。
+     * 従来の `MainActivity.onResume` は `super.onResume()` の後で helper を呼んでいた。super に対する
+     * 前後だけが違い、同じ `onResume` の内側で呼ばれる。既定は何もしない。
+     */
+    protected void onHostResumed(ComponentActivity activity) {}
+
+    /**
+     * Activity が前面を離れる時（`Activity.onPause()` の中、つまり `super.onPause()` の中）。
+     * 従来の `MainActivity.onPause` は `super.onPause()` の後で helper を呼んでいた。同じ `onPause` の内側で
+     * 呼ばれるため、権限ダイアログの応答との到着順（契約表 1）はこの通知を受ける側で実際の状態を見て判断する。
+     * 既定は何もしない。
+     */
+    protected void onHostPaused(ComponentActivity activity) {}
 
     @Override
     public boolean onCreate() {
@@ -85,10 +100,18 @@ public abstract class FeatureLifecycleProvider extends ContentProvider
     public void onActivityStarted(Activity activity) {}
 
     @Override
-    public void onActivityResumed(Activity activity) {}
+    public void onActivityResumed(Activity activity) {
+        if (isHost(activity)) {
+            onHostResumed((ComponentActivity) activity);
+        }
+    }
 
     @Override
-    public void onActivityPaused(Activity activity) {}
+    public void onActivityPaused(Activity activity) {
+        if (isHost(activity)) {
+            onHostPaused((ComponentActivity) activity);
+        }
+    }
 
     @Override
     public void onActivityStopped(Activity activity) {}

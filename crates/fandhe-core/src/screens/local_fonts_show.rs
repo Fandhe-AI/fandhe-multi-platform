@@ -7,7 +7,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の
-//! `device/local_fonts.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する
+//! `fandhe-cap-local-fonts/src/driver.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する
 //! （`audio_devices_show.rs` と同型の状態機械）。
 //!
 //! **起動時には読まない**。初期状態は `Idle` でボタンを出し、押下で初めて要求を立てる。Web の

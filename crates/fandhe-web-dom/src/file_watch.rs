@@ -5,7 +5,7 @@
 //! 観測し、Chrome 133+ の `FileSystemObserver` と OPFS（`navigator.storage.getDirectory()`、
 //! 許可ダイアログなし）の専用フォルダ `file-watch` へ渡して、結果を `finish_start` / `apply_scan` /
 //! `mark_failed` / `finish_op` で書き戻す。`fandhe-device` の `FileWatch` trait は通らず、
-//! 共有するのは走査結果の整形・差分・サンプル名の規則（`fandhe_device::file_watch` の純関数）だけ。
+//! 共有するのは走査結果の整形・差分・サンプル名の規則（`fandhe_cap_file_watch` の純関数）だけ。
 //! `fandhe-egui-proxy` の wasm canvas 経路は対象外。任意フォルダの監視は #1408。
 //!
 //! # 方式（ネイティブ 4 OS と同じ）
@@ -46,10 +46,10 @@
 
 use std::time::{Duration, SystemTime};
 
-use fandhe_core::screens::file_watch_show::RecordKind;
-use fandhe_device::file_watch::{
+use fandhe_cap_file_watch::{
     diff, folder_scan_from, sample_number, ChangeKind, FileEntry, FolderScan, WatchSignal,
 };
+use fandhe_core::screens::file_watch_show::RecordKind;
 
 /// 開始失敗の固定文言（`fandhe-egui-proxy` のドライバと同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -141,14 +141,14 @@ mod web {
     use std::cell::RefCell;
     use std::collections::{HashMap, HashSet};
 
+    use fandhe_cap_file_watch::{
+        next_sample_body, next_sample_number, sample_name, FolderScan, WatchSignal,
+        MAX_SAMPLE_BYTES, SAMPLE_INITIAL,
+    };
     use fandhe_core::screens::file_watch_show::{
         apply_scan, finish_op, finish_pick, finish_start, mark_failed, take_op, take_pick,
         take_start, FileWatchShowState, OpKind, OpRequest, StartInfo, WatchFailure, WatchPhase,
         WEB_FOLDER_LABEL,
-    };
-    use fandhe_device::file_watch::{
-        next_sample_body, next_sample_number, sample_name, FolderScan, WatchSignal,
-        MAX_SAMPLE_BYTES, SAMPLE_INITIAL,
     };
     use js_sys::{Array, Function, Object, Promise, Reflect, Uint8Array};
     use wasm_bindgen::prelude::*;

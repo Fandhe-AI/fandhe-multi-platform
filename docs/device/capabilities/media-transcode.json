@@ -14,7 +14,7 @@
       "note": "実装済み（#313、macOS と共用の実装）。範囲は実行時に作った 5 秒・モノラル・48 kHz・PCM 16bit の音声を AAC-LC（m4a）へ 1 回変換することのみ（動画・利用者のファイル・進捗・取り消し・形式の選択・保存は範囲外）。成功は出力を読み直し、0 バイトでない・m4a として解析できる・符号形式が mp4a・長さが入力 ±200 ms の中、をすべて満たすときだけ。失敗は期限切れ・出力が空・解析できない・長さの不一致・非対応を分けて表示する。取り消しと権限は存在しない。一時ファイルは成功・失敗の全経路で消す。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、一時ファイルとコーデックの解放。守らない範囲: OS ごとの所要時間とビットレートの違い、期限後も書き込みが走り切ること、複数プロセス間。deploymentTarget が 17.0 のため OS が古くて非対応になることはない。背景遷移では中断せず、suspend をはさんで期限を過ぎたときは復帰時に期限切れの失敗で確定し、遅れて届いた結果は世代照合で捨てて成功にしない。iOS 実機の確認は #310 で行う。",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#310）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_media_transcode.rs + crates/fandhe-egui-proxy/src/device/apple_media_transcode.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_media_transcode.m + crates/fandhe-egui-proxy/src/device/media_transcode.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #313"
+      "impl": "crates/fandhe-cap-media-transcode/src/ios.rs + crates/fandhe-cap-media-transcode/src/apple.rs + crates/fandhe-cap-media-transcode/apple/fandhe_apple_media_transcode.m + crates/fandhe-cap-media-transcode/src/driver.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #313"
     },
     "android": {
       "status": "done",
@@ -24,7 +24,7 @@
       "note": "実装済み（#314）。範囲は実行時に作った 5 秒・モノラル・48 kHz・PCM 16bit の音声を AAC-LC（m4a）へ 1 回変換することのみ（動画・利用者のファイル・進捗・取り消し・形式の選択・保存は範囲外）。成功は出力を読み直し、0 バイトでない・m4a として解析できる・符号形式が mp4a・長さが入力 ±200 ms の中、をすべて満たすときだけ（Java は成功を判定しない）。失敗は期限切れ・出力が空・解析できない・長さの不一致を分けて表示する。期限は単調時計で確かめ、過ぎたら OS 側で中断する。取り消しと権限は存在しない。一時ファイル・コーデック・muxer は成功・失敗・期限切れの全経路で解放する。Activity を作り直したときは保留中の要求を Rust 側で破棄し、古い結果が新しい要求を消費しない。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: 端末ごとの所要時間とビットレートの違い、複数プロセス間。Android 実機の目視は #310 で行う。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#310）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_media_transcode.rs + platforms/android/app/src/main/java/com/fandhe/platform/MediaTranscodeHelper.java + crates/fandhe-egui-proxy/src/device/media_transcode.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #314"
+      "impl": "crates/fandhe-cap-media-transcode/src/android.rs + crates/fandhe-cap-media-transcode/android/java/com/fandhe/platform/MediaTranscodeHelper.java + crates/fandhe-cap-media-transcode/src/driver.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #314"
     },
     "macos": {
       "status": "done",
@@ -34,7 +34,7 @@
       "note": "実装済み（#311）。範囲は実行時に作った 5 秒・モノラル・48 kHz・PCM 16bit の音声を AAC-LC（m4a）へ 1 回変換することのみ（動画・利用者のファイル・進捗・取り消し・形式の選択・保存は範囲外）。成功は出力を読み直し、0 バイトでない・m4a として解析できる・符号形式が mp4a・長さが入力 ±200 ms の中、をすべて満たすときだけ。失敗は期限切れ・出力が空・解析できない・長さの不一致・非対応を分けて表示する。取り消しと権限は存在しない。一時ファイルは成功・失敗の全経路で消す。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、一時ファイルとコーデックの解放。守らない範囲: OS ごとの所要時間とビットレートの違い、期限後も書き込みが走り切ること、複数プロセス間。Mac 実機の目視は #310 で行う。",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#310）",
-      "impl": "crates/fandhe-egui-proxy/src/device/apple_media_transcode.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_media_transcode.m + crates/fandhe-egui-proxy/src/device/media_transcode.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #311"
+      "impl": "crates/fandhe-cap-media-transcode/src/apple.rs + crates/fandhe-cap-media-transcode/apple/fandhe_apple_media_transcode.m + crates/fandhe-cap-media-transcode/src/driver.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #311"
     },
     "windows": {
       "status": "done",
@@ -44,7 +44,7 @@
       "note": "実装済み（#312）。範囲は実行時に作った 5 秒・モノラル・48 kHz・PCM 16bit の音声を AAC-LC（m4a）へ 1 回変換することのみ（動画・利用者のファイル・進捗・取り消し・形式の選択・保存は範囲外）。成功は出力を読み直し、0 バイトでない・m4a として解析できる・符号形式が mp4a・長さが入力 ±200 ms の中、をすべて満たすときだけ。失敗は期限切れ・出力が空・解析できない・長さの不一致・非対応を分けて表示する。取り消しと権限は存在しない。入力の一時 WAV と各ストリームは成功・失敗・期限切れの全経路で閉じて消す。Media Feature Pack のない N エディションと Windows 10 1709 未満は非対応（Unsupported）。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、一時ファイルとストリームの解放。守らない範囲: OS ごとの所要時間とビットレートの違い、複数プロセス間。Windows 実機の確認は #310 で行う。",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#310）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_media_transcode.rs + crates/fandhe-egui-proxy/src/device/media_transcode.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #312"
+      "impl": "crates/fandhe-cap-media-transcode/src/windows.rs + crates/fandhe-cap-media-transcode/src/driver.rs + crates/fandhe-core/src/screens/media_transcode.rs + crates/fandhe-device/src/media_transcode.rs、Issue #312"
     },
     "web": {
       "status": "done",

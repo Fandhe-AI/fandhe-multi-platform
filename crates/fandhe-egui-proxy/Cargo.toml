@@ -29,7 +29,7 @@ default = ["device"]
 # optional 依存として置く（Windows 以外では `device` feature を有効にしても入らない）。
 # Issue #907: `windows-future`（`IAsyncOperation`/`AsyncOperationCompletedHandler` の
 # 型名）も同じ Windows target 分岐にのみ置く。
-device = ["dep:fandhe-device", "dep:fandhe-cap-system-tray", "dep:fandhe-cap-media-cast", "dep:fandhe-cap-serial-port", "dep:serde_json", "dep:jni", "dep:windows", "dep:fandhe-platform-windows", "dep:windows-future", "dep:windows-core", "dep:ttf-parser"]
+device = ["dep:fandhe-device", "dep:fandhe-cap-system-tray", "dep:fandhe-cap-media-cast", "dep:fandhe-cap-midi", "dep:fandhe-cap-serial-port", "dep:serde_json", "dep:jni", "dep:windows", "dep:fandhe-platform-windows", "dep:windows-future", "dep:windows-core"]
 
 frame-metrics = []
 
@@ -130,6 +130,8 @@ fandhe-device = { path = "../fandhe-device", optional = true }
 # 終了時の片付け（`device::shutdown`）が呼ぶ。未移行の機能が使う共有部分が残る間の過渡期の依存（#1194 で消える）。
 fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast", optional = true }
 fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }
+# 終了時の購読の停止（`device::shutdown` が `fandhe_cap_midi::shutdown` を呼ぶ）。過渡期の依存（#1194 で消える）。
+fandhe-cap-midi = { path = "../fandhe-cap-midi", optional = true }
 # 終了時の片付け（`device::shutdown` の `fandhe_cap_serial_port::shutdown`）。過渡期の依存（#1194 で消える）。
 fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port", optional = true }
 # Issue #748: `fandhe-cap-http-get` が `Http` の応答（JSON 配列）を
@@ -261,8 +263,6 @@ winit = { workspace = true, features = ["android-game-activity"] }
 # （カメラ撮影は機能 crate `fandhe-cap-camera-capture` へ移した、Issue #1170）。`android-activity`（上記）の直接依存として既に 0.22.4 が解決済みのため
 # 新規パッケージは増えない（ルート Cargo.toml の `jni` コメント参照）。
 jni = { workspace = true, optional = true }
-# Issue #1378: `device/android_local_fonts.rs` が `name` テーブルを読む（ルート Cargo.toml 参照）。
-ttf-parser = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Issue #1001（REQ-9）: Windows 通常ビルドで eframe の "accesskit" feature を有効化し、
@@ -322,7 +322,7 @@ windows = { workspace = true, optional = true, features = [
     # Issue #955: `InMemoryRandomAccessStream`/`DataReader`（録音先バッファの読み書き）
     # に使う。
     "Storage_Streams",
-    # Issue #343: `device/windows_passkey.rs` が `WebAuthNAuthenticatorMakeCredential` /
+    # Issue #343: `fandhe-cap-passkey-signin/src/windows.rs` が `WebAuthNAuthenticatorMakeCredential` /
     # `GetAssertion`（`Win32_Networking_WindowsWebServices`）と、challenge 用の
     # `CryptographicBuffer::GenerateRandom`（`Security_Cryptography`）を呼ぶ。新規パッケージは増えない。
     "Win32_Networking_WindowsWebServices",
@@ -357,7 +357,7 @@ windows = { workspace = true, optional = true, features = [
     # Issue #1094: `device/windows_nlp.rs` が `WordsSegmenter` / `WordSegment`
     # （`Data_Text`）を呼ぶ。新規パッケージは増えない。
     "Data_Text",
-    # Issue #1402: `device/windows_midi.rs` が `MidiInPort` / `MidiNoteOnMessage`（`Devices_Midi`）と
+    # Issue #1402: `fandhe-cap-midi/src/windows.rs` が `MidiInPort` / `MidiNoteOnMessage`（`Devices_Midi`）と
     # 抜き差しを受ける `DeviceWatcher`（`Devices_Enumeration`）を呼ぶ。新規パッケージは増えない。
     "Devices_Midi",
     "Devices_Enumeration",
@@ -381,7 +381,7 @@ windows = { workspace = true, optional = true, features = [
     # `RtlGetVersion`（`Wdk_System_SystemServices`）を呼ぶ。新規パッケージは増えない。
     "Win32_System_SystemInformation",
     "Wdk_System_SystemServices",
-    # Issue #1330: `device/windows_audio_devices.rs` が `IMMDeviceEnumerator` / `EnumAudioEndpoints`
+    # Issue #1330: `fandhe-cap-audio-devices/src/windows.rs` が `IMMDeviceEnumerator` / `EnumAudioEndpoints`
     # （`Win32_Media_Audio`）と `PKEY_Device_FriendlyName`（`Win32_Devices_FunctionDiscovery`）を呼ぶ。
     # 新規パッケージは増えない。
     "Win32_Media_Audio",
@@ -390,10 +390,10 @@ windows = { workspace = true, optional = true, features = [
     # （`GetMasterVolumeLevelScalar` / `GetMute` / `VolumeStepUp` / `VolumeStepDown`）を呼ぶ。
     # 新規パッケージは増えない。
     "Win32_Media_Audio_Endpoints",
-    # Issue #1376: `device/windows_local_fonts.rs` が DirectWrite の `DWriteCreateFactory` /
+    # Issue #1376: `fandhe-cap-local-fonts/src/windows.rs` が DirectWrite の `DWriteCreateFactory` /
     # `IDWriteFontCollection`（`Win32_Graphics_DirectWrite`）を呼ぶ。新規パッケージは増えない。
     "Win32_Graphics_DirectWrite",
-    # Issue #1341: `device/windows_multi_display.rs` が `EnumDisplayMonitors` /
+    # Issue #1341: `fandhe-cap-multi-display/src/windows.rs` が `EnumDisplayMonitors` /
     # `GetMonitorInfoW`（`Win32_Graphics_Gdi`）と `GetDpiForMonitor`（`Win32_UI_HiDpi`）を呼ぶ。
     # 新規パッケージは増えない。
     "Win32_Graphics_Gdi",
@@ -491,7 +491,7 @@ windows = { workspace = true, optional = true, features = [
     # Issue #1278: `device/windows_screen_wake_lock.rs` が `SetThreadExecutionState`
     # （画面スリープの抑止）を呼ぶために使う。新規パッケージは増えない。
     "Win32_System_Power",
-    # Issue #26: `device/windows_screen_capture.rs` が `GraphicsCapturePicker` /
+    # Issue #26: `fandhe-cap-screen-capture/src/windows.rs` が `GraphicsCapturePicker` /
     # `Direct3D11CaptureFramePool`（`Graphics_Capture`）、D3D11 サーフェスの受け渡し
     # （`Graphics_DirectX*`、`Win32_System_WinRT_Direct3D11`）、`MediaStreamSource`
     # （`Media_Core`）、`MediaTranscoder`（`Media_Transcoding`）による H.264 / MP4 書き出し、
@@ -501,7 +501,7 @@ windows = { workspace = true, optional = true, features = [
     "Graphics_DirectX_Direct3D11",
     "Media_Core",
     "Media_Transcoding",
-    # Issue #312: `device/windows_media_transcode.rs` が入力の一時 WAV を開く
+    # Issue #312: `fandhe-cap-media-transcode/src/windows.rs` が入力の一時 WAV を開く
     # `FileAccessMode`（`Storage`）に使う。`MediaTranscoder` は上の #26 と共用。新規パッケージは増えない。
     "Storage",
     # Issue #1150: `device/windows_video_capture.rs`（video-capture）が撮れた動画の長さ・寸法・向きを
@@ -586,8 +586,6 @@ web-sys = { workspace = true, features = [
 console_error_panic_hook = { workspace = true }
 
 [target.'cfg(not(target_os = "android"))'.dev-dependencies]
-# Issue #1378: `android_local_fonts::family_name` の純関数テストをホストで走らせる。
-ttf-parser = { workspace = true }
 # egui_kittest（AccessKit ベース）で要素欠落 0 件を機械的に検証し、wgpu バックエンドで
 # レンダ画像（PNG エビデンス）も取得する。
 #

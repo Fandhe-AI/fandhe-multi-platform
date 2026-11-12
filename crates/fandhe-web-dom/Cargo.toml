@@ -11,6 +11,10 @@ publish = false
 name = "fandhe_web_dom"
 crate-type = ["rlib", "cdylib"]
 
+[build-dependencies]
+# Swift の薄層・弱リンクを持つ機能 crate のリンク指定をホストのテスト実行体へ出し直す（build.rs）。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
 [dependencies]
 # 依存方向は本クレート（最適化レイヤ）→ fandhe-core（共通コア）の一方向
 # （coding-rust.md 準拠）。共通コアへ本クレートの依存を持ち込まない。
@@ -26,6 +30,8 @@ fandhe-device = { path = "../fandhe-device" }
 # Issue #1173: 共有の受け取りの契約（`ShareInbox`・`validate_text`）の正本。wasm32 では
 # `fandhe-core`・`fandhe-runtime`・`thiserror` しか引かない（Android/macOS の実装は cfg で外れる）。
 fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive" }
+# accessibility-prefs の契約（`READ_INTERVAL`）。Web 実装本体は本クレートに残る（`display_refresh_hdr` が `pref_from` を共用するため）。
+fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs" }
 # Issue #1187: 電源状態の純関数（`percent_from_raw`）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の実装が cfg で外れる。
 fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast" }
 fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device" }
@@ -37,6 +43,26 @@ fandhe-cap-ar = { path = "../fandhe-cap-ar" }
 fandhe-cap-nlp = { path = "../fandhe-cap-nlp" }
 # http-get の Web 実装（`fetch`）。デモ（`mount_http_fetch_screen`）が effect として呼ぶ。
 fandhe-cap-http-get = { path = "../fandhe-cap-http-get" }
+# multi-display の契約（検証・READ_INTERVAL・ScreenInfo）。Web 実装本体は本クレートに残る。
+fandhe-cap-multi-display = { path = "../fandhe-cap-multi-display" }
+# audio-devices の契約（listed・AudioDirection・MAX_DEVICES）。Web 実装本体は本クレートに残る。
+fandhe-cap-audio-devices = { path = "../fandhe-cap-audio-devices" }
+# local-fonts の契約（families_from・require_named）。Web 実装本体は本クレートに残る。
+fandhe-cap-local-fonts = { path = "../fandhe-cap-local-fonts" }
+# file-watch の契約（走査結果の整形・差分・サンプル名の規則）。Web 実装本体は本クレートに残る。
+fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch" }
+# on-device-llm の契約（check_response・validate_prompt・EMPTY・RESPOND_DEADLINE）。Web 実装本体は本クレートに残る。
+fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm" }
+# media-transcode の契約（SAMPLE_RATE・TRANSCODE_DEADLINE・検査）。Web 実装本体は本クレートに残る（video_transcode が pick_codec を共用するため）。
+fandhe-cap-media-transcode = { path = "../fandhe-cap-media-transcode" }
+# app-badge の契約（BadgeValue）。Web 実装本体は本クレートに残る。
+fandhe-cap-app-badge = { path = "../fandhe-cap-app-badge" }
+# midi の契約（MidiParser・NoteEvent）。Web 実装本体は本クレートに残る。
+fandhe-cap-midi = { path = "../fandhe-cap-midi" }
+# passkey-signin の契約（PasskeyOutcome・verify_response・outcome_from_dom_error）。Web 実装本体は本クレートに残る。
+fandhe-cap-passkey-signin = { path = "../fandhe-cap-passkey-signin" }
+# screen-capture の契約（build_capture_result）。Web 実装本体は本クレートに残る。
+fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture" }
 # Issue #1190: シリアルポートの純関数・定数（`LineAssembler`・`SerialPortFailure`・`BAUD_RATE` など）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の実装が cfg で外れる。
 fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。

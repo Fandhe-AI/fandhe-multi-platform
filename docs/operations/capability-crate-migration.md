@@ -144,7 +144,40 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | 共有の SAFETY コメント | 移した関数を根拠に指しているコメントは、unsafe の根拠が共通層（`fandhe_platform_android::with_activity`）へ移った場合に、そこを指す形へ直す |
 | 複数の stem・id と stem が違う機能 | `scaffold` が使えない。`git mv` で手で移し、対応表の `impl` を新しいパスへ書き換える |
 
-## 9. 第 4 束（#1189）で出た型と後回しの機能
+## 9. 第 3 束（#1188）で出た型
+
+第 3 束（accessibility-prefs・multi-display・audio-devices・local-fonts・file-watch・on-device-llm・media-transcode・app-badge・midi・passkey-signin・screen-capture）で
+はじめて出た型と、その扱いです。
+
+| 型 | 扱い |
+|----|------|
+| `scaffold` の誤写像 | `scaffold` は元のコードが識別子（`MODEL_NOT_READY` など）で分岐していても `Internal` を引数なしにする箇所がある。移した後に `error.rs` の対象バリアントを `&'static str` つきへ戻し、引数なしの `Internal` には元の文字列を書く。`stage` のように呼び出し側が渡すラベルがあるバリアント（screen-capture）も同じ |
+| `build.rs` の framework・弱リンク | `scaffold` が出す `compile_objc` の framework は仮の値。元の `fandhe-egui-proxy/build.rs` の呼び出しと照合して直す（audio-devices は CoreAudio・AVFoundation）。弱リンク（`weak_link_framework`）や OS ごとの分岐を元の関数が持っていたら移す。弱リンクと Swift の薄層は `links` + `export_link_args()` で最終成果物へ届け、`fandhe-gallery` の `build.rs` が `import_link_args` を足す。ホストの `cargo test` で同じ機能 crate を直接の依存にする別 crate（`fandhe-web-dom`）にも `build.rs` で `import_link_args` が要る |
+| 共有の MP4・base64url など OS に触れない部品 | 他機能も使う純関数は `fandhe-device` の同名モジュールに最小限だけ残し、機能 crate が参照する（media-transcode の box 走査と `DURATION_TOLERANCE`、passkey-signin の base64url）。失敗は理由を持たない型にして、呼び出し側が自機能のエラーへ写す |
+| 前面の復帰・離脱に参加する機能 | `FeatureLifecycleProvider` の `onHostResumed` / `onHostPaused`（screen-capture が使う）。どちらも `Activity.onResume()` / `onPause()` の中、つまり `super.onResume()` / `super.onPause()` の中で呼ばれる。従来の `MainActivity` は `super` の後で helper を呼んでいたため、`super` に対する前後だけが違う |
+| Activity に紐づく helper（app-badge・midi・passkey-signin・screen-capture） | Helper を `HELPERS`（`WeakHashMap`）で Activity ごとに引く。コンストラクタは private にし、Rust から呼ぶ入口は第 1 引数が `Activity` の static メソッドにする。helper が無いときは結果が来ないまま待たせず、失敗で確定する。`onDestroy` を持つ helper は provider の `onHostDestroyed` から `detach` 経由で呼ぶ |
+| 1 つの Helper が Context を取る同期呼び出し | `read(Context)` を `read(Context activity)` にして、先頭で `activity.getApplicationContext()` を取る。`MainActivity` の 1 行ラッパーは消す |
+| 前面サービス（screen-capture） | サービス本体を機能 crate の `android/java` へ移し、宣言の `components`（`kind = "service"`、`attributes = { foregroundServiceType = ... }`）と `permissions` に書く。Manifest の要素は宣言と完全に一致させる |
+| Credential Manager など Gradle の依存（passkey-signin） | 宣言の `gradle` に書く。版は `scripts/android/versions.env` と一致させる（cargo-fandhe の突き合わせテストが確かめる） |
+| 文字列資源（app-badge） | 機能 crate の `android/res/values/strings.xml` へ移し、宣言の `res` に書く。アプリの `strings.xml` からは消す |
+| 共通層へ上げる小さな部品 | 複数の未移行機能が使う JNI 文字列の読み取り（`read_ble_string`）は `fandhe-platform-android::read_bounded_string` へ上げ、`fandhe-egui-proxy` の同名関数は委譲にする。フレームごとの経過時間の実測（`measure_dt_ms`）は `fandhe-runtime::tick` へ上げた |
+| 経路が終了処理を持つ機能（midi） | `device::shutdown` が呼ぶ停止は `fandhe-egui-proxy` が機能 crate へ任意依存して呼ぶ（§7、#1194 で消える） |
+
+### 後回しにした機能と理由
+
+| 機能 | 理由 | 解消の見込み |
+|------|------|--------------|
+| network-status | 未移行の `fandhe_apple_lan_discovery.m` が `fandhe_apple_network_status_read` を呼ぶ | lan-discovery と一緒に移す |
+| device-info | 未移行の `apple_quick_settings_tile.rs` が `macos_device_info::implementation()` を呼ぶ | quick-settings-tile の後 |
+| now-playing-controls | `media_playback`（egui-proxy・web-dom の両方）が `now_playing::sync*` を呼ぶ | media-playback と同じ PR で移す |
+| pen-stylus | Android が `MainActivity.dispatchTouchEvent` の上書きを要する。provider では置き換えられない | Activity の入力を横取りする口の設計が先 |
+| picture-in-picture | Android が `onPictureInPictureModeChanged` の上書きと `<activity supportsPictureInPicture>` 属性を要する | 宣言の拡張が先 |
+| fullscreen-immersive | `FullscreenHelper.onInsets` が、`MainActivity` の唯一の decorView insets リスナー（safe-area と共用）から呼ばれる | insets を配る口を `fandhe-platform-android` に置く設計が先 |
+| compose-mail-sms | 未移行の `windows_web_auth_session.rs` が `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を呼ぶ | web-auth-session と一緒に移す、または `open_url` を `fandhe-platform-windows` へ上げる |
+| print・print-screen | `print_screen_page_effect` が egui 固有の読み書き口（`EguiSenderExt` の `request_screenshot`・`tagged_screenshot`）を使う | `fandhe-runtime` に egui 非依存の口を足す設計が先 |
+| in-app-purchase | 全 OS が未実装（`possible`）で `impl` が無い | 実装後 |
+
+## 10. 第 4 束（#1189）で出た型と後回しの機能
 
 第 4 束（20 機能）のうち、system-accent-color・focus-mode-status・usb-device・pdf-viewer・media-cast の 5 機能を移した。
 残りは下の表の理由で止まっている。理由が解消してから移す。
@@ -183,7 +216,7 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | safe-area-insets | egui-proxy の `android.rs` にある insets の static と JNI エクスポートを `fandhe-platform-android` へ上げる共通層の変更が先 | 共通層の先行変更とあわせて別の周で |
 | compass-heading | 第 3 束 #1301 の `FeatureLifecycleProvider.onHostResumed` / `onHostPaused` に依存する。`WaitTracker`・`NO_READING_TIMEOUT_MS` を ar と未移行の `environment_sensors` が使うため、`fandhe-device::compass` へ最小限を残す設計も要る | #1301 のマージ後 |
 
-## 10. 第 5 束（#1190）で出た型と後回しの機能
+## 11. 第 5 束（#1190）で出た型と後回しの機能
 
 第 5 束（20 機能）のうち、in-app-review・uwb-ranging・user-idle・serial-port・app-attest・
 per-app-language・screen-brightness・spell-check・geocoding-search の 9 機能を移した。

@@ -112,3 +112,29 @@ pub fn with_activity_class<T, E: From<jni::errors::Error>>(
         f(env, activity, &class)
     })
 }
+
+/// JNI の文字列を、UTF-16 単位数が `max_units` 以内のときだけ Rust の `String` へ複製する
+/// （null・超過・読み取り失敗は `None`）。OS や他アプリ由来の文字列は信頼境界の外なので、複製前に長さで弾く。
+/// 各機能 crate の JNI コールバック（`nativeOn*`）が受けた `String` の読み取りに使う。
+pub fn read_bounded_string(
+    env: &mut jni::Env,
+    value: &jni::objects::JString,
+    max_units: i32,
+) -> Option<String> {
+    if value.is_null() {
+        return None;
+    }
+    let units = env
+        .call_method(
+            value,
+            jni::jni_str!("length"),
+            jni::jni_sig!(() -> int),
+            &[],
+        )
+        .and_then(|v| v.i())
+        .ok()?;
+    if units > max_units {
+        return None;
+    }
+    value.try_to_string(env).ok()
+}

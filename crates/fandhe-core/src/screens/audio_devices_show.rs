@@ -7,7 +7,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の
-//! `device/audio_devices.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する
+//! `fandhe-cap-audio-devices/src/driver.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する
 //! （`device_info_show.rs` と同型の状態機械）。
 //!
 //! 全対象 OS（macOS / Windows / iOS / Android / Web）の文言・状態をここで確定済みで、後続の

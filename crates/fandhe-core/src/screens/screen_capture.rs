@@ -5,7 +5,7 @@
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod screen_capture;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。実際の録画・同意 UI は
-//! `fandhe-egui-proxy` の effect ドライバ（`device/screen_capture.rs`）が
+//! `fandhe-egui-proxy` の effect ドライバ（`fandhe-cap-screen-capture/src/driver.rs`）が
 //! [`take_start_request`] / [`take_stop_request`] で要求を観測し、[`finish_capture`] で
 //! 結果を注入する（`mic_record` と同型の pull 型）。
 //!

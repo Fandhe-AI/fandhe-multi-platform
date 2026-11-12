@@ -91,6 +91,20 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // `fandhe_cap_calendar::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_calendar::reset_pending_tracking();
+    // 第 3 束の機能: 端末内 LLM・音声変換・アイコンバッジ・MIDI・パスキー・画面録画の保留中の要求と処理済み世代も
+    // 破棄する（理由は ml_inference と同じ。各 crate の `reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_on_device_llm::reset_pending_tracking();
+    #[cfg(feature = "device")]
+    fandhe_cap_media_transcode::reset_pending_tracking();
+    #[cfg(feature = "device")]
+    fandhe_cap_app_badge::reset_pending_tracking();
+    #[cfg(feature = "device")]
+    fandhe_cap_midi::reset_pending_tracking();
+    #[cfg(feature = "device")]
+    fandhe_cap_passkey_signin::reset_pending_tracking();
+    #[cfg(feature = "device")]
+    fandhe_cap_screen_capture::reset_pending_tracking();
     // PDF 表示の処理済み世代も破棄する。画面状態は再生成で generation 0 に戻るため、残すと次の
     // 「表示する」が飲み込まれる（`fandhe_cap_pdf_viewer::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

@@ -6,9 +6,9 @@
 //!
 //! # `Passkey` トレイトを通らない理由
 //!
-//! `fandhe_device::passkey::Passkey::run` はブロッキングで、wasm のメインスレッドでは呼べない。
+//! `fandhe_cap_passkey_signin::Passkey::run` はブロッキングで、wasm のメインスレッドでは呼べない。
 //! `biometric_auth.rs`・`print_page.rs` と同じく Web は effect で非同期に処理し、
-//! `fandhe_device::passkey` の純関数（`outcome_from_dom_error`・`verify_response`）だけを共有する。
+//! `fandhe_cap_passkey_signin` の純関数（`outcome_from_dom_error`・`verify_response`）だけを共有する。
 //!
 //! # RP ID と origin
 //!
@@ -42,11 +42,11 @@
 //! マウント破棄・ページ離脱での取り消し。守らない: 複数タブ・複数プロセス、署名の正しさ、
 //! OS やパスワードマネージャーに残るデモ用パスキーの削除、OS 側の確定との時間差。
 
+use fandhe_cap_passkey_signin::PasskeySigninError;
+use fandhe_cap_passkey_signin::{PasskeyOutcome, PasskeySummary};
 use fandhe_core::screens::passkey_signin::{
     CoreOutcome, CoreSummary, CredentialMemo, MISMATCH_TEXT,
 };
-use fandhe_device::passkey::{PasskeyOutcome, PasskeySummary};
-use fandhe_device::DeviceError;
 
 /// 失敗の固定文言（内部名・例外の内容は含めない）。
 const FAILED_TEXT: &str = "パスキーの操作を完了できませんでした";
@@ -61,18 +61,18 @@ fn to_summary(s: PasskeySummary) -> CoreSummary {
     }
 }
 
-/// `DeviceError` を画面用の結果へ写す。`fandhe-egui-proxy/src/device/passkey.rs` の
+/// `PasskeySigninError` を画面用の結果へ写す。`fandhe-egui-proxy/src/device/passkey.rs` の
 /// `to_outcome` と同期する（同クレートに依存しないため同じ写像をここに置く）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-fn to_outcome(result: Result<PasskeyOutcome, DeviceError>) -> Result<CoreOutcome, String> {
+fn to_outcome(result: Result<PasskeyOutcome, PasskeySigninError>) -> Result<CoreOutcome, String> {
     match result {
         Ok(PasskeyOutcome::Registered(s)) => Ok(CoreOutcome::Registered(to_summary(s))),
         Ok(PasskeyOutcome::AssertionReturned(s)) => {
             Ok(CoreOutcome::AssertionReturned(to_summary(s)))
         }
         Ok(PasskeyOutcome::NotAllowed) => Ok(CoreOutcome::NotAllowed),
-        Err(DeviceError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
-        Err(DeviceError::InvalidInput(_)) => Err(MISMATCH_TEXT.to_string()),
+        Err(PasskeySigninError::Unsupported) => Ok(CoreOutcome::Unsupported),
+        Err(PasskeySigninError::InvalidInput) => Err(MISMATCH_TEXT.to_string()),
         Err(_) => Err(FAILED_TEXT.to_string()),
     }
 }
@@ -82,14 +82,14 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
-    use fandhe_core::screens::passkey_signin::{
-        finish, mark_running, take_request, PasskeyAction, PasskeySigninState,
-    };
-    use fandhe_device::passkey::{
+    use fandhe_cap_passkey_signin::PasskeySigninError;
+    use fandhe_cap_passkey_signin::{
         outcome_from_dom_error, verify_response, Challenge, PasskeyOp, PasskeyOutcome,
         CHALLENGE_LEN, DEMO_USER_NAME, RP_NAME, USER_ID_LEN,
     };
-    use fandhe_device::DeviceError;
+    use fandhe_core::screens::passkey_signin::{
+        finish, mark_running, take_request, PasskeyAction, PasskeySigninState,
+    };
     use js_sys::{Array, Reflect, Uint8Array};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
@@ -161,7 +161,7 @@ mod web {
     }
 
     /// 例外の `name` だけを結果へ写す（`message` は読まない）。無ければ `Internal` になる。
-    fn outcome_of_error(err: &JsValue) -> Result<PasskeyOutcome, DeviceError> {
+    fn outcome_of_error(err: &JsValue) -> Result<PasskeyOutcome, PasskeySigninError> {
         let name = Reflect::get(err, &JsValue::from_str("name"))
             .ok()
             .and_then(|v| v.as_string())
@@ -181,8 +181,8 @@ mod web {
         challenge: &Challenge,
         rp_id: &str,
         cred: &PublicKeyCredential,
-    ) -> Result<PasskeyOutcome, DeviceError> {
-        const BAD: DeviceError = DeviceError::InvalidInput("passkey flags");
+    ) -> Result<PasskeyOutcome, PasskeySigninError> {
+        const BAD: PasskeySigninError = PasskeySigninError::InvalidInput;
         let response: AuthenticatorResponse = cred.response();
         let client_data = Uint8Array::new(&response.client_data_json()).to_vec();
         let raw_id = Uint8Array::new(&cred.raw_id()).to_vec();
@@ -251,12 +251,12 @@ mod web {
         applier.apply(mark_running);
 
         let done = move |applier: &Applier<PasskeySigninState>,
-                         r: Result<PasskeyOutcome, DeviceError>| {
+                         r: Result<PasskeyOutcome, PasskeySigninError>| {
             let out = to_outcome(r);
             applier.apply(move |s| finish(s, generation, out));
         };
-        let unsupported = DeviceError::Unsupported("passkey");
-        let internal = DeviceError::Internal("passkey failed");
+        let unsupported = PasskeySigninError::Unsupported;
+        let internal = PasskeySigninError::Internal;
 
         let Some(window) = web_sys::window() else {
             return done(applier, Err(unsupported));
@@ -349,7 +349,7 @@ mod web {
             let result = match JsFuture::from(promise).await {
                 Ok(v) => match v.dyn_into::<PublicKeyCredential>() {
                     Ok(cred) => check(op, &expected, &rp_id, &cred),
-                    Err(_) => Err(DeviceError::Internal("passkey failed")),
+                    Err(_) => Err(PasskeySigninError::Internal),
                 },
                 Err(err) => outcome_of_error(&err),
             };
@@ -369,7 +369,7 @@ pub(crate) use web::release_mount;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::passkey::{outcome_from_dom_error, CredentialId};
+    use fandhe_cap_passkey_signin::{outcome_from_dom_error, CredentialId};
 
     fn summary() -> PasskeySummary {
         PasskeySummary {
@@ -396,15 +396,15 @@ mod tests {
             Ok(CoreOutcome::NotAllowed)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Unsupported("passkey"))),
+            to_outcome(Err(PasskeySigninError::Unsupported)),
             Ok(CoreOutcome::Unsupported)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::InvalidInput("passkey flags"))),
+            to_outcome(Err(PasskeySigninError::InvalidInput)),
             Err(MISMATCH_TEXT.to_string())
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Internal("passkey failed"))),
+            to_outcome(Err(PasskeySigninError::Internal)),
             Err(FAILED_TEXT.to_string())
         );
     }
