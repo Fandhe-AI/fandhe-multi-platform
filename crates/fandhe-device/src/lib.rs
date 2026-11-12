@@ -238,8 +238,6 @@ pub mod translation;
 pub mod tts;
 /// Phase 11（端末機能の拡充ループ、親 #1116、Issue #1215）: カスタム URL scheme の受信。
 pub mod url_scheme;
-/// Phase 11（端末機能の拡充ループ、親 #112、Issue #505）: USB 機器の一覧（ベンダー ID・製品 ID・製品名）。
-pub mod usb_device;
 /// Phase 11（端末機能の拡充ループ、親 #125、Issue #631）: 無操作時間（最後の入力からの経過）。
 pub mod user_idle;
 /// Phase 11（端末機能の拡充ループ、親 #129、Issue #653）: UWB による相手との距離・方向（能力の可否と測距）。

@@ -479,7 +479,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "usb_device_show" => fandhe_core::screens::usb_device_show::current_screen,
-    fandhe_egui_proxy::device::usb_device::usb_device_show_effect,
+    fandhe_cap_usb_device::usb_device_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "music_library_list" => fandhe_core::screens::music_library_list::current_screen,

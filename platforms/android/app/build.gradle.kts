@@ -125,6 +125,8 @@ android {
             java.srcDirs("../../../crates/fandhe-cap-share-receive/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-system-accent-color/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-usb-device/android/java")
             // END fandhe-cap
         }
     }

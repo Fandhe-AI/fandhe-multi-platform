@@ -5,9 +5,9 @@ import android.content.pm.PackageManager;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 
-// USB・HID 機器一覧画面（Issue #507、親 #112）の Android 実装ヘルパー。MainActivity.usbDeviceList()
-// から委譲される。Rust の `device/android_usb_device.rs` が egui スレッドからボタン押下ごとに
-// JNI（`()Ljava/lang/String;`）で 1 回呼ぶ同期 getter で、Java -> Rust の native コールバックは
+// USB・HID 機器一覧画面（Issue #507、親 #112）の Android 実装ヘルパー。static の `list(Context)`
+// を JNI で直接呼ぶ。Rust の `src/android.rs` が egui スレッドからボタン押下ごとに
+// JNI（`(Landroid/content/Context;)Ljava/lang/String;`）で 1 回呼ぶ同期 getter で、Java -> Rust の native コールバックは
 // 無い（no-op スタブ不要）。
 //
 // 戻り値は Rust 側 `from_android` と対で決める:
@@ -35,7 +35,7 @@ final class UsbDeviceHelper {
             if (!context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_USB_HOST)) {
                 return "";
             }
-            UsbManager um = (UsbManager) context.getSystemService(Context.USB_SERVICE);
+            UsbManager um = (UsbManager) context.getApplicationContext().getSystemService(Context.USB_SERVICE);
             if (um == null) {
                 return null;
             }

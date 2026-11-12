@@ -970,12 +970,6 @@ fn compile_macos_web_auth_session() {
     );
 }
 
-/// `macos/fandhe_macos_usb_device.m` を `cc` でコンパイルし IOKit をリンクする（Issue #505）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_usb_device.rs` が使う）。
-fn compile_macos_usb_device() {
-    compile_objc("macos/fandhe_macos_usb_device.m", &["Foundation", "IOKit"]);
-}
-
 /// `macos/fandhe_macos_bluetooth_classic.m` を `cc` でコンパイルし IOBluetooth・CoreBluetooth をリンクする
 /// （Issue #659）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_bluetooth_classic.rs` が使う）。
 fn compile_macos_bluetooth_classic() {
@@ -1557,8 +1551,6 @@ fn build_macos() {
     compile_macos_wifi_connect();
     // `macos/fandhe_macos_radio_control.m`（Issue #972）も macOS 専用。CoreWLAN・IOBluetooth を使う。
     compile_macos_radio_control();
-    // `macos/fandhe_macos_usb_device.m`（Issue #505）も macOS 専用。IOKit を使う。
-    compile_macos_usb_device();
     // `macos/fandhe_macos_bluetooth_classic.m`（Issue #659）も macOS 専用。IOBluetooth を使う。
     compile_macos_bluetooth_classic();
     // `macos/fandhe_macos_serial_port.m`（Issue #670）も macOS 専用。IOKit を使う。

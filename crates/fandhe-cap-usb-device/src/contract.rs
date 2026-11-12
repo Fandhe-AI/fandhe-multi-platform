@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #112、Issue #505）: 接続中の USB 機器の一覧（ベンダー ID・製品 ID・
-//! 製品名）を 1 回読む契約。`fandhe-egui-proxy` の `device/usb_device.rs` が起動時と「再取得」
+//! 製品名）を 1 回読む契約。`driver.rs` が起動時と「再取得」
 //! ボタン押下時に [`UsbDevices::list`] を 1 回だけ呼び、各 OS 実装（macOS: IOKit、Windows: SetupAPI（#506）、
 //! Android: #507）が本トレイトを実装する。Web は `fandhe-web-dom` 側（#508）で WebUSB / WebHID を
 //! 使い、本トレイトは経由しない。
@@ -10,9 +10,9 @@
 //! # 結果の種類（契約表 6・10）
 //!
 //! - 成功: `Vec<UsbDeviceEntry>`（0 件を含む。0 件は正常）
-//! - 非対応: `Err(DeviceError::Unsupported("usb_device"))`（iOS、その他の OS、USB ホスト非搭載の
+//! - 非対応: `Err(UsbDeviceError::Unsupported)`（iOS、その他の OS、USB ホスト非搭載の
 //!   Android 機）
-//! - 失敗: `Err(DeviceError::Internal("usb_device list"))`（OS 呼び出しの失敗、橋渡しの値の不正）
+//! - 失敗: `Err(UsbDeviceError::Internal)`（OS 呼び出しの失敗、橋渡しの値の不正）
 //!
 //! `PermissionDenied` は返さない。機器を開かないため権限の経路が無い。`Cancelled` は Web の画面側
 //! だけで使う（選択ダイアログを閉じた場合）。失敗として見せない。
@@ -21,7 +21,7 @@
 //!
 //! シリアル番号・インスタンス ID・locationID・`/dev/bus/usb` のパス・Web の `serialNumber` は
 //! 読まない・保持しない（フィンガープリント防止）。製品名は画面にだけ出し、ログ出力・送信をしない。
-//! 名前の加工は [`crate::device_info::clean_text`]（制御文字除去・128 文字）のみ。
+//! 名前の加工は `fandhe_device::device_info::clean_text`（制御文字除去・128 文字）のみ。
 //!
 //! # 件数上限
 //!
@@ -37,8 +37,8 @@
 //!
 //! 並行性: 読み取りは 1 要求 1 回の同期読みで、購読・コールバックを持たない。集約すべき並行経路は無い。
 
-use crate::DeviceError;
-use crate::device_info::clean_text;
+use crate::error::UsbDeviceError;
+use fandhe_device::device_info::clean_text;
 
 /// 最大件数。
 pub const MAX_DEVICES: usize = 64;
@@ -57,7 +57,7 @@ pub struct UsbDeviceEntry {
 /// 接続中の USB 機器を 1 回読む。
 pub trait UsbDevices: Send + Sync {
     /// 契約はモジュール doc 参照。
-    fn list(&self) -> Result<Vec<UsbDeviceEntry>, DeviceError>;
+    fn list(&self) -> Result<Vec<UsbDeviceEntry>, UsbDeviceError>;
 }
 
 /// 非対応 OS 向けの実装。常に `Unsupported` を返し、成功値へは倒さない。
@@ -65,8 +65,8 @@ pub trait UsbDevices: Send + Sync {
 pub struct UnsupportedUsbDevices;
 
 impl UsbDevices for UnsupportedUsbDevices {
-    fn list(&self) -> Result<Vec<UsbDeviceEntry>, DeviceError> {
-        Err(DeviceError::Unsupported("usb_device"))
+    fn list(&self) -> Result<Vec<UsbDeviceEntry>, UsbDeviceError> {
+        Err(UsbDeviceError::Unsupported)
     }
 }
 
@@ -132,7 +132,7 @@ mod tests {
     fn unsupported_never_succeeds() {
         assert!(matches!(
             UnsupportedUsbDevices.list(),
-            Err(DeviceError::Unsupported("usb_device"))
+            Err(UsbDeviceError::Unsupported)
         ));
     }
 

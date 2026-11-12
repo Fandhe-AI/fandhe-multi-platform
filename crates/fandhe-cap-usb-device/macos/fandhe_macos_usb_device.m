@@ -2,7 +2,7 @@
 // IOKit の `IOUSBHostDevice` を列挙し、ベンダー ID・製品 ID・製品名を同期で読む。機器は開かない
 // ので TCC も entitlement も増やさない。シリアル番号・locationID など識別子は読まない。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_usb_device.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-usb-device/src/macos.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルし IOKit をリンクする。
 //
 // 契約:

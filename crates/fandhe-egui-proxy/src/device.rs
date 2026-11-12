@@ -390,11 +390,6 @@ pub mod android_translation;
 /// platform_url_scheme` の Android 経路から使われる。
 #[cfg(target_os = "android")]
 pub mod android_url_scheme;
-/// Issue #507: Android 向け USB 機器一覧実装（`UsbManager`）。`device/usb_device.rs` の
-/// Android 経路から呼ばれる。純関数をホストでテストするため test でもコンパイルする。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_usb_device;
 /// Issue #821: Android 向け動画の撮影実装のスタブ（#823 が埋める）。
 /// `device/video_capture.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -1318,12 +1313,6 @@ pub mod macos_spell_check;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_system_sound;
-/// Issue #505: macOS 向け USB 機器一覧実装（`macos/fandhe_macos_usb_device.m` の IOKit 列挙を呼ぶ
-/// C ABI ラッパー）。`device/usb_device.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
-/// テストできるよう cfg は `any(macos, test)`。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_usb_device;
 /// Issue #631: macOS 向け無操作時間実装（`macos/fandhe_macos_user_idle.m` を呼ぶ C ABI ラッパー）。
 /// `device/user_idle.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -1551,10 +1540,6 @@ pub mod tts;
 /// Phase 11 の拡充ループ（親 #1116、Issue #1215）: カスタム URL scheme 受信の effect
 /// ドライバ（macOS 実装、他 OS は `UnsupportedUrlScheme` 固定）。
 pub mod url_scheme;
-/// Phase 11 の拡充ループ（親 #112、Issue #505）: USB 機器一覧の effect ドライバ（macOS・Windows・Android 実装、
-/// 他 OS は `UnsupportedUsbDevices` 固定。Web は
-/// `fandhe-web-dom`）。
-pub mod usb_device;
 /// Phase 11 の拡充ループ（親 #125、Issue #631）: 無操作時間の effect ドライバ（macOS・Windows 実装、
 /// 他 OS は `UnsupportedUserIdle` 固定。Web は `fandhe-web-dom`）。
 pub mod user_idle;
@@ -1903,10 +1888,6 @@ pub mod windows_text_scale;
 /// モジュール内に閉じる（`windows_background_task` と同じ方針）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_url_scheme;
-/// Issue #505: Windows 向け USB 機器一覧実装。`device/usb_device.rs` の
-/// Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_usb_device;
 /// Issue #631: Windows 向け無操作時間実装（Win32 `GetLastInputInfo` + `GetTickCount`）。
 /// `device/user_idle.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

@@ -1,8 +1,8 @@
 //! Phase 11 の拡充ループ（親 #112、Issue #505）型サンプル「USB 機器」の effect ドライバ。
 //! `fandhe_core::screens::usb_device_show`（端末依存ゼロ）の要求を `take_request` で観測し、
-//! `fandhe_device::usb_device::UsbDevices` を呼んで、結果を `CompletionSender` 経由で注入する
+//! `crate::contract::UsbDevices` を呼んで、結果を `CompletionSender` 経由で注入する
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる
-//! 契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::usb_device`。
+//! 契約、`app::EffectFn` 参照）。契約の SSOT は `crate::contract`。
 //!
 //! # OS 別実装の差し込み口
 //!
@@ -15,32 +15,32 @@
 //!
 //! 全 OS とも UI スレッドから同期で 1 回呼ぶ（[`drive_sync`]）。IOKit も SetupAPI も COM を使わず、
 //! ワーカーを置かない。OS 呼び出しが戻らない場合の期限は持たない（既知の天井、
-//! `fandhe_device::usb_device` 参照）。Web 由来の読み方（WebUSB / WebHID）がネイティブへ来た場合は
+//! `crate::contract` 参照）。Web 由来の読み方（WebUSB / WebHID）がネイティブへ来た場合は
 //! OS を呼ばず `Unsupported` で完了する（嘘の成功にしない）。
 
-use fandhe_core::screens::usb_device_show::{
-    finish_read, take_request, ReadFailure, ReadSource, UsbDeviceRow, UsbDeviceShowState,
-};
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "android")))]
-use fandhe_device::usb_device::UnsupportedUsbDevices;
-use fandhe_device::usb_device::{UsbDeviceEntry, UsbDevices};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedUsbDevices;
+use crate::contract::{UsbDeviceEntry, UsbDevices};
+use crate::error::UsbDeviceError;
+use fandhe_core::screens::usb_device_show::{
+    ReadFailure, ReadSource, UsbDeviceRow, UsbDeviceShowState, finish_read, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `UsbDevices` 実装を返す（状態を持たないため呼び出しごとに構築）。
-fn platform_usb_devices() -> Box<dyn UsbDevices> {
+pub fn platform_usb_devices() -> Box<dyn UsbDevices> {
     #[cfg(target_os = "macos")]
     {
-        super::macos_usb_device::implementation()
+        crate::macos::implementation()
     }
     #[cfg(target_os = "windows")]
     {
-        super::windows_usb_device::implementation()
+        crate::windows::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_usb_device::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "android")))]
     {
@@ -61,9 +61,9 @@ fn to_rows(entries: Vec<UsbDeviceEntry>) -> Vec<UsbDeviceRow> {
 
 /// エラーを画面用の失敗へ写す。画面へは固定文言のみ（OS の生コードは出さない、security.md A09）。
 /// ネイティブ経路に `Cancelled` は無いので作らない。
-fn to_failure(e: DeviceError) -> ReadFailure {
+fn to_failure(e: UsbDeviceError) -> ReadFailure {
     match e {
-        DeviceError::Unsupported(_) => ReadFailure::Unsupported,
+        UsbDeviceError::Unsupported => ReadFailure::Unsupported,
         _ => ReadFailure::Failed("USB 機器の読み取り".to_string()),
     }
 }
@@ -100,8 +100,8 @@ pub fn usb_device_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::usb_device_show::{pick_usb, read, ReadPhase, UNSUPPORTED_STATUS};
-    use fandhe_device::usb_device::UnsupportedUsbDevices as Unsupported;
+    use crate::contract::UnsupportedUsbDevices as Unsupported;
+    use fandhe_core::screens::usb_device_show::{ReadPhase, UNSUPPORTED_STATUS, pick_usb, read};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
 
@@ -120,11 +120,9 @@ mod tests {
     }
 
     impl UsbDevices for Fake {
-        fn list(&self) -> Result<Vec<UsbDeviceEntry>, DeviceError> {
+        fn list(&self) -> Result<Vec<UsbDeviceEntry>, UsbDeviceError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            self.result
-                .clone()
-                .ok_or(DeviceError::Internal("usb_device list"))
+            self.result.clone().ok_or(UsbDeviceError::Internal)
         }
     }
 
@@ -136,11 +134,21 @@ mod tests {
         }]
     }
 
-    type Rx = mpsc::Receiver<crate::app::Completion<UsbDeviceShowState>>;
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<UsbDeviceShowState>>;
 
     fn channel() -> (CompletionSender<UsbDeviceShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     fn run(state: &mut UsbDeviceShowState, devices: &dyn UsbDevices) {
@@ -219,7 +227,7 @@ mod tests {
     fn unsupported_os_implementation_is_unsupported() {
         assert!(matches!(
             platform_usb_devices().list(),
-            Err(DeviceError::Unsupported("usb_device"))
+            Err(UsbDeviceError::Unsupported)
         ));
     }
 }

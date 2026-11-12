@@ -1,8 +1,8 @@
 //! macOS 向け USB 機器一覧実装（Issue #505）。`macos/fandhe_macos_usb_device.m`（IOKit の
-//! `IOUSBHostDevice` 列挙。`build.rs` が macOS ターゲットの feature `device` 有効時にコンパイルし
+//! `IOUSBHostDevice` 列挙。`build.rs` が macOS ターゲットでコンパイルし
 //! IOKit をリンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ
-//! `// SAFETY:` で契約を明記する。`device/usb_device.rs` の macOS 経路から呼ばれ、契約は
-//! `fandhe_device::usb_device`。
+//! `// SAFETY:` で契約を明記する。`driver.rs` の macOS 経路から呼ばれ、契約は
+//! `crate::contract`。
 //!
 //! `.m` が返す固定長バッファは [`from_raw`] で契約の値へ写す。写像はホストでもテストできるよう
 //! モジュールは `cfg(any(macos, test))`。
@@ -15,8 +15,8 @@
 
 use std::ffi::CStr;
 
-use fandhe_device::usb_device::{normalize, UsbDeviceEntry, MAX_DEVICES};
-use fandhe_device::DeviceError;
+use crate::contract::{MAX_DEVICES, UsbDeviceEntry, normalize};
+use crate::error::UsbDeviceError;
 
 const NAME_BYTES: usize = 512;
 
@@ -38,11 +38,11 @@ struct Raw {
 /// `.m` の生値を契約の値へ写す。件数が 0..=64 の外なら `Internal`（0 件の成功に畳まない）。
 /// VID/PID は丸める前に `u16` の範囲を検証し、範囲外の項目は捨てる。名前は NUL 終端と UTF-8 を
 /// 検証し、満たさなければ `None`（件数には数える）。
-fn from_raw(raw: &Raw) -> Result<Vec<UsbDeviceEntry>, DeviceError> {
+fn from_raw(raw: &Raw) -> Result<Vec<UsbDeviceEntry>, UsbDeviceError> {
     let n = usize::try_from(raw.count)
         .ok()
         .filter(|&n| n <= MAX_DEVICES)
-        .ok_or(DeviceError::Internal("usb_device list"))?;
+        .ok_or(UsbDeviceError::Internal)?;
     Ok(normalize(raw.entries[..n].iter().filter_map(|e| {
         Some(UsbDeviceEntry {
             vendor_id: u16::try_from(e.vendor_id).ok()?,
@@ -62,7 +62,7 @@ mod ffi {
     // SAFETY: `macos/fandhe_macos_usb_device.m`（`build.rs` が macOS ターゲットの feature
     // `device` 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_usb_device_list(out: *mut Raw) -> i32;
     }
 
@@ -89,20 +89,20 @@ fn blank() -> Box<Raw> {
 struct MacUsbDevices;
 
 #[cfg(target_os = "macos")]
-impl fandhe_device::usb_device::UsbDevices for MacUsbDevices {
-    fn list(&self) -> Result<Vec<UsbDeviceEntry>, DeviceError> {
+impl crate::contract::UsbDevices for MacUsbDevices {
+    fn list(&self) -> Result<Vec<UsbDeviceEntry>, UsbDeviceError> {
         // 約 33KB。ヒープに置く。
         let mut raw = blank();
         if ffi::list(&mut raw) != 0 {
-            return Err(DeviceError::Internal("usb_device list"));
+            return Err(UsbDeviceError::Internal);
         }
         from_raw(&raw)
     }
 }
 
-/// macOS の `UsbDevices` 実装を返す（`device/usb_device.rs` の dispatch から呼ばれる）。
+/// macOS の `UsbDevices` 実装を返す（`driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "macos")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::usb_device::UsbDevices> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::UsbDevices> {
     Box::new(MacUsbDevices)
 }
 
@@ -137,10 +137,7 @@ mod tests {
         for c in [-1, 65] {
             let mut r = blank();
             r.count = c;
-            assert!(matches!(
-                from_raw(&r),
-                Err(DeviceError::Internal("usb_device list"))
-            ));
+            assert!(matches!(from_raw(&r), Err(UsbDeviceError::Internal)));
         }
     }
 

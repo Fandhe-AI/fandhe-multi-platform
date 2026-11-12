@@ -1,6 +1,6 @@
 //! Windows 向け USB 機器一覧実装（Issue #506、親 #112）。`device/usb_device.rs::
 //! platform_usb_devices` の Windows 経路から UI スレッドで同期に 1 回呼ばれる。契約の SSOT は
-//! `fandhe_device::usb_device`。
+//! `crate::contract`。
 //!
 //! # 流れ（COM なし、ワーカーなし）
 //!
@@ -22,22 +22,20 @@
 //! WinRT `Windows.Devices.Usb` は package identity が必要なため使わない。WinUSB は機器を開く API で
 //! 範囲外。型検査は `x86_64-pc-windows-gnu` のみで、実機確認は #504。
 
-use fandhe_device::usb_device::{
-    normalize, parse_hardware_id, UsbDeviceEntry, UsbDevices, MAX_DEVICES,
-};
-use fandhe_device::DeviceError;
-use windows::core::HRESULT;
-use windows::core::PCWSTR;
+use crate::contract::{MAX_DEVICES, UsbDeviceEntry, UsbDevices, normalize, parse_hardware_id};
+use crate::error::UsbDeviceError;
 use windows::Win32::Devices::DeviceAndDriverInstallation::{
+    DIGCF_DEVICEINTERFACE, DIGCF_PRESENT, HDEVINFO, SP_DEVINFO_DATA, SPDRP_HARDWAREID,
     SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInfo, SetupDiGetClassDevsW,
-    SetupDiGetDevicePropertyW, SetupDiGetDeviceRegistryPropertyW, DIGCF_DEVICEINTERFACE,
-    DIGCF_PRESENT, HDEVINFO, SPDRP_HARDWAREID, SP_DEVINFO_DATA,
+    SetupDiGetDevicePropertyW, SetupDiGetDeviceRegistryPropertyW,
 };
 use windows::Win32::Devices::Properties::{
-    DEVPKEY_Device_BusReportedDeviceDesc, DEVPROPTYPE, DEVPROP_TYPE_STRING,
+    DEVPKEY_Device_BusReportedDeviceDesc, DEVPROP_TYPE_STRING, DEVPROPTYPE,
 };
 use windows::Win32::Devices::Usb::GUID_DEVINTERFACE_USB_DEVICE;
 use windows::Win32::Foundation::{ERROR_INVALID_DATA, ERROR_NO_MORE_ITEMS};
+use windows::core::HRESULT;
+use windows::core::PCWSTR;
 
 /// Windows の `UsbDevices` 実装を返す。
 pub(crate) fn implementation() -> Box<dyn UsbDevices> {
@@ -71,17 +69,17 @@ fn utf16_until_nul(bytes: &[u8]) -> Option<String> {
 
 /// hardware ID 取得失敗の分類。プロパティが無い（`ERROR_INVALID_DATA`）のは想定内で機器を飛ばし、
 /// それ以外（アクセス拒否等）は一覧を不完全にするため `Internal` として伝播する。
-fn classify_registry_error(code: HRESULT) -> Result<Option<(u16, u16)>, DeviceError> {
+fn classify_registry_error(code: HRESULT) -> Result<Option<(u16, u16)>, UsbDeviceError> {
     if code == ERROR_INVALID_DATA.to_hresult() {
         Ok(None)
     } else {
-        Err(DeviceError::Internal("usb_device list"))
+        Err(UsbDeviceError::Internal)
     }
 }
 
 /// 1 件の VID/PID。プロパティ無し・解析不能は `Ok(None)`（捨てる）、想定外の OS エラーは `Err`。
 #[allow(unsafe_code)]
-fn vid_pid(set: HDEVINFO, data: &SP_DEVINFO_DATA) -> Result<Option<(u16, u16)>, DeviceError> {
+fn vid_pid(set: HDEVINFO, data: &SP_DEVINFO_DATA) -> Result<Option<(u16, u16)>, UsbDeviceError> {
     let mut buf = [0u8; 1024];
     // SAFETY: `set` は有効なハンドル、`data` は `cbSize` 初期化済みで列挙が埋めたもの。
     // バッファは slice で長さを OS に伝える。
@@ -120,8 +118,8 @@ fn product_name(set: HDEVINFO, data: &SP_DEVINFO_DATA) -> Option<String> {
 
 impl UsbDevices for WindowsUsbDevices {
     #[allow(unsafe_code)]
-    fn list(&self) -> Result<Vec<UsbDeviceEntry>, DeviceError> {
-        let fail = || DeviceError::Internal("usb_device list");
+    fn list(&self) -> Result<Vec<UsbDeviceEntry>, UsbDeviceError> {
+        let fail = || UsbDeviceError::Internal;
         // SAFETY: GUID は静的な定数への有効な参照。他の引数は未指定（NULL）で良い組み合わせ。
         let set = unsafe {
             SetupDiGetClassDevsW(

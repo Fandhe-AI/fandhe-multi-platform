@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod usb_device_show;` と対）。機器は開かず、読み書きも扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは
-//! `fandhe-egui-proxy` の `device/usb_device.rs` が [`take_request`] で要求を観測し
+//! `fandhe-cap-usb-device` の `driver.rs` が [`take_request`] で要求を観測し
 //! [`finish_read`] で結果を注入する（`audio_devices_show.rs` と同型の状態機械）。
 //!
 //! 全対象 OS の状態・文言をここで確定済みで、後続の OS 実装（#506 / #507 / #508）は本画面を

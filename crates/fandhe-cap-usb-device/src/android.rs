@@ -1,10 +1,10 @@
-//! Android 向け USB 機器一覧実装（Issue #507、親 #112）。`device/usb_device.rs` の Android 経路
+//! Android 向け USB 機器一覧実装（Issue #507、親 #112）。`driver.rs` の Android 経路
 //! （`drive_sync`）から egui スレッドでボタン押下ごとに同期で 1 回呼ばれる。契約は
-//! `fandhe_device::usb_device`（範囲は接続中機器の VID・PID・製品名の一覧のみ。機器のオープン・
+//! `crate::contract`（範囲は接続中機器の VID・PID・製品名の一覧のみ。機器のオープン・
 //! 転送・抜き差しへの追従・接続許可の要求は範囲外）。
 //!
-//! Java 側 `MainActivity.usbDeviceList()`（JNI シグネチャ `()Ljava/lang/String;`）が
-//! `UsbDeviceHelper.list` へ委譲する。詰め方の SSOT は `UsbDeviceHelper.java` 冒頭。文字列から
+//! Java 側 `UsbDeviceHelper.list(Context)`（static、JNI シグネチャ
+//! `(Landroid/content/Context;)Ljava/lang/String;`）を `MainActivity` を介さず呼ぶ。詰め方の SSOT は `UsbDeviceHelper.java` 冒頭。文字列から
 //! 契約の値への写像は純関数 [`from_android`] に置き、ホストでもテストする。
 //!
 //! - 空文字は USB ホスト非搭載（`Unsupported`）、`"0"` は 0 件の成功。両者を区別する
@@ -23,8 +23,8 @@
 //! <https://developer.android.com/develop/connectivity/usb/host>、
 //! <https://developer.android.com/reference/android/hardware/usb/UsbManager#getDeviceList()>
 
-use fandhe_device::usb_device::{normalize, UsbDeviceEntry};
-use fandhe_device::DeviceError;
+use crate::contract::{UsbDeviceEntry, normalize};
+use crate::error::UsbDeviceError;
 
 /// Java が機器レコードの頭に置く区切り文字（U+001E）。
 const REC: char = '\u{1E}';
@@ -48,9 +48,9 @@ fn parse_record(rec: &str) -> Option<UsbDeviceEntry> {
 }
 
 /// `UsbDeviceHelper` の文字列を契約の値へ写す。形が不正なら `None`（呼び出し側で `Internal`）。
-fn from_android(raw: &str) -> Option<Result<Vec<UsbDeviceEntry>, DeviceError>> {
+fn from_android(raw: &str) -> Option<Result<Vec<UsbDeviceEntry>, UsbDeviceError>> {
     if raw.is_empty() {
-        return Some(Err(DeviceError::Unsupported("usb_device")));
+        return Some(Err(UsbDeviceError::Unsupported));
     }
     let mut it = raw.split(REC);
     let count: usize = it.next()?.parse().ok()?;
@@ -61,49 +61,30 @@ fn from_android(raw: &str) -> Option<Result<Vec<UsbDeviceEntry>, DeviceError>> {
 #[cfg(target_os = "android")]
 mod jni_impl {
     use super::from_android;
-    use crate::device::android::JniCallFailed;
-    use fandhe_device::usb_device::{UsbDeviceEntry, UsbDevices};
-    use fandhe_device::DeviceError;
+    use crate::contract::{UsbDeviceEntry, UsbDevices};
+    use crate::error::UsbDeviceError;
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
 
-    /// Android の `UsbDevices` 実装（`MainActivity.usbDeviceList()` を JNI で呼ぶ）。
+    /// Android の `UsbDevices` 実装（`UsbDeviceHelper.list(Context)` を JNI の static 呼び出しで呼ぶ）。
     pub(super) struct AndroidUsbDevices;
 
     impl UsbDevices for AndroidUsbDevices {
-        /// 2 箇所の `unsafe` は `android_audio_devices` の `list` と同じ根拠・同じ形。
-        #[allow(unsafe_code)]
-        fn list(&self) -> Result<Vec<UsbDeviceEntry>, DeviceError> {
-            const FAILED: DeviceError = DeviceError::Internal("usb_device list");
-            let Some(app) = crate::android::android_app() else {
+        /// `unsafe` は共通層 `with_activity_class` に閉じている。
+        fn list(&self) -> Result<Vec<UsbDeviceEntry>, UsbDeviceError> {
+            const FAILED: UsbDeviceError = UsbDeviceError::Internal;
+            let Some(app) = android_app() else {
                 return Err(FAILED);
             };
-
-            // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。`vm_as_ptr()` は
-            // android-activity が管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
-            let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-            let result = vm.attach_current_thread(
-                |env: &mut jni::Env| -> Result<Option<String>, JniCallFailed> {
-                    let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                    // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。未所有の JNI
-                    // グローバル参照を `Cast` で包むだけで delete は試みない。
-                    let activity =
-                        unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                    let ret = env.call_method(
-                        &activity,
-                        jni::jni_str!("usbDeviceList"),
-                        jni::jni_sig!(() -> java.lang.String),
-                        &[],
-                    );
-                    let ret = match ret {
-                        Ok(v) => v,
-                        Err(e) => {
-                            // 例外は自動クリアされない（jni 0.22）。文言は読まない。
-                            if env.exception_check() {
-                                env.exception_clear();
-                            }
-                            return Err(e.into());
-                        }
-                    };
+            let result = with_activity_class(
+                &app,
+                jni::jni_str!("com.fandhe.platform.UsbDeviceHelper"),
+                |env, activity, class| -> Result<Option<String>, JniCallFailed> {
+                    let ret = env.call_static_method(
+                        class,
+                        jni::jni_str!("list"),
+                        jni::jni_sig!((android.content.Context) -> java.lang.String),
+                        &[jni::objects::JValue::Object(activity)],
+                    )?;
                     let jstring = env.cast_local::<jni::objects::JString>(ret.l()?)?;
                     if jstring.is_null() {
                         Ok(None)
@@ -112,7 +93,6 @@ mod jni_impl {
                     }
                 },
             );
-
             let raw = result.ok().flatten().ok_or(FAILED)?;
             from_android(&raw).ok_or(FAILED)?
         }
@@ -121,14 +101,14 @@ mod jni_impl {
 
 /// Android の `UsbDevices` 実装を返す。
 #[cfg(target_os = "android")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::usb_device::UsbDevices> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::UsbDevices> {
     Box::new(jni_impl::AndroidUsbDevices)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::usb_device::MAX_DEVICES;
+    use crate::contract::MAX_DEVICES;
 
     fn ok(raw: &str) -> Vec<UsbDeviceEntry> {
         from_android(raw).unwrap().unwrap()
@@ -152,7 +132,7 @@ mod tests {
     fn empty_is_unsupported() {
         assert!(matches!(
             from_android(""),
-            Some(Err(DeviceError::Unsupported("usb_device")))
+            Some(Err(UsbDeviceError::Unsupported))
         ));
     }
 
