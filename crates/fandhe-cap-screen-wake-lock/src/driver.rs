@@ -1,12 +1,11 @@
 //! Phase 11（親 #1129）型サンプル「画面スリープの抑止」（Issue #1278）の effect ドライバ。
 //! `fandhe_core::screens::wake_lock_toggle`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::screen_wake_lock::ScreenWakeLock` で抑止を取る / 外し、直後に
+//! `crate::contract::ScreenWakeLock` で抑止を取る / 外し、直後に
 //! [`ScreenWakeLock::is_held`] で実際に効いているかを読み戻して `CompletionSender` 経由で
-//! 返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約（冪等・エラー種別・守る範囲）の SSOT は `fandhe_device::screen_wake_lock`。
+//! 返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`fandhe_runtime::EffectFn` 参照）。
+//! 契約（冪等・エラー種別・守る範囲）の SSOT は `crate::contract`。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。Web（wasm32）は
-//! 本経路を通らず `fandhe-web-dom` が Screen Wake Lock API へ直接配線する（#1281）。
+//! Web（wasm32）は本経路を通らず `fandhe-web-dom` が Screen Wake Lock API へ直接配線する（#1281）。
 //!
 //! # スレッド
 //!
@@ -17,42 +16,43 @@
 //!
 //! # 対応 OS と後続
 //!
-//! macOS: `macos_screen_wake_lock`、Windows: `windows_screen_wake_lock`、iOS（#1279）:
-//! `ios_screen_wake_lock`。Android（#1280）: `android_screen_wake_lock`。
+//! macOS: `macos`、Windows: `windows`、iOS（#1279）:
+//! `ios`。Android（#1280）: `android`。
 //! dispatch・共通コア画面は本 PR で最終形にしてある。それ以外（Linux）は
 //! `UnsupportedScreenWakeLock` 固定。
 
 use std::sync::Arc;
 
+use crate::contract::ScreenWakeLock;
+use crate::error::ScreenWakeLockError;
 use fandhe_core::screens::wake_lock_toggle::{
-    finish, mark_applying, take_request, WakeLockFailure, WakeLockToggleState,
+    WakeLockFailure, WakeLockToggleState, finish, mark_applying, take_request,
 };
-use fandhe_device::screen_wake_lock::ScreenWakeLock;
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `ScreenWakeLock` 実装を返す（プロセスで 1 個）。
-fn implementation() -> Arc<dyn ScreenWakeLock> {
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_screen_wake_lock() -> Arc<dyn ScreenWakeLock> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn ScreenWakeLock>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "macos")]
             {
-                super::macos_screen_wake_lock::implementation()
+                crate::macos::implementation()
             }
             #[cfg(target_os = "windows")]
             {
-                super::windows_screen_wake_lock::implementation()
+                crate::windows::implementation()
             }
             #[cfg(target_os = "ios")]
             {
-                super::ios_screen_wake_lock::implementation()
+                crate::ios::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_screen_wake_lock::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(
                 target_os = "macos",
@@ -61,17 +61,17 @@ fn implementation() -> Arc<dyn ScreenWakeLock> {
                 target_os = "android"
             )))]
             {
-                Arc::new(fandhe_device::screen_wake_lock::UnsupportedScreenWakeLock)
+                Arc::new(crate::contract::UnsupportedScreenWakeLock)
             }
         })
         .clone()
 }
 
-/// `DeviceError` を画面の失敗種別へ写す。`Unsupported` 以外は `Display` の文言のみを転送する
+/// `ScreenWakeLockError` を画面の失敗種別へ写す。`Unsupported` 以外は `Display` の文言のみを転送する
 /// （OS のエラーコードを画面・ログへ出さない、security.md A09）。
-fn to_failure(e: DeviceError) -> WakeLockFailure {
+fn to_failure(e: ScreenWakeLockError) -> WakeLockFailure {
     match e {
-        DeviceError::Unsupported(_) => WakeLockFailure::Unsupported,
+        ScreenWakeLockError::Unsupported => WakeLockFailure::Unsupported,
         other => WakeLockFailure::Failed(other.to_string()),
     }
 }
@@ -104,15 +104,15 @@ pub fn wake_lock_toggle_effect(
     state: &WakeLockToggleState,
     sender: &CompletionSender<WakeLockToggleState>,
 ) {
-    drive(state, sender, implementation());
+    drive(state, sender, platform_screen_wake_lock());
 }
 
 /// `SetThreadExecutionState` の戻り値（直前の状態。失敗時は 0）を契約のエラー種別へ写す。
 /// ホストでも検証できるよう OS 非依存の純関数にしてある。
 #[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
-pub(crate) fn exec_state_result(prev: u32) -> Result<(), DeviceError> {
+pub(crate) fn exec_state_result(prev: u32) -> Result<(), ScreenWakeLockError> {
     if prev == 0 {
-        Err(DeviceError::Internal("screen-wake-lock"))
+        Err(ScreenWakeLockError::Internal)
     } else {
         Ok(())
     }
@@ -121,32 +121,41 @@ pub(crate) fn exec_state_result(prev: u32) -> Result<(), DeviceError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::UnsupportedScreenWakeLock;
     use fandhe_core::screens::wake_lock_toggle::{
-        turn_off, turn_on, WakeLockPhase, FAILED_PREFIX, HELD_STATUS, RELEASED_STATUS,
-        UNSUPPORTED_STATUS,
+        FAILED_PREFIX, HELD_STATUS, RELEASED_STATUS, UNSUPPORTED_STATUS, WakeLockPhase, turn_off,
+        turn_on,
     };
-    use fandhe_device::screen_wake_lock::UnsupportedScreenWakeLock;
     use std::sync::atomic::{AtomicBool, Ordering};
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     fn sender_with_channel() -> (
         CompletionSender<WakeLockToggleState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<WakeLockToggleState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<WakeLockToggleState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     /// 成功なら `held` を要求どおりに更新し、失敗なら変えない Fake。
     struct Fake {
         held: AtomicBool,
-        fail: Option<fn() -> DeviceError>,
+        fail: Option<fn() -> ScreenWakeLockError>,
         /// `Ok` を返すのに `held` を変えない（嘘の成功の再現）。
         ignore: bool,
     }
 
     impl ScreenWakeLock for Fake {
-        fn set_keep_awake(&self, keep: bool) -> Result<(), DeviceError> {
+        fn set_keep_awake(&self, keep: bool) -> Result<(), ScreenWakeLockError> {
             if let Some(f) = self.fail {
                 return Err(f());
             }
@@ -160,7 +169,7 @@ mod tests {
         }
     }
 
-    fn fake(fail: Option<fn() -> DeviceError>, ignore: bool) -> Arc<Fake> {
+    fn fake(fail: Option<fn() -> ScreenWakeLockError>, ignore: bool) -> Arc<Fake> {
         Arc::new(Fake {
             held: AtomicBool::new(false),
             fail,
@@ -226,7 +235,7 @@ mod tests {
     #[test]
     fn internal_error_is_failure_with_prefix() {
         let mut state = WakeLockToggleState::default();
-        let lock = fake(Some(|| DeviceError::Internal("screen-wake-lock")), false);
+        let lock = fake(Some(|| ScreenWakeLockError::Internal), false);
         run(&mut state, lock, turn_on);
         assert!(state.error.starts_with(FAILED_PREFIX), "{}", state.error);
         assert!(!state.held);
@@ -241,8 +250,8 @@ mod tests {
     #[test]
     fn unsupported_os_implementation_is_unsupported() {
         assert!(matches!(
-            implementation().set_keep_awake(true),
-            Err(DeviceError::Unsupported(_))
+            platform_screen_wake_lock().set_keep_awake(true),
+            Err(ScreenWakeLockError::Unsupported)
         ));
     }
 
@@ -250,7 +259,7 @@ mod tests {
     fn exec_state_result_maps_zero_to_internal() {
         assert!(matches!(
             exec_state_result(0),
-            Err(DeviceError::Internal(_))
+            Err(ScreenWakeLockError::Internal)
         ));
         assert!(exec_state_result(0x8000_0000).is_ok());
         assert!(exec_state_result(1).is_ok());

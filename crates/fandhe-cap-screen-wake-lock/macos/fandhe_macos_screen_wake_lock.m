@@ -2,8 +2,8 @@
 // IOKit の電源アサーション（`kIOPMAssertionTypePreventUserIdleDisplaySleep`）を取る / 外す。
 // macOS 専用 API のため `apple/*.m` ではなく `macos/` に置く。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_screen_wake_lock.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルし、IOKit と
+// `crates/fandhe-cap-screen-wake-lock/src/macos.rs` から C ABI 経由で呼ばれる。
+// 本 crate の `build.rs` が macOS ターゲットでコンパイルし、IOKit と
 // CoreFoundation をリンクする。
 //
 // 契約:

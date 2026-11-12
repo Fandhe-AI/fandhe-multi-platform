@@ -4,13 +4,20 @@ import android.app.Activity;
 import android.view.Window;
 import android.view.WindowManager;
 
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// 画面スリープ抑止（Issue #1280、親 #1129）の Android 実装ヘルパー。MainActivity から
-// 生成・委譲される（Rust の `device/android_screen_wake_lock.rs` が egui スレッドから
-// `MainActivity.screenWakeLockSet` / `screenWakeLockIsHeld` を JNI で同期呼び出しする）。
+// 画面スリープ抑止（Issue #1280、親 #1129、#1187）の Android 実装ヘルパー。利用者の `MainActivity` には
+// 何も書かせない。Rust の `src/android.rs` が egui スレッドから static の `set(Activity, keep)` /
+// `isHeld(Activity)` を JNI で同期呼び出しする。Activity への参加は `ScreenWakeLockLifecycle`
+// （非公開 ContentProvider、`FeatureLifecycleProvider` 継承）が行い、生成時に `attach`、破棄時に `detach` を呼ぶ。
+// Activity ごとの helper は `HELPERS` に持つ（egui スレッドと UI スレッドの両方から触るので同期化し、
+// 破棄時に必ず外す）。表に無い Activity への要求は RESULT_FAILED / false を返す（嘘の成功にしない）。
+//
 //
 // `Window.addFlags/clearFlags(FLAG_KEEP_SCREEN_ON)` は UI スレッドで呼ぶ必要があるため、
 // `set` は `runOnUiThread` へ渡して最長 APPLY_TIMEOUT_MS だけ待つ。Rust 側 `drive` は
@@ -28,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 // ため、要求は持ち越さない。背景（`onPause`/`onStop`）ではフラグを残す（見えない間は OS が
 // 効かせず、前面復帰で再び効く。守らない範囲）。
 final class ScreenWakeLockHelper {
-    // 結果コード。SSOT はここで、Rust 側 `android_screen_wake_lock.rs::decode` が同じ値で写像する。
+    // 結果コード。SSOT はここで、Rust 側 `android.rs::decode` が同じ値で写像する。
     static final int RESULT_OK = 0;
     static final int RESULT_TIMEOUT = 1;
     static final int RESULT_FAILED = 2;
@@ -46,19 +53,47 @@ final class ScreenWakeLockHelper {
         volatile int code = RESULT_FAILED;
     }
 
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, ScreenWakeLockHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     private final Activity activity;
     private final Object lock = new Object();
     private boolean held;
     private boolean destroyed;
 
-    ScreenWakeLockHelper(Activity activity) {
+    private ScreenWakeLockHelper(Activity activity) {
         this.activity = activity;
+    }
+
+    // Activity の生成時（`ScreenWakeLockLifecycle` から）。
+    static void attach(Activity activity) {
+        HELPERS.put(activity, new ScreenWakeLockHelper(activity));
+    }
+
+    // Activity の破棄時（`ScreenWakeLockLifecycle` から）。以後に届く旧要求は Window に触れない。
+    static void detach(Activity activity) {
+        ScreenWakeLockHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // egui スレッドから呼ぶ入口。helper が無い（生成前・破棄後）なら失敗を返す。
+    static int set(Activity activity, boolean keep) {
+        ScreenWakeLockHelper helper = HELPERS.get(activity);
+        return helper == null ? RESULT_FAILED : helper.setKeepAwake(keep);
+    }
+
+    static boolean isHeld(Activity activity) {
+        ScreenWakeLockHelper helper = HELPERS.get(activity);
+        return helper != null && helper.held();
     }
 
     // egui スレッドから呼ぶ。UI スレッドで適用し、読み戻した結果を返す。
     // RESULT_TIMEOUT を返すのは「未開始のまま放棄できた」ときだけで、以後 UI 側は Window に触れない
     // （FLAG_KEEP_SCREEN_ON も held も変わらない）。適用開始済みなら終了を待ち実結果を返す。
-    int set(final boolean keep) {
+    private int setKeepAwake(final boolean keep) {
         final Call call = new Call();
         activity.runOnUiThread(new Runnable() {
             @Override
@@ -137,14 +172,14 @@ final class ScreenWakeLockHelper {
         }
     }
 
-    boolean isHeld() {
+    private boolean held() {
         synchronized (lock) {
             return held;
         }
     }
 
-    // `MainActivity.onDestroy`（UI スレッド）から呼ぶ。以後に届く旧要求は Window に触れない。
-    void onDestroy() {
+    // `detach`（UI スレッド）から呼ぶ。以後に届く旧要求は Window に触れない。
+    private void onDestroy() {
         synchronized (lock) {
             destroyed = true;
             held = false;

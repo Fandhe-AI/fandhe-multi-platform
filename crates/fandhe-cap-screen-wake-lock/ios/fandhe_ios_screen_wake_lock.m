@@ -1,7 +1,7 @@
 // 画面スリープの抑止: iOS 実装（Issue #1279）。`UIApplication.idleTimerDisabled` を書く / 読む。
 //
-// `src/device/ios_screen_wake_lock.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
-// feature `device` 有効時のみ `cc` コンパイルする（UIKit / Foundation はリンク済み）。
+// `crates/fandhe-cap-screen-wake-lock/src/ios.rs` から C ABI 経由で呼ばれる。本 crate の `build.rs` が iOS ターゲットで
+// `cc` コンパイルする（UIKit / Foundation はリンク済み）。
 //
 // 契約（一発呼び出し型。結果を待つ要求は持たない）:
 //   fandhe_ios_screen_wake_lock_set(int32_t keep) -> int32_t

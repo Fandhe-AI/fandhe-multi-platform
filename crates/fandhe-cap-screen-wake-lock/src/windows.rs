@@ -1,5 +1,5 @@
 //! Windows 向け画面スリープ抑止実装（Issue #1278）。Win32 の `SetThreadExecutionState` を
-//! 呼ぶ（package identity 不要）。`device/screen_wake_lock.rs` の Windows 経路から使われる。
+//! 呼ぶ（package identity 不要）。`driver.rs` の Windows 経路から使われる。
 //!
 //! # スレッド
 //!
@@ -20,11 +20,11 @@
 
 use std::sync::{Arc, Mutex};
 
-use fandhe_device::screen_wake_lock::ScreenWakeLock;
-use fandhe_device::DeviceError;
-use windows::Win32::System::Power::{SetThreadExecutionState, ES_CONTINUOUS, ES_DISPLAY_REQUIRED};
+use crate::contract::ScreenWakeLock;
+use crate::error::ScreenWakeLockError;
+use windows::Win32::System::Power::{ES_CONTINUOUS, ES_DISPLAY_REQUIRED, SetThreadExecutionState};
 
-use super::screen_wake_lock::exec_state_result;
+use crate::driver::exec_state_result;
 
 /// Windows の `ScreenWakeLock` 実装。
 struct WindowsScreenWakeLock {
@@ -32,7 +32,7 @@ struct WindowsScreenWakeLock {
 }
 
 impl ScreenWakeLock for WindowsScreenWakeLock {
-    fn set_keep_awake(&self, keep: bool) -> Result<(), DeviceError> {
+    fn set_keep_awake(&self, keep: bool) -> Result<(), ScreenWakeLockError> {
         let mut held = self.held.lock().unwrap_or_else(|p| p.into_inner());
         if *held == keep {
             return Ok(());

@@ -3,7 +3,7 @@
 //!
 //! 扱う範囲は「アプリが前面にいる間、画面の自動消灯・スリープを止める / 戻す」ことだけ。
 //! 対象は iOS / Android / macOS / Windows / Web。取得・解除はどちらも即時で、結果を待つ
-//! 要求を持たない一発呼び出し型。`fandhe-egui-proxy` の橋渡し層が UI スレッドから
+//! 要求を持たない一発呼び出し型。本 crate の `driver.rs` が UI スレッドから
 //! [`ScreenWakeLock::set_keep_awake`] を呼び、[`ScreenWakeLock::is_held`] で実際に効いているかを
 //! 読み戻して画面（`fandhe_core::screens::wake_lock_toggle`）へ返す。
 //!
@@ -36,12 +36,12 @@
 //! スレッド終了でフラグが消える。OS が代わりに片付けるため同期させない）。いずれも表示が
 //! 一時的に食い違うだけで、データ消失・資源漏れ・嘘の成功には至らない。
 
-use crate::DeviceError;
+use crate::error::ScreenWakeLockError;
 
 /// 画面スリープ抑止の契約（モジュール doc の「契約」節）。
 pub trait ScreenWakeLock: Send + Sync {
     /// `true` で抑止を取り、`false` で外す。冪等。
-    fn set_keep_awake(&self, keep: bool) -> Result<(), DeviceError>;
+    fn set_keep_awake(&self, keep: bool) -> Result<(), ScreenWakeLockError>;
 
     /// 抑止が実際に効いているか（モジュール doc の「`is_held` の意味」）。
     fn is_held(&self) -> bool;
@@ -51,8 +51,8 @@ pub trait ScreenWakeLock: Send + Sync {
 pub struct UnsupportedScreenWakeLock;
 
 impl ScreenWakeLock for UnsupportedScreenWakeLock {
-    fn set_keep_awake(&self, _keep: bool) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("screen-wake-lock"))
+    fn set_keep_awake(&self, _keep: bool) -> Result<(), ScreenWakeLockError> {
+        Err(ScreenWakeLockError::Unsupported)
     }
 
     fn is_held(&self) -> bool {
@@ -68,7 +68,7 @@ mod tests {
     fn unsupported_is_not_a_fake_success() {
         for keep in [true, false] {
             let err = UnsupportedScreenWakeLock.set_keep_awake(keep).unwrap_err();
-            assert!(matches!(err, DeviceError::Unsupported(_)));
+            assert!(matches!(err, ScreenWakeLockError::Unsupported));
         }
         assert!(!UnsupportedScreenWakeLock.is_held());
     }

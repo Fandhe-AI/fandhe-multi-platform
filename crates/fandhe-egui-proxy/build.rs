@@ -188,7 +188,6 @@ fn build() {
 
     // `ios/fandhe_ios_spell_check.m`（Issue #579）。iOS 分岐のみ。
     compile_ios_spell_check();
-    compile_ios_screen_wake_lock();
     // `ios/fandhe_ios_screen_brightness.m`（Issue #634）。iOS 分岐のみ。
     compile_ios_screen_brightness();
     // `ios/fandhe_ios_fullscreen_immersive.m`（Issue #1313）。iOS 分岐のみ。
@@ -735,15 +734,6 @@ fn compile_macos_managed_app_config() {
     );
 }
 
-/// `macos/fandhe_macos_screen_wake_lock.m` を `cc` でコンパイルし IOKit をリンクする
-/// （Issue #1278）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_screen_wake_lock.rs` が使う）。
-fn compile_macos_screen_wake_lock() {
-    compile_objc(
-        "macos/fandhe_macos_screen_wake_lock.m",
-        &["CoreFoundation", "Foundation", "IOKit"],
-    );
-}
-
 /// `ios/fandhe_ios_url_scheme.m` を `cc` でコンパイルする（Issue #1217）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/apple_url_scheme.rs` が使う）。
 fn compile_ios_url_scheme() {
@@ -1222,15 +1212,6 @@ fn compile_ios_health_data() {
     compile_objc("ios/fandhe_ios_health_data.m", &["Foundation", "HealthKit"]);
 }
 
-/// `ios/fandhe_ios_screen_wake_lock.m` を `cc` でコンパイルする（Issue #1279）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_screen_wake_lock.rs` が使う）。
-fn compile_ios_screen_wake_lock() {
-    compile_objc(
-        "ios/fandhe_ios_screen_wake_lock.m",
-        &["Foundation", "UIKit"],
-    );
-}
-
 /// `ios/fandhe_ios_screen_brightness.m` を `cc` でコンパイルする（Issue #634）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_screen_brightness.rs` が使う）。
 fn compile_ios_screen_brightness() {
@@ -1697,8 +1678,6 @@ fn build_macos() {
     // `macos/fandhe_macos_serial_port.m`（Issue #670）も macOS 専用。IOKit を使う。
     compile_macos_serial_port();
     compile_macos_pen_stylus();
-    // `macos/fandhe_macos_screen_wake_lock.m`（Issue #1278）も macOS 専用。IOKit を使う。
-    compile_macos_screen_wake_lock();
     // `macos/fandhe_macos_managed_app_config.m`（Issue #944）も macOS 専用。CoreFoundation を使う。
     compile_macos_managed_app_config();
     // `apple/fandhe_apple_screen_capture.m`（Issue #1335）の macOS 側（ScreenCaptureKit）。

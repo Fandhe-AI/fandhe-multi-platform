@@ -223,8 +223,6 @@ pub mod screen_brightness;
 pub mod screen_capture;
 /// Phase 11（端末機能の拡充ループ、親 #128、Issue #655）: 画面向きの取得・固定。
 pub mod screen_orientation;
-/// Phase 11（端末機能の拡充ループ、親 #1129、Issue #1278）: 画面スリープの抑止。
-pub mod screen_wake_lock;
 /// Phase 11（端末機能の拡充ループ、親 #921、Issue #922）: 資格情報の安全な保存。
 pub mod secure_credential;
 /// Phase 11（端末機能の拡充ループ、親 #131、Issue #670）: シリアルポートの一覧と 1 行の往復。

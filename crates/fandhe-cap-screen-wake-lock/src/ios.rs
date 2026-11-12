@@ -1,7 +1,7 @@
 //! iOS 向け画面スリープ抑止実装（Issue #1279）。`UIApplication.idleTimerDisabled`
-//! （`ios/fandhe_ios_screen_wake_lock.m`、`build.rs` が iOS 分岐の feature `device` 有効時に
+//! （`ios/fandhe_ios_screen_wake_lock.m`、本 crate の `build.rs` が iOS ターゲットで
 //! コンパイルする）を `unsafe extern "C"` 2 関数で書く / 読む。`unsafe` はこの呼び出しに閉じ
-//! `// SAFETY:` で契約を明記する。`device/screen_wake_lock.rs` の iOS 経路が `implementation()`
+//! `// SAFETY:` で契約を明記する。`driver.rs` の iOS 経路が `implementation()`
 //! を呼ぶ（dispatch・共通コア画面は #1278 で確定済みで触らない）。
 //!
 //! # 状態
@@ -15,7 +15,7 @@
 //!
 //! OS コールバックが共有状態へ結果を入れる経路は無く、完了は `drive` が同期で読み戻して
 //! `CompletionSender::send`（内部で `request_repaint`）が起こす。復帰時の observer は OS の値を
-//! 要求へ揃えるだけで共有状態を変えないため、`crate::ios::request_repaint` は呼ばない（該当なし）。
+//! 要求へ揃えるだけで共有状態を変えないため、`fandhe_runtime::request_repaint` は呼ばない（該当なし）。
 //!
 //! # 守る範囲 / 守らない範囲
 //!
@@ -27,8 +27,8 @@
 use std::sync::Arc;
 
 #[cfg(target_os = "ios")]
-use fandhe_device::screen_wake_lock::ScreenWakeLock;
-use fandhe_device::DeviceError;
+use crate::contract::ScreenWakeLock;
+use crate::error::ScreenWakeLockError;
 
 // `ios/fandhe_ios_screen_wake_lock.m` が定義する C ABI。契約は `.m` 冒頭コメントに集約する。
 #[cfg(target_os = "ios")]
@@ -39,11 +39,11 @@ unsafe extern "C" {
 }
 
 /// `set` の戻りコード（0 = 成功、それ以外 = 失敗）を契約のエラー種別へ写す。
-fn decode(code: i32) -> Result<(), DeviceError> {
+fn decode(code: i32) -> Result<(), ScreenWakeLockError> {
     if code == 0 {
         Ok(())
     } else {
-        Err(DeviceError::Internal("screen-wake-lock"))
+        Err(ScreenWakeLockError::Internal)
     }
 }
 
@@ -59,7 +59,7 @@ struct IosScreenWakeLock;
 #[cfg(target_os = "ios")]
 impl ScreenWakeLock for IosScreenWakeLock {
     #[allow(unsafe_code)]
-    fn set_keep_awake(&self, keep: bool) -> Result<(), DeviceError> {
+    fn set_keep_awake(&self, keep: bool) -> Result<(), ScreenWakeLockError> {
         // SAFETY: 引数は値渡しの i32 のみでポインタを経由しない。`.m` 側で main スレッドを
         // 検査し、main 以外では UIKit に触れず 2 を返す。
         let code = unsafe { fandhe_ios_screen_wake_lock_set(i32::from(keep)) };
@@ -87,10 +87,7 @@ mod tests {
     fn decode_maps_nonzero_to_internal() {
         assert!(decode(0).is_ok());
         for code in [2, -1] {
-            assert!(matches!(
-                decode(code),
-                Err(DeviceError::Internal("screen-wake-lock"))
-            ));
+            assert!(matches!(decode(code), Err(ScreenWakeLockError::Internal)));
         }
     }
 

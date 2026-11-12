@@ -1,8 +1,8 @@
 //! macOS 向け画面スリープ抑止実装（Issue #1278）。IOKit の電源アサーション
-//! （`macos/fandhe_macos_screen_wake_lock.m`、`build.rs` が macOS ターゲットの feature `device`
-//! 有効時にコンパイル・リンクする）を `unsafe extern "C"` 2 関数で取る / 外す。`unsafe` は
+//! （`macos/fandhe_macos_screen_wake_lock.m`、本 crate の `build.rs` が macOS ターゲットで
+//! コンパイル・リンクする）を `unsafe extern "C"` 2 関数で取る / 外す。`unsafe` は
 //! この呼び出しに閉じ `// SAFETY:` で契約を明記する（`macos_background_task.rs` と同型、
-//! coding-rust.md の FFI 例外規定準拠）。`device/screen_wake_lock.rs` の macOS 経路から使われる。
+//! coding-rust.md の FFI 例外規定準拠）。`driver.rs` の macOS 経路から使われる。
 //!
 //! # 状態
 //!
@@ -18,8 +18,8 @@
 
 use std::sync::{Arc, Mutex};
 
-use fandhe_device::screen_wake_lock::ScreenWakeLock;
-use fandhe_device::DeviceError;
+use crate::contract::ScreenWakeLock;
+use crate::error::ScreenWakeLockError;
 
 // `macos/fandhe_macos_screen_wake_lock.m` が定義する C ABI。契約は `.m` 冒頭コメントに集約する。
 #[cfg(target_os = "macos")]
@@ -30,11 +30,11 @@ unsafe extern "C" {
 }
 
 /// `.m` の戻りコード（0 = 成功、それ以外 = 失敗）を契約のエラー種別へ写す。
-fn decode(code: i32) -> Result<(), DeviceError> {
+fn decode(code: i32) -> Result<(), ScreenWakeLockError> {
     if code == 0 {
         Ok(())
     } else {
-        Err(DeviceError::Internal("screen-wake-lock"))
+        Err(ScreenWakeLockError::Internal)
     }
 }
 
@@ -49,9 +49,9 @@ impl Holder {
     fn set(
         &self,
         keep: bool,
-        acquire: impl FnOnce() -> Result<u32, DeviceError>,
-        release: impl FnOnce(u32) -> Result<(), DeviceError>,
-    ) -> Result<(), DeviceError> {
+        acquire: impl FnOnce() -> Result<u32, ScreenWakeLockError>,
+        release: impl FnOnce(u32) -> Result<(), ScreenWakeLockError>,
+    ) -> Result<(), ScreenWakeLockError> {
         let mut id = self.id.lock().unwrap_or_else(|p| p.into_inner());
         match (keep, *id) {
             (true, None) => {
@@ -80,7 +80,7 @@ struct MacScreenWakeLock(Holder);
 #[cfg(target_os = "macos")]
 impl ScreenWakeLock for MacScreenWakeLock {
     #[allow(unsafe_code)]
-    fn set_keep_awake(&self, keep: bool) -> Result<(), DeviceError> {
+    fn set_keep_awake(&self, keep: bool) -> Result<(), ScreenWakeLockError> {
         self.0.set(
             keep,
             || {
@@ -115,15 +115,15 @@ mod tests {
     use super::*;
     use std::cell::Cell;
 
-    fn internal() -> DeviceError {
-        DeviceError::Internal("screen-wake-lock")
+    fn internal() -> ScreenWakeLockError {
+        ScreenWakeLockError::Internal
     }
 
     #[test]
     fn decode_maps_codes() {
         assert!(decode(0).is_ok());
-        assert!(matches!(decode(1), Err(DeviceError::Internal(_))));
-        assert!(matches!(decode(2), Err(DeviceError::Internal(_))));
+        assert!(matches!(decode(1), Err(ScreenWakeLockError::Internal)));
+        assert!(matches!(decode(2), Err(ScreenWakeLockError::Internal)));
     }
 
     #[test]

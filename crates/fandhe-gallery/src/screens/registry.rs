@@ -423,7 +423,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wake_lock_toggle" => fandhe_core::screens::wake_lock_toggle::current_screen,
-    fandhe_egui_proxy::device::screen_wake_lock::wake_lock_toggle_effect,
+    fandhe_cap_screen_wake_lock::wake_lock_toggle_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "screen_brightness_show" => fandhe_core::screens::screen_brightness_show::current_screen,

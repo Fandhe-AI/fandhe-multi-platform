@@ -373,11 +373,6 @@ pub mod android_screen_capture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_orientation;
-/// Issue #1280: Android 向け画面スリープ抑止実装（`FLAG_KEEP_SCREEN_ON`、Java は `ScreenWakeLockHelper`）。
-/// `device/screen_wake_lock.rs` の Android 経路から使われる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_screen_wake_lock;
 /// Issue #810: Android 向けスリープ・ロックの通知の骨格（`Unsupported` のスタブ。#811 が埋める）。
 /// `device/sleep_lock_events.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
@@ -1166,12 +1161,6 @@ pub mod ios_screen_brightness;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_orientation;
-/// Issue #1279: iOS 向け画面スリープ抑止実装（`ios/fandhe_ios_screen_wake_lock.m` を呼ぶ C ABI
-/// ラッパー。#1278 のスタブを置き換え）。
-/// `device/screen_wake_lock.rs` の iOS 経路から使われる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_screen_wake_lock;
 /// Issue #1079・#1080: iOS 向けスマートホーム実装（`ios/fandhe_ios_smart_home.m` の HomeKit を呼ぶ C ABI ラッパー）。`device/smart_home.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -1382,12 +1371,6 @@ pub mod macos_removable_storage;
 /// C ABI ラッパー）。`device/safe_area_insets.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_safe_area_insets;
-/// Issue #1278: macOS 向け画面スリープ抑止実装（`macos/fandhe_macos_screen_wake_lock.m` を
-/// 呼ぶ C ABI ラッパー）。`device/screen_wake_lock.rs` の macOS 経路から呼ばれる。状態管理
-/// （`Holder`）はホストのテストで検証できるよう `test` でもコンパイルする。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code, unused_imports))]
-pub mod macos_screen_wake_lock;
 /// Issue #670: macOS 向けシリアルポート実装（`macos/fandhe_macos_serial_port.m` の IOKit 列挙と
 /// POSIX 端末入出力を包む C ABI ラッパー）。`device/serial_port.rs` の macOS 経路から呼ばれる。
 /// 生値の写像をホストでテストできるよう cfg は `any(macos, test)`。
@@ -1604,10 +1587,6 @@ pub mod screen_capture;
 /// （iOS は #656、Android は #657 が埋めるスタブ、Web は #658 の `fandhe-web-dom`、
 /// 他 OS は `UnsupportedScreenOrientation` 固定）。
 pub mod screen_orientation;
-/// Phase 11 の拡充ループ（親 #1129、Issue #1278）: 画面スリープ抑止の effect ドライバ
-/// （macOS/Windows/iOS/Android 実装、他 OS は
-/// `UnsupportedScreenWakeLock` 固定。Web は `fandhe-web-dom`）。
-pub mod screen_wake_lock;
 /// Phase 11 の拡充ループ（親 #921、Issue #922・#924）: 資格情報保存の effect
 /// ドライバ（macOS/iOS/Android 実装、Windows は #923）。
 pub mod secure_credential;
@@ -1982,10 +1961,6 @@ pub mod windows_scanner_devices;
 /// `device/screen_capture.rs` の Windows 経路から使われる。
 #[cfg(target_os = "windows")]
 pub mod windows_screen_capture;
-/// Issue #1278: Windows 向け画面スリープ抑止実装（Win32 `SetThreadExecutionState`）。
-/// `device/screen_wake_lock.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_screen_wake_lock;
 /// Issue #923: Windows 向け資格情報保存実装（WinRT `PasswordVault` ラッパー）。
 /// `device/secure_credential.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

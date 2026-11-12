@@ -979,18 +979,6 @@ public class MainActivity extends GameActivity {
         videoCaptureHelper.capture(requestId, maxSecs);
     }
 
-    // 画面スリープ抑止（Issue #1280）。実装は `ScreenWakeLockHelper`。Rust の
-    // `android_screen_wake_lock.rs` が egui スレッドから同期で JNI 呼び出しする。
-    private final ScreenWakeLockHelper screenWakeLockHelper = new ScreenWakeLockHelper(this);
-
-    int screenWakeLockSet(boolean keep) {
-        return screenWakeLockHelper.set(keep);
-    }
-
-    boolean screenWakeLockIsHeld() {
-        return screenWakeLockHelper.isHeld();
-    }
-
     // 画面輝度の上書き（Issue #635）。実装は `ScreenBrightnessHelper`。Rust の
     // `android_screen_brightness.rs` が egui スレッドから同期で JNI 呼び出しする。
     private final ScreenBrightnessHelper screenBrightnessHelper = new ScreenBrightnessHelper(this);
@@ -5027,7 +5015,6 @@ public class MainActivity extends GameActivity {
         screenCaptureHelper.onDestroy();
         videoCaptureHelper.onDestroy();
         printHelper.onDestroy();
-        screenWakeLockHelper.onDestroy();
         screenBrightnessHelper.onDestroy();
         screenOrientationHelper.onDestroy();
         captureProtectionHelper.onDestroy();
