@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod on_device_llm;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は
-//! 本モジュール外（`fandhe-egui-proxy` の `device/on_device_llm.rs`）が [`take_request`] で要求を
+//! 本モジュール外（`fandhe-cap-on-device-llm`（`src/driver.rs`））が [`take_request`] で要求を
 //! 観測し、[`mark_running`]・[`finish_respond`] で状態を進める。全対象 OS（macOS / iOS / Web）で
 //! 同じ UI・文言を使うため、OS 別の子 issue はこのファイルを触らない。Web でだけ起きる失敗種別
 //! （[`LlmFailure::PermissionDenied`]・[`LlmFailure::Interrupted`]）の文言もここで定義する。

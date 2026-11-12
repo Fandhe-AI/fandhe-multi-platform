@@ -596,11 +596,6 @@ pub mod apple_nlp;
 #[cfg(any(target_os = "macos", target_os = "ios", test))]
 #[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 pub mod apple_now_playing;
-/// Issue #345 macOS・#346 iOS: 端末内 LLM 実装（`apple/fandhe_apple_on_device_llm.swift` を
-/// 呼ぶ C ABI ラッパー）。`device/on_device_llm.rs` の macOS 経路と、iOS 経路（`ios_on_device_llm` 経由）から
-/// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_on_device_llm;
 /// Issue #469: macOS / iOS 向け PDF 表示実装（`apple/fandhe_apple_pdf_viewer.m` の CoreGraphics を
 /// 呼ぶ C ABI ラッパー）。`device/pdf_viewer.rs` の macOS 経路と `ios_pdf_viewer`（#471）から
 /// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
@@ -1070,10 +1065,6 @@ pub mod ios_notification;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_now_playing;
-/// Issue #346: iOS 向け端末内 LLM 実装（macOS と共用の `apple_on_device_llm` を返す）。
-/// `device/on_device_llm.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_on_device_llm;
 /// Issue #798: iOS 向け「OS の設定画面を開く」の骨格（実体は #799）。`device/open_system_settings.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -1464,9 +1455,6 @@ pub mod notification;
 /// 他 OS は `UnsupportedNowPlaying` 固定。
 /// Web は #384 で `fandhe-web-dom`）。`media_playback` の `audio_play` 画面から呼ばれる。
 pub mod now_playing;
-/// Phase 11 の拡充ループ（親 #93、Issue #345）: 端末内 LLM の effect ドライバ（macOS・iOS 実装、
-/// 他 OS は `UnsupportedOnDeviceLlm` 固定。Web は `fandhe-web-dom` が持つ）。
-pub mod on_device_llm;
 /// Issue #749: 既定アプリで開く・ファイルマネージャーで選択表示の effect ドライバ（サンプルファイルの用意・
 /// `ShellPath` 検査・OS 実装の呼び出し）。`screens/registry.rs` の `effect` 区画から呼ばれる。
 pub mod open_in_shell;

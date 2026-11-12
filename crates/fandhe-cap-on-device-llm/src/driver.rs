@@ -1,16 +1,16 @@
 //! Phase 11（親 #93）型サンプル「端末内 LLM」（Issue #345）の effect ドライバ。
 //! `fandhe_core::screens::on_device_llm`（端末依存ゼロ）の要求を観測し、ワーカースレッドで
-//! `fandhe_device::on_device_llm::OnDeviceLlm` を呼んで `CompletionSender` 経由で結果を返す
+//! `crate::contract::OnDeviceLlm` を呼んで `CompletionSender` 経由で結果を返す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
-//! `fandhe_device::on_device_llm`。
+//! `fandhe_cap_on_device_llm`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。Web の実体は
 //! `fandhe-web-dom` の非同期 effect（c の子 issue）が持つ。
 //!
 //! # OS 別の分担（dispatch は #345 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
-//! - macOS: [`super::apple_on_device_llm::AppleOnDeviceLlm`]（#345）
+//! - macOS: [`crate::apple::AppleOnDeviceLlm`]（#345）
 //! - iOS: `ios_on_device_llm`（#346。macOS と共用の `AppleOnDeviceLlm`）
 //! - Web: `fandhe-web-dom`（c。Prompt API）
 //! - Android・Windows: 保留・申請待ちのため `UnsupportedOnDeviceLlm` 固定
@@ -27,30 +27,30 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::contract::{
+    BUSY, EMPTY, MODEL_NOT_READY, OnDeviceLlm, REFUSED, RESPOND_DEADLINE, TIMEOUT, check_response,
+    validate_prompt,
+};
+use crate::error::OnDeviceLlmError;
 use fandhe_core::screens::on_device_llm::{
-    finish_respond, mark_running, take_request, LlmFailure, LlmPhase, OnDeviceLlmState, PROMPT,
+    LlmFailure, LlmPhase, OnDeviceLlmState, PROMPT, finish_respond, mark_running, take_request,
 };
-use fandhe_device::on_device_llm::{
-    check_response, validate_prompt, OnDeviceLlm, BUSY, EMPTY, MODEL_NOT_READY, REFUSED,
-    RESPOND_DEADLINE, TIMEOUT,
-};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `OnDeviceLlm` 実装を返す（dispatch の最終形）。
 fn platform() -> Arc<dyn OnDeviceLlm> {
     #[cfg(target_os = "macos")]
     {
-        Arc::new(super::apple_on_device_llm::AppleOnDeviceLlm)
+        Arc::new(crate::apple::AppleOnDeviceLlm)
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_on_device_llm::implementation()
+        crate::ios::implementation()
     }
     #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     {
-        Arc::new(fandhe_device::on_device_llm::UnsupportedOnDeviceLlm)
+        Arc::new(crate::contract::UnsupportedOnDeviceLlm)
     }
 }
 
@@ -68,24 +68,24 @@ static SESSION: std::sync::OnceLock<Session> = std::sync::OnceLock::new();
 /// 「質問する」が発送されず飲み込まれる。古いワーカーの結果は古いアプリのチャネルへ届くので
 /// 新しい画面には適用されない。走っている OS 呼び出しは止めず走り切らせる。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
         *s.inflight.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }
 
-/// `DeviceError` を画面の失敗種別へ写す。内部識別子・OS コード・OS の文言は画面にもログにも出さず、
+/// `OnDeviceLlmError` を画面の失敗種別へ写す。内部識別子・OS コード・OS の文言は画面にもログにも出さず、
 /// 上記以外は固定文言にする（security.md A09）。
-pub(crate) fn to_failure(e: DeviceError) -> LlmFailure {
+pub(crate) fn to_failure(e: OnDeviceLlmError) -> LlmFailure {
     match e {
-        DeviceError::Unsupported(_) => LlmFailure::Unsupported,
-        DeviceError::Disabled(_) => LlmFailure::Disabled,
-        DeviceError::PermissionDenied(_) => LlmFailure::PermissionDenied,
-        DeviceError::Internal(MODEL_NOT_READY) => LlmFailure::ModelNotReady,
-        DeviceError::Internal(REFUSED) => LlmFailure::Refused,
-        DeviceError::Internal(BUSY) => LlmFailure::Busy,
-        DeviceError::Internal(TIMEOUT) => LlmFailure::Timeout,
-        DeviceError::Internal(EMPTY) => LlmFailure::Empty,
+        OnDeviceLlmError::Unsupported => LlmFailure::Unsupported,
+        OnDeviceLlmError::Disabled(_) => LlmFailure::Disabled,
+        OnDeviceLlmError::PermissionDenied => LlmFailure::PermissionDenied,
+        OnDeviceLlmError::Internal(MODEL_NOT_READY) => LlmFailure::ModelNotReady,
+        OnDeviceLlmError::Internal(REFUSED) => LlmFailure::Refused,
+        OnDeviceLlmError::Internal(BUSY) => LlmFailure::Busy,
+        OnDeviceLlmError::Internal(TIMEOUT) => LlmFailure::Timeout,
+        OnDeviceLlmError::Internal(EMPTY) => LlmFailure::Empty,
         _ => LlmFailure::Failed("応答を得られませんでした".to_string()),
     }
 }
@@ -117,24 +117,24 @@ fn drive(
     let new_request = {
         let mut g = session.inflight.lock().unwrap_or_else(|e| e.into_inner());
         match take_request(state) {
-            Some(generation) if g.map(|(gen, _)| gen) != Some(generation) => {
+            Some(generation) if g.map(|(gen_id, _)| gen_id) != Some(generation) => {
                 let started = Instant::now();
                 *g = Some((generation, started));
                 Some((generation, started))
             }
             _ => {
                 // 期限判定: 処理中でセッションの世代が一致するときだけ。
-                if let (Some((gen, started)), LlmPhase::Running) = (*g, &state.phase) {
-                    if gen == state.generation {
-                        let elapsed = started.elapsed();
-                        if elapsed >= deadline {
-                            *g = None;
-                            let _ = sender.send(Box::new(move |s: &mut OnDeviceLlmState| {
-                                finish_respond(s, gen, Err(LlmFailure::Timeout));
-                            }));
-                        } else {
-                            sender.request_repaint_after(deadline - elapsed);
-                        }
+                if let (Some((gen_id, started)), LlmPhase::Running) = (*g, &state.phase)
+                    && gen_id == state.generation
+                {
+                    let elapsed = started.elapsed();
+                    if elapsed >= deadline {
+                        *g = None;
+                        let _ = sender.send(Box::new(move |s: &mut OnDeviceLlmState| {
+                            finish_respond(s, gen_id, Err(LlmFailure::Timeout));
+                        }));
+                    } else {
+                        sender.request_repaint_after(deadline - elapsed);
                     }
                 }
                 None
@@ -184,31 +184,41 @@ pub fn on_device_llm_effect(state: &OnDeviceLlmState, sender: &CompletionSender<
 
 #[cfg(test)]
 mod tests {
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     use super::*;
+    use crate::contract::UnsupportedOnDeviceLlm;
     use fandhe_core::screens::on_device_llm::request_respond;
-    use fandhe_device::on_device_llm::UnsupportedOnDeviceLlm;
     use std::sync::mpsc;
 
-    type Rx = mpsc::Receiver<crate::app::Completion<OnDeviceLlmState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<OnDeviceLlmState>>;
 
     fn channel() -> (CompletionSender<OnDeviceLlmState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     /// 指定の結果を返し、`sleep` だけ待つフェイク。
     struct Fake {
-        result: fn() -> Result<String, DeviceError>,
+        result: fn() -> Result<String, OnDeviceLlmError>,
         sleep: Duration,
     }
     impl OnDeviceLlm for Fake {
-        fn respond(&self, _: &str, _: Duration) -> Result<String, DeviceError> {
+        fn respond(&self, _: &str, _: Duration) -> Result<String, OnDeviceLlmError> {
             std::thread::sleep(self.sleep);
             (self.result)()
         }
     }
 
-    fn fake(result: fn() -> Result<String, DeviceError>) -> Arc<dyn OnDeviceLlm> {
+    fn fake(result: fn() -> Result<String, OnDeviceLlmError>) -> Arc<dyn OnDeviceLlm> {
         Arc::new(Fake {
             result,
             sleep: Duration::ZERO,
@@ -263,28 +273,31 @@ mod tests {
 
     #[test]
     fn errors_map_to_failures() {
-        type R = fn() -> Result<String, DeviceError>;
+        type R = fn() -> Result<String, OnDeviceLlmError>;
         let cases: [(R, LlmFailure); 7] = [
             (
-                || Err(DeviceError::Unsupported("on_device_llm")),
+                || Err(OnDeviceLlmError::Unsupported),
                 LlmFailure::Unsupported,
             ),
             (
-                || Err(DeviceError::Disabled("on_device_llm")),
+                || Err(OnDeviceLlmError::Disabled("on_device_llm")),
                 LlmFailure::Disabled,
             ),
             (
-                || Err(DeviceError::Internal(MODEL_NOT_READY)),
+                || Err(OnDeviceLlmError::Internal(MODEL_NOT_READY)),
                 LlmFailure::ModelNotReady,
             ),
-            (|| Err(DeviceError::Internal(REFUSED)), LlmFailure::Refused),
-            (|| Err(DeviceError::Internal(BUSY)), LlmFailure::Busy),
             (
-                || Err(DeviceError::PermissionDenied("on_device_llm")),
+                || Err(OnDeviceLlmError::Internal(REFUSED)),
+                LlmFailure::Refused,
+            ),
+            (|| Err(OnDeviceLlmError::Internal(BUSY)), LlmFailure::Busy),
+            (
+                || Err(OnDeviceLlmError::PermissionDenied),
                 LlmFailure::PermissionDenied,
             ),
             (
-                || Err(DeviceError::InvalidInput("on_device_llm prompt")),
+                || Err(OnDeviceLlmError::InvalidInput),
                 LlmFailure::Failed("応答を得られませんでした".into()),
             ),
         ];
@@ -297,7 +310,7 @@ mod tests {
     #[test]
     fn blank_response_is_empty_not_success() {
         for f in [
-            (|| Ok(String::new())) as fn() -> Result<String, DeviceError>,
+            (|| Ok(String::new())) as fn() -> Result<String, OnDeviceLlmError>,
             || Ok("  \n".into()),
         ] {
             let s = run(fake(f), 2);
@@ -307,7 +320,7 @@ mod tests {
 
     #[test]
     fn internal_ids_never_reach_screen_text() {
-        let s = run(fake(|| Err(DeviceError::Internal("secret os detail"))), 2);
+        let s = run(fake(|| Err(OnDeviceLlmError::Internal("on_device_llm"))), 2);
         let text = fandhe_core::screens::on_device_llm::error_text(&s);
         assert!(
             !text.contains("secret") && !text.contains("on_device_llm"),
@@ -413,7 +426,7 @@ mod tests {
         #[cfg(not(any(target_os = "macos", target_os = "ios")))]
         assert!(matches!(
             platform().respond("x", Duration::ZERO),
-            Err(DeviceError::Unsupported(_))
+            Err(OnDeviceLlmError::Unsupported)
         ));
     }
 }

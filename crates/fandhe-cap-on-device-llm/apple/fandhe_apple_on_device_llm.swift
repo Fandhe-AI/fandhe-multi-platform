@@ -2,7 +2,7 @@
 //
 // `LanguageModelSession` は Swift 専用 API で ObjC から呼べないため、`build.rs` の
 // `compile_apple_on_device_llm` が swiftc で静的ライブラリ化し、Rust の
-// `device/apple_on_device_llm.rs` が `@_cdecl` の C ABI 1 関数だけを呼ぶ。macOS と iOS で共用し、
+// `fandhe-cap-on-device-llm/src/apple.rs` が `@_cdecl` の C ABI 1 関数だけを呼ぶ。macOS と iOS で共用し、
 // OS の分岐は `TARGET_OS` ではなく `canImport` と `#available` で行う。
 //
 // 契約（戻りコードの意味の SSOT は Rust 側の `match`）:

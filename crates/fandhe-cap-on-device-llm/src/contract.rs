@@ -49,7 +49,7 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::OnDeviceLlmError;
 
 /// 要求を受け付けてから結果を確定するまでの期限（Rust のドライバだけが持つ。初回のモデル読み込みを含む）。
 pub const RESPOND_DEADLINE: Duration = Duration::from_secs(60);
@@ -74,31 +74,31 @@ pub const EMPTY: &str = "on_device_llm empty";
 /// 端末内 LLM の契約（モジュール doc の「契約」節）。
 pub trait OnDeviceLlm: Send + Sync {
     /// `prompt` を 1 回渡して応答の全文を返す。`remaining` は期限までの残り時間。
-    fn respond(&self, prompt: &str, remaining: Duration) -> Result<String, DeviceError>;
+    fn respond(&self, prompt: &str, remaining: Duration) -> Result<String, OnDeviceLlmError>;
 }
 
 /// 対象外 OS・未実装 OS のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedOnDeviceLlm;
 
 impl OnDeviceLlm for UnsupportedOnDeviceLlm {
-    fn respond(&self, _: &str, _: Duration) -> Result<String, DeviceError> {
-        Err(DeviceError::Unsupported("on_device_llm"))
+    fn respond(&self, _: &str, _: Duration) -> Result<String, OnDeviceLlmError> {
+        Err(OnDeviceLlmError::Unsupported)
     }
 }
 
 /// プロンプトを OS へ渡す前に検査する。空・空白だけ・NUL を含む・`MAX_PROMPT_BYTES` 超過は `InvalidInput`。
-pub fn validate_prompt(prompt: &str) -> Result<(), DeviceError> {
+pub fn validate_prompt(prompt: &str) -> Result<(), OnDeviceLlmError> {
     if prompt.trim().is_empty() || prompt.contains('\0') || prompt.len() > MAX_PROMPT_BYTES {
-        Err(DeviceError::InvalidInput("on_device_llm prompt"))
+        Err(OnDeviceLlmError::InvalidInput)
     } else {
         Ok(())
     }
 }
 
 /// 応答を検査する。trim 後に空なら `Internal(EMPTY)`。それ以外は入力どおり返す（trim しない）。
-pub fn check_response(text: String) -> Result<String, DeviceError> {
+pub fn check_response(text: String) -> Result<String, OnDeviceLlmError> {
     if text.trim().is_empty() {
-        Err(DeviceError::Internal(EMPTY))
+        Err(OnDeviceLlmError::Internal(EMPTY))
     } else {
         Ok(text)
     }
@@ -119,7 +119,7 @@ mod tests {
             "a".repeat(MAX_PROMPT_BYTES + 1),
         ] {
             assert!(
-                matches!(validate_prompt(&bad), Err(DeviceError::InvalidInput(_))),
+                matches!(validate_prompt(&bad), Err(OnDeviceLlmError::InvalidInput)),
                 "{bad:?}"
             );
         }
@@ -130,7 +130,7 @@ mod tests {
         for bad in ["", "  \n"] {
             assert!(matches!(
                 check_response(bad.to_string()),
-                Err(DeviceError::Internal(EMPTY))
+                Err(OnDeviceLlmError::Internal(EMPTY))
             ));
         }
         assert_eq!(check_response(" 春 ".to_string()).unwrap(), " 春 ");
@@ -141,6 +141,6 @@ mod tests {
         let e = UnsupportedOnDeviceLlm
             .respond("x", RESPOND_DEADLINE)
             .unwrap_err();
-        assert!(matches!(e, DeviceError::Unsupported("on_device_llm")));
+        assert!(matches!(e, OnDeviceLlmError::Unsupported));
     }
 }

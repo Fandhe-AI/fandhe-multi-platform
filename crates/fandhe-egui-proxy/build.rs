@@ -172,8 +172,6 @@ fn build() {
     compile_apple_pdf_viewer();
     // `apple/fandhe_apple_file_preview.m`（Issue #917 macOS + b-ios iOS）も共用する。
     compile_apple_file_preview();
-    // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS + #346 iOS）も共用する。
-    compile_apple_on_device_llm();
     // `apple/fandhe_apple_translation.swift`（Issue #535 macOS + #536 iOS）も共用する。
     compile_apple_translation();
     // `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS + #976 iOS）も共用する。
@@ -562,20 +560,6 @@ fn compile_apple_ml_inference() {
         "apple/fandhe_apple_ml_inference.m",
         &["CoreML", "Foundation"],
     );
-}
-
-/// 端末内 LLM の Swift 薄層 `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS、Issue #346 iOS）。
-/// FoundationModels を弱リンクする。macOS・iOS の両分岐から呼ぶ。
-fn compile_apple_on_device_llm() {
-    compile_swift(&SwiftLib {
-        srcs: &["apple/fandhe_apple_on_device_llm.swift"],
-        lib: "fandhe_apple_on_device_llm",
-        module: "FandheOnDeviceLlmBridge",
-        framework: "FoundationModels",
-        weak: true,
-        require_env: "FANDHE_REQUIRE_ON_DEVICE_LLM",
-        tag: "on_device_llm",
-    });
 }
 
 /// 端末内での画像生成の Swift 薄層 `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS、#976 iOS）。
@@ -1521,8 +1505,6 @@ fn build_macos() {
     compile_apple_barcode_scan();
     // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
     compile_apple_ml_inference();
-    // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS。iOS は Issue #346 で `build_ios` からも呼ぶ）。
-    compile_apple_on_device_llm();
     compile_apple_translation();
     // `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS。iOS は `build_ios` からも呼ぶ）。
     compile_apple_image_generation();

@@ -1209,6 +1209,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-on-device-llm"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-share-receive"
 version = "0.2.0"
 dependencies = [
@@ -1312,6 +1322,7 @@ dependencies = [
  "fandhe-cap-local-fonts",
  "fandhe-cap-multi-display",
  "fandhe-cap-nfc-card-emulation",
+ "fandhe-cap-on-device-llm",
  "fandhe-cap-share-receive",
  "fandhe-cap-system-tray",
  "fandhe-core",
@@ -1413,6 +1424,7 @@ dependencies = [
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",
  "fandhe-cap-multi-display",
+ "fandhe-cap-on-device-llm",
  "fandhe-cap-share-receive",
  "fandhe-core",
  "fandhe-device",

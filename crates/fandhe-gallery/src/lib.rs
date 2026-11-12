@@ -72,6 +72,8 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 以前は egui-proxy の `android::run` が呼んでいた。機能 crate を egui-proxy が知らないようにするため移した）。
     #[cfg(feature = "device")]
     fandhe_cap_document_scan::reset_pending_tracking();
+    #[cfg(feature = "device")]
+    fandhe_cap_on_device_llm::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 

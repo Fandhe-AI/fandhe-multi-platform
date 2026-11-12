@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::on_device_llm`（端末依存ゼロ）の画面を [`super::mount::mount_with_effect`] の
 //! effect として駆動する。`take_request` で要求を観測し、Prompt API（`LanguageModel`）へ固定プロンプトを
 //! 1 回渡して応答の全文を画面へ返す。`OnDeviceLlm` trait（`Send + Sync`）は `JsValue` を持てないため
-//! 通らず、契約（`fandhe_device::on_device_llm` の写像表）だけを共有する。`LanguageModel` は web-sys に
+//! 通らず、契約（`fandhe_cap_on_device_llm` の写像表）だけを共有する。`LanguageModel` は web-sys に
 //! 型が無いので `js_sys::Reflect` で呼ぶ。`fandhe-egui-proxy` の wasm canvas 経路は対象外（`Unsupported`）。
 //!
 //! # 結果の種類
@@ -27,9 +27,9 @@
 //! egui-proxy の wasm canvas 経路。プロンプト・応答・例外の `message` は画面にも console にも出さない
 //! （security.md A09）。
 
+use fandhe_cap_on_device_llm::OnDeviceLlmError;
+use fandhe_cap_on_device_llm::{check_response, EMPTY};
 use fandhe_core::screens::on_device_llm::LlmFailure;
-use fandhe_device::on_device_llm::{check_response, EMPTY};
-use fandhe_device::DeviceError;
 
 /// 失敗の固定文言（`fandhe-egui-proxy` の `to_failure` と同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -60,7 +60,7 @@ pub(crate) fn failure_from_error_name(name: Option<&str>) -> LlmFailure {
 pub(crate) fn response_outcome(v: Option<String>) -> Result<String, LlmFailure> {
     match v.map(check_response) {
         Some(Ok(t)) => Ok(t),
-        Some(Err(DeviceError::Internal(EMPTY))) => Err(LlmFailure::Empty),
+        Some(Err(OnDeviceLlmError::Internal(EMPTY))) => Err(LlmFailure::Empty),
         _ => Err(LlmFailure::Failed(FAILED.to_string())),
     }
 }
@@ -68,7 +68,7 @@ pub(crate) fn response_outcome(v: Option<String>) -> Result<String, LlmFailure> 
 /// 開始から期限以上経ったか（`performance.now()` の単調時計、ミリ秒）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn is_late(started_ms: f64, now_ms: f64) -> bool {
-    now_ms - started_ms >= fandhe_device::on_device_llm::RESPOND_DEADLINE.as_secs_f64() * 1000.0
+    now_ms - started_ms >= fandhe_cap_on_device_llm::RESPOND_DEADLINE.as_secs_f64() * 1000.0
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -83,10 +83,10 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_on_device_llm::{validate_prompt, RESPOND_DEADLINE};
     use fandhe_core::screens::on_device_llm::{
         finish_respond, mark_running, take_request, LlmFailure, OnDeviceLlmState, PROMPT,
     };
-    use fandhe_device::on_device_llm::{validate_prompt, RESPOND_DEADLINE};
     use js_sys::{Array, Function, Object, Promise, Reflect};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::{spawn_local, JsFuture};

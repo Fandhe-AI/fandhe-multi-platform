@@ -507,7 +507,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "on_device_llm" => fandhe_core::screens::on_device_llm::current_screen,
-    fandhe_egui_proxy::device::on_device_llm::on_device_llm_effect,
+    fandhe_cap_on_device_llm::on_device_llm_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "app_attest_show" => fandhe_core::screens::app_attest_show::current_screen,

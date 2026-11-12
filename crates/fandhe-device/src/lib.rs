@@ -173,8 +173,6 @@ pub mod nlp;
 pub mod notification;
 /// Phase 11（端末機能の拡充ループ、親 #98、Issue #381）: ロック画面・OS のメディア操作（再生中の表示と再生・一時停止の受け取り）。
 pub mod now_playing;
-/// Phase 11（端末機能の拡充ループ、親 #93、Issue #345）: 端末内 LLM（固定プロンプトの応答 1 回）。
-pub mod on_device_llm;
 /// Phase 11（端末機能の拡充ループ、親 #146、Issue #749）: 既定アプリで開く・ファイルマネージャーで選択表示。
 pub mod open_in_shell;
 /// Phase 11（端末機能の拡充ループ、親 #171、Issue #798）: OS の設定画面を開く（固定の 2 頁）。

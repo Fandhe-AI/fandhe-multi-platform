@@ -38,6 +38,8 @@ fandhe-cap-audio-devices = { path = "../fandhe-cap-audio-devices" }
 fandhe-cap-local-fonts = { path = "../fandhe-cap-local-fonts" }
 # file-watch の契約（走査結果の整形・差分・サンプル名の規則）。Web 実装本体は本クレートに残る。
 fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch" }
+# on-device-llm の契約（check_response・validate_prompt・EMPTY・RESPOND_DEADLINE）。Web 実装本体は本クレートに残る。
+fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。
 fandhe-platform-web = { path = "../fandhe-platform-web" }
 
