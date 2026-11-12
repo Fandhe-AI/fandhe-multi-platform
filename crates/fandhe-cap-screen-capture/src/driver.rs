@@ -125,11 +125,12 @@ fn to_outcome(
     target_os = "android"
 ))]
 pub(crate) mod bridge {
-    use fandhe_core::screens::screen_capture::CaptureOutcome;
-
     use fandhe_runtime::request_slot::RequestSlot;
 
-    pub(crate) type Outcome = Result<CaptureOutcome, String>;
+    /// OS の生の結果。画面用への写像は取り出す側が行う
+    /// （画面経由でも公開入口 [`super::poll_capture`] でも同じ slot を使う）。
+    pub(crate) type Outcome =
+        Result<crate::contract::CaptureResult, crate::error::ScreenCaptureError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
@@ -155,13 +156,13 @@ pub(crate) mod bridge {
         SLOT.snapshot().map(|(request_id, _)| request_id)
     }
 
-    /// 結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは捨てて `false`。
+    /// 結果を置く。`request_id` 不一致・未登録・既に結果ありは捨てて `false`。
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub(crate) fn deliver(
         request_id: u64,
         result: Result<crate::contract::CaptureResult, crate::error::ScreenCaptureError>,
     ) -> bool {
-        SLOT.deliver(request_id, super::to_outcome(result))
+        SLOT.deliver(request_id, result)
     }
 
     /// 開始失敗を即確定する（スタブの `Unsupported` もこの経路）。
@@ -211,6 +212,47 @@ pub fn platform_screen_capture() -> &'static dyn ScreenCapturer {
 ))]
 static LAST_TICK: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
 
+/// 画面に依存しない公開入口（4 OS）。録画を依頼して要求 id を返す。
+/// 結果は [`poll_capture`] で受け取り、止めるときは `platform_screen_capture().stop(id)`。
+/// 依頼自体が失敗したら `Err`（コールバックは来ない）。保留は 1 件だけで、新しい依頼は前の結果を捨てる
+/// （画面経由の依頼と slot を共有する）。
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "windows",
+    target_os = "android"
+))]
+pub fn begin_capture(max_duration: std::time::Duration) -> Result<u64, ScreenCaptureError> {
+    let request_id = bridge::begin();
+    match platform_screen_capture().start(request_id, max_duration) {
+        Ok(()) => Ok(request_id),
+        Err(e) => {
+            bridge::SLOT.clear(request_id);
+            Err(e)
+        }
+    }
+}
+
+/// [`begin_capture`] の結果を取り出す。未着なら `None`（次フレーム以降に再度呼ぶ）。
+/// 取り出すと保留は解放される。`request_id` が現在の依頼でなければ `None`。
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "windows",
+    target_os = "android"
+))]
+pub fn poll_capture(
+    request_id: u64,
+) -> Option<Result<crate::contract::CaptureResult, ScreenCaptureError>> {
+    let (id, ready) = bridge::SLOT.snapshot()?;
+    if id != request_id {
+        return None;
+    }
+    let result = ready?;
+    bridge::SLOT.clear(id);
+    Some(result)
+}
+
 /// 4 OS 経路の effect ドライバ本体。
 #[cfg(any(
     target_os = "macos",
@@ -257,10 +299,10 @@ fn drive_callback(state: &ScreenCaptureState, sender: &CompletionSender<ScreenCa
         &bridge::SLOT,
         sender,
         |_request_id| {},
-        move |s: &mut ScreenCaptureState, outcome| {
+        move |s: &mut ScreenCaptureState, raw| {
             // 反映できる状態か確かめてから確定し、反映できたときだけ `true`（clear させる）。
             if s.phase != CapturePhase::Idle {
-                finish_capture(s, generation, outcome);
+                finish_capture(s, generation, to_outcome(raw));
                 true
             } else {
                 false

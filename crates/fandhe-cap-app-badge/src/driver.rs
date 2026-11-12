@@ -42,11 +42,12 @@ fn to_outcome(
 pub(crate) mod bridge {
     use crate::contract::BadgeOutcome;
     use crate::error::AppBadgeError;
-    use fandhe_core::screens::app_badge_set::CoreOutcome;
 
     use fandhe_runtime::request_slot::RequestSlot;
 
-    pub(crate) type Outcome = Result<CoreOutcome, String>;
+    /// 依頼した値と OS の生の結果。画面用への写像は取り出す側が行う
+    /// （画面経由でも公開入口 [`super::poll_set_badge`] でも同じ slot を使う）。
+    pub(crate) type Outcome = (u32, Result<BadgeOutcome, AppBadgeError>);
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
@@ -55,14 +56,14 @@ pub(crate) mod bridge {
         SLOT.begin()
     }
 
-    /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
+    /// OS からの結果を置く。`request_id` 不一致・未登録・既に結果ありは
     /// 捨てて `false`（先に届いたものだけを採る）。
     pub(crate) fn deliver(
         request_id: u64,
         value: u32,
         result: Result<BadgeOutcome, AppBadgeError>,
     ) -> bool {
-        SLOT.deliver(request_id, super::to_outcome(value, result))
+        SLOT.deliver(request_id, (value, result))
     }
 
     /// Android: Activity 再生成直後に `android_main` から呼ぶ。保留中の要求は復元せず破棄し、
@@ -71,6 +72,35 @@ pub(crate) mod bridge {
     pub(crate) fn reset() {
         SLOT.reset()
     }
+}
+
+/// 画面に依存しない公開入口（iOS / Android）。バッジ設定を依頼して要求 id を返す。
+/// 結果は [`poll_set_badge`] で受け取る。範囲外の値は OS を呼ばず `InvalidInput`。
+/// 保留は 1 件だけで、新しい依頼は前の結果を捨てる（画面経由の依頼と slot を共有する）。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub fn begin_set_badge(value: u32) -> Result<u64, AppBadgeError> {
+    let value = BadgeValue::new(value)?;
+    let request_id = bridge::begin();
+    match begin_set(request_id, value) {
+        Ok(()) => Ok(request_id),
+        Err(e) => {
+            bridge::SLOT.clear(request_id);
+            Err(e)
+        }
+    }
+}
+
+/// [`begin_set_badge`] の結果を取り出す。未着なら `None`（次フレーム以降に再度呼ぶ）。
+/// 取り出すと保留は解放される。`request_id` が現在の依頼でなければ `None`。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub fn poll_set_badge(request_id: u64) -> Option<Result<BadgeOutcome, AppBadgeError>> {
+    let (id, ready) = bridge::SLOT.snapshot()?;
+    if id != request_id {
+        return None;
+    }
+    let (_, result) = ready?;
+    bridge::SLOT.clear(id);
+    Some(result)
 }
 
 /// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
@@ -115,10 +145,10 @@ fn drive_callback(state: &AppBadgeSetState, sender: &CompletionSender<AppBadgeSe
         &bridge::SLOT,
         sender,
         |_request_id| {},
-        move |s: &mut AppBadgeSetState, outcome| {
+        move |s: &mut AppBadgeSetState, (value, result)| {
             // 反映できたとき（`Idle` へ戻っていないとき）だけ `true` を返す。
             if s.phase != BadgePhase::Idle {
-                finish_set(s, generation, outcome);
+                finish_set(s, generation, to_outcome(value, result));
                 true
             } else {
                 false
@@ -358,7 +388,7 @@ mod bridge_tests {
         assert!(bridge::deliver(id, 1, Err(AppBadgeError::PermissionDenied)));
         assert!(!bridge::deliver(id, 1, Ok(BadgeOutcome::Submitted)));
         let (_, ready) = bridge::SLOT.snapshot().expect("begin 済み");
-        assert_eq!(ready, Some(Ok(CoreOutcome::Denied)));
+        assert_eq!(ready, Some((1, Err(AppBadgeError::PermissionDenied))));
         bridge::SLOT.clear(id);
     }
 }

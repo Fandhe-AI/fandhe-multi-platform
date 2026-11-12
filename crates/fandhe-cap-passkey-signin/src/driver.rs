@@ -22,7 +22,7 @@ use fandhe_core::screens::passkey_signin::{
 use fandhe_runtime::CompletionSender;
 
 /// OS 別の [`Passkey`] 実装を返す（状態型に依存しない入口）。Windows 以外は `UnsupportedPasskey`
-/// （Android はコールバック型で [`Passkey`] を実装せず、effect ドライバ経由で使う）。
+/// （Android はコールバック型で [`Passkey`] を実装せず、`begin_passkey` / `poll_passkey` を使う）。
 pub fn platform_passkey() -> Box<dyn crate::contract::Passkey> {
     #[cfg(target_os = "windows")]
     return crate::windows::implementation();
@@ -74,11 +74,12 @@ fn to_outcome(result: Result<PasskeyOutcome, PasskeySigninError>) -> Result<Core
 pub(crate) mod bridge {
     use crate::contract::PasskeyOutcome;
     use crate::error::PasskeySigninError;
-    use fandhe_core::screens::passkey_signin::CoreOutcome;
 
     use fandhe_runtime::request_slot::RequestSlot;
 
-    pub(crate) type Outcome = Result<CoreOutcome, String>;
+    /// OS の生の結果。画面用への写像は取り出す側が行う
+    /// （画面経由でも公開入口 `poll_passkey` でも同じ slot を使う）。
+    pub(crate) type Outcome = Result<PasskeyOutcome, PasskeySigninError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
@@ -88,13 +89,13 @@ pub(crate) mod bridge {
         SLOT.begin()
     }
 
-    /// ワーカーからの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
+    /// ワーカーからの結果を置く。`request_id` 不一致・未登録・既に結果ありは
     /// 捨てて `false`（先に届いたものだけを採る）。
     pub(crate) fn deliver(
         request_id: u64,
         result: Result<PasskeyOutcome, PasskeySigninError>,
     ) -> bool {
-        SLOT.deliver(request_id, super::to_outcome(result))
+        SLOT.deliver(request_id, result)
     }
 
     /// Activity 再生成直後に呼ぶ。保留中の要求は復元せず破棄し、旧 `request_id` の完了を無視させる。
@@ -102,6 +103,34 @@ pub(crate) mod bridge {
     pub(crate) fn reset() {
         SLOT.reset()
     }
+}
+
+/// 画面に依存しない公開入口（Android）。Credential Manager へ依頼して要求 id を返す。
+/// 結果は [`poll_passkey`] で受け取る。RP ID 未設定・不正は `Unsupported`（OS を呼ばない）。
+/// 保留は 1 件だけで、新しい依頼は前の結果を捨てる（画面経由の依頼と slot を共有する）。
+#[cfg(target_os = "android")]
+pub fn begin_passkey(op: PasskeyOp) -> Result<u64, PasskeySigninError> {
+    let request_id = bridge::SLOT.begin();
+    match crate::android::begin(request_id, op) {
+        Ok(()) => Ok(request_id),
+        Err(e) => {
+            bridge::SLOT.clear(request_id);
+            Err(e)
+        }
+    }
+}
+
+/// [`begin_passkey`] の結果を取り出す。未着なら `None`（次フレーム以降に再度呼ぶ）。
+/// 取り出すと保留は解放される。`request_id` が現在の依頼でなければ `None`。
+#[cfg(target_os = "android")]
+pub fn poll_passkey(request_id: u64) -> Option<Result<PasskeyOutcome, PasskeySigninError>> {
+    let (id, ready) = bridge::SLOT.snapshot()?;
+    if id != request_id {
+        return None;
+    }
+    let result = ready?;
+    bridge::SLOT.clear(id);
+    Some(result)
 }
 
 /// `android_main` から呼ぶ。slot と `android_passkey` の保留を捨てる（Java 側は `onDestroy` で追跡を外し済み）。
@@ -131,7 +160,7 @@ fn drive_callback(
         let _ = sender.send(Box::new(mark_running));
         let request_id = slot.begin();
         if let Err(e) = begin(request_id, op_of(view.action)) {
-            slot.deliver(request_id, to_outcome(Err(e)));
+            slot.deliver(request_id, Err(e));
         }
         return;
     }
@@ -143,10 +172,10 @@ fn drive_callback(
         slot,
         sender,
         |_request_id| {},
-        move |s: &mut PasskeySigninState, outcome| {
+        move |s: &mut PasskeySigninState, raw| {
             // 反映できたとき（`Idle` へ戻っていないとき）だけ `true` を返す。
             if s.phase != PasskeyPhase::Idle {
-                finish(s, generation, outcome);
+                finish(s, generation, to_outcome(raw));
                 true
             } else {
                 false
@@ -201,10 +230,10 @@ pub fn passkey_signin_effect(
         &bridge::SLOT,
         sender,
         |_request_id| {},
-        move |s: &mut PasskeySigninState, outcome| {
+        move |s: &mut PasskeySigninState, raw| {
             // 反映できたとき（`Idle` へ戻っていないとき）だけ `true` を返す。
             if s.phase != PasskeyPhase::Idle {
-                finish(s, generation, outcome);
+                finish(s, generation, to_outcome(raw));
                 true
             } else {
                 false
@@ -304,7 +333,7 @@ mod tests {
             Ok(PasskeyOutcome::Registered(summary()))
         ));
         let (_, ready) = bridge::SLOT.snapshot().expect("begin 済み");
-        assert_eq!(ready, Some(Ok(CoreOutcome::NotAllowed)));
+        assert_eq!(ready, Some(Ok(PasskeyOutcome::NotAllowed)));
         bridge::SLOT.clear(id);
     }
 
@@ -352,7 +381,7 @@ mod tests {
             let before = CALLS.load(Ordering::SeqCst);
             frame(&mut s, &SLOT, ok_begin);
             assert_eq!(CALLS.load(Ordering::SeqCst), before);
-            assert!(SLOT.deliver(id, to_outcome(Ok(PasskeyOutcome::NotAllowed))));
+            assert!(SLOT.deliver(id, Ok(PasskeyOutcome::NotAllowed)));
             frame(&mut s, &SLOT, ok_begin);
             assert_ne!(s.phase, screen::PasskeyPhase::Running);
             assert!(SLOT.snapshot().is_none());
@@ -381,7 +410,7 @@ mod tests {
             static SLOT: RequestSlot<bridge::Outcome> = RequestSlot::new();
             let id = SLOT.begin();
             SLOT.reset();
-            assert!(!SLOT.deliver(id, to_outcome(Ok(PasskeyOutcome::NotAllowed))));
+            assert!(!SLOT.deliver(id, Ok(PasskeyOutcome::NotAllowed)));
         }
     }
 
