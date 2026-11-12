@@ -11,6 +11,10 @@ publish = false
 name = "fandhe_web_dom"
 crate-type = ["rlib", "cdylib"]
 
+[build-dependencies]
+# Swift の薄層・弱リンクを持つ機能 crate のリンク指定をホストのテスト実行体へ出し直す（build.rs）。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
 [dependencies]
 # 依存方向は本クレート（最適化レイヤ）→ fandhe-core（共通コア）の一方向
 # （coding-rust.md 準拠）。共通コアへ本クレートの依存を持ち込まない。

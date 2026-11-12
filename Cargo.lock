@@ -1654,6 +1654,7 @@ dependencies = [
  "fandhe-cap-share-receive",
  "fandhe-core",
  "fandhe-device",
+ "fandhe-platform-apple",
  "fandhe-platform-web",
  "image",
  "js-sys",
