@@ -36,7 +36,7 @@
 use std::time::Duration;
 
 use crate::PdfViewerError;
-use fandhe_device::Image;
+pub use fandhe_device::Image;
 
 /// 出力画像の長辺の上限（ピクセル）。`fandhe_core::RGBA_MAX_SIDE` 以下に保つ。
 pub const MAX_SIDE: u32 = 1024;

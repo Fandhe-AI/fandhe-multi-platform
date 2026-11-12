@@ -40,7 +40,7 @@ use fandhe_runtime::CompletionSender;
 use fandhe_runtime::request_slot::RequestSlot;
 
 /// 現在のプラットフォームに応じた `PdfPageRenderer` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn PdfPageRenderer> {
+pub fn platform_pdf_viewer() -> Arc<dyn PdfPageRenderer> {
     #[cfg(target_os = "macos")]
     {
         Arc::new(crate::apple::ApplePdfPageRenderer)
@@ -227,7 +227,7 @@ pub fn pdf_first_page_effect(
     sender: &CompletionSender<PdfFirstPageState>,
 ) {
     static IMPL: std::sync::OnceLock<Arc<dyn PdfPageRenderer>> = std::sync::OnceLock::new();
-    let imp = IMPL.get_or_init(platform);
+    let imp = IMPL.get_or_init(platform_pdf_viewer);
     drive(
         state,
         sender,
@@ -504,7 +504,7 @@ mod tests {
             target_os = "android"
         )))]
         assert!(matches!(
-            platform().render_first_page(&[1], MAX_SIDE),
+            platform_pdf_viewer().render_first_page(&[1], MAX_SIDE),
             Err(PdfViewerError::Unsupported)
         ));
     }

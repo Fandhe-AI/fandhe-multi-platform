@@ -6,7 +6,7 @@
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`platform_cast`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
+//! [`platform_media_cast`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（macOS: `apple`、iOS: `ios`、Windows: `windows`。
 //! いずれも実装済み）。Web は別クレート
 //! （`fandhe-web-dom`）。Android（Cast SDK が GMS 前提のため保留）と Linux は `UnsupportedMediaCast` 固定で、
@@ -42,7 +42,7 @@ use fandhe_runtime::CompletionSender;
 const FAILED_CAST: &str = "外部機器への再生";
 
 /// プロセスに 1 つだけ持つ実装（`stop` が `play` と同じ実体に届くようにする）。
-fn platform_cast() -> &'static Arc<dyn MediaCast> {
+pub fn platform_media_cast() -> &'static Arc<dyn MediaCast> {
     static CAST: OnceLock<Arc<dyn MediaCast>> = OnceLock::new();
     CAST.get_or_init(|| {
         #[cfg(target_os = "macos")]
@@ -335,7 +335,7 @@ pub fn cast_show_effect(state: &CastShowState, sender: &CompletionSender<CastSho
     drive(
         state,
         sender,
-        platform_cast(),
+        platform_media_cast(),
         SESSION.get_or_init(Session::default),
         START_DEADLINE,
         CONNECT_DEADLINE,
@@ -344,7 +344,7 @@ pub fn cast_show_effect(state: &CastShowState, sender: &CompletionSender<CastSho
 
 /// アプリ終了時に資源を解放する（`device::shutdown` から呼ばれる）。
 pub fn shutdown() {
-    platform_cast().release();
+    platform_media_cast().release();
 }
 
 #[cfg(test)]
