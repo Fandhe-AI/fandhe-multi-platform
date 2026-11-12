@@ -98,6 +98,7 @@ pub(crate) mod bridge {
     /// 画面を経ない呼び出し（`platform_passkey`、Android）の待ち合わせ。画面の [`SLOT`] とは別に持ち、
     /// 互いの保留を上書きしない（`fandhe-cap-calendar` と同形）。ID は [`SLOT`] の払い出しと衝突しないよう上位ビットを立てる。
     static WAITERS: std::sync::Mutex<Vec<(u64, Waiter)>> = std::sync::Mutex::new(Vec::new());
+    #[cfg(any(target_os = "android", test))]
     static NEXT_EXTERNAL_ID: std::sync::atomic::AtomicU64 =
         std::sync::atomic::AtomicU64::new(1 << 62);
 
@@ -119,6 +120,7 @@ pub(crate) mod bridge {
 
     /// 登録済みの待ちを外す（依頼自体が同期的に失敗したとき）。
     #[cfg(any(target_os = "android", test))]
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     pub(crate) fn cancel_external(request_id: u64) {
         WAITERS
             .lock()
