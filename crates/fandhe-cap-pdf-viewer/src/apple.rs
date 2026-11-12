@@ -1,6 +1,6 @@
 //! macOS / iOS 向け PDF 表示実装（Issue #469 macOS、iOS は #471 で共用）。
 //! `driver.rs` の macOS 経路（と `ios_pdf_viewer`）から呼ばれ、CoreGraphics 実装
-//! （`apple/fandhe_apple_pdf_viewer.m`、`build.rs` が feature `device` 有効時のみコンパイル・
+//! （`apple/fandhe_apple_pdf_viewer.m`、`build.rs` がコンパイル・
 //! リンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこのモジュールの extern 宣言と
 //! 呼び出し 1 か所に閉じ `// SAFETY:` で契約を明記する（coding-rust.md の FFI 例外規定準拠）。
 //!

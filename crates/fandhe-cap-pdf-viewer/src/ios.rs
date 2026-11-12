@@ -1,7 +1,7 @@
 //! iOS 向け PDF 表示実装（Issue #471。親 #107 の b-ios）。
 //!
 //! 呼び出し元: `driver.rs` の iOS 経路が `implementation` を呼ぶ。macOS（#469）と共用の
-//! `apple_pdf_viewer::ApplePdfPageRenderer`（CoreGraphics。`.m` に `#if` 分岐は無い）を返すだけで、
+//! `crate::apple::ApplePdfPageRenderer`（CoreGraphics。`.m` に `#if` 分岐は無い）を返すだけで、
 //! dispatch・画面・文言は触らない。
 //!
 //! 契約表の点検:
@@ -17,5 +17,5 @@ use crate::contract::PdfPageRenderer;
 
 /// iOS の `PdfPageRenderer` 実装（macOS と共用の CoreGraphics 実装）を返す。
 pub(crate) fn implementation() -> Arc<dyn PdfPageRenderer> {
-    Arc::new(super::apple_pdf_viewer::ApplePdfPageRenderer)
+    Arc::new(crate::apple::ApplePdfPageRenderer)
 }

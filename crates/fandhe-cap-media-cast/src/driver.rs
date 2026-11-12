@@ -7,7 +7,7 @@
 //! # OS 別実装の差し込み口
 //!
 //! [`platform_cast`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
-//! モジュールだけを埋める（macOS: `apple_media_cast`、iOS: `ios_media_cast`、Windows: `windows_media_cast`。
+//! モジュールだけを埋める（macOS: `apple`、iOS: `ios`、Windows: `windows`。
 //! いずれも実装済み）。Web は別クレート
 //! （`fandhe-web-dom`）。Android（Cast SDK が GMS 前提のため保留）と Linux は `UnsupportedMediaCast` 固定で、
 //! ダミーの成功実装へは倒さない。
