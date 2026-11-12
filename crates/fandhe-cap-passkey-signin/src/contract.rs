@@ -7,8 +7,8 @@
 //! （[`check_client_data`]・[`verify_response`]）。画面（`fandhe_core::screens::passkey_signin`、
 //! 端末依存ゼロ）へは `fandhe-egui-proxy` の effect ドライバ（`fandhe-cap-passkey-signin/src/driver.rs`）が写像する。
 //! Windows（#343）・Web（#344）が [`Passkey`] を実装し、写像の純関数（[`outcome_from_dom_error`]・
-//! base64url・検証）を共有する。Android（#1280）は Credential Manager がコールバック型のため `Passkey` を実装せず、
-//! 同じ写像・検証を使って bridge へ直接届ける。iOS・macOS は対応表で保留（`deferred`）のため配線しない。
+//! base64url・検証）を共有する。Android（#1280）は Credential Manager がコールバック型のため、画面の effect は
+//! 同じ写像・検証を使って bridge へ直接届け、`platform_passkey()` は OS の完了まで `run` を block する。iOS・macOS は対応表で保留（`deferred`）のため配線しない。
 //!
 //! # 結果の種類（[`PasskeyOutcome`]）
 //!

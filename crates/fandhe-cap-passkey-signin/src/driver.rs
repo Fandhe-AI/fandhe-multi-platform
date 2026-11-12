@@ -21,12 +21,16 @@ use fandhe_core::screens::passkey_signin::{
 
 use fandhe_runtime::CompletionSender;
 
-/// OS 別の [`Passkey`] 実装を返す（状態型に依存しない入口）。Windows 以外は `UnsupportedPasskey`
-/// （Android はコールバック型で [`Passkey`] を実装せず、`begin_passkey` / `poll_passkey` を使う）。
+/// OS 別の [`Passkey`] 実装を返す（画面の状態型に依存しない入口、`docs/architecture/consumer-app-structure.md` §8.2）。
+/// Android はコールバック型のため、Credential Manager の完了まで `run` を block する（期限は置かない）。
+/// 同時に 1 件だけで、先行が終わるまで後から呼ぶと `Internal` で即座に戻る。UI スレッドから呼ばない。
+/// Windows 以外の非対応 OS は常に `Unsupported`。
 pub fn platform_passkey() -> Box<dyn crate::contract::Passkey> {
     #[cfg(target_os = "windows")]
     return crate::windows::implementation();
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "android")]
+    return Box::new(CallbackPasskey);
+    #[cfg(not(any(target_os = "windows", target_os = "android")))]
     return Box::new(crate::contract::UnsupportedPasskey);
 }
 
@@ -105,12 +109,11 @@ pub(crate) mod bridge {
     }
 }
 
-/// 画面に依存しない公開入口（Android）。Credential Manager へ依頼して要求 id を返す。
-/// 結果は [`poll_passkey`] で受け取る。RP ID 未設定・不正は `Unsupported`（OS を呼ばない）。
-/// 保留は 1 件だけで、進行中に新しい依頼を出すと `Internal`（未取得の結果は捨てる）（画面経由の依頼と slot を共有する）。
+/// Credential Manager へ依頼して要求 id を返す。RP ID 未設定・不正は `Unsupported`（OS を呼ばない）。
+/// 保留は 1 件だけで、進行中に新しい依頼を出すと `Internal`（画面経由の依頼と slot を共有し、先行を置き換えない。
+/// 失敗時の clear で既存依頼を壊さない）。
 #[cfg(target_os = "android")]
-pub fn begin_passkey(op: PasskeyOp) -> Result<u64, PasskeySigninError> {
-    // 進行中の依頼があれば置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。
+fn begin_passkey(op: PasskeyOp) -> Result<u64, PasskeySigninError> {
     let Some(request_id) = bridge::SLOT.try_begin() else {
         return Err(PasskeySigninError::Internal);
     };
@@ -123,17 +126,33 @@ pub fn begin_passkey(op: PasskeyOp) -> Result<u64, PasskeySigninError> {
     }
 }
 
-/// [`begin_passkey`] の結果を取り出す。未着なら `None`（次フレーム以降に再度呼ぶ）。
-/// 取り出すと保留は解放される。`request_id` が現在の依頼でなければ `None`。
+/// [`begin_passkey`] の結果が届くまで待つ。期限は置かない（OS の UI の応答待ちを推測の期限で失敗にしない）。
+/// Activity 再生成（[`bridge::reset`]）で slot が捨てられたら `Internal`。
 #[cfg(target_os = "android")]
-pub fn poll_passkey(request_id: u64) -> Option<Result<PasskeyOutcome, PasskeySigninError>> {
-    let (id, ready) = bridge::SLOT.snapshot()?;
-    if id != request_id {
-        return None;
+fn wait_passkey(request_id: u64) -> Result<PasskeyOutcome, PasskeySigninError> {
+    loop {
+        match bridge::SLOT.snapshot() {
+            Some((id, Some(result))) if id == request_id => {
+                bridge::SLOT.clear(id);
+                return result;
+            }
+            Some((id, None)) if id == request_id => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            _ => return Err(PasskeySigninError::Internal),
+        }
     }
-    let result = ready?;
-    bridge::SLOT.clear(id);
-    Some(result)
+}
+
+/// Android 版の [`Passkey`]（[`platform_passkey`]）。
+#[cfg(target_os = "android")]
+struct CallbackPasskey;
+
+#[cfg(target_os = "android")]
+impl crate::contract::Passkey for CallbackPasskey {
+    fn run(&self, op: PasskeyOp) -> Result<PasskeyOutcome, PasskeySigninError> {
+        wait_passkey(begin_passkey(op)?)
+    }
 }
 
 /// `android_main` から呼ぶ。slot と `android_passkey` の保留を捨てる（Java 側は `onDestroy` で追跡を外し済み）。

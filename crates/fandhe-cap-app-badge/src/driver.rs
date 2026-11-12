@@ -74,13 +74,10 @@ pub(crate) mod bridge {
     }
 }
 
-/// 画面に依存しない公開入口（iOS / Android）。バッジ設定を依頼して要求 id を返す。
-/// 結果は [`poll_set_badge`] で受け取る。範囲外の値は OS を呼ばず `InvalidInput`。
-/// 保留は 1 件だけで、進行中に新しい依頼を出すと `Internal`（未取得の結果は捨てる）（画面経由の依頼と slot を共有する）。
+/// バッジ設定を依頼して要求 id を返す。保留は 1 件だけで、進行中に新しい依頼を出すと `Internal`
+/// （画面経由の依頼と slot を共有し、先行を置き換えない。失敗時の clear で既存依頼を壊さない）。
 #[cfg(any(target_os = "ios", target_os = "android"))]
-pub fn begin_set_badge(value: u32) -> Result<u64, AppBadgeError> {
-    let value = BadgeValue::new(value)?;
-    // 進行中の依頼があれば置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。
+fn begin_set_badge(value: BadgeValue) -> Result<u64, AppBadgeError> {
     let Some(request_id) = bridge::SLOT.try_begin() else {
         return Err(AppBadgeError::Internal);
     };
@@ -93,17 +90,34 @@ pub fn begin_set_badge(value: u32) -> Result<u64, AppBadgeError> {
     }
 }
 
-/// [`begin_set_badge`] の結果を取り出す。未着なら `None`（次フレーム以降に再度呼ぶ）。
-/// 取り出すと保留は解放される。`request_id` が現在の依頼でなければ `None`。
+/// [`begin_set_badge`] の結果が届くまで待つ。期限は置かない（OS の許可ダイアログの応答待ちを
+/// 推測の期限で失敗にしない）。Activity 再生成（[`bridge::reset`]）で slot が捨てられたら `Internal`。
 #[cfg(any(target_os = "ios", target_os = "android"))]
-pub fn poll_set_badge(request_id: u64) -> Option<Result<BadgeOutcome, AppBadgeError>> {
-    let (id, ready) = bridge::SLOT.snapshot()?;
-    if id != request_id {
-        return None;
+fn wait_set_badge(request_id: u64) -> Result<BadgeOutcome, AppBadgeError> {
+    loop {
+        match bridge::SLOT.snapshot() {
+            Some((id, Some((_, result)))) if id == request_id => {
+                bridge::SLOT.clear(id);
+                return result;
+            }
+            Some((id, None)) if id == request_id => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            _ => return Err(AppBadgeError::Internal),
+        }
     }
-    let (_, result) = ready?;
-    bridge::SLOT.clear(id);
-    Some(result)
+}
+
+/// モバイル版の [`AppBadge`]（[`platform_app_badge`]）。OS の完了まで `set` を block する。
+/// UI スレッド（iOS / Android のメイン）から呼ばない。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+struct CallbackAppBadge;
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+impl crate::contract::AppBadge for CallbackAppBadge {
+    fn set(&self, value: BadgeValue) -> Result<BadgeOutcome, AppBadgeError> {
+        wait_set_badge(begin_set_badge(value)?)
+    }
 }
 
 /// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
@@ -186,15 +200,22 @@ fn drive(
     }));
 }
 
-/// OS 別の [`AppBadge`] 実装を返す（macOS / Windows / それ以外）。iOS / Android はコールバック型で
-/// [`AppBadge`] を実装しないため、この入口は無い（effect ドライバ経由で使う）。
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+/// OS 別の [`AppBadge`] 実装を返す（画面の状態型に依存しない入口、`docs/architecture/consumer-app-structure.md` §8.2）。
+/// iOS / Android はコールバック型のため、OS の完了（許可ダイアログの応答を含む）まで `set` を block する。
+/// 同時に 1 件だけで、先行が終わるまで後から呼ぶと `Internal` で即座に戻る。Linux は常に `Unsupported`。
 pub fn platform_app_badge() -> Box<dyn crate::contract::AppBadge> {
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    return Box::new(CallbackAppBadge);
     #[cfg(target_os = "macos")]
     return crate::macos::implementation();
     #[cfg(target_os = "windows")]
     return crate::windows::implementation();
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(not(any(
+        target_os = "ios",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "windows"
+    )))]
     return Box::new(crate::contract::UnsupportedAppBadge);
 }
 
@@ -213,6 +234,7 @@ pub fn app_badge_set_effect(state: &AppBadgeSetState, sender: &CompletionSender<
 #[cfg(test)]
 mod tests {
     /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    #[cfg_attr(any(target_os = "ios", target_os = "android"), allow(dead_code))]
     struct NoopWaker;
     impl fandhe_runtime::RepaintWaker for NoopWaker {
         fn wake(&self) {}
@@ -383,8 +405,12 @@ mod bridge_tests {
     use super::bridge;
     use super::*;
 
+    /// プロセス static の `SLOT` を触るテストを直列化する。
+    static BRIDGE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn stale_request_id_is_dropped_and_second_deliver_ignored() {
+        let _g = BRIDGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let id = bridge::begin();
         assert!(!bridge::deliver(id + 1000, 1, Ok(BadgeOutcome::Submitted)));
         assert!(bridge::SLOT.snapshot().is_some_and(|(_, r)| r.is_none()));
@@ -393,5 +419,21 @@ mod bridge_tests {
         let (_, ready) = bridge::SLOT.snapshot().expect("begin 済み");
         assert_eq!(ready, Some((1, Err(AppBadgeError::PermissionDenied))));
         bridge::SLOT.clear(id);
+    }
+
+    #[test]
+    fn wait_returns_delivered_result_and_reset_unblocks() {
+        let _g = BRIDGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let id = bridge::begin();
+        let t = std::thread::spawn(move || wait_set_badge(id));
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert!(bridge::deliver(id, 1, Ok(BadgeOutcome::Cancelled)));
+        assert_eq!(t.join().unwrap(), Ok(BadgeOutcome::Cancelled));
+
+        let id = bridge::begin();
+        let t = std::thread::spawn(move || wait_set_badge(id));
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        bridge::SLOT.reset();
+        assert_eq!(t.join().unwrap(), Err(AppBadgeError::Internal));
     }
 }
