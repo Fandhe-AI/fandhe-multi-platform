@@ -1,0 +1,35 @@
+[package]
+name = "fandhe-cap-focus-mode-status"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の focus-mode-status の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+# 機能宣言（capability-declaration.md）。権限・usage description・framework は手で足す（cargo fandhe check が検証する）。
+# WinRT `FocusSessionManager`（`UI_Shell`）と `REGDB_E_CLASSNOTREG`（`Win32_Foundation`）。
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { workspace = true, features = ["UI_Shell", "Foundation", "Win32_Foundation"] }
+
+# 機能宣言（capability-declaration.md）。読み取りのみで権限は要らない。
+[package.metadata.fandhe]
+id = "focus-mode-status"
+
+[package.metadata.fandhe.android]
+java = ["android/java"]
+
+[lints]
+workspace = true

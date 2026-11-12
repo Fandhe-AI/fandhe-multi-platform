@@ -4800,12 +4800,6 @@ public class MainActivity extends GameActivity {
         return AccessibilityPrefsHelper.read(getApplicationContext());
     }
 
-    // Rust 側（`AndroidFocusStatus::call_read`、JNI 署名 `()I`）から 1 秒間隔で呼ばれる
-    // 同期メソッド（Issue #439）。結果コードの意味は `FocusModeStatusHelper` を参照。
-    private int focusModeStatusRead() {
-        return FocusModeStatusHelper.read(getApplicationContext());
-    }
-
     // Rust 側（`AndroidAppShortcuts::call_install`、JNI 署名 `(Ljava/lang/String;Ljava/lang/String;)I`）
     // からワーカースレッドで呼ばれる同期メソッド（Issue #426）。結果コードは `AppShortcutsHelper` を参照。
     private int appShortcutsInstall(String label, String url) {

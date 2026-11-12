@@ -172,11 +172,6 @@ pub mod android_file_watch;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_flashlight;
-/// Issue #439: Android 向け集中モードの状態実装（`FocusModeStatusHelper` との JNI 橋渡し）。
-/// `device/focus_mode_status.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_focus_mode_status;
 /// Issue #1098: Android 向け折りたたみ姿勢の実装（`FoldablePostureHelper` との JNI 橋渡し）。
 /// `device/foldable_posture.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -777,9 +772,6 @@ pub mod file_watch;
 /// （iOS・Android・Windows 実装、他 OS は `UnsupportedFlashlight`
 /// 固定。Web は `fandhe-web-dom`）。
 pub mod flashlight;
-/// Phase 11 の拡充ループ（親 #104、Issue #438）: 集中モードの状態の effect ドライバ（Windows 実装、
-/// Android は JNI 実装、他 OS は `UnsupportedFocusStatus` 固定）。
-pub mod focus_mode_status;
 /// Phase 11 の拡充ループ（親 #141、Issue #723）: 折りたたみの姿勢の effect ドライバ
 /// （Android は OS 別モジュール（#1098 が埋めるスタブ）、他ネイティブ OS は
 /// `UnsupportedFoldablePosture` 固定。Web は `fandhe-web-dom`）。
@@ -1726,10 +1718,6 @@ pub mod windows_file_watch;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_flashlight;
-/// Issue #438: Windows 向け集中モードの状態実装（WinRT `FocusSessionManager`）。
-/// `device/focus_mode_status.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_focus_mode_status;
 /// Issue #933: Windows 向けゲームコントローラ実装（WinRT `Windows.Gaming.Input.Gamepad`
 /// ラッパー）。`device/gamepad.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

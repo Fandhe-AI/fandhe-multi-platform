@@ -1,5 +1,5 @@
 //! Windows 向け集中モードの状態実装（Issue #438、親 #104）。
-//! `device/focus_mode_status.rs::implementation` の Windows 経路から呼ばれ、WinRT
+//! `driver.rs::platform_focus_mode_status` の Windows 経路から呼ばれ、WinRT
 //! `FocusSessionManager`（Windows 11 22H2+）を UI スレッドで同期に読む
 //! （1 秒に 1 回。`IsFocusActiveChanged` は購読しない）。
 //!
@@ -10,19 +10,19 @@
 //! `unsafe` と `RoInitialize` は使わない。HRESULT と状態の値はログにも画面にも出さない
 //! （security.md A09）。既知の天井: unpackaged exe での動作は実機未確認（#435）。
 
-use fandhe_device::focus_mode_status::FocusStatusSource;
-use fandhe_device::DeviceError;
-use windows::Win32::Foundation::REGDB_E_CLASSNOTREG;
+use crate::contract::FocusStatusSource;
+use crate::error::FocusModeStatusError;
 use windows::UI::Shell::FocusSessionManager;
+use windows::Win32::Foundation::REGDB_E_CLASSNOTREG;
 
 /// [`FocusStatusSource`] の Windows 実装。状態を持たず、呼び出しごとに OS を読む。
 pub(crate) struct WindowsFocusStatus;
 
-const INTERNAL: DeviceError = DeviceError::Internal("focus_mode_status read");
-const UNSUPPORTED: DeviceError = DeviceError::Unsupported("focus_mode_status");
+const INTERNAL: FocusModeStatusError = FocusModeStatusError::Internal;
+const UNSUPPORTED: FocusModeStatusError = FocusModeStatusError::Unsupported;
 
 impl FocusStatusSource for WindowsFocusStatus {
-    fn read(&self) -> Result<bool, DeviceError> {
+    fn read(&self) -> Result<bool, FocusModeStatusError> {
         match FocusSessionManager::IsSupported() {
             Ok(true) => {}
             Ok(false) => return Err(UNSUPPORTED),

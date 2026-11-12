@@ -1,11 +1,11 @@
 //! 集中モード・おやすみモードの状態の契約（Issue #438、親 #104）。「いま集中モード中か」を
-//! 1 つの `bool` で取得するための橋渡しで、`fandhe-egui-proxy` の
-//! `device/focus_mode_status.rs` が間隔つきで [`FocusStatusSource::read`] を呼ぶ
+//! 1 つの `bool` で取得するための橋渡しで、機能 crate の
+//! `driver.rs` が間隔つきで [`FocusStatusSource::read`] を呼ぶ
 //! （pull 型。OS の変更通知は購読しない）。
 //!
 //! # 契約
 //!
-//! - 結果は `bool` か `DeviceError`（`Unsupported` / `Internal` のみ）。失敗・非対応で
+//! - 結果は `bool` か `FocusModeStatusError`（`Unsupported` / `Internal` のみ）。失敗・非対応で
 //!   「オフ」を返さない（`device-bridge-contracts.md`「6. 嘘の成功」）
 //! - **三値**（契約表 10）: 「読めた」「非対応（`Unsupported`）」「失敗（`Internal`）」。
 //!   利用者のキャンセル・権限ダイアログは本契約に無いので、キャンセルと権限拒否は該当なし
@@ -23,7 +23,7 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::FocusModeStatusError;
 
 /// 画面側が OS を読み直す間隔。
 pub const READ_INTERVAL: Duration = Duration::from_secs(1);
@@ -31,7 +31,7 @@ pub const READ_INTERVAL: Duration = Duration::from_secs(1);
 /// 集中モードの状態を 1 回読む。UI スレッドで同期に呼ばれるため短時間で戻ること。
 pub trait FocusStatusSource: Send + Sync {
     /// 現在、集中モードがオンなら `true`。失敗後に直前の値を返し続けてはならない。
-    fn read(&self) -> Result<bool, DeviceError>;
+    fn read(&self) -> Result<bool, FocusModeStatusError>;
 }
 
 /// 常に非対応を返す実装（未実装 OS の dispatch 先・スタブ）。
@@ -39,8 +39,8 @@ pub trait FocusStatusSource: Send + Sync {
 pub struct UnsupportedFocusStatus;
 
 impl FocusStatusSource for UnsupportedFocusStatus {
-    fn read(&self) -> Result<bool, DeviceError> {
-        Err(DeviceError::Unsupported("focus_mode_status"))
+    fn read(&self) -> Result<bool, FocusModeStatusError> {
+        Err(FocusModeStatusError::Unsupported)
     }
 }
 
@@ -49,12 +49,12 @@ impl FocusStatusSource for UnsupportedFocusStatus {
 /// - `0`: オフ / `1`: オン
 /// - `-2`: この OS 版では取れない（`Unsupported`）
 /// - `-1` とそれ以外（未定義コード）: `Internal`（成功にしない）
-pub fn focus_from_code(code: i32) -> Result<bool, DeviceError> {
+pub fn focus_from_code(code: i32) -> Result<bool, FocusModeStatusError> {
     match code {
         0 => Ok(false),
         1 => Ok(true),
-        -2 => Err(DeviceError::Unsupported("focus_mode_status")),
-        _ => Err(DeviceError::Internal("focus_mode_status read")),
+        -2 => Err(FocusModeStatusError::Unsupported),
+        _ => Err(FocusModeStatusError::Internal),
     }
 }
 
@@ -66,7 +66,7 @@ mod tests {
     fn unsupported_never_succeeds() {
         assert!(matches!(
             UnsupportedFocusStatus.read(),
-            Err(DeviceError::Unsupported("focus_mode_status"))
+            Err(FocusModeStatusError::Unsupported)
         ));
     }
 
@@ -80,11 +80,11 @@ mod tests {
     fn sentinel_and_undefined_codes_never_succeed() {
         assert!(matches!(
             focus_from_code(-2),
-            Err(DeviceError::Unsupported("focus_mode_status"))
+            Err(FocusModeStatusError::Unsupported)
         ));
         for c in [-1, 2, -3, i32::MIN, i32::MAX] {
             assert!(
-                matches!(focus_from_code(c), Err(DeviceError::Internal(_))),
+                matches!(focus_from_code(c), Err(FocusModeStatusError::Internal)),
                 "{c}"
             );
         }

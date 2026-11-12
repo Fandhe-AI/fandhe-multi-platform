@@ -4,11 +4,11 @@ import android.app.NotificationManager;
 import android.content.Context;
 
 // 集中モード・おやすみモードの状態（Issue #439）の Android 実装ヘルパー。
-// Rust の `device/android_focus_mode_status.rs` が `MainActivity.focusModeStatusRead` 経由で
-// 1 秒間隔に同期で呼ぶ（JNI 署名 `()I`）。
+// Rust の `src/android.rs` が static の `read(Context)` を JNI で 1 秒間隔に同期で呼ぶ（JNI 署名
+// `(Landroid/content/Context;)I`。利用者の `MainActivity` には何も書かせない）。
 // コールバック登録・要求 id・保留状態を持たないため、Activity 再生成で破棄すべき要求は無い。
 // 読み取りのみなので ACCESS_NOTIFICATION_POLICY は宣言しない。状態の値はログへ出さない。
-// 定数の値は Rust の `fandhe_device::focus_mode_status::focus_from_code` と一致させること。
+// 定数の値は Rust の `contract::focus_from_code`（fandhe-cap-focus-mode-status） と一致させること。
 //   0: オフ、1: オン、-1: 失敗（UNKNOWN・未定義値・取得不能を含む）。
 final class FocusModeStatusHelper {
     static final int OFF = 0;
@@ -19,7 +19,7 @@ final class FocusModeStatusHelper {
 
     static int read(Context context) {
         try {
-            NotificationManager nm = context.getSystemService(NotificationManager.class);
+            NotificationManager nm = context.getApplicationContext().getSystemService(NotificationManager.class);
             if (nm == null) {
                 return FAILED;
             }

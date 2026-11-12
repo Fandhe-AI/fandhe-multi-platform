@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #104、Issue #438）「集中モードの状態」の effect ドライバ。
-//! `fandhe_device::focus_mode_status::FocusStatusSource` を一定間隔で読み、結果を
+//! `crate::contract::FocusStatusSource` を一定間隔で読み、結果を
 //! `fandhe_core::screens::focus_mode_status_show`（端末依存ゼロ）へ注入する
 //! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。
 //!
@@ -14,25 +14,25 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::focus_mode_status_show::{
-    apply_read, FocusModeStatusShowState, ReadFailure,
-};
 #[cfg(not(any(target_os = "windows", target_os = "android")))]
-use fandhe_device::focus_mode_status::UnsupportedFocusStatus;
-use fandhe_device::focus_mode_status::{FocusStatusSource, READ_INTERVAL};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedFocusStatus;
+use crate::contract::{FocusStatusSource, READ_INTERVAL};
+use crate::error::FocusModeStatusError;
+use fandhe_core::screens::focus_mode_status_show::{
+    FocusModeStatusShowState, ReadFailure, apply_read,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
-/// 現在のプラットフォームに応じた実装を返す。
-fn implementation() -> Arc<dyn FocusStatusSource> {
+/// 現在のプラットフォームに応じた実装を返す。フレームワークの外のアプリも直接使える入口。
+pub fn platform_focus_mode_status() -> Arc<dyn FocusStatusSource> {
     #[cfg(target_os = "windows")]
     {
-        Arc::new(super::windows_focus_mode_status::WindowsFocusStatus)
+        Arc::new(crate::windows::WindowsFocusStatus)
     }
     #[cfg(target_os = "android")]
     {
-        super::android_focus_mode_status::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(target_os = "windows", target_os = "android")))]
     {
@@ -42,10 +42,10 @@ fn implementation() -> Arc<dyn FocusStatusSource> {
 
 /// 契約の結果を画面の入力へ写す。失敗は固定文言へ畳み、OS 固有値を画面へ漏らさない
 /// （security.md A09）。
-fn to_result(r: Result<bool, DeviceError>) -> Result<bool, ReadFailure> {
+fn to_result(r: Result<bool, FocusModeStatusError>) -> Result<bool, ReadFailure> {
     match r {
         Ok(v) => Ok(v),
-        Err(DeviceError::Unsupported(_)) => Err(ReadFailure::Unsupported),
+        Err(FocusModeStatusError::Unsupported) => Err(ReadFailure::Unsupported),
         Err(_) => Err(ReadFailure::Failed("集中モードの取得".to_string())),
     }
 }
@@ -104,7 +104,7 @@ pub fn focus_mode_status_show_effect(
     drive(
         state,
         sender,
-        implementation().as_ref(),
+        platform_focus_mode_status().as_ref(),
         Instant::now(),
         &mut timing,
     );
@@ -113,25 +113,31 @@ pub fn focus_mode_status_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::UnsupportedFocusStatus as Unsupported;
     use fandhe_core::screens::focus_mode_status_show::FocusView;
-    use fandhe_device::focus_mode_status::UnsupportedFocusStatus as Unsupported;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<FocusModeStatusShowState>>;
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<FocusModeStatusShowState>>;
 
     fn sender_with_channel() -> (CompletionSender<FocusModeStatusShowState>, Rx) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     struct Fake {
-        result: Result<bool, DeviceError>,
+        result: Result<bool, FocusModeStatusError>,
         reads: AtomicUsize,
     }
 
     impl Fake {
-        fn new(result: Result<bool, DeviceError>) -> Self {
+        fn new(result: Result<bool, FocusModeStatusError>) -> Self {
             Self {
                 result,
                 reads: AtomicUsize::new(0),
@@ -140,12 +146,12 @@ mod tests {
     }
 
     impl FocusStatusSource for Fake {
-        fn read(&self) -> Result<bool, DeviceError> {
+        fn read(&self) -> Result<bool, FocusModeStatusError> {
             self.reads.fetch_add(1, Ordering::SeqCst);
             match &self.result {
                 Ok(v) => Ok(*v),
-                Err(DeviceError::Unsupported(n)) => Err(DeviceError::Unsupported(n)),
-                Err(_) => Err(DeviceError::Internal("x")),
+                Err(FocusModeStatusError::Unsupported) => Err(FocusModeStatusError::Unsupported),
+                Err(_) => Err(FocusModeStatusError::Internal),
             }
         }
     }
@@ -209,8 +215,8 @@ mod tests {
     #[test]
     fn failures_never_become_read() {
         for r in [
-            Err(DeviceError::Unsupported("focus_mode_status")),
-            Err(DeviceError::Internal("x")),
+            Err(FocusModeStatusError::Unsupported),
+            Err(FocusModeStatusError::Internal),
         ] {
             let (tx, rx) = sender_with_channel();
             let mut state = FocusModeStatusShowState::default();
@@ -238,7 +244,7 @@ mod tests {
         drive(&state, &tx, &Fake::new(Ok(true)), t0, &mut timing);
         apply_all(&rx, &mut state);
         assert_eq!(state.view, FocusView::On);
-        let failing = Fake::new(Err(DeviceError::Internal("x")));
+        let failing = Fake::new(Err(FocusModeStatusError::Internal));
         drive(&state, &tx, &failing, t0 + READ_INTERVAL, &mut timing);
         apply_all(&rx, &mut state);
         assert!(!matches!(state.view, FocusView::On | FocusView::Off));
