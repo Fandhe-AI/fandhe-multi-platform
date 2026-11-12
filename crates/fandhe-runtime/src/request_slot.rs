@@ -206,7 +206,8 @@ impl SlotOwner {
         self.0.load(Ordering::Acquire)
     }
 
-    fn release(&self, request_id: u64) {
+    /// 自分の分の印を外す（`request_id` が現在の印のときだけ）。結果を取り出し終えたときに呼ぶ。
+    pub fn release(&self, request_id: u64) {
         let _ = self
             .0
             .compare_exchange(request_id, 0, Ordering::AcqRel, Ordering::Acquire);
@@ -220,8 +221,8 @@ impl Default for SlotOwner {
 }
 
 /// [`poll_and_finish`] の自分の分だけ版。`owner` の id が slot の現在の要求のときだけ結果を取って反映する。
-/// 自分の分が無ければ何もしない。slot の要求が別の id に置き換わっていたら（自分の要求は失われた）、
-/// 結果を取らず `on_lost` を送って失敗を確定させる。
+/// 自分の分が無ければ何もしない。slot の要求が別の id に置き換わっていた、または slot が空になっていた
+/// （Activity 再生成の `reset` 等で自分の要求は失われた）ときは、印を外して `on_lost` を送り、失敗を確定させる。
 pub fn poll_and_finish_owned<S: 'static, O: Clone + Send + 'static>(
     slot: &'static RequestSlot<O>,
     owner: &'static SlotOwner,
@@ -234,7 +235,8 @@ pub fn poll_and_finish_owned<S: 'static, O: Clone + Send + 'static>(
     if mine == 0 {
         return;
     }
-    if slot.snapshot().is_some_and(|(id, _)| id != mine) {
+    // 完了の反映と同じフレームで観測し直しても、`on_lost` は世代照合で捨てられる（`finish_*` は完了済みの画面を変えない）。
+    if slot.snapshot().is_none_or(|(id, _)| id != mine) {
         owner.release(mine);
         let _ = sender.send(Box::new(on_lost));
         return;
@@ -382,6 +384,32 @@ mod tests {
             crate::CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
             rx,
         )
+    }
+
+    #[test]
+    fn owned_poll_reports_lost_when_slot_was_reset() {
+        static SLOT: RequestSlot<u8> = RequestSlot::new();
+        static OWNER: SlotOwner = SlotOwner::new();
+        let (sender, rx) = sender_with_channel();
+        let id = OWNER.begin(&SLOT).expect("空き");
+        // 要求中に slot が空になる（Activity 再生成）。
+        SLOT.reset();
+        poll_and_finish_owned(
+            &SLOT,
+            &OWNER,
+            &sender,
+            |_| panic!("呼ばれない"),
+            |_s, _o: u8| true,
+            |s: &mut u8| *s = 9,
+        );
+        let mut state = 0u8;
+        rx.try_recv().expect("on_lost が送られる")(&mut state);
+        assert_eq!(state, 9);
+        assert_eq!(OWNER.current(), 0);
+        // 印が外れた後は何もしない。
+        poll_and_finish_owned(&SLOT, &OWNER, &sender, |_| {}, |_s, _o: u8| true, |_s| {});
+        assert!(rx.try_recv().is_err());
+        let _ = id;
     }
 
     #[test]

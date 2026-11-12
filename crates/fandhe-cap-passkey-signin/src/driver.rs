@@ -203,6 +203,10 @@ static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
 #[cfg(any(target_os = "android", test))]
 const BUSY_MESSAGE: &str = "他のパスキー操作が処理中です。完了後にもう一度お試しください";
 
+/// 依頼が失われた（再生成・別の依頼への置き換え）ときの表示。
+#[cfg(any(target_os = "android", test))]
+const LOST_MESSAGE: &str = "パスキー操作が中断されました。もう一度お試しください";
+
 /// Android 版の effect ドライバ本体。`begin` が `Err` なら依頼自体の失敗としてその場で結果を置く
 /// （RP ID 未設定・不正は `Unsupported`、OS を呼ばずに「使えない」になる）。先行（公開入口の待ち）が
 /// 進行中なら置き換えず、画面には失敗として返す。
@@ -250,7 +254,7 @@ fn drive_callback(
             }
         },
         move |s: &mut PasskeySigninState| {
-            finish(s, generation, Err(BUSY_MESSAGE.to_string()));
+            finish(s, generation, Err(LOST_MESSAGE.to_string()));
         },
     );
 }
@@ -535,6 +539,21 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(30));
             bridge::reset();
             assert!(t.join().unwrap().is_err());
+        }
+
+        #[test]
+        fn screen_request_fails_instead_of_hanging_when_slot_is_reset() {
+            static SLOT: RequestSlot<bridge::Outcome> = RequestSlot::new();
+            static OWNER: SlotOwner = SlotOwner::new();
+            let mut s = PasskeySigninState::default();
+            screen::sign_in(&mut s);
+            frame(&mut s, &SLOT, &OWNER, ok_begin);
+            assert_eq!(s.phase, screen::PasskeyPhase::Running);
+            // Activity 再生成で slot が空になっても、画面は Running のまま止まらず失敗で確定する。
+            SLOT.reset();
+            frame(&mut s, &SLOT, &OWNER, ok_begin);
+            assert_eq!(s.phase, screen::PasskeyPhase::Idle);
+            assert!(s.error.contains(LOST_MESSAGE));
         }
 
         #[test]

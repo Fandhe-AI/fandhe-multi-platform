@@ -172,8 +172,14 @@ static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
     fandhe_runtime::request_slot::SlotOwner::new();
 
 /// 公開入口などの先行が進行中で、画面の依頼を受けられないときの表示。
-#[cfg(any(target_os = "ios", target_os = "android"))]
+#[cfg(any(target_os = "ios", target_os = "android", test))]
+#[cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))]
 const BUSY_MESSAGE: &str = "他のバッジ設定が処理中です。完了後にもう一度お試しください";
+
+/// 依頼が失われた（再生成・別の依頼への置き換え）ときの表示。
+#[cfg(any(target_os = "ios", target_os = "android", test))]
+#[cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))]
+const LOST_MESSAGE: &str = "バッジ設定が中断されました。もう一度お試しください";
 
 /// iOS / Android 版の effect ドライバ本体。
 #[cfg(any(target_os = "ios", target_os = "android"))]
@@ -217,7 +223,7 @@ fn drive_callback(state: &AppBadgeSetState, sender: &CompletionSender<AppBadgeSe
             }
         },
         move |s: &mut AppBadgeSetState| {
-            finish_set(s, generation, Err(BUSY_MESSAGE.to_string()));
+            finish_set(s, generation, Err(LOST_MESSAGE.to_string()));
         },
     );
 }
@@ -505,5 +511,42 @@ mod bridge_tests {
         std::thread::sleep(std::time::Duration::from_millis(30));
         bridge::reset();
         assert!(t.join().unwrap().is_err());
+    }
+
+    #[test]
+    fn screen_request_fails_instead_of_hanging_when_slot_is_reset() {
+        use fandhe_core::screens::app_badge_set::BadgePhase;
+        struct Waker;
+        impl fandhe_runtime::RepaintWaker for Waker {
+            fn wake(&self) {}
+            fn wake_after(&self, _delay: std::time::Duration) {}
+        }
+        let _g = BRIDGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        bridge::begin_screen().expect("空き");
+        // Activity 再生成で slot が空になった後の 1 フレーム（Setting のまま）。
+        bridge::reset();
+        let mut s = AppBadgeSetState {
+            phase: BadgePhase::Setting,
+            ..Default::default()
+        };
+        let generation = s.generation;
+        let (tx, rx) = std::sync::mpsc::channel();
+        let sender = CompletionSender::new(tx, std::sync::Arc::new(Waker));
+        fandhe_runtime::request_slot::poll_and_finish_owned(
+            &bridge::SLOT,
+            &SCREEN_OWNER,
+            &sender,
+            |_| {},
+            |_s: &mut AppBadgeSetState, _o| true,
+            move |s: &mut AppBadgeSetState| {
+                finish_set(s, generation, Err(LOST_MESSAGE.to_string()));
+            },
+        );
+        while let Ok(apply) = rx.try_recv() {
+            apply(&mut s);
+        }
+        assert_eq!(s.phase, BadgePhase::Idle);
+        assert!(s.error.contains(LOST_MESSAGE));
     }
 }

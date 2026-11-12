@@ -206,8 +206,9 @@ static LAST_TICK: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None
 
 /// 画面に依存しない公開入口（4 OS）。録画を依頼して要求 id を返す。
 /// 結果は [`poll_capture`] で受け取り、止めるときは `platform_screen_capture().stop(id)`。
-/// 依頼自体が失敗したら `Err`（コールバックは来ない）。保留は 1 件だけで、進行中に新しい依頼を出すと `Internal("busy")`（未取得の結果は捨てる）
-/// （画面経由の依頼と slot を共有する）。
+/// 依頼自体が失敗したら `Err`（コールバックは来ない）。保留は 1 件だけで、進行中、または結果が届いて未取得の間に
+/// 新しい依頼を出すと `Internal("busy")` で拒否する（置き換えない。画面経由の依頼と slot を共有する）。
+/// 結果は [`poll_capture`] で取り出すか、不要なら [`abandon_capture`] で捨てる（どちらもしないと、再生成まで busy のまま）。
 #[cfg(any(
     target_os = "macos",
     target_os = "ios",
@@ -215,8 +216,7 @@ static LAST_TICK: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None
     target_os = "android"
 ))]
 pub fn begin_capture(max_duration: std::time::Duration) -> Result<u64, ScreenCaptureError> {
-    // 進行中の依頼があれば置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。
-    // 進行中の依頼、または画面側の未反映の結果があれば置き換えず拒否する。
+    // 進行中の依頼、または未取得の結果（画面側・公開側）があれば置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。
     let Some(request_id) =
         PUBLIC_OWNER.begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
     else {
@@ -248,7 +248,28 @@ pub fn poll_capture(
     }
     let result = ready?;
     bridge::SLOT.clear(id);
+    PUBLIC_OWNER.release(id);
     Some(result)
+}
+
+/// [`begin_capture`] の結果が届いているのに取り出さない（受け手が不要になった）とき、その結果を捨てて保留を解放する。
+/// 結果が届いている `request_id` なら `true`。未着（録画中）・別の id なら何もせず `false`
+/// （録画中のものは `platform_screen_capture().stop(id)` で止め、届いた結果をこの関数で捨てる）。
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "windows",
+    target_os = "android"
+))]
+pub fn abandon_capture(request_id: u64) -> bool {
+    match bridge::SLOT.snapshot() {
+        Some((id, Some(_))) if id == request_id => {
+            bridge::SLOT.clear(id);
+            PUBLIC_OWNER.release(id);
+            true
+        }
+        _ => false,
+    }
 }
 
 /// 公開入口 [`begin_capture`] が追う自分の分の要求。結果が届いて [`poll_capture`] が取り出すまで、
@@ -281,6 +302,15 @@ static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
     target_os = "android"
 ))]
 const BUSY_MESSAGE: &str = "他の画面録画が処理中です。完了後にもう一度お試しください";
+
+/// 依頼が失われた（再生成・別の依頼への置き換え）ときの表示。
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "windows",
+    target_os = "android"
+))]
+const LOST_MESSAGE: &str = "画面録画が中断されました。もう一度お試しください";
 
 /// 4 OS 経路の effect ドライバ本体。
 #[cfg(any(
@@ -348,7 +378,7 @@ fn drive_callback(state: &ScreenCaptureState, sender: &CompletionSender<ScreenCa
             }
         },
         move |s: &mut ScreenCaptureState| {
-            finish_capture(s, generation, Err(BUSY_MESSAGE.to_string()));
+            finish_capture(s, generation, Err(LOST_MESSAGE.to_string()));
         },
     );
 }
@@ -513,6 +543,40 @@ mod tests {
                 .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
                 .is_some()
         );
+        bridge::reset();
+    }
+
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    ))]
+    #[test]
+    fn abandoned_public_result_is_recovered_and_poll_releases_owner() {
+        let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let id = PUBLIC_OWNER
+            .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+            .expect("空き");
+        // 録画中は捨てられない。
+        assert!(!abandon_capture(id));
+        assert!(bridge::deliver(id, Err(ScreenCaptureError::Cancelled)));
+        // 放棄された結果は回収でき、画面側からも公開側からも再び依頼できる。
+        assert!(abandon_capture(id));
+        assert_eq!(PUBLIC_OWNER.current(), 0);
+        let id2 = SCREEN_OWNER
+            .begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER])
+            .expect("回収後は空き");
+        // 取り出した場合も印が外れる。
+        bridge::reset();
+        let id3 = PUBLIC_OWNER
+            .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+            .expect("空き");
+        assert!(bridge::deliver(id3, Err(ScreenCaptureError::Cancelled)));
+        assert!(poll_capture(id3).is_some());
+        assert_eq!(PUBLIC_OWNER.current(), 0);
+        let _ = id2;
         bridge::reset();
     }
 
