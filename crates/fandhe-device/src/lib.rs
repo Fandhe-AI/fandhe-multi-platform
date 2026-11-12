@@ -55,8 +55,6 @@ pub mod ble_peripheral;
 pub mod bluetooth_classic;
 /// Phase 11（端末機能の拡充ループ）: Bluetooth LE の周辺機器スキャン。
 pub mod bluetooth_le;
-/// Phase 11（端末機能の拡充ループ、親 #1118、Issue #1224）: 予定を 1 件追加する。
-pub mod calendar;
 /// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得（ズーム操作を含む）。
 pub mod camera_preview_stream;
 /// Phase 11（端末機能の拡充ループ、親 #120、Issue #582）: 画面キャプチャの防止・検知。

@@ -2,7 +2,7 @@
 // iOS 実装（Issue #1225、`EKEventEditViewController`）。iOS / macOS 共用ファイル
 // （`fandhe_apple_share.m` と同じ分け方。`#if TARGET_OS_IPHONE` が iOS 側）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_calendar.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-calendar/src/apple.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の `build_macos` が feature `device` 有効時に `cc` でコンパイルし、
 // EventKit をリンクする。iOS は同じく `build.rs` の iOS 分岐が EventKit / EventKitUI を
 // リンクする。
@@ -15,7 +15,7 @@
 //     長さ 5 の配列（年・月・日・時・分、端末のローカル時刻）。いずれも return する前に
 //     値コピーするため、呼び出し元は return 後に解放してよい（所有権は移らない）。
 //   fandhe_rust_calendar_outcome(uint64_t request_id, int32_t code)
-//     Rust 側が公開する関数。code は device/calendar.rs::outcome_from_code の表が SSOT
+//     Rust 側が公開する関数。code は `crates/fandhe-cap-calendar/src/driver.rs`::outcome_from_code の表が SSOT
 //     （0 保存 / 1 権限拒否 / 2 macOS 14 未満 / 3 保存失敗 / 4 権限要求エラー /
 //      5 既定カレンダーなし / 6 日時変換失敗 / 7 利用者が編集画面を閉じた（iOS のみ、
 //      キャンセル。失敗ではない） / 8 編集画面を出せなかった（iOS のみ））。

@@ -1,10 +1,10 @@
 //! Phase 11（親 #1118）型サンプル「予定の追加」（Issue #1224 macOS・#1225 iOS）の
 //! effect ドライバ。
 //! `fandhe_core::screens::calendar_add`（端末依存ゼロ）の要求を観測し、検査
-//! （`fandhe_device::calendar::EventDraft::parse`）を通ったものだけを OS へ渡して、
+//! （`crate::contract::EventDraft::parse`）を通ったものだけを OS へ渡して、
 //! 結果を `CompletionSender` 経由で返す（`screens/registry.rs` の `effect` 区画から
 //! 呼ばれる契約、`device/biometric_auth.rs` と同型）。契約と守る範囲は
-//! `fandhe_device::calendar` のモジュール doc を参照。
+//! `crate::contract` のモジュール doc を参照。
 //!
 //! - macOS / iOS: EventKit（iOS は EventKitUI の編集画面）はコールバック型のため
 //!   `CalendarEvents` を通らず、pull 型 [`bridge`]（`RequestSlot` の facade）で
@@ -14,24 +14,24 @@
 //!   アプリ無し・非前景・起動失敗は失敗
 //! - それ以外（Linux・Windows）: `UnsupportedCalendar` を同期に呼び「非対応」を表示する
 
+use crate::contract::{AddEventOutcome, EventDraft};
+use crate::error::CalendarError;
 use fandhe_core::screens::calendar_add::{
-    finish_add, mark_adding, take_request, AddFailure, AddOutcome as CoreOutcome, CalendarAddState,
+    AddFailure, AddOutcome as CoreOutcome, CalendarAddState, finish_add, mark_adding, take_request,
 };
-use fandhe_device::calendar::{AddEventOutcome, EventDraft};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
-/// `DeviceError` を画面用の結果へ写像する。内部構造は出さず固定文言だけにする
+/// `CalendarError` を画面用の結果へ写像する。内部構造は出さず固定文言だけにする
 /// （security.md A09）。
-fn to_outcome(result: Result<AddEventOutcome, DeviceError>) -> Result<CoreOutcome, AddFailure> {
+fn to_outcome(result: Result<AddEventOutcome, CalendarError>) -> Result<CoreOutcome, AddFailure> {
     match result {
         Ok(AddEventOutcome::Saved) => Ok(CoreOutcome::Saved),
         Ok(AddEventOutcome::HandedToOs) => Ok(CoreOutcome::HandedToOs),
         Ok(AddEventOutcome::Cancelled) => Ok(CoreOutcome::Cancelled),
-        Err(DeviceError::PermissionDenied(_)) => Ok(CoreOutcome::Denied),
-        Err(DeviceError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
-        Err(DeviceError::InvalidInput(kind)) => Err(AddFailure::Invalid(
+        Err(CalendarError::PermissionDenied) => Ok(CoreOutcome::Denied),
+        Err(CalendarError::Unsupported) => Ok(CoreOutcome::Unsupported),
+        Err(CalendarError::InvalidInput(kind)) => Err(AddFailure::Invalid(
             match kind {
                 "calendar title" => "件名は 1〜200 文字で入力してください",
                 "calendar time" => "日時は YYYY-MM-DD HH:MM で入力してください",
@@ -61,18 +61,18 @@ fn to_outcome(result: Result<AddEventOutcome, DeviceError>) -> Result<CoreOutcom
 ///
 /// ホストでもテストできるよう cfg は割かない（呼び出し元は iOS / macOS のみ）。
 #[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
-pub(crate) fn outcome_from_code(code: i32) -> Result<AddEventOutcome, DeviceError> {
+pub(crate) fn outcome_from_code(code: i32) -> Result<AddEventOutcome, CalendarError> {
     match code {
         0 => Ok(AddEventOutcome::Saved),
-        1 => Err(DeviceError::PermissionDenied("calendar")),
-        2 => Err(DeviceError::Unsupported("calendar")),
-        3 => Err(DeviceError::Internal("calendar save")),
-        4 => Err(DeviceError::Internal("calendar access")),
-        5 => Err(DeviceError::Internal("calendar default")),
-        6 => Err(DeviceError::Internal("calendar date")),
+        1 => Err(CalendarError::PermissionDenied),
+        2 => Err(CalendarError::Unsupported),
+        3 => Err(CalendarError::Internal("calendar save")),
+        4 => Err(CalendarError::Internal("calendar access")),
+        5 => Err(CalendarError::Internal("calendar default")),
+        6 => Err(CalendarError::Internal("calendar date")),
         7 => Ok(AddEventOutcome::Cancelled),
-        8 => Err(DeviceError::Internal("calendar present")),
-        _ => Err(DeviceError::Internal("calendar outcome")),
+        8 => Err(CalendarError::Internal("calendar present")),
+        _ => Err(CalendarError::Internal("calendar outcome")),
     }
 }
 
@@ -90,24 +90,24 @@ pub(crate) fn outcome_from_code(code: i32) -> Result<AddEventOutcome, DeviceErro
 /// macOS 用 [`outcome_from_code`] とはコード体系が違うため別関数にする。
 /// ホストでもテストできるよう cfg は割かない。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn outcome_from_android_code(code: i32) -> Result<AddEventOutcome, DeviceError> {
+pub(crate) fn outcome_from_android_code(code: i32) -> Result<AddEventOutcome, CalendarError> {
     match code {
         0 => Ok(AddEventOutcome::HandedToOs),
-        1 => Err(DeviceError::Internal("calendar app")),
-        2 => Err(DeviceError::Internal("calendar background")),
-        3 => Err(DeviceError::Internal("calendar launch")),
-        _ => Err(DeviceError::Internal("calendar outcome")),
+        1 => Err(CalendarError::Internal("calendar app")),
+        2 => Err(CalendarError::Internal("calendar background")),
+        3 => Err(CalendarError::Internal("calendar launch")),
+        _ => Err(CalendarError::Internal("calendar outcome")),
     }
 }
 
 /// OS 側コールバックとの橋渡し（macOS / iOS / Android、pull 型、`RequestSlot` の facade）。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub(crate) mod bridge {
+    use crate::contract::AddEventOutcome;
+    use crate::error::CalendarError;
     use fandhe_core::screens::calendar_add::{AddFailure, AddOutcome};
-    use fandhe_device::calendar::AddEventOutcome;
-    use fandhe_device::DeviceError;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) type Outcome = Result<AddOutcome, AddFailure>;
 
@@ -120,7 +120,7 @@ pub(crate) mod bridge {
 
     /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果あり
     /// は捨てて `false`（先に届いたものだけを採る）。
-    pub(crate) fn deliver(request_id: u64, result: Result<AddEventOutcome, DeviceError>) -> bool {
+    pub(crate) fn deliver(request_id: u64, result: Result<AddEventOutcome, CalendarError>) -> bool {
         SLOT.deliver(request_id, super::to_outcome(result))
     }
 
@@ -135,7 +135,7 @@ pub(crate) mod bridge {
 
 /// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::reset();
 }
 
@@ -143,12 +143,12 @@ pub(crate) fn reset_pending_tracking() {
 /// `Err(Internal("calendar present"))` として畳む）。
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 fn present(request_id: u64, draft: &EventDraft) -> bool {
-    super::apple_calendar::present(request_id, draft)
+    crate::apple::present(request_id, draft)
 }
 
 #[cfg(target_os = "android")]
 fn present(request_id: u64, draft: &EventDraft) -> bool {
-    super::android::request_calendar_insert(request_id, draft)
+    crate::android::request_calendar_insert(request_id, draft)
 }
 
 /// macOS / iOS / Android 版の effect ドライバ本体。
@@ -163,7 +163,7 @@ fn drive_callback(state: &CalendarAddState, sender: &CompletionSender<CalendarAd
             Ok(draft) => {
                 if !present(request_id, &draft) {
                     // 依頼自体が同期的に失敗した（コールバックは二度と来ない）。
-                    bridge::deliver(request_id, Err(DeviceError::Internal("calendar present")));
+                    bridge::deliver(request_id, Err(CalendarError::Internal("calendar present")));
                 }
             }
             // 入力不正は OS を呼ばずに画面へ返す。
@@ -178,7 +178,7 @@ fn drive_callback(state: &CalendarAddState, sender: &CompletionSender<CalendarAd
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -206,7 +206,7 @@ pub fn calendar_add_effect(state: &CalendarAddState, sender: &CompletionSender<C
 fn drive(
     state: &CalendarAddState,
     sender: &CompletionSender<CalendarAddState>,
-    calendar: &dyn fandhe_device::calendar::CalendarEvents,
+    calendar: &dyn crate::contract::CalendarEvents,
 ) {
     let Some(request) = take_request(state) else {
         return;
@@ -224,12 +224,20 @@ fn drive(
 /// `registry.rs` から配線される effect ドライバ（非対応 OS。常に非対応を表示する）。
 #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
 pub fn calendar_add_effect(state: &CalendarAddState, sender: &CompletionSender<CalendarAddState>) {
-    drive(state, sender, &fandhe_device::calendar::UnsupportedCalendar);
+    drive(state, sender, &crate::contract::UnsupportedCalendar);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    #[allow(dead_code)]
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     #[test]
     fn to_outcome_covers_all_paths() {
@@ -246,21 +254,21 @@ mod tests {
             Ok(CoreOutcome::Cancelled)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::PermissionDenied("calendar"))),
+            to_outcome(Err(CalendarError::PermissionDenied)),
             Ok(CoreOutcome::Denied)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Unsupported("calendar"))),
+            to_outcome(Err(CalendarError::Unsupported)),
             Ok(CoreOutcome::Unsupported)
         );
         for kind in ["calendar title", "calendar time", "calendar range"] {
             assert!(matches!(
-                to_outcome(Err(DeviceError::InvalidInput(kind))),
+                to_outcome(Err(CalendarError::InvalidInput(kind))),
                 Err(AddFailure::Invalid(_))
             ));
         }
         assert!(matches!(
-            to_outcome(Err(DeviceError::Internal("calendar save"))),
+            to_outcome(Err(CalendarError::Internal("calendar save"))),
             Err(AddFailure::Failed(_))
         ));
     }
@@ -270,11 +278,11 @@ mod tests {
         assert!(matches!(outcome_from_code(0), Ok(AddEventOutcome::Saved)));
         assert!(matches!(
             outcome_from_code(1),
-            Err(DeviceError::PermissionDenied("calendar"))
+            Err(CalendarError::PermissionDenied)
         ));
         assert!(matches!(
             outcome_from_code(2),
-            Err(DeviceError::Unsupported("calendar"))
+            Err(CalendarError::Unsupported)
         ));
         assert!(matches!(
             outcome_from_code(7),
@@ -283,7 +291,7 @@ mod tests {
         for code in [3, 4, 5, 6, 8, -1, i32::MAX] {
             assert!(matches!(
                 outcome_from_code(code),
-                Err(DeviceError::Internal(_))
+                Err(CalendarError::Internal(_))
             ));
         }
     }
@@ -297,7 +305,7 @@ mod tests {
         for code in [1, 2, 3, 4, -1, i32::MAX] {
             assert!(matches!(
                 outcome_from_android_code(code),
-                Err(DeviceError::Internal(_))
+                Err(CalendarError::Internal(_))
             ));
         }
     }
@@ -305,16 +313,12 @@ mod tests {
     #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
     mod non_macos {
         use super::*;
-        use fandhe_core::screens::calendar_add::{add, AddPhase};
+        use fandhe_core::screens::calendar_add::{AddPhase, add};
 
         fn run(state: &mut CalendarAddState) {
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = crate::app::egui_sender(tx, egui::Context::default());
-            drive(
-                state,
-                &sender,
-                &fandhe_device::calendar::UnsupportedCalendar,
-            );
+            let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
+            drive(state, &sender, &crate::contract::UnsupportedCalendar);
             while let Ok(apply) = rx.try_recv() {
                 apply(state);
             }

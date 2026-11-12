@@ -1073,6 +1073,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-calendar"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-call-ui"
 version = "0.2.0"
 dependencies = [
@@ -1318,6 +1330,7 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "fandhe-cap-ar",
+ "fandhe-cap-calendar",
  "fandhe-cap-call-ui",
  "fandhe-cap-camera-capture",
  "fandhe-cap-device-identifier",

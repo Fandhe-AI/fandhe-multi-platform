@@ -87,7 +87,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "calendar_add" => fandhe_core::screens::calendar_add::current_screen,
-    fandhe_egui_proxy::device::calendar::calendar_add_effect,
+    fandhe_cap_calendar::calendar_add_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "alarm_show" => fandhe_core::screens::alarm_show::current_screen,

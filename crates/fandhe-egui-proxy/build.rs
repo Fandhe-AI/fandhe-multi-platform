@@ -114,9 +114,6 @@ fn build() {
     // 。
     compile_apple_gamepad();
 
-    // `apple/fandhe_apple_calendar.m`（Issue #1224 macOS + #1225 iOS）も macOS 分岐と共用する。
-    compile_apple_calendar();
-
     // `apple/fandhe_apple_photo_library.m`（Issue #1254 macOS + #1255 iOS）も macOS 分岐と共用する。
     compile_apple_photo_library();
 
@@ -374,19 +371,6 @@ fn compile_apple_scanner_devices() {
                 "ImageIO",
                 "UniformTypeIdentifiers",
             ]
-        },
-    );
-}
-
-/// `apple/fandhe_apple_calendar.m` を `cc` でコンパイルし EventKit をリンクする（Issue #1224 macOS + #1225 iOS）。
-/// iOS は EventKitUI も使う。
-fn compile_apple_calendar() {
-    compile_objc(
-        "apple/fandhe_apple_calendar.m",
-        if target_is_ios() {
-            &["EventKit", "EventKitUI", "Foundation", "UIKit"]
-        } else {
-            &["EventKit", "Foundation"]
         },
     );
 }
@@ -1440,7 +1424,6 @@ fn build_macos() {
     compile_apple_contact_picker();
     compile_apple_secure_credential();
     compile_apple_gamepad();
-    compile_apple_calendar();
     compile_apple_photo_library();
     compile_apple_map_view();
     compile_apple_geocoding_search();

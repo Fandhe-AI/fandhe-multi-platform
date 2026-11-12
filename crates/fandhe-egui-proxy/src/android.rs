@@ -214,12 +214,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // 無視させる（`device::photo_pick::bridge::reset` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::photo_pick::reset_pending_tracking();
-    // Issue #1226: `calendar::bridge::SLOT` もプロセス static のため再生成をまたいで残る。
-    // 保留中の要求は復元せず破棄し、旧要求の遅延完了を id 不一致で無視させる
-    // （`device::calendar::reset_pending_tracking` doc 参照）。Java 側に no-op スタブは
-    // 置かない（`request_calendar_insert` を経ないと `nativeOnCalendarResult` は呼ばれない）。
-    #[cfg(feature = "device")]
-    crate::device::calendar::reset_pending_tracking();
     // Issue #1254: `photo_save::bridge::SLOT` も同様。保留中の保存要求は復元せず破棄し、
     // 旧要求の遅延完了を id 不一致で無視させる（`device::photo_save::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

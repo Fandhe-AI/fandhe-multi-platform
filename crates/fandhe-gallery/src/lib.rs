@@ -84,6 +84,10 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 残すと次の操作と OS 側の表示が食い違う（`fandhe_cap_live_activity::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_live_activity::reset_pending_tracking();
+    // 予定追加の保留中の要求も破棄する（`SLOT` はプロセス static のため再生成をまたいで残る。
+    // `fandhe_cap_calendar::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_calendar::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 

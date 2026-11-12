@@ -42,7 +42,7 @@
 //! 既知の天井: 件名 200 文字、ローカル時刻のみ、終日・繰り返し・通知は扱わない。
 //! 件名・日時はログへ出力しない（security.md A09）。
 
-use crate::DeviceError;
+use crate::error::CalendarError;
 
 /// 追加の結果。`Saved` 以外を「保存した」と見せない（モジュール doc の契約）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,8 +96,8 @@ fn days_in_month(y: i32, m: u8) -> u8 {
 }
 
 /// `YYYY-MM-DD HH:MM`（桁数固定・ASCII のみ）を解釈する。
-fn parse_local(s: &str) -> Result<LocalDateTime, DeviceError> {
-    let err = || DeviceError::InvalidInput("calendar time");
+fn parse_local(s: &str) -> Result<LocalDateTime, CalendarError> {
+    let err = || CalendarError::InvalidInput("calendar time");
     let b = s.as_bytes();
     if !s.is_ascii()
         || b.len() != 16
@@ -108,7 +108,7 @@ fn parse_local(s: &str) -> Result<LocalDateTime, DeviceError> {
     {
         return Err(err());
     }
-    let num = |r: std::ops::Range<usize>| -> Result<u32, DeviceError> {
+    let num = |r: std::ops::Range<usize>| -> Result<u32, CalendarError> {
         let t = &s[r];
         if t.bytes().all(|c| c.is_ascii_digit()) {
             t.parse().map_err(|_| err())
@@ -138,14 +138,14 @@ fn parse_local(s: &str) -> Result<LocalDateTime, DeviceError> {
 impl EventDraft {
     /// 件名・開始・終了を検査する。件名は trim 後 1〜200 文字・NUL なし、日時は
     /// `YYYY-MM-DD HH:MM`、終了は開始以降（同時刻は許す）。
-    pub fn parse(title: &str, start: &str, end: &str) -> Result<Self, DeviceError> {
+    pub fn parse(title: &str, start: &str, end: &str) -> Result<Self, CalendarError> {
         let title = title.trim();
         if title.is_empty() || title.chars().count() > MAX_TITLE_CHARS || title.contains('\0') {
-            return Err(DeviceError::InvalidInput("calendar title"));
+            return Err(CalendarError::InvalidInput("calendar title"));
         }
         let (start, end) = (parse_local(start)?, parse_local(end)?);
         if end < start {
-            return Err(DeviceError::InvalidInput("calendar range"));
+            return Err(CalendarError::InvalidInput("calendar range"));
         }
         Ok(Self {
             title: title.to_string(),
@@ -173,15 +173,15 @@ impl EventDraft {
 /// 予定追加の契約。
 pub trait CalendarEvents: Send + Sync {
     /// 予定を 1 件追加する。固定タイムアウトは掛けない。
-    fn add_event(&self, draft: &EventDraft) -> Result<AddEventOutcome, DeviceError>;
+    fn add_event(&self, draft: &EventDraft) -> Result<AddEventOutcome, CalendarError>;
 }
 
 /// 対応不可プラットフォーム用。常に `Unsupported("calendar")`。
 pub struct UnsupportedCalendar;
 
 impl CalendarEvents for UnsupportedCalendar {
-    fn add_event(&self, _draft: &EventDraft) -> Result<AddEventOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("calendar"))
+    fn add_event(&self, _draft: &EventDraft) -> Result<AddEventOutcome, CalendarError> {
+        Err(CalendarError::Unsupported)
     }
 }
 
@@ -197,7 +197,7 @@ mod tests {
         for bad in ["", "   ", "a\0b"] {
             assert!(matches!(
                 EventDraft::parse(bad, S, E),
-                Err(DeviceError::InvalidInput("calendar title"))
+                Err(CalendarError::InvalidInput("calendar title"))
             ));
         }
         assert!(EventDraft::parse(&"あ".repeat(201), S, E).is_err());
@@ -221,7 +221,7 @@ mod tests {
             assert!(
                 matches!(
                     EventDraft::parse("a", bad, "2030-01-01 00:00"),
-                    Err(DeviceError::InvalidInput("calendar time"))
+                    Err(CalendarError::InvalidInput("calendar time"))
                 ),
                 "{bad}"
             );
@@ -234,7 +234,7 @@ mod tests {
     fn range_rules() {
         assert!(matches!(
             EventDraft::parse("a", "2026-10-10 11:00", "2026-10-10 10:59"),
-            Err(DeviceError::InvalidInput("calendar range"))
+            Err(CalendarError::InvalidInput("calendar range"))
         ));
         assert!(EventDraft::parse("a", E, E).is_ok());
     }
@@ -244,7 +244,7 @@ mod tests {
         let d = EventDraft::parse("a", S, E).unwrap();
         assert!(matches!(
             UnsupportedCalendar.add_event(&d),
-            Err(DeviceError::Unsupported("calendar"))
+            Err(CalendarError::Unsupported)
         ));
     }
 

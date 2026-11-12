@@ -434,21 +434,6 @@ public class MainActivity extends GameActivity {
     // 4=内部エラー（`notify()` 呼び出し自体の失敗）。
     private static native void nativeOnNotificationResult(long requestId, int code);
 
-    // 予定の追加（Issue #1226）。Rust 側 `device/calendar.rs::bridge` と pull 型で橋渡しする。
-    // 結果コード（本ファイルが SSOT、Rust 側 `calendar::outcome_from_android_code` の doc と
-    // 対）: 0=編集画面へ渡した（保存の有無は分からない）, 1=カレンダーアプリ無し,
-    // 2=非前景・破棄中で起動しなかった, 3=その他の起動失敗。
-    private static native void nativeOnCalendarResult(long requestId, int code);
-
-    private static final int CALENDAR_RESULT_HANDED = 0;
-    private static final int CALENDAR_RESULT_NO_APP = 1;
-    private static final int CALENDAR_RESULT_BACKGROUND = 2;
-    private static final int CALENDAR_RESULT_LAUNCH_FAILED = 3;
-
-    // 新しい要求に差し替えられた旧要求を UI スレッド側で捨てるための追跡。
-    private static final RequestTracker calendarRequest = new RequestTracker();
-
-
     // 上記 code 定数（`requestNotificationPermission`/`requestNotification`/
     // `postNotification` からも参照するため）。
     private static final int NOTIFICATION_RESULT_SUBMITTED = 0;
@@ -3781,49 +3766,6 @@ public class MainActivity extends GameActivity {
         micTempFile = tempFile;
         micStartedAt = SystemClock.elapsedRealtime();
         nativeOnMicRecordStarted(requestId);
-    }
-
-    // Rust 側 `device/android.rs::request_calendar_insert` から JNI 経由で呼ばれる
-    // （Issue #1226）。カレンダーアプリの編集画面（`ACTION_INSERT`）を開くだけで権限は
-    // 使わない。結果コードは `startActivity` が例外なく戻った時点で返し、編集画面からの
-    // 戻りは待たない（結果コードは保存の有無を表さないため）。件名・日時はログへ出さない。
-    private void requestCalendarInsert(long requestId, String title,
-            int sy, int smo, int sd, int sh, int smi,
-            int ey, int emo, int ed, int eh, int emi) {
-        calendarRequest.track(requestId);
-        runOnUiThread(() -> {
-            if (!calendarRequest.complete(requestId)) {
-                return; // 新しい要求に差し替えられた旧要求
-            }
-            if (isFinishing() || isDestroyed() || !activityResumed) {
-                // 背景からの起動は OS に黙って抑止されうる（嘘の成功の防止）。
-                nativeOnCalendarResult(requestId, CALENDAR_RESULT_BACKGROUND);
-                return;
-            }
-            // th_TH 等で仏暦になる Calendar.getInstance() を避け、西暦固定にする。
-            // 1582 年より前もユリウス暦へ倒さず、Rust 側の検証（先発グレゴリオ暦）と暦を揃える。
-            Calendar begin = new GregorianCalendar();
-            ((GregorianCalendar) begin).setGregorianChange(new java.util.Date(Long.MIN_VALUE));
-            begin.clear();
-            begin.set(sy, smo - 1, sd, sh, smi);
-            Calendar end = new GregorianCalendar();
-            ((GregorianCalendar) end).setGregorianChange(new java.util.Date(Long.MIN_VALUE));
-            end.clear();
-            end.set(ey, emo - 1, ed, eh, emi);
-            Intent intent = new Intent(Intent.ACTION_INSERT)
-                    .setData(CalendarContract.Events.CONTENT_URI)
-                    .putExtra(CalendarContract.Events.TITLE, title)
-                    .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, begin.getTimeInMillis())
-                    .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, end.getTimeInMillis());
-            try {
-                startActivity(intent);
-                nativeOnCalendarResult(requestId, CALENDAR_RESULT_HANDED);
-            } catch (ActivityNotFoundException e) {
-                nativeOnCalendarResult(requestId, CALENDAR_RESULT_NO_APP);
-            } catch (RuntimeException e) {
-                nativeOnCalendarResult(requestId, CALENDAR_RESULT_LAUNCH_FAILED);
-            }
-        });
     }
 
     // 写真ライブラリ保存（Issue #1256）。Rust 側 `device/android_photo_library.rs` から JNI で

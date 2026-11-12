@@ -492,10 +492,6 @@ pub mod apple_ble_peripheral;
 /// 呼ぶ C ABI ラッパー）。`device/bluetooth_le.rs` の iOS / macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_bluetooth_le;
-/// Issue #1224 macOS + #1225 iOS: 予定追加実装（`apple/fandhe_apple_calendar.m` を呼ぶ
-/// C ABI ラッパー）。`device/calendar.rs` の iOS / macOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_calendar;
 /// Issue #1220 macOS + #1221 iOS: 連絡先選択実装（`apple/fandhe_apple_contact_picker.m` を
 /// 呼ぶ C ABI ラッパー）。`device/contact_pick.rs` の Apple 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -707,10 +703,6 @@ pub mod bluetooth_classic;
 /// Phase 11 の拡充ループ（親 #1059、Issue #1060）: BLE スキャンの effect ドライバ
 /// （iOS/macOS/Windows/Android 実装、他 OS は `UnsupportedBluetoothLe` 固定。Web は別経路 `fandhe-web-dom`（#1063））。
 pub mod bluetooth_le;
-/// Issue #1224: 予定を 1 件追加する型サンプル「予定の追加」の effect ドライバ
-/// （macOS は EventKit・Android は `Intent.ACTION_INSERT`（#1226）の pull 型 `bridge`、
-/// それ以外は非対応表示）。
-pub mod calendar;
 /// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得の effect ドライバ
 /// （iOS #813・Android #814・macOS #1066 は実装済み、Windows #1102 も実装済みで、他 OS は `UnsupportedCameraPreview`
 /// 固定。Web は `fandhe-web-dom`、#815）。

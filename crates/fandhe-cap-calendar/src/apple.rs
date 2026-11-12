@@ -1,4 +1,4 @@
-//! macOS / iOS 向け予定追加実装（Issue #1224・#1225）。`device/calendar.rs` の
+//! macOS / iOS 向け予定追加実装（Issue #1224・#1225）。`driver.rs` の
 //! iOS / macOS 経路から呼ばれ、
 //! EventKit 実装（`apple/fandhe_apple_calendar.m`、`build.rs` が
 //! feature `device` 有効時のみコンパイル・リンクする。iOS は main queue で
@@ -7,13 +7,13 @@
 //! （`apple_biometric.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側の完了から [`fandhe_rust_calendar_outcome`] が呼ばれ、`device/calendar::bridge`
-//! へ結果を置く（pull 型）。結果コード → 結果の写像は `device/calendar.rs::outcome_from_code`
+//! へ結果を置く（pull 型）。結果コード → 結果の写像は `driver.rs`::outcome_from_code`
 //! に一本化する。件名・日時はログへ出力しない（security.md A09）。
 
 use std::ffi::CString;
 use std::os::raw::c_char;
 
-use fandhe_device::calendar::EventDraft;
+use crate::contract::EventDraft;
 
 // SAFETY: `apple/fandhe_apple_calendar.m` が定義する C ABI。契約は `.m` 冒頭コメントと
 // 下記 `present` のコメントに集約する。
@@ -36,7 +36,7 @@ pub(crate) fn present(request_id: u64, draft: &EventDraft) -> bool {
     let Ok(title) = CString::new(draft.title()) else {
         return false;
     };
-    let pack = |t: fandhe_device::calendar::LocalDateTime| {
+    let pack = |t: crate::contract::LocalDateTime| {
         [
             t.year,
             i32::from(t.month),
@@ -57,16 +57,16 @@ pub(crate) fn present(request_id: u64, draft: &EventDraft) -> bool {
 }
 
 /// `.m` 側の完了から呼ばれる `extern "C"` 関数。コードの解釈は
-/// `device/calendar.rs::outcome_from_code`。任意スレッドから呼ばれてよい
+/// `driver.rs`::outcome_from_code`。任意スレッドから呼ばれてよい
 /// （`bridge` は `Mutex`）。画面への反映は毎フレームの `drive_callback` が行う。
 ///
 /// iOS では EventKitUI の delegate が egui の `update` 外から呼ぶため、結果を置いた後に
 /// `ios::request_repaint` で次フレームを起こす（`apple_biometric.rs` と同じ理由。
 /// macOS は event loop が別途 repaint を要求するためここでは呼ばない）。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_calendar_outcome(request_id: u64, code: i32) {
-    super::calendar::bridge::deliver(request_id, super::calendar::outcome_from_code(code));
+    crate::driver::bridge::deliver(request_id, crate::driver::outcome_from_code(code));
     #[cfg(target_os = "ios")]
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }

@@ -18,6 +18,7 @@ device = [
   "fandhe-egui-proxy/device",
   # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
   "dep:fandhe-cap-ar",
+  "dep:fandhe-cap-calendar",
   "dep:fandhe-cap-call-ui",
   "dep:fandhe-cap-camera-capture",
   "dep:fandhe-cap-device-identifier",
@@ -64,6 +65,9 @@ bundle-id = "com.fandhe.iosapp"
 NSCameraUsageDescription = "型サンプル「カメラ撮影」「AR 表示」「書類スキャン」「動画の撮影」「カメラのライブ映像」「接続した機器からの取り込み」の動作確認に使います"
 NSMotionUsageDescription = "型サンプル「歩数」「気圧」「行動認識」の動作確認に使います"
 
+[package.metadata.fandhe-app.macos.usage-descriptions]
+NSCalendarsWriteOnlyAccessUsageDescription = "型サンプル「予定の追加」の動作確認に使います"
+
 [build-dependencies]
 # Apple のリンク指定（弱リンク・rpath・Info.plist 埋め込み）を `fandhe-egui-proxy` から受け取って出し直す。
 fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
@@ -79,6 +83,7 @@ egui = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
 fandhe-cap-ar = { path = "../fandhe-cap-ar", optional = true }
+fandhe-cap-calendar = { path = "../fandhe-cap-calendar", optional = true }
 fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui", optional = true }
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
 fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier", optional = true }
