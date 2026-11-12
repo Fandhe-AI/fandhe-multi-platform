@@ -247,8 +247,6 @@ fn build() {
     compile_ios_pen_stylus();
     // `ios/fandhe_ios_ar.m`（Issue #308）。iOS 分岐のみ。
     compile_ios_ar();
-    // `ios/fandhe_ios_file_watch.m`（Issue #1412）。iOS 分岐のみ。
-    compile_ios_file_watch();
     // `ios/fandhe_ios_display_refresh_hdr.m`（Issue #871）。iOS 分岐のみ。
     compile_ios_display_refresh_hdr();
     // `ios/fandhe_ios_call_ui.m`（Issue #277）。iOS 分岐のみ（macOS は対応表で no）。
@@ -882,15 +880,6 @@ fn compile_macos_removable_storage() {
     );
 }
 
-/// `macos/fandhe_macos_file_watch.m` を `cc` でコンパイルする（Issue #1410）。**macOS 分岐のみ**
-/// から呼ばれる（`src/device/macos_file_watch.rs` が使う）。FSEvents のため CoreServices をリンクする。
-fn compile_macos_file_watch() {
-    compile_objc(
-        "macos/fandhe_macos_file_watch.m",
-        &["CoreServices", "Foundation"],
-    );
-}
-
 /// `macos/fandhe_macos_app_progress_attention.m` を `cc` でコンパイルする（Issue #860）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_app_progress_attention.rs` が使う）。
 fn compile_macos_app_progress_attention() {
@@ -1467,12 +1456,6 @@ fn compile_ios_live_activity() {
     });
 }
 
-/// `ios/fandhe_ios_file_watch.m` を `cc` でコンパイルする（Issue #1412）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_file_watch.rs` が使う）。
-fn compile_ios_file_watch() {
-    compile_objc("ios/fandhe_ios_file_watch.m", &["Foundation"]);
-}
-
 /// `ios/fandhe_ios_background_task.m` を `cc` でコンパイルし BackgroundTasks を
 /// リンクする（Issue #1045）。**iOS 分岐のみ**から呼ばれる（`BGTaskScheduler` は
 /// iOS 専用、doc 参照）。
@@ -1629,8 +1612,6 @@ fn build_macos() {
     compile_apple_now_playing();
     // `macos/fandhe_macos_spell_check.m`（Issue #578）も macOS 専用。
     compile_macos_spell_check();
-    // `macos/fandhe_macos_file_watch.m`（Issue #1410）も macOS 専用。CoreServices を使う。
-    compile_macos_file_watch();
     // `macos/fandhe_macos_sleep_lock_events.m`（Issue #810）も macOS 専用。
     compile_macos_sleep_lock_events();
     // `macos/fandhe_macos_app_lifecycle.m`（Issue #893）も macOS 専用。

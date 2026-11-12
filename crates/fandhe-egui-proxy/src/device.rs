@@ -154,11 +154,6 @@ pub mod android_file_preview;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_file_provider;
-/// Issue #1410: Android 向けフォルダ変更監視実装。`device/file_watch.rs` の
-/// Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_file_watch;
 /// Issue #461: Android 向けライト（トーチ）実装（`FlashlightHelper` との JNI 橋渡し）。
 /// `device/flashlight.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -803,9 +798,6 @@ pub mod file_preview;
 /// Phase 11 の拡充ループ（親 #194、Issue #1019）: 自アプリの保存先を OS のファイル画面に出す effect ドライバ
 /// （Android はスタブ、iOS・macOS・Windows は保留、他 OS は `UnsupportedFileProvider` 固定）。
 pub mod file_provider;
-/// Phase 11 の拡充ループ（親 #1143、Issue #1410）: フォルダの変更監視の effect ドライバ（macOS・Windows・iOS・Android 実装、
-/// 他 OS は `UnsupportedFileWatch` 固定）。
-pub mod file_watch;
 /// Phase 11 の拡充ループ（親 #106、Issue #458）: ライト（トーチ）の effect ドライバ
 /// （iOS・Android・Windows 実装、他 OS は `UnsupportedFlashlight`
 /// 固定。Web は `fandhe-web-dom`）。
@@ -979,11 +971,6 @@ pub mod ios_file_association;
 /// `device/file_preview.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_file_preview;
-/// Issue #1410: iOS 向けフォルダ変更監視実装。`device/file_watch.rs` の
-/// iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_file_watch;
 /// Issue #460: iOS 向けライト（トーチ）実装（`ios/fandhe_ios_flashlight.m` を呼ぶ C ABI ラッパー）。
 /// `device/flashlight.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1269,10 +1256,6 @@ pub mod macos_eye_dropper;
 /// C ABI ラッパーと窓が閉じた通知の受け口）。`device/file_preview.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_file_preview;
-/// Issue #1410: macOS 向けフォルダ変更監視実装（`macos/fandhe_macos_file_watch.m`、FSEvents を呼ぶ
-/// C ABI ラッパー）。`device/file_watch.rs` の macOS 経路から呼ばれる。
-#[cfg(target_os = "macos")]
-pub mod macos_file_watch;
 /// Issue #766: macOS 向けグローバルホットキー実装（`macos/fandhe_macos_global_hotkey.m`（Carbon）を呼ぶ
 /// C ABI ラッパーと押下の受け口）。`device/global_hotkey.rs` の macos 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -1777,10 +1760,6 @@ pub mod windows_file_association;
 /// `device/file_preview.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_file_preview;
-/// Issue #1410: Windows 向けフォルダ変更監視実装。`device/file_watch.rs` の
-/// Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_file_watch;
 /// Issue #459: Windows 向けライト（トーチ）実装（`Lamp`）。
 /// `device/flashlight.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

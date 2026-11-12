@@ -9,7 +9,7 @@
 //! 置く。選んだフォルダは利用者のファイルなので、確認用の作成・更新・削除は受け付けない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
-//! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の `device/file_watch.rs` が
+//! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-cap-file-watch`（`src/driver.rs`） が
 //! [`take_start`] / [`take_op`] / [`take_pick`] で要求を観測し、[`finish_start`] / [`apply_scan`] / [`mark_failed`] /
 //! [`finish_op`] / [`finish_pick`] で結果を注入する。
 //!

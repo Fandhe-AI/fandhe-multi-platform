@@ -1126,6 +1126,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-file-watch"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "libc",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-home-widget"
 version = "0.2.0"
 dependencies = [
@@ -1292,6 +1306,7 @@ dependencies = [
  "fandhe-cap-camera-capture",
  "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
+ "fandhe-cap-file-watch",
  "fandhe-cap-home-widget",
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",
@@ -1394,6 +1409,7 @@ dependencies = [
  "console_error_panic_hook",
  "fandhe-cap-accessibility-prefs",
  "fandhe-cap-audio-devices",
+ "fandhe-cap-file-watch",
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",
  "fandhe-cap-multi-display",

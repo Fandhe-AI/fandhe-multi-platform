@@ -1,12 +1,12 @@
 //! macOS 向けフォルダ変更監視実装（Issue #1410）。`macos/fandhe_macos_file_watch.m`（CoreServices の
 //! FSEventStream。`build.rs` が macOS 分岐で feature `device` 有効時にコンパイルする）を
 //! `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
-//! `device/file_watch.rs` の macOS 経路から UI スレッドで呼ばれ、契約は `fandhe_device::file_watch`。
+//! `fandhe-cap-file-watch/src/driver.rs` の macOS 経路から UI スレッドで呼ばれ、契約は `fandhe_cap_file_watch`。
 //!
 //! # 方式
 //!
 //! OS 資源は `id` で `.m` が所有し、Rust へは生ポインタを渡さない。変化は `.m` が
-//! `fandhe_rust_file_watch_fire`（`device/file_watch.rs`）経由で `id` の登録表を引いて合図にする。
+//! `fandhe_rust_file_watch_fire`（`fandhe-cap-file-watch/src/driver.rs`）経由で `id` の登録表を引いて合図にする。
 //! 停止（[`MacGuard`] の drop）は「登録解除 → `.m` の停止（実行中コールバックの終了を待つ）」の順。
 //! 実パス（`canonicalize`）で開始する。`/var` → `/private/var` のような symlink 経由のパスでは
 //! FSEvents が届かないため。
@@ -21,16 +21,16 @@ use std::ffi::CString;
 use std::path::Path;
 use std::sync::Arc;
 
-use fandhe_device::file_watch::{FileWatch, OnSignal, WatchGuard};
-use fandhe_device::DeviceError;
+use crate::contract::{FileWatch, OnSignal, WatchGuard};
+use crate::error::FileWatchError;
 
-use super::file_watch::{register, unregister};
+use crate::driver::{register, unregister};
 
 mod ffi {
     // SAFETY: `macos/fandhe_macos_file_watch.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_file_watch_start(id: u64, path: *const std::ffi::c_char) -> i32;
         fn fandhe_macos_file_watch_stop(id: u64);
     }
@@ -69,8 +69,12 @@ impl Drop for MacGuard {
 struct MacFileWatch;
 
 impl FileWatch for MacFileWatch {
-    fn start(&self, dir: &Path, on_signal: OnSignal) -> Result<Box<dyn WatchGuard>, DeviceError> {
-        const FAILED: DeviceError = DeviceError::Internal("file_watch start");
+    fn start(
+        &self,
+        dir: &Path,
+        on_signal: OnSignal,
+    ) -> Result<Box<dyn WatchGuard>, FileWatchError> {
+        const FAILED: FileWatchError = FileWatchError::Internal;
         let real = std::fs::canonicalize(dir).map_err(|_| FAILED)?;
         let c_path = CString::new(std::os::unix::ffi::OsStrExt::as_bytes(real.as_os_str()))
             .map_err(|_| FAILED)?;
@@ -83,7 +87,7 @@ impl FileWatch for MacFileWatch {
     }
 }
 
-/// macOS の `FileWatch` 実装を返す（`device/file_watch.rs` の dispatch から呼ばれる）。
+/// macOS の `FileWatch` 実装を返す（`fandhe-cap-file-watch/src/driver.rs` の dispatch から呼ばれる）。
 pub(crate) fn implementation() -> Arc<dyn FileWatch> {
     Arc::new(MacFileWatch)
 }
@@ -91,7 +95,7 @@ pub(crate) fn implementation() -> Arc<dyn FileWatch> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::file_watch::WatchSignal;
+    use crate::contract::WatchSignal;
     use std::sync::mpsc;
     use std::time::Duration;
 
@@ -130,6 +134,6 @@ mod tests {
     fn missing_folder_fails_without_leaving_registration() {
         let dir = tmp("missing").join("nope");
         let r = implementation().start(&dir, Arc::new(|_| {}));
-        assert!(matches!(r, Err(DeviceError::Internal("file_watch start"))));
+        assert!(matches!(r, Err(FileWatchError::Internal)));
     }
 }

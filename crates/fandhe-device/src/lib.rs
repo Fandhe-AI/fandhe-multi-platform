@@ -99,8 +99,6 @@ pub mod file_picker;
 pub mod file_preview;
 /// Phase 11 の拡充ループ（親 #194、Issue #1019）: 自アプリの保存先を OS のファイル画面に出す（一覧・置く・消すの契約と共通実装）。
 pub mod file_provider;
-/// Phase 11 の拡充ループ（親 #1143、Issue #1410）: 作業フォルダ直下のファイルの作成・更新・削除の監視。
-pub mod file_watch;
 /// Phase 11 の拡充ループ（親 #106、Issue #458）: ライト（トーチ）の点灯 / 消灯。
 pub mod flashlight;
 /// Phase 11（端末機能の拡充ループ、親 #104、Issue #438）: 集中モード・おやすみモードの状態。

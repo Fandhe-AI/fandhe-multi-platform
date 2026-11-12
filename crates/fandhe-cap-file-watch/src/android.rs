@@ -1,12 +1,12 @@
 //! Android 向けフォルダ変更監視実装（Issue #1413）。Rust から inotify（`FileObserver` が包んでいる
-//! のと同じカーネル機能）を直接呼び、アプリ専用の作業フォルダを監視する。`device/file_watch.rs` の
-//! Android 経路（UI スレッド）から呼ばれ、契約は `fandhe_device::file_watch`。JNI・Java・権限は不要
+//! のと同じカーネル機能）を直接呼び、アプリ専用の作業フォルダを監視する。`fandhe-cap-file-watch/src/driver.rs` の
+//! Android 経路（UI スレッド）から呼ばれ、契約は `fandhe_cap_file_watch`。JNI・Java・権限は不要
 //! （作業フォルダは内部ストレージ）。参考: <https://man7.org/linux/man-pages/man7/inotify.7.html>
 //!
 //! # 方式
 //!
 //! 監視 1 件につき専用スレッド 1 本が、停止用 eventfd と inotify fd を `poll` で待つ。イベントの
-//! 中身（ファイル名）は読まず、「変化の合図」として `register` / `fire`（`device/file_watch.rs`）へ送る。
+//! 中身（ファイル名）は読まず、「変化の合図」として `register` / `fire`（`fandhe-cap-file-watch/src/driver.rs`）へ送る。
 //! 停止（`AndroidGuard` の drop）は「登録解除 → eventfd 書き込み → join」の順で、drop が戻ると
 //! 以後コールバックは走らない。Activity を作り直すと画面状態が初期化され、ドライバの照合が
 //! 古い監視を drop する（遅れた合図も id 照合で捨てられる）。
@@ -22,7 +22,7 @@
 //! - 守る: 開始失敗で登録表・fd・スレッドを残さない。パス・ファイル名・errno をログ・エラーに出さない
 //! - 守らない範囲: 複数プロセス、同一ミリ秒の変化の順序、バックグラウンド中の遅れ
 
-use fandhe_device::file_watch::WatchSignal;
+use crate::contract::WatchSignal;
 
 // inotify の Linux ABI 定数（Android ビルドでは imp 内で libc の値との一致をコンパイル時に検査する）。
 const IN_MODIFY: u32 = 0x2;
@@ -68,11 +68,11 @@ mod imp {
     use std::sync::Arc;
     use std::thread::JoinHandle;
 
-    use fandhe_device::file_watch::{FileWatch, OnSignal, WatchGuard, WatchSignal};
-    use fandhe_device::DeviceError;
+    use crate::contract::{FileWatch, OnSignal, WatchGuard, WatchSignal};
+    use crate::error::FileWatchError;
 
     use super::*;
-    use crate::device::file_watch::{fire, register, unregister};
+    use crate::driver::{fire, register, unregister};
 
     const _: () = {
         assert!(IN_MODIFY == libc::IN_MODIFY);
@@ -93,7 +93,7 @@ mod imp {
     /// 1 バッチで読む最大回数（4096 バイト × 16）。
     const MAX_READS: usize = 16;
 
-    const FAILED: DeviceError = DeviceError::Internal("file_watch start");
+    const FAILED: FileWatchError = FileWatchError::Internal;
 
     /// 新規 fd を直ちに所有物へ包む。負なら None。
     #[allow(unsafe_code)]
@@ -203,7 +203,7 @@ mod imp {
             &self,
             dir: &Path,
             on_signal: OnSignal,
-        ) -> Result<Box<dyn WatchGuard>, DeviceError> {
+        ) -> Result<Box<dyn WatchGuard>, FileWatchError> {
             let path = CString::new(dir.as_os_str().as_bytes()).map_err(|_| FAILED)?;
             // SAFETY: 引数は有効なフラグのみ。
             let ino = own(unsafe { libc::inotify_init1(libc::IN_CLOEXEC | libc::IN_NONBLOCK) })
@@ -247,7 +247,7 @@ mod imp {
         }
     }
 
-    /// Android の `FileWatch` 実装を返す（`device/file_watch.rs` の dispatch から呼ばれる）。
+    /// Android の `FileWatch` 実装を返す（`fandhe-cap-file-watch/src/driver.rs` の dispatch から呼ばれる）。
     pub(crate) fn implementation() -> Arc<dyn FileWatch> {
         Arc::new(AndroidFileWatch)
     }

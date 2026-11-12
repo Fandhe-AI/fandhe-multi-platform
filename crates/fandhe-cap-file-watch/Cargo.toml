@@ -1,0 +1,47 @@
+[package]
+name = "fandhe-cap-file-watch"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の file-watch の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+# 共有の検証（`clean_text` など）。契約は `fandhe-device` に残る共有部品を参照する。
+fandhe-device = { path = "../fandhe-device" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+# inotify（`android.rs`）。android-activity 等の推移的依存で既に解決済みのため新規パッケージは増えない。
+libc = "0.2"
+
+# `ReadDirectoryChangesW` による監視（`windows.rs`）。
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Threading",
+  "Win32_System_IO",
+] }
+
+[build-dependencies]
+# iOS・macOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。権限・usage description・framework は手で足す（cargo fandhe check が検証する）。
+[package.metadata.fandhe]
+id = "file-watch"
+
+[package.metadata.fandhe.macos]
+frameworks = ["CoreServices"]
+
+[lints]
+workspace = true

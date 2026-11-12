@@ -1,8 +1,8 @@
 //! Phase 11 の拡充ループ（親 #1143）型サンプル「フォルダの変更監視」（Issue #1410）の effect ドライバ。
 //! `fandhe_core::screens::file_watch_show`（端末依存ゼロ）の要求を `take_start` / `take_op` で観測し、
-//! `fandhe_device::file_watch::FileWatch` を呼んで、結果を `CompletionSender` 経由で注入する
+//! `crate::contract::FileWatch` を呼んで、結果を `CompletionSender` 経由で注入する
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる
-//! 契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::file_watch`。
+//! 契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_cap_file_watch`。
 //!
 //! # OS 別実装の差し込み口
 //!
@@ -36,24 +36,24 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use fandhe_core::screens::file_watch_show::{
-    apply_scan, finish_op, finish_pick, finish_start, mark_failed, take_op, take_pick, take_start,
-    FileWatchShowState, OpKind, PickedFolder, RecordKind, StartInfo, WatchFailure, WatchPhase,
-};
 #[cfg(not(any(
     target_os = "windows",
     target_os = "macos",
     target_os = "ios",
     target_os = "android"
 )))]
-use fandhe_device::file_watch::UnsupportedFileWatch;
-use fandhe_device::file_watch::{
-    create_sample, delete_sample, diff, scan, update_sample, ChangeKind, FileWatch, FolderScan,
-    OnSignal, WatchGuard, WatchSignal,
+use crate::contract::UnsupportedFileWatch;
+use crate::contract::{
+    ChangeKind, FileWatch, FolderScan, OnSignal, WatchGuard, WatchSignal, create_sample,
+    delete_sample, diff, scan, update_sample,
 };
-use fandhe_device::DeviceError;
+use crate::error::FileWatchError;
+use fandhe_core::screens::file_watch_show::{
+    FileWatchShowState, OpKind, PickedFolder, RecordKind, StartInfo, WatchFailure, WatchPhase,
+    apply_scan, finish_op, finish_pick, finish_start, mark_failed, take_op, take_pick, take_start,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 画面へ出す固定の失敗文言（OS の生コード・名前は出さない）。
 const START_FAILED: &str = "監視の開始";
@@ -67,19 +67,19 @@ const WORK_DIR_NAME: &str = "file-watch";
 fn platform_file_watch() -> Arc<dyn FileWatch> {
     #[cfg(target_os = "windows")]
     {
-        super::windows_file_watch::implementation()
+        crate::windows::implementation()
     }
     #[cfg(target_os = "macos")]
     {
-        super::macos_file_watch::implementation()
+        crate::macos::implementation()
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_file_watch::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_file_watch::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(
         target_os = "windows",
@@ -147,7 +147,7 @@ fn signal_from_code(kind: i32) -> WatchSignal {
 /// `.m`（macOS / iOS）のコールバックから呼ばれる受け口。`kind` は 0 = 変化、それ以外 = 失敗。
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_file_watch_fire(id: u64, kind: i32) {
     fire(id, signal_from_code(kind));
 }
@@ -183,15 +183,14 @@ static NEXT_PICK_ID: AtomicU64 = AtomicU64::new(1);
 fn do_pick(
     sender: &Sender,
     picked: &PickedSlot,
-    pick: &dyn Fn() -> Result<Option<PathBuf>, DeviceError>,
+    pick: &dyn Fn() -> Result<Option<PathBuf>, FileWatchError>,
     generation: u64,
 ) {
     let result = pick()
         .and_then(|o| match o {
             None => Ok(None),
             Some(p) => {
-                let real = std::fs::canonicalize(&p)
-                    .map_err(|_| DeviceError::Internal("file_watch pick"))?;
+                let real = std::fs::canonicalize(&p).map_err(|_| FileWatchError::Internal)?;
                 let label = real
                     .file_name()
                     .and_then(|n| fandhe_device::device_info::clean_text(&n.to_string_lossy()))
@@ -208,23 +207,31 @@ fn do_pick(
 }
 
 /// 作業フォルダを解決して作る。外部入力からパスを組み立てない。
-fn work_dir() -> Result<PathBuf, DeviceError> {
+fn work_dir() -> Result<PathBuf, FileWatchError> {
     #[cfg(target_os = "ios")]
-    let base = super::ios::documents_dir()?.0;
+    let base = {
+        // iOS はアプリコンテナ直下の `Documents/`（`$HOME` がコンテナのルートを指す）。
+        #[allow(deprecated)]
+        std::env::home_dir()
+            .map(|home| home.join("Documents"))
+            .ok_or(FileWatchError::Unsupported)?
+    };
     #[cfg(target_os = "android")]
-    let base = super::android::data_dir()
-        .ok_or(DeviceError::Internal("file_watch dir"))?
-        .0;
+    let base = fandhe_platform_android::android_app()
+        .and_then(|app| app.internal_data_path())
+        .ok_or(FileWatchError::Internal)?;
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    let base = fandhe_device::storage::FsStorage::desktop_default()?.0;
+    let base = fandhe_device::storage::FsStorage::desktop_default()
+        .map_err(|_| FileWatchError::Internal)?
+        .0;
     let dir = base.join(WORK_DIR_NAME);
-    std::fs::create_dir_all(&dir).map_err(|_| DeviceError::Internal("file_watch dir"))?;
+    std::fs::create_dir_all(&dir).map_err(|_| FileWatchError::Internal)?;
     Ok(dir)
 }
 
-fn to_failure(e: DeviceError, message: &str) -> WatchFailure {
+fn to_failure(e: FileWatchError, message: &str) -> WatchFailure {
     match e {
-        DeviceError::Unsupported(_) => WatchFailure::Unsupported,
+        FileWatchError::Unsupported => WatchFailure::Unsupported,
         _ => WatchFailure::Failed(message.to_string()),
     }
 }
@@ -244,7 +251,7 @@ fn do_start(
     sender: &Sender,
     active: &Mutex<Option<ActiveWatch>>,
     fw: &dyn FileWatch,
-    resolve_dir: &dyn Fn() -> Result<PathBuf, DeviceError>,
+    resolve_dir: &dyn Fn() -> Result<PathBuf, FileWatchError>,
     generation: u64,
 ) -> Result<StartInfo, WatchFailure> {
     let fail = |e| to_failure(e, START_FAILED);
@@ -284,7 +291,7 @@ fn do_start(
     Ok(info)
 }
 
-fn do_op(dir: &std::path::Path, kind: OpKind) -> Result<bool, DeviceError> {
+fn do_op(dir: &std::path::Path, kind: OpKind) -> Result<bool, FileWatchError> {
     match kind {
         OpKind::Create => create_sample(dir).map(|_| true),
         OpKind::Update => update_sample(dir),
@@ -298,18 +305,18 @@ fn drive(
     sender: &Sender,
     active: &Mutex<Option<ActiveWatch>>,
     fw: &dyn FileWatch,
-    resolve_dir: &dyn Fn() -> Result<PathBuf, DeviceError>,
+    resolve_dir: &dyn Fn() -> Result<PathBuf, FileWatchError>,
     picked: &PickedSlot,
-    pick: &dyn Fn() -> Result<Option<PathBuf>, DeviceError>,
+    pick: &dyn Fn() -> Result<Option<PathBuf>, FileWatchError>,
 ) {
     // 0. フォルダ選択（UI スレッドで同期。開始より前に処理して、選択後の開始が新しい選択を使う）。
     // macOS の NSOpenPanel は入れ子 run loop を回すため、ダイアログ表示中に drive が再入しうる。
     // 処理中の世代は飛ばし、同じ世代でダイアログを二重に開かない（UI スレッド限定の in-flight ガード）。
-    if let Some(generation) = take_pick(state) {
-        if PICK_IN_FLIGHT.with(|c| c.replace(Some(generation))) != Some(generation) {
-            do_pick(sender, picked, pick, generation);
-            PICK_IN_FLIGHT.with(|c| c.set(None));
-        }
+    if let Some(generation) = take_pick(state)
+        && PICK_IN_FLIGHT.with(|c| c.replace(Some(generation))) != Some(generation)
+    {
+        do_pick(sender, picked, pick, generation);
+        PICK_IN_FLIGHT.with(|c| c.set(None));
     }
 
     // 1. 照合: 画面が監視中でない / 世代が違う監視は止める。利用者の停止、`Failed` の合図、
@@ -319,36 +326,32 @@ fn drive(
         let keep = g.as_ref().is_some_and(|w| {
             state.phase != WatchPhase::Idle && state.watch_generation == w.generation
         });
-        if keep {
-            None
-        } else {
-            g.take()
-        }
+        if keep { None } else { g.take() }
     };
     drop(stale); // 停止の待ちはロックの外。
 
     // 2. 開始（完了が届くまでの再実行で二重に起こさない）。
-    if let Some(generation) = take_start(state) {
-        if lock(active).is_none() {
-            // 選んだフォルダがあればその実パス（id 不一致は失敗）、無ければ作業フォルダ。
-            let resolve = || match &state.picked {
-                Some(p) => match lock(picked).as_ref() {
-                    Some((id, path)) if *id == p.id => Ok(path.clone()),
-                    _ => Err(DeviceError::Internal("file_watch picked")),
-                },
-                None => resolve_dir(),
-            };
-            let label = state.picked.as_ref().map(|p| p.label.clone());
-            let result = do_start(sender, active, fw, &resolve, generation).map(|mut info| {
-                if let Some(l) = label {
-                    info.folder = l; // 選んだフォルダはフルパスを出さない。
-                }
-                info
-            });
-            let _ = sender.send(Box::new(move |s: &mut FileWatchShowState| {
-                finish_start(s, generation, result)
-            }));
-        }
+    if let Some(generation) = take_start(state)
+        && lock(active).is_none()
+    {
+        // 選んだフォルダがあればその実パス（id 不一致は失敗）、無ければ作業フォルダ。
+        let resolve = || match &state.picked {
+            Some(p) => match lock(picked).as_ref() {
+                Some((id, path)) if *id == p.id => Ok(path.clone()),
+                _ => Err(FileWatchError::Internal),
+            },
+            None => resolve_dir(),
+        };
+        let label = state.picked.as_ref().map(|p| p.label.clone());
+        let result = do_start(sender, active, fw, &resolve, generation).map(|mut info| {
+            if let Some(l) = label {
+                info.folder = l; // 選んだフォルダはフルパスを出さない。
+            }
+            info
+        });
+        let _ = sender.send(Box::new(move |s: &mut FileWatchShowState| {
+            finish_start(s, generation, result)
+        }));
     }
 
     // 3. 操作。変化そのものは合図 → 再走査の経路で記録に出る。
@@ -367,28 +370,28 @@ fn drive(
     let mut failed = None;
     {
         let mut g = lock(active);
-        if let Some(w) = g.as_mut() {
-            if w.pending.swap(false, Ordering::SeqCst) {
-                match scan(&w.dir) {
-                    Ok(next) => {
-                        let changes: Vec<_> = diff(&w.prev, &next)
-                            .into_iter()
-                            .map(|c| {
-                                let name = fandhe_device::device_info::clean_text(&c.name)
-                                    .unwrap_or_else(|| "?".to_string());
-                                (to_record_kind(c.kind), name)
-                            })
-                            .collect();
-                        let (generation, count, truncated) =
-                            (w.generation, next.files.len(), next.truncated);
-                        w.prev = next;
-                        let _ = sender.send(Box::new(move |s: &mut FileWatchShowState| {
-                            apply_scan(s, generation, changes, count, truncated)
-                        }));
-                    }
-                    // フォルダ消失・走査失敗は止まった監視として失敗にする。
-                    Err(_) => failed = g.take(),
+        if let Some(w) = g.as_mut()
+            && w.pending.swap(false, Ordering::SeqCst)
+        {
+            match scan(&w.dir) {
+                Ok(next) => {
+                    let changes: Vec<_> = diff(&w.prev, &next)
+                        .into_iter()
+                        .map(|c| {
+                            let name = fandhe_device::device_info::clean_text(&c.name)
+                                .unwrap_or_else(|| "?".to_string());
+                            (to_record_kind(c.kind), name)
+                        })
+                        .collect();
+                    let (generation, count, truncated) =
+                        (w.generation, next.files.len(), next.truncated);
+                    w.prev = next;
+                    let _ = sender.send(Box::new(move |s: &mut FileWatchShowState| {
+                        apply_scan(s, generation, changes, count, truncated)
+                    }));
                 }
+                // フォルダ消失・走査失敗は止まった監視として失敗にする。
+                Err(_) => failed = g.take(),
             }
         }
     }
@@ -410,16 +413,29 @@ pub fn file_watch_show_effect(state: &FileWatchShowState, sender: &Sender) {
         platform_file_watch().as_ref(),
         &work_dir,
         &PICKED,
-        &fandhe_device::file_picker::pick_folder,
+        &|| {
+            // 共有部品 `pick_folder` の失敗を本機能の失敗へ写す（OS の文言は持ち込まない）。
+            fandhe_device::file_picker::pick_folder().map_err(|e| match e {
+                fandhe_device::DeviceError::Unsupported(_) => FileWatchError::Unsupported,
+                _ => FileWatchError::Internal,
+            })
+        },
     );
 }
 
 #[cfg(test)]
 mod tests {
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     use super::*;
     use fandhe_core::screens::file_watch_show::{
-        create, delete, pick_folder, start, stop, update, FAILED_PREFIX, MONITOR_STOPPED_ERROR,
-        NO_TARGET_STATUS, PICK_UNSUPPORTED_STATUS, UNSUPPORTED_STATUS, WATCHING_STATUS,
+        FAILED_PREFIX, MONITOR_STOPPED_ERROR, NO_TARGET_STATUS, PICK_UNSUPPORTED_STATUS,
+        UNSUPPORTED_STATUS, WATCHING_STATUS, create, delete, pick_folder, start, stop, update,
     };
     use std::sync::atomic::AtomicUsize;
     use std::sync::mpsc;
@@ -434,7 +450,7 @@ mod tests {
 
     #[derive(Default)]
     struct Fake {
-        fail: Option<DeviceError>,
+        fail: Option<FileWatchError>,
         cb: Mutex<Option<OnSignal>>,
         drops: Arc<AtomicUsize>,
         starts: AtomicUsize,
@@ -450,11 +466,11 @@ mod tests {
             &self,
             _dir: &std::path::Path,
             on_signal: OnSignal,
-        ) -> Result<Box<dyn WatchGuard>, DeviceError> {
+        ) -> Result<Box<dyn WatchGuard>, FileWatchError> {
             self.starts.fetch_add(1, Ordering::SeqCst);
             match &self.fail {
-                Some(DeviceError::Unsupported(n)) => Err(DeviceError::Unsupported(n)),
-                Some(_) => Err(DeviceError::Internal("file_watch start")),
+                Some(FileWatchError::Unsupported) => Err(FileWatchError::Unsupported),
+                Some(_) => Err(FileWatchError::Internal),
                 None => {
                     *lock(&self.cb) = Some(on_signal);
                     Ok(Box::new(FakeGuard(self.drops.clone())))
@@ -469,10 +485,10 @@ mod tests {
         fake: Fake,
         state: FileWatchShowState,
         sender: Sender,
-        rx: mpsc::Receiver<crate::app::Completion<FileWatchShowState>>,
+        rx: mpsc::Receiver<fandhe_runtime::Completion<FileWatchShowState>>,
         picked: PickedSlot,
         /// 次の `pick` 呼び出しの結果（テストが差し替える）。
-        pick_result: Mutex<Result<Option<PathBuf>, DeviceError>>,
+        pick_result: Mutex<Result<Option<PathBuf>, FileWatchError>>,
     }
     impl Env {
         fn new(tag: &str, fake: Fake) -> Self {
@@ -489,7 +505,7 @@ mod tests {
                 active: Mutex::new(None),
                 fake,
                 state: FileWatchShowState::default(),
-                sender: crate::app::egui_sender(tx, egui::Context::default()),
+                sender: CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
                 rx,
                 picked: Mutex::new(None),
                 pick_result: Mutex::new(Ok(None)),
@@ -507,8 +523,8 @@ mod tests {
                 &self.picked,
                 &|| match &*lock(pr) {
                     Ok(o) => Ok(o.clone()),
-                    Err(DeviceError::Unsupported(n)) => Err(DeviceError::Unsupported(n)),
-                    Err(_) => Err(DeviceError::Internal("x")),
+                    Err(FileWatchError::Unsupported) => Err(FileWatchError::Unsupported),
+                    Err(_) => Err(FileWatchError::Internal),
                 },
             );
             while let Ok(c) = self.rx.try_recv() {
@@ -618,7 +634,7 @@ mod tests {
         let mut e = Env::new(
             "startfail",
             Fake {
-                fail: Some(DeviceError::Internal("x")),
+                fail: Some(FileWatchError::Internal),
                 ..Fake::default()
             },
         );
@@ -634,7 +650,7 @@ mod tests {
         let mut e = Env::new(
             "unsup",
             Fake {
-                fail: Some(DeviceError::Unsupported("file_watch")),
+                fail: Some(FileWatchError::Unsupported),
                 ..Fake::default()
             },
         );
@@ -773,7 +789,7 @@ mod tests {
     #[test]
     fn unsupported_pick_shows_message_and_failure_is_not_success() {
         let mut e = Env::new("pickunsup", Fake::default());
-        *lock(&e.pick_result) = Err(DeviceError::Unsupported("folder_picker"));
+        *lock(&e.pick_result) = Err(FileWatchError::Unsupported);
         pick_folder(&mut e.state);
         e.tick();
         assert_eq!(e.state.error, PICK_UNSUPPORTED_STATUS);
@@ -844,6 +860,6 @@ mod tests {
     #[test]
     fn dispatch_without_implementation_is_unsupported() {
         let r = platform_file_watch().start(std::path::Path::new("."), Arc::new(|_| {}));
-        assert!(matches!(r, Err(DeviceError::Unsupported(_))));
+        assert!(matches!(r, Err(FileWatchError::Unsupported)));
     }
 }

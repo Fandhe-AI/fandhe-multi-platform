@@ -1,13 +1,13 @@
 //! iOS 向けフォルダ変更監視実装（Issue #1412）。`ios/fandhe_ios_file_watch.m`（`open(O_EVTONLY)` +
 //! `DISPATCH_SOURCE_TYPE_VNODE`。`build.rs` が iOS 分岐で feature `device` 有効時にコンパイルする）を
 //! `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
-//! `device/file_watch.rs` の iOS 経路から UI スレッドで呼ばれ、契約は `fandhe_device::file_watch`。
+//! `fandhe-cap-file-watch/src/driver.rs` の iOS 経路から UI スレッドで呼ばれ、契約は `fandhe_cap_file_watch`。
 //!
 //! # 方式
 //!
 //! OS 資源は `id` で `.m` が所有し、Rust へは生ポインタを渡さない。変化は `.m` が
-//! `fandhe_rust_file_watch_fire`（`device/file_watch.rs`）経由で `id` の登録表を引いて合図にする。
-//! 合図の直後に `crate::ios::request_repaint` で次フレームを起こす（入力がないと egui が描画せず
+//! `fandhe_rust_file_watch_fire`（`fandhe-cap-file-watch/src/driver.rs`）経由で `id` の登録表を引いて合図にする。
+//! 合図の直後に `fandhe_runtime::request_repaint` で次フレームを起こす（入力がないと egui が描画せず
 //! 画面が止まるため）。停止（[`IosGuard`] の drop）は「登録解除 → `.m` の停止（cancel 完了を待つ）」の順。
 //!
 //! # 守る範囲 / 守らない範囲
@@ -24,16 +24,16 @@ mod imp {
     use std::path::Path;
     use std::sync::Arc;
 
-    use fandhe_device::file_watch::{FileWatch, OnSignal, WatchGuard};
-    use fandhe_device::DeviceError;
+    use crate::contract::{FileWatch, OnSignal, WatchGuard};
+    use crate::error::FileWatchError;
 
-    use super::super::file_watch::{register, unregister};
+    use crate::driver::{register, unregister};
 
     mod ffi {
         // SAFETY: `ios/fandhe_ios_file_watch.m`（`build.rs` が iOS 分岐で feature `device` 有効時に
         // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
         #[allow(unsafe_code)]
-        extern "C" {
+        unsafe extern "C" {
             fn fandhe_ios_file_watch_start(id: u64, path: *const std::ffi::c_char) -> i32;
             fn fandhe_ios_file_watch_stop(id: u64);
         }
@@ -76,13 +76,13 @@ mod imp {
             &self,
             dir: &Path,
             on_signal: OnSignal,
-        ) -> Result<Box<dyn WatchGuard>, DeviceError> {
-            const FAILED: DeviceError = DeviceError::Internal("file_watch start");
+        ) -> Result<Box<dyn WatchGuard>, FileWatchError> {
+            const FAILED: FileWatchError = FileWatchError::Internal;
             // バイト列のまま渡す（lossy 変換しない）。NUL を含めば失敗。
             let c_path = CString::new(dir.as_os_str().as_bytes()).map_err(|_| FAILED)?;
             let id = register(Arc::new(move |s| {
                 on_signal(s);
-                crate::ios::request_repaint();
+                fandhe_runtime::request_repaint();
             }));
             if !ffi::start(id, &c_path) {
                 unregister(id);
@@ -92,7 +92,7 @@ mod imp {
         }
     }
 
-    /// iOS の `FileWatch` 実装を返す（`device/file_watch.rs` の dispatch から呼ばれる）。
+    /// iOS の `FileWatch` 実装を返す（`fandhe-cap-file-watch/src/driver.rs` の dispatch から呼ばれる）。
     pub(crate) fn implementation() -> Arc<dyn FileWatch> {
         Arc::new(IosFileWatch)
     }

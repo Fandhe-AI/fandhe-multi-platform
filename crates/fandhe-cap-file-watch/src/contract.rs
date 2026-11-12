@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #1143、Issue #1410）: 作業フォルダ 1 つの「直下の通常ファイル」の
-//! 作成・更新・削除を見張る契約。`fandhe-egui-proxy` の `device/file_watch.rs`（effect ドライバ）が
+//! 作成・更新・削除を見張る契約。`fandhe-cap-file-watch`（`src/driver.rs`）（effect ドライバ）が
 //! [`FileWatch::start`] で OS の監視を開始し、各 OS 実装（macOS: FSEvents #1410、Windows: #1411、
 //! iOS: #1412、Android: #1413）が本トレイトを実装する。Web は `fandhe-web-dom::file_watch`（#1414）が
 //! `FileSystemObserver` を使い、本トレイトは経由せず、純関数（[`folder_scan_from`]・[`diff`]・
@@ -49,7 +49,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use crate::DeviceError;
+use crate::error::FileWatchError;
 
 /// 1 回の走査で残す最大件数。仮置きで、実機で足りなければ上げる。
 pub const MAX_SCAN_ENTRIES: usize = 64;
@@ -122,7 +122,8 @@ pub type OnSignal = Arc<dyn Fn(WatchSignal) + Send + Sync>;
 pub trait FileWatch: Send + Sync {
     /// `dir` の監視を開始し、合図を `on_signal` へ送る。停止は返した [`WatchGuard`] の drop。
     /// 開始に失敗したら OS 資源を残さず `Err` を返す。
-    fn start(&self, dir: &Path, on_signal: OnSignal) -> Result<Box<dyn WatchGuard>, DeviceError>;
+    fn start(&self, dir: &Path, on_signal: OnSignal)
+    -> Result<Box<dyn WatchGuard>, FileWatchError>;
 }
 
 /// 非対応 OS 向けの実装。常に `Unsupported` を返し、成功値へは倒さない。
@@ -130,8 +131,12 @@ pub trait FileWatch: Send + Sync {
 pub struct UnsupportedFileWatch;
 
 impl FileWatch for UnsupportedFileWatch {
-    fn start(&self, _dir: &Path, _on_signal: OnSignal) -> Result<Box<dyn WatchGuard>, DeviceError> {
-        Err(DeviceError::Unsupported("file_watch"))
+    fn start(
+        &self,
+        _dir: &Path,
+        _on_signal: OnSignal,
+    ) -> Result<Box<dyn WatchGuard>, FileWatchError> {
+        Err(FileWatchError::Unsupported)
     }
 }
 
@@ -151,8 +156,8 @@ fn entry_of(e: &fs::DirEntry) -> Option<FileEntry> {
 }
 
 /// `dir` 直下の通常ファイルを走査する。`Ok` で空は「0 件」の成功、`read_dir` 自体の失敗は `Err`。
-pub fn scan(dir: &Path) -> Result<FolderScan, DeviceError> {
-    let rd = fs::read_dir(dir).map_err(|_| DeviceError::Internal("file_watch scan"))?;
+pub fn scan(dir: &Path) -> Result<FolderScan, FileWatchError> {
+    let rd = fs::read_dir(dir).map_err(|_| FileWatchError::Internal)?;
     // 走査中に消えた等のエントリ単位の失敗は、そのエントリだけ捨てる。
     Ok(folder_scan_from(
         rd.filter_map(|e| entry_of(&e.ok()?)).collect(),
@@ -236,8 +241,8 @@ pub fn sample_name(n: u64) -> String {
 }
 
 /// サンプルの通常ファイルのうち最大番号を返す（64 件の窓に依らず `read_dir` 全体から探す）。
-fn max_sample(dir: &Path) -> Result<Option<u64>, DeviceError> {
-    let rd = fs::read_dir(dir).map_err(|_| DeviceError::Internal("file_watch sample"))?;
+fn max_sample(dir: &Path) -> Result<Option<u64>, FileWatchError> {
+    let rd = fs::read_dir(dir).map_err(|_| FileWatchError::Internal)?;
     Ok(rd
         .filter_map(|e| entry_of(&e.ok()?))
         .filter_map(|f| sample_number(&f.name))
@@ -245,21 +250,21 @@ fn max_sample(dir: &Path) -> Result<Option<u64>, DeviceError> {
 }
 
 /// dot 始まりの一時ファイルへ書いて rename で差し替える（監視側に中途半端な内容を見せない）。
-fn write_atomically(dir: &Path, name: &str, body: &[u8]) -> Result<(), DeviceError> {
+fn write_atomically(dir: &Path, name: &str, body: &[u8]) -> Result<(), FileWatchError> {
     let tmp = dir.join(format!(".{name}.tmp"));
     // create_new で排他的に作る。既存の一時パス（リンク含む）は上書きも削除もせず失敗にする。
     let mut f = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&tmp)
-        .map_err(|_| DeviceError::Internal("file_watch sample"))?;
+        .map_err(|_| FileWatchError::Internal)?;
     let r = f
         .write_all(body)
         .and_then(|()| fs::rename(&tmp, dir.join(name)));
     if r.is_err() {
         let _ = fs::remove_file(&tmp);
     }
-    r.map_err(|_| DeviceError::Internal("file_watch sample"))
+    r.map_err(|_| FileWatchError::Internal)
 }
 
 /// 既存の最大番号から、次に作るサンプルの番号を返す。上限超過は `None`。
@@ -276,22 +281,21 @@ pub fn next_sample_body(current: Option<&[u8]>) -> Vec<u8> {
 }
 
 /// 既存の最大番号 + 1 のサンプルを作り、その名前を返す。
-pub fn create_sample(dir: &Path) -> Result<String, DeviceError> {
-    let next =
-        next_sample_number(max_sample(dir)?).ok_or(DeviceError::Internal("file_watch sample"))?;
+pub fn create_sample(dir: &Path) -> Result<String, FileWatchError> {
+    let next = next_sample_number(max_sample(dir)?).ok_or(FileWatchError::Internal)?;
     let name = sample_name(next);
     write_atomically(dir, &name, SAMPLE_INITIAL.as_bytes())?;
     Ok(name)
 }
 
 /// 最大番号のサンプルに 1 行追記してサイズを増やす。対象が無ければ `Ok(false)`。
-pub fn update_sample(dir: &Path) -> Result<bool, DeviceError> {
+pub fn update_sample(dir: &Path) -> Result<bool, FileWatchError> {
     let Some(n) = max_sample(dir)? else {
         return Ok(false);
     };
     let name = sample_name(n);
     let path = dir.join(&name);
-    let err = |_| DeviceError::Internal("file_watch sample");
+    let err = |_| FileWatchError::Internal;
     let len = fs::metadata(&path).map_err(err)?.len();
     let current = if len <= MAX_SAMPLE_BYTES {
         Some(fs::read(&path).map_err(err)?)
@@ -304,12 +308,11 @@ pub fn update_sample(dir: &Path) -> Result<bool, DeviceError> {
 }
 
 /// 最大番号のサンプルを消す。対象が無ければ `Ok(false)`。
-pub fn delete_sample(dir: &Path) -> Result<bool, DeviceError> {
+pub fn delete_sample(dir: &Path) -> Result<bool, FileWatchError> {
     let Some(n) = max_sample(dir)? else {
         return Ok(false);
     };
-    fs::remove_file(dir.join(sample_name(n)))
-        .map_err(|_| DeviceError::Internal("file_watch sample"))?;
+    fs::remove_file(dir.join(sample_name(n))).map_err(|_| FileWatchError::Internal)?;
     Ok(true)
 }
 
@@ -385,7 +388,7 @@ mod tests {
         assert!(s.files.is_empty() && !s.truncated);
         assert!(matches!(
             scan(&t.0.join("nope")),
-            Err(DeviceError::Internal("file_watch scan"))
+            Err(FileWatchError::Internal)
         ));
     }
 
@@ -536,6 +539,6 @@ mod tests {
     #[test]
     fn unsupported_is_not_success() {
         let r = UnsupportedFileWatch.start(Path::new("."), Arc::new(|_| {}));
-        assert!(matches!(r, Err(DeviceError::Unsupported("file_watch"))));
+        assert!(matches!(r, Err(FileWatchError::Unsupported)));
     }
 }

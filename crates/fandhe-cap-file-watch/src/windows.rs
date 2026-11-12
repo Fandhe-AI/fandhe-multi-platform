@@ -1,11 +1,11 @@
 //! Windows 向けフォルダ変更監視実装（Issue #1411）。Win32 `ReadDirectoryChangesW`（overlapped I/O）で
-//! アプリ専用の作業フォルダを監視する。`device/file_watch.rs` の Windows 経路から UI スレッドで呼ばれ、
-//! 契約は `fandhe_device::file_watch`。COM は使わない。権限は不要（Win32 のファイル API で package identity 不要）。
+//! アプリ専用の作業フォルダを監視する。`fandhe-cap-file-watch/src/driver.rs` の Windows 経路から UI スレッドで呼ばれ、
+//! 契約は `fandhe_cap_file_watch`。COM は使わない。権限は不要（Win32 のファイル API で package identity 不要）。
 //!
 //! # 方式
 //!
 //! 通知バッファの中身（ファイル名）は読まず、完了を「変化の合図」1 種として `register` / `fire`
-//! （`device/file_watch.rs`）へ送る。監視 1 件につき専用スレッド 1 本が、停止イベントと I/O 完了イベントを
+//! （`fandhe-cap-file-watch/src/driver.rs`）へ送る。監視 1 件につき専用スレッド 1 本が、停止イベントと I/O 完了イベントを
 //! `WaitForMultipleObjects` で待つ。バッファ・`OVERLAPPED`・ディレクトリ `HANDLE` はスレッドの外へ貸さない。
 //! 停止（[`WinGuard`] の drop）は「登録解除 → 停止イベント → スレッド join」の順で、スレッドは発行中の I/O を
 //! `CancelIoEx` した後に完了を待ってから資源を閉じる（カーネルが書き終える前に解放しない）。
@@ -24,30 +24,30 @@
 
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
-use std::sync::mpsc::sync_channel;
 use std::sync::Arc;
+use std::sync::mpsc::sync_channel;
 use std::thread::JoinHandle;
 
-use fandhe_device::file_watch::{FileWatch, OnSignal, WatchGuard, WatchSignal};
-use fandhe_device::DeviceError;
-use windows::core::{HRESULT, PCWSTR};
+use crate::contract::{FileWatch, OnSignal, WatchGuard, WatchSignal};
+use crate::error::FileWatchError;
 use windows::Win32::Foundation::{
     CloseHandle, ERROR_IO_PENDING, ERROR_NOTIFY_ENUM_DIR, HANDLE, WAIT_OBJECT_0,
 };
 use windows::Win32::Storage::FileSystem::{
-    CreateFileW, ReadDirectoryChangesW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OVERLAPPED,
-    FILE_LIST_DIRECTORY, FILE_NOTIFY_CHANGE_DIR_NAME, FILE_NOTIFY_CHANGE_FILE_NAME,
-    FILE_NOTIFY_CHANGE_LAST_WRITE, FILE_NOTIFY_CHANGE_SIZE, FILE_SHARE_DELETE, FILE_SHARE_READ,
-    FILE_SHARE_WRITE, OPEN_EXISTING,
-};
-use windows::Win32::System::Threading::{
-    CreateEventW, ResetEvent, SetEvent, WaitForMultipleObjects, INFINITE,
+    CreateFileW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OVERLAPPED, FILE_LIST_DIRECTORY,
+    FILE_NOTIFY_CHANGE_DIR_NAME, FILE_NOTIFY_CHANGE_FILE_NAME, FILE_NOTIFY_CHANGE_LAST_WRITE,
+    FILE_NOTIFY_CHANGE_SIZE, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    ReadDirectoryChangesW,
 };
 use windows::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
+use windows::Win32::System::Threading::{
+    CreateEventW, INFINITE, ResetEvent, SetEvent, WaitForMultipleObjects,
+};
+use windows::core::{HRESULT, PCWSTR};
 
-use super::file_watch::{fire, register, unregister};
+use crate::driver::{fire, register, unregister};
 
-const FAILED: DeviceError = DeviceError::Internal("file_watch start");
+const FAILED: FileWatchError = FileWatchError::Internal;
 
 /// 完了結果を合図へ写す純関数。`Ok`（0 バイト完了のあふれを含む）と `ERROR_NOTIFY_ENUM_DIR` は
 /// `Changed`、それ以外の失敗は `Failed`。
@@ -234,7 +234,11 @@ struct WinFileWatch;
 
 impl FileWatch for WinFileWatch {
     #[allow(unsafe_code)]
-    fn start(&self, dir: &Path, on_signal: OnSignal) -> Result<Box<dyn WatchGuard>, DeviceError> {
+    fn start(
+        &self,
+        dir: &Path,
+        on_signal: OnSignal,
+    ) -> Result<Box<dyn WatchGuard>, FileWatchError> {
         let wide: Vec<u16> = dir.as_os_str().encode_wide().chain(Some(0)).collect();
         // SAFETY: 引数は有効な既定値（manual-reset・非シグナル）。
         let stop = unsafe { CreateEventW(None, true, false, None) }.map_err(|_| FAILED)?;
@@ -265,7 +269,7 @@ impl FileWatch for WinFileWatch {
     }
 }
 
-/// Windows の `FileWatch` 実装を返す（`device/file_watch.rs` の dispatch から呼ばれる）。
+/// Windows の `FileWatch` 実装を返す（`fandhe-cap-file-watch/src/driver.rs` の dispatch から呼ばれる）。
 pub(crate) fn implementation() -> Arc<dyn FileWatch> {
     Arc::new(WinFileWatch)
 }
@@ -325,6 +329,6 @@ mod tests {
     fn missing_folder_fails_without_leaving_registration() {
         let dir = tmp("missing").join("nope");
         let r = implementation().start(&dir, Arc::new(|_| {}));
-        assert!(matches!(r, Err(DeviceError::Internal("file_watch start"))));
+        assert!(matches!(r, Err(FileWatchError::Internal)));
     }
 }
