@@ -162,8 +162,6 @@ fn build() {
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
-    // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
-    compile_apple_ml_inference();
     // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
     compile_apple_media_transcode();
     // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も macOS 分岐と共用する。
@@ -566,17 +564,6 @@ fn compile_apple_video_transcode() {
     compile_objc(
         "apple/fandhe_apple_video_transcode.m",
         &["AVFoundation", "CoreMedia", "CoreVideo", "Foundation"],
-    );
-}
-
-/// `apple/fandhe_apple_ml_inference.m` を `cc` でコンパイルし CoreML をリンクする
-/// （Issue #289 macOS、iOS は b-ios が利用、機械学習モデル推論）。
-/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_ml_inference`）と
-/// 同じ OS 集合に保つ。`MLModelAsset`（macOS 13 / iOS 16）は `.m` の `@available` で守る。
-fn compile_apple_ml_inference() {
-    compile_objc(
-        "apple/fandhe_apple_ml_inference.m",
-        &["CoreML", "Foundation"],
     );
 }
 
@@ -1601,8 +1588,6 @@ fn build_macos() {
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
-    // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
-    compile_apple_ml_inference();
     // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS。iOS は Issue #346 で `build_ios` からも呼ぶ）。
     compile_apple_on_device_llm();
     compile_apple_translation();

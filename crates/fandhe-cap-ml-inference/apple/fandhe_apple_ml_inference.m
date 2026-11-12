@@ -2,8 +2,8 @@
 // iOS 実装（b-ios）と共用できるよう `TARGET_OS` では分けない（CoreML と Foundation だけを使い、
 // UIKit / AppKit に触れない）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_ml_inference.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が macOS・iOS ターゲットの feature `device` 有効時に `cc` コンパイルする
+// `crates/fandhe-cap-ml-inference/src/apple.rs` から C ABI 経由で呼ばれる。
+// 本 crate の `build.rs` が macOS・iOS ターゲットで `cc` コンパイルする
 // （Rust 側 cfg と同じ OS 集合に保つ）。
 //
 // 契約（一発呼び出し型。結果を待つ要求は持たない）:

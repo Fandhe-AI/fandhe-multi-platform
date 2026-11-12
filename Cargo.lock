@@ -1110,6 +1110,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-ml-inference"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "libc",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-nfc-card-emulation"
 version = "0.2.0"
 dependencies = [
@@ -1221,6 +1233,7 @@ dependencies = [
  "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
  "fandhe-cap-home-widget",
+ "fandhe-cap-ml-inference",
  "fandhe-cap-nfc-card-emulation",
  "fandhe-cap-pedometer",
  "fandhe-cap-share-receive",

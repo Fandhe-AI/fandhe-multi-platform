@@ -260,10 +260,6 @@ pub mod android_memory_pressure;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_midi;
-/// Issue #289: Android 向け機械学習推論実装。
-/// `device/ml_inference.rs` の Android 経路から呼ばれる。
-#[cfg(target_os = "android")]
-pub mod android_ml_inference;
 /// Issue #898: Android 向けジャイロ・磁気・線形加速度の生値実装（骨格。実体は #901）。
 /// `device/motion_raw_sensors.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -602,11 +598,6 @@ pub mod apple_mic_record;
 /// C ABI ラッパー。iOS は 14 以上、未満は失敗コードを返す）。`device/midi.rs` の Apple 分岐から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_midi;
-/// Issue #289 macOS・b-ios iOS: Core ML 推論実装（`apple/fandhe_apple_ml_inference.m` を呼ぶ
-/// C ABI ラッパー）。`device/ml_inference.rs` の macOS 経路と、iOS 経路（`ios_ml_inference` 経由）から
-/// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_ml_inference;
 /// Issue #1282: macOS / iOS 向けネットワーク接続状態（`apple/fandhe_apple_network_status.m` を
 /// 呼ぶ C ABI ラッパー）。`device/network_status.rs` の macOS / iOS 経路から呼ばれる。
 /// 純関数をホストの `cargo test` で検査するため cfg に `test` を含める（FFI 部分は macOS 限定）。
@@ -1102,10 +1093,6 @@ pub mod ios_media_transcode;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_memory_pressure;
-/// Issue #291: iOS 向け機械学習推論（macOS と共用の `AppleMlInference` を返す）。
-/// `device/ml_inference.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_ml_inference;
 /// Issue #900: iOS 向けジャイロ・磁気・線形加速度の生値実装（`ios/fandhe_ios_motion_raw_sensors.m`、
 /// CoreMotion の `CMMotionManager`）。`device/motion_raw_sensors.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1518,10 +1505,6 @@ pub mod mic_record;
 /// Phase 11 の拡充ループ（親 #1137、Issue #1398）: MIDI 入力の effect ドライバ（macOS・iOS・Android・Windows 実装、
 /// 他 OS は `UnsupportedMidiInput` 固定）。
 pub mod midi;
-/// Phase 11 の拡充ループ（親 #89、Issue #289）: 機械学習モデル推論の effect ドライバ（macOS・iOS / Windows / Android 実装、
-/// 他 OS は
-/// `UnsupportedMlInference` 固定。Web は対象外）。
-pub mod ml_inference;
 /// Phase 11（親 #180、Issue #898）: ジャイロ・磁気・線形加速度の生値の effect ドライバ（iOS・Android・Windows 実装、
 /// 他 OS は `UnsupportedMotionRawSensors` 固定。Web は `fandhe-web-dom` 側）。
 pub mod motion_raw_sensors;
@@ -1929,10 +1912,6 @@ pub mod windows_mic_record;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_midi;
-/// Issue #289: Windows 向け機械学習推論実装。
-/// `device/ml_inference.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_ml_inference;
 /// Issue #898: Windows 向けジャイロ・磁気・線形加速度の生値実装（骨格。実体は #899）。
 /// `device/motion_raw_sensors.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

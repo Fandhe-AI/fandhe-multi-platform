@@ -1,16 +1,16 @@
 //! macOS / iOS 向け機械学習推論実装（Issue #289 macOS、#291 iOS）。
-//! `device/ml_inference.rs` の macOS 経路と iOS 経路（`ios_ml_inference` 経由）から呼ばれ、`apple/fandhe_apple_ml_inference.m`
-//! （Core ML。`build.rs` が feature `device` 有効時にコンパイル）を `unsafe extern "C"` 1 関数で
+//! `driver.rs` の macOS 経路と iOS 経路（`ios` 経由）から呼ばれ、`apple/fandhe_apple_ml_inference.m`
+//! （Core ML。本 crate の `build.rs` がコンパイル）を `unsafe extern "C"` 1 関数で
 //! 呼ぶ。`unsafe` はこの呼び出し 1 か所に閉じる（coding-rust.md の FFI 例外規定準拠）。
-//! `build.rs` のコンパイル条件・`device.rs` の mod cfg と同じ OS 集合に保つ。
+//! `build.rs` のコンパイル条件・`lib.rs` の mod cfg と同じ OS 集合に保つ。
 //!
-//! 契約の SSOT は `fandhe_device::ml_inference`。モデルのバイト列は `coreml_spec` が実行時に組み、
+//! 契約の SSOT は `crate::contract`。モデルのバイト列は `coreml_spec` が実行時に組み、
 //! `.m` へはポインタと長さだけを渡す。呼び出しはブロックするため、呼び出し元はワーカーで呼ぶ。
 
 use std::time::Duration;
 
-use fandhe_device::ml_inference::{coreml_spec, DemoModel, MlInference, INVALID_MODEL, TIMEOUT};
-use fandhe_device::DeviceError;
+use crate::contract::{DemoModel, INVALID_MODEL, MlInference, TIMEOUT, coreml_spec};
+use crate::error::MlInferenceError;
 
 // SAFETY: `apple/fandhe_apple_ml_inference.m` が定義する C ABI（`build.rs` が macOS / iOS
 // ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は `.m` 冒頭コメントに集約する。
@@ -36,7 +36,7 @@ impl MlInference for AppleMlInference {
         model: DemoModel,
         input: [f32; 2],
         remaining: Duration,
-    ) -> Result<f64, DeviceError> {
+    ) -> Result<f64, MlInferenceError> {
         let spec = coreml_spec(model);
         let input = input.map(f64::from);
         let mut y = 0.0_f64;
@@ -55,10 +55,10 @@ impl MlInference for AppleMlInference {
         };
         match code {
             0 => Ok(y),
-            1 => Err(DeviceError::Internal(INVALID_MODEL)),
-            3 => Err(DeviceError::Internal(TIMEOUT)),
-            4 => Err(DeviceError::Unsupported("ml_inference")),
-            _ => Err(DeviceError::Internal("ml_inference")),
+            1 => Err(MlInferenceError::Internal(INVALID_MODEL)),
+            3 => Err(MlInferenceError::Internal(TIMEOUT)),
+            4 => Err(MlInferenceError::Unsupported),
+            _ => Err(MlInferenceError::Internal("ml_inference")),
         }
     }
 }
@@ -66,7 +66,7 @@ impl MlInference for AppleMlInference {
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
-    use fandhe_device::ml_inference::{check_output, expected, DEMO_INPUT};
+    use crate::contract::{DEMO_INPUT, check_output, expected};
 
     const LONG: Duration = Duration::from_secs(30);
 
@@ -84,7 +84,7 @@ mod tests {
             .infer(DemoModel::Corrupt, DEMO_INPUT, LONG)
             .unwrap_err();
         assert!(
-            matches!(err, DeviceError::Internal(INVALID_MODEL)),
+            matches!(err, MlInferenceError::Internal(INVALID_MODEL)),
             "{err:?}"
         );
     }

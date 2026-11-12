@@ -503,7 +503,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ml_infer" => fandhe_core::screens::ml_infer::current_screen,
-    fandhe_egui_proxy::device::ml_inference::ml_infer_effect,
+    fandhe_cap_ml_inference::ml_infer_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "on_device_llm" => fandhe_core::screens::on_device_llm::current_screen,

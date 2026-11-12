@@ -17,7 +17,7 @@
       ],
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#288）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_ml_inference.rs + crates/fandhe-egui-proxy/src/device/apple_ml_inference.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_ml_inference.m + crates/fandhe-egui-proxy/src/device/ml_inference.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-device/src/ml_inference.rs、Issue #291"
+      "impl": "crates/fandhe-cap-ml-inference/src/ios.rs + crates/fandhe-cap-ml-inference/src/apple.rs + crates/fandhe-cap-ml-inference/apple/fandhe_apple_ml_inference.m + crates/fandhe-cap-ml-inference/src/driver.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-cap-ml-inference/src/contract.rs、Issue #291"
     },
     "android": {
       "status": "done",
@@ -27,7 +27,7 @@
       "note": "実装済み（#292）。範囲は固定の線形モデル（y = 2·x0 + 3·x1 + 1）の推論 1 回と期待値（24）の照合のみ。モデルはコードで組む。API 27 以上で動き、24〜26 は Unsupported。NNAPI は Android 15 で非推奨だが動作は続く（公式）。LiteRT 2.x は推移依存に GMS が入るため採らない。将来 NNAPI が削除されたら LiteRT へ移るかを見直す。壊れたモデルは演算の入力数の不一致で OS が拒否し、失敗として表示する。Activity 再生成時は保留中の要求を捨てる。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: OS ごとの所要時間の違い、期限後も OS の呼び出しが走り切ること、複数プロセス間。Android 実機の確認は #288 で行う。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#288）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_ml_inference.rs + crates/fandhe-egui-proxy/src/device/ml_inference.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-device/src/ml_inference.rs、Issue #292",
+      "impl": "crates/fandhe-cap-ml-inference/src/android.rs + crates/fandhe-cap-ml-inference/src/driver.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-cap-ml-inference/src/contract.rs、Issue #292",
       "sourceName": [
         "機械学習（画像・テキスト認識等）"
       ]
@@ -40,7 +40,7 @@
       "note": "実装済み（#289）。範囲は固定の線形モデル（y = 2·x0 + 3·x1 + 1）の推論 1 回と期待値（24）の照合のみ。モデルファイルは置かず、実行時に Core ML の仕様をコードで組む（画像前処理・分類モデル・モデルの動的取得・GPU / NPU の選択・取り消しは範囲外）。macOS 13 未満は非対応（Unsupported）。計算ユニットは CPU 固定。結果は成功（期待値と許容差の中で一致）、失敗（OS がモデルを拒否・期限切れ・出力の不一致・非対応）を分けて表示し、「壊れたモデルで試す」は失敗として表示する。取り消しと権限は存在しない。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: OS ごとの所要時間の違い（初回読み込みのキャッシュを含む）、期限後も OS の呼び出しが走り切ること、複数プロセス間。Mac 実機の目視は #288 で行う。",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#288）",
-      "impl": "crates/fandhe-egui-proxy/src/device/apple_ml_inference.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_ml_inference.m + crates/fandhe-egui-proxy/src/device/ml_inference.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-device/src/ml_inference.rs、Issue #289"
+      "impl": "crates/fandhe-cap-ml-inference/src/apple.rs + crates/fandhe-cap-ml-inference/apple/fandhe_apple_ml_inference.m + crates/fandhe-cap-ml-inference/src/driver.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-cap-ml-inference/src/contract.rs、Issue #289"
     },
     "windows": {
       "status": "done",
@@ -50,7 +50,7 @@
       "note": "実装済み（#290）。範囲は固定の線形モデル（y = 2·x0 + 3·x1 + 1）の推論 1 回と期待値（24）の照合のみ。モデルファイルも一時ファイルも置かず、実行時に ONNX をコードで組んでメモリ上のストリームから読む（画像前処理・分類モデル・モデルの動的取得・GPU / NPU の選択・取り消しは範囲外）。Windows 10 1809 未満や WinML の無い環境は非対応（Unsupported）。結果は成功（期待値と許容差の中で一致）、失敗（OS がモデルを拒否・期限切れ・出力の不一致・非対応）を分けて表示し、「壊れたモデルで試す」は失敗として表示する。取り消しと権限は存在しない。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: OS ごとの所要時間の違い、期限後も同期呼び出しが走り切ること、複数プロセス間。後継の Windows App SDK 版は同梱ランタイムの配布形態が増えるため採らない。unpackaged の exe から動くかは #288 で確認する。",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#288）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_ml_inference.rs + crates/fandhe-egui-proxy/src/device/ml_inference.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-device/src/ml_inference.rs、Issue #290"
+      "impl": "crates/fandhe-cap-ml-inference/src/windows.rs + crates/fandhe-cap-ml-inference/src/driver.rs + crates/fandhe-core/src/screens/ml_infer.rs + crates/fandhe-cap-ml-inference/src/contract.rs、Issue #290"
     },
     "web": {
       "status": "no",

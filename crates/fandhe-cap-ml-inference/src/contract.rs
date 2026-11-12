@@ -7,7 +7,7 @@
 //! 画像の前処理・分類モデル・モデルの動的取得・利用者が持ち込むモデル・GPU / NPU の選択・
 //! 推論の取り消しは扱わない。対象は macOS / iOS（Core ML）、Windows（WinML）、
 //! Android（NNAPI）。Web は対象外。
-//! 一発呼び出し型の同期 API。呼び出し側（`fandhe-egui-proxy` の effect ドライバ）は
+//! 一発呼び出し型の同期 API。呼び出し側（本 crate の `driver.rs`）は
 //! UI を止めないようワーカースレッドから呼ぶ。
 //!
 //! # 契約
@@ -38,7 +38,7 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::MlInferenceError;
 
 /// 線形モデルの重み `w`。
 pub const WEIGHTS: [f64; 2] = [2.0, 3.0];
@@ -73,15 +73,15 @@ pub trait MlInference: Send + Sync {
         model: DemoModel,
         input: [f32; 2],
         remaining: Duration,
-    ) -> Result<f64, DeviceError>;
+    ) -> Result<f64, MlInferenceError>;
 }
 
 /// 対象外 OS（Linux 等）・未実装 OS のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedMlInference;
 
 impl MlInference for UnsupportedMlInference {
-    fn infer(&self, _: DemoModel, _: [f32; 2], _: Duration) -> Result<f64, DeviceError> {
-        Err(DeviceError::Unsupported("ml_inference"))
+    fn infer(&self, _: DemoModel, _: [f32; 2], _: Duration) -> Result<f64, MlInferenceError> {
+        Err(MlInferenceError::Unsupported)
     }
 }
 
@@ -91,20 +91,20 @@ pub fn expected(input: [f32; 2]) -> f64 {
 }
 
 /// 入力が有限値であることを OS を呼ぶ前に検査する。
-pub fn validate_input(input: [f32; 2]) -> Result<(), DeviceError> {
+pub fn validate_input(input: [f32; 2]) -> Result<(), MlInferenceError> {
     if input.iter().all(|v| v.is_finite()) {
         Ok(())
     } else {
-        Err(DeviceError::InvalidInput("ml_inference input"))
+        Err(MlInferenceError::InvalidInput)
     }
 }
 
 /// 出力 `y` を期待値と照合する。NaN・無限大・許容差（相対 1e-3、下限 1）の外は `Internal(MISMATCH)`。
-pub fn check_output(y: f64, expected: f64) -> Result<f64, DeviceError> {
+pub fn check_output(y: f64, expected: f64) -> Result<f64, MlInferenceError> {
     if y.is_finite() && (y - expected).abs() <= 1e-3 * expected.abs().max(1.0) {
         Ok(y)
     } else {
-        Err(DeviceError::Internal(MISMATCH))
+        Err(MlInferenceError::Internal(MISMATCH))
     }
 }
 
@@ -312,7 +312,7 @@ mod tests {
         for bad in [0.0, 24.5, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(matches!(
                 check_output(bad, 24.0),
-                Err(DeviceError::Internal(MISMATCH))
+                Err(MlInferenceError::Internal(MISMATCH))
             ));
         }
     }
@@ -323,7 +323,7 @@ mod tests {
         for bad in [[f32::NAN, 1.0], [1.0, f32::INFINITY]] {
             assert!(matches!(
                 validate_input(bad),
-                Err(DeviceError::InvalidInput(_))
+                Err(MlInferenceError::InvalidInput)
             ));
         }
     }
@@ -333,7 +333,7 @@ mod tests {
         let e = UnsupportedMlInference
             .infer(DemoModel::Valid, DEMO_INPUT, INFER_DEADLINE)
             .unwrap_err();
-        assert!(matches!(e, DeviceError::Unsupported("ml_inference")));
+        assert!(matches!(e, MlInferenceError::Unsupported));
     }
 
     /// 入力の終端でぴったり終わる protobuf か（tag・varint・length-delimited を辿る）。

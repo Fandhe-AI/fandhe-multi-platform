@@ -1,18 +1,16 @@
 //! Phase 11（親 #89）型サンプル「機械学習モデル推論」（Issue #289）の effect ドライバ。
 //! `fandhe_core::screens::ml_infer`（端末依存ゼロ）の要求を観測し、ワーカースレッドで
-//! `fandhe_device::ml_inference::MlInference` を呼んで `CompletionSender` 経由で結果を返す
+//! `crate::contract::MlInference` を呼んで `CompletionSender` 経由で結果を返す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
-//! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
-//! `fandhe_device::ml_inference`。
-//!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。Web は対象外。
+//! 呼ばれる契約、`fandhe_runtime::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
+//! `crate::contract`。Web は対象外（gallery が wasm32 では本 crate を依存に入れない）。
 //!
 //! # OS 別の分担（dispatch は #289 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
-//! - macOS: [`super::apple_ml_inference::AppleMlInference`]（#289）
-//! - iOS: `ios_ml_inference`（b-ios）
-//! - Windows: `windows_ml_inference`（windows の子。WinML）
-//! - Android: `android_ml_inference`（b-android。NNAPI）
+//! - macOS: `apple::AppleMlInference`（#289）
+//! - iOS: `ios`（b-ios）
+//! - Windows: `windows`（windows の子。WinML）
+//! - Android: `android`（b-android。NNAPI）
 //! - それ以外（Linux）: `UnsupportedMlInference` 固定（ダミーの成功実装へは倒さない）
 //!
 //! # 期限（契約表 3）
@@ -26,35 +24,35 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::contract::{
+    DEMO_INPUT, DemoModel, INFER_DEADLINE, INVALID_MODEL, MISMATCH, MlInference, TIMEOUT,
+    check_output, expected, validate_input,
+};
+use crate::error::MlInferenceError;
 use fandhe_core::screens::ml_infer::{
-    finish_infer, mark_running, take_request, InferFailure, MlInferPhase, MlInferState,
-    MlModelChoice,
+    InferFailure, MlInferPhase, MlInferState, MlModelChoice, finish_infer, mark_running,
+    take_request,
 };
-use fandhe_device::ml_inference::{
-    check_output, expected, validate_input, DemoModel, MlInference, DEMO_INPUT, INFER_DEADLINE,
-    INVALID_MODEL, MISMATCH, TIMEOUT,
-};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `MlInference` 実装を返す（dispatch の最終形）。
 fn platform() -> Arc<dyn MlInference> {
     #[cfg(target_os = "macos")]
     {
-        Arc::new(super::apple_ml_inference::AppleMlInference)
+        Arc::new(crate::apple::AppleMlInference)
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_ml_inference::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "windows")]
     {
-        super::windows_ml_inference::implementation()
+        crate::windows::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_ml_inference::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(
         target_os = "macos",
@@ -63,7 +61,7 @@ fn platform() -> Arc<dyn MlInference> {
         target_os = "android"
     )))]
     {
-        Arc::new(fandhe_device::ml_inference::UnsupportedMlInference)
+        Arc::new(crate::contract::UnsupportedMlInference)
     }
 }
 
@@ -80,21 +78,20 @@ static SESSION: std::sync::OnceLock<Session> = std::sync::OnceLock::new();
 /// 画面状態は `default()`（世代 0）に戻るため、完了後も残る記録（世代 1）を残すと次の
 /// 「推論する」が発送されず飲み込まれる。古いワーカーの結果は古いアプリのチャネルへ届くので
 /// 新しい画面には適用されない。走っている OS 呼び出しは止めず走り切らせる。
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
         *s.inflight.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }
 
-/// `DeviceError` を画面の失敗種別へ写す。内部識別子・OS コードは画面にもログにも出さず、
+/// `MlInferenceError` を画面の失敗種別へ写す。内部識別子・OS コードは画面にもログにも出さず、
 /// 上記以外は固定文言にする（security.md A09）。
-pub(crate) fn to_failure(e: DeviceError) -> InferFailure {
+pub(crate) fn to_failure(e: MlInferenceError) -> InferFailure {
     match e {
-        DeviceError::Unsupported(_) => InferFailure::Unsupported,
-        DeviceError::Internal(INVALID_MODEL) => InferFailure::InvalidModel,
-        DeviceError::Internal(TIMEOUT) => InferFailure::Timeout,
-        DeviceError::Internal(MISMATCH) => InferFailure::Mismatch,
+        MlInferenceError::Unsupported => InferFailure::Unsupported,
+        MlInferenceError::Internal(INVALID_MODEL) => InferFailure::InvalidModel,
+        MlInferenceError::Internal(TIMEOUT) => InferFailure::Timeout,
+        MlInferenceError::Internal(MISMATCH) => InferFailure::Mismatch,
         _ => InferFailure::Failed("推論できませんでした".to_string()),
     }
 }
@@ -146,24 +143,24 @@ fn drive(
     let new_request = {
         let mut g = session.inflight.lock().unwrap_or_else(|e| e.into_inner());
         match take_request(state) {
-            Some((generation, choice)) if g.map(|(gen, _)| gen) != Some(generation) => {
+            Some((generation, choice)) if g.map(|(gen_id, _)| gen_id) != Some(generation) => {
                 let started = Instant::now();
                 *g = Some((generation, started));
                 Some((generation, choice, started))
             }
             _ => {
                 // 期限判定: 処理中でセッションの世代が一致するときだけ。
-                if let (Some((gen, started)), MlInferPhase::Running) = (*g, &state.phase) {
-                    if gen == state.generation {
-                        let elapsed = started.elapsed();
-                        if elapsed >= deadline {
-                            *g = None;
-                            let _ = sender.send(Box::new(move |s: &mut MlInferState| {
-                                finish_infer(s, gen, Err(InferFailure::Timeout));
-                            }));
-                        } else {
-                            sender.request_repaint_after(deadline - elapsed);
-                        }
+                if let (Some((gen_id, started)), MlInferPhase::Running) = (*g, &state.phase)
+                    && gen_id == state.generation
+                {
+                    let elapsed = started.elapsed();
+                    if elapsed >= deadline {
+                        *g = None;
+                        let _ = sender.send(Box::new(move |s: &mut MlInferState| {
+                            finish_infer(s, gen_id, Err(InferFailure::Timeout));
+                        }));
+                    } else {
+                        sender.request_repaint_after(deadline - elapsed);
                     }
                 }
                 None
@@ -214,30 +211,37 @@ pub fn ml_infer_effect(state: &MlInferState, sender: &CompletionSender<MlInferSt
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::ml_infer::{request_infer, MlInferPhase};
-    use fandhe_device::ml_inference::UnsupportedMlInference;
+    use crate::contract::UnsupportedMlInference;
+    use fandhe_core::screens::ml_infer::{MlInferPhase, request_infer};
     use std::sync::mpsc;
 
-    type Rx = mpsc::Receiver<crate::app::Completion<MlInferState>>;
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<MlInferState>>;
 
     fn channel() -> (CompletionSender<MlInferState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// 指定の結果を返し、`sleep` だけ待つフェイク。
     struct Fake {
-        result: fn() -> Result<f64, DeviceError>,
+        result: fn() -> Result<f64, MlInferenceError>,
         sleep: Duration,
     }
     impl MlInference for Fake {
-        fn infer(&self, _: DemoModel, _: [f32; 2], _: Duration) -> Result<f64, DeviceError> {
+        fn infer(&self, _: DemoModel, _: [f32; 2], _: Duration) -> Result<f64, MlInferenceError> {
             std::thread::sleep(self.sleep);
             (self.result)()
         }
     }
 
-    fn fake(result: fn() -> Result<f64, DeviceError>) -> Arc<dyn MlInference> {
+    fn fake(result: fn() -> Result<f64, MlInferenceError>) -> Arc<dyn MlInference> {
         Arc::new(Fake {
             result,
             sleep: Duration::ZERO,
@@ -299,7 +303,7 @@ mod tests {
     #[test]
     fn invalid_model_error_maps() {
         let s = run(
-            fake(|| Err(DeviceError::Internal(INVALID_MODEL))),
+            fake(|| Err(MlInferenceError::Internal(INVALID_MODEL))),
             MlModelChoice::Corrupt,
             2,
         );
@@ -309,7 +313,7 @@ mod tests {
     #[test]
     fn wrong_output_is_mismatch_not_success() {
         for f in [
-            (|| Ok(0.0)) as fn() -> Result<f64, DeviceError>,
+            (|| Ok(0.0)) as fn() -> Result<f64, MlInferenceError>,
             || Ok(f64::NAN),
             || Ok(f64::INFINITY),
         ] {
@@ -327,7 +331,7 @@ mod tests {
     #[test]
     fn internal_ids_never_reach_screen_text() {
         let s = run(
-            fake(|| Err(DeviceError::Internal("secret os detail"))),
+            fake(|| Err(MlInferenceError::Internal("ml_inference"))),
             MlModelChoice::Valid,
             2,
         );
@@ -432,7 +436,7 @@ mod tests {
         )))]
         assert!(matches!(
             platform().infer(DemoModel::Valid, DEMO_INPUT, Duration::ZERO),
-            Err(DeviceError::Unsupported(_))
+            Err(MlInferenceError::Unsupported)
         ));
     }
 }

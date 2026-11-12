@@ -1,7 +1,7 @@
 //! Android 向け機械学習推論（Issue #292、親 #89 の b-android）。NNAPI（`libneuralnetworks.so`）を
 //! `dlopen` で動的に読み、固定の線形モデル `y = 2·x0 + 3·x1 + 1` を `FULLY_CONNECTED` 1 演算で
-//! 組んで 1 回推論する。`device/ml_inference.rs` の Android 経路（dispatch は #289 で最終形）から
-//! 呼ばれ、契約（結果の種類・期限・守る範囲）の SSOT は `fandhe_device::ml_inference`。
+//! 組んで 1 回推論する。`driver.rs` の Android 経路（dispatch は #289 で最終形）から
+//! 呼ばれ、契約（結果の種類・期限・守る範囲）の SSOT は `crate::contract`。
 //!
 //! - NNAPI は API 27 以上。minSdk 24 のためリンクせず `dlopen` し、読めなければ `Unsupported`。
 //!   Android 15 で非推奨だが動作は続く（公式）。LiteRT 2.x は推移依存に GMS が入るため採らない。
@@ -12,17 +12,17 @@
 //!   `BAD_DATA` になり、実行時ドライバに依存せず確実に拒否される。
 //! - `unsafe` は `dlopen` / `dlsym` / NNAPI 呼び出しに限り、公開は安全な `implementation` のみ。
 //!   OS のコード・`dlerror` の文字列はログにも画面にも出さない（security.md A09）。
-//! - ホストではコンパイルされない（`device.rs` が `target_os = "android"` で宣言）。
+//! - ホストではコンパイルされない（`lib.rs` が `target_os = "android"` で宣言）。
 
 // クレートは `deny(unsafe_code)`。FFI 境界のこのモジュールだけ許可し、各 `unsafe` に SAFETY を付ける。
 #![allow(unsafe_code)]
 
-use std::ffi::{c_void, CStr};
+use std::ffi::{CStr, c_void};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use fandhe_device::ml_inference::{DemoModel, MlInference, BIAS, INVALID_MODEL, WEIGHTS};
-use fandhe_device::DeviceError;
+use crate::contract::{BIAS, DemoModel, INVALID_MODEL, MlInference, WEIGHTS};
+use crate::error::MlInferenceError;
 
 // NeuralNetworks.h の定数。
 const TENSOR_FLOAT32: i32 = 3;
@@ -143,8 +143,8 @@ enum Stage {
 }
 
 /// NNAPI の結果コードを契約上のエラーへ写す。元のコードを `-1` に潰さず固定識別子で区別する。
-fn map_code(stage: Stage, code: i32) -> DeviceError {
-    DeviceError::Internal(match (stage, code) {
+fn map_code(stage: Stage, code: i32) -> MlInferenceError {
+    MlInferenceError::Internal(match (stage, code) {
         (Stage::Build, BAD_DATA | BAD_STATE) => INVALID_MODEL,
         (_, OUT_OF_MEMORY) => "ml_inference nnapi out_of_memory",
         (_, INCOMPLETE) => "ml_inference nnapi incomplete",
@@ -160,7 +160,7 @@ fn map_code(stage: Stage, code: i32) -> DeviceError {
 }
 
 /// `NO_ERROR` だけを先へ進める。
-fn check(stage: Stage, code: i32) -> Result<(), DeviceError> {
+fn check(stage: Stage, code: i32) -> Result<(), MlInferenceError> {
     if code == NO_ERROR {
         Ok(())
     } else {
@@ -183,7 +183,7 @@ impl Drop for Handle {
     }
 }
 
-/// 線形モデルの重みと bias（`fandhe_device::ml_inference` の SSOT から作る）。
+/// 線形モデルの重みと bias（`crate::contract` の SSOT から作る）。
 fn weights_f32() -> ([f32; 2], [f32; 1]) {
     ([WEIGHTS[0] as f32, WEIGHTS[1] as f32], [BIAS as f32])
 }
@@ -198,7 +198,7 @@ fn tensor(dims: &[u32]) -> OperandType {
     }
 }
 
-fn run(api: &Api, model_kind: DemoModel, input: [f32; 2]) -> Result<f64, DeviceError> {
+fn run(api: &Api, model_kind: DemoModel, input: [f32; 2]) -> Result<f64, MlInferenceError> {
     use Stage::{Build, Execute};
     let (weights, bias) = weights_f32();
     let activation: i32 = FUSED_NONE;
@@ -344,10 +344,10 @@ impl MlInference for NnapiMlInference {
         model: DemoModel,
         input: [f32; 2],
         _remaining: Duration,
-    ) -> Result<f64, DeviceError> {
+    ) -> Result<f64, MlInferenceError> {
         match API.get_or_init(load) {
             Some(api) => run(api, model, input),
-            None => Err(DeviceError::Unsupported("ml_inference")),
+            None => Err(MlInferenceError::Unsupported),
         }
     }
 }
@@ -366,7 +366,7 @@ mod tests {
         for c in [BAD_DATA, BAD_STATE] {
             assert!(matches!(
                 map_code(Stage::Build, c),
-                DeviceError::Internal(INVALID_MODEL)
+                MlInferenceError::Internal(INVALID_MODEL)
             ));
         }
     }
@@ -374,7 +374,7 @@ mod tests {
     #[test]
     fn execute_codes_are_not_invalid_model_and_keep_identity() {
         let e = map_code(Stage::Execute, BAD_DATA);
-        assert!(matches!(e, DeviceError::Internal(s) if s != INVALID_MODEL));
+        assert!(matches!(e, MlInferenceError::Internal(s) if s != INVALID_MODEL));
         assert_ne!(
             format!("{:?}", map_code(Stage::Execute, OP_FAILED)),
             format!("{:?}", map_code(Stage::Execute, UNMAPPABLE))

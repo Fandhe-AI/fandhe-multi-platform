@@ -72,6 +72,10 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 以前は egui-proxy の `android::run` が呼んでいた。機能 crate を egui-proxy が知らないようにするため移した）。
     #[cfg(feature = "device")]
     fandhe_cap_document_scan::reset_pending_tracking();
+    // 機械学習推論の処理済み世代も破棄する。画面状態は再生成で generation 0 に戻るため、残すと次の
+    // 「推論する」が飲み込まれる（`fandhe_cap_ml_inference::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_ml_inference::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 
