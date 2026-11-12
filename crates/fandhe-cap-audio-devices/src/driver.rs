@@ -1,8 +1,8 @@
 //! Phase 11 の拡充ループ（親 #1136）型サンプル「音声デバイス」（Issue #1330）の effect ドライバ。
 //! `fandhe_core::screens::audio_devices_show`（端末依存ゼロ）の要求を `take_request` で観測し、
-//! `fandhe_device::audio_devices::AudioDevices` を呼んで、結果を `CompletionSender` 経由で注入する
+//! `crate::contract::AudioDevices` を呼んで、結果を `CompletionSender` 経由で注入する
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる
-//! 契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::audio_devices`。
+//! 契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_cap_audio_devices`。
 //!
 //! # OS 別実装の差し込み口
 //!
@@ -17,26 +17,26 @@
 //! 初期化の都合（UI スレッドは STA、実装は MTA）と戻らない場合の備えのため、ワーカーで呼び
 //! 5 秒の期限を付ける（[`drive_worker`]）。期限切れ後に遅れて届いた結果は捨て、前回の OS 呼び出しが未終了の間は新しい呼び出しを起こさず失敗で確定する。
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::sync::Arc;
 use std::time::Duration;
 
-use fandhe_core::screens::audio_devices_show::{
-    finish_read, mark_reading, take_request, AudioDevicesReading, AudioDevicesShowState,
-    DeviceGroup, ReadFailure,
-};
 #[cfg(not(any(
     target_os = "windows",
     target_os = "macos",
     target_os = "ios",
     target_os = "android"
 )))]
-use fandhe_device::audio_devices::UnsupportedAudioDevices;
-use fandhe_device::audio_devices::{AudioDeviceList, AudioDevices, AudioDirection};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedAudioDevices;
+use crate::contract::{AudioDeviceList, AudioDevices, AudioDirection};
+use crate::error::AudioDevicesError;
+use fandhe_core::screens::audio_devices_show::{
+    AudioDevicesReading, AudioDevicesShowState, DeviceGroup, ReadFailure, finish_read,
+    mark_reading, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// Windows のワーカーが結果を待つ上限。
 const LIST_DEADLINE: Duration = Duration::from_secs(5);
@@ -51,19 +51,19 @@ static OS_CALL_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 fn platform_audio_devices() -> Arc<dyn AudioDevices> {
     #[cfg(target_os = "windows")]
     {
-        super::windows_audio_devices::implementation()
+        crate::windows::implementation()
     }
     #[cfg(target_os = "macos")]
     {
-        super::macos_audio_devices::implementation()
+        crate::macos::implementation()
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_audio_devices::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_audio_devices::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(
         target_os = "windows",
@@ -93,9 +93,9 @@ fn to_reading(l: AudioDeviceList) -> AudioDevicesReading {
 }
 
 /// エラーを画面用の失敗へ写す。画面へは固定文言のみ（OS の生コードは出さない、security.md A09）。
-fn to_failure(e: DeviceError) -> ReadFailure {
+fn to_failure(e: AudioDevicesError) -> ReadFailure {
     match e {
-        DeviceError::Unsupported(_) => ReadFailure::Unsupported,
+        AudioDevicesError::Unsupported => ReadFailure::Unsupported,
         _ => ReadFailure::Failed("音声デバイスの読み取り".to_string()),
     }
 }
@@ -217,9 +217,16 @@ pub fn audio_devices_show_effect(
 
 #[cfg(test)]
 mod tests {
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     use super::*;
-    use fandhe_core::screens::audio_devices_show::{ReadPhase, READING_STATUS, UNSUPPORTED_STATUS};
-    use fandhe_device::audio_devices::{listed, UnsupportedAudioDevices as Unsupported};
+    use crate::contract::{UnsupportedAudioDevices as Unsupported, listed};
+    use fandhe_core::screens::audio_devices_show::{READING_STATUS, ReadPhase, UNSUPPORTED_STATUS};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     struct Fake {
@@ -242,12 +249,10 @@ mod tests {
     }
 
     impl AudioDevices for Fake {
-        fn list(&self) -> Result<AudioDeviceList, DeviceError> {
+        fn list(&self) -> Result<AudioDeviceList, AudioDevicesError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             std::thread::sleep(self.delay);
-            self.result
-                .clone()
-                .ok_or(DeviceError::Internal("audio_devices list"))
+            self.result.clone().ok_or(AudioDevicesError::Internal)
         }
     }
 
@@ -263,11 +268,14 @@ mod tests {
         }
     }
 
-    type Rx = mpsc::Receiver<crate::app::Completion<AudioDevicesShowState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<AudioDevicesShowState>>;
 
     fn channel() -> (CompletionSender<AudioDevicesShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     /// 起動時の要求を `drive_sync` し、届いた完了をすべて適用した状態を返す。
@@ -415,7 +423,7 @@ mod tests {
     fn unsupported_os_implementation_is_unsupported() {
         assert!(matches!(
             platform_audio_devices().list(),
-            Err(DeviceError::Unsupported("audio_devices"))
+            Err(AudioDevicesError::Unsupported)
         ));
     }
 }

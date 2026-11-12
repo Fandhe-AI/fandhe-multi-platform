@@ -53,11 +53,6 @@ pub mod android_app_lifecycle;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_app_shortcuts;
-/// Issue #1330: Android 向け音声デバイス一覧実装。`device/audio_devices.rs` の
-/// Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_audio_devices;
 /// Issue #842: Android 向け音声セッション実装（`AudioSessionHelper.java` を JNI で呼ぶ）。
 /// `device/audio_session.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -698,9 +693,6 @@ pub mod apple_video_transcode;
 /// Issue #307（親 #90）: AR 表示の effect ドライバ（iOS は `ios_ar.rs`、
 /// 他 OS は `UnsupportedAr` 固定。Web は `fandhe-web-dom`）。
 pub mod ar;
-/// Phase 11 の拡充ループ（親 #1136、Issue #1330）: 音声デバイス一覧の effect ドライバ（macOS / Windows
-/// ・iOS・Android 実装、他 OS は `UnsupportedAudioDevices` 固定）。
-pub mod audio_devices;
 /// Phase 11 の拡充ループ（親 #172、Issue #840）: 音声の割り込み・セッション種別の effect ドライバ
 /// （iOS は #841・Android は #842 が埋めるスタブ、他 OS は `UnsupportedAudioSession` 固定）。
 pub mod audio_session;
@@ -900,11 +892,6 @@ pub mod ios_app_shortcuts;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_ar;
-/// Issue #1331: iOS 向け音声デバイス一覧実装（`ios/fandhe_ios_audio_devices.m` を呼ぶ C ABI ラッパー）。
-/// `device/audio_devices.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_audio_devices;
 /// Issue #840: iOS 向け音声セッション実装（`ios/fandhe_ios_audio_session.m` を呼ぶ C ABI ラッパー）。
 /// `device/audio_session.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1252,12 +1239,6 @@ pub mod macos_app_progress_attention;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_app_shortcuts;
-/// Issue #1330: macOS 向け音声デバイス一覧実装（`macos/fandhe_macos_audio_devices.m` を呼ぶ C ABI
-/// ラッパー）。`device/audio_devices.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
-/// テストできるよう cfg は `any(macos, test)`。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_audio_devices;
 /// Issue #1043: macOS 向けバックグラウンド処理実装（`macos/
 /// fandhe_macos_background_task.m` を呼ぶ C ABI ラッパー）。`device/
 /// background_task.rs` の macOS 経路から呼ばれる。
@@ -1731,10 +1712,6 @@ pub mod windows_app_progress_attention;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_app_shortcuts;
-/// Issue #1330: Windows 向け音声デバイス一覧実装（MMDevice `IMMDeviceEnumerator`）。
-/// `device/audio_devices.rs` の Windows 経路（ワーカー）から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_audio_devices;
 /// Issue #390: Windows 向けバックグラウンドダウンロード実装。
 /// `device/background_download.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

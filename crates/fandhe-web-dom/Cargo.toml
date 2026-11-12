@@ -32,6 +32,8 @@ fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs" }
 fandhe-cap-http-get = { path = "../fandhe-cap-http-get" }
 # multi-display の契約（検証・READ_INTERVAL・ScreenInfo）。Web 実装本体は本クレートに残る。
 fandhe-cap-multi-display = { path = "../fandhe-cap-multi-display" }
+# audio-devices の契約（listed・AudioDirection・MAX_DEVICES）。Web 実装本体は本クレートに残る。
+fandhe-cap-audio-devices = { path = "../fandhe-cap-audio-devices" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。
 fandhe-platform-web = { path = "../fandhe-platform-web" }
 

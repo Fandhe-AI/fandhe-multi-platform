@@ -1,13 +1,13 @@
 //! iOS 向け音声デバイス一覧実装（Issue #1331）。`ios/fandhe_ios_audio_devices.m`
 //! （`AVAudioSession` の読み取り。`build.rs` が iOS 分岐で feature `device` 有効時にコンパイルする）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
-//! `device/audio_devices.rs` の iOS 経路から呼ばれ、契約は `fandhe_device::audio_devices`。
+//! `fandhe-cap-audio-devices/src/driver.rs` の iOS 経路から呼ばれ、契約は `fandhe_cap_audio_devices`。
 //!
 //! 写像（[`from_raw`]）はホストでもテストできるようモジュールは `cfg(any(ios, test))`。
 //!
 //! # 再描画
 //!
-//! 同期読み取りで OS コールバックを持たないため `crate::ios::request_repaint` は呼ばない。結果は
+//! 同期読み取りで OS コールバックを持たないため `fandhe_runtime::request_repaint` は呼ばない。結果は
 //! `CompletionSender::send` で渡り、その中の `ctx.request_repaint()` が次フレームを起こす
 //! （device-info の iOS 実装と同じ形）。
 //!
@@ -28,9 +28,9 @@ use std::ffi::CStr;
 #[cfg(target_os = "ios")]
 use std::sync::Arc;
 
-use fandhe_device::audio_devices::{listed, AudioDeviceList, AudioDirection, MAX_DEVICES};
+use crate::contract::{AudioDeviceList, AudioDirection, MAX_DEVICES, listed};
 #[cfg(target_os = "ios")]
-use fandhe_device::audio_devices::{require_listed, AudioDevices};
+use crate::contract::{AudioDevices, require_listed};
 
 const NAME_BYTES: usize = 512;
 
@@ -86,7 +86,7 @@ mod ffi {
     // SAFETY: `ios/fandhe_ios_audio_devices.m`（`build.rs` が iOS 分岐で feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_ios_audio_devices_list(out: *mut Raw) -> i32;
     }
 
@@ -103,7 +103,7 @@ struct IosAudioDevices;
 
 #[cfg(target_os = "ios")]
 impl AudioDevices for IosAudioDevices {
-    fn list(&self) -> Result<AudioDeviceList, fandhe_device::DeviceError> {
+    fn list(&self) -> Result<AudioDeviceList, crate::error::AudioDevicesError> {
         // 約 64KB。UI スレッドのスタックで足りる。
         let mut raw = Raw {
             category: 0,
@@ -113,13 +113,13 @@ impl AudioDevices for IosAudioDevices {
             outputs: [[0; NAME_BYTES]; MAX_DEVICES],
         };
         if ffi::list(&mut raw) != 0 {
-            return Err(fandhe_device::DeviceError::Internal("audio_devices list"));
+            return Err(crate::error::AudioDevicesError::Internal);
         }
         require_listed(from_raw(&raw))
     }
 }
 
-/// iOS の `AudioDevices` 実装を返す（`device/audio_devices.rs` の dispatch から呼ばれる）。
+/// iOS の `AudioDevices` 実装を返す（`fandhe-cap-audio-devices/src/driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "ios")]
 pub(crate) fn implementation() -> Arc<dyn AudioDevices> {
     Arc::new(IosAudioDevices)
@@ -128,7 +128,7 @@ pub(crate) fn implementation() -> Arc<dyn AudioDevices> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::audio_devices::{require_listed, AudioDevice};
+    use crate::contract::{AudioDevice, require_listed};
 
     fn blank() -> Box<Raw> {
         Box::new(Raw {

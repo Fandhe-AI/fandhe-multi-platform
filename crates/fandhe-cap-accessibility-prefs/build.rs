@@ -7,7 +7,7 @@ fn main() {
     if target_is_ios() || target_is_macos() {
         compile_objc(
             "apple/fandhe_apple_accessibility_prefs.m",
-            &["Foundation", ui_framework()],
+            &[ui_framework(), "Foundation"],
         );
     }
 }

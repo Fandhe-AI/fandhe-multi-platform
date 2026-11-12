@@ -4678,13 +4678,6 @@ public class MainActivity extends GameActivity {
         return AlarmHelper.state(getApplicationContext());
     }
 
-    // Rust 側（`device/android_audio_devices.rs`、Issue #1332）から JNI 経由で egui スレッドが
-    // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
-    // `AudioDevicesHelper` 冒頭を参照。失敗は null。
-    private String audioDevicesList() {
-        return AudioDevicesHelper.list(getApplicationContext());
-    }
-
     // Rust 側（`device/android_managed_app_config.rs`、Issue #946）からワーカースレッドが JNI 経由で
     // 押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
     // `ManagedAppConfigHelper` 冒頭を参照。失敗は null。ディスク I/O を伴うので UI スレッドから呼ばない。

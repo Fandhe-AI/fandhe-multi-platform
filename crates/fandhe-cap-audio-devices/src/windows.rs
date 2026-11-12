@@ -1,8 +1,8 @@
 //! Windows 向け音声デバイス一覧実装（Issue #1330）。Core Audio の MMDevice API
 //! （`IMMDeviceEnumerator::EnumAudioEndpoints`、`DEVICE_STATE_ACTIVE`）で接続中の入力（capture）
 //! と出力（render）のエンドポイントを列挙し、`PKEY_Device_FriendlyName` を名前にする。
-//! `device/audio_devices.rs` の Windows 経路（`drive_worker`）からワーカースレッド上で呼ばれ、
-//! 契約は `fandhe_device::audio_devices`。
+//! `fandhe-cap-audio-devices/src/driver.rs` の Windows 経路（`drive_worker`）からワーカースレッド上で呼ばれ、
+//! 契約は `fandhe_cap_audio_devices`。
 //!
 //! # スレッドと COM
 //!
@@ -28,17 +28,17 @@
 
 use std::sync::Arc;
 
-use fandhe_device::audio_devices::{
-    listed, require_listed, AudioDeviceList, AudioDevices, AudioDirection, MAX_DEVICES,
+use crate::contract::{
+    AudioDeviceList, AudioDevices, AudioDirection, MAX_DEVICES, listed, require_listed,
 };
-use fandhe_device::DeviceError;
+use crate::error::AudioDevicesError;
 use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
 use windows::Win32::Media::Audio::{
-    eCapture, eRender, EDataFlow, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator,
-    DEVICE_STATE_ACTIVE,
+    DEVICE_STATE_ACTIVE, EDataFlow, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator, eCapture,
+    eRender,
 };
 use windows::Win32::System::Com::StructuredStorage::PropVariantClear;
-use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL, STGM_READ};
+use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance, STGM_READ};
 use windows::Win32::System::Variant::VT_LPWSTR;
 
 use fandhe_platform_windows::ComInit;
@@ -87,12 +87,12 @@ fn direction(enumerator: &IMMDeviceEnumerator, flow: EDataFlow) -> AudioDirectio
 
 impl AudioDevices for WindowsAudioDevices {
     #[allow(unsafe_code)]
-    fn list(&self) -> Result<AudioDeviceList, DeviceError> {
-        let _com = ComInit::new().map_err(|_| DeviceError::Internal("audio_devices list"))?;
+    fn list(&self) -> Result<AudioDeviceList, AudioDevicesError> {
+        let _com = ComInit::new().map_err(|_| AudioDevicesError::Internal)?;
         // SAFETY: COM を初期化済みのスレッドで、クラス ID とインターフェースは windows クレートの定義。
         let enumerator: IMMDeviceEnumerator =
             unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) }
-                .map_err(|_| DeviceError::Internal("audio_devices list"))?;
+                .map_err(|_| AudioDevicesError::Internal)?;
         require_listed(AudioDeviceList {
             inputs: direction(&enumerator, eCapture),
             outputs: direction(&enumerator, eRender),
@@ -100,7 +100,7 @@ impl AudioDevices for WindowsAudioDevices {
     }
 }
 
-/// Windows の `AudioDevices` 実装を返す（`device/audio_devices.rs` の dispatch から呼ばれる）。
+/// Windows の `AudioDevices` 実装を返す（`fandhe-cap-audio-devices/src/driver.rs` の dispatch から呼ばれる）。
 pub(crate) fn implementation() -> Arc<dyn AudioDevices> {
     Arc::new(WindowsAudioDevices)
 }

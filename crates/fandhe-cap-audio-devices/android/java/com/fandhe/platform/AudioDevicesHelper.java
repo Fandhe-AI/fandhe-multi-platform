@@ -4,8 +4,8 @@ import android.content.Context;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 
-// 音声デバイス一覧画面（Issue #1332、親 #1136）の Android 実装ヘルパー。MainActivity.audioDevicesList()
-// から委譲される。Rust の `device/android_audio_devices.rs` が egui スレッドからボタン押下ごとに
+// 音声デバイス一覧画面（Issue #1332、親 #1136）の Android 実装ヘルパー。static メソッド list(Context)
+// から委譲される。Rust の `fandhe-cap-audio-devices/src/android.rs` が egui スレッドからボタン押下ごとに
 // JNI（`()Ljava/lang/String;`）で 1 回呼ぶ同期 getter で、Java -> Rust の native コールバックは
 // 無い（no-op スタブ不要）。
 //
@@ -27,7 +27,8 @@ final class AudioDevicesHelper {
 
     private AudioDevicesHelper() {}
 
-    static String list(Context context) {
+    static String list(Context activity) {
+        Context context = activity.getApplicationContext();
         try {
             AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
             if (am == null) {

@@ -378,7 +378,7 @@ windows = { workspace = true, optional = true, features = [
     # `RtlGetVersion`（`Wdk_System_SystemServices`）を呼ぶ。新規パッケージは増えない。
     "Win32_System_SystemInformation",
     "Wdk_System_SystemServices",
-    # Issue #1330: `device/windows_audio_devices.rs` が `IMMDeviceEnumerator` / `EnumAudioEndpoints`
+    # Issue #1330: `fandhe-cap-audio-devices/src/windows.rs` が `IMMDeviceEnumerator` / `EnumAudioEndpoints`
     # （`Win32_Media_Audio`）と `PKEY_Device_FriendlyName`（`Win32_Devices_FunctionDiscovery`）を呼ぶ。
     # 新規パッケージは増えない。
     "Win32_Media_Audio",

@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #1136、Issue #1330）: 接続中の音声入力・出力デバイスの名前を
-//! 一覧で 1 回読む契約。`fandhe-egui-proxy` の `device/audio_devices.rs` が起動時と「再取得」
+//! 一覧で 1 回読む契約。`fandhe-cap-audio-devices`（`src/driver.rs`） が起動時と「再取得」
 //! ボタン押下時に [`AudioDevices::list`] を 1 回だけ呼び、各 OS 実装（macOS: Core Audio、
 //! Windows: MMDevice、iOS: #1331、Android: #1332）が本トレイトを実装する。Web は
 //! `fandhe-web-dom` 側（#1333）で `enumerateDevices` を使い、本トレイトは経由しない。
@@ -10,8 +10,8 @@
 //!
 //! - 成功: [`AudioDeviceList`]。方向ごとに [`AudioDirection`] で「列挙できた（0 件を含む）」
 //!   「列挙する手段が無い」「入力を許すセッションのときだけ取れる」を区別する。0 件は正常
-//! - 非対応: `Err(DeviceError::Unsupported("audio_devices"))`
-//! - 失敗: `Err(DeviceError::Internal("audio_devices list"))`（OS 呼び出しの失敗、または両方向とも
+//! - 非対応: `Err(AudioDevicesError::Unsupported)`
+//! - 失敗: `Err(AudioDevicesError::Internal)`（OS 呼び出しの失敗、または両方向とも
 //!   列挙できなかった場合。[`require_listed`]）
 //!
 //! `PermissionDenied` は返さない（権限ダイアログの経路が無い。I/O を開かず名前だけ読む）。
@@ -21,7 +21,7 @@
 //!
 //! デバイス ID・UID・エンドポイント ID・MAC は読まない・保持しない・ログに出さない
 //! （プライバシー）。種別（内蔵 / Bluetooth 等）・既定・使用中の印も持たない。名前の加工は
-//! [`crate::device_info::clean_text`]（制御文字除去・128 文字）のみ。
+//! [`fandhe_device::device_info::clean_text`]（制御文字除去・128 文字）のみ。
 //!
 //! # 件数上限
 //!
@@ -42,8 +42,8 @@
 //! Android の内蔵機器は機種名で並ぶ。iOS の入力一覧はマイクを使うセッション中のみ取れる
 //! （[`AudioDirection::OnlyWhileMicActive`]）。
 
-use crate::DeviceError;
-use crate::device_info::clean_text;
+use crate::error::AudioDevicesError;
+use fandhe_device::device_info::clean_text;
 
 /// 1 方向あたりの最大件数。
 pub const MAX_DEVICES: usize = 64;
@@ -78,7 +78,7 @@ pub struct AudioDeviceList {
 /// 接続中の音声デバイスを 1 回読む。
 pub trait AudioDevices: Send + Sync {
     /// 契約はモジュール doc 参照。
-    fn list(&self) -> Result<AudioDeviceList, DeviceError>;
+    fn list(&self) -> Result<AudioDeviceList, AudioDevicesError>;
 }
 
 /// 非対応 OS 向けの実装。常に `Unsupported` を返し、成功値へは倒さない。
@@ -86,8 +86,8 @@ pub trait AudioDevices: Send + Sync {
 pub struct UnsupportedAudioDevices;
 
 impl AudioDevices for UnsupportedAudioDevices {
-    fn list(&self) -> Result<AudioDeviceList, DeviceError> {
-        Err(DeviceError::Unsupported("audio_devices"))
+    fn list(&self) -> Result<AudioDeviceList, AudioDevicesError> {
+        Err(AudioDevicesError::Unsupported)
     }
 }
 
@@ -106,13 +106,13 @@ pub fn listed(names: impl IntoIterator<Item = Option<String>>) -> AudioDirection
 }
 
 /// 両方向とも `Listed` でなければ `Internal`（全不明を成功に畳まない）。
-pub fn require_listed(list: AudioDeviceList) -> Result<AudioDeviceList, DeviceError> {
+pub fn require_listed(list: AudioDeviceList) -> Result<AudioDeviceList, AudioDevicesError> {
     if matches!(list.inputs, AudioDirection::Listed(_))
         || matches!(list.outputs, AudioDirection::Listed(_))
     {
         Ok(list)
     } else {
-        Err(DeviceError::Internal("audio_devices list"))
+        Err(AudioDevicesError::Internal)
     }
 }
 
@@ -124,7 +124,7 @@ mod tests {
     fn unsupported_never_succeeds() {
         assert!(matches!(
             UnsupportedAudioDevices.list(),
-            Err(DeviceError::Unsupported("audio_devices"))
+            Err(AudioDevicesError::Unsupported)
         ));
     }
 
@@ -159,7 +159,7 @@ mod tests {
         };
         assert!(matches!(
             require_listed(bad),
-            Err(DeviceError::Internal("audio_devices list"))
+            Err(AudioDevicesError::Internal)
         ));
         let one = AudioDeviceList {
             inputs: AudioDirection::Unavailable,

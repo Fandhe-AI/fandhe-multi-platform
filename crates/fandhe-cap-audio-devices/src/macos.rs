@@ -1,8 +1,8 @@
 //! macOS 向け音声デバイス一覧実装（Issue #1330）。`macos/fandhe_macos_audio_devices.m`
 //! （Core Audio のデバイス列挙、`build.rs` が macOS ターゲットの feature `device` 有効時に
 //! コンパイルし CoreAudio をリンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` は
-//! この呼び出しに閉じ `// SAFETY:` で契約を明記する。`device/audio_devices.rs` の macOS 経路から
-//! 呼ばれ、契約は `fandhe_device::audio_devices`。
+//! この呼び出しに閉じ `// SAFETY:` で契約を明記する。`fandhe-cap-audio-devices/src/driver.rs` の macOS 経路から
+//! 呼ばれ、契約は `fandhe_cap_audio_devices`。
 //!
 //! `.m` が返す固定長バッファは [`from_raw`] で契約の値へ写す。写像はホストでもテストできるよう
 //! モジュールは `cfg(any(macos, test))`。
@@ -18,8 +18,8 @@ use std::ffi::CStr;
 use std::sync::Arc;
 
 #[cfg(target_os = "macos")]
-use fandhe_device::audio_devices::require_listed;
-use fandhe_device::audio_devices::{listed, AudioDeviceList, AudioDirection, MAX_DEVICES};
+use crate::contract::require_listed;
+use crate::contract::{AudioDeviceList, AudioDirection, MAX_DEVICES, listed};
 
 const NAME_BYTES: usize = 512;
 
@@ -61,7 +61,7 @@ mod ffi {
     // SAFETY: `macos/fandhe_macos_audio_devices.m`（`build.rs` が macOS ターゲットの feature
     // `device` 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_audio_devices_list(out: *mut Raw) -> i32;
     }
 
@@ -77,8 +77,8 @@ mod ffi {
 struct MacAudioDevices;
 
 #[cfg(target_os = "macos")]
-impl fandhe_device::audio_devices::AudioDevices for MacAudioDevices {
-    fn list(&self) -> Result<AudioDeviceList, fandhe_device::DeviceError> {
+impl crate::contract::AudioDevices for MacAudioDevices {
+    fn list(&self) -> Result<AudioDeviceList, crate::error::AudioDevicesError> {
         // 約 64KB。UI スレッドのスタックで足りる。
         let mut raw = Raw {
             input_count: 0,
@@ -87,22 +87,22 @@ impl fandhe_device::audio_devices::AudioDevices for MacAudioDevices {
             outputs: [[0; NAME_BYTES]; MAX_DEVICES],
         };
         if ffi::list(&mut raw) != 0 {
-            return Err(fandhe_device::DeviceError::Internal("audio_devices list"));
+            return Err(crate::error::AudioDevicesError::Internal);
         }
         require_listed(from_raw(&raw))
     }
 }
 
-/// macOS の `AudioDevices` 実装を返す（`device/audio_devices.rs` の dispatch から呼ばれる）。
+/// macOS の `AudioDevices` 実装を返す（`fandhe-cap-audio-devices/src/driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "macos")]
-pub(crate) fn implementation() -> Arc<dyn fandhe_device::audio_devices::AudioDevices> {
+pub(crate) fn implementation() -> Arc<dyn crate::contract::AudioDevices> {
     Arc::new(MacAudioDevices)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::audio_devices::AudioDevice;
+    use crate::contract::AudioDevice;
 
     fn blank() -> Box<Raw> {
         Box::new(Raw {

@@ -219,8 +219,6 @@ fn build() {
     compile_ios_managed_app_config();
     // `ios/fandhe_ios_safe_area_insets.m`（Issue #445）。iOS 分岐のみ。
     compile_ios_safe_area_insets();
-    // `ios/fandhe_ios_audio_devices.m`（Issue #1331）。iOS 分岐のみ。
-    compile_ios_audio_devices();
     // `ios/fandhe_ios_audio_session.m`（Issue #841）。iOS 分岐のみ。
     compile_ios_audio_session();
     // `ios/fandhe_ios_local_fonts.m`（Issue #1377）。iOS 分岐のみ。
@@ -843,15 +841,6 @@ fn compile_apple_midi() {
     compile_objc("apple/fandhe_apple_midi.m", &["CoreMIDI", "Foundation"]);
 }
 
-/// `macos/fandhe_macos_audio_devices.m` を `cc` でコンパイルする（Issue #1330）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_audio_devices.rs` が使う）。CoreAudio を追加でリンクする。
-fn compile_macos_audio_devices() {
-    compile_objc(
-        "macos/fandhe_macos_audio_devices.m",
-        &["CoreAudio", "Foundation"],
-    );
-}
-
 /// `macos/fandhe_macos_volume_control.m` を `cc` でコンパイルする（Issue #785）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_volume_control.rs` が使う）。CoreAudio と AudioToolbox
 /// （`kAudioHardwareServiceDeviceProperty_VirtualMainVolume`）を追加でリンクする。
@@ -1347,15 +1336,6 @@ fn compile_ios_safe_area_insets() {
     compile_objc("ios/fandhe_ios_safe_area_insets.m", &["UIKit"]);
 }
 
-/// `ios/fandhe_ios_audio_devices.m` を `cc` でコンパイルする（Issue #1331）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_audio_devices.rs` が使う）。
-fn compile_ios_audio_devices() {
-    compile_objc(
-        "ios/fandhe_ios_audio_devices.m",
-        &["AVFoundation", "Foundation"],
-    );
-}
-
 /// `ios/fandhe_ios_audio_session.m` を `cc` でコンパイルする（Issue #841）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_audio_session.rs` が使う）。
 fn compile_ios_audio_session() {
@@ -1646,8 +1626,6 @@ fn build_macos() {
     compile_macos_file_preview();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。
     compile_macos_print();
-    // `macos/fandhe_macos_audio_devices.m`（Issue #1330）も macOS 専用。CoreAudio を使う。
-    compile_macos_audio_devices();
     // `macos/fandhe_macos_volume_control.m`（Issue #785）も macOS 専用。CoreAudio・AudioToolbox を使う。
     compile_macos_volume_control();
     // `apple/fandhe_apple_media_cast.m`（Issue #386 macOS + #387 iOS）。iOS 分岐と共用する。AVKit・CoreAudio を使う。

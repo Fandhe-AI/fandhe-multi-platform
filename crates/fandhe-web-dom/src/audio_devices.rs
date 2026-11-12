@@ -33,8 +33,8 @@
 //! 再取得まで）、複数タブ間の一致、非表示タブで `enumerateDevices` が解決しない場合の期限
 //! （device_info と同じ扱い）、入力 0 台でマイクを許可できない環境の出力が「許可後に表示」のまま残ること。
 
+use fandhe_cap_audio_devices::{listed, AudioDirection};
 use fandhe_core::screens::audio_devices_show::{AudioDevicesReading, DeviceGroup};
-use fandhe_device::audio_devices::{listed, AudioDirection};
 
 /// `kind` と `label` の組から表示用の読み取り結果を作る純関数。
 ///
@@ -306,7 +306,7 @@ mod tests {
         let r = reading_from_entries(&many, true, Some(true), Some(true));
         assert_eq!(
             names(&r.inputs).len(),
-            fandhe_device::audio_devices::MAX_DEVICES
+            fandhe_cap_audio_devices::MAX_DEVICES
         );
     }
 

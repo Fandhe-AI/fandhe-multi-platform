@@ -1,8 +1,8 @@
-//! Android 向け音声デバイス一覧実装（Issue #1332）。`device/audio_devices.rs` の Android 経路
+//! Android 向け音声デバイス一覧実装（Issue #1332）。`fandhe-cap-audio-devices/src/driver.rs` の Android 経路
 //! （`drive_sync`）から egui スレッドでボタン押下ごとに同期で 1 回呼ばれる。契約は
-//! `fandhe_device::audio_devices`（範囲は接続中デバイス名の一覧のみ。選択・切り替え・音量は範囲外）。
+//! `fandhe_cap_audio_devices`（範囲は接続中デバイス名の一覧のみ。選択・切り替え・音量は範囲外）。
 //!
-//! Java 側 `MainActivity.audioDevicesList()`（JNI シグネチャ `()Ljava/lang/String;`）が
+//! Java 側 `AudioDevicesHelper.list`（JNI シグネチャ `()Ljava/lang/String;`）が
 //! `AudioDevicesHelper.list` へ委譲し、入力・出力の名前を U+001D 区切りの 2 区画で返す。
 //! 詰め方の SSOT は `AudioDevicesHelper.java` 冒頭。文字列から契約の値への写像は純関数
 //! [`from_android`] に置き、ホストでもテストする。
@@ -22,7 +22,7 @@
 //! <https://developer.android.com/reference/android/media/AudioManager#getDevices(int)>、
 //! <https://developer.android.com/reference/android/media/AudioDeviceInfo>
 
-use fandhe_device::audio_devices::{listed, AudioDeviceList, AudioDirection};
+use crate::contract::{AudioDeviceList, AudioDirection, listed};
 
 /// Java が項目をつなぐ区切り文字（U+001F）。
 const SEP: char = '\u{1F}';
@@ -55,38 +55,29 @@ fn from_android(raw: &str) -> Option<AudioDeviceList> {
 #[cfg(target_os = "android")]
 mod jni_impl {
     use super::from_android;
-    use crate::device::android::JniCallFailed;
-    use fandhe_device::audio_devices::{require_listed, AudioDeviceList, AudioDevices};
-    use fandhe_device::DeviceError;
+    use crate::contract::{AudioDeviceList, AudioDevices, require_listed};
+    use crate::error::AudioDevicesError;
+    use fandhe_platform_android::{JniCallFailed, with_activity_class};
 
-    /// Android の `AudioDevices` 実装（`MainActivity.audioDevicesList()` を JNI で呼ぶ）。
+    /// Android の `AudioDevices` 実装（`AudioDevicesHelper.list` を JNI で呼ぶ）。
     pub(super) struct AndroidAudioDevices;
 
     impl AudioDevices for AndroidAudioDevices {
-        /// 2 箇所の `unsafe` は `AndroidDeviceInfo::read` と同じ根拠・同じ形。
-        #[allow(unsafe_code)]
-        fn list(&self) -> Result<AudioDeviceList, DeviceError> {
-            const FAILED: DeviceError = DeviceError::Internal("audio_devices list");
-            let Some(app) = crate::android::android_app() else {
+        fn list(&self) -> Result<AudioDeviceList, AudioDevicesError> {
+            const FAILED: AudioDevicesError = AudioDevicesError::Internal;
+            let Some(app) = fandhe_platform_android::android_app() else {
                 return Err(FAILED);
             };
 
-            // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。`vm_as_ptr()` は
-            // android-activity が管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
-            let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-            let result = vm.attach_current_thread(
-                |env: &mut jni::Env| -> Result<Option<String>, JniCallFailed> {
-                    let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                    // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。未所有の JNI
-                    // グローバル参照を `Cast` で包むだけで delete は試みない。
-                    let activity =
-                        unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                    let ret = env.call_method(
-                        &activity,
-                        jni::jni_str!("audioDevicesList"),
-                        jni::jni_sig!(() -> java.lang.String),
-                        &[],
+            let result = with_activity_class(
+                &app,
+                jni::jni_str!("com.fandhe.platform.AudioDevicesHelper"),
+                |env, activity, class| -> Result<Option<String>, JniCallFailed> {
+                    let ret = env.call_static_method(
+                        class,
+                        jni::jni_str!("list"),
+                        jni::jni_sig!((android.content.Context) -> java.lang.String),
+                        &[jni::objects::JValue::Object(activity)],
                     );
                     let ret = match ret {
                         Ok(v) => v,
@@ -115,14 +106,14 @@ mod jni_impl {
 
 /// Android の `AudioDevices` 実装を返す。
 #[cfg(target_os = "android")]
-pub(crate) fn implementation() -> std::sync::Arc<dyn fandhe_device::audio_devices::AudioDevices> {
+pub(crate) fn implementation() -> std::sync::Arc<dyn crate::contract::AudioDevices> {
     std::sync::Arc::new(jni_impl::AndroidAudioDevices)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::audio_devices::{require_listed, MAX_DEVICES};
+    use crate::contract::{MAX_DEVICES, require_listed};
 
     fn names(d: &AudioDirection) -> Vec<Option<&str>> {
         match d {

@@ -303,7 +303,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "audio_devices_show" => fandhe_core::screens::audio_devices_show::current_screen,
-    fandhe_egui_proxy::device::audio_devices::audio_devices_show_effect,
+    fandhe_cap_audio_devices::audio_devices_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "local_fonts_show" => fandhe_core::screens::local_fonts_show::current_screen,
