@@ -1062,6 +1062,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-accessibility-prefs"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-camera-capture"
 version = "0.2.0"
 dependencies = [
@@ -1231,6 +1244,7 @@ name = "fandhe-gallery"
 version = "0.1.0"
 dependencies = [
  "egui",
+ "fandhe-cap-accessibility-prefs",
  "fandhe-cap-camera-capture",
  "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
@@ -1332,6 +1346,7 @@ name = "fandhe-web-dom"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "fandhe-cap-accessibility-prefs",
  "fandhe-cap-http-get",
  "fandhe-cap-share-receive",
  "fandhe-core",

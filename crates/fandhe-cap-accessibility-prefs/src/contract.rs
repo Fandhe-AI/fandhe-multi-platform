@@ -5,7 +5,7 @@
 //!
 //! # 契約
 //!
-//! - 結果は [`AccessibilityPrefs`]（2 設定を 1 回の読み取りで返す）か `DeviceError`
+//! - 結果は [`AccessibilityPrefs`]（2 設定を 1 回の読み取りで返す）か `AccessibilityPrefsError`
 //!   （`Unsupported` / `Internal` のみ。新しい失敗 enum は作らない）
 //! - 各設定の `None` は「この OS・この版では取得できない（不明）」で、「オフ」とは偽らない
 //!   （`device-bridge-contracts.md`「6. 嘘の成功」）。失敗・非対応も「オン」「オフ」にしない
@@ -27,7 +27,7 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::AccessibilityPrefsError;
 
 /// 画面側が OS を読み直す間隔。`fandhe-egui-proxy` と `fandhe-web-dom` が共有する唯一の値。
 pub const READ_INTERVAL: Duration = Duration::from_secs(1);
@@ -44,7 +44,7 @@ pub struct AccessibilityPrefs {
 /// 設定を 1 回読む。UI スレッドで同期に呼ばれるため短時間で戻ること。
 pub trait AccessibilityPrefsSource: Send + Sync {
     /// 現在の設定を返す。失敗後に直前の値を返し続けてはならない。
-    fn read(&self) -> Result<AccessibilityPrefs, DeviceError>;
+    fn read(&self) -> Result<AccessibilityPrefs, AccessibilityPrefsError>;
 }
 
 /// 常に非対応を返す実装（未実装 OS の dispatch 先・スタブ）。
@@ -52,8 +52,8 @@ pub trait AccessibilityPrefsSource: Send + Sync {
 pub struct UnsupportedAccessibilityPrefs;
 
 impl AccessibilityPrefsSource for UnsupportedAccessibilityPrefs {
-    fn read(&self) -> Result<AccessibilityPrefs, DeviceError> {
-        Err(DeviceError::Unsupported("accessibility_prefs"))
+    fn read(&self) -> Result<AccessibilityPrefs, AccessibilityPrefsError> {
+        Err(AccessibilityPrefsError::Unsupported)
     }
 }
 
@@ -64,9 +64,6 @@ mod tests {
     #[test]
     fn unsupported_never_succeeds() {
         let r = UnsupportedAccessibilityPrefs.read();
-        assert!(matches!(
-            r,
-            Err(DeviceError::Unsupported("accessibility_prefs"))
-        ));
+        assert!(matches!(r, Err(AccessibilityPrefsError::Unsupported)));
     }
 }

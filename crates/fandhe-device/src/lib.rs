@@ -17,8 +17,6 @@
 //! #745 の API が確定してから #747〜#749 側で行う。
 #![forbid(unsafe_code)]
 
-/// Phase 11（端末機能の拡充ループ、親 #1132、Issue #1308）: アクセシビリティ設定（視差軽減・コントラスト）。
-pub mod accessibility_prefs;
 /// Phase 11（端末機能の拡充ループ、親 #124、Issue #613）: 行動認識（歩行・走行・乗り物など）。
 pub mod activity_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #140、Issue #721）: アラーム・正確な時刻の予約（Windows 実装、他 OS は `Unsupported` 固定）。

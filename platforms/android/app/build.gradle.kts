@@ -86,6 +86,8 @@ android {
             // 宣言とここの srcDirs の一致を確かめる。
             // BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-accessibility-prefs/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-camera-capture/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-device-identifier/android/java")

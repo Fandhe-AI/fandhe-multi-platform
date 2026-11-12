@@ -4968,12 +4968,6 @@ public class MainActivity extends GameActivity {
         return NetworkStatusHelper.read(getApplicationContext());
     }
 
-    // Rust 側（`AndroidAccessibilityPrefs::call_read`、JNI 署名 `()I`）から 1 秒間隔で呼ばれる
-    // 同期メソッド（Issue #1310）。結果コードの意味は `AccessibilityPrefsHelper` を参照。
-    private int accessibilityPrefsRead() {
-        return AccessibilityPrefsHelper.read(getApplicationContext());
-    }
-
     // Rust 側（`AndroidAccentColor::call_read`、JNI 署名 `()I`）から 1 秒間隔で呼ばれる
     // 同期メソッド（Issue #422）。結果コードの意味は `SystemAccentColorHelper` を参照。
     private int systemAccentColorRead() {

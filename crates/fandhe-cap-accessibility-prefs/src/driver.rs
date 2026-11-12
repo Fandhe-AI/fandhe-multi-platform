@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #1132、Issue #1308）「アクセシビリティ設定の追従」の effect ドライバ。
-//! `fandhe_device::accessibility_prefs::AccessibilityPrefsSource` を一定間隔で読み、結果を
+//! `crate::contract::AccessibilityPrefsSource` を一定間隔で読み、結果を
 //! `fandhe_core::screens::accessibility_prefs_show`（端末依存ゼロ）へ注入する
 //! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。
 //!
@@ -15,22 +15,20 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::accessibility_prefs_show::{
-    advance_phase, animates, apply_read, AccessibilityPrefsShowState, Prefs, ReadFailure,
-};
 #[cfg(not(any(
     target_os = "windows",
     target_os = "macos",
     target_os = "ios",
     target_os = "android"
 )))]
-use fandhe_device::accessibility_prefs::UnsupportedAccessibilityPrefs;
-use fandhe_device::accessibility_prefs::{
-    AccessibilityPrefs, AccessibilityPrefsSource, READ_INTERVAL,
+use crate::contract::UnsupportedAccessibilityPrefs;
+use crate::contract::{AccessibilityPrefs, AccessibilityPrefsSource, READ_INTERVAL};
+use crate::error::AccessibilityPrefsError;
+use fandhe_core::screens::accessibility_prefs_show::{
+    AccessibilityPrefsShowState, Prefs, ReadFailure, advance_phase, animates, apply_read,
 };
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 1 フレームで進める時間の上限（バックグラウンド復帰などの飛び対策）。
 const MAX_DT: f32 = 0.1;
@@ -41,19 +39,19 @@ const DEFAULT_DT: f32 = 1.0 / 60.0;
 fn implementation() -> Arc<dyn AccessibilityPrefsSource> {
     #[cfg(target_os = "windows")]
     {
-        Arc::new(super::windows_accessibility_prefs::WindowsAccessibilityPrefs)
+        Arc::new(crate::windows::WindowsAccessibilityPrefs)
     }
     #[cfg(target_os = "macos")]
     {
-        Arc::new(super::apple_accessibility_prefs::AppleAccessibilityPrefs)
+        Arc::new(crate::apple::AppleAccessibilityPrefs)
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_accessibility_prefs::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_accessibility_prefs::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(
         target_os = "windows",
@@ -68,13 +66,13 @@ fn implementation() -> Arc<dyn AccessibilityPrefsSource> {
 
 /// 契約の結果を画面の入力へ写す。失敗は固定文言へ畳み、OS 固有値を画面へ漏らさない
 /// （security.md A09）。
-fn to_result(r: Result<AccessibilityPrefs, DeviceError>) -> Result<Prefs, ReadFailure> {
+fn to_result(r: Result<AccessibilityPrefs, AccessibilityPrefsError>) -> Result<Prefs, ReadFailure> {
     match r {
         Ok(p) => Ok(Prefs {
             reduce_motion: p.reduce_motion,
             increase_contrast: p.increase_contrast,
         }),
-        Err(DeviceError::Unsupported(_)) => Err(ReadFailure::Unsupported),
+        Err(AccessibilityPrefsError::Unsupported) => Err(ReadFailure::Unsupported),
         Err(_) => Err(ReadFailure::Failed("設定の取得".to_string())),
     }
 }
@@ -159,26 +157,35 @@ pub fn accessibility_prefs_show_effect(
 
 #[cfg(test)]
 mod tests {
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     use super::*;
-    use fandhe_core::screens::accessibility_prefs_show::{status_text, PrefsView};
-    use fandhe_device::accessibility_prefs::UnsupportedAccessibilityPrefs as Unsupported;
+    use crate::contract::UnsupportedAccessibilityPrefs as Unsupported;
+    use fandhe_core::screens::accessibility_prefs_show::{PrefsView, status_text};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<AccessibilityPrefsShowState>>;
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<AccessibilityPrefsShowState>>;
 
     fn sender_with_channel() -> (CompletionSender<AccessibilityPrefsShowState>, Rx) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     struct Fake {
-        result: Result<AccessibilityPrefs, DeviceError>,
+        result: Result<AccessibilityPrefs, AccessibilityPrefsError>,
         reads: AtomicUsize,
     }
 
     impl Fake {
-        fn new(result: Result<AccessibilityPrefs, DeviceError>) -> Self {
+        fn new(result: Result<AccessibilityPrefs, AccessibilityPrefsError>) -> Self {
             Self {
                 result,
                 reads: AtomicUsize::new(0),
@@ -193,12 +200,14 @@ mod tests {
     }
 
     impl AccessibilityPrefsSource for Fake {
-        fn read(&self) -> Result<AccessibilityPrefs, DeviceError> {
+        fn read(&self) -> Result<AccessibilityPrefs, AccessibilityPrefsError> {
             self.reads.fetch_add(1, Ordering::SeqCst);
             match &self.result {
                 Ok(p) => Ok(*p),
-                Err(DeviceError::Unsupported(n)) => Err(DeviceError::Unsupported(n)),
-                Err(_) => Err(DeviceError::Internal("x")),
+                Err(AccessibilityPrefsError::Unsupported) => {
+                    Err(AccessibilityPrefsError::Unsupported)
+                }
+                Err(_) => Err(AccessibilityPrefsError::Internal),
             }
         }
     }
@@ -308,8 +317,8 @@ mod tests {
     #[test]
     fn failures_never_become_on() {
         for r in [
-            Err(DeviceError::Unsupported("accessibility_prefs")),
-            Err(DeviceError::Internal("x")),
+            Err(AccessibilityPrefsError::Unsupported),
+            Err(AccessibilityPrefsError::Internal),
         ] {
             let (tx, rx) = sender_with_channel();
             let mut state = AccessibilityPrefsShowState::default();
@@ -344,7 +353,7 @@ mod tests {
             &mut timing,
         );
         apply_all(&rx, &mut state);
-        let failing = Fake::new(Err(DeviceError::Internal("x")));
+        let failing = Fake::new(Err(AccessibilityPrefsError::Internal));
         drive(&state, &tx, &failing, t0 + READ_INTERVAL, &mut timing);
         apply_all(&rx, &mut state);
         assert!(!matches!(state.view, PrefsView::Read(_)));

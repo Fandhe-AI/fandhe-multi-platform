@@ -4,7 +4,7 @@
 //! [`super::mount::mount_with_effect`] の effect として駆動する。値の取得は
 //! `matchMedia('(prefers-reduced-motion: reduce)')` と `matchMedia('(prefers-contrast: more)')`。
 //! `AccessibilityPrefs` トレイトは経由しない（トレイト doc どおり）。`fandhe-egui-proxy` の
-//! wasm canvas 経路は対象外で、共有するのは `fandhe_device::accessibility_prefs::READ_INTERVAL` だけ。
+//! wasm canvas 経路は対象外で、共有するのは `fandhe_cap_accessibility_prefs::READ_INTERVAL` だけ。
 //!
 //! # 方式
 //!
@@ -77,7 +77,7 @@ mod web {
     use fandhe_core::screens::accessibility_prefs_show::{
         advance_phase, animates, apply_read, AccessibilityPrefsShowState, Prefs, ReadFailure,
     };
-    use fandhe_device::accessibility_prefs::READ_INTERVAL;
+    use fandhe_cap_accessibility_prefs::READ_INTERVAL;
     use wasm_bindgen::prelude::*;
 
     use super::{frame_dt, pref_from, read_due, FAILED_LABEL};

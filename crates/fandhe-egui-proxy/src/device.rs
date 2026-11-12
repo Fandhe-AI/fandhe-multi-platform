@@ -17,9 +17,6 @@
 //! [`http_fetch`] / [`tilt`] サブモジュールに置く（カメラ撮影は機能 crate `fandhe-cap-camera-capture`、#1170）
 //! （`registry.rs` の `effect` 区画から配線される）。
 
-/// Issue #1308: アクセシビリティ設定（視差軽減・コントラスト）の effect ドライバ（Windows / macOS / iOS / Android 実装、
-/// 他 OS は `UnsupportedAccessibilityPrefs` 固定。Web は `fandhe-web-dom`）。
-pub mod accessibility_prefs;
 /// Issue #613（親 #124）: 行動認識（歩行・乗車等）の effect ドライバ（Windows 実装、iOS 実装、
 /// Android は b-android が埋めるスタブ、他 OS は `UnsupportedActivityRecognizer` 固定）。
 pub mod activity_recognition;
@@ -28,11 +25,6 @@ pub mod activity_recognition;
 pub mod alarm;
 #[cfg(target_os = "android")]
 pub mod android;
-/// Issue #1310: Android 向けアクセシビリティ設定実装（`AccessibilityPrefsHelper` を JNI で呼ぶ）。
-/// `device/accessibility_prefs.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_accessibility_prefs;
 /// Issue #1126: Android 向け行動認識の骨格（実体は b-android）。`device/activity_recognition.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -488,11 +480,6 @@ pub mod app_progress_attention;
 /// `device/url_scheme.rs::url_scheme_show_effect` から呼ばれる。実装は macOS（Dock メニュー）、
 /// iOS は Info.plist の静的宣言（`Declared`、#425）、Android・Windows（ジャンプリスト）は実装済み、他 OS は `UnsupportedAppShortcuts` 固定。
 pub mod app_shortcuts;
-/// Issue #1308: macOS / iOS 向けアクセシビリティ設定（`apple/fandhe_apple_accessibility_prefs.m` を
-/// 呼ぶ C ABI ラッパー）。`device/accessibility_prefs.rs` の macOS / iOS 経路から呼ばれる。
-/// 純関数をホストの `cargo test` で検査するため cfg に `test` を含める。
-#[cfg(any(target_os = "ios", target_os = "macos", test))]
-pub mod apple_accessibility_prefs;
 /// Issue #390（macOS）/ #391（iOS）: バックグラウンドダウンロード実装（`apple/fandhe_apple_background_download.m` の
 /// background `NSURLSession` を呼ぶ C ABI ラッパー）。`device/background_download.rs` の macOS / iOS 経路から呼ばれる。
 /// 状態遷移の純ロジックをホストの `cargo test` で検査するため cfg に `test` を含める。
@@ -891,11 +878,6 @@ pub mod in_app_browser;
 pub mod in_app_review;
 #[cfg(target_os = "ios")]
 pub mod ios;
-/// Issue #1308: iOS 向けアクセシビリティ設定実装（#1309。`AppleAccessibilityPrefs` を返す）。
-/// `device/accessibility_prefs.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_accessibility_prefs;
 /// Issue #613: iOS 向け行動認識実装。`device/activity_recognition.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -1738,11 +1720,6 @@ pub mod wifi_info;
 /// Phase 11 の拡充ループ（親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）の effect ドライバ
 /// （macOS 実装、Windows は #637、他 OS は `UnsupportedWindowManager` 固定。Web は `fandhe-web-dom`）。
 pub mod window_management;
-/// Issue #1308: Windows 向けアクセシビリティ設定実装（WinRT `UISettings` / `AccessibilitySettings`）。
-/// `device/accessibility_prefs.rs` の Windows 経路から呼ばれる。写像の純関数はホストの
-/// `cargo test` で検査するため cfg を付けず、WinRT 呼び出しだけをモジュール内に閉じる。
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_accessibility_prefs;
 /// Issue #613: Windows 向け行動認識実装（WinRT `ActivitySensor` の `ReadingChanged`）。`device/activity_recognition.rs` の windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]

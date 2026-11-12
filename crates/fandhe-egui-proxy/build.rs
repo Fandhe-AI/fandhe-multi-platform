@@ -295,8 +295,6 @@ fn build() {
     compile_apple_media_cast();
     // `apple/fandhe_apple_now_playing.m`（Issue #381 macOS + #382 iOS）。macOS 分岐と共用する。MediaPlayer を使う。
     compile_apple_now_playing();
-    // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308 macOS + #1309 iOS）も共用する。
-    compile_apple_accessibility_prefs();
     // `apple/fandhe_apple_per_app_language.m`（Issue #1073）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_per_app_language();
     // `apple/fandhe_apple_screen_capture.m`（Issue #1336）の iOS 側（ReplayKit）。
@@ -628,15 +626,6 @@ fn compile_ios_alarm() {
         require_env: "FANDHE_REQUIRE_ALARM",
         tag: "alarm",
     });
-}
-
-/// `apple/fandhe_apple_accessibility_prefs.m` を `cc` でコンパイルする（Issue #1308 macOS、
-/// #1309 iOS 共用）。AppKit / UIKit は各分岐の既存リンクで足りる。
-fn compile_apple_accessibility_prefs() {
-    compile_objc(
-        "apple/fandhe_apple_accessibility_prefs.m",
-        &[ui_framework(), "Foundation"],
-    );
 }
 
 /// `apple/fandhe_apple_per_app_language.m` を `cc` でコンパイルする（Issue #1073 macOS、
@@ -1617,8 +1606,6 @@ fn build_macos() {
     compile_apple_file_preview();
     // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。
     compile_apple_network_status();
-    // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308）。iOS 分岐と共用する。
-    compile_apple_accessibility_prefs();
     // `apple/fandhe_apple_per_app_language.m`（Issue #1073）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_per_app_language();
     // `macos/fandhe_macos_background_task.m`（Issue #1043）は macOS 専用（doc 参照）。

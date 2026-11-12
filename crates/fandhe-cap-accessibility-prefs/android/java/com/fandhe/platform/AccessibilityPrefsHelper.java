@@ -7,8 +7,8 @@ import android.os.Build;
 import android.provider.Settings;
 
 // アクセシビリティ設定画面（Issue #1310）の Android 実装ヘルパー。
-// Rust の `device/android_accessibility_prefs.rs` が `MainActivity.accessibilityPrefsRead` 経由で
-// 1 秒間隔に同期で呼ぶ（JNI 署名 `()I`）。OS の事実を 2 ビット x 2 に詰めて返すだけで、
+// Rust の `fandhe-cap-accessibility-prefs/src/android.rs` が static メソッド `read(Context)` を
+// 1 秒間隔に同期で呼ぶ（JNI 署名 `(Landroid/content/Context;)I`）。OS の事実を 2 ビット x 2 に詰めて返すだけで、
 // 値の検証は Rust 側 `prefs_from_code`（ホストの `cargo test` で検査）が行う。
 // コールバック登録・要求 id・保留状態を持たないため、Activity 再生成で破棄すべき要求は無い。
 // 権限は不要。設定値はログへ出さない。
@@ -23,8 +23,9 @@ final class AccessibilityPrefsHelper {
 
     private AccessibilityPrefsHelper() {}
 
-    static int read(Context context) {
+    static int read(Context activity) {
         try {
+            Context context = activity.getApplicationContext();
             ContentResolver cr = context.getContentResolver();
             if (cr == null) {
                 return FAILED;

@@ -363,7 +363,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "accessibility_prefs_show" => fandhe_core::screens::accessibility_prefs_show::current_screen,
-    fandhe_egui_proxy::device::accessibility_prefs::accessibility_prefs_show_effect,
+    fandhe_cap_accessibility_prefs::accessibility_prefs_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "system_accent_color_show" => fandhe_core::screens::system_accent_color_show::current_screen,

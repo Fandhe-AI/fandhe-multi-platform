@@ -26,6 +26,8 @@ fandhe-device = { path = "../fandhe-device" }
 # Issue #1173: 共有の受け取りの契約（`ShareInbox`・`validate_text`）の正本。wasm32 では
 # `fandhe-core`・`fandhe-runtime`・`thiserror` しか引かない（Android/macOS の実装は cfg で外れる）。
 fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive" }
+# accessibility-prefs の契約（`READ_INTERVAL`）。Web 実装本体は本クレートに残る（`display_refresh_hdr` が `pref_from` を共用するため）。
+fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs" }
 # http-get の Web 実装（`fetch`）。デモ（`mount_http_fetch_screen`）が effect として呼ぶ。
 fandhe-cap-http-get = { path = "../fandhe-cap-http-get" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。

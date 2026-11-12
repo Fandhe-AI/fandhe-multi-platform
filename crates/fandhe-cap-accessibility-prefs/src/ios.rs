@@ -8,7 +8,7 @@
 //!
 //! # 再描画
 //!
-//! OS コールバックを持たず結果を共有状態へ書く経路が無いため、`crate::ios::request_repaint` は
+//! OS コールバックを持たず結果を共有状態へ書く経路が無いため、`fandhe_runtime::request_repaint` は
 //! 呼ばない。再描画は `drive` の完了通知と 1 秒間隔の再描画予約が起こす。
 //!
 //! # 守る範囲・守らない範囲
@@ -22,10 +22,10 @@
 use std::sync::Arc;
 
 #[cfg(target_os = "ios")]
-use fandhe_device::accessibility_prefs::AccessibilityPrefsSource;
+use crate::contract::AccessibilityPrefsSource;
 
 /// iOS の実装を返す。
 #[cfg(target_os = "ios")]
 pub(crate) fn implementation() -> Arc<dyn AccessibilityPrefsSource> {
-    Arc::new(super::apple_accessibility_prefs::AppleAccessibilityPrefs)
+    Arc::new(crate::apple::AppleAccessibilityPrefs)
 }

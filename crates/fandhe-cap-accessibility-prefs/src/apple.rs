@@ -17,26 +17,24 @@
 // ホストの test ビルドでは純関数がテストからのみ使われる。
 #![cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 
-use fandhe_device::accessibility_prefs::AccessibilityPrefs;
+use crate::contract::AccessibilityPrefs;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-use fandhe_device::accessibility_prefs::AccessibilityPrefsSource;
-use fandhe_device::DeviceError;
+use crate::contract::AccessibilityPrefsSource;
+use crate::error::AccessibilityPrefsError;
 
-const FAILED_MSG: &str = "accessibility_prefs read";
-
-fn flag(two_bits: i32) -> Result<Option<bool>, DeviceError> {
+fn flag(two_bits: i32) -> Result<Option<bool>, AccessibilityPrefsError> {
     match two_bits {
         0 => Ok(None),
         1 => Ok(Some(false)),
         2 => Ok(Some(true)),
-        _ => Err(DeviceError::Internal(FAILED_MSG)),
+        _ => Err(AccessibilityPrefsError::Internal),
     }
 }
 
 /// `.m` が詰めた値を契約の値へ戻す純関数（ホストの `cargo test` で検査する）。
-fn prefs_from_packed(packed: i32) -> Result<AccessibilityPrefs, DeviceError> {
+fn prefs_from_packed(packed: i32) -> Result<AccessibilityPrefs, AccessibilityPrefsError> {
     if packed < 0 || packed >> 4 != 0 {
-        return Err(DeviceError::Internal(FAILED_MSG));
+        return Err(AccessibilityPrefsError::Internal);
     }
     Ok(AccessibilityPrefs {
         reduce_motion: flag(packed & 0b11)?,
@@ -59,7 +57,7 @@ pub(crate) struct AppleAccessibilityPrefs;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 impl AccessibilityPrefsSource for AppleAccessibilityPrefs {
     #[allow(unsafe_code)]
-    fn read(&self) -> Result<AccessibilityPrefs, DeviceError> {
+    fn read(&self) -> Result<AccessibilityPrefs, AccessibilityPrefsError> {
         // SAFETY: 上記 extern 宣言のとおり、副作用は OS 設定の読み取りのみ。
         let packed = unsafe { fandhe_apple_accessibility_prefs_read() };
         prefs_from_packed(packed)
@@ -94,7 +92,7 @@ mod tests {
     fn invalid_values_are_errors_not_off() {
         for v in [-1, i32::MIN, 3, 3 << 2, 1 << 4, i32::MAX] {
             assert!(
-                matches!(prefs_from_packed(v), Err(DeviceError::Internal(_))),
+                matches!(prefs_from_packed(v), Err(AccessibilityPrefsError::Internal)),
                 "v={v}"
             );
         }

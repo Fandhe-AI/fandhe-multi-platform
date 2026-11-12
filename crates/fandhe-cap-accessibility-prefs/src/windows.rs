@@ -15,11 +15,11 @@
 //! 既知の天井: unpackaged exe での動作は実機未確認（#1302）。ローカルに MSVC が無く型検査は
 //! `x86_64-pc-windows-gnu` のみ。
 
-use fandhe_device::accessibility_prefs::AccessibilityPrefs;
+use crate::contract::AccessibilityPrefs;
 #[cfg(target_os = "windows")]
-use fandhe_device::accessibility_prefs::AccessibilityPrefsSource;
+use crate::contract::AccessibilityPrefsSource;
 #[cfg(target_os = "windows")]
-use fandhe_device::DeviceError;
+use crate::error::AccessibilityPrefsError;
 
 /// OS の 2 つの bool を契約の値へ写す純関数。
 fn prefs_from(animations_enabled: bool, high_contrast: bool) -> AccessibilityPrefs {
@@ -35,9 +35,9 @@ pub(crate) struct WindowsAccessibilityPrefs;
 
 #[cfg(target_os = "windows")]
 impl AccessibilityPrefsSource for WindowsAccessibilityPrefs {
-    fn read(&self) -> Result<AccessibilityPrefs, DeviceError> {
+    fn read(&self) -> Result<AccessibilityPrefs, AccessibilityPrefsError> {
         use windows::UI::ViewManagement::{AccessibilitySettings, UISettings};
-        const FAILED: DeviceError = DeviceError::Internal("accessibility_prefs read");
+        const FAILED: AccessibilityPrefsError = AccessibilityPrefsError::Internal;
         let animations = UISettings::new()
             .and_then(|s| s.AnimationsEnabled())
             .map_err(|_| FAILED)?;
