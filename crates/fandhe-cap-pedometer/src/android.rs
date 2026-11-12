@@ -1,12 +1,12 @@
-//! Android 向け歩数実装（Issue #1249、親 #1119）。`device/pedometer.rs::implementation` の
+//! Android 向け歩数実装（Issue #1249、親 #1119）。`driver.rs::platform_pedometer` の
 //! Android 経路から呼ばれ、`Sensor.TYPE_STEP_COUNTER`（再起動後の累積歩数）を 1 回だけ
 //! 期限付きで取得する。Java 側は `PedometerHelper`（許可確認・リスナー登録・解除）。
 //!
 //! 流れ: `Pedometer::read_steps`（ワーカースレッド）→ [`RequestSlot::begin`] で id 採番 →
-//! JNI `MainActivity.requestPedometerRead(id)` → Java が結果コードを
+//! JNI `PedometerHelper.read(activity, id)`（static） → Java が結果コードを
 //! `nativeOnPedometerResult` で返す → [`decode`] で契約の失敗種別へ写像 → ワーカーが
 //! 100ms 周期で slot を見て受け取る。期限（`timeout`）は契約の `READ_TIMEOUT` 1 つだけで、
-//! 切れたら `cancelPedometerRead(id)` でリスナーを解除し `NoReading`（0 歩にしない）。
+//! 切れたら `PedometerHelper.cancel(activity, id)` でリスナーを解除し `NoReading`（0 歩にしない）。
 //!
 //! 守る範囲: 1 プロセス内の要求順序・0 歩と未取得の区別・非搭載/拒否/破棄を成功に
 //! 畳まないこと・リスナーの解除。守らない範囲: センサー遅延による値の鮮度、許可ダイアログ
@@ -18,9 +18,9 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use fandhe_device::pedometer::{total_steps, Pedometer, PedometerFailure};
+use crate::contract::{Pedometer, PedometerFailure, total_steps};
 
-use super::request_slot::{RequestSlot, POLL_INTERVAL};
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot};
 
 /// 結果コード（SSOT は Java 側 `PedometerHelper.RESULT_*`）。
 const RESULT_OK: i32 = 0;
@@ -102,41 +102,44 @@ impl Pedometer for AndroidPedometer {
     }
 }
 
-/// `MainActivity.requestPedometerRead(long)`（`cancel=false`）または
-/// `cancelPedometerRead(long)`（`cancel=true`）を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `device/android.rs::request_calendar_insert` と同一の根拠。
+/// `PedometerHelper.read(Activity, long)`（`cancel=false`）または `PedometerHelper.cancel(Activity, long)`
+/// （`cancel=true`）を JNI で呼ぶ。`false` は呼び出し失敗。クラスは Activity の class loader で解決する
+/// （`fandhe_platform_android::with_activity_class`）。unsafe は共通層の中に閉じ、ここには無い。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_activity(cancel: bool, id: u64) -> bool {
-    use super::android::JniCallFailed;
-    let Some(app) = crate::android::android_app() else {
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    let Some(app) = android_app() else {
         return false;
     };
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        let args = [jni::objects::JValue::Long(id as jni::sys::jlong)];
-        if cancel {
-            env.call_method(
-                &activity,
-                jni::jni_str!("cancelPedometerRead"),
-                jni::jni_sig!((long) -> ()),
-                &args,
-            )?;
-        } else {
-            env.call_method(
-                &activity,
-                jni::jni_str!("requestPedometerRead"),
-                jni::jni_sig!((long) -> ()),
-                &args,
-            )?;
-        }
-        Ok(())
-    })
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.PedometerHelper"),
+        |env, activity, class| -> Result<(), JniCallFailed> {
+            let id = jni::sys::jlong::try_from(id).map_err(|_| JniCallFailed)?;
+            if cancel {
+                env.call_static_method(
+                    class,
+                    jni::jni_str!("cancel"),
+                    jni::jni_sig!((android.app.Activity, long) -> ()),
+                    &[
+                        jni::objects::JValue::Object(activity),
+                        jni::objects::JValue::Long(id),
+                    ],
+                )?;
+            } else {
+                env.call_static_method(
+                    class,
+                    jni::jni_str!("read"),
+                    jni::jni_sig!((android.app.Activity, long) -> ()),
+                    &[
+                        jni::objects::JValue::Object(activity),
+                        jni::objects::JValue::Long(id),
+                    ],
+                )?;
+            }
+            Ok(())
+        },
+    )
     .is_ok()
 }
 
@@ -144,12 +147,12 @@ fn call_activity(cancel: bool, id: u64) -> bool {
 /// 歩数・結果は一切ログへ出さない。
 ///
 /// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` は JNI 命名規約上の固定
+/// この関数自体は `unsafe` 操作を含まない。`#[unsafe(no_mangle)]` は JNI 命名規約上の固定
 /// シンボル名で、本クレートは cdylib として 1 つの Android 実行単位にのみリンクされる
 /// ため他シンボルと衝突しない（既存の JNI エクスポートと同じ根拠）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_PedometerHelper_nativeOnPedometerResult<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -166,12 +169,12 @@ pub(crate) fn implementation() -> Arc<dyn Pedometer> {
     Arc::new(AndroidPedometer)
 }
 
-/// `device.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形。
+/// `lib.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形。
 /// dispatch は Android でしか呼ばない。非対応を返し、成功へは倒さない。
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn Pedometer> {
-    Arc::new(fandhe_device::pedometer::UnsupportedPedometer)
+    Arc::new(crate::contract::UnsupportedPedometer)
 }
 
 #[cfg(test)]

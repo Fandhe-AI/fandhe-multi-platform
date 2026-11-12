@@ -399,18 +399,18 @@ fn ios_shell_values_match_current_info_plist() {
 
 #[test]
 fn ios_usage_description_matches_current_info_plist() {
-    let key = "NSCameraUsageDescription";
     let gen = &gallery()["ios/Info.plist"];
     let cur = repo("platforms/apple/FandheIosApp/Resources/Info.plist");
-    assert_eq!(plist_string(gen, key), plist_string(&cur, key));
-    // 選ばなかった機能の説明文は出ない。
-    assert_eq!(
-        plist_keys(gen)
-            .iter()
-            .filter(|k| k.ends_with("UsageDescription"))
-            .count(),
-        1
-    );
+    // 生成側に出た説明文は、現行の Info.plist と一字一句同じ。選んだ機能の分だけが出る（宣言の数は
+    // gallery の `fandhe-app.ios.usage-descriptions` と `cargo fandhe gen` が突き合わせる）。
+    let keys: Vec<_> = plist_keys(gen)
+        .into_iter()
+        .filter(|k| k.ends_with("UsageDescription"))
+        .collect();
+    assert!(!keys.is_empty(), "UsageDescription が生成されていない");
+    for key in keys {
+        assert_eq!(plist_string(gen, &key), plist_string(&cur, &key), "{key}");
+    }
 }
 
 #[test]

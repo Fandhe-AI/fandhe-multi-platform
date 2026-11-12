@@ -1,6 +1,7 @@
 package com.fandhe.platform;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
@@ -13,9 +14,16 @@ import androidx.activity.ComponentActivity;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 
-// 歩数画面（Issue #1249）の Android 実装ヘルパー。MainActivity から生成・委譲される
-// （Rust の `device/android_pedometer.rs` が `MainActivity.requestPedometerRead` /
-// `cancelPedometerRead` を JNI で呼び、結果を `nativeOnPedometerResult` で受ける）。
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
+
+// 歩数画面（Issue #1249、#1187）の Android 実装ヘルパー。利用者の `MainActivity` には何も書かせない。
+// Rust の `src/android.rs` が static の `read(Activity, id)` / `cancel(Activity, id)` を JNI で呼び、
+// 結果を `nativeOnPedometerResult` で受ける。Activity への参加は `PedometerLifecycle`
+// （非公開 ContentProvider、`FeatureLifecycleProvider` 継承）が行い、生成時に `attach`、破棄時に `detach` を呼ぶ。
+// Activity ごとの helper は `HELPERS` に持つ（Rust のワーカーと UI スレッドの両方から触るので同期化し、
+// 破棄時に必ず外す）。表に無い Activity への要求は何もせず、Rust 側の期限で `NoReading` になる。
 //
 // 1 回の要求 = `TYPE_STEP_COUNTER` のリスナーを登録し、最初のイベント（再起動後の
 // 累積歩数）を 1 回受けて解除する。開始・許可結果は UI スレッド（main looper）で直列化する。
@@ -28,12 +36,18 @@ import androidx.activity.result.contract.ActivityResultContracts;
 // 含む）では保留中の要求を INTERRUPTED で確定して破棄する。`request` はインスタンス
 // フィールドなので、再生成後の新インスタンスは NONE から始まり旧結果を拾わない。
 final class PedometerHelper implements SensorEventListener {
-    // 結果コード。SSOT はここで、Rust 側 `android_pedometer.rs::decode` が同じ値で写像する。
+    // 結果コード。SSOT はここで、Rust 側 `android.rs::decode` が同じ値で写像する。
     static final int RESULT_OK = 0;
     static final int RESULT_UNSUPPORTED = 1;
     static final int RESULT_PERMISSION_DENIED = 2;
     static final int RESULT_INTERRUPTED = 3;
     static final int RESULT_FAILED = 4;
+
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, PedometerHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    private static final String KEY_PERMISSION = "fandhe.pedometer.permission";
 
     private static native void nativeOnPedometerResult(long requestId, int code, long steps);
 
@@ -50,24 +64,52 @@ final class PedometerHelper implements SensorEventListener {
     // 追い越された古い要求として捨てる（Rust 側は既に NoReading で戻っている）。
     private long latestId = RequestTracker.NONE;
 
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity の
-    // フィールド初期化子から本クラスを生成してここで登録する。
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`attach`（`Activity.onCreate` 内）で
+    // 本クラスを生成してここで登録する。キーは明示する（連番だと生成順で結果が別のランチャーへ届く）。
     private final ActivityResultLauncher<String> permissionLauncher;
 
-    PedometerHelper(ComponentActivity activity) {
+    private PedometerHelper(ComponentActivity activity) {
         this.activity = activity;
-        this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:PedometerHelper:1", activity,
+        this.permissionLauncher = activity.getActivityResultRegistry().register(KEY_PERMISSION, activity,
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
     }
 
-    // JNI スレッドから呼ばれる。
-    void read(long id) {
+    // Activity の生成時（`PedometerLifecycle` から）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new PedometerHelper(activity));
+    }
+
+    // Activity の破棄時（`PedometerLifecycle` から）。保留中の要求を中断で確定し、表から外す。
+    static void detach(Activity activity) {
+        PedometerHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // JNI スレッド（Rust のワーカー）から呼ばれる入口。helper が無い（生成前・破棄後）なら何もしない。
+    static void read(Activity activity, long id) {
+        PedometerHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.begin(id);
+        }
+    }
+
+    // Rust 側の期限切れから呼ばれる入口。
+    static void cancel(Activity activity, long id) {
+        PedometerHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.cancelRequest(id);
+        }
+    }
+
+    private void begin(long id) {
         activity.runOnUiThread(() -> start(id));
     }
 
     // Rust 側の期限切れから呼ばれる。古い id なら何もしない。戻る前にリスナーを解除する
     // （UI スレッドへ post しない: UI が停滞しても期限後にリスナーが残らないようにする）。
-    void cancel(long id) {
+    private void cancelRequest(long id) {
         synchronized (lock) {
             cancelledId = Math.max(cancelledId, id);
             if (request.complete(id)) {
@@ -76,8 +118,8 @@ final class PedometerHelper implements SensorEventListener {
         }
     }
 
-    // MainActivity.onDestroy から UI スレッドで呼ぶ。
-    void onDestroy() {
+    // `detach` から UI スレッドで呼ぶ。
+    private void onDestroy() {
         finish(RESULT_INTERRUPTED, 0);
     }
 

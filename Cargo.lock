@@ -1121,6 +1121,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-pedometer"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-share-receive"
 version = "0.2.0"
 dependencies = [
@@ -1208,6 +1222,7 @@ dependencies = [
  "fandhe-cap-document-scan",
  "fandhe-cap-home-widget",
  "fandhe-cap-nfc-card-emulation",
+ "fandhe-cap-pedometer",
  "fandhe-cap-share-receive",
  "fandhe-core",
  "fandhe-egui-proxy",

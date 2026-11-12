@@ -371,6 +371,10 @@
             android:authorities="${applicationId}.fandhe.document-scan"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.PedometerLifecycle"
+            android:authorities="${applicationId}.fandhe.pedometer"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.ShareReceiveLifecycle"
             android:authorities="${applicationId}.fandhe.share-receive"
             android:exported="false" />

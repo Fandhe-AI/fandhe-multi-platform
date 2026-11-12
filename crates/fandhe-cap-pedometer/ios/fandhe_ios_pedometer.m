@@ -1,8 +1,7 @@
 // Phase 11 の拡充ループ（親 #1116）型サンプル「歩数」: iOS 実装（Issue #1248）。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_pedometer.rs` の `IosPedometer::read_steps` から
-// C ABI 経由で呼ばれる。`build.rs` の `build_ios()` が feature `device` 有効時にのみ
-// コンパイルする。CoreMotion は `fandhe_ios_motion.m` のためにリンク済み。
+// `crates/fandhe-cap-pedometer/src/ios.rs` の `IosPedometer::read_steps` から
+// C ABI 経由で呼ばれる。本 crate の `build.rs` がコンパイルする（iOS のみ）。
 // 権限宣言は `platforms/apple/FandheIosApp/Resources/Info.plist` の `NSMotionUsageDescription`。
 //
 // 契約:

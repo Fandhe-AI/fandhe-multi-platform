@@ -460,18 +460,6 @@ public class MainActivity extends GameActivity {
     private static final int NOTIFICATION_RESULT_AUTH_ERROR = 3;
     private static final int NOTIFICATION_RESULT_POST_ERROR = 4;
 
-    // 歩数画面（Issue #1249）。実装は `PedometerHelper`（フィールド初期化子で生成し、
-    // STARTED 前に許可ランチャーを登録する）。Rust の `android_pedometer.rs` が JNI で呼ぶ。
-    private final PedometerHelper pedometerHelper = new PedometerHelper(this);
-
-    void requestPedometerRead(long requestId) {
-        pedometerHelper.read(requestId);
-    }
-
-    void cancelPedometerRead(long requestId) {
-        pedometerHelper.cancel(requestId);
-    }
-
     // ヘルスデータ（今日の歩数、Issue #1100）。実装は `HealthDataHelper`（フィールド初期化子で
     // 生成し、STARTED 前に許可ランチャーを登録する）。Rust の `android_health_data.rs` が JNI で呼ぶ。
     private final HealthDataHelper healthDataHelper = new HealthDataHelper(this);
@@ -5014,7 +5002,6 @@ public class MainActivity extends GameActivity {
         companionDeviceHelper.onDestroy();
         paymentRequestHelper.onDestroy();
         passkeyHelper.onDestroy();
-        pedometerHelper.onDestroy();
         healthDataHelper.onDestroy();
         translationHelper.onDestroy();
         geocodingHelper.onDestroy();

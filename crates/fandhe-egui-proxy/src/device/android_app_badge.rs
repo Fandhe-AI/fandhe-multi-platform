@@ -62,7 +62,7 @@ pub(crate) fn begin_set(_request_id: u64, _value: BadgeValue) -> Result<(), Devi
 }
 
 /// `MainActivity.requestAppBadge(long, int)` を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `android_pedometer::call_activity` と同一の根拠。
+/// `unsafe` 2 箇所は `fandhe_platform_android::with_activity` と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 fn call_activity(id: u64, value: i32) -> bool {

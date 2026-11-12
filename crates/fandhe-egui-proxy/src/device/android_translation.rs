@@ -117,7 +117,7 @@ impl TextTranslator for AndroidTextTranslator {
 }
 
 /// `MainActivity.requestTranslation(long, String, String, String)` を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `device/android_pedometer.rs::call_activity` と同一の根拠。
+/// `unsafe` 2 箇所は `fandhe_platform_android::with_activity` と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 fn call_request(id: u64, text: &str, source: &str, target: &str) -> bool {

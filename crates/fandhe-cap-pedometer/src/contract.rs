@@ -4,7 +4,7 @@
 //! 扱う範囲は「ボタンを押すと累積歩数を 1 回取得する」ことだけ。履歴・背景取得・継続 push、
 //! HealthKit / Health Connect（health-data）は扱わない。対象は Windows（#1247）・
 //! iOS（#1248）・Android（#1249）。macOS・Web は対応表で `no`。
-//! `fandhe-egui-proxy` の `device/pedometer.rs` がワーカースレッドで [`Pedometer::read_steps`]
+//! 本 crate の `driver.rs` がワーカースレッドで [`Pedometer::read_steps`]
 //! を呼ぶ（ブロッキングの契約）。
 //!
 //! # 契約

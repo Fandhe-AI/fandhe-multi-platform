@@ -188,8 +188,6 @@ fn build() {
     // `ios/fandhe_ios_url_scheme.m`（Issue #1217）。iOS 分岐のみ（macOS は別 .m）。
     compile_ios_url_scheme();
 
-    // `ios/fandhe_ios_pedometer.m`（Issue #1248）。macOS は対応表で `no` のため iOS 分岐のみ。
-    compile_ios_pedometer();
     // `ios/fandhe_ios_spell_check.m`（Issue #579）。iOS 分岐のみ。
     compile_ios_spell_check();
     compile_ios_screen_wake_lock();
@@ -1217,12 +1215,6 @@ fn compile_macos_user_idle() {
         "macos/fandhe_macos_user_idle.m",
         &["CoreGraphics", "Foundation"],
     );
-}
-
-/// `ios/fandhe_ios_pedometer.m` を `cc` でコンパイルする（Issue #1248）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_pedometer.rs` が使う）。
-fn compile_ios_pedometer() {
-    compile_objc("ios/fandhe_ios_pedometer.m", &["CoreMotion", "Foundation"]);
 }
 
 /// `ios/fandhe_ios_spell_check.m` を `cc` でコンパイルする（Issue #579）。

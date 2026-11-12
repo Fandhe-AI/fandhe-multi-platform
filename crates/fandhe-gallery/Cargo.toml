@@ -22,6 +22,7 @@ device = [
   "dep:fandhe-cap-document-scan",
   "dep:fandhe-cap-home-widget",
   "dep:fandhe-cap-nfc-card-emulation",
+  "dep:fandhe-cap-pedometer",
   "dep:fandhe-cap-share-receive",
   # END fandhe-cap
 ]
@@ -53,6 +54,7 @@ bundle-id = "com.fandhe.iosapp"
 
 [package.metadata.fandhe-app.ios.usage-descriptions]
 NSCameraUsageDescription = "型サンプル「カメラ撮影」「AR 表示」「書類スキャン」「動画の撮影」「カメラのライブ映像」「接続した機器からの取り込み」の動作確認に使います"
+NSMotionUsageDescription = "型サンプル「歩数」「気圧」「行動認識」の動作確認に使います"
 
 [build-dependencies]
 # Apple のリンク指定（弱リンク・rpath・Info.plist 埋め込み）を `fandhe-egui-proxy` から受け取って出し直す。
@@ -73,6 +75,7 @@ fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier", optio
 fandhe-cap-document-scan = { path = "../fandhe-cap-document-scan", optional = true }
 fandhe-cap-home-widget = { path = "../fandhe-cap-home-widget", optional = true }
 fandhe-cap-nfc-card-emulation = { path = "../fandhe-cap-nfc-card-emulation", optional = true }
+fandhe-cap-pedometer = { path = "../fandhe-cap-pedometer", optional = true }
 fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive", optional = true }
 # END fandhe-cap
 

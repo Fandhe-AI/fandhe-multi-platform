@@ -1,4 +1,4 @@
-//! Windows 向け歩数実装（Issue #1247）。`device/pedometer.rs` の Windows 経路から呼ばれ、
+//! Windows 向け歩数実装（Issue #1247）。`driver.rs` の Windows 経路から呼ばれ、
 //! WinRT `Windows.Devices.Sensors.Pedometer` から累積歩数を 1 回読む（`Pedometer` トレイトを
 //! 実装。呼び出し側がワーカースレッドで呼ぶ前提）。
 //!
@@ -25,11 +25,11 @@
 //!   `Failed` になる
 //! - ローカルに MSVC が無く、型検査は `x86_64-pc-windows-gnu` のみ
 
-use std::sync::mpsc;
 use std::sync::Arc;
+use std::sync::mpsc;
 use std::time::Duration;
 
-use fandhe_device::pedometer::{total_steps, Pedometer, PedometerFailure};
+use crate::contract::{Pedometer, PedometerFailure, total_steps};
 use windows::Devices::Sensors::Pedometer as WinPedometer;
 use windows_future::{AsyncOperationCompletedHandler, AsyncStatus};
 

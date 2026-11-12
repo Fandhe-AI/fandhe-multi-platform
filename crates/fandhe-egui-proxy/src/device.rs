@@ -313,12 +313,6 @@ pub mod android_payment_request;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_pdf_viewer;
-/// Issue #1247: Android 向け歩数実装。`device/pedometer.rs` の
-/// Android 経路から呼ばれる。JNI の本体はモジュール内側の `cfg(target_os = "android")` に閉じ、
-/// 純関数をホストでテストできるよう cfg は `any(android, test)`。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_pedometer;
 /// Issue #355: Android 向けペン・筆圧入力実装。`device/pen_stylus.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -1151,12 +1145,6 @@ pub mod ios_open_system_settings;
 /// `device/pdf_viewer.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_pdf_viewer;
-/// Issue #1248: iOS 向け歩数実装（#1247 のスタブを置き換え）。`device/pedometer.rs` の iOS
-/// 経路から呼ばれる。FFI の本体はモジュール内側の `cfg(target_os = "ios")` に閉じ、
-/// 純関数をホストでテストできるよう cfg は `any(ios, test)`。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_pedometer;
 /// Issue #356: iOS 向けペン・筆圧入力実装（`ios/fandhe_ios_pen_stylus.m` の観測専用
 /// `UIGestureRecognizer` が値を置く C ABI ラッパー）。`device/pen_stylus.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1583,9 +1571,6 @@ pub mod payment_request;
 /// Phase 11 の拡充ループ（親 #107、Issue #469）: PDF 表示（1 ページ目の画像化）の effect ドライバ
 /// （macOS・iOS / Windows / Android 実装、他 OS は `UnsupportedPdfPageRenderer` 固定）。
 pub mod pdf_viewer;
-/// Phase 11 の拡充ループ（親 #1119、Issue #1247）: 歩数の effect ドライバ（Windows・iOS・Android 実装、
-/// 他 OS は `UnsupportedPedometer` 固定）。
-pub mod pedometer;
 /// Phase 11 の拡充ループ（親 #95、Issue #355）: ペン・筆圧入力の effect ドライバ（macOS・iOS・Android・Windows 実装、
 /// 他 OS は `UnsupportedPenStylus` 固定。
 /// Web は `fandhe-web-dom`）。
@@ -2001,10 +1986,6 @@ pub mod windows_passkey;
 /// `device/pdf_viewer.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_pdf_viewer;
-/// Issue #1247: Windows 向け歩数実装（WinRT `Pedometer` ラッパー）。
-/// `device/pedometer.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_pedometer;
 /// Issue #359: Windows 向けペン・筆圧入力実装（`SetWindowSubclass` の観測専用サブクラスが
 /// `WM_POINTER*` から値を置く）。`device/pen_stylus.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

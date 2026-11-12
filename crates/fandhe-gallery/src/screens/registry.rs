@@ -267,7 +267,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pedometer_read" => fandhe_core::screens::pedometer_read::current_screen,
-    fandhe_egui_proxy::device::pedometer::pedometer_read_effect,
+    fandhe_cap_pedometer::pedometer_read_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "audio_play" => fandhe_core::screens::audio_play::current_screen,

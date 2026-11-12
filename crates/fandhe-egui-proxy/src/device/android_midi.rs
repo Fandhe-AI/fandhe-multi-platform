@@ -178,7 +178,7 @@ impl MidiInput for AndroidMidi {
 
 /// `MainActivity.midiStart(long)`（`Some(epoch)`、戻り値は結果コード）または
 /// `midiStop()`（`None`）を JNI で呼ぶ。`None` の戻りは呼び出し失敗。
-/// `unsafe` 2 箇所は `android_pedometer.rs::call_activity` と同一の根拠。
+/// `unsafe` 2 箇所は `fandhe_platform_android::with_activity` と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 fn call_activity(epoch: Option<u64>) -> Option<i32> {

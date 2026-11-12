@@ -1,8 +1,8 @@
 //! Phase 11（親 #1119）型サンプル「歩数」（Issue #1247）の effect ドライバ。
 //! `fandhe_core::screens::pedometer_read`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::pedometer::Pedometer` で累積歩数を 1 回取得して `CompletionSender` 経由で
+//! `crate::contract::Pedometer` で累積歩数を 1 回取得して `CompletionSender` 経由で
 //! 結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
-//! として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::pedometer`。
+//! として呼ばれる契約、`fandhe_runtime::EffectFn` 参照）。契約の SSOT は `crate::contract`。
 //!
 //! # スレッド
 //!
@@ -11,39 +11,39 @@
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`implementation`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを
-//! 埋める（Windows: `windows_pedometer`、iOS: `ios_pedometer`（#1248）、Android:
-//! `android_pedometer`（#1249））。それ以外（macOS / Linux）は `UnsupportedPedometer` 固定で、
+//! [`platform_pedometer`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを
+//! 埋める（Windows: `windows`、iOS: `ios`（#1248）、Android: `android`（#1249））。それ以外（macOS / Linux）は `UnsupportedPedometer` 固定で、
 //! ダミーの成功実装へは倒さない。
 
 use std::sync::Arc;
 
-use fandhe_core::screens::pedometer_read::{
-    finish_read, mark_reading, take_request, PedometerReadState, ReadFailure,
-};
 #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
-use fandhe_device::pedometer::UnsupportedPedometer;
-use fandhe_device::pedometer::{Pedometer, PedometerFailure, READ_TIMEOUT};
+use crate::contract::UnsupportedPedometer;
+use crate::contract::{Pedometer, PedometerFailure, READ_TIMEOUT};
+use fandhe_core::screens::pedometer_read::{
+    PedometerReadState, ReadFailure, finish_read, mark_reading, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `Pedometer` 実装を返す（プロセスで 1 個）。
-fn implementation() -> Arc<dyn Pedometer> {
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_pedometer() -> Arc<dyn Pedometer> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn Pedometer>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "windows")]
             {
-                super::windows_pedometer::implementation()
+                crate::windows::implementation()
             }
             #[cfg(target_os = "ios")]
             {
-                super::ios_pedometer::implementation()
+                crate::ios::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_pedometer::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
             {
@@ -104,26 +104,33 @@ pub fn pedometer_read_effect(
     state: &PedometerReadState,
     sender: &CompletionSender<PedometerReadState>,
 ) {
-    drive(state, sender, implementation());
+    drive(state, sender, platform_pedometer());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::UnsupportedPedometer as Unsupported;
     use fandhe_core::screens::pedometer_read::{
-        read, NO_READING_STATUS, PERMISSION_DENIED_STATUS, UNSUPPORTED_STATUS,
+        NO_READING_STATUS, PERMISSION_DENIED_STATUS, UNSUPPORTED_STATUS, read,
     };
-    use fandhe_device::pedometer::UnsupportedPedometer as Unsupported;
+    use fandhe_runtime::RepaintWaker;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
     fn sender_with_channel() -> (
         CompletionSender<PedometerReadState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<PedometerReadState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<PedometerReadState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     struct Fake {
@@ -228,7 +235,7 @@ mod tests {
     #[test]
     fn unsupported_os_implementation_is_unsupported() {
         assert_eq!(
-            implementation().read_steps(Duration::from_millis(1)),
+            platform_pedometer().read_steps(Duration::from_millis(1)),
             Err(PedometerFailure::Unsupported)
         );
     }

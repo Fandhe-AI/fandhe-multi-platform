@@ -100,6 +100,8 @@ android {
             @Suppress("DEPRECATION")
             res.srcDirs("../../../crates/fandhe-cap-nfc-card-emulation/android/res")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-pedometer/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-share-receive/android/java")
             // END fandhe-cap
         }
