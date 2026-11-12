@@ -5,13 +5,13 @@
 //!
 //! # 契約（各実装・呼び出し元が守る不変条件）
 //!
-//! - **対象外 OS**: [`SystemTray::show`] は `Err(Unsupported("system_tray"))`、
+//! - **対象外 OS**: [`SystemTray::show`] は `Err(SystemTrayError::Unsupported)`、
 //!   [`SystemTray::hide`] は `Ok(NotShown)`（後始末の経路で失敗させない）、
 //!   [`SystemTray::take_selection`] は `None` を返す（[`UnsupportedSystemTray`]）
 //! - **二重表示**: 表示中の `show` は 2 個目のアイコンを作らず `Ok(AlreadyShown)` を
 //!   返す。メニューも差し替えない
 //! - **未表示の非表示**: `Ok(NotShown)` を返す
-//! - **失敗**: OS 側の追加に失敗したときは `Err(Internal("system_tray show"))` を
+//! - **失敗**: OS 側の追加に失敗したときは `Err(SystemTrayError::Internal)` を
 //!   返す。確保済みのウィンドウ・スレッドは解放してから返す
 //!   （`device-bridge-contracts.md`「9. 失敗時のリソース解放」）
 //! - **選択の受け取り**: `hide` の後と、前回 `show` 時と異なる世代の選択は返さない
@@ -154,7 +154,7 @@ struct QueueState {
     items: Vec<usize>,
 }
 
-/// macOS（`apple_system_tray.rs`）・Windows（`windows_system_tray.rs`）の両実装が
+/// macOS（`apple.rs`）・Windows（`windows.rs`）の両実装が
 /// 共有する「OS コールバックから届く選択」の受け皿。OS 側コールバック（ObjC の
 /// `onSelect:`・Win32 の `WndProc`）は任意スレッドから [`push`](Self::push) を
 /// 呼べる一方、取り出しは effect ドライバの UI スレッドから行う想定（`Mutex` で
@@ -214,8 +214,8 @@ impl SelectionQueue {
 
     /// 現在有効（`begin` 済み・`end` 未呼び出し）かどうか。macOS/Windows 実装が
     /// 「表示中かどうか」の判定そのものに流用する（二重表示判定を Rust 側の状態
-    /// だけで完結させ、OS 側へ毎回問い合わせない設計、`apple_system_tray.rs`/
-    /// `windows_system_tray.rs` のモジュール doc 参照）。
+    /// だけで完結させ、OS 側へ毎回問い合わせない設計、`apple.rs`/
+    /// `windows.rs` のモジュール doc 参照）。
     pub fn is_active(&self) -> bool {
         self.lock().active
     }
