@@ -5,8 +5,8 @@
 //! `fandhe-web-dom` の mount が使う。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
-//! `fandhe-egui-proxy` の `device/system_accent_color.rs`（Web は `fandhe-web-dom`）が一定間隔で
-//! 行い、[`apply_read`] で結果を注入する。`fandhe_device::system_accent_color` の型は
+//! `fandhe-cap-system-accent-color` の `driver.rs`（Web は `fandhe-web-dom`）が一定間隔で
+//! 行い、[`apply_read`] で結果を注入する。`fandhe_cap_system_accent_color` の型は
 //! 依存方向の都合でここに写し取る。
 //!
 //! 色見本は読めたときだけ描く。取得中・非対応・失敗では見本も `#` 表記も出さない
@@ -27,7 +27,7 @@ pub const SWATCH_H: f32 = 80.0;
 
 const CANVAS_ID: WidgetId = WidgetId::from_raw(1);
 
-/// OS から読めた色（`fandhe_device::system_accent_color::Rgb` の写し）。
+/// OS から読めた色（`fandhe_cap_system_accent_color::Rgb` の写し）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rgb {
     /// 赤。

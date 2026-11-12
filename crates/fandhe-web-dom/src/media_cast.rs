@@ -160,11 +160,11 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_media_cast::{CONNECT_DEADLINE, START_DEADLINE};
     use fandhe_core::screens::cast_show::{
         apply_update, expire, mark_command_taken, prepare, take_command, CastCommand,
         CastShowFailure, CastShowPlayback, CastShowRoute, CastShowState, CastShowUpdate,
     };
-    use fandhe_device::media_cast::{CONNECT_DEADLINE, START_DEADLINE};
     use fandhe_device::media_playback::demo_wav;
     use js_sys::{Array, Function, Promise, Reflect, Uint8Array};
     use wasm_bindgen::prelude::*;
@@ -772,7 +772,7 @@ mod web {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::media_cast::{CONNECT_DEADLINE, START_DEADLINE};
+    use fandhe_cap_media_cast::{CONNECT_DEADLINE, START_DEADLINE};
 
     #[test]
     fn route_never_invents_connected() {

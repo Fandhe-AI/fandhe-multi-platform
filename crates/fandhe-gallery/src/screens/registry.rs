@@ -287,7 +287,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "cast_show" => fandhe_core::screens::cast_show::current_screen,
-    fandhe_egui_proxy::device::media_cast::cast_show_effect,
+    fandhe_cap_media_cast::cast_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "midi_show" => fandhe_core::screens::midi_show::current_screen,
@@ -367,7 +367,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "system_accent_color_show" => fandhe_core::screens::system_accent_color_show::current_screen,
-    fandhe_egui_proxy::device::system_accent_color::system_accent_color_show_effect,
+    fandhe_cap_system_accent_color::system_accent_color_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "safe_area_insets_show" => fandhe_core::screens::safe_area_insets_show::current_screen,
@@ -379,7 +379,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "focus_mode_status_show" => fandhe_core::screens::focus_mode_status_show::current_screen,
-    fandhe_egui_proxy::device::focus_mode_status::focus_mode_status_show_effect,
+    fandhe_cap_focus_mode_status::focus_mode_status_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "compass_show" => fandhe_core::screens::compass_show::current_screen,
@@ -475,11 +475,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pdf_first_page" => fandhe_core::screens::pdf_first_page::current_screen,
-    fandhe_egui_proxy::device::pdf_viewer::pdf_first_page_effect,
+    fandhe_cap_pdf_viewer::pdf_first_page_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "usb_device_show" => fandhe_core::screens::usb_device_show::current_screen,
-    fandhe_egui_proxy::device::usb_device::usb_device_show_effect,
+    fandhe_cap_usb_device::usb_device_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "music_library_list" => fandhe_core::screens::music_library_list::current_screen,

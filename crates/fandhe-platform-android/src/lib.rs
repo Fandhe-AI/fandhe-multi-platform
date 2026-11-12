@@ -64,6 +64,12 @@ impl From<jni::errors::Error> for JniCallFailed {
 /// `Activity` は未所有の借用で、`f` の外へ持ち出せない（delete されない）。`app` を借用で
 /// 受けるのは、JavaVM と Activity のポインタが `app` の生存期間中だけ有効という根拠を
 /// 型に現すため。attach 自体の失敗は `E::from` 経由で返る。
+///
+/// `f`（または Activity 取得）が `Err` を返したとき、Java 例外が pending なら `exception_clear` で
+/// 片付けてから戻る（pending のまま同じスレッドの次の JNI 呼び出しへ進ませない）。全機能 crate が
+/// 通る入口なので、各機能の `?` 離脱をここで一括して受ける。`exception_clear` は `()` を返し失敗しない
+/// （jni 0.22）。例外の文言は在席情報等を含みうるため `exception_describe` は呼ばない。
+/// jni 0.22 の `attach_current_thread` も既定方針で戻り際に例外を回収するが、版の既定に依存しないよう明示する。
 #[allow(unsafe_code)]
 pub fn with_activity<T, E: From<jni::errors::Error>>(
     app: &AndroidApp,
@@ -77,8 +83,13 @@ pub fn with_activity<T, E: From<jni::errors::Error>>(
         // SAFETY: `activity_as_ptr()` は `AndroidApp` が保持する未所有のグローバル参照で、
         // `app` の生存期間中有効。`Cast` は所有権を持たないラッパーのため delete しない
         // （jni の `as_cast_raw` 文書「Don't wrap as Global/Auto」参照）。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        f(env, &activity)
+        let result = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity) }
+            .map_err(E::from)
+            .and_then(|activity| f(env, &activity));
+        if result.is_err() && env.exception_check() {
+            env.exception_clear();
+        }
+        result
     })
 }
 

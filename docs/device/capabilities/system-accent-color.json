@@ -21,7 +21,7 @@
       "note": "API 30 以下は既定色に倒さず「取得できません（非対応）」を出す。リファレンス: https://developer.android.com/reference/android/R.color#system_accent1_500 。守らない範囲: AOSP の既定値を本物と区別しない、反映は最大 1 秒 + 1 フレーム、壁紙変更後の反映は実機未確認（#415）",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#415）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_system_accent_color.rs + platforms/android/app/src/main/java/com/fandhe/platform/SystemAccentColorHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/system_accent_color.rs + crates/fandhe-core/src/screens/system_accent_color_show.rs + crates/fandhe-device/src/system_accent_color.rs、Issue #422"
+      "impl": "crates/fandhe-cap-system-accent-color/src/android.rs + crates/fandhe-cap-system-accent-color/android/java/com/fandhe/platform/SystemAccentColorHelper.java + crates/fandhe-cap-system-accent-color/src/driver.rs + crates/fandhe-core/src/screens/system_accent_color_show.rs + crates/fandhe-cap-system-accent-color/src/contract.rs、Issue #422"
     },
     "macos": {
       "status": "done",
@@ -31,7 +31,7 @@
       "note": "main スレッドで同期に読み、失敗・非対応では既定色を出さず「取得できません」を出す。守らない範囲: 「マルチカラー」設定で返る青を本物と区別しない、反映は最大 1 秒 + 1 フレーム",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#415）",
-      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_system_accent_color.m + crates/fandhe-egui-proxy/src/device/macos_system_accent_color.rs + crates/fandhe-egui-proxy/src/device/system_accent_color.rs + crates/fandhe-core/src/screens/system_accent_color_show.rs + crates/fandhe-device/src/system_accent_color.rs、Issue #421"
+      "impl": "crates/fandhe-cap-system-accent-color/macos/fandhe_macos_system_accent_color.m + crates/fandhe-cap-system-accent-color/src/macos.rs + crates/fandhe-cap-system-accent-color/src/driver.rs + crates/fandhe-core/src/screens/system_accent_color_show.rs + crates/fandhe-cap-system-accent-color/src/contract.rs、Issue #421"
     },
     "windows": {
       "status": "done",
@@ -41,7 +41,7 @@
       "note": "アルファは捨てる。失敗・非対応では既定色を出さず「取得できません」を出す。unpackaged exe での動作は実機未確認",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#415）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_system_accent_color.rs + crates/fandhe-egui-proxy/src/device/system_accent_color.rs + crates/fandhe-core/src/screens/system_accent_color_show.rs + crates/fandhe-device/src/system_accent_color.rs、Issue #421"
+      "impl": "crates/fandhe-cap-system-accent-color/src/windows.rs + crates/fandhe-cap-system-accent-color/src/driver.rs + crates/fandhe-core/src/screens/system_accent_color_show.rs + crates/fandhe-cap-system-accent-color/src/contract.rs、Issue #421"
     },
     "web": {
       "status": "done",
