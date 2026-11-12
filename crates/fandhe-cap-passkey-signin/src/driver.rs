@@ -107,9 +107,13 @@ pub(crate) mod bridge {
 
 /// 画面に依存しない公開入口（Android）。Credential Manager へ依頼して要求 id を返す。
 /// 結果は [`poll_passkey`] で受け取る。RP ID 未設定・不正は `Unsupported`（OS を呼ばない）。
-/// 保留は 1 件だけで、新しい依頼は前の結果を捨てる（画面経由の依頼と slot を共有する）。
+/// 保留は 1 件だけで、進行中に新しい依頼を出すと `Internal`（未取得の結果は捨てる）（画面経由の依頼と slot を共有する）。
 #[cfg(target_os = "android")]
 pub fn begin_passkey(op: PasskeyOp) -> Result<u64, PasskeySigninError> {
+    // 進行中の依頼があれば置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。
+    if matches!(bridge::SLOT.snapshot(), Some((_, None))) {
+        return Err(PasskeySigninError::Internal);
+    }
     let request_id = bridge::SLOT.begin();
     match crate::android::begin(request_id, op) {
         Ok(()) => Ok(request_id),

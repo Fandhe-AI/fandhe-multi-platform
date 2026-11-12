@@ -76,10 +76,14 @@ pub(crate) mod bridge {
 
 /// 画面に依存しない公開入口（iOS / Android）。バッジ設定を依頼して要求 id を返す。
 /// 結果は [`poll_set_badge`] で受け取る。範囲外の値は OS を呼ばず `InvalidInput`。
-/// 保留は 1 件だけで、新しい依頼は前の結果を捨てる（画面経由の依頼と slot を共有する）。
+/// 保留は 1 件だけで、進行中に新しい依頼を出すと `Internal`（未取得の結果は捨てる）（画面経由の依頼と slot を共有する）。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn begin_set_badge(value: u32) -> Result<u64, AppBadgeError> {
     let value = BadgeValue::new(value)?;
+    // 進行中の依頼があれば置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。
+    if matches!(bridge::SLOT.snapshot(), Some((_, None))) {
+        return Err(AppBadgeError::Internal);
+    }
     let request_id = bridge::begin();
     match begin_set(request_id, value) {
         Ok(()) => Ok(request_id),

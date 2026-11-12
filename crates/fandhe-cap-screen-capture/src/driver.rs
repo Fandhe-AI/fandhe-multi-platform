@@ -214,7 +214,7 @@ static LAST_TICK: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None
 
 /// 画面に依存しない公開入口（4 OS）。録画を依頼して要求 id を返す。
 /// 結果は [`poll_capture`] で受け取り、止めるときは `platform_screen_capture().stop(id)`。
-/// 依頼自体が失敗したら `Err`（コールバックは来ない）。保留は 1 件だけで、新しい依頼は前の結果を捨てる
+/// 依頼自体が失敗したら `Err`（コールバックは来ない）。保留は 1 件だけで、進行中に新しい依頼を出すと `Internal("busy")`（未取得の結果は捨てる）
 /// （画面経由の依頼と slot を共有する）。
 #[cfg(any(
     target_os = "macos",
@@ -223,6 +223,10 @@ static LAST_TICK: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None
     target_os = "android"
 ))]
 pub fn begin_capture(max_duration: std::time::Duration) -> Result<u64, ScreenCaptureError> {
+    // 進行中の依頼があれば置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。
+    if matches!(bridge::SLOT.snapshot(), Some((_, None))) {
+        return Err(ScreenCaptureError::Internal("busy"));
+    }
     let request_id = bridge::begin();
     match platform_screen_capture().start(request_id, max_duration) {
         Ok(()) => Ok(request_id),
@@ -385,6 +389,17 @@ mod tests {
     impl fandhe_runtime::RepaintWaker for NoopWaker {
         fn wake(&self) {}
         fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
+    #[test]
+    fn begin_capture_rejects_while_in_flight_and_keeps_existing() {
+        let id = bridge::SLOT.begin();
+        assert!(begin_capture(std::time::Duration::from_secs(1)).is_err());
+        assert!(bridge::deliver(id, Err(ScreenCaptureError::Cancelled)));
+        assert!(matches!(
+            poll_capture(id),
+            Some(Err(ScreenCaptureError::Cancelled))
+        ));
     }
 
     #[test]
