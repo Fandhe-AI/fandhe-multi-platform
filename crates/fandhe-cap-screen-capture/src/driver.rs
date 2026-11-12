@@ -27,12 +27,6 @@
 ))]
 use std::time::Instant;
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "android"
-))]
 use crate::contract::ScreenCapturer;
 use crate::error::ScreenCaptureError;
 use fandhe_core::screens::screen_capture::{CaptureOutcome, CaptureSummary};
