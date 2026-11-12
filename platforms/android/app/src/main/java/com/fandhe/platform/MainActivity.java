@@ -4692,13 +4692,6 @@ public class MainActivity extends GameActivity {
         return UsbDeviceHelper.list(getApplicationContext());
     }
 
-    // Rust 側（`device/android_local_fonts.rs`、Issue #1378）から JNI 経由で egui スレッドが
-    // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()[Ljava/lang/Object;`）。詰め方は
-    // `LocalFontsHelper` 冒頭を参照。API 29 未満は長さ 0、失敗は null。
-    private Object[] localFontsList() {
-        return LocalFontsHelper.list();
-    }
-
     // Rust 側（`device/android_display_refresh_hdr.rs`、Issue #872）から JNI 経由で egui
     // スレッドが押下ごとに呼ぶ同期メソッド（シグネチャ `()[F`）。詰め方は
     // `DisplayRefreshHdrHelper` 冒頭を参照。失敗は null。

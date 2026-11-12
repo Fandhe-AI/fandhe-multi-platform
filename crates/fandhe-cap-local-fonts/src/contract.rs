@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #1145、Issue #1376）: 端末に入っているフォントの「ファミリー名」を
-//! 一覧で 1 回読む契約。`fandhe-egui-proxy` の `device/local_fonts.rs` が「一覧を取得」ボタン押下ごとに
+//! 一覧で 1 回読む契約。`fandhe-cap-local-fonts`（`src/driver.rs`） が「一覧を取得」ボタン押下ごとに
 //! [`LocalFonts::list_families`] を 1 回だけ呼び、各 OS 実装（macOS: AppKit `NSFontManager`、
 //! Windows: DirectWrite、iOS: UIKit `UIFont.familyNames`、Android: #1378）が本トレイトを実装する。Web は
 //! `fandhe-web-dom` 側（#1379）で `queryLocalFonts()` を使い、本トレイトは経由しない。
@@ -10,8 +10,8 @@
 //! # 結果の種類（契約表 6・10）
 //!
 //! - 成功: [`LocalFontFamilies`]。`families` が空は「OS が 0 件を返した」正常な結果
-//! - 非対応: `Err(DeviceError::Unsupported("local_fonts"))`（手段が無い OS・版。Android API 29 未満を含む）
-//! - 失敗: `Err(DeviceError::Internal("local_fonts list"))`（OS 呼び出しの失敗、または 1 件以上
+//! - 非対応: `Err(LocalFontsError::Unsupported)`（手段が無い OS・版。Android API 29 未満を含む）
+//! - 失敗: `Err(LocalFontsError::Internal)`（OS 呼び出しの失敗、または 1 件以上
 //!   あるのに名前を 1 件も取れなかった場合。[`require_named`]）
 //!
 //! `PermissionDenied` は本トレイトでは返さない。拒否が実在するのは Web だけで、Web は本トレイトを
@@ -48,8 +48,8 @@
 
 use std::collections::BTreeSet;
 
-use crate::DeviceError;
-use crate::device_info::clean_text;
+use crate::error::LocalFontsError;
+use fandhe_device::device_info::clean_text;
 
 /// 返すファミリー名の最大件数。仮置きの値で、実機で足りなければ上げる。
 pub const MAX_FAMILIES: usize = 1000;
@@ -66,7 +66,7 @@ pub struct LocalFontFamilies {
 /// 端末のフォントのファミリー名を 1 回読む。
 pub trait LocalFonts: Send + Sync {
     /// 契約はモジュール doc 参照。
-    fn list_families(&self) -> Result<LocalFontFamilies, DeviceError>;
+    fn list_families(&self) -> Result<LocalFontFamilies, LocalFontsError>;
 }
 
 /// 非対応 OS 向けの実装。常に `Unsupported` を返し、成功値へは倒さない。
@@ -74,8 +74,8 @@ pub trait LocalFonts: Send + Sync {
 pub struct UnsupportedLocalFonts;
 
 impl LocalFonts for UnsupportedLocalFonts {
-    fn list_families(&self) -> Result<LocalFontFamilies, DeviceError> {
-        Err(DeviceError::Unsupported("local_fonts"))
+    fn list_families(&self) -> Result<LocalFontFamilies, LocalFontsError> {
+        Err(LocalFontsError::Unsupported)
     }
 }
 
@@ -94,9 +94,9 @@ pub fn families_from(names: impl IntoIterator<Item = String>) -> LocalFontFamili
 pub fn require_named(
     attempted: usize,
     f: LocalFontFamilies,
-) -> Result<LocalFontFamilies, DeviceError> {
+) -> Result<LocalFontFamilies, LocalFontsError> {
     if attempted > 0 && f.families.is_empty() {
-        Err(DeviceError::Internal("local_fonts list"))
+        Err(LocalFontsError::Internal)
     } else {
         Ok(f)
     }
@@ -114,7 +114,7 @@ mod tests {
     fn unsupported_never_succeeds() {
         assert!(matches!(
             UnsupportedLocalFonts.list_families(),
-            Err(DeviceError::Unsupported("local_fonts"))
+            Err(LocalFontsError::Unsupported)
         ));
     }
 
@@ -167,7 +167,7 @@ mod tests {
         assert!(require_named(0, empty.clone()).is_ok());
         assert!(matches!(
             require_named(3, empty),
-            Err(DeviceError::Internal("local_fonts list"))
+            Err(LocalFontsError::Internal)
         ));
         assert!(require_named(3, families_from(s(&["A"]))).is_ok());
     }

@@ -1,9 +1,8 @@
-//! Android 向け OS 搭載フォント一覧実装（Issue #1378、親 #1145）。`device/local_fonts.rs` の
+//! Android 向け OS 搭載フォント一覧実装（Issue #1378、親 #1145）。`fandhe-cap-local-fonts/src/driver.rs` の
 //! Android 経路（`drive_sync`）から egui スレッドでボタン押下ごとに同期で 1 回呼ばれる。
-//! 契約は `fandhe_device::local_fonts`（範囲はファミリー名の一覧のみ。描画への利用は範囲外）。
+//! 契約は `fandhe_cap_local_fonts`（範囲はファミリー名の一覧のみ。描画への利用は範囲外）。
 //!
-//! Java 側 `MainActivity.localFontsList()`（JNI シグネチャ `()[Ljava/lang/Object;`）が
-//! `LocalFontsHelper.list` へ委譲し、`SystemFonts.getAvailableFonts()` の各 `Font` から
+//! Java 側 `LocalFontsHelper.list`（static、JNI シグネチャ `()[Ljava/lang/Object;`）が`SystemFonts.getAvailableFonts()` の各 `Font` から
 //! `getBuffer()`（direct・read-only の mmap）と `getTtcIndex()` を返す。詰め方の SSOT は
 //! `LocalFontsHelper.java` 冒頭。`Font` に名前を返す公開 API は無いため、Rust が `name` テーブル
 //! だけを読んでファミリー名を取り出す（純関数 `family_name`、ホストでもテストする）。
@@ -27,7 +26,7 @@
 //! <https://developer.android.com/reference/android/graphics/fonts/Font#getBuffer()>
 
 #[cfg(any(target_os = "android", test))]
-use ttf_parser::{name::Names, name_id, PlatformId, RawFace, Tag};
+use ttf_parser::{PlatformId, RawFace, Tag, name::Names, name_id};
 
 /// `id` の名前を 1 件選ぶ。Windows かつ en-US を最優先し、無ければ復号できる最初の名前。
 /// Mac Roman など Unicode 系でない名前は使わない。
@@ -61,9 +60,9 @@ fn family_name(data: &[u8], ttc_index: u32) -> Option<String> {
 #[cfg(target_os = "android")]
 mod jni_impl {
     use super::family_name;
-    use crate::device::android::JniCallFailed;
-    use fandhe_device::local_fonts::{families_from, require_named, LocalFontFamilies, LocalFonts};
-    use fandhe_device::DeviceError;
+    use crate::contract::{LocalFontFamilies, LocalFonts, families_from, require_named};
+    use crate::error::LocalFontsError;
+    use fandhe_platform_android::{JniCallFailed, with_activity_class};
     use jni::objects::{JByteBuffer, JIntArray, JObject, JObjectArray};
 
     /// Java の戻り値を読んだ結果。
@@ -74,7 +73,7 @@ mod jni_impl {
         Fonts(usize, Vec<String>),
     }
 
-    /// Android の `LocalFonts` 実装（`MainActivity.localFontsList()` を JNI で呼ぶ）。
+    /// Android の `LocalFonts` 実装（`LocalFontsHelper.list` を JNI で呼ぶ）。
     pub(super) struct AndroidLocalFonts;
 
     /// 1 要素を読む。取れない要素は `None`（そのフォントだけ捨てる）。呼び出し側が local frame で囲む。
@@ -100,28 +99,19 @@ mod jni_impl {
     }
 
     impl LocalFonts for AndroidLocalFonts {
-        /// 2 箇所の `unsafe` は `AndroidAudioDevices::list` と同じ根拠・同じ形。
-        #[allow(unsafe_code)]
-        fn list_families(&self) -> Result<LocalFontFamilies, DeviceError> {
-            const FAILED: DeviceError = DeviceError::Internal("local_fonts list");
-            let Some(app) = crate::android::android_app() else {
+        fn list_families(&self) -> Result<LocalFontFamilies, LocalFontsError> {
+            const FAILED: LocalFontsError = LocalFontsError::Internal;
+            let Some(app) = fandhe_platform_android::android_app() else {
                 return Err(FAILED);
             };
 
-            // SAFETY: `AndroidAudioDevices::list` と同一の根拠。`vm_as_ptr()` は
-            // android-activity が管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
-            let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-            let result = vm.attach_current_thread(
-                |env: &mut jni::Env| -> Result<Option<Outcome>, JniCallFailed> {
-                    let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                    // SAFETY: `AndroidAudioDevices::list` と同一の根拠。未所有の JNI
-                    // グローバル参照を `Cast` で包むだけで delete は試みない。
-                    let activity =
-                        unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                    let ret = env.call_method(
-                        &activity,
-                        jni::jni_str!("localFontsList"),
+            let result = with_activity_class(
+                &app,
+                jni::jni_str!("com.fandhe.platform.LocalFontsHelper"),
+                |env, _activity, class| -> Result<Option<Outcome>, JniCallFailed> {
+                    let ret = env.call_static_method(
+                        class,
+                        jni::jni_str!("list"),
                         jni::jni_sig!(() -> java.lang.Object[]),
                         &[],
                     );
@@ -174,7 +164,7 @@ mod jni_impl {
             );
 
             match result.ok().flatten().ok_or(FAILED)? {
-                Outcome::Unsupported => Err(DeviceError::Unsupported("local_fonts")),
+                Outcome::Unsupported => Err(LocalFontsError::Unsupported),
                 Outcome::Fonts(attempted, names) => require_named(attempted, families_from(names)),
             }
         }
@@ -183,7 +173,7 @@ mod jni_impl {
 
 /// Android の `LocalFonts` 実装を返す。
 #[cfg(target_os = "android")]
-pub(crate) fn implementation() -> std::sync::Arc<dyn fandhe_device::local_fonts::LocalFonts> {
+pub(crate) fn implementation() -> std::sync::Arc<dyn crate::contract::LocalFonts> {
     std::sync::Arc::new(jni_impl::AndroidLocalFonts)
 }
 

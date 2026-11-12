@@ -29,7 +29,7 @@ default = ["device"]
 # optional 依存として置く（Windows 以外では `device` feature を有効にしても入らない）。
 # Issue #907: `windows-future`（`IAsyncOperation`/`AsyncOperationCompletedHandler` の
 # 型名）も同じ Windows target 分岐にのみ置く。
-device = ["dep:fandhe-device", "dep:fandhe-cap-system-tray", "dep:serde_json", "dep:jni", "dep:windows", "dep:fandhe-platform-windows", "dep:windows-future", "dep:windows-core", "dep:ttf-parser"]
+device = ["dep:fandhe-device", "dep:fandhe-cap-system-tray", "dep:serde_json", "dep:jni", "dep:windows", "dep:fandhe-platform-windows", "dep:windows-future", "dep:windows-core"]
 
 frame-metrics = []
 
@@ -258,8 +258,6 @@ winit = { workspace = true, features = ["android-game-activity"] }
 # （カメラ撮影は機能 crate `fandhe-cap-camera-capture` へ移した、Issue #1170）。`android-activity`（上記）の直接依存として既に 0.22.4 が解決済みのため
 # 新規パッケージは増えない（ルート Cargo.toml の `jni` コメント参照）。
 jni = { workspace = true, optional = true }
-# Issue #1378: `device/android_local_fonts.rs` が `name` テーブルを読む（ルート Cargo.toml 参照）。
-ttf-parser = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Issue #1001（REQ-9）: Windows 通常ビルドで eframe の "accesskit" feature を有効化し、
@@ -387,7 +385,7 @@ windows = { workspace = true, optional = true, features = [
     # （`GetMasterVolumeLevelScalar` / `GetMute` / `VolumeStepUp` / `VolumeStepDown`）を呼ぶ。
     # 新規パッケージは増えない。
     "Win32_Media_Audio_Endpoints",
-    # Issue #1376: `device/windows_local_fonts.rs` が DirectWrite の `DWriteCreateFactory` /
+    # Issue #1376: `fandhe-cap-local-fonts/src/windows.rs` が DirectWrite の `DWriteCreateFactory` /
     # `IDWriteFontCollection`（`Win32_Graphics_DirectWrite`）を呼ぶ。新規パッケージは増えない。
     "Win32_Graphics_DirectWrite",
     # Issue #1341: `fandhe-cap-multi-display/src/windows.rs` が `EnumDisplayMonitors` /
@@ -583,8 +581,6 @@ web-sys = { workspace = true, features = [
 console_error_panic_hook = { workspace = true }
 
 [target.'cfg(not(target_os = "android"))'.dev-dependencies]
-# Issue #1378: `android_local_fonts::family_name` の純関数テストをホストで走らせる。
-ttf-parser = { workspace = true }
 # egui_kittest（AccessKit ベース）で要素欠落 0 件を機械的に検証し、wgpu バックエンドで
 # レンダ画像（PNG エビデンス）も取得する。
 #

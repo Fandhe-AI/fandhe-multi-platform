@@ -307,7 +307,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "local_fonts_show" => fandhe_core::screens::local_fonts_show::current_screen,
-    fandhe_egui_proxy::device::local_fonts::local_fonts_show_effect,
+    fandhe_cap_local_fonts::local_fonts_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "camera_preview_stream_show" => fandhe_core::screens::camera_preview_stream_show::current_screen,

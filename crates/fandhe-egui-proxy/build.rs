@@ -221,8 +221,6 @@ fn build() {
     compile_ios_safe_area_insets();
     // `ios/fandhe_ios_audio_session.m`（Issue #841）。iOS 分岐のみ。
     compile_ios_audio_session();
-    // `ios/fandhe_ios_local_fonts.m`（Issue #1377）。iOS 分岐のみ。
-    compile_ios_local_fonts();
     // `ios/fandhe_ios_music_library.m`（Issue #484）。iOS 分岐のみ。
     compile_ios_music_library();
     // `ios/fandhe_ios_smart_home.m`（Issue #1080）。iOS 分岐のみ。
@@ -960,15 +958,6 @@ fn compile_ios_capture_protection() {
     );
 }
 
-/// `macos/fandhe_macos_local_fonts.m` を `cc` でコンパイルする（Issue #1376）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_local_fonts.rs` が使う）。
-fn compile_macos_local_fonts() {
-    compile_objc(
-        "macos/fandhe_macos_local_fonts.m",
-        &["AppKit", "Foundation"],
-    );
-}
-
 /// `macos/fandhe_macos_spell_check.m` を `cc` でコンパイルする（Issue #578）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_spell_check.rs` が使う）。
 fn compile_macos_spell_check() {
@@ -1354,12 +1343,6 @@ fn compile_ios_volume_control() {
     );
 }
 
-/// `ios/fandhe_ios_local_fonts.m` を `cc` でコンパイルする（Issue #1377）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_local_fonts.rs` が使う）。
-fn compile_ios_local_fonts() {
-    compile_objc("ios/fandhe_ios_local_fonts.m", &["Foundation", "UIKit"]);
-}
-
 /// `ios/fandhe_ios_compass.m` を `cc` でコンパイルする（Issue #1405）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_compass.rs` が使う）。
 fn compile_ios_compass() {
@@ -1644,8 +1627,6 @@ fn build_macos() {
     compile_apple_file_association();
     // `apple/fandhe_apple_now_playing.m`（Issue #381）。iOS 分岐と共用する。MediaPlayer を使う。
     compile_apple_now_playing();
-    // `macos/fandhe_macos_local_fonts.m`（Issue #1376）も macOS 専用。
-    compile_macos_local_fonts();
     // `macos/fandhe_macos_spell_check.m`（Issue #578）も macOS 専用。
     compile_macos_spell_check();
     // `macos/fandhe_macos_file_watch.m`（Issue #1410）も macOS 専用。CoreServices を使う。

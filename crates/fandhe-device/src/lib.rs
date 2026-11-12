@@ -138,8 +138,6 @@ pub mod lan_discovery;
 pub mod launch_at_login;
 /// Phase 11（端末機能の拡充ループ、親 #88、Issue #294）: 数値 1 つのライブ表示（ライブアクティビティ・進行中通知）の開始・更新・終了。
 pub mod live_activity;
-/// Phase 11（端末機能の拡充ループ、親 #1145、Issue #1376）: OS 搭載フォントのファミリー名の一覧。
-pub mod local_fonts;
 /// Phase 11（端末機能の拡充ループ、親 #110、Issue #511）: 近くの端末との直接通信（同じアプリを開いた 2 台が固定文字列を 1 回ずつ送り合う）。
 pub mod local_peer;
 /// Phase 11（端末機能の拡充ループ、親 #887、Issue #888）: 継続 push 型の位置情報取得。

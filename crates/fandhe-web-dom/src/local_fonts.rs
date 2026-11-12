@@ -4,7 +4,7 @@
 //! effect として観測し、`window.queryLocalFonts()` の結果を `finish_read` へ書き戻す。
 //! `fandhe-device` の `LocalFonts` トレイトは経由しない（`fandhe-device/src/local_fonts.rs` の
 //! module doc どおり、Web は本クレートの担当）。整形・重複除去・昇順・上限は
-//! `fandhe_device::local_fonts::{families_from, require_named}` を macOS / Windows と共用する。
+//! `fandhe_cap_local_fonts::{families_from, require_named}` を macOS / Windows と共用する。
 //! `fandhe-egui-proxy` の wasm canvas 経路は対象外。範囲はファミリー名の一覧のみ。
 //!
 //! # 読み取り方
@@ -31,8 +31,8 @@
 //! 利用者を失敗にしないため設けない）、読み取り後のフォント追加・削除（再取得まで）、
 //! 複数タブ・複数マウント、ブラウザ間・OS 間の一覧の一致。
 
+use fandhe_cap_local_fonts::{families_from, require_named};
 use fandhe_core::screens::local_fonts_show::{LocalFontsReading, ReadFailure};
-use fandhe_device::local_fonts::{families_from, require_named};
 
 /// 失敗時の固定文言（egui-proxy 側と同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -182,7 +182,7 @@ pub(crate) use web::release_mount;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::local_fonts::MAX_FAMILIES;
+    use fandhe_cap_local_fonts::MAX_FAMILIES;
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|x| x.to_string()).collect()

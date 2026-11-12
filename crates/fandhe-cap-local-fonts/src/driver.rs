@@ -1,8 +1,8 @@
 //! Phase 11 の拡充ループ（親 #1145）型サンプル「OS 搭載フォント」（Issue #1376）の effect ドライバ。
 //! `fandhe_core::screens::local_fonts_show`（端末依存ゼロ）の要求を `take_request` で観測し、
-//! `fandhe_device::local_fonts::LocalFonts` を呼んで、結果を `CompletionSender` 経由で注入する
+//! `crate::contract::LocalFonts` を呼んで、結果を `CompletionSender` 経由で注入する
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる
-//! 契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::local_fonts`。
+//! 契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_cap_local_fonts`。
 //!
 //! # OS 別実装の差し込み口
 //!
@@ -17,27 +17,27 @@
 //! 戻らない場合の備えのため、ワーカーで呼び 5 秒の期限を付ける（[`drive_worker`]）。期限切れ後に
 //! 遅れて届いた結果は捨て、前回の OS 呼び出しが未終了の間は新しい呼び出しを起こさず失敗で確定する。
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::sync::Arc;
 use std::time::Duration;
 
-use fandhe_core::screens::local_fonts_show::{
-    finish_read, mark_reading, take_request, LocalFontsReading, LocalFontsShowState, ReadFailure,
-};
 #[cfg(not(any(
     target_os = "windows",
     target_os = "macos",
     target_os = "ios",
     target_os = "android"
 )))]
-use fandhe_device::local_fonts::UnsupportedLocalFonts;
+use crate::contract::UnsupportedLocalFonts;
+use crate::contract::{LocalFontFamilies, LocalFonts};
 #[cfg(any(target_os = "macos", target_os = "ios", test))]
-use fandhe_device::local_fonts::{families_from, require_named};
-use fandhe_device::local_fonts::{LocalFontFamilies, LocalFonts};
-use fandhe_device::DeviceError;
+use crate::contract::{families_from, require_named};
+use crate::error::LocalFontsError;
+use fandhe_core::screens::local_fonts_show::{
+    LocalFontsReading, LocalFontsShowState, ReadFailure, finish_read, mark_reading, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// Windows のワーカーが結果を待つ上限。
 const LIST_DEADLINE: Duration = Duration::from_secs(5);
@@ -55,19 +55,19 @@ static OS_CALL_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 fn platform_local_fonts() -> Arc<dyn LocalFonts> {
     #[cfg(target_os = "windows")]
     {
-        super::windows_local_fonts::implementation()
+        crate::windows::implementation()
     }
     #[cfg(target_os = "macos")]
     {
-        super::macos_local_fonts::implementation()
+        crate::macos::implementation()
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_local_fonts::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_local_fonts::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(
         target_os = "windows",
@@ -89,9 +89,9 @@ fn to_reading(f: LocalFontFamilies) -> LocalFontsReading {
 }
 
 /// エラーを画面用の失敗へ写す。`PermissionDenied` は Web だけが画面側で使うため、ここでは作らない。
-fn to_failure(e: DeviceError) -> ReadFailure {
+fn to_failure(e: LocalFontsError) -> ReadFailure {
     match e {
-        DeviceError::Unsupported(_) => ReadFailure::Unsupported,
+        LocalFontsError::Unsupported => ReadFailure::Unsupported,
         _ => ReadFailure::Failed(FAILED_MESSAGE.to_string()),
     }
 }
@@ -209,11 +209,11 @@ pub fn local_fonts_show_effect(
 /// 取りこぼしたか。
 #[cfg(any(target_os = "macos", target_os = "ios", test))]
 #[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
-pub(super) fn families_from_nul_buffer(
+pub(crate) fn families_from_nul_buffer(
     buf: &[u8],
     count: u32,
     overflowed: bool,
-) -> Result<LocalFontFamilies, DeviceError> {
+) -> Result<LocalFontFamilies, LocalFontsError> {
     let names = buf
         .split(|&b| b == 0)
         .filter_map(|s| std::str::from_utf8(s).ok())
@@ -245,7 +245,7 @@ mod buffer_tests {
     fn no_names_with_positive_count_is_internal() {
         assert!(matches!(
             families_from_nul_buffer(b"", 2, false),
-            Err(DeviceError::Internal("local_fonts list"))
+            Err(LocalFontsError::Internal)
         ));
         assert!(families_from_nul_buffer(b"\0\0", 2, false).is_err());
     }
@@ -265,11 +265,18 @@ mod buffer_tests {
 
 #[cfg(test)]
 mod tests {
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     use super::*;
+    use crate::contract::{UnsupportedLocalFonts as Unsupported, families_from};
     use fandhe_core::screens::local_fonts_show::{
-        fetch, ReadPhase, READING_STATUS, UNSUPPORTED_STATUS,
+        READING_STATUS, ReadPhase, UNSUPPORTED_STATUS, fetch,
     };
-    use fandhe_device::local_fonts::{families_from, UnsupportedLocalFonts as Unsupported};
     use std::sync::atomic::AtomicUsize;
 
     struct Fake {
@@ -292,12 +299,10 @@ mod tests {
     }
 
     impl LocalFonts for Fake {
-        fn list_families(&self) -> Result<LocalFontFamilies, DeviceError> {
+        fn list_families(&self) -> Result<LocalFontFamilies, LocalFontsError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             std::thread::sleep(self.delay);
-            self.result
-                .clone()
-                .ok_or(DeviceError::Internal("local_fonts list"))
+            self.result.clone().ok_or(LocalFontsError::Internal)
         }
     }
 
@@ -310,11 +315,14 @@ mod tests {
         families_from(["Alpha".to_string(), "Beta".to_string()])
     }
 
-    type Rx = mpsc::Receiver<crate::app::Completion<LocalFontsShowState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<LocalFontsShowState>>;
 
     fn channel() -> (CompletionSender<LocalFontsShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     /// 要求済みの状態を作る（画面はボタン押下で要求を立てる）。
@@ -465,7 +473,7 @@ mod tests {
     fn unsupported_os_implementation_is_unsupported() {
         assert!(matches!(
             platform_local_fonts().list_families(),
-            Err(DeviceError::Unsupported("local_fonts"))
+            Err(LocalFontsError::Unsupported)
         ));
     }
 }

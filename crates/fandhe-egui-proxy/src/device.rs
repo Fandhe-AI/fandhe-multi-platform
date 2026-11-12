@@ -214,11 +214,6 @@ pub mod android_lan_discovery;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_live_activity;
-/// Issue #1376: Android 向け OS 搭載フォント一覧実装。`device/local_fonts.rs` の
-/// Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_local_fonts;
 /// Issue #511: Android 向け近くの端末との直接通信実装。
 /// `device/local_peer.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
@@ -1035,11 +1030,6 @@ pub mod ios_lan_discovery;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_live_activity;
-/// Issue #1377: iOS 向け OS 搭載フォント一覧実装（`ios/fandhe_ios_local_fonts.m`、UIKit
-/// `UIFont.familyNames`）。`device/local_fonts.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_local_fonts;
 /// Issue #512: iOS 向け近くの端末との直接通信（親 #110、`apple_local_peer` へ委譲する）。
 /// `device/local_peer.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -1213,9 +1203,6 @@ pub mod launch_at_login;
 /// Phase 11 の拡充ループ（親 #88、Issue #294）: ライブアクティビティの effect ドライバ（iOS・Android 実装、
 /// 他 OS は `UnsupportedLiveActivity` 固定）。
 pub mod live_activity;
-/// Phase 11 の拡充ループ（親 #1145、Issue #1376）: OS 搭載フォント一覧の effect ドライバ（macOS / Windows
-/// ・iOS・Android 実装、他 OS は `UnsupportedLocalFonts` 固定）。
-pub mod local_fonts;
 /// Phase 11 の拡充ループ（親 #110、Issue #511）: 近くの端末との直接通信の effect ドライバ
 /// （macOS・iOS / Android 実装、他 OS は `UnsupportedLocalPeer` 固定）。
 pub mod local_peer;
@@ -1301,12 +1288,6 @@ pub mod macos_in_app_review;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_launch_at_login;
-/// Issue #1376: macOS 向け OS 搭載フォント一覧実装（`macos/fandhe_macos_local_fonts.m` を呼ぶ C ABI
-/// ラッパー）。`device/local_fonts.rs` の macOS 経路から呼ばれる。バッファ解釈の純関数をホストで
-/// テストできるよう cfg は `any(macos, test)`。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_local_fonts;
 /// Issue #944: macOS 向け MDM 管理アプリ設定実装（`macos/fandhe_macos_managed_app_config.m` を呼ぶ
 /// C ABI ラッパー）。`device/managed_app_config.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -1839,10 +1820,6 @@ pub mod windows_lan_discovery;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_launch_at_login;
-/// Issue #1376: Windows 向け OS 搭載フォント一覧実装（DirectWrite のシステムフォントコレクション）。
-/// `device/local_fonts.rs` の Windows 経路（ワーカー）から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_local_fonts;
 /// Issue #388: Windows 向け外部機器への再生（`CastingDevicePicker` + `MediaPlayer`）。`device/media_cast.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]

@@ -1,8 +1,8 @@
 //! iOS 向け OS 搭載フォント一覧実装（Issue #1377）。`ios/fandhe_ios_local_fonts.m`
 //! （UIKit `UIFont.familyNames`。`build.rs` が iOS 分岐で feature `device` 有効時にコンパイルする）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
-//! `device/local_fonts.rs` の iOS 経路（`drive_sync`）から UI スレッドで呼ばれ、契約は
-//! `fandhe_device::local_fonts`。バッファの解釈は macOS と共用の `families_from_nul_buffer`。
+//! `fandhe-cap-local-fonts/src/driver.rs` の iOS 経路（`drive_sync`）から UI スレッドで呼ばれ、契約は
+//! `fandhe_cap_local_fonts`。バッファの解釈は macOS と共用の `families_from_nul_buffer`。
 //!
 //! # 守る範囲 / 守らない範囲
 //!
@@ -13,7 +13,7 @@
 //!
 //! # 再描画
 //!
-//! 同期の 1 回読みで OS コールバックが無く `crate::ios::request_repaint` は呼ばない。結果は
+//! 同期の 1 回読みで OS コールバックが無く `fandhe_runtime::request_repaint` は呼ばない。結果は
 //! `CompletionSender::send` が注入直後に `ctx.request_repaint()` で次フレームを起こす。
 //!
 //! # 既知の天井
@@ -25,15 +25,15 @@
 mod imp {
     use std::sync::Arc;
 
-    use fandhe_device::local_fonts::{LocalFontFamilies, LocalFonts};
-    use fandhe_device::DeviceError;
+    use crate::contract::{LocalFontFamilies, LocalFonts};
+    use crate::error::LocalFontsError;
 
-    use crate::device::local_fonts::families_from_nul_buffer;
+    use crate::driver::families_from_nul_buffer;
 
     // SAFETY: `ios/fandhe_ios_local_fonts.m`（`build.rs` が iOS 分岐で feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_ios_local_fonts_list(
             buf: *mut u8,
             cap: usize,
@@ -64,15 +64,14 @@ mod imp {
     struct IosLocalFonts;
 
     impl LocalFonts for IosLocalFonts {
-        fn list_families(&self) -> Result<LocalFontFamilies, DeviceError> {
+        fn list_families(&self) -> Result<LocalFontFamilies, LocalFontsError> {
             let mut buf = vec![0u8; 1 << 20];
-            let (len, count, overflowed) =
-                list(&mut buf).ok_or(DeviceError::Internal("local_fonts list"))?;
+            let (len, count, overflowed) = list(&mut buf).ok_or(LocalFontsError::Internal)?;
             families_from_nul_buffer(&buf[..len], count, overflowed)
         }
     }
 
-    /// iOS の `LocalFonts` 実装を返す（`device/local_fonts.rs` の dispatch から呼ばれる）。
+    /// iOS の `LocalFonts` 実装を返す（`fandhe-cap-local-fonts/src/driver.rs` の dispatch から呼ばれる）。
     pub(crate) fn implementation() -> Arc<dyn LocalFonts> {
         Arc::new(IosLocalFonts)
     }

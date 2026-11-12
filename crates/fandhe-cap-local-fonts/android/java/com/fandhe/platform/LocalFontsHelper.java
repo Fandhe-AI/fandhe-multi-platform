@@ -7,8 +7,8 @@ import android.os.Build;
 import java.nio.ByteBuffer;
 import java.util.Set;
 
-// OS 搭載フォント一覧画面（Issue #1378、親 #1145）の Android 実装ヘルパー。MainActivity の
-// `localFontsList()` から委譲される（Rust の `device/android_local_fonts.rs` が egui スレッドで
+// OS 搭載フォント一覧画面（Issue #1378、親 #1145）の Android 実装ヘルパー。
+// （Rust の `fandhe-cap-local-fonts/src/android.rs` が egui スレッドで
 // ボタン押下ごとに同期で 1 回 JNI 呼び出しする。シグネチャ `()[Ljava/lang/Object;`）。
 //
 // `Font` に名前を返す公開 API は無いため、各 `Font` の `getBuffer()`（direct・read-only の mmap）と

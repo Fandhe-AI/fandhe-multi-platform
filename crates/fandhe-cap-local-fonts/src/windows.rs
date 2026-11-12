@@ -1,7 +1,7 @@
 //! Windows 向け OS 搭載フォント一覧実装（Issue #1376）。DirectWrite のシステムフォントコレクション
 //! （`IDWriteFactory::GetSystemFontCollection`）から各ファミリーの英語名（`en-us`、無ければ先頭の
-//! ロケール）を読む。`device/local_fonts.rs` の Windows 経路（`drive_worker`）からワーカースレッド上で
-//! 呼ばれ、契約は `fandhe_device::local_fonts`。
+//! ロケール）を読む。`fandhe-cap-local-fonts/src/driver.rs` の Windows 経路（`drive_worker`）からワーカースレッド上で
+//! 呼ばれ、契約は `fandhe_cap_local_fonts`。
 //!
 //! # スレッドと COM
 //!
@@ -30,12 +30,12 @@
 
 use std::sync::Arc;
 
-use fandhe_device::local_fonts::{families_from, require_named, LocalFontFamilies, LocalFonts};
-use fandhe_device::DeviceError;
-use windows::core::{w, BOOL};
+use crate::contract::{LocalFontFamilies, LocalFonts, families_from, require_named};
+use crate::error::LocalFontsError;
 use windows::Win32::Graphics::DirectWrite::{
-    DWriteCreateFactory, IDWriteFactory, IDWriteFontCollection, DWRITE_FACTORY_TYPE_SHARED,
+    DWRITE_FACTORY_TYPE_SHARED, DWriteCreateFactory, IDWriteFactory, IDWriteFontCollection,
 };
+use windows::core::{BOOL, w};
 
 struct WindowsLocalFonts;
 
@@ -65,8 +65,8 @@ fn family_name(collection: &IDWriteFontCollection, index: u32) -> Option<String>
 
 impl LocalFonts for WindowsLocalFonts {
     #[allow(unsafe_code)]
-    fn list_families(&self) -> Result<LocalFontFamilies, DeviceError> {
-        const FAIL: DeviceError = DeviceError::Internal("local_fonts list");
+    fn list_families(&self) -> Result<LocalFontFamilies, LocalFontsError> {
+        const FAIL: LocalFontsError = LocalFontsError::Internal;
         // SAFETY: 共有ファクトリの生成のみ。型とインターフェースは windows クレートの定義。
         let factory: IDWriteFactory =
             unsafe { DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED) }.map_err(|_| FAIL)?;
@@ -81,7 +81,7 @@ impl LocalFonts for WindowsLocalFonts {
     }
 }
 
-/// Windows の `LocalFonts` 実装を返す（`device/local_fonts.rs` の dispatch から呼ばれる）。
+/// Windows の `LocalFonts` 実装を返す（`fandhe-cap-local-fonts/src/driver.rs` の dispatch から呼ばれる）。
 pub(crate) fn implementation() -> Arc<dyn LocalFonts> {
     Arc::new(WindowsLocalFonts)
 }
