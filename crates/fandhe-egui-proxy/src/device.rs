@@ -289,11 +289,6 @@ pub mod android_passkey;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_payment_request;
-/// Issue #472: Android 向け PDF 表示の実装（`PdfRenderer`）。
-/// `device/pdf_viewer.rs` の Android 経路から呼ばれる。応答の解読をホストでテストするため test でも載せる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_pdf_viewer;
 /// Issue #355: Android 向けペン・筆圧入力実装。`device/pen_stylus.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -570,11 +565,6 @@ pub mod apple_now_playing;
 /// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_on_device_llm;
-/// Issue #469: macOS / iOS 向け PDF 表示実装（`apple/fandhe_apple_pdf_viewer.m` の CoreGraphics を
-/// 呼ぶ C ABI ラッパー）。`device/pdf_viewer.rs` の macOS 経路と `ios_pdf_viewer`（#471）から
-/// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_pdf_viewer;
 /// Issue #1073 / #1074: macOS / iOS 向けアプリ別の言語設定（`apple/fandhe_apple_per_app_language.m` を呼ぶ
 /// C ABI ラッパー）。`device/per_app_language.rs` の macOS / iOS 経路から呼ばれる。
 /// 純関数をホストの `cargo test` で検査するため cfg に `test` を含める。
@@ -1042,10 +1032,6 @@ pub mod ios_on_device_llm;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_open_system_settings;
-/// Issue #471: iOS 向け PDF 表示実装（macOS と共用の `ApplePdfPageRenderer` を返す）。
-/// `device/pdf_viewer.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_pdf_viewer;
 /// Issue #356: iOS 向けペン・筆圧入力実装（`ios/fandhe_ios_pen_stylus.m` の観測専用
 /// `UIGestureRecognizer` が値を置く C ABI ラッパー）。`device/pen_stylus.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1424,9 +1410,6 @@ pub mod passkey;
 /// pull 型 bridge、他のネイティブは `UnsupportedPaymentSheet` 固定の同期経路。dispatch は最終形。
 /// Web は `fandhe-web-dom`）。
 pub mod payment_request;
-/// Phase 11 の拡充ループ（親 #107、Issue #469）: PDF 表示（1 ページ目の画像化）の effect ドライバ
-/// （macOS・iOS / Windows / Android 実装、他 OS は `UnsupportedPdfPageRenderer` 固定）。
-pub mod pdf_viewer;
 /// Phase 11 の拡充ループ（親 #95、Issue #355）: ペン・筆圧入力の effect ドライバ（macOS・iOS・Android・Windows 実装、
 /// 他 OS は `UnsupportedPenStylus` 固定。
 /// Web は `fandhe-web-dom`）。
@@ -1805,10 +1788,6 @@ pub mod windows_open_system_settings;
 /// `device/passkey.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_passkey;
-/// Issue #469: Windows 向け PDF 表示実装。
-/// `device/pdf_viewer.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_pdf_viewer;
 /// Issue #359: Windows 向けペン・筆圧入力実装（`SetWindowSubclass` の観測専用サブクラスが
 /// `WM_POINTER*` から値を置く）。`device/pen_stylus.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

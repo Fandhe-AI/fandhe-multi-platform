@@ -475,7 +475,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pdf_first_page" => fandhe_core::screens::pdf_first_page::current_screen,
-    fandhe_egui_proxy::device::pdf_viewer::pdf_first_page_effect,
+    fandhe_cap_pdf_viewer::pdf_first_page_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "usb_device_show" => fandhe_core::screens::usb_device_show::current_screen,

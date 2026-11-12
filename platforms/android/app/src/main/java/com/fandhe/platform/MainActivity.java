@@ -639,10 +639,6 @@ public class MainActivity extends GameActivity {
         mediaPlaybackHelper.shutdown();
     }
 
-    // PDF 表示（Issue #472）。実装は PdfPageHelper。Rust の android_pdf_viewer.rs がワーカーから同期 JNI で呼ぶ（署名 ([BI)[B）。
-    byte[] pdfRenderFirstPage(byte[] pdf, int maxSide) {
-        return PdfPageHelper.renderFirstPage(getCacheDir(), pdf, maxSide);
-    }
 
     // ファイル・動画のプレビューとサムネイル（Issue #920）。実装は `FilePreviewHelper`。
     // Rust の `android_file_preview.rs` が JNI で呼ぶ（サムネイルは同期 `(I[BIJ)[B`、プレビューは非同期 `(JI[B)V`）。

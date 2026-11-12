@@ -1,5 +1,6 @@
 package com.fandhe.platform;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.pdf.PdfRenderer;
@@ -11,12 +12,12 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 // PDF 表示画面（Issue #472、親 #107 の b-android）の Android 実装ヘルパー。
-// Rust の `device/android_pdf_viewer.rs` がドライバのワーカースレッドから
-// `MainActivity.pdfRenderFirstPage` 経由で同期 JNI で呼ぶ。Rust への native コールバックは無く、
+// Rust の `src/android.rs` がドライバのワーカースレッドから static の
+// `renderFirstPage(Context, byte[], int)` を JNI（署名 `(Landroid/content/Context;[BI)[B`）で同期に呼ぶ。利用者の `MainActivity` には何も書かせない。Rust への native コールバックは無く、
 // JNI 署名の照合先は Java の 1 か所だけ。
 // 扱う範囲は「PDF のバイト列の 1 ページ目を `PdfRenderer` で長辺 maxSide 以内の RGBA に描く」ことだけ。
 //
-// コード表の SSOT は Rust の `fandhe_device::pdf_viewer::decode_code`。同じ値で持つ（1=非対応は Android では返さない）。
+// コード表の SSOT は Rust の `contract::decode_code`（fandhe-cap-pdf-viewer）。同じ値で持つ（1=非対応は Android では返さない）。
 //   戻り値 byte[]: 成功 = [0][pageCount:int32 BE][width:int32 BE][height:int32 BE][RGBA]
 //                  失敗 = コード 1 バイトだけ / 想定外の例外 = null（Rust 側で Internal）
 //   成功の妥当性は Rust の `check_page` が決める（Java は成功を判定しない）。
@@ -36,7 +37,8 @@ final class PdfPageHelper {
 
     private PdfPageHelper() {}
 
-    static byte[] renderFirstPage(File cacheDir, byte[] pdf, int maxSide) {
+    static byte[] renderFirstPage(Context context, byte[] pdf, int maxSide) {
+        File cacheDir = context == null ? null : context.getApplicationContext().getCacheDir();
         if (pdf == null || pdf.length == 0 || pdf.length > MAX_PDF_BYTES
                 || maxSide < 1 || maxSide > MAX_SIDE || cacheDir == null) {
             return code(SIZE);

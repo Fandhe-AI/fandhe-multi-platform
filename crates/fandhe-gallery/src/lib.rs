@@ -91,6 +91,10 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // `fandhe_cap_calendar::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_calendar::reset_pending_tracking();
+    // PDF 表示の処理済み世代も破棄する。画面状態は再生成で generation 0 に戻るため、残すと次の
+    // 「表示する」が飲み込まれる（`fandhe_cap_pdf_viewer::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_pdf_viewer::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 

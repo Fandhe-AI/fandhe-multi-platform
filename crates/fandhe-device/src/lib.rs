@@ -177,8 +177,6 @@ pub mod open_system_settings;
 pub mod passkey;
 /// Phase 11（端末機能の拡充ループ、親 #114、Issue #541）: 物・サービスの決済シート（Google Pay TEST 環境、課金なし）。
 pub mod payment_request;
-/// Phase 11（端末機能の拡充ループ、親 #107、Issue #469）: 埋め込み PDF の 1 ページ目の画像化と総ページ数。
-pub mod pdf_viewer;
 /// Phase 11（端末機能の拡充ループ、親 #95、Issue #355）: ペン・筆圧入力（種類・筆圧・傾き）。
 pub mod pen_stylus;
 /// Phase 11（端末機能の拡充ループ、親 #137、Issue #1073）: アプリ別の言語設定（言語タグと設定の出どころ）。

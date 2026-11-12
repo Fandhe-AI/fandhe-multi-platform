@@ -57,7 +57,7 @@ mod imp {
     use jni::objects::{JByteArray, JObject};
 
     /// `MainActivity` のメソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`（例外は消す）。
-    /// 2 箇所の `unsafe` は `android_pdf_viewer.rs::call_activity` と同一の根拠。
+    /// 2 箇所の `unsafe` は `android_media_transcode.rs::call_activity` と同一の根拠。
     #[allow(unsafe_code)]
     pub(super) fn call_activity<T>(
         f: impl FnOnce(&mut jni::Env, &JObject) -> Result<T, crate::device::android::JniCallFailed>,

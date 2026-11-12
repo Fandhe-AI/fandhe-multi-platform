@@ -1,9 +1,9 @@
 //! Windows 向け PDF 表示（Issue #470。親 #107）。WinRT `Windows.Data.Pdf` で 1 ページ目を描く。
 //!
-//! 呼び出し元: `device/pdf_viewer.rs` の Windows 経路が `implementation` を呼び、ワーカー
+//! 呼び出し元: `driver.rs` の Windows 経路が `implementation` を呼び、ワーカー
 //! スレッドから `render_first_page` を同期に呼ぶ。期限・世代・`check_page` の再検査は呼び出し側が
 //! 持ち、本ファイルは「ブロックしてよい同期関数」だけを持つ。契約の SSOT は
-//! `fandhe_device::pdf_viewer`。
+//! `crate::contract`。
 //!
 //! 失敗の写像（全呼び出し箇所で一貫。`map_load_err` / `map_render_err`）:
 //! - アクティベーション失敗（`REGDB_E_CLASSNOTREG` / `E_NOINTERFACE` / package identity 無し）
@@ -20,11 +20,11 @@
 
 use std::sync::Arc;
 
-use fandhe_device::pdf_viewer::{
-    check_page, render_size, validate_input, PdfFirstPage, PdfPageRenderer, BROKEN, EMPTY,
-    ENCRYPTED, MAX_SIDE, SIZE,
+use crate::contract::{
+    BROKEN, EMPTY, ENCRYPTED, MAX_SIDE, PdfFirstPage, PdfPageRenderer, SIZE, check_page,
+    render_size, validate_input,
 };
-use fandhe_device::DeviceError;
+use crate::error::PdfViewerError;
 use windows::Data::Pdf::{PdfDocument, PdfPageRenderOptions};
 use windows::Graphics::Imaging::{
     BitmapAlphaMode, BitmapDecoder, BitmapPixelFormat, BitmapTransform, ColorManagementMode,
@@ -53,28 +53,28 @@ fn is_unsupported(code: i32) -> bool {
 }
 
 /// 読み込み段（`LoadFromStreamAsync`）の HRESULT を契約上のエラーへ写す。
-fn map_load_err(code: i32) -> DeviceError {
+fn map_load_err(code: i32) -> PdfViewerError {
     match code {
-        c if is_unsupported(c) => DeviceError::Unsupported("pdf_viewer"),
-        WRONG_PASSWORD => DeviceError::Internal(ENCRYPTED),
-        _ => DeviceError::Internal(BROKEN),
+        c if is_unsupported(c) => PdfViewerError::Unsupported,
+        WRONG_PASSWORD => PdfViewerError::Internal(ENCRYPTED),
+        _ => PdfViewerError::Internal(BROKEN),
     }
 }
 
 /// 描画・復号段の HRESULT を契約上のエラーへ写す。
-fn map_render_err(code: i32) -> DeviceError {
+fn map_render_err(code: i32) -> PdfViewerError {
     if is_unsupported(code) {
-        DeviceError::Unsupported("pdf_viewer")
+        PdfViewerError::Unsupported
     } else {
-        DeviceError::Internal("pdf_viewer render")
+        PdfViewerError::Internal("pdf_viewer render")
     }
 }
 
-fn stream_err(_: windows::core::Error) -> DeviceError {
-    DeviceError::Internal("pdf_viewer stream")
+fn stream_err(_: windows::core::Error) -> PdfViewerError {
+    PdfViewerError::Internal("pdf_viewer stream")
 }
 
-fn render(pdf: &[u8], max_side: u32) -> Result<PdfFirstPage, DeviceError> {
+fn render(pdf: &[u8], max_side: u32) -> Result<PdfFirstPage, PdfViewerError> {
     let rerr = |e: windows::core::Error| map_render_err(e.code().0);
 
     let stream = InMemoryRandomAccessStream::new().map_err(stream_err)?;
@@ -96,12 +96,12 @@ fn render(pdf: &[u8], max_side: u32) -> Result<PdfFirstPage, DeviceError> {
         .map_err(load)?;
     let page_count = doc.PageCount().map_err(rerr)?;
     if page_count == 0 {
-        return Err(DeviceError::Internal(EMPTY));
+        return Err(PdfViewerError::Internal(EMPTY));
     }
     let page = doc.GetPage(0).map_err(rerr)?;
     let size = page.Size().map_err(rerr)?;
     let (mut w, mut h) = render_size(f64::from(size.Width), f64::from(size.Height))
-        .ok_or(DeviceError::Internal(SIZE))?;
+        .ok_or(PdfViewerError::Internal(SIZE))?;
     if max_side < MAX_SIDE {
         // ドライバは常に MAX_SIDE を渡すので通常は通らない。長辺を比例で縮める。
         let f = |v: u32| (u64::from(v) * u64::from(max_side) / u64::from(MAX_SIDE)).max(1) as u32;
@@ -159,10 +159,10 @@ fn render(pdf: &[u8], max_side: u32) -> Result<PdfFirstPage, DeviceError> {
 }
 
 impl PdfPageRenderer for WindowsPdfPageRenderer {
-    fn render_first_page(&self, pdf: &[u8], max_side: u32) -> Result<PdfFirstPage, DeviceError> {
+    fn render_first_page(&self, pdf: &[u8], max_side: u32) -> Result<PdfFirstPage, PdfViewerError> {
         validate_input(pdf)?;
         if max_side == 0 || max_side > MAX_SIDE {
-            return Err(DeviceError::InvalidInput("pdf_viewer input"));
+            return Err(PdfViewerError::InvalidInput);
         }
         render(pdf, max_side)
     }
@@ -171,23 +171,23 @@ impl PdfPageRenderer for WindowsPdfPageRenderer {
 #[cfg(all(test, target_os = "windows"))]
 mod tests {
     use super::*;
-    use fandhe_device::pdf_viewer::{empty_page_pdf, sample_pdf, truncated_pdf};
+    use crate::contract::{empty_page_pdf, sample_pdf, truncated_pdf};
 
     #[test]
     fn error_mapping_table() {
         for c in [REGDB_E_CLASSNOTREG, E_NOINTERFACE, NO_PACKAGE] {
-            assert!(matches!(map_load_err(c), DeviceError::Unsupported(_)));
-            assert!(matches!(map_render_err(c), DeviceError::Unsupported(_)));
+            assert!(matches!(map_load_err(c), PdfViewerError::Unsupported));
+            assert!(matches!(map_render_err(c), PdfViewerError::Unsupported));
         }
         assert!(matches!(
             map_load_err(WRONG_PASSWORD),
-            DeviceError::Internal(ENCRYPTED)
+            PdfViewerError::Internal(ENCRYPTED)
         ));
         assert!(matches!(
             map_load_err(0x8003_001E_u32 as i32),
-            DeviceError::Internal(BROKEN)
+            PdfViewerError::Internal(BROKEN)
         ));
-        assert!(matches!(map_load_err(-1), DeviceError::Internal(BROKEN)));
+        assert!(matches!(map_load_err(-1), PdfViewerError::Internal(BROKEN)));
     }
 
     #[test]
@@ -198,7 +198,7 @@ mod tests {
                 assert!(p.image.width.max(p.image.height) <= MAX_SIDE);
             }
             // package identity が無い環境
-            Err(DeviceError::Unsupported(_)) => {}
+            Err(PdfViewerError::Unsupported) => {}
             Err(e) => panic!("{e:?}"),
         }
     }

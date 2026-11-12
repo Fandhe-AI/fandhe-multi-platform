@@ -1,15 +1,15 @@
 //! Phase 11（端末機能の拡充ループ、親 #107）型サンプル「PDF 表示」（Issue #469）の effect ドライバ。
 //! `fandhe_core::screens::pdf_first_page`（端末依存ゼロ）の要求を観測し、ワーカースレッドで
-//! `fandhe_device::pdf_viewer::PdfPageRenderer` を呼んで `CompletionSender` 経由で結果を返す
+//! `crate::contract::PdfPageRenderer` を呼んで `CompletionSender` 経由で結果を返す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
-//! `fandhe_device::pdf_viewer`。
+//! `crate::contract`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。Web は対象外。
 //!
 //! # OS 別の分担（dispatch は #469 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
-//! - macOS: [`super::apple_pdf_viewer::ApplePdfPageRenderer`]（#469）
+//! - macOS: [`crate::apple::ApplePdfPageRenderer`]（#469）
 //! - iOS: `ios_pdf_viewer`（Issue #471。macOS と共用の `ApplePdfPageRenderer` を返す）
 //! - Windows: `windows_pdf_viewer`（windows の子。`Windows.Data.Pdf`）
 //! - Android: `android_pdf_viewer`（b-android。`PdfRenderer`）
@@ -26,36 +26,36 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::pdf_first_page::{
-    finish, mark_loading, take_request, PdfFailure, PdfFirstPageState, PdfPhase, PdfShown,
+use crate::contract::{
+    BROKEN, EMPTY, ENCRYPTED, MAX_SIDE, PDF_DEADLINE, PdfPageRenderer, TIMEOUT, check_page,
+    sample_pdf, validate_input,
 };
+use crate::error::PdfViewerError;
 use fandhe_core::RgbaPixels;
-use fandhe_device::pdf_viewer::{
-    check_page, sample_pdf, validate_input, PdfPageRenderer, BROKEN, EMPTY, ENCRYPTED, MAX_SIDE,
-    PDF_DEADLINE, TIMEOUT,
+use fandhe_core::screens::pdf_first_page::{
+    PdfFailure, PdfFirstPageState, PdfPhase, PdfShown, finish, mark_loading, take_request,
 };
-use fandhe_device::DeviceError;
 
-use super::request_slot::RequestSlot;
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::RequestSlot;
 
 /// 現在のプラットフォームに応じた `PdfPageRenderer` 実装を返す（dispatch の最終形）。
 fn platform() -> Arc<dyn PdfPageRenderer> {
     #[cfg(target_os = "macos")]
     {
-        Arc::new(super::apple_pdf_viewer::ApplePdfPageRenderer)
+        Arc::new(crate::apple::ApplePdfPageRenderer)
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_pdf_viewer::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "windows")]
     {
-        super::windows_pdf_viewer::implementation()
+        crate::windows::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_pdf_viewer::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(
         target_os = "macos",
@@ -64,7 +64,7 @@ fn platform() -> Arc<dyn PdfPageRenderer> {
         target_os = "android"
     )))]
     {
-        Arc::new(fandhe_device::pdf_viewer::UnsupportedPdfPageRenderer)
+        Arc::new(crate::contract::UnsupportedPdfPageRenderer)
     }
 }
 
@@ -106,22 +106,21 @@ static SESSION: std::sync::OnceLock<Arc<Session>> = std::sync::OnceLock::new();
 /// 画面状態は `default()`（世代 0）に戻るため、完了後も残る記録を残すと次の「表示」が
 /// 発送されず飲み込まれる。古いワーカーの結果は古いアプリのチャネルへ届くので新しい画面には
 /// 適用されない。走っている OS 呼び出しは止めず走り切らせる。
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
         s.reset();
     }
 }
 
-/// `DeviceError` を画面の失敗種別へ写す。内部識別子・OS コードは画面にもログにも出さない
+/// `PdfViewerError` を画面の失敗種別へ写す。内部識別子・OS コードは画面にもログにも出さない
 /// （security.md A09）。
-pub(crate) fn to_failure(e: DeviceError) -> PdfFailure {
+pub(crate) fn to_failure(e: PdfViewerError) -> PdfFailure {
     match e {
-        DeviceError::Unsupported(_) => PdfFailure::Unsupported,
-        DeviceError::Internal(TIMEOUT) => PdfFailure::Timeout,
-        DeviceError::Internal(BROKEN) => PdfFailure::Broken,
-        DeviceError::Internal(ENCRYPTED) => PdfFailure::Encrypted,
-        DeviceError::Internal(EMPTY) => PdfFailure::Empty,
+        PdfViewerError::Unsupported => PdfFailure::Unsupported,
+        PdfViewerError::Internal(TIMEOUT) => PdfFailure::Timeout,
+        PdfViewerError::Internal(BROKEN) => PdfFailure::Broken,
+        PdfViewerError::Internal(ENCRYPTED) => PdfFailure::Encrypted,
+        PdfViewerError::Internal(EMPTY) => PdfFailure::Empty,
         _ => PdfFailure::Failed,
     }
 }
@@ -172,18 +171,17 @@ fn drive(
                 // 期限判定: 処理中でセッションの世代が一致するときだけ。
                 if let (Some((request_id, generation, started)), PdfPhase::Loading) =
                     (*g, state.phase)
+                    && generation == state.generation
                 {
-                    if generation == state.generation {
-                        let elapsed = started.elapsed();
-                        if elapsed >= deadline {
-                            *g = None;
-                            session.slot.clear(request_id);
-                            let _ = sender.send(Box::new(move |s: &mut PdfFirstPageState| {
-                                finish(s, generation, Err(PdfFailure::Timeout));
-                            }));
-                        } else {
-                            sender.request_repaint_after(deadline - elapsed);
-                        }
+                    let elapsed = started.elapsed();
+                    if elapsed >= deadline {
+                        *g = None;
+                        session.slot.clear(request_id);
+                        let _ = sender.send(Box::new(move |s: &mut PdfFirstPageState| {
+                            finish(s, generation, Err(PdfFailure::Timeout));
+                        }));
+                    } else {
+                        sender.request_repaint_after(deadline - elapsed);
                     }
                 }
                 None
@@ -242,19 +240,26 @@ pub fn pdf_first_page_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{PdfFirstPage, UnsupportedPdfPageRenderer};
     use fandhe_core::screens::pdf_first_page::{error_text, request};
-    use fandhe_device::pdf_viewer::{PdfFirstPage, UnsupportedPdfPageRenderer};
     use fandhe_device::Image;
     use std::sync::mpsc;
 
-    type Rx = mpsc::Receiver<crate::app::Completion<PdfFirstPageState>>;
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<PdfFirstPageState>>;
 
     fn channel() -> (CompletionSender<PdfFirstPageState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
-    fn page(pages: u32, w: u32, h: u32, len: usize) -> Result<PdfFirstPage, DeviceError> {
+    fn page(pages: u32, w: u32, h: u32, len: usize) -> Result<PdfFirstPage, PdfViewerError> {
         Ok(PdfFirstPage {
             page_count: pages,
             image: Image {
@@ -265,23 +270,23 @@ mod tests {
         })
     }
 
-    fn good() -> Result<PdfFirstPage, DeviceError> {
+    fn good() -> Result<PdfFirstPage, PdfViewerError> {
         page(3, 2, 3, 24)
     }
 
     /// 指定の結果を返し、`sleep` だけ待つフェイク。
     struct Fake {
-        result: fn() -> Result<PdfFirstPage, DeviceError>,
+        result: fn() -> Result<PdfFirstPage, PdfViewerError>,
         sleep: Duration,
     }
     impl PdfPageRenderer for Fake {
-        fn render_first_page(&self, _: &[u8], _: u32) -> Result<PdfFirstPage, DeviceError> {
+        fn render_first_page(&self, _: &[u8], _: u32) -> Result<PdfFirstPage, PdfViewerError> {
             std::thread::sleep(self.sleep);
             (self.result)()
         }
     }
 
-    fn fake(result: fn() -> Result<PdfFirstPage, DeviceError>) -> Arc<dyn PdfPageRenderer> {
+    fn fake(result: fn() -> Result<PdfFirstPage, PdfViewerError>) -> Arc<dyn PdfPageRenderer> {
         Arc::new(Fake {
             result,
             sleep: Duration::ZERO,
@@ -349,9 +354,9 @@ mod tests {
 
     #[test]
     fn os_errors_map_to_their_failures() {
-        let s = run(fake(|| Err(DeviceError::Internal(ENCRYPTED))), 2);
+        let s = run(fake(|| Err(PdfViewerError::Internal(ENCRYPTED))), 2);
         assert_eq!(failure(&s), PdfFailure::Encrypted);
-        let s = run(fake(|| Err(DeviceError::Internal(BROKEN))), 2);
+        let s = run(fake(|| Err(PdfViewerError::Internal(BROKEN))), 2);
         assert_eq!(failure(&s), PdfFailure::Broken);
         let s = run(Arc::new(UnsupportedPdfPageRenderer), 2);
         assert_eq!(failure(&s), PdfFailure::Unsupported);
@@ -359,7 +364,10 @@ mod tests {
 
     #[test]
     fn internal_ids_never_reach_screen_text() {
-        let s = run(fake(|| Err(DeviceError::Internal("secret os detail"))), 2);
+        let s = run(
+            fake(|| Err(PdfViewerError::Internal("secret os detail"))),
+            2,
+        );
         assert!(!error_text(&s).contains("secret"));
         assert_eq!(failure(&s), PdfFailure::Failed);
     }
@@ -497,7 +505,7 @@ mod tests {
         )))]
         assert!(matches!(
             platform().render_first_page(&[1], MAX_SIDE),
-            Err(DeviceError::Unsupported(_))
+            Err(PdfViewerError::Unsupported)
         ));
     }
 

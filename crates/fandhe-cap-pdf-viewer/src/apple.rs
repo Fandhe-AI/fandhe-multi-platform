@@ -1,19 +1,19 @@
 //! macOS / iOS 向け PDF 表示実装（Issue #469 macOS、iOS は #471 で共用）。
-//! `device/pdf_viewer.rs` の macOS 経路（と `ios_pdf_viewer`）から呼ばれ、CoreGraphics 実装
+//! `driver.rs` の macOS 経路（と `ios_pdf_viewer`）から呼ばれ、CoreGraphics 実装
 //! （`apple/fandhe_apple_pdf_viewer.m`、`build.rs` が feature `device` 有効時のみコンパイル・
 //! リンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこのモジュールの extern 宣言と
 //! 呼び出し 1 か所に閉じ `// SAFETY:` で契約を明記する（coding-rust.md の FFI 例外規定準拠）。
 //!
-//! 結果コード → 結果の写像は `fandhe_device::pdf_viewer::decode_code` に一本化する。出力バッファは
+//! 結果コード → 結果の写像は `crate::contract::decode_code` に一本化する。出力バッファは
 //! Rust が確保して容量を渡し、戻り値の寸法は [`check_page`] で再検査する（境界を越えて
 //! malloc / free を渡し合わない）。PDF・画素・OS のエラーはログへ出さない（security.md A09）。
 //!
 //! 同期呼び出しで、`.m` は UI も main スレッドも要らない。呼び出し側（ワーカー）から直接呼ぶ。
 
-use fandhe_device::pdf_viewer::{
-    check_page, decode_code, validate_input, PdfFirstPage, PdfPageRenderer, MAX_SIDE,
+use crate::contract::{
+    MAX_SIDE, PdfFirstPage, PdfPageRenderer, check_page, decode_code, validate_input,
 };
-use fandhe_device::DeviceError;
+use crate::error::PdfViewerError;
 
 // SAFETY: `apple/fandhe_apple_pdf_viewer.m` が定義する C ABI。契約は `.m` 冒頭コメントと
 // 下記 `render_first_page` の SAFETY コメントに集約する。
@@ -36,16 +36,16 @@ pub struct ApplePdfPageRenderer;
 
 impl PdfPageRenderer for ApplePdfPageRenderer {
     #[allow(unsafe_code)]
-    fn render_first_page(&self, pdf: &[u8], max_side: u32) -> Result<PdfFirstPage, DeviceError> {
+    fn render_first_page(&self, pdf: &[u8], max_side: u32) -> Result<PdfFirstPage, PdfViewerError> {
         validate_input(pdf)?;
         if max_side == 0 || max_side > MAX_SIDE {
-            return Err(DeviceError::InvalidInput("pdf_viewer input"));
+            return Err(PdfViewerError::InvalidInput);
         }
         let side = max_side as usize;
         let cap = side
             .checked_mul(side)
             .and_then(|n| n.checked_mul(4))
-            .ok_or(DeviceError::InvalidInput("pdf_viewer input"))?;
+            .ok_or(PdfViewerError::InvalidInput)?;
         let mut buf = vec![0u8; cap];
         let (mut w, mut h, mut pages) = (0u32, 0u32, 0u32);
         // SAFETY: `pdf` は有効なスライスで、ポインタと長さを一緒に渡す。`.m` は呼び出しの間だけ
@@ -68,7 +68,7 @@ impl PdfPageRenderer for ApplePdfPageRenderer {
             .checked_mul(h as usize)
             .and_then(|n| n.checked_mul(4))
             .filter(|n| *n <= buf.len())
-            .ok_or(DeviceError::Internal(fandhe_device::pdf_viewer::SIZE))?;
+            .ok_or(PdfViewerError::Internal(crate::contract::SIZE))?;
         buf.truncate(used);
         check_page(pages, w, h, buf)
     }
@@ -77,7 +77,7 @@ impl PdfPageRenderer for ApplePdfPageRenderer {
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
-    use fandhe_device::pdf_viewer::{empty_page_pdf, sample_pdf, truncated_pdf, BROKEN, EMPTY};
+    use crate::contract::{BROKEN, EMPTY, empty_page_pdf, sample_pdf, truncated_pdf};
 
     // 実 CGPDF を呼ぶホストテスト。cargo test の既定どおり main 以外のスレッドで走る
     // （`.m` は main を要求しない）。
@@ -101,15 +101,15 @@ mod tests {
     #[test]
     fn broken_and_empty_inputs_never_succeed() {
         let r = ApplePdfPageRenderer.render_first_page(&truncated_pdf(), MAX_SIDE);
-        assert!(matches!(r, Err(DeviceError::Internal(BROKEN))), "{r:?}");
+        assert!(matches!(r, Err(PdfViewerError::Internal(BROKEN))), "{r:?}");
         let r = ApplePdfPageRenderer.render_first_page(&empty_page_pdf(), MAX_SIDE);
         assert!(
-            matches!(r, Err(DeviceError::Internal(EMPTY | BROKEN))),
+            matches!(r, Err(PdfViewerError::Internal(EMPTY | BROKEN))),
             "{r:?}"
         );
         let r = ApplePdfPageRenderer.render_first_page(&[], MAX_SIDE);
-        assert!(matches!(r, Err(DeviceError::InvalidInput(_))));
+        assert!(matches!(r, Err(PdfViewerError::InvalidInput)));
         let r = ApplePdfPageRenderer.render_first_page(&sample_pdf(), MAX_SIDE + 1);
-        assert!(matches!(r, Err(DeviceError::InvalidInput(_))));
+        assert!(matches!(r, Err(PdfViewerError::InvalidInput)));
     }
 }

@@ -159,8 +159,6 @@ fn build() {
     compile_apple_media_transcode();
     // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も macOS 分岐と共用する。
     compile_apple_video_transcode();
-    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
-    compile_apple_pdf_viewer();
     // `apple/fandhe_apple_file_preview.m`（Issue #917 macOS + b-ios iOS）も共用する。
     compile_apple_file_preview();
     // `apple/fandhe_apple_on_device_llm.swift`（Issue #345 macOS + #346 iOS）も共用する。
@@ -464,14 +462,6 @@ fn compile_apple_image_recognition() {
         "apple/fandhe_apple_image_recognition.m",
         &["Foundation", "Vision"],
     );
-}
-
-/// `apple/fandhe_apple_pdf_viewer.m` を `cc` でコンパイルし CoreGraphics をリンクする
-/// （Issue #469 macOS、iOS は親 #107 の b-ios が利用、PDF の 1 ページ目の画像化）。
-/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_pdf_viewer`）と
-/// 同じ OS 集合に保つ。
-fn compile_apple_pdf_viewer() {
-    compile_objc("apple/fandhe_apple_pdf_viewer.m", &["CoreGraphics"]);
 }
 
 /// `apple/fandhe_apple_file_preview.m` を `cc` でコンパイルし QuickLookThumbnailing・CoreGraphics を
@@ -1447,8 +1437,6 @@ fn build_macos() {
     compile_apple_media_transcode();
     // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も共用する。
     compile_apple_video_transcode();
-    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
-    compile_apple_pdf_viewer();
     // `apple/fandhe_apple_file_preview.m`（Issue #917 macOS + b-ios iOS）も共用する。
     compile_apple_file_preview();
     // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。

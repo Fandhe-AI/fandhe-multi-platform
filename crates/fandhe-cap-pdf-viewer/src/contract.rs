@@ -35,7 +35,8 @@
 
 use std::time::Duration;
 
-use crate::{DeviceError, Image};
+use crate::PdfViewerError;
+use fandhe_device::Image;
 
 /// 出力画像の長辺の上限（ピクセル）。`fandhe_core::RGBA_MAX_SIDE` 以下に保つ。
 pub const MAX_SIDE: u32 = 1024;
@@ -80,22 +81,22 @@ impl std::fmt::Debug for PdfFirstPage {
 /// PDF の 1 ページ目の描画契約（モジュール doc の「契約」節）。
 pub trait PdfPageRenderer: Send + Sync {
     /// `pdf` の 1 ページ目を長辺 `max_side` 以内の RGBA に描いて返す。同期でブロックしてよい。
-    fn render_first_page(&self, pdf: &[u8], max_side: u32) -> Result<PdfFirstPage, DeviceError>;
+    fn render_first_page(&self, pdf: &[u8], max_side: u32) -> Result<PdfFirstPage, PdfViewerError>;
 }
 
 /// 対象外 OS（Linux 等）・未実装 OS のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedPdfPageRenderer;
 
 impl PdfPageRenderer for UnsupportedPdfPageRenderer {
-    fn render_first_page(&self, _: &[u8], _: u32) -> Result<PdfFirstPage, DeviceError> {
-        Err(DeviceError::Unsupported("pdf_viewer"))
+    fn render_first_page(&self, _: &[u8], _: u32) -> Result<PdfFirstPage, PdfViewerError> {
+        Err(PdfViewerError::Unsupported)
     }
 }
 
 /// 入力を OS を呼ぶ前に検査する。空、または [`MAX_PDF_BYTES`] 超は `InvalidInput`。
-pub fn validate_input(pdf: &[u8]) -> Result<(), DeviceError> {
+pub fn validate_input(pdf: &[u8]) -> Result<(), PdfViewerError> {
     if pdf.is_empty() || pdf.len() > MAX_PDF_BYTES {
-        Err(DeviceError::InvalidInput("pdf_viewer input"))
+        Err(PdfViewerError::InvalidInput)
     } else {
         Ok(())
     }
@@ -103,15 +104,15 @@ pub fn validate_input(pdf: &[u8]) -> Result<(), DeviceError> {
 
 /// Apple（`.m`）と Android が返す結果コードを写す。0 のみ成功。未知の値は失敗（嘘の成功の禁止）。
 /// コード表の SSOT: 0 成功 / 1 非対応 / 2 壊れている / 3 暗号化 / 4 0 ページ / 5 寸法・引数の不正。
-pub fn decode_code(code: i32) -> Result<(), DeviceError> {
+pub fn decode_code(code: i32) -> Result<(), PdfViewerError> {
     match code {
         0 => Ok(()),
-        1 => Err(DeviceError::Unsupported("pdf_viewer")),
-        2 => Err(DeviceError::Internal(BROKEN)),
-        3 => Err(DeviceError::Internal(ENCRYPTED)),
-        4 => Err(DeviceError::Internal(EMPTY)),
-        5 => Err(DeviceError::Internal(SIZE)),
-        _ => Err(DeviceError::Internal(OUTCOME)),
+        1 => Err(PdfViewerError::Unsupported),
+        2 => Err(PdfViewerError::Internal(BROKEN)),
+        3 => Err(PdfViewerError::Internal(ENCRYPTED)),
+        4 => Err(PdfViewerError::Internal(EMPTY)),
+        5 => Err(PdfViewerError::Internal(SIZE)),
+        _ => Err(PdfViewerError::Internal(OUTCOME)),
     }
 }
 
@@ -121,16 +122,16 @@ pub fn check_page(
     width: u32,
     height: u32,
     rgba: Vec<u8>,
-) -> Result<PdfFirstPage, DeviceError> {
+) -> Result<PdfFirstPage, PdfViewerError> {
     if page_count == 0 {
-        return Err(DeviceError::Internal(EMPTY));
+        return Err(PdfViewerError::Internal(EMPTY));
     }
     let in_range = |v: u32| (1..=MAX_SIDE).contains(&v);
     let expected = (width as usize)
         .checked_mul(height as usize)
         .and_then(|n| n.checked_mul(4));
     if !in_range(width) || !in_range(height) || expected != Some(rgba.len()) {
-        return Err(DeviceError::Internal(SIZE));
+        return Err(PdfViewerError::Internal(SIZE));
     }
     Ok(PdfFirstPage {
         page_count,
@@ -251,9 +252,9 @@ mod tests {
         std::str::from_utf8(b).unwrap().trim().parse().unwrap()
     }
 
-    fn internal(r: Result<impl std::fmt::Debug, DeviceError>, id: &str) {
+    fn internal(r: Result<impl std::fmt::Debug, PdfViewerError>, id: &str) {
         match r {
-            Err(DeviceError::Internal(got)) => assert_eq!(got, id),
+            Err(PdfViewerError::Internal(got)) => assert_eq!(got, id),
             other => panic!("Internal({id}) のはず: {other:?}"),
         }
     }
@@ -297,10 +298,7 @@ mod tests {
     #[test]
     fn decode_code_table() {
         assert!(decode_code(0).is_ok());
-        assert!(matches!(
-            decode_code(1),
-            Err(DeviceError::Unsupported("pdf_viewer"))
-        ));
+        assert!(matches!(decode_code(1), Err(PdfViewerError::Unsupported)));
         for (c, id) in [
             (2, BROKEN),
             (3, ENCRYPTED),
@@ -353,7 +351,7 @@ mod tests {
     #[test]
     fn unsupported_never_succeeds() {
         let r = UnsupportedPdfPageRenderer.render_first_page(&sample_pdf(), MAX_SIDE);
-        assert!(matches!(r, Err(DeviceError::Unsupported("pdf_viewer"))));
+        assert!(matches!(r, Err(PdfViewerError::Unsupported)));
     }
 
     #[test]

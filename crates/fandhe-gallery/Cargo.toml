@@ -31,6 +31,7 @@ device = [
   "dep:fandhe-cap-ml-inference",
   "dep:fandhe-cap-nfc-card-emulation",
   "dep:fandhe-cap-nlp",
+  "dep:fandhe-cap-pdf-viewer",
   "dep:fandhe-cap-pedometer",
   "dep:fandhe-cap-power-state",
   "dep:fandhe-cap-screen-wake-lock",
@@ -101,6 +102,7 @@ fandhe-cap-live-activity = { path = "../fandhe-cap-live-activity", optional = tr
 fandhe-cap-ml-inference = { path = "../fandhe-cap-ml-inference", optional = true }
 fandhe-cap-nfc-card-emulation = { path = "../fandhe-cap-nfc-card-emulation", optional = true }
 fandhe-cap-nlp = { path = "../fandhe-cap-nlp", optional = true }
+fandhe-cap-pdf-viewer = { path = "../fandhe-cap-pdf-viewer", optional = true }
 fandhe-cap-pedometer = { path = "../fandhe-cap-pedometer", optional = true }
 fandhe-cap-power-state = { path = "../fandhe-cap-power-state", optional = true }
 fandhe-cap-screen-wake-lock = { path = "../fandhe-cap-screen-wake-lock", optional = true }

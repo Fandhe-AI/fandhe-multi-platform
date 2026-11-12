@@ -1,7 +1,7 @@
 // Phase 11 の拡充ループ（親 #107）型サンプル「PDF 表示」: macOS（Issue #469）の実装。
 // iOS（#471）も同じ実装を共用する（CoreGraphics は iOS にもあり、`#if` 分岐は要らない）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_pdf_viewer.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-pdf-viewer/src/ios.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の macOS / iOS 両分岐が feature `device` 有効時に `cc` でコンパイルし、
 // CoreGraphics をリンクする（PDFKit は使わない）。
 //
@@ -10,7 +10,7 @@
 //     pdf/len: 呼び出しの間だけ有効な PDF のバイト列（コピーしない）。
 //     out/out_cap: Rust が確保した出力バッファ。w*h*4 <= out_cap を確かめてから描く。
 //     w/h/pages: 成功時だけ書く。pages は UINT32_MAX で飽和。
-//     戻り値の表は fandhe_device::pdf_viewer::decode_code が SSOT
+//     戻り値の表は crate::contract::decode_code が SSOT
 //     （0 成功 / 1 非対応 / 2 壊れている / 3 暗号化で開けない / 4 0 ページ / 5 引数・寸法の不正）。
 //
 // 出力は RGBA・行優先・不透明（白で塗ってから描くので premultiplied と straight は同じ値）。
