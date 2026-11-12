@@ -1,8 +1,8 @@
 //! Android 向け複数ディスプレイ実装（Issue #1343、親 #1134）。`fandhe-cap-multi-display/src/driver.rs` の
 //! Android 経路から egui スレッドが 1 秒ごとに同期で呼ぶ。契約は `fandhe_cap_multi_display`。
 //!
-//! Java 側 `MainActivity.multiDisplayRead()`（JNI シグネチャ `()Ljava/lang/String;`）が
-//! `MultiDisplayHelper.read` へ委譲し、`DisplayManager` の画面一覧を返す。詰め方の SSOT は
+//! Java 側 `MultiDisplayHelper.read(Context)`（static、JNI シグネチャ
+//! `(Landroid/content/Context;)Ljava/lang/String;`）が `DisplayManager` の画面一覧を返す。詰め方の SSOT は
 //! `MultiDisplayHelper.java` 冒頭（画面は U+001E、項目は U+001F 区切りの 5 項目）。文字列から
 //! 契約の値への写像は純関数 [`from_android`] に置き、ホストでもテストする。
 //!

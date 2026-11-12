@@ -2,6 +2,10 @@
 name = "fandhe-cap-screen-capture"
 version = "0.2.0"
 edition = "2024"
+# macOS の ScreenCaptureKit の弱リンク指定を最終成果物（fandhe-gallery）へ渡す。`cargo:rustc-link-arg` は出した package 自身の
+# 成果物にしか効かないため、`build.rs` の `export_link_args` が `DEP_FANDHE_CAP_SCREEN_CAPTURE_*` として公開し、
+# gallery の `build.rs` が出し直す。
+links = "fandhe_cap_screen_capture"
 description = "fandhe-multi-platform の screen-capture の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
@@ -42,7 +46,7 @@ permissions = [
 ]
 
 [package.metadata.fandhe.ios]
-frameworks = ["AVFoundation"]
+frameworks = ["AVFoundation", "ReplayKit"]
 
 [package.metadata.fandhe.macos]
 frameworks = ["AVFoundation"]

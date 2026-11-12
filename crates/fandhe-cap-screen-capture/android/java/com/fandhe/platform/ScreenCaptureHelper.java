@@ -77,7 +77,7 @@ final class ScreenCaptureHelper {
             helper = HELPERS.remove(activity);
         }
         if (helper != null) {
-            // 従来の `MainActivity.onDestroy` と同じく UI スレッド（`Activity.onDestroy` の中）で呼ばれる。
+            // UI スレッド（`Activity.onDestroy` の中）で呼ばれる。
             helper.onDestroy();
         }
     }

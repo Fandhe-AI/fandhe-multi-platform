@@ -24,7 +24,7 @@
 //! パスワードマネージャーの一覧への反映の時間差・署名と rpIdHash の検証。
 //! challenge・user.id・資格情報 ID・応答 JSON はログに出さない（security.md A09）。
 //!
-//! no-op スタブは置かない: Java の native は Rust の `requestPasskey` を経た後でしか呼ばれない
+//! no-op スタブは置かない: Java の native は Rust の `PasskeyHelper.request` を経た後でしか呼ばれない
 //! （android_payment_request と同じ）。
 
 use std::sync::Mutex;

@@ -13,7 +13,7 @@
 //! ときの画面表示値との食い違い、ランチャーごとの表示差。`Cancelled` は出さない
 //! （拒否とダイアログを閉じただけの場合を区別できないため）。
 //!
-//! no-op スタブは置かない: Java の native は Rust の `requestAppBadge` を経た後でしか呼ばれず、
+//! no-op スタブは置かない: Java の native は Rust の `AppBadgeHelper.set` を経た後でしか呼ばれず、
 //! feature `device` 無効ビルドではその経路に到達しない（pedometer と同じ）。
 
 use crate::contract::{BadgeOutcome, BadgeValue};

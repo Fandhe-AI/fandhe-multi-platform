@@ -22,7 +22,7 @@
 
 use fandhe_platform_apple::build::{
     bin_link_arg, compile_objc, compile_swift, export_link_args, target_is_ios, target_is_macos,
-    ui_framework, weak_link_framework, SwiftLib,
+    ui_framework, SwiftLib,
 };
 
 fn main() {
@@ -83,9 +83,6 @@ fn build() {
 
     // `ios/fandhe_ios_notification.m`（通知）。
     compile_objc("ios/fandhe_ios_notification.m", &["UserNotifications"]);
-
-    // `ios/fandhe_ios_app_badge.m`（アプリバッジ）。
-    compile_objc("ios/fandhe_ios_app_badge.m", &["UserNotifications"]);
 
     // `ios/fandhe_ios_drag_drop.m`（ドラッグ&ドロップ）。
     compile_objc(
