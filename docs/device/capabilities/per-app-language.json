@@ -19,7 +19,7 @@
       "note": "実装済み（#1074）。出どころは常に不明（Apple にアプリ別 / OS 全体を区別する公開 API が無い）。nil・空・`UTF8String` が NULL・長すぎる値・不正なタグ（ASCII 英数字・`-`・`_` 以外、35 文字超）は失敗で、「言語なし」の成功にしない。タグ検査は Rust 側（`clean_tag`）が正。守る範囲: 嘘の値を出さない・1 プロセス内の取得・押下ごとに OS へ聞く。守らない範囲: 読み取り後の変更の反映（再読込まで）、アプリ自身の文言の切り替え、アプリ内からの言語変更、アプリ別 / OS 全体の区別、宣言で OS が描く UI の言語が変わること、OS 間のタグ表記の揃い、複数プロセス、OS 呼び出しが戻らない場合の期限。UI スレッドで同期 1 回だけ読む（並行経路なし）。宣言は `ja`（アプリ自身の文言の言語）と `en`（未宣言時の既定）の 2 つ。設定アプリに「言語」が出るのは端末の優先言語が 2 つ以上のとき（WWDC19）。言語を変えるとアプリは再起動する（WWDC19）。`Locale.preferredLanguages` はアプリの対応言語に関係なく利用者の希望一覧を返すため使わない。実機での確かめは #1054",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#1054）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_per_app_language.rs + crates/fandhe-egui-proxy/src/device/apple_per_app_language.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_per_app_language.m + crates/fandhe-egui-proxy/src/device/per_app_language.rs + crates/fandhe-core/src/screens/per_app_language_show.rs + crates/fandhe-device/src/per_app_language.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue #1074"
+      "impl": "crates/fandhe-cap-per-app-language/src/ios.rs + crates/fandhe-cap-per-app-language/src/apple.rs + crates/fandhe-cap-per-app-language/apple/fandhe_apple_per_app_language.m + crates/fandhe-cap-per-app-language/src/driver.rs + crates/fandhe-core/src/screens/per_app_language_show.rs + crates/fandhe-cap-per-app-language/src/contract.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue #1074"
     },
     "android": {
       "status": "done",
@@ -32,7 +32,7 @@
       "note": "実装済み（#1075）。API 32 以下は `Unsupported`。空の `getApplicationLocales()` は「アプリ別の設定なし」で OS 全体（`System`、成功）、タグは `getSystemLocales()` の先頭。`getSystemLocales()` の空・null・例外・言語なし（`und`）は失敗で、成功にしない。Android 14 以降の地域設定などの Unicode 拡張は `stripExtensions` で落とす。タグ検査は Rust 側（`clean_tag`）が正。`ja` は `res/values/strings.xml` の最終代替。`values-en` は置かないので `en` を選んでもアプリの文言は日本語のまま。宣言（`localeConfig`）は利用者が選ぶまで既定の挙動を変えない。AppCompat の `AppCompatDelegate` と AGP の `generateLocaleConfig` は使わない。守る範囲: 嘘の値を出さない・1 プロセス内の取得・押下ごとに OS へ聞く。守らない範囲: 読み取り後の変更の反映（再読込まで）、アプリ自身の文言の切り替え、アプリ内からの言語変更、OS 間のタグ表記の揃い、複数プロセス、OS 呼び出しが戻らない場合の期限。UI スレッドで同期 1 回だけ読む（並行経路なし）。`MainActivity` の `configChanges` に `locale` があり、言語変更で Activity は再生成されないので、再読込で反映される。設定 → システム → 言語 → アプリの言語で選んだ値が「アプリ別」になるか、未選択で「OS 全体」になるか、API 32 以下で「取得できません」になるかは実機で確かめる（#1054）",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#1054）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_per_app_language.rs + platforms/android/app/src/main/java/com/fandhe/platform/PerAppLanguageHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + platforms/android/app/src/main/res/xml/locale_config.xml + platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-egui-proxy/src/device/per_app_language.rs + crates/fandhe-core/src/screens/per_app_language_show.rs + crates/fandhe-device/src/per_app_language.rs、Issue #1075"
+      "impl": "crates/fandhe-cap-per-app-language/src/android.rs + crates/fandhe-cap-per-app-language/android/java/com/fandhe/platform/PerAppLanguageHelper.java + platforms/android/app/src/main/res/xml/locale_config.xml + platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-cap-per-app-language/src/driver.rs + crates/fandhe-core/src/screens/per_app_language_show.rs + crates/fandhe-cap-per-app-language/src/contract.rs、Issue #1075"
     },
     "macos": {
       "status": "done",
@@ -45,7 +45,7 @@
       "note": "実装済み（#1073）。出どころは常に不明（Apple にアプリ別 / OS 全体を区別する公開 API が無い）。nil・空・長すぎる値・不正なタグ（ASCII 英数字・`-`・`_` 以外、35 文字超）は失敗で、「言語なし」の成功にしない。タグ検査は Rust 側（`clean_tag`）が正。守る範囲: 嘘の値を出さない・1 プロセス内の取得・押下ごとに OS へ聞く。守らない範囲: 読み取り後の変更の反映（再読込まで）、アプリ自身の文言の切り替え、アプリ内からの言語変更、アプリ別 / OS 全体の区別、宣言で OS が描く UI の言語が変わること、OS 間のタグ表記の揃い、複数プロセス、OS 呼び出しが戻らない場合の期限。UI スレッドで同期 1 回だけ読む（並行経路なし）。システム設定から変えた言語が反映されるか、素の実行体（Info.plist 埋め込み）で宣言が効くかは Mac 目視（#1054）で確かめる。反映にはアプリの再起動が要る場合がある（Apple サポート）",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#1054）",
-      "impl": "crates/fandhe-egui-proxy/src/device/apple_per_app_language.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_per_app_language.m + crates/fandhe-egui-proxy/src/device/per_app_language.rs + crates/fandhe-core/src/screens/per_app_language_show.rs + crates/fandhe-device/src/per_app_language.rs + crates/fandhe-egui-proxy/macos/Info.plist、Issue #1073"
+      "impl": "crates/fandhe-cap-per-app-language/src/apple.rs + crates/fandhe-cap-per-app-language/apple/fandhe_apple_per_app_language.m + crates/fandhe-cap-per-app-language/src/driver.rs + crates/fandhe-core/src/screens/per_app_language_show.rs + crates/fandhe-cap-per-app-language/src/contract.rs + crates/fandhe-egui-proxy/macos/Info.plist、Issue #1073"
     },
     "windows": {
       "status": "no",

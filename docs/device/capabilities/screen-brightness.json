@@ -17,7 +17,7 @@
       "note": "実装済み（Issue #634）。アプリが元の値を控え、背景で戻し前面で掛け直す。背景で戻している間も上書き中として扱い、上書きをやめるのは利用者の変更を検知したときだけ。メイン画面のみ。visionOS では効かない。自動輝度による変化も利用者の変更として上書きをやめる場合がある。利用者変更の判定閾値 0.02 は仮の値で、実機確認（#628）で確定する",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#628）",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_screen_brightness.m + crates/fandhe-egui-proxy/src/device/ios_screen_brightness.rs + crates/fandhe-egui-proxy/src/device/screen_brightness.rs + crates/fandhe-core/src/screens/screen_brightness_show.rs + crates/fandhe-device/src/screen_brightness.rs、Issue #634"
+      "impl": "crates/fandhe-cap-screen-brightness/ios/fandhe_ios_screen_brightness.m + crates/fandhe-cap-screen-brightness/src/ios.rs + crates/fandhe-cap-screen-brightness/src/driver.rs + crates/fandhe-core/src/screens/screen_brightness_show.rs + crates/fandhe-cap-screen-brightness/src/contract.rs、Issue #634"
     },
     "android": {
       "status": "done",
@@ -31,7 +31,7 @@
       "note": "実装済み（#635）。UI スレッドで `screenBrightness` を設定して読み戻す。最長 1 秒待ち、期限後は適用しない。Activity 再生成で要求を持ち越し、実終了で捨てる。上書きしていない間の現在値は出さない（システム値は 1〜255 で端末の曲線と一致しない）。背景ではウィンドウが前面にいないため OS が利用者の値で表示する。守る範囲: 1 プロセス内の順序・失敗を成功と見せないこと・範囲外の値を OS に渡さないこと。守らない範囲: 複数ウィンドウ・分割画面、自動輝度や利用者の操作による一時的な食い違い",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#628）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_screen_brightness.rs + platforms/android/app/src/main/java/com/fandhe/platform/ScreenBrightnessHelper.java + crates/fandhe-egui-proxy/src/device/screen_brightness.rs + crates/fandhe-core/src/screens/screen_brightness_show.rs + crates/fandhe-device/src/screen_brightness.rs、Issue #635"
+      "impl": "crates/fandhe-cap-screen-brightness/src/android.rs + crates/fandhe-cap-screen-brightness/android/java/com/fandhe/platform/ScreenBrightnessHelper.java + crates/fandhe-cap-screen-brightness/src/driver.rs + crates/fandhe-core/src/screens/screen_brightness_show.rs + crates/fandhe-cap-screen-brightness/src/contract.rs、Issue #635"
     },
     "macos": {
       "status": "no",

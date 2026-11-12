@@ -91,6 +91,15 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // `fandhe_cap_calendar::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_calendar::reset_pending_tracking();
+    // 端末・アプリの真正性証明の処理済み世代も破棄する（画面状態は再生成で generation 0 に戻るため、残すと次の取得が飲み込まれる）（`fandhe_cap_app_attest::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_app_attest::reset_pending_tracking();
+    // スペルチェックの保留中の要求も破棄する（画面状態は再生成で generation 0 に戻るため、残すと次の検査が飲み込まれる）（`fandhe_cap_spell_check::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_spell_check::reset_pending_tracking();
+    // 住所の座標変換の保留中の要求も破棄する（画面状態は再生成で generation 0 に戻るため、残すと次の変換が飲み込まれる）（`fandhe_cap_geocoding_search::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_geocoding_search::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 
