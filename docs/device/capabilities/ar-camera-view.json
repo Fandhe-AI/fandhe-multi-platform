@@ -49,7 +49,7 @@
       "perm": "セッション開始時のブラウザ許可。secure context 必須、`xr-spatial-tracking` の Permissions-Policy",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebXR_Device_API",
       "safari": "非対応（iOS / iPadOS の Safari は WebXR 自体が無く、visionOS の Safari は immersive-vr のみ）",
-      "impl": "crates/fandhe-web-dom/src/ar.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/ar_show.rs + crates/fandhe-device/src/ar.rs、Issue #309",
+      "impl": "crates/fandhe-web-dom/src/ar.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/ar_show.rs + crates/fandhe-cap-ar/src/contract.rs、Issue #309",
       "detail": "できている（ヘッドレス Chrome で非対応表示まで確認・実機は未確認）",
       "implStatus": "実装済み・ヘッドレス Chrome で非対応表示まで確認。ARCore 対応 Android 端末の Chrome での確認は #306",
       "note": "`ar` の Web 実装で、WebXR `immersive-ar` のブラウザがカメラ映像を合成している。マウント先の DOM を `dom-overlay` の root にしてカメラ映像へ重ねる。実質 Android Chrome 限定（Safari 非対応）"
