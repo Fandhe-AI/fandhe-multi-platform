@@ -30,7 +30,7 @@ id = "ar"
 
 [package.metadata.fandhe.ios]
 usage-descriptions = ["NSCameraUsageDescription"]
-frameworks = ["ARKit", "AVFoundation", "CoreVideo"]
+frameworks = ["ARKit", "AVFoundation", "CoreVideo", "UIKit"]
 
 [lints]
 workspace = true

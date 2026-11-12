@@ -5,7 +5,7 @@ use fandhe_platform_apple::build::{compile_objc, target_is_ios, target_is_macos}
 
 fn main() {
     if target_is_ios() {
-        compile_objc("ios/fandhe_ios_power_state.m", &["Foundation"]);
+        compile_objc("ios/fandhe_ios_power_state.m", &["Foundation", "UIKit"]);
     }
     if target_is_macos() {
         compile_objc("macos/fandhe_macos_power_state.m", &["Foundation", "IOKit"]);

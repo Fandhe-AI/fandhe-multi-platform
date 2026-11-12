@@ -7,7 +7,7 @@ fn main() {
     if target_is_ios() {
         compile_objc(
             "ios/fandhe_ios_ar.m",
-            &["ARKit", "AVFoundation", "CoreVideo", "Foundation"],
+            &["ARKit", "AVFoundation", "CoreVideo", "Foundation", "UIKit"],
         );
     }
 }
