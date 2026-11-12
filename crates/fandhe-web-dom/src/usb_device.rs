@@ -5,7 +5,7 @@
 //! `navigator.usb.requestDevice({ filters: [] })`（1 台）/ WebHID の
 //! `navigator.hid.requestDevice({ filters: [] })`（`HIDDevice` の配列）で利用者に機器を選ばせて
 //! 一覧として書き戻す。呼び出し元は `demo.rs` の `mount_usb_device_show_screen`。契約の SSOT は
-//! `fandhe_device::usb_device`（正規化は `normalize`）。Web は `UsbDevices` トレイトを通らない
+//! `fandhe_cap_usb_device`（正規化は `normalize`）。Web は `UsbDevices` トレイトを通らない
 //! （`bluetooth_le.rs` と同じ理由）ため、本モジュールが DOM レンダラ側の対応実装にあたる。
 //!
 //! # ブラウザ側の制約
@@ -35,8 +35,8 @@
 //! `None` を返し、`Reading` 中のボタンは no-op。機器の ID・名前・例外の `message` は `console` へ
 //! 出さない（security.md A09）。
 
+use fandhe_cap_usb_device::{normalize, UsbDeviceEntry};
 use fandhe_core::screens::usb_device_show::{ReadFailure, UsbDeviceRow};
-use fandhe_device::usb_device::{normalize, UsbDeviceEntry};
 
 /// 失敗時の固定文言（egui-proxy 側と同じ）。例外の `message` は使わない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]

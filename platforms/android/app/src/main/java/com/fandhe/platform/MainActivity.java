@@ -617,10 +617,6 @@ public class MainActivity extends GameActivity {
         mediaPlaybackHelper.shutdown();
     }
 
-    // PDF 表示（Issue #472）。実装は PdfPageHelper。Rust の android_pdf_viewer.rs がワーカーから同期 JNI で呼ぶ（署名 ([BI)[B）。
-    byte[] pdfRenderFirstPage(byte[] pdf, int maxSide) {
-        return PdfPageHelper.renderFirstPage(getCacheDir(), pdf, maxSide);
-    }
 
     // ファイル・動画のプレビューとサムネイル（Issue #920）。実装は `FilePreviewHelper`。
     // Rust の `android_file_preview.rs` が JNI で呼ぶ（サムネイルは同期 `(I[BIJ)[B`、プレビューは非同期 `(JI[B)V`）。
@@ -4469,13 +4465,6 @@ public class MainActivity extends GameActivity {
         return ManagedAppConfigHelper.read(getApplicationContext());
     }
 
-    // Rust 側（`device/android_usb_device.rs`、Issue #507）から JNI 経由で egui スレッドが
-    // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
-    // `UsbDeviceHelper` 冒頭を参照。失敗は null、USB ホスト非搭載は空文字。
-    private String usbDeviceList() {
-        return UsbDeviceHelper.list(getApplicationContext());
-    }
-
     // Rust 側（`device/android_display_refresh_hdr.rs`、Issue #872）から JNI 経由で egui
     // スレッドが押下ごとに呼ぶ同期メソッド（シグネチャ `()[F`）。詰め方は
     // `DisplayRefreshHdrHelper` 冒頭を参照。失敗は null。
@@ -4667,18 +4656,6 @@ public class MainActivity extends GameActivity {
     // 同期メソッド（Issue #1284）。結果コードの意味は `NetworkStatusHelper` を参照。
     private int networkStatusRead() {
         return NetworkStatusHelper.read(getApplicationContext());
-    }
-
-    // Rust 側（`AndroidAccentColor::call_read`、JNI 署名 `()I`）から 1 秒間隔で呼ばれる
-    // 同期メソッド（Issue #422）。結果コードの意味は `SystemAccentColorHelper` を参照。
-    private int systemAccentColorRead() {
-        return SystemAccentColorHelper.read(getApplicationContext());
-    }
-
-    // Rust 側（`AndroidFocusStatus::call_read`、JNI 署名 `()I`）から 1 秒間隔で呼ばれる
-    // 同期メソッド（Issue #439）。結果コードの意味は `FocusModeStatusHelper` を参照。
-    private int focusModeStatusRead() {
-        return FocusModeStatusHelper.read(getApplicationContext());
     }
 
     // Rust 側（`AndroidAppShortcuts::call_install`、JNI 署名 `(Ljava/lang/String;Ljava/lang/String;)I`）

@@ -4,7 +4,7 @@
 //! `pub mod focus_mode_status_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
-//! `fandhe-egui-proxy` の `device/focus_mode_status.rs` が一定間隔で行い、[`apply_read`] で
+//! `fandhe-cap-focus-mode-status` の `driver.rs` が一定間隔で行い、[`apply_read`] で
 //! 結果を注入する。
 //!
 //! 取得中・非対応・失敗では「オフ」を出さない（嘘の成功の禁止）。失敗時は最後に読めた値を残さない。

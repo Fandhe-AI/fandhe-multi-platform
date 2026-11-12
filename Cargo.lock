@@ -1200,6 +1200,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-focus-mode-status"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-geocoding-search"
 version = "0.2.0"
 dependencies = [
@@ -1290,6 +1302,20 @@ dependencies = [
  "thiserror 2.0.20",
  "ttf-parser",
  "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-media-cast"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
 ]
 
 [[package]]
@@ -1393,6 +1419,20 @@ dependencies = [
  "fandhe-runtime",
  "jni 0.22.4",
  "serde_json",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-pdf-viewer"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
 ]
@@ -1516,12 +1556,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-system-accent-color"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-system-tray"
 version = "0.2.0"
 dependencies = [
  "fandhe-core",
  "fandhe-platform-apple",
  "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-usb-device"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
 ]
@@ -1579,6 +1646,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_kittest",
+ "fandhe-cap-media-cast",
  "fandhe-cap-midi",
  "fandhe-cap-serial-port",
  "fandhe-cap-system-tray",
@@ -1630,6 +1698,7 @@ dependencies = [
  "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
  "fandhe-cap-file-watch",
+ "fandhe-cap-focus-mode-status",
  "fandhe-cap-geocoding-search",
  "fandhe-cap-haptics",
  "fandhe-cap-home-widget",
@@ -1637,6 +1706,7 @@ dependencies = [
  "fandhe-cap-in-app-review",
  "fandhe-cap-live-activity",
  "fandhe-cap-local-fonts",
+ "fandhe-cap-media-cast",
  "fandhe-cap-media-transcode",
  "fandhe-cap-midi",
  "fandhe-cap-ml-inference",
@@ -1645,6 +1715,7 @@ dependencies = [
  "fandhe-cap-nlp",
  "fandhe-cap-on-device-llm",
  "fandhe-cap-passkey-signin",
+ "fandhe-cap-pdf-viewer",
  "fandhe-cap-pedometer",
  "fandhe-cap-per-app-language",
  "fandhe-cap-power-state",
@@ -1654,7 +1725,9 @@ dependencies = [
  "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
  "fandhe-cap-spell-check",
+ "fandhe-cap-system-accent-color",
  "fandhe-cap-system-tray",
+ "fandhe-cap-usb-device",
  "fandhe-cap-user-idle",
  "fandhe-cap-uwb-ranging",
  "fandhe-core",
@@ -1758,6 +1831,7 @@ dependencies = [
  "fandhe-cap-file-watch",
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",
+ "fandhe-cap-media-cast",
  "fandhe-cap-media-transcode",
  "fandhe-cap-midi",
  "fandhe-cap-multi-display",
@@ -1768,6 +1842,8 @@ dependencies = [
  "fandhe-cap-screen-capture",
  "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
+ "fandhe-cap-system-accent-color",
+ "fandhe-cap-usb-device",
  "fandhe-core",
  "fandhe-device",
  "fandhe-platform-apple",

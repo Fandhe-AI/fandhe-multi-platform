@@ -177,11 +177,50 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | print・print-screen | `print_screen_page_effect` が egui 固有の読み書き口（`EguiSenderExt` の `request_screenshot`・`tagged_screenshot`）を使う | `fandhe-runtime` に egui 非依存の口を足す設計が先 |
 | in-app-purchase | 全 OS が未実装（`possible`）で `impl` が無い | 実装後 |
 
-## 10. 第 5 束（#1190）で出た型と後回しの機能
+## 10. 第 4 束（#1189）で出た型と後回しの機能
+
+第 4 束（20 機能）のうち、system-accent-color・focus-mode-status・usb-device・pdf-viewer・media-cast の 5 機能を移した。
+残りは下の表の理由で止まっている。理由が解消してから移す。
+
+### 手作業で気づいた型
+
+| 型 | 扱い |
+|----|------|
+| `scaffold` が拾わない Android の Helper | Helper の名前が `<Pascal>Helper` でない機能（pdf-viewer の `PdfPageHelper`）は `git mv` されない。手で `android/java/` へ移し、対応表の `impl` も直す |
+| `scaffold` が書く `build.rs` の framework | 元の `compile_*` の framework と必ず照合する（scaffold の既定は誤ることがある。usb-device は `Foundation` + `IOKit`、pdf-viewer は `CoreGraphics`、media-cast は iOS と macOS で別） |
+| `Internal` が識別子を持つ機能（pdf-viewer） | §8 のとおり `error.rs` を `Internal(&'static str)` にし、`scaffold` が単位バリアントへ潰した呼び出し（`Internal("…")`）を元の文字列へ戻す。表示文言には出さない |
+| `Internal` の文字列を捨てる機能（media-cast の Windows） | 画面もログも固定文言に畳むなら単位バリアントのまま、段の識別子の引数は `_` 始まりにして残す |
+| edition 2024 の予約語 | `gen` を識別子に使う箇所（media-cast の世代）は `epoch` などへ変える。`#[no_mangle]` は `#[unsafe(no_mangle)]` |
+| 同じ機能の Web 実装が参照する記号 | `fandhe-web-dom` が `fandhe_device::<stem>` を使っていたら、機能 crate への依存（wasm32 でも通る）に付け替える（usb-device・media-cast・system-accent-color）。コンパイルしないと気づけないため、移行のたびに `cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown --all-features` も通す |
+| `fandhe-device` に残す共有の純関数・型 | 他機能が使う `device_info::clean_text`・`media_playback::demo_wav`・`Image` は `fandhe-device` に残し、機能 crate が依存する（§7） |
+| 終了時の片付け（media-cast の `shutdown`） | §7 の過渡期の依存。`fandhe-egui-proxy` が feature `device` で optional 依存し、`device::shutdown` から `fandhe_cap_media_cast::shutdown()` を呼ぶ |
+| Android 全体の型検査 | NDK が手元にあれば `ANDROID_NDK_HOME` と `CC_aarch64_linux_android`（NDK の clang）を設定して `cargo clippy -p <crate> --target aarch64-linux-android --all-features` で通る（`--all-targets` は既存のテストが通らない） |
+
+### 後回しにした機能
+
+| 機能 | 理由 | 解消の見込み |
+|------|------|--------------|
+| background-download | 未移行の iOS AppDelegate（`ios/fandhe_ios_url_scheme.m`）が `fandhe_apple_bgdl_handle_events` を呼ぶ | iOS の AppDelegate イベントを配る口の設計が先、または url-scheme・background-upload と同時に移す |
+| app-shortcuts | macOS の `.m` が egui-proxy の `fandhe_rust_url_scheme_received` を呼ぶ。Windows は `windows_url_scheme` と `windows_notification::lpwstr_variant` を使う。iOS は `fandhe_ios_scene.m` に埋まっている | url-scheme と同時に移す |
+| file-association | `windows_url_scheme` の内部（`win::`・`map_registry_error`）を使う。iOS・macOS は url_scheme の `.m` が受け口 | url-scheme と同時に移す |
+| spotlight-index | driver が `url_scheme::platform_url_scheme()` を使い、apple の `.m` が `fandhe_rust_url_scheme_received` を呼ぶ | url-scheme と同時に移す |
+| barcode-scan | `photo_pick::implementation`・`ios::present_photo_picker`・`image_recognition::precheck` を使う。photo-picker 側も barcode_scan の参照で止まっていて循環している | photo-picker・image-recognition と同じ PR で移す |
+| lan-discovery | apple の `.m` が `fandhe_apple_network_status_read` を、Windows が `windows_network_status` を使う。network-status も `map_view.rs` が OS 実装を使うため移せない | network-status・map-view と同時に移す |
+| wifi-info | 未移行の wifi-connect の Windows 実装（`windows_wifi_connect.rs`）が `windows_wifi_info::radio_off` を使う | wifi-connect と同時に移す |
+| local-peer-connect | `NEARBY_WIFI_DEVICES` の `usesPermissionFlags="neverForLocation"` を宣言の `Permission`（name・max-sdk のみ）で表せず、`cargo-fandhe` の `tests/gen.rs` が通らない | 宣言に権限フラグを足してから |
+| web-auth-session | Android は `MainActivity.onNewIntent` が `WebAuthSessionHelper.onNewIntent` を先に呼び、url-scheme の受信箱へ流さない分岐を持つ（provider に onNewIntent の口が無い）。Windows は `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を使う | Activity の Intent を配る口の設計が先。open_url は compose-mail-sms と同時に platform-windows へ上げる |
+| payment-request | Google Pay の `<application>` 直下の `meta-data`（`com.google.android.gms.wallet.api.enabled`）を宣言で表せない（`meta-data` はコンポーネント単位だけ） | 宣言に application の meta-data を足してから |
+| music-library | Android が許可ランチャーと `onDestroy` を持つ（provider と JNI エクスポートが要る）。Windows の `windows_photo_library::known_folder` を `fandhe-platform-windows` へ上げる共通層の変更も要る | 共通層の先行変更とあわせて別の周で |
+| translation | Android がランチャーと `onDestroy`・`reset_pending_tracking` を持ち、Apple は Swift の薄層（`links` と `import_link_args`）が要る | 別の周で |
+| flashlight | Android の Helper が `onStart` / `onStop` / `onDestroy` に参加する。`FeatureLifecycleProvider` に Started / Stopped の口を足す共通層の変更が先 | 共通層の先行変更とあわせて別の周で |
+| safe-area-insets | egui-proxy の `android.rs` にある insets の static と JNI エクスポートを `fandhe-platform-android` へ上げる共通層の変更が先 | 共通層の先行変更とあわせて別の周で |
+| compass-heading | 第 3 束 #1301 の `FeatureLifecycleProvider.onHostResumed` / `onHostPaused` に依存する。`WaitTracker`・`NO_READING_TIMEOUT_MS` を ar と未移行の `environment_sensors` が使うため、`fandhe-device::compass` へ最小限を残す設計も要る | #1301 のマージ後 |
+
+## 11. 第 5 束（#1190）で出た型と後回しの機能
 
 第 5 束（20 機能）のうち、in-app-review・uwb-ranging・user-idle・serial-port・app-attest・
 per-app-language・screen-brightness・spell-check・geocoding-search の 9 機能を移した。
-残りは下の表の理由で止まっている。理由が解消してから移す。節番号は #1301・#1306 の § 9 と重なるため、マージ順に合わせて振り直す。
+残りは下の表の理由で止まっている。理由が解消してから移す。
 
 ### 手作業で気づいた型
 

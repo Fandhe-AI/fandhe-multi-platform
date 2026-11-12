@@ -105,6 +105,10 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     fandhe_cap_passkey_signin::reset_pending_tracking();
     #[cfg(feature = "device")]
     fandhe_cap_screen_capture::reset_pending_tracking();
+    // PDF 表示の処理済み世代も破棄する。画面状態は再生成で generation 0 に戻るため、残すと次の
+    // 「表示する」が飲み込まれる（`fandhe_cap_pdf_viewer::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_pdf_viewer::reset_pending_tracking();
     // 端末・アプリの真正性証明の処理済み世代も破棄する（画面状態は再生成で generation 0 に戻るため、残すと次の取得が飲み込まれる）（`fandhe_cap_app_attest::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_app_attest::reset_pending_tracking();

@@ -150,8 +150,6 @@ fn build() {
     compile_apple_barcode_scan();
     // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も macOS 分岐と共用する。
     compile_apple_video_transcode();
-    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
-    compile_apple_pdf_viewer();
     // `apple/fandhe_apple_file_preview.m`（Issue #917 macOS + b-ios iOS）も共用する。
     compile_apple_file_preview();
     // `apple/fandhe_apple_translation.swift`（Issue #535 macOS + #536 iOS）も共用する。
@@ -242,8 +240,6 @@ fn build() {
     compile_apple_background_upload();
     // `apple/fandhe_apple_file_association.m`（Issue #416）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_file_association();
-    // `apple/fandhe_apple_media_cast.m`（Issue #387）。macOS 分岐と共用する。AVKit を使う。
-    compile_apple_media_cast();
     // `apple/fandhe_apple_now_playing.m`（Issue #381 macOS + #382 iOS）。macOS 分岐と共用する。MediaPlayer を使う。
     compile_apple_now_playing();
 }
@@ -401,14 +397,6 @@ fn compile_apple_image_recognition() {
         "apple/fandhe_apple_image_recognition.m",
         &["Foundation", "Vision"],
     );
-}
-
-/// `apple/fandhe_apple_pdf_viewer.m` を `cc` でコンパイルし CoreGraphics をリンクする
-/// （Issue #469 macOS、iOS は親 #107 の b-ios が利用、PDF の 1 ページ目の画像化）。
-/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_pdf_viewer`）と
-/// 同じ OS 集合に保つ。
-fn compile_apple_pdf_viewer() {
-    compile_objc("apple/fandhe_apple_pdf_viewer.m", &["CoreGraphics"]);
 }
 
 /// `apple/fandhe_apple_file_preview.m` を `cc` でコンパイルし QuickLookThumbnailing・CoreGraphics を
@@ -655,20 +643,6 @@ fn compile_apple_now_playing() {
     );
 }
 
-/// `apple/fandhe_apple_media_cast.m` を `cc` でコンパイルし AVKit・AVFoundation・CoreAudio をリンクする
-/// （Issue #386 macOS + #387 iOS）。macOS・iOS 双方の分岐から呼ばれる（`src/device/apple_media_cast.rs` が使う）。
-/// CoreAudio は macOS のみ。
-fn compile_apple_media_cast() {
-    compile_objc(
-        "apple/fandhe_apple_media_cast.m",
-        if target_is_ios() {
-            &["AVFoundation", "AVKit", "Foundation", "UIKit"]
-        } else {
-            &["AVFoundation", "AVKit", "AppKit", "CoreAudio", "Foundation"]
-        },
-    );
-}
-
 /// `macos/fandhe_macos_volume_control.m` を `cc` でコンパイルする（Issue #785）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_volume_control.rs` が使う）。CoreAudio と AudioToolbox
 /// （`kAudioHardwareServiceDeviceProperty_VirtualMainVolume`）を追加でリンクする。
@@ -806,12 +780,6 @@ fn compile_macos_web_auth_session() {
     );
 }
 
-/// `macos/fandhe_macos_usb_device.m` を `cc` でコンパイルし IOKit をリンクする（Issue #505）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_usb_device.rs` が使う）。
-fn compile_macos_usb_device() {
-    compile_objc("macos/fandhe_macos_usb_device.m", &["Foundation", "IOKit"]);
-}
-
 /// `macos/fandhe_macos_bluetooth_classic.m` を `cc` でコンパイルし IOBluetooth・CoreBluetooth をリンクする
 /// （Issue #659）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_bluetooth_classic.rs` が使う）。
 fn compile_macos_bluetooth_classic() {
@@ -916,12 +884,6 @@ fn compile_macos_window_management() {
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_safe_area_insets.rs` が使う）。
 fn compile_macos_safe_area_insets() {
     compile_objc("macos/fandhe_macos_safe_area_insets.m", &["AppKit"]);
-}
-
-/// `macos/fandhe_macos_system_accent_color.m` を `cc` でコンパイルする（Issue #421）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_system_accent_color.rs` が使う）。
-fn compile_macos_system_accent_color() {
-    compile_objc("macos/fandhe_macos_system_accent_color.m", &["AppKit"]);
 }
 
 /// `macos/fandhe_macos_pen_stylus.m` を `cc` でコンパイルする（Issue #355）。
@@ -1213,8 +1175,6 @@ fn build_macos() {
     compile_apple_spotlight_index();
     // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も共用する。
     compile_apple_video_transcode();
-    // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
-    compile_apple_pdf_viewer();
     // `apple/fandhe_apple_file_preview.m`（Issue #917 macOS + b-ios iOS）も共用する。
     compile_apple_file_preview();
     // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。
@@ -1229,8 +1189,6 @@ fn build_macos() {
     compile_macos_device_info();
     // `macos/fandhe_macos_display_refresh_hdr.m`（Issue #870）も macOS 専用。
     compile_macos_display_refresh_hdr();
-    // `macos/fandhe_macos_system_accent_color.m`（Issue #421）も macOS 専用。
-    compile_macos_system_accent_color();
     // `macos/fandhe_macos_safe_area_insets.m`（Issue #444）も macOS 専用。
     compile_macos_safe_area_insets();
     // `macos/fandhe_macos_window_management.m`（Issue #636）も macOS 専用。
@@ -1265,8 +1223,6 @@ fn build_macos() {
     compile_macos_print();
     // `macos/fandhe_macos_volume_control.m`（Issue #785）も macOS 専用。CoreAudio・AudioToolbox を使う。
     compile_macos_volume_control();
-    // `apple/fandhe_apple_media_cast.m`（Issue #386 macOS + #387 iOS）。iOS 分岐と共用する。AVKit・CoreAudio を使う。
-    compile_apple_media_cast();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。iOS 分岐と共用する。
     compile_apple_media_playback();
     // `apple/fandhe_apple_picture_in_picture.m`（Issue #364 macOS + #365 iOS）。iOS 分岐と共用する。AVKit を使う。
@@ -1297,8 +1253,6 @@ fn build_macos() {
     compile_macos_wifi_connect();
     // `macos/fandhe_macos_radio_control.m`（Issue #972）も macOS 専用。CoreWLAN・IOBluetooth を使う。
     compile_macos_radio_control();
-    // `macos/fandhe_macos_usb_device.m`（Issue #505）も macOS 専用。IOKit を使う。
-    compile_macos_usb_device();
     // `macos/fandhe_macos_bluetooth_classic.m`（Issue #659）も macOS 専用。IOBluetooth を使う。
     compile_macos_bluetooth_classic();
     compile_macos_pen_stylus();

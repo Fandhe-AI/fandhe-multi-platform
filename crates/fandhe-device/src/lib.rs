@@ -91,8 +91,6 @@ pub mod file_preview;
 pub mod file_provider;
 /// Phase 11 の拡充ループ（親 #106、Issue #458）: ライト（トーチ）の点灯 / 消灯。
 pub mod flashlight;
-/// Phase 11（端末機能の拡充ループ、親 #104、Issue #438）: 集中モード・おやすみモードの状態。
-pub mod focus_mode_status;
 /// Phase 11 の拡充ループ（親 #141、Issue #723）: 折りたたみ端末の姿勢と折れ目。
 pub mod foldable_posture;
 /// Phase 11（端末機能の拡充ループ、親 #1133、Issue #1312）: 全画面表示（システムバー非表示）。
@@ -126,8 +124,6 @@ pub mod location;
 pub mod managed_app_config;
 /// Phase 11（端末機能の拡充ループ、親 #85、Issue #273）: 地図の静止画 1 枚の取得。
 pub mod map_view;
-/// Phase 11（端末機能の拡充ループ、親 #99、Issue #386）: 外部機器への再生（AirPlay・Cast 等）。
-pub mod media_cast;
 /// Phase 11（端末機能の拡充ループ、親 #86、Issue #267）: 音声 1 本の再生・一時停止・停止。
 pub mod media_playback;
 /// Issue #1188: MP4 box 読みの共有部品（音声変換は機能 crate `fandhe-cap-media-transcode`、動画変換 `video_transcode` が使う）。
@@ -157,8 +153,6 @@ pub mod open_system_settings;
 pub mod passkey;
 /// Phase 11（端末機能の拡充ループ、親 #114、Issue #541）: 物・サービスの決済シート（Google Pay TEST 環境、課金なし）。
 pub mod payment_request;
-/// Phase 11（端末機能の拡充ループ、親 #107、Issue #469）: 埋め込み PDF の 1 ページ目の画像化と総ページ数。
-pub mod pdf_viewer;
 /// Phase 11（端末機能の拡充ループ、親 #95、Issue #355）: ペン・筆圧入力（種類・筆圧・傾き）。
 pub mod pen_stylus;
 /// Phase 11（端末機能の拡充ループ、親 #1121、Issue #1254）: 画像 1 枚の写真ライブラリ保存。
@@ -198,8 +192,6 @@ pub mod speech_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #117、Issue #560）: OS の検索への登録（固定のメモ 1 件の登録と全削除）。
 pub mod spotlight_index;
 pub mod storage;
-/// Phase 11（端末機能の拡充ループ、親 #103、Issue #421）: システムのアクセント色。
-pub mod system_accent_color;
 /// Phase 11（端末機能の拡充ループ、親 #183、Issue #939）: システムの効果音・ビープ。
 pub mod system_sound;
 /// Phase 11（端末機能の拡充ループ、親 #911、Issue #912）: 文字サイズ設定の追従。
@@ -210,8 +202,6 @@ pub mod translation;
 pub mod tts;
 /// Phase 11（端末機能の拡充ループ、親 #1116、Issue #1215）: カスタム URL scheme の受信。
 pub mod url_scheme;
-/// Phase 11（端末機能の拡充ループ、親 #112、Issue #505）: USB 機器の一覧（ベンダー ID・製品 ID・製品名）。
-pub mod usb_device;
 /// Phase 11（端末機能の拡充ループ、親 #169、Issue #821）: 動画の撮影（OS の撮影 UI を開き、長さ・寸法・サイズを出す）。
 pub mod video_capture;
 /// Phase 11（端末機能の拡充ループ、親 #340、Issue #1014）: 動画の変換（実行時に作った元動画を小さい解像度の MP4 へ書き出す）。

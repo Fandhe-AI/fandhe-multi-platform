@@ -108,6 +108,8 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-document-scan/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-focus-mode-status/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-geocoding-search/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-haptics/android/java")
@@ -136,6 +138,8 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-passkey-signin/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-pdf-viewer/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-pedometer/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-per-app-language/android/java")
@@ -151,6 +155,10 @@ android {
             java.srcDirs("../../../crates/fandhe-cap-share-receive/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-spell-check/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-system-accent-color/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-usb-device/android/java")
             // END fandhe-cap
         }
     }

@@ -4,7 +4,7 @@
 //! [`super::mount::mount_with_effect`] の effect として駆動する。値の取得は CSS システムカラー
 //! `AccentColor` を非表示の探り用要素の `color` に指定し、`getComputedStyle` で読み戻す。
 //! `AccentColorSource` トレイトは経由しない（トレイト doc どおり）。共有するのは
-//! `fandhe_device::system_accent_color::READ_INTERVAL` だけ。
+//! `fandhe_cap_system_accent_color::READ_INTERVAL` だけ。
 //!
 //! # 方式
 //!
@@ -84,10 +84,10 @@ mod web {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    use fandhe_cap_system_accent_color::READ_INTERVAL;
     use fandhe_core::screens::system_accent_color_show::{
         apply_read, ReadFailure, Rgb, SystemAccentColorShowState,
     };
-    use fandhe_device::system_accent_color::READ_INTERVAL;
     use wasm_bindgen::prelude::*;
 
     use super::{classify, FAILED_LABEL};
