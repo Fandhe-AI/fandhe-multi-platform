@@ -47,7 +47,7 @@ impl fandhe_device::screen_capture::ScreenCapturer for AndroidScreenCapturer {
 
 /// `MainActivity.requestScreenCaptureStart(long, int)`（`max_ms` あり）または
 /// `requestScreenCaptureStop(long)` を JNI で呼ぶ。
-/// `unsafe` 2 箇所は `android_pedometer.rs::call_activity` と同一の根拠。
+/// `unsafe` 2 箇所は `fandhe_platform_android::with_activity` と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 fn call_activity(id: u64, max_ms: Option<i32>) -> Result<(), ()> {

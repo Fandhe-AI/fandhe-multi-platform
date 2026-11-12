@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。入力の検査と OS 呼び出しは
-//! `fandhe-egui-proxy` の effect ドライバ（`device/calendar.rs`）が [`take_request`] で
+//! `fandhe-cap-calendar` の effect ドライバ（`driver.rs`）が [`take_request`] で
 //! 要求を観測して行い、[`finish_add`] で結果を注入する。本画面は二重押し防止だけを持つ。
 //!
 //! # 結果を混同しない理由
@@ -54,7 +54,7 @@ pub enum AddPhase {
 }
 
 /// OS が判定した結果（`fandhe_device::calendar::AddEventOutcome` と権限拒否・非対応を
-/// 合わせたもの。写像は `fandhe-egui-proxy` 側の責務）。
+/// 合わせたもの。写像は `fandhe-cap-calendar` 側の責務）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AddOutcome {
     /// 保存が確定した。

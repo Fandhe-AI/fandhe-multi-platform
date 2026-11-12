@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::nlp_segment`（端末依存ゼロ）の要求を
 //! [`super::mount::mount_with_effect`] の effect として観測し、`Intl.Segmenter`
 //! （granularity `word`）で分割して結果を書き戻す。契約（結果の形・失敗の区別）の SSOT は
-//! `fandhe_device::nlp`。Web は `fandhe-device` のトレイトを通らない（`share.rs` と同じ理由）
+//! `fandhe_cap_nlp`。Web は `fandhe-device` のトレイトを通らない（`share.rs` と同じ理由）
 //! ため、共有できる `validate_input` / `normalize_words` だけを直接使う。
 //!
 //! # ブラウザ側の制約
@@ -16,9 +16,8 @@
 //!   `console` へ出さない（security.md A09）
 //! - 分割は同期 API。同じ effect 呼び出しの中で完了まで済ませる
 
+use fandhe_cap_nlp::{normalize_words, validate_input, NlpError};
 use fandhe_core::screens::nlp_segment::SegmentFailure;
-use fandhe_device::nlp::{normalize_words, validate_input};
-use fandhe_device::DeviceError;
 
 /// 分割の呼び出しが例外で失敗したときの案内（例外の中身は載せない）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -49,7 +48,7 @@ pub(crate) fn segment_result(
         return Err(SegmentFailure::Unsupported);
     }
     validate_input(text).map_err(|e| match e {
-        DeviceError::InvalidInput(_) => SegmentFailure::InvalidInput,
+        NlpError::InvalidInput => SegmentFailure::InvalidInput,
         other => SegmentFailure::Failed(other.to_string()),
     })?;
     if text.is_empty() {
@@ -134,7 +133,7 @@ pub use web::nlp_segment_effect;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::nlp::MAX_INPUT_CHARS;
+    use fandhe_cap_nlp::MAX_INPUT_CHARS;
 
     fn seg(items: &[(&str, bool)]) -> Vec<(String, bool)> {
         items.iter().map(|(t, w)| (t.to_string(), *w)).collect()

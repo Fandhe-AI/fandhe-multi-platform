@@ -1062,6 +1062,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-ar"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-calendar"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-call-ui"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-camera-capture"
 version = "0.2.0"
 dependencies = [
@@ -1098,6 +1133,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-haptics"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-home-widget"
 version = "0.2.0"
 dependencies = [
@@ -1127,6 +1176,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-live-activity"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-ml-inference"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "libc",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-nfc-card-emulation"
 version = "0.2.0"
 dependencies = [
@@ -1135,6 +1208,59 @@ dependencies = [
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-nlp"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-pedometer"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
+name = "fandhe-cap-power-state"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-screen-wake-lock"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -1231,16 +1357,27 @@ name = "fandhe-gallery"
 version = "0.1.0"
 dependencies = [
  "egui",
+ "fandhe-cap-ar",
+ "fandhe-cap-calendar",
+ "fandhe-cap-call-ui",
  "fandhe-cap-camera-capture",
  "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
+ "fandhe-cap-haptics",
  "fandhe-cap-home-widget",
  "fandhe-cap-http-get",
+ "fandhe-cap-live-activity",
+ "fandhe-cap-ml-inference",
  "fandhe-cap-nfc-card-emulation",
+ "fandhe-cap-nlp",
+ "fandhe-cap-pedometer",
+ "fandhe-cap-power-state",
+ "fandhe-cap-screen-wake-lock",
  "fandhe-cap-share-receive",
  "fandhe-cap-system-tray",
  "fandhe-core",
  "fandhe-egui-proxy",
+ "fandhe-platform-android",
  "fandhe-platform-apple",
  "fandhe-platform-windows",
  "fandhe-render-egui",
@@ -1332,7 +1469,10 @@ name = "fandhe-web-dom"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "fandhe-cap-ar",
  "fandhe-cap-http-get",
+ "fandhe-cap-nlp",
+ "fandhe-cap-power-state",
  "fandhe-cap-share-receive",
  "fandhe-core",
  "fandhe-device",

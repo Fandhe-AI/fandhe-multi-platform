@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。OS 呼び出しは本モジュール外
-//! （`fandhe-egui-proxy` の `device/screen_wake_lock.rs`、Web は `fandhe-web-dom`）が
+//! （`fandhe-cap-screen-wake-lock` の `driver.rs`、Web は `fandhe-web-dom`）が
 //! [`take_request`] で要求を観測し [`finish`] で結果を注入する（`haptics_tap.rs` と同型）。
 //!
 //! # 「要求した」と「効いている」を分ける

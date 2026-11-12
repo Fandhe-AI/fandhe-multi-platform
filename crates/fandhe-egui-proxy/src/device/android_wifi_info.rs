@@ -165,7 +165,7 @@ impl WifiInfo for AndroidWifiInfo {
 
 /// `MainActivity.requestWifiInfo(long)`（`cancel=false`）または
 /// `cancelWifiInfo(long)`（`cancel=true`）を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `android_pedometer.rs::call_activity` と同一の根拠。
+/// `unsafe` 2 箇所は `fandhe_platform_android::with_activity` と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 fn call_activity(cancel: bool, id: u64) -> bool {

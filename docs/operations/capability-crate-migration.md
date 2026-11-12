@@ -122,3 +122,24 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
   `fandhe-web-dom` は機能 crate に依存して `demo.rs` から effect を呼ぶ
 - wasm32 で解決できない依存（`ureq` など）は native の target 依存にし、driver も `cfg(not(target_arch = "wasm32"))` で外す
 - 純関数のテストが private 関数に触れる場合は、元のモジュールに残る関数のテストを元の場所へ戻す
+
+## 8. 第 2 束（#1187）で出た型
+
+第 2 束（pedometer・ml-inference・power-state・screen-wake-lock・ar・call-ui・live-activity・haptics・nlp・calendar）で
+はじめて出た型と、その扱いです。
+
+| 型 | 扱い |
+|----|------|
+| edition 2024 への移行で壊れる書き方 | `gen` は予約語（識別子を変える）、`extern "C" {}` は `unsafe extern "C" {}`、`#[no_mangle]` は `#[unsafe(no_mangle)]`、入れ子の `if` / `if let` は let チェーンへ（`cargo clippy --fix` が直す）。`scaffold` の後に `cargo clippy -p fandhe-cap-<id> --all-targets` を通すと拾える |
+| `DeviceError` の写し | `scaffold` は定数の文字列を持つバリアントを引数なしにする。元が `Internal("calendar save")` のように識別子で分岐しているなら、`error.rs` のバリアントを `&'static str` つきにして元の識別子を戻す。バリアントが 0 件の機能（pedometer・ar・call-ui）は `error.rs` を作らない |
+| MainActivity に埋まった Android 実装（haptics・nlp・calendar） | 機能 crate に `android.rs` と `<Pascal>Helper.java` を新設する。状態を持たない同期呼び出しは Helper の static メソッドだけにし、provider は作らない。保留中の要求・ランチャーを持つ機能は `FeatureLifecycleProvider` の派生と `HELPERS`（`WeakHashMap`）で Activity ごとに引く。Helper が無いときは失敗で確定する（結果が来ないまま待たせない）。`MainActivity` のクラスを Java から直接参照しない（起動 Intent は `getLaunchIntentForPackage`） |
+| 文字列資源（call-ui・live-activity） | 機能 crate の `android/res/values/` に移し、宣言の `res` に書く。アプリの `strings.xml` からは消す |
+| Swift の薄層（live-activity） | `Cargo.toml` に `links = "fandhe_cap_<id>"` を置き、`build.rs` の最後で `export_link_args()` を呼ぶ。最終成果物（gallery）の `build.rs` が `import_link_args("fandhe_cap_<id>")` を feature `device` が有効なときだけ呼ぶ。ウィジェット拡張が共有する Swift ファイルは機能 crate へ移し、`platforms/apple/project.yml` のパスを直す |
+| Activity 再生成時の破棄・終了処理 | `reset_pending_tracking` は機能 crate が `pub` で公開し、gallery の `android_main` が呼ぶ。`fandhe-egui-proxy` の `android.rs` からは消す |
+| macOS の usage description（calendar） | 機能の宣言（`[package.metadata.fandhe.macos]`）にキーを書き、文言は gallery の `[package.metadata.fandhe-app.macos.usage-descriptions]` に置く |
+| 同じ機能の Web 実装が使う純関数・定数 | 機能 crate の `contract.rs` へ置き、`fandhe-web-dom` が機能 crate に依存する（`share-receive` と同じ形。power-state・ar・nlp）。機能 crate は wasm32 でも通るよう、OS 別の依存は `target` で外す。Web 実装の本体は `fandhe-web-dom` に残す |
+| 他機能も使う純粋なコード（ar） | §7 の規則どおり `fandhe-device` に残して機能 crate が依存する（`camera_preview_stream`・`compass`）。OS に触れない縮小や待ちの追跡は §8 の「型・検証」の扱い |
+| 他機能の OS 実装を参照している機能の後回し | 未移行の機能がこの機能の OS 実装を使っている間は移さない。`fandhe-egui-proxy` から機能 crate への依存は作らない。参照が解消してから移す（第 2 束では photo-picker・image-recognition・url-scheme） |
+| 他の束の機能 crate に依存する機能の後回し | 機能 crate から機能 crate への依存は、依存先が `main` に入ってから足す（第 2 束では geofence→location、background-task→local-storage-kv、map-view→network-status） |
+| 共有の SAFETY コメント | 移した関数を根拠に指しているコメントは、unsafe の根拠が共通層（`fandhe_platform_android::with_activity`）へ移った場合に、そこを指す形へ直す |
+| 複数の stem・id と stem が違う機能 | `scaffold` が使えない。`git mv` で手で移し、対応表の `impl` を新しいパスへ書き換える |

@@ -1,0 +1,61 @@
+[package]
+name = "fandhe-cap-live-activity"
+version = "0.2.0"
+edition = "2024"
+# iOS の Swift 薄層（ActivityKit）のリンク指定（`-rpath` など）を最終成果物（fandhe-gallery）へ渡す。
+# `cargo:rustc-link-arg` は出した package 自身の成果物にしか効かないため、`build.rs` の `export_link_args` が
+# `DEP_FANDHE_CAP_LIVE_ACTIVITY_*` として公開し、gallery の `build.rs` が出し直す。
+links = "fandhe_cap_live_activity"
+description = "fandhe-multi-platform のライブアクティビティ（live-activity）の機能 crate（iOS の ActivityKit・Android の進行中通知・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+[build-dependencies]
+# iOS の Swift 薄層を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。`cargo fandhe check` が現行の設定と突き合わせる。
+# POST_NOTIFICATIONS はローカル通知・通話 UI と共有する（統合で 1 つになる）。
+[package.metadata.fandhe]
+id = "live-activity"
+
+[package.metadata.fandhe.ios]
+frameworks = ["ActivityKit"]
+info-plist = { NSSupportsLiveActivities = true }
+
+# ロック画面・Dynamic Island の表示側（Widget Extension）。属性型はアプリ側の Swift 薄層と共有する。
+[[package.metadata.fandhe.ios.extensions]]
+name = "FandheLiveActivity"
+bundle-suffix = "liveactivity"
+deployment-target = "17.0"
+sources = ["apple/widget", "ios/fandhe_live_activity_attributes.swift"]
+frameworks = ["ActivityKit", "SwiftUI", "WidgetKit"]
+info-plist = { NSExtension = { NSExtensionPointIdentifier = "com.apple.widgetkit-extension" } }
+
+[package.metadata.fandhe.android]
+permissions = [{ name = "android.permission.POST_NOTIFICATIONS" }]
+java = ["android/java"]
+res = ["android/res"]
+
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.LiveActivityLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.live-activity" }
+
+[lints]
+workspace = true

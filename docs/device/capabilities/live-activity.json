@@ -17,7 +17,7 @@
       ],
       "detail": "できている（実機・シミュレータでの描画は未確認。実機は拡張の署名手順が無く未対応）",
       "implStatus": "実装済み（シミュレータ・実機とも未確認。実機は拡張の署名手順待ち #293）",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_live_activity.swift + crates/fandhe-egui-proxy/ios/fandhe_live_activity_attributes.swift + crates/fandhe-egui-proxy/src/device/ios_live_activity.rs + crates/fandhe-egui-proxy/src/device/live_activity.rs + crates/fandhe-core/src/screens/live_activity_show.rs + crates/fandhe-device/src/live_activity.rs + platforms/apple/FandheLiveActivity/Sources/FandheLiveActivity/FandheLiveActivityWidget.swift + platforms/apple/project.yml + scripts/ios/build-simulator-app.sh、Issue #295"
+      "impl": "crates/fandhe-cap-live-activity/ios/fandhe_ios_live_activity.swift + crates/fandhe-cap-live-activity/ios/fandhe_live_activity_attributes.swift + crates/fandhe-cap-live-activity/src/ios.rs + crates/fandhe-cap-live-activity/src/driver.rs + crates/fandhe-core/src/screens/live_activity_show.rs + crates/fandhe-cap-live-activity/src/contract.rs + crates/fandhe-cap-live-activity/apple/widget/FandheLiveActivityWidget.swift + platforms/apple/project.yml + scripts/ios/build-simulator-app.sh、Issue #295"
     },
     "android": {
       "status": "done",
@@ -27,7 +27,7 @@
       "note": "実装済み（Issue #296）。数値 1 つの開始・更新・終了、同時 1 件。API 24〜25 は Unsupported。拒否・通知オフ・チャンネルブロックは PermissionDenied。更新時に通知が無ければ Dismissed（再投稿しない）。終了は冪等で許可を求めない。Cancelled は出さない。再生成時と起動時は保留中の要求を破棄し、通知を閉じる。守る範囲: 1 プロセス内の要求順序・拒否/通知オフを成功に畳まないこと・通知の解放。守らない範囲: 利用者が閉じてから次の操作までの画面表示の食い違い、OEM 独自の表示規則。Live Updates への昇格は範囲外（compileSdk 36 と androidx.core の引き上げが要る）",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#293）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_live_activity.rs + platforms/android/app/src/main/java/com/fandhe/platform/LiveActivityHelper.java + crates/fandhe-egui-proxy/src/device/live_activity.rs + crates/fandhe-core/src/screens/live_activity_show.rs + crates/fandhe-device/src/live_activity.rs、Issue #296"
+      "impl": "crates/fandhe-cap-live-activity/src/android.rs + crates/fandhe-cap-live-activity/android/java/com/fandhe/platform/LiveActivityHelper.java + crates/fandhe-cap-live-activity/src/driver.rs + crates/fandhe-core/src/screens/live_activity_show.rs + crates/fandhe-cap-live-activity/src/contract.rs、Issue #296"
     },
     "macos": {
       "status": "no",

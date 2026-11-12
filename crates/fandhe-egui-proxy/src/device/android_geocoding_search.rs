@@ -122,7 +122,7 @@ impl ForwardGeocoder for AndroidForwardGeocoder {
 }
 
 /// `MainActivity.requestGeocode(long, String, int)` を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `device/android_pedometer.rs::call_activity` と同一の根拠。
+/// `unsafe` 2 箇所は `fandhe_platform_android::with_activity` と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 fn call_request(id: u64, address: &str, max_results: i32) -> bool {

@@ -5,7 +5,7 @@
 //! 音声・発信・履歴・複数通話・電話番号の入力は扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは
-//! `fandhe-egui-proxy` の `device/call_ui.rs` が [`take_command`] で要求を観測し、[`apply_update`] で
+//! `fandhe-cap-call-ui` の `driver.rs` が [`take_command`] で要求を観測し、[`apply_update`] で
 //! 通知を注入する（`midi_show.rs` と同型）。iOS・Android の操作案内も含め、全対象 OS の状態・文言を
 //! ここで確定済みで、後続の OS 実装（#277・#278）は本画面を触らない。
 //!

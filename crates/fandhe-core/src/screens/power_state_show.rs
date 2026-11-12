@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節）。表示用の型は device 側と別に持ち、写像は呼び出し側
-//! （proxy の `device/power_state.rs`、Web は #1277 の `fandhe-web-dom`）が行う
+//! （`fandhe-cap-power-state` の `driver.rs`、Web は #1277 の `fandhe-web-dom`）が行う
 //! （`text_scale_preview` と同じ「コアは device に依存できないので複製する」判断）。
 //!
 //! 操作 UI は無い（1 秒間隔の pull のみ）。結果は [`finish_read`] で注入する。`Read` の後に
