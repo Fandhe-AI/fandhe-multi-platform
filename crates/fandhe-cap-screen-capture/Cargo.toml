@@ -53,6 +53,14 @@ frameworks = ["AVFoundation"]
 
 # MediaProjection を持つ前景サービス。自アプリの明示 Intent だけで起動するため exported = false。
 # Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+# Manifest の同じ要素と完全に一致させる。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.ScreenCaptureLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.screen-capture" }
+
 [[package.metadata.fandhe.android.components]]
 kind = "service"
 name = "com.fandhe.platform.ScreenCaptureService"

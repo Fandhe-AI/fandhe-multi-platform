@@ -45,7 +45,7 @@ use fandhe_runtime::request_slot::RequestSlot;
 const WAV_HEADER_BYTES: u64 = 44;
 
 /// 現在のプラットフォームに応じた `MediaTranscode` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn MediaTranscode> {
+pub fn platform_media_transcode() -> Arc<dyn MediaTranscode> {
     #[cfg(target_os = "macos")]
     {
         Arc::new(crate::apple::AppleMediaTranscode)
@@ -239,7 +239,7 @@ fn drive(
 /// `registry.rs` の `effect` 区画から `media_transcode` 画面用に配線される effect ドライバ。
 pub fn media_transcode_effect(state: &TranscodeState, sender: &CompletionSender<TranscodeState>) {
     static IMPL: std::sync::OnceLock<Arc<dyn MediaTranscode>> = std::sync::OnceLock::new();
-    let imp = IMPL.get_or_init(platform);
+    let imp = IMPL.get_or_init(platform_media_transcode);
     drive(
         state,
         sender,
@@ -511,7 +511,7 @@ mod tests {
             target_os = "android"
         )))]
         assert!(matches!(
-            platform().transcode(&[1], SAMPLE_RATE, Duration::ZERO),
+            platform_media_transcode().transcode(&[1], SAMPLE_RATE, Duration::ZERO),
             Err(MediaTranscodeError::Unsupported)
         ));
     }

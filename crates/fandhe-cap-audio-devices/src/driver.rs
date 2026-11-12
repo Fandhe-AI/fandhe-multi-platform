@@ -48,7 +48,7 @@ static OS_CALL_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
 /// 現在のプラットフォームに応じた `AudioDevices` 実装を返す（状態を持たないため呼び出しごとに構築）。
 /// `Arc` なのは Windows でワーカーへ move するため。
-fn platform_audio_devices() -> Arc<dyn AudioDevices> {
+pub fn platform_audio_devices() -> Arc<dyn AudioDevices> {
     #[cfg(target_os = "windows")]
     {
         crate::windows::implementation()

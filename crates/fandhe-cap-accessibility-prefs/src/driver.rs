@@ -36,7 +36,7 @@ const MAX_DT: f32 = 0.1;
 const DEFAULT_DT: f32 = 1.0 / 60.0;
 
 /// 現在のプラットフォームに応じた実装を返す。
-fn implementation() -> Arc<dyn AccessibilityPrefsSource> {
+pub fn platform_accessibility_prefs() -> Arc<dyn AccessibilityPrefsSource> {
     #[cfg(target_os = "windows")]
     {
         Arc::new(crate::windows::WindowsAccessibilityPrefs)
@@ -149,7 +149,7 @@ pub fn accessibility_prefs_show_effect(
     drive(
         state,
         sender,
-        implementation().as_ref(),
+        platform_accessibility_prefs().as_ref(),
         Instant::now(),
         &mut timing,
     );

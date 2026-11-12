@@ -21,6 +21,15 @@ use fandhe_core::screens::passkey_signin::{
 
 use fandhe_runtime::CompletionSender;
 
+/// OS 別の [`Passkey`] 実装を返す（状態型に依存しない入口）。Windows 以外は `UnsupportedPasskey`
+/// （Android はコールバック型で [`Passkey`] を実装せず、effect ドライバ経由で使う）。
+pub fn platform_passkey() -> Box<dyn crate::contract::Passkey> {
+    #[cfg(target_os = "windows")]
+    return crate::windows::implementation();
+    #[cfg(not(target_os = "windows"))]
+    return Box::new(crate::contract::UnsupportedPasskey);
+}
+
 fn op_of(action: PasskeyAction) -> PasskeyOp {
     match action {
         PasskeyAction::Register => PasskeyOp::Register,
@@ -172,7 +181,7 @@ pub fn passkey_signin_effect(
         let request_id = bridge::begin();
         let op = op_of(view.action);
         // HWND の取得などは UI スレッドで済ませ、ブロッキングの呼び出しだけをワーカーへ渡す。
-        let passkey = crate::windows::implementation();
+        let passkey = platform_passkey();
         let spawned = std::thread::Builder::new()
             .name("passkey".into())
             .spawn(move || {

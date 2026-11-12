@@ -42,7 +42,7 @@ use fandhe_core::screens::midi_show::{
 use fandhe_runtime::CompletionSender;
 
 /// プロセスに 1 つだけ持つ実装（`stop` が `start` と同じ実体に届くようにする）。
-fn platform_midi() -> &'static Arc<dyn MidiInput> {
+pub fn platform_midi() -> &'static Arc<dyn MidiInput> {
     static INPUT: OnceLock<Arc<dyn MidiInput>> = OnceLock::new();
     INPUT.get_or_init(|| {
         #[cfg(any(target_os = "macos", target_os = "ios"))]

@@ -153,9 +153,10 @@ fn drive(
     }));
 }
 
-/// OS 別の [`AppBadge`] 実装を返す（macOS / Windows / それ以外）。
+/// OS 別の [`AppBadge`] 実装を返す（macOS / Windows / それ以外）。iOS / Android はコールバック型で
+/// [`AppBadge`] を実装しないため、この入口は無い（effect ドライバ経由で使う）。
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-fn platform_app_badge() -> Box<dyn crate::contract::AppBadge> {
+pub fn platform_app_badge() -> Box<dyn crate::contract::AppBadge> {
     #[cfg(target_os = "macos")]
     return crate::macos::implementation();
     #[cfg(target_os = "windows")]

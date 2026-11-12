@@ -39,7 +39,7 @@ use fandhe_core::screens::on_device_llm::{
 use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `OnDeviceLlm` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn OnDeviceLlm> {
+pub fn platform_on_device_llm() -> Arc<dyn OnDeviceLlm> {
     #[cfg(target_os = "macos")]
     {
         Arc::new(crate::apple::AppleOnDeviceLlm)
@@ -172,7 +172,7 @@ fn drive(
 /// `registry.rs` の `effect` 区画から `on_device_llm` 画面用に配線される effect ドライバ。
 pub fn on_device_llm_effect(state: &OnDeviceLlmState, sender: &CompletionSender<OnDeviceLlmState>) {
     static IMPL: std::sync::OnceLock<Arc<dyn OnDeviceLlm>> = std::sync::OnceLock::new();
-    let imp = IMPL.get_or_init(platform);
+    let imp = IMPL.get_or_init(platform_on_device_llm);
     drive(
         state,
         sender,
@@ -425,7 +425,7 @@ mod tests {
     fn fallback_platform_is_unsupported_on_linux() {
         #[cfg(not(any(target_os = "macos", target_os = "ios")))]
         assert!(matches!(
-            platform().respond("x", Duration::ZERO),
+            platform_on_device_llm().respond("x", Duration::ZERO),
             Err(OnDeviceLlmError::Unsupported)
         ));
     }

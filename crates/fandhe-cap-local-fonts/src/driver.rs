@@ -52,7 +52,7 @@ static OS_CALL_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
 /// 現在のプラットフォームに応じた `LocalFonts` 実装を返す（状態を持たないため呼び出しごとに構築）。
 /// `Arc` なのは Windows でワーカーへ move するため。
-fn platform_local_fonts() -> Arc<dyn LocalFonts> {
+pub fn platform_local_fonts() -> Arc<dyn LocalFonts> {
     #[cfg(target_os = "windows")]
     {
         crate::windows::implementation()

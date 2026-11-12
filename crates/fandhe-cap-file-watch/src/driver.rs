@@ -64,7 +64,7 @@ const PICK_FAILED: &str = "フォルダの選択";
 const WORK_DIR_NAME: &str = "file-watch";
 
 /// 現在のプラットフォームに応じた `FileWatch` 実装を返す（状態を持たないため呼び出しごとに構築）。
-fn platform_file_watch() -> Arc<dyn FileWatch> {
+pub fn platform_file_watch() -> Arc<dyn FileWatch> {
     #[cfg(target_os = "windows")]
     {
         crate::windows::implementation()

@@ -35,6 +35,8 @@ id = "app-badge"
 [package.metadata.fandhe.android]
 java = ["android/java"]
 res = ["android/res"]
+# Android 13 以降はバッジ通知の投稿に必要（ローカル通知・通話 UI と共有、統合で 1 つになる）。
+permissions = [{ name = "android.permission.POST_NOTIFICATIONS" }]
 
 [package.metadata.fandhe.ios]
 frameworks = ["UserNotifications"]

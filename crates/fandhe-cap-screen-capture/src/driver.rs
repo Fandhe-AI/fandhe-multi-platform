@@ -184,13 +184,7 @@ pub(crate) mod bridge {
 }
 
 /// OS 別エンジンの dispatch（最終形。後続 OS の子 issue は各 OS のモジュール内だけを直す）。
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "android"
-))]
-fn capturer() -> &'static dyn ScreenCapturer {
+pub fn platform_screen_capture() -> &'static dyn ScreenCapturer {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
         crate::apple::capturer()
@@ -202,6 +196,15 @@ fn capturer() -> &'static dyn ScreenCapturer {
     #[cfg(target_os = "windows")]
     {
         crate::windows::capturer()
+    }
+    #[cfg(not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    )))]
+    {
+        &crate::contract::UnsupportedScreenCapturer
     }
 }
 
@@ -226,7 +229,7 @@ fn drive_callback(state: &ScreenCaptureState, sender: &CompletionSender<ScreenCa
         let _ = sender.send(Box::new(mark_recording));
         let request_id = bridge::begin();
         let max = std::time::Duration::from_millis(MAX_CAPTURE_MS);
-        if let Err(e) = capturer().start(request_id, max) {
+        if let Err(e) = platform_screen_capture().start(request_id, max) {
             // 依頼自体が失敗した（コールバックは二度と来ない）。
             bridge::deliver_error(request_id, e);
         }
@@ -237,7 +240,7 @@ fn drive_callback(state: &ScreenCaptureState, sender: &CompletionSender<ScreenCa
         let _ = sender.send(Box::new(mark_stopping));
         // 停止依頼が届かなくても（既に終了済み等）自動停止か既存の結果配送が追随する。
         if let Some(request_id) = bridge::current_request_id() {
-            let _ = capturer().stop(request_id);
+            let _ = platform_screen_capture().stop(request_id);
         }
         return;
     }
@@ -339,6 +342,14 @@ pub fn reset_pending_tracking() {
 mod tests {
     use super::*;
     use crate::contract::build_capture_result;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    #[allow(dead_code)]
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     #[test]
     fn hresult_access_denied_is_permission_denied() {

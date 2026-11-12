@@ -32,7 +32,7 @@ use fandhe_core::screens::multi_display_show::{
 use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた実装を返す（状態を持たないため呼び出しごとに構築）。
-fn platform_multi_display() -> Box<dyn MultiDisplay> {
+pub fn platform_multi_display() -> Box<dyn MultiDisplay> {
     #[cfg(target_os = "windows")]
     {
         crate::windows::implementation()
