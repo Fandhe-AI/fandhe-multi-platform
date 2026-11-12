@@ -20,7 +20,6 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
 
 use crate::contract::{LiveActivity, LiveOperation, LiveOutcome, LiveValue};
 use crate::error::LiveActivityError;
@@ -44,12 +43,10 @@ pub fn platform_live_activity() -> &'static Arc<dyn LiveActivity> {
     })
 }
 
-/// 画面外の呼び出しが結果を待つ上限。
-const EXTERNAL_WAIT_LIMIT: Duration = Duration::from_secs(30);
-
 /// 画面の状態型に依存しない入口（`docs/architecture/consumer-app-structure.md` §8.2）。操作を OS へ渡し、
-/// 開始成功・権限拒否・OS エラーなどの完了まで block して返す（上限 30 秒。超過は `Internal("live_activity timeout")` で戻るが、OS 側が終わるまでの後続は
-/// `Internal("live_activity busy")` で拒否する）。
+/// 開始成功・権限拒否・OS エラーなどの完了まで block して返す（期限は置かない。OS の操作は取り消せず、推測の期限で失敗を返すと
+/// 後から開始されて再試行で重複するため、OS の結果か再生成まで待つ）。先行が未完了の間の後続は
+/// `Internal("live_activity busy")` で拒否する。
 /// 画面の [`bridge::SLOT`] は使わない。UI スレッドから呼ばない。Activity 再生成で待っている呼び出しは
 /// `Internal("live_activity reset")` で戻る。
 pub fn run_live_activity(op: LiveOperation) -> Result<LiveOutcome, LiveActivityError> {
@@ -58,18 +55,9 @@ pub fn run_live_activity(op: LiveOperation) -> Result<LiveOutcome, LiveActivityE
         bridge::cancel_external(request_id);
         return Err(e);
     }
-    match rx.recv_timeout(EXTERNAL_WAIT_LIMIT) {
-        Ok(result) => result,
-        // 期限後も OS 側の要求（許可ダイアログ等）は生きていて、後から古い操作が効きうる。
-        // 待ちの登録は外さず後続を busy にし、結果が届くか再生成で消えるまで次の操作を受けない。
-        // ponytail: コールバックが失われると再生成まで busy。
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-            Err(LiveActivityError::Internal("live_activity timeout"))
-        }
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            Err(LiveActivityError::Internal("live_activity reset"))
-        }
-    }
+    // ponytail: コールバックが失われると再生成まで block・busy。
+    rx.recv()
+        .unwrap_or(Err(LiveActivityError::Internal("live_activity reset")))
 }
 
 /// `LiveActivityError` / 成功結果を画面用の結果へ写像する。`Internal` と未知のエラー（`Cancelled` を含む）は
@@ -479,5 +467,25 @@ mod tests {
         end(&mut st);
         pump(&mut st, &ui, &S_END, &tx, &rx);
         assert!(matches!(ui.calls.lock().unwrap()[0].1, LiveOperation::End));
+    }
+
+    /// 画面外の待ちは期限で失敗を確定せず、再生成（送信側の破棄）で `reset` として戻る。
+    #[test]
+    fn external_wait_returns_reset_on_disconnect() {
+        let (id, rx) = bridge::begin_external().expect("空きがある");
+        assert!(matches!(
+            bridge::begin_external(),
+            Err(LiveActivityError::Internal("live_activity busy"))
+        ));
+        let h = std::thread::spawn(move || {
+            rx.recv()
+                .unwrap_or(Err(LiveActivityError::Internal("live_activity reset")))
+        });
+        let _ = id;
+        bridge::reset_external();
+        assert_eq!(
+            h.join().unwrap(),
+            Err(LiveActivityError::Internal("live_activity reset"))
+        );
     }
 }

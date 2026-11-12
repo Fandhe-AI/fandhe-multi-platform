@@ -206,7 +206,8 @@ fn present(request_id: u64, draft: &EventDraft) -> bool {
 /// （`docs/architecture/consumer-app-structure.md` §8.2）。
 ///
 /// macOS / iOS / Android は OS 側がコールバックで結果を返すため、画面の bridge を経ずに独自の待ち合わせで
-/// 完了まで `add_event` を block する（上限 10 分）。同時に 1 件だけで、先行が終わるまで後から呼ぶと
+/// 完了まで `add_event` を block する（期限は置かない。OS の操作は取り消せず、推測の期限で失敗を返すと
+/// 後から保存されて再試行で重複するため、OS の結果か再生成まで待つ）。同時に 1 件だけで、先行が終わるまで後から呼ぶと
 /// `Internal("calendar busy")` で即座に戻る（先行は置き換えない）。UI スレッド（iOS / macOS のメイン）から呼ばない。
 /// Activity 再生成で待っている呼び出しは `Internal("calendar reset")` で戻る。それ以外の OS は常に `Unsupported`。
 pub fn platform_calendar() -> std::sync::Arc<dyn crate::contract::CalendarEvents> {
@@ -220,10 +221,6 @@ pub fn platform_calendar() -> std::sync::Arc<dyn crate::contract::CalendarEvents
     }
 }
 
-/// 画面外の呼び出しが編集画面の結果を待つ上限（利用者の操作を待つため長めに取る）。
-#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
-const EXTERNAL_WAIT_LIMIT: std::time::Duration = std::time::Duration::from_secs(600);
-
 /// コールバック型 OS 向けの同期ラッパ（[`platform_calendar`]）。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 struct CallbackCalendar;
@@ -236,18 +233,10 @@ impl crate::contract::CalendarEvents for CallbackCalendar {
             bridge::cancel_external(request_id);
             return Err(CalendarError::Internal("calendar present"));
         }
-        // OS のコールバックが失われても永久に待たない。期限後も OS 側の要求は生きているため
-        // 待ちの登録は外さず（後続を busy にしたまま）、結果が届くか再生成で消える。
-        // ponytail: コールバックが失われると再生成まで busy。解除用の入口は必要になったら足す。
-        match rx.recv_timeout(EXTERNAL_WAIT_LIMIT) {
-            Ok(result) => result,
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                Err(CalendarError::Internal("calendar timeout"))
-            }
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                Err(CalendarError::Internal("calendar reset"))
-            }
-        }
+        // 結果が届くか、再生成で送信側が捨てられる（Disconnected）まで待つ。
+        // ponytail: コールバックが失われると再生成まで block・busy。解除用の入口は必要になったら足す。
+        rx.recv()
+            .unwrap_or(Err(CalendarError::Internal("calendar reset")))
     }
 }
 
@@ -465,5 +454,25 @@ mod bridge_tests {
         let (_, ready) = bridge::SLOT.snapshot().expect("begin 済み");
         assert_eq!(ready, Some(Ok(CoreOutcome::Cancelled)));
         bridge::SLOT.clear(id);
+    }
+
+    /// 画面外の待ちは期限で失敗を確定せず、再生成（送信側の破棄）で `reset` として戻る。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+    #[test]
+    fn external_wait_returns_reset_on_disconnect() {
+        let (_id, rx) = bridge::begin_external().expect("空きがある");
+        assert!(matches!(
+            bridge::begin_external(),
+            Err(CalendarError::Internal("calendar busy"))
+        ));
+        let h = std::thread::spawn(move || {
+            rx.recv()
+                .unwrap_or(Err(CalendarError::Internal("calendar reset")))
+        });
+        bridge::reset();
+        assert_eq!(
+            h.join().unwrap(),
+            Err(CalendarError::Internal("calendar reset"))
+        );
     }
 }
