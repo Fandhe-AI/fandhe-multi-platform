@@ -226,6 +226,20 @@ mod tests {
     };
     use std::sync::Mutex;
 
+    /// `bridge::WAITERS` はプロセス共有で `drive`（`begin_screen`）も参照するため、
+    /// `drive` を呼ぶテストと画面外の待ちを占有するテストを直列化する。
+    static BRIDGE_LOCK: Mutex<()> = Mutex::new(());
+
+    fn drive_serial(
+        snapshot: &St,
+        tx: &CompletionSender<St>,
+        ui: &dyn LiveActivity,
+        slot: &'static RequestSlot<LiveResult>,
+    ) {
+        let _g = BRIDGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        drive(snapshot, tx, ui, slot);
+    }
+
     /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
     struct NoopWaker;
     impl fandhe_runtime::RepaintWaker for NoopWaker {
@@ -284,7 +298,7 @@ mod tests {
         rx: &std::sync::mpsc::Receiver<fandhe_runtime::Completion<St>>,
     ) {
         let snapshot = state.clone();
-        drive(&snapshot, tx, ui, slot);
+        drive_serial(&snapshot, tx, ui, slot);
         while let Ok(c) = rx.try_recv() {
             c(state);
         }
@@ -376,7 +390,7 @@ mod tests {
         let mut st = St::default();
         start(&mut st);
         let snapshot = st.clone();
-        drive(&snapshot, &tx, &UnsupportedLiveActivity, &S_UNSUP);
+        drive_serial(&snapshot, &tx, &UnsupportedLiveActivity, &S_UNSUP);
         while let Ok(c) = rx.try_recv() {
             c(&mut st);
         }
@@ -392,7 +406,7 @@ mod tests {
         slot: &'static RequestSlot<LiveResult>,
     ) {
         let snapshot = st.clone();
-        drive(&snapshot, tx, &UnsupportedLiveActivity, slot);
+        drive_serial(&snapshot, tx, &UnsupportedLiveActivity, slot);
         while let Ok(c) = rx.try_recv() {
             c(st);
         }
@@ -472,6 +486,7 @@ mod tests {
     /// 画面外の待ちは期限で失敗を確定せず、再生成（送信側の破棄）で `reset` として戻る。
     #[test]
     fn external_wait_returns_reset_on_disconnect() {
+        let _g = BRIDGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let (id, rx) = bridge::begin_external().expect("空きがある");
         assert!(matches!(
             bridge::begin_external(),

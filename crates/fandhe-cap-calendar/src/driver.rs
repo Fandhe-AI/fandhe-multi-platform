@@ -444,8 +444,12 @@ mod bridge_tests {
     use super::bridge;
     use super::*;
 
+    /// `bridge` のプロセス共有 static（`SLOT`・`WAITERS`）を触るテストを直列化する。
+    static BRIDGE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn stale_request_id_is_dropped_and_second_deliver_ignored() {
+        let _g = BRIDGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let id = bridge::begin().0;
         assert!(!bridge::deliver(id + 1000, Ok(AddEventOutcome::Saved)));
         assert!(bridge::SLOT.snapshot().is_some_and(|(_, r)| r.is_none()));
@@ -460,6 +464,7 @@ mod bridge_tests {
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     #[test]
     fn external_wait_returns_reset_on_disconnect() {
+        let _g = BRIDGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let (_id, rx) = bridge::begin_external().expect("空きがある");
         assert!(matches!(
             bridge::begin_external(),
