@@ -86,6 +86,8 @@ android {
             // 宣言とここの srcDirs の一致を確かめる。
             // BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-app-attest/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-calendar/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-call-ui/android/java")
@@ -99,6 +101,8 @@ android {
             java.srcDirs("../../../crates/fandhe-cap-document-scan/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-focus-mode-status/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-geocoding-search/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-haptics/android/java")
             @Suppress("DEPRECATION")
@@ -120,7 +124,11 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-pedometer/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-per-app-language/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-power-state/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-screen-brightness/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-screen-wake-lock/android/java")
             @Suppress("DEPRECATION")
@@ -129,6 +137,8 @@ android {
             java.srcDirs("../../../crates/fandhe-cap-system-accent-color/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-usb-device/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-spell-check/android/java")
             // END fandhe-cap
         }
     }

@@ -23,8 +23,6 @@ pub mod accessibility_prefs;
 pub mod activity_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #140、Issue #721）: アラーム・正確な時刻の予約（Windows 実装、他 OS は `Unsupported` 固定）。
 pub mod alarm;
-/// Phase 11（端末機能の拡充ループ、親 #132、Issue #677）: 端末・アプリの真正性証明（Android の Key Attestation を 1 回取得する）。
-pub mod app_attest;
 /// Phase 11（端末機能の拡充ループ、親 #1141、Issue #1360）: アプリアイコンのバッジ（Windows はタスクバーのオーバーレイ数字）。
 pub mod app_badge;
 /// Phase 11 の拡充ループ（親 #178、Issue #893）: アプリの前面・背面・凍結の通知。
@@ -107,8 +105,6 @@ pub mod foldable_posture;
 pub mod fullscreen_immersive;
 /// Phase 11（端末機能の拡充ループ、親 #932、Issue #933）: 継続 push 型のゲームコントローラ入力。
 pub mod gamepad;
-/// Phase 11（端末機能の拡充ループ、親 #133、Issue #691）: 住所の座標変換（順ジオコーディング）。
-pub mod geocoding_search;
 /// Phase 11（端末機能の拡充ループ）: location に乗せた Rust 側のジオフェンス判定。
 pub mod geofence;
 /// Phase 11（端末機能の拡充ループ、親 #150、Issue #766）: グローバルホットキー（固定の組み合わせ 1 つ）。
@@ -124,8 +120,6 @@ pub mod image_generation;
 pub mod image_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #135、Issue #701）: アプリ内ブラウザ（固定の公開 URL を OS のアプリ内ブラウザで開く）。
 pub mod in_app_browser;
-/// Phase 11（端末機能の拡充ループ、Issue #563）: アプリ内レビュー依頼（OS のレビュー依頼 API を 1 回呼ぶ）。
-pub mod in_app_review;
 /// Phase 11（端末機能の拡充ループ、親 #109、Issue #486）: LAN のサービス探索（mDNS / Bonjour、`_http._tcp` を固定窓で 1 回探す）。
 pub mod lan_discovery;
 /// Phase 11（端末機能の拡充ループ、親 #134、Issue #696）: ログイン時の自動起動（有効化・無効化・状態の読み戻し）。
@@ -177,8 +171,6 @@ pub mod passkey;
 pub mod payment_request;
 /// Phase 11（端末機能の拡充ループ、親 #95、Issue #355）: ペン・筆圧入力（種類・筆圧・傾き）。
 pub mod pen_stylus;
-/// Phase 11（端末機能の拡充ループ、親 #137、Issue #1073）: アプリ別の言語設定（言語タグと設定の出どころ）。
-pub mod per_app_language;
 /// Phase 11（端末機能の拡充ループ、親 #1121、Issue #1254）: 画像 1 枚の写真ライブラリ保存。
 pub mod photo_library;
 /// Phase 11（端末機能の拡充ループ）: 写真 1 枚の選択。
@@ -199,16 +191,12 @@ pub mod removable_storage;
 pub mod safe_area_insets;
 /// Phase 11（端末機能の拡充ループ、親 #192、Issue #981）: 接続したスキャナー・カメラ機器からの取り込み。
 pub mod scanner_devices;
-/// Phase 11（端末機能の拡充ループ、親 #126、Issue #633）: 画面輝度の取得・設定。
-pub mod screen_brightness;
 /// Phase 11（端末機能の拡充ループ、親 #1135、Issue #1335）: 画面の録画・キャプチャ。
 pub mod screen_capture;
 /// Phase 11（端末機能の拡充ループ、親 #128、Issue #655）: 画面向きの取得・固定。
 pub mod screen_orientation;
 /// Phase 11（端末機能の拡充ループ、親 #921、Issue #922）: 資格情報の安全な保存。
 pub mod secure_credential;
-/// Phase 11（端末機能の拡充ループ、親 #131、Issue #670）: シリアルポートの一覧と 1 行の往復。
-pub mod serial_port;
 /// Phase 11（端末機能の拡充ループ、親 #896、Issue #897）: 共有シート。
 pub mod share;
 /// Phase 11 の拡充ループ（親 #167、Issue #810）: スリープ・画面の消灯と点灯・ロックと解除の通知。
@@ -219,8 +207,6 @@ pub mod smart_home;
 pub mod sound_classification;
 /// Phase 11（端末機能の拡充ループ、親 #1023、Issue #1024）: 音声認識。
 pub mod speech_recognition;
-/// Phase 11（端末機能の拡充ループ、親 #119、Issue #578）: スペルチェック（入力文の誤り語と修正候補）。
-pub mod spell_check;
 /// Phase 11（端末機能の拡充ループ、親 #117、Issue #560）: OS の検索への登録（固定のメモ 1 件の登録と全削除）。
 pub mod spotlight_index;
 pub mod storage;
@@ -234,10 +220,6 @@ pub mod translation;
 pub mod tts;
 /// Phase 11（端末機能の拡充ループ、親 #1116、Issue #1215）: カスタム URL scheme の受信。
 pub mod url_scheme;
-/// Phase 11（端末機能の拡充ループ、親 #125、Issue #631）: 無操作時間（最後の入力からの経過）。
-pub mod user_idle;
-/// Phase 11（端末機能の拡充ループ、親 #129、Issue #653）: UWB による相手との距離・方向（能力の可否と測距）。
-pub mod uwb_ranging;
 /// Phase 11（端末機能の拡充ループ、親 #169、Issue #821）: 動画の撮影（OS の撮影 UI を開き、長さ・寸法・サイズを出す）。
 pub mod video_capture;
 /// Phase 11（端末機能の拡充ループ、親 #340、Issue #1014）: 動画の変換（実行時に作った元動画を小さい解像度の MP4 へ書き出す）。

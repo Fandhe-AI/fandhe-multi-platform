@@ -1062,6 +1062,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-app-attest"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-ar"
 version = "0.2.0"
 dependencies = [
@@ -1145,6 +1156,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-geocoding-search"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-haptics"
 version = "0.2.0"
 dependencies = [
@@ -1185,6 +1208,16 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "fandhe-cap-in-app-review"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -1278,6 +1311,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-per-app-language"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-power-state"
 version = "0.2.0"
 dependencies = [
@@ -1288,6 +1333,18 @@ dependencies = [
  "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-screen-brightness"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -1304,6 +1361,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-serial-port"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-share-receive"
 version = "0.2.0"
 dependencies = [
@@ -1313,6 +1382,21 @@ dependencies = [
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-spell-check"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -1354,6 +1438,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-user-idle"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-uwb-ranging"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-core"
 version = "0.2.0"
 dependencies = [
@@ -1386,6 +1491,7 @@ dependencies = [
  "egui",
  "egui_kittest",
  "fandhe-cap-media-cast",
+ "fandhe-cap-serial-port",
  "fandhe-cap-system-tray",
  "fandhe-core",
  "fandhe-device",
@@ -1425,6 +1531,7 @@ name = "fandhe-gallery"
 version = "0.1.0"
 dependencies = [
  "egui",
+ "fandhe-cap-app-attest",
  "fandhe-cap-ar",
  "fandhe-cap-calendar",
  "fandhe-cap-call-ui",
@@ -1432,9 +1539,11 @@ dependencies = [
  "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
  "fandhe-cap-focus-mode-status",
+ "fandhe-cap-geocoding-search",
  "fandhe-cap-haptics",
  "fandhe-cap-home-widget",
  "fandhe-cap-http-get",
+ "fandhe-cap-in-app-review",
  "fandhe-cap-live-activity",
  "fandhe-cap-media-cast",
  "fandhe-cap-ml-inference",
@@ -1442,12 +1551,18 @@ dependencies = [
  "fandhe-cap-nlp",
  "fandhe-cap-pdf-viewer",
  "fandhe-cap-pedometer",
+ "fandhe-cap-per-app-language",
  "fandhe-cap-power-state",
+ "fandhe-cap-screen-brightness",
  "fandhe-cap-screen-wake-lock",
+ "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
+ "fandhe-cap-spell-check",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-system-tray",
  "fandhe-cap-usb-device",
+ "fandhe-cap-user-idle",
+ "fandhe-cap-uwb-ranging",
  "fandhe-core",
  "fandhe-egui-proxy",
  "fandhe-platform-android",
@@ -1547,6 +1662,7 @@ dependencies = [
  "fandhe-cap-media-cast",
  "fandhe-cap-nlp",
  "fandhe-cap-power-state",
+ "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-usb-device",

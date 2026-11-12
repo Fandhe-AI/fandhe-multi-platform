@@ -120,10 +120,6 @@ fn build() {
     // `apple/fandhe_apple_map_view.m`（Issue #273 macOS + #274 iOS）も macOS 分岐と共用する。
     compile_apple_map_view();
 
-    // `apple/fandhe_apple_geocoding_search.m`（Issue #691 macOS + #692 iOS）も macOS 分岐と共用する
-    // （b-ios が本ファイルを触らずに済むよう、iOS 分岐からも (a) で呼んでおく）。
-    compile_apple_geocoding_search();
-
     // `apple/fandhe_apple_scanner_devices.m`（Issue #981 macOS + #982 iOS）も macOS 分岐と共用する
     // （b-ios が本ファイルを触らずに済むよう、iOS 分岐からも (a) で呼んでおく）。
     compile_apple_scanner_devices();
@@ -177,10 +173,6 @@ fn build() {
     // `ios/fandhe_ios_url_scheme.m`（Issue #1217）。iOS 分岐のみ（macOS は別 .m）。
     compile_ios_url_scheme();
 
-    // `ios/fandhe_ios_spell_check.m`（Issue #579）。iOS 分岐のみ。
-    compile_ios_spell_check();
-    // `ios/fandhe_ios_screen_brightness.m`（Issue #634）。iOS 分岐のみ。
-    compile_ios_screen_brightness();
     // `ios/fandhe_ios_fullscreen_immersive.m`（Issue #1313）。iOS 分岐のみ。
     compile_ios_fullscreen_immersive();
     // `ios/fandhe_ios_screen_orientation.m`（Issue #656）。iOS 分岐のみ。
@@ -225,8 +217,6 @@ fn build() {
     compile_ios_motion_raw_sensors();
     // `ios/fandhe_ios_activity_recognition.m`（Issue #614）。iOS 分岐のみ（macOS は対応表で n-a）。
     compile_ios_activity_recognition();
-    // `ios/fandhe_ios_uwb_ranging.m`（Issue #654）。iOS 分岐のみ（macOS は対応表で no）。
-    compile_ios_uwb_ranging();
     // `ios/fandhe_ios_camera_preview_stream.m`（Issue #813）。iOS 分岐。macOS 分岐（`build_macos`）も同じ `.m` を共有する（Issue #1066）。
     compile_ios_camera_preview_stream();
     // `ios/fandhe_ios_flashlight.m`（Issue #460）。iOS 分岐のみ（macOS は対応表で n-a）。
@@ -247,8 +237,6 @@ fn build() {
     compile_ios_in_app_browser();
     // `ios/fandhe_ios_video_capture.m`（Issue #822）。iOS 分岐のみ。CoreMedia をリンクする。
     compile_ios_video_capture();
-    // `ios/fandhe_ios_in_app_review.m`（Issue #564）。iOS 分岐のみ。StoreKit をリンクする。
-    compile_ios_in_app_review();
     // `ios/fandhe_ios_capture_protection.m`（Issue #583）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_capture_protection();
     // `ios/fandhe_ios_file_preview.m`（Issue #919）。iOS 分岐のみ。QuickLook をリンクする。
@@ -273,8 +261,6 @@ fn build() {
     compile_apple_now_playing();
     // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308 macOS + #1309 iOS）も共用する。
     compile_apple_accessibility_prefs();
-    // `apple/fandhe_apple_per_app_language.m`（Issue #1073）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
-    compile_apple_per_app_language();
     // `apple/fandhe_apple_screen_capture.m`（Issue #1336）の iOS 側（ReplayKit）。
     compile_apple_screen_capture();
 }
@@ -333,17 +319,6 @@ fn compile_apple_map_view() {
     compile_objc(
         "apple/fandhe_apple_map_view.m",
         &[ui_framework(), "CoreGraphics", "Foundation", "MapKit"],
-    );
-}
-
-/// `apple/fandhe_apple_geocoding_search.m` を `cc` でコンパイルし MapKit / CoreLocation をリンクする
-/// （Issue #691 macOS・#692 iOS。両分岐から呼ぶ）。MapKit は `compile_apple_map_view` でもリンク
-/// するが、本機能が単独で成り立つよう重複を許してここでも宣言する。`MKGeocodingRequest`（26 以上）は
-/// `API_AVAILABLE` 付きクラス参照のため clang が弱参照にし、26 未満の OS でも起動できる。
-fn compile_apple_geocoding_search() {
-    compile_objc(
-        "apple/fandhe_apple_geocoding_search.m",
-        &["CoreLocation", "Foundation", "MapKit"],
     );
 }
 
@@ -557,12 +532,6 @@ fn compile_apple_accessibility_prefs() {
         "apple/fandhe_apple_accessibility_prefs.m",
         &[ui_framework(), "Foundation"],
     );
-}
-
-/// `apple/fandhe_apple_per_app_language.m` を `cc` でコンパイルする（Issue #1073 macOS、
-/// #1074 iOS 共用）。Foundation は各分岐の既存リンクで足りる。
-fn compile_apple_per_app_language() {
-    compile_objc("apple/fandhe_apple_per_app_language.m", &["Foundation"]);
 }
 
 /// `apple/fandhe_apple_network_status.m` を `cc` でコンパイルし Network をリンクする
@@ -848,18 +817,6 @@ fn compile_macos_launch_at_login() {
     );
 }
 
-/// `macos/fandhe_macos_in_app_review.m` を `cc` でコンパイルする（Issue #563）。**macOS 分岐のみ**
-/// から呼ばれる（`src/device/macos_in_app_review.rs` が使う）。StoreKit を追加でリンクする。
-fn compile_macos_in_app_review() {
-    compile_objc("macos/fandhe_macos_in_app_review.m", &["StoreKit"]);
-}
-
-/// `ios/fandhe_ios_in_app_review.m` を `cc` でコンパイルする（Issue #564）。**iOS 分岐のみ**
-/// から呼ばれる（`src/device/ios_in_app_review.rs` が使う）。StoreKit を追加でリンクする。
-fn compile_ios_in_app_review() {
-    compile_objc("ios/fandhe_ios_in_app_review.m", &["StoreKit", "UIKit"]);
-}
-
 /// `ios/fandhe_ios_file_preview.m` を `cc` でコンパイルし QuickLook をリンクする（Issue #919）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_file_preview.rs` が使う）。
 fn compile_ios_file_preview() {
@@ -886,15 +843,6 @@ fn compile_ios_capture_protection() {
 fn compile_macos_local_fonts() {
     compile_objc(
         "macos/fandhe_macos_local_fonts.m",
-        &["AppKit", "Foundation"],
-    );
-}
-
-/// `macos/fandhe_macos_spell_check.m` を `cc` でコンパイルする（Issue #578）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_spell_check.rs` が使う）。
-fn compile_macos_spell_check() {
-    compile_objc(
-        "macos/fandhe_macos_spell_check.m",
         &["AppKit", "Foundation"],
     );
 }
@@ -951,12 +899,6 @@ fn compile_macos_bluetooth_classic() {
         "macos/fandhe_macos_bluetooth_classic.m",
         &["CoreBluetooth", "Foundation", "IOBluetooth"],
     );
-}
-
-/// `macos/fandhe_macos_serial_port.m` を `cc` でコンパイルし IOKit をリンクする（Issue #670）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_serial_port.rs` が使う）。
-fn compile_macos_serial_port() {
-    compile_objc("macos/fandhe_macos_serial_port.m", &["Foundation", "IOKit"]);
 }
 
 /// `macos/fandhe_macos_compose_mail_sms.m` を `cc` でコンパイルする（Issue #1384）。
@@ -1080,21 +1022,6 @@ fn compile_ios_display_refresh_hdr() {
     compile_objc("ios/fandhe_ios_display_refresh_hdr.m", &["UIKit"]);
 }
 
-/// `macos/fandhe_macos_user_idle.m` を `cc` でコンパイルする（Issue #631）。**macOS 分岐のみ**
-/// から呼ばれる（`src/device/macos_user_idle.rs` が使う）。CoreGraphics を追加でリンクする。
-fn compile_macos_user_idle() {
-    compile_objc(
-        "macos/fandhe_macos_user_idle.m",
-        &["CoreGraphics", "Foundation"],
-    );
-}
-
-/// `ios/fandhe_ios_spell_check.m` を `cc` でコンパイルする（Issue #579）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_spell_check.rs` が使う）。
-fn compile_ios_spell_check() {
-    compile_objc("ios/fandhe_ios_spell_check.m", &["Foundation", "UIKit"]);
-}
-
 /// `ios/fandhe_ios_music_library.m` を `cc` でコンパイルする（Issue #484）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_music_library.rs` が使う）。
 fn compile_ios_music_library() {
@@ -1114,15 +1041,6 @@ fn compile_ios_smart_home() {
 /// から呼ばれる（`src/device/ios_health_data.rs` が使う）。
 fn compile_ios_health_data() {
     compile_objc("ios/fandhe_ios_health_data.m", &["Foundation", "HealthKit"]);
-}
-
-/// `ios/fandhe_ios_screen_brightness.m` を `cc` でコンパイルする（Issue #634）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_screen_brightness.rs` が使う）。
-fn compile_ios_screen_brightness() {
-    compile_objc(
-        "ios/fandhe_ios_screen_brightness.m",
-        &["Foundation", "UIKit"],
-    );
 }
 
 /// `ios/fandhe_ios_fullscreen_immersive.m` を `cc` でコンパイルする（Issue #1313）。**iOS 分岐のみ**
@@ -1298,20 +1216,6 @@ fn compile_ios_activity_recognition() {
     );
 }
 
-/// `ios/fandhe_ios_uwb_ranging.m` を `cc` でコンパイルし NearbyInteraction をリンクする（Issue #654）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_uwb_ranging.rs` が使う）。
-fn compile_ios_uwb_ranging() {
-    compile_objc(
-        "ios/fandhe_ios_uwb_ranging.m",
-        &[
-            "Foundation",
-            "MultipeerConnectivity",
-            "NearbyInteraction",
-            "UIKit",
-        ],
-    );
-}
-
 /// `ios/fandhe_ios_camera_preview_stream.m` を `cc` でコンパイルする（Issue #813、macOS は #1066）。
 /// **iOS・macOS 双方**の分岐から呼ばれる（`src/device/ios_camera_preview_stream.rs` が使う）。
 fn compile_ios_camera_preview_stream() {
@@ -1380,7 +1284,6 @@ fn build_macos() {
     compile_apple_gamepad();
     compile_apple_photo_library();
     compile_apple_map_view();
-    compile_apple_geocoding_search();
     compile_apple_scanner_devices();
 
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）は iOS 分岐と
@@ -1427,16 +1330,12 @@ fn build_macos() {
     compile_apple_network_status();
     // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308）。iOS 分岐と共用する。
     compile_apple_accessibility_prefs();
-    // `apple/fandhe_apple_per_app_language.m`（Issue #1073）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
-    compile_apple_per_app_language();
     // `macos/fandhe_macos_background_task.m`（Issue #1043）は macOS 専用（doc 参照）。
     compile_macos_background_task();
     // `macos/fandhe_macos_url_scheme.m`（Issue #1215）も macOS 専用。
     compile_macos_url_scheme();
     // `macos/fandhe_macos_app_shortcuts.m`（Issue #424）も macOS 専用。
     compile_macos_app_shortcuts();
-    // `macos/fandhe_macos_user_idle.m`（Issue #631）も macOS 専用。
-    compile_macos_user_idle();
     // `macos/fandhe_macos_device_info.m`（Issue #1304）も macOS 専用。
     compile_macos_device_info();
     // `macos/fandhe_macos_display_refresh_hdr.m`（Issue #870）も macOS 専用。
@@ -1455,8 +1354,6 @@ fn build_macos() {
     compile_macos_app_progress_attention();
     // `macos/fandhe_macos_launch_at_login.m`（Issue #696）も macOS 専用。ServiceManagement をリンクする。
     compile_macos_launch_at_login();
-    // `macos/fandhe_macos_in_app_review.m`（Issue #563）も macOS 専用。StoreKit をリンクする。
-    compile_macos_in_app_review();
     // `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384）も macOS 専用。
     compile_macos_compose_mail_sms();
     // `macos/fandhe_macos_external_app_launch.m`（Issue #861）も macOS 専用。
@@ -1497,8 +1394,6 @@ fn build_macos() {
     compile_apple_now_playing();
     // `macos/fandhe_macos_local_fonts.m`（Issue #1376）も macOS 専用。
     compile_macos_local_fonts();
-    // `macos/fandhe_macos_spell_check.m`（Issue #578）も macOS 専用。
-    compile_macos_spell_check();
     // `macos/fandhe_macos_file_watch.m`（Issue #1410）も macOS 専用。CoreServices を使う。
     compile_macos_file_watch();
     // `macos/fandhe_macos_sleep_lock_events.m`（Issue #810）も macOS 専用。
@@ -1523,8 +1418,6 @@ fn build_macos() {
     compile_macos_radio_control();
     // `macos/fandhe_macos_bluetooth_classic.m`（Issue #659）も macOS 専用。IOBluetooth を使う。
     compile_macos_bluetooth_classic();
-    // `macos/fandhe_macos_serial_port.m`（Issue #670）も macOS 専用。IOKit を使う。
-    compile_macos_serial_port();
     compile_macos_pen_stylus();
     // `macos/fandhe_macos_managed_app_config.m`（Issue #944）も macOS 専用。CoreFoundation を使う。
     compile_macos_managed_app_config();

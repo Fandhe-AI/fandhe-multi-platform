@@ -286,10 +286,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device::translation::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::translation::reset_pending_tracking();
-    // Issue #691: 住所の座標変換の処理済み世代も破棄する（理由は translation と同じ。
-    // `device::geocoding_search::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::geocoding_search::reset_pending_tracking();
     // Issue #981: 機器からの取り込みの処理済み世代も破棄する（理由は geocoding_search と同じ。
     // `device::scanner_devices::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -304,10 +300,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Issue #1045: Android の NFC 橋渡し側 slot も破棄する（`android_nfc` の doc 参照）。
     #[cfg(feature = "device")]
     crate::device::android_nfc::reset_pending_tracking();
-    // Issue #677: 端末・アプリの真正性証明の処理済み世代も破棄する（理由は translation と同じ。
-    // `device::app_attest::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::app_attest::reset_pending_tracking();
     // Issue #740: 付属機器のペアリングの保留中の要求も破棄する（理由は translation と同じ。
     // `device::companion_device::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -316,10 +308,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device::in_app_browser::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::in_app_browser::reset_pending_tracking();
-    // Issue #578: スペルチェックの処理済み世代も破棄する（理由は translation と同じ。
-    // `device::spell_check::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::spell_check::reset_pending_tracking();
     // Issue #560: OS の検索への登録の処理済み世代も破棄する（理由は translation と同じ。
     // `device::spotlight_index::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
