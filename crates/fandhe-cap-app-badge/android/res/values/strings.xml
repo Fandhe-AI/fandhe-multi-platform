@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- アプリアイコンのバッジ（Issue #1362）用チャンネル名と通知本文。機能 crate 側の資源で、アプリの strings.xml には置かない。 -->
+<resources>
+    <string name="app_badge_channel_name">アイコンのバッジ</string>
+    <string name="app_badge_notification_text">アイコンのバッジ用の通知です。</string>
+</resources>

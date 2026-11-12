@@ -23,8 +23,6 @@ pub mod activity_recognition;
 pub mod alarm;
 /// Phase 11（端末機能の拡充ループ、親 #132、Issue #677）: 端末・アプリの真正性証明（Android の Key Attestation を 1 回取得する）。
 pub mod app_attest;
-/// Phase 11（端末機能の拡充ループ、親 #1141、Issue #1360）: アプリアイコンのバッジ（Windows はタスクバーのオーバーレイ数字）。
-pub mod app_badge;
 /// Phase 11 の拡充ループ（親 #178、Issue #893）: アプリの前面・背面・凍結の通知。
 pub mod app_lifecycle;
 /// Phase 11 の拡充ループ（親 #174、Issue #860）: Dock・タスクバーの進捗表示と注意喚起。

@@ -99,7 +99,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "app_badge_set" => fandhe_core::screens::app_badge_set::current_screen,
-    fandhe_egui_proxy::device::app_badge::app_badge_set_effect,
+    fandhe_cap_app_badge::app_badge_set_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "app_progress_attention_show" => fandhe_core::screens::app_progress_attention_show::current_screen,

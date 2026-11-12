@@ -14,8 +14,8 @@ import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.Lifecycle;
 
-// アプリアイコンのバッジ画面（Issue #1362、親 #1141）の Android 実装ヘルパー。MainActivity から
-// 生成・委譲される（Rust の `device/android_app_badge.rs` が `MainActivity.requestAppBadge` を
+// アプリアイコンのバッジ画面（Issue #1362、親 #1141）の Android 実装ヘルパー。`AppBadgeLifecycle` から
+// 生成・委譲される（Rust の `fandhe-cap-app-badge/src/android.rs` が `static メソッド set(Activity, long, int)` を
 // JNI で呼び、結果を `nativeOnAppBadgeResult` で受ける）。
 //
 // Android にバッジ専用 API は無いため、`setNumber(n)` を付けた無音の通知を固定 tag/ID で 1 件出す。
@@ -43,18 +43,43 @@ final class AppBadgeHelper {
     private final ComponentActivity activity;
     private final RequestTracker request = new RequestTracker();
     private int pendingValue; // 許可ダイアログ中の値（UI スレッド専用）。
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity の
-    // フィールド初期化子から本クラスを生成してここで登録する。
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`AppBadgeLifecycle`
+    // （`FeatureLifecycleProvider`）が `Activity.onCreate` の中で `attach` を呼び、ここで登録する。
     private final ActivityResultLauncher<String> permissionLauncher;
 
-    AppBadgeHelper(ComponentActivity activity) {
+    // Activity ごとの helper。再生成後は新しい Activity に新しい helper が付き、旧 Activity の分は破棄時に外す。
+    private static final java.util.Map<android.app.Activity, AppBadgeHelper> HELPERS =
+            new java.util.WeakHashMap<>();
+
+    static synchronized void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new AppBadgeHelper(activity));
+    }
+
+    static synchronized void detach(android.app.Activity activity) {
+        HELPERS.remove(activity);
+    }
+
+    // JNI スレッドから呼ばれる入口。helper が無い（想定外の Activity）ときは失敗で確定し、結果が来ないまま待たせない。
+    static void set(android.app.Activity activity, long id, int value) {
+        AppBadgeHelper helper;
+        synchronized (AppBadgeHelper.class) {
+            helper = HELPERS.get(activity);
+        }
+        if (helper == null) {
+            nativeOnAppBadgeResult(id, value, RESULT_FAILED);
+            return;
+        }
+        helper.set(id, value);
+    }
+
+    private AppBadgeHelper(ComponentActivity activity) {
         this.activity = activity;
         this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:AppBadgeHelper:1", activity,
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
     }
 
-    // JNI スレッドから呼ばれる。
-    void set(long id, int value) {
+    // JNI スレッドから呼ばれる（static 入口 `set(Activity, long, int)` 経由）。
+    private void set(long id, int value) {
         activity.runOnUiThread(() -> start(id, value));
     }
 

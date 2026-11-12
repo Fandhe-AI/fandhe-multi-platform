@@ -1,8 +1,8 @@
 //! Windows 向けバッジ実装（Issue #1360、#29）。`ITaskbarList3::SetOverlayIcon` でメインウィンドウの
 //! タスクバーボタンに件数（1〜9999）を数字入りの 16x16 アイコンとして重ねる（0 は外す）。
 //! タスクバー進捗（`SetProgressValue`）は使わず、`set` は進捗を触らない（併用しない）。
-//! HWND は `fandhe_platform_windows::window()` と共通。`device/app_badge.rs` の Windows 経路から
-//! 呼ばれ、契約は `fandhe_device::app_badge`。
+//! HWND は `fandhe_platform_windows::window()` と共通。`fandhe-cap-app-badge/src/driver.rs` の Windows 経路から
+//! 呼ばれ、契約は `fandhe_cap_app_badge`。
 //!
 //! 入力の検証・HWND の有無の判定・アイコンのピクセル生成は純関数（[`plan`]・[`render`]・
 //! [`description`]）にまとめ、ホストでもテストできるようモジュールは `cfg(any(windows, test))`。
@@ -18,8 +18,8 @@
 //! - `HRESULT` と `CreateIcon` の失敗はすべて `Internal("app_badge set")` に写す。こちらから
 //!   `CoInitializeEx` はしない（`CO_E_NOTINITIALIZED` も失敗として返す）
 
-use fandhe_device::app_badge::BadgeValue;
-use fandhe_device::DeviceError;
+use crate::contract::BadgeValue;
+use crate::error::AppBadgeError;
 
 /// アイコンの一辺（px）。
 const SIZE: usize = 16;
@@ -34,9 +34,9 @@ pub(crate) enum Step {
 }
 
 /// HWND 判定と操作の決定。値の範囲検証は `BadgeValue::new` が OS 型へ変換する前に済ませている（契約表 5）。
-pub(crate) fn plan(value: BadgeValue, has_window: bool) -> Result<Step, DeviceError> {
+pub(crate) fn plan(value: BadgeValue, has_window: bool) -> Result<Step, AppBadgeError> {
     if !has_window {
-        return Err(DeviceError::Internal("app_badge window"));
+        return Err(AppBadgeError::Internal);
     }
     Ok(if value.is_clear() {
         Step::Clear
@@ -121,12 +121,12 @@ pub(crate) fn description(count: u32) -> String {
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
 mod com {
-    use windows::core::{HSTRING, PCWSTR};
-    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
+    use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
     use windows::Win32::UI::Shell::{ITaskbarList3, TaskbarList};
     use windows::Win32::UI::WindowsAndMessaging::{CreateIcon, DestroyIcon, HICON};
+    use windows::core::{HSTRING, PCWSTR};
 
-    use super::{description, render, Step, SIZE};
+    use super::{SIZE, Step, description, render};
 
     /// `CreateIcon` で作った `HICON` の所有者。`Drop` で必ず解放する（契約表 9）。
     struct OwnedIcon(HICON);
@@ -182,24 +182,21 @@ mod com {
 struct WindowsAppBadge;
 
 #[cfg(target_os = "windows")]
-impl fandhe_device::app_badge::AppBadge for WindowsAppBadge {
-    fn set(
-        &self,
-        value: BadgeValue,
-    ) -> Result<fandhe_device::app_badge::BadgeOutcome, DeviceError> {
+impl crate::contract::AppBadge for WindowsAppBadge {
+    fn set(&self, value: BadgeValue) -> Result<crate::contract::BadgeOutcome, AppBadgeError> {
         let hwnd = fandhe_platform_windows::window();
         let step = plan(value, hwnd.is_some())?;
         let Some(hwnd) = hwnd else {
-            return Err(DeviceError::Internal("app_badge window"));
+            return Err(AppBadgeError::Internal);
         };
-        com::apply(hwnd, step).map_err(|_| DeviceError::Internal("app_badge set"))?;
-        Ok(fandhe_device::app_badge::BadgeOutcome::Submitted)
+        com::apply(hwnd, step).map_err(|_| AppBadgeError::Internal)?;
+        Ok(crate::contract::BadgeOutcome::Submitted)
     }
 }
 
-/// Windows の `AppBadge` 実装を返す（`device/app_badge.rs` の dispatch から呼ばれる）。
+/// Windows の `AppBadge` 実装を返す（`fandhe-cap-app-badge/src/driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "windows")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::app_badge::AppBadge> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::AppBadge> {
     Box::new(WindowsAppBadge)
 }
 
@@ -217,10 +214,7 @@ mod tests {
         assert_eq!(plan(v(1), true).unwrap(), Step::Overlay(1));
         assert_eq!(plan(v(101), true).unwrap(), Step::Overlay(101));
         assert_eq!(plan(v(9999), true).unwrap(), Step::Overlay(9999));
-        assert!(matches!(
-            plan(v(5), false),
-            Err(DeviceError::Internal("app_badge window"))
-        ));
+        assert!(matches!(plan(v(5), false), Err(AppBadgeError::Internal)));
     }
 
     #[test]

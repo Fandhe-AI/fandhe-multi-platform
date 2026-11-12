@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ型サンプル「アプリ内レビュー依頼」（Issue #563）の effect ドライバ。
 //! `fandhe_core::screens::in_app_review`（端末依存ゼロ）の要求を観測し、OS のレビュー依頼を 1 回
 //! 呼んで結果を `CompletionSender` 経由で返す（`screens/registry.rs` の `effect` 区画から呼ばれる、
-//! `device/app_badge.rs` の同期経路と同型）。契約と守る範囲は `fandhe_device::in_app_review` の
+//! `fandhe-cap-app-badge/src/driver.rs` の同期経路と同型）。契約と守る範囲は `fandhe_device::in_app_review` の
 //! モジュール doc を参照。
 //!
 //! review API は completion を持たない同期呼び出しなので全 OS とも UI スレッドで同期に呼び、

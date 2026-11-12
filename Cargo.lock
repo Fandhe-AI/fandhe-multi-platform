@@ -1075,6 +1075,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-app-badge"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-audio-devices"
 version = "0.2.0"
 dependencies = [
@@ -1328,6 +1342,7 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "fandhe-cap-accessibility-prefs",
+ "fandhe-cap-app-badge",
  "fandhe-cap-audio-devices",
  "fandhe-cap-camera-capture",
  "fandhe-cap-device-identifier",
@@ -1436,6 +1451,7 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "fandhe-cap-accessibility-prefs",
+ "fandhe-cap-app-badge",
  "fandhe-cap-audio-devices",
  "fandhe-cap-file-watch",
  "fandhe-cap-http-get",

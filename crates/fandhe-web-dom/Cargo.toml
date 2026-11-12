@@ -42,6 +42,8 @@ fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch" }
 fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm" }
 # media-transcode の契約（SAMPLE_RATE・TRANSCODE_DEADLINE・検査）。Web 実装本体は本クレートに残る（video_transcode が pick_codec を共用するため）。
 fandhe-cap-media-transcode = { path = "../fandhe-cap-media-transcode" }
+# app-badge の契約（BadgeValue）。Web 実装本体は本クレートに残る。
+fandhe-cap-app-badge = { path = "../fandhe-cap-app-badge" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。
 fandhe-platform-web = { path = "../fandhe-platform-web" }
 

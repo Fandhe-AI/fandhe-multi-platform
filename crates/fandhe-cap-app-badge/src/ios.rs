@@ -1,8 +1,8 @@
 //! iOS 向けバッジ設定実装（Issue #1361）。`UNUserNotificationCenter.setBadgeCount`
 //! （`ios/fandhe_ios_app_badge.m`、`build.rs` が iOS 分岐の feature `device` 有効時にコンパイル）
-//! を `unsafe extern "C"` 1 関数で呼ぶ。`device/app_badge.rs` の iOS 経路（`begin_set`）から
+//! を `unsafe extern "C"` 1 関数で呼ぶ。`fandhe-cap-app-badge/src/driver.rs` の iOS 経路（`begin_set`）から
 //! 呼ばれ、dispatch・共通コア画面は #1360 で確定済みで触らない。契約は
-//! `fandhe_device::app_badge` を参照。
+//! `fandhe_cap_app_badge` を参照。
 //!
 //! 結果は `.m` の completion から [`fandhe_rust_app_badge_outcome`] が `app_badge::bridge` へ
 //! 置く（pull 型）。結果コード表の SSOT は [`outcome_from_code`]。
@@ -15,10 +15,10 @@
 //!
 //! `NSError` の内容はログ・画面へ出さない（security.md A09）。
 
-use fandhe_device::app_badge::BadgeOutcome;
+use crate::contract::BadgeOutcome;
 #[cfg(target_os = "ios")]
-use fandhe_device::app_badge::BadgeValue;
-use fandhe_device::DeviceError;
+use crate::contract::BadgeValue;
+use crate::error::AppBadgeError;
 
 // `ios/fandhe_ios_app_badge.m` が定義する C ABI。契約は `.m` 冒頭コメントに集約する。
 #[cfg(target_os = "ios")]
@@ -30,14 +30,14 @@ unsafe extern "C" {
 /// 設定を依頼する。`Ok` は受理済みで結果は後から `bridge::deliver` で届く。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-pub(crate) fn begin_set(request_id: u64, value: BadgeValue) -> Result<(), DeviceError> {
+pub(crate) fn begin_set(request_id: u64, value: BadgeValue) -> Result<(), AppBadgeError> {
     // SAFETY: 引数は値渡しの整数のみでポインタを経由しない。`.m` 側は main queue へ渡して
     // 即 return し、結果は `fandhe_rust_app_badge_outcome` でちょうど 1 回届く。
     let code = unsafe { fandhe_ios_app_badge_set(request_id, value.get()) };
     if code == 0 {
         Ok(())
     } else {
-        Err(DeviceError::Internal("app_badge set"))
+        Err(AppBadgeError::Internal)
     }
 }
 
@@ -45,21 +45,21 @@ pub(crate) fn begin_set(request_id: u64, value: BadgeValue) -> Result<(), Device
 /// （入力が無いと egui が描画せず画面が処理中のまま止まるため、契約表 4）。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_app_badge_outcome(request_id: u64, value: u32, code: i32) {
-    super::app_badge::bridge::deliver(request_id, value, outcome_from_code(code));
-    crate::ios::request_repaint();
+    crate::driver::bridge::deliver(request_id, value, outcome_from_code(code));
+    fandhe_runtime::request_repaint();
 }
 
 /// `.m` の結果コードを契約の結果へ写す（SSOT）。成功になるのは 0 と 1（キャンセル）のみ。
 #[cfg_attr(not(any(target_os = "ios", test)), allow(dead_code))]
-pub(crate) fn outcome_from_code(code: i32) -> Result<BadgeOutcome, DeviceError> {
+pub(crate) fn outcome_from_code(code: i32) -> Result<BadgeOutcome, AppBadgeError> {
     match code {
         0 => Ok(BadgeOutcome::Submitted),
         1 => Ok(BadgeOutcome::Cancelled),
-        2 => Err(DeviceError::PermissionDenied("app_badge")),
-        5 => Err(DeviceError::Unsupported("app_badge")),
-        _ => Err(DeviceError::Internal("app_badge set")),
+        2 => Err(AppBadgeError::PermissionDenied),
+        5 => Err(AppBadgeError::Unsupported),
+        _ => Err(AppBadgeError::Internal),
     }
 }
 
@@ -73,17 +73,14 @@ mod tests {
         assert!(matches!(outcome_from_code(1), Ok(BadgeOutcome::Cancelled)));
         assert!(matches!(
             outcome_from_code(2),
-            Err(DeviceError::PermissionDenied("app_badge"))
+            Err(AppBadgeError::PermissionDenied)
         ));
         assert!(matches!(
             outcome_from_code(5),
-            Err(DeviceError::Unsupported("app_badge"))
+            Err(AppBadgeError::Unsupported)
         ));
         for c in [3, 4, 6, -1, i32::MAX] {
-            assert!(matches!(
-                outcome_from_code(c),
-                Err(DeviceError::Internal("app_badge set"))
-            ));
+            assert!(matches!(outcome_from_code(c), Err(AppBadgeError::Internal)));
         }
     }
 }

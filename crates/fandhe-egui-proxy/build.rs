@@ -857,12 +857,6 @@ fn compile_macos_app_progress_attention() {
     compile_objc("macos/fandhe_macos_app_progress_attention.m", &["AppKit"]);
 }
 
-/// `macos/fandhe_macos_app_badge.m` を `cc` でコンパイルする（Issue #1360）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_app_badge.rs` が使う）。
-fn compile_macos_app_badge() {
-    compile_objc("macos/fandhe_macos_app_badge.m", &["AppKit"]);
-}
-
 /// `macos/fandhe_macos_system_sound.m` を `cc` でコンパイルする（Issue #939）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_system_sound.rs` が使う）。
 fn compile_macos_system_sound() {
@@ -1527,8 +1521,6 @@ fn build_macos() {
     compile_macos_safe_area_insets();
     // `macos/fandhe_macos_window_management.m`（Issue #636）も macOS 専用。
     compile_macos_window_management();
-    // `macos/fandhe_macos_app_badge.m`（Issue #1360）も macOS 専用。
-    compile_macos_app_badge();
     // `macos/fandhe_macos_system_sound.m`（Issue #939）も macOS 専用。
     compile_macos_system_sound();
     // `macos/fandhe_macos_wallpaper.m`（Issue #970）も macOS 専用。

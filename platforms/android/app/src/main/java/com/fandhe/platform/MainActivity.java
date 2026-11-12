@@ -833,14 +833,6 @@ public class MainActivity extends GameActivity {
         callUiHelper.end(id);
     }
 
-    // アプリアイコンのバッジ（Issue #1362）。実装は `AppBadgeHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_app_badge.rs` が JNI で呼ぶ。
-    private final AppBadgeHelper appBadgeHelper = new AppBadgeHelper(this);
-
-    void requestAppBadge(long requestId, int value) {
-        appBadgeHelper.set(requestId, value);
-    }
-
     // ライブアクティビティ（Issue #296）。実装は `LiveActivityHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_live_activity.rs` が JNI で呼ぶ。
     private final LiveActivityHelper liveActivityHelper = new LiveActivityHelper(this);

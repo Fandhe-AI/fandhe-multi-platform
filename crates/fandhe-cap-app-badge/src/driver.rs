@@ -1,8 +1,8 @@
 //! Phase 11（親 #1141）型サンプル「バッジの設定」（Issue #1360）の effect ドライバ。
 //! `fandhe_core::screens::app_badge_set`（端末依存ゼロ）の要求を観測し、値を
-//! `fandhe_device::app_badge::BadgeValue` で検査してから OS へ渡し、結果を `CompletionSender`
+//! `crate::contract::BadgeValue` で検査してから OS へ渡し、結果を `CompletionSender`
 //! 経由で返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約、`device/photo_save.rs`
-//! と同型）。契約と守る範囲は `fandhe_device::app_badge` のモジュール doc を参照。
+//! と同型）。契約と守る範囲は `fandhe_cap_app_badge` のモジュール doc を参照。
 //!
 //! - iOS（#1361）/ Android（#1362）: コールバック型のため pull 型 [`bridge`]（`RequestSlot`
 //!   の facade）で毎フレーム `drive_callback` が結果を反映する。各 OS モジュールが実装済み。
@@ -11,27 +11,27 @@
 //! - macOS / Windows / それ以外: [`AppBadge`] を UI スレッドで同期に呼ぶ。Linux は
 //!   `UnsupportedAppBadge` で「非対応」を表示する
 
+use crate::contract::{BadgeOutcome, BadgeValue};
+use crate::error::AppBadgeError;
 use fandhe_core::screens::app_badge_set::{
-    finish_set, mark_setting, take_request, AppBadgeSetState, CoreOutcome, OUT_OF_RANGE_MESSAGE,
+    AppBadgeSetState, CoreOutcome, OUT_OF_RANGE_MESSAGE, finish_set, mark_setting, take_request,
 };
-use fandhe_device::app_badge::{BadgeOutcome, BadgeValue};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
-/// `DeviceError` を画面用の結果へ写像する。内部構造は出さず固定文言だけにする
+/// `AppBadgeError` を画面用の結果へ写像する。内部構造は出さず固定文言だけにする
 /// （security.md A09）。`value` は 0 の成功を「消去」の文言に分けるために使う。
 fn to_outcome(
     value: u32,
-    result: Result<BadgeOutcome, DeviceError>,
+    result: Result<BadgeOutcome, AppBadgeError>,
 ) -> Result<CoreOutcome, String> {
     match result {
         Ok(BadgeOutcome::Submitted) if value == 0 => Ok(CoreOutcome::Cleared),
         Ok(BadgeOutcome::Submitted) => Ok(CoreOutcome::Submitted),
         Ok(BadgeOutcome::Cancelled) => Ok(CoreOutcome::Cancelled),
-        Err(DeviceError::PermissionDenied(_)) => Ok(CoreOutcome::Denied),
-        Err(DeviceError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
-        Err(DeviceError::InvalidInput(_)) => Err(OUT_OF_RANGE_MESSAGE.to_string()),
+        Err(AppBadgeError::PermissionDenied) => Ok(CoreOutcome::Denied),
+        Err(AppBadgeError::Unsupported) => Ok(CoreOutcome::Unsupported),
+        Err(AppBadgeError::InvalidInput) => Err(OUT_OF_RANGE_MESSAGE.to_string()),
         Err(_) => Err("OS のバッジ設定に失敗しました".to_string()),
     }
 }
@@ -40,11 +40,11 @@ fn to_outcome(
 /// notification とは共有しない本機能専用の [`SLOT`](bridge::SLOT)。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub(crate) mod bridge {
+    use crate::contract::BadgeOutcome;
+    use crate::error::AppBadgeError;
     use fandhe_core::screens::app_badge_set::CoreOutcome;
-    use fandhe_device::app_badge::BadgeOutcome;
-    use fandhe_device::DeviceError;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) type Outcome = Result<CoreOutcome, String>;
 
@@ -60,7 +60,7 @@ pub(crate) mod bridge {
     pub(crate) fn deliver(
         request_id: u64,
         value: u32,
-        result: Result<BadgeOutcome, DeviceError>,
+        result: Result<BadgeOutcome, AppBadgeError>,
     ) -> bool {
         SLOT.deliver(request_id, super::to_outcome(value, result))
     }
@@ -75,20 +75,20 @@ pub(crate) mod bridge {
 
 /// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::reset();
 }
 
 /// OS へ設定を依頼する。`Ok` は受理済みで結果は後から [`bridge::deliver`] で届く。
 /// `Err` は依頼自体の失敗（呼び出し元がその場で `deliver` する）。
 #[cfg(target_os = "ios")]
-fn begin_set(request_id: u64, value: BadgeValue) -> Result<(), DeviceError> {
-    super::ios_app_badge::begin_set(request_id, value)
+fn begin_set(request_id: u64, value: BadgeValue) -> Result<(), AppBadgeError> {
+    crate::ios::begin_set(request_id, value)
 }
 
 #[cfg(target_os = "android")]
-fn begin_set(request_id: u64, value: BadgeValue) -> Result<(), DeviceError> {
-    super::android_app_badge::begin_set(request_id, value)
+fn begin_set(request_id: u64, value: BadgeValue) -> Result<(), AppBadgeError> {
+    crate::android::begin_set(request_id, value)
 }
 
 /// iOS / Android 版の effect ドライバ本体。
@@ -111,7 +111,7 @@ fn drive_callback(state: &AppBadgeSetState, sender: &CompletionSender<AppBadgeSe
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -138,7 +138,7 @@ pub fn app_badge_set_effect(state: &AppBadgeSetState, sender: &CompletionSender<
 fn drive(
     state: &AppBadgeSetState,
     sender: &CompletionSender<AppBadgeSetState>,
-    badge: &dyn fandhe_device::app_badge::AppBadge,
+    badge: &dyn crate::contract::AppBadge,
 ) {
     let Some(request) = take_request(state) else {
         return;
@@ -155,13 +155,13 @@ fn drive(
 
 /// OS 別の [`AppBadge`] 実装を返す（macOS / Windows / それ以外）。
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-fn platform_app_badge() -> Box<dyn fandhe_device::app_badge::AppBadge> {
+fn platform_app_badge() -> Box<dyn crate::contract::AppBadge> {
     #[cfg(target_os = "macos")]
-    return super::macos_app_badge::implementation();
+    return crate::macos::implementation();
     #[cfg(target_os = "windows")]
-    return super::windows_app_badge::implementation();
+    return crate::windows::implementation();
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    return Box::new(fandhe_device::app_badge::UnsupportedAppBadge);
+    return Box::new(crate::contract::UnsupportedAppBadge);
 }
 
 /// `registry.rs` から配線される effect ドライバ（macOS・Windows・Linux）。
@@ -178,6 +178,13 @@ pub fn app_badge_set_effect(state: &AppBadgeSetState, sender: &CompletionSender<
 
 #[cfg(test)]
 mod tests {
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     use super::*;
 
     #[test]
@@ -195,45 +202,45 @@ mod tests {
             Ok(CoreOutcome::Cancelled)
         );
         assert_eq!(
-            to_outcome(3, Err(DeviceError::PermissionDenied("app_badge"))),
+            to_outcome(3, Err(AppBadgeError::PermissionDenied)),
             Ok(CoreOutcome::Denied)
         );
         assert_eq!(
-            to_outcome(0, Err(DeviceError::PermissionDenied("app_badge"))),
+            to_outcome(0, Err(AppBadgeError::PermissionDenied)),
             Ok(CoreOutcome::Denied)
         );
         assert_eq!(
-            to_outcome(3, Err(DeviceError::Unsupported("app_badge"))),
+            to_outcome(3, Err(AppBadgeError::Unsupported)),
             Ok(CoreOutcome::Unsupported)
         );
         assert_eq!(
-            to_outcome(30000, Err(DeviceError::InvalidInput("app_badge value"))),
+            to_outcome(30000, Err(AppBadgeError::InvalidInput)),
             Err(OUT_OF_RANGE_MESSAGE.to_string())
         );
-        assert!(to_outcome(3, Err(DeviceError::Internal("app_badge set"))).is_err());
+        assert!(to_outcome(3, Err(AppBadgeError::Internal)).is_err());
     }
 
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     mod sync_path {
         use super::*;
-        use fandhe_core::screens::app_badge_set::{clear, set, BadgePhase};
-        use fandhe_device::app_badge::{AppBadge, UnsupportedAppBadge};
+        use crate::contract::{AppBadge, UnsupportedAppBadge};
+        use fandhe_core::screens::app_badge_set::{BadgePhase, clear, set};
         use std::sync::atomic::{AtomicU32, Ordering};
 
         /// 呼び出し回数を数え、決めた結果を返す偽実装。
         struct Fake {
             calls: AtomicU32,
-            result: fn() -> Result<BadgeOutcome, DeviceError>,
+            result: fn() -> Result<BadgeOutcome, AppBadgeError>,
         }
 
         impl AppBadge for Fake {
-            fn set(&self, _v: BadgeValue) -> Result<BadgeOutcome, DeviceError> {
+            fn set(&self, _v: BadgeValue) -> Result<BadgeOutcome, AppBadgeError> {
                 self.calls.fetch_add(1, Ordering::SeqCst);
                 (self.result)()
             }
         }
 
-        fn fake(result: fn() -> Result<BadgeOutcome, DeviceError>) -> Fake {
+        fn fake(result: fn() -> Result<BadgeOutcome, AppBadgeError>) -> Fake {
             Fake {
                 calls: AtomicU32::new(0),
                 result,
@@ -252,7 +259,7 @@ mod tests {
                 set(&mut s);
             }
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = crate::app::egui_sender(tx, egui::Context::default());
+            let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
             drive(&s, &sender, badge);
             while let Ok(apply) = rx.try_recv() {
                 apply(&mut s);
@@ -265,7 +272,7 @@ mod tests {
             let f = fake(|| Ok(BadgeOutcome::Submitted));
             let s = AppBadgeSetState::default();
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = crate::app::egui_sender(tx, egui::Context::default());
+            let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
             drive(&s, &sender, &f);
             assert!(rx.try_recv().is_err());
             assert_eq!(f.calls.load(Ordering::SeqCst), 0);
@@ -300,7 +307,7 @@ mod tests {
 
         #[test]
         fn denied_and_unsupported_go_to_error() {
-            let f = fake(|| Err(DeviceError::PermissionDenied("app_badge")));
+            let f = fake(|| Err(AppBadgeError::PermissionDenied));
             let s = run("5", false, &f);
             assert_eq!(s.error, fandhe_core::screens::app_badge_set::DENIED_STATUS);
             assert!(s.status.is_empty());
@@ -347,11 +354,7 @@ mod bridge_tests {
         let id = bridge::begin();
         assert!(!bridge::deliver(id + 1000, 1, Ok(BadgeOutcome::Submitted)));
         assert!(bridge::SLOT.snapshot().is_some_and(|(_, r)| r.is_none()));
-        assert!(bridge::deliver(
-            id,
-            1,
-            Err(DeviceError::PermissionDenied("app_badge"))
-        ));
+        assert!(bridge::deliver(id, 1, Err(AppBadgeError::PermissionDenied)));
         assert!(!bridge::deliver(id, 1, Ok(BadgeOutcome::Submitted)));
         let (_, ready) = bridge::SLOT.snapshot().expect("begin 済み");
         assert_eq!(ready, Some(Ok(CoreOutcome::Denied)));

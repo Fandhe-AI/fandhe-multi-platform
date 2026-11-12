@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #1141、Issue #1360）: アプリアイコンのバッジ数（Windows はタスクバー
-//! 進捗 %）を固定値に設定し、0 で消す契約。`fandhe-egui-proxy` の `device/app_badge.rs` が
+//! 進捗 %）を固定値に設定し、0 で消す契約。`fandhe-cap-app-badge`（`src/driver.rs`） が
 //! 「設定する」「消す」ボタン押下時に [`AppBadge::set`] を呼ぶ。macOS（`NSDockTile.badgeLabel`）と
 //! Windows（`ITaskbarList3`）が実装し、iOS（#1361）・Android（#1362）は後続、Web（#1363）は
 //! `fandhe-web-dom` 側で Badging API を使い本トレイトを経由しない。
@@ -34,7 +34,7 @@
 //! バッジが残るか消えるか（終了時に消す処理は持たない）。並行経路は無い（モバイルは
 //! `RequestSlot` 1 本、デスクトップは UI スレッドで同期、Web は世代）。
 
-use crate::DeviceError;
+use crate::error::AppBadgeError;
 
 /// バッジ数の上限。
 pub const MAX_BADGE: u32 = 9999;
@@ -45,9 +45,9 @@ pub struct BadgeValue(u32);
 
 impl BadgeValue {
     /// 上限を超える値は `InvalidInput`。OS 型へ変換する前の唯一の検証点。
-    pub fn new(value: u32) -> Result<Self, DeviceError> {
+    pub fn new(value: u32) -> Result<Self, AppBadgeError> {
         if value > MAX_BADGE {
-            return Err(DeviceError::InvalidInput("app_badge value"));
+            return Err(AppBadgeError::InvalidInput);
         }
         Ok(Self(value))
     }
@@ -76,7 +76,7 @@ pub enum BadgeOutcome {
 /// （モバイルは非同期の橋渡し側で扱うため本トレイトを経由しない）。
 pub trait AppBadge: Send + Sync {
     /// 値を設定する（0 は消去）。契約は本モジュール doc。
-    fn set(&self, value: BadgeValue) -> Result<BadgeOutcome, DeviceError>;
+    fn set(&self, value: BadgeValue) -> Result<BadgeOutcome, AppBadgeError>;
 }
 
 /// 非対応環境（Linux 等）用。常に `Unsupported`。
@@ -84,8 +84,8 @@ pub trait AppBadge: Send + Sync {
 pub struct UnsupportedAppBadge;
 
 impl AppBadge for UnsupportedAppBadge {
-    fn set(&self, _value: BadgeValue) -> Result<BadgeOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("app_badge"))
+    fn set(&self, _value: BadgeValue) -> Result<BadgeOutcome, AppBadgeError> {
+        Err(AppBadgeError::Unsupported)
     }
 }
 
@@ -98,7 +98,7 @@ mod tests {
         assert!(BadgeValue::new(9999).is_ok());
         assert!(matches!(
             BadgeValue::new(10000),
-            Err(DeviceError::InvalidInput("app_badge value"))
+            Err(AppBadgeError::InvalidInput)
         ));
         assert!(BadgeValue::new(0).unwrap().is_clear());
         assert!(!BadgeValue::new(1).unwrap().is_clear());
@@ -109,7 +109,7 @@ mod tests {
         for v in [0, 5] {
             assert!(matches!(
                 UnsupportedAppBadge.set(BadgeValue::new(v).unwrap()),
-                Err(DeviceError::Unsupported("app_badge"))
+                Err(AppBadgeError::Unsupported)
             ));
         }
     }

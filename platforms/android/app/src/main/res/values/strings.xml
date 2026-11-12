@@ -6,9 +6,6 @@
     <!-- ローカル通知（Issue #1006）の通知チャンネル表示名（システム設定 > アプリ >
          通知 に出る名前）。切り離し時に削除する。 -->
     <string name="notification_channel_name">通知</string>
-    <!-- アプリアイコンのバッジ（Issue #1362）用チャンネル名と通知本文。切り離し時に削除する。 -->
-    <string name="app_badge_channel_name">アイコンのバッジ</string>
-    <string name="app_badge_notification_text">アイコンのバッジ用の通知です。</string>
     <string name="live_activity_channel_name">ライブアクティビティ</string>
     <string name="live_activity_notification_title">ライブアクティビティ</string>
     <string name="live_activity_notification_prefix">現在の値: </string>

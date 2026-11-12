@@ -232,9 +232,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Java 側に no-op スタブは置かない（`requestRadioControlSet` を経ないと native は呼ばれない）。
     #[cfg(feature = "device")]
     crate::device::android_radio_control::reset_pending_tracking();
-    // Issue #1360: `app_badge::bridge::SLOT` も同様に破棄する（`device::app_badge::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::app_badge::reset_pending_tracking();
     // Issue #1384: `compose_mail_sms::bridge::SLOT` も同様に破棄する（`device::compose_mail_sms::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::compose_mail_sms::reset_pending_tracking();
