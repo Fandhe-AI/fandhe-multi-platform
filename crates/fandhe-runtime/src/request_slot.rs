@@ -67,8 +67,16 @@ impl<O> RequestSlot<O> {
     /// 進行中（結果未着）の要求があれば `None`、無ければ確認と登録を同じロックで行い `request_id` を返す。
     /// 公開入口が `snapshot` → `begin` の 2 段で二重登録しないために使う。
     pub fn try_begin(&self) -> Option<u64> {
+        self.try_begin_unless(|_| false)
+    }
+
+    /// [`RequestSlot::try_begin`] に加え、結果が届いて未取得の要求の id が `keep` を満たすときも `None`
+    /// （その結果の持ち主がまだ取り出していないため、置き換えて落とさない）。判定と登録は同じロックで行う。
+    pub fn try_begin_unless(&self, keep: impl FnOnce(u64) -> bool) -> Option<u64> {
         let mut pending = self.lock();
-        if pending.as_ref().is_some_and(|p| p.ready.is_none()) {
+        if let Some(p) = pending.as_ref()
+            && (p.ready.is_none() || keep(p.request_id))
+        {
             return None;
         }
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
@@ -181,6 +189,14 @@ impl SlotOwner {
     /// 先行（公開入口・別の画面要求）が進行中なら `None`（置き換えない）。呼び出し側は画面へ「処理中」の失敗を返す。
     pub fn begin<O>(&self, slot: &RequestSlot<O>) -> Option<u64> {
         let request_id = slot.try_begin()?;
+        self.0.store(request_id, Ordering::Release);
+        Some(request_id)
+    }
+
+    /// [`SlotOwner::begin`] に加え、`others` のいずれかの持ち主の結果が届いて未取得のときも `None`（取り出す前に置き換えて
+    /// 落とさない。自分自身を含めれば、自分の未取得の結果も守れる）。画面と公開入口が 1 つの slot を共有し、片方が結果を取り出す方式（pull 型）の機能で使う。
+    pub fn begin_excluding<O>(&self, slot: &RequestSlot<O>, others: &[&SlotOwner]) -> Option<u64> {
+        let request_id = slot.try_begin_unless(|id| others.iter().any(|o| o.current() == id))?;
         self.0.store(request_id, Ordering::Release);
         Some(request_id)
     }
@@ -469,6 +485,25 @@ mod tests {
         let mine = OWNER.begin(&SLOT).expect("空き");
         assert_eq!(OWNER.current(), mine);
         assert_ne!(mine, public);
+        SLOT.reset();
+    }
+
+    #[test]
+    fn begin_excluding_keeps_other_owners_unconsumed_result() {
+        static SLOT: RequestSlot<u8> = RequestSlot::new();
+        static A: SlotOwner = SlotOwner::new();
+        static B: SlotOwner = SlotOwner::new();
+        let a = A.begin_excluding(&SLOT, &[&B]).expect("空き");
+        // 結果が届いても A が取り出すまで、B は置き換えられない。
+        assert!(SLOT.deliver(a, 7));
+        assert!(B.begin_excluding(&SLOT, &[&A]).is_none());
+        assert!(
+            SLOT.snapshot()
+                .is_some_and(|(id, r)| id == a && r == Some(7))
+        );
+        // 取り出して clear した後は B が登録できる。
+        SLOT.clear(a);
+        assert!(B.begin_excluding(&SLOT, &[&A]).is_some());
         SLOT.reset();
     }
 }

@@ -63,7 +63,7 @@ impl LanguageChoice {
     }
 }
 
-/// 誤り語 1 件の表示用データ（`fandhe_device::spell_check::SpellIssue` から effect 側が写す）。
+/// 誤り語 1 件の表示用データ（`fandhe_cap_spell_check::SpellIssue` から effect 側が写す）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpellIssueView {
     /// 入力文での開始位置（文字単位、0 始まり）。

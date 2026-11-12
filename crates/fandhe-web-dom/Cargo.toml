@@ -60,6 +60,8 @@ fandhe-cap-midi = { path = "../fandhe-cap-midi" }
 fandhe-cap-passkey-signin = { path = "../fandhe-cap-passkey-signin" }
 # screen-capture の契約（build_capture_result）。Web 実装本体は本クレートに残る。
 fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture" }
+# Issue #1190: シリアルポートの純関数・定数（`LineAssembler`・`SerialPortFailure`・`BAUD_RATE` など）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の実装が cfg で外れる。
+fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。
 fandhe-platform-web = { path = "../fandhe-platform-web" }
 

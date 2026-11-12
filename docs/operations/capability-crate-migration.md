@@ -176,3 +176,43 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | compose-mail-sms | 未移行の `windows_web_auth_session.rs` が `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を呼ぶ | web-auth-session と一緒に移す、または `open_url` を `fandhe-platform-windows` へ上げる |
 | print・print-screen | `print_screen_page_effect` が egui 固有の読み書き口（`EguiSenderExt` の `request_screenshot`・`tagged_screenshot`）を使う | `fandhe-runtime` に egui 非依存の口を足す設計が先 |
 | in-app-purchase | 全 OS が未実装（`possible`）で `impl` が無い | 実装後 |
+
+## 10. 第 5 束（#1190）で出た型と後回しの機能
+
+第 5 束（20 機能）のうち、in-app-review・uwb-ranging・user-idle・serial-port・app-attest・
+per-app-language・screen-brightness・spell-check・geocoding-search の 9 機能を移した。
+残りは下の表の理由で止まっている。理由が解消してから移す。節番号は #1301・#1306 の § 9 と重なるため、マージ順に合わせて振り直す。
+
+### 手作業で気づいた型
+
+| 型 | 扱い |
+|----|------|
+| `scaffold` が書く `build.rs` の framework | 元の `compile_*` の framework と必ず照合する（scaffold の既定は誤る。in-app-review は `StoreKit`（iOS は `UIKit` も）、user-idle は `CoreGraphics`、serial-port は `IOKit`、geocoding-search は `CoreLocation` + `MapKit`、per-app-language は `Foundation` のみ）。宣言の `frameworks` には基盤を除いたものだけを書く |
+| `scaffold` が拾わない Android の Helper | Helper の名前が `<Pascal>Helper` でない機能（geocoding-search の `GeocodingHelper`）は `git mv` されない。手で `android/java/` へ移し、対応表の `impl` も直す |
+| Activity のインスタンスを持つ Helper（screen-brightness・spell-check・geocoding-search） | Helper を private コンストラクタ + static の入口（`set(Activity, …)` など）にし、Activity ごとの helper は `HELPERS`（`Collections.synchronizedMap(new WeakHashMap<>())`）に持つ。`FeatureLifecycleProvider` の派生（`<Name>Lifecycle`）が `onHostCreated` で `attach`、`onHostDestroyed` で `detach` する。Helper が無い（生成前・破棄後）要求は FAILED で確定し、結果が来ないまま待たせない。provider は宣言の `components` と `AndroidManifest.xml` に同じ名前・authorities で書く。Helper が Activity を持たない設計（geocoding-search）は、static の入口が `getApplicationContext()` を取り出して渡す |
+| Helper の native コールバック（spell-check・geocoding-search） | Helper クラスの `native` と Rust の JNI エクスポート名（`Java_com_fandhe_platform_<Helper>_native…`）は移動で変わらない。Rust 側の呼び出しだけ `with_activity_class` + `call_static_method` に変え、JNI の署名は Java と Rust の 2 か所で照合する |
+| Android の `unsafe` が `with_activity_class` へ移って残らない機能（app-attest・screen-brightness・per-app-language） | `lib.rs` の `cfg_attr` から Android を外す（app-attest は全 OS で `forbid(unsafe_code)`）。JNI エクスポート（`#[unsafe(no_mangle)]`）を持つ spell-check・geocoding-search は `deny` のまま |
+| `Internal` / `Disabled` が識別子を持つ機能（spell-check・app-attest・geocoding-search） | §8 のとおり `error.rs` を `&'static str` つきにする。`scaffold` が単位バリアントへ潰した呼び出しは元の文字列へ戻す（テストが `Internal(_)` や識別子で照合するため、全 OS の呼び出しを元のソースと突き合わせる）。`Disabled`（`scaffold` が写さない）は手で足す |
+| `<application>` の属性（per-app-language の `android:localeConfig`） | 宣言の `components` は子要素だけを表し、`<application>` の属性は表せない。アプリが対応する言語の一覧でもあるため、`AndroidManifest.xml` と `res/xml/locale_config.xml` に残す |
+| iOS の Info.plist のキー（uwb-ranging） | `usage-descriptions` にキーを、`NSBonjourServices` は `info-plist` の配列で宣言する。説明文は gallery の `[package.metadata.fandhe-app.ios.usage-descriptions]` に置く。複数機能が共有するキー（`NSLocalNetworkUsageDescription`）は、最初に移した機能が宣言する |
+| `fandhe-device` に残す純関数の公開（spell-check の `translation::valid_lang_tag`） | `pub(crate)` だった関数は `pub` にして機能 crate が依存する（§7）。複製して手で合わせない |
+| 終了時の片付け（serial-port の `shutdown`） | §7 の過渡期の依存。`fandhe-egui-proxy` が feature `device` で optional 依存し、`device::shutdown` から `fandhe_cap_serial_port::shutdown()` を呼ぶ |
+| Windows の `windows` クレートの feature | 移した実装が使う feature を機能 crate の target 依存へ書く（serial-port の `CreateFileW` は `Win32_Security` も要る）。`fandhe-egui-proxy` 側の feature は他機能が使うため消さない。`cargo clippy -p <crate> --target x86_64-pc-windows-gnu --all-targets` で拾える |
+| Web 実装が参照する記号 | `fandhe-web-dom` の serial-port が `fandhe_device::serial_port` を使っていたため、機能 crate への依存に付け替えた（user-idle は参照が無く不要）。`cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown` で拾える |
+| Android 全体の型検査 | `ANDROID_NDK_HOME` を設定して `cargo ndk -t arm64-v8a clippy -p <crate> --all-features -- -D warnings` が通る。Android 限定の unused import（app-attest の `JObject`）はホストでは拾えない |
+
+### 後回しにした機能
+
+| 機能 | 理由 | 解消の見込み |
+|------|------|--------------|
+| in-app-browser | Android の Helper が `onResume` / `onPause` / `onDestroy` に参加する。`FeatureLifecycleProvider` に Resumed / Paused の口が無い（#1301 で足す） | #1301 のマージ後 |
+| environment-sensors | Android が `onResume` / `onPause` / `onDestroy` に参加する（同上）。egui-proxy の `android.rs` にある feature 無効時の no-op スタブも消す必要がある | #1301 のマージ後 |
+| capture-protection | Android の Helper が `onStart` / `onStop` に参加する。`FeatureLifecycleProvider` に Started / Stopped の口が無い | flashlight と同じ共通層の変更の後 |
+| activity-recognition | Android が `onStart` / `onStop` に参加し、`ActivityRecognitionReceiver` も持つ | Started / Stopped の口の後 |
+| bluetooth-classic | Android が `onResume` / `onPause` と許可ランチャーを持つ。共有ファイル `device/android.rs` の `read_ble_string` を使う | `read_ble_string` を共通層へ上げてから（bluetooth-le と同時が自然） |
+| window-management | driver と OS 実装が `egui::Context`・`ViewportCommand` を直接使う（§1 の egui 固有の口） | `fandhe-runtime` にウィンドウ操作の egui 非依存の口を設計してから |
+| screen-orientation | driver が `EguiSenderExt::viewport_size` を使う | 同上 |
+| launch-at-login | Windows 実装が未移行の `windows_compose_mail_sms::open_url` を使う | compose-mail-sms と同時に `open_url` を `fandhe-platform-windows` へ上げる |
+| autofill-otp | iOS の受け口 `fandhe_ios_text_input_set_one_time_code_hint` が、描画層の IME 橋渡し（`fandhe-egui-proxy/ios/fandhe_ios_text_input.m`）の入力欄 static に埋まっていて切り離せない | 入力欄のヒントを渡す口を描画層に設計してから |
+| game-center | 全 OS が `possible` で実装も `impl` も無く、移すものが無い | 実装時に最初から crate で作る |
+| app-intents | macOS の実装が url-scheme の受け口（`device/url_scheme.rs`・`FandheWidgetHost`）そのもので、独自のモジュールが無い | url-scheme と同時に扱う |

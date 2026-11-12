@@ -468,28 +468,6 @@ public class MainActivity extends GameActivity {
         translationHelper.cancel(requestId);
     }
 
-    // 住所の座標変換（Issue #693）。実装は `GeocodingHelper`。Rust の `android_geocoding_search.rs` が JNI で呼ぶ。
-    private final GeocodingHelper geocodingHelper = new GeocodingHelper();
-
-    void requestGeocode(long requestId, String address, int maxResults) {
-        geocodingHelper.request(getApplicationContext(), requestId, address, maxResults);
-    }
-
-    void cancelGeocode(long requestId) {
-        geocodingHelper.cancel(requestId);
-    }
-
-    // スペルチェック（Issue #580）。実装は `SpellCheckHelper`。Rust の `android_spell_check.rs` が JNI で呼ぶ。
-    private final SpellCheckHelper spellCheckHelper = new SpellCheckHelper(this);
-
-    void requestSpellCheck(long requestId, String text, String language, int suggestionsLimit) {
-        spellCheckHelper.request(requestId, text, language, suggestionsLimit);
-    }
-
-    void cancelSpellCheck(long requestId) {
-        spellCheckHelper.cancel(requestId);
-    }
-
     // 音楽ライブラリ画面（Issue #485）。実装は `MusicLibraryHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_music_library.rs` が JNI で呼ぶ。
     private final MusicLibraryHelper musicLibraryHelper = new MusicLibraryHelper(this);
@@ -659,15 +637,6 @@ public class MainActivity extends GameActivity {
     // 動画の変換（Issue #1017）。実装は `VideoTranscodeHelper`。Rust の `android_video_transcode.rs` が同期 JNI で呼ぶ。
     byte[] videoTranscode(int sw, int sh, int fps, int frames, int tw, int th, long remainingMs) {
         return VideoTranscodeHelper.transcode(getCacheDir(), sw, sh, fps, frames, tw, th, remainingMs);
-    }
-
-    // 端末・アプリの真正性証明（Issue #678）。実装は `AppAttestHelper`。Rust の `android_app_attest.rs` がワーカースレッドから同期 JNI で呼ぶ。
-    byte[] appAttestRandom(int len) {
-        return AppAttestHelper.random(len);
-    }
-
-    byte[] appAttest(byte[] challenge, long remainingMs) {
-        return AppAttestHelper.attest(challenge, remainingMs);
     }
 
     // OS の検索への登録（Issue #562）。実装は `SpotlightIndexHelper`。Rust の `android_spotlight_index.rs` がワーカースレッドから同期 JNI で呼ぶ。
@@ -890,22 +859,6 @@ public class MainActivity extends GameActivity {
 
     void requestVideoCapture(long requestId, int maxSecs) {
         videoCaptureHelper.capture(requestId, maxSecs);
-    }
-
-    // 画面輝度の上書き（Issue #635）。実装は `ScreenBrightnessHelper`。Rust の
-    // `android_screen_brightness.rs` が egui スレッドから同期で JNI 呼び出しする。
-    private final ScreenBrightnessHelper screenBrightnessHelper = new ScreenBrightnessHelper(this);
-
-    int screenBrightnessSet(float level) {
-        return screenBrightnessHelper.set(level);
-    }
-
-    int screenBrightnessClear() {
-        return screenBrightnessHelper.clear();
-    }
-
-    float screenBrightnessRead() {
-        return screenBrightnessHelper.read();
     }
 
     // 画面向きの取得・固定（Issue #657）。実装は `ScreenOrientationHelper`。Rust の
@@ -2263,7 +2216,6 @@ public class MainActivity extends GameActivity {
         super.onCreate(savedInstanceState);
         backgroundUploadHelper.onCreate();
         companionDeviceHelper.init();
-        screenBrightnessHelper.onCreate();
         captureProtectionHelper.onCreate();
         installAccessibilityOffGuard();
         fullscreenHelper.register();
@@ -4496,13 +4448,6 @@ public class MainActivity extends GameActivity {
         return DeviceInfoHelper.read(getApplicationContext());
     }
 
-    // Rust 側（`device/android_per_app_language.rs`、Issue #1075）から JNI 経由で egui スレッドが
-    // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。符号化は
-    // `PerAppLanguageHelper` 冒頭を参照。失敗は null。
-    private String perAppLanguageRead() {
-        return PerAppLanguageHelper.read(getApplicationContext());
-    }
-
     // Rust 側（`device/android_alarm.rs`、Issue #1078）から JNI 経由でワーカースレッドが同期で呼ぶ
     // 3 本。シグネチャは `(J)I` / `()I` / `()J`。結果コードは `AlarmHelper` 冒頭を参照。
     private int alarmSchedule(long fireAtMs) {
@@ -4765,8 +4710,6 @@ public class MainActivity extends GameActivity {
         paymentRequestHelper.onDestroy();
         healthDataHelper.onDestroy();
         translationHelper.onDestroy();
-        geocodingHelper.onDestroy();
-        spellCheckHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();
         bluetoothClassicHelper.onDestroy();
@@ -4791,7 +4734,6 @@ public class MainActivity extends GameActivity {
         cameraPreviewHelper.onDestroy();
         videoCaptureHelper.onDestroy();
         printHelper.onDestroy();
-        screenBrightnessHelper.onDestroy();
         screenOrientationHelper.onDestroy();
         captureProtectionHelper.onDestroy();
         foldablePostureHelper.onDestroy();

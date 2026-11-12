@@ -66,7 +66,7 @@ pub fn build_capture_result(
 
 /// 画面録画エンジンの契約。`Ok` は「依頼を受理した」ことだけを意味し、結果は後から
 /// bridge へ 1 回だけ届く。画面の effect と公開入口（`begin_capture`）は 1 つの slot を共有し、
-/// 併用時は先行を置き換えず後続を拒否する（画面側には「処理中」の失敗を表示する）。
+/// 併用時は先行の進行中、および公開側が `poll_capture` で取り出す前の結果を置き換えず後続を拒否する（画面側には「処理中」の失敗を表示する）。
 pub trait ScreenCapturer: Send + Sync {
     /// 録画を依頼する。`max_duration` で実装側が自動停止する。
     fn start(&self, request_id: u64, max_duration: Duration) -> Result<(), ScreenCaptureError>;

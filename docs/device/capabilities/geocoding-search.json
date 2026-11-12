@@ -17,7 +17,7 @@
       "note": "実装済み（#692）。macOS と同じ `.m` を共用し、画面の固定の公開住所 1 件を座標へ変換して先頭候補の緯度・経度と候補数を出す。通信不可・回数上限・該当なし・座標なし・時間切れを区別して失敗にし、0 件・座標なし・error 付きを成功にしない。住所・座標・OS のエラー文はログへ出さない。iOS 26 未満は Unsupported（非推奨の CLGeocoder へ倒さない）。背景にいる間は completion が遅れ得て、その場合は期限切れで失敗を確定し遅れた結果は捨てる。権限・Info.plist は不要。実機での通信・精度は #689 で確かめる。守らない範囲: 結果の精度と候補の選択、回数上限、期限後も OS 側の処理が走り切ること",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#689）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_geocoding_search.rs + crates/fandhe-egui-proxy/src/device/apple_geocoding_search.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_geocoding_search.m + crates/fandhe-egui-proxy/src/device/geocoding_search.rs、Issue #692"
+      "impl": "crates/fandhe-cap-geocoding-search/src/ios.rs + crates/fandhe-cap-geocoding-search/src/apple.rs + crates/fandhe-cap-geocoding-search/apple/fandhe_apple_geocoding_search.m + crates/fandhe-cap-geocoding-search/src/driver.rs、Issue #692"
     },
     "android": {
       "status": "done",
@@ -30,7 +30,7 @@
       "note": "実装済み（#693）。画面の固定の公開住所 1 件を `Geocoder` で座標へ変換し、先頭候補の緯度・経度と候補数を出す。API 33 以上は `GeocodeListener` 版、24〜32 は同期版を executor で呼ぶ。`isPresent()` が false なら Unsupported。0 件・座標なし・範囲外・時間切れを失敗にし、成功へ畳まない。通信不可・回数上限・IOException は区別せず失敗にする。住所・座標・OS の例外文はログへ出さない。フレームワーク API で権限と Gradle 依存の追加は不要。守らない範囲: 取り消し API が無く期限後も OS 側の変換が走り切ること、同期版が詰まったときの後続要求の遅れ（Rust の期限で失敗が確定する）、結果の精度と候補の選択、provider の有無による端末差",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#689）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/GeocodingHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_geocoding_search.rs + crates/fandhe-egui-proxy/src/device/geocoding_search.rs + crates/fandhe-core/src/screens/geocoding_search_show.rs + crates/fandhe-device/src/geocoding_search.rs、Issue #693"
+      "impl": "crates/fandhe-cap-geocoding-search/android/java/com/fandhe/platform/GeocodingHelper.java + crates/fandhe-cap-geocoding-search/src/android.rs + crates/fandhe-cap-geocoding-search/src/driver.rs + crates/fandhe-core/src/screens/geocoding_search_show.rs + crates/fandhe-cap-geocoding-search/src/contract.rs、Issue #693"
     },
     "macos": {
       "status": "done",
@@ -40,7 +40,7 @@
       "note": "実装済み（#691）。画面の固定の公開住所 1 件を座標へ変換し、先頭候補の緯度・経度と候補数を出す。通信不可・回数上限・該当なし・座標なし・時間切れを区別して失敗にし、0 件・座標なし・error 付きを成功にしない。住所・座標・OS のエラー文はログへ出さない。macOS 26 未満は Unsupported（非推奨の CLGeocoder へ倒さない）。素の実行体から MapKit の地理コードが通るかは Mac 目視（#689）で確かめる。守らない範囲: 結果の精度と候補の選択、回数上限、期限後も OS 側の処理が走り切ること",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#689）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_geocoding_search.m + crates/fandhe-egui-proxy/src/device/apple_geocoding_search.rs + crates/fandhe-egui-proxy/src/device/geocoding_search.rs + crates/fandhe-core/src/screens/geocoding_search_show.rs + crates/fandhe-device/src/geocoding_search.rs、Issue #691"
+      "impl": "crates/fandhe-cap-geocoding-search/apple/fandhe_apple_geocoding_search.m + crates/fandhe-cap-geocoding-search/src/apple.rs + crates/fandhe-cap-geocoding-search/src/driver.rs + crates/fandhe-core/src/screens/geocoding_search_show.rs + crates/fandhe-cap-geocoding-search/src/contract.rs、Issue #691"
     },
     "windows": {
       "status": "no",

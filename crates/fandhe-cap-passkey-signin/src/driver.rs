@@ -93,65 +93,96 @@ pub(crate) mod bridge {
         SLOT.begin()
     }
 
-    /// ワーカーからの結果を置く。`request_id` 不一致・未登録・既に結果ありは
-    /// 捨てて `false`（先に届いたものだけを採る）。
+    type Waiter = std::sync::mpsc::Sender<Outcome>;
+
+    /// 画面を経ない呼び出し（`platform_passkey`、Android）の待ち合わせ。画面の [`SLOT`] とは別に持ち、
+    /// 互いの保留を上書きしない（`fandhe-cap-calendar` と同形）。ID は [`SLOT`] の払い出しと衝突しないよう上位ビットを立てる。
+    static WAITERS: std::sync::Mutex<Vec<(u64, Waiter)>> = std::sync::Mutex::new(Vec::new());
+    static NEXT_EXTERNAL_ID: std::sync::atomic::AtomicU64 =
+        std::sync::atomic::AtomicU64::new(1 << 62);
+
+    /// 画面を経ない呼び出しの待ちを登録して `(request_id, 受信側)` を返す。先行（画面の進行中の保留・別の待ち）が
+    /// あれば `Internal` で拒否する。判定と登録は `WAITERS` のロックの内側で行い、[`begin_screen`] と直列化する。
+    /// 結果は受信側のチャネルに入るため、[`SLOT`] の未取得の結果を置き換えない。
+    #[cfg(any(target_os = "android", test))]
+    pub(crate) fn begin_external()
+    -> Result<(u64, std::sync::mpsc::Receiver<Outcome>), PasskeySigninError> {
+        let mut w = WAITERS.lock().unwrap_or_else(|e| e.into_inner());
+        if !w.is_empty() || SLOT.snapshot().is_some_and(|(_, r)| r.is_none()) {
+            return Err(PasskeySigninError::Internal);
+        }
+        let id = NEXT_EXTERNAL_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let (tx, rx) = std::sync::mpsc::channel();
+        w.push((id, tx));
+        Ok((id, rx))
+    }
+
+    /// 登録済みの待ちを外す（依頼自体が同期的に失敗したとき）。
+    #[cfg(any(target_os = "android", test))]
+    pub(crate) fn cancel_external(request_id: u64) {
+        WAITERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|(id, _)| *id != request_id);
+    }
+
+    /// 画面の依頼を登録する。画面を経ない待ちが残っているとき、または `slot` に進行中の保留があるときは
+    /// `None`（置き換えない）。
+    #[cfg(any(target_os = "android", test))]
+    pub(crate) fn begin_screen(
+        slot: &RequestSlot<Outcome>,
+        owner: &fandhe_runtime::request_slot::SlotOwner,
+    ) -> Option<u64> {
+        let w = WAITERS.lock().unwrap_or_else(|e| e.into_inner());
+        if !w.is_empty() {
+            return None;
+        }
+        owner.begin(slot)
+    }
+
+    /// OS・ワーカーからの結果を置く。画面を経ない待ちの id ならその待ちへ、そうでなければ [`SLOT`] へ。
+    /// `request_id` 不一致・未登録・既に結果ありは捨てて `false`（先に届いたものだけを採る）。
     pub(crate) fn deliver(
         request_id: u64,
         result: Result<PasskeyOutcome, PasskeySigninError>,
     ) -> bool {
+        let waiter = {
+            let mut w = WAITERS.lock().unwrap_or_else(|e| e.into_inner());
+            w.iter()
+                .position(|(id, _)| *id == request_id)
+                .map(|i| w.remove(i).1)
+        };
+        if let Some(tx) = waiter {
+            return tx.send(result).is_ok();
+        }
         SLOT.deliver(request_id, result)
     }
 
     /// Activity 再生成直後に呼ぶ。保留中の要求は復元せず破棄し、旧 `request_id` の完了を無視させる。
-    #[cfg(target_os = "android")]
+    #[cfg(any(target_os = "android", test))]
     pub(crate) fn reset() {
-        SLOT.reset()
+        SLOT.reset();
+        // 待っている呼び出しは送信側を捨てて起こす（受信側は `Internal` で戻る）。
+        WAITERS.lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 }
 
-/// Credential Manager へ依頼して要求 id を返す。RP ID 未設定・不正は `Unsupported`（OS を呼ばない）。
-/// 保留は 1 件だけで、進行中に新しい依頼を出すと `Internal`（画面経由の依頼と slot を共有し、先行を置き換えない。
-/// 失敗時の clear で既存依頼を壊さない）。
-#[cfg(target_os = "android")]
-fn begin_passkey(op: PasskeyOp) -> Result<u64, PasskeySigninError> {
-    let Some(request_id) = bridge::SLOT.try_begin() else {
-        return Err(PasskeySigninError::Internal);
-    };
-    match crate::android::begin(request_id, op) {
-        Ok(()) => Ok(request_id),
-        Err(e) => {
-            bridge::SLOT.clear(request_id);
-            Err(e)
-        }
-    }
-}
-
-/// [`begin_passkey`] の結果が届くまで待つ。期限は置かない（OS の UI の応答待ちを推測の期限で失敗にしない）。
-/// Activity 再生成（[`bridge::reset`]）で slot が捨てられたら `Internal`。
-#[cfg(target_os = "android")]
-fn wait_passkey(request_id: u64) -> Result<PasskeyOutcome, PasskeySigninError> {
-    loop {
-        match bridge::SLOT.snapshot() {
-            Some((id, Some(result))) if id == request_id => {
-                bridge::SLOT.clear(id);
-                return result;
-            }
-            Some((id, None)) if id == request_id => {
-                std::thread::sleep(std::time::Duration::from_millis(20));
-            }
-            _ => return Err(PasskeySigninError::Internal),
-        }
-    }
-}
-
-/// Android 版の [`Passkey`]（[`platform_passkey`]）。
+/// Android 版の [`Passkey`]（[`platform_passkey`]）。Credential Manager の完了まで `run` を block する
+/// （期限は置かない。OS の UI の応答待ちを推測の期限で失敗にしない）。RP ID 未設定・不正は `Unsupported`（OS を呼ばない）。
+/// 同時に 1 件だけで、先行（画面の保留・別の待ち）が終わるまで後から呼ぶと `Internal` で即座に戻る。
+/// Activity 再生成で待っている呼び出しは `Internal` で戻る。
 #[cfg(target_os = "android")]
 struct CallbackPasskey;
 
 #[cfg(target_os = "android")]
 impl crate::contract::Passkey for CallbackPasskey {
     fn run(&self, op: PasskeyOp) -> Result<PasskeyOutcome, PasskeySigninError> {
-        wait_passkey(begin_passkey(op)?)
+        let (request_id, rx) = bridge::begin_external()?;
+        if let Err(e) = crate::android::begin(request_id, op) {
+            bridge::cancel_external(request_id);
+            return Err(e);
+        }
+        rx.recv().unwrap_or(Err(PasskeySigninError::Internal))
     }
 }
 
@@ -162,7 +193,7 @@ pub fn reset_pending_tracking() {
     crate::android::reset();
 }
 
-/// 画面用 effect が追う自分の分の要求（公開入口 [`platform_passkey`] と slot を共有するため）。
+/// 画面用 effect が追う自分の分の要求（公開入口 [`platform_passkey`] は別の待ち口を使う）。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
@@ -189,7 +220,7 @@ fn drive_callback(
     if let Some(view) = take_request(state) {
         let _ = sender.send(Box::new(mark_running));
         let generation = view.generation;
-        let Some(request_id) = owner.begin(slot) else {
+        let Some(request_id) = bridge::begin_screen(slot, owner) else {
             let _ = sender.send(Box::new(move |s: &mut PasskeySigninState| {
                 finish(s, generation, Err(BUSY_MESSAGE.to_string()));
             }));
@@ -396,6 +427,7 @@ mod tests {
             owner: &'static SlotOwner,
             begin: fn(u64, PasskeyOp) -> Result<(), PasskeySigninError>,
         ) {
+            let _g = WAITERS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
             let (tx, rx) = std::sync::mpsc::channel();
             let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
             drive_callback(s, &sender, slot, owner, begin);
@@ -403,6 +435,9 @@ mod tests {
                 apply(s);
             }
         }
+
+        /// 画面を経ない待ち合わせ（プロセス static）を触るテストと `frame` を直列化する。
+        static WAITERS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
         static CALLS: AtomicUsize = AtomicUsize::new(0);
         fn ok_begin(_id: u64, _op: PasskeyOp) -> Result<(), PasskeySigninError> {
@@ -474,6 +509,32 @@ mod tests {
             let (id, ready) = SLOT.snapshot().expect("公開側の保留が残る");
             assert_eq!(id, public);
             assert!(ready.is_some());
+        }
+
+        #[test]
+        fn external_wait_is_isolated_and_second_run_does_not_drop_first() {
+            let _g = WAITERS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            bridge::reset();
+            static SLOT: RequestSlot<bridge::Outcome> = RequestSlot::new();
+            static OWNER: SlotOwner = SlotOwner::new();
+            let (id1, rx1) = bridge::begin_external().expect("空き");
+            // 待ちの間は画面の依頼も 2 つ目の待ちも拒否される。
+            assert!(bridge::begin_screen(&SLOT, &OWNER).is_none());
+            assert_eq!(
+                bridge::begin_external().err(),
+                Some(PasskeySigninError::Internal)
+            );
+            assert!(bridge::deliver(id1, Ok(PasskeyOutcome::NotAllowed)));
+            // 2 回目が来ても 1 回目の成功は落ちない。
+            let (_id2, _rx2) = bridge::begin_external().expect("1 回目の配送後は空き");
+            assert_eq!(rx1.recv(), Ok(Ok(PasskeyOutcome::NotAllowed)));
+            // 再生成で待っている呼び出しは起こされる。
+            bridge::reset();
+            let (_id3, rx3) = bridge::begin_external().expect("再生成後は空き");
+            let t = std::thread::spawn(move || rx3.recv());
+            std::thread::sleep(std::time::Duration::from_millis(30));
+            bridge::reset();
+            assert!(t.join().unwrap().is_err());
         }
 
         #[test]

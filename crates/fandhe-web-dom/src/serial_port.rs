@@ -5,7 +5,7 @@
 //! Web Serial API（`navigator.serial`）で「利用者がダイアログで 1 つ選ぶ → 固定設定で開く →
 //! `fandhe\n` を送る → LF までの 1 行を受ける → 毎回閉じる」を行って画面へ書き戻す。
 //! 呼び出し元は `demo.rs` の `mount_serial_port_show_screen`、破棄時の解放は
-//! `mount::release_features` から [`release_mount`]。契約の SSOT は `fandhe_device::serial_port`
+//! `mount::release_features` から [`release_mount`]。契約の SSOT は `fandhe_cap_serial_port`
 //! （定数・[`LineAssembler`]・失敗種別）。Web は `SerialPorts` トレイトと `round_trip` を通らない
 //! （ブロッキング契約と合わないため）ので、本モジュールが DOM レンダラ側の対応実装にあたる。
 //!
@@ -62,8 +62,8 @@
 //! 他アプリ使用中の `open()` が `NetworkError` になるか、open 時にブラウザが OS の受信バッファを
 //! 捨てるか（Web Serial に破棄 API は無い）、bfcache・離脱時にブラウザがポートを閉じるか。
 
+use fandhe_cap_serial_port::{LineAssembler, SerialPortFailure, BAUD_RATE, ROUND_TRIP_TIMEOUT};
 use fandhe_core::screens::serial_port_show::PortFailure;
-use fandhe_device::serial_port::{LineAssembler, SerialPortFailure, BAUD_RATE, ROUND_TRIP_TIMEOUT};
 
 /// 失敗時の固定文言（egui-proxy 側と同じ）。例外の `message` は使わない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -220,11 +220,11 @@ mod web {
     use std::collections::HashMap;
     use std::rc::{Rc, Weak};
 
+    use fandhe_cap_serial_port::{LineAssembler, SerialPortFailure, SEND_LINE};
     use fandhe_core::screens::serial_port_show::{
         finish_list, finish_round_trip, mark_running, take_request, PortFailure, RequestKind,
         SerialPortShowState,
     };
-    use fandhe_device::serial_port::{LineAssembler, SerialPortFailure, SEND_LINE};
     use js_sys::{Array, Function, Object, Promise, Reflect, Uint8Array};
     use wasm_bindgen::closure::Closure;
     use wasm_bindgen::{JsCast, JsValue};

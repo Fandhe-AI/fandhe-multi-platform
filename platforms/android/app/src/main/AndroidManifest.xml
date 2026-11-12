@@ -379,6 +379,18 @@
             android:authorities="${applicationId}.fandhe.screen-wake-lock"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.ScreenBrightnessLifecycle"
+            android:authorities="${applicationId}.fandhe.screen-brightness"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.SpellCheckLifecycle"
+            android:authorities="${applicationId}.fandhe.spell-check"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.GeocodingLifecycle"
+            android:authorities="${applicationId}.fandhe.geocoding-search"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.CallUiLifecycle"
             android:authorities="${applicationId}.fandhe.call-ui"
             android:exported="false" />

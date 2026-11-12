@@ -142,7 +142,7 @@ pub struct Request {
     pub kind: RequestKind,
 }
 
-/// 失敗の種別（`fandhe_device::serial_port::SerialPortFailure` から写す責務は effect 側）。
+/// 失敗の種別（`fandhe_cap_serial_port::SerialPortFailure` から写す責務は effect 側）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PortFailure {
     /// 期限切れ。

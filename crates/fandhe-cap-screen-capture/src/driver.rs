@@ -216,7 +216,10 @@ static LAST_TICK: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None
 ))]
 pub fn begin_capture(max_duration: std::time::Duration) -> Result<u64, ScreenCaptureError> {
     // 進行中の依頼があれば置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。
-    let Some(request_id) = bridge::SLOT.try_begin() else {
+    // 進行中の依頼、または画面側の未反映の結果があれば置き換えず拒否する。
+    let Some(request_id) =
+        PUBLIC_OWNER.begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+    else {
         return Err(ScreenCaptureError::Internal("busy"));
     };
     match platform_screen_capture().start(request_id, max_duration) {
@@ -247,6 +250,17 @@ pub fn poll_capture(
     bridge::SLOT.clear(id);
     Some(result)
 }
+
+/// 公開入口 [`begin_capture`] が追う自分の分の要求。結果が届いて [`poll_capture`] が取り出すまで、
+/// 画面側がその結果を置き換えない（`SCREEN_OWNER` と対称）。
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "windows",
+    target_os = "android"
+))]
+static PUBLIC_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
 
 /// 画面用 effect が追う自分の分の要求（公開入口 [`begin_capture`] と slot を共有するため）。
 /// 停止・経過時間の対象 id もこちらを使い、公開入口の録画を巻き込まない。
@@ -280,7 +294,7 @@ fn drive_callback(state: &ScreenCaptureState, sender: &CompletionSender<ScreenCa
         let _ = sender.send(Box::new(mark_recording));
         let generation = request.generation;
         // 先行（公開入口の録画など）を置き換えず、画面には失敗として返す（黙って捨てない）。
-        let Some(request_id) = SCREEN_OWNER.begin(&bridge::SLOT) else {
+        let Some(request_id) = SCREEN_OWNER.begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER]) else {
             let _ = sender.send(Box::new(move |s: &mut ScreenCaptureState| {
                 finish_capture(s, generation, Err(BUSY_MESSAGE.to_string()));
             }));
@@ -456,10 +470,49 @@ mod tests {
         bridge::reset();
         // 公開入口の録画が進行中のとき、画面の登録は拒否され、公開側の id はそのまま。
         let public = bridge::SLOT.try_begin().expect("空き");
-        assert!(SCREEN_OWNER.begin(&bridge::SLOT).is_none());
+        assert!(
+            SCREEN_OWNER
+                .begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER])
+                .is_none()
+        );
         assert!(bridge::SLOT.snapshot().is_some_and(|(id, _)| id == public));
         // 画面の停止・経過時間の対象は公開側の id を指さない。
         assert_ne!(SCREEN_OWNER.current(), public);
+        bridge::reset();
+    }
+
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    ))]
+    #[test]
+    fn unconsumed_public_result_is_not_replaced_by_screen_or_next_public() {
+        let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let id = PUBLIC_OWNER
+            .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+            .expect("空き");
+        // OS の結果が届いて、公開側がまだ取り出していない。
+        assert!(bridge::deliver(id, Err(ScreenCaptureError::Cancelled)));
+        assert!(
+            SCREEN_OWNER
+                .begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER])
+                .is_none()
+        );
+        assert!(
+            PUBLIC_OWNER
+                .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+                .is_none()
+        );
+        // 取り出して clear した後は登録できる。
+        bridge::SLOT.clear(id);
+        assert!(
+            PUBLIC_OWNER
+                .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+                .is_some()
+        );
         bridge::reset();
     }
 

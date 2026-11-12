@@ -14,10 +14,14 @@ fn main() {
     if target_is_ios() {
         compile_objc(
             "apple/fandhe_apple_screen_capture.m",
-            &["AVFoundation", "ReplayKit"],
+            &["AVFoundation", "Foundation", "ReplayKit"],
         );
     } else if target_is_macos() {
-        compile_objc("apple/fandhe_apple_screen_capture.m", &["AVFoundation"]);
+        // Foundation・CoreGraphics は `.m` が直接使う（テスト実行体のリンクにも要る。実行体側は他の framework が引き込むため気づきにくい）。
+        compile_objc(
+            "apple/fandhe_apple_screen_capture.m",
+            &["AVFoundation", "CoreGraphics", "Foundation"],
+        );
         weak_link_framework("ScreenCaptureKit");
     }
     export_link_args();

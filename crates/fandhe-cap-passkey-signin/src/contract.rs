@@ -283,8 +283,8 @@ pub fn verify_response(
     })
 }
 
-/// パスキーの登録・サインイン UI を出す。Android では画面の effect と `platform_passkey()` が 1 つの slot を
-/// 共有し、併用時は先行を置き換えず後続を拒否する（画面側には「処理中」の失敗を表示する）。
+/// パスキーの登録・サインイン UI を出す。Android では画面の effect と `platform_passkey()` が別々の待ち口を持ち、
+/// 併用時は先行が終わるまで後続を拒否する（画面側には「処理中」の失敗を表示する）。先行の結果は後続に落とされない。
 /// OS ごとの実装は `fandhe-egui-proxy`（Windows）/
 /// `fandhe-web-dom`（Web）が持つ。
 pub trait Passkey: Send + Sync {

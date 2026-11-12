@@ -41,7 +41,7 @@ pub const NOT_FOUND_MESSAGE: &str = "該当する場所が見つかりません�
 pub const NO_COORDINATE_MESSAGE: &str = "場所は見つかりましたが座標がありません";
 /// 期限切れのときの案内。
 pub const TIMEOUT_MESSAGE: &str = "時間内に変換が終わりませんでした";
-/// 候補数として数える上限（`fandhe_device::geocoding_search::MAX_CANDIDATES` と同じ値）。
+/// 候補数として数える上限（`fandhe_cap_geocoding_search::MAX_CANDIDATES` と同じ値）。
 pub const MAX_CANDIDATES_SHOWN: u32 = 5;
 
 /// 失敗の種別（`fandhe_device::DeviceError` から写す責務は effect 側）。

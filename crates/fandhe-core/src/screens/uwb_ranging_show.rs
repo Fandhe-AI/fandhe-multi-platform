@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
 //! `device/uwb_ranging.rs` が行い、[`apply_capability`] / [`apply_poll`] / [`apply_end`] /
-//! [`apply_failure`] で注入する。`fandhe_device::uwb_ranging` の型は依存方向の都合でここへ写す。
+//! [`apply_failure`] で注入する。`fandhe_cap_uwb_ranging` の型は依存方向の都合でここへ写す。
 //!
 //! 嘘の距離を出さない: 距離は [`RangingView::Measured`] だけが持つ（センチメートルの `u32`）。
 //! 圏外（[`RangingView::NoMeasurement`]）・探索中・終端・失敗は距離を持たず、0 m で埋めない。
@@ -52,7 +52,7 @@ pub const FAILED_TEXT: &str = "取得できません";
 /// 能力を読む前の表示。
 pub const CAPABILITY_PENDING_TEXT: &str = "端末の能力: 確認中…";
 
-/// 能力の 1 項目（`fandhe_device::uwb_ranging::Support` の写し）。
+/// 能力の 1 項目（`fandhe_cap_uwb_ranging::Support` の写し）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SupportView {
     /// 使える。
