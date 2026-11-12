@@ -64,6 +64,21 @@ impl<O> RequestSlot<O> {
         request_id
     }
 
+    /// 進行中（結果未着）の要求があれば `None`、無ければ確認と登録を同じロックで行い `request_id` を返す。
+    /// 公開入口が `snapshot` → `begin` の 2 段で二重登録しないために使う。
+    pub fn try_begin(&self) -> Option<u64> {
+        let mut pending = self.lock();
+        if pending.as_ref().is_some_and(|p| p.ready.is_none()) {
+            return None;
+        }
+        let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
+        *pending = Some(Pending {
+            request_id,
+            ready: None,
+        });
+        Some(request_id)
+    }
+
     /// OS からの結果を置く（任意スレッド）。`request_id` 不一致・未登録（プロセス死後の
     /// 再配送等）・既に結果あり（重複通知）は捨てて `false`。
     pub fn deliver(&self, request_id: u64, outcome: O) -> bool {
@@ -152,6 +167,15 @@ pub fn poll_and_finish<S: 'static, O: Clone + Send + 'static>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn try_begin_refuses_while_pending_and_allows_after_ready() {
+        let slot: RequestSlot<u8> = RequestSlot::new();
+        let id = slot.try_begin().expect("空き");
+        assert!(slot.try_begin().is_none());
+        assert!(slot.deliver(id, 1));
+        assert!(slot.try_begin().is_some());
+    }
+
     use super::*;
 
     #[test]

@@ -81,10 +81,9 @@ pub(crate) mod bridge {
 pub fn begin_set_badge(value: u32) -> Result<u64, AppBadgeError> {
     let value = BadgeValue::new(value)?;
     // 進行中の依頼があれば置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。
-    if matches!(bridge::SLOT.snapshot(), Some((_, None))) {
+    let Some(request_id) = bridge::SLOT.try_begin() else {
         return Err(AppBadgeError::Internal);
-    }
-    let request_id = bridge::begin();
+    };
     match begin_set(request_id, value) {
         Ok(()) => Ok(request_id),
         Err(e) => {

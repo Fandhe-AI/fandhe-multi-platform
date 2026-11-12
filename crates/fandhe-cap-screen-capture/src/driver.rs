@@ -224,10 +224,9 @@ static LAST_TICK: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None
 ))]
 pub fn begin_capture(max_duration: std::time::Duration) -> Result<u64, ScreenCaptureError> {
     // 進行中の依頼があれば置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。
-    if matches!(bridge::SLOT.snapshot(), Some((_, None))) {
+    let Some(request_id) = bridge::SLOT.try_begin() else {
         return Err(ScreenCaptureError::Internal("busy"));
-    }
-    let request_id = bridge::begin();
+    };
     match platform_screen_capture().start(request_id, max_duration) {
         Ok(()) => Ok(request_id),
         Err(e) => {
@@ -391,15 +390,33 @@ mod tests {
         fn wake_after(&self, _delay: std::time::Duration) {}
     }
 
+    /// 静的 `bridge::SLOT` を触るテストを直列化する（並列実行で request id を上書きし合わない）。
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    ))]
+    static SLOT_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    ))]
     #[test]
     fn begin_capture_rejects_while_in_flight_and_keeps_existing() {
-        let id = bridge::SLOT.begin();
+        let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let id = bridge::SLOT.try_begin().expect("空き");
         assert!(begin_capture(std::time::Duration::from_secs(1)).is_err());
         assert!(bridge::deliver(id, Err(ScreenCaptureError::Cancelled)));
         assert!(matches!(
             poll_capture(id),
             Some(Err(ScreenCaptureError::Cancelled))
         ));
+        bridge::reset();
     }
 
     #[test]
@@ -478,6 +495,8 @@ mod tests {
     ))]
     #[test]
     fn stale_request_id_deliver_is_dropped() {
+        let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
         let id = bridge::begin();
         assert!(!bridge::deliver(
             id + 1,

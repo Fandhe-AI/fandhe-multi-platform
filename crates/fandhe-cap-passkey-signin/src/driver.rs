@@ -111,10 +111,9 @@ pub(crate) mod bridge {
 #[cfg(target_os = "android")]
 pub fn begin_passkey(op: PasskeyOp) -> Result<u64, PasskeySigninError> {
     // 進行中の依頼があれば置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。
-    if matches!(bridge::SLOT.snapshot(), Some((_, None))) {
+    let Some(request_id) = bridge::SLOT.try_begin() else {
         return Err(PasskeySigninError::Internal);
-    }
-    let request_id = bridge::SLOT.begin();
+    };
     match crate::android::begin(request_id, op) {
         Ok(()) => Ok(request_id),
         Err(e) => {
