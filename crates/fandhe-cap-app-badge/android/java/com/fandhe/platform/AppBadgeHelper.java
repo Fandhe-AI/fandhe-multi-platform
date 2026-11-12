@@ -45,6 +45,7 @@ final class AppBadgeHelper {
     private final ComponentActivity activity;
     private final RequestTracker request = new RequestTracker();
     private int pendingValue; // 許可ダイアログ中の値（UI スレッド専用）。
+    private boolean detached; // `onDestroy` 済み（UI スレッド専用。破棄後に来た要求を開始させない）。
     // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`AppBadgeLifecycle`
     // （`FeatureLifecycleProvider`）が `Activity.onCreate` の中で `attach` を呼び、ここで登録する。
     private final ActivityResultLauncher<String> permissionLauncher;
@@ -100,7 +101,7 @@ final class AppBadgeHelper {
     }
 
     private void start(long id, int value) {
-        if (destroyed()) {
+        if (detached || destroyed()) {
             finish(id, value, RESULT_FAILED);
             return;
         }
@@ -141,6 +142,7 @@ final class AppBadgeHelper {
     // `detach` から UI スレッド（`Activity.onDestroy`）で呼ぶ。許可ダイアログ待ちの要求があれば中断で確定する
     // （待ち続ける呼び出しを残さない）。`take` は first-wins のため、結果を届け済みの要求には二重に届けない。
     private void onDestroy() {
+        detached = true;
         long id = request.take();
         if (id != RequestTracker.NONE) {
             finish(id, pendingValue, RESULT_INTERRUPTED);

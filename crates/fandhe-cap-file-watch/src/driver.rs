@@ -211,10 +211,11 @@ fn work_dir() -> Result<PathBuf, FileWatchError> {
     #[cfg(target_os = "ios")]
     let base = {
         // iOS はアプリコンテナ直下の `Documents/`（`$HOME` がコンテナのルートを指す）。
+        // iOS は対応 OS のため、保存先を解決できないのは「非対応」ではなく開始の失敗（Android 分岐と同じ `Internal`）。
         #[allow(deprecated)]
         std::env::home_dir()
             .map(|home| home.join("Documents"))
-            .ok_or(FileWatchError::Unsupported)?
+            .ok_or(FileWatchError::Internal)?
     };
     #[cfg(target_os = "android")]
     let base = fandhe_platform_android::android_app()

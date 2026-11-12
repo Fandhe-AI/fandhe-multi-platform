@@ -448,9 +448,18 @@ mod tests {
             }
         }
 
-        static CALLS: AtomicUsize = AtomicUsize::new(0);
         fn ok_begin(_id: u64, _op: PasskeyOp) -> Result<(), PasskeySigninError> {
-            CALLS.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        // 呼び出し回数を検査するテストごとに専用の計数関数を使う（他のテストの呼び出しが混ざらない）。
+        static CALLS_PENDING: AtomicUsize = AtomicUsize::new(0);
+        fn counting_begin_pending(_id: u64, _op: PasskeyOp) -> Result<(), PasskeySigninError> {
+            CALLS_PENDING.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        static CALLS_BUSY: AtomicUsize = AtomicUsize::new(0);
+        fn counting_begin_busy(_id: u64, _op: PasskeyOp) -> Result<(), PasskeySigninError> {
+            CALLS_BUSY.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
         fn unsupported_begin(_id: u64, _op: PasskeyOp) -> Result<(), PasskeySigninError> {
@@ -466,15 +475,15 @@ mod tests {
             static OWNER: SlotOwner = SlotOwner::new();
             let mut s = PasskeySigninState::default();
             screen::sign_in(&mut s);
-            frame(&mut s, &SLOT, &OWNER, ok_begin);
+            frame(&mut s, &SLOT, &OWNER, counting_begin_pending);
             assert_eq!(s.phase, screen::PasskeyPhase::Running);
             let (id, _) = SLOT.snapshot().expect("begin 済み");
             // 保留中に再度観測しても begin は二度呼ばれない。
-            let before = CALLS.load(Ordering::SeqCst);
-            frame(&mut s, &SLOT, &OWNER, ok_begin);
-            assert_eq!(CALLS.load(Ordering::SeqCst), before);
+            let before = CALLS_PENDING.load(Ordering::SeqCst);
+            frame(&mut s, &SLOT, &OWNER, counting_begin_pending);
+            assert_eq!(CALLS_PENDING.load(Ordering::SeqCst), before);
             assert!(SLOT.deliver(id, Ok(PasskeyOutcome::NotAllowed)));
-            frame(&mut s, &SLOT, &OWNER, ok_begin);
+            frame(&mut s, &SLOT, &OWNER, counting_begin_pending);
             assert_ne!(s.phase, screen::PasskeyPhase::Running);
             assert!(SLOT.snapshot().is_none());
         }
@@ -505,16 +514,16 @@ mod tests {
             static OWNER: SlotOwner = SlotOwner::new();
             // 公開入口の待ちが進行中のとき、画面の要求は OS を呼ばず「処理中」の失敗になる。
             let public = SLOT.try_begin().expect("空き");
-            let before = CALLS.load(Ordering::SeqCst);
+            let before = CALLS_BUSY.load(Ordering::SeqCst);
             let mut s = PasskeySigninState::default();
             screen::sign_in(&mut s);
-            frame(&mut s, &SLOT, &OWNER, ok_begin);
-            assert_eq!(CALLS.load(Ordering::SeqCst), before);
+            frame(&mut s, &SLOT, &OWNER, counting_begin_busy);
+            assert_eq!(CALLS_BUSY.load(Ordering::SeqCst), before);
             assert_eq!(s.phase, screen::PasskeyPhase::Idle);
             assert!(s.error.contains(BUSY_MESSAGE));
             // 公開側の id は置き換わらず、結果も画面に取られない。
             assert!(SLOT.deliver(public, Ok(PasskeyOutcome::NotAllowed)));
-            frame(&mut s, &SLOT, &OWNER, ok_begin);
+            frame(&mut s, &SLOT, &OWNER, counting_begin_busy);
             let (id, ready) = SLOT.snapshot().expect("公開側の保留が残る");
             assert_eq!(id, public);
             assert!(ready.is_some());

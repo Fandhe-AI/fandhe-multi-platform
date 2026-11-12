@@ -127,15 +127,30 @@ final class PasskeyHelper {
     }
 
     // JNI スレッドから呼ばれる（static 入口 `request(Activity, ...)` 経由）。
+    // 破棄済みの helper へ来た要求は追跡せず、その場で中断を 1 回だけ返す（`detach` に競り負けても待たせない）。
+    // 判定と track は同じロックで行い、`onDestroy` の `take` と交差しない。
     private void request(long id, boolean register, String requestJson) {
+        boolean dead;
         synchronized (this) {
-            request.track(id);
+            dead = destroyed;
+            if (!dead) {
+                request.track(id);
+            }
+        }
+        if (dead) {
+            nativeOnPasskeyResult(id, KIND_INTERRUPTED, null);
+            return;
         }
         uiHandler.post(() -> start(id, register, requestJson));
     }
 
     private synchronized void start(long id, boolean register, String requestJson) {
-        if (request.current() != id || destroyed) {
+        // 破棄済みなら、`onDestroy` が中断を返していない id（まだ追跡中の分）だけをここで確定する。
+        if (destroyed) {
+            finish(id, KIND_INTERRUPTED, null);
+            return;
+        }
+        if (request.current() != id) {
             return;
         }
         ComponentActivity activity = activityRef.get();
