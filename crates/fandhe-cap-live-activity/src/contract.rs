@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #88、Issue #294）: 数値 1 つ（0〜[`MAX_LIVE_VALUE`]）を OS の
 //! ライブ表示として出す契約。iOS はライブアクティビティ（ActivityKit）、Android は進行中通知。
-//! `fandhe-egui-proxy` の `device/live_activity.rs` が「開始」「更新」「終了」ボタン押下時に
+//! `driver.rs` が「開始」「更新」「終了」ボタン押下時に
 //! [`LiveActivity::submit`] を呼ぶ。macOS は非対応、Windows・Web は対象外で、いずれも
 //! [`UnsupportedLiveActivity`] を返す。同時に出すのは 1 件。push 更新・複数同時は範囲外。
 //!

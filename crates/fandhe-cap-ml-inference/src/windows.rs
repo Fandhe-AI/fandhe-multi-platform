@@ -1,6 +1,6 @@
 //! Windows 向け機械学習推論（Issue #290）。WinML（`Windows.AI.MachineLearning`、Windows 10 1809 以降）を呼ぶ。
 //!
-//! 呼び出し元: `device/ml_inference.rs` の Windows 経路。ワーカースレッド上で `infer` を同期に
+//! 呼び出し元: `driver.rs` の Windows 経路。ワーカースレッド上で `infer` を同期に
 //! 呼ぶ。期限・世代照合・出力の照合・画面向けの失敗写像は呼び出し側が担い、本ファイルは
 //! 「ブロックしてよい同期関数」だけを持つ。契約の SSOT は `crate::contract`。
 //! モデルは `onnx_model` が実行時に組んだバイト列をメモリ上のストリームで渡す（一時ファイルなし）。

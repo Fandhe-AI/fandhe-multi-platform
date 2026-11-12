@@ -1,7 +1,7 @@
 //! iOS 向け電源状態実装（Issue #1275）。`ios/fandhe_ios_power_state.m`（`UIDevice` +
 //! `NSProcessInfo`、`build.rs` が iOS ターゲットの feature `device` 有効時にコンパイルする）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。#1274 のスタブを置き換えたもので、dispatch
-//! （`device/power_state.rs`）と共通コア画面は変えない。契約は `crate::contract`。
+//! （`driver.rs`）と共通コア画面は変えない。契約は `crate::contract`。
 //!
 //! `.m` は OS の生値を返すだけで、値域チェックと契約値への写像は [`from_raw`] が行う
 //! （ホストでテストできるようモジュールは `cfg(any(ios, test))`）。`UIDevice` は UIKit のため

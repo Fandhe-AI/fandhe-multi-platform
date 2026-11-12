@@ -1,5 +1,5 @@
 // iOS のライブアクティビティ（ActivityKit）の薄層（Issue #295、親 #88 の b-ios）。
-// `src/device/ios_live_activity.rs` から呼ばれる。`Activity<Attributes>` は Swift 専用 API で ObjC から
+// `src/ios.rs` から呼ばれる。`Activity<Attributes>` は Swift 専用 API で ObjC から
 // 呼べないため、`@_cdecl` で C ABI を公開する（`build.rs` が swiftc で静的ライブラリ化してリンクする）。
 //
 // # ABI

@@ -159,7 +159,7 @@ mod imp {
         }
     }
 
-    /// iOS の `ArTracking` 実装を返す（`device/ar.rs` の iOS 経路から呼ばれる）。
+    /// iOS の `ArTracking` 実装を返す（`driver.rs` の iOS 経路から呼ばれる）。
     pub(crate) fn implementation() -> Arc<dyn ArTracking> {
         Arc::new(IosAr)
     }

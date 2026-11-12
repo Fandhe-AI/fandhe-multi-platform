@@ -3,7 +3,7 @@
 // 省電力モード・熱状態を同期で読む。macOS 専用（iOS は UIDevice を使い API が異なるため
 // `apple/*.m` ではなく `macos/` に置く、`fandhe_macos_url_scheme.m` と同じ判断）。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_power_state.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-power-state/src/macos.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルし、IOKit をリンクする。
 //
 // 契約:

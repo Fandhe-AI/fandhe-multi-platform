@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::calendar_add`（端末依存ゼロ）の要求を観測し、検査
 //! （`crate::contract::EventDraft::parse`）を通ったものだけを OS へ渡して、
 //! 結果を `CompletionSender` 経由で返す（`screens/registry.rs` の `effect` 区画から
-//! 呼ばれる契約、`device/biometric_auth.rs` と同型）。契約と守る範囲は
+//! 呼ばれる契約、`fandhe-egui-proxy` の `device/biometric_auth.rs` と同型）。契約と守る範囲は
 //! `crate::contract` のモジュール doc を参照。
 //!
 //! - macOS / iOS: EventKit（iOS は EventKitUI の編集画面）はコールバック型のため
@@ -76,8 +76,8 @@ pub(crate) fn outcome_from_code(code: i32) -> Result<AddEventOutcome, CalendarEr
     }
 }
 
-/// Android: `.java` 側の結果コード → 結果の写像（SSOT は `MainActivity.java` の
-/// `CALENDAR_RESULT_*`。未知のコードは失敗に倒し成功を作らない）。
+/// Android: `.java` 側の結果コード → 結果の写像（SSOT は `CalendarHelper.java` の
+/// `RESULT_*`。未知のコードは失敗に倒し成功を作らない）。
 ///
 /// | code | 意味 | 写像 |
 /// |---|---|---|

@@ -1,5 +1,5 @@
 //! iOS（CallKit）向け通話 UI 実装（Issue #277、親 #87 / #276 の b-ios）。
-//! `device/call_ui.rs::platform_call_ui` の ios 経路から呼ばれ、`ios/fandhe_ios_call_ui.m`
+//! `driver.rs` の ios 経路から呼ばれ、`ios/fandhe_ios_call_ui.m`
 //! （`CXProvider` / `CXProviderDelegate` / `CXCallController`。`build.rs` が iOS の feature `device`
 //! 有効時にコンパイルし CallKit をリンクする）を C ABI で呼ぶ。dispatch・共通コア画面・trait 契約
 //! （`fandhe_device::call_ui`）は変えない。call_id の照合・段階遷移・期限はドライバ側が持つ。

@@ -64,7 +64,7 @@ fn async_failure_code(status: AsyncStatus, results_code: Option<i32>) -> i32 {
 /// `Pedometer` センサーから累積歩数を読む実装。
 pub(crate) struct WindowsPedometer;
 
-/// プロセスで共有する実装を返す（`device/pedometer.rs::implementation` から呼ばれる）。
+/// プロセスで共有する実装を返す（`driver.rs::implementation` から呼ばれる）。
 pub(crate) fn implementation() -> Arc<dyn Pedometer> {
     Arc::new(WindowsPedometer)
 }

@@ -6,7 +6,7 @@
 //! （[`present`]）で呼ぶ。`unsafe` はこの呼び出し 1 箇所に閉じ `// SAFETY:` で契約を明記する
 //! （`apple_biometric.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
-//! `.m` 側の完了から [`fandhe_rust_calendar_outcome`] が呼ばれ、`device/calendar::bridge`
+//! `.m` 側の完了から [`fandhe_rust_calendar_outcome`] が呼ばれ、`driver::bridge`
 //! へ結果を置く（pull 型）。結果コード → 結果の写像は `driver.rs`::outcome_from_code`
 //! に一本化する。件名・日時はログへ出力しない（security.md A09）。
 

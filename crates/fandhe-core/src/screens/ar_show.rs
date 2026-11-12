@@ -5,7 +5,7 @@
 //! `screens/registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod ar_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
-//! `device/ar.rs`（Web は `fandhe-web-dom`）が行い、[`apply_reading`] / [`apply_failure`] /
+//! `fandhe-cap-ar` の `driver.rs`（Web は `fandhe-web-dom`）が行い、[`apply_reading`] / [`apply_failure`] /
 //! [`apply_ended`] で注入する。`fandhe_device::ar` の型は依存方向の都合でここへ写す。
 //!
 //! 嘘の値を出さない: 位置は `Live` かつ追跡できているときだけ、水平面は数えられる環境だけ数字で出す

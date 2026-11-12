@@ -65,7 +65,7 @@ fn implementation() -> Arc<dyn WordSegmenter> {
         .clone()
 }
 
-/// Android の `MainActivity.nlpSegment` の戻り値（トークンを U+0000 で連結した文字列。
+/// Android の `NlpHelper.segment` の戻り値（トークンを U+0000 で連結した文字列。
 /// 入力は `validate_input` が NUL を拒否済みでトークンは入力の部分文字列のため、NUL は
 /// 区切りとして曖昧にならない。null は Java 側の失敗）をトークン列へ写す。
 /// 写像だけを OS 非依存の純関数にして、ホストでテストする。

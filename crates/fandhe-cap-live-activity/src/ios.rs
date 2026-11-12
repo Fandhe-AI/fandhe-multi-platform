@@ -1,5 +1,5 @@
 //! iOS（ActivityKit）向けライブアクティビティ実装（Issue #295、親 #88 / #294 の b-ios）。
-//! `device/live_activity.rs::platform_live_activity` の ios 経路から呼ばれ、
+//! `driver.rs` の ios 経路から呼ばれ、
 //! `ios/fandhe_ios_live_activity.swift`（`build.rs` が iOS の feature `device` 有効時に swiftc で静的
 //! ライブラリ化し ActivityKit をリンクする）を C ABI で呼ぶ。dispatch・共通コア画面・trait 契約
 //! （`fandhe_device::live_activity`）は変えない。要求の照合はドライバ側の `RequestSlot` が持つ。

@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #87、Issue #276）: 疑似着信を OS の着信 UI に出し、応答・拒否・終了の
-//! 結果を画面へ返す契約。`fandhe-egui-proxy` の `device/call_ui.rs`（effect ドライバ）が
+//! 結果を画面へ返す契約。`driver.rs`（effect ドライバ）が
 //! [`CallUi::report_incoming`] / [`CallUi::end`] を呼び、各 OS 実装（iOS: CallKit = #277、
 //! Android: self-managed `ConnectionService` = #278）が本トレイトを実装する。macOS・Windows・Web は
 //! 対象外で [`UnsupportedCallUi`] 固定。

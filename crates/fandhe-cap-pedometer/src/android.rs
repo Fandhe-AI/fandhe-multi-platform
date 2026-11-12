@@ -163,7 +163,7 @@ extern "system" fn Java_com_fandhe_platform_PedometerHelper_nativeOnPedometerRes
     SLOT.deliver(request_id as u64, decode(code, steps));
 }
 
-/// Android の `Pedometer` 実装を返す（`device/pedometer.rs` の dispatch から呼ばれる）。
+/// Android の `Pedometer` 実装を返す（`driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn Pedometer> {
     Arc::new(AndroidPedometer)

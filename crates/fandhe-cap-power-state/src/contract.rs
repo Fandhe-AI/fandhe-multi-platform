@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #1128、Issue #1274）: 電源状態（電池残量・充電状態・省電力モード・
-//! 熱状態）を 1 回読む契約。`fandhe-egui-proxy` の `device/power_state.rs` が 1 秒間隔の pull で
+//! 熱状態）を 1 回読む契約。`driver.rs` が 1 秒間隔の pull で
 //! [`PowerState::read`] を呼び、各 OS 実装（macOS: IOKit + `NSProcessInfo`、Windows:
 //! `GetSystemPowerStatus`、iOS: #1275、Android: #1276）が本トレイトを実装する。Web は
 //! `fandhe-web-dom` 側（#1277）で Battery Status API を使い、本トレイトは経由しない。
