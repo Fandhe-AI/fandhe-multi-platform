@@ -3,7 +3,7 @@
 // カメラ映像（Issue #1009、(b-ios)）は `fandhe_ios_ar_read_frame` が `currentFrame.capturedImage` の生の面を
 // Rust へ同期に渡し、RGB 変換と縮小は Rust が行う。`ARFrame` / pixel buffer は呼び出しの中で手放し保持しない。
 //
-// `src/device/ios_ar.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の feature `device` 有効時のみ
+// `crates/fandhe-cap-ar/src/ios.rs` から C ABI 経由で呼ばれる。本 crate の `build.rs` が iOS ターゲットで
 // `cc` コンパイルし ARKit をリンクする。
 //
 // 契約:

@@ -399,7 +399,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ar_show" => fandhe_core::screens::ar_show::current_screen,
-    fandhe_egui_proxy::device::ar::ar_show_effect,
+    fandhe_cap_ar::ar_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "network_status_show" => fandhe_core::screens::network_status_show::current_screen,

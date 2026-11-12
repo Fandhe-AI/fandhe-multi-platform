@@ -32,10 +32,10 @@
 //!
 //! 位置・例外の message は DOM・ログへ出さない（security.md A09）。
 
+use fandhe_cap_ar::{checked_reading, ArFailure, ArReading, LimitedReason, Tracking};
 use fandhe_core::screens::ar_show::{
     ArFailureView, ArReadingView, LimitedReasonView, TrackingView,
 };
-use fandhe_device::ar::{checked_reading, ArFailure, ArReading, LimitedReason, Tracking};
 use fandhe_device::compass::WaitTracker;
 
 use super::compass::STALE_MS;
@@ -153,10 +153,10 @@ mod web {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    use fandhe_cap_ar::{ArFailure, READ_INTERVAL};
     use fandhe_core::screens::ar_show::{
         apply_ended, apply_failure, apply_reading, reading_lines, ArFailureView, ArShowState,
     };
-    use fandhe_device::ar::{ArFailure, READ_INTERVAL};
     use fandhe_device::compass::WaitTracker;
     use js_sys::{Array, Function, Object, Promise, Reflect};
     use wasm_bindgen::prelude::*;

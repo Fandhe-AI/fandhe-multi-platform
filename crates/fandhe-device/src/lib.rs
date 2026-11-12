@@ -33,8 +33,6 @@ pub mod app_lifecycle;
 pub mod app_progress_attention;
 /// Phase 11（端末機能の拡充ループ、親 #101、Issue #424）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録。
 pub mod app_shortcuts;
-/// Phase 11（端末機能の拡充ループ、親 #90、Issue #307）: AR 表示（追跡状態・位置・水平面の数）。
-pub mod ar;
 /// Phase 11（端末機能の拡充ループ、親 #1136、Issue #1330）: 音声デバイスの一覧（入力・出力の名前）。
 pub mod audio_devices;
 /// Phase 11 の拡充ループ（親 #172、Issue #840）: 音声の割り込み・セッション種別（他の音を止める・下げる・混ぜる）。

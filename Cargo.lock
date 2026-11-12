@@ -1062,6 +1062,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-ar"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-camera-capture"
 version = "0.2.0"
 dependencies = [
@@ -1255,6 +1266,7 @@ name = "fandhe-gallery"
 version = "0.1.0"
 dependencies = [
  "egui",
+ "fandhe-cap-ar",
  "fandhe-cap-camera-capture",
  "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
@@ -1358,6 +1370,7 @@ name = "fandhe-web-dom"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "fandhe-cap-ar",
  "fandhe-cap-power-state",
  "fandhe-cap-share-receive",
  "fandhe-core",

@@ -1,14 +1,14 @@
 //! iOS 向け AR 実装（Issue #308、親 #90 の (b-ios)）。`ios/fandhe_ios_ar.m`（ARKit の `ARSession`、
-//! `build.rs` が iOS ターゲットの feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 3 関数で
-//! 呼ぶ。(a) のスタブを置き換えたもので、dispatch（`device/ar.rs`）・共通コア画面・trait 契約
-//! （`fandhe_device::ar`）は変えない。
+//! 本 crate の `build.rs` が iOS ターゲットでコンパイルする）を `unsafe extern "C"` 3 関数で
+//! 呼ぶ。(a) のスタブを置き換えたもので、dispatch（`driver.rs`）・共通コア画面・trait 契約
+//! （`crate::contract`）は変えない。
 //!
 //! `.m` は OS の生値と状態コードを返すだけで、範囲検査と契約値への写像は [`start_result`] /
 //! [`read_result`] / [`tracking_from_code`] が行う（ホストでテストできるよう `cfg(any(ios, test))`）。
 //!
 //! # 再描画
 //!
-//! `.m` が状態の変化を確定した直後に `fandhe_rust_ar_changed` を呼び、`crate::ios::request_repaint` で
+//! `.m` が状態の変化を確定した直後に `fandhe_rust_ar_changed` を呼び、`fandhe_runtime::request_repaint` で
 //! 次フレームを起こす。位置は毎フレーム変わるため要求せず、ドライバの 100 ms pull で拾う。
 //!
 //! # 守る範囲・守らない範囲
@@ -32,7 +32,7 @@
 //! 実機での追跡・権限ダイアログ・背景復帰・中断の挙動は未確認（#306）。
 
 #[cfg(any(target_os = "ios", test))]
-use fandhe_device::ar::{checked_reading, ArFailure, ArSample, LimitedReason, Tracking};
+use crate::contract::{ArFailure, ArSample, LimitedReason, Tracking, checked_reading};
 #[cfg(any(target_os = "ios", test))]
 use fandhe_device::camera_preview_stream::ScaledFrame;
 
@@ -110,7 +110,7 @@ fn read_result(
 mod imp {
     use std::sync::Arc;
 
-    use fandhe_device::ar::{ArFailure, ArSample, ArTracking};
+    use crate::contract::{ArFailure, ArSample, ArTracking};
 
     use fandhe_device::camera_preview_stream::ScaledFrame;
 
@@ -119,7 +119,7 @@ mod imp {
     // SAFETY: `ios/fandhe_ios_ar.m`（`build.rs` が iOS ターゲットの feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_ios_ar_start() -> i32;
         fn fandhe_ios_ar_read(tracking: *mut i32, pos: *mut f64, planes: *mut i32) -> i32;
         fn fandhe_ios_ar_stop();
@@ -171,16 +171,16 @@ pub(crate) use imp::implementation;
 /// 状態変化の通知（`.m` から）。引数なし・panic しない。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_ar_changed() {
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 /// 映像の面を受ける（`.m` の `fandhe_ios_ar_read_frame` から同期に呼ばれる）。
 /// `ctx` は `read_frame` の `Option<ScaledFrame>`。lock 中の面を変換して書き込むだけで保持しない。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code, clippy::too_many_arguments)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_ar_frame(
     ctx: *mut std::ffi::c_void,
     width: u32,
@@ -210,18 +210,18 @@ extern "C" fn fandhe_rust_ar_frame(
 /// 背景遷移の通知。背景中は `NoReading` の待機を止める。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_ar_backgrounded() {
-    super::ar::note_backgrounded();
+    crate::driver::note_backgrounded();
 }
 
 /// 前景復帰の通知。ドライバの待機起点を引き直させる。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_ar_resumed() {
-    super::ar::note_resumed();
-    crate::ios::request_repaint();
+    crate::driver::note_resumed();
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]

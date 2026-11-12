@@ -28,6 +28,8 @@ fandhe-device = { path = "../fandhe-device" }
 fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive" }
 # Issue #1187: 電源状態の純関数（`percent_from_raw`）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の実装が cfg で外れる。
 fandhe-cap-power-state = { path = "../fandhe-cap-power-state" }
+# Issue #1187: AR 表示の純関数・定数（`checked_reading`・`READ_INTERVAL` など）の正本。Web 実装の本体は本クレートに残す。
+fandhe-cap-ar = { path = "../fandhe-cap-ar" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。
 fandhe-platform-web = { path = "../fandhe-platform-web" }
 

@@ -17,6 +17,7 @@ default = ["device"]
 device = [
   "fandhe-egui-proxy/device",
   # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
+  "dep:fandhe-cap-ar",
   "dep:fandhe-cap-camera-capture",
   "dep:fandhe-cap-device-identifier",
   "dep:fandhe-cap-document-scan",
@@ -73,6 +74,7 @@ egui = { workspace = true }
 # 画面の effect ドライバとして使う。wasm32 の Web 実装は `fandhe-web-dom` 側のため入れない。
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
+fandhe-cap-ar = { path = "../fandhe-cap-ar", optional = true }
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
 fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier", optional = true }
 fandhe-cap-document-scan = { path = "../fandhe-cap-document-scan", optional = true }

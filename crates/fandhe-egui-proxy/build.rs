@@ -242,8 +242,6 @@ fn build() {
     compile_ios_flashlight();
     // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
     compile_ios_pen_stylus();
-    // `ios/fandhe_ios_ar.m`（Issue #308）。iOS 分岐のみ。
-    compile_ios_ar();
     // `ios/fandhe_ios_file_watch.m`（Issue #1412）。iOS 分岐のみ。
     compile_ios_file_watch();
     // `ios/fandhe_ios_multi_display.m`（Issue #27）。iOS 分岐のみ。
@@ -1440,15 +1438,6 @@ fn compile_ios_flashlight() {
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_pen_stylus.rs` が使う）。
 fn compile_ios_pen_stylus() {
     compile_objc("ios/fandhe_ios_pen_stylus.m", &["UIKit"]);
-}
-
-/// `ios/fandhe_ios_ar.m` を `cc` でコンパイルし ARKit をリンクする（Issue #308）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_ar.rs` が使う）。
-fn compile_ios_ar() {
-    compile_objc(
-        "ios/fandhe_ios_ar.m",
-        &["ARKit", "AVFoundation", "CoreVideo", "Foundation", "UIKit"],
-    );
 }
 
 /// `ios/fandhe_ios_call_ui.m` を `cc` でコンパイルし CallKit をリンクする（Issue #277）。**iOS 分岐のみ**

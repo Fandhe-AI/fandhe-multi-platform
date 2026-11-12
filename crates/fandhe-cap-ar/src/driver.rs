@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #90、Issue #307）「AR 表示」の effect ドライバ。
 //! `fandhe_core::screens::ar_show`（端末依存ゼロ）の `wanted` の立ち上がりで
-//! `fandhe_device::ar::ArTracking::start`、立ち下がりで `stop` を呼び、実行中は
+//! `crate::contract::ArTracking::start`、立ち下がりで `stop` を呼び、実行中は
 //! [`READ_INTERVAL`] ごとに `read` して結果を注入する（`registry.rs` の `effect` 区画から
 //! 毎フレーム同期に呼ばれる）。`compass.rs` と同型の間隔つき pull。
 //!
@@ -11,38 +11,38 @@
 //! 映像は `Reading` を得た読み取りでだけ `read_frame` で読み、検査して同じ世代の `apply_frame` で送る。
 //! 背景では映像を消す。
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は `ios_ar.rs`（ARKit、Issue #308。
+//! dispatch（[`platform_ar`]）は全対象 OS の最終形。iOS は `ios.rs`（ARKit、Issue #308。
 //! 非対応端末は `Unsupported`）、Web は `fandhe-web-dom` 側（(c)）、他 OS は対象外で `UnsupportedAr` 固定。
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use fandhe_core::screens::ar_show::{
-    apply_failure, apply_frame, apply_reading, reading_lines, ArFailureView, ArReadingView,
-    ArShowState, ArView, LimitedReasonView, TrackingView,
+#[cfg(not(target_os = "ios"))]
+use crate::contract::UnsupportedAr;
+use crate::contract::{
+    ArFailure, ArReading, ArSample, ArTracking, LimitedReason, READ_INTERVAL, Tracking,
 };
 use fandhe_core::RgbaPixels;
-#[cfg(not(target_os = "ios"))]
-use fandhe_device::ar::UnsupportedAr;
-use fandhe_device::ar::{
-    ArFailure, ArReading, ArSample, ArTracking, LimitedReason, Tracking, READ_INTERVAL,
+use fandhe_core::screens::ar_show::{
+    ArFailureView, ArReadingView, ArShowState, ArView, LimitedReasonView, TrackingView,
+    apply_failure, apply_frame, apply_reading, reading_lines,
 };
-use fandhe_device::camera_preview_stream::{ScaledFrame, PREVIEW_MAX_SIDE};
+use fandhe_device::camera_preview_stream::{PREVIEW_MAX_SIDE, ScaledFrame};
 use fandhe_device::compass::WaitTracker;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた実装を返す（プロセスで 1 個。セッションを二重に作らないため
-/// `OnceLock` で保持する）。
-fn implementation() -> Arc<dyn ArTracking> {
+/// `OnceLock` で保持する）。画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_ar() -> Arc<dyn ArTracking> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn ArTracking>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "ios")]
             {
-                super::ios_ar::implementation()
+                crate::ios::implementation()
             }
             #[cfg(not(target_os = "ios"))]
             {
@@ -270,7 +270,7 @@ pub fn ar_show_effect(state: &ArShowState, sender: &CompletionSender<ArShowState
     drive(
         state,
         sender,
-        implementation().as_ref(),
+        platform_ar().as_ref(),
         Instant::now(),
         RESUME_EPOCH.load(Ordering::SeqCst),
         ds,
@@ -280,18 +280,28 @@ pub fn ar_show_effect(state: &ArShowState, sender: &CompletionSender<ArShowState
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::UnsupportedAr as Unsupported;
     use fandhe_core::screens::ar_show::{main_text, start, stop};
-    use fandhe_device::ar::UnsupportedAr as Unsupported;
     use fandhe_device::compass::NO_READING_TIMEOUT_MS;
-    use std::sync::atomic::AtomicUsize;
     use std::sync::Mutex as StdMutex;
+    use std::sync::atomic::AtomicUsize;
     use std::time::Duration;
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<ArShowState>>;
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<ArShowState>>;
 
     fn channel() -> (CompletionSender<ArShowState>, Rx) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     fn apply_all(rx: &Rx, s: &mut ArShowState) {
