@@ -43,8 +43,8 @@ import java.security.SecureRandom;
 
 // パスキー（WebAuthn）の登録・サインイン要求（Issue #1280、親 #92 の b-android）の Android 実装ヘルパー。
 // 範囲は Credential Manager でパスキーの登録とサインイン要求を出し、結果の種別と本文を Rust へ返すこと。
-// MainActivity から生成・委譲される。Rust の `device/android_passkey.rs` が同期 JNI `MainActivity.passkeyRandom`
-// で乱数を得て、`MainActivity.requestPasskey(id, register, requestJson)` を JNI で呼び、結果を
+// `PasskeyLifecycle` が Activity ごとに生成する。Rust の `fandhe-cap-passkey-signin/src/android.rs` が同期 JNI の static メソッド `random(int)`
+// で乱数を得て、static メソッド `request(activity, id, register, requestJson)` を JNI で呼び、結果を
 // `nativeOnPasskeyResult(id, kind, payload)` で受けて `passkey::bridge::deliver` へ渡す。
 //
 // 要求 JSON の組み立てと応答の照合（challenge・type・UP/UV/AT・署名の有無）は Rust だけで行い、ここへ
@@ -79,7 +79,38 @@ final class PasskeyHelper {
     private CancellationSignal signal;
     private boolean destroyed;
 
-    PasskeyHelper(ComponentActivity activity) {
+    // Activity ごとの helper。`PasskeyLifecycle`（`FeatureLifecycleProvider`）が生成時に付け、破棄時に外して OS の UI を取り消す。
+    private static final java.util.Map<android.app.Activity, PasskeyHelper> HELPERS =
+            new java.util.WeakHashMap<>();
+
+    static synchronized void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new PasskeyHelper(activity));
+    }
+
+    static void detach(android.app.Activity activity) {
+        PasskeyHelper helper;
+        synchronized (PasskeyHelper.class) {
+            helper = HELPERS.remove(activity);
+        }
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // JNI スレッドから呼ばれる入口。helper が無いときは失敗で確定する（結果が来ないまま待たせない）。
+    static void request(android.app.Activity activity, long id, boolean register, String requestJson) {
+        PasskeyHelper helper;
+        synchronized (PasskeyHelper.class) {
+            helper = HELPERS.get(activity);
+        }
+        if (helper == null) {
+            nativeOnPasskeyResult(id, KIND_FAILED, null);
+            return;
+        }
+        helper.request(id, register, requestJson);
+    }
+
+    private PasskeyHelper(ComponentActivity activity) {
         this.activityRef = new WeakReference<>(activity);
     }
 
@@ -93,8 +124,8 @@ final class PasskeyHelper {
         return b;
     }
 
-    // JNI スレッドから呼ばれる。
-    void request(long id, boolean register, String requestJson) {
+    // JNI スレッドから呼ばれる（static 入口 `request(Activity, ...)` 経由）。
+    private void request(long id, boolean register, String requestJson) {
         synchronized (this) {
             request.track(id);
         }
@@ -228,7 +259,7 @@ final class PasskeyHelper {
     }
 
     // Activity 破棄。OS の UI を取り消し、結果は送らず追跡を外す（Rust 側が slot を捨てる）。
-    synchronized void onDestroy() {
+    private synchronized void onDestroy() {
         destroyed = true;
         request.take();
         if (signal != null) {

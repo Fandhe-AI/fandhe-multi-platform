@@ -350,9 +350,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Issue #1130: 決済シートの保留中の要求を破棄し、旧 request_id の完了を不一致で捨てさせる。
     #[cfg(feature = "device")]
     crate::device::payment_request::reset_pending_tracking();
-    // Issue #1280: パスキーの保留中の要求を破棄し、旧 request_id の完了を不一致で捨てさせる。
-    #[cfg(feature = "device")]
-    crate::device::passkey::reset_pending_tracking();
 
     // TASK-17.2（REQ-17）/ Issue #715: `FANDHE_PROXY_APP=<名前>` で描画対象を切り替える
     // （`main.rs`/`web.rs`/`ios.rs` と同じ契約、A03 対策・security.md 準拠の固定文字列

@@ -2498,22 +2498,7 @@ pub(crate) fn read_ble_string(
     value: &jni::objects::JString,
     max_units: i32,
 ) -> Option<String> {
-    if value.is_null() {
-        return None;
-    }
-    let units = env
-        .call_method(
-            value,
-            jni::jni_str!("length"),
-            jni::jni_sig!(() -> int),
-            &[],
-        )
-        .and_then(|v| v.i())
-        .ok()?;
-    if units > max_units {
-        return None;
-    }
-    value.try_to_string(env).ok()
+    fandhe_platform_android::read_bounded_string(env, value, max_units)
 }
 
 /// `MainActivity.nativeOnBleScanResult`（Java 側）から呼ばれる JNI エクスポート関数

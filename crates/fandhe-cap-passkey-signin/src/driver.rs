@@ -1,8 +1,8 @@
 //! Phase 11（親 #92）型サンプル「パスキー・サインイン連携」（Issue #342）の effect ドライバ。
-//! `fandhe_core::screens::passkey_signin`（端末依存ゼロ）の要求を観測し、`fandhe_device::passkey`
+//! `fandhe_core::screens::passkey_signin`（端末依存ゼロ）の要求を観測し、`fandhe_cap_passkey_signin`
 //! の [`Passkey`] を呼んで結果を `CompletionSender` 経由で返す
 //! （`screens/registry.rs` の `effect` 区画から呼ばれる契約）。契約と守る範囲は
-//! `fandhe_device::passkey` のモジュール doc を参照。
+//! `fandhe_cap_passkey_signin` のモジュール doc を参照。
 //!
 //! - Windows: OS の UI はブロッキングのため、ワーカースレッドで [`Passkey::run`] を呼び、結果を
 //!   pull 型 [`bridge`]（`RequestSlot` の facade）で毎フレーム反映する。実装は
@@ -13,13 +13,13 @@
 //! - macOS / Linux / iOS: 対応表で保留または非対応のため、同期で `UnsupportedPasskey`
 //!   を呼び「使えない」を表示する。Web は `fandhe-web-dom`（#344）
 
+use crate::contract::{PasskeyOp, PasskeyOutcome, PasskeySummary};
+use crate::error::PasskeySigninError;
 use fandhe_core::screens::passkey_signin::{
-    take_request, CoreOutcome, CoreSummary, CredentialMemo, PasskeyAction, PasskeySigninState,
+    CoreOutcome, CoreSummary, CredentialMemo, PasskeyAction, PasskeySigninState, take_request,
 };
-use fandhe_device::passkey::{PasskeyOp, PasskeyOutcome, PasskeySummary};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 fn op_of(action: PasskeyAction) -> PasskeyOp {
     match action {
@@ -38,17 +38,17 @@ fn to_summary(s: PasskeySummary) -> CoreSummary {
     }
 }
 
-/// `DeviceError` を画面用の結果へ写像する。内部構造・入力値は出さず固定文言だけにする
+/// `PasskeySigninError` を画面用の結果へ写像する。内部構造・入力値は出さず固定文言だけにする
 /// （security.md A09）。応答不整合は成功にせず失敗として見せる。
-fn to_outcome(result: Result<PasskeyOutcome, DeviceError>) -> Result<CoreOutcome, String> {
+fn to_outcome(result: Result<PasskeyOutcome, PasskeySigninError>) -> Result<CoreOutcome, String> {
     match result {
         Ok(PasskeyOutcome::Registered(s)) => Ok(CoreOutcome::Registered(to_summary(s))),
         Ok(PasskeyOutcome::AssertionReturned(s)) => {
             Ok(CoreOutcome::AssertionReturned(to_summary(s)))
         }
         Ok(PasskeyOutcome::NotAllowed) => Ok(CoreOutcome::NotAllowed),
-        Err(DeviceError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
-        Err(DeviceError::InvalidInput(_)) => {
+        Err(PasskeySigninError::Unsupported) => Ok(CoreOutcome::Unsupported),
+        Err(PasskeySigninError::InvalidInput) => {
             Err(fandhe_core::screens::passkey_signin::MISMATCH_TEXT.to_string())
         }
         Err(_) => Err("パスキーの操作を完了できませんでした".to_string()),
@@ -63,11 +63,11 @@ fn to_outcome(result: Result<PasskeyOutcome, DeviceError>) -> Result<CoreOutcome
     allow(dead_code)
 )]
 pub(crate) mod bridge {
+    use crate::contract::PasskeyOutcome;
+    use crate::error::PasskeySigninError;
     use fandhe_core::screens::passkey_signin::CoreOutcome;
-    use fandhe_device::passkey::PasskeyOutcome;
-    use fandhe_device::DeviceError;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) type Outcome = Result<CoreOutcome, String>;
 
@@ -81,7 +81,10 @@ pub(crate) mod bridge {
 
     /// ワーカーからの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
     /// 捨てて `false`（先に届いたものだけを採る）。
-    pub(crate) fn deliver(request_id: u64, result: Result<PasskeyOutcome, DeviceError>) -> bool {
+    pub(crate) fn deliver(
+        request_id: u64,
+        result: Result<PasskeyOutcome, PasskeySigninError>,
+    ) -> bool {
         SLOT.deliver(request_id, super::to_outcome(result))
     }
 
@@ -94,9 +97,9 @@ pub(crate) mod bridge {
 
 /// `android_main` から呼ぶ。slot と `android_passkey` の保留を捨てる（Java 側は `onDestroy` で追跡を外し済み）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::reset();
-    super::android_passkey::reset();
+    crate::android::reset();
 }
 
 /// Android 版の effect ドライバ本体。`begin` が `Err` なら依頼自体の失敗としてその場で結果を置く
@@ -106,10 +109,10 @@ pub(crate) fn reset_pending_tracking() {
 fn drive_callback(
     state: &PasskeySigninState,
     sender: &CompletionSender<PasskeySigninState>,
-    slot: &'static crate::device::request_slot::RequestSlot<bridge::Outcome>,
-    begin: fn(u64, PasskeyOp) -> Result<(), DeviceError>,
+    slot: &'static fandhe_runtime::request_slot::RequestSlot<bridge::Outcome>,
+    begin: fn(u64, PasskeyOp) -> Result<(), PasskeySigninError>,
 ) {
-    use fandhe_core::screens::passkey_signin::{finish, mark_running, PasskeyPhase};
+    use fandhe_core::screens::passkey_signin::{PasskeyPhase, finish, mark_running};
 
     if let Some(view) = take_request(state) {
         // `mark_running` の反映前に次フレームが同じ要求を観測しても、二重に OS の UI を出さない。
@@ -127,7 +130,7 @@ fn drive_callback(
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         slot,
         sender,
         |_request_id| {},
@@ -149,7 +152,7 @@ pub fn passkey_signin_effect(
     state: &PasskeySigninState,
     sender: &CompletionSender<PasskeySigninState>,
 ) {
-    drive_callback(state, sender, &bridge::SLOT, super::android_passkey::begin);
+    drive_callback(state, sender, &bridge::SLOT, crate::android::begin);
 }
 
 /// Windows 版の effect ドライバ。要求を観測したらワーカーで OS の UI を出し、保留中は毎フレーム結果を拾う。
@@ -158,7 +161,7 @@ pub fn passkey_signin_effect(
     state: &PasskeySigninState,
     sender: &CompletionSender<PasskeySigninState>,
 ) {
-    use fandhe_core::screens::passkey_signin::{finish, mark_running, PasskeyPhase};
+    use fandhe_core::screens::passkey_signin::{PasskeyPhase, finish, mark_running};
 
     if let Some(view) = take_request(state) {
         // `mark_running` の反映前に次フレームが同じ要求を観測しても、二重に OS の UI を出さない。
@@ -169,14 +172,14 @@ pub fn passkey_signin_effect(
         let request_id = bridge::begin();
         let op = op_of(view.action);
         // HWND の取得などは UI スレッドで済ませ、ブロッキングの呼び出しだけをワーカーへ渡す。
-        let passkey = super::windows_passkey::implementation();
+        let passkey = crate::windows::implementation();
         let spawned = std::thread::Builder::new()
             .name("passkey".into())
             .spawn(move || {
                 bridge::deliver(request_id, passkey.run(op));
             });
         if spawned.is_err() {
-            bridge::deliver(request_id, Err(DeviceError::Internal("passkey failed")));
+            bridge::deliver(request_id, Err(PasskeySigninError::Internal));
         }
         return;
     }
@@ -185,7 +188,7 @@ pub fn passkey_signin_effect(
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -207,7 +210,7 @@ pub fn passkey_signin_effect(
 fn drive_sync(
     state: &PasskeySigninState,
     sender: &CompletionSender<PasskeySigninState>,
-    passkey: &dyn fandhe_device::passkey::Passkey,
+    passkey: &dyn crate::contract::Passkey,
 ) {
     use fandhe_core::screens::passkey_signin::{finish, mark_running};
 
@@ -229,13 +232,20 @@ pub fn passkey_signin_effect(
     state: &PasskeySigninState,
     sender: &CompletionSender<PasskeySigninState>,
 ) {
-    drive_sync(state, sender, &fandhe_device::passkey::UnsupportedPasskey);
+    drive_sync(state, sender, &crate::contract::UnsupportedPasskey);
 }
 
 #[cfg(test)]
 mod tests {
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     use super::*;
-    use fandhe_device::passkey::CredentialId;
+    use crate::contract::CredentialId;
 
     fn summary() -> PasskeySummary {
         PasskeySummary {
@@ -262,16 +272,15 @@ mod tests {
             Ok(CoreOutcome::NotAllowed)
         ));
         assert!(matches!(
-            to_outcome(Err(DeviceError::Unsupported("passkey"))),
+            to_outcome(Err(PasskeySigninError::Unsupported)),
             Ok(CoreOutcome::Unsupported)
         ));
-        for kind in ["passkey client data", "passkey flags", "passkey credential"] {
-            assert_eq!(
-                to_outcome(Err(DeviceError::InvalidInput(kind))),
-                Err(fandhe_core::screens::passkey_signin::MISMATCH_TEXT.to_string())
-            );
-        }
-        let failed = to_outcome(Err(DeviceError::Internal("passkey failed"))).unwrap_err();
+        // 不整合（clientData・フラグ・資格情報のどれ）も同じ固定文言の失敗になる。
+        assert_eq!(
+            to_outcome(Err(PasskeySigninError::InvalidInput)),
+            Err(fandhe_core::screens::passkey_signin::MISMATCH_TEXT.to_string())
+        );
+        let failed = to_outcome(Err(PasskeySigninError::Internal)).unwrap_err();
         assert!(!failed.contains("passkey"));
     }
 
@@ -292,18 +301,18 @@ mod tests {
 
     mod callback_path {
         use super::*;
-        use crate::device::request_slot::RequestSlot;
         use fandhe_core::screens::passkey_signin as screen;
+        use fandhe_runtime::request_slot::RequestSlot;
         use std::sync::atomic::{AtomicUsize, Ordering};
 
         /// 独立 slot で 1 フレーム進め、送られた更新を状態へ適用する。
         fn frame(
             s: &mut PasskeySigninState,
             slot: &'static RequestSlot<bridge::Outcome>,
-            begin: fn(u64, PasskeyOp) -> Result<(), DeviceError>,
+            begin: fn(u64, PasskeyOp) -> Result<(), PasskeySigninError>,
         ) {
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = crate::app::egui_sender(tx, egui::Context::default());
+            let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
             drive_callback(s, &sender, slot, begin);
             while let Ok(apply) = rx.try_recv() {
                 apply(s);
@@ -311,15 +320,15 @@ mod tests {
         }
 
         static CALLS: AtomicUsize = AtomicUsize::new(0);
-        fn ok_begin(_id: u64, _op: PasskeyOp) -> Result<(), DeviceError> {
+        fn ok_begin(_id: u64, _op: PasskeyOp) -> Result<(), PasskeySigninError> {
             CALLS.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
-        fn unsupported_begin(_id: u64, _op: PasskeyOp) -> Result<(), DeviceError> {
-            Err(DeviceError::Unsupported("passkey"))
+        fn unsupported_begin(_id: u64, _op: PasskeyOp) -> Result<(), PasskeySigninError> {
+            Err(PasskeySigninError::Unsupported)
         }
-        fn failing_begin(_id: u64, _op: PasskeyOp) -> Result<(), DeviceError> {
-            Err(DeviceError::Internal("passkey failed"))
+        fn failing_begin(_id: u64, _op: PasskeyOp) -> Result<(), PasskeySigninError> {
+            Err(PasskeySigninError::Internal)
         }
 
         #[test]
@@ -370,14 +379,14 @@ mod tests {
     #[cfg(not(any(target_os = "windows", target_os = "android")))]
     mod sync_path {
         use super::*;
+        use crate::contract::{Passkey, UnsupportedPasskey};
         use fandhe_core::screens::passkey_signin as screen;
-        use fandhe_device::passkey::{Passkey, UnsupportedPasskey};
 
         fn run(p: &dyn Passkey, press: fn(&mut PasskeySigninState)) -> PasskeySigninState {
             let mut s = PasskeySigninState::default();
             press(&mut s);
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = crate::app::egui_sender(tx, egui::Context::default());
+            let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
             drive_sync(&s, &sender, p);
             while let Ok(apply) = rx.try_recv() {
                 apply(&mut s);
@@ -387,8 +396,8 @@ mod tests {
 
         struct Fail;
         impl Passkey for Fail {
-            fn run(&self, _op: PasskeyOp) -> Result<PasskeyOutcome, DeviceError> {
-                Err(DeviceError::Internal("passkey failed"))
+            fn run(&self, _op: PasskeyOp) -> Result<PasskeyOutcome, PasskeySigninError> {
+                Err(PasskeySigninError::Internal)
             }
         }
 
@@ -411,7 +420,7 @@ mod tests {
         fn no_request_never_calls_os() {
             let s = PasskeySigninState::default();
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = crate::app::egui_sender(tx, egui::Context::default());
+            let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
             drive_sync(&s, &sender, &Fail);
             assert!(rx.try_recv().is_err());
         }

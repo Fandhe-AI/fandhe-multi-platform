@@ -135,7 +135,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "passkey_signin" => fandhe_core::screens::passkey_signin::current_screen,
-    fandhe_egui_proxy::device::passkey::passkey_signin_effect,
+    fandhe_cap_passkey_signin::passkey_signin_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "payment_request" => fandhe_core::screens::payment_request::current_screen,

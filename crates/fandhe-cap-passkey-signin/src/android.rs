@@ -1,9 +1,9 @@
-//! Issue #1280（親 #92）: Android 向けパスキー（Credential Manager）の実装。`device/passkey.rs` の
+//! Issue #1280（親 #92）: Android 向けパスキー（Credential Manager）の実装。`fandhe-cap-passkey-signin/src/driver.rs` の
 //! Android 経路（`drive_callback`）から呼ばれ、パスキーの登録・サインイン要求を出す。Java 側は
-//! `PasskeyHelper`（`androidx.credentials`）。契約の SSOT は `fandhe_device::passkey`。
+//! `PasskeyHelper`（`androidx.credentials`）。契約の SSOT は `fandhe_cap_passkey_signin`。
 //!
-//! 流れ: `begin(id, op)` → RP ID を検証 → 同期 JNI `MainActivity.passkeyRandom` で challenge 32 + user.id 16
-//! （`SecureRandom`）→ [`PENDING`] に要求を置く → JNI `MainActivity.requestPasskey(id, register, json)` →
+//! 流れ: `begin(id, op)` → RP ID を検証 → 同期 JNI `PasskeyHelper.random` で challenge 32 + user.id 16
+//! （`SecureRandom`）→ [`PENDING`] に要求を置く → JNI `PasskeyHelper.request(activity, id, register, json)` →
 //! Java が結果の種別と本文を `nativeOnPasskeyResult` で返す → [`decode_reply`] で契約の結果へ写像 →
 //! `passkey::bridge::deliver`。要求 JSON の組み立てと応答の照合は Rust だけで行い、Java に定数を複製しない。
 //!
@@ -29,11 +29,11 @@
 
 use std::sync::Mutex;
 
-use fandhe_device::passkey::{
-    base64url_decode, base64url_encode, outcome_from_dom_error, verify_response, Challenge,
-    PasskeyOp, PasskeyOutcome, CHALLENGE_LEN, DEMO_USER_NAME, RP_NAME, USER_ID_LEN,
+use crate::contract::{
+    CHALLENGE_LEN, Challenge, DEMO_USER_NAME, PasskeyOp, PasskeyOutcome, RP_NAME, USER_ID_LEN,
+    base64url_decode, base64url_encode, outcome_from_dom_error, verify_response,
 };
-use fandhe_device::DeviceError;
+use crate::error::PasskeySigninError;
 
 /// 結果の種別（SSOT は Java 側 `PasskeyHelper.KIND_*`）。
 const KIND_RESPONSE: i32 = 0;
@@ -48,9 +48,9 @@ const PAYLOAD_MAX_UNITS: i32 = 64 * 1024;
 /// 応答 JSON のバイト上限。解析前に検査する。
 const RESPONSE_MAX_BYTES: usize = 64 * 1024;
 
-const FAILED: DeviceError = DeviceError::Internal("passkey failed");
-const BAD_CLIENT_DATA: DeviceError = DeviceError::InvalidInput("passkey client data");
-const BAD_FLAGS: DeviceError = DeviceError::InvalidInput("passkey flags");
+const FAILED: PasskeySigninError = PasskeySigninError::Internal;
+const BAD_CLIENT_DATA: PasskeySigninError = PasskeySigninError::InvalidInput;
+const BAD_FLAGS: PasskeySigninError = PasskeySigninError::InvalidInput;
 
 /// ビルド時に渡す RP ID。値は本リポジトリに書かない（public-repo.md）。
 #[cfg(any(target_os = "android", test))]
@@ -225,7 +225,7 @@ fn parse_response(
     challenge: &Challenge,
     rp_id: &str,
     json: &str,
-) -> Result<PasskeyOutcome, DeviceError> {
+) -> Result<PasskeyOutcome, PasskeySigninError> {
     if json.len() > RESPONSE_MAX_BYTES {
         return Err(BAD_CLIENT_DATA);
     }
@@ -261,7 +261,7 @@ fn decode_reply(
     p: &Pending,
     kind: i32,
     payload: Option<&str>,
-) -> Result<PasskeyOutcome, DeviceError> {
+) -> Result<PasskeyOutcome, PasskeySigninError> {
     match kind {
         KIND_RESPONSE => match payload {
             Some(json) => parse_response(p.op, &p.challenge, &p.rp_id, json),
@@ -269,7 +269,7 @@ fn decode_reply(
         },
         KIND_NOT_ALLOWED => Ok(PasskeyOutcome::NotAllowed),
         KIND_DOM_ERROR => outcome_from_dom_error(payload.unwrap_or("")),
-        KIND_UNSUPPORTED => Err(DeviceError::Unsupported("passkey")),
+        KIND_UNSUPPORTED => Err(PasskeySigninError::Unsupported),
         // KIND_FAILED・未知の値。
         _ => Err(FAILED),
     }
@@ -283,10 +283,10 @@ fn prepare(
     op: PasskeyOp,
     rp_id: Option<&str>,
     random: &[u8],
-) -> Result<String, DeviceError> {
+) -> Result<String, PasskeySigninError> {
     let rp_id = rp_id
         .filter(|s| valid_rp_id(s))
-        .ok_or(DeviceError::Unsupported("passkey"))?;
+        .ok_or(PasskeySigninError::Unsupported)?;
     if random.len() != CHALLENGE_LEN + USER_ID_LEN {
         return Err(FAILED);
     }
@@ -305,10 +305,10 @@ fn prepare(
 /// OS へ依頼する。`Ok` は受理済みで結果は後から `bridge::deliver` で届く。`Err` は呼び出し自体の失敗で、
 /// 呼び出し元がその場で結果を置く。
 #[cfg(target_os = "android")]
-pub(crate) fn begin(request_id: u64, op: PasskeyOp) -> Result<(), DeviceError> {
+pub(crate) fn begin(request_id: u64, op: PasskeyOp) -> Result<(), PasskeySigninError> {
     // 未設定・不正な RP ID は乱数を作る前に弾く（OS を呼ばない）。
     if !RP_ID.is_some_and(valid_rp_id) {
-        return Err(DeviceError::Unsupported("passkey"));
+        return Err(PasskeySigninError::Unsupported);
     }
     let random = call_random().ok_or(FAILED)?;
     let json = prepare(request_id, op, RP_ID, &random)?;
@@ -322,32 +322,37 @@ pub(crate) fn begin(request_id: u64, op: PasskeyOp) -> Result<(), DeviceError> {
 
 /// ホストのテストビルド用。非対応を返し、成功へは倒さない。
 #[cfg(not(target_os = "android"))]
-pub(crate) fn begin(_request_id: u64, _op: PasskeyOp) -> Result<(), DeviceError> {
-    Err(DeviceError::Unsupported("passkey"))
+pub(crate) fn begin(_request_id: u64, _op: PasskeyOp) -> Result<(), PasskeySigninError> {
+    Err(PasskeySigninError::Unsupported)
 }
 
-/// `MainActivity.passkeyRandom(int)`（同期 JNI）で `SecureRandom` の 48 バイトを得る。
-/// `unsafe` 2 箇所は `device/android_payment_request.rs::call_request` と同一の根拠。
+/// `PasskeyHelper.random(int)`（static、同期 JNI）で `SecureRandom` の 48 バイトを得る。
+/// `unsafe` は共通層 `fandhe_platform_android::with_activity_class` に閉じている。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_random() -> Option<Vec<u8>> {
-    use super::android::JniCallFailed;
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
+    use fandhe_platform_android::{JniCallFailed, with_activity_class};
+    let app = fandhe_platform_android::android_app()?;
     let len = CHALLENGE_LEN + USER_ID_LEN;
-    vm.attach_current_thread(
-        |env: &mut jni::Env| -> Result<Option<Vec<u8>>, JniCallFailed> {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-            let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-            let ret = env.call_method(
-                &activity,
-                jni::jni_str!("passkeyRandom"),
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.PasskeyHelper"),
+        |env, _activity, class| -> Result<Option<Vec<u8>>, JniCallFailed> {
+            let ret = env.call_static_method(
+                class,
+                jni::jni_str!("random"),
                 jni::jni_sig!((int) -> byte[]),
                 &[jni::objects::JValue::Int(len as i32)],
-            )?;
+            );
+            let ret = match ret {
+                Ok(v) => v,
+                Err(e) => {
+                    // 例外は自動クリアされない（jni 0.22）。後続 JNI に影響させない。
+                    if env.exception_check() {
+                        env.exception_clear();
+                    }
+                    return Err(e.into());
+                }
+            };
             let arr = env.cast_local::<jni::objects::JByteArray>(ret.l()?)?;
             if arr.is_null() || arr.len(env)? != len {
                 return Ok(None);
@@ -359,35 +364,39 @@ fn call_random() -> Option<Vec<u8>> {
     .flatten()
 }
 
-/// `MainActivity.requestPasskey(long, boolean, String)` を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `device/android_payment_request.rs::call_request` と同一の根拠。
+/// `PasskeyHelper.request(Activity, long, boolean, String)`（static）を JNI で呼ぶ。`false` は呼び出し失敗。
+/// `unsafe` は共通層 `fandhe_platform_android::with_activity_class` に閉じている。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_request(id: u64, register: bool, json: &str) -> bool {
-    use super::android::JniCallFailed;
-    let Some(app) = crate::android::android_app() else {
+    use fandhe_platform_android::{JniCallFailed, with_activity_class};
+    let Some(app) = fandhe_platform_android::android_app() else {
         return false;
     };
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
-        let j_json = env.new_string(json)?;
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        env.call_method(
-            &activity,
-            jni::jni_str!("requestPasskey"),
-            jni::jni_sig!((long, boolean, java.lang.String) -> ()),
-            &[
-                jni::objects::JValue::Long(id as jni::sys::jlong),
-                jni::objects::JValue::Bool(register),
-                jni::objects::JValue::Object(&j_json),
-            ],
-        )?;
-        Ok(())
-    })
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.PasskeyHelper"),
+        |env, activity, class| -> Result<(), JniCallFailed> {
+            let r = (|| {
+                let j_json = env.new_string(json)?;
+                env.call_static_method(
+                    class,
+                    jni::jni_str!("request"),
+                    jni::jni_sig!((android.app.Activity, long, boolean, java.lang.String) -> ()),
+                    &[
+                        jni::objects::JValue::Object(activity),
+                        jni::objects::JValue::Long(id as jni::sys::jlong),
+                        jni::objects::JValue::Bool(register),
+                        jni::objects::JValue::Object(&j_json),
+                    ],
+                )?;
+                Ok::<(), jni::errors::Error>(())
+            })();
+            if r.is_err() && env.exception_check() {
+                env.exception_clear();
+            }
+            Ok(r?)
+        },
+    )
     .is_ok()
 }
 
@@ -396,11 +405,11 @@ fn call_request(id: u64, register: bool, json: &str) -> bool {
 ///
 /// # Safety
 /// この関数自体は `unsafe` 操作を含まない。`EnvUnowned::with_env` が JNI アタッチメントの
-/// 安全な取り扱い（`catch_unwind` による panic の遮断込み）を担う。`#[no_mangle]` は
+/// 安全な取り扱い（`catch_unwind` による panic の遮断込み）を担う。`#[unsafe(no_mangle)]` は
 /// JNI 命名規約上の固定シンボル名で、既存の JNI エクスポートと同じ根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_PasskeyHelper_nativeOnPasskeyResult<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -411,11 +420,12 @@ extern "system" fn Java_com_fandhe_platform_PasskeyHelper_nativeOnPasskeyResult<
     let _ = unowned_env.with_env(|env| -> Result<(), jni::errors::Error> {
         // 保留と id が合わなければ（作り直し後の旧結果）何もしない。
         if let Some(p) = take_pending(request_id as u64) {
-            let text = super::android::read_ble_string(env, &payload, PAYLOAD_MAX_UNITS);
+            let text =
+                fandhe_platform_android::read_bounded_string(env, &payload, PAYLOAD_MAX_UNITS);
             let result = decode_reply(&p, kind, text.as_deref());
-            super::passkey::bridge::deliver(request_id as u64, result);
+            crate::driver::bridge::deliver(request_id as u64, result);
             // 入力が無いと egui が描画せず「処理中」で止まるため次フレームを起こす。
-            crate::android::request_repaint();
+            fandhe_runtime::request_repaint();
         }
         Ok(())
     });
@@ -424,7 +434,7 @@ extern "system" fn Java_com_fandhe_platform_PasskeyHelper_nativeOnPasskeyResult<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::passkey::client_data_json;
+    use crate::contract::client_data_json;
 
     const RP: &str = "example.com";
     const UP_UV_AT: u8 = 0x45;
@@ -562,7 +572,7 @@ mod tests {
             assert!(
                 matches!(
                     decode_reply(&p, KIND_RESPONSE, Some(&c)),
-                    Err(DeviceError::InvalidInput(_))
+                    Err(PasskeySigninError::InvalidInput)
                 ),
                 "{}",
                 c.len()
@@ -589,22 +599,22 @@ mod tests {
         ));
         assert!(matches!(
             decode_reply(&p, KIND_DOM_ERROR, Some("SecurityError")),
-            Err(DeviceError::Unsupported("passkey"))
+            Err(PasskeySigninError::Unsupported)
         ));
         assert!(matches!(
             decode_reply(&p, KIND_DOM_ERROR, Some("")),
-            Err(DeviceError::Internal(_))
+            Err(PasskeySigninError::Internal)
         ));
         assert!(matches!(
             decode_reply(&p, KIND_UNSUPPORTED, None),
-            Err(DeviceError::Unsupported("passkey"))
+            Err(PasskeySigninError::Unsupported)
         ));
         let good = response(&p, UP_UV, true, true);
         for k in [-1, 4, 5, 99, i32::MIN, i32::MAX] {
             assert!(
                 matches!(
                     decode_reply(&p, k, Some(&good)),
-                    Err(DeviceError::Internal(_))
+                    Err(PasskeySigninError::Internal)
                 ),
                 "{k}"
             );
@@ -630,10 +640,7 @@ mod tests {
     #[test]
     fn host_begin_never_succeeds() {
         for op in [PasskeyOp::Register, PasskeyOp::SignIn] {
-            assert!(matches!(
-                begin(1, op),
-                Err(DeviceError::Unsupported("passkey"))
-            ));
+            assert!(matches!(begin(1, op), Err(PasskeySigninError::Unsupported)));
         }
     }
 }

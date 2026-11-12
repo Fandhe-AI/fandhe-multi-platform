@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
 //! 置き場」節の制約どおり）。OS 呼び出しと応答の整合確認は `fandhe-egui-proxy` の effect ドライバ
-//! （`device/passkey.rs`）が [`take_request`] で要求を観測して行い、[`finish`] で結果を注入する。
+//! （`fandhe-cap-passkey-signin/src/driver.rs`）が [`take_request`] で要求を観測して行い、[`finish`] で結果を注入する。
 //! Windows・Web の分の状態・文言はここですべて定義する（後続の OS 別 issue は画面に触らない）。
 //!
 //! # サインインの成立と言わない理由

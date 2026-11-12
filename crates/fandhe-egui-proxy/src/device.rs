@@ -257,11 +257,6 @@ pub mod android_now_playing;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_open_system_settings;
-/// Issue #1280（親 #92）: Android 向けパスキー（Credential Manager）の実装。
-/// `device/passkey.rs` の Android 経路から呼ばれる。応答の解読をホストでテストするため test でも載せる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_passkey;
 /// Issue #1131（親 #114）: Android 向け決済シート（Google Pay API、TEST 環境）の実装。
 /// `device/payment_request.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -1417,10 +1412,6 @@ pub mod open_in_shell;
 /// iOS / Android は pull 型 `bridge`（#799・#800 が埋めるスタブ）、他 OS は
 /// `UnsupportedOpenSystemSettings` 固定。Web は対象外）。
 pub mod open_system_settings;
-/// Phase 11 の拡充ループ（親 #92、Issue #342）: パスキーの effect ドライバ（Windows はワーカー +
-/// pull 型 bridge、実装は #343 が埋める。Android は #1280 でコールバック型の pull 型 bridge。他 OS は
-/// `UnsupportedPasskey` 固定。Web は `fandhe-web-dom`）。
-pub mod passkey;
 /// Phase 11 の拡充ループ（親 #114、Issue #541・#1130）: 決済シートの effect ドライバ（Android は
 /// pull 型 bridge、他のネイティブは `UnsupportedPaymentSheet` 固定の同期経路。dispatch は最終形。
 /// Web は `fandhe-web-dom`）。
@@ -1799,10 +1790,6 @@ pub mod windows_open_in_shell;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_open_system_settings;
-/// Issue #343: Windows 向けパスキー実装（`webauthn.h` の MakeCredential / GetAssertion）。
-/// `device/passkey.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_passkey;
 /// Issue #469: Windows 向け PDF 表示実装。
 /// `device/pdf_viewer.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

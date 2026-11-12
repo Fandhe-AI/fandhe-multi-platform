@@ -34,6 +34,7 @@ id = "app-badge"
 
 [package.metadata.fandhe.android]
 java = ["android/java"]
+res = ["android/res"]
 
 [package.metadata.fandhe.ios]
 frameworks = ["UserNotifications"]
