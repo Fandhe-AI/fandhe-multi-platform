@@ -93,7 +93,7 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
      Android 単独へ戻す）
    - `crates/fandhe-device/src/lib.rs` の `DeviceError::Cancelled`
      （Android（#750）のキャンセル処理でも使う場合は残す）
-   - 実機確認用の `FANDHE_ITEMS_URL`（`crates/fandhe-egui-proxy/src/device/http_fetch.rs`）、
+   - 実機確認用の `FANDHE_ITEMS_URL`（`crates/fandhe-cap-http-get/src/driver.rs`）、
      `scripts/ios/verify-device-launch.sh` の ATS 差し込み処理、
      `crates/fandhe-device/src/http.rs` の私設 IPv4 許可（`is_local_plain_http_host`、Issue #660）
    - 位置情報（親 #887、Issue #889）: `crates/fandhe-egui-proxy/apple/fandhe_apple_location.m`・

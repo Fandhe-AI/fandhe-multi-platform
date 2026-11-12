@@ -32,6 +32,8 @@ fandhe-cap-power-state = { path = "../fandhe-cap-power-state" }
 fandhe-cap-ar = { path = "../fandhe-cap-ar" }
 # Issue #1187: 単語分割の純関数・定数（`normalize_words`・`validate_input`・`MAX_INPUT_CHARS`）の正本。Web 実装の本体は本クレートに残す。
 fandhe-cap-nlp = { path = "../fandhe-cap-nlp" }
+# http-get の Web 実装（`fetch`）。デモ（`mount_http_fetch_screen`）が effect として呼ぶ。
+fandhe-cap-http-get = { path = "../fandhe-cap-http-get" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。
 fandhe-platform-web = { path = "../fandhe-platform-web" }
 

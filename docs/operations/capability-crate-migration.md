@@ -13,7 +13,8 @@ TASK-21.4）。構成の根拠は `docs/architecture/consumer-app-structure.md`�
 | 対象 | 扱い |
 |------|------|
 | 端末機能でない行（`ui-widget-catalog`・`checkbox-list`・`dark-mode`・`gpu-backend` など） | crate を作らない |
-| Windows・Web の実装がある機能 | `fandhe-platform-windows` / `-web`（#1184・#1185）の後で移す。`inventory` が注意を表示する |
+| Windows・Web の実装がある機能 | `fandhe-platform-windows` / `-web`（#1184・#1185）は済み。Windows は `src/windows.rs`（scaffold が移す）、Web は `fandhe-web-dom/src/<stem>.rs` を `src/web.rs` へ `git mv` して手で移す（下の「Web の移し方」）。`inventory` の注意は読み流してよい |
+| driver が egui 固有の読み書き口（`fandhe_render_egui::EguiSenderExt`: `set_zoom_factor`・`focused`・`file_drag` など）を使う機能（dynamic-type・share-sheet の Windows 経路・drag-drop） | 機能 crate は egui 非依存のため、そのままは移せない。`fandhe-runtime` に egui 非依存の口を足す設計が先に要る。先行して移さない |
 | 実装が共有ファイル（`device/android.rs`・`device/ios.rs`・`MainActivity.java`）に埋まった古い型（tts・clipboard・http・storage など） | `scaffold` では動かせない。`inventory` の参照行を見て手で切り出す |
 | 対応表の id と stem が違う機能（`http-get` → `http`、`dynamic-type` → `text_scale` など） | `--module <stem>` で渡す |
 | stem が複数ある機能 | stem ごとに手で移す。`scaffold` は 1 stem だけ扱う |
@@ -108,7 +109,21 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
   該当行の削除だけに留め、整形や並べ替えを混ぜない
 - 連番つきのファイルは作らない
 
-## 7. 第 2 束（#1187）で出た型
+## 7. 共有コードの過渡期の規則と Web の移し方（第 1 束 #1186）
+
+- 未移行のモジュールが使い続ける記号（例: `fandhe_device::http::{check_url, MAX_BODY_BYTES}`）は `fandhe-device` に残し、
+  機能 crate が `fandhe-device` に依存して参照する。`fandhe-device` から機能 crate へは依存させない
+- 機能の終了時の片付け（`fandhe-egui-proxy::device::shutdown` が呼ぶ `stop_shared_*`）が残る間は、
+  `fandhe-egui-proxy` が該当の機能 crate へ optional 依存する（feature `device`。#1194 で消える過渡期の依存）
+- Web: `fandhe-web-dom/src/<stem>.rs` を `crates/fandhe-cap-<id>/src/web.rs` へ `git mv` し、
+  `crate::mount::Applier` を `fandhe_platform_web::Applier` に直す。ブラウザ API の依存は wasm32 の target 依存に書く。
+  内側の `mod web` は親と同名で clippy に怒られるため `mod browser` などにする。ブラウザ側の解放が要る機能は
+  effect の入口で `fandhe_platform_web::on_mount_release` を呼び、`fandhe-web-dom` の `release_features` から行を消す。
+  `fandhe-web-dom` は機能 crate に依存して `demo.rs` から effect を呼ぶ
+- wasm32 で解決できない依存（`ureq` など）は native の target 依存にし、driver も `cfg(not(target_arch = "wasm32"))` で外す
+- 純関数のテストが private 関数に触れる場合は、元のモジュールに残る関数のテストを元の場所へ戻す
+
+## 8. 第 2 束（#1187）で出た型
 
 第 2 束（pedometer・ml-inference・power-state・screen-wake-lock・ar・call-ui・live-activity・haptics・nlp・calendar）で
 はじめて出た型と、その扱いです。
@@ -123,9 +138,8 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | Activity 再生成時の破棄・終了処理 | `reset_pending_tracking` は機能 crate が `pub` で公開し、gallery の `android_main` が呼ぶ。`fandhe-egui-proxy` の `android.rs` からは消す |
 | macOS の usage description（calendar） | 機能の宣言（`[package.metadata.fandhe.macos]`）にキーを書き、文言は gallery の `[package.metadata.fandhe-app.macos.usage-descriptions]` に置く |
 | 同じ機能の Web 実装が使う純関数・定数 | 機能 crate の `contract.rs` へ置き、`fandhe-web-dom` が機能 crate に依存する（`share-receive` と同じ形。power-state・ar・nlp）。機能 crate は wasm32 でも通るよう、OS 別の依存は `target` で外す。Web 実装の本体は `fandhe-web-dom` に残す |
-| 他機能も使う純粋なコード（ar） | `fandhe-device` に残して機能 crate が依存する（`camera_preview_stream`・`compass`）。OS に触れない縮小や待ちの追跡は §8 の「型・検証」の扱い |
+| 他機能も使う純粋なコード（ar） | §7 の規則どおり `fandhe-device` に残して機能 crate が依存する（`camera_preview_stream`・`compass`）。OS に触れない縮小や待ちの追跡は §8 の「型・検証」の扱い |
 | 他機能の OS 実装を参照している機能の後回し | 未移行の機能がこの機能の OS 実装を使っている間は移さない。`fandhe-egui-proxy` から機能 crate への依存は作らない。参照が解消してから移す（第 2 束では photo-picker・image-recognition・url-scheme） |
 | 他の束の機能 crate に依存する機能の後回し | 機能 crate から機能 crate への依存は、依存先が `main` に入ってから足す（第 2 束では geofence→location、background-task→local-storage-kv、map-view→network-status） |
 | 共有の SAFETY コメント | 移した関数を根拠に指しているコメントは、unsafe の根拠が共通層（`fandhe_platform_android::with_activity`）へ移った場合に、そこを指す形へ直す |
 | 複数の stem・id と stem が違う機能 | `scaffold` が使えない。`git mv` で手で移し、対応表の `impl` を新しいパスへ書き換える |
-

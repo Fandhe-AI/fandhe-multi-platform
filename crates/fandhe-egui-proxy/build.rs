@@ -432,14 +432,6 @@ fn compile_apple_mic_record() {
     );
 }
 
-/// `apple/fandhe_apple_system_tray.m` を `cc` でコンパイルする（Issue #1039、macOS 専用）。
-fn compile_apple_system_tray() {
-    compile_objc(
-        "apple/fandhe_apple_system_tray.m",
-        &["AppKit", "Foundation"],
-    );
-}
-
 /// `apple/fandhe_apple_speech_recognition.m` を `cc` でコンパイルし Speech をリンクする（Issue #1024 macOS + #1025 iOS）。
 fn compile_apple_speech_recognition() {
     compile_objc(
@@ -1437,9 +1429,6 @@ fn build_macos() {
     // iOS 分岐と共用する。
     compile_apple_speech_recognition();
 
-    // `apple/fandhe_apple_system_tray.m`（Issue #1039）は **macOS 専用**（上記
-    // `compile_apple_system_tray` doc 参照、iOS 分岐からは呼ばない）。
-    compile_apple_system_tray();
     // `apple/fandhe_apple_bluetooth_le.m`（Issue #1060 macOS + #1061 iOS）も共用する。
     compile_apple_bluetooth_le();
     // `apple/fandhe_apple_ble_peripheral.m`（Issue #778）。macOS・iOS 両分岐から呼ぶ。

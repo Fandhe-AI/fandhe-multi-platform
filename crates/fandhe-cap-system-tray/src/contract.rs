@@ -5,13 +5,13 @@
 //!
 //! # 契約（各実装・呼び出し元が守る不変条件）
 //!
-//! - **対象外 OS**: [`SystemTray::show`] は `Err(Unsupported("system_tray"))`、
+//! - **対象外 OS**: [`SystemTray::show`] は `Err(SystemTrayError::Unsupported)`、
 //!   [`SystemTray::hide`] は `Ok(NotShown)`（後始末の経路で失敗させない）、
 //!   [`SystemTray::take_selection`] は `None` を返す（[`UnsupportedSystemTray`]）
 //! - **二重表示**: 表示中の `show` は 2 個目のアイコンを作らず `Ok(AlreadyShown)` を
 //!   返す。メニューも差し替えない
 //! - **未表示の非表示**: `Ok(NotShown)` を返す
-//! - **失敗**: OS 側の追加に失敗したときは `Err(Internal("system_tray show"))` を
+//! - **失敗**: OS 側の追加に失敗したときは `Err(SystemTrayError::Internal)` を
 //!   返す。確保済みのウィンドウ・スレッドは解放してから返す
 //!   （`device-bridge-contracts.md`「9. 失敗時のリソース解放」）
 //! - **選択の受け取り**: `hide` の後と、前回 `show` 時と異なる世代の選択は返さない
@@ -25,7 +25,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::DeviceError;
+use crate::error::SystemTrayError;
 
 /// メニュー項目数の上限（`TrackPopupMenu`/`NSMenu` いずれも実用上十分な件数、
 /// 際限のない入力による描画コスト増大を避ける事前検証）。
@@ -39,14 +39,13 @@ pub const ITEM_MAX_CHARS: usize = 64;
 const QUEUE_CAP: usize = 16;
 
 /// ラベル（タイトル・メニュー項目）の共通検証。空文字・NUL・その他の制御文字・
-/// 文字数超過を拒否する（`feature` はエラーに含める固定識別子、`notification.rs`
-/// の `NotificationRequest::new` と同じ方針）。
-fn validate_label(value: &str, max_chars: usize, feature: &'static str) -> Result<(), DeviceError> {
+/// 文字数超過を拒否する。
+fn validate_label(value: &str, max_chars: usize) -> Result<(), SystemTrayError> {
     if value.is_empty() || value.chars().count() > max_chars {
-        return Err(DeviceError::InvalidInput(feature));
+        return Err(SystemTrayError::InvalidInput);
     }
     if value.chars().any(|c| c == '\0' || c.is_control()) {
-        return Err(DeviceError::InvalidInput(feature));
+        return Err(SystemTrayError::InvalidInput);
     }
     Ok(())
 }
@@ -63,16 +62,16 @@ impl TrayMenu {
     /// `title`・`items` を検証して構築する。
     ///
     /// - `title`: 1〜[`TITLE_MAX_CHARS`] 文字。空文字・NUL・制御文字は
-    ///   `InvalidInput("system_tray menu")`
+    ///   `InvalidInput`
     /// - `items`: 1〜[`MAX_MENU_ITEMS`] 件。件数超過・0 件も同エラー。各要素は
     ///   1〜[`ITEM_MAX_CHARS`] 文字、空文字・NUL・制御文字は同エラー
-    pub fn new(title: &str, items: &[&str]) -> Result<Self, DeviceError> {
-        validate_label(title, TITLE_MAX_CHARS, "system_tray menu")?;
+    pub fn new(title: &str, items: &[&str]) -> Result<Self, SystemTrayError> {
+        validate_label(title, TITLE_MAX_CHARS)?;
         if items.is_empty() || items.len() > MAX_MENU_ITEMS {
-            return Err(DeviceError::InvalidInput("system_tray menu"));
+            return Err(SystemTrayError::InvalidInput);
         }
         for item in items {
-            validate_label(item, ITEM_MAX_CHARS, "system_tray menu")?;
+            validate_label(item, ITEM_MAX_CHARS)?;
         }
         Ok(Self {
             title: title.to_string(),
@@ -112,15 +111,15 @@ pub enum HideOutcome {
 
 /// システムトレイ（メニューバー / 通知領域アイコン）の契約（モジュール doc の
 /// 「契約」節を参照）。`Send + Sync`: effect ドライバ側の `static` 実装
-/// （`fandhe-egui-proxy::device::system_tray::platform_tray`）がスレッド間で
+/// （`crate::driver::platform_tray`）がスレッド間で
 /// 共有されるため。
 pub trait SystemTray: Send + Sync {
     /// アイコンを表示する（冪等、二重表示は `Ok(AlreadyShown)`）。
-    fn show(&self, menu: &TrayMenu) -> Result<ShowOutcome, DeviceError>;
+    fn show(&self, menu: &TrayMenu) -> Result<ShowOutcome, SystemTrayError>;
     /// アイコンを消す（冪等、未表示は `Ok(NotShown)`）。
-    fn hide(&self) -> Result<HideOutcome, DeviceError>;
+    fn hide(&self) -> Result<HideOutcome, SystemTrayError>;
     /// 未読のメニュー選択を 1 件取り出す（無ければ `None`）。呼び出し側が
-    /// 空になるまで繰り返し呼ぶ契約（`fandhe-egui-proxy::device::system_tray::drive`
+    /// 空になるまで繰り返し呼ぶ契約（`crate::driver::drive`
     /// 参照）。
     fn take_selection(&self) -> Option<usize>;
 }
@@ -130,11 +129,11 @@ pub trait SystemTray: Send + Sync {
 pub struct UnsupportedSystemTray;
 
 impl SystemTray for UnsupportedSystemTray {
-    fn show(&self, _menu: &TrayMenu) -> Result<ShowOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("system_tray"))
+    fn show(&self, _menu: &TrayMenu) -> Result<ShowOutcome, SystemTrayError> {
+        Err(SystemTrayError::Unsupported)
     }
 
-    fn hide(&self) -> Result<HideOutcome, DeviceError> {
+    fn hide(&self) -> Result<HideOutcome, SystemTrayError> {
         Ok(HideOutcome::NotShown)
     }
 
@@ -155,7 +154,7 @@ struct QueueState {
     items: Vec<usize>,
 }
 
-/// macOS（`apple_system_tray.rs`）・Windows（`windows_system_tray.rs`）の両実装が
+/// macOS（`apple.rs`）・Windows（`windows.rs`）の両実装が
 /// 共有する「OS コールバックから届く選択」の受け皿。OS 側コールバック（ObjC の
 /// `onSelect:`・Win32 の `WndProc`）は任意スレッドから [`push`](Self::push) を
 /// 呼べる一方、取り出しは effect ドライバの UI スレッドから行う想定（`Mutex` で
@@ -215,8 +214,8 @@ impl SelectionQueue {
 
     /// 現在有効（`begin` 済み・`end` 未呼び出し）かどうか。macOS/Windows 実装が
     /// 「表示中かどうか」の判定そのものに流用する（二重表示判定を Rust 側の状態
-    /// だけで完結させ、OS 側へ毎回問い合わせない設計、`apple_system_tray.rs`/
-    /// `windows_system_tray.rs` のモジュール doc 参照）。
+    /// だけで完結させ、OS 側へ毎回問い合わせない設計、`apple.rs`/
+    /// `windows.rs` のモジュール doc 参照）。
     pub fn is_active(&self) -> bool {
         self.lock().active
     }
@@ -327,7 +326,7 @@ impl Default for DummySystemTray {
 }
 
 impl SystemTray for DummySystemTray {
-    fn show(&self, menu: &TrayMenu) -> Result<ShowOutcome, DeviceError> {
+    fn show(&self, menu: &TrayMenu) -> Result<ShowOutcome, SystemTrayError> {
         let mut state = self.lock();
         state.show_calls += 1;
         if state.shown {
@@ -342,7 +341,7 @@ impl SystemTray for DummySystemTray {
         Ok(ShowOutcome::Added)
     }
 
-    fn hide(&self) -> Result<HideOutcome, DeviceError> {
+    fn hide(&self) -> Result<HideOutcome, SystemTrayError> {
         let mut state = self.lock();
         state.hide_calls += 1;
         if !state.shown {
@@ -385,7 +384,7 @@ mod tests {
     fn tray_menu_rejects_empty_title() {
         assert!(matches!(
             TrayMenu::new("", &["a"]),
-            Err(DeviceError::InvalidInput("system_tray menu"))
+            Err(SystemTrayError::InvalidInput)
         ));
     }
 
@@ -394,7 +393,7 @@ mod tests {
         let title = "a".repeat(TITLE_MAX_CHARS + 1);
         assert!(matches!(
             TrayMenu::new(&title, &["a"]),
-            Err(DeviceError::InvalidInput("system_tray menu"))
+            Err(SystemTrayError::InvalidInput)
         ));
     }
 
@@ -408,7 +407,7 @@ mod tests {
     fn tray_menu_rejects_empty_items() {
         assert!(matches!(
             TrayMenu::new("t", &[]),
-            Err(DeviceError::InvalidInput("system_tray menu"))
+            Err(SystemTrayError::InvalidInput)
         ));
     }
 
@@ -417,7 +416,7 @@ mod tests {
         let items: Vec<&str> = (0..=MAX_MENU_ITEMS).map(|_| "a").collect();
         assert!(matches!(
             TrayMenu::new("t", &items),
-            Err(DeviceError::InvalidInput("system_tray menu"))
+            Err(SystemTrayError::InvalidInput)
         ));
     }
 
@@ -431,7 +430,7 @@ mod tests {
     fn tray_menu_rejects_item_with_nul() {
         assert!(matches!(
             TrayMenu::new("t", &["a\0b"]),
-            Err(DeviceError::InvalidInput("system_tray menu"))
+            Err(SystemTrayError::InvalidInput)
         ));
     }
 
@@ -440,7 +439,7 @@ mod tests {
         let item = "a".repeat(ITEM_MAX_CHARS + 1);
         assert!(matches!(
             TrayMenu::new("t", &[&item]),
-            Err(DeviceError::InvalidInput("system_tray menu"))
+            Err(SystemTrayError::InvalidInput)
         ));
     }
 
@@ -448,7 +447,7 @@ mod tests {
     fn tray_menu_rejects_control_character() {
         assert!(matches!(
             TrayMenu::new("t\u{0007}", &["a"]),
-            Err(DeviceError::InvalidInput("system_tray menu"))
+            Err(SystemTrayError::InvalidInput)
         ));
     }
 
@@ -456,7 +455,7 @@ mod tests {
     fn unsupported_tray_show_is_unsupported() {
         assert!(matches!(
             UnsupportedSystemTray.show(&menu()),
-            Err(DeviceError::Unsupported("system_tray"))
+            Err(SystemTrayError::Unsupported)
         ));
     }
 

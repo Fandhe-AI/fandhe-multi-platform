@@ -1159,6 +1159,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-http-get"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-web",
+ "fandhe-runtime",
+ "js-sys",
+ "serde_json",
+ "thiserror 2.0.20",
+ "ureq",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "fandhe-cap-live-activity"
 version = "0.2.0"
 dependencies = [
@@ -1259,6 +1276,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-system-tray"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-core"
 version = "0.2.0"
 dependencies = [
@@ -1278,7 +1306,6 @@ dependencies = [
  "rfd",
  "serde_json",
  "thiserror 2.0.20",
- "ureq",
 ]
 
 [[package]]
@@ -1291,6 +1318,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_kittest",
+ "fandhe-cap-system-tray",
  "fandhe-core",
  "fandhe-device",
  "fandhe-fonts",
@@ -1337,6 +1365,7 @@ dependencies = [
  "fandhe-cap-document-scan",
  "fandhe-cap-haptics",
  "fandhe-cap-home-widget",
+ "fandhe-cap-http-get",
  "fandhe-cap-live-activity",
  "fandhe-cap-ml-inference",
  "fandhe-cap-nfc-card-emulation",
@@ -1345,6 +1374,7 @@ dependencies = [
  "fandhe-cap-power-state",
  "fandhe-cap-screen-wake-lock",
  "fandhe-cap-share-receive",
+ "fandhe-cap-system-tray",
  "fandhe-core",
  "fandhe-egui-proxy",
  "fandhe-platform-android",
@@ -1440,6 +1470,7 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "fandhe-cap-ar",
+ "fandhe-cap-http-get",
  "fandhe-cap-nlp",
  "fandhe-cap-power-state",
  "fandhe-cap-share-receive",

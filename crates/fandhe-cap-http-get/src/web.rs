@@ -1,17 +1,17 @@
 //! 型サンプル「HTTP 取得（GET 限定）」の Web 経路（Issue #985）。
 //!
 //! `fandhe_core::screens::http_fetch`（端末依存ゼロ）の要求を
-//! [`super::mount::mount_with_effect`] の effect として観測し、ブラウザの `fetch`
+//! [``fandhe-web-dom` の `mount_with_effect``] の effect として観測し、ブラウザの `fetch`
 //! （Fetch API）で GET だけを行って結果を書き戻す。
 //!
-//! Web は `fandhe-device` の `Http` トレイト（`UreqHttp`）を通らない。`UreqHttp` は
+//! Web は `crate::contract` の `Http` トレイト（`UreqHttp`）を通らない。`UreqHttp` は
 //! wasm32 では `ureq` の推移依存（`getrandom`）が解決できず存在しない
-//! （`fandhe_device::http` モジュール doc 参照）ため、本モジュールが DOM レンダラ側の
+//! （`crate::contract` モジュール doc 参照）ため、本モジュールが DOM レンダラ側の
 //! 対応実装にあたる。ただし本文上限・タイムアウト・件数上限・JSON 解析
 //! （`MAX_BODY_BYTES`/`TIMEOUT`/`MAX_ITEMS`/`parse_items`）は desktop 実装
 //! （`fandhe_device::http`）と共有する（二重管理を避ける SSOT 方針、Issue #985）。
 //!
-//! # 取得先（`FANDHE_ITEMS_URL`、`fandhe-egui-proxy::device::http_fetch::ITEMS_URL` と
+//! # 取得先（`FANDHE_ITEMS_URL`、`driver.rs` の `ITEMS_URL` と
 //! 同じ env 名・同じ `option_env!` 方式）
 //!
 //! ビルド時に指定し、未指定なら相対 URL `"items.json"`（同一オリジン、配布物は
@@ -36,7 +36,7 @@
 //!
 //! # 期限（`TIMEOUT`・`AbortController`）
 //!
-//! `fandhe_device::http::TIMEOUT`（15 秒）と同じ値を `AbortController` の期限に使う
+//! `crate::contract::TIMEOUT`（15 秒）と同じ値を `AbortController` の期限に使う
 //! （デスクトップと Web で期限を揃える、device-bridge-contracts.md 3 節）。`signal` は
 //! `fetch` と本文の読み取り（`array_buffer()`）の両方に効く。フェッチが先に終わる
 //! 通常経路では `clear_timeout_with_handle` でタイマーを解除して `Closure` を drop する
@@ -55,7 +55,7 @@
 //!
 //! # 二重起動防止
 //!
-//! [`super::mount::Applier::apply`] は effect 実行中（`state` が借用中）の同期呼び出しを
+//! [`fandhe_platform_web::Applier::apply`] は effect 実行中（`state` が借用中）の同期呼び出しを
 //! マイクロタスクへ退避する（`Applier::apply` の doc 参照）。本モジュールは
 //! `Requested` を見たらまず `spawn_local` へ丸ごと逃がし、その中で `applier.apply` に
 //! より「`Requested` のままか」を確認しつつ `mark_loading` を適用する。`spawn_local` の
@@ -112,7 +112,7 @@ pub(crate) fn check_len(len: u64) -> Result<(), String> {
 
 /// `url` が許可される取得先かを判定する純関数（ブラウザ API を呼ばないため
 /// `check_status`/`check_len` と同じく native からもテストできる、`wasm32` gate の
-/// 外に置く）。`fandhe_device::http::UreqHttp::get` のスキーム/ホスト検証（`https://`
+/// 外に置く）。`crate::contract::UreqHttp::get` のスキーム/ホスト検証（`https://`
 /// 全般、またはループバック/私設 IPv4 宛ての `http://` のみ）と同じ方針を採る
 /// （モジュール doc「取得先」節参照）。相対 URL（スキームを持たない値のうち、
 /// プロトコル相対 `//host/...`・`\\host/...` 等ではないもの）は同一オリジンへの
@@ -223,25 +223,25 @@ fn is_local_plain_http_host(host: &str) -> bool {
 }
 
 #[cfg(target_arch = "wasm32")]
-mod web {
+mod browser {
     use std::cell::Cell;
     use std::rc::Rc;
 
+    use crate::contract::{TIMEOUT, parse_items};
     use fandhe_core::screens::http_fetch::{
-        finish_fetch, mark_loading, FetchPhase, HttpFetchState,
+        FetchPhase, HttpFetchState, finish_fetch, mark_loading,
     };
-    use fandhe_device::http::{parse_items, TIMEOUT};
     use js_sys::Uint8Array;
-    use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
+    use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::JsFuture;
     use web_sys::{
         AbortController, AbortSignal, ReadableStreamDefaultReader, ReadableStreamReadResult,
         RequestCredentials, RequestInit, RequestRedirect, Response, Window,
     };
 
-    use super::{check_len, check_status, is_allowed_items_url, NETWORK_FAILURE, TIMEOUT_MESSAGE};
-    use crate::mount::Applier;
+    use super::{NETWORK_FAILURE, TIMEOUT_MESSAGE, check_len, check_status, is_allowed_items_url};
+    use fandhe_platform_web::Applier;
 
     /// 取得先 URL（モジュール doc「取得先」節参照）。実行時の利用者入力で変える経路は
     /// 作らない。
@@ -350,10 +350,10 @@ mod web {
 
         // Content-Length があれば本文を読む前に確認する（chunked 応答は本文読み取り後の
         // 再確認に委ねる、モジュール doc「本文上限」節参照）。
-        if let Ok(Some(header)) = response.headers().get("content-length") {
-            if let Ok(len) = header.parse::<u64>() {
-                check_len(len)?;
-            }
+        if let Ok(Some(header)) = response.headers().get("content-length")
+            && let Ok(len) = header.parse::<u64>()
+        {
+            check_len(len)?;
         }
 
         let bytes = read_body_limited(&response, controller, &signal).await?;
@@ -417,7 +417,7 @@ mod web {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub use web::http_fetch_effect;
+pub use browser::http_fetch_effect;
 
 #[cfg(test)]
 mod tests {
