@@ -45,7 +45,7 @@ const FAILED_MESSAGE: &str = "座標に変換できませんでした";
 type Coordinates = (f64, f64, u32);
 
 /// 現在のプラットフォームに応じた `ForwardGeocoder` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn ForwardGeocoder> {
+pub fn platform_geocoding_search() -> Arc<dyn ForwardGeocoder> {
     #[cfg(target_os = "macos")]
     {
         Arc::new(crate::apple::AppleForwardGeocoder)
@@ -194,7 +194,7 @@ pub fn geocoding_search_show_effect(
     sender: &CompletionSender<GeocodingSearchState>,
 ) {
     static IMPL: std::sync::OnceLock<Arc<dyn ForwardGeocoder>> = std::sync::OnceLock::new();
-    let imp = IMPL.get_or_init(platform);
+    let imp = IMPL.get_or_init(platform_geocoding_search);
     drive(
         state,
         sender,
@@ -497,7 +497,7 @@ mod tests {
     fn fallback_platform_is_unsupported_on_linux() {
         #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
         assert!(matches!(
-            platform().geocode("x", Duration::ZERO),
+            platform_geocoding_search().geocode("x", Duration::ZERO),
             Err(GeocodingSearchError::Unsupported)
         ));
     }

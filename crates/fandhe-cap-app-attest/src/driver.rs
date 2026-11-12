@@ -49,7 +49,7 @@ const FAILED_MESSAGE: &str = "証明データを取得できませんでした";
 type Summary = (usize, usize);
 
 /// 現在のプラットフォームに応じた `AppAttest` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn AppAttest> {
+pub fn platform_app_attest() -> Arc<dyn AppAttest> {
     #[cfg(target_os = "android")]
     {
         crate::android::implementation()
@@ -188,7 +188,7 @@ fn drive(
 /// `registry.rs` の `effect` 区画から `app_attest_show` 画面用に配線される effect ドライバ。
 pub fn app_attest_show_effect(state: &AppAttestState, sender: &CompletionSender<AppAttestState>) {
     static IMPL: std::sync::OnceLock<Arc<dyn AppAttest>> = std::sync::OnceLock::new();
-    let imp = IMPL.get_or_init(platform);
+    let imp = IMPL.get_or_init(platform_app_attest);
     drive(
         state,
         sender,
@@ -536,7 +536,7 @@ mod tests {
     fn fallback_platform_is_unsupported_off_android() {
         #[cfg(not(target_os = "android"))]
         {
-            let imp = platform();
+            let imp = platform_app_attest();
             let c = validate_challenge(&[1; CHALLENGE_LEN]).unwrap();
             assert!(matches!(
                 imp.attest(&c, Duration::ZERO),

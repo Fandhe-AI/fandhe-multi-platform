@@ -9,7 +9,7 @@
 //! （入力が無いと egui が描画せず pull が止まる、契約表 4）。読み取りに失敗・非対応のときは
 //! 予約しない（失敗状態で再描画し続けない）。期限は `Instant`（単調時計）で測る（契約表 3）。
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は `ios.rs`
+//! dispatch（[`platform_screen_brightness`]）は全対象 OS の最終形。iOS は `ios.rs`
 //! （#634）、Android は `android.rs`（#635）が返す。macOS・Web は `no`、
 //! Windows は `deferred` のため `UnsupportedScreenBrightness` 固定。
 
@@ -28,7 +28,7 @@ use fandhe_core::screens::screen_brightness_show::{
 use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `ScreenBrightness` 実装を返す（プロセスで 1 個）。
-fn implementation() -> Arc<dyn ScreenBrightness> {
+pub fn platform_screen_brightness() -> Arc<dyn ScreenBrightness> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn ScreenBrightness>> = OnceLock::new();
     INSTANCE
@@ -148,7 +148,7 @@ pub fn screen_brightness_show_effect(
     drive(
         state,
         sender,
-        implementation().as_ref(),
+        platform_screen_brightness().as_ref(),
         Instant::now(),
         &mut timing,
     );
@@ -431,7 +431,7 @@ mod tests {
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     #[test]
     fn fallback_implementation_never_succeeds() {
-        let imp = implementation();
+        let imp = platform_screen_brightness();
         assert!(imp.set_override(0.5).is_err());
         assert!(imp.clear_override().is_err());
         assert!(imp.read().is_err());

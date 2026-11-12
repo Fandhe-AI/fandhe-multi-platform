@@ -13,7 +13,7 @@
 //! [`ExchangeDeadline`] だけ（OS 側に別の期限を持たせない）。許可待ちは数えない。
 //! 距離は [`validate_distance_m`] を通った値だけを、[`StaleTracker`] が新しいと判定した間だけ出す。
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は `ios.rs`、Android（GMS 依存で保留）・
+//! dispatch（[`platform_uwb_ranging`]）は全対象 OS の最終形。iOS は `ios.rs`、Android（GMS 依存で保留）・
 //! macOS・Windows・Linux は `UnsupportedUwbRanging`。
 
 use std::sync::{Arc, Mutex};
@@ -34,7 +34,7 @@ use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた実装を返す（プロセスで 1 個。MPC / `NISession` を二重に作らないため
 /// `OnceLock` で保持する）。
-fn implementation() -> Arc<dyn UwbRanging> {
+pub fn platform_uwb_ranging() -> Arc<dyn UwbRanging> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn UwbRanging>> = OnceLock::new();
     INSTANCE
@@ -309,7 +309,13 @@ fn drive(
 pub fn uwb_ranging_show_effect(state: &UwbRangingShowState, sender: &Sender) {
     let mut guard = DRIVER.lock().unwrap_or_else(|p| p.into_inner());
     let ds = guard.get_or_insert_with(DriverState::default);
-    drive(state, sender, implementation().as_ref(), Instant::now(), ds);
+    drive(
+        state,
+        sender,
+        platform_uwb_ranging().as_ref(),
+        Instant::now(),
+        ds,
+    );
 }
 
 #[cfg(test)]

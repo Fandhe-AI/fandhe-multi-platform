@@ -43,7 +43,7 @@ use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
 const FAILED_MESSAGE: &str = "検査できませんでした";
 
 /// 現在のプラットフォームに応じた `SpellChecker` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn SpellChecker> {
+pub fn platform_spell_check() -> Arc<dyn SpellChecker> {
     #[cfg(target_os = "macos")]
     {
         crate::macos::implementation()
@@ -264,7 +264,7 @@ fn drive(
 /// `registry.rs` の `effect` 区画から `spell_check` 画面用に配線される effect ドライバ。
 pub fn spell_check_effect(state: &SpellCheckState, sender: &CompletionSender<SpellCheckState>) {
     static IMPL: std::sync::OnceLock<Arc<dyn SpellChecker>> = std::sync::OnceLock::new();
-    let imp = IMPL.get_or_init(platform);
+    let imp = IMPL.get_or_init(platform_spell_check);
     drive(
         state,
         sender,
@@ -618,7 +618,7 @@ mod tests {
             target_os = "windows"
         )))]
         assert!(matches!(
-            platform().check("x", "en", Duration::ZERO),
+            platform_spell_check().check("x", "en", Duration::ZERO),
             Err(SpellCheckError::Unsupported)
         ));
     }

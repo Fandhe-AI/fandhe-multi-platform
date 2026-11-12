@@ -14,7 +14,7 @@
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`platform_serial_ports`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを
+//! [`platform_serial_port`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを
 //! 埋める（macOS: `macos`（#670）、Windows: `windows`（#671 が埋める。現状は
 //! `Unsupported` のスタブ））。それ以外（iOS・Android・Linux）は `UnsupportedSerialPorts` 固定で、
 //! ダミーの成功実装へは倒さない。Web は `fandhe-web-dom` が別経路で実装する（#672）ため、
@@ -48,7 +48,7 @@ use fandhe_runtime::CompletionSender;
 const SHUTDOWN_WAIT: Duration = Duration::from_millis(300);
 
 /// 現在のプラットフォームに応じた `SerialPorts` 実装を返す（プロセスで 1 個）。
-fn platform_serial_ports() -> Arc<dyn SerialPorts> {
+pub fn platform_serial_port() -> Arc<dyn SerialPorts> {
     static INSTANCE: OnceLock<Arc<dyn SerialPorts>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
@@ -251,7 +251,7 @@ static WORKER: OnceLock<Option<Worker>> = OnceLock::new();
 
 fn global_worker() -> Option<&'static Worker> {
     WORKER
-        .get_or_init(|| Worker::spawn(platform_serial_ports()))
+        .get_or_init(|| Worker::spawn(platform_serial_port()))
         .as_ref()
 }
 
@@ -562,7 +562,7 @@ mod tests {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     #[test]
     fn unsupported_os_dispatch_is_unsupported() {
-        let p = platform_serial_ports();
+        let p = platform_serial_port();
         assert_eq!(p.list().map(|_| ()), Err(SerialPortFailure::Unsupported));
         assert!(matches!(p.open("x"), Err(SerialPortFailure::Unsupported)));
     }
