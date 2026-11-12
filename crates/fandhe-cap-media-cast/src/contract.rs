@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #99、Issue #386）: 外部機器への再生（AirPlay・Cast 等）の契約。
-//! `fandhe-egui-proxy` の `device/media_cast.rs`（effect ドライバ）が [`MediaCast`] を呼び、
+//! 機能 crate の `driver.rs`（effect ドライバ）が [`MediaCast`] を呼び、
 //! 各 OS 実装（macOS: AVKit `AVRoutePickerView` + `AVAudioPlayer` = #386、iOS・Windows・Web は後続の子）が
-//! 本トレイトを実装する。送る音は [`crate::media_playback::demo_wav`] の実行時生成 WAV で、
+//! 本トレイトを実装する。送る音は `fandhe_device::media_playback::demo_wav` の実行時生成 WAV で、
 //! URL・ファイルパスは受けない。出力先の選択 UI は OS のものを使い、アプリは作らない。
 //!
 //! 範囲は「ループ再生」「出力先を選ぶ UI を出す」「選ばれた出力先の名前（OS が教えるときだけ）と接続状態」。
@@ -19,7 +19,7 @@
 //!
 //! # ライフサイクル（契約表 1）
 //!
-//! - macOS: 窓が背面・最小化でも続ける。終了時は `device::shutdown` から [`MediaCast::release`] を呼ぶ
+//! - macOS: 窓が背面・最小化でも続ける。終了時は `fandhe-egui-proxy` の `device::shutdown` から [`MediaCast::release`] を呼ぶ
 //! - iOS: 背景遷移で止めて [`CastPlayback::Interrupted`] にする
 //! - Web: `pagehide` で [`CastPlayback::Interrupted`] にする
 //!
@@ -37,7 +37,7 @@
 //! # 出力先の名前
 //!
 //! 画面にだけ出す（ログ・保存・ID の取得はしない）。OS が返した文字列は
-//! [`crate::device_info::clean_text`] を通す。
+//! `fandhe_device::device_info::clean_text` を通す。
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
 //!
@@ -48,7 +48,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::MediaCastError;
 
 /// 準備・再生・停止の各遷移の期限。
 pub const START_DEADLINE: Duration = Duration::from_secs(5);
@@ -83,7 +83,7 @@ pub enum RouteState {
     Choosing,
     /// 接続中（Windows・Web）。
     Connecting,
-    /// 外部機器へ出ている。名前は OS が教えたときだけ `Some`（[`crate::device_info::clean_text`] 済み）。
+    /// 外部機器へ出ている。名前は OS が教えたときだけ `Some`（`fandhe_device::device_info::clean_text` 済み）。
     Connected {
         /// 出力先の名前。
         name: Option<String>,
@@ -139,13 +139,13 @@ pub struct CastSnapshot {
 pub trait MediaCast: Send + Sync {
     /// 音源（WAV）を受けて資源を作り、世代を進めて返す。前の資源を解放してから作り、失敗経路でも
     /// 作りかけを解放する。0 バイトは `InvalidInput("media_cast wav")`。非対応は `Unsupported`。
-    fn prepare(&self, wav: Arc<[u8]>) -> Result<u64, DeviceError>;
+    fn prepare(&self, wav: Arc<[u8]>) -> Result<u64, MediaCastError>;
     /// ループ再生を始める。結果は非同期で、[`Self::snapshot`] で確定する。古い世代は `InvalidInput`。
-    fn play(&self, generation: u64) -> Result<(), DeviceError>;
+    fn play(&self, generation: u64) -> Result<(), MediaCastError>;
     /// 再生を止める。再生中でなければ何もしない。古い世代は `InvalidInput`。
-    fn stop(&self, generation: u64) -> Result<(), DeviceError>;
+    fn stop(&self, generation: u64) -> Result<(), MediaCastError>;
     /// 出力先のピッカーを出す。[`PickerKind::Native`] の実装は `Unsupported`（OS のボタンから選ぶ）。
-    fn show_picker(&self, generation: u64) -> Result<(), DeviceError>;
+    fn show_picker(&self, generation: u64) -> Result<(), MediaCastError>;
     /// 最新状態。
     fn snapshot(&self) -> CastSnapshot;
     /// 資源の解放。冪等。失敗経路・期限切れ・アプリ終了のすべてで呼ぶ。
@@ -156,17 +156,17 @@ pub trait MediaCast: Send + Sync {
 pub struct UnsupportedMediaCast;
 
 impl MediaCast for UnsupportedMediaCast {
-    fn prepare(&self, _wav: Arc<[u8]>) -> Result<u64, DeviceError> {
-        Err(DeviceError::Unsupported("media_cast"))
+    fn prepare(&self, _wav: Arc<[u8]>) -> Result<u64, MediaCastError> {
+        Err(MediaCastError::Unsupported)
     }
-    fn play(&self, _generation: u64) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("media_cast"))
+    fn play(&self, _generation: u64) -> Result<(), MediaCastError> {
+        Err(MediaCastError::Unsupported)
     }
-    fn stop(&self, _generation: u64) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("media_cast"))
+    fn stop(&self, _generation: u64) -> Result<(), MediaCastError> {
+        Err(MediaCastError::Unsupported)
     }
-    fn show_picker(&self, _generation: u64) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("media_cast"))
+    fn show_picker(&self, _generation: u64) -> Result<(), MediaCastError> {
+        Err(MediaCastError::Unsupported)
     }
     fn snapshot(&self) -> CastSnapshot {
         CastSnapshot {
@@ -187,10 +187,7 @@ mod tests {
     fn unsupported_never_succeeds() {
         let c = UnsupportedMediaCast;
         let wav: Arc<[u8]> = Arc::from(vec![1u8]);
-        assert!(matches!(
-            c.prepare(wav),
-            Err(DeviceError::Unsupported("media_cast"))
-        ));
+        assert!(matches!(c.prepare(wav), Err(MediaCastError::Unsupported)));
         assert!(c.play(1).is_err() && c.stop(1).is_err() && c.show_picker(1).is_err());
         let s = c.snapshot();
         assert_eq!(s.playback, CastPlayback::Idle);

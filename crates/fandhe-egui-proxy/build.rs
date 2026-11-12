@@ -269,8 +269,6 @@ fn build() {
     compile_apple_background_upload();
     // `apple/fandhe_apple_file_association.m`（Issue #416）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_file_association();
-    // `apple/fandhe_apple_media_cast.m`（Issue #387）。macOS 分岐と共用する。AVKit を使う。
-    compile_apple_media_cast();
     // `apple/fandhe_apple_now_playing.m`（Issue #381 macOS + #382 iOS）。macOS 分岐と共用する。MediaPlayer を使う。
     compile_apple_now_playing();
     // `apple/fandhe_apple_accessibility_prefs.m`（Issue #1308 macOS + #1309 iOS）も共用する。
@@ -745,20 +743,6 @@ fn compile_apple_now_playing() {
             &["Foundation", "MediaPlayer", "UIKit"]
         } else {
             &["Foundation", "MediaPlayer"]
-        },
-    );
-}
-
-/// `apple/fandhe_apple_media_cast.m` を `cc` でコンパイルし AVKit・AVFoundation・CoreAudio をリンクする
-/// （Issue #386 macOS + #387 iOS）。macOS・iOS 双方の分岐から呼ばれる（`src/device/apple_media_cast.rs` が使う）。
-/// CoreAudio は macOS のみ。
-fn compile_apple_media_cast() {
-    compile_objc(
-        "apple/fandhe_apple_media_cast.m",
-        if target_is_ios() {
-            &["AVFoundation", "AVKit", "Foundation", "UIKit"]
-        } else {
-            &["AVFoundation", "AVKit", "AppKit", "CoreAudio", "Foundation"]
         },
     );
 }
@@ -1497,8 +1481,6 @@ fn build_macos() {
     compile_macos_audio_devices();
     // `macos/fandhe_macos_volume_control.m`（Issue #785）も macOS 専用。CoreAudio・AudioToolbox を使う。
     compile_macos_volume_control();
-    // `apple/fandhe_apple_media_cast.m`（Issue #386 macOS + #387 iOS）。iOS 分岐と共用する。AVKit・CoreAudio を使う。
-    compile_apple_media_cast();
     // `apple/fandhe_apple_midi.m`（Issue #1398）。iOS 分岐（#1399）と共用する。CoreMIDI を使う。
     compile_apple_midi();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。iOS 分岐と共用する。

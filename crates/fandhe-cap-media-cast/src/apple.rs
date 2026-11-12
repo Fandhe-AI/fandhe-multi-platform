@@ -10,14 +10,12 @@
 //! 出力先のボタンは OS のもの（[`PickerKind::Native`]）が窓の右下に重なるため、`show_picker` は
 //! `Unsupported` を返す（ドライバは失敗にせず、画面が案内を出す）。
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::contract::{CastFailure, CastPlayback, CastSnapshot, MediaCast, PickerKind, RouteState};
+use crate::error::MediaCastError;
 use fandhe_device::device_info::clean_text;
-use fandhe_device::media_cast::{
-    CastFailure, CastPlayback, CastSnapshot, MediaCast, PickerKind, RouteState,
-};
-use fandhe_device::DeviceError;
 
 /// 名前を受ける固定長バッファの大きさ（NUL を含む。`clean_text` が 128 文字へ切る前の上限）。
 const NAME_BYTES: usize = 512;
@@ -50,13 +48,13 @@ unsafe extern "C" {
 }
 
 /// `.m` の戻りコードを契約へ写す純関数。OS の生値は見ず固定の種別へ畳む。
-fn result_from_code(code: i32) -> Result<(), DeviceError> {
+fn result_from_code(code: i32) -> Result<(), MediaCastError> {
     match code {
         0 => Ok(()),
-        1 => Err(DeviceError::Unsupported("media_cast")),
-        2 => Err(DeviceError::InvalidInput("media_cast wav")),
-        6 => Err(DeviceError::InvalidInput("media_cast generation")),
-        _ => Err(DeviceError::Internal("media_cast")),
+        1 => Err(MediaCastError::Unsupported),
+        2 => Err(MediaCastError::InvalidInput),
+        6 => Err(MediaCastError::InvalidInput),
+        _ => Err(MediaCastError::Internal),
     }
 }
 
@@ -94,9 +92,9 @@ fn name_from_buffer(buf: &[u8]) -> Option<String> {
 
 impl MediaCast for AppleMediaCast {
     #[allow(unsafe_code)]
-    fn prepare(&self, wav: Arc<[u8]>) -> Result<u64, DeviceError> {
+    fn prepare(&self, wav: Arc<[u8]>) -> Result<u64, MediaCastError> {
         if wav.is_empty() {
-            return Err(DeviceError::InvalidInput("media_cast wav"));
+            return Err(MediaCastError::InvalidInput);
         }
         let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
         // SAFETY: `wav` はこの呼び出しの間生きており、`.m` は同期でコピーしてポインタを保持しない。
@@ -106,20 +104,20 @@ impl MediaCast for AppleMediaCast {
     }
 
     #[allow(unsafe_code)]
-    fn play(&self, generation: u64) -> Result<(), DeviceError> {
+    fn play(&self, generation: u64) -> Result<(), MediaCastError> {
         // SAFETY: 値渡しの引数のみ。`.m` は 1 本のミューテックスの内側で処理する。
         result_from_code(unsafe { fandhe_apple_cast_play(generation) })
     }
 
     #[allow(unsafe_code)]
-    fn stop(&self, generation: u64) -> Result<(), DeviceError> {
+    fn stop(&self, generation: u64) -> Result<(), MediaCastError> {
         // SAFETY: 同上。
         result_from_code(unsafe { fandhe_apple_cast_stop(generation) })
     }
 
-    fn show_picker(&self, _generation: u64) -> Result<(), DeviceError> {
+    fn show_picker(&self, _generation: u64) -> Result<(), MediaCastError> {
         // OS のボタンが窓の右下に重なる。アプリからは開かない。
-        Err(DeviceError::Unsupported("media_cast picker"))
+        Err(MediaCastError::Unsupported)
     }
 
     #[allow(unsafe_code)]
@@ -161,18 +159,18 @@ mod tests {
         assert!(result_from_code(0).is_ok());
         assert!(matches!(
             result_from_code(1),
-            Err(DeviceError::Unsupported("media_cast"))
+            Err(MediaCastError::Unsupported)
         ));
         assert!(matches!(
             result_from_code(2),
-            Err(DeviceError::InvalidInput("media_cast wav"))
+            Err(MediaCastError::InvalidInput)
         ));
         assert!(matches!(
             result_from_code(6),
-            Err(DeviceError::InvalidInput("media_cast generation"))
+            Err(MediaCastError::InvalidInput)
         ));
         for c in [3, 4, 99] {
-            assert!(matches!(result_from_code(c), Err(DeviceError::Internal(_))));
+            assert!(matches!(result_from_code(c), Err(MediaCastError::Internal)));
         }
     }
 
@@ -216,10 +214,10 @@ mod tests {
     #[test]
     fn show_picker_is_unsupported_and_empty_wav_is_invalid() {
         let c = AppleMediaCast;
-        assert!(matches!(c.show_picker(1), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(c.show_picker(1), Err(MediaCastError::Unsupported)));
         assert!(matches!(
             c.prepare(Arc::from(Vec::<u8>::new())),
-            Err(DeviceError::InvalidInput("media_cast wav"))
+            Err(MediaCastError::InvalidInput)
         ));
     }
 }

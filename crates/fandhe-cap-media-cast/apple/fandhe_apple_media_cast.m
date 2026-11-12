@@ -10,7 +10,7 @@
 // 未確認: AVRoutePickerView の player が nil のときシステムの出力が切り替わるか、AVAudioPlayer が
 // 既定出力の切り替えに追従するか（Mac 目視 #379 で確かめる。駄目なら AVPlayer 経路へ切り替える）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_media_cast.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-media-cast/src/ios.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の macOS・iOS 双方の分岐がコンパイルし、AVKit・AVFoundation（macOS はさらに CoreAudio）をリンクする。
 //
 // 契約（戻りコードは固定。NSError の生値・説明は返さずログにも出さない、security.md A09）:

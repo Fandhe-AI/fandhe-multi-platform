@@ -14,7 +14,7 @@
       "note": "実装済み（#387）。実行時に生成した音をループ再生し、右下に OS の出力先ボタンを重ねる。背景遷移・割り込みで止めて中断表示にし、勝手に再開しない。出力先の名前は AirPlay 出力のときだけ画面に出す（ログ・保存はしない）。守る範囲: 1 プロセス内の操作順・失敗を成功にしないこと・資源と音声セッションの解放。守らない範囲: PiP 等の他画面との AVAudioSession の同時利用、OS の UI で切り替えた反映のポーリング間隔ぶんの遅れ、複数プロセス、受信機側の品質。未確認: AVAudioPlayer の音がそのまま AirPlay へ流れるか、シミュレータのピッカーに機器が出るか（実機確認 #379）",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#379）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_media_cast.rs + crates/fandhe-egui-proxy/src/device/apple_media_cast.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_media_cast.m + crates/fandhe-egui-proxy/src/device/media_cast.rs + crates/fandhe-core/src/screens/cast_show.rs + crates/fandhe-device/src/media_cast.rs、Issue #387"
+      "impl": "crates/fandhe-cap-media-cast/src/ios.rs + crates/fandhe-cap-media-cast/src/apple.rs + crates/fandhe-cap-media-cast/apple/fandhe_apple_media_cast.m + crates/fandhe-cap-media-cast/src/driver.rs + crates/fandhe-core/src/screens/cast_show.rs + crates/fandhe-cap-media-cast/src/contract.rs、Issue #387"
     },
     "android": {
       "status": "possible",
@@ -35,7 +35,7 @@
       "note": "実装済み（#386）。実行時に生成した音をループ再生し、窓の右下に OS の出力先ボタンを重ねる。出力先の名前は、既定出力が AirPlay のときに Core Audio が返した値だけを画面に出す（ログ・保存はしない）。読めなければ「OS の表示で確認してください」と出し、接続中とは言わない（NotReported）。守る範囲: 1 プロセス内の操作順・失敗を成功にしないこと・資源の解放。守らない範囲: OS の UI で切り替えた反映の約 250ms の遅れ、複数プロセス、受信機側の品質。未確認: player が nil のときにシステムの出力が切り替わるか、AVAudioPlayer が既定出力の切り替えに追従するか（Mac 目視 #379。駄目なら AVPlayer 経路へ切り替える）",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#379）",
-      "impl": "crates/fandhe-egui-proxy/src/device/apple_media_cast.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_media_cast.m + crates/fandhe-egui-proxy/src/device/media_cast.rs + crates/fandhe-core/src/screens/cast_show.rs + crates/fandhe-device/src/media_cast.rs、Issue #386"
+      "impl": "crates/fandhe-cap-media-cast/src/apple.rs + crates/fandhe-cap-media-cast/apple/fandhe_apple_media_cast.m + crates/fandhe-cap-media-cast/src/driver.rs + crates/fandhe-core/src/screens/cast_show.rs + crates/fandhe-cap-media-cast/src/contract.rs、Issue #386"
     },
     "windows": {
       "status": "done",
@@ -48,7 +48,7 @@
       "note": "実装済み（#388）。実行時に生成した音をループ再生し、アプリのボタンから OS のピッカーを出す。対象は Miracast・DLNA・Bluetooth。出力先の名前と接続状態は画面にだけ出す（ログ・保存・ID の取得はしない）。ピッカーを閉じたときは失敗にしない。守る範囲: 1 プロセス内の操作順・失敗を成功にしないこと・資源の解放。守らない範囲: 約 250ms の反映遅れ、複数窓・複数プロセス、受信機側の品質、出力先なしの能動的な検出、ピッカーが窓の位置に追従しないこと。未確認（Windows 実機 #379）: 素の exe から DLNA・Miracast・Bluetooth へ接続できるか、メモリ上の WAV を受信機が受けるか、接続をワーカーで行う方式、ピッカーの表示位置。素の exe で接続できなければ保留へ移す",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#379）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_media_cast.rs + crates/fandhe-egui-proxy/src/device/media_cast.rs + crates/fandhe-core/src/screens/cast_show.rs + crates/fandhe-device/src/media_cast.rs、Issue #388"
+      "impl": "crates/fandhe-cap-media-cast/src/windows.rs + crates/fandhe-cap-media-cast/src/driver.rs + crates/fandhe-core/src/screens/cast_show.rs + crates/fandhe-cap-media-cast/src/contract.rs、Issue #388"
     },
     "web": {
       "status": "done",
@@ -59,7 +59,7 @@
       "note": "実装済み（#389）。実行時に生成した WAV を blob: URL でループ再生し、アプリのボタンから prompt() で出力先ピッカーを出す。prompt() の NotAllowedError は利用者が閉じたキャンセルとして失敗にせず実際の remote.state から経路を戻し、NotFoundError は「出力先が見つかりません」、NotSupportedError は「この音源は送れません」と出す。出力先の名前は仕様上渡されないため常に出さない。非対応（Firefox）は非対応表示。期限は再生 5 秒・接続 15 秒（単調時計）、pagehide で中断する。守る範囲: 1 マウント内の操作順・失敗を成功にしないこと・資源の解放。守らない範囲: 複数タブ、受信機側で再開した再生の反映、受信機の品質。未確認: 実ブラウザ・実受信機（Chrome の Cast 機器、Safari の AirPlay）で blob: の WAV が送れるか、prompt() が解決する時機、disableRemotePlayback で切断されるか（#379）",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#379）",
-      "impl": "crates/fandhe-web-dom/src/media_cast.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/cast_show.rs + crates/fandhe-device/src/media_cast.rs、Issue #389"
+      "impl": "crates/fandhe-web-dom/src/media_cast.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/cast_show.rs + crates/fandhe-cap-media-cast/src/contract.rs、Issue #389"
     }
   },
   "note": "iOS / macOS は AirPlay（AVRoutePickerView）、Windows は CastingDevicePicker、Web は Remote Playback。Android は Cast SDK が GMS 前提のため保留。media-playback（既存 id）は端末内再生で、本機能は出力先を外部機器へ切り替える点が違う。audio-devices（端末側の出力先選択）とも別。今回の範囲: 実行時に生成した音声をループ再生し、OS の出力先選択 UI を出して、選ばれた出力先の名前（OS が教えるときだけ）と接続状態を出す。画面ミラーリング・動画・アプリからの切断は扱わない。成功経路の確認には実機の受信機が要る"

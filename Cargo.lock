@@ -1200,6 +1200,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-media-cast"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-ml-inference"
 version = "0.2.0"
 dependencies = [
@@ -1371,6 +1385,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_kittest",
+ "fandhe-cap-media-cast",
  "fandhe-cap-system-tray",
  "fandhe-core",
  "fandhe-device",
@@ -1421,6 +1436,7 @@ dependencies = [
  "fandhe-cap-home-widget",
  "fandhe-cap-http-get",
  "fandhe-cap-live-activity",
+ "fandhe-cap-media-cast",
  "fandhe-cap-ml-inference",
  "fandhe-cap-nfc-card-emulation",
  "fandhe-cap-nlp",
@@ -1528,10 +1544,12 @@ dependencies = [
  "console_error_panic_hook",
  "fandhe-cap-ar",
  "fandhe-cap-http-get",
+ "fandhe-cap-media-cast",
  "fandhe-cap-nlp",
  "fandhe-cap-power-state",
  "fandhe-cap-share-receive",
  "fandhe-cap-system-accent-color",
+ "fandhe-cap-usb-device",
  "fandhe-core",
  "fandhe-device",
  "fandhe-platform-web",

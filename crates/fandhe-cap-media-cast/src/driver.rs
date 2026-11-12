@@ -1,8 +1,8 @@
 //! Phase 11 の拡充ループ（親 #99）型サンプル「外部機器への再生」（Issue #386）の effect ドライバ。
 //! `fandhe_core::screens::cast_show`（端末依存ゼロ）の要求を `take_command` で観測し、
-//! `fandhe_device::media_cast::MediaCast` を操作して、状態を `CompletionSender` 経由で注入する
+//! `crate::contract::MediaCast` を操作して、状態を `CompletionSender` 経由で注入する
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約の SSOT は `fandhe_device::media_cast`。
+//! 契約の SSOT は `crate::contract`。
 //!
 //! # OS 別実装の差し込み口
 //!
@@ -24,19 +24,19 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "windows")))]
-use fandhe_device::media_cast::UnsupportedMediaCast;
-use fandhe_device::media_cast::{
-    CastFailure, CastPlayback, CastSnapshot, MediaCast, PickerKind, RouteState, CONNECT_DEADLINE,
-    POLL_INTERVAL, START_DEADLINE,
+use crate::contract::UnsupportedMediaCast;
+use crate::contract::{
+    CONNECT_DEADLINE, CastFailure, CastPlayback, CastSnapshot, MediaCast, POLL_INTERVAL,
+    PickerKind, RouteState, START_DEADLINE,
 };
-use fandhe_device::DeviceError;
+use crate::error::MediaCastError;
 
 use fandhe_core::screens::cast_show::{
-    apply_update, expire, mark_command_taken, prepare, take_command, CastCommand, CastShowFailure,
-    CastShowPlayback, CastShowRoute, CastShowState, CastShowUpdate, PickerView,
+    CastCommand, CastShowFailure, CastShowPlayback, CastShowRoute, CastShowState, CastShowUpdate,
+    PickerView, apply_update, expire, mark_command_taken, prepare, take_command,
 };
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// OS の生コードを含まない固定の失敗文言。
 const FAILED_CAST: &str = "外部機器への再生";
@@ -47,15 +47,15 @@ fn platform_cast() -> &'static Arc<dyn MediaCast> {
     CAST.get_or_init(|| {
         #[cfg(target_os = "macos")]
         {
-            super::apple_media_cast::implementation()
+            crate::apple::implementation()
         }
         #[cfg(target_os = "ios")]
         {
-            super::ios_media_cast::implementation()
+            crate::ios::implementation()
         }
         #[cfg(target_os = "windows")]
         {
-            super::windows_media_cast::implementation()
+            crate::windows::implementation()
         }
         #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "windows")))]
         {
@@ -99,10 +99,10 @@ fn release_resources(inner: &mut SessionInner, cast: &Arc<dyn MediaCast>) {
     inner.connecting_since = None;
 }
 
-fn to_failure(e: &DeviceError) -> CastShowFailure {
+fn to_failure(e: &MediaCastError) -> CastShowFailure {
     match e {
-        DeviceError::Unsupported(_) => CastShowFailure::Unsupported,
-        DeviceError::PermissionDenied(_) => CastShowFailure::Blocked,
+        MediaCastError::Unsupported => CastShowFailure::Unsupported,
+        MediaCastError::PermissionDenied => CastShowFailure::Blocked,
         // OS の生コードは画面へ出さない（security.md A09）。
         _ => CastShowFailure::Failed(FAILED_CAST.to_string()),
     }
@@ -196,15 +196,15 @@ fn drive(
         return None;
     }
 
-    if let Some((command, generation)) = take_command(state) {
-        if inner.handled != generation {
-            inner.handled = generation;
-            let _ = sender.send(Box::new(move |s: &mut CastShowState| {
-                mark_command_taken(s, generation)
-            }));
-            inner.last_report = None;
-            handle_command(&mut inner, sender, cast, command, generation);
-        }
+    if let Some((command, generation)) = take_command(state)
+        && inner.handled != generation
+    {
+        inner.handled = generation;
+        let _ = sender.send(Box::new(move |s: &mut CastShowState| {
+            mark_command_taken(s, generation)
+        }));
+        inner.last_report = None;
+        handle_command(&mut inner, sender, cast, command, generation);
     }
 
     // 未発送の再生を画面側で取り消すと、要求なしで世代だけが進む。追跡を現在の世代へ揃える。
@@ -265,7 +265,7 @@ fn handle_command(
     command: CastCommand,
     generation: u64,
 ) {
-    let fail = |inner: &mut SessionInner, e: &DeviceError| {
+    let fail = |inner: &mut SessionInner, e: &MediaCastError| {
         release_resources(inner, cast);
         send_update(sender, generation, CastShowUpdate::Failed(to_failure(e)));
     };
@@ -285,14 +285,14 @@ fn handle_command(
         return;
     }
     let Some(g) = inner.device_gen else {
-        return fail(inner, &DeviceError::Internal("media_cast"));
+        return fail(inner, &MediaCastError::Internal);
     };
     let r = match command {
         CastCommand::Play => cast.play(g),
         CastCommand::Stop => cast.stop(g),
         CastCommand::ShowPicker => match cast.show_picker(g) {
             // Native のピッカーは OS のボタンから選ぶ。要求が届いても失敗にはしない。
-            Err(DeviceError::Unsupported(_)) => return,
+            Err(MediaCastError::Unsupported) => return,
             r => return r.unwrap_or_else(|e| fail(inner, &e)),
         },
         CastCommand::Prepare => return,
@@ -343,7 +343,7 @@ pub fn cast_show_effect(state: &CastShowState, sender: &CompletionSender<CastSho
 }
 
 /// アプリ終了時に資源を解放する（`device::shutdown` から呼ばれる）。
-pub(super) fn shutdown() {
+pub fn shutdown() {
     platform_cast().release();
 }
 
@@ -353,13 +353,20 @@ mod tests {
     use fandhe_core::screens::cast_show::{play, show_picker, stop};
     use std::sync::mpsc;
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
     struct FakeSt {
-        gen: u64,
+        epoch: u64,
         playback: CastPlayback,
         route: RouteState,
         picker: PickerKind,
-        prepare_err: Option<DeviceError>,
-        play_err: Option<DeviceError>,
+        prepare_err: Option<MediaCastError>,
+        play_err: Option<MediaCastError>,
         auto_play: bool,
         releases: usize,
     }
@@ -369,7 +376,7 @@ mod tests {
     impl Fake {
         fn new(auto_play: bool) -> Arc<Self> {
             Arc::new(Self(Mutex::new(FakeSt {
-                gen: 0,
+                epoch: 0,
                 playback: CastPlayback::Idle,
                 route: RouteState::Local,
                 picker: PickerKind::App,
@@ -385,22 +392,22 @@ mod tests {
     }
 
     impl MediaCast for Fake {
-        fn prepare(&self, wav: Arc<[u8]>) -> Result<u64, DeviceError> {
+        fn prepare(&self, wav: Arc<[u8]>) -> Result<u64, MediaCastError> {
             let mut s = self.0.lock().unwrap();
             if wav.is_empty() {
-                return Err(DeviceError::InvalidInput("media_cast wav"));
+                return Err(MediaCastError::InvalidInput);
             }
             if let Some(e) = s.prepare_err.take() {
                 return Err(e);
             }
-            s.gen += 1;
+            s.epoch += 1;
             s.playback = CastPlayback::Ready;
-            Ok(s.gen)
+            Ok(s.epoch)
         }
-        fn play(&self, g: u64) -> Result<(), DeviceError> {
+        fn play(&self, g: u64) -> Result<(), MediaCastError> {
             let mut s = self.0.lock().unwrap();
-            if g != s.gen {
-                return Err(DeviceError::InvalidInput("media_cast generation"));
+            if g != s.epoch {
+                return Err(MediaCastError::InvalidInput);
             }
             if let Some(e) = s.play_err.take() {
                 return Err(e);
@@ -410,21 +417,21 @@ mod tests {
             }
             Ok(())
         }
-        fn stop(&self, _g: u64) -> Result<(), DeviceError> {
+        fn stop(&self, _g: u64) -> Result<(), MediaCastError> {
             let mut s = self.0.lock().unwrap();
             if s.playback == CastPlayback::Playing {
                 s.playback = CastPlayback::Stopped;
             }
             Ok(())
         }
-        fn show_picker(&self, _g: u64) -> Result<(), DeviceError> {
+        fn show_picker(&self, _g: u64) -> Result<(), MediaCastError> {
             self.0.lock().unwrap().route = RouteState::Choosing;
             Ok(())
         }
         fn snapshot(&self) -> CastSnapshot {
             let s = self.0.lock().unwrap();
             CastSnapshot {
-                generation: s.gen,
+                generation: s.epoch,
                 playback: s.playback,
                 route: s.route.clone(),
                 picker: s.picker,
@@ -435,7 +442,7 @@ mod tests {
         }
     }
 
-    type Rx = mpsc::Receiver<crate::app::Completion<CastShowState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<CastShowState>>;
 
     struct H {
         fake: Arc<Fake>,
@@ -459,7 +466,7 @@ mod tests {
             Self {
                 fake,
                 cast,
-                sender: crate::app::egui_sender(tx, egui::Context::default()),
+                sender: CompletionSender::new(tx, Arc::new(NoopWaker)),
                 rx,
                 session: Session::default(),
                 state: CastShowState::default(),
@@ -510,7 +517,7 @@ mod tests {
     #[test]
     fn prepare_invalid_input_fails_and_releases() {
         let fake = Fake::new(true);
-        fake.set(|s| s.prepare_err = Some(DeviceError::InvalidInput("media_cast wav")));
+        fake.set(|s| s.prepare_err = Some(MediaCastError::InvalidInput));
         let mut h = H::new(fake);
         h.step();
         h.step();
@@ -529,7 +536,7 @@ mod tests {
         play(&mut h.state);
         h.step();
         h.fake.set(|s| {
-            s.gen += 1;
+            s.epoch += 1;
             s.playback = CastPlayback::Playing;
         });
         h.step();
@@ -601,7 +608,7 @@ mod tests {
         let fake = Fake::new(true);
         let mut h = H::new(fake.clone());
         h.open_ready();
-        fake.set(|s| s.play_err = Some(DeviceError::PermissionDenied("x")));
+        fake.set(|s| s.play_err = Some(MediaCastError::PermissionDenied));
         play(&mut h.state);
         h.step();
         h.step();
@@ -615,7 +622,7 @@ mod tests {
     fn unsupported_implementation_never_plays_or_connects() {
         let mut h = H::with(
             Fake::new(true),
-            Arc::new(fandhe_device::media_cast::UnsupportedMediaCast),
+            Arc::new(crate::contract::UnsupportedMediaCast),
         );
         h.step();
         h.step();
@@ -650,7 +657,7 @@ mod tests {
         h.step();
         h.state.command = c.map(|(c, _)| c);
         h.step();
-        assert_eq!(h.fake.0.lock().unwrap().gen, 1);
+        assert_eq!(h.fake.0.lock().unwrap().epoch, 1);
     }
 
     #[test]

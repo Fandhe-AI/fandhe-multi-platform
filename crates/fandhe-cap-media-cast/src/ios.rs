@@ -14,7 +14,7 @@
 //! # 再描画（契約表 4）
 //!
 //! `.m` が通知・delegate で状態を変えた直後、`g_lock` を外してから [`fandhe_rust_media_cast_changed`] を呼ぶ。
-//! ここで `crate::ios::request_repaint` を呼び次フレームを起こす（入力が無いと egui が描画せず表示が止まるため）。
+//! ここで `fandhe_runtime::request_repaint` を呼び次フレームを起こす（入力が無いと egui が描画せず表示が止まるため）。
 //!
 //! # 守る範囲と守らない範囲（契約表 11）
 //!
@@ -26,19 +26,19 @@
 use std::sync::Arc;
 
 #[cfg(target_os = "ios")]
-use fandhe_device::media_cast::MediaCast;
+use crate::contract::MediaCast;
 
 /// iOS の実装を返す（macOS と共用）。
 #[cfg(target_os = "ios")]
 pub(crate) fn implementation() -> Arc<dyn MediaCast> {
-    super::apple_media_cast::implementation()
+    crate::apple::implementation()
 }
 
 /// `.m` が状態を変えた直後に呼ぶ受け口。引数なし・ポインタなしで、main thread（通知・delegate）から呼ばれる。
 /// `request_repaint` は Mutex を取るだけで `dispatch_sync` はしない（デッドロックしない）。panic しない。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_media_cast_changed() {
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }

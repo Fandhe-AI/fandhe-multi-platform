@@ -527,10 +527,6 @@ pub mod apple_location;
 /// `device/map_view.rs` の macOS / iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_map_view;
-/// Issue #386（macOS）/ #387（iOS）: 外部機器への再生（`apple/fandhe_apple_media_cast.m` の AVKit・AVFoundation を
-/// 呼ぶ C ABI ラッパー）。`device/media_cast.rs` の macOS 経路と `ios_media_cast` 経由の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_media_cast;
 /// Issue #267: macOS 向け音声再生実装（`apple/fandhe_apple_media_playback.m` の `AVAudioPlayer` を呼ぶ
 /// C ABI ラッパー）。`device/media_playback.rs` の macOS 経路から呼ばれる。iOS は親 #86 の b-ios が使う。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -979,10 +975,6 @@ pub mod ios_local_peer;
 /// `device/managed_app_config.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_managed_app_config;
-/// Issue #387: iOS 向け外部機器への再生（macOS と共用の `apple_media_cast` へ委譲。`device/media_cast.rs` の iOS 経路から呼ばれる）。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_media_cast;
 /// Issue #267: iOS 向け音声再生実装。`device/media_playback.rs` の
 /// iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1347,9 +1339,6 @@ pub mod managed_app_config;
 /// Phase 11 の拡充ループ（親 #85、Issue #273）: 地図表示の effect ドライバ（macOS / iOS は
 /// pull 型 `bridge`、他 OS は `UnsupportedMapSnapshotter` 固定）。
 pub mod map_view;
-/// Phase 11 の拡充ループ（親 #99、Issue #386）: 外部機器への再生の effect ドライバ（macOS・iOS・Windows 実装、
-/// 他 OS は `UnsupportedMediaCast` 固定）。
-pub mod media_cast;
 /// Phase 11 の拡充ループ（親 #86、Issue #267）: 音声再生の effect ドライバ（macOS・iOS・Android・Windows 実装、
 /// 他 OS は `UnsupportedMediaPlayback` 固定）。
 pub mod media_playback;
@@ -1716,10 +1705,6 @@ pub mod windows_launch_at_login;
 /// `device/local_fonts.rs` の Windows 経路（ワーカー）から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_local_fonts;
-/// Issue #388: Windows 向け外部機器への再生（`CastingDevicePicker` + `MediaPlayer`）。`device/media_cast.rs` の Windows 経路から呼ばれる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_media_cast;
 /// Issue #267: Windows 向け音声再生実装。`device/media_playback.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
@@ -1941,7 +1926,7 @@ pub fn shutdown() {
     media_playback::shutdown();
     now_playing::shutdown();
     picture_in_picture::shutdown();
-    media_cast::shutdown();
+    fandhe_cap_media_cast::shutdown();
     web_auth_session::shutdown();
     serial_port::shutdown();
     camera_preview_stream::shutdown();

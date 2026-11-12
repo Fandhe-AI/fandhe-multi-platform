@@ -287,7 +287,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "cast_show" => fandhe_core::screens::cast_show::current_screen,
-    fandhe_egui_proxy::device::media_cast::cast_show_effect,
+    fandhe_cap_media_cast::cast_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "midi_show" => fandhe_core::screens::midi_show::current_screen,

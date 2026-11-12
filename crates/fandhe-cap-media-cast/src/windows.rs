@@ -1,5 +1,5 @@
 //! Windows 向け外部機器への再生（Issue #388、親 #99 の windows 子）。`device/media_cast.rs::platform_cast` の
-//! Windows 経路から呼ばれ、契約（SSOT）は `fandhe_device::media_cast`。
+//! Windows 経路から呼ばれ、契約（SSOT）は `crate::contract`。
 //! 実行時に生成した WAV を WinRT `MediaPlayer`（メモリ上の `InMemoryRandomAccessStream`、ループ）で鳴らし、
 //! アプリのボタンから OS の `CastingDevicePicker` を出して Miracast・DLNA・Bluetooth の受信機へ送る。
 //! 出力先の名前と接続状態は画面に出す。画面ミラーリング・動画・アプリからの切断は範囲外。
@@ -44,9 +44,9 @@
 #[cfg(target_os = "windows")]
 use std::sync::Arc;
 
+use crate::contract::{CastFailure, CastPlayback, CastSnapshot, PickerKind, RouteState};
+use crate::error::MediaCastError;
 use fandhe_device::device_info::clean_text;
-use fandhe_device::media_cast::{CastFailure, CastPlayback, CastSnapshot, PickerKind, RouteState};
-use fandhe_device::DeviceError;
 
 /// `prepare` に渡せる WAV の上限（他の再生実装と同じ。異常に大きい入力を OS に渡さない）。
 const MAX_WAV_BYTES: usize = 16 * 1024 * 1024;
@@ -147,29 +147,29 @@ impl Shared {
     }
 
     /// 新しい準備を始める。0 バイトと上限超は拒み、旧世代も無効にする。
-    fn begin_prepare(&mut self, len: usize) -> Result<u64, DeviceError> {
+    fn begin_prepare(&mut self, len: usize) -> Result<u64, MediaCastError> {
         self.reset();
         if len == 0 || len > MAX_WAV_BYTES {
-            return Err(DeviceError::InvalidInput("media_cast wav"));
+            return Err(MediaCastError::InvalidInput);
         }
         self.next_gen += 1;
         self.current = Some(self.next_gen);
         Ok(self.next_gen)
     }
 
-    fn check(&self, gen: u64) -> Result<(), DeviceError> {
-        if self.current == Some(gen) {
+    fn check(&self, epoch: u64) -> Result<(), MediaCastError> {
+        if self.current == Some(epoch) {
             Ok(())
         } else {
-            Err(DeviceError::InvalidInput("media_cast generation"))
+            Err(MediaCastError::InvalidInput)
         }
     }
 
     /// 意図だけ記録する。`Playing` は OS の通知で立てる。
-    fn on_play(&mut self, gen: u64) -> Result<(), DeviceError> {
-        self.check(gen)?;
+    fn on_play(&mut self, epoch: u64) -> Result<(), MediaCastError> {
+        self.check(epoch)?;
         if matches!(self.playback, CastPlayback::Failed(_)) {
-            return Err(DeviceError::InvalidInput("media_cast failed"));
+            return Err(MediaCastError::InvalidInput);
         }
         // 前回の停止結果を持ち越さない（今回の Playing 通知前に Stopped と確定されるのを防ぐ）。
         if self.playback == CastPlayback::Stopped {
@@ -182,8 +182,8 @@ impl Shared {
 
     /// 戻り値は OS へ停止を流すべきか。再生中か、`play` 済みで Playing 通知が未達（キュー内の
     /// `Cmd::Play` が後で鳴らしうる）なら流す。Stop は冪等。`Stopped` は Paused の通知で立てる。
-    fn on_stop(&mut self, gen: u64) -> Result<bool, DeviceError> {
-        self.check(gen)?;
+    fn on_stop(&mut self, epoch: u64) -> Result<bool, MediaCastError> {
+        self.check(epoch)?;
         let was_play = self.intent == Intent::Play;
         self.intent = Intent::Stop;
         let flush = was_play || self.playback == CastPlayback::Playing;
@@ -197,13 +197,13 @@ impl Shared {
 
     /// ピッカーを出す前の確認。`Choosing` は `Show` の前に立てる（閉じた通知が先に届いても戻せる）。
     /// `Local` のときだけ立てる。接続中・接続済み・切断のまま閉じられても `Local` へ戻さない（嘘の状態にしない）。
-    fn on_picker_shown(&mut self, gen: u64) -> Result<(), DeviceError> {
-        self.check(gen)?;
+    fn on_picker_shown(&mut self, epoch: u64) -> Result<(), MediaCastError> {
+        self.check(epoch)?;
         if !matches!(
             self.playback,
             CastPlayback::Ready | CastPlayback::Playing | CastPlayback::Stopped
         ) {
-            return Err(DeviceError::Internal("media_cast not ready"));
+            return Err(MediaCastError::Internal);
         }
         if self.route == RouteState::Local {
             self.route = RouteState::Choosing;
@@ -222,8 +222,8 @@ impl Shared {
     }
 
     /// 世代の違う通知は捨てる（契約表 2）。
-    fn on_event(&mut self, gen: u64, ev: Ev) {
-        if self.check(gen).is_err() {
+    fn on_event(&mut self, epoch: u64, ev: Ev) {
+        if self.check(epoch).is_err() {
             return;
         }
         let failed = matches!(self.playback, CastPlayback::Failed(_));
@@ -327,16 +327,15 @@ impl Shared {
 
 /// 現在の実装（Windows 以外では本モジュールは host テストにだけ含まれ、呼ばれない）。
 #[cfg(target_os = "windows")]
-pub(crate) fn implementation() -> Arc<dyn fandhe_device::media_cast::MediaCast> {
+pub(crate) fn implementation() -> Arc<dyn crate::contract::MediaCast> {
     Arc::new(win::WindowsMediaCast)
 }
 
 #[cfg(target_os = "windows")]
 mod win {
     use std::cell::RefCell;
-    use std::sync::{mpsc, Mutex, OnceLock};
+    use std::sync::{Mutex, OnceLock, mpsc};
 
-    use windows::core::{Interface, Ref, HSTRING};
     use windows::Foundation::{Rect, TimeSpan, TypedEventHandler};
     use windows::Media::Casting::{
         CastingConnection, CastingConnectionErrorOccurredEventArgs, CastingConnectionErrorStatus,
@@ -349,9 +348,10 @@ mod win {
     use windows::Storage::Streams::{DataWriter, InMemoryRandomAccessStream};
     use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::Shell::IInitializeWithWindow;
+    use windows::core::{HSTRING, Interface, Ref};
     use windows_future::{AsyncOperationCompletedHandler, AsyncStatus, IAsyncOperation};
 
-    use fandhe_device::media_cast::MediaCast;
+    use crate::contract::MediaCast;
 
     use super::*;
     use fandhe_platform_windows::ComInit;
@@ -368,8 +368,8 @@ mod win {
 
     /// 状態更新とキュー送信を同じ排他区間で行う（契約表 2・11）。`send` は待たないのでロック内で呼んでよい。
     fn with_shared_send(
-        f: impl FnOnce(&mut Shared) -> Result<Cmd, DeviceError>,
-    ) -> Result<(), DeviceError> {
+        f: impl FnOnce(&mut Shared) -> Result<Cmd, MediaCastError>,
+    ) -> Result<(), MediaCastError> {
         let mut s = SHARED.lock().unwrap_or_else(|e| e.into_inner());
         let cmd = f(&mut s)?;
         send(cmd)
@@ -401,45 +401,46 @@ mod win {
             .as_ref()
     }
 
-    fn send(cmd: Cmd) -> Result<(), DeviceError> {
+    fn send(cmd: Cmd) -> Result<(), MediaCastError> {
         match queue() {
             Some(q) if q.send(cmd).is_ok() => Ok(()),
-            _ => Err(DeviceError::Internal("media_cast")),
+            _ => Err(MediaCastError::Internal),
         }
     }
 
     /// HRESULT を契約のエラー種別へ写す（写像はここ 1 か所、生コードは保持しない）。
-    fn map_err(e: &windows::core::Error, stage: &'static str) -> DeviceError {
+    /// 段の識別子は呼び出し箇所の読みやすさのために残す（契約側は固定の失敗へ畳み、画面・ログへ出さない）。
+    fn map_err(e: &windows::core::Error, _stage: &'static str) -> MediaCastError {
         if e.code().0 == CLASS_NOT_REG {
-            DeviceError::Unsupported("media_cast")
+            MediaCastError::Unsupported
         } else {
-            DeviceError::Internal(stage)
+            MediaCastError::Internal
         }
     }
 
     pub(super) struct WindowsMediaCast;
 
     impl MediaCast for WindowsMediaCast {
-        fn prepare(&self, wav: Arc<[u8]>) -> Result<u64, DeviceError> {
+        fn prepare(&self, wav: Arc<[u8]>) -> Result<u64, MediaCastError> {
             hide_picker();
-            let mut gen = 0;
+            let mut epoch = 0;
             let r = with_shared_send(|s| {
-                gen = s.begin_prepare(wav.len())?;
-                Ok(Cmd::Prepare(gen, wav))
+                epoch = s.begin_prepare(wav.len())?;
+                Ok(Cmd::Prepare(epoch, wav))
             });
             if let Err(e) = r {
                 // 旧世代の資源が残らないようにする（入力不正でも `begin_prepare` が無効化済み）。
                 self.release();
                 return Err(e);
             }
-            Ok(gen)
+            Ok(epoch)
         }
 
-        fn play(&self, generation: u64) -> Result<(), DeviceError> {
+        fn play(&self, generation: u64) -> Result<(), MediaCastError> {
             with_shared_send(|s| s.on_play(generation).map(|_| Cmd::Play(generation)))
         }
 
-        fn stop(&self, generation: u64) -> Result<(), DeviceError> {
+        fn stop(&self, generation: u64) -> Result<(), MediaCastError> {
             let mut s = SHARED.lock().unwrap_or_else(|e| e.into_inner());
             if s.on_stop(generation)? {
                 send(Cmd::Stop(generation))?;
@@ -447,11 +448,10 @@ mod win {
             Ok(())
         }
 
-        fn show_picker(&self, generation: u64) -> Result<(), DeviceError> {
+        fn show_picker(&self, generation: u64) -> Result<(), MediaCastError> {
             with_shared(|s| s.check(generation))?;
-            let hwnd = fandhe_platform_windows::window()
-                .ok_or(DeviceError::Internal("media_cast window"))?;
-            let tx = queue().ok_or(DeviceError::Internal("media_cast"))?.clone();
+            let hwnd = fandhe_platform_windows::window().ok_or(MediaCastError::Internal)?;
+            let tx = queue().ok_or(MediaCastError::Internal)?.clone();
             with_shared(|s| s.on_picker_shown(generation))?;
             hide_picker();
             match open_picker(generation, hwnd, tx) {
@@ -501,24 +501,24 @@ mod win {
         }
     }
 
-    fn open_picker(gen: u64, hwnd: HWND, tx: mpsc::Sender<Cmd>) -> windows::core::Result<Held> {
+    fn open_picker(epoch: u64, hwnd: HWND, tx: mpsc::Sender<Cmd>) -> windows::core::Result<Held> {
         let picker = CastingDevicePicker::new()?;
         picker.Filter()?.SetSupportsAudio(true)?;
         init_picker_window(&picker, hwnd)?;
         let tx_sel = tx.clone();
         let selected = picker.CastingDeviceSelected(&TypedEventHandler::new(
             move |_, args: Ref<'_, CastingDeviceSelectedEventArgs>| {
-                if let Some(args) = args.as_ref() {
-                    if let Ok(device) = args.SelectedCastingDevice() {
-                        let _ = tx_sel.send(Cmd::Selected(gen, device));
-                    }
+                if let Some(args) = args.as_ref()
+                    && let Ok(device) = args.SelectedCastingDevice()
+                {
+                    let _ = tx_sel.send(Cmd::Selected(epoch, device));
                 }
                 Ok(())
             },
         ))?;
         let dismissed =
             match picker.CastingDevicePickerDismissed(&TypedEventHandler::new(move |_, _| {
-                let _ = tx.send(Cmd::Event(gen, Ev::Dismissed));
+                let _ = tx.send(Cmd::Event(epoch, Ev::Dismissed));
                 Ok(())
             })) {
                 Ok(t) => t,
@@ -556,7 +556,7 @@ mod win {
 
     /// ワーカーが持つ 1 世代ぶんの OS 資源。
     struct Res {
-        gen: u64,
+        epoch: u64,
         player: MediaPlayer,
         _stream: InMemoryRandomAccessStream,
         opened: i64,
@@ -574,11 +574,11 @@ mod win {
     }
 
     /// ハンドラからキューへ通知を戻す。
-    fn post(tx: &mpsc::Sender<Cmd>, gen: u64, ev: Ev) {
-        let _ = tx.send(Cmd::Event(gen, ev));
+    fn post(tx: &mpsc::Sender<Cmd>, epoch: u64, ev: Ev) {
+        let _ = tx.send(Cmd::Event(epoch, ev));
     }
 
-    fn create_player(gen: u64, wav: &[u8], tx: &mpsc::Sender<Cmd>) -> windows::core::Result<Res> {
+    fn create_player(epoch: u64, wav: &[u8], tx: &mpsc::Sender<Cmd>) -> windows::core::Result<Res> {
         let stream = InMemoryRandomAccessStream::new()?;
         let writer = DataWriter::CreateDataWriter(&stream)?;
         writer.WriteBytes(wav)?;
@@ -594,7 +594,7 @@ mod win {
             player.SetIsLoopingEnabled(true)?;
             let t = tx.clone();
             let opened = player.MediaOpened(&TypedEventHandler::new(move |_, _| {
-                post(&t, gen, Ev::Opened);
+                post(&t, epoch, Ev::Opened);
                 Ok(())
             }))?;
             let t = tx.clone();
@@ -604,7 +604,7 @@ mod win {
                         .as_ref()
                         .and_then(|a| a.Error().ok())
                         .map_or(0, |e| e.0);
-                    post(&t, gen, Ev::MediaFailed(failure_from_media_error(code)));
+                    post(&t, epoch, Ev::MediaFailed(failure_from_media_error(code)));
                     Ok(())
                 },
             )) {
@@ -620,8 +620,8 @@ mod win {
                     move |s: Ref<'_, MediaPlaybackSession>, _| {
                         if let Some(s) = s.as_ref() {
                             match s.PlaybackState() {
-                                Ok(MediaPlaybackState::Playing) => post(&t, gen, Ev::Playing),
-                                Ok(MediaPlaybackState::Paused) => post(&t, gen, Ev::Paused),
+                                Ok(MediaPlaybackState::Playing) => post(&t, epoch, Ev::Playing),
+                                Ok(MediaPlaybackState::Paused) => post(&t, epoch, Ev::Paused),
                                 _ => {}
                             }
                         }
@@ -648,7 +648,7 @@ mod win {
         })();
         match built {
             Ok((opened, failed, state)) => Ok(Res {
-                gen,
+                epoch,
                 player,
                 _stream: stream,
                 opened,
@@ -694,15 +694,15 @@ mod win {
         if let Some(old) = res.conn.take() {
             close_conn(old);
         }
-        let gen = res.gen;
+        let epoch = res.epoch;
         let conn = device.CreateCastingConnection()?;
         let t = tx.clone();
         let state = conn.StateChanged(&TypedEventHandler::new(
             move |c: Ref<'_, CastingConnection>, _| {
-                if let Some(c) = c.as_ref() {
-                    if let Ok(s) = c.State() {
-                        post(&t, gen, Ev::ConnState(seq, s.0));
-                    }
+                if let Some(c) = c.as_ref()
+                    && let Ok(s) = c.State()
+                {
+                    post(&t, epoch, Ev::ConnState(seq, s.0));
                 }
                 Ok(())
             },
@@ -714,7 +714,7 @@ mod win {
                     .as_ref()
                     .and_then(|a| a.ErrorStatus().ok())
                     .map_or(CastingConnectionErrorStatus::Unknown.0, |s| s.0);
-                post(&t, gen, Ev::ConnError(seq, code));
+                post(&t, epoch, Ev::ConnError(seq, code));
                 Ok(())
             },
         )) {
@@ -751,7 +751,7 @@ mod win {
                 ),
                 _ => CastingConnectionErrorStatus::Unknown.0,
             };
-            post(&t, gen, Ev::StartResult(seq, code));
+            post(&t, epoch, Ev::StartResult(seq, code));
             Ok(())
         }));
         if let Err(e) = set {
@@ -763,8 +763,8 @@ mod win {
         Ok(())
     }
 
-    fn fail(gen: u64, f: CastFailure) {
-        with_shared(|s| s.on_event(gen, Ev::MediaFailed(f)));
+    fn fail(epoch: u64, f: CastFailure) {
+        with_shared(|s| s.on_event(epoch, Ev::MediaFailed(f)));
     }
 
     fn worker(rx: mpsc::Receiver<Cmd>, tx: mpsc::Sender<Cmd>) {
@@ -775,21 +775,21 @@ mod win {
         let mut conn_seq: u64 = 0;
         while let Ok(cmd) = rx.recv() {
             match cmd {
-                Cmd::Prepare(gen, wav) => {
-                    if with_shared(|s| s.check(gen)).is_err() {
+                Cmd::Prepare(epoch, wav) => {
+                    if with_shared(|s| s.check(epoch)).is_err() {
                         continue;
                     }
                     if let Some(old) = res.take() {
                         teardown(old);
                     }
                     if com.is_err() {
-                        fail(gen, CastFailure::Internal);
+                        fail(epoch, CastFailure::Internal);
                         continue;
                     }
-                    match create_player(gen, &wav, &tx) {
+                    match create_player(epoch, &wav, &tx) {
                         Ok(r) => res = Some(r),
                         Err(e) => fail(
-                            gen,
+                            epoch,
                             if e.code().0 == CLASS_NOT_REG {
                                 CastFailure::Unsupported
                             } else {
@@ -798,20 +798,20 @@ mod win {
                         ),
                     }
                 }
-                Cmd::Play(gen) => {
-                    if let Some(r) = res.as_ref().filter(|r| r.gen == gen) {
-                        if r.player.Play().is_err() {
-                            fail(gen, CastFailure::Os);
-                        }
+                Cmd::Play(epoch) => {
+                    if let Some(r) = res.as_ref().filter(|r| r.epoch == epoch)
+                        && r.player.Play().is_err()
+                    {
+                        fail(epoch, CastFailure::Os);
                     }
                 }
-                Cmd::Stop(gen) => {
-                    if let Some(r) = res.as_ref().filter(|r| r.gen == gen) {
+                Cmd::Stop(epoch) => {
+                    if let Some(r) = res.as_ref().filter(|r| r.epoch == epoch) {
                         // 停止の成否は Pause のみで決める（失敗を成功に見せない）。
                         // 先頭へのシークは契約外で、キャスト受信側が非対応でも停止は成立済みのため、
                         // 失敗しても `fail` せず Stopped のまま確定する。
                         if r.player.Pause().is_err() {
-                            fail(gen, CastFailure::Os);
+                            fail(epoch, CastFailure::Os);
                         } else {
                             let _ = r
                                 .player
@@ -820,7 +820,7 @@ mod win {
                         }
                     }
                 }
-                Cmd::Selected(gen, device) => {
+                Cmd::Selected(epoch, device) => {
                     // 世代が違えば捨てる。一致すれば `Connecting` へ進めてから接続を始める。
                     conn_seq += 1;
                     let seq = conn_seq;
@@ -829,24 +829,24 @@ mod win {
                         .map(|n| n.to_string())
                         .unwrap_or_default();
                     let current = with_shared(|s| {
-                        let ok = s.check(gen).is_ok();
+                        let ok = s.check(epoch).is_ok();
                         if ok {
-                            s.on_event(gen, Ev::Selected(seq, name));
+                            s.on_event(epoch, Ev::Selected(seq, name));
                         }
                         ok
                     });
                     if current {
                         // 資源が無い（準備失敗直後等）場合も 6 = Unknown として失敗を確定する。
-                        let ok = match res.as_mut().filter(|r| r.gen == gen) {
+                        let ok = match res.as_mut().filter(|r| r.epoch == epoch) {
                             Some(r) => connect(r, &device, seq, &tx).is_ok(),
                             None => false,
                         };
                         if !ok {
-                            with_shared(|s| s.on_event(gen, Ev::StartResult(seq, 6)));
+                            with_shared(|s| s.on_event(epoch, Ev::StartResult(seq, 6)));
                         }
                     }
                 }
-                Cmd::Event(gen, ev) => with_shared(|s| s.on_event(gen, ev)),
+                Cmd::Event(epoch, ev) => with_shared(|s| s.on_event(epoch, ev)),
                 Cmd::Release => {
                     if let Some(old) = res.take() {
                         teardown(old);
@@ -931,7 +931,7 @@ mod tests {
         let (mut s, g) = ready();
         assert!(matches!(
             s.begin_prepare(0),
-            Err(DeviceError::InvalidInput("media_cast wav"))
+            Err(MediaCastError::InvalidInput)
         ));
         assert!(s.check(g).is_err());
         assert!(s.begin_prepare(MAX_WAV_BYTES + 1).is_err());
@@ -999,7 +999,7 @@ mod tests {
         let g = s.begin_prepare(10).unwrap();
         assert!(matches!(
             s.on_picker_shown(g),
-            Err(DeviceError::Internal(_))
+            Err(MediaCastError::Internal)
         ));
     }
 
