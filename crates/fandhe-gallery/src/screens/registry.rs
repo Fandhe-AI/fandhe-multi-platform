@@ -183,7 +183,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "serial_port_show" => fandhe_core::screens::serial_port_show::current_screen,
-    fandhe_egui_proxy::device::serial_port::serial_port_show_effect,
+    fandhe_cap_serial_port::serial_port_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "gamepad_show" => fandhe_core::screens::gamepad_show::current_screen,
@@ -359,7 +359,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "user_idle_show" => fandhe_core::screens::user_idle_show::current_screen,
-    fandhe_egui_proxy::device::user_idle::user_idle_show_effect,
+    fandhe_cap_user_idle::user_idle_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "accessibility_prefs_show" => fandhe_core::screens::accessibility_prefs_show::current_screen,
@@ -411,7 +411,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "per_app_language_show" => fandhe_core::screens::per_app_language_show::current_screen,
-    fandhe_egui_proxy::device::per_app_language::per_app_language_show_effect,
+    fandhe_cap_per_app_language::per_app_language_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "fullscreen_toggle" => fandhe_core::screens::fullscreen_toggle::current_screen,
@@ -427,7 +427,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "screen_brightness_show" => fandhe_core::screens::screen_brightness_show::current_screen,
-    fandhe_egui_proxy::device::screen_brightness::screen_brightness_show_effect,
+    fandhe_cap_screen_brightness::screen_brightness_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "volume_control_show" => fandhe_core::screens::volume_control_show::current_screen,
@@ -439,7 +439,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "uwb_ranging_show" => fandhe_core::screens::uwb_ranging_show::current_screen,
-    fandhe_egui_proxy::device::uwb_ranging::uwb_ranging_show_effect,
+    fandhe_cap_uwb_ranging::uwb_ranging_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "flashlight_toggle" => fandhe_core::screens::flashlight_toggle::current_screen,
@@ -459,7 +459,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "in_app_review" => fandhe_core::screens::in_app_review::current_screen,
-    fandhe_egui_proxy::device::in_app_review::in_app_review_effect,
+    fandhe_cap_in_app_review::in_app_review_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "image_recognize" => fandhe_core::screens::image_recognize::current_screen,
@@ -511,7 +511,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "app_attest_show" => fandhe_core::screens::app_attest_show::current_screen,
-    fandhe_egui_proxy::device::app_attest::app_attest_show_effect,
+    fandhe_cap_app_attest::app_attest_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "companion_device_show" => fandhe_core::screens::companion_device_show::current_screen,
@@ -531,7 +531,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "geocoding_search_show" => fandhe_core::screens::geocoding_search_show::current_screen,
-    fandhe_egui_proxy::device::geocoding_search::geocoding_search_show_effect,
+    fandhe_cap_geocoding_search::geocoding_search_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nfc_read" => fandhe_core::screens::nfc_read::current_screen,
@@ -551,7 +551,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "spell_check" => fandhe_core::screens::spell_check::current_screen,
-    fandhe_egui_proxy::device::spell_check::spell_check_effect,
+    fandhe_cap_spell_check::spell_check_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "spotlight_index" => fandhe_core::screens::spotlight_index::current_screen,

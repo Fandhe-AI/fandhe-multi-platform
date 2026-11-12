@@ -102,7 +102,7 @@ pub enum BrightnessFailure {
     Failed(String),
 }
 
-/// OS の読み戻し（`fandhe_device::screen_brightness::BrightnessReading` の鏡像）。
+/// OS の読み戻し（`fandhe_cap_screen_brightness::BrightnessReading` の鏡像）。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Reading {
     /// 現在の輝度。出さない OS では `None`。
