@@ -31,8 +31,8 @@
 
 use std::sync::Arc;
 
-use fandhe_device::live_activity::{LiveActivity, LiveOutcome};
-use fandhe_device::DeviceError;
+use crate::contract::{LiveActivity, LiveOutcome};
+use crate::error::LiveActivityError;
 
 const OP_START: i32 = 0;
 const OP_UPDATE: i32 = 1;
@@ -46,8 +46,8 @@ const CODE_UNSUPPORTED: i32 = 11;
 /// Swift の結果コードを契約の結果へ写す（コード表の SSOT）。op に合わない成功コード・未知のコードは
 /// `Internal` にして、成功へ倒さない。
 #[cfg_attr(not(any(target_os = "ios", test)), allow(dead_code))]
-pub(crate) fn outcome_from_code(op: i32, code: i32) -> Result<LiveOutcome, DeviceError> {
-    let internal = DeviceError::Internal(match op {
+pub(crate) fn outcome_from_code(op: i32, code: i32) -> Result<LiveOutcome, LiveActivityError> {
+    let internal = LiveActivityError::Internal(match op {
         OP_START => "live_activity start",
         OP_UPDATE => "live_activity update",
         OP_END => "live_activity end",
@@ -58,8 +58,8 @@ pub(crate) fn outcome_from_code(op: i32, code: i32) -> Result<LiveOutcome, Devic
         (OP_UPDATE, 1) => Ok(LiveOutcome::Updated),
         (OP_UPDATE, CODE_DISMISSED) => Ok(LiveOutcome::Dismissed),
         (OP_END, 2) => Ok(LiveOutcome::Ended),
-        (_, CODE_PERMISSION_DENIED) => Err(DeviceError::PermissionDenied("live_activity")),
-        (_, CODE_UNSUPPORTED) => Err(DeviceError::Unsupported("live_activity")),
+        (_, CODE_PERMISSION_DENIED) => Err(LiveActivityError::PermissionDenied),
+        (_, CODE_UNSUPPORTED) => Err(LiveActivityError::Unsupported),
         _ => Err(internal),
     }
 }
@@ -67,12 +67,12 @@ pub(crate) fn outcome_from_code(op: i32, code: i32) -> Result<LiveOutcome, Devic
 #[cfg(target_os = "ios")]
 mod imp {
     use super::*;
-    use crate::device::live_activity::bridge;
-    use fandhe_device::live_activity::LiveOperation;
+    use crate::contract::LiveOperation;
+    use crate::driver::bridge;
 
     // `ios/fandhe_ios_live_activity.swift` が定義する C ABI。契約は Swift 側冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_ios_live_activity_submit(
             request_id: u64,
             op: i32,
@@ -86,13 +86,13 @@ mod imp {
     /// 描画せず、画面が処理中のまま止まる。契約表 4）。
     extern "C" fn on_done(request_id: u64, op: i32, code: i32) {
         bridge::deliver(request_id, outcome_from_code(op, code));
-        crate::ios::request_repaint();
+        fandhe_runtime::request_repaint();
     }
 
     pub(super) struct IosLiveActivity;
 
     impl LiveActivity for IosLiveActivity {
-        fn submit(&self, request_id: u64, op: LiveOperation) -> Result<(), DeviceError> {
+        fn submit(&self, request_id: u64, op: LiveOperation) -> Result<(), LiveActivityError> {
             let (code, value, name) = match op {
                 LiveOperation::Start(v) => (OP_START, v.get(), "live_activity start"),
                 LiveOperation::Update(v) => (OP_UPDATE, v.get(), "live_activity update"),
@@ -106,7 +106,7 @@ mod imp {
             if accepted == 0 {
                 Ok(())
             } else {
-                Err(DeviceError::Internal(name))
+                Err(LiveActivityError::Internal(name))
             }
         }
 
@@ -130,7 +130,7 @@ pub(crate) fn implementation() -> Arc<dyn LiveActivity> {
     }
     #[cfg(not(target_os = "ios"))]
     {
-        Arc::new(fandhe_device::live_activity::UnsupportedLiveActivity)
+        Arc::new(crate::contract::UnsupportedLiveActivity)
     }
 }
 
@@ -155,11 +155,11 @@ mod tests {
         for op in [OP_START, OP_UPDATE, OP_END] {
             assert!(matches!(
                 outcome_from_code(op, 10),
-                Err(DeviceError::PermissionDenied("live_activity"))
+                Err(LiveActivityError::PermissionDenied)
             ));
             assert!(matches!(
                 outcome_from_code(op, 11),
-                Err(DeviceError::Unsupported("live_activity"))
+                Err(LiveActivityError::Unsupported)
             ));
         }
     }
@@ -168,21 +168,21 @@ mod tests {
     fn mismatched_or_unknown_codes_are_internal() {
         assert!(matches!(
             outcome_from_code(OP_START, 1),
-            Err(DeviceError::Internal("live_activity start"))
+            Err(LiveActivityError::Internal("live_activity start"))
         ));
         assert!(matches!(
             outcome_from_code(OP_END, 3),
-            Err(DeviceError::Internal("live_activity end"))
+            Err(LiveActivityError::Internal("live_activity end"))
         ));
         for code in [20, 21, 22, 23, -1, i32::MAX] {
             assert!(matches!(
                 outcome_from_code(OP_UPDATE, code),
-                Err(DeviceError::Internal("live_activity update"))
+                Err(LiveActivityError::Internal("live_activity update"))
             ));
         }
         assert!(matches!(
             outcome_from_code(99, 0),
-            Err(DeviceError::Internal("live_activity"))
+            Err(LiveActivityError::Internal("live_activity"))
         ));
     }
 }

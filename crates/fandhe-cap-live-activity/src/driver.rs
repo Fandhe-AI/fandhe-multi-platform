@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #88、Issue #294）型サンプル「ライブアクティビティ」の effect ドライバ。
 //! `fandhe_core::screens::live_activity_show`（端末依存ゼロ）の要求を観測し、値を
-//! `fandhe_device::live_activity::LiveValue` で検査してから OS へ渡し、結果を `CompletionSender`
+//! `crate::contract::LiveValue` で検査してから OS へ渡し、結果を `CompletionSender`
 //! 経由で返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約）。契約と守る範囲は
 //! `fandhe_device::live_activity` のモジュール doc を参照。
 //!
@@ -20,39 +20,39 @@
 
 use std::sync::{Arc, OnceLock};
 
+use crate::contract::{LiveActivity, LiveOperation, LiveOutcome, LiveValue};
+use crate::error::LiveActivityError;
 use fandhe_core::screens::live_activity_show::{
-    apply_result, mark_command_taken, take_command, LiveActivityShowState, LiveCommand, LiveResult,
+    LiveActivityShowState, LiveCommand, LiveResult, apply_result, mark_command_taken, take_command,
 };
-use fandhe_device::live_activity::{LiveActivity, LiveOperation, LiveOutcome, LiveValue};
-use fandhe_device::DeviceError;
 
-use super::request_slot::{poll_and_finish, RequestSlot, POLL_INTERVAL};
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
 
 /// OS ごとの実装を 1 つだけ持つ（iOS・Android は各 OS 実装、他 OS は非対応）。
-fn platform_live_activity() -> &'static Arc<dyn LiveActivity> {
+pub fn platform_live_activity() -> &'static Arc<dyn LiveActivity> {
     static INSTANCE: OnceLock<Arc<dyn LiveActivity>> = OnceLock::new();
     INSTANCE.get_or_init(|| {
         #[cfg(target_os = "ios")]
-        return super::ios_live_activity::implementation();
+        return crate::ios::implementation();
         #[cfg(target_os = "android")]
-        return super::android_live_activity::implementation();
+        return crate::android::implementation();
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
-        return Arc::new(fandhe_device::live_activity::UnsupportedLiveActivity);
+        return Arc::new(crate::contract::UnsupportedLiveActivity);
     })
 }
 
-/// `DeviceError` / 成功結果を画面用の結果へ写像する。`Internal` と未知のエラー（`Cancelled` を含む）は
+/// `LiveActivityError` / 成功結果を画面用の結果へ写像する。`Internal` と未知のエラー（`Cancelled` を含む）は
 /// 固定文言の失敗にし、OS の文言は入れない（security.md A09）。
-fn to_result(result: Result<LiveOutcome, DeviceError>) -> LiveResult {
+fn to_result(result: Result<LiveOutcome, LiveActivityError>) -> LiveResult {
     match result {
         Ok(LiveOutcome::Started) => LiveResult::Started,
         Ok(LiveOutcome::Updated) => LiveResult::Updated,
         Ok(LiveOutcome::Ended) => LiveResult::Ended,
         Ok(LiveOutcome::Dismissed) => LiveResult::Dismissed,
-        Err(DeviceError::PermissionDenied(_)) => LiveResult::Denied,
-        Err(DeviceError::Unsupported(_)) => LiveResult::Unsupported,
-        Err(DeviceError::InvalidInput(_)) => LiveResult::OutOfRange,
+        Err(LiveActivityError::PermissionDenied) => LiveResult::Denied,
+        Err(LiveActivityError::Unsupported) => LiveResult::Unsupported,
+        Err(LiveActivityError::InvalidInput) => LiveResult::OutOfRange,
         Err(_) => LiveResult::Failed("OS のライブ表示の操作に失敗しました".to_string()),
     }
 }
@@ -66,7 +66,7 @@ pub(crate) mod bridge {
     /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
     /// 捨てて `false`（先に届いたものだけを採る）。b 層の実装は完了時に 1 回だけ呼ぶ。
     #[allow(dead_code)]
-    pub(crate) fn deliver(request_id: u64, result: Result<LiveOutcome, DeviceError>) -> bool {
+    pub(crate) fn deliver(request_id: u64, result: Result<LiveOutcome, LiveActivityError>) -> bool {
         SLOT.deliver(request_id, to_result(result))
     }
 }
@@ -80,21 +80,19 @@ fn drive(
     slot: &'static RequestSlot<LiveResult>,
 ) {
     let busy = matches!(slot.snapshot(), Some((_, None)));
-    if !busy {
-        if let Some((command, generation)) = take_command(state) {
-            let _ = sender.send(Box::new(move |s: &mut LiveActivityShowState| {
-                mark_command_taken(s, generation)
-            }));
-            let request_id = slot.begin();
-            // 範囲外の値は OS へ渡さずその場で画面へ返す。
-            let accepted = to_operation(command).and_then(|op| ui.submit(request_id, op));
-            if let Err(e) = accepted {
-                slot.deliver(request_id, to_result(Err(e)));
-            }
-            // 結果は次フレーム以降の poll で拾う。入力がなくても起こす。
-            sender.request_repaint_after(POLL_INTERVAL);
-            return;
+    if !busy && let Some((command, generation)) = take_command(state) {
+        let _ = sender.send(Box::new(move |s: &mut LiveActivityShowState| {
+            mark_command_taken(s, generation)
+        }));
+        let request_id = slot.begin();
+        // 範囲外の値は OS へ渡さずその場で画面へ返す。
+        let accepted = to_operation(command).and_then(|op| ui.submit(request_id, op));
+        if let Err(e) = accepted {
+            slot.deliver(request_id, to_result(Err(e)));
         }
+        // 結果は次フレーム以降の poll で拾う。入力がなくても起こす。
+        sender.request_repaint_after(POLL_INTERVAL);
+        return;
     }
 
     let generation = state.generation;
@@ -111,7 +109,7 @@ fn drive(
 }
 
 /// 画面の要求を検証済みの操作へ変換する。OS 型へ変換する前の唯一の検証点を通す。
-fn to_operation(command: LiveCommand) -> Result<LiveOperation, DeviceError> {
+fn to_operation(command: LiveCommand) -> Result<LiveOperation, LiveActivityError> {
     Ok(match command {
         LiveCommand::Start(v) => LiveOperation::Start(LiveValue::new(v)?),
         LiveCommand::Update(v) => LiveOperation::Update(LiveValue::new(v)?),
@@ -135,8 +133,7 @@ pub fn live_activity_show_effect(
 /// Android: Activity 再生成直後に `android_main` から呼ぶ。保留中の要求は復元せず破棄して以後届く旧
 /// `request_id` の完了を無視させ、OS 側の表示も閉じる。再生成後の画面は `Idle` から始まるため、
 /// 表示を残すと「開始」の次の操作と食い違う（契約表 1・9）。
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::SLOT.reset();
     platform_live_activity().dismiss_all();
 }
@@ -144,20 +141,27 @@ pub(crate) fn reset_pending_tracking() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::UnsupportedLiveActivity;
     use fandhe_core::screens::live_activity_show::{
-        end, error_text, start, status_text, update, LivePhase,
+        LivePhase, end, error_text, start, status_text, update,
     };
-    use fandhe_device::live_activity::UnsupportedLiveActivity;
     use std::sync::Mutex;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     /// `submit` の呼び出しを記録する偽実装。`submit_error` が `Some` なら依頼自体を失敗させる。
     struct Fake {
         calls: Mutex<Vec<(u64, LiveOperation)>>,
-        submit_error: Option<fn() -> DeviceError>,
+        submit_error: Option<fn() -> LiveActivityError>,
     }
 
     impl Fake {
-        fn new(submit_error: Option<fn() -> DeviceError>) -> Self {
+        fn new(submit_error: Option<fn() -> LiveActivityError>) -> Self {
             Self {
                 calls: Mutex::new(Vec::new()),
                 submit_error,
@@ -169,7 +173,7 @@ mod tests {
     }
 
     impl LiveActivity for Fake {
-        fn submit(&self, request_id: u64, op: LiveOperation) -> Result<(), DeviceError> {
+        fn submit(&self, request_id: u64, op: LiveOperation) -> Result<(), LiveActivityError> {
             self.calls.lock().unwrap().push((request_id, op));
             match self.submit_error {
                 Some(f) => Err(f()),
@@ -183,10 +187,13 @@ mod tests {
 
     fn channel() -> (
         CompletionSender<St>,
-        std::sync::mpsc::Receiver<crate::app::Completion<St>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<St>>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     /// 1 回の `drive` で送られた完了を全部状態へ適用する。
@@ -195,7 +202,7 @@ mod tests {
         ui: &Fake,
         slot: &'static RequestSlot<LiveResult>,
         tx: &CompletionSender<St>,
-        rx: &std::sync::mpsc::Receiver<crate::app::Completion<St>>,
+        rx: &std::sync::mpsc::Receiver<fandhe_runtime::Completion<St>>,
     ) {
         let snapshot = state.clone();
         drive(&snapshot, tx, ui, slot);
@@ -250,7 +257,7 @@ mod tests {
     fn bridge_deliver(
         slot: &RequestSlot<LiveResult>,
         id: u64,
-        r: Result<LiveOutcome, DeviceError>,
+        r: Result<LiveOutcome, LiveActivityError>,
     ) -> bool {
         slot.deliver(id, to_result(r))
     }
@@ -272,7 +279,7 @@ mod tests {
 
     #[test]
     fn permission_denied_is_error_not_success() {
-        let ui = Fake::new(Some(|| DeviceError::PermissionDenied("live_activity")));
+        let ui = Fake::new(Some(|| LiveActivityError::PermissionDenied));
         let (tx, rx) = channel();
         let mut st = St::default();
         start(&mut st);
@@ -302,7 +309,7 @@ mod tests {
     fn pump_poll(
         st: &mut St,
         tx: &CompletionSender<St>,
-        rx: &std::sync::mpsc::Receiver<crate::app::Completion<St>>,
+        rx: &std::sync::mpsc::Receiver<fandhe_runtime::Completion<St>>,
         slot: &'static RequestSlot<LiveResult>,
     ) {
         let snapshot = st.clone();
@@ -350,20 +357,20 @@ mod tests {
         assert_eq!(to_result(Ok(LiveOutcome::Ended)), LiveResult::Ended);
         assert_eq!(to_result(Ok(LiveOutcome::Dismissed)), LiveResult::Dismissed);
         assert_eq!(
-            to_result(Err(DeviceError::PermissionDenied("live_activity"))),
+            to_result(Err(LiveActivityError::PermissionDenied)),
             LiveResult::Denied
         );
         assert_eq!(
-            to_result(Err(DeviceError::Unsupported("live_activity"))),
+            to_result(Err(LiveActivityError::Unsupported)),
             LiveResult::Unsupported
         );
         assert_eq!(
-            to_result(Err(DeviceError::InvalidInput("live_activity value"))),
+            to_result(Err(LiveActivityError::InvalidInput)),
             LiveResult::OutOfRange
         );
         for e in [
-            DeviceError::Internal("live_activity start"),
-            DeviceError::Cancelled("live_activity"),
+            LiveActivityError::Internal("live_activity start"),
+            LiveActivityError::Cancelled,
         ] {
             assert!(matches!(to_result(Err(e)), LiveResult::Failed(_)));
         }

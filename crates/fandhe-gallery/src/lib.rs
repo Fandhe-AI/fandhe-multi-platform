@@ -80,6 +80,10 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 残すと次の「着信を模擬する」が飲み込まれ、OS 側の着信も残る（`fandhe_cap_call_ui::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_call_ui::reset_pending_tracking();
+    // ライブアクティビティの保留中の要求も破棄し、表示中の通知を閉じる。再生成後の画面は Idle から始まるため、
+    // 残すと次の操作と OS 側の表示が食い違う（`fandhe_cap_live_activity::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_live_activity::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 

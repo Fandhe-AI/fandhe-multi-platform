@@ -217,11 +217,6 @@ pub mod android_in_app_browser;
 /// `device/lan_discovery.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_lan_discovery;
-/// Issue #294: Android 向けライブアクティビティ（進行中通知）実装。
-/// `device/live_activity.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_live_activity;
 /// Issue #1376: Android 向け OS 搭載フォント一覧実装。`device/local_fonts.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -1027,11 +1022,6 @@ pub mod ios_in_app_review;
 /// `device/lan_discovery.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_lan_discovery;
-/// Issue #294: iOS 向けライブアクティビティ（ActivityKit）実装。
-/// `device/live_activity.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_live_activity;
 /// Issue #1377: iOS 向け OS 搭載フォント一覧実装（`ios/fandhe_ios_local_fonts.m`、UIKit
 /// `UIFont.familyNames`）。`device/local_fonts.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1189,9 +1179,6 @@ pub mod lan_discovery;
 /// Phase 11 の拡充ループ（親 #134、Issue #696）: ログイン時の自動起動の effect ドライバ
 /// （macOS 実装。Windows は HKCU の Run キーで Issue #697。他 OS は `UnsupportedLaunchAtLogin` 固定）。
 pub mod launch_at_login;
-/// Phase 11 の拡充ループ（親 #88、Issue #294）: ライブアクティビティの effect ドライバ（iOS・Android 実装、
-/// 他 OS は `UnsupportedLiveActivity` 固定）。
-pub mod live_activity;
 /// Phase 11 の拡充ループ（親 #1145、Issue #1376）: OS 搭載フォント一覧の effect ドライバ（macOS / Windows
 /// ・iOS・Android 実装、他 OS は `UnsupportedLocalFonts` 固定）。
 pub mod local_fonts;

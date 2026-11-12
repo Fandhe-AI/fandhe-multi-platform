@@ -295,7 +295,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "live_activity_show" => fandhe_core::screens::live_activity_show::current_screen,
-    fandhe_egui_proxy::device::live_activity::live_activity_show_effect,
+    fandhe_cap_live_activity::live_activity_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "call_ui_show" => fandhe_core::screens::call_ui_show::current_screen,

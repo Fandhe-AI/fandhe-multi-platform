@@ -37,7 +37,7 @@
 //! 閉じてから次の操作までの画面表示の食い違い、OS が描画へ反映するまでの時間差、iOS の 8 時間上限、
 //! Android の OEM 独自の表示規則。並行経路の集約先は iOS が main actor、Android が main looper。
 
-use crate::DeviceError;
+use crate::error::LiveActivityError;
 
 /// 表示する値の上限。
 pub const MAX_LIVE_VALUE: u32 = 9999;
@@ -48,9 +48,9 @@ pub struct LiveValue(u32);
 
 impl LiveValue {
     /// 上限を超える値は `InvalidInput`。OS 型へ変換する前の唯一の検証点。
-    pub fn new(value: u32) -> Result<Self, DeviceError> {
+    pub fn new(value: u32) -> Result<Self, LiveActivityError> {
         if value > MAX_LIVE_VALUE {
-            return Err(DeviceError::InvalidInput("live_activity value"));
+            return Err(LiveActivityError::InvalidInput);
         }
         Ok(Self(value))
     }
@@ -89,7 +89,7 @@ pub enum LiveOutcome {
 pub trait LiveActivity: Send + Sync {
     /// 操作を依頼する。`Ok(())` は受理で、結果は同じ `request_id` で 1 回だけ届く。
     /// `Err` は依頼そのものの失敗で、呼び出し元がその場で確定する。契約は本モジュール doc。
-    fn submit(&self, request_id: u64, op: LiveOperation) -> Result<(), DeviceError>;
+    fn submit(&self, request_id: u64, op: LiveOperation) -> Result<(), LiveActivityError>;
 
     /// 表示中のものを全部閉じる（冪等）。Android の Activity 再生成時と、実装の初期化時
     /// （前回プロセスの残り）に使う。
@@ -101,8 +101,8 @@ pub trait LiveActivity: Send + Sync {
 pub struct UnsupportedLiveActivity;
 
 impl LiveActivity for UnsupportedLiveActivity {
-    fn submit(&self, _request_id: u64, _op: LiveOperation) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("live_activity"))
+    fn submit(&self, _request_id: u64, _op: LiveOperation) -> Result<(), LiveActivityError> {
+        Err(LiveActivityError::Unsupported)
     }
 
     fn dismiss_all(&self) {}
@@ -118,7 +118,7 @@ mod tests {
         assert_eq!(LiveValue::new(MAX_LIVE_VALUE).unwrap().get(), 9999);
         assert!(matches!(
             LiveValue::new(10000),
-            Err(DeviceError::InvalidInput("live_activity value"))
+            Err(LiveActivityError::InvalidInput)
         ));
     }
 
@@ -132,7 +132,7 @@ mod tests {
         ] {
             assert!(matches!(
                 UnsupportedLiveActivity.submit(1, op),
-                Err(DeviceError::Unsupported("live_activity"))
+                Err(LiveActivityError::Unsupported)
             ));
         }
         UnsupportedLiveActivity.dismiss_all();

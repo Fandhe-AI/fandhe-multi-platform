@@ -383,6 +383,10 @@
             android:authorities="${applicationId}.fandhe.call-ui"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.LiveActivityLifecycle"
+            android:authorities="${applicationId}.fandhe.live-activity"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.ShareReceiveLifecycle"
             android:authorities="${applicationId}.fandhe.share-receive"
             android:exported="false" />

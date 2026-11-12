@@ -284,11 +284,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // （`device::picture_in_picture::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::picture_in_picture::reset_pending_tracking();
-    // Issue #294: ライブアクティビティの保留中の要求も破棄し、表示中の通知を閉じる。再生成後の画面は
-    // Idle から始まるため、残すと次の操作と OS 側の表示が食い違う
-    // （`device::live_activity::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::live_activity::reset_pending_tracking();
     // Issue #345: 端末内 LLM の処理済み世代も破棄する（理由は ml_inference と同じ。
     // `device::on_device_llm::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
