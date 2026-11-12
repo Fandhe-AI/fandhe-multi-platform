@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::focus_mode_status_show`（端末依存ゼロ）へ注入する
 //! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。
 //!
-//! **間隔つき pull**（`system_accent_color.rs` と同型）: 最終読取から `READ_INTERVAL` 未満なら
+//! **間隔つき pull**（`fandhe-cap-system-accent-color` の `driver.rs` と同型）: 最終読取から `READ_INTERVAL` 未満なら
 //! OS を読まない。状態が変わらなければ送信を省くが、次の読み取りまでの再描画を必ず予約する
 //! （入力が無いと egui が描画せずポーリングが止まる、契約表 4）。
 //!

@@ -2,14 +2,14 @@
 // `NSColor.controlAccentColor` を `NSApp.effectiveAppearance` の下で sRGB に解決して読む。
 // 通知（NSSystemColorsDidChangeNotification）は購読しない（呼び出し側が 1 秒間隔で読み直す）。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_system_accent_color.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `crates/fandhe-cap-system-accent-color/src/macos.rs` から C ABI 経由で呼ばれる。
+// 本 crate の `build.rs` が macOS ターゲットでコンパイルする。
 //
 // 契約:
 //   int32_t fandhe_macos_system_accent_color_read(void)
 //     UI（main）スレッドから同期で呼ぶ。
 //     0..=0xFFFFFF: 0xRRGGBB。-1: 失敗（main 以外・NSApp 未確立・変換失敗・成分が不正）。
-//     値の写像の SSOT は fandhe_device::system_accent_color::rgb_from_code。
+//     値の写像の SSOT は fandhe-cap-system-accent-color の contract::rgb_from_code。
 //
 // FFI 規約: 全体を `@autoreleasepool` で囲む。static・購読・ログは持たない（色は
 // フィンガープリントに使えるためログへ出さない）。

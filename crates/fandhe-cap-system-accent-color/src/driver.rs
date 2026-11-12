@@ -1,5 +1,5 @@
-//! Phase 11 の拡充ループ（親 #103、Issue #421）「システムのアクセント色」の effect ドライバ。
-//! `fandhe_device::system_accent_color::AccentColorSource` を一定間隔で読み、結果を
+//! Phase 11 の拡充ループ（親 #103、Issue #421）「システムのアクセント色」の effect ドライバ（機能 crate へ移行、Issue #1189）。
+//! `crate::contract::AccentColorSource` を一定間隔で読み、結果を
 //! `fandhe_core::screens::system_accent_color_show`（端末依存ゼロ）へ注入する
 //! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。
 //!
@@ -9,34 +9,34 @@
 //!
 //! dispatch（[`implementation`]）は全対象 OS の最終形。macOS は `macos_system_accent_color.rs`、
 //! Windows は `windows_system_accent_color.rs`、Android は `android_system_accent_color.rs`
-//! （JNI の同期 pull）。Web は `fandhe-web-dom` 側（#423）。
+//! （JNI の同期 pull）。Web は `fandhe-web-dom` 側（#423）で、純粋な定数 `READ_INTERVAL` だけを本 crate から使う。
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::system_accent_color_show::{
-    apply_read, ReadFailure, Rgb, SystemAccentColorShowState,
-};
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "android")))]
-use fandhe_device::system_accent_color::UnsupportedAccentColor;
-use fandhe_device::system_accent_color::{self as dev, AccentColorSource, READ_INTERVAL};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedAccentColor;
+use crate::contract::{self as dev, AccentColorSource, READ_INTERVAL};
+use crate::error::SystemAccentColorError;
+use fandhe_core::screens::system_accent_color_show::{
+    ReadFailure, Rgb, SystemAccentColorShowState, apply_read,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
-/// 現在のプラットフォームに応じた実装を返す。
-fn implementation() -> Arc<dyn AccentColorSource> {
+/// 現在のプラットフォームに応じた実装を返す。フレームワークの外のアプリも直接使える入口。
+pub fn platform_system_accent_color() -> Arc<dyn AccentColorSource> {
     #[cfg(target_os = "windows")]
     {
-        Arc::new(super::windows_system_accent_color::WindowsAccentColor)
+        Arc::new(crate::windows::WindowsAccentColor)
     }
     #[cfg(target_os = "macos")]
     {
-        Arc::new(super::macos_system_accent_color::MacosAccentColor)
+        Arc::new(crate::macos::MacosAccentColor)
     }
     #[cfg(target_os = "android")]
     {
-        super::android_system_accent_color::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "android")))]
     {
@@ -46,14 +46,14 @@ fn implementation() -> Arc<dyn AccentColorSource> {
 
 /// 契約の結果を画面の入力へ写す。失敗は固定文言へ畳み、OS 固有値を画面へ漏らさない
 /// （security.md A09）。
-fn to_result(r: Result<dev::Rgb, DeviceError>) -> Result<Rgb, ReadFailure> {
+fn to_result(r: Result<dev::Rgb, SystemAccentColorError>) -> Result<Rgb, ReadFailure> {
     match r {
         Ok(c) => Ok(Rgb {
             r: c.r,
             g: c.g,
             b: c.b,
         }),
-        Err(DeviceError::Unsupported(_)) => Err(ReadFailure::Unsupported),
+        Err(SystemAccentColorError::Unsupported) => Err(ReadFailure::Unsupported),
         Err(_) => Err(ReadFailure::Failed("アクセント色の取得".to_string())),
     }
 }
@@ -112,7 +112,7 @@ pub fn system_accent_color_show_effect(
     drive(
         state,
         sender,
-        implementation().as_ref(),
+        platform_system_accent_color().as_ref(),
         Instant::now(),
         &mut timing,
     );
@@ -121,25 +121,31 @@ pub fn system_accent_color_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::UnsupportedAccentColor as Unsupported;
     use fandhe_core::screens::system_accent_color_show::AccentView;
-    use fandhe_device::system_accent_color::UnsupportedAccentColor as Unsupported;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<SystemAccentColorShowState>>;
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<SystemAccentColorShowState>>;
 
     fn sender_with_channel() -> (CompletionSender<SystemAccentColorShowState>, Rx) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     struct Fake {
-        result: Result<dev::Rgb, DeviceError>,
+        result: Result<dev::Rgb, SystemAccentColorError>,
         reads: AtomicUsize,
     }
 
     impl Fake {
-        fn new(result: Result<dev::Rgb, DeviceError>) -> Self {
+        fn new(result: Result<dev::Rgb, SystemAccentColorError>) -> Self {
             Self {
                 result,
                 reads: AtomicUsize::new(0),
@@ -151,12 +157,14 @@ mod tests {
     }
 
     impl AccentColorSource for Fake {
-        fn read(&self) -> Result<dev::Rgb, DeviceError> {
+        fn read(&self) -> Result<dev::Rgb, SystemAccentColorError> {
             self.reads.fetch_add(1, Ordering::SeqCst);
             match &self.result {
                 Ok(c) => Ok(*c),
-                Err(DeviceError::Unsupported(n)) => Err(DeviceError::Unsupported(n)),
-                Err(_) => Err(DeviceError::Internal("x")),
+                Err(SystemAccentColorError::Unsupported) => {
+                    Err(SystemAccentColorError::Unsupported)
+                }
+                Err(_) => Err(SystemAccentColorError::Internal),
             }
         }
     }
@@ -220,8 +228,8 @@ mod tests {
     #[test]
     fn failures_never_become_read() {
         for r in [
-            Err(DeviceError::Unsupported("system_accent_color")),
-            Err(DeviceError::Internal("x")),
+            Err(SystemAccentColorError::Unsupported),
+            Err(SystemAccentColorError::Internal),
         ] {
             let (tx, rx) = sender_with_channel();
             let mut state = SystemAccentColorShowState::default();
@@ -248,7 +256,7 @@ mod tests {
         let mut timing = Timing::default();
         drive(&state, &tx, &Fake::color(1, 2, 3), t0, &mut timing);
         apply_all(&rx, &mut state);
-        let failing = Fake::new(Err(DeviceError::Internal("x")));
+        let failing = Fake::new(Err(SystemAccentColorError::Internal));
         drive(&state, &tx, &failing, t0 + READ_INTERVAL, &mut timing);
         apply_all(&rx, &mut state);
         assert!(!matches!(state.view, AccentView::Read(_)));

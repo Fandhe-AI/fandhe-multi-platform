@@ -1,11 +1,11 @@
 //! システムのアクセント色の契約（Issue #421、親 #103）。OS のアクセント色を 1 つ
-//! （sRGB 8bit×3、アルファは捨てる）取得するための橋渡しで、`fandhe-egui-proxy` の
-//! `device/system_accent_color.rs` が間隔つきで [`AccentColorSource::read`] を呼ぶ
+//! （sRGB 8bit×3、アルファは捨てる）取得するための橋渡しで、機能 crate の
+//! `driver.rs` が間隔つきで [`AccentColorSource::read`] を呼ぶ
 //! （pull 型。OS の変化通知は購読しない）。Web は `fandhe-web-dom` が計算済みスタイルを読む。
 //!
 //! # 契約
 //!
-//! - 結果は [`Rgb`] か `DeviceError`（`Unsupported` / `Internal` のみ）。失敗・非対応で
+//! - 結果は [`Rgb`] か `SystemAccentColorError`（`Unsupported` / `Internal` のみ）。失敗・非対応で
 //!   既定色を返さない（`device-bridge-contracts.md`「6. 嘘の成功」）
 //! - **三値**（契約表 10）: 結果は「読めた」「非対応（`Unsupported`）」「失敗（`Internal`）」。
 //!   利用者のキャンセル・権限ダイアログ・入力は無いので、キャンセルと権限拒否は該当なし
@@ -24,9 +24,9 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::SystemAccentColorError;
 
-/// 画面側が OS を読み直す間隔。`fandhe-egui-proxy` と `fandhe-web-dom` が共有する唯一の値。
+/// 画面側が OS を読み直す間隔。本 crate の driver と `fandhe-web-dom` が共有する唯一の値。
 pub const READ_INTERVAL: Duration = Duration::from_secs(1);
 
 /// sRGB 8bit の色。
@@ -43,7 +43,7 @@ pub struct Rgb {
 /// アクセント色を 1 回読む。UI スレッドで同期に呼ばれるため短時間で戻ること。
 pub trait AccentColorSource: Send + Sync {
     /// 現在のアクセント色を返す。失敗後に直前の値を返し続けてはならない。
-    fn read(&self) -> Result<Rgb, DeviceError>;
+    fn read(&self) -> Result<Rgb, SystemAccentColorError>;
 }
 
 /// 常に非対応を返す実装（未実装 OS の dispatch 先・スタブ）。
@@ -51,8 +51,8 @@ pub trait AccentColorSource: Send + Sync {
 pub struct UnsupportedAccentColor;
 
 impl AccentColorSource for UnsupportedAccentColor {
-    fn read(&self) -> Result<Rgb, DeviceError> {
-        Err(DeviceError::Unsupported("system_accent_color"))
+    fn read(&self) -> Result<Rgb, SystemAccentColorError> {
+        Err(SystemAccentColorError::Unsupported)
     }
 }
 
@@ -64,15 +64,15 @@ impl AccentColorSource for UnsupportedAccentColor {
 /// - それ以外の負値・`0xFF_FFFF` 超: 未定義コード（`Internal`。成功にしない）
 ///
 /// 値域の検査は変換の前に行う。
-pub fn rgb_from_code(code: i32) -> Result<Rgb, DeviceError> {
+pub fn rgb_from_code(code: i32) -> Result<Rgb, SystemAccentColorError> {
     match code {
         0..=0xFF_FFFF => Ok(Rgb {
             r: ((code >> 16) & 0xFF) as u8,
             g: ((code >> 8) & 0xFF) as u8,
             b: (code & 0xFF) as u8,
         }),
-        -2 => Err(DeviceError::Unsupported("system_accent_color")),
-        _ => Err(DeviceError::Internal("system_accent_color read")),
+        -2 => Err(SystemAccentColorError::Unsupported),
+        _ => Err(SystemAccentColorError::Internal),
     }
 }
 
@@ -84,7 +84,7 @@ mod tests {
     fn unsupported_never_succeeds() {
         assert!(matches!(
             UnsupportedAccentColor.read(),
-            Err(DeviceError::Unsupported("system_accent_color"))
+            Err(SystemAccentColorError::Unsupported)
         ));
     }
 
@@ -113,15 +113,15 @@ mod tests {
     fn sentinel_and_out_of_range_codes_never_succeed() {
         assert!(matches!(
             rgb_from_code(-1),
-            Err(DeviceError::Internal("system_accent_color read"))
+            Err(SystemAccentColorError::Internal)
         ));
         assert!(matches!(
             rgb_from_code(-2),
-            Err(DeviceError::Unsupported("system_accent_color"))
+            Err(SystemAccentColorError::Unsupported)
         ));
         for c in [-3, i32::MIN, 0x100_0000, i32::MAX] {
             assert!(
-                matches!(rgb_from_code(c), Err(DeviceError::Internal(_))),
+                matches!(rgb_from_code(c), Err(SystemAccentColorError::Internal)),
                 "{c}"
             );
         }

@@ -230,8 +230,6 @@ pub mod spell_check;
 /// Phase 11（端末機能の拡充ループ、親 #117、Issue #560）: OS の検索への登録（固定のメモ 1 件の登録と全削除）。
 pub mod spotlight_index;
 pub mod storage;
-/// Phase 11（端末機能の拡充ループ、親 #103、Issue #421）: システムのアクセント色。
-pub mod system_accent_color;
 /// Phase 11（端末機能の拡充ループ、親 #183、Issue #939）: システムの効果音・ビープ。
 pub mod system_sound;
 /// Phase 11（端末機能の拡充ループ、親 #911、Issue #912）: 文字サイズ設定の追従。

@@ -1,5 +1,5 @@
 //! Windows 向けシステムのアクセント色実装（Issue #421、親 #103）。
-//! `device/system_accent_color.rs::implementation` の Windows 経路から呼ばれ、WinRT
+//! `driver.rs::platform_system_accent_color` の Windows 経路から呼ばれ、WinRT
 //! `UISettings.GetColorValue(UIColorType.Accent)` を UI スレッドで同期に読む
 //! （1 秒に 1 回。`ColorValuesChanged` は購読しない）。
 //!
@@ -9,18 +9,18 @@
 //!
 //! 既知の天井: unpackaged exe での動作は実機未確認（#415）。
 
-use fandhe_device::system_accent_color::{AccentColorSource, Rgb};
-use fandhe_device::DeviceError;
+use crate::contract::{AccentColorSource, Rgb};
+use crate::error::SystemAccentColorError;
 use windows::UI::ViewManagement::{UIColorType, UISettings};
 
 /// [`AccentColorSource`] の Windows 実装。状態を持たず、呼び出しごとに `UISettings` を生成する。
 pub(crate) struct WindowsAccentColor;
 
 impl AccentColorSource for WindowsAccentColor {
-    fn read(&self) -> Result<Rgb, DeviceError> {
+    fn read(&self) -> Result<Rgb, SystemAccentColorError> {
         let c = UISettings::new()
             .and_then(|s| s.GetColorValue(UIColorType::Accent))
-            .map_err(|_| DeviceError::Internal("system_accent_color read"))?;
+            .map_err(|_| SystemAccentColorError::Internal)?;
         Ok(Rgb {
             r: c.R,
             g: c.G,

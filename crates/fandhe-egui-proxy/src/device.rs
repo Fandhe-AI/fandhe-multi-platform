@@ -379,11 +379,6 @@ pub mod android_spell_check;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_spotlight_index;
-/// Issue #421: Android 向けシステムのアクセント色実装（JNI の同期 pull）。
-/// `device/system_accent_color.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_system_accent_color;
 /// Issue #939: Android 向けシステムの効果音の骨格（`Unsupported` を返すスタブ。#940 が実体に置き換える）。
 /// `device/system_sound.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -1326,10 +1321,6 @@ pub mod macos_sleep_lock_events;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_spell_check;
-/// Issue #421: macOS 向けシステムのアクセント色実装（`macos/fandhe_macos_system_accent_color.m` を
-/// 呼ぶ C ABI ラッパー）。`device/system_accent_color.rs` の macOS 経路から呼ばれる。
-#[cfg(target_os = "macos")]
-pub mod macos_system_accent_color;
 /// Issue #939: macOS 向けシステムの効果音実装（`macos/fandhe_macos_system_sound.m` を呼ぶ C ABI ラッパー）。
 /// `device/system_sound.rs` の macOS 経路から呼ばれる。結果コードの写像をホストでテストするため test でもコンパイルする。
 #[cfg(any(target_os = "macos", test))]
@@ -1550,9 +1541,6 @@ pub mod spell_check;
 /// Phase 11 の拡充ループ（親 #117、Issue #560）: OS の検索への登録の effect ドライバ（macOS・iOS・
 /// Android 実装、他 OS は `UnsupportedSpotlightIndex` 固定）。
 pub mod spotlight_index;
-/// Phase 11 の拡充ループ（親 #103、Issue #421）: システムのアクセント色の effect ドライバ
-/// （macOS / Windows 実装、Android は JNI 実装、他 OS は `UnsupportedAccentColor` 固定）。
-pub mod system_accent_color;
 /// Phase 11 の拡充ループ（親 #183、Issue #939）: システムの効果音の effect ドライバ
 /// （macOS / Windows 実装、Android は `ToneGenerator`（#940）、iOS・他 OS は `UnsupportedSystemSound` 固定）。
 pub mod system_sound;
@@ -1912,10 +1900,6 @@ pub mod windows_speech_recognition;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_spell_check;
-/// Issue #421: Windows 向けシステムのアクセント色実装（WinRT `UISettings.GetColorValue`）。
-/// `device/system_accent_color.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_system_accent_color;
 /// Issue #939: Windows 向けシステムの効果音実装（`PlaySoundW` の `SystemDefault` 別名）。
 /// `device/system_sound.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

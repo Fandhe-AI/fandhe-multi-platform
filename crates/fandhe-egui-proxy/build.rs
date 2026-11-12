@@ -1088,12 +1088,6 @@ fn compile_macos_safe_area_insets() {
     compile_objc("macos/fandhe_macos_safe_area_insets.m", &["AppKit"]);
 }
 
-/// `macos/fandhe_macos_system_accent_color.m` を `cc` でコンパイルする（Issue #421）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_system_accent_color.rs` が使う）。
-fn compile_macos_system_accent_color() {
-    compile_objc("macos/fandhe_macos_system_accent_color.m", &["AppKit"]);
-}
-
 /// `macos/fandhe_macos_multi_display.m` を `cc` でコンパイルする（Issue #1341）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_multi_display.rs` が使う）。
 fn compile_macos_multi_display() {
@@ -1481,8 +1475,6 @@ fn build_macos() {
     compile_macos_device_info();
     // `macos/fandhe_macos_display_refresh_hdr.m`（Issue #870）も macOS 専用。
     compile_macos_display_refresh_hdr();
-    // `macos/fandhe_macos_system_accent_color.m`（Issue #421）も macOS 専用。
-    compile_macos_system_accent_color();
     // `macos/fandhe_macos_safe_area_insets.m`（Issue #444）も macOS 専用。
     compile_macos_safe_area_insets();
     // `macos/fandhe_macos_window_management.m`（Issue #636）も macOS 専用。

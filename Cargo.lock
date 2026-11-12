@@ -1276,6 +1276,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-system-accent-color"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-system-tray"
 version = "0.2.0"
 dependencies = [
@@ -1374,6 +1387,7 @@ dependencies = [
  "fandhe-cap-power-state",
  "fandhe-cap-screen-wake-lock",
  "fandhe-cap-share-receive",
+ "fandhe-cap-system-accent-color",
  "fandhe-cap-system-tray",
  "fandhe-core",
  "fandhe-egui-proxy",
@@ -1474,6 +1488,7 @@ dependencies = [
  "fandhe-cap-nlp",
  "fandhe-cap-power-state",
  "fandhe-cap-share-receive",
+ "fandhe-cap-system-accent-color",
  "fandhe-core",
  "fandhe-device",
  "fandhe-platform-web",

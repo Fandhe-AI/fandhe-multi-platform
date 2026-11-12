@@ -121,6 +121,8 @@ android {
             java.srcDirs("../../../crates/fandhe-cap-screen-wake-lock/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-share-receive/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-system-accent-color/android/java")
             // END fandhe-cap
         }
     }
