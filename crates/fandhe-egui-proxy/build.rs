@@ -154,7 +154,6 @@ fn build() {
     // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
     compile_apple_local_peer();
 
-    compile_apple_nlp();
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も iOS 分岐と共用する。
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
@@ -466,16 +465,6 @@ fn compile_apple_speech_recognition() {
         } else {
             &["AVFoundation", "Speech"]
         },
-    );
-}
-
-/// `apple/fandhe_apple_nlp.m` を `cc` でコンパイルし NaturalLanguage をリンクする
-/// （Issue #1094 macOS + #1095 iOS、単語分割）。
-/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_nlp`）と同じ OS 集合に保つ。
-fn compile_apple_nlp() {
-    compile_objc(
-        "apple/fandhe_apple_nlp.m",
-        &["Foundation", "NaturalLanguage"],
     );
 }
 
@@ -1483,8 +1472,6 @@ fn build_macos() {
     // `apple/fandhe_apple_local_peer.m`（Issue #511 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
     compile_apple_local_peer();
-    // `apple/fandhe_apple_nlp.m`（Issue #1094 macOS + #1095 iOS）も macOS 分岐と共用する。
-    compile_apple_nlp();
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も共用する。
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。

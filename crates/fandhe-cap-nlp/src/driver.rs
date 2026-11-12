@@ -1,13 +1,13 @@
 //! Phase 11（親 #1093）型サンプル「単語分割」（Issue #1094）の effect ドライバ。
 //! `fandhe_core::screens::nlp_segment`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::nlp::WordSegmenter` で OS の単語分割を呼んで `CompletionSender` 経由で
+//! `crate::contract::WordSegmenter` で OS の単語分割を呼んで `CompletionSender` 経由で
 //! 結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる（`device.rs`
 //! モジュール doc と同じ理由）。Web（wasm32）は本経路を通らず `fandhe-web-dom` の
 //! `nlp.rs` が `Intl.Segmenter` へ直接配線する。契約（結果の形・失敗の区別）の SSOT は
-//! `fandhe_device::nlp`。
+//! `crate::contract`。
 //!
 //! # スレッド
 //!
@@ -19,20 +19,20 @@
 //!
 //! # 対応 OS
 //!
-//! macOS / iOS: [`super::apple_nlp::AppleWordSegmenter`]、Windows:
-//! [`super::windows_nlp::WindowsWordSegmenter`]、Android:
-//! [`super::android::AndroidWordSegmenter`]（#1095）。それ以外（Linux）は
+//! macOS / iOS: [`crate::apple::AppleWordSegmenter`]、Windows:
+//! [`crate::windows::WindowsWordSegmenter`]、Android:
+//! `android::AndroidWordSegmenter`（#1095）。それ以外（Linux）は
 //! `UnsupportedWordSegmenter` 固定（ダミーの成功実装へは倒さない）。
 
 use std::sync::Arc;
 
+use crate::contract::{WordSegmenter, normalize_words};
+use crate::error::NlpError;
 use fandhe_core::screens::nlp_segment::{
-    finish_segment, take_request, NlpSegmentState, SegmentFailure,
+    NlpSegmentState, SegmentFailure, finish_segment, take_request,
 };
-use fandhe_device::nlp::{normalize_words, WordSegmenter};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `WordSegmenter` 実装を返す（プロセスで 1 個）。
 fn implementation() -> Arc<dyn WordSegmenter> {
@@ -42,15 +42,15 @@ fn implementation() -> Arc<dyn WordSegmenter> {
         .get_or_init(|| {
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             {
-                Arc::new(super::apple_nlp::AppleWordSegmenter)
+                Arc::new(crate::apple::AppleWordSegmenter)
             }
             #[cfg(target_os = "windows")]
             {
-                Arc::new(super::windows_nlp::WindowsWordSegmenter)
+                Arc::new(crate::windows::WindowsWordSegmenter)
             }
             #[cfg(target_os = "android")]
             {
-                Arc::new(super::android::AndroidWordSegmenter)
+                Arc::new(crate::android::AndroidWordSegmenter)
             }
             #[cfg(not(any(
                 target_os = "macos",
@@ -59,7 +59,7 @@ fn implementation() -> Arc<dyn WordSegmenter> {
                 target_os = "android"
             )))]
             {
-                Arc::new(fandhe_device::nlp::UnsupportedWordSegmenter)
+                Arc::new(crate::contract::UnsupportedWordSegmenter)
             }
         })
         .clone()
@@ -70,17 +70,17 @@ fn implementation() -> Arc<dyn WordSegmenter> {
 /// 区切りとして曖昧にならない。null は Java 側の失敗）をトークン列へ写す。
 /// 写像だけを OS 非依存の純関数にして、ホストでテストする。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
-pub(crate) fn decode_android_tokens(raw: Option<String>) -> Result<Vec<String>, DeviceError> {
-    let raw = raw.ok_or(DeviceError::Internal("nlp"))?;
+pub(crate) fn decode_android_tokens(raw: Option<String>) -> Result<Vec<String>, NlpError> {
+    let raw = raw.ok_or(NlpError::Internal)?;
     Ok(normalize_words(raw.split('\0')))
 }
 
-/// `DeviceError` を画面の失敗種別へ写す。内部構造は `fandhe-core` へ漏らさず、
+/// `NlpError` を画面の失敗種別へ写す。内部構造は `fandhe-core` へ漏らさず、
 /// `Unsupported` / `InvalidInput` 以外は `Display` の文言のみを転送する（security.md A09）。
-fn to_failure(e: DeviceError) -> SegmentFailure {
+fn to_failure(e: NlpError) -> SegmentFailure {
     match e {
-        DeviceError::Unsupported(_) => SegmentFailure::Unsupported,
-        DeviceError::InvalidInput(_) => SegmentFailure::InvalidInput,
+        NlpError::Unsupported => SegmentFailure::Unsupported,
+        NlpError::InvalidInput => SegmentFailure::InvalidInput,
         other => SegmentFailure::Failed(other.to_string()),
     }
 }
@@ -110,22 +110,31 @@ pub fn nlp_segment_effect(state: &NlpSegmentState, sender: &CompletionSender<Nlp
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::nlp_segment::{segment, INVALID_INPUT_STATUS, UNSUPPORTED_STATUS};
-    use fandhe_device::nlp::UnsupportedWordSegmenter;
+    use crate::contract::UnsupportedWordSegmenter;
+    use fandhe_core::screens::nlp_segment::{INVALID_INPUT_STATUS, UNSUPPORTED_STATUS, segment};
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     fn sender_with_channel() -> (
         CompletionSender<NlpSegmentState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<NlpSegmentState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<NlpSegmentState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
-    struct Fake(Result<Vec<String>, fn() -> DeviceError>);
+    struct Fake(Result<Vec<String>, fn() -> NlpError>);
 
     impl WordSegmenter for Fake {
-        fn segment(&self, _text: &str) -> Result<Vec<String>, DeviceError> {
+        fn segment(&self, _text: &str) -> Result<Vec<String>, NlpError> {
             self.0.clone().map_err(|f| f())
         }
     }
@@ -176,12 +185,9 @@ mod tests {
 
     #[test]
     fn invalid_input_and_internal_are_mapped() {
-        let state = run(
-            "x",
-            Arc::new(Fake(Err(|| DeviceError::InvalidInput("nlp text")))),
-        );
+        let state = run("x", Arc::new(Fake(Err(|| NlpError::InvalidInput))));
         assert_eq!(state.error, INVALID_INPUT_STATUS);
-        let state = run("x", Arc::new(Fake(Err(|| DeviceError::Internal("nlp")))));
+        let state = run("x", Arc::new(Fake(Err(|| NlpError::Internal))));
         assert!(state.error.starts_with("失敗しました: "));
         assert_eq!(state.status, "");
     }
@@ -196,7 +202,7 @@ mod tests {
     #[test]
     fn real_implementation_rejects_over_limit_input() {
         let state = run(
-            &"a".repeat(fandhe_device::nlp::MAX_INPUT_CHARS + 1),
+            &"a".repeat(crate::contract::MAX_INPUT_CHARS + 1),
             implementation(),
         );
         assert_eq!(state.error, INVALID_INPUT_STATUS);
@@ -219,7 +225,7 @@ mod tests {
     fn decode_android_tokens_maps_null_and_filters() {
         assert!(matches!(
             decode_android_tokens(None),
-            Err(DeviceError::Internal(_))
+            Err(NlpError::Internal)
         ));
         assert_eq!(decode_android_tokens(Some(String::new())).unwrap().len(), 0);
         assert_eq!(

@@ -167,8 +167,6 @@ pub mod music_library;
 pub mod network_status;
 /// Phase 11（端末機能の拡充ループ、親 #157、Issue #1044）: NFC タグ（NDEF）の読み取り。
 pub mod nfc;
-/// Phase 11（端末機能の拡充ループ）: 単語分割。
-pub mod nlp;
 /// Phase 11（端末機能の拡充ループ、親 #1003、Issue #1004）: ローカル通知。
 pub mod notification;
 /// Phase 11（端末機能の拡充ループ、親 #98、Issue #381）: ロック画面・OS のメディア操作（再生中の表示と再生・一時停止の受け取り）。

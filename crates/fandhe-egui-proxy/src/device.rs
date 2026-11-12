@@ -578,11 +578,6 @@ pub mod apple_midi;
 /// 純関数をホストの `cargo test` で検査するため cfg に `test` を含める（FFI 部分は macOS 限定）。
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
 pub mod apple_network_status;
-/// Issue #1094 macOS + #1095 iOS: 単語分割実装（`apple/fandhe_apple_nlp.m` を呼ぶ C ABI
-/// ラッパー）。`device/nlp.rs` の macOS / iOS 経路から呼ばれる。`build.rs` のコンパイル条件と
-/// 同じ OS 集合に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_nlp;
 /// Issue #381（macOS）・#382（iOS）: ロック画面・OS のメディア操作実装（`apple/fandhe_apple_now_playing.m` の
 /// MediaPlayer を呼ぶ C ABI ラッパー）。`device/now_playing.rs` の macOS 経路と、iOS 経路（`ios_now_playing` 経由）から呼ばれる。
 /// 写像の純関数をホストでテストできるよう `test` でもコンパイルする。
@@ -1446,10 +1441,6 @@ pub mod network_status;
 /// Phase 11 の拡充ループ（親 #157、Issue #1044）: NFC タグ読み取りの effect ドライバ
 /// （Android は後続の子が埋めるスタブ、他 OS は `UnsupportedNfcReader` 固定。Web は `fandhe-web-dom`）。
 pub mod nfc;
-/// Phase 11 の拡充ループ（親 #1093、Issue #1094）: 単語分割の effect ドライバ
-/// （macOS / iOS / Windows / Android 実装、他 OS は `UnsupportedWordSegmenter` 固定。Web は
-/// `fandhe-web-dom`）。
-pub mod nlp;
 /// Phase 11 の拡充ループ（親 #1003、Issue #1004/#1005）: ローカル通知の effect
 /// ドライバ（macOS/Windows/iOS 実装、Android は #1006）。
 pub mod notification;
@@ -1847,10 +1838,6 @@ pub mod windows_music_library;
 /// `cargo test` で検査するため cfg を付けず、WinRT 呼び出しだけをモジュール内に閉じる。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_network_status;
-/// Issue #1094: Windows 向け単語分割実装（WinRT `WordsSegmenter` ラッパー）。
-/// `device/nlp.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_nlp;
 /// Issue #1004: Windows 向けローカル通知実装（WinRT `ToastNotificationManager` ラッパー）。
 /// `device/notification.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

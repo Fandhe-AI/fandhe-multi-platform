@@ -2,7 +2,7 @@
 // iOS 実装（Issue #1095）で共用する。`TARGET_OS` では分けない（NaturalLanguage と
 // Foundation だけを使い、UIKit / AppKit に触れない）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_nlp.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-nlp/src/apple.rs` から C ABI 経由で呼ばれる。
 // `build.rs` が macOS・iOS ターゲットの feature `device` 有効時に `cc` コンパイルする
 // （Rust 側 cfg と同じ OS 集合に保つ）。
 //
@@ -17,7 +17,7 @@
 //         `Internal` へ畳む）
 //
 // 空白・記号だけのトークンの除去と前後空白の trim は Rust 側の `normalize_words` が行う
-// （契約の SSOT は `fandhe_device::nlp`）。言語は指定せず `NLTokenizer` の自動判定に任せる。
+// （契約の SSOT は `crate::contract`）。言語は指定せず `NLTokenizer` の自動判定に任せる。
 //
 // スレッド: UI ではなく、呼び出しごとに `NLTokenizer` を作るため共有状態もロックも持たない。
 // 呼ばれたスレッドで同期に実行する（`dispatch_sync` は使わない。main 側が呼び出し元を待つと

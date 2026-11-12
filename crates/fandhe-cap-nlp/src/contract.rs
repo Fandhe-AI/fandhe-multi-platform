@@ -33,7 +33,7 @@
 //! 処理時間は扱わない（上限で頭打ちにするのみ）。同期で完結し確保する資源は無いため、
 //! 並行・画面離脱に関する要求追跡は持たない。
 
-use crate::DeviceError;
+use crate::error::NlpError;
 
 /// 入力文字数（Unicode スカラー値）の上限。超過は `InvalidInput`。
 pub const MAX_INPUT_CHARS: usize = 10_000;
@@ -43,26 +43,26 @@ pub trait WordSegmenter: Send + Sync {
     /// `text` を単語に分割し、[`normalize_words`] 済みの一覧を返す。件数は戻り値の長さ。
     ///
     /// 実装は [`validate_input`] を通し、空入力は OS を呼ばず `Ok(vec![])` を返す。
-    fn segment(&self, text: &str) -> Result<Vec<String>, DeviceError>;
+    fn segment(&self, text: &str) -> Result<Vec<String>, NlpError>;
 }
 
 /// 対象外 OS（Linux 等）・初期化失敗時のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedWordSegmenter;
 
 impl WordSegmenter for UnsupportedWordSegmenter {
-    fn segment(&self, _text: &str) -> Result<Vec<String>, DeviceError> {
-        Err(DeviceError::Unsupported("nlp"))
+    fn segment(&self, _text: &str) -> Result<Vec<String>, NlpError> {
+        Err(NlpError::Unsupported)
     }
 }
 
 /// 入力が契約に収まるか検証する（長さ上限・NUL 混入）。各 OS 実装が OS を呼ぶ前に使う。
-pub fn validate_input(text: &str) -> Result<(), DeviceError> {
+pub fn validate_input(text: &str) -> Result<(), NlpError> {
     if text.contains('\0') {
-        return Err(DeviceError::InvalidInput("nlp text"));
+        return Err(NlpError::InvalidInput);
     }
     // 上限 + 1 文字目の有無だけ見る（全体を数えない）。
     if text.chars().nth(MAX_INPUT_CHARS).is_some() {
-        return Err(DeviceError::InvalidInput("nlp text length"));
+        return Err(NlpError::InvalidInput);
     }
     Ok(())
 }
@@ -109,19 +109,16 @@ mod tests {
     #[test]
     fn validate_rejects_over_limit_and_nul() {
         let long = "a".repeat(MAX_INPUT_CHARS + 1);
-        assert!(matches!(
-            validate_input(&long),
-            Err(DeviceError::InvalidInput(_))
-        ));
+        assert!(matches!(validate_input(&long), Err(NlpError::InvalidInput)));
         assert!(matches!(
             validate_input("a\0b"),
-            Err(DeviceError::InvalidInput(_))
+            Err(NlpError::InvalidInput)
         ));
     }
 
     #[test]
     fn unsupported_segmenter_is_not_a_fake_success() {
         let err = UnsupportedWordSegmenter.segment("hello").unwrap_err();
-        assert!(matches!(err, DeviceError::Unsupported(_)));
+        assert!(matches!(err, NlpError::Unsupported));
     }
 }

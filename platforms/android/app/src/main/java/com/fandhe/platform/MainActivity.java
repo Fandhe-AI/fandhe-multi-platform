@@ -4666,35 +4666,6 @@ public class MainActivity extends GameActivity {
         return MultiDisplayHelper.read(getApplicationContext());
     }
 
-    // 単語分割（Issue #1095）。egui スレッドから呼ばれる同期メソッド（シグネチャ
-    // `(Ljava/lang/String;)Ljava/lang/String;`）。Rust 側 `device/android.rs::
-    // AndroidWordSegmenter` から呼ばれ、Java → Rust の native コールバックを持たないため
-    // no-op スタブは不要（`hapticsTap` と同じ判断）。`BreakIterator`（API 24 = minSdk）の
-    // 語境界で切った部分文字列を出現順に U+0000 で連結して返す。入力は Rust 側
-    // `validate_input` が NUL を拒否済みで、トークンは入力の部分文字列のため区切りは曖昧にならない。
-    // 空白・記号だけのトークンの除去は Rust 側 `normalize_words` が行う。
-    // トークン 0 件は空文字列、失敗（RuntimeException）は null（Java 例外を JNI 側へ残さず
-    // Rust が `Internal` へ写す）。入力・トークンはログへ出さない。
-    private String nlpSegment(String text) {
-        try {
-            BreakIterator it = BreakIterator.getWordInstance();
-            it.setText(text);
-            StringBuilder sb = new StringBuilder();
-            boolean first = true;
-            int start = it.first();
-            for (int end = it.next(); end != BreakIterator.DONE; start = end, end = it.next()) {
-                if (!first) {
-                    sb.append('\0');
-                }
-                sb.append(text, start, end);
-                first = false;
-            }
-            return sb.toString();
-        } catch (RuntimeException e) {
-            return null;
-        }
-    }
-
     // 資格情報保存（Issue #924）の op 定数。Rust 側 `device/android.rs::
     // AndroidSecureCredential::request` の同名定数と対で決める契約。
     private static final int SECURE_CREDENTIAL_OP_STORE = 0;

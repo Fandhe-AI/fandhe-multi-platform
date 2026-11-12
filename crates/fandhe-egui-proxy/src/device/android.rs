@@ -14,7 +14,6 @@ use std::time::{Duration, Instant};
 use fandhe_core::screens::drag_drop::DropItem;
 use fandhe_device::clipboard::Clipboard;
 use fandhe_device::file_picker::{PickedFile, MAX_FILE_BYTES};
-use fandhe_device::nlp::{validate_input, WordSegmenter};
 use fandhe_device::secure_credential::{validate_key, validate_secret, Secret, SecureCredential};
 use fandhe_device::share::ShareRequest;
 use fandhe_device::text_scale::TextScale;
@@ -815,72 +814,6 @@ impl TextScale for AndroidTextScale {
         // （`fandhe_device::text_scale` モジュール doc の「読めない」＝
         // `Unsupported` とは区別する契約、実装計画 §3 参照）。
         result.map_err(|_| DeviceError::Internal("text_scale: jni call failed"))
-    }
-}
-
-// --------------------------------------------------------------------------
-// 単語分割（Issue #1095、Phase 11 型サンプル「単語分割」の Android 経路）
-// --------------------------------------------------------------------------
-
-/// Android 実単語分割実装（`android.icu.text.BreakIterator`、Issue #1095）。
-/// `device/nlp.rs` の effect ドライバから egui スレッドで同期に呼ばれる。mailbox は介さない:
-/// Java 側 `MainActivity.nlpSegment(String)`（`(Ljava/lang/String;)Ljava/lang/String;`）は
-/// 同期 API で、非同期コールバックを持たない。戻り値は `decode_android_tokens` で写す。
-pub struct AndroidWordSegmenter;
-
-impl WordSegmenter for AndroidWordSegmenter {
-    /// 2 箇所の `unsafe` は `fandhe_platform_android::with_activity` と同じ根拠・同じ形。
-    #[allow(unsafe_code)]
-    fn segment(&self, text: &str) -> Result<Vec<String>, DeviceError> {
-        validate_input(text)?;
-        if text.is_empty() {
-            return Ok(Vec::new());
-        }
-        let Some(app) = crate::android::android_app() else {
-            return Err(DeviceError::Internal("nlp: no activity"));
-        };
-
-        // SAFETY: `fandhe_platform_android::with_activity` と同一の根拠。`vm_as_ptr()` は android-activity が
-        // 管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-        let result = vm.attach_current_thread(
-            |env: &mut jni::Env| -> Result<Option<String>, JniCallFailed> {
-                let j_text = env.new_string(text)?;
-                let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                // SAFETY: `fandhe_platform_android::with_activity` と同一の根拠。未所有の JNI グローバル参照を
-                // `Cast` で包むだけで delete は試みない。
-                let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                let ret = env.call_method(
-                    &activity,
-                    jni::jni_str!("nlpSegment"),
-                    jni::jni_sig!((java.lang.String) -> java.lang.String),
-                    &[jni::objects::JValue::Object(&j_text)],
-                );
-                let ret = match ret {
-                    Ok(v) => v,
-                    Err(e) => {
-                        // 例外は自動クリアされない（jni 0.22）ため後続の JNI 呼び出しへ
-                        // 残さない。文言は読まない（security.md A09）。
-                        if env.exception_check() {
-                            env.exception_clear();
-                        }
-                        return Err(e.into());
-                    }
-                };
-                let jstring = env.cast_local::<jni::objects::JString>(ret.l()?)?;
-                if jstring.is_null() {
-                    Ok(None)
-                } else {
-                    Ok(Some(jstring.try_to_string(env)?))
-                }
-            },
-        );
-
-        match result {
-            Ok(raw) => super::nlp::decode_android_tokens(raw),
-            Err(_) => Err(DeviceError::Internal("nlp: jni call failed")),
-        }
     }
 }
 

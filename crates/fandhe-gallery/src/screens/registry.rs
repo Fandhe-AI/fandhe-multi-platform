@@ -447,7 +447,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nlp_segment" => fandhe_core::screens::nlp_segment::current_screen,
-    fandhe_egui_proxy::device::nlp::nlp_segment_effect,
+    fandhe_cap_nlp::nlp_segment_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "barcode_scan" => fandhe_core::screens::barcode_scan::current_screen,

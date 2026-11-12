@@ -17,7 +17,7 @@
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_nlp.m + crates/fandhe-egui-proxy/src/device/apple_nlp.rs + crates/fandhe-egui-proxy/src/device/nlp.rs + crates/fandhe-core/src/screens/nlp_segment.rs、Issue 旧#1095"
+      "impl": "crates/fandhe-cap-nlp/apple/fandhe_apple_nlp.m + crates/fandhe-cap-nlp/src/apple.rs + crates/fandhe-cap-nlp/src/driver.rs + crates/fandhe-core/src/screens/nlp_segment.rs、Issue 旧#1095"
     },
     "android": {
       "status": "done",
@@ -27,7 +27,7 @@
       "note": "実装済み（旧#1095）。`android.icu.text.BreakIterator.getWordInstance()`（API 24 = minSdk、依存追加なし・権限不要）を JNI の同期呼び出し `MainActivity.nlpSegment(String)` で呼ぶ。トークンは U+0000 区切りの 1 文字列で返し（入力は NUL 拒否済みのため曖昧にならない）、Rust 側 `decode_android_tokens` が `normalize_words` を通す。null（Java 側の `RuntimeException`）は `Internal`、JNI 例外は Rust 側でクリアする。Java → Rust の native コールバックは無く no-op スタブは不要。言語は既定ロケール。OS を呼ぶ前に `validate_input`（上限 10,000 文字・NUL 拒否）、空入力は OS を呼ばず `Ok(vec![])`、結果は必ず `normalize_words` を通す。守る範囲: 入力の検証・正規化の一貫性と失敗を成功と見せないこと。守らない範囲: OS 間の分割結果の一致、巨大入力に近い長さでの処理時間。Pixel 実機での確認は人間確認待ち",
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/device/nlp.rs + crates/fandhe-core/src/screens/nlp_segment.rs、Issue 旧#1095"
+      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-cap-nlp/src/driver.rs + crates/fandhe-core/src/screens/nlp_segment.rs、Issue 旧#1095"
     },
     "macos": {
       "status": "done",
@@ -37,7 +37,7 @@
       "note": "実装済み（旧#1094）。ヘッダ `NaturalLanguage/NLTokenizer.h` で ObjC 宣言（`initWithUnit:` / `setString` / `enumerateTokensInRange:usingBlock:`）を確認済みで、ObjC から呼べる。`NLTokenizer`（単語単位、言語は自動判定）を C ABI 1 関数で呼び、トークンをコールバックで Rust の `Vec<String>` へ積んで `normalize_words` を通す。`@autoreleasepool` の内側で呼び、呼び出しごとに分割器を作るため共有状態・ロックは無く、`dispatch_sync` も使わない。OS を呼ぶ前に `validate_input`（上限 10,000 文字・NUL 拒否）、空入力は OS を呼ばず `Ok(vec![])`、NSString / UTF-8 変換の失敗は `Internal`。`.m` は macOS・iOS で共用（cfg と build.rs の分岐は両 OS に揃えた）。守る範囲: 入力の検証・正規化の一貫性と失敗を成功と見せないこと。守らない範囲: OS 間の分割結果の一致、巨大入力に近い長さでの処理時間。10/7 に Mac 目視済み（「今日は良い天気です。Hello, world!」→ 7 語で句読点・記号を除外、空入力 → 0 語）",
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_nlp.m + crates/fandhe-egui-proxy/src/device/apple_nlp.rs + crates/fandhe-egui-proxy/src/device/nlp.rs + crates/fandhe-core/src/screens/nlp_segment.rs、Issue 旧#1094"
+      "impl": "crates/fandhe-cap-nlp/apple/fandhe_apple_nlp.m + crates/fandhe-cap-nlp/src/apple.rs + crates/fandhe-cap-nlp/src/driver.rs + crates/fandhe-core/src/screens/nlp_segment.rs、Issue 旧#1094"
     },
     "windows": {
       "status": "done",
@@ -47,7 +47,7 @@
       "note": "実装済み（旧#1094）。`WordsSegmenter::CreateWithLanguage(\"ja\")` → `GetTokens` で分割し、各 `WordSegment::Text()` を `normalize_words` へ通す（どちらも同期 API のためワーカーは使わない）。言語は `ja` 固定（日本語規則は英数字も分割でき、規則が無ければ OS が UAX #29 の `und` へ落ちる。利用者の言語へ追従するなら Globalization から取る）。OS を呼ぶ前に `validate_input`、空入力は OS を呼ばず `Ok(vec![])`、HRESULT は固定ラベルの `Internal` へ畳む。守る範囲: 入力の検証・正規化と失敗を成功と見せないこと。守らない範囲: OS 間の分割結果の一致。既知の天井: パッケージ無しの素の exe から `WordsSegmenter` が動くかは一次情報で未確認（動かないと判明したらこの `done` を取り下げる）。ローカルに MSVC が無く型検査は `x86_64-pc-windows-gnu` のみ。Windows 実機での確認は人間確認待ち",
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_nlp.rs + crates/fandhe-egui-proxy/src/device/nlp.rs + crates/fandhe-core/src/screens/nlp_segment.rs、Issue 旧#1094"
+      "impl": "crates/fandhe-cap-nlp/src/windows.rs + crates/fandhe-cap-nlp/src/driver.rs + crates/fandhe-core/src/screens/nlp_segment.rs、Issue 旧#1094"
     },
     "web": {
       "status": "done",
