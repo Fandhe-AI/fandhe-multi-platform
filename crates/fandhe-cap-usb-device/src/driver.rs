@@ -6,7 +6,7 @@
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`platform_usb_devices`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
+//! [`platform_usb_device`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（macOS: `macos_usb_device`、Windows: `windows_usb_device`（#506）、
 //! Android: `android_usb_device`（#507））。それ以外（iOS を含む）は `UnsupportedUsbDevices` 固定で、
 //! ダミーの成功実装へは倒さない。
@@ -29,7 +29,7 @@ use fandhe_core::screens::usb_device_show::{
 use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `UsbDevices` 実装を返す（状態を持たないため呼び出しごとに構築）。
-pub fn platform_usb_devices() -> Box<dyn UsbDevices> {
+pub fn platform_usb_device() -> Box<dyn UsbDevices> {
     #[cfg(target_os = "macos")]
     {
         crate::macos::implementation()
@@ -94,7 +94,7 @@ pub fn usb_device_show_effect(
     state: &UsbDeviceShowState,
     sender: &CompletionSender<UsbDeviceShowState>,
 ) {
-    drive_sync(state, sender, platform_usb_devices().as_ref());
+    drive_sync(state, sender, platform_usb_device().as_ref());
 }
 
 #[cfg(test)]
@@ -226,7 +226,7 @@ mod tests {
     #[test]
     fn unsupported_os_implementation_is_unsupported() {
         assert!(matches!(
-            platform_usb_devices().list(),
+            platform_usb_device().list(),
             Err(UsbDeviceError::Unsupported)
         ));
     }

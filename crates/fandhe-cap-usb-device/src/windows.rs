@@ -1,5 +1,5 @@
 //! Windows 向け USB 機器一覧実装（Issue #506、親 #112）。`device/usb_device.rs::
-//! platform_usb_devices` の Windows 経路から UI スレッドで同期に 1 回呼ばれる。契約の SSOT は
+//! platform_usb_device` の Windows 経路から UI スレッドで同期に 1 回呼ばれる。契約の SSOT は
 //! `crate::contract`。
 //!
 //! # 流れ（COM なし、ワーカーなし）
