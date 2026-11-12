@@ -74,6 +74,8 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     fandhe_cap_document_scan::reset_pending_tracking();
     #[cfg(feature = "device")]
     fandhe_cap_on_device_llm::reset_pending_tracking();
+    #[cfg(feature = "device")]
+    fandhe_cap_media_transcode::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 

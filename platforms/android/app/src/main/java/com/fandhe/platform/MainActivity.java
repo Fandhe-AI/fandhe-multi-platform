@@ -683,11 +683,6 @@ public class MainActivity extends GameActivity {
         filePreviewHelper.preview(requestId, kind, data);
     }
 
-    // 音声変換（Issue #314）。実装は `MediaTranscodeHelper`。Rust の `android_media_transcode.rs` がワーカースレッドから同期 JNI で呼ぶ。
-    byte[] mediaTranscode(byte[] pcmLe, int sampleRate, long remainingMs) {
-        return MediaTranscodeHelper.transcode(getCacheDir(), pcmLe, sampleRate, remainingMs);
-    }
-
     // 動画の変換（Issue #1017）。実装は `VideoTranscodeHelper`。Rust の `android_video_transcode.rs` が同期 JNI で呼ぶ。
     byte[] videoTranscode(int sw, int sh, int fps, int frames, int tw, int th, long remainingMs) {
         return VideoTranscodeHelper.transcode(getCacheDir(), sw, sh, fps, frames, tw, th, remainingMs);

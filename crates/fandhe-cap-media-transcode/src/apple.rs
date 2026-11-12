@@ -1,12 +1,12 @@
 //! macOS / iOS 向け音声変換実装（Issue #311 macOS、iOS は #313 で `ios_media_transcode` 経由）。
-//! `device/media_transcode.rs` の macOS 経路から呼ばれ、`apple/fandhe_apple_media_transcode.m`
+//! `fandhe-cap-media-transcode/src/driver.rs` の macOS 経路から呼ばれ、`apple/fandhe_apple_media_transcode.m`
 //! （`AVAudioFile` で AAC の m4a を書く。`build.rs` が feature `device` 有効時にコンパイル）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。出力は `.m` からコールバックで Rust の `Vec<u8>` へコピーし、
 //! 所有権とアロケータは境界を越えない。`unsafe` はこの呼び出しとコールバックの 2 箇所に閉じる
 //! （coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・`device.rs` の mod cfg と
 //! 同じ OS 集合に保つ。
 //!
-//! 契約の SSOT は `fandhe_device::media_transcode`。出力の検証（`check_m4a`）はドライバが行う。
+//! 契約の SSOT は `fandhe_cap_media_transcode`。出力の検証（`check_m4a`）はドライバが行う。
 //! `AVAudioFile` の書き込みは中断できないため `remaining` は使わず走り切らせる。期限後に届いた
 //! 結果はドライバが捨てる（契約の「守らない範囲」）。呼び出しはブロックするため、呼び出し元は
 //! ワーカーで呼ぶ。
@@ -14,8 +14,8 @@
 use std::ffi::c_void;
 use std::time::Duration;
 
-use fandhe_device::media_transcode::{MediaTranscode, EMPTY, UNREADABLE};
-use fandhe_device::DeviceError;
+use crate::contract::{EMPTY, MediaTranscode, UNREADABLE};
+use crate::error::MediaTranscodeError;
 
 // SAFETY: `apple/fandhe_apple_media_transcode.m` が定義する C ABI（`build.rs` が macOS / iOS
 // ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は `.m` 冒頭コメントに集約する。
@@ -58,7 +58,7 @@ impl MediaTranscode for AppleMediaTranscode {
         pcm: &[i16],
         sample_rate: u32,
         _remaining: Duration,
-    ) -> Result<Vec<u8>, DeviceError> {
+    ) -> Result<Vec<u8>, MediaTranscodeError> {
         let mut out: Vec<u8> = Vec::new();
         // SAFETY: `pcm` は呼び出しの間生存する読み取り専用の領域で、`.m` は呼び出しの間だけ参照し
         // 保持しない。`out` への可変参照はこの呼び出しの間だけ `ctx` として渡し、`.m` は戻る前に
@@ -73,12 +73,12 @@ impl MediaTranscode for AppleMediaTranscode {
             )
         };
         match code {
-            0 if out.is_empty() => Err(DeviceError::Internal(EMPTY)),
+            0 if out.is_empty() => Err(MediaTranscodeError::Internal(EMPTY)),
             0 => Ok(out),
-            1 => Err(DeviceError::InvalidInput("media_transcode input")),
-            3 => Err(DeviceError::Internal(UNREADABLE)),
-            4 => Err(DeviceError::Internal(EMPTY)),
-            _ => Err(DeviceError::Internal("media_transcode")),
+            1 => Err(MediaTranscodeError::InvalidInput),
+            3 => Err(MediaTranscodeError::Internal(UNREADABLE)),
+            4 => Err(MediaTranscodeError::Internal(EMPTY)),
+            _ => Err(MediaTranscodeError::Internal("media_transcode")),
         }
     }
 }
@@ -86,8 +86,8 @@ impl MediaTranscode for AppleMediaTranscode {
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
+    use crate::contract::{SAMPLE_RATE, check_m4a, input_duration};
     use fandhe_device::media_playback::demo_pcm;
-    use fandhe_device::media_transcode::{check_m4a, input_duration, SAMPLE_RATE};
 
     const LONG: Duration = Duration::from_secs(30);
 
@@ -117,11 +117,11 @@ mod tests {
         check_m4a(&bytes, input_duration(pcm.len(), SAMPLE_RATE)).expect("m4a として検証できる");
         assert!(matches!(
             AppleMediaTranscode.transcode(&[], SAMPLE_RATE, LONG),
-            Err(DeviceError::InvalidInput(_))
+            Err(MediaTranscodeError::InvalidInput)
         ));
         assert!(matches!(
             AppleMediaTranscode.transcode(&pcm, 0, LONG),
-            Err(DeviceError::InvalidInput(_))
+            Err(MediaTranscodeError::InvalidInput)
         ));
         assert_eq!(leftovers(), before, "一時ファイルが残っている");
     }

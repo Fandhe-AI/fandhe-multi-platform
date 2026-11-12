@@ -5,14 +5,15 @@ import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 import android.media.MediaMuxer;
 
+import android.content.Context;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
 // 動画・音声の変換画面（Issue #314、親 #91 の b-android）の Android 実装ヘルパー。
-// Rust の `device/android_media_transcode.rs` がドライバのワーカースレッドから
-// `MainActivity.mediaTranscode` 経由で同期 JNI で呼ぶ。Java から Rust への native コールバックは無く、
+// Rust の `fandhe-cap-media-transcode/src/android.rs` がドライバのワーカースレッドから
+// static メソッド `transcode(Context, ...)` を同期 JNI で呼ぶ。Java から Rust への native コールバックは無く、
 // JNI 署名の照合先は Java の 1 か所だけ。
 // 扱う範囲は「モノラル PCM 16bit を AAC-LC の m4a へ 1 回変換する」ことだけ
 // （`MediaCodec` + `MediaMuxer`。動画・進捗・取り消しは扱わない）。
@@ -38,7 +39,8 @@ final class MediaTranscodeHelper {
 
     private MediaTranscodeHelper() {}
 
-    static byte[] transcode(File cacheDir, byte[] pcm, int sampleRate, long remainingMs) {
+    static byte[] transcode(Context activity, byte[] pcm, int sampleRate, long remainingMs) {
+        File cacheDir = activity == null ? null : activity.getApplicationContext().getCacheDir();
         if (remainingMs <= 0) {
             return code(TIMEOUT);
         }

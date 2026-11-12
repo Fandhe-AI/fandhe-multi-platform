@@ -148,7 +148,7 @@ pub mod map_view;
 pub mod media_cast;
 /// Phase 11（端末機能の拡充ループ、親 #86、Issue #267）: 音声 1 本の再生・一時停止・停止。
 pub mod media_playback;
-/// Phase 11（端末機能の拡充ループ、親 #91、Issue #311）: 音声 1 本の AAC（m4a）への変換と出力の検証。
+/// Issue #1188: MP4 box 読みの共有部品（音声変換は機能 crate `fandhe-cap-media-transcode`、動画変換 `video_transcode` が使う）。
 pub mod media_transcode;
 /// Phase 11 の拡充ループ（親 #179、Issue #911）: メモリ逼迫・負荷の通知。
 pub mod memory_pressure;

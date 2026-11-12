@@ -1,16 +1,16 @@
 //! Phase 11（端末機能の拡充ループ、親 #91）型サンプル「動画・音声の変換」（Issue #311）の effect ドライバ。
 //! `fandhe_core::screens::media_transcode`（端末依存ゼロ）の要求を観測し、ワーカースレッドで
-//! `fandhe_device::media_transcode::MediaTranscode` を呼んで `CompletionSender` 経由で結果を返す
+//! `crate::contract::MediaTranscode` を呼んで `CompletionSender` 経由で結果を返す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
-//! `fandhe_device::media_transcode`。
+//! `fandhe_cap_media_transcode`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。Web は対象外
 //! （`fandhe-web-dom` 側で扱う）。
 //!
 //! # OS 別の分担（dispatch は #311 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
-//! - macOS: [`super::apple_media_transcode::AppleMediaTranscode`]（#311）
+//! - macOS: [`crate::apple::AppleMediaTranscode`]（#311）
 //! - iOS: `ios_media_transcode`（b-ios）
 //! - Windows: `windows_media_transcode`（windows の子。MediaTranscoder）
 //! - Android: `android_media_transcode`（b-android。MediaCodec + MediaMuxer）
@@ -27,19 +27,19 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::contract::{
+    EMPTY, MISMATCH, MediaTranscode, SAMPLE_RATE, TIMEOUT, TRANSCODE_DEADLINE, UNREADABLE,
+    check_m4a, input_duration, validate_input,
+};
+use crate::error::MediaTranscodeError;
 use fandhe_core::screens::media_transcode::{
-    finish_transcode, mark_running, take_request, TranscodeFailure, TranscodeFormat,
-    TranscodeOutput, TranscodePhase, TranscodeState,
+    TranscodeFailure, TranscodeFormat, TranscodeOutput, TranscodePhase, TranscodeState,
+    finish_transcode, mark_running, take_request,
 };
 use fandhe_device::media_playback::demo_pcm;
-use fandhe_device::media_transcode::{
-    check_m4a, input_duration, validate_input, MediaTranscode, EMPTY, MISMATCH, SAMPLE_RATE,
-    TIMEOUT, TRANSCODE_DEADLINE, UNREADABLE,
-};
-use fandhe_device::DeviceError;
 
-use super::request_slot::RequestSlot;
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::RequestSlot;
 
 /// WAV のヘッダ長（入力の大きさの表示用）。
 const WAV_HEADER_BYTES: u64 = 44;
@@ -48,19 +48,19 @@ const WAV_HEADER_BYTES: u64 = 44;
 fn platform() -> Arc<dyn MediaTranscode> {
     #[cfg(target_os = "macos")]
     {
-        Arc::new(super::apple_media_transcode::AppleMediaTranscode)
+        Arc::new(crate::apple::AppleMediaTranscode)
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_media_transcode::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "windows")]
     {
-        super::windows_media_transcode::implementation()
+        crate::windows::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_media_transcode::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(
         target_os = "macos",
@@ -69,7 +69,7 @@ fn platform() -> Arc<dyn MediaTranscode> {
         target_os = "android"
     )))]
     {
-        Arc::new(fandhe_device::media_transcode::UnsupportedMediaTranscode)
+        Arc::new(crate::contract::UnsupportedMediaTranscode)
     }
 }
 
@@ -112,21 +112,21 @@ static SESSION: std::sync::OnceLock<Arc<Session>> = std::sync::OnceLock::new();
 /// 「変換する」が発送されず飲み込まれる。古いワーカーの結果は古いアプリのチャネルへ届くので
 /// 新しい画面には適用されない。走っている OS 呼び出しは止めず走り切らせる。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
         s.reset();
     }
 }
 
-/// `DeviceError` を画面の失敗種別へ写す。内部識別子・OS コードは画面にもログにも出さず、
+/// `MediaTranscodeError` を画面の失敗種別へ写す。内部識別子・OS コードは画面にもログにも出さず、
 /// 上記以外は固定文言にする（security.md A09）。
-pub(crate) fn to_failure(e: DeviceError) -> TranscodeFailure {
+pub(crate) fn to_failure(e: MediaTranscodeError) -> TranscodeFailure {
     match e {
-        DeviceError::Unsupported(_) => TranscodeFailure::Unsupported,
-        DeviceError::Internal(TIMEOUT) => TranscodeFailure::Timeout,
-        DeviceError::Internal(UNREADABLE) => TranscodeFailure::Unreadable,
-        DeviceError::Internal(MISMATCH) => TranscodeFailure::Mismatch,
-        DeviceError::Internal(EMPTY) => TranscodeFailure::Empty,
+        MediaTranscodeError::Unsupported => TranscodeFailure::Unsupported,
+        MediaTranscodeError::Internal(TIMEOUT) => TranscodeFailure::Timeout,
+        MediaTranscodeError::Internal(UNREADABLE) => TranscodeFailure::Unreadable,
+        MediaTranscodeError::Internal(MISMATCH) => TranscodeFailure::Mismatch,
+        MediaTranscodeError::Internal(EMPTY) => TranscodeFailure::Empty,
         _ => TranscodeFailure::Failed("変換できませんでした".to_string()),
     }
 }
@@ -180,20 +180,19 @@ fn drive(
             }
             _ => {
                 // 期限判定: 処理中でセッションの世代が一致するときだけ。
-                if let (Some((request_id, gen, started)), TranscodePhase::Running) =
+                if let (Some((request_id, gen_id, started)), TranscodePhase::Running) =
                     (*g, &state.phase)
+                    && gen_id == state.generation
                 {
-                    if gen == state.generation {
-                        let elapsed = started.elapsed();
-                        if elapsed >= deadline {
-                            *g = None;
-                            session.slot.clear(request_id);
-                            let _ = sender.send(Box::new(move |s: &mut TranscodeState| {
-                                finish_transcode(s, gen, Err(TranscodeFailure::Timeout));
-                            }));
-                        } else {
-                            sender.request_repaint_after(deadline - elapsed);
-                        }
+                    let elapsed = started.elapsed();
+                    if elapsed >= deadline {
+                        *g = None;
+                        session.slot.clear(request_id);
+                        let _ = sender.send(Box::new(move |s: &mut TranscodeState| {
+                            finish_transcode(s, gen_id, Err(TranscodeFailure::Timeout));
+                        }));
+                    } else {
+                        sender.request_repaint_after(deadline - elapsed);
                     }
                 }
                 None
@@ -252,16 +251,26 @@ pub fn media_transcode_effect(state: &TranscodeState, sender: &CompletionSender<
 
 #[cfg(test)]
 mod tests {
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     use super::*;
+    use crate::contract::{UnsupportedMediaTranscode, minimal_m4a};
     use fandhe_core::screens::media_transcode::request_transcode;
-    use fandhe_device::media_transcode::{minimal_m4a, UnsupportedMediaTranscode};
     use std::sync::mpsc;
 
-    type Rx = mpsc::Receiver<crate::app::Completion<TranscodeState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<TranscodeState>>;
 
     fn channel() -> (CompletionSender<TranscodeState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     /// 入力と同じ長さ（5 秒）の最小の m4a。
@@ -271,17 +280,22 @@ mod tests {
 
     /// 指定の結果を返し、`sleep` だけ待つフェイク。
     struct Fake {
-        result: fn() -> Result<Vec<u8>, DeviceError>,
+        result: fn() -> Result<Vec<u8>, MediaTranscodeError>,
         sleep: Duration,
     }
     impl MediaTranscode for Fake {
-        fn transcode(&self, _: &[i16], _: u32, _: Duration) -> Result<Vec<u8>, DeviceError> {
+        fn transcode(
+            &self,
+            _: &[i16],
+            _: u32,
+            _: Duration,
+        ) -> Result<Vec<u8>, MediaTranscodeError> {
             std::thread::sleep(self.sleep);
             (self.result)()
         }
     }
 
-    fn fake(result: fn() -> Result<Vec<u8>, DeviceError>) -> Arc<dyn MediaTranscode> {
+    fn fake(result: fn() -> Result<Vec<u8>, MediaTranscodeError>) -> Arc<dyn MediaTranscode> {
         Arc::new(Fake {
             result,
             sleep: Duration::ZERO,
@@ -353,7 +367,10 @@ mod tests {
 
     #[test]
     fn internal_ids_never_reach_screen_text() {
-        let s = run(fake(|| Err(DeviceError::Internal("secret os detail"))), 2);
+        let s = run(
+            fake(|| Err(MediaTranscodeError::Internal("media_transcode"))),
+            2,
+        );
         let text = fandhe_core::screens::media_transcode::error_text(&s);
         assert!(!text.contains("secret"), "{text}");
         assert!(matches!(failed(&s), TranscodeFailure::Failed(_)));
@@ -495,7 +512,7 @@ mod tests {
         )))]
         assert!(matches!(
             platform().transcode(&[1], SAMPLE_RATE, Duration::ZERO),
-            Err(DeviceError::Unsupported(_))
+            Err(MediaTranscodeError::Unsupported)
         ));
     }
 }

@@ -1,6 +1,6 @@
 //! Android 向け動画・音声の変換実装（Issue #314、親 #91 の b-android）。
 //! `device/media_transcode.rs::platform` の Android 経路から、ドライバのワーカースレッド
-//! （`media-transcode`）で呼ばれ、`MainActivity.mediaTranscode` を同期 JNI で 1 回呼ぶ。
+//! （`media-transcode`）で呼ばれ、`MediaTranscodeHelper.transcode`（static）を同期 JNI で 1 回呼ぶ。
 //! Java 側は `MediaTranscodeHelper`（`MediaCodec` の AAC エンコーダ + `MediaMuxer` の MPEG-4）。
 //! Java から Rust への native コールバックは無いので、JNI 署名の照合先は Java のみ。
 //!
@@ -22,9 +22,9 @@
 //! PCM・出力・OS の生エラー値はログに出さない。実機確認は #310。
 
 #[cfg(any(target_os = "android", test))]
-use fandhe_device::media_transcode::TIMEOUT;
+use crate::contract::TIMEOUT;
 #[cfg(any(target_os = "android", test))]
-use fandhe_device::DeviceError;
+use crate::error::MediaTranscodeError;
 
 /// 渡せる PCM の上限（Java 側と同じ。異常に大きい入力を FFI に渡さない）。
 #[cfg(any(target_os = "android", test))]
@@ -38,11 +38,11 @@ const FAILED: &str = "media_transcode android";
 
 /// Java の戻り（先頭 1 バイト = コード）を契約へ写す。成功以外はすべて `Err`。
 #[cfg(any(target_os = "android", test))]
-fn decode_reply(reply: &[u8]) -> Result<Vec<u8>, DeviceError> {
+fn decode_reply(reply: &[u8]) -> Result<Vec<u8>, MediaTranscodeError> {
     match reply.split_first() {
         Some((0, rest)) => Ok(rest.to_vec()),
-        Some((1, _)) => Err(DeviceError::Internal(TIMEOUT)),
-        _ => Err(DeviceError::Internal(FAILED)),
+        Some((1, _)) => Err(MediaTranscodeError::Internal(TIMEOUT)),
+        _ => Err(MediaTranscodeError::Internal(FAILED)),
     }
 }
 
@@ -50,34 +50,35 @@ fn decode_reply(reply: &[u8]) -> Result<Vec<u8>, DeviceError> {
 mod imp {
     use std::time::Duration;
 
-    use fandhe_device::media_transcode::{validate_input, MediaTranscode, TIMEOUT};
-    use fandhe_device::DeviceError;
+    use crate::contract::{MediaTranscode, TIMEOUT, validate_input};
+    use crate::error::MediaTranscodeError;
     use jni::objects::{JByteArray, JObject, JValue};
 
-    use super::{decode_reply, FAILED, MAX_M4A_BYTES, MAX_PCM_BYTES};
+    use super::{FAILED, MAX_M4A_BYTES, MAX_PCM_BYTES, decode_reply};
 
     pub(super) struct AndroidMediaTranscode;
 
-    /// `MainActivity` の同期メソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`（例外は消す）。
-    /// 2 箇所の `unsafe` は `android_compass.rs::call_activity` と同一の根拠。
-    #[allow(unsafe_code)]
-    fn call_activity<T>(
-        f: impl FnOnce(&mut jni::Env, &JObject) -> Result<T, crate::device::android::JniCallFailed>,
+    /// `MediaTranscodeHelper` の static メソッドを同期で呼ぶ。Activity 未確立・JNI 失敗は `None`（例外は消す）。
+    /// `unsafe` は共通層 `fandhe_platform_android::with_activity_class` に閉じている。
+    fn call_helper<T>(
+        f: impl FnOnce(
+            &mut jni::Env,
+            &JObject,
+            &jni::objects::JClass,
+        ) -> Result<T, fandhe_platform_android::JniCallFailed>,
     ) -> Option<T> {
-        let app = crate::android::android_app()?;
-        // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-        // `app` は本呼び出しの間生存する。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-        vm.attach_current_thread(|env: &mut jni::Env| {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-            let activity = unsafe { env.as_cast_raw::<JObject>(&raw_activity)? };
-            let r = f(env, &activity);
-            if r.is_err() && env.exception_check() {
-                env.exception_clear();
-            }
-            r
-        })
+        let app = fandhe_platform_android::android_app()?;
+        fandhe_platform_android::with_activity_class(
+            &app,
+            jni::jni_str!("com.fandhe.platform.MediaTranscodeHelper"),
+            |env, activity, class| {
+                let r = f(env, activity, class);
+                if r.is_err() && env.exception_check() {
+                    env.exception_clear();
+                }
+                r
+            },
+        )
         .ok()
     }
 
@@ -87,25 +88,25 @@ mod imp {
             pcm: &[i16],
             sample_rate: u32,
             remaining: Duration,
-        ) -> Result<Vec<u8>, DeviceError> {
+        ) -> Result<Vec<u8>, MediaTranscodeError> {
             validate_input(pcm, sample_rate)?;
             if pcm.len() * 2 > MAX_PCM_BYTES {
-                return Err(DeviceError::InvalidInput("media_transcode input"));
+                return Err(MediaTranscodeError::InvalidInput);
             }
-            let rate = i32::try_from(sample_rate)
-                .map_err(|_| DeviceError::InvalidInput("media_transcode input"))?;
+            let rate = i32::try_from(sample_rate).map_err(|_| MediaTranscodeError::InvalidInput)?;
             let ms = i64::try_from(remaining.as_millis()).unwrap_or(i64::MAX);
             if ms == 0 {
-                return Err(DeviceError::Internal(TIMEOUT));
+                return Err(MediaTranscodeError::Internal(TIMEOUT));
             }
             let bytes: Vec<u8> = pcm.iter().flat_map(|s| s.to_le_bytes()).collect();
-            let reply = call_activity(|env, a| {
+            let reply = call_helper(|env, activity, class| {
                 let j_pcm = env.byte_array_from_slice(&bytes)?;
-                let ret = env.call_method(
-                    a,
-                    jni::jni_str!("mediaTranscode"),
-                    jni::jni_sig!((byte[], int, long) -> byte[]),
+                let ret = env.call_static_method(
+                    class,
+                    jni::jni_str!("transcode"),
+                    jni::jni_sig!((android.content.Context, byte[], int, long) -> byte[]),
                     &[
+                        JValue::Object(activity),
                         JValue::Object(&j_pcm),
                         JValue::Int(rate),
                         JValue::Long(ms as jni::sys::jlong),
@@ -122,7 +123,7 @@ mod imp {
                 Ok(Some(env.convert_byte_array(&arr)?))
             })
             .flatten()
-            .ok_or(DeviceError::Internal(FAILED))?;
+            .ok_or(MediaTranscodeError::Internal(FAILED))?;
             decode_reply(&reply)
         }
     }
@@ -130,17 +131,15 @@ mod imp {
 
 /// Android の実装を返す。
 #[cfg(target_os = "android")]
-pub(crate) fn implementation() -> std::sync::Arc<dyn fandhe_device::media_transcode::MediaTranscode>
-{
+pub(crate) fn implementation() -> std::sync::Arc<dyn crate::contract::MediaTranscode> {
     std::sync::Arc::new(imp::AndroidMediaTranscode)
 }
 
 /// ホストのテストビルドにも載るための形。dispatch は Android でしか呼ばない。
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
-pub(crate) fn implementation() -> std::sync::Arc<dyn fandhe_device::media_transcode::MediaTranscode>
-{
-    std::sync::Arc::new(fandhe_device::media_transcode::UnsupportedMediaTranscode)
+pub(crate) fn implementation() -> std::sync::Arc<dyn crate::contract::MediaTranscode> {
+    std::sync::Arc::new(crate::contract::UnsupportedMediaTranscode)
 }
 
 #[cfg(test)]
@@ -154,12 +153,12 @@ mod tests {
         assert_eq!(decode_reply(&[0]).unwrap(), Vec::<u8>::new());
         assert!(matches!(
             decode_reply(&[1]),
-            Err(DeviceError::Internal(TIMEOUT))
+            Err(MediaTranscodeError::Internal(TIMEOUT))
         ));
         for bad in [&[][..], &[2][..], &[99, 1][..]] {
             assert!(matches!(
                 decode_reply(bad),
-                Err(DeviceError::Internal(FAILED))
+                Err(MediaTranscodeError::Internal(FAILED))
             ));
         }
     }

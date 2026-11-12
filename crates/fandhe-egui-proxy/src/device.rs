@@ -223,10 +223,6 @@ pub mod android_managed_app_config;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_media_playback;
-/// Issue #311: Android 向け音声変換実装。
-/// `device/media_transcode.rs` の Android 経路から呼ばれる。
-#[cfg(target_os = "android")]
-pub mod android_media_transcode;
 /// Issue #913: Android 向けメモリ逼迫の通知の実装（`ComponentCallbacks2` + `ActivityManager.MemoryInfo`）。
 /// `device/memory_pressure.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
@@ -561,11 +557,6 @@ pub mod apple_media_cast;
 /// C ABI ラッパー）。`device/media_playback.rs` の macOS 経路から呼ばれる。iOS は親 #86 の b-ios が使う。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_media_playback;
-/// Issue #311: macOS / iOS 向け音声変換実装（`apple/fandhe_apple_media_transcode.m` の `AVAudioFile` を
-/// 呼ぶ C ABI ラッパー）。`device/media_transcode.rs` の macOS 経路と `ios_media_transcode`（Issue #313）から
-/// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_media_transcode;
 /// Issue #954（macOS）/ #956（iOS）: iOS / macOS 向けマイク録音実装（`apple/
 /// fandhe_apple_mic_record.m` を呼ぶ C ABI ラッパー）。`device/mic_record.rs` の
 /// iOS/macOS 経路から呼ばれる。
@@ -1029,10 +1020,6 @@ pub mod ios_media_cast;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_media_playback;
-/// Issue #313: iOS 向け音声変換（macOS と共用の `AppleMediaTranscode` を返す）。
-/// `device/media_transcode.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_media_transcode;
 /// Issue #912: iOS 向けメモリ逼迫の通知実装（`ios/fandhe_ios_memory_pressure.m` のメモリ警告 observer と
 /// memory pressure source を呼ぶ C ABI ラッパー）。`device/memory_pressure.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1411,10 +1398,6 @@ pub mod media_cast;
 /// Phase 11 の拡充ループ（親 #86、Issue #267）: 音声再生の effect ドライバ（macOS・iOS・Android・Windows 実装、
 /// 他 OS は `UnsupportedMediaPlayback` 固定）。
 pub mod media_playback;
-/// Phase 11 の拡充ループ（親 #91、Issue #311）: 音声変換（AAC）の effect ドライバ（macOS・iOS / Windows / Android 実装、
-/// 他 OS は `UnsupportedMediaTranscode` 固定。
-/// Web は `fandhe-web-dom`）。
-pub mod media_transcode;
 /// Phase 11 の拡充ループ（親 #179、Issue #911）: メモリ逼迫・負荷の通知の effect ドライバ（macOS・Windows 実装、
 /// iOS・Android は骨格のスタブで b-ios・b-android が埋める。他 OS は `UnsupportedMemoryPressure` 固定。
 /// Web は `fandhe-web-dom`）。
@@ -1796,10 +1779,6 @@ pub mod windows_media_cast;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_media_playback;
-/// Issue #312: Windows 向け音声変換の実装（MediaTranscoder）。
-/// `device/media_transcode.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_media_transcode;
 /// Issue #911: Windows 向けメモリ逼迫の通知実装（`CreateMemoryResourceNotification` の Low / High を待機スレッドで
 /// 受ける）。`device/memory_pressure.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

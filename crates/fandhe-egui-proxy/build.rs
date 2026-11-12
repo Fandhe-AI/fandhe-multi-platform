@@ -164,8 +164,6 @@ fn build() {
     compile_apple_barcode_scan();
     // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
     compile_apple_ml_inference();
-    // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
-    compile_apple_media_transcode();
     // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も macOS 分岐と共用する。
     compile_apple_video_transcode();
     // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
@@ -527,17 +525,6 @@ fn compile_apple_file_preview() {
     compile_objc(
         "apple/fandhe_apple_file_preview.m",
         &["CoreGraphics", "Foundation", "QuickLookThumbnailing"],
-    );
-}
-
-/// `apple/fandhe_apple_media_transcode.m` を `cc` でコンパイルし AVFoundation をリンクする
-/// （Issue #311 macOS、iOS は b-ios が利用、音声の AAC 変換）。
-/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_media_transcode`）と
-/// 同じ OS 集合に保つ。
-fn compile_apple_media_transcode() {
-    compile_objc(
-        "apple/fandhe_apple_media_transcode.m",
-        &["AVFoundation", "Foundation"],
     );
 }
 
@@ -1510,8 +1497,6 @@ fn build_macos() {
     compile_apple_image_generation();
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
-    // `apple/fandhe_apple_media_transcode.m`（Issue #311 macOS + b-ios iOS）も共用する。
-    compile_apple_media_transcode();
     // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も共用する。
     compile_apple_video_transcode();
     // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。

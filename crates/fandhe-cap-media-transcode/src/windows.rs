@@ -1,10 +1,10 @@
 //! Windows 向け動画・音声の変換（Issue #312）。`Windows.Media.Transcoding.MediaTranscoder` で
 //! 実行時に作った PCM を AAC-LC の m4a へ 1 回変換する。
 //!
-//! 呼び出し元: `device/media_transcode.rs` の Windows 経路がワーカースレッドから `transcode` を
+//! 呼び出し元: `fandhe-cap-media-transcode/src/driver.rs` の Windows 経路がワーカースレッドから `transcode` を
 //! 同期に呼ぶ。期限・世代の照合、期限後に届いた結果の破棄、出力の読み直し（`check_m4a`）、
-//! 画面向けの失敗の写像は呼び出し側が担い、本ファイルは m4a のバイト列か `DeviceError` だけを返す。
-//! 契約の SSOT は `fandhe_device::media_transcode`。
+//! 画面向けの失敗の写像は呼び出し側が担い、本ファイルは m4a のバイト列か `MediaTranscodeError` だけを返す。
+//! 契約の SSOT は `fandhe_cap_media_transcode`。
 //!
 //! 入力が一時ファイルになる理由: `PrepareStreamTranscodeAsync` はメモリ上のストリームを受けない
 //! （<https://learn.microsoft.com/en-us/uwp/api/windows.media.transcoding.mediatranscoder.preparestreamtranscodeasync>）。
@@ -27,13 +27,12 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
+use crate::contract::{EMPTY, MediaTranscode, TIMEOUT, validate_input};
+use crate::error::MediaTranscodeError;
 use fandhe_device::media_playback::wav_bytes;
-use fandhe_device::media_transcode::{validate_input, MediaTranscode, EMPTY, TIMEOUT};
-use fandhe_device::DeviceError;
-use windows::core::HSTRING;
 use windows::Media::MediaProperties::{AudioEncodingQuality, MediaEncodingProfile};
 use windows::Media::Transcoding::{MediaTranscoder, TranscodeFailureReason};
 use windows::Storage::FileAccessMode;
@@ -41,6 +40,7 @@ use windows::Storage::Streams::{
     DataReader, FileRandomAccessStream, IRandomAccessStream, InMemoryRandomAccessStream,
 };
 use windows::Win32::Foundation::{E_NOINTERFACE, REGDB_E_CLASSNOTREG};
+use windows::core::HSTRING;
 use windows_future::{
     AsyncActionWithProgressCompletedHandler, AsyncOperationCompletedHandler, AsyncStatus,
     IAsyncOperation,
@@ -52,14 +52,14 @@ const MAX_OUTPUT_BYTES: u64 = 16 * 1024 * 1024;
 /// Windows の動画・音声変換（MediaTranscoder）。
 pub(crate) struct WindowsMediaTranscode;
 
-fn internal(label: &'static str) -> DeviceError {
-    DeviceError::Internal(label)
+fn internal(label: &'static str) -> MediaTranscodeError {
+    MediaTranscodeError::Internal(label)
 }
 
 /// クラスなし・statics なしは非対応、それ以外は段階別ラベルの `Internal`。
-fn map_err(e: &windows::core::Error, label: &'static str) -> DeviceError {
+fn map_err(e: &windows::core::Error, label: &'static str) -> MediaTranscodeError {
     if e.code() == REGDB_E_CLASSNOTREG || e.code() == E_NOINTERFACE {
-        DeviceError::Unsupported("media_transcode")
+        MediaTranscodeError::Unsupported
     } else {
         internal(label)
     }
@@ -120,7 +120,7 @@ fn wait(
     label: &'static str,
     register: impl FnOnce(mpsc::Sender<AsyncStatus>) -> windows::core::Result<()>,
     cancel: impl Fn(),
-) -> Result<(), DeviceError> {
+) -> Result<(), MediaTranscodeError> {
     let (tx, rx) = mpsc::channel();
     if register(tx).is_err() {
         cancel();
@@ -144,7 +144,7 @@ fn wait_op<T: windows::core::RuntimeType + 'static>(
     deadline: Instant,
     label: &'static str,
     op: &IAsyncOperation<T>,
-) -> Result<T, DeviceError> {
+) -> Result<T, MediaTranscodeError> {
     wait(
         deadline,
         label,
@@ -167,7 +167,7 @@ impl MediaTranscode for WindowsMediaTranscode {
         pcm: &[i16],
         sample_rate: u32,
         remaining: Duration,
-    ) -> Result<Vec<u8>, DeviceError> {
+    ) -> Result<Vec<u8>, MediaTranscodeError> {
         let deadline = Instant::now() + remaining;
         validate_input(pcm, sample_rate)?;
         purge_stale();
@@ -204,7 +204,7 @@ impl MediaTranscode for WindowsMediaTranscode {
 }
 
 /// 準備 → 変換 → 読み出し。出力ストリームは戻る前に閉じる。
-fn run(input: &IRandomAccessStream, deadline: Instant) -> Result<Vec<u8>, DeviceError> {
+fn run(input: &IRandomAccessStream, deadline: Instant) -> Result<Vec<u8>, MediaTranscodeError> {
     let transcoder = MediaTranscoder::new().map_err(|e| map_err(&e, "media_transcode prepare"))?;
     let profile = MediaEncodingProfile::CreateM4a(AudioEncodingQuality::Auto)
         .map_err(|_| internal("media_transcode prepare"))?;
@@ -222,16 +222,14 @@ fn transcode_into(
     output: &InMemoryRandomAccessStream,
     profile: &MediaEncodingProfile,
     deadline: Instant,
-) -> Result<(), DeviceError> {
+) -> Result<(), MediaTranscodeError> {
     let prep = transcoder
         .PrepareStreamTranscodeAsync(input, output, profile)
         .map_err(|e| map_err(&e, "media_transcode prepare"))?;
     let prepared = wait_op(deadline, "media_transcode prepare", &prep)?;
     if !prepared.CanTranscode().unwrap_or(false) {
         return Err(match prepared.FailureReason() {
-            Ok(TranscodeFailureReason::CodecNotFound) => {
-                DeviceError::Unsupported("media_transcode")
-            }
+            Ok(TranscodeFailureReason::CodecNotFound) => MediaTranscodeError::Unsupported,
             _ => internal("media_transcode prepare"),
         });
     }
@@ -256,7 +254,7 @@ fn transcode_into(
 }
 
 /// 出力ストリームの全バイトを読む。0 バイト・上限超えは失敗。
-fn read_all(output: &InMemoryRandomAccessStream) -> Result<Vec<u8>, DeviceError> {
+fn read_all(output: &InMemoryRandomAccessStream) -> Result<Vec<u8>, MediaTranscodeError> {
     let size = output
         .Size()
         .map_err(|_| internal("media_transcode size"))?;
@@ -283,8 +281,8 @@ pub(crate) fn implementation() -> Arc<dyn MediaTranscode> {
 #[cfg(all(test, target_os = "windows"))]
 mod tests {
     use super::*;
+    use crate::contract::{SAMPLE_RATE, check_m4a, input_duration};
     use fandhe_device::media_playback::demo_pcm;
-    use fandhe_device::media_transcode::{check_m4a, input_duration, SAMPLE_RATE};
 
     fn leftovers() -> usize {
         let prefix = format!("fandhe-media-transcode-{}-", std::process::id());
@@ -305,7 +303,7 @@ mod tests {
             Ok(bytes) => {
                 check_m4a(&bytes, input_duration(pcm.len(), SAMPLE_RATE)).expect("m4a 検証");
             }
-            Err(DeviceError::Unsupported(_)) => {}
+            Err(MediaTranscodeError::Unsupported) => {}
             Err(e) => panic!("想定外の失敗: {e:?}"),
         }
         assert_eq!(leftovers(), 0, "一時ファイルが残っている");
@@ -318,7 +316,7 @@ mod tests {
         let r = WindowsMediaTranscode.transcode(&pcm, SAMPLE_RATE, Duration::ZERO);
         assert!(matches!(
             r,
-            Err(DeviceError::Internal(TIMEOUT)) | Err(DeviceError::Unsupported(_))
+            Err(MediaTranscodeError::Internal(TIMEOUT)) | Err(MediaTranscodeError::Unsupported)
         ));
         assert_eq!(leftovers(), 0, "一時ファイルが残っている");
     }

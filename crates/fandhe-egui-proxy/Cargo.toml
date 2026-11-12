@@ -496,7 +496,7 @@ windows = { workspace = true, optional = true, features = [
     "Graphics_DirectX_Direct3D11",
     "Media_Core",
     "Media_Transcoding",
-    # Issue #312: `device/windows_media_transcode.rs` が入力の一時 WAV を開く
+    # Issue #312: `fandhe-cap-media-transcode/src/windows.rs` が入力の一時 WAV を開く
     # `FileAccessMode`（`Storage`）に使う。`MediaTranscoder` は上の #26 と共用。新規パッケージは増えない。
     "Storage",
     # Issue #1150: `device/windows_video_capture.rs`（video-capture）が撮れた動画の長さ・寸法・向きを
