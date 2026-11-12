@@ -121,29 +121,26 @@ pub(crate) mod bridge {
     static NEXT_EXTERNAL_ID: std::sync::atomic::AtomicU64 =
         std::sync::atomic::AtomicU64::new(1 << 62);
 
-    /// 新しい要求を出す前に、待っている画面外の呼び出しを失敗で完了させる。OS 側
-    /// （Android の `RequestTracker`・iOS の保持 delegate）は同時に 1 要求しか持たず、新しい要求が
-    /// 古い要求を通知なしに置き換えるため、古い待ちは永久に起きなくなる。
-    fn supersede_externals() {
-        let old = std::mem::take(&mut *WAITERS.lock().unwrap_or_else(|e| e.into_inner()));
-        for (_, tx) in old {
-            let _ = tx.send(Err(CalendarError::Internal("calendar superseded")));
+    /// 待ち合わせを登録して `(request_id, 受信側)` を返す。OS 側（Android の `RequestTracker`・
+    /// iOS の保持 delegate・macOS の権限応答待ち）は同時に 1 要求しか持てず、後続が先行を置き換えても
+    /// 先行の保存は取り消せない（失敗を返したのに後から保存され、再試行で重複する）。置き換えず、
+    /// 先行（画面外の待ち・画面の保留）が終わるまで後続を `calendar busy` で拒否する。
+    /// 判定と登録は [`WAITERS`] のロックの内側で行い、画面側の [`begin`] と直列化する。
+    pub(crate) fn begin_external() -> Result<
+        (
+            u64,
+            std::sync::mpsc::Receiver<Result<AddEventOutcome, CalendarError>>,
+        ),
+        CalendarError,
+    > {
+        let mut w = WAITERS.lock().unwrap_or_else(|e| e.into_inner());
+        if !w.is_empty() || SLOT.snapshot().is_some_and(|(_, r)| r.is_none()) {
+            return Err(CalendarError::Internal("calendar busy"));
         }
-    }
-
-    /// 待ち合わせを登録して `(request_id, 受信側)` を返す。先に待っていた呼び出しは失敗で戻る。
-    pub(crate) fn begin_external() -> (
-        u64,
-        std::sync::mpsc::Receiver<Result<AddEventOutcome, CalendarError>>,
-    ) {
-        supersede_externals();
         let id = NEXT_EXTERNAL_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let (tx, rx) = std::sync::mpsc::channel();
-        WAITERS
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push((id, tx));
-        (id, rx)
+        w.push((id, tx));
+        Ok((id, rx))
     }
 
     /// 登録済みの待ち合わせを外す（依頼自体が同期的に失敗したとき）。
@@ -154,10 +151,11 @@ pub(crate) mod bridge {
             .retain(|(id, _)| *id != request_id);
     }
 
-    /// 提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
-    pub(crate) fn begin() -> u64 {
-        supersede_externals();
-        SLOT.begin()
+    /// 提示直前に呼ぶ。画面外の待ちが残っているとき（2 つ目が `false`）は OS へ渡さず、
+    /// 呼び出し側が `calendar busy` を [`deliver`] して画面へ返す。
+    pub(crate) fn begin() -> (u64, bool) {
+        let w = WAITERS.lock().unwrap_or_else(|e| e.into_inner());
+        (SLOT.begin(), w.is_empty())
     }
 
     /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果あり
@@ -208,8 +206,8 @@ fn present(request_id: u64, draft: &EventDraft) -> bool {
 /// （`docs/architecture/consumer-app-structure.md` §8.2）。
 ///
 /// macOS / iOS / Android は OS 側がコールバックで結果を返すため、画面の bridge を経ずに独自の待ち合わせで
-/// 完了まで `add_event` を block する（上限 10 分）。同時に 1 件だけで、後から呼ぶと先の呼び出しは
-/// `Internal("calendar superseded")` で戻る。UI スレッド（iOS / macOS のメイン）から呼ばない。
+/// 完了まで `add_event` を block する（上限 10 分）。同時に 1 件だけで、先行が終わるまで後から呼ぶと
+/// `Internal("calendar busy")` で即座に戻る（先行は置き換えない）。UI スレッド（iOS / macOS のメイン）から呼ばない。
 /// Activity 再生成で待っている呼び出しは `Internal("calendar reset")` で戻る。それ以外の OS は常に `Unsupported`。
 pub fn platform_calendar() -> std::sync::Arc<dyn crate::contract::CalendarEvents> {
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
@@ -233,16 +231,17 @@ struct CallbackCalendar;
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 impl crate::contract::CalendarEvents for CallbackCalendar {
     fn add_event(&self, draft: &EventDraft) -> Result<AddEventOutcome, CalendarError> {
-        let (request_id, rx) = bridge::begin_external();
+        let (request_id, rx) = bridge::begin_external()?;
         if !present(request_id, draft) {
             bridge::cancel_external(request_id);
             return Err(CalendarError::Internal("calendar present"));
         }
-        // OS のコールバックが失われても永久に待たない。期限後に届く結果は待ちを外すため捨てられる。
+        // OS のコールバックが失われても永久に待たない。期限後も OS 側の要求は生きているため
+        // 待ちの登録は外さず（後続を busy にしたまま）、結果が届くか再生成で消える。
+        // ponytail: コールバックが失われると再生成まで busy。解除用の入口は必要になったら足す。
         match rx.recv_timeout(EXTERNAL_WAIT_LIMIT) {
             Ok(result) => result,
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                bridge::cancel_external(request_id);
                 Err(CalendarError::Internal("calendar timeout"))
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
@@ -259,8 +258,11 @@ fn drive_callback(state: &CalendarAddState, sender: &CompletionSender<CalendarAd
 
     if let Some(request) = take_request(state) {
         let _ = sender.send(Box::new(mark_adding));
-        let request_id = bridge::begin();
+        let (request_id, free) = bridge::begin();
         match EventDraft::parse(&request.title, &request.start, &request.end) {
+            Ok(_) if !free => {
+                bridge::deliver(request_id, Err(CalendarError::Internal("calendar busy")));
+            }
             Ok(draft) => {
                 if !present(request_id, &draft) {
                     // 依頼自体が同期的に失敗した（コールバックは二度と来ない）。
@@ -455,7 +457,7 @@ mod bridge_tests {
 
     #[test]
     fn stale_request_id_is_dropped_and_second_deliver_ignored() {
-        let id = bridge::begin();
+        let id = bridge::begin().0;
         assert!(!bridge::deliver(id + 1000, Ok(AddEventOutcome::Saved)));
         assert!(bridge::SLOT.snapshot().is_some_and(|(_, r)| r.is_none()));
         assert!(bridge::deliver(id, Ok(AddEventOutcome::Cancelled)));
