@@ -23,7 +23,7 @@ import java.util.WeakHashMap;
 // 結果を `nativeOnPedometerResult` で受ける。Activity への参加は `PedometerLifecycle`
 // （非公開 ContentProvider、`FeatureLifecycleProvider` 継承）が行い、生成時に `attach`、破棄時に `detach` を呼ぶ。
 // Activity ごとの helper は `HELPERS` に持つ（Rust のワーカーと UI スレッドの両方から触るので同期化し、
-// 破棄時に必ず外す）。表に無い Activity への要求は何もせず、Rust 側の期限で `NoReading` になる。
+// 破棄時に必ず外す）。表に無い Activity への要求は即座に INTERRUPTED で返す。
 //
 // 1 回の要求 = `TYPE_STEP_COUNTER` のリスナーを登録し、最初のイベント（再起動後の
 // 累積歩数）を 1 回受けて解除する。開始・許可結果は UI スレッド（main looper）で直列化する。
@@ -87,11 +87,14 @@ final class PedometerHelper implements SensorEventListener {
         }
     }
 
-    // JNI スレッド（Rust のワーカー）から呼ばれる入口。helper が無い（生成前・破棄後）なら何もしない。
+    // JNI スレッド（Rust のワーカー）から呼ばれる入口。helper が無い（生成前・破棄後）なら
+    // Rust を期限まで待たせず、中断として即座に返す。
     static void read(Activity activity, long id) {
         PedometerHelper helper = HELPERS.get(activity);
         if (helper != null) {
             helper.begin(id);
+        } else {
+            nativeOnPedometerResult(id, RESULT_INTERRUPTED, 0);
         }
     }
 
