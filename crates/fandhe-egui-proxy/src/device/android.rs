@@ -14,8 +14,6 @@ use std::time::{Duration, Instant};
 use fandhe_core::screens::drag_drop::DropItem;
 use fandhe_device::clipboard::Clipboard;
 use fandhe_device::file_picker::{PickedFile, MAX_FILE_BYTES};
-use fandhe_device::haptics::Haptics;
-use fandhe_device::nlp::{validate_input, WordSegmenter};
 use fandhe_device::secure_credential::{validate_key, validate_secret, Secret, SecureCredential};
 use fandhe_device::share::ShareRequest;
 use fandhe_device::text_scale::TextScale;
@@ -816,111 +814,6 @@ impl TextScale for AndroidTextScale {
         // （`fandhe_device::text_scale` モジュール doc の「読めない」＝
         // `Unsupported` とは区別する契約、実装計画 §3 参照）。
         result.map_err(|_| DeviceError::Internal("text_scale: jni call failed"))
-    }
-}
-
-/// Android 実触覚フィードバック実装（`Vibrator`、Issue #1092）。`device/haptics.rs` の
-/// effect ドライバから egui スレッドで同期に呼ばれる。`AndroidTextScale` と同じく mailbox
-/// を介さない: Java 側 `MainActivity.hapticsTap()`（`()I`）は非同期コールバックを持たない
-/// ため、戻り値を `decode_haptics_result` で写すだけで済む。
-pub struct AndroidHaptics;
-
-impl Haptics for AndroidHaptics {
-    /// 2 箇所の `unsafe` は `AndroidTextScale::scale_factor` と同じ根拠・同じ形。
-    #[allow(unsafe_code)]
-    fn tap(&self) -> Result<(), DeviceError> {
-        let Some(app) = crate::android::android_app() else {
-            return Err(DeviceError::Internal("haptics: no activity"));
-        };
-
-        // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。`vm_as_ptr()` は
-        // android-activity が管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-        let result = vm.attach_current_thread(|env: &mut jni::Env| -> Result<i32, JniCallFailed> {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。未所有の JNI
-            // グローバル参照を `Cast` で包むだけで delete は試みない。
-            let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-            let value = env.call_method(
-                &activity,
-                jni::jni_str!("hapticsTap"),
-                jni::jni_sig!(() -> int),
-                &[],
-            )?;
-            Ok(value.i()?)
-        });
-
-        match result {
-            Ok(code) => super::haptics::decode_haptics_result(code),
-            Err(_) => Err(DeviceError::Internal("haptics: jni call failed")),
-        }
-    }
-}
-
-// --------------------------------------------------------------------------
-// 単語分割（Issue #1095、Phase 11 型サンプル「単語分割」の Android 経路）
-// --------------------------------------------------------------------------
-
-/// Android 実単語分割実装（`android.icu.text.BreakIterator`、Issue #1095）。
-/// `device/nlp.rs` の effect ドライバから egui スレッドで同期に呼ばれる。mailbox は介さない:
-/// Java 側 `MainActivity.nlpSegment(String)`（`(Ljava/lang/String;)Ljava/lang/String;`）は
-/// 同期 API で、非同期コールバックを持たない。戻り値は `decode_android_tokens` で写す。
-pub struct AndroidWordSegmenter;
-
-impl WordSegmenter for AndroidWordSegmenter {
-    /// 2 箇所の `unsafe` は `AndroidHaptics::tap` と同じ根拠・同じ形。
-    #[allow(unsafe_code)]
-    fn segment(&self, text: &str) -> Result<Vec<String>, DeviceError> {
-        validate_input(text)?;
-        if text.is_empty() {
-            return Ok(Vec::new());
-        }
-        let Some(app) = crate::android::android_app() else {
-            return Err(DeviceError::Internal("nlp: no activity"));
-        };
-
-        // SAFETY: `AndroidHaptics::tap` と同一の根拠。`vm_as_ptr()` は android-activity が
-        // 管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-        let result = vm.attach_current_thread(
-            |env: &mut jni::Env| -> Result<Option<String>, JniCallFailed> {
-                let j_text = env.new_string(text)?;
-                let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                // SAFETY: `AndroidHaptics::tap` と同一の根拠。未所有の JNI グローバル参照を
-                // `Cast` で包むだけで delete は試みない。
-                let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                let ret = env.call_method(
-                    &activity,
-                    jni::jni_str!("nlpSegment"),
-                    jni::jni_sig!((java.lang.String) -> java.lang.String),
-                    &[jni::objects::JValue::Object(&j_text)],
-                );
-                let ret = match ret {
-                    Ok(v) => v,
-                    Err(e) => {
-                        // 例外は自動クリアされない（jni 0.22）ため後続の JNI 呼び出しへ
-                        // 残さない。文言は読まない（security.md A09）。
-                        if env.exception_check() {
-                            env.exception_clear();
-                        }
-                        return Err(e.into());
-                    }
-                };
-                let jstring = env.cast_local::<jni::objects::JString>(ret.l()?)?;
-                if jstring.is_null() {
-                    Ok(None)
-                } else {
-                    Ok(Some(jstring.try_to_string(env)?))
-                }
-            },
-        );
-
-        match result {
-            Ok(raw) => super::nlp::decode_android_tokens(raw),
-            Err(_) => Err(DeviceError::Internal("nlp: jni call failed")),
-        }
     }
 }
 
@@ -2648,83 +2541,6 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnNotificationRes
 ) {
     let outcome = super::notification::outcome_from_code(code);
     super::notification::bridge::deliver(request_id as u64, outcome);
-    crate::android::request_repaint();
-}
-
-// 予定の追加（Issue #1226）。Java 側 `MainActivity.requestCalendarInsert` /
-// `nativeOnCalendarResult` で `device/calendar.rs::bridge` と pull 型で橋渡しする
-// （`request_notification` と同型）。Java 側に対になる no-op スタブは置かない:
-// この関数を経ないと `nativeOnCalendarResult` を呼ぶ経路自体が無いため。
-
-/// Java 側 `MainActivity.requestCalendarInsert(long, String, int x10)` を呼び、カレンダー
-/// アプリの編集画面を開く（Issue #1226）。結果は `nativeOnCalendarResult` が非同期に届ける。
-/// 件名・日時は `EventDraft::parse` 検証済みで、ログには出さない（security.md A09）。
-/// 戻り値は JNI 呼び出し自体の成否のみ（`false` は呼び出し元が失敗として畳む）。
-// 本体内の 2 箇所の `unsafe` は `request_notification` と同一の根拠。
-#[allow(unsafe_code)]
-pub(crate) fn request_calendar_insert(
-    request_id: u64,
-    draft: &fandhe_device::calendar::EventDraft,
-) -> bool {
-    let Some(app) = crate::android::android_app() else {
-        return false;
-    };
-
-    // SAFETY: `request_notification` と同一の根拠。`app.vm_as_ptr()` は android-activity が
-    // 管理する有効な `JavaVM*` で、`app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-    let (s, e) = (draft.start(), draft.end());
-    let request_result =
-        vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
-            let j_title = env.new_string(draft.title())?;
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: `request_notification` と同一の根拠。未所有のグローバル参照を
-            // 所有権なしでラップするだけで delete しない。
-            let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-            let i = |v: u8| jni::objects::JValue::Int(v as jni::sys::jint);
-            env.call_method(
-                &activity,
-                jni::jni_str!("requestCalendarInsert"),
-                jni::jni_sig!((long, java.lang.String, int, int, int, int, int, int, int, int, int, int) -> ()),
-                &[
-                    jni::objects::JValue::Long(request_id as jni::sys::jlong),
-                    jni::objects::JValue::Object(&j_title),
-                    jni::objects::JValue::Int(s.year as jni::sys::jint),
-                    i(s.month),
-                    i(s.day),
-                    i(s.hour),
-                    i(s.minute),
-                    jni::objects::JValue::Int(e.year as jni::sys::jint),
-                    i(e.month),
-                    i(e.day),
-                    i(e.hour),
-                    i(e.minute),
-                ],
-            )?;
-            Ok(())
-        });
-
-    request_result.is_ok()
-}
-
-/// `MainActivity.nativeOnCalendarResult`（Java 側）から呼ばれる JNI エクスポート関数
-/// （Issue #1226）。`code` の意味は `device/calendar.rs::outcome_from_android_code` の doc
-/// （Java 側 `CALENDAR_RESULT_*` と対）。旧要求の遅延到着は `deliver` が id 不一致で捨てる。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` は JNI 命名規約上の固定シンボル名
-/// （`nativeOnNotificationResult` と同じ根拠）。
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnCalendarResult(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    request_id: jni::sys::jlong,
-    code: jni::sys::jint,
-) {
-    let outcome = super::calendar::outcome_from_android_code(code);
-    super::calendar::bridge::deliver(request_id as u64, outcome);
     crate::android::request_repaint();
 }
 

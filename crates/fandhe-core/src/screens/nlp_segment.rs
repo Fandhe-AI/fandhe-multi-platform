@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。OS 呼び出しは本モジュール外
-//! （`fandhe-egui-proxy` の `device/nlp.rs`、Web は `fandhe-web-dom` の `nlp.rs`）が
+//! （`fandhe-cap-nlp` の `driver.rs`、Web は `fandhe-web-dom` の `nlp.rs`）が
 //! [`take_request`] で要求を観測し [`finish_segment`] で結果を注入する。
 //!
 //! # 空入力を core で止めない理由

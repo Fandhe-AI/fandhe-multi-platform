@@ -19,21 +19,31 @@ device = [
   # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
   "dep:fandhe-cap-accessibility-prefs",
   "dep:fandhe-cap-app-badge",
+  "dep:fandhe-cap-ar",
   "dep:fandhe-cap-audio-devices",
+  "dep:fandhe-cap-calendar",
+  "dep:fandhe-cap-call-ui",
   "dep:fandhe-cap-camera-capture",
   "dep:fandhe-cap-device-identifier",
   "dep:fandhe-cap-document-scan",
   "dep:fandhe-cap-file-watch",
+  "dep:fandhe-cap-haptics",
   "dep:fandhe-cap-home-widget",
   "dep:fandhe-cap-http-get",
+  "dep:fandhe-cap-live-activity",
   "dep:fandhe-cap-local-fonts",
   "dep:fandhe-cap-media-transcode",
   "dep:fandhe-cap-midi",
+  "dep:fandhe-cap-ml-inference",
   "dep:fandhe-cap-multi-display",
   "dep:fandhe-cap-nfc-card-emulation",
+  "dep:fandhe-cap-nlp",
   "dep:fandhe-cap-on-device-llm",
   "dep:fandhe-cap-passkey-signin",
+  "dep:fandhe-cap-pedometer",
+  "dep:fandhe-cap-power-state",
   "dep:fandhe-cap-screen-capture",
+  "dep:fandhe-cap-screen-wake-lock",
   "dep:fandhe-cap-share-receive",
   "dep:fandhe-cap-system-tray",
   # END fandhe-cap
@@ -66,6 +76,10 @@ bundle-id = "com.fandhe.iosapp"
 
 [package.metadata.fandhe-app.ios.usage-descriptions]
 NSCameraUsageDescription = "型サンプル「カメラ撮影」「AR 表示」「書類スキャン」「動画の撮影」「カメラのライブ映像」「接続した機器からの取り込み」の動作確認に使います"
+NSMotionUsageDescription = "型サンプル「歩数」「気圧」「行動認識」の動作確認に使います"
+
+[package.metadata.fandhe-app.macos.usage-descriptions]
+NSCalendarsWriteOnlyAccessUsageDescription = "型サンプル「予定の追加」の動作確認に使います"
 
 [build-dependencies]
 # Apple のリンク指定（弱リンク・rpath・Info.plist 埋め込み）を `fandhe-egui-proxy` から受け取って出し直す。
@@ -83,21 +97,31 @@ egui = { workspace = true }
 # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
 fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs", optional = true }
 fandhe-cap-app-badge = { path = "../fandhe-cap-app-badge", optional = true }
+fandhe-cap-ar = { path = "../fandhe-cap-ar", optional = true }
 fandhe-cap-audio-devices = { path = "../fandhe-cap-audio-devices", optional = true }
+fandhe-cap-calendar = { path = "../fandhe-cap-calendar", optional = true }
+fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui", optional = true }
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
 fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier", optional = true }
 fandhe-cap-document-scan = { path = "../fandhe-cap-document-scan", optional = true }
 fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch", optional = true }
+fandhe-cap-haptics = { path = "../fandhe-cap-haptics", optional = true }
 fandhe-cap-home-widget = { path = "../fandhe-cap-home-widget", optional = true }
 fandhe-cap-http-get = { path = "../fandhe-cap-http-get", optional = true }
+fandhe-cap-live-activity = { path = "../fandhe-cap-live-activity", optional = true }
 fandhe-cap-local-fonts = { path = "../fandhe-cap-local-fonts", optional = true }
 fandhe-cap-media-transcode = { path = "../fandhe-cap-media-transcode", optional = true }
 fandhe-cap-midi = { path = "../fandhe-cap-midi", optional = true }
+fandhe-cap-ml-inference = { path = "../fandhe-cap-ml-inference", optional = true }
 fandhe-cap-multi-display = { path = "../fandhe-cap-multi-display", optional = true }
 fandhe-cap-nfc-card-emulation = { path = "../fandhe-cap-nfc-card-emulation", optional = true }
+fandhe-cap-nlp = { path = "../fandhe-cap-nlp", optional = true }
 fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm", optional = true }
 fandhe-cap-passkey-signin = { path = "../fandhe-cap-passkey-signin", optional = true }
+fandhe-cap-pedometer = { path = "../fandhe-cap-pedometer", optional = true }
+fandhe-cap-power-state = { path = "../fandhe-cap-power-state", optional = true }
 fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture", optional = true }
+fandhe-cap-screen-wake-lock = { path = "../fandhe-cap-screen-wake-lock", optional = true }
 fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive", optional = true }
 fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }
 # END fandhe-cap
@@ -105,6 +129,10 @@ fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }
 # Windows の共通層。起動時にメインウィンドウの HWND を控える（端末機能の有無によらない起動の定型、TASK-21.4 / #1184）。
 [target.'cfg(target_os = "windows")'.dependencies]
 fandhe-platform-windows = { path = "../fandhe-platform-windows" }
+
+# Android の共通層。通知の片付け等が `AndroidApp` を要するため、`android_main` が片付けの前に自分で登録する。
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { workspace = true }

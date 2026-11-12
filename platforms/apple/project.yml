@@ -300,8 +300,8 @@ targets:
     platform: iOS
     deploymentTarget: "17.0"
     sources:
-      - path: FandheLiveActivity/Sources/FandheLiveActivity
-      - path: ../../crates/fandhe-egui-proxy/ios/fandhe_live_activity_attributes.swift
+      - path: ../../crates/fandhe-cap-live-activity/apple/widget
+      - path: ../../crates/fandhe-cap-live-activity/ios/fandhe_live_activity_attributes.swift
     settings:
       base:
         GENERATE_INFOPLIST_FILE: NO

@@ -87,7 +87,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "calendar_add" => fandhe_core::screens::calendar_add::current_screen,
-    fandhe_egui_proxy::device::calendar::calendar_add_effect,
+    fandhe_cap_calendar::calendar_add_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "alarm_show" => fandhe_core::screens::alarm_show::current_screen,
@@ -251,7 +251,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "haptics_tap" => fandhe_core::screens::haptics_tap::current_screen,
-    fandhe_egui_proxy::device::haptics::haptics_tap_effect,
+    fandhe_cap_haptics::haptics_tap_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "system_sound_beep" => fandhe_core::screens::system_sound_beep::current_screen,
@@ -267,7 +267,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pedometer_read" => fandhe_core::screens::pedometer_read::current_screen,
-    fandhe_egui_proxy::device::pedometer::pedometer_read_effect,
+    fandhe_cap_pedometer::pedometer_read_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "audio_play" => fandhe_core::screens::audio_play::current_screen,
@@ -295,11 +295,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "live_activity_show" => fandhe_core::screens::live_activity_show::current_screen,
-    fandhe_egui_proxy::device::live_activity::live_activity_show_effect,
+    fandhe_cap_live_activity::live_activity_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "call_ui_show" => fandhe_core::screens::call_ui_show::current_screen,
-    fandhe_egui_proxy::device::call_ui::call_ui_show_effect,
+    fandhe_cap_call_ui::call_ui_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "audio_devices_show" => fandhe_core::screens::audio_devices_show::current_screen,
@@ -355,7 +355,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "power_state_show" => fandhe_core::screens::power_state_show::current_screen,
-    fandhe_egui_proxy::device::power_state::power_state_show_effect,
+    fandhe_cap_power_state::power_state_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "user_idle_show" => fandhe_core::screens::user_idle_show::current_screen,
@@ -399,7 +399,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ar_show" => fandhe_core::screens::ar_show::current_screen,
-    fandhe_egui_proxy::device::ar::ar_show_effect,
+    fandhe_cap_ar::ar_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "network_status_show" => fandhe_core::screens::network_status_show::current_screen,
@@ -423,7 +423,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wake_lock_toggle" => fandhe_core::screens::wake_lock_toggle::current_screen,
-    fandhe_egui_proxy::device::screen_wake_lock::wake_lock_toggle_effect,
+    fandhe_cap_screen_wake_lock::wake_lock_toggle_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "screen_brightness_show" => fandhe_core::screens::screen_brightness_show::current_screen,
@@ -447,7 +447,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nlp_segment" => fandhe_core::screens::nlp_segment::current_screen,
-    fandhe_egui_proxy::device::nlp::nlp_segment_effect,
+    fandhe_cap_nlp::nlp_segment_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "barcode_scan" => fandhe_core::screens::barcode_scan::current_screen,
@@ -503,7 +503,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ml_infer" => fandhe_core::screens::ml_infer::current_screen,
-    fandhe_egui_proxy::device::ml_inference::ml_infer_effect,
+    fandhe_cap_ml_inference::ml_infer_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "on_device_llm" => fandhe_core::screens::on_device_llm::current_screen,

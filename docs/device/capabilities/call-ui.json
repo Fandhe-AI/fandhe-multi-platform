@@ -17,7 +17,7 @@
       ],
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#275）",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_call_ui.m + crates/fandhe-egui-proxy/src/device/ios_call_ui.rs + crates/fandhe-egui-proxy/src/device/call_ui.rs + crates/fandhe-core/src/screens/call_ui_show.rs + crates/fandhe-device/src/call_ui.rs、Issue #277"
+      "impl": "crates/fandhe-cap-call-ui/ios/fandhe_ios_call_ui.m + crates/fandhe-cap-call-ui/src/ios.rs + crates/fandhe-cap-call-ui/src/driver.rs + crates/fandhe-core/src/screens/call_ui_show.rs + crates/fandhe-cap-call-ui/src/contract.rs、Issue #277"
     },
     "android": {
       "status": "done",
@@ -27,7 +27,7 @@
       "note": "範囲: 疑似着信 1 件・固定の発信者名。音声・VoIP push・発信・履歴は扱わない。API 26+ で動作し、24〜25 と Telecom 機能の無い端末は Unsupported を返す。`CAPABILITY_SELF_MANAGED` は API 37 で非推奨のため、compileSdk を 37 に上げるときに CoreTelecom への移行を見直す。拒否・終了・応答なしは失敗にしない。期限切れ（Unanswered）も取り消しも `DisconnectCause.LOCAL` で閉じ、`MISSED` は区別しない（trait の `end` に理由引数が無いため）。通知の投稿に成功した後にだけ Ringing を返す。守る範囲: 1 プロセス内の順序（Java は main looper 1 本、Rust は `SLOT` 1 本）、嘘の成功の禁止、通知・Connection の解放。守らない範囲: 背景での通話の継続、プロセス死、`PhoneAccount` の登録を残すこと。API 34+ で full-screen intent の許可が切られた場合の挙動は実機で確認する（#275）",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#275）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_call_ui.rs + platforms/android/app/src/main/java/com/fandhe/platform/CallUiHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/CallUiConnectionService.java + platforms/android/app/src/main/java/com/fandhe/platform/CallUiActionReceiver.java + crates/fandhe-egui-proxy/src/device/call_ui.rs + crates/fandhe-core/src/screens/call_ui_show.rs + crates/fandhe-device/src/call_ui.rs、Issue #278"
+      "impl": "crates/fandhe-cap-call-ui/src/android.rs + crates/fandhe-cap-call-ui/android/java/com/fandhe/platform/CallUiHelper.java + crates/fandhe-cap-call-ui/android/java/com/fandhe/platform/CallUiConnectionService.java + crates/fandhe-cap-call-ui/android/java/com/fandhe/platform/CallUiActionReceiver.java + crates/fandhe-cap-call-ui/src/driver.rs + crates/fandhe-core/src/screens/call_ui_show.rs + crates/fandhe-cap-call-ui/src/contract.rs、Issue #278"
     },
     "macos": {
       "status": "no",

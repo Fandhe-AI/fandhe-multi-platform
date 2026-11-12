@@ -111,9 +111,6 @@ fn build() {
     // 。
     compile_apple_gamepad();
 
-    // `apple/fandhe_apple_calendar.m`（Issue #1224 macOS + #1225 iOS）も macOS 分岐と共用する。
-    compile_apple_calendar();
-
     // `apple/fandhe_apple_photo_library.m`（Issue #1254 macOS + #1255 iOS）も macOS 分岐と共用する。
     compile_apple_photo_library();
 
@@ -151,16 +148,10 @@ fn build() {
     // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
     compile_apple_local_peer();
 
-    // `apple/fandhe_apple_haptics.m`（Issue #1091 macOS + #1092 iOS）も macOS 分岐と
-    // 共用する。
-    compile_apple_haptics();
-    compile_apple_nlp();
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も iOS 分岐と共用する。
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
-    // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
-    compile_apple_ml_inference();
     // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も macOS 分岐と共用する。
     compile_apple_video_transcode();
     // `apple/fandhe_apple_pdf_viewer.m`（Issue #469 macOS + Issue #471 iOS）も共用する。
@@ -181,19 +172,14 @@ fn build() {
     // `ios/fandhe_ios_url_scheme.m`（Issue #1217）。iOS 分岐のみ（macOS は別 .m）。
     compile_ios_url_scheme();
 
-    // `ios/fandhe_ios_pedometer.m`（Issue #1248）。macOS は対応表で `no` のため iOS 分岐のみ。
-    compile_ios_pedometer();
     // `ios/fandhe_ios_spell_check.m`（Issue #579）。iOS 分岐のみ。
     compile_ios_spell_check();
-    compile_ios_screen_wake_lock();
     // `ios/fandhe_ios_screen_brightness.m`（Issue #634）。iOS 分岐のみ。
     compile_ios_screen_brightness();
     // `ios/fandhe_ios_fullscreen_immersive.m`（Issue #1313）。iOS 分岐のみ。
     compile_ios_fullscreen_immersive();
     // `ios/fandhe_ios_screen_orientation.m`（Issue #656）。iOS 分岐のみ。
     compile_ios_screen_orientation();
-    // `ios/fandhe_ios_power_state.m`（Issue #1275）。iOS 分岐のみ。
-    compile_ios_power_state();
     // `ios/fandhe_ios_app_lifecycle.m`（Issue #894）。iOS 分岐のみ。
     compile_ios_app_lifecycle();
     // `ios/fandhe_ios_memory_pressure.m`（Issue #912）。iOS 分岐のみ。
@@ -238,14 +224,8 @@ fn build() {
     compile_ios_flashlight();
     // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
     compile_ios_pen_stylus();
-    // `ios/fandhe_ios_ar.m`（Issue #308）。iOS 分岐のみ。
-    compile_ios_ar();
     // `ios/fandhe_ios_display_refresh_hdr.m`（Issue #871）。iOS 分岐のみ。
     compile_ios_display_refresh_hdr();
-    // `ios/fandhe_ios_call_ui.m`（Issue #277）。iOS 分岐のみ（macOS は対応表で no）。
-    compile_ios_call_ui();
-    // `ios/fandhe_ios_live_activity.swift`（Issue #295）。iOS 分岐のみ（macOS は対応表で no）。
-    compile_ios_live_activity();
     // `ios/fandhe_ios_alarm.swift`（Issue #1077）。iOS 分岐のみ。AlarmKit を弱リンクする。
     compile_ios_alarm();
     // `ios/fandhe_ios_web_auth_session.m`（Issue #532）。iOS 分岐のみ。
@@ -374,19 +354,6 @@ fn compile_apple_scanner_devices() {
     );
 }
 
-/// `apple/fandhe_apple_calendar.m` を `cc` でコンパイルし EventKit をリンクする（Issue #1224 macOS + #1225 iOS）。
-/// iOS は EventKitUI も使う。
-fn compile_apple_calendar() {
-    compile_objc(
-        "apple/fandhe_apple_calendar.m",
-        if target_is_ios() {
-            &["EventKit", "EventKitUI", "Foundation", "UIKit"]
-        } else {
-            &["EventKit", "Foundation"]
-        },
-    );
-}
-
 /// `apple/fandhe_apple_text_scale.m` を `cc` でコンパイルする（Issue #914）。iOS 分岐のみから呼ばれる（doc 参照）。
 /// `TARGET_OS_IPHONE` ガードで中身を囲んでいるため、ファイル自体は共有形式のまま iOS 専用のコンパイル対象にできる。
 fn compile_apple_text_scale() {
@@ -439,30 +406,6 @@ fn compile_apple_speech_recognition() {
     );
 }
 
-/// `apple/fandhe_apple_haptics.m` を `cc` でコンパイルする（Issue #1091 macOS + #1092 iOS、触覚フィードバック）。
-/// macOS は AppKit、iOS は CoreHaptics（`supportsHaptics` 判定）と UIKit をリンクする。
-/// iOS・macOS 双方の feature `device` 分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_haptics`）と同じ OS 集合に保つ。
-fn compile_apple_haptics() {
-    compile_objc(
-        "apple/fandhe_apple_haptics.m",
-        if target_is_ios() {
-            &["CoreHaptics", "UIKit"]
-        } else {
-            &["AppKit"]
-        },
-    );
-}
-
-/// `apple/fandhe_apple_nlp.m` を `cc` でコンパイルし NaturalLanguage をリンクする
-/// （Issue #1094 macOS + #1095 iOS、単語分割）。
-/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_nlp`）と同じ OS 集合に保つ。
-fn compile_apple_nlp() {
-    compile_objc(
-        "apple/fandhe_apple_nlp.m",
-        &["Foundation", "NaturalLanguage"],
-    );
-}
-
 /// `apple/fandhe_apple_barcode_scan.m` を `cc` でコンパイルし Vision をリンクする
 /// （Issue #557 macOS、iOS は #558 が利用、バーコード・QR 読み取り）。
 /// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_barcode_scan`）と
@@ -511,17 +454,6 @@ fn compile_apple_video_transcode() {
     compile_objc(
         "apple/fandhe_apple_video_transcode.m",
         &["AVFoundation", "CoreMedia", "CoreVideo", "Foundation"],
-    );
-}
-
-/// `apple/fandhe_apple_ml_inference.m` を `cc` でコンパイルし CoreML をリンクする
-/// （Issue #289 macOS、iOS は b-ios が利用、機械学習モデル推論）。
-/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_ml_inference`）と
-/// 同じ OS 集合に保つ。`MLModelAsset`（macOS 13 / iOS 16）は `.m` の `@available` で守る。
-fn compile_apple_ml_inference() {
-    compile_objc(
-        "apple/fandhe_apple_ml_inference.m",
-        &["CoreML", "Foundation"],
     );
 }
 
@@ -669,15 +601,6 @@ fn compile_macos_managed_app_config() {
     compile_objc(
         "macos/fandhe_macos_managed_app_config.m",
         &["CoreFoundation", "Foundation"],
-    );
-}
-
-/// `macos/fandhe_macos_screen_wake_lock.m` を `cc` でコンパイルし IOKit をリンクする
-/// （Issue #1278）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_screen_wake_lock.rs` が使う）。
-fn compile_macos_screen_wake_lock() {
-    compile_objc(
-        "macos/fandhe_macos_screen_wake_lock.m",
-        &["CoreFoundation", "Foundation", "IOKit"],
     );
 }
 
@@ -1072,13 +995,6 @@ fn compile_ios_display_refresh_hdr() {
     compile_objc("ios/fandhe_ios_display_refresh_hdr.m", &["UIKit"]);
 }
 
-/// `macos/fandhe_macos_power_state.m` を `cc` でコンパイルする（Issue #1274）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_power_state.rs` が使う）。
-/// IOKit（`IOPSCopyPowerSourcesInfo`）を追加でリンクする。
-fn compile_macos_power_state() {
-    compile_objc("macos/fandhe_macos_power_state.m", &["Foundation", "IOKit"]);
-}
-
 /// `macos/fandhe_macos_user_idle.m` を `cc` でコンパイルする（Issue #631）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_user_idle.rs` が使う）。CoreGraphics を追加でリンクする。
 fn compile_macos_user_idle() {
@@ -1086,12 +1002,6 @@ fn compile_macos_user_idle() {
         "macos/fandhe_macos_user_idle.m",
         &["CoreGraphics", "Foundation"],
     );
-}
-
-/// `ios/fandhe_ios_pedometer.m` を `cc` でコンパイルする（Issue #1248）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_pedometer.rs` が使う）。
-fn compile_ios_pedometer() {
-    compile_objc("ios/fandhe_ios_pedometer.m", &["CoreMotion", "Foundation"]);
 }
 
 /// `ios/fandhe_ios_spell_check.m` を `cc` でコンパイルする（Issue #579）。
@@ -1119,15 +1029,6 @@ fn compile_ios_smart_home() {
 /// から呼ばれる（`src/device/ios_health_data.rs` が使う）。
 fn compile_ios_health_data() {
     compile_objc("ios/fandhe_ios_health_data.m", &["Foundation", "HealthKit"]);
-}
-
-/// `ios/fandhe_ios_screen_wake_lock.m` を `cc` でコンパイルする（Issue #1279）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_screen_wake_lock.rs` が使う）。
-fn compile_ios_screen_wake_lock() {
-    compile_objc(
-        "ios/fandhe_ios_screen_wake_lock.m",
-        &["Foundation", "UIKit"],
-    );
 }
 
 /// `ios/fandhe_ios_screen_brightness.m` を `cc` でコンパイルする（Issue #634）。
@@ -1211,12 +1112,6 @@ fn compile_ios_external_app_launch() {
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_print.rs` が使う）。
 fn compile_ios_print() {
     compile_objc("ios/fandhe_ios_print.m", &["UIKit"]);
-}
-
-/// `ios/fandhe_ios_power_state.m` を `cc` でコンパイルする（Issue #1275）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_power_state.rs` が使う）。
-fn compile_ios_power_state() {
-    compile_objc("ios/fandhe_ios_power_state.m", &["Foundation", "UIKit"]);
 }
 
 /// `ios/fandhe_ios_app_lifecycle.m` を `cc` でコンパイルする（Issue #894）。
@@ -1351,46 +1246,6 @@ fn compile_ios_pen_stylus() {
     compile_objc("ios/fandhe_ios_pen_stylus.m", &["UIKit"]);
 }
 
-/// `ios/fandhe_ios_ar.m` を `cc` でコンパイルし ARKit をリンクする（Issue #308）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_ar.rs` が使う）。
-fn compile_ios_ar() {
-    compile_objc(
-        "ios/fandhe_ios_ar.m",
-        &["ARKit", "AVFoundation", "CoreVideo", "Foundation", "UIKit"],
-    );
-}
-
-/// `ios/fandhe_ios_call_ui.m` を `cc` でコンパイルし CallKit をリンクする（Issue #277）。**iOS 分岐のみ**
-/// から呼ばれる（`src/device/ios_call_ui.rs` が使う）。
-fn compile_ios_call_ui() {
-    compile_objc(
-        "ios/fandhe_ios_call_ui.m",
-        &["AVFoundation", "CallKit", "Foundation"],
-    );
-}
-
-/// ライブアクティビティの Swift 薄層を `swiftc` で静的ライブラリ化してリンクする（Issue #295）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_live_activity.rs` が使う）。`ActivityKit` の
-/// `Activity<Attributes>` は Swift 専用 API で ObjC から呼べないため、`cc` ではなく swiftc を使う。
-/// Apple ツール（`xcrun`）が無いホスト（Linux の型検査経路。`docs/operations/ios-build-pipeline.md`）
-/// では警告を出して静的ライブラリの生成をスキップする。この場合 `cargo check` は通るが、
-/// リンクはシンボル未解決で失敗するため成功には見えない。`FANDHE_REQUIRE_LIVE_ACTIVITY=1`
-/// （本番・配布ビルド）ではスキップせず panic する。swiftc 自体の失敗は常に panic。
-fn compile_ios_live_activity() {
-    compile_swift(&SwiftLib {
-        srcs: &[
-            "ios/fandhe_live_activity_attributes.swift",
-            "ios/fandhe_ios_live_activity.swift",
-        ],
-        lib: "fandhe_ios_live_activity",
-        module: "FandheLiveActivityBridge",
-        framework: "ActivityKit",
-        weak: false,
-        require_env: "FANDHE_REQUIRE_LIVE_ACTIVITY",
-        tag: "live_activity",
-    });
-}
-
 /// `ios/fandhe_ios_background_task.m` を `cc` でコンパイルし BackgroundTasks を
 /// リンクする（Issue #1045）。**iOS 分岐のみ**から呼ばれる（`BGTaskScheduler` は
 /// iOS 専用、doc 参照）。
@@ -1417,7 +1272,6 @@ fn build_macos() {
     compile_apple_contact_picker();
     compile_apple_secure_credential();
     compile_apple_gamepad();
-    compile_apple_calendar();
     compile_apple_photo_library();
     compile_apple_map_view();
     compile_apple_geocoding_search();
@@ -1446,16 +1300,10 @@ fn build_macos() {
     // `apple/fandhe_apple_local_peer.m`（Issue #511 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
     compile_apple_local_peer();
-    // `apple/fandhe_apple_haptics.m`（Issue #1091 macOS + #1092 iOS）も iOS 分岐と共用する。
-    compile_apple_haptics();
-    // `apple/fandhe_apple_nlp.m`（Issue #1094 macOS + #1095 iOS）も macOS 分岐と共用する。
-    compile_apple_nlp();
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も共用する。
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
-    // `apple/fandhe_apple_ml_inference.m`（Issue #289 macOS + b-ios iOS）も共用する。
-    compile_apple_ml_inference();
     compile_apple_translation();
     // `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS。iOS は `build_ios` からも呼ぶ）。
     compile_apple_image_generation();
@@ -1477,8 +1325,6 @@ fn build_macos() {
     compile_macos_url_scheme();
     // `macos/fandhe_macos_app_shortcuts.m`（Issue #424）も macOS 専用。
     compile_macos_app_shortcuts();
-    // `macos/fandhe_macos_power_state.m`（Issue #1274）も macOS 専用。
-    compile_macos_power_state();
     // `macos/fandhe_macos_user_idle.m`（Issue #631）も macOS 専用。
     compile_macos_user_idle();
     // `macos/fandhe_macos_device_info.m`（Issue #1304）も macOS 専用。
@@ -1564,8 +1410,6 @@ fn build_macos() {
     // `macos/fandhe_macos_serial_port.m`（Issue #670）も macOS 専用。IOKit を使う。
     compile_macos_serial_port();
     compile_macos_pen_stylus();
-    // `macos/fandhe_macos_screen_wake_lock.m`（Issue #1278）も macOS 専用。IOKit を使う。
-    compile_macos_screen_wake_lock();
     // `macos/fandhe_macos_managed_app_config.m`（Issue #944）も macOS 専用。CoreFoundation を使う。
     compile_macos_managed_app_config();
 

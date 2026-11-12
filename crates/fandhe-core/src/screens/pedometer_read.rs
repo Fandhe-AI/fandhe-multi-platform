@@ -5,8 +5,8 @@
 //! （`screens/mod.rs` の `pub mod pedometer_read;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
-//! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の
-//! `device/pedometer.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する
+//! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-cap-pedometer` の
+//! `driver.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する
 //! （`haptics_tap.rs` と同型の状態機械）。
 //!
 //! 全対象 OS（Windows / iOS / Android）の文言・状態をここで定義済みで、後続の OS 実装は

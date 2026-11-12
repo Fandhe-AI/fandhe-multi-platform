@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。OS 呼び出しは本モジュール外
-//! （`fandhe-egui-proxy` の `device/haptics.rs`、Web は `fandhe-web-dom` の `haptics.rs`）が
+//! （`fandhe-cap-haptics` の `driver.rs`、Web は `fandhe-web-dom` の `haptics.rs`）が
 //! [`take_request`] で要求を観測し [`finish_tap`] で結果を注入する
 //! （`notification_send.rs` と同型の状態機械）。
 //!

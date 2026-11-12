@@ -6,7 +6,7 @@
 //! 複数同時・アプリ内ボタンは扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは
-//! `fandhe-egui-proxy` の `device/live_activity.rs` が [`take_command`] で要求を観測し、
+//! `fandhe-cap-live-activity` の `driver.rs` が [`take_command`] で要求を観測し、
 //! [`apply_result`] で結果を注入する（`call_ui_show.rs` と同型）。iOS・Android の案内も含め全対象 OS の
 //! 状態・文言をここで確定済みで、後続の OS 実装（b 層）は本画面を触らない。
 //!

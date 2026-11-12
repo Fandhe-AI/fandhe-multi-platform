@@ -1,0 +1,65 @@
+[package]
+name = "fandhe-cap-call-ui"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の通話 UI 統合（call-ui）の機能 crate（iOS の CallKit・Android の self-managed ConnectionService・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+[build-dependencies]
+# iOS・macOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。`cargo fandhe check` が現行の設定と突き合わせる。
+[package.metadata.fandhe]
+id = "call-ui"
+
+[package.metadata.fandhe.ios]
+frameworks = ["AVFoundation", "CallKit"]
+
+[package.metadata.fandhe.android]
+# POST_NOTIFICATIONS はローカル通知（別機能）と共有する（統合で 1 つになる）。
+permissions = [
+    { name = "android.permission.POST_NOTIFICATIONS" },
+    { name = "android.permission.MANAGE_OWN_CALLS" },
+    { name = "android.permission.USE_FULL_SCREEN_INTENT" },
+]
+java = ["android/java"]
+res = ["android/res"]
+
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.CallUiLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.call-ui" }
+
+# self-managed ConnectionService（Telecom だけが bind できる）。
+[[package.metadata.fandhe.android.components]]
+kind = "service"
+name = "com.fandhe.platform.CallUiConnectionService"
+exported = true
+attributes = { permission = "android.permission.BIND_TELECOM_CONNECTION_SERVICE" }
+intent-filters = [{ actions = ["android.telecom.ConnectionService"] }]
+
+# 着信通知の応答・拒否ボタンの受け口（自アプリの明示 Intent だけが届く）。
+[[package.metadata.fandhe.android.components]]
+kind = "receiver"
+name = "com.fandhe.platform.CallUiActionReceiver"
+exported = false
+
+[lints]
+workspace = true

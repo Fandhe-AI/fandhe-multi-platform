@@ -434,21 +434,6 @@ public class MainActivity extends GameActivity {
     // 4=内部エラー（`notify()` 呼び出し自体の失敗）。
     private static native void nativeOnNotificationResult(long requestId, int code);
 
-    // 予定の追加（Issue #1226）。Rust 側 `device/calendar.rs::bridge` と pull 型で橋渡しする。
-    // 結果コード（本ファイルが SSOT、Rust 側 `calendar::outcome_from_android_code` の doc と
-    // 対）: 0=編集画面へ渡した（保存の有無は分からない）, 1=カレンダーアプリ無し,
-    // 2=非前景・破棄中で起動しなかった, 3=その他の起動失敗。
-    private static native void nativeOnCalendarResult(long requestId, int code);
-
-    private static final int CALENDAR_RESULT_HANDED = 0;
-    private static final int CALENDAR_RESULT_NO_APP = 1;
-    private static final int CALENDAR_RESULT_BACKGROUND = 2;
-    private static final int CALENDAR_RESULT_LAUNCH_FAILED = 3;
-
-    // 新しい要求に差し替えられた旧要求を UI スレッド側で捨てるための追跡。
-    private static final RequestTracker calendarRequest = new RequestTracker();
-
-
     // 上記 code 定数（`requestNotificationPermission`/`requestNotification`/
     // `postNotification` からも参照するため）。
     private static final int NOTIFICATION_RESULT_SUBMITTED = 0;
@@ -459,18 +444,6 @@ public class MainActivity extends GameActivity {
     private static final int NOTIFICATION_RESULT_PERMISSION_DENIED = 2;
     private static final int NOTIFICATION_RESULT_AUTH_ERROR = 3;
     private static final int NOTIFICATION_RESULT_POST_ERROR = 4;
-
-    // 歩数画面（Issue #1249）。実装は `PedometerHelper`（フィールド初期化子で生成し、
-    // STARTED 前に許可ランチャーを登録する）。Rust の `android_pedometer.rs` が JNI で呼ぶ。
-    private final PedometerHelper pedometerHelper = new PedometerHelper(this);
-
-    void requestPedometerRead(long requestId) {
-        pedometerHelper.read(requestId);
-    }
-
-    void cancelPedometerRead(long requestId) {
-        pedometerHelper.cancel(requestId);
-    }
 
     // ヘルスデータ（今日の歩数、Issue #1100）。実装は `HealthDataHelper`（フィールド初期化子で
     // 生成し、STARTED 前に許可ランチャーを登録する）。Rust の `android_health_data.rs` が JNI で呼ぶ。
@@ -810,30 +783,6 @@ public class MainActivity extends GameActivity {
         return cameraPreviewHelper.setZoom(id, ratio);
     }
 
-    // 通話 UI 統合（Issue #278）。実装は `CallUiHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_call_ui.rs` が JNI で呼ぶ。
-    private final CallUiHelper callUiHelper = new CallUiHelper(this);
-
-    int callUiReport(long id) {
-        return callUiHelper.report(id);
-    }
-
-    void callUiEnd(long id) {
-        callUiHelper.end(id);
-    }
-
-    // ライブアクティビティ（Issue #296）。実装は `LiveActivityHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_live_activity.rs` が JNI で呼ぶ。
-    private final LiveActivityHelper liveActivityHelper = new LiveActivityHelper(this);
-
-    void requestLiveActivity(long requestId, int op, int value) {
-        liveActivityHelper.submit(requestId, op, value);
-    }
-
-    void liveActivityDismissAll() {
-        liveActivityHelper.dismissAll();
-    }
-
     // メール・SMS 作成画面（Issue #1386）。実装は `ComposeHelper`。
     // Rust の `android_compose_mail_sms.rs` が JNI で呼ぶ。
     private final ComposeHelper composeHelper = new ComposeHelper(this);
@@ -941,18 +890,6 @@ public class MainActivity extends GameActivity {
 
     void requestVideoCapture(long requestId, int maxSecs) {
         videoCaptureHelper.capture(requestId, maxSecs);
-    }
-
-    // 画面スリープ抑止（Issue #1280）。実装は `ScreenWakeLockHelper`。Rust の
-    // `android_screen_wake_lock.rs` が egui スレッドから同期で JNI 呼び出しする。
-    private final ScreenWakeLockHelper screenWakeLockHelper = new ScreenWakeLockHelper(this);
-
-    int screenWakeLockSet(boolean keep) {
-        return screenWakeLockHelper.set(keep);
-    }
-
-    boolean screenWakeLockIsHeld() {
-        return screenWakeLockHelper.isHeld();
     }
 
     // 画面輝度の上書き（Issue #635）。実装は `ScreenBrightnessHelper`。Rust の
@@ -3782,49 +3719,6 @@ public class MainActivity extends GameActivity {
         nativeOnMicRecordStarted(requestId);
     }
 
-    // Rust 側 `device/android.rs::request_calendar_insert` から JNI 経由で呼ばれる
-    // （Issue #1226）。カレンダーアプリの編集画面（`ACTION_INSERT`）を開くだけで権限は
-    // 使わない。結果コードは `startActivity` が例外なく戻った時点で返し、編集画面からの
-    // 戻りは待たない（結果コードは保存の有無を表さないため）。件名・日時はログへ出さない。
-    private void requestCalendarInsert(long requestId, String title,
-            int sy, int smo, int sd, int sh, int smi,
-            int ey, int emo, int ed, int eh, int emi) {
-        calendarRequest.track(requestId);
-        runOnUiThread(() -> {
-            if (!calendarRequest.complete(requestId)) {
-                return; // 新しい要求に差し替えられた旧要求
-            }
-            if (isFinishing() || isDestroyed() || !activityResumed) {
-                // 背景からの起動は OS に黙って抑止されうる（嘘の成功の防止）。
-                nativeOnCalendarResult(requestId, CALENDAR_RESULT_BACKGROUND);
-                return;
-            }
-            // th_TH 等で仏暦になる Calendar.getInstance() を避け、西暦固定にする。
-            // 1582 年より前もユリウス暦へ倒さず、Rust 側の検証（先発グレゴリオ暦）と暦を揃える。
-            Calendar begin = new GregorianCalendar();
-            ((GregorianCalendar) begin).setGregorianChange(new java.util.Date(Long.MIN_VALUE));
-            begin.clear();
-            begin.set(sy, smo - 1, sd, sh, smi);
-            Calendar end = new GregorianCalendar();
-            ((GregorianCalendar) end).setGregorianChange(new java.util.Date(Long.MIN_VALUE));
-            end.clear();
-            end.set(ey, emo - 1, ed, eh, emi);
-            Intent intent = new Intent(Intent.ACTION_INSERT)
-                    .setData(CalendarContract.Events.CONTENT_URI)
-                    .putExtra(CalendarContract.Events.TITLE, title)
-                    .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, begin.getTimeInMillis())
-                    .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, end.getTimeInMillis());
-            try {
-                startActivity(intent);
-                nativeOnCalendarResult(requestId, CALENDAR_RESULT_HANDED);
-            } catch (ActivityNotFoundException e) {
-                nativeOnCalendarResult(requestId, CALENDAR_RESULT_NO_APP);
-            } catch (RuntimeException e) {
-                nativeOnCalendarResult(requestId, CALENDAR_RESULT_LAUNCH_FAILED);
-            }
-        });
-    }
-
     // 写真ライブラリ保存（Issue #1256）。Rust 側 `device/android_photo_library.rs` から JNI で
     // 呼ばれる。実処理は `PhotoSaveHelper`（Activity を握らない。再生成時の破棄は Rust 側 reset と対）。
     private void requestPhotoSave(long requestId, byte[] png) {
@@ -4595,12 +4489,6 @@ public class MainActivity extends GameActivity {
         return getResources().getConfiguration().fontScale;
     }
 
-    // Rust 側（`device/android_power_state.rs`、Issue #1276）から JNI 経由で egui スレッドが
-    // 1 秒ごとに呼ぶ同期メソッド（シグネチャ `()J`）。詰め方は `PowerStateHelper` 冒頭を参照。
-    private long powerStateRead() {
-        return PowerStateHelper.read(getApplicationContext());
-    }
-
     // Rust 側（`device/android_device_info.rs`、Issue #1306）から JNI 経由で egui スレッドが
     // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
     // `DeviceInfoHelper` 冒頭を参照。失敗は null。
@@ -4648,68 +4536,6 @@ public class MainActivity extends GameActivity {
     // `DisplayRefreshHdrHelper` 冒頭を参照。失敗は null。
     private float[] displayRefreshHdrRead() {
         return DisplayRefreshHdrHelper.read(this);
-    }
-
-    // Rust 側（`device/android.rs` の `AndroidHaptics`、Issue #1092）から JNI 経由で
-    // egui スレッドから呼ばれる同期メソッド（シグネチャ `()I`）。`Vibrator.vibrate` に
-    // スレッド制約は無く、Java → Rust の native コールバックも持たないため no-op スタブは不要。
-    // 戻り値（Rust 側 `decode_haptics_result` と対で決める契約）:
-    //   0 = 要求を渡した（サイレント・システム触覚オフでは無反応で、検知できない）
-    //   1 = 振動子なし（`Unsupported` へ写す）
-    //   2 = 失敗（`SecurityException` 等。Java 例外を JNI 側へ残さず `Internal` へ写す）
-    // 15ms は Web 実装（`navigator.vibrate(15)`）に揃えた軽い単発。
-    @SuppressWarnings("deprecation")
-    private int hapticsTap() {
-        try {
-            Vibrator vibrator;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                VibratorManager manager = getSystemService(VibratorManager.class);
-                vibrator = manager == null ? null : manager.getDefaultVibrator();
-            } else {
-                vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-            }
-            if (vibrator == null || !vibrator.hasVibrator()) {
-                return 1;
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(
-                        VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE));
-            } else {
-                vibrator.vibrate(15);
-            }
-            return 0;
-        } catch (RuntimeException e) {
-            return 2;
-        }
-    }
-
-    // 単語分割（Issue #1095）。egui スレッドから呼ばれる同期メソッド（シグネチャ
-    // `(Ljava/lang/String;)Ljava/lang/String;`）。Rust 側 `device/android.rs::
-    // AndroidWordSegmenter` から呼ばれ、Java → Rust の native コールバックを持たないため
-    // no-op スタブは不要（`hapticsTap` と同じ判断）。`BreakIterator`（API 24 = minSdk）の
-    // 語境界で切った部分文字列を出現順に U+0000 で連結して返す。入力は Rust 側
-    // `validate_input` が NUL を拒否済みで、トークンは入力の部分文字列のため区切りは曖昧にならない。
-    // 空白・記号だけのトークンの除去は Rust 側 `normalize_words` が行う。
-    // トークン 0 件は空文字列、失敗（RuntimeException）は null（Java 例外を JNI 側へ残さず
-    // Rust が `Internal` へ写す）。入力・トークンはログへ出さない。
-    private String nlpSegment(String text) {
-        try {
-            BreakIterator it = BreakIterator.getWordInstance();
-            it.setText(text);
-            StringBuilder sb = new StringBuilder();
-            boolean first = true;
-            int start = it.first();
-            for (int end = it.next(); end != BreakIterator.DONE; start = end, end = it.next()) {
-                if (!first) {
-                    sb.append('\0');
-                }
-                sb.append(text, start, end);
-                first = false;
-            }
-            return sb.toString();
-        } catch (RuntimeException e) {
-            return null;
-        }
     }
 
     // 資格情報保存（Issue #924）の op 定数。Rust 側 `device/android.rs::
@@ -4937,7 +4763,6 @@ public class MainActivity extends GameActivity {
         inAppBrowserHelper.onDestroy();
         companionDeviceHelper.onDestroy();
         paymentRequestHelper.onDestroy();
-        pedometerHelper.onDestroy();
         healthDataHelper.onDestroy();
         translationHelper.onDestroy();
         geocodingHelper.onDestroy();
@@ -4964,10 +4789,8 @@ public class MainActivity extends GameActivity {
         removableStorageHelper.onDestroy();
         audioSessionHelper.onDestroy();
         cameraPreviewHelper.onDestroy();
-        callUiHelper.onDestroy();
         videoCaptureHelper.onDestroy();
         printHelper.onDestroy();
-        screenWakeLockHelper.onDestroy();
         screenBrightnessHelper.onDestroy();
         screenOrientationHelper.onDestroy();
         captureProtectionHelper.onDestroy();

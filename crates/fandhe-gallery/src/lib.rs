@@ -67,11 +67,32 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
 #[allow(unsafe_code)]
 #[no_mangle]
 fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
+    // 片付けの前に新しい `AndroidApp` を登録する。通知の閉じ込み等は `android_app()` を使うため、
+    // 新プロセスで未登録のまま呼ぶと何も消えない（`run` 内の登録と同じ値で、そちらは上書きになるだけ）。
+    fandhe_platform_android::set_android_app(app.clone());
     // Activity 再生成では画面状態が作り直される（世代 0）。保留中の書類スキャン要求が残ると
     // 次の要求が飲み込まれるため、新しい画面状態を作る前に破棄する（TASK-21.3 / Issue #1171。
     // 以前は egui-proxy の `android::run` が呼んでいた。機能 crate を egui-proxy が知らないようにするため移した）。
     #[cfg(feature = "device")]
     fandhe_cap_document_scan::reset_pending_tracking();
+    // 機械学習推論の処理済み世代も破棄する。画面状態は再生成で generation 0 に戻るため、残すと次の
+    // 「推論する」が飲み込まれる（`fandhe_cap_ml_inference::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_ml_inference::reset_pending_tracking();
+    // 通話 UI の記録（処理済み世代）と進行中の通話も破棄する。画面状態は再生成で generation 0 に戻るため、
+    // 残すと次の「着信を模擬する」が飲み込まれ、OS 側の着信も残る（`fandhe_cap_call_ui::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_call_ui::reset_pending_tracking();
+    // ライブアクティビティの保留中の要求も破棄し、表示中の通知を閉じる。再生成後の画面は Idle から始まるため、
+    // 残すと次の操作と OS 側の表示が食い違う（`fandhe_cap_live_activity::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_live_activity::reset_pending_tracking();
+    // 予定追加の保留中の要求も破棄する（`SLOT` はプロセス static のため再生成をまたいで残る。
+    // `fandhe_cap_calendar::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_calendar::reset_pending_tracking();
+    // 第 3 束の機能: 端末内 LLM・音声変換・アイコンバッジ・MIDI・パスキー・画面録画の保留中の要求と処理済み世代も
+    // 破棄する（理由は ml_inference と同じ。各 crate の `reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_on_device_llm::reset_pending_tracking();
     #[cfg(feature = "device")]

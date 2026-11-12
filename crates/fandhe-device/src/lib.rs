@@ -29,8 +29,6 @@ pub mod app_lifecycle;
 pub mod app_progress_attention;
 /// Phase 11（端末機能の拡充ループ、親 #101、Issue #424）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録。
 pub mod app_shortcuts;
-/// Phase 11（端末機能の拡充ループ、親 #90、Issue #307）: AR 表示（追跡状態・位置・水平面の数）。
-pub mod ar;
 /// Phase 11 の拡充ループ（親 #172、Issue #840）: 音声の割り込み・セッション種別（他の音を止める・下げる・混ぜる）。
 pub mod audio_session;
 /// Phase 11（端末機能の拡充ループ、親 #121、Issue #585）: ワンタイムコード（OTP）の自動入力のヒント。
@@ -51,10 +49,6 @@ pub mod ble_peripheral;
 pub mod bluetooth_classic;
 /// Phase 11（端末機能の拡充ループ）: Bluetooth LE の周辺機器スキャン。
 pub mod bluetooth_le;
-/// Phase 11（端末機能の拡充ループ、親 #1118、Issue #1224）: 予定を 1 件追加する。
-pub mod calendar;
-/// Phase 11（端末機能の拡充ループ、親 #87、Issue #276）: 疑似着信の OS 着信 UI への表示と結果の取得。
-pub mod call_ui;
 /// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得（ズーム操作を含む）。
 pub mod camera_preview_stream;
 /// Phase 11（端末機能の拡充ループ、親 #120、Issue #582）: 画面キャプチャの防止・検知。
@@ -113,8 +107,6 @@ pub mod geocoding_search;
 pub mod geofence;
 /// Phase 11（端末機能の拡充ループ、親 #150、Issue #766）: グローバルホットキー（固定の組み合わせ 1 つ）。
 pub mod global_hotkey;
-/// Phase 11（端末機能の拡充ループ）: 触覚フィードバック（軽い振動 1 回）。
-pub mod haptics;
 /// Phase 11（端末機能の拡充ループ、親 #149、Issue #1089）: ヘルスデータ（今日の歩数を 1 回読む）。
 pub mod health_data;
 pub mod http;
@@ -132,8 +124,6 @@ pub mod in_app_review;
 pub mod lan_discovery;
 /// Phase 11（端末機能の拡充ループ、親 #134、Issue #696）: ログイン時の自動起動（有効化・無効化・状態の読み戻し）。
 pub mod launch_at_login;
-/// Phase 11（端末機能の拡充ループ、親 #88、Issue #294）: 数値 1 つのライブ表示（ライブアクティビティ・進行中通知）の開始・更新・終了。
-pub mod live_activity;
 /// Phase 11（端末機能の拡充ループ、親 #110、Issue #511）: 近くの端末との直接通信（同じアプリを開いた 2 台が固定文字列を 1 回ずつ送り合う）。
 pub mod local_peer;
 /// Phase 11（端末機能の拡充ループ、親 #887、Issue #888）: 継続 push 型の位置情報取得。
@@ -152,8 +142,6 @@ pub mod media_transcode;
 pub mod memory_pressure;
 /// Phase 11（端末機能の拡充ループ、親 #953、Issue #954）: マイク録音。
 pub mod mic_record;
-/// Phase 11（端末機能の拡充ループ、親 #89、Issue #289）: 固定の線形モデルの推論 1 回（Core ML 等）。
-pub mod ml_inference;
 pub mod motion;
 /// Phase 11（端末機能の拡充ループ、親 #180、Issue #898）: ジャイロ・磁気・線形加速度の生値。
 pub mod motion_raw_sensors;
@@ -163,8 +151,6 @@ pub mod music_library;
 pub mod network_status;
 /// Phase 11（端末機能の拡充ループ、親 #157、Issue #1044）: NFC タグ（NDEF）の読み取り。
 pub mod nfc;
-/// Phase 11（端末機能の拡充ループ）: 単語分割。
-pub mod nlp;
 /// Phase 11（端末機能の拡充ループ、親 #1003、Issue #1004）: ローカル通知。
 pub mod notification;
 /// Phase 11（端末機能の拡充ループ、親 #98、Issue #381）: ロック画面・OS のメディア操作（再生中の表示と再生・一時停止の受け取り）。
@@ -179,8 +165,6 @@ pub mod passkey;
 pub mod payment_request;
 /// Phase 11（端末機能の拡充ループ、親 #107、Issue #469）: 埋め込み PDF の 1 ページ目の画像化と総ページ数。
 pub mod pdf_viewer;
-/// Phase 11（端末機能の拡充ループ、親 #1119、Issue #1247）: 歩数（累積歩数を 1 回取得）。
-pub mod pedometer;
 /// Phase 11（端末機能の拡充ループ、親 #95、Issue #355）: ペン・筆圧入力（種類・筆圧・傾き）。
 pub mod pen_stylus;
 /// Phase 11（端末機能の拡充ループ、親 #137、Issue #1073）: アプリ別の言語設定（言語タグと設定の出どころ）。
@@ -191,8 +175,6 @@ pub mod photo_library;
 pub mod photo_picker;
 /// Phase 11（端末機能の拡充ループ、親 #97、Issue #364）: ピクチャ・イン・ピクチャ（映像の小窓表示）。
 pub mod picture_in_picture;
-/// Phase 11（端末機能の拡充ループ、親 #1128、Issue #1274）: 電源状態（電池・省電力・熱）。
-pub mod power_state;
 /// Phase 11（端末機能の拡充ループ、親 #94、Issue #325）: 印刷ダイアログを開く。
 pub mod print;
 /// Phase 11（端末機能の拡充ループ、親 #139、Issue #719）: クイック設定タイル・コントロール（押された回数の読み出し）。
@@ -211,8 +193,6 @@ pub mod scanner_devices;
 pub mod screen_brightness;
 /// Phase 11（端末機能の拡充ループ、親 #128、Issue #655）: 画面向きの取得・固定。
 pub mod screen_orientation;
-/// Phase 11（端末機能の拡充ループ、親 #1129、Issue #1278）: 画面スリープの抑止。
-pub mod screen_wake_lock;
 /// Phase 11（端末機能の拡充ループ、親 #921、Issue #922）: 資格情報の安全な保存。
 pub mod secure_credential;
 /// Phase 11（端末機能の拡充ループ、親 #131、Issue #670）: シリアルポートの一覧と 1 行の往復。
