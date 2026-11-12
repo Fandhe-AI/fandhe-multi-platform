@@ -1,8 +1,8 @@
 //! Phase 11 の拡充ループ（親 #1137）型サンプル「MIDI 入力」（Issue #1398）の effect ドライバ。
 //! `fandhe_core::screens::midi_show`（端末依存ゼロ）の要求を `take_command` で観測し、
-//! `fandhe_device::midi::MidiInput` の購読を始め / 止め、届いた通知を `CompletionSender` 経由で
+//! `crate::contract::MidiInput` の購読を始め / 止め、届いた通知を `CompletionSender` 経由で
 //! 注入する（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約の SSOT は `fandhe_device::midi`。
+//! 契約の SSOT は `fandhe_cap_midi`。
 //!
 //! # OS 別実装の差し込み口
 //!
@@ -19,27 +19,27 @@
 //! 開始の期限は単調時計（`Instant`）で測り、`Starting` の間だけ `request_repaint_after` で判定を
 //! 予約する。期限切れ後は `stop()` を呼んで遅れて確定した購読を残さない。
 
-use std::sync::atomic::{AtomicU64, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::midi_show::{
-    apply_update, expire_start, mark_command_taken, take_command, MidiCommand, MidiFailure,
-    MidiNoteRow, MidiPhase, MidiShowState, MidiUpdate,
-};
 #[cfg(not(any(
     target_os = "windows",
     target_os = "macos",
     target_os = "ios",
     target_os = "android"
 )))]
-use fandhe_device::midi::UnsupportedMidiInput;
-use fandhe_device::midi::{
-    MidiEvent, MidiInput, MidiSink, NoteEvent, MAX_PENDING_BATCHES, START_DEADLINE,
+use crate::contract::UnsupportedMidiInput;
+use crate::contract::{
+    MAX_PENDING_BATCHES, MidiEvent, MidiInput, MidiSink, NoteEvent, START_DEADLINE,
 };
-use fandhe_device::DeviceError;
+use crate::error::MidiError;
+use fandhe_core::screens::midi_show::{
+    MidiCommand, MidiFailure, MidiNoteRow, MidiPhase, MidiShowState, MidiUpdate, apply_update,
+    expire_start, mark_command_taken, take_command,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// プロセスに 1 つだけ持つ実装（`stop` が `start` と同じ実体に届くようにする）。
 fn platform_midi() -> &'static Arc<dyn MidiInput> {
@@ -47,15 +47,15 @@ fn platform_midi() -> &'static Arc<dyn MidiInput> {
     INPUT.get_or_init(|| {
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
-            super::apple_midi::implementation()
+            crate::apple::implementation()
         }
         #[cfg(target_os = "windows")]
         {
-            super::windows_midi::implementation()
+            crate::windows::implementation()
         }
         #[cfg(target_os = "android")]
         {
-            super::android_midi::implementation()
+            crate::android::implementation()
         }
         #[cfg(not(any(
             target_os = "windows",
@@ -109,17 +109,17 @@ impl Session {
 /// 処理済み世代と購読（Rust 側 epoch・sink）も揃えて捨てる。Java 側は旧インスタンスの
 /// `onDestroy` が close 済みで、epoch が進むため旧通知は新しい購読に混ざらない。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
         s.reset();
     }
     platform_midi().stop();
 }
 
-fn to_failure(e: &DeviceError) -> MidiFailure {
+fn to_failure(e: &MidiError) -> MidiFailure {
     match e {
-        DeviceError::Unsupported(_) => MidiFailure::Unsupported,
-        DeviceError::PermissionDenied(_) => MidiFailure::PermissionDenied,
+        MidiError::Unsupported => MidiFailure::Unsupported,
+        MidiError::PermissionDenied => MidiFailure::PermissionDenied,
         // OS の生コードは画面へ出さない（security.md A09）。
         _ => MidiFailure::Failed("MIDI の開始".to_string()),
     }
@@ -219,30 +219,29 @@ fn drive(
     let Ok(mut inner) = session.inner.lock() else {
         return;
     };
-    if let Some((command, generation)) = take_command(state) {
-        if inner.handled != generation {
-            inner.handled = generation;
-            let _ = sender.send(Box::new(move |s: &mut MidiShowState| {
-                mark_command_taken(s, generation)
-            }));
-            match command {
-                MidiCommand::Start => {
-                    let settle = Arc::new(AtomicU8::new(SETTLE_PENDING));
-                    let now = Instant::now();
-                    inner.starting = Some((generation, now, settle.clone()));
-                    let dropped = Arc::new(AtomicU64::new(0));
-                    inner.dropped = Some((generation, dropped.clone()));
-                    let sink =
-                        make_sink(sender.clone(), generation, settle, now, deadline, dropped);
-                    if let Err(e) = input.start(sink) {
-                        inner.starting = None;
-                        send_update(sender, generation, MidiUpdate::Failed(to_failure(&e)));
-                    }
-                }
-                MidiCommand::Stop => {
+    if let Some((command, generation)) = take_command(state)
+        && inner.handled != generation
+    {
+        inner.handled = generation;
+        let _ = sender.send(Box::new(move |s: &mut MidiShowState| {
+            mark_command_taken(s, generation)
+        }));
+        match command {
+            MidiCommand::Start => {
+                let settle = Arc::new(AtomicU8::new(SETTLE_PENDING));
+                let now = Instant::now();
+                inner.starting = Some((generation, now, settle.clone()));
+                let dropped = Arc::new(AtomicU64::new(0));
+                inner.dropped = Some((generation, dropped.clone()));
+                let sink = make_sink(sender.clone(), generation, settle, now, deadline, dropped);
+                if let Err(e) = input.start(sink) {
                     inner.starting = None;
-                    input.stop();
+                    send_update(sender, generation, MidiUpdate::Failed(to_failure(&e)));
                 }
+            }
+            MidiCommand::Stop => {
+                inner.starting = None;
+                input.stop();
             }
         }
     }
@@ -254,10 +253,10 @@ fn drive(
     // 取りこぼしの読み取りと drive の間（同一フレーム内）の増分は消去前として扱う。
     if state.clear_epoch != inner.cleared_epoch {
         inner.cleared_epoch = state.clear_epoch;
-        if let Some((g, d)) = inner.dropped.clone() {
-            if g == state.generation {
-                send_update(sender, g, MidiUpdate::DroppedBase(d.load(Ordering::SeqCst)));
-            }
+        if let Some((g, d)) = inner.dropped.clone()
+            && g == state.generation
+        {
+            send_update(sender, g, MidiUpdate::DroppedBase(d.load(Ordering::SeqCst)));
         }
     }
 
@@ -305,25 +304,32 @@ pub fn midi_show_effect(state: &MidiShowState, sender: &CompletionSender<MidiSho
 }
 
 /// アプリ終了時に購読を外す（`device::shutdown` から呼ばれる）。
-pub(super) fn shutdown() {
+pub fn shutdown() {
     platform_midi().stop();
 }
 
 #[cfg(test)]
 mod tests {
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     use super::*;
-    use fandhe_core::screens::midi_show::{start, stop, START_TIMEOUT};
+    use fandhe_core::screens::midi_show::{START_TIMEOUT, start, stop};
     use std::sync::mpsc;
 
     struct Fake {
-        error: Mutex<Option<DeviceError>>,
+        error: Mutex<Option<MidiError>>,
         auto_started: Option<usize>,
         sink: Mutex<Option<MidiSink>>,
         stops: AtomicUsize,
     }
 
     impl Fake {
-        fn new(error: Option<DeviceError>, auto_started: Option<usize>) -> Arc<Self> {
+        fn new(error: Option<MidiError>, auto_started: Option<usize>) -> Arc<Self> {
             Arc::new(Self {
                 error: Mutex::new(error),
                 auto_started,
@@ -337,7 +343,7 @@ mod tests {
     }
 
     impl MidiInput for Fake {
-        fn start(&self, sink: MidiSink) -> Result<(), DeviceError> {
+        fn start(&self, sink: MidiSink) -> Result<(), MidiError> {
             if let Some(e) = self.error.lock().unwrap().take() {
                 return Err(e);
             }
@@ -355,11 +361,14 @@ mod tests {
         }
     }
 
-    type Rx = mpsc::Receiver<crate::app::Completion<MidiShowState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<MidiShowState>>;
 
     fn channel() -> (CompletionSender<MidiShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     fn pump(state: &mut MidiShowState, rx: &Rx) {
@@ -399,10 +408,9 @@ mod tests {
 
     #[test]
     fn errors_are_never_success() {
-        for (e, expect_unsupported) in [
-            (DeviceError::Unsupported("midi"), true),
-            (DeviceError::Internal("midi start"), false),
-        ] {
+        for (e, expect_unsupported) in
+            [(MidiError::Unsupported, true), (MidiError::Internal, false)]
+        {
             let fake = Fake::new(Some(e), None);
             let (state, ..) = run(&fake);
             match state.phase {
@@ -636,7 +644,7 @@ mod tests {
         let sink: MidiSink = Arc::new(|_| true);
         assert!(matches!(
             platform_midi().start(sink),
-            Err(DeviceError::Unsupported("midi"))
+            Err(MidiError::Unsupported)
         ));
     }
 }

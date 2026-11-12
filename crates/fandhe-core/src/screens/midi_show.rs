@@ -5,7 +5,7 @@
 //! 表示のみで、出力・SysEx・CC・デバイス名は扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは
-//! `fandhe-egui-proxy` の `device/midi.rs` が [`take_command`] で要求を観測し、[`apply_update`] で
+//! `fandhe-cap-midi`（`src/driver.rs`） が [`take_command`] で要求を観測し、[`apply_update`] で
 //! 通知を注入する（`audio_devices_show.rs` と同型の状態機械 + 継続配信）。
 //!
 //! 全対象 OS（macOS / iOS / Android / Windows / Web）の文言・状態をここで確定済みで、後続の OS 実装
@@ -32,7 +32,7 @@ const STOP_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
 /// 「消去」ボタン。
 const CLEAR_BUTTON_ID: WidgetId = WidgetId::from_raw(3);
 
-/// 画面に残す直近の件数（`fandhe_device::midi::MAX_SHOWN_EVENTS` と同値。依存方向のため複製）。
+/// 画面に残す直近の件数（`fandhe_cap_midi::MAX_SHOWN_EVENTS` と同値。依存方向のため複製）。
 pub const MAX_SHOWN_EVENTS: usize = 100;
 
 /// 画面タイトル。
@@ -101,7 +101,7 @@ pub enum MidiCommand {
     Stop,
 }
 
-/// 一覧の 1 行（`fandhe_device::midi::NoteEvent` の写し）。
+/// 一覧の 1 行（`fandhe_cap_midi::NoteEvent` の写し）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MidiNoteRow {
     /// ノートオンか。

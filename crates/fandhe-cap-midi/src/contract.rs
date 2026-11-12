@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #1137、Issue #1398）: 接続中の MIDI 入力から届いたノートオン / オフを
-//! 受ける契約。`fandhe-egui-proxy` の `device/midi.rs`（effect ドライバ）が [`MidiInput::start`] /
+//! 受ける契約。`fandhe-cap-midi`（`src/driver.rs`）（effect ドライバ）が [`MidiInput::start`] /
 //! [`MidiInput::stop`] を呼び、各 OS 実装（macOS: CoreMIDI = #1398、iOS: #1399、Android: #1400、
 //! Windows: #1402）が本トレイトを実装する。Web は `fandhe-web-dom` 側（#1401）の Web MIDI を使い、
 //! 本トレイトは経由しない。
@@ -10,8 +10,8 @@
 //! # 結果の種類（契約表 6・10）
 //!
 //! - 成功: `start` が `Ok`、続いて [`MidiEvent::Started`]。接続中の入力が 0 台でも成功（正常）
-//! - 非対応: `Err(DeviceError::Unsupported("midi"))`。成功値へ倒さない
-//! - 失敗: `Err(DeviceError::Internal("midi start"))`、または非同期の [`MidiEvent::Failed`]
+//! - 非対応: `Err(MidiError::Unsupported)`。成功値へ倒さない
+//! - 失敗: `Err(MidiError::Internal)`、または非同期の [`MidiEvent::Failed`]
 //! - 利用者の停止は失敗ではない（[`MidiInput::stop`]）。`PermissionDenied` は Web 専用で本トレイトを通らない
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）
@@ -30,7 +30,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::MidiError;
 
 /// 画面に残す直近の件数。
 pub const MAX_SHOWN_EVENTS: usize = 100;
@@ -94,7 +94,7 @@ pub enum MidiEvent {
     /// OS のコールバック 1 回ぶんのノート。
     Notes(Vec<NoteEvent>),
     /// 非同期の開始失敗（Windows が使う）。
-    Failed(DeviceError),
+    Failed(MidiError),
 }
 
 /// 通知の受け口。`false` は「受け手がいないので購読を止めてよい」の意味。
@@ -105,7 +105,7 @@ pub trait MidiInput: Send + Sync {
     /// 購読を始める。即時に確定する失敗は戻り値で返す。同期で確定できる実装は `start` の中で
     /// `sink(Started{..})` を呼んでよい。非同期の実装は後から `Started` か `Failed` を流す
     /// （期限 [`START_DEADLINE`] はドライバが持つ）。
-    fn start(&self, sink: MidiSink) -> Result<(), DeviceError>;
+    fn start(&self, sink: MidiSink) -> Result<(), MidiError>;
     /// 購読を止める。冪等。登録を確実に外し、以後 sink を呼ばない。
     fn stop(&self);
 }
@@ -115,8 +115,8 @@ pub trait MidiInput: Send + Sync {
 pub struct UnsupportedMidiInput;
 
 impl MidiInput for UnsupportedMidiInput {
-    fn start(&self, _sink: MidiSink) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("midi"))
+    fn start(&self, _sink: MidiSink) -> Result<(), MidiError> {
+        Err(MidiError::Unsupported)
     }
     fn stop(&self) {}
 }
@@ -311,7 +311,7 @@ mod tests {
         let sink: MidiSink = Arc::new(|_| true);
         assert!(matches!(
             UnsupportedMidiInput.start(sink),
-            Err(DeviceError::Unsupported("midi"))
+            Err(MidiError::Unsupported)
         ));
     }
 }

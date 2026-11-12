@@ -706,17 +706,6 @@ public class MainActivity extends GameActivity {
         return SpotlightIndexHelper.removeAll(getApplicationContext(), domain, remainingMs);
     }
 
-    // MIDI 入力（Issue #1400）。実装は `MidiHelper`。Rust の `android_midi.rs` が JNI で呼ぶ。
-    private final MidiHelper midiHelper = new MidiHelper(this);
-
-    int midiStart(long epoch) {
-        return midiHelper.start(epoch);
-    }
-
-    void midiStop() {
-        midiHelper.stop();
-    }
-
     // スリープ・画面ロック・解除の通知（Issue #811）。実装は `SleepLockEventsHelper`。
     // Rust の `android_sleep_lock_events.rs` が JNI で呼ぶ。
     private final SleepLockEventsHelper sleepLockEventsHelper = new SleepLockEventsHelper(this);
@@ -4995,7 +4984,6 @@ public class MainActivity extends GameActivity {
         motionRawSensorsHelper.onDestroy();
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
-        midiHelper.onDestroy();
         sleepLockEventsHelper.onDestroy();
         appLifecycleHelper.onDestroy();
         memoryPressureHelper.onDestroy();

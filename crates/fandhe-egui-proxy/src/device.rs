@@ -224,11 +224,6 @@ pub mod android_media_playback;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_memory_pressure;
-/// Issue #1398: Android 向け MIDI 入力実装。`device/midi.rs` の
-/// Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_midi;
 /// Issue #289: Android 向け機械学習推論実装。
 /// `device/ml_inference.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
@@ -554,10 +549,6 @@ pub mod apple_media_playback;
 /// iOS/macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_mic_record;
-/// Issue #1398: iOS / macOS 共通の MIDI 入力実装（`apple/fandhe_apple_midi.m` を呼ぶ
-/// C ABI ラッパー。iOS は 14 以上、未満は失敗コードを返す）。`device/midi.rs` の Apple 分岐から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_midi;
 /// Issue #289 macOS・b-ios iOS: Core ML 推論実装（`apple/fandhe_apple_ml_inference.m` を呼ぶ
 /// C ABI ラッパー）。`device/ml_inference.rs` の macOS 経路と、iOS 経路（`ios_ml_inference` 経由）から
 /// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
@@ -1390,9 +1381,6 @@ pub mod memory_pressure;
 /// effect ドライバ（macOS/iOS/Windows/Android 実装、他 OS は `UnsupportedMicRecorder`
 /// 固定）。
 pub mod mic_record;
-/// Phase 11 の拡充ループ（親 #1137、Issue #1398）: MIDI 入力の effect ドライバ（macOS・iOS・Android・Windows 実装、
-/// 他 OS は `UnsupportedMidiInput` 固定）。
-pub mod midi;
 /// Phase 11 の拡充ループ（親 #89、Issue #289）: 機械学習モデル推論の effect ドライバ（macOS・iOS / Windows / Android 実装、
 /// 他 OS は
 /// `UnsupportedMlInference` 固定。Web は対象外）。
@@ -1768,11 +1756,6 @@ pub mod windows_memory_pressure;
 /// `device/mic_record.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_mic_record;
-/// Issue #1398: Windows 向け MIDI 入力実装。`device/midi.rs` の
-/// Windows 経路から呼ばれる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_midi;
 /// Issue #289: Windows 向け機械学習推論実装。
 /// `device/ml_inference.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -1995,7 +1978,7 @@ pub fn shutdown() {
     lan_discovery::stop_shared_discovery();
     local_peer::stop_shared_exchange();
     global_hotkey::shutdown();
-    midi::shutdown();
+    fandhe_cap_midi::shutdown();
     media_playback::shutdown();
     now_playing::shutdown();
     picture_in_picture::shutdown();

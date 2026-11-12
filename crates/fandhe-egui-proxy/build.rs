@@ -267,8 +267,6 @@ fn build() {
     compile_ios_color_picker();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
-    // `apple/fandhe_apple_midi.m`（Issue #1398 macOS + #1399 iOS）も共用する。CoreMIDI を使う。
-    compile_apple_midi();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。macOS と iOS（親 #86 の b-ios）で共用する。
     compile_apple_media_playback();
     // `apple/fandhe_apple_picture_in_picture.m`（Issue #365）。macOS 分岐と共用する。AVKit を使う。
@@ -800,12 +798,6 @@ fn compile_apple_media_cast() {
             &["AVFoundation", "AVKit", "AppKit", "CoreAudio", "Foundation"]
         },
     );
-}
-
-/// `apple/fandhe_apple_midi.m` を `cc` でコンパイルし CoreMIDI をリンクする（Issue #1398）。
-/// iOS・macOS 双方の分岐から呼ばれる（`src/device/apple_midi.rs` が使う。iOS は Issue #1399）。
-fn compile_apple_midi() {
-    compile_objc("apple/fandhe_apple_midi.m", &["CoreMIDI", "Foundation"]);
 }
 
 /// `macos/fandhe_macos_volume_control.m` を `cc` でコンパイルする（Issue #785）。**macOS 分岐のみ**
@@ -1555,8 +1547,6 @@ fn build_macos() {
     compile_macos_volume_control();
     // `apple/fandhe_apple_media_cast.m`（Issue #386 macOS + #387 iOS）。iOS 分岐と共用する。AVKit・CoreAudio を使う。
     compile_apple_media_cast();
-    // `apple/fandhe_apple_midi.m`（Issue #1398）。iOS 分岐（#1399）と共用する。CoreMIDI を使う。
-    compile_apple_midi();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。iOS 分岐と共用する。
     compile_apple_media_playback();
     // `apple/fandhe_apple_picture_in_picture.m`（Issue #364 macOS + #365 iOS）。iOS 分岐と共用する。AVKit を使う。

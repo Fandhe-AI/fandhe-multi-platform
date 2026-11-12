@@ -20,8 +20,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
-// MIDI 入力画面（Issue #1400、親 #1137）の Android 実装ヘルパー。MainActivity から生成・委譲される
-// （Rust の `device/android_midi.rs` が `MainActivity.midiStart` / `midiStop` を JNI で呼び、
+// MIDI 入力画面（Issue #1400、親 #1137）の Android 実装ヘルパー。`MidiLifecycle` が Activity ごとに生成する
+// （Rust の `fandhe-cap-midi/src/android.rs` が static メソッド `start(Activity, long)` / `stop(Activity)` を JNI で呼び、
 // 結果を `nativeOnMidi*` で受ける）。範囲は USB 等で `getDevices` に出る入力（出力ポートを持つ
 // デバイス）の受信のみ。BLE の接続（`openBluetoothDevice`）、出力、デバイス名は扱わない。
 //
@@ -77,7 +77,42 @@ final class MidiHelper {
     // デバイス id ごとの接続できなかった出力ポート数。
     private final Map<Integer, Integer> failedByDevice = new HashMap<>();
 
-    MidiHelper(ComponentActivity activity) {
+    // Activity ごとの helper。`MidiLifecycle`（`FeatureLifecycleProvider`）が生成時に付け、破棄時に外して購読を破棄する。
+    private static final java.util.Map<android.app.Activity, MidiHelper> HELPERS =
+            new java.util.WeakHashMap<>();
+
+    static synchronized void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new MidiHelper(activity));
+    }
+
+    static void detach(android.app.Activity activity) {
+        MidiHelper helper;
+        synchronized (MidiHelper.class) {
+            helper = HELPERS.remove(activity);
+        }
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    private static synchronized MidiHelper of(android.app.Activity activity) {
+        return HELPERS.get(activity);
+    }
+
+    // JNI から呼ばれる入口。helper が無いときは失敗で確定する（結果が来ないまま待たせない）。
+    static int start(android.app.Activity activity, long epoch) {
+        MidiHelper helper = of(activity);
+        return helper == null ? START_FAILED : helper.start(epoch);
+    }
+
+    static void stop(android.app.Activity activity) {
+        MidiHelper helper = of(activity);
+        if (helper != null) {
+            helper.stop();
+        }
+    }
+
+    private MidiHelper(ComponentActivity activity) {
         this.activity = activity;
     }
 
@@ -109,7 +144,7 @@ final class MidiHelper {
 
     // 0 = 受け付けた / 1 = 非対応 / 2 = 失敗。
     @SuppressWarnings("deprecation")
-    int start(long epoch) {
+    private int start(long epoch) {
         synchronized (lock) {
             if (destroyed) return START_FAILED;
             if (!activity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_MIDI)) {
@@ -146,14 +181,14 @@ final class MidiHelper {
     }
 
     // 冪等。戻った後は native を呼ばない（Rust 側も epoch を進めて捨てる）。
-    void stop() {
+    private void stop() {
         synchronized (lock) {
             current = NONE;
             closeAllLocked();
         }
     }
 
-    void onDestroy() {
+    private void onDestroy() {
         synchronized (lock) {
             destroyed = true;
             current = NONE;

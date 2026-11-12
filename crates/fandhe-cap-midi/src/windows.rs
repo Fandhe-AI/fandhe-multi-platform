@@ -1,6 +1,6 @@
 //! Windows 向け MIDI 入力実装（Issue #1402、親 #1137）。`device/midi.rs::platform_midi` の
 //! Windows 経路から呼ばれ、WinRT `Windows.Devices.Midi.MidiInPort` が型付きで渡すノートオン / オフを
-//! `fandhe_device::midi::NoteEvent::from_wire` で検証して sink へ流す。
+//! `crate::contract::NoteEvent::from_wire` で検証して sink へ流す。
 //!
 //! # 方式: 常駐ワーカー 1 本 + 直列キュー + 世代（epoch）照合
 //!
@@ -39,8 +39,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use fandhe_device::midi::{MidiEvent, MidiInput, MidiSink};
-use fandhe_device::DeviceError;
+use crate::contract::{MidiEvent, MidiInput, MidiSink};
+use crate::error::MidiError;
 
 /// epoch と sink を 1 本のロックで守る純ロジック（host でテストする）。
 #[derive(Default)]
@@ -113,7 +113,7 @@ fn with_router<R>(f: impl FnOnce(&mut Router) -> R) -> R {
 /// 列挙完了時の開始結果。1 台以上見つかって全部開けないときだけ失敗（0 台は成功）。
 fn start_event(opened: usize, failed: usize) -> MidiEvent {
     if opened == 0 && failed > 0 {
-        MidiEvent::Failed(DeviceError::Internal("midi open"))
+        MidiEvent::Failed(MidiError::Internal)
     } else {
         MidiEvent::Started {
             sources: opened,
@@ -168,15 +168,14 @@ pub(crate) fn implementation() -> Arc<dyn MidiInput> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        Arc::new(fandhe_device::midi::UnsupportedMidiInput)
+        Arc::new(crate::contract::UnsupportedMidiInput)
     }
 }
 
 #[cfg(target_os = "windows")]
 mod win {
-    use std::sync::{mpsc, OnceLock};
+    use std::sync::{OnceLock, mpsc};
 
-    use windows::core::{Interface, Ref, HSTRING};
     use windows::Devices::Enumeration::{
         DeviceInformation, DeviceInformationUpdate, DeviceWatcher,
     };
@@ -185,10 +184,11 @@ mod win {
         MidiNoteOnMessage,
     };
     use windows::Foundation::TypedEventHandler;
+    use windows::core::{HSTRING, Interface, Ref};
 
     use windows_future::{AsyncOperationCompletedHandler, AsyncStatus};
 
-    use fandhe_device::midi::NoteEvent;
+    use crate::contract::NoteEvent;
 
     use super::*;
     use fandhe_platform_windows::ComInit;
@@ -249,18 +249,14 @@ mod win {
     pub(super) struct WindowsMidi;
 
     impl MidiInput for WindowsMidi {
-        fn start(&self, sink: MidiSink) -> Result<(), DeviceError> {
+        fn start(&self, sink: MidiSink) -> Result<(), MidiError> {
             // 世代更新と投入は同じロックで行い、投入順を世代順に揃える（mpsc 送信はブロックしない）。
             let ok = with_router(|r| {
                 r.begin_enqueue(sink, |e| {
                     queue().is_some_and(|q| q.send(Cmd::Start(e)).is_ok())
                 })
             });
-            if ok {
-                Ok(())
-            } else {
-                Err(DeviceError::Internal("midi start"))
-            }
+            if ok { Ok(()) } else { Err(MidiError::Internal) }
         }
 
         fn stop(&self) {
@@ -275,11 +271,11 @@ mod win {
         }
     }
 
-    fn map_start_error(e: &windows::core::Error) -> DeviceError {
+    fn map_start_error(e: &windows::core::Error) -> MidiError {
         if e.code().0 == CLASS_NOT_REG {
-            DeviceError::Unsupported("midi")
+            MidiError::Unsupported
         } else {
-            DeviceError::Internal("midi start")
+            MidiError::Internal
         }
     }
 
@@ -298,7 +294,7 @@ mod win {
         let _ = s.watcher.Stop();
     }
 
-    fn open_session(epoch: u64, tx: &mpsc::Sender<Cmd>) -> Result<Session, DeviceError> {
+    fn open_session(epoch: u64, tx: &mpsc::Sender<Cmd>) -> Result<Session, MidiError> {
         let err = |e: windows::core::Error| map_start_error(&e);
         let selector = MidiInPort::GetDeviceSelector().map_err(err)?;
         let watcher = DeviceInformation::CreateWatcherAqsFilter(&selector).map_err(err)?;
@@ -469,7 +465,7 @@ mod win {
                     }
                     let result = match &com {
                         Ok(_) => open_session(e, &tx),
-                        Err(_) => Err(DeviceError::Internal("midi start")),
+                        Err(_) => Err(MidiError::Internal),
                     };
                     match result {
                         Ok(s) => session = Some(s),
@@ -477,10 +473,10 @@ mod win {
                     }
                 }
                 Cmd::Stop(e) => {
-                    if session.as_ref().is_some_and(|s| s.epoch < e) {
-                        if let Some(s) = session.take() {
-                            teardown(s);
-                        }
+                    if session.as_ref().is_some_and(|s| s.epoch < e)
+                        && let Some(s) = session.take()
+                    {
+                        teardown(s);
                     }
                 }
                 Cmd::Added(e, id) => {
@@ -498,10 +494,10 @@ mod win {
                     } else {
                         s.inputs.insert(key, None);
                     }
-                    if settle(s) {
-                        if let Some(s) = session.take() {
-                            teardown(s);
-                        }
+                    if settle(s)
+                        && let Some(s) = session.take()
+                    {
+                        teardown(s);
                     }
                 }
                 Cmd::Opened(e, id, req, port) => {
@@ -516,10 +512,10 @@ mod win {
                     };
                     s.pending.remove(&key);
                     s.inputs.insert(key, port.and_then(|p| register_port(e, p)));
-                    if settle(s) {
-                        if let Some(s) = session.take() {
-                            teardown(s);
-                        }
+                    if settle(s)
+                        && let Some(s) = session.take()
+                    {
+                        teardown(s);
                     }
                 }
                 Cmd::Removed(e, id) => {
@@ -533,18 +529,16 @@ mod win {
                         let _ = port.RemoveMessageReceived(token);
                         let _ = port.Close();
                     }
-                    if settle(s) {
-                        if let Some(s) = session.take() {
-                            teardown(s);
-                        }
+                    if settle(s)
+                        && let Some(s) = session.take()
+                    {
+                        teardown(s);
                     }
                 }
                 Cmd::Stopped(e) => {
                     // 世代が一致する間は OS 起点の停止。成功を装わず失敗を通知して片付ける。
                     if session.as_ref().is_some_and(|s| s.epoch == e) {
-                        with_router(|r| {
-                            r.emit(e, MidiEvent::Failed(DeviceError::Internal("midi watcher")))
-                        });
+                        with_router(|r| r.emit(e, MidiEvent::Failed(MidiError::Internal)));
                         if let Some(s) = session.take() {
                             teardown(s);
                         }
@@ -555,10 +549,10 @@ mod win {
                         continue;
                     };
                     s.enumerated = true;
-                    if settle(s) {
-                        if let Some(s) = session.take() {
-                            teardown(s);
-                        }
+                    if settle(s)
+                        && let Some(s) = session.take()
+                    {
+                        teardown(s);
                     }
                 }
             }
@@ -599,7 +593,7 @@ mod tests {
         ));
         assert!(matches!(
             start_event(0, 2),
-            MidiEvent::Failed(DeviceError::Internal("midi open"))
+            MidiEvent::Failed(MidiError::Internal)
         ));
         assert!(matches!(
             start_event(1, 1),

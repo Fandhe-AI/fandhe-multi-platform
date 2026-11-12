@@ -1,17 +1,17 @@
 //! Android 向け MIDI 入力実装（Issue #1400、親 #1137）。`device/midi.rs::platform_midi` の
 //! Android 経路から呼ばれ、`MidiManager` が見せる出力ポートの受信バイト列を
-//! `fandhe_device::midi::MidiParser` でノートへ組み立てて sink へ流す。Java 側は `MidiHelper`。
+//! `crate::contract::MidiParser` でノートへ組み立てて sink へ流す。Java 側は `MidiHelper`。
 //!
 //! # 方式: push 型 + 世代（epoch）照合
 //!
 //! Rust が epoch（プロセス内で単調増加。リセットでも 0 へ戻さない）を採番して
-//! `MainActivity.midiStart(epoch)` へ渡し、Java は開始確定・入力数・受信バイト列を epoch 付きの
+//! `MidiHelper.start(activity, epoch)` へ渡し、Java は開始確定・入力数・受信バイト列を epoch 付きの
 //! native コールバックで返す。Rust は「epoch が現在値と一致し sink がある」ときだけ sink を呼ぶ。
 //! 停止後・Activity 再生成後に遅れて届いた通知は epoch 不一致で捨てる。
 //!
 //! # 結果コード（SSOT は Java 側 `MidiHelper.START_*`）
 //!
-//! `midiStart` の戻り値: 0 = 受け付けた（確定は非同期の `Started`）/ 1 = 非対応（`FEATURE_MIDI` なし）
+//! `MidiHelper.start` の戻り値: 0 = 受け付けた（確定は非同期の `Started`）/ 1 = 非対応（`FEATURE_MIDI` なし）
 //! / 2 = 失敗。未知の値は失敗。0 台の成功は `Started{sources: 0}` で、非対応・失敗とは別。
 //!
 //! # 並行性の集約（契約表 2・11）
@@ -26,7 +26,7 @@
 //! （`openBluetoothDevice` は範囲外）、抜き差し確定との時間差による入力数表示の一時的な食い違い。
 //! 演奏内容・デバイス名・例外メッセージはログへ出さない。
 //!
-//! no-op スタブは置かない: Java の native は Rust の `midiStart` を経た後でしか呼ばれず、
+//! no-op スタブは置かない: Java の native は Rust の `MidiHelper.start` を経た後でしか呼ばれず、
 //! feature `device` 無効ビルドではその経路に到達しない（pedometer / mic-record と同じ）。
 
 use std::collections::HashMap;
@@ -34,10 +34,10 @@ use std::sync::Arc;
 #[cfg(target_os = "android")]
 use std::sync::Mutex;
 
-use fandhe_device::midi::{MidiEvent, MidiInput, MidiParser, MidiSink};
-use fandhe_device::DeviceError;
+use crate::contract::{MidiEvent, MidiInput, MidiParser, MidiSink};
+use crate::error::MidiError;
 
-/// `midiStart` の結果コード（SSOT は Java 側 `MidiHelper.START_*`）。
+/// `MidiHelper.start` の結果コード（SSOT は Java 側 `MidiHelper.START_*`）。
 const START_OK: i32 = 0;
 const START_UNSUPPORTED: i32 = 1;
 
@@ -46,11 +46,11 @@ const START_UNSUPPORTED: i32 = 1;
 const MAX_DATA_LEN: usize = 4096;
 
 /// Java の開始コードを契約のエラーへ写像する。未知の値は失敗。
-fn decode_start(code: i32) -> Result<(), DeviceError> {
+fn decode_start(code: i32) -> Result<(), MidiError> {
     match code {
         START_OK => Ok(()),
-        START_UNSUPPORTED => Err(DeviceError::Unsupported("midi")),
-        _ => Err(DeviceError::Internal("midi start")),
+        START_UNSUPPORTED => Err(MidiError::Unsupported),
+        _ => Err(MidiError::Internal),
     }
 }
 
@@ -156,12 +156,12 @@ struct AndroidMidi;
 
 #[cfg(target_os = "android")]
 impl MidiInput for AndroidMidi {
-    fn start(&self, sink: MidiSink) -> Result<(), DeviceError> {
+    fn start(&self, sink: MidiSink) -> Result<(), MidiError> {
         let epoch = with_router(|r| r.begin(sink));
         // ROUTER を手放してから JNI を呼ぶ（Java → Rust の一方向を守る）。
         let result = match call_activity(Some(epoch)) {
             Some(code) => decode_start(code),
-            None => Err(DeviceError::Internal("midi start")),
+            None => Err(MidiError::Internal),
         };
         if result.is_err() {
             with_router(|r| r.fail(epoch));
@@ -176,53 +176,58 @@ impl MidiInput for AndroidMidi {
     }
 }
 
-/// `MainActivity.midiStart(long)`（`Some(epoch)`、戻り値は結果コード）または
-/// `midiStop()`（`None`）を JNI で呼ぶ。`None` の戻りは呼び出し失敗。
-/// `unsafe` 2 箇所は `android_pedometer.rs::call_activity` と同一の根拠。
+/// `MidiHelper.start(Activity, long)`（`Some(epoch)`、戻り値は結果コード）または
+/// `MidiHelper.stop(Activity)`（`None`）を JNI で呼ぶ。`None` の戻りは呼び出し失敗。
+/// `unsafe` は共通層 `fandhe_platform_android::with_activity_class` に閉じている。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_activity(epoch: Option<u64>) -> Option<i32> {
-    use super::android::JniCallFailed;
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<i32, JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        match epoch {
-            Some(e) => Ok(env
-                .call_method(
-                    &activity,
-                    jni::jni_str!("midiStart"),
-                    jni::jni_sig!((long) -> int),
-                    &[jni::objects::JValue::Long(e as jni::sys::jlong)],
-                )?
-                .i()?),
-            None => {
-                env.call_method(
-                    &activity,
-                    jni::jni_str!("midiStop"),
-                    jni::jni_sig!(() -> ()),
-                    &[],
-                )?;
-                Ok(0)
+    use fandhe_platform_android::{JniCallFailed, with_activity_class};
+    let app = fandhe_platform_android::android_app()?;
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.MidiHelper"),
+        |env, activity, class| -> Result<i32, JniCallFailed> {
+            let r = (|| match epoch {
+                Some(e) => Ok(env
+                    .call_static_method(
+                        class,
+                        jni::jni_str!("start"),
+                        jni::jni_sig!((android.app.Activity, long) -> int),
+                        &[
+                            jni::objects::JValue::Object(activity),
+                            jni::objects::JValue::Long(e as jni::sys::jlong),
+                        ],
+                    )?
+                    .i()?),
+                None => {
+                    env.call_static_method(
+                        class,
+                        jni::jni_str!("stop"),
+                        jni::jni_sig!((android.app.Activity) -> ()),
+                        &[jni::objects::JValue::Object(activity)],
+                    )?;
+                    Ok::<i32, jni::errors::Error>(0)
+                }
+            })();
+            if r.is_err() && env.exception_check() {
+                // 例外は自動クリアされない（jni 0.22）。後続 JNI に影響させない。
+                env.exception_clear();
             }
-        }
-    })
+            Ok(r?)
+        },
+    )
     .ok()
 }
 
 /// `MidiHelper.nativeOnMidiStarted`（Java 側）から呼ばれる JNI エクスポート。
 ///
 /// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` は JNI 命名規約上の固定
+/// この関数自体は `unsafe` 操作を含まない。`#[unsafe(no_mangle)]` は JNI 命名規約上の固定
 /// シンボル名で、本クレートは cdylib として 1 つの Android 実行単位にのみリンクされるため
 /// 他シンボルと衝突しない（既存の JNI エクスポートと同じ根拠）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_MidiHelper_nativeOnMidiStarted<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -237,7 +242,7 @@ extern "system" fn Java_com_fandhe_platform_MidiHelper_nativeOnMidiStarted<'call
 /// 固定シンボル名の根拠は `nativeOnMidiStarted` と同じ。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_MidiHelper_nativeOnMidiSources<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -253,7 +258,7 @@ extern "system" fn Java_com_fandhe_platform_MidiHelper_nativeOnMidiSources<'call
 /// 固定シンボル名の根拠は `nativeOnMidiStarted` と同じ。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_MidiHelper_nativeOnMidiData<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -281,7 +286,7 @@ extern "system" fn Java_com_fandhe_platform_MidiHelper_nativeOnMidiData<'caller>
 /// ポート抜去で、その入力ソースのパーサーを捨てる。固定シンボル名の根拠は `nativeOnMidiStarted` と同じ。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_MidiHelper_nativeOnMidiFlush<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -291,7 +296,7 @@ extern "system" fn Java_com_fandhe_platform_MidiHelper_nativeOnMidiFlush<'caller
     with_router(|r| r.flush(epoch as u64, key));
 }
 
-/// Android の `MidiInput` 実装を返す（`device/midi.rs` の dispatch から呼ばれる）。
+/// Android の `MidiInput` 実装を返す（`fandhe-cap-midi/src/driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn MidiInput> {
     Arc::new(AndroidMidi)
@@ -302,13 +307,13 @@ pub(crate) fn implementation() -> Arc<dyn MidiInput> {
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn MidiInput> {
-    Arc::new(fandhe_device::midi::UnsupportedMidiInput)
+    Arc::new(crate::contract::UnsupportedMidiInput)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::midi::NoteEvent;
+    use crate::contract::NoteEvent;
     use std::sync::Mutex;
 
     type Log = Arc<Mutex<Vec<String>>>;
@@ -419,13 +424,10 @@ mod tests {
     #[test]
     fn decode_start_maps_codes() {
         assert!(decode_start(0).is_ok());
-        assert!(matches!(
-            decode_start(1),
-            Err(DeviceError::Unsupported("midi"))
-        ));
-        assert!(matches!(decode_start(2), Err(DeviceError::Internal(_))));
-        assert!(matches!(decode_start(99), Err(DeviceError::Internal(_))));
-        assert!(matches!(decode_start(-1), Err(DeviceError::Internal(_))));
+        assert!(matches!(decode_start(1), Err(MidiError::Unsupported)));
+        assert!(matches!(decode_start(2), Err(MidiError::Internal)));
+        assert!(matches!(decode_start(99), Err(MidiError::Internal)));
+        assert!(matches!(decode_start(-1), Err(MidiError::Internal)));
     }
 
     #[test]

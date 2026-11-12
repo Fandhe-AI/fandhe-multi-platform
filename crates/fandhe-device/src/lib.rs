@@ -152,8 +152,6 @@ pub mod media_transcode;
 pub mod memory_pressure;
 /// Phase 11（端末機能の拡充ループ、親 #953、Issue #954）: マイク録音。
 pub mod mic_record;
-/// Phase 11（端末機能の拡充ループ、親 #1137、Issue #1398）: MIDI 入力（ノートオン / オフ）。
-pub mod midi;
 /// Phase 11（端末機能の拡充ループ、親 #89、Issue #289）: 固定の線形モデルの推論 1 回（Core ML 等）。
 pub mod ml_inference;
 pub mod motion;

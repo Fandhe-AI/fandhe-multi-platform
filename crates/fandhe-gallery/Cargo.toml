@@ -28,6 +28,7 @@ device = [
   "dep:fandhe-cap-http-get",
   "dep:fandhe-cap-local-fonts",
   "dep:fandhe-cap-media-transcode",
+  "dep:fandhe-cap-midi",
   "dep:fandhe-cap-multi-display",
   "dep:fandhe-cap-nfc-card-emulation",
   "dep:fandhe-cap-on-device-llm",
@@ -89,6 +90,7 @@ fandhe-cap-home-widget = { path = "../fandhe-cap-home-widget", optional = true }
 fandhe-cap-http-get = { path = "../fandhe-cap-http-get", optional = true }
 fandhe-cap-local-fonts = { path = "../fandhe-cap-local-fonts", optional = true }
 fandhe-cap-media-transcode = { path = "../fandhe-cap-media-transcode", optional = true }
+fandhe-cap-midi = { path = "../fandhe-cap-midi", optional = true }
 fandhe-cap-multi-display = { path = "../fandhe-cap-multi-display", optional = true }
 fandhe-cap-nfc-card-emulation = { path = "../fandhe-cap-nfc-card-emulation", optional = true }
 fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm", optional = true }

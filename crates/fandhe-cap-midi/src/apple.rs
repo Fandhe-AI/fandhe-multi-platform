@@ -5,7 +5,7 @@
 //!
 //! # 再描画（契約表 4）
 //!
-//! `.m` のコールバックが結果を sink へ渡した直後、iOS では `crate::ios::request_repaint` で
+//! `.m` のコールバックが結果を sink へ渡した直後、iOS では `fandhe_runtime::request_repaint` で
 //! 次フレームを起こす（入力が無いと egui が描画せず、一覧が止まって見えるため）。
 //!
 //! `.m` の受信スレッドが [`fandhe_rust_midi_ump`] / [`fandhe_rust_midi_sources`] を呼び、
@@ -15,8 +15,8 @@
 
 use std::sync::Arc;
 
-use fandhe_device::midi::{MidiInput, MidiSink};
-use fandhe_device::DeviceError;
+use crate::contract::{MidiInput, MidiSink};
+use crate::error::MidiError;
 
 /// 現在の OS 向け実装を返す。
 pub(crate) fn implementation() -> Arc<dyn MidiInput> {
@@ -26,7 +26,7 @@ pub(crate) fn implementation() -> Arc<dyn MidiInput> {
 struct AppleMidiInput;
 
 impl MidiInput for AppleMidiInput {
-    fn start(&self, sink: MidiSink) -> Result<(), DeviceError> {
+    fn start(&self, sink: MidiSink) -> Result<(), MidiError> {
         imp::start(sink)
     }
 
@@ -40,8 +40,8 @@ mod imp {
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use fandhe_device::midi::{notes_from_ump_words, MidiEvent, MidiSink};
-    use fandhe_device::DeviceError;
+    use crate::contract::{MidiEvent, MidiSink, notes_from_ump_words};
+    use crate::error::MidiError;
 
     /// 1 回のコールバックで受け付ける最大ワード数（異常値で巨大スライスを作らない）。
     const MAX_WORDS: u32 = 1 << 16;
@@ -75,10 +75,10 @@ mod imp {
         code: i32,
         sources: u32,
         failed: u32,
-    ) -> Result<(usize, usize), DeviceError> {
+    ) -> Result<(usize, usize), MidiError> {
         match code {
             0 => Ok((sources as usize, failed as usize)),
-            _ => Err(DeviceError::Internal("midi start")),
+            _ => Err(MidiError::Internal),
         }
     }
 
@@ -95,7 +95,7 @@ mod imp {
     }
 
     #[allow(unsafe_code)]
-    pub(super) fn start(sink: MidiSink) -> Result<(), DeviceError> {
+    pub(super) fn start(sink: MidiSink) -> Result<(), MidiError> {
         let epoch = EPOCH.fetch_add(1, Ordering::SeqCst) + 1;
         *lock_sink() = Some(Sub {
             epoch,
@@ -157,7 +157,7 @@ mod imp {
 
     /// `.m` の受信ブロックから、コールバック 1 回につき 1 回呼ばれる。
     #[allow(unsafe_code)]
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     extern "C" fn fandhe_rust_midi_ump(words: *const u32, count: u32, epoch: u64) {
         if words.is_null() || count == 0 || count > MAX_WORDS {
             return;
@@ -175,7 +175,7 @@ mod imp {
         // ロックの外で呼ぶ。受け手なしなら（差し替わっていない限り）SINK を外すだけ。
         let alive = sink(MidiEvent::Notes(notes));
         #[cfg(target_os = "ios")]
-        crate::ios::request_repaint();
+        fandhe_runtime::request_repaint();
         if !alive {
             let mut g = lock_sink();
             if g.as_ref().is_some_and(|cur| Arc::ptr_eq(&cur.sink, &sink)) {
@@ -186,7 +186,7 @@ mod imp {
 
     /// `.m` の SetupChanged 通知から呼ばれる。開始中は `start` が `Started` の後に反映する。
     #[allow(unsafe_code)]
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     extern "C" fn fandhe_rust_midi_sources(count: u32, failed: u32, epoch: u64) {
         let sink = {
             let mut g = lock_sink();
@@ -204,7 +204,7 @@ mod imp {
             failed: failed as usize,
         });
         #[cfg(target_os = "ios")]
-        crate::ios::request_repaint();
+        fandhe_runtime::request_repaint();
     }
 
     #[cfg(test)]
@@ -276,7 +276,7 @@ mod imp {
             for c in [1, 2, -1, 99] {
                 assert!(matches!(
                     result_from_code(c, 5, 0),
-                    Err(DeviceError::Internal("midi start"))
+                    Err(MidiError::Internal)
                 ));
             }
         }

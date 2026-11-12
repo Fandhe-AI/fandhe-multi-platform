@@ -2,7 +2,7 @@
 //!
 //! `fandhe_core::screens::midi_show`（端末依存ゼロ）の画面を [`super::mount::mount_with_effect`] の
 //! effect として駆動する。`take_command` で要求を観測し、Web MIDI API（`navigator.requestMIDIAccess`）
-//! の接続中の入力へ `onmidimessage` を付けて、届いたバイト列を `fandhe_device::midi::MidiParser` で
+//! の接続中の入力へ `onmidimessage` を付けて、届いたバイト列を `fandhe_cap_midi::MidiParser` で
 //! ノートオン / オフにし、`apply_update` で書き戻す。`fandhe-device` の `MidiInput` trait は通らない。
 //! `fandhe-egui-proxy` の wasm canvas 経路は対象外（従来どおり `Unsupported`）。
 //!
@@ -48,8 +48,8 @@
 //!
 //! ponytail: 1 件ごとに全再描画する。バーストで重ければ `requestAnimationFrame` でまとめる。
 
+use fandhe_cap_midi::{MidiParser, NoteEvent};
 use fandhe_core::screens::midi_show::{MidiFailure, MidiNoteRow};
-use fandhe_device::midi::{MidiParser, NoteEvent};
 
 /// 開始失敗の固定文言（`fandhe-egui-proxy` のドライバと同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -127,11 +127,11 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_midi::MidiParser;
     use fandhe_core::screens::midi_show::{
         apply_update, mark_command_taken, stop, take_command, MidiCommand, MidiFailure,
         MidiNoteRow, MidiPhase, MidiShowState, MidiUpdate, MAX_SHOWN_EVENTS,
     };
-    use fandhe_device::midi::MidiParser;
     use js_sys::{Array, Function, Object, Promise, Reflect, Uint8Array};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::{spawn_local, JsFuture};

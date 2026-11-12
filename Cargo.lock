@@ -1215,6 +1215,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-midi"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-multi-display"
 version = "0.2.0"
 dependencies = [
@@ -1303,6 +1318,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_kittest",
+ "fandhe-cap-midi",
  "fandhe-cap-system-tray",
  "fandhe-core",
  "fandhe-device",
@@ -1352,6 +1368,7 @@ dependencies = [
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",
  "fandhe-cap-media-transcode",
+ "fandhe-cap-midi",
  "fandhe-cap-multi-display",
  "fandhe-cap-nfc-card-emulation",
  "fandhe-cap-on-device-llm",
@@ -1457,6 +1474,7 @@ dependencies = [
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",
  "fandhe-cap-media-transcode",
+ "fandhe-cap-midi",
  "fandhe-cap-multi-display",
  "fandhe-cap-on-device-llm",
  "fandhe-cap-share-receive",
