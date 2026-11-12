@@ -356,6 +356,10 @@ pub fn passkey_signin_effect(
     drive_sync(state, sender, &crate::contract::UnsupportedPasskey);
 }
 
+/// 画面を経ない待ち合わせ（プロセス static）を触るテストと `frame` を直列化する。
+#[cfg(test)]
+pub(crate) static WAITERS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[cfg(test)]
 mod tests {
     /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
@@ -433,7 +437,9 @@ mod tests {
             owner: &'static SlotOwner,
             begin: fn(u64, PasskeyOp) -> Result<(), PasskeySigninError>,
         ) {
-            let _g = WAITERS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let _g = crate::driver::WAITERS_TEST_LOCK
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             let (tx, rx) = std::sync::mpsc::channel();
             let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
             drive_callback(s, &sender, slot, owner, begin);
@@ -441,9 +447,6 @@ mod tests {
                 apply(s);
             }
         }
-
-        /// 画面を経ない待ち合わせ（プロセス static）を触るテストと `frame` を直列化する。
-        static WAITERS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
         static CALLS: AtomicUsize = AtomicUsize::new(0);
         fn ok_begin(_id: u64, _op: PasskeyOp) -> Result<(), PasskeySigninError> {
@@ -519,7 +522,9 @@ mod tests {
 
         #[test]
         fn external_wait_is_isolated_and_second_run_does_not_drop_first() {
-            let _g = WAITERS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let _g = crate::driver::WAITERS_TEST_LOCK
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             bridge::reset();
             static SLOT: RequestSlot<bridge::Outcome> = RequestSlot::new();
             static OWNER: SlotOwner = SlotOwner::new();

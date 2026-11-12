@@ -549,4 +549,18 @@ mod bridge_tests {
         assert_eq!(s.phase, BadgePhase::Idle);
         assert!(s.error.contains(LOST_MESSAGE));
     }
+
+    #[test]
+    fn interrupted_result_wakes_external_waiter_with_internal() {
+        let _g = BRIDGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let (id, rx) = bridge::begin_external().expect("空き");
+        // 許可ダイアログ待ちの間に Activity が破棄され、Java が中断(4)を届ける。
+        let (value, result) = crate::android::decode(5, 4);
+        assert!(bridge::deliver(id, value, result));
+        assert_eq!(rx.recv(), Ok(Err(AppBadgeError::Internal)));
+        // 二重に届いても（Java は first-wins だが）待ちは既に外れていて何も起きない。
+        assert!(!bridge::deliver(id, 5, Ok(BadgeOutcome::Submitted)));
+        bridge::reset();
+    }
 }

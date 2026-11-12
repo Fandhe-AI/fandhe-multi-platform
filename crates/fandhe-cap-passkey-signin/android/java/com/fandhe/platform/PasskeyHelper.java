@@ -53,7 +53,7 @@ import java.security.SecureRandom;
 // （クラス名の文字列化は R8 で壊れるため使わない）。Rust 側の写像表は `outcome_from_dom_error`（SSOT）。
 //
 // ライフサイクル: Activity は WeakReference で持つ。onPause / onStop では取り消さない（Credential Manager の UI が
-// 自身を pause させる）。onDestroy で CancellationSignal を取り消し、追跡を外して結果は送らない。再生成後の新
+// 自身を pause させる）。onDestroy で CancellationSignal を取り消し、追跡を外して保留中の要求は KIND_INTERRUPTED で確定する。再生成後の新
 // インスタンスは NONE から始まり、Rust 側 reset_pending_tracking() と対で旧要求を捨てる。OS の UI を出す直前に
 // 要求の世代と Activity の状態（RESUMED・isFinishing・isDestroyed）を見直す。
 // 守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止。守らない範囲: プロセス死をまたぐ結果・
@@ -66,6 +66,8 @@ final class PasskeyHelper {
     static final int KIND_DOM_ERROR = 2;
     static final int KIND_UNSUPPORTED = 3;
     static final int KIND_FAILED = 4;
+    // OS の応答前に Activity が破棄された（待っている呼び出しを残さない）。Rust 側は Internal へ写す。
+    static final int KIND_INTERRUPTED = 5;
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -258,13 +260,17 @@ final class PasskeyHelper {
         nativeOnPasskeyResult(id, kind, payload);
     }
 
-    // Activity 破棄。OS の UI を取り消し、結果は送らず追跡を外す（Rust 側が slot を捨てる）。
+    // Activity 破棄。OS の UI を取り消し、追跡を外す。保留中の要求があれば KIND_INTERRUPTED で確定する
+    // （待っている呼び出しを残さない）。`take` は first-wins のため、結果を届け済みの要求には二重に届けない。
     private synchronized void onDestroy() {
         destroyed = true;
-        request.take();
+        long id = request.take();
         if (signal != null) {
             signal.cancel();
             signal = null;
+        }
+        if (id != RequestTracker.NONE) {
+            nativeOnPasskeyResult(id, KIND_INTERRUPTED, null);
         }
     }
 }

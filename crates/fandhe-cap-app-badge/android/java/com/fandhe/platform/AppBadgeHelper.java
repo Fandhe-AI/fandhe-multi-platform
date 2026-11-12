@@ -21,10 +21,10 @@ import androidx.lifecycle.Lifecycle;
 // Android にバッジ専用 API は無いため、`setNumber(n)` を付けた無音の通知を固定 tag/ID で 1 件出す。
 // 0 は許可を問わず `cancel` で消す。API 26 未満は OS がドットを出さないので UNSUPPORTED。
 //
-// ライフサイクル: `onDestroy` 連携は持たない。`request` と `pendingValue` はインスタンス
-// フィールドなので、再生成後の新インスタンスは NONE から始まり旧ダイアログの結果を拾わない。
-// 旧インスタンスの Runnable は入口の破棄判定で FAILED を返し、その結果も Rust 側の
-// `reset_pending_tracking()` と id 照合で捨てられる。
+// ライフサイクル: `detach`（`Activity.onDestroy`）で許可ダイアログ待ちの要求を RESULT_INTERRUPTED で確定する。
+// `request` と `pendingValue` はインスタンスフィールドなので、再生成後の新インスタンスは NONE から始まり
+// 旧ダイアログの結果を拾わない。旧インスタンスの Runnable は入口の破棄判定で FAILED を返し、その結果も
+// Rust 側の `reset_pending_tracking()` と id 照合で捨てられる。
 //
 // 結果コードの SSOT はここで、Rust 側 `android_app_badge.rs::decode` が同じ値で写像する。
 // 値・例外メッセージはログに出さない。全処理は UI スレッドで直列化する。
@@ -33,6 +33,8 @@ final class AppBadgeHelper {
     static final int RESULT_UNSUPPORTED = 1;
     static final int RESULT_PERMISSION_DENIED = 2;
     static final int RESULT_FAILED = 3;
+    // 許可ダイアログ待ちの間に Activity が破棄された。Rust 側は未知のコードとして Internal へ写す。
+    static final int RESULT_INTERRUPTED = 4;
 
     private static final String TAG = "fandhe_app_badge";
     private static final int NOTIFICATION_ID = 1;
@@ -55,8 +57,14 @@ final class AppBadgeHelper {
         HELPERS.put(activity, new AppBadgeHelper(activity));
     }
 
-    static synchronized void detach(android.app.Activity activity) {
-        HELPERS.remove(activity);
+    static void detach(android.app.Activity activity) {
+        AppBadgeHelper helper;
+        synchronized (AppBadgeHelper.class) {
+            helper = HELPERS.remove(activity);
+        }
+        if (helper != null) {
+            helper.onDestroy();
+        }
     }
 
     // JNI スレッドから呼ばれる入口。helper が無い（想定外の Activity）ときは失敗で確定し、結果が来ないまま待たせない。
@@ -128,6 +136,15 @@ final class AppBadgeHelper {
             return;
         }
         post(id, value);
+    }
+
+    // `detach` から UI スレッド（`Activity.onDestroy`）で呼ぶ。許可ダイアログ待ちの要求があれば中断で確定する
+    // （待ち続ける呼び出しを残さない）。`take` は first-wins のため、結果を届け済みの要求には二重に届けない。
+    private void onDestroy() {
+        long id = request.take();
+        if (id != RequestTracker.NONE) {
+            finish(id, pendingValue, RESULT_INTERRUPTED);
+        }
     }
 
     private void onPermissionResult(boolean granted) {

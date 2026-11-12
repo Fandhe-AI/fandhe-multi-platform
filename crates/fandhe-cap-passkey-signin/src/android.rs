@@ -40,7 +40,7 @@ const KIND_RESPONSE: i32 = 0;
 const KIND_NOT_ALLOWED: i32 = 1;
 const KIND_DOM_ERROR: i32 = 2;
 const KIND_UNSUPPORTED: i32 = 3;
-// KIND_FAILED（4）と未知の値は、写像の既定（失敗）に入るため定数にしない。
+// KIND_FAILED（4）・KIND_INTERRUPTED（5、応答前の Activity 破棄）と未知の値は、写像の既定（Internal）に入るため定数にしない。
 
 /// 応答 JSON・DOM 名の UTF-16 単位数の上限。超えたら読まずに拒否する。
 #[cfg(any(target_os = "android", test))]
@@ -584,6 +584,28 @@ mod tests {
         let json = response(&p, UP_UV, true, true);
         assert!(decode_reply(&wrong, KIND_RESPONSE, Some(&json)).is_err());
         assert!(decode_reply(&p, KIND_RESPONSE, None).is_err());
+    }
+
+    #[test]
+    fn interrupted_kind_wakes_external_waiter_with_internal() {
+        let _g = crate::driver::WAITERS_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        crate::driver::bridge::reset();
+        let p = pending(PasskeyOp::SignIn);
+        let (id, rx) = crate::driver::bridge::begin_external().expect("空き");
+        // 応答前に Activity が破棄され、Java が中断(5)を届ける。
+        assert!(crate::driver::bridge::deliver(
+            id,
+            decode_reply(&p, 5, None)
+        ));
+        assert_eq!(rx.recv(), Ok(Err(PasskeySigninError::Internal)));
+        // 二重に届いても待ちは既に外れていて何も起きない。
+        assert!(!crate::driver::bridge::deliver(
+            id,
+            decode_reply(&p, 5, None)
+        ));
+        crate::driver::bridge::reset();
     }
 
     #[test]

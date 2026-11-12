@@ -23,12 +23,13 @@ use crate::error::AppBadgeError;
 const RESULT_SUBMITTED: i32 = 0;
 const RESULT_UNSUPPORTED: i32 = 1;
 const RESULT_PERMISSION_DENIED: i32 = 2;
+// 3（失敗）と 4（許可待ちの間の Activity 破棄 = 中断）は既定の `Internal` へ写す。
 
 const INTERNAL: AppBadgeError = AppBadgeError::Internal;
 
 /// Java の結果コードと値を `(値, 契約の結果)` へ写像する。未知のコードと負値は `Internal`。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-fn decode(value: i32, code: i32) -> (u32, Result<BadgeOutcome, AppBadgeError>) {
+pub(crate) fn decode(value: i32, code: i32) -> (u32, Result<BadgeOutcome, AppBadgeError>) {
     let Ok(v) = u32::try_from(value) else {
         return (0, Err(INTERNAL));
     };
@@ -132,6 +133,7 @@ mod tests {
             (3, Err(AppBadgeError::PermissionDenied))
         ));
         assert!(matches!(decode(3, 3), (3, Err(AppBadgeError::Internal))));
+        assert!(matches!(decode(3, 4), (3, Err(AppBadgeError::Internal))));
         assert!(matches!(decode(3, 99), (3, Err(AppBadgeError::Internal))));
         assert!(matches!(decode(-1, 0), (0, Err(AppBadgeError::Internal))));
     }
