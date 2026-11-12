@@ -195,7 +195,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "screen_capture" => fandhe_core::screens::screen_capture::current_screen,
-    fandhe_egui_proxy::device::screen_capture::screen_capture_effect,
+    fandhe_cap_screen_capture::screen_capture_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "tsv_import" => fandhe_core::screens::tsv_import::current_screen,

@@ -1,8 +1,8 @@
 //! Phase 11 の拡充ループ（親 #1135、Issue #1335）: 画面の録画・キャプチャの effect ドライバ。
 //! `fandhe_core::screens::screen_capture`（端末依存ゼロ）の要求を観測し、OS の録画エンジン
-//! （`fandhe_device::screen_capture::ScreenCapturer`）へ依頼して、結果を状態機械へ書き戻す
+//! （`crate::contract::ScreenCapturer`）へ依頼して、結果を状態機械へ書き戻す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる、`app::EffectFn` 参照）。
-//! 契約（三値・守る範囲）の SSOT は `fandhe_device::screen_capture` のモジュール doc。
+//! 契約（三値・守る範囲）の SSOT は `fandhe_cap_screen_capture` のモジュール doc。
 //!
 //! # 4 OS は pull 型、それ以外は同期
 //!
@@ -33,9 +33,18 @@ use std::time::Instant;
     target_os = "windows",
     target_os = "android"
 ))]
+use crate::contract::ScreenCapturer;
+use crate::error::ScreenCaptureError;
+use fandhe_core::screens::screen_capture::{CaptureOutcome, CaptureSummary};
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "windows",
+    target_os = "android"
+))]
 use fandhe_core::screens::screen_capture::{
-    finish_capture, mark_recording, mark_stopping, take_start_request, take_stop_request, tick,
-    CapturePhase, ScreenCaptureState, MAX_CAPTURE_MS,
+    CapturePhase, MAX_CAPTURE_MS, ScreenCaptureState, finish_capture, mark_recording,
+    mark_stopping, take_start_request, take_stop_request, tick,
 };
 #[cfg(not(any(
     target_os = "macos",
@@ -44,21 +53,12 @@ use fandhe_core::screens::screen_capture::{
     target_os = "android"
 )))]
 use fandhe_core::screens::screen_capture::{
-    finish_capture, mark_recording, take_start_request, ScreenCaptureState,
+    ScreenCaptureState, finish_capture, mark_recording, take_start_request,
 };
-use fandhe_core::screens::screen_capture::{CaptureOutcome, CaptureSummary};
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "android"
-))]
-use fandhe_device::screen_capture::ScreenCapturer;
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
-/// ネイティブ → [`DeviceError`] の写像（SSOT。`.m` / 将来の Java / Web も同じ表）。
+/// ネイティブ → [`ScreenCaptureError`] の写像（SSOT。`.m` / 将来の Java / Web も同じ表）。
 ///
 /// | code | 意味 | 写像 |
 /// |---|---|---|
@@ -69,46 +69,46 @@ use crate::app::CompletionSender;
 /// | 6 | API が無い（macOS 15 未満・iOS の `isAvailable == false`） | `Unsupported` |
 /// | 他 | 内部エラー | `Internal("screen_capture")` |
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub(crate) fn error_from_code(code: i32) -> DeviceError {
+pub(crate) fn error_from_code(code: i32) -> ScreenCaptureError {
     match code {
-        1 => DeviceError::PermissionDenied("screen_capture"),
-        3 => DeviceError::Internal("screen_capture busy"),
-        4 => DeviceError::Cancelled("screen_capture"),
-        5 => DeviceError::Internal("screen_capture interrupted"),
-        6 => DeviceError::Unsupported("screen_capture"),
-        _ => DeviceError::Internal("screen_capture"),
+        1 => ScreenCaptureError::PermissionDenied,
+        3 => ScreenCaptureError::Internal("screen_capture"),
+        4 => ScreenCaptureError::Cancelled,
+        5 => ScreenCaptureError::Internal("screen_capture"),
+        6 => ScreenCaptureError::Unsupported,
+        _ => ScreenCaptureError::Internal("screen_capture"),
     }
 }
 
-/// Windows の `HRESULT` → [`DeviceError`] の写像。`E_ACCESSDENIED` だけ権限拒否、
+/// Windows の `HRESULT` → [`ScreenCaptureError`] の写像。`E_ACCESSDENIED` だけ権限拒否、
 /// それ以外は `stage` の固定ラベルで `Internal` に畳む（生の HRESULT は出さない、
 /// security.md A09）。Windows 限定モジュールから呼ばれるが、ホストの `cargo test` で
 /// 固定するため `cfg` は付けない（`mic_record::error_from_hresult` と同じ方針）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub(crate) fn error_from_hresult(code: i32, stage: &'static str) -> DeviceError {
+pub(crate) fn error_from_hresult(code: i32, stage: &'static str) -> ScreenCaptureError {
     const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
     if code == E_ACCESSDENIED {
-        DeviceError::PermissionDenied("screen_capture")
+        ScreenCaptureError::PermissionDenied
     } else {
-        DeviceError::Internal(stage)
+        ScreenCaptureError::Internal(stage)
     }
 }
 
 /// 録画対象のサイズ → H.264 エンコーダへ渡す偶数サイズ。0 以下は `Internal`、
 /// 奇数は 1 つ切り下げる（4:2:0 は幅・高さが偶数でないと受け付けない）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub(crate) fn even_capture_size(width: i32, height: i32) -> Result<(u32, u32), DeviceError> {
+pub(crate) fn even_capture_size(width: i32, height: i32) -> Result<(u32, u32), ScreenCaptureError> {
     let (w, h) = (width & !1, height & !1);
     if w <= 0 || h <= 0 {
-        return Err(DeviceError::Internal("screen_capture size"));
+        return Err(ScreenCaptureError::Internal("screen_capture"));
     }
     Ok((w as u32, h as u32))
 }
 
 /// OS からの結果 → 状態機械へ渡す形。キャンセルと非対応は失敗文言に畳まない
-/// （`DeviceError` の内部構造は画面へ出さない、security.md A09）。
+/// （`ScreenCaptureError` の内部構造は画面へ出さない、security.md A09）。
 fn to_outcome(
-    result: Result<fandhe_device::screen_capture::CaptureResult, DeviceError>,
+    result: Result<crate::contract::CaptureResult, ScreenCaptureError>,
 ) -> Result<CaptureOutcome, String> {
     match result {
         Ok(r) => Ok(CaptureOutcome::Captured(CaptureSummary {
@@ -116,8 +116,8 @@ fn to_outcome(
             mime: r.mime,
             duration_ms: r.duration_ms,
         })),
-        Err(DeviceError::Cancelled(_)) => Ok(CaptureOutcome::Cancelled),
-        Err(DeviceError::Unsupported(_)) => Ok(CaptureOutcome::Unsupported),
+        Err(ScreenCaptureError::Cancelled) => Ok(CaptureOutcome::Cancelled),
+        Err(ScreenCaptureError::Unsupported) => Ok(CaptureOutcome::Unsupported),
         Err(other) => Err(other.to_string()),
     }
 }
@@ -133,7 +133,7 @@ fn to_outcome(
 pub(crate) mod bridge {
     use fandhe_core::screens::screen_capture::CaptureOutcome;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) type Outcome = Result<CaptureOutcome, String>;
 
@@ -165,13 +165,13 @@ pub(crate) mod bridge {
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub(crate) fn deliver(
         request_id: u64,
-        result: Result<fandhe_device::screen_capture::CaptureResult, fandhe_device::DeviceError>,
+        result: Result<crate::contract::CaptureResult, crate::error::ScreenCaptureError>,
     ) -> bool {
         SLOT.deliver(request_id, super::to_outcome(result))
     }
 
     /// 開始失敗を即確定する（スタブの `Unsupported` もこの経路）。
-    pub(crate) fn deliver_error(request_id: u64, e: fandhe_device::DeviceError) -> bool {
+    pub(crate) fn deliver_error(request_id: u64, e: crate::error::ScreenCaptureError) -> bool {
         deliver(request_id, Err(e))
     }
 
@@ -193,15 +193,15 @@ pub(crate) mod bridge {
 fn capturer() -> &'static dyn ScreenCapturer {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
-        super::apple_screen_capture::capturer()
+        crate::apple::capturer()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_screen_capture::capturer()
+        crate::android::capturer()
     }
     #[cfg(target_os = "windows")]
     {
-        super::windows_screen_capture::capturer()
+        crate::windows::capturer()
     }
 }
 
@@ -244,7 +244,7 @@ fn drive_callback(state: &ScreenCaptureState, sender: &CompletionSender<ScreenCa
 
     // 経過秒数は画面側の時刻で進める。同意ダイアログ中（未開始）は進めない。
     let started = bridge::current_request_id().is_some_and(bridge::has_started);
-    let dt_ms = super::mic_record::measure_dt_ms(
+    let dt_ms = fandhe_runtime::tick::measure_dt_ms(
         &LAST_TICK,
         state.phase == CapturePhase::Recording && started,
     );
@@ -256,7 +256,7 @@ fn drive_callback(state: &ScreenCaptureState, sender: &CompletionSender<ScreenCa
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -282,7 +282,7 @@ fn drive_callback(state: &ScreenCaptureState, sender: &CompletionSender<ScreenCa
 fn drive(
     state: &ScreenCaptureState,
     sender: &CompletionSender<ScreenCaptureState>,
-    capturer: &dyn fandhe_device::screen_capture::ScreenCapturer,
+    capturer: &dyn crate::contract::ScreenCapturer,
 ) {
     let Some(request) = take_start_request(state) else {
         return;
@@ -293,7 +293,7 @@ fn drive(
         .start(0, max)
         .and_then(|()| capturer.stop(0))
         .err()
-        .unwrap_or(DeviceError::Internal("screen_capture sync"));
+        .unwrap_or(ScreenCaptureError::Internal("screen_capture"));
     let result = to_outcome(Err(err));
     let generation = request.generation;
     let _ = sender.send(Box::new(move |s: &mut ScreenCaptureState| {
@@ -326,33 +326,29 @@ pub fn screen_capture_effect(
     state: &ScreenCaptureState,
     sender: &CompletionSender<ScreenCaptureState>,
 ) {
-    drive(
-        state,
-        sender,
-        &fandhe_device::screen_capture::UnsupportedScreenCapturer,
-    );
+    drive(state, sender, &crate::contract::UnsupportedScreenCapturer);
 }
 
 /// `android_main` から呼ぶ（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::reset();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::screen_capture::build_capture_result;
+    use crate::contract::build_capture_result;
 
     #[test]
     fn hresult_access_denied_is_permission_denied() {
         assert!(matches!(
             error_from_hresult(0x8007_0005_u32 as i32, "x"),
-            DeviceError::PermissionDenied("screen_capture")
+            ScreenCaptureError::PermissionDenied
         ));
         assert!(matches!(
             error_from_hresult(0x8000_4005_u32 as i32, "stage"),
-            DeviceError::Internal("stage")
+            ScreenCaptureError::Internal("stage")
         ));
     }
 
@@ -368,45 +364,42 @@ mod tests {
     fn error_from_code_maps_table() {
         assert!(matches!(
             error_from_code(1),
-            DeviceError::PermissionDenied("screen_capture")
+            ScreenCaptureError::PermissionDenied
         ));
         assert!(matches!(
             error_from_code(3),
-            DeviceError::Internal("screen_capture busy")
+            ScreenCaptureError::Internal(_)
         ));
-        assert!(matches!(
-            error_from_code(4),
-            DeviceError::Cancelled("screen_capture")
-        ));
+        assert!(matches!(error_from_code(4), ScreenCaptureError::Cancelled));
         assert!(matches!(
             error_from_code(5),
-            DeviceError::Internal("screen_capture interrupted")
+            ScreenCaptureError::Internal(_)
         ));
         assert!(matches!(
             error_from_code(6),
-            DeviceError::Unsupported("screen_capture")
+            ScreenCaptureError::Unsupported
         ));
         assert!(matches!(
             error_from_code(2),
-            DeviceError::Internal("screen_capture")
+            ScreenCaptureError::Internal(_)
         ));
         assert!(matches!(
             error_from_code(999),
-            DeviceError::Internal("screen_capture")
+            ScreenCaptureError::Internal(_)
         ));
     }
 
     #[test]
     fn to_outcome_separates_three_values() {
         assert_eq!(
-            to_outcome(Err(DeviceError::Cancelled("screen_capture"))),
+            to_outcome(Err(ScreenCaptureError::Cancelled)),
             Ok(CaptureOutcome::Cancelled)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Unsupported("screen_capture"))),
+            to_outcome(Err(ScreenCaptureError::Unsupported)),
             Ok(CaptureOutcome::Unsupported)
         );
-        assert!(to_outcome(Err(DeviceError::PermissionDenied("screen_capture"))).is_err());
+        assert!(to_outcome(Err(ScreenCaptureError::PermissionDenied)).is_err());
         // 0 バイトは成功にならない。
         assert!(to_outcome(build_capture_result(0, "video/mp4".into(), 1_000)).is_err());
         assert!(matches!(
@@ -448,18 +441,13 @@ mod tests {
     )))]
     #[test]
     fn drive_reports_unsupported() {
-        use fandhe_core::screens::screen_capture::{start_capture, CapturePhase};
+        use fandhe_core::screens::screen_capture::{CapturePhase, start_capture};
 
         let mut state = ScreenCaptureState::default();
         start_capture(&mut state);
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = crate::app::egui_sender(tx, ctx);
-        drive(
-            &state,
-            &sender,
-            &fandhe_device::screen_capture::UnsupportedScreenCapturer,
-        );
+        let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
+        drive(&state, &sender, &crate::contract::UnsupportedScreenCapturer);
         rx.try_recv().expect("mark_recording")(&mut state);
         assert_eq!(state.phase, CapturePhase::Recording);
         rx.try_recv().expect("finish_capture")(&mut state);

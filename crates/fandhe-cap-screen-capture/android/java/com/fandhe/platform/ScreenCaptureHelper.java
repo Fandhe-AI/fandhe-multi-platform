@@ -13,9 +13,9 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 
-// 画面録画（Issue #1337）の Android 実装ヘルパー。MainActivity から生成・委譲される
-// （Rust の `device/android_screen_capture.rs` が `MainActivity.requestScreenCaptureStart` /
-// `requestScreenCaptureStop` を JNI で呼び、結果を `nativeOnScreenCaptureResult` で受ける）。
+// 画面録画（Issue #1337）の Android 実装ヘルパー。`ScreenCaptureLifecycle` が Activity ごとに生成する
+// （Rust の `fandhe-cap-screen-capture/src/android.rs` が static メソッド `start(Activity, long, int)` /
+// `stop(Activity, long)` を JNI で呼び、結果を `nativeOnScreenCaptureResult` で受ける）。
 // 録画の実体は `ScreenCaptureService`（フォアグラウンドサービス）で、本クラスは
 // 同意ダイアログの起動・結果の振り分け・ライフサイクル（onPause / onDestroy）を担う。
 //
@@ -58,26 +58,77 @@ final class ScreenCaptureHelper {
     private boolean dialogOpen;
     private int pendingMaxMs;
 
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity の
-    // フィールド初期化子から本クラスを生成してここで登録する。
-    ScreenCaptureHelper(ComponentActivity activity) {
+    // Activity ごとの helper。`ScreenCaptureLifecycle`（`FeatureLifecycleProvider`）が生成時に付け、
+    // 前面離脱時に `paused`、破棄時に `detach` を呼ぶ。
+    private static final java.util.Map<Activity, ScreenCaptureHelper> HELPERS =
+            new java.util.WeakHashMap<>();
+
+    static synchronized void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new ScreenCaptureHelper(activity));
+    }
+
+    private static synchronized ScreenCaptureHelper of(Activity activity) {
+        return HELPERS.get(activity);
+    }
+
+    static void detach(Activity activity) {
+        ScreenCaptureHelper helper;
+        synchronized (ScreenCaptureHelper.class) {
+            helper = HELPERS.remove(activity);
+        }
+        if (helper != null) {
+            // 従来の `MainActivity.onDestroy` と同じく UI スレッド（`Activity.onDestroy` の中）で呼ばれる。
+            helper.onDestroy();
+        }
+    }
+
+    // `Activity.onPause()` の中（UI スレッド）で呼ばれる。
+    static void paused(Activity activity) {
+        ScreenCaptureHelper helper = of(activity);
+        if (helper != null) {
+            helper.onPause();
+        }
+    }
+
+    // JNI スレッドから呼ばれる入口。helper が無いときは失敗で確定する（結果が来ないまま待たせない）。
+    static void start(Activity activity, long id, int maxMs) {
+        ScreenCaptureHelper helper = of(activity);
+        if (helper == null) {
+            report(id, RESULT_FAILED, 0, 0);
+            return;
+        }
+        helper.start(id, maxMs);
+    }
+
+    static void stop(Activity activity, long id) {
+        ScreenCaptureHelper helper = of(activity);
+        if (helper == null) {
+            report(id, RESULT_FAILED, 0, 0);
+            return;
+        }
+        helper.stop(id);
+    }
+
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`attach` が `Activity.onCreate` の中で
+    // 本クラスを生成してここで登録する。
+    private ScreenCaptureHelper(ComponentActivity activity) {
         this.activity = activity;
         this.consentLauncher = activity.getActivityResultRegistry().register("fandhe:ScreenCaptureHelper:1", activity,
                 new ActivityResultContracts.StartActivityForResult(), this::onConsent);
     }
 
-    // JNI スレッドから呼ばれる。
-    void start(long id, int maxMs) {
+    // JNI スレッドから呼ばれる（static 入口経由）。
+    private void start(long id, int maxMs) {
         activity.runOnUiThread(() -> doStart(id, maxMs));
     }
 
-    // JNI スレッドから呼ばれる。
-    void stop(long id) {
+    // JNI スレッドから呼ばれる（static 入口経由）。
+    private void stop(long id) {
         activity.runOnUiThread(() -> doStop(id));
     }
 
-    // MainActivity.onPause から UI スレッドで呼ぶ。同意ダイアログ待ち（consentId のみ）は残す。
-    void onPause() {
+    // `paused` から UI スレッドで呼ぶ。同意ダイアログ待ち（consentId のみ）は残す。
+    private void onPause() {
         long starting = STARTING.take();
         if (starting != RequestTracker.NONE) {
             report(starting, RESULT_INTERRUPTED, 0, 0);
@@ -90,8 +141,8 @@ final class ScreenCaptureHelper {
         }
     }
 
-    // MainActivity.onDestroy から UI スレッドで呼ぶ。
-    void onDestroy() {
+    // `detach` から UI スレッドで呼ぶ。
+    private void onDestroy() {
         if (consentId != RequestTracker.NONE) {
             long id = consentId;
             consentId = RequestTracker.NONE;

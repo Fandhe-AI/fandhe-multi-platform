@@ -1,8 +1,8 @@
-//! Windows 向け画面録画実装（Issue #26）。`device/screen_capture.rs` の dispatch から
+//! Windows 向け画面録画実装（Issue #26）。`fandhe-cap-screen-capture/src/driver.rs` の dispatch から
 //! 呼ばれ、`Windows.Graphics.Capture` で撮った画面を WinRT `MediaTranscoder` で
 //! H.264 / MP4 へ符号化し、[`ScreenCapturer`] 実装（[`WindowsScreenCapturer`]）として
 //! バイト数・mime・録画時間だけを `screen_capture::bridge` へ返す（映像は Rust へ読み込まない）。
-//! 契約（三値・守る範囲）の SSOT は `fandhe_device::screen_capture` のモジュール doc。
+//! 契約（三値・守る範囲）の SSOT は `fandhe_cap_screen_capture` のモジュール doc。
 //!
 //! # エンコード経路の選定
 //!
@@ -56,7 +56,6 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use windows::core::Interface;
 use windows::Foundation::{TimeSpan, TypedEventHandler};
 use windows::Graphics::Capture::{
     Direct3D11CaptureFrame, Direct3D11CaptureFramePool, GraphicsCaptureItem, GraphicsCapturePicker,
@@ -77,9 +76,9 @@ use windows::Storage::Streams::InMemoryRandomAccessStream;
 use windows::Win32::Foundation::{HMODULE, HWND};
 use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_HARDWARE;
 use windows::Win32::Graphics::Direct3D11::{
-    D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Multithread, ID3D11Texture2D,
     D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-    D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
+    D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11CreateDevice, ID3D11Device,
+    ID3D11DeviceContext, ID3D11Multithread, ID3D11Texture2D,
 };
 use windows::Win32::Graphics::Dxgi::{IDXGIDevice, IDXGISurface};
 use windows::Win32::System::WinRT::Direct3D11::{
@@ -87,14 +86,15 @@ use windows::Win32::System::WinRT::Direct3D11::{
     IDirect3DDxgiInterfaceAccess,
 };
 use windows::Win32::UI::Shell::IInitializeWithWindow;
+use windows::core::Interface;
 // `IAsyncOperation` 等は `windows::Foundation` へ再エクスポートされない（windows_biometric.rs 参照）。
 use windows_future::{AsyncActionWithProgressCompletedHandler, AsyncOperationCompletedHandler};
 use windows_future::{AsyncStatus, IAsyncOperation};
 
-use fandhe_device::screen_capture::{build_capture_result, CaptureResult, ScreenCapturer};
-use fandhe_device::DeviceError;
+use crate::contract::{CaptureResult, ScreenCapturer, build_capture_result};
+use crate::error::ScreenCaptureError;
 
-use super::screen_capture::{bridge, error_from_hresult, even_capture_size};
+use crate::driver::{bridge, error_from_hresult, even_capture_size};
 
 /// ワーカーがトランスコード完了を待つ猶予。超えたら `Cancel` して失敗にする。
 const FINISH_GRACE: Duration = Duration::from_secs(5);
@@ -137,7 +137,7 @@ fn lock_session() -> std::sync::MutexGuard<'static, Option<Session>> {
 }
 
 /// 自分の要求のときだけ [`SESSION`] を解除してから結果を配送する。
-fn finish(request_id: u64, result: Result<CaptureResult, DeviceError>) {
+fn finish(request_id: u64, result: Result<CaptureResult, ScreenCaptureError>) {
     {
         let mut guard = lock_session();
         if guard.as_ref().is_some_and(|s| s.request_id == request_id) {
@@ -147,21 +147,21 @@ fn finish(request_id: u64, result: Result<CaptureResult, DeviceError>) {
     bridge::deliver(request_id, result);
 }
 
-fn hr(e: &windows::core::Error, stage: &'static str) -> DeviceError {
+fn hr(e: &windows::core::Error, stage: &'static str) -> ScreenCaptureError {
     error_from_hresult(e.code().0, stage)
 }
 
 impl ScreenCapturer for WindowsScreenCapturer {
-    fn start(&self, request_id: u64, max_duration: Duration) -> Result<(), DeviceError> {
+    fn start(&self, request_id: u64, max_duration: Duration) -> Result<(), ScreenCaptureError> {
         if !GraphicsCaptureSession::IsSupported().unwrap_or(false) {
-            return Err(DeviceError::Unsupported("screen_capture"));
+            return Err(ScreenCaptureError::Unsupported);
         }
         let hwnd = fandhe_platform_windows::window()
-            .ok_or(DeviceError::Internal("screen_capture window"))?;
+            .ok_or(ScreenCaptureError::Internal("screen_capture"))?;
         {
             let mut guard = lock_session();
             if guard.is_some() {
-                return Err(DeviceError::Internal("screen_capture busy"));
+                return Err(ScreenCaptureError::Internal("screen_capture"));
             }
             *guard = Some(Session {
                 request_id,
@@ -181,7 +181,7 @@ impl ScreenCapturer for WindowsScreenCapturer {
         started
     }
 
-    fn stop(&self, request_id: u64) -> Result<(), DeviceError> {
+    fn stop(&self, request_id: u64) -> Result<(), ScreenCaptureError> {
         let mut guard = lock_session();
         if let Some(s) = guard.as_mut().filter(|s| s.request_id == request_id) {
             match &mut s.phase {
@@ -197,7 +197,7 @@ impl ScreenCapturer for WindowsScreenCapturer {
 }
 
 /// ピッカーを出して完了ハンドラを登録する。
-fn begin_pick(request_id: u64, max: Duration, hwnd: HWND) -> Result<(), DeviceError> {
+fn begin_pick(request_id: u64, max: Duration, hwnd: HWND) -> Result<(), ScreenCaptureError> {
     let picker = GraphicsCapturePicker::new().map_err(|e| hr(&e, "screen_capture picker"))?;
     init_picker_window(&picker, hwnd).map_err(|e| hr(&e, "screen_capture picker window"))?;
     let op = picker
@@ -229,7 +229,7 @@ fn begin_pick(request_id: u64, max: Duration, hwnd: HWND) -> Result<(), DeviceEr
 fn on_picked(
     request_id: u64,
     max: Duration,
-    item: Result<Option<GraphicsCaptureItem>, DeviceError>,
+    item: Result<Option<GraphicsCaptureItem>, ScreenCaptureError>,
 ) {
     let (tx, rx) = mpsc::channel::<()>();
     let item = {
@@ -255,7 +255,7 @@ fn on_picked(
                 drop(guard);
                 let err = match other {
                     Err(e) => e,
-                    Ok(_) => DeviceError::Cancelled("screen_capture"),
+                    Ok(_) => ScreenCaptureError::Cancelled,
                 };
                 bridge::deliver(request_id, Err(err));
                 return;
@@ -271,15 +271,15 @@ fn on_picked(
     if spawned.is_err() {
         finish(
             request_id,
-            Err(DeviceError::Internal("screen_capture spawn")),
+            Err(ScreenCaptureError::Internal("screen_capture")),
         );
     }
 }
 
 /// サンプル生成側（`SampleRequested`）で起きたエラーをワーカーへ渡す枠。最初の 1 件だけ残す。
-type Fault = Arc<Mutex<Option<DeviceError>>>;
+type Fault = Arc<Mutex<Option<ScreenCaptureError>>>;
 
-fn take_fault(fault: &Fault) -> Option<DeviceError> {
+fn take_fault(fault: &Fault) -> Option<ScreenCaptureError> {
     fault.lock().unwrap_or_else(|e| e.into_inner()).take()
 }
 
@@ -322,7 +322,7 @@ fn record(
     max: Duration,
     stop_rx: &Receiver<()>,
     stop_tx: Sender<()>,
-) -> Result<CaptureResult, DeviceError> {
+) -> Result<CaptureResult, ScreenCaptureError> {
     let size = item.Size().map_err(|e| hr(&e, "screen_capture item"))?;
     let (w, h) = even_capture_size(size.Width, size.Height)?;
     let (d3d, ctx, device) = create_devices().map_err(|e| hr(&e, "screen_capture d3d"))?;
@@ -402,18 +402,19 @@ fn record(
         match prep_rx.recv_timeout(Duration::from_millis(20)) {
             Ok(_) => break,
             Err(mpsc::RecvTimeoutError::Disconnected) => {
-                return Err(DeviceError::Internal("screen_capture prepare"));
+                return Err(ScreenCaptureError::Internal("screen_capture"));
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
         if stop_rx.try_recv().is_ok() {
             let _ = prep_op.Cancel();
-            return Err(take_fault(&fault)
-                .unwrap_or(DeviceError::Internal("screen_capture prepare interrupted")));
+            return Err(
+                take_fault(&fault).unwrap_or(ScreenCaptureError::Internal("screen_capture"))
+            );
         }
         if t0.elapsed() >= max {
             let _ = prep_op.Cancel();
-            return Err(DeviceError::Internal("screen_capture prepare timeout"));
+            return Err(ScreenCaptureError::Internal("screen_capture"));
         }
     }
     if let Some(e) = take_fault(&fault) {
@@ -423,7 +424,7 @@ fn record(
         .GetResults()
         .map_err(|e| hr(&e, "screen_capture prepare"))?;
     if !prepared.CanTranscode().unwrap_or(false) {
-        return Err(DeviceError::Internal("screen_capture transcode"));
+        return Err(ScreenCaptureError::Internal("screen_capture"));
     }
 
     let (done_tx, done_rx) = mpsc::channel::<AsyncStatus>();
@@ -454,10 +455,10 @@ fn record(
     }
     match done_rx.recv_timeout(FINISH_GRACE) {
         Ok(AsyncStatus::Completed) => {}
-        Ok(_) => return Err(DeviceError::Internal("screen_capture transcode")),
+        Ok(_) => return Err(ScreenCaptureError::Internal("screen_capture")),
         Err(_) => {
             let _ = action.Cancel();
-            return Err(DeviceError::Internal("screen_capture finish timeout"));
+            return Err(ScreenCaptureError::Internal("screen_capture"));
         }
     }
     // 最初の確認後に進行中だったサンプル生成が失敗していても成功にしない。
@@ -479,7 +480,7 @@ fn build_source(
     fault: &Fault,
     stop_tx: Sender<()>,
     (w, h): (u32, u32),
-) -> Result<MediaStreamSource, DeviceError> {
+) -> Result<MediaStreamSource, ScreenCaptureError> {
     let err = |e: windows::core::Error| hr(&e, "screen_capture source");
     let subtype = MediaEncodingSubtypes::Bgra8().map_err(err)?;
     let props = VideoEncodingProperties::CreateUncompressed(&subtype, w, h).map_err(err)?;

@@ -12,7 +12,7 @@
 //! - 成功: 明示停止・期限（10 秒）による自動停止・OS や利用者が OS 側 UI で止めた場合。
 //!   macOS は書き出し完了通知（`recordingOutputDidFinishRecording:`）を受けた場合のみ成功
 //!   （失敗通知・完了待ちタイムアウトはファイルサイズによらず失敗）。0 バイトは失敗（[`build_capture_result`]）
-//! - キャンセル: 同意 UI を閉じた・拒否した（`DeviceError::Cancelled`）。失敗として見せない
+//! - キャンセル: 同意 UI を閉じた・拒否した（`ScreenCaptureError::Cancelled`）。失敗として見せない
 //! - 失敗: 権限拒否（`PermissionDenied`）、0 バイト、エンコード失敗、ライフサイクル破棄
 //!   （`Internal("screen_capture interrupted")`）、API が無い（`Unsupported`）
 //!
@@ -31,7 +31,7 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::ScreenCaptureError;
 
 /// 録画結果。本番経路は必ず [`build_capture_result`] を通す。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,12 +50,12 @@ pub fn build_capture_result(
     size_bytes: u64,
     mime: String,
     duration_ms: u64,
-) -> Result<CaptureResult, DeviceError> {
+) -> Result<CaptureResult, ScreenCaptureError> {
     if size_bytes == 0 {
-        return Err(DeviceError::InvalidInput("screen_capture bytes"));
+        return Err(ScreenCaptureError::InvalidInput);
     }
     if duration_ms == 0 {
-        return Err(DeviceError::InvalidInput("screen_capture duration"));
+        return Err(ScreenCaptureError::InvalidInput);
     }
     Ok(CaptureResult {
         size_bytes,
@@ -68,21 +68,21 @@ pub fn build_capture_result(
 /// bridge へ 1 回だけ届く。
 pub trait ScreenCapturer: Send + Sync {
     /// 録画を依頼する。`max_duration` で実装側が自動停止する。
-    fn start(&self, request_id: u64, max_duration: Duration) -> Result<(), DeviceError>;
+    fn start(&self, request_id: u64, max_duration: Duration) -> Result<(), ScreenCaptureError>;
     /// 停止を依頼する。`request_id` が進行中と一致しなければ無視される。
-    fn stop(&self, request_id: u64) -> Result<(), DeviceError>;
+    fn stop(&self, request_id: u64) -> Result<(), ScreenCaptureError>;
 }
 
 /// 対応不可の環境（Linux 等）。常に `Unsupported("screen_capture")`。
 pub struct UnsupportedScreenCapturer;
 
 impl ScreenCapturer for UnsupportedScreenCapturer {
-    fn start(&self, _request_id: u64, _max_duration: Duration) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("screen_capture"))
+    fn start(&self, _request_id: u64, _max_duration: Duration) -> Result<(), ScreenCaptureError> {
+        Err(ScreenCaptureError::Unsupported)
     }
 
-    fn stop(&self, _request_id: u64) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("screen_capture"))
+    fn stop(&self, _request_id: u64) -> Result<(), ScreenCaptureError> {
+        Err(ScreenCaptureError::Unsupported)
     }
 }
 
@@ -94,11 +94,11 @@ mod tests {
     fn rejects_zero_bytes_and_zero_duration() {
         assert!(matches!(
             build_capture_result(0, "video/mp4".into(), 1_000),
-            Err(DeviceError::InvalidInput("screen_capture bytes"))
+            Err(ScreenCaptureError::InvalidInput)
         ));
         assert!(matches!(
             build_capture_result(10, "video/mp4".into(), 0),
-            Err(DeviceError::InvalidInput("screen_capture duration"))
+            Err(ScreenCaptureError::InvalidInput)
         ));
     }
 
@@ -113,11 +113,8 @@ mod tests {
         let c = UnsupportedScreenCapturer;
         assert!(matches!(
             c.start(1, Duration::from_secs(1)),
-            Err(DeviceError::Unsupported("screen_capture"))
+            Err(ScreenCaptureError::Unsupported)
         ));
-        assert!(matches!(
-            c.stop(1),
-            Err(DeviceError::Unsupported("screen_capture"))
-        ));
+        assert!(matches!(c.stop(1), Err(ScreenCaptureError::Unsupported)));
     }
 }

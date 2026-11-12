@@ -935,18 +935,6 @@ public class MainActivity extends GameActivity {
         printHelper.printImage(requestId, argb, width, height);
     }
 
-    // 画面録画（Issue #1337）。実装は `ScreenCaptureHelper` / `ScreenCaptureService`。
-    // Rust の `android_screen_capture.rs` が JNI で呼ぶ。
-    private final ScreenCaptureHelper screenCaptureHelper = new ScreenCaptureHelper(this);
-
-    void requestScreenCaptureStart(long requestId, int maxMs) {
-        screenCaptureHelper.start(requestId, maxMs);
-    }
-
-    void requestScreenCaptureStop(long requestId) {
-        screenCaptureHelper.stop(requestId);
-    }
-
     // 動画の撮影（Issue #823）。実装は `VideoCaptureHelper`。Rust の
     // `android_video_capture.rs` が JNI で呼ぶ。
     private final VideoCaptureHelper videoCaptureHelper = new VideoCaptureHelper(this);
@@ -2824,7 +2812,6 @@ public class MainActivity extends GameActivity {
         nfcReadHelper.onPause();
         webAuthSessionHelper.onPause();
         inAppBrowserHelper.onPause();
-        screenCaptureHelper.onPause();
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
         bluetoothClassicHelper.onPause();
@@ -4978,7 +4965,6 @@ public class MainActivity extends GameActivity {
         audioSessionHelper.onDestroy();
         cameraPreviewHelper.onDestroy();
         callUiHelper.onDestroy();
-        screenCaptureHelper.onDestroy();
         videoCaptureHelper.onDestroy();
         printHelper.onDestroy();
         screenWakeLockHelper.onDestroy();

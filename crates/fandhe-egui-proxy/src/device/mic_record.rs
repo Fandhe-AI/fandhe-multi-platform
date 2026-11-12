@@ -318,42 +318,15 @@ fn request_stop(request_id: u64) -> bool {
 ))]
 static LAST_TICK: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
 
-/// 1 回の呼び出しで進める経過ミリ秒の上限（バックグラウンド復帰等の飛び対策、
-/// `device/tilt.rs::MAX_DT` と同じ考え方）。`device/speech_recognition.rs` も
-/// [`measure_dt_ms`] 経由で共用する（Issue #1024、複製回避）。
+/// 前回呼び出しからの経過ミリ秒を実測する。実体は `fandhe_runtime::tick::measure_dt_ms`
+/// （画面録画の機能 crate と共用。`device/speech_recognition.rs` が自前の `LAST_TICK` を渡して共用する、Issue #1024）。
 #[cfg(any(
     target_os = "macos",
     target_os = "ios",
     target_os = "windows",
     target_os = "android"
 ))]
-pub(crate) const MAX_TICK_MS: u64 = 1_000;
-
-/// 前回呼び出しからの経過ミリ秒を実測する（[`LAST_TICK`] 同様の役割を持つ
-/// `Mutex<Option<Instant>>` を呼び出し元から受け取る引数化版、Issue #1024。
-/// `device/speech_recognition.rs` が自前の `LAST_TICK` を渡して共用する）。
-/// `active` が `false`（計測対象の状態でない）なら実測せず `last` をリセットして
-/// `0` を返す（モジュール doc 参照）。
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "android"
-))]
-pub(crate) fn measure_dt_ms(last: &std::sync::Mutex<Option<Instant>>, active: bool) -> u64 {
-    let mut last = last.lock().unwrap_or_else(|e| e.into_inner());
-    if !active {
-        *last = None;
-        return 0;
-    }
-    let now = Instant::now();
-    let dt_ms = match *last {
-        Some(prev) => now.duration_since(prev).as_millis() as u64,
-        None => 0,
-    };
-    *last = Some(now);
-    dt_ms.min(MAX_TICK_MS)
-}
+pub(crate) use fandhe_runtime::tick::measure_dt_ms;
 
 /// macOS/iOS/Android/Windows 経路の effect ドライバ本体（`device/biometric_auth.rs::
 /// drive_callback` と同型）。

@@ -82,6 +82,8 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     fandhe_cap_midi::reset_pending_tracking();
     #[cfg(feature = "device")]
     fandhe_cap_passkey_signin::reset_pending_tracking();
+    #[cfg(feature = "device")]
+    fandhe_cap_screen_capture::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 

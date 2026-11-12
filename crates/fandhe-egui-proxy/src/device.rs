@@ -332,11 +332,6 @@ pub mod android_scanner_devices;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_brightness;
-/// Issue #1335: Android 向け画面録画実装。`device/screen_capture.rs` の
-/// Android 経路から使われる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_screen_capture;
 /// Issue #655: Android 向け画面向き実装（#657 が埋めるスタブ）。
 /// `device/screen_orientation.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
@@ -596,11 +591,6 @@ pub mod apple_quick_settings_tile;
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
 #[cfg_attr(not(any(target_os = "ios", target_os = "macos")), allow(dead_code))]
 pub mod apple_scanner_devices;
-/// Issue #1335（macOS）/ #1336（iOS）: macOS 向け ScreenCaptureKit 画面録画（`apple/
-/// fandhe_apple_screen_capture.m` を呼ぶ C ABI ラッパー。iOS は #1336 の ReplayKit）。
-/// `device/screen_capture.rs` の macOS / iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_screen_capture;
 /// Issue #922・#924: iOS / macOS 向け資格情報保存実装（`apple/
 /// fandhe_apple_secure_credential.m` を呼ぶ C ABI ラッパー）。`device/
 /// secure_credential.rs` の iOS/macOS 経路から呼ばれる。
@@ -1484,10 +1474,6 @@ pub mod scanner_devices;
 /// Phase 11 の拡充ループ（親 #126、Issue #633）: 画面輝度の effect ドライバ
 /// （iOS は #634 で実装済み、Android は後続の子 #635 が埋めるスタブ、他 OS は `UnsupportedScreenBrightness` 固定）。
 pub mod screen_brightness;
-/// Phase 11 の拡充ループ（親 #1135、Issue #1335）: 画面の録画・キャプチャの effect ドライバ
-/// （macOS 実装、iOS・Android 実装、他 OS は
-/// `UnsupportedScreenCapturer` 固定。Web は `fandhe-web-dom`）。
-pub mod screen_capture;
 /// Phase 11 の拡充ループ（親 #128、Issue #655）: 画面向きの effect ドライバ
 /// （iOS は #656、Android は #657 が埋めるスタブ、Web は #658 の `fandhe-web-dom`、
 /// 他 OS は `UnsupportedScreenOrientation` 固定）。
@@ -1837,10 +1823,6 @@ pub mod windows_removable_storage;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_scanner_devices;
-/// Issue #26: Windows 向け画面録画実装（`Windows.Graphics.Capture` + `MediaTranscoder`）。
-/// `device/screen_capture.rs` の Windows 経路から使われる。
-#[cfg(target_os = "windows")]
-pub mod windows_screen_capture;
 /// Issue #1278: Windows 向け画面スリープ抑止実装（Win32 `SetThreadExecutionState`）。
 /// `device/screen_wake_lock.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

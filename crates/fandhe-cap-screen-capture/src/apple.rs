@@ -1,5 +1,5 @@
 //! macOS / iOS 向け画面録画（macOS: Issue #1335、iOS: #1336）。
-//! `device/screen_capture.rs` の dispatch から呼ばれ、ScreenCaptureKit 実装
+//! `fandhe-cap-screen-capture/src/driver.rs` の dispatch から呼ばれ、ScreenCaptureKit 実装
 //! （`apple/fandhe_apple_screen_capture.m`、`build.rs` が macOS で compile）を
 //! `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` は呼び出し 1 か所ずつに閉じ `// SAFETY:` を付ける
 //! （coding-rust.md の FFI 例外規定）。
@@ -12,7 +12,7 @@
 //! # iOS（#1336）
 //!
 //! `.m` の `#if TARGET_OS_IPHONE` 側が ReplayKit（`RPScreenRecorder`）で自アプリの画面を録画する。
-//! OS コールバックが結果を共有状態へ入れた直後に `crate::ios::request_repaint` で次フレームを
+//! OS コールバックが結果を共有状態へ入れた直後に `fandhe_runtime::request_repaint` で次フレームを
 //! 起こす（契約表 4。`started` も対象: 同意待ち中は入力が無く、経過秒数が止まって見えるため）。
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -23,9 +23,9 @@ use std::os::raw::c_char;
 use std::time::Duration;
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-use fandhe_device::screen_capture::{build_capture_result, ScreenCapturer};
+use crate::contract::{ScreenCapturer, build_capture_result};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-use fandhe_device::DeviceError;
+use crate::error::ScreenCaptureError;
 
 // SAFETY: `apple/fandhe_apple_screen_capture.m` が定義する C ABI（`build.rs` が macOS で
 // compile・リンクする）。契約は `.m` 冒頭コメントに集約する。
@@ -43,7 +43,7 @@ pub(crate) struct AppleScreenCapturer;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 impl ScreenCapturer for AppleScreenCapturer {
     #[allow(unsafe_code)]
-    fn start(&self, request_id: u64, max_duration: Duration) -> Result<(), DeviceError> {
+    fn start(&self, request_id: u64, max_duration: Duration) -> Result<(), ScreenCaptureError> {
         // SAFETY: 引数はプリミティブのみ。戻り値 0 は依頼の受理のみを意味し、結果は非同期に
         // `fandhe_rust_screen_capture_finished` 経由で届く。
         let code =
@@ -51,19 +51,19 @@ impl ScreenCapturer for AppleScreenCapturer {
         if code == 0 {
             Ok(())
         } else {
-            Err(super::screen_capture::error_from_code(code))
+            Err(crate::driver::error_from_code(code))
         }
     }
 
     #[allow(unsafe_code)]
-    fn stop(&self, request_id: u64) -> Result<(), DeviceError> {
+    fn stop(&self, request_id: u64) -> Result<(), ScreenCaptureError> {
         // SAFETY: 引数はプリミティブのみ。`.m` 側は常に 0（受理）を返し、request_id 不一致の判定は
         // main queue 上で行って黙って捨てる。非 0 は ABI 契約外の防御分岐。
         let code = unsafe { fandhe_apple_screen_capture_stop(request_id) };
         if code == 0 {
             Ok(())
         } else {
-            Err(DeviceError::Internal("screen_capture stale"))
+            Err(ScreenCaptureError::Internal("screen_capture"))
         }
     }
 }
@@ -79,11 +79,11 @@ pub(crate) fn capturer() -> &'static dyn ScreenCapturer {
 /// （経過時間の計測をこの時点から始める）。
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_screen_capture_started(request_id: u64) {
-    super::screen_capture::bridge::mark_started(request_id);
+    crate::driver::bridge::mark_started(request_id);
     #[cfg(target_os = "ios")]
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 /// `.m` の完了コールバック。`code`: 0 = 成功（`size_bytes` / `mime` / `duration_ms` が有効）、
@@ -92,7 +92,7 @@ extern "C" fn fandhe_rust_screen_capture_started(request_id: u64) {
 /// 不変条件（0 バイト・0 ミリ秒の拒否）は `build_capture_result` に一本化する。
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_screen_capture_finished(
     request_id: u64,
     code: i32,
@@ -102,7 +102,7 @@ extern "C" fn fandhe_rust_screen_capture_finished(
 ) {
     let result = if code == 0 {
         if mime.is_null() {
-            Err(DeviceError::Internal(
+            Err(ScreenCaptureError::Internal(
                 "screen_capture: null result on success",
             ))
         } else {
@@ -114,9 +114,9 @@ extern "C" fn fandhe_rust_screen_capture_finished(
             build_capture_result(size_bytes, mime, duration_ms)
         }
     } else {
-        Err(super::screen_capture::error_from_code(code))
+        Err(crate::driver::error_from_code(code))
     };
-    super::screen_capture::bridge::deliver(request_id, result);
+    crate::driver::bridge::deliver(request_id, result);
     #[cfg(target_os = "ios")]
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }

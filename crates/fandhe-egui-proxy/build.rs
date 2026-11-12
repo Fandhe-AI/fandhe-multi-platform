@@ -283,8 +283,6 @@ fn build() {
     compile_apple_now_playing();
     // `apple/fandhe_apple_per_app_language.m`（Issue #1073）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_per_app_language();
-    // `apple/fandhe_apple_screen_capture.m`（Issue #1336）の iOS 側（ReplayKit）。
-    compile_apple_screen_capture();
 }
 
 /// `apple/fandhe_apple_location.m` を `cc` でコンパイルし CoreLocation をリンクする
@@ -416,23 +414,6 @@ fn compile_apple_gamepad() {
         "apple/fandhe_apple_gamepad.m",
         &["Foundation", "GameController"],
     );
-}
-
-/// `apple/fandhe_apple_screen_capture.m` を `cc` でコンパイルする（Issue #1335 macOS、#1336 iOS）。
-/// macOS 分岐と iOS 分岐の両方から呼ぶ。
-/// macOS は ScreenCaptureKit（macOS 12.3+、`SCRecordingOutput` は 15+）は実行体の `MACOSX_DEPLOYMENT_TARGET`（11.0）より新しいため**弱リンク**にする。
-/// `rustc-link-arg-bins` ではなく `rustc-link-arg` を使う: cdylib とテスト実行体のリンクでも `_OBJC_CLASS_$_SCStream` を解決する必要があるため（本クレートに下流の依存クレートは無い）。
-fn compile_apple_screen_capture() {
-    if target_is_ios() {
-        // iOS は ReplayKit（iOS 14+ の API は .m 側で @available ガード）。SCK の弱リンクは持ち込まない。
-        compile_objc(
-            "apple/fandhe_apple_screen_capture.m",
-            &["AVFoundation", "ReplayKit"],
-        );
-    } else {
-        compile_objc("apple/fandhe_apple_screen_capture.m", &["AVFoundation"]);
-        weak_link_framework("ScreenCaptureKit");
-    }
 }
 
 /// `apple/fandhe_apple_mic_record.m` を `cc` でコンパイルし AVFoundation・
@@ -1590,8 +1571,6 @@ fn build_macos() {
     compile_macos_screen_wake_lock();
     // `macos/fandhe_macos_managed_app_config.m`（Issue #944）も macOS 専用。CoreFoundation を使う。
     compile_macos_managed_app_config();
-    // `apple/fandhe_apple_screen_capture.m`（Issue #1335）の macOS 側（ScreenCaptureKit）。
-    compile_apple_screen_capture();
 
     // 素の実行体（`fandhe-gallery` の bin）へ `macos/Info.plist`
     // （`CFBundleIdentifier` + `NSLocationUsageDescription`）を埋め込む。macOS 10.15+

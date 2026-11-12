@@ -1279,6 +1279,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-screen-capture"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-share-receive"
 version = "0.2.0"
 dependencies = [
@@ -1388,6 +1403,7 @@ dependencies = [
  "fandhe-cap-nfc-card-emulation",
  "fandhe-cap-on-device-llm",
  "fandhe-cap-passkey-signin",
+ "fandhe-cap-screen-capture",
  "fandhe-cap-share-receive",
  "fandhe-cap-system-tray",
  "fandhe-core",
@@ -1494,6 +1510,7 @@ dependencies = [
  "fandhe-cap-multi-display",
  "fandhe-cap-on-device-llm",
  "fandhe-cap-passkey-signin",
+ "fandhe-cap-screen-capture",
  "fandhe-cap-share-receive",
  "fandhe-core",
  "fandhe-device",

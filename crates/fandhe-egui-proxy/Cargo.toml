@@ -488,7 +488,7 @@ windows = { workspace = true, optional = true, features = [
     # Issue #1278: `device/windows_screen_wake_lock.rs` が `SetThreadExecutionState`
     # （画面スリープの抑止）を呼ぶために使う。新規パッケージは増えない。
     "Win32_System_Power",
-    # Issue #26: `device/windows_screen_capture.rs` が `GraphicsCapturePicker` /
+    # Issue #26: `fandhe-cap-screen-capture/src/windows.rs` が `GraphicsCapturePicker` /
     # `Direct3D11CaptureFramePool`（`Graphics_Capture`）、D3D11 サーフェスの受け渡し
     # （`Graphics_DirectX*`、`Win32_System_WinRT_Direct3D11`）、`MediaStreamSource`
     # （`Media_Core`）、`MediaTranscoder`（`Media_Transcoding`）による H.264 / MP4 書き出し、

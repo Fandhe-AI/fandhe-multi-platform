@@ -27,7 +27,7 @@ import java.io.File;
 // 画面録画（Issue #1337）の実体。`MediaProjection` は Android 10 以降
 // 「型 mediaProjection のフォアグラウンドサービス」からしか取得できないため、
 // `ScreenCaptureHelper`（同意ダイアログ・ライフサイクル）から起動される。
-// Rust 側 `device/android_screen_capture.rs` へは `ScreenCaptureHelper.report` 経由で結果を返す。
+// Rust 側 `fandhe-cap-screen-capture/src/android.rs` へは `ScreenCaptureHelper.report` 経由で結果を返す。
 //
 // 状態はすべて main looper 上で扱う（`active` も同様）。確定点は `finish` の 1 か所で、
 // first-wins（`done`）。`projection.stop()` が `onStop` を再入させても二重確定しない。

@@ -153,9 +153,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // （`device::mic_record::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::mic_record::reset_pending_tracking();
-    // Issue #1335: `screen_capture::bridge` も同じ理由で再生成前に捨てる。
-    #[cfg(feature = "device")]
-    crate::device::screen_capture::reset_pending_tracking();
     // Issue #1026: `speech_recognition::bridge::SLOT`/`STARTED_REQUEST_ID` も同じ理由で
     // プロセス static のため Activity 再生成をまたいで残る。新しい画面
     // `SpeechRecognizeState::default()`（`Idle`）を構築する前にここで捨て、再生成前に

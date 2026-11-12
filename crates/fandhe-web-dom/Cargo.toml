@@ -48,6 +48,8 @@ fandhe-cap-app-badge = { path = "../fandhe-cap-app-badge" }
 fandhe-cap-midi = { path = "../fandhe-cap-midi" }
 # passkey-signin の契約（PasskeyOutcome・verify_response・outcome_from_dom_error）。Web 実装本体は本クレートに残る。
 fandhe-cap-passkey-signin = { path = "../fandhe-cap-passkey-signin" }
+# screen-capture の契約（build_capture_result）。Web 実装本体は本クレートに残る。
+fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。
 fandhe-platform-web = { path = "../fandhe-platform-web" }
 
