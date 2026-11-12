@@ -22,3 +22,5 @@ mod ios;
 
 pub use contract::*;
 pub use driver::*;
+// `ArTracking::read_frame` の戻り値型。利用側が `fandhe-device` に直接依存せず実装できるよう再公開する。
+pub use fandhe_device::camera_preview_stream::ScaledFrame;

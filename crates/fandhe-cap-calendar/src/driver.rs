@@ -121,11 +121,22 @@ pub(crate) mod bridge {
     static NEXT_EXTERNAL_ID: std::sync::atomic::AtomicU64 =
         std::sync::atomic::AtomicU64::new(1 << 62);
 
-    /// 待ち合わせを登録して `(request_id, 受信側)` を返す。
+    /// 新しい要求を出す前に、待っている画面外の呼び出しを失敗で完了させる。OS 側
+    /// （Android の `RequestTracker`・iOS の保持 delegate）は同時に 1 要求しか持たず、新しい要求が
+    /// 古い要求を通知なしに置き換えるため、古い待ちは永久に起きなくなる。
+    fn supersede_externals() {
+        let old = std::mem::take(&mut *WAITERS.lock().unwrap_or_else(|e| e.into_inner()));
+        for (_, tx) in old {
+            let _ = tx.send(Err(CalendarError::Internal("calendar superseded")));
+        }
+    }
+
+    /// 待ち合わせを登録して `(request_id, 受信側)` を返す。先に待っていた呼び出しは失敗で戻る。
     pub(crate) fn begin_external() -> (
         u64,
         std::sync::mpsc::Receiver<Result<AddEventOutcome, CalendarError>>,
     ) {
+        supersede_externals();
         let id = NEXT_EXTERNAL_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let (tx, rx) = std::sync::mpsc::channel();
         WAITERS
@@ -145,6 +156,7 @@ pub(crate) mod bridge {
 
     /// 提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
     pub(crate) fn begin() -> u64 {
+        supersede_externals();
         SLOT.begin()
     }
 
@@ -196,7 +208,8 @@ fn present(request_id: u64, draft: &EventDraft) -> bool {
 /// （`docs/architecture/consumer-app-structure.md` §8.2）。
 ///
 /// macOS / iOS / Android は OS 側がコールバックで結果を返すため、画面の bridge を経ずに独自の待ち合わせで
-/// 完了まで `add_event` を block する（固定タイムアウトなし）。UI スレッド（iOS / macOS のメイン）から呼ばない。
+/// 完了まで `add_event` を block する（上限 10 分）。同時に 1 件だけで、後から呼ぶと先の呼び出しは
+/// `Internal("calendar superseded")` で戻る。UI スレッド（iOS / macOS のメイン）から呼ばない。
 /// Activity 再生成で待っている呼び出しは `Internal("calendar reset")` で戻る。それ以外の OS は常に `Unsupported`。
 pub fn platform_calendar() -> std::sync::Arc<dyn crate::contract::CalendarEvents> {
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
@@ -208,6 +221,10 @@ pub fn platform_calendar() -> std::sync::Arc<dyn crate::contract::CalendarEvents
         std::sync::Arc::new(crate::contract::UnsupportedCalendar)
     }
 }
+
+/// 画面外の呼び出しが編集画面の結果を待つ上限（利用者の操作を待つため長めに取る）。
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+const EXTERNAL_WAIT_LIMIT: std::time::Duration = std::time::Duration::from_secs(600);
 
 /// コールバック型 OS 向けの同期ラッパ（[`platform_calendar`]）。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
@@ -221,8 +238,17 @@ impl crate::contract::CalendarEvents for CallbackCalendar {
             bridge::cancel_external(request_id);
             return Err(CalendarError::Internal("calendar present"));
         }
-        rx.recv()
-            .unwrap_or(Err(CalendarError::Internal("calendar reset")))
+        // OS のコールバックが失われても永久に待たない。期限後に届く結果は待ちを外すため捨てられる。
+        match rx.recv_timeout(EXTERNAL_WAIT_LIMIT) {
+            Ok(result) => result,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                bridge::cancel_external(request_id);
+                Err(CalendarError::Internal("calendar timeout"))
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                Err(CalendarError::Internal("calendar reset"))
+            }
+        }
     }
 }
 

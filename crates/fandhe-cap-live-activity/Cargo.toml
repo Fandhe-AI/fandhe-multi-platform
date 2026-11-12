@@ -34,6 +34,16 @@ id = "live-activity"
 
 [package.metadata.fandhe.ios]
 frameworks = ["ActivityKit"]
+info-plist = { NSSupportsLiveActivities = true }
+
+# ロック画面・Dynamic Island の表示側（Widget Extension）。属性型はアプリ側の Swift 薄層と共有する。
+[[package.metadata.fandhe.ios.extensions]]
+name = "FandheLiveActivity"
+bundle-suffix = "liveactivity"
+deployment-target = "17.0"
+sources = ["apple/widget", "ios/fandhe_live_activity_attributes.swift"]
+frameworks = ["ActivityKit", "SwiftUI", "WidgetKit"]
+info-plist = { NSExtension = { NSExtensionPointIdentifier = "com.apple.widgetkit-extension" } }
 
 [package.metadata.fandhe.android]
 permissions = [{ name = "android.permission.POST_NOTIFICATIONS" }]

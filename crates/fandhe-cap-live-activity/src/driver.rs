@@ -18,7 +18,9 @@
 //! OS 呼び出し（`submit`）はロックの外で行う。処理中（結果未着）に届いた要求は二重に渡さず、完了後に
 //! 取り込む。
 
-use std::sync::{Arc, OnceLock};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
 use crate::contract::{LiveActivity, LiveOperation, LiveOutcome, LiveValue};
 use crate::error::LiveActivityError;
@@ -42,6 +44,31 @@ pub fn platform_live_activity() -> &'static Arc<dyn LiveActivity> {
     })
 }
 
+/// 画面外の呼び出しが結果を待つ上限。
+const EXTERNAL_WAIT_LIMIT: Duration = Duration::from_secs(30);
+
+/// 画面の状態型に依存しない入口（`docs/architecture/consumer-app-structure.md` §8.2）。操作を OS へ渡し、
+/// 開始成功・権限拒否・OS エラーなどの完了まで block して返す（上限 30 秒。超過は `Internal("live_activity timeout")`）。
+/// 画面の [`bridge::SLOT`] は使わない。UI スレッドから呼ばない。Activity 再生成で待っている呼び出しは
+/// `Internal("live_activity reset")` で戻る。
+pub fn run_live_activity(op: LiveOperation) -> Result<LiveOutcome, LiveActivityError> {
+    let (request_id, rx) = bridge::begin_external();
+    if let Err(e) = platform_live_activity().submit(request_id, op) {
+        bridge::cancel_external(request_id);
+        return Err(e);
+    }
+    match rx.recv_timeout(EXTERNAL_WAIT_LIMIT) {
+        Ok(result) => result,
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            bridge::cancel_external(request_id);
+            Err(LiveActivityError::Internal("live_activity timeout"))
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            Err(LiveActivityError::Internal("live_activity reset"))
+        }
+    }
+}
+
 /// `LiveActivityError` / 成功結果を画面用の結果へ写像する。`Internal` と未知のエラー（`Cancelled` を含む）は
 /// 固定文言の失敗にし、OS の文言は入れない（security.md A09）。
 fn to_result(result: Result<LiveOutcome, LiveActivityError>) -> LiveResult {
@@ -63,11 +90,53 @@ pub(crate) mod bridge {
 
     pub(crate) static SLOT: RequestSlot<LiveResult> = RequestSlot::new();
 
-    /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
-    /// 捨てて `false`（先に届いたものだけを採る）。b 層の実装は完了時に 1 回だけ呼ぶ。
+    type Waiter = std::sync::mpsc::Sender<Result<LiveOutcome, LiveActivityError>>;
+
+    /// 画面を経ない呼び出し（[`run_live_activity`]）の待ち合わせ。画面の [`SLOT`] とは別に持つ。
+    /// ID は [`SLOT`] の払い出しと衝突しないよう上位ビットを立てる。
+    static WAITERS: Mutex<Vec<(u64, Waiter)>> = Mutex::new(Vec::new());
+    static NEXT_EXTERNAL_ID: AtomicU64 = AtomicU64::new(1 << 62);
+
+    pub(super) fn begin_external() -> (
+        u64,
+        std::sync::mpsc::Receiver<Result<LiveOutcome, LiveActivityError>>,
+    ) {
+        let id = NEXT_EXTERNAL_ID.fetch_add(1, Ordering::Relaxed);
+        let (tx, rx) = std::sync::mpsc::channel();
+        WAITERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push((id, tx));
+        (id, rx)
+    }
+
+    pub(super) fn cancel_external(request_id: u64) {
+        WAITERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|(id, _)| *id != request_id);
+    }
+
+    /// OS からの結果を置く。画面外の待ちがあればそちらへ、なければ画面用へ変換して [`SLOT`] に置く。
+    /// `request_id` 不一致・未登録・既に結果ありは捨てて `false`（先に届いたものだけを採る）。
+    /// b 層の実装は完了時に 1 回だけ呼ぶ。
     #[allow(dead_code)]
     pub(crate) fn deliver(request_id: u64, result: Result<LiveOutcome, LiveActivityError>) -> bool {
+        let waiter = {
+            let mut w = WAITERS.lock().unwrap_or_else(|e| e.into_inner());
+            w.iter()
+                .position(|(id, _)| *id == request_id)
+                .map(|i| w.remove(i).1)
+        };
+        if let Some(tx) = waiter {
+            return tx.send(result).is_ok();
+        }
         SLOT.deliver(request_id, to_result(result))
+    }
+
+    /// Activity 再生成時に画面外の待ちを起こす（送信側を捨てる。受信側は失敗として戻る）。
+    pub(super) fn reset_external() {
+        WAITERS.lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 }
 
@@ -135,6 +204,7 @@ pub fn live_activity_show_effect(
 /// 表示を残すと「開始」の次の操作と食い違う（契約表 1・9）。
 pub fn reset_pending_tracking() {
     bridge::SLOT.reset();
+    bridge::reset_external();
     platform_live_activity().dismiss_all();
 }
 
