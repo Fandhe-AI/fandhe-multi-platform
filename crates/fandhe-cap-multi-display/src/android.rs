@@ -1,5 +1,5 @@
-//! Android 向け複数ディスプレイ実装（Issue #1343、親 #1134）。`device/multi_display.rs` の
-//! Android 経路から egui スレッドが 1 秒ごとに同期で呼ぶ。契約は `fandhe_device::multi_display`。
+//! Android 向け複数ディスプレイ実装（Issue #1343、親 #1134）。`fandhe-cap-multi-display/src/driver.rs` の
+//! Android 経路から egui スレッドが 1 秒ごとに同期で呼ぶ。契約は `fandhe_cap_multi_display`。
 //!
 //! Java 側 `MainActivity.multiDisplayRead()`（JNI シグネチャ `()Ljava/lang/String;`）が
 //! `MultiDisplayHelper.read` へ委譲し、`DisplayManager` の画面一覧を返す。詰め方の SSOT は
@@ -20,7 +20,7 @@
 //!
 //! 一次情報: <https://developer.android.com/reference/android/hardware/display/DisplayManager>
 
-use fandhe_device::multi_display::ScreenInfo;
+use crate::contract::ScreenInfo;
 
 /// 画面をつなぐ区切り文字（U+001E）。
 const RS: char = '\u{1E}';
@@ -76,38 +76,29 @@ fn from_android(raw: &str) -> Option<Vec<ScreenInfo>> {
 #[cfg(target_os = "android")]
 mod jni_impl {
     use super::from_android;
-    use crate::device::android::JniCallFailed;
-    use fandhe_device::multi_display::{MultiDisplay, ScreenInfo};
-    use fandhe_device::DeviceError;
+    use crate::contract::{MultiDisplay, ScreenInfo};
+    use crate::error::MultiDisplayError;
+    use fandhe_platform_android::{JniCallFailed, with_activity_class};
 
-    /// Android の `MultiDisplay` 実装（`MainActivity.multiDisplayRead()` を JNI で呼ぶ）。
+    /// Android の `MultiDisplay` 実装（`MultiDisplayHelper.read` を JNI で呼ぶ）。
     pub(super) struct AndroidMultiDisplay;
 
     impl MultiDisplay for AndroidMultiDisplay {
-        /// 2 箇所の `unsafe` は `AndroidPowerState::read` と同じ根拠・同じ形。
-        #[allow(unsafe_code)]
-        fn read(&self) -> Result<Vec<ScreenInfo>, DeviceError> {
-            const FAILED: DeviceError = DeviceError::Internal("multi_display read");
-            let Some(app) = crate::android::android_app() else {
+        fn read(&self) -> Result<Vec<ScreenInfo>, MultiDisplayError> {
+            const FAILED: MultiDisplayError = MultiDisplayError::Internal;
+            let Some(app) = fandhe_platform_android::android_app() else {
                 return Err(FAILED);
             };
 
-            // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。`vm_as_ptr()` は
-            // android-activity が管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
-            let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-            let result = vm.attach_current_thread(
-                |env: &mut jni::Env| -> Result<Option<String>, JniCallFailed> {
-                    let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                    // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。未所有の JNI
-                    // グローバル参照を `Cast` で包むだけで delete は試みない。
-                    let activity =
-                        unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                    let ret = env.call_method(
-                        &activity,
-                        jni::jni_str!("multiDisplayRead"),
-                        jni::jni_sig!(() -> java.lang.String),
-                        &[],
+            let result = with_activity_class(
+                &app,
+                jni::jni_str!("com.fandhe.platform.MultiDisplayHelper"),
+                |env, activity, class| -> Result<Option<String>, JniCallFailed> {
+                    let ret = env.call_static_method(
+                        class,
+                        jni::jni_str!("read"),
+                        jni::jni_sig!((android.content.Context) -> java.lang.String),
+                        &[jni::objects::JValue::Object(activity)],
                     );
                     let ret = match ret {
                         Ok(v) => v,
@@ -136,15 +127,15 @@ mod jni_impl {
 
 /// Android の `MultiDisplay` 実装を返す。
 #[cfg(target_os = "android")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::multi_display::MultiDisplay> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::MultiDisplay> {
     Box::new(jni_impl::AndroidMultiDisplay)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::multi_display::validate;
-    use fandhe_device::DeviceError;
+    use crate::contract::validate;
+    use crate::error::MultiDisplayError;
 
     fn rec(p: [&str; 5]) -> String {
         p.join("\u{1F}")
@@ -184,7 +175,7 @@ mod tests {
     fn bad_scale_becomes_none_after_validate() {
         for s in ["abc", "NaN", "0", ""] {
             let v = validate(
-                from_android(&rec(["1", "1", s, "1", "n"])).ok_or(DeviceError::Internal("x")),
+                from_android(&rec(["1", "1", s, "1", "n"])).ok_or(MultiDisplayError::Internal),
             )
             .unwrap();
             assert_eq!(v[0].scale, None);

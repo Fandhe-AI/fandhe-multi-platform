@@ -351,7 +351,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "multi_display_show" => fandhe_core::screens::multi_display_show::current_screen,
-    fandhe_egui_proxy::device::multi_display::multi_display_show_effect,
+    fandhe_cap_multi_display::multi_display_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "power_state_show" => fandhe_core::screens::power_state_show::current_screen,

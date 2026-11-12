@@ -5,8 +5,8 @@ import android.hardware.display.DisplayManager;
 import android.util.DisplayMetrics;
 import android.view.Display;
 
-// 複数ディスプレイ画面（Issue #1343、親 #1134）の Android 実装ヘルパー。MainActivity.multiDisplayRead()
-// から委譲される。Rust の `device/android_multi_display.rs` が egui スレッドから 1 秒ごとに
+// 複数ディスプレイ画面（Issue #1343、親 #1134）の Android 実装ヘルパー。
+// Rust の `fandhe-cap-multi-display/src/android.rs` が static メソッド read(Context) を egui スレッドから 1 秒ごとに
 // JNI（`()Ljava/lang/String;`）で呼ぶ同期 getter で、Java -> Rust の native コールバックは
 // 無い（no-op スタブ不要）。
 //
@@ -33,7 +33,8 @@ final class MultiDisplayHelper {
     // getRealMetrics は API 31 で deprecated。代替の Display.Mode.getPhysicalWidth は回転を反映せず、
     // WindowMetrics は画面ごとに window context が要るため、全 API 帯で動くこちらを使う。
     @SuppressWarnings("deprecation")
-    static String read(Context context) {
+    static String read(Context activity) {
+        Context context = activity.getApplicationContext();
         try {
             DisplayManager dm = (DisplayManager) context.getSystemService(Context.DISPLAY_SERVICE);
             if (dm == null) {

@@ -390,7 +390,7 @@ windows = { workspace = true, optional = true, features = [
     # Issue #1376: `device/windows_local_fonts.rs` が DirectWrite の `DWriteCreateFactory` /
     # `IDWriteFontCollection`（`Win32_Graphics_DirectWrite`）を呼ぶ。新規パッケージは増えない。
     "Win32_Graphics_DirectWrite",
-    # Issue #1341: `device/windows_multi_display.rs` が `EnumDisplayMonitors` /
+    # Issue #1341: `fandhe-cap-multi-display/src/windows.rs` が `EnumDisplayMonitors` /
     # `GetMonitorInfoW`（`Win32_Graphics_Gdi`）と `GetDpiForMonitor`（`Win32_UI_HiDpi`）を呼ぶ。
     # 新規パッケージは増えない。
     "Win32_Graphics_Gdi",

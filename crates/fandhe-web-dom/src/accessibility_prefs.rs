@@ -74,10 +74,10 @@ mod web {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    use fandhe_cap_accessibility_prefs::READ_INTERVAL;
     use fandhe_core::screens::accessibility_prefs_show::{
         advance_phase, animates, apply_read, AccessibilityPrefsShowState, Prefs, ReadFailure,
     };
-    use fandhe_cap_accessibility_prefs::READ_INTERVAL;
     use wasm_bindgen::prelude::*;
 
     use super::{frame_dt, pref_from, read_due, FAILED_LABEL};

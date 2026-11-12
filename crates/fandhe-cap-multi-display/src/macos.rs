@@ -1,8 +1,8 @@
 //! macOS 向け複数ディスプレイ実装（Issue #1341）。`macos/fandhe_macos_multi_display.m`
 //! （`NSScreen.screens`、`build.rs` が macOS ターゲットの feature `device` 有効時にコンパイルする）
 //! を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を
-//! 明記する。`device/multi_display.rs` の macOS 経路から呼ばれ、契約は
-//! `fandhe_device::multi_display`。
+//! 明記する。`fandhe-cap-multi-display/src/driver.rs` の macOS 経路から呼ばれ、契約は
+//! `fandhe_cap_multi_display`。
 //!
 //! `.m` が返す生値（固定長の名前バッファ）は [`from_raw`] で契約の値へ写す。写像はホストでも
 //! テストできるようモジュールは `cfg(any(macos, test))`。`.m` は main thread 以外では失敗を返す
@@ -19,7 +19,7 @@
 
 use std::ffi::CStr;
 
-use fandhe_device::multi_display::ScreenInfo;
+use crate::contract::ScreenInfo;
 
 /// `.m` に渡す出力バッファの画面数上限。
 pub(super) const CAP: usize = 16;
@@ -59,7 +59,7 @@ mod ffi {
     // SAFETY: `macos/fandhe_macos_multi_display.m`（`build.rs` が macOS ターゲットの feature
     // `device` 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_multi_display_read(out: *mut Raw, cap: u32, count: *mut u32) -> i32;
     }
 
@@ -76,8 +76,8 @@ mod ffi {
 struct MacMultiDisplay;
 
 #[cfg(target_os = "macos")]
-impl fandhe_device::multi_display::MultiDisplay for MacMultiDisplay {
-    fn read(&self) -> Result<Vec<ScreenInfo>, fandhe_device::DeviceError> {
+impl crate::contract::MultiDisplay for MacMultiDisplay {
+    fn read(&self) -> Result<Vec<ScreenInfo>, crate::error::MultiDisplayError> {
         let mut buf = [Raw {
             width_px: 0,
             height_px: 0,
@@ -87,15 +87,15 @@ impl fandhe_device::multi_display::MultiDisplay for MacMultiDisplay {
         }; CAP];
         let mut count = 0u32;
         if ffi::read(&mut buf, &mut count) != 0 || count as usize > CAP {
-            return Err(fandhe_device::DeviceError::Internal("multi_display read"));
+            return Err(crate::error::MultiDisplayError::Internal);
         }
         Ok(from_raw(&buf[..count as usize]))
     }
 }
 
-/// macOS の `MultiDisplay` 実装を返す（`device/multi_display.rs` の dispatch から呼ばれる）。
+/// macOS の `MultiDisplay` 実装を返す（`fandhe-cap-multi-display/src/driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "macos")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::multi_display::MultiDisplay> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::MultiDisplay> {
     Box::new(MacMultiDisplay)
 }
 
@@ -120,7 +120,7 @@ mod tests {
     #[test]
     fn off_main_thread_is_internal_error() {
         let r = implementation().read();
-        assert!(matches!(r, Err(fandhe_device::DeviceError::Internal(_))));
+        assert!(matches!(r, Err(crate::error::MultiDisplayError::Internal)));
     }
 
     #[test]

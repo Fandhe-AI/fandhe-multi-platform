@@ -30,6 +30,8 @@ fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive" }
 fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs" }
 # http-get の Web 実装（`fetch`）。デモ（`mount_http_fetch_screen`）が effect として呼ぶ。
 fandhe-cap-http-get = { path = "../fandhe-cap-http-get" }
+# multi-display の契約（検証・READ_INTERVAL・ScreenInfo）。Web 実装本体は本クレートに残る。
+fandhe-cap-multi-display = { path = "../fandhe-cap-multi-display" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。
 fandhe-platform-web = { path = "../fandhe-platform-web" }
 

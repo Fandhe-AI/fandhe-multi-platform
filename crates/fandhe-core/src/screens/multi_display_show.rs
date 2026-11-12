@@ -3,7 +3,7 @@
 //! の `effect` 区画（native）と `fandhe-web-dom` の `demo.rs`（Web）から呼ばれる。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
-//! `fandhe-egui-proxy` の `device/multi_display.rs` が一定間隔で行い [`apply_read`] で注入する。
+//! `fandhe-cap-multi-display`（`src/driver.rs`） が一定間隔で行い [`apply_read`] で注入する。
 //! Web は許可ダイアログを要するためボタン起点（[`request_screens`] / [`take_request`] /
 //! [`finish_request`]）で、世代を照合して古い完了を捨てる。
 //!
@@ -24,7 +24,7 @@ pub const REQUEST_LABEL: &str = "画面の一覧を読む（許可を求めま�
 /// 反映遅れ・論理ディスプレイ・ミラーリングの注記。
 pub const NOTE: &str = "接続・切断の反映は最大 1 秒遅れます。一覧は OS が有効と認める論理ディスプレイで、物理ディスプレイの数と一致しないことがあります。ミラーリング時の扱いは OS によって異なります。";
 
-/// 画面 1 枚の写し（`fandhe_device::multi_display::ScreenInfo` の写し）。
+/// 画面 1 枚の写し（`fandhe_cap_multi_display::ScreenInfo` の写し）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScreenRow {
     /// 幅（物理ピクセル。Web は約）。

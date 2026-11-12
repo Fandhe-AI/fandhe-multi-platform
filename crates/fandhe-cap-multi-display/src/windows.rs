@@ -1,7 +1,7 @@
-//! Windows 向け複数ディスプレイ実装（Issue #1341）。`device/multi_display.rs` の Windows 経路から
+//! Windows 向け複数ディスプレイ実装（Issue #1341）。`fandhe-cap-multi-display/src/driver.rs` の Windows 経路から
 //! 呼ばれ、Win32 の `EnumDisplayMonitors` / `GetMonitorInfoW` / `GetDpiForMonitor` を UI スレッドから
 //! 同期で呼ぶ（package identity・管理者権限は不要。WinAppSDK `DisplayArea` は使わない）。
-//! 契約は `fandhe_device::multi_display`。
+//! 契約は `fandhe_cap_multi_display`。
 //!
 //! - サイズ: `rcMonitor` の差。winit が per-monitor v2 DPI aware にするため物理ピクセルの値
 //! - 倍率: `GetDpiForMonitor(MDT_EFFECTIVE_DPI)` / 96。失敗しても画面は落とさず `None`
@@ -42,14 +42,14 @@ fn is_primary_flag(flags: u32) -> bool {
 #[allow(unsafe_code)]
 mod win {
     use super::{is_primary_flag, rect_size, scale_from_dpi};
-    use fandhe_device::multi_display::{MultiDisplay, ScreenInfo};
-    use fandhe_device::DeviceError;
-    use windows::core::BOOL;
+    use crate::contract::{MultiDisplay, ScreenInfo};
+    use crate::error::MultiDisplayError;
     use windows::Win32::Foundation::{LPARAM, RECT};
     use windows::Win32::Graphics::Gdi::{
         EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO,
     };
     use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
+    use windows::core::BOOL;
 
     pub(super) struct WindowsMultiDisplay;
 
@@ -106,8 +106,8 @@ mod win {
     }
 
     impl MultiDisplay for WindowsMultiDisplay {
-        fn read(&self) -> Result<Vec<ScreenInfo>, DeviceError> {
-            const FAILED: DeviceError = DeviceError::Internal("multi_display read");
+        fn read(&self) -> Result<Vec<ScreenInfo>, MultiDisplayError> {
+            const FAILED: MultiDisplayError = MultiDisplayError::Internal;
             let mut out = Vec::new();
             for m in monitors().ok_or(FAILED)? {
                 let mi = info(m).ok_or(FAILED)?;
@@ -127,9 +127,9 @@ mod win {
     }
 }
 
-/// Windows の `MultiDisplay` 実装を返す（`device/multi_display.rs` の dispatch から呼ばれる）。
+/// Windows の `MultiDisplay` 実装を返す（`fandhe-cap-multi-display/src/driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "windows")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::multi_display::MultiDisplay> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::MultiDisplay> {
     Box::new(win::WindowsMultiDisplay)
 }
 

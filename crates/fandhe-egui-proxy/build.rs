@@ -253,8 +253,6 @@ fn build() {
     compile_ios_ar();
     // `ios/fandhe_ios_file_watch.m`（Issue #1412）。iOS 分岐のみ。
     compile_ios_file_watch();
-    // `ios/fandhe_ios_multi_display.m`（Issue #27）。iOS 分岐のみ。
-    compile_ios_multi_display();
     // `ios/fandhe_ios_display_refresh_hdr.m`（Issue #871）。iOS 分岐のみ。
     compile_ios_display_refresh_hdr();
     // `ios/fandhe_ios_call_ui.m`（Issue #277）。iOS 分岐のみ（macOS は対応表で no）。
@@ -1160,22 +1158,10 @@ fn compile_macos_system_accent_color() {
     compile_objc("macos/fandhe_macos_system_accent_color.m", &["AppKit"]);
 }
 
-/// `macos/fandhe_macos_multi_display.m` を `cc` でコンパイルする（Issue #1341）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_multi_display.rs` が使う）。
-fn compile_macos_multi_display() {
-    compile_objc("macos/fandhe_macos_multi_display.m", &["AppKit"]);
-}
-
 /// `macos/fandhe_macos_pen_stylus.m` を `cc` でコンパイルする（Issue #355）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_pen_stylus.rs` が使う）。
 fn compile_macos_pen_stylus() {
     compile_objc("macos/fandhe_macos_pen_stylus.m", &["AppKit"]);
-}
-
-/// `ios/fandhe_ios_multi_display.m` を `cc` でコンパイルする（Issue #27）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_multi_display.rs` が使う）。
-fn compile_ios_multi_display() {
-    compile_objc("ios/fandhe_ios_multi_display.m", &["UIKit"]);
 }
 
 /// `ios/fandhe_ios_display_refresh_hdr.m` を `cc` でコンパイルする（Issue #871）。
@@ -1694,8 +1680,6 @@ fn build_macos() {
     compile_macos_memory_pressure();
     // `macos/fandhe_macos_removable_storage.m`（Issue #858）も macOS 専用。
     compile_macos_removable_storage();
-    // `macos/fandhe_macos_multi_display.m`（Issue #1341）も macOS 専用。
-    compile_macos_multi_display();
     // `macos/fandhe_macos_music_library.m`（Issue #482）も macOS 専用。iTunesLibrary を使う。
     compile_macos_music_library();
     // `macos/fandhe_macos_web_auth_session.m`（Issue #530）も macOS 専用。AuthenticationServices を使う。

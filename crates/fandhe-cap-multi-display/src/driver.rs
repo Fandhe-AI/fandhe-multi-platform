@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #1134、Issue #1341）「複数ディスプレイ」の effect ドライバ。
-//! `fandhe_device::multi_display::MultiDisplay` を一定間隔で読み、結果を
+//! `crate::contract::MultiDisplay` を一定間隔で読み、結果を
 //! `fandhe_core::screens::multi_display_show`（端末依存ゼロ）へ注入する
 //! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。
 //!
@@ -16,38 +16,38 @@
 use std::sync::Mutex;
 use std::time::Instant;
 
-use fandhe_core::screens::multi_display_show::{
-    apply_read, MultiDisplayShowState, ReadFailure, ScreenRow,
-};
 #[cfg(not(any(
     target_os = "windows",
     target_os = "macos",
     target_os = "ios",
     target_os = "android"
 )))]
-use fandhe_device::multi_display::UnsupportedMultiDisplay;
-use fandhe_device::multi_display::{validate, MultiDisplay, ScreenInfo, READ_INTERVAL};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedMultiDisplay;
+use crate::contract::{MultiDisplay, READ_INTERVAL, ScreenInfo, validate};
+use crate::error::MultiDisplayError;
+use fandhe_core::screens::multi_display_show::{
+    MultiDisplayShowState, ReadFailure, ScreenRow, apply_read,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた実装を返す（状態を持たないため呼び出しごとに構築）。
 fn platform_multi_display() -> Box<dyn MultiDisplay> {
     #[cfg(target_os = "windows")]
     {
-        super::windows_multi_display::implementation()
+        crate::windows::implementation()
     }
     #[cfg(target_os = "macos")]
     {
-        super::macos_multi_display::implementation()
+        crate::macos::implementation()
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_multi_display::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_multi_display::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(
         target_os = "windows",
@@ -72,10 +72,10 @@ fn to_row(s: ScreenInfo) -> ScreenRow {
 
 /// 契約の結果を画面の入力へ写す。失敗は固定文言へ畳み、OS 固有値を画面へ漏らさない
 /// （security.md A09）。
-fn to_result(r: Result<Vec<ScreenInfo>, DeviceError>) -> Result<Vec<ScreenRow>, ReadFailure> {
+fn to_result(r: Result<Vec<ScreenInfo>, MultiDisplayError>) -> Result<Vec<ScreenRow>, ReadFailure> {
     match r {
         Ok(v) => Ok(v.into_iter().map(to_row).collect()),
-        Err(DeviceError::Unsupported(_)) => Err(ReadFailure::Unsupported),
+        Err(MultiDisplayError::Unsupported) => Err(ReadFailure::Unsupported),
         Err(_) => Err(ReadFailure::Failed("画面一覧の取得".to_string())),
     }
 }
@@ -132,18 +132,27 @@ pub fn multi_display_show_effect(
 
 #[cfg(test)]
 mod tests {
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     use super::*;
-    use fandhe_core::screens::multi_display_show::{list_text, DisplayView};
-    use fandhe_device::multi_display::UnsupportedMultiDisplay as Unsupported;
+    use crate::contract::UnsupportedMultiDisplay as Unsupported;
+    use fandhe_core::screens::multi_display_show::{DisplayView, list_text};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<MultiDisplayShowState>>;
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<MultiDisplayShowState>>;
 
     fn sender_with_channel() -> (CompletionSender<MultiDisplayShowState>, Rx) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     struct Fake {
@@ -161,9 +170,9 @@ mod tests {
     }
 
     impl MultiDisplay for Fake {
-        fn read(&self) -> Result<Vec<ScreenInfo>, DeviceError> {
+        fn read(&self) -> Result<Vec<ScreenInfo>, MultiDisplayError> {
             self.reads.fetch_add(1, Ordering::SeqCst);
-            self.result.clone().map_err(|_| DeviceError::Internal("x"))
+            self.result.clone().map_err(|_| MultiDisplayError::Internal)
         }
     }
 

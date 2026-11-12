@@ -1,11 +1,11 @@
 //! 複数ディスプレイ・外部ディスプレイの一覧の契約（Issue #1341、親 #1134）。接続中の画面を
 //! 画面ごとの物理解像度・倍率・主画面か・名前で返す橋渡しで、`fandhe-egui-proxy` の
-//! `device/multi_display.rs` が間隔つきで [`MultiDisplay::read`] を呼ぶ（pull 型。OS の変化
+//! `fandhe-cap-multi-display/src/driver.rs` が間隔つきで [`MultiDisplay::read`] を呼ぶ（pull 型。OS の変化
 //! 通知は購読しない）。Web は `fandhe-web-dom` 側が同じ [`validate`] を通す。
 //!
 //! # 契約
 //!
-//! - **三値**: 読めた（`Ok`）/ 非対応（`DeviceError::Unsupported`）/ 失敗（`DeviceError::Internal`）。
+//! - **三値**: 読めた（`Ok`）/ 非対応（`MultiDisplayError::Unsupported`）/ 失敗（`MultiDisplayError::Internal`）。
 //!   Web の「許可なし」は画面側（core）の型で表し、ここでは新しい失敗 enum を作らない
 //! - サイズは物理ピクセル。Web だけは CSS px × 画面ごとの devicePixelRatio を丸めた「約」の値
 //! - `scale` は論理 1 に対する物理の比（取れない・不正は `None`）。`is_primary` は macOS が
@@ -29,7 +29,7 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::MultiDisplayError;
 
 /// 画面側が OS を読み直す間隔。`fandhe-egui-proxy` と `fandhe-web-dom` が共有する唯一の値。
 pub const READ_INTERVAL: Duration = Duration::from_secs(1);
@@ -52,7 +52,7 @@ pub struct ScreenInfo {
 /// 接続中の画面を 1 回読む。
 pub trait MultiDisplay: Send + Sync {
     /// 現在の画面一覧を返す。呼び出し側が [`validate`] を通す。
-    fn read(&self) -> Result<Vec<ScreenInfo>, DeviceError>;
+    fn read(&self) -> Result<Vec<ScreenInfo>, MultiDisplayError>;
 }
 
 /// 常に非対応を返す実装（対応 OS 以外・未実装 OS の dispatch 先）。
@@ -60,18 +60,20 @@ pub trait MultiDisplay: Send + Sync {
 pub struct UnsupportedMultiDisplay;
 
 impl MultiDisplay for UnsupportedMultiDisplay {
-    fn read(&self) -> Result<Vec<ScreenInfo>, DeviceError> {
-        Err(DeviceError::Unsupported("multi_display"))
+    fn read(&self) -> Result<Vec<ScreenInfo>, MultiDisplayError> {
+        Err(MultiDisplayError::Unsupported)
     }
 }
 
 /// 契約を強制する。空の一覧・サイズ 0 の画面が 1 つでもあれば `Internal`（一部だけ捨てて
 /// 個数を偽らない）。不正な `scale` は `None`、主画面がちょうど 1 つでなければ全て false、
 /// 空の名前は `None`。並び順は変えない。
-pub fn validate(r: Result<Vec<ScreenInfo>, DeviceError>) -> Result<Vec<ScreenInfo>, DeviceError> {
+pub fn validate(
+    r: Result<Vec<ScreenInfo>, MultiDisplayError>,
+) -> Result<Vec<ScreenInfo>, MultiDisplayError> {
     let mut screens = r?;
     if screens.is_empty() || screens.iter().any(|s| s.width_px == 0 || s.height_px == 0) {
-        return Err(DeviceError::Internal("multi_display read"));
+        return Err(MultiDisplayError::Internal);
     }
     if screens.iter().filter(|s| s.is_primary).count() != 1 {
         screens.iter_mut().for_each(|s| s.is_primary = false);
@@ -102,14 +104,14 @@ mod tests {
     #[test]
     fn unsupported_never_succeeds() {
         let r = UnsupportedMultiDisplay.read();
-        assert!(matches!(r, Err(DeviceError::Unsupported("multi_display"))));
+        assert!(matches!(r, Err(MultiDisplayError::Unsupported)));
     }
 
     #[test]
     fn empty_and_zero_size_are_errors() {
         assert!(matches!(
             validate(Ok(vec![])),
-            Err(DeviceError::Internal(_))
+            Err(MultiDisplayError::Internal)
         ));
         for (w, h) in [(0, 5), (5, 0)] {
             let mut bad = scr(false);
@@ -122,8 +124,8 @@ mod tests {
     #[test]
     fn errors_pass_through() {
         assert!(matches!(
-            validate(Err(DeviceError::Unsupported("multi_display"))),
-            Err(DeviceError::Unsupported(_))
+            validate(Err(MultiDisplayError::Unsupported)),
+            Err(MultiDisplayError::Unsupported)
         ));
     }
 

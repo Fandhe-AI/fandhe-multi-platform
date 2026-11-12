@@ -1140,6 +1140,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-multi-display"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-nfc-card-emulation"
 version = "0.2.0"
 dependencies = [
@@ -1250,6 +1263,7 @@ dependencies = [
  "fandhe-cap-document-scan",
  "fandhe-cap-home-widget",
  "fandhe-cap-http-get",
+ "fandhe-cap-multi-display",
  "fandhe-cap-nfc-card-emulation",
  "fandhe-cap-share-receive",
  "fandhe-cap-system-tray",
@@ -1348,6 +1362,7 @@ dependencies = [
  "console_error_panic_hook",
  "fandhe-cap-accessibility-prefs",
  "fandhe-cap-http-get",
+ "fandhe-cap-multi-display",
  "fandhe-cap-share-receive",
  "fandhe-core",
  "fandhe-device",

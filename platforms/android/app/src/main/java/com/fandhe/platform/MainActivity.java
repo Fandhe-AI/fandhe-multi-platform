@@ -4713,13 +4713,6 @@ public class MainActivity extends GameActivity {
         return DisplayRefreshHdrHelper.read(this);
     }
 
-    // Rust 側（`device/android_multi_display.rs`、Issue #1343）から JNI 経由で egui スレッドが
-    // 1 秒ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
-    // `MultiDisplayHelper` 冒頭を参照。失敗は null。
-    private String multiDisplayRead() {
-        return MultiDisplayHelper.read(getApplicationContext());
-    }
-
     // Rust 側（`device/android.rs` の `AndroidHaptics`、Issue #1092）から JNI 経由で
     // egui スレッドから呼ばれる同期メソッド（シグネチャ `()I`）。`Vibrator.vibrate` に
     // スレッド制約は無く、Java → Rust の native コールバックも持たないため no-op スタブは不要。

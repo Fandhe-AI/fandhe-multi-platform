@@ -1,6 +1,6 @@
 //! アクセシビリティ設定（視差軽減・コントラスト増加）の契約（Issue #1308、親 #1132）。
 //! 2 つの OS 設定を画面へ反映するための橋渡しで、`fandhe-egui-proxy` の
-//! `device/accessibility_prefs.rs` が間隔つきで [`AccessibilityPrefsSource::read`] を呼ぶ
+//! `fandhe-cap-accessibility-prefs/src/driver.rs` が間隔つきで [`AccessibilityPrefsSource::read`] を呼ぶ
 //! （pull 型。OS の変化通知は購読しない）。Web は `fandhe-web-dom` が `matchMedia` を読む。
 //!
 //! # 契約

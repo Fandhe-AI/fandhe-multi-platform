@@ -261,11 +261,6 @@ pub mod android_ml_inference;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_motion_raw_sensors;
-/// Issue #1343: Android 向け複数ディスプレイ実装（`DisplayManager` を JNI で読む）。
-/// `device/multi_display.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_multi_display;
 /// Issue #485: Android 向け音楽ライブラリ実装（`MediaStore.Audio.Media` を JNI 経由で読む）。
 /// `device/music_library.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でも載せる。
 #[cfg(any(target_os = "android", test))]
@@ -1093,10 +1088,6 @@ pub mod ios_ml_inference;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_motion_raw_sensors;
-/// Issue #27: iOS 向け複数ディスプレイ実装（`ios/fandhe_ios_multi_display.m`、scene の `UIScreen`）。
-/// `device/multi_display.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_multi_display;
 /// Issue #484: iOS 向け音楽ライブラリ実装（`ios/fandhe_ios_music_library.m` の MediaPlayer を呼ぶ
 /// C ABI ラッパー）。`device/music_library.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -1343,13 +1334,6 @@ pub mod macos_managed_app_config;
 /// memory pressure source を呼ぶ C ABI ラッパー）。`device/memory_pressure.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_memory_pressure;
-/// Issue #1341: macOS 向け複数ディスプレイ実装（`macos/fandhe_macos_multi_display.m` を呼ぶ C ABI
-/// ラッパー）。`device/multi_display.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
-/// テストできるよう cfg は `any(macos, test)`。写像の純関数は iOS 実装（`ios_multi_display`）と
-/// 共用するため iOS でもコンパイルする。
-#[cfg(any(target_os = "macos", target_os = "ios", test))]
-#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
-pub mod macos_multi_display;
 /// Issue #482: macOS 向け音楽ライブラリ実装（`macos/fandhe_macos_music_library.m` の `ITLibrary` を
 /// 呼ぶ C ABI ラッパー）。`device/music_library.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -1513,9 +1497,6 @@ pub mod ml_inference;
 /// Phase 11（親 #180、Issue #898）: ジャイロ・磁気・線形加速度の生値の effect ドライバ（iOS・Android・Windows 実装、
 /// 他 OS は `UnsupportedMotionRawSensors` 固定。Web は `fandhe-web-dom` 側）。
 pub mod motion_raw_sensors;
-/// Phase 11 の拡充ループ（親 #1134、Issue #1341）: 複数ディスプレイの effect ドライバ（macOS / Windows
-/// ・iOS・Android 実装、他 OS は `UnsupportedMultiDisplay` 固定）。
-pub mod multi_display;
 /// Phase 11 の拡充ループ（親 #108、Issue #482）: 音楽ライブラリの effect ドライバ（macOS・iOS 実装、
 /// Windows・Android は #483・#485 の担当、他 OS は `UnsupportedMusicLibrary` 固定。
 /// Web は対象外）。
@@ -1921,12 +1902,6 @@ pub mod windows_ml_inference;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_motion_raw_sensors;
-/// Issue #1341: Windows 向け複数ディスプレイ実装（`EnumDisplayMonitors` / `GetMonitorInfoW` /
-/// `GetDpiForMonitor`）。`device/multi_display.rs` の Windows 経路から呼ばれる。写像の純関数を
-/// ホストでテストできるよう cfg は `any(windows, test)`。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_multi_display;
 /// Issue #483: Windows 向け音楽ライブラリ実装（Music フォルダの走査 + プロパティストア）。
 /// `device/music_library.rs` の Windows 経路から呼ばれる。走査の純関数をホストの `cargo test` で
 /// 検査するため cfg は `any(windows, test)`。

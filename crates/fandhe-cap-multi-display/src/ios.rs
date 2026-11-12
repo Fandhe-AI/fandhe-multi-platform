@@ -1,14 +1,14 @@
 //! iOS 向け複数ディスプレイ実装（Issue #27）。`ios/fandhe_ios_multi_display.m`
 //! （`UIApplication.connectedScenes` の `UIWindowScene.screen`、`build.rs` が iOS ターゲットの
 //! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの
-//! 呼び出しに閉じる。`device/multi_display.rs` の iOS 経路から呼ばれ、契約は
-//! `fandhe_device::multi_display`。`macos_multi_display.rs` と同型の薄いラッパーで、
+//! 呼び出しに閉じる。`fandhe-cap-multi-display/src/driver.rs` の iOS 経路から呼ばれ、契約は
+//! `fandhe_cap_multi_display`。`macos_multi_display.rs` と同型の薄いラッパーで、
 //! 生値の写像（`Raw` / `from_raw`）は macOS 版を共用する。
 //!
 //! 外部ディスプレイは scene 化（`ios/fandhe_ios_scene.m`、Info.plist の
 //! `UIApplicationSceneManifest`）で初めて列挙できる。`UIScreen.screens` は iOS 16 で非推奨で、
 //! 外部画面を返す保証が無いため使わない。再描画は `CompletionSender` 経由のため
-//! `crate::ios::request_repaint` は不要（契約表 4）。
+//! `fandhe_runtime::request_repaint` は不要（契約表 4）。
 //!
 //! # 守る範囲
 //!
@@ -22,14 +22,14 @@
 //! - 画面名は取れない（`UIScreen` に表示名の API が無く、常に `None`）
 //! - 接続・切断の反映は最大 `READ_INTERVAL` 遅れる
 
-use fandhe_device::multi_display::ScreenInfo;
+use crate::contract::ScreenInfo;
 
-use super::macos_multi_display::{from_raw, Raw, CAP};
+use crate::macos::{CAP, Raw, from_raw};
 
 // SAFETY: `ios/fandhe_ios_multi_display.m`（`build.rs` が iOS ターゲットの feature `device` 有効時に
 // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
 #[allow(unsafe_code)]
-extern "C" {
+unsafe extern "C" {
     fn fandhe_ios_multi_display_read(out: *mut Raw, cap: u32, count: *mut u32) -> i32;
 }
 
@@ -43,8 +43,8 @@ fn read_raw(out: &mut [Raw], count: &mut u32) -> i32 {
 
 struct IosMultiDisplay;
 
-impl fandhe_device::multi_display::MultiDisplay for IosMultiDisplay {
-    fn read(&self) -> Result<Vec<ScreenInfo>, fandhe_device::DeviceError> {
+impl crate::contract::MultiDisplay for IosMultiDisplay {
+    fn read(&self) -> Result<Vec<ScreenInfo>, crate::error::MultiDisplayError> {
         let mut buf = [Raw {
             width_px: 0,
             height_px: 0,
@@ -54,13 +54,13 @@ impl fandhe_device::multi_display::MultiDisplay for IosMultiDisplay {
         }; CAP];
         let mut count = 0u32;
         if read_raw(&mut buf, &mut count) != 0 || count as usize > CAP {
-            return Err(fandhe_device::DeviceError::Internal("multi_display read"));
+            return Err(crate::error::MultiDisplayError::Internal);
         }
         Ok(from_raw(&buf[..count as usize]))
     }
 }
 
-/// iOS の `MultiDisplay` 実装を返す（`device/multi_display.rs` の dispatch から呼ばれる）。
-pub(crate) fn implementation() -> Box<dyn fandhe_device::multi_display::MultiDisplay> {
+/// iOS の `MultiDisplay` 実装を返す（`fandhe-cap-multi-display/src/driver.rs` の dispatch から呼ばれる）。
+pub(crate) fn implementation() -> Box<dyn crate::contract::MultiDisplay> {
     Box::new(IosMultiDisplay)
 }
