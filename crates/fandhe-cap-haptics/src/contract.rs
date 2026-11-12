@@ -35,7 +35,7 @@
 //! したか・振動が重なったときの体感は OS / 端末 / ユーザー設定に依存し、検知も保証も
 //! しない。確保する資源は無い（要求を渡したら終わり）ため、画面離脱・終了時の後片付けも無い。
 
-use crate::DeviceError;
+use crate::error::HapticsError;
 
 /// 触覚フィードバックの契約（モジュール doc の「契約」節）。
 pub trait Haptics: Send + Sync {
@@ -43,15 +43,15 @@ pub trait Haptics: Send + Sync {
     ///
     /// 非搭載を判定できる OS では非搭載のとき `Err(Unsupported)`。判定できない
     /// macOS / Web の `Ok` は「要求を渡した」まで。
-    fn tap(&self) -> Result<(), DeviceError>;
+    fn tap(&self) -> Result<(), HapticsError>;
 }
 
 /// 対象外 OS（Linux 等）・初期化失敗時のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedHaptics;
 
 impl Haptics for UnsupportedHaptics {
-    fn tap(&self) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("haptics"))
+    fn tap(&self) -> Result<(), HapticsError> {
+        Err(HapticsError::Unsupported)
     }
 }
 
@@ -62,6 +62,6 @@ mod tests {
     #[test]
     fn unsupported_haptics_is_not_a_fake_success() {
         let err = UnsupportedHaptics.tap().unwrap_err();
-        assert!(matches!(err, DeviceError::Unsupported(_)));
+        assert!(matches!(err, HapticsError::Unsupported));
     }
 }

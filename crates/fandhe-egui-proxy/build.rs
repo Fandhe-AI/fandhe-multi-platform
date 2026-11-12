@@ -154,9 +154,6 @@ fn build() {
     // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
     compile_apple_local_peer();
 
-    // `apple/fandhe_apple_haptics.m`（Issue #1091 macOS + #1092 iOS）も macOS 分岐と
-    // 共用する。
-    compile_apple_haptics();
     compile_apple_nlp();
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も iOS 分岐と共用する。
     compile_apple_image_recognition();
@@ -468,20 +465,6 @@ fn compile_apple_speech_recognition() {
             &["AVFoundation", "Speech", "UIKit"]
         } else {
             &["AVFoundation", "Speech"]
-        },
-    );
-}
-
-/// `apple/fandhe_apple_haptics.m` を `cc` でコンパイルする（Issue #1091 macOS + #1092 iOS、触覚フィードバック）。
-/// macOS は AppKit、iOS は CoreHaptics（`supportsHaptics` 判定）と UIKit をリンクする。
-/// iOS・macOS 双方の feature `device` 分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_haptics`）と同じ OS 集合に保つ。
-fn compile_apple_haptics() {
-    compile_objc(
-        "apple/fandhe_apple_haptics.m",
-        if target_is_ios() {
-            &["CoreHaptics", "UIKit"]
-        } else {
-            &["AppKit"]
         },
     );
 }
@@ -1500,8 +1483,6 @@ fn build_macos() {
     // `apple/fandhe_apple_local_peer.m`（Issue #511 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
     compile_apple_local_peer();
-    // `apple/fandhe_apple_haptics.m`（Issue #1091 macOS + #1092 iOS）も iOS 分岐と共用する。
-    compile_apple_haptics();
     // `apple/fandhe_apple_nlp.m`（Issue #1094 macOS + #1095 iOS）も macOS 分岐と共用する。
     compile_apple_nlp();
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も共用する。

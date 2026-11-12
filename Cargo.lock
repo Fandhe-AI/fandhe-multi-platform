@@ -1121,6 +1121,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-haptics"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-home-widget"
 version = "0.2.0"
 dependencies = [
@@ -1295,6 +1309,7 @@ dependencies = [
  "fandhe-cap-camera-capture",
  "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
+ "fandhe-cap-haptics",
  "fandhe-cap-home-widget",
  "fandhe-cap-live-activity",
  "fandhe-cap-ml-inference",

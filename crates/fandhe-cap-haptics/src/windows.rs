@@ -1,4 +1,4 @@
-//! Windows 向け触覚フィードバック実装（Issue #1091）。`device/haptics.rs` の Windows
+//! Windows 向け触覚フィードバック実装（Issue #1091）。`driver.rs` の Windows
 //! 経路から呼ばれ、WinRT `VibrationDevice` / `SimpleHapticsController` で軽い振動を
 //! 1 回要求する（`Haptics` トレイトを実装。呼び出し側がワーカースレッドで呼ぶ前提、
 //! `.get()` が同期待ちのため）。
@@ -9,7 +9,7 @@
 //!    （契約上 `PermissionDenied` は返さない。成功にもしない）
 //! 2. `VibrationDevice::GetDefaultAsync().get()`: null（振動デバイス無し）は `Unsupported`、
 //!    それ以外のエラーは `Internal`
-//! 3. `SupportedFeedback` から Click 波形だけを選ぶ（`haptics::select_feedback_index`）。
+//! 3. `SupportedFeedback` から Click 波形だけを選ぶ（`crate::driver::select_feedback_index`）。
 //!    Click が無ければ `Unsupported`（連続波形等は止められないため使わない）
 //! 4. `SendHapticFeedback`。失敗は `Internal`
 //!
@@ -23,56 +23,53 @@
 //! （`windows_share.rs` の前例と同じ扱い）。ローカルに MSVC が無く、型検査は
 //! `x86_64-pc-windows-gnu` のみ。`.get()` に期限は設けない。
 
-use fandhe_device::haptics::Haptics;
-use fandhe_device::DeviceError;
+use crate::contract::Haptics;
+use crate::error::HapticsError;
 use windows::Devices::Haptics::{
     KnownSimpleHapticsControllerWaveforms, VibrationAccessStatus, VibrationDevice,
 };
 
-use super::haptics::select_feedback_index;
+use crate::driver::select_feedback_index;
 
 /// `VibrationDevice` で軽い振動を 1 回要求する実装。
 pub(crate) struct WindowsHaptics;
 
 impl Haptics for WindowsHaptics {
-    fn tap(&self) -> Result<(), DeviceError> {
+    fn tap(&self) -> Result<(), HapticsError> {
         let access = VibrationDevice::RequestAccessAsync()
             .and_then(|op| op.get())
-            .map_err(|_| DeviceError::Internal("haptics access"))?;
+            .map_err(|_| HapticsError::Internal)?;
         if access != VibrationAccessStatus::Allowed {
-            return Err(DeviceError::Internal("haptics access"));
+            return Err(HapticsError::Internal);
         }
 
         let device = match VibrationDevice::GetDefaultAsync().and_then(|op| op.get()) {
             Ok(device) => device,
             // 振動デバイス無しは `GetDefaultAsync` が null（S_OK + 空）を返す
             // （`windows_bluetooth_le.rs` と同じ判定）。
-            Err(e) if e.code().0 == 0 => return Err(DeviceError::Unsupported("haptics")),
-            Err(_) => return Err(DeviceError::Internal("haptics init")),
+            Err(e) if e.code().0 == 0 => return Err(HapticsError::Unsupported),
+            Err(_) => return Err(HapticsError::Internal),
         };
 
         let controller = device
             .SimpleHapticsController()
-            .map_err(|_| DeviceError::Internal("haptics init"))?;
+            .map_err(|_| HapticsError::Internal)?;
         let supported = controller
             .SupportedFeedback()
-            .map_err(|_| DeviceError::Internal("haptics init"))?;
+            .map_err(|_| HapticsError::Internal)?;
         let feedbacks: Vec<_> = supported.into_iter().collect();
         let mut waveforms = Vec::with_capacity(feedbacks.len());
         for f in &feedbacks {
-            waveforms.push(
-                f.Waveform()
-                    .map_err(|_| DeviceError::Internal("haptics init"))?,
-            );
+            waveforms.push(f.Waveform().map_err(|_| HapticsError::Internal)?);
         }
-        let click = KnownSimpleHapticsControllerWaveforms::Click()
-            .map_err(|_| DeviceError::Internal("haptics init"))?;
+        let click =
+            KnownSimpleHapticsControllerWaveforms::Click().map_err(|_| HapticsError::Internal)?;
         let Some(index) = select_feedback_index(&waveforms, click) else {
-            return Err(DeviceError::Unsupported("haptics"));
+            return Err(HapticsError::Unsupported);
         };
 
         controller
             .SendHapticFeedback(&feedbacks[index])
-            .map_err(|_| DeviceError::Internal("haptics send"))
+            .map_err(|_| HapticsError::Internal)
     }
 }

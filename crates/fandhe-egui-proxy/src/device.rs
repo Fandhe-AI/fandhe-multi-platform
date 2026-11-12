@@ -522,11 +522,6 @@ pub mod apple_gamepad;
 /// 同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_geocoding_search;
-/// Issue #1091・#1092: macOS / iOS 向け触覚フィードバック実装（`apple/fandhe_apple_haptics.m`
-/// を呼ぶ C ABI ラッパー）。`device/haptics.rs` の Apple 経路から呼ばれる。`build.rs` の
-/// コンパイル条件と同じ OS 集合に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_haptics;
 /// Issue #975 macOS・#976 iOS: 端末内での画像生成実装（`apple/fandhe_apple_image_generation.swift` を
 /// 呼ぶ C ABI ラッパー）。`device/image_generation.rs` の macOS 経路と、iOS 経路から呼ばれる。
 /// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
@@ -829,10 +824,6 @@ pub mod geofence;
 /// Phase 11 の拡充ループ（親 #150、Issue #766）: グローバルホットキーの effect ドライバ
 /// （macOS 実装。Windows は骨格のスタブで #767 が埋める。他 OS は `UnsupportedGlobalHotkey` 固定）。
 pub mod global_hotkey;
-/// Phase 11 の拡充ループ（親 #1090、Issue #1091）: 触覚フィードバックの effect ドライバ
-/// （macOS/Windows 実装、他 OS は `UnsupportedHaptics` 固定。Web は `fandhe-web-dom`、
-/// iOS/Android は #1092）。
-pub mod haptics;
 /// Phase 11 の拡充ループ（親 #149、Issue #1089）: ヘルスデータ（今日の歩数）の effect ドライバ
 /// （iOS・Android は OS 別モジュール。他 OS は `UnsupportedHealthData` 固定）。
 pub mod health_data;
@@ -1786,10 +1777,6 @@ pub mod windows_gamepad;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_global_hotkey;
-/// Issue #1091: Windows 向け触覚フィードバック実装（WinRT `VibrationDevice` ラッパー）。
-/// `device/haptics.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_haptics;
 /// Issue #960: Windows 向け在席検知実装（WinRT `HumanPresenceSensor` ラッパー）。
 /// `device/human_presence.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

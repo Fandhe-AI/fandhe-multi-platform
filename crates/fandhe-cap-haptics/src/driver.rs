@@ -1,13 +1,13 @@
 //! Phase 11（親 #1090）型サンプル「触覚フィードバック」（Issue #1091）の effect ドライバ。
 //! `fandhe_core::screens::haptics_tap`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::haptics::Haptics` で OS へ軽い振動 1 回を要求して `CompletionSender`
+//! `crate::contract::Haptics` で OS へ軽い振動 1 回を要求して `CompletionSender`
 //! 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。Web（wasm32）は本経路を通らず
 //! `fandhe-web-dom` の `haptics.rs` が `navigator.vibrate` へ直接配線する。
-//! 契約（`Ok` の意味・`Unsupported` の条件・連打）の SSOT は `fandhe_device::haptics`。
+//! 契約（`Ok` の意味・`Unsupported` の条件・連打）の SSOT は `crate::contract`。
 //!
 //! # スレッド
 //!
@@ -19,19 +19,19 @@
 //!
 //! # 対応 OS
 //!
-//! macOS / iOS: [`super::apple_haptics::AppleHaptics`]、Windows: [`super::windows_haptics::
-//! WindowsHaptics`]、Android: `super::android::AndroidHaptics`。それ以外（Linux）は
+//! macOS / iOS: `apple::AppleHaptics`、Windows: `windows::
+//! WindowsHaptics`、Android: `crate::android::AndroidHaptics`。それ以外（Linux）は
 //! `UnsupportedHaptics` 固定（ダミーの成功実装へは倒さない）。
 
 use std::sync::Arc;
 
+use crate::contract::Haptics;
+use crate::error::HapticsError;
 use fandhe_core::screens::haptics_tap::{
-    finish_tap, mark_sending, take_request, HapticsTapState, TapFailure,
+    HapticsTapState, TapFailure, finish_tap, mark_sending, take_request,
 };
-use fandhe_device::haptics::Haptics;
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `Haptics` 実装を返す（プロセスで 1 個）。
 fn implementation() -> Arc<dyn Haptics> {
@@ -41,19 +41,19 @@ fn implementation() -> Arc<dyn Haptics> {
         .get_or_init(|| {
             #[cfg(target_os = "macos")]
             {
-                Arc::new(super::apple_haptics::AppleHaptics)
+                Arc::new(crate::apple::AppleHaptics)
             }
             #[cfg(target_os = "windows")]
             {
-                Arc::new(super::windows_haptics::WindowsHaptics)
+                Arc::new(crate::windows::WindowsHaptics)
             }
             #[cfg(target_os = "ios")]
             {
-                Arc::new(super::apple_haptics::AppleHaptics)
+                Arc::new(crate::apple::AppleHaptics)
             }
             #[cfg(target_os = "android")]
             {
-                Arc::new(super::android::AndroidHaptics)
+                Arc::new(crate::android::AndroidHaptics)
             }
             #[cfg(not(any(
                 target_os = "macos",
@@ -62,17 +62,17 @@ fn implementation() -> Arc<dyn Haptics> {
                 target_os = "android"
             )))]
             {
-                Arc::new(fandhe_device::haptics::UnsupportedHaptics)
+                Arc::new(crate::contract::UnsupportedHaptics)
             }
         })
         .clone()
 }
 
-/// `DeviceError` を画面の失敗種別へ写す。内部構造は `fandhe-core` へ漏らさず、
+/// `HapticsError` を画面の失敗種別へ写す。内部構造は `fandhe-core` へ漏らさず、
 /// `Unsupported` 以外は `Display` の文言のみを転送する（security.md A09）。
-fn to_failure(e: DeviceError) -> TapFailure {
+fn to_failure(e: HapticsError) -> TapFailure {
     match e {
-        DeviceError::Unsupported(_) => TapFailure::Unsupported,
+        HapticsError::Unsupported => TapFailure::Unsupported,
         other => TapFailure::Failed(other.to_string()),
     }
 }
@@ -109,9 +109,7 @@ fn drive(
                 finish_tap(
                     s,
                     generation,
-                    Err(TapFailure::Failed(
-                        DeviceError::Internal("haptics worker").to_string(),
-                    )),
+                    Err(TapFailure::Failed(HapticsError::Internal.to_string())),
                 );
             }));
         }
@@ -130,14 +128,14 @@ pub fn haptics_tap_effect(state: &HapticsTapState, sender: &CompletionSender<Hap
     drive(state, sender, implementation());
 }
 
-/// Java 側 `MainActivity.hapticsTap()` の戻り値（0 = 要求を渡した / 1 = 振動子なし /
+/// Java 側 `HapticsHelper.tap` の戻り値（0 = 要求を渡した / 1 = 振動子なし /
 /// それ以外 = 失敗）を契約のエラー種別へ写す。ホストでも検証できるよう OS 非依存の純関数。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
-pub(crate) fn decode_haptics_result(code: i32) -> Result<(), DeviceError> {
+pub(crate) fn decode_haptics_result(code: i32) -> Result<(), HapticsError> {
     match code {
         0 => Ok(()),
-        1 => Err(DeviceError::Unsupported("haptics")),
-        _ => Err(DeviceError::Internal("haptics")),
+        1 => Err(HapticsError::Unsupported),
+        _ => Err(HapticsError::Internal),
     }
 }
 
@@ -153,22 +151,31 @@ pub(crate) fn select_feedback_index(waveforms: &[u16], click: u16) -> Option<usi
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::haptics_tap::{tap, REQUESTED_STATUS, UNSUPPORTED_STATUS};
-    use fandhe_device::haptics::UnsupportedHaptics;
+    use crate::contract::UnsupportedHaptics;
+    use fandhe_core::screens::haptics_tap::{REQUESTED_STATUS, UNSUPPORTED_STATUS, tap};
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     fn sender_with_channel() -> (
         CompletionSender<HapticsTapState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<HapticsTapState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<HapticsTapState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
-    struct Fake(Result<(), fn() -> DeviceError>);
+    struct Fake(Result<(), fn() -> HapticsError>);
 
     impl Haptics for Fake {
-        fn tap(&self) -> Result<(), DeviceError> {
+        fn tap(&self) -> Result<(), HapticsError> {
             self.0.map_err(|f| f())
         }
     }
@@ -216,7 +223,7 @@ mod tests {
 
     #[test]
     fn internal_error_is_failure_with_prefix() {
-        let state = run(Arc::new(Fake(Err(|| DeviceError::Internal("haptics")))));
+        let state = run(Arc::new(Fake(Err(|| HapticsError::Internal))));
         assert!(state.error.starts_with("失敗しました: "), "{}", state.error);
         assert_eq!(state.status, "");
     }
@@ -231,7 +238,7 @@ mod tests {
     fn unsupported_os_implementation_is_unsupported() {
         assert!(matches!(
             implementation().tap(),
-            Err(DeviceError::Unsupported(_))
+            Err(HapticsError::Unsupported)
         ));
     }
 
@@ -240,15 +247,15 @@ mod tests {
         assert!(decode_haptics_result(0).is_ok());
         assert!(matches!(
             decode_haptics_result(1),
-            Err(DeviceError::Unsupported(_))
+            Err(HapticsError::Unsupported)
         ));
         assert!(matches!(
             decode_haptics_result(2),
-            Err(DeviceError::Internal(_))
+            Err(HapticsError::Internal)
         ));
         assert!(matches!(
             decode_haptics_result(-1),
-            Err(DeviceError::Internal(_))
+            Err(HapticsError::Internal)
         ));
     }
 

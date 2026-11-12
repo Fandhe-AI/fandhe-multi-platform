@@ -69,16 +69,16 @@ mod imp {
     use crate::device::android::JniCallFailed;
 
     /// `MainActivity.fileProviderNotifyChanged()` を呼ぶ。JNI 失敗・例外は `None`。
-    /// `AndroidHaptics::tap` と同じ根拠・同じ形。
+    /// `fandhe_platform_android::with_activity` と同じ根拠・同じ形。
     #[allow(unsafe_code)]
     pub(super) fn notify_changed() -> Option<bool> {
         let app = crate::android::android_app()?;
-        // SAFETY: `AndroidHaptics::tap` と同一の根拠。`vm_as_ptr()` は android-activity が
+        // SAFETY: `fandhe_platform_android::with_activity` と同一の根拠。`vm_as_ptr()` は android-activity が
         // 管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
         let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
         vm.attach_current_thread(|env: &mut jni::Env| -> Result<bool, JniCallFailed> {
             let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: `AndroidHaptics::tap` と同一の根拠。未所有のグローバル参照を `Cast` で
+            // SAFETY: `fandhe_platform_android::with_activity` と同一の根拠。未所有のグローバル参照を `Cast` で
             // 包むだけで delete は試みない。
             let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
             let ret = env.call_method(

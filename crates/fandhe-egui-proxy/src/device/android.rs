@@ -14,7 +14,6 @@ use std::time::{Duration, Instant};
 use fandhe_core::screens::drag_drop::DropItem;
 use fandhe_device::clipboard::Clipboard;
 use fandhe_device::file_picker::{PickedFile, MAX_FILE_BYTES};
-use fandhe_device::haptics::Haptics;
 use fandhe_device::nlp::{validate_input, WordSegmenter};
 use fandhe_device::secure_credential::{validate_key, validate_secret, Secret, SecureCredential};
 use fandhe_device::share::ShareRequest;
@@ -819,45 +818,6 @@ impl TextScale for AndroidTextScale {
     }
 }
 
-/// Android 実触覚フィードバック実装（`Vibrator`、Issue #1092）。`device/haptics.rs` の
-/// effect ドライバから egui スレッドで同期に呼ばれる。`AndroidTextScale` と同じく mailbox
-/// を介さない: Java 側 `MainActivity.hapticsTap()`（`()I`）は非同期コールバックを持たない
-/// ため、戻り値を `decode_haptics_result` で写すだけで済む。
-pub struct AndroidHaptics;
-
-impl Haptics for AndroidHaptics {
-    /// 2 箇所の `unsafe` は `AndroidTextScale::scale_factor` と同じ根拠・同じ形。
-    #[allow(unsafe_code)]
-    fn tap(&self) -> Result<(), DeviceError> {
-        let Some(app) = crate::android::android_app() else {
-            return Err(DeviceError::Internal("haptics: no activity"));
-        };
-
-        // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。`vm_as_ptr()` は
-        // android-activity が管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-        let result = vm.attach_current_thread(|env: &mut jni::Env| -> Result<i32, JniCallFailed> {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。未所有の JNI
-            // グローバル参照を `Cast` で包むだけで delete は試みない。
-            let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-            let value = env.call_method(
-                &activity,
-                jni::jni_str!("hapticsTap"),
-                jni::jni_sig!(() -> int),
-                &[],
-            )?;
-            Ok(value.i()?)
-        });
-
-        match result {
-            Ok(code) => super::haptics::decode_haptics_result(code),
-            Err(_) => Err(DeviceError::Internal("haptics: jni call failed")),
-        }
-    }
-}
-
 // --------------------------------------------------------------------------
 // 単語分割（Issue #1095、Phase 11 型サンプル「単語分割」の Android 経路）
 // --------------------------------------------------------------------------
@@ -869,7 +829,7 @@ impl Haptics for AndroidHaptics {
 pub struct AndroidWordSegmenter;
 
 impl WordSegmenter for AndroidWordSegmenter {
-    /// 2 箇所の `unsafe` は `AndroidHaptics::tap` と同じ根拠・同じ形。
+    /// 2 箇所の `unsafe` は `fandhe_platform_android::with_activity` と同じ根拠・同じ形。
     #[allow(unsafe_code)]
     fn segment(&self, text: &str) -> Result<Vec<String>, DeviceError> {
         validate_input(text)?;
@@ -880,7 +840,7 @@ impl WordSegmenter for AndroidWordSegmenter {
             return Err(DeviceError::Internal("nlp: no activity"));
         };
 
-        // SAFETY: `AndroidHaptics::tap` と同一の根拠。`vm_as_ptr()` は android-activity が
+        // SAFETY: `fandhe_platform_android::with_activity` と同一の根拠。`vm_as_ptr()` は android-activity が
         // 管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
         let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
 
@@ -888,7 +848,7 @@ impl WordSegmenter for AndroidWordSegmenter {
             |env: &mut jni::Env| -> Result<Option<String>, JniCallFailed> {
                 let j_text = env.new_string(text)?;
                 let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                // SAFETY: `AndroidHaptics::tap` と同一の根拠。未所有の JNI グローバル参照を
+                // SAFETY: `fandhe_platform_android::with_activity` と同一の根拠。未所有の JNI グローバル参照を
                 // `Cast` で包むだけで delete は試みない。
                 let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
                 let ret = env.call_method(

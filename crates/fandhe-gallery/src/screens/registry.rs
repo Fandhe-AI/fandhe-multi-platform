@@ -251,7 +251,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "haptics_tap" => fandhe_core::screens::haptics_tap::current_screen,
-    fandhe_egui_proxy::device::haptics::haptics_tap_effect,
+    fandhe_cap_haptics::haptics_tap_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "system_sound_beep" => fandhe_core::screens::system_sound_beep::current_screen,

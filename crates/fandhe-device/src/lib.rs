@@ -117,8 +117,6 @@ pub mod geocoding_search;
 pub mod geofence;
 /// Phase 11（端末機能の拡充ループ、親 #150、Issue #766）: グローバルホットキー（固定の組み合わせ 1 つ）。
 pub mod global_hotkey;
-/// Phase 11（端末機能の拡充ループ）: 触覚フィードバック（軽い振動 1 回）。
-pub mod haptics;
 /// Phase 11（端末機能の拡充ループ、親 #149、Issue #1089）: ヘルスデータ（今日の歩数を 1 回読む）。
 pub mod health_data;
 pub mod http;

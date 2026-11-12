@@ -22,6 +22,7 @@ device = [
   "dep:fandhe-cap-camera-capture",
   "dep:fandhe-cap-device-identifier",
   "dep:fandhe-cap-document-scan",
+  "dep:fandhe-cap-haptics",
   "dep:fandhe-cap-home-widget",
   "dep:fandhe-cap-live-activity",
   "dep:fandhe-cap-ml-inference",
@@ -81,6 +82,7 @@ fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui", optional = true }
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
 fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier", optional = true }
 fandhe-cap-document-scan = { path = "../fandhe-cap-document-scan", optional = true }
+fandhe-cap-haptics = { path = "../fandhe-cap-haptics", optional = true }
 fandhe-cap-home-widget = { path = "../fandhe-cap-home-widget", optional = true }
 fandhe-cap-live-activity = { path = "../fandhe-cap-live-activity", optional = true }
 fandhe-cap-ml-inference = { path = "../fandhe-cap-ml-inference", optional = true }

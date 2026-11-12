@@ -1,9 +1,9 @@
 // Phase 11 の拡充ループ（親 #1090）型サンプル「触覚フィードバック」: macOS 実装（Issue #1091）
 // と iOS 実装（Issue #1092）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_haptics.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が macOS（AppKit）・iOS（UIKit + CoreHaptics）ターゲットの feature `device`
-// 有効時に `cc` コンパイルする。Rust 側 cfg（`device.rs` の `apple_haptics`）と同じ OS 集合。
+// `crates/fandhe-cap-haptics/src/apple.rs` から C ABI 経由で呼ばれる。
+// 本 crate の `build.rs` が macOS（AppKit）・iOS（UIKit + CoreHaptics）ターゲットで
+// `cc` コンパイルする。Rust 側 cfg（`lib.rs` の `apple`）と同じ OS 集合。
 //
 // 契約（一発呼び出し型。結果を待つ要求は持たない）:
 //   fandhe_apple_haptics_tap(void) -> int32_t
@@ -15,7 +15,7 @@
 //         iPad の多くが該当。呼び出し元が `Unsupported` へ写す。macOS は 3 を返さない）。
 // iOS の `0` も「要求を渡した」まで（サイレント・システム触覚オフ・背景では無反応で検知不可）。
 //
-// スレッド: AppKit は main スレッド前提。呼び出し元（`device/haptics.rs` の effect）は
+// スレッド: AppKit は main スレッド前提。呼び出し元（`crates/fandhe-cap-haptics/src/driver.rs` の effect）は
 // egui の update ループ = macOS では main スレッドから同期で呼ぶ。performer の取得・判定・
 // 実行は main 上の同じ処理で行い、失敗をそのまま返す。main 以外から呼ばれた場合は
 // `dispatch_sync` で main を待たず（main 側が呼び出し元を待っているとデッドロックするため、

@@ -4666,39 +4666,6 @@ public class MainActivity extends GameActivity {
         return MultiDisplayHelper.read(getApplicationContext());
     }
 
-    // Rust 側（`device/android.rs` の `AndroidHaptics`、Issue #1092）から JNI 経由で
-    // egui スレッドから呼ばれる同期メソッド（シグネチャ `()I`）。`Vibrator.vibrate` に
-    // スレッド制約は無く、Java → Rust の native コールバックも持たないため no-op スタブは不要。
-    // 戻り値（Rust 側 `decode_haptics_result` と対で決める契約）:
-    //   0 = 要求を渡した（サイレント・システム触覚オフでは無反応で、検知できない）
-    //   1 = 振動子なし（`Unsupported` へ写す）
-    //   2 = 失敗（`SecurityException` 等。Java 例外を JNI 側へ残さず `Internal` へ写す）
-    // 15ms は Web 実装（`navigator.vibrate(15)`）に揃えた軽い単発。
-    @SuppressWarnings("deprecation")
-    private int hapticsTap() {
-        try {
-            Vibrator vibrator;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                VibratorManager manager = getSystemService(VibratorManager.class);
-                vibrator = manager == null ? null : manager.getDefaultVibrator();
-            } else {
-                vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-            }
-            if (vibrator == null || !vibrator.hasVibrator()) {
-                return 1;
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(
-                        VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE));
-            } else {
-                vibrator.vibrate(15);
-            }
-            return 0;
-        } catch (RuntimeException e) {
-            return 2;
-        }
-    }
-
     // 単語分割（Issue #1095）。egui スレッドから呼ばれる同期メソッド（シグネチャ
     // `(Ljava/lang/String;)Ljava/lang/String;`）。Rust 側 `device/android.rs::
     // AndroidWordSegmenter` から呼ばれ、Java → Rust の native コールバックを持たないため
