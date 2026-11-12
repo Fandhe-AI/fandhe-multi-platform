@@ -13,7 +13,8 @@ TASK-21.4）。構成の根拠は `docs/architecture/consumer-app-structure.md`�
 | 対象 | 扱い |
 |------|------|
 | 端末機能でない行（`ui-widget-catalog`・`checkbox-list`・`dark-mode`・`gpu-backend` など） | crate を作らない |
-| Windows・Web の実装がある機能 | `fandhe-platform-windows` / `-web`（#1184・#1185）の後で移す。`inventory` が注意を表示する |
+| Windows・Web の実装がある機能 | `fandhe-platform-windows` / `-web`（#1184・#1185）は済み。Windows は `src/windows.rs`（scaffold が移す）、Web は `fandhe-web-dom/src/<stem>.rs` を `src/web.rs` へ `git mv` して手で移す（下の「Web の移し方」）。`inventory` の注意は読み流してよい |
+| driver が egui 固有の読み書き口（`fandhe_render_egui::EguiSenderExt`: `set_zoom_factor`・`focused`・`file_drag` など）を使う機能（dynamic-type・share-sheet の Windows 経路・drag-drop） | 機能 crate は egui 非依存のため、そのままは移せない。`fandhe-runtime` に egui 非依存の口を足す設計が先に要る。先行して移さない |
 | 実装が共有ファイル（`device/android.rs`・`device/ios.rs`・`MainActivity.java`）に埋まった古い型（tts・clipboard・http・storage など） | `scaffold` では動かせない。`inventory` の参照行を見て手で切り出す |
 | 対応表の id と stem が違う機能（`http-get` → `http`、`dynamic-type` → `text_scale` など） | `--module <stem>` で渡す |
 | stem が複数ある機能 | stem ごとに手で移す。`scaffold` は 1 stem だけ扱う |
@@ -107,3 +108,17 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 - 共有ファイル（`device.rs`・`fandhe-egui-proxy/build.rs`・`MainActivity.java`・`registry.rs`）は同じ箇所を触りやすい。
   該当行の削除だけに留め、整形や並べ替えを混ぜない
 - 連番つきのファイルは作らない
+
+## 7. 共有コードの過渡期の規則と Web の移し方（第 1 束 #1186）
+
+- 未移行のモジュールが使い続ける記号（例: `fandhe_device::http::{check_url, MAX_BODY_BYTES}`）は `fandhe-device` に残し、
+  機能 crate が `fandhe-device` に依存して参照する。`fandhe-device` から機能 crate へは依存させない
+- 機能の終了時の片付け（`fandhe-egui-proxy::device::shutdown` が呼ぶ `stop_shared_*`）が残る間は、
+  `fandhe-egui-proxy` が該当の機能 crate へ optional 依存する（feature `device`。#1194 で消える過渡期の依存）
+- Web: `fandhe-web-dom/src/<stem>.rs` を `crates/fandhe-cap-<id>/src/web.rs` へ `git mv` し、
+  `crate::mount::Applier` を `fandhe_platform_web::Applier` に直す。ブラウザ API の依存は wasm32 の target 依存に書く。
+  内側の `mod web` は親と同名で clippy に怒られるため `mod browser` などにする。ブラウザ側の解放が要る機能は
+  effect の入口で `fandhe_platform_web::on_mount_release` を呼び、`fandhe-web-dom` の `release_features` から行を消す。
+  `fandhe-web-dom` は機能 crate に依存して `demo.rs` から effect を呼ぶ
+- wasm32 で解決できない依存（`ureq` など）は native の target 依存にし、driver も `cfg(not(target_arch = "wasm32"))` で外す
+- 純関数のテストが private 関数に触れる場合は、元のモジュールに残る関数のテストを元の場所へ戻す
