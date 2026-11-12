@@ -64,7 +64,7 @@ fn is_local_plain_http_host(host: &str) -> bool {
             .is_ok_and(|addr| addr.is_private())
 }
 
-/// `parse_items` は wasm32 の `fandhe-web-dom::http_fetch` 実装からも呼ばれるため、
+/// `parse_items` は wasm32 の `fandhe-cap-http-get` の Web 実装からも呼ばれるため、
 /// desktop 限定の `mod tests`（`UreqHttp` を使う）とは別に全ターゲットで通す
 /// （Issue #985）。
 #[cfg(test)]

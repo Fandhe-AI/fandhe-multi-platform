@@ -70,7 +70,7 @@ const _: () = assert!(
 );
 
 /// `http.get(url)` の応答（JSON 配列）を `Vec<String>` へ変換する。解析・件数上限
-/// （`crate::contract::MAX_ITEMS`）は `fandhe-web-dom::http_fetch` と共有する
+/// （`crate::contract::MAX_ITEMS`）は Web 実装（`web.rs`）と共有する
 /// `crate::contract::parse_items` に委譲する（Issue #985、二重管理を避ける SSOT 方針）。
 /// エラーメッセージに応答本文・URL 全体は含めない（security.md A09 ログ方針、
 /// `DeviceError` の踏襲）。

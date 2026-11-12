@@ -129,7 +129,7 @@ fandhe-fonts = { path = "../fandhe-fonts" }
 fandhe-device = { path = "../fandhe-device", optional = true }
 # 終了時の片付け（`device::shutdown`）が呼ぶ。未移行の機能が使う共有部分が残る間の過渡期の依存（#1194 で消える）。
 fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }
-# Issue #748: `device/http_fetch.rs` が `fandhe_device::http::Http` の応答（JSON 配列）を
+# Issue #748: `fandhe-cap-http-get` が `Http` の応答（JSON 配列）を
 # `Vec<String>` へ変換するために使う。`fandhe-device` と同じく feature `device` に
 # 含め、wasm32 では依存自体を持ち込まない（`ureq` と同じ理由、上記コメント参照）。
 serde_json = { workspace = true, optional = true }
@@ -441,7 +441,7 @@ windows = { workspace = true, optional = true, features = [
     # リダイレクトされた %APPDATA% で失敗する、Cursor Bugbot 指摘）だが、
     # 同一ディレクトリ内の移動は `MoveFileExW` の方が広く対応するため。
     "Win32_Storage_FileSystem",
-    # Issue #1039: `device/windows_system_tray.rs` が通知領域アイコン用の
+    # Issue #1039: `fandhe-cap-system-tray` の `windows.rs` が通知領域アイコン用の
     # 不可視ウィンドウ・メッセージループ・ポップアップメニューを組み立てるために
     # 使う（`CreateWindowExW`/`RegisterClassW`/`GetMessageW`/`TrackPopupMenu` 等）。
     "Win32_UI_WindowsAndMessaging",

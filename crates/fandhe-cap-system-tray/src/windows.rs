@@ -1,4 +1,4 @@
-//! Windows 向けシステムトレイ実装（Issue #1039）。`device/system_tray.rs::
+//! Windows 向けシステムトレイ実装（Issue #1039）。`contract.rs::
 //! platform_tray` の Windows 分岐から呼ばれ、`Shell_NotifyIconW`（通知領域
 //! アイコン）+ 不可視のトップレベルウィンドウ + `TrackPopupMenu`（右クリック
 //! メニュー）で実装する。`windows_share.rs`/`windows_biometric.rs` と同じく
@@ -48,7 +48,7 @@
 //! 速やかに確定し `ready_tx` へ届く。
 //!
 //! `show`/`hide` は `crate::driver::drive` が生成する
-//! 作業スレッドから呼ばれる契約（P1 是正、`device/system_tray.rs` モジュール doc
+//! 作業スレッドから呼ばれる契約（P1 是正、`contract.rs` モジュール doc
 //! 「別スレッドへ逃がす理由」参照）。呼び出しスレッド自体は毎回異なり得るが、
 //! `drive` 側の二重 dispatch 防止（`mark_showing`/`mark_hiding` が完了を待たず
 //! 次の要求を塞ぐ）により同時に実行される `show`/`hide` は常に 1 件のみのため、
@@ -57,7 +57,7 @@
 //! # 選択の受け渡し
 //!
 //! アイコン専用スレッドの `WndProc` から [`crate::contract::
-//! SelectionQueue::push`] へ直接積む（`apple_system_tray.rs` の
+//! SelectionQueue::push`] へ直接積む（`apple.rs` の
 //! `fandhe_rust_system_tray_selected` と同じ橋渡し方式だが、FFI を介さず
 //! 同一プロセス内の Rust 関数呼び出しで完結する）。
 
@@ -101,7 +101,7 @@ const DELETE_RETRY_DELAY: Duration = Duration::from_millis(50);
 
 const WINDOW_CLASS_NAME: PCWSTR = windows::core::w!("FandheSystemTrayWindow");
 
-/// 選択の受け渡し先（`apple_system_tray.rs::QUEUE` と同じ役割）。
+/// 選択の受け渡し先（`apple.rs::QUEUE` と同じ役割）。
 static QUEUE: SelectionQueue = SelectionQueue::new();
 
 /// 表示中のアイコン専用スレッドの状態。`hide` が `Slot::Idle` に戻す際に使う。

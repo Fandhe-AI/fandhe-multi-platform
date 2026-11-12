@@ -186,7 +186,7 @@ fn drive(
     let phys_y = if y.abs() <= TILT_EPSILON { 0.0 } else { y };
 
     // 受信側（ProxyApp）がドロップ済み（アプリ終了中）の送信失敗は無視してよい
-    // （coding-rust.md: panic を API 契約にしない、`device/http_fetch.rs` と同じ判断）。
+    // （coding-rust.md: panic を API 契約にしない、`fandhe-cap-http-get` の driver と同じ判断）。
     let _ = sender.send(Box::new(move |s: &mut TiltBallState| {
         s.tilt_x = x;
         s.tilt_y = y;

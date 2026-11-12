@@ -29,7 +29,7 @@ pub trait Http: Send + Sync {
 /// 全ターゲットへ公開する。`Duration` は `fandhe-core` 同様プラットフォーム非依存の型。
 pub const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
-/// 一覧の表示件数上限（`fandhe-egui-proxy::device::http_fetch` から移設、Issue #985）。
+/// 一覧の表示件数上限（旧 `fandhe-egui-proxy::device::http_fetch` から移設、Issue #985）。
 // ponytail: 8MB 上限の body を全行描画しない保険。件数が要件になったら VirtualList 化。
 pub const MAX_ITEMS: usize = 100;
 

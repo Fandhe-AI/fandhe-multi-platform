@@ -1,4 +1,4 @@
-//! macOS 向けシステムトレイ実装（Issue #1039）。`device/system_tray.rs::platform_tray`
+//! macOS 向けシステムトレイ実装（Issue #1039）。`contract.rs` の `platform_tray`
 //! の macOS 分岐から呼ばれ、`NSStatusBar`/`NSStatusItem`/`NSMenu` 実装
 //! （`apple/fandhe_apple_system_tray.m`、`build.rs::build_macos` がコンパイル・
 //! リンクする）を `unsafe extern "C"` 関数 2 つ（[`fandhe_apple_system_tray_show`]/
@@ -28,7 +28,7 @@ use crate::error::SystemTrayError;
 // SAFETY: `apple/fandhe_apple_system_tray.m` が定義する C ABI（`build.rs::build_macos`
 // がコンパイル・リンクする）。契約は `.m` ファイル冒頭コメントおよび下記
 // `AppleSystemTray` 実装のコメントに集約する。呼び出しスレッドが main でなければ
-// `.m` 側が `dispatch_sync` で main へ寄せてから実行する（`device/system_tray.rs`
+// `.m` 側が `dispatch_sync` で main へ寄せてから実行する（`contract.rs`
 // モジュール doc「別スレッドへ逃がす理由」参照、P1 是正）。
 #[allow(unsafe_code)]
 unsafe extern "C" {
@@ -50,7 +50,7 @@ static QUEUE: SelectionQueue = SelectionQueue::new();
 /// macOS 向け `SystemTray` 実装。`crate::driver::drive`
 /// から作業スレッド（UI スレッドではない）で呼ばれる契約。AppKit 呼び出しは
 /// main thread 必須のため、`.m` 側が `dispatch_sync` で main へ寄せてから実行
-/// する（`device/system_tray.rs` モジュール doc「別スレッドへ逃がす理由」参照）。
+/// する（`contract.rs` モジュール doc「別スレッドへ逃がす理由」参照）。
 pub(crate) struct AppleSystemTray;
 
 impl SystemTray for AppleSystemTray {

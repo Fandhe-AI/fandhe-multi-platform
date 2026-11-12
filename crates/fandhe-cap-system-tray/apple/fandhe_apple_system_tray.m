@@ -3,12 +3,12 @@
 // 相当する UI が無いため macOS 専用（対応表 `docs/device/capabilities/
 // system-tray.json` で iOS は `n-a`）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_system_tray.rs` から C ABI 経由で
+// `crates/fandhe-cap-system-tray/src/apple.rs` から C ABI 経由で
 // 呼ばれる。`build.rs::build_macos` がコンパイルし、追加リンクは無い（AppKit は
 // `compile_apple_share(true)` が既にリンク済み）。
 //
 // 契約（同期呼び出し。`fandhe_ios_file_picker.m` のような completion コールバック
-// 型ではなく、`apple_system_tray.rs` が呼んで戻り値を待つ）:
+// 型ではなく、`apple.rs` が呼んで戻り値を待つ）:
 //   fandhe_apple_system_tray_show(uint64_t generation, const char *title,
 //       const char *const *items, int32_t item_count) -> int32_t
 //     0 = 成功（アイコン + メニューを生成した）。
@@ -22,11 +22,11 @@
 //   fandhe_apple_system_tray_hide(void) -> int32_t
 //     常に 0（失敗経路が無い）。
 //   fandhe_rust_system_tray_selected(uint64_t generation, int64_t index)
-//     -> Rust 側（`apple_system_tray.rs`）が公開する `extern "C"` 関数。
+//     -> Rust 側（`apple.rs`）が公開する `extern "C"` 関数。
 //        メニュー項目選択時に呼ぶ。
 //
 // 呼び出しスレッド（P1 是正、PR #1041 codex 指摘、Issue #1039）:
-//   AppKit 呼び出しは main thread 必須。呼び出し元（`apple_system_tray.rs`）は
+//   AppKit 呼び出しは main thread 必須。呼び出し元（`apple.rs`）は
 //   `fandhe-egui-proxy::device::system_tray::drive` が起こす作業スレッドから
 //   呼ぶため main でないことがある。本体を block（`FandheRunOnMainAndWait`）に
 //   包み、呼び出しスレッドが main ならそのまま実行、main でなければ
@@ -46,7 +46,7 @@
 #import <Cocoa/Cocoa.h>
 #import <dispatch/dispatch.h>
 
-// Rust 側（`apple_system_tray.rs`）が公開する `extern "C"` 関数。
+// Rust 側（`apple.rs`）が公開する `extern "C"` 関数。
 extern void fandhe_rust_system_tray_selected(uint64_t generation, int64_t index);
 
 // プロセス内で 1 個だけ保持する status item / menu / target

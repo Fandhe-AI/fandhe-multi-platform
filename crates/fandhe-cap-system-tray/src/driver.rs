@@ -12,7 +12,7 @@
 //! Windows 実装（`windows_system_tray.rs`）の `show` はアイコン専用スレッドの
 //! 起動完了を、`hide` は後始末メッセージの処理完了を、いずれも期限無しで待つ
 //! （同モジュール doc「待ち時間切れを持たない理由」参照）。macOS 実装
-//! （`apple_system_tray.rs`）は AppKit 呼び出しのため main thread 必須だが、
+//! （`apple.rs`）は AppKit 呼び出しのため main thread 必須だが、
 //! `.m` 側が呼び出しスレッドが main でなければ `dispatch_sync` で main へ
 //! 寄せる（`fandhe_apple_system_tray.m` 冒頭コメント参照）ため、呼び出し元は
 //! main でなくてよい。これらの待ちを UI スレッド（[`drive`] の呼び出し元、

@@ -4,14 +4,14 @@
 //! [``fandhe-web-dom` の `mount_with_effect``] の effect として観測し、ブラウザの `fetch`
 //! （Fetch API）で GET だけを行って結果を書き戻す。
 //!
-//! Web は `fandhe-device` の `Http` トレイト（`UreqHttp`）を通らない。`UreqHttp` は
+//! Web は `crate::contract` の `Http` トレイト（`UreqHttp`）を通らない。`UreqHttp` は
 //! wasm32 では `ureq` の推移依存（`getrandom`）が解決できず存在しない
-//! （`fandhe_device::http` モジュール doc 参照）ため、本モジュールが DOM レンダラ側の
+//! （`crate::contract` モジュール doc 参照）ため、本モジュールが DOM レンダラ側の
 //! 対応実装にあたる。ただし本文上限・タイムアウト・件数上限・JSON 解析
 //! （`MAX_BODY_BYTES`/`TIMEOUT`/`MAX_ITEMS`/`parse_items`）は desktop 実装
 //! （`fandhe_device::http`）と共有する（二重管理を避ける SSOT 方針、Issue #985）。
 //!
-//! # 取得先（`FANDHE_ITEMS_URL`、`fandhe-egui-proxy::device::http_fetch::ITEMS_URL` と
+//! # 取得先（`FANDHE_ITEMS_URL`、`driver.rs` の `ITEMS_URL` と
 //! 同じ env 名・同じ `option_env!` 方式）
 //!
 //! ビルド時に指定し、未指定なら相対 URL `"items.json"`（同一オリジン、配布物は
@@ -112,7 +112,7 @@ pub(crate) fn check_len(len: u64) -> Result<(), String> {
 
 /// `url` が許可される取得先かを判定する純関数（ブラウザ API を呼ばないため
 /// `check_status`/`check_len` と同じく native からもテストできる、`wasm32` gate の
-/// 外に置く）。`fandhe_device::http::UreqHttp::get` のスキーム/ホスト検証（`https://`
+/// 外に置く）。`crate::contract::UreqHttp::get` のスキーム/ホスト検証（`https://`
 /// 全般、またはループバック/私設 IPv4 宛ての `http://` のみ）と同じ方針を採る
 /// （モジュール doc「取得先」節参照）。相対 URL（スキームを持たない値のうち、
 /// プロトコル相対 `//host/...`・`\\host/...` 等ではないもの）は同一オリジンへの

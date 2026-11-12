@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の OS 呼び出しは本モジュール外
-//! （`fandhe-egui-proxy` の effect ドライバ、`device/system_tray.rs`）が
+//! （`fandhe-cap-system-tray` の effect ドライバ、`src/driver.rs`）が
 //! [`take_action`] で要求を観測し [`finish_show`]/[`finish_hide`] で結果を注入する
 //! （`notification_send.rs` と同型の状態機械）。
 //!
@@ -66,7 +66,7 @@ const EVENING_MESSAGE: &str = "こんばんは";
 /// 処理中（`ShowRequested`/`HideRequested`）の案内。
 pub const PROCESSING_STATUS: &str = "処理中…";
 /// 表示成功時の案内。「表示しました」ではなく「出しました」に留めるのは
-/// `fandhe_device::system_tray` モジュール doc の嘘の成功対策と同じ方針だが、
+/// `fandhe-cap-system-tray` の `contract.rs` モジュール doc の嘘の成功対策と同じ方針だが、
 /// 本機能は OS 側で確認できる操作のため断定してよい（`notification_send` の
 /// `Submitted`/`Shown` の区別とは事情が異なる）。
 pub const SHOWN_STATUS: &str = "メニューバー / 通知領域に出しました";
@@ -101,7 +101,7 @@ pub enum TrayPhase {
     Hiding,
 }
 
-/// [`fandhe_device::system_tray::ShowOutcome`] と 1 対 1 対応するコア側の 2 値
+/// [`fandhe_cap_system_tray::ShowOutcome`] と 1 対 1 対応するコア側の 2 値
 /// （`fandhe-core` は `fandhe-device` に依存しないため、写像は `fandhe-egui-proxy`
 /// 側の責務、モジュール doc 参照）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,7 +112,7 @@ pub enum ShowResult {
     AlreadyShown,
 }
 
-/// [`fandhe_device::system_tray::HideOutcome`] と 1 対 1 対応するコア側の 2 値。
+/// [`fandhe_cap_system_tray::HideOutcome`] と 1 対 1 対応するコア側の 2 値。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HideResult {
     /// アイコンを削除した。
@@ -289,7 +289,7 @@ pub fn finish_hide(
 
 /// OS から届いたメニュー選択を反映する。`Shown` 以外では無視する
 /// （effect ドライバが `SelectionQueue` から取り出した index をそのまま渡す契約、
-/// 範囲検証は `fandhe_device::system_tray::SelectionQueue::push` 側で既に
+/// 範囲検証は `fandhe_cap_system_tray::SelectionQueue::push` 側で既に
 /// 済んでいるが、ここでも未知の index は無視して壊れた表示にしない）。
 pub fn apply_selection(state: &mut SystemTrayState, index: usize) {
     if state.phase != TrayPhase::Shown {
