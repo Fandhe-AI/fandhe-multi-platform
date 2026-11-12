@@ -17,12 +17,12 @@
       "api": "AppKit（`NSStatusBar` / `NSStatusItem`）",
       "perm": "なし",
       "url": "https://developer.apple.com/documentation/appkit/nsstatusbar",
-      "note": "実装済み（旧#1039）。`NSStatusBar`/`NSStatusItem`/`NSMenu` で画像アイコンではなくテキストタイトル（`TRAY_TITLE`＝\"Fandhe\"）のみを使う最小実装。二重表示の判定は `.m` 側へ問い合わせず Rust 側（`fandhe_device::system_tray::SelectionQueue::is_active`）で完結させる（表示状態の SSOT を Rust 側に一本化）。メニュー選択は `onSelect:` → `fandhe_rust_system_tray_selected` → `SelectionQueue::push`（世代・範囲照合）で橋渡しする。`show`/`hide` いずれもメインスレッド以外から呼ばれた場合は dispatch へ載せ替えず即座に失敗（コード 3）を返す（デッドロック回避）。アプリ終了時（`on_exit`）に `stop_shared_system_tray` が `hide` を呼び、通知領域相当のメニューバーアイコンを残さない。Mac 目視は main 側で実施予定（実機未確認）。Mac 目視済み（10/2、「出す」でメニューバーに出て、メニュー項目の選択が画面に反映され、「消す」でメニューバーから消える）",
+      "note": "実装済み（旧#1039）。`NSStatusBar`/`NSStatusItem`/`NSMenu` で画像アイコンではなくテキストタイトル（`TRAY_TITLE`＝\"Fandhe\"）のみを使う最小実装。二重表示の判定は `.m` 側へ問い合わせず Rust 側（`fandhe_cap_system_tray::SelectionQueue::is_active`）で完結させる（表示状態の SSOT を Rust 側に一本化）。メニュー選択は `onSelect:` → `fandhe_rust_system_tray_selected` → `SelectionQueue::push`（世代・範囲照合）で橋渡しする。`show`/`hide` いずれもメインスレッド以外から呼ばれた場合は dispatch へ載せ替えず即座に失敗（コード 3）を返す（デッドロック回避）。アプリ終了時（`on_exit`）に `stop_shared_system_tray` が `hide` を呼び、通知領域相当のメニューバーアイコンを残さない。Mac 目視は main 側で実施予定（実機未確認）。Mac 目視済み（10/2、「出す」でメニューバーに出て、メニュー項目の選択が画面に反映され、「消す」でメニューバーから消える）",
       "sourceName": [
         "メニューバー・システムトレイ"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_system_tray.m + crates/fandhe-egui-proxy/src/device/apple_system_tray.rs + crates/fandhe-egui-proxy/src/device/system_tray.rs、Issue 旧#1039"
+      "impl": "crates/fandhe-cap-system-tray/apple/fandhe_apple_system_tray.m + crates/fandhe-cap-system-tray/src/apple.rs + crates/fandhe-cap-system-tray/src/driver.rs、Issue 旧#1039"
     },
     "windows": {
       "status": "done",
@@ -35,7 +35,7 @@
         "システムトレイ"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_system_tray.rs + crates/fandhe-egui-proxy/src/device/system_tray.rs、Issue 旧#1039"
+      "impl": "crates/fandhe-cap-system-tray/src/windows.rs + crates/fandhe-cap-system-tray/src/driver.rs、Issue 旧#1039"
     },
     "web": {
       "status": "n-a",

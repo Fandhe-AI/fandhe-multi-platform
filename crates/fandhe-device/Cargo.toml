@@ -9,16 +9,9 @@ publish = false
 
 [dependencies]
 thiserror = { workspace = true }
-# Issue #985: `http::parse_items`（JSON 配列 → 件数上限つき `Vec<String>`）を
-# `fandhe-egui-proxy`（desktop/mobile）と `fandhe-web-dom`（Web）の両方から共有するために
-# 全ターゲットの依存にする。既に workspace で解決済みで新規パッケージは増えない
-# （ルート Cargo.toml の `serde_json` コメント参照）。
+# `passkey`・`background_task` 等が JSON を扱うため全ターゲットの依存にする。既に workspace で解決済みで
+# 新規パッケージは増えない（ルート Cargo.toml の `serde_json` コメント参照）。
 serde_json = { workspace = true }
-
-# wasm32 では ureq の推移依存（getrandom）が解決できないため、HTTP 共通実装
-# （`http::UreqHttp`）自体を非 wasm32 に閉じる（ルート Cargo.toml の `ureq` コメント参照）。
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ureq = { workspace = true }
 
 # Phase 11（Issue #859）: `clipboard::ArboardClipboard`（macOS/Windows/Linux 共通実装）が
 # 使う。`NSPasteboard`/WinRT `Clipboard`/X11 を自前で叩くと本クレートの

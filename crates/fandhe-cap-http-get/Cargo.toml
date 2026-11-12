@@ -1,0 +1,55 @@
+[package]
+name = "fandhe-cap-http-get"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の http-get（HTTP 取得・GET 限定）の機能 crate（契約・共通実装・Web 実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数（`mark_loading` / `finish_fetch`）を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 取得先 URL の検証（`check_url`）と本文上限（`MAX_BODY_BYTES`）。背景ダウンロード・アップロードも使うため
+# `fandhe-device` に残している共有部分（consumer-app-structure.md §8）。
+fandhe-device = { path = "../fandhe-device" }
+# 完了通知の送り口（CompletionSender）。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+# wasm32 では `getrandom` が解決できないため、`ureq` の共通実装（`UreqHttp`）は native に限る。
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ureq = { workspace = true }
+
+# Web 実装（`web.rs`）はブラウザの `fetch` を使う。
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+fandhe-platform-web = { path = "../fandhe-platform-web" }
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+web-sys = { workspace = true, features = [
+  "Window",
+  "AbortController",
+  "AbortSignal",
+  "RequestInit",
+  "RequestRedirect",
+  "RequestCredentials",
+  "Response",
+  "Headers",
+  # 本文を一括確保せず `ReadableStream` で逐次読み取りながら `MAX_BODY_BYTES` を適用する。
+  "ReadableStream",
+  "ReadableStreamDefaultReader",
+  "ReadableStreamReadResult",
+] }
+
+# 機能宣言（capability-declaration.md）。現行の Manifest と突き合わせ済み（cargo-fandhe の tests）。
+[package.metadata.fandhe]
+id = "http-get"
+
+[package.metadata.fandhe.android]
+permissions = [{ name = "android.permission.INTERNET" }]
+
+[lints]
+workspace = true

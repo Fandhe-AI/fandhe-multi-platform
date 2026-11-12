@@ -1,4 +1,4 @@
-//! Windows 向けシステムトレイ実装（Issue #1039）。`device/system_tray.rs::
+//! Windows 向けシステムトレイ実装（Issue #1039）。`contract.rs::
 //! platform_tray` の Windows 分岐から呼ばれ、`Shell_NotifyIconW`（通知領域
 //! アイコン）+ 不可視のトップレベルウィンドウ + `TrackPopupMenu`（右クリック
 //! メニュー）で実装する。`windows_share.rs`/`windows_biometric.rs` と同じく
@@ -41,13 +41,14 @@
 //!   まま相手のモーダルループが進まなくなるデッドロックを OS 側が避ける
 //!   ための挙動）。そのため `hide` がメニュー表示中に呼ばれても `WM_TRAY_HIDE`
 //!   は処理される
+//!
 //! `show` の起動完了待ち（`ready_rx.recv()`）も同じ理由で期限無しにする。
 //! ウィンドウ作成・`Shell_NotifyIconW(NIM_ADD)` はいずれも専用スレッド内の
 //! ローカルな Win32 呼び出しで、外部からの応答待ちが無いため、失敗か成功かが
 //! 速やかに確定し `ready_tx` へ届く。
 //!
-//! `show`/`hide` は `fandhe-egui-proxy::device::system_tray::drive` が生成する
-//! 作業スレッドから呼ばれる契約（P1 是正、`device/system_tray.rs` モジュール doc
+//! `show`/`hide` は `crate::driver::drive` が生成する
+//! 作業スレッドから呼ばれる契約（P1 是正、`contract.rs` モジュール doc
 //! 「別スレッドへ逃がす理由」参照）。呼び出しスレッド自体は毎回異なり得るが、
 //! `drive` 側の二重 dispatch 防止（`mark_showing`/`mark_hiding` が完了を待たず
 //! 次の要求を塞ぐ）により同時に実行される `show`/`hide` は常に 1 件のみのため、
@@ -55,35 +56,35 @@
 //!
 //! # 選択の受け渡し
 //!
-//! アイコン専用スレッドの `WndProc` から [`fandhe_device::system_tray::
-//! SelectionQueue::push`] へ直接積む（`apple_system_tray.rs` の
+//! アイコン専用スレッドの `WndProc` から [`crate::contract::
+//! SelectionQueue::push`] へ直接積む（`apple.rs` の
 //! `fandhe_rust_system_tray_selected` と同じ橋渡し方式だが、FFI を介さず
 //! 同一プロセス内の Rust 関数呼び出しで完結する）。
 
-use std::sync::mpsc::sync_channel;
 use std::sync::Mutex;
+use std::sync::mpsc::sync_channel;
 use std::time::Duration;
 
-use fandhe_device::system_tray::{HideOutcome, SelectionQueue, ShowOutcome, SystemTray, TrayMenu};
-use fandhe_device::DeviceError;
+use crate::contract::{HideOutcome, SelectionQueue, ShowOutcome, SystemTray, TrayMenu};
+use crate::error::SystemTrayError;
 
-use windows::core::PCWSTR;
 use windows::Win32::Foundation::{
-    GetLastError, ERROR_CLASS_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WPARAM,
+    ERROR_CLASS_ALREADY_EXISTS, GetLastError, HWND, LPARAM, LRESULT, WPARAM,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Shell::{
-    Shell_NotifyIconW, NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY,
-    NOTIFYICONDATAW, NOTIFY_ICON_MESSAGE,
+    NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY, NOTIFY_ICON_MESSAGE,
+    NOTIFYICONDATAW, Shell_NotifyIconW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
-    DispatchMessageW, EndMenu, GetCursorPos, GetMessageW, LoadIconW, PostMessageW, PostQuitMessage,
-    RegisterClassW, RegisterWindowMessageW, SendMessageW, SetForegroundWindow, TrackPopupMenu,
-    TranslateMessage, CW_USEDEFAULT, IDI_APPLICATION, MF_STRING, MSG, TPM_NONOTIFY, TPM_RETURNCMD,
-    TPM_RIGHTBUTTON, WM_APP, WM_DESTROY, WM_LBUTTONUP, WM_NULL, WM_RBUTTONUP, WNDCLASSW,
-    WS_EX_TOOLWINDOW, WS_OVERLAPPEDWINDOW,
+    AppendMenuW, CW_USEDEFAULT, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu,
+    DestroyWindow, DispatchMessageW, EndMenu, GetCursorPos, GetMessageW, IDI_APPLICATION,
+    LoadIconW, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassW,
+    RegisterWindowMessageW, SendMessageW, SetForegroundWindow, TPM_NONOTIFY, TPM_RETURNCMD,
+    TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WM_APP, WM_DESTROY, WM_LBUTTONUP, WM_NULL,
+    WM_RBUTTONUP, WNDCLASSW, WS_EX_TOOLWINDOW, WS_OVERLAPPEDWINDOW,
 };
+use windows::core::PCWSTR;
 
 /// アイコンのコールバックメッセージ（`uCallbackMessage`）。右クリック/左クリックの
 /// 判定は `lParam`（`WM_RBUTTONUP`/`WM_LBUTTONUP`）で行う。
@@ -100,7 +101,7 @@ const DELETE_RETRY_DELAY: Duration = Duration::from_millis(50);
 
 const WINDOW_CLASS_NAME: PCWSTR = windows::core::w!("FandheSystemTrayWindow");
 
-/// 選択の受け渡し先（`apple_system_tray.rs::QUEUE` と同じ役割）。
+/// 選択の受け渡し先（`apple.rs::QUEUE` と同じ役割）。
 static QUEUE: SelectionQueue = SelectionQueue::new();
 
 /// 表示中のアイコン専用スレッドの状態。`hide` が `Slot::Idle` に戻す際に使う。
@@ -128,12 +129,12 @@ thread_local! {
     static THREAD_ITEMS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// Windows 向け `SystemTray` 実装。`fandhe-egui-proxy::device::system_tray::drive`
+/// Windows 向け `SystemTray` 実装。`crate::driver::drive`
 /// が生成する作業スレッドから呼ばれる契約（モジュール doc参照、P1 是正）。
 pub(crate) struct WindowsSystemTray;
 
 impl SystemTray for WindowsSystemTray {
-    fn show(&self, menu: &TrayMenu) -> Result<ShowOutcome, DeviceError> {
+    fn show(&self, menu: &TrayMenu) -> Result<ShowOutcome, SystemTrayError> {
         // `CURRENT` は表示が確定する（`Shown` を書く）まで握り続ける。作業スレッドで
         // 表示中にアプリが終了すると `on_exit` の `hide` が走るが、ロックを放して
         // いると `Idle` を見て `NotShown` を返し、その後に追加されたアイコンが
@@ -166,13 +167,13 @@ impl SystemTray for WindowsSystemTray {
                 // この経路に到達した専用スレッドは既に自己後始末済みで存在し
                 // ないため `Idle` のままでよい。
                 QUEUE.end();
-                Err(DeviceError::Internal("system_tray show"))
+                Err(SystemTrayError::Internal)
             }
         }
     }
 
     #[allow(unsafe_code)]
-    fn hide(&self) -> Result<HideOutcome, DeviceError> {
+    fn hide(&self) -> Result<HideOutcome, SystemTrayError> {
         // ロックは Win32 呼び出しが終わるまで握ったままにする。`SendMessageW` は
         // 同期呼び出しのため、ここでロックを握っている間に別の呼び出しが同じ
         // `hwnd` へ送ることは無く、破棄済みハンドルへの送信競合は構造上起きない
@@ -195,7 +196,7 @@ impl SystemTray for WindowsSystemTray {
             // `Shown` のまま残し（`guard` は未更新）、次回 `hide` が同じ `hwnd`
             // へ再試行できるようにする（`device-bridge-contracts.md`
             // 「9. 失敗時のリソース解放・共有状態復元」「6. 嘘の成功」）。
-            return Err(DeviceError::Internal("system_tray hide"));
+            return Err(SystemTrayError::Internal);
         }
         QUEUE.end();
         *guard = Slot::Idle;

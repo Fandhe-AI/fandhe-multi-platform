@@ -696,11 +696,6 @@ pub mod apple_speech_recognition;
 /// iOS 経路（#561 で `ios_spotlight_index` 経由）から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_spotlight_index;
-/// Issue #1039: macOS 向けシステムトレイ実装（`apple/fandhe_apple_system_tray.m` を
-/// 呼ぶ C ABI ラッパー）。`device/system_tray.rs::platform_tray` の macOS 経路から
-/// 呼ばれる（iOS は対応表 `system-tray.json` で `n-a` のため対象外）。
-#[cfg(target_os = "macos")]
-pub mod apple_system_tray;
 /// Issue #535 macOS・#536 iOS: 端末内翻訳実装（`apple/fandhe_apple_translation.swift` を呼ぶ
 /// C ABI ラッパー）。`device/translation.rs` の macOS 経路と、iOS 経路（#536 で `ios_translation`
 /// 経由）から呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
@@ -877,7 +872,6 @@ pub mod haptics;
 /// Phase 11 の拡充ループ（親 #149、Issue #1089）: ヘルスデータ（今日の歩数）の effect ドライバ
 /// （iOS・Android は OS 別モジュール。他 OS は `UnsupportedHealthData` 固定）。
 pub mod health_data;
-pub mod http_fetch;
 /// Phase 11 の拡充ループ（親 #187、Issue #960）: 人の在席・離席の検知の effect ドライバ（Windows 実装、
 /// 他 OS は `UnsupportedHumanPresence` 固定）。
 pub mod human_presence;
@@ -1694,9 +1688,6 @@ pub mod system_accent_color;
 /// Phase 11 の拡充ループ（親 #183、Issue #939）: システムの効果音の effect ドライバ
 /// （macOS / Windows 実装、Android は `ToneGenerator`（#940）、iOS・他 OS は `UnsupportedSystemSound` 固定）。
 pub mod system_sound;
-/// Phase 11 の拡充ループ（親 #1038、Issue #1039）: システムトレイの effect
-/// ドライバ（macOS/Windows 実装、他 OS は `UnsupportedSystemTray` 固定）。
-pub mod system_tray;
 /// Phase 11 の拡充ループ（親 #911、Issue #912）: 文字サイズ追従の effect ドライバ。
 pub mod text_scale;
 pub mod tilt;
@@ -2087,11 +2078,6 @@ pub mod windows_system_accent_color;
 /// `device/system_sound.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_system_sound;
-/// Issue #1039: Windows 向けシステムトレイ実装（`Shell_NotifyIconW` + 隠しウィンドウ
-/// + `TrackPopupMenu` ラッパー）。`device/system_tray.rs::platform_tray` の Windows
-/// 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_system_tray;
 /// Issue #913: Windows 向け文字サイズ追従実装（`UISettings.TextScaleFactor` を
 /// 読む WinRT ラッパー）。`device/text_scale.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -2167,7 +2153,7 @@ use fandhe_device::{storage::Storage, DeviceError};
 pub fn shutdown() {
     tts::stop_shared_tts();
     location::stop_shared_location();
-    system_tray::stop_shared_system_tray();
+    fandhe_cap_system_tray::stop_shared_system_tray();
     bluetooth_le::stop_shared_scan();
     // 公開の停止は `.m` の専用キューへの短い同期呼び出し。Rust 側のロックは握らない。
     ble_peripheral::shutdown();

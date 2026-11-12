@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。取得結果は本モジュール外
-//! （`fandhe-egui-proxy` の effect ドライバ、`device/http_fetch.rs` 参照）が
+//! （`fandhe-cap-http-get` の effect ドライバ、`crates/fandhe-cap-http-get/src/driver.rs` 参照）が
 //! [`finish_fetch`] を通して注入する契約。
 //!
 //! # 状態機械

@@ -67,8 +67,6 @@
 //!   のみ `wasm32` gate の外に置く
 //! - [`screen_capture`]: 「画面の録画・キャプチャ」画面の Web 経路（Issue #1338）。[`location`] と同じ理由で
 //!   純関数（例外の `name` → 結果種別・`Blob.size` 等 → 録画結果の検証）のみ `wasm32` gate の外に置く
-//! - [`http_fetch`]: 「HTTP 取得（GET 限定）」画面の Web 経路（Issue #985）。[`location`]
-//!   と同じ理由で純関数（2xx 判定・本文上限判定）のみ `wasm32` gate の外に置く
 //! - [`storage_note`]: 「メモ保存」画面の Web 経路（Issue #987）。[`location`] と同じ理由で
 //!   純関数（キー変換・例外の `name` → エラー種別の対応）のみ `wasm32` gate の外に置く
 //! - [`camera_capture`]: 「カメラ撮影」画面の Web 経路（Issue #991）。[`location`] と同じ
@@ -273,11 +271,6 @@ pub mod video_transcode;
 /// 純関数（例外の `name` → 結果種別・録画結果の検証）は native からもテストできるよう
 /// クレート単位の `wasm32` gate を外す。
 pub mod screen_capture;
-
-/// 型サンプル「HTTP 取得（GET 限定）」の Web 経路（Issue #985）。[`location`] と同じ理由で
-/// 純関数（2xx 判定・本文上限判定）は native からもテストできるようクレート単位の
-/// `wasm32` gate を外す。
-pub mod http_fetch;
 
 /// 型サンプル「メモ保存」の Web 経路（Issue #987）。[`location`] と同じ理由で
 /// 純関数（キー変換・例外の `name` → エラー種別の対応）は native からもテストできるよう

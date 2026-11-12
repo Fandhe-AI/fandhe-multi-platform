@@ -1,15 +1,14 @@
 //! `fandhe_core::screens::http_fetch`（Issue #748）の effect ドライバ。画面の
-//! `FetchPhase::Requested` を観測し、`fandhe_device::http::UreqHttp` で
+//! `FetchPhase::Requested` を観測し、`crate::contract::UreqHttp` で
 //! ローカル検証用ダミー API を別スレッドから取得、`CompletionSender` 経由で
 //! `mark_loading` / `finish_fetch` を送る（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画
 //! から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
-//! 依存方向はこのモジュール → `fandhe_device` の一方向（`fandhe-core` は端末依存ゼロ）。
+//! 画面の状態型を参照してよいのは本モジュールだけ（契約は `crate::contract`）。
 
-use fandhe_core::screens::http_fetch::{finish_fetch, mark_loading, FetchPhase, HttpFetchState};
-use fandhe_device::http::{Http, UreqHttp};
-
-use crate::app::CompletionSender;
+use crate::contract::{Http, UreqHttp};
+use fandhe_core::screens::http_fetch::{FetchPhase, HttpFetchState, finish_fetch, mark_loading};
+use fandhe_runtime::CompletionSender;
 
 /// ローカル検証用ダミー API の URL（受入 2: `node scripts/web/serve-brotli.mjs`
 /// 等で 8787 番へ立てる想定、docs/operations/http-fetch-device-check.md 参照）。文言・URL はダミー。
@@ -27,7 +26,7 @@ const ITEMS_URL: &str = match option_env!("FANDHE_ITEMS_URL") {
 /// ASCII 空白・制御文字を含まない）かどうかを判定する。`FANDHE_ITEMS_URL` の
 /// ビルド時検証（下の `assert!`）専用の構文チェックであり、接続先ホストが
 /// ループバック・私設 IP かどうかの信頼境界判定は含まない（実行時に
-/// `fandhe_device::http::UreqHttp::get` が担う、security.md A02/A03）。
+/// `crate::contract::UreqHttp::get` が担う、security.md A02/A03）。
 // `const _: () = assert!(...)` の中でしか呼ばれておらず、rustc の dead_code 解析は
 // 無名 const（`_`）の初期化式を到達可能グラフに含めないため、実際には使われていても
 // 誤検出される（コンパイル時アサーション定石のよくある制約）。テストからも呼ぶため
@@ -63,7 +62,7 @@ const fn is_plain_http_url(url: &str) -> bool {
 
 // ビルド時検証（Issue #660）: `FANDHE_ITEMS_URL` に構文の外れた値を渡した場合、
 // 実機ビルドを進めず即座に失敗させる。ここでは構文のみ検証し、接続先ホストの
-// 信頼境界（ループバック・私設 IP 限定）は `fandhe_device::http::UreqHttp::get` が
+// 信頼境界（ループバック・私設 IP 限定）は `crate::contract::UreqHttp::get` が
 // 実行時に担う。
 const _: () = assert!(
     is_plain_http_url(ITEMS_URL),
@@ -71,13 +70,13 @@ const _: () = assert!(
 );
 
 /// `http.get(url)` の応答（JSON 配列）を `Vec<String>` へ変換する。解析・件数上限
-/// （`fandhe_device::http::MAX_ITEMS`）は `fandhe-web-dom::http_fetch` と共有する
-/// `fandhe_device::http::parse_items` に委譲する（Issue #985、二重管理を避ける SSOT 方針）。
+/// （`crate::contract::MAX_ITEMS`）は Web 実装（`web.rs`）と共有する
+/// `crate::contract::parse_items` に委譲する（Issue #985、二重管理を避ける SSOT 方針）。
 /// エラーメッセージに応答本文・URL 全体は含めない（security.md A09 ログ方針、
 /// `DeviceError` の踏襲）。
 pub fn fetch_items(http: &dyn Http, url: &str) -> Result<Vec<String>, String> {
     let body = http.get(url).map_err(|err| err.to_string())?;
-    fandhe_device::http::parse_items(&body)
+    crate::contract::parse_items(&body)
 }
 
 /// `state.phase == Requested` のときだけ、`mark_loading` の完了を同期的に送り
@@ -111,8 +110,17 @@ pub fn http_fetch_effect(state: &HttpFetchState, sender: &CompletionSender<HttpF
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::HttpGetError;
     use fandhe_core::screens::http_fetch::start_fetch;
-    use fandhe_device::DeviceError;
+    use fandhe_runtime::RepaintWaker;
+    use std::sync::Arc;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
     use std::io::{Read, Write};
     use std::net::TcpListener;
 
@@ -120,8 +128,8 @@ mod tests {
     struct MockHttp(Result<Vec<u8>, String>);
 
     impl Http for MockHttp {
-        fn get(&self, _url: &str) -> Result<Vec<u8>, DeviceError> {
-            self.0.clone().map_err(DeviceError::Http)
+        fn get(&self, _url: &str) -> Result<Vec<u8>, HttpGetError> {
+            self.0.clone().map_err(HttpGetError::Http)
         }
     }
 
@@ -177,7 +185,7 @@ mod tests {
         assert!(fetch_items(&http, "http://127.0.0.1/items.json").is_err());
     }
 
-    /// 固定 JSON 応答を 1 回返すローカルサーバー（`fandhe_device::http::UreqHttp` の
+    /// 固定 JSON 応答を 1 回返すローカルサーバー（`crate::contract::UreqHttp` の
     /// テストと同じ決定的手法。ポート番号は OS 割り当てのため衝突しない）。
     fn spawn_fixed_json_server(body: &'static str) -> u16 {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind は成功する");
@@ -203,9 +211,8 @@ mod tests {
     #[test]
     fn spawn_fetch_delivers_loading_then_loaded_completions() {
         let port = spawn_fixed_json_server(r#"["x","y"]"#);
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = crate::app::egui_sender(tx, ctx);
+        let sender = CompletionSender::new(tx, Arc::new(NoopWaker));
         let mut state = HttpFetchState::default();
         start_fetch(&mut state);
         assert_eq!(state.phase, FetchPhase::Requested);
@@ -231,9 +238,8 @@ mod tests {
         let port = listener.local_addr().expect("local_addr は成功する").port();
         drop(listener);
 
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = crate::app::egui_sender(tx, ctx);
+        let sender = CompletionSender::new(tx, Arc::new(NoopWaker));
         let mut state = HttpFetchState::default();
         start_fetch(&mut state);
 
@@ -249,9 +255,8 @@ mod tests {
     /// `Idle`（`Requested` 以外）では何も送らない（二重起動防止・無関係な起動の抑止）。
     #[test]
     fn spawn_fetch_is_noop_when_not_requested() {
-        let ctx = egui::Context::default();
-        let (tx, rx) = std::sync::mpsc::channel::<crate::app::Completion<HttpFetchState>>();
-        let sender = crate::app::egui_sender(tx, ctx);
+        let (tx, rx) = std::sync::mpsc::channel::<fandhe_runtime::Completion<HttpFetchState>>();
+        let sender = CompletionSender::new(tx, Arc::new(NoopWaker));
         let state = HttpFetchState::default();
 
         spawn_fetch(&state, &sender, "http://127.0.0.1:1/");

@@ -31,7 +31,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "http_fetch" => fandhe_core::screens::http_fetch::current_screen,
-    fandhe_egui_proxy::device::http_fetch::http_fetch_effect,
+    fandhe_cap_http_get::http_fetch_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "camera_capture" => fandhe_core::screens::camera_capture::current_screen,
@@ -219,7 +219,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "system_tray" => fandhe_core::screens::system_tray::current_screen,
-    fandhe_egui_proxy::device::system_tray::system_tray_effect,
+    fandhe_cap_system_tray::system_tray_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "background-task" => fandhe_core::screens::background_task::current_screen,

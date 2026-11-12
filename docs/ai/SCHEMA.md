@@ -1063,7 +1063,7 @@ std::thread::spawn(move || {
 `Requested` が複数回観測されて二重起動することはない（フレーム内順序「drain →
 描画/dispatch → driver 呼び出し」が契約）。参照実装は
 `crates/fandhe-core/src/screens/http_fetch.rs`（状態機械）と
-`crates/fandhe-egui-proxy/src/device/http_fetch.rs`（`driver` 本体）、
+`crates/fandhe-cap-http-get/src/driver.rs`（`driver` 本体）、
 `crates/fandhe-gallery/src/screens/registry.rs`（`effect` 行の書式）。
 
 取得先はビルド時 `FANDHE_ITEMS_URL` で差し替え可能（実機テスト用、Issue #660）。

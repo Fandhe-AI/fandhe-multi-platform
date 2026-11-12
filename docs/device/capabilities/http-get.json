@@ -16,7 +16,7 @@
         "HTTP 取得"
       ],
       "implStatus": "実装済み（`UreqHttp`。wasm32 は未対応）",
-      "impl": "`crates/fandhe-device/src/http.rs`"
+      "impl": "`crates/fandhe-cap-http-get/src/contract.rs`（UreqHttp）+ `crates/fandhe-device/src/http.rs`（check_url・MAX_BODY_BYTES 共有）"
     },
     "android": {
       "status": "done",
@@ -54,8 +54,8 @@
         "HTTP 取得"
       ],
       "implStatus": "実装済み（実ブラウザ未確認）",
-      "impl": "crates/fandhe-web-dom/src/http_fetch.rs（http_fetch_effect）+ crates/fandhe-web-dom/src/demo.rs（mount_http_fetch_screen）+ crates/fandhe-device/src/http.rs（MAX_BODY_BYTES/TIMEOUT/parse_items 共有）、Issue 旧#985"
+      "impl": "crates/fandhe-cap-http-get/src/web.rs（http_fetch_effect）+ crates/fandhe-web-dom/src/demo.rs（mount_http_fetch_screen）+ crates/fandhe-cap-http-get/src/contract.rs（TIMEOUT/parse_items 共有）+ crates/fandhe-device/src/http.rs（MAX_BODY_BYTES 共有）、Issue 旧#985"
     }
   },
-  "note": "`fandhe-device::http::UreqHttp`。https 全般 + ループバック/私設 IPv4 の平文 http のみ許可（`http.rs`）。wasm32 では `ureq` が `getrandom` を解決できず `Http` 実装自体が存在しない（`http.rs` 冒頭コメント）。Web は `fandhe-web-dom::http_fetch` がブラウザの `fetch` API 経由で実装済み（Issue 旧#985）"
+  "note": "`fandhe-cap-http-get` の `UreqHttp`。https 全般 + ループバック/私設 IPv4 の平文 http のみ許可（`fandhe_device::http::check_url`）。wasm32 では `ureq` が `getrandom` を解決できず `Http` 実装自体が存在しない（`contract.rs` 冒頭コメント）。Web は `fandhe-cap-http-get` の `web.rs` がブラウザの `fetch` API 経由で実装済み（Issue 旧#985）"
 }
