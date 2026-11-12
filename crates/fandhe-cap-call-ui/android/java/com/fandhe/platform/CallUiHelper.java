@@ -1,6 +1,7 @@
 package com.fandhe.platform;
 
 import android.Manifest;
+import android.app.Activity;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -29,9 +30,15 @@ import androidx.core.app.Person;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.Lifecycle;
 
-// 通話 UI 統合（Issue #278、親 #87）の Android 実装ヘルパー。MainActivity から生成・委譲される
-// （Rust の `device/android_call_ui.rs` が `MainActivity.callUiReport` / `callUiEnd` を JNI で呼び、
-// 結果を `nativeOnCallUiEvent` で受ける）。self-managed ConnectionService は OS が着信画面を
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
+
+// 通話 UI 統合（Issue #278、親 #87、#1187）の Android 実装ヘルパー。利用者の `MainActivity` には何も書かせない。
+// Rust の `src/android.rs` が static の `report(Activity, id)` / `end(Activity, id)` を JNI で呼び、
+// 結果を `nativeOnCallUiEvent` で受ける。Activity への参加は `CallUiLifecycle`（非公開 ContentProvider、
+// `FeatureLifecycleProvider` 継承）が行い、生成時に `attach`、破棄時に `detach` を呼ぶ。Activity ごとの helper は
+// `HELPERS` に持つ（破棄時に必ず外す）。表に無い Activity への要求は REPORT_FAILED を返す。self-managed ConnectionService は OS が着信画面を
 // 出さないため、本クラスが着信通知（CallStyle + full-screen intent）を出し、通知の応答・拒否は
 // `CallUiActionReceiver` → `CallUiConnectionService.CallConnection` を経て `finish` / `answered` に集まる。
 //
@@ -43,10 +50,10 @@ import androidx.lifecycle.Lifecycle;
 // 確定して `end` を呼ぶので、Java は LocalEnded / Unanswered を報告しない。`end` は常に
 // `DisconnectCause.LOCAL` で閉じ、`MISSED` は区別しない（trait の `end` に理由引数が無いため）。
 //
-// ライフサイクル: `onDestroy` で現在の通話を報告なしで閉じる。Rust 側は次の `android_main` の
+// ライフサイクル: `detach`（Activity の破棄）で現在の通話を報告なしで閉じる。Rust 側は次の `android_main` の
 // `reset_pending_tracking` で揃うため、旧結果が新しい要求の id を消費しない。
 //
-// 結果コードの SSOT はここで、Rust 側 `android_call_ui.rs` が同じ値で写像する。
+// 結果コードの SSOT はここで、Rust 側 `android.rs` が同じ値で写像する。
 // id・発信者名・例外内容はログに出さない。
 final class CallUiHelper {
     static final int REPORT_ACCEPTED = 0;
@@ -71,6 +78,12 @@ final class CallUiHelper {
     private static final String CHANNEL_ID = "fandhe_call_ui";
     private static final String ACCOUNT_ID = "fandhe_call_ui";
 
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, CallUiHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    private static final String KEY_PERMISSION = "fandhe.call-ui.permission";
+
     private static native void nativeOnCallUiEvent(long id, int code);
 
     // 以下の static は main looper 専用。
@@ -80,14 +93,40 @@ final class CallUiHelper {
 
     private final ComponentActivity activity;
     private final Handler main = new Handler(Looper.getMainLooper());
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity の
-    // フィールド初期化子から本クラスを生成してここで登録する。
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`attach`（`Activity.onCreate` 内）で
+    // 本クラスを生成してここで登録する。キーは明示する（連番だと生成順で結果が別のランチャーへ届く）。
     private final ActivityResultLauncher<String> permissionLauncher;
 
-    CallUiHelper(ComponentActivity activity) {
+    private CallUiHelper(ComponentActivity activity) {
         this.activity = activity;
-        this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:CallUiHelper:1", activity,
+        this.permissionLauncher = activity.getActivityResultRegistry().register(KEY_PERMISSION, activity,
                 new ActivityResultContracts.RequestPermission(), granted -> { });
+    }
+
+    // Activity の生成時（`CallUiLifecycle` から）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new CallUiHelper(activity));
+    }
+
+    // Activity の破棄時（`CallUiLifecycle` から）。現在の通話を報告なしで閉じ、表から外す。
+    static void detach(Activity activity) {
+        CallUiHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // JNI スレッド（Rust のワーカー）から呼ばれる入口。helper が無い（生成前・破棄後）なら失敗を返す。
+    static int report(Activity activity, long id) {
+        CallUiHelper helper = HELPERS.get(activity);
+        return helper == null ? REPORT_FAILED : helper.reportIncoming(id);
+    }
+
+    static void end(Activity activity, long id) {
+        CallUiHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.endCall(id);
+        }
     }
 
     // ---- 確定（main looper） ----
@@ -141,7 +180,7 @@ final class CallUiHelper {
 
     // ---- JNI スレッドから ----
 
-    int report(long id) {
+    private int reportIncoming(long id) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return REPORT_UNSUPPORTED;
         }
@@ -156,7 +195,7 @@ final class CallUiHelper {
         return REPORT_ACCEPTED;
     }
 
-    void end(long id) {
+    private void endCall(long id) {
         main.post(() -> {
             if (id != currentId) {
                 return;
@@ -165,8 +204,8 @@ final class CallUiHelper {
         });
     }
 
-    // MainActivity.onDestroy から（main）。報告なしで閉じる。
-    void onDestroy() {
+    // `detach` から（main）。報告なしで閉じる。
+    private void onDestroy() {
         close(DisconnectCause.LOCAL);
     }
 
@@ -267,8 +306,14 @@ final class CallUiHelper {
         }
         try {
             Context ctx = appContext;
-            Intent open = new Intent(ctx, MainActivity.class)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            // 利用者の Activity クラスを直接参照しない（機能 crate が MainActivity に依存しない）。
+            // 起動アイコンと同じ入口を開く。
+            Intent open = ctx.getPackageManager().getLaunchIntentForPackage(ctx.getPackageName());
+            if (open == null) {
+                finish(id, EVENT_FAILED);
+                return;
+            }
+            open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             PendingIntent openPi = PendingIntent.getActivity(
                     ctx, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
             Person person = new Person.Builder()

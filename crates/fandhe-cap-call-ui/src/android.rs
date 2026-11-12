@@ -1,11 +1,11 @@
-//! Android 向け通話 UI 実装（Issue #278、親 #87。(a) は #276）。`device/call_ui.rs::platform_call_ui`
+//! Android 向け通話 UI 実装（Issue #278、親 #87。(a) は #276）。`driver.rs::platform_call_ui`
 //! の android 経路から呼ばれ、self-managed `ConnectionService` と着信通知（CallStyle + full-screen
 //! intent）を Java の `CallUiHelper` 経由で動かす。応答・拒否の結果は native コールバックで
 //! `CallUiSink` へ流す。
 //!
 //! # 結果コード（SSOT は Java 側 `CallUiHelper`）
 //!
-//! `MainActivity.callUiReport(long)` の戻り値: 0 = 受け付けた（確定は非同期の `Ringing`）/
+//! `CallUiHelper.report(Activity, long)` の戻り値: 0 = 受け付けた（確定は非同期の `Ringing`）/
 //! 1 = 非対応 / 2 = 失敗。未知の値は失敗。`nativeOnCallUiEvent(id, code)` の code は
 //! [`decode_event`] の写像表のとおりで、未知の値は `Failed{Failed}` に倒し成功にはしない。
 //!
@@ -25,7 +25,7 @@
 //! 再生成・取り消し後の通知の破棄、通知・Connection の解放。守らない範囲: 背景での通話の継続、
 //! プロセス死、`PhoneAccount` の登録を残すこと。id・発信者名・例外内容はログへ出さない。
 //!
-//! no-op スタブは置かない: Java の native は Rust の `callUiReport` を経た後でしか呼ばれない。
+//! no-op スタブは置かない: Java の native は Rust の `report` を経た後でしか呼ばれない。
 //! プロセス死後に残った通知のボタンは Java 側で `currentId == NONE` を見て native を呼ばず消す。
 
 use std::sync::Arc;
@@ -33,8 +33,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 #[cfg(not(target_os = "android"))]
-use fandhe_device::call_ui::UnsupportedCallUi;
-use fandhe_device::call_ui::{CallUi, CallUiEvent, CallUiFailure, CallUiSink, EndReason};
+use crate::contract::UnsupportedCallUi;
+use crate::contract::{CallUi, CallUiEvent, CallUiFailure, CallUiSink, EndReason};
 
 /// `callUiReport` の結果コード（SSOT は Java 側 `CallUiHelper.REPORT_*`）。
 const REPORT_ACCEPTED: i32 = 0;
@@ -137,53 +137,53 @@ impl CallUi for AndroidCallUi {
     }
 }
 
-/// `MainActivity.callUiReport(long)`（`report == true`、戻り値は結果コード）または
-/// `callUiEnd(long)`（`false`）を JNI で呼ぶ。`None` は呼び出し失敗。
-/// `unsafe` 2 箇所は `android_midi.rs::call_activity` と同一の根拠。
+/// `CallUiHelper.report(Activity, long)`（`report == true`、戻り値は結果コード）または
+/// `CallUiHelper.end(Activity, long)`（`false`）を JNI で呼ぶ。`None` は呼び出し失敗。
+/// クラスは Activity の class loader で解決する（`fandhe_platform_android::with_activity_class`）。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_activity(call_id: u64, report: bool) -> Option<i32> {
-    use super::android::JniCallFailed;
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<i32, JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        let arg = [jni::objects::JValue::Long(call_id as jni::sys::jlong)];
-        if report {
-            Ok(env
-                .call_method(
-                    &activity,
-                    jni::jni_str!("callUiReport"),
-                    jni::jni_sig!((long) -> int),
-                    &arg,
-                )?
-                .i()?)
-        } else {
-            env.call_method(
-                &activity,
-                jni::jni_str!("callUiEnd"),
-                jni::jni_sig!((long) -> ()),
-                &arg,
-            )?;
-            Ok(0)
-        }
-    })
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    let app = android_app()?;
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.CallUiHelper"),
+        |env, activity, class| -> Result<i32, JniCallFailed> {
+            let args = [
+                jni::objects::JValue::Object(activity),
+                jni::objects::JValue::Long(call_id as jni::sys::jlong),
+            ];
+            if report {
+                Ok(env
+                    .call_static_method(
+                        class,
+                        jni::jni_str!("report"),
+                        jni::jni_sig!((android.app.Activity, long) -> int),
+                        &args,
+                    )?
+                    .i()?)
+            } else {
+                env.call_static_method(
+                    class,
+                    jni::jni_str!("end"),
+                    jni::jni_sig!((android.app.Activity, long) -> ()),
+                    &args,
+                )?;
+                Ok(0)
+            }
+        },
+    )
     .ok()
 }
 
 /// `CallUiHelper.nativeOnCallUiEvent`（Java 側）から呼ばれる JNI エクスポート。
 ///
 /// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` は JNI 命名規約上の固定
+/// この関数自体は `unsafe` 操作を含まない。`#[unsafe(no_mangle)]` は JNI 命名規約上の固定
 /// シンボル名で、本クレートは cdylib として 1 つの Android 実行単位にのみリンクされるため
 /// 他シンボルと衝突しない（既存の JNI エクスポートと同じ根拠）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_CallUiHelper_nativeOnCallUiEvent<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -193,7 +193,7 @@ extern "system" fn Java_com_fandhe_platform_CallUiHelper_nativeOnCallUiEvent<'ca
     with_slot(|s| s.emit(call_id as u64, code));
 }
 
-/// Android の `CallUi` 実装を返す（`device/call_ui.rs` の dispatch から呼ばれる）。
+/// Android の `CallUi` 実装を返す（`driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn CallUi> {
     Arc::new(AndroidCallUi)

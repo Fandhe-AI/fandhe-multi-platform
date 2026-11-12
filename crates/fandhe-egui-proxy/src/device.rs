@@ -96,11 +96,6 @@ pub mod android_ble_peripheral;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_bluetooth_classic;
-/// Issue #276: Android 向け通話 UI 統合実装。`device/call_ui.rs` の
-/// Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_call_ui;
 /// Issue #812: Android 向けカメラのライブ映像実装のスタブ（#814 が埋める）。
 /// `device/camera_preview_stream.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -731,9 +726,6 @@ pub mod bluetooth_le;
 /// （macOS は EventKit・Android は `Intent.ACTION_INSERT`（#1226）の pull 型 `bridge`、
 /// それ以外は非対応表示）。
 pub mod calendar;
-/// Phase 11 の拡充ループ（親 #87、Issue #276）: 通話 UI 統合の effect ドライバ（iOS・Android 実装、
-/// 他 OS は `UnsupportedCallUi` 固定）。
-pub mod call_ui;
 /// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得の effect ドライバ
 /// （iOS #813・Android #814・macOS #1066 は実装済み、Windows #1102 も実装済みで、他 OS は `UnsupportedCameraPreview`
 /// 固定。Web は `fandhe-web-dom`、#815）。
@@ -935,11 +927,6 @@ pub mod ios_barcode_scan;
 /// `device/ble_peripheral.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_ble_peripheral;
-/// Issue #277: iOS 向け通話 UI 統合実装（`ios/fandhe_ios_call_ui.m` の CallKit を呼ぶ C ABI ラッパー）。
-/// `device/call_ui.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_call_ui;
 /// Issue #813・#1066: iOS・macOS 向けカメラのライブ映像実装（`ios/fandhe_ios_camera_preview_stream.m` を共有）。
 /// `device/camera_preview_stream.rs` の iOS・macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos", test))]

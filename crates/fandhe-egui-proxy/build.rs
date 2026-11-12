@@ -248,8 +248,6 @@ fn build() {
     compile_ios_multi_display();
     // `ios/fandhe_ios_display_refresh_hdr.m`（Issue #871）。iOS 分岐のみ。
     compile_ios_display_refresh_hdr();
-    // `ios/fandhe_ios_call_ui.m`（Issue #277）。iOS 分岐のみ（macOS は対応表で no）。
-    compile_ios_call_ui();
     // `ios/fandhe_ios_live_activity.swift`（Issue #295）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_live_activity();
     // `ios/fandhe_ios_alarm.swift`（Issue #1077）。iOS 分岐のみ。AlarmKit を弱リンクする。
@@ -1438,15 +1436,6 @@ fn compile_ios_flashlight() {
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_pen_stylus.rs` が使う）。
 fn compile_ios_pen_stylus() {
     compile_objc("ios/fandhe_ios_pen_stylus.m", &["UIKit"]);
-}
-
-/// `ios/fandhe_ios_call_ui.m` を `cc` でコンパイルし CallKit をリンクする（Issue #277）。**iOS 分岐のみ**
-/// から呼ばれる（`src/device/ios_call_ui.rs` が使う）。
-fn compile_ios_call_ui() {
-    compile_objc(
-        "ios/fandhe_ios_call_ui.m",
-        &["AVFoundation", "CallKit", "Foundation"],
-    );
 }
 
 /// ライブアクティビティの Swift 薄層を `swiftc` で静的ライブラリ化してリンクする（Issue #295）。

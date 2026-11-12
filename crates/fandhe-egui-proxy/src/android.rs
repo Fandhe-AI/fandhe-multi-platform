@@ -284,11 +284,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // （`device::picture_in_picture::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::picture_in_picture::reset_pending_tracking();
-    // Issue #276: 通話 UI の記録（処理済み世代）と進行中の通話も破棄する。画面状態は再生成で
-    // generation 0 に戻るため、残すと次の「着信を模擬する」が飲み込まれ、OS 側の着信も残る
-    // （`device::call_ui::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::call_ui::reset_pending_tracking();
     // Issue #294: ライブアクティビティの保留中の要求も破棄し、表示中の通知を閉じる。再生成後の画面は
     // Idle から始まるため、残すと次の操作と OS 側の表示が食い違う
     // （`device::live_activity::reset_pending_tracking` doc 参照）。

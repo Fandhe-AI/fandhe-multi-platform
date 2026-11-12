@@ -1,14 +1,14 @@
 //! Phase 11 の拡充ループ（親 #87）型サンプル「通話 UI 統合」（Issue #276）の effect ドライバ。
 //! `fandhe_core::screens::call_ui_show`（端末依存ゼロ）の要求を `take_command` で観測し、
-//! `fandhe_device::call_ui::CallUi` で疑似着信を出し / 取り消し、届いた通知を `CompletionSender` 経由で
+//! `crate::contract::CallUi` で疑似着信を出し / 取り消し、届いた通知を `CompletionSender` 経由で
 //! 注入する（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約の SSOT は `fandhe_device::call_ui`。
 //!
 //! # OS 別実装の差し込み口
 //!
 //! [`platform_call_ui`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
-//! モジュールだけを埋める（iOS: `ios_call_ui`（#277）、Android: `android_call_ui`（#278。再生成時は
-//! `reset_pending_tracking` を `android_main` が呼ぶ））。それ以外は `UnsupportedCallUi` 固定で、
+//! モジュールだけを埋める（iOS: `ios`（#277）、Android: `android`（#278。再生成時は
+//! `reset_pending_tracking` を gallery の `android_main` が呼ぶ））。それ以外は `UnsupportedCallUi` 固定で、
 //! ダミーの成功実装へは倒さない。
 //!
 //! # 並行性と期限
@@ -25,29 +25,29 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::call_ui_show::{
-    apply_update, mark_command_taken, take_command, CallCommand, CallEnd, CallFailure,
-    CallUiShowState, CallUpdate, REPORT_TIMEOUT,
-};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-use fandhe_device::call_ui::UnsupportedCallUi;
-use fandhe_device::call_ui::{
+use crate::contract::UnsupportedCallUi;
+use crate::contract::{
     CallUi, CallUiEvent, CallUiFailure, CallUiSink, EndReason, REPORT_DEADLINE, RING_TIMEOUT,
 };
+use fandhe_core::screens::call_ui_show::{
+    CallCommand, CallEnd, CallFailure, CallUiShowState, CallUpdate, REPORT_TIMEOUT, apply_update,
+    mark_command_taken, take_command,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// プロセスに 1 つだけ持つ実装（`end` が `report_incoming` と同じ実体に届くようにする）。
-fn platform_call_ui() -> &'static Arc<dyn CallUi> {
+pub fn platform_call_ui() -> &'static Arc<dyn CallUi> {
     static UI: OnceLock<Arc<dyn CallUi>> = OnceLock::new();
     UI.get_or_init(|| {
         #[cfg(target_os = "ios")]
         {
-            super::ios_call_ui::implementation()
+            crate::ios::implementation()
         }
         #[cfg(target_os = "android")]
         {
-            super::android_call_ui::implementation()
+            crate::android::implementation()
         }
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
@@ -95,8 +95,7 @@ fn lock(m: &Mutex<Inner>) -> std::sync::MutexGuard<'_, Inner> {
 /// Activity 再生成時（`android_main` の再実行）に、ドライバの記録を捨てて進行中の通話を終わらせる。
 /// 画面状態は再生成で generation 0 に戻るため、残すと次の「着信を模擬する」が処理済みとして
 /// 飲み込まれる。OS 側の着信も残さない（契約表 9）。
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     let old = SESSION.get().and_then(|s| {
         let mut g = lock(&s.inner);
         g.handled = 0;
@@ -205,32 +204,32 @@ fn drive(
 
     {
         let mut g = lock(&session.inner);
-        if let Some((command, generation)) = take_command(state) {
-            if g.handled != generation {
-                g.handled = generation;
-                let _ = sender.send(Box::new(move |s: &mut CallUiShowState| {
-                    mark_command_taken(s, generation)
-                }));
-                // 残っている通話は先に終わらせる（OS 側の着信を残さない）。
-                if let Some(old) = g.current.take() {
-                    to_end.push(old.call_id);
-                }
-                if command == CallCommand::Report {
-                    let call_id = NEXT_CALL_ID.fetch_add(1, Ordering::SeqCst);
-                    g.current = Some(Slot {
-                        call_id,
-                        generation,
-                        stage: Stage::Reporting(Instant::now()),
-                    });
-                    let sink = make_sink(
-                        session.inner.clone(),
-                        sender.clone(),
-                        call_id,
-                        report_deadline,
-                        ring_timeout,
-                    );
-                    to_report = Some((call_id, sink));
-                }
+        if let Some((command, generation)) = take_command(state)
+            && g.handled != generation
+        {
+            g.handled = generation;
+            let _ = sender.send(Box::new(move |s: &mut CallUiShowState| {
+                mark_command_taken(s, generation)
+            }));
+            // 残っている通話は先に終わらせる（OS 側の着信を残さない）。
+            if let Some(old) = g.current.take() {
+                to_end.push(old.call_id);
+            }
+            if command == CallCommand::Report {
+                let call_id = NEXT_CALL_ID.fetch_add(1, Ordering::SeqCst);
+                g.current = Some(Slot {
+                    call_id,
+                    generation,
+                    stage: Stage::Reporting(Instant::now()),
+                });
+                let sink = make_sink(
+                    session.inner.clone(),
+                    sender.clone(),
+                    call_id,
+                    report_deadline,
+                    ring_timeout,
+                );
+                to_report = Some((call_id, sink));
             }
         }
         // 期限判定。確定（current = None と画面への通知）してから end を呼ぶ。
@@ -261,14 +260,14 @@ fn drive(
     for id in to_end {
         ui.end(id);
     }
-    if let Some((call_id, sink)) = to_report {
-        if let Err(f) = ui.report_incoming(call_id, sink) {
-            let mut g = lock(&session.inner);
-            if g.current.as_ref().is_some_and(|s| s.call_id == call_id) {
-                if let Some(slot) = g.current.take() {
-                    send_update(sender, slot.generation, CallUpdate::Failed(to_failure(f)));
-                }
-            }
+    if let Some((call_id, sink)) = to_report
+        && let Err(f) = ui.report_incoming(call_id, sink)
+    {
+        let mut g = lock(&session.inner);
+        if g.current.as_ref().is_some_and(|s| s.call_id == call_id)
+            && let Some(slot) = g.current.take()
+        {
+            send_update(sender, slot.generation, CallUpdate::Failed(to_failure(f)));
         }
     }
 }
@@ -288,8 +287,15 @@ pub fn call_ui_show_effect(state: &CallUiShowState, sender: &CompletionSender<Ca
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::call_ui_show::{end_call, report, CallPhase};
+    use fandhe_core::screens::call_ui_show::{CallPhase, end_call, report};
     use std::sync::mpsc;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     const LONG: Duration = Duration::from_secs(60);
 
@@ -338,11 +344,14 @@ mod tests {
         }
     }
 
-    type Rx = mpsc::Receiver<crate::app::Completion<CallUiShowState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<CallUiShowState>>;
 
     fn channel() -> (CompletionSender<CallUiShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     fn pump(state: &mut CallUiShowState, rx: &Rx) {

@@ -814,18 +814,6 @@ public class MainActivity extends GameActivity {
         return cameraPreviewHelper.setZoom(id, ratio);
     }
 
-    // 通話 UI 統合（Issue #278）。実装は `CallUiHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_call_ui.rs` が JNI で呼ぶ。
-    private final CallUiHelper callUiHelper = new CallUiHelper(this);
-
-    int callUiReport(long id) {
-        return callUiHelper.report(id);
-    }
-
-    void callUiEnd(long id) {
-        callUiHelper.end(id);
-    }
-
     // アプリアイコンのバッジ（Issue #1362）。実装は `AppBadgeHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_app_badge.rs` が JNI で呼ぶ。
     private final AppBadgeHelper appBadgeHelper = new AppBadgeHelper(this);
@@ -5011,7 +4999,6 @@ public class MainActivity extends GameActivity {
         removableStorageHelper.onDestroy();
         audioSessionHelper.onDestroy();
         cameraPreviewHelper.onDestroy();
-        callUiHelper.onDestroy();
         screenCaptureHelper.onDestroy();
         videoCaptureHelper.onDestroy();
         printHelper.onDestroy();

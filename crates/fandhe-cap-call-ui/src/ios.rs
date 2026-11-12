@@ -21,7 +21,7 @@
 //!
 //! シミュレータでの CallKit の挙動、`unentitled` が実際に出るか、背景での扱いは実機の #275 で確かめる。
 
-use fandhe_device::call_ui::{CallUiEvent, CallUiFailure, CallUiSink, EndReason};
+use crate::contract::{CallUiEvent, CallUiFailure, CallUiSink, EndReason};
 use std::sync::Mutex;
 
 /// `.m` の kind: 受理（`Ringing`）。
@@ -131,7 +131,7 @@ impl Router {
 #[cfg(target_os = "ios")]
 mod imp {
     use super::*;
-    use fandhe_device::call_ui::CallUi;
+    use crate::contract::CallUi;
     use std::sync::{Arc, OnceLock};
 
     static ROUTER: OnceLock<Router> = OnceLock::new();
@@ -142,7 +142,7 @@ mod imp {
 
     // `ios/fandhe_ios_call_ui.m` が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_ios_call_ui_report(call_id: u64);
         fn fandhe_ios_call_ui_end(call_id: u64);
     }
@@ -187,7 +187,7 @@ mod imp {
 
 /// この OS の `CallUi` 実装。
 #[cfg(target_os = "ios")]
-pub(crate) fn implementation() -> std::sync::Arc<dyn fandhe_device::call_ui::CallUi> {
+pub(crate) fn implementation() -> std::sync::Arc<dyn crate::contract::CallUi> {
     imp::implementation()
 }
 
@@ -195,14 +195,14 @@ pub(crate) fn implementation() -> std::sync::Arc<dyn fandhe_device::call_ui::Cal
 /// （入力が無いと egui が描画せず画面が止まるため。契約表 4）。panic しない。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_call_ui_event(call_id: u64, kind: i32, domain: i32, code: i64) {
     if imp::router().deliver(call_id, event_from(call_id, kind, domain, code)) == Some(false) {
         // 受け手が消えた。登録を外し、OS の通話を閉じる（Active のまま残さない）。
         imp::router().clear_if(call_id);
         imp::end_native(call_id);
     }
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]

@@ -299,7 +299,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "call_ui_show" => fandhe_core::screens::call_ui_show::current_screen,
-    fandhe_egui_proxy::device::call_ui::call_ui_show_effect,
+    fandhe_cap_call_ui::call_ui_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "audio_devices_show" => fandhe_core::screens::audio_devices_show::current_screen,
