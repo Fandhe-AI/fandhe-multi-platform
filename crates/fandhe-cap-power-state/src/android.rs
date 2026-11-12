@@ -1,8 +1,7 @@
-//! Android 向け電源状態実装（Issue #1276）。`device/power_state.rs` の Android 経路から
-//! egui スレッドで 1 秒ごとに同期で呼ばれる。契約は `fandhe_device::power_state`。
+//! Android 向け電源状態実装（Issue #1276）。`driver.rs` の Android 経路から
+//! egui スレッドで 1 秒ごとに同期で呼ばれる。契約は `crate::contract`。
 //!
-//! Java 側 `MainActivity.powerStateRead()`（JNI シグネチャ `()J`）が `PowerStateHelper.read` へ
-//! 委譲し、5 項目（電池の有無・残量・充電状態・省電力・熱）を 1 つの `long` に詰めて返す。
+//! Java 側 `PowerStateHelper.read(Context)`（static。JNI シグネチャ `(Landroid/content/Context;)J`）が5 項目（電池の有無・残量・充電状態・省電力・熱）を 1 つの `long` に詰めて返す。
 //! 詰め方の SSOT は `PowerStateHelper.java` 冒頭の表。1 回の呼び出しで全項目を読むので、
 //! 項目間は同じ時点の値になる。OS 定数 -> 契約の値の写像は純関数 [`from_android`] に置き、
 //! ホストでもテストする（#1257 の反省）。
@@ -16,7 +15,7 @@
 //! <https://developer.android.com/reference/android/os/BatteryManager>、
 //! <https://developer.android.com/reference/android/os/PowerManager>
 
-use fandhe_device::power_state::{percent_from_raw, Battery, Charging, PowerSnapshot, Thermal};
+use crate::contract::{Battery, Charging, PowerSnapshot, Thermal, percent_from_raw};
 
 /// Java が返した `long` を (有無, 残量, 充電状態, 省電力, 熱) へ分解する。負値は失敗で `None`。
 fn unpack(raw: i64) -> Option<(u8, u8, u8, u8, u8)> {
@@ -66,41 +65,32 @@ fn from_android(present: u8, percent: u8, status: u8, low_power: u8, thermal: u8
 #[cfg(target_os = "android")]
 mod jni_impl {
     use super::{from_android, unpack};
-    use crate::device::android::JniCallFailed;
-    use fandhe_device::power_state::{PowerSnapshot, PowerState};
-    use fandhe_device::DeviceError;
+    use crate::contract::{PowerSnapshot, PowerState};
+    use crate::error::PowerStateError;
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
 
-    /// Android の `PowerState` 実装（`MainActivity.powerStateRead()` を JNI で呼ぶ）。
+    /// Android の `PowerState` 実装（`PowerStateHelper.read(Context)` を static 呼び出しで読む）。
     pub(super) struct AndroidPowerState;
 
     impl PowerState for AndroidPowerState {
-        /// 2 箇所の `unsafe` は `AndroidTextScale::scale_factor` と同じ根拠・同じ形。
-        #[allow(unsafe_code)]
-        fn read(&self) -> Result<PowerSnapshot, DeviceError> {
-            const FAILED: DeviceError = DeviceError::Internal("power_state read");
-            let Some(app) = crate::android::android_app() else {
+        fn read(&self) -> Result<PowerSnapshot, PowerStateError> {
+            const FAILED: PowerStateError = PowerStateError::Internal;
+            let Some(app) = android_app() else {
                 return Err(FAILED);
             };
-
-            // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。`vm_as_ptr()` は
-            // android-activity が管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
-            let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-            let result =
-                vm.attach_current_thread(|env: &mut jni::Env| -> Result<i64, JniCallFailed> {
-                    let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                    // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。未所有の JNI
-                    // グローバル参照を `Cast` で包むだけで delete は試みない。
-                    let activity =
-                        unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                    let value = env.call_method(
-                        &activity,
-                        jni::jni_str!("powerStateRead"),
-                        jni::jni_sig!(() -> long),
-                        &[],
+            let result = with_activity_class(
+                &app,
+                jni::jni_str!("com.fandhe.platform.PowerStateHelper"),
+                |env, activity, class| -> Result<i64, JniCallFailed> {
+                    let value = env.call_static_method(
+                        class,
+                        jni::jni_str!("read"),
+                        jni::jni_sig!((android.content.Context) -> long),
+                        &[jni::objects::JValue::Object(activity)],
                     )?;
                     Ok(value.j()?)
-                });
+                },
+            );
 
             let (present, percent, status, low_power, thermal) =
                 result.ok().and_then(unpack).ok_or(FAILED)?;
@@ -111,7 +101,7 @@ mod jni_impl {
 
 /// Android の `PowerState` 実装を返す。
 #[cfg(target_os = "android")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::power_state::PowerState> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::PowerState> {
     Box::new(jni_impl::AndroidPowerState)
 }
 

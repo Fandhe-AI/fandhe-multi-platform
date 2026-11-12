@@ -8,8 +8,8 @@
 //!
 //! - 成功: [`PowerSnapshot`]。項目ごとの「取れない」は `Ok` の中の `Unknown` / `None` で表す。
 //!   電池が無い機種は [`Battery::Absent`] で表し、0% や充電中で代用しない
-//! - 非対応: `Err(DeviceError::Unsupported("power_state"))`（API 自体が無い OS）
-//! - 失敗: `Err(DeviceError::Internal("power_state read"))`（OS 呼び出しが失敗した）
+//! - 非対応: `Err(PowerStateError::Unsupported)`（API 自体が無い OS）
+//! - 失敗: `Err(PowerStateError::Internal)`（OS 呼び出しが失敗した）
 //!
 //! キャンセル・権限ダイアログの経路は無い（権限不要の同期 pull のみ）ため、三値のうち
 //! キャンセルは存在しない。
@@ -40,7 +40,7 @@
 //! 並行性: 読み取りは UI スレッドの effect 1 本だけで、ワーカー・コールバック・変化通知の
 //! 購読を持たない。集約すべき並行経路は無い。
 
-use crate::DeviceError;
+use crate::error::PowerStateError;
 
 /// 充電状態。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,15 +100,15 @@ pub struct PowerSnapshot {
 /// 電源状態の読み取り契約（module doc 参照）。
 pub trait PowerState: Send + Sync {
     /// 現在の電源状態を同期で読む。
-    fn read(&self) -> Result<PowerSnapshot, DeviceError>;
+    fn read(&self) -> Result<PowerSnapshot, PowerStateError>;
 }
 
 /// 常に非対応を返す実装。API が無い OS が成功値（ダミー）へ倒れないための既定。
 pub struct UnsupportedPowerState;
 
 impl PowerState for UnsupportedPowerState {
-    fn read(&self) -> Result<PowerSnapshot, DeviceError> {
-        Err(DeviceError::Unsupported("power_state"))
+    fn read(&self) -> Result<PowerSnapshot, PowerStateError> {
+        Err(PowerStateError::Unsupported)
     }
 }
 
@@ -126,7 +126,7 @@ mod tests {
     fn unsupported_never_succeeds() {
         assert!(matches!(
             UnsupportedPowerState.read(),
-            Err(DeviceError::Unsupported("power_state"))
+            Err(PowerStateError::Unsupported)
         ));
     }
 

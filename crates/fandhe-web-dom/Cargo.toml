@@ -26,6 +26,8 @@ fandhe-device = { path = "../fandhe-device" }
 # Issue #1173: 共有の受け取りの契約（`ShareInbox`・`validate_text`）の正本。wasm32 では
 # `fandhe-core`・`fandhe-runtime`・`thiserror` しか引かない（Android/macOS の実装は cfg で外れる）。
 fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive" }
+# Issue #1187: 電源状態の純関数（`percent_from_raw`）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の実装が cfg で外れる。
+fandhe-cap-power-state = { path = "../fandhe-cap-power-state" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。
 fandhe-platform-web = { path = "../fandhe-platform-web" }
 

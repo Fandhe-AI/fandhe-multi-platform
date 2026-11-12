@@ -36,10 +36,10 @@
 //!
 //! 例外の詳細（`message`）は画面にも `console` にも出さない（security.md A09）。
 
+use fandhe_cap_power_state::percent_from_raw;
 use fandhe_core::screens::power_state_show::{
     BatteryView, ChargingView, PowerReadError, PowerReading, ThermalView,
 };
-use fandhe_device::power_state::percent_from_raw;
 
 /// 読み取りに失敗したときの固定文言（例外の `message` は出さない）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]

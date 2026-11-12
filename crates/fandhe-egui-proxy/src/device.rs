@@ -328,11 +328,6 @@ pub mod android_photo_library;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_picture_in_picture;
-/// Issue #1274: Android 向け電源状態実装。`device/power_state.rs` の
-/// Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_power_state;
 /// Issue #328: Android 向け印刷（`PrintHelper` + JNI）。`device/print.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -1147,12 +1142,6 @@ pub mod ios_per_app_language;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_picture_in_picture;
-/// Issue #1275: iOS 向け電源状態実装（`ios/fandhe_ios_power_state.m` を呼ぶ C ABI ラッパー。
-/// #1274 のスタブを置き換え）。`device/power_state.rs` の iOS 経路から呼ばれる。写像の純関数を
-/// ホストでテストできるよう cfg は `any(ios, test)`。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_power_state;
 /// Issue #327: iOS 向け印刷実装（`ios/fandhe_ios_print.m` を呼ぶ C ABI ラッパー、`UIPrintInteractionController`）。
 /// `device/print.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -1365,12 +1354,6 @@ pub mod macos_open_in_shell;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_pen_stylus;
-/// Issue #1274: macOS 向け電源状態実装（`macos/fandhe_macos_power_state.m` を呼ぶ C ABI ラッパー）。
-/// `device/power_state.rs` の macOS 経路から呼ばれる。写像の純関数をホストでテストできるよう
-/// cfg は `any(macos, test)`。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_power_state;
 /// Issue #325: macOS 向け印刷実装（`macos/fandhe_macos_print.m` を呼ぶ C ABI ラッパー）。
 /// `device/print.rs` の macOS 経路から呼ばれる。結果コードの写像をホストでテストできるよう
 /// cfg は `any(macos, test)`。
@@ -1573,9 +1556,6 @@ pub mod photo_save;
 /// Phase 11 の拡充ループ（親 #97、Issue #364）: ピクチャ・イン・ピクチャの effect ドライバ（macOS・iOS・Android 実装、
 /// 他 OS は `UnsupportedPictureInPicture` 固定）。
 pub mod picture_in_picture;
-/// Phase 11 の拡充ループ（親 #1128、Issue #1274）: 電源状態の effect ドライバ（macOS / Windows
-/// ・iOS・Android 実装、他 OS は `UnsupportedPowerState` 固定）。
-pub mod power_state;
 /// Phase 11 の拡充ループ（親 #94、Issue #325）: 印刷ダイアログの effect ドライバ（macOS 実装、
 /// Windows / iOS / Android 実装、他 OS は `UnsupportedPrint` 固定。
 /// Web は `fandhe-web-dom`）。画面の内容の印刷（print-screen、親 #341、Issue #1010）の取り込み段と
@@ -1974,12 +1954,6 @@ pub mod windows_pen_stylus;
 /// フォルダへ `FolderPhotoLibrary` で書く）。`device/photo_save.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_photo_library;
-/// Issue #1274: Windows 向け電源状態実装（Win32 `GetSystemPowerStatus`）。
-/// `device/power_state.rs` の Windows 経路から呼ばれる。写像の純関数をホストでテストできるよう
-/// cfg は `any(windows, test)`。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_power_state;
 /// Issue #326: Windows 向け印刷実装（`PrintDlgExW` + GDI）。`device/print.rs` の Windows 経路から
 /// 呼ばれる。結果の写像は純関数でホストでもテストできる（ffi 部分は `cfg(target_os = "windows")`）。
 #[cfg(any(target_os = "windows", test))]

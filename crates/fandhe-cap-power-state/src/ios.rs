@@ -1,7 +1,7 @@
 //! iOS 向け電源状態実装（Issue #1275）。`ios/fandhe_ios_power_state.m`（`UIDevice` +
 //! `NSProcessInfo`、`build.rs` が iOS ターゲットの feature `device` 有効時にコンパイルする）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。#1274 のスタブを置き換えたもので、dispatch
-//! （`device/power_state.rs`）と共通コア画面は変えない。契約は `fandhe_device::power_state`。
+//! （`device/power_state.rs`）と共通コア画面は変えない。契約は `crate::contract`。
 //!
 //! `.m` は OS の生値を返すだけで、値域チェックと契約値への写像は [`from_raw`] が行う
 //! （ホストでテストできるようモジュールは `cfg(any(ios, test))`）。`UIDevice` は UIKit のため
@@ -9,7 +9,7 @@
 //!
 //! # 再描画
 //!
-//! OS コールバックを持たず結果を共有状態へ書く経路が無いため、`crate::ios::request_repaint` は
+//! OS コールバックを持たず結果を共有状態へ書く経路が無いため、`fandhe_runtime::request_repaint` は
 //! 呼ばない。再描画は `drive` の完了通知と 1 秒間隔の再描画予約が起こす。
 //!
 //! # 守る範囲・守らない範囲
@@ -26,7 +26,7 @@
 //! - シミュレータは電池を不明で返す
 //! - 実機の目視確認は #1271
 
-use fandhe_device::power_state::{percent_from_raw, Battery, Charging, PowerSnapshot, Thermal};
+use crate::contract::{Battery, Charging, PowerSnapshot, Thermal, percent_from_raw};
 
 /// `.m` の `FandheIosPowerStateRaw` と同じレイアウト。
 #[repr(C)]
@@ -85,7 +85,7 @@ mod ffi {
     // SAFETY: `ios/fandhe_ios_power_state.m`（`build.rs` が iOS ターゲットの feature `device`
     // 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_ios_power_state_read(out: *mut Raw) -> i32;
     }
 
@@ -101,19 +101,19 @@ mod ffi {
 struct IosPowerState;
 
 #[cfg(target_os = "ios")]
-impl fandhe_device::power_state::PowerState for IosPowerState {
-    fn read(&self) -> Result<PowerSnapshot, fandhe_device::DeviceError> {
+impl crate::contract::PowerState for IosPowerState {
+    fn read(&self) -> Result<PowerSnapshot, crate::error::PowerStateError> {
         let mut raw = Raw::default();
         if ffi::read(&mut raw) != 0 {
-            return Err(fandhe_device::DeviceError::Internal("power_state read"));
+            return Err(crate::error::PowerStateError::Internal);
         }
         Ok(from_raw(raw))
     }
 }
 
-/// iOS の `PowerState` 実装を返す（`device/power_state.rs` の dispatch から呼ばれる）。
+/// iOS の `PowerState` 実装を返す（`driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "ios")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::power_state::PowerState> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::PowerState> {
     Box::new(IosPowerState)
 }
 

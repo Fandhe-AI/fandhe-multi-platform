@@ -1,8 +1,8 @@
 //! macOS 向け電源状態実装（Issue #1274）。`macos/fandhe_macos_power_state.m`（IOKit +
-//! `NSProcessInfo`、`build.rs` が macOS ターゲットの feature `device` 有効時にコンパイル・
+//! `NSProcessInfo`、本 crate の `build.rs` が macOS ターゲットでコンパイル・
 //! リンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で
-//! 契約を明記する。`device/power_state.rs` の macOS 経路から呼ばれ、契約は
-//! `fandhe_device::power_state`。
+//! 契約を明記する。`driver.rs` の macOS 経路から呼ばれ、契約は
+//! `crate::contract`。
 //!
 //! `.m` が返す生値（番兵 -1 など）は [`from_raw`] で契約の値へ写す。範囲外の値
 //! （`level > 100`、`thermal > 3`、未知の充電コード）は FFI 境界の入力として Unknown / `None` へ
@@ -13,7 +13,7 @@
 //! - 変化通知（低電力モード・熱・スリープ復帰）は購読せず 1 秒 pull のみ
 //! - 実機の目視確認は #1271
 
-use fandhe_device::power_state::{percent_from_raw, Battery, Charging, PowerSnapshot, Thermal};
+use crate::contract::{Battery, Charging, PowerSnapshot, Thermal, percent_from_raw};
 
 /// `.m` の `FandhePowerStateRaw` と同じレイアウト。
 #[repr(C)]
@@ -65,7 +65,7 @@ mod ffi {
     // SAFETY: `macos/fandhe_macos_power_state.m`（`build.rs` が macOS ターゲットの feature
     // `device` 有効時にコンパイル・リンクする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_power_state_read(out: *mut Raw) -> i32;
     }
 
@@ -81,19 +81,19 @@ mod ffi {
 struct MacPowerState;
 
 #[cfg(target_os = "macos")]
-impl fandhe_device::power_state::PowerState for MacPowerState {
-    fn read(&self) -> Result<PowerSnapshot, fandhe_device::DeviceError> {
+impl crate::contract::PowerState for MacPowerState {
+    fn read(&self) -> Result<PowerSnapshot, crate::error::PowerStateError> {
         let mut raw = Raw::default();
         if ffi::read(&mut raw) != 0 {
-            return Err(fandhe_device::DeviceError::Internal("power_state read"));
+            return Err(crate::error::PowerStateError::Internal);
         }
         Ok(from_raw(raw))
     }
 }
 
-/// macOS の `PowerState` 実装を返す（`device/power_state.rs` の dispatch から呼ばれる）。
+/// macOS の `PowerState` 実装を返す（`driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "macos")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::power_state::PowerState> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::PowerState> {
     Box::new(MacPowerState)
 }
 

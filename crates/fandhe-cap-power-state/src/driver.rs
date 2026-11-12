@@ -1,14 +1,14 @@
 //! Phase 11 の拡充ループ（親 #1128）型サンプル「電源状態」（Issue #1274）の effect ドライバ。
-//! `fandhe_device::power_state::PowerState` を 1 秒間隔で UI スレッドから同期 pull し、
+//! `crate::contract::PowerState` を 1 秒間隔で UI スレッドから同期 pull し、
 //! `fandhe_core::screens::power_state_show`（端末依存ゼロ）へ結果を `CompletionSender` 経由で
 //! 渡す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
-//! 呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::power_state`。
+//! 呼ばれる契約、`fandhe_runtime::EffectFn` 参照）。契約の SSOT は `crate::contract`。
 //!
 //! # OS 別実装の差し込み口
 //!
 //! [`platform_power_state`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を
-//! 持つモジュールだけを埋める（macOS: `macos_power_state`、Windows: `windows_power_state`、
-//! iOS: `ios_power_state`（#1275）、Android: `android_power_state`（#1276））。それ以外は
+//! 持つモジュールだけを埋める（macOS: `macos`、Windows: `windows`、
+//! iOS: `ios`（#1275）、Android: `android`（#1276））。それ以外は
 //! `UnsupportedPowerState` 固定で、ダミーの成功実装へは倒さない。
 //!
 //! # 再描画の予約（契約表 4）
@@ -21,21 +21,21 @@
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::power_state_show::{
-    finish_read, view, BatteryView, ChargingView, PowerReadError, PowerReading,
-    PowerStateShowState, PowerView, ThermalView,
-};
 #[cfg(not(any(
     target_os = "windows",
     target_os = "macos",
     target_os = "ios",
     target_os = "android"
 )))]
-use fandhe_device::power_state::UnsupportedPowerState;
-use fandhe_device::power_state::{Battery, Charging, PowerSnapshot, PowerState, Thermal};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedPowerState;
+use crate::contract::{Battery, Charging, PowerSnapshot, PowerState, Thermal};
+use crate::error::PowerStateError;
+use fandhe_core::screens::power_state_show::{
+    BatteryView, ChargingView, PowerReadError, PowerReading, PowerStateShowState, PowerView,
+    ThermalView, finish_read, view,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// OS を読み直す間隔。
 const READ_INTERVAL: Duration = Duration::from_secs(1);
@@ -45,22 +45,23 @@ const READ_INTERVAL: Duration = Duration::from_secs(1);
 static LAST_READ: Mutex<Option<Instant>> = Mutex::new(None);
 
 /// 現在のプラットフォームに応じた `PowerState` 実装を返す（状態を持たないため呼び出しごとに構築）。
-fn platform_power_state() -> Box<dyn PowerState> {
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_power_state() -> Box<dyn PowerState> {
     #[cfg(target_os = "windows")]
     {
-        super::windows_power_state::implementation()
+        crate::windows::implementation()
     }
     #[cfg(target_os = "macos")]
     {
-        super::macos_power_state::implementation()
+        crate::macos::implementation()
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_power_state::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_power_state::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(
         target_os = "windows",
@@ -126,7 +127,7 @@ fn drive(
 
     let result = match ps.read() {
         Ok(snapshot) => Ok(to_reading(snapshot)),
-        Err(DeviceError::Unsupported(_)) => Err(PowerReadError::Unavailable),
+        Err(PowerStateError::Unsupported) => Err(PowerReadError::Unavailable),
         // 画面へは機能名程度の Display のみ（OS の生コードは出さない、security.md A09）。
         Err(e) => Err(PowerReadError::Failed(e.to_string())),
     };
@@ -172,19 +173,28 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     struct Mock {
         count: AtomicUsize,
-        f: Box<dyn Fn() -> Result<PowerSnapshot, DeviceError> + Send + Sync>,
+        f: Box<dyn Fn() -> Result<PowerSnapshot, PowerStateError> + Send + Sync>,
     }
 
     impl PowerState for Mock {
-        fn read(&self) -> Result<PowerSnapshot, DeviceError> {
+        fn read(&self) -> Result<PowerSnapshot, PowerStateError> {
             self.count.fetch_add(1, Ordering::SeqCst);
             (self.f)()
         }
     }
 
-    fn mock(f: impl Fn() -> Result<PowerSnapshot, DeviceError> + Send + Sync + 'static) -> Mock {
+    fn mock(
+        f: impl Fn() -> Result<PowerSnapshot, PowerStateError> + Send + Sync + 'static,
+    ) -> Mock {
         Mock {
             count: AtomicUsize::new(0),
             f: Box::new(f),
@@ -201,14 +211,17 @@ mod tests {
 
     fn channel() -> (
         CompletionSender<PowerStateShowState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<PowerStateShowState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<PowerStateShowState>>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     fn apply(
-        rx: &std::sync::mpsc::Receiver<crate::app::Completion<PowerStateShowState>>,
+        rx: &std::sync::mpsc::Receiver<fandhe_runtime::Completion<PowerStateShowState>>,
     ) -> PowerStateShowState {
         let mut s = PowerStateShowState::default();
         (rx.recv().expect("完了が送られる"))(&mut s);
@@ -264,7 +277,7 @@ mod tests {
     #[test]
     fn unsupported_sends_unavailable_and_stops_repaint() {
         let (sender, rx) = channel();
-        let ps = mock(|| Err(DeviceError::Unsupported("power_state")));
+        let ps = mock(|| Err(PowerStateError::Unsupported));
         let mut last = None;
         let d = drive(
             &PowerStateShowState::default(),
@@ -300,7 +313,7 @@ mod tests {
     #[test]
     fn internal_error_sends_failed_and_keeps_polling() {
         let (sender, rx) = channel();
-        let ps = mock(|| Err(DeviceError::Internal("power_state read")));
+        let ps = mock(|| Err(PowerStateError::Internal));
         let mut last = None;
         let d = drive(
             &PowerStateShowState::default(),

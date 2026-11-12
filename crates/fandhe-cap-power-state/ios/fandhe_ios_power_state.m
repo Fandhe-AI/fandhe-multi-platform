@@ -1,7 +1,6 @@
 // 電源状態: iOS 実装（Issue #1275）。`UIDevice`（電池）と `NSProcessInfo`（省電力・熱）を読む。
 //
-// `src/device/ios_power_state.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
-// feature `device` 有効時のみ `cc` コンパイルする（UIKit / Foundation はリンク済み）。
+// `crates/fandhe-cap-power-state/src/ios.rs` から C ABI 経由で呼ばれる。本 crate の `build.rs` が iOS ターゲットで `cc` コンパイルする。
 //
 // 契約（一発呼び出し型。結果を待つ要求は持たない）:
 //   fandhe_ios_power_state_read(FandheIosPowerStateRaw *out) -> int32_t

@@ -7,8 +7,8 @@ import android.os.BatteryManager;
 import android.os.Build;
 import android.os.PowerManager;
 
-// 電源状態画面（Issue #1276）の Android 実装ヘルパー。MainActivity.powerStateRead() から
-// 委譲される。Rust の `device/android_power_state.rs` が egui スレッドから JNI（`()J`）で
+// 電源状態画面（Issue #1276、#1187）の Android 実装ヘルパー。利用者の `MainActivity` には何も書かせない。
+// Rust の `src/android.rs` が egui スレッドから static の `read(Context)` を JNI で
 // 1 秒に 1 回呼ぶ同期 getter で、Java -> Rust の native コールバックは無い（no-op スタブ不要）。
 //
 // 戻り値は 5 項目を 1 つの long に詰めた値（各 8bit、不明は 255）。Rust 側 `unpack` と対で決める:
@@ -22,14 +22,15 @@ import android.os.PowerManager;
 // registerReceiver(null, ...) は sticky intent を返すだけで receiver を登録しないため解除不要。
 // 3 つの API はいずれも binder 呼び出しでスレッド制約・Looper 要件が無く、android_main
 // スレッドから呼べる。権限は不要（BATTERY_STATS は宣言しない）。Activity は握らず
-// ApplicationContext だけを使うので、Activity 再生成で保留する要求も状態も無い。
+// ApplicationContext だけを使うので（呼び出し側が渡した Context から取り出す）、Activity 再生成で保留する要求も状態も無い。
 // 守る範囲: 1 回の呼び出し内で同じ時点の値を返すこと。守らない範囲: 呼び出し間隔内の変化の反映。
 final class PowerStateHelper {
     private static final long UNKNOWN = 255L;
 
     private PowerStateHelper() {}
 
-    static long read(Context context) {
+    static long read(Context hostContext) {
+        Context context = hostContext.getApplicationContext();
         try {
             long present = UNKNOWN;
             long percent = UNKNOWN;

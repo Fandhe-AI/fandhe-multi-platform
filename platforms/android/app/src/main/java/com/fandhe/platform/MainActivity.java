@@ -4632,12 +4632,6 @@ public class MainActivity extends GameActivity {
         return getResources().getConfiguration().fontScale;
     }
 
-    // Rust 側（`device/android_power_state.rs`、Issue #1276）から JNI 経由で egui スレッドが
-    // 1 秒ごとに呼ぶ同期メソッド（シグネチャ `()J`）。詰め方は `PowerStateHelper` 冒頭を参照。
-    private long powerStateRead() {
-        return PowerStateHelper.read(getApplicationContext());
-    }
-
     // Rust 側（`device/android_device_info.rs`、Issue #1306）から JNI 経由で egui スレッドが
     // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
     // `DeviceInfoHelper` 冒頭を参照。失敗は null。

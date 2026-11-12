@@ -195,8 +195,6 @@ fn build() {
     compile_ios_fullscreen_immersive();
     // `ios/fandhe_ios_screen_orientation.m`（Issue #656）。iOS 分岐のみ。
     compile_ios_screen_orientation();
-    // `ios/fandhe_ios_power_state.m`（Issue #1275）。iOS 分岐のみ。
-    compile_ios_power_state();
     // `ios/fandhe_ios_app_lifecycle.m`（Issue #894）。iOS 分岐のみ。
     compile_ios_app_lifecycle();
     // `ios/fandhe_ios_memory_pressure.m`（Issue #912）。iOS 分岐のみ。
@@ -1188,13 +1186,6 @@ fn compile_ios_display_refresh_hdr() {
     compile_objc("ios/fandhe_ios_display_refresh_hdr.m", &["UIKit"]);
 }
 
-/// `macos/fandhe_macos_power_state.m` を `cc` でコンパイルする（Issue #1274）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_power_state.rs` が使う）。
-/// IOKit（`IOPSCopyPowerSourcesInfo`）を追加でリンクする。
-fn compile_macos_power_state() {
-    compile_objc("macos/fandhe_macos_power_state.m", &["Foundation", "IOKit"]);
-}
-
 /// `macos/fandhe_macos_user_idle.m` を `cc` でコンパイルする（Issue #631）。**macOS 分岐のみ**
 /// から呼ばれる（`src/device/macos_user_idle.rs` が使う）。CoreGraphics を追加でリンクする。
 fn compile_macos_user_idle() {
@@ -1321,12 +1312,6 @@ fn compile_ios_external_app_launch() {
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_print.rs` が使う）。
 fn compile_ios_print() {
     compile_objc("ios/fandhe_ios_print.m", &["UIKit"]);
-}
-
-/// `ios/fandhe_ios_power_state.m` を `cc` でコンパイルする（Issue #1275）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_power_state.rs` が使う）。
-fn compile_ios_power_state() {
-    compile_objc("ios/fandhe_ios_power_state.m", &["Foundation", "UIKit"]);
 }
 
 /// `ios/fandhe_ios_app_lifecycle.m` を `cc` でコンパイルする（Issue #894）。
@@ -1615,8 +1600,6 @@ fn build_macos() {
     compile_macos_url_scheme();
     // `macos/fandhe_macos_app_shortcuts.m`（Issue #424）も macOS 専用。
     compile_macos_app_shortcuts();
-    // `macos/fandhe_macos_power_state.m`（Issue #1274）も macOS 専用。
-    compile_macos_power_state();
     // `macos/fandhe_macos_user_idle.m`（Issue #631）も macOS 専用。
     compile_macos_user_idle();
     // `macos/fandhe_macos_device_info.m`（Issue #1304）も macOS 専用。

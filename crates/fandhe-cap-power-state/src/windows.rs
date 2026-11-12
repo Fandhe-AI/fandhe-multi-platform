@@ -1,6 +1,6 @@
-//! Windows 向け電源状態実装（Issue #1274）。`device/power_state.rs` の Windows 経路から呼ばれ、
+//! Windows 向け電源状態実装（Issue #1274）。`driver.rs` の Windows 経路から呼ばれ、
 //! Win32 `GetSystemPowerStatus` を UI スレッドから同期で 1 回呼ぶ（数 µs。package identity 不要）。
-//! `PowerState` の契約は `fandhe_device::power_state`。
+//! `PowerState` の契約は `crate::contract`。
 //!
 //! 値の写像は純関数 [`from_win32`] に切り出し、ホストでもテストする（Windows でしか走らない
 //! 写像テストを作らない、#1257 の反省）。
@@ -12,7 +12,7 @@
 //! - 熱状態は取る API が無いため常に `Unknown`
 //! - 実機確認は #1271。ローカルに MSVC が無く、型検査は `x86_64-pc-windows-gnu` のみ
 
-use fandhe_device::power_state::{percent_from_raw, Battery, Charging, PowerSnapshot, Thermal};
+use crate::contract::{Battery, Charging, PowerSnapshot, Thermal, percent_from_raw};
 
 /// `BatteryFlag`: 充電中ビット。
 const FLAG_CHARGING: u8 = 8;
@@ -58,15 +58,15 @@ fn from_win32(ac_line: u8, battery_flag: u8, percent: u8, system_status_flag: u8
 struct WindowsPowerState;
 
 #[cfg(target_os = "windows")]
-impl fandhe_device::power_state::PowerState for WindowsPowerState {
+impl crate::contract::PowerState for WindowsPowerState {
     #[allow(unsafe_code)]
-    fn read(&self) -> Result<PowerSnapshot, fandhe_device::DeviceError> {
+    fn read(&self) -> Result<PowerSnapshot, crate::error::PowerStateError> {
         use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
         let mut s = SYSTEM_POWER_STATUS::default();
         // SAFETY: `s` は呼び出しの間有効なスタック上の構造体で、排他的な書き込み先として渡す。
         // 関数は保持しない。
         unsafe { GetSystemPowerStatus(&mut s) }
-            .map_err(|_| fandhe_device::DeviceError::Internal("power_state read"))?;
+            .map_err(|_| crate::error::PowerStateError::Internal)?;
         Ok(from_win32(
             s.ACLineStatus,
             s.BatteryFlag,
@@ -76,9 +76,9 @@ impl fandhe_device::power_state::PowerState for WindowsPowerState {
     }
 }
 
-/// Windows の `PowerState` 実装を返す（`device/power_state.rs` の dispatch から呼ばれる）。
+/// Windows の `PowerState` 実装を返す（`driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "windows")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::power_state::PowerState> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::PowerState> {
     Box::new(WindowsPowerState)
 }
 

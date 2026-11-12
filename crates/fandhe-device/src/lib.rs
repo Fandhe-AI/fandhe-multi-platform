@@ -203,8 +203,6 @@ pub mod photo_library;
 pub mod photo_picker;
 /// Phase 11（端末機能の拡充ループ、親 #97、Issue #364）: ピクチャ・イン・ピクチャ（映像の小窓表示）。
 pub mod picture_in_picture;
-/// Phase 11（端末機能の拡充ループ、親 #1128、Issue #1274）: 電源状態（電池・省電力・熱）。
-pub mod power_state;
 /// Phase 11（端末機能の拡充ループ、親 #94、Issue #325）: 印刷ダイアログを開く。
 pub mod print;
 /// Phase 11（端末機能の拡充ループ、親 #139、Issue #719）: クイック設定タイル・コントロール（押された回数の読み出し）。

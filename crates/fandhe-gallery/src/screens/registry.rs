@@ -355,7 +355,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "power_state_show" => fandhe_core::screens::power_state_show::current_screen,
-    fandhe_egui_proxy::device::power_state::power_state_show_effect,
+    fandhe_cap_power_state::power_state_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "user_idle_show" => fandhe_core::screens::user_idle_show::current_screen,
