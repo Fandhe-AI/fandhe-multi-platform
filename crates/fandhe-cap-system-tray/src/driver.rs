@@ -1,6 +1,6 @@
 //! Phase 11（親 #1038）型サンプル「システムトレイ」（Issue #1039）の effect ドライバ。
 //! `fandhe_core::screens::system_tray`（端末依存ゼロ）の `pending` 要求を観測し、
-//! `fandhe_device::system_tray::SystemTray` で OS へアイコンの表示 / 非表示を依頼して
+//! `crate::contract::SystemTray` で OS へアイコンの表示 / 非表示を依頼して
 //! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`device/notification.rs` と同型）。
 //!
@@ -41,22 +41,22 @@
 
 use std::sync::Arc;
 
+use crate::contract::{HideOutcome, ShowOutcome, SystemTray, TrayMenu};
+use crate::error::SystemTrayError;
 use fandhe_core::screens::system_tray::{
-    apply_selection, finish_hide, finish_show, mark_hiding, mark_showing, take_action, HideResult,
-    ShowResult, SystemTrayState, TrayActionKind, MENU_ITEMS, TRAY_TITLE,
+    HideResult, MENU_ITEMS, ShowResult, SystemTrayState, TRAY_TITLE, TrayActionKind,
+    apply_selection, finish_hide, finish_show, mark_hiding, mark_showing, take_action,
 };
-use fandhe_device::system_tray::{HideOutcome, ShowOutcome, SystemTray, TrayMenu};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
-use crate::device::request_slot::POLL_INTERVAL;
+use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::POLL_INTERVAL;
 
-/// `DeviceError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
-/// それ以外は `Display` の文言のみを転送する（`DeviceError` の内部構造は漏らさない、
+/// `SystemTrayError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
+/// それ以外は `Display` の文言のみを転送する（`SystemTrayError` の内部構造は漏らさない、
 /// security.md A09。`notification.rs::to_message` と同型）。
-fn to_message(e: DeviceError) -> String {
+fn to_message(e: SystemTrayError) -> String {
     match e {
-        DeviceError::Unsupported(_) => {
+        SystemTrayError::Unsupported => {
             "この OS ではメニューバー・システムトレイに対応していません".to_string()
         }
         other => other.to_string(),
@@ -83,36 +83,29 @@ fn to_hide_result(outcome: HideOutcome) -> HideResult {
 /// カスケード）。`Arc` で返すのは [`drive`] が `show`/`hide` を作業スレッドへ
 /// 逃がすため（`'static` 参照ではなく `std::thread::spawn` へ move できる所有権が
 /// 要る、`notification.rs::implementation` と同型）。
-fn platform_tray() -> Arc<dyn SystemTray> {
+pub fn platform_system_tray() -> Arc<dyn SystemTray> {
     #[cfg(target_os = "macos")]
     {
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn SystemTray>> = OnceLock::new();
-        Arc::clone(
-            INSTANCE.get_or_init(|| Arc::new(super::apple_system_tray::AppleSystemTray) as _),
-        )
+        Arc::clone(INSTANCE.get_or_init(|| Arc::new(crate::apple::AppleSystemTray) as _))
     }
     #[cfg(target_os = "windows")]
     {
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn SystemTray>> = OnceLock::new();
-        Arc::clone(
-            INSTANCE.get_or_init(|| Arc::new(super::windows_system_tray::WindowsSystemTray) as _),
-        )
+        Arc::clone(INSTANCE.get_or_init(|| Arc::new(crate::windows::WindowsSystemTray) as _))
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn SystemTray>> = OnceLock::new();
-        Arc::clone(
-            INSTANCE
-                .get_or_init(|| Arc::new(fandhe_device::system_tray::UnsupportedSystemTray) as _),
-        )
+        Arc::clone(INSTANCE.get_or_init(|| Arc::new(crate::contract::UnsupportedSystemTray) as _))
     }
 }
 
 /// `MENU_ITEMS`（`&[&str; 3]`）を `TrayMenu::new` が要求する `&[&str]` へ変換する。
-fn tray_menu() -> Result<TrayMenu, DeviceError> {
+fn tray_menu() -> Result<TrayMenu, SystemTrayError> {
     let items: Vec<&str> = MENU_ITEMS.to_vec();
     TrayMenu::new(TRAY_TITLE, &items)
 }
@@ -185,7 +178,7 @@ pub(crate) fn drive(
 /// `registry.rs` の `effect` 区画から `system_tray` 画面用に配線される effect
 /// ドライバ。
 pub fn system_tray_effect(state: &SystemTrayState, sender: &CompletionSender<SystemTrayState>) {
-    drive(state, sender, platform_tray());
+    drive(state, sender, platform_system_tray());
 }
 
 /// アプリ終了時（`device.rs::shutdown`）に呼ぶ。表示中のアイコンを消す
@@ -201,27 +194,34 @@ pub(crate) fn cleanup(tray: &dyn SystemTray) {
 /// 通知領域アイコンが残る（`NIM_DELETE` 忘れ）のを防ぐ（モジュール doc「終了時」
 /// 契約、`device.rs::shutdown` 参照）。
 pub fn stop_shared_system_tray() {
-    cleanup(&*platform_tray());
+    cleanup(&*platform_system_tray());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::system_tray::{request_hide, request_show, TrayPhase};
+    use fandhe_core::screens::system_tray::{TrayPhase, request_hide, request_show};
+    use fandhe_runtime::RepaintWaker;
+
+    /// 再描画の起床は不要なテスト用 waker。
+    struct NoopWaker;
+    impl RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     fn sender_with_channel() -> (
         CompletionSender<SystemTrayState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<SystemTrayState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<SystemTrayState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// `DummySystemTray` を `drive` へ渡せる `Arc<dyn SystemTray>` へ包む
     /// （内部状態は `Arc<Mutex<..>>` で共有されるため、元の `tray` 変数で
     /// `show_calls()` 等を観測できる）。
-    fn arc_dummy(tray: &fandhe_device::system_tray::DummySystemTray) -> Arc<dyn SystemTray> {
+    fn arc_dummy(tray: &crate::contract::DummySystemTray) -> Arc<dyn SystemTray> {
         Arc::new(tray.clone())
     }
 
@@ -232,7 +232,7 @@ mod tests {
         drive(
             &state,
             &sender,
-            Arc::new(fandhe_device::system_tray::DummySystemTray::new()),
+            Arc::new(crate::contract::DummySystemTray::new()),
         );
         assert!(rx.try_recv().is_err());
     }
@@ -243,7 +243,7 @@ mod tests {
         let mut state = SystemTrayState::default();
         request_show(&mut state);
 
-        let tray = fandhe_device::system_tray::DummySystemTray::new();
+        let tray = crate::contract::DummySystemTray::new();
         drive(&state, &sender, arc_dummy(&tray));
         rx.recv().expect("mark_showing が送られる")(&mut state);
         assert_eq!(state.phase, TrayPhase::Showing);
@@ -263,7 +263,7 @@ mod tests {
         let mut state = SystemTrayState::default();
         request_show(&mut state);
 
-        let tray = fandhe_device::system_tray::DummySystemTray::new();
+        let tray = crate::contract::DummySystemTray::new();
         drive(&state, &sender, arc_dummy(&tray));
         // mark_showing のみ反映する（フレーム境界で完了が未反映のまま次フレームの
         // 先頭まで進んだ状況を模す）。
@@ -289,7 +289,7 @@ mod tests {
         let (sender, rx) = sender_with_channel();
         let mut state = SystemTrayState::default();
         request_show(&mut state);
-        let tray = fandhe_device::system_tray::DummySystemTray::new();
+        let tray = crate::contract::DummySystemTray::new();
         drive(&state, &sender, arc_dummy(&tray));
         rx.recv().expect("mark_showing が送られる")(&mut state);
         rx.recv().expect("show 完了が送られる")(&mut state);
@@ -308,7 +308,7 @@ mod tests {
         let (sender, rx) = sender_with_channel();
         let mut state = SystemTrayState::default();
         request_show(&mut state);
-        let tray = fandhe_device::system_tray::DummySystemTray::new();
+        let tray = crate::contract::DummySystemTray::new();
         drive(&state, &sender, arc_dummy(&tray));
         rx.recv().expect("mark_showing が送られる")(&mut state);
         rx.recv().expect("show 完了")(&mut state);
@@ -331,7 +331,7 @@ mod tests {
         drive(
             &state,
             &sender,
-            Arc::new(fandhe_device::system_tray::UnsupportedSystemTray),
+            Arc::new(crate::contract::UnsupportedSystemTray),
         );
         rx.recv().expect("mark_showing が送られる")(&mut state);
         let apply = rx.recv().expect("完了が送られる");
@@ -345,7 +345,7 @@ mod tests {
         let (sender, rx) = sender_with_channel();
         let mut state = SystemTrayState::default();
         request_show(&mut state);
-        let tray = fandhe_device::system_tray::DummySystemTray::new();
+        let tray = crate::contract::DummySystemTray::new();
         drive(&state, &sender, arc_dummy(&tray));
         rx.recv().expect("mark_showing が送られる")(&mut state);
         rx.recv().expect("show 完了")(&mut state);
@@ -368,14 +368,14 @@ mod tests {
         drive(
             &state,
             &sender,
-            Arc::new(fandhe_device::system_tray::DummySystemTray::new()),
+            Arc::new(crate::contract::DummySystemTray::new()),
         );
         assert!(rx.try_recv().is_err());
     }
 
     #[test]
     fn cleanup_calls_hide_and_ignores_result() {
-        let tray = fandhe_device::system_tray::DummySystemTray::new();
+        let tray = crate::contract::DummySystemTray::new();
         cleanup(&tray);
         assert_eq!(tray.hide_calls(), 1);
     }

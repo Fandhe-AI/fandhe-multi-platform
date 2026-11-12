@@ -9,8 +9,8 @@
 //! # 「表示中かどうか」を Rust 側で判定する理由
 //!
 //! 二重表示の判定（[`SystemTray::show`] の `AlreadyShown`）は `.m` 側へ問い合わせず、
-//! [`QUEUE`]（`fandhe_device::system_tray::SelectionQueue`）の
-//! [`is_active`](fandhe_device::system_tray::SelectionQueue::is_active) で完結させる。
+//! [`QUEUE`]（`crate::contract::SelectionQueue`）の
+//! [`is_active`](crate::contract::SelectionQueue::is_active) で完結させる。
 //! `QUEUE.begin`/`QUEUE.end` を「表示中フラグ」としても流用することで、
 //! 表示状態を Rust/ObjC 両側に二重管理しない（SSOT、`device-bridge-contracts.md`
 //! 「6. 嘘の成功」の裏返しの設計判断: 片方だけが表示中と思い込む food を防ぐ）。
@@ -22,8 +22,8 @@
 use std::ffi::CString;
 use std::os::raw::c_char;
 
-use fandhe_device::system_tray::{HideOutcome, SelectionQueue, ShowOutcome, SystemTray, TrayMenu};
-use fandhe_device::DeviceError;
+use crate::contract::{HideOutcome, SelectionQueue, ShowOutcome, SystemTray, TrayMenu};
+use crate::error::SystemTrayError;
 
 // SAFETY: `apple/fandhe_apple_system_tray.m` が定義する C ABI（`build.rs::build_macos`
 // がコンパイル・リンクする）。契約は `.m` ファイル冒頭コメントおよび下記
@@ -47,7 +47,7 @@ unsafe extern "C" {
 /// `QUEUE.is_active()` が「現在表示中か」を兼ねる（モジュール doc 参照）。
 static QUEUE: SelectionQueue = SelectionQueue::new();
 
-/// macOS 向け `SystemTray` 実装。`fandhe-egui-proxy::device::system_tray::drive`
+/// macOS 向け `SystemTray` 実装。`crate::driver::drive`
 /// から作業スレッド（UI スレッドではない）で呼ばれる契約。AppKit 呼び出しは
 /// main thread 必須のため、`.m` 側が `dispatch_sync` で main へ寄せてから実行
 /// する（`device/system_tray.rs` モジュール doc「別スレッドへ逃がす理由」参照）。
@@ -55,18 +55,17 @@ pub(crate) struct AppleSystemTray;
 
 impl SystemTray for AppleSystemTray {
     #[allow(unsafe_code)]
-    fn show(&self, menu: &TrayMenu) -> Result<ShowOutcome, DeviceError> {
+    fn show(&self, menu: &TrayMenu) -> Result<ShowOutcome, SystemTrayError> {
         // CString 化失敗（NUL 混入）は `TrayMenu::new` の検証で既に排除済みだが、
         // 防御的に `Internal` へ畳む（`TrayMenu` の不変条件が将来崩れても panic
         // させない）。
-        let title =
-            CString::new(menu.title()).map_err(|_| DeviceError::Internal("system_tray show"))?;
+        let title = CString::new(menu.title()).map_err(|_| SystemTrayError::Internal)?;
         let item_cstrings: Vec<CString> = menu
             .items()
             .iter()
             .map(|s| CString::new(s.as_str()))
             .collect::<Result<_, _>>()
-            .map_err(|_| DeviceError::Internal("system_tray show"))?;
+            .map_err(|_| SystemTrayError::Internal)?;
         let item_ptrs: Vec<*const c_char> = item_cstrings.iter().map(|c| c.as_ptr()).collect();
 
         // 表示中かの判定と開始は同じロック内で行う（`SelectionQueue::try_begin` 参照）。
@@ -93,12 +92,12 @@ impl SystemTray for AppleSystemTray {
             // 無効化し、以後の選択（来ないはずだが防御的に）を無視できるように
             // する（`device-bridge-contracts.md`「9. 失敗時のリソース解放」）。
             QUEUE.end();
-            Err(DeviceError::Internal("system_tray show"))
+            Err(SystemTrayError::Internal)
         }
     }
 
     #[allow(unsafe_code)]
-    fn hide(&self) -> Result<HideOutcome, DeviceError> {
+    fn hide(&self) -> Result<HideOutcome, SystemTrayError> {
         if !QUEUE.is_active() {
             return Ok(HideOutcome::NotShown);
         }
@@ -109,7 +108,7 @@ impl SystemTray for AppleSystemTray {
         if code != 0 {
             // 失敗時は「まだ表示中」として扱う（`QUEUE` も active のまま残す。
             // `fandhe-core` 側の `finish_hide` 失敗時の `Shown` 復帰と整合させる）。
-            return Err(DeviceError::Internal("system_tray hide"));
+            return Err(SystemTrayError::Internal);
         }
         QUEUE.end();
         Ok(HideOutcome::Removed)
@@ -125,7 +124,7 @@ impl SystemTray for AppleSystemTray {
 /// 積む（`SelectionQueue::push` が世代・範囲の両方を照合する、モジュール doc
 /// 参照）。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_system_tray_selected(generation: u64, index: i64) {
     QUEUE.push(generation, index);
 }
