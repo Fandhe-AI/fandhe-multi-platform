@@ -7,7 +7,7 @@
 //! - Android の cdylib: 本ファイルの `android_main`
 //! - Web の wasm cdylib: 本ファイルの `start`（`#[wasm_bindgen(start)]`）
 //!
-//! 端末機能の配線と各 OS の入口関数は `fandhe-egui-proxy`（機能 crate へ分けるまで、#1194）、
+//! 端末機能の配線と各 OS の入口関数は `fandhe-egui-proxy`（機能 crate へ分けるまで、#1194。終了時の解放と Android の画面ゲートは本 crate が呼ぶ）、
 //! 描画と起動は `fandhe-render-egui` が持つ。依存の向きは本 crate → egui-proxy の一方向で、
 //! 画面の登録は入口へ引数（`BuildAppFn`）で渡す。`android_main` / `start` のような
 //! 最終成果物ごとに 1 つだけの固定シンボルは、重複を避けるため rlib の egui-proxy ではなく本 crate が持つ。
@@ -258,7 +258,43 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // クリップボードの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_clipboard::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_clipboard::reset_pending_tracking();
+    // ドラッグ & ドロップの集約器もプロセス static のため再生成をまたいで残る。進行中のセッション・未適用イベントを
+    // 新しい画面状態を作る前に捨てる（`fandhe_cap_drag_drop::reset_sessions` doc 参照。以前は egui-proxy の `run` が呼んでいた）。
+    #[cfg(feature = "device")]
+    fandhe_cap_drag_drop::reset_sessions();
+    // 他画面でのアナログ入力・他画面宛てのドロップによる再描画を抑える画面ゲートを、画面の構築前に設定する
+    // （`fandhe_cap_gamepad::set_screen_active`・`fandhe_cap_drag_drop::set_screen_active` doc 参照）。
+    #[cfg(feature = "device")]
+    {
+        let name = fandhe_egui_proxy::android::requested_app_name();
+        fandhe_cap_gamepad::set_screen_active(name == "gamepad_show");
+        fandhe_cap_drag_drop::set_screen_active(name == "drag_drop");
+    }
+    // 終了時の解放処理を描画層へ登録する（再生成で再実行されても 2 回目以降は無視される）。
+    register_teardown_hooks();
     fandhe_egui_proxy::android::run(app, build_app);
+}
+
+/// アプリ終了時の解放処理を描画層（`fandhe-render-egui`）へ登録する。各 OS の入口（`main.rs`・`android_main`）が
+/// 起動前に 1 回呼ぶ。描画層は端末機能を知らないため、終了（ウィンドウを閉じる経路）と `ProxyApp` の破棄で
+/// 呼ぶ関数をここで渡す。`device` 無効のビルド・wasm32 では何もしない。
+pub fn register_teardown_hooks() {
+    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    fandhe_render_egui::app::set_teardown_hooks(shutdown, fandhe_cap_memory_pressure::shutdown);
+}
+
+/// 終了時の停止。未移行の機能（egui-proxy の `device`）を先に止め、機能 crate を続けて止める。
+/// 機能 crate の停止は相互に独立で、依存のある media_playback → audio_session の前後は保っている。
+#[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+fn shutdown() {
+    fandhe_egui_proxy::device::shutdown();
+    fandhe_cap_system_tray::stop_shared_system_tray();
+    fandhe_cap_global_hotkey::shutdown();
+    fandhe_cap_midi::shutdown();
+    fandhe_cap_media_cast::shutdown();
+    fandhe_cap_serial_port::shutdown();
+    fandhe_cap_audio_session::shutdown();
+    fandhe_cap_memory_pressure::shutdown();
 }
 
 /// Web のエントリポイント。wasm-bindgen の glue が読み込み時に呼ぶ。実処理は egui-proxy の

@@ -978,7 +978,8 @@ use fandhe_device::{storage::Storage, DeviceError};
 /// のは本クレート側の責務）。`DeviceError` の内部構造（`std::io::Error` 等）は
 /// `fandhe-core` 側へ漏らさず、`Display` の文言のみを転送する
 /// （`DeviceError` の内部構造を漏らさない、security.md A09 準拠）。
-/// アプリ終了時に端末リソースを解放する（`ProxyApp::on_exit` が `register_teardown_hooks` 経由で呼ぶ契約、
+/// アプリ終了時に未移行の端末リソースを解放する（最終成果物（`fandhe-gallery`）の `register_teardown_hooks` 経由で `ProxyApp::on_exit` が呼ぶ契約、
+/// 機能 crate の停止は gallery の終了フックが本関数の後に呼ぶ。停止の順序は「未移行 → 機能 crate」になるが、相互に独立している。
 /// `fandhe-render-egui` の `app.rs` の `EguiApp::on_exit` 実装 doc 参照）。プロセスが終了すると
 /// `static` の `Drop` は走らないため、生きている間に明示停止が要るリソースを
 /// ここへ集約する。現状は TTS の子プロセス停止のみ（Issue #865 の codex-review
@@ -987,7 +988,6 @@ use fandhe_device::{storage::Storage, DeviceError};
 pub fn shutdown() {
     tts::stop_shared_tts();
     location::stop_shared_location();
-    fandhe_cap_system_tray::stop_shared_system_tray();
     bluetooth_le::stop_shared_scan();
     // 公開の停止は `.m` の専用キューへの短い同期呼び出し。Rust 側のロックは握らない。
     ble_peripheral::shutdown();
@@ -996,17 +996,11 @@ pub fn shutdown() {
     bluetooth_classic::stop_shared_discovery();
     lan_discovery::stop_shared_discovery();
     local_peer::stop_shared_exchange();
-    fandhe_cap_global_hotkey::shutdown();
-    fandhe_cap_midi::shutdown();
     media_playback::shutdown();
     now_playing::shutdown();
     picture_in_picture::shutdown();
-    fandhe_cap_media_cast::shutdown();
     web_auth_session::shutdown();
-    fandhe_cap_serial_port::shutdown();
     camera_preview_stream::shutdown();
-    fandhe_cap_audio_session::shutdown();
-    fandhe_cap_memory_pressure::shutdown();
 }
 
 fn to_note_storage_error(e: DeviceError) -> NoteStorageError {

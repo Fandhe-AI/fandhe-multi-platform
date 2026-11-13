@@ -12,7 +12,7 @@
 //!
 //! 本 crate → `fandhe-core`（画面の状態関数）・`fandhe-runtime`（`CompletionSender`・再描画）の一方向。
 //! egui には依存しない。呼び出し元は `fandhe-gallery`（effect の登録）と、Android の画面ゲートを切り替える
-//! `fandhe-egui-proxy`（過渡期。#1194 で消える）。
+//! `fandhe-gallery` の `android_main`。
 //!
 //! # Android の入力は `Window.Callback` を包んで観測する（Issue #1303）
 //!

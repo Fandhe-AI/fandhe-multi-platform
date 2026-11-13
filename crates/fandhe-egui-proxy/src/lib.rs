@@ -179,17 +179,3 @@ pub fn selected_app_name() -> Option<String> {
         .filter(|value| !value.is_empty())
         .or_else(|| option_env!("FANDHE_PROXY_APP").map(str::to_string))
 }
-
-/// 端末リソースの終了・破棄時の解放処理を、描画層（`fandhe-render-egui`）へ登録する。
-///
-/// `ProxyApp` を使う各入口（`main.rs`・`ios.rs`・`android.rs`）が起動前に 1 回呼ぶ。
-/// 描画層は端末機能を知らないため、`device::shutdown`（ウィンドウを閉じる経路）と
-/// `fandhe_cap_memory_pressure::shutdown`（`ProxyApp` の破棄）をここで渡す。
-/// `device` feature が無効なビルド・wasm32 では何もしない（`device.rs` モジュール doc 参照）。
-pub fn register_teardown_hooks() {
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
-    fandhe_render_egui::app::set_teardown_hooks(
-        device::shutdown,
-        fandhe_cap_memory_pressure::shutdown,
-    );
-}

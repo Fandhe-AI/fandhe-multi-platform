@@ -71,6 +71,13 @@ pub(crate) fn request_repaint() {
     fandhe_runtime::request_repaint();
 }
 
+/// 起動する画面名（実行時 env → ビルド時 `option_env!` → debug システムプロパティの順）。
+/// 最終成果物（`fandhe-gallery`）が画面ゲートを設定するために使う。固定文字列との比較にだけ使い、
+/// パス・コマンドへは展開しない（A03）。
+pub fn requested_app_name() -> String {
+    crate::selected_app_name().unwrap_or_else(read_debug_proxy_app_property)
+}
+
 /// Android アプリの本体。`fandhe-gallery` の `android_main`（`android-activity` が探す固定シンボル）から
 /// 呼ばれる。
 ///
@@ -158,11 +165,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // （`device::notification::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::notification::reset_pending_tracking();
-    // Issue #1016: ドラッグ & ドロップの集約器もプロセス static のため Activity 再生成をまたいで残る。進行中の
-    // セッション・未適用イベントをここで捨て、旧 Activity 由来の読み取りスレッドが打ち切られるようにする
-    // （`fandhe_cap_drag_drop::reset_sessions` doc 参照。#1194 までの過渡期の依存）。
-    #[cfg(feature = "device")]
-    fandhe_cap_drag_drop::reset_sessions();
     // Issue #1104: `photo_pick::bridge::SLOT` もプロセス static のため再生成をまたいで残る。
     // 写真選択の契約は「保留中の要求は復元せず破棄」（`fandhe_device::photo_picker` モジュール
     // doc）なので、新しい `Idle` の画面状態を作る前に捨て、旧要求の遅延完了を id 不一致で
@@ -234,24 +236,12 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // では常に空文字列となって既定経路へ落ちる（Issue #718、security.md A05）。
     // `tv-focus` は専用の `TvFocusApp` へ、それ以外はレジストリ（`crate::build_app`）
     // 経由で解決する。
-    let requested_name = crate::selected_app_name().unwrap_or_else(read_debug_proxy_app_property);
+    let requested_name = requested_app_name();
     let use_tv_focus = requested_name == "tv-focus";
     // codex-review 指摘 P2（Issue #831）: 傾き画面以外でのセンサ再描画を抑えるため、
     // 起動画面決定と同時にゲートを設定する（`ACTIVE_SCREEN_USES_TILT` doc 参照）。
     set_active_screen_uses_tilt(requested_name == "tilt_ball");
-    // Bugbot 指摘（PR #939）: gamepad_show 以外の画面でのアナログイベント再描画を
-    // 抑えるため、傾きと同じタイミングでゲートを設定する
-    // （`fandhe_cap_gamepad::set_screen_active` doc 参照。#1194 で egui-proxy ごと消える過渡期の配線）。
-    #[cfg(feature = "device")]
-    fandhe_cap_gamepad::set_screen_active(requested_name == "gamepad_show");
-    // Issue #1016: drag_drop 以外の画面が他画面宛てのドロップを受け取らないよう、
-    // 傾き・ゲームパッドと同じタイミングでゲートを設定する
-    // （`fandhe_cap_drag_drop::set_screen_active` doc 参照。#1194 までの過渡期の依存）。
-    #[cfg(feature = "device")]
-    fandhe_cap_drag_drop::set_screen_active(requested_name == "drag_drop");
 
-    // 解放処理を描画層へ登録する（`Activity` 再生成で再実行されても 2 回目以降は無視される）。
-    crate::register_teardown_hooks();
     // バックエンドは Vulkan 固定（REQ-1）。`run_android` が持つ。
     if let Err(err) = fandhe_render_egui::launch::run_android(app, "fandhe-egui-proxy", move |lc| {
         let ctx = lc.egui_ctx();

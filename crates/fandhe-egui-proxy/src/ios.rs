@@ -56,7 +56,6 @@ pub(crate) fn request_repaint() {
 /// 無効のため、本番経路には影響しない）。
 #[cfg(feature = "cold-start-probe")]
 pub fn run(_build_app: crate::BuildAppFn) -> Result<(), fandhe_render_egui::LaunchError> {
-    crate::register_teardown_hooks();
     let start = std::time::Instant::now();
     fandhe_render_egui::launch::run_ios("fandhe-egui-proxy", move |lc| {
         // 改訂 4: ファイル選択 FFI 受け口からの `request_repaint` 経路確保のため
@@ -96,7 +95,6 @@ pub fn run(_build_app: crate::BuildAppFn) -> Result<(), fandhe_render_egui::Laun
 /// コンパイルしない（`lib.rs` の cfg と `build.rs` 参照、Issue #19）。
 #[cfg(not(any(feature = "cold-start-probe", feature = "frame-metrics")))]
 pub fn run(build_app: crate::BuildAppFn) -> Result<(), fandhe_render_egui::LaunchError> {
-    crate::register_teardown_hooks();
     fandhe_render_egui::launch::run_ios("fandhe-egui-proxy", move |lc| {
         let ctx = lc.egui_ctx();
         // 改訂 4: ファイル選択 FFI 受け口からの `request_repaint` 経路確保のため

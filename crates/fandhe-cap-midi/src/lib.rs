@@ -1,7 +1,7 @@
 //! midi（MIDI 入力の受信とノート表示） の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。
 //!
 //! 呼び出し元は `fandhe-gallery` の画面登録（`midi_show_effect`）、Activity 再生成時に `reset_pending_tracking` を呼ぶアプリの `android_main`、
-//! 終了時に購読を止める `fandhe-egui-proxy::device::shutdown`（`shutdown`。過渡期の依存で #1194 で消える）。契約のパーサ
+//! 終了時に購読を止める `fandhe-gallery` の終了フック（`shutdown`）。契約のパーサ
 //! （`MidiParser`・`NoteEvent`）は Web 実装（`fandhe-web-dom`、本体は web-dom に残る）と共有する。Android は Activity ごとの
 //! helper（`MidiLifecycle`）で購読と HandlerThread を持つ。守る範囲は購読の解放と、停止後に届く古い世代の入力を捨てることで、
 //! 背景での受信継続・出力・デバイス名は守らない。演奏内容はログへ出さない。

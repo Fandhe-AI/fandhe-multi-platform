@@ -1,7 +1,7 @@
 //! audio-session（音声セッションの種別と割り込みの通知）の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行、#1192）。
 //!
-//! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`audio_session_show_effect`）、終了時の `fandhe-egui-proxy`
-//! （`shutdown`、過渡期の依存）、Activity 再生成時の `fandhe-gallery` の `android_main`（`reset_pending_tracking`）。
+//! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`audio_session_show_effect`）、終了時の `fandhe-gallery`
+//! （`shutdown`）、Activity 再生成時の `fandhe-gallery` の `android_main`（`reset_pending_tracking`）。
 //! Android（`AudioFocusRequest`）・iOS（`AVAudioSession`）が実装し、他の OS は `Unsupported`。
 //! 変更前の共有状態（`AVAudioSession` の category 等）は全終了経路で復元し、復元に失敗したら次の開始を受け付けない。
 //! 守る範囲は 1 プロセス内の受信順・失敗と非対応を成功に畳まないこと・全終了経路での解除。
