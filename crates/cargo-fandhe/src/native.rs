@@ -44,6 +44,9 @@ const LIBRARY_CLASS_PATH: &str = "android/java/com/fandhe/platform/FandheLibrary
 pub(crate) const ANDROID_TRIPLE: &str = "aarch64-linux-android";
 pub(crate) const IOS_TRIPLE: &str = "aarch64-apple-ios";
 pub(crate) const MACOS_TRIPLE: &str = "aarch64-apple-darwin";
+pub(crate) const WEB_TRIPLE: &str = "wasm32-unknown-unknown";
+/// Web の出力先（`gen/` からの相対）。配信側（`scripts/web/build-wasm-dom.sh`）がここから dist へ写す。
+const WEB_MANIFEST_PATH: &str = "web/manifest.webmanifest";
 pub(crate) const APP_GROUPS_KEY: &str = "com.apple.security.application-groups";
 
 /// 生成結果。`files` のキーは `gen_dir` からの相対パス（区切りは `/`）。
@@ -64,6 +67,17 @@ pub(crate) struct AppConfig {
     ios: OsConfig,
     #[serde(default)]
     macos: OsConfig,
+    /// Web を出すアプリだけが書く。無いアプリには `web/` を出さない。
+    web: Option<WebConfig>,
+}
+
+/// アプリの基礎 manifest。名前・アイコン・`start_url` などアプリが持つ値だけを書く。
+/// 機能が持つメンバー（`share_target` 等）は書けず、`gen` が到達した機能の宣言から足す。
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+struct WebConfig {
+    /// アプリの crate からの相対パス。
+    manifest: String,
 }
 
 /// 本体と拡張の Info.plist が共有する説明文（キー → 文言）。
@@ -145,6 +159,17 @@ impl AppConfig {
         if let Some(b) = &cfg.ios.bundle_id {
             if !is_reverse_dns(b) {
                 errs.push(format!("fandhe-app.ios.bundle-id: `{b}` はドット区切り（2 セグメント以上）の英数字とハイフンにしてください"));
+            }
+        }
+        if let Some(w) = &cfg.web {
+            let m = &w.manifest;
+            if m.is_empty()
+                || m.starts_with('/')
+                || m.contains(['\\', ':'])
+                || m.chars().any(char::is_control)
+                || m.split('/').any(|s| s == "..")
+            {
+                errs.push(format!("fandhe-app.web.manifest: `{m}` はアプリの crate からの相対パスにしてください（空・絶対・`..`・`\\`・`:` は不可）"));
             }
         }
         if cfg.macos.bundle_id.is_some() {
@@ -626,6 +651,7 @@ pub(crate) fn render(
                 if os != "android" {
                     d.android = None;
                 }
+                d.web = None;
                 d
             })
             .collect();
@@ -702,6 +728,28 @@ pub(crate) fn render(
     Ok(files)
 }
 
+/// metadata の root パッケージ（アプリ）の (crate のディレクトリ, `metadata.fandhe-app`, package)。
+fn app_root(meta: &Value) -> Result<(PathBuf, Value, Value), Vec<String>> {
+    let root = meta["resolve"]["root"].as_str().ok_or_else(|| {
+        vec!["アプリのパッケージを特定できません。--manifest-path にパッケージの Cargo.toml を指定してください".to_string()]
+    })?;
+    let pkg = meta["packages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|p| p["id"].as_str() == Some(root))
+        .ok_or_else(|| vec![format!("root パッケージ {root} が packages にありません")])?;
+    let dir = pkg["manifest_path"]
+        .as_str()
+        .and_then(|p| Path::new(p).parent())
+        .ok_or_else(|| vec!["manifest_path を読めません".to_string()])?;
+    Ok((
+        dir.to_path_buf(),
+        pkg["metadata"]["fandhe-app"].clone(),
+        pkg.clone(),
+    ))
+}
+
 /// `manifest`（省略時はカレントのパッケージ）のアプリが選んだ機能から、ネイティブ設定を生成する。
 /// 宣言・入力に問題が 1 件でもあれば何も返さない（check と同じ厳しさ）。書き出しは [`write`]。
 pub fn generate(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
@@ -710,24 +758,7 @@ pub fn generate(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
     for triple in [ANDROID_TRIPLE, IOS_TRIPLE, MACOS_TRIPLE] {
         let meta = run_metadata(manifest, Some(triple))?;
         if app.is_none() {
-            let root = meta["resolve"]["root"].as_str().ok_or_else(|| {
-                vec!["アプリのパッケージを特定できません。--manifest-path にパッケージの Cargo.toml を指定してください".to_string()]
-            })?;
-            let pkg = meta["packages"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .find(|p| p["id"].as_str() == Some(root))
-                .ok_or_else(|| vec![format!("root パッケージ {root} が packages にありません")])?;
-            let dir = pkg["manifest_path"]
-                .as_str()
-                .and_then(|p| Path::new(p).parent())
-                .ok_or_else(|| vec!["manifest_path を読めません".to_string()])?;
-            app = Some((
-                dir.to_path_buf(),
-                pkg["metadata"]["fandhe-app"].clone(),
-                pkg.clone(),
-            ));
+            app = Some(app_root(&meta)?);
         }
         let reach = reachable(&meta);
         sets.push(
@@ -746,6 +777,93 @@ pub fn generate(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
         gen_dir: dir.join("gen"),
         files,
     })
+}
+
+/// Web だけを生成する（`cargo fandhe gen --os web`、#1238）。bin や iOS 設定を持たない Web 専用の
+/// アプリ（fandhe-web-dom）が、Android・iOS の殻の必須条件に阻まれず manifest を得るための入口。
+/// 基礎 manifest（`fandhe-app.web.manifest`）に、wasm32 で到達した機能の `web.manifest` を足して出す。
+/// 選ばなかった機能のメンバーは入らない。`fandhe-app.web` が無いアプリはエラー（何も出ないため）。
+pub fn generate_web(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
+    let meta = run_metadata(manifest, Some(WEB_TRIPLE))?;
+    let (dir, cfg, _) = app_root(&meta)?;
+    let cfg = AppConfig::parse(&cfg)?;
+    let web = cfg.web.ok_or_else(|| {
+        vec!["[package.metadata.fandhe-app.web] manifest がありません。Web の出力には基礎 manifest の指定が要ります".to_string()]
+    })?;
+    let reach = reachable(&meta);
+    let found: Vec<Found> = collect(&meta)?
+        .into_iter()
+        .filter(|f| reach.contains(&f.pkg_id))
+        .collect();
+    let body = render_web(
+        &found.iter().collect::<Vec<_>>(),
+        &read_base_manifest(&dir, &web.manifest)?,
+    )?;
+    Ok(Generated {
+        gen_dir: dir.join("gen"),
+        files: BTreeMap::from([
+            (WEB_MANIFEST_PATH.to_string(), body),
+            (
+                MARKER.to_string(),
+                "cargo fandhe gen が生成したディレクトリ。次回の生成で置き換わる\n".to_string(),
+            ),
+        ]),
+    })
+}
+
+/// 基礎 manifest を読む。crate の外（symlink 経由を含む）は拒否し、読めない・JSON のオブジェクトでないときはエラー
+/// （黙って機能のメンバーだけの manifest を出さない）。
+fn read_base_manifest(crate_dir: &Path, rel: &str) -> Result<Map<String, Value>, Vec<String>> {
+    let err = |m: String| vec![format!("fandhe-app.web.manifest: {m}")];
+    let root = crate_dir
+        .canonicalize()
+        .map_err(|e| err(format!("{} を解決できません: {e}", crate_dir.display())))?;
+    let path = root
+        .join(rel)
+        .canonicalize()
+        .map_err(|e| err(format!("`{rel}` を解決できません: {e}")))?;
+    if !path.starts_with(&root) {
+        return Err(err(format!("`{rel}` が crate の外を指しています")));
+    }
+    let text = fs::read_to_string(&path).map_err(|e| err(format!("`{rel}` を読めません: {e}")))?;
+    match serde_json::from_str(&text) {
+        Ok(Value::Object(m)) => Ok(m),
+        Ok(_) => Err(err(format!("`{rel}` は JSON のオブジェクトにしてください"))),
+        Err(e) => Err(err(format!("`{rel}` を JSON として読めません: {e}"))),
+    }
+}
+
+/// 到達した機能の `web.manifest` を統合し、基礎 manifest に足して整形済みの JSON にする。純粋関数。
+/// 基礎が機能の持つメンバーを書いていたらエラー（二重管理と、選ばない機能の値の残存を防ぐ）。
+pub(crate) fn render_web(web: &[&Found], base: &Map<String, Value>) -> Result<String, Vec<String>> {
+    let decls: Vec<_> = web
+        .iter()
+        .map(|f| {
+            let mut d = f.decl.clone();
+            d.ios = None;
+            d.macos = None;
+            d.android = None;
+            d
+        })
+        .collect();
+    let refs: Vec<_> = decls.iter().map(|d| (d.id.as_str(), d)).collect();
+    let merged =
+        merge(&refs).map_err(|e| e.into_iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
+    // 許可リストのメンバーは基礎に書けない（選ばなかった機能の値が残る・二重管理になるため）。
+    if let Some(k) = crate::declaration::WEB_MANIFEST_MEMBERS
+        .iter()
+        .find(|k| base.contains_key(**k))
+    {
+        return Err(vec![format!(
+            "fandhe-app.web.manifest: `{k}` は機能の宣言から足すメンバーです。基礎 manifest から削除してください"
+        )]);
+    }
+    let mut out = base.clone();
+    out.extend(merged.web_manifest);
+    let mut s = serde_json::to_string_pretty(&Value::Object(out))
+        .map_err(|e| vec![format!("manifest を直列化できません: {e}")])?;
+    s.push('\n');
+    Ok(s)
 }
 
 /// `gen_dir` へ書き出す。印（`.fandhe-gen`）のある既存ディレクトリだけを消して作り直す

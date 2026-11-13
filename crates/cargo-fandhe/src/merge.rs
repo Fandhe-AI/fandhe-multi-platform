@@ -51,6 +51,8 @@ pub struct Merged {
     pub macos: AppleMerged,
     pub android: AndroidMerged,
     pub windows_identity: bool,
+    /// Web manifest のメンバー（`web.manifest`）。
+    pub web_manifest: Map<String, Value>,
     /// (機能 id, OS, 拡張名, crate からの相対パス)。
     pub extension_sources: Vec<(String, String, String, String)>,
 }
@@ -265,6 +267,16 @@ pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, Vec<MergeError>> 
                 .extend(a.java.iter().map(|p| (id.to_string(), p.clone())));
             dst.res
                 .extend(a.res.iter().map(|p| (id.to_string(), p.clone())));
+        }
+        if let Some(w) = &d.web {
+            merge_map(
+                &mut out.web_manifest,
+                &w.manifest,
+                "web.manifest",
+                owners.entry("web.manifest".into()).or_default(),
+                id,
+                &mut errs,
+            );
         }
         out.windows_identity |= d.windows.as_ref().is_some_and(|w| w.identity);
     }

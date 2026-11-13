@@ -238,6 +238,21 @@ fn merge_components_same_ok_different_rejected() {
     );
 }
 
+#[test]
+fn merge_web_manifest_same_ok_different_rejected() {
+    let st = |a: &str| json!({"id":"x","web":{"manifest":{"share_target":{"action":a}}}});
+    let (a, b, c) = (decl(st("./")), decl(st("./")), decl(st("/other")));
+    assert_eq!(
+        merge(&[("a", &a), ("b", &b)]).unwrap().web_manifest.len(),
+        1
+    );
+    let e = merge(&[("a", &a), ("c", &c)]).unwrap_err();
+    assert!(
+        e[0].field.contains("web.manifest.share_target.action"),
+        "{e:?}"
+    );
+}
+
 // ---- 拒否 ----
 
 fn problems(v: Value) -> String {
@@ -275,7 +290,20 @@ fn accepts_minimal_valid() {
 
 #[test]
 fn rejects_structure_errors() {
-    assert_rejected(json!({"id":"x","web":{}}), "unknown field");
+    assert_rejected(json!({"id":"x","linux":{}}), "unknown field");
+    // web は manifest のメンバーだけ（許可リスト・オブジェクト・制御文字）。#1238
+    assert_rejected(
+        json!({"id":"x","web":{"manifest":{"start_url":{}}}}),
+        "web.manifest.start_url",
+    );
+    assert_rejected(
+        json!({"id":"x","web":{"manifest":{"share_target":"x"}}}),
+        "オブジェクト",
+    );
+    assert_rejected(
+        json!({"id":"x","web":{"manifest":{"share_target":{"action":"a\nb"}}}}),
+        "制御文字",
+    );
     assert_rejected(
         json!({"id":"x","android":{"permisions":[]}}),
         "unknown field",

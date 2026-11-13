@@ -72,6 +72,11 @@ meta-data = [{ name = "android.nfc.cardemulation.host_apdu_service", resource = 
 
 [package.metadata.fandhe.windows]
 identity = true
+
+[package.metadata.fandhe.web.manifest.share_target]  # Web App Manifest のメンバー（許可リストのみ）
+action = "./"
+method = "GET"
+params = { text = "share_text", url = "share_url" }
 ```
 
 先行 5 機能の例は `crates/cargo-fandhe/tests/fixtures/` にあります。
@@ -93,6 +98,7 @@ identity = true
 | `main-activity-intent-filters` | 既存の MainActivity への追記 | |
 | `components` | `<activity>`・`<service>`・`<receiver>`・`<provider>` | `exported` は省略不可。`attributes` は他の `android:*` 属性 |
 | `windows.identity` | パッケージ ID | 生成は #1208 |
+| `web.manifest` | Web App Manifest のメンバー | 書けるのは `share_target` だけ（許可リスト）。基礎 manifest へ足される（7 節、#1238） |
 
 選んだ理由は次のとおりです。
 
@@ -116,6 +122,7 @@ identity = true
 - `meta-data` は `resource`（`@` 始まり）か `value` のどちらか一方です
 - パスは相対のみです（空・絶対・`..`・`\`・`:` は拒否）。実在と、symlink 解決後に crate 内に収まることも確かめます
 - 文字列と plist の値に制御文字は置けません
+- `web.manifest` のキーは許可リスト（`share_target`）だけで、値はオブジェクトです。`start_url`・`scope`・`name`・`icons` などアプリの同一性に関わる値を、依存 crate が書き換えられないようにするためです。別のメンバーを機能へ移すときは許可リストに足します
 
 宣言の値は後で XML・plist・Gradle へ展開されます。エスケープは生成側（`gen`、§7）の責務で、本書はそのための入力制約を定めます。
 
@@ -136,6 +143,7 @@ identity = true
 | `main-activity-intent-filters` | 内容が同じなら 1 つ |
 | `java`・`res`・`sources` | 統合しない。crate ごとに集める。同名リソースの衝突は Gradle のマージに任せる |
 | `windows.identity` | どれかが true なら true |
+| `web.manifest` | `info-plist` と同じ（同じ値は 1 つ、配列は和集合、オブジェクトは再帰、不一致はエラー）。`share_target` は manifest に 1 つしか置けないため、2 機能が違う値を書くとエラー |
 
 エラーには欄と、食い違った 2 機能の id を含めます。
 
@@ -143,7 +151,6 @@ identity = true
 
 | 項目 | 理由・足す条件 |
 |------|--------------|
-| `web` の欄 | 共通層（`fandhe-platform-web`）は設定を要求しないため足さない。manifest のメンバー（`share_target` 等）を機能の宣言へ移す形式は #1238 で決める |
 | `windows.capabilities` | #1208 で必要になれば足す |
 | 形式の版番号 | 未知キーの拒否で足りる。要否は #1224 で判断する |
 | 到達判定（対象アプリが使う機能だけを生成に入れる） | 実装済み（`crates/cargo-fandhe/src/reach.rs`、#1176）。次を満たす: `cargo tree` の文字列解析に頼らず、`cargo metadata` の `resolve` の package ID で対応付ける / feature の統合が他の workspace member から混ざらない（`resolve.nodes[].features` は使わず、アプリの `default` から feature を自前で活性化する。辺は通常依存のみ） / 対象 OS 限定の依存（`[target.'cfg(...)'.dependencies]`）を含める / 取得元違いの同名同版を区別する / default-members に左右されない |
@@ -180,7 +187,7 @@ identity = true
 | `FandheAppGroupIdentifier` | 現行どおり `$(TeamIdentifierPrefix)com.fandhe.widget` を literal で宣言。記号名との一本化は未決。生成も literal のまま出す | 未決 |
 | `NSMenuItem.default` | 現行どおり literal。利用者が差し替える手段は未決。生成も literal のまま出す | 未決 |
 | `CFBundle*` 等の定型キー | 生成側のテンプレートの責務。iOS 本体は確定値（実行体名・bundle id・版・`MinimumOSVersion`・`UIDeviceFamily`・`UILaunchScreen`）、macOS と拡張はビルド設定変数 7 キーを出す | 決着（#1176・#1259） |
-| Web の `share_target`、Windows の `webcam` | 形式に欄がない。カメラの Windows 実装はダミー | #1238・#1208 |
+| Windows の `webcam` | 形式に欄がない。カメラの Windows 実装はダミー | #1208 |
 | 対応表 JSON の macOS カメラの `perm` 文 | 計画情報で設定の実体ではない | #1195 |
 
 突き合わせテストの寿命: 生成物との比較（`tests/gen.rs`）は、設定を生成へ切り替える #1194 で比べる相手ごと撤去します。`declarations.rs` に残す項目（framework のリンク・Gradle の版と `versions.env`・Xcode の拡張ターゲット・Swift の `import`）は、#1194 と #1212 で撤去します。
@@ -212,6 +219,15 @@ bundle-id = "com.example.app"               # iOS の Info.plist を出すので
 
 これらは全 OS の殻を出す前提の必須条件です。`cargo fandhe gen` は Android と iOS の両方を常に出すため、片方の OS だけを対象にする絞り込みは範囲外です（`cdylib`・bin・`ios.bundle-id` のどれが欠けても gen 全体がエラーになります）。
 
+Web は `cargo fandhe gen --os web` で Web App Manifest だけを出します（triple は `wasm32-unknown-unknown`）。bin や iOS 設定を持たない Web 専用のアプリでも、Android・iOS の殻の必須条件に阻まれないよう、Web に限って絞り込みを認めます。
+
+```toml
+[package.metadata.fandhe-app.web]
+manifest = "web/manifest.webmanifest"       # アプリの crate からの相対パス。名前・アイコン・start_url 等の基礎
+```
+
+基礎 manifest に機能のメンバー（`share_target`）を書くとエラーです。`fandhe-app.web` が無いアプリは `--os web` がエラーで、全 OS の `gen` は `web/` を出しません（manifest を配らないアプリは共有先にならないため、嘘の成功にはなりません）。
+
 説明文が欠けると、OS・機能 id・キーを示してエラーにします。`usage-descriptions` は本体と拡張で共有します。
 
 ### 出力
@@ -225,6 +241,7 @@ bundle-id = "com.example.app"               # iOS の Info.plist を出すので
 | `macos/Info.plist` | ビルド設定変数の定型 7 キー、説明文、`info-plist` |
 | `ios/App.entitlements`・`macos/App.entitlements` | `entitlements` と、展開した App Group（ios は `group.<prefix>.<名>`、macos は `$(TeamIdentifierPrefix)<prefix>.<名>`） |
 | `<os>/extensions/<name>/Info.plist`・`<name>.entitlements` | 拡張ごとの plist と entitlements |
+| `web/manifest.webmanifest` | `--os web` のときだけ。基礎 manifest に、wasm32 で到達した機能の `web.manifest` を足した JSON。選ばなかった機能のメンバーは入らない |
 | `.fandhe-gen` | 生成物の印 |
 
 値は出力先の文法（XML・plist・Groovy の単一引用符）でエスケープします。plist の null はエラーです。
@@ -237,7 +254,7 @@ bundle-id = "com.example.app"               # iOS の Info.plist を出すので
 
 ### 範囲外
 
-`CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、applicationId・compileSdk・`<application>` の属性、macOS・拡張の Info.plist の確定値化、framework のリンクと Xcode のターゲット（#1212）、Windows の identity（#1208）、手書き設定の置き換え（#1194）、`run`/`build` への組み込み（#1201）、追記と `--eject`（#1202）。
+`CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、applicationId・compileSdk・`<application>` の属性、macOS・拡張の Info.plist の確定値化、framework のリンクと Xcode のターゲット（#1212）、Windows の identity（#1208）、手書き設定の置き換え（#1194）、`run`/`build` への組み込み（#1201）、追記と `--eject`（#1202）、`verify-scope` の Web 対応。
 
 ## 8. 選ばなかった機能の検査（`cargo fandhe verify-scope`）
 

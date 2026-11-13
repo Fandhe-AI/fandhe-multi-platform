@@ -10,7 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use cargo_fandhe::declaration::{Component, IntentData, IntentFilter, MetaData};
-use cargo_fandhe::{check_workspace, generate, Declaration};
+use cargo_fandhe::{check_workspace, generate, generate_web, Declaration};
 use serde_json::Value;
 
 const IDS: [&str; 5] = [
@@ -625,4 +625,124 @@ fn target_specific_dependency_reaches_only_its_os() {
     let g = generate(Some(&m)).unwrap();
     assert!(g.files["android/AndroidManifest.xml"].contains("android.permission.CAMERA"));
     assert!(!g.files["ios/Info.plist"].contains("NSCameraUsageDescription"));
+}
+
+// ---- 3. Web manifest（#1238）----
+
+/// `share_target` を宣言する機能 crate。
+fn web_cap() -> (String, String) {
+    (
+        "fandhe-cap-sharer".into(),
+        pkg(
+            "fandhe-cap-sharer",
+            "[package.metadata.fandhe]\nid = \"sharer\"\n\
+             [package.metadata.fandhe.web.manifest.share_target]\naction = \"./\"\nmethod = \"GET\"\n",
+        ),
+    )
+}
+
+/// Web アプリ（基礎 manifest `web.json` つき）の workspace を作り、その Cargo.toml を返す。
+fn web_ws(tag: &str, deps: &str, base: &str, web_cfg: &str) -> PathBuf {
+    let (dir, toml) = web_cap();
+    let app = pkg("app", &format!("{deps}{web_cfg}"));
+    let m = make_ws(tag, "app", &[(&dir, toml), ("app", app)]);
+    fs::write(m.parent().unwrap().join("web.json"), base).unwrap();
+    m
+}
+
+const WEB_CFG: &str = "[package.metadata.fandhe-app.web]\nmanifest = \"web.json\"\n";
+const SHARER_DEP: &str =
+    "[dependencies]\nfandhe-cap-sharer = { path = \"../fandhe-cap-sharer\" }\n";
+
+fn web_manifest(m: &Path) -> Value {
+    serde_json::from_str(&generate_web(Some(m)).unwrap().files["web/manifest.webmanifest"]).unwrap()
+}
+
+#[test]
+fn web_manifest_has_share_target_only_when_the_feature_is_selected() {
+    let base = r#"{ "name": "demo", "start_url": "./" }"#;
+    // 選んだアプリ: 基礎のキーに share_target が足される。
+    let m = web_ws("web-with", SHARER_DEP, base, WEB_CFG);
+    let v = web_manifest(&m);
+    assert_eq!(v["name"], "demo");
+    assert_eq!(v["share_target"]["method"], "GET");
+    // 選ばないアプリ: share_target が無く、基礎のキーは残る。
+    let m = web_ws("web-without", "", base, WEB_CFG);
+    let v = web_manifest(&m);
+    assert!(v.get("share_target").is_none(), "{v}");
+    assert_eq!(v["name"], "demo");
+}
+
+#[test]
+fn web_manifest_rejects_bad_inputs() {
+    let base = r#"{ "name": "demo" }"#;
+    // 基礎が機能のメンバーを持つ。
+    let m = web_ws("web-dup", SHARER_DEP, r#"{ "share_target": {} }"#, WEB_CFG);
+    assert!(errs(generate_web(Some(&m))).contains("share_target"));
+    // fandhe-app.web が無い。
+    let m = web_ws("web-nocfg", SHARER_DEP, base, "");
+    assert!(errs(generate_web(Some(&m))).contains("fandhe-app.web"));
+    // パスが crate の外・絶対。
+    for bad in ["../x.json", "/etc/passwd"] {
+        let cfg = format!("[package.metadata.fandhe-app.web]\nmanifest = \"{bad}\"\n");
+        let m = web_ws("web-path", SHARER_DEP, base, &cfg);
+        assert!(errs(generate_web(Some(&m))).contains("相対パス"), "{bad}");
+    }
+    // 基礎が JSON でない・オブジェクトでない。
+    for bad in ["not json", "[]"] {
+        let m = web_ws("web-json", SHARER_DEP, bad, WEB_CFG);
+        assert!(errs(generate_web(Some(&m))).contains("JSON"), "{bad}");
+    }
+    // 他の機能が許可リスト外のメンバーを宣言する。
+    let bad = pkg(
+        "fandhe-cap-sharer",
+        "[package.metadata.fandhe]\nid = \"sharer\"\n\
+         [package.metadata.fandhe.web.manifest.start_url]\nx = \"y\"\n",
+    );
+    let app = pkg("app", &format!("{SHARER_DEP}{WEB_CFG}"));
+    let m = make_ws(
+        "web-allow",
+        "app",
+        &[("fandhe-cap-sharer", bad), ("app", app)],
+    );
+    fs::write(m.parent().unwrap().join("web.json"), base).unwrap();
+    assert!(errs(generate_web(Some(&m))).contains("start_url"));
+}
+
+#[test]
+fn web_dir_is_not_generated_without_web_config() {
+    // 全 OS の gen は fandhe-app.web が無いアプリに web/ を出さない（gallery の決定性テストも同じ性質に依存）。
+    assert!(!gallery().keys().any(|k| k.starts_with("web/")));
+}
+
+/// fandhe-web-dom は share-receive を選んでいるので、従来の静的 manifest と同じ内容が配信される。
+#[test]
+fn web_dom_demo_manifest_keeps_share_target() {
+    let m = Path::new(env!("CARGO_MANIFEST_DIR")).join("../fandhe-web-dom/Cargo.toml");
+    let want: Value = serde_json::json!({
+        "name": "fandhe-web-dom サンプル画面",
+        "short_name": "fandhe",
+        "start_url": "./",
+        "scope": "./",
+        "display": "standalone",
+        "icons": [
+            { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+            { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+        ],
+        "file_handlers": [
+            { "action": "./?screen=file_association_show", "accept": { "text/plain": [".txt"] } }
+        ],
+        "shortcuts": [
+            {
+                "name": "デモを開く",
+                "url": "./?screen=url_scheme_show&url=web%2Bfandhe%3A%2F%2Fshortcut%2Fopen-demo"
+            }
+        ],
+        "share_target": {
+            "action": "./",
+            "method": "GET",
+            "params": { "text": "share_text", "url": "share_url" }
+        }
+    });
+    assert_eq!(web_manifest(&m), want);
 }
