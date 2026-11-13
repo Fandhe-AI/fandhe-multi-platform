@@ -523,7 +523,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "image_generation_show" => fandhe_core::screens::image_generation_show::current_screen,
-    fandhe_egui_proxy::device::image_generation::image_generation_show_effect,
+    fandhe_cap_image_generation::image_generation_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "in_app_browser_show" => fandhe_core::screens::in_app_browser_show::current_screen,

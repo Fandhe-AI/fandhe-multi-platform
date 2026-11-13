@@ -1450,6 +1450,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-image-generation"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-in-app-review"
 version = "0.2.0"
 dependencies = [
@@ -2074,6 +2084,7 @@ dependencies = [
  "fandhe-cap-home-widget",
  "fandhe-cap-http-get",
  "fandhe-cap-human-presence",
+ "fandhe-cap-image-generation",
  "fandhe-cap-in-app-review",
  "fandhe-cap-live-activity",
  "fandhe-cap-local-fonts",

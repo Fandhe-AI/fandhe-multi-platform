@@ -128,8 +128,6 @@ fn build() {
     compile_apple_video_transcode();
     // `apple/fandhe_apple_translation.swift`（Issue #535 macOS + #536 iOS）も共用する。
     compile_apple_translation();
-    // `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS + #976 iOS）も共用する。
-    compile_apple_image_generation();
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
 
@@ -337,20 +335,6 @@ fn compile_apple_video_transcode() {
         "apple/fandhe_apple_video_transcode.m",
         &["AVFoundation", "CoreMedia", "CoreVideo", "Foundation"],
     );
-}
-
-/// 端末内での画像生成の Swift 薄層 `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS、#976 iOS）。
-/// ImagePlayground を弱リンクする。macOS・iOS の両分岐から呼ぶ。
-fn compile_apple_image_generation() {
-    compile_swift(&SwiftLib {
-        srcs: &["apple/fandhe_apple_image_generation.swift"],
-        lib: "fandhe_apple_image_generation",
-        module: "FandheImageGenerationBridge",
-        framework: "ImagePlayground",
-        weak: true,
-        require_env: "FANDHE_REQUIRE_IMAGE_GENERATION",
-        tag: "image_generation",
-    });
 }
 
 /// 端末内翻訳の Swift 薄層 `apple/fandhe_apple_translation.swift`（Issue #535 macOS、iOS は #536）。
@@ -864,8 +848,6 @@ fn build_macos() {
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
     compile_apple_translation();
-    // `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS。iOS は `build_ios` からも呼ぶ）。
-    compile_apple_image_generation();
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
     // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も共用する。

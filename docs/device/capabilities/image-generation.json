@@ -12,7 +12,7 @@
       "perm": "宣言不要（生成画面は OS が出す。人物の取り込み（personalization）は無効にして写真ライブラリに触れない）",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#966）",
-      "impl": "`crates/fandhe-egui-proxy/apple/fandhe_apple_image_generation.swift` + `crates/fandhe-egui-proxy/src/device/apple_image_generation.rs` + `crates/fandhe-egui-proxy/src/device/ios_image_generation.rs` + `crates/fandhe-egui-proxy/src/device/image_generation.rs` + `crates/fandhe-core/src/screens/image_generation_show.rs` + `crates/fandhe-device/src/image_generation.rs`、Issue #976",
+      "impl": "`crates/fandhe-cap-image-generation/apple/fandhe_apple_image_generation.swift` + `crates/fandhe-cap-image-generation/src/apple.rs` + `crates/fandhe-egui-proxy/src/device/ios_image_generation.rs` + `crates/fandhe-cap-image-generation/src/driver.rs` + `crates/fandhe-core/src/screens/image_generation_show.rs` + `crates/fandhe-cap-image-generation/src/contract.rs`、Issue #976",
       "url": [
         "https://developer.apple.com/documentation/imageplayground/imageplaygroundviewcontroller",
         "https://developer.apple.com/documentation/imageplayground/imageplaygroundviewcontroller/isavailable",
@@ -36,7 +36,7 @@
       "perm": "宣言不要（生成画面は OS が出す。人物の取り込み（personalization）は無効にして写真ライブラリに触れない）",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#966）",
-      "impl": "`crates/fandhe-egui-proxy/apple/fandhe_apple_image_generation.swift` + `crates/fandhe-egui-proxy/src/device/apple_image_generation.rs` + `crates/fandhe-egui-proxy/src/device/image_generation.rs` + `crates/fandhe-core/src/screens/image_generation_show.rs` + `crates/fandhe-device/src/image_generation.rs`、Issue #975",
+      "impl": "`crates/fandhe-cap-image-generation/apple/fandhe_apple_image_generation.swift` + `crates/fandhe-cap-image-generation/src/apple.rs` + `crates/fandhe-cap-image-generation/src/driver.rs` + `crates/fandhe-core/src/screens/image_generation_show.rs` + `crates/fandhe-cap-image-generation/src/contract.rs`、Issue #975",
       "url": [
         "https://developer.apple.com/documentation/imageplayground/imageplaygroundviewcontroller",
         "https://developer.apple.com/documentation/imageplayground/imageplaygroundviewcontroller/isavailable",

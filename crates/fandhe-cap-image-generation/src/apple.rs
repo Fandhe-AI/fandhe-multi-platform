@@ -1,26 +1,26 @@
 //! macOS / iOS 向け端末内での画像生成実装（Issue #975 macOS、#976 iOS）。
-//! `device/image_generation.rs` の macOS 経路と iOS 経路（`ios_image_generation`）から呼ばれ、
+//! `driver` の macOS 経路と iOS 経路（`crate::ios`）から呼ばれ、
 //! `apple/fandhe_apple_image_generation.swift`（Image Playground の `ImagePlaygroundViewController`。
-//! `build.rs` が feature `device` 有効時に swiftc で静的ライブラリ化）を `unsafe extern "C"` 1 関数で呼ぶ。
+//! `build.rs` が swiftc で静的ライブラリ化）を `unsafe extern "C"` 1 関数で呼ぶ。
 //! Swift からは受け口 2 本（[`on_begin`]・[`on_done`]）の関数ポインタ経由で戻る。`unsafe` はこの
 //! FFI 宣言・呼び出し・受け口に閉じ、各所に `// SAFETY:` を書く（coding-rust.md の FFI 例外規定）。
-//! `build.rs` のコンパイル条件・`device.rs` の mod cfg と同じ OS 集合に保つ。
+//! `build.rs` のコンパイル条件・`lib.rs` の mod cfg と同じ OS 集合に保つ。
 //!
-//! 契約の SSOT は `fandhe_device::image_generation`。戻りコード → 結果の写像の SSOT は
+//! 契約の SSOT は `crate::contract`。戻りコード → 結果の写像の SSOT は
 //! `outcome_from_apple_code`。期限・世代照合・二重完了の破棄・表示開始の記録は effect ドライバの
 //! bridge が担い、ここは生成画面の表示依頼と結果の受け取りだけをする。
 //! 画素はコピーしてから渡し、ポインタを保持しない。画素・プロンプト・OS のエラー文はログに出さない。
 
 use std::sync::Arc;
 
-use fandhe_device::image_generation::{
-    outcome_from_apple_code, ImageGenerationFailure, ImageGenerator, MAX_SIDE, PROMPT,
+use crate::contract::{
+    ImageGenerationFailure, ImageGenerator, MAX_SIDE, PROMPT, outcome_from_apple_code,
 };
 
-use super::image_generation::{complete_from_os, try_begin_present};
+use crate::driver::{complete_from_os, try_begin_present};
 
 // SAFETY: `apple/fandhe_apple_image_generation.swift` が `@_cdecl` で定義する C ABI（`build.rs` が
-// macOS・iOS ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は swift 冒頭コメントに集約する。
+// macOS・iOS ターゲットでコンパイル・リンクする）。契約は swift 冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_apple_image_generation_present(
@@ -107,5 +107,5 @@ extern "C" fn on_done(
         outcome_from_apple_code(code, rgba, width, height),
     );
     #[cfg(target_os = "ios")]
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }

@@ -5,7 +5,7 @@
 //! 画面なしの生成（`ImageCreator`）・複数枚・元画像の指定・人物の取り込み・保存・共有は扱わない。
 //! 生成の元にする文は固定の [`PROMPT`] で、外部入力を受けない。対象は macOS（#975）と iOS（#976）。
 //! Android・Windows・Web は対応表で `no` のため OS 別モジュールを置かず `Unsupported`。
-//! `fandhe-egui-proxy` の effect ドライバ（`device/image_generation.rs`）が本モジュールの trait を呼び、
+//! `driver`（effect ドライバ）が本モジュールの trait を呼び、
 //! OS 層が実装する。
 //!
 //! # 契約
@@ -44,7 +44,7 @@
 //!   - `didCreateImageAt` の一時ファイルは成功・失敗・寸法超過の全経路で消す
 //!   - 寸法は復号の前に読んで検査する（0 は 4、[`MAX_SIDE`] 超は 5）
 //!   - VC とデリゲートは通知の後に解放する
-//!   - iOS は受け口で結果を共有状態へ入れた直後に `crate::ios::request_repaint` を呼ぶ
+//!   - iOS は受け口で結果を共有状態へ入れた直後に `fandhe_runtime::request_repaint` を呼ぶ
 //! - **秘密値**（契約表 8）: プロンプト・一時ファイルのパス・画素・OS のエラー文を
 //!   ログ・画面のエラー文・`Debug` に出さない
 //!
@@ -64,7 +64,7 @@ use std::time::Duration;
 pub const PRESENT_DEADLINE: Duration = Duration::from_secs(10);
 
 /// 受け取る画像の一辺の上限（画素）。OS 層は復号の前にこの値で寸法を検査する。
-/// `fandhe-core` の `RGBA_MAX_SIDE` 以下に保つ（`fandhe-egui-proxy` に const assert を置く）。
+/// `fandhe-core` の `RGBA_MAX_SIDE` 以下に保つ（`driver` に const assert を置く）。
 pub const MAX_SIDE: u32 = 2048;
 
 /// 生成の元にする固定文（英語。外部入力を受けない）。
@@ -189,7 +189,7 @@ pub fn outcome_from_apple_code(
 }
 
 /// 画像生成の OS 実装。`generate` は「受理」だけを同期で返し、結果は OS 層が
-/// `fandhe-egui-proxy` の bridge（`complete_from_os`）へ 1 回だけ非同期に届ける。
+/// `driver` の bridge（`complete_from_os`）へ 1 回だけ非同期に届ける。
 pub trait ImageGenerator: Send + Sync {
     /// `request_id` の要求として生成画面の表示を OS へ依頼する。
     /// 表示の直前に bridge の `try_begin_present` を呼び、`false` なら表示しない。

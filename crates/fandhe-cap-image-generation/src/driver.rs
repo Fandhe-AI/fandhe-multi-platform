@@ -1,16 +1,14 @@
 //! Phase 11 型サンプル「端末内での画像生成」（親 #191、Issue #975）の effect ドライバ。
 //! `fandhe_core::screens::image_generation_show`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::image_generation::ImageGenerator` に生成画面の表示を依頼して、
+//! `crate::contract::ImageGenerator` に生成画面の表示を依頼して、
 //! OS 層から届く結果を `CompletionSender` 経由で画面へ返す（`fandhe-gallery` の `screens/registry.rs` の
-//! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約（結果の三値・期限・守る範囲）の SSOT は `fandhe_device::image_generation`。
+//! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`fandhe_runtime::EffectFn` 参照）。
+//! 契約（結果の三値・期限・守る範囲）の SSOT は `crate::contract`。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
+//! //! # OS 別の分担（dispatch・bridge・本ファイルは #975 で最終形。後続の子はここを触らない）
 //!
-//! # OS 別の分担（dispatch・bridge・本ファイルは #975 で最終形。後続の子はここを触らない）
-//!
-//! - macOS: `apple_image_generation`（#975。Image Playground の `ImagePlaygroundViewController`）
-//! - iOS: `ios_image_generation`（#976。macOS と共用の実体を UIKit で提示）
+//! - macOS: `crate::apple`（#975。Image Playground の `ImagePlaygroundViewController`）
+//! - iOS: `crate::ios`（#976。macOS と共用の実体を UIKit で提示）
 //! - Android・Windows・Linux: 対応表で `no` のため `UnsupportedImageGenerator` 固定
 //!   （ダミーの成功実装へは倒さない）。Web は対象外
 //!
@@ -39,17 +37,17 @@
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::image_generation_show::ImageGenerationShowState;
-use fandhe_core::screens::image_generation_show::{
-    finish_generate, mark_running, take_request, CoreFailure, CoreOutcome, Phase,
-};
-use fandhe_core::RgbaPixels;
-use fandhe_device::image_generation::{
+use crate::contract::{
     ImageGenerationFailure, ImageGenerationOutcome, ImageGenerator, MAX_SIDE, PRESENT_DEADLINE,
 };
+use fandhe_core::RgbaPixels;
+use fandhe_core::screens::image_generation_show::ImageGenerationShowState;
+use fandhe_core::screens::image_generation_show::{
+    CoreFailure, CoreOutcome, Phase, finish_generate, mark_running, take_request,
+};
 
-use super::request_slot::{poll_and_finish, RequestSlot, POLL_INTERVAL};
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
 
 // 受け取る寸法の上限は描画側の上限を超えない（超えると `RgbaPixels::new` が `None` になる）。
 const _: () = assert!(MAX_SIDE <= fandhe_core::RGBA_MAX_SIDE);
@@ -65,19 +63,20 @@ enum CoreGen {
 type Outcome = Result<CoreGen, ImageGenerationFailure>;
 
 /// 現在のプラットフォームに応じた `ImageGenerator` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn ImageGenerator> {
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_image_generation() -> Arc<dyn ImageGenerator> {
     #[cfg(target_os = "macos")]
     {
-        super::apple_image_generation::implementation()
+        crate::apple::implementation()
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_image_generation::implementation()
+        crate::ios::implementation()
     }
     // Android・Windows・Linux は対応表で no。
     #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     {
-        Arc::new(fandhe_device::image_generation::UnsupportedImageGenerator)
+        Arc::new(crate::contract::UnsupportedImageGenerator)
     }
 }
 
@@ -197,11 +196,9 @@ impl Bridge {
         let due = active
             .as_ref()
             .is_some_and(|a| !a.presenting && a.started.elapsed() >= self.deadline);
-        if due {
-            if let Some(a) = active.take() {
-                self.slot
-                    .deliver(a.request_id, Err(ImageGenerationFailure::TimedOut));
-            }
+        if due && let Some(a) = active.take() {
+            self.slot
+                .deliver(a.request_id, Err(ImageGenerationFailure::TimedOut));
         }
     }
 }
@@ -308,22 +305,34 @@ pub fn image_generation_show_effect(
     sender: &CompletionSender<ImageGenerationShowState>,
 ) {
     static IMPL: OnceLock<Arc<dyn ImageGenerator>> = OnceLock::new();
-    drive(state, sender, IMPL.get_or_init(platform), bridge());
+    drive(
+        state,
+        sender,
+        IMPL.get_or_init(platform_image_generation),
+        bridge(),
+    );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{GeneratedImage, UnsupportedImageGenerator};
     use fandhe_core::screens::image_generation_show::{error_text, request_generate};
-    use fandhe_device::image_generation::{GeneratedImage, UnsupportedImageGenerator};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
 
-    type Rx = mpsc::Receiver<crate::app::Completion<ImageGenerationShowState>>;
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<ImageGenerationShowState>>;
 
     fn channel() -> (CompletionSender<ImageGenerationShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     fn new_bridge(deadline: Duration) -> &'static Bridge {
