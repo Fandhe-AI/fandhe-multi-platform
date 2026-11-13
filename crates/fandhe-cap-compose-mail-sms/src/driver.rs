@@ -1,8 +1,8 @@
 //! Phase 11（親 #1142）型サンプル「メール・SMS の作成」（Issue #1384）の effect ドライバ。
 //! `fandhe_core::screens::compose_mail_sms`（端末依存ゼロ）の要求を観測し、値を
-//! `fandhe_device::compose_mail_sms::ComposeRequest` で検査してから OS へ渡し、結果を
+//! `crate::contract::ComposeRequest` で検査してから OS へ渡し、結果を
 //! `CompletionSender` 経由で返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約、
-//! `fandhe-cap-app-badge/src/driver.rs` と同型）。契約と守る範囲は `fandhe_device::compose_mail_sms` の
+//! `fandhe-cap-app-badge/src/driver.rs` と同型）。契約と守る範囲は `crate::contract` の
 //! モジュール doc を参照。
 //!
 //! - iOS / Android: コールバック型のため pull 型 [`bridge`]（`RequestSlot` の facade）で毎フレーム
@@ -10,34 +10,36 @@
 //!   モジュールだけを埋める**
 //! - macOS / Windows / それ以外: [`ComposeMailSms`] を UI スレッドで同期に呼ぶ（macOS の添付付きも
 //!   `NSSharingService` を同期に呼び、完了は待たない）。Windows の添付付きは modal の Simple MAPI を
-//!   作業スレッドで呼び、結果を `CompletionSender` で後から届ける（#1043、`windows_compose_mail_sms`）。
+//!   作業スレッドで呼び、結果を `CompletionSender` で後から届ける（#1043、`crate::windows`）。
 //!   Linux は `UnsupportedComposeMailSms` で「非対応」を表示する
 
+use crate::contract::{self, ComposeAttachment, ComposeOutcome, ComposeRequest};
+use crate::error::ComposeMailSmsError;
 use fandhe_core::screens::compose_mail_sms::{
-    take_request, ComposeFailure, ComposeMailSmsState, ComposeRequestView, ComposeTarget,
-    CoreOutcome,
+    ComposeFailure, ComposeMailSmsState, ComposeRequestView, ComposeTarget, CoreOutcome,
+    take_request,
 };
-use fandhe_device::compose_mail_sms::{self, ComposeAttachment, ComposeOutcome, ComposeRequest};
-use fandhe_device::DeviceError;
 
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+use crate::contract::ComposeMailSms;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use fandhe_core::screens::compose_mail_sms::{finish_compose, mark_composing};
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
-use fandhe_device::compose_mail_sms::ComposeMailSms;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
-/// `DeviceError` を画面用の結果へ写像する。内部構造・入力値は出さず固定文言だけにする
+/// `ComposeMailSmsError` を画面用の結果へ写像する。内部構造・入力値は出さず固定文言だけにする
 /// （security.md A09）。
-fn to_outcome(result: Result<ComposeOutcome, DeviceError>) -> Result<CoreOutcome, ComposeFailure> {
+fn to_outcome(
+    result: Result<ComposeOutcome, ComposeMailSmsError>,
+) -> Result<CoreOutcome, ComposeFailure> {
     match result {
         Ok(ComposeOutcome::Queued) => Ok(CoreOutcome::Queued),
         Ok(ComposeOutcome::Saved) => Ok(CoreOutcome::Saved),
         Ok(ComposeOutcome::Cancelled) => Ok(CoreOutcome::Cancelled),
         Ok(ComposeOutcome::HandedOff) => Ok(CoreOutcome::HandedOff),
         Ok(ComposeOutcome::NoHandler) => Ok(CoreOutcome::NoHandler),
-        Err(DeviceError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
-        Err(DeviceError::InvalidInput(kind)) => Err(ComposeFailure::Invalid(
+        Err(ComposeMailSmsError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
+        Err(ComposeMailSmsError::InvalidInput(kind)) => Err(ComposeFailure::Invalid(
             match kind {
                 "compose to" => "宛先",
                 "compose cc" => "CC",
@@ -49,56 +51,53 @@ fn to_outcome(result: Result<ComposeOutcome, DeviceError>) -> Result<CoreOutcome
             }
             .to_string(),
         )),
-        Err(DeviceError::Internal(label)) => Err(ComposeFailure::Failed(
+        Err(ComposeMailSmsError::Internal(label)) => Err(ComposeFailure::Failed(
             match label {
-                l if l == compose_mail_sms::ATTACHMENT_FILE => {
+                l if l == contract::ATTACHMENT_FILE => {
                     "添付の一時ファイルを用意できませんでした"
                 }
-                l if l == compose_mail_sms::CLEANUP => {
+                l if l == contract::CLEANUP => {
                     "前回の添付の一時ファイルを消せなかったため、作成画面を開きませんでした"
                 }
-                l if l == compose_mail_sms::BUSY => "前の作成画面がまだ開いています",
-                l if l == compose_mail_sms::MAPI => {
+                l if l == contract::BUSY => "前の作成画面がまだ開いています",
+                l if l == contract::MAPI => {
                     "既定のメールアプリで添付付きの作成を開けませんでした（新しい Outlook は非対応）"
                 }
                 _ => "OS の作成画面を開けませんでした",
             }
             .to_string(),
         )),
-        Err(_) => Err(ComposeFailure::Failed(
-            "OS の作成画面を開けませんでした".to_string(),
-        )),
     }
 }
 
 /// iOS の結果コード表（SSOT。`.m` の `RESULT_*` と一致させる）。未知のコードは失敗に倒す。
 #[allow(dead_code)] // b-ios が結果受け口から使う
-pub(crate) fn outcome_from_ios_code(code: i32) -> Result<ComposeOutcome, DeviceError> {
+pub(crate) fn outcome_from_ios_code(code: i32) -> Result<ComposeOutcome, ComposeMailSmsError> {
     match code {
         0 => Ok(ComposeOutcome::Queued),
         1 => Ok(ComposeOutcome::Saved),
         2 => Ok(ComposeOutcome::Cancelled),
-        3 => Err(DeviceError::Internal("compose failed")),
+        3 => Err(ComposeMailSmsError::Internal("compose failed")),
         4 => Ok(ComposeOutcome::NoHandler),
-        5 => Err(DeviceError::Internal("compose present")),
-        _ => Err(DeviceError::Internal("compose outcome")),
+        5 => Err(ComposeMailSmsError::Internal("compose present")),
+        _ => Err(ComposeMailSmsError::Internal("compose outcome")),
     }
 }
 
 /// Android の結果コード表（SSOT。Java 側 `ComposeHelper.RESULT_*` と一致させる）。
 #[allow(dead_code)] // b-android が結果受け口から使う
-pub(crate) fn outcome_from_android_code(code: i32) -> Result<ComposeOutcome, DeviceError> {
+pub(crate) fn outcome_from_android_code(code: i32) -> Result<ComposeOutcome, ComposeMailSmsError> {
     match code {
         0 => Ok(ComposeOutcome::HandedOff),
         1 => Ok(ComposeOutcome::NoHandler),
-        2 => Err(DeviceError::Internal("compose background")),
-        3 => Err(DeviceError::Internal("compose present")),
-        _ => Err(DeviceError::Internal("compose outcome")),
+        2 => Err(ComposeMailSmsError::Internal("compose background")),
+        3 => Err(ComposeMailSmsError::Internal("compose present")),
+        _ => Err(ComposeMailSmsError::Internal("compose outcome")),
     }
 }
 
 /// 画面の値から検査済みの要求を作る。OS へ渡す唯一の入口（検査の SSOT は `ComposeRequest`）。
-fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, DeviceError> {
+fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, ComposeMailSmsError> {
     match view.target {
         ComposeTarget::Mail => {
             // macOS の `NSSharingService` は To しか渡せないため、添付付きは CC / BCC を付けない
@@ -119,7 +118,9 @@ fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, DeviceErro
                 None => Ok(req),
             }
         }
-        ComposeTarget::Sms if view.to.len() > 1 => Err(DeviceError::InvalidInput("compose to")),
+        ComposeTarget::Sms if view.to.len() > 1 => {
+            Err(ComposeMailSmsError::InvalidInput("compose to"))
+        }
         ComposeTarget::Sms => {
             ComposeRequest::sms(view.to.first().map_or("", String::as_str), &view.body)
         }
@@ -130,11 +131,11 @@ fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, DeviceErro
 /// 他機能とは共有しない本機能専用の [`SLOT`](bridge::SLOT)。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub(crate) mod bridge {
+    use crate::contract::ComposeOutcome;
+    use crate::error::ComposeMailSmsError;
     use fandhe_core::screens::compose_mail_sms::{ComposeFailure, CoreOutcome};
-    use fandhe_device::compose_mail_sms::ComposeOutcome;
-    use fandhe_device::DeviceError;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) type Outcome = Result<CoreOutcome, ComposeFailure>;
 
@@ -148,7 +149,10 @@ pub(crate) mod bridge {
     /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
     /// 捨てて `false`（先に届いたものだけを採る）。
     #[allow(dead_code)] // 後続 issue（b-ios / b-android）の受け口が使う
-    pub(crate) fn deliver(request_id: u64, result: Result<ComposeOutcome, DeviceError>) -> bool {
+    pub(crate) fn deliver(
+        request_id: u64,
+        result: Result<ComposeOutcome, ComposeMailSmsError>,
+    ) -> bool {
         SLOT.deliver(request_id, super::to_outcome(result))
     }
 
@@ -160,28 +164,28 @@ pub(crate) mod bridge {
     }
 }
 
-/// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
+/// gallery の `android_main`（Activity 再生成）から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::reset();
 }
 
 /// OS へ作成画面の表示を依頼する。`Ok` は受理済みで結果は後から [`bridge::deliver`] で届く。
 /// `Err` は依頼自体の失敗（呼び出し元がその場で `deliver` する）。
 #[cfg(target_os = "ios")]
-fn begin_compose(request_id: u64, req: &ComposeRequest) -> Result<(), DeviceError> {
-    super::ios_compose_mail_sms::begin_compose(request_id, req)
+fn begin_compose(request_id: u64, req: &ComposeRequest) -> Result<(), ComposeMailSmsError> {
+    crate::ios::begin_compose(request_id, req)
 }
 
 #[cfg(target_os = "android")]
-fn begin_compose(request_id: u64, req: &ComposeRequest) -> Result<(), DeviceError> {
-    super::android_compose_mail_sms::begin_compose(request_id, req)
+fn begin_compose(request_id: u64, req: &ComposeRequest) -> Result<(), ComposeMailSmsError> {
+    crate::android::begin_compose(request_id, req)
 }
 
 /// iOS / Android 版の effect ドライバ本体。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 fn drive_callback(state: &ComposeMailSmsState, sender: &CompletionSender<ComposeMailSmsState>) {
-    use fandhe_core::screens::compose_mail_sms::{finish_compose, mark_composing, ComposePhase};
+    use fandhe_core::screens::compose_mail_sms::{ComposePhase, finish_compose, mark_composing};
 
     if let Some(view) = take_request(state) {
         let _ = sender.send(Box::new(mark_composing));
@@ -198,7 +202,7 @@ fn drive_callback(state: &ComposeMailSmsState, sender: &CompletionSender<Compose
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -237,14 +241,13 @@ fn drive(
     let generation = view.generation;
     let req = build_request(&view);
     // Windows の添付付きは Simple MAPI の modal を作業スレッドで開き、結果は後から届ける
-    // （UI スレッドを止めない。在席フラグと一時ファイルは `windows_compose_mail_sms` が持つ）。
+    // （UI スレッドを止めない。在席フラグと一時ファイルは `crate::windows` が持つ）。
     #[cfg(target_os = "windows")]
     let req = match req {
         Ok(r) if r.attachment().is_some() => {
             let s = sender.clone();
-            let started = super::windows_compose_mail_sms::begin_attachment(r, move |res| {
-                finish(&s, generation, res)
-            });
+            let started =
+                crate::windows::begin_attachment(r, move |res| finish(&s, generation, res));
             if let Err(e) = started {
                 finish(sender, generation, Err(e));
             }
@@ -260,7 +263,7 @@ fn drive(
 fn finish(
     sender: &CompletionSender<ComposeMailSmsState>,
     generation: u64,
-    result: Result<ComposeOutcome, DeviceError>,
+    result: Result<ComposeOutcome, ComposeMailSmsError>,
 ) {
     let outcome = to_outcome(result);
     let _ = sender.send(Box::new(move |s: &mut ComposeMailSmsState| {
@@ -268,15 +271,16 @@ fn finish(
     }));
 }
 
-/// OS 別の [`ComposeMailSms`] 実装を返す（macOS / Windows / それ以外）。
+/// OS 別の [`ComposeMailSms`] 実装を返す（macOS / Windows / それ以外）。画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+/// iOS / Android は結果をコールバックで受ける別の型（`bridge`）で、同期の [`ComposeMailSms`] を持たないため載せない。
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-fn platform_compose() -> Box<dyn ComposeMailSms> {
+pub fn platform_compose_mail_sms() -> Box<dyn ComposeMailSms> {
     #[cfg(target_os = "macos")]
-    return super::macos_compose_mail_sms::implementation();
+    return crate::macos::implementation();
     #[cfg(target_os = "windows")]
-    return super::windows_compose_mail_sms::implementation();
+    return crate::windows::implementation();
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    return Box::new(fandhe_device::compose_mail_sms::UnsupportedComposeMailSms);
+    return Box::new(crate::contract::UnsupportedComposeMailSms);
 }
 
 /// `registry.rs` から配線される effect ドライバ（macOS・Windows・Linux）。
@@ -291,12 +295,22 @@ pub fn compose_mail_sms_effect(
     if take_request(state).is_none() {
         return;
     }
-    drive(state, sender, platform_compose().as_ref());
+    drive(state, sender, platform_compose_mail_sms().as_ref());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    #[allow(dead_code)]
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
     use fandhe_core::screens::compose_mail_sms as screen;
 
     #[test]
@@ -322,15 +336,15 @@ mod tests {
             Ok(CoreOutcome::NoHandler)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Unsupported("compose"))),
+            to_outcome(Err(ComposeMailSmsError::Unsupported("compose"))),
             Ok(CoreOutcome::Unsupported)
         );
         assert!(matches!(
-            to_outcome(Err(DeviceError::InvalidInput("compose to"))),
+            to_outcome(Err(ComposeMailSmsError::InvalidInput("compose to"))),
             Err(ComposeFailure::Invalid(m)) if m == "宛先"
         ));
         assert!(matches!(
-            to_outcome(Err(DeviceError::Internal("compose present"))),
+            to_outcome(Err(ComposeMailSmsError::Internal("compose present"))),
             Err(ComposeFailure::Failed(_))
         ));
     }
@@ -338,19 +352,20 @@ mod tests {
     #[test]
     fn to_outcome_maps_attachment_labels_to_fixed_text() {
         for l in [
-            compose_mail_sms::ATTACHMENT_FILE,
-            compose_mail_sms::CLEANUP,
-            compose_mail_sms::BUSY,
-            compose_mail_sms::MAPI,
+            contract::ATTACHMENT_FILE,
+            contract::CLEANUP,
+            contract::BUSY,
+            contract::MAPI,
         ] {
-            let Err(ComposeFailure::Failed(m)) = to_outcome(Err(DeviceError::Internal(l))) else {
+            let Err(ComposeFailure::Failed(m)) = to_outcome(Err(ComposeMailSmsError::Internal(l)))
+            else {
                 panic!("{l}");
             };
             assert!(!m.contains("compose") && !m.is_empty());
             assert_ne!(m, "OS の作成画面を開けませんでした");
         }
         assert_eq!(
-            to_outcome(Err(DeviceError::Unsupported("compose cc"))),
+            to_outcome(Err(ComposeMailSmsError::Unsupported("compose cc"))),
             Ok(CoreOutcome::Unsupported)
         );
     }
@@ -401,7 +416,7 @@ mod tests {
         };
         assert!(matches!(
             build_request(&bad),
-            Err(DeviceError::InvalidInput("compose to"))
+            Err(ComposeMailSmsError::InvalidInput("compose to"))
         ));
         let bad_cc = ComposeRequestView {
             to: vec!["a@b.c".into()],
@@ -409,7 +424,10 @@ mod tests {
             ..bad
         };
         let err = build_request(&bad_cc).unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidInput("compose cc")));
+        assert!(matches!(
+            err,
+            ComposeMailSmsError::InvalidInput("compose cc")
+        ));
         assert_eq!(
             to_outcome(Err(err)),
             Err(ComposeFailure::Invalid("CC".into()))
@@ -419,23 +437,23 @@ mod tests {
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     mod sync_path {
         use super::*;
-        use fandhe_device::compose_mail_sms::UnsupportedComposeMailSms;
+        use crate::contract::UnsupportedComposeMailSms;
         use std::sync::atomic::{AtomicU32, Ordering};
 
         /// 呼び出し回数を数え、決めた結果を返す偽実装。
         struct Fake {
             calls: AtomicU32,
-            result: fn() -> Result<ComposeOutcome, DeviceError>,
+            result: fn() -> Result<ComposeOutcome, ComposeMailSmsError>,
         }
 
         impl ComposeMailSms for Fake {
-            fn compose(&self, _r: &ComposeRequest) -> Result<ComposeOutcome, DeviceError> {
+            fn compose(&self, _r: &ComposeRequest) -> Result<ComposeOutcome, ComposeMailSmsError> {
                 self.calls.fetch_add(1, Ordering::SeqCst);
                 (self.result)()
             }
         }
 
-        fn fake(result: fn() -> Result<ComposeOutcome, DeviceError>) -> Fake {
+        fn fake(result: fn() -> Result<ComposeOutcome, ComposeMailSmsError>) -> Fake {
             Fake {
                 calls: AtomicU32::new(0),
                 result,
@@ -451,7 +469,7 @@ mod tests {
                 screen::compose_sms(&mut s);
             }
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = crate::app::egui_sender(tx, egui::Context::default());
+            let sender = CompletionSender::new(tx, Arc::new(NoopWaker));
             drive(&s, &sender, composer);
             while let Ok(apply) = rx.try_recv() {
                 apply(&mut s);
@@ -466,20 +484,20 @@ mod tests {
 
         #[cfg(not(target_os = "windows"))]
         impl ComposeMailSms for UrlOnly {
-            fn compose(&self, r: &ComposeRequest) -> Result<ComposeOutcome, DeviceError> {
+            fn compose(&self, r: &ComposeRequest) -> Result<ComposeOutcome, ComposeMailSmsError> {
                 r.to_url().map(|_| ComposeOutcome::HandedOff)
             }
         }
 
         // Windows の添付付きは `drive` が実 MAPI（`begin_attachment`）へ直行し composer を使わないため、
-        // 実ダイアログを開かないようこのテストは Windows で走らせない（MAPI 経路は windows_compose_mail_sms のテストが持つ）。
+        // 実ダイアログを開かないようこのテストは Windows で走らせない（MAPI 経路は `crate::windows` のテストが持つ）。
         #[cfg(not(target_os = "windows"))]
         #[test]
         fn attachment_over_url_path_shows_unsupported() {
             let mut s = ComposeMailSmsState::default();
             screen::compose_mail_with_attachment(&mut s);
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = crate::app::egui_sender(tx, egui::Context::default());
+            let sender = CompletionSender::new(tx, Arc::new(NoopWaker));
             drive(&s, &sender, &UrlOnly);
             while let Ok(apply) = rx.try_recv() {
                 apply(&mut s);
@@ -493,7 +511,7 @@ mod tests {
             let f = fake(|| Ok(ComposeOutcome::HandedOff));
             let s = ComposeMailSmsState::default();
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = crate::app::egui_sender(tx, egui::Context::default());
+            let sender = CompletionSender::new(tx, Arc::new(NoopWaker));
             drive(&s, &sender, &f);
             assert!(rx.try_recv().is_err());
             assert_eq!(f.calls.load(Ordering::SeqCst), 0);
@@ -522,7 +540,7 @@ mod tests {
 
         #[test]
         fn failure_goes_to_error_with_fixed_label() {
-            let f = fake(|| Err(DeviceError::Internal("compose present")));
+            let f = fake(|| Err(ComposeMailSmsError::Internal("compose present")));
             let s = run(true, &f);
             assert!(s.status.is_empty());
             assert!(s.error.starts_with(screen::FAILED_PREFIX));

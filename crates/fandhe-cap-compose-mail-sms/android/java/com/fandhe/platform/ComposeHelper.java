@@ -1,5 +1,6 @@
 package com.fandhe.platform;
 
+import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.Intent;
@@ -12,12 +13,16 @@ import androidx.lifecycle.Lifecycle;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
 import java.util.UUID;
+import java.util.WeakHashMap;
 
-// メール・SMS 作成画面（Issue #1386、親 #1142）の Android 実装ヘルパー。MainActivity から
-// 生成・委譲される（Rust の `device/android_compose_mail_sms.rs` が `MainActivity.requestCompose` を
-// JNI で呼び、結果を `nativeOnComposeResult` で受けて `compose_mail_sms::outcome_from_android_code`
-// で契約の結果へ写像する）。
+// メール・SMS 作成画面（Issue #1386、親 #1142）の Android 実装ヘルパー。Rust の `src/android.rs` が
+// static の `compose(Activity, ...)` を JNI で呼び、結果を `nativeOnComposeResult` で受けて
+// `driver::outcome_from_android_code` で契約の結果へ写像する。Activity ごとの helper は `HELPERS` に持ち、
+// `ComposeLifecycle`（`FeatureLifecycleProvider` 継承）が `attach` / `detach` で知らせる。helper が無い
+// （生成前・破棄後）要求は RESULT_PRESENT_FAILED で確定し、結果が来ないまま待たせない。
 //
 // 公式 intents-common の「Compose an email / SMS」に従い、どちらも `ACTION_SENDTO`。
 // メールは `mailto:` + EXTRA_EMAIL/CC/BCC/SUBJECT/TEXT（宛先は `\n` 連結で受け、配列へ戻す）、SMS は `smsto:`（宛先は fromParts で符号化）+ `sms_body`。
@@ -28,13 +33,13 @@ import java.util.UUID;
 // 結果は「作成画面へ渡した」(HANDED_OFF) か「受け手がいない」(NO_HANDLER) のみで、送信や
 // 下書き保存は分からない。非前景・破棄中は OS に黙って抑止されうるため起動せず BACKGROUND を返す。
 // ライフサイクル: `request` はインスタンスフィールド。再生成後の新インスタンスは NONE から始まり、
-// 旧インスタンスの結果も Rust 側 `reset_pending_tracking()` と id 照合で捨てられる。
+// 旧インスタンスの結果も Rust 側 `reset_pending_tracking()` と id 照合で捨てられる。起動の直前に RESUMED・破棄中でないことを見直す（`start`）。
 // 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止。守らない範囲: 渡した後の送信可否。
 //
 // 添付（Issue #32、メールのみ・1 件）: URL では渡せないため `ACTION_SEND` + `EXTRA_STREAM`
-// （`FileProvider` の content URI）にし、`setSelector(ACTION_SENDTO mailto:)` でメールアプリに絞る。
-// 一時ファイルは `getCacheDir()/compose/<要求ごとの乱数>/<検証済みファイル名>` だけ（FileProvider の paths は
-// `compose/` 配下に限り、cache-path は配下ディレクトリも許可する）。同名でも URI が毎回異なる。
+// （機能専用の `ComposeMailFileProvider` の content URI）にし、`setSelector(ACTION_SENDTO mailto:)` でメールアプリに絞る。
+// 一時ファイルは `getCacheDir()/compose/<要求ごとの乱数>/<検証済みファイル名>` だけ（`ComposeMailFileProvider` の paths は
+// `compose/` 配下だけに限り、cache-path は配下ディレクトリも許可する。共有の `${applicationId}.compose` からは外した）。同名でも URI が毎回異なる。
 // 書き込み前に `compose/` のうち 10 分より古い要求ディレクトリだけを回収し、直近の要求の添付は残す
 // （受け手が使用中の前回 URI を壊さない）。書き込み失敗と startActivity の例外では自要求のディレクトリ
 // だけをその場で消し、前回の添付には触れない。HANDED_OFF では受け手が後から読むため残す
@@ -47,7 +52,7 @@ final class ComposeHelper {
     static final int KIND_MAIL = 0;
     static final int KIND_SMS = 1;
 
-    // 結果コードの SSOT。Rust 側 `outcome_from_android_code` が同じ値で写像する。
+    // 結果コードの SSOT。Rust 側 `driver::outcome_from_android_code` が同じ値で写像する。
     static final int RESULT_HANDED_OFF = 0;
     static final int RESULT_NO_HANDLER = 1;
     static final int RESULT_BACKGROUND = 2;
@@ -55,19 +60,38 @@ final class ComposeHelper {
 
     private static native void nativeOnComposeResult(long requestId, int code);
 
+    // Activity ごとの helper。再生成後の新しい Activity は新しい helper を持ち、旧要求は持ち越さない。
+    private static final Map<Activity, ComposeHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     private final ComponentActivity activity;
     private final RequestTracker request = new RequestTracker();
 
-    ComposeHelper(ComponentActivity activity) {
+    private ComposeHelper(ComponentActivity activity) {
         this.activity = activity;
     }
 
-    // JNI スレッドから呼ばれる。
-    void compose(long id, int kind, String to, String cc, String bcc, String subject,
-            String body, byte[] attData, String attMime, String attName) {
-        request.track(id);
-        activity.runOnUiThread(
-                () -> start(id, kind, to, cc, bcc, subject, body, attData, attMime, attName));
+    // Activity の生成時（`ComposeLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new ComposeHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。保留中の状態は持たない（起動は UI スレッドで同期に完了する）。
+    static void detach(Activity activity) {
+        HELPERS.remove(activity);
+    }
+
+    // JNI スレッドから呼ばれる入口。helper が無ければ結果を RESULT_PRESENT_FAILED で確定する。
+    static void compose(Activity activity, long id, int kind, String to, String cc, String bcc,
+            String subject, String body, byte[] attData, String attMime, String attName) {
+        ComposeHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            nativeOnComposeResult(id, RESULT_PRESENT_FAILED);
+            return;
+        }
+        helper.request.track(id);
+        helper.activity.runOnUiThread(() -> helper.start(id, kind, to, cc, bcc, subject, body,
+                attData, attMime, attName));
     }
 
     // `\n` 連結を配列へ戻す。空文字列は空配列（"".split は [""] を返すため）。
@@ -148,7 +172,7 @@ final class ComposeHelper {
             Uri uri;
             try {
                 uri = FileProvider.getUriForFile(activity,
-                        activity.getPackageName() + ".compose", attFile);
+                        activity.getPackageName() + ".fandhe.compose-mail-sms.files", attFile);
             } catch (IllegalArgumentException e) {
                 deleteRecursive(attFile.getParentFile());
                 nativeOnComposeResult(id, RESULT_PRESENT_FAILED);

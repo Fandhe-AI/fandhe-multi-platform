@@ -518,16 +518,6 @@ public class MainActivity extends GameActivity {
         return cameraPreviewHelper.setZoom(id, ratio);
     }
 
-    // メール・SMS 作成画面（Issue #1386）。実装は `ComposeHelper`。
-    // Rust の `android_compose_mail_sms.rs` が JNI で呼ぶ。
-    private final ComposeHelper composeHelper = new ComposeHelper(this);
-
-    void requestCompose(long requestId, int kind, String to, String cc, String bcc,
-            String subject, String body, byte[] attData, String attMime, String attName) {
-        composeHelper.compose(requestId, kind, to, cc, bcc, subject, body, attData, attMime,
-                attName);
-    }
-
     // OAuth 用 Web 認証セッション（Issue #534）。実装は `WebAuthSessionHelper`。
     // Rust の `android_web_auth_session.rs` が JNI で呼ぶ。
     private final WebAuthSessionHelper webAuthSessionHelper = new WebAuthSessionHelper(this);

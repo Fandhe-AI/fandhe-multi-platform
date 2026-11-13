@@ -2,7 +2,7 @@
 //! （`NSWorkspace openURL:`、`build.rs` が macOS ターゲットの feature `device` 有効時にコンパイル
 //! する）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を
 //! 明記する。`device/compose_mail_sms.rs` の macOS 経路から呼ばれ、契約は
-//! `fandhe_device::compose_mail_sms`。URL は `ComposeRequest::to_url`（scheme は `mailto:` /
+//! `crate::contract`。URL は `ComposeRequest::to_url`（scheme は `mailto:` /
 //! `sms:` 固定）で組み立て済みのものだけを渡す。
 //! 添付付きの要求（Issue #1042）は URL で渡せないため、`NSSharingService`（composeEmail）へ To・件名・
 //! 本文・添付だけを渡す（[`compose_attachment`]）。CC / BCC 付きは渡す API が無く、黙って落とさず
@@ -22,20 +22,20 @@
 use std::path::Path;
 use std::time::Instant;
 
-use fandhe_device::compose_mail_sms::{ComposeAttachment, ComposeOutcome, ComposeRequest};
-use fandhe_device::DeviceError;
+use crate::contract::{ComposeAttachment, ComposeOutcome, ComposeRequest};
+use crate::error::ComposeMailSmsError;
 
-use super::compose_attachment_file::Store;
+use crate::compose_attachment_file::Store;
 
 /// `.m` の結果コード → 結果の写像（SSOT。未知のコードは失敗に倒し成功を作らない）。
 /// 0 = 受理 / 1 = 扱うアプリ無し（`openURL:` が NO）/ 2 = NSURL を作れない・main thread 外。
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub(crate) fn outcome_from_code(code: i32) -> Result<ComposeOutcome, DeviceError> {
+pub(crate) fn outcome_from_code(code: i32) -> Result<ComposeOutcome, ComposeMailSmsError> {
     match code {
         0 => Ok(ComposeOutcome::HandedOff),
         1 => Ok(ComposeOutcome::NoHandler),
-        2 => Err(DeviceError::Internal("compose present")),
-        _ => Err(DeviceError::Internal("compose outcome")),
+        2 => Err(ComposeMailSmsError::Internal("compose present")),
+        _ => Err(ComposeMailSmsError::Internal("compose outcome")),
     }
 }
 
@@ -49,10 +49,10 @@ pub(crate) fn compose_attachment(
     store: &mut Store,
     now: Instant,
     open: impl FnOnce(&str, &str, &str, &Path) -> i32,
-) -> Result<ComposeOutcome, DeviceError> {
+) -> Result<ComposeOutcome, ComposeMailSmsError> {
     // NSSharingService に CC / BCC を渡す API は無い。黙って落とさない。
     if !req.cc().is_empty() || !req.bcc().is_empty() {
-        return Err(DeviceError::Unsupported("compose cc"));
+        return Err(ComposeMailSmsError::Unsupported("compose cc"));
     }
     let file = store.prepare(a, now)?;
     let result = outcome_from_code(open(
@@ -78,7 +78,7 @@ mod ffi {
     // SAFETY: `macos/fandhe_macos_compose_mail_sms.m`（`build.rs` が macOS ターゲットの feature
     // `device` 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_compose_open_url(url: *const std::ffi::c_char) -> i32;
         fn fandhe_macos_compose_attachment(
             to_nl: *const std::ffi::c_char,
@@ -120,11 +120,11 @@ mod ffi {
 struct MacComposeMailSms;
 
 #[cfg(target_os = "macos")]
-impl fandhe_device::compose_mail_sms::ComposeMailSms for MacComposeMailSms {
+impl crate::contract::ComposeMailSms for MacComposeMailSms {
     fn compose(
         &self,
-        req: &fandhe_device::compose_mail_sms::ComposeRequest,
-    ) -> Result<ComposeOutcome, DeviceError> {
+        req: &crate::contract::ComposeRequest,
+    ) -> Result<ComposeOutcome, ComposeMailSmsError> {
         // ponytail: UI スレッドで同期に呼ぶ（`performWithItems:` は作成画面を出すだけで戻る想定）。
         // 入れ子の run loop が見つかったら `dispatch_async(main)` へ移す。
         match req.attachment() {
@@ -132,7 +132,7 @@ impl fandhe_device::compose_mail_sms::ComposeMailSms for MacComposeMailSms {
             Some(a) => compose_attachment(
                 req,
                 a,
-                &mut super::compose_attachment_file::lock(),
+                &mut crate::compose_attachment_file::lock(),
                 Instant::now(),
                 ffi::compose_attachment,
             ),
@@ -142,14 +142,14 @@ impl fandhe_device::compose_mail_sms::ComposeMailSms for MacComposeMailSms {
 
 /// macOS の `ComposeMailSms` 実装を返す（`device/compose_mail_sms.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "macos")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::compose_mail_sms::ComposeMailSms> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::ComposeMailSms> {
     Box::new(MacComposeMailSms)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::compose_attachment_file::{fail_remove, test_store};
     use super::*;
+    use crate::compose_attachment_file::{fail_remove, test_store};
     use std::cell::RefCell;
     use std::path::PathBuf;
 
@@ -168,7 +168,15 @@ mod tests {
     type Calls = Vec<(String, String, String, bool)>;
 
     /// `open` が受けた引数と呼び出しを記録して `code` を返す。
-    fn run(code: i32, cc: bool) -> (Result<ComposeOutcome, DeviceError>, Calls, Store, PathBuf) {
+    fn run(
+        code: i32,
+        cc: bool,
+    ) -> (
+        Result<ComposeOutcome, ComposeMailSmsError>,
+        Calls,
+        Store,
+        PathBuf,
+    ) {
         let (mut st, root) = test_store();
         let calls = RefCell::new(Vec::new());
         let r = compose_attachment(&req(cc), &att(), &mut st, Instant::now(), |t, s, b, p| {
@@ -183,7 +191,10 @@ mod tests {
     #[test]
     fn cc_attachment_is_unsupported_without_open_or_file() {
         let (r, calls, st, root) = run(0, true);
-        assert!(matches!(r, Err(DeviceError::Unsupported("compose cc"))));
+        assert!(matches!(
+            r,
+            Err(ComposeMailSmsError::Unsupported("compose cc"))
+        ));
         assert!(calls.is_empty() && st.kept.is_empty() && !root.exists());
     }
 
@@ -237,7 +248,7 @@ mod tests {
             },
         );
         assert!(
-            matches!(r, Err(DeviceError::Internal(l)) if l == fandhe_device::compose_mail_sms::CLEANUP)
+            matches!(r, Err(ComposeMailSmsError::Internal(l)) if l == crate::contract::CLEANUP)
         );
         assert_eq!(*n.borrow(), 0);
     }

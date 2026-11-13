@@ -248,6 +248,9 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 機器からの取り込みの保留中の要求と処理済み世代も破棄する（画面状態は再生成で generation 0 に戻るため、残すと次の取り込みが飲み込まれる）（`fandhe_cap_scanner_devices::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_scanner_devices::reset_pending_tracking();
+    // メール・SMS 作成の保留中の要求も破棄する（`bridge::SLOT` はプロセス static のため再生成をまたいで残る。`fandhe_cap_compose_mail_sms::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_compose_mail_sms::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 

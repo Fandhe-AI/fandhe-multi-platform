@@ -107,7 +107,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "compose_mail_sms" => fandhe_core::screens::compose_mail_sms::current_screen,
-    fandhe_egui_proxy::device::compose_mail_sms::compose_mail_sms_effect,
+    fandhe_cap_compose_mail_sms::compose_mail_sms_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "open_system_settings_show" => fandhe_core::screens::open_system_settings_show::current_screen,

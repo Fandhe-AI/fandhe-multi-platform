@@ -1,6 +1,6 @@
 //! Windows 向けメール・SMS 作成画面の実装（Issue #1384・#31）。`ShellExecuteW` で `mailto:` /
 //! `sms:` URL を開き、既定のハンドラの作成画面を出す。`device/compose_mail_sms.rs` の Windows 経路から呼ばれ、
-//! 契約は `fandhe_device::compose_mail_sms`。渡すのは `ComposeRequest::to_url` が組み立てた
+//! 契約は `crate::contract`。渡すのは `ComposeRequest::to_url` が組み立てた
 //! `mailto:` / `sms:` URL の 2 種だけで、scheme は固定。任意の scheme・パス・引数を渡す経路は作らない。
 //! 添付付きの要求は URL で渡せないため、Simple MAPI（`MAPISendMailW`）を作業スレッドで呼ぶ
 //! （[`begin_attachment`]、Issue #1043・親 #156）。`compose` 自体は添付付きを `to_url` の
@@ -41,15 +41,15 @@
 //!   （ponytail: 事前に `AssocQueryStringW` で調べれば `NoHandler` を確実にできる。必要になったら足す）
 //! - URL が 2083 文字を超える場合の挙動は OS 依存で、失敗は `Internal` に倒れる
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::time::Instant;
 
-use fandhe_device::compose_mail_sms::{ComposeOutcome, ComposeRequest, BUSY, MAPI};
-use fandhe_device::DeviceError;
+use crate::contract::{BUSY, ComposeOutcome, ComposeRequest, MAPI};
+use crate::error::ComposeMailSmsError;
 
-use super::compose_attachment_file::Store;
+use crate::compose_attachment_file::Store;
 
 /// `SE_ERR_NOASSOC`（関連付けが無い）。Windows では共通層の定義を使い、ホストのテストでも写像を検証できるよう
 /// それ以外の OS では同じ値（`ShellExecuteW` の公式の表）を置く。
@@ -61,21 +61,21 @@ pub(crate) const SE_ERR_NOASSOC: isize = 31;
 /// `ShellExecuteW` の戻り値 → 結果の写像（SSOT）。公式の表のとおり `> 32` が成功、
 /// 31 が関連付け無し、それ以外（0〜32 の他のエラー値）は失敗。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub(crate) fn outcome_from_shell(code: isize) -> Result<ComposeOutcome, DeviceError> {
+pub(crate) fn outcome_from_shell(code: isize) -> Result<ComposeOutcome, ComposeMailSmsError> {
     match code {
         c if c > 32 => Ok(ComposeOutcome::HandedOff),
         SE_ERR_NOASSOC => Ok(ComposeOutcome::NoHandler),
-        _ => Err(DeviceError::Internal("compose present")),
+        _ => Err(ComposeMailSmsError::Internal("compose present")),
     }
 }
 
 /// `MAPISendMailW` の戻り値 → 結果の写像（SSOT）。0 が成功、1（`MAPI_USER_ABORT`）が利用者の取り消し、
 /// それ以外（新しい Outlook の `MAPI_E_FAILURE` を含む）はすべて失敗。成功へ畳まない。
-pub(crate) fn outcome_from_mapi(code: u32) -> Result<ComposeOutcome, DeviceError> {
+pub(crate) fn outcome_from_mapi(code: u32) -> Result<ComposeOutcome, ComposeMailSmsError> {
     match code {
         0 => Ok(ComposeOutcome::HandedOff),
         1 => Ok(ComposeOutcome::Cancelled),
-        _ => Err(DeviceError::Internal(MAPI)),
+        _ => Err(ComposeMailSmsError::Internal(MAPI)),
     }
 }
 
@@ -145,20 +145,20 @@ pub(crate) fn run_attachment(
     store: &Mutex<Store>,
     now: Instant,
     send: impl FnOnce(&mut MapiMail) -> u32,
-) -> Result<ComposeOutcome, DeviceError> {
+) -> Result<ComposeOutcome, ComposeMailSmsError> {
     let a = req
         .attachment()
-        .ok_or(DeviceError::Unsupported("compose attachment"))?;
+        .ok_or(ComposeMailSmsError::Unsupported("compose attachment"))?;
     let file = lock(store).prepare(a, now)?;
     let Some(mut mail) = mapi_mail(req, file.path()) else {
         lock(store).discard(file);
-        return Err(DeviceError::Unsupported("compose attachment"));
+        return Err(ComposeMailSmsError::Unsupported("compose attachment"));
     };
     // `send` が panic しても一時ファイルを破棄してから失敗を返す（契約表 9）。
     let code = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| send(&mut mail)));
     lock(store).discard(file);
     code.map_or(
-        Err(DeviceError::Internal("compose present")),
+        Err(ComposeMailSmsError::Internal("compose present")),
         outcome_from_mapi,
     )
 }
@@ -177,20 +177,20 @@ impl Drop for BusyGuard {
 /// `deliver` は呼ばれない。前の画面が開いている間は `Internal(BUSY)`。
 pub(crate) fn begin_attachment_with(
     req: ComposeRequest,
-    deliver: impl FnOnce(Result<ComposeOutcome, DeviceError>) + Send + 'static,
+    deliver: impl FnOnce(Result<ComposeOutcome, ComposeMailSmsError>) + Send + 'static,
     busy: &'static AtomicBool,
     store: &'static Mutex<Store>,
     send: impl FnOnce(&mut MapiMail) -> u32 + Send + 'static,
-) -> Result<JoinHandle<()>, DeviceError> {
+) -> Result<JoinHandle<()>, ComposeMailSmsError> {
     if req.attachment().is_none() {
-        return Err(DeviceError::Unsupported("compose attachment"));
+        return Err(ComposeMailSmsError::Unsupported("compose attachment"));
     }
     // 判定と更新を 1 操作で行う（契約表 2）。
     if busy
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
         .is_err()
     {
-        return Err(DeviceError::Internal(BUSY));
+        return Err(ComposeMailSmsError::Internal(BUSY));
     }
     let guard = BusyGuard(busy);
     // スレッドを起動できなければ closure ごと guard が落ちて解除される。
@@ -200,11 +200,11 @@ pub(crate) fn begin_attachment_with(
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 run_attachment(&req, store, Instant::now(), send)
             }))
-            .unwrap_or(Err(DeviceError::Internal("compose present")));
+            .unwrap_or(Err(ComposeMailSmsError::Internal("compose present")));
             drop(guard);
             deliver(result);
         })
-        .map_err(|_| DeviceError::Internal("compose present"))
+        .map_err(|_| ComposeMailSmsError::Internal("compose present"))
 }
 
 /// 前の作成画面が開いている間 `true`（プロセス内で 1 件）。
@@ -215,13 +215,13 @@ static IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "windows")]
 pub(crate) fn begin_attachment(
     req: ComposeRequest,
-    deliver: impl FnOnce(Result<ComposeOutcome, DeviceError>) + Send + 'static,
-) -> Result<(), DeviceError> {
+    deliver: impl FnOnce(Result<ComposeOutcome, ComposeMailSmsError>) + Send + 'static,
+) -> Result<(), ComposeMailSmsError> {
     begin_attachment_with(
         req,
         deliver,
         &IN_FLIGHT,
-        &super::compose_attachment_file::STORE,
+        &crate::compose_attachment_file::STORE,
         ffi::send,
     )
     .map(drop)
@@ -232,14 +232,14 @@ pub(crate) fn begin_attachment(
 mod ffi {
     use std::sync::OnceLock;
 
-    use windows::core::{s, w, PWSTR};
-    use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
+    use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
     use windows::Win32::System::LibraryLoader::{
-        GetProcAddress, LoadLibraryExW, LOAD_LIBRARY_SEARCH_SYSTEM32,
+        GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
     };
     use windows::Win32::System::Mapi::{
-        MapiFileDescW, MapiMessageW, MapiRecipDescW, MAPI_DIALOG, MAPI_LOGON_UI,
+        MAPI_DIALOG, MAPI_LOGON_UI, MapiFileDescW, MapiMessageW, MapiRecipDescW,
     };
+    use windows::core::{PWSTR, s, w};
 
     use super::MapiMail;
 
@@ -328,11 +328,11 @@ mod ffi {
 struct WindowsComposeMailSms;
 
 #[cfg(target_os = "windows")]
-impl fandhe_device::compose_mail_sms::ComposeMailSms for WindowsComposeMailSms {
+impl crate::contract::ComposeMailSms for WindowsComposeMailSms {
     fn compose(
         &self,
-        req: &fandhe_device::compose_mail_sms::ComposeRequest,
-    ) -> Result<ComposeOutcome, DeviceError> {
+        req: &crate::contract::ComposeRequest,
+    ) -> Result<ComposeOutcome, ComposeMailSmsError> {
         outcome_from_shell(open_url(&req.to_url()?))
     }
 }
@@ -343,7 +343,7 @@ pub(crate) use fandhe_platform_windows::open_url;
 
 /// Windows の `ComposeMailSms` 実装を返す（`device/compose_mail_sms.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "windows")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::compose_mail_sms::ComposeMailSms> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::ComposeMailSms> {
     Box::new(WindowsComposeMailSms)
 }
 
@@ -353,19 +353,14 @@ mod tests {
 
     use std::sync::mpsc;
 
-    use super::super::compose_attachment_file::{fail_remove, test_store};
+    use crate::compose_attachment_file::{fail_remove, test_store};
 
     fn att_req(to: &[&str], cc: &[&str], bcc: &[&str], body: &str) -> ComposeRequest {
         let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
         ComposeRequest::mail(&s(to), &s(cc), &s(bcc), " 件名 ", body)
             .unwrap()
             .with_attachment(
-                fandhe_device::compose_mail_sms::ComposeAttachment::new(
-                    "a.txt",
-                    "text/plain",
-                    b"x",
-                )
-                .unwrap(),
+                crate::contract::ComposeAttachment::new("a.txt", "text/plain", b"x").unwrap(),
             )
             .unwrap()
     }
@@ -384,7 +379,7 @@ mod tests {
         assert_eq!(outcome_from_mapi(1).unwrap(), ComposeOutcome::Cancelled);
         for c in (2..=27).chain([u32::MAX]) {
             assert!(
-                matches!(outcome_from_mapi(c), Err(DeviceError::Internal(l)) if l == MAPI),
+                matches!(outcome_from_mapi(c), Err(ComposeMailSmsError::Internal(l)) if l == MAPI),
                 "{c}"
             );
         }
@@ -466,7 +461,7 @@ mod tests {
         });
         assert!(matches!(
             out,
-            Err(DeviceError::Internal(l)) if l == fandhe_device::compose_mail_sms::CLEANUP
+            Err(ComposeMailSmsError::Internal(l)) if l == crate::contract::CLEANUP
         ));
         assert!(!called);
     }
@@ -497,7 +492,7 @@ mod tests {
             store,
             |_| panic!("send not called"),
         );
-        assert!(matches!(second, Err(DeviceError::Internal(BUSY))));
+        assert!(matches!(second, Err(ComposeMailSmsError::Internal(BUSY))));
         hold_tx.send(()).unwrap();
         let (res, busy_in_deliver) = res_rx.recv().unwrap();
         h.join().unwrap();
@@ -512,7 +507,7 @@ mod tests {
         let busy = leaked_flag();
         let plain = ComposeRequest::mail(&["a@b.c".to_string()], &[], &[], "", "").unwrap();
         let r = begin_attachment_with(plain, |_| {}, busy, leaked_store(), |_| 0);
-        assert!(matches!(r, Err(DeviceError::Unsupported(_))));
+        assert!(matches!(r, Err(ComposeMailSmsError::Unsupported(_))));
         assert!(!busy.load(Ordering::SeqCst));
     }
 

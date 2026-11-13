@@ -184,7 +184,7 @@ fn main_activity_filters(t: &[Tag]) -> Vec<IntentFilter> {
 fn android_manifest_overlay_matches_current_manifest() {
     let cur = tags(&repo("platforms/android/app/src/main/AndroidManifest.xml"));
     let gen = tags(&gallery()["android/AndroidManifest.xml"]);
-    // 権限・feature は生成側の各要素が現行にあり（属性まで同じ）、宣言が無い camera・NFC の feature は現行にも無い。
+    // 権限・feature は生成側の各要素が現行にあり（属性まで同じ）、宣言が無い camera の feature は現行にも無い。
     for (kind, key) in [("uses-permission", "name"), ("uses-feature", "name")] {
         let g: Vec<_> = gen.iter().filter(|(k, _)| k == kind).collect();
         assert!(!g.is_empty(), "{kind} が生成されていない");
@@ -206,10 +206,11 @@ fn android_manifest_overlay_matches_current_manifest() {
         names(&cur, "android.hardware.camera"),
         names(&gen, "android.hardware.camera")
     );
-    // android.hardware.nfc は nfc（タグ読み取り）の宣言で、HCE の宣言ではない。
-    let mut cur_nfc = names(&cur, "android.hardware.nfc");
-    assert!(cur_nfc.remove("android.hardware.nfc"));
-    assert_eq!(cur_nfc, names(&gen, "android.hardware.nfc"));
+    // android.hardware.nfc は nfc（タグ読み取り、`fandhe-cap-nfc`）の宣言、android.hardware.nfc.hce は nfc-card-emulation の宣言。
+    assert_eq!(
+        names(&cur, "android.hardware.nfc"),
+        names(&gen, "android.hardware.nfc")
+    );
 
     // コンポーネントは宣言ごとに、生成側と現行が同じ型の値になる。
     let mut n = 0;

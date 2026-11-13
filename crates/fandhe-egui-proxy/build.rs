@@ -136,8 +136,6 @@ fn build() {
     compile_ios_fullscreen_immersive();
     // `ios/fandhe_ios_screen_orientation.m`（Issue #656）。iOS 分岐のみ。
     compile_ios_screen_orientation();
-    // `ios/fandhe_ios_compose_mail_sms.m`（Issue #1385）。iOS 分岐のみ。
-    compile_ios_compose_mail_sms();
     // `ios/fandhe_ios_print.m`（Issue #327）。iOS 分岐のみ。
     compile_ios_print();
     // `ios/fandhe_ios_device_info.m`（Issue #1305）。iOS 分岐のみ。
@@ -539,12 +537,6 @@ fn compile_macos_bluetooth_classic() {
     );
 }
 
-/// `macos/fandhe_macos_compose_mail_sms.m` を `cc` でコンパイルする（Issue #1384）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_compose_mail_sms.rs` が使う）。
-fn compile_macos_compose_mail_sms() {
-    compile_objc("macos/fandhe_macos_compose_mail_sms.m", &["AppKit"]);
-}
-
 /// `macos/fandhe_macos_video_capture.m` を `cc` でコンパイルし AVFoundation・CoreMedia・QuartzCore をリンクする
 /// （Issue #1071）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_video_capture.rs` が使う）。
 fn compile_macos_video_capture() {
@@ -615,12 +607,6 @@ fn compile_ios_screen_orientation() {
         "ios/fandhe_ios_screen_orientation.m",
         &["Foundation", "UIKit"],
     );
-}
-
-/// `ios/fandhe_ios_compose_mail_sms.m` を `cc` でコンパイルし MessageUI をリンクする（Issue #1385）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_compose_mail_sms.rs` が使う）。
-fn compile_ios_compose_mail_sms() {
-    compile_objc("ios/fandhe_ios_compose_mail_sms.m", &["MessageUI", "UIKit"]);
 }
 
 /// `ios/fandhe_ios_web_auth_session.m` を `cc` でコンパイルし AuthenticationServices をリンクする（Issue #532）。
@@ -813,8 +799,6 @@ fn build_macos() {
     compile_macos_window_management();
     // `macos/fandhe_macos_launch_at_login.m`（Issue #696）も macOS 専用。ServiceManagement をリンクする。
     compile_macos_launch_at_login();
-    // `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384）も macOS 専用。
-    compile_macos_compose_mail_sms();
     // `macos/fandhe_macos_video_capture.m`（Issue #1071）も macOS 専用。AVFoundation 等をリンクする。
     compile_macos_video_capture();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。

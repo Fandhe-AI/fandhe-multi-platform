@@ -63,7 +63,7 @@ const MAIL_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 const SMS_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
 const ATTACH_BUTTON_ID: WidgetId = WidgetId::from_raw(3);
 
-/// 作成画面の種類（`fandhe_device::compose_mail_sms::ComposeKind` に対応。写像は proxy 側）。
+/// 作成画面の種類（`fandhe_cap_compose_mail_sms::ComposeKind` に対応。写像は機能 crate の driver 側）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComposeTarget {
     /// メール。

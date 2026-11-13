@@ -3,8 +3,8 @@
 //! `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しと結果コールバックに閉じる。
 //!
 //! 結果は `.m` の delegate から [`fandhe_rust_compose_mail_sms_outcome`] が呼ばれ、
-//! `compose_mail_sms::bridge`（pull 型・`RequestSlot`）へ置く。コード表は
-//! `compose_mail_sms::outcome_from_ios_code`。
+//! `driver::bridge`（pull 型・`RequestSlot`）へ置く。コード表は
+//! `driver::outcome_from_ios_code`。
 //!
 //! 契約表の対応: 1・2（delegate は static 強参照、`done` フラグと `request_id` 照合で二重・古い通知を捨てる）、
 //! 4（コールバック直後に `request_repaint`）、5（main queue・`@autoreleasepool`）、
@@ -13,10 +13,10 @@
 //! 添付（Issue #32）は一時ファイルを作らず `addAttachmentData:` へ NSData で渡す（契約表 9）。
 //! 宛先・件名・本文・添付はログへ出さない。
 
-use fandhe_device::compose_mail_sms::{ComposeKind, ComposeRequest};
+use crate::contract::{ComposeKind, ComposeRequest};
 #[cfg(not(target_os = "ios"))]
-use fandhe_device::compose_mail_sms::{ComposeMailSms, UnsupportedComposeMailSms};
-use fandhe_device::DeviceError;
+use crate::contract::{ComposeMailSms, UnsupportedComposeMailSms};
+use crate::error::ComposeMailSmsError;
 
 /// `.m` 側へ渡す種別コード（0 = メール、1 = SMS）。
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -50,9 +50,12 @@ unsafe extern "C" {
 /// `deliver` する）。`Ok` なら結果は後で [`fandhe_rust_compose_mail_sms_outcome`] が届ける。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-pub(crate) fn begin_compose(request_id: u64, req: &ComposeRequest) -> Result<(), DeviceError> {
+pub(crate) fn begin_compose(
+    request_id: u64,
+    req: &ComposeRequest,
+) -> Result<(), ComposeMailSmsError> {
     use std::ffi::CString;
-    const PRESENT: DeviceError = DeviceError::Internal("compose present");
+    const PRESENT: ComposeMailSmsError = ComposeMailSmsError::Internal("compose present");
     // `ComposeRequest` が NUL を含む制御文字を弾いているため通常は失敗しない。
     // 各リストは `\n` 連結で渡す（`\n` は検証で拒否される文字で宛先に現れない。`.m` 側で配列へ戻す）。
     let (Ok(to), Ok(cc), Ok(bcc), Ok(subject), Ok(body)) = (
@@ -92,16 +95,15 @@ pub(crate) fn begin_compose(request_id: u64, req: &ComposeRequest) -> Result<(),
             att_name.as_ptr(),
         )
     };
-    if code == 0 {
-        Ok(())
-    } else {
-        Err(PRESENT)
-    }
+    if code == 0 { Ok(()) } else { Err(PRESENT) }
 }
 
 /// ホストのテストビルドでは実体が無いため非対応を返す。
 #[cfg(not(target_os = "ios"))]
-pub(crate) fn begin_compose(_request_id: u64, req: &ComposeRequest) -> Result<(), DeviceError> {
+pub(crate) fn begin_compose(
+    _request_id: u64,
+    req: &ComposeRequest,
+) -> Result<(), ComposeMailSmsError> {
     UnsupportedComposeMailSms.compose(req).map(|_| ())
 }
 
@@ -109,13 +111,10 @@ pub(crate) fn begin_compose(_request_id: u64, req: &ComposeRequest) -> Result<()
 /// 結果を置いた直後に次フレームを起こす（egui は入力が無いと描画せず、画面が処理中のまま止まるため）。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_compose_mail_sms_outcome(request_id: u64, code: i32) {
-    super::compose_mail_sms::bridge::deliver(
-        request_id,
-        super::compose_mail_sms::outcome_from_ios_code(code),
-    );
-    crate::ios::request_repaint();
+    crate::driver::bridge::deliver(request_id, crate::driver::outcome_from_ios_code(code));
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]
@@ -134,7 +133,7 @@ mod tests {
         let req = ComposeRequest::sms("", "b").unwrap();
         assert!(matches!(
             begin_compose(1, &req),
-            Err(DeviceError::Unsupported("compose"))
+            Err(ComposeMailSmsError::Unsupported("compose"))
         ));
     }
 }

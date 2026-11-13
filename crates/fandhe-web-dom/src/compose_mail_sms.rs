@@ -9,7 +9,7 @@
 //!
 //! # 結果の写像
 //!
-//! - 入力不正: URL へ遷移せず `Invalid`（文言は `fandhe-egui-proxy/src/device/compose_mail_sms.rs`
+//! - 入力不正: URL へ遷移せず `Invalid`（文言は `fandhe-cap-compose-mail-sms`（`src/driver.rs`）
 //!   の `to_outcome` と同期する）
 //! - `window` が無い: `Unsupported`
 //! - `set_href` が成功: `HandedOff`（ブラウザへ渡した、まで。ハンドラの有無・送信は取れない）
@@ -26,11 +26,11 @@
 //! 守らない: ハンドラの有無、作成画面を開いた後の利用者の操作、ブラウザ差による
 //! ページ遷移扱い、デスクトップでの `sms:` の無反応、複数タブ、wasm canvas 経路。
 
+use fandhe_cap_compose_mail_sms::ComposeMailSmsError;
+use fandhe_cap_compose_mail_sms::{ComposeAttachment, ComposeRequest};
 use fandhe_core::screens::compose_mail_sms::{
     ComposeFailure, ComposeRequestView, ComposeTarget, CoreOutcome,
 };
-use fandhe_device::compose_mail_sms::{ComposeAttachment, ComposeRequest};
-use fandhe_device::DeviceError;
 
 /// 遷移拒否の固定文言（例外の内容は含めない）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -38,7 +38,7 @@ const NAVIGATE_FAILED: &str = "ブラウザが作成画面への遷移を拒否�
 
 /// 画面の要求を検証済みの `ComposeRequest` にする。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, DeviceError> {
+fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, ComposeMailSmsError> {
     match view.target {
         ComposeTarget::Mail => {
             let req =
@@ -52,7 +52,9 @@ fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, DeviceErro
                 None => Ok(req),
             }
         }
-        ComposeTarget::Sms if view.to.len() > 1 => Err(DeviceError::InvalidInput("compose to")),
+        ComposeTarget::Sms if view.to.len() > 1 => {
+            Err(ComposeMailSmsError::InvalidInput("compose to"))
+        }
         ComposeTarget::Sms => {
             ComposeRequest::sms(view.to.first().map_or("", String::as_str), &view.body)
         }
@@ -61,15 +63,15 @@ fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, DeviceErro
 
 /// 入力不正を画面用の失敗にする。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-fn invalid_failure(e: DeviceError) -> ComposeFailure {
+fn invalid_failure(e: ComposeMailSmsError) -> ComposeFailure {
     ComposeFailure::Invalid(
         match e {
-            DeviceError::InvalidInput("compose to") => "宛先",
-            DeviceError::InvalidInput("compose cc") => "CC",
-            DeviceError::InvalidInput("compose bcc") => "BCC",
-            DeviceError::InvalidInput("compose subject") => "件名",
-            DeviceError::InvalidInput("compose body") => "本文",
-            DeviceError::InvalidInput("compose attachment") => "添付",
+            ComposeMailSmsError::InvalidInput("compose to") => "宛先",
+            ComposeMailSmsError::InvalidInput("compose cc") => "CC",
+            ComposeMailSmsError::InvalidInput("compose bcc") => "BCC",
+            ComposeMailSmsError::InvalidInput("compose subject") => "件名",
+            ComposeMailSmsError::InvalidInput("compose body") => "本文",
+            ComposeMailSmsError::InvalidInput("compose attachment") => "添付",
             _ => "入力",
         }
         .to_string(),
@@ -173,7 +175,7 @@ mod tests {
         // 遷移せず Unsupported にする根拠（mailto: は添付を持てない）。
         assert!(matches!(
             r.to_url(),
-            Err(DeviceError::Unsupported("compose attachment"))
+            Err(ComposeMailSmsError::Unsupported("compose attachment"))
         ));
     }
 
@@ -192,7 +194,7 @@ mod tests {
         let e = build_request(&v).unwrap_err();
         assert_eq!(invalid_failure(e), ComposeFailure::Invalid("件名".into()));
         assert_eq!(
-            invalid_failure(DeviceError::InvalidInput("x")),
+            invalid_failure(ComposeMailSmsError::InvalidInput("x")),
             ComposeFailure::Invalid("入力".into())
         );
     }

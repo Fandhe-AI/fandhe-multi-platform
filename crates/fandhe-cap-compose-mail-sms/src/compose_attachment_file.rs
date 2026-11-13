@@ -1,7 +1,7 @@
 //! メール作成画面へ渡す添付の一時ファイルの置き場（Issue #1042、親 #156）。
 //! `device/macos_compose_mail_sms.rs`（`NSSharingService`、渡した後も残す）と、#1043 の
-//! `device/windows_compose_mail_sms.rs`（Simple MAPI、戻ったらすぐ消す）が共用する。契約は
-//! `fandhe_device::compose_mail_sms` のモジュール doc。
+//! `windows`（`src/windows.rs`）（Simple MAPI、戻ったらすぐ消す）が共用する。契約は
+//! `crate::contract` のモジュール doc。
 //!
 //! 置き場（root）は固定名にせず、プロセスごとに初回の [`Store::prepare`] で
 //! `temp_dir()/fandhe-compose-<pid>-<n>` を `create_dir`（unix は 0o700）で新しく作る。既存のものは受け入れず
@@ -21,8 +21,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use fandhe_device::compose_mail_sms::{ComposeAttachment, ATTACHMENT_FILE, CLEANUP};
-use fandhe_device::DeviceError;
+use crate::contract::{ATTACHMENT_FILE, CLEANUP, ComposeAttachment};
+use crate::error::ComposeMailSmsError;
 
 /// 渡した後に残す一時ファイルの回収までの時間（Rust 側だけに置く）。
 const RECYCLE_AFTER: Duration = Duration::from_secs(600);
@@ -82,7 +82,7 @@ impl Store {
     /// 空にして新しく作り直す。シンボリックリンク・ファイルへ差し替わった、または取得失敗なら、
     /// そのパス経由では何も消さず `CLEANUP` を返す（差し替え先を消さないため）。
     /// root が無ければ親の下に新しく作る（既存は受け入れない）。
-    fn ensure_root(&mut self) -> Result<PathBuf, DeviceError> {
+    fn ensure_root(&mut self) -> Result<PathBuf, ComposeMailSmsError> {
         if let Some(r) = &self.root {
             match std::fs::symlink_metadata(r) {
                 Ok(m) if m.is_dir() => return Ok(r.clone()),
@@ -91,10 +91,10 @@ impl Store {
                     self.kept.clear();
                     self.stale.clear();
                 }
-                _ => return Err(DeviceError::Internal(CLEANUP)),
+                _ => return Err(ComposeMailSmsError::Internal(CLEANUP)),
             }
         }
-        let fail = || DeviceError::Internal(ATTACHMENT_FILE);
+        let fail = || ComposeMailSmsError::Internal(ATTACHMENT_FILE);
         let parent = self.parent.clone().unwrap_or_else(std::env::temp_dir);
         std::fs::create_dir_all(&parent).map_err(|_| fail())?;
         #[cfg_attr(not(unix), allow(unused_mut))]
@@ -134,8 +134,8 @@ impl Store {
         &mut self,
         a: &ComposeAttachment,
         now: Instant,
-    ) -> Result<AttachmentFile, DeviceError> {
-        let fail = || DeviceError::Internal(ATTACHMENT_FILE);
+    ) -> Result<AttachmentFile, ComposeMailSmsError> {
+        let fail = || ComposeMailSmsError::Internal(ATTACHMENT_FILE);
         let root = self.ensure_root()?;
         let stale = std::mem::take(&mut self.stale);
         for p in stale {
@@ -149,7 +149,7 @@ impl Store {
             self.remove_or_stale(p);
         }
         if !self.stale.is_empty() {
-            return Err(DeviceError::Internal(CLEANUP));
+            return Err(ComposeMailSmsError::Internal(CLEANUP));
         }
         // 既存のディレクトリは再利用しない。PID 再利用で前プロセスの残りと同名になったら連番を進めて別名を取る。
         let mut tries = 0;
@@ -332,7 +332,7 @@ mod tests {
         s.discard(f);
         assert_eq!(s.stale, vec![dir.clone()]);
         let e = s.prepare(&att(), Instant::now()).unwrap_err();
-        assert!(matches!(e, DeviceError::Internal(l) if l == CLEANUP));
+        assert!(matches!(e, ComposeMailSmsError::Internal(l) if l == CLEANUP));
         assert!(dir.exists());
         s.remove = remove_dir;
         let g = s.prepare(&att(), Instant::now()).unwrap();
@@ -371,7 +371,7 @@ mod tests {
         s.keep(f, t0);
         s.remove = fail_remove;
         let e = s.prepare(&att(), t0 + RECYCLE_AFTER).unwrap_err();
-        assert!(matches!(e, DeviceError::Internal(l) if l == CLEANUP));
+        assert!(matches!(e, ComposeMailSmsError::Internal(l) if l == CLEANUP));
         assert_eq!(s.stale, vec![dir.clone()]);
         assert!(s.kept.is_empty() && dir.exists());
         s.remove = remove_dir;
@@ -413,7 +413,7 @@ mod tests {
         std::os::unix::fs::symlink(&target, &root).unwrap();
         // 回収対象の時間を過ぎていても、リンク経由では何も消さない。
         let e = s.prepare(&att(), t0 + RECYCLE_AFTER).unwrap_err();
-        assert!(matches!(e, DeviceError::Internal(l) if l == CLEANUP));
+        assert!(matches!(e, ComposeMailSmsError::Internal(l) if l == CLEANUP));
         assert!(victim.exists());
         let _ = std::fs::remove_dir_all(parent);
     }

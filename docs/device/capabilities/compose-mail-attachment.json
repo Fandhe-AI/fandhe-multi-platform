@@ -14,7 +14,7 @@
       "note": "メールに 1 件だけ。NSData を直接渡すので一時ファイルは作らない（バイト列は FFI の return 前にコピー）。到達する結果は compose-mail-sms と同じ。SMS への添付は範囲外（`MFMessageComposeViewController` の `addAttachmentData:typeIdentifier:filename:` と `canSendAttachments` が使える見込みで、後続の候補）。シミュレータは `canSendMail` が false で NoHandler",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_compose_mail_sms.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_compose_mail_sms.m + crates/fandhe-device/src/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs、Issue #32"
+      "impl": "crates/fandhe-cap-compose-mail-sms/src/ios.rs + crates/fandhe-cap-compose-mail-sms/ios/fandhe_ios_compose_mail_sms.m + crates/fandhe-cap-compose-mail-sms/src/contract.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-cap-compose-mail-sms/src/driver.rs、Issue #32"
     },
     "android": {
       "status": "done",
@@ -24,7 +24,7 @@
       "note": "メールに 1 件だけ。保存先は `cache/compose/` 配下の要求ごとのディレクトリ。次回の添付要求時に 10 分より古いものだけを回収し、10 分以内の複数要求では複数件が残る。書き込み失敗と `startActivity` の例外では即削除し、`HandedOff` では受け手が後から読むため残す（10 分を過ぎた後の次回の添付要求と OS の cacheDir 掃除で消える）。FileProvider は exported=false・grantUriPermissions=true で、読み取り権限は Intent 単位のみ。新しい権限は足さない。既知の天井: 受け手が 10 分を超えて読まずに別の添付要求が来ると、その古い添付は読めなくなる（各 1 MiB 以下）、一部のメールアプリは selector 経由の `EXTRA_STREAM` を無視しうる。SMS（MMS）は範囲外",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_compose_mail_sms.rs + platforms/android/app/src/main/java/com/fandhe/platform/ComposeHelper.java + platforms/android/app/src/main/res/xml/compose_file_paths.xml + crates/fandhe-device/src/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs、Issue #32"
+      "impl": "crates/fandhe-egui-proxy/src/device/android_compose_mail_sms.rs + crates/fandhe-cap-compose-mail-sms/android/java/com/fandhe/platform/ComposeHelper.java + crates/fandhe-cap-compose-mail-sms/android/res/xml/compose_mail_file_paths.xml + crates/fandhe-cap-compose-mail-sms/src/contract.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-cap-compose-mail-sms/src/driver.rs、Issue #32"
     },
     "macos": {
       "status": "done",
@@ -41,7 +41,7 @@
       "note": "`mailto:` は添付を持てないため、添付付き要求を `mailto:` へ落とさず、添付を黙って落とすこともしない。CC / BCC を渡す API が無く、CC / BCC 付きの添付要求は `Unsupported(\"compose cc\")` を返す（To・件名・本文・添付のみ渡せる）。完了の通知は `didShareItems:` / `didFailToShareItems:error:` の 2 つで取り消しの通知が無く、作成画面を開いた時か送った時かも公式に記載が無いため、完了を待たず `HandedOff` を返す。Mail 以外が既定のとき `canPerformWithItems:` が NO になるという開発者の報告がある（非公式・Mac 目視で確認する）。添付の一時ファイルは `temp_dir` 配下にプロセスごとに新しく作った置き場（既存のディレクトリは受け入れない）の下へ要求ごとのディレクトリで作り、渡した後は残して、同じプロセスの次の添付要求で 10 分より古いものを回収する（経過時間は単調時計で測る）。前のプロセスが残したものは走査・回収せず、OS の一時領域の掃除に任せる。macOS の添付付きは proxy が CC / BCC を要求から外して画面にもその旨を出すので、通常は `Unsupported(\"compose cc\")` に当たらない（iOS / Android は CC / BCC も渡す）",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#1039）",
-      "impl": "crates/fandhe-egui-proxy/src/device/macos_compose_mail_sms.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_compose_mail_sms.m + crates/fandhe-egui-proxy/src/device/compose_attachment_file.rs + crates/fandhe-device/src/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs、Issue #1042"
+      "impl": "crates/fandhe-cap-compose-mail-sms/src/macos.rs + crates/fandhe-cap-compose-mail-sms/macos/fandhe_macos_compose_mail_sms.m + crates/fandhe-cap-compose-mail-sms/src/compose_attachment_file.rs + crates/fandhe-cap-compose-mail-sms/src/contract.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-cap-compose-mail-sms/src/driver.rs、Issue #1042"
     },
     "windows": {
       "status": "done",
@@ -57,7 +57,7 @@
       "note": "新しい Outlook は MAPI 連携に未対応（公式の既知の問題）。既定が新しい Outlook だと `MAPI_E_FAILURE` が返るという報告があり、固定文言の失敗として出す（`NoHandler` に読み替えない）。classic Outlook・Thunderbird 等の MAPI 対応アプリが既定なら作成画面が開く。`MAPI_DIALOG` の作成画面は modal で利用者が閉じるまで戻らないため作業スレッドで呼び、`MAPI_E_USER_ABORT` は `Cancelled`（失敗にしない）。添付は関数が返る前にメッセージへコピーされる（公式）ので、返った直後に一時ファイルを消す。既定のメールアプリが無いときは OS がメッセージを出して失敗を返す（公式・アーカイブ文書）。作業スレッドからの呼び出しと COM の apartment の要否は公式に記載が無く未確認（実機で確かめる）。CC / BCC は `MapiRecipDescW` の `ulRecipClass` で渡せる。実装上の事実: 作業スレッドで STA の COM を初期化して呼ぶ（要否は公式に無いため安全側、実機で確かめる）。`ulUIParam` は 0 で、作成画面はアプリの窓に従属しない（別スレッドの modal の親に UI スレッドの HWND を渡さない）。MIME type は MAPI に渡さず（`lpFileType` は null）受け手は拡張子で判断する。宛先は `lpszName` = アドレス、`lpszAddress` = `SMTP:` + アドレス（旧 Outlook / Thunderbird での効き方は実機で確かめる）。前の作成画面が開いている間の添付要求は `Internal(BUSY)`。`mapi32.dll` を解決できなければ `Internal(MAPI)`。戻った直後に一時ファイルを消し、削除に失敗したものは次の添付要求の前に消し直す。ビルド確認はローカルでは gnu ターゲットまで",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#1039）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_attachment_file.rs + crates/fandhe-device/src/compose_mail_sms.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/compose_mail_sms.rs、Issue #1043"
+      "impl": "crates/fandhe-cap-compose-mail-sms/src/windows.rs + crates/fandhe-cap-compose-mail-sms/src/compose_attachment_file.rs + crates/fandhe-cap-compose-mail-sms/src/contract.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs + crates/fandhe-cap-compose-mail-sms/src/driver.rs、Issue #1043"
     },
     "web": {
       "status": "no",

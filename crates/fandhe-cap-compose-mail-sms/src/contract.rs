@@ -98,7 +98,7 @@
 //! 実機確認（#1383、Windows は #34）で確かめる。固定タイムアウトは掛けない。宛先・件名・本文・URL はログへ出さない
 //! （security.md A09）。
 
-use crate::DeviceError;
+use crate::error::ComposeMailSmsError;
 
 /// 作成画面の種類。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -142,7 +142,8 @@ pub const BUSY: &str = "compose busy";
 /// MAPI が失敗を返した（Windows の添付付き。`NoHandler` に読み替えない）。
 pub const MAPI: &str = "compose mapi";
 
-const INVALID_ATTACHMENT: DeviceError = DeviceError::InvalidInput("compose attachment");
+const INVALID_ATTACHMENT: ComposeMailSmsError =
+    ComposeMailSmsError::InvalidInput("compose attachment");
 
 fn valid_attach_name(n: &str) -> bool {
     (1..=ATTACH_NAME_MAX_BYTES).contains(&n.len())
@@ -173,7 +174,7 @@ pub struct ComposeAttachment {
 
 impl ComposeAttachment {
     /// 添付を作る。規則はモジュール doc。違反は `InvalidInput("compose attachment")`。
-    pub fn new(file_name: &str, mime_type: &str, data: &[u8]) -> Result<Self, DeviceError> {
+    pub fn new(file_name: &str, mime_type: &str, data: &[u8]) -> Result<Self, ComposeMailSmsError> {
         if !valid_attach_name(file_name)
             || !valid_attach_mime(mime_type)
             || data.is_empty()
@@ -213,11 +214,11 @@ pub struct ComposeRequest {
     attachment: Option<ComposeAttachment>,
 }
 
-const INVALID_TO: DeviceError = DeviceError::InvalidInput("compose to");
-const INVALID_CC: DeviceError = DeviceError::InvalidInput("compose cc");
-const INVALID_BCC: DeviceError = DeviceError::InvalidInput("compose bcc");
-const INVALID_SUBJECT: DeviceError = DeviceError::InvalidInput("compose subject");
-const INVALID_BODY: DeviceError = DeviceError::InvalidInput("compose body");
+const INVALID_TO: ComposeMailSmsError = ComposeMailSmsError::InvalidInput("compose to");
+const INVALID_CC: ComposeMailSmsError = ComposeMailSmsError::InvalidInput("compose cc");
+const INVALID_BCC: ComposeMailSmsError = ComposeMailSmsError::InvalidInput("compose bcc");
+const INVALID_SUBJECT: ComposeMailSmsError = ComposeMailSmsError::InvalidInput("compose subject");
+const INVALID_BODY: ComposeMailSmsError = ComposeMailSmsError::InvalidInput("compose body");
 
 fn valid_mail_to(to: &str) -> bool {
     let Some((local, domain)) = to.split_once('@') else {
@@ -294,7 +295,7 @@ impl ComposeRequest {
         bcc: &[S],
         subject: &str,
         body: &str,
-    ) -> Result<Self, DeviceError> {
+    ) -> Result<Self, ComposeMailSmsError> {
         if !valid_recipients(to, 1) {
             return Err(INVALID_TO);
         }
@@ -322,7 +323,7 @@ impl ComposeRequest {
     }
 
     /// SMS 要求。宛先は空を許し、文字は数字・先頭の `+`・`- . ( )` だけ。
-    pub fn sms(to: &str, body: &str) -> Result<Self, DeviceError> {
+    pub fn sms(to: &str, body: &str) -> Result<Self, ComposeMailSmsError> {
         if !valid_sms_to(to) {
             return Err(INVALID_TO);
         }
@@ -345,7 +346,7 @@ impl ComposeRequest {
     }
 
     /// 添付を付ける。SMS の要求には付けられない（`InvalidInput("compose attachment")`）。
-    pub fn with_attachment(mut self, a: ComposeAttachment) -> Result<Self, DeviceError> {
+    pub fn with_attachment(mut self, a: ComposeAttachment) -> Result<Self, ComposeMailSmsError> {
         if self.kind != ComposeKind::Mail {
             return Err(INVALID_ATTACHMENT);
         }
@@ -385,9 +386,9 @@ impl ComposeRequest {
     /// `mailto:`（RFC 6068）/ `sms:`（RFC 5724）の URL を組み立てる。Web と、添付なしの macOS / Windows が共用する。
     /// 本文の改行は `\r\n` に正規化してから encode する。URL は添付を持てないため、
     /// 添付付きは `Unsupported("compose attachment")`（添付を黙って落とさない）。
-    pub fn to_url(&self) -> Result<String, DeviceError> {
+    pub fn to_url(&self) -> Result<String, ComposeMailSmsError> {
         if self.attachment.is_some() {
-            return Err(DeviceError::Unsupported("compose attachment"));
+            return Err(ComposeMailSmsError::Unsupported("compose attachment"));
         }
         let to = join_encoded(&self.to);
         let body = percent_encode(
@@ -415,15 +416,15 @@ impl ComposeRequest {
 /// メール・SMS の作成画面を開く OS 実装の抽象。呼び出し元は `fandhe-egui-proxy` の effect ドライバ。
 pub trait ComposeMailSms: Send + Sync {
     /// 作成画面を開く。結果の意味と OS ごとの到達値はモジュール doc。
-    fn compose(&self, req: &ComposeRequest) -> Result<ComposeOutcome, DeviceError>;
+    fn compose(&self, req: &ComposeRequest) -> Result<ComposeOutcome, ComposeMailSmsError>;
 }
 
 /// 非対応 OS 用。常に `Unsupported` を返し、成功を作らない。
 pub struct UnsupportedComposeMailSms;
 
 impl ComposeMailSms for UnsupportedComposeMailSms {
-    fn compose(&self, _req: &ComposeRequest) -> Result<ComposeOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("compose"))
+    fn compose(&self, _req: &ComposeRequest) -> Result<ComposeOutcome, ComposeMailSmsError> {
+        Err(ComposeMailSmsError::Unsupported("compose"))
     }
 }
 
@@ -452,21 +453,21 @@ mod tests {
             assert!(
                 matches!(
                     ComposeRequest::mail(&[to], &[], &[], "s", "b"),
-                    Err(DeviceError::InvalidInput("compose to"))
+                    Err(ComposeMailSmsError::InvalidInput("compose to"))
                 ),
                 "{to:?}"
             );
             assert!(
                 matches!(
                     ComposeRequest::mail(&["a@b.c"], &[to], &[], "s", "b"),
-                    Err(DeviceError::InvalidInput("compose cc"))
+                    Err(ComposeMailSmsError::InvalidInput("compose cc"))
                 ),
                 "cc {to:?}"
             );
             assert!(
                 matches!(
                     ComposeRequest::mail(&["a@b.c"], &[], &[to], "s", "b"),
-                    Err(DeviceError::InvalidInput("compose bcc"))
+                    Err(ComposeMailSmsError::InvalidInput("compose bcc"))
                 ),
                 "bcc {to:?}"
             );
@@ -484,19 +485,19 @@ mod tests {
         assert!(ComposeRequest::mail(&ten, &ten, &ten, "s", "b").is_ok());
         assert!(matches!(
             ComposeRequest::mail(&none, &none, &none, "s", "b"),
-            Err(DeviceError::InvalidInput("compose to"))
+            Err(ComposeMailSmsError::InvalidInput("compose to"))
         ));
         assert!(matches!(
             ComposeRequest::mail(&eleven, &none, &none, "s", "b"),
-            Err(DeviceError::InvalidInput("compose to"))
+            Err(ComposeMailSmsError::InvalidInput("compose to"))
         ));
         assert!(matches!(
             ComposeRequest::mail(&ten, &eleven, &none, "s", "b"),
-            Err(DeviceError::InvalidInput("compose cc"))
+            Err(ComposeMailSmsError::InvalidInput("compose cc"))
         ));
         assert!(matches!(
             ComposeRequest::mail(&ten, &none, &eleven, "s", "b"),
-            Err(DeviceError::InvalidInput("compose bcc"))
+            Err(ComposeMailSmsError::InvalidInput("compose bcc"))
         ));
     }
 
@@ -505,7 +506,7 @@ mod tests {
         for s in ["x\r\nBcc: a@b.c", "x\ny", "x\0"] {
             assert!(matches!(
                 ComposeRequest::mail(&["a@b.c"], &[], &[], s, "b"),
-                Err(DeviceError::InvalidInput("compose subject"))
+                Err(ComposeMailSmsError::InvalidInput("compose subject"))
             ));
         }
         assert!(ComposeRequest::mail(&["a@b.c"], &[], &[], &"あ".repeat(200), "b").is_ok());
@@ -513,7 +514,7 @@ mod tests {
         for b in ["a\rb", "a\0b", "a\u{7}b"] {
             assert!(matches!(
                 ComposeRequest::mail(&["a@b.c"], &[], &[], "s", b),
-                Err(DeviceError::InvalidInput("compose body"))
+                Err(ComposeMailSmsError::InvalidInput("compose body"))
             ));
         }
         assert!(ComposeRequest::sms("", &"a".repeat(1001)).is_err());
@@ -625,7 +626,7 @@ mod tests {
         assert!(req.attachment().is_some());
         assert!(matches!(
             req.to_url(),
-            Err(DeviceError::Unsupported("compose attachment"))
+            Err(ComposeMailSmsError::Unsupported("compose attachment"))
         ));
     }
 
@@ -634,7 +635,7 @@ mod tests {
         let req = ComposeRequest::sms("", "b").unwrap();
         assert!(matches!(
             UnsupportedComposeMailSms.compose(&req),
-            Err(DeviceError::Unsupported("compose"))
+            Err(ComposeMailSmsError::Unsupported("compose"))
         ));
     }
 }

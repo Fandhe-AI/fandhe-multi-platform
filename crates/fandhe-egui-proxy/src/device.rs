@@ -83,10 +83,6 @@ pub mod android_car_display;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_compass;
-/// Issue #1384: Android 向けメール・SMS 作成画面実装（`ComposeHelper` の `ACTION_SENDTO` を JNI で呼ぶ）。`device/compose_mail_sms.rs` の android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_compose_mail_sms;
 /// Issue #1279: Android 向けディープリンク（App Links）受信（https の `ACTION_VIEW` を JNI で受ける）。
 /// `device/deep_link.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -410,15 +406,6 @@ pub mod clipboard;
 /// Issue #1404（親 #1154）: 方位（コンパス）の effect ドライバ（Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedCompass` 固定。Web は `fandhe-web-dom`）。
 pub mod compass;
-/// Issue #1042（親 #156）: メール添付の一時ファイルの置き場（macOS は渡した後も残して 10 分で回収、
-/// Windows は戻ったらすぐ消す、#1043）。`macos_compose_mail_sms` / `windows_compose_mail_sms` が共用する。
-#[cfg(any(target_os = "macos", target_os = "windows", test))]
-#[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
-pub mod compose_attachment_file;
-/// Phase 11（親 #1142、Issue #1384）: メール・SMS 作成画面の effect ドライバ（macOS・Windows は同期、
-/// Windows の添付付きだけ作業スレッド（#1043）、iOS / Android は pull 型 `bridge`、他 OS は
-/// `UnsupportedComposeMailSms` 固定。Web は `fandhe-web-dom`）。
-pub mod compose_mail_sms;
 /// Phase 11 の拡充ループ（親 #1117、Issue #1220・#1221・#1222）: 連絡先選択の effect ドライバ
 /// （macOS / iOS / Android は pull 型 `bridge`、他 OS は兄弟 issue が入るまで
 /// `UnsupportedContactPicker` 固定）。
@@ -520,10 +507,6 @@ pub mod ios_capture_protection;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_compass;
-/// Issue #1385: iOS 向けメール・SMS 作成画面実装（`ios/fandhe_ios_compose_mail_sms.m` を呼ぶ C ABI ラッパー、MessageUI）。`device/compose_mail_sms.rs` の ios 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_compose_mail_sms;
 /// Issue #1305: iOS 向け端末・OS 情報実装（`ios/fandhe_ios_device_info.m` を呼ぶ C ABI ラッパー。
 /// #1304 のスタブを置き換え）。`device/device_info.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -667,10 +650,6 @@ pub mod macos_background_task;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_bluetooth_classic;
-/// Issue #1384: macOS 向けメール作成・SMS 作成画面実装（`macos/fandhe_macos_compose_mail_sms.m` を呼ぶ C ABI ラッパー）。`device/compose_mail_sms.rs` の macos 経路から呼ばれる。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_compose_mail_sms;
 /// Issue #1304: macOS 向け端末・OS 情報実装（`macos/fandhe_macos_device_info.m` を呼ぶ C ABI
 /// ラッパー）。`device/device_info.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
 /// テストできるよう cfg は `any(macos, test)`。
@@ -897,10 +876,6 @@ pub mod windows_capture_protection;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_compass;
-/// Issue #1384: Windows 向けメール・SMS 作成画面実装（`ShellExecuteW` で `mailto:` / `sms:`）。`device/compose_mail_sms.rs` の windows 経路から呼ばれる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_compose_mail_sms;
 /// Issue #1304: Windows 向け端末・OS 情報実装（`RtlGetVersion` / レジストリ / `GlobalMemoryStatusEx` /
 /// `GetDiskFreeSpaceExW`）。`device/device_info.rs` の Windows 経路から呼ばれる。写像の純関数を
 /// ホストでテストできるよう cfg は `any(windows, test)`。
