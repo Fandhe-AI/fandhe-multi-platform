@@ -17,7 +17,6 @@ use fandhe_core::screens::open_system_settings_show::{
     CoreOutcome, OpenSettingsFailure, OpenSystemSettingsState, SettingsTarget,
 };
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use crate::contract::OpenSystemSettings;
 #[cfg(any(target_os = "ios", target_os = "android"))]
 use fandhe_core::screens::open_system_settings_show::take_request;

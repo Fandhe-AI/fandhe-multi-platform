@@ -17,7 +17,6 @@ use fandhe_core::screens::external_app_launch_show::{
     CoreOutcome, ExternalAppLaunchState, ExternalLaunchFailure, LaunchKind,
 };
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use crate::contract::ExternalAppLaunch;
 #[cfg(any(target_os = "ios", target_os = "android"))]
 use fandhe_core::screens::external_app_launch_show::take_request;
