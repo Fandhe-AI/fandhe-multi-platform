@@ -19,7 +19,7 @@
 //!
 //! # ライフサイクル（契約表 1）
 //!
-//! - macOS: 窓が背面・最小化でも続ける。終了時は `fandhe-egui-proxy` の `device::shutdown` から [`MediaCast::release`] を呼ぶ
+//! - macOS: 窓が背面・最小化でも続ける。終了時は `fandhe-gallery` の終了フックから [`MediaCast::release`] を呼ぶ
 //! - iOS: 背景遷移で止めて [`CastPlayback::Interrupted`] にする
 //! - Web: `pagehide` で [`CastPlayback::Interrupted`] にする
 //!

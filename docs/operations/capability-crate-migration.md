@@ -114,8 +114,8 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 
 - 未移行のモジュールが使い続ける記号（例: `fandhe_device::http::{check_url, MAX_BODY_BYTES}`）は `fandhe-device` に残し、
   機能 crate が `fandhe-device` に依存して参照する。`fandhe-device` から機能 crate へは依存させない
-- 機能の終了時の片付け（`fandhe-egui-proxy::device::shutdown` が呼ぶ `stop_shared_*`）が残る間は、
-  `fandhe-egui-proxy` が該当の機能 crate へ optional 依存する（feature `device`。#1194 で消える過渡期の依存）
+- 機能 crate の終了時の片付け・Android の画面ゲート・再生成時の破棄は、最終成果物（`fandhe-gallery`）が呼ぶ。
+  `fandhe-egui-proxy` から機能 crate へは依存しない（`fandhe-egui-proxy::device::shutdown` は未移行の機能の停止だけを持つ）
 - Web: `fandhe-web-dom/src/<stem>.rs` を `crates/fandhe-cap-<id>/src/web.rs` へ `git mv` し、
   `crate::mount::Applier` を `fandhe_platform_web::Applier` に直す。ブラウザ API の依存は wasm32 の target 依存に書く。
   内側の `mod web` は親と同名で clippy に怒られるため `mod browser` などにする。ブラウザ側の解放が要る機能は
@@ -161,7 +161,7 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | Credential Manager など Gradle の依存（passkey-signin） | 宣言の `gradle` に書く。版は `scripts/android/versions.env` と一致させる（cargo-fandhe の突き合わせテストが確かめる） |
 | 文字列資源（app-badge） | 機能 crate の `android/res/values/strings.xml` へ移し、宣言の `res` に書く。アプリの `strings.xml` からは消す |
 | 共通層へ上げる小さな部品 | 複数の未移行機能が使う JNI 文字列の読み取り（`read_ble_string`）は `fandhe-platform-android::read_bounded_string` へ上げ、`fandhe-egui-proxy` の同名関数は委譲にする。フレームごとの経過時間の実測（`measure_dt_ms`）は `fandhe-runtime::tick` へ上げた |
-| 経路が終了処理を持つ機能（midi） | `device::shutdown` が呼ぶ停止は `fandhe-egui-proxy` が機能 crate へ任意依存して呼ぶ（§7、#1194 で消える） |
+| 経路が終了処理を持つ機能（midi） | 終了時の停止は `fandhe-gallery` の終了フックが呼ぶ（§7） |
 
 ### 後回しにした機能と理由
 
@@ -192,7 +192,7 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | `Internal` の文字列を捨てる機能（media-cast の Windows） | 画面もログも固定文言に畳むなら単位バリアントのまま、段の識別子の引数は `_` 始まりにして残す |
 | 同じ機能の Web 実装が参照する記号 | `fandhe-web-dom` が `fandhe_device::<stem>` を使っていたら、機能 crate への依存（wasm32 でも通る）に付け替える（usb-device・media-cast・system-accent-color）。コンパイルしないと気づけないため、移行のたびに `cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown --all-features` も通す |
 | `fandhe-device` に残す共有の純関数・型 | 他機能が使う `device_info::clean_text`・`media_playback::demo_wav`・`Image` は `fandhe-device` に残し、機能 crate が依存する（§7） |
-| 終了時の片付け（media-cast の `shutdown`） | §7 の過渡期の依存。`fandhe-egui-proxy` が feature `device` で optional 依存し、`device::shutdown` から `fandhe_cap_media_cast::shutdown()` を呼ぶ |
+| 終了時の片付け（media-cast の `shutdown`） | §7 の規則。`fandhe-gallery` の終了フックが `fandhe_cap_media_cast::shutdown()` を呼ぶ |
 | Android 全体の型検査 | NDK が手元にあれば `ANDROID_NDK_HOME` と `CC_aarch64_linux_android`（NDK の clang）を設定して `cargo clippy -p <crate> --target aarch64-linux-android --all-features` で通る（`--all-targets` は既存のテストが通らない） |
 
 ### 後回しにした機能
@@ -234,7 +234,7 @@ per-app-language・screen-brightness・spell-check・geocoding-search の 9 機�
 | `<application>` の属性（per-app-language の `android:localeConfig`） | 宣言の `components` は子要素だけを表し、`<application>` の属性は表せない。アプリが対応する言語の一覧でもあるため、`AndroidManifest.xml` と `res/xml/locale_config.xml` に残す |
 | iOS の Info.plist のキー（uwb-ranging） | `usage-descriptions` にキーを、`NSBonjourServices` は `info-plist` の配列で宣言する。説明文は gallery の `[package.metadata.fandhe-app.ios.usage-descriptions]` に置く。複数機能が共有するキー（`NSLocalNetworkUsageDescription`）は、最初に移した機能が宣言する |
 | `fandhe-device` に残す純関数の公開（spell-check の `translation::valid_lang_tag`） | `pub(crate)` だった関数は `pub` にして機能 crate が依存する（§7）。複製して手で合わせない |
-| 終了時の片付け（serial-port の `shutdown`） | §7 の過渡期の依存。`fandhe-egui-proxy` が feature `device` で optional 依存し、`device::shutdown` から `fandhe_cap_serial_port::shutdown()` を呼ぶ |
+| 終了時の片付け（serial-port の `shutdown`） | §7 の規則。`fandhe-gallery` の終了フックが `fandhe_cap_serial_port::shutdown()` を呼ぶ |
 | Windows の `windows` クレートの feature | 移した実装が使う feature を機能 crate の target 依存へ書く（serial-port の `CreateFileW` は `Win32_Security` も要る）。`fandhe-egui-proxy` 側の feature は他機能が使うため消さない。`cargo clippy -p <crate> --target x86_64-pc-windows-gnu --all-targets` で拾える |
 | Web 実装が参照する記号 | `fandhe-web-dom` の serial-port が `fandhe_device::serial_port` を使っていたため、機能 crate への依存に付け替えた（user-idle は参照が無く不要）。`cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown` で拾える |
 | Android 全体の型検査 | `ANDROID_NDK_HOME` を設定して `cargo ndk -t arm64-v8a clippy -p <crate> --all-features -- -D warnings` が通る。Android 限定の unused import（app-attest の `JObject`）はホストでは拾えない |
@@ -266,7 +266,7 @@ Android のゲームパッド入力は利用者の `MainActivity` の `dispatchK
 | 守らない範囲 | 起動後に `getWindow().setCallback()` で callback を差し替えると入力が届かなくなる。接続状態の監視（`InputManager`）は影響を受けない。`crate` doc と対応表の `note` に書く |
 | `MainActivity` 由来の JNI エクスポート名 | `Java_com_fandhe_platform_MainActivity_native…` を `Java_com_fandhe_platform_GamepadHelper_native…` に付け替え、Java の native 宣言（`GamepadHelper`）と署名を 2 か所で照合する。Rust から Java は呼ばないため `with_activity_class` は要らない |
 | feature 無効時の no-op スタブ | 旧 JNI 名のスタブを egui-proxy から消し、`fandhe-gallery` に新しい名前で置く（share-receive と同じ。provider は feature を知らず native を呼ぶため、実体が無いと `UnsatisfiedLinkError` になる） |
-| 画面ゲート | `ACTIVE_SCREEN_USES_GAMEPAD` を機能 crate の static へ移し、`set_screen_active(bool)` で公開する。egui-proxy の `android_main` が過渡期の依存（feature `device`）で呼ぶ（#1194 で消える） |
+| 画面ゲート | `ACTIVE_SCREEN_USES_GAMEPAD` を機能 crate の static へ移し、`set_screen_active(bool)` で公開する。`fandhe-gallery` の `android_main` が呼ぶ |
 | Web | 実装本体は `fandhe-web-dom` に残し、契約と `GamepadError`（識別子つき）だけ機能 crate から使う。永続的な非対応と非標準配置の区別は識別子で保つ |
 
 ## 13. 描画層の口 `HostView`（#1302）で出た型
@@ -292,7 +292,7 @@ dynamic-type・share-sheet・drag-drop の 3 機能を移した。3 機能とも
 | driver のテスト | `egui_sender` の代わりに、`HostView` を実装した起床口（`Mutex<Option<f32>>` で拡大率を記録する等）で `CompletionSender::new` する。描画コンテキスト単位の分離（PR #920）は `fandhe-render-egui` のテストで固定する |
 | 契約を `fandhe-device` に残す機能（drag-drop） | `file-association` が `fandhe_device::drag_drop` を使うため、契約は動かさず機能 crate が `fandhe-device` に依存する（§7）。`scaffold` は契約も `git mv` するので使わず、手で移す |
 | 複数 stem の機能（drag-drop） | `drag_drop`・`drop_session`・`ios_drag_drop` を手で移す。集約器 `drop_session` は Android の JNI 受け口と iOS が共有する |
-| Android の画面の表示状態と再生成時の破棄（drag-drop） | `fandhe-egui-proxy` の `android::run` が画面名を決める。機能 crate が `set_screen_active` / `reset_sessions` を `pub` で公開し、`fandhe-egui-proxy` が feature `device` で optional 依存して呼ぶ（§7 の過渡期の依存、#1194 で消える）。JNI の `nativeDragDropIsActive` は機能 crate の Helper 側へ移した |
+| Android の画面の表示状態と再生成時の破棄（drag-drop） | `fandhe-gallery` の `android_main` が `fandhe-egui-proxy` の `android::requested_app_name` で画面名を決める。機能 crate が `set_screen_active` / `reset_sessions` を `pub` で公開し、`fandhe-gallery` が呼ぶ（§7）。JNI の `nativeDragDropIsActive` は機能 crate の Helper 側へ移した |
 | DecorView への取り付け（drag-drop） | `onHostCreated` で `getDecorView()` を呼ぶと、後続の `requestWindowFeature` が使えなくなるおそれがある。`onHostResumed` で取り付ける（同じリスナーの再設定は無害） |
 | Activity を跨いで生きる受信器（share-sheet） | Application Context へ登録する static の受信器と要求 id は、`MainActivity` のときと同じく static に置く。ランチャーだけ Activity ごとの Helper に持つ |
 | 複製していた検証規則（drag-drop） | SAF の表示名の検証 `sanitize_picked_name` はファイル選択と drag-drop が使うため、`fandhe-device::file_picker` へ上げて共有する |
@@ -322,7 +322,7 @@ device-identifier は第 1 束で移行済みで、本束では確かめただ�
 | Web の参照の付け替え（display-refresh-hdr・memory-pressure・external-app-launch・color-picker・digital-credentials・app-lifecycle） | 本体は `fandhe-web-dom` に残し、`fandhe_device::<stem>` の参照を機能 crate への依存に付け替える。契約の関数が機能固有のエラー型を返すようになるため、Web 側のエラー型の写像も付け替える（color-picker・digital-credentials）。`cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown --all-features` で拾える |
 | 受け口を持つ driver（removable-storage・memory-pressure・app-lifecycle） | `.m` が呼ぶ `#[unsafe(no_mangle)] extern "C"` の受け口は driver に残る。`scaffold` は driver の `unsafe` を OS 実装のファイルへ写せず止まるため、受け口の属性を一時的に外して実行し、後で戻す。`lib.rs` の cfg（`any(target_os, test)`）は元の `device.rs` の宣言から写す（共有ファイルを先に直すと読めなくなる） |
 | 公開入口のない機能（digital-credentials） | ネイティブ OS は全て `Unsupported` で OS 実装が無い。`platform_digital_credentials()` が同期で `Unsupported` を返し、effect はそれを呼ぶ |
-| 終了時の片付け（memory-pressure・audio-session） | §7 の過渡期の依存。`fandhe-egui-proxy` が feature `device` で optional 依存し、`device::shutdown`（と `ProxyApp` の破棄）から `shutdown()` を呼ぶ（#1194 で消える） |
+| 終了時の片付け（memory-pressure・audio-session） | §7 の規則。`fandhe-gallery` の終了フック（と `ProxyApp` の破棄）が `shutdown()` を呼ぶ |
 | `reset_pending_tracking` | audio-session・external-app-launch・open-system-settings・wallpaper-set・file-preview は機能 crate が `pub` で公開し、`fandhe-gallery` の `android_main` が呼ぶ。`fandhe-egui-proxy` の `android.rs` からは消す |
 | `windows` の feature | 移した実装が使う feature を機能 crate の target 依存へ書く（file-preview は `std`、memory-pressure は `Win32_Security`、external-app-launch は `Win32_System_Registry` も要る）。`cargo clippy -p <crate> --target x86_64-pc-windows-gnu --all-targets` で拾える |
 

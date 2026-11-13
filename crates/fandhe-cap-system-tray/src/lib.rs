@@ -1,7 +1,7 @@
 //! system-tray（メニューバー / 通知領域アイコン）の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。
 //!
 //! 呼び出し元は `fandhe-gallery` の画面登録（`system_tray_effect`）と、アプリ終了時に共有アイコンを
-//! 片付ける `fandhe-egui-proxy::device::shutdown`（`stop_shared_system_tray`）。macOS と Windows だけ実装し、
+//! 片付ける `fandhe-gallery` の終了フック（`stop_shared_system_tray`）。macOS と Windows だけ実装し、
 //! 他 OS は `UnsupportedSystemTray`（嘘の成功にしない）。守る範囲は 1 プロセス内の表示 / 非表示の順序と
 //! アイコンの解放で、複数プロセス間・OS 側の非同期確定との時間差は守らない。
 //!

@@ -1,6 +1,6 @@
 //! serial-port の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。専用ワーカーでシリアルポートの一覧と 1 往復を行う。
 //!
-//! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`serial_port_show_effect`）と、終了時の `fandhe-egui-proxy::device::shutdown`（`shutdown`）。
+//! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`serial_port_show_effect`）と、終了時の `fandhe-gallery` の終了フック（`shutdown`）。
 //! macOS（IOKit 列挙 + POSIX 端末入出力）と Windows（`GetCommPorts` 系）が実装し、Web 実装（Web Serial）は `fandhe-web-dom` に残る。
 //! 守る範囲は固定設定（8N1）・3 秒の期限・開く前の設定の復元・嘘の成功の禁止。守らない範囲は複数プロセスからの同一ポート、待ち切れない OS 呼び出し（終了時は OS が fd を閉じる）。
 //!

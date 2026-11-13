@@ -17,7 +17,7 @@
 //! - **選択の受け取り**: `hide` の後と、前回 `show` 時と異なる世代の選択は返さない
 //!   （[`SelectionQueue::end`]/[`SelectionQueue::push`] の世代照合）。範囲外の
 //!   index は捨てる
-//! - **終了時**: 呼び出し側（`fandhe-egui-proxy`）が `on_exit` で `hide` を呼ぶ
+//! - **終了時**: 呼び出し側（`fandhe-gallery`）が `on_exit` で `hide` を呼ぶ
 //!   （プロセス終了任せにしない。Windows は `NIM_DELETE` しないとアイコンが
 //!   通知領域に残るため）
 //! - 初期化に失敗した実装は [`UnsupportedSystemTray`] へ倒す（ダミーの成功実装へは

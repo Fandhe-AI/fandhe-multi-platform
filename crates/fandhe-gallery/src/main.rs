@@ -77,7 +77,7 @@
 ))]
 fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     let start = std::time::Instant::now();
-    fandhe_egui_proxy::register_teardown_hooks();
+    fandhe_gallery::register_teardown_hooks();
     // 計測条件を通常起動と揃えるため、ウィンドウサイズは下の通常分岐と同一
     // （`DEFAULT_INNER_SIZE`・バックエンドは eframe 既定）。
     // iOS 側 `ios::run` のような専用バックエンド指定はデスクトップでは不要。
@@ -210,7 +210,7 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     let save_failed_for_closure = Arc::clone(&save_failed);
 
     // ProxyApp の終了・破棄時に端末リソースを解放する（描画層へ登録する、lib.rs 参照）。
-    fandhe_egui_proxy::register_teardown_hooks();
+    fandhe_gallery::register_teardown_hooks();
 
     fandhe_render_egui::launch::run_desktop(
         "fandhe-egui-proxy",
@@ -296,6 +296,10 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     // （`apple/fandhe_apple_spotlight_index.m`・`fandhe-platform-apple` の `ios/fandhe_ios_scene.m` 参照）。
     #[cfg(feature = "device")]
     fandhe_egui_proxy::device::apple_spotlight_index::register();
+
+    // 終了時の解放処理を登録する（frame-metrics 単独の計測ビルドでは従来も登録しない）。
+    #[cfg(not(all(feature = "frame-metrics", not(feature = "cold-start-probe"))))]
+    fandhe_gallery::register_teardown_hooks();
 
     // iOS の実エントリは ios.rs（wgpu/Metal バックエンド初期化、TASK-1.3-S2）。
     fandhe_egui_proxy::ios::run(fandhe_gallery::build_app)

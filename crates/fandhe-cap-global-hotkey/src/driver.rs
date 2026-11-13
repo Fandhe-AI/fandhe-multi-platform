@@ -144,7 +144,7 @@ pub fn global_hotkey_effect(
     drive(state, sender, shared_impl().as_ref());
 }
 
-/// アプリ終了時に登録を外す（`fandhe-egui-proxy` の `device::shutdown` から、eframe の `on_exit`（main thread）で呼ばれる。過渡期の依存で #1194 で消える）。
+/// アプリ終了時に登録を外す（`fandhe-gallery` の終了フックから、eframe の `on_exit`（main thread）で呼ばれる）。
 /// 終了経路なので結果は見ない。
 pub fn shutdown() {
     let _ = shared_impl().unregister();

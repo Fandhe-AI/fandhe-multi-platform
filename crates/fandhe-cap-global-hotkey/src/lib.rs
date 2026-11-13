@@ -1,6 +1,6 @@
 //! global-hotkey の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。OS 全体で効くキー（Ctrl + Shift + Alt/Option + K の固定 1 つ）の登録・解除と押下の通知。
 //!
-//! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`global_hotkey_effect`）と、アプリ終了時の `shutdown`（`fandhe-egui-proxy` から）。
+//! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`global_hotkey_effect`）と、アプリ終了時の `shutdown`（`fandhe-gallery` の終了フックから）。
 //! 守る範囲は嘘の成功の禁止・旧世代の押下を捨てること・終了時の解除、守らない範囲は他プロセスとの組み合わせの衝突・OS が予約するキー（`contract` の doc を参照）。
 //! macOS（Carbon）・Windows（`RegisterHotKey`）が実装し、他の OS は `Unsupported`。
 //!

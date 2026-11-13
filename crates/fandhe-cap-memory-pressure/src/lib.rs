@@ -1,7 +1,7 @@
 //! memory-pressure（メモリ逼迫・負荷の通知）の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行、#1192）。
 //!
 //! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`memory_pressure_show_effect`）、終了時の
-//! `fandhe-egui-proxy`（`shutdown`、過渡期の依存）、契約の純関数と型（`PressureEvent`・`EventLog`・`ALL_EVENTS`）を共有する
+//! `fandhe-gallery`（`shutdown`）、契約の純関数と型（`PressureEvent`・`EventLog`・`ALL_EVENTS`）を共有する
 //! `fandhe-web-dom`（Web 実装本体は `fandhe-web-dom` に残る）。Android（`ComponentCallbacks2`）・iOS・macOS（OS の通知）・
 //! Windows（`CreateMemoryResourceNotification`）が実装する。購読は id で照合し、停止後・再生成前の古い id の通知は捨てる。
 //! 守る範囲は 1 プロセス内の受信順・失敗と非対応を成功に畳まないこと・全終了経路での登録解除。
