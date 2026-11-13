@@ -201,6 +201,12 @@ impl SlotOwner {
         Some(request_id)
     }
 
+    /// 既に登録済みの `request_id`（`slot.begin()` の戻り値等）を自分の分として覚える。
+    /// 先行の要求を置き換える画面用の登録で使う。
+    pub fn adopt(&self, request_id: u64) {
+        self.0.store(request_id, Ordering::Release);
+    }
+
     /// 自分の分の `request_id`（無ければ `0`）。
     pub fn current(&self) -> u64 {
         self.0.load(Ordering::Acquire)

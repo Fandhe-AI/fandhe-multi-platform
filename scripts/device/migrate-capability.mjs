@@ -67,11 +67,13 @@ export const stripRustLiterals = (src) =>
 
 /** edition 2021 -> 2024 で壊れる書き方（`extern "C" {}`・`#[no_mangle]`・`gen` 識別子）の機械的な書き換え。 */
 export function rewriteEdition2024(src) {
-  return src
-    .replace(/(?<!unsafe\s+)\bextern\s+"C"\s*\{/g, 'unsafe extern "C" {')
-    .replace(/#\[no_mangle\]/g, "#[unsafe(no_mangle)]")
-    // コメント・文字列（複数行・raw を含む）は一致させたうえでそのまま返し、その外の `gen` だけを直す。
-    .replace(new RegExp(`${RUST_OPAQUE}|(?<!r#)\\bgen\\b`, "gm"), (m) => (m === "gen" ? "r#gen" : m));
+  // コメント・文字列（複数行・raw を含む）は一致させたうえでそのまま返し、その外だけを直す。
+  const code = String.raw`(?<!unsafe\s+)\bextern\s+"C"\s*\{|#\[no_mangle\]|(?<!r#)\bgen\b`;
+  return src.replace(new RegExp(`${RUST_OPAQUE}|${code}`, "gm"), (m) => {
+    if (m.startsWith("extern")) return 'unsafe extern "C" {';
+    if (m === "#[no_mangle]") return "#[unsafe(no_mangle)]";
+    return m === "gen" ? "r#gen" : m;
+  });
 }
 
 /** `DeviceError::V(引数)` の組。引数なし（括弧なし）は undefined。 */

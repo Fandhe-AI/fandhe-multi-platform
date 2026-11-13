@@ -163,6 +163,8 @@ test("rewriteEdition2024: extern・no_mangle・gen を 2024 の書き方へ、�
   assert.equal(rewriteEdition2024("let gen = 1;"), "let r#gen = 1;");
   assert.equal(rewriteEdition2024("fn f(gen: u64) {}"), "fn f(r#gen: u64) {}");
   for (const keep of ['"gen"', "// gen", "let r#gen = 1;", "generation", "gen_id"]) assert.equal(rewriteEdition2024(keep), keep);
+  const lit = 'const S: &str = r#"extern "C" { #[no_mangle]"#;';
+  assert.equal(rewriteEdition2024(lit), lit);
   assert.equal(rewriteEdition2024('log("gen"); let gen = 2; // gen'), 'log("gen"); let r#gen = 2; // gen');
 });
 

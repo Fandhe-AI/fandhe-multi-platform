@@ -45,7 +45,7 @@ use fandhe_core::screens::document_scan_show::DocumentScanShowState;
 use fandhe_core::screens::document_scan_show::{
     CoreFailure, CoreOutcome, Phase, ShownPage, finish_scan, mark_running, take_request,
 };
-use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, SlotOwner, poll_and_finish_owned};
 use fandhe_runtime::{CompletionSender, image_store};
 
 use crate::{
@@ -153,6 +153,8 @@ struct Active {
 /// 引数で渡す（`poll_and_finish` が `'static` を要るためスロットは leak）。
 struct Bridge {
     slot: &'static RequestSlot<Outcome>,
+    /// 画面ドライバの要求 id。公開入口の要求の結果を画面へ反映・clear しないための印。
+    screen: &'static SlotOwner,
     active: Mutex<Option<Active>>,
     deadline: Duration,
 }
@@ -161,6 +163,7 @@ impl Bridge {
     fn new(deadline: Duration) -> Self {
         Self {
             slot: Box::leak(Box::new(RequestSlot::new())),
+            screen: Box::leak(Box::new(SlotOwner::new())),
             active: Mutex::new(None),
             deadline,
         }
@@ -179,6 +182,7 @@ impl Bridge {
     fn begin(&self) -> u64 {
         let mut active = self.lock();
         let request_id = self.slot.begin();
+        self.screen.adopt(request_id);
         *active = Some(Active {
             request_id,
             started: Instant::now(),
@@ -284,6 +288,7 @@ impl Bridge {
     fn reset(&self) {
         let mut active = self.lock();
         *active = None;
+        self.screen.release(self.screen.current());
         self.slot.reset();
     }
 }
@@ -420,11 +425,10 @@ fn drive(
     let generation = state.generation;
     bridge.expire_if_due();
     let slot = bridge.slot;
-    let Some((pending_id, _)) = slot.snapshot() else {
-        return;
-    };
-    poll_and_finish(
+    let mine = bridge.screen.current();
+    poll_and_finish_owned(
         slot,
+        bridge.screen,
         sender,
         |_| {},
         move |s: &mut DocumentScanShowState, outcome: Outcome| {
@@ -432,9 +436,13 @@ fn drive(
             // 反映できない完了（世代違い）は捨てる。残すとスロットが埋まったままになり、
             // `has_pending` が真のまま以降の要求が発送されない。
             if !applied {
-                slot.clear(pending_id);
+                slot.clear(mine);
             }
             applied
+        },
+        // 自分の要求が失われた（`reset` 等）。失敗を確定して画面を Running のまま残さない。
+        move |s: &mut DocumentScanShowState| {
+            let _ = finish_scan(s, generation, Err(CoreFailure::Internal));
         },
     );
 }
@@ -665,6 +673,30 @@ mod tests {
         assert!(b.begin_exclusive().is_none());
         b.slot.clear(id);
         assert!(b.begin_exclusive().is_some());
+    }
+
+    #[test]
+    fn screen_does_not_consume_public_request_result() {
+        let bridge = new_bridge(LONG);
+        let f = fake(Mode::Silent, bridge);
+        let imp: Arc<dyn DocumentScanner> = f.clone();
+        let (sender, rx) = channel();
+        let mut state = DocumentScanShowState::default();
+        request_scan(&mut state);
+        state.phase = Phase::Running;
+        // 画面の要求ではない公開入口の要求が slot にある。
+        let id = bridge.begin_exclusive().unwrap();
+        bridge.complete_from_os(id, Err(DocumentScanFailure::Unsupported));
+        drive(&state, &sender, &imp, bridge);
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        assert!(
+            bridge
+                .slot
+                .snapshot()
+                .is_some_and(|(i, o)| i == id && o.is_some())
+        );
     }
 
     #[test]
