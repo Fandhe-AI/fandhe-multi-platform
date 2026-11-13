@@ -170,7 +170,7 @@ test("rewriteEdition2024: extern・no_mangle・gen を 2024 の書き方へ、�
 
 test("refPatterns: stem・id・Pascal を語の境界で照合する（短い stem で別の機能・語を拾わない）", () => {
   const hit = (l) => refPatterns("ar", "ar").some((re) => re.test(l));
-  for (const l of ["compile_ios_ar();", "pub mod ios_ar;", "device::ar::ar_show_effect", "ArHelper.java", "fandhe-cap-ar", "fandhe_ios_ar.m"])
+  for (const l of ["compile_ios_ar();", "pub mod ios_ar;", "device::ar::ar_show_effect", "ArHelper.java", "fandhe-cap-ar", "fandhe_ios_ar.m", "fandhe_egui_proxy::device::ar_show_effect"])
     assert.ok(hit(l), l);
   for (const l of ["compile_ios_ar_camera_view();", "Array", "solar", "charge", "fandhe-cap-ar-camera-view"]) assert.ok(!hit(l), l);
 });
@@ -181,6 +181,8 @@ test("missingEntry: crate ルートから公開された platform_<stem> だけ�
   assert.equal(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": def }), null);
   assert.equal(missingEntry("x", { "lib.rs": "pub use driver::{a, platform_x, b};", "driver.rs": def }), null);
   assert.equal(missingEntry("x", { "lib.rs": "pub use driver::{\n    a,\n    platform_x,\n};", "driver.rs": def }), null);
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::{platform_x as other};", "driver.rs": def }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::platform_x as other;", "driver.rs": def }));
   assert.ok(missingEntry("x", { "lib.rs": "mod internal {\n    pub fn platform_x() {}\n}\n" }));
   assert.ok(missingEntry("x", { "lib.rs": "mod internal {\n    pub use driver::*;\n}\n", "driver.rs": def }));
   assert.ok(missingEntry("x", { "lib.rs": "mod driver;", "driver.rs": def }));

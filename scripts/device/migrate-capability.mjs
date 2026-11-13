@@ -291,7 +291,7 @@ export function missingEntry(stem, files) {
       ([f, src]) =>
         f !== "lib.rs" &&
         def.test(src) &&
-        new RegExp(`pub use ${f.replace(/\.rs$/, "")}::(?:\\*|${fn}\\b|\\{[^}]*\\b${fn}\\b[^}]*\\})`).test(lib),
+        new RegExp(`pub use ${f.replace(/\.rs$/, "")}::(?:\\*|${fn}\\b(?!\\s+as\\b)|\\{[^}]*\\b${fn}\\b(?!\\s+as\\b)[^}]*\\})`).test(lib),
     );
   return ok ? null : `pub fn ${fn}() を crate ルートから公開する（consumer-app-structure.md §8.2）`;
 }
@@ -340,9 +340,11 @@ function nativeFiles(R, stem) {
  * ponytail: 左に `_` で連なる別の stem（`camera_view` が `ar_camera_view` に一致する）は拾う。厳密にするなら共有ファイルの構文解析が要る。
  */
 export function refPatterns(id, stem) {
+  // 語の直後は英数字・`-` を禁じ、`_` は `ar_show_effect` のような effect 関数名の接尾辞のときだけ許す。
+  const tail = String.raw`(?![A-Za-z0-9-]|_(?![a-z0-9_]*_effect\b))`;
   return [
-    new RegExp(`(?<![A-Za-z0-9])${stem}(?![A-Za-z0-9_-])`),
-    new RegExp(`(?<![A-Za-z0-9])${id}(?![A-Za-z0-9_-])`),
+    new RegExp(`(?<![A-Za-z0-9])${stem}${tail}`),
+    new RegExp(`(?<![A-Za-z0-9])${id}${tail}`),
     new RegExp(`(?<![A-Za-z0-9])${pascalOf(stem)}(?![a-z0-9])`),
   ];
 }
