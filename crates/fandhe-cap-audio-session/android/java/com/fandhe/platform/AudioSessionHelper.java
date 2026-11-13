@@ -100,9 +100,12 @@ final class AudioSessionHelper {
 
     // Activity の破棄時（同上）。保持している資源を解放し、以後の開始を拒否する。
     static void detach(Activity activity) {
-        AudioSessionHelper helper = HELPERS.remove(activity);
+        // 解除の結果（markLost）を記録し終えてから HELPERS から外す。先に外すと、その隙間の stop が
+        // helper も記録も見つけられず、失敗する解除を成功として返す。
+        AudioSessionHelper helper = HELPERS.get(activity);
         if (helper != null) {
             helper.onDestroy();
+            HELPERS.remove(activity);
         }
     }
 
@@ -113,11 +116,9 @@ final class AudioSessionHelper {
     }
 
     static int stop(Activity activity, long id) {
-        if (takeLost(id)) {
-            return 1;
-        }
         AudioSessionHelper helper = HELPERS.get(activity);
-        return helper == null ? 0 : helper.stopInternal(id);
+        // helper が無いのは onDestroy の記録が済んだ後（detach は記録してから外す）なので、記録だけ見ればよい。
+        return helper == null ? (takeLost(id) ? 1 : 0) : helper.stopInternal(id);
     }
 
     static int read(Activity activity) {
@@ -206,7 +207,8 @@ final class AudioSessionHelper {
     private int stopInternal(long id) {
         synchronized (lock) {
             if (current == NONE || id != current) {
-                return 0;
+                // onDestroy が同じ lock 内で記録した解除失敗はここで読む。
+                return takeLost(id) ? 1 : 0;
             }
             return releaseLocked() ? 0 : 1;
         }
