@@ -148,7 +148,8 @@ impl Camera for DummyCamera {
 
 /// 実行対象プラットフォームに応じたカメラ実装を返す（[`camera_capture_effect`] から
 /// 撮影開始時のみ呼ばれる）。Android・iOS は実カメラ、それ以外（デスクトップ）は [`DummyCamera`]。
-fn platform_camera() -> Arc<dyn Camera> {
+/// 状態型に依存しない入口（consumer-app-structure.md §8.2）。フレームワークの外のアプリも、自分の状態型の effect から使える。
+pub fn platform_camera_capture() -> Arc<dyn Camera> {
     #[cfg(target_os = "android")]
     {
         Arc::new(android::AndroidCamera::new())
@@ -228,12 +229,12 @@ fn spawn_capture(
 }
 
 /// 画面カタログの `effect "camera_capture"` 行から呼ばれる effect ドライバ
-/// （`fn(&S, &CompletionSender<S>)`）。[`platform_camera`] が返す実装を撮影対象にする。
+/// （`fn(&S, &CompletionSender<S>)`）。[`platform_camera_capture`] が返す実装を撮影対象にする。
 pub fn camera_capture_effect(
     state: &CameraCaptureState,
     sender: &CompletionSender<CameraCaptureState>,
 ) {
-    spawn_capture(state, sender, platform_camera());
+    spawn_capture(state, sender, platform_camera_capture());
 }
 
 #[cfg(test)]

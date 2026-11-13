@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   checkId, stemOf, pascalOf, moveTargets, rewriteSource, usedErrorVariants, unmappedVariants,
   renderErrorRs, replaceBlock, featureLines, gradleLines, renderUnsafeAttr, renderBuildRs, unsafeOsesOf,
+  strErrorVariants, rewriteEdition2024, stripRustLiterals, refPatterns, missingEntry,
 } from "./migrate-capability.mjs";
 
 test("checkId: 不正な id を拒む", () => {
@@ -51,7 +52,7 @@ test("rewriteSource: 共通部品・エラー型・契約パスの置換", () =>
       "use crate::error::DeviceIdentifierError;",
       "use crate::contract::{DeviceId};",
       "use fandhe_platform_android::JniCallFailed;",
-      "Err(DeviceIdentifierError::Internal)",
+      'Err(DeviceIdentifierError::Internal("x"))',
       "Err(DeviceIdentifierError::Unsupported) => 1,",
       "fandhe_platform_android::android_app()",
       "fandhe_runtime::request_repaint();",
@@ -130,4 +131,104 @@ test("renderErrorRs: 写像するバリアントが 0 件ならテストを出�
     assert.ok(!rs.includes("for (e, expected) in [\n        ]"));
   }
   assert.ok(renderErrorRs("foo-bar", ["Internal"]).includes("messages_are_fixed"));
+});
+
+test("DeviceError: 機能名以外を渡すバリアントは引数を残し、機能名・_ だけなら単位バリアントへ", () => {
+  const src = 'DeviceError::Internal("calendar save") DeviceError::Unsupported("cal") DeviceError::Unsupported(_) DeviceError::Cancelled(..)';
+  assert.deepEqual([...strErrorVariants([src], "cal", "cal")], ["Internal"]);
+  assert.equal(
+    rewriteSource(src, "cal"),
+    'CalError::Internal("calendar save") CalError::Unsupported CalError::Unsupported CalError::Cancelled',
+  );
+  // 識別子・変数・括弧なしの関数としての使用も文字列扱い。
+  for (const u of ["DeviceError::Internal(MODEL_NOT_READY)", "DeviceError::Internal(stage)", ".map_err(DeviceError::Internal)"])
+    assert.ok(strErrorVariants([u], "cal", "cal").has("Internal"), u);
+  // 別ファイルで文字列を渡していれば、このファイルの Internal(_) も引数を残す（写像はファイル横断で揃える）。
+  const vs = strErrorVariants(['DeviceError::Internal("x")', "DeviceError::Internal(_)"], "cal", "cal");
+  assert.equal(rewriteSource("DeviceError::Internal(_)", "cal", "cal", vs), "CalError::Internal(_)");
+});
+
+test("renderErrorRs: 文字列を渡すバリアントは &'static str で出し、テストにも引数を渡す", () => {
+  const rs = renderErrorRs("cal", ["Internal", "Unsupported"], new Set(["Internal"]));
+  assert.ok(rs.includes('#[error("内部エラーが発生しました: {0}")]\n    Internal(&\'static str),'));
+  assert.ok(rs.includes('(CalError::Internal("cal"), "内部エラーが発生しました: cal"),'));
+  assert.ok(rs.includes("    Unsupported,\n"));
+});
+
+test("rewriteEdition2024: extern・no_mangle・gen を 2024 の書き方へ、文字列・コメント・既に直した箇所には触れない", () => {
+  assert.equal(rewriteEdition2024('extern "C" {'), 'unsafe extern "C" {');
+  assert.equal(rewriteEdition2024('unsafe extern "C" {'), 'unsafe extern "C" {');
+  assert.equal(rewriteEdition2024('pub extern "C" fn f() {}'), 'pub extern "C" fn f() {}');
+  assert.equal(rewriteEdition2024("#[no_mangle]"), "#[unsafe(no_mangle)]");
+  assert.equal(rewriteEdition2024("let gen = 1;"), "let r#gen = 1;");
+  assert.equal(rewriteEdition2024("fn f(gen: u64) {}"), "fn f(r#gen: u64) {}");
+  for (const keep of ['"gen"', "// gen", "let r#gen = 1;", "generation", "gen_id"]) assert.equal(rewriteEdition2024(keep), keep);
+  const lit = 'const S: &str = r#"extern "C" { #[no_mangle]"#;';
+  assert.equal(rewriteEdition2024(lit), lit);
+  assert.equal(rewriteEdition2024('log("gen"); let gen = 2; // gen'), 'log("gen"); let r#gen = 2; // gen');
+});
+
+test("refPatterns: stem・id・Pascal を語の境界で照合する（短い stem で別の機能・語を拾わない）", () => {
+  const hit = (l) => refPatterns("ar", "ar").some((re) => re.test(l));
+  for (const l of ["compile_ios_ar();", "pub mod ios_ar;", "device::ar::ar_show_effect", "ArHelper.java", "fandhe-cap-ar", "fandhe_ios_ar.m", "fandhe_egui_proxy::device::ar_show_effect"])
+    assert.ok(hit(l), l);
+  for (const l of ["compile_ios_ar_camera_view();", "Array", "solar", "charge", "fandhe-cap-ar-camera-view"]) assert.ok(!hit(l), l);
+  // effect 名の接尾辞は `_effect` か `_<動詞 1 語>_effect` だけ。2 語以上は兄弟の機能名。
+  const hitOf = (stem) => (l) => refPatterns(stem, stem).some((re) => re.test(l));
+  for (const [stem, l] of [["nfc", "nfc_read_effect"], ["print", "print_page_effect"], ["location", "location_effect"]]) assert.ok(hitOf(stem)(l), l);
+  for (const [stem, l] of [["nfc", "nfc_card_emulation_show_effect"], ["print", "print_screen_page_effect"]]) assert.ok(!hitOf(stem)(l), l);
+});
+
+test("missingEntry: crate ルートから公開された platform_<stem> だけを合格にする", () => {
+  const def = "/// doc\n#[cfg(not(target_arch = \"wasm32\"))]\npub fn platform_x() -> u8 { 0 }\n";
+  assert.equal(missingEntry("x", { "lib.rs": def }), null);
+  assert.equal(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver.rs": def }), null);
+  assert.equal(missingEntry("x", { "lib.rs": "pub mod driver;\npub use driver::{a, platform_x, b};", "driver.rs": def }), null);
+  assert.equal(missingEntry("x", { "lib.rs": "#[cfg(not(target_arch = \"wasm32\"))] mod driver;\npub use driver::{\n    a,\n    platform_x,\n};", "driver.rs": def }), null);
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::{platform_x as other};", "driver.rs": def }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::platform_x as other;", "driver.rs": def }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod internal {\n    pub fn platform_x() {}\n}\n" }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\nmod internal {\n    pub use driver::*;\n}\n", "driver.rs": def }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;", "driver.rs": def }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver.rs": "pub(crate) fn platform_x() {}" }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver.rs": "fn platform_x() {}" }));
+  assert.ok(missingEntry("x", { "lib.rs": "pub fn platform_passkey() {}" }) && missingEntry("passkey_signin", { "lib.rs": "pub fn platform_passkey() {}" }));
+  assert.ok(missingEntry("x", { "lib.rs": "pub fn platform_x_y() {}" }));
+  assert.ok(missingEntry("x", {}));
+  // 深さ 0 にない定義・再公開は入口にしない（impl の関連関数・trait の関数・インライン mod）。
+  assert.ok(missingEntry("x", { "lib.rs": "pub struct Factory;\nimpl Factory {\n    pub fn platform_x() {}\n}\n" }));
+  assert.ok(missingEntry("x", { "lib.rs": "pub trait T {\n    fn platform_x() {}\n}\n" }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod inner { pub fn platform_x() {} }" }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver.rs": "impl D {\n    pub fn platform_x() {}\n}\n" }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\nfn f() {\n    pub use driver::platform_x;\n}", "driver.rs": def }));
+  assert.equal(missingEntry("x", { "lib.rs": "mod a { fn g() {} }\npub fn platform_x() { if true { } }\n" }), null);
+  assert.equal(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::platform_x;", "driver.rs": def }), null);
+  // 再公開は lib.rs の深さ 0 でモジュールを宣言しているときだけ成立する。ファイルは driver.rs か driver/mod.rs。
+  assert.ok(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": "pub fn platform_x() {}" }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod inner { mod driver; }\npub use driver::*;", "driver.rs": def }));
+  assert.equal(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver.rs": "pub fn platform_x() {}" }), null);
+  assert.equal(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver/mod.rs": def }), null);
+  // 2 段以上の経路は判別しないので欠けとして報告する（保守側）。
+  assert.ok(missingEntry("x", { "lib.rs": "mod a;\npub use a::b::platform_x;", "a.rs": "pub mod b;", "a/b.rs": def }));
+});
+
+test("rewriteEdition2024: 複数行文字列・raw string・ブロックコメントの内側は変えない", () => {
+  for (const keep of ['let s = "a\n  let gen = 1;\n";', 'let s = r#"x\nlet gen = 1;\n"#;', "/* \nlet gen = 1;\n*/", "let c = '\"'; // gen"]) assert.equal(rewriteEdition2024(keep), keep);
+  assert.equal(rewriteEdition2024('let s = "a\nb";\nlet gen = 1;'), 'let s = "a\nb";\nlet r#gen = 1;');
+  // ブロックコメントは入れ子になる。最初の `*/` で閉じると、コメント内の `"` から後ろを文字列とみなしてしまう。
+  assert.equal(rewriteEdition2024('/* outer /* inner */ " */\nlet gen = 1;\nlet s = "x";'), '/* outer /* inner */ " */\nlet r#gen = 1;\nlet s = "x";');
+  assert.equal(stripRustLiterals("/* a /* b */ c */x"), " ".repeat(17) + "x");
+  // raw byte string・raw C string もリテラル全体を保護する。接頭辞付きの通常の文字列・文字・lifetime も中身に触れない。
+  for (const keep of ['const S: &[u8] = br#"a " gen " b"#;', 'cr#"a " gen " b"#', 'br"gen"', 'b"a \\" gen"', 'c"gen"', "b'\"'"])
+    assert.equal(rewriteEdition2024(keep), keep);
+  assert.equal(rewriteEdition2024('br#"a " gen "#; let gen = 1;'), 'br#"a " gen "#; let r#gen = 1;');
+  assert.equal(rewriteEdition2024("fn f<'a>(x: &'a str) { let gen = \"gen\"; }"), "fn f<'a>(x: &'a str) { let r#gen = \"gen\"; }");
+});
+
+test("missingEntry: コメント・文字列の中の pub fn は公開入口にしない", () => {
+  assert.ok(missingEntry("x", { "lib.rs": "// pub fn platform_x() {}" }));
+  assert.ok(missingEntry("x", { "lib.rs": "/*\npub fn platform_x() {}\n*/" }));
+  assert.ok(missingEntry("x", { "lib.rs": 'const S: &str = "\npub fn platform_x() {}\n";' }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver.rs": "// pub fn platform_x() {}" }));
+  assert.equal(stripRustLiterals("a // b\nc").length, 8);
 });

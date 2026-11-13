@@ -22,6 +22,12 @@ const ITEMS_URL: &str = match option_env!("FANDHE_ITEMS_URL") {
     None => "http://127.0.0.1:8787/items.json",
 };
 
+/// 取得に使う共通の `Http` 実装（[`UreqHttp`]）を返す。ネイティブのみ（Web は `web.rs` が fetch を使う）。
+/// 状態型に依存しない入口（consumer-app-structure.md §8.2）。フレームワークの外のアプリも、自分の状態型の effect から使える。
+pub fn platform_http_get() -> Box<dyn Http> {
+    Box::new(UreqHttp::new())
+}
+
 /// `url` が `http://<host>...` 形式（スキームの後にホスト部が 1 文字以上続き、
 /// ASCII 空白・制御文字を含まない）かどうかを判定する。`FANDHE_ITEMS_URL` の
 /// ビルド時検証（下の `assert!`）専用の構文チェックであり、接続先ホストが
@@ -95,7 +101,7 @@ fn spawn_fetch(state: &HttpFetchState, sender: &CompletionSender<HttpFetchState>
     let sender = sender.clone();
     let url = url.to_string();
     std::thread::spawn(move || {
-        let result = fetch_items(&UreqHttp::new(), &url);
+        let result = fetch_items(&*platform_http_get(), &url);
         let _ = sender.send(Box::new(move |state: &mut HttpFetchState| {
             finish_fetch(state, result);
         }));

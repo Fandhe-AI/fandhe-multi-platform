@@ -7,8 +7,9 @@
  *   node scripts/device/migrate-capability.mjs inventory <id> [--module <stem>]   移す対象と参照を表示する（読み取りのみ）
  *   node scripts/device/migrate-capability.mjs scaffold <id> [--module <stem>] [--dry-run]
  *                                                                                  git mv で機能 crate を作り、機械的に直せる記述を直す
- *   node scripts/device/migrate-capability.mjs sync                                gallery の feature・依存と build.gradle.kts の srcDirs を
- *                                                                                  `crates/fandhe-cap-*` から書き直す（冪等）
+ *   node scripts/device/migrate-capability.mjs sync [--check]                      gallery の feature・依存と build.gradle.kts の srcDirs を
+ *                                                                                  `crates/fandhe-cap-*` から書き直す（冪等）。--check は書かずに、
+ *                                                                                  目印ブロックのずれと公開入口 `pub fn platform_<stem>()` の欠けを検査する
  *
  * stem は id の `-` を `_` にしたものが既定。対応表の id と stem が違う機能は --module で渡す。
  * 扱うのは 1 stem だけ。複数 stem の機能・共有ファイルに実装が埋まった古い型は inventory を見て手で移す。
@@ -57,9 +58,74 @@ export function moveTargets(id, stem) {
   ];
 }
 
+/**
+ * 複数行にまたがりうる Rust のコメント・文字列・文字リテラル（raw string・raw byte string `br"…"`・raw C string `cr"…"` を含む）。これらの内側は書き換え・判定の対象外にする。
+ * ブロックコメントは入れ子になるため正規表現では閉じを決められない。開き `/*` だけを一致させ、閉じは replaceRust が深さを数えて決める。
+ */
+const RUST_OPAQUE = String.raw`\b[bc]?r(#*)"[\s\S]*?"\1|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\\n]|\\[^\n']+)'|\/\/.*$|\/\*`;
+
+/** `/*` で始まるブロックコメントの終わり（閉じの直後の位置）。入れ子の深さを数える。閉じが無ければ末尾。 */
+function blockCommentEnd(src, i) {
+  let depth = 0;
+  while (i < src.length) {
+    if (src.startsWith("/*", i)) {
+      depth++;
+      i += 2;
+    } else if (src.startsWith("*/", i)) {
+      i += 2;
+      if (--depth === 0) return i;
+    } else i++;
+  }
+  return src.length;
+}
+
+/** RUST_OPAQUE（と code）の一致を左から順に f で置き換える。ブロックコメントは閉じまでを 1 つの一致として渡す。 */
+function replaceRust(src, code, f) {
+  const re = new RegExp(code ? `${RUST_OPAQUE}|${code}` : RUST_OPAQUE, "gm");
+  let out = "";
+  let last = 0;
+  for (let m; (m = re.exec(src)); last = re.lastIndex) {
+    if (m[0] === "/*") re.lastIndex = blockCommentEnd(src, m.index);
+    out += src.slice(last, m.index) + f(src.slice(m.index, re.lastIndex));
+  }
+  return out + src.slice(last);
+}
+
+/** コメントと文字列の中身を空白に置き換える（行数は保つ）。公開入口の有無など、コードだけを見たい判定用。 */
+export const stripRustLiterals = (src) => replaceRust(src, null, (m) => m.replace(/[^\n]/g, " "));
+
+/** edition 2021 -> 2024 で壊れる書き方（`extern "C" {}`・`#[no_mangle]`・`gen` 識別子）の機械的な書き換え。 */
+export function rewriteEdition2024(src) {
+  // コメント・文字列（複数行・raw を含む）は一致させたうえでそのまま返し、その外だけを直す。
+  const code = String.raw`(?<!unsafe\s+)\bextern\s+"C"\s*\{|#\[no_mangle\]|(?<!r#)\bgen\b`;
+  return replaceRust(src, code, (m) => {
+    if (m.startsWith("extern")) return 'unsafe extern "C" {';
+    if (m === "#[no_mangle]") return "#[unsafe(no_mangle)]";
+    return m === "gen" ? "r#gen" : m;
+  });
+}
+
+/** `DeviceError::V(引数)` の組。引数なし（括弧なし）は undefined。 */
+export function errorVariantArgs(src) {
+  return [...src.matchAll(/\bDeviceError::([A-Za-z]+)(?:\(([^()]*)\))?/g)].map((m) => [m[1], m[2]?.trim()]);
+}
+
+/**
+ * 機能名以外の文字列・識別子・式を渡して使われている写像対象バリアント。
+ * 引数なしへ潰すと情報が落ちるため、error.rs では `V(&'static str)` で出す。括弧なしの使用（`.map_err(DeviceError::Internal)`）も含む。
+ */
+export function strErrorVariants(srcs, id, stem) {
+  const fixed = new Set(["_", "..", `"${id}"`, `"${stem}"`]);
+  const out = new Set();
+  for (const src of srcs)
+    for (const [v, arg] of errorVariantArgs(src)) if (v in ERROR_VARIANTS && (arg === undefined || !fixed.has(arg))) out.add(v);
+  return out;
+}
+
 /** 移動した Rust ソースの機械的な書き換え。返すのは書き換え後の本文。 */
-export function rewriteSource(src, id, stem = stemOf(id)) {
+export function rewriteSource(src, id, stem = stemOf(id), strVs = strErrorVariants([src], id, stem)) {
   const err = `${pascalOf(id)}Error`;
+  const unitVs = Object.keys(ERROR_VARIANTS).filter((v) => !strVs.has(v));
   const rules = [
     [/crate::app::\{CompletionSender, Completion\}/g, "fandhe_runtime::{Completion, CompletionSender}"],
     [/crate::app::(CompletionSender|Completion)\b/g, "fandhe_runtime::$1"],
@@ -70,11 +136,13 @@ export function rewriteSource(src, id, stem = stemOf(id)) {
     [new RegExp(`fandhe_device::${stem}::`, "g"), "crate::contract::"],
     [/use (?:fandhe_device|crate)::DeviceError;/g, `use crate::error::${err};`],
     [/\bfandhe_device::DeviceError\b/g, `crate::error::${err}`],
-    // 引数つきの固定バリアントは単位バリアントへ（文言は error.rs 側が持つ）。
-    [new RegExp(`\\bDeviceError::(${Object.keys(ERROR_VARIANTS).join("|")})\\((?:"[^"]*"|_)\\)`, "g"), `${err}::$1`],
+    // 機能名か `_`・`..` だけを渡す固定バリアントは単位バリアントへ（文言は error.rs 側が持つ）。それ以外を渡すバリアントは引数を残す。
+    ...(unitVs.length
+      ? [[new RegExp(`\\bDeviceError::(${unitVs.join("|")})\\((?:_|\\.\\.|"${id}"|"${stem}")\\)`, "g"), `${err}::$1`]]
+      : []),
     [/\bDeviceError\b/g, err],
   ];
-  return rules.reduce((s, [re, to]) => s.replace(re, to), src);
+  return rules.reduce((s, [re, to]) => s.replace(re, to), rewriteEdition2024(src));
 }
 
 /** ソースが使っている DeviceError のバリアント名（重複なし）。 */
@@ -85,15 +153,19 @@ export function usedErrorVariants(src) {
 /** error.rs に写せないバリアント（手作業の対象）。 */
 export const unmappedVariants = (vs) => vs.filter((v) => !(v in ERROR_VARIANTS));
 
-const hasUnsafe = (src) => /\bunsafe\b/.test(src.replace(/\/\/.*$/gm, ""));
+const hasUnsafe = (src) => /\bunsafe\b/.test(rewriteEdition2024(src).replace(/\/\/.*$/gm, ""));
 
-export function renderErrorRs(id, variants) {
+export function renderErrorRs(id, variants, strVs = new Set()) {
   const name = `${pascalOf(id)}Error`;
   const vs = variants.filter((v) => v in ERROR_VARIANTS);
   const body = vs
-    .map((v) => `    /// \`DeviceError::${v}\` に相当する。\n    #[error("${ERROR_VARIANTS[v]}: ${id}")]\n    ${v},`)
+    .map((v) =>
+      strVs.has(v)
+        ? `    /// \`DeviceError::${v}\` に相当する。呼び出し側が固定の識別子を渡す。\n    #[error("${ERROR_VARIANTS[v]}: {0}")]\n    ${v}(&'static str),`
+        : `    /// \`DeviceError::${v}\` に相当する。\n    #[error("${ERROR_VARIANTS[v]}: ${id}")]\n    ${v},`,
+    )
     .join("\n");
-  const fixed = vs.map((v) => `            (${name}::${v}, "${ERROR_VARIANTS[v]}: ${id}"),`).join("\n");
+  const fixed = vs.map((v) => `            (${name}::${v}${strVs.has(v) ? `("${id}")` : ""}, "${ERROR_VARIANTS[v]}: ${id}"),`).join("\n");
   // 写像するバリアントが 0 件だと配列が空になり型を推論できずコンパイルできない。そのときはテストを出さない。
   const tests = vs.length
     ? `#[cfg(test)]
@@ -216,19 +288,81 @@ function listCaps(R) {
     }));
 }
 
-function sync(R) {
+/**
+ * stripRustLiterals 済みの本文から、深さ 0 にない波括弧の中身を空白にする（行数は保つ）。
+ * `::{` で始まる use の木（`pub use driver::{a, b}`）は中身を残す。
+ */
+function topLevelOnly(src) {
+  let out = "";
+  let i = 0;
+  for (let open; (open = src.indexOf("{", i)) >= 0; ) {
+    let k = open;
+    while (k > 0 && /\s/.test(src[k - 1])) k--;
+    let end = open + 1;
+    if (!src.startsWith("::", k - 2))
+      for (let depth = 1; end < src.length && depth > 0; end++) depth += src[end] === "{" ? 1 : src[end] === "}" ? -1 : 0;
+    out += src.slice(i, open + 1) + src.slice(open + 1, end).replace(/[^\n]/g, " ");
+    i = end;
+  }
+  return out + src.slice(i);
+}
+
+/**
+ * 機能 crate が crate ルートから `pub fn platform_<stem>()` を公開しているかの検査（consumer-app-structure.md §8.2）。
+ * files は src/ 配下の { "lib.rs": 本文, "driver.rs": 本文, "foo/mod.rs": 本文, ... }。満たせば null、欠けていれば理由を返す。
+ * lib.rs に直接定義するか、lib.rs で宣言したモジュール（`mod driver;`、`driver.rs` か `driver/mod.rs`）に定義して
+ * lib.rs から `pub use driver::…` で再公開していれば合格。cfg の有無は見ない。定義・宣言・再公開とも深さ 0（mod・impl・trait・関数本文の外）だけを数える。
+ * これはテキスト照合による近似で、最終的な保証は使う側が `fandhe_cap_<stem>::platform_<stem>()` を呼んでビルドが通ること。
+ * 近似で判別できない形（2 段以上の経路 `pub use a::b::platform_x`・`self::`・`crate::`・`#[path]`・マクロの中の定義など）は、欠けとして報告する側へ倒す。
+ */
+export function missingEntry(stem, files) {
+  const fn = `platform_${stem}`;
+  const def = new RegExp(`^\\s*pub fn ${fn}\\s*[<(]`, "m");
+  files = Object.fromEntries(Object.entries(files).map(([f, src]) => [f, topLevelOnly(stripRustLiterals(src))]));
+  const lib = files["lib.rs"] ?? "";
+  const mods = [...lib.matchAll(/^\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*;/gm)].map((m) => m[1]);
+  const ok =
+    def.test(lib) ||
+    mods.some(
+      (m) =>
+        def.test(files[`${m}.rs`] ?? files[`${m}/mod.rs`] ?? "") &&
+        new RegExp(`pub use ${m}::(?:\\*|${fn}\\b(?!\\s+as\\b)|\\{[^}]*\\b${fn}\\b(?!\\s+as\\b)[^}]*\\})`).test(lib),
+    );
+  return ok ? null : `pub fn ${fn}() を crate ルートから公開する（consumer-app-structure.md §8.2）`;
+}
+
+/** 書き直しを行う。check のときは書かず、ずれと公開入口の欠けを表示して false を返す（問題なしなら true）。 */
+function sync(R, check = false) {
   const caps = listCaps(R);
   const ids = caps.map((c) => c.id);
   const edits = [
     ["crates/fandhe-gallery/Cargo.toml", (t) => replaceBlock(replaceBlock(t, 0, featureLines(ids)), 1, depLines(ids))],
     ["platforms/android/app/build.gradle.kts", (t) => replaceBlock(t, 0, gradleLines(caps))],
   ];
+  let ok = true;
   for (const [p, f] of edits) {
     const before = read(R, p);
     const after = f(before);
-    if (after !== before) writeFileSync(join(R, p), after);
-    console.log(`${after === before ? "変更なし" : "更新"}: ${p}`);
+    if (after !== before && !check) writeFileSync(join(R, p), after);
+    console.log(`${after === before ? "変更なし" : check ? "要 sync" : "更新"}: ${p}`);
+    if (after !== before) ok = false;
   }
+  if (!check) return true;
+  for (const { id } of caps) {
+    const dir = join(R, "crates", `fandhe-cap-${id}`, "src");
+    const files = Object.fromEntries(
+      (existsSync(dir) ? readdirSync(dir) : [])
+        .map((f) => (f.endsWith(".rs") ? f : `${f}/mod.rs`))
+        .filter((f) => existsSync(join(dir, f)))
+        .map((f) => [f, readFileSync(join(dir, f), "utf8")]),
+    );
+    const why = missingEntry(stemOf(id), files);
+    if (why) {
+      console.log(`公開入口なし: crates/fandhe-cap-${id}（${why}）`);
+      ok = false;
+    }
+  }
+  return ok;
 }
 
 function nativeFiles(R, stem) {
@@ -239,18 +373,33 @@ function nativeFiles(R, stem) {
   });
 }
 
+/**
+ * inventory が「手で直す参照」を拾う正規表現。stem・id・Pascal を語の境界で照合する。
+ * ponytail: 左に `_` で連なる別の stem（`camera_view` が `ar_camera_view` に一致する）は拾う。厳密にするなら共有ファイルの構文解析が要る。
+ */
+export function refPatterns(id, stem) {
+  // 語の直後は英数字・`-` を禁じ、`_` は effect 関数名の接尾辞 `_effect`・`_<動詞 1 語>_effect`（`ar_show_effect`）のときだけ許す。
+  // 2 語以上は兄弟の機能名（`nfc` に対する `nfc_card_emulation_show_effect`）なので拾わない。
+  const tail = String.raw`(?![A-Za-z0-9-]|_(?!(?:[a-z0-9]+_)?effect\b))`;
+  return [
+    new RegExp(`(?<![A-Za-z0-9])${stem}${tail}`),
+    new RegExp(`(?<![A-Za-z0-9])${id}${tail}`),
+    new RegExp(`(?<![A-Za-z0-9])${pascalOf(stem)}(?![a-z0-9])`),
+  ];
+}
+
 function sharedRefs(R, id, stem) {
   const files = git(R, "ls-files", "crates", "scripts", "docs", "platforms", "Cargo.toml")
     .split("\n")
     .filter((f) => f && !f.startsWith("crates/fandhe-cap-") && !f.startsWith("docs/spec/") && !f.startsWith("scripts/device/migrate-capability"));
-  const needles = [stem, pascalOf(stem), id];
+  const pats = refPatterns(id, stem);
   const hits = [];
   for (const f of files) {
     if (!/\.(rs|java|kt|kts|m|h|swift|toml|md|json|sh|mjs|xml|yml|plist)$/.test(f)) continue;
     let t;
     try { t = read(R, f); } catch { continue; }
     t.split("\n").forEach((l, i) => {
-      if (needles.some((n) => l.includes(n))) hits.push(`${f}:${i + 1}: ${l.trim().slice(0, 120)}`);
+      if (pats.some((re) => re.test(l))) hits.push(`${f}:${i + 1}: ${l.trim().slice(0, 120)}`);
     });
   }
   return hits;
@@ -271,7 +420,7 @@ function inventory(R, id, stem) {
   for (const [d, f] of nativeFiles(R, stem)) console.log(`  crates/fandhe-egui-proxy/${d}/${f} -> crates/fandhe-cap-${id}/${d}/${f}`);
   const helper = pascalOf(stem);
   if (existsSync(join(R, JAVA_DIR)))
-    for (const f of readdirSync(join(R, JAVA_DIR)).filter((f) => f.startsWith(helper) && f !== `${helper}Helper.java`))
+    for (const f of readdirSync(join(R, JAVA_DIR)).filter((f) => new RegExp(`^${helper}(?![a-z0-9])`).test(f) && f !== `${helper}Helper.java`))
       console.log(`  候補（自動では動かさない）: ${JAVA_DIR}/${f}`);
   const dev = `crates/fandhe-device/src/${stem}.rs`;
   if (existsSync(join(R, dev))) {
@@ -306,15 +455,18 @@ function scaffold(R, id, stem, dry) {
   }
   const variants = new Set();
   const unsafeOs = new Set();
-  for (const [, t] of moves.filter(([, t]) => t.endsWith(".rs"))) {
-    const src = read(R, t);
-    usedErrorVariants(src).forEach((v) => variants.add(v));
-    if (hasUnsafe(src)) unsafeOsesOf(t.match(/src\/([^/]+)\.rs$/)[1]).forEach((o) => unsafeOs.add(o));
-    writeFileSync(join(R, t), rewriteSource(src, id, stem));
-  }
+  const rsMoves = moves.filter(([, t]) => t.endsWith(".rs"));
+  // バリアントの写像は移すファイル全体で揃える必要があるため、読みと書き換えを 2 周に分ける。
+  const srcs = rsMoves.map(([, t]) => read(R, t));
+  const strVs = strErrorVariants(srcs, id, stem);
+  rsMoves.forEach(([, t], i) => {
+    usedErrorVariants(srcs[i]).forEach((v) => variants.add(v));
+    if (hasUnsafe(srcs[i])) unsafeOsesOf(t.match(/src\/([^/]+)\.rs$/)[1]).forEach((o) => unsafeOs.add(o));
+    writeFileSync(join(R, t), rewriteSource(srcs[i], id, stem, strVs));
+  });
   const has = (re) => moves.some(([, t]) => re.test(t));
   writeFileSync(join(R, crate, "Cargo.toml"), renderCargoToml(id, { android: has(/\/src\/android\.rs$/), apple: has(/\.m$/), java: has(/\.java$/) }));
-  writeFileSync(join(R, crate, "src/error.rs"), renderErrorRs(id, [...variants]));
+  writeFileSync(join(R, crate, "src/error.rs"), renderErrorRs(id, [...variants], strVs));
   if (has(/\.m$/)) {
     const ms = moves.filter(([, t]) => t.endsWith(".m")).map(([, t]) => t.slice(crate.length + 1));
     writeFileSync(join(R, crate, "build.rs"), renderBuildRs(ms));
@@ -331,7 +483,7 @@ function scaffold(R, id, stem, dry) {
   const unsafeAttr = renderUnsafeAttr([...unsafeOs].sort());
   writeFileSync(
     join(R, crate, "src/lib.rs"),
-    `//! ${id} の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。TODO: 役割・呼び出し元・守る範囲 / 守らない範囲を書く。\n//!\n//! 契約（\`contract\`）・失敗の種類（\`error\`）・effect ドライバ（\`driver\`）・OS 実装を 1 つに集める。\n//! 画面の状態型を参照してよいのは \`driver\` だけ。入口 \`platform_${stem}()\` は状態型に依存しないため、\n//! フレームワークの外のアプリも使える。\n\n${unsafeAttr}\n\nmod contract;\nmod driver;\nmod error;\n${modLines.join("\n")}\n\npub use contract::*;\npub use driver::*;\npub use error::${pascalOf(id)}Error;\n`,
+    `//! ${id} の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。TODO: 役割・呼び出し元・守る範囲 / 守らない範囲を書く。\n//!\n//! 契約（\`contract\`）・失敗の種類（\`error\`）・effect ドライバ（\`driver\`）・OS 実装を 1 つに集める。\n//! 画面の状態型を参照してよいのは \`driver\` だけ。入口 \`pub fn platform_${stemOf(id)}()\` は状態型に依存しないため、\n//! フレームワークの外のアプリも使える。\n\n${unsafeAttr}\n\nmod contract;\nmod driver;\nmod error;\n${modLines.join("\n")}\n\npub use contract::*;\npub use driver::*;\npub use error::${pascalOf(id)}Error;\n`,
   );
   sync(R);
   console.log("\n## 残件（手作業）");
@@ -343,6 +495,7 @@ function scaffold(R, id, stem, dry) {
   }
   console.log("  - JNI が MainActivity のインスタンスメソッドを呼ぶなら Helper の static 呼び出し（with_activity_class）へ直す");
   console.log("  - 共有ファイル（device.rs・fandhe-egui-proxy/build.rs・registry.rs・fandhe-device/src/lib.rs・MainActivity.java・対応表の impl）");
+  console.log(`  - driver.rs の入口を pub fn platform_${stemOf(id)}() にする（crate ルートから公開。node scripts/device/migrate-capability.mjs sync --check で確かめる）`);
   console.log("  - lib.rs の crate doc、宣言の権限・framework、画面の状態型に依存するテスト");
 }
 
@@ -350,9 +503,12 @@ function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   try {
     const R = git(process.cwd(), "rev-parse", "--show-toplevel").trim();
-    if (cmd === "sync") return sync(R);
+    if (cmd === "sync") {
+      if (!sync(R, rest.includes("--check"))) process.exit(1);
+      return;
+    }
     if (cmd !== "inventory" && cmd !== "scaffold") {
-      console.error("使い方: migrate-capability.mjs <inventory|scaffold> <id> [--module <stem>] [--dry-run] | sync");
+      console.error("使い方: migrate-capability.mjs <inventory|scaffold> <id> [--module <stem>] [--dry-run] | sync [--check]");
       process.exit(2);
     }
     const id = checkId(rest[0]);

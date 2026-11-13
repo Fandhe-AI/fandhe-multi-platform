@@ -186,7 +186,8 @@ graph TD
 
 - HTTP・保存・クリップボードも他と同じ 1 機能 1 crate にします（`fandhe-cap-http-get`・`fandhe-cap-local-storage-kv`・`fandhe-cap-clipboard`）
 - 全機能 crate は、画面の状態型に依存しない入口 `pub fn platform_<stem>()` と trait を crate ルートから公開します。
-  フレームワークの外のアプリはこれを使い、effect は自分の状態型で書きます（実例: `fandhe-cap-device-identifier`）
+  フレームワークの外のアプリはこれを使い、effect は自分の状態型で書きます（実例: `fandhe-cap-device-identifier`）。
+  公開の有無は `node scripts/device/migrate-capability.mjs sync --check` が検査します
 - 保存先の解決（Android の `data_dir`・iOS の `documents_dir`・デスクトップの既定）は `fandhe-cap-local-storage-kv` が持ちます。
   他機能は「OS 機能を実際に使う」場合として依存します
 

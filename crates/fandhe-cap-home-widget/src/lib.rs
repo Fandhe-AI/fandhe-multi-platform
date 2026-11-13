@@ -133,7 +133,8 @@ fn to_message(e: HomeWidgetError) -> String {
 
 /// 現在のプラットフォームの `HomeWidget` 実装。macOS は Team ID が取れなければ
 /// `UnsupportedHomeWidget`（iOS は #1212）。
-fn implementation() -> Arc<dyn HomeWidget> {
+/// 状態型に依存しない入口（consumer-app-structure.md §8.2）。フレームワークの外のアプリも、自分の状態型の effect から使える。
+pub fn platform_home_widget() -> Arc<dyn HomeWidget> {
     #[cfg(target_os = "macos")]
     {
         use std::sync::OnceLock;
@@ -192,7 +193,7 @@ pub fn home_widget_show_effect(
     state: &HomeWidgetShowState,
     sender: &CompletionSender<HomeWidgetShowState>,
 ) {
-    drive(state, sender, implementation());
+    drive(state, sender, platform_home_widget());
 }
 
 #[cfg(test)]

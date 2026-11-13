@@ -230,7 +230,8 @@ impl ShareReceive for UnsupportedShareReceive {
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// 現在の OS の実装（macOS はサービスメニュー、Android は JNI 受け口、他は `Unsupported` 固定）。
-fn platform_share_receive() -> &'static dyn ShareReceive {
+/// 状態型に依存しない入口（consumer-app-structure.md §8.2）。フレームワークの外のアプリも、自分の状態型の effect から使える。
+pub fn platform_share_receive() -> &'static dyn ShareReceive {
     #[cfg(target_os = "macos")]
     {
         &macos::MacosShareReceive

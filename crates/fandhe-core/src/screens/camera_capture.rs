@@ -192,7 +192,7 @@ pub fn status_text(state: &CameraCaptureState) -> String {
         // Web（`getUserMedia`）・Android/iOS（`fandhe-device::camera::Camera` の実装）は
         // 実カメラへアクセスするが、macOS/Windows/Linux は引き続き `DummyCamera`
         // （固定の市松模様画像）を使う（`fandhe-egui-proxy/src/device/camera_capture.rs`
-        // の `platform_camera` 参照）。`state` はどの実装が動いているかを知らない
+        // の `platform_camera_capture` 参照）。`state` はどの実装が動いているかを知らない
         // （共通コアはプラットフォーム固有クレートへ依存しない、coding-rust.md
         // 「クレート構成」節）ため、実カメラ/ダミーの両方に当てはまる表現にする
         // （Codex 指摘 #998）。
