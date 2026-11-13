@@ -46,22 +46,22 @@ fn to_outcome(result: Result<PickedColor, ColorPickerError>) -> ColorPickerOutco
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub(crate) mod bridge {
     use crate::error::ColorPickerError;
-    use fandhe_core::screens::color_picker_pick::ColorPickerOutcome;
     use fandhe_device::eye_dropper::PickedColor;
 
     use fandhe_runtime::request_slot::RequestSlot;
 
-    pub(crate) static SLOT: RequestSlot<ColorPickerOutcome> = RequestSlot::new();
+    /// 契約の結果をそのまま置く（画面用への写像は effect ドライバ側で行い、公開入口 [`super::poll_color_pick`] は生の結果を返す）。
+    pub(crate) static SLOT: RequestSlot<Result<PickedColor, ColorPickerError>> = RequestSlot::new();
 
     /// 提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
     pub(crate) fn begin() -> u64 {
         SLOT.begin()
     }
 
-    /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは捨てて
+    /// OS からの結果を置く。`request_id` 不一致・未登録・既に結果ありは捨てて
     /// `false`（古い世代・二重通知が成功へ化けない）。
     pub(crate) fn deliver(request_id: u64, result: Result<PickedColor, ColorPickerError>) -> bool {
-        SLOT.deliver(request_id, super::to_outcome(result))
+        SLOT.deliver(request_id, result)
     }
 }
 
@@ -101,10 +101,10 @@ fn drive_callback(state: &ColorPickerState, sender: &CompletionSender<ColorPicke
         &bridge::SLOT,
         sender,
         |_request_id| {},
-        move |s: &mut ColorPickerState, outcome| {
+        move |s: &mut ColorPickerState, result| {
             // `Idle` へ既に戻っていたら反映せず、`RequestSlot` を残す（clear しない）。
             if s.phase != PickPhase::Idle {
-                finish_pick(s, generation, outcome);
+                finish_pick(s, generation, to_outcome(result));
                 true
             } else {
                 false
@@ -139,6 +139,40 @@ pub fn platform_color_picker() -> Box<dyn ColorPicker> {
     return crate::windows::implementation();
     #[cfg(not(target_os = "windows"))]
     Box::new(crate::contract::UnsupportedColorPicker)
+}
+
+/// 色選択を OS へ依頼し、結果を [`poll_color_pick`] で受け取るための要求 id を返す（macOS・iOS）。
+///
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。1 プロセスに 1 要求で、
+/// 進行中の要求があるうちは `Internal`（busy）で断る。依頼自体の失敗は `Err`（結果は届かない）。
+/// Windows は同期の [`platform_color_picker`] を使う。Android・Linux は `Unsupported`。
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+pub fn begin_color_pick() -> Result<u64, ColorPickerError> {
+    let request_id = bridge::SLOT
+        .try_begin()
+        .ok_or(ColorPickerError::Internal("color picker busy"))?;
+    if let Err(e) = present(request_id) {
+        bridge::SLOT.clear(request_id);
+        return Err(e);
+    }
+    Ok(request_id)
+}
+
+/// macOS・iOS 以外には OS コールバック型の実装がない（成功へは倒さず `Unsupported`）。
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+pub fn begin_color_pick() -> Result<u64, ColorPickerError> {
+    Err(ColorPickerError::Unsupported)
+}
+
+/// [`begin_color_pick`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
+pub fn poll_color_pick(request_id: u64) -> Option<Result<PickedColor, ColorPickerError>> {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    return bridge::SLOT.take_ready(request_id);
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    {
+        let _ = request_id;
+        None
+    }
 }
 
 /// `registry.rs` の `effect` 区画から `color_picker` 画面用に配線される effect ドライバ。
@@ -204,7 +238,7 @@ mod tests {
         assert!(!bridge::deliver(id, Ok(color("#aabbcc"))));
         assert_eq!(
             bridge::SLOT.snapshot(),
-            Some((id, Some(ColorPickerOutcome::Cancelled)))
+            Some((id, Some(Err(ColorPickerError::Cancelled))))
         );
         // 新しい begin 後の旧 id の遅延完了も成功へ化けない。
         let old = bridge::begin();

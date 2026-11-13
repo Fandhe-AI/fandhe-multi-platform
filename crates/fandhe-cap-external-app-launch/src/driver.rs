@@ -80,11 +80,10 @@ pub(crate) fn outcome_from_android_code(
 pub(crate) mod bridge {
     use crate::contract::LaunchOutcome;
     use crate::error::ExternalAppLaunchError;
-    use fandhe_core::screens::external_app_launch_show::{CoreOutcome, ExternalLaunchFailure};
 
     use fandhe_runtime::request_slot::RequestSlot;
 
-    pub(crate) type Outcome = Result<CoreOutcome, ExternalLaunchFailure>;
+    pub(crate) type Outcome = Result<LaunchOutcome, ExternalAppLaunchError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
@@ -93,14 +92,14 @@ pub(crate) mod bridge {
         SLOT.begin()
     }
 
-    /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
+    /// OS からの結果を契約のまま置く（画面用への写像は effect ドライバ側、公開入口は生の結果を返す）。`request_id` 不一致・未登録・既に結果ありは
     /// 捨てて `false`（先に届いたものだけを採る）。
     #[cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))] // iOS（#862）/ Android（b-android）の受け口が使う
     pub(crate) fn deliver(
         request_id: u64,
         result: Result<LaunchOutcome, ExternalAppLaunchError>,
     ) -> bool {
-        SLOT.deliver(request_id, super::to_outcome(result))
+        SLOT.deliver(request_id, result)
     }
 
     /// Android: Activity 再生成直後に `android_main` から呼ぶ。保留中の要求は復元せず破棄し、
@@ -156,10 +155,10 @@ fn drive_callback(
         &bridge::SLOT,
         sender,
         |_request_id| {},
-        move |s: &mut ExternalAppLaunchState, outcome| {
+        move |s: &mut ExternalAppLaunchState, result| {
             // 反映できたとき（`Idle` へ戻っていないとき）だけ `true` を返す。
             if s.phase != ExternalLaunchPhase::Idle {
-                finish_launch(s, generation, outcome);
+                finish_launch(s, generation, to_outcome(result));
                 true
             } else {
                 false
@@ -175,6 +174,42 @@ pub fn external_app_launch_show_effect(
     sender: &CompletionSender<ExternalAppLaunchState>,
 ) {
     drive_callback(state, sender);
+}
+
+/// 他アプリの起動を OS へ依頼し、結果を [`poll_external_app_launch`] で受け取るための要求 id を返す（iOS・Android）。
+///
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。1 プロセスに 1 要求で、
+/// 進行中の要求があるうちは `Internal`（busy）で断る。依頼自体の失敗は `Err`（結果は届かない）。
+/// macOS・Windows は同期の [`platform_external_app_launch`] を使う。Linux は `Unsupported`。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub fn begin_external_app_launch(target: LaunchTarget) -> Result<u64, ExternalAppLaunchError> {
+    let request_id = bridge::SLOT
+        .try_begin()
+        .ok_or(ExternalAppLaunchError::Internal("external app launch busy"))?;
+    if let Err(e) = begin_launch(request_id, target) {
+        bridge::SLOT.clear(request_id);
+        return Err(e);
+    }
+    Ok(request_id)
+}
+
+/// iOS・Android 以外では OS コールバック型の実装がない（成功へは倒さず `Unsupported`）。
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub fn begin_external_app_launch(_target: LaunchTarget) -> Result<u64, ExternalAppLaunchError> {
+    Err(ExternalAppLaunchError::Unsupported("external-app-launch"))
+}
+
+/// [`begin_external_app_launch`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
+pub fn poll_external_app_launch(
+    request_id: u64,
+) -> Option<Result<LaunchOutcome, ExternalAppLaunchError>> {
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    return bridge::SLOT.take_ready(request_id);
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        let _ = request_id;
+        None
+    }
 }
 
 /// 同期経路（macOS・Windows・Linux）: [`ExternalAppLaunch`] を呼ぶ。
@@ -426,7 +461,7 @@ mod bridge_tests {
         assert!(bridge::deliver(id, Ok(LaunchOutcome::NoHandler)));
         assert!(!bridge::deliver(id, Ok(LaunchOutcome::HandedOff)));
         let (_, ready) = bridge::SLOT.snapshot().expect("begin 済み");
-        assert_eq!(ready, Some(Ok(CoreOutcome::NoHandler)));
+        assert_eq!(ready, Some(Ok(LaunchOutcome::NoHandler)));
         bridge::SLOT.clear(id);
     }
 }

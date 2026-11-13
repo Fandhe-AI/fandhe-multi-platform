@@ -73,11 +73,10 @@ fn to_choice(target: WallpaperTarget) -> WallpaperChoice {
 pub(crate) mod bridge {
     use crate::contract::WallpaperTarget;
     use crate::error::WallpaperSetError;
-    use fandhe_core::screens::wallpaper_set::SetOutcome;
 
     use fandhe_runtime::request_slot::RequestSlot;
 
-    pub(crate) type Outcome = Result<SetOutcome, String>;
+    pub(crate) type Outcome = Result<WallpaperTarget, WallpaperSetError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
@@ -86,13 +85,13 @@ pub(crate) mod bridge {
         SLOT.begin()
     }
 
-    /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
+    /// OS からの結果を契約のまま置く（画面用への写像は effect ドライバ側、公開入口は生の結果を返す）。`request_id` 不一致・未登録・既に結果ありは
     /// 捨てて `false`（先に届いたものだけを採る）。
     pub(crate) fn deliver(
         request_id: u64,
         result: Result<WallpaperTarget, WallpaperSetError>,
     ) -> bool {
-        SLOT.deliver(request_id, super::to_outcome(result))
+        SLOT.deliver(request_id, result)
     }
 
     /// Activity 再生成直後に `android_main` から呼ぶ。保留中の要求は復元せず破棄し、
@@ -132,10 +131,10 @@ fn drive_callback(state: &WallpaperSetState, sender: &CompletionSender<Wallpaper
         &bridge::SLOT,
         sender,
         |_request_id| {},
-        move |s: &mut WallpaperSetState, outcome| {
+        move |s: &mut WallpaperSetState, result| {
             // 反映できたとき（`Idle` へ戻っていないとき）だけ `true` を返す。
             if s.phase != SetPhase::Idle {
-                finish_set(s, generation, outcome);
+                finish_set(s, generation, to_outcome(result));
                 true
             } else {
                 false
@@ -151,6 +150,47 @@ pub fn wallpaper_set_effect(
     sender: &CompletionSender<WallpaperSetState>,
 ) {
     drive_callback(state, sender);
+}
+
+/// 壁紙の設定を OS へ依頼し、結果を [`poll_wallpaper_set`] で受け取るための要求 id を返す（Android）。
+///
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。画像は呼び出し側が
+/// `PngImage::new` で検査済みのものを渡す。進行中の要求があるうちは `Internal`（busy）で断る。
+/// 依頼自体の失敗は `Err`（結果は届かない）。macOS・Windows は同期の [`platform_wallpaper_set`] を使う。
+/// iOS・Linux は `Unsupported`。
+#[cfg(target_os = "android")]
+pub fn begin_wallpaper_set(
+    image: &PngImage,
+    target: WallpaperTarget,
+) -> Result<u64, WallpaperSetError> {
+    let request_id = bridge::SLOT
+        .try_begin()
+        .ok_or(WallpaperSetError::Internal("wallpaper set busy"))?;
+    if let Err(e) = crate::android::begin_set(request_id, image, target) {
+        bridge::SLOT.clear(request_id);
+        return Err(e);
+    }
+    Ok(request_id)
+}
+
+/// Android 以外には OS コールバック型の実装がない（成功へは倒さず `Unsupported`）。
+#[cfg(not(target_os = "android"))]
+pub fn begin_wallpaper_set(
+    _image: &PngImage,
+    _target: WallpaperTarget,
+) -> Result<u64, WallpaperSetError> {
+    Err(WallpaperSetError::Unsupported)
+}
+
+/// [`begin_wallpaper_set`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
+pub fn poll_wallpaper_set(request_id: u64) -> Option<Result<WallpaperTarget, WallpaperSetError>> {
+    #[cfg(target_os = "android")]
+    return bridge::SLOT.take_ready(request_id);
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = request_id;
+        None
+    }
 }
 
 /// 同期経路（macOS・Windows・iOS・Linux）: 検査してから [`Wallpaper`] を呼ぶ。
@@ -188,7 +228,7 @@ pub fn wallpaper_set_effect(
 
 /// 現在のプラットフォームの同期の `Wallpaper` 実装を返す（macOS・Windows）。画面の状態型に依存しない入口で、
 /// フレームワークの外のアプリも画像を直接渡して設定できる。Android はコールバック型で trait を通らず
-/// （[`crate::android::begin_set`]）、iOS・Linux と同じく `UnsupportedWallpaper` を返す（成功へは倒さない）。
+/// （[`begin_wallpaper_set`]）、iOS・Linux と同じく `UnsupportedWallpaper` を返す（成功へは倒さない）。
 pub fn platform_wallpaper_set() -> Box<dyn crate::contract::Wallpaper> {
     #[cfg(target_os = "macos")]
     return Box::new(crate::macos::MacosWallpaper);
@@ -276,7 +316,7 @@ mod tests {
         ));
         assert!(!bridge::deliver(id, Ok(WallpaperTarget::Home)));
         let (_, ready) = bridge::SLOT.snapshot().expect("begin 済み");
-        assert_eq!(ready, Some(Ok(SetOutcome::Denied)));
+        assert_eq!(ready, Some(Err(WallpaperSetError::PermissionDenied)));
         bridge::SLOT.clear(id);
     }
 }

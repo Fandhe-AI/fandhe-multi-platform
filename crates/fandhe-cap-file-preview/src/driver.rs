@@ -95,6 +95,43 @@ pub fn platform_file_preview() -> Arc<dyn FileThumbnailer> {
     }
 }
 
+/// 固定ファイルのプレビューを OS へ依頼し、結果を [`poll_file_preview`] で受け取るための要求 id を返す。
+///
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。画面の effect と同じ要求の枠
+/// （1 プロセスに 1 要求）を共用するため、進行中の要求があるうちは `Internal`（busy）で断る。
+/// OS が同期で結果を確定した場合も、[`poll_file_preview`] で受け取る。依頼自体の失敗は `Err`（結果は届かない）。
+/// サムネイルは同期の [`platform_file_preview`] を使う。
+pub fn begin_file_preview(kind: FileKind) -> Result<u64, FilePreviewError> {
+    let request_id = SESSION
+        .slot
+        .try_begin()
+        .ok_or(FilePreviewError::Internal("file preview busy"))?;
+    match present_preview(request_id, kind, sample_bytes(kind)) {
+        Ok(None) => Ok(request_id),
+        Ok(Some(r)) => {
+            SESSION.deliver_preview(request_id, Ok(r));
+            Ok(request_id)
+        }
+        Err(e) => {
+            SESSION.slot.clear(request_id);
+            Err(e)
+        }
+    }
+}
+
+/// [`begin_file_preview`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
+pub fn poll_file_preview(request_id: u64) -> Option<Result<PreviewResult, FilePreviewError>> {
+    let _ = SESSION.slot.take_ready(request_id)?; // 画面用の写像は捨て、生値を返す
+    let mut raw = SESSION
+        .raw_preview
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    match raw.take() {
+        Some((id, r)) if id == request_id => Some(r),
+        _ => Some(Err(FilePreviewError::Internal("file preview result"))),
+    }
+}
+
 /// 現在のプラットフォームのプレビュー提示を呼ぶ（dispatch の最終形）。
 fn present_preview(
     request_id: u64,
@@ -143,6 +180,8 @@ struct Timing {
 pub(crate) struct Session {
     slot: RequestSlot<Outcome>,
     timing: Mutex<Option<Timing>>,
+    /// プレビューの結果の生値（公開入口 [`poll_file_preview`] 用。画面用 `slot` と同じ id で置く）。
+    raw_preview: Mutex<Option<(u64, Result<PreviewResult, FilePreviewError>)>>,
 }
 
 impl Session {
@@ -150,7 +189,25 @@ impl Session {
         Self {
             slot: RequestSlot::new(),
             timing: Mutex::new(None),
+            raw_preview: Mutex::new(None),
         }
+    }
+
+    /// プレビューの結果を置く。生値を先に記録してから `slot` へ置き、`slot` が捨てた（旧 id・二重通知）なら生値も戻す。
+    fn deliver_preview(
+        &self,
+        request_id: u64,
+        result: Result<PreviewResult, FilePreviewError>,
+    ) -> bool {
+        *self.raw_preview.lock().unwrap_or_else(|e| e.into_inner()) = Some((request_id, result));
+        let accepted = self.slot.deliver(request_id, preview_outcome(result));
+        if !accepted {
+            let mut raw = self.raw_preview.lock().unwrap_or_else(|e| e.into_inner());
+            if raw.as_ref().is_some_and(|(id, _)| *id == request_id) {
+                *raw = None;
+            }
+        }
+        accepted
     }
 
     fn timing(&self) -> Option<Timing> {
@@ -190,9 +247,7 @@ pub(crate) mod bridge {
         request_id: u64,
         result: Result<PreviewResult, FilePreviewError>,
     ) -> bool {
-        super::SESSION
-            .slot
-            .deliver(request_id, super::preview_outcome(result))
+        super::SESSION.deliver_preview(request_id, result)
     }
 }
 
@@ -261,10 +316,10 @@ fn start(
         match present(request_id, kind, bytes) {
             Ok(None) => {}
             Ok(Some(r)) => {
-                session.slot.deliver(request_id, preview_outcome(Ok(r)));
+                session.deliver_preview(request_id, Ok(r));
             }
             Err(e) => {
-                session.slot.deliver(request_id, Err(to_failure(e)));
+                session.deliver_preview(request_id, Err(e));
             }
         }
         return;
@@ -730,4 +785,16 @@ mod tests {
 
     /// サムネイルの長辺の上限が `RgbaPixels` の上限に収まる（崩れたらコンパイルが通らない）。
     const _: () = assert!(THUMBNAIL_MAX_SIDE <= fandhe_core::RGBA_MAX_SIDE);
+
+    #[test]
+    fn public_poll_returns_raw_result_once() {
+        let id = SESSION.slot.begin();
+        assert_eq!(poll_file_preview(id), None);
+        assert!(SESSION.deliver_preview(id, Err(FilePreviewError::PermissionDenied("x"))));
+        assert_eq!(
+            poll_file_preview(id),
+            Some(Err(FilePreviewError::PermissionDenied("x")))
+        );
+        assert_eq!(poll_file_preview(id), None);
+    }
 }
