@@ -35,6 +35,9 @@ id = "app-lifecycle"
 [package.metadata.fandhe.android]
 java = ["android/java"]
 
+[package.metadata.fandhe.ios]
+frameworks = ["UIKit"]
+
 [package.metadata.fandhe.macos]
 frameworks = ["AppKit"]
 
