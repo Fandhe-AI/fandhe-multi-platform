@@ -286,7 +286,7 @@ fn drive_callback(state: &ShareTextState, sender: &CompletionSender<ShareTextSta
 /// 画面の状態型に依存しない入口。フレームワークの外のアプリも自分の状態型の effect から使える。
 ///
 /// macOS・iOS・Android は OS の共有 UI の結果をコールバックで受け、結果が届くまで呼び出しスレッドを塞ぐ
-/// [`Share`] を返す。メインスレッドから呼ばず（コールバックがメインで届くためデッドロックする）、
+/// [`Share`] を返す。進行中の要求があるときの 2 件目は提示せず `Internal` で断る。メインスレッドから呼ばず（コールバックがメインで届くためデッドロックする）、
 /// 画面ドライバ（[`share_text_effect`]）と同時に使わない（要求の追跡を共有する）。失敗の種類は
 /// `Internal` へ畳む。Windows はフォーカスの観測（`HostView`）なしにキャンセルを検知できないため、
 /// Linux と同じく常に `Unsupported`。
@@ -308,7 +308,10 @@ struct CallbackShare;
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 impl Share for CallbackShare {
     fn share(&self, request: &ShareRequest) -> Result<DeviceShareOutcome, ShareSheetError> {
-        let id = bridge::begin();
+        // 進行中・未取得の要求があれば置き換えず断る（他スレッドの待機を落とさない）。
+        let Some(id) = bridge::SLOT.try_begin_unless(|_| true) else {
+            return Err(ShareSheetError::Internal);
+        };
         if !present(id, request) {
             bridge::deliver(id, Err(ShareSheetError::Internal));
         }
@@ -379,7 +382,7 @@ pub fn share_text_effect(state: &ShareTextState, sender: &CompletionSender<Share
     target_os = "windows"
 )))]
 pub fn share_text_effect(state: &ShareTextState, sender: &CompletionSender<ShareTextState>) {
-    drive(state, sender, &UnsupportedShare);
+    drive(state, sender, &crate::contract::UnsupportedShare);
 }
 
 #[cfg(test)]
@@ -532,7 +535,7 @@ mod tests {
     fn drive_is_noop_without_pending_request() {
         let (sender, rx) = sender_with_channel();
         let state = ShareTextState::default();
-        drive(&state, &sender, &UnsupportedShare);
+        drive(&state, &sender, &crate::contract::UnsupportedShare);
         assert!(rx.try_recv().is_err());
     }
 
@@ -549,7 +552,7 @@ mod tests {
         set_input(&mut state, "hello".to_string());
         share(&mut state);
 
-        drive(&state, &sender, &UnsupportedShare);
+        drive(&state, &sender, &crate::contract::UnsupportedShare);
         apply_all(&mut state, &rx);
 
         assert!(state.error.contains(UNAVAILABLE), "{}", state.error);

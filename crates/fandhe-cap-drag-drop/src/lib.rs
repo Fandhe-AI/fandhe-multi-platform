@@ -21,10 +21,27 @@
 #[cfg(target_os = "android")]
 mod android;
 mod driver;
-mod drop_session;
+pub mod drop_session;
 #[cfg(target_os = "ios")]
 mod ios;
 
 #[cfg(target_os = "android")]
 pub use android::{reset_sessions, set_screen_active};
 pub use driver::*;
+
+/// 画面の状態型に依存しない入口（iOS・Android）。OS が積んだドロップの出来事を取り出す。
+///
+/// 受け取り側は [`drop_session::DropEvent`] を順に適用し、ファイルの読み取りは OS 実装が済ませた
+/// [`drop_session::DroppedItem`] を使う。デスクトップ（macOS・Windows）は OS 実装が無く常に空。
+/// ウィンドウへのドロップは `fandhe_runtime::HostView::file_drag` と `fandhe_device::drag_drop::read_dropped`
+/// で受け取る（どちらも公開済み）。画面ドライバ（[`drag_drop_effect`]）と同時に使わない（出来事を取り合う）。
+pub fn platform_drag_drop() -> Vec<drop_session::DropEvent> {
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        drop_session::take_events()
+    }
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        Vec::new()
+    }
+}
