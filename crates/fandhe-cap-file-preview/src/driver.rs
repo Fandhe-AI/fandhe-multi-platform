@@ -354,28 +354,40 @@ fn drive(
         let mut g = session.timing.lock().unwrap_or_else(|e| e.into_inner());
         match take_request(state) {
             // 発送済みの世代は `mark_working` の適用まで再発送しない（先の結果も消さない）。
-            // 公開入口の要求・結果が残っているうちは置き換えず、次のフレームで再試行する。
-            Some((generation, op)) if g.is_none_or(|t| t.generation != generation) => session
-                .screen
-                .begin_keeping_foreign(&session.slot)
-                .map(|request_id| {
-                    let started = Instant::now();
-                    *g = Some(Timing {
-                        request_id,
-                        generation,
-                        started,
-                        has_deadline: op != FilePreviewOp::Preview,
-                    });
-                    (request_id, op, started)
-                }),
+            // 公開入口の要求・結果が残っているうちは置き換えず、画面へ busy の失敗を返す。
+            Some((generation, op)) if g.is_none_or(|t| t.generation != generation) => {
+                Some(match session.screen.begin_keeping_foreign(&session.slot) {
+                    Some(request_id) => {
+                        let started = Instant::now();
+                        *g = Some(Timing {
+                            request_id,
+                            generation,
+                            started,
+                            has_deadline: op != FilePreviewOp::Preview,
+                        });
+                        Ok((request_id, op, started))
+                    }
+                    None => Err(generation),
+                })
+            }
             _ => None,
         }
     };
-    if let Some(req) = new_request {
-        let _ = sender.send(Box::new(mark_working));
-        start(session, sender, imp, present, req, deadline);
-        sender.request_repaint_after(Duration::ZERO);
-        return;
+    match new_request {
+        Some(Ok(req)) => {
+            let _ = sender.send(Box::new(mark_working));
+            start(session, sender, imp, present, req, deadline);
+            sender.request_repaint_after(Duration::ZERO);
+            return;
+        }
+        Some(Err(generation)) => {
+            // 枠が埋まっていると画面は `Requested` のまま再描画されなくなるため、失敗を確定して戻す。
+            let _ = sender.send(Box::new(move |s: &mut FilePreviewState| {
+                finish(s, generation, Err(FilePreviewFailure::Failed));
+            }));
+            return;
+        }
+        None => {}
     }
     if !matches!(state.phase, FilePreviewPhase::Working(_)) {
         return;
@@ -588,6 +600,31 @@ mod tests {
         assert_eq!(CALLS.load(Ordering::SeqCst), 1);
     }
 
+    /// 公開入口が枠を使用中に画面から要求しても、`Requested` のまま止まらず busy の失敗が画面へ届く。
+    #[test]
+    fn busy_slot_returns_failure_to_screen() {
+        let (sender, rx) = channel();
+        let session = session();
+        let imp = fake(|| thumb(2, 3, 24));
+        let busy = session.slot.try_begin_unless(|_| true).expect("枠を占有");
+        let mut state = FilePreviewState::default();
+        request(&mut state, FilePreviewOp::Preview);
+        drive(
+            &state,
+            &sender,
+            session,
+            &imp,
+            no_preview,
+            Duration::from_secs(30),
+        );
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        assert_eq!(failure(&state), FilePreviewFailure::Failed);
+        assert!(session.timing().is_none());
+        session.slot.clear(busy);
+    }
+
     fn failure(s: &FilePreviewState) -> FilePreviewFailure {
         match &s.outcome {
             Some(Err(f)) => *f,
@@ -780,8 +817,13 @@ mod tests {
         request(&mut state, FilePreviewOp::Thumbnail);
         let d = Duration::from_secs(30);
         drive(&state, &sender, session, &imp, no_preview, d);
-        assert!(rx.try_recv().is_err(), "記録が残ると飲み込まれる");
+        // 記録が残っていると発送されず、busy の失敗が画面へ返る。
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        assert_eq!(failure(&state), FilePreviewFailure::Failed);
         session.reset();
+        request(&mut state, FilePreviewOp::Thumbnail);
         drive(&state, &sender, session, &imp, no_preview, d);
         assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok());
     }
