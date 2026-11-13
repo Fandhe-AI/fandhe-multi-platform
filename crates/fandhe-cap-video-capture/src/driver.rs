@@ -157,6 +157,19 @@ struct Active {
 struct Bridge {
     slot: &'static RequestSlot<Outcome>,
     active: Mutex<Option<Active>>,
+    /// 画面側の発送が登録した要求の id。slot に残る要求が画面自身のものか公開入口のものかの区別に使う。
+    /// 取るときは必ず `active` のロックを先に取る（逆順にしない）。
+    screen_request: Mutex<Option<u64>>,
+}
+
+/// 画面側の発送の結果。
+enum ScreenBegin {
+    /// 空きだったので登録した。この id で OS へ渡す。
+    Begun(u64),
+    /// 画面自身が発送済みの要求（結果の画面反映待ちを含む）が残っている。二重に発送しない。
+    Ours,
+    /// 公開入口の要求・結果が残っている。置き換えない。
+    Busy,
 }
 
 impl Bridge {
@@ -164,6 +177,7 @@ impl Bridge {
         Self {
             slot: Box::leak(Box::new(RequestSlot::new())),
             active: Mutex::new(None),
+            screen_request: Mutex::new(None),
         }
     }
 
@@ -172,6 +186,7 @@ impl Bridge {
     }
 
     /// 発送済み（OS 呼び出し中、または結果が画面へ未反映）の要求があるか。
+    #[cfg(test)]
     fn has_pending(&self) -> bool {
         self.lock().is_some() || self.slot.snapshot().is_some()
     }
@@ -184,6 +199,10 @@ impl Bridge {
             return false;
         }
         self.slot.begin_with(request_id);
+        *self
+            .screen_request
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
         *active = Some(Active {
             request_id,
             presenting: false,
@@ -201,16 +220,37 @@ impl Bridge {
         self.slot.clear(request_id);
     }
 
-    /// 新しい要求を登録して id を返す。OS へ渡す前に呼び、即時の完了も照合できるようにする。
-    fn begin(&self) -> u64 {
+    /// 画面側の発送。空きの確認と登録を `active` のロックの内側で 1 回で行う（`try_begin_with` と同じ排他）。
+    /// OS へ渡す前に呼び、即時の完了も照合できるようにする。
+    fn try_begin_screen(&self) -> ScreenBegin {
         let mut active = self.lock();
+        let mut screen = self
+            .screen_request
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let pending = self.slot.snapshot();
+        if active.is_some() || pending.is_some() {
+            return match pending {
+                Some((id, _)) if *screen == Some(id) => ScreenBegin::Ours,
+                _ => ScreenBegin::Busy,
+            };
+        }
         let request_id = self.slot.begin();
+        *screen = Some(request_id);
         *active = Some(Active {
             request_id,
             presenting: false,
             panel: None,
         });
-        request_id
+        ScreenBegin::Begun(request_id)
+    }
+
+    #[cfg(test)]
+    fn begin(&self) -> u64 {
+        match self.try_begin_screen() {
+            ScreenBegin::Begun(id) => id,
+            _ => panic!("テストは空きの bridge で呼ぶ"),
+        }
     }
 
     /// 表示開始の記録。現在の要求で、未提示のときだけ `true`。
@@ -266,6 +306,10 @@ impl Bridge {
     fn reset(&self) {
         let mut active = self.lock();
         *active = None;
+        *self
+            .screen_request
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
         self.slot.reset();
     }
 }
@@ -319,9 +363,8 @@ fn to_core_failure(f: VideoCaptureFailure) -> CoreFailure {
     }
 }
 
-/// 要求を登録して OS へ渡す。同期失敗はその場で確定する。
-fn start_request(bridge: &Bridge, imp: &dyn VideoCapturer) {
-    let request_id = bridge.begin();
+/// 登録済みの要求を OS へ渡す。同期失敗はその場で確定する。
+fn start_request(bridge: &Bridge, imp: &dyn VideoCapturer, request_id: u64) {
     if let Err(f) = imp.capture(request_id, MAX_DURATION_SECS) {
         bridge.complete_from_os(request_id, Err(f));
     }
@@ -335,14 +378,25 @@ fn drive(
     bridge: &Bridge,
     forward: fn(u64, PanelCommand),
 ) {
-    if take_request(state).is_some() {
-        // 保留ありは発送済み（`mark_running` の適用待ち）。二重に発送しない。
-        if bridge.has_pending() {
-            return;
+    if let Some(generation) = take_request(state) {
+        match bridge.try_begin_screen() {
+            // 画面自身の発送済み（`mark_running` の適用待ち）。二重に発送しない。
+            ScreenBegin::Ours => {}
+            ScreenBegin::Begun(request_id) => {
+                let _ = sender.send(Box::new(mark_running));
+                start_request(bridge, &**imp, request_id);
+                sender.request_repaint_after(POLL_INTERVAL);
+            }
+            // 公開入口の要求・結果が残っているうちは置き換えず、画面へ busy の失敗を返す
+            // （`Requested` のまま止まらないよう `Running` を経て確定する）。
+            ScreenBegin::Busy => {
+                let _ = sender.send(Box::new(move |s: &mut VideoCaptureShowState| {
+                    mark_running(s);
+                    finish_capture(s, generation, Err(CoreFailure::Internal));
+                }));
+                sender.request_repaint_after(POLL_INTERVAL);
+            }
         }
-        let _ = sender.send(Box::new(mark_running));
-        start_request(bridge, &**imp);
-        sender.request_repaint_after(POLL_INTERVAL);
         return;
     }
     if state.phase != Phase::Running {
@@ -864,6 +918,23 @@ mod tests {
         assert!(!bridge.has_pending());
         assert!(bridge.try_begin_with(7));
         assert_eq!(bridge.slot.snapshot().map(|s| s.0), Some(7));
+    }
+
+    /// 公開入口が枠を使用中に画面が発送しても、外部の登録は残り、画面へは busy の失敗が届く。
+    #[test]
+    fn busy_slot_keeps_external_request_and_fails_screen() {
+        let bridge = new_bridge();
+        let f = fake(Mode::Silent, bridge);
+        let imp: Arc<dyn VideoCapturer> = f.clone();
+        let (sender, rx) = channel();
+        assert!(bridge.try_begin_with(42));
+        let mut state = VideoCaptureShowState::default();
+        request_capture(&mut state);
+        pump(&mut state, &sender, &rx, &imp, bridge);
+        assert_eq!(state.result, Some(Err(CoreFailure::Internal)));
+        assert_eq!(f.calls.load(Ordering::SeqCst), 0, "OS へは渡さない");
+        assert_eq!(bridge.slot.snapshot().map(|s| s.0), Some(42));
+        assert!(bridge.lock().as_ref().is_some_and(|a| a.request_id == 42));
     }
 
     #[test]

@@ -66,6 +66,10 @@ impl<O> RequestSlot<O> {
 
     /// 呼び出し側が決めた `request_id` で登録する（フレームワーク外のアプリが自分の id で OS 実装を直接呼ぶ入口用）。
     /// 採番は `request_id` の次まで進め、後の `begin` が同じ id を発行しないようにする。
+    ///
+    /// 占有の確認はしない（進行中の要求を無条件に上書きする）。空きの確認は呼び出し側が自分のロックの内側で
+    /// 行う。`request_id` は `i64::MAX` 以下を前提とする。`saturating_add` のため `u64::MAX` を渡すと
+    /// 採番が `u64::MAX` で止まり、次の `begin` が同じ id を発行する。
     pub fn begin_with(&self, request_id: u64) {
         self.next_request_id
             .fetch_max(request_id.saturating_add(1), Ordering::Relaxed);

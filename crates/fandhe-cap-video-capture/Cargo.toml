@@ -23,7 +23,7 @@ jni = { workspace = true }
 # 完了の積み込みは共通層（`fandhe_platform_windows::winrt_async`）。
 [target.'cfg(target_os = "windows")'.dependencies]
 fandhe-platform-windows = { path = "../fandhe-platform-windows" }
-windows = { workspace = true, features = ["std", "Foundation", "Media_Capture", "Media_MediaProperties", "Storage", "Storage_FileProperties", "Win32_Foundation"] }
+windows = { workspace = true, features = ["std", "Foundation", "Media_Capture", "Media_MediaProperties", "Storage", "Storage_FileProperties", "Storage_Streams", "Win32_Foundation"] }
 windows-future = { workspace = true }
 
 [build-dependencies]
