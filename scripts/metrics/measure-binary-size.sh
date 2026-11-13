@@ -15,14 +15,20 @@
 # 使い方:
 #   bash scripts/metrics/measure-binary-size.sh <成果物パス> [<成果物パス> ...]
 #
-# 出力: 標準出力に CSV（列: path,bytes,mib,sha256）を書く。各ファイルについて
-# 20MB（20 * 1024 * 1024 バイト）以内か否かの判定を標準エラーへ出力する。
-# `.aab` / `.apk` を渡された場合は、`unzip -l`（無ければ `python3 -m zipfile -l`）に
-# よる ABI 別 `lib/<abi>/*.so` の内訳サイズも標準エラーへ追加出力する。この内訳は
-# 圧縮・整列によるコンテナオーバーヘッドを含まない zip エントリ単位の概算であり、
-# 実際のダウンロードサイズとは一致しない近似値である旨に注意すること
-# （bundletool 等の新規バイナリ導入はしない。ci.md の「野良インストール禁止」・
-# security.md A06「脆弱な依存」対策）。
+# 出力: 標準出力に CSV（列: path,bytes,mib,sha256）を書く。bytes はファイル自体の
+# サイズで、参考値である。
+#
+# 20MiB 判定の物差し（#1179 の決定、#1294）: 端末が受け取るサイズ。`.aab` に限り
+# bundletool の `get-size total --dimensions=ABI` を使い、ABI ごとの MAX のうち最大値を
+# 20 * 1024 * 1024 バイトと比べて判定を標準エラーへ出す。AAB ファイルには配信されない
+# デバッグシンボル（BUNDLE-METADATA）と全 ABI 分が同梱されるため、ファイルサイズでは
+# 配信サイズより大きく出る。`build-apks` は署名鍵を渡さず実行する（署名ブロック分の数 KB は
+# 誤差）。`.apk`・`.so` 等は端末が受け取るサイズではないため判定対象外とし、参考値の
+# CSV だけを出す。
+# 前提: `scripts/android/setup-android-env.sh` で導入済みの bundletool と JDK
+# （`scripts/android/android-env.sh` の BUNDLETOOL_JAR・JAVA_HOME）。無い場合・bundletool が
+# 失敗した場合は、ファイルサイズへ切り替えず非 0 で終える。
+# `.apk` には、zip エントリ単位の ABI 別 `lib/<abi>/*.so` 内訳（概算）も標準エラーへ出す。
 set -euo pipefail
 
 readonly TWENTY_MIB_BYTES=$((20 * 1024 * 1024))
@@ -102,6 +108,57 @@ print_abi_breakdown() {
   done
 }
 
+# .aab の端末あたり配信サイズで 20MiB 判定する。呼び出し元はメインループ。
+# bundletool が使えない・結果が読めないときは exit 1（ファイルサイズへ倒さない）。
+measure_aab_download_size() {
+  local target="$1"
+  local env_file
+  env_file="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../android" && pwd -P)/android-env.sh"
+  # shellcheck source=../android/android-env.sh
+  # shellcheck disable=SC1091
+  . "${env_file}"
+  if [ ! -f "${BUNDLETOOL_JAR}" ] || [ ! -x "${JAVA_HOME}/bin/java" ]; then
+    echo "エラー: bundletool または JDK が未導入です。bash scripts/android/setup-android-env.sh を実行してください" >&2
+    exit 1
+  fi
+
+  local work sizes
+  work="$(mktemp -d)"
+  if ! "${JAVA_HOME}/bin/java" -jar "${BUNDLETOOL_JAR}" build-apks \
+    --bundle="${target}" --output="${work}/app.apks" >/dev/null; then
+    rm -rf "${work}"
+    echo "エラー: bundletool build-apks に失敗しました: ${target}" >&2
+    exit 1
+  fi
+  if ! sizes="$("${JAVA_HOME}/bin/java" -jar "${BUNDLETOOL_JAR}" get-size total \
+    --apks="${work}/app.apks" --dimensions=ABI)"; then
+    rm -rf "${work}"
+    echo "エラー: bundletool get-size に失敗しました: ${target}" >&2
+    exit 1
+  fi
+  rm -rf "${work}"
+
+  # 行形式: ABI,MIN,MAX。数字の行だけ受け取り、最大の MAX を返す。
+  local rows max
+  rows="$(printf '%s\n' "${sizes}" | awk -F, 'NF >= 3 && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ { print $1 "\t" $2 "\t" $3 }')"
+  if [ -z "${rows}" ]; then
+    echo "エラー: get-size の結果から ABI ごとのサイズを読めませんでした: ${target}" >&2
+    exit 1
+  fi
+  echo "  端末あたり配信サイズ（get-size total、ABI 別）:" >&2
+  printf '%s\n' "${rows}" | while IFS="$(printf '\t')" read -r abi min_b max_b; do
+    printf '    %s: MIN %s bytes (%s MiB) / MAX %s bytes (%s MiB)\n' \
+      "${abi}" "${min_b}" "$(bytes_to_mib "${min_b}")" "${max_b}" "$(bytes_to_mib "${max_b}")" >&2
+  done
+  max="$(printf '%s\n' "${rows}" | awk -F'\t' 'BEGIN { m = 0 } $3 + 0 > m { m = $3 + 0 } END { printf "%d", m }')"
+  if [ "${max}" -le "${TWENTY_MIB_BYTES}" ]; then
+    echo "判定 OK: ${target} の端末あたり配信サイズは 20MiB 以内です（最大 $(bytes_to_mib "${max}") MiB）" >&2
+  else
+    echo "判定 NG: ${target} の端末あたり配信サイズは 20MiB を超えています（最大 $(bytes_to_mib "${max}") MiB）" >&2
+  fi
+  echo "  AAB ファイルサイズは参考値（判定には使わない）" >&2
+}
+
 echo "path,bytes,mib,sha256"
 
 for target in "$@"; do
@@ -116,15 +173,16 @@ for target in "$@"; do
 
   echo "${target},${bytes},${mib},${digest}"
 
-  if [ "${bytes}" -le "${TWENTY_MIB_BYTES}" ]; then
-    echo "判定 OK: ${target} は 20MiB 以内です（${mib} MiB）" >&2
-  else
-    echo "判定 NG: ${target} は 20MiB を超えています（${mib} MiB）" >&2
-  fi
-
   case "${target}" in
-    *.aab | *.apk)
+    *.aab)
+      measure_aab_download_size "${target}"
+      ;;
+    *.apk)
+      echo "判定対象外: ${target}（端末が受け取るサイズではないため参考値のみ）" >&2
       print_abi_breakdown "${target}"
+      ;;
+    *)
+      echo "判定対象外: ${target}（端末が受け取るサイズではないため参考値のみ）" >&2
       ;;
   esac
 done
