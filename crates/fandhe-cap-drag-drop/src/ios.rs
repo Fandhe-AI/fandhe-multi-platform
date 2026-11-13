@@ -77,6 +77,15 @@ static INSTALLED: AtomicBool = AtomicBool::new(false);
 /// 再描画が止まらない問題への対処、契約表 4）。
 const INSTALL_RETRY_INTERVAL_MS: u64 = 1000;
 
+/// 直近の取り付け試行が失敗で、まだ成功していないか。再試行待ちの間も失敗を返し続けるために保持する
+/// （待機中の [`ensure_installed`] は `None` を返すため、これが無いと独立入口で失敗が消えて見える）。
+static INSTALL_FAILED: AtomicBool = AtomicBool::new(false);
+
+/// 取り付けが未完了で、直近の試行が失敗だったか（成功で解除される）。
+pub(crate) fn install_failed() -> bool {
+    INSTALL_FAILED.load(Ordering::SeqCst)
+}
+
 /// 直近に [`fandhe_ios_drag_drop_install`] を試みた時刻（[`now_ms`] 基準）。0 は
 /// 「一度も試みていない」を表す番兵（[`LAST_ACTIVE_MS`] と同じ考え方）。この番兵と
 /// 実際の時刻 0 が衝突するのはプロセス起動直後の一瞬のみで実害は無い（同 doc 参照）。
@@ -131,9 +140,11 @@ pub(crate) fn ensure_installed() -> Option<InstallResult> {
     let code = unsafe { fandhe_ios_drag_drop_install() };
     if code == 0 {
         INSTALLED.store(true, Ordering::SeqCst);
+        INSTALL_FAILED.store(false, Ordering::SeqCst);
         return Some(InstallResult::Installed);
     }
 
+    INSTALL_FAILED.store(true, Ordering::SeqCst);
     Some(InstallResult::Failed)
 }
 

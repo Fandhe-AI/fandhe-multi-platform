@@ -46,7 +46,9 @@ pub fn platform_drag_drop() -> Result<Vec<drop_session::DropEvent>, DropSetupErr
     #[cfg(target_os = "ios")]
     {
         ios::mark_active();
-        if let Some(ios::InstallResult::Failed) = ios::ensure_installed() {
+        // 再試行待ちの間は ensure_installed が None を返すため、保持した失敗で装着成功まで Err を返し続ける。
+        ios::ensure_installed();
+        if ios::install_failed() {
             return Err(DropSetupError);
         }
         Ok(drop_session::take_events())
