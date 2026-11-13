@@ -1,14 +1,14 @@
 //! macOS・iOS 向け環境音の分類実装（Issue #725、親 #142）。`apple/fandhe_apple_sound_classification.m`
 //! （SoundAnalysis の内蔵分類器 `SNClassifySoundRequest` と `AVAudioEngine` の入力タップ。
 //! `build.rs` が macOS・iOS 双方の feature `device` 分岐でコンパイルする）を `unsafe extern "C"`
-//! 3 関数で呼ぶ。`device/sound_classification.rs` の macOS 経路が [`implementation`] を呼ぶ。
-//! iOS（Issue #726）も同じ `.m` を使い、`ios_sound_classification.rs` がこのモジュールへ委譲する
+//! 3 関数で呼ぶ。`driver` の macOS 経路が [`implementation`] を呼ぶ。
+//! iOS（Issue #726）も同じ `.m` を使い、`ios.rs` がこのモジュールへ委譲する
 //! （iOS では背景遷移・音声の割り込みを中断にし、`AVAudioSession` を保存して全終了経路で戻す）。dispatch・共通コア画面・ドライバ・trait 契約
-//! （`fandhe_device::sound_classification`）は #725 の最終形のまま変えない。
+//! （`crate::contract`）は #725 の最終形のまま変えない。
 //!
 //! `.m` は OS の生値と状態コードを返すだけで、契約値への写像は [`start_result`] / [`read_result`] が
 //! 行う（ホストでテストできるよう `cfg(any(ios, macos, test))`）。ラベルと信頼度の検証・上位 3 件の
-//! 選択は `fandhe_device::sound_classification::select_top` が SSOT で、丸めの前に検査する。
+//! 選択は `crate::contract::select_top` が SSOT で、丸めの前に検査する。
 //! 未知のコード・範囲外の件数や理由は成功へ倒さず `Failed` / 結果なしに写す。
 //!
 //! # 流れ
@@ -28,12 +28,12 @@
 //!
 //! TCC の許可を伴う実際の分類と入力変更時の中断は Mac 目視（#716）で確かめる。
 
-use fandhe_device::sound_classification::{
-    select_top, ClassificationResult, InterruptReason, SoundFailure, SoundPoll, MAX_LABEL_BYTES,
-    TOP_K,
+use crate::contract::{
+    ClassificationResult, InterruptReason, MAX_LABEL_BYTES, SoundFailure, SoundPoll, TOP_K,
+    select_top,
 };
 
-/// `.m` が返す候補の最大件数（`fandhe_device::sound_classification::TOP_K` と一致させる）。
+/// `.m` が返す候補の最大件数（`crate::contract::TOP_K` と一致させる）。
 pub(crate) const MAX_CANDIDATES: usize = TOP_K;
 
 /// `.m` が候補 1 件ごとに確保するラベルのバッファ長（バイト）。
@@ -134,14 +134,14 @@ pub(crate) fn read_result(code: i32, raw: &RawRead) -> Result<SoundPoll, SoundFa
 mod imp {
     use std::sync::Arc;
 
-    use fandhe_device::sound_classification::{SoundClassifier, SoundFailure, SoundPoll};
+    use crate::contract::{SoundClassifier, SoundFailure, SoundPoll};
 
-    use super::{read_result, start_result, RawRead};
+    use super::{RawRead, read_result, start_result};
 
     // SAFETY: `apple/fandhe_apple_sound_classification.m`（`build.rs` が macOS・iOS の feature `device`
     // 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_apple_sound_classification_start() -> i32;
         fn fandhe_apple_sound_classification_read(
             seq: *mut u64,
@@ -189,7 +189,7 @@ mod imp {
         }
     }
 
-    /// Apple 系の `SoundClassifier` 実装を返す（`device/sound_classification.rs` の macOS 経路と、
+    /// Apple 系の `SoundClassifier` 実装を返す（`driver` の macOS 経路と、
     /// b-ios が委譲する `ios_sound_classification` から呼ばれる）。
     pub(crate) fn implementation() -> Arc<dyn SoundClassifier> {
         Arc::new(AppleSoundClassifier)

@@ -215,7 +215,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "sound_classification_show" => fandhe_core::screens::sound_classification_show::current_screen,
-    fandhe_egui_proxy::device::sound_classification::sound_classification_show_effect,
+    fandhe_cap_sound_classification::sound_classification_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "system_tray" => fandhe_core::screens::system_tray::current_screen,

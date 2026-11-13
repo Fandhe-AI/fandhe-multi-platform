@@ -1602,6 +1602,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-sound-classification"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+]
+
+[[package]]
 name = "fandhe-cap-spell-check"
 version = "0.2.0"
 dependencies = [
@@ -1792,6 +1801,7 @@ dependencies = [
  "fandhe-cap-share-receive",
  "fandhe-cap-share-sheet",
  "fandhe-cap-smart-home",
+ "fandhe-cap-sound-classification",
  "fandhe-cap-spell-check",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-system-tray",

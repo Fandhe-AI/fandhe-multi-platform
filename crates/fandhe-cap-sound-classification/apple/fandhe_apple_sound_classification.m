@@ -3,7 +3,7 @@
 // iOS 固有の区画（AVAudioSession、背景・割り込みの購読、再描画の通知）は `#if TARGET_OS_IPHONE`。
 // Android / Windows / Web は対応表で「できない」のまま（Rust 側の `UnsupportedSoundClassifier`）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_sound_classification.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-sound-classification/src/apple.rs` から C ABI 経由で呼ばれる。
 //
 // 契約（pull 型。OS 側が最新の結果を持ち、Rust 側が間隔つきで読む。`ios_activity_recognition.m` と同型）:
 //   int32_t fandhe_apple_sound_classification_start(void)
@@ -67,7 +67,7 @@
 #if TARGET_OS_IPHONE
 #import <UIKit/UIKit.h>
 
-// Rust 側（`ios_sound_classification.rs`）の受け口。`crate::ios::request_repaint` を呼ぶだけ。
+// Rust 側（`crates/fandhe-cap-sound-classification/src/ios.rs`）の受け口。`crate::ios::request_repaint` を呼ぶだけ。
 extern void fandhe_rust_sound_classification_changed(void);
 
 // 制御キューの外から呼ぶ（main が dispatch_sync(g_ctrl) 中でも入れ子の待ちを作らない）。

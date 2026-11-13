@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #142、Issue #725）「環境音の分類」の effect ドライバ。
 //! `fandhe_core::screens::sound_classification_show`（端末依存ゼロ）の `wanted` の立ち上がりで
-//! `fandhe_device::sound_classification::SoundClassifier::start`、立ち下がりで `stop` を呼び、
+//! `crate::contract::SoundClassifier::start`、立ち下がりで `stop` を呼び、
 //! 聞き取り中は [`READ_INTERVAL`] ごとに `read` して結果を注入する（`registry.rs` の `effect` 区画から
 //! 毎フレーム同期に呼ばれる。`activity_recognition.rs` と同型）。
 //!
@@ -20,33 +20,33 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use fandhe_core::screens::sound_classification_show::{
-    apply_failure, apply_interrupted, apply_poll, ClassificationView, InterruptReasonView,
-    ResultView, SoundClassificationShowState, SoundFailureView, SoundPollView,
-};
 #[cfg(not(any(target_os = "macos", target_os = "ios")))]
-use fandhe_device::sound_classification::UnsupportedSoundClassifier;
-use fandhe_device::sound_classification::{
-    to_percent, FirstResultDeadline, InterruptReason, PollKind, SoundClassifier, SoundFailure,
-    SoundPoll, StaleTracker, READ_INTERVAL,
+use crate::contract::UnsupportedSoundClassifier;
+use crate::contract::{
+    FirstResultDeadline, InterruptReason, PollKind, READ_INTERVAL, SoundClassifier, SoundFailure,
+    SoundPoll, StaleTracker, to_percent,
+};
+use fandhe_core::screens::sound_classification_show::{
+    ClassificationView, InterruptReasonView, ResultView, SoundClassificationShowState,
+    SoundFailureView, SoundPollView, apply_failure, apply_interrupted, apply_poll,
 };
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた実装を返す（プロセスで 1 個。聞き取りを二重に作らないため
-/// `OnceLock` で保持する）。
-fn implementation() -> Arc<dyn SoundClassifier> {
+/// `OnceLock` で保持する）。画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_sound_classification() -> Arc<dyn SoundClassifier> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn SoundClassifier>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "macos")]
             {
-                super::apple_sound_classification::implementation()
+                crate::apple::implementation()
             }
             #[cfg(target_os = "ios")]
             {
-                super::ios_sound_classification::implementation()
+                crate::ios::implementation()
             }
             #[cfg(not(any(target_os = "macos", target_os = "ios")))]
             {
@@ -75,9 +75,7 @@ fn to_failure(f: SoundFailure) -> SoundFailureView {
 }
 
 /// 結果の写し。候補が空の結果は作らない（`None`）。
-fn to_result_view(
-    r: &fandhe_device::sound_classification::ClassificationResult,
-) -> Option<ResultView> {
+fn to_result_view(r: &crate::contract::ClassificationResult) -> Option<ResultView> {
     if r.top.is_empty() {
         return None;
     }
@@ -264,28 +262,41 @@ pub fn sound_classification_show_effect(
 ) {
     let mut guard = DRIVER.lock().unwrap_or_else(|p| p.into_inner());
     let ds = guard.get_or_insert_with(DriverState::default);
-    drive(state, sender, implementation().as_ref(), Instant::now(), ds);
+    drive(
+        state,
+        sender,
+        platform_sound_classification().as_ref(),
+        Instant::now(),
+        ds,
+    );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{
+        Classification, ClassificationResult, FIRST_RESULT_TIMEOUT_MS, STALE_AFTER_MS,
+        UnsupportedSoundClassifier as Unsupported,
+    };
     use fandhe_core::screens::sound_classification_show::{
-        result_text, start, status_text, stop, SoundView, FAILED_TEXT, LISTENING_TEXT,
+        FAILED_TEXT, LISTENING_TEXT, SoundView, result_text, start, status_text, stop,
     };
-    use fandhe_device::sound_classification::{
-        Classification, ClassificationResult, UnsupportedSoundClassifier as Unsupported,
-        FIRST_RESULT_TIMEOUT_MS, STALE_AFTER_MS,
-    };
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex as StdMutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<SoundClassificationShowState>>;
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<SoundClassificationShowState>>;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
 
     fn channel() -> (CompletionSender<SoundClassificationShowState>, Rx) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     fn apply_all(rx: &Rx, s: &mut SoundClassificationShowState) {

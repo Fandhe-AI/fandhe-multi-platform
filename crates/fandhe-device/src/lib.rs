@@ -179,8 +179,6 @@ pub mod screen_orientation;
 pub mod secure_credential;
 /// Phase 11 の拡充ループ（親 #167、Issue #810）: スリープ・画面の消灯と点灯・ロックと解除の通知。
 pub mod sleep_lock_events;
-/// Phase 11（端末機能の拡充ループ、親 #142、Issue #725）: 環境音の分類（上位 3 件のラベルと信頼度）。
-pub mod sound_classification;
 /// Phase 11（端末機能の拡充ループ、親 #1023、Issue #1024）: 音声認識。
 pub mod speech_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #117、Issue #560）: OS の検索への登録（固定のメモ 1 件の登録と全削除）。

@@ -1,6 +1,6 @@
 //! 環境音の分類の契約（Issue #725、親 #142、対応表 `sound-classification`）。マイクで拾った
 //! まわりの音を OS の内蔵分類器で分類し、上位 3 件のラベルと信頼度を画面に出すための橋渡し。
-//! `fandhe-egui-proxy` の `device/sound_classification.rs` が `start` / `stop` と間隔つきの
+//! 本 crate の `driver` が `start` / `stop` と間隔つきの
 //! [`SoundClassifier::read`] を行う（pull 型。OS 側が最新の結果を持ち、画面側が読む。
 //! `activity_recognition` と同型）。実体は macOS の SoundAnalysis + `AVAudioEngine`（#725）、
 //! iOS は後続の b-ios。
@@ -10,7 +10,7 @@
 //!
 //! # 契約
 //!
-//! - 結果は [`SoundPoll`] か [`SoundFailure`]。`DeviceError` へ variant を足すと既存の網羅 match が壊れるため
+//! - 結果は [`SoundPoll`] か [`SoundFailure`]。`SoundClassificationError` へ variant を足すと既存の網羅 match が壊れるため
 //!   機能固有の enum にする（`compass::CompassFailure` と同じ判断）
 //! - 結果なしを、空の結果や直前の値で代用しない（`device-bridge-contracts.md`「6. 嘘の成功」）。
 //!   結果が空（検証で全候補を捨てた場合を含む）のときは [`SoundPoll::Listening`] にする
@@ -65,8 +65,8 @@
 //! - `AVAudioSession` を Record にし、開始前の category / options を保存して、失敗を含む全終了経路で戻す
 //! - 背景遷移（[`InterruptReason::Background`]）と `AVAudioSessionInterruptionNotification`
 //!   （[`InterruptReason::AudioInterruption`]）で止め、[`SoundPoll::Interrupted`] を返す
-//! - 値の確定直後に `crate::ios::request_repaint` を呼ぶ（契約表 4）
-//! - `ios_sound_classification.rs` を `apple_sound_classification::implementation` への委譲に差し替える
+//! - 値の確定直後に `fandhe_runtime::request_repaint` を呼ぶ（契約表 4）
+//! - `ios.rs` を `apple::implementation` への委譲に差し替える
 //!   （dispatch・共通コア画面・`device.rs`・`build.rs` は変えない）
 
 use std::time::Duration;

@@ -116,9 +116,6 @@ fn build() {
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
-    // `apple/fandhe_apple_sound_classification.m`（Issue #725 macOS + b-ios iOS）。macOS・iOS 両分岐から呼ぶ
-    // （b-ios は build.rs を触らずに済む）。SoundAnalysis をリンクする。
-    compile_apple_sound_classification();
     // `apple/fandhe_apple_local_peer.m`（Issue #511 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
     compile_apple_local_peer();
@@ -453,19 +450,6 @@ fn compile_apple_lan_discovery() {
     compile_objc(
         "apple/fandhe_apple_lan_discovery.m",
         &["Foundation", "Network"],
-    );
-}
-
-/// `apple/fandhe_apple_sound_classification.m` を `cc` でコンパイルし SoundAnalysis をリンクする（Issue #725 macOS・b-ios で iOS も共用）。
-/// SoundAnalysis は macOS 10.15・iOS 13 からあるため強リンクでよい（内蔵分類器は `.m` の `@available(macOS 12.0, *)` で守る）。
-fn compile_apple_sound_classification() {
-    compile_objc(
-        "apple/fandhe_apple_sound_classification.m",
-        if target_is_ios() {
-            &["AVFoundation", "Foundation", "SoundAnalysis", "UIKit"]
-        } else {
-            &["AVFoundation", "Foundation", "SoundAnalysis"]
-        },
     );
 }
 
@@ -1105,9 +1089,6 @@ fn build_macos() {
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
-    // `apple/fandhe_apple_sound_classification.m`（Issue #725 macOS + b-ios iOS）。macOS・iOS 両分岐から呼ぶ
-    // （b-ios は build.rs を触らずに済む）。SoundAnalysis をリンクする。
-    compile_apple_sound_classification();
     // `apple/fandhe_apple_local_peer.m`（Issue #511 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
     compile_apple_local_peer();

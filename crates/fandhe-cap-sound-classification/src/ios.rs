@@ -1,9 +1,9 @@
 //! iOS 向け環境音の分類（Issue #726、親 #142 の b-ios）。
 //!
-//! 呼び出し元: `device/sound_classification.rs` の iOS 経路が [`implementation`] を呼ぶ。
-//! 実体は macOS と共用の `apple_sound_classification::implementation`（SoundAnalysis の内蔵分類器を
+//! 呼び出し元: `driver` の iOS 経路が [`implementation`] を呼ぶ。
+//! 実体は macOS と共用の `apple::implementation`（SoundAnalysis の内蔵分類器を
 //! `apple/fandhe_apple_sound_classification.m` の C ABI 経由で呼ぶ）への委譲で、dispatch・共通コア画面・
-//! ドライバ・trait 契約（`fandhe_device::sound_classification`）は変えない。
+//! ドライバ・trait 契約（`crate::contract`）は変えない。
 //!
 //! iOS 固有の処理は `.m` の `TARGET_OS_IPHONE` 区画にある。
 //!
@@ -25,18 +25,18 @@
 
 use std::sync::Arc;
 
-use fandhe_device::sound_classification::SoundClassifier;
+use crate::contract::SoundClassifier;
 
 /// iOS の `SoundClassifier` 実装を返す（macOS と共用の Apple 実装へ委譲する）。
 pub(crate) fn implementation() -> Arc<dyn SoundClassifier> {
-    super::apple_sound_classification::implementation()
+    crate::apple::implementation()
 }
 
 /// 値の確定（結果・失敗・中断）の通知（`.m` の非同期経路から、制御キューの外で呼ばれる）。
 /// 次フレームを起こすだけで、引数もポインタも取らず、panic せず、`dispatch_sync` もしない
 /// （契約表 4・11）。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_sound_classification_changed() {
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
