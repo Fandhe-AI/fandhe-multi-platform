@@ -10,12 +10,15 @@
 //! - レンダラ実装は [`RepaintWaker`] を実装して [`CompletionSender`] へ渡す
 //! - OS コールバックのように sender を持たない経路は [`request_repaint`] で起こす
 //!   （レンダラ実装が起動時に [`set_repaint_waker`] で登録する）
+//! - 描画層の観測値と操作（フォーカス・ファイルのドラッグ・拡大率）は [`HostView`]。
+//!   [`Renderer`] には載せず、[`RepaintWaker::host_view`] で [`CompletionSender::host_view`] へ届ける
 //! - [`image_store`] は effect ドライバが復号済みの画素を描画側へ渡す 1 枠の保管所
 //! - [`request_slot`] は request/response 型の端末機能が使う「要求 1 件の追跡」
 //! - [`tick`] は時間で進む画面の effect ドライバが共用する、フレームごとの経過時間の実測
 
 #![forbid(unsafe_code)]
 
+pub mod host_view;
 pub mod image_store;
 pub mod request_slot;
 pub mod tick;
@@ -28,6 +31,8 @@ use std::time::Duration;
 /// 描画命令。定義は `fandhe-core`（`Widget::paint` が返すため）にあり、ここは再公開のみ。
 pub use fandhe_core::PaintCommand;
 use fandhe_core::{Screen, StateStore};
+pub use host_view::HostView;
+use host_view::NoHostView;
 
 /// レンダラ差し替えの契約。1 フレーム分の `screen` を描き、UI イベントを `store.dispatch` へ流す。
 ///
@@ -55,6 +60,10 @@ pub trait RepaintWaker: Any + Send + Sync {
     fn wake(&self);
     /// `delay` 経過後に 1 回だけフレームを要求する。
     fn wake_after(&self, delay: Duration);
+    /// 描画層の観測値と操作の口（[`HostView`]）。レンダラ実装が上書きする。既定は既定値だけを返す口。
+    fn host_view(&self) -> &dyn HostView {
+        &NoHostView
+    }
 }
 
 /// プロセス単位の起床口。sender を持たない OS コールバックが使う。
@@ -127,6 +136,11 @@ impl<S> CompletionSender<S> {
         self.waker.wake_after(duration);
     }
 
+    /// 描画層の観測値と操作の口。機能 crate が egui を知らずにフォーカス等を読むために使う。
+    pub fn host_view(&self) -> &dyn HostView {
+        self.waker.host_view()
+    }
+
     /// 起床口そのもの。レンダラ実装が自分の型へ戻す暫定の橋渡し用で、機能 crate は使わない。
     pub fn waker(&self) -> &dyn RepaintWaker {
         &*self.waker
@@ -191,6 +205,41 @@ mod tests {
         fn wake_after(&self, delay: Duration) {
             self.afters.lock().unwrap().push(delay);
         }
+    }
+
+    /// 口を提供しない起床口の `host_view` は「観測していない」既定値を返す。
+    #[test]
+    fn host_view_defaults_when_waker_has_none() {
+        let (tx, _rx) = channel::<Completion<Counter>>();
+        let sender = CompletionSender::new(tx, Arc::new(FakeWaker::default()));
+        let v = sender.host_view();
+        assert!(v.focused());
+        assert_eq!(v.file_drag(), (false, Vec::new()));
+        assert!(!v.pointer_primary_down());
+        v.set_zoom_factor(2.0);
+        assert_eq!(v.applied_zoom_factor(), None);
+    }
+
+    struct ViewWaker;
+    impl RepaintWaker for ViewWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _: Duration) {}
+        fn host_view(&self) -> &dyn HostView {
+            self
+        }
+    }
+    impl HostView for ViewWaker {
+        fn focused(&self) -> bool {
+            false
+        }
+    }
+
+    /// waker が上書きした `host_view` の値が sender から見える。
+    #[test]
+    fn host_view_override_is_visible_from_sender() {
+        let (tx, _rx) = channel::<Completion<Counter>>();
+        let sender = CompletionSender::new(tx, Arc::new(ViewWaker));
+        assert!(!sender.host_view().focused());
     }
 
     #[test]

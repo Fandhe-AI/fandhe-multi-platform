@@ -159,8 +159,7 @@ pub fn drag_drop_effect(state: &DragDropState, sender: &CompletionSender<DragDro
     }
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
-        use crate::app::EguiSenderExt as _;
-        let (hovering, dropped) = sender.file_drag();
+        let (hovering, dropped) = sender.host_view().file_drag();
         drive(state, sender, hovering, dropped);
     }
 }

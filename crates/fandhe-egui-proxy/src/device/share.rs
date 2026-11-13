@@ -273,9 +273,7 @@ fn drive_callback(state: &ShareTextState, sender: &CompletionSender<ShareTextSta
             // 無いため、フォーカス復帰ヒューリスティックでキャンセルを補う
             // （モジュール doc・`cancel_due` 参照）。
             #[cfg(target_os = "windows")]
-            use crate::app::EguiSenderExt as _;
-            #[cfg(target_os = "windows")]
-            if windows_cancel_check(_request_id, sender.focused()) {
+            if windows_cancel_check(_request_id, sender.host_view().focused()) {
                 bridge::deliver(
                     _request_id,
                     Ok(fandhe_device::share::ShareOutcome::Cancelled),

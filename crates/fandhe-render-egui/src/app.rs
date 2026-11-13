@@ -27,7 +27,7 @@ use crate::recyclers::VirtualListRecyclers;
 /// （`ProxyAppDyn::set_inset_margin_supplier` / `android.rs` 参照、Issue #715）。
 pub type InsetMarginSupplier = Box<dyn Fn(&egui::Context) -> egui::Margin>;
 
-use fandhe_runtime::{drain_completions, Renderer, RepaintWaker};
+use fandhe_runtime::{drain_completions, HostView, Renderer, RepaintWaker};
 /// 起床と完了通知の型は egui 非依存の `fandhe-runtime` が持つ（Issue #1162）。
 /// `crate::app::CompletionSender` などの既存パスを保つための再公開。
 pub use fandhe_runtime::{Completion, CompletionSender, EffectFn};
@@ -51,6 +51,54 @@ impl RepaintWaker for EguiWaker {
     }
     fn wake_after(&self, delay: std::time::Duration) {
         self.0.request_repaint_after(delay);
+    }
+    fn host_view(&self) -> &dyn HostView {
+        self
+    }
+}
+
+/// egui の入力・コンテキストを [`HostView`] へつなぐ。機能 crate は egui を知らずに使う（Issue #1302）。
+impl HostView for EguiWaker {
+    /// `egui::RawInput::focused` への薄い委譲。
+    fn focused(&self) -> bool {
+        self.0.input(|i| i.raw.focused)
+    }
+
+    /// `RawInput::hovered_files` / `dropped_files` への薄い委譲。egui-winit はドロップ一覧を
+    /// `RawInput::take` で 1 度だけ消費するため、ドロップは次フレーム以降には現れない。
+    fn file_drag(&self) -> (bool, Vec<Option<std::path::PathBuf>>) {
+        self.0.input(|i| {
+            (
+                !i.raw.hovered_files.is_empty(),
+                i.raw.dropped_files.iter().map(|f| f.path.clone()).collect(),
+            )
+        })
+    }
+
+    /// `egui::PointerState::primary_down` への薄い委譲。スライダーのドラッグ中に拡大率を変えると
+    /// スライダー自身が別の point 空間へ再マップされて倍率が飛ぶため、拡大率の適用を保留する判定に使う
+    /// （PR #920 是正）。
+    fn pointer_primary_down(&self) -> bool {
+        self.0.input(|i| i.pointer.primary_down())
+    }
+
+    /// `egui::Context::set_zoom_factor` に、次フレームの再描画要求と適用値の記録を足す。
+    ///
+    /// `set_zoom_factor` 自体は repaint を要求しないので、フレーム末尾で呼ばれる effect が
+    /// 入力待ちのアイドル状態のまま止まらないよう `request_repaint` する。記録は `ctx.data` の
+    /// 領域に持ち、プロセス全体の static にしない（Context A の適用値を B が適用済みと誤判定しない。
+    /// PR #920 是正）。`get_persisted` / `insert_persisted` を使うのは、将来 `persistence` を
+    /// 有効にしても読み直せなくするため。
+    fn set_zoom_factor(&self, zoom: f32) {
+        self.0.set_zoom_factor(zoom);
+        self.0.request_repaint();
+        self.0
+            .data_mut(|d| d.insert_persisted(applied_zoom_factor_id(), zoom));
+    }
+
+    fn applied_zoom_factor(&self) -> Option<f32> {
+        self.0
+            .data_mut(|d| d.get_persisted::<f32>(applied_zoom_factor_id()))
     }
 }
 
@@ -79,19 +127,6 @@ pub trait EguiSenderExt {
     #[cfg(not(target_arch = "wasm32"))]
     fn egui_context(&self) -> egui::Context {
         self.egui_ctx().clone()
-    }
-
-    /// このフレームでウィンドウがフォーカスを持っているか（`egui::RawInput::focused`
-    /// への薄い委譲）。Windows 共有シートのキャンセル検知専用
-    /// （`device/share.rs::windows_cancel_check` が「共有 UI へフォーカスを奪われた
-    /// → 復帰後も結果未着」を判定するために使う。`DataTransferManager` に
-    /// 「共有 UI を閉じた」イベントが無いための代替、`device/windows_share.rs`
-    /// モジュール doc「キャンセル検知の天井」参照）。
-    ///
-    /// 2 人目の利用者は `device/app_progress_attention.rs` の注意喚起の待機で、「フォーカスを
-    /// 失った最初のフレーム」の判定に読む（タイマーやアプリ内の記憶を持たず OS の観測を正にする）。
-    fn focused(&self) -> bool {
-        self.egui_ctx().input(|i| i.raw.focused)
     }
 
     /// このフレームのビューポート（描画領域）の大きさ（`egui::InputState::viewport_rect` への
@@ -127,17 +162,6 @@ pub trait EguiSenderExt {
             .input(|i| find_tagged_screenshot(&i.events, tag))
     }
 
-    /// ポインタの主ボタン（左クリック/タップ）がこのフレームで押下中か
-    /// （`egui::PointerState::primary_down` への薄い委譲）。Issue #912「文字サイズ追従」の
-    /// effect ドライバ（`device/text_scale.rs::drive`）専用。スライダーのドラッグ中は
-    /// `set_zoom_factor` を保留し離した後に適用するための判定に使う
-    /// （Cursor Bugbot 指摘 "Slider drag fights live zoom"、PR #920 是正。ドラッグ中に
-    /// `pixels_per_point` を変えると、スライダー自身が次パスで別の point 空間の矩形へ
-    /// 再マップされ、指/カーソル追従を失って倍率が飛ぶため）。
-    fn pointer_primary_down(&self) -> bool {
-        self.egui_ctx().input(|i| i.pointer.primary_down())
-    }
-
     /// キャンバス `id` 上で主ボタンを押下中のポインタ位置（キャンバス左上原点）。押していなければ
     /// `None`。`lib.rs` の `CanvasWidget` 分岐が毎フレーム書いた値を `ctx.data` から読むだけの
     /// 薄い委譲で、effect はフレーム末尾で呼ばれるため同じフレームの値が見える
@@ -163,78 +187,6 @@ pub trait EguiSenderExt {
         self.egui_ctx()
             .data(|d| d.get_temp::<bool>(canvas_pressed_id(id.raw())))
             .unwrap_or(false)
-    }
-
-    /// 実描画の拡大率を差し替える（`egui::Context::set_zoom_factor` への薄い委譲。
-    /// Issue #912「文字サイズ追従」の effect ドライバ
-    /// （`device/text_scale.rs::drive`）専用）。
-    ///
-    /// egui は次パス先頭で `pixels_per_point = zoom_factor × native_ppp` に反映する
-    /// （egui 0.33.3 `Context::set_zoom_factor` doc）。値域 clamp・「変わったフレーム
-    /// だけ適用するか」の判断は呼び出し側（`device/text_scale.rs`）が担い、本メソッドは
-    /// 委譲のみに留める。
-    fn set_zoom_factor(&self, zoom: f32) {
-        self.egui_ctx().set_zoom_factor(zoom);
-        // set_zoom_factor 自体は repaint を要求しない（egui::Context::set_zoom_factor の
-        // 実装詳細）。effect はフレーム末尾で呼ばれるため（本モジュール doc）、ここで
-        // request_repaint しないと「次パスで zoom を反映する」ための次フレームが
-        // 入力待ちのアイドル状態のまま起こらず、スライダー/OS 値が変わっても描画に
-        // 反映されないまま止まる（Cursor Bugbot 指摘、PR #920 是正。send が同じ理由で
-        // request_repaint する設計と揃える）。
-        self.egui_ctx().request_repaint();
-    }
-
-    /// device/text_scale.rs::drive が「直前に set_zoom_factor を適用した値」を
-    /// egui::Context 単位（ctx.data の一時領域）で読み書きするための薄い委譲。
-    ///
-    /// プロセス全体で共有する static に持たせると、egui::Context を複数持つ場面
-    /// （アプリ再構築・複数ウィンドウ等）で Context A に適用した倍率が Context B にも
-    /// 適用済みと誤判定され、B が既定倍率のまま止まる（codex-review 指摘 P2、PR #920
-    /// 是正）。ctx.data_mut の一時領域はこの ctx（＝1 つの実描画コンテキスト）に閉じる
-    /// ため、Context 単位でキャッシュが分離される（lib.rs::dispatch_back_if_requested の
-    /// text_input_focused_last_frame_id と同じ、ctx.data の一時領域を薄いキャッシュとして
-    /// 使うパターン）。
-    ///
-    /// `get_temp`/`insert_temp` ではなく `get_persisted`/`insert_persisted` を使う
-    /// （Cursor Bugbot 指摘、PR #920 是正）。`get_temp` はシリアライズ対象外の値として
-    /// 扱われ、`persistence` feature 有効時に `egui::Memory` の保存・復元サイクルを
-    /// 経由すると読み直せなくなる。`egui` は本クレートで `default-features = false`
-    /// のため今は該当しないが、`persistence` を将来有効化しても drive の
-    /// skip-if-unchanged 判定が壊れないよう、意図的に持続想定の API 側へ寄せる
-    /// （このクレートに `persistence` feature が無いため実際のシリアライズは発生しない）。
-    fn text_scale_last_applied(&self) -> Option<f32> {
-        self.egui_ctx()
-            .data_mut(|d| d.get_persisted::<f32>(text_scale_last_applied_id()))
-    }
-
-    /// Self::text_scale_last_applied の書き込み側（doc 参照）。
-    fn set_text_scale_last_applied(&self, zoom: f32) {
-        self.egui_ctx()
-            .data_mut(|d| d.insert_persisted(text_scale_last_applied_id(), zoom));
-    }
-
-    /// このフレームのドラッグ & ドロップ入力（`egui::RawInput::hovered_files`/
-    /// `dropped_files` への薄い委譲）。`device/drag_drop.rs::drag_drop_effect` 専用
-    /// （Issue #1014）。
-    ///
-    /// 戻り値の第 1 要素はホバー中のファイルがあるか、第 2 要素はこのフレームで
-    /// ドロップされたパスの一覧（`dropped_files[].path` は Web では常に `None`。
-    /// デスクトップでは OS からパスが渡らない特殊なドロップ元で `None` になり得る）。
-    /// egui-winit はドロップ一覧を `RawInput::take` で 1 度だけ消費するため、
-    /// ドロップされたイベントは次フレーム以降には現れない（`device/drag_drop.rs`
-    /// モジュール doc「egui-winit 0.33.3 の挙動」参照）。
-    ///
-    /// iOS/Android では呼ばれない（`drag_drop_effect` の iOS/Android 分岐は egui-winit を
-    /// 経由しない `ios_drag_drop.rs`・`device/android.rs`/`drop_session.rs` 経由の
-    /// 橋渡しを使う、Issue #1015・#1016。`cfg_attr` は iOS/Android ビルドでの
-    /// `dead_code` 誤検知を避けるため）。
-    fn file_drag(&self) -> (bool, Vec<Option<std::path::PathBuf>>) {
-        self.egui_ctx().input(|i| {
-            (
-                !i.raw.hovered_files.is_empty(),
-                i.raw.dropped_files.iter().map(|f| f.path.clone()).collect(),
-            )
-        })
     }
 }
 
@@ -269,9 +221,8 @@ pub fn canvas_released_id(widget_raw: u64) -> egui::Id {
     egui::Id::new(("fandhe_canvas_released", widget_raw))
 }
 
-/// CompletionSender::text_scale_last_applied / set_text_scale_last_applied が使う
-/// egui::Id（doc 参照）。
-fn text_scale_last_applied_id() -> egui::Id {
+/// [`HostView::applied_zoom_factor`] の記録に使う egui::Id（`ctx.data` 内）。
+fn applied_zoom_factor_id() -> egui::Id {
     egui::Id::new("fandhe_egui_proxy_text_scale_last_applied")
 }
 
@@ -702,7 +653,19 @@ mod completion_queue_tests {
     fn egui_sender_ext_reaches_context() {
         let (tx, _rx) = std::sync::mpsc::channel::<Completion<Counter>>();
         let sender = egui_sender(tx, egui::Context::default());
-        let _ = sender.focused(); // downcast に失敗すると panic する
+        let _ = sender.egui_context(); // downcast に失敗すると panic する
+    }
+
+    /// PR #920 の回帰チェック: 適用済み拡大率の記録は `egui::Context` 単位に分離される。
+    #[test]
+    fn applied_zoom_factor_is_isolated_per_context() {
+        let (tx_a, _ra) = std::sync::mpsc::channel::<Completion<Counter>>();
+        let (tx_b, _rb) = std::sync::mpsc::channel::<Completion<Counter>>();
+        let a = egui_sender(tx_a, egui::Context::default());
+        let b = egui_sender(tx_b, egui::Context::default());
+        a.host_view().set_zoom_factor(1.5);
+        assert_eq!(a.host_view().applied_zoom_factor(), Some(1.5));
+        assert_eq!(b.host_view().applied_zoom_factor(), None);
     }
 
     /// [`CompletionSender::send`] が `request_repaint` を呼び、アイドル中（入力待ち）の

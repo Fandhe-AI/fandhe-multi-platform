@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ（親 #911）型サンプル「文字サイズ追従」（Issue #912）の
 //! effect ドライバ。`fandhe_core::screens::text_scale_preview`（端末依存ゼロ）へ
 //! OS 値の読み取り結果を渡しつつ、スライダー値（実描画へ反映する倍率）を
-//! `CompletionSender::set_zoom_factor` 経由で毎フレーム実描画へ適用する
+//! `HostView::set_zoom_factor` 経由で毎フレーム実描画へ適用する
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
 //! として呼ばれる契約、`device/tilt.rs` と同型）。
 //!
@@ -26,7 +26,7 @@
 //! `set_zoom_factor` を呼び、egui のキーボード zoom（既定 `zoom_with_keyboard =
 //! true`、Ctrl+/−）を毎フレーム上書きしない（ponytail: キーボード zoom との
 //! 競合が要件上問題になった場合は `zoom_with_keyboard` を無効化する設計に上げる）。
-//! 「直前に適用した値」は `CompletionSender::text_scale_last_applied` 経由で
+//! 「直前に適用した値」は `HostView::applied_zoom_factor` 経由で
 //! `egui::Context` 単位のキャッシュとして持つ（`app.rs` 側の doc 参照。プロセス
 //! グローバルな `static` にすると複数 `Context` 間でキャッシュが混線するため、
 //! codex-review 指摘 P2・PR #920 是正で移した）。
@@ -38,7 +38,7 @@
 //! レイアウトを次パスで別の point 空間の矩形へ再マップし、指/カーソルの追従を失って
 //! 倍率が飛ぶ（Cursor Bugbot 指摘 "Slider drag fights live zoom"、PR #920 是正）。
 //! ポインタを離した最初のフレームで、その時点の `state.scale`（＝ドラッグ終了時の値）を
-//! 一度だけ適用する。`CompletionSender::pointer_primary_down` 参照。
+//! 一度だけ適用する。`HostView::pointer_primary_down` 参照。
 
 use fandhe_core::screens::text_scale_preview::{
     finish_read, OsScale, OsScaleError, TextScalePreviewState,
@@ -129,8 +129,7 @@ fn drive(
     if *last == Some(target) {
         return false;
     }
-    use crate::app::EguiSenderExt as _;
-    sender.set_zoom_factor(target);
+    sender.host_view().set_zoom_factor(target);
     *last = Some(target);
     true
 }
@@ -142,14 +141,10 @@ pub fn text_scale_effect(
 ) {
     // `egui::Context` 単位のキャッシュ（モジュール doc 参照）を読み出し・
     // `drive` に渡し、変わっていれば書き戻す。
-    use crate::app::EguiSenderExt as _;
-    let mut last = sender.text_scale_last_applied();
-    let dragging = sender.pointer_primary_down();
-    if drive(state, sender, shared_text_scale(), &mut last, dragging) {
-        if let Some(applied) = last {
-            sender.set_text_scale_last_applied(applied);
-        }
-    }
+    // 適用済みの値は描画層が `set_zoom_factor` のたびに記録する（HostView）。
+    let mut last = sender.host_view().applied_zoom_factor();
+    let dragging = sender.host_view().pointer_primary_down();
+    drive(state, sender, shared_text_scale(), &mut last, dragging);
 }
 
 #[cfg(test)]
@@ -269,8 +264,6 @@ mod tests {
         assert_eq!(SCALE_MAX, fandhe_device::text_scale::SCALE_MAX);
     }
 
-    use crate::app::EguiSenderExt as _;
-
     /// codex-review 指摘 P2（PR #920）の回帰チェック: `text_scale_effect` が使う
     /// 「直近に適用した値」キャッシュは `egui::Context` 単位に分離されている必要がある。
     /// Context A に倍率を適用したあと、別 Context B の effect が同じ倍率を「適用済み」と
@@ -285,12 +278,12 @@ mod tests {
 
         // Context A へ 1.5 を適用。
         text_scale_effect(&state, &sender_a);
-        assert_eq!(sender_a.text_scale_last_applied(), Some(1.5));
+        assert_eq!(sender_a.host_view().applied_zoom_factor(), Some(1.5));
 
         // Context B は別インスタンスのため、A で適用済みでも未適用のまま。
-        assert_eq!(sender_b.text_scale_last_applied(), None);
+        assert_eq!(sender_b.host_view().applied_zoom_factor(), None);
         text_scale_effect(&state, &sender_b);
-        assert_eq!(sender_b.text_scale_last_applied(), Some(1.5));
+        assert_eq!(sender_b.host_view().applied_zoom_factor(), Some(1.5));
     }
 
     /// Issue #914 の回帰チェック: iOS/Android 以外のターゲット（このテストが走る
