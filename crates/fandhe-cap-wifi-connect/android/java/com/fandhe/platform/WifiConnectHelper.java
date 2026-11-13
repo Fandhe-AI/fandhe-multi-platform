@@ -1,5 +1,6 @@
 package com.fandhe.platform;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
@@ -15,9 +16,16 @@ import android.os.Looper;
 import androidx.activity.ComponentActivity;
 import androidx.annotation.RequiresApi;
 
-// 指定した Wi-Fi への接続画面（Issue #1065、親 #1060）の Android 実装ヘルパー。MainActivity から
-// 生成・委譲される（Rust の `device/android_wifi_connect.rs` が `MainActivity.requestWifiConnect` を
-// JNI で呼び、結果コードを `nativeOnWifiConnectResult` で受ける）。
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
+
+// 指定した Wi-Fi への接続画面（Issue #1065、親 #1060）の Android 実装ヘルパー。利用者の `MainActivity` には何も書かせない。
+// Rust の `src/android.rs` が static の `connect(Activity, long, String, String, boolean)` を JNI で呼び、
+// 結果コードを `nativeOnWifiConnectResult` で受ける。Activity の生成・破棄は `WifiConnectLifecycle`
+// （非公開 ContentProvider、`FeatureLifecycleProvider` 継承）が `attach` / `detach` で知らせる。Activity ごとの helper は
+// `HELPERS` に持つ（JNI スレッドと UI スレッドの両方から触るので同期化し、Activity が GC されれば項目も消える）。
+// helper が無い（生成前・破棄後）要求は FAILED で確定し、結果が来ないまま待たせない。
 //
 // `WifiNetworkSpecifier`（API 29+）を付けた `requestNetwork` を 1 回出し、OS のダイアログで承認されて
 // `onAvailable` が最初に届いたときだけ OK を返す。`onUnavailable` は拒否・見つからない・接続失敗・
@@ -34,7 +42,7 @@ import androidx.annotation.RequiresApi;
 // `request` はインスタンスフィールドなので、再生成後の新インスタンスは NONE から始まり、
 // 旧インスタンスの結果は `complete(id)` に失敗して捨てられる。
 final class WifiConnectHelper {
-    // 結果コード。SSOT は Rust 側 `android_wifi_connect.rs::decode`。
+    // 結果コード。SSOT は Rust 側 `android.rs::decode`。
     static final int RESULT_OK = 0;
     static final int RESULT_UNSUPPORTED = 1;
     static final int RESULT_RADIO_OFF = 2;
@@ -42,22 +50,44 @@ final class WifiConnectHelper {
 
     private static native void nativeOnWifiConnectResult(long requestId, int code);
 
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, WifiConnectHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     private final ComponentActivity activity;
     private final RequestTracker request = new RequestTracker();
     // 登録中の callback（保留中の要求、または成功して握っている要求）。main looper 専用。
     private ConnectivityManager.NetworkCallback registered;
 
-    WifiConnectHelper(ComponentActivity activity) {
+    private WifiConnectHelper(ComponentActivity activity) {
         this.activity = activity;
     }
 
-    // JNI スレッドから呼ばれる。以降の処理は main looper へ移す。
-    void connect(long requestId, String ssid, String password, boolean hexKey) {
-        activity.runOnUiThread(() -> start(requestId, ssid, password, hexKey));
+    // Activity の生成時（`WifiConnectLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new WifiConnectHelper(activity));
     }
 
-    // MainActivity.onDestroy から UI スレッドで呼ぶ。
-    void onDestroy() {
+    // Activity の破棄時（同上）。保留中の要求を FAILED で確定し、登録を解放する。
+    static void detach(ComponentActivity activity) {
+        WifiConnectHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // JNI スレッドから呼ばれる。helper が無い（生成前・破棄後）ときは FAILED で確定する。
+    // 以降の処理は main looper へ移す。
+    static void connect(Activity activity, long requestId, String ssid, String password, boolean hexKey) {
+        WifiConnectHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            nativeOnWifiConnectResult(requestId, RESULT_FAILED);
+            return;
+        }
+        helper.activity.runOnUiThread(() -> helper.start(requestId, ssid, password, hexKey));
+    }
+
+    private void onDestroy() {
         long id = request.take();
         if (id != RequestTracker.NONE) {
             nativeOnWifiConnectResult(id, RESULT_FAILED);

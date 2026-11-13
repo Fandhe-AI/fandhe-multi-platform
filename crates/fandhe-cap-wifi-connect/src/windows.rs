@@ -1,6 +1,6 @@
 //! Windows 向け「指定した Wi-Fi への接続」実装（Issue #792、親 #165）。`device/wifi_connect.rs` の
 //! dispatch（Windows 経路）からワーカースレッドで呼ばれる。契約の SSOT は
-//! `fandhe_device::wifi_connect`（「OS ごとの写像」節）。
+//! `crate::contract`（「OS ごとの写像」節）。
 //!
 //! # 流れ（Win32 wlanapi。COM・WinRT なし）
 //!
@@ -41,10 +41,10 @@
 
 use std::sync::{Condvar, Mutex};
 
-use fandhe_device::wifi_connect::{
-    ConnectRequest, CONNECT_FAILED, FEATURE, NOT_FOUND, RADIO_OFF, SSID_MAX_BYTES,
+use crate::contract::{
+    CONNECT_FAILED, ConnectRequest, FEATURE, NOT_FOUND, RADIO_OFF, SSID_MAX_BYTES,
 };
-use fandhe_device::DeviceError;
+use crate::error::WifiConnectError;
 
 /// `ERROR_ACCESS_DENIED`。
 const ACCESS_DENIED: u32 = 5;
@@ -88,13 +88,13 @@ enum Failure {
     Other,
 }
 
-/// 失敗を契約の `DeviceError` へ写す（全経路で共通）。`radio_off` は失敗後に読み直した電源状態。
-fn to_error(failure: Failure, radio_off: bool) -> DeviceError {
+/// 失敗を契約の `WifiConnectError` へ写す（全経路で共通）。`radio_off` は失敗後に読み直した電源状態。
+fn to_error(failure: Failure, radio_off: bool) -> WifiConnectError {
     match failure {
-        Failure::Denied => DeviceError::PermissionDenied(FEATURE),
-        Failure::NotFound => DeviceError::Internal(NOT_FOUND),
-        Failure::Other if radio_off => DeviceError::Disabled(RADIO_OFF),
-        Failure::Other => DeviceError::Internal(CONNECT_FAILED),
+        Failure::Denied => WifiConnectError::PermissionDenied(FEATURE),
+        Failure::NotFound => WifiConnectError::Internal(NOT_FOUND),
+        Failure::Other if radio_off => WifiConnectError::Disabled(RADIO_OFF),
+        Failure::Other => WifiConnectError::Internal(CONNECT_FAILED),
     }
 }
 
@@ -247,30 +247,31 @@ pub(crate) use ffi::implementation;
 mod ffi {
     use std::ffi::c_void;
     use std::mem::{offset_of, size_of};
-    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::panic::{AssertUnwindSafe, catch_unwind};
     use std::sync::Arc;
 
-    use fandhe_device::wifi_connect::{ConnectRequest, WifiConnect, FEATURE, SSID_MAX_BYTES};
-    use fandhe_device::DeviceError;
-    use windows::core::{GUID, PCWSTR};
+    use crate::contract::{ConnectRequest, FEATURE, SSID_MAX_BYTES, WifiConnect};
+    use crate::error::WifiConnectError;
     use windows::Win32::Foundation::HANDLE;
     use windows::Win32::NetworkManagement::WiFi::{
+        DOT11_SSID, L2_NOTIFICATION_DATA, WLAN_CONNECTION_NOTIFICATION_DATA,
+        WLAN_CONNECTION_PARAMETERS, WLAN_INTERFACE_INFO, WLAN_INTERFACE_INFO_LIST,
+        WLAN_NOTIFICATION_SOURCE_ACM, WLAN_NOTIFICATION_SOURCE_NONE, WLAN_RADIO_STATE,
+        WLAN_REASON_CODE_NETWORK_NOT_AVAILABLE, WLAN_REASON_CODE_NOT_VISIBLE,
+        WLAN_REASON_CODE_SUCCESS, WlanCloseHandle, WlanConnect, WlanEnumInterfaces, WlanFreeMemory,
+        WlanOpenHandle, WlanQueryInterface, WlanRegisterNotification,
         dot11_BSS_type_infrastructure, wlan_connection_mode_temporary_profile,
         wlan_interface_state_connected, wlan_intf_opcode_radio_state,
         wlan_notification_acm_connection_attempt_fail, wlan_notification_acm_connection_complete,
-        wlan_notification_acm_interface_removal, WlanCloseHandle, WlanConnect, WlanEnumInterfaces,
-        WlanFreeMemory, WlanOpenHandle, WlanQueryInterface, WlanRegisterNotification, DOT11_SSID,
-        L2_NOTIFICATION_DATA, WLAN_CONNECTION_NOTIFICATION_DATA, WLAN_CONNECTION_PARAMETERS,
-        WLAN_INTERFACE_INFO, WLAN_INTERFACE_INFO_LIST, WLAN_NOTIFICATION_SOURCE_ACM,
-        WLAN_NOTIFICATION_SOURCE_NONE, WLAN_RADIO_STATE, WLAN_REASON_CODE_NETWORK_NOT_AVAILABLE,
-        WLAN_REASON_CODE_NOT_VISIBLE, WLAN_REASON_CODE_SUCCESS,
+        wlan_notification_acm_interface_removal,
     };
+    use windows::core::{GUID, PCWSTR};
 
     use super::{
-        classify_sync, match_notification, profile_xml, to_error, ConnData, Failure, Outcome, Slot,
-        ACM_ATTEMPT_FAIL, ACM_CONNECTION_COMPLETE, ACM_INTERFACE_REMOVAL, MODE_TEMPORARY_PROFILE,
-        REASON_NETWORK_NOT_AVAILABLE, REASON_NOT_VISIBLE, REASON_SUCCESS, SERVICE_NOT_ACTIVE,
-        SOURCE_ACM,
+        ACM_ATTEMPT_FAIL, ACM_CONNECTION_COMPLETE, ACM_INTERFACE_REMOVAL, ConnData, Failure,
+        MODE_TEMPORARY_PROFILE, Outcome, REASON_NETWORK_NOT_AVAILABLE, REASON_NOT_VISIBLE,
+        REASON_SUCCESS, SERVICE_NOT_ACTIVE, SOURCE_ACM, Slot, classify_sync, match_notification,
+        profile_xml, to_error,
     };
     use fandhe_device::wifi_info::radio_off;
 
@@ -297,7 +298,7 @@ mod ffi {
     struct WindowsWifiConnect;
 
     impl WifiConnect for WindowsWifiConnect {
-        fn connect(&self, request: &ConnectRequest) -> Result<(), DeviceError> {
+        fn connect(&self, request: &ConnectRequest) -> Result<(), WifiConnectError> {
             connect(request)
         }
     }
@@ -312,11 +313,7 @@ mod ffi {
             let mut h = HANDLE::default();
             // SAFETY: `ver`・`h` は呼び出しの間有効なローカル変数への排他ポインタ。
             let rc = unsafe { WlanOpenHandle(2, None, &mut ver, &mut h) };
-            if rc == 0 {
-                Ok(Client(h))
-            } else {
-                Err(rc)
-            }
+            if rc == 0 { Ok(Client(h)) } else { Err(rc) }
         }
     }
 
@@ -507,9 +504,9 @@ mod ffi {
     }
 
     #[allow(unsafe_code)]
-    fn connect(req: &ConnectRequest) -> Result<(), DeviceError> {
+    fn connect(req: &ConnectRequest) -> Result<(), WifiConnectError> {
         let client = Client::open().map_err(|rc| match rc {
-            SERVICE_NOT_ACTIVE => DeviceError::Unsupported(FEATURE),
+            SERVICE_NOT_ACTIVE => WifiConnectError::Unsupported(FEATURE),
             _ => to_error(classify_sync(rc), false),
         })?;
         let ifaces = interfaces(&client).map_err(|rc| to_error(classify_sync(rc), false))?;
@@ -518,11 +515,11 @@ mod ffi {
             .iter()
             .find(|i| i.1)
             .or_else(|| ifaces.first())
-            .ok_or(DeviceError::Unsupported(FEATURE))?;
+            .ok_or(WifiConnectError::Unsupported(FEATURE))?;
 
         let ssid_bytes = req.ssid.as_bytes();
         if ssid_bytes.len() > SSID_MAX_BYTES {
-            return Err(DeviceError::InvalidInput(FEATURE));
+            return Err(WifiConnectError::InvalidInput(FEATURE));
         }
         let shared = Arc::new(Shared {
             guid,
@@ -592,7 +589,7 @@ mod ffi {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::wifi_connect::validate;
+    use crate::contract::validate;
 
     fn data(mode: i32, ssid: &[u8], reason: u32) -> ConnData {
         let mut b = [0u8; SSID_MAX_BYTES];
@@ -651,19 +648,19 @@ mod tests {
     fn error_mapping() {
         assert!(matches!(
             to_error(classify_sync(5), false),
-            DeviceError::PermissionDenied(FEATURE)
+            WifiConnectError::PermissionDenied(FEATURE)
         ));
         assert!(matches!(
             to_error(classify_sync(87), false),
-            DeviceError::Internal(CONNECT_FAILED)
+            WifiConnectError::Internal(CONNECT_FAILED)
         ));
         assert!(matches!(
             to_error(classify_sync(87), true),
-            DeviceError::Disabled(RADIO_OFF)
+            WifiConnectError::Disabled(RADIO_OFF)
         ));
         assert!(matches!(
             to_error(Failure::NotFound, true),
-            DeviceError::Internal(NOT_FOUND)
+            WifiConnectError::Internal(NOT_FOUND)
         ));
         assert_eq!(SERVICE_NOT_ACTIVE, 1062);
     }

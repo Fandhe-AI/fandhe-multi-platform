@@ -1,9 +1,9 @@
 //! Phase 11（親 #165）型サンプル「指定した Wi-Fi への接続」（Issue #791）の effect ドライバ。
 //! `fandhe_core::screens::wifi_connect_show`（端末依存ゼロ）の要求を観測し、入力を
-//! `fandhe_device::wifi_connect::validate` で検査してから `WifiConnect` で接続を 1 回要求し、
+//! `crate::contract::validate` で検査してから `WifiConnect` で接続を 1 回要求し、
 //! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は
-//! `fandhe_device::wifi_connect`。
+//! 本 crate の `contract`。
 //!
 //! # スレッド
 //!
@@ -14,7 +14,7 @@
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`implementation`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを埋める
+//! [`platform_wifi_connect`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを埋める
 //! （macOS: `macos_wifi_connect`（#791）、Windows: `windows_wifi_connect`（#792）、
 //! Android: `android_wifi_connect`（#1065））。Android の JNI 照合は OS 別モジュールの
 //! 内部で行う。それ以外（iOS は対応表で `deferred`・Linux 等）は `UnsupportedWifiConnect` 固定で、
@@ -22,34 +22,35 @@
 
 use std::sync::Arc;
 
-use fandhe_core::screens::wifi_connect_show::{
-    finish_connect, mark_connecting, take_request, ConnectFailure, PermissionHint,
-    WifiConnectShowState,
-};
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
-use fandhe_device::wifi_connect::UnsupportedWifiConnect;
-use fandhe_device::wifi_connect::{validate, WifiConnect, NOT_FOUND, UNSUPPORTED_SECURITY};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedWifiConnect;
+use crate::contract::{NOT_FOUND, UNSUPPORTED_SECURITY, WifiConnect, validate};
+use crate::error::WifiConnectError;
+use fandhe_core::screens::wifi_connect_show::{
+    ConnectFailure, PermissionHint, WifiConnectShowState, finish_connect, mark_connecting,
+    take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `WifiConnect` 実装を返す（プロセスで 1 個）。
-fn implementation() -> Arc<dyn WifiConnect> {
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_wifi_connect() -> Arc<dyn WifiConnect> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn WifiConnect>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "macos")]
             {
-                super::macos_wifi_connect::implementation()
+                crate::macos::implementation()
             }
             #[cfg(target_os = "windows")]
             {
-                super::windows_wifi_connect::implementation()
+                crate::windows::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_wifi_connect::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
             {
@@ -66,16 +67,16 @@ const PERMISSION_HINT: PermissionHint = if cfg!(target_os = "windows") {
     PermissionHint::SystemSettings
 };
 
-/// `DeviceError` を画面の失敗種別へ写す。その他は固定文言へ畳み、OS 固有の値を画面へ漏らさない
+/// `WifiConnectError` を画面の失敗種別へ写す。その他は固定文言へ畳み、OS 固有の値を画面へ漏らさない
 /// （security.md A09）。
-fn to_failure(e: DeviceError) -> ConnectFailure {
+fn to_failure(e: WifiConnectError) -> ConnectFailure {
     match e {
-        DeviceError::Unsupported(_) => ConnectFailure::Unsupported,
-        DeviceError::PermissionDenied(_) => ConnectFailure::PermissionDenied(PERMISSION_HINT),
-        DeviceError::Disabled(_) => ConnectFailure::RadioOff,
-        DeviceError::InvalidInput(_) => ConnectFailure::InvalidInput,
-        DeviceError::Internal(NOT_FOUND) => ConnectFailure::NotFound,
-        DeviceError::Internal(UNSUPPORTED_SECURITY) => {
+        WifiConnectError::Unsupported(_) => ConnectFailure::Unsupported,
+        WifiConnectError::PermissionDenied(_) => ConnectFailure::PermissionDenied(PERMISSION_HINT),
+        WifiConnectError::Disabled(_) => ConnectFailure::RadioOff,
+        WifiConnectError::InvalidInput(_) => ConnectFailure::InvalidInput,
+        WifiConnectError::Internal(NOT_FOUND) => ConnectFailure::NotFound,
+        WifiConnectError::Internal(UNSUPPORTED_SECURITY) => {
             ConnectFailure::Failed("対応していない認証方式".to_string())
         }
         _ => ConnectFailure::Failed("Wi-Fi への接続".to_string()),
@@ -134,34 +135,40 @@ pub fn wifi_connect_show_effect(
     state: &WifiConnectShowState,
     sender: &CompletionSender<WifiConnectShowState>,
 ) {
-    drive(state, sender, implementation());
+    drive(state, sender, platform_wifi_connect());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::wifi_connect_show::{
-        connect, set_password, set_ssid, Outcome, Phase, CONNECTED_STATUS, FAILED_PREFIX,
-        INVALID_INPUT_STATUS, NOT_FOUND_STATUS, PERMISSION_SYSTEM_SETTINGS,
-        PERMISSION_WINDOWS_SETTINGS, RADIO_OFF_STATUS, UNSUPPORTED_STATUS,
+    use crate::contract::{
+        CONNECT_FAILED, ConnectRequest, FEATURE, RADIO_OFF, UnsupportedWifiConnect as Unsupported,
     };
-    use fandhe_device::wifi_connect::{
-        ConnectRequest, UnsupportedWifiConnect as Unsupported, CONNECT_FAILED, FEATURE, RADIO_OFF,
+    use fandhe_core::screens::wifi_connect_show::{
+        CONNECTED_STATUS, FAILED_PREFIX, INVALID_INPUT_STATUS, NOT_FOUND_STATUS, Outcome,
+        PERMISSION_SYSTEM_SETTINGS, PERMISSION_WINDOWS_SETTINGS, Phase, RADIO_OFF_STATUS,
+        UNSUPPORTED_STATUS, connect, set_password, set_ssid,
     };
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
     fn sender_with_channel() -> (
         CompletionSender<WifiConnectShowState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<WifiConnectShowState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<WifiConnectShowState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     struct Fake {
-        result: Result<(), fn() -> DeviceError>,
+        result: Result<(), fn() -> WifiConnectError>,
         calls: AtomicUsize,
     }
 
@@ -172,7 +179,7 @@ mod tests {
                 calls: AtomicUsize::new(0),
             })
         }
-        fn err(f: fn() -> DeviceError) -> Arc<Self> {
+        fn err(f: fn() -> WifiConnectError) -> Arc<Self> {
             Arc::new(Self {
                 result: Err(f),
                 calls: AtomicUsize::new(0),
@@ -181,7 +188,7 @@ mod tests {
     }
 
     impl WifiConnect for Fake {
-        fn connect(&self, _request: &ConnectRequest) -> Result<(), DeviceError> {
+        fn connect(&self, _request: &ConnectRequest) -> Result<(), WifiConnectError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             self.result.map_err(|f| f())
         }
@@ -246,28 +253,34 @@ mod tests {
         } else {
             PERMISSION_SYSTEM_SETTINGS
         };
-        let cases: [(fn() -> DeviceError, String); 8] = [
+        let cases: [(fn() -> WifiConnectError, String); 8] = [
             (
-                || DeviceError::Unsupported(FEATURE),
+                || WifiConnectError::Unsupported(FEATURE),
                 UNSUPPORTED_STATUS.into(),
             ),
-            (|| DeviceError::PermissionDenied(FEATURE), hint.into()),
-            (|| DeviceError::Disabled(RADIO_OFF), RADIO_OFF_STATUS.into()),
+            (|| WifiConnectError::PermissionDenied(FEATURE), hint.into()),
             (
-                || DeviceError::InvalidInput(FEATURE),
+                || WifiConnectError::Disabled(RADIO_OFF),
+                RADIO_OFF_STATUS.into(),
+            ),
+            (
+                || WifiConnectError::InvalidInput(FEATURE),
                 INVALID_INPUT_STATUS.into(),
             ),
-            (|| DeviceError::Internal(NOT_FOUND), NOT_FOUND_STATUS.into()),
             (
-                || DeviceError::Internal(UNSUPPORTED_SECURITY),
+                || WifiConnectError::Internal(NOT_FOUND),
+                NOT_FOUND_STATUS.into(),
+            ),
+            (
+                || WifiConnectError::Internal(UNSUPPORTED_SECURITY),
                 format!("{FAILED_PREFIX}対応していない認証方式"),
             ),
             (
-                || DeviceError::Internal(CONNECT_FAILED),
+                || WifiConnectError::Internal(CONNECT_FAILED),
                 format!("{FAILED_PREFIX}Wi-Fi への接続"),
             ),
             (
-                || DeviceError::Io(std::io::Error::other("x")),
+                || WifiConnectError::Internal("other"),
                 format!("{FAILED_PREFIX}Wi-Fi への接続"),
             ),
         ];
@@ -320,8 +333,8 @@ mod tests {
     fn unsupported_os_implementation_is_unsupported() {
         let req = validate("home", "").expect("検査を通る");
         assert!(matches!(
-            implementation().connect(&req),
-            Err(DeviceError::Unsupported(_))
+            platform_wifi_connect().connect(&req),
+            Err(WifiConnectError::Unsupported(_))
         ));
     }
 }

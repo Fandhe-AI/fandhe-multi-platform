@@ -662,15 +662,6 @@ fn compile_macos_wifi_info() {
     );
 }
 
-/// `macos/fandhe_macos_wifi_connect.m` を `cc` でコンパイルし CoreWLAN をリンクする（Issue #791）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_wifi_connect.rs` が使う）。
-fn compile_macos_wifi_connect() {
-    compile_objc(
-        "macos/fandhe_macos_wifi_connect.m",
-        &["CoreLocation", "CoreWLAN", "Foundation"],
-    );
-}
-
 /// `macos/fandhe_macos_radio_control.m` を `cc` でコンパイルし CoreWLAN・IOBluetooth をリンクする（Issue #972）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_radio_control.rs` が使う）。
 fn compile_macos_radio_control() {
@@ -1123,8 +1114,6 @@ fn build_macos() {
     compile_macos_web_auth_session();
     // `macos/fandhe_macos_wifi_info.m`（Issue #514）も macOS 専用。CoreWLAN を使う。
     compile_macos_wifi_info();
-    // `macos/fandhe_macos_wifi_connect.m`（Issue #791）も macOS 専用。CoreWLAN を使う。
-    compile_macos_wifi_connect();
     // `macos/fandhe_macos_radio_control.m`（Issue #972）も macOS 専用。CoreWLAN・IOBluetooth を使う。
     compile_macos_radio_control();
     // `macos/fandhe_macos_bluetooth_classic.m`（Issue #659）も macOS 専用。IOBluetooth を使う。

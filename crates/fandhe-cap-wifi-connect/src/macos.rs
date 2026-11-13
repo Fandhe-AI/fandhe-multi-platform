@@ -3,7 +3,7 @@
 //! `associateToNetwork:password:error:`、CoreLocation の許可要求。`build.rs` が macOS 分岐で
 //! feature `device` 有効時にコンパイルし CoreWLAN をリンクする）を `unsafe extern "C"` 1 関数で呼ぶ。
 //! `unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。`device/wifi_connect.rs` の macOS
-//! 経路からワーカースレッドで呼ばれ、契約は `fandhe_device::wifi_connect`。
+//! 経路からワーカースレッドで呼ばれ、契約は `crate::contract`。
 //!
 //! 戻りコードの写像 [`decode_code`] は純関数で、ホストの `cargo test` で検査する。
 //!
@@ -27,22 +27,20 @@
 use std::sync::Arc;
 
 #[cfg(target_os = "macos")]
-use fandhe_device::wifi_connect::WifiConnect;
-use fandhe_device::wifi_connect::{
-    CONNECT_FAILED, FEATURE, NOT_FOUND, RADIO_OFF, UNSUPPORTED_SECURITY,
-};
-use fandhe_device::DeviceError;
+use crate::contract::WifiConnect;
+use crate::contract::{CONNECT_FAILED, FEATURE, NOT_FOUND, RADIO_OFF, UNSUPPORTED_SECURITY};
+use crate::error::WifiConnectError;
 
 /// `.m` の戻りコードを契約の結果へ写す。未知の値は `Internal`（成功へ畳まない）。
-fn decode_code(rc: i32) -> Result<(), DeviceError> {
+fn decode_code(rc: i32) -> Result<(), WifiConnectError> {
     match rc {
         0 => Ok(()),
-        1 => Err(DeviceError::Unsupported(FEATURE)),
-        2 => Err(DeviceError::PermissionDenied(FEATURE)),
-        3 => Err(DeviceError::Disabled(RADIO_OFF)),
-        4 => Err(DeviceError::Internal(NOT_FOUND)),
-        6 => Err(DeviceError::Internal(UNSUPPORTED_SECURITY)),
-        _ => Err(DeviceError::Internal(CONNECT_FAILED)),
+        1 => Err(WifiConnectError::Unsupported(FEATURE)),
+        2 => Err(WifiConnectError::PermissionDenied(FEATURE)),
+        3 => Err(WifiConnectError::Disabled(RADIO_OFF)),
+        4 => Err(WifiConnectError::Internal(NOT_FOUND)),
+        6 => Err(WifiConnectError::Internal(UNSUPPORTED_SECURITY)),
+        _ => Err(WifiConnectError::Internal(CONNECT_FAILED)),
     }
 }
 
@@ -51,7 +49,7 @@ mod ffi {
     // SAFETY: `macos/fandhe_macos_wifi_connect.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_wifi_connect(
             ssid: *const u8,
             ssid_len: usize,
@@ -76,10 +74,7 @@ struct MacWifiConnect;
 
 #[cfg(target_os = "macos")]
 impl WifiConnect for MacWifiConnect {
-    fn connect(
-        &self,
-        request: &fandhe_device::wifi_connect::ConnectRequest,
-    ) -> Result<(), DeviceError> {
+    fn connect(&self, request: &crate::contract::ConnectRequest) -> Result<(), WifiConnectError> {
         let password = request
             .password
             .as_ref()
@@ -101,33 +96,39 @@ mod tests {
     #[test]
     fn every_code_maps_and_unknown_is_internal() {
         assert!(decode_code(0).is_ok());
-        assert!(matches!(decode_code(1), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(
+            decode_code(1),
+            Err(WifiConnectError::Unsupported(_))
+        ));
         assert!(matches!(
             decode_code(2),
-            Err(DeviceError::PermissionDenied(_))
+            Err(WifiConnectError::PermissionDenied(_))
         ));
         assert!(matches!(
             decode_code(3),
-            Err(DeviceError::Disabled(RADIO_OFF))
+            Err(WifiConnectError::Disabled(RADIO_OFF))
         ));
         assert!(matches!(
             decode_code(4),
-            Err(DeviceError::Internal(NOT_FOUND))
+            Err(WifiConnectError::Internal(NOT_FOUND))
         ));
         assert!(matches!(
             decode_code(5),
-            Err(DeviceError::Internal(CONNECT_FAILED))
+            Err(WifiConnectError::Internal(CONNECT_FAILED))
         ));
         assert!(matches!(
             decode_code(6),
-            Err(DeviceError::Internal(UNSUPPORTED_SECURITY))
+            Err(WifiConnectError::Internal(UNSUPPORTED_SECURITY))
         ));
         assert!(matches!(
             decode_code(7),
-            Err(DeviceError::Internal(CONNECT_FAILED))
+            Err(WifiConnectError::Internal(CONNECT_FAILED))
         ));
         for rc in [-1, 8, 99, i32::MIN] {
-            assert!(matches!(decode_code(rc), Err(DeviceError::Internal(_))));
+            assert!(matches!(
+                decode_code(rc),
+                Err(WifiConnectError::Internal(_))
+            ));
         }
     }
 }

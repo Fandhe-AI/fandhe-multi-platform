@@ -35,7 +35,7 @@
       "note": "実装済み（#1065）。OS のダイアログで利用者が承認して接続できると `onAvailable`、拒否・接続の失敗は `onUnavailable` で届く（公式）。Wi-Fi オフ・前景でないアプリからの要求も `onUnavailable` で返り（AOSP の WifiNetworkFactory）、理由を区別できないため、`onUnavailable` の後に Wi-Fi の電源だけを読み直してオフを分け、残りは「接続できませんでした」にする。「見つからない」は返さない。接続はこのアプリだけのもので、インターネット接続にはならない（公式）。要求は `unregisterNetworkCallback` まで生き、どの要求にも合わないネットワークは OS がいつでも切りうる（AOSP の ConnectivityManager）ため、成功した要求は次の接続要求か Activity の破棄（画面回転を含む）まで握る。保留中の要求は Activity の破棄で失敗に確定して取り下げる。Specifier は認証方式を 1 つしか持てないので WPA2-Personal と暗号なしだけを作り、WPA3 だけのネットワークは失敗になる。16 進 64 文字の鍵は ASCII のパスフレーズとして引用符で包まれる（AOSP の WifiNetworkSpecifier）ため OS へ渡さず失敗にする。API 28 以下（minSdk 24〜28）は `Unsupported`。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#782）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_wifi_connect.rs + platforms/android/app/src/main/java/com/fandhe/platform/WifiConnectHelper.java + crates/fandhe-egui-proxy/src/device/wifi_connect.rs + crates/fandhe-core/src/screens/wifi_connect_show.rs + crates/fandhe-device/src/wifi_connect.rs、Issue #1065"
+      "impl": "crates/fandhe-cap-wifi-connect/src/android.rs + crates/fandhe-cap-wifi-connect/android/java/com/fandhe/platform/WifiConnectHelper.java + crates/fandhe-cap-wifi-connect/src/driver.rs + crates/fandhe-core/src/screens/wifi_connect_show.rs + crates/fandhe-cap-wifi-connect/src/contract.rs、Issue #1065"
     },
     "macos": {
       "status": "done",
@@ -49,7 +49,7 @@
       "note": "実装済み（#791）。指定 SSID への directed scan → `ssidData` のバイト一致するものだけを残す → 暗号なし・Personal 系の方式だけに associate。位置情報の許可は未決定のときだけ要求し、失敗したときに電源・許可を読み直して理由を分ける。associate は接続の間ブロックし、管理者パスワードを求めることがある（公式）。結果は BOOL と `CWErr` の NSError で返る。SDK のヘッダーでは、位置情報の許可が無いとスキャン結果に BSSID が入らない。macOS 14 以降は SSID の取得にも位置情報の許可が要る（wifi-info の macOS と同じ前提）。",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#782）",
-      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_wifi_connect.m + crates/fandhe-egui-proxy/src/device/macos_wifi_connect.rs + crates/fandhe-egui-proxy/src/device/wifi_connect.rs + crates/fandhe-core/src/screens/wifi_connect_show.rs + crates/fandhe-device/src/wifi_connect.rs、Issue #791"
+      "impl": "crates/fandhe-cap-wifi-connect/macos/fandhe_macos_wifi_connect.m + crates/fandhe-cap-wifi-connect/src/macos.rs + crates/fandhe-cap-wifi-connect/src/driver.rs + crates/fandhe-core/src/screens/wifi_connect_show.rs + crates/fandhe-cap-wifi-connect/src/contract.rs、Issue #791"
     },
     "windows": {
       "status": "done",
@@ -66,7 +66,7 @@
       "note": "実装済み（#792）。`WlanConnect` の戻り値 0 は要求の受け付けにすぎないため成功にせず、`connection_complete` の通知（interface GUID・SSID・一時プロファイルで照合、reason が成功のときだけ成功）を待つ。登録解除 → context の解放 → ハンドルを閉じる、の順を全経路で守る。アダプターが外れた通知（`interface_removal`）は失敗として待ちを終える。一時プロファイルは XML 文字列で渡し、SSID は 16 進、パスフレーズは XML エスケープして `keyMaterial` に平文で入る（公式）。失敗したときだけ電源を読み直して Wi-Fi オフを分ける。`UNSUPPORTED_SECURITY` は返さず、WPA3 のみのネットワークなどは `CONNECT_FAILED` に入る。`windows` クレートの feature `Win32_NetworkManagement_Ndis` を足した（`WlanConnect` の型がこの下にある。新規パッケージは増えない）。WinRT の `WiFiAdapter.ConnectAsync` はスキャン結果の `WiFiAvailableNetwork` が要り、`Windows.Devices.WiFi` は位置情報の同意の対象のため使わない。",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#782）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_wifi_connect.rs + crates/fandhe-egui-proxy/src/device/windows_wifi_info.rs + crates/fandhe-egui-proxy/src/device/wifi_connect.rs + crates/fandhe-core/src/screens/wifi_connect_show.rs + crates/fandhe-device/src/wifi_connect.rs、Issue #792"
+      "impl": "crates/fandhe-cap-wifi-connect/src/windows.rs + crates/fandhe-egui-proxy/src/device/windows_wifi_info.rs + crates/fandhe-cap-wifi-connect/src/driver.rs + crates/fandhe-core/src/screens/wifi_connect_show.rs + crates/fandhe-cap-wifi-connect/src/contract.rs、Issue #792"
     },
     "web": {
       "status": "no",

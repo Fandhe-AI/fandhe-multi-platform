@@ -1,10 +1,10 @@
 //! Android 向け「指定した Wi-Fi への接続」実装（Issue #1065、親 #1060）。
-//! `device/wifi_connect.rs` の dispatch（Android 経路）から呼ばれ、契約の SSOT は
-//! `fandhe_device::wifi_connect`。Java 側は `WifiConnectHelper`（Specifier の生成・
+//! `driver` の dispatch（Android 経路）から呼ばれ、契約の SSOT は
+//! `crate::contract`。Java 側は `WifiConnectHelper`（Specifier の生成・
 //! `requestNetwork`・callback・解放）。
 //!
 //! 流れ: `WifiConnect::connect`（ワーカースレッド）→ [`RequestSlot::begin`] で id 採番 →
-//! JNI `MainActivity.requestWifiConnect(id, ssid, password, hexKey)` → Java が結果コードを
+//! JNI `WifiConnectHelper.connect(Activity, id, ssid, password, hexKey)`（static） → Java が結果コードを
 //! `nativeOnWifiConnectResult` で返す → [`decode`] で契約の失敗種別へ写像 → ワーカーが slot を見て受け取る。
 //!
 //! 期限は持たない。待ちを終える保証は、Java の `onDestroy` が保留中の要求を FAILED で返すこと
@@ -16,14 +16,12 @@
 
 use std::sync::Arc;
 
-use fandhe_device::wifi_connect::{
-    ConnectRequest, WifiConnect, CONNECT_FAILED, FEATURE, RADIO_OFF,
-};
-use fandhe_device::DeviceError;
+use crate::contract::{CONNECT_FAILED, ConnectRequest, FEATURE, RADIO_OFF, WifiConnect};
+use crate::error::WifiConnectError;
 
-use super::request_slot::{RequestSlot, POLL_INTERVAL};
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot};
 
-/// 契約の失敗種別（`DeviceError` は `Clone` でないため slot 用に写した形）。
+/// 契約の失敗種別（`WifiConnectError` は `Clone` でないため slot 用に写した形）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Fail {
     Unsupported,
@@ -31,12 +29,12 @@ enum Fail {
     Failed,
 }
 
-impl From<Fail> for DeviceError {
+impl From<Fail> for WifiConnectError {
     fn from(f: Fail) -> Self {
         match f {
-            Fail::Unsupported => DeviceError::Unsupported(FEATURE),
-            Fail::RadioOff => DeviceError::Disabled(RADIO_OFF),
-            Fail::Failed => DeviceError::Internal(CONNECT_FAILED),
+            Fail::Unsupported => WifiConnectError::Unsupported(FEATURE),
+            Fail::RadioOff => WifiConnectError::Disabled(RADIO_OFF),
+            Fail::Failed => WifiConnectError::Internal(CONNECT_FAILED),
         }
     }
 }
@@ -93,47 +91,47 @@ struct AndroidWifiConnect;
 
 #[cfg(target_os = "android")]
 impl WifiConnect for AndroidWifiConnect {
-    fn connect(&self, request: &ConnectRequest) -> Result<(), DeviceError> {
+    fn connect(&self, request: &ConnectRequest) -> Result<(), WifiConnectError> {
         let (ssid, password, hex_key) = java_args(request)?;
-        connect_with(&SLOT, |id| call_activity(id, ssid, password, hex_key))
-            .map_err(DeviceError::from)
+        connect_with(&SLOT, |id| call_helper(id, ssid, password, hex_key))
+            .map_err(WifiConnectError::from)
     }
 }
 
-/// `MainActivity.requestWifiConnect(long, String, String, boolean)` を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `android_geocoding_search.rs::call_request` と同一の根拠。
+/// `WifiConnectHelper.connect(Activity, long, String, String, boolean)`（static）を JNI で呼ぶ。`false` は呼び出し失敗。
+/// クラスは Activity の class loader で解決する（`fandhe_platform_android::with_activity_class`）。
+/// Helper が無い（生成前・破棄後）場合は Java 側が `nativeOnWifiConnectResult` で FAILED を返す。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
-fn call_activity(id: u64, ssid: &str, password: Option<&str>, hex_key: bool) -> bool {
-    use super::android::JniCallFailed;
-    let Some(app) = crate::android::android_app() else {
+fn call_helper(id: u64, ssid: &str, password: Option<&str>, hex_key: bool) -> bool {
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    use jni::objects::{JObject, JValue};
+    let Some(app) = android_app() else {
         return false;
     };
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
-        let j_ssid = env.new_string(ssid)?;
-        let j_password = match password {
-            Some(p) => jni::objects::JObject::from(env.new_string(p)?),
-            None => jni::objects::JObject::null(),
-        };
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        env.call_method(
-            &activity,
-            jni::jni_str!("requestWifiConnect"),
-            jni::jni_sig!((long, java.lang.String, java.lang.String, boolean) -> ()),
-            &[
-                jni::objects::JValue::Long(id as jni::sys::jlong),
-                jni::objects::JValue::Object(&j_ssid),
-                jni::objects::JValue::Object(&j_password),
-                jni::objects::JValue::Bool(hex_key),
-            ],
-        )?;
-        Ok(())
-    })
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.WifiConnectHelper"),
+        |env, activity, class| -> Result<(), JniCallFailed> {
+            let j_ssid = env.new_string(ssid)?;
+            let j_password = match password {
+                Some(p) => JObject::from(env.new_string(p)?),
+                None => JObject::null(),
+            };
+            env.call_static_method(
+                class,
+                jni::jni_str!("connect"),
+                jni::jni_sig!((android.app.Activity, long, java.lang.String, java.lang.String, boolean) -> ()),
+                &[
+                    JValue::Object(activity),
+                    JValue::Long(id as jni::sys::jlong),
+                    JValue::Object(&j_ssid),
+                    JValue::Object(&j_password),
+                    JValue::Bool(hex_key),
+                ],
+            )?;
+            Ok(())
+        },
+    )
     .is_ok()
 }
 
@@ -145,7 +143,7 @@ fn call_activity(id: u64, ssid: &str, password: Option<&str>, hex_key: bool) -> 
 /// `#[no_mangle]` は JNI 命名規約上の固定シンボル名で、既存の JNI エクスポートと同じ根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_WifiConnectHelper_nativeOnWifiConnectResult<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -155,24 +153,24 @@ extern "system" fn Java_com_fandhe_platform_WifiConnectHelper_nativeOnWifiConnec
     SLOT.deliver(request_id as u64, decode(code));
 }
 
-/// Android の `WifiConnect` 実装を返す（`device/wifi_connect.rs` の dispatch から呼ばれる）。
+/// Android の `WifiConnect` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn WifiConnect> {
     Arc::new(AndroidWifiConnect)
 }
 
-/// `device.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形。
+/// `lib.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形。
 /// dispatch は Android でしか呼ばない。非対応を返し、成功へは倒さない。
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn WifiConnect> {
-    Arc::new(fandhe_device::wifi_connect::UnsupportedWifiConnect)
+    Arc::new(crate::contract::UnsupportedWifiConnect)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::wifi_connect::validate;
+    use crate::contract::validate;
     use std::cell::Cell;
 
     #[test]
@@ -188,16 +186,16 @@ mod tests {
     #[test]
     fn fail_maps_to_contract_errors() {
         assert!(matches!(
-            DeviceError::from(Fail::Unsupported),
-            DeviceError::Unsupported(FEATURE)
+            WifiConnectError::from(Fail::Unsupported),
+            WifiConnectError::Unsupported(FEATURE)
         ));
         assert!(matches!(
-            DeviceError::from(Fail::RadioOff),
-            DeviceError::Disabled(RADIO_OFF)
+            WifiConnectError::from(Fail::RadioOff),
+            WifiConnectError::Disabled(RADIO_OFF)
         ));
         assert!(matches!(
-            DeviceError::from(Fail::Failed),
-            DeviceError::Internal(CONNECT_FAILED)
+            WifiConnectError::from(Fail::Failed),
+            WifiConnectError::Internal(CONNECT_FAILED)
         ));
     }
 
@@ -262,7 +260,7 @@ mod tests {
         let req = validate("home", "").expect("検査を通る");
         assert!(matches!(
             implementation().connect(&req),
-            Err(DeviceError::Unsupported(_))
+            Err(WifiConnectError::Unsupported(_))
         ));
     }
 }

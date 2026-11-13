@@ -495,7 +495,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wifi_connect_show" => fandhe_core::screens::wifi_connect_show::current_screen,
-    fandhe_egui_proxy::device::wifi_connect::wifi_connect_show_effect,
+    fandhe_cap_wifi_connect::wifi_connect_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "radio_control_show" => fandhe_core::screens::radio_control_show::current_screen,

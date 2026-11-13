@@ -1,14 +1,14 @@
 //! 指定した Wi-Fi への接続（SSID とパスワードを指定して接続を 1 回要求し、OS の結果を受ける）の抽象
 //! （Phase 11 の拡充ループ、対応表 `docs/device/capabilities/wifi-connect.json`、親 #165、Issue #791）。
 //!
-//! `fandhe-egui-proxy` の `device/wifi_connect.rs` がワーカースレッドで [`WifiConnect::connect`] を
+//! 本 crate の `driver` がワーカースレッドで [`WifiConnect::connect`] を
 //! 呼ぶ（ブロッキングの契約）。対象は macOS（#791）・Windows（#792）・Android（API 29 以上）。iOS は対応表で
 //! `deferred`、Web は `no`。入力は [`validate`] を通した [`ConnectRequest`] だけが OS へ渡る。
 //! 今つながっている Wi-Fi を読む `wifi_info` とは別で、本機能は書き込み側。
 //!
 //! # 契約
 //!
-//! - 結果は成功か [`DeviceError`]。写像は次のとおり
+//! - 結果は成功か [`WifiConnectError`]。写像は次のとおり
 //!
 //! | 結果 | 意味 |
 //! | --- | --- |
@@ -72,7 +72,7 @@
 //!   OS へ渡さず [`CONNECT_FAILED`]。WPA3 だけのネットワークは [`CONNECT_FAILED`]。要求の生成・登録で
 //!   例外（`TooManyRequestsException`・`SecurityException` 等）が出たら [`CONNECT_FAILED`]
 
-use crate::DeviceError;
+use crate::error::WifiConnectError;
 
 /// `Unsupported` / `PermissionDenied` / `InvalidInput` の機能名。
 pub const FEATURE: &str = "wifi_connect";
@@ -136,8 +136,8 @@ pub struct ConnectRequest {
 ///   （`" home "` は `"home"` と別の SSID。空白だけの入力は不可）
 /// - パスワード: 空（暗号なし）・印字可能な ASCII（0x20〜0x7E）で 8〜63 文字・16 進 64 文字のどれか。
 ///   **trim しない**。WEP（5・13 文字等）は扱わないため不可
-pub fn validate(ssid: &str, password: &str) -> Result<ConnectRequest, DeviceError> {
-    let invalid = || DeviceError::InvalidInput(FEATURE);
+pub fn validate(ssid: &str, password: &str) -> Result<ConnectRequest, WifiConnectError> {
+    let invalid = || WifiConnectError::InvalidInput(FEATURE);
     if ssid.is_empty()
         || ssid.len() > SSID_MAX_BYTES
         || ssid.chars().any(char::is_control)
@@ -165,15 +165,15 @@ pub fn validate(ssid: &str, password: &str) -> Result<ConnectRequest, DeviceErro
 /// 指定した Wi-Fi への接続の契約（モジュール doc の「契約」節）。
 pub trait WifiConnect: Send + Sync {
     /// 接続を 1 回要求し、OS の結果を返す。呼び出し側がワーカースレッドで呼ぶブロッキング呼び出し。
-    fn connect(&self, request: &ConnectRequest) -> Result<(), DeviceError>;
+    fn connect(&self, request: &ConnectRequest) -> Result<(), WifiConnectError>;
 }
 
 /// 対象外 OS・初期化失敗時のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedWifiConnect;
 
 impl WifiConnect for UnsupportedWifiConnect {
-    fn connect(&self, _request: &ConnectRequest) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported(FEATURE))
+    fn connect(&self, _request: &ConnectRequest) -> Result<(), WifiConnectError> {
+        Err(WifiConnectError::Unsupported(FEATURE))
     }
 }
 
@@ -182,7 +182,10 @@ mod tests {
     use super::*;
 
     fn bad(ssid: &str, pw: &str) -> bool {
-        matches!(validate(ssid, pw), Err(DeviceError::InvalidInput(FEATURE)))
+        matches!(
+            validate(ssid, pw),
+            Err(WifiConnectError::InvalidInput(FEATURE))
+        )
     }
 
     #[test]
@@ -240,7 +243,7 @@ mod tests {
         let r = validate("s", "").unwrap();
         assert!(matches!(
             UnsupportedWifiConnect.connect(&r),
-            Err(DeviceError::Unsupported(FEATURE))
+            Err(WifiConnectError::Unsupported(FEATURE))
         ));
     }
 }

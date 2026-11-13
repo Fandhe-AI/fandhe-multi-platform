@@ -171,6 +171,8 @@ android {
             java.srcDirs("../../../crates/fandhe-cap-usb-device/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-volume-control/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-wifi-connect/android/java")
             // END fandhe-cap
         }
     }
