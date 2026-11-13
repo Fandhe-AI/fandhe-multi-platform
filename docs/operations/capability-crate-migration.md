@@ -61,7 +61,7 @@ node scripts/device/migrate-capability.mjs scaffold <id> [--module <stem>] [--dr
 |------|------|
 | 共通部品への置換の確認 | `crate::app::CompletionSender` → `fandhe_runtime::CompletionSender`、`super::request_slot` → `fandhe_runtime::request_slot`、`crate::{android,ios}::request_repaint()` → `fandhe_runtime::request_repaint()`、`crate::android::android_app()` → `fandhe_platform_android::android_app()`、`JniCallFailed` → `fandhe_platform_android::JniCallFailed`（`scaffold` が置換する） |
 | エラー型 | `<Pascal>Error` の文言を固定するテストを足す。写せないバリアント（`Io` など）は `error.rs` に手で足す |
-| `driver.rs` | import を直し、`platform_<stem>()` を `pub` にして役割を doc に書く。テストの `egui_sender` は `CompletionSender::new(tx, Arc::new(NoopWaker))` に直す（`fandhe-cap-camera-capture` のテストと同じ形） |
+| `driver.rs` | import を直し、入口を `pub fn platform_<stem>()`（stem は crate 名から作る。`--module` で違っても揃える）にして役割を doc に書く。`sync --check` が crate ルートからの公開を検査する。テストの `egui_sender` は `CompletionSender::new(tx, Arc::new(NoopWaker))` に直す（`fandhe-cap-camera-capture` のテストと同じ形） |
 | JNI | `MainActivity` のインスタンスメソッド呼び出しをやめ、Helper の static メソッドを `fandhe_platform_android::with_activity_class` で呼ぶ。Helper は渡された Context から `getApplicationContext()` を取る。JNI の署名は Java と Rust の 2 か所で照合する。手本は `fandhe-cap-nfc-card-emulation/src/android.rs` |
 | ObjC | `build.rs` の `compile_objc` に framework を渡す。`.m` 冒頭コメントのパスを直す |
 | ライフサイクル | Activity のライフサイクルに参加する機能は `FeatureLifecycleProvider`（`fandhe-platform-android`）を使い、宣言の `components` に provider を書く |
@@ -83,7 +83,7 @@ node scripts/device/migrate-capability.mjs scaffold <id> [--module <stem>] [--dr
 | iOS | `scripts/ios/check-lib.sh`（iOS の cfg を触るため必須。CI では検査されない） |
 | Android | `bash scripts/android/build-android.sh`。NDK が無ければ CI の android-build で確認し、PR 本文に未検証と書く |
 | wasm・Windows | `cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown --all-features -- -D warnings`、`cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings` |
-| ツール | `node --test scripts/device/migrate-capability.test.mjs` |
+| ツール | `node --test scripts/device/migrate-capability.test.mjs`、`node scripts/device/migrate-capability.mjs sync --check`（全機能 crate の公開入口と一覧のずれ） |
 | 実挙動 | デスクトップで `FANDHE_PROXY_APP=<screen> cargo run -p fandhe-gallery` を起動し、従来どおりの表示になること |
 
 iOS・Android の実機での確認は人間担当です。移行 PR では行わず、PR 本文に明記します。
@@ -100,6 +100,7 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | `scripts/audit/unsafe-audit.sh` | `fandhe-cap-*` の接頭辞の規則 |
 | `fandhe-gallery/Cargo.toml` の feature `device` と依存、`platforms/android/app/build.gradle.kts` の `srcDirs` | `BEGIN fandhe-cap` / `END fandhe-cap` の間を `node scripts/device/migrate-capability.mjs sync` が書き直す（冪等） |
 
+`sync --check` は書き込まず、目印ブロックのずれと、公開入口 `pub fn platform_<stem>()` の欠けを検査します（ずれ・欠けがあれば終了コード 1）。
 `sync` は目印が無いと失敗します。`tests/gen.rs`（cargo-fandhe）が `build.gradle.kts` の行を文字列で照合するため、glob にはしていません。
 
 ## 6. 並列で作業するときの注意
@@ -130,8 +131,8 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 
 | 型 | 扱い |
 |----|------|
-| edition 2024 への移行で壊れる書き方 | `gen` は予約語（識別子を変える）、`extern "C" {}` は `unsafe extern "C" {}`、`#[no_mangle]` は `#[unsafe(no_mangle)]`、入れ子の `if` / `if let` は let チェーンへ（`cargo clippy --fix` が直す）。`scaffold` の後に `cargo clippy -p fandhe-cap-<id> --all-targets` を通すと拾える |
-| `DeviceError` の写し | `scaffold` は定数の文字列を持つバリアントを引数なしにする。元が `Internal("calendar save")` のように識別子で分岐しているなら、`error.rs` のバリアントを `&'static str` つきにして元の識別子を戻す。バリアントが 0 件の機能（pedometer・ar・call-ui）は `error.rs` を作らない |
+| edition 2024 への移行で壊れる書き方 | `scaffold` が `gen` を `r#gen`（読みやすい名前へ変えてよい）、`extern "C" {}` を `unsafe extern "C" {}`、`#[no_mangle]` を `#[unsafe(no_mangle)]` へ直す。入れ子の `if` / `if let` は let チェーンへ（`cargo clippy --fix` が直す）。`scaffold` の後に `cargo clippy -p fandhe-cap-<id> --all-targets` を通すと拾える |
+| `DeviceError` の写し | `scaffold` は機能名か `_` だけを渡すバリアントを引数なしにし、`Internal("calendar save")`・`Internal(MODEL_NOT_READY)`・`Internal(stage)` のように機能名以外を渡すバリアントは `&'static str` つきで出して引数を残す。`Disabled` などの未写像バリアントは手で足す。バリアントが 0 件の機能（pedometer・ar・call-ui）は `error.rs` を作らない |
 | MainActivity に埋まった Android 実装（haptics・nlp・calendar） | 機能 crate に `android.rs` と `<Pascal>Helper.java` を新設する。状態を持たない同期呼び出しは Helper の static メソッドだけにし、provider は作らない。保留中の要求・ランチャーを持つ機能は `FeatureLifecycleProvider` の派生と `HELPERS`（`WeakHashMap`）で Activity ごとに引く。Helper が無いときは失敗で確定する（結果が来ないまま待たせない）。`MainActivity` のクラスを Java から直接参照しない（起動 Intent は `getLaunchIntentForPackage`） |
 | 文字列資源（call-ui・live-activity） | 機能 crate の `android/res/values/` に移し、宣言の `res` に書く。アプリの `strings.xml` からは消す |
 | Swift の薄層（live-activity） | `Cargo.toml` に `links = "fandhe_cap_<id>"` を置き、`build.rs` の最後で `export_link_args()` を呼ぶ。最終成果物（gallery）の `build.rs` が `import_link_args("fandhe_cap_<id>")` を feature `device` が有効なときだけ呼ぶ。ウィジェット拡張が共有する Swift ファイルは機能 crate へ移し、`platforms/apple/project.yml` のパスを直す |
@@ -151,7 +152,6 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 
 | 型 | 扱い |
 |----|------|
-| `scaffold` の誤写像 | `scaffold` は元のコードが識別子（`MODEL_NOT_READY` など）で分岐していても `Internal` を引数なしにする箇所がある。移した後に `error.rs` の対象バリアントを `&'static str` つきへ戻し、引数なしの `Internal` には元の文字列を書く。`stage` のように呼び出し側が渡すラベルがあるバリアント（screen-capture）も同じ |
 | `build.rs` の framework・弱リンク | `scaffold` が出す `compile_objc` の framework は仮の値。元の `fandhe-egui-proxy/build.rs` の呼び出しと照合して直す（audio-devices は CoreAudio・AVFoundation）。弱リンク（`weak_link_framework`）や OS ごとの分岐を元の関数が持っていたら移す。弱リンクと Swift の薄層は `links` + `export_link_args()` で最終成果物へ届け、`fandhe-gallery` の `build.rs` が `import_link_args` を足す。ホストの `cargo test` で同じ機能 crate を直接の依存にする別 crate（`fandhe-web-dom`）にも `build.rs` で `import_link_args` が要る |
 | 共有の MP4・base64url など OS に触れない部品 | 他機能も使う純関数は `fandhe-device` の同名モジュールに最小限だけ残し、機能 crate が参照する（media-transcode の box 走査と `DURATION_TOLERANCE`、passkey-signin の base64url）。失敗は理由を持たない型にして、呼び出し側が自機能のエラーへ写す |
 | 前面の復帰・離脱に参加する機能 | `FeatureLifecycleProvider` の `onHostResumed` / `onHostPaused`（screen-capture が使う）。どちらも `Activity.onResume()` / `onPause()` の中、つまり `super.onResume()` / `super.onPause()` の中で呼ばれる。従来の `MainActivity` は `super` の後で helper を呼んでいたため、`super` に対する前後だけが違う |
@@ -188,9 +188,8 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 |----|------|
 | `scaffold` が拾わない Android の Helper | Helper の名前が `<Pascal>Helper` でない機能（pdf-viewer の `PdfPageHelper`）は `git mv` されない。手で `android/java/` へ移し、対応表の `impl` も直す |
 | `scaffold` が書く `build.rs` の framework | 元の `compile_*` の framework と必ず照合する（scaffold の既定は誤ることがある。usb-device は `Foundation` + `IOKit`、pdf-viewer は `CoreGraphics`、media-cast は iOS と macOS で別） |
-| `Internal` が識別子を持つ機能（pdf-viewer） | §8 のとおり `error.rs` を `Internal(&'static str)` にし、`scaffold` が単位バリアントへ潰した呼び出し（`Internal("…")`）を元の文字列へ戻す。表示文言には出さない |
+| `Internal` が識別子を持つ機能（pdf-viewer） | `scaffold` が `error.rs` を `Internal(&'static str)` で出し、呼び出しの引数も残す。表示文言には出さない |
 | `Internal` の文字列を捨てる機能（media-cast の Windows） | 画面もログも固定文言に畳むなら単位バリアントのまま、段の識別子の引数は `_` 始まりにして残す |
-| edition 2024 の予約語 | `gen` を識別子に使う箇所（media-cast の世代）は `epoch` などへ変える。`#[no_mangle]` は `#[unsafe(no_mangle)]` |
 | 同じ機能の Web 実装が参照する記号 | `fandhe-web-dom` が `fandhe_device::<stem>` を使っていたら、機能 crate への依存（wasm32 でも通る）に付け替える（usb-device・media-cast・system-accent-color）。コンパイルしないと気づけないため、移行のたびに `cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown --all-features` も通す |
 | `fandhe-device` に残す共有の純関数・型 | 他機能が使う `device_info::clean_text`・`media_playback::demo_wav`・`Image` は `fandhe-device` に残し、機能 crate が依存する（§7） |
 | 終了時の片付け（media-cast の `shutdown`） | §7 の過渡期の依存。`fandhe-egui-proxy` が feature `device` で optional 依存し、`device::shutdown` から `fandhe_cap_media_cast::shutdown()` を呼ぶ |
@@ -231,7 +230,7 @@ per-app-language・screen-brightness・spell-check・geocoding-search の 9 機�
 | Activity のインスタンスを持つ Helper（screen-brightness・spell-check・geocoding-search） | Helper を private コンストラクタ + static の入口（`set(Activity, …)` など）にし、Activity ごとの helper は `HELPERS`（`Collections.synchronizedMap(new WeakHashMap<>())`）に持つ。`FeatureLifecycleProvider` の派生（`<Name>Lifecycle`）が `onHostCreated` で `attach`、`onHostDestroyed` で `detach` する。Helper が無い（生成前・破棄後）要求は FAILED で確定し、結果が来ないまま待たせない。provider は宣言の `components` と `AndroidManifest.xml` に同じ名前・authorities で書く。Helper が Activity を持たない設計（geocoding-search）は、static の入口が `getApplicationContext()` を取り出して渡す |
 | Helper の native コールバック（spell-check・geocoding-search） | Helper クラスの `native` と Rust の JNI エクスポート名（`Java_com_fandhe_platform_<Helper>_native…`）は移動で変わらない。Rust 側の呼び出しだけ `with_activity_class` + `call_static_method` に変え、JNI の署名は Java と Rust の 2 か所で照合する |
 | Android の `unsafe` が `with_activity_class` へ移って残らない機能（app-attest・screen-brightness・per-app-language） | `lib.rs` の `cfg_attr` から Android を外す（app-attest は全 OS で `forbid(unsafe_code)`）。JNI エクスポート（`#[unsafe(no_mangle)]`）を持つ spell-check・geocoding-search は `deny` のまま |
-| `Internal` / `Disabled` が識別子を持つ機能（spell-check・app-attest・geocoding-search） | §8 のとおり `error.rs` を `&'static str` つきにする。`scaffold` が単位バリアントへ潰した呼び出しは元の文字列へ戻す（テストが `Internal(_)` や識別子で照合するため、全 OS の呼び出しを元のソースと突き合わせる）。`Disabled`（`scaffold` が写さない）は手で足す |
+| `Internal` / `Disabled` が識別子を持つ機能（spell-check・app-attest・geocoding-search） | `scaffold` が `error.rs` を `&'static str` つきで出す。テストが `Internal(_)` や識別子で照合するため、全 OS の呼び出しを元のソースと突き合わせる。`Disabled`（`scaffold` が写さない）は手で足す |
 | `<application>` の属性（per-app-language の `android:localeConfig`） | 宣言の `components` は子要素だけを表し、`<application>` の属性は表せない。アプリが対応する言語の一覧でもあるため、`AndroidManifest.xml` と `res/xml/locale_config.xml` に残す |
 | iOS の Info.plist のキー（uwb-ranging） | `usage-descriptions` にキーを、`NSBonjourServices` は `info-plist` の配列で宣言する。説明文は gallery の `[package.metadata.fandhe-app.ios.usage-descriptions]` に置く。複数機能が共有するキー（`NSLocalNetworkUsageDescription`）は、最初に移した機能が宣言する |
 | `fandhe-device` に残す純関数の公開（spell-check の `translation::valid_lang_tag`） | `pub(crate)` だった関数は `pub` にして機能 crate が依存する（§7）。複製して手で合わせない |
