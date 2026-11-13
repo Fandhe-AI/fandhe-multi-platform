@@ -4,7 +4,7 @@
 //! effect として駆動する。呼び出し元は `demo.rs` のエントリポイントと、破棄時の解放を担う
 //! `mount::release_features`。`fandhe-device` の `SleepLockEvents` trait は経由しない（ブラウザの
 //! Promise・イベントは同期のトレイトに載らない）。結果の種類は trait doc に従い、
-//! `fandhe_device::sleep_lock_events` から使い回すのは `EventLog` と純関数だけ。
+//! `fandhe_cap_sleep_lock_events` から使い回すのは `EventLog` と純関数だけ。
 //!
 //! # 方式
 //!
@@ -30,11 +30,11 @@
 //!
 //! ロック状態・例外の `message` は console にも DOM にも出さない（security.md A09）。
 
+use fandhe_cap_sleep_lock_events::{LockState, SleepLockEvent};
 use fandhe_core::screens::sleep_lock_events_show::{CurrentView, ScreenView};
 use fandhe_core::screens::sleep_lock_events_show::{
     EventKind, LockView, StartFailure, SupportView, ALL_KINDS,
 };
-use fandhe_device::sleep_lock_events::{LockState, SleepLockEvent};
 
 /// `start()` の呼び出しを起点にした期限（ms）。許可ダイアログの待ちは含めない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -147,12 +147,12 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_sleep_lock_events::{
+        event_from_lock_transition, lock_state_from_idle_screen_state, EventLog, LockState,
+    };
     use fandhe_core::screens::sleep_lock_events_show::{
         apply_init, apply_snapshot, finish_start, mark_left, take_init, take_start, CurrentView,
         Phase, ScreenView, SleepLockEventsShowState, StartFailure,
-    };
-    use fandhe_device::sleep_lock_events::{
-        event_from_lock_transition, lock_state_from_idle_screen_state, EventLog, LockState,
     };
     use js_sys::{Array, Function, Object, Promise, Reflect};
     use wasm_bindgen::prelude::*;
@@ -629,10 +629,7 @@ mod tests {
 
     #[test]
     fn kinds_align_with_device_events() {
-        for (i, e) in fandhe_device::sleep_lock_events::ALL_EVENTS
-            .iter()
-            .enumerate()
-        {
+        for (i, e) in fandhe_cap_sleep_lock_events::ALL_EVENTS.iter().enumerate() {
             assert_eq!(kind_from_device(*e).index(), i);
         }
     }

@@ -126,7 +126,7 @@ mod imp {
 
     /// `MainActivity.audioSessionStart(long, int)` / `audioSessionStop(long)` / `audioSessionRead()`
     /// （戻りはいずれも int）を JNI で呼ぶ。`None` は呼び出し失敗。
-    /// `unsafe` 2 箇所は `android_sleep_lock_events.rs::call_activity` と同一の根拠。
+    /// `unsafe` 2 箇所は `fandhe_platform_android::with_activity` と同一の根拠。
     #[allow(unsafe_code)]
     fn call_activity(call: Call) -> Option<i32> {
         use crate::device::android::JniCallFailed;

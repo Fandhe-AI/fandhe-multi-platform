@@ -89,11 +89,6 @@ pub mod android_capture_protection;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_car_display;
-/// Issue #740 / #741（親 #143）: Android 向け付属機器のペアリング（`CompanionDeviceManager`）の骨格。
-/// `device/companion_device.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_companion_device;
 /// Issue #1404: Android 向け方位実装。`device/compass.rs` の android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -275,11 +270,6 @@ pub mod android_scanner_devices;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_screen_orientation;
-/// Issue #810: Android 向けスリープ・ロックの通知の骨格（`Unsupported` のスタブ。#811 が埋める）。
-/// `device/sleep_lock_events.rs` の Android 経路から使われる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_sleep_lock_events;
 /// Issue #562: Android 向け OS の検索への登録実装（AppSearch、API 31+、Java は `MainActivity`）。
 /// `device/spotlight_index.rs` の Android 経路から呼ばれる。結果コード写像をホストでテストするため
 /// test でもコンパイルする。
@@ -312,11 +302,6 @@ pub mod android_video_capture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_video_transcode;
-/// Issue #785: Android 向けシステム音量実装（#787 が埋めるスタブ）。
-/// `device/volume_control.rs` の Android 経路から使われる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_volume_control;
 /// Issue #970: Android 向け壁紙設定の骨格（`Unsupported` を返すスタブ。#971 が実体に置き換える）。
 /// `device/wallpaper.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -327,11 +312,6 @@ pub mod android_wallpaper;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_web_auth_session;
-/// Issue #1065: Android 向け「指定した Wi-Fi への接続」実装（`WifiConnectHelper` を JNI 経由で呼ぶ）。
-/// `device/wifi_connect.rs` の Android 経路から呼ばれる。ホストのテストビルドにも載せるため `any(android, test)`。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_wifi_connect;
 /// Issue #516: Android 向け Wi-Fi 情報・スキャン実装（`WifiManager`、JNI 経由の pull 型 bridge）。
 /// `device/wifi_info.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でもコンパイルする。
 #[cfg(any(target_os = "android", test))]
@@ -467,12 +447,6 @@ pub mod apple_scanner_devices;
 /// secure_credential.rs` の iOS/macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_secure_credential;
-/// Issue #725 macOS: 環境音の分類実装（`apple/fandhe_apple_sound_classification.m` を呼ぶ C ABI ラッパー）。
-/// `device/sound_classification.rs` の macOS 経路と、b-ios が委譲する `ios_sound_classification` から呼ばれる。
-/// `build.rs` のコンパイル条件と同じ OS 集合（+ ホストテスト）に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod apple_sound_classification;
 /// Issue #1024（macOS）/ #1025（iOS）: iOS / macOS 向け音声認識実装（`apple/
 /// fandhe_apple_speech_recognition.m` を呼ぶ C ABI ラッパー）。`device/
 /// speech_recognition.rs` の iOS/macOS 経路から呼ばれる。
@@ -547,10 +521,6 @@ pub mod clipboard;
 /// （macOS・iOS は pull 型 `bridge`、Windows は同期モーダル、他 OS は `UnsupportedColorPicker` 固定。
 /// Web は `fandhe-web-dom` が持つ）。
 pub mod color_picker;
-/// Phase 11（親 #143、Issue #740）: 付属機器のペアリングの effect ドライバ（Android は
-/// `CompanionDeviceManager` で #741 が実装、iOS は保留のため他 OS と同じ
-/// `UnsupportedCompanionDevicePicker` 固定。Web は対象外）。
-pub mod companion_device;
 /// Issue #1404（親 #1154）: 方位（コンパス）の effect ドライバ（Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedCompass` 固定。Web は `fandhe-web-dom`）。
 pub mod compass;
@@ -586,9 +556,6 @@ pub mod environment_sensors;
 /// iOS / Android は pull 型 `bridge`（(b-ios)・(b-android) が埋めるスタブ）、他 OS は
 /// `UnsupportedExternalAppLaunch` 固定。Web は `fandhe-web-dom`）。
 pub mod external_app_launch;
-/// Phase 11 の拡充ループ（親 #148、Issue #762）: 画面のスポイトの effect ドライバ（macOS は pull 型
-/// `bridge`、他 OS は `UnsupportedEyeDropper` 固定。Web は `fandhe-web-dom` が持つ）。
-pub mod eye_dropper;
 /// Phase 11 の拡充ループ（親 #102、Issue #416）: ファイルの関連付けの effect ドライバ
 /// （macOS・iOS・Windows 実装、Android は未実装のスタブ、他 OS は `Unsupported` 固定）。
 pub mod file_association;
@@ -614,9 +581,6 @@ pub mod fullscreen_immersive;
 /// Phase 11 の拡充ループ（親 #1056、Issue #1057）: ジオフェンスの effect ドライバ
 /// （location の継続取得に乗せて `GeofenceTracker` で判定する）。
 pub mod geofence;
-/// Phase 11 の拡充ループ（親 #150、Issue #766）: グローバルホットキーの effect ドライバ
-/// （macOS 実装。Windows は骨格のスタブで #767 が埋める。他 OS は `UnsupportedGlobalHotkey` 固定）。
-pub mod global_hotkey;
 /// Phase 11 の拡充ループ（親 #149、Issue #1089）: ヘルスデータ（今日の歩数）の effect ドライバ
 /// （iOS・Android は OS 別モジュール。他 OS は `UnsupportedHealthData` 固定）。
 pub mod health_data;
@@ -843,14 +807,6 @@ pub mod ios_scanner_devices;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_orientation;
-/// Issue #1079・#1080: iOS 向けスマートホーム実装（`ios/fandhe_ios_smart_home.m` の HomeKit を呼ぶ C ABI ラッパー）。`device/smart_home.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_smart_home;
-/// Issue #725: iOS 向け環境音の分類（b-ios まではスタブ。実装時に `apple_sound_classification` へ委譲する）。
-/// `device/sound_classification.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_sound_classification;
 /// Issue #561: iOS 向け OS の検索への登録実装（macOS と共用の `apple_spotlight_index` へ委譲）。
 /// `device/spotlight_index.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -867,11 +823,6 @@ pub mod ios_video_capture;
 /// `device/video_transcode.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_video_transcode;
-/// Issue #785: iOS 向けシステム音量実装（#786 が埋めるスタブ）。
-/// `device/volume_control.rs` の iOS 経路から使われる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_volume_control;
 /// Issue #532: iOS 向け Web 認証セッション実装（`ios/fandhe_ios_web_auth_session.m` の
 /// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -936,18 +887,10 @@ pub mod macos_display_refresh_hdr;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_external_app_launch;
-/// Issue #762: macOS 向け画面のスポイト実装（`macos/fandhe_macos_eye_dropper.m` の `NSColorSampler` を
-/// 呼ぶ C ABI ラッパー）。`device/eye_dropper.rs` の macOS 経路から呼ばれる。
-#[cfg(target_os = "macos")]
-pub mod macos_eye_dropper;
 /// Issue #917: macOS 向けプレビュー実装（`macos/fandhe_macos_file_preview.m` の `QLPreviewView` を呼ぶ
 /// C ABI ラッパーと窓が閉じた通知の受け口）。`device/file_preview.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_file_preview;
-/// Issue #766: macOS 向けグローバルホットキー実装（`macos/fandhe_macos_global_hotkey.m`（Carbon）を呼ぶ
-/// C ABI ラッパーと押下の受け口）。`device/global_hotkey.rs` の macos 経路から呼ばれる。
-#[cfg(target_os = "macos")]
-pub mod macos_global_hotkey;
 /// Issue #696: macOS 向けログイン時の自動起動実装（`macos/fandhe_macos_launch_at_login.m` の
 /// `SMAppService.mainApp` を呼ぶ C ABI ラッパー）。`device/launch_at_login.rs` の macOS 経路から呼ばれる。
 /// 写像の純関数をホストでテストできるよう cfg は `any(macos, test)`。
@@ -1006,10 +949,6 @@ pub mod macos_removable_storage;
 /// C ABI ラッパー）。`device/safe_area_insets.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_safe_area_insets;
-/// Issue #810: macOS 向けスリープ・ロックの通知実装（`macos/fandhe_macos_sleep_lock_events.m`、
-/// NSWorkspace の通知を呼ぶ C ABI ラッパー）。`device/sleep_lock_events.rs` の macOS 経路から呼ばれる。
-#[cfg(target_os = "macos")]
-pub mod macos_sleep_lock_events;
 /// Issue #939: macOS 向けシステムの効果音実装（`macos/fandhe_macos_system_sound.m` を呼ぶ C ABI ラッパー）。
 /// `device/system_sound.rs` の macOS 経路から呼ばれる。結果コードの写像をホストでテストするため test でもコンパイルする。
 #[cfg(any(target_os = "macos", test))]
@@ -1020,12 +959,6 @@ pub mod macos_system_sound;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_video_capture;
-/// Issue #785: macOS 向けシステム音量実装（`macos/fandhe_macos_volume_control.m` の Core Audio を呼ぶ
-/// C ABI ラッパー）。`device/volume_control.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
-/// テストできるよう cfg は `any(macos, test)`。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_volume_control;
 /// Issue #970: macOS 向け壁紙設定実装（`macos/fandhe_macos_wallpaper.m` を呼ぶ C ABI ラッパー）。
 /// `device/wallpaper.rs` の macOS 経路から呼ばれる。結果コードの写像をホストでテストするため test でもコンパイルする。
 #[cfg(any(target_os = "macos", test))]
@@ -1037,12 +970,6 @@ pub mod macos_wallpaper;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_web_auth_session;
-/// Issue #791: macOS 向け「指定した Wi-Fi への接続」実装（`macos/fandhe_macos_wifi_connect.m` の CoreWLAN を
-/// 呼ぶ C ABI ラッパー）。`device/wifi_connect.rs` の macOS 経路から呼ばれる。写像の純関数を
-/// ホストでテストするため test でも載せる。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_wifi_connect;
 /// Issue #514: macOS 向け Wi-Fi 情報実装（`macos/fandhe_macos_wifi_info.m` の CoreWLAN と CoreLocation の
 /// 許可判定を呼ぶ C ABI ラッパー）。`device/wifi_info.rs` の macOS 経路から呼ばれる。写像の純関数を
 /// ホストでテストするため test でも載せる。
@@ -1162,15 +1089,6 @@ pub mod screen_orientation;
 /// Phase 11 の拡充ループ（親 #921、Issue #922・#924）: 資格情報保存の effect
 /// ドライバ（macOS/iOS/Android 実装、Windows は #923）。
 pub mod secure_credential;
-/// Phase 11 の拡充ループ（親 #167、Issue #810）: スリープ・ロックの通知の effect ドライバ
-/// （macOS・Windows 実装、Android は骨格のスタブで #811 が埋める。他 OS は `UnsupportedSleepLockEvents` 固定）。
-pub mod sleep_lock_events;
-/// Phase 11 の拡充ループ（親 #147、Issue #1079）: スマートホーム（家と機器の名前の一覧）の effect ドライバ
-/// （iOS は骨格のスタブで #1080 が埋める。他 OS は `UnsupportedSmartHome` 固定）。
-pub mod smart_home;
-/// Phase 11 の拡充ループ（親 #142、Issue #725）: 環境音の分類の effect ドライバ（macOS 実装、
-/// iOS は b-ios、他 OS は `UnsupportedSoundClassifier` 固定）。
-pub mod sound_classification;
 /// Phase 11 の拡充ループ（親 #1023、Issue #1024・#1025）: 音声認識の effect ドライバ
 /// （macOS/iOS/Windows/Android 実装、Android/Web は兄弟 issue）。
 pub mod speech_recognition;
@@ -1201,17 +1119,12 @@ pub mod video_capture;
 /// （macOS・iOS 実装、Android は #1017・Windows は #1015 が埋めるスタブ、
 /// Web は #1018、他 OS は `UnsupportedVideoTranscode` 固定）。
 pub mod video_transcode;
-/// Phase 11 の拡充ループ（親 #166、Issue #785）: システム音量の effect ドライバ
-/// （macOS・Windows 実装、iOS は #786・Android は #787 が埋めるスタブ、他 OS は `UnsupportedVolumeControl` 固定）。
-pub mod volume_control;
 /// Phase 11 の拡充ループ（親 #188、Issue #970）: 壁紙・ロック画面の設定の effect ドライバ
 /// （macOS・Windows 実装、Android は #971 が埋めるスタブ、iOS・他 OS は `UnsupportedWallpaper` 固定）。
 pub mod wallpaper;
 /// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS・Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
 pub mod web_auth_session;
-/// Phase 11 の拡充ループ（親 #165、Issue #791）: 指定した Wi-Fi への接続の effect ドライバ（macOS・Windows 実装、Android 実装（#1065）、iOS（deferred）・他 OS は `UnsupportedWifiConnect` 固定。Web は対象外）。
-pub mod wifi_connect;
 /// Phase 11 の拡充ループ（親 #111、Issue #514）: Wi-Fi 情報の effect ドライバ（macOS・Windows・Android 実装、
 /// iOS（deferred）・他 OS は `UnsupportedWifiInfo` 固定。Web は対象外）。
 pub mod wifi_info;
@@ -1333,11 +1246,6 @@ pub mod windows_file_preview;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_flashlight;
-/// Issue #766: Windows 向けグローバルホットキーの骨格（実装は #767）。
-/// `device/global_hotkey.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_global_hotkey;
 /// Issue #960: Windows 向け在席検知実装（WinRT `HumanPresenceSensor` ラッパー）。
 /// `device/human_presence.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -1441,10 +1349,6 @@ pub mod windows_scanner_devices;
 /// `device/secure_credential.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_secure_credential;
-/// Issue #810: Windows 向けスリープ・ロックの通知実装（不可視ウィンドウ + `WTSRegisterSessionNotification` /
-/// `RegisterSuspendResumeNotification`）。`device/sleep_lock_events.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_sleep_lock_events;
 /// Issue #1024: Windows 向け音声認識実装（WinRT `SpeechRecognizer` ラッパー）。
 /// `device/speech_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -1470,10 +1374,6 @@ pub mod windows_video_capture;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_video_transcode;
-/// Issue #785: Windows 向けシステム音量実装（`IAudioEndpointVolume`）。
-/// `device/volume_control.rs` の Windows 経路（ワーカー）から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_volume_control;
 /// Issue #970: Windows 向け壁紙設定実装（`SystemParametersInfoW(SPI_SETDESKWALLPAPER)`）。
 /// `device/wallpaper.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -1482,11 +1382,6 @@ pub mod windows_wallpaper;
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_web_auth_session;
-/// Issue #791: Windows 向け「指定した Wi-Fi への接続」実装のスタブ（実装は #792）。
-/// `device/wifi_connect.rs` の Windows 経路から呼ばれる。#792 が cfg を変えずに済むよう `any(windows, test)`。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_wifi_connect;
 /// Issue #515: Windows 向け Wi-Fi 情報実装（`wlanapi`）。
 /// `device/wifi_info.rs` の Windows 経路から呼ばれる。写像の純関数をホストでテストできるよう
 /// cfg は `any(windows, test)`。
@@ -1525,7 +1420,7 @@ pub fn shutdown() {
     bluetooth_classic::stop_shared_discovery();
     lan_discovery::stop_shared_discovery();
     local_peer::stop_shared_exchange();
-    global_hotkey::shutdown();
+    fandhe_cap_global_hotkey::shutdown();
     fandhe_cap_midi::shutdown();
     media_playback::shutdown();
     now_playing::shutdown();

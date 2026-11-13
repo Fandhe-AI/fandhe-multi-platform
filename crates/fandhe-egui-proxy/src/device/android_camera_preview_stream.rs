@@ -198,7 +198,7 @@ enum Ret {
 
 /// `MainActivity.cameraPreviewStart(long)` / `cameraPreviewStop(long)` / `cameraPreviewZoomRange(long)` /
 /// `cameraPreviewSetZoom(long, float)` を JNI で呼ぶ。`None` は呼び出し失敗。
-/// `unsafe` 2 箇所は `android_sleep_lock_events.rs::call_activity` と同一の根拠。
+/// `unsafe` 2 箇所は `fandhe_platform_android::with_activity` と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 fn call_activity(call: Call) -> Option<Ret> {

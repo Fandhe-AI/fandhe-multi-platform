@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
 //! 置き場」節の制約どおり）。OS への要求と読み戻しは `fandhe-egui-proxy` の effect ドライバ
-//! （`device/volume_control.rs`）が [`take_step`] / [`wants_read`] で観測し、[`begin`] →
+//! （`fandhe-cap-volume-control` の `driver.rs`）が [`take_step`] / [`wants_read`] で観測し、[`begin`] →
 //! [`finish_step`] / [`apply_read`] / [`expire`] で結果を注入する。
 //!
 //! # 嘘の成功を避ける

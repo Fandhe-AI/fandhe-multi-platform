@@ -1162,6 +1162,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-companion-device"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-runtime",
+ "jni 0.22.4",
+]
+
+[[package]]
 name = "fandhe-cap-device-identifier"
 version = "0.2.0"
 dependencies = [
@@ -1208,6 +1218,16 @@ dependencies = [
  "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-eye-dropper"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
 ]
 
 [[package]]
@@ -1258,6 +1278,17 @@ dependencies = [
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-global-hotkey"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -1592,6 +1623,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-sleep-lock-events"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-smart-home"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+]
+
+[[package]]
+name = "fandhe-cap-sound-classification"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+]
+
+[[package]]
 name = "fandhe-cap-spell-check"
 version = "0.2.0"
 dependencies = [
@@ -1666,6 +1729,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-volume-control"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-wifi-connect"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-core"
 version = "0.2.0"
 dependencies = [
@@ -1699,6 +1790,7 @@ dependencies = [
  "egui_kittest",
  "fandhe-cap-drag-drop",
  "fandhe-cap-gamepad",
+ "fandhe-cap-global-hotkey",
  "fandhe-cap-media-cast",
  "fandhe-cap-midi",
  "fandhe-cap-serial-port",
@@ -1748,14 +1840,17 @@ dependencies = [
  "fandhe-cap-calendar",
  "fandhe-cap-call-ui",
  "fandhe-cap-camera-capture",
+ "fandhe-cap-companion-device",
  "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
  "fandhe-cap-drag-drop",
  "fandhe-cap-dynamic-type",
+ "fandhe-cap-eye-dropper",
  "fandhe-cap-file-watch",
  "fandhe-cap-focus-mode-status",
  "fandhe-cap-gamepad",
  "fandhe-cap-geocoding-search",
+ "fandhe-cap-global-hotkey",
  "fandhe-cap-haptics",
  "fandhe-cap-home-widget",
  "fandhe-cap-http-get",
@@ -1781,12 +1876,17 @@ dependencies = [
  "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
  "fandhe-cap-share-sheet",
+ "fandhe-cap-sleep-lock-events",
+ "fandhe-cap-smart-home",
+ "fandhe-cap-sound-classification",
  "fandhe-cap-spell-check",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-system-tray",
  "fandhe-cap-usb-device",
  "fandhe-cap-user-idle",
  "fandhe-cap-uwb-ranging",
+ "fandhe-cap-volume-control",
+ "fandhe-cap-wifi-connect",
  "fandhe-core",
  "fandhe-egui-proxy",
  "fandhe-platform-android",
@@ -1903,6 +2003,7 @@ dependencies = [
  "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
  "fandhe-cap-share-sheet",
+ "fandhe-cap-sleep-lock-events",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-usb-device",
  "fandhe-core",

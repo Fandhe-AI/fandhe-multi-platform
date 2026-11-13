@@ -57,8 +57,6 @@ pub mod car_display;
 pub mod clipboard;
 /// Phase 11（端末機能の拡充ループ、親 #184、Issue #941）: システムの色選択ダイアログ（固定の初期色から 1 色を選ばせ `#rrggbb` で返す）。
 pub mod color_picker;
-/// Phase 11（端末機能の拡充ループ、親 #143、Issue #740）: 付属機器のペアリング（OS の機器選択画面で BLE 機器を 1 台選び、名前を知る）。
-pub mod companion_device;
 /// Phase 11（端末機能の拡充ループ、親 #1154、Issue #1404）: 方位（コンパス）。
 pub mod compass;
 /// Phase 11（端末機能の拡充ループ、親 #1142、Issue #1384）: メール・SMS の作成画面を開く。
@@ -97,8 +95,6 @@ pub mod foldable_posture;
 pub mod fullscreen_immersive;
 /// Phase 11（端末機能の拡充ループ）: location に乗せた Rust 側のジオフェンス判定。
 pub mod geofence;
-/// Phase 11（端末機能の拡充ループ、親 #150、Issue #766）: グローバルホットキー（固定の組み合わせ 1 つ）。
-pub mod global_hotkey;
 /// Phase 11（端末機能の拡充ループ、親 #149、Issue #1089）: ヘルスデータ（今日の歩数を 1 回読む）。
 pub mod health_data;
 pub mod http;
@@ -177,12 +173,6 @@ pub mod scanner_devices;
 pub mod screen_orientation;
 /// Phase 11（端末機能の拡充ループ、親 #921、Issue #922）: 資格情報の安全な保存。
 pub mod secure_credential;
-/// Phase 11 の拡充ループ（親 #167、Issue #810）: スリープ・画面の消灯と点灯・ロックと解除の通知。
-pub mod sleep_lock_events;
-/// Phase 11（端末機能の拡充ループ、親 #147、Issue #1079）: スマートホーム（登録済みの家と機器の名前の一覧）。
-pub mod smart_home;
-/// Phase 11（端末機能の拡充ループ、親 #142、Issue #725）: 環境音の分類（上位 3 件のラベルと信頼度）。
-pub mod sound_classification;
 /// Phase 11（端末機能の拡充ループ、親 #1023、Issue #1024）: 音声認識。
 pub mod speech_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #117、Issue #560）: OS の検索への登録（固定のメモ 1 件の登録と全削除）。
@@ -200,14 +190,10 @@ pub mod url_scheme;
 pub mod video_capture;
 /// Phase 11（端末機能の拡充ループ、親 #340、Issue #1014）: 動画の変換（実行時に作った元動画を小さい解像度の MP4 へ書き出す）。
 pub mod video_transcode;
-/// Phase 11（端末機能の拡充ループ、親 #166、Issue #785）: システム音量・消音状態の取得と変更。
-pub mod volume_control;
 /// Phase 11（端末機能の拡充ループ、親 #188、Issue #970）: 壁紙・ロック画面の設定（アプリが作った PNG 1 枚）。
 pub mod wallpaper;
 /// Phase 11（端末機能の拡充ループ、親 #113、Issue #530）: OAuth 用の Web 認証セッション（デモ認可ページ + コールバック検査）。
 pub mod web_auth_session;
-/// Phase 11 の拡充ループ（親 #165、Issue #791）: 指定した Wi-Fi への接続（SSID とパスワードを指定して 1 回要求）。
-pub mod wifi_connect;
 /// Phase 11（端末機能の拡充ループ、親 #111、Issue #514）: Wi-Fi 情報（現在の接続と周辺の上位数件）。
 pub mod wifi_info;
 /// Phase 11（端末機能の拡充ループ、親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）。

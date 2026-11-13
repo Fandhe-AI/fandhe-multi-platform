@@ -104,6 +104,8 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-camera-capture/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-companion-device/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-device-identifier/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-document-scan/android/java")
@@ -162,11 +164,17 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-share-sheet/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-sleep-lock-events/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-spell-check/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-system-accent-color/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-usb-device/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-volume-control/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-wifi-connect/android/java")
             // END fandhe-cap
         }
     }

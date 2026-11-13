@@ -18,7 +18,7 @@
       "note": "実装済み（#786）。1 秒ごとに `outputVolume` を読み、画面の下端に `MPVolumeView` を 1 個置く（画面が出ている間ずっと置き、プロセスの終了で消える）。消音は読めず、「＋」「－」は出さない。音声セッションは変えない。公式は「システム音量を直接変えられるのは利用者だけ。アプリ内の音量操作は `MPVolumeView` で出す」と書く。`MPVolumeView` は音量を制御できない出力先（車載機等）ではスライダーの代わりに出力先の名前を出し、シミュレータでは音量を変えられない（公式）。消音スイッチの状態を読む公開 API は無い。`outputVolume` は値の変化を KVO で観測できる（公式）が、音声セッションを有効にしていないと更新が届かない・古い値や 0 が返る旨の報告が Apple Developer Forums にある（公式文書には記載なし）",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#780）",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_volume_control.m + crates/fandhe-egui-proxy/src/device/ios_volume_control.rs + crates/fandhe-egui-proxy/src/device/volume_control.rs + crates/fandhe-core/src/screens/volume_control_show.rs + crates/fandhe-device/src/volume_control.rs、Issue #786"
+      "impl": "crates/fandhe-cap-volume-control/ios/fandhe_ios_volume_control.m + crates/fandhe-cap-volume-control/src/ios.rs + crates/fandhe-cap-volume-control/src/driver.rs + crates/fandhe-core/src/screens/volume_control_show.rs + crates/fandhe-cap-volume-control/src/contract.rs、Issue #786"
     },
     "android": {
       "status": "done",
@@ -32,7 +32,7 @@
       "note": "実装済み（#787）。1 秒ごとに読み直し、読み戻した値を表示する。`isVolumeFixed()` が真のときは「＋」「－」を出さない。上限・下限で値が変わらないときは失敗にしない。`adjustStreamVolume` は 1 段階ずつ変え、段の幅と上下限は OS が決める。音量固定の端末（`isVolumeFixed()` が真）では変更が効かない（公式）。公式は `adjustStreamVolume` を「全体の音声設定を置き換えるアプリか電話アプリ向け」と書く。音量の変化を知らせる公開の通知（broadcast・listener）は無い。対象はメディア音量（`STREAM_MUSIC`）だけで、着信音・通知音量は扱わない",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#780）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/VolumeControlHelper.java + crates/fandhe-egui-proxy/src/device/android_volume_control.rs + crates/fandhe-egui-proxy/src/device/volume_control.rs + crates/fandhe-core/src/screens/volume_control_show.rs + crates/fandhe-device/src/volume_control.rs、Issue #787"
+      "impl": "crates/fandhe-cap-volume-control/android/java/com/fandhe/platform/VolumeControlHelper.java + crates/fandhe-cap-volume-control/src/android.rs + crates/fandhe-cap-volume-control/src/driver.rs + crates/fandhe-core/src/screens/volume_control_show.rs + crates/fandhe-cap-volume-control/src/contract.rs、Issue #787"
     },
     "macos": {
       "status": "done",
@@ -47,7 +47,7 @@
       "note": "実装済み（#785）。毎回既定の出力機器を OS へ問い、「＋」「－」で 1/16 刻みに設定して同じ呼び出しの中で読み戻した値を表示する（設定値は機器が丸めるため読み戻しが少しずれることがある）。上限・下限は「変わらなかった」で失敗にしない。音量を持たない出力機器・設定できない機器は「変更できない」でボタンを出さない。VirtualMainVolume は機器が主音量を持てばそれを、チャンネル別の音量しか持たなければ優先ステレオ対のチャンネルをまとめて動かし、左右の比を保つ（SDK のヘッダ）。音量の値は機器が選べる値へ丸められる（`kAudioDevicePropertyVolumeScalar` のヘッダ）。音量の制御を持たない出力機器（HDMI 等）ではプロパティが無い。段の幅を返す API は無く、1 段階はアプリが決めた幅（1/16）",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#780）",
-      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_volume_control.m + crates/fandhe-egui-proxy/src/device/macos_volume_control.rs + crates/fandhe-egui-proxy/src/device/volume_control.rs + crates/fandhe-core/src/screens/volume_control_show.rs + crates/fandhe-device/src/volume_control.rs、Issue #785"
+      "impl": "crates/fandhe-cap-volume-control/macos/fandhe_macos_volume_control.m + crates/fandhe-cap-volume-control/src/macos.rs + crates/fandhe-cap-volume-control/src/driver.rs + crates/fandhe-core/src/screens/volume_control_show.rs + crates/fandhe-cap-volume-control/src/contract.rs、Issue #785"
     },
     "windows": {
       "status": "done",
@@ -62,7 +62,7 @@
       "note": "実装済み（#785）。ワーカー上の COM（MTA）で既定の出力を毎回問い、`VolumeStepUp/Down` の後に読み戻した値を表示する。期限は 5 秒（単調時計）で、期限後に届いた結果は捨てる。出力機器が無いときは失敗ではなく「変更できない」。音量は 0.0〜1.0 の正規化値で、聴感に合わせた曲線（公式）。`VolumeStepUp` / `VolumeStepDown` は OS が決める次の段へ動かし、上限・下限ではなにもせず S_OK を返す（公式）。変化の通知は `RegisterControlChangeNotify` で受けられるが、解除の前にコールバックを解放すると資源が漏れる（公式）",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#780）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_volume_control.rs + crates/fandhe-egui-proxy/src/device/volume_control.rs + crates/fandhe-core/src/screens/volume_control_show.rs + crates/fandhe-device/src/volume_control.rs、Issue #785"
+      "impl": "crates/fandhe-cap-volume-control/src/windows.rs + crates/fandhe-cap-volume-control/src/driver.rs + crates/fandhe-core/src/screens/volume_control_show.rs + crates/fandhe-cap-volume-control/src/contract.rs、Issue #785"
     },
     "web": {
       "status": "no",

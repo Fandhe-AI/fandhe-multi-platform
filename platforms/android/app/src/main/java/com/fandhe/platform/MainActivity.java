@@ -407,14 +407,6 @@ public class MainActivity extends GameActivity {
         wifiInfoHelper.cancel(requestId);
     }
 
-    // 指定した Wi-Fi への接続（Issue #1065）。実装は `WifiConnectHelper`。
-    // Rust の `android_wifi_connect.rs` が JNI で呼ぶ。
-    private final WifiConnectHelper wifiConnectHelper = new WifiConnectHelper(this);
-
-    void requestWifiConnect(long requestId, String ssid, String password, boolean hexKey) {
-        wifiConnectHelper.connect(requestId, ssid, password, hexKey);
-    }
-
     // 無線の状態取得と切り替え（Issue #974）。実装は `RadioControlHelper`（ランチャーを STARTED 前に登録）。
     // Rust の `android_radio_control.rs` が JNI で呼ぶ。
     private final RadioControlHelper radioControlHelper = new RadioControlHelper(this);
@@ -559,22 +551,6 @@ public class MainActivity extends GameActivity {
         return SpotlightIndexHelper.removeAll(getApplicationContext(), domain, remainingMs);
     }
 
-    // スリープ・画面ロック・解除の通知（Issue #811）。実装は `SleepLockEventsHelper`。
-    // Rust の `android_sleep_lock_events.rs` が JNI で呼ぶ。
-    private final SleepLockEventsHelper sleepLockEventsHelper = new SleepLockEventsHelper(this);
-
-    int sleepLockEventsStart(long id) {
-        return sleepLockEventsHelper.start(id);
-    }
-
-    void sleepLockEventsStop(long id) {
-        sleepLockEventsHelper.stop(id);
-    }
-
-    int sleepLockEventsRead() {
-        return sleepLockEventsHelper.read();
-    }
-
     // アプリの前面・背面の通知（Issue #895）。実装は `AppLifecycleHelper`。
     // Rust の `android_app_lifecycle.rs` が JNI で呼ぶ。
     private final AppLifecycleHelper appLifecycleHelper = new AppLifecycleHelper(this);
@@ -709,13 +685,6 @@ public class MainActivity extends GameActivity {
         return WebAuthSessionHelper.sha256(data);
     }
 
-    // 付属機器のペアリング（Issue #741）。実装は `CompanionDeviceHelper`（結果ランチャーを STARTED 前に登録）。
-    private final CompanionDeviceHelper companionDeviceHelper = new CompanionDeviceHelper(this);
-
-    void requestCompanionDevicePick(long requestId) {
-        companionDeviceHelper.pick(requestId);
-    }
-
     // 物・サービスの決済（Issue #1131）。実装は `PaymentRequestHelper`（結果ランチャーを STARTED 前に登録）。
     private final PaymentRequestHelper paymentRequestHelper = new PaymentRequestHelper(this);
 
@@ -834,18 +803,6 @@ public class MainActivity extends GameActivity {
 
     int systemSoundBeep() {
         return systemSoundHelper.beep();
-    }
-
-    // システム音量（Issue #787）。実装は `VolumeControlHelper`。Rust の `android_volume_control.rs` が
-    // egui スレッドから同期で JNI 呼び出しする。
-    private final VolumeControlHelper volumeControlHelper = new VolumeControlHelper(this);
-
-    int[] volumeControlRead() {
-        return volumeControlHelper.read();
-    }
-
-    int volumeControlAdjust(int direction) {
-        return volumeControlHelper.adjust(direction);
     }
 
     @Override
@@ -1844,7 +1801,6 @@ public class MainActivity extends GameActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         backgroundUploadHelper.onCreate();
-        companionDeviceHelper.init();
         captureProtectionHelper.onCreate();
         installAccessibilityOffGuard();
         fullscreenHelper.register();
@@ -4121,7 +4077,6 @@ public class MainActivity extends GameActivity {
         nowPlayingHelper.onDestroy();
         super.onDestroy();
         inAppBrowserHelper.onDestroy();
-        companionDeviceHelper.onDestroy();
         paymentRequestHelper.onDestroy();
         healthDataHelper.onDestroy();
         translationHelper.onDestroy();
@@ -4131,7 +4086,6 @@ public class MainActivity extends GameActivity {
         blePeripheralHelper.onDestroy();
         musicLibraryHelper.onDestroy();
         wifiInfoHelper.onDestroy();
-        wifiConnectHelper.onDestroy();
         radioControlHelper.onDestroy();
         scannerDevicesHelper.onDestroy();
         nfcReadHelper.onDestroy();
@@ -4141,7 +4095,6 @@ public class MainActivity extends GameActivity {
         motionRawSensorsHelper.onDestroy();
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
-        sleepLockEventsHelper.onDestroy();
         appLifecycleHelper.onDestroy();
         memoryPressureHelper.onDestroy();
         removableStorageHelper.onDestroy();

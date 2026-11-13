@@ -33,7 +33,7 @@
       "note": "実装済み（#811）。画面の消灯・点灯・解除の 3 種を受け、システムのスリープ・復帰とロックした瞬間は「この OS では取れない」と出す（知らせるブロードキャストが無い。`ACTION_USER_PRESENT` は解除のみ）。今の状態は画面を開いた時と出来事が届くたびに `isInteractive` / `isKeyguardLocked` で読み直し、サービスが取れない項目は「不明」、読み取りの失敗は失敗として出す（点灯・ロックなしへ畳まない）。`ACTION_SCREEN_OFF` / `ON` はマニフェストに宣言した受信側では受け取れず（javadoc）、Application Context へ動的に登録する。3 つともシステムだけが送る保護されたブロードキャストで、システムのブロードキャストだけを受けるレシーバーは、Android 14 以上でも `RECEIVER_EXPORTED` / `NOT_EXPORTED` を指定しない（公式）。画面を消すと Activity が onPause するため、onPause では止めない。`onDestroy`（Activity 再生成を含む）でレシーバーを解除し、停止を失敗として扱わない。購読は id で数え、解除後と再生成前の古い id の通知は捨てる。Android 14 以上では、アプリがキャッシュ状態の間に届いたブロードキャストは列に溜められ、前面へ戻った時にまとめて届き、同種のものは 1 件に畳まれることがある（公式、守らない範囲）。`isKeyguardLocked` は鍵なしのキーガード表示中も true になりうる（OS の定義の差、守らない範囲）。`isInteractive` は API 20、`isKeyguardLocked` は API 16 で追加されており、minSdk 24 で使える",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#806）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_sleep_lock_events.rs + platforms/android/app/src/main/java/com/fandhe/platform/SleepLockEventsHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/sleep_lock_events.rs + crates/fandhe-core/src/screens/sleep_lock_events_show.rs + crates/fandhe-device/src/sleep_lock_events.rs、Issue #811"
+      "impl": "crates/fandhe-cap-sleep-lock-events/src/android.rs + crates/fandhe-cap-sleep-lock-events/android/java/com/fandhe/platform/SleepLockEventsHelper.java + crates/fandhe-cap-sleep-lock-events/android/java/com/fandhe/platform/SleepLockEventsLifecycle.java + crates/fandhe-cap-sleep-lock-events/src/driver.rs + crates/fandhe-core/src/screens/sleep_lock_events_show.rs + crates/fandhe-cap-sleep-lock-events/src/contract.rs、Issue #811"
     },
     "macos": {
       "status": "done",
@@ -48,7 +48,7 @@
       "note": "実装済み（#810）。スリープ・復帰・画面の消灯・点灯の 4 種を受け、ロックと今の状態の読み取りは「この OS では取れない」と出す。停止は observer の解除で、解除後に届いた通知は捨てる。4 つの通知は `NSWorkspace` の通知センターに登録しないと届かない（公式の注記）。`willSleepNotification` の処理中はスリープを最大 30 秒遅らせうる（公式）ため、受け取ったら記録して即座に戻る。画面ロックは公式文書に無い分散通知名（`com.apple.screenIsLocked` 等）か `CGSessionCopyCurrentDictionary` の文書化されていないキーに頼るしかなく、使わない（画面には「この OS では取れない」と出す）",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#806）",
-      "impl": "crates/fandhe-egui-proxy/src/device/macos_sleep_lock_events.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_sleep_lock_events.m + crates/fandhe-egui-proxy/src/device/sleep_lock_events.rs + crates/fandhe-core/src/screens/sleep_lock_events_show.rs + crates/fandhe-device/src/sleep_lock_events.rs、Issue #810"
+      "impl": "crates/fandhe-cap-sleep-lock-events/src/macos.rs + crates/fandhe-cap-sleep-lock-events/macos/fandhe_macos_sleep_lock_events.m + crates/fandhe-cap-sleep-lock-events/src/driver.rs + crates/fandhe-core/src/screens/sleep_lock_events_show.rs + crates/fandhe-cap-sleep-lock-events/src/contract.rs、Issue #810"
     },
     "windows": {
       "status": "done",
@@ -64,7 +64,7 @@
       "note": "実装済み（#810）。スリープ・復帰・ロック・解除の 4 種を、購読ごとの専用スレッドの不可視のトップレベルウィンドウで受ける。復帰は `PBT_APMRESUMEAUTOMATIC` だけ数え、`PBT_APMRESUMESUSPEND` は二重計上になるため数えない。今のロック状態は出来事が届くたびに `WTSQuerySessionInformationW` で問い直す。画面の消灯・点灯は「この OS では取れない」と出す。通知は登録したウィンドウにだけ届くため HWND が要り、ウィンドウを壊す前に `WTSUnRegisterSessionNotification` を登録と 1 対 1 で呼ぶ（公式）。`PBT_APMRESUMEAUTOMATIC` は復帰のたびに必ず届き、利用者の操作による復帰では続けて `PBT_APMRESUMESUSPEND` も届く（公式）。`SessionFlags` は Windows 7 / Server 2008 R2 では LOCK と UNLOCK が逆になる（公式の注記、対象外の版）。使う関数は `windows` クレートの導入済み feature（`Win32_System_RemoteDesktop`・`Win32_System_Power`・`Win32_UI_WindowsAndMessaging`）にある",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#806）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_sleep_lock_events.rs + crates/fandhe-egui-proxy/src/device/sleep_lock_events.rs + crates/fandhe-core/src/screens/sleep_lock_events_show.rs + crates/fandhe-device/src/sleep_lock_events.rs、Issue #810"
+      "impl": "crates/fandhe-cap-sleep-lock-events/src/windows.rs + crates/fandhe-cap-sleep-lock-events/src/driver.rs + crates/fandhe-core/src/screens/sleep_lock_events_show.rs + crates/fandhe-cap-sleep-lock-events/src/contract.rs、Issue #810"
     },
     "web": {
       "status": "done",
@@ -81,7 +81,7 @@
       "safari": "非対応（Idle Detection API）。visibilitychange は対応",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#806）",
-      "impl": "crates/fandhe-web-dom/src/sleep_lock_events.rs + crates/fandhe-web-dom/src/user_idle.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/sleep_lock_events_show.rs + crates/fandhe-device/src/sleep_lock_events.rs、Issue #1063",
+      "impl": "crates/fandhe-web-dom/src/sleep_lock_events.rs + crates/fandhe-web-dom/src/user_idle.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/sleep_lock_events_show.rs + crates/fandhe-cap-sleep-lock-events/src/contract.rs、Issue #1063",
       "note": "実装済み（Issue #1063）。Chromium 系のみ（Chrome 94〜）。Idle Detection API は experimental で Baseline ではない（MDN）。`locked` はスクリーンセーバーも含む（仕様の定義）。`screenState` は `start()` 前は null のため、受け取りを始めるまでロック状態は「不明」と出す。`change` は `userState` の変化でも届き、どちらが変わったかは渡されないため、同じ購読の中で直前に読んだ `screenState` との違いでロック・解除を決める（今の状態の表示は毎回 `screenState` を読み直す）。null・未知の値は読み取り失敗とし、次に読めた値は基準にするだけで出来事にしない。許可の拒否は「許可されていない」と出し、開始失敗と分ける。開始の解決前に届いた `change` は基準を置くだけで出来事にしない。pagehide で止め（正常）、bfcache から戻っても自動で再開しない。`start()` の呼び出しを起点に 10 秒の期限を置く。`visibilitychange` では止めない（ロックで非表示になるのは受け取りたい場面そのもの）"
     }
   },

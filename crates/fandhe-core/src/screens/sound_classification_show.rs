@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod sound_classification_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
-//! `device/sound_classification.rs` が行い、[`apply_poll`] / [`apply_interrupted`] /
+//! `fandhe-cap-sound-classification` の `driver.rs` が行い、[`apply_poll`] / [`apply_interrupted`] /
 //! [`apply_failure`] で注入する。`fandhe_device::sound_classification` の型は依存方向の都合で
 //! ここへ写す。
 //!
