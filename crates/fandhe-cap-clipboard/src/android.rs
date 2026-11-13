@@ -56,7 +56,10 @@ fn request_with(
     start: impl FnOnce(u64) -> bool,
 ) -> Result<Option<String>, ClipboardError> {
     let began = Instant::now();
-    let id = slot.begin();
+    // 進行中・未取得の結果がある間は後続要求を拒否する（旧 Mailbox と同じ単一飛行。先行要求の結果を上書きしない）。
+    let Some(id) = slot.try_begin_unless(|_| true) else {
+        return Err(ClipboardError::Internal("clipboard busy"));
+    };
     if !start(id) {
         slot.clear(id);
         return Err(ClipboardError::Internal("clipboard jni"));

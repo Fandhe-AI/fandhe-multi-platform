@@ -433,7 +433,7 @@ mod tests {
     #[test]
     fn unsupported_os_implementation_is_unsupported() {
         assert!(matches!(
-            implementation().read(RadioKind::Wifi),
+            platform_radio_control().read(RadioKind::Wifi),
             Err(RadioControlError::Unsupported(_))
         ));
     }
