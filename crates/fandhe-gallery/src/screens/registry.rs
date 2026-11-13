@@ -43,7 +43,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "clipboard_text" => fandhe_core::screens::clipboard_text::current_screen,
-    fandhe_egui_proxy::device::clipboard::clipboard_text_effect,
+    fandhe_cap_clipboard::clipboard_text_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "tts_speak" => fandhe_core::screens::tts_speak::current_screen,
@@ -107,7 +107,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "compose_mail_sms" => fandhe_core::screens::compose_mail_sms::current_screen,
-    fandhe_egui_proxy::device::compose_mail_sms::compose_mail_sms_effect,
+    fandhe_cap_compose_mail_sms::compose_mail_sms_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "open_system_settings_show" => fandhe_core::screens::open_system_settings_show::current_screen,
@@ -127,11 +127,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "open_in_shell" => fandhe_core::screens::open_in_shell::current_screen,
-    fandhe_egui_proxy::device::open_in_shell::open_in_shell_effect,
+    fandhe_cap_open_in_shell::open_in_shell_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "recent_documents_show" => fandhe_core::screens::recent_documents_show::current_screen,
-    fandhe_egui_proxy::device::recent_documents::recent_documents_show_effect,
+    fandhe_cap_recent_documents::recent_documents_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "passkey_signin" => fandhe_core::screens::passkey_signin::current_screen,
@@ -315,7 +315,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_provider_show" => fandhe_core::screens::file_provider_show::current_screen,
-    fandhe_egui_proxy::device::file_provider::file_provider_show_effect,
+    fandhe_cap_file_provider::file_provider_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_watch_show" => fandhe_core::screens::file_watch_show::current_screen,
@@ -471,7 +471,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "video_transcode" => fandhe_core::screens::video_transcode::current_screen,
-    fandhe_egui_proxy::device::video_transcode::video_transcode_effect,
+    fandhe_cap_video_transcode::video_transcode_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pdf_first_page" => fandhe_core::screens::pdf_first_page::current_screen,
@@ -499,7 +499,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "radio_control_show" => fandhe_core::screens::radio_control_show::current_screen,
-    fandhe_egui_proxy::device::radio_control::radio_control_show_effect,
+    fandhe_cap_radio_control::radio_control_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ml_infer" => fandhe_core::screens::ml_infer::current_screen,
@@ -523,7 +523,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "image_generation_show" => fandhe_core::screens::image_generation_show::current_screen,
-    fandhe_egui_proxy::device::image_generation::image_generation_show_effect,
+    fandhe_cap_image_generation::image_generation_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "in_app_browser_show" => fandhe_core::screens::in_app_browser_show::current_screen,
@@ -535,7 +535,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nfc_read" => fandhe_core::screens::nfc_read::current_screen,
-    fandhe_egui_proxy::device::nfc::nfc_read_effect,
+    fandhe_cap_nfc::nfc_read_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nfc_card_emulation_show" => fandhe_core::screens::nfc_card_emulation_show::current_screen,
@@ -543,7 +543,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "scanner_devices_import" => fandhe_core::screens::scanner_devices_import::current_screen,
-    fandhe_egui_proxy::device::scanner_devices::scanner_devices_import_effect,
+    fandhe_cap_scanner_devices::scanner_devices_import_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "translation" => fandhe_core::screens::translation::current_screen,

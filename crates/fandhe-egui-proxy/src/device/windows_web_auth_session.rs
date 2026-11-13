@@ -5,7 +5,7 @@
 //! `fandhe_device::web_auth_session`。
 //!
 //! 乱数は `BCryptGenRandom`、SHA-256（PKCE の S256）は `BCryptHash`。`unsafe` はこの 2 呼び出しに
-//! 閉じ、各所に `// SAFETY:` を書く（`ShellExecuteW` は `windows_compose_mail_sms::open_url` を共用）。
+//! 閉じ、各所に `// SAFETY:` を書く（`ShellExecuteW` は `fandhe_platform_windows::open_url` を共用）。
 //!
 //! # 取り消し
 //!
@@ -24,7 +24,12 @@ use std::sync::Arc;
 use fandhe_device::url_scheme::MAX_URL_BYTES;
 use fandhe_device::web_auth_session::{AuthRequest, RedirectKind, WebAuthFailure, WebAuthSession};
 
-use super::windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC};
+// `ShellExecuteW` で URL を開く入口と戻り値の定数は Windows 共通層（`fandhe-platform-windows`）にある。
+// 共通層は Windows でしか載らないため、ホストのテストでは同じ値（公式の表）を置く。
+#[cfg(target_os = "windows")]
+use fandhe_platform_windows::{open_url, SE_ERR_NOASSOC};
+#[cfg(not(target_os = "windows"))]
+const SE_ERR_NOASSOC: isize = 31;
 
 /// `ShellExecuteW` の戻り値 → 結果。`> 32` は成功、関連付けなしは `NoBrowser`、他は `Internal`。
 pub(crate) fn start_result(code: isize) -> Result<(), WebAuthFailure> {

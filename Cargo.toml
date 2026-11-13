@@ -59,11 +59,11 @@ unsafe_op_in_unsafe_fn = "deny"
 # 直接依存へ昇格するのみで新規 crate の追加ではない。切り離し手順は
 # docs/architecture/device-feature-removal.md 参照（Phase 8 撤去時に本行も削除する）。
 cc = "1"
-# Phase 11（Issue #859）: `fandhe-device::clipboard::ArboardClipboard` が使う
+# Phase 11（Issue #859）: `fandhe-cap-clipboard`（`ArboardClipboard`）が使う
 # クリップボード抽象（macOS/Windows/Linux）。eframe → egui-winit が "clipboard" feature で
 # 非 optional に引いているため既に 3.6.1 が解決済みで（`cargo tree -i arboard` 実査済み、
 # 上記 egui/eframe のコメントでも「feature 選択では無効化不可」と記録済み）、直接依存への
-# 昇格で新規パッケージは増えない。`fandhe-device` が `#![forbid(unsafe_code)]` を
+# 昇格で新規パッケージは増えない。`fandhe-cap-clipboard` が `#![forbid(unsafe_code)]` を
 # 維持したまま 3 OS のクリップボードを覆うために必要（各 OS の API を自前で叩くと
 # unsafe が要る）。MSRV 1.71.0 はランナー固定の 1.88.0 以下。
 arboard = "3.6"

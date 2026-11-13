@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::open_system_settings_show`（端末依存ゼロ）の要求を観測し、頁を
 //! `crate::contract::SettingsPage` へ写して OS へ渡し、結果を
 //! `CompletionSender` 経由で返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約、
-//! `device/compose_mail_sms.rs` と同型）。契約と守る範囲は `crate::contract` の
+//! `fandhe-cap-compose-mail-sms` の driver と同型）。契約と守る範囲は `crate::contract` の
 //! モジュール doc を参照。
 //!
 //! - Windows: [`OpenSystemSettings`] を UI スレッドで同期に呼ぶ

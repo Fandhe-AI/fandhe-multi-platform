@@ -305,9 +305,7 @@ mod win {
 
     pub(super) fn open_settings() -> Result<(), DeviceError> {
         let _com = ComGuard::new();
-        settings_result(crate::device::windows_compose_mail_sms::open_url(
-            SETTINGS_URI,
-        ))
+        settings_result(fandhe_platform_windows::open_url(SETTINGS_URI))
     }
 }
 

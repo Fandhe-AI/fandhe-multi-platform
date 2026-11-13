@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
 //! 置き場」節の制約どおり）。サンプルファイルの用意・パスの検査・OS 呼び出しは `fandhe-egui-proxy`
-//! の effect ドライバ（`device/open_in_shell.rs`）が [`take_request`] で要求を観測して行い、
+//! の effect ドライバ（`fandhe-cap-open-in-shell` の `driver`）が [`take_request`] で要求を観測して行い、
 //! [`finish_action`] で結果を注入する。本画面は二重押し防止と文言、OS 別の表示（[`Platform`]、
 //! ドライバが一度だけ注入）だけを持つ。パスの入力欄は置かない。
 //!

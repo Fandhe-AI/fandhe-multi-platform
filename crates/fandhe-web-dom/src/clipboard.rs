@@ -145,7 +145,7 @@ pub fn clipboard_text_effect(state: &ClipboardTextState, applier: &Applier<Clipb
                 let result = match JsFuture::from(promise).await {
                     // `read_text` は空のクリップボードでも空文字列で解決する。
                     // 画面側の「空」表示へ合わせて `None` へ畳む
-                    // （`fandhe_device::clipboard` の desktop 実装と同じ規則）。
+                    // （`fandhe_cap_clipboard` の desktop 実装と同じ規則）。
                     Ok(value) => Ok(value.as_string().filter(|text| !text.is_empty())),
                     Err(e) => Err(to_message(e)),
                 };

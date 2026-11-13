@@ -312,18 +312,18 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
-        <!-- Issue #32: メール添付の content URI を渡す FileProvider。exported=false のまま、
-             Intent 単位の一時読み取り許可（grantUriPermissions）だけで受け手に読ませる。公開する
-             パスは `cache/compose/` だけ（res/xml/compose_file_paths.xml）。新しい権限は足さない。
-             切り離し時に削除する。 -->
+        <!-- メール添付（Issue #32）が content URI を渡す機能専用の FileProvider。共有の compose provider から分けて、
+             公開するパスを `cache/compose/` だけに狭める（`fandhe-cap-compose-mail-sms` の `res/xml/compose_mail_file_paths.xml`）。
+             exported=false のまま、Intent 単位の一時読み取り許可（grantUriPermissions）だけで受け手に読ませる。新しい権限は足さない。
+             宣言は `fandhe-cap-compose-mail-sms` の Cargo.toml と完全に一致させる。切り離し時は crate ごと削除する。 -->
         <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.compose"
+            android:name="com.fandhe.platform.ComposeMailFileProvider"
+            android:authorities="${applicationId}.fandhe.compose-mail-sms.files"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/compose_file_paths" />
+                android:resource="@xml/compose_mail_file_paths" />
         </provider>
 
         <!-- ファイルのプレビュー（Issue #920）が content URI を渡す機能専用の FileProvider。共有の compose provider
@@ -505,6 +505,22 @@
         <provider
             android:name="com.fandhe.platform.ScreenCaptureLifecycle"
             android:authorities="${applicationId}.fandhe.screen-capture"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.RadioControlLifecycle"
+            android:authorities="${applicationId}.fandhe.radio-control"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.NfcReadLifecycle"
+            android:authorities="${applicationId}.fandhe.nfc"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.ScannerDevicesLifecycle"
+            android:authorities="${applicationId}.fandhe.scanner-devices"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.ComposeLifecycle"
+            android:authorities="${applicationId}.fandhe.compose-mail-sms"
             android:exported="false" />
         <!-- Issue #1100: Health Connect の許可画面から開かれる権限の理由画面。実体は exported=false、
              alias は START_VIEW_PERMISSION_USAGE（システム専用）を要求するので起動できるのは

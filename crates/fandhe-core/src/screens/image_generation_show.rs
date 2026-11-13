@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod image_generation_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は
-//! 本モジュール外（`fandhe-egui-proxy` の `device/image_generation.rs`）が [`take_request`] で要求を
+//! 本モジュール外（`fandhe-cap-image-generation` の `driver`）が [`take_request`] で要求を
 //! 観測し、[`mark_running`]・[`finish_generate`] で状態を進める。全対象 OS（macOS・iOS）の分の
 //! 状態・文言はここで定義するため、iOS の子 issue（#976）はこのファイルを触らない。
 //!
@@ -56,7 +56,7 @@ fn generated_status(p: &RgbaPixels) -> String {
     format!("{}×{} の画像を表示しています", p.width(), p.height())
 }
 
-/// 生成できなかった理由（`fandhe_device::image_generation::ImageGenerationFailure` から写す責務は
+/// 生成できなかった理由（`fandhe_cap_image_generation::ImageGenerationFailure` から写す責務は
 /// effect 側）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreFailure {

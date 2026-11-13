@@ -55,7 +55,7 @@
       "note": "実装済み（#798）。通知は `ms-settings:notifications` を `ShellExecuteW` で開き、戻り値をそのまま画面に出す。自アプリの設定は OS を呼ばずに「この OS では開けない頁」と出す。期限は設けない。`ms-settings:` の URI は公式の一覧に載る（頁の有無は Windows の版・SKU で変わる、公式）。自アプリの頁（`ms-settings:appsfeatures-app?<PFN>`）はパッケージ ファミリー名が要り、パッケージ化していない本アプリには無いため、「自アプリの設定」は Windows では非対応と返す（別の頁へ置き換えない）。通知は OS 全体の通知の頁で、本アプリだけの頁ではない。公式は `Launcher.LaunchUriAsync`（WinRT）を例に挙げるが、同じ URI を `ShellExecuteW` で開き、WinRT の依存を足さない",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#795）",
-      "impl": "crates/fandhe-cap-open-system-settings/src/windows.rs + crates/fandhe-egui-proxy/src/device/windows_compose_mail_sms.rs + crates/fandhe-cap-open-system-settings/src/driver.rs + crates/fandhe-core/src/screens/open_system_settings_show.rs + crates/fandhe-cap-open-system-settings/src/contract.rs、Issue #798"
+      "impl": "crates/fandhe-cap-open-system-settings/src/windows.rs + crates/fandhe-platform-windows/src/lib.rs + crates/fandhe-cap-open-system-settings/src/driver.rs + crates/fandhe-core/src/screens/open_system_settings_show.rs + crates/fandhe-cap-open-system-settings/src/contract.rs、Issue #798"
     },
     "web": {
       "status": "no",
