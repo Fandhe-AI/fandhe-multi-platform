@@ -1,9 +1,9 @@
 //! Phase 11（親 #147）型サンプル「スマートホーム」（Issue #1079）の effect ドライバ。
 //! `fandhe_core::screens::smart_home_list`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::smart_home::SmartHome` で家と機器の名前を読んで
+//! `crate::contract::SmartHome` で家と機器の名前を読んで
 //! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約の SSOT は `fandhe_device::smart_home`。
+//! 契約の SSOT は本 crate の `contract`。
 //!
 //! # スレッド
 //!
@@ -12,30 +12,31 @@
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`implementation`] の cfg 分岐が最終形で、iOS は `ios_smart_home`（#1080）の
-//! `implementation()` だけを埋める。Android は保留で dispatch に入れない。
+//! [`platform_smart_home`] の cfg 分岐が最終形で、iOS は `ios_smart_home`（#1080）の
+//! `platform_smart_home()` だけを埋める。Android は保留で dispatch に入れない。
 //! それ以外は `UnsupportedSmartHome` 固定で、ダミーの成功実装へは倒さない。
 
 use std::sync::Arc;
 
-use fandhe_core::screens::smart_home_list::{
-    finish_list, mark_loading, take_request, HomeListing, ListFailure, SmartHomeListState,
-};
 #[cfg(not(target_os = "ios"))]
-use fandhe_device::smart_home::UnsupportedSmartHome;
-use fandhe_device::smart_home::{AccessoryList, SmartHome, SmartHomeFailure, LIST_TIMEOUT};
+use crate::contract::UnsupportedSmartHome;
+use crate::contract::{AccessoryList, LIST_TIMEOUT, SmartHome, SmartHomeFailure};
+use fandhe_core::screens::smart_home_list::{
+    HomeListing, ListFailure, SmartHomeListState, finish_list, mark_loading, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
-/// 現在のプラットフォームに応じた `SmartHome` 実装を返す（プロセスで 1 個）。
-fn implementation() -> Arc<dyn SmartHome> {
+/// 現在のプラットフォームに応じた `SmartHome` 実装を返す（プロセスで 1 個）。画面の状態型に依存しないため、
+/// フレームワークの外のアプリも使える。
+pub fn platform_smart_home() -> Arc<dyn SmartHome> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn SmartHome>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "ios")]
             {
-                super::ios_smart_home::implementation()
+                crate::ios::implementation()
             }
             #[cfg(not(target_os = "ios"))]
             {
@@ -112,26 +113,32 @@ pub fn smart_home_list_effect(
     state: &SmartHomeListState,
     sender: &CompletionSender<SmartHomeListState>,
 ) {
-    drive(state, sender, implementation());
+    drive(state, sender, platform_smart_home());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{UnsupportedSmartHome as Unsupported, accessories_from};
     use fandhe_core::screens::smart_home_list::{
-        fetch, Phase, PERMISSION_DENIED_STATUS, TIMEOUT_STATUS, UNSUPPORTED_STATUS,
+        PERMISSION_DENIED_STATUS, Phase, TIMEOUT_STATUS, UNSUPPORTED_STATUS, fetch,
     };
-    use fandhe_device::smart_home::{accessories_from, UnsupportedSmartHome as Unsupported};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
     fn sender_with_channel() -> (
         CompletionSender<SmartHomeListState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<SmartHomeListState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<SmartHomeListState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     struct Fake {
@@ -261,7 +268,7 @@ mod tests {
     #[test]
     fn unsupported_os_implementation_is_unsupported() {
         assert_eq!(
-            implementation()
+            platform_smart_home()
                 .list_accessories(Duration::from_millis(1))
                 .map(|_| ()),
             Err(SmartHomeFailure::Unsupported)

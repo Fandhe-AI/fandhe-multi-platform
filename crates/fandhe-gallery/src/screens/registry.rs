@@ -487,7 +487,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "smart_home_list" => fandhe_core::screens::smart_home_list::current_screen,
-    fandhe_egui_proxy::device::smart_home::smart_home_list_effect,
+    fandhe_cap_smart_home::smart_home_list_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wifi_info_show" => fandhe_core::screens::wifi_info_show::current_screen,

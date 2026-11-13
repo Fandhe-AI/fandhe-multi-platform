@@ -1,14 +1,14 @@
 //! iOS 向けスマートホーム実装（Issue #1080、親 #147）。`ios/fandhe_ios_smart_home.m`
 //! （HomeKit `HMHomeManager`。`build.rs` が iOS 分岐で feature `device` 有効時にコンパイルし HomeKit をリンクする）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
-//! `device/smart_home.rs` の iOS 経路からワーカースレッドで呼ばれ、契約は `fandhe_device::smart_home`。
+//! `driver` の iOS 経路からワーカースレッドで呼ばれ、契約は `crate::contract`。
 //!
 //! バッファの解釈は本ファイルの [`list_from_nul_buffer`]（ホストのテストでも使う）、戻りコードの写像は
-//! `fandhe_device::smart_home::decode_code`。
+//! `crate::contract::decode_code`。
 //!
 //! # 守る範囲 / 守らない範囲
 //!
-//! 契約は `fandhe_device::smart_home` の trait doc を正とする。
+//! 契約は `crate::contract` の trait doc を正とする。
 //!
 //! - 守る: 家と機器の名前以外を取らない。名前をログに出さない。許可と読み込みの完了が両方そろう前は
 //!   読まない（生成直後の空の一覧を 0 件の成功にしない）。壊れたバッファ・未知の戻りコードは成功にせず `Failed`。
@@ -19,7 +19,7 @@
 //!
 //! OS の delegate は semaphore で同じワーカーへ戻るだけで共有状態を書かない。結果を画面へ入れるのは
 //! `CompletionSender::send` で、そこで `ctx.request_repaint()` が呼ばれるため
-//! `crate::ios::request_repaint` は呼ばない（`ios_music_library` と同じ根拠）。
+//! `fandhe_runtime::request_repaint` は呼ばない（`ios_music_library` と同じ根拠）。
 //!
 //! # 未確認事項（iOS 実機確認 #1055 で確認）
 //!
@@ -32,9 +32,9 @@ use std::sync::Arc;
 #[cfg(target_os = "ios")]
 use std::time::Duration;
 
+use crate::contract::{AccessoryList, SmartHomeFailure};
 #[cfg(target_os = "ios")]
-use fandhe_device::smart_home::{decode_code, SmartHome};
-use fandhe_device::smart_home::{AccessoryList, SmartHomeFailure};
+use crate::contract::{SmartHome, decode_code};
 
 /// 受け取りバッファ。20 件 × 2 要素 × 1024 バイトが収まる。
 #[cfg(target_os = "ios")]
@@ -45,7 +45,7 @@ mod ffi {
     // SAFETY: `ios/fandhe_ios_smart_home.m`（`build.rs` が iOS 分岐で feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_ios_smart_home_list(
             timeout_ms: u64,
             buf: *mut u8,
@@ -140,7 +140,7 @@ fn list_from_nul_buffer(
         rows.push((to_opt(pair[0])?, to_opt(pair[1])?));
     }
     let home_count = usize::try_from(home_count).map_err(|_| fail)?;
-    let mut list = fandhe_device::smart_home::accessories_from(home_count, rows);
+    let mut list = crate::contract::accessories_from(home_count, rows);
     list.truncated |= overflowed;
     Ok(list)
 }

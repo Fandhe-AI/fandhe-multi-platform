@@ -171,8 +171,6 @@ fn build() {
     compile_ios_audio_session();
     // `ios/fandhe_ios_music_library.m`（Issue #484）。iOS 分岐のみ。
     compile_ios_music_library();
-    // `ios/fandhe_ios_smart_home.m`（Issue #1080）。iOS 分岐のみ。
-    compile_ios_smart_home();
     // `ios/fandhe_ios_health_data.m`（Issue #1090）。iOS 分岐のみ（macOS は対応表で n-a）。
     compile_ios_health_data();
     // `ios/fandhe_ios_volume_control.m`（Issue #786）。iOS 分岐のみ。
@@ -862,12 +860,6 @@ fn compile_ios_music_library() {
         "ios/fandhe_ios_music_library.m",
         &["Foundation", "MediaPlayer"],
     );
-}
-
-/// `ios/fandhe_ios_smart_home.m` を `cc` でコンパイルし HomeKit をリンクする（Issue #1080）。**iOS 分岐のみ**
-/// から呼ばれる（`src/device/ios_smart_home.rs` が使う）。
-fn compile_ios_smart_home() {
-    compile_objc("ios/fandhe_ios_smart_home.m", &["Foundation", "HomeKit"]);
 }
 
 /// `ios/fandhe_ios_health_data.m` を `cc` でコンパイルし HealthKit をリンクする（Issue #1090）。**iOS 分岐のみ**

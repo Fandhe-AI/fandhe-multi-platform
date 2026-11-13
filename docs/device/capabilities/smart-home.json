@@ -10,7 +10,7 @@
       "status": "done",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#1055）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_smart_home.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_smart_home.m + crates/fandhe-egui-proxy/src/device/smart_home.rs + crates/fandhe-core/src/screens/smart_home_list.rs + crates/fandhe-device/src/smart_home.rs、Issue #1080",
+      "impl": "crates/fandhe-cap-smart-home/src/ios.rs + crates/fandhe-cap-smart-home/ios/fandhe_ios_smart_home.m + crates/fandhe-cap-smart-home/src/driver.rs + crates/fandhe-core/src/screens/smart_home_list.rs + crates/fandhe-cap-smart-home/src/contract.rs、Issue #1080",
       "api": "HomeKit（`HMHomeManager` を 1 つだけ生成して保持し、`homes` → `HMHome.name` / `HMHome.accessories` → `HMAccessory.name` を読む。読み込み完了は `HMHomeManagerDelegate.homeManagerDidUpdateHomes(_:)`、許可は `authorizationStatus`（`determined` / `authorized` / `restricted`）と `homeManager(_:didUpdate:)`。家・機器の追加と操作はしない）",
       "perm": "HomeKit capability（`com.apple.developer.homekit` entitlement）を、プロファイル生成専用のホストターゲット `FandheIosApp`（`platforms/apple/project.yml`）の `CODE_SIGN_ENTITLEMENTS` に足す。実機署名はプロファイルから entitlements を抜き出して Rust/winit のバンドルへ付ける既存手順のまま。Apple Developer Program なしの無料の Apple Developer（Personal Team）でも付けられる（公式の対応表）。Info.plist の `NSHomeKitUsageDescription`（無いと初回の HomeKit 利用でクラッシュする）。初回の `HMHomeManager` 生成で OS が実行時の許可を求める（明示の要求 API は無い）",
       "url": [

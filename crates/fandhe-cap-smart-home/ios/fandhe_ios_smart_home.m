@@ -2,7 +2,7 @@
 // HomeKit の `HMHomeManager` で、登録済みの家の数と（家の名前, 機器の名前）を OS の返す順に先頭 20 件だけ読む。
 // 機器の操作・状態の読み取り・家の追加はしない。家・機器の名前と NSError はログに出さない。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_smart_home.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-smart-home/src/ios.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の iOS 分岐が feature `device` 有効時にのみコンパイルし、HomeKit をリンクする。
 // 権限宣言は `platforms/apple/FandheIosApp/Resources/Info.plist` の `NSHomeKitUsageDescription`
 // （無いと初回の HomeKit 利用でクラッシュする）と、同ターゲットの entitlement `com.apple.developer.homekit`。

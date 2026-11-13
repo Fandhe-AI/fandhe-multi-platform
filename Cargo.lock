@@ -1592,6 +1592,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-smart-home"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+]
+
+[[package]]
 name = "fandhe-cap-spell-check"
 version = "0.2.0"
 dependencies = [
@@ -1781,6 +1791,7 @@ dependencies = [
  "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
  "fandhe-cap-share-sheet",
+ "fandhe-cap-smart-home",
  "fandhe-cap-spell-check",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-system-tray",

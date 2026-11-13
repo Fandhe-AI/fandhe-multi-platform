@@ -843,10 +843,6 @@ pub mod ios_scanner_devices;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_orientation;
-/// Issue #1079・#1080: iOS 向けスマートホーム実装（`ios/fandhe_ios_smart_home.m` の HomeKit を呼ぶ C ABI ラッパー）。`device/smart_home.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_smart_home;
 /// Issue #725: iOS 向け環境音の分類（b-ios まではスタブ。実装時に `apple_sound_classification` へ委譲する）。
 /// `device/sound_classification.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -1165,9 +1161,6 @@ pub mod secure_credential;
 /// Phase 11 の拡充ループ（親 #167、Issue #810）: スリープ・ロックの通知の effect ドライバ
 /// （macOS・Windows 実装、Android は骨格のスタブで #811 が埋める。他 OS は `UnsupportedSleepLockEvents` 固定）。
 pub mod sleep_lock_events;
-/// Phase 11 の拡充ループ（親 #147、Issue #1079）: スマートホーム（家と機器の名前の一覧）の effect ドライバ
-/// （iOS は骨格のスタブで #1080 が埋める。他 OS は `UnsupportedSmartHome` 固定）。
-pub mod smart_home;
 /// Phase 11 の拡充ループ（親 #142、Issue #725）: 環境音の分類の effect ドライバ（macOS 実装、
 /// iOS は b-ios、他 OS は `UnsupportedSoundClassifier` 固定）。
 pub mod sound_classification;

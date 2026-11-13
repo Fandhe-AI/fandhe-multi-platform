@@ -58,6 +58,7 @@ device = [
   "dep:fandhe-cap-serial-port",
   "dep:fandhe-cap-share-receive",
   "dep:fandhe-cap-share-sheet",
+  "dep:fandhe-cap-smart-home",
   "dep:fandhe-cap-spell-check",
   "dep:fandhe-cap-system-accent-color",
   "dep:fandhe-cap-system-tray",
@@ -97,6 +98,7 @@ NSCameraUsageDescription = "型サンプル「カメラ撮影」「AR 表示」�
 NSMotionUsageDescription = "型サンプル「歩数」「気圧」「行動認識」の動作確認に使います"
 NSLocalNetworkUsageDescription = "型サンプル「LAN のサービス探索」「近くの端末との直接通信」「UWB による距離」の動作確認に使います"
 NSNearbyInteractionUsageDescription = "型サンプル「UWB による距離」で、近くの端末までの距離を測るために使います"
+NSHomeKitUsageDescription = "型サンプル「スマートホーム操作」の動作確認に使います"
 
 [package.metadata.fandhe-app.macos.usage-descriptions]
 NSCalendarsWriteOnlyAccessUsageDescription = "型サンプル「予定の追加」の動作確認に使います"
@@ -156,6 +158,7 @@ fandhe-cap-screen-wake-lock = { path = "../fandhe-cap-screen-wake-lock", optiona
 fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port", optional = true }
 fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive", optional = true }
 fandhe-cap-share-sheet = { path = "../fandhe-cap-share-sheet", optional = true }
+fandhe-cap-smart-home = { path = "../fandhe-cap-smart-home", optional = true }
 fandhe-cap-spell-check = { path = "../fandhe-cap-spell-check", optional = true }
 fandhe-cap-system-accent-color = { path = "../fandhe-cap-system-accent-color", optional = true }
 fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }

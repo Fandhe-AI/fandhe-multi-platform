@@ -4,13 +4,13 @@
 //! 扱う範囲は「ボタンを押すと、OS に登録済みの家の数と（家の名前, 機器の名前）の組を OS の返す
 //! 順で先頭 [`MAX_ACCESSORIES`] 件だけ読む」ことだけ。機器の操作・状態・部屋・シーン・家の追加は
 //! 扱わない。対象は iOS（HomeKit）のみ。Android は GMS 依存のため保留、macOS / Windows / Web は
-//! 対応表で `no`。`fandhe-egui-proxy` の `device/smart_home.rs` がワーカースレッドで
+//! 対応表で `no`。本 crate の `driver` がワーカースレッドで
 //! [`SmartHome::list_accessories`] を呼ぶ（ブロッキングの契約）。全 OS が [`accessories_from`] を
 //! 通して整形する。
 //!
 //! # 契約
 //!
-//! - 結果は成功（家 0 件・機器 0 件を含む）か [`SmartHomeFailure`]。`DeviceError` に variant を足すと
+//! - 結果は成功（家 0 件・機器 0 件を含む）か [`SmartHomeFailure`]。`SmartHomeError` に variant を足すと
 //!   既存の網羅 match が壊れるため機能固有の enum にする（`music_library::MusicLibraryFailure` と同じ判断）
 //! - **家 0 件の成功（`home_count == 0`）と、家が 1 件以上あって機器 0 件の成功を区別する**
 //! - **0 件を出すのは、許可済みで OS が空を返したときだけ**。iOS では `authorizationStatus` に
@@ -46,7 +46,7 @@
 
 use std::time::Duration;
 
-use crate::device_info::clean_text;
+use fandhe_device::device_info::clean_text;
 
 /// 読む機器数の上限。
 pub const MAX_ACCESSORIES: usize = 20;
