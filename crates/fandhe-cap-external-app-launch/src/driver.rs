@@ -81,15 +81,19 @@ pub(crate) mod bridge {
     use crate::contract::LaunchOutcome;
     use crate::error::ExternalAppLaunchError;
 
-    use fandhe_runtime::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::{RequestSlot, SlotOwner};
 
     pub(crate) type Outcome = Result<LaunchOutcome, ExternalAppLaunchError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
     /// 依頼直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
-    pub(crate) fn begin() -> u64 {
-        SLOT.begin()
+    /// 画面の effect が登録した要求の印。公開入口の要求を置き換えたり、その結果を取り出したりしないために使う。
+    pub(crate) static SCREEN: SlotOwner = SlotOwner::new();
+
+    /// 画面用の登録。公開入口の進行中の要求・未取得の結果があれば `None`（置き換えて落とさない）。
+    pub(crate) fn begin() -> Option<u64> {
+        SCREEN.begin_keeping_foreign(&SLOT)
     }
 
     /// OS からの結果を契約のまま置く（画面用への写像は effect ドライバ側、公開入口は生の結果を返す）。`request_id` 不一致・未登録・既に結果ありは
@@ -140,7 +144,17 @@ fn drive_callback(
 
     if let Some(view) = take_request(state) {
         let _ = sender.send(Box::new(mark_launching));
-        let request_id = bridge::begin();
+        let Some(request_id) = bridge::begin() else {
+            // 公開入口の要求が進行中・未取得。置き換えず、画面へ「処理中」の失敗を返す。
+            let generation = view.generation;
+            let outcome = to_outcome(Err(ExternalAppLaunchError::Internal(
+                "external app launch busy",
+            )));
+            let _ = sender.send(Box::new(move |s: &mut ExternalAppLaunchState| {
+                finish_launch(s, generation, outcome);
+            }));
+            return;
+        };
         if let Err(e) = begin_launch(request_id, to_target(view.kind)) {
             bridge::deliver(request_id, Err(e));
         }
@@ -151,8 +165,10 @@ fn drive_callback(
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    let mine = bridge::SCREEN.current();
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &bridge::SCREEN,
         sender,
         |_request_id| {},
         move |s: &mut ExternalAppLaunchState, result| {
@@ -161,8 +177,17 @@ fn drive_callback(
                 finish_launch(s, generation, to_outcome(result));
                 true
             } else {
+                // 反映できない完了は捨てる（残すと次の要求が置き換えるまで未取得のまま残る）。
+                bridge::SLOT.clear(mine);
                 false
             }
+        },
+        // 自分の要求が失われた（Activity 再生成の `reset` 等）。失敗を確定して画面を処理中のまま残さない。
+        move |s: &mut ExternalAppLaunchState| {
+            let outcome = to_outcome(Err(ExternalAppLaunchError::Internal(
+                "external app launch lost",
+            )));
+            finish_launch(s, generation, outcome);
         },
     );
 }
@@ -184,7 +209,7 @@ pub fn external_app_launch_show_effect(
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn begin_external_app_launch(target: LaunchTarget) -> Result<u64, ExternalAppLaunchError> {
     let request_id = bridge::SLOT
-        .try_begin()
+        .try_begin_unless(|_| true)
         .ok_or(ExternalAppLaunchError::Internal("external app launch busy"))?;
     if let Err(e) = begin_launch(request_id, target) {
         bridge::SLOT.clear(request_id);
@@ -455,7 +480,7 @@ mod bridge_tests {
 
     #[test]
     fn stale_request_id_is_dropped_and_second_deliver_ignored() {
-        let id = bridge::begin();
+        let id = bridge::begin().expect("begin");
         assert!(!bridge::deliver(id + 1000, Ok(LaunchOutcome::HandedOff)));
         assert!(bridge::SLOT.snapshot().is_some_and(|(_, r)| r.is_none()));
         assert!(bridge::deliver(id, Ok(LaunchOutcome::NoHandler)));

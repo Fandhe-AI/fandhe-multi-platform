@@ -35,3 +35,4 @@ mod windows;
 pub use contract::*;
 pub use driver::*;
 pub use error::WallpaperSetError;
+pub use fandhe_device::photo_library::PngImage;

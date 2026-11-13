@@ -39,9 +39,17 @@ use fandhe_core::screens::file_preview_show::{
 };
 
 use fandhe_runtime::CompletionSender;
-use fandhe_runtime::request_slot::{RequestSlot, poll_and_finish};
+use fandhe_runtime::request_slot::{RequestSlot, SlotOwner, poll_and_finish_owned};
 
 type Outcome = Result<FilePreviewOutcome, FilePreviewFailure>;
+
+/// `RequestSlot` に置く結果。サムネイルは画面用に畳んだ値、プレビューは契約の生の値で置く
+/// （公開入口 [`poll_file_preview`] は生の値を返し、画面は反映時に写像する）。照合・first-wins・保持は slot の 1 つのロックで決まる。
+#[derive(Clone)]
+enum Raw {
+    Screen(Outcome),
+    Preview(Result<PreviewResult, FilePreviewError>),
+}
 
 /// プレビュー提示の関数型。`Ok(None)` は OS が受け付けた（結果は後で [`bridge::deliver`] に届く）、
 /// `Ok(Some(r))` は同期で確定した、`Err` は失敗。
@@ -102,9 +110,10 @@ pub fn platform_file_preview() -> Arc<dyn FileThumbnailer> {
 /// OS が同期で結果を確定した場合も、[`poll_file_preview`] で受け取る。依頼自体の失敗は `Err`（結果は届かない）。
 /// サムネイルは同期の [`platform_file_preview`] を使う。
 pub fn begin_file_preview(kind: FileKind) -> Result<u64, FilePreviewError> {
+    // 画面の未取得の結果も含め、届いて未取得の結果があるうちは置き換えない。
     let request_id = SESSION
         .slot
-        .try_begin()
+        .try_begin_unless(|_| true)
         .ok_or(FilePreviewError::Internal("file preview busy"))?;
     match present_preview(request_id, kind, sample_bytes(kind)) {
         Ok(None) => Ok(request_id),
@@ -121,14 +130,9 @@ pub fn begin_file_preview(kind: FileKind) -> Result<u64, FilePreviewError> {
 
 /// [`begin_file_preview`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
 pub fn poll_file_preview(request_id: u64) -> Option<Result<PreviewResult, FilePreviewError>> {
-    let _ = SESSION.slot.take_ready(request_id)?; // 画面用の写像は捨て、生値を返す
-    let mut raw = SESSION
-        .raw_preview
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    match raw.take() {
-        Some((id, r)) if id == request_id => Some(r),
-        _ => Some(Err(FilePreviewError::Internal("file preview result"))),
+    match SESSION.slot.take_ready(request_id)? {
+        Raw::Preview(r) => Some(r),
+        Raw::Screen(_) => Some(Err(FilePreviewError::Internal("file preview result"))),
     }
 }
 
@@ -178,36 +182,28 @@ struct Timing {
 
 /// ドライバの可変状態。テストが干渉しないよう static から切り出し、引数で渡す。
 pub(crate) struct Session {
-    slot: RequestSlot<Outcome>,
+    slot: RequestSlot<Raw>,
+    /// 画面の effect が登録した要求の印。公開入口の要求を置き換えたり、その結果を取り出したりしないために使う。
+    screen: SlotOwner,
     timing: Mutex<Option<Timing>>,
-    /// プレビューの結果の生値（公開入口 [`poll_file_preview`] 用。画面用 `slot` と同じ id で置く）。
-    raw_preview: Mutex<Option<(u64, Result<PreviewResult, FilePreviewError>)>>,
 }
 
 impl Session {
     pub(crate) const fn new() -> Self {
         Self {
             slot: RequestSlot::new(),
+            screen: SlotOwner::new(),
             timing: Mutex::new(None),
-            raw_preview: Mutex::new(None),
         }
     }
 
-    /// プレビューの結果を置く。生値を先に記録してから `slot` へ置き、`slot` が捨てた（旧 id・二重通知）なら生値も戻す。
+    /// プレビューの結果を生値のまま置く。旧 id・二重通知は slot が捨てて `false`（先に届いた結果は変わらない）。
     fn deliver_preview(
         &self,
         request_id: u64,
         result: Result<PreviewResult, FilePreviewError>,
     ) -> bool {
-        *self.raw_preview.lock().unwrap_or_else(|e| e.into_inner()) = Some((request_id, result));
-        let accepted = self.slot.deliver(request_id, preview_outcome(result));
-        if !accepted {
-            let mut raw = self.raw_preview.lock().unwrap_or_else(|e| e.into_inner());
-            if raw.as_ref().is_some_and(|(id, _)| *id == request_id) {
-                *raw = None;
-            }
-        }
-        accepted
+        self.slot.deliver(request_id, Raw::Preview(result))
     }
 
     fn timing(&self) -> Option<Timing> {
@@ -331,15 +327,16 @@ fn start(
         .spawn(move || {
             let remaining = deadline.saturating_sub(started.elapsed());
             let r = worker_imp.thumbnail(kind, &bytes, THUMBNAIL_MAX_SIDE, remaining);
-            session
-                .slot
-                .deliver(request_id, thumbnail_outcome(r, started, deadline));
+            session.slot.deliver(
+                request_id,
+                Raw::Screen(thumbnail_outcome(r, started, deadline)),
+            );
             worker_sender.request_repaint_after(Duration::ZERO);
         });
     if spawned.is_err() {
         session
             .slot
-            .deliver(request_id, Err(FilePreviewFailure::Failed));
+            .deliver(request_id, Raw::Screen(Err(FilePreviewFailure::Failed)));
     }
 }
 
@@ -356,18 +353,23 @@ fn drive(
     let new_request = {
         let mut g = session.timing.lock().unwrap_or_else(|e| e.into_inner());
         match take_request(state) {
-            Some((generation, op)) if session.slot.snapshot().is_none() => {
-                let started = Instant::now();
-                let request_id = session.slot.begin();
-                *g = Some(Timing {
-                    request_id,
-                    generation,
-                    started,
-                    has_deadline: op != FilePreviewOp::Preview,
-                });
-                Some((request_id, op, started))
+            // 公開入口の要求・結果が残っているうちは置き換えず、次のフレームで再試行する。
+            Some((generation, op)) => {
+                session
+                    .screen
+                    .begin_keeping_foreign(&session.slot)
+                    .map(|request_id| {
+                        let started = Instant::now();
+                        *g = Some(Timing {
+                            request_id,
+                            generation,
+                            started,
+                            has_deadline: op != FilePreviewOp::Preview,
+                        });
+                        (request_id, op, started)
+                    })
             }
-            _ => None,
+            None => None,
         }
     };
     if let Some(req) = new_request {
@@ -398,15 +400,25 @@ fn drive(
             sender.request_repaint_after(deadline - elapsed);
         }
     }
-    poll_and_finish(
+    poll_and_finish_owned(
         &session.slot,
+        &session.screen,
         sender,
         |_| {},
-        move |s: &mut FilePreviewState, outcome| {
+        move |s: &mut FilePreviewState, raw| {
+            let outcome = match raw {
+                Raw::Screen(o) => o,
+                Raw::Preview(r) => preview_outcome(r),
+            };
             // `finish` が `Idle`・世代違いを捨てる。結果は常に消費し、記録を残さない。
             finish(s, generation, outcome);
             session.set_timing(None);
             true
+        },
+        // 自分の要求が失われた（Activity 再生成の `reset` 等）。失敗を確定して画面を処理中のまま残さない。
+        move |s: &mut FilePreviewState| {
+            finish(s, generation, Err(FilePreviewFailure::Failed));
+            session.set_timing(None);
         },
     );
 }
@@ -684,15 +696,24 @@ mod tests {
     fn stale_and_duplicate_delivery_are_discarded() {
         let s = session();
         let id = s.slot.begin();
+        assert!(!s.slot.deliver(
+            id.wrapping_add(1),
+            Raw::Screen(Ok(FilePreviewOutcome::Closed))
+        ));
+        assert!(
+            s.slot
+                .deliver(id, Raw::Screen(Ok(FilePreviewOutcome::Closed)))
+        );
         assert!(
             !s.slot
-                .deliver(id.wrapping_add(1), Ok(FilePreviewOutcome::Closed))
+                .deliver(id, Raw::Screen(Ok(FilePreviewOutcome::HandedOff)))
         );
-        assert!(s.slot.deliver(id, Ok(FilePreviewOutcome::Closed)));
-        assert!(!s.slot.deliver(id, Ok(FilePreviewOutcome::HandedOff)));
         let old = s.slot.begin();
         let _new = s.slot.begin();
-        assert!(!s.slot.deliver(old, Ok(FilePreviewOutcome::Closed)));
+        assert!(
+            !s.slot
+                .deliver(old, Raw::Screen(Ok(FilePreviewOutcome::Closed)))
+        );
     }
 
     #[test]

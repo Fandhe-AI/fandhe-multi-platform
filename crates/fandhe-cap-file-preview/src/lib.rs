@@ -46,3 +46,4 @@ mod windows;
 pub use contract::*;
 pub use driver::*;
 pub use error::FilePreviewError;
+pub use fandhe_device::Image;

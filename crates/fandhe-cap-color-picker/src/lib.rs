@@ -34,3 +34,4 @@ mod windows;
 pub use contract::*;
 pub use driver::*;
 pub use error::ColorPickerError;
+pub use fandhe_device::eye_dropper::PickedColor;

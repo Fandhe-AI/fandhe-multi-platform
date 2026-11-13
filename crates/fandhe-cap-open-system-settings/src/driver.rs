@@ -88,15 +88,19 @@ pub(crate) mod bridge {
     use crate::contract::OpenSettingsOutcome;
     use crate::error::OpenSystemSettingsError;
 
-    use fandhe_runtime::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::{RequestSlot, SlotOwner};
 
     pub(crate) type Outcome = Result<OpenSettingsOutcome, OpenSystemSettingsError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
     /// 依頼直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
-    pub(crate) fn begin() -> u64 {
-        SLOT.begin()
+    /// 画面の effect が登録した要求の印。公開入口の要求を置き換えたり、その結果を取り出したりしないために使う。
+    pub(crate) static SCREEN: SlotOwner = SlotOwner::new();
+
+    /// 画面用の登録。公開入口の進行中の要求・未取得の結果があれば `None`（置き換えて落とさない）。
+    pub(crate) fn begin() -> Option<u64> {
+        SCREEN.begin_keeping_foreign(&SLOT)
     }
 
     /// OS からの結果を契約のまま置く（画面用への写像は effect ドライバ側、公開入口は生の結果を返す）。`request_id` 不一致・未登録・既に結果ありは
@@ -147,7 +151,15 @@ fn drive_callback(
 
     if let Some(view) = take_request(state) {
         let _ = sender.send(Box::new(mark_opening));
-        let request_id = bridge::begin();
+        let Some(request_id) = bridge::begin() else {
+            // 公開入口の要求が進行中・未取得。置き換えず、画面へ「処理中」の失敗を返す。
+            let generation = view.generation;
+            let outcome = to_outcome(Err(OpenSystemSettingsError::Internal("open settings busy")));
+            let _ = sender.send(Box::new(move |s: &mut OpenSystemSettingsState| {
+                finish_open(s, generation, outcome);
+            }));
+            return;
+        };
         if let Err(e) = begin_open(request_id, to_page(view.target)) {
             bridge::deliver(request_id, Err(e));
         }
@@ -158,8 +170,10 @@ fn drive_callback(
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    let mine = bridge::SCREEN.current();
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &bridge::SCREEN,
         sender,
         |_request_id| {},
         move |s: &mut OpenSystemSettingsState, result| {
@@ -168,8 +182,15 @@ fn drive_callback(
                 finish_open(s, generation, to_outcome(result));
                 true
             } else {
+                // 反映できない完了は捨てる（残すと次の要求が置き換えるまで未取得のまま残る）。
+                bridge::SLOT.clear(mine);
                 false
             }
+        },
+        // 自分の要求が失われた（Activity 再生成の `reset` 等）。失敗を確定して画面を処理中のまま残さない。
+        move |s: &mut OpenSystemSettingsState| {
+            let outcome = to_outcome(Err(OpenSystemSettingsError::Internal("open settings lost")));
+            finish_open(s, generation, outcome);
         },
     );
 }
@@ -191,7 +212,7 @@ pub fn open_system_settings_show_effect(
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn begin_open_system_settings(page: SettingsPage) -> Result<u64, OpenSystemSettingsError> {
     let request_id = bridge::SLOT
-        .try_begin()
+        .try_begin_unless(|_| true)
         .ok_or(OpenSystemSettingsError::Internal("open settings busy"))?;
     if let Err(e) = begin_open(request_id, page) {
         bridge::SLOT.clear(request_id);
@@ -456,7 +477,7 @@ mod bridge_tests {
 
     #[test]
     fn stale_request_id_is_dropped_and_second_deliver_ignored() {
-        let id = bridge::begin();
+        let id = bridge::begin().expect("begin");
         assert!(!bridge::deliver(
             id + 1000,
             Ok(OpenSettingsOutcome::HandedOff)

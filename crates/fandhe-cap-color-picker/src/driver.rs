@@ -48,14 +48,18 @@ pub(crate) mod bridge {
     use crate::error::ColorPickerError;
     use fandhe_device::eye_dropper::PickedColor;
 
-    use fandhe_runtime::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::{RequestSlot, SlotOwner};
 
     /// 契約の結果をそのまま置く（画面用への写像は effect ドライバ側で行い、公開入口 [`super::poll_color_pick`] は生の結果を返す）。
     pub(crate) static SLOT: RequestSlot<Result<PickedColor, ColorPickerError>> = RequestSlot::new();
 
     /// 提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
-    pub(crate) fn begin() -> u64 {
-        SLOT.begin()
+    /// 画面の effect が登録した要求の印。公開入口の要求を置き換えたり、その結果を取り出したりしないために使う。
+    pub(crate) static SCREEN: SlotOwner = SlotOwner::new();
+
+    /// 画面用の登録。公開入口の進行中の要求・未取得の結果があれば `None`（置き換えて落とさない）。
+    pub(crate) fn begin() -> Option<u64> {
+        SCREEN.begin_keeping_foreign(&SLOT)
     }
 
     /// OS からの結果を置く。`request_id` 不一致・未登録・既に結果ありは捨てて
@@ -84,9 +88,16 @@ fn drive_callback(state: &ColorPickerState, sender: &CompletionSender<ColorPicke
         PickPhase, finish_pick, mark_picking, take_request,
     };
 
-    if take_request(state).is_some() {
+    if let Some(generation) = take_request(state) {
         let _ = sender.send(Box::new(mark_picking));
-        let request_id = bridge::begin();
+        let Some(request_id) = bridge::begin() else {
+            // 公開入口の要求が進行中・未取得。置き換えず、画面へ「処理中」の失敗を返す。
+            let outcome = to_outcome(Err(ColorPickerError::Internal("color picker busy")));
+            let _ = sender.send(Box::new(move |s: &mut ColorPickerState| {
+                finish_pick(s, generation, outcome);
+            }));
+            return;
+        };
         if let Err(e) = present(request_id) {
             bridge::deliver(request_id, Err(e));
         }
@@ -97,8 +108,10 @@ fn drive_callback(state: &ColorPickerState, sender: &CompletionSender<ColorPicke
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    let mine = bridge::SCREEN.current();
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &bridge::SCREEN,
         sender,
         |_request_id| {},
         move |s: &mut ColorPickerState, result| {
@@ -107,8 +120,15 @@ fn drive_callback(state: &ColorPickerState, sender: &CompletionSender<ColorPicke
                 finish_pick(s, generation, to_outcome(result));
                 true
             } else {
+                // 反映できない完了は捨てる（残すと次の要求が置き換えるまで未取得のまま残る）。
+                bridge::SLOT.clear(mine);
                 false
             }
+        },
+        // 自分の要求が失われた。失敗を確定して画面を処理中のまま残さない。
+        move |s: &mut ColorPickerState| {
+            let outcome = to_outcome(Err(ColorPickerError::Internal("color picker lost")));
+            finish_pick(s, generation, outcome);
         },
     );
 }
@@ -149,7 +169,7 @@ pub fn platform_color_picker() -> Box<dyn ColorPicker> {
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub fn begin_color_pick() -> Result<u64, ColorPickerError> {
     let request_id = bridge::SLOT
-        .try_begin()
+        .try_begin_unless(|_| true)
         .ok_or(ColorPickerError::Internal("color picker busy"))?;
     if let Err(e) = present(request_id) {
         bridge::SLOT.clear(request_id);
@@ -231,7 +251,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn stale_and_duplicate_delivery_never_becomes_success() {
-        let id = bridge::begin();
+        let id = bridge::begin().expect("begin");
         assert!(!bridge::deliver(id.wrapping_add(1), Ok(color("#aabbcc"))));
         assert!(bridge::deliver(id, Err(ColorPickerError::Cancelled)));
         // 二重通知は first-wins で、成功へ化けない。
@@ -241,8 +261,8 @@ mod tests {
             Some((id, Some(Err(ColorPickerError::Cancelled))))
         );
         // 新しい begin 後の旧 id の遅延完了も成功へ化けない。
-        let old = bridge::begin();
-        let _new = bridge::begin();
+        let old = bridge::SLOT.begin();
+        let _new = bridge::SLOT.begin();
         assert!(!bridge::deliver(old, Ok(color("#aabbcc"))));
     }
 
