@@ -4,7 +4,7 @@
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod wifi_connect_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの置き場」節）。
-//! OS 呼び出しは `fandhe-egui-proxy` の `device/wifi_connect.rs` が [`take_request`] で要求を観測し
+//! OS 呼び出しは `fandhe-cap-wifi-connect` の `driver.rs` が [`take_request`] で要求を観測し
 //! [`finish_connect`] で結果を注入する（`wifi_info_show.rs` と同型）。
 //!
 //! 全対象 OS（macOS / Windows / Android）の文言・状態をここで確定済みで、後続の OS 実装は本画面を触らない。

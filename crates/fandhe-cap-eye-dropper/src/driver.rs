@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::eye_dropper_pick`（端末依存ゼロ）の要求を観測し、結果を
 //! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は
-//! `fandhe_device::eye_dropper` のモジュール doc。本 crate が `fandhe-egui-proxy` の `device/eye_dropper.rs` から移した（#1191）。
+//! `fandhe_device::eye_dropper` のモジュール doc。本 crate が `fandhe-egui-proxy` から移した（#1191）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
 //!

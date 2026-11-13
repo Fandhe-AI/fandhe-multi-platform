@@ -9,7 +9,7 @@
 //!
 //! # OS 別の分担（dispatch・bridge・本ファイルは #740 で最終形。後続の子はここを触らない）
 //!
-//! - Android: `android_companion_device`（#741。`CompanionDeviceManager`、API 33 以上）
+//! - Android: `src/android.rs`（#741。`CompanionDeviceManager`、API 33 以上）
 //! - iOS: 保留（`AccessorySetupKit` を宣言すると `bluetooth-le` と両立しない）。OS 別モジュールを
 //!   置かず fallback に含める。保留を解くときは dispatch の変更を別 issue で扱う
 //! - macOS・Windows・Linux: 対応表で `no` のため `UnsupportedCompanionDevicePicker` 固定
