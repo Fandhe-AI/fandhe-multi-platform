@@ -289,30 +289,34 @@ function listCaps(R) {
 }
 
 /**
+ * stripRustLiterals 済みの本文から、深さ 0 にない波括弧の中身を空白にする（行数は保つ）。
+ * `::{` で始まる use の木（`pub use driver::{a, b}`）は中身を残す。
+ */
+function topLevelOnly(src) {
+  let out = "";
+  let i = 0;
+  for (let open; (open = src.indexOf("{", i)) >= 0; ) {
+    let k = open;
+    while (k > 0 && /\s/.test(src[k - 1])) k--;
+    let end = open + 1;
+    if (!src.startsWith("::", k - 2))
+      for (let depth = 1; end < src.length && depth > 0; end++) depth += src[end] === "{" ? 1 : src[end] === "}" ? -1 : 0;
+    out += src.slice(i, open + 1) + src.slice(open + 1, end).replace(/[^\n]/g, " ");
+    i = end;
+  }
+  return out + src.slice(i);
+}
+
+/**
  * 機能 crate が crate ルートから `pub fn platform_<stem>()` を公開しているかの検査（consumer-app-structure.md §8.2）。
  * files は src/ 直下の { "lib.rs": 本文, "driver.rs": 本文, ... }。満たせば null、欠けていれば理由を返す。
  * lib.rs に直接定義するか、他のモジュールで定義して lib.rs から `pub use` で再公開していれば合格。cfg の有無は見ない。
+ * 定義・再公開とも、ファイルの深さ 0（mod・impl・trait・関数本文の外）にあるものだけを数える。
  */
 export function missingEntry(stem, files) {
-  // インライン mod の本文は crate ルート直下ではないため、定義・再公開の判定から外す。
-  const dropInlineMods = (src) => {
-    let out = "";
-    for (let i = 0; i < src.length; ) {
-      const hit = /\bmod\s+\w+\s*\{/g;
-      hit.lastIndex = i;
-      const found = hit.exec(src);
-      if (!found) return out + src.slice(i);
-      out += src.slice(i, found.index);
-      let depth = 1;
-      let j = found.index + found[0].length;
-      for (; j < src.length && depth > 0; j++) depth += src[j] === "{" ? 1 : src[j] === "}" ? -1 : 0;
-      i = j;
-    }
-    return out;
-  };
   const fn = `platform_${stem}`;
   const def = new RegExp(`^\\s*pub fn ${fn}\\s*[<(]`, "m");
-  files = Object.fromEntries(Object.entries(files).map(([f, src]) => [f, dropInlineMods(stripRustLiterals(src))]));
+  files = Object.fromEntries(Object.entries(files).map(([f, src]) => [f, topLevelOnly(stripRustLiterals(src))]));
   const lib = files["lib.rs"] ?? "";
   const ok =
     def.test(lib) ||

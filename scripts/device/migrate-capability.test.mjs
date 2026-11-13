@@ -195,6 +195,14 @@ test("missingEntry: crate ルートから公開された platform_<stem> だけ�
   assert.ok(missingEntry("x", { "lib.rs": "pub fn platform_passkey() {}" }) && missingEntry("passkey_signin", { "lib.rs": "pub fn platform_passkey() {}" }));
   assert.ok(missingEntry("x", { "lib.rs": "pub fn platform_x_y() {}" }));
   assert.ok(missingEntry("x", {}));
+  // 深さ 0 にない定義・再公開は入口にしない（impl の関連関数・trait の関数・インライン mod）。
+  assert.ok(missingEntry("x", { "lib.rs": "pub struct Factory;\nimpl Factory {\n    pub fn platform_x() {}\n}\n" }));
+  assert.ok(missingEntry("x", { "lib.rs": "pub trait T {\n    fn platform_x() {}\n}\n" }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod inner { pub fn platform_x() {} }" }));
+  assert.ok(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": "impl D {\n    pub fn platform_x() {}\n}\n" }));
+  assert.ok(missingEntry("x", { "lib.rs": "fn f() {\n    pub use driver::platform_x;\n}", "driver.rs": def }));
+  assert.equal(missingEntry("x", { "lib.rs": "mod a { fn g() {} }\npub fn platform_x() { if true { } }\n" }), null);
+  assert.equal(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::platform_x;", "driver.rs": def }), null);
 });
 
 test("rewriteEdition2024: 複数行文字列・raw string・ブロックコメントの内側は変えない", () => {
