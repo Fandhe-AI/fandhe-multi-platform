@@ -397,6 +397,43 @@ fn ios_shell_values_match_current_info_plist() {
     assert!(!gen.contains("CFBundleSupportedPlatforms"));
 }
 
+/// `UIApplicationSceneManifest` の部分（コメントを除いた plist から、次の同階層キーの手前まで）。
+fn scene_manifest(plist: &str) -> String {
+    let p = strip_comments(plist);
+    let body = p
+        .split("<key>UIApplicationSceneManifest</key>")
+        .nth(1)
+        .unwrap();
+    // 子の dict が閉じるまで（入れ子の深さで数える）。
+    let mut depth = 0;
+    let mut end = 0;
+    for (i, _) in body.match_indices(['<']) {
+        let t = &body[i..];
+        if t.starts_with("<dict>") {
+            depth += 1;
+        } else if t.starts_with("</dict>") {
+            depth -= 1;
+            if depth == 0 {
+                end = i;
+                break;
+            }
+        }
+    }
+    body[..end].split_whitespace().collect()
+}
+
+#[test]
+fn ios_scene_manifest_matches_current_info_plist_and_shim() {
+    // 無いと実機で起動直後に終了する（#1292）。本体と同じ構成を、選んだ機能に関係なく出す。
+    let gen = &gallery()["ios/Info.plist"];
+    let cur = repo("platforms/apple/FandheIosApp/Resources/Info.plist");
+    assert_eq!(scene_manifest(gen), scene_manifest(&cur));
+    // 名指す delegate は .m が実装している。
+    let m = repo("crates/fandhe-platform-apple/ios/fandhe_ios_scene.m");
+    assert!(m.contains("@implementation FandheSceneDelegate"));
+    assert!(gen.contains("<string>FandheSceneDelegate</string>"));
+}
+
 #[test]
 fn ios_usage_description_matches_current_info_plist() {
     let gen = &gallery()["ios/Info.plist"];

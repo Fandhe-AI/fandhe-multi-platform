@@ -24,9 +24,10 @@
 //     種類の判定（Core Spotlight）は受信側 `apple/fandhe_apple_spotlight_index.m` が行う
 //     （本ファイルは feature `device` に依存せず CoreSpotlight をリンクしないため）。
 //
-// `build.rs` が feature・計測ビルドに関係なく常にコンパイルする（Info.plist は 1 つのため）。
-// `src/ios_scene.rs` の `install()` が `fandhe_ios_scene_install()` を呼んで、リンカが
-// 本ファイルのクラスを捨てないようにする。winit が scene に対応（upstream #4723）したら削除する。
+// `fandhe-platform-apple` の `build.rs` が iOS で常にコンパイルする（Info.plist は 1 つのため）。
+// `fandhe_platform_apple::ios_scene_install()` が `fandhe_ios_scene_install()` を呼んで、リンカが
+// 本ファイルのクラスを捨てないようにする。呼び出しはレンダラの起動関数（`run_ios`）が行う（Issue #1292）。
+// winit が scene に対応（upstream #4723）したら削除する。
 //
 // スレッド契約: UIKit が main thread から呼ぶ。中身は `@autoreleasepool` で囲む。
 // URL・画面情報はログへ出さない。

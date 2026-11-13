@@ -2,7 +2,7 @@
 name = "fandhe-platform-apple"
 version = "0.2.0"
 edition = "2024"
-description = "fandhe-multi-platform の Apple（iOS / macOS）共通層（ObjC / Swift 薄層の build script helper・共有ヘッダ・main thread 判定）"
+description = "fandhe-multi-platform の Apple（iOS / macOS）共通層（ObjC / Swift 薄層の build script helper・共有ヘッダ・main thread 判定・UIScene 化シム）"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
 # 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
@@ -16,6 +16,10 @@ build = ["dep:cc"]
 [dependencies]
 # build 依存として host（Linux・Windows 含む）でもコンパイルされるため、依存は `cc` のみ・optional。
 cc = { workspace = true, optional = true }
+
+# `build.rs` が自身の `src/build.rs` を読み込んで iOS の UIScene 化シムをコンパイルするための build 依存。
+[build-dependencies]
+cc = { workspace = true }
 
 [lints]
 workspace = true
