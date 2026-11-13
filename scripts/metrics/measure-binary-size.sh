@@ -125,7 +125,10 @@ measure_aab_download_size() {
   local sizes
   # 中断・予期しない終了でも大きな .apks を残さない（EXIT trap で参照するためグローバル変数）
   AAB_WORK="$(mktemp -d)"
-  trap 'rm -rf "${AAB_WORK}"' EXIT INT TERM
+  trap 'rm -rf "${AAB_WORK}"' EXIT
+  # シグナルでは終了させる（後始末は EXIT trap が行う）
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
   local work="${AAB_WORK}"
   if ! "${JAVA_HOME}/bin/java" -jar "${BUNDLETOOL_JAR}" build-apks \
     --bundle="${target}" --output="${work}/app.apks" >/dev/null; then
