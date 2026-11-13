@@ -1,26 +1,26 @@
 //! Phase 11 型サンプル「動画の撮影」（親 #169、Issue #821）の effect ドライバ。
 //! `fandhe_core::screens::video_capture_show`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::video_capture::VideoCapturer` に撮影 UI の表示を依頼して、
+//! `crate::contract::VideoCapturer` に撮影 UI の表示を依頼して、
 //! OS 層から届く結果を `CompletionSender` 経由で画面へ返す（`fandhe-gallery` の `screens/registry.rs` の
 //! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約（結果の三値・数値表・守る範囲）の SSOT は `fandhe_device::video_capture`。
+//! 契約（結果の三値・数値表・守る範囲）の SSOT は `crate::contract`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
 //!
 //! # OS 別の分担（dispatch・bridge・本ファイルは #821 で最終形。後続の子はここを触らない）
 //!
-//! - iOS: `ios_video_capture`（#822。`UIImagePickerController`）
-//! - Android: `android_video_capture`（#823。`ACTION_VIDEO_CAPTURE`）
+//! - iOS: `ios`（#822。`UIImagePickerController`）
+//! - Android: `android`（#823。`ACTION_VIDEO_CAPTURE`）
 //! - Web: `fandhe-web-dom` 側（#824）。wasm32 では本ファイルをビルドしない
-//! - macOS: `macos_video_capture`（#1071。AppKit の撮影パネル + `AVCaptureMovieFileOutput`）
-//! - Windows: `windows_video_capture`（#1150。WinRT `MediaCapture` + アプリが組む撮影パネル）。
+//! - macOS: `macos`（#1071。AppKit の撮影パネル + `AVCaptureMovieFileOutput`）
+//! - Windows: `windows`（#1150。WinRT `MediaCapture` + アプリが組む撮影パネル）。
 //!   Linux は対象外で `UnsupportedVideoCapturer` 固定（ダミーの成功実装へは倒さない）
 //!
 //! # 撮影パネル（Windows）の経路
 //!
 //! パネルの状態は OS を正にする。ワーカーが [`set_panel`] で bridge へ書いた状態を、`drive` が
 //! 画面へ写す（`set_panel` の completion）。ボタンが立てた命令は `drive` が `forward`
-//! （本番は `windows_video_capture::panel_command`）で現在の要求 id とともにワーカーへ渡し、
+//! （本番は `windows::panel_command`）で現在の要求 id とともにワーカーへ渡し、
 //! 渡した後に命令を消す。消える前の次フレームで同じ命令が再転送されうるため、ワーカーが状態と
 //! 照合して重複を捨てる。trait `VideoCapturer` は変えない（契約変更を避ける）
 //!
@@ -33,7 +33,7 @@
 //! # 期限を持たない理由
 //!
 //! 撮影は利用者の操作時間に依存するため、Rust 側で期限・タイマーを置かない（OS を正とする）。
-//! OS から完了通知が届かない場合、画面は撮影中のままになる（`fandhe_device::video_capture` の
+//! OS から完了通知が届かない場合、画面は撮影中のままになる（`crate::contract` の
 //! 守らない範囲）。
 //!
 //! # スレッド
@@ -47,39 +47,39 @@
 
 use std::sync::{Arc, Mutex, OnceLock};
 
+use crate::contract::{MAX_DURATION_SECS, VideoCaptureFailure, VideoCaptureOutcome, VideoCapturer};
 use fandhe_core::screens::video_capture_show::VideoCaptureShowState;
 use fandhe_core::screens::video_capture_show::{
+    ClipOrigin, CoreFailure, CoreOutcome, PanelCommand, PanelPhase, Phase, ShownClip,
     clear_panel_command, finish_capture, mark_running, set_panel as set_screen_panel,
-    take_panel_command, take_request, ClipOrigin, CoreFailure, CoreOutcome, PanelCommand,
-    PanelPhase, Phase, ShownClip,
-};
-use fandhe_device::video_capture::{
-    VideoCaptureFailure, VideoCaptureOutcome, VideoCapturer, MAX_DURATION_SECS,
+    take_panel_command, take_request,
 };
 
-use super::request_slot::{poll_and_finish, RequestSlot, POLL_INTERVAL};
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
 
 /// OS 層から届いて検査を終えた結果。
 type Outcome = Result<VideoCaptureOutcome, VideoCaptureFailure>;
 
 /// 現在のプラットフォームに応じた `VideoCapturer` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn VideoCapturer> {
+///
+/// 画面の状態型に依存しない入口で、フレームワークの外のアプリも契約を直接呼べる。
+pub fn platform_video_capture() -> Arc<dyn VideoCapturer> {
     #[cfg(target_os = "ios")]
     {
-        super::ios_video_capture::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_video_capture::implementation()
+        crate::android::implementation()
     }
     #[cfg(target_os = "macos")]
     {
-        super::macos_video_capture::implementation()
+        crate::macos::implementation()
     }
     #[cfg(target_os = "windows")]
     {
-        super::windows_video_capture::implementation()
+        crate::windows::implementation()
     }
     // Linux は対象外。Web は `fandhe-web-dom` 側。
     #[cfg(not(any(
@@ -89,7 +89,7 @@ fn platform() -> Arc<dyn VideoCapturer> {
         target_os = "windows"
     )))]
     {
-        Arc::new(fandhe_device::video_capture::UnsupportedVideoCapturer)
+        Arc::new(crate::contract::UnsupportedVideoCapturer)
     }
 }
 
@@ -202,7 +202,7 @@ fn bridge() -> &'static Bridge {
 }
 
 /// OS 層が撮影 UI を出す直前に呼ぶ。`false` なら出さない（モジュール doc 参照）。
-// iOS・Android 以外のビルドでは未使用（スタブ段階では #822・#823 が呼ぶ）。
+// OS 実装（iOS・Android・macOS・Windows）だけが呼ぶ。
 #[allow(dead_code)]
 pub(crate) fn try_begin_present(request_id: u64) -> bool {
     bridge().try_begin_present(request_id)
@@ -223,9 +223,8 @@ pub(crate) fn set_panel(request_id: u64, panel: Option<PanelPhase>) {
 
 /// 画面の作り直し時に保留中の要求を破棄する。画面状態は `default()`（世代 0）に戻るため、
 /// 保留が残ると次の要求が発送されず飲み込まれる。旧要求の遅延完了は id 不一致で捨てられる。
-// Android の再生成経路（`android.rs`）から呼ばれる。Android 以外では未使用。
-#[allow(dead_code)]
-pub(crate) fn reset_pending_tracking() {
+// Android の再生成経路（`fandhe-gallery` の `android_main`）から呼ばれる。
+pub fn reset_pending_tracking() {
     if let Some(b) = BRIDGE.get() {
         b.reset();
     }
@@ -284,12 +283,12 @@ fn drive(
             clear_panel_command(s, g, cmd)
         }));
     }
-    if let Some((_, panel)) = bridge.panel() {
-        if panel != state.panel {
-            let _ = sender.send(Box::new(move |s: &mut VideoCaptureShowState| {
-                set_screen_panel(s, generation, panel);
-            }));
-        }
+    if let Some((_, panel)) = bridge.panel()
+        && panel != state.panel
+    {
+        let _ = sender.send(Box::new(move |s: &mut VideoCaptureShowState| {
+            set_screen_panel(s, generation, panel);
+        }));
     }
     let slot = bridge.slot;
     let Some((pending_id, _)) = slot.snapshot() else {
@@ -337,7 +336,7 @@ pub fn video_capture_show_effect(
     drive(
         state,
         sender,
-        IMPL.get_or_init(platform),
+        IMPL.get_or_init(platform_video_capture),
         bridge(),
         forward_panel_command,
     );
@@ -346,7 +345,7 @@ pub fn video_capture_show_effect(
 /// 撮影パネルの命令を OS 層へ渡す本番の転送先。Windows 以外にパネルは無い。
 fn forward_panel_command(request_id: u64, command: PanelCommand) {
     #[cfg(target_os = "windows")]
-    super::windows_video_capture::panel_command(request_id, command);
+    crate::windows::panel_command(request_id, command);
     #[cfg(not(target_os = "windows"))]
     let _ = (request_id, command);
 }
@@ -354,19 +353,26 @@ fn forward_panel_command(request_id: u64, command: PanelCommand) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{UnsupportedVideoCapturer, VideoClip};
     use fandhe_core::screens::video_capture_show::{
-        error_text, request_capture, status_text, MAX_DURATION_SECS as CORE_MAX_SECS,
+        MAX_DURATION_SECS as CORE_MAX_SECS, error_text, request_capture, status_text,
     };
-    use fandhe_device::video_capture::{UnsupportedVideoCapturer, VideoClip};
     use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
-    type Rx = mpsc::Receiver<crate::app::Completion<VideoCaptureShowState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<VideoCaptureShowState>>;
 
     fn channel() -> (CompletionSender<VideoCaptureShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
+    }
+
+    /// 起床しないだけの口（受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
     }
 
     fn new_bridge() -> &'static Bridge {

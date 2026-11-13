@@ -196,10 +196,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // セッションを止めて `ACTIVE` を解放する（`device::camera_preview_stream::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::camera_preview_stream::reset_pending_tracking();
-    // Issue #821: 動画の撮影も同様。画面状態が generation 0 に戻るため、保留中の要求を破棄し、
-    // 旧要求の遅延完了を id 不一致で捨てさせる（`device::video_capture::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::video_capture::reset_pending_tracking();
     // Issue #267: 音声再生も同様。画面状態が generation 0 に戻るため、処理済み世代を捨て再生を止める
     // （`device::media_playback::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

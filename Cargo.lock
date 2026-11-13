@@ -1909,6 +1909,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-video-capture"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-volume-control"
 version = "0.2.0"
 dependencies = [
@@ -2096,6 +2111,7 @@ dependencies = [
  "fandhe-cap-usb-device",
  "fandhe-cap-user-idle",
  "fandhe-cap-uwb-ranging",
+ "fandhe-cap-video-capture",
  "fandhe-cap-volume-control",
  "fandhe-cap-wallpaper-set",
  "fandhe-cap-wifi-connect",
@@ -2225,6 +2241,7 @@ dependencies = [
  "fandhe-cap-sleep-lock-events",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-usb-device",
+ "fandhe-cap-video-capture",
  "fandhe-core",
  "fandhe-device",
  "fandhe-platform-apple",

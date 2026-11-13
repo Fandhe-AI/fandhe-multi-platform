@@ -10,7 +10,7 @@
 //! `mount.rs::release_features`（`release_mount`）。
 //!
 //! Web は `fandhe-device` の `VideoCapturer` トレイトを通らない（`file_picker.rs` と同じ分担）。
-//! 検査の SSOT は [`fandhe_device::video_capture::VideoClip::from_os`] で、複製しない。
+//! 検査の SSOT は [`fandhe_cap_video_capture::VideoClip::from_os`] で、複製しない。
 //! モバイルのブラウザはカメラアプリを開き、デスクトップのブラウザは `capture` を無視して通常の
 //! ファイル選択になるため、結果は常に「受け取った動画」（`ClipOrigin::Received`）として出す。
 //! `MediaRecorder` で自前に録る方式は、新しい許可と撮影画面が要るため使わない。
@@ -44,10 +44,10 @@
 //! 資源の解放。守らない: `cancel` 非対応の古いブラウザで通知が届かない場合（画面は撮影中の
 //! まま）、撮影中のブラウザのプロセス死、動画の中身・画質・形式、複数タブ。
 
+use fandhe_cap_video_capture::{VideoCaptureFailure, VideoClip};
 use fandhe_core::screens::video_capture_show::{
     finish_capture, ClipOrigin, CoreFailure, CoreOutcome, ShownClip, VideoCaptureShowState,
 };
-use fandhe_device::video_capture::{VideoCaptureFailure, VideoClip};
 
 /// `<input>` の `accept`。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]

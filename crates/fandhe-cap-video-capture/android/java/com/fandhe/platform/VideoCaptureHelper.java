@@ -20,13 +20,20 @@ import androidx.lifecycle.Lifecycle;
 
 import java.io.File;
 import java.security.SecureRandom;
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-// 動画の撮影（Issue #823、親 #169）の Android 実装ヘルパー。MainActivity から生成・委譲される。
-// Rust の `device/android_video_capture.rs` が `MainActivity.requestVideoCapture` を JNI で呼び、
+// 動画の撮影（Issue #823、親 #169）の Android 実装ヘルパー。Activity の生成・破棄は `VideoCaptureLifecycle`
+// （非公開 ContentProvider、`FeatureLifecycleProvider` 継承）が `attach` / `detach` で知らせる。
+// Activity ごとの helper は `HELPERS` に持つ（JNI スレッドと UI スレッドの両方から触るので同期化し、
+// Activity が GC されれば項目も消える）。helper が無い要求は `capture` が false を返し、Rust が失敗で確定する。
+// Rust の `fandhe_cap_video_capture` の `android.rs` が `capture` を JNI（static）で呼び、
 // 表示の直前に `nativeTryBeginPresent`、結果を `nativeOnVideoCaptureResult` で返す。
-// 契約の SSOT は `fandhe_device::video_capture`（結果コード表 `result_from_code`）。
+// 契約の SSOT は `fandhe_cap_video_capture` の `contract`（結果コード表 `result_from_code`）。
+// 撮影の出力先は機能専用の `VideoCaptureFileProvider`（`cache/video_capture/` だけを公開）。
 //
 // 流れ: CAMERA の実行時許可 → `MediaStore.ACTION_VIDEO_CAPTURE`（EXTRA_OUTPUT は FileProvider の
 // `cache/video_capture/`、EXTRA_DURATION_LIMIT は上限秒）→ Activity の結果で完了。
@@ -72,6 +79,9 @@ final class VideoCaptureHelper {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    private static final Map<Activity, VideoCaptureHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     private final ComponentActivity activity;
     private final RequestTracker request = new RequestTracker();
     private final ExecutorService reader = Executors.newSingleThreadExecutor();
@@ -79,12 +89,12 @@ final class VideoCaptureHelper {
     private long permissionId = RequestTracker.NONE; // 許可ダイアログ待ちの要求 id。
     private int permissionMaxSecs;
     private File launchedFile; // 撮影中の出力先。結果で必ず消す。
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity の
-    // フィールド初期化子から本クラスを生成してここで登録する。
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`attach`（`onHostCreated`、
+    // onCreate 内）で本クラスを生成してここで登録する。
     private final ActivityResultLauncher<String> permissionLauncher;
     private final ActivityResultLauncher<Intent> videoLauncher;
 
-    VideoCaptureHelper(ComponentActivity activity) {
+    private VideoCaptureHelper(ComponentActivity activity) {
         this.activity = activity;
         this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:VideoCaptureHelper:1", activity,
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
@@ -92,13 +102,32 @@ final class VideoCaptureHelper {
                 new ActivityResultContracts.StartActivityForResult(), this::onVideoResult);
     }
 
-    // JNI スレッドから呼ばれる。
-    void capture(long id, int maxSecs) {
-        activity.runOnUiThread(() -> start(id, maxSecs));
+    // Activity の生成時（`VideoCaptureLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new VideoCaptureHelper(activity));
     }
 
-    // MainActivity.onDestroy から UI スレッドで呼ぶ。作業スレッドへ移った要求は、そちらが 1 回だけ報告する。
-    void onDestroy() {
+    // Activity の破棄時（同上）。保留中の要求を中断で確定する。
+    static void detach(Activity activity) {
+        VideoCaptureHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // JNI スレッドから呼ばれる入口。helper が無い（生成前・破棄後）なら false を返し、Rust が失敗として確定する
+    // （結果の native は呼ばれない）。
+    static boolean capture(Activity activity, long id, int maxSecs) {
+        VideoCaptureHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            return false;
+        }
+        helper.activity.runOnUiThread(() -> helper.start(id, maxSecs));
+        return true;
+    }
+
+    // 作業スレッドへ移った要求は、そちらが 1 回だけ報告する。
+    private void onDestroy() {
         long pending = request.take();
         permissionId = RequestTracker.NONE;
         File f = launchedFile;
@@ -220,7 +249,7 @@ final class VideoCaptureHelper {
         Uri uri;
         try {
             uri = FileProvider.getUriForFile(activity,
-                    activity.getPackageName() + ".compose", file);
+                    activity.getPackageName() + ".fandhe.video-capture.files", file);
         } catch (IllegalArgumentException e) {
             finishWith(id, RESULT_INTERNAL);
             return;

@@ -236,6 +236,10 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // ファイルプレビューの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_file_preview::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_file_preview::reset_pending_tracking();
+    // 動画の撮影の保留中の要求も破棄する。画面状態は再生成で generation 0 に戻るため、残すと次の要求が飲み込まれ、
+    // 旧要求の遅延完了は id 不一致で捨てさせる（`fandhe_cap_video_capture::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_video_capture::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 

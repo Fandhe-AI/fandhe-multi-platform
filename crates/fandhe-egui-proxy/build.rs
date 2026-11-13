@@ -176,8 +176,6 @@ fn build() {
     compile_ios_web_auth_session();
     // `ios/fandhe_ios_in_app_browser.m`（Issue #702）。iOS 分岐のみ。SafariServices をリンクする。
     compile_ios_in_app_browser();
-    // `ios/fandhe_ios_video_capture.m`（Issue #822）。iOS 分岐のみ。CoreMedia をリンクする。
-    compile_ios_video_capture();
     // `ios/fandhe_ios_capture_protection.m`（Issue #583）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_capture_protection();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
@@ -622,15 +620,6 @@ fn compile_macos_open_in_shell() {
     compile_objc("macos/fandhe_macos_open_in_shell.m", &["AppKit"]);
 }
 
-/// `macos/fandhe_macos_video_capture.m` を `cc` でコンパイルし AVFoundation・CoreMedia・QuartzCore をリンクする
-/// （Issue #1071）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_video_capture.rs` が使う）。
-fn compile_macos_video_capture() {
-    compile_objc(
-        "macos/fandhe_macos_video_capture.m",
-        &["AVFoundation", "AppKit", "CoreMedia", "QuartzCore"],
-    );
-}
-
 /// `macos/fandhe_macos_print.m` を `cc` でコンパイルする（Issue #325）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_print.rs` が使う）。
 fn compile_macos_print() {
@@ -715,20 +704,6 @@ fn compile_ios_in_app_browser() {
     compile_objc(
         "ios/fandhe_ios_in_app_browser.m",
         &["SafariServices", "UIKit"],
-    );
-}
-
-/// `ios/fandhe_ios_video_capture.m` を `cc` でコンパイルし CoreMedia をリンクする（Issue #822）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_video_capture.rs` が使う）。
-fn compile_ios_video_capture() {
-    compile_objc(
-        "ios/fandhe_ios_video_capture.m",
-        &[
-            "AVFoundation",
-            "CoreMedia",
-            "UIKit",
-            "UniformTypeIdentifiers",
-        ],
     );
 }
 
@@ -901,8 +876,6 @@ fn build_macos() {
     compile_macos_open_in_shell();
     // `macos/fandhe_macos_recent_documents.m`（Issue #988）も macOS 専用。
     compile_macos_recent_documents();
-    // `macos/fandhe_macos_video_capture.m`（Issue #1071）も macOS 専用。AVFoundation 等をリンクする。
-    compile_macos_video_capture();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。
     compile_macos_print();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。iOS 分岐と共用する。

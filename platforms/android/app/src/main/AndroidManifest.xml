@@ -314,7 +314,7 @@
 
         <!-- Issue #32: メール添付の content URI を渡す FileProvider。exported=false のまま、
              Intent 単位の一時読み取り許可（grantUriPermissions）だけで受け手に読ませる。公開する
-             パスは `cache/compose/` と動画の撮影の `cache/video_capture/` だけ（res/xml/compose_file_paths.xml）。新しい権限は足さない。
+             パスは `cache/compose/` だけ（res/xml/compose_file_paths.xml）。新しい権限は足さない。
              切り離し時に削除する。 -->
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -338,6 +338,20 @@
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_preview_file_paths" />
+        </provider>
+
+        <!-- 動画の撮影（Issue #823）が撮影アプリへ書き込み先の content URI を渡す機能専用の FileProvider。共有の compose provider
+             から分けて、公開するパスを `cache/video_capture/` だけに狭める（res/xml/video_capture_file_paths.xml）。
+             exported=false のまま、Intent 単位の一時許可（grantUriPermissions）だけで撮影アプリに書かせる。新しい権限は足さない。
+             宣言は `fandhe-cap-video-capture` の Cargo.toml と完全に一致させる。切り離し時は crate ごと削除する。 -->
+        <provider
+            android:name="com.fandhe.platform.VideoCaptureFileProvider"
+            android:authorities="${applicationId}.fandhe.video-capture.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/video_capture_file_paths" />
         </provider>
 
         <!-- クラウド保存先として OS のファイル画面に出る DocumentsProvider（Issue #1020）。
@@ -427,6 +441,10 @@
         <provider
             android:name="com.fandhe.platform.FilePreviewLifecycle"
             android:authorities="${applicationId}.fandhe.file-preview"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.VideoCaptureLifecycle"
+            android:authorities="${applicationId}.fandhe.video-capture"
             android:exported="false" />
         <provider
             android:name="com.fandhe.platform.AppLifecycleLifecycle"

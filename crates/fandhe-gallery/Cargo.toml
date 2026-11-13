@@ -37,8 +37,8 @@ device = [
   "dep:fandhe-cap-drag-drop",
   "dep:fandhe-cap-dynamic-type",
   "dep:fandhe-cap-external-app-launch",
-  "dep:fandhe-cap-file-preview",
   "dep:fandhe-cap-eye-dropper",
+  "dep:fandhe-cap-file-preview",
   "dep:fandhe-cap-file-watch",
   "dep:fandhe-cap-focus-mode-status",
   "dep:fandhe-cap-gamepad",
@@ -84,8 +84,9 @@ device = [
   "dep:fandhe-cap-usb-device",
   "dep:fandhe-cap-user-idle",
   "dep:fandhe-cap-uwb-ranging",
-  "dep:fandhe-cap-wallpaper-set",
+  "dep:fandhe-cap-video-capture",
   "dep:fandhe-cap-volume-control",
+  "dep:fandhe-cap-wallpaper-set",
   "dep:fandhe-cap-wifi-connect",
   # END fandhe-cap
 ]
@@ -127,6 +128,7 @@ NSMicrophoneUsageDescription = "型サンプル「マイク録音」「音声認
 NSLocationUsageDescription = "型サンプル「Wi-Fi への接続」で、接続先の Wi-Fi 名を読むために使います"
 NSCalendarsWriteOnlyAccessUsageDescription = "型サンプル「予定の追加」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」の動作確認に使います"
+NSCameraUsageDescription = "型サンプル「カメラのライブ映像」「動画の撮影」の動作確認に使います"
 
 [build-dependencies]
 # Apple のリンク指定（弱リンク・rpath・Info.plist 埋め込み）を `fandhe-egui-proxy` から受け取って出し直す。
@@ -162,8 +164,8 @@ fandhe-cap-document-scan = { path = "../fandhe-cap-document-scan", optional = tr
 fandhe-cap-drag-drop = { path = "../fandhe-cap-drag-drop", optional = true }
 fandhe-cap-dynamic-type = { path = "../fandhe-cap-dynamic-type", optional = true }
 fandhe-cap-external-app-launch = { path = "../fandhe-cap-external-app-launch", optional = true }
-fandhe-cap-file-preview = { path = "../fandhe-cap-file-preview", optional = true }
 fandhe-cap-eye-dropper = { path = "../fandhe-cap-eye-dropper", optional = true }
+fandhe-cap-file-preview = { path = "../fandhe-cap-file-preview", optional = true }
 fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch", optional = true }
 fandhe-cap-focus-mode-status = { path = "../fandhe-cap-focus-mode-status", optional = true }
 fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad", optional = true }
@@ -209,8 +211,9 @@ fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }
 fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device", optional = true }
 fandhe-cap-user-idle = { path = "../fandhe-cap-user-idle", optional = true }
 fandhe-cap-uwb-ranging = { path = "../fandhe-cap-uwb-ranging", optional = true }
-fandhe-cap-wallpaper-set = { path = "../fandhe-cap-wallpaper-set", optional = true }
+fandhe-cap-video-capture = { path = "../fandhe-cap-video-capture", optional = true }
 fandhe-cap-volume-control = { path = "../fandhe-cap-volume-control", optional = true }
+fandhe-cap-wallpaper-set = { path = "../fandhe-cap-wallpaper-set", optional = true }
 fandhe-cap-wifi-connect = { path = "../fandhe-cap-wifi-connect", optional = true }
 # END fandhe-cap
 

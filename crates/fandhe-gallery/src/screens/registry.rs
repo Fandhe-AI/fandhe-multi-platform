@@ -587,7 +587,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "video_capture_show" => fandhe_core::screens::video_capture_show::current_screen,
-    fandhe_egui_proxy::device::video_capture::video_capture_show_effect,
+    fandhe_cap_video_capture::video_capture_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "audio_session_show" => fandhe_core::screens::audio_session_show::current_screen,
