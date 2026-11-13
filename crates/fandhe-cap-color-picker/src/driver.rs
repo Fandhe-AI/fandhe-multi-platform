@@ -21,7 +21,6 @@ use crate::error::ColorPickerError;
 use fandhe_core::screens::color_picker_pick::{ColorPickerOutcome, ColorPickerState};
 use fandhe_device::eye_dropper::PickedColor;
 
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 use crate::contract::ColorPicker;
 #[cfg(not(any(target_os = "macos", target_os = "ios")))]
 use fandhe_core::screens::color_picker_pick::{finish_pick, mark_picking, take_request};
@@ -131,10 +130,10 @@ fn drive(
     }));
 }
 
-/// Windows は実装、それ以外（Android・Linux）は `Unsupported` 固定。
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
-/// 現在のプラットフォームの実装を返す。///
+/// 現在のプラットフォームの同期の `ColorPicker` 実装を返す（Windows のみ実装、それ以外は `Unsupported` 固定）。
+///
 /// 画面の状態型に依存しない入口で、フレームワークの外のアプリも契約を直接呼べる。
+/// macOS・iOS は OS コールバック型で trait を通らないため `Unsupported` を返す（成功へは倒さない）。
 pub fn platform_color_picker() -> Box<dyn ColorPicker> {
     #[cfg(target_os = "windows")]
     return crate::windows::implementation();
@@ -156,6 +155,15 @@ pub fn color_picker_pick_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 起床しないだけの口（受信側で完了を直接確かめる）。
+    #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "windows")))]
+    struct NoopWaker;
+    #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "windows")))]
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     fn color(hex: &str) -> PickedColor {
         fandhe_device::eye_dropper::color_from_srgb_hex(hex).unwrap()

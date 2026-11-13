@@ -72,8 +72,22 @@ final class AudioSessionHelper {
     private AudioFocusRequest request;
     private BroadcastReceiver receiver;
     private boolean destroyed;
-    // onDestroy の解除に失敗した購読の id。その id の stop は解除失敗として返す。
-    private long lostId = NONE;
+    // onDestroy の解除に失敗した購読の id。その id の stop は解除失敗として返す。detach で helper が
+    // HELPERS から消えた後も stop が読めるよう static に持つ（id は Rust 側で単調増加するので Activity 間で衝突しない）。
+    private static long lostId = NONE;
+
+    private static synchronized void markLost(long id) {
+        lostId = id;
+    }
+
+    // id が失敗した購読なら記録を消して true。
+    private static synchronized boolean takeLost(long id) {
+        if (lostId != NONE && id == lostId) {
+            lostId = NONE;
+            return true;
+        }
+        return false;
+    }
 
     private AudioSessionHelper(ComponentActivity activity) {
         this.activity = activity;
@@ -99,6 +113,9 @@ final class AudioSessionHelper {
     }
 
     static int stop(Activity activity, long id) {
+        if (takeLost(id)) {
+            return 1;
+        }
         AudioSessionHelper helper = HELPERS.get(activity);
         return helper == null ? 0 : helper.stopInternal(id);
     }
@@ -188,10 +205,6 @@ final class AudioSessionHelper {
     // 現在の id と一致するときだけ解除する（再生成後の新インスタンスへ届く古い id の stop は何もしない）。
     private int stopInternal(long id) {
         synchronized (lock) {
-            if (lostId != NONE && id == lostId) {
-                lostId = NONE;
-                return 1;
-            }
             if (current == NONE || id != current) {
                 return 0;
             }
@@ -204,7 +217,7 @@ final class AudioSessionHelper {
             destroyed = true;
             long id = current;
             if (!releaseLocked() && id != NONE) {
-                lostId = id;
+                markLost(id);
             }
         }
     }

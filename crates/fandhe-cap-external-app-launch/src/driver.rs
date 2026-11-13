@@ -196,9 +196,9 @@ fn drive(
     }));
 }
 
-/// OS 別の [`ExternalAppLaunch`] 実装を返す。macOS・Windows 以外は fallback に入る。
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
-/// 現在のプラットフォームの実装を返す。///
+/// 現在のプラットフォームの同期の [`ExternalAppLaunch`] 実装を返す。iOS・Android はコールバック型で trait を通らず、
+/// 実装の無い OS と同じく `Unsupported` を返す（成功へは倒さない）。
+///
 /// 画面の状態型に依存しない入口で、フレームワークの外のアプリも契約を直接呼べる。
 pub fn platform_external_app_launch() -> Box<dyn ExternalAppLaunch> {
     #[cfg(target_os = "macos")]
