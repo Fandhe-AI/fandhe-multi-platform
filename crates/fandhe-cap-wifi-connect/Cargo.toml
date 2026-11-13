@@ -38,7 +38,7 @@ frameworks = ["CoreLocation", "CoreWLAN"]
 usage-descriptions = ["NSLocationUsageDescription"]
 
 [package.metadata.fandhe.android]
-permissions = [{ name = "android.permission.CHANGE_NETWORK_STATE" }, { name = "android.permission.ACCESS_WIFI_STATE" }, { name = "android.permission.ACCESS_FINE_LOCATION", max-sdk = 32 }, { name = "android.permission.NEARBY_WIFI_DEVICES" }]
+permissions = [{ name = "android.permission.CHANGE_NETWORK_STATE" }, { name = "android.permission.ACCESS_WIFI_STATE" }]
 features = [{ name = "android.hardware.wifi", required = false }]
 java = ["android/java"]
 
