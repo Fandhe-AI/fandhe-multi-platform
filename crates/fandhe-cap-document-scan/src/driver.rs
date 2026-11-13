@@ -122,7 +122,8 @@ type Outcome = Result<CoreScan, DocumentScanFailure>;
 
 /// 現在のプラットフォームに応じた `DocumentScanner` 実装を返す（dispatch の最終形）。
 /// 状態型に依存しない入口（consumer-app-structure.md §8.2）。フレームワークの外のアプリも、自分の状態型の effect から使える。
-/// 結果は trait の契約どおり bridge を経由して [`document_scan_show_effect`] へ届き、bridge を介さずフレームワークの外で受け取る口はない。
+/// 結果の受け取りは、画面用の [`document_scan_show_effect`] か、状態型に依存しない [`start_scan`] / [`poll_scan`] の組で行う
+/// （`scanner.scan(id)` を直接呼ぶだけでは撮影 UI が出ない。要求の登録は [`start_scan`] が行う）。
 pub fn platform_document_scan() -> Arc<dyn DocumentScanner> {
     #[cfg(target_os = "ios")]
     {
@@ -184,6 +185,21 @@ impl Bridge {
             presenting: false,
         });
         request_id
+    }
+
+    /// 進行中の要求（画面用・公開入口のどちらも）が無いときだけ登録して id を返す。判定と登録は同じロックで行う。
+    fn begin_exclusive(&self) -> Option<u64> {
+        let mut active = self.lock();
+        if active.is_some() || self.slot.snapshot().is_some() {
+            return None;
+        }
+        let request_id = self.slot.begin();
+        *active = Some(Active {
+            request_id,
+            started: Instant::now(),
+            presenting: false,
+        });
+        Some(request_id)
     }
 
     /// 表示開始の記録。現在の要求で、未確定で、期限前のときだけ `true`。
@@ -326,6 +342,57 @@ fn start_request(bridge: &Bridge, imp: &dyn DocumentScanner) {
     if let Err(f) = imp.scan(request_id) {
         bridge.complete_from_os(request_id, Err(f));
     }
+}
+
+/// 状態型に依存しない入口で受け取るスキャン結果。
+#[derive(Clone)]
+pub enum ScanResult {
+    /// 利用者がキャンセルした。
+    Cancelled,
+    /// スキャンできた。`image` は表示用に縮小した 1 ページ目。
+    Scanned {
+        image: RgbaPixels,
+        page_count: u32,
+        /// 復号した元画像の辺（画素）。
+        width: u32,
+        height: u32,
+    },
+}
+
+/// フレームワークの外のアプリ用: 要求を登録して OS へ撮影 UI の表示を依頼し、要求 id を返す。
+/// 画面用の要求や先行の要求が進行中なら `None`（置き換えない）。同期で失敗した場合も id を返し、失敗は [`poll_scan`] で受け取る。
+/// 結果は [`poll_scan`] を毎フレーム呼んで取り出す。期限は [`PRESENT_DEADLINE`]（撮影 UI が出るまで）。
+pub fn start_scan() -> Option<u64> {
+    static IMPL: OnceLock<Arc<dyn DocumentScanner>> = OnceLock::new();
+    let b = bridge();
+    let request_id = b.begin_exclusive()?;
+    if let Err(f) = IMPL.get_or_init(platform_document_scan).scan(request_id) {
+        b.complete_from_os(request_id, Err(f));
+    }
+    Some(request_id)
+}
+
+/// [`start_scan`] で得た要求の結果を取り出す。未着は `None`。取り出すと要求は終わり、次の [`start_scan`] を受け付ける。
+/// 別の要求の id・取り出し済みの id は常に `None`。
+pub fn poll_scan(request_id: u64) -> Option<Result<ScanResult, DocumentScanFailure>> {
+    let b = bridge();
+    b.expire_if_due();
+    let (id, Some(outcome)) = b.slot.snapshot()? else {
+        return None;
+    };
+    if id != request_id {
+        return None;
+    }
+    b.slot.clear(id);
+    Some(outcome.map(|o| match o {
+        CoreScan::Cancelled => ScanResult::Cancelled,
+        CoreScan::Scanned(s) => ScanResult::Scanned {
+            image: s.decoded.image.clone(),
+            page_count: s.page_count,
+            width: s.decoded.width,
+            height: s.decoded.height,
+        },
+    }))
 }
 
 /// 1 フレームぶんの処理。要求の発送・期限判定・完了の画面反映を行う。
@@ -587,6 +654,18 @@ mod tests {
     }
 
     const LONG: Duration = Duration::from_secs(30);
+
+    #[test]
+    fn begin_exclusive_refuses_while_pending() {
+        let b = Bridge::new(Duration::from_secs(10));
+        let id = b.begin_exclusive().unwrap();
+        assert!(b.begin_exclusive().is_none());
+        b.complete_from_os(id, Err(DocumentScanFailure::Unsupported));
+        // 結果が未取得のうちも受け付けない。
+        assert!(b.begin_exclusive().is_none());
+        b.slot.clear(id);
+        assert!(b.begin_exclusive().is_some());
+    }
 
     #[test]
     fn no_request_does_nothing() {

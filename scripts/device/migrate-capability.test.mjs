@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import {
   checkId, stemOf, pascalOf, moveTargets, rewriteSource, usedErrorVariants, unmappedVariants,
   renderErrorRs, replaceBlock, featureLines, gradleLines, renderUnsafeAttr, renderBuildRs, unsafeOsesOf,
-  strErrorVariants, rewriteEdition2024, refPatterns, missingEntry,
+  strErrorVariants, rewriteEdition2024, stripRustLiterals, refPatterns, missingEntry,
 } from "./migrate-capability.mjs";
 
 test("checkId: 不正な id を拒む", () => {
@@ -185,4 +185,17 @@ test("missingEntry: crate ルートから公開された platform_<stem> だけ�
   assert.ok(missingEntry("x", { "lib.rs": "pub fn platform_passkey() {}" }) && missingEntry("passkey_signin", { "lib.rs": "pub fn platform_passkey() {}" }));
   assert.ok(missingEntry("x", { "lib.rs": "pub fn platform_x_y() {}" }));
   assert.ok(missingEntry("x", {}));
+});
+
+test("rewriteEdition2024: 複数行文字列・raw string・ブロックコメントの内側は変えない", () => {
+  for (const keep of ['let s = "a\n  let gen = 1;\n";', 'let s = r#"x\nlet gen = 1;\n"#;', "/* \nlet gen = 1;\n*/", "let c = '\"'; // gen"]) assert.equal(rewriteEdition2024(keep), keep);
+  assert.equal(rewriteEdition2024('let s = "a\nb";\nlet gen = 1;'), 'let s = "a\nb";\nlet r#gen = 1;');
+});
+
+test("missingEntry: コメント・文字列の中の pub fn は公開入口にしない", () => {
+  assert.ok(missingEntry("x", { "lib.rs": "// pub fn platform_x() {}" }));
+  assert.ok(missingEntry("x", { "lib.rs": "/*\npub fn platform_x() {}\n*/" }));
+  assert.ok(missingEntry("x", { "lib.rs": 'const S: &str = "\npub fn platform_x() {}\n";' }));
+  assert.ok(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": "// pub fn platform_x() {}" }));
+  assert.equal(stripRustLiterals("a // b\nc").length, 8);
 });

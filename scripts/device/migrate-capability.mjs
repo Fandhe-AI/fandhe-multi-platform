@@ -58,15 +58,20 @@ export function moveTargets(id, stem) {
   ];
 }
 
+/** 複数行にまたがりうる Rust のコメント・文字列・文字リテラル（raw string を含む）。これらの内側は書き換え・判定の対象外にする。 */
+const RUST_OPAQUE = String.raw`\br(#*)"[\s\S]*?"\1|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\\n]|\\[^\n']+)'|\/\/.*$|\/\*[\s\S]*?\*\/`;
+
+/** コメントと文字列の中身を空白に置き換える（行数は保つ）。公開入口の有無など、コードだけを見たい判定用。 */
+export const stripRustLiterals = (src) =>
+  src.replace(new RegExp(RUST_OPAQUE, "gm"), (m) => m.replace(/[^\n]/g, " "));
+
 /** edition 2021 -> 2024 で壊れる書き方（`extern "C" {}`・`#[no_mangle]`・`gen` 識別子）の機械的な書き換え。 */
 export function rewriteEdition2024(src) {
   return src
     .replace(/(?<!unsafe\s+)\bextern\s+"C"\s*\{/g, 'unsafe extern "C" {')
     .replace(/#\[no_mangle\]/g, "#[unsafe(no_mangle)]")
-    .split("\n")
-    // 文字列リテラルと行コメントは一致させたうえでそのまま返し、その外の `gen` だけを直す。
-    .map((l) => l.replace(/"(?:[^"\\]|\\.)*"|\/\/.*$|(?<!r#)\bgen\b/g, (m) => (m === "gen" ? "r#gen" : m)))
-    .join("\n");
+    // コメント・文字列（複数行・raw を含む）は一致させたうえでそのまま返し、その外の `gen` だけを直す。
+    .replace(new RegExp(`${RUST_OPAQUE}|(?<!r#)\\bgen\\b`, "gm"), (m) => (m === "gen" ? "r#gen" : m));
 }
 
 /** `DeviceError::V(引数)` の組。引数なし（括弧なし）は undefined。 */
@@ -260,6 +265,7 @@ function listCaps(R) {
 export function missingEntry(stem, files) {
   const fn = `platform_${stem}`;
   const def = new RegExp(`^\\s*pub fn ${fn}\\s*[<(]`, "m");
+  files = Object.fromEntries(Object.entries(files).map(([f, src]) => [f, stripRustLiterals(src)]));
   const lib = files["lib.rs"] ?? "";
   const ok =
     def.test(lib) ||
