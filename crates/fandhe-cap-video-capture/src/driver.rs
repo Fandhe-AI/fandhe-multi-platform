@@ -391,6 +391,10 @@ fn drive(
             // （`Requested` のまま止まらないよう `Running` を経て確定する）。
             ScreenBegin::Busy => {
                 let _ = sender.send(Box::new(move |s: &mut VideoCaptureShowState| {
+                    // 同じ世代で積まれた先行の適用後に再要求されていたら、新しい要求を壊さない。
+                    if s.generation != generation {
+                        return;
+                    }
                     mark_running(s);
                     finish_capture(s, generation, Err(CoreFailure::Internal));
                 }));
@@ -429,8 +433,8 @@ fn drive(
         |_| {},
         move |s: &mut VideoCaptureShowState, outcome: Outcome| {
             let applied = apply_outcome(s, generation, outcome);
-            // 反映できない完了（世代違い）は捨てる。残すとスロットが埋まったままになり、
-            // `has_pending` が真のまま以降の要求が発送されない。
+            // 反映できない完了（世代違い）は捨てる。残すと `slot` に完了が残ったままになり、
+            // `try_begin_screen` が `Busy` を返し続けて以降の画面要求が発送されない。
             if !applied {
                 slot.clear(pending_id);
             }
@@ -935,6 +939,28 @@ mod tests {
         assert_eq!(f.calls.load(Ordering::SeqCst), 0, "OS へは渡さない");
         assert_eq!(bridge.slot.snapshot().map(|s| s.0), Some(42));
         assert!(bridge.lock().as_ref().is_some_and(|a| a.request_id == 42));
+    }
+
+    /// busy の失敗を積んだ後に再要求された新しい世代を、遅れて届いた同世代の 2 つ目の適用が `Running` にしない。
+    #[test]
+    fn stale_busy_closure_does_not_run_new_generation() {
+        let bridge = new_bridge();
+        let f = fake(Mode::Silent, bridge);
+        let imp: Arc<dyn VideoCapturer> = f.clone();
+        let (sender, rx) = channel();
+        assert!(bridge.try_begin_with(42));
+        let mut state = VideoCaptureShowState::default();
+        request_capture(&mut state);
+        drive(&state, &sender, &imp, bridge, no_forward);
+        drive(&state, &sender, &imp, bridge, no_forward);
+        let mut closures: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        assert_eq!(closures.len(), 2);
+        let second = closures.pop().unwrap();
+        (closures.pop().unwrap())(&mut state);
+        assert_eq!(state.phase, Phase::Idle);
+        request_capture(&mut state);
+        second(&mut state);
+        assert_eq!(state.phase, Phase::Requested);
     }
 
     #[test]
