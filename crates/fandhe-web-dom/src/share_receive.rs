@@ -6,7 +6,7 @@
 //! （契約の SSOT）をそのまま使う。Web は `ShareReceive` trait を通らない
 //! （`url_scheme.rs` と同じ理由）。
 //!
-//! - 受け方: manifest の `share_target`（`method: GET`、Service Worker なし）。インストール済み PWA が
+//! - 受け方: manifest の `share_target`（宣言は fandhe-cap-share-receive の `web.manifest`、`cargo fandhe gen --os web` が足す。`method: GET`、Service Worker なし）。インストール済み PWA が
 //!   共有先に選ばれると、ブラウザが共有内容をクエリ `share_text` / `share_url` に載せて自ページを開く。
 //!   読み込み時に 1 回だけクエリを読み、読んだら `history.replaceState` で共有パラメーターを消す
 //! - 範囲: テキスト 1 件（URL もテキストとして扱う）。件名・画像・ファイル・複数件は扱わない
@@ -220,15 +220,21 @@ mod tests {
 
     #[test]
     fn manifest_declares_get_share_target() {
-        let m = include_str!("../web/manifest.webmanifest");
-        assert!(m.contains("\"share_target\""));
-        assert!(m.contains("\"method\": \"GET\""));
-        assert!(m.contains(&format!("\"text\": \"{SHARE_TEXT_PARAM}\"")));
-        assert!(m.contains(&format!("\"url\": \"{SHARE_URL_PARAM}\"")));
-        let action = m
+        // share_target は機能の宣言（fandhe-cap-share-receive の web.manifest）にある（#1238）。
+        let m = include_str!("../../fandhe-cap-share-receive/Cargo.toml");
+        let section = m
+            .split("[package.metadata.fandhe.web.manifest.share_target]")
+            .nth(1)
+            .expect("share_target の宣言")
+            .split("\n[")
+            .next()
+            .unwrap();
+        assert!(section.contains("method = \"GET\""));
+        assert!(section.contains(&format!("text = \"{SHARE_TEXT_PARAM}\"")));
+        assert!(section.contains(&format!("url = \"{SHARE_URL_PARAM}\"")));
+        let action = section
             .lines()
-            .skip_while(|l| !l.contains("\"share_target\""))
-            .find_map(|l| l.trim().strip_prefix("\"action\": \""))
+            .find_map(|l| l.trim().strip_prefix("action = \""))
             .expect("share_target.action");
         assert!(!action.contains('?'));
     }

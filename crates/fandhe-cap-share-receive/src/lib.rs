@@ -14,7 +14,7 @@
 //! egui には依存しない。呼び出し元は `fandhe-gallery`（effect の登録と macOS の provider 登録）と
 //! `fandhe-web-dom`（Web は契約 [`ShareInbox`] / [`validate_text`] だけを使う。Web の実装本体は
 //! 共通層は `fandhe-platform-web`（#1185）へ切り出し済みだが、Web の実装は
-//! `fandhe-web-dom` に残っており、移動は manifest の `share_target` の扱い（#1238）と合わせる）。
+//! `fandhe-web-dom` に残っており、`share_target` の宣言は本 crate の `web.manifest` にある。実装本体の移動は #1194）。
 //! `RequestSlot` 型（要求 1 件に結果 1 件）ではなく、OS が任意の
 //! タイミングで書き込む継続配信型として扱う（`url_scheme` と同型）。
 //!
@@ -45,7 +45,7 @@
 //! - macOS（Issue #606）: Info.plist の `NSServices` によるサービスメニューと
 //!   `NSApp.servicesProvider`。`.app` 化して LaunchServices に登録した場合だけ届く
 //! - Android（#607）: `ACTION_SEND` + `EXTRA_TEXT`
-//! - Web（#608）: manifest の `share_target`（GET）。trait を通らず [`validate_text`] /
+//! - Web（#608）: manifest の `share_target`（GET）。宣言は本 crate の `web.manifest`（#1238）。trait を通らず [`validate_text`] /
 //!   [`ShareInbox`] を直接使う
 //!
 //! # pull 型のポーリング

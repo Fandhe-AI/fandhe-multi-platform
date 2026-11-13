@@ -33,6 +33,13 @@ id = "share-receive"
 [package.metadata.fandhe.macos]
 info-plist = { NSServices = [{ NSMenuItem = { default = "Fandhe で受け取る" }, NSMessage = "receiveSharedText", NSPortName = "$(EXECUTABLE_NAME)", NSSendTypes = ["public.utf8-plain-text"] }] }
 
+# Web: 共有先になる manifest の `share_target`。選んだアプリの manifest にだけ入る（#1238）。
+# 受け取り側の実装（クエリ名 `share_text` / `share_url` の読み取り）は fandhe-web-dom にあり、名前を揃える。
+[package.metadata.fandhe.web.manifest.share_target]
+action = "./"
+method = "GET"
+params = { text = "share_text", url = "share_url" }
+
 [package.metadata.fandhe.android]
 java = ["android/java"]
 main-activity-intent-filters = [
