@@ -20,13 +20,41 @@
 //! 受け取った内容（ファイル名・中身）はログ出力・保存しない（他アプリの機密文書になり得る、security.md A09）。
 
 use std::os::fd::{FromRawFd, OwnedFd};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::Instant;
 
 use crate::drop_session::DroppedItem;
 use fandhe_device::file_picker::sanitize_picked_name;
 
 /// 現在表示中の画面が `drag_drop` かどうか。`nativeDragDropIsActive` が読む。
 static SCREEN_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+/// 単調時計の基準点（`Instant` は絶対値を持たないため）。
+static START: OnceLock<Instant> = OnceLock::new();
+
+/// [`mark_active`] の有効期間（ミリ秒）。iOS の `SCREEN_ACTIVE_WINDOW_MS` と揃える。
+const ACTIVE_WINDOW_MS: u64 = 500;
+
+/// 直近の [`mark_active`] 時刻（基準点からの経過ミリ秒 + 1。0 は未呼び出し）。
+static LAST_ACTIVE_MS: AtomicU64 = AtomicU64::new(0);
+
+fn now_ms() -> u64 {
+    START.get_or_init(Instant::now).elapsed().as_millis() as u64
+}
+
+/// 独立入口（`platform_drag_drop`）の毎フレーム呼び出しで有効期間を延ばす。呼び出しが止まれば
+/// [`ACTIVE_WINDOW_MS`] 後に受け付けを止め、別画面でのドロップを積まない（契約表 1）。
+pub(crate) fn mark_active() {
+    LAST_ACTIVE_MS.store(now_ms() + 1, Ordering::Relaxed);
+    fandhe_runtime::request_repaint_after(std::time::Duration::from_millis(ACTIVE_WINDOW_MS / 2));
+}
+
+fn is_active() -> bool {
+    let last = LAST_ACTIVE_MS.load(Ordering::Relaxed);
+    SCREEN_ACTIVE.load(Ordering::Relaxed)
+        || (last != 0 && now_ms().saturating_sub(last - 1) < ACTIVE_WINDOW_MS)
+}
 
 /// 表示中の画面が `drag_drop` かどうかを差し替える。`fandhe-egui-proxy` の `android::run` が起動画面を決定した直後に呼ぶ。
 pub fn set_screen_active(active: bool) {
@@ -86,7 +114,7 @@ extern "system" fn Java_com_fandhe_platform_DragDropHelper_nativeDragDropIsActiv
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) -> u8 {
-    u8::from(SCREEN_ACTIVE.load(Ordering::Relaxed))
+    u8::from(is_active())
 }
 
 /// `DragDropHelper.nativeOnDragDropHover`。`entered`（`true` = 領域内に入った）をそのまま集約器へ渡す。

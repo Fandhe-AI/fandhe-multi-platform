@@ -38,24 +38,38 @@ pub use fandhe_device::drag_drop::{
 /// 受け取り側は [`drop_session::DropEvent`] を順に適用し、ファイルの読み取りは OS 実装が済ませた
 /// [`drop_session::DroppedItem`] を使う。デスクトップ（macOS・Windows）は OS 実装が無く常に空。
 /// ウィンドウへのドロップは `fandhe_runtime::HostView::file_drag` と [`read_dropped`] で受け取る。
-/// iOS は取り付けと有効化、Android は画面の有効化を呼び出しごとに行うため、毎フレーム呼ぶこと
-/// （iOS の有効期間は 500ms で、呼び出しが止まると受け付けを止める）。
+/// iOS は取り付け、iOS・Android は受け付けの有効化を呼び出しごとに行うため、毎フレーム呼ぶこと
+/// （有効期間は 500ms で、呼び出しが止まると受け付けを止める）。
+/// iOS で取り付けに失敗したら [`DropSetupError`] を返す（呼び出し側が利用者へ見せる。取り付けは間隔を置いて再試行される）。
 /// 画面ドライバ（[`drag_drop_effect`]）と同時に使わない（出来事を取り合う）。
-pub fn platform_drag_drop() -> Vec<drop_session::DropEvent> {
+pub fn platform_drag_drop() -> Result<Vec<drop_session::DropEvent>, DropSetupError> {
     #[cfg(target_os = "ios")]
     {
         ios::mark_active();
-        // 取り付けの失敗は間隔を置いて次回の呼び出しで再試行される。
-        let _ = ios::ensure_installed();
-        drop_session::take_events()
+        if let Some(ios::InstallResult::Failed) = ios::ensure_installed() {
+            return Err(DropSetupError);
+        }
+        Ok(drop_session::take_events())
     }
     #[cfg(target_os = "android")]
     {
-        android::set_screen_active(true);
-        drop_session::take_events()
+        android::mark_active();
+        Ok(drop_session::take_events())
     }
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
-        Vec::new()
+        Ok(Vec::new())
     }
 }
+
+/// [`platform_drag_drop`] の受け取り準備（iOS の `UIDropInteraction` 取り付け）に失敗した。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DropSetupError;
+
+impl std::fmt::Display for DropSetupError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ドロップの受け取りを準備できませんでした")
+    }
+}
+
+impl std::error::Error for DropSetupError {}
