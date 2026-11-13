@@ -512,8 +512,6 @@ impl AppleCtx<'_> {
     }
 }
 
-/// iOS 本体の土台。Xcode の変数ではなく確定値を書く（Xcode を通さない組み立てでもそのまま使える）。
-/// `CFBundleSupportedPlatforms` は組み立て時の値（シミュレータか実機か）のため出さない（#1201）。
 /// `UIApplicationSceneManifest`。機能の宣言ではなくアプリ全体の構成で、選んだ機能に関係なく常に出す。
 /// 無いと iOS 実機で起動直後に終了する（#1292、TN3187）。application ロールは winit の window を付け、
 /// 外部ディスプレイ ロールは window を付けない（`fandhe_ios_scene.m`）。複数 window scene は許可しない。
@@ -533,6 +531,8 @@ fn ios_scene_manifest() -> Value {
     })
 }
 
+/// iOS 本体の土台。Xcode の変数ではなく確定値を書く（Xcode を通さない組み立てでもそのまま使える）。
+/// `CFBundleSupportedPlatforms` は組み立て時の値（シミュレータか実機か）のため出さない（#1201）。
 fn ios_base(app: &AppInfo, cfg: &OsConfig) -> Result<Map<String, Value>, Vec<String>> {
     let mut errs = Vec::new();
     let bundle = cfg.bundle_id.clone().unwrap_or_else(|| {
