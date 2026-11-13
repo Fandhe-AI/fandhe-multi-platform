@@ -84,6 +84,14 @@ pub fn request_repaint() {
     }
 }
 
+/// 登録済みの起床口で [`RepaintWaker::wake_after`] を呼ぶ。未登録（起動前）は何もしない。
+pub fn request_repaint_after(delay: Duration) {
+    let waker = WAKER.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    if let Some(waker) = waker {
+        waker.wake_after(delay);
+    }
+}
+
 /// 外部 I/O の完了結果を状態へ適用するクロージャ（`StateStore::apply` へ渡す）。
 ///
 /// 別スレッドから [`CompletionSender`] 経由でチャンネルへ送られ、UI スレッドの

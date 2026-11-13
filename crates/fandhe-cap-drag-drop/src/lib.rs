@@ -28,16 +28,30 @@ mod ios;
 #[cfg(target_os = "android")]
 pub use android::{reset_sessions, set_screen_active};
 pub use driver::*;
+// 契約（読み取りの検証・上限）の正本は fandhe-device に残し、利用者が直接依存しなくて済むよう再公開する。
+pub use fandhe_device::drag_drop::{
+    DropError, MAX_DROP_FILES, MAX_FILE_BYTES, PickedFile, read_dropped, read_dropped_from,
+};
 
 /// 画面の状態型に依存しない入口（iOS・Android）。OS が積んだドロップの出来事を取り出す。
 ///
 /// 受け取り側は [`drop_session::DropEvent`] を順に適用し、ファイルの読み取りは OS 実装が済ませた
 /// [`drop_session::DroppedItem`] を使う。デスクトップ（macOS・Windows）は OS 実装が無く常に空。
-/// ウィンドウへのドロップは `fandhe_runtime::HostView::file_drag` と `fandhe_device::drag_drop::read_dropped`
-/// で受け取る（どちらも公開済み）。画面ドライバ（[`drag_drop_effect`]）と同時に使わない（出来事を取り合う）。
+/// ウィンドウへのドロップは `fandhe_runtime::HostView::file_drag` と [`read_dropped`] で受け取る。
+/// iOS は取り付けと有効化、Android は画面の有効化を呼び出しごとに行うため、毎フレーム呼ぶこと
+/// （iOS の有効期間は 500ms で、呼び出しが止まると受け付けを止める）。
+/// 画面ドライバ（[`drag_drop_effect`]）と同時に使わない（出来事を取り合う）。
 pub fn platform_drag_drop() -> Vec<drop_session::DropEvent> {
-    #[cfg(any(target_os = "ios", target_os = "android"))]
+    #[cfg(target_os = "ios")]
     {
+        ios::mark_active();
+        // 取り付けの失敗は間隔を置いて次回の呼び出しで再試行される。
+        let _ = ios::ensure_installed();
+        drop_session::take_events()
+    }
+    #[cfg(target_os = "android")]
+    {
+        android::set_screen_active(true);
         drop_session::take_events()
     }
     #[cfg(not(any(target_os = "ios", target_os = "android")))]

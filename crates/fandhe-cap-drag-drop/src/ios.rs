@@ -46,8 +46,6 @@ use std::time::Instant;
 use crate::drop_session::DroppedItem;
 use fandhe_device::drag_drop::{DropError, read_dropped};
 
-use fandhe_runtime::CompletionSender;
-
 /// プロセス起動時刻（単調時計の基準点、`Instant` は絶対値を持たないため）。
 /// [`now_ms`] からのみ参照する。
 static START: OnceLock<Instant> = OnceLock::new();
@@ -99,7 +97,7 @@ pub(crate) enum InstallResult {
 /// 取り付けを試みた場合だけ結果を返す（済み・再試行間隔内は `None`）。失敗を画面へ見せる（契約表 6、黙って
 /// ダミー化しない）判断と文言は画面の型を知る `driver` が持つ。
 #[allow(unsafe_code)]
-pub(super) fn ensure_installed<S>(sender: &CompletionSender<S>) -> Option<InstallResult> {
+pub(crate) fn ensure_installed() -> Option<InstallResult> {
     if INSTALLED.load(Ordering::SeqCst) {
         return None;
     }
@@ -118,7 +116,7 @@ pub(super) fn ensure_installed<S>(sender: &CompletionSender<S>) -> Option<Instal
             // 再試行間隔ぶん明示的に repaint を予約し、送信を省略する分岐でも
             // 次回のポーリングを保証する（契約表 4、`location.rs::drive` と
             // 同じ考え方）。
-            sender.request_repaint_after(std::time::Duration::from_millis(
+            fandhe_runtime::request_repaint_after(std::time::Duration::from_millis(
                 INSTALL_RETRY_INTERVAL_MS - elapsed,
             ));
             return None;
@@ -171,9 +169,9 @@ static LAST_ACTIVE_MS: AtomicU64 = AtomicU64::new(0);
 ///
 /// [`SCREEN_ACTIVE_POLL_INTERVAL_MS`] 後の repaint も併せて予約し、利用者操作の
 /// 有無に関わらずこの画面が表示され続ける限り有効期間を切らさない（doc 上記参照）。
-pub(super) fn mark_active<S>(sender: &CompletionSender<S>) {
+pub(crate) fn mark_active() {
     LAST_ACTIVE_MS.store(now_ms(), Ordering::SeqCst);
-    sender.request_repaint_after(std::time::Duration::from_millis(
+    fandhe_runtime::request_repaint_after(std::time::Duration::from_millis(
         SCREEN_ACTIVE_POLL_INTERVAL_MS,
     ));
 }

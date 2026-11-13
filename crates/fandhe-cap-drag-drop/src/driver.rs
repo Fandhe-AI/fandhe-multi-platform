@@ -146,8 +146,8 @@ pub fn drag_drop_effect(state: &DragDropState, sender: &CompletionSender<DragDro
     {
         // 毎フレーム、install 成否に関わらず先に呼ぶ（画面が表示中である証跡を
         // 更新する。`ios_drag_drop::mark_active` doc・codex 指摘 #1019 参照）。
-        crate::ios::mark_active(sender);
-        match crate::ios::ensure_installed(sender) {
+        crate::ios::mark_active();
+        match crate::ios::ensure_installed() {
             Some(crate::ios::InstallResult::Installed) => {
                 let _ = sender.send(Box::new(|s: &mut DragDropState| {
                     if s.error == INSTALL_FAILED_MESSAGE {

@@ -18,6 +18,8 @@ fandhe-runtime = { path = "../fandhe-runtime" }
 fandhe-device = { path = "../fandhe-device" }
 
 [target.'cfg(target_os = "android")'.dependencies]
+# Java 側の共有基盤（FeatureLifecycleProvider）。cargo fandhe gen が Java ソースと Gradle 宣言を集める。
+fandhe-platform-android = { path = "../fandhe-platform-android" }
 jni = { workspace = true }
 
 [build-dependencies]
