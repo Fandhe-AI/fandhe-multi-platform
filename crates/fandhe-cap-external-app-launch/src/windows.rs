@@ -5,7 +5,7 @@
 //! 電話は固定の `tel:` URI を `ShellExecuteExW`（`SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI`）で開く。
 //! 失敗は `GetLastError` で「開けるアプリなし」「利用者のキャンセル」を分ける。地図は Windows の地図
 //! アプリが非推奨のため OS を呼ばず `TargetUnavailable` を返す（別の URI で代わりに開かない）。
-//! 渡す URI は `fandhe-device` の定数だけで、外から URI を受ける経路は無い。`windows_open_in_shell.rs` の
+//! 渡す URI は `fandhe-device` の定数だけで、外から URI を受ける経路は無い。`fandhe-cap-open-in-shell`（`src/windows.rs`）の
 //! 呼び出し経路を写したもので、共通化はしない（他機能のファイルを触らないため）。
 //!
 //! 写像は純関数 [`uri_for`] / [`exec_failure_outcome`] に置き、ホストでもテストできるよう
@@ -65,7 +65,7 @@ mod win {
     use windows::core::{HSTRING, PCWSTR, w};
 
     /// COM（STA）初期化ガード。成功（`S_OK`/`S_FALSE`）時だけ Drop で解放する。
-    /// `windows_open_in_shell.rs` の `ComGuard` と同型。
+    /// `fandhe-cap-open-in-shell`（`src/windows.rs`）の `ComGuard` と同型。
     struct ComGuard(bool);
     impl ComGuard {
         #[allow(unsafe_code)]

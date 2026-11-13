@@ -1,0 +1,63 @@
+[package]
+name = "fandhe-cap-compose-mail-sms"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の compose-mail-sms の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+# Simple MAPI（`MAPISendMailW`、`Win32_System_Mapi`）と DLL の動的読み込み（`Win32_System_LibraryLoader`）・COM の初期化（windows.rs）。
+# `ShellExecuteW` の入口（`open_url`・`SE_ERR_NOASSOC`）は Windows 共通層にある。
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_System_Mapi"] }
+fandhe-platform-windows = { path = "../fandhe-platform-windows" }
+
+[build-dependencies]
+# iOS・macOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。権限・usage description・framework は手で足す（cargo fandhe check が検証する）。
+[package.metadata.fandhe]
+id = "compose-mail-sms"
+
+[package.metadata.fandhe.ios]
+frameworks = ["MessageUI"]
+
+[package.metadata.fandhe.macos]
+frameworks = ["AppKit"]
+
+[package.metadata.fandhe.android]
+java = ["android/java"]
+res = ["android/res"]
+
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+# Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.ComposeLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.compose-mail-sms" }
+
+# 機能専用の FileProvider。共有の `${applicationId}.compose` から分け、公開するパスを `cache/compose/` だけに狭める。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.ComposeMailFileProvider"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.compose-mail-sms.files", grantUriPermissions = "true" }
+meta-data = [{ name = "android.support.FILE_PROVIDER_PATHS", resource = "@xml/compose_mail_file_paths" }]
+
+[lints]
+workspace = true

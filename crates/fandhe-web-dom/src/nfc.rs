@@ -7,9 +7,9 @@
 //!
 //! # ブロッキング trait を通らない理由
 //!
-//! `fandhe_device::nfc::NfcReader` は `Send + Sync` のブロッキング API で、`JsValue` を持てない。
+//! `fandhe_cap_nfc::NfcReader` は `Send + Sync` のブロッキング API で、`JsValue` を持てない。
 //! Web は effect で非同期に処理し、契約（写像表・定数・`decode_text`・表示型）だけを
-//! `fandhe_device::nfc` と共有する。写像表の Web 列は同モジュールの doc が SSOT。
+//! `fandhe_cap_nfc` と共有する。写像表の Web 列は同モジュールの doc が SSOT。
 //!
 //! # 期限・ライフサイクル（契約表 1・2・3・9）
 //!
@@ -35,10 +35,10 @@
 //! タグの中身・URL・UID（`serialNumber`）・record の `id`・例外の `message` は読まない・出さない。
 //! テキストは trim せず、URL は開かない。
 
-use fandhe_core::screens::nfc_read::{CoreFailure, ShownRecord, ShownTag};
-use fandhe_device::nfc::{
+use fandhe_cap_nfc::{
     decode_text, NdefRecordView, NfcReadFailure, NfcReadOutcome, MAX_NDEF_BYTES, READ_DEADLINE,
 };
+use fandhe_core::screens::nfc_read::{CoreFailure, ShownRecord, ShownTag};
 
 /// Web NFC の `NDEFRecord` から必要な値だけを写したもの。`id` と UID は読まない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -161,7 +161,7 @@ pub(crate) fn is_late(started_ms: f64, now_ms: f64) -> bool {
     now_ms - started_ms >= READ_DEADLINE.as_secs_f64() * 1000.0
 }
 
-/// 契約の結果を画面の結果へ写す。`fandhe-egui-proxy/src/device/nfc.rs` の `to_core_record` /
+/// 契約の結果を画面の結果へ写す。`fandhe-cap-nfc`（`src/driver.rs`）の `to_core_record` /
 /// `to_core_failure` と同期する（同クレートに依存しないため同じ写像をここに置く）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 fn to_core(r: Result<NfcReadOutcome, NfcReadFailure>) -> Result<ShownTag, CoreFailure> {
@@ -200,8 +200,8 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_nfc::{NfcReadFailure, NfcReadOutcome, READ_DEADLINE};
     use fandhe_core::screens::nfc_read::{finish_read, mark_running, take_request, NfcReadState};
-    use fandhe_device::nfc::{NfcReadFailure, NfcReadOutcome, READ_DEADLINE};
     use js_sys::{Array, DataView, Function, Reflect, Uint8Array};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;

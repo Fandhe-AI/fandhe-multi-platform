@@ -17,7 +17,7 @@
         "クリップボード読み書き"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-egui-proxy/ios/fandhe_ios_clipboard.m` + `crates/fandhe-egui-proxy/src/device/ios.rs`（`IosClipboard`）、Issue 旧#859"
+      "impl": "`crates/fandhe-cap-clipboard/ios/fandhe_ios_clipboard.m` + `crates/fandhe-cap-clipboard/src/ios.rs`（`IosClipboard`）、Issue 旧#859"
     },
     "android": {
       "status": "done",
@@ -31,7 +31,7 @@
         "クリップボード"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-egui-proxy/src/device/android.rs`（`AndroidClipboard`）+ `platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java`、Issue 旧#859"
+      "impl": "`crates/fandhe-cap-clipboard/src/android.rs`（`AndroidClipboard`）+ `crates/fandhe-cap-clipboard/android/java/com/fandhe/platform/ClipboardHelper.java`、Issue 旧#859"
     },
     "macos": {
       "status": "done",
@@ -44,7 +44,7 @@
         "クリップボード"
       ],
       "implStatus": "実装済み",
-      "impl": "`crates/fandhe-device/src/clipboard.rs`（`ArboardClipboard`）、Issue 旧#859"
+      "impl": "`crates/fandhe-cap-clipboard/src/contract.rs`（`ArboardClipboard`）、Issue 旧#859"
     },
     "windows": {
       "status": "done",
@@ -57,7 +57,7 @@
         "クリップボード"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`crates/fandhe-device/src/clipboard.rs`（`ArboardClipboard`）、Issue 旧#859"
+      "impl": "`crates/fandhe-cap-clipboard/src/contract.rs`（`ArboardClipboard`）、Issue 旧#859"
     },
     "web": {
       "status": "done",

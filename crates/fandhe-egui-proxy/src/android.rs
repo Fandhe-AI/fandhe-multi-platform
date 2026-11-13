@@ -173,14 +173,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // 旧要求の遅延完了を id 不一致で無視させる（`device::photo_save::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::photo_save::reset_pending_tracking();
-    // Issue #974: `radio_control` の保留中の切り替え要求も同様に破棄する（Java 側 `onDestroy` が
-    // INTERRUPTED で確定し、ここで待機中のワーカーを失敗で戻す。`android_radio_control` の doc 参照）。
-    // Java 側に no-op スタブは置かない（`requestRadioControlSet` を経ないと native は呼ばれない）。
-    #[cfg(feature = "device")]
-    crate::device::android_radio_control::reset_pending_tracking();
-    // Issue #1384: `compose_mail_sms::bridge::SLOT` も同様に破棄する（`device::compose_mail_sms::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::compose_mail_sms::reset_pending_tracking();
     // Issue #534: `web_auth_session::bridge` の `ACTIVE`（デモサーバー）と `SLOT` も同様に破棄する。
     // 残ると次の要求が開けなくなる（`device::android_web_auth_session::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -216,20 +208,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device::translation::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::translation::reset_pending_tracking();
-    // Issue #981: 機器からの取り込みの処理済み世代も破棄する（理由は geocoding_search と同じ。
-    // `device::scanner_devices::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::scanner_devices::reset_pending_tracking();
-    // Issue #1044: NFC タグ読み取りの処理済み世代も破棄する（理由は scanner_devices と同じ。
-    // `device::nfc::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::nfc::reset_pending_tracking();
-    // Issue #983: Android の橋渡し側 slot も破棄する（`android_scanner_devices` の doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::android_scanner_devices::reset_pending_tracking();
-    // Issue #1045: Android の NFC 橋渡し側 slot も破棄する（`android_nfc` の doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::android_nfc::reset_pending_tracking();
     // Issue #701: アプリ内ブラウザの保留中の要求も破棄する（理由は translation と同じ。
     // `device::in_app_browser::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -238,10 +216,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device::spotlight_index::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::spotlight_index::reset_pending_tracking();
-    // Issue #1014: 動画変換の処理済み世代も破棄する（理由は media_transcode と同じ。
-    // `device::video_transcode::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::video_transcode::reset_pending_tracking();
     // Issue #1123: Android の BLE 周辺機器役の通知先も破棄する（`android_ble_peripheral` の doc 参照）。
     #[cfg(feature = "device")]
     crate::device::android_ble_peripheral::reset_pending_tracking();

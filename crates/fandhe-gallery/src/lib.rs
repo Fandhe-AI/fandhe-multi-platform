@@ -236,6 +236,24 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // ファイルプレビューの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_file_preview::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_file_preview::reset_pending_tracking();
+    // 無線の切り替えの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_radio_control::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_radio_control::reset_pending_tracking();
+    // 動画変換の処理済み世代も破棄する（画面状態は再生成で generation 0 に戻るため、残すと次の変換が飲み込まれる）（`fandhe_cap_video_transcode::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_video_transcode::reset_pending_tracking();
+    // NFC タグ読み取りの保留中の要求と処理済み世代も破棄する（画面状態は再生成で generation 0 に戻るため、残すと次の読み取りが飲み込まれる）（`fandhe_cap_nfc::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_nfc::reset_pending_tracking();
+    // 機器からの取り込みの保留中の要求と処理済み世代も破棄する（画面状態は再生成で generation 0 に戻るため、残すと次の取り込みが飲み込まれる）（`fandhe_cap_scanner_devices::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_scanner_devices::reset_pending_tracking();
+    // メール・SMS 作成の保留中の要求も破棄する（`bridge::SLOT` はプロセス static のため再生成をまたいで残る。`fandhe_cap_compose_mail_sms::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_compose_mail_sms::reset_pending_tracking();
+    // クリップボードの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_clipboard::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_clipboard::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 

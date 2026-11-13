@@ -2,7 +2,7 @@
 //!
 //! `fandhe_core::screens::video_transcode`（端末依存ゼロ）の画面を [`super::mount::mount_with_effect`] の
 //! effect として駆動する。`take_request` で要求を観測し、実行時に作った 1280×720・15 fps・30 フレーム
-//! （`fandhe_device::video_transcode::fill_source_frame_bgra`）を WebCodecs の `VideoEncoder` で 640×360 へ
+//! （`fandhe_cap_video_transcode::fill_source_frame_bgra`）を WebCodecs の `VideoEncoder` で 640×360 へ
 //! 符号化し、`VideoDecoder` で復号し直して `check_decoded` で検証する。縮小は符号化器に任せる
 //! （仕様の MUST scale）。`VideoTranscode` trait（`Send + Sync`）は `JsValue` を持てないため通らない。
 //! WebCodecs は web-sys の不安定 API なので `js_sys::Reflect` で呼ぶ（音声版 [`super::media_transcode`] と同じ）。
@@ -40,14 +40,14 @@
 //! egui-proxy の wasm canvas 経路。例外の `message` と出力のバイト列は画面にも console にも出さない
 //! （security.md A09）。
 
-use fandhe_core::screens::video_transcode::{
-    VideoContainer, VideoTranscodeFailure, VideoTranscodeOutput, GENERIC_FAILED_MESSAGE,
-};
-use fandhe_device::video_transcode::{
+use fandhe_cap_video_transcode::VideoTranscodeError;
+use fandhe_cap_video_transcode::{
     check_decoded, source_duration, DecodedFrame, SOURCE_HEIGHT, SOURCE_WIDTH, TARGET_HEIGHT,
     TARGET_WIDTH, TRANSCODE_DEADLINE,
 };
-use fandhe_device::DeviceError;
+use fandhe_core::screens::video_transcode::{
+    VideoContainer, VideoTranscodeFailure, VideoTranscodeOutput, GENERIC_FAILED_MESSAGE,
+};
 
 /// 試す codec の順（`isConfigSupported` に渡す文字列, 画面に出すラベル）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -59,14 +59,14 @@ const CODEC_CANDIDATES: [(&str, &str); 3] = [
 
 /// `check_decoded` のエラーを失敗種別へ写す（`fandhe-egui-proxy` の `to_failure` と同じ写像）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-fn to_failure(e: DeviceError) -> VideoTranscodeFailure {
-    use fandhe_device::video_transcode::{EMPTY, MISMATCH, NOT_SMALLER, UNREADABLE};
+fn to_failure(e: VideoTranscodeError) -> VideoTranscodeFailure {
+    use fandhe_cap_video_transcode::{EMPTY, MISMATCH, NOT_SMALLER, UNREADABLE};
     match e {
-        DeviceError::Internal(EMPTY) => VideoTranscodeFailure::Empty,
-        DeviceError::Internal(UNREADABLE) => VideoTranscodeFailure::Unreadable,
-        DeviceError::Internal(NOT_SMALLER) => VideoTranscodeFailure::NotSmaller,
-        DeviceError::Internal(MISMATCH) => VideoTranscodeFailure::Mismatch,
-        DeviceError::Unsupported(_) => VideoTranscodeFailure::Unsupported,
+        VideoTranscodeError::Internal(EMPTY) => VideoTranscodeFailure::Empty,
+        VideoTranscodeError::Internal(UNREADABLE) => VideoTranscodeFailure::Unreadable,
+        VideoTranscodeError::Internal(NOT_SMALLER) => VideoTranscodeFailure::NotSmaller,
+        VideoTranscodeError::Internal(MISMATCH) => VideoTranscodeFailure::Mismatch,
+        VideoTranscodeError::Unsupported => VideoTranscodeFailure::Unsupported,
         _ => VideoTranscodeFailure::Failed(GENERIC_FAILED_MESSAGE.to_string()),
     }
 }
@@ -146,13 +146,13 @@ mod web {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    use fandhe_cap_video_transcode::{
+        fill_source_frame_bgra, DecodedFrame, SOURCE_FPS, SOURCE_FRAMES, SOURCE_HEIGHT,
+        SOURCE_WIDTH, TARGET_HEIGHT, TARGET_WIDTH, TRANSCODE_DEADLINE,
+    };
     use fandhe_core::screens::video_transcode::{
         finish_transcode, interrupt_transcode, mark_running, take_request, VideoTranscodeFailure,
         VideoTranscodeOutput, VideoTranscodeState, GENERIC_FAILED_MESSAGE,
-    };
-    use fandhe_device::video_transcode::{
-        fill_source_frame_bgra, DecodedFrame, SOURCE_FPS, SOURCE_FRAMES, SOURCE_HEIGHT,
-        SOURCE_WIDTH, TARGET_HEIGHT, TARGET_WIDTH, TRANSCODE_DEADLINE,
     };
     use js_sys::{Array, Function, Object, Promise, Reflect, Uint8Array};
     use wasm_bindgen::prelude::*;

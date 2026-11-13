@@ -28,7 +28,7 @@
       "note": "実装済み（#974）。読み取りは `getWifiState` / `getState` を写し、Wi-Fi の切り替えと Bluetooth のオフは設定画面を開いて `Opened`、Bluetooth のオンは `ACTION_REQUEST_ENABLE` で `RESULT_OK` が `Applied`、`RESULT_CANCELED` が `NotChanged`（失敗にしない）。`setWifiEnabled` は「Q 以上を target するアプリでは常に失敗し false を返す」、`BluetoothAdapter.enable()` / `disable()` は「TIRAMISU 以上を target すると常に失敗」（公式）のため使わない。`Disabled` は返さない（相当する OS 値がない）。`Opened` / `NotChanged` を「切り替えた」と言わず、直後の読み直しの値だけで状態を出す。Activity を作り直したら保留中の要求を破棄する。守らない範囲: 設定画面での利用者の操作、読み直し時点で切り替わり途中の値、ダイアログや設定画面の待ち時間。既知の天井（実機未確認）: 端末によって `getState` に許可が要るか、`ACTION_REQUEST_ENABLE` が既にオンの端末で返す値",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#965）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_radio_control.rs + platforms/android/app/src/main/java/com/fandhe/platform/RadioControlHelper.java + crates/fandhe-egui-proxy/src/device/radio_control.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-device/src/radio_control.rs、Issue #974"
+      "impl": "crates/fandhe-cap-radio-control/src/android.rs + crates/fandhe-cap-radio-control/android/java/com/fandhe/platform/RadioControlHelper.java + crates/fandhe-cap-radio-control/src/driver.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-cap-radio-control/src/contract.rs、Issue #974"
     },
     "macos": {
       "status": "done",
@@ -43,7 +43,7 @@
       "note": "実装済み（#972）。Wi-Fi は `powerOn` で読み `setPower` で切り替え、Bluetooth は `powerState` の読み取りのみで切り替えは `Unsupported`（`IOBluetoothPreferenceSetControllerPowerState` は非公開のため使わない）。切り替えの後は読み直した値を並べ、「切り替えた」と言わない。守らない範囲: 読み直し時点で切り替わり途中の値、要求後に他アプリ・スイッチが状態を変えること、管理者パスワードのダイアログの待ち時間。既知の天井（実機未確認）: `powerState` の読み取りに Bluetooth の TCC が掛かるか、管理者パスワード取り消し時の `NSError` の値（いまは失敗）、`powerOn` は失敗時にも NO を返すため Off と区別できない",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#965）",
-      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_radio_control.m + crates/fandhe-egui-proxy/src/device/macos_radio_control.rs + crates/fandhe-egui-proxy/src/device/radio_control.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-device/src/radio_control.rs、Issue #972"
+      "impl": "crates/fandhe-cap-radio-control/macos/fandhe_macos_radio_control.m + crates/fandhe-cap-radio-control/src/macos.rs + crates/fandhe-cap-radio-control/src/driver.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-cap-radio-control/src/contract.rs、Issue #972"
     },
     "windows": {
       "status": "done",
@@ -61,7 +61,7 @@
       "note": "実装済み（#973）。`RequestAccessAsync` の後に `GetRadiosAsync` を Kind で絞った先頭 1 つを使い `SetStateAsync` を呼ぶ。Wi-Fi・Bluetooth の無線を同じ API で扱える。`SetStateAsync` の `Allowed` は「要求を受け付けた」で、最終状態は非同期に移りハードウェアスイッチ・ポリシーが覆しうるため、`State` を読み直して確かめる（`Allowed` は `Accepted` で、状態は読み直した値で出す）。`GetRadiosAsync` の空リストは失敗ではなく `NotPresent`。既知の天井（実機未確認）: 素の exe で `RequestAccessAsync` / `SetStateAsync` が `Allowed` を返すか。`DeniedBySystem` に倒れるなら読み取りだけの `done` に note を直す",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#965）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_radio_control.rs + crates/fandhe-egui-proxy/src/device/radio_control.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-device/src/radio_control.rs、Issue #973"
+      "impl": "crates/fandhe-cap-radio-control/src/windows.rs + crates/fandhe-cap-radio-control/src/driver.rs + crates/fandhe-core/src/screens/radio_control_show.rs + crates/fandhe-cap-radio-control/src/contract.rs、Issue #973"
     },
     "web": {
       "status": "no",

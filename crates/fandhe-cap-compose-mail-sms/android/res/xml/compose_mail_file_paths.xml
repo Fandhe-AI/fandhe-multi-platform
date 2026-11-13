@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- compose-mail-sms 専用の FileProvider が公開するパス。メール添付（Issue #32）は `getCacheDir()/compose/` だけに限る。 -->
+<paths>
+    <cache-path name="compose" path="compose/" />
+</paths>

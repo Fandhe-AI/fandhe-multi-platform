@@ -59,9 +59,6 @@ fn build() {
     // `ios/fandhe_ios_motion.m`（Issue #832、実センサ傾き）。
     compile_objc("ios/fandhe_ios_motion.m", &["CoreMotion", "UIKit"]);
 
-    // `ios/fandhe_ios_clipboard.m`（Issue #859、`UIPasteboard` 読み書き）。
-    compile_objc("ios/fandhe_ios_clipboard.m", &["UIKit"]);
-
     // `ios/fandhe_ios_tts.m`（Issue #866、`AVSpeechSynthesizer` による読み上げ）。
     compile_objc("ios/fandhe_ios_tts.m", &["AVFoundation"]);
 
@@ -96,10 +93,6 @@ fn build() {
     // `apple/fandhe_apple_map_view.m`（Issue #273 macOS + #274 iOS）も macOS 分岐と共用する。
     compile_apple_map_view();
 
-    // `apple/fandhe_apple_scanner_devices.m`（Issue #981 macOS + #982 iOS）も macOS 分岐と共用する
-    // （b-ios が本ファイルを触らずに済むよう、iOS 分岐からも (a) で呼んでおく）。
-    compile_apple_scanner_devices();
-
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）も macOS 分岐と
     // 共用する。
     compile_apple_mic_record();
@@ -124,12 +117,8 @@ fn build() {
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
-    // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も macOS 分岐と共用する。
-    compile_apple_video_transcode();
     // `apple/fandhe_apple_translation.swift`（Issue #535 macOS + #536 iOS）も共用する。
     compile_apple_translation();
-    // `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS + #976 iOS）も共用する。
-    compile_apple_image_generation();
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
 
@@ -144,8 +133,6 @@ fn build() {
     compile_ios_fullscreen_immersive();
     // `ios/fandhe_ios_screen_orientation.m`（Issue #656）。iOS 分岐のみ。
     compile_ios_screen_orientation();
-    // `ios/fandhe_ios_compose_mail_sms.m`（Issue #1385）。iOS 分岐のみ。
-    compile_ios_compose_mail_sms();
     // `ios/fandhe_ios_print.m`（Issue #327）。iOS 分岐のみ。
     compile_ios_print();
     // `ios/fandhe_ios_device_info.m`（Issue #1305）。iOS 分岐のみ。
@@ -247,30 +234,6 @@ fn compile_apple_map_view() {
     );
 }
 
-/// `apple/fandhe_apple_scanner_devices.m` を `cc` でコンパイルし ImageCaptureCore / ImageIO /
-/// UniformTypeIdentifiers をリンクする（Issue #981 macOS・#982 iOS。両分岐から呼ぶ）。
-fn compile_apple_scanner_devices() {
-    compile_objc(
-        "apple/fandhe_apple_scanner_devices.m",
-        if target_is_ios() {
-            &[
-                "Foundation",
-                "ImageCaptureCore",
-                "ImageIO",
-                "UIKit",
-                "UniformTypeIdentifiers",
-            ]
-        } else {
-            &[
-                "Foundation",
-                "ImageCaptureCore",
-                "ImageIO",
-                "UniformTypeIdentifiers",
-            ]
-        },
-    );
-}
-
 /// `apple/fandhe_apple_secure_credential.m` を `cc` でコンパイルし Security を
 /// リンクする（Issue #922・#924）。iOS・macOS 双方の feature `device` 分岐から
 /// 呼ばれる共通処理（doc 参照）。
@@ -327,30 +290,6 @@ fn compile_apple_image_recognition() {
         "apple/fandhe_apple_image_recognition.m",
         &["Foundation", "Vision"],
     );
-}
-
-/// `apple/fandhe_apple_video_transcode.m` を `cc` でコンパイルし AVFoundation・CoreMedia・CoreVideo を
-/// リンクする（Issue #1014 macOS、iOS は #1016 が利用、動画の小さい解像度への変換）。
-/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_video_transcode`）と同じ OS 集合に保つ。
-fn compile_apple_video_transcode() {
-    compile_objc(
-        "apple/fandhe_apple_video_transcode.m",
-        &["AVFoundation", "CoreMedia", "CoreVideo", "Foundation"],
-    );
-}
-
-/// 端末内での画像生成の Swift 薄層 `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS、#976 iOS）。
-/// ImagePlayground を弱リンクする。macOS・iOS の両分岐から呼ぶ。
-fn compile_apple_image_generation() {
-    compile_swift(&SwiftLib {
-        srcs: &["apple/fandhe_apple_image_generation.swift"],
-        lib: "fandhe_apple_image_generation",
-        module: "FandheImageGenerationBridge",
-        framework: "ImagePlayground",
-        weak: true,
-        require_env: "FANDHE_REQUIRE_IMAGE_GENERATION",
-        tag: "image_generation",
-    });
 }
 
 /// 端末内翻訳の Swift 薄層 `apple/fandhe_apple_translation.swift`（Issue #535 macOS、iOS は #536）。
@@ -568,15 +507,6 @@ fn compile_macos_wifi_info() {
     );
 }
 
-/// `macos/fandhe_macos_radio_control.m` を `cc` でコンパイルし CoreWLAN・IOBluetooth をリンクする（Issue #972）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_radio_control.rs` が使う）。
-fn compile_macos_radio_control() {
-    compile_objc(
-        "macos/fandhe_macos_radio_control.m",
-        &["CoreWLAN", "Foundation", "IOBluetooth"],
-    );
-}
-
 /// `macos/fandhe_macos_music_library.m` を `cc` でコンパイルし iTunesLibrary をリンクする（Issue #482）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_music_library.rs` が使う）。
 fn compile_macos_music_library() {
@@ -602,24 +532,6 @@ fn compile_macos_bluetooth_classic() {
         "macos/fandhe_macos_bluetooth_classic.m",
         &["CoreBluetooth", "Foundation", "IOBluetooth"],
     );
-}
-
-/// `macos/fandhe_macos_compose_mail_sms.m` を `cc` でコンパイルする（Issue #1384）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_compose_mail_sms.rs` が使う）。
-fn compile_macos_compose_mail_sms() {
-    compile_objc("macos/fandhe_macos_compose_mail_sms.m", &["AppKit"]);
-}
-
-/// `macos/fandhe_macos_recent_documents.m` を `cc` でコンパイルする（Issue #988）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_recent_documents.rs` が使う）。
-fn compile_macos_recent_documents() {
-    compile_objc("macos/fandhe_macos_recent_documents.m", &["AppKit"]);
-}
-
-/// `macos/fandhe_macos_open_in_shell.m` を `cc` でコンパイルする（Issue #749）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_open_in_shell.rs` が使う）。
-fn compile_macos_open_in_shell() {
-    compile_objc("macos/fandhe_macos_open_in_shell.m", &["AppKit"]);
 }
 
 /// `macos/fandhe_macos_video_capture.m` を `cc` でコンパイルし AVFoundation・CoreMedia・QuartzCore をリンクする
@@ -692,12 +604,6 @@ fn compile_ios_screen_orientation() {
         "ios/fandhe_ios_screen_orientation.m",
         &["Foundation", "UIKit"],
     );
-}
-
-/// `ios/fandhe_ios_compose_mail_sms.m` を `cc` でコンパイルし MessageUI をリンクする（Issue #1385）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_compose_mail_sms.rs` が使う）。
-fn compile_ios_compose_mail_sms() {
-    compile_objc("ios/fandhe_ios_compose_mail_sms.m", &["MessageUI", "UIKit"]);
 }
 
 /// `ios/fandhe_ios_web_auth_session.m` を `cc` でコンパイルし AuthenticationServices をリンクする（Issue #532）。
@@ -846,7 +752,6 @@ fn build_macos() {
     compile_apple_secure_credential();
     compile_apple_photo_library();
     compile_apple_map_view();
-    compile_apple_scanner_devices();
 
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）は iOS 分岐と
     // 共用する。
@@ -873,12 +778,8 @@ fn build_macos() {
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
     compile_apple_translation();
-    // `apple/fandhe_apple_image_generation.swift`（Issue #975 macOS。iOS は `build_ios` からも呼ぶ）。
-    compile_apple_image_generation();
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
-    // `apple/fandhe_apple_video_transcode.m`（Issue #1014 macOS + #1016 iOS）も共用する。
-    compile_apple_video_transcode();
     // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。
     compile_apple_network_status();
     // `macos/fandhe_macos_background_task.m`（Issue #1043）は macOS 専用（doc 参照）。
@@ -895,12 +796,6 @@ fn build_macos() {
     compile_macos_window_management();
     // `macos/fandhe_macos_launch_at_login.m`（Issue #696）も macOS 専用。ServiceManagement をリンクする。
     compile_macos_launch_at_login();
-    // `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384）も macOS 専用。
-    compile_macos_compose_mail_sms();
-    // `macos/fandhe_macos_open_in_shell.m`（Issue #749）も macOS 専用。
-    compile_macos_open_in_shell();
-    // `macos/fandhe_macos_recent_documents.m`（Issue #988）も macOS 専用。
-    compile_macos_recent_documents();
     // `macos/fandhe_macos_video_capture.m`（Issue #1071）も macOS 専用。AVFoundation 等をリンクする。
     compile_macos_video_capture();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。
@@ -923,8 +818,6 @@ fn build_macos() {
     compile_macos_web_auth_session();
     // `macos/fandhe_macos_wifi_info.m`（Issue #514）も macOS 専用。CoreWLAN を使う。
     compile_macos_wifi_info();
-    // `macos/fandhe_macos_radio_control.m`（Issue #972）も macOS 専用。CoreWLAN・IOBluetooth を使う。
-    compile_macos_radio_control();
     // `macos/fandhe_macos_bluetooth_classic.m`（Issue #659）も macOS 専用。IOBluetooth を使う。
     compile_macos_bluetooth_classic();
     compile_macos_pen_stylus();

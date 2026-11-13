@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
 //! 置き場」節の制約どおり）。入力の検査と OS 呼び出しは `fandhe-egui-proxy` の effect ドライバ
-//! （`device/compose_mail_sms.rs`）が [`take_request`] で要求を観測して行い、[`finish_compose`] で
+//! （`fandhe-cap-compose-mail-sms` の `driver`）が [`take_request`] で要求を観測して行い、[`finish_compose`] で
 //! 結果を注入する。本画面は二重押し防止と文言だけを持つ。
 //!
 //! # 結果を混同しない理由
@@ -63,7 +63,7 @@ const MAIL_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 const SMS_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
 const ATTACH_BUTTON_ID: WidgetId = WidgetId::from_raw(3);
 
-/// 作成画面の種類（`fandhe_device::compose_mail_sms::ComposeKind` に対応。写像は proxy 側）。
+/// 作成画面の種類（`fandhe_cap_compose_mail_sms::ComposeKind` に対応。写像は機能 crate の driver 側）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComposeTarget {
     /// メール。

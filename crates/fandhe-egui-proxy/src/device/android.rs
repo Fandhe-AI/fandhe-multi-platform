@@ -11,7 +11,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
-use fandhe_device::clipboard::Clipboard;
 use fandhe_device::file_picker::sanitize_picked_name;
 use fandhe_device::file_picker::{PickedFile, MAX_FILE_BYTES};
 use fandhe_device::secure_credential::{validate_key, validate_secret, Secret, SecureCredential};
@@ -33,7 +32,7 @@ pub fn data_dir() -> Option<DataDir> {
 /// `From` 変換できる必要がある（`JavaVM::attach_current_thread` の型制約）が、
 /// `fandhe_device::DeviceError` はこの変換を持たない（`fandhe-device` を変更しない方針）
 /// ため、本モジュール内に閉じた変換先として用意する。`pub(crate)`: `android_background_task.rs`
-/// も同じ JNI 呼び出し形（`AndroidClipboard::request` と同型）で再利用する
+/// も同じ JNI 呼び出し形（`fandhe-cap-camera-capture` の `AndroidCamera::capture` と同型）で再利用する
 /// （Issue #1046、二重実装を避ける）。
 pub(crate) use fandhe_platform_android::JniCallFailed;
 
@@ -84,30 +83,6 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnMotionChanged(
     }
 }
 
-// --------------------------------------------------------------------------
-// クリップボード（Issue #859、Phase 11 型サンプル「クリップボード」）
-// --------------------------------------------------------------------------
-//
-// `ClipboardManager` は Java 側の `Context` から取得する system service で、UI
-// スレッドから触るのが Android の作法（`getPrimaryClip` は Android 10 以降
-// フォーカス状態に依存する）。一方 `android_main`（eframe の event loop、effect
-// ドライバが走るスレッド）は GameActivity 経路では Java の UI スレッドとは別の
-// ネイティブスレッドであるため、`MainActivity.clipboardRequest` へ JNI で要求を
-// 出し、Java 側が `runOnUiThread` で実行した結果を `nativeOnClipboardResult` で
-// 受け取る往復にする（カメラ（#750）と同じ mailbox 方式だが、Activity result の
-// ライフサイクルが絡まないぶん単純）。
-
-/// クリップボード要求の種別（Java 側 `MainActivity.clipboardRequest` の `op` と対）。
-const CLIPBOARD_OP_READ: i32 = 0;
-/// 同上（書き込み）。
-const CLIPBOARD_OP_WRITE: i32 = 1;
-
-/// JNI 往復の待ち上限。クリップボードは OS 内の即時操作で、UI スレッドへの
-/// `runOnUiThread` ディスパッチ待ちしか入らないため短く取る（カメラの 300 秒と違い
-/// ユーザー操作を待たない）。固着防止の安全弁であり、値自体に強い実測根拠はない
-/// （ponytail: 実機で timeout の報告が出たら見直す）。
-const CLIPBOARD_TIMEOUT: Duration = Duration::from_secs(5);
-
 /// 1 件の request/response 往復を仲介する mailbox のスロット。運ぶ値の型 `T` は
 /// クリップボード（`Option<String>`）・TTS（`()`）で異なるため汎用化する
 /// （Issue #866、`ClipboardMailbox` を一般化したもの。挙動・doc は据え置き）。
@@ -125,7 +100,6 @@ enum Slot<T> {
 struct Mailbox<T> {
     slot: Mutex<Slot<T>>,
     condvar: Condvar,
-    next_id: AtomicU64,
     /// `wait` がタイムアウトした際のエラー文言（用途ごとに変える。例:
     /// `"clipboard timeout"` / `"tts timeout"`）。
     timeout_label: &'static str,
@@ -137,28 +111,14 @@ impl<T> Mailbox<T> {
         Self {
             slot: Mutex::new(Slot::Idle),
             condvar: Condvar::new(),
-            next_id: AtomicU64::new(0),
             timeout_label,
         }
     }
 
-    /// `Idle` なら要求 ID を発行して `Pending` へ遷移する。進行中なら `None`
-    /// （ponytail: 待ち行列化はしない。画面側が `pending` で二重要求を防いでいる）。
-    fn begin(&self) -> Option<u64> {
-        let mut slot = self.slot.lock().unwrap_or_else(|e| e.into_inner());
-        if matches!(*slot, Slot::Idle) {
-            let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-            *slot = Slot::Pending(id);
-            Some(id)
-        } else {
-            None
-        }
-    }
-
-    /// [`begin`](Self::begin) の ID 指定版。呼び出し元が別の経路（`AndroidTts` の
+    /// 呼び出し元が別の経路（`AndroidTts` の
     /// 共有カウンタ等）で発行済みの ID を引き継ぐ場合に使う。`Idle` のときのみ
     /// `Pending(id)` へ遷移して `true` を返し、進行中なら `false`
-    /// （単一飛行の防御、`begin` と同じ意味）。
+    /// （単一飛行の防御）。
     fn begin_at_if_idle(&self, id: u64) -> bool {
         let mut slot = self.slot.lock().unwrap_or_else(|e| e.into_inner());
         if matches!(*slot, Slot::Idle) {
@@ -219,7 +179,7 @@ impl<T> Mailbox<T> {
         let _ = self.try_deliver(id, result);
     }
 
-    /// `begin` を呼んだスレッドがその ID の結果を待つ。`timeout` 内に届かなければ
+    /// `begin_at_if_idle` / `begin_at` を呼んだスレッドがその ID の結果を待つ。`timeout` 内に届かなければ
     /// スロットを `Idle` へ戻して（固着防止）エラーを返す。
     fn wait(&self, id: u64, timeout: Duration) -> Result<T, DeviceError> {
         let mut slot = self.slot.lock().unwrap_or_else(|e| e.into_inner());
@@ -272,7 +232,7 @@ impl Mailbox<()> {
     /// (1) へ、後続 `speak` は (2) へ倒す）。
     ///
     /// [`wait`](Mailbox::wait) をそのまま使わず専用ループにする理由（codex-review
-    /// P1 再指摘）: `wait` は「自分が `begin` した ID がそのまま `Ready` になる」
+    /// P1 再指摘）: `wait` は「自分が `begin_at_if_idle` した ID がそのまま `Ready` になる」
     /// 契約のみを見るため、待機中に [`begin_at`](Mailbox::begin_at) が同じ mailbox を
     /// 別の ID（後続の発話 B）へ無条件に差し替えても、それを検知せず古い ID の
     /// `Ready` をひたすら待ち続けてしまう。Java 側は新しい ID にしか応答しない
@@ -305,139 +265,6 @@ impl Mailbox<()> {
             slot = self.condvar.wait(slot).unwrap_or_else(|e| e.into_inner());
         }
     }
-}
-
-/// クリップボード往復を仲介する mailbox（プロセス内で単一飛行）。
-static CLIPBOARD_MAILBOX: Mailbox<Option<String>> = Mailbox::new("clipboard timeout");
-
-/// Android 実クリップボード実装（`ClipboardManager`、Issue #859）。
-/// `device/clipboard.rs` の effect ドライバから「コピー」/「貼り付け」押下時に呼ばれる。
-pub struct AndroidClipboard;
-
-impl AndroidClipboard {
-    /// Java 側 `MainActivity.clipboardRequest(long, int, String)` を呼び、結果を待つ。
-    /// `op` は [`CLIPBOARD_OP_READ`] / [`CLIPBOARD_OP_WRITE`]。
-    // 本体内の 2 箇所の `unsafe`（`JavaVM::from_raw` / `as_cast_raw`）は各 `// SAFETY:`
-    // コメント参照。`fandhe-cap-camera-capture` の `AndroidCamera::capture` と同じ根拠・同じ形に揃えている。
-    #[allow(unsafe_code)]
-    fn request(&self, op: i32, text: &str) -> Result<Option<String>, DeviceError> {
-        let Some(request_id) = CLIPBOARD_MAILBOX.begin() else {
-            // 画面側が `pending` で二重要求を防いでいるため通常到達しないが、
-            // 多重呼び出しに対する防御として単一飛行を守る。
-            return Err(DeviceError::Internal("clipboard busy"));
-        };
-
-        let Some(app) = crate::android::android_app() else {
-            CLIPBOARD_MAILBOX.cancel(request_id);
-            return Err(DeviceError::Unsupported("clipboard"));
-        };
-
-        // SAFETY: `fandhe-cap-camera-capture` の `AndroidCamera::capture` と同一の根拠。`app.vm_as_ptr()` は
-        // android-activity が管理する有効な `JavaVM*` を返し、`android_app()` は
-        // 最新の `AndroidApp` を複製して返すため、ここで得た `app` は呼び出し時点で
-        // 有効な `Activity` を指す。呼び出し中（JNI 呼び出し → mailbox 待ち）は
-        // ローカル変数 `app` が生存を保つ。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-        let request_result =
-            vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
-                // クリップボードへ渡す文字列を Java String へ変換する（読み出し要求では
-                // 空文字列を渡し、Java 側は `op` で無視する）。
-                let j_text = env.new_string(text)?;
-                let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                // SAFETY: `fandhe-cap-camera-capture` の `AndroidCamera::capture` と同一の根拠。`activity_as_ptr()` は
-                // `AndroidApp` が保持する未所有の JNI グローバル参照で、`AndroidApp` の
-                // 生存期間中有効。`Cast` は所有権を持たないラッパーのため delete を
-                // 試みない。
-                let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                env.call_method(
-                    &activity,
-                    jni::jni_str!("clipboardRequest"),
-                    jni::jni_sig!((long, int, java.lang.String) -> ()),
-                    &[
-                        jni::objects::JValue::Long(request_id as jni::sys::jlong),
-                        jni::objects::JValue::Int(op as jni::sys::jint),
-                        jni::objects::JValue::Object(&j_text),
-                    ],
-                )?;
-                Ok(())
-            });
-
-        if request_result.is_err() {
-            // JNI 呼び出し自体が失敗した（メソッド未検出・例外送出等）。コールバックは
-            // 来ないため `wait` せず即座にスロットを解放する。
-            CLIPBOARD_MAILBOX.cancel(request_id);
-            return Err(DeviceError::Internal("clipboard jni"));
-        }
-
-        CLIPBOARD_MAILBOX.wait(request_id, CLIPBOARD_TIMEOUT)
-    }
-}
-
-impl Clipboard for AndroidClipboard {
-    fn get_text(&self) -> Result<Option<String>, DeviceError> {
-        self.request(CLIPBOARD_OP_READ, "")
-    }
-
-    fn set_text(&self, text: &str) -> Result<(), DeviceError> {
-        self.request(CLIPBOARD_OP_WRITE, text).map(|_| ())
-    }
-}
-
-/// Java 側から届いたクリップボード結果を解釈する（`nativeOnClipboardResult` 本体）。
-/// `status` の意味は `MainActivity.clipboardRequest`（Java 側実装）と対で決める:
-/// 0 = 成功（読み出しは `text` に内容、書き込みは `text` が null）、
-/// 1 = クリップボードにテキストが無い（読み出しのみ。`Ok(None)`）、
-/// 2 = `ClipboardManager` を取得できない等の内部エラー。それ以外は未知の失敗。
-fn decode_clipboard_result(
-    text: Option<String>,
-    status: jni::sys::jint,
-) -> Result<Option<String>, DeviceError> {
-    match status {
-        0 => Ok(text),
-        1 => Ok(None),
-        _ => Err(DeviceError::Internal("clipboard")),
-    }
-}
-
-/// `MainActivity.nativeOnClipboardResult`（Java 側）から呼ばれる JNI エクスポート関数
-/// （Issue #859）。シンボル名の固定規約は `nativeOnCameraResult` と同じ。
-///
-/// 受け取った内容は [`CLIPBOARD_MAILBOX`] へ届けるだけで、ログ出力・保存は一切行わない
-/// （クリップボードは他アプリのパスワード等が載り得る機密経路のため痕跡を残さない、
-/// security.md A09）。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`EnvUnowned::with_env` が JNI アタッチメントの
-/// 安全な取り扱い（`catch_unwind` によるパニックの遮断込み）を担う。`#[no_mangle]` は
-/// JNI 命名規約上の固定シンボル名であり、本クレートは cdylib として 1 つの Android
-/// 実行単位にのみリンクされるため他シンボルと衝突しない（`nativeOnCameraResult` と
-/// 同じ根拠）。
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnClipboardResult<'caller>(
-    mut unowned_env: jni::EnvUnowned<'caller>,
-    _class: jni::objects::JClass<'caller>,
-    request_id: jni::sys::jlong,
-    text: jni::objects::JString<'caller>,
-    status: jni::sys::jint,
-) {
-    let outcome = unowned_env.with_env(|env| -> Result<(), jni::errors::Error> {
-        // `text` が null（書き込み要求の応答・テキスト不在）なら `None` にする。
-        let value = if text.is_null() {
-            None
-        } else {
-            // 変換失敗（不正な UTF-16 等）は内容を推測せず不在扱いにする
-            // （security.md A03: 検証できない入力を通さない）。
-            // modified UTF-8 → Rust の `String` 変換（jni 0.22 の非 deprecated API。
-            // `Env::get_string` は deprecated で `JString::try_to_string` が後継）。
-            text.try_to_string(env).ok()
-        };
-        CLIPBOARD_MAILBOX.deliver(request_id as u64, decode_clipboard_result(value, status));
-        Ok(())
-    });
-    // JVM 境界を越えて panic させない（`with_env` が `catch_unwind` 済み）。
-    let _ = outcome.into_outcome();
 }
 
 // --------------------------------------------------------------------------
@@ -559,7 +386,7 @@ impl AndroidTts {
 
     /// Java 側 `MainActivity.ttsRequest(long, int, String)` を JNI で呼ぶだけの
     /// 薄いヘルパー（mailbox の登録・解除は呼び出し元が担う）。
-    /// `AndroidClipboard::request` と同じ根拠・同じ形に揃えている（本体内の
+    /// `fandhe-cap-camera-capture` の `AndroidCamera::capture` と同じ根拠・同じ形に揃えている（本体内の
     /// 2 箇所の `unsafe` は各 `// SAFETY:` 参照）。
     #[allow(unsafe_code)]
     fn call_tts_request(&self, id: u64, op: i32, text: &str) -> Result<(), DeviceError> {
@@ -567,7 +394,7 @@ impl AndroidTts {
             return Err(DeviceError::Unsupported("tts"));
         };
 
-        // SAFETY: `AndroidClipboard::request`（および `fandhe-cap-camera-capture` の `AndroidCamera::capture`）と同一の根拠。
+        // SAFETY: `fandhe-cap-camera-capture` の `AndroidCamera::capture`と同一の根拠。
         // `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` を返し、
         // `android_app()` は最新の `AndroidApp` を複製して返すため、ここで得た
         // `app` は呼び出し時点で有効な `Activity` を指す。呼び出し中（JNI 呼び出し
@@ -578,7 +405,7 @@ impl AndroidTts {
             vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
                 let j_text = env.new_string(text)?;
                 let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                // SAFETY: `AndroidClipboard::request` と同一の根拠。`activity_as_ptr()`
+                // SAFETY: `fandhe-cap-camera-capture` の `AndroidCamera::capture` と同一の根拠。`activity_as_ptr()`
                 // は `AndroidApp` が保持する未所有の JNI グローバル参照で、
                 // `AndroidApp` の生存期間中有効。`Cast` は所有権を持たないラッパー
                 // のため delete を試みない。
@@ -717,7 +544,7 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnTtsAccepted(
 }
 
 /// `MainActivity.nativeOnTtsResult`（Java 側）から呼ばれる JNI エクスポート関数
-/// （Issue #866）。シンボル名の固定規約は `nativeOnClipboardResult` と同じ。
+/// （Issue #866）。シンボル名の固定規約は `nativeOnCameraResult` と同じ。
 ///
 /// STOP の最終結果、または SPEAK の真の最終結果のいずれかを運ぶ（モジュール doc
 /// 「2 本の mailbox」参照）。まず [`TTS_ACCEPT_MAILBOX`] への配送を試み
@@ -747,7 +574,7 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnTtsAccepted(
 /// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` により Rust の名前修飾を
 /// 無効化するが、シンボル名は JNI 命名規約上の固定名であり、本クレートは cdylib
 /// として 1 つの Android 実行単位にのみリンクされるため他シンボルと衝突しない
-/// （`nativeOnCameraResult`・`nativeOnClipboardResult` と同じ根拠）。
+/// （`nativeOnCameraResult` と同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]
 extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnTtsResult(
@@ -798,7 +625,7 @@ impl AndroidSecureCredential {
     /// `value` は STORE 以外では空文字列を渡す（Java 側は `op` で無視する）。
     ///
     /// 本体内の 2 箇所の `unsafe`（`JavaVM::from_raw` / `as_cast_raw`）は
-    /// `AndroidClipboard::request` と同じ根拠・同じ形に揃えている（各
+    /// `fandhe-cap-camera-capture` の `AndroidCamera::capture` と同じ根拠・同じ形に揃えている（各
     /// `// SAFETY:` コメント参照）。戻り値の `java.lang.String` から `JString` への
     /// 変換は `env.cast_local`（safe API、null なら `To::null()` を返す）を使うため
     /// 追加の `unsafe` は不要。
@@ -808,7 +635,7 @@ impl AndroidSecureCredential {
             return Err(DeviceError::Unsupported("secure_credential"));
         };
 
-        // SAFETY: `AndroidClipboard::request` と同一の根拠。`app.vm_as_ptr()` は
+        // SAFETY: `fandhe-cap-camera-capture` の `AndroidCamera::capture` と同一の根拠。`app.vm_as_ptr()` は
         // android-activity が管理する有効な `JavaVM*` を返し、`android_app()` は
         // 最新の `AndroidApp` を複製して返すため、ここで得た `app` は呼び出し
         // 時点で有効な `Activity` を指す。呼び出し中（JNI 呼び出し・戻り値変換）は
@@ -820,7 +647,7 @@ impl AndroidSecureCredential {
                 let j_key = env.new_string(key)?;
                 let j_value = env.new_string(value)?;
                 let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                // SAFETY: `AndroidClipboard::request` と同一の根拠。
+                // SAFETY: `fandhe-cap-camera-capture` の `AndroidCamera::capture` と同一の根拠。
                 // `activity_as_ptr()` は `AndroidApp` が保持する未所有の JNI
                 // グローバル参照で、`AndroidApp` の生存期間中有効。`Cast` は
                 // 所有権を持たないラッパーのため delete を試みない。
@@ -1228,7 +1055,7 @@ mod tts_tests {
 // ケースを避けるため）。
 
 /// Java 側 `MainActivity.requestFilePick(long)` を呼び、ダイアログの提示だけを要求する
-/// （Issue #874、案 B）。`AndroidClipboard::request`/`AndroidTts::call_tts_request` と
+/// （Issue #874、案 B）。`fandhe-cap-camera-capture` の `AndroidCamera::capture`/`AndroidTts::call_tts_request` と
 /// 同じ JNI 呼び出しの形だが、結果を待たずに即座に戻る点が異なる（呼び出し元
 /// `device/file_pick.rs` の `bridge::begin`/`bridge::deliver` が結果の受け皿を持つ、
 /// モジュール doc 参照）。渡す `request_id` は画面状態の generation ではなく
@@ -1236,7 +1063,7 @@ mod tts_tests {
 /// 戻り値は JNI 呼び出し自体の成否のみ（`false` はメソッド未検出・例外送出等。
 /// 呼び出し元が [`crate::device::file_pick::bridge::deliver`] へ
 /// `Err(DeviceError::Internal("file_picker present"))` を渡して畳む）。
-// 本体内の 2 箇所の `unsafe`（`JavaVM::from_raw` / `as_cast_raw`）は `AndroidClipboard::request`
+// 本体内の 2 箇所の `unsafe`（`JavaVM::from_raw` / `as_cast_raw`）は `fandhe-cap-camera-capture` の `AndroidCamera::capture`
 // と同一の根拠（各 `// SAFETY:` 参照）。
 #[allow(unsafe_code)]
 pub(crate) fn request_file_pick(request_id: u64) -> bool {
@@ -1244,7 +1071,7 @@ pub(crate) fn request_file_pick(request_id: u64) -> bool {
         return false;
     };
 
-    // SAFETY: `AndroidClipboard::request`/`AndroidTts::call_tts_request` と同一の
+    // SAFETY: `fandhe-cap-camera-capture` の `AndroidCamera::capture`/`AndroidTts::call_tts_request` と同一の
     // 根拠。`app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` を返し、
     // `android_app()` は最新の `AndroidApp` を複製して返すため、ここで得た `app` は
     // 呼び出し時点で有効な `Activity` を指す。呼び出し中はローカル変数 `app` が
@@ -1254,7 +1081,7 @@ pub(crate) fn request_file_pick(request_id: u64) -> bool {
     let request_result =
         vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
             let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: `AndroidClipboard::request` と同一の根拠。`activity_as_ptr()`
+            // SAFETY: `fandhe-cap-camera-capture` の `AndroidCamera::capture` と同一の根拠。`activity_as_ptr()`
             // は `AndroidApp` が保持する未所有の JNI グローバル参照で、`AndroidApp` の
             // 生存期間中有効。`Cast` は所有権を持たないラッパーのため delete を
             // 試みない。
@@ -1320,7 +1147,7 @@ fn decode_file_pick_result(
         return Err(DeviceError::Internal("file_picker"));
     }
     // modified UTF-8 → Rust の `String` 変換（jni 0.22 の非 deprecated API。
-    // `nativeOnClipboardResult` と同じ手法）。
+    // `nativeOnCameraResult` と同じ手法）。
     let raw_name = name
         .try_to_string(env)
         .map_err(|_| DeviceError::Internal("file_picker"))?;
@@ -1332,7 +1159,7 @@ fn decode_file_pick_result(
 }
 
 /// `MainActivity.nativeOnFilePickerResult`（Java 側）から呼ばれる JNI エクスポート関数
-/// （Issue #874、案 B）。シンボル名の固定規約は `nativeOnClipboardResult` と同じ。
+/// （Issue #874、案 B）。シンボル名の固定規約は `nativeOnCameraResult` と同じ。
 ///
 /// [`decode_file_pick_result`] で `PickedFile` へ変換し、
 /// [`crate::device::file_pick::bridge::deliver`] へ届ける。`request_id` が現在
@@ -1352,7 +1179,7 @@ fn decode_file_pick_result(
 /// [`decode_file_pick_result`] に閉じる）。`EnvUnowned::with_env` が JNI アタッチメントの
 /// 安全な取り扱い（`catch_unwind` によるパニックの遮断込み）を担う。`#[no_mangle]` は
 /// JNI 命名規約上の固定シンボル名であり、本クレートは cdylib として 1 つの Android
-/// 実行単位にのみリンクされるため他シンボルと衝突しない（`nativeOnClipboardResult` と
+/// 実行単位にのみリンクされるため他シンボルと衝突しない（`nativeOnCameraResult` と
 /// 同じ根拠）。
 #[allow(unsafe_code)]
 #[no_mangle]

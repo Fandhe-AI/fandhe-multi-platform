@@ -4,7 +4,7 @@
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod nfc_read;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は
-//! 本モジュール外（`fandhe-egui-proxy` の `device/nfc.rs`）が [`take_request`] で要求を観測し、
+//! 本モジュール外（`fandhe-cap-nfc` の `driver`）が [`take_request`] で要求を観測し、
 //! [`mark_running`]・[`finish_read`] で状態を進める。Web（`fandhe-web-dom`）も同じ関数と文言を使う。
 //! 全対象 OS の分の状態・文言はここで定義するため、OS 別の子 issue はこのファイルを触らない。
 //!
@@ -52,7 +52,7 @@ pub const UNSUPPORTED_MESSAGE: &str = "この環境では使えません";
 /// それ以外の失敗の案内。
 pub const FAILED_MESSAGE: &str = "原因不明のエラーが起きました";
 
-/// 表示するレコード（`fandhe_device::nfc::NdefRecordView` から写す責務は effect 側）。
+/// 表示するレコード（`fandhe_cap_nfc::NdefRecordView` から写す責務は effect 側）。
 /// `Debug` は中身を出さない。
 #[derive(Clone, PartialEq, Eq)]
 pub enum ShownRecord {
@@ -122,7 +122,7 @@ pub enum ShownTag {
     Empty,
 }
 
-/// 読めなかった理由（`fandhe_device::nfc::NfcReadFailure` から写す責務は effect 側）。
+/// 読めなかった理由（`fandhe_cap_nfc::NfcReadFailure` から写す責務は effect 側）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreFailure {
     /// 読めないタグ。

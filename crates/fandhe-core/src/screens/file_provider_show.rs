@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod file_provider_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは
-//! `fandhe-egui-proxy` の `device/file_provider.rs` が [`take_request`] で要求を観測し、
+//! `fandhe-cap-file-provider` の `driver` が [`take_request`] で要求を観測し、
 //! [`mark_in_flight`] / [`finish`] / [`apply_unsupported`] で結果を注入する。状態・定数・文言は
 //! 全対象 OS 分（Android の操作、iOS・macOS・Windows の「保留中」、その他の「非対応」）をここで
 //! 確定し、OS 実装は画面に触らない。
@@ -40,7 +40,7 @@ pub const TITLE: &str = "ファイル画面に出す保存先";
 pub const ROOT_TITLE: &str = "Fandhe（この端末内のみ）";
 /// 範囲の注記。
 pub const NOTE: &str = "この端末内のみ。ネットワーク同期はしない";
-/// 見本の表示名（同名があってもずらさず、置くたびに新しい書類 ID の別の書類になる。契約は `fandhe_device::file_provider`）。
+/// 見本の表示名（同名があってもずらさず、置くたびに新しい書類 ID の別の書類になる。契約は `fandhe_cap_file_provider`）。
 pub const SAMPLE_NAME: &str = "fandhe-sample.txt";
 /// 見本の中身（ASCII 固定）。
 pub const SAMPLE_CONTENT: &str = "fandhe file provider sample\n";

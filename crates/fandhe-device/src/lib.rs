@@ -47,12 +47,8 @@ pub mod camera_preview_stream;
 pub mod capture_protection;
 /// Phase 11（端末機能の拡充ループ、親 #152、Issue #1116）: 車載ディスプレイの 1 行テキスト。
 pub mod car_display;
-/// Phase 11（端末機能の拡充ループ、Issue #859）: クリップボード読み書き。
-pub mod clipboard;
 /// Phase 11（端末機能の拡充ループ、親 #1154、Issue #1404）: 方位（コンパス）。
 pub mod compass;
-/// Phase 11（端末機能の拡充ループ、親 #1142、Issue #1384）: メール・SMS の作成画面を開く。
-pub mod compose_mail_sms;
 /// Phase 11（端末機能の拡充ループ、親 #1117、Issue #1220）: 連絡先を 1 件選ぶ。
 pub mod contact_picker;
 /// Phase 11（端末機能の拡充ループ、親 #153、Issue #1278）: ディープリンク（Universal Links / App Links）の受信。
@@ -69,8 +65,6 @@ pub mod eye_dropper;
 pub mod file_association;
 /// Phase 11（端末機能の拡充ループ、Issue #872）: ファイル選択ダイアログ。
 pub mod file_picker;
-/// Phase 11 の拡充ループ（親 #194、Issue #1019）: 自アプリの保存先を OS のファイル画面に出す（一覧・置く・消すの契約と共通実装）。
-pub mod file_provider;
 /// Phase 11 の拡充ループ（親 #106、Issue #458）: ライト（トーチ）の点灯 / 消灯。
 pub mod flashlight;
 /// Phase 11 の拡充ループ（親 #141、Issue #723）: 折りたたみ端末の姿勢と折れ目。
@@ -82,8 +76,6 @@ pub mod geofence;
 /// Phase 11（端末機能の拡充ループ、親 #149、Issue #1089）: ヘルスデータ（今日の歩数を 1 回読む）。
 pub mod health_data;
 pub mod http;
-/// Phase 11（端末機能の拡充ループ、親 #191、Issue #975）: 端末内での画像生成（OS の生成画面で作った 1 枚を表示する）。
-pub mod image_generation;
 /// Phase 11（端末機能の拡充ループ、親 #1120、Issue #1250）: 画像内の文字認識（OCR）。
 pub mod image_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #135、Issue #701）: アプリ内ブラウザ（固定の公開 URL を OS のアプリ内ブラウザで開く）。
@@ -111,14 +103,10 @@ pub mod motion_raw_sensors;
 pub mod music_library;
 /// Phase 11（端末機能の拡充ループ、親 #1130、Issue #1282）: ネットワーク接続状態（有無・種別・従量制）。
 pub mod network_status;
-/// Phase 11（端末機能の拡充ループ、親 #157、Issue #1044）: NFC タグ（NDEF）の読み取り。
-pub mod nfc;
 /// Phase 11（端末機能の拡充ループ、親 #1003、Issue #1004）: ローカル通知。
 pub mod notification;
 /// Phase 11（端末機能の拡充ループ、親 #98、Issue #381）: ロック画面・OS のメディア操作（再生中の表示と再生・一時停止の受け取り）。
 pub mod now_playing;
-/// Phase 11（端末機能の拡充ループ、親 #146、Issue #749）: 既定アプリで開く・ファイルマネージャーで選択表示。
-pub mod open_in_shell;
 /// Issue #1188: base64url の共有部品（パスキー本体は機能 crate `fandhe-cap-passkey-signin`）。
 pub mod passkey;
 /// Phase 11（端末機能の拡充ループ、親 #114、Issue #541）: 物・サービスの決済シート（Google Pay TEST 環境、課金なし）。
@@ -135,14 +123,8 @@ pub mod picture_in_picture;
 pub mod print;
 /// Phase 11（端末機能の拡充ループ、親 #139、Issue #719）: クイック設定タイル・コントロール（押された回数の読み出し）。
 pub mod quick_settings_tile;
-/// Phase 11 の拡充ループ（親 #189、Issue #972）: 無線（Wi-Fi・Bluetooth）の状態取得と切り替え。
-pub mod radio_control;
-/// Phase 11（端末機能の拡充ループ、親 #193、Issue #988）: OS の「最近使った項目」への登録と読み戻し。
-pub mod recent_documents;
 /// Phase 11（端末機能の拡充ループ、親 #105、Issue #444）: セーフエリア・ディスプレイ切り欠き。
 pub mod safe_area_insets;
-/// Phase 11（端末機能の拡充ループ、親 #192、Issue #981）: 接続したスキャナー・カメラ機器からの取り込み。
-pub mod scanner_devices;
 /// Phase 11（端末機能の拡充ループ、親 #128、Issue #655）: 画面向きの取得・固定。
 pub mod screen_orientation;
 /// Phase 11（端末機能の拡充ループ、親 #921、Issue #922）: 資格情報の安全な保存。
@@ -160,8 +142,6 @@ pub mod tts;
 pub mod url_scheme;
 /// Phase 11（端末機能の拡充ループ、親 #169、Issue #821）: 動画の撮影（OS の撮影 UI を開き、長さ・寸法・サイズを出す）。
 pub mod video_capture;
-/// Phase 11（端末機能の拡充ループ、親 #340、Issue #1014）: 動画の変換（実行時に作った元動画を小さい解像度の MP4 へ書き出す）。
-pub mod video_transcode;
 /// Phase 11（端末機能の拡充ループ、親 #113、Issue #530）: OAuth 用の Web 認証セッション（デモ認可ページ + コールバック検査）。
 pub mod web_auth_session;
 /// Phase 11（端末機能の拡充ループ、親 #111、Issue #514）: Wi-Fi 情報（現在の接続と周辺の上位数件）。
