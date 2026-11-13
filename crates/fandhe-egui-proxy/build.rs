@@ -96,7 +96,6 @@ fn build() {
     // `apple/fandhe_apple_map_view.m`（Issue #273 macOS + #274 iOS）も macOS 分岐と共用する。
     compile_apple_map_view();
 
-
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）も macOS 分岐と
     // 共用する。
     compile_apple_mic_record();
