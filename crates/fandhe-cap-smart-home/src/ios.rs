@@ -145,7 +145,7 @@ fn list_from_nul_buffer(
     Ok(list)
 }
 
-/// iOS の `SmartHome` 実装を返す（`device/smart_home.rs` の dispatch から呼ばれる）。
+/// iOS の `SmartHome` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "ios")]
 pub(crate) fn implementation() -> Arc<dyn SmartHome> {
     Arc::new(IosSmartHome)

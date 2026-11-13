@@ -1,4 +1,4 @@
-//! Windows 向け「指定した Wi-Fi への接続」実装（Issue #792、親 #165）。`device/wifi_connect.rs` の
+//! Windows 向け「指定した Wi-Fi への接続」実装（Issue #792、親 #165）。`driver` の
 //! dispatch（Windows 経路）からワーカースレッドで呼ばれる。契約の SSOT は
 //! `crate::contract`（「OS ごとの写像」節）。
 //!

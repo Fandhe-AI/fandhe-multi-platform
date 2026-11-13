@@ -1,4 +1,4 @@
-//! Android 向けシステム音量実装（Issue #787、親 #166）。`device/volume_control.rs` の dispatch
+//! Android 向けシステム音量実装（Issue #787、親 #166）。`driver` の dispatch
 //! （Android 経路、egui スレッドから同期）から呼ばれ、契約は `crate::contract`。
 //! `AudioManager` の `STREAM_MUSIC`（メディア音量）だけを扱う。Java 側の SSOT は
 //! `VolumeControlHelper`（結果コード）。

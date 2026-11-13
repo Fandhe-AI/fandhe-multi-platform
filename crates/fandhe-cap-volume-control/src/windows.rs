@@ -1,7 +1,7 @@
 //! Windows 向けシステム音量実装（Issue #785）。Core Audio の MMDevice API で既定の出力
 //! （`GetDefaultAudioEndpoint(eRender, eConsole)`）を毎回 OS へ問い、`IAudioEndpointVolume` の
 //! `GetMasterVolumeLevelScalar` / `GetMute` で読み、`VolumeStepUp` / `VolumeStepDown` で 1 段階
-//! 動かして同じ呼び出しの中で読み戻す。`device/volume_control.rs` の Windows 経路
+//! 動かして同じ呼び出しの中で読み戻す。`driver` の Windows 経路
 //! （ワーカー上、5 秒の期限つき）から呼ばれ、契約は `crate::contract`。
 //!
 //! # スレッドと COM
@@ -123,7 +123,7 @@ impl VolumeControl for WindowsVolumeControl {
     }
 }
 
-/// Windows の `VolumeControl` 実装を返す（`device/volume_control.rs` の dispatch から呼ばれる）。
+/// Windows の `VolumeControl` 実装を返す（`driver` の dispatch から呼ばれる）。
 pub(crate) fn implementation() -> Arc<dyn VolumeControl> {
     Arc::new(WindowsVolumeControl)
 }

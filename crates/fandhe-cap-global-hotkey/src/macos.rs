@@ -1,7 +1,7 @@
 //! macOS 向けグローバルホットキーの実装（Issue #766、親 #150）。
 //! `macos/fandhe_macos_global_hotkey.m`（Carbon の `RegisterEventHotKey`、`build.rs` が macOS ターゲットの
 //! feature `device` 有効時にコンパイルする）を `extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに
-//! 閉じ `// SAFETY:` で契約を明記する。`device/global_hotkey.rs` の macOS 経路から呼ばれ、契約は
+//! 閉じ `// SAFETY:` で契約を明記する。`driver` の macOS 経路から呼ばれ、契約は
 //! `crate::contract`。Rust へは生ポインタを渡さず `token`（値）だけを渡す。
 //!
 //! 押下の受け口は `slot`（`token` と [`OnPress`] の組）。`.m` は押下のたびに main thread で
@@ -109,7 +109,7 @@ impl GlobalHotkey for MacGlobalHotkey {
     }
 }
 
-/// macOS の `GlobalHotkey` 実装を返す（`device/global_hotkey.rs` の dispatch から呼ばれる）。
+/// macOS の `GlobalHotkey` 実装を返す（`driver` の dispatch から呼ばれる）。
 pub(crate) fn implementation() -> Arc<dyn GlobalHotkey> {
     Arc::new(MacGlobalHotkey)
 }

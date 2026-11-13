@@ -1,4 +1,4 @@
-//! Windows 向けスリープ・ロックの通知実装（Issue #810、親 #167）。`device/sleep_lock_events.rs`
+//! Windows 向けスリープ・ロックの通知実装（Issue #810、親 #167）。`driver`
 //! （effect ドライバ）の windows 経路から UI スレッドで呼ばれ、契約は
 //! `crate::contract`。ホストでは写像（`fandhe_device` の純関数）だけをテストし、
 //! Win32 を呼ぶ部分は Windows ビルドだけ。
@@ -39,7 +39,7 @@ use std::sync::Arc;
 
 use crate::contract::SleepLockEvents;
 
-/// Windows の `SleepLockEvents` 実装を返す（`device/sleep_lock_events.rs` の dispatch から呼ばれる）。
+/// Windows の `SleepLockEvents` 実装を返す（`driver` の dispatch から呼ばれる）。
 pub(crate) fn implementation() -> Arc<dyn SleepLockEvents> {
     Arc::new(win::WindowsSleepLockEvents)
 }

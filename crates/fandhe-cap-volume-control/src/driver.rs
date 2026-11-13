@@ -7,8 +7,8 @@
 //! # OS 別実装の差し込み口
 //!
 //! [`platform_volume_control`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
-//! モジュールだけを埋める（macOS: `macos_volume_control`、Windows: `windows_volume_control`、
-//! iOS: `ios_volume_control`（#786）、Android: `android_volume_control`（#787））。それ以外は
+//! モジュールだけを埋める（macOS: `macos`、Windows: `windows`、
+//! iOS: `ios`（#786）、Android: `android`（#787））。それ以外は
 //! `UnsupportedVolumeControl` 固定で、ダミーの成功実装へは倒さない。
 //!
 //! # 1 フレームの流れ

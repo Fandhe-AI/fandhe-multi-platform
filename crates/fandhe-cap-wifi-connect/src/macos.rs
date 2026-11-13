@@ -2,7 +2,7 @@
 //! `macos/fandhe_macos_wifi_connect.m`（CoreWLAN の directed scan と
 //! `associateToNetwork:password:error:`、CoreLocation の許可要求。`build.rs` が macOS 分岐で
 //! feature `device` 有効時にコンパイルし CoreWLAN をリンクする）を `unsafe extern "C"` 1 関数で呼ぶ。
-//! `unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。`device/wifi_connect.rs` の macOS
+//! `unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。`driver` の macOS
 //! 経路からワーカースレッドで呼ばれ、契約は `crate::contract`。
 //!
 //! 戻りコードの写像 [`decode_code`] は純関数で、ホストの `cargo test` で検査する。
@@ -83,7 +83,7 @@ impl WifiConnect for MacWifiConnect {
     }
 }
 
-/// macOS の `WifiConnect` 実装を返す（`device/wifi_connect.rs` の dispatch から呼ばれる）。
+/// macOS の `WifiConnect` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "macos")]
 pub(crate) fn implementation() -> Arc<dyn WifiConnect> {
     Arc::new(MacWifiConnect)
