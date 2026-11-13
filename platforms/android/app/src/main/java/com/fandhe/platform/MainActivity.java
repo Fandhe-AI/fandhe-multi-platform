@@ -539,8 +539,6 @@ public class MainActivity extends GameActivity {
         return SpotlightIndexHelper.removeAll(getApplicationContext(), domain, remainingMs);
     }
 
-    }
-
     // カメラのライブ映像（Issue #814）。実装は `CameraPreviewHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_camera_preview_stream.rs` が JNI で呼ぶ。
     private final CameraPreviewHelper cameraPreviewHelper = new CameraPreviewHelper(this);
@@ -701,8 +699,6 @@ public class MainActivity extends GameActivity {
 
     int flashlightRead() {
         return flashlightHelper.read();
-    }
-
     }
 
     @Override
