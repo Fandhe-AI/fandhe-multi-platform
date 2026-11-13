@@ -221,11 +221,6 @@ pub mod android_translation;
 /// platform_url_scheme` の Android 経路から使われる。
 #[cfg(target_os = "android")]
 pub mod android_url_scheme;
-/// Issue #821: Android 向け動画の撮影実装のスタブ（#823 が埋める）。
-/// `device/video_capture.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_video_capture;
 /// Issue #534: Android 向け Web 認証セッション実装（Custom Tabs、Java 側 `WebAuthSessionHelper`）。
 /// `device/web_auth_session.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でもコンパイルする。
 #[cfg(any(target_os = "android", test))]
@@ -612,11 +607,6 @@ pub mod ios_spotlight_index;
 /// Issue #536: iOS 向け端末内翻訳実装（macOS と共用の `AppleTextTranslator` を返す）。`device/translation.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_translation;
-/// Issue #821: iOS 向け動画の撮影実装のスタブ（#822 が埋める）。
-/// `device/video_capture.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_video_capture;
 /// Issue #532: iOS 向け Web 認証セッション実装（`ios/fandhe_ios_web_auth_session.m` の
 /// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -681,11 +671,6 @@ pub mod macos_print;
 /// C ABI ラッパー）。`device/safe_area_insets.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_safe_area_insets;
-/// Issue #1071: macOS 向け動画の撮影実装（`macos/fandhe_macos_video_capture.m` の撮影パネルを呼ぶ C ABI ラッパー）。
-/// `device/video_capture.rs` の macOS 経路から呼ばれる。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_video_capture;
 /// Issue #530: macOS 向け Web 認証セッション実装（`macos/fandhe_macos_web_auth_session.m` の
 /// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の macOS 経路から呼ばれる。
 /// 写像の純関数をホストでテストできるよう cfg は `any(macos, test)`。
@@ -801,9 +786,6 @@ pub mod tts;
 /// ドライバ（macOS 実装、他 OS は `UnsupportedUrlScheme` 固定）。
 pub mod url_scheme;
 /// Phase 11 の拡充ループ（親 #169、Issue #821）: 動画の撮影の effect ドライバ
-/// （iOS は #822・Android は #823・macOS は #1071・Windows は #1150、Web は `fandhe-web-dom`（#824）、
-/// Linux は `UnsupportedVideoCapturer` 固定）。
-pub mod video_capture;
 /// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS・Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
 pub mod web_auth_session;
@@ -972,11 +954,6 @@ pub mod windows_speech_recognition;
 /// モジュール内に閉じる（`windows_background_task` と同じ方針）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_url_scheme;
-/// Issue #1150: Windows 向け動画の撮影実装（WinRT `MediaCapture` + アプリが組む撮影パネル）。
-/// `device/video_capture.rs` の Windows 経路から呼ばれる。純関数と一時置き場はホストでも試す。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_video_capture;
 /// Issue #530: Windows 向け Web 認証セッション実装。`device/web_auth_session.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

@@ -47,6 +47,8 @@ fandhe-cap-color-picker = { path = "../fandhe-cap-color-picker" }
 fandhe-cap-digital-credentials = { path = "../fandhe-cap-digital-credentials" }
 # app-lifecycle の契約（`LifecycleEvent`・`EventLog`・`ALL_EVENTS`）。Web 実装本体は本クレートに残る。
 fandhe-cap-app-lifecycle = { path = "../fandhe-cap-app-lifecycle" }
+# video-capture の契約（`VideoCaptureFailure`・`VideoClip`）。Web 実装本体は本クレートに残る。
+fandhe-cap-video-capture = { path = "../fandhe-cap-video-capture" }
 fandhe-cap-display-refresh-hdr = { path = "../fandhe-cap-display-refresh-hdr" }
 # Issue #1187: 電源状態の純関数（`percent_from_raw`）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の実装が cfg で外れる。
 fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast" }

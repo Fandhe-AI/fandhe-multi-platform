@@ -303,8 +303,9 @@ dynamic-type・share-sheet・drag-drop の 3 機能を移した。3 機能とも
 
 第 7 束（20 機能）のうち、app-progress-attention・human-presence・system-sound・managed-app-config・display-refresh-hdr・
 removable-storage・memory-pressure・audio-session・external-app-launch・open-system-settings・color-picker・digital-credentials・
-wallpaper-set・file-preview・app-lifecycle の 15 機能を移した。device-identifier は第 1 束で移行済みで、本束では確かめただけ
-（`crates/fandhe-cap-device-identifier`、対応表の `impl` も新しいパス）。残りの 4 機能は下の表の理由で止まっている。
+wallpaper-set・file-preview・app-lifecycle の 15 機能と、WinRT 完了の積み込みを共通層へ上げた後の video-capture を移した。
+device-identifier は第 1 束で移行済みで、本束では確かめただけ（`crates/fandhe-cap-device-identifier`、対応表の `impl` も新しいパス）。
+残りの 3 機能は下の表の理由で止まっている。
 
 ### 手作業で気づいた型
 
@@ -312,7 +313,8 @@ wallpaper-set・file-preview・app-lifecycle の 15 機能を移した。device-
 |----|------|
 | 共通層への引き上げ（`open_url`） | 複数の未移行機能が使う Windows の `ShellExecuteW`（`open_url`・`SE_ERR_NOASSOC`）を `fandhe-platform-windows` へ上げた。渡すのは各機能が組み立てた固定 scheme の URL だけで、任意の scheme・引数を受ける口ではない。`windows_compose_mail_sms` は再公開だけを持ち、未移行の web-auth-session・launch-at-login の参照は変えない。`SE_ERR_NOASSOC` はホストのテストでも写像を検証するため、Windows 以外では同じ値（公式の表）を置く |
 | `FeatureLifecycleProvider` の `onHostStarted` / `onHostStopped` | app-lifecycle が使う。どちらも `Activity.onStart()` / `onStop()` の中、つまり `super.onStart()` / `super.onStop()` の中で呼ばれる。従来の `MainActivity.onStart` は `super` の後で、`onStop` は `super` の前に helper を呼んでいた。`super` に対する前後だけが違い、`isChangingConfigurations()` の判定は同じコールバックの内側で行うので変わらない。到着順の扱い（契約表 1）は購読の id 照合と、通知時の実際の状態の読み直しで保つ |
-| 機能専用の FileProvider（file-preview） | 共有の `${applicationId}.compose`（メール添付・動画の撮影と共用）から外し、`FilePreviewFileProvider`（`FileProvider` の空の派生）と `res/xml/file_preview_file_paths.xml`（`cache/file_preview/` だけ）を機能 crate が持つ。宣言の `components`（`exported = false`・`grantUriPermissions = "true"`・`meta-data`）と `AndroidManifest.xml` に同じ内容を書く。公開するパスが狭まる（最小公開）。新しい権限は足さない。共有 provider の公開パスの一覧からは `file_preview` を消す |
+| WinRT 完了の積み込み（video-capture） | `IAsyncOperation` / `IAsyncAction` の完了を命令へ包んでワーカーのキューへ積む `spawn` / `spawn_action` を、camera-preview-stream の Windows 実装から `fandhe_platform_windows::winrt_async` へ上げた（先行コミット）。待たずに `SetCompleted` から積む形（契約表 11）は変えない。camera-preview-stream の参照も共通層へ付け替えた |
+| 機能専用の FileProvider（file-preview・video-capture） | 共有の `${applicationId}.compose`（メール添付・動画の撮影と共用）から外し、`FilePreviewFileProvider`（`FileProvider` の空の派生）と `res/xml/file_preview_file_paths.xml`（`cache/file_preview/` だけ）を機能 crate が持つ。宣言の `components`（`exported = false`・`grantUriPermissions = "true"`・`meta-data`）と `AndroidManifest.xml` に同じ内容を書く。公開するパスが狭まる（最小公開）。新しい権限は足さない。共有 provider の公開パスの一覧からは `file_preview` を消す。video-capture も同じ形（`VideoCaptureFileProvider`・`cache/video_capture/`・authority `${applicationId}.fandhe.video-capture.files`）で、共有 compose provider の公開パスから `video_capture` を消した（メール添付だけが残る） |
 | Context を取る static の入口（managed-app-config・wallpaper-set） | `read(Context)` / `set(Context, …)` を、第 1 引数が `Activity` の static にして先頭で `getApplicationContext()` を取る（§9 の「1 つの Helper が Context を取る同期呼び出し」と同じ）。`MainActivity` の 1 行ラッパーは消す |
 | 起動を依頼する Helper（external-app-launch・open-system-settings） | Activity ごとの helper を `HELPERS` に持ち、static の入口 `launch(Activity, …)` / `open(Activity, …)` が `boolean` を返す。表に無ければ `false` を返し、Rust が失敗として確定する。起動直前に RESUMED・`isFinishing` を見直す（契約表 2）処理は変えない |
 | `onDestroy` を持つ Helper（system-sound・removable-storage・memory-pressure・audio-session） | §8 の型（private コンストラクタ・`HELPERS`・`<Name>Lifecycle`）。インスタンスメソッドは `private` にして、static の入口が表から引いて委譲する。helper が無い要求は失敗で確定する（stop は購読が無いので `0`）。provider は宣言の `components` と `AndroidManifest.xml` に同じ name・authorities（`${applicationId}.fandhe.<id>`）で書く |
@@ -330,8 +332,7 @@ wallpaper-set・file-preview・app-lifecycle の 15 機能を移した。device-
 |------|------|--------------|
 | age-range | 全 OS が `possible` で実装も `impl` も無く、移すものが無い（game-center と同じ扱い） | 実装するときに最初から crate で作る |
 | background-upload | 未移行の iOS AppDelegate（`ios/fandhe_ios_url_scheme.m` の `handleEventsForBackgroundURLSession`）が転送先として `fandhe_apple_background_upload.m` に結びついている（background-download と同じ止まり方） | AppDelegate のイベントを配る口を設計した後、または url-scheme・background-download と同時に移す |
-| motion-raw-sensors | Windows 実装が未移行の `windows_environment_sensors::ensure_minimize_watcher` を使い、ウォッチャー側も `windows_motion_raw_sensors::note_minimized` / `note_restored` を呼び返していて、双方向に結びついている | environment-sensors と同じ PR で移す。または最小化の通知を配る口を `fandhe-platform-windows` に置いてから |
-| video-capture | Windows 実装が `windows_camera_preview_stream::{spawn, spawn_action}` を使う。camera-preview-stream は並行して進む第 6 束（#1191）の対象。共有の FileProvider（`compose_file_paths.xml`）も使う | #1191 のマージ後に移す。そのときは WinRT 完了の積み込み（`spawn` / `spawn_action`）を `fandhe-platform-windows` へ上げ、FileProvider は file-preview と同じ機能専用の派生にする |
+| motion-raw-sensors | (1) Windows 実装が未移行の `windows_environment_sensors::ensure_minimize_watcher` を使い、ウォッチャー側も `windows_motion_raw_sensors::note_minimized` / `note_restored` を呼び返していて、双方向に結びついている。(2) iOS の `ios/fandhe_ios_motion_raw_sensors.m` が、未移行の tilt-motion の `ios/fandhe_ios_motion.m` が定義する共有の `CMMotionManager`（`fandhe_ios_shared_motion_manager` など）を extern で使う | (1) environment-sensors と同じ PR で移す。または最小化の通知を配る口を `fandhe-platform-windows` に置いてから。(2) tilt-motion・environment-sensors と同じ PR で移す。manager を `fandhe-platform-apple` へ上げると CoreMotion が全アプリにリンクされ、未選択機能の混入検査（#1178）の趣旨に反するため上げない |
 ## 14. 第 6 束（#1191）で出た型と後回しの機能
 
 第 6 束（20 機能）のうち、sound-classification・companion-device・smart-home・eye-dropper・global-hotkey・
@@ -367,8 +368,8 @@ wifi-connect・volume-control・sleep-lock-events の 8 機能を移した。残
 | health-data | `HealthPermissionsRationaleActivity` を指す `<activity-alias>` を、宣言の `ComponentKind`（activity / service / receiver / provider）で表せない | 宣言に activity-alias を足してから |
 | car-display | `<application>` 直下の `meta-data` 2 件を宣言で表せない（payment-request と同じ） | 宣言に application の meta-data を足してから |
 | deep-link | Android の振り分けが `MainActivity.deliverUrlIntent`（url-scheme の受け口）に埋まっている。`url_scheme::UrlInbox` も使う | url-scheme と同時に移す（Intent を配る口の設計が先） |
+| camera-preview-stream | 未移行の video-capture の Windows 実装が `windows_camera_preview_stream::{spawn, spawn_action}` を使う | 第 7 束（#1192）で `spawn` が共通層（`fandhe_platform_windows::winrt_async`）へ上がり、障害が解消した。次の周で移せる |
 | open-in-shell | 未移行の recent-documents が driver の `open_in_shell::prepare_sample_file_in` と、Windows の `windows_open_in_shell::to_win32_path` を使う | recent-documents と同じ PR で移す （第 8 束 #1193 で recent-documents と同時に移した） |
-| camera-preview-stream | 未移行の video-capture の Windows 実装が `windows_camera_preview_stream::{spawn, spawn_action}` を使う | video-capture と同じ PR で移すか、`spawn` を共通層へ上げてから |
 
 wifi-info（§10 の後回し）は、wifi-connect の移行で `radio_off` が `fandhe-device::wifi_info` へ上がったため、
 参照の障害が解消した。次の周で移せる。
@@ -386,7 +387,7 @@ ar-camera-view は iOS の実装が `fandhe-cap-ar` にあるため新しい cra
 |----|------|
 | 2 つの id を 1 つの crate にまとめる（compose-mail-sms・compose-mail-attachment） | 2 つの id が同じモジュール（`compose_mail_sms` と、macOS・Windows の `compose_attachment_file`）を共有するため、crate は 1 つにして宣言の `id` は compose-mail-sms にする。`scaffold` は片方の stem しか移さないので、もう一方（`compose_attachment_file.rs`・`ComposeHelper.java`）は `git mv` で手で移す。2 つの対応表の `impl` は同じ crate のパスを指す。`scaffold` が機械的に `super::` で書く OS 実装から driver への参照は、`crate::driver::` へ手で直す |
 | 再公開が無くなる（compose-mail-sms の `open_url`） | `windows_compose_mail_sms` が持っていた `open_url`・`SE_ERR_NOASSOC` の再公開は、web-auth-session・launch-at-login の参照を `fandhe_platform_windows` へ付け替える先行コミットで先に消した（Windows 以外のテストが `SE_ERR_NOASSOC` を要るときは、同じ値を cfg で置く）。§9 の compose-mail-sms の障害はこれで解消した |
-| 機能専用の FileProvider（compose-mail-sms） | file-preview と同じ形で `ComposeMailFileProvider`（`FileProvider` の空の派生）と `res/xml/compose_mail_file_paths.xml`（`cache/compose/` だけ）を機能 crate に持つ。lifecycle provider の authority（`${applicationId}.fandhe.compose-mail-sms`）と区別するため、FileProvider は `.files` を付ける。共有の `${applicationId}.compose` の公開パスから `compose` を消し、動画の撮影の `cache/video_capture/` だけを残した |
+| 機能専用の FileProvider（compose-mail-sms） | file-preview と同じ形で `ComposeMailFileProvider`（`FileProvider` の空の派生）と `res/xml/compose_mail_file_paths.xml`（`cache/compose/` だけ）を機能 crate に持つ。lifecycle provider の authority（`${applicationId}.fandhe.compose-mail-sms`）と区別するため、FileProvider は `.files` を付ける。共有の `${applicationId}.compose` の provider と `compose_file_paths.xml` は、動画の撮影も機能専用へ移ったため撤去した |
 | 契約を他の crate が使う機能の同時移行（open-in-shell・recent-documents） | recent-documents が open-in-shell の `ShellPath`・`prepare_sample_file_in`・Windows の `to_win32_path` を使い、契約の `fandhe-device` 側も互いに参照していたため、1 コミットで移した。recent-documents の crate が open-in-shell の crate に依存する。`prepare_sample_file_in`・`to_win32_path` は `pub` にして crate ルートから出す（検査は変えない）。`to_win32_path` は OS に触れない純関数のため、`windows` モジュールは全 OS で載せる。エラーは `From<OpenInShellError> for RecentDocumentsError` で識別子ごと 1:1 に写す。§14 の open-in-shell の障害はこれで解消した |
 | Windows の他機能が使う記号 | external-app-launch の Windows 実装のコメントが指していた `windows_open_in_shell.rs` の `ComGuard` は、新しいパス（`fandhe-cap-open-in-shell`）へ直した |
 | 他機能と共有する画像の復号の複製（scanner-devices） | 表示用の復号（`MAX_SIDE`・`MAX_ALLOC`・`DISPLAY_SIDE`・`image::Limits`）は未移行の photo-picker の `decode_for_display` が持っていた。scanner-devices は document-scan の前例に合わせて driver に同じ処理を持ち、`// ponytail:` で「photo-picker を移すときに共有の置き場を決める」と書いた。契約側の `PickedPhoto`・`validate_photo`・`MAX_PHOTO_BYTES` は `fandhe-device` に残して参照する（§7） |

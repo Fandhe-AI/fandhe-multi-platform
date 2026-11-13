@@ -140,8 +140,6 @@ pub mod translation;
 pub mod tts;
 /// Phase 11（端末機能の拡充ループ、親 #1116、Issue #1215）: カスタム URL scheme の受信。
 pub mod url_scheme;
-/// Phase 11（端末機能の拡充ループ、親 #169、Issue #821）: 動画の撮影（OS の撮影 UI を開き、長さ・寸法・サイズを出す）。
-pub mod video_capture;
 /// Phase 11（端末機能の拡充ループ、親 #113、Issue #530）: OAuth 用の Web 認証セッション（デモ認可ページ + コールバック検査）。
 pub mod web_auth_session;
 /// Phase 11（端末機能の拡充ループ、親 #111、Issue #514）: Wi-Fi 情報（現在の接続と周辺の上位数件）。

@@ -19,8 +19,9 @@
 //! - 追加するのは `windows` クレートの feature だけで、新しい依存は足さない
 //! - 守らない範囲: 撮影パネルの見た目・画質、音声（録らない）、複数プロセス。権限拒否（`E_ACCESSDENIED`）は
 //!   `PermissionDenied` に写す
-//! `fandhe-egui-proxy` の effect ドライバ（`device/video_capture.rs`）が本モジュールの trait を呼び、
-//! OS 層が実装する。Web の子は検査 [`VideoClip::from_os`] を再利用する（本モジュールは wasm32 でも
+//!
+//! 本 crate の effect ドライバ（`driver`）が本モジュールの trait を呼び、OS 層が実装する。
+//! Web の子は検査 [`VideoClip::from_os`] を再利用する（本モジュールは wasm32 でも
 //! ビルドできる純粋なコードに保つ）。
 //!
 //! # 契約
@@ -225,7 +226,7 @@ pub fn result_from_code(
 }
 
 /// 動画撮影の OS 実装。`capture` は「受理」だけを同期で返し、結果は OS 層が
-/// `fandhe-egui-proxy` の bridge（`complete_from_os`）へ 1 回だけ非同期に届ける。
+/// 本 crate の bridge（`driver::complete_from_os`）へ 1 回だけ非同期に届ける。
 pub trait VideoCapturer: Send + Sync {
     /// `request_id` の要求として撮影 UI の表示を OS へ依頼する。`max_duration_secs` は
     /// 録画の長さの上限。表示の直前に bridge の `try_begin_present` を呼び、`false` なら表示しない。

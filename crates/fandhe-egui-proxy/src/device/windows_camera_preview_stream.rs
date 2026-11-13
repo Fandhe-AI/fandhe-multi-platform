@@ -46,7 +46,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, OnceLock};
 
-use windows::core::{IInspectable, Interface, Ref, RuntimeType, HRESULT, HSTRING};
+use fandhe_platform_windows::winrt_async::{spawn, spawn_action};
+use windows::core::{IInspectable, Ref, HRESULT, HSTRING};
 use windows::Devices::Enumeration::{
     DeviceClass, DeviceInformation, DeviceInformationCollection, Panel,
 };
@@ -64,10 +65,7 @@ use windows::Media::Capture::{
 use windows::Media::Devices::{ZoomControl, ZoomSettings, ZoomTransitionMode};
 use windows::Media::MediaProperties::MediaEncodingSubtypes;
 use windows::Storage::Streams::{Buffer, DataReader};
-use windows_future::{
-    AsyncActionCompletedHandler, AsyncOperationCompletedHandler, AsyncStatus, IAsyncAction,
-    IAsyncInfo, IAsyncOperation,
-};
+use windows_future::IAsyncInfo;
 
 use fandhe_device::camera_preview_stream::{
     checked_zoom, downscale_packed, event_from_windows_stream_state,
@@ -77,9 +75,6 @@ use fandhe_device::camera_preview_stream::{
 };
 
 use super::camera_preview_stream::{deliver_event, deliver_frame, register, unregister};
-
-/// `E_FAIL`（完了が成功以外で、OS が理由を返さないときの代用）。
-const E_FAIL: i32 = 0x8000_4005_u32 as i32;
 
 /// ワーカーへの命令。開始・停止・ズーム・各段の完了・OS の通知はすべてここを順に通る。
 enum Cmd {
@@ -175,55 +170,6 @@ impl Session {
         }
         ok
     }
-}
-
-/// `IAsyncOperation` の完了を `wrap` で命令（`C`）にしてキューへ積む。待たない。
-/// `windows_video_capture` も同じ形で共用する（命令型だけが違う）。
-pub(super) fn spawn<C: Send + 'static, T: RuntimeType + 'static>(
-    op: windows::core::Result<IAsyncOperation<T>>,
-    tx: &Sender<C>,
-    wrap: impl Fn(windows::core::Result<T>) -> C + Send + 'static,
-) -> windows::core::Result<IAsyncInfo> {
-    let op = op?;
-    let tx = tx.clone();
-    op.SetCompleted(&AsyncOperationCompletedHandler::new(move |op, status| {
-        let result = match (op.ok(), status) {
-            (Ok(op), AsyncStatus::Completed) => op.GetResults(),
-            // 失敗・取り消しは成功にしない（理由が取れなければ E_FAIL）。
-            (Ok(op), _) => Err(op
-                .GetResults()
-                .err()
-                .unwrap_or_else(|| HRESULT(E_FAIL).into())),
-            _ => Err(HRESULT(E_FAIL).into()),
-        };
-        // 受信側（ワーカー）が終わっていても無視してよい。
-        let _ = tx.send(wrap(result));
-        Ok(())
-    }))?;
-    op.cast()
-}
-
-/// `IAsyncAction` 版の [`spawn`]。
-pub(super) fn spawn_action<C: Send + 'static>(
-    op: windows::core::Result<IAsyncAction>,
-    tx: &Sender<C>,
-    wrap: impl Fn(windows::core::Result<()>) -> C + Send + 'static,
-) -> windows::core::Result<IAsyncInfo> {
-    let op = op?;
-    let tx = tx.clone();
-    op.SetCompleted(&AsyncActionCompletedHandler::new(move |op, status| {
-        let result = match (op.ok(), status) {
-            (Ok(op), AsyncStatus::Completed) => op.GetResults(),
-            (Ok(op), _) => Err(op
-                .GetResults()
-                .err()
-                .unwrap_or_else(|| HRESULT(E_FAIL).into())),
-            _ => Err(HRESULT(E_FAIL).into()),
-        };
-        let _ = tx.send(wrap(result));
-        Ok(())
-    }))?;
-    op.cast()
 }
 
 struct WindowsCameraPreview;

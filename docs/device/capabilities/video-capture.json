@@ -22,7 +22,7 @@
       "note": "実装済み（#822）。提示前にカメラ・動画モードの有無（シミュレータなど非対応の機器は非対応として返す）・前面・カメラ権限を確かめ、上限 30 秒を `videoMaximumDuration` に渡す。撮影 UI を閉じたのを観測してから 1 回だけ結果を返す。長さ・寸法・回転は `AVURLAsset` の読み込み API（`duration`、映像トラックの `naturalSize` / `preferredTransform`）、サイズはファイルから読み、長さだけ読めなければ長さなしで返す。`mediaURL` の一時ファイルは成功・取り消し・失敗の全経路で消す。期限・タイマーは持たず、完了は OS の delegate 通知だけで決める。守らない範囲: 提示の completion が届かない場合、録画中の背景遷移の扱い（OS 任せ）。実機確認は #819",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#819）",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_video_capture.m + crates/fandhe-egui-proxy/src/device/ios_video_capture.rs、Issue #822"
+      "impl": "crates/fandhe-cap-video-capture/ios/fandhe_ios_video_capture.m + crates/fandhe-cap-video-capture/src/ios.rs、Issue #822"
     },
     "android": {
       "status": "done",
@@ -38,7 +38,7 @@
       "note": "実装済み（#823）。CAMERA の許可を求めてから `ACTION_VIDEO_CAPTURE` を起動し、上限 30 秒を `EXTRA_DURATION_LIMIT` に渡す。出力先は `cache/video_capture/` を `FileProvider` で渡し、撮影の前に置き場を空にして、成功・取り消し・失敗・破棄の全経路で消す。`resolveActivity` で事前判定せず、`ActivityNotFoundException` を「カメラアプリなし」に写す。長さ・寸法・回転は `MediaMetadataRetriever`（minSdk 24 のため `close()` ではなく `release()`）、サイズはファイルの大きさから読み、回転が無いときは 0 として扱う。期限・タイマーは持たず、完了は Activity の結果だけで決める。守らない範囲: `EXTRA_OUTPUT` を無視して別の場所へ保存するカメラアプリ（空のファイルとして失敗にする）、撮影中の背景遷移の扱い（OS 任せ）、撮影中のプロセス死（次回の撮影の前に回収）。`RECORD_AUDIO` が録画の音声に要らないことの明文は未確認。実機確認は #819",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#819）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_video_capture.rs + platforms/android/app/src/main/java/com/fandhe/platform/VideoCaptureHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + platforms/android/app/src/main/res/xml/compose_file_paths.xml、Issue #823"
+      "impl": "crates/fandhe-cap-video-capture/src/android.rs + crates/fandhe-cap-video-capture/android/java/com/fandhe/platform/VideoCaptureHelper.java + crates/fandhe-cap-video-capture/android/java/com/fandhe/platform/VideoCaptureLifecycle.java + crates/fandhe-cap-video-capture/android/java/com/fandhe/platform/VideoCaptureFileProvider.java + crates/fandhe-cap-video-capture/android/res/xml/video_capture_file_paths.xml、Issue #823"
     },
     "macos": {
       "status": "done",
@@ -57,7 +57,7 @@
       "note": "実装済み（#1071）。撮影パネルは要求ごとに開き、閉じてから結果を 1 回だけ返す。録画前に「キャンセル」を押すかパネルを閉じると取り消し。録画中に閉じると録画を止め、完了の delegate を待ってファイルを消してから取り消しにする。成否は完了の delegate だけで決める（エラーが無い、またはエラー付きでも `AVErrorRecordingSuccessfullyFinishedKey` が YES なら撮れた。上限 30 秒で止まった場合はエラー付きで届く（公式））。`AVErrorNoDataCaptured` と 0 バイトは空の失敗。一時ファイルは要求ごとに `mkdtemp`（0700）で作る置き場の中だけに書き、成功・取り消し・失敗の全経路で置き場ごと消す。消せなかったら結果を失敗（その他）にし、次の撮影の前に消し直して、消せなければ次も失敗にする。音声は録らない。ウィンドウが背面でもパネルを出す（前面でない・表示前の中断は使わない）。カメラが無いと非対応、録画前の実行時エラー・カメラの取り外しはその他の失敗。パネルを開いたまま画面を離れてもパネルは残り、後から届いた結果は捨てる。使うカメラは OS の既定。カメラの許可は毎回 OS に問い、拒否は権限拒否。上限 30 秒は `maxRecordedDuration` で OS が止める。マイクは使わない。Mac 目視は #819 で行う",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#819）",
-      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_video_capture.m + crates/fandhe-egui-proxy/src/device/macos_video_capture.rs + crates/fandhe-egui-proxy/src/device/video_capture.rs + crates/fandhe-egui-proxy/macos/Info.plist、Issue #1071"
+      "impl": "crates/fandhe-cap-video-capture/macos/fandhe_macos_video_capture.m + crates/fandhe-cap-video-capture/src/macos.rs + crates/fandhe-cap-video-capture/src/driver.rs + crates/fandhe-egui-proxy/macos/Info.plist、Issue #1071"
     },
     "windows": {
       "status": "done",
@@ -74,7 +74,7 @@
       "note": "実装済み（#1150）。Windows App SDK 版の `CameraCaptureUI` は採らず、WinRT `MediaCapture`（映像のみ。音声は録らず、マイクの許可を求めない）で組んだ。撮影 UI は core 画面の撮影パネル（「録画を始める」「止める」「キャンセル」）で、プレビューは出さない。パネルの状態はワーカーが OS の完了を観測してから書き、ボタンは命令を立てるだけで、ワーカーが段と照合して重複・遅れた命令を捨てる。上限 30 秒は録画の開始から単調時計（`Instant`）で測って自動で止める。録画前の「キャンセル」と録画中の「キャンセル」はどちらも取り消し（録画中は止めてからファイルを消す）で、失敗にしない。長さ・寸法・向きは `GetVideoPropertiesAsync`（`Duration` / `Width` / `Height` / `Orientation`）、サイズはファイルの大きさから読み、0 バイトは空の失敗、読めないものは読めない動画の失敗。`E_ACCESSDENIED` は権限拒否、`MF_E_NO_CAPTURE_DEVICES_AVAILABLE` は非対応（カメラが無い）、それ以外はその他の失敗。一時ファイルは要求ごとに新しい置き場へ `create_new` で作り、成功・取り消し・失敗の全経路で、保留中の操作を `Cancel` して完了が届いてから `RemoveFailed`・`MediaCapture::Close`・置き場の削除の順に解放する。消せなかったら結果を失敗（その他）にし、置き場を記録して次の撮影の前に消し直し、消せなければ次も失敗にする。各段の完了は `SetCompleted` から直列キューへ積み、要求 id で照合する（ワーカー上で `.get()` しない）。守らない範囲: `InitializeAsync` を MTA のワーカーで呼ぶ点（camera-preview-stream の Windows と同じ。実機で失敗したら UI スレッドでの初期化へ寄せる）、撮影パネルの見た目・画質、使うカメラ（OS の既定）、複数プロセス、撮影中のプロセス死、取り消しを含む完了が届かない場合の画面表示。補足: Windows App SDK 版の `CaptureFileAsync` はキャンセルとエラーをどちらも null で返し区別しない（公式）。`MediaCapture` の単一録画の上限は約 3 時間（公式）。実機確認は #819",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#819）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_video_capture.rs + crates/fandhe-egui-proxy/src/device/video_capture.rs + crates/fandhe-core/src/screens/video_capture_show.rs + crates/fandhe-egui-proxy/Cargo.toml、Issue #1150"
+      "impl": "crates/fandhe-cap-video-capture/src/windows.rs + crates/fandhe-cap-video-capture/src/driver.rs + crates/fandhe-core/src/screens/video_capture_show.rs + crates/fandhe-cap-video-capture/Cargo.toml、Issue #1150"
     },
     "web": {
       "status": "done",

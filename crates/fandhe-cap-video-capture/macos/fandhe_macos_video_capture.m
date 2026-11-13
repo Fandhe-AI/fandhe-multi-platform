@@ -1,6 +1,6 @@
 // macOS 向け動画の撮影（AppKit の撮影パネル + AVCaptureSession / AVCaptureMovieFileOutput、Issue #1071、親 #169）。
 // macOS には OS 標準の動画撮影 UI が無いため、アプリ側で NSPanel（プレビュー + 3 ボタン）を組む。
-// `src/device/macos_video_capture.rs` から呼ばれ、`build.rs` の `build_macos()` が feature `device` 有効時に
+// `src/macos.rs` から呼ばれ、`build.rs` が
 // コンパイルする（AppKit は既存のリンク。AVFoundation・CoreMedia・QuartzCore は明示リンク）。
 // 映像のみ録る（マイクは使わず、`NSMicrophoneUsageDescription` にも触れない）。
 // カメラの宣言は `macos/Info.plist` の `NSCameraUsageDescription`（文言に機能名を足すだけ）。
@@ -15,7 +15,7 @@
 //   int64_t duration_ms, int32_t width, int32_t height, int32_t rotation_deg)`（1 要求につき 1 回）。
 //   ポインタは渡さない。パス・NSError の文言は Rust へ渡さない。
 //
-// kind（`fandhe_device::video_capture::result_from_code` の表と一致させる）:
+// kind（`contract` の `result_from_code` の表と一致させる）:
 // 0 = 撮れた / 1 = 利用者が閉じた・キャンセル / 2 = 非対応（カメラなし）/ 3 = カメラ権限の拒否・制限 /
 // 4・5・6 = macOS では使わない（撮影アプリなし・前面判定・表示前の中断は持たない）/
 // 7 = 0 バイト・動画なし / 8 = メタデータ（映像トラック・寸法）を読めない / 9 = その他（置き場の削除失敗を含む）。

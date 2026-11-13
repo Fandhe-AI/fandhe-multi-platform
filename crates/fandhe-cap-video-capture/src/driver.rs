@@ -1,26 +1,26 @@
 //! Phase 11 型サンプル「動画の撮影」（親 #169、Issue #821）の effect ドライバ。
 //! `fandhe_core::screens::video_capture_show`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::video_capture::VideoCapturer` に撮影 UI の表示を依頼して、
+//! `crate::contract::VideoCapturer` に撮影 UI の表示を依頼して、
 //! OS 層から届く結果を `CompletionSender` 経由で画面へ返す（`fandhe-gallery` の `screens/registry.rs` の
 //! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約（結果の三値・数値表・守る範囲）の SSOT は `fandhe_device::video_capture`。
+//! 契約（結果の三値・数値表・守る範囲）の SSOT は `crate::contract`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
 //!
 //! # OS 別の分担（dispatch・bridge・本ファイルは #821 で最終形。後続の子はここを触らない）
 //!
-//! - iOS: `ios_video_capture`（#822。`UIImagePickerController`）
-//! - Android: `android_video_capture`（#823。`ACTION_VIDEO_CAPTURE`）
+//! - iOS: `ios`（#822。`UIImagePickerController`）
+//! - Android: `android`（#823。`ACTION_VIDEO_CAPTURE`）
 //! - Web: `fandhe-web-dom` 側（#824）。wasm32 では本ファイルをビルドしない
-//! - macOS: `macos_video_capture`（#1071。AppKit の撮影パネル + `AVCaptureMovieFileOutput`）
-//! - Windows: `windows_video_capture`（#1150。WinRT `MediaCapture` + アプリが組む撮影パネル）。
+//! - macOS: `macos`（#1071。AppKit の撮影パネル + `AVCaptureMovieFileOutput`）
+//! - Windows: `windows`（#1150。WinRT `MediaCapture` + アプリが組む撮影パネル）。
 //!   Linux は対象外で `UnsupportedVideoCapturer` 固定（ダミーの成功実装へは倒さない）
 //!
 //! # 撮影パネル（Windows）の経路
 //!
 //! パネルの状態は OS を正にする。ワーカーが [`set_panel`] で bridge へ書いた状態を、`drive` が
 //! 画面へ写す（`set_panel` の completion）。ボタンが立てた命令は `drive` が `forward`
-//! （本番は `windows_video_capture::panel_command`）で現在の要求 id とともにワーカーへ渡し、
+//! （本番は `windows::panel_command`）で現在の要求 id とともにワーカーへ渡し、
 //! 渡した後に命令を消す。消える前の次フレームで同じ命令が再転送されうるため、ワーカーが状態と
 //! 照合して重複を捨てる。trait `VideoCapturer` は変えない（契約変更を避ける）
 //!
@@ -33,7 +33,7 @@
 //! # 期限を持たない理由
 //!
 //! 撮影は利用者の操作時間に依存するため、Rust 側で期限・タイマーを置かない（OS を正とする）。
-//! OS から完了通知が届かない場合、画面は撮影中のままになる（`fandhe_device::video_capture` の
+//! OS から完了通知が届かない場合、画面は撮影中のままになる（`crate::contract` の
 //! 守らない範囲）。
 //!
 //! # スレッド
@@ -47,39 +47,89 @@
 
 use std::sync::{Arc, Mutex, OnceLock};
 
+use crate::contract::{MAX_DURATION_SECS, VideoCaptureFailure, VideoCaptureOutcome, VideoCapturer};
 use fandhe_core::screens::video_capture_show::VideoCaptureShowState;
 use fandhe_core::screens::video_capture_show::{
+    ClipOrigin, CoreFailure, CoreOutcome, PanelCommand, PanelPhase, Phase, ShownClip,
     clear_panel_command, finish_capture, mark_running, set_panel as set_screen_panel,
-    take_panel_command, take_request, ClipOrigin, CoreFailure, CoreOutcome, PanelCommand,
-    PanelPhase, Phase, ShownClip,
-};
-use fandhe_device::video_capture::{
-    VideoCaptureFailure, VideoCaptureOutcome, VideoCapturer, MAX_DURATION_SECS,
+    take_panel_command, take_request,
 };
 
-use super::request_slot::{poll_and_finish, RequestSlot, POLL_INTERVAL};
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
 
 /// OS 層から届いて検査を終えた結果。
 type Outcome = Result<VideoCaptureOutcome, VideoCaptureFailure>;
 
 /// 現在のプラットフォームに応じた `VideoCapturer` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn VideoCapturer> {
+///
+/// 画面の状態型に依存しない入口で、フレームワークの外のアプリも契約を直接呼べる。
+/// `capture(request_id, ..)` は渡した id で要求を bridge へ登録してから OS へ渡すため、撮影 UI が出る。
+/// 結果は [`take_capture_result`] で 1 回だけ取り出す（取り出すまで次の要求は `Internal` で断る）。
+pub fn platform_video_capture() -> Arc<dyn VideoCapturer> {
+    Arc::new(Registering(raw_platform()))
+}
+
+/// 撮影の結果を取り出す。`request_id` が現在の要求で、結果が届いていれば 1 回だけ `Some`。
+pub fn take_capture_result(
+    request_id: u64,
+) -> Option<Result<VideoCaptureOutcome, VideoCaptureFailure>> {
+    bridge().slot.take_ready(request_id)
+}
+
+/// Windows の撮影パネルの状態（表示中の要求 `request_id` のときだけ `Some`）。
+/// `platform_video_capture()` を直接使うアプリが、自前のパネルへ状態を写すための口。
+pub fn capture_panel(request_id: u64) -> Option<PanelPhase> {
+    bridge()
+        .panel()
+        .filter(|(id, _)| *id == request_id)
+        .and_then(|(_, p)| p)
+}
+
+/// 撮影パネルの命令（録画の開始・停止・取り消し）を `request_id` の要求へ渡す。Windows 以外は何もしない。
+pub fn send_panel_command(request_id: u64, command: PanelCommand) {
+    forward_panel_command(request_id, command);
+}
+
+/// 外部アプリ向け。呼び出し側の id を bridge へ登録してから内側の実装へ渡す。
+struct Registering(Arc<dyn VideoCapturer>);
+
+impl VideoCapturer for Registering {
+    fn capture(&self, request_id: u64, max_duration_secs: u32) -> Result<(), VideoCaptureFailure> {
+        // JNI の long で負数になる id は Android の `RequestTracker.NONE`（-1）と衝突し結果が捨てられるため、登録前に断る。
+        if i64::try_from(request_id).is_err() {
+            return Err(VideoCaptureFailure::Internal);
+        }
+        let b = bridge();
+        if !b.try_begin_with(request_id) {
+            return Err(VideoCaptureFailure::Internal);
+        }
+        let r = self.0.capture(request_id, max_duration_secs);
+        if r.is_err() {
+            // 同期失敗は Err で返すので、失敗を結果として残さず登録ごと取り消す（再試行を塞がない）。
+            b.cancel(request_id);
+        }
+        r
+    }
+}
+
+/// OS 実装そのもの（要求の登録は呼び出し側が行う）。
+fn raw_platform() -> Arc<dyn VideoCapturer> {
     #[cfg(target_os = "ios")]
     {
-        super::ios_video_capture::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_video_capture::implementation()
+        crate::android::implementation()
     }
     #[cfg(target_os = "macos")]
     {
-        super::macos_video_capture::implementation()
+        crate::macos::implementation()
     }
     #[cfg(target_os = "windows")]
     {
-        super::windows_video_capture::implementation()
+        crate::windows::implementation()
     }
     // Linux は対象外。Web は `fandhe-web-dom` 側。
     #[cfg(not(any(
@@ -89,7 +139,7 @@ fn platform() -> Arc<dyn VideoCapturer> {
         target_os = "windows"
     )))]
     {
-        Arc::new(fandhe_device::video_capture::UnsupportedVideoCapturer)
+        Arc::new(crate::contract::UnsupportedVideoCapturer)
     }
 }
 
@@ -107,6 +157,19 @@ struct Active {
 struct Bridge {
     slot: &'static RequestSlot<Outcome>,
     active: Mutex<Option<Active>>,
+    /// 画面側の発送が登録した要求の id。slot に残る要求が画面自身のものか公開入口のものかの区別に使う。
+    /// 取るときは必ず `active` のロックを先に取る（逆順にしない）。
+    screen_request: Mutex<Option<u64>>,
+}
+
+/// 画面側の発送の結果。
+enum ScreenBegin {
+    /// 空きだったので登録した。この id で OS へ渡す。
+    Begun(u64),
+    /// 画面自身が発送済みの要求（結果の画面反映待ちを含む）が残っている。二重に発送しない。
+    Ours,
+    /// 公開入口の要求・結果が残っている。置き換えない。
+    Busy,
 }
 
 impl Bridge {
@@ -114,6 +177,7 @@ impl Bridge {
         Self {
             slot: Box::leak(Box::new(RequestSlot::new())),
             active: Mutex::new(None),
+            screen_request: Mutex::new(None),
         }
     }
 
@@ -122,20 +186,71 @@ impl Bridge {
     }
 
     /// 発送済み（OS 呼び出し中、または結果が画面へ未反映）の要求があるか。
+    #[cfg(test)]
     fn has_pending(&self) -> bool {
         self.lock().is_some() || self.slot.snapshot().is_some()
     }
 
-    /// 新しい要求を登録して id を返す。OS へ渡す前に呼び、即時の完了も照合できるようにする。
-    fn begin(&self) -> u64 {
+    /// 空きの確認と登録を同じロックで行う（外部アプリの直接呼び出し用）。占有中なら `false`。
+    /// 呼び出し側の id は採番を追い越さない（`RequestSlot::begin_with` が進める）。
+    fn try_begin_with(&self, request_id: u64) -> bool {
         let mut active = self.lock();
-        let request_id = self.slot.begin();
+        if active.is_some() || self.slot.snapshot().is_some() {
+            return false;
+        }
+        self.slot.begin_with(request_id);
+        *self
+            .screen_request
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
         *active = Some(Active {
             request_id,
             presenting: false,
             panel: None,
         });
-        request_id
+        true
+    }
+
+    /// 同期失敗した要求の登録を、結果を残さず取り消す。
+    fn cancel(&self, request_id: u64) {
+        let mut active = self.lock();
+        if active.as_ref().is_some_and(|a| a.request_id == request_id) {
+            *active = None;
+        }
+        self.slot.clear(request_id);
+    }
+
+    /// 画面側の発送。空きの確認と登録を `active` のロックの内側で 1 回で行う（`try_begin_with` と同じ排他）。
+    /// OS へ渡す前に呼び、即時の完了も照合できるようにする。
+    fn try_begin_screen(&self) -> ScreenBegin {
+        let mut active = self.lock();
+        let mut screen = self
+            .screen_request
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let pending = self.slot.snapshot();
+        if active.is_some() || pending.is_some() {
+            return match pending {
+                Some((id, _)) if *screen == Some(id) => ScreenBegin::Ours,
+                _ => ScreenBegin::Busy,
+            };
+        }
+        let request_id = self.slot.begin();
+        *screen = Some(request_id);
+        *active = Some(Active {
+            request_id,
+            presenting: false,
+            panel: None,
+        });
+        ScreenBegin::Begun(request_id)
+    }
+
+    #[cfg(test)]
+    fn begin(&self) -> u64 {
+        match self.try_begin_screen() {
+            ScreenBegin::Begun(id) => id,
+            _ => panic!("テストは空きの bridge で呼ぶ"),
+        }
     }
 
     /// 表示開始の記録。現在の要求で、未提示のときだけ `true`。
@@ -191,6 +306,10 @@ impl Bridge {
     fn reset(&self) {
         let mut active = self.lock();
         *active = None;
+        *self
+            .screen_request
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
         self.slot.reset();
     }
 }
@@ -202,7 +321,7 @@ fn bridge() -> &'static Bridge {
 }
 
 /// OS 層が撮影 UI を出す直前に呼ぶ。`false` なら出さない（モジュール doc 参照）。
-// iOS・Android 以外のビルドでは未使用（スタブ段階では #822・#823 が呼ぶ）。
+// OS 実装（iOS・Android・macOS・Windows）だけが呼ぶ。
 #[allow(dead_code)]
 pub(crate) fn try_begin_present(request_id: u64) -> bool {
     bridge().try_begin_present(request_id)
@@ -223,9 +342,8 @@ pub(crate) fn set_panel(request_id: u64, panel: Option<PanelPhase>) {
 
 /// 画面の作り直し時に保留中の要求を破棄する。画面状態は `default()`（世代 0）に戻るため、
 /// 保留が残ると次の要求が発送されず飲み込まれる。旧要求の遅延完了は id 不一致で捨てられる。
-// Android の再生成経路（`android.rs`）から呼ばれる。Android 以外では未使用。
-#[allow(dead_code)]
-pub(crate) fn reset_pending_tracking() {
+// Android の再生成経路（`fandhe-gallery` の `android_main`）から呼ばれる。
+pub fn reset_pending_tracking() {
     if let Some(b) = BRIDGE.get() {
         b.reset();
     }
@@ -245,9 +363,8 @@ fn to_core_failure(f: VideoCaptureFailure) -> CoreFailure {
     }
 }
 
-/// 要求を登録して OS へ渡す。同期失敗はその場で確定する。
-fn start_request(bridge: &Bridge, imp: &dyn VideoCapturer) {
-    let request_id = bridge.begin();
+/// 登録済みの要求を OS へ渡す。同期失敗はその場で確定する。
+fn start_request(bridge: &Bridge, imp: &dyn VideoCapturer, request_id: u64) {
     if let Err(f) = imp.capture(request_id, MAX_DURATION_SECS) {
         bridge.complete_from_os(request_id, Err(f));
     }
@@ -261,14 +378,29 @@ fn drive(
     bridge: &Bridge,
     forward: fn(u64, PanelCommand),
 ) {
-    if take_request(state).is_some() {
-        // 保留ありは発送済み（`mark_running` の適用待ち）。二重に発送しない。
-        if bridge.has_pending() {
-            return;
+    if let Some(generation) = take_request(state) {
+        match bridge.try_begin_screen() {
+            // 画面自身の発送済み（`mark_running` の適用待ち）。二重に発送しない。
+            ScreenBegin::Ours => {}
+            ScreenBegin::Begun(request_id) => {
+                let _ = sender.send(Box::new(mark_running));
+                start_request(bridge, &**imp, request_id);
+                sender.request_repaint_after(POLL_INTERVAL);
+            }
+            // 公開入口の要求・結果が残っているうちは置き換えず、画面へ busy の失敗を返す
+            // （`Requested` のまま止まらないよう `Running` を経て確定する）。
+            ScreenBegin::Busy => {
+                let _ = sender.send(Box::new(move |s: &mut VideoCaptureShowState| {
+                    // 同じ世代で積まれた先行の適用後に再要求されていたら、新しい要求を壊さない。
+                    if s.generation != generation {
+                        return;
+                    }
+                    mark_running(s);
+                    finish_capture(s, generation, Err(CoreFailure::Internal));
+                }));
+                sender.request_repaint_after(POLL_INTERVAL);
+            }
         }
-        let _ = sender.send(Box::new(mark_running));
-        start_request(bridge, &**imp);
-        sender.request_repaint_after(POLL_INTERVAL);
         return;
     }
     if state.phase != Phase::Running {
@@ -284,12 +416,12 @@ fn drive(
             clear_panel_command(s, g, cmd)
         }));
     }
-    if let Some((_, panel)) = bridge.panel() {
-        if panel != state.panel {
-            let _ = sender.send(Box::new(move |s: &mut VideoCaptureShowState| {
-                set_screen_panel(s, generation, panel);
-            }));
-        }
+    if let Some((_, panel)) = bridge.panel()
+        && panel != state.panel
+    {
+        let _ = sender.send(Box::new(move |s: &mut VideoCaptureShowState| {
+            set_screen_panel(s, generation, panel);
+        }));
     }
     let slot = bridge.slot;
     let Some((pending_id, _)) = slot.snapshot() else {
@@ -301,8 +433,8 @@ fn drive(
         |_| {},
         move |s: &mut VideoCaptureShowState, outcome: Outcome| {
             let applied = apply_outcome(s, generation, outcome);
-            // 反映できない完了（世代違い）は捨てる。残すとスロットが埋まったままになり、
-            // `has_pending` が真のまま以降の要求が発送されない。
+            // 反映できない完了（世代違い）は捨てる。残すと `slot` に完了が残ったままになり、
+            // `try_begin_screen` が `Busy` を返し続けて以降の画面要求が発送されない。
             if !applied {
                 slot.clear(pending_id);
             }
@@ -337,7 +469,7 @@ pub fn video_capture_show_effect(
     drive(
         state,
         sender,
-        IMPL.get_or_init(platform),
+        IMPL.get_or_init(raw_platform),
         bridge(),
         forward_panel_command,
     );
@@ -346,7 +478,7 @@ pub fn video_capture_show_effect(
 /// 撮影パネルの命令を OS 層へ渡す本番の転送先。Windows 以外にパネルは無い。
 fn forward_panel_command(request_id: u64, command: PanelCommand) {
     #[cfg(target_os = "windows")]
-    super::windows_video_capture::panel_command(request_id, command);
+    crate::windows::panel_command(request_id, command);
     #[cfg(not(target_os = "windows"))]
     let _ = (request_id, command);
 }
@@ -354,19 +486,26 @@ fn forward_panel_command(request_id: u64, command: PanelCommand) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{UnsupportedVideoCapturer, VideoClip};
     use fandhe_core::screens::video_capture_show::{
-        error_text, request_capture, status_text, MAX_DURATION_SECS as CORE_MAX_SECS,
+        MAX_DURATION_SECS as CORE_MAX_SECS, error_text, request_capture, status_text,
     };
-    use fandhe_device::video_capture::{UnsupportedVideoCapturer, VideoClip};
     use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
-    type Rx = mpsc::Receiver<crate::app::Completion<VideoCaptureShowState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<VideoCaptureShowState>>;
 
     fn channel() -> (CompletionSender<VideoCaptureShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
+    }
+
+    /// 起床しないだけの口（受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
     }
 
     fn new_bridge() -> &'static Bridge {
@@ -541,7 +680,7 @@ mod tests {
             target_os = "windows"
         )))]
         assert_eq!(
-            platform().capture(1, MAX_DURATION_SECS),
+            raw_platform().capture(1, MAX_DURATION_SECS),
             Err(VideoCaptureFailure::Unsupported)
         );
     }
@@ -609,6 +748,13 @@ mod tests {
             let (s, _) = run(mode);
             assert_eq!(s.result, Some(Err(CoreFailure::Internal)));
         }
+    }
+
+    #[test]
+    fn registering_rejects_ids_that_are_negative_as_jni_long() {
+        let imp: Arc<dyn VideoCapturer> = fake(Mode::Silent, new_bridge());
+        let r = Registering(imp);
+        assert_eq!(r.capture(u64::MAX, 30), Err(VideoCaptureFailure::Internal));
     }
 
     #[test]
@@ -765,6 +911,56 @@ mod tests {
         request_capture(&mut fresh);
         drive(&fresh, &sender, &imp, bridge, no_forward);
         assert_eq!(f.calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn try_begin_with_is_exclusive_and_cancel_frees_it() {
+        let bridge = new_bridge();
+        assert!(bridge.try_begin_with(5));
+        assert!(!bridge.try_begin_with(6));
+        bridge.cancel(5);
+        assert!(!bridge.has_pending());
+        assert!(bridge.try_begin_with(7));
+        assert_eq!(bridge.slot.snapshot().map(|s| s.0), Some(7));
+    }
+
+    /// 公開入口が枠を使用中に画面が発送しても、外部の登録は残り、画面へは busy の失敗が届く。
+    #[test]
+    fn busy_slot_keeps_external_request_and_fails_screen() {
+        let bridge = new_bridge();
+        let f = fake(Mode::Silent, bridge);
+        let imp: Arc<dyn VideoCapturer> = f.clone();
+        let (sender, rx) = channel();
+        assert!(bridge.try_begin_with(42));
+        let mut state = VideoCaptureShowState::default();
+        request_capture(&mut state);
+        pump(&mut state, &sender, &rx, &imp, bridge);
+        assert_eq!(state.result, Some(Err(CoreFailure::Internal)));
+        assert_eq!(f.calls.load(Ordering::SeqCst), 0, "OS へは渡さない");
+        assert_eq!(bridge.slot.snapshot().map(|s| s.0), Some(42));
+        assert!(bridge.lock().as_ref().is_some_and(|a| a.request_id == 42));
+    }
+
+    /// busy の失敗を積んだ後に再要求された新しい世代を、遅れて届いた同世代の 2 つ目の適用が `Running` にしない。
+    #[test]
+    fn stale_busy_closure_does_not_run_new_generation() {
+        let bridge = new_bridge();
+        let f = fake(Mode::Silent, bridge);
+        let imp: Arc<dyn VideoCapturer> = f.clone();
+        let (sender, rx) = channel();
+        assert!(bridge.try_begin_with(42));
+        let mut state = VideoCaptureShowState::default();
+        request_capture(&mut state);
+        drive(&state, &sender, &imp, bridge, no_forward);
+        drive(&state, &sender, &imp, bridge, no_forward);
+        let mut closures: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        assert_eq!(closures.len(), 2);
+        let second = closures.pop().unwrap();
+        (closures.pop().unwrap())(&mut state);
+        assert_eq!(state.phase, Phase::Idle);
+        request_capture(&mut state);
+        second(&mut state);
+        assert_eq!(state.phase, Phase::Requested);
     }
 
     #[test]

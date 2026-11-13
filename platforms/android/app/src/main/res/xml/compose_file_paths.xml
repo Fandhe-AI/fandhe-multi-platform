@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- FileProvider が公開するパス。動画の撮影（Issue #823）の出力先は `getCacheDir()/video_capture/`だけに限る（メール添付（Issue #32）とファイルのプレビュー（Issue #920）は機能専用の FileProvider を持つ）。 -->
-<paths>
-    <cache-path name="video_capture" path="video_capture/" />
-</paths>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- video-capture 専用の FileProvider が公開するパス。動画の撮影（Issue #823）は `getCacheDir()/video_capture/` だけに限る。 -->
+<paths>
+    <cache-path name="video_capture" path="video_capture/" />
+</paths>

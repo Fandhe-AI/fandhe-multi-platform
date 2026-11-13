@@ -569,14 +569,6 @@ public class MainActivity extends GameActivity {
         printHelper.printImage(requestId, argb, width, height);
     }
 
-    // 動画の撮影（Issue #823）。実装は `VideoCaptureHelper`。Rust の
-    // `android_video_capture.rs` が JNI で呼ぶ。
-    private final VideoCaptureHelper videoCaptureHelper = new VideoCaptureHelper(this);
-
-    void requestVideoCapture(long requestId, int maxSecs) {
-        videoCaptureHelper.capture(requestId, maxSecs);
-    }
-
     // 画面向きの取得・固定（Issue #657）。実装は `ScreenOrientationHelper`。Rust の
     // `android_screen_orientation.rs` が egui スレッドから同期で JNI 呼び出しする。
     private final ScreenOrientationHelper screenOrientationHelper = new ScreenOrientationHelper(this);
@@ -3840,7 +3832,6 @@ public class MainActivity extends GameActivity {
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
         cameraPreviewHelper.onDestroy();
-        videoCaptureHelper.onDestroy();
         printHelper.onDestroy();
         screenOrientationHelper.onDestroy();
         captureProtectionHelper.onDestroy();

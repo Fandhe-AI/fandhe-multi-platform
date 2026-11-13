@@ -1,9 +1,9 @@
 //! Windows 向け動画の撮影実装（Issue #1150）。`device/video_capture.rs` の `platform()`
 //! （Windows 経路）から呼ばれ、WinRT `MediaCapture` で動画を MP4 に録り、撮れた動画の長さ・寸法・
-//! 向き・ファイルサイズを `fandhe_device::video_capture::VideoClip::from_os` で検査して返す。
-//! 契約（三値・数値表・守る範囲）の SSOT は `fandhe_device::video_capture`。OS の撮影 UI が無いため、
+//! 向き・ファイルサイズを `crate::contract::VideoClip::from_os` で検査して返す。
+//! 契約（三値・数値表・守る範囲）の SSOT は `crate::contract`。OS の撮影 UI が無いため、
 //! 撮影パネル（開始・停止・キャンセル）は core 画面（`fandhe_core::screens::video_capture_show`）が描き、
-//! 本モジュールは状態を [`super::video_capture::set_panel`] で書き、命令を [`panel_command`] で受ける。
+//! 本モジュールは状態を [`crate::driver::set_panel`] で書き、命令を [`panel_command`] で受ける。
 //!
 //! # 流れ（専用ワーカーの待たない状態機械）
 //!
@@ -11,7 +11,7 @@
 //! 2. `InitializeWithSettingsAsync`（`StreamingCaptureMode::Video` のみ。音声は録らない）。成功したら
 //!    `try_begin_present` を記録してパネルを `Ready` にする
 //! 3. 「録画を始める」で `StartRecordToStorageFileAsync`（MP4・音声なし）。始まったらパネルを `Recording` にし、
-//!    期限（[`fandhe_device::video_capture::MAX_DURATION_SECS`]）を単調時計（`Instant`）で測る
+//!    期限（[`crate::contract::MAX_DURATION_SECS`]）を単調時計（`Instant`）で測る
 //! 4. 「止める」・期限切れ・「キャンセル」で `StopRecordAsync`。撮れたなら `GetVideoPropertiesAsync` で
 //!    長さ・寸法・向きを読み、ファイルの大きさと合わせて検査する
 //! 5. 後片付け（下記）を済ませてから `complete_from_os` を 1 回だけ呼ぶ
@@ -54,7 +54,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use fandhe_device::video_capture::VideoCaptureFailure;
+use crate::contract::VideoCaptureFailure;
 
 /// `E_ACCESSDENIED`（カメラへのアクセス拒否）。
 const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
@@ -164,7 +164,6 @@ mod imp {
     use std::sync::{Arc, OnceLock};
     use std::time::{Duration, Instant};
 
-    use windows::core::{AgileReference, HSTRING};
     use windows::Media::Capture::{
         MediaCapture, MediaCaptureFailedEventHandler, MediaCaptureInitializationSettings,
         StreamingCaptureMode,
@@ -174,16 +173,15 @@ mod imp {
     };
     use windows::Storage::FileProperties::VideoProperties;
     use windows::Storage::StorageFile;
+    use windows::core::{AgileReference, HSTRING};
     use windows_future::IAsyncInfo;
 
+    use crate::contract::{VideoCaptureFailure, VideoCaptureOutcome, VideoCapturer, VideoClip};
     use fandhe_core::screens::video_capture_show::{PanelCommand, PanelPhase};
-    use fandhe_device::video_capture::{
-        VideoCaptureFailure, VideoCaptureOutcome, VideoCapturer, VideoClip,
-    };
 
-    use super::super::video_capture::{complete_from_os, set_panel, try_begin_present};
-    use super::super::windows_camera_preview_stream::{spawn, spawn_action};
-    use super::{duration_ms_from_ticks, failure_from_hresult, retry_leftovers, TempClip};
+    use super::{TempClip, duration_ms_from_ticks, failure_from_hresult, retry_leftovers};
+    use crate::driver::{complete_from_os, set_panel, try_begin_present};
+    use fandhe_platform_windows::winrt_async::{spawn, spawn_action};
 
     type Outcome = Result<VideoCaptureOutcome, VideoCaptureFailure>;
 
@@ -350,18 +348,17 @@ mod imp {
 
         fn step(&mut self, cmd: Cmd) {
             // 解放待ちの要求に一致する完了は、中身を捨てて解放の続きとして扱う。
-            if let Some(id) = cmd.completion_id() {
-                if self
+            if let Some(id) = cmd.completion_id()
+                && self
                     .job
                     .as_ref()
                     .is_some_and(|j| j.id == id && j.stage == Stage::Closing)
-                {
-                    if let Some(j) = self.job.as_mut() {
-                        j.op = None;
-                    }
-                    self.release();
-                    return;
+            {
+                if let Some(j) = self.job.as_mut() {
+                    j.op = None;
                 }
+                self.release();
+                return;
             }
             match cmd {
                 Cmd::Capture(id, max) => self.begin(id, max),
@@ -648,11 +645,11 @@ mod imp {
             if let Some(c) = j.capture.take() {
                 ok &= c.Close().is_ok();
             }
-            if let Some(clip) = j.clip.take() {
-                if let Err(dir) = clip.remove() {
-                    self.leftovers.push(dir);
-                    ok = false;
-                }
+            if let Some(clip) = j.clip.take()
+                && let Err(dir) = clip.remove()
+            {
+                self.leftovers.push(dir);
+                ok = false;
             }
             let result = j
                 .result
@@ -752,7 +749,7 @@ mod tests {
 
     #[test]
     fn zero_byte_clip_is_empty_not_success() {
-        use fandhe_device::video_capture::VideoClip;
+        use crate::contract::VideoClip;
         let base = base("zero_byte_clip_is_empty_not_success");
         let c = TempClip::create_in(&base).unwrap();
         assert_eq!(

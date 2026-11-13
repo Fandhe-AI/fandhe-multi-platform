@@ -1,5 +1,5 @@
 // iOS 向け動画の撮影（`UIImagePickerController` の動画モード、Issue #822、親 #169）。
-// `src/device/ios_video_capture.rs` から呼ばれ、`build.rs` が feature `device` 有効時にコンパイルする
+// `src/ios.rs` から呼ばれ、`build.rs` がコンパイルする
 // （AVFoundation・UIKit・UniformTypeIdentifiers は既存のリンクで足り、CoreMedia だけ明示リンクする）。
 // 新しい権限キーは足さない（`NSCameraUsageDescription`・`NSMicrophoneUsageDescription` の文言に機能名を足すだけ）。
 // マイク許可は事前に要求しない（撮影 UI が必要に応じて OS の確認を出す）。
@@ -14,7 +14,7 @@
 //   int64_t duration_ms, int32_t width, int32_t height, int32_t rotation_deg)`（1 要求につき 1 回。
 //   直後に Rust が再描画を要求する）。ポインタは渡さない。パス・NSError の文言は Rust へ渡さない。
 //
-// kind（`fandhe_device::video_capture::result_from_code` の表と一致させる）:
+// kind（`contract` の `result_from_code` の表と一致させる）:
 // 0 = 撮れた / 1 = 利用者が閉じた / 2 = 非対応（カメラなし・動画モードなし。シミュレータもここ）/
 // 3 = カメラ権限の拒否・制限 / 4 = 撮影アプリなし（iOS では使わない）/ 5 = 前面でない /
 // 6 = 表示前の中断 / 7 = 0 バイト・動画なし / 8 = メタデータ（映像トラック・寸法）を読めない / 9 = その他。
