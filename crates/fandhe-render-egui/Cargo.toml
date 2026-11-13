@@ -53,6 +53,8 @@ raw-window-handle = { workspace = true }
 # iOS: glow は非対応のため wgpu（Metal）。"metal" は eframe の "wgpu" feature だけでは有効にならないため
 # wgpu へ直接依存して feature を加算する。
 [target.'cfg(target_os = "ios")'.dependencies]
+# UIScene 化シム（`run_ios` が起動前に有効にする。Issue #1292）。
+fandhe-platform-apple = { path = "../fandhe-platform-apple" }
 wgpu = { workspace = true }
 eframe = { workspace = true, default-features = false, features = ["wgpu"] }
 

@@ -11,6 +11,9 @@
 //! `FandheLibrary.NAME`、iOS の確定値の Info.plist（実行体名・bundle id・版・`UIDeviceFamily` 等）は
 //! アプリの crate（lib/bin target・version）と `fandhe-app.ios.bundle-id` から出す。
 //!
+//! iOS の `UIApplicationSceneManifest` も殻の確定値として常に出す（アプリ全体の構成で、機能の宣言に
+//! 書けない。無いと実機で起動直後に終了する、#1292）。機能の `info-plist` が殻のキーを上書きする宣言はエラーにする。
+//!
 //! 出力先は `<アプリの crate>/gen/` に固定する（consumer-app-structure.md §4、gitignore する）。
 //! Info.plist の説明文（`*UsageDescription`）は既定値を持たず、アプリ側の
 //! `[package.metadata.fandhe-app]` に無ければエラーにする（既定文言のまま審査に出る事故を防ぐ）。
@@ -36,6 +39,9 @@ const MAIN_ACTIVITY: &str = "com.fandhe.platform.MainActivity";
 /// Android の MainActivity が受け取る設定変更。受け取らないと Activity が作り直され、winit が古い描画スレッドを
 /// 残して黒画面・ANR になる（#73）。Rust の実行層の前提でアプリ固有ではない。古い端末では未知の flag は無視される。
 const MAIN_ACTIVITY_CONFIG_CHANGES: &str = "orientation|screenSize|keyboardHidden|uiMode|fontScale|density|locale|layoutDirection|smallestScreenSize|screenLayout|colorMode|fontWeightAdjustment|keyboard|navigation|touchscreen|mcc|mnc|grammaticalGender";
+/// iOS の scene delegate クラス名。`fandhe-platform-apple/ios/fandhe_ios_scene.m` の `@implementation` と
+/// 一致させる（一致は tests/gen.rs が読み合わせる）。Info.plist が存在しないクラスを名指すと起動しない（#1292）。
+const IOS_SCENE_DELEGATE: &str = "FandheSceneDelegate";
 /// iOS の最低対応版。`.cargo/config.toml` の `IPHONEOS_DEPLOYMENT_TARGET` と揃える（一致は tests/gen.rs が保証する）。
 const IOS_MIN_VERSION: &str = "17.0";
 /// ライブラリ名を Java から参照させるクラス（アプリは `System.loadLibrary(FandheLibrary.NAME)` と書く）。
@@ -453,6 +459,13 @@ impl AppleCtx<'_> {
         errs: &mut Vec<String>,
     ) -> Map<String, Value> {
         let mut m = base;
+        // 殻の確定値（scene 構成・bundle id・実行体名等）を機能の宣言が黙って上書きしないようにする。
+        for k in info.keys().filter(|k| m.contains_key(*k)) {
+            errs.push(format!(
+                "{}: info-plist のキー {k} は殻が確定値を出すため、機能の宣言では上書きできません",
+                self.os
+            ));
+        }
         m.extend(info.clone());
         for k in keys {
             match self.cfg.usage_descriptions.get(k) {
@@ -501,6 +514,25 @@ impl AppleCtx<'_> {
 
 /// iOS 本体の土台。Xcode の変数ではなく確定値を書く（Xcode を通さない組み立てでもそのまま使える）。
 /// `CFBundleSupportedPlatforms` は組み立て時の値（シミュレータか実機か）のため出さない（#1201）。
+/// `UIApplicationSceneManifest`。機能の宣言ではなくアプリ全体の構成で、選んだ機能に関係なく常に出す。
+/// 無いと iOS 実機で起動直後に終了する（#1292、TN3187）。application ロールは winit の window を付け、
+/// 外部ディスプレイ ロールは window を付けない（`fandhe_ios_scene.m`）。複数 window scene は許可しない。
+fn ios_scene_manifest() -> Value {
+    let role = |name: &str| {
+        serde_json::json!([{
+            "UISceneConfigurationName": name,
+            "UISceneDelegateClassName": IOS_SCENE_DELEGATE,
+        }])
+    };
+    serde_json::json!({
+        "UIApplicationSupportsMultipleScenes": false,
+        "UISceneConfigurations": {
+            "UIWindowSceneSessionRoleApplication": role("Default"),
+            "UIWindowSceneSessionRoleExternalDisplayNonInteractive": role("External"),
+        },
+    })
+}
+
 fn ios_base(app: &AppInfo, cfg: &OsConfig) -> Result<Map<String, Value>, Vec<String>> {
     let mut errs = Vec::new();
     let bundle = cfg.bundle_id.clone().unwrap_or_else(|| {
@@ -528,6 +560,7 @@ fn ios_base(app: &AppInfo, cfg: &OsConfig) -> Result<Map<String, Value>, Vec<Str
     }
     let s = |x: &str| Value::String(x.to_string());
     Ok([
+        ("UIApplicationSceneManifest", ios_scene_manifest()),
         ("CFBundleExecutable", s(&app.bins[0])),
         ("CFBundleIdentifier", s(&bundle)),
         ("CFBundleInfoDictionaryVersion", s("6.0")),
@@ -914,6 +947,14 @@ mod tests {
     }
 
     #[test]
+    fn info_plist_cannot_override_shell_values() {
+        let f =
+            found(json!({"id": "o", "ios": {"info-plist": {"UIApplicationSceneManifest": {}}}}));
+        let e = err(render(&[], &[&f], &[], &ios_cfg(), &app()));
+        assert!(e.contains("UIApplicationSceneManifest"), "{e}");
+    }
+
+    #[test]
     fn plist_rejects_null() {
         let f = found(json!({"id": "n", "ios": {"info-plist": {"K": null}}}));
         let e = err(render(
@@ -955,6 +996,10 @@ mod tests {
             "<string>17.0</string>",
             "<key>UILaunchScreen</key>",
             "<integer>2</integer>",
+            "<key>UIApplicationSceneManifest</key>",
+            "<key>UIWindowSceneSessionRoleApplication</key>",
+            "<key>UIWindowSceneSessionRoleExternalDisplayNonInteractive</key>",
+            "<string>FandheSceneDelegate</string>",
         ] {
             assert!(p.contains(k), "{k}");
         }

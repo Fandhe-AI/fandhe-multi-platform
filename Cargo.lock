@@ -1790,6 +1790,7 @@ dependencies = [
  "egui_kittest",
  "fandhe-core",
  "fandhe-fonts",
+ "fandhe-platform-apple",
  "fandhe-runtime",
  "image",
  "ordered-float",
