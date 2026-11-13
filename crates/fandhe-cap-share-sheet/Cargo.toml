@@ -33,6 +33,12 @@ fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"
 [package.metadata.fandhe]
 id = "share-sheet"
 
+[package.metadata.fandhe.ios]
+frameworks = ["UIKit"]
+
+[package.metadata.fandhe.macos]
+frameworks = ["AppKit"]
+
 [package.metadata.fandhe.android]
 java = ["android/java"]
 

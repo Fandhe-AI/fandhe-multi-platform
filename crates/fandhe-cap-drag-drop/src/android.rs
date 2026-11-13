@@ -22,7 +22,7 @@
 use std::os::fd::{FromRawFd, OwnedFd};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use fandhe_core::screens::drag_drop::DropItem;
+use crate::drop_session::DroppedItem;
 use fandhe_device::file_picker::sanitize_picked_name;
 
 /// 現在表示中の画面が `drag_drop` かどうか。`nativeDragDropIsActive` が読む。
@@ -39,7 +39,7 @@ pub fn reset_sessions() {
     crate::drop_session::reset();
 }
 
-/// Java 側から届いた `code`/`name`/`fd` を [`DropItem`] へ変換する（`nativeOnDragDropItem` 本体）。
+/// Java 側から届いた `code`/`name`/`fd` を [`DroppedItem`] へ変換する（`nativeOnDragDropItem` 本体）。
 /// `code` の意味は [`crate::driver::item_from_fd`] の doc と `DragDropHelper.nativeOnDragDropItem` 宣言コメントと対。
 ///
 /// `fd` の所有権は `code` に関わらず常に先に取る（`fd >= 0` のときのみ）。Java 側が誤って `code != 0` で
@@ -54,7 +54,7 @@ fn decode_drag_drop_item(
     code: jni::sys::jint,
     name: &jni::objects::JString,
     fd: jni::sys::jint,
-) -> DropItem {
+) -> DroppedItem {
     // SAFETY: Java 側の読み取りスレッド（`DragDropHelper.deliverDropItem`）が `ParcelFileDescriptor.detachFd()` で
     // 所有権を手放した直後に渡す有効な fd（`fd >= 0` のときのみ）で、detach 後は Java 側で close しない契約。
     // 負の値（fd なし、フォルダ・読めない経路）は所有権を取らない。ここで 1 回だけ所有に取る。
@@ -147,11 +147,11 @@ extern "system" fn Java_com_fandhe_platform_DragDropHelper_nativeDragDropWants(
 }
 
 /// `DragDropHelper.nativeOnDragDropItem`。読み取りスレッドが 1 件読み終える（またはフォルダ・読めないと判定する）
-/// たびに呼ぶ。[`decode_drag_drop_item`] で [`DropItem`] へ変換し、集約器へ渡す。読み取りはロックの外
+/// たびに呼ぶ。[`decode_drag_drop_item`] で [`DroppedItem`] へ変換し、集約器へ渡す。読み取りはロックの外
 /// （本関数の中、`drop_session::item` 呼び出し前）で行い、ロック保持中に I/O をしない。
 ///
 /// `index` が負（契約違反）の場合は `item` を呼ばないが、`fd` の所有権は decode の中で既に取っているため、
-/// 変換結果の `DropItem` が drop されるだけでリークしない。成否に関わらず次フレームを起こす。
+/// 変換結果の `DroppedItem` が drop されるだけでリークしない。成否に関わらず次フレームを起こす。
 ///
 /// # Safety
 /// この関数自体は `unsafe` 操作を含まない（`fd` の `unsafe` な受け取りは [`decode_drag_drop_item`] に閉じる）。

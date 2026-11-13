@@ -75,7 +75,7 @@ use fandhe_runtime::CompletionSender;
 // iOS に限らず常に import する。[`drive_events`] 自体もホストの `cargo test` から
 // 常に呼べるようにするため（`drive` と同じ「ロジックはホストの `cargo test` で
 // 検証する」方針、`android_gamepad.rs` と同型）。
-use crate::drop_session::DropEvent;
+use crate::drop_session::{DropEvent, DroppedItem};
 
 /// 直近に読み取りスレッドへ渡した世代番号（codex 指摘 #1018 対応）。
 ///
@@ -133,6 +133,10 @@ impl Drop for ReaderSlot {
 #[cfg_attr(any(target_os = "ios", target_os = "android"), allow(dead_code))]
 const BUSY_REASON: &str = "前の読み込みが終わっていないため受け取れません";
 
+/// iOS で `UIDropInteraction` の取り付けに失敗したときに一度だけ出す案内（接頭辞込み）。
+#[cfg(target_os = "ios")]
+const INSTALL_FAILED_MESSAGE: &str = "失敗しました: ドロップの受け取りを準備できませんでした";
+
 /// `registry.rs` の `effect` 区画から `drag_drop` 画面用に配線される effect ドライバ。
 /// iOS/Android/デスクトップで経路が分かれる（モジュール doc「デスクトップと iOS/Android
 /// で経路が分かれる理由」参照）。
@@ -143,7 +147,24 @@ pub fn drag_drop_effect(state: &DragDropState, sender: &CompletionSender<DragDro
         // 毎フレーム、install 成否に関わらず先に呼ぶ（画面が表示中である証跡を
         // 更新する。`ios_drag_drop::mark_active` doc・codex 指摘 #1019 参照）。
         crate::ios::mark_active(sender);
-        crate::ios::ensure_installed(sender);
+        match crate::ios::ensure_installed(sender) {
+            Some(crate::ios::InstallResult::Installed) => {
+                let _ = sender.send(Box::new(|s: &mut DragDropState| {
+                    if s.error == INSTALL_FAILED_MESSAGE {
+                        s.error.clear();
+                    }
+                }));
+            }
+            Some(crate::ios::InstallResult::Failed) => {
+                // 同じ文言を毎フレーム連打しない（契約表 4）。成功したら同じ文言のときだけ消す。
+                let _ = sender.send(Box::new(|s: &mut DragDropState| {
+                    if s.error != INSTALL_FAILED_MESSAGE {
+                        s.error = INSTALL_FAILED_MESSAGE.to_string();
+                    }
+                }));
+            }
+            None => {}
+        }
         drive_events(sender, crate::drop_session::take_events());
     }
     #[cfg(target_os = "android")]
@@ -196,9 +217,10 @@ fn drive_events(sender: &CompletionSender<DragDropState>, events: Vec<DropEvent>
             }
             DropEvent::Finished {
                 session,
-                mut items,
+                items,
                 overflow,
             } => {
+                let mut items: Vec<DropItem> = items.into_iter().map(into_drop_item).collect();
                 // `finish_drop_with_overflow` は「超過分が 1 件の集約行として
                 // 既に `items` に含まれている」契約（`read_all`/コア側 doc 参照）。
                 // `drop_session::DropSessions::item` は個々の読み込み結果しか
@@ -216,6 +238,15 @@ fn drive_events(sender: &CompletionSender<DragDropState>, events: Vec<DropEvent>
                 }));
             }
         }
+    }
+}
+
+/// 契約側の [`DroppedItem`] を画面用の [`DropItem`] へ変換する（画面の型を知ってよいのは本ファイルだけ）。
+#[cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))]
+fn into_drop_item(item: DroppedItem) -> DropItem {
+    DropItem {
+        name: item.name,
+        result: item.result,
     }
 }
 
@@ -369,7 +400,7 @@ fn display_name(path: Option<&std::path::Path>) -> String {
 }
 
 /// Android の JNI 受け口（`device/android.rs::nativeOnDragDropItem`）が fd から得た
-/// 結果を [`DropItem`] へ変換する、FFI を含まない純粋な分岐部分（ホストの `cargo test`
+/// 結果を [`DroppedItem`] へ変換する、FFI を含まない純粋な分岐部分（ホストの `cargo test`
 /// で検証できるようにする切り出し、`ios_drag_drop.rs::build_item` と同じ方針）。
 ///
 /// `code` の意味（`MainActivity.java` の `nativeOnDragDropItem` 宣言コメントと対）:
@@ -385,23 +416,23 @@ fn display_name(path: Option<&std::path::Path>) -> String {
 /// 呼び出し前）で本関数を呼ぶ契約（`drop_session.rs` モジュール doc「判定と更新は同じ
 /// ロックの内側」参照。ロック保持中に I/O を行わない）。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn item_from_fd(code: i32, file: Option<File>, name: String) -> DropItem {
+pub(crate) fn item_from_fd(code: i32, file: Option<File>, name: String) -> DroppedItem {
     match (code, file) {
         (0, Some(file)) => match read_dropped_from(file, name.clone()) {
-            Ok(picked) => DropItem {
+            Ok(picked) => DroppedItem {
                 name: picked.name,
                 result: Ok(picked.bytes.len()),
             },
-            Err(e) => DropItem {
+            Err(e) => DroppedItem {
                 name,
                 result: Err(e.to_string()),
             },
         },
-        (1, _) => DropItem {
+        (1, _) => DroppedItem {
             name,
             result: Err(DropError::Folder.to_string()),
         },
-        _ => DropItem {
+        _ => DroppedItem {
             name,
             result: Err(DropError::Unreadable.to_string()),
         },
@@ -815,7 +846,7 @@ mod tests {
                     DropEvent::Began(1),
                     DropEvent::Finished {
                         session: 1,
-                        items: vec![DropItem {
+                        items: vec![DroppedItem {
                             name: "a.txt".to_string(),
                             result: Ok(10),
                         }],
@@ -841,11 +872,11 @@ mod tests {
                     DropEvent::Finished {
                         session: 1,
                         items: vec![
-                            DropItem {
+                            DroppedItem {
                                 name: "a.txt".to_string(),
                                 result: Ok(10),
                             },
-                            DropItem {
+                            DroppedItem {
                                 name: "b".to_string(),
                                 result: Err("フォルダは受け取れません".to_string()),
                             },
@@ -874,7 +905,7 @@ mod tests {
                     DropEvent::Began(1),
                     DropEvent::Finished {
                         session: 1,
-                        items: vec![DropItem {
+                        items: vec![DroppedItem {
                             name: "a.txt".to_string(),
                             result: Ok(10),
                         }],
@@ -905,7 +936,7 @@ mod tests {
                 &sender,
                 vec![DropEvent::Finished {
                     session: 1,
-                    items: vec![DropItem {
+                    items: vec![DroppedItem {
                         name: "stale.txt".to_string(),
                         result: Ok(1),
                     }],

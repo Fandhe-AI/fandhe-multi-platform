@@ -7,7 +7,7 @@
 //!
 //! # OS 値の読み取りは Windows / iOS / Android で実装（Issue #913 / #914）
 //!
-//! [`shared_text_scale`] は Windows では [`crate::windows::WindowsTextScale`]
+//! [`platform_text_scale`] は Windows では [`crate::windows::WindowsTextScale`]
 //! （`UISettings.TextScaleFactor` を読む、Issue #913）、iOS/Android では
 //! `IosTextScale`/`AndroidTextScale`（`crate::ios`/`crate::android`、
 //! Issue #914）を返し、それ以外のターゲットは `UnsupportedTextScale` を返す
@@ -52,20 +52,20 @@ use fandhe_runtime::CompletionSender;
 
 /// OS の文字サイズ追従実装（iOS 分岐、モジュール doc 参照）。
 #[cfg(target_os = "ios")]
-fn shared_text_scale() -> &'static dyn TextScale {
+pub fn platform_text_scale() -> &'static dyn TextScale {
     &crate::ios::IosTextScale
 }
 
 /// OS の文字サイズ追従実装（Android 分岐、モジュール doc 参照）。
 #[cfg(target_os = "android")]
-fn shared_text_scale() -> &'static dyn TextScale {
+pub fn platform_text_scale() -> &'static dyn TextScale {
     &crate::android::AndroidTextScale
 }
 
 /// OS の文字サイズ追従実装（iOS/Android 以外の分岐、モジュール doc 参照。Windows は
 /// 実装済み、他は `UnsupportedTextScale` 固定）。
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-fn shared_text_scale() -> &'static dyn TextScale {
+pub fn platform_text_scale() -> &'static dyn TextScale {
     #[cfg(target_os = "windows")]
     {
         &crate::windows::WindowsTextScale
@@ -87,7 +87,7 @@ fn to_os_error(err: DynamicTypeError) -> OsScaleError {
     }
 }
 
-/// [`shared_text_scale`] を読み・スライダー値を実描画へ適用する 1 フレーム分の処理。
+/// [`platform_text_scale`] を読み・スライダー値を実描画へ適用する 1 フレーム分の処理。
 /// `state`/`sender`/`ts`/`last` をすべて引数で受け取ることでプラットフォーム cfg 抜きで
 /// テストできるようにしている（`device/tilt.rs::drive` と同じ構成）。
 ///
@@ -141,7 +141,7 @@ pub fn text_scale_effect(
     // 適用済みの値は描画層が `set_zoom_factor` のたびに記録する（HostView）。
     let mut last = sender.host_view().applied_zoom_factor();
     let dragging = sender.host_view().pointer_primary_down();
-    drive(state, sender, shared_text_scale(), &mut last, dragging);
+    drive(state, sender, platform_text_scale(), &mut last, dragging);
 }
 
 #[cfg(test)]
@@ -309,12 +309,12 @@ mod tests {
     }
 
     /// Issue #914 の回帰チェック: iOS/Android 以外のターゲット（このテストが走る
-    /// ホスト環境を含む）では [`shared_text_scale`] が引き続き `Unsupported` を
+    /// ホスト環境を含む）では [`platform_text_scale`] が引き続き `Unsupported` を
     /// 返す（誤って「読めた」扱いにしていない、モジュール doc 参照）。
     #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
     #[test]
-    fn shared_text_scale_is_unsupported_outside_windows_ios_and_android() {
-        let err = shared_text_scale().scale_factor().unwrap_err();
+    fn platform_text_scale_is_unsupported_outside_windows_ios_and_android() {
+        let err = platform_text_scale().scale_factor().unwrap_err();
         assert!(matches!(err, DynamicTypeError::Unsupported));
     }
 }

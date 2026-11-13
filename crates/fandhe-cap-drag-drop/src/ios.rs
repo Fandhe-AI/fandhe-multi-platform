@@ -43,7 +43,7 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
-use fandhe_core::screens::drag_drop::{DragDropState, DropItem};
+use crate::drop_session::DroppedItem;
 use fandhe_device::drag_drop::{DropError, read_dropped};
 
 use fandhe_runtime::CompletionSender;
@@ -72,10 +72,6 @@ unsafe extern "C" {
 /// 「送信を省略する分岐でも次回のポーリングを予約する」）。
 static INSTALLED: AtomicBool = AtomicBool::new(false);
 
-/// インストール失敗時に一度だけ出す案内の接頭辞込み文言。同じ文言を毎フレーム
-/// 連打しない判定に使う（下記 `ensure_installed` 参照）。
-const INSTALL_FAILED_MESSAGE: &str = "失敗しました: ドロップの受け取りを準備できませんでした";
-
 /// インストール失敗時の再試行間隔（ミリ秒）。この間隔より短い間隔で
 /// [`ensure_installed`] が呼ばれても [`fandhe_ios_drag_drop_install`] を呼び直さず
 /// 早期 return する（codex 指摘 #1019: 失敗が続く間、毎フレーム
@@ -94,15 +90,18 @@ static LAST_INSTALL_ATTEMPT_MS: AtomicU64 = AtomicU64::new(0);
 /// `objc_setAssociatedObject` 相当の static で二重付与を防ぐ二重の安全網、
 /// `.m` ファイル冒頭コメント参照）。
 ///
-/// 失敗時は画面へ「失敗しました: ...」を出す（契約表 6、黙ってダミー化しない）。
-/// `state.error` が既に同じ文言なら送らない（同じ文言を連打しない、契約表 4
-/// 「失敗状態のまま再描画し続けていないか」の逆: 再描画自体は続けるが completion
-/// 送信は止める）。成功したら、直前まで同じ失敗文言が出ていた場合のみ消す
-/// （利用者が既に読んだ他のエラーを上書きしない）。
+/// 取り付けを試みた結果。画面への反映（失敗文言の出し入れ）は `driver` が行う。
+pub(crate) enum InstallResult {
+    Installed,
+    Failed,
+}
+
+/// 取り付けを試みた場合だけ結果を返す（済み・再試行間隔内は `None`）。失敗を画面へ見せる（契約表 6、黙って
+/// ダミー化しない）判断と文言は画面の型を知る `driver` が持つ。
 #[allow(unsafe_code)]
-pub(super) fn ensure_installed(sender: &CompletionSender<DragDropState>) {
+pub(super) fn ensure_installed<S>(sender: &CompletionSender<S>) -> Option<InstallResult> {
     if INSTALLED.load(Ordering::SeqCst) {
-        return;
+        return None;
     }
 
     // last == 0 は「一度も試みていない」番兵（`LAST_INSTALL_ATTEMPT_MS` doc 参照）。
@@ -122,7 +121,7 @@ pub(super) fn ensure_installed(sender: &CompletionSender<DragDropState>) {
             sender.request_repaint_after(std::time::Duration::from_millis(
                 INSTALL_RETRY_INTERVAL_MS - elapsed,
             ));
-            return;
+            return None;
         }
     }
     LAST_INSTALL_ATTEMPT_MS.store(now, Ordering::SeqCst);
@@ -134,19 +133,10 @@ pub(super) fn ensure_installed(sender: &CompletionSender<DragDropState>) {
     let code = unsafe { fandhe_ios_drag_drop_install() };
     if code == 0 {
         INSTALLED.store(true, Ordering::SeqCst);
-        let _ = sender.send(Box::new(|s: &mut DragDropState| {
-            if s.error == INSTALL_FAILED_MESSAGE {
-                s.error.clear();
-            }
-        }));
-        return;
+        return Some(InstallResult::Installed);
     }
 
-    let _ = sender.send(Box::new(|s: &mut DragDropState| {
-        if s.error != INSTALL_FAILED_MESSAGE {
-            s.error = INSTALL_FAILED_MESSAGE.to_string();
-        }
-    }));
+    Some(InstallResult::Failed)
 }
 
 /// 画面が現在有効（表示中）とみなす期間（ミリ秒）。[`mark_active`] の呼び出し間隔
@@ -181,7 +171,7 @@ static LAST_ACTIVE_MS: AtomicU64 = AtomicU64::new(0);
 ///
 /// [`SCREEN_ACTIVE_POLL_INTERVAL_MS`] 後の repaint も併せて予約し、利用者操作の
 /// 有無に関わらずこの画面が表示され続ける限り有効期間を切らさない（doc 上記参照）。
-pub(super) fn mark_active(sender: &CompletionSender<DragDropState>) {
+pub(super) fn mark_active<S>(sender: &CompletionSender<S>) {
     LAST_ACTIVE_MS.store(now_ms(), Ordering::SeqCst);
     sender.request_repaint_after(std::time::Duration::from_millis(
         SCREEN_ACTIVE_POLL_INTERVAL_MS,
@@ -301,33 +291,33 @@ unsafe extern "C" fn fandhe_rust_drag_drop_item(
 /// `path` が UTF-8 変換に失敗していた（`None`）場合は `Unreadable` として扱う）。
 /// `code == 1` は [`DropError::Folder`]、それ以外（未知の `code` を含む）は
 /// [`DropError::Unreadable`] にする（契約表 6「嘘の成功」: 未知の値を成功へ丸めない）。
-fn build_item(code: i32, path: Option<&str>, suggested_name: &str) -> DropItem {
+fn build_item(code: i32, path: Option<&str>, suggested_name: &str) -> DroppedItem {
     match (code, path) {
         (0, Some(path_str)) => {
             let path = Path::new(path_str);
             match read_dropped(path) {
-                Ok(picked) => DropItem {
+                Ok(picked) => DroppedItem {
                     name: display_name(suggested_name, Some(picked.name.as_str())),
                     result: Ok(picked.bytes.len()),
                 },
                 Err(e) => {
                     let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned());
-                    DropItem {
+                    DroppedItem {
                         name: display_name(suggested_name, file_name.as_deref()),
                         result: Err(e.to_string()),
                     }
                 }
             }
         }
-        (0, None) => DropItem {
+        (0, None) => DroppedItem {
             name: display_name(suggested_name, None),
             result: Err(DropError::Unreadable.to_string()),
         },
-        (1, _) => DropItem {
+        (1, _) => DroppedItem {
             name: display_name(suggested_name, None),
             result: Err(DropError::Folder.to_string()),
         },
-        _ => DropItem {
+        _ => DroppedItem {
             name: display_name(suggested_name, None),
             result: Err(DropError::Unreadable.to_string()),
         },

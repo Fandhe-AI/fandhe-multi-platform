@@ -42,8 +42,17 @@
 
 use std::sync::Mutex;
 
-use fandhe_core::screens::drag_drop::DropItem;
 use fandhe_device::drag_drop::MAX_DROP_FILES;
+
+/// 受け取った 1 件の結果。契約側の型で、画面の状態型（`DropItem`）は知らない。`driver` が画面用へ変換する。
+/// `result` は成功時のバイト数、失敗時は表示用の理由文言（パスは含めない、security.md A09）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DroppedItem {
+    /// ファイル名（パスを含まない）。
+    pub name: String,
+    /// 成功: 受け取ったバイト数。失敗: 理由の文言。
+    pub result: Result<usize, String>,
+}
 
 /// `take_events` が返す、状態機械へ適用すべき 1 件の変化。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,16 +64,16 @@ pub enum DropEvent {
     /// `session` の全アイテムの読み込みが完了した。
     Finished {
         session: u64,
-        items: Vec<DropItem>,
+        items: Vec<DroppedItem>,
         overflow: usize,
     },
 }
 
 /// 進行中の 1 セッション。`slots` は `begin` で払い出した `to_load` 件ぶんの枠で、
-/// 各 slot は完了した [`DropItem`] が届くまで `None`。
+/// 各 slot は完了した [`DroppedItem`] が届くまで `None`。
 struct InFlight {
     id: u64,
-    slots: Vec<Option<DropItem>>,
+    slots: Vec<Option<DroppedItem>>,
     overflow: usize,
 }
 
@@ -74,8 +83,8 @@ impl InFlight {
         self.slots.iter().all(Option::is_some)
     }
 
-    /// 埋まった slot を順序どおりの `Vec<DropItem>` へ取り出す。`is_complete` 確認後にのみ呼ぶ。
-    fn take_items(self) -> Vec<DropItem> {
+    /// 埋まった slot を順序どおりの `Vec<DroppedItem>` へ取り出す。`is_complete` 確認後にのみ呼ぶ。
+    fn take_items(self) -> Vec<DroppedItem> {
         self.slots.into_iter().flatten().collect()
     }
 }
@@ -142,7 +151,7 @@ impl DropSessions {
     ///
     /// 全 slot が埋まった時点で [`DropEvent::Finished`] を 1 回だけ積み、`current` を
     /// `None` に戻す。
-    fn item(&mut self, session: u64, index: usize, result: DropItem) {
+    fn item(&mut self, session: u64, index: usize, result: DroppedItem) {
         let Some(in_flight) = self.current.as_mut() else {
             return;
         };
@@ -229,7 +238,7 @@ pub fn begin(total: usize) -> (u64, usize) {
 
 /// [`DropSessions::item`] へ委譲する（`ios.rs::fandhe_rust_drag_drop_item` から。
 /// 呼び出し元がロックの外で読み取りを済ませている契約、モジュール doc 参照）。
-pub fn item(session: u64, index: usize, result: DropItem) {
+pub fn item(session: u64, index: usize, result: DroppedItem) {
     lock().item(session, index, result);
 }
 
@@ -269,8 +278,8 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    fn ok_item(name: &str) -> DropItem {
-        DropItem {
+    fn ok_item(name: &str) -> DroppedItem {
+        DroppedItem {
             name: name.to_string(),
             result: Ok(name.len()),
         }

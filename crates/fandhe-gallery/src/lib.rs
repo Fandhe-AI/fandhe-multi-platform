@@ -39,6 +39,25 @@ extern "system" fn Java_com_fandhe_platform_ShareReceiveHelper_nativeOnShareRece
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeDragDropIsActive` フォールバック。`DragDropLifecycle` は feature を知らず
+/// `DragDropHelper` を取り付け、ドラッグ開始のたびにこの getter を呼ぶため、実体を持つ `fandhe-cap-drag-drop`
+/// （`device` 有効時のみ依存）が無いと `UnsatisfiedLinkError` になる。常に false（画面が drag_drop でない扱い）を返し、
+/// Java はそのドラッグを無視して他の native を呼ばない。実体との二重定義を避けるため cfg は `device` 無効のときだけ。
+/// 署名は Java 宣言・実体と一致（`() -> boolean`）。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
+/// シンボル名は JNI 命名規約上の固定名。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_DragDropHelper_nativeDragDropIsActive(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+) -> u8 {
+    0
+}
+
 /// Android アプリのエントリポイント（計測専用ビルド）。
 ///
 /// `android-activity`（GameActivity 方式）がライブラリロード後にこのシンボル名を検索して呼ぶ

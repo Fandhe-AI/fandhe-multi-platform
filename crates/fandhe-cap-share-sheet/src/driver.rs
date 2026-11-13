@@ -36,14 +36,7 @@
 //! 反映されず捨てられる（固着はしない）。無検証の再開 API は追加しない
 //! （`file_pick` の `RestoreRequested` は本 Issue でも導入しない、実装計画 §2.6 参照）。
 
-#[cfg(not(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "android",
-    target_os = "windows"
-)))]
-use crate::contract::Share;
-use crate::contract::{ShareOutcome as DeviceShareOutcome, ShareRequest};
+use crate::contract::{Share, ShareOutcome as DeviceShareOutcome, ShareRequest};
 use crate::error::ShareSheetError;
 use fandhe_core::screens::share_text::{
     ShareOutcome as CoreShareOutcome, ShareTextState, finish_share, mark_sharing, take_request,
@@ -290,6 +283,58 @@ fn drive_callback(state: &ShareTextState, sender: &CompletionSender<ShareTextSta
     );
 }
 
+/// 画面の状態型に依存しない入口。フレームワークの外のアプリも自分の状態型の effect から使える。
+///
+/// macOS・iOS・Android は OS の共有 UI の結果をコールバックで受け、結果が届くまで呼び出しスレッドを塞ぐ
+/// [`Share`] を返す。メインスレッドから呼ばず（コールバックがメインで届くためデッドロックする）、
+/// 画面ドライバ（[`share_text_effect`]）と同時に使わない（要求の追跡を共有する）。失敗の種類は
+/// `Internal` へ畳む。Windows はフォーカスの観測（`HostView`）なしにキャンセルを検知できないため、
+/// Linux と同じく常に `Unsupported`。
+pub fn platform_share() -> Box<dyn Share> {
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+    {
+        Box::new(CallbackShare)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
+    {
+        Box::new(crate::contract::UnsupportedShare)
+    }
+}
+
+/// コールバック型の OS 実装を [`Share`] に見せるブロッキング版（[`platform_share`] 参照）。
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+struct CallbackShare;
+
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+impl Share for CallbackShare {
+    fn share(&self, request: &ShareRequest) -> Result<DeviceShareOutcome, ShareSheetError> {
+        let id = bridge::begin();
+        if !present(id, request) {
+            bridge::deliver(id, Err(ShareSheetError::Internal));
+        }
+        loop {
+            match bridge::SLOT.snapshot() {
+                Some((rid, Some(outcome))) if rid == id => {
+                    bridge::SLOT.clear(id);
+                    return outcome
+                        .map_err(|_| ShareSheetError::Internal)
+                        .map(|o| match o {
+                            CoreShareOutcome::Shared => DeviceShareOutcome::Shared,
+                            CoreShareOutcome::Cancelled => DeviceShareOutcome::Cancelled,
+                            CoreShareOutcome::NoTarget => DeviceShareOutcome::NoTarget,
+                            CoreShareOutcome::Unknown => DeviceShareOutcome::Unknown,
+                        });
+                }
+                // 別の要求に置き換えられた・消された場合は結果が来ないため失敗で返す。
+                Some((rid, None)) if rid == id => {
+                    std::thread::sleep(std::time::Duration::from_millis(50))
+                }
+                _ => return Err(ShareSheetError::Internal),
+            }
+        }
+    }
+}
+
 /// 上記 4 OS 以外（Linux）向け: `Share` トレイト経由の同期呼び出し。
 #[cfg(not(any(
     target_os = "macos",
@@ -334,7 +379,7 @@ pub fn share_text_effect(state: &ShareTextState, sender: &CompletionSender<Share
     target_os = "windows"
 )))]
 pub fn share_text_effect(state: &ShareTextState, sender: &CompletionSender<ShareTextState>) {
-    drive(state, sender, &crate::contract::UnsupportedShare);
+    drive(state, sender, &UnsupportedShare);
 }
 
 #[cfg(test)]
@@ -487,7 +532,7 @@ mod tests {
     fn drive_is_noop_without_pending_request() {
         let (sender, rx) = sender_with_channel();
         let state = ShareTextState::default();
-        drive(&state, &sender, &crate::contract::UnsupportedShare);
+        drive(&state, &sender, &UnsupportedShare);
         assert!(rx.try_recv().is_err());
     }
 
@@ -504,7 +549,7 @@ mod tests {
         set_input(&mut state, "hello".to_string());
         share(&mut state);
 
-        drive(&state, &sender, &crate::contract::UnsupportedShare);
+        drive(&state, &sender, &UnsupportedShare);
         apply_all(&mut state, &rx);
 
         assert!(state.error.contains(UNAVAILABLE), "{}", state.error);
