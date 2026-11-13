@@ -866,6 +866,11 @@ pub(crate) fn render_web(web: &[&Found], base: &Map<String, Value>) -> Result<St
     Ok(s)
 }
 
+/// 印が通常ファイルとして在るか。symlink は印と認めない（書き込みがリンク先を上書きするため）。
+fn has_marker(gen_dir: &Path) -> bool {
+    fs::symlink_metadata(gen_dir.join(MARKER)).is_ok_and(|m| m.is_file())
+}
+
 /// `gen_dir` へ書き出す。印（`.fandhe-gen`）のある既存ディレクトリの、今回出す側（`web/` か、それ以外）だけを消して作り直す
 /// （選ばなくなった機能の拡張ディレクトリが残って成果物に混ざるのを防ぐ）。
 /// symlink と、印の無い既存ディレクトリ（利用者のもの）は拒否する。
@@ -874,7 +879,7 @@ pub fn write(gen_dir: &Path, files: &BTreeMap<String, String>) -> Result<(), Str
         Ok(md) if md.file_type().is_symlink() => {
             return Err(format!("{} は symlink です。書き出しません", gen_dir.display()))
         }
-        Ok(_) if !gen_dir.join(MARKER).is_file() => {
+        Ok(_) if !has_marker(gen_dir) => {
             return Err(format!(
                 "{} は既に存在し、`{MARKER}` がありません。cargo fandhe gen が作ったものではないため上書きしません",
                 gen_dir.display()
@@ -916,7 +921,7 @@ pub fn write(gen_dir: &Path, files: &BTreeMap<String, String>) -> Result<(), Str
             });
         if let Err(e) = res {
             // ここへ来る gen/ は新規か印付きを消した後の自前分。印が無いまま残ると次回が利用者のものとして拒否するため片付ける。
-            if !gen_dir.join(MARKER).is_file() {
+            if !has_marker(gen_dir) {
                 let _ = fs::remove_dir_all(gen_dir);
             }
             return Err(e);
@@ -1126,6 +1131,21 @@ mod tests {
         fs::write(root.join("gen/stale.txt"), "x").unwrap();
         write(&root.join("gen"), &files).unwrap();
         assert!(!root.join("gen/stale.txt").exists() && root.join("gen/a/b.txt").exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_refuses_symlinked_marker() {
+        let root =
+            std::env::temp_dir().join(format!("fandhe-native-marker-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("gen")).unwrap();
+        fs::write(root.join("target.txt"), "keep").unwrap();
+        std::os::unix::fs::symlink(root.join("target.txt"), root.join("gen").join(MARKER)).unwrap();
+        let files = BTreeMap::from([(MARKER.to_string(), "m".to_string())]);
+        assert!(write(&root.join("gen"), &files).is_err());
+        assert_eq!(fs::read_to_string(root.join("target.txt")).unwrap(), "keep");
         let _ = fs::remove_dir_all(&root);
     }
 
