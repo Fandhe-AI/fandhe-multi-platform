@@ -170,7 +170,7 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | network-status | 未移行の `fandhe_apple_lan_discovery.m` が `fandhe_apple_network_status_read` を呼ぶ | lan-discovery と一緒に移す |
 | device-info | 未移行の `apple_quick_settings_tile.rs` が `macos_device_info::implementation()` を呼ぶ | quick-settings-tile の後 |
 | now-playing-controls | `media_playback`（egui-proxy・web-dom の両方）が `now_playing::sync*` を呼ぶ | media-playback と同じ PR で移す |
-| pen-stylus | Android が `MainActivity.dispatchTouchEvent` の上書きを要する。provider では置き換えられない | Activity の入力を横取りする口の設計が先 |
+| pen-stylus | Android が `MainActivity.dispatchTouchEvent` の上書きを要する。provider では置き換えられない | §12 の `Window.Callback` を包む型で移せる（`dispatchTouchEvent` の観測。共通層への引き上げはそのとき行う） |
 | picture-in-picture | Android が `onPictureInPictureModeChanged` の上書きと `<activity supportsPictureInPicture>` 属性を要する | 宣言の拡張が先 |
 | fullscreen-immersive | `FullscreenHelper.onInsets` が、`MainActivity` の唯一の decorView insets リスナー（safe-area と共用）から呼ばれる | insets を配る口を `fandhe-platform-android` に置く設計が先 |
 | compose-mail-sms | 未移行の `windows_web_auth_session.rs` が `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を呼ぶ | web-auth-session と一緒に移す、または `open_url` を `fandhe-platform-windows` へ上げる |
@@ -255,3 +255,17 @@ per-app-language・screen-brightness・spell-check・geocoding-search の 9 機�
 | autofill-otp | iOS の受け口 `fandhe_ios_text_input_set_one_time_code_hint` が、描画層の IME 橋渡し（`fandhe-egui-proxy/ios/fandhe_ios_text_input.m`）の入力欄 static に埋まっていて切り離せない | 入力欄のヒントを渡す口を描画層に設計してから |
 | game-center | 全 OS が `possible` で実装も `impl` も無く、移すものが無い | 実装時に最初から crate で作る |
 | app-intents | macOS の実装が url-scheme の受け口（`device/url_scheme.rs`・`FandheWidgetHost`）そのもので、独自のモジュールが無い | url-scheme と同時に扱う |
+
+## 12. ゲームパッド（#1303）で出た型
+
+Android のゲームパッド入力は利用者の `MainActivity` の `dispatchKeyEvent` / `dispatchGenericMotionEvent` の上書きで受けていた。
+`FeatureLifecycleProvider` では受けられないため、扱いを決めたうえで移した。
+
+| 型 | 扱い |
+|----|------|
+| Activity の入力の観測 | provider（`GamepadLifecycle`）が `onHostCreated` で `Window.Callback` を包み、通知してから元の戻り値をそのまま返す（消費しない）。`Window.Callback` の全メソッドを明示的に委譲し、API 24 以降の default メソッドも飛ばさない。`getDecorView()` は呼ばない。`gen` で `MainActivity` へ挿入する案と手順書で案内する案は採らない（`consumer-app-structure.md` §4） |
+| 守らない範囲 | 起動後に `getWindow().setCallback()` で callback を差し替えると入力が届かなくなる。接続状態の監視（`InputManager`）は影響を受けない。`crate` doc と対応表の `note` に書く |
+| `MainActivity` 由来の JNI エクスポート名 | `Java_com_fandhe_platform_MainActivity_native…` を `Java_com_fandhe_platform_GamepadHelper_native…` に付け替え、Java の native 宣言（`GamepadHelper`）と署名を 2 か所で照合する。Rust から Java は呼ばないため `with_activity_class` は要らない |
+| feature 無効時の no-op スタブ | 旧 JNI 名のスタブを egui-proxy から消し、`fandhe-gallery` に新しい名前で置く（share-receive と同じ。provider は feature を知らず native を呼ぶため、実体が無いと `UnsatisfiedLinkError` になる） |
+| 画面ゲート | `ACTIVE_SCREEN_USES_GAMEPAD` を機能 crate の static へ移し、`set_screen_active(bool)` で公開する。egui-proxy の `android_main` が過渡期の依存（feature `device`）で呼ぶ（#1194 で消える） |
+| Web | 実装本体は `fandhe-web-dom` に残し、契約と `GamepadError`（識別子つき）だけ機能 crate から使う。永続的な非対応と非標準配置の区別は識別子で保つ |

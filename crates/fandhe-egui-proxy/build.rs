@@ -107,10 +107,6 @@ fn build() {
     // 共用する。
     compile_apple_secure_credential();
 
-    // `apple/fandhe_apple_gamepad.m`（Issue #934）は macOS 分岐と共用する
-    // 。
-    compile_apple_gamepad();
-
     // `apple/fandhe_apple_photo_library.m`（Issue #1254 macOS + #1255 iOS）も macOS 分岐と共用する。
     compile_apple_photo_library();
 
@@ -338,16 +334,6 @@ fn compile_apple_secure_credential() {
     compile_objc(
         "apple/fandhe_apple_secure_credential.m",
         &["Foundation", "Security"],
-    );
-}
-
-/// `apple/fandhe_apple_gamepad.m` を `cc` でコンパイルし GameController を
-/// リンクする（iOS・macOS 双方の feature `device` 分岐から呼ばれる共通処理、
-/// Issue #934）。
-fn compile_apple_gamepad() {
-    compile_objc(
-        "apple/fandhe_apple_gamepad.m",
-        &["Foundation", "GameController"],
     );
 }
 
@@ -1136,7 +1122,6 @@ fn build_macos() {
     compile_apple_biometric();
     compile_apple_contact_picker();
     compile_apple_secure_credential();
-    compile_apple_gamepad();
     compile_apple_photo_library();
     compile_apple_map_view();
     compile_apple_scanner_devices();

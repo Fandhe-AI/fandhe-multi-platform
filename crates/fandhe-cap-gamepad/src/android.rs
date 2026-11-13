@@ -1,18 +1,20 @@
 //! Android 向けゲームコントローラ実装（Issue #935、親 #932、Windows 実装 #933 の横展開）。
-//! `device/gamepad.rs` の `platform_gamepad()` Android 分岐から使われる。
+//! `driver.rs` の `platform_gamepad()` Android 分岐から使われる。
 //!
 //! # 受け口が Java 側にある理由
 //!
 //! `android-activity`（GameActivity グルー）・`winit` の Android backend はいずれも
 //! `SOURCE_TOUCHSCREEN` 以外の `MotionEvent` を native へ渡す前に捨てる／タッチとして
 //! 扱ってしまうため、Rust 側だけではスティック・トリガの入力を受け取れない（#935
-//! 実装計画 §2.1）。そのため既存構成（`MainActivity.java` + JNI push、傾き #831 と
-//! 同型）で受ける。
+//! 実装計画 §2.1）。そのため Java（`GamepadHelper` / `GamepadLifecycle`）で受けて
+//! JNI push する（傾き #831 と同型）。Activity の `dispatch*` override ではなく、
+//! `GamepadLifecycle` が `Window.Callback` を包んで観測する（#1303。利用者の
+//! `MainActivity` に委譲コードを書かせないため）。
 //!
 //! # 「観測のみ・消費しない」で TV フォーカス（#280）を守る
 //!
-//! `MainActivity` の `dispatchKeyEvent`/`dispatchGenericMotionEvent` はイベントを
-//! 一切消費せず（`super.dispatch...` の戻り値をそのまま返す）、ゲームパッド由来なら
+//! 包んだ `Window.Callback` の `dispatchKeyEvent`/`dispatchGenericMotionEvent` はイベントを
+//! 一切消費せず（元の callback の戻り値をそのまま返す）、ゲームパッド由来なら
 //! 追加で本モジュールの JNI エクスポートへ通知するだけに留める。リモコンの
 //! `KEYCODE_DPAD_*` は従来どおり GameActivity → winit → `egui::Key::Arrow*` →
 //! `tv_focus.rs` へ流れ続ける（#935 実装計画 §2.2）。
@@ -23,7 +25,7 @@
 //! 有無は Java が `InputDevice.getDeviceIds()` を再走査して都度通知する
 //! （`onResume`・`InputDeviceListener` の added/removed/changed・`onPause` では
 //! 「無し」）。接続直後は「接続中 + 中立値」になる（実際に接続されており入力が無い
-//! 状態の真値が中立であるため、`fandhe_device::gamepad` モジュール doc の
+//! 状態の真値が中立であるため、`crate::contract` モジュール doc の
 //! 「未接続を全 0 の接続中の代用にしない」契約には反しない）。
 //! ponytail: 復帰時にスティックを倒したままだと次の `MotionEvent` まで中立値が
 //! 天井になる。取りこぼしが問題になれば Java 側で最新値を都度問い合わせる経路へ
@@ -61,10 +63,11 @@
 #[cfg(target_os = "android")]
 use std::sync::Mutex;
 
-use fandhe_device::gamepad::{
-    normalize_axis, normalize_trigger, GamepadSnapshot, BUTTON_A, BUTTON_B, BUTTON_DPAD_DOWN,
-    BUTTON_DPAD_LEFT, BUTTON_DPAD_RIGHT, BUTTON_DPAD_UP, BUTTON_LEFT_SHOULDER, BUTTON_LEFT_STICK,
-    BUTTON_MENU, BUTTON_RIGHT_SHOULDER, BUTTON_RIGHT_STICK, BUTTON_VIEW, BUTTON_X, BUTTON_Y,
+use crate::contract::{
+    BUTTON_A, BUTTON_B, BUTTON_DPAD_DOWN, BUTTON_DPAD_LEFT, BUTTON_DPAD_RIGHT, BUTTON_DPAD_UP,
+    BUTTON_LEFT_SHOULDER, BUTTON_LEFT_STICK, BUTTON_MENU, BUTTON_RIGHT_SHOULDER,
+    BUTTON_RIGHT_STICK, BUTTON_VIEW, BUTTON_X, BUTTON_Y, GamepadSnapshot, normalize_axis,
+    normalize_trigger,
 };
 
 /// `MotionEvent`/`KeyEvent` の `source`（Android `InputDevice`）が
@@ -105,7 +108,7 @@ fn apply_flat(value: f32, flat: f32) -> f32 {
 }
 
 /// `KeyEvent#getKeyCode()`（Android `KeyEvent.KEYCODE_BUTTON_*`/`KEYCODE_DPAD_*`）を
-/// [`fandhe_device::gamepad`] のビット定数へ写像する。未知の keyCode は `None`
+/// [`crate::contract`] のビット定数へ写像する。未知の keyCode は `None`
 /// （panic せず無視する、security.md A03）。`L2`/`R2` のデジタルのみ報告する機種の
 /// トリガ反映はスコープ外（#935 実装計画 §7）。
 fn map_key_code(key_code: i32) -> Option<u16> {
@@ -149,7 +152,7 @@ fn hat_to_buttons(hat_x: f32, hat_y: f32) -> u16 {
     buttons
 }
 
-/// 先頭 1 台ぶんの最新値（[`fandhe_device::gamepad`] モジュール doc の「複数台接続」
+/// 先頭 1 台ぶんの最新値（[`crate::contract`] モジュール doc の「複数台接続」
 /// 契約: 2 台目以降は無視する。split pad 機種の非対応についてはモジュール doc
 /// 「split pad は非対応」参照、PR #939）。
 struct Tracked {
@@ -224,7 +227,7 @@ impl PendingScan {
 }
 
 /// Android ゲームコントローラ入力の状態機械（純粋・ターゲット非依存）。JNI 越しに
-/// Java から届く生値を受け取り、[`fandhe_device::gamepad::Gamepad::read`] が返す
+/// Java から届く生値を受け取り、[`crate::contract::Gamepad::read`] が返す
 /// スナップショットへ写像する。ホストの `cargo test` から `cfg` 抜きで検証できる
 /// （モジュール doc「ロジックを Rust 側に寄せる理由」参照）。
 pub(crate) struct AndroidGamepadState {
@@ -404,7 +407,7 @@ impl AndroidGamepadState {
         tracked.key_buttons != before
     }
 
-    /// [`fandhe_device::gamepad::Gamepad::read`] が返すスナップショットを組み立てる。
+    /// [`crate::contract::Gamepad::read`] が返すスナップショットを組み立てる。
     /// 未接続（`current` が `None`）は `None`（全 0 の接続中と混同しない契約）。
     pub(crate) fn snapshot(&self) -> Option<GamepadSnapshot> {
         self.current.as_ref().map(|tracked| GamepadSnapshot {
@@ -432,14 +435,34 @@ impl Default for AndroidGamepadState {
 #[cfg(target_os = "android")]
 static STATE: Mutex<AndroidGamepadState> = Mutex::new(AndroidGamepadState::new());
 
-/// Android 実ゲームコントローラ実装（Issue #935）。`device/gamepad.rs` の
+/// 現在表示中の画面が `gamepad_show` かどうか（Bugbot 指摘、PR #939）。Java 側は画面に関わらず
+/// `MotionEvent` を常に配送するため、表示していない画面でのスティックドリフトによる高頻度の
+/// `request_repaint` を防ぐゲートとして使う。呼び出し元（`android_main` が起動画面を決めた直後）が
+/// [`set_screen_active`] で差し替える。
+#[cfg(target_os = "android")]
+static ACTIVE_SCREEN_USES_GAMEPAD: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// [`ACTIVE_SCREEN_USES_GAMEPAD`] を差し替える（`crate::set_screen_active` として再公開）。
+#[cfg(target_os = "android")]
+pub fn set_screen_active(active: bool) {
+    ACTIVE_SCREEN_USES_GAMEPAD.store(active, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// [`ACTIVE_SCREEN_USES_GAMEPAD`] を読む。
+#[cfg(target_os = "android")]
+fn active_screen_uses_gamepad() -> bool {
+    ACTIVE_SCREEN_USES_GAMEPAD.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Android 実ゲームコントローラ実装（Issue #935）。`driver.rs` の
 /// `platform_gamepad()` Android 分岐から構築される。
 #[cfg(target_os = "android")]
 pub struct AndroidGamepad;
 
 #[cfg(target_os = "android")]
-impl fandhe_device::gamepad::Gamepad for AndroidGamepad {
-    fn read(&self) -> Result<Option<GamepadSnapshot>, fandhe_device::DeviceError> {
+impl crate::contract::Gamepad for AndroidGamepad {
+    fn read(&self) -> Result<Option<GamepadSnapshot>, crate::error::GamepadError> {
         let state = STATE
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -447,26 +470,26 @@ impl fandhe_device::gamepad::Gamepad for AndroidGamepad {
     }
 }
 
-/// `MainActivity.nativeOnGamepadPresenceScanBegin`（Java 側）から呼ばれる JNI
+/// `GamepadHelper.nativeOnGamepadPresenceScanBegin`（Java 側）から呼ばれる JNI
 /// エクスポート関数（Issue #935）。`reportGamepadPresence()` が `InputDevice.getDeviceIds()`
 /// の再走査を開始したことを通知する。以降の deviceId は
-/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanId`] で 1 件ずつ
-/// 届き、[`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanEnd`] で
+/// [`Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanId`] で 1 件ずつ
+/// 届き、[`Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanEnd`] で
 /// 確定する（モジュール doc「接続状態はレベルトリガ」参照）。
 ///
 /// `JNIEnv`/`jclass` は本関数内で一切使わず、生ポインタへのアクセスを行わないため
-/// 関数本体に `unsafe` 操作は含まない。`#[no_mangle]` はこの 1 関数に閉じ、`unsafe`
+/// 関数本体に `unsafe` 操作は含まない。`#[unsafe(no_mangle)]` はこの 1 関数に閉じ、`unsafe`
 /// を公開 API 側へ漏らさない（`.claude/rules/coding-rust.md` の FFI 例外規定準拠）。
 ///
 /// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` により Rust の名前修飾を
+/// この関数自体は `unsafe` 操作を含まない。`#[unsafe(no_mangle)]` により Rust の名前修飾を
 /// 無効化するが、シンボル名は JNI 命名規約上の固定名であり、本クレートは cdylib
 /// として 1 つの Android 実行単位にのみリンクされるため他シンボルと衝突しない
 /// （`device/android.rs::nativeOnMotionChanged` と同じ根拠）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin(
+#[unsafe(no_mangle)]
+extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanBegin(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) {
@@ -476,14 +499,14 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresence
     state.presence_scan_begin();
 }
 
-/// `MainActivity.nativeOnGamepadPresenceScanId`（Java 側）から呼ばれる JNI
+/// `GamepadHelper.nativeOnGamepadPresenceScanId`（Java 側）から呼ばれる JNI
 /// エクスポート関数（Issue #935）。走査中に見つかったゲームパッド/ジョイスティック
 /// ソースの `device_id` を 1 件通知する。安全性根拠は
-/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ。
+/// [`Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanBegin`] と同じ。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanId(
+#[unsafe(no_mangle)]
+extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanId(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     device_id: i32,
@@ -494,14 +517,14 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresence
     state.presence_scan_id(device_id);
 }
 
-/// `MainActivity.nativeOnGamepadPresenceScanEnd`（Java 側）から呼ばれる JNI
+/// `GamepadHelper.nativeOnGamepadPresenceScanEnd`（Java 側）から呼ばれる JNI
 /// エクスポート関数（Issue #935）。走査結果を確定する（`AndroidGamepadState::presence_scan_end`
 /// 参照）。安全性根拠は
-/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ。
+/// [`Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanBegin`] と同じ。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanEnd(
+#[unsafe(no_mangle)]
+extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanEnd(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) {
@@ -513,15 +536,15 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresence
     }
     // ユーザー操作（コントローラの接続/切断）起点のみのため、センサのような
     // 画面ゲート（`device/android.rs::active_screen_uses_tilt` 相当）は不要。
-    crate::android::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
-/// `MainActivity.nativeOnGamepadMotion`（Java 側）から呼ばれる JNI エクスポート関数
+/// `GamepadHelper.nativeOnGamepadMotion`（Java 側）から呼ばれる JNI エクスポート関数
 /// （Issue #935）。`dispatchGenericMotionEvent` が最新サンプルのみ（履歴サンプルは
-/// 読まない）を中継する。安全性根拠は [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`]
+/// 読まない）を中継する。安全性根拠は [`Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanBegin`]
 /// と同じ。
 ///
-/// `request_repaint` は (1) `gamepad_show` 画面を表示中（[`crate::android::active_screen_uses_gamepad`]）
+/// `request_repaint` は (1) `gamepad_show` 画面を表示中（[`active_screen_uses_gamepad`]）
 /// かつ (2) 追跡中デバイスへ反映しスナップショットが実際に変化した（[`AndroidGamepadState::motion`]
 /// の戻り値）場合に限って呼ぶ（Bugbot 指摘 PR #939。無視対象デバイス・非表示画面でのスティック
 /// ドリフトが毎サンプル UI ループを起こすのを防ぐ、`ACTIVE_SCREEN_USES_GAMEPAD` doc と同じ理由。
@@ -529,8 +552,8 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresence
 /// 毎サンプル repaint し続ける、二次指摘参照）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code, clippy::too_many_arguments)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadMotion(
+#[unsafe(no_mangle)]
+extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadMotion(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     device_id: i32,
@@ -569,18 +592,18 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadMotion(
             flat_rz,
         )
     };
-    if updated && crate::android::active_screen_uses_gamepad() {
-        crate::android::request_repaint();
+    if updated && active_screen_uses_gamepad() {
+        fandhe_runtime::request_repaint();
     }
 }
 
-/// `MainActivity.nativeOnGamepadKey`（Java 側）から呼ばれる JNI エクスポート関数
+/// `GamepadHelper.nativeOnGamepadKey`（Java 側）から呼ばれる JNI エクスポート関数
 /// （Issue #935）。`dispatchKeyEvent` の DOWN/UP を中継する。安全性根拠は
-/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ。
+/// [`Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanBegin`] と同じ。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadKey(
+#[unsafe(no_mangle)]
+extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadKey(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     device_id: i32,
@@ -594,8 +617,8 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadKey(
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         state.key(device_id, source, key_code, down != 0)
     };
-    if updated && crate::android::active_screen_uses_gamepad() {
-        crate::android::request_repaint();
+    if updated && active_screen_uses_gamepad() {
+        fandhe_runtime::request_repaint();
     }
 }
 
@@ -1046,16 +1069,13 @@ mod tests {
             "新たな deviceId は中立値で採用され、旧デバイスの A を引き継がない"
         );
         assert!(state.key(2, SOURCE_GAMEPAD, 97, true)); // B（id=2 から受理される）
-        assert_eq!(
-            state.snapshot().unwrap().buttons,
-            fandhe_device::gamepad::BUTTON_B
-        );
+        assert_eq!(state.snapshot().unwrap().buttons, crate::contract::BUTTON_B);
     }
 
     #[test]
     #[cfg(target_os = "android")]
     fn read_returns_ok_none_when_unconnected() {
-        use fandhe_device::gamepad::Gamepad;
+        use crate::contract::Gamepad;
         let gamepad = AndroidGamepad;
         assert_eq!(gamepad.read().unwrap(), None);
     }

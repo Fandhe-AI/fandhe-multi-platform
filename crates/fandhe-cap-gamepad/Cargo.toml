@@ -1,0 +1,54 @@
+[package]
+name = "fandhe-cap-gamepad"
+version = "0.2.0"
+edition = "2024"
+description = "ゲームコントローラ入力の機能 crate。契約・effect ドライバ・Android/Apple/Windows 実装・宣言を 1 crate に集める"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+# Rust からは使わない。Java の基底クラス FeatureLifecycleProvider を持つ共通層を、
+# `cargo fandhe gen` の到達判定に入れる（GamepadLifecycle のコンパイルに必要）ための依存。
+# JNI の入口は Java の static native から Rust への一方向のみ（Rust から Java は呼ばない）。
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { workspace = true, features = ["std", "Gaming_Input"] }
+
+[build-dependencies]
+# iOS・macOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。権限・usage description・framework は手で足す（cargo fandhe check が検証する）。
+[package.metadata.fandhe]
+id = "gamepad"
+
+[package.metadata.fandhe.android]
+java = ["android/java"]
+
+[package.metadata.fandhe.ios]
+frameworks = ["GameController"]
+
+[package.metadata.fandhe.macos]
+frameworks = ["GameController"]
+
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+# Window.Callback を包んで入力を観測する（#1303）。利用者の MainActivity に委譲コードを書かせない。
+# Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.GamepadLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.gamepad" }
+
+[lints]
+workspace = true

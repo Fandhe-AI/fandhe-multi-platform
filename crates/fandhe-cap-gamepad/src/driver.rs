@@ -1,20 +1,17 @@
 //! Phase 11 の拡充ループ（親 #932）型サンプル「ゲームコントローラ」（Issue #933）の
 //! effect ドライバ。`fandhe_core::screens::gamepad_show`（端末依存ゼロ）へ、
-//! `fandhe_device::gamepad::Gamepad` から読んだ最新スナップショットを渡す
+//! `crate::contract::Gamepad` から読んだ最新スナップショットを渡す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
-//! 呼ばれる契約、`app::EffectFn` 参照）。
-//!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
+//! 呼ばれる契約、`fandhe_runtime::EffectFn` 参照）。
 //!
 //! # 実装スコープ（Issue #933・#934・#935）
 //!
-//! Windows は [`WindowsGamepad`](crate::device::windows_gamepad::WindowsGamepad)、
-//! iOS / macOS は [`AppleGamepad`](crate::device::apple_gamepad::AppleGamepad)
-//! （`GCController` を pull で読む、`device/apple_gamepad.rs` 参照）、Android は
-//! [`AndroidGamepad`](crate::device::android_gamepad::AndroidGamepad)
-//! （`device/android_gamepad.rs` 参照）を使う。それ以外（Linux/その他）は常に
-//! `DeviceError::Unsupported("gamepad")` を返す `UnsupportedGamepad` にする
+//! Windows は [`WindowsGamepad`](crate::windows::WindowsGamepad)、
+//! iOS / macOS は [`AppleGamepad`](crate::apple::AppleGamepad)
+//! （`GCController` を pull で読む、`apple.rs` 参照）、Android は
+//! [`AndroidGamepad`](crate::android::AndroidGamepad)
+//! （`android.rs` 参照）を使う。それ以外（Linux/その他）は常に
+//! `GamepadError::Unsupported("gamepad")` を返す `UnsupportedGamepad` にする
 //! （`location.rs` の cfg カスケードと同型。ダミー座標へフォールバックしない）。
 //!
 //! 代替入力（スライダー・チェックボックス）は `fandhe_core::screens::gamepad_show::
@@ -29,14 +26,14 @@
 use std::sync::Mutex;
 use std::time::Instant;
 
+use crate::contract::{Gamepad, pressed_labels};
+use crate::error::GamepadError;
 use fandhe_core::screens::gamepad_show::{
-    apply_connected, apply_disconnected, apply_unsupported, is_at_rest, pressed_text,
-    GamepadShowState, GamepadView,
+    GamepadShowState, GamepadView, apply_connected, apply_disconnected, apply_unsupported,
+    is_at_rest, pressed_text,
 };
-use fandhe_device::gamepad::{pressed_labels, Gamepad};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 1 フレームで進める時間の上限（`tilt_ball::step` と同じ値）。
 const MAX_DT: f32 = 0.1;
@@ -78,26 +75,26 @@ const IDLE_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis
 struct UnsupportedGamepad;
 
 impl Gamepad for UnsupportedGamepad {
-    fn read(&self) -> Result<Option<fandhe_device::gamepad::GamepadSnapshot>, DeviceError> {
-        Err(DeviceError::Unsupported("gamepad"))
+    fn read(&self) -> Result<Option<crate::contract::GamepadSnapshot>, GamepadError> {
+        Err(GamepadError::Unsupported("gamepad"))
     }
 }
 
 /// 実行対象プラットフォームに応じた `Gamepad` 実装を返す（`clipboard.rs::
 /// shared_clipboard` と同型の cfg カスケード。状態を持たない実装のみのため
 /// `OnceLock` は使わず、呼び出しごとに構築する）。
-fn platform_gamepad() -> Box<dyn Gamepad> {
+pub fn platform_gamepad() -> Box<dyn Gamepad> {
     #[cfg(target_os = "windows")]
     {
-        Box::new(crate::device::windows_gamepad::WindowsGamepad)
+        Box::new(crate::windows::WindowsGamepad)
     }
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     {
-        Box::new(crate::device::apple_gamepad::AppleGamepad)
+        Box::new(crate::apple::AppleGamepad)
     }
     #[cfg(target_os = "android")]
     {
-        Box::new(crate::device::android_gamepad::AndroidGamepad)
+        Box::new(crate::android::AndroidGamepad)
     }
     #[cfg(not(any(
         target_os = "windows",
@@ -148,7 +145,7 @@ fn resolve_frame(
             )
         }
         Ok(None) => alt_frame(state, GamepadView::DisconnectedAlt),
-        Err(DeviceError::Unsupported(_)) => alt_frame(state, GamepadView::UnsupportedAlt),
+        Err(GamepadError::Unsupported(_)) => alt_frame(state, GamepadView::UnsupportedAlt),
         // タイムアウト・その他の一時的な読み取り失敗も代替入力へ倒す（未接続と同じ扱い。
         // `gamepad_show::GamepadView` は 3 状態のみのため、専用の失敗表示は本 Issue の
         // スコープ外とする）。
@@ -225,15 +222,24 @@ pub fn gamepad_show_effect(state: &GamepadShowState, sender: &CompletionSender<G
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::gamepad::{DummyGamepad, GamepadSnapshot, BUTTON_A};
+    use crate::contract::{BUTTON_A, DummyGamepad, GamepadSnapshot};
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     fn sender_with_channel() -> (
         CompletionSender<GamepadShowState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<GamepadShowState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<GamepadShowState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     #[test]
@@ -274,8 +280,8 @@ mod tests {
     fn resolve_frame_falls_back_to_alt_when_unsupported() {
         struct Unsupported;
         impl Gamepad for Unsupported {
-            fn read(&self) -> Result<Option<GamepadSnapshot>, DeviceError> {
-                Err(DeviceError::Unsupported("gamepad"))
+            fn read(&self) -> Result<Option<GamepadSnapshot>, GamepadError> {
+                Err(GamepadError::Unsupported("gamepad"))
             }
         }
         let state = GamepadShowState::default();
@@ -371,8 +377,8 @@ mod tests {
     fn resolve_frame_treats_internal_error_as_disconnected_alt_not_connected() {
         struct FailingGamepad;
         impl Gamepad for FailingGamepad {
-            fn read(&self) -> Result<Option<GamepadSnapshot>, DeviceError> {
-                Err(DeviceError::Internal("gamepad read"))
+            fn read(&self) -> Result<Option<GamepadSnapshot>, GamepadError> {
+                Err(GamepadError::Internal("gamepad read"))
             }
         }
         let state = GamepadShowState::default();

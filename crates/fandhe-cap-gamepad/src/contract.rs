@@ -16,9 +16,8 @@
 //!   - 接続中のコントローラが無い: `Ok(None)`（全 0 の [`GamepadSnapshot`] を
 //!     「未接続」の代用にしない。`location.rs` の「(0, 0) に測位できた」と
 //!     「まだ測位できていない」の区別と同じ設計判断）。
-//!   - 現在のプラットフォームでは未対応: `Err(DeviceError::Unsupported("gamepad"))`。
-//!   - 接続はしているが読み取りが一時的に失敗した: `Err(DeviceError::Internal("gamepad
-//!     read"))`。
+//!   - 現在のプラットフォームでは未対応: `Err(GamepadError::Unsupported("gamepad"))`。
+//!   - 接続はしているが読み取りが一時的に失敗した: `Err(GamepadError::Internal("gamepad read"))`。
 //! - **複数台接続**: 先頭 1 台のみを扱う。2 台目以降は無視する（本 Issue のスコープ外、
 //!   複数台の合成・切替は将来課題）。
 //! - **切断後**: 直前の値を返し続けない。切断を検知したら次回以降の [`Gamepad::read`]
@@ -27,7 +26,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::DeviceError;
+use crate::error::GamepadError;
 
 /// スティック・トリガ・ボタンの最新スナップショット。モジュール doc の値域・軸の
 /// 向きの契約に従う。
@@ -96,7 +95,7 @@ pub fn pressed_labels(buttons: u16) -> Vec<&'static str> {
 pub trait Gamepad: Send + Sync {
     /// 最新のスナップショットを返す。モジュール doc の 3 分岐（未接続 `Ok(None)` /
     /// 非対応 `Unsupported` / 読み取り失敗 `Internal`）を守る契約。
-    fn read(&self) -> Result<Option<GamepadSnapshot>, DeviceError>;
+    fn read(&self) -> Result<Option<GamepadSnapshot>, GamepadError>;
 }
 
 /// NaN を `0.0` へ置換してから `-1.0..=1.0` へ丸める（`motion::clamp_finite` と同型）。
@@ -120,7 +119,7 @@ pub fn normalize_trigger(value: f32) -> f32 {
 
 /// テスト・代替入力（未接続 / 非対応時のスライダー代替）用のダミー実装。実装の
 /// 初期化失敗時にこれへ黙ってフォールバックしない契約は呼び出し側
-/// （`fandhe-egui-proxy::device::gamepad`）が担う。
+/// （`crate::driver`）が担う。
 #[derive(Clone)]
 pub struct DummyGamepad(Arc<Mutex<Option<GamepadSnapshot>>>);
 
@@ -170,7 +169,7 @@ impl Default for DummyGamepad {
 }
 
 impl Gamepad for DummyGamepad {
-    fn read(&self) -> Result<Option<GamepadSnapshot>, DeviceError> {
+    fn read(&self) -> Result<Option<GamepadSnapshot>, GamepadError> {
         // 他所の panic に由来する poison を呼び出し側へ伝播させない
         // （coding-rust.md: unwrap/expect を本実装コードで使わない方針）。
         let state = self
@@ -199,8 +198,8 @@ mod tests {
     struct UnsupportedGamepad;
 
     impl Gamepad for UnsupportedGamepad {
-        fn read(&self) -> Result<Option<GamepadSnapshot>, DeviceError> {
-            Err(DeviceError::Unsupported("gamepad"))
+        fn read(&self) -> Result<Option<GamepadSnapshot>, GamepadError> {
+            Err(GamepadError::Unsupported("gamepad"))
         }
     }
 
@@ -209,7 +208,7 @@ mod tests {
         let gamepad = UnsupportedGamepad;
         assert!(matches!(
             gamepad.read(),
-            Err(DeviceError::Unsupported("gamepad"))
+            Err(GamepadError::Unsupported("gamepad"))
         ));
     }
 

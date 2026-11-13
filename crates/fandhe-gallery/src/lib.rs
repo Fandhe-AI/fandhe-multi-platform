@@ -39,6 +39,86 @@ extern "system" fn Java_com_fandhe_platform_ShareReceiveHelper_nativeOnShareRece
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeOnGamepadPresenceScanBegin`/`ScanId`/`ScanEnd`/
+/// `nativeOnGamepadMotion`/`nativeOnGamepadKey` no-op フォールバック（Issue #935・#1303）。
+/// `GamepadLifecycle`（`fandhe-cap-gamepad` の provider）は feature を知らず、ゲームパッド由来のイベントなら
+/// `GamepadHelper` の native を必ず呼ぶため、実体を持つ `fandhe-cap-gamepad`（`device` 有効時のみ依存）が無いと
+/// `UnsatisfiedLinkError` になる。実体との二重定義を避けるため cfg は `device` 無効のときだけ。
+/// 3 分割・シグネチャは `fandhe-cap-gamepad/src/android.rs` 側の実装と必ず一致させる（JNI は署名不一致を実行時にしか
+/// 検出しないため、PR #939 で `ScanId` から `controllerNumber` 引数を削った際も両側を
+/// 揃えた）。
+///
+/// # Safety
+/// この 5 関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 5 関数に閉じ、
+/// シンボル名は JNI 命名規約上の固定名。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanBegin(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+) {
+}
+
+/// [`Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanId(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _device_id: i32,
+) {
+}
+
+/// [`Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanEnd(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+) {
+}
+
+/// [`Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code, clippy::too_many_arguments)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadMotion(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _device_id: i32,
+    _source: i32,
+    _x: f32,
+    _y: f32,
+    _z: f32,
+    _rz: f32,
+    _left_trigger: f32,
+    _right_trigger: f32,
+    _hat_x: f32,
+    _hat_y: f32,
+    _flat_x: f32,
+    _flat_y: f32,
+    _flat_z: f32,
+    _flat_rz: f32,
+) {
+}
+
+/// [`Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadKey(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _device_id: i32,
+    _source: i32,
+    _key_code: i32,
+    _down: u8,
+) {
+}
+
 /// Android アプリのエントリポイント（計測専用ビルド）。
 ///
 /// `android-activity`（GameActivity 方式）がライブラリロード後にこのシンボル名を検索して呼ぶ

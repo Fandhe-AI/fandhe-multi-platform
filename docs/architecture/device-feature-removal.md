@@ -46,17 +46,9 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
    - `MainActivity.java` の `sensorManager`/`motionSensor` フィールド・`motionListener`・
      `nativeOnMotionChanged` native 宣言・`onResume`/`onPause` 内のセンサ登録/解除を
      削除する（Issue #831）
-   - ゲームコントローラ（親 #932、Issue #935）: `crates/fandhe-egui-proxy/src/device/
-     android_gamepad.rs`（`device.rs` の `pub mod android_gamepad;` 行込み。JNI
-     エクスポート `nativeOnGamepadPresenceScanBegin`/`nativeOnGamepadPresenceScanId`/
-     `nativeOnGamepadPresenceScanEnd`/`nativeOnGamepadMotion`/`nativeOnGamepadKey`
-     の 5 関数を含む）・`crates/fandhe-egui-proxy/src/device/gamepad.rs` の Android
-     分岐（`platform_gamepad()` の `#[cfg(target_os = "android")]` ブロックと
-     `dead_code` 許可の `android` 追加分）を削除する。`MainActivity.java` の
-     `inputManager` フィールド・`gamepadDeviceListener`・
-     `reportGamepadPresence`/`axisFlat`・`nativeOnGamepad*` native 宣言 5 本・
-     `dispatchKeyEvent`/`dispatchGenericMotionEvent` オーバーライド・
-     `onResume`/`onPause` 内の `InputManager` 登録/解除を削除する
+   - ゲームコントローラ（親 #932、Issue #935・#1303）: 機能 crate `crates/fandhe-cap-gamepad/` へ移した。
+     `MainActivity.java` には何も残らない。切り離しは crate の依存を外すだけでよい
+     （Manifest の `GamepadLifecycle` provider は `cargo fandhe gen` が宣言から出す）
    - `platforms/android/app/src/main/AndroidManifest.xml` の `INTERNET`/`CAMERA`
      の `uses-permission` 2 行と `uses-feature` 3 行（`android.hardware.camera.any`/
      `android.hardware.camera`/`android.hardware.camera.autofocus`）を戻す

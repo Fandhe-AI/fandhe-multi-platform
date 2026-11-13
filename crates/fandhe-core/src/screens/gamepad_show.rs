@@ -5,8 +5,8 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。ゲームコントローラの実読み取りは
-//! 本モジュール外（`fandhe-egui-proxy` の effect ドライバ、`device/gamepad.rs`）が
-//! `fandhe_device::gamepad::Gamepad` を pull し、[`apply_connected`] /
+//! 本モジュール外（`fandhe-cap-gamepad` の effect ドライバ、`driver.rs`）が
+//! `fandhe_cap_gamepad::Gamepad` を pull し、[`apply_connected`] /
 //! [`apply_disconnected`] / [`apply_unsupported`] を呼んで結果を注入する。
 //!
 //! 玉の絵・物理は [`crate::screens::tilt_ball`] の公開 API（[`tilt_ball::step`] /
@@ -41,7 +41,7 @@ pub const UNSUPPORTED_ALT_LABEL: &str = "非対応（代替入力）";
 const NO_BUTTON_TEXT: &str = "なし";
 /// 代替入力チェックボックスが表す仮想ボタン名。
 const ALT_BUTTON_LABEL: &str = "代替ボタン";
-/// 「傾き無し」とみなす代替入力のデッドゾーン（`fandhe-egui-proxy::device::gamepad::
+/// 「傾き無し」とみなす代替入力のデッドゾーン（`fandhe_cap_gamepad::
 /// STICK_EPSILON` と同じ値）。[`apply_alt_frame`] が [`tilt_ball::step`] に渡す前に
 /// この閾値以下を 0.0 として畳む。effect ドライバ側は接続時のみこの畳み込みを行い
 /// [`apply_disconnected`]/[`apply_unsupported`] へは生の `alt_x`/`alt_y` をそのまま
@@ -137,7 +137,7 @@ pub fn set_alt_button(state: &mut GamepadShowState, value: bool) {
 
 /// 実コントローラを読めているときの 1 フレーム分の更新。`x`/`y` は effect ドライバが
 /// 実装の軸の向き契約（画面座標系・y 下が正）へ正規化済みの値を渡す契約
-/// （`fandhe_device::gamepad` モジュール doc 参照）。`pressed` は `fandhe_device::gamepad::
+/// （`fandhe_cap_gamepad` の契約 doc 参照）。`pressed` は `fandhe_device::gamepad::
 /// pressed_labels` の結果を整形した表示用文字列（空文字列は「押下なし」）。
 pub fn apply_connected(state: &mut GamepadShowState, x: f32, y: f32, pressed: String, dt: f32) {
     state.view = GamepadView::Connected;
@@ -172,7 +172,7 @@ fn apply_alt_frame(state: &mut GamepadShowState, dt: f32) {
     tilt_ball::step(&mut state.ball, (x, y), dt);
 }
 
-/// 玉が静止中か（`fandhe-egui-proxy::device::gamepad` が「傾き 0 かつ静止中は完了送信を
+/// 玉が静止中か（`fandhe_cap_gamepad` が「傾き 0 かつ静止中は完了送信を
 /// スキップする」判定に使う、`device/tilt.rs::can_skip_send` と同じ考え方）。
 pub fn is_at_rest(state: &GamepadShowState) -> bool {
     tilt_ball::is_at_rest(&state.ball)
