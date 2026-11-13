@@ -16,7 +16,7 @@
 //!    ハンドルを閉じる」の順（`ConnectGuard` の `Drop`）
 //!
 //! 失敗したときだけ電源状態を読み直し、オフなら `Disabled(RADIO_OFF)` に分ける（電源の判定は
-//! `windows_wifi_info::radio_off` を共有）。読み直しに失敗したら元の失敗をそのまま返す。
+//! `fandhe_device::wifi_info::radio_off` を共有）。読み直しに失敗したら元の失敗をそのまま返す。
 //!
 //! # プロファイル
 //!
@@ -266,13 +266,13 @@ mod ffi {
         WLAN_REASON_CODE_NOT_VISIBLE, WLAN_REASON_CODE_SUCCESS,
     };
 
-    use super::super::windows_wifi_info::radio_off;
     use super::{
         classify_sync, match_notification, profile_xml, to_error, ConnData, Failure, Outcome, Slot,
         ACM_ATTEMPT_FAIL, ACM_CONNECTION_COMPLETE, ACM_INTERFACE_REMOVAL, MODE_TEMPORARY_PROFILE,
         REASON_NETWORK_NOT_AVAILABLE, REASON_NOT_VISIBLE, REASON_SUCCESS, SERVICE_NOT_ACTIVE,
         SOURCE_ACM,
     };
+    use fandhe_device::wifi_info::radio_off;
 
     // 純関数側の定数が windows クレートの値と一致していることをコンパイル時に固定する。
     const _: () = {

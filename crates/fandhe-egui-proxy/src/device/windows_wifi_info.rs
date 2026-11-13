@@ -36,12 +36,8 @@ const ACCESS_DENIED: u32 = 5;
 const SERVICE_NOT_ACTIVE: u32 = 1062;
 /// `ERROR_INVALID_STATE`（接続状態の読み出しが切断と競合した）。
 const INVALID_STATE: u32 = 5023;
-/// `dot11_radio_state_on`。
-const RADIO_ON: i32 = 1;
 /// 受け入れるインターフェース数の上限。超える値は壊れたヘッダーとみなす。
 const MAX_INTERFACES: usize = 64;
-/// `dot11_radio_state_off`（ソフト・ハードどちらかが明示的にオフ）。0 は unknown で、オフではない。
-const RADIO_STATE_OFF: i32 = 2;
 /// SSID の最大バイト数（IEEE 802.11）。
 const SSID_MAX: usize = 32;
 
@@ -59,16 +55,6 @@ fn open_error(code: u32) -> DeviceError {
         SERVICE_NOT_ACTIVE => DeviceError::Unsupported(FEATURE),
         _ => classify(code),
     }
-}
-
-/// `(ソフト, ハード)` の電源状態で、明示的にオフの PHY が 1 つ以上あり、かつ両方オンの PHY が
-/// 無いときだけ true。unknown（0）だけ・空は判定不能として false（偽の失敗を避ける）。
-pub(super) fn radio_off(states: &[(i32, i32)]) -> bool {
-    let on = states.iter().any(|&(s, h)| s == RADIO_ON && h == RADIO_ON);
-    let off = states
-        .iter()
-        .any(|&(s, h)| s == RADIO_STATE_OFF || h == RADIO_STATE_OFF);
-    off && !on
 }
 
 /// 生の SSID 長・バイト列・dBm から 1 件を作る。長さの検証をスライスより先に行う。
@@ -114,9 +100,10 @@ mod ffi {
         WLAN_INTF_OPCODE, WLAN_RADIO_STATE,
     };
 
+    use fandhe_device::wifi_info::radio_off;
+
     use super::{
-        bss_items_fit, classify, net_from_parts, open_error, radio_off, INVALID_STATE,
-        MAX_INTERFACES,
+        bss_items_fit, classify, net_from_parts, open_error, INVALID_STATE, MAX_INTERFACES,
     };
 
     /// Windows の `WifiInfo` 実装を返す。
@@ -331,18 +318,6 @@ mod tests {
             DeviceError::PermissionDenied(FEATURE)
         ));
         assert!(matches!(open_error(87), DeviceError::Internal(READ_FAILED)));
-    }
-
-    #[test]
-    fn radio_states() {
-        assert!(radio_off(&[(2, 1), (1, 2)]));
-        assert!(!radio_off(&[(0, 1), (1, 0)]));
-        assert!(!radio_off(&[(0, 0)]));
-        assert!(radio_off(&[(2, 1), (0, 0)]));
-        assert!(radio_off(&[(1, 2)]));
-        assert!(!radio_off(&[(0, 0), (1, 1)]));
-        assert!(!radio_off(&[(2, 2), (1, 1)]));
-        assert!(!radio_off(&[]));
     }
 
     #[test]
