@@ -203,6 +203,11 @@ test("rewriteEdition2024: 複数行文字列・raw string・ブロックコメ�
   // ブロックコメントは入れ子になる。最初の `*/` で閉じると、コメント内の `"` から後ろを文字列とみなしてしまう。
   assert.equal(rewriteEdition2024('/* outer /* inner */ " */\nlet gen = 1;\nlet s = "x";'), '/* outer /* inner */ " */\nlet r#gen = 1;\nlet s = "x";');
   assert.equal(stripRustLiterals("/* a /* b */ c */x"), " ".repeat(17) + "x");
+  // raw byte string・raw C string もリテラル全体を保護する。接頭辞付きの通常の文字列・文字・lifetime も中身に触れない。
+  for (const keep of ['const S: &[u8] = br#"a " gen " b"#;', 'cr#"a " gen " b"#', 'br"gen"', 'b"a \\" gen"', 'c"gen"', "b'\"'"])
+    assert.equal(rewriteEdition2024(keep), keep);
+  assert.equal(rewriteEdition2024('br#"a " gen "#; let gen = 1;'), 'br#"a " gen "#; let r#gen = 1;');
+  assert.equal(rewriteEdition2024("fn f<'a>(x: &'a str) { let gen = \"gen\"; }"), "fn f<'a>(x: &'a str) { let r#gen = \"gen\"; }");
 });
 
 test("missingEntry: コメント・文字列の中の pub fn は公開入口にしない", () => {

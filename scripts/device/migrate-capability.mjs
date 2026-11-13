@@ -59,10 +59,10 @@ export function moveTargets(id, stem) {
 }
 
 /**
- * 複数行にまたがりうる Rust のコメント・文字列・文字リテラル（raw string を含む）。これらの内側は書き換え・判定の対象外にする。
+ * 複数行にまたがりうる Rust のコメント・文字列・文字リテラル（raw string・raw byte string `br"…"`・raw C string `cr"…"` を含む）。これらの内側は書き換え・判定の対象外にする。
  * ブロックコメントは入れ子になるため正規表現では閉じを決められない。開き `/*` だけを一致させ、閉じは replaceRust が深さを数えて決める。
  */
-const RUST_OPAQUE = String.raw`\br(#*)"[\s\S]*?"\1|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\\n]|\\[^\n']+)'|\/\/.*$|\/\*`;
+const RUST_OPAQUE = String.raw`\b[bc]?r(#*)"[\s\S]*?"\1|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\\n]|\\[^\n']+)'|\/\/.*$|\/\*`;
 
 /** `/*` で始まるブロックコメントの終わり（閉じの直後の位置）。入れ子の深さを数える。閉じが無ければ末尾。 */
 function blockCommentEnd(src, i) {
