@@ -173,6 +173,10 @@ test("refPatterns: stem・id・Pascal を語の境界で照合する（短い st
   for (const l of ["compile_ios_ar();", "pub mod ios_ar;", "device::ar::ar_show_effect", "ArHelper.java", "fandhe-cap-ar", "fandhe_ios_ar.m", "fandhe_egui_proxy::device::ar_show_effect"])
     assert.ok(hit(l), l);
   for (const l of ["compile_ios_ar_camera_view();", "Array", "solar", "charge", "fandhe-cap-ar-camera-view"]) assert.ok(!hit(l), l);
+  // effect 名の接尾辞は `_effect` か `_<動詞 1 語>_effect` だけ。2 語以上は兄弟の機能名。
+  const hitOf = (stem) => (l) => refPatterns(stem, stem).some((re) => re.test(l));
+  for (const [stem, l] of [["nfc", "nfc_read_effect"], ["print", "print_page_effect"], ["location", "location_effect"]]) assert.ok(hitOf(stem)(l), l);
+  for (const [stem, l] of [["nfc", "nfc_card_emulation_show_effect"], ["print", "print_screen_page_effect"]]) assert.ok(!hitOf(stem)(l), l);
 });
 
 test("missingEntry: crate ルートから公開された platform_<stem> だけを合格にする", () => {
@@ -196,6 +200,9 @@ test("missingEntry: crate ルートから公開された platform_<stem> だけ�
 test("rewriteEdition2024: 複数行文字列・raw string・ブロックコメントの内側は変えない", () => {
   for (const keep of ['let s = "a\n  let gen = 1;\n";', 'let s = r#"x\nlet gen = 1;\n"#;', "/* \nlet gen = 1;\n*/", "let c = '\"'; // gen"]) assert.equal(rewriteEdition2024(keep), keep);
   assert.equal(rewriteEdition2024('let s = "a\nb";\nlet gen = 1;'), 'let s = "a\nb";\nlet r#gen = 1;');
+  // ブロックコメントは入れ子になる。最初の `*/` で閉じると、コメント内の `"` から後ろを文字列とみなしてしまう。
+  assert.equal(rewriteEdition2024('/* outer /* inner */ " */\nlet gen = 1;\nlet s = "x";'), '/* outer /* inner */ " */\nlet r#gen = 1;\nlet s = "x";');
+  assert.equal(stripRustLiterals("/* a /* b */ c */x"), " ".repeat(17) + "x");
 });
 
 test("missingEntry: コメント・文字列の中の pub fn は公開入口にしない", () => {

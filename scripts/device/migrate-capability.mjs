@@ -58,18 +58,47 @@ export function moveTargets(id, stem) {
   ];
 }
 
-/** 複数行にまたがりうる Rust のコメント・文字列・文字リテラル（raw string を含む）。これらの内側は書き換え・判定の対象外にする。 */
-const RUST_OPAQUE = String.raw`\br(#*)"[\s\S]*?"\1|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\\n]|\\[^\n']+)'|\/\/.*$|\/\*[\s\S]*?\*\/`;
+/**
+ * 複数行にまたがりうる Rust のコメント・文字列・文字リテラル（raw string を含む）。これらの内側は書き換え・判定の対象外にする。
+ * ブロックコメントは入れ子になるため正規表現では閉じを決められない。開き `/*` だけを一致させ、閉じは replaceRust が深さを数えて決める。
+ */
+const RUST_OPAQUE = String.raw`\br(#*)"[\s\S]*?"\1|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\\n]|\\[^\n']+)'|\/\/.*$|\/\*`;
+
+/** `/*` で始まるブロックコメントの終わり（閉じの直後の位置）。入れ子の深さを数える。閉じが無ければ末尾。 */
+function blockCommentEnd(src, i) {
+  let depth = 0;
+  while (i < src.length) {
+    if (src.startsWith("/*", i)) {
+      depth++;
+      i += 2;
+    } else if (src.startsWith("*/", i)) {
+      i += 2;
+      if (--depth === 0) return i;
+    } else i++;
+  }
+  return src.length;
+}
+
+/** RUST_OPAQUE（と code）の一致を左から順に f で置き換える。ブロックコメントは閉じまでを 1 つの一致として渡す。 */
+function replaceRust(src, code, f) {
+  const re = new RegExp(code ? `${RUST_OPAQUE}|${code}` : RUST_OPAQUE, "gm");
+  let out = "";
+  let last = 0;
+  for (let m; (m = re.exec(src)); last = re.lastIndex) {
+    if (m[0] === "/*") re.lastIndex = blockCommentEnd(src, m.index);
+    out += src.slice(last, m.index) + f(src.slice(m.index, re.lastIndex));
+  }
+  return out + src.slice(last);
+}
 
 /** コメントと文字列の中身を空白に置き換える（行数は保つ）。公開入口の有無など、コードだけを見たい判定用。 */
-export const stripRustLiterals = (src) =>
-  src.replace(new RegExp(RUST_OPAQUE, "gm"), (m) => m.replace(/[^\n]/g, " "));
+export const stripRustLiterals = (src) => replaceRust(src, null, (m) => m.replace(/[^\n]/g, " "));
 
 /** edition 2021 -> 2024 で壊れる書き方（`extern "C" {}`・`#[no_mangle]`・`gen` 識別子）の機械的な書き換え。 */
 export function rewriteEdition2024(src) {
   // コメント・文字列（複数行・raw を含む）は一致させたうえでそのまま返し、その外だけを直す。
   const code = String.raw`(?<!unsafe\s+)\bextern\s+"C"\s*\{|#\[no_mangle\]|(?<!r#)\bgen\b`;
-  return src.replace(new RegExp(`${RUST_OPAQUE}|${code}`, "gm"), (m) => {
+  return replaceRust(src, code, (m) => {
     if (m.startsWith("extern")) return 'unsafe extern "C" {';
     if (m === "#[no_mangle]") return "#[unsafe(no_mangle)]";
     return m === "gen" ? "r#gen" : m;
@@ -340,8 +369,9 @@ function nativeFiles(R, stem) {
  * ponytail: 左に `_` で連なる別の stem（`camera_view` が `ar_camera_view` に一致する）は拾う。厳密にするなら共有ファイルの構文解析が要る。
  */
 export function refPatterns(id, stem) {
-  // 語の直後は英数字・`-` を禁じ、`_` は `ar_show_effect` のような effect 関数名の接尾辞のときだけ許す。
-  const tail = String.raw`(?![A-Za-z0-9-]|_(?![a-z0-9_]*_effect\b))`;
+  // 語の直後は英数字・`-` を禁じ、`_` は effect 関数名の接尾辞 `_effect`・`_<動詞 1 語>_effect`（`ar_show_effect`）のときだけ許す。
+  // 2 語以上は兄弟の機能名（`nfc` に対する `nfc_card_emulation_show_effect`）なので拾わない。
+  const tail = String.raw`(?![A-Za-z0-9-]|_(?!(?:[a-z0-9]+_)?effect\b))`;
   return [
     new RegExp(`(?<![A-Za-z0-9])${stem}${tail}`),
     new RegExp(`(?<![A-Za-z0-9])${id}${tail}`),
