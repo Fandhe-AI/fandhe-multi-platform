@@ -315,7 +315,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_provider_show" => fandhe_core::screens::file_provider_show::current_screen,
-    fandhe_egui_proxy::device::file_provider::file_provider_show_effect,
+    fandhe_cap_file_provider::file_provider_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_watch_show" => fandhe_core::screens::file_watch_show::current_screen,

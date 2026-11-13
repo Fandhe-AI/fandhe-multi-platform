@@ -126,6 +126,8 @@ android {
             @Suppress("DEPRECATION")
             res.srcDirs("../../../crates/fandhe-cap-file-preview/android/res")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-file-provider/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-focus-mode-status/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-gamepad/android/java")

@@ -107,11 +107,6 @@ pub mod android_environment_sensors;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_file_association;
-/// Issue #1020: Android 向け「OS のファイル画面に出る保存先」の実装。
-/// `device/file_provider.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_file_provider;
 /// Issue #461: Android 向けライト（トーチ）実装（`FlashlightHelper` との JNI 橋渡し）。
 /// `device/flashlight.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -469,9 +464,6 @@ pub mod environment_sensors;
 /// （macOS・iOS・Windows 実装、Android は未実装のスタブ、他 OS は `Unsupported` 固定）。
 pub mod file_association;
 pub mod file_pick;
-/// Phase 11 の拡充ループ（親 #194、Issue #1019）: 自アプリの保存先を OS のファイル画面に出す effect ドライバ
-/// （Android はスタブ、iOS・macOS・Windows は保留、他 OS は `UnsupportedFileProvider` 固定）。
-pub mod file_provider;
 /// Phase 11 の拡充ループ（親 #106、Issue #458）: ライト（トーチ）の effect ドライバ
 /// （iOS・Android・Windows 実装、他 OS は `UnsupportedFlashlight`
 /// 固定。Web は `fandhe-web-dom`）。

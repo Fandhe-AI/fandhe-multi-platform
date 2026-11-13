@@ -30,7 +30,7 @@
         "https://developer.android.com/reference/android/provider/DocumentsContract.Root",
         "https://developer.android.com/reference/android/os/ParcelFileDescriptor"
       ],
-      "impl": "crates/fandhe-egui-proxy/src/device/android_file_provider.rs + platforms/android/app/src/main/java/com/fandhe/platform/FileProviderDocumentsProvider.java + crates/fandhe-egui-proxy/src/device/file_provider.rs + crates/fandhe-core/src/screens/file_provider_show.rs + crates/fandhe-device/src/file_provider.rs、Issue #1020",
+      "impl": "crates/fandhe-cap-file-provider/src/android.rs + crates/fandhe-cap-file-provider/android/java/com/fandhe/platform/FileProviderDocumentsProvider.java + crates/fandhe-cap-file-provider/src/driver.rs + crates/fandhe-core/src/screens/file_provider_show.rs + crates/fandhe-cap-file-provider/src/contract.rs、Issue #1020",
       "note": "実装済み（#1020）。JNI ではなく manifest 宣言の Java クラスが要る。範囲は内部ストレージの専用フォルダ `files/file-provider/` を、ルート 1 件「Fandhe（この端末内のみ）」として出すこと。1 書類 = 再利用しない ID 1 つで、配置は `files/file-provider/<id>/<表示名>`（ID のサブフォルダに通常ファイルを 1 つだけ置く）。document ID・URI・削除キーは ID（英数字のみ、128 bit 相当の乱数、`create_dir` で一意性を確かめ、消した ID は二度と使わない）で、表示名は見せるだけ。ファイル名を ID にする旧設計は、消して同名で作り直すと古い URI の権限が新しい書類に及ぶため廃止（契約は #1019）。守らない範囲: 他アプリの書き込み中の途中サイズ、拡張子の無い名前の MIME（octet-stream）。【推測】実機で見る点: Files アプリへの表示、他アプリからの保存・開く・削除、消した後に古い URI で開けないこと"
     },
     "macos": {

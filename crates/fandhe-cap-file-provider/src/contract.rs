@@ -76,7 +76,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-use crate::DeviceError;
+use crate::error::FileProviderError;
 
 /// アプリ専用フォルダ名。Android は `getFilesDir()/file-provider`（Java 側と一致させる）。
 /// 書類は直下の ID サブフォルダ `<FOLDER_NAME>/<id>/<表示名>` に 1 つずつ置く。
@@ -85,7 +85,7 @@ pub const FOLDER_NAME: &str = "file-provider";
 pub const MAX_NAME_BYTES: usize = 255;
 /// 書類 ID の文字数の上限（英数字のみ）。
 pub const MAX_ID_LEN: usize = 64;
-/// 「既に無い」を表す `Internal` の識別子（`DeviceError` に列挙子を足さない）。
+/// 「既に無い」を表す `Internal` の識別子（`FileProviderError` に列挙子を足さない）。
 pub const NOT_FOUND: &str = "file_provider not_found";
 /// 名前（表示名と ID）の規則違反を表す `InvalidInput` の識別子。
 pub const INVALID_NAME: &str = "file_provider name";
@@ -129,41 +129,41 @@ pub trait FileProvider: Send + Sync {
     /// 書類を表示名順（同名は ID 順）で返す。対象は「ID サブフォルダの中身がちょうど 1 つの通常ファイル」
     /// だけで、作りかけ（空・2 つ以上）は出さず失敗にもしない。失敗は I/O エラーに限り、1 件でも
     /// 読めなければ全体を失敗にする。
-    fn list(&self) -> Result<Vec<Entry>, DeviceError>;
+    fn list(&self) -> Result<Vec<Entry>, FileProviderError>;
     /// `base_name` を表示名として、新しい ID の書類を置く。表示名の重複は許し、既存の書類を上書きも
     /// ずらしもしない。ID は `create_dir` で一意性を確かめて採番する。
-    fn put(&self, base_name: &str, content: &[u8]) -> Result<PutOutcome, DeviceError>;
+    fn put(&self, base_name: &str, content: &[u8]) -> Result<PutOutcome, FileProviderError>;
     /// 書類を消す。削除キーは ID。ファイルを消してから ID のサブフォルダを消し、サブフォルダの
     /// 削除失敗は握りつぶさず `Err(Internal)` にする。消した ID は二度と使わない。
     /// ID のサブフォルダが無ければ [`NOT_FOUND`]。
-    fn delete(&self, id: &str) -> Result<DeleteOutcome, DeviceError>;
+    fn delete(&self, id: &str) -> Result<DeleteOutcome, FileProviderError>;
 }
 
 /// 非対応 OS 用。全メソッドが `Unsupported("file_provider")` を返す。
 pub struct UnsupportedFileProvider;
 
 impl FileProvider for UnsupportedFileProvider {
-    fn list(&self) -> Result<Vec<Entry>, DeviceError> {
-        Err(DeviceError::Unsupported("file_provider"))
+    fn list(&self) -> Result<Vec<Entry>, FileProviderError> {
+        Err(FileProviderError::Unsupported)
     }
-    fn put(&self, _base_name: &str, _content: &[u8]) -> Result<PutOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("file_provider"))
+    fn put(&self, _base_name: &str, _content: &[u8]) -> Result<PutOutcome, FileProviderError> {
+        Err(FileProviderError::Unsupported)
     }
-    fn delete(&self, _id: &str) -> Result<DeleteOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("file_provider"))
+    fn delete(&self, _id: &str) -> Result<DeleteOutcome, FileProviderError> {
+        Err(FileProviderError::Unsupported)
     }
 }
 
 /// 表示名の規則。空・`.`・`..`・`/`・NUL・制御文字・先頭 `.`・255 バイト超を `InvalidInput` で拒否する。
 /// 表示名は `<id>/<表示名>` のパス 1 要素になるため、パスの閉じ込めも兼ねる。
 /// 一覧に出す条件にも使う（provider 側も同じ表で検証する）。ID の規則は [`validate_id`]。
-pub fn validate_name(name: &str) -> Result<(), DeviceError> {
+pub fn validate_name(name: &str) -> Result<(), FileProviderError> {
     let bad = name.is_empty()
         || name.starts_with('.')
         || name.len() > MAX_NAME_BYTES
         || name.chars().any(|c| c == '/' || c.is_control());
     if bad {
-        Err(DeviceError::InvalidInput(INVALID_NAME))
+        Err(FileProviderError::InvalidInput(INVALID_NAME))
     } else {
         Ok(())
     }
@@ -171,9 +171,9 @@ pub fn validate_name(name: &str) -> Result<(), DeviceError> {
 
 /// 書類 ID の規則。空・ASCII 英数字以外・[`MAX_ID_LEN`] 超を `InvalidInput` で拒否する。
 /// `/`・`..`・NUL を含められないため、パスの閉じ込めも兼ねる（Java 側も同じ表で検証する）。
-pub fn validate_id(id: &str) -> Result<(), DeviceError> {
+pub fn validate_id(id: &str) -> Result<(), FileProviderError> {
     if id.is_empty() || id.len() > MAX_ID_LEN || !id.bytes().all(|b| b.is_ascii_alphanumeric()) {
-        Err(DeviceError::InvalidInput(INVALID_NAME))
+        Err(FileProviderError::InvalidInput(INVALID_NAME))
     } else {
         Ok(())
     }
@@ -211,14 +211,14 @@ const MAX_ID_TRIES: usize = 8;
 /// 排他を共有しない（ID が衝突しないため）。
 pub struct DirFileProvider {
     dir: PathBuf,
-    notify: Box<dyn Fn() -> Result<(), DeviceError> + Send + Sync>,
+    notify: Box<dyn Fn() -> Result<(), FileProviderError> + Send + Sync>,
 }
 
 impl DirFileProvider {
     /// `dir` を保存先、`notify` を変更通知とする。
     pub fn new(
         dir: PathBuf,
-        notify: Box<dyn Fn() -> Result<(), DeviceError> + Send + Sync>,
+        notify: Box<dyn Fn() -> Result<(), FileProviderError> + Send + Sync>,
     ) -> Self {
         Self { dir, notify }
     }
@@ -295,10 +295,10 @@ fn to_entry(item: io::Result<fs::DirEntry>) -> io::Result<Option<Entry>> {
 /// 項目の `io::Result` 列から一覧を作る。1 件でも `Err` なら全体を失敗にする（飛ばして成功にしない）。
 fn collect_entries(
     items: impl Iterator<Item = io::Result<Option<Entry>>>,
-) -> Result<Vec<Entry>, DeviceError> {
+) -> Result<Vec<Entry>, FileProviderError> {
     let mut out = Vec::new();
     for item in items {
-        if let Some(e) = item.map_err(|_| DeviceError::Internal(INTERNAL))? {
+        if let Some(e) = item.map_err(|_| FileProviderError::Internal(INTERNAL))? {
             out.push(e);
         }
     }
@@ -312,43 +312,43 @@ fn write_or_cleanup(
     file: &std::path::Path,
     sub: &std::path::Path,
     write: impl FnOnce() -> io::Result<()>,
-) -> Result<(), DeviceError> {
+) -> Result<(), FileProviderError> {
     if write().is_err() {
         let _ = fs::remove_file(file);
         let _ = fs::remove_dir(sub);
-        return Err(DeviceError::Internal(INTERNAL));
+        return Err(FileProviderError::Internal(INTERNAL));
     }
     Ok(())
 }
 
-fn map_remove_err(e: &io::Error) -> DeviceError {
+fn map_remove_err(e: &io::Error) -> FileProviderError {
     if e.kind() == io::ErrorKind::NotFound {
-        DeviceError::Internal(NOT_FOUND)
+        FileProviderError::Internal(NOT_FOUND)
     } else {
-        DeviceError::Internal(INTERNAL)
+        FileProviderError::Internal(INTERNAL)
     }
 }
 
 impl FileProvider for DirFileProvider {
-    fn list(&self) -> Result<Vec<Entry>, DeviceError> {
+    fn list(&self) -> Result<Vec<Entry>, FileProviderError> {
         match fs::read_dir(&self.dir) {
             Ok(rd) => collect_entries(rd.map(to_entry)),
             // まだ何も置いていない = 0 件の成功。
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
-            Err(_) => Err(DeviceError::Internal(INTERNAL)),
+            Err(_) => Err(FileProviderError::Internal(INTERNAL)),
         }
     }
 
-    fn put(&self, base_name: &str, content: &[u8]) -> Result<PutOutcome, DeviceError> {
+    fn put(&self, base_name: &str, content: &[u8]) -> Result<PutOutcome, FileProviderError> {
         validate_name(base_name)?;
-        fs::create_dir_all(&self.dir).map_err(|_| DeviceError::Internal(INTERNAL))?;
+        fs::create_dir_all(&self.dir).map_err(|_| FileProviderError::Internal(INTERNAL))?;
         for _ in 0..MAX_ID_TRIES {
             let id = new_id();
             let sub = self.dir.join(&id);
             match fs::create_dir(&sub) {
                 Ok(()) => {}
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
-                Err(_) => return Err(DeviceError::Internal(INTERNAL)),
+                Err(_) => return Err(FileProviderError::Internal(INTERNAL)),
             }
             let file = sub.join(base_name);
             let mut f = match fs::OpenOptions::new()
@@ -359,7 +359,7 @@ impl FileProvider for DirFileProvider {
                 Ok(f) => f,
                 Err(_) => {
                     let _ = fs::remove_dir(&sub);
-                    return Err(DeviceError::Internal(INTERNAL));
+                    return Err(FileProviderError::Internal(INTERNAL));
                 }
             };
             write_or_cleanup(&file, &sub, || {
@@ -372,21 +372,21 @@ impl FileProvider for DirFileProvider {
                 notified: (self.notify)().is_ok(),
             });
         }
-        Err(DeviceError::Internal(INTERNAL))
+        Err(FileProviderError::Internal(INTERNAL))
     }
 
-    fn delete(&self, id: &str) -> Result<DeleteOutcome, DeviceError> {
+    fn delete(&self, id: &str) -> Result<DeleteOutcome, FileProviderError> {
         validate_id(id)?;
         let sub = self.dir.join(id);
         // シンボリックリンクを辿らず、ディレクトリだけを対象にする。
         let meta = fs::symlink_metadata(&sub).map_err(|e| map_remove_err(&e))?;
         if !meta.is_dir() {
-            return Err(DeviceError::Internal(INTERNAL));
+            return Err(FileProviderError::Internal(INTERNAL));
         }
         for item in fs::read_dir(&sub).map_err(|e| map_remove_err(&e))? {
             let item = item.map_err(|e| map_remove_err(&e))?;
             if item.file_type().map_err(|e| map_remove_err(&e))?.is_dir() {
-                return Err(DeviceError::Internal(INTERNAL));
+                return Err(FileProviderError::Internal(INTERNAL));
             }
             fs::remove_file(item.path()).map_err(|e| map_remove_err(&e))?;
         }
@@ -432,7 +432,7 @@ mod tests {
                 if ok {
                     Ok(())
                 } else {
-                    Err(DeviceError::Internal("notify"))
+                    Err(FileProviderError::Internal("notify"))
                 }
             }),
         );
@@ -455,7 +455,7 @@ mod tests {
             assert!(
                 matches!(
                     validate_name(n),
-                    Err(DeviceError::InvalidInput(INVALID_NAME))
+                    Err(FileProviderError::InvalidInput(INVALID_NAME))
                 ),
                 "{n:?}"
             );
@@ -470,7 +470,10 @@ mod tests {
         let long = "a".repeat(MAX_ID_LEN + 1);
         for n in ["", "a/b", "..", "a.b", "a_b", "日本", "a\0", long.as_str()] {
             assert!(
-                matches!(validate_id(n), Err(DeviceError::InvalidInput(INVALID_NAME))),
+                matches!(
+                    validate_id(n),
+                    Err(FileProviderError::InvalidInput(INVALID_NAME))
+                ),
                 "{n:?}"
             );
         }
@@ -512,7 +515,7 @@ mod tests {
         let (p, calls) = provider(dir.clone(), true);
         assert!(matches!(
             p.put("../x", b"y"),
-            Err(DeviceError::InvalidInput(_))
+            Err(FileProviderError::InvalidInput(_))
         ));
         assert!(!dir.exists());
         assert_eq!(calls.load(Ordering::SeqCst), 0);
@@ -526,7 +529,7 @@ mod tests {
         let file = sub.join("x");
         fs::write(&file, b"partial").unwrap();
         let r = write_or_cleanup(&file, &sub, || Err(io::Error::other("boom")));
-        assert!(matches!(r, Err(DeviceError::Internal(_))));
+        assert!(matches!(r, Err(FileProviderError::Internal(_))));
         assert!(!sub.exists());
     }
 
@@ -537,7 +540,7 @@ mod tests {
         assert_eq!(p.list().unwrap(), vec![]);
         fs::write(t.0.join("f"), b"x").unwrap();
         let (p, _) = provider(t.0.join("f"), true);
-        assert!(matches!(p.list(), Err(DeviceError::Internal(_))));
+        assert!(matches!(p.list(), Err(FileProviderError::Internal(_))));
     }
 
     #[test]
@@ -590,7 +593,7 @@ mod tests {
         let items = vec![Ok(Some(ok)), Err(io::Error::other("x"))];
         assert!(matches!(
             collect_entries(items.into_iter()),
-            Err(DeviceError::Internal(_))
+            Err(FileProviderError::Internal(_))
         ));
     }
 
@@ -608,18 +611,23 @@ mod tests {
         assert!(!dir.join(&r.id).exists());
         assert!(matches!(
             p.delete(&r.id),
-            Err(DeviceError::Internal(NOT_FOUND))
+            Err(FileProviderError::Internal(NOT_FOUND))
         ));
         for bad in ["../outside", "a/b", ""] {
-            assert!(matches!(p.delete(bad), Err(DeviceError::InvalidInput(_))));
+            assert!(matches!(
+                p.delete(bad),
+                Err(FileProviderError::InvalidInput(_))
+            ));
         }
         assert!(outside.exists());
         // ID のサブフォルダ内にディレクトリがあれば消さず失敗。通常ファイルは ID の対象外。
         fs::create_dir_all(dir.join("nested").join("sub")).unwrap();
-        assert!(matches!(p.delete("nested"), Err(DeviceError::Internal(m)) if m != NOT_FOUND));
+        assert!(
+            matches!(p.delete("nested"), Err(FileProviderError::Internal(m)) if m != NOT_FOUND)
+        );
         assert!(dir.join("nested").join("sub").is_dir());
         fs::write(dir.join("flat"), b"x").unwrap();
-        assert!(matches!(p.delete("flat"), Err(DeviceError::Internal(m)) if m != NOT_FOUND));
+        assert!(matches!(p.delete("flat"), Err(FileProviderError::Internal(m)) if m != NOT_FOUND));
         assert!(dir.join("flat").is_file());
     }
 
@@ -635,7 +643,7 @@ mod tests {
         assert!(!t.0.join(&id1).exists());
         assert!(matches!(
             p.delete(&id1),
-            Err(DeviceError::Internal(NOT_FOUND))
+            Err(FileProviderError::Internal(NOT_FOUND))
         ));
         let v = p.list().unwrap();
         assert_eq!(v.len(), 1);
@@ -645,11 +653,11 @@ mod tests {
     #[test]
     fn unsupported_never_succeeds() {
         let u = UnsupportedFileProvider;
+        assert!(matches!(u.list(), Err(FileProviderError::Unsupported)));
         assert!(matches!(
-            u.list(),
-            Err(DeviceError::Unsupported("file_provider"))
+            u.put("a", b""),
+            Err(FileProviderError::Unsupported)
         ));
-        assert!(matches!(u.put("a", b""), Err(DeviceError::Unsupported(_))));
-        assert!(matches!(u.delete("a"), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(u.delete("a"), Err(FileProviderError::Unsupported)));
     }
 }

@@ -1,9 +1,9 @@
 //! Phase 11 の拡充ループ（親 #194、Issue #1019）型サンプル「クラウド保存先として OS のファイル画面に出る」
 //! の effect ドライバ。`fandhe_core::screens::file_provider_show`（端末依存ゼロ）の要求を
-//! `take_request` で観測し、`fandhe_device::file_provider::FileProvider` をワーカーで呼んで、
+//! `take_request` で観測し、`crate::contract::FileProvider` をワーカーで呼んで、
 //! 操作の結果と操作後に読み直した一覧を `CompletionSender` 経由で 1 件にまとめて注入する
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる、`app::EffectFn` 参照）。
-//! 契約の SSOT は `fandhe_device::file_provider`（削除キーは再利用しない書類 ID）。
+//! 契約の SSOT は `crate::contract`（削除キーは再利用しない書類 ID）。
 //!
 //! # OS 別実装の差し込み口
 //!
@@ -22,16 +22,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use fandhe_core::screens::file_provider_show::{
-    apply_unsupported, finish, mark_in_flight, take_request, EntryView, FileAction,
-    FileProviderShowState, OpResult, SAMPLE_CONTENT, SAMPLE_NAME,
-};
 #[cfg(not(target_os = "android"))]
-use fandhe_device::file_provider::UnsupportedFileProvider;
-use fandhe_device::file_provider::{Entry, FileProvider, NOT_FOUND};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedFileProvider;
+use crate::contract::{Entry, FileProvider, NOT_FOUND};
+use crate::error::FileProviderError;
+use fandhe_core::screens::file_provider_show::{
+    EntryView, FileAction, FileProviderShowState, OpResult, SAMPLE_CONTENT, SAMPLE_NAME,
+    apply_unsupported, finish, mark_in_flight, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 前の操作が実行中のとき、要求を残して次に見直すまでの間隔。
 const RETRY_AFTER: Duration = Duration::from_millis(100);
@@ -47,10 +47,11 @@ const DEFERRED: bool = cfg!(any(
 static IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
 /// 現在のプラットフォームに応じた実装を返す。
-fn platform() -> Arc<dyn FileProvider> {
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_file_provider() -> Arc<dyn FileProvider> {
     #[cfg(target_os = "android")]
     {
-        super::android_file_provider::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(target_os = "android"))]
     {
@@ -77,17 +78,17 @@ fn to_view(e: Entry) -> EntryView {
 }
 
 /// エラーを固定の種類へ写す。名前・パス・OS の文言は画面にもログにも出さない。
-fn put_failure(e: &DeviceError) -> OpResult {
+fn put_failure(e: &FileProviderError) -> OpResult {
     match e {
-        DeviceError::InvalidInput(_) => OpResult::InvalidName,
+        FileProviderError::InvalidInput(_) => OpResult::InvalidName,
         _ => OpResult::PutFailed,
     }
 }
 
-fn delete_failure(e: &DeviceError) -> OpResult {
+fn delete_failure(e: &FileProviderError) -> OpResult {
     match e {
-        DeviceError::InvalidInput(_) => OpResult::InvalidName,
-        DeviceError::Internal(NOT_FOUND) => OpResult::AlreadyGone,
+        FileProviderError::InvalidInput(_) => OpResult::InvalidName,
+        FileProviderError::Internal(NOT_FOUND) => OpResult::AlreadyGone,
         _ => OpResult::DeleteFailed,
     }
 }
@@ -100,14 +101,14 @@ fn run(imp: &dyn FileProvider, action: &FileAction) -> Done {
             Ok(o) => OpResult::Placed {
                 notified: o.notified,
             },
-            Err(DeviceError::Unsupported(_)) => return Done::Unsupported,
+            Err(FileProviderError::Unsupported) => return Done::Unsupported,
             Err(e) => put_failure(&e),
         }),
         FileAction::Delete(id) => Some(match imp.delete(id) {
             Ok(o) => OpResult::Deleted {
                 notified: o.notified,
             },
-            Err(DeviceError::Unsupported(_)) => return Done::Unsupported,
+            Err(FileProviderError::Unsupported) => return Done::Unsupported,
             Err(e) => delete_failure(&e),
         }),
     };
@@ -116,7 +117,7 @@ fn run(imp: &dyn FileProvider, action: &FileAction) -> Done {
             op,
             list: Ok(v.into_iter().map(to_view).collect()),
         },
-        Err(DeviceError::Unsupported(_)) => Done::Unsupported,
+        Err(FileProviderError::Unsupported) => Done::Unsupported,
         Err(_) => Done::Ran { op, list: Err(()) },
     }
 }
@@ -187,35 +188,43 @@ pub fn file_provider_show_effect(
     sender: &CompletionSender<FileProviderShowState>,
 ) {
     static IMP: OnceLock<Arc<dyn FileProvider>> = OnceLock::new();
-    let imp = IMP.get_or_init(platform).clone();
+    let imp = IMP.get_or_init(platform_file_provider).clone();
     drive(state, sender, imp, &IN_FLIGHT, DEFERRED);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{DeleteOutcome, PutOutcome};
     use fandhe_core::screens::file_provider_show::{
-        delete_row, error_text, put_sample, status_text, Phase, View, ALREADY_GONE_ERROR,
-        DEFERRED_ERROR, EMPTY_STATUS, UNSUPPORTED_ERROR,
+        ALREADY_GONE_ERROR, DEFERRED_ERROR, EMPTY_STATUS, Phase, UNSUPPORTED_ERROR, View,
+        delete_row, error_text, put_sample, status_text,
     };
-    use fandhe_device::file_provider::{DeleteOutcome, PutOutcome};
     use std::sync::atomic::AtomicUsize;
-    use std::sync::{mpsc, Mutex};
+    use std::sync::{Mutex, mpsc};
+    use std::time::Duration;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
 
     /// メモリ上の偽実装。`fail` で各操作を失敗させる。
     #[derive(Default)]
     struct Fake {
         files: Mutex<Vec<String>>,
-        put_err: Option<fn() -> DeviceError>,
+        put_err: Option<fn() -> FileProviderError>,
         list_err: bool,
         calls: AtomicUsize,
     }
 
     impl FileProvider for Fake {
-        fn list(&self) -> Result<Vec<Entry>, DeviceError> {
+        fn list(&self) -> Result<Vec<Entry>, FileProviderError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             if self.list_err {
-                return Err(DeviceError::Internal("x"));
+                return Err(FileProviderError::Internal("x"));
             }
             Ok(self
                 .files
@@ -231,7 +240,7 @@ mod tests {
                 })
                 .collect())
         }
-        fn put(&self, base: &str, _c: &[u8]) -> Result<PutOutcome, DeviceError> {
+        fn put(&self, base: &str, _c: &[u8]) -> Result<PutOutcome, FileProviderError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             if let Some(e) = self.put_err {
                 return Err(e());
@@ -243,7 +252,7 @@ mod tests {
                 notified: true,
             })
         }
-        fn delete(&self, id: &str) -> Result<DeleteOutcome, DeviceError> {
+        fn delete(&self, id: &str) -> Result<DeleteOutcome, FileProviderError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             let mut f = self.files.lock().unwrap();
             match f.iter().position(|n| n == id) {
@@ -251,7 +260,7 @@ mod tests {
                     f.remove(i);
                     Ok(DeleteOutcome { notified: true })
                 }
-                None => Err(DeviceError::Internal(NOT_FOUND)),
+                None => Err(FileProviderError::Internal(NOT_FOUND)),
             }
         }
     }
@@ -260,11 +269,11 @@ mod tests {
         Box::leak(Box::new(AtomicBool::new(false)))
     }
 
-    type Rx = mpsc::Receiver<crate::app::Completion<FileProviderShowState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<FileProviderShowState>>;
 
     fn channel() -> (CompletionSender<FileProviderShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// 要求を 1 件ドライブし、完了が揃うまで待って適用する。
@@ -330,26 +339,26 @@ mod tests {
 
     struct UnsupportedProvider;
     impl FileProvider for UnsupportedProvider {
-        fn list(&self) -> Result<Vec<Entry>, DeviceError> {
-            Err(DeviceError::Unsupported("file_provider"))
+        fn list(&self) -> Result<Vec<Entry>, FileProviderError> {
+            Err(FileProviderError::Unsupported)
         }
-        fn put(&self, _: &str, _: &[u8]) -> Result<PutOutcome, DeviceError> {
-            Err(DeviceError::Unsupported("file_provider"))
+        fn put(&self, _: &str, _: &[u8]) -> Result<PutOutcome, FileProviderError> {
+            Err(FileProviderError::Unsupported)
         }
-        fn delete(&self, _: &str) -> Result<DeleteOutcome, DeviceError> {
-            Err(DeviceError::Unsupported("file_provider"))
+        fn delete(&self, _: &str) -> Result<DeleteOutcome, FileProviderError> {
+            Err(FileProviderError::Unsupported)
         }
     }
 
     #[test]
     fn error_mapping_covers_all_branches() {
-        let inv = DeviceError::InvalidInput("x");
-        let int = DeviceError::Internal("x");
+        let inv = FileProviderError::InvalidInput("x");
+        let int = FileProviderError::Internal("x");
         assert_eq!(put_failure(&inv), OpResult::InvalidName);
         assert_eq!(put_failure(&int), OpResult::PutFailed);
         assert_eq!(delete_failure(&inv), OpResult::InvalidName);
         assert_eq!(
-            delete_failure(&DeviceError::Internal(NOT_FOUND)),
+            delete_failure(&FileProviderError::Internal(NOT_FOUND)),
             OpResult::AlreadyGone
         );
         assert_eq!(delete_failure(&int), OpResult::DeleteFailed);
@@ -358,7 +367,7 @@ mod tests {
     #[test]
     fn failures_are_shown_not_swallowed() {
         let fake = Arc::new(Fake {
-            put_err: Some(|| DeviceError::Internal("x")),
+            put_err: Some(|| FileProviderError::Internal("x")),
             list_err: true,
             ..Default::default()
         });
