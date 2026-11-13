@@ -3,9 +3,11 @@
 //! - メインウィンドウの HWND の保持: 起動側（`fandhe-gallery`）が [`remember_window`] で 1 度控え、
 //!   各機能の Windows 実装が [`window`] で読む。1 プロセス 1 ウィンドウが前提
 //! - COM 初期化（MTA）の RAII ガード [`ComInit`]: 機能ごとの作業スレッドで使う
+//! - 既定の関連付けで URL を開く [`open_url`] と、その戻り値 [`SE_ERR_NOASSOC`]: メール・SMS の作成、OS の設定画面、
+//!   Web 認証の既定ブラウザの起動が共用する。渡すのは各機能が組み立てた固定 scheme の URL だけで、任意の scheme・引数を受ける口ではない
 //!
 //! egui・eframe・winit・`fandhe-device` には依存しない（機能 crate の依存グラフに入れないため）。
-//! Windows 以外ではクレート全体が空。`unsafe` は [`ComInit`] の COM 呼び出し 2 か所だけで、
+//! Windows 以外ではクレート全体が空。`unsafe` は [`ComInit`] の COM 呼び出し 2 か所と [`open_url`] の `ShellExecuteW` 1 か所の計 3 か所だけで、
 //! クレートルートは `deny(unsafe_code)`。
 
 #![cfg(target_os = "windows")]
@@ -17,6 +19,9 @@ use std::sync::OnceLock;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
+use windows::Win32::UI::Shell::ShellExecuteW;
+use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+use windows::core::{HSTRING, PCWSTR, w};
 
 /// [`remember_window`] が控える HWND（`isize` で持つのは `HWND` が `Sync` でないため）。
 static WINDOW: OnceLock<isize> = OnceLock::new();
@@ -80,4 +85,29 @@ impl Drop for ComInit {
         // `!Send` のため作ったスレッドで 1 度だけ drop される。
         unsafe { CoUninitialize() };
     }
+}
+
+/// `ShellExecuteW` の戻り値 `SE_ERR_NOASSOC`: URL に関連付けられたアプリが無い（公式の表の値）。
+/// `> 32` が成功、これが「関連付け無し」、それ以外の 0〜32 は失敗。
+pub const SE_ERR_NOASSOC: isize = 31;
+
+/// `ShellExecuteW` で `url` を既定の関連付けで開き、その戻り値を返す。UI（STA）スレッドから呼ぶ。
+/// 戻り値の読み方は [`SE_ERR_NOASSOC`] を参照（呼び出し側が自機能の結果へ写像する）。
+/// `url` は呼び出し側が組み立てた固定 scheme のものだけを渡す。外部入力の scheme・引数を通さない。
+#[allow(unsafe_code)]
+pub fn open_url(url: &str) -> isize {
+    let url = HSTRING::from(url);
+    // SAFETY: `url` は NUL 終端の UTF-16 で、この呼び出しの間だけ生きる。`w!("open")` は
+    // 静的な NUL 終端文字列。`ShellExecuteW` は引数を保持せず、UI スレッドから同期に呼ぶ。
+    let result = unsafe {
+        ShellExecuteW(
+            None,
+            w!("open"),
+            &url,
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    result.0 as isize
 }

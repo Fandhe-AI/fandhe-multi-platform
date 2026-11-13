@@ -29,8 +29,8 @@
 //! 守らない: 読んだ後の変化の追従（`change` は購読しない）、窓が複数画面にまたがるときの画面の選び方、
 //! ブラウザと出力機器の組による「HDR」「広色域」の意味の差、複数タブ、wasm canvas 経路。
 
+use fandhe_cap_display_refresh_hdr::{require_any, DisplayCapabilities};
 use fandhe_core::screens::display_refresh_hdr_show::{DisplayReading, ReadFailure};
-use fandhe_device::display_refresh_hdr::{require_any, DisplayCapabilities};
 
 use crate::accessibility_prefs::pref_from;
 

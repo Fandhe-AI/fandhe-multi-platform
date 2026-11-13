@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::color_picker_pick`（端末依存ゼロ）を [`super::mount::mount_with_effect`] の
 //! effect として観測し、`<input type="color">` を開いて `change` の値を `finish_pick` へ書き戻す。
 //! 呼び出し元は `demo.rs` の `mount_color_picker_screen`。契約（初期色・`#rrggbb` の検査）は
-//! `fandhe_device::color_picker` が SSOT で、macOS / Windows / iOS 実装（egui-proxy）と共用する。
+//! `fandhe-cap-color-picker` が SSOT で、macOS / Windows / iOS 実装と共用する。
 //! `fandhe-device` の `ColorPicker` トレイトは経由しない（Web は本クレートの担当）。
 //!
 //! # ブラウザ側の制約
@@ -37,19 +37,20 @@
 //! 守らない: 色を変えずに閉じた場合（`change` が来ず `Picking` のまま。「やめる」で抜ける）と
 //! 初期色と同じ色を選んだ場合の区別、ブラウザごとの UI・`change` の時機の差、複数タブ・複数マウント。
 
+use fandhe_cap_color_picker::{color_from_input_value, ColorPickerError};
 use fandhe_core::screens::color_picker_pick::ColorPickerOutcome;
-use fandhe_device::color_picker::color_from_input_value;
 use fandhe_device::eye_dropper::PickedColor;
-use fandhe_device::DeviceError;
 
-/// `Result<PickedColor, DeviceError>` を画面用の結果へ畳む。egui-proxy の同名処理と同じ写像
+/// `Result<PickedColor, ColorPickerError>` を画面用の結果へ畳む。egui-proxy の同名処理と同じ写像
 /// （web-dom は egui-proxy に依存できないため重複を許容する）。権限拒否が来ても成功にしない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-pub(crate) fn outcome_from_result(result: Result<PickedColor, DeviceError>) -> ColorPickerOutcome {
+pub(crate) fn outcome_from_result(
+    result: Result<PickedColor, ColorPickerError>,
+) -> ColorPickerOutcome {
     match result {
         Ok(c) => ColorPickerOutcome::Picked(c.rgb()),
-        Err(DeviceError::Cancelled(_)) => ColorPickerOutcome::Cancelled,
-        Err(DeviceError::Unsupported(_)) => ColorPickerOutcome::Unsupported,
+        Err(ColorPickerError::Cancelled) => ColorPickerOutcome::Cancelled,
+        Err(ColorPickerError::Unsupported) => ColorPickerOutcome::Unsupported,
         Err(e) => ColorPickerOutcome::Failed(e.to_string()),
     }
 }
@@ -59,7 +60,7 @@ pub(crate) fn outcome_from_result(result: Result<PickedColor, DeviceError>) -> C
 pub(crate) fn outcome_from_value(value: Option<&str>) -> ColorPickerOutcome {
     let result = match value {
         Some(v) => color_from_input_value(v),
-        None => Err(DeviceError::Internal("color_picker hex")),
+        None => Err(ColorPickerError::Internal("color_picker hex")),
     };
     outcome_from_result(result)
 }
@@ -69,11 +70,10 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_color_picker::{ColorPickerError, INITIAL_RGB};
     use fandhe_core::screens::color_picker_pick::{
         finish_pick, mark_picking, take_request, ColorPickerOutcome, ColorPickerState,
     };
-    use fandhe_device::color_picker::INITIAL_RGB;
-    use fandhe_device::DeviceError;
     use js_sys::{Function, Reflect};
     use wasm_bindgen::prelude::*;
     use web_sys::{Event, HtmlInputElement};
@@ -137,7 +137,7 @@ mod web {
     }
 
     fn failed(reason: &'static str) -> ColorPickerOutcome {
-        outcome_from_result(Err(DeviceError::Internal(reason)))
+        outcome_from_result(Err(ColorPickerError::Internal(reason)))
     }
 
     /// 透明・1px で描画対象のまま置く（`showPicker()` は描画されない要素で例外になりうる）。
@@ -275,16 +275,16 @@ mod tests {
     #[test]
     fn result_mapping_covers_all_branches() {
         assert_eq!(
-            outcome_from_result(Err(DeviceError::Cancelled("x"))),
+            outcome_from_result(Err(ColorPickerError::Cancelled)),
             ColorPickerOutcome::Cancelled
         );
         assert_eq!(
-            outcome_from_result(Err(DeviceError::Unsupported("x"))),
+            outcome_from_result(Err(ColorPickerError::Unsupported)),
             ColorPickerOutcome::Unsupported
         );
         for e in [
-            DeviceError::PermissionDenied("x"),
-            DeviceError::Internal("x"),
+            ColorPickerError::PermissionDenied,
+            ColorPickerError::Internal("x"),
         ] {
             assert!(matches!(
                 outcome_from_result(Err(e)),

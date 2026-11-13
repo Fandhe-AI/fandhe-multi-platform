@@ -36,6 +36,18 @@ fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs" }
 fandhe-cap-dynamic-type = { path = "../fandhe-cap-dynamic-type" }
 # share-sheet の契約（`ShareRequest` の入力検証）。Web 実装本体は本クレートに残る。
 fandhe-cap-share-sheet = { path = "../fandhe-cap-share-sheet" }
+# display-refresh-hdr の契約（`require_any`・`DisplayCapabilities`）。Web 実装本体は本クレートに残る。
+# memory-pressure の契約（`PressureEvent`・`EventLog`・`ALL_EVENTS`）。Web 実装本体は本クレートに残る。
+fandhe-cap-memory-pressure = { path = "../fandhe-cap-memory-pressure" }
+# external-app-launch の契約（`GEO_URI`・`PHONE_URI`）。Web 実装本体は本クレートに残る。
+fandhe-cap-external-app-launch = { path = "../fandhe-cap-external-app-launch" }
+# color-picker の契約（`color_from_input_value`・`INITIAL_RGB`・`ColorPickerError`）。Web 実装本体は本クレートに残る。
+fandhe-cap-color-picker = { path = "../fandhe-cap-color-picker" }
+# digital-credentials の契約（`CredentialOutcome` と応答の検査）。Web 実装本体は本クレートに残る。
+fandhe-cap-digital-credentials = { path = "../fandhe-cap-digital-credentials" }
+# app-lifecycle の契約（`LifecycleEvent`・`EventLog`・`ALL_EVENTS`）。Web 実装本体は本クレートに残る。
+fandhe-cap-app-lifecycle = { path = "../fandhe-cap-app-lifecycle" }
+fandhe-cap-display-refresh-hdr = { path = "../fandhe-cap-display-refresh-hdr" }
 # Issue #1187: 電源状態の純関数（`percent_from_raw`）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の実装が cfg で外れる。
 fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast" }
 fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device" }

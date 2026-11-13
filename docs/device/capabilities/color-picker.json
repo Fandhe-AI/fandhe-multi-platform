@@ -10,7 +10,7 @@
       "status": "done",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#936）",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_color_picker.m + crates/fandhe-egui-proxy/src/device/ios_color_picker.rs + crates/fandhe-egui-proxy/src/device/color_picker.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-device/src/color_picker.rs、Issue #942",
+      "impl": "crates/fandhe-cap-color-picker/ios/fandhe_ios_color_picker.m + crates/fandhe-cap-color-picker/src/ios.rs + crates/fandhe-cap-color-picker/src/driver.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-cap-color-picker/src/contract.rs、Issue #942",
       "api": "UIKit `UIColorPickerViewController`（iOS 14+、`supportsAlpha = NO`）。選択は `colorPickerViewController(_:didSelectColor:continuously:)`、閉じたことは `colorPickerViewControllerDidFinish(_:)` と `presentationControllerDidDismiss(_:)`（スワイプで閉じた場合）",
       "perm": "不要",
       "url": [
@@ -31,7 +31,7 @@
       "status": "done",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#936）",
-      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_color_picker.m + crates/fandhe-egui-proxy/src/device/macos_color_picker.rs + crates/fandhe-egui-proxy/src/device/color_picker.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-device/src/color_picker.rs、Issue #941",
+      "impl": "crates/fandhe-cap-color-picker/macos/fandhe_macos_color_picker.m + crates/fandhe-cap-color-picker/src/macos.rs + crates/fandhe-cap-color-picker/src/driver.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-cap-color-picker/src/contract.rs、Issue #941",
       "api": "AppKit `NSColorPanel.shared`（`NSColorPanelColorDidChangeNotification`）、閉じたことは `NSWindowWillCloseNotification`（object = パネル）",
       "perm": "不要",
       "url": [
@@ -46,7 +46,7 @@
       "status": "done",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#936）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_color_picker.rs + crates/fandhe-egui-proxy/src/device/color_picker.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-device/src/color_picker.rs、Issue #941",
+      "impl": "crates/fandhe-cap-color-picker/src/windows.rs + crates/fandhe-cap-color-picker/src/driver.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-cap-color-picker/src/contract.rs、Issue #941",
       "api": "Win32 共通ダイアログ `ChooseColorW`（OK で非 0、取り消し・エラーは 0 で `CommDlgExtendedError` が 0 なら取り消し）。色は `COLORREF`（`0x00bbggrr`）",
       "perm": "不要",
       "url": [
@@ -60,7 +60,7 @@
       "status": "done",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#936）",
-      "impl": "crates/fandhe-web-dom/src/color_picker.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-device/src/color_picker.rs、Issue #943",
+      "impl": "crates/fandhe-web-dom/src/color_picker.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-cap-color-picker/src/contract.rs、Issue #943",
       "api": "`<input type=\"color\">`（ブラウザ標準のカラーピッカー）。`showPicker()`（無ければ `click()`）で開き、`change` で確定",
       "perm": "不要",
       "url": [

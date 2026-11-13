@@ -92,7 +92,7 @@ graph TD
     Activity は第 1 引数で渡します。Activity ごとの状態は helper の表（`WeakHashMap`、破棄時に外す）に持ち、表に無ければ
     Java が `false` を返して Rust が失敗として返します（成功へ畳みません）
   - Activity のライフサイクルへの参加は、機能ごとの非公開 `ContentProvider`（共通層の `FeatureLifecycleProvider` を継承）が
-    行います。provider は OS がプロセス開始時に生成し、`ActivityLifecycleCallbacks` で `GameActivity` の生成・状態保存・破棄だけを
+    行います。provider は OS がプロセス開始時に生成し、`ActivityLifecycleCallbacks` で `GameActivity` の生成・状態保存・見える／見えなくなる・前面への復帰・前面離脱・破棄だけを
     機能の helper へ流します。provider は宣言の `android.components`（`kind = "provider"`、`authorities` は
     `${applicationId}.fandhe.<id>`）で出ます。`registerForActivityResult` は登録キーを明示し、生成順への依存を残しません
   - Activity の入力（`dispatchKeyEvent`・`dispatchGenericMotionEvent` 等）の観測は、provider が `onHostCreated` で

@@ -7,7 +7,7 @@
 //!
 //! # ブロッキング trait を通らない理由
 //!
-//! `fandhe_device::digital_credentials` に trait は無い。`passkey.rs` と同じく Web は effect で
+//! `fandhe_cap_digital_credentials` に trait は無い。`passkey.rs` と同じく Web は effect で
 //! 非同期に処理し、定数と純関数（`request_json`・`outcome_from_dom_error`・`outcome_from_response`）だけを共有する。
 //!
 //! # ライフサイクル
@@ -19,26 +19,28 @@
 //!
 //! # 守る範囲 / 守らない範囲
 //!
-//! 契約は `fandhe_device::digital_credentials` の doc を参照。応答の中身（`data`）・例外の `message`・nonce は
+//! 契約は `fandhe_cap_digital_credentials` の doc を参照。応答の中身（`data`）・例外の `message`・nonce は
 //! 画面にも `console` にも storage にも出さない。読むのは例外の `name`、応答の `protocol` と `data` の有無だけ。
 
+use fandhe_cap_digital_credentials::CredentialOutcome;
+use fandhe_cap_digital_credentials::DigitalCredentialsError;
 use fandhe_core::screens::digital_credentials::CoreOutcome;
-use fandhe_device::digital_credentials::CredentialOutcome;
-use fandhe_device::DeviceError;
 
 /// 失敗時の固定文言。内部名を含めない（`fandhe-egui-proxy` の文言と揃える）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const FAILED_TEXT: &str = "身分証の提示要求を完了できませんでした";
 
-/// `DeviceError` を画面用の結果へ写す。`fandhe-egui-proxy/src/device/digital_credentials.rs` の
+/// `DigitalCredentialsError` を画面用の結果へ写す。`fandhe-cap-digital-credentials/src/driver.rs` の
 /// `core_outcome` と同期する（同クレートに依存しないため同じ写像をここに置く）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-fn to_outcome(result: Result<CredentialOutcome, DeviceError>) -> Result<CoreOutcome, String> {
+fn to_outcome(
+    result: Result<CredentialOutcome, DigitalCredentialsError>,
+) -> Result<CoreOutcome, String> {
     match result {
         Ok(CredentialOutcome::Responded) => Ok(CoreOutcome::Responded),
         Ok(CredentialOutcome::NotShared) => Ok(CoreOutcome::NotShared),
         Ok(CredentialOutcome::Cancelled) => Ok(CoreOutcome::Cancelled),
-        Err(DeviceError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
+        Err(DigitalCredentialsError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
         Err(_) => Err(FAILED_TEXT.to_string()),
     }
 }
@@ -48,14 +50,14 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
-    use fandhe_core::screens::digital_credentials::{
-        finish, mark_running, take_request, DigitalCredentialsState,
-    };
-    use fandhe_device::digital_credentials::{
+    use fandhe_cap_digital_credentials::DigitalCredentialsError;
+    use fandhe_cap_digital_credentials::{
         outcome_from_dom_error, outcome_from_response, request_json, CredentialOutcome, FEATURE,
         NONCE_LEN, PROTOCOL,
     };
-    use fandhe_device::DeviceError;
+    use fandhe_core::screens::digital_credentials::{
+        finish, mark_running, take_request, DigitalCredentialsState,
+    };
     use js_sys::{Function, Reflect};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
@@ -120,7 +122,7 @@ mod web {
     }
 
     /// 例外の `name` だけを結果へ写す（`message` は読まない）。無ければ `Internal` になる。
-    fn outcome_of_error(err: &JsValue) -> Result<CredentialOutcome, DeviceError> {
+    fn outcome_of_error(err: &JsValue) -> Result<CredentialOutcome, DigitalCredentialsError> {
         let name = Reflect::get(err, &JsValue::from_str("name"))
             .ok()
             .and_then(|v| v.as_string())
@@ -140,8 +142,8 @@ mod web {
     }
 
     /// 事前判定。使える環境でなければ `Unsupported`、判定自体が例外なら `Internal`。
-    fn precheck(window: &web_sys::Window) -> Result<(), DeviceError> {
-        let unsupported = DeviceError::Unsupported(FEATURE);
+    fn precheck(window: &web_sys::Window) -> Result<(), DigitalCredentialsError> {
+        let unsupported = DigitalCredentialsError::Unsupported(FEATURE);
         let nav: JsValue = window.navigator().into();
         let win: JsValue = window.clone().into();
         if !window.is_secure_context() || get(&nav, "credentials").is_none() {
@@ -158,7 +160,9 @@ mod web {
         match allows.call1(&dc, &JsValue::from_str(PROTOCOL)) {
             Ok(v) if v.as_bool() == Some(true) => Ok(()),
             Ok(_) => Err(unsupported),
-            Err(_) => Err(DeviceError::Internal("digital_credentials failed")),
+            Err(_) => Err(DigitalCredentialsError::Internal(
+                "digital_credentials failed",
+            )),
         }
     }
 
@@ -205,14 +209,14 @@ mod web {
         applier.apply(mark_running);
 
         let done = move |applier: &Applier<DigitalCredentialsState>,
-                         r: Result<CredentialOutcome, DeviceError>| {
+                         r: Result<CredentialOutcome, DigitalCredentialsError>| {
             let out = to_outcome(r);
             applier.apply(move |s| finish(s, generation, out));
         };
-        let internal = DeviceError::Internal("digital_credentials failed");
+        let internal = DigitalCredentialsError::Internal("digital_credentials failed");
 
         let Some(window) = web_sys::window() else {
-            return done(applier, Err(DeviceError::Unsupported(FEATURE)));
+            return done(applier, Err(DigitalCredentialsError::Unsupported(FEATURE)));
         };
         if let Err(e) = precheck(&window) {
             return done(applier, Err(e));
@@ -280,7 +284,7 @@ pub(crate) use web::release_mount;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::digital_credentials::{
+    use fandhe_cap_digital_credentials::{
         outcome_from_dom_error, outcome_from_response, FEATURE, PROTOCOL,
     };
 
@@ -299,11 +303,11 @@ mod tests {
             Ok(CoreOutcome::Cancelled)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Unsupported(FEATURE))),
+            to_outcome(Err(DigitalCredentialsError::Unsupported(FEATURE))),
             Ok(CoreOutcome::Unsupported)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Internal("x"))),
+            to_outcome(Err(DigitalCredentialsError::Internal("x"))),
             Err(FAILED_TEXT.to_string())
         );
     }

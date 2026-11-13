@@ -2,7 +2,7 @@
 //! 説明文と「ホーム画面の壁紙にする」「ロック画面の壁紙にする」ボタンだけの 1 画面。
 //! `FANDHE_PROXY_APP=wallpaper_set` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod wallpaper_set;` と対）。
-//! 設定する画像は effect ドライバ（`device/wallpaper.rs`）が自前で生成するため入力欄を持たない。
+//! 設定する画像は effect ドライバ（`crates/fandhe-cap-wallpaper-set/src/driver.rs`）が自前で生成するため入力欄を持たない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。PNG の検査と OS 呼び出しは effect ドライバが
@@ -47,7 +47,7 @@ pub enum SetPhase {
     Setting,
 }
 
-/// 設定先（`fandhe_device::wallpaper::WallpaperTarget` の写し。core は device に依存しない）。
+/// 設定先（`fandhe_cap_wallpaper_set::WallpaperTarget` の写し。core は device に依存しない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WallpaperChoice {
     /// ホーム画面。

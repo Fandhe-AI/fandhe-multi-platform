@@ -31,7 +31,7 @@
       "status": "done",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#954）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_human_presence.rs + crates/fandhe-egui-proxy/src/device/human_presence.rs + crates/fandhe-core/src/screens/human_presence_read.rs + crates/fandhe-device/src/human_presence.rs、Issue #960",
+      "impl": "crates/fandhe-cap-human-presence/src/windows.rs + crates/fandhe-cap-human-presence/src/driver.rs + crates/fandhe-core/src/screens/human_presence_read.rs + crates/fandhe-cap-human-presence/src/contract.rs、Issue #960",
       "api": "WinRT `Windows.Devices.Sensors.HumanPresenceSensor`。`GetDefaultAsync` → `GetCurrentReading` の `Presence`（`Present` / `NotPresent` / `Unknown`）を押したときに 1 回読む。`ReadingChanged` は購読しない。`UniversalApiContract` v15（Windows 11 22H2 以降。公式頁の要件欄は 22621 と 23504 で食い違う）",
       "perm": "宣言不要（パッケージ無しの exe は設定の「デスクトップ アプリに Presence Sensing へのアクセスを許可する」でまとめて制御。capability `humanPresence` はパッケージ化したアプリの宣言）",
       "url": [

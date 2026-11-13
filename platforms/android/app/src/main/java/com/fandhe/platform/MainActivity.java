@@ -533,18 +533,6 @@ public class MainActivity extends GameActivity {
     }
 
 
-    // ファイル・動画のプレビューとサムネイル（Issue #920）。実装は `FilePreviewHelper`。
-    // Rust の `android_file_preview.rs` が JNI で呼ぶ（サムネイルは同期 `(I[BIJ)[B`、プレビューは非同期 `(JI[B)V`）。
-    private final FilePreviewHelper filePreviewHelper = new FilePreviewHelper(this);
-
-    byte[] filePreviewThumbnail(int kind, byte[] data, int maxSide, long timeoutMs) {
-        return FilePreviewHelper.thumbnail(getCacheDir(), kind, data, maxSide, timeoutMs);
-    }
-
-    void requestFilePreview(long requestId, int kind, byte[] data) {
-        filePreviewHelper.preview(requestId, kind, data);
-    }
-
     // 動画の変換（Issue #1017）。実装は `VideoTranscodeHelper`。Rust の `android_video_transcode.rs` が同期 JNI で呼ぶ。
     byte[] videoTranscode(int sw, int sh, int fps, int frames, int tw, int th, long remainingMs) {
         return VideoTranscodeHelper.transcode(getCacheDir(), sw, sh, fps, frames, tw, th, remainingMs);
@@ -575,74 +563,6 @@ public class MainActivity extends GameActivity {
         return sleepLockEventsHelper.read();
     }
 
-    // アプリの前面・背面の通知（Issue #895）。実装は `AppLifecycleHelper`。
-    // Rust の `android_app_lifecycle.rs` が JNI で呼ぶ。
-    private final AppLifecycleHelper appLifecycleHelper = new AppLifecycleHelper(this);
-
-    int appLifecycleStart(long id) {
-        return appLifecycleHelper.start(id);
-    }
-
-    void appLifecycleStop(long id) {
-        appLifecycleHelper.stop(id);
-    }
-
-    int appLifecycleRead() {
-        return appLifecycleHelper.read();
-    }
-
-    // メモリ逼迫・負荷の通知（Issue #913）。実装は `MemoryPressureHelper`。
-    // Rust の `android_memory_pressure.rs` が JNI で呼ぶ。
-    private final MemoryPressureHelper memoryPressureHelper = new MemoryPressureHelper(this);
-
-    int memoryPressureStart(long id) {
-        return memoryPressureHelper.start(id);
-    }
-
-    void memoryPressureStop(long id) {
-        memoryPressureHelper.stop(id);
-    }
-
-    int memoryPressureRead() {
-        return memoryPressureHelper.read();
-    }
-
-    // 外部ストレージの着脱（Issue #859）。実装は `RemovableStorageHelper`。
-    // Rust の `android_removable_storage.rs` が JNI で呼ぶ。
-    private final RemovableStorageHelper removableStorageHelper = new RemovableStorageHelper(this);
-
-    int removableStorageSupport() {
-        return removableStorageHelper.support();
-    }
-
-    int removableStorageStart(long id) {
-        return removableStorageHelper.start(id);
-    }
-
-    void removableStorageStop(long id) {
-        removableStorageHelper.stop(id);
-    }
-
-    String removableStorageList() {
-        return removableStorageHelper.list();
-    }
-
-    // 音声の割り込み・セッション種別（Issue #842）。実装は `AudioSessionHelper`。
-    // Rust の `android_audio_session.rs` が JNI で呼ぶ。
-    private final AudioSessionHelper audioSessionHelper = new AudioSessionHelper(this);
-
-    int audioSessionStart(long id, int kind) {
-        return audioSessionHelper.start(id, kind);
-    }
-
-    int audioSessionStop(long id) {
-        return audioSessionHelper.stop(id);
-    }
-
-    int audioSessionRead() {
-        return audioSessionHelper.read();
-    }
-
     // カメラのライブ映像（Issue #814）。実装は `CameraPreviewHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_camera_preview_stream.rs` が JNI で呼ぶ。
     private final CameraPreviewHelper cameraPreviewHelper = new CameraPreviewHelper(this);
@@ -671,22 +591,6 @@ public class MainActivity extends GameActivity {
             String subject, String body, byte[] attData, String attMime, String attName) {
         composeHelper.compose(requestId, kind, to, cc, bcc, subject, body, attData, attMime,
                 attName);
-    }
-
-    // OS の設定画面を開く（Issue #800）。実装は `SystemSettingsHelper`。
-    // Rust の `android_open_system_settings.rs` が JNI で呼ぶ。
-    private final SystemSettingsHelper systemSettingsHelper = new SystemSettingsHelper(this);
-
-    void requestOpenSystemSettings(long requestId, int page) {
-        systemSettingsHelper.open(requestId, page);
-    }
-
-    // 電話発信・地図など他アプリの起動（Issue #863）。実装は `ExternalAppLaunchHelper`。
-    // Rust の `android_external_app_launch.rs` が JNI で呼ぶ。
-    private final ExternalAppLaunchHelper externalAppLaunchHelper = new ExternalAppLaunchHelper(this);
-
-    void requestExternalAppLaunch(long requestId, int target, String uri) {
-        externalAppLaunchHelper.launch(requestId, target, uri);
     }
 
     // OAuth 用 Web 認証セッション（Issue #534）。実装は `WebAuthSessionHelper`。
@@ -828,14 +732,6 @@ public class MainActivity extends GameActivity {
         return flashlightHelper.read();
     }
 
-    // システムの効果音（Issue #940）。実装は `SystemSoundHelper`。Rust の `android_system_sound.rs` が
-    // egui スレッドから同期で JNI 呼び出しする（0=要求した／1=鳴らさなかった／2=失敗）。
-    private final SystemSoundHelper systemSoundHelper = new SystemSoundHelper();
-
-    int systemSoundBeep() {
-        return systemSoundHelper.beep();
-    }
-
     // システム音量（Issue #787）。実装は `VolumeControlHelper`。Rust の `android_volume_control.rs` が
     // egui スレッドから同期で JNI 呼び出しする。
     private final VolumeControlHelper volumeControlHelper = new VolumeControlHelper(this);
@@ -851,7 +747,6 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onStart() {
         super.onStart();
-        appLifecycleHelper.onStart();
         flashlightHelper.onStart();
         captureProtectionHelper.onStart();
         foldablePostureHelper.onStart();
@@ -860,7 +755,6 @@ public class MainActivity extends GameActivity {
 
     @Override
     protected void onStop() {
-        appLifecycleHelper.onStop();
         flashlightHelper.onStop();
         captureProtectionHelper.onStop();
         foldablePostureHelper.onStop();
@@ -2218,7 +2112,6 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        appLifecycleHelper.onResume();
         activityResumed = true;
         webAuthSessionHelper.onResume();
         inAppBrowserHelper.onResume();
@@ -2305,7 +2198,6 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        appLifecycleHelper.onPause();
         // `requestLocationUpdates`/`requestLocationPermission` の Runnable・コールバックが
         // ここより後に UI スレッドで実行される場合に、停止済み Activity へリスナーを
         // 再登録しないようにするための可視性フラグ（codex-review P1 指摘、PR #894）。
@@ -3124,12 +3016,6 @@ public class MainActivity extends GameActivity {
         PhotoSaveHelper.save(getApplicationContext().getContentResolver(), requestId, png);
     }
 
-    // 壁紙・ロック画面の設定（Issue #971）。Rust 側 `device/android_wallpaper.rs` から JNI で
-    // 呼ばれる。実処理は `WallpaperHelper`（Activity を握らない。再生成時の破棄は Rust 側 reset と対）。
-    private void requestWallpaperSet(long requestId, byte[] png, int target) {
-        WallpaperHelper.set(getApplicationContext(), requestId, png, target);
-    }
-
     // Rust 側 bridge モジュール（`device/notification.rs`）の `present`（Android 分岐）から
     // JNI 経由で呼ばれる（Issue #1006）。`requestBiometric` と同じ「即時 return・結果は
     // 非同期通知」の形。`title`/`body` は Rust 側 `NotificationRequest::new`（空・NUL・
@@ -3896,20 +3782,6 @@ public class MainActivity extends GameActivity {
         return AlarmHelper.state(getApplicationContext());
     }
 
-    // Rust 側（`device/android_managed_app_config.rs`、Issue #946）からワーカースレッドが JNI 経由で
-    // 押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
-    // `ManagedAppConfigHelper` 冒頭を参照。失敗は null。ディスク I/O を伴うので UI スレッドから呼ばない。
-    private String managedAppConfigRead() {
-        return ManagedAppConfigHelper.read(getApplicationContext());
-    }
-
-    // Rust 側（`device/android_display_refresh_hdr.rs`、Issue #872）から JNI 経由で egui
-    // スレッドが押下ごとに呼ぶ同期メソッド（シグネチャ `()[F`）。詰め方は
-    // `DisplayRefreshHdrHelper` 冒頭を参照。失敗は null。
-    private float[] displayRefreshHdrRead() {
-        return DisplayRefreshHdrHelper.read(this);
-    }
-
     // 資格情報保存（Issue #924）の op 定数。Rust 側 `device/android.rs::
     // AndroidSecureCredential::request` の同名定数と対で決める契約。
     private static final int SECURE_CREDENTIAL_OP_STORE = 0;
@@ -4142,10 +4014,6 @@ public class MainActivity extends GameActivity {
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
         sleepLockEventsHelper.onDestroy();
-        appLifecycleHelper.onDestroy();
-        memoryPressureHelper.onDestroy();
-        removableStorageHelper.onDestroy();
-        audioSessionHelper.onDestroy();
         cameraPreviewHelper.onDestroy();
         videoCaptureHelper.onDestroy();
         printHelper.onDestroy();
@@ -4153,7 +4021,6 @@ public class MainActivity extends GameActivity {
         captureProtectionHelper.onDestroy();
         foldablePostureHelper.onDestroy();
         flashlightHelper.onDestroy();
-        systemSoundHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず
         // 直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。

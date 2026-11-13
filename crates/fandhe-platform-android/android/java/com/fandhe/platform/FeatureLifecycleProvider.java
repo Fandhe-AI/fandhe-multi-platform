@@ -52,6 +52,20 @@ public abstract class FeatureLifecycleProvider extends ContentProvider
     protected void onHostResumed(ComponentActivity activity) {}
 
     /**
+     * Activity が見えるようになった時（`Activity.onStart()` の中、つまり `super.onStart()` の中）。
+     * 従来の `MainActivity.onStart` は `super.onStart()` の後で helper を呼んでいた。super に対する前後だけが違い、
+     * 同じ `onStart` の内側で呼ばれる。既定は何もしない。
+     */
+    protected void onHostStarted(ComponentActivity activity) {}
+
+    /**
+     * Activity が見えなくなった時（`Activity.onStop()` の中、つまり `super.onStop()` の中）。
+     * 従来の `MainActivity.onStop` は `super.onStop()` の前に helper を呼んでいた。同じ `onStop` の内側で呼ばれるため、
+     * `isChangingConfigurations()` の判定など Activity の状態を読む処理は変わらずここで行える。既定は何もしない。
+     */
+    protected void onHostStopped(ComponentActivity activity) {}
+
+    /**
      * Activity が前面を離れる時（`Activity.onPause()` の中、つまり `super.onPause()` の中）。
      * 従来の `MainActivity.onPause` は `super.onPause()` の後で helper を呼んでいた。同じ `onPause` の内側で
      * 呼ばれるため、権限ダイアログの応答との到着順（契約表 1）はこの通知を受ける側で実際の状態を見て判断する。
@@ -97,7 +111,11 @@ public abstract class FeatureLifecycleProvider extends ContentProvider
     }
 
     @Override
-    public void onActivityStarted(Activity activity) {}
+    public void onActivityStarted(Activity activity) {
+        if (isHost(activity)) {
+            onHostStarted((ComponentActivity) activity);
+        }
+    }
 
     @Override
     public void onActivityResumed(Activity activity) {
@@ -114,7 +132,11 @@ public abstract class FeatureLifecycleProvider extends ContentProvider
     }
 
     @Override
-    public void onActivityStopped(Activity activity) {}
+    public void onActivityStopped(Activity activity) {
+        if (isHost(activity)) {
+            onHostStopped((ComponentActivity) activity);
+        }
+    }
 
     // 以下は ContentProvider の必須実装。データは持たず、何も返さない。
 

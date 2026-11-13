@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
 //! 置き場」節の制約どおり）。OS 呼び出しは `fandhe-egui-proxy` の effect ドライバ
-//! （`device/external_app_launch.rs`）が [`take_request`] で要求を観測して行い、[`finish_launch`] で
+//! （`crates/fandhe-cap-external-app-launch/src/driver.rs`）が [`take_request`] で要求を観測して行い、[`finish_launch`] で
 //! 結果を注入する。本画面は二重押し防止と文言だけを持ち、全対象 OS（macOS・Windows・iOS・Android・Web）の
 //! 文言をここで決める（後続の OS 実装は画面を触らない）。
 //!
@@ -43,7 +43,7 @@ pub const MAP_BUTTON_LABEL: &str = "地図アプリへ東京駅を渡す";
 const PHONE_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 const MAP_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
 
-/// 起動する操作（`fandhe_device::external_app_launch::LaunchTarget` に対応。写像は proxy 側）。
+/// 起動する操作（`fandhe_cap_external_app_launch::LaunchTarget` に対応。写像は proxy 側）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LaunchKind {
     /// 電話。

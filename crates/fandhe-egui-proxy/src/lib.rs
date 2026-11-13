@@ -184,12 +184,12 @@ pub fn selected_app_name() -> Option<String> {
 ///
 /// `ProxyApp` を使う各入口（`main.rs`・`ios.rs`・`android.rs`）が起動前に 1 回呼ぶ。
 /// 描画層は端末機能を知らないため、`device::shutdown`（ウィンドウを閉じる経路）と
-/// `device::memory_pressure::stop_shared`（`ProxyApp` の破棄）をここで渡す。
+/// `fandhe_cap_memory_pressure::shutdown`（`ProxyApp` の破棄）をここで渡す。
 /// `device` feature が無効なビルド・wasm32 では何もしない（`device.rs` モジュール doc 参照）。
 pub fn register_teardown_hooks() {
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     fandhe_render_egui::app::set_teardown_hooks(
         device::shutdown,
-        device::memory_pressure::stop_shared,
+        fandhe_cap_memory_pressure::shutdown,
     );
 }

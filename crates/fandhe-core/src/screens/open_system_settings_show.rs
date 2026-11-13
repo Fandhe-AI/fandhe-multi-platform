@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
 //! 置き場」節の制約どおり）。OS 呼び出しは `fandhe-egui-proxy` の effect ドライバ
-//! （`device/open_system_settings.rs`）が [`take_request`] で要求を観測して行い、[`finish_open`] で
+//! （`crates/fandhe-cap-open-system-settings/src/driver.rs`）が [`take_request`] で要求を観測して行い、[`finish_open`] で
 //! 結果を注入する。本画面は二重押し防止と文言だけを持ち、全対象 OS（Windows・iOS・Android）の
 //! 文言をここで決める（後続の OS 実装は画面を触らない）。
 //!
@@ -41,7 +41,7 @@ pub const NOTIFICATIONS_BUTTON_LABEL: &str = "通知の設定を開く";
 const APP_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 const NOTIFICATIONS_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
 
-/// 開く頁（`fandhe_device::open_system_settings::SettingsPage` に対応。写像は proxy 側）。
+/// 開く頁（`fandhe_cap_open_system_settings::SettingsPage` に対応。写像は proxy 側）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsTarget {
     /// 自アプリの設定。

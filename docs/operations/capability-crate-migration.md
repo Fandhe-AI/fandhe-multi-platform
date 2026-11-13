@@ -13,7 +13,7 @@ TASK-21.4）。構成の根拠は `docs/architecture/consumer-app-structure.md`�
 | 対象 | 扱い |
 |------|------|
 | 端末機能でない行（`ui-widget-catalog`・`checkbox-list`・`dark-mode`・`gpu-backend` など） | crate を作らない |
-| Windows・Web の実装がある機能 | `fandhe-platform-windows` / `-web`（#1184・#1185）は済み。Windows は `src/windows.rs`（scaffold が移す）、Web は `fandhe-web-dom/src/<stem>.rs` を `src/web.rs` へ `git mv` して手で移す（下の「Web の移し方」）。`inventory` の注意は読み流してよい |
+| Windows・Web の実装がある機能 | `fandhe-platform-windows`（`open_url`・`SE_ERR_NOASSOC` を含む）/ `-web`（#1184・#1185）は済み。Windows は `src/windows.rs`（scaffold が移す）、Web は `fandhe-web-dom/src/<stem>.rs` を `src/web.rs` へ `git mv` して手で移す（下の「Web の移し方」）。`inventory` の注意は読み流してよい |
 | driver が egui 固有の読み書き口（`fandhe_render_egui::EguiSenderExt`）を使う機能 | 機能 crate は egui 非依存のため、そのままは移せない。拡大率・フォーカス・ファイルのドラッグ・ポインタ押下は `sender.host_view()`（`fandhe_runtime::HostView`、§13）で読み書きできる。`HostView` に無い口（`viewport_size`・`request_screenshot` / `tagged_screenshot`・`egui_context`・`canvas_*`）を使う機能は、その口を設計してから移す |
 | 実装が共有ファイル（`device/android.rs`・`device/ios.rs`・`MainActivity.java`）に埋まった古い型（tts・clipboard・http・storage など） | `scaffold` では動かせない。`inventory` の参照行を見て手で切り出す |
 | 対応表の id と stem が違う機能（`http-get` → `http`、`dynamic-type` → `text_scale` など） | `--module <stem>` で渡す |
@@ -173,7 +173,7 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | pen-stylus | Android が `MainActivity.dispatchTouchEvent` の上書きを要する。provider では置き換えられない | §12 の `Window.Callback` を包む型で移せる（`dispatchTouchEvent` の観測。共通層への引き上げはそのとき行う） |
 | picture-in-picture | Android が `onPictureInPictureModeChanged` の上書きと `<activity supportsPictureInPicture>` 属性を要する | 宣言の拡張が先 |
 | fullscreen-immersive | `FullscreenHelper.onInsets` が、`MainActivity` の唯一の decorView insets リスナー（safe-area と共用）から呼ばれる | insets を配る口を `fandhe-platform-android` に置く設計が先 |
-| compose-mail-sms | 未移行の `windows_web_auth_session.rs` が `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を呼ぶ | web-auth-session と一緒に移す、または `open_url` を `fandhe-platform-windows` へ上げる |
+| compose-mail-sms | 未移行の `windows_web_auth_session.rs` が `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を呼ぶ | `open_url` は #1192 で `fandhe-platform-windows` へ上げた（`windows_compose_mail_sms` は再公開だけを持つ）。web-auth-session と同時に移すか、その再公開を共通層への参照に付け替えて移す |
 | print・print-screen | `print_screen_page_effect` が egui 固有の読み書き口（`EguiSenderExt` の `request_screenshot`・`tagged_screenshot`）を使う | `fandhe-runtime` に egui 非依存の口を足す設計が先 |
 | in-app-purchase | 全 OS が未実装（`possible`）で `impl` が無い | 実装後 |
 
@@ -207,11 +207,11 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | lan-discovery | apple の `.m` が `fandhe_apple_network_status_read` を、Windows が `windows_network_status` を使う。network-status も `map_view.rs` が OS 実装を使うため移せない | network-status・map-view と同時に移す |
 | wifi-info | 未移行の wifi-connect の Windows 実装（`windows_wifi_connect.rs`）が `windows_wifi_info::radio_off` を使う | wifi-connect と同時に移す |
 | local-peer-connect | `NEARBY_WIFI_DEVICES` の `usesPermissionFlags="neverForLocation"` を宣言の `Permission`（name・max-sdk のみ）で表せず、`cargo-fandhe` の `tests/gen.rs` が通らない | 宣言に権限フラグを足してから |
-| web-auth-session | Android は `MainActivity.onNewIntent` が `WebAuthSessionHelper.onNewIntent` を先に呼び、url-scheme の受信箱へ流さない分岐を持つ（provider に onNewIntent の口が無い）。Windows は `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を使う | Activity の Intent を配る口の設計が先。open_url は compose-mail-sms と同時に platform-windows へ上げる |
+| web-auth-session | Android は `MainActivity.onNewIntent` が `WebAuthSessionHelper.onNewIntent` を先に呼び、url-scheme の受信箱へ流さない分岐を持つ（provider に onNewIntent の口が無い）。Windows は `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を使う | Activity の Intent を配る口の設計が先。`open_url` は #1192 で `fandhe-platform-windows` へ上げた |
 | payment-request | Google Pay の `<application>` 直下の `meta-data`（`com.google.android.gms.wallet.api.enabled`）を宣言で表せない（`meta-data` はコンポーネント単位だけ） | 宣言に application の meta-data を足してから |
 | music-library | Android が許可ランチャーと `onDestroy` を持つ（provider と JNI エクスポートが要る）。Windows の `windows_photo_library::known_folder` を `fandhe-platform-windows` へ上げる共通層の変更も要る | 共通層の先行変更とあわせて別の周で |
 | translation | Android がランチャーと `onDestroy`・`reset_pending_tracking` を持ち、Apple は Swift の薄層（`links` と `import_link_args`）が要る | 別の周で |
-| flashlight | Android の Helper が `onStart` / `onStop` / `onDestroy` に参加する。`FeatureLifecycleProvider` に Started / Stopped の口を足す共通層の変更が先 | 共通層の先行変更とあわせて別の周で |
+| flashlight | Android の Helper が `onStart` / `onStop` / `onDestroy` に参加する。`FeatureLifecycleProvider` の Started / Stopped の口は #1192 で足した | 口が `main` に入った後に移せる（app-lifecycle と同じ形） |
 | safe-area-insets | egui-proxy の `android.rs` にある insets の static と JNI エクスポートを `fandhe-platform-android` へ上げる共通層の変更が先 | 共通層の先行変更とあわせて別の周で |
 | compass-heading | 第 3 束 #1301 の `FeatureLifecycleProvider.onHostResumed` / `onHostPaused` に依存する。`WaitTracker`・`NO_READING_TIMEOUT_MS` を ar と未移行の `environment_sensors` が使うため、`fandhe-device::compass` へ最小限を残す設計も要る | #1301 のマージ後 |
 
@@ -245,12 +245,12 @@ per-app-language・screen-brightness・spell-check・geocoding-search の 9 機�
 |------|------|--------------|
 | in-app-browser | Android の Helper が `onResume` / `onPause` / `onDestroy` に参加する。`FeatureLifecycleProvider` に Resumed / Paused の口が無い（#1301 で足す） | #1301 のマージ後 |
 | environment-sensors | Android が `onResume` / `onPause` / `onDestroy` に参加する（同上）。egui-proxy の `android.rs` にある feature 無効時の no-op スタブも消す必要がある | #1301 のマージ後 |
-| capture-protection | Android の Helper が `onStart` / `onStop` に参加する。`FeatureLifecycleProvider` に Started / Stopped の口が無い | flashlight と同じ共通層の変更の後 |
-| activity-recognition | Android が `onStart` / `onStop` に参加し、`ActivityRecognitionReceiver` も持つ | Started / Stopped の口の後 |
+| capture-protection | Android の Helper が `onStart` / `onStop` に参加する。`FeatureLifecycleProvider` の Started / Stopped の口は #1192 で足した | 口が `main` に入った後に移せる |
+| activity-recognition | Android が `onStart` / `onStop` に参加し、`ActivityRecognitionReceiver` も持つ（口は #1192 で足した） | 口が `main` に入った後に移せる |
 | bluetooth-classic | Android が `onResume` / `onPause` と許可ランチャーを持つ。共有ファイル `device/android.rs` の `read_ble_string` を使う | `read_ble_string` を共通層へ上げてから（bluetooth-le と同時が自然） |
 | window-management | driver と OS 実装が `egui::Context`・`ViewportCommand` を直接使う（§1 の egui 固有の口） | `fandhe-runtime` にウィンドウ操作の egui 非依存の口を設計してから |
 | screen-orientation | driver が `EguiSenderExt::viewport_size` を使う | 同上 |
-| launch-at-login | Windows 実装が未移行の `windows_compose_mail_sms::open_url` を使う | compose-mail-sms と同時に `open_url` を `fandhe-platform-windows` へ上げる |
+| launch-at-login | Windows 実装が未移行の `windows_compose_mail_sms::open_url` を使う（`open_url` は #1192 で `fandhe-platform-windows` へ上げた） | 再公開を共通層への参照に付け替えて移せる |
 | autofill-otp | iOS の受け口 `fandhe_ios_text_input_set_one_time_code_hint` が、描画層の IME 橋渡し（`fandhe-egui-proxy/ios/fandhe_ios_text_input.m`）の入力欄 static に埋まっていて切り離せない | 入力欄のヒントを渡す口を描画層に設計してから |
 | game-center | 全 OS が `possible` で実装も `impl` も無く、移すものが無い | 実装時に最初から crate で作る |
 | app-intents | macOS の実装が url-scheme の受け口（`device/url_scheme.rs`・`FandheWidgetHost`）そのもので、独自のモジュールが無い | url-scheme と同時に扱う |
@@ -298,3 +298,37 @@ dynamic-type・share-sheet・drag-drop の 3 機能を移した。3 機能とも
 | 複製していた検証規則（drag-drop） | SAF の表示名の検証 `sanitize_picked_name` はファイル選択と drag-drop が使うため、`fandhe-device::file_picker` へ上げて共有する |
 | `scaffold` が書く `build.rs` | 元の framework と照合する（dynamic-type は iOS だけ `UIKit`、share-sheet は `ui_framework()` だけ、drag-drop は iOS だけ `UIKit` + `UniformTypeIdentifiers`） |
 | 旧受け口の取りこぼし | `device/android.rs` のような共有ファイルに残った JNI 受け口は、`cargo ndk clippy -p fandhe-egui-proxy` で拾える（ホストの検査では拾えない） |
+
+## 14. 第 7 束（#1192）で出た型と後回しの機能
+
+第 7 束（20 機能）のうち、app-progress-attention・human-presence・system-sound・managed-app-config・display-refresh-hdr・
+removable-storage・memory-pressure・audio-session・external-app-launch・open-system-settings・color-picker・digital-credentials・
+wallpaper-set・file-preview・app-lifecycle の 15 機能を移した。device-identifier は第 1 束で移行済みで、本束では確かめただけ
+（`crates/fandhe-cap-device-identifier`、対応表の `impl` も新しいパス）。残りの 4 機能は下の表の理由で止まっている。
+
+### 手作業で気づいた型
+
+| 型 | 扱い |
+|----|------|
+| 共通層への引き上げ（`open_url`） | 複数の未移行機能が使う Windows の `ShellExecuteW`（`open_url`・`SE_ERR_NOASSOC`）を `fandhe-platform-windows` へ上げた。渡すのは各機能が組み立てた固定 scheme の URL だけで、任意の scheme・引数を受ける口ではない。`windows_compose_mail_sms` は再公開だけを持ち、未移行の web-auth-session・launch-at-login の参照は変えない。`SE_ERR_NOASSOC` はホストのテストでも写像を検証するため、Windows 以外では同じ値（公式の表）を置く |
+| `FeatureLifecycleProvider` の `onHostStarted` / `onHostStopped` | app-lifecycle が使う。どちらも `Activity.onStart()` / `onStop()` の中、つまり `super.onStart()` / `super.onStop()` の中で呼ばれる。従来の `MainActivity.onStart` は `super` の後で、`onStop` は `super` の前に helper を呼んでいた。`super` に対する前後だけが違い、`isChangingConfigurations()` の判定は同じコールバックの内側で行うので変わらない。到着順の扱い（契約表 1）は購読の id 照合と、通知時の実際の状態の読み直しで保つ |
+| 機能専用の FileProvider（file-preview） | 共有の `${applicationId}.compose`（メール添付・動画の撮影と共用）から外し、`FilePreviewFileProvider`（`FileProvider` の空の派生）と `res/xml/file_preview_file_paths.xml`（`cache/file_preview/` だけ）を機能 crate が持つ。宣言の `components`（`exported = false`・`grantUriPermissions = "true"`・`meta-data`）と `AndroidManifest.xml` に同じ内容を書く。公開するパスが狭まる（最小公開）。新しい権限は足さない。共有 provider の公開パスの一覧からは `file_preview` を消す |
+| Context を取る static の入口（managed-app-config・wallpaper-set） | `read(Context)` / `set(Context, …)` を、第 1 引数が `Activity` の static にして先頭で `getApplicationContext()` を取る（§9 の「1 つの Helper が Context を取る同期呼び出し」と同じ）。`MainActivity` の 1 行ラッパーは消す |
+| 起動を依頼する Helper（external-app-launch・open-system-settings） | Activity ごとの helper を `HELPERS` に持ち、static の入口 `launch(Activity, …)` / `open(Activity, …)` が `boolean` を返す。表に無ければ `false` を返し、Rust が失敗として確定する。起動直前に RESUMED・`isFinishing` を見直す（契約表 2）処理は変えない |
+| `onDestroy` を持つ Helper（system-sound・removable-storage・memory-pressure・audio-session） | §8 の型（private コンストラクタ・`HELPERS`・`<Name>Lifecycle`）。インスタンスメソッドは `private` にして、static の入口が表から引いて委譲する。helper が無い要求は失敗で確定する（stop は購読が無いので `0`）。provider は宣言の `components` と `AndroidManifest.xml` に同じ name・authorities（`${applicationId}.fandhe.<id>`）で書く |
+| 見本画像の扱い（wallpaper-set） | 未移行の photo-save の `pub(crate)` の `sample_png()` は機能 crate から見えないため、driver に同じ生成を持ち（`image` の `png` だけ）、`// ponytail:` で「photo-save を移すときに共有を見直す」と書く。`PngImage`・`FsStorage` は他機能も使うため `fandhe-device` に残して参照する（§7） |
+| Web の参照の付け替え（display-refresh-hdr・memory-pressure・external-app-launch・color-picker・digital-credentials・app-lifecycle） | 本体は `fandhe-web-dom` に残し、`fandhe_device::<stem>` の参照を機能 crate への依存に付け替える。契約の関数が機能固有のエラー型を返すようになるため、Web 側のエラー型の写像も付け替える（color-picker・digital-credentials）。`cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown --all-features` で拾える |
+| 受け口を持つ driver（removable-storage・memory-pressure・app-lifecycle） | `.m` が呼ぶ `#[unsafe(no_mangle)] extern "C"` の受け口は driver に残る。`scaffold` は driver の `unsafe` を OS 実装のファイルへ写せず止まるため、受け口の属性を一時的に外して実行し、後で戻す。`lib.rs` の cfg（`any(target_os, test)`）は元の `device.rs` の宣言から写す（共有ファイルを先に直すと読めなくなる） |
+| 公開入口のない機能（digital-credentials） | ネイティブ OS は全て `Unsupported` で OS 実装が無い。`platform_digital_credentials()` が同期で `Unsupported` を返し、effect はそれを呼ぶ |
+| 終了時の片付け（memory-pressure・audio-session） | §7 の過渡期の依存。`fandhe-egui-proxy` が feature `device` で optional 依存し、`device::shutdown`（と `ProxyApp` の破棄）から `shutdown()` を呼ぶ（#1194 で消える） |
+| `reset_pending_tracking` | audio-session・external-app-launch・open-system-settings・wallpaper-set・file-preview は機能 crate が `pub` で公開し、`fandhe-gallery` の `android_main` が呼ぶ。`fandhe-egui-proxy` の `android.rs` からは消す |
+| `windows` の feature | 移した実装が使う feature を機能 crate の target 依存へ書く（file-preview は `std`、memory-pressure は `Win32_Security`、external-app-launch は `Win32_System_Registry` も要る）。`cargo clippy -p <crate> --target x86_64-pc-windows-gnu --all-targets` で拾える |
+
+### 後回しにした機能
+
+| 機能 | 理由 | 解消の見込み |
+|------|------|--------------|
+| age-range | 全 OS が `possible` で実装も `impl` も無く、移すものが無い（game-center と同じ扱い） | 実装するときに最初から crate で作る |
+| background-upload | 未移行の iOS AppDelegate（`ios/fandhe_ios_url_scheme.m` の `handleEventsForBackgroundURLSession`）が転送先として `fandhe_apple_background_upload.m` に結びついている（background-download と同じ止まり方） | AppDelegate のイベントを配る口を設計した後、または url-scheme・background-download と同時に移す |
+| motion-raw-sensors | Windows 実装が未移行の `windows_environment_sensors::ensure_minimize_watcher` を使い、ウォッチャー側も `windows_motion_raw_sensors::note_minimized` / `note_restored` を呼び返していて、双方向に結びついている | environment-sensors と同じ PR で移す。または最小化の通知を配る口を `fandhe-platform-windows` に置いてから |
+| video-capture | Windows 実装が `windows_camera_preview_stream::{spawn, spawn_action}` を使う。camera-preview-stream は並行して進む第 6 束（#1191）の対象。共有の FileProvider（`compose_file_paths.xml`）も使う | #1191 のマージ後に移す。そのときは WinRT 完了の積み込み（`spawn` / `spawn_action`）を `fandhe-platform-windows` へ上げ、FileProvider は file-preview と同じ機能専用の派生にする |

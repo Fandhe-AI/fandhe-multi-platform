@@ -4,14 +4,14 @@
 //! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは
-//! `fandhe-egui-proxy` の `device/system_sound.rs` が [`take_request`] で要求を観測し
+//! `fandhe-egui-proxy` の `crates/fandhe-cap-system-sound/src/driver.rs` が [`take_request`] で要求を観測し
 //! [`finish_beep`] で結果を注入する（`haptics_tap` と同型の状態機械）。状態・定数・文言は
 //! 全 OS 分をここで定義し、OS 別の実体（macOS / Windows / Android）は画面を触らない。
 //!
 //! # 「鳴りました」と言い切らない理由
 //!
 //! `Requested` は OS に渡したまでで、消音・音量・サウンド設定で聞こえないことがある
-//! （`fandhe_device::system_sound` の契約）。成功文言は [`REQUESTED_STATUS`] に留める。
+//! （`fandhe_cap_system_sound` の契約）。成功文言は [`REQUESTED_STATUS`] に留める。
 //! OS が鳴らさなかったと返した場合（[`BeepResult::NotPlayed`]）は成功にも失敗の色にもしない。
 //!
 //! ```text
@@ -48,7 +48,7 @@ pub enum BeepPhase {
     Sending,
 }
 
-/// OS から返った結果（成功系）。`fandhe_device::system_sound::BeepOutcome` の写し。
+/// OS から返った結果（成功系）。`fandhe_cap_system_sound::BeepOutcome` の写し。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BeepResult {
     /// OS に渡した。
