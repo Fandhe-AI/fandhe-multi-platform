@@ -182,16 +182,16 @@ test("refPatterns: stem・id・Pascal を語の境界で照合する（短い st
 test("missingEntry: crate ルートから公開された platform_<stem> だけを合格にする", () => {
   const def = "/// doc\n#[cfg(not(target_arch = \"wasm32\"))]\npub fn platform_x() -> u8 { 0 }\n";
   assert.equal(missingEntry("x", { "lib.rs": def }), null);
-  assert.equal(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": def }), null);
-  assert.equal(missingEntry("x", { "lib.rs": "pub use driver::{a, platform_x, b};", "driver.rs": def }), null);
-  assert.equal(missingEntry("x", { "lib.rs": "pub use driver::{\n    a,\n    platform_x,\n};", "driver.rs": def }), null);
+  assert.equal(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver.rs": def }), null);
+  assert.equal(missingEntry("x", { "lib.rs": "pub mod driver;\npub use driver::{a, platform_x, b};", "driver.rs": def }), null);
+  assert.equal(missingEntry("x", { "lib.rs": "#[cfg(not(target_arch = \"wasm32\"))] mod driver;\npub use driver::{\n    a,\n    platform_x,\n};", "driver.rs": def }), null);
   assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::{platform_x as other};", "driver.rs": def }));
   assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::platform_x as other;", "driver.rs": def }));
   assert.ok(missingEntry("x", { "lib.rs": "mod internal {\n    pub fn platform_x() {}\n}\n" }));
-  assert.ok(missingEntry("x", { "lib.rs": "mod internal {\n    pub use driver::*;\n}\n", "driver.rs": def }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\nmod internal {\n    pub use driver::*;\n}\n", "driver.rs": def }));
   assert.ok(missingEntry("x", { "lib.rs": "mod driver;", "driver.rs": def }));
-  assert.ok(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": "pub(crate) fn platform_x() {}" }));
-  assert.ok(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": "fn platform_x() {}" }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver.rs": "pub(crate) fn platform_x() {}" }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver.rs": "fn platform_x() {}" }));
   assert.ok(missingEntry("x", { "lib.rs": "pub fn platform_passkey() {}" }) && missingEntry("passkey_signin", { "lib.rs": "pub fn platform_passkey() {}" }));
   assert.ok(missingEntry("x", { "lib.rs": "pub fn platform_x_y() {}" }));
   assert.ok(missingEntry("x", {}));
@@ -199,10 +199,17 @@ test("missingEntry: crate ルートから公開された platform_<stem> だけ�
   assert.ok(missingEntry("x", { "lib.rs": "pub struct Factory;\nimpl Factory {\n    pub fn platform_x() {}\n}\n" }));
   assert.ok(missingEntry("x", { "lib.rs": "pub trait T {\n    fn platform_x() {}\n}\n" }));
   assert.ok(missingEntry("x", { "lib.rs": "mod inner { pub fn platform_x() {} }" }));
-  assert.ok(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": "impl D {\n    pub fn platform_x() {}\n}\n" }));
-  assert.ok(missingEntry("x", { "lib.rs": "fn f() {\n    pub use driver::platform_x;\n}", "driver.rs": def }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver.rs": "impl D {\n    pub fn platform_x() {}\n}\n" }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\nfn f() {\n    pub use driver::platform_x;\n}", "driver.rs": def }));
   assert.equal(missingEntry("x", { "lib.rs": "mod a { fn g() {} }\npub fn platform_x() { if true { } }\n" }), null);
   assert.equal(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::platform_x;", "driver.rs": def }), null);
+  // 再公開は lib.rs の深さ 0 でモジュールを宣言しているときだけ成立する。ファイルは driver.rs か driver/mod.rs。
+  assert.ok(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": "pub fn platform_x() {}" }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod inner { mod driver; }\npub use driver::*;", "driver.rs": def }));
+  assert.equal(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver.rs": "pub fn platform_x() {}" }), null);
+  assert.equal(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver/mod.rs": def }), null);
+  // 2 段以上の経路は判別しないので欠けとして報告する（保守側）。
+  assert.ok(missingEntry("x", { "lib.rs": "mod a;\npub use a::b::platform_x;", "a.rs": "pub mod b;", "a/b.rs": def }));
 });
 
 test("rewriteEdition2024: 複数行文字列・raw string・ブロックコメントの内側は変えない", () => {
@@ -222,6 +229,6 @@ test("missingEntry: コメント・文字列の中の pub fn は公開入口に�
   assert.ok(missingEntry("x", { "lib.rs": "// pub fn platform_x() {}" }));
   assert.ok(missingEntry("x", { "lib.rs": "/*\npub fn platform_x() {}\n*/" }));
   assert.ok(missingEntry("x", { "lib.rs": 'const S: &str = "\npub fn platform_x() {}\n";' }));
-  assert.ok(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": "// pub fn platform_x() {}" }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;\npub use driver::*;", "driver.rs": "// pub fn platform_x() {}" }));
   assert.equal(stripRustLiterals("a // b\nc").length, 8);
 });

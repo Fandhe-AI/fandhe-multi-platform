@@ -309,22 +309,24 @@ function topLevelOnly(src) {
 
 /**
  * 機能 crate が crate ルートから `pub fn platform_<stem>()` を公開しているかの検査（consumer-app-structure.md §8.2）。
- * files は src/ 直下の { "lib.rs": 本文, "driver.rs": 本文, ... }。満たせば null、欠けていれば理由を返す。
- * lib.rs に直接定義するか、他のモジュールで定義して lib.rs から `pub use` で再公開していれば合格。cfg の有無は見ない。
- * 定義・再公開とも、ファイルの深さ 0（mod・impl・trait・関数本文の外）にあるものだけを数える。
+ * files は src/ 配下の { "lib.rs": 本文, "driver.rs": 本文, "foo/mod.rs": 本文, ... }。満たせば null、欠けていれば理由を返す。
+ * lib.rs に直接定義するか、lib.rs で宣言したモジュール（`mod driver;`、`driver.rs` か `driver/mod.rs`）に定義して
+ * lib.rs から `pub use driver::…` で再公開していれば合格。cfg の有無は見ない。定義・宣言・再公開とも深さ 0（mod・impl・trait・関数本文の外）だけを数える。
+ * これはテキスト照合による近似で、最終的な保証は使う側が `fandhe_cap_<stem>::platform_<stem>()` を呼んでビルドが通ること。
+ * 近似で判別できない形（2 段以上の経路 `pub use a::b::platform_x`・`self::`・`crate::`・`#[path]`・マクロの中の定義など）は、欠けとして報告する側へ倒す。
  */
 export function missingEntry(stem, files) {
   const fn = `platform_${stem}`;
   const def = new RegExp(`^\\s*pub fn ${fn}\\s*[<(]`, "m");
   files = Object.fromEntries(Object.entries(files).map(([f, src]) => [f, topLevelOnly(stripRustLiterals(src))]));
   const lib = files["lib.rs"] ?? "";
+  const mods = [...lib.matchAll(/^\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*;/gm)].map((m) => m[1]);
   const ok =
     def.test(lib) ||
-    Object.entries(files).some(
-      ([f, src]) =>
-        f !== "lib.rs" &&
-        def.test(src) &&
-        new RegExp(`pub use ${f.replace(/\.rs$/, "")}::(?:\\*|${fn}\\b(?!\\s+as\\b)|\\{[^}]*\\b${fn}\\b(?!\\s+as\\b)[^}]*\\})`).test(lib),
+    mods.some(
+      (m) =>
+        def.test(files[`${m}.rs`] ?? files[`${m}/mod.rs`] ?? "") &&
+        new RegExp(`pub use ${m}::(?:\\*|${fn}\\b(?!\\s+as\\b)|\\{[^}]*\\b${fn}\\b(?!\\s+as\\b)[^}]*\\})`).test(lib),
     );
   return ok ? null : `pub fn ${fn}() を crate ルートから公開する（consumer-app-structure.md §8.2）`;
 }
@@ -349,7 +351,10 @@ function sync(R, check = false) {
   for (const { id } of caps) {
     const dir = join(R, "crates", `fandhe-cap-${id}`, "src");
     const files = Object.fromEntries(
-      existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".rs")).map((f) => [f, readFileSync(join(dir, f), "utf8")]) : [],
+      (existsSync(dir) ? readdirSync(dir) : [])
+        .map((f) => (f.endsWith(".rs") ? f : `${f}/mod.rs`))
+        .filter((f) => existsSync(join(dir, f)))
+        .map((f) => [f, readFileSync(join(dir, f), "utf8")]),
     );
     const why = missingEntry(stemOf(id), files);
     if (why) {
