@@ -8,7 +8,7 @@
 //! 守らない。challenge・資格情報 ID・署名・応答 JSON はログ・`Debug` に出さず、永続化しない。
 //!
 //! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`）・OS 実装を 1 つに集める。
-//! 画面の状態型を参照してよいのは `driver` だけ。入口 `platform_passkey()` は状態型に依存しないため、
+//! 画面の状態型を参照してよいのは `driver` だけ。入口 `platform_passkey_signin()` は状態型に依存しないため、
 //! フレームワークの外のアプリも使える。
 
 // unsafe は OS 実装の FFI・JNI エクスポートに限る（`// SAFETY:` を付ける）。該当 OS だけ deny へ緩める。

@@ -92,7 +92,7 @@ use std::fmt;
 use std::time::Duration;
 
 mod driver;
-pub use driver::{document_scan_show_effect, reset_pending_tracking};
+pub use driver::{document_scan_show_effect, platform_document_scan, reset_pending_tracking};
 
 // OS 別の実体。ホストのテストでも写像（純関数）を検査するため `test` でも載せる。
 #[cfg(any(target_os = "android", test))]

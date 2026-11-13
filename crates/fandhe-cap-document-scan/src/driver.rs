@@ -121,7 +121,9 @@ enum CoreScan {
 type Outcome = Result<CoreScan, DocumentScanFailure>;
 
 /// 現在のプラットフォームに応じた `DocumentScanner` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn DocumentScanner> {
+/// 状態型に依存しない入口（consumer-app-structure.md §8.2）。フレームワークの外のアプリも、自分の状態型の effect から使える。
+/// 結果は trait の契約どおり bridge を経由して [`document_scan_show_effect`] へ届き、bridge を介さずフレームワークの外で受け取る口はない。
+pub fn platform_document_scan() -> Arc<dyn DocumentScanner> {
     #[cfg(target_os = "ios")]
     {
         crate::ios::implementation()
@@ -404,7 +406,12 @@ pub fn document_scan_show_effect(
     sender: &CompletionSender<DocumentScanShowState>,
 ) {
     static IMPL: OnceLock<Arc<dyn DocumentScanner>> = OnceLock::new();
-    drive(state, sender, IMPL.get_or_init(platform), bridge());
+    drive(
+        state,
+        sender,
+        IMPL.get_or_init(platform_document_scan),
+        bridge(),
+    );
 }
 
 #[cfg(test)]
@@ -605,7 +612,10 @@ mod tests {
     #[test]
     fn fallback_platform_is_unsupported_off_ios_and_android() {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
-        assert_eq!(platform().scan(1), Err(DocumentScanFailure::Unsupported));
+        assert_eq!(
+            platform_document_scan().scan(1),
+            Err(DocumentScanFailure::Unsupported)
+        );
     }
 
     #[test]

@@ -139,7 +139,8 @@ impl Poller {
 }
 
 /// 現在の OS の実装（Android は `android::implementation`、他は `Unsupported` 固定）。
-fn platform_emulation() -> &'static Arc<dyn CardEmulation> {
+/// 状態型に依存しない入口（consumer-app-structure.md §8.2）。フレームワークの外のアプリも、自分の状態型の effect から使える。
+pub fn platform_nfc_card_emulation() -> &'static Arc<dyn CardEmulation> {
     static EMU: OnceLock<Arc<dyn CardEmulation>> = OnceLock::new();
     EMU.get_or_init(|| {
         #[cfg(target_os = "android")]
@@ -258,7 +259,13 @@ pub fn nfc_card_emulation_show_effect(
     sender: &CompletionSender<NfcCardEmulationShowState>,
 ) {
     static POLLER: Poller = Poller::new();
-    drive(state, sender, platform_emulation(), &POLLER, Instant::now());
+    drive(
+        state,
+        sender,
+        platform_nfc_card_emulation(),
+        &POLLER,
+        Instant::now(),
+    );
 }
 
 #[cfg(test)]

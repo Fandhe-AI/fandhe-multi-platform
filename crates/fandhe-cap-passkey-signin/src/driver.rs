@@ -25,7 +25,7 @@ use fandhe_runtime::CompletionSender;
 /// Android はコールバック型のため、Credential Manager の完了まで `run` を block する（期限は置かない）。
 /// 同時に 1 件だけで、先行が終わるまで後から呼ぶと `Internal` で即座に戻る。UI スレッドから呼ばない。
 /// Windows 以外の非対応 OS は常に `Unsupported`。
-pub fn platform_passkey() -> Box<dyn crate::contract::Passkey> {
+pub fn platform_passkey_signin() -> Box<dyn crate::contract::Passkey> {
     #[cfg(target_os = "windows")]
     return crate::windows::implementation();
     #[cfg(target_os = "android")]
@@ -95,7 +95,7 @@ pub(crate) mod bridge {
 
     type Waiter = std::sync::mpsc::Sender<Outcome>;
 
-    /// 画面を経ない呼び出し（`platform_passkey`、Android）の待ち合わせ。画面の [`SLOT`] とは別に持ち、
+    /// 画面を経ない呼び出し（`platform_passkey_signin`、Android）の待ち合わせ。画面の [`SLOT`] とは別に持ち、
     /// 互いの保留を上書きしない（`fandhe-cap-calendar` と同形）。ID は [`SLOT`] の払い出しと衝突しないよう上位ビットを立てる。
     static WAITERS: std::sync::Mutex<Vec<(u64, Waiter)>> = std::sync::Mutex::new(Vec::new());
     #[cfg(any(target_os = "android", test))]
@@ -169,7 +169,7 @@ pub(crate) mod bridge {
     }
 }
 
-/// Android 版の [`Passkey`]（[`platform_passkey`]）。Credential Manager の完了まで `run` を block する
+/// Android 版の [`Passkey`]（[`platform_passkey_signin`]）。Credential Manager の完了まで `run` を block する
 /// （期限は置かない。OS の UI の応答待ちを推測の期限で失敗にしない）。RP ID 未設定・不正は `Unsupported`（OS を呼ばない）。
 /// 同時に 1 件だけで、先行（画面の保留・別の待ち）が終わるまで後から呼ぶと `Internal` で即座に戻る。
 /// Activity 再生成で待っている呼び出しは `Internal` で戻る。
@@ -195,7 +195,7 @@ pub fn reset_pending_tracking() {
     crate::android::reset();
 }
 
-/// 画面用 effect が追う自分の分の要求（公開入口 [`platform_passkey`] は別の待ち口を使う）。
+/// 画面用 effect が追う自分の分の要求（公開入口 [`platform_passkey_signin`] は別の待ち口を使う）。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
@@ -293,7 +293,7 @@ pub fn passkey_signin_effect(
         let request_id = bridge::begin();
         let op = op_of(view.action);
         // HWND の取得などは UI スレッドで済ませ、ブロッキングの呼び出しだけをワーカーへ渡す。
-        let passkey = platform_passkey();
+        let passkey = platform_passkey_signin();
         let spawned = std::thread::Builder::new()
             .name("passkey".into())
             .spawn(move || {

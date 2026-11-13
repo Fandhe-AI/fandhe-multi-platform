@@ -1,5 +1,5 @@
 //! Android 向け NFC カードエミュレーション（HCE）の実装（親 #151、Issue #1129）。
-//! `lib.rs` の Android 経路（`platform_emulation`）から呼ばれ、effect ドライバのワーカースレッドで
+//! `lib.rs` の Android 経路（`platform_nfc_card_emulation`）から呼ばれ、effect ドライバのワーカースレッドで
 //! [`CardEmulation::status`] として使われる。
 //!
 //! 流れ: OS は `android/res/xml/apduservice.xml` の AID への SELECT を `NfcCardEmulationService`

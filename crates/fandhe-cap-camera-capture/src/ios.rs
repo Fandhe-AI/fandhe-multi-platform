@@ -1,4 +1,4 @@
-//! iOS 向けカメラ実装（Issue #751）。`crate::platform_camera`（`cfg(target_os = "ios")` 分岐）から
+//! iOS 向けカメラ実装（Issue #751）。`crate::platform_camera_capture`（`cfg(target_os = "ios")` 分岐）から
 //! 構築される。
 //!
 //! 実装は `unsafe extern "C"` で `ios/fandhe_ios_camera.m`（本 crate の `build.rs` が iOS

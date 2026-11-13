@@ -2,7 +2,7 @@
 //! JNI で呼び、結果を `CameraCaptureHelper.nativeOnCameraResult`（Java 側）から受ける。利用者の
 //! `MainActivity` に受け口は要らない（#1257。Activity への参加は `CameraCaptureLifecycle`）。
 //!
-//! 呼び出し元は `crate::platform_camera`（`cfg(target_os = "android")` 分岐）。`AndroidApp` の取得と
+//! 呼び出し元は `crate::platform_camera_capture`（`cfg(target_os = "android")` 分岐）。`AndroidApp` の取得と
 //! JavaVM への attach・Activity とクラスの取得は `fandhe-platform-android` の `with_activity_class` に任せ、
 //! 本モジュールに `unsafe` を残すのは JNI エクスポート関数 1 つだけにする。
 //!
