@@ -49,23 +49,6 @@ pub(crate) fn active_screen_uses_tilt() -> bool {
     ACTIVE_SCREEN_USES_TILT.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-/// 現在表示中の画面が `gamepad_show` かどうか（Bugbot 指摘、PR #939）。`ACTIVE_SCREEN_USES_TILT`
-/// と同じ理由・同じ契約（Java 側は画面に関わらず `MotionEvent` を常に配送するため、
-/// 表示していない画面でのスティックドリフトによる高頻度 `request_repaint` を防ぐ）。
-static ACTIVE_SCREEN_USES_GAMEPAD: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-
-/// [`ACTIVE_SCREEN_USES_GAMEPAD`] を差し替える。`android_main` が起動画面を決定した直後に呼ぶ。
-pub(crate) fn set_active_screen_uses_gamepad(uses_gamepad: bool) {
-    ACTIVE_SCREEN_USES_GAMEPAD.store(uses_gamepad, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// [`ACTIVE_SCREEN_USES_GAMEPAD`] を読む。`gamepad_show` 以外ではアナログイベントの
-/// たびの `request_repaint` を省略するためのゲートとして使う。
-pub(crate) fn active_screen_uses_gamepad() -> bool {
-    ACTIVE_SCREEN_USES_GAMEPAD.load(std::sync::atomic::Ordering::Relaxed)
-}
-
 /// `android_main` が組み立てる `eframe::App` の `egui::Context` を `EguiWaker` として
 /// 起床口に登録する（Issue #831 codex-review 指摘 PRRT_kwDOTl73E86hCOSM）。`device/android.rs` の
 /// `nativeOnMotionChanged` は UI スレッド外（Java 側センサコールバック）から
@@ -309,8 +292,9 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     set_active_screen_uses_tilt(requested_name == "tilt_ball");
     // Bugbot 指摘（PR #939）: gamepad_show 以外の画面でのアナログイベント再描画を
     // 抑えるため、傾きと同じタイミングでゲートを設定する
-    // （`ACTIVE_SCREEN_USES_GAMEPAD` doc 参照）。
-    set_active_screen_uses_gamepad(requested_name == "gamepad_show");
+    // （`fandhe_cap_gamepad::set_screen_active` doc 参照。#1194 で egui-proxy ごと消える過渡期の配線）。
+    #[cfg(feature = "device")]
+    fandhe_cap_gamepad::set_screen_active(requested_name == "gamepad_show");
     // Issue #1016: drag_drop 以外の画面が他画面宛てのドロップを受け取らないよう、
     // 傾き・ゲームパッドと同じタイミングでゲートを設定する
     // （`fandhe_cap_drag_drop::set_screen_active` doc 参照。#1194 までの過渡期の依存）。
@@ -708,89 +692,6 @@ extern "system" fn Java_com_fandhe_platform_EnvironmentSensorsHelper_nativeOnFor
 // `nativeOnLocationChanged`/`nativeOnLocationFailure` を呼ぶ経路を持たない。
 // よって feature 無効ビルドではこれらのシンボルへ到達しえず、
 // `UnsatisfiedLinkError` の心配がない（codex-review の同種再指摘の予防）。
-
-/// `device` feature 無効ビルド向けの `nativeOnGamepadPresenceScanBegin`/`ScanId`/`ScanEnd`/
-/// `nativeOnGamepadMotion`/`nativeOnGamepadKey` no-op フォールバック（Issue #935）。
-/// `MainActivity` の `reportGamepadPresence()`/`dispatchGenericMotionEvent`/`dispatchKeyEvent`
-/// はビルド feature を知らずゲームパッド由来のイベントであれば常にこれらを呼ぶため、
-/// `nativeOnMotionChanged` と同じ理由（feature 無効ビルドでの `UnsatisfiedLinkError`
-/// 防止）で値を捨てるだけの no-op を用意する（feature 有効時は
-/// `device/android_gamepad.rs` 側の定義と重複しないよう `cfg(not(feature =
-/// "device"))` で排他にする）。`ScanBegin`/`ScanId`/`ScanEnd` の 3 分割・シグネチャは
-/// `device/android_gamepad.rs` 側の実装と必ず一致させる（JNI は署名不一致を実行時にしか
-/// 検出しないため、PR #939 で `ScanId` から `controllerNumber` 引数を削った際も両側を
-/// 揃えた）。
-///
-/// # Safety
-/// この 5 関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 5 関数に閉じ、
-/// シンボル名は JNI 命名規約上の固定名（`nativeOnMotionChanged` と同じ根拠）。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-) {
-}
-
-/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanId(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    _device_id: i32,
-) {
-}
-
-/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanEnd(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-) {
-}
-
-/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code, clippy::too_many_arguments)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadMotion(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    _device_id: i32,
-    _source: i32,
-    _x: f32,
-    _y: f32,
-    _z: f32,
-    _rz: f32,
-    _left_trigger: f32,
-    _right_trigger: f32,
-    _hat_x: f32,
-    _hat_y: f32,
-    _flat_x: f32,
-    _flat_y: f32,
-    _flat_z: f32,
-    _flat_rz: f32,
-) {
-}
-
-/// [`Java_com_fandhe_platform_MainActivity_nativeOnGamepadPresenceScanBegin`] と同じ根拠の no-op。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnGamepadKey(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    _device_id: i32,
-    _source: i32,
-    _key_code: i32,
-    _down: u8,
-) {
-}
 
 /// `device` feature 無効ビルド向けの `nativeOnFullscreenChanged` no-op フォールバック
 /// （Issue #1314）。`FullscreenHelper` は insets リスナーから必ず呼ぶため、スタブが無いと

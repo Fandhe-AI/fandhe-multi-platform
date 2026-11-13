@@ -19,8 +19,8 @@ fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"
 # 依存方向は本クレート（最適化レイヤ）→ fandhe-core（共通コア）の一方向
 # （coding-rust.md 準拠）。共通コアへ本クレートの依存を持ち込まない。
 fandhe-core = { path = "../fandhe-core" }
-# `location`/`gamepad` モジュールの純関数（native `cargo test` 対象）が
-# `fandhe_device::{location, gamepad}` の検証・正規化ロジック（`is_valid_fix`/
+# `location` モジュールの純関数（native `cargo test` 対象）が
+# `fandhe_device::location` の検証・正規化ロジック（`is_valid_fix`/
 # `normalize_axis` 等）を共有するため、wasm32 限定ではなく全ターゲットの依存にする
 # （Issue #936。`fandhe-device` は thiserror のみに依存が解決するため新規パッケージは
 # 増えない、下の wasm32 向けコメント参照）。同じ最適化レイヤ同士（本クレート ⇔
@@ -39,6 +39,8 @@ fandhe-cap-share-sheet = { path = "../fandhe-cap-share-sheet" }
 # Issue #1187: 電源状態の純関数（`percent_from_raw`）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の実装が cfg で外れる。
 fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast" }
 fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device" }
+# Issue #1303: ゲームコントローラの契約（`Gamepad`・`GamepadSnapshot`・`normalize_axis` 等）の正本。Web 実装の本体は本クレートに残す。
+fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad" }
 fandhe-cap-power-state = { path = "../fandhe-cap-power-state" }
 fandhe-cap-system-accent-color = { path = "../fandhe-cap-system-accent-color" }
 # Issue #1187: AR 表示の純関数・定数（`checked_reading`・`READ_INTERVAL` など）の正本。Web 実装の本体は本クレートに残す。
@@ -270,6 +272,11 @@ web-sys = { workspace = true, features = [
 [dev-dependencies]
 # png_data_url の往復テスト用（native テストのみ。lockfile 済みの版で新規パッケージは増えない）。
 image = { workspace = true }
+
+# Web App Manifest の基礎（名前・アイコン・start_url 等）。`cargo fandhe gen --os web` が、
+# アプリが選んだ機能の `web.manifest`（share-receive の share_target 等）を足して gen/web/ へ出す（#1238）。
+[package.metadata.fandhe-app.web]
+manifest = "web/manifest.webmanifest"
 
 [lints]
 workspace = true

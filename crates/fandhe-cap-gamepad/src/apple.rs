@@ -1,37 +1,37 @@
 //! iOS / macOS 向けゲームコントローラ実装（Issue #934、親 #932）。
-//! `device/gamepad.rs::platform_gamepad` の Apple 分岐（`any(target_os = "ios",
+//! `driver.rs::platform_gamepad` の Apple 分岐（`any(target_os = "ios",
 //! target_os = "macos")`）から呼ばれ、GameController.framework（`GCController`）
-//! 実装（`apple/fandhe_apple_gamepad.m`、`build.rs` が iOS・macOS 双方の
-//! feature `device` 有効時のみコンパイル・リンクする）を `unsafe extern "C"` 1 関数
+//! 実装（`apple/fandhe_apple_gamepad.m`、`build.rs` が iOS・macOS 双方で
+//! コンパイル・リンクする）を `unsafe extern "C"` 1 関数
 //! （[`AppleGamepad::read`]）で呼ぶ。`unsafe` はこの FFI 呼び出し 1 箇所に閉じ
 //! `// SAFETY:` で契約を明記する（`ios.rs::IosMotion`/`apple_location.rs::start` と
 //! 同型、`lib.rs` の iOS/macOS `deny(unsafe_code)` 緩和・coding-rust.md の FFI
 //! 例外規定準拠）。
 //!
-//! **pull 型**（push 通知ではない）: `device/windows_gamepad.rs::WindowsGamepad` と
+//! **pull 型**（push 通知ではない）: `device/windows.rs::WindowsGamepad` と
 //! 同じく状態を一切キャッシュせず、`read()` のたびに `.m` 側の現在値を読み直す
 //! （設計判断は `.m` ファイル冒頭コメント参照）。
 //!
 //! 軸・ボタンビットの対称性は `.m` ファイル冒頭コメントの表と同一。`.m` 側は
 //! OS の生値（y 上が正）をそのまま返し、符号反転・値域クランプ・NaN 置換は
 //! [`result_from_code`]（本ファイル）でのみ行う（テスト可能な側に責務を寄せる、
-//! `windows_gamepad.rs::reading_to_snapshot` と同じ配置）。
+//! `windows.rs::reading_to_snapshot` と同じ配置）。
 //!
-//! Apple 実装は `DeviceError::Unsupported` を返さない: iOS 17 / macOS 11 の両方で
+//! Apple 実装は `GamepadError::Unsupported("gamepad")` を返さない: iOS 17 / macOS 11 の両方で
 //! GameController.framework は常に存在するため（実装計画 §3.3）。
 //!
 //! 入力値（スティック値・ボタン名）をログへ出力しない（security.md A09）。
 
-use fandhe_device::gamepad::{
-    normalize_axis, normalize_trigger, Gamepad, GamepadSnapshot, BUTTON_A, BUTTON_B,
-    BUTTON_DPAD_DOWN, BUTTON_DPAD_LEFT, BUTTON_DPAD_RIGHT, BUTTON_DPAD_UP, BUTTON_LEFT_SHOULDER,
-    BUTTON_LEFT_STICK, BUTTON_MENU, BUTTON_RIGHT_SHOULDER, BUTTON_RIGHT_STICK, BUTTON_VIEW,
-    BUTTON_X, BUTTON_Y,
+use crate::contract::{
+    BUTTON_A, BUTTON_B, BUTTON_DPAD_DOWN, BUTTON_DPAD_LEFT, BUTTON_DPAD_RIGHT, BUTTON_DPAD_UP,
+    BUTTON_LEFT_SHOULDER, BUTTON_LEFT_STICK, BUTTON_MENU, BUTTON_RIGHT_SHOULDER,
+    BUTTON_RIGHT_STICK, BUTTON_VIEW, BUTTON_X, BUTTON_Y, Gamepad, GamepadSnapshot, normalize_axis,
+    normalize_trigger,
 };
-use fandhe_device::DeviceError;
+use crate::error::GamepadError;
 
 /// `.m` 側が既知ビットとして書きうる全ビットの OR 和。想定外の未定義ビットを
-/// AND で落とす（`fandhe_device::gamepad::pressed_labels` が未定義ビットを無視する
+/// AND で落とす（`crate::contract::pressed_labels` が未定義ビットを無視する
 /// のと同じ security.md A03 判断。OS から来る値を信頼境界の入力として扱う）。
 const KNOWN_BUTTONS_MASK: u16 = BUTTON_A
     | BUTTON_B
@@ -56,13 +56,13 @@ unsafe extern "C" {
     fn fandhe_apple_gamepad_read(out_axes: *mut f32, out_buttons: *mut u16) -> i32;
 }
 
-/// [`fandhe_device::gamepad::Gamepad`] の iOS / macOS 実装（`GCController` を
+/// [`crate::contract::Gamepad`] の iOS / macOS 実装（`GCController` を
 /// pull で読む、モジュール doc 参照）。状態を持たない（`WindowsGamepad` と同じ判断）。
 pub(crate) struct AppleGamepad;
 
 impl Gamepad for AppleGamepad {
     #[allow(unsafe_code)]
-    fn read(&self) -> Result<Option<GamepadSnapshot>, DeviceError> {
+    fn read(&self) -> Result<Option<GamepadSnapshot>, GamepadError> {
         let mut axes = [0.0f32; 6];
         let mut buttons: u16 = 0;
 
@@ -81,24 +81,24 @@ impl Gamepad for AppleGamepad {
     }
 }
 
-/// `.m` 側の戻りコードから [`fandhe_device::gamepad::Gamepad::read`] の契約
+/// `.m` 側の戻りコードから [`crate::contract::Gamepad::read`] の契約
 /// （3 分岐: 未接続 `Ok(None)` / 読み取り失敗 `Err(Internal)` / 接続中
 /// `Ok(Some(..))`）へ写す純関数（cfg 無しで全ターゲットからテストできる、
-/// `windows_gamepad.rs::reading_to_snapshot` と同じ切り出し方針）。
+/// `windows.rs::reading_to_snapshot` と同じ切り出し方針）。
 ///
 /// - `code == 0`: 接続中。`axes`/`buttons` は `.m` 側の生値。y 軸は画面座標系
-///   （y 下が正、`fandhe_device::gamepad` モジュール doc 参照）へ符号反転し、
+///   （y 下が正、`crate::contract` モジュール doc 参照）へ符号反転し、
 ///   `normalize_axis`/`normalize_trigger` で NaN 置換・クランプする。ボタンは
 ///   [`KNOWN_BUTTONS_MASK`] で未定義ビットを落とす。
 /// - `code == 1`: 使えるコントローラが未接続。`axes`/`buttons` の中身は一切見ない
 ///   （古い値・ゴミ値を接続中として漏らさない）。
 /// - それ以外（2 / 3 / 未知）: 偽の成功・偽の未接続を作らず `Err(Internal)` へ畳む
-///   （呼び出し元 `device/gamepad.rs::resolve_frame` は `DisconnectedAlt` 表示へ倒す）。
+///   （呼び出し元 `driver.rs::resolve_frame` は `DisconnectedAlt` 表示へ倒す）。
 fn result_from_code(
     code: i32,
     axes: [f32; 6],
     buttons: u16,
-) -> Result<Option<GamepadSnapshot>, DeviceError> {
+) -> Result<Option<GamepadSnapshot>, GamepadError> {
     match code {
         0 => Ok(Some(GamepadSnapshot {
             left_stick: (normalize_axis(axes[0]), normalize_axis(-axes[1])),
@@ -108,7 +108,7 @@ fn result_from_code(
             buttons: buttons & KNOWN_BUTTONS_MASK,
         })),
         1 => Ok(None),
-        _ => Err(DeviceError::Internal("gamepad read")),
+        _ => Err(GamepadError::Internal("gamepad read")),
     }
 }
 
@@ -127,7 +127,7 @@ mod tests {
     fn code_2_3_and_unknown_are_internal_error() {
         for code in [2, 3, -1, 99] {
             let result = result_from_code(code, [0.0; 6], 0);
-            assert!(matches!(result, Err(DeviceError::Internal("gamepad read"))));
+            assert!(matches!(result, Err(GamepadError::Internal(_))));
         }
     }
 

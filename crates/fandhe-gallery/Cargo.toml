@@ -31,6 +31,7 @@ device = [
   "dep:fandhe-cap-dynamic-type",
   "dep:fandhe-cap-file-watch",
   "dep:fandhe-cap-focus-mode-status",
+  "dep:fandhe-cap-gamepad",
   "dep:fandhe-cap-geocoding-search",
   "dep:fandhe-cap-haptics",
   "dep:fandhe-cap-home-widget",
@@ -128,6 +129,7 @@ fandhe-cap-drag-drop = { path = "../fandhe-cap-drag-drop", optional = true }
 fandhe-cap-dynamic-type = { path = "../fandhe-cap-dynamic-type", optional = true }
 fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch", optional = true }
 fandhe-cap-focus-mode-status = { path = "../fandhe-cap-focus-mode-status", optional = true }
+fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad", optional = true }
 fandhe-cap-geocoding-search = { path = "../fandhe-cap-geocoding-search", optional = true }
 fandhe-cap-haptics = { path = "../fandhe-cap-haptics", optional = true }
 fandhe-cap-home-widget = { path = "../fandhe-cap-home-widget", optional = true }

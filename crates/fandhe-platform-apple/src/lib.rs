@@ -10,9 +10,37 @@
 //! - [`app_group_id`]・`macos_app_group_dir`: 拡張を持つ機能（home-widget・quick-settings-tile）が共有する
 //!   App Group の ID / コンテナパスの組み立てと Team ID 検証。
 //!
-//! 起動経路（`ios_scene`・`ios_text_input`）は winit の補完であり、本 crate には置かない。
+//! - [`ios_scene_install`]（iOS）: UIScene 化シム `ios/fandhe_ios_scene.m` を有効にする（Issue #1292）。
+//!   Info.plist の `UIApplicationSceneManifest` が名指す `FandheSceneDelegate` はレンダラに依存せず、
+//!   外部ディスプレイ・URL・ショートカットの通知を受ける機能 crate が本 crate に依存するため、ここに置く。
+//!   winit が scene に対応（upstream #4723）したら削除する。
+//!
+//! `ios_text_input` は winit の補完でレンダラ固有のため、本 crate には置かない。
 
 #![deny(unsafe_code)]
+
+#[cfg(target_os = "ios")]
+#[allow(unsafe_code)]
+mod ios_scene {
+    unsafe extern "C" {
+        /// `ios/fandhe_ios_scene.m`（`build.rs` が iOS で常にコンパイル）が定義する引数なしの C 関数。
+        fn fandhe_ios_scene_install();
+    }
+
+    pub(super) fn install() {
+        // SAFETY: 引数・戻り値なしの C 関数。前提条件はなく、冪等で副作用は通知の購読登録だけ。
+        unsafe { fandhe_ios_scene_install() }
+    }
+}
+
+/// UIScene 化シムを有効にする。`FandheSceneDelegate` をリンクに残し、winit の window を scene へ付ける購読を登録する。
+///
+/// レンダラの起動関数（`fandhe_render_egui::launch::run_ios`）が `UIApplicationMain` より前に呼ぶ。
+/// 冪等。呼ばないと Info.plist の delegate が見つからず、画面が出ない。
+#[cfg(target_os = "ios")]
+pub fn ios_scene_install() {
+    ios_scene::install();
+}
 
 #[cfg(feature = "build")]
 pub mod build;

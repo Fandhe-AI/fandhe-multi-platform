@@ -74,7 +74,7 @@ use fandhe_runtime::CompletionSender;
 // `drop_session` はターゲット非依存（`device.rs` の doc 参照）なので、`DropEvent` は
 // iOS に限らず常に import する。[`drive_events`] 自体もホストの `cargo test` から
 // 常に呼べるようにするため（`drive` と同じ「ロジックはホストの `cargo test` で
-// 検証する」方針、`android_gamepad.rs` と同型）。
+// 検証する」方針、`fandhe-cap-gamepad` の `android.rs` と同型）。
 use crate::drop_session::{DropEvent, DroppedItem};
 
 /// 直近に読み取りスレッドへ渡した世代番号（codex 指摘 #1018 対応）。

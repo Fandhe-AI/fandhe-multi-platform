@@ -3,7 +3,7 @@
 //! `NSItemProvider` の読み込み完了ごとに別々のバックグラウンドスレッドから
 //! `fandhe_rust_drag_drop_item` を呼ぶため、「全アイテムの読み込みが揃うまで待つ」
 //! 「重複・古い世代の完了を無視する」の状態機械をここへ切り出し、
-//! `android_gamepad.rs::AndroidGamepadState` と同じく `cargo test` で検証できる形にする
+//! `fandhe-cap-gamepad` の `AndroidGamepadState` と同じく `cargo test` で検証できる形にする
 //! （FFI・ObjC を経由しないロジック本体）。
 //!
 //! # 判定と更新は同じロックの内側（契約表 2）
@@ -23,7 +23,7 @@
 //!
 //! iOS/Android 以外のターゲットでは本モジュールは `#[cfg(test)]` からのみ参照されるため、
 //! `dead_code` 誤検知を避けるためモジュール全体に `cfg_attr` で許可する
-//! （`android_gamepad.rs` と同じ判断）。
+//! （`fandhe-cap-gamepad` の `android.rs` と同じ判断）。
 //!
 //! # Android 経路（Issue #1016）
 //!

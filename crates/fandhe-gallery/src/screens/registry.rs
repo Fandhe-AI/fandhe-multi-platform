@@ -187,7 +187,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "gamepad_show" => fandhe_core::screens::gamepad_show::current_screen,
-    fandhe_egui_proxy::device::gamepad::gamepad_show_effect,
+    fandhe_cap_gamepad::gamepad_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "mic_record" => fandhe_core::screens::mic_record::current_screen,

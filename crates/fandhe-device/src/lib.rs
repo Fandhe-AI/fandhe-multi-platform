@@ -95,8 +95,6 @@ pub mod flashlight;
 pub mod foldable_posture;
 /// Phase 11（端末機能の拡充ループ、親 #1133、Issue #1312）: 全画面表示（システムバー非表示）。
 pub mod fullscreen_immersive;
-/// Phase 11（端末機能の拡充ループ、親 #932、Issue #933）: 継続 push 型のゲームコントローラ入力。
-pub mod gamepad;
 /// Phase 11（端末機能の拡充ループ）: location に乗せた Rust 側のジオフェンス判定。
 pub mod geofence;
 /// Phase 11（端末機能の拡充ループ、親 #150、Issue #766）: グローバルホットキー（固定の組み合わせ 1 つ）。

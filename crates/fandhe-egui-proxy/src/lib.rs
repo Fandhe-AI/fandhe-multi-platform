@@ -35,8 +35,8 @@
 //! macOS はプラットフォーム統合レイヤ（platforms/apple/）を持たず、この `unsafe` が
 //! 唯一の FFI 境界であるため、Android/iOS と同型の緩和で足りる。Issue #906 で `device/apple_biometric.rs`
 //! （`apple/fandhe_apple_biometric.m` の生体認証実装を呼ぶ）も同様に相乗りする。
-//! Issue #934 で `device/apple_gamepad.rs`（`apple/fandhe_apple_gamepad.m` の
-//! `GCController` 実装を呼ぶ）も同じ緩和へ相乗りした。
+//! Issue #934 の `apple_gamepad`（`GCController` 実装）も同じ緩和へ相乗りしていたが、
+//! 機能 crate `fandhe-cap-gamepad` へ移した（Issue #1303）。
 //!
 //! Windows も同じ理由により `deny` へ緩める（Issue #898 で共有シートが導入した緩和）。
 //! `unsafe` は呼び出し 1 関数に閉じ、`// SAFETY:` で HWND の生存根拠を明記する
@@ -129,9 +129,6 @@ pub mod tv_sample;
 pub mod frame_metrics;
 #[cfg(target_os = "ios")]
 pub mod ios;
-// Issue #27: UIScene 化シムのリンク用アンカー（`main` から呼ぶ）。
-#[cfg(target_os = "ios")]
-pub mod ios_scene;
 // Issue #795: `ios.rs::run` 専用の `TextInputApp` ラッパー（ソフトキーボードの
 // 文字入力ブリッジ）。`ios.rs` からのみ使う内部モジュールのため非公開にする。
 // FFI 境界（`TextInputApp` 本体・`#[no_mangle]` コールバック）は

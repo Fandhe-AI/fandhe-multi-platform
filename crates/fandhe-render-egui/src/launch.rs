@@ -127,11 +127,16 @@ where
 /// iOS で起動する。glow（glutin）は iOS 非対応のため wgpu の Metal に固定する。
 /// Vulkan / GL へ `wgpu` が誤ってフォールバックしないよう、許可するバックエンドを Metal だけにする。
 /// iOS はフルスクリーン前提のため、ウィンドウの大きさは指定しない。
+///
+/// 起動前に UIScene 化シムを有効にする。Info.plist の `UIApplicationSceneManifest` が名指す
+/// `FandheSceneDelegate` をリンクに残し、winit の window を scene へ付ける（Issue #1292）。
+/// 呼び出し元（gen の出力で組んだアプリを含む）が個別に呼ばなくてよいよう、起動関数の側に置く。
 #[cfg(target_os = "ios")]
 pub fn run_ios<F>(title: &str, build: F) -> Result<(), LaunchError>
 where
     F: FnOnce(&LaunchContext<'_>) -> Box<dyn EguiApp> + 'static,
 {
+    fandhe_platform_apple::ios_scene_install();
     let wgpu_setup = eframe::egui_wgpu::WgpuSetupCreateNew {
         instance_descriptor: eframe::wgpu::InstanceDescriptor {
             backends: eframe::wgpu::Backends::METAL,

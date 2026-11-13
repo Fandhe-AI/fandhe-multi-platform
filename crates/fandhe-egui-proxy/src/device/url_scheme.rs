@@ -2,7 +2,7 @@
 //! effect ドライバ。`fandhe_core::screens::url_scheme_show`（端末依存ゼロ）へ、
 //! `fandhe_device::url_scheme::UrlScheme` が持つ受信状態を注入する
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
-//! 呼ばれる契約、`device/gamepad.rs::drive` と同型）。
+//! 呼ばれる契約、`fandhe-cap-gamepad` の `drive` と同型）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。

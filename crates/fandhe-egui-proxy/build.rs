@@ -7,10 +7,10 @@
 //!
 //! - `CARGO_CFG_TARGET_OS` が `ios` / `macos` 以外（Windows・Linux・wasm32・Android）では即座に return する
 //!   no-op で、既存ビルドへの影響はない。
-//! - `ios/fandhe_ios_scene.m`（UIScene 化シム、Issue #27）は feature・計測ビルドに関係なく常にコンパイルする
-//!   （Info.plist の `UIApplicationSceneManifest` が参照するため）。`ios/fandhe_ios_text_input.m`
-//!   （Issue #795）は `src/ios_text_input.rs` が外れる計測ビルド（`cold-start-probe`・`frame-metrics`）では
-//!   コンパイルしない（Issue #19）。この 2 本は winit の補完で起動経路の責務のため、本 crate に残す。
+//! - UIScene 化シム（Issue #27）は `fandhe-platform-apple` へ移した（Issue #1292。レンダラ非依存のため）。
+//!   `ios/fandhe_ios_text_input.m`（Issue #795）は `src/ios_text_input.rs` が外れる計測ビルド
+//!   （`cold-start-probe`・`frame-metrics`）ではコンパイルしない（Issue #19）。winit の補完で起動経路の
+//!   責務のため、本 crate に残す。
 //! - それ以外の端末機能は feature `device`（既定 on）でのみコンパイルする。無効時は呼び出し元の
 //!   `src/device/*` がビルドされないため、リンクエラーを避けて素通りする。
 //! - framework は `.m` / Swift ごとに自己完結して宣言する（他の単位のリンクに頼らない）。
@@ -39,10 +39,6 @@ fn build() {
     if !target_is_ios() {
         return;
     }
-
-    // Issue #27: UIScene 化シム。Info.plist の `UIApplicationSceneManifest` はビルド種別に関係なく
-    // 1 つのため、計測ビルド・feature `device` 無効でも常にコンパイルする。
-    compile_objc("ios/fandhe_ios_scene.m", &["Foundation", "UIKit"]);
 
     // 計測専用ビルドでは `src/ios_text_input.rs`（`#[no_mangle]` の受け口）が `lib.rs` の
     // cfg で外れるため、呼び出し側の `.m` も同じ条件で外す（Issue #19）。
@@ -93,10 +89,6 @@ fn build() {
     // `apple/fandhe_apple_secure_credential.m`（Issue #922・#924）は macOS 分岐と
     // 共用する。
     compile_apple_secure_credential();
-
-    // `apple/fandhe_apple_gamepad.m`（Issue #934）は macOS 分岐と共用する
-    // 。
-    compile_apple_gamepad();
 
     // `apple/fandhe_apple_photo_library.m`（Issue #1254 macOS + #1255 iOS）も macOS 分岐と共用する。
     compile_apple_photo_library();
@@ -313,16 +305,6 @@ fn compile_apple_secure_credential() {
     compile_objc(
         "apple/fandhe_apple_secure_credential.m",
         &["Foundation", "Security"],
-    );
-}
-
-/// `apple/fandhe_apple_gamepad.m` を `cc` でコンパイルし GameController を
-/// リンクする（iOS・macOS 双方の feature `device` 分岐から呼ばれる共通処理、
-/// Issue #934）。
-fn compile_apple_gamepad() {
-    compile_objc(
-        "apple/fandhe_apple_gamepad.m",
-        &["Foundation", "GameController"],
     );
 }
 
@@ -1110,7 +1092,6 @@ fn build_macos() {
     compile_apple_biometric();
     compile_apple_contact_picker();
     compile_apple_secure_credential();
-    compile_apple_gamepad();
     compile_apple_photo_library();
     compile_apple_map_view();
     compile_apple_scanner_devices();

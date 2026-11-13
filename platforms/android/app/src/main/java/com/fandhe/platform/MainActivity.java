@@ -14,12 +14,11 @@
 // 重力センサ中継、Phase 11（Issue #859）のクリップボード中継、Phase 11（Issue #866）の
 // 読み上げ（TTS）中継、Phase 11（Issue #874）のファイル選択（SAF）中継、
 // Phase 11（Issue #890）の位置情報（`LocationManager`）中継、
-// Phase 11（Issue #935）のゲームコントローラ（`InputManager`/`dispatchKeyEvent`/
-// `dispatchGenericMotionEvent`）中継、Phase 11（Issue #1218）のカスタム URL scheme
+// Phase 11（Issue #1218）のカスタム URL scheme
 // （`fandhe://`、`onCreate` の `getIntent()` / `onNewIntent`）受信中継、
 // （いずれも feature `device` 切り離し時に削除）。
-// 機能 crate へ移した 5 機能（カメラ撮影・書類スキャン・NFC カードエミュレーション・ホーム画面ウィジェット・
-// 共有テキスト受信）の JNI 入口と Activity への参加は、各 crate の Java（static 入口と非公開 provider）が持つ
+// 機能 crate へ移した機能（カメラ撮影・書類スキャン・NFC カードエミュレーション・ホーム画面ウィジェット・
+// 共有テキスト受信・ゲームコントローラ）の JNI 入口と Activity への参加は、各 crate の Java（static 入口と非公開 provider）が持つ
 // ためここには無い（Issue #1257）。
 // window insets 中継の経緯（Issue #579: `AndroidApp::content_rect()` は GameActivity
 // 経路（android-activity 0.6.1、Pixel 10a / Android 16 実機）で insets を反映せず常に
@@ -59,7 +58,6 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.hardware.input.InputManager;
 import android.icu.text.BreakIterator;
 import android.location.Location;
 import android.location.LocationListener;
@@ -89,8 +87,6 @@ import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.view.DragAndDropPermissions;
 import android.view.DragEvent;
-import android.view.InputDevice;
-import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
@@ -152,42 +148,6 @@ public class MainActivity extends GameActivity {
     // （SensorEvent#values[0]/[1]、m/s^2）。rotation: 呼び出し時点の画面回転
     // （Surface.ROTATION_*）。Rust 側 `gravity_to_tilt` が画面座標の傾きへ写像する。
     private static native void nativeOnMotionChanged(float x, float y, int rotation);
-
-    // Rust 側（crates/fandhe-egui-proxy/src/device/android_gamepad.rs）の JNI
-    // エクスポート関数 5 本（Issue #935、Phase 11 型サンプル「ゲームコントローラ」の
-    // Android 経路に限り追加。Phase 8 の feature `device` 切り離し時に削除する）。
-    // `reportGamepadPresence()` が `InputDevice.getDeviceIds()` を再走査した結果を
-    // begin → (見つかった deviceId ごとに) scanId → end の 3 段で通知する。1 台の
-    // 物理コントローラがボタン用・ジョイスティック用の 2 つの deviceId に分かれて見える
-    // 機種（split pad、Joy-Con 等）は Android 上で別々の InputDevice として扱われ、
-    // 公開 API に再結合の手段が無いため束ねない（`getControllerNumber()` は機器ごとに
-    // 固有の番号で、片割れ間の共通識別には使えない）。Rust 側の状態機械
-    // （`AndroidGamepadState`）は走査で見つかった先頭 1 台のみを追跡する
-    // （codex-review 指摘 P0/P1、PR #939 で束ね機能を撤去）。
-    private static native void nativeOnGamepadPresenceScanBegin();
-    private static native void nativeOnGamepadPresenceScanId(int deviceId);
-    private static native void nativeOnGamepadPresenceScanEnd();
-    // `dispatchGenericMotionEvent` の最新サンプル（x/y/z/rz はスティック軸、
-    // leftTrigger/rightTrigger はトリガ軸、hatX/hatY は十字キー軸、flat* は各軸の
-    // `MotionRange#getFlat()`）を Rust 側デッドゾーン処理へそのまま渡す。
-    private static native void nativeOnGamepadMotion(
-            int deviceId,
-            int source,
-            float x,
-            float y,
-            float z,
-            float rz,
-            float leftTrigger,
-            float rightTrigger,
-            float hatX,
-            float hatY,
-            float flatX,
-            float flatY,
-            float flatZ,
-            float flatRz);
-    // `dispatchKeyEvent` の DOWN/UP（keyCode は `KeyEvent.KEYCODE_BUTTON_*`/
-    // `KEYCODE_DPAD_*`）。
-    private static native void nativeOnGamepadKey(int deviceId, int source, int keyCode, boolean down);
 
     // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
     // （Issue #859、Phase 11 型サンプル「クリップボード」の Android 経路に限り追加。
@@ -1591,59 +1551,6 @@ public class MainActivity extends GameActivity {
         }
     };
 
-    // ゲームコントローラの接続監視（Issue #935）。Android には軸の現在値を問い合わせる
-    // API が無い（イベント駆動のみ）ため、`InputDevice.getDeviceIds()` を都度再走査して
-    // 「先頭のゲームパッドの deviceId、または無し」を通知する（レベルトリガ、
-    // #935 実装計画 §2.3）。`registerInputDeviceListener`/`unregisterInputDeviceListener`
-    // は onResume/onPause で対にする（motionListener と同じ作法）。
-    private InputManager inputManager;
-
-    private final InputManager.InputDeviceListener gamepadDeviceListener =
-            new InputManager.InputDeviceListener() {
-                @Override
-                public void onInputDeviceAdded(int deviceId) {
-                    reportGamepadPresence();
-                }
-
-                @Override
-                public void onInputDeviceRemoved(int deviceId) {
-                    reportGamepadPresence();
-                }
-
-                @Override
-                public void onInputDeviceChanged(int deviceId) {
-                    reportGamepadPresence();
-                }
-            };
-
-    // 接続中のゲームパッド／ジョイスティック（`isVirtual()` を除く）を漏れなく Rust 側へ
-    // 通知する。見つかった deviceId を scanId で 1 件ずつ通知し、Rust 側
-    // （`AndroidGamepadState::presence_scan_end`）が先頭 1 台のみを追跡対象として
-    // 採用する。1 台の物理コントローラが複数 deviceId に分かれて見える機種
-    // （split pad、Joy-Con 等）は Android 上で別々の InputDevice として扱われ、
-    // 公開 API に再結合の手段が無いため束ねず、片側のみが操作対象になる
-    // （codex-review 指摘 P0/P1、PR #939 で束ね機能を撤去）。
-    // `onResume`・`gamepadDeviceListener` の added/removed/changed から呼ばれる。
-    private void reportGamepadPresence() {
-        if (inputManager == null) {
-            return;
-        }
-        nativeOnGamepadPresenceScanBegin();
-        for (int deviceId : inputManager.getInputDeviceIds()) {
-            InputDevice device = inputManager.getInputDevice(deviceId);
-            if (device == null || device.isVirtual()) {
-                continue;
-            }
-            int sources = device.getSources();
-            boolean isGamepad = (sources & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD;
-            boolean isJoystick = (sources & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
-            if (isGamepad || isJoystick) {
-                nativeOnGamepadPresenceScanId(deviceId);
-            }
-        }
-        nativeOnGamepadPresenceScanEnd();
-    }
-
     // 読み上げ（TTS、Issue #866）。`TextToSpeech` は最初の要求で遅延生成し（`onCreate`
     // では作らない。読み上げを 1 度も使わない画面ではエンジン起動コストを払わない）、
     // `OnInitListener` による非同期初期化の完了まで要求を 1 件だけ保留する
@@ -2010,7 +1917,6 @@ public class MainActivity extends GameActivity {
         }
 
         locationManager = getSystemService(LocationManager.class);
-        inputManager = getSystemService(InputManager.class);
 
         // ファイル選択（Issue #874）は `filePickRequest` を Bundle へ保存・復元
         // しない（案 B の決定事項）。`filePickRequest` は static のため Activity
@@ -2328,13 +2234,6 @@ public class MainActivity extends GameActivity {
             sensorManager.registerListener(
                     motionListener, motionSensor, SensorManager.SENSOR_DELAY_GAME);
         }
-        // ゲームコントローラの接続監視（Issue #935）。登録＋現在の接続状況を都度再走査
-        // する（onPause で解除済みのため、フォアグラウンド復帰のたびに要る。motionListener
-        // と同型の対）。
-        if (inputManager != null) {
-            inputManager.registerInputDeviceListener(gamepadDeviceListener, null);
-            reportGamepadPresence();
-        }
         // 測位継続の意思（Issue #890）があり、かつ権限が既にあるなら再登録する
         // （`onPause` で解除済みのため、フォアグラウンド復帰のたびに要る。傾き（#831）
         // の motionListener と同型の対）。権限が無ければここでは要求しない
@@ -2428,13 +2327,6 @@ public class MainActivity extends GameActivity {
         if (sensorManager != null) {
             sensorManager.unregisterListener(motionListener);
         }
-        // バックグラウンド中の key up/切断の取りこぼしで「接続中」が張り付かないよう、
-        // 登録解除に加えて明示的に「無し」を通知する（Issue #935、#935 実装計画 §2.3）。
-        if (inputManager != null) {
-            inputManager.unregisterInputDeviceListener(gamepadDeviceListener);
-            nativeOnGamepadPresenceScanBegin();
-            nativeOnGamepadPresenceScanEnd();
-        }
         // 「使用中のみ」の権限のため、バックグラウンドでは測位しない（Issue #890）。
         if (locationManager != null) {
             locationManager.removeUpdates(locationListener);
@@ -2471,80 +2363,6 @@ public class MainActivity extends GameActivity {
     public boolean dispatchTouchEvent(MotionEvent event) {
         penStylusHelper.onTouch(event);
         return super.dispatchTouchEvent(event);
-    }
-
-    // ゲームコントローラのスティック・トリガ・十字キー軸の中継（Issue #935）。
-    // 【契約】イベントは一切消費しない: `return super.dispatchGenericMotionEvent(event)`
-    // の戻り値をそのまま返すことで、TV フォーカス（#280）のリモコン十字キー
-    // （`KEYCODE_DPAD_*`、`dispatchKeyEvent` 経由）を含む既存の入力経路
-    // （GameActivity → winit → `egui::Key::Arrow*`）を一切変えない
-    // （#935 実装計画 §2.2、ソース判定は誤検出の防御でしかなく、消費しない設計自体が
-    // #280 を構造的に守る）。最新サンプルのみを渡す（履歴サンプルは読まない）。
-    @Override
-    public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        int source = event.getSource();
-        boolean isJoystick = (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
-        if (isJoystick && event.getAction() == MotionEvent.ACTION_MOVE) {
-            InputDevice device = event.getDevice();
-            nativeOnGamepadMotion(
-                    event.getDeviceId(),
-                    source,
-                    event.getAxisValue(MotionEvent.AXIS_X),
-                    event.getAxisValue(MotionEvent.AXIS_Y),
-                    event.getAxisValue(MotionEvent.AXIS_Z),
-                    event.getAxisValue(MotionEvent.AXIS_RZ),
-                    Math.max(
-                            event.getAxisValue(MotionEvent.AXIS_LTRIGGER),
-                            event.getAxisValue(MotionEvent.AXIS_BRAKE)),
-                    Math.max(
-                            event.getAxisValue(MotionEvent.AXIS_RTRIGGER),
-                            event.getAxisValue(MotionEvent.AXIS_GAS)),
-                    event.getAxisValue(MotionEvent.AXIS_HAT_X),
-                    event.getAxisValue(MotionEvent.AXIS_HAT_Y),
-                    axisFlat(device, source, MotionEvent.AXIS_X),
-                    axisFlat(device, source, MotionEvent.AXIS_Y),
-                    axisFlat(device, source, MotionEvent.AXIS_Z),
-                    axisFlat(device, source, MotionEvent.AXIS_RZ));
-        }
-        return super.dispatchGenericMotionEvent(event);
-    }
-
-    // `InputDevice.getMotionRange(axis, source)` のデッドゾーン幅（`range` が無ければ
-    // 0、Rust 側 `apply_flat` が NaN/負値と同様に安全側へ倒す）。
-    private static float axisFlat(InputDevice device, int source, int axis) {
-        if (device == null) {
-            return 0f;
-        }
-        InputDevice.MotionRange range = device.getMotionRange(axis, source);
-        return range == null ? 0f : range.getFlat();
-    }
-
-    // ゲームコントローラのボタン押下/解放の中継（Issue #935）。
-    // 【契約】`dispatchGenericMotionEvent` と同じくイベントを一切消費しない
-    // （`return super.dispatchKeyEvent(event)` の戻り値をそのまま返す）。ソース前段
-    // フィルタ（GAMEPAD/JOYSTICK のみ）は、物理キーボードの打鍵（パスワード等）を
-    // ゲームパッド経路へ誤って流さないための防御であり、消費しない設計自体が #280
-    // を守っている点は上記と同じ。
-    // HAT 軸を持たず十字キーを SOURCE_DPAD（KEYBOARD ビット無し）の KeyEvent でのみ
-    // 通知する機種があるため、SOURCE_DPAD かつ SOURCE_KEYBOARD を含まない場合も
-    // ゲームパッド経路へ通す（TV リモコンは SOURCE_KEYBOARD | SOURCE_DPAD で来る
-    // ため誤って混ざらない、codex-review 指摘 PR #939）。
-    @Override
-    public boolean dispatchKeyEvent(KeyEvent event) {
-        int source = event.getSource();
-        boolean isGamepad = (source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD;
-        boolean isJoystick = (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
-        boolean isDpadOnly =
-                (source & InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD
-                        && (source & InputDevice.SOURCE_KEYBOARD) != InputDevice.SOURCE_KEYBOARD;
-        if (isGamepad || isJoystick || isDpadOnly) {
-            int action = event.getAction();
-            if (action == KeyEvent.ACTION_DOWN || action == KeyEvent.ACTION_UP) {
-                nativeOnGamepadKey(
-                        event.getDeviceId(), source, event.getKeyCode(), action == KeyEvent.ACTION_DOWN);
-            }
-        }
-        return super.dispatchKeyEvent(event);
     }
 
     // Rust 側（`device/android.rs` の `AndroidClipboard::request`）から JNI 経由で呼ばれる

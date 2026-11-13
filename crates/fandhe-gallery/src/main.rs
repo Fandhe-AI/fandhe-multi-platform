@@ -270,8 +270,7 @@ fn main() {
 
 #[cfg(target_os = "ios")]
 fn main() -> Result<(), fandhe_render_egui::LaunchError> {
-    // Issue #27: UIScene 化シム（`ios/fandhe_ios_scene.m`）をリンクに残す。本番・計測の全経路をここで覆う。
-    fandhe_egui_proxy::ios_scene::install();
+    // UIScene 化シム（`fandhe-platform-apple` の `ios/fandhe_ios_scene.m`）は `run_ios` が起動前に有効にする。
 
     // Issue #1045: `BGTaskScheduler` の launch handler は起動完了前（main thread・
     // `UIApplicationMain` 呼び出し前）に登録する契約（Apple ドキュメント要件、
@@ -294,7 +293,7 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
 
     // Issue #561: OS の検索から開かれたときの受信も `UIApplicationMain` より前に登録する。
     // 未起動からの起動は `willConnectToSession` にだけ届くため、observer が後だと取りこぼす
-    // （`apple/fandhe_apple_spotlight_index.m`・`ios/fandhe_ios_scene.m` 参照）。
+    // （`apple/fandhe_apple_spotlight_index.m`・`fandhe-platform-apple` の `ios/fandhe_ios_scene.m` 参照）。
     #[cfg(feature = "device")]
     fandhe_egui_proxy::device::apple_spotlight_index::register();
 

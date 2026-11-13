@@ -22,7 +22,21 @@ pub struct Declaration {
     pub macos: Option<Apple>,
     pub android: Option<Android>,
     pub windows: Option<Windows>,
+    pub web: Option<Web>,
 }
+
+/// Web の欄。生成物は Web App Manifest（`cargo fandhe gen --os web`、#1238）。
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct Web {
+    /// manifest のメンバー（名前 → 値）。書けるメンバーは [`WEB_MANIFEST_MEMBERS`] だけ。
+    #[serde(default)]
+    pub manifest: Map<String, Value>,
+}
+
+/// 機能の宣言が書ける manifest のメンバー。`start_url`・`scope`・`name`・`icons` などアプリの同一性に
+/// 関わる値を、依存 crate が書き換えられないよう許可リストにする（security.md A05・A08）。
+pub const WEB_MANIFEST_MEMBERS: &[&str] = &["share_target"];
 
 /// iOS / macOS 共通の欄。
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -397,6 +411,24 @@ pub fn validate(d: &Declaration) -> Vec<Problem> {
     }
     if let Some(a) = &d.android {
         validate_android(&mut c, a);
+    }
+    if let Some(w) = &d.web {
+        for (k, v) in &w.manifest {
+            let field = format!("web.manifest.{k}");
+            c.check(
+                WEB_MANIFEST_MEMBERS.contains(&k.as_str()),
+                &field,
+                format!(
+                    "機能の宣言が書ける manifest のメンバーは {WEB_MANIFEST_MEMBERS:?} だけです"
+                ),
+            );
+            c.check(v.is_object(), &field, "オブジェクトにしてください");
+            c.check(
+                no_ctrl(k) && json_no_ctrl(v),
+                &field,
+                "制御文字は使えません",
+            );
+        }
     }
     c.0
 }

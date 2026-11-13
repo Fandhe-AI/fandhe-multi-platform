@@ -56,7 +56,7 @@ pub mod android_audio_session;
 pub mod android_background_download;
 /// Issue #1046: Android 向けバックグラウンド処理実装（`WorkManager`/
 /// `OneTimeWorkRequest` を呼ぶ Java 側 `MainActivity` の JNI 受け口）。状態変換の
-/// 純関数はホストでテストできるよう cfg を付けない（`android_gamepad.rs` と同じ
+/// 純関数はホストでテストできるよう cfg を付けない（`fandhe-cap-gamepad` の `android.rs` と同じ
 /// 判断）。`device/background_task.rs` の Android 経路から使われる。
 pub mod android_background_task;
 /// Issue #835（骨格）/ #837（実装）: Android 向けバックグラウンド送信実装。
@@ -155,12 +155,6 @@ pub mod android_foldable_posture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_fullscreen_immersive;
-/// Issue #935: Android 向けゲームコントローラ実装（`InputDevice`/`MotionEvent`/`KeyEvent`
-/// を橋渡しする Java 側 `MainActivity` の JNI 受け口）。状態機械本体はターゲット非依存
-/// （ホストの `cargo test` で検証、モジュール doc 参照）だが、`Gamepad` トレイト実装・
-/// JNI エクスポートは Android ターゲットのみでコンパイルされる（モジュール自体の cfg は
-/// 付けない。`device/tilt.rs` と同じ判断）。`device/gamepad.rs` の Android 経路から使われる。
-pub mod android_gamepad;
 /// Issue #1099: Android 向けヘルスデータ（今日の歩数）の骨格（#1100 が Health Connect 実装に
 /// 置き換える）。`device/health_data.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -398,11 +392,6 @@ pub mod apple_file_association;
 /// 呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_file_preview;
-/// Issue #934: iOS / macOS 共通のゲームコントローラ実装（`apple/
-/// fandhe_apple_gamepad.m` を呼ぶ C ABI ラッパー）。`device/gamepad.rs` の
-/// Apple cfg 分岐から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_gamepad;
 /// Issue #975 macOS・#976 iOS: 端末内での画像生成実装（`apple/fandhe_apple_image_generation.swift` を
 /// 呼ぶ C ABI ラッパー）。`device/image_generation.rs` の macOS 経路と、iOS 経路から呼ばれる。
 /// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
@@ -622,9 +611,6 @@ pub mod foldable_posture;
 /// eframe の viewport コマンド、iOS/Android は OS 別モジュール、他 OS は
 /// `UnsupportedFullscreen` 固定。Web は `fandhe-web-dom`）。
 pub mod fullscreen_immersive;
-/// Phase 11 の拡充ループ（親 #932、Issue #933・#934・#935）: ゲームコントローラの effect
-/// ドライバ（Windows / iOS / macOS / Android 実装）。
-pub mod gamepad;
 /// Phase 11 の拡充ループ（親 #1056、Issue #1057）: ジオフェンスの effect ドライバ
 /// （location の継続取得に乗せて `GeofenceTracker` で判定する）。
 pub mod geofence;
@@ -1347,10 +1333,6 @@ pub mod windows_file_preview;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_flashlight;
-/// Issue #933: Windows 向けゲームコントローラ実装（WinRT `Windows.Gaming.Input.Gamepad`
-/// ラッパー）。`device/gamepad.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_gamepad;
 /// Issue #766: Windows 向けグローバルホットキーの骨格（実装は #767）。
 /// `device/global_hotkey.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
 #[cfg(any(target_os = "windows", test))]

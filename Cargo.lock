@@ -1237,6 +1237,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-gamepad"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-geocoding-search"
 version = "0.2.0"
 dependencies = [
@@ -1686,6 +1698,7 @@ dependencies = [
  "egui",
  "egui_kittest",
  "fandhe-cap-drag-drop",
+ "fandhe-cap-gamepad",
  "fandhe-cap-media-cast",
  "fandhe-cap-midi",
  "fandhe-cap-serial-port",
@@ -1741,6 +1754,7 @@ dependencies = [
  "fandhe-cap-dynamic-type",
  "fandhe-cap-file-watch",
  "fandhe-cap-focus-mode-status",
+ "fandhe-cap-gamepad",
  "fandhe-cap-geocoding-search",
  "fandhe-cap-haptics",
  "fandhe-cap-home-widget",
@@ -1833,6 +1847,7 @@ dependencies = [
  "egui_kittest",
  "fandhe-core",
  "fandhe-fonts",
+ "fandhe-platform-apple",
  "fandhe-runtime",
  "image",
  "ordered-float",
@@ -1873,6 +1888,7 @@ dependencies = [
  "fandhe-cap-audio-devices",
  "fandhe-cap-dynamic-type",
  "fandhe-cap-file-watch",
+ "fandhe-cap-gamepad",
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",
  "fandhe-cap-media-cast",
