@@ -174,30 +174,22 @@ impl Bridge {
     }
 
     /// 発送済み（OS 呼び出し中、または結果が画面へ未反映）の要求があるか。
+    #[cfg(test)]
     fn has_pending(&self) -> bool {
         self.lock().is_some() || self.slot.snapshot().is_some()
     }
 
-    /// 新しい要求を登録して id を返す。OS へ渡す前に呼び、即時の完了も照合できるようにする。
-    fn begin(&self) -> u64 {
-        let mut active = self.lock();
-        let request_id = self.slot.begin();
-        self.screen.adopt(request_id);
-        *active = Some(Active {
-            request_id,
-            started: Instant::now(),
-            presenting: false,
-        });
-        request_id
-    }
-
-    /// 進行中の要求（画面用・公開入口のどちらも）が無いときだけ登録して id を返す。判定と登録は同じロックで行う。
-    fn begin_exclusive(&self) -> Option<u64> {
+    /// 進行中の要求（画面用・公開入口のどちらも）が無いときだけ登録して id を返す。判定・登録・`screen.adopt`
+    /// は同じロックで行い、別スレッドの登録を置き換えない。`for_screen` が真なら画面ドライバの要求として覚える。
+    fn begin_exclusive(&self, for_screen: bool) -> Option<u64> {
         let mut active = self.lock();
         if active.is_some() || self.slot.snapshot().is_some() {
             return None;
         }
         let request_id = self.slot.begin();
+        if for_screen {
+            self.screen.adopt(request_id);
+        }
         *active = Some(Active {
             request_id,
             started: Instant::now(),
@@ -288,7 +280,7 @@ impl Bridge {
     fn reset(&self) {
         let mut active = self.lock();
         *active = None;
-        self.screen.release(self.screen.current());
+        // 画面の印は残す。`poll_and_finish_owned` が失われた要求として画面を確定して外す。
         self.slot.reset();
     }
 }
@@ -341,12 +333,22 @@ fn to_core_failure(f: DocumentScanFailure) -> CoreFailure {
     }
 }
 
-/// 要求を登録して OS へ渡す。同期失敗はその場で確定する。
-fn start_request(bridge: &Bridge, imp: &dyn DocumentScanner) {
-    let request_id = bridge.begin();
+/// 要求を登録して OS へ渡す。先行の要求があれば `false`（何もしない）。同期失敗はその場で確定する。
+fn start_request(
+    bridge: &Bridge,
+    imp: &dyn DocumentScanner,
+    sender: &CompletionSender<DocumentScanShowState>,
+) -> bool {
+    let Some(request_id) = bridge.begin_exclusive(true) else {
+        return false;
+    };
+    // 前回の画素を先に解放する（失敗・キャンセルの横に前の画像を残さない）。
+    image_store::clear();
+    let _ = sender.send(Box::new(mark_running));
     if let Err(f) = imp.scan(request_id) {
         bridge.complete_from_os(request_id, Err(f));
     }
+    true
 }
 
 /// 状態型に依存しない入口で受け取るスキャン結果。
@@ -370,7 +372,7 @@ pub enum ScanResult {
 pub fn start_scan() -> Option<u64> {
     static IMPL: OnceLock<Arc<dyn DocumentScanner>> = OnceLock::new();
     let b = bridge();
-    let request_id = b.begin_exclusive()?;
+    let request_id = b.begin_exclusive(false)?;
     if let Err(f) = IMPL.get_or_init(platform_document_scan).scan(request_id) {
         b.complete_from_os(request_id, Err(f));
     }
@@ -409,13 +411,9 @@ fn drive(
 ) {
     if take_request(state).is_some() {
         // 保留ありは発送済み（`mark_running` の適用待ち）。二重に発送しない。
-        if bridge.has_pending() {
+        if !start_request(bridge, &**imp, sender) {
             return;
         }
-        // 前回の画素を先に解放する（失敗・キャンセルの横に前の画像を残さない）。
-        image_store::clear();
-        let _ = sender.send(Box::new(mark_running));
-        start_request(bridge, &**imp);
         sender.request_repaint_after(POLL_INTERVAL);
         return;
     }
@@ -666,13 +664,13 @@ mod tests {
     #[test]
     fn begin_exclusive_refuses_while_pending() {
         let b = Bridge::new(Duration::from_secs(10));
-        let id = b.begin_exclusive().unwrap();
-        assert!(b.begin_exclusive().is_none());
+        let id = b.begin_exclusive(false).unwrap();
+        assert!(b.begin_exclusive(false).is_none());
         b.complete_from_os(id, Err(DocumentScanFailure::Unsupported));
         // 結果が未取得のうちも受け付けない。
-        assert!(b.begin_exclusive().is_none());
+        assert!(b.begin_exclusive(false).is_none());
         b.slot.clear(id);
-        assert!(b.begin_exclusive().is_some());
+        assert!(b.begin_exclusive(false).is_some());
     }
 
     #[test]
@@ -685,7 +683,7 @@ mod tests {
         request_scan(&mut state);
         state.phase = Phase::Running;
         // 画面の要求ではない公開入口の要求が slot にある。
-        let id = bridge.begin_exclusive().unwrap();
+        let id = bridge.begin_exclusive(false).unwrap();
         bridge.complete_from_os(id, Err(DocumentScanFailure::Unsupported));
         drive(&state, &sender, &imp, bridge);
         while let Ok(c) = rx.try_recv() {
@@ -811,7 +809,7 @@ mod tests {
     #[test]
     fn present_attempt_after_deadline_times_out_atomically() {
         let bridge = new_bridge(Duration::from_millis(10));
-        let id = bridge.begin();
+        let id = bridge.begin_exclusive(false).unwrap();
         std::thread::sleep(Duration::from_millis(30));
         assert!(!bridge.try_begin_present(id));
         let timed_out = |b: &Bridge| {
@@ -835,7 +833,7 @@ mod tests {
     #[test]
     fn stale_request_id_is_dropped_and_duplicates_first_wins() {
         let bridge = new_bridge(LONG);
-        let id = bridge.begin();
+        let id = bridge.begin_exclusive(false).unwrap();
         assert!(bridge.try_begin_present(id));
         bridge.complete_from_os(id + 1, Err(DocumentScanFailure::Empty));
         assert!(matches!(bridge.slot.snapshot(), Some((i, None)) if i == id));
@@ -846,7 +844,7 @@ mod tests {
             Some((i, Some(Ok(CoreScan::Cancelled)))) if i == id
         ));
         bridge.reset();
-        let id2 = bridge.begin();
+        let id2 = bridge.begin_exclusive(false).unwrap();
         assert!(bridge.try_begin_present(id2));
         assert!(!bridge.try_begin_present(id2));
     }
