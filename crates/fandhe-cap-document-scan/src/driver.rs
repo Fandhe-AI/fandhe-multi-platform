@@ -280,8 +280,16 @@ impl Bridge {
     fn reset(&self) {
         let mut active = self.lock();
         *active = None;
-        // 画面の印は残す。`poll_and_finish_owned` が失われた要求として画面を確定して外す。
-        self.slot.reset();
+        // 公開入口の要求は消さず、未着なら `Interrupted` を確定して `poll_scan` で一度受け取れるようにする
+        // （消すと以後ずっと `None` で、利用者が要求の消失を区別できない）。届いて未取得の結果もそのまま残す。
+        match self.slot.snapshot() {
+            Some((id, None)) if id != self.screen.current() => {
+                self.slot.deliver(id, Err(DocumentScanFailure::Interrupted));
+            }
+            Some((id, Some(_))) if id != self.screen.current() => {}
+            // 画面の印は残す。`poll_and_finish_owned` が失われた要求として画面を確定して外す。
+            _ => self.slot.reset(),
+        }
     }
 }
 
@@ -384,13 +392,7 @@ pub fn start_scan() -> Option<u64> {
 pub fn poll_scan(request_id: u64) -> Option<Result<ScanResult, DocumentScanFailure>> {
     let b = bridge();
     b.expire_if_due();
-    let (id, Some(outcome)) = b.slot.snapshot()? else {
-        return None;
-    };
-    if id != request_id {
-        return None;
-    }
-    b.slot.clear(id);
+    let outcome = b.slot.take_ready(request_id)?;
     Some(outcome.map(|o| match o {
         CoreScan::Cancelled => ScanResult::Cancelled,
         CoreScan::Scanned(s) => ScanResult::Scanned {
@@ -843,7 +845,9 @@ mod tests {
             bridge.slot.snapshot(),
             Some((i, Some(Ok(CoreScan::Cancelled)))) if i == id
         ));
+        // 届いて未取得の公開要求の結果は reset でも残る。取り出してから次を始める。
         bridge.reset();
+        assert!(bridge.slot.take_ready(id).is_some());
         let id2 = bridge.begin_exclusive(false).unwrap();
         assert!(bridge.try_begin_present(id2));
         assert!(!bridge.try_begin_present(id2));
@@ -948,5 +952,15 @@ mod tests {
         while rx.try_recv().is_ok() {}
         drive(&fresh, &sender, &imp, bridge);
         assert_eq!(f.calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn reset_reports_interrupted_to_public_request_once() {
+        let bridge = new_bridge(LONG);
+        let id = bridge.begin_exclusive(false).unwrap();
+        bridge.reset();
+        let out = bridge.slot.take_ready(id);
+        assert!(matches!(out, Some(Err(DocumentScanFailure::Interrupted))));
+        assert!(bridge.slot.take_ready(id).is_none());
     }
 }

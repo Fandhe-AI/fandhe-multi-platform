@@ -111,6 +111,19 @@ impl<O> RequestSlot<O> {
             .map(|p| (p.request_id, p.ready.clone()))
     }
 
+    /// `request_id` が現在の要求で結果が届いていれば、照合と取り出しと消去を同じロックで行って結果を返す。
+    /// 同じ id を複数スレッドが呼んでも、取り出せるのは 1 つだけ（`snapshot` + `clear` の 2 段では両方が取れてしまう）。
+    pub fn take_ready(&self, request_id: u64) -> Option<O> {
+        let mut pending = self.lock();
+        if pending
+            .as_ref()
+            .is_some_and(|p| p.request_id == request_id && p.ready.is_some())
+        {
+            return pending.take().and_then(|p| p.ready);
+        }
+        None
+    }
+
     /// 完了クロージャが画面へ反映できたときだけ呼ぶ。`request_id` が現在の要求と
     /// 一致するときのみ消す。
     pub fn clear(&self, request_id: u64) {
