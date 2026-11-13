@@ -29,7 +29,7 @@ import java.util.concurrent.Executors;
 // 動画の撮影（Issue #823、親 #169）の Android 実装ヘルパー。Activity の生成・破棄は `VideoCaptureLifecycle`
 // （非公開 ContentProvider、`FeatureLifecycleProvider` 継承）が `attach` / `detach` で知らせる。
 // Activity ごとの helper は `HELPERS` に持つ（JNI スレッドと UI スレッドの両方から触るので同期化し、
-// Activity が GC されれば項目も消える）。helper が無い要求は `capture` が false を返し、Rust が失敗で確定する。
+// 値の helper が Activity を強参照するので、`detach` の明示 remove で解放する）。helper が無い要求は `capture` が false を返し、Rust が失敗で確定する。
 // Rust の `fandhe_cap_video_capture` の `android.rs` が `capture` を JNI（static）で呼び、
 // 表示の直前に `nativeTryBeginPresent`、結果を `nativeOnVideoCaptureResult` で返す。
 // 契約の SSOT は `fandhe_cap_video_capture` の `contract`（結果コード表 `result_from_code`）。

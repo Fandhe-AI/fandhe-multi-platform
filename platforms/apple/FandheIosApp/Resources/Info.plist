@@ -58,7 +58,7 @@
   （`FANDHE_PROXY_APP=document_scan_show`、
   `crates/fandhe-egui-proxy/ios/fandhe_ios_document_scan.m`）と「動画の撮影」画面
   （`FANDHE_PROXY_APP=video_capture_show`、
-  `crates/fandhe-egui-proxy/ios/fandhe_ios_video_capture.m`）が `UIImagePickerController`
+  `crates/fandhe-cap-video-capture/ios/fandhe_ios_video_capture.m`）が `UIImagePickerController`
   （`crates/fandhe-egui-proxy/ios/fandhe_ios_camera.m`）でカメラを起動するために
   必須（未設定だと初回起動時に即クラッシュする）。「カメラのライブ映像」画面
   （`FANDHE_PROXY_APP=camera_preview_stream_show`、Issue #813、

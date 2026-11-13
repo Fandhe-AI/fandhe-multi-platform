@@ -39,7 +39,7 @@ usage-descriptions = ["NSCameraUsageDescription", "NSMicrophoneUsageDescription"
 frameworks = ["AVFoundation", "CoreMedia", "UniformTypeIdentifiers"]
 
 [package.metadata.fandhe.macos]
-usage-descriptions = ["NSCameraUsageDescription", "NSMicrophoneUsageDescription"]
+usage-descriptions = ["NSCameraUsageDescription"]
 frameworks = ["AVFoundation", "AppKit", "CoreMedia", "QuartzCore"]
 
 [package.metadata.fandhe.android]

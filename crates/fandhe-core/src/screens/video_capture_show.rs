@@ -32,7 +32,7 @@ const START_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
 const STOP_BUTTON_ID: WidgetId = WidgetId::from_raw(3);
 const CANCEL_BUTTON_ID: WidgetId = WidgetId::from_raw(4);
 
-/// 長さの上限（秒、案内文言用）。`fandhe_device::video_capture::MAX_DURATION_SECS` と一致させる
+/// 長さの上限（秒、案内文言用）。`fandhe_cap_video_capture::MAX_DURATION_SECS` と一致させる
 /// （core は device を import しないため、一致は `fandhe-egui-proxy` のテストで縛る）。
 pub const MAX_DURATION_SECS: u32 = 30;
 
@@ -109,7 +109,7 @@ pub struct ShownClip {
     pub origin: ClipOrigin,
 }
 
-/// 撮れなかった理由（`fandhe_device::video_capture::VideoCaptureFailure` から写す責務は effect 側）。
+/// 撮れなかった理由（`fandhe_cap_video_capture::VideoCaptureFailure` から写す責務は effect 側）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreFailure {
     /// 非対応。
