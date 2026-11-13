@@ -1200,6 +1200,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-clipboard"
+version = "0.2.0"
+dependencies = [
+ "arboard",
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-color-picker"
 version = "0.2.0"
 dependencies = [
@@ -2080,7 +2093,6 @@ dependencies = [
 name = "fandhe-device"
 version = "0.1.0"
 dependencies = [
- "arboard",
  "libc",
  "rfd",
  "serde_json",
@@ -2154,6 +2166,7 @@ dependencies = [
  "fandhe-cap-calendar",
  "fandhe-cap-call-ui",
  "fandhe-cap-camera-capture",
+ "fandhe-cap-clipboard",
  "fandhe-cap-color-picker",
  "fandhe-cap-companion-device",
  "fandhe-cap-compose-mail-sms",

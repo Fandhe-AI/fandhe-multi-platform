@@ -8,29 +8,29 @@
 //! `NSPasteboard`/WinRT `Clipboard`/X11 の各 API を自前で叩くと本クレートの
 //! `#![forbid(unsafe_code)]` を破ることになるのに対し、`arboard` は 3 OS を safe API で
 //! 覆うため（選定根拠は `Cargo.toml` の依存コメント参照）。iOS（`UIPasteboard`）と
-//! Android（`ClipboardManager`）は safe な Rust バインディングが無いため
-//! `fandhe-egui-proxy` 側（FFI 境界を持てるレイヤ）で実装する。
+//! Android（`ClipboardManager`）は safe な Rust バインディングが無いため、
+//! 同じ crate の `ios`・`android`（FFI 境界を持つ OS 実装）で実装する。
 //!
 //! [`ArboardClipboard`] はその 3 OS でのみ存在する（arboard が Android/iOS の
 //! バックエンドを持たずコンパイルが通らないため、`Cargo.toml` の target 分岐と対で
 //! `cfg` を付けている）。どのプラットフォームでも使える [`DummyClipboard`] は
 //! プロセス内に閉じたフォールバックとして常に提供する。
 
-use crate::DeviceError;
+use crate::error::ClipboardError;
 
 /// クリップボード読み書きの契約（`Storage`/`Camera` と同じくスレッド間で共有され
 /// うるため `Send + Sync`）。対応不可プラットフォームは
-/// `DeviceError::Unsupported("clipboard")` を返す契約とする。
+/// `ClipboardError::Unsupported` を返す契約とする。
 pub trait Clipboard: Send + Sync {
     /// クリップボードのテキストを読む。空・非テキスト内容は `Ok(None)`。
     ///
     /// iOS 16 以降は他アプリがコピーした内容の読み取りで OS の許可アラートが出る
     /// （拒否されると `Ok(None)` 相当になる）。自アプリがコピーした内容の読み取りは
     /// アラート無しで通る（`docs/device/capabilities/clipboard.json` の iOS 欄）。
-    fn get_text(&self) -> Result<Option<String>, DeviceError>;
+    fn get_text(&self) -> Result<Option<String>, ClipboardError>;
 
     /// クリップボードへテキストを書く。既存内容は置き換わる。
-    fn set_text(&self, text: &str) -> Result<(), DeviceError>;
+    fn set_text(&self, text: &str) -> Result<(), ClipboardError>;
 }
 
 /// デスクトップ（macOS/Windows/Linux）実装。`arboard` のハンドルを 1 個だけ保持する。
@@ -47,17 +47,17 @@ pub struct ArboardClipboard(std::sync::Mutex<arboard::Clipboard>);
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 impl ArboardClipboard {
     /// OS のクリップボードへ接続する。接続自体が失敗する環境（ディスプレイサーバ
-    /// 不在のヘッドレス Linux 等）では `DeviceError::Unsupported` を返す。
-    pub fn new() -> Result<Self, DeviceError> {
+    /// 不在のヘッドレス Linux 等）では `ClipboardError::Unsupported` を返す。
+    pub fn new() -> Result<Self, ClipboardError> {
         arboard::Clipboard::new()
             .map(|c| Self(std::sync::Mutex::new(c)))
-            .map_err(|_| DeviceError::Unsupported("clipboard"))
+            .map_err(|_| ClipboardError::Unsupported)
     }
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 impl Clipboard for ArboardClipboard {
-    fn get_text(&self) -> Result<Option<String>, DeviceError> {
+    fn get_text(&self) -> Result<Option<String>, ClipboardError> {
         // 他所の panic 由来の poison を呼び出し側へ伝播させない
         // （coding-rust.md: unwrap/expect を本実装コードで使わない。`motion` と同じ判断）。
         let mut guard = self
@@ -71,18 +71,18 @@ impl Clipboard for ArboardClipboard {
             // `Ok(None)` へ畳む。`arboard` はこの区別を `ContentNotAvailable` で
             // 表すが、エラー型の内部構造を呼び出し側へ漏らさない（security.md A09）。
             Err(arboard::Error::ContentNotAvailable) => Ok(None),
-            Err(_) => Err(DeviceError::Internal("clipboard read")),
+            Err(_) => Err(ClipboardError::Internal("clipboard read")),
         }
     }
 
-    fn set_text(&self, text: &str) -> Result<(), DeviceError> {
+    fn set_text(&self, text: &str) -> Result<(), ClipboardError> {
         let mut guard = self
             .0
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         guard
             .set_text(text.to_string())
-            .map_err(|_| DeviceError::Internal("clipboard write"))
+            .map_err(|_| ClipboardError::Internal("clipboard write"))
     }
 }
 
@@ -99,7 +99,7 @@ impl DummyClipboard {
 }
 
 impl Clipboard for DummyClipboard {
-    fn get_text(&self) -> Result<Option<String>, DeviceError> {
+    fn get_text(&self) -> Result<Option<String>, ClipboardError> {
         let guard = self
             .0
             .lock()
@@ -110,7 +110,7 @@ impl Clipboard for DummyClipboard {
         Ok(guard.clone().filter(|text| !text.is_empty()))
     }
 
-    fn set_text(&self, text: &str) -> Result<(), DeviceError> {
+    fn set_text(&self, text: &str) -> Result<(), ClipboardError> {
         let mut guard = self
             .0
             .lock()
@@ -128,11 +128,11 @@ mod tests {
     struct UnsupportedClipboard;
 
     impl Clipboard for UnsupportedClipboard {
-        fn get_text(&self) -> Result<Option<String>, DeviceError> {
-            Err(DeviceError::Unsupported("clipboard"))
+        fn get_text(&self) -> Result<Option<String>, ClipboardError> {
+            Err(ClipboardError::Unsupported)
         }
-        fn set_text(&self, _text: &str) -> Result<(), DeviceError> {
-            Err(DeviceError::Unsupported("clipboard"))
+        fn set_text(&self, _text: &str) -> Result<(), ClipboardError> {
+            Err(ClipboardError::Unsupported)
         }
     }
 
@@ -179,7 +179,7 @@ mod tests {
     /// `#[ignore]` を付けて既定の `cargo test` からは外す: 実 OS のクリップボードを
     /// 書き換える副作用があり、ヘッドレス CI（ディスプレイサーバ不在）では
     /// `ArboardClipboard::new()` 自体が失敗するため。実行は
-    /// `cargo test -p fandhe-device --lib -- --ignored --nocapture` で行う
+    /// `cargo test -p fandhe-cap-clipboard --lib -- --ignored --nocapture` で行う
     /// （Issue #859 の Mac 目視確認の機械的な裏付けとして使う）。
     #[test]
     #[ignore = "実 OS のクリップボードを書き換えるため手動実行（--ignored）"]
@@ -221,11 +221,11 @@ mod tests {
         let clipboard = UnsupportedClipboard;
         assert!(matches!(
             clipboard.get_text(),
-            Err(DeviceError::Unsupported(_))
+            Err(ClipboardError::Unsupported)
         ));
         assert!(matches!(
             clipboard.set_text("x"),
-            Err(DeviceError::Unsupported(_))
+            Err(ClipboardError::Unsupported)
         ));
     }
 }

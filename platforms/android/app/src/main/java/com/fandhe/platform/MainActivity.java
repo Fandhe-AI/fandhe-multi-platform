@@ -43,8 +43,6 @@ import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -148,21 +146,6 @@ public class MainActivity extends GameActivity {
     // （SensorEvent#values[0]/[1]、m/s^2）。rotation: 呼び出し時点の画面回転
     // （Surface.ROTATION_*）。Rust 側 `gravity_to_tilt` が画面座標の傾きへ写像する。
     private static native void nativeOnMotionChanged(float x, float y, int rotation);
-
-    // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
-    // （Issue #859、Phase 11 型サンプル「クリップボード」の Android 経路に限り追加。
-    // Phase 8 の feature `device` 切り離し時に削除する）。
-    // requestId: `clipboardRequest(long, int, String)` が受け取った値をそのまま返す
-    // （Rust 側 mailbox が ID 一致を検査し、タイムアウト後の遅延到着を新要求の結果と
-    // 取り違えないため。カメラ経路と同じ理由）。
-    // text: 読み出し結果（書き込み要求・テキスト不在では null）。
-    // status: 0=成功／1=クリップボードにテキストが無い／2=内部エラー
-    // （Rust 側 `decode_clipboard_result` と対で決める）。
-    private static native void nativeOnClipboardResult(long requestId, String text, int status);
-
-    // クリップボード要求の種別（Rust 側 `CLIPBOARD_OP_READ` / `CLIPBOARD_OP_WRITE` と対）。
-    private static final int CLIPBOARD_OP_READ = 0;
-    private static final int CLIPBOARD_OP_WRITE = 1;
 
     // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
     // （Issue #866、Phase 11 型サンプル「読み上げ」の Android 経路に限り追加。
@@ -2159,62 +2142,6 @@ public class MainActivity extends GameActivity {
     public boolean dispatchTouchEvent(MotionEvent event) {
         penStylusHelper.onTouch(event);
         return super.dispatchTouchEvent(event);
-    }
-
-    // Rust 側（`device/android.rs` の `AndroidClipboard::request`）から JNI 経由で呼ばれる
-    // （Issue #859）。`android_main` は GameActivity 経路では Java の UI スレッドとは別の
-    // ネイティブスレッドで走るため、`ClipboardManager` の操作を `runOnUiThread` へ委譲し、
-    // 結果を `nativeOnClipboardResult` で返す（Rust 側は mailbox で待つ）。
-    //
-    // `ClipboardManager` を UI スレッドで扱うのは Android の作法（`getPrimaryClip` は
-    // Android 10 以降アプリのフォーカス状態に依存し、OEM 実装によっては Looper を
-    // 持たないスレッドからの取得が失敗する）。
-    //
-    // クリップボードの内容はそのまま native 側へ渡すだけで、ログ出力・保存は一切行わない
-    // （クリップボードは他アプリのパスワード等が載り得る機密経路のため痕跡を残さない）。
-    private void clipboardRequest(long requestId, int op, String text) {
-        runOnUiThread(
-                () -> {
-                    ClipboardManager clipboard =
-                            (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                    if (clipboard == null) {
-                        nativeOnClipboardResult(requestId, null, 2);
-                        return;
-                    }
-                    try {
-                        if (op == CLIPBOARD_OP_WRITE) {
-                            clipboard.setPrimaryClip(ClipData.newPlainText(null, text));
-                            nativeOnClipboardResult(requestId, null, 0);
-                            return;
-                        }
-                        if (op != CLIPBOARD_OP_READ) {
-                            // 未知の op（Rust 側との契約違反）。内容を推測せず内部エラーにする。
-                            nativeOnClipboardResult(requestId, null, 2);
-                            return;
-                        }
-                        ClipData clip = clipboard.getPrimaryClip();
-                        if (clip == null || clip.getItemCount() == 0) {
-                            nativeOnClipboardResult(requestId, null, 1);
-                            return;
-                        }
-                        // `getText()` でテキストそのものだけを取る。`coerceToText` は
-                        // Intent を `intent:` URI へ、Uri を文字列へ強制変換するため、
-                        // Rust 側 `Clipboard` の「非テキスト内容は Ok(None)」契約と
-                        // 食い違う（呼び出し側がテキストか否かを区別できなくなる。
-                        // codex-review 指摘 P1、PR #860）。テキストが無ければ status=1。
-                        CharSequence value = clip.getItemAt(0).getText();
-                        if (value == null || value.length() == 0) {
-                            nativeOnClipboardResult(requestId, null, 1);
-                            return;
-                        }
-                        nativeOnClipboardResult(requestId, value.toString(), 0);
-                    } catch (RuntimeException e) {
-                        // SecurityException（フォーカス無しでの読み取り拒否）等を
-                        // 取りこぼさず Rust 側へ内部エラーとして返す（例外メッセージは
-                        // クリップボード内容を含み得るためログ出力しない）。
-                        nativeOnClipboardResult(requestId, null, 2);
-                    }
-                });
     }
 
     // Rust 側の TTS ワーカースレッド（`device/android.rs` の `AndroidTts`）から

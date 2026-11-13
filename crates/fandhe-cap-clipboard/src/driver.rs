@@ -1,11 +1,10 @@
 //! Phase 11（親 #858）型サンプル「クリップボード」（Issue #859）の effect ドライバ。
 //! `fandhe_core::screens::clipboard_text`（端末依存ゼロ）の `pending` 要求を観測し、
-//! `fandhe_device::clipboard::Clipboard` で OS のクリップボードを読み書きして
+//! `crate::contract::Clipboard` で OS のクリップボードを読み書きして
 //! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
-//! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
+//! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`fandhe_runtime::EffectFn` 参照）。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。Web（wasm32）のクリップボードは本経路を
+//! Web（wasm32）のクリップボードは本経路を
 //! 通らず `fandhe-web-dom` 側の `mount` が `navigator.clipboard` へ直接配線する
 //! （`crates/fandhe-web-dom/src/mount.rs` 参照）。
 //!
@@ -23,21 +22,28 @@
 
 use std::sync::OnceLock;
 
+use crate::contract::Clipboard;
+use crate::error::ClipboardError;
 use fandhe_core::screens::clipboard_text::{
-    finish_copy, finish_paste, take_request, ClipboardRequest, ClipboardTextState,
+    ClipboardRequest, ClipboardTextState, finish_copy, finish_paste, take_request,
 };
-use fandhe_device::clipboard::Clipboard;
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// プロセス内で共有するクリップボード実装（接続失敗はエラーとして保持する）。
 ///
 /// デスクトップの `ArboardClipboard` はハンドルを作り直すと X11 で書き込んだ内容が
-/// 失われる（`fandhe_device::clipboard::ArboardClipboard` の doc 参照）ため、
+/// 失われる（`crate::contract::ArboardClipboard` の doc 参照）ため、
 /// `OnceLock` で 1 個だけ保持して使い回す。接続に失敗した場合もその結果を保持し、
 /// 呼び出しのたびに再接続を試みない（失敗はディスプレイサーバ不在など持続的な要因）。
 static CLIPBOARD: OnceLock<Result<Box<dyn Clipboard>, String>> = OnceLock::new();
+
+/// Android: Activity 再生成直後に gallery の `android_main` から呼ぶ。保留中の要求を破棄し、待機中のワーカーを失敗で戻す
+/// （復元しない）。
+#[cfg(target_os = "android")]
+pub fn reset_pending_tracking() {
+    crate::android::reset_pending_tracking();
+}
 
 /// OS クリップボードへ接続できないときに画面へ出す案内。
 const UNAVAILABLE: &str = "この環境では OS のクリップボードを使えません";
@@ -45,8 +51,8 @@ const UNAVAILABLE: &str = "この環境では OS のクリップボードを使�
 /// 実行対象プラットフォームに応じたクリップボード実装を返す。
 ///
 /// デスクトップ（macOS/Windows/Linux）は `ArboardClipboard`、iOS は
-/// [`crate::device::ios::IosClipboard`]、Android は
-/// [`crate::device::android::AndroidClipboard`]。
+/// [`crate::ios::IosClipboard`]、Android は
+/// `crate::android::AndroidClipboard`。画面の状態型に依存しないため、フレームワークの外のアプリも使える。
 ///
 /// **接続失敗を `DummyClipboard` で埋めない**（codex-review 指摘 P1、PR #860）。
 /// プロセス内ダミーへ退避すると、OS のクリップボードには何も書けていないのに画面へ
@@ -54,22 +60,22 @@ const UNAVAILABLE: &str = "この環境では OS のクリップボードを使�
 /// （ユーザーへ嘘の成功を返す最悪の挙動）。失敗は失敗として呼び出し元へ返し、
 /// 画面の `status` にも出す（coding-rust.md「回復可能なエラーは Result で返す」）。
 /// `DummyClipboard` はテストと、端末機能を持たない明示的なデモ用途に限る。
-fn shared_clipboard() -> Result<&'static dyn Clipboard, &'static str> {
+pub fn platform_clipboard() -> Result<&'static dyn Clipboard, &'static str> {
     let cached = CLIPBOARD.get_or_init(|| {
         #[cfg(target_os = "ios")]
         {
-            Ok(Box::new(crate::device::ios::IosClipboard) as Box<dyn Clipboard>)
+            Ok(Box::new(crate::ios::IosClipboard) as Box<dyn Clipboard>)
         }
         #[cfg(target_os = "android")]
         {
-            Ok(Box::new(crate::device::android::AndroidClipboard) as Box<dyn Clipboard>)
+            Ok(Box::new(crate::android::AndroidClipboard) as Box<dyn Clipboard>)
         }
         // `ArboardClipboard` はデスクトップ 3 OS でのみ存在する
         // （arboard が Android/iOS のバックエンドを持たない、
         // `fandhe_device::clipboard` の doc 参照）。
         #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
         {
-            use fandhe_device::clipboard::ArboardClipboard;
+            use crate::contract::ArboardClipboard;
             ArboardClipboard::new()
                 .map(|c| Box::new(c) as Box<dyn Clipboard>)
                 .map_err(|e| e.to_string())
@@ -84,7 +90,7 @@ fn shared_clipboard() -> Result<&'static dyn Clipboard, &'static str> {
             target_os = "linux"
         )))]
         {
-            Err(DeviceError::Unsupported("clipboard").to_string())
+            Err(ClipboardError::Unsupported.to_string())
         }
     });
     match cached {
@@ -95,10 +101,9 @@ fn shared_clipboard() -> Result<&'static dyn Clipboard, &'static str> {
     }
 }
 
-/// `DeviceError` を画面へ渡す文言へ変換する。`DeviceError` の内部構造（`std::io::Error`
-/// 等）は `fandhe-core` 側へ漏らさず `Display` の文言のみを転送する
-/// （security.md A09、`device.rs` の `to_note_storage_error` と同じ判断）。
-fn to_message(e: DeviceError) -> String {
+/// `ClipboardError` を画面へ渡す文言へ変換する。内部構造は `fandhe-core` 側へ漏らさず `Display` の文言のみを
+/// 転送する（security.md A09）。
+fn to_message(e: ClipboardError) -> String {
     e.to_string()
 }
 
@@ -157,7 +162,7 @@ pub fn clipboard_text_effect(
     state: &ClipboardTextState,
     sender: &CompletionSender<ClipboardTextState>,
 ) {
-    match shared_clipboard() {
+    match platform_clipboard() {
         Ok(clipboard) => drive(state, sender, clipboard),
         Err(message) => fail_request(state, sender, message),
     }
@@ -166,27 +171,35 @@ pub fn clipboard_text_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::DummyClipboard;
     use fandhe_core::screens::clipboard_text::{copy, paste, set_input};
-    use fandhe_device::clipboard::DummyClipboard;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
 
     fn sender_with_channel() -> (
         CompletionSender<ClipboardTextState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<ClipboardTextState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<ClipboardTextState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// 常に失敗する `Clipboard`（エラー文言の転送経路を検証する）。
     struct FailingClipboard;
 
     impl Clipboard for FailingClipboard {
-        fn get_text(&self) -> Result<Option<String>, DeviceError> {
-            Err(DeviceError::Unsupported("clipboard"))
+        fn get_text(&self) -> Result<Option<String>, ClipboardError> {
+            Err(ClipboardError::Unsupported)
         }
-        fn set_text(&self, _text: &str) -> Result<(), DeviceError> {
-            Err(DeviceError::Unsupported("clipboard"))
+        fn set_text(&self, _text: &str) -> Result<(), ClipboardError> {
+            Err(ClipboardError::Unsupported)
         }
     }
 
@@ -267,7 +280,7 @@ mod tests {
     fn shared_clipboard_reports_failure_instead_of_faking_success() {
         // 接続できた場合は書き込めること、できない場合（ヘッドレス等）は
         // ダミーで成功を装わずエラーを返すことを確認する（codex-review P1、PR #860）。
-        match shared_clipboard() {
+        match platform_clipboard() {
             Ok(clipboard) => assert!(clipboard.set_text("fandhe clipboard self check").is_ok()),
             Err(message) => assert_eq!(message, UNAVAILABLE),
         }

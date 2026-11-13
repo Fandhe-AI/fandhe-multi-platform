@@ -43,7 +43,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "clipboard_text" => fandhe_core::screens::clipboard_text::current_screen,
-    fandhe_egui_proxy::device::clipboard::clipboard_text_effect,
+    fandhe_cap_clipboard::clipboard_text_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "tts_speak" => fandhe_core::screens::tts_speak::current_screen,

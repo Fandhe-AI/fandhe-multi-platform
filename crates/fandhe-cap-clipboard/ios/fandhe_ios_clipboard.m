@@ -1,12 +1,11 @@
 // Phase 11（親 #858）型サンプル「クリップボード」: iOS 側の実実装（Issue #859）。
 //
-// `crates/fandhe-egui-proxy/src/device/ios.rs`（`IosClipboard`）から C ABI 経由で
+// `crates/fandhe-cap-clipboard/src/ios.rs`（`IosClipboard`）から C ABI 経由で
 // 呼ばれる。`UIPasteboard` は Rust バインディングを持たないため、この 1 ファイルの
 // ObjC コードに実装を閉じ、`extern "C"` 宣言のみを Rust 側へ公開する
 // （`fandhe_ios_motion.m` と同型、coding-rust.md の FFI 例外規定）。
 //
-// `build.rs` が iOS ターゲット（`CARGO_CFG_TARGET_OS == "ios"`）かつ feature `device`
-// 有効時のみ `cc` でコンパイルする（他ターゲットのビルドには一切関与しない）。
+// `build.rs` が iOS ターゲット（`CARGO_CFG_TARGET_OS == "ios"`）のみ `cc` でコンパイルする（他ターゲットのビルドには一切関与しない）。
 //
 // 契約（`ios.rs` のコメントと対）:
 //   fandhe_ios_clipboard_read(&out_text, &out_len) -> 0 で成功。*out_text に UTF-8

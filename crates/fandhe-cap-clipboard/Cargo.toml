@@ -1,0 +1,50 @@
+[package]
+name = "fandhe-cap-clipboard"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の clipboard の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+# Phase 11（Issue #859）: macOS/Windows/Linux 共通実装 `ArboardClipboard` が使う。`NSPasteboard`/WinRT `Clipboard`/X11 を
+# 自前で叩くと本 crate の `#![forbid(unsafe_code)]` を破るため、3 OS を safe API で覆う `arboard` へ委譲する。
+# 既に依存グラフ内で解決済み（eframe → egui-winit が "clipboard" feature で非 optional に引く 3.6.1）の推移依存を
+# 直接依存へ昇格するのみで新規パッケージは増えない。MSRV 1.71.0 は rust-toolchain.toml 固定の 1.88.0 以下。
+#
+# **デスクトップ 3 OS に限定する**（`cfg(not(target_arch = "wasm32"))` では広すぎる）:
+# arboard は Android/iOS 向けのバックエンドを持たず、`platform::Clipboard` 等が解決できずコンパイルが通らない。
+# モバイルのクリップボードは本 crate の FFI 実装（`UIPasteboard` / `ClipboardManager`）が担う。
+[target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
+arboard = { workspace = true }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+# main thread 判定（`UIPasteboard` は UIKit の main スレッド前提 API）。
+fandhe-platform-apple = { path = "../fandhe-platform-apple" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+[build-dependencies]
+# iOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。クリップボードは権限・usage description を要さない（`UIPasteboard` の読み取りは
+# iOS 16 以降 OS の許可アラートが出るが、Info.plist のキーは無い）。
+[package.metadata.fandhe]
+id = "clipboard"
+
+[package.metadata.fandhe.android]
+java = ["android/java"]
+
+[lints]
+workspace = true

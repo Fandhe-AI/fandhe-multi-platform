@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の読み書きは本モジュール外
-//! （`fandhe-egui-proxy` の effect ドライバ、`device/clipboard.rs`）が
+//! （`fandhe-cap-clipboard` の effect ドライバ）が
 //! [`take_request`] で要求を観測し [`finish_copy`] / [`finish_paste`] で結果を注入する。
 //!
 //! # 往復を「自アプリで書いて自アプリで読む」にしている理由

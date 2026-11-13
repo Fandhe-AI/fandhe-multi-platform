@@ -251,6 +251,9 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // メール・SMS 作成の保留中の要求も破棄する（`bridge::SLOT` はプロセス static のため再生成をまたいで残る。`fandhe_cap_compose_mail_sms::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_compose_mail_sms::reset_pending_tracking();
+    // クリップボードの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_clipboard::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_clipboard::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 

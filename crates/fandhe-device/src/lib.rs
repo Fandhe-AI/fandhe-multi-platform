@@ -47,8 +47,6 @@ pub mod camera_preview_stream;
 pub mod capture_protection;
 /// Phase 11（端末機能の拡充ループ、親 #152、Issue #1116）: 車載ディスプレイの 1 行テキスト。
 pub mod car_display;
-/// Phase 11（端末機能の拡充ループ、Issue #859）: クリップボード読み書き。
-pub mod clipboard;
 /// Phase 11（端末機能の拡充ループ、親 #1154、Issue #1404）: 方位（コンパス）。
 pub mod compass;
 /// Phase 11（端末機能の拡充ループ、親 #1117、Issue #1220）: 連絡先を 1 件選ぶ。
