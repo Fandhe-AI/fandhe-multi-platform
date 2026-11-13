@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   checkId, stemOf, pascalOf, moveTargets, rewriteSource, usedErrorVariants, unmappedVariants,
   renderErrorRs, replaceBlock, featureLines, gradleLines, renderUnsafeAttr, renderBuildRs, unsafeOsesOf,
+  strErrorVariants, rewriteEdition2024, refPatterns, missingEntry,
 } from "./migrate-capability.mjs";
 
 test("checkId: 不正な id を拒む", () => {
@@ -51,7 +52,7 @@ test("rewriteSource: 共通部品・エラー型・契約パスの置換", () =>
       "use crate::error::DeviceIdentifierError;",
       "use crate::contract::{DeviceId};",
       "use fandhe_platform_android::JniCallFailed;",
-      "Err(DeviceIdentifierError::Internal)",
+      'Err(DeviceIdentifierError::Internal("x"))',
       "Err(DeviceIdentifierError::Unsupported) => 1,",
       "fandhe_platform_android::android_app()",
       "fandhe_runtime::request_repaint();",
@@ -130,4 +131,58 @@ test("renderErrorRs: 写像するバリアントが 0 件ならテストを出�
     assert.ok(!rs.includes("for (e, expected) in [\n        ]"));
   }
   assert.ok(renderErrorRs("foo-bar", ["Internal"]).includes("messages_are_fixed"));
+});
+
+test("DeviceError: 機能名以外を渡すバリアントは引数を残し、機能名・_ だけなら単位バリアントへ", () => {
+  const src = 'DeviceError::Internal("calendar save") DeviceError::Unsupported("cal") DeviceError::Unsupported(_) DeviceError::Cancelled(..)';
+  assert.deepEqual([...strErrorVariants([src], "cal", "cal")], ["Internal"]);
+  assert.equal(
+    rewriteSource(src, "cal"),
+    'CalError::Internal("calendar save") CalError::Unsupported CalError::Unsupported CalError::Cancelled',
+  );
+  // 識別子・変数・括弧なしの関数としての使用も文字列扱い。
+  for (const u of ["DeviceError::Internal(MODEL_NOT_READY)", "DeviceError::Internal(stage)", ".map_err(DeviceError::Internal)"])
+    assert.ok(strErrorVariants([u], "cal", "cal").has("Internal"), u);
+  // 別ファイルで文字列を渡していれば、このファイルの Internal(_) も引数を残す（写像はファイル横断で揃える）。
+  const vs = strErrorVariants(['DeviceError::Internal("x")', "DeviceError::Internal(_)"], "cal", "cal");
+  assert.equal(rewriteSource("DeviceError::Internal(_)", "cal", "cal", vs), "CalError::Internal(_)");
+});
+
+test("renderErrorRs: 文字列を渡すバリアントは &'static str で出し、テストにも引数を渡す", () => {
+  const rs = renderErrorRs("cal", ["Internal", "Unsupported"], new Set(["Internal"]));
+  assert.ok(rs.includes('#[error("内部エラーが発生しました: {0}")]\n    Internal(&\'static str),'));
+  assert.ok(rs.includes('(CalError::Internal("cal"), "内部エラーが発生しました: cal"),'));
+  assert.ok(rs.includes("    Unsupported,\n"));
+});
+
+test("rewriteEdition2024: extern・no_mangle・gen を 2024 の書き方へ、文字列・コメント・既に直した箇所には触れない", () => {
+  assert.equal(rewriteEdition2024('extern "C" {'), 'unsafe extern "C" {');
+  assert.equal(rewriteEdition2024('unsafe extern "C" {'), 'unsafe extern "C" {');
+  assert.equal(rewriteEdition2024('pub extern "C" fn f() {}'), 'pub extern "C" fn f() {}');
+  assert.equal(rewriteEdition2024("#[no_mangle]"), "#[unsafe(no_mangle)]");
+  assert.equal(rewriteEdition2024("let gen = 1;"), "let r#gen = 1;");
+  assert.equal(rewriteEdition2024("fn f(gen: u64) {}"), "fn f(r#gen: u64) {}");
+  for (const keep of ['"gen"', "// gen", "let r#gen = 1;", "generation", "gen_id"]) assert.equal(rewriteEdition2024(keep), keep);
+  assert.equal(rewriteEdition2024('log("gen"); let gen = 2; // gen'), 'log("gen"); let r#gen = 2; // gen');
+});
+
+test("refPatterns: stem・id・Pascal を語の境界で照合する（短い stem で別の機能・語を拾わない）", () => {
+  const hit = (l) => refPatterns("ar", "ar").some((re) => re.test(l));
+  for (const l of ["compile_ios_ar();", "pub mod ios_ar;", "device::ar::ar_show_effect", "ArHelper.java", "fandhe-cap-ar", "fandhe_ios_ar.m"])
+    assert.ok(hit(l), l);
+  for (const l of ["compile_ios_ar_camera_view();", "Array", "solar", "charge", "fandhe-cap-ar-camera-view"]) assert.ok(!hit(l), l);
+});
+
+test("missingEntry: crate ルートから公開された platform_<stem> だけを合格にする", () => {
+  const def = "/// doc\n#[cfg(not(target_arch = \"wasm32\"))]\npub fn platform_x() -> u8 { 0 }\n";
+  assert.equal(missingEntry("x", { "lib.rs": def }), null);
+  assert.equal(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": def }), null);
+  assert.equal(missingEntry("x", { "lib.rs": "pub use driver::{a, platform_x, b};", "driver.rs": def }), null);
+  assert.equal(missingEntry("x", { "lib.rs": "pub use driver::{\n    a,\n    platform_x,\n};", "driver.rs": def }), null);
+  assert.ok(missingEntry("x", { "lib.rs": "mod driver;", "driver.rs": def }));
+  assert.ok(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": "pub(crate) fn platform_x() {}" }));
+  assert.ok(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": "fn platform_x() {}" }));
+  assert.ok(missingEntry("x", { "lib.rs": "pub fn platform_passkey() {}" }) && missingEntry("passkey_signin", { "lib.rs": "pub fn platform_passkey() {}" }));
+  assert.ok(missingEntry("x", { "lib.rs": "pub fn platform_x_y() {}" }));
+  assert.ok(missingEntry("x", {}));
 });
