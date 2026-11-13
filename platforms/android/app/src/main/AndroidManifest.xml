@@ -411,6 +411,10 @@
             android:authorities="${applicationId}.fandhe.midi"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.GamepadLifecycle"
+            android:authorities="${applicationId}.fandhe.gamepad"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.PasskeyLifecycle"
             android:authorities="${applicationId}.fandhe.passkey-signin"
             android:exported="false" />

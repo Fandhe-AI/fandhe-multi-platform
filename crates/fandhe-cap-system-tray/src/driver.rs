@@ -79,7 +79,7 @@ fn to_hide_result(outcome: HideOutcome) -> HideResult {
 
 /// 現在のプラットフォームに応じた `SystemTray` 実装を返す。macOS/Windows 以外
 /// （Linux・Web・iOS・Android、対応表 `system-tray.json` で `n-a`）は
-/// `UnsupportedSystemTray` 固定（`gamepad.rs::platform_gamepad` と同型の cfg
+/// `UnsupportedSystemTray` 固定（`fandhe-cap-gamepad` の `platform_gamepad` と同型の cfg
 /// カスケード）。`Arc` で返すのは [`drive`] が `show`/`hide` を作業スレッドへ
 /// 逃がすため（`'static` 参照ではなく `std::thread::spawn` へ move できる所有権が
 /// 要る、`notification.rs::implementation` と同型）。

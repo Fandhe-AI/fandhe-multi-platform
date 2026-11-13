@@ -3,14 +3,14 @@
 // macOS で同一 API のため、`apple/fandhe_apple_location.m` と同じく 1 ファイルを
 // 両 OS で共用する。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_gamepad.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が iOS・macOS 両ターゲット（feature `device` 有効時）で `cc` コンパイルし、
+// `crates/fandhe-cap-gamepad/src/apple.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が iOS・macOS 両ターゲットで `cc` コンパイルし、
 // GameController フレームワークをリンクする。
 //
 // 設計判断: スナップショットの読み取りは通知キャッシュではなく **pull 型**にする
-// （Windows 実装 `windows_gamepad.rs`・iOS `fandhe_ios_motion.m` と同じ形）。状態を
+// （Windows 実装 `windows.rs`・iOS `fandhe_ios_motion.m` と同じ形）。状態を
 // 一切キャッシュしないため、「切断後も最後の値を返し続ける」事故が構造上起こらない
-// （Issue #859 型の「嘘の成功」の再発防止、`fandhe_device::gamepad` モジュール doc
+// （Issue #859 型の「嘘の成功」の再発防止、`fandhe_cap_gamepad::contract` モジュール doc
 // 参照）。
 //
 // ただし `GCControllerDidConnectNotification` を一度も購読しないと、GameController
@@ -30,18 +30,18 @@
 //
 //   out_axes の並び（固定）: [0] 左 X / [1] 左 Y / [2] 右 X / [3] 右 Y /
 //   [4] 左トリガ / [5] 右トリガ。**OS の生値（y 上が正）をそのまま書く**。
-//   符号反転・クランプ・NaN 置換は Rust 側（`apple_gamepad.rs::result_from_code`）が
-//   行う（テスト可能な側へ寄せる、`windows_gamepad.rs::reading_to_snapshot` と同じ
+//   符号反転・クランプ・NaN 置換は Rust 側（`apple.rs::result_from_code`）が
+//   行う（テスト可能な側へ寄せる、`windows.rs::reading_to_snapshot` と同じ
 //   責務配置）。
 //
-//   out_buttons のビット位置は `fandhe_device::gamepad::BUTTON_*` と同一
+//   out_buttons のビット位置は `fandhe_cap_gamepad::BUTTON_*` と同一
 //   （bit0 A / 1 B / 2 X / 3 Y / 4 LB / 5 RB / 6 左スティック押込み /
 //   7 右スティック押込み / 8-11 十字キー上下左右 / 12 メニュー / 13 ビュー）。
 //
 //   「先頭 1 台」の解釈: `[GCController controllers]` を先頭から走査し、
 //   `extendedGamepad != nil` の最初の 1 台を読む。スティックを持たないプロファイル
 //   のみの機器は「使えるコントローラが未接続」（戻り値 1）として扱い、全 0 を
-//   接続中として返さない（`fandhe_device::gamepad` モジュール doc の契約）。
+//   接続中として返さない（`fandhe_cap_gamepad::contract` モジュール doc の契約）。
 //
 //   main スレッド検査: `[NSThread isMainThread]`（`fandhe_apple_text_scale.m` と
 //   同じ判断で、macOS 用に Rust 側へ `pthread_main_np` の unsafe 宣言を増やさない）。

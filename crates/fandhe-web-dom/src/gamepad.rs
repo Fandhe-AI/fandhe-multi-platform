@@ -3,13 +3,13 @@
 //! `fandhe_core::screens::gamepad_show`（端末依存ゼロ）の状態を
 //! [`super::mount::mount_with_effect`] の effect として観測し、Gamepad API
 //! （`navigator.getGamepads()`、pull 型）を `requestAnimationFrame` の自己再
-//! スケジュールでポーリングして結果を書き戻す。`fandhe-device` の `Gamepad`
+//! スケジュールでポーリングして結果を書き戻す。`fandhe-cap-gamepad` の `Gamepad`
 //! トレイトは Windows 実装（Issue #933）のみが使う経路で、Web は
 //! `location.rs`/`share.rs` と同じ理由（`fandhe-egui-proxy` の feature `device`
 //! が wasm32 に依存を持ち込まない設計）でこれを通らず、本モジュールが
 //! DOM レンダラ側の対応実装にあたる。ただし値域の正規化（`normalize_axis`/
 //! `normalize_trigger`）とボタンラベル整形（`pressed_labels`）は
-//! `fandhe_device::gamepad` を共有する（正規化ロジックの SSOT を 1 箇所に保つ）。
+//! `fandhe_cap_gamepad` を共有する（正規化ロジックの SSOT を 1 箇所に保つ）。
 //!
 //! # ポーリング方式（独自タイマーを作らない理由）
 //!
@@ -21,26 +21,26 @@
 //!
 //! `gamepaddisconnected` イベントは購読しない: 毎フレーム pull しているため、
 //! 切断は次フレームの `getGamepads()` が返す null / `connected === false` で
-//! 検知できる（`fandhe_device::gamepad` モジュール doc の契約と同じ「古い値を
+//! 検知できる（`fandhe_cap_gamepad` モジュール doc の契約と同じ「古い値を
 //! 張り付かせない」の web 版の実現方法）。`pagehide`/`pageshow` の購読も不要:
 //! `requestAnimationFrame` はページが非表示・bfcache 中は発火せず、表示復帰で
 //! 自動的に再開する（`watchPosition` のように明示的に止める対象が無い）。
 //!
 //! # 軸の向き（符号反転しない）
 //!
-//! `fandhe_device::gamepad` モジュール doc の契約（画面座標系・y 下が正）に対し、
+//! `fandhe_cap_gamepad` モジュール doc の契約（画面座標系・y 下が正）に対し、
 //! Web Gamepad API の `axes` は既に y 下が正で返る（Windows/`XInput` の y 上が正
 //! とは逆）。そのため他 OS 実装と異なり**符号反転しない**（`snapshot_from_pads`
 //! のテストで固定する）。
 //!
 //! # 非標準配置の扱い（Issue #859 の 3 状態設計と対で「未接続」に化けさせない）
 //!
-//! `mapping !== "standard"` の接続は `DeviceError::Unsupported("gamepad
+//! `mapping !== "standard"` の接続は `GamepadError::Unsupported("gamepad
 //! mapping")` として返す。`gamepad_show` 画面の `GamepadView` は 3 状態のみで
 //! 4 状態目の追加は他 OS 実装（並列実装中の Android 等）の網羅 `match` に波及する
 //! ため行わず、`UnsupportedAlt`（「非対応（代替入力）」）で表示する。「未接続」
 //! （`DisconnectedAlt`）とは別のペイロード文字列で区別する（両方とも
-//! `frame_from_read` では `Frame::Unsupported` へ写るが、`DeviceError::Unsupported`
+//! `frame_from_read` では `Frame::Unsupported` へ写るが、`GamepadError::Unsupported`
 //! のペイロードで「永続的な非対応」（API 不在・非 secure context）と区別できる
 //! ようにしておく。[`mod@web`] の `run_tick` 参照）。
 //!
@@ -49,32 +49,31 @@
 //! [`RawPad`]/[`snapshot_from_pads`]/[`Frame`]/[`frame_from_read`]/[`Shown`]/
 //! [`can_skip`] は、JS 値から剥がした生値 → 型安全なスナップショット・次フレーム
 //! の表示内容という、ブラウザ API を呼ばない変換ロジックのみを持つ。
-//! `location.rs`/`fandhe-egui-proxy::device::gamepad` と同じ観点で native の
+//! `location.rs`/`fandhe_cap_gamepad` と同じ観点で native の
 //! `cargo test` から固定できるようにするため、ブラウザ API を直接使う部分
 //! （[`mod@web`]）だけを `wasm32` へ gate する。
 
-use fandhe_core::screens::gamepad_show::GamepadView;
-use fandhe_device::gamepad::{
-    normalize_axis, normalize_trigger, pressed_labels, GamepadSnapshot, BUTTON_A, BUTTON_B,
-    BUTTON_DPAD_DOWN, BUTTON_DPAD_LEFT, BUTTON_DPAD_RIGHT, BUTTON_DPAD_UP, BUTTON_LEFT_SHOULDER,
-    BUTTON_LEFT_STICK, BUTTON_MENU, BUTTON_RIGHT_SHOULDER, BUTTON_RIGHT_STICK, BUTTON_VIEW,
-    BUTTON_X, BUTTON_Y,
+use fandhe_cap_gamepad::{
+    normalize_axis, normalize_trigger, pressed_labels, GamepadError, GamepadSnapshot, BUTTON_A,
+    BUTTON_B, BUTTON_DPAD_DOWN, BUTTON_DPAD_LEFT, BUTTON_DPAD_RIGHT, BUTTON_DPAD_UP,
+    BUTTON_LEFT_SHOULDER, BUTTON_LEFT_STICK, BUTTON_MENU, BUTTON_RIGHT_SHOULDER,
+    BUTTON_RIGHT_STICK, BUTTON_VIEW, BUTTON_X, BUTTON_Y,
 };
-use fandhe_device::DeviceError;
+use fandhe_core::screens::gamepad_show::GamepadView;
 
-/// 「傾き無し」とみなす閾値（`fandhe-egui-proxy::device::gamepad::STICK_EPSILON` と
+/// 「傾き無し」とみなす閾値（`fandhe_cap_gamepad::STICK_EPSILON` と
 /// 同じ値。デッドゾーン内は 0 として畳み、`can_skip` の静止判定と揃える）。
 const STICK_EPSILON: f32 = 0.02;
 
 /// 永続的な非対応（API 不在・非 secure context。差し替えで解消しない）を表す
-/// [`DeviceError::Unsupported`] のペイロード。`fandhe_device::gamepad` の
+/// [`GamepadError::Unsupported`] のペイロード。`fandhe_cap_gamepad` の
 /// 使用例（モジュール doc の 3 分岐）と同じ `"gamepad"` を使う。
 /// native ビルドでは `mod web`（唯一の呼び出し元）が存在しないため未使用警告が出る
 /// （`share.rs::UNAVAILABLE` と同じ理由）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) const UNSUPPORTED_PLATFORM: &str = "gamepad";
 /// 非標準配置（`mapping !== "standard"`。コントローラの差し替えで解消しうる）を表す
-/// [`DeviceError::Unsupported`] のペイロード。[`UNSUPPORTED_PLATFORM`] と区別する。
+/// [`GamepadError::Unsupported`] のペイロード。[`UNSUPPORTED_PLATFORM`] と区別する。
 pub(crate) const UNSUPPORTED_MAPPING: &str = "gamepad mapping";
 
 /// `getGamepads()` が返す 1 要素ぶんの生値。JS 側の `Gamepad` オブジェクトから
@@ -92,24 +91,24 @@ pub(crate) struct RawPad {
 }
 
 /// `getGamepads()` の配列（null 混在）から、先頭の「`Some` かつ `connected`」の
-/// 1 台だけを見て [`fandhe_device::gamepad`] モジュール doc の 3 分岐へ写す。
+/// 1 台だけを見て [`fandhe_cap_gamepad`] モジュール doc の 3 分岐へ写す。
 ///
 /// - 該当する台が無い: `Ok(None)`（全 0 スナップショットを「未接続」の代用にしない）
-/// - `!standard`: `Err(DeviceError::Unsupported(UNSUPPORTED_MAPPING))`
-/// - `standard` だが `axes`/`buttons` の要素数が足りない: `Err(DeviceError::Internal(
+/// - `!standard`: `Err(GamepadError::Unsupported(UNSUPPORTED_MAPPING))`
+/// - `standard` だが `axes`/`buttons` の要素数が足りない: `Err(GamepadError::Internal(
 ///   "gamepad read"))`（欠けた要素を 0 で埋めない。添字アクセスは長さ検査の後のみ）
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn snapshot_from_pads(
     pads: &[Option<RawPad>],
-) -> Result<Option<GamepadSnapshot>, DeviceError> {
+) -> Result<Option<GamepadSnapshot>, GamepadError> {
     let Some(pad) = pads.iter().flatten().find(|pad| pad.connected) else {
         return Ok(None);
     };
     if !pad.standard {
-        return Err(DeviceError::Unsupported(UNSUPPORTED_MAPPING));
+        return Err(GamepadError::Unsupported(UNSUPPORTED_MAPPING));
     }
     if pad.axes.len() < 4 || pad.buttons.len() < 16 {
-        return Err(DeviceError::Internal("gamepad read"));
+        return Err(GamepadError::Internal("gamepad read"));
     }
 
     let axis = |i: usize| normalize_axis(pad.axes[i] as f32);
@@ -156,8 +155,8 @@ pub(crate) fn snapshot_from_pads(
     }))
 }
 
-/// 次フレームで画面へ適用する内容（[`fandhe_device::gamepad::Gamepad::read`] の
-/// 結果から決まる、`fandhe-egui-proxy::device::gamepad::resolve_frame` の Web 版）。
+/// 次フレームで画面へ適用する内容（[`fandhe_cap_gamepad::Gamepad::read`] の
+/// 結果から決まる、`fandhe_cap_gamepad::resolve_frame` の Web 版）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Frame {
@@ -169,10 +168,10 @@ pub(crate) enum Frame {
     Unsupported,
 }
 
-/// [`fandhe_device::gamepad::Gamepad::read`] の結果を [`Frame`] へ写す
-/// （`fandhe-egui-proxy::device::gamepad::resolve_frame` と同じ判定基準）。
+/// [`fandhe_cap_gamepad::Gamepad::read`] の結果を [`Frame`] へ写す
+/// （`fandhe_cap_gamepad::resolve_frame` と同じ判定基準）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-pub(crate) fn frame_from_read(read: Result<Option<GamepadSnapshot>, DeviceError>) -> Frame {
+pub(crate) fn frame_from_read(read: Result<Option<GamepadSnapshot>, GamepadError>) -> Frame {
     match read {
         Ok(Some(snapshot)) => {
             let pressed = pressed_labels(snapshot.buttons).join("、");
@@ -184,10 +183,10 @@ pub(crate) fn frame_from_read(read: Result<Option<GamepadSnapshot>, DeviceError>
             }
         }
         Ok(None) => Frame::Disconnected,
-        Err(DeviceError::Unsupported(_)) => Frame::Unsupported,
+        Err(GamepadError::Unsupported(_)) => Frame::Unsupported,
         // タイムアウト・その他の一時的な読み取り失敗も未接続と同じ扱いへ倒す
         // （`gamepad_show::GamepadView` は 3 状態のみのため、専用の失敗表示は
-        // 本 Issue のスコープ外、`fandhe-egui-proxy::device::gamepad::resolve_frame`
+        // 本 Issue のスコープ外、`fandhe_cap_gamepad::resolve_frame`
         // と同じ判断）。
         Err(_) => Frame::Disconnected,
     }
@@ -237,12 +236,11 @@ mod web {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    use fandhe_cap_gamepad::{Gamepad, GamepadError, GamepadSnapshot};
     use fandhe_core::screens::gamepad_show::{
         apply_connected, apply_disconnected, apply_unsupported, is_at_rest, pressed_text,
         GamepadShowState,
     };
-    use fandhe_device::gamepad::{Gamepad, GamepadSnapshot};
-    use fandhe_device::DeviceError;
     use js_sys::Reflect;
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
@@ -251,7 +249,7 @@ mod web {
     use super::{can_skip, frame_from_read, snapshot_from_pads, Frame, RawPad, Shown};
     use crate::mount::Applier;
 
-    /// 1 フレームで進める時間の上限（`fandhe-egui-proxy::device::gamepad::MAX_DT` と
+    /// 1 フレームで進める時間の上限（`fandhe_cap_gamepad::MAX_DT` と
     /// 同じ値）。
     const MAX_DT: f32 = 0.1;
     /// マウント後、最初の `requestAnimationFrame` コールバックで使う既定 dt
@@ -288,19 +286,19 @@ mod web {
     /// `navigator.getGamepads()` を読み、`Vec<Option<RawPad>>` へ剥がす。
     /// 非 secure context・API 不在・呼び出し自体の失敗は
     /// `Err(Unsupported(UNSUPPORTED_PLATFORM))`（永続的な非対応）にする。
-    fn read_raw_pads() -> Result<Vec<Option<RawPad>>, DeviceError> {
-        let window = web_sys::window().ok_or(DeviceError::Unsupported(UNSUPPORTED_PLATFORM))?;
+    fn read_raw_pads() -> Result<Vec<Option<RawPad>>, GamepadError> {
+        let window = web_sys::window().ok_or(GamepadError::Unsupported(UNSUPPORTED_PLATFORM))?;
         if !window.is_secure_context() {
-            return Err(DeviceError::Unsupported(UNSUPPORTED_PLATFORM));
+            return Err(GamepadError::Unsupported(UNSUPPORTED_PLATFORM));
         }
         let navigator = window.navigator();
         let navigator_value: JsValue = navigator.clone().into();
         if !has_function(&navigator_value, "getGamepads") {
-            return Err(DeviceError::Unsupported(UNSUPPORTED_PLATFORM));
+            return Err(GamepadError::Unsupported(UNSUPPORTED_PLATFORM));
         }
         let array = navigator
             .get_gamepads()
-            .map_err(|_| DeviceError::Unsupported(UNSUPPORTED_PLATFORM))?;
+            .map_err(|_| GamepadError::Unsupported(UNSUPPORTED_PLATFORM))?;
 
         let mut pads = Vec::with_capacity(array.length() as usize);
         for i in 0..array.length() {
@@ -344,14 +342,14 @@ mod web {
     pub struct WebGamepad;
 
     impl Gamepad for WebGamepad {
-        fn read(&self) -> Result<Option<GamepadSnapshot>, DeviceError> {
+        fn read(&self) -> Result<Option<GamepadSnapshot>, GamepadError> {
             let pads = read_raw_pads()?;
             snapshot_from_pads(&pads)
         }
     }
 
     /// `mount_id` の直前フレームからの経過秒数を実測し、`[0.0, MAX_DT]` へ
-    /// クランプして返す（`fandhe-egui-proxy::device::gamepad::measure_dt` と
+    /// クランプして返す（`fandhe_cap_gamepad::measure_dt` と
     /// 同じ役割。引数は `requestAnimationFrame` コールバックが渡す
     /// `DOMHighResTimeStamp`〈ms〉）。
     fn measure_dt(mount_id: u64, ts_ms: f64) -> f32 {
@@ -390,7 +388,7 @@ mod web {
     fn run_tick(mount_id: u64, applier: &Applier<GamepadShowState>, ts_ms: f64) -> bool {
         let dt = measure_dt(mount_id, ts_ms);
         let read = WebGamepad.read();
-        let persistent_unsupported = matches!(&read, Err(DeviceError::Unsupported(payload)) if *payload == UNSUPPORTED_PLATFORM);
+        let persistent_unsupported = matches!(&read, Err(GamepadError::Unsupported(payload)) if *payload == UNSUPPORTED_PLATFORM);
         let frame = frame_from_read(read);
 
         let shown = SHOWN.with(|cell| cell.borrow().get(&mount_id).cloned());
@@ -495,7 +493,7 @@ mod tests {
         let result = snapshot_from_pads(&[Some(pad)]);
         assert!(matches!(
             result,
-            Err(DeviceError::Unsupported(UNSUPPORTED_MAPPING))
+            Err(GamepadError::Unsupported(UNSUPPORTED_MAPPING))
         ));
     }
 
@@ -509,7 +507,7 @@ mod tests {
         };
         assert!(matches!(
             snapshot_from_pads(&[Some(short_axes)]),
-            Err(DeviceError::Internal("gamepad read"))
+            Err(GamepadError::Internal("gamepad read"))
         ));
 
         let short_buttons = RawPad {
@@ -520,7 +518,7 @@ mod tests {
         };
         assert!(matches!(
             snapshot_from_pads(&[Some(short_buttons)]),
-            Err(DeviceError::Internal("gamepad read"))
+            Err(GamepadError::Internal("gamepad read"))
         ));
     }
 
@@ -576,15 +574,15 @@ mod tests {
     #[test]
     fn frame_from_read_maps_unsupported_and_internal_and_none() {
         assert_eq!(
-            frame_from_read(Err(DeviceError::Unsupported(UNSUPPORTED_PLATFORM))),
+            frame_from_read(Err(GamepadError::Unsupported(UNSUPPORTED_PLATFORM))),
             Frame::Unsupported
         );
         assert_eq!(
-            frame_from_read(Err(DeviceError::Unsupported(UNSUPPORTED_MAPPING))),
+            frame_from_read(Err(GamepadError::Unsupported(UNSUPPORTED_MAPPING))),
             Frame::Unsupported
         );
         assert_eq!(
-            frame_from_read(Err(DeviceError::Internal("gamepad read"))),
+            frame_from_read(Err(GamepadError::Internal("gamepad read"))),
             Frame::Disconnected
         );
         assert_eq!(frame_from_read(Ok(None)), Frame::Disconnected);

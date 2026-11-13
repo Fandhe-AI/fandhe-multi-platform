@@ -37,8 +37,8 @@
 //! `device/apple_share.rs`（`apple/fandhe_apple_share.m` の共有シート実装を呼ぶ）が
 //! 同じ緩和へ相乗りした。Issue #906 で `device/apple_biometric.rs`
 //! （`apple/fandhe_apple_biometric.m` の生体認証実装を呼ぶ）も同様に相乗りする。
-//! Issue #934 で `device/apple_gamepad.rs`（`apple/fandhe_apple_gamepad.m` の
-//! `GCController` 実装を呼ぶ）も同じ緩和へ相乗りした。
+//! Issue #934 の `apple_gamepad`（`GCController` 実装）も同じ緩和へ相乗りしていたが、
+//! 機能 crate `fandhe-cap-gamepad` へ移した（Issue #1303）。
 //!
 //! Windows も Issue #898 で同じ理由により `deny` へ緩める: `device/windows_share.rs`
 //! が WinRT `IDataTransferManagerInterop::GetForWindow` / `ShowShareUIForWindow`

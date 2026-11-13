@@ -95,8 +95,13 @@ graph TD
     行います。provider は OS がプロセス開始時に生成し、`ActivityLifecycleCallbacks` で `GameActivity` の生成・状態保存・破棄だけを
     機能の helper へ流します。provider は宣言の `android.components`（`kind = "provider"`、`authorities` は
     `${applicationId}.fandhe.<id>`）で出ます。`registerForActivityResult` は登録キーを明示し、生成順への依存を残しません
+  - Activity の入力（`dispatchKeyEvent`・`dispatchGenericMotionEvent` 等）の観測は、provider が `onHostCreated` で
+    `Window.Callback` を包んで行います（#1303、ゲームパッド）。包んだ callback は Activity より前に呼ばれ、従来の override と
+    同じイベントを受けます。通知してから元の戻り値をそのまま返し、イベントは消費しません。AppCompat も同じ方法で
+    包んでおり、どちらが外側でも委譲は連なります。守らない範囲は、起動後に `getWindow().setCallback()` で callback を
+    差し替えた場合に入力が届かなくなることです。`Activity` 内の他の経路（`onNewIntent` など）は `ComponentActivity` のリスナーで足りるため、この方法は入力の観測に限ります
   - 利用者の `MainActivity` に要るのは `GameActivity` の継承と、`static` 初期化子での `System.loadLibrary` だけです
-  - 採らなかった案: `gen` が委譲コードを生成する（出力と宣言の欄が増える）、共通の基底 Activity に集める（機能の一覧を知る手段が別に要る）、
+  - 採らなかった案: `gen` が委譲コードを生成する（出力と宣言の欄が増える。`gen` は現状 `MainActivity` を出さず、`--eject` も未実装）、利用者の手順書で委譲を案内する（「機能を選ぶだけ」が崩れる）、共通の基底 Activity に集める（機能の一覧を知る手段が別に要る）、
     単一 provider に meta-data を集める（同名コンポーネントの異なる定義を拒否する現行の統合規則に欄の追加が要る）
   - 機能が数十に増えて起動時間が問題になれば、`androidx.startup` 型の単一 provider へ寄せます（Phase 5 で計測してから）
 - 細かい形式と検証・統合の規則は `capability-declaration.md` に定めました（#1160）。
