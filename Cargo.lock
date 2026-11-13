@@ -1211,6 +1211,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-eye-dropper"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+]
+
+[[package]]
 name = "fandhe-cap-file-watch"
 version = "0.2.0"
 dependencies = [
@@ -1797,6 +1807,7 @@ dependencies = [
  "fandhe-cap-document-scan",
  "fandhe-cap-drag-drop",
  "fandhe-cap-dynamic-type",
+ "fandhe-cap-eye-dropper",
  "fandhe-cap-file-watch",
  "fandhe-cap-focus-mode-status",
  "fandhe-cap-gamepad",

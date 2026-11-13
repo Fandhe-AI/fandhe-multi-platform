@@ -63,7 +63,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "eye_dropper" => fandhe_core::screens::eye_dropper_pick::current_screen,
-    fandhe_egui_proxy::device::eye_dropper::eye_dropper_pick_effect,
+    fandhe_cap_eye_dropper::eye_dropper_pick_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "color_picker" => fandhe_core::screens::color_picker_pick::current_screen,

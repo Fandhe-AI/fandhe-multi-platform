@@ -1,7 +1,7 @@
 // Phase 11 の拡充ループ（親 #148）型サンプル「画面のスポイト」: macOS 実装（Issue #762）。
 // `NSColorSampler` で画面上の 1 点の色を拾い、sRGB に直して 0xRRGGBB の整数で Rust へ通知する。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_eye_dropper.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-eye-dropper/src/macos.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする（AppKit は既存のリンク）。
 //
 // 契約（pull 型。`fandhe_apple_contact_picker.m` と同型）:

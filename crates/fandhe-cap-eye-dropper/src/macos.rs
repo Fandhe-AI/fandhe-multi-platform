@@ -1,11 +1,11 @@
-//! macOS 向け画面のスポイト実装（Issue #762）。`device/eye_dropper.rs` の macOS 経路から呼ばれ、
+//! macOS 向け画面のスポイト実装（Issue #762）。`driver` の macOS 経路から呼ばれ、
 //! `macos/fandhe_macos_eye_dropper.m`（`NSColorSampler`。`build.rs` が feature `device` 有効時のみ
 //! コンパイルする）を `unsafe extern "C"` 1 関数（[`present`]）で呼ぶ。
 //! `unsafe` はこの呼び出しと受け口に閉じ `// SAFETY:` で契約を明記する
 //! （`apple_contact_picker.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側のハンドラから [`fandhe_rust_eye_dropper_outcome`] が呼ばれ、
-//! `device/eye_dropper::bridge` へ結果を push する（pull 型）。コード → 結果の写像は
+//! `driver` の `bridge` へ結果を push する（pull 型）。コード → 結果の写像は
 //! `fandhe_device::eye_dropper::result_from_macos_code` に一本化する。
 //!
 //! 拾った色をログへ出力しない（security.md A09）。
@@ -29,9 +29,9 @@ pub(crate) fn present(request_id: u64) -> bool {
 /// `.m` 側のハンドラから呼ばれる受け口。ポインタを受けず、色は整数 `rgb` で渡る。
 /// macOS は event loop 側が待機中に `request_repaint_after` を出すため repaint は呼ばない。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_eye_dropper_outcome(request_id: u64, code: i32, rgb: i32) {
-    super::eye_dropper::bridge::deliver(
+    crate::driver::bridge::deliver(
         request_id,
         fandhe_device::eye_dropper::result_from_macos_code(code, rgb),
     );

@@ -29,6 +29,7 @@ device = [
   "dep:fandhe-cap-document-scan",
   "dep:fandhe-cap-drag-drop",
   "dep:fandhe-cap-dynamic-type",
+  "dep:fandhe-cap-eye-dropper",
   "dep:fandhe-cap-file-watch",
   "dep:fandhe-cap-focus-mode-status",
   "dep:fandhe-cap-gamepad",
@@ -134,6 +135,7 @@ fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier", optio
 fandhe-cap-document-scan = { path = "../fandhe-cap-document-scan", optional = true }
 fandhe-cap-drag-drop = { path = "../fandhe-cap-drag-drop", optional = true }
 fandhe-cap-dynamic-type = { path = "../fandhe-cap-dynamic-type", optional = true }
+fandhe-cap-eye-dropper = { path = "../fandhe-cap-eye-dropper", optional = true }
 fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch", optional = true }
 fandhe-cap-focus-mode-status = { path = "../fandhe-cap-focus-mode-status", optional = true }
 fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad", optional = true }

@@ -2,14 +2,14 @@
 //! `fandhe_core::screens::eye_dropper_pick`（端末依存ゼロ）の要求を観測し、結果を
 //! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は
-//! `fandhe_device::eye_dropper` のモジュール doc。
+//! `fandhe_device::eye_dropper` のモジュール doc。本 crate が `fandhe-egui-proxy` の `device/eye_dropper.rs` から移した（#1191）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
 //!
 //! # macOS: pull 型 `bridge`
 //!
 //! `NSColorSampler` のハンドラは非同期に届くため、`EyeDropper` トレイトを通さず
-//! `fandhe-runtime/src/request_slot.rs::RequestSlot` の facade で受ける。画面への反映は毎フレーム
+//! `fandhe_runtime::request_slot::RequestSlot` の facade で受ける。画面への反映は毎フレーム
 //! [`drive_callback`] が行う。
 //!
 //! # macOS 以外
@@ -18,15 +18,14 @@
 //! `fandhe-web-dom` が持つ（#763）。後続の子はこのファイルの dispatch・cfg・fallback を触らない。
 
 use fandhe_core::screens::eye_dropper_pick::{EyeDropperOutcome, EyeDropperState};
-use fandhe_device::eye_dropper::PickedColor;
 use fandhe_device::DeviceError;
+use fandhe_device::eye_dropper::PickedColor;
 
 #[cfg(not(target_os = "macos"))]
 use fandhe_core::screens::eye_dropper_pick::{finish_pick, mark_picking, take_request};
-#[cfg(not(target_os = "macos"))]
-use fandhe_device::eye_dropper::EyeDropper;
+use fandhe_device::eye_dropper::{EyeDropper, UnsupportedEyeDropper};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// `Result<PickedColor, DeviceError>` を画面用の結果へ畳む。権限拒否が来ても成功にせず
 /// `Failed` へ畳む（この機能は権限を要さない）。表示文字列は内部識別子のみで色は入らない。
@@ -44,10 +43,10 @@ fn to_outcome(result: Result<PickedColor, DeviceError>) -> EyeDropperOutcome {
 #[cfg(target_os = "macos")]
 pub(crate) mod bridge {
     use fandhe_core::screens::eye_dropper_pick::EyeDropperOutcome;
-    use fandhe_device::eye_dropper::PickedColor;
     use fandhe_device::DeviceError;
+    use fandhe_device::eye_dropper::PickedColor;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) static SLOT: RequestSlot<EyeDropperOutcome> = RequestSlot::new();
 
@@ -67,13 +66,13 @@ pub(crate) mod bridge {
 #[cfg(target_os = "macos")]
 fn drive_callback(state: &EyeDropperState, sender: &CompletionSender<EyeDropperState>) {
     use fandhe_core::screens::eye_dropper_pick::{
-        finish_pick, mark_picking, take_request, PickPhase,
+        PickPhase, finish_pick, mark_picking, take_request,
     };
 
     if take_request(state).is_some() {
         let _ = sender.send(Box::new(mark_picking));
         let request_id = bridge::begin();
-        if !super::macos_eye_dropper::present(request_id) {
+        if !crate::macos::present(request_id) {
             // 起動依頼自体が同期的に失敗した（コールバックは二度と来ない）。
             bridge::deliver(
                 request_id,
@@ -87,7 +86,7 @@ fn drive_callback(state: &EyeDropperState, sender: &CompletionSender<EyeDropperS
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -120,6 +119,14 @@ fn drive(
     }));
 }
 
+/// 同期の trait 経由で選べる OS 実装を返す。どの OS にも同期実装は無い（macOS の `NSColorSampler` は
+/// 非同期のため受け口 `bridge` でしか受けられず、trait を通らない）ので、常に `UnsupportedEyeDropper`
+/// （`Unsupported` を返し、成功へは倒さない）。macOS は [`eye_dropper_pick_effect`] 経由で使う。
+/// 画面の状態型に依存しない入口で、フレームワークの外のアプリも使える。
+pub fn platform_eye_dropper() -> Box<dyn EyeDropper> {
+    Box::new(UnsupportedEyeDropper)
+}
+
 /// `registry.rs` の `effect` 区画から `eye_dropper` 画面用に配線される effect ドライバ。
 pub fn eye_dropper_pick_effect(
     state: &EyeDropperState,
@@ -128,11 +135,7 @@ pub fn eye_dropper_pick_effect(
     #[cfg(target_os = "macos")]
     drive_callback(state, sender);
     #[cfg(not(target_os = "macos"))]
-    drive(
-        state,
-        sender,
-        &fandhe_device::eye_dropper::UnsupportedEyeDropper,
-    );
+    drive(state, sender, &UnsupportedEyeDropper);
 }
 
 #[cfg(test)]
@@ -192,10 +195,14 @@ mod tests {
     #[cfg(not(target_os = "macos"))]
     #[test]
     fn unsupported_is_reflected_not_success() {
-        use fandhe_core::screens::eye_dropper_pick::{request_pick, PickPhase, UNSUPPORTED_TEXT};
-        let ctx = egui::Context::default();
+        use fandhe_core::screens::eye_dropper_pick::{PickPhase, UNSUPPORTED_TEXT, request_pick};
+        struct NoopWaker;
+        impl fandhe_runtime::RepaintWaker for NoopWaker {
+            fn wake(&self) {}
+            fn wake_after(&self, _delay: std::time::Duration) {}
+        }
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = crate::app::egui_sender(tx, ctx);
+        let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
         let mut state = EyeDropperState::default();
         request_pick(&mut state);
         eye_dropper_pick_effect(&state, &sender);

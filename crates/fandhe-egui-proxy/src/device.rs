@@ -575,9 +575,6 @@ pub mod environment_sensors;
 /// iOS / Android は pull 型 `bridge`（(b-ios)・(b-android) が埋めるスタブ）、他 OS は
 /// `UnsupportedExternalAppLaunch` 固定。Web は `fandhe-web-dom`）。
 pub mod external_app_launch;
-/// Phase 11 の拡充ループ（親 #148、Issue #762）: 画面のスポイトの effect ドライバ（macOS は pull 型
-/// `bridge`、他 OS は `UnsupportedEyeDropper` 固定。Web は `fandhe-web-dom` が持つ）。
-pub mod eye_dropper;
 /// Phase 11 の拡充ループ（親 #102、Issue #416）: ファイルの関連付けの effect ドライバ
 /// （macOS・iOS・Windows 実装、Android は未実装のスタブ、他 OS は `Unsupported` 固定）。
 pub mod file_association;
@@ -909,10 +906,6 @@ pub mod macos_display_refresh_hdr;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_external_app_launch;
-/// Issue #762: macOS 向け画面のスポイト実装（`macos/fandhe_macos_eye_dropper.m` の `NSColorSampler` を
-/// 呼ぶ C ABI ラッパー）。`device/eye_dropper.rs` の macOS 経路から呼ばれる。
-#[cfg(target_os = "macos")]
-pub mod macos_eye_dropper;
 /// Issue #917: macOS 向けプレビュー実装（`macos/fandhe_macos_file_preview.m` の `QLPreviewView` を呼ぶ
 /// C ABI ラッパーと窓が閉じた通知の受け口）。`device/file_preview.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]

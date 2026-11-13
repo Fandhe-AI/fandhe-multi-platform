@@ -740,12 +740,6 @@ fn compile_macos_open_in_shell() {
     compile_objc("macos/fandhe_macos_open_in_shell.m", &["AppKit"]);
 }
 
-/// `macos/fandhe_macos_eye_dropper.m` を `cc` でコンパイルする（Issue #762）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_eye_dropper.rs` が使う）。
-fn compile_macos_eye_dropper() {
-    compile_objc("macos/fandhe_macos_eye_dropper.m", &["AppKit"]);
-}
-
 /// `macos/fandhe_macos_color_picker.m` を `cc` でコンパイルする（Issue #941）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_color_picker.rs` が使う）。
 fn compile_macos_color_picker() {
@@ -1106,8 +1100,6 @@ fn build_macos() {
     compile_macos_open_in_shell();
     // `macos/fandhe_macos_recent_documents.m`（Issue #988）も macOS 専用。
     compile_macos_recent_documents();
-    // `macos/fandhe_macos_eye_dropper.m`（Issue #762）も macOS 専用。
-    compile_macos_eye_dropper();
     // `macos/fandhe_macos_color_picker.m`（Issue #941）も macOS 専用。
     compile_macos_color_picker();
     // `macos/fandhe_macos_video_capture.m`（Issue #1071）も macOS 専用。AVFoundation 等をリンクする。
