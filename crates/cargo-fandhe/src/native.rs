@@ -866,7 +866,7 @@ pub(crate) fn render_web(web: &[&Found], base: &Map<String, Value>) -> Result<St
     Ok(s)
 }
 
-/// `gen_dir` へ書き出す。印（`.fandhe-gen`）のある既存ディレクトリだけを消して作り直す
+/// `gen_dir` へ書き出す。印（`.fandhe-gen`）のある既存ディレクトリの、今回出す側（`web/` か、それ以外）だけを消して作り直す
 /// （選ばなくなった機能の拡張ディレクトリが残って成果物に混ざるのを防ぐ）。
 /// symlink と、印の無い既存ディレクトリ（利用者のもの）は拒否する。
 pub fn write(gen_dir: &Path, files: &BTreeMap<String, String>) -> Result<(), String> {
@@ -881,7 +881,21 @@ pub fn write(gen_dir: &Path, files: &BTreeMap<String, String>) -> Result<(), Str
             ))
         }
         Ok(_) => {
-            fs::remove_dir_all(gen_dir).map_err(|e| format!("{} を消せません: {e}", gen_dir.display()))?;
+            // Web の生成（`web/` 配下を出す）とネイティブの生成は互いの成果物を消さない:
+            // 今回出す側（web か、web 以外）の直下だけを消す。
+            let web_run = files.keys().any(|k| k.starts_with("web/"));
+            let rd = fs::read_dir(gen_dir).map_err(|e| format!("{} を読めません: {e}", gen_dir.display()))?;
+            for ent in rd {
+                let ent = ent.map_err(|e| format!("{} を列挙できません: {e}", gen_dir.display()))?;
+                let name = ent.file_name();
+                if name == MARKER || (name == "web") != web_run {
+                    continue;
+                }
+                let p = ent.path();
+                let md = fs::symlink_metadata(&p).map_err(|e| format!("{} を調べられません: {e}", p.display()))?;
+                let r = if md.is_dir() { fs::remove_dir_all(&p) } else { fs::remove_file(&p) };
+                r.map_err(|e| format!("{} を消せません: {e}", p.display()))?;
+            }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(format!("{} を調べられません: {e}", gen_dir.display())),
@@ -1112,6 +1126,34 @@ mod tests {
         fs::write(root.join("gen/stale.txt"), "x").unwrap();
         write(&root.join("gen"), &files).unwrap();
         assert!(!root.join("gen/stale.txt").exists() && root.join("gen/a/b.txt").exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn web_and_native_writes_keep_each_other() {
+        let root = std::env::temp_dir().join(format!("fandhe-native-web-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let gen = root.join("gen");
+        let m = (MARKER.to_string(), "m".to_string());
+        let native = BTreeMap::from([m.clone(), ("android/a.txt".into(), "1".into())]);
+        let web = BTreeMap::from([m, ("web/manifest.webmanifest".into(), "{}".into())]);
+        // native -> web
+        write(&gen, &native).unwrap();
+        write(&gen, &web).unwrap();
+        assert!(
+            gen.join("android/a.txt").exists() && gen.join("web/manifest.webmanifest").exists()
+        );
+        // web -> native（古いネイティブ成果物は消え、web は残る）
+        fs::write(gen.join("stale.txt"), "x").unwrap();
+        write(&gen, &native).unwrap();
+        assert!(!gen.join("stale.txt").exists() && gen.join("web/manifest.webmanifest").exists());
+        // web 単独が先でも後続のネイティブが拒否されない
+        fs::remove_dir_all(&gen).unwrap();
+        write(&gen, &web).unwrap();
+        write(&gen, &native).unwrap();
+        assert!(
+            gen.join("android/a.txt").exists() && gen.join("web/manifest.webmanifest").exists()
+        );
         let _ = fs::remove_dir_all(&root);
     }
 }
