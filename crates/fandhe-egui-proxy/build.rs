@@ -84,12 +84,6 @@ fn build() {
     // `ios/fandhe_ios_notification.m`（通知）。
     compile_objc("ios/fandhe_ios_notification.m", &["UserNotifications"]);
 
-    // `ios/fandhe_ios_drag_drop.m`（ドラッグ&ドロップ）。
-    compile_objc(
-        "ios/fandhe_ios_drag_drop.m",
-        &["UIKit", "UniformTypeIdentifiers"],
-    );
-
     compile_apple_location();
 
     // `apple/fandhe_apple_biometric.m`（Issue #906）も macOS 分岐と共用する。

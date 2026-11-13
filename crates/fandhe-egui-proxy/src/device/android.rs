@@ -11,11 +11,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::drag_drop::DropItem;
 use fandhe_device::clipboard::Clipboard;
+use fandhe_device::file_picker::sanitize_picked_name;
 use fandhe_device::file_picker::{PickedFile, MAX_FILE_BYTES};
 use fandhe_device::secure_credential::{validate_key, validate_secret, Secret, SecureCredential};
-use fandhe_device::share::ShareRequest;
 use fandhe_device::tts::Tts;
 use fandhe_device::{DataDir, DeviceError};
 
@@ -1272,18 +1271,6 @@ pub(crate) fn request_file_pick(request_id: u64) -> bool {
     request_result.is_ok()
 }
 
-/// DISPLAY_NAME からパスを剥がして末尾要素のみを採用し、NUL・空文字を拒否する
-/// （`PickedFile.name` の不変条件「パスを含まない・NUL 無し」、`fandhe_device::file_picker`
-/// モジュール doc 参照）。SAF のプロバイダが `/` を含む DISPLAY_NAME を返す場合に備え、
-/// 呼び出し元へパスの断片を渡さない（security.md A03: 検証できない入力を通さない）。
-fn sanitize_picked_name(raw: &str) -> Option<String> {
-    let name = raw.rsplit('/').next().unwrap_or(raw);
-    if name.is_empty() || name.contains('\0') {
-        return None;
-    }
-    Some(name.to_string())
-}
-
 /// Java 側から届いた `code`/`name`/`fd` を `PickedFile` へ変換する
 /// （`nativeOnFilePickerResult` 本体）。`code` の意味は `MainActivity.
 /// nativeOnFilePickerResult` 宣言コメントと対で決める: 0=選択（name/fd 必須）／
@@ -1534,31 +1521,6 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnContactPickerRe
     crate::android::request_repaint();
 }
 
-#[cfg(test)]
-mod file_pick_tests {
-    use super::sanitize_picked_name;
-
-    #[test]
-    fn sanitize_picked_name_strips_leading_path() {
-        assert_eq!(
-            sanitize_picked_name("a/b/名前.txt").as_deref(),
-            Some("名前.txt")
-        );
-    }
-
-    #[test]
-    fn sanitize_picked_name_rejects_nul_and_empty() {
-        assert_eq!(sanitize_picked_name(""), None);
-        assert_eq!(sanitize_picked_name("a/"), None);
-        assert_eq!(sanitize_picked_name("na\0me"), None);
-    }
-
-    #[test]
-    fn sanitize_picked_name_keeps_plain_name() {
-        assert_eq!(sanitize_picked_name("a.txt").as_deref(), Some("a.txt"));
-    }
-}
-
 // --------------------------------------------------------------------------
 // 位置情報（Issue #890、Phase 11 型サンプル「位置情報」の Android 経路、親 #887）
 // --------------------------------------------------------------------------
@@ -1718,108 +1680,12 @@ mod location_tests {
     }
 }
 
-// --------------------------------------------------------------------------
-// 共有シート（Issue #899、Phase 11 型サンプル「共有」の Android 経路、親 #896）
-// --------------------------------------------------------------------------
-//
-// `fandhe_device::share::Share` trait を通らない（`device/share.rs` モジュール doc の
-// 「macOS/iOS/Android は pull 型 bridge」参照）。`Intent.createChooser` は標準では
-// 選択結果を返さない（`StartActivityForResult` の結果は常に `RESULT_CANCELED`）ため、
-// Java 側 `MainActivity.requestShare` が `IntentSender`（`Intent.createChooser` の
-// 3 引数版）で選択完了 broadcast を受け取り、受信できれば `Shared`、chooser が閉じても
-// broadcast が届かなければ `Unknown`（結果不明、`device/share.rs::outcome_from_code`
-// の code 4）として通知する（実装計画 §2.3 参照）。
-
-/// Java 側 `MainActivity.requestShare(long, String, String)` を呼び、共有シートの提示を
-/// 要求する（Issue #899）。`request_file_pick`/`request_location_updates` と同じ JNI
-/// 呼び出しの形で、結果を待たずに即座に戻る（実結果は `nativeOnShareResult` が非同期に
-/// 届ける、`device/share.rs::bridge` 参照）。`url` が無い場合は Java 側へ `null` を渡す
-/// （`ShareRequest::url()` が `None` の場合。Java 側は `null` を「URL 無し」と解釈する
-/// 契約、`MainActivity.requestShare` 宣言コメントと対）。
-///
-/// 戻り値は JNI 呼び出し自体の成否のみ（`false` はメソッド未検出・例外送出等。呼び出し元
-/// [`crate::device::share::present`]（Android 分岐）が `false` を見て
-/// `Err(DeviceError::Internal("share present"))` として `bridge::deliver` する）。
-// 本体内の 2 箇所の `unsafe`（`JavaVM::from_raw` / `as_cast_raw`）は `request_file_pick`
-// と同一の根拠（各 `// SAFETY:` 参照）。
-#[allow(unsafe_code)]
-pub(crate) fn request_share(request_id: u64, request: &ShareRequest) -> bool {
-    let Some(app) = crate::android::android_app() else {
-        return false;
-    };
-
-    // SAFETY: `request_file_pick` と同一の根拠。`app.vm_as_ptr()` は android-activity が
-    // 管理する有効な `JavaVM*` を返し、`android_app()` は最新の `AndroidApp` を複製して
-    // 返すため、ここで得た `app` は呼び出し時点で有効な `Activity` を指す。呼び出し中は
-    // ローカル変数 `app` が生存を保つ（本関数は結果を待たず即座に戻るため、生存期間は
-    // この呼び出し内で足りる）。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-    let request_result =
-        vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
-            let j_text = env.new_string(request.text())?;
-            let j_url = match request.url() {
-                Some(url) => jni::objects::JObject::from(env.new_string(url)?),
-                None => jni::objects::JObject::null(),
-            };
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: `request_file_pick` と同一の根拠。`activity_as_ptr()` は
-            // `AndroidApp` が保持する未所有の JNI グローバル参照で、`AndroidApp` の
-            // 生存期間中有効。`Cast` は所有権を持たないラッパーのため delete を試みない。
-            let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-            env.call_method(
-                &activity,
-                jni::jni_str!("requestShare"),
-                jni::jni_sig!((long, java.lang.String, java.lang.String) -> ()),
-                &[
-                    jni::objects::JValue::Long(request_id as jni::sys::jlong),
-                    jni::objects::JValue::Object(&j_text),
-                    jni::objects::JValue::Object(&j_url),
-                ],
-            )?;
-            Ok(())
-        });
-
-    request_result.is_ok()
-}
-
-/// `MainActivity.nativeOnShareResult`（Java 側）から呼ばれる JNI エクスポート関数
-/// （Issue #899）。シンボル名の固定規約は `nativeOnFilePickerResult` と同じ。`code` の
-/// 意味は `device/share.rs::outcome_from_code` の表（iOS/macOS/Android 共通）と対で
-/// 決める。
-///
-/// [`super::share::outcome_from_code`] で変換し、[`super::share::bridge::deliver`] へ
-/// 届ける。`request_id` が現在追跡中の要求と不一致（プロセス死後の再配送・旧要求の
-/// 遅延到着）なら `deliver` が黙って捨てる（`bridge` モジュール doc 参照）。
-///
-/// `deliver` の成否に関わらず無条件で [`crate::android::request_repaint`] を呼び、
-/// `drive_callback` が次フレームで `bridge::snapshot` を観測できるようにする
-/// （`nativeOnFilePickerResult` と同じ理由）。共有テキスト・URL は引数に含まれないため
-/// ログ出力の懸念は無い。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` は JNI 命名規約上の固定
-/// シンボル名であり、本クレートは cdylib として 1 つの Android 実行単位にのみ
-/// リンクされるため他シンボルと衝突しない（`nativeOnFilePickerResult` と同じ根拠）。
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnShareResult(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    request_id: jni::sys::jlong,
-    code: jni::sys::jint,
-) {
-    let outcome = super::share::outcome_from_code(code);
-    super::share::bridge::deliver(request_id as u64, outcome);
-    crate::android::request_repaint();
-}
-
 // 生体認証（Issue #908）。Java 側は `MainActivity.requestBiometric(long, String)`（提示
 // 依頼）/ `nativeOnBiometricResult`（結果通知）で `device/biometric_auth.rs::bridge` と
-// pull 型で橋渡しする（`共有` 節と同型、Issue #899 と同じ設計判断）。
+// pull 型で橋渡しする（`device/share` と同型の pull 型橋渡し、Issue #899 と同じ設計判断）。
 
 /// Java 側 `MainActivity.requestBiometric(long, String)` を呼び、生体認証プロンプトの
-/// 提示を要求する（Issue #908）。`request_share` と同じ JNI 呼び出しの形で、結果を
+/// 提示を要求する（Issue #908）。`request_file_pick` と同じ JNI 呼び出しの形で、結果を
 /// 待たずに即座に戻る（実結果は `nativeOnBiometricResult` が非同期に届ける、
 /// `device/biometric_auth.rs::bridge` 参照）。`reason` は呼び出し元
 /// （`device/biometric_auth.rs::present`）で `validate_reason` 済みの非空文字列。
@@ -2491,183 +2357,5 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnNotificationRes
 ) {
     let outcome = super::notification::outcome_from_code(code);
     super::notification::bridge::deliver(request_id as u64, outcome);
-    crate::android::request_repaint();
-}
-
-// ドラッグ & ドロップ受け取り（Issue #1016）。Java 側の `dragListener`
-// （`View.OnDragListener`、`MainActivity.java`）が `View.setOnDragListener` 経由で push
-// する各イベントを、iOS（`ios_drag_drop.rs`）と同じ集約器 [`super::drop_session`] へ
-// 橋渡しする。file-pick/notification と異なり `RequestSlot`/`bridge` は使わない
-// （`drop_session.rs` モジュール doc「Android 経路」参照。集約器自体がセッション id で
-// 世代を追う）。`nativeDragDropIsActive`（`crate::android` 側、feature 無条件で 1 つだけ
-// 定義）が `false` を返す画面では、Java 側はここから先の 4 関数を一切呼ばない
-// （実装計画 §3-2「スタブを置かない理由」）。
-
-/// Java 側から届いた `code`/`name`/`fd` を [`DropItem`] へ変換する
-/// （`nativeOnDragDropItem` 本体）。`code` の意味は [`super::drag_drop::item_from_fd`]
-/// の doc（`MainActivity.nativeOnDragDropItem` 宣言コメントと対）を参照。
-///
-/// `fd` の所有権は `code` に関わらず常に先に取る（`fd >= 0` のときのみ）。Java 側が
-/// 誤って `code != 0` で正の fd を渡した場合でも取りこぼして leak させないため
-/// （`decode_file_pick_result` と同じ判断、codex P1 対応の踏襲）。所有権を取った
-/// `File` は [`super::drag_drop::item_from_fd`] が読み取り成否に関わらず drop 時に
-/// 必ず 1 回だけ close する。
-///
-/// 表示名は Java 側 DISPLAY_NAME（`MainActivity.resolveDisplayName`）を
-/// [`sanitize_picked_name`] で検証する（パスの断片・NUL・空文字を拒否）。`name` が
-/// null、または検証に失敗した場合は「（名前なし）」にする（`file_pick` と同じ
-/// フォールバック）。
-// 本体内の 1 箇所の `unsafe`（`OwnedFd::from_raw_fd`）は関数 doc の SAFETY 記述参照。
-#[allow(unsafe_code)]
-fn decode_drag_drop_item(
-    env: &jni::Env,
-    code: jni::sys::jint,
-    name: &jni::objects::JString,
-    fd: jni::sys::jint,
-) -> DropItem {
-    // SAFETY: Java 側 `dragListener` の読み取りスレッド（`MainActivity.java`
-    // `deliverDropItem`）が `ParcelFileDescriptor.detachFd()` で所有権を手放した
-    // 直後に渡す有効な fd（`fd >= 0` のときのみ）であり、detach 後は Java 側で
-    // close しない契約（`decode_file_pick_result` と同一の根拠）。負の値（fd なし、
-    // フォルダ/読めない経路）は所有権を取らない。
-    let file = (fd >= 0).then(|| {
-        // SAFETY: 上記のとおり `fd >= 0` は所有権を手放された有効な fd で、ここで 1 回だけ所有に取る。
-        let owned = unsafe { OwnedFd::from_raw_fd(fd) };
-        std::fs::File::from(owned)
-    });
-
-    let display_name = if name.is_null() {
-        None
-    } else {
-        name.try_to_string(env).ok()
-    }
-    .and_then(|raw| sanitize_picked_name(&raw))
-    .unwrap_or_else(|| "（名前なし）".to_string());
-
-    super::drag_drop::item_from_fd(code, file, display_name)
-}
-
-/// `MainActivity.java` の `dragListener` が `ACTION_DRAG_ENTERED`/`ACTION_DRAG_EXITED`
-/// から呼ぶ JNI エクスポート関数（Issue #1016）。`entered`（`true` = 領域内に入った）を
-/// そのまま [`super::drop_session::hover`] へ委譲する。
-///
-/// View のジェスチャ処理は egui の描画ループとは独立して進むため、
-/// [`crate::android::request_repaint`] で次フレームを明示的に起こす
-/// （`nativeOnFilePickerResult` と同じ理由）。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` は JNI 命名規約上の固定
-/// シンボル名であり、本クレートは cdylib として 1 つの Android 実行単位にのみ
-/// リンクされるため他シンボルと衝突しない（`nativeOnFilePickerResult` と同じ根拠）。
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnDragDropHover(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    entered: jni::sys::jboolean,
-) {
-    super::drop_session::hover(entered);
-    crate::android::request_repaint();
-}
-
-/// `MainActivity.java` の `dragListener` が `ACTION_DROP` の冒頭から呼ぶ JNI
-/// エクスポート関数（Issue #1016）。[`super::drop_session::begin`] へ委譲し、払い出した
-/// セッション id を返す。`total` が負（契約違反）なら 0 件として扱う。
-///
-/// iOS の `fandhe_rust_drag_drop_begin`（out パラメータで `to_load` も返す）と異なり、
-/// `to_load` は返さない: Java 側の読み取りスレッドは `total` 件すべてについて
-/// [`Java_com_fandhe_platform_MainActivity_nativeDragDropWants`] へ 1 件ずつ問い合わせ、
-/// 上限超過分・旧世代はそこで `false` として打ち切られる（実装計画 §3-1 ステップ 5、
-/// `drop_session::wants` doc 参照）。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない（`nativeOnDragDropHover` と同じ根拠）。
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnDragDropBegin(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    total: jni::sys::jint,
-) -> jni::sys::jlong {
-    let total = usize::try_from(total).unwrap_or(0);
-    let (session, _to_load) = super::drop_session::begin(total);
-    crate::android::request_repaint();
-    session as jni::sys::jlong
-}
-
-/// `MainActivity.java` の読み取りスレッドが、1 件読む **前** に呼ぶ JNI エクスポート
-/// 関数（Issue #1016）。[`super::drop_session::wants`] へ委譲する。`false` が返れば
-/// Java 側は読み取りを行わず break する（旧世代の打ち切り・上限超過分の打ち切りの
-/// 両方をここで判定する、実装計画 §3-3）。`session`/`index` が負（契約違反）なら
-/// 無条件で `false`。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない（`nativeOnDragDropHover` と同じ根拠）。
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeDragDropWants(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    session: jni::sys::jlong,
-    index: jni::sys::jint,
-) -> jni::sys::jboolean {
-    if session < 0 {
-        return false;
-    }
-    let Ok(index) = usize::try_from(index) else {
-        return false;
-    };
-    super::drop_session::wants(session as u64, index)
-}
-
-/// `MainActivity.java` の読み取りスレッドが、1 件読み終える（またはフォルダ/読めない
-/// と判定する）たびに呼ぶ JNI エクスポート関数（Issue #1016）。[`decode_drag_drop_item`]
-/// で [`DropItem`] へ変換し、[`super::drop_session::item`] へ渡す。
-///
-/// 読み取り（[`decode_drag_drop_item`] 内の [`super::drag_drop::item_from_fd`]）は
-/// ロックの外（本関数の中、`drop_session::item` 呼び出し前）で行う（`drop_session.rs`
-/// モジュール doc「判定と更新は同じロックの内側」参照。ロック保持中に I/O を行わない）。
-///
-/// `index` が負（契約違反）の場合は `drop_session::item` を呼ばないが、`fd` の所有権は
-/// [`decode_drag_drop_item`] の中で既に取っているため、変換結果の `DropItem` が drop
-/// されるだけでリークしない。
-///
-/// 受け取った内容（ファイル名・中身）はログ出力・保存を一切行わない（他アプリの
-/// 機密文書になり得る、security.md A09）。`deliver` に相当する経路の成否に関わらず
-/// 無条件で [`crate::android::request_repaint`] を呼ぶ（`nativeOnFilePickerResult` と
-/// 同じ理由。アイドル中でも次フレームで `drag_drop_effect` が
-/// `drop_session::take_events` を観測できるようにする、契約表 4）。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない（`fd` の `unsafe` な受け取りは
-/// [`decode_drag_drop_item`] に閉じる）。`EnvUnowned::with_env` が JNI アタッチメントの
-/// 安全な取り扱い（`catch_unwind` によるパニックの遮断込み）を担う。`#[no_mangle]` は
-/// JNI 命名規約上の固定シンボル名であり、本クレートは cdylib として 1 つの Android
-/// 実行単位にのみリンクされるため他シンボルと衝突しない（`nativeOnFilePickerResult` と
-/// 同じ根拠）。
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnDragDropItem<'caller>(
-    mut unowned_env: jni::EnvUnowned<'caller>,
-    _class: jni::objects::JClass<'caller>,
-    session: jni::sys::jlong,
-    index: jni::sys::jint,
-    code: jni::sys::jint,
-    name: jni::objects::JString<'caller>,
-    fd: jni::sys::jint,
-) {
-    let outcome = unowned_env.with_env(|env| -> Result<(), jni::errors::Error> {
-        // fd の所有権は decode 側が code に関わらず先に取るため、index 不正で
-        // `item` を呼ばない経路でも close されリークしない（関数 doc 参照）。
-        let item = decode_drag_drop_item(env, code, &name, fd);
-        if session >= 0 {
-            if let Ok(index) = usize::try_from(index) {
-                super::drop_session::item(session as u64, index, item);
-            }
-        }
-        Ok(())
-    });
-    // JVM 境界を越えて panic させない（`with_env` が `catch_unwind` 済み）。
-    let _ = outcome.into_outcome();
     crate::android::request_repaint();
 }

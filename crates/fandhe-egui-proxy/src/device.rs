@@ -590,15 +590,6 @@ pub mod digital_credentials;
 /// Phase 11 の拡充ループ（親 #177、Issue #870）: 画面のリフレッシュレート・HDR・広色域の effect
 /// ドライバ（macOS / Windows 実装、iOS・Android は骨格、他 OS は `UnsupportedDisplayRefreshHdr` 固定）。
 pub mod display_refresh_hdr;
-/// Phase 11 の拡充ループ（親 #1013、Issue #1014・#1015）: ドラッグ & ドロップ受け取りの
-/// effect ドライバ（macOS/Windows は egui `RawInput::hovered_files`/`dropped_files` を
-/// 橋渡し、iOS は [`drop_session`]/[`ios_drag_drop`] 経由で `UIDropInteraction` を橋渡し）。
-pub mod drag_drop;
-/// ドラッグ & ドロップ（[`drag_drop`]）の集約状態機械。ターゲット非依存
-/// （`drop_session.rs` モジュール doc 参照）。iOS 経路（[`ios_drag_drop`]）専用の
-/// 入力元だが、ロジック自体はホストの `cargo test` から検証できるよう cfg で
-/// ゲートしない（`android_gamepad.rs` と同じ判断）。
-pub mod drop_session;
 /// Phase 11（親 #123、Issue #609）: 気圧・照度・近接センサーの effect ドライバ（iOS・Android・Windows 実装、
 /// 他 OS は `UnsupportedEnvironmentSensors` 固定。Web は対応表で `no`）。
 pub mod environment_sensors;
@@ -743,11 +734,6 @@ pub mod ios_device_info;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_display_refresh_hdr;
-/// Issue #1015: iOS 向けドラッグ & ドロップ受け取り実装（`ios/fandhe_ios_drag_drop.m`
-/// を呼ぶ C ABI ラッパー）。`device/drag_drop.rs::drag_drop_effect` の iOS 経路から
-/// 呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_drag_drop;
 /// Issue #609: iOS 向け気圧・照度・近接センサー実装。
 /// `device/environment_sensors.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]

@@ -11,14 +11,14 @@
 //! [`SESSIONS`] の `Mutex` の内側で「現在のセッションか」「その slot は空きか」
 //! 「全 slot が埋まったか」をまとめて判定・更新する。ファイルの実読み取り
 //! （`fandhe_device::drag_drop::read_dropped`）はロックの外（呼び出し元
-//! `ios_drag_drop.rs::fandhe_rust_drag_drop_item`）で済ませてから [`DropSessions::item`]
+//! `ios.rs::fandhe_rust_drag_drop_item`）で済ませてから [`DropSessions::item`]
 //! を呼ぶ契約にし、ロック保持中に I/O を行わない。
 //!
 //! # イベントは push 型・`take_events` で drain
 //!
-//! [`DropEvent`] は `effect` 呼び出し（`device/drag_drop.rs::drag_drop_effect` の iOS
+//! [`DropEvent`] は `effect` 呼び出し（`driver::drag_drop_effect` の iOS
 //! 分岐、毎フレーム pull）が [`take_events`] で取り出し、`fandhe_core::screens::
-//! drag_drop` の状態遷移関数へ適用する（`drive_events`、`device/drag_drop.rs` 参照）。
+//! drag_drop` の状態遷移関数へ適用する（`drive_events`、`driver.rs` 参照）。
 //! 集約器自体は `fandhe_core` にも `egui`/ObjC にも依存しない。
 //!
 //! iOS/Android 以外のターゲットでは本モジュールは `#[cfg(test)]` からのみ参照されるため、
@@ -27,17 +27,18 @@
 //!
 //! # Android 経路（Issue #1016）
 //!
-//! Android は `View.setOnDragListener`（`MainActivity.java` の `dragListener`）が
+//! Android は `View.setOnDragListener`（`DragDropHelper.java` の `dragListener`）が
 //! push する 1 件ずつの読み込み結果を、iOS と同じくこの集約器へ渡す
-//! （`device/android.rs::nativeOnDragDropItem` 経由）。iOS の completion 側
-//! （`NSItemProvider`）と異なり、Android の読み取りスレッド（`MainActivity.java`）は
+//! （`android.rs` の `nativeOnDragDropItem` 経由）。iOS の completion 側
+//! （`NSItemProvider`）と異なり、Android の読み取りスレッド（`DragDropHelper.java`）は
 //! 「このセッションはまだ現在のものか」を事前に問い合わせてから I/O を始めたいため、
 //! [`wants`] を追加した（iOS は completion が既に非同期に開始済みで問い合わせる余地が
 //! 無く、[`item`] の世代照合だけで十分だった）。Activity 再生成時は [`reset`] を呼び
 //! （`android_main` から、モジュール doc 参照）、進行中のセッションと未適用イベントを
 //! 破棄する。
 
-#![cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))]
+// `wants` と `reset` は Android だけが使う。デスクトップ・iOS では未使用になるため許可する。
+#![cfg_attr(not(target_os = "android"), allow(dead_code))]
 
 use std::sync::Mutex;
 
@@ -98,7 +99,7 @@ impl DropSessions {
 
     /// 新しいドロップ（`total` 件）を開始する。上限 [`MAX_DROP_FILES`] を超えた分は
     /// 読み込み対象にせず `overflow` として集計する（デスクトップの `read_all` と
-    /// 同じ「入力件数そのものを打ち切る」方針、`device/drag_drop.rs` 参照）。
+    /// 同じ「入力件数そのものを打ち切る」方針、`driver.rs` 参照）。
     ///
     /// 進行中の旧セッションがあれば（読み込み完了を待たず）差し替える。旧セッションの
     /// `slots` を捨てるだけで `Finished` は積まない。以降に届く旧セッション宛ての
@@ -226,19 +227,19 @@ pub fn begin(total: usize) -> (u64, usize) {
     lock().begin(total)
 }
 
-/// [`DropSessions::item`] へ委譲する（`ios_drag_drop.rs::fandhe_rust_drag_drop_item` から。
+/// [`DropSessions::item`] へ委譲する（`ios.rs::fandhe_rust_drag_drop_item` から。
 /// 呼び出し元がロックの外で読み取りを済ませている契約、モジュール doc 参照）。
 pub fn item(session: u64, index: usize, result: DropItem) {
     lock().item(session, index, result);
 }
 
-/// [`DropSessions::take_events`] へ委譲する（`device/drag_drop.rs::drag_drop_effect` の
+/// [`DropSessions::take_events`] へ委譲する（`driver::drag_drop_effect` の
 /// iOS 分岐から毎フレーム呼ばれる）。
 pub fn take_events() -> Vec<DropEvent> {
     lock().take_events()
 }
 
-/// [`DropSessions::wants`] へ委譲する（`device/android.rs::
+/// [`DropSessions::wants`] へ委譲する（`android.rs::
 /// Java_..._nativeDragDropWants` から、読み取りスレッドが I/O を始める前に呼ぶ、
 /// モジュール doc「Android 経路」参照）。
 pub fn wants(session: u64, index: usize) -> bool {
@@ -258,7 +259,7 @@ mod tests {
 
     /// [`SESSIONS`] はプロセス全体で共有の static であり、`cargo test` の既定並列
     /// 実行では別テストの `begin`/`item` が世代を進め合って干渉し得るため、本モジュール
-    /// を直接叩くテストはこのロックで直列化する（`device/drag_drop.rs::DRIVE_TEST_LOCK`
+    /// を直接叩くテストはこのロックで直列化する（`driver.rs::DRIVE_TEST_LOCK`
     /// と同じ判断。テスト専用）。
     static TEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -417,9 +418,11 @@ mod tests {
         item(id, 0, ok_item("a"));
 
         let events = take_events();
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, DropEvent::Finished { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, DropEvent::Finished { .. }))
+        );
     }
 
     #[test]

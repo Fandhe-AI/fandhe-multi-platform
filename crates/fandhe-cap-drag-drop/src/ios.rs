@@ -1,6 +1,6 @@
-//! iOS 向けドラッグ & ドロップ受け取り実装（Issue #1015、親 #1013）。`device/drag_drop.rs`
+//! iOS 向けドラッグ & ドロップ受け取り実装（Issue #1015、親 #1013）。`driver.rs`
 //! の `drag_drop_effect` iOS 分岐から呼ばれ、`UIDropInteraction`
-//! （`ios/fandhe_ios_drag_drop.m`、`build.rs` が feature `device` 有効時のみ
+//! （`ios/fandhe_ios_drag_drop.m`、`build.rs` が iOS のときだけ
 //! コンパイル・リンクする）を `unsafe extern "C"` 1 関数（[`ensure_installed`] が
 //! 呼ぶ [`fandhe_ios_drag_drop_install`]）で呼ぶ。`unsafe` はこの呼び出し 1 箇所に
 //! 閉じ `// SAFETY:` で契約を明記する（`ios_notification.rs::present` と同型、
@@ -11,9 +11,9 @@
 //! （[`fandhe_rust_drag_drop_hover`]・[`fandhe_rust_drag_drop_begin`]・
 //! [`fandhe_rust_drag_drop_item`]）経由で push する（pull 型ではない。
 //! `ios_notification.rs::fandhe_rust_notification_outcome` と同じ橋渡し方式）。
-//! 受けた内容は [`super::drop_session`]（ターゲット非依存の集約器）へそのまま渡し、
-//! 状態機械への反映は `device/drag_drop.rs::drive_events` が毎フレーム
-//! [`super::drop_session::take_events`] を drain して行う（本モジュールでは
+//! 受けた内容は [`crate::drop_session`]（ターゲット非依存の集約器）へそのまま渡し、
+//! 状態機械への反映は `driver::drive_events` が毎フレーム
+//! [`crate::drop_session::take_events`] を drain して行う（本モジュールでは
 //! `fandhe_core` の状態を直接書き換えない）。
 //!
 //! # 読み取りは completion スレッド上で同期に行う（一時ファイルの寿命）
@@ -28,7 +28,7 @@
 //! # 判定と更新は同じロックの内側（契約表 2）
 //!
 //! [`fandhe_rust_drag_drop_item`] は読み取り（I/O）をロックの外（本関数の中、
-//! `super::drop_session::item` 呼び出し前）で終えてから、集約器へ結果を渡す
+//! `crate::drop_session::item` 呼び出し前）で終えてから、集約器へ結果を渡す
 //! （`drop_session.rs` モジュール doc 参照。ロック保持中に I/O を行わない）。
 //!
 //! # 入力は信頼境界（A03、契約表 5「FFI 境界」）
@@ -39,14 +39,14 @@
 //! ファイル名・パス・エラー詳細をログへ出力しない（security.md A09）。
 
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
 use fandhe_core::screens::drag_drop::{DragDropState, DropItem};
-use fandhe_device::drag_drop::{read_dropped, DropError};
+use fandhe_device::drag_drop::{DropError, read_dropped};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// プロセス起動時刻（単調時計の基準点、`Instant` は絶対値を持たないため）。
 /// [`now_ms`] からのみ参照する。
@@ -88,7 +88,7 @@ const INSTALL_RETRY_INTERVAL_MS: u64 = 1000;
 /// 実際の時刻 0 が衝突するのはプロセス起動直後の一瞬のみで実害は無い（同 doc 参照）。
 static LAST_INSTALL_ATTEMPT_MS: AtomicU64 = AtomicU64::new(0);
 
-/// `device/drag_drop.rs::drag_drop_effect` の iOS 分岐から毎フレーム呼ばれる。
+/// `driver::drag_drop_effect` の iOS 分岐から毎フレーム呼ばれる。
 /// [`INSTALLED`] が `false` の間だけ [`fandhe_ios_drag_drop_install`] を呼び、
 /// 冪等な `UIDropInteraction` の取り付けを試みる（`.m` 側も
 /// `objc_setAssociatedObject` 相当の static で二重付与を防ぐ二重の安全網、
@@ -168,7 +168,7 @@ const SCREEN_ACTIVE_POLL_INTERVAL_MS: u64 = SCREEN_ACTIVE_WINDOW_MS / 2;
 /// その間はまだ画面表示前のため実害は無い）。
 static LAST_ACTIVE_MS: AtomicU64 = AtomicU64::new(0);
 
-/// `device/drag_drop.rs::drag_drop_effect` の iOS 分岐から毎フレーム呼ばれる。
+/// `driver::drag_drop_effect` の iOS 分岐から毎フレーム呼ばれる。
 /// `UIDropInteraction` はウィンドウ全体へ一度取り付けたら本モジュールの
 /// `INSTALLED` が `true` の間ずっと delegate が動き続けるため（本ファイル冒頭
 /// コメント「ライフサイクル・登録トークン」参照）、この画面の effect が実際に
@@ -192,10 +192,10 @@ pub(super) fn mark_active(sender: &CompletionSender<DragDropState>) {
 /// この画面が「直近 [`SCREEN_ACTIVE_WINDOW_MS`] 以内に [`mark_active`] された
 /// (= 表示中の)」かどうかを返す。非表示中は `.m` 側がセッションを受け付けず
 /// （`canHandleSession:` が `NO`）、ホバー/ドロップのどちらも Rust 側（延いては
-/// [`super::drop_session`] の集約キュー）へ積まれない（契約表 1「画面外イベントを
+/// [`crate::drop_session`] の集約キュー）へ積まれない（契約表 1「画面外イベントを
 /// 破棄する」）。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_drag_drop_is_active() -> i32 {
     let last = LAST_ACTIVE_MS.load(Ordering::SeqCst);
     i32::from(now_ms().saturating_sub(last) < SCREEN_ACTIVE_WINDOW_MS)
@@ -203,20 +203,20 @@ extern "C" fn fandhe_rust_drag_drop_is_active() -> i32 {
 
 /// `.m` 側 `sessionDidEnter:`/`sessionDidExit:`/`sessionDidEnd:` から呼ばれる
 /// `extern "C"` 関数。`entered != 0` を「領域内に入った」として
-/// [`super::drop_session::hover`] へ委譲する。
+/// [`crate::drop_session::hover`] へ委譲する。
 ///
 /// egui の描画ループとは非同期の経路（UIKit のジェスチャ処理スレッド）のため、
-/// [`crate::ios::request_repaint`] で次フレームを明示的に起こす
+/// [`fandhe_runtime::request_repaint`] で次フレームを明示的に起こす
 /// （`ios_notification.rs::fandhe_rust_notification_outcome` と同じ理由）。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_drag_drop_hover(entered: i32) {
-    super::drop_session::hover(entered != 0);
-    crate::ios::request_repaint();
+    crate::drop_session::hover(entered != 0);
+    fandhe_runtime::request_repaint();
 }
 
 /// `.m` 側 `performDrop:` の冒頭から呼ばれる `extern "C"` 関数。`total` 件のうち
-/// [`super::drop_session::begin`] が計算した `to_load` 件だけを `.m` 側に読み込ませる
+/// [`crate::drop_session::begin`] が計算した `to_load` 件だけを `.m` 側に読み込ませる
 /// （上限は `fandhe_device::drag_drop::MAX_DROP_FILES` が SSOT、`.m` 側に定数を
 /// 複製しない）。
 ///
@@ -229,7 +229,7 @@ extern "C" fn fandhe_rust_drag_drop_hover(entered: i32) {
 /// あること（`.m` 側の呼び出し規約）。本関数は指す先の型（`u64`/`usize`）として
 /// 1 回だけ書き込み、ポインタの所有権は受け取らない。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn fandhe_rust_drag_drop_begin(
     total: usize,
     out_session: *mut u64,
@@ -238,7 +238,7 @@ unsafe extern "C" fn fandhe_rust_drag_drop_begin(
     if out_session.is_null() || out_to_load.is_null() {
         return;
     }
-    let (session, to_load) = super::drop_session::begin(total);
+    let (session, to_load) = crate::drop_session::begin(total);
     // SAFETY: 呼び出し元契約（本関数 doc の `# Safety`）により、両ポインタは
     // この呼び出しの間だけ有効な書き込み可能な `u64`/`usize` を指す。上で
     // null チェック済み。
@@ -246,7 +246,7 @@ unsafe extern "C" fn fandhe_rust_drag_drop_begin(
         *out_session = session;
         *out_to_load = to_load;
     }
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 /// `.m` 側の `loadFileRepresentationForTypeIdentifier:completionHandler:` completion
@@ -270,7 +270,7 @@ unsafe extern "C" fn fandhe_rust_drag_drop_begin(
 /// 呼び出し規約）。`code != 0` のときはどちらも参照しない契約だが、本関数は
 /// 念のため常に null/長さを確認してから読む。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn fandhe_rust_drag_drop_item(
     session: u64,
     index: usize,
@@ -288,8 +288,8 @@ unsafe extern "C" fn fandhe_rust_drag_drop_item(
     let path = unsafe { bytes_to_str(path_ptr, path_len) };
 
     let item = build_item(code, path, suggested_name);
-    super::drop_session::item(session, index, item);
-    crate::ios::request_repaint();
+    crate::drop_session::item(session, index, item);
+    fandhe_runtime::request_repaint();
 }
 
 /// [`fandhe_rust_drag_drop_item`] 本体の、FFI・`unsafe` を含まない純粋な分岐部分

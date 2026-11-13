@@ -1,11 +1,10 @@
 //! Phase 11 の拡充ループ（親 #1013）型サンプル「ドラッグ & ドロップ」（Issue #1014）の
 //! effect ドライバ。`fandhe_core::screens::drag_drop`（端末依存ゼロ）へ、egui が
 //! 観測したホバー/ドロップのイベントを橋渡しする（`fandhe-gallery` の `screens/registry.rs` の
-//! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn`
+//! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`fandhe_runtime::EffectFn`
 //! 参照）。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。ドロップ領域はウィンドウ全体
+//! ドロップ領域はウィンドウ全体
 //! （egui の `ViewportBuilder::drag_and_drop` は `None` のまま winit の既定＝有効に
 //! 任せている。`main.rs` の変更は不要）。領域外へ出た = ウィンドウ外 =
 //! `HoveredFileCancelled` として扱われる。
@@ -13,11 +12,11 @@
 //! # デスクトップ（macOS/Windows）と iOS/Android で経路が分かれる理由
 //!
 //! iOS/Android では egui-winit がドラッグ & ドロップイベントを一切発火させないため
-//! （[`crate::app::EguiSenderExt::file_drag`] は常に空を返す）、[`drive`]（本
+//! （`HostView::file_drag` は常に空を返す）、[`drive`]（本
 //! モジュールの経路）をそのまま流用できない。[`drag_drop_effect`] は
 //! `target_os` に応じて [`drive`]（デスクトップ）と [`drive_events`] +
-//! [`super::drop_session`]（iOS は `super::ios_drag_drop` 経由で `UIDropInteraction`
-//! を橋渡し、Issue #1015。Android は `super::android::request_repaint` 呼び出し込みの
+//! [`crate::drop_session`]（iOS は `crate::ios` 経由で `UIDropInteraction`
+//! を橋渡し、Issue #1015。Android は `fandhe_runtime::request_repaint` 呼び出し込みの
 //! JNI 受け口が直接 `drop_session` を駆動、Issue #1016）の経路に分かれる。デスクトップの
 //! [`drive`] を iOS/Android で呼んではいけない（`file_drag()` が常に「ホバー無し」を
 //! 返すため、ホバー中の間、毎フレーム誤って `cancel_hover` が送られてしまう）。Windows の
@@ -65,18 +64,18 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use fandhe_core::screens::drag_drop::{
-    begin_drop_read, begin_hover, cancel_hover, finish_drop_with_overflow, is_current_generation,
-    next_generation, DragDropState, DropItem, FAILED_PREFIX,
+    DragDropState, DropItem, FAILED_PREFIX, begin_drop_read, begin_hover, cancel_hover,
+    finish_drop_with_overflow, is_current_generation, next_generation,
 };
-use fandhe_device::drag_drop::{read_dropped, read_dropped_from, DropError, MAX_DROP_FILES};
+use fandhe_device::drag_drop::{DropError, MAX_DROP_FILES, read_dropped, read_dropped_from};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 // `drop_session` はターゲット非依存（`device.rs` の doc 参照）なので、`DropEvent` は
 // iOS に限らず常に import する。[`drive_events`] 自体もホストの `cargo test` から
 // 常に呼べるようにするため（`drive` と同じ「ロジックはホストの `cargo test` で
 // 検証する」方針、`android_gamepad.rs` と同型）。
-use super::drop_session::DropEvent;
+use crate::drop_session::DropEvent;
 
 /// 直近に読み取りスレッドへ渡した世代番号（codex 指摘 #1018 対応）。
 ///
@@ -88,7 +87,7 @@ use super::drop_session::DropEvent;
 ///
 /// デスクトップ限定（[`drive`] 経路専用）。iOS では読み取りを起動側
 /// （`ios_drag_drop.rs::fandhe_rust_drag_drop_item`）が同期に 1 件ずつ処理し、
-/// 世代照合は [`super::drop_session::DropSessions`] のセッション id が兼ねるため
+/// 世代照合は [`crate::drop_session::DropSessions`] のセッション id が兼ねるため
 /// 参照されない（`cfg_attr` は iOS ビルドでの `dead_code` 誤検知を避けるため）。
 #[cfg_attr(any(target_os = "ios", target_os = "android"), allow(dead_code))]
 static LATEST_GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -143,19 +142,19 @@ pub fn drag_drop_effect(state: &DragDropState, sender: &CompletionSender<DragDro
     {
         // 毎フレーム、install 成否に関わらず先に呼ぶ（画面が表示中である証跡を
         // 更新する。`ios_drag_drop::mark_active` doc・codex 指摘 #1019 参照）。
-        super::ios_drag_drop::mark_active(sender);
-        super::ios_drag_drop::ensure_installed(sender);
-        drive_events(sender, super::drop_session::take_events());
+        crate::ios::mark_active(sender);
+        crate::ios::ensure_installed(sender);
+        drive_events(sender, crate::drop_session::take_events());
     }
     #[cfg(target_os = "android")]
     {
-        // Android は取り付け（`setOnDragListener`）を Java 側 `onCreate` が担うため、
+        // Android は取り付け（`setOnDragListener`）を Java 側 `DragDropHelper` が担うため、
         // iOS の `ensure_installed`/`mark_active` に相当する処理は無い（Issue #1016
-        // 実装計画 §3-1）。JNI 受け口（`device/android.rs::nativeOnDragDrop*`）が
-        // 毎フレームではなくイベント発生時に `super::drop_session` へ push し、そのたびに
-        // `crate::android::request_repaint()` を呼ぶため、ここでは溜まったイベントを
+        // 実装計画 §3-1）。JNI 受け口（`android.rs` の `nativeOnDragDrop*`）が
+        // 毎フレームではなくイベント発生時に `crate::drop_session` へ push し、そのたびに
+        // `fandhe_runtime::request_repaint()` を呼ぶため、ここでは溜まったイベントを
         // drain するだけでよい（契約表 4）。
-        drive_events(sender, super::drop_session::take_events());
+        drive_events(sender, crate::drop_session::take_events());
     }
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
@@ -171,7 +170,7 @@ pub fn drag_drop_effect(state: &DragDropState, sender: &CompletionSender<DragDro
 ///
 /// 判定はすべてこの関数の呼び出し時点（`events` を受け取った時点）の最新の `state`
 /// に対して行う（契約表 2「並行性・世代」）。`events` は
-/// [`super::drop_session::take_events`] が返す順序どおりに 1 件ずつ適用する。iOS/Android
+/// [`crate::drop_session::take_events`] が返す順序どおりに 1 件ずつ適用する。iOS/Android
 /// 共通（`drag_drop_effect` の両分岐から呼ばれる）。
 #[cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))]
 fn drive_events(sender: &CompletionSender<DragDropState>, events: Vec<DropEvent>) {
@@ -351,7 +350,7 @@ fn read_all(paths: Vec<Option<PathBuf>>, generation: u64) -> (Vec<DropItem>, usi
 /// `None`。デスクトップ（[`read_all`]）と iOS（`ios_drag_drop.rs::
 /// fandhe_rust_drag_drop_begin` が超過分を計算し、読み込み完了後に集約する側）の
 /// 両方で使う共通部品（安易な複製を避ける、実装計画 §2.2「再利用」）。
-pub(super) fn overflow_item(overflow: usize) -> Option<DropItem> {
+pub(crate) fn overflow_item(overflow: usize) -> Option<DropItem> {
     (overflow > 0).then(|| DropItem {
         name: format!("（他 {overflow} 件）"),
         result: Err(DropError::TooMany.to_string()),
@@ -382,11 +381,11 @@ fn display_name(path: Option<&std::path::Path>) -> String {
 ///   成功へ丸めず読めない扱いにする（契約表 6「嘘の成功」）
 ///
 /// 読み取り（[`read_dropped_from`]）は本関数の中で行う。呼び出し元
-/// （`device/android.rs::nativeOnDragDropItem`）がロックの外（`super::drop_session::item`
+/// （`device/android.rs::nativeOnDragDropItem`）がロックの外（`crate::drop_session::item`
 /// 呼び出し前）で本関数を呼ぶ契約（`drop_session.rs` モジュール doc「判定と更新は同じ
 /// ロックの内側」参照。ロック保持中に I/O を行わない）。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(super) fn item_from_fd(code: i32, file: Option<File>, name: String) -> DropItem {
+pub(crate) fn item_from_fd(code: i32, file: Option<File>, name: String) -> DropItem {
     match (code, file) {
         (0, Some(file)) => match read_dropped_from(file, name.clone()) {
             Ok(picked) => DropItem {
@@ -430,11 +429,18 @@ mod tests {
 
     fn sender_with_channel() -> (
         CompletionSender<DragDropState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<DragDropState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<DragDropState>>,
     ) {
-        let ctx = egui::Context::default();
+        struct NoopWaker;
+        impl fandhe_runtime::RepaintWaker for NoopWaker {
+            fn wake(&self) {}
+            fn wake_after(&self, _: std::time::Duration) {}
+        }
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     fn write_temp_file(contents: &[u8]) -> std::path::PathBuf {
@@ -443,7 +449,7 @@ mod tests {
         let seq = SEQ.fetch_add(1, Ordering::Relaxed);
         let mut path = std::env::temp_dir();
         path.push(format!(
-            "fandhe-egui-proxy-drag-drop-test-{}-{}-{}",
+            "fandhe-cap-drag-drop-test-{}-{}-{}",
             std::process::id(),
             seq,
             std::time::SystemTime::now()
@@ -456,7 +462,7 @@ mod tests {
     }
 
     fn apply(
-        rx: &std::sync::mpsc::Receiver<crate::app::Completion<DragDropState>>,
+        rx: &std::sync::mpsc::Receiver<fandhe_runtime::Completion<DragDropState>>,
         state: &mut DragDropState,
     ) {
         let completion = rx.recv().expect("完了が送られているはず");
@@ -467,7 +473,7 @@ mod tests {
     /// 読み取り完了（非同期）の 2 件を順に送る（モジュール doc・[`drive`] 参照）。
     /// 2 件目の `recv` はワーカースレッドの完了を待ってブロックする。
     fn apply_drop(
-        rx: &std::sync::mpsc::Receiver<crate::app::Completion<DragDropState>>,
+        rx: &std::sync::mpsc::Receiver<fandhe_runtime::Completion<DragDropState>>,
         state: &mut DragDropState,
     ) {
         apply(rx, state); // 世代確定
@@ -527,11 +533,13 @@ mod tests {
         apply_drop(&rx, &mut state);
 
         assert!(!state.error.is_empty());
-        assert!(state.items[0]
-            .result
-            .as_ref()
-            .unwrap_err()
-            .contains("フォルダ"));
+        assert!(
+            state.items[0]
+                .result
+                .as_ref()
+                .unwrap_err()
+                .contains("フォルダ")
+        );
     }
 
     #[test]
@@ -589,11 +597,13 @@ mod tests {
 
         assert_eq!(state.items.len(), MAX_DROP_FILES + 1);
         assert!(state.items[MAX_DROP_FILES - 1].result.is_ok());
-        assert!(state.items[MAX_DROP_FILES]
-            .result
-            .as_ref()
-            .unwrap_err()
-            .contains("一度に受け取れるのは"));
+        assert!(
+            state.items[MAX_DROP_FILES]
+                .result
+                .as_ref()
+                .unwrap_err()
+                .contains("一度に受け取れるのは")
+        );
 
         for path in paths.into_iter().flatten() {
             let _ = std::fs::remove_file(path);
@@ -618,11 +628,13 @@ mod tests {
         assert_eq!(state.items.len(), MAX_DROP_FILES + 1);
         assert!(state.items[MAX_DROP_FILES - 1].result.is_ok());
         let overflow_item = &state.items[MAX_DROP_FILES];
-        assert!(overflow_item
-            .result
-            .as_ref()
-            .unwrap_err()
-            .contains("一度に受け取れるのは"));
+        assert!(
+            overflow_item
+                .result
+                .as_ref()
+                .unwrap_err()
+                .contains("一度に受け取れるのは")
+        );
         assert!(overflow_item.name.contains(&overflow.to_string()));
 
         for path in paths.into_iter().flatten() {
@@ -733,7 +745,7 @@ mod tests {
         fn temp_file(contents: &[u8]) -> File {
             let mut path = std::env::temp_dir();
             path.push(format!(
-                "fandhe-egui-proxy-drag-drop-android-test-{}-{}",
+                "fandhe-cap-drag-drop-android-test-{}-{}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -786,7 +798,7 @@ mod tests {
         }
     }
 
-    /// iOS 経路（[`drive_events`]）のテスト群。`super::drop_session` を経由せず、
+    /// iOS 経路（[`drive_events`]）のテスト群。`crate::drop_session` を経由せず、
     /// [`DropEvent`] を直接組み立てて渡す（イベント生成側の分岐網羅は
     /// `drop_session.rs` のテストが担う）。
     mod drive_events_tests {
