@@ -164,11 +164,6 @@ pub mod android_music_library;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_network_status;
-/// Issue #1045: Android 向け NFC タグ読み取り実装（`NfcReadHelper` を JNI で橋渡し）。
-/// `device/nfc.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_nfc;
 /// Issue #383: Android 向けロック画面・OS のメディア操作実装（`MediaSession` + `Notification.MediaStyle` を JNI で操作）。
 /// `device/now_playing.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -778,9 +773,6 @@ pub mod music_library;
 /// （Windows / macOS / iOS 実装、Android は #1284、他 OS は
 /// `UnsupportedNetworkStatus` 固定。Web は `fandhe-web-dom`）。
 pub mod network_status;
-/// Phase 11 の拡充ループ（親 #157、Issue #1044）: NFC タグ読み取りの effect ドライバ
-/// （Android は後続の子が埋めるスタブ、他 OS は `UnsupportedNfcReader` 固定。Web は `fandhe-web-dom`）。
-pub mod nfc;
 /// Phase 11 の拡充ループ（親 #1003、Issue #1004/#1005）: ローカル通知の effect
 /// ドライバ（macOS/Windows/iOS 実装、Android は #1006）。
 pub mod notification;

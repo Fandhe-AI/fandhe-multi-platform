@@ -60,6 +60,7 @@ device = [
   "dep:fandhe-cap-midi",
   "dep:fandhe-cap-ml-inference",
   "dep:fandhe-cap-multi-display",
+  "dep:fandhe-cap-nfc",
   "dep:fandhe-cap-nfc-card-emulation",
   "dep:fandhe-cap-nlp",
   "dep:fandhe-cap-on-device-llm",
@@ -189,6 +190,7 @@ fandhe-cap-memory-pressure = { path = "../fandhe-cap-memory-pressure", optional 
 fandhe-cap-midi = { path = "../fandhe-cap-midi", optional = true }
 fandhe-cap-ml-inference = { path = "../fandhe-cap-ml-inference", optional = true }
 fandhe-cap-multi-display = { path = "../fandhe-cap-multi-display", optional = true }
+fandhe-cap-nfc = { path = "../fandhe-cap-nfc", optional = true }
 fandhe-cap-nfc-card-emulation = { path = "../fandhe-cap-nfc-card-emulation", optional = true }
 fandhe-cap-nlp = { path = "../fandhe-cap-nlp", optional = true }
 fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm", optional = true }

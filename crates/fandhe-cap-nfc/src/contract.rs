@@ -3,7 +3,7 @@
 //!
 //! 扱う範囲は「操作 1 回で、期限 [`READ_DEADLINE`] の間に最初にかざした 1 枚の NDEF を読む」
 //! ことまで。書き込み・UID・生データ・連続読み取り・intent の配送は扱わない。
-//! `fandhe-egui-proxy` の effect ドライバ（`device/nfc.rs`）が [`NfcReader`] をワーカースレッドから
+//! `driver`（effect ドライバ）が [`NfcReader`] をワーカースレッドから
 //! 呼び、Android の OS 層が実装する。Web は `fandhe-web-dom` が同じ表示型・定数で受け持つ。
 //! NDEF の解釈は OS 非依存の純関数（[`parse_ndef`]）にまとめ、Android は
 //! `NdefMessage.toByteArray()` を渡すだけにする。

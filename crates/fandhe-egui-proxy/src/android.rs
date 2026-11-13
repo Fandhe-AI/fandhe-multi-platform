@@ -215,16 +215,9 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device::scanner_devices::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::scanner_devices::reset_pending_tracking();
-    // Issue #1044: NFC タグ読み取りの処理済み世代も破棄する（理由は scanner_devices と同じ。
-    // `device::nfc::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::nfc::reset_pending_tracking();
     // Issue #983: Android の橋渡し側 slot も破棄する（`android_scanner_devices` の doc 参照）。
     #[cfg(feature = "device")]
     crate::device::android_scanner_devices::reset_pending_tracking();
-    // Issue #1045: Android の NFC 橋渡し側 slot も破棄する（`android_nfc` の doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::android_nfc::reset_pending_tracking();
     // Issue #701: アプリ内ブラウザの保留中の要求も破棄する（理由は translation と同じ。
     // `device::in_app_browser::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

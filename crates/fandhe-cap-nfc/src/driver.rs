@@ -1,9 +1,9 @@
 //! Phase 11（親 #157）型サンプル「NFC タグ読み取り」（Issue #1044）の effect ドライバ。
 //! `fandhe_core::screens::nfc_read`（端末依存ゼロ）の要求を観測し、ワーカースレッドで
-//! `fandhe_device::nfc::NfcReader` を呼んで `CompletionSender` 経由で結果を返す
+//! `crate::contract::NfcReader` を呼んで `CompletionSender` 経由で結果を返す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
-//! `fandhe_device::nfc`。
+//! `crate::contract`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
 //!
@@ -25,16 +25,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
+use crate::contract::{NdefRecordView, NfcReadFailure, NfcReadOutcome, NfcReader, READ_DEADLINE};
 use fandhe_core::screens::nfc_read::{
-    finish_read, mark_running, take_request, CoreFailure, NfcReadState, Phase, ShownRecord,
-    ShownTag,
-};
-use fandhe_device::nfc::{
-    NdefRecordView, NfcReadFailure, NfcReadOutcome, NfcReader, READ_DEADLINE,
+    CoreFailure, NfcReadState, Phase, ShownRecord, ShownTag, finish_read, mark_running,
+    take_request,
 };
 
-use super::request_slot::{poll_and_finish, RequestSlot, POLL_INTERVAL};
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
 
 /// OS 層が期限後にリスナーを解除し終えるまでの猶予。仮の値で、#1040 で見直す。
 /// ponytail: 固定 5 秒。OS 層の解除が常にこれ以内に終わる保証は無い（超えても次の発送は `os_active` が止める）。
@@ -43,14 +41,15 @@ const SETTLE_GRACE: Duration = Duration::from_secs(5);
 type Outcome = Result<NfcReadOutcome, NfcReadFailure>;
 
 /// 現在のプラットフォームに応じた `NfcReader` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn NfcReader> {
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_nfc() -> Arc<dyn NfcReader> {
     #[cfg(target_os = "android")]
     {
-        super::android_nfc::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(target_os = "android"))]
     {
-        Arc::new(fandhe_device::nfc::UnsupportedNfcReader)
+        Arc::new(crate::contract::UnsupportedNfcReader)
     }
 }
 
@@ -87,13 +86,15 @@ static SESSION: OnceLock<Session> = OnceLock::new();
 /// Activity 再生成時（`android_main` の再実行）に、保留中の要求を破棄する。
 /// 画面状態は `default()`（世代 0）に戻るため、保留が残ると次の押下が発送されず飲み込まれる。
 /// 古いワーカーの結果は照合で捨てられる。走っている OS 呼び出しは止めず走り切らせる。
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+#[cfg(target_os = "android")]
+pub fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
         s.slot.reset();
         *s.started.lock().unwrap_or_else(|e| e.into_inner()) = None;
         *s.waiting.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
+    // Android の橋渡し側の slot も破棄する（保留中の要求を待つワーカーを失敗で戻す）。
+    crate::android::reset_pending_tracking();
 }
 
 /// 契約上の失敗を画面の失敗種別へ写す（タグの中身・OS の文言は元々持たない）。
@@ -234,7 +235,7 @@ fn drive(
 /// `registry.rs` の `effect` 区画から `nfc_read` 画面用に配線される effect ドライバ。
 pub fn nfc_read_effect(state: &NfcReadState, sender: &CompletionSender<NfcReadState>) {
     static IMPL: OnceLock<Arc<dyn NfcReader>> = OnceLock::new();
-    let imp = IMPL.get_or_init(platform);
+    let imp = IMPL.get_or_init(platform_nfc);
     drive(
         state,
         sender,
@@ -247,15 +248,22 @@ pub fn nfc_read_effect(state: &NfcReadState, sender: &CompletionSender<NfcReadSt
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::nfc_read::{request_read, NfcReadState as State};
-    use fandhe_device::nfc::UnsupportedNfcReader;
+    use crate::contract::UnsupportedNfcReader;
+    use fandhe_core::screens::nfc_read::{NfcReadState as State, request_read};
     use std::sync::mpsc;
 
-    type Rx = mpsc::Receiver<crate::app::Completion<State>>;
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<State>>;
 
     fn channel() -> (CompletionSender<State>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     fn text() -> Outcome {
@@ -463,7 +471,7 @@ mod tests {
         );
         #[cfg(not(target_os = "android"))]
         assert_eq!(
-            platform().read_one(Duration::ZERO),
+            platform_nfc().read_one(Duration::ZERO),
             Err(NfcReadFailure::Unsupported)
         );
     }

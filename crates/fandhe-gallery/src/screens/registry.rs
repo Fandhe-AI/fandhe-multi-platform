@@ -535,7 +535,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nfc_read" => fandhe_core::screens::nfc_read::current_screen,
-    fandhe_egui_proxy::device::nfc::nfc_read_effect,
+    fandhe_cap_nfc::nfc_read_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nfc_card_emulation_show" => fandhe_core::screens::nfc_card_emulation_show::current_screen,

@@ -1,5 +1,6 @@
 package com.fandhe.platform;
 
+import android.app.Activity;
 import android.nfc.NdefMessage;
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
@@ -10,9 +11,16 @@ import android.os.Looper;
 import androidx.activity.ComponentActivity;
 import androidx.lifecycle.Lifecycle;
 
-// NFC タグ読み取り（Issue #1045、親 #157）の Android 実装ヘルパー。MainActivity から生成・委譲される。
-// Rust の `device/android_nfc.rs` が `MainActivity.requestNfcRead` / `cancelNfcRead` を JNI で呼び、
-// 結果を `nativeOnNfcReadResult` で受けて契約（`fandhe_device::nfc`）の結果へ写像する。
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
+
+// NFC タグ読み取り（Issue #1045、親 #157）の Android 実装ヘルパー。
+// Rust の `src/android.rs` が static の `start(Activity, long, int)` / `cancel(Activity, long)` を JNI で呼び、
+// 結果を `nativeOnNfcReadResult` で受けて契約（`contract`）の結果へ写像する。
+// Activity ごとの helper は `HELPERS` に持ち、`NfcReadLifecycle`（`FeatureLifecycleProvider` 継承）が
+// `attach` / `paused` / `detach` で知らせる。helper が無い（生成前・破棄後）`start` は CODE_FAILED で確定し、
+// 結果が来ないまま待たせない。
 //
 // 流れ: 要求のたびに `getDefaultAdapter`（null は UNSUPPORTED）と `isEnabled`（偽は DISABLED）を OS へ問い、
 // `enableReaderMode`（前面の間だけ有効。intent の配送は通らない）で最初にかざした 1 枚の
@@ -24,14 +32,15 @@ import androidx.lifecycle.Lifecycle;
 // 結果の確定は必ず `disableReaderMode` を済ませてから `finish` で 1 回だけ行う（`RequestTracker.complete`
 // が id 照合の first-wins）。解除が例外を投げたら取れた結果は捨てて FAILED にし、未解放を static に記録して
 // onPause / 次の要求の前に再試行する（解除できるまで次の要求は FAILED で断る）。
-// ライフサイクル: `onPause` で解除して INTERRUPTED で確定する（OS は resume で reader mode を付け直すため
+// ライフサイクル: `onHostPaused`（`Activity.onPause()` 内、`super.onPause()` の中で届く）で解除して INTERRUPTED で確定する
+// （OS は resume で reader mode を付け直すため
 // 明示的に解除する。NFC は normal 権限で許可ダイアログが無く、pause を正常な許可の中断と取り違えない）。
 // `onDestroy` も INTERRUPTED。再生成後の新インスタンスは空の tracker から始まり旧結果は捨てられる。
 // 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止・reader mode の解除。守らない範囲: かざしたが届く前の
 // 離脱、2 枚同時にかざしたときの選択、他アプリ・OS が先にタグを処理した場合。
 // タグの中身・例外の文言・id はログに出さない。
 final class NfcReadHelper {
-    // 結果コード。Rust 側 `android_nfc.rs::decode` が同じ値で写像する（SSOT は本クラス）。
+    // 結果コード。Rust 側 `android.rs::decode` が同じ値で写像する（SSOT は本クラス）。
     static final int CODE_OK = 0;
     static final int CODE_EMPTY = 1;
     static final int CODE_UNSUPPORTED = 2;
@@ -61,6 +70,10 @@ final class NfcReadHelper {
         }
     }
 
+    // Activity ごとの helper。再生成後の新しい Activity は新しい helper を持ち、旧要求は持ち越さない。
+    private static final Map<Activity, NfcReadHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     private final ComponentActivity activity;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final RequestTracker request = new RequestTracker();
@@ -72,28 +85,58 @@ final class NfcReadHelper {
     private static NfcAdapter unreleasedAdapter;
     private static android.app.Activity unreleasedActivity;
 
-    NfcReadHelper(ComponentActivity activity) {
+    private NfcReadHelper(ComponentActivity activity) {
         this.activity = activity;
     }
 
-    // Rust のワーカーから JNI で呼ばれる。main へ post するだけ。
-    void start(long id, int maxBytes) {
-        request.track(id);
-        handler.post(() -> begin(new Req(id, maxBytes)));
+    // Activity の生成時（`NfcReadLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new NfcReadHelper(activity));
     }
 
-    // 期限切れで Rust のワーカーが同期で呼ぶ。main へ post するだけ。
-    void cancel(long id) {
-        handler.post(() -> {
-            Req r = cur;
+    // Activity の `onPause`（同上）。reader mode を解除して保留中の要求を INTERRUPTED で確定する。
+    static void paused(Activity activity) {
+        NfcReadHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onPause();
+        }
+    }
+
+    // Activity の破棄時（同上）。
+    static void detach(Activity activity) {
+        NfcReadHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // Rust のワーカーから JNI で呼ばれる入口。main へ post するだけ。helper が無ければ CODE_FAILED で確定する。
+    static void start(Activity activity, long id, int maxBytes) {
+        NfcReadHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            nativeOnNfcReadResult(id, CODE_FAILED, null);
+            return;
+        }
+        helper.request.track(id);
+        helper.handler.post(() -> helper.begin(new Req(id, maxBytes)));
+    }
+
+    // 期限切れで Rust のワーカーが同期で呼ぶ。main へ post するだけ。helper が無ければ何もしない
+    // （`start` が既に確定している）。
+    static void cancel(Activity activity, long id) {
+        NfcReadHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            return;
+        }
+        helper.handler.post(() -> {
+            Req r = helper.cur;
             if (r != null && r.id == id) {
-                end(r, CODE_CANCELLED, null);
+                helper.end(r, CODE_CANCELLED, null);
             }
         });
     }
 
-    // MainActivity.onPause から UI スレッドで呼ぶ。
-    void onPause() {
+    private void onPause() {
         Req r = cur;
         if (r != null) {
             end(r, CODE_INTERRUPTED, null);
@@ -101,8 +144,7 @@ final class NfcReadHelper {
         retryUnreleased();
     }
 
-    // MainActivity.onDestroy から UI スレッドで呼ぶ。
-    void onDestroy() {
+    private void onDestroy() {
         destroyed = true;
         onPause();
     }

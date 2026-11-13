@@ -50,6 +50,8 @@ fandhe-cap-app-lifecycle = { path = "../fandhe-cap-app-lifecycle" }
 fandhe-cap-display-refresh-hdr = { path = "../fandhe-cap-display-refresh-hdr" }
 # Issue #1187: 電源状態の純関数（`percent_from_raw`）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の実装が cfg で外れる。
 fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast" }
+# nfc の契約（`NfcReadOutcome`・`NfcReadFailure`・`READ_DEADLINE`・写像表）。Web 実装本体は本クレートに残る。
+fandhe-cap-nfc = { path = "../fandhe-cap-nfc" }
 # video-transcode の契約（寸法・定数・出力の検査）。Web 実装本体は本クレートに残る。
 fandhe-cap-video-transcode = { path = "../fandhe-cap-video-transcode" }
 fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device" }
