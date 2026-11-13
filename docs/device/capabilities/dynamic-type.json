@@ -18,7 +18,7 @@
         "Dynamic Type（OS の文字サイズ設定追従）"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_text_scale.m + crates/fandhe-egui-proxy/src/device/ios.rs（`IosTextScale`）+ src/device/text_scale.rs、Issue 旧#914"
+      "impl": "crates/fandhe-cap-dynamic-type/apple/fandhe_apple_text_scale.m + crates/fandhe-cap-dynamic-type/src/ios.rs（`IosTextScale`）+ crates/fandhe-cap-dynamic-type/src/driver.rs、Issue 旧#914"
     },
     "android": {
       "status": "done",
@@ -31,7 +31,7 @@
         "文字サイズ設定の追従（Android の Dynamic Type 相当）"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs（`AndroidTextScale`）、Issue 旧#914"
+      "impl": "crates/fandhe-cap-dynamic-type/android/java/com/fandhe/platform/TextScaleHelper.java + crates/fandhe-cap-dynamic-type/src/android.rs（`AndroidTextScale`）、Issue 旧#914"
     },
     "macos": {
       "status": "no",
@@ -39,12 +39,12 @@
       "api": "AppKit（`NSFont`。OS 設定は「システム設定 → アクセシビリティ → ディスプレイ → テキストサイズ」）",
       "perm": "なし",
       "url": "https://support.apple.com/en-gb/guide/mac-help/mchlbc4c53ca/mac",
-      "note": "候補と根拠（Issue 旧#912 一次情報調査）: (1) アクセシビリティ「テキストサイズ」は第三者アプリが読む・監視する公開 API 無し（Apple サポート https://support.apple.com/en-gb/guide/mac-help/mchlbc4c53ca/mac、対象は「複数のアプリ」で開発者 API の記載なし／Apple Developer Forums 旧#746501 https://developer.apple.com/forums/thread/746501 で Apple 側回答「There is currently no API」）。(2) `NSFont.systemFontSize` は定数（13pt）でアクセシビリティ設定に追従しない（https://developer.apple.com/documentation/appkit/nsfont/systemfontsize）。(3) `NSUserDefaults` の `AppleDisplayScaleFactor` は 10.4 時代の解像度非依存機構の残骸で Lion 以降撤去済み（Resolution Independent UI Release Notes https://developer.apple.com/library/archive/releasenotes/GraphicsImaging/RN-ResolutionIndependentUI、High Resolution Guidelines https://developer.apple.com/library/archive/documentation/GraphicsAnimation/Conceptual/HighResolutionOSX/APIs/APIs.html）。`1.0` を「読めた」と偽らないため `Unsupported` を返す（`crates/fandhe-device/src/text_scale.rs` 参照）",
+      "note": "候補と根拠（Issue 旧#912 一次情報調査）: (1) アクセシビリティ「テキストサイズ」は第三者アプリが読む・監視する公開 API 無し（Apple サポート https://support.apple.com/en-gb/guide/mac-help/mchlbc4c53ca/mac、対象は「複数のアプリ」で開発者 API の記載なし／Apple Developer Forums 旧#746501 https://developer.apple.com/forums/thread/746501 で Apple 側回答「There is currently no API」）。(2) `NSFont.systemFontSize` は定数（13pt）でアクセシビリティ設定に追従しない（https://developer.apple.com/documentation/appkit/nsfont/systemfontsize）。(3) `NSUserDefaults` の `AppleDisplayScaleFactor` は 10.4 時代の解像度非依存機構の残骸で Lion 以降撤去済み（Resolution Independent UI Release Notes https://developer.apple.com/library/archive/releasenotes/GraphicsImaging/RN-ResolutionIndependentUI、High Resolution Guidelines https://developer.apple.com/library/archive/documentation/GraphicsAnimation/Conceptual/HighResolutionOSX/APIs/APIs.html）。`1.0` を「読めた」と偽らないため `Unsupported` を返す（`crates/fandhe-cap-dynamic-type/src/contract.rs` 参照）",
       "sourceName": [
         "文字サイズ設定の追従"
       ],
       "implStatus": "共通層のみ実装（trait・型サンプル・zoom 反映）。OS 値の読み取りは不可",
-      "impl": "crates/fandhe-device/src/text_scale.rs + crates/fandhe-core/src/screens/text_scale_preview.rs + crates/fandhe-egui-proxy/src/device/text_scale.rs、Issue 旧#912"
+      "impl": "crates/fandhe-cap-dynamic-type/src/contract.rs + crates/fandhe-core/src/screens/text_scale_preview.rs + crates/fandhe-cap-dynamic-type/src/driver.rs、Issue 旧#912"
     },
     "windows": {
       "status": "done",
@@ -57,7 +57,7 @@
         "文字サイズ設定の追従"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_text_scale.rs + crates/fandhe-egui-proxy/src/device/text_scale.rs、Issue 旧#913"
+      "impl": "crates/fandhe-cap-dynamic-type/src/windows.rs + crates/fandhe-cap-dynamic-type/src/driver.rs、Issue 旧#913"
     },
     "web": {
       "status": "done",

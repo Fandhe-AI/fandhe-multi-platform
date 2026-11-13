@@ -3,16 +3,13 @@
 //! OS 値の読み取り結果を渡しつつ、スライダー値（実描画へ反映する倍率）を
 //! `HostView::set_zoom_factor` 経由で毎フレーム実描画へ適用する
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
-//! として呼ばれる契約、`device/tilt.rs` と同型）。
-//!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
+//! として呼ばれる契約）。
 //!
 //! # OS 値の読み取りは Windows / iOS / Android で実装（Issue #913 / #914）
 //!
-//! [`shared_text_scale`] は Windows では [`super::windows_text_scale::WindowsTextScale`]
+//! [`shared_text_scale`] は Windows では [`crate::windows::WindowsTextScale`]
 //! （`UISettings.TextScaleFactor` を読む、Issue #913）、iOS/Android では
-//! [`IosTextScale`]/[`AndroidTextScale`]（`crate::device::ios`/`crate::device::android`、
+//! `IosTextScale`/`AndroidTextScale`（`crate::ios`/`crate::android`、
 //! Issue #914）を返し、それ以外のターゲットは `UnsupportedTextScale` を返す
 //! （macOS は一次情報調査の結果、第三者アプリ向け公開 API が無いため恒久的に
 //! `Unsupported`、`fandhe_device::text_scale` モジュール doc 参照）。
@@ -23,12 +20,12 @@
 //! 実際に `set_zoom_factor` へ渡す値は常にその時点の `state.scale`（スライダー値）
 //! を使う。これにより「OS 値 → スライダーで上書き」の順で見た目確認ができる
 //! （Issue #912 実装計画 §3.1）。直前に適用した値と異なる値のときだけ
-//! `set_zoom_factor` を呼び、egui のキーボード zoom（既定 `zoom_with_keyboard =
+//! `set_zoom_factor` を呼び、描画層のキーボード zoom（egui は既定 `zoom_with_keyboard =
 //! true`、Ctrl+/−）を毎フレーム上書きしない（ponytail: キーボード zoom との
 //! 競合が要件上問題になった場合は `zoom_with_keyboard` を無効化する設計に上げる）。
 //! 「直前に適用した値」は `HostView::applied_zoom_factor` 経由で
-//! `egui::Context` 単位のキャッシュとして持つ（`app.rs` 側の doc 参照。プロセス
-//! グローバルな `static` にすると複数 `Context` 間でキャッシュが混線するため、
+//! 描画コンテキスト単位のキャッシュとして持つ（`HostView` 実装側の doc 参照。プロセス
+//! グローバルな `static` にすると複数コンテキスト間でキャッシュが混線するため、
 //! codex-review 指摘 P2・PR #920 是正で移した）。
 //!
 //! # ドラッグ中は zoom 適用を保留する
@@ -40,29 +37,29 @@
 //! ポインタを離した最初のフレームで、その時点の `state.scale`（＝ドラッグ終了時の値）を
 //! 一度だけ適用する。`HostView::pointer_primary_down` 参照。
 
-use fandhe_core::screens::text_scale_preview::{
-    finish_read, OsScale, OsScaleError, TextScalePreviewState,
-};
 #[cfg(any(
     not(any(target_os = "windows", target_os = "ios", target_os = "android")),
     test
 ))]
-use fandhe_device::text_scale::UnsupportedTextScale;
-use fandhe_device::text_scale::{read_scale, TextScale};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedTextScale;
+use crate::contract::{TextScale, read_scale};
+use crate::error::DynamicTypeError;
+use fandhe_core::screens::text_scale_preview::{
+    OsScale, OsScaleError, TextScalePreviewState, finish_read,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// OS の文字サイズ追従実装（iOS 分岐、モジュール doc 参照）。
 #[cfg(target_os = "ios")]
 fn shared_text_scale() -> &'static dyn TextScale {
-    &crate::device::ios::IosTextScale
+    &crate::ios::IosTextScale
 }
 
 /// OS の文字サイズ追従実装（Android 分岐、モジュール doc 参照）。
 #[cfg(target_os = "android")]
 fn shared_text_scale() -> &'static dyn TextScale {
-    &crate::device::android::AndroidTextScale
+    &crate::android::AndroidTextScale
 }
 
 /// OS の文字サイズ追従実装（iOS/Android 以外の分岐、モジュール doc 参照。Windows は
@@ -71,7 +68,7 @@ fn shared_text_scale() -> &'static dyn TextScale {
 fn shared_text_scale() -> &'static dyn TextScale {
     #[cfg(target_os = "windows")]
     {
-        &super::windows_text_scale::WindowsTextScale
+        &crate::windows::WindowsTextScale
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -79,13 +76,13 @@ fn shared_text_scale() -> &'static dyn TextScale {
     }
 }
 
-/// `fandhe_device::DeviceError` を
+/// `crate::error::DynamicTypeError` を
 /// `fandhe_core::screens::text_scale_preview::OsScaleError` へ写像する
 /// （`device.rs::to_note_storage_error` と同じ判断。内部構造は漏らさず `Display`
 /// 文言のみを転送する、security.md A09）。
-fn to_os_error(err: DeviceError) -> OsScaleError {
+fn to_os_error(err: DynamicTypeError) -> OsScaleError {
     match err {
-        DeviceError::Unsupported(_) => OsScaleError::Unavailable,
+        DynamicTypeError::Unsupported => OsScaleError::Unavailable,
         other => OsScaleError::Failed(other.to_string()),
     }
 }
@@ -139,7 +136,7 @@ pub fn text_scale_effect(
     state: &TextScalePreviewState,
     sender: &CompletionSender<TextScalePreviewState>,
 ) {
-    // `egui::Context` 単位のキャッシュ（モジュール doc 参照）を読み出し・
+    // 描画コンテキスト単位のキャッシュ（モジュール doc 参照）を読み出し・
     // `drive` に渡し、変わっていれば書き戻す。
     // 適用済みの値は描画層が `set_zoom_factor` のたびに記録する（HostView）。
     let mut last = sender.host_view().applied_zoom_factor();
@@ -154,21 +151,46 @@ mod tests {
 
     fn sender_with_channel() -> (
         CompletionSender<TextScalePreviewState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<TextScalePreviewState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<TextScalePreviewState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(FakeView::default())),
+            rx,
+        )
     }
 
-    struct MockTextScale(Result<f32, DeviceError>);
+    /// 拡大率の記録だけを持つ `HostView` 付きの起床口。描画コンテキスト 1 つ分に相当する。
+    #[derive(Default)]
+    struct FakeView {
+        applied: std::sync::Mutex<Option<f32>>,
+    }
+
+    impl fandhe_runtime::RepaintWaker for FakeView {
+        fn wake(&self) {}
+        fn wake_after(&self, _: std::time::Duration) {}
+        fn host_view(&self) -> &dyn fandhe_runtime::HostView {
+            self
+        }
+    }
+
+    impl fandhe_runtime::HostView for FakeView {
+        fn set_zoom_factor(&self, zoom: f32) {
+            *self.applied.lock().unwrap() = Some(zoom);
+        }
+        fn applied_zoom_factor(&self) -> Option<f32> {
+            *self.applied.lock().unwrap()
+        }
+    }
+
+    struct MockTextScale(Result<f32, DynamicTypeError>);
 
     impl TextScale for MockTextScale {
-        fn scale_factor(&self) -> Result<f32, DeviceError> {
+        fn scale_factor(&self) -> Result<f32, DynamicTypeError> {
             match &self.0 {
                 Ok(v) => Ok(*v),
-                Err(DeviceError::Unsupported(s)) => Err(DeviceError::Unsupported(s)),
-                Err(_) => Err(DeviceError::Internal("mock")),
+                Err(DynamicTypeError::Unsupported) => Err(DynamicTypeError::Unsupported),
+                Err(_) => Err(DynamicTypeError::Internal),
             }
         }
     }
@@ -260,15 +282,15 @@ mod tests {
 
     #[test]
     fn scale_range_constants_match_device_crate() {
-        assert_eq!(SCALE_MIN, fandhe_device::text_scale::SCALE_MIN);
-        assert_eq!(SCALE_MAX, fandhe_device::text_scale::SCALE_MAX);
+        assert_eq!(SCALE_MIN, crate::contract::SCALE_MIN);
+        assert_eq!(SCALE_MAX, crate::contract::SCALE_MAX);
     }
 
     /// codex-review 指摘 P2（PR #920）の回帰チェック: `text_scale_effect` が使う
-    /// 「直近に適用した値」キャッシュは `egui::Context` 単位に分離されている必要がある。
+    /// 「直近に適用した値」キャッシュは 描画コンテキスト単位に分離されている必要がある。
     /// Context A に倍率を適用したあと、別 Context B の effect が同じ倍率を「適用済み」と
     /// 誤判定して省略しない（= B 側の `set_zoom_factor` が実際に呼ばれる）ことを、
-    /// B が返す完了・repaint 要求ではなく `text_scale_last_applied` の書き戻り値で確認する。
+    /// B が返す完了・repaint 要求ではなく `applied_zoom_factor` の値で確認する。
     #[test]
     fn last_applied_cache_is_isolated_per_context() {
         let (sender_a, _rx_a) = sender_with_channel();
@@ -293,6 +315,6 @@ mod tests {
     #[test]
     fn shared_text_scale_is_unsupported_outside_windows_ios_and_android() {
         let err = shared_text_scale().scale_factor().unwrap_err();
-        assert!(matches!(err, DeviceError::Unsupported("text_scale")));
+        assert!(matches!(err, DynamicTypeError::Unsupported));
     }
 }

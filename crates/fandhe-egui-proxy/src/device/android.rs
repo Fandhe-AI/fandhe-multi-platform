@@ -16,7 +16,6 @@ use fandhe_device::clipboard::Clipboard;
 use fandhe_device::file_picker::{PickedFile, MAX_FILE_BYTES};
 use fandhe_device::secure_credential::{validate_key, validate_secret, Secret, SecureCredential};
 use fandhe_device::share::ShareRequest;
-use fandhe_device::text_scale::TextScale;
 use fandhe_device::tts::Tts;
 use fandhe_device::{DataDir, DeviceError};
 
@@ -766,55 +765,6 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnTtsResult(
         return;
     }
     TTS_OUTCOME_MAILBOX.deliver(id, decode_tts_result(status));
-}
-
-/// Android 実文字サイズ追従実装（`Configuration.fontScale`、Issue #914）。
-/// `device/text_scale.rs` の effect ドライバから毎フレーム pull される。
-/// `AndroidClipboard`/`AndroidTts` と異なり mailbox を介さない: Java 側
-/// `MainActivity.textScaleFactor()` は非同期コールバックを持たない単純な
-/// getter のため、JNI 呼び出しの戻り値をそのまま同期で返す。
-pub struct AndroidTextScale;
-
-impl TextScale for AndroidTextScale {
-    /// 本体内の 2 箇所の `unsafe`（`JavaVM::from_raw` / `as_cast_raw`）は
-    /// `AndroidClipboard::request` と同じ根拠・同じ形に揃えている（各
-    /// `// SAFETY:` コメント参照）。
-    #[allow(unsafe_code)]
-    fn scale_factor(&self) -> Result<f32, DeviceError> {
-        let Some(app) = crate::android::android_app() else {
-            return Err(DeviceError::Unsupported("text_scale"));
-        };
-
-        // SAFETY: `AndroidClipboard::request` と同一の根拠。`app.vm_as_ptr()` は
-        // android-activity が管理する有効な `JavaVM*` を返し、`android_app()` は
-        // 最新の `AndroidApp` を複製して返すため、ここで得た `app` は呼び出し
-        // 時点で有効な `Activity` を指す。呼び出し中（JNI 呼び出し・戻り値変換）は
-        // ローカル変数 `app` が生存を保つ。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-        let result = vm.attach_current_thread(|env: &mut jni::Env| -> Result<f32, JniCallFailed> {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: `AndroidClipboard::request` と同一の根拠。
-            // `activity_as_ptr()` は `AndroidApp` が保持する未所有の JNI
-            // グローバル参照で、`AndroidApp` の生存期間中有効。`Cast` は
-            // 所有権を持たないラッパーのため delete を試みない。
-            let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-            let value = env.call_method(
-                &activity,
-                jni::jni_str!("textScaleFactor"),
-                jni::jni_sig!(() -> float),
-                &[],
-            )?;
-            Ok(value.f()?)
-        });
-
-        // NaN/範囲外の丸めは `fandhe_device::text_scale::read_scale` に一本化する
-        // ため、ここでは JNI から得た値をそのまま返す。JNI 呼び出し自体の失敗
-        // （メソッド未検出・例外送出等）は「使えない」ではなく「失敗」として扱う
-        // （`fandhe_device::text_scale` モジュール doc の「読めない」＝
-        // `Unsupported` とは区別する契約、実装計画 §3 参照）。
-        result.map_err(|_| DeviceError::Internal("text_scale: jni call failed"))
-    }
 }
 
 // --------------------------------------------------------------------------

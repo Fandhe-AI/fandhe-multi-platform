@@ -11,7 +11,7 @@
 //!
 //! # 倍率を Rust 側から再適用しない理由
 //!
-//! Windows/iOS/Android の経路（`device/text_scale.rs`）は読んだ倍率を毎フレーム
+//! Windows/iOS/Android の経路（`fandhe-cap-dynamic-type` の `driver`）は読んだ倍率を毎フレーム
 //! `set_zoom_factor` で実描画へ押し込む必要があるが、Web の DOM 出力は
 //! 見出し・本文が UA 既定（`h1 { font-size: 2em }` 等、`em`/`rem` 相当）を継承する
 //! ため、ブラウザ自身が既定フォントサイズの変更をテキストへ反映済みである
@@ -61,10 +61,10 @@ mod web {
     use std::cell::Cell;
     use std::rc::Rc;
 
+    use fandhe_cap_dynamic_type::clamp_scale;
     use fandhe_core::screens::text_scale_preview::{
         finish_read, OsScale, OsScaleError, TextScalePreviewState,
     };
-    use fandhe_device::text_scale::clamp_scale;
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
 

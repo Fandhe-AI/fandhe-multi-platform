@@ -221,7 +221,7 @@ fn drive_events(sender: &CompletionSender<DragDropState>, events: Vec<DropEvent>
 }
 
 /// GUI（`egui::Context`）に依存しない純粋な分岐部分。`hovering`/`dropped` を
-/// 引数で受け取ることで、`device/tilt.rs::drive`/`device/text_scale.rs::drive` と
+/// 引数で受け取ることで、`device/tilt.rs::drive` や dynamic-type の `drive` と
 /// 同様プラットフォーム cfg 抜きでテストできるようにしている。
 ///
 /// 評価順序が重要: ドロップされたフレームでは egui-winit が既にホバー一覧を

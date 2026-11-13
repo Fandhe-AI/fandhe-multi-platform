@@ -99,10 +99,6 @@ fn build() {
     compile_apple_biometric();
     compile_apple_contact_picker();
 
-    // `apple/fandhe_apple_text_scale.m`（Issue #914）は iOS 分岐のみから呼ぶ
-    // （`build_macos` からは呼ばない）。
-    compile_apple_text_scale();
-
     // `apple/fandhe_apple_secure_credential.m`（Issue #922・#924）は macOS 分岐と
     // 共用する。
     compile_apple_secure_credential();
@@ -323,12 +319,6 @@ fn compile_apple_scanner_devices() {
             ]
         },
     );
-}
-
-/// `apple/fandhe_apple_text_scale.m` を `cc` でコンパイルする（Issue #914）。iOS 分岐のみから呼ばれる（doc 参照）。
-/// `TARGET_OS_IPHONE` ガードで中身を囲んでいるため、ファイル自体は共有形式のまま iOS 専用のコンパイル対象にできる。
-fn compile_apple_text_scale() {
-    compile_objc("apple/fandhe_apple_text_scale.m", &["UIKit"]);
 }
 
 /// `apple/fandhe_apple_secure_credential.m` を `cc` でコンパイルし Security を

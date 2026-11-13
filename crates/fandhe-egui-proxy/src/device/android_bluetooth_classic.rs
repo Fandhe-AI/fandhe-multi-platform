@@ -144,14 +144,14 @@ mod jni_impl {
                 return Err(FAILED);
             };
 
-            // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。`vm_as_ptr()` は
+            // SAFETY: `AndroidClipboard::request` と同一の根拠。`vm_as_ptr()` は
             // android-activity が管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
             let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
 
             let result = vm.attach_current_thread(
                 |env: &mut jni::Env| -> Result<Option<String>, JniCallFailed> {
                     let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                    // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。未所有の JNI
+                    // SAFETY: `AndroidClipboard::request` と同一の根拠。未所有の JNI
                     // グローバル参照を `Cast` で包むだけで delete は試みない。
                     let activity =
                         unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };

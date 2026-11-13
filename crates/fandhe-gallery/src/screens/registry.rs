@@ -175,7 +175,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "text_scale_preview" => fandhe_core::screens::text_scale_preview::current_screen,
-    fandhe_egui_proxy::device::text_scale::text_scale_effect,
+    fandhe_cap_dynamic_type::text_scale_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "credential_vault" => fandhe_core::screens::credential_vault::current_screen,

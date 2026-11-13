@@ -194,8 +194,6 @@ pub mod spotlight_index;
 pub mod storage;
 /// Phase 11（端末機能の拡充ループ、親 #183、Issue #939）: システムの効果音・ビープ。
 pub mod system_sound;
-/// Phase 11（端末機能の拡充ループ、親 #911、Issue #912）: 文字サイズ設定の追従。
-pub mod text_scale;
 /// Phase 11（端末機能の拡充ループ、親 #115、Issue #535）: 端末内翻訳（固定の原文を 1 回訳す）。
 pub mod translation;
 /// Phase 11（端末機能の拡充ループ、Issue #865）: 任意テキストの読み上げ（TTS）。

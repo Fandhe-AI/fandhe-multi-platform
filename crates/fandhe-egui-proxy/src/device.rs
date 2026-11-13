@@ -1216,8 +1216,6 @@ pub mod spotlight_index;
 /// Phase 11 の拡充ループ（親 #183、Issue #939）: システムの効果音の effect ドライバ
 /// （macOS / Windows 実装、Android は `ToneGenerator`（#940）、iOS・他 OS は `UnsupportedSystemSound` 固定）。
 pub mod system_sound;
-/// Phase 11 の拡充ループ（親 #911、Issue #912）: 文字サイズ追従の effect ドライバ。
-pub mod text_scale;
 pub mod tilt;
 /// Phase 11 の拡充ループ（親 #115、Issue #535）: 端末内翻訳の effect ドライバ（macOS 実装、
 /// iOS・Android も実装済み（#536・#537）、他 OS は `UnsupportedTextTranslator` 固定。Web は
@@ -1499,10 +1497,6 @@ pub mod windows_speech_recognition;
 /// `device/system_sound.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_system_sound;
-/// Issue #913: Windows 向け文字サイズ追従実装（`UISettings.TextScaleFactor` を
-/// 読む WinRT ラッパー）。`device/text_scale.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_text_scale;
 /// Issue #1216: Windows 向けカスタム URL scheme 受信（レジストリ登録・起動引数・
 /// 名前付き mutex と named pipe による起動済みインスタンスへの転送）。
 /// `device/url_scheme.rs` の Windows 経路と `main.rs` から使われる。純関数はホストの

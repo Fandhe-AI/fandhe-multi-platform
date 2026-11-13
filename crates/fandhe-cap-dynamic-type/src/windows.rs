@@ -1,4 +1,4 @@
-//! Windows 向け文字サイズ追従実装（Issue #913）。`device/text_scale.rs` の
+//! Windows 向け文字サイズ追従実装（Issue #913）。`driver.rs` の
 //! `shared_text_scale()` の Windows 経路から呼ばれ、WinRT
 //! `Windows.UI.ViewManagement.UISettings.TextScaleFactor`（値域 1.0〜2.25、
 //! <https://learn.microsoft.com/en-us/uwp/api/windows.ui.viewmanagement.uisettings.textscalefactor>）
@@ -19,11 +19,11 @@
 //! MTA へフォールバックする（`windows-core` の既定挙動、#898/#907 と同じ前提）ため
 //! 本実装では `RoInitialize` を呼ばない。失敗は `Result` でそのまま返る。
 //!
-//! `HRESULT` や設定値の生値をログへ出さず、固定ラベルの `DeviceError::Internal` へ
+//! `HRESULT` や設定値の生値をログへ出さず、固定ラベルの `DynamicTypeError::Internal` へ
 //! 畳む（`windows_share.rs`/`windows_biometric.rs` と同じ方針、security.md A09）。
 
-use fandhe_device::text_scale::TextScale;
-use fandhe_device::DeviceError;
+use crate::contract::TextScale;
+use crate::error::DynamicTypeError;
 use windows::UI::ViewManagement::UISettings;
 
 /// [`TextScale`] の Windows 実装。状態を持たないため呼び出しごとに `UISettings` を
@@ -31,12 +31,11 @@ use windows::UI::ViewManagement::UISettings;
 pub(crate) struct WindowsTextScale;
 
 impl TextScale for WindowsTextScale {
-    fn scale_factor(&self) -> Result<f32, DeviceError> {
-        let settings =
-            UISettings::new().map_err(|_| DeviceError::Internal("text_scale settings"))?;
+    fn scale_factor(&self) -> Result<f32, DynamicTypeError> {
+        let settings = UISettings::new().map_err(|_| DynamicTypeError::Internal)?;
         let factor = settings
             .TextScaleFactor()
-            .map_err(|_| DeviceError::Internal("text_scale read"))?;
+            .map_err(|_| DynamicTypeError::Internal)?;
         Ok(factor as f32)
     }
 }

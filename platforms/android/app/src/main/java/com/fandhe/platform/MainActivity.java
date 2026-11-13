@@ -4424,19 +4424,6 @@ public class MainActivity extends GameActivity {
         }
     }
 
-    // Rust 側（`device/text_scale.rs` の Android 分岐、Issue #914）から JNI 経由で
-    // 呼ばれる同期 getter（`requestBiometric` 等と異なり結果を待つ非同期通知は無い）。
-    // `Configuration.fontScale` は「システム標準の何倍か」を表す倍率で、Rust 側の
-    // `TextScale` 契約（`fandhe_device::text_scale` モジュール doc）とそのまま一致する。
-    //
-    // `AndroidManifest.xml` の `configChanges` に `fontScale` を含めているため、文字サイズ変更で
-    // Activity は再生成されない（Issue #73）。Rust 側は `OsScale::Unread` のとき 1 回読むだけで、
-    // 稼働中の変更には追従しない（再起動で反映。天井は
-    // `docs/device/capabilities/dynamic-type.json` の `note` に記録）。
-    private float textScaleFactor() {
-        return getResources().getConfiguration().fontScale;
-    }
-
     // Rust 側（`device/android_device_info.rs`、Issue #1306）から JNI 経由で egui スレッドが
     // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
     // `DeviceInfoHelper` 冒頭を参照。失敗は null。

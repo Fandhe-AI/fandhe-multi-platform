@@ -23,7 +23,7 @@
 //! スレッド方式と同型）。`RoInitialize` は呼ばない（`windows-core` の
 //! `CO_E_NOTINITIALIZED` → MTA フォールバック、#898/#907/#913/#923 と同じ前提）。
 //! `windows` クレート側が safe fn としてラップ済みのため `unsafe` は不要
-//! （`windows_secure_credential.rs`/`windows_text_scale.rs` と同型。`lib.rs` の
+//! （`windows_secure_credential.rs`/`windows_system_sound.rs` と同型。`lib.rs` の
 //! Windows `deny(unsafe_code)` に対する `allow` も付けない）。
 //!
 //! # 期限はワーカーのタイマで一致させる

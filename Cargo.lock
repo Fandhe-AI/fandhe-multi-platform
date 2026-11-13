@@ -1186,6 +1186,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-dynamic-type"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-file-watch"
 version = "0.2.0"
 dependencies = [
@@ -1697,6 +1710,7 @@ dependencies = [
  "fandhe-cap-camera-capture",
  "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
+ "fandhe-cap-dynamic-type",
  "fandhe-cap-file-watch",
  "fandhe-cap-focus-mode-status",
  "fandhe-cap-geocoding-search",
@@ -1828,6 +1842,7 @@ dependencies = [
  "fandhe-cap-app-badge",
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
+ "fandhe-cap-dynamic-type",
  "fandhe-cap-file-watch",
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",

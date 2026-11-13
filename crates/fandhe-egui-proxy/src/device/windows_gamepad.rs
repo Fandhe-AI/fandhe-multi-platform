@@ -4,7 +4,7 @@
 //! を読む。
 //!
 //! `Gamepad::Gamepads()`/`GetCurrentReading()` は `windows` クレート側で safe fn として
-//! ラップ済みのため `unsafe` は不要（`windows_text_scale.rs` と同じ判断。
+//! ラップ済みのため `unsafe` は不要（`windows_system_sound.rs` と同じ判断。
 //! `fandhe-egui-proxy` の Windows `deny(unsafe_code)` に対する `#[allow(unsafe_code)]` も
 //! 付けない）。先頭 1 台のみを扱う契約（`fandhe_device::gamepad` モジュール doc 参照）で、
 //! 複数台接続時は `Gamepads()` が返す一覧の先頭要素のみを見る。
@@ -14,7 +14,7 @@
 //! [`fandhe_device::gamepad::GamepadSnapshot`] へ詰める（モジュール doc の軸の向き参照）。
 //!
 //! `HRESULT` の生値をログ・エラー文へ出さず、固定ラベルの `DeviceError::Internal` へ
-//! 畳む（`windows_text_scale.rs`/`windows_share.rs` と同じ方針、security.md A09）。
+//! 畳む（`windows_system_sound.rs`/`windows_share.rs` と同じ方針、security.md A09）。
 
 use fandhe_device::gamepad::{
     normalize_axis, normalize_trigger, Gamepad as GamepadTrait, GamepadSnapshot, BUTTON_A,
@@ -26,7 +26,7 @@ use fandhe_device::DeviceError;
 use windows::Gaming::Input::{Gamepad as WinGamepad, GamepadButtons, GamepadReading};
 
 /// [`fandhe_device::gamepad::Gamepad`] の Windows 実装。状態を持たない
-/// （`Gamepads()` は毎回 OS 側の一覧を引く。`windows_text_scale.rs` と同じ判断で、
+/// （`Gamepads()` は毎回 OS 側の一覧を引く。`windows_system_sound.rs` と同じ判断で、
 /// 常駐スレッド・イベント購読は持たない、ホットプラグ通知は本 Issue のスコープ外）。
 pub(crate) struct WindowsGamepad;
 
