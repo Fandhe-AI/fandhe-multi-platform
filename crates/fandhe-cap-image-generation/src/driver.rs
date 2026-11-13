@@ -458,7 +458,7 @@ mod tests {
     fn fallback_platform_is_unsupported_off_apple() {
         #[cfg(not(any(target_os = "macos", target_os = "ios")))]
         assert_eq!(
-            platform().generate(1),
+            platform_image_generation().generate(1),
             Err(ImageGenerationFailure::Unsupported)
         );
     }
