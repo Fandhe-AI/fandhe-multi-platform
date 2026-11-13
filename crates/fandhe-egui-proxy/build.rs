@@ -96,9 +96,6 @@ fn build() {
     // `apple/fandhe_apple_map_view.m`（Issue #273 macOS + #274 iOS）も macOS 分岐と共用する。
     compile_apple_map_view();
 
-    // `apple/fandhe_apple_scanner_devices.m`（Issue #981 macOS + #982 iOS）も macOS 分岐と共用する
-    // （b-ios が本ファイルを触らずに済むよう、iOS 分岐からも (a) で呼んでおく）。
-    compile_apple_scanner_devices();
 
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）も macOS 分岐と
     // 共用する。
@@ -240,30 +237,6 @@ fn compile_apple_map_view() {
     compile_objc(
         "apple/fandhe_apple_map_view.m",
         &[ui_framework(), "CoreGraphics", "Foundation", "MapKit"],
-    );
-}
-
-/// `apple/fandhe_apple_scanner_devices.m` を `cc` でコンパイルし ImageCaptureCore / ImageIO /
-/// UniformTypeIdentifiers をリンクする（Issue #981 macOS・#982 iOS。両分岐から呼ぶ）。
-fn compile_apple_scanner_devices() {
-    compile_objc(
-        "apple/fandhe_apple_scanner_devices.m",
-        if target_is_ios() {
-            &[
-                "Foundation",
-                "ImageCaptureCore",
-                "ImageIO",
-                "UIKit",
-                "UniformTypeIdentifiers",
-            ]
-        } else {
-            &[
-                "Foundation",
-                "ImageCaptureCore",
-                "ImageIO",
-                "UniformTypeIdentifiers",
-            ]
-        },
     );
 }
 
@@ -809,7 +782,6 @@ fn build_macos() {
     compile_apple_secure_credential();
     compile_apple_photo_library();
     compile_apple_map_view();
-    compile_apple_scanner_devices();
 
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）は iOS 分岐と
     // 共用する。

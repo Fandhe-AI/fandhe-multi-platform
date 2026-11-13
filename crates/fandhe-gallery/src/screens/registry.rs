@@ -543,7 +543,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "scanner_devices_import" => fandhe_core::screens::scanner_devices_import::current_screen,
-    fandhe_egui_proxy::device::scanner_devices::scanner_devices_import_effect,
+    fandhe_cap_scanner_devices::scanner_devices_import_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "translation" => fandhe_core::screens::translation::current_screen,

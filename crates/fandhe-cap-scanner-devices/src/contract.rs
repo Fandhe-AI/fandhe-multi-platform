@@ -5,7 +5,7 @@
 //! 画像 1 枚を取り込んで表示する」ことまで。機器の選択 UI・複数枚・RAW・テザー撮影・ネットワーク
 //! 接続の機器・着脱の継続監視は扱わない。OS ごとに扱える機器が違う（macOS・iOS・Android は
 //! カメラ機器、Windows は WIA のスキャナー、macOS のスキャナーと Windows のカメラ機器は範囲外、
-//! Web は対象外）。`fandhe-egui-proxy` の effect ドライバ（`device/scanner_devices.rs`）が本モジュールの
+//! Web は対象外）。`driver`（effect ドライバ）が本モジュールの
 //! trait をワーカースレッドから呼び、OS 層が実装する。
 //!
 //! # 契約
@@ -53,7 +53,7 @@
 use std::fmt;
 use std::time::Duration;
 
-use crate::photo_picker::{PickedPhoto, validate_photo};
+use fandhe_device::photo_picker::{PickedPhoto, validate_photo};
 
 /// 機器を探す時間。仮の値で、実機確認（#967）で見直す。
 pub const DISCOVERY_WINDOW: Duration = Duration::from_secs(3);
@@ -62,7 +62,7 @@ pub const DISCOVERY_WINDOW: Duration = Duration::from_secs(3);
 pub const IMPORT_DEADLINE: Duration = Duration::from_secs(60);
 
 /// 取り込んだ画像のバイト数上限。写真選択の上限（SSOT）を参照し、値を複製しない。
-pub const MAX_PAGE_BYTES: usize = crate::photo_picker::MAX_PHOTO_BYTES;
+pub const MAX_PAGE_BYTES: usize = fandhe_device::photo_picker::MAX_PHOTO_BYTES;
 
 /// 取り込み元の機器の種類（機器名は持たない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

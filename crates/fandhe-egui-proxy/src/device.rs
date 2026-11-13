@@ -203,11 +203,6 @@ pub mod android_quick_settings_tile;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_safe_area_insets;
-/// Issue #981 (a): Android 向けスキャナー・カメラ機器からの取り込み（#983 が埋めるスタブ）。
-/// `device/scanner_devices.rs` の Android 経路から使われる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_scanner_devices;
 /// Issue #655: Android 向け画面向き実装（#657 が埋めるスタブ）。
 /// `device/screen_orientation.rs` の Android 経路から使われる。
 #[cfg(any(target_os = "android", test))]
@@ -346,13 +341,6 @@ pub mod apple_picture_in_picture;
 /// `cfg(test)` でも有効にする。
 #[cfg(any(target_os = "macos", test))]
 pub mod apple_quick_settings_tile;
-/// Issue #981（macOS）/ #982（iOS）: Apple 共用のスキャナー・カメラ機器からの取り込み
-/// （`apple/fandhe_apple_scanner_devices.m` の ImageCaptureCore を呼ぶ C ABI ラッパー）。
-/// `device/scanner_devices.rs` の macOS 経路と iOS 経路から呼ばれる。`build.rs` のコンパイル条件と
-/// 同じ OS 集合に保つ。写像の純関数はホストの `cargo test` でも検査するため `test` でも有効にする。
-#[cfg(any(target_os = "ios", target_os = "macos", test))]
-#[cfg_attr(not(any(target_os = "ios", target_os = "macos")), allow(dead_code))]
-pub mod apple_scanner_devices;
 /// Issue #922・#924: iOS / macOS 向け資格情報保存実装（`apple/
 /// fandhe_apple_secure_credential.m` を呼ぶ C ABI ラッパー）。`device/
 /// secure_credential.rs` の iOS/macOS 経路から呼ばれる。
@@ -630,10 +618,6 @@ pub mod ios_print;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_safe_area_insets;
-/// Issue #982: iOS 向けスキャナー・カメラ機器からの取り込み（macOS と共用の `apple_scanner_devices` へ委譲し、戻り直後に再描画を起こす）。
-/// `device/scanner_devices.rs` の iOS 経路から使われる。
-#[cfg(target_os = "ios")]
-pub mod ios_scanner_devices;
 /// Issue #655: iOS 向け画面向き実装（#656 が埋めるスタブ）。
 /// `device/screen_orientation.rs` の iOS 経路から使われる。
 #[cfg(any(target_os = "ios", test))]
@@ -830,10 +814,6 @@ pub(crate) use fandhe_runtime::request_slot;
 /// Phase 11 の拡充ループ（親 #105、Issue #444）: セーフエリアの effect ドライバ
 /// （macOS・iOS / Android 実装、他 OS は `UnsupportedSafeArea` 固定）。
 pub mod safe_area_insets;
-/// Phase 11 の拡充ループ（親 #192、Issue #981）: 接続したスキャナー・カメラ機器からの取り込みの
-/// effect ドライバ（macOS 実装、iOS・Android・Windows は後続の子が埋めるスタブ、他 OS は
-/// `UnsupportedScannerDevices` 固定）。
-pub mod scanner_devices;
 /// Phase 11 の拡充ループ（親 #128、Issue #655）: 画面向きの effect ドライバ
 /// （iOS は #656、Android は #657 が埋めるスタブ、Web は #658 の `fandhe-web-dom`、
 /// 他 OS は `UnsupportedScreenOrientation` 固定）。
@@ -1031,11 +1011,6 @@ pub mod windows_print;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_recent_documents;
-/// Issue #981 (a): Windows 向けスキャナー取り込み（#984 が埋めるスタブ）。
-/// `device/scanner_devices.rs` の Windows 経路から使われる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_scanner_devices;
 /// Issue #923: Windows 向け資格情報保存実装（WinRT `PasswordVault` ラッパー）。
 /// `device/secure_credential.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

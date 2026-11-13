@@ -133,8 +133,6 @@ pub mod quick_settings_tile;
 pub mod recent_documents;
 /// Phase 11（端末機能の拡充ループ、親 #105、Issue #444）: セーフエリア・ディスプレイ切り欠き。
 pub mod safe_area_insets;
-/// Phase 11（端末機能の拡充ループ、親 #192、Issue #981）: 接続したスキャナー・カメラ機器からの取り込み。
-pub mod scanner_devices;
 /// Phase 11（端末機能の拡充ループ、親 #128、Issue #655）: 画面向きの取得・固定。
 pub mod screen_orientation;
 /// Phase 11（端末機能の拡充ループ、親 #921、Issue #922）: 資格情報の安全な保存。

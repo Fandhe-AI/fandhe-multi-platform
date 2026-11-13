@@ -1,5 +1,5 @@
 //! macOS / iOS 共用のスキャナー・カメラ機器からの取り込み（Issue #981 macOS、#982 iOS）。
-//! `device/scanner_devices.rs` の macOS 経路（iOS は `ios_scanner_devices` 経由で委譲）から呼ばれ、
+//! `driver` の macOS 経路（iOS は `crate::ios` 経由で委譲）から呼ばれ、
 //! `apple/fandhe_apple_scanner_devices.m`（ImageCaptureCore で USB 接続のカメラ機器を探し、最新の
 //! 画像 1 枚を一時ディレクトリへ取り込んで ImageIO で長辺 2048 画素以下の JPEG にする）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。バイト列は `.m` が戻る直前に呼び出しスレッド自身が
@@ -7,11 +7,11 @@
 //! この呼び出しとコールバックの 2 箇所に閉じる（coding-rust.md の FFI 例外規定準拠）。
 //!
 //! 戻りコードの写像の SSOT は [`failure_for`]（純関数。ホストの `cargo test` で全コードを検査する）。
-//! 契約の SSOT は `fandhe_device::scanner_devices`: 成功は必ず `ImportedImage::from_os` を通し、
+//! 契約の SSOT は `crate::contract`: 成功は必ず `ImportedImage::from_os` を通し、
 //! `NSError.code` は握りつぶさず（`-1` へ潰さず）契約の失敗種別へ写す。呼び出しはブロックするため、
-//! 呼び出し元はワーカーで呼ぶ。`build.rs` のコンパイル条件・`device.rs` の mod cfg と同じ OS 集合に保つ。
+//! 呼び出し元はワーカーで呼ぶ。`build.rs` のコンパイル条件・`lib.rs` の mod cfg と同じ OS 集合に保つ。
 
-use fandhe_device::scanner_devices::ScannerImportFailure;
+use crate::contract::ScannerImportFailure;
 
 /// `.m` の戻りコード 9（OS の失敗）のとき、`NSError.code`（ImageCaptureCore の `ICReturnCode` 等）を
 /// 契約の失敗種別へ写す。未知のコードと 0（欠けた要素など OS のコードが無い失敗）は `Failed`。
@@ -53,9 +53,9 @@ mod os {
     use std::ffi::c_void;
     use std::time::Duration;
 
-    use fandhe_device::scanner_devices::{
-        DeviceKind, ImportedImage, ScannerDevices, ScannerImportFailure, DISCOVERY_WINDOW,
-        MAX_PAGE_BYTES,
+    use crate::contract::{
+        DISCOVERY_WINDOW, DeviceKind, ImportedImage, MAX_PAGE_BYTES, ScannerDevices,
+        ScannerImportFailure,
     };
 
     use super::failure_for;

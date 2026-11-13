@@ -407,18 +407,6 @@ public class MainActivity extends GameActivity {
         wifiInfoHelper.cancel(requestId);
     }
 
-    // 接続した機器からの取り込み（Issue #983）。実装は `ScannerDevicesHelper`。
-    // Rust の `android_scanner_devices.rs` が JNI で呼ぶ。
-    private final ScannerDevicesHelper scannerDevicesHelper = new ScannerDevicesHelper(this);
-
-    void requestScannerDevicesImport(long requestId, long windowMs, int maxBytes) {
-        scannerDevicesHelper.start(requestId, windowMs, maxBytes);
-    }
-
-    void cancelScannerDevicesImport(long requestId) {
-        scannerDevicesHelper.cancel(requestId);
-    }
-
     // 行動認識（Issue #1127）。実装は `ActivityRecognitionHelper`（フィールド初期化子で生成し、STARTED 前に
     // 許可ランチャーを登録する）。Rust の `android_activity_recognition.rs` が同期 JNI で呼ぶ。
     private final ActivityRecognitionHelper activityRecognitionHelper = new ActivityRecognitionHelper(this);
@@ -3928,7 +3916,6 @@ public class MainActivity extends GameActivity {
         blePeripheralHelper.onDestroy();
         musicLibraryHelper.onDestroy();
         wifiInfoHelper.onDestroy();
-        scannerDevicesHelper.onDestroy();
         compassHelper.onDestroy();
         activityRecognitionHelper.onDestroy();
         environmentSensorsHelper.onDestroy();

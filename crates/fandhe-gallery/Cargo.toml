@@ -72,6 +72,7 @@ device = [
   "dep:fandhe-cap-power-state",
   "dep:fandhe-cap-radio-control",
   "dep:fandhe-cap-removable-storage",
+  "dep:fandhe-cap-scanner-devices",
   "dep:fandhe-cap-screen-brightness",
   "dep:fandhe-cap-screen-capture",
   "dep:fandhe-cap-screen-wake-lock",
@@ -202,6 +203,7 @@ fandhe-cap-per-app-language = { path = "../fandhe-cap-per-app-language", optiona
 fandhe-cap-power-state = { path = "../fandhe-cap-power-state", optional = true }
 fandhe-cap-radio-control = { path = "../fandhe-cap-radio-control", optional = true }
 fandhe-cap-removable-storage = { path = "../fandhe-cap-removable-storage", optional = true }
+fandhe-cap-scanner-devices = { path = "../fandhe-cap-scanner-devices", optional = true }
 fandhe-cap-screen-brightness = { path = "../fandhe-cap-screen-brightness", optional = true }
 fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture", optional = true }
 fandhe-cap-screen-wake-lock = { path = "../fandhe-cap-screen-wake-lock", optional = true }

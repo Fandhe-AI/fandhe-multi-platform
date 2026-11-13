@@ -4,7 +4,7 @@
 //! 呼び出し元: `device/scanner_devices.rs::platform` の Windows 経路が、ワーカースレッドから
 //! `ScannerDevices::import_one` を同期に呼ぶ。世代・期限の判定と、表示前の復号（2 段検査の 2 段目）は
 //! 呼び出し側が担い、本ファイルは `ImportedImage` か `ScannerImportFailure` だけを返す。
-//! 契約（結果の種類・写像表・守る範囲）の SSOT は `fandhe_device::scanner_devices`。
+//! 契約（結果の種類・写像表・守る範囲）の SSOT は `crate::contract`。
 //!
 //! # 流れ
 //!
@@ -31,7 +31,7 @@
 
 use std::sync::Arc;
 
-use fandhe_device::scanner_devices::{ScannerDevices, ScannerImportFailure};
+use crate::contract::{ScannerDevices, ScannerImportFailure};
 
 /// `REGDB_E_CLASSNOTREG`（この環境にクラスが無い）。
 #[cfg(any(target_os = "windows", test))]
@@ -113,7 +113,7 @@ fn check_preview(succeeded: bool, size: u64) -> Result<(), ScannerImportFailure>
         Err(ScannerImportFailure::Failed)
     } else if size == 0 {
         Err(ScannerImportFailure::NoImage)
-    } else if size > fandhe_device::scanner_devices::MAX_PAGE_BYTES as u64 {
+    } else if size > crate::contract::MAX_PAGE_BYTES as u64 {
         Err(ScannerImportFailure::TooLarge)
     } else {
         Ok(())
@@ -122,14 +122,14 @@ fn check_preview(succeeded: bool, size: u64) -> Result<(), ScannerImportFailure>
 
 #[cfg(target_os = "windows")]
 mod imp {
-    use std::sync::{mpsc, Mutex};
+    use std::sync::{Mutex, mpsc};
     use std::time::{Duration, Instant};
 
-    use fandhe_device::scanner_devices::{DeviceKind, ImportedImage, DISCOVERY_WINDOW};
-    use windows::core::HSTRING;
+    use crate::contract::{DISCOVERY_WINDOW, DeviceKind, ImportedImage};
     use windows::Devices::Enumeration::DeviceInformation;
     use windows::Devices::Scanners::{ImageScanner, ImageScannerFormat, ImageScannerScanSource};
     use windows::Storage::Streams::{DataReader, InMemoryRandomAccessStream};
+    use windows::core::HSTRING;
     use windows_future::{AsyncOperationCompletedHandler, AsyncStatus, IAsyncOperation};
 
     use super::*;
@@ -394,9 +394,11 @@ mod imp {
         /// 機器の無い環境では成功しない（`NoDevice` か `Unsupported`）。
         #[test]
         fn no_scanner_does_not_succeed() {
-            assert!(WindowsScannerDevices
-                .import_one(Duration::from_secs(30))
-                .is_err());
+            assert!(
+                WindowsScannerDevices
+                    .import_one(Duration::from_secs(30))
+                    .is_err()
+            );
         }
 
         #[test]
@@ -414,14 +416,14 @@ pub(crate) fn implementation() -> Arc<dyn ScannerDevices> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        Arc::new(fandhe_device::scanner_devices::UnsupportedScannerDevices)
+        Arc::new(crate::contract::UnsupportedScannerDevices)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::scanner_devices::MAX_PAGE_BYTES;
+    use crate::contract::MAX_PAGE_BYTES;
     use ScannerImportFailure as F;
 
     #[test]

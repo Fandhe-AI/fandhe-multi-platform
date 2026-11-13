@@ -1,5 +1,6 @@
 package com.fandhe.platform;
 
+import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -28,14 +29,18 @@ import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // 接続したスキャナー・カメラ機器（USB の PTP / MTP）からの取り込み（Issue #983、親 #192）の
-// Android 実装ヘルパー。MainActivity から生成・委譲される。Rust の `device/android_scanner_devices.rs` が
-// `MainActivity.requestScannerDevicesImport` / `cancelScannerDevicesImport` を JNI で呼び、
-// 結果を `nativeOnScannerDevicesResult` で受けて契約（`fandhe_device::scanner_devices`）の結果へ写像する。
+// Android 実装ヘルパー。Rust の `src/android.rs` が static の `start(Activity, long, long, int)` /
+// `cancel(Activity, long)` を JNI で呼び、結果を `nativeOnScannerDevicesResult` で受けて
+// 契約（`contract`）の結果へ写像する。Activity ごとの helper は `HELPERS` に持ち、`ScannerDevicesLifecycle`
+// （`FeatureLifecycleProvider` 継承）が `attach` / `detach` で知らせる。helper が無い（生成前・破棄後）`start` は
+// CODE_FAILED で確定し、結果が来ないまま待たせない。BroadcastReceiver の登録と解除は helper の内側に閉じる。
 //
 // 流れ: 探索窓の間 `getDeviceList` を読み直して Still Image の機器を探す → `hasPermission` が偽なら
 // `requestPermission`（応答の extras は信じず `hasPermission` を読み直す）→ IO スレッドで
@@ -53,7 +58,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 // ダイアログで与えられた許可（OS に残る）。
 // 機器名・シリアル・画像・例外の文言・id はログに出さない。
 final class ScannerDevicesHelper {
-    // 結果コード。Rust 側 `android_scanner_devices.rs::decode` が同じ値で写像する（SSOT は本クラス）。
+    // 結果コード。Rust 側 `android.rs::decode` が同じ値で写像する（SSOT は本クラス）。
     static final int CODE_OK = 0;
     static final int CODE_UNSUPPORTED = 1;
     static final int CODE_NO_DEVICE = 2;
@@ -109,6 +114,10 @@ final class ScannerDevicesHelper {
         }
     }
 
+    // Activity ごとの helper。再生成後の新しい Activity は新しい helper を持ち、旧要求は持ち越さない。
+    private static final Map<Activity, ScannerDevicesHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     private final ComponentActivity activity;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final RequestTracker request = new RequestTracker();
@@ -116,28 +125,51 @@ final class ScannerDevicesHelper {
     // onDestroy 済みなら、post 済みの begin も開始せず INTERRUPTED で確定する。
     private boolean destroyed;
 
-    ScannerDevicesHelper(ComponentActivity activity) {
+    private ScannerDevicesHelper(ComponentActivity activity) {
         this.activity = activity;
     }
 
-    // Rust のワーカーから JNI で呼ばれる。main へ post するだけ。
-    void start(long id, long windowMs, int maxBytes) {
-        request.track(id);
-        handler.post(() -> begin(new Req(id, windowMs, maxBytes)));
+    // Activity の生成時（`ScannerDevicesLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new ScannerDevicesHelper(activity));
     }
 
-    // 期限切れで Rust のワーカーが同期で呼ぶ。main へ post するだけ。
-    void cancel(long id) {
-        handler.post(() -> {
-            Req r = cur;
+    // Activity の破棄時（同上）。保留中の要求を INTERRUPTED で確定する。
+    static void detach(Activity activity) {
+        ScannerDevicesHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // Rust のワーカーから JNI で呼ばれる入口。main へ post するだけ。helper が無ければ CODE_FAILED で確定する。
+    static void start(Activity activity, long id, long windowMs, int maxBytes) {
+        ScannerDevicesHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            nativeOnScannerDevicesResult(id, CODE_FAILED, 0, null);
+            return;
+        }
+        helper.request.track(id);
+        helper.handler.post(() -> helper.begin(new Req(id, windowMs, maxBytes)));
+    }
+
+    // 期限切れで Rust のワーカーが同期で呼ぶ。main へ post するだけ。helper が無ければ何もしない
+    // （`start` が既に確定している）。
+    static void cancel(Activity activity, long id) {
+        ScannerDevicesHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            return;
+        }
+        helper.handler.post(() -> {
+            Req r = helper.cur;
             if (r != null && r.id == id) {
-                abortReq(r, CODE_CANCELLED);
+                helper.abortReq(r, CODE_CANCELLED);
             }
         });
     }
 
-    // MainActivity.onDestroy から UI スレッドで呼ぶ。
-    void onDestroy() {
+    // `detach`（UI スレッド）から呼ぶ。
+    private void onDestroy() {
         destroyed = true;
         Req r = cur;
         if (r != null) {

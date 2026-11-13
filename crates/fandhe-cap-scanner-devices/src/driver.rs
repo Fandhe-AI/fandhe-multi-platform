@@ -1,15 +1,15 @@
 //! Phase 11（親 #192）型サンプル「接続した機器からの取り込み」（Issue #981）の effect ドライバ。
 //! `fandhe_core::screens::scanner_devices_import`（端末依存ゼロ）の要求を観測し、ワーカースレッドで
-//! `fandhe_device::scanner_devices::ScannerDevices` を呼んで `CompletionSender` 経由で結果を返す
+//! `crate::contract::ScannerDevices` を呼んで `CompletionSender` 経由で結果を返す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
-//! `fandhe_device::scanner_devices`。
+//! `crate::contract`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
 //!
 //! # OS 別の分担（dispatch は #981 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
-//! - macOS: [`super::apple_scanner_devices::AppleScannerDevices`]（#981。ImageCaptureCore）
+//! - macOS: [`crate::apple::AppleScannerDevices`]（#981。ImageCaptureCore）
 //! - iOS: `ios_scanner_devices`（#982。macOS と共用の `AppleScannerDevices` へ委譲し、許可・背景遷移は `.m` の iOS 区画）
 //! - Android: `android_scanner_devices`（#983。`UsbManager` + `MtpDevice`）
 //! - Windows: `windows_scanner_devices`（#984。WinRT `ImageScanner`）
@@ -29,18 +29,67 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
+use crate::contract::{DeviceKind, IMPORT_DEADLINE, ScannerDevices, ScannerImportFailure};
 use fandhe_core::screens::scanner_devices_import::{
-    finish_import, mark_running, take_request, CoreFailure, CoreKind, Phase,
-    ScannerDevicesImportState, ShownImage,
-};
-use fandhe_device::scanner_devices::{
-    DeviceKind, ScannerDevices, ScannerImportFailure, IMPORT_DEADLINE,
+    CoreFailure, CoreKind, Phase, ScannerDevicesImportState, ShownImage, finish_import,
+    mark_running, take_request,
 };
 
-use super::photo_pick::{decode_for_display, Decoded};
-use super::request_slot::{poll_and_finish, RequestSlot, POLL_INTERVAL};
-use crate::app::CompletionSender;
-use crate::image_store;
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
+use fandhe_runtime::{CompletionSender, image_store};
+
+/// 復号を許す辺の最大（画素）。
+const MAX_SIDE: u32 = 16384;
+/// 復号中の確保上限（バイト）。
+const MAX_ALLOC: u64 = 256 * 1024 * 1024;
+/// 表示用の複製の辺の上限（画素）。`RgbaPixels` の上限（2048）に収まる。
+// ponytail: 写真選択（egui-proxy の `photo_pick`）・書類スキャン（`fandhe-cap-document-scan`）と同じ値・同じ縮小処理を
+// 複製している。photo-picker を移すときに 3 か所の共有の置き場を決める。
+const DISPLAY_SIDE: u32 = 1024;
+
+/// 復号確認を通った画像。
+struct Decoded {
+    image: fandhe_core::RgbaPixels,
+    width: u32,
+    height: u32,
+}
+
+/// 2 段目の検査: 実際に復号できるかを確かめ、表示用の画素を作る。失敗は `Err(())`
+/// （画像の中身・OS のエラー文は持ち出さない）。
+fn decode_for_display(photo: &fandhe_device::photo_picker::PickedPhoto) -> Result<Decoded, ()> {
+    use fandhe_device::photo_picker::ImageFormat;
+    let format = match photo.format {
+        ImageFormat::Png => image::ImageFormat::Png,
+        ImageFormat::Jpeg => image::ImageFormat::Jpeg,
+        // feature を持たない。成功にせず失敗として返す。
+        ImageFormat::Gif | ImageFormat::Webp => return Err(()),
+    };
+    let mut reader =
+        image::ImageReader::with_format(std::io::Cursor::new(&photo.bytes[..]), format);
+    // `Limits` は non_exhaustive のため、既定値から書き換える。
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(MAX_SIDE);
+    limits.max_image_height = Some(MAX_SIDE);
+    limits.max_alloc = Some(MAX_ALLOC);
+    reader.limits(limits);
+    let decoded = reader.decode().map_err(|_| ())?;
+    let (width, height) = (decoded.width(), decoded.height());
+    // thumbnail は小さい画像を拡大しうるため、大きいときだけ縮める。
+    let shown = if width > DISPLAY_SIDE || height > DISPLAY_SIDE {
+        decoded.thumbnail(DISPLAY_SIDE, DISPLAY_SIDE)
+    } else {
+        decoded
+    };
+    let rgba = shown.to_rgba8();
+    // 表示辺 DISPLAY_SIDE 以下なので `RGBA_MAX_SIDE` に収まる。外れたら成功にせず失敗にする。
+    let image =
+        fandhe_core::RgbaPixels::new(rgba.width(), rgba.height(), rgba.into_raw()).ok_or(())?;
+    Ok(Decoded {
+        image,
+        width,
+        height,
+    })
+}
 
 /// 復号済みの画像。`RequestSlot` が `Clone` を要るため画素は `Arc` で持つ。
 #[derive(Clone)]
@@ -53,22 +102,23 @@ struct Imported {
 type Outcome = Result<Imported, ScannerImportFailure>;
 
 /// 現在のプラットフォームに応じた `ScannerDevices` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn ScannerDevices> {
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_scanner_devices() -> Arc<dyn ScannerDevices> {
     #[cfg(target_os = "macos")]
     {
-        Arc::new(super::apple_scanner_devices::AppleScannerDevices)
+        Arc::new(crate::apple::AppleScannerDevices)
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_scanner_devices::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_scanner_devices::implementation()
+        crate::android::implementation()
     }
     #[cfg(target_os = "windows")]
     {
-        super::windows_scanner_devices::implementation()
+        crate::windows::implementation()
     }
     #[cfg(not(any(
         target_os = "macos",
@@ -77,7 +127,7 @@ fn platform() -> Arc<dyn ScannerDevices> {
         target_os = "windows"
     )))]
     {
-        Arc::new(fandhe_device::scanner_devices::UnsupportedScannerDevices)
+        Arc::new(crate::contract::UnsupportedScannerDevices)
     }
 }
 
@@ -111,13 +161,15 @@ static SESSION: OnceLock<Session> = OnceLock::new();
 /// Activity 再生成時（`android_main` の再実行）に、保留中の要求を破棄する。
 /// 画面状態は `default()`（世代 0）に戻るため、保留が残ると次の押下が発送されず飲み込まれる。
 /// 古いワーカーの結果は照合で捨てられる。走っている OS 呼び出しは止めず走り切らせる。
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+#[cfg(target_os = "android")]
+pub fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
         s.slot.reset();
         *s.started.lock().unwrap_or_else(|e| e.into_inner()) = None;
         *s.waiting.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
+    // Android の橋渡し側の slot も破棄する（保留中の要求を待つワーカーを失敗で戻す）。
+    crate::android::reset_pending_tracking();
 }
 
 /// 契約上の失敗を画面の失敗種別へ写す（機器名・OS の文言は元々持たない）。
@@ -280,7 +332,7 @@ pub fn scanner_devices_import_effect(
     sender: &CompletionSender<ScannerDevicesImportState>,
 ) {
     static IMPL: OnceLock<Arc<dyn ScannerDevices>> = OnceLock::new();
-    let imp = IMPL.get_or_init(platform);
+    let imp = IMPL.get_or_init(platform_scanner_devices);
     drive(
         state,
         sender,
@@ -293,18 +345,25 @@ pub fn scanner_devices_import_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{ImportedImage, UnsupportedScannerDevices};
     use fandhe_core::screens::scanner_devices_import::{
-        image_source, request_import, ScannerDevicesImportState as State,
+        ScannerDevicesImportState as State, image_source, request_import,
     };
-    use fandhe_device::scanner_devices::{ImportedImage, UnsupportedScannerDevices};
     use std::sync::mpsc;
 
-    type Rx = mpsc::Receiver<crate::app::Completion<State>>;
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<State>>;
     type Result_ = Result<ImportedImage, ScannerImportFailure>;
 
     fn channel() -> (CompletionSender<State>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     fn png() -> Vec<u8> {
@@ -598,7 +657,7 @@ mod tests {
             target_os = "windows"
         )))]
         assert_eq!(
-            platform().import_one(Duration::ZERO),
+            platform_scanner_devices().import_one(Duration::ZERO),
             Err(ScannerImportFailure::Unsupported)
         );
     }

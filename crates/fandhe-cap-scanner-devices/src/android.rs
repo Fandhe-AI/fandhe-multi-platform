@@ -1,10 +1,10 @@
 //! Android 向け「接続したスキャナー・カメラ機器からの取り込み」実装（Issue #983、親 #192）。
 //! `device/scanner_devices.rs::platform` の Android 経路から [`implementation`] が呼ばれ、
 //! Java 側 `ScannerDevicesHelper`（`UsbManager` + `MtpDevice`）を JNI で橋渡しする。
-//! 契約の SSOT は `fandhe_device::scanner_devices`。
+//! 契約の SSOT は `crate::contract`。
 //!
 //! 流れ:
-//! - ワーカーが [`import_with`] で `MainActivity.requestScannerDevicesImport(long, long, int)` を呼び、
+//! - ワーカーが [`import_with`] で `ScannerDevicesHelper.start(Activity, long, long, int)`（static）を呼び、
 //!   Java が `nativeOnScannerDevicesResult(id, code, found, jpeg)` で返した値を [`decode`] で契約の結果へ写す
 //! - 期限（呼び出し元から渡る残り時間、起点は単調時計）が切れたら `cancelScannerDevicesImport(long)` を
 //!   呼び、Java が MTP セッション・接続・レシーバーを解放した後の最終通知を待ってから `TimedOut` を返す
@@ -21,14 +21,14 @@
 //! 開いていることによる失敗（`Failed`）、期限の後にダイアログで与えられた許可（OS に残る）。
 //! 機器名・画像・id・コードはログに出さない。
 //!
-//! no-op スタブは置かない: Java の native は Rust の `requestScannerDevicesImport` を経た後でしか呼ばれず、
-//! feature `device` 無効ビルドではその経路に到達しない（`android_radio_control` と同じ）。
+//! no-op スタブは置かない: Java の native は Rust の `ScannerDevicesHelper.start` を経た後でしか呼ばれず、
+//! feature `device` 無効ビルドではその経路に到達しない（radio-control と同じ）。
 
 use std::time::{Duration, Instant};
 
-use fandhe_device::scanner_devices::{DeviceKind, ImportedImage, ScannerImportFailure};
+use crate::contract::{DeviceKind, ImportedImage, ScannerImportFailure};
 
-use super::request_slot::{RequestSlot, POLL_INTERVAL};
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot};
 
 /// 結果コード（SSOT は Java 側 `ScannerDevicesHelper.CODE_*`）。
 const CODE_OK: i32 = 0;
@@ -115,7 +115,7 @@ fn import_with(
                     ScannerImportFailure::TimedOut
                 } else {
                     ScannerImportFailure::Failed
-                })
+                });
             }
         }
     }
@@ -124,7 +124,7 @@ fn import_with(
 #[cfg(target_os = "android")]
 static SLOT: RequestSlot<Reply> = RequestSlot::new();
 
-/// Activity 再生成直後に `android::reset_pending_tracking` から呼ぶ。保留中の要求を捨て、
+/// Activity 再生成直後に gallery の `android_main` から（`driver::reset_pending_tracking` 経由で）呼ぶ。保留中の要求を捨て、
 /// 待機中のワーカーを失敗で戻し、旧要求の遅延完了を id 不一致で無視させる。
 #[cfg(target_os = "android")]
 pub(crate) fn reset_pending_tracking() {
@@ -136,9 +136,9 @@ pub(crate) fn reset_pending_tracking() {
 struct AndroidScannerDevices;
 
 #[cfg(target_os = "android")]
-impl fandhe_device::scanner_devices::ScannerDevices for AndroidScannerDevices {
+impl crate::contract::ScannerDevices for AndroidScannerDevices {
     fn import_one(&self, remaining: Duration) -> Result<ImportedImage, ScannerImportFailure> {
-        use fandhe_device::scanner_devices::{DISCOVERY_WINDOW, MAX_PAGE_BYTES};
+        use crate::contract::{DISCOVERY_WINDOW, MAX_PAGE_BYTES};
         let window_ms = DISCOVERY_WINDOW.as_millis() as i64;
         let max_bytes = MAX_PAGE_BYTES.min(i32::MAX as usize) as i32;
         import_with(
@@ -152,34 +152,31 @@ impl fandhe_device::scanner_devices::ScannerDevices for AndroidScannerDevices {
 
 /// Android の実装を返す。`device/scanner_devices.rs` の dispatch は android の cfg 内でだけ呼ぶ。
 #[cfg(target_os = "android")]
-pub(crate) fn implementation() -> std::sync::Arc<dyn fandhe_device::scanner_devices::ScannerDevices>
-{
+pub(crate) fn implementation() -> std::sync::Arc<dyn crate::contract::ScannerDevices> {
     std::sync::Arc::new(AndroidScannerDevices)
 }
 
-/// `MainActivity.requestScannerDevicesImport(long, long, int)` を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `android_radio_control.rs::call_set` と同一の根拠。
+/// `ScannerDevicesHelper.start(Activity, long, long, int)`（static）を JNI で呼ぶ。`false` は呼び出し失敗。
+/// Helper が無い（生成前・破棄後）場合は Java 側が結果を FAILED で確定する（結果が来ないまま待たせない）。
+/// クラスは Activity の class loader で解決する（`fandhe_platform_android::with_activity_class`）。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_start(id: u64, window_ms: i64, max_bytes: i32) -> bool {
-    let Some(app) = crate::android::android_app() else {
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    let Some(app) = android_app() else {
         return false;
     };
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(
-        |env: &mut jni::Env| -> Result<(), super::android::JniCallFailed> {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-            let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-            env.call_method(
-                &activity,
-                jni::jni_str!("requestScannerDevicesImport"),
-                jni::jni_sig!((long, long, int) -> ()),
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.ScannerDevicesHelper"),
+        |env, activity, class| -> Result<(), JniCallFailed> {
+            env.call_static_method(
+                class,
+                jni::jni_str!("start"),
+                jni::jni_sig!((android.app.Activity, long, long, int) -> ()),
                 &[
+                    jni::objects::JValue::Object(activity),
                     jni::objects::JValue::Long(id as jni::sys::jlong),
-                    jni::objects::JValue::Long(window_ms),
+                    jni::objects::JValue::Long(window_ms as jni::sys::jlong),
                     jni::objects::JValue::Int(max_bytes),
                 ],
             )?;
@@ -189,26 +186,25 @@ fn call_start(id: u64, window_ms: i64, max_bytes: i32) -> bool {
     .is_ok()
 }
 
-/// `MainActivity.cancelScannerDevicesImport(long)` を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `call_start` と同一の根拠。
+/// `ScannerDevicesHelper.cancel(Activity, long)`（static）を JNI で呼ぶ。`false` は呼び出し失敗。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_cancel(id: u64) -> bool {
-    let Some(app) = crate::android::android_app() else {
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    let Some(app) = android_app() else {
         return false;
     };
-    // SAFETY: `call_start` と同一の根拠。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(
-        |env: &mut jni::Env| -> Result<(), super::android::JniCallFailed> {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: `call_start` と同一の根拠。
-            let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-            env.call_method(
-                &activity,
-                jni::jni_str!("cancelScannerDevicesImport"),
-                jni::jni_sig!((long) -> ()),
-                &[jni::objects::JValue::Long(id as jni::sys::jlong)],
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.ScannerDevicesHelper"),
+        |env, activity, class| -> Result<(), JniCallFailed> {
+            env.call_static_method(
+                class,
+                jni::jni_str!("cancel"),
+                jni::jni_sig!((android.app.Activity, long) -> ()),
+                &[
+                    jni::objects::JValue::Object(activity),
+                    jni::objects::JValue::Long(id as jni::sys::jlong),
+                ],
             )?;
             Ok(())
         },
@@ -226,7 +222,7 @@ fn call_cancel(id: u64) -> bool {
 /// ため他シンボルと衝突しない（既存の JNI エクスポートと同じ根拠）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_ScannerDevicesHelper_nativeOnScannerDevicesResult<
     'caller,
 >(
@@ -241,7 +237,7 @@ extern "system" fn Java_com_fandhe_platform_ScannerDevicesHelper_nativeOnScanner
         let mut code = code;
         let bytes = if jpeg.is_null() {
             None
-        } else if jpeg.len(env)? > fandhe_device::scanner_devices::MAX_PAGE_BYTES {
+        } else if jpeg.len(env)? > crate::contract::MAX_PAGE_BYTES {
             code = CODE_TOO_LARGE;
             None
         } else {

@@ -245,6 +245,9 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // NFC タグ読み取りの保留中の要求と処理済み世代も破棄する（画面状態は再生成で generation 0 に戻るため、残すと次の読み取りが飲み込まれる）（`fandhe_cap_nfc::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_nfc::reset_pending_tracking();
+    // 機器からの取り込みの保留中の要求と処理済み世代も破棄する（画面状態は再生成で generation 0 に戻るため、残すと次の取り込みが飲み込まれる）（`fandhe_cap_scanner_devices::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_scanner_devices::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 
