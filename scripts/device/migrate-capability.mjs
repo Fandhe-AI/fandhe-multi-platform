@@ -265,9 +265,25 @@ function listCaps(R) {
  * lib.rs に直接定義するか、他のモジュールで定義して lib.rs から `pub use` で再公開していれば合格。cfg の有無は見ない。
  */
 export function missingEntry(stem, files) {
+  // インライン mod の本文は crate ルート直下ではないため、定義・再公開の判定から外す。
+  const dropInlineMods = (src) => {
+    let out = "";
+    for (let i = 0; i < src.length; ) {
+      const hit = /\bmod\s+\w+\s*\{/g;
+      hit.lastIndex = i;
+      const found = hit.exec(src);
+      if (!found) return out + src.slice(i);
+      out += src.slice(i, found.index);
+      let depth = 1;
+      let j = found.index + found[0].length;
+      for (; j < src.length && depth > 0; j++) depth += src[j] === "{" ? 1 : src[j] === "}" ? -1 : 0;
+      i = j;
+    }
+    return out;
+  };
   const fn = `platform_${stem}`;
   const def = new RegExp(`^\\s*pub fn ${fn}\\s*[<(]`, "m");
-  files = Object.fromEntries(Object.entries(files).map(([f, src]) => [f, stripRustLiterals(src)]));
+  files = Object.fromEntries(Object.entries(files).map(([f, src]) => [f, dropInlineMods(stripRustLiterals(src))]));
   const lib = files["lib.rs"] ?? "";
   const ok =
     def.test(lib) ||

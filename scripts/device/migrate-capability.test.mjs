@@ -181,6 +181,8 @@ test("missingEntry: crate ルートから公開された platform_<stem> だけ�
   assert.equal(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": def }), null);
   assert.equal(missingEntry("x", { "lib.rs": "pub use driver::{a, platform_x, b};", "driver.rs": def }), null);
   assert.equal(missingEntry("x", { "lib.rs": "pub use driver::{\n    a,\n    platform_x,\n};", "driver.rs": def }), null);
+  assert.ok(missingEntry("x", { "lib.rs": "mod internal {\n    pub fn platform_x() {}\n}\n" }));
+  assert.ok(missingEntry("x", { "lib.rs": "mod internal {\n    pub use driver::*;\n}\n", "driver.rs": def }));
   assert.ok(missingEntry("x", { "lib.rs": "mod driver;", "driver.rs": def }));
   assert.ok(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": "pub(crate) fn platform_x() {}" }));
   assert.ok(missingEntry("x", { "lib.rs": "pub use driver::*;", "driver.rs": "fn platform_x() {}" }));
