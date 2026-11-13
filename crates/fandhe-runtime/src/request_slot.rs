@@ -64,6 +64,15 @@ impl<O> RequestSlot<O> {
         request_id
     }
 
+    /// 呼び出し側が決めた `request_id` で登録する（フレームワーク外のアプリが自分の id で OS 実装を直接呼ぶ入口用）。
+    /// 採番は進めない。
+    pub fn begin_with(&self, request_id: u64) {
+        *self.lock() = Some(Pending {
+            request_id,
+            ready: None,
+        });
+    }
+
     /// 進行中（結果未着）の要求があれば `None`、無ければ確認と登録を同じロックで行い `request_id` を返す。
     /// 公開入口が `snapshot` → `begin` の 2 段で二重登録しないために使う。
     pub fn try_begin(&self) -> Option<u64> {
@@ -279,6 +288,14 @@ pub fn poll_and_finish_owned<S: 'static, O: Clone + Send + 'static>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn begin_with_registers_caller_id() {
+        let slot: RequestSlot<u8> = RequestSlot::new();
+        slot.begin_with(7);
+        assert!(slot.deliver(7, 1));
+        assert_eq!(slot.take_ready(7), Some(1));
+    }
+
     #[test]
     fn try_begin_refuses_while_pending_and_allows_after_ready() {
         let slot: RequestSlot<u8> = RequestSlot::new();

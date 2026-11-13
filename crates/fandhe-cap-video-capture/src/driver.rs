@@ -64,7 +64,39 @@ type Outcome = Result<VideoCaptureOutcome, VideoCaptureFailure>;
 /// 現在のプラットフォームに応じた `VideoCapturer` 実装を返す（dispatch の最終形）。
 ///
 /// 画面の状態型に依存しない入口で、フレームワークの外のアプリも契約を直接呼べる。
+/// `capture(request_id, ..)` は渡した id で要求を bridge へ登録してから OS へ渡すため、撮影 UI が出る。
+/// 結果は [`take_capture_result`] で 1 回だけ取り出す（取り出すまで次の要求は `Internal` で断る）。
 pub fn platform_video_capture() -> Arc<dyn VideoCapturer> {
+    Arc::new(Registering(raw_platform()))
+}
+
+/// 撮影の結果を取り出す。`request_id` が現在の要求で、結果が届いていれば 1 回だけ `Some`。
+pub fn take_capture_result(
+    request_id: u64,
+) -> Option<Result<VideoCaptureOutcome, VideoCaptureFailure>> {
+    bridge().slot.take_ready(request_id)
+}
+
+/// 外部アプリ向け。呼び出し側の id を bridge へ登録してから内側の実装へ渡す。
+struct Registering(Arc<dyn VideoCapturer>);
+
+impl VideoCapturer for Registering {
+    fn capture(&self, request_id: u64, max_duration_secs: u32) -> Result<(), VideoCaptureFailure> {
+        let b = bridge();
+        if b.has_pending() {
+            return Err(VideoCaptureFailure::Internal);
+        }
+        b.begin_with(request_id);
+        let r = self.0.capture(request_id, max_duration_secs);
+        if let Err(f) = r {
+            b.complete_from_os(request_id, Err(f));
+        }
+        r
+    }
+}
+
+/// OS 実装そのもの（要求の登録は呼び出し側が行う）。
+fn raw_platform() -> Arc<dyn VideoCapturer> {
     #[cfg(target_os = "ios")]
     {
         crate::ios::implementation()
@@ -124,6 +156,17 @@ impl Bridge {
     /// 発送済み（OS 呼び出し中、または結果が画面へ未反映）の要求があるか。
     fn has_pending(&self) -> bool {
         self.lock().is_some() || self.slot.snapshot().is_some()
+    }
+
+    /// 呼び出し側の id で要求を登録する（外部アプリの直接呼び出し用）。
+    fn begin_with(&self, request_id: u64) {
+        let mut active = self.lock();
+        self.slot.begin_with(request_id);
+        *active = Some(Active {
+            request_id,
+            presenting: false,
+            panel: None,
+        });
     }
 
     /// 新しい要求を登録して id を返す。OS へ渡す前に呼び、即時の完了も照合できるようにする。
@@ -336,7 +379,7 @@ pub fn video_capture_show_effect(
     drive(
         state,
         sender,
-        IMPL.get_or_init(platform_video_capture),
+        IMPL.get_or_init(raw_platform),
         bridge(),
         forward_panel_command,
     );
@@ -547,7 +590,7 @@ mod tests {
             target_os = "windows"
         )))]
         assert_eq!(
-            platform().capture(1, MAX_DURATION_SECS),
+            raw_platform().capture(1, MAX_DURATION_SECS),
             Err(VideoCaptureFailure::Unsupported)
         );
     }
