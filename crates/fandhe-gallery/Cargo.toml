@@ -67,6 +67,7 @@ device = [
   "dep:fandhe-cap-usb-device",
   "dep:fandhe-cap-user-idle",
   "dep:fandhe-cap-uwb-ranging",
+  "dep:fandhe-cap-volume-control",
   # END fandhe-cap
 ]
 frame-metrics = ["fandhe-egui-proxy/frame-metrics"]
@@ -171,6 +172,7 @@ fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }
 fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device", optional = true }
 fandhe-cap-user-idle = { path = "../fandhe-cap-user-idle", optional = true }
 fandhe-cap-uwb-ranging = { path = "../fandhe-cap-uwb-ranging", optional = true }
+fandhe-cap-volume-control = { path = "../fandhe-cap-volume-control", optional = true }
 # END fandhe-cap
 
 # Windows の共通層。起動時にメインウィンドウの HWND を控える（端末機能の有無によらない起動の定型、TASK-21.4 / #1184）。

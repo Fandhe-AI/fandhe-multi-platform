@@ -3,7 +3,7 @@
 // 指定した音量へ設定して、同じ呼び出しの中で読み戻す。I/O は開かないので TCC の確認は掛からず、
 // 権限の宣言も増やさない。既定の出力機器は毎回 OS へ問い、デバイス ID・名前は保持しない・返さない。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_volume_control.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-volume-control/src/macos.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
 //
 // 契約:

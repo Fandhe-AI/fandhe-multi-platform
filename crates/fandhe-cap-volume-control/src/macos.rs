@@ -2,26 +2,24 @@
 //! `VirtualMainVolume` / `Mute`、`build.rs` が macOS ターゲットの feature `device` 有効時に
 //! コンパイルし CoreAudio・AudioToolbox をリンクする）を `unsafe extern "C"` 2 関数で呼ぶ。
 //! `unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。`device/volume_control.rs` の
-//! macOS 経路（UI スレッドから同期）から呼ばれ、契約は `fandhe_device::volume_control`。
+//! macOS 経路（UI スレッドから同期）から呼ばれ、契約は `crate::contract`。
 //!
 //! `.m` が返す生値は [`from_raw`] で契約の値へ写す。写像と 1 段階の決定はホストでもテストできるよう
 //! モジュールは `cfg(any(macos, test))`。
 //!
 //! # 既知の天井
 //!
-//! - 1 段階の幅は `fandhe_device::volume_control::MACOS_STEPS` 分の 1（段の幅を返す API が無い）。
+//! - 1 段階の幅は `crate::contract::MACOS_STEPS` 分の 1（段の幅を返す API が無い）。
 //!   設定値は機器が選べる値へ丸められるため、読み戻しが要求値と少しずれることがある（読み戻しを表示する）
 //! - 音量の制御を持たない出力機器（HDMI 等）は `level: None` / `NotChangeable`
 //! - 読み取りと設定の間に既定の出力機器が変わった場合の 1 段階の起点のずれは守らない範囲
 //! - 実機での動作確認は #780
 
-use fandhe_device::volume_control::{validate_level, VolumeControlMode, VolumeReading};
-use fandhe_device::DeviceError;
+use crate::contract::{VolumeControlMode, VolumeReading, validate_level};
+use crate::error::VolumeControlError;
 
 #[cfg(target_os = "macos")]
-use fandhe_device::volume_control::{
-    classify_step, macos_next_level, StepDirection, StepOutcome, VolumeControl,
-};
+use crate::contract::{StepDirection, StepOutcome, VolumeControl, classify_step, macos_next_level};
 #[cfg(target_os = "macos")]
 use std::sync::Arc;
 
@@ -38,7 +36,7 @@ struct Raw {
 }
 
 /// `.m` の生値を契約の値へ写す。音量は丸め・変換の前に検証する。
-fn from_raw(raw: &Raw) -> Result<VolumeReading, DeviceError> {
+fn from_raw(raw: &Raw) -> Result<VolumeReading, VolumeControlError> {
     if raw.has_device == 0 || raw.has_level == 0 {
         // 出力機器なし・音量を持たない出力機器は失敗ではなく「変えられない」。
         return Ok(VolumeReading {
@@ -65,7 +63,7 @@ mod ffi {
     // SAFETY: `macos/fandhe_macos_volume_control.m`（`build.rs` が macOS ターゲットの feature
     // `device` 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_volume_control_read(out: *mut Raw) -> i32;
         fn fandhe_macos_volume_control_set(level: f32, out: *mut Raw) -> i32;
     }
@@ -90,15 +88,15 @@ struct MacVolumeControl;
 
 #[cfg(target_os = "macos")]
 impl VolumeControl for MacVolumeControl {
-    fn read(&self) -> Result<VolumeReading, DeviceError> {
+    fn read(&self) -> Result<VolumeReading, VolumeControlError> {
         let mut raw = Raw::default();
         if ffi::read(&mut raw) != 0 {
-            return Err(DeviceError::Internal("volume-control read"));
+            return Err(VolumeControlError::Internal("volume-control read"));
         }
         from_raw(&raw)
     }
 
-    fn step(&self, direction: StepDirection) -> Result<StepOutcome, DeviceError> {
+    fn step(&self, direction: StepDirection) -> Result<StepOutcome, VolumeControlError> {
         let before = self.read()?;
         // 変えられない環境は OS へ渡さない。
         if before.mode != VolumeControlMode::Steps {
@@ -114,7 +112,7 @@ impl VolumeControl for MacVolumeControl {
         let next = validate_level(next)?;
         let mut raw = Raw::default();
         if ffi::set(next, &mut raw) != 0 {
-            return Err(DeviceError::Internal("volume-control set"));
+            return Err(VolumeControlError::Internal("volume-control set"));
         }
         // 要求値ではなく、同じ呼び出しの中で読み戻した値で結果を決める。
         Ok(classify_step(&before, from_raw(&raw)?))
@@ -180,7 +178,10 @@ mod tests {
     fn invalid_level_is_rejected_before_use() {
         for bad in [f32::NAN, f32::INFINITY, -0.5, 1.5] {
             assert!(
-                matches!(from_raw(&raw(bad, 1, None)), Err(DeviceError::Internal(_))),
+                matches!(
+                    from_raw(&raw(bad, 1, None)),
+                    Err(VolumeControlError::Internal(_))
+                ),
                 "{bad}"
             );
         }

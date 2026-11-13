@@ -431,7 +431,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "volume_control_show" => fandhe_core::screens::volume_control_show::current_screen,
-    fandhe_egui_proxy::device::volume_control::volume_control_show_effect,
+    fandhe_cap_volume_control::volume_control_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "screen_orientation_show" => fandhe_core::screens::screen_orientation_show::current_screen,

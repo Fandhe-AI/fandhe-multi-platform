@@ -1,12 +1,12 @@
 //! Android 向けシステム音量実装（Issue #787、親 #166）。`device/volume_control.rs` の dispatch
-//! （Android 経路、egui スレッドから同期）から呼ばれ、契約は `fandhe_device::volume_control`。
+//! （Android 経路、egui スレッドから同期）から呼ばれ、契約は `crate::contract`。
 //! `AudioManager` の `STREAM_MUSIC`（メディア音量）だけを扱う。Java 側の SSOT は
 //! `VolumeControlHelper`（結果コード）。
 //!
-//! JNI 窓口（`MainActivity`。Java・本ファイルの `jni_sig!`・非 Android 版の doc の 3 か所でそろえる）:
+//! JNI 窓口（`VolumeControlHelper` の static メソッド。Java・本ファイルの `jni_sig!`・非 Android 版の doc の 3 か所でそろえる）:
 //!
-//! - `int[] volumeControlRead()`: `()[I`。`{index, maxIndex, muted(0/1), fixed(0/1)}`。読めないときは null
-//! - `int volumeControlAdjust(int)`: `(I)I`。1 = 上げる / -1 = 下げる。結果コードを返す
+//! - `int[] read(Context)`: `(Landroid/content/Context;)[I`。`{index, maxIndex, muted(0/1), fixed(0/1)}`。読めないときは null
+//! - `int adjust(Context, int)`: `(Landroid/content/Context;I)I`。1 = 上げる / -1 = 下げる。結果コードを返す
 //!
 //! 写像: `index / maxIndex` を `level`、`isStreamMute` を `muted`（minSdk 24 では常に `Some`）、
 //! `isVolumeFixed` が真なら `NotChangeable`、偽なら `Steps`。`step` は「変更前の読み取り → 変更 →
@@ -30,11 +30,11 @@
 use std::sync::Arc;
 
 #[cfg_attr(not(any(target_os = "android", test)), allow(unused_imports))]
-use fandhe_device::volume_control::{
-    classify_step, validate_level, StepDirection, StepOutcome, VolumeControl, VolumeControlMode,
-    VolumeReading,
+use crate::contract::{
+    StepDirection, StepOutcome, VolumeControl, VolumeControlMode, VolumeReading, classify_step,
+    validate_level,
 };
-use fandhe_device::DeviceError;
+use crate::error::VolumeControlError;
 
 /// 変更の結果コード（SSOT は Java 側 `VolumeControlHelper.ADJUST_*`）。
 const ADJUST_OK: i32 = 0;
@@ -60,15 +60,16 @@ fn encode_direction(dir: StepDirection) -> i32 {
 /// 読み取りの 4 要素を `VolumeReading` へ写す純関数。`None`（読めない）・範囲外は `Internal`。
 /// 範囲は整数のまま割り算の前に検証する。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
-fn decode_read(values: Option<[i32; 4]>) -> Result<VolumeReading, DeviceError> {
-    let [index, max, muted, fixed] = values.ok_or(DeviceError::Internal("volume-control"))?;
+fn decode_read(values: Option<[i32; 4]>) -> Result<VolumeReading, VolumeControlError> {
+    let [index, max, muted, fixed] =
+        values.ok_or(VolumeControlError::Internal("volume-control"))?;
     if max <= 0
         || index < 0
         || index > max
         || !(0..=1).contains(&muted)
         || !(0..=1).contains(&fixed)
     {
-        return Err(DeviceError::Internal("volume-control"));
+        return Err(VolumeControlError::Internal("volume-control"));
     }
     let level = validate_level(index as f32 / max as f32)?;
     Ok(VolumeReading {
@@ -84,99 +85,96 @@ fn decode_read(values: Option<[i32; 4]>) -> Result<VolumeReading, DeviceError> {
 
 /// 変更の結果コードを契約の結果へ写す純関数。未知値は成功にせず `Internal`。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
-fn decode_adjust(code: i32) -> Result<(), DeviceError> {
+fn decode_adjust(code: i32) -> Result<(), VolumeControlError> {
     match code {
         ADJUST_OK => Ok(()),
-        ADJUST_PERMISSION_DENIED => Err(DeviceError::PermissionDenied("volume-control")),
-        _ => Err(DeviceError::Internal("volume-control")),
+        ADJUST_PERMISSION_DENIED => Err(VolumeControlError::PermissionDenied),
+        _ => Err(VolumeControlError::Internal("volume-control")),
     }
 }
 
 /// 「変更前の読み取り → 変更 → 読み戻し」を組み立てる純関数（OS 呼び出しは引数で受ける）。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
 fn step_with(
-    read: impl Fn() -> Result<VolumeReading, DeviceError>,
-    adjust: impl FnOnce(i32) -> Result<(), DeviceError>,
+    read: impl Fn() -> Result<VolumeReading, VolumeControlError>,
+    adjust: impl FnOnce(i32) -> Result<(), VolumeControlError>,
     dir: StepDirection,
-) -> Result<StepOutcome, DeviceError> {
+) -> Result<StepOutcome, VolumeControlError> {
     let before = read()?;
     if before.mode != VolumeControlMode::Steps {
         return Ok(StepOutcome::NotChangeable(before));
     }
     adjust(encode_direction(dir))?;
     // 読み戻しに失敗したら変更を成功として返さない。
-    let after = read().map_err(|_| DeviceError::Internal("volume-control"))?;
+    let after = read().map_err(|_| VolumeControlError::Internal("volume-control"))?;
     Ok(classify_step(&before, after))
 }
 
 #[cfg(target_os = "android")]
 struct AndroidVolumeControl;
 
-/// `MainActivity.volumeControl*` を JNI で呼ぶ。`None` は呼び出し失敗。
-/// `unsafe` 2 箇所は `android_screen_orientation.rs::call_activity` と同一の根拠。
-#[cfg(target_os = "android")]
-#[allow(unsafe_code)]
-fn call_activity<T>(
-    f: impl FnOnce(&mut jni::Env, &jni::objects::JObject) -> Result<T, super::android::JniCallFailed>,
-) -> Option<T> {
-    use super::android::JniCallFailed;
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<T, JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        f(env, &activity)
-    })
-    .ok()
-}
-
 #[cfg(target_os = "android")]
 impl VolumeControl for AndroidVolumeControl {
-    fn read(&self) -> Result<VolumeReading, DeviceError> {
-        use jni::objects::JIntArray;
-        let values = call_activity(|env, a| {
-            let ret = env.call_method(
-                a,
-                jni::jni_str!("volumeControlRead"),
-                jni::jni_sig!(() -> int[]),
-                &[],
-            )?;
-            let arr = env.cast_local::<JIntArray>(ret.l()?)?;
-            if arr.is_null() {
-                return Ok(None);
-            }
-            // 長さを検証してから読む。
-            if arr.len(env)? != 4 {
-                return Ok(None);
-            }
-            let mut v = [0i32; 4];
-            arr.get_region(env, 0, &mut v)?;
-            Ok(Some(v))
-        })
-        .flatten();
+    fn read(&self) -> Result<VolumeReading, VolumeControlError> {
+        use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+        use jni::objects::{JIntArray, JValue};
+        let values = android_app()
+            .and_then(|app| {
+                with_activity_class(
+                    &app,
+                    jni::jni_str!("com.fandhe.platform.VolumeControlHelper"),
+                    |env, activity, class| -> Result<Option<[i32; 4]>, JniCallFailed> {
+                        let ret = env.call_static_method(
+                            class,
+                            jni::jni_str!("read"),
+                            jni::jni_sig!((android.content.Context) -> int[]),
+                            &[JValue::Object(activity)],
+                        )?;
+                        let arr = env.cast_local::<JIntArray>(ret.l()?)?;
+                        if arr.is_null() {
+                            return Ok(None);
+                        }
+                        // 長さを検証してから読む。
+                        if arr.len(env)? != 4 {
+                            return Ok(None);
+                        }
+                        let mut v = [0i32; 4];
+                        arr.get_region(env, 0, &mut v)?;
+                        Ok(Some(v))
+                    },
+                )
+                .ok()
+            })
+            .flatten();
         decode_read(values)
     }
 
-    fn step(&self, direction: StepDirection) -> Result<StepOutcome, DeviceError> {
+    fn step(&self, direction: StepDirection) -> Result<StepOutcome, VolumeControlError> {
         step_with(
             || self.read(),
             |dir| {
-                let code = call_activity(|env, a| {
-                    Ok(env
-                        .call_method(
-                            a,
-                            jni::jni_str!("volumeControlAdjust"),
-                            jni::jni_sig!((int) -> int),
-                            &[jni::objects::JValue::Int(dir)],
-                        )?
-                        .i()?)
+                use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+                use jni::objects::JValue;
+                let code = android_app().and_then(|app| {
+                    with_activity_class(
+                        &app,
+                        jni::jni_str!("com.fandhe.platform.VolumeControlHelper"),
+                        |env, activity, class| -> Result<i32, JniCallFailed> {
+                            Ok(env
+                                .call_static_method(
+                                    class,
+                                    jni::jni_str!("adjust"),
+                                    jni::jni_sig!((android.content.Context, int) -> int),
+                                    &[JValue::Object(activity), JValue::Int(dir)],
+                                )?
+                                .i()?)
+                        },
+                    )
+                    .ok()
                 });
                 match code {
                     Some(c) => decode_adjust(c),
-                    None => Err(DeviceError::Internal("volume-control")),
+                    None => Err(VolumeControlError::Internal("volume-control")),
                 }
             },
             direction,
@@ -184,19 +182,19 @@ impl VolumeControl for AndroidVolumeControl {
     }
 }
 
-/// Android の `VolumeControl` 実装を返す（`device/volume_control.rs` の dispatch から呼ばれる）。
+/// Android の `VolumeControl` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn VolumeControl> {
     Arc::new(AndroidVolumeControl)
 }
 
-/// `device.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形
-/// （JNI 署名 `()[I` / `(I)I` は Android 版と同じ）。dispatch は Android でしか呼ばない。
+/// `lib.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形
+/// （JNI 署名は Android 版と同じ）。dispatch は Android でしか呼ばない。
 /// 非対応を返し、成功へは倒さない。
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn VolumeControl> {
-    Arc::new(fandhe_device::volume_control::UnsupportedVolumeControl)
+    Arc::new(crate::contract::UnsupportedVolumeControl)
 }
 
 #[cfg(test)]
@@ -240,7 +238,10 @@ mod tests {
 
     #[test]
     fn decode_read_rejects_unreadable_and_out_of_range() {
-        assert!(matches!(decode_read(None), Err(DeviceError::Internal(_))));
+        assert!(matches!(
+            decode_read(None),
+            Err(VolumeControlError::Internal(_))
+        ));
         for v in [
             [0, 0, 0, 0],
             [1, -1, 0, 0],
@@ -252,7 +253,7 @@ mod tests {
             [5, 10, 0, -1],
         ] {
             assert!(
-                matches!(decode_read(Some(v)), Err(DeviceError::Internal(_))),
+                matches!(decode_read(Some(v)), Err(VolumeControlError::Internal(_))),
                 "{v:?}"
             );
         }
@@ -263,20 +264,25 @@ mod tests {
         assert!(decode_adjust(ADJUST_OK).is_ok());
         assert!(matches!(
             decode_adjust(ADJUST_PERMISSION_DENIED),
-            Err(DeviceError::PermissionDenied(_))
+            Err(VolumeControlError::PermissionDenied)
         ));
         for c in [ADJUST_FAILED, ADJUST_INVALID, -1, 99] {
-            assert!(matches!(decode_adjust(c), Err(DeviceError::Internal(_))));
+            assert!(matches!(
+                decode_adjust(c),
+                Err(VolumeControlError::Internal(_))
+            ));
         }
     }
 
     /// 呼び出しごとに順に値を返す read を作る。
-    fn seq(vals: Vec<Option<VolumeReading>>) -> impl Fn() -> Result<VolumeReading, DeviceError> {
+    fn seq(
+        vals: Vec<Option<VolumeReading>>,
+    ) -> impl Fn() -> Result<VolumeReading, VolumeControlError> {
         let i = Cell::new(0usize);
         move || {
             let n = i.get();
             i.set(n + 1);
-            vals[n.min(vals.len() - 1)].ok_or(DeviceError::Internal("volume-control"))
+            vals[n.min(vals.len() - 1)].ok_or(VolumeControlError::Internal("volume-control"))
         }
     }
 
@@ -335,10 +341,10 @@ mod tests {
     fn step_propagates_permission_denied() {
         let r = step_with(
             seq(vec![Some(steps(0.5, false))]),
-            |_| Err(DeviceError::PermissionDenied("volume-control")),
+            |_| Err(VolumeControlError::PermissionDenied),
             StepDirection::Up,
         );
-        assert!(matches!(r, Err(DeviceError::PermissionDenied(_))));
+        assert!(matches!(r, Err(VolumeControlError::PermissionDenied)));
     }
 
     #[test]
@@ -348,7 +354,7 @@ mod tests {
             |_| Ok(()),
             StepDirection::Up,
         );
-        assert!(matches!(r, Err(DeviceError::Internal(_))));
+        assert!(matches!(r, Err(VolumeControlError::Internal(_))));
     }
 
     #[test]

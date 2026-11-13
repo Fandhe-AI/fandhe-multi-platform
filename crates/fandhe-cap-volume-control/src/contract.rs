@@ -3,7 +3,7 @@
 //!
 //! 扱う範囲は「既定の出力（Android はメディア音量）の現在の音量と消音状態を読む」ことと、
 //! 「1 段階ずつ上げ下げする」ことだけ。消音の切り替え・着信音などほかの音量・出力機器の選択は
-//! 扱わない。`fandhe-egui-proxy` の橋渡し層（`device/volume_control.rs`）が呼び、結果を
+//! 扱わない。本 crate の橋渡し層（`driver`）が呼び、結果を
 //! 画面（`fandhe_core::screens::volume_control_show`）へ返す。対象は macOS・Windows（#785）、
 //! iOS（#786）、Android（#787）。Web は `no` のため [`UnsupportedVolumeControl`] を返す。
 //!
@@ -36,7 +36,7 @@
 //! - iOS（#786）: `AVAudioSession.outputVolume` → `level`、`muted` は `None`（消音スイッチを読む公開
 //!   API は無い）、`mode` は常に `OsSlider`（`MPVolumeView` は画面に 1 個だけ置く）。音声セッションの
 //!   category・有効化は変えない。UI を要する呼び出しは main queue で行い、値の取得後に
-//!   `crate::ios::request_repaint` で次フレームを起こす
+//!   `fandhe_runtime::request_repaint` で次フレームを起こす
 //! - Android（#787）: `STREAM_MUSIC` の `getStreamVolume / getStreamMaxVolume` → `level`、
 //!   `isStreamMute`（API 23+。minSdk 未満なら `None`）→ `muted`、`isVolumeFixed` が真なら
 //!   `NotChangeable`、それ以外は `Steps`（`adjustStreamVolume(ADJUST_RAISE | ADJUST_LOWER, 0)`）。
@@ -55,7 +55,7 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::VolumeControlError;
 
 /// 画面が OS を読み直す間隔（pull 型）。
 pub const READ_INTERVAL: Duration = Duration::from_secs(1);
@@ -112,11 +112,11 @@ pub enum StepOutcome {
 }
 
 /// OS から返った音量の検証。非有限・範囲外は `Internal`。丸め・変換の前に通す。
-pub fn validate_level(raw: f32) -> Result<f32, DeviceError> {
+pub fn validate_level(raw: f32) -> Result<f32, VolumeControlError> {
     if raw.is_finite() && (0.0..=1.0).contains(&raw) {
         Ok(raw)
     } else {
-        Err(DeviceError::Internal("volume-control level"))
+        Err(VolumeControlError::Internal("volume-control level"))
     }
 }
 
@@ -161,22 +161,22 @@ pub fn classify_step(before: &VolumeReading, after: VolumeReading) -> StepOutcom
 /// システム音量の契約（モジュール doc の「契約」節）。
 pub trait VolumeControl: Send + Sync {
     /// 現在の音量・消音・変え方を OS から読む。
-    fn read(&self) -> Result<VolumeReading, DeviceError>;
+    fn read(&self) -> Result<VolumeReading, VolumeControlError>;
 
     /// 1 段階上げ下げし、同じ呼び出しの中で読み戻した結果を返す。
-    fn step(&self, direction: StepDirection) -> Result<StepOutcome, DeviceError>;
+    fn step(&self, direction: StepDirection) -> Result<StepOutcome, VolumeControlError>;
 }
 
 /// 対象外 OS・初期化失敗時のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedVolumeControl;
 
 impl VolumeControl for UnsupportedVolumeControl {
-    fn read(&self) -> Result<VolumeReading, DeviceError> {
-        Err(DeviceError::Unsupported("volume-control"))
+    fn read(&self) -> Result<VolumeReading, VolumeControlError> {
+        Err(VolumeControlError::Unsupported)
     }
 
-    fn step(&self, _direction: StepDirection) -> Result<StepOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("volume-control"))
+    fn step(&self, _direction: StepDirection) -> Result<StepOutcome, VolumeControlError> {
+        Err(VolumeControlError::Unsupported)
     }
 }
 
@@ -191,10 +191,10 @@ mod tests {
     #[test]
     fn unsupported_is_not_a_fake_success() {
         let u = UnsupportedVolumeControl;
-        assert!(matches!(u.read(), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(u.read(), Err(VolumeControlError::Unsupported)));
         assert!(matches!(
             u.step(StepDirection::Up),
-            Err(DeviceError::Unsupported(_))
+            Err(VolumeControlError::Unsupported)
         ));
     }
 
@@ -202,7 +202,7 @@ mod tests {
     fn validate_level_rejects_invalid_before_rounding() {
         for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -0.01, 1.01] {
             assert!(
-                matches!(validate_level(bad), Err(DeviceError::Internal(_))),
+                matches!(validate_level(bad), Err(VolumeControlError::Internal(_))),
                 "{bad}"
             );
         }

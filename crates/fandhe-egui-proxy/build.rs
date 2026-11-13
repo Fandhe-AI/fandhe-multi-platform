@@ -170,8 +170,6 @@ fn build() {
     compile_ios_music_library();
     // `ios/fandhe_ios_health_data.m`（Issue #1090）。iOS 分岐のみ（macOS は対応表で n-a）。
     compile_ios_health_data();
-    // `ios/fandhe_ios_volume_control.m`（Issue #786）。iOS 分岐のみ。
-    compile_ios_volume_control();
     // `ios/fandhe_ios_compass.m`（Issue #1405）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_compass();
     // `ios/fandhe_ios_environment_sensors.m`（Issue #610）。iOS 分岐のみ（macOS は対応表で no）。
@@ -582,16 +580,6 @@ fn compile_apple_now_playing() {
     );
 }
 
-/// `macos/fandhe_macos_volume_control.m` を `cc` でコンパイルする（Issue #785）。**macOS 分岐のみ**
-/// から呼ばれる（`src/device/macos_volume_control.rs` が使う）。CoreAudio と AudioToolbox
-/// （`kAudioHardwareServiceDeviceProperty_VirtualMainVolume`）を追加でリンクする。
-fn compile_macos_volume_control() {
-    compile_objc(
-        "macos/fandhe_macos_volume_control.m",
-        &["AudioToolbox", "CoreAudio", "Foundation"],
-    );
-}
-
 /// `macos/fandhe_macos_app_lifecycle.m` を `cc` でコンパイルする（Issue #893）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_app_lifecycle.rs` が使う）。
 fn compile_macos_app_lifecycle() {
@@ -955,15 +943,6 @@ fn compile_ios_audio_session() {
     );
 }
 
-/// `ios/fandhe_ios_volume_control.m` を `cc` でコンパイルする（Issue #786）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_volume_control.rs` が使う）。
-fn compile_ios_volume_control() {
-    compile_objc(
-        "ios/fandhe_ios_volume_control.m",
-        &["AVFoundation", "Foundation", "MediaPlayer", "UIKit"],
-    );
-}
-
 /// `ios/fandhe_ios_compass.m` を `cc` でコンパイルする（Issue #1405）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_compass.rs` が使う）。
 fn compile_ios_compass() {
@@ -1137,8 +1116,6 @@ fn build_macos() {
     compile_macos_file_preview();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。
     compile_macos_print();
-    // `macos/fandhe_macos_volume_control.m`（Issue #785）も macOS 専用。CoreAudio・AudioToolbox を使う。
-    compile_macos_volume_control();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。iOS 分岐と共用する。
     compile_apple_media_playback();
     // `apple/fandhe_apple_picture_in_picture.m`（Issue #364 macOS + #365 iOS）。iOS 分岐と共用する。AVKit を使う。

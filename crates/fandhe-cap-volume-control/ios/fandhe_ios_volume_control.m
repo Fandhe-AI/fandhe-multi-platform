@@ -1,7 +1,7 @@
 // システム音量の取得: iOS 実装（Issue #786、親 #166）。`AVAudioSession.outputVolume` を読み、
 // 音量を変えるための `MPVolumeView`（OS の音量スライダー）を画面の下端に 1 個置く。
 //
-// `src/device/ios_volume_control.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
+// `crates/fandhe-cap-volume-control/src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
 // feature `device` 有効時のみ `cc` コンパイルする（AVFoundation・MediaPlayer・UIKit はリンク済み）。
 //
 // 契約（戻りコードは値渡しの int32_t）:

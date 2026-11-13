@@ -1,19 +1,18 @@
 package com.fandhe.platform;
 
-import android.app.Activity;
 import android.content.Context;
 import android.media.AudioManager;
 
 // システム音量・消音状態の取得と変更（Issue #787、親 #166）の Android 実装ヘルパー。
-// MainActivity から生成・委譲され、Rust の `device/android_volume_control.rs` が egui スレッドから
-// `MainActivity.volumeControlRead` / `volumeControlAdjust` を JNI で同期呼び出しする。
+// 利用者の `MainActivity` には何も書かせない。Rust の `src/android.rs` が egui スレッドから
+// static の `read(Context)` / `adjust(Context, int)` を JNI で同期呼び出しする。
 //
 // 結果コードの SSOT はこのクラスで、Rust 側は同じ値を写す。未知値は Rust 側で `Internal` になる。
 // 対象はメディア音量（STREAM_MUSIC）だけ。着信音・通知音量・おやすみモードは扱わない。
 // flags は 0 で、OS の音量 UI は出さない。音量固定の判定は Rust 側が変更前の読み取りで行う。
 //
-// AudioManager は呼び出しのたびに ApplicationContext から取る（Activity を握らず、
-// フィールド初期化の時点で Context が未 attach でも壊れない）。binder の同期呼び出しだけなので
+// AudioManager は呼び出しのたびに渡された Context の ApplicationContext から取る（Activity を握らない）。
+// binder の同期呼び出しだけなので
 // UI スレッドへは post しない。要求 id も保留状態も持たないため、Activity 再生成で破棄する
 // 保留中の要求はなく、古い結果が新しい要求を消費することもない（照合は Rust の RequestSlot）。
 // 守らない範囲: 他アプリによる音量変更への追従（Rust 側が 1 秒ごとに読み直す）、
@@ -24,14 +23,10 @@ final class VolumeControlHelper {
     static final int ADJUST_FAILED = 2;
     static final int ADJUST_INVALID = 3;
 
-    private final Activity activity;
+    private VolumeControlHelper() {}
 
-    VolumeControlHelper(Activity activity) {
-        this.activity = activity;
-    }
-
-    private AudioManager audioManager() {
-        Context app = activity.getApplicationContext();
+    private static AudioManager audioManager(Context context) {
+        Context app = context.getApplicationContext();
         if (app == null) {
             return null;
         }
@@ -40,9 +35,9 @@ final class VolumeControlHelper {
     }
 
     // {index, maxIndex, muted(0/1), fixed(0/1)}。読めないときは null（成功値へ畳まない）。
-    int[] read() {
+    static int[] read(Context context) {
         try {
-            AudioManager am = audioManager();
+            AudioManager am = audioManager(context);
             if (am == null) {
                 return null;
             }
@@ -58,7 +53,7 @@ final class VolumeControlHelper {
     }
 
     // direction は 1（上げる）か -1（下げる）。
-    int adjust(int direction) {
+    static int adjust(Context context, int direction) {
         int adj;
         if (direction == 1) {
             adj = AudioManager.ADJUST_RAISE;
@@ -68,7 +63,7 @@ final class VolumeControlHelper {
             return ADJUST_INVALID;
         }
         try {
-            AudioManager am = audioManager();
+            AudioManager am = audioManager(context);
             if (am == null) {
                 return ADJUST_FAILED;
             }

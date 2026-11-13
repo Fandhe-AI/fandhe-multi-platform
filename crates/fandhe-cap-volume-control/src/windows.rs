@@ -2,7 +2,7 @@
 //! （`GetDefaultAudioEndpoint(eRender, eConsole)`）を毎回 OS へ問い、`IAudioEndpointVolume` の
 //! `GetMasterVolumeLevelScalar` / `GetMute` で読み、`VolumeStepUp` / `VolumeStepDown` で 1 段階
 //! 動かして同じ呼び出しの中で読み戻す。`device/volume_control.rs` の Windows 経路
-//! （ワーカー上、5 秒の期限つき）から呼ばれ、契約は `fandhe_device::volume_control`。
+//! （ワーカー上、5 秒の期限つき）から呼ばれ、契約は `crate::contract`。
 //!
 //! # スレッドと COM
 //!
@@ -30,14 +30,14 @@
 
 use std::sync::Arc;
 
-use fandhe_device::volume_control::{
-    classify_step, validate_level, StepDirection, StepOutcome, VolumeControl, VolumeControlMode,
-    VolumeReading,
+use crate::contract::{
+    StepDirection, StepOutcome, VolumeControl, VolumeControlMode, VolumeReading, classify_step,
+    validate_level,
 };
-use fandhe_device::DeviceError;
+use crate::error::VolumeControlError;
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
-use windows::Win32::Media::Audio::{eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator};
-use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+use windows::Win32::Media::Audio::{IMMDeviceEnumerator, MMDeviceEnumerator, eConsole, eRender};
+use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance};
 
 use fandhe_platform_windows::ComInit;
 
@@ -48,32 +48,32 @@ struct WindowsVolumeControl;
 
 /// 既定の出力の音量インターフェース。出力機器が無ければ `Ok(None)`（失敗ではない）。
 #[allow(unsafe_code)]
-fn default_endpoint_volume() -> Result<Option<IAudioEndpointVolume>, DeviceError> {
+fn default_endpoint_volume() -> Result<Option<IAudioEndpointVolume>, VolumeControlError> {
     // SAFETY: COM を初期化済みのスレッドで、クラス ID とインターフェースは windows クレートの定義。
     let enumerator: IMMDeviceEnumerator =
         unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) }
-            .map_err(|_| DeviceError::Internal("volume-control enumerator"))?;
+            .map_err(|_| VolumeControlError::Internal("volume-control enumerator"))?;
     // SAFETY: `enumerator` は有効な COM 参照。既定の出力機器は毎回 OS へ問い、ID を保持しない。
     let device = match unsafe { enumerator.GetDefaultAudioEndpoint(eRender, eConsole) } {
         Ok(d) => d,
         Err(e) if e.code().0 == E_NOTFOUND => return Ok(None),
-        Err(_) => return Err(DeviceError::Internal("volume-control endpoint")),
+        Err(_) => return Err(VolumeControlError::Internal("volume-control endpoint")),
     };
     // SAFETY: `device` は有効な COM 参照。
     let volume: IAudioEndpointVolume = unsafe { device.Activate(CLSCTX_ALL, None) }
-        .map_err(|_| DeviceError::Internal("volume-control activate"))?;
+        .map_err(|_| VolumeControlError::Internal("volume-control activate"))?;
     Ok(Some(volume))
 }
 
 /// 音量インターフェースから現在の値を読む。
 #[allow(unsafe_code)]
-fn read_from(volume: &IAudioEndpointVolume) -> Result<VolumeReading, DeviceError> {
+fn read_from(volume: &IAudioEndpointVolume) -> Result<VolumeReading, VolumeControlError> {
     // SAFETY: `volume` は有効な COM 参照。
     let raw = unsafe { volume.GetMasterVolumeLevelScalar() }
-        .map_err(|_| DeviceError::Internal("volume-control level"))?;
+        .map_err(|_| VolumeControlError::Internal("volume-control level"))?;
     // SAFETY: `volume` は有効な COM 参照。
     let muted = unsafe { volume.GetMute() }
-        .map_err(|_| DeviceError::Internal("volume-control mute"))?
+        .map_err(|_| VolumeControlError::Internal("volume-control mute"))?
         .as_bool();
     Ok(VolumeReading {
         // 丸め・変換の前に値域を検証する。
@@ -93,8 +93,9 @@ fn no_device() -> VolumeReading {
 }
 
 impl VolumeControl for WindowsVolumeControl {
-    fn read(&self) -> Result<VolumeReading, DeviceError> {
-        let _com = ComInit::new().map_err(|_| DeviceError::Internal("volume-control read"))?;
+    fn read(&self) -> Result<VolumeReading, VolumeControlError> {
+        let _com =
+            ComInit::new().map_err(|_| VolumeControlError::Internal("volume-control read"))?;
         match default_endpoint_volume()? {
             Some(v) => read_from(&v),
             None => Ok(no_device()),
@@ -102,8 +103,9 @@ impl VolumeControl for WindowsVolumeControl {
     }
 
     #[allow(unsafe_code)]
-    fn step(&self, direction: StepDirection) -> Result<StepOutcome, DeviceError> {
-        let _com = ComInit::new().map_err(|_| DeviceError::Internal("volume-control step"))?;
+    fn step(&self, direction: StepDirection) -> Result<StepOutcome, VolumeControlError> {
+        let _com =
+            ComInit::new().map_err(|_| VolumeControlError::Internal("volume-control step"))?;
         let Some(volume) = default_endpoint_volume()? else {
             return Ok(StepOutcome::NotChangeable(no_device()));
         };
@@ -115,7 +117,7 @@ impl VolumeControl for WindowsVolumeControl {
                 StepDirection::Down => volume.VolumeStepDown(std::ptr::null()),
             }
         };
-        stepped.map_err(|_| DeviceError::Internal("volume-control step"))?;
+        stepped.map_err(|_| VolumeControlError::Internal("volume-control step"))?;
         // 同じ呼び出しの中で読み戻した値で結果を決める（上限・下限では値が変わらず `Unchanged`）。
         Ok(classify_step(&before, read_from(&volume)?))
     }

@@ -1,12 +1,12 @@
 //! Phase 11 の拡充ループ（親 #166、Issue #785）「システム音量」の effect ドライバ。
-//! `fandhe_device::volume_control::VolumeControl` へ要求を渡し、読み戻しを
+//! `crate::contract::VolumeControl` へ要求を渡し、読み戻しを
 //! `fandhe_core::screens::volume_control_show`（端末依存ゼロ）へ注入する
 //! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。契約の SSOT は
-//! `fandhe_device::volume_control`。
+//! `crate::contract`。
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`implementation`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
+//! [`platform_volume_control`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（macOS: `macos_volume_control`、Windows: `windows_volume_control`、
 //! iOS: `ios_volume_control`（#786）、Android: `android_volume_control`（#787））。それ以外は
 //! `UnsupportedVolumeControl` 固定で、ダミーの成功実装へは倒さない。
@@ -31,55 +31,56 @@
 //! 前回の OS 呼び出しが未終了の間は新しい呼び出しを起こさず失敗で確定する（スレッドの累積防止）。
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::volume_control_show::{
-    apply_read, begin, expire, finish_step, take_step, wants_read, ControlMode, OpKind, Reading,
-    StepDir, StepResult, VolumeControlShowState, VolumeFailure, BUSY_REASON, OPERATION_REASON,
-    TIMEOUT_REASON,
-};
 #[cfg(not(any(
     target_os = "windows",
     target_os = "macos",
     target_os = "ios",
     target_os = "android"
 )))]
-use fandhe_device::volume_control::UnsupportedVolumeControl;
-use fandhe_device::volume_control::{
-    StepDirection, StepOutcome, VolumeControl, VolumeControlMode, VolumeReading, OS_CALL_DEADLINE,
-    READ_INTERVAL,
+use crate::contract::UnsupportedVolumeControl;
+use crate::contract::{
+    OS_CALL_DEADLINE, READ_INTERVAL, StepDirection, StepOutcome, VolumeControl, VolumeControlMode,
+    VolumeReading,
 };
-use fandhe_device::DeviceError;
+use crate::error::VolumeControlError;
+use fandhe_core::screens::volume_control_show::{
+    BUSY_REASON, ControlMode, OPERATION_REASON, OpKind, Reading, StepDir, StepResult,
+    TIMEOUT_REASON, VolumeControlShowState, VolumeFailure, apply_read, begin, expire, finish_step,
+    take_step, wants_read,
+};
 
-use crate::app::CompletionSender;
-use crate::device::request_slot::{poll_and_finish, RequestSlot};
+use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::{RequestSlot, poll_and_finish};
 
 /// OS 呼び出し（内側スレッド）が実行中か。期限切れで画面を失敗にしても呼び出しが戻るまでは
 /// true のままで、その間は新しい OS スレッドを起こさない。
 static OS_CALL_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
-/// 現在のプラットフォームに応じた `VolumeControl` 実装を返す（プロセスで 1 個）。
-fn implementation() -> Arc<dyn VolumeControl> {
+/// 現在のプラットフォームに応じた `VolumeControl` 実装を返す（プロセスで 1 個）。画面の状態型に依存しないため、
+/// フレームワークの外のアプリも使える。
+pub fn platform_volume_control() -> Arc<dyn VolumeControl> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn VolumeControl>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "macos")]
             {
-                super::macos_volume_control::implementation()
+                crate::macos::implementation()
             }
             #[cfg(target_os = "windows")]
             {
-                super::windows_volume_control::implementation()
+                crate::windows::implementation()
             }
             #[cfg(target_os = "ios")]
             {
-                super::ios_volume_control::implementation()
+                crate::ios::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_volume_control::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(
                 target_os = "windows",
@@ -94,12 +95,12 @@ fn implementation() -> Arc<dyn VolumeControl> {
         .clone()
 }
 
-/// `DeviceError` を画面の失敗種別へ写す。OS のエラーコードは固定文言に畳み、画面・ログへ出さない
+/// `VolumeControlError` を画面の失敗種別へ写す。OS のエラーコードは固定文言に畳み、画面・ログへ出さない
 /// （security.md A09）。
-fn to_failure(e: DeviceError) -> VolumeFailure {
+fn to_failure(e: VolumeControlError) -> VolumeFailure {
     match e {
-        DeviceError::Unsupported(_) => VolumeFailure::Unsupported,
-        DeviceError::PermissionDenied(_) => VolumeFailure::PermissionDenied,
+        VolumeControlError::Unsupported => VolumeFailure::Unsupported,
+        VolumeControlError::PermissionDenied => VolumeFailure::PermissionDenied,
         _ => VolumeFailure::Failed(OPERATION_REASON.to_string()),
     }
 }
@@ -365,7 +366,7 @@ pub fn volume_control_show_effect(
     drive(
         state,
         sender,
-        &implementation(),
+        &platform_volume_control(),
         path,
         Instant::now(),
         &mut timing,
@@ -379,18 +380,25 @@ pub fn volume_control_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::UnsupportedVolumeControl as Unsupported;
     use fandhe_core::screens::volume_control_show::{
-        error_text, level_text, notice_text, press_down, press_up, reload, ReadState, AT_MAX_NOTE,
-        LEVEL_PREFIX, PERMISSION_DENIED_REASON, UNSUPPORTED_STATUS,
+        AT_MAX_NOTE, LEVEL_PREFIX, PERMISSION_DENIED_REASON, ReadState, UNSUPPORTED_STATUS,
+        error_text, level_text, notice_text, press_down, press_up, reload,
     };
-    use fandhe_device::volume_control::UnsupportedVolumeControl as Unsupported;
     use std::sync::atomic::AtomicUsize;
 
-    type Rx = mpsc::Receiver<crate::app::Completion<VolumeControlShowState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<VolumeControlShowState>>;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
 
     fn channel() -> (CompletionSender<VolumeControlShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     fn apply_all(rx: &Rx, s: &mut VolumeControlShowState) {
@@ -419,7 +427,7 @@ mod tests {
     /// 音量と結果を差し込める Fake。
     struct Fake {
         level: Mutex<f32>,
-        step_error: Mutex<Option<DeviceError>>,
+        step_error: Mutex<Option<VolumeControlError>>,
         read_error: bool,
         delay: Duration,
         reads: AtomicUsize,
@@ -450,15 +458,15 @@ mod tests {
     }
 
     impl VolumeControl for Fake {
-        fn read(&self) -> Result<VolumeReading, DeviceError> {
+        fn read(&self) -> Result<VolumeReading, VolumeControlError> {
             self.reads.fetch_add(1, Ordering::SeqCst);
             std::thread::sleep(self.delay);
             if self.read_error {
-                return Err(DeviceError::Internal("x"));
+                return Err(VolumeControlError::Internal("x"));
             }
             Ok(reading(*self.level.lock().unwrap()))
         }
-        fn step(&self, direction: StepDirection) -> Result<StepOutcome, DeviceError> {
+        fn step(&self, direction: StepDirection) -> Result<StepOutcome, VolumeControlError> {
             self.steps.fetch_add(1, Ordering::SeqCst);
             std::thread::sleep(self.delay);
             if let Some(e) = self.step_error.lock().unwrap().take() {
@@ -472,7 +480,7 @@ mod tests {
             };
             *l = next;
             let after = reading(next);
-            Ok(fandhe_device::volume_control::classify_step(&before, after))
+            Ok(crate::contract::classify_step(&before, after))
         }
     }
 
@@ -607,7 +615,7 @@ mod tests {
         let (tx, rx) = channel();
         let sl = slot();
         let fake = Fake::new(0.5);
-        *fake.step_error.lock().unwrap() = Some(DeviceError::PermissionDenied("volume-control"));
+        *fake.step_error.lock().unwrap() = Some(VolumeControlError::PermissionDenied);
         let imp = dynamic(fake.clone());
         let mut s = VolumeControlShowState::default();
         let t0 = Instant::now();
@@ -832,11 +840,11 @@ mod tests {
     #[test]
     fn error_mapping_keeps_codes_out_of_screen() {
         assert_eq!(
-            to_failure(DeviceError::Internal("volume-control hr=0x80004005")),
+            to_failure(VolumeControlError::Internal("volume-control hr=0x80004005")),
             VolumeFailure::Failed(OPERATION_REASON.to_string())
         );
         assert_eq!(
-            to_failure(DeviceError::Unsupported("volume-control")),
+            to_failure(VolumeControlError::Unsupported),
             VolumeFailure::Unsupported
         );
     }

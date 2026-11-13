@@ -312,11 +312,6 @@ pub mod android_video_capture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_video_transcode;
-/// Issue #785: Android 向けシステム音量実装（#787 が埋めるスタブ）。
-/// `device/volume_control.rs` の Android 経路から使われる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_volume_control;
 /// Issue #970: Android 向け壁紙設定の骨格（`Unsupported` を返すスタブ。#971 が実体に置き換える）。
 /// `device/wallpaper.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -850,11 +845,6 @@ pub mod ios_video_capture;
 /// `device/video_transcode.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_video_transcode;
-/// Issue #785: iOS 向けシステム音量実装（#786 が埋めるスタブ）。
-/// `device/volume_control.rs` の iOS 経路から使われる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_volume_control;
 /// Issue #532: iOS 向け Web 認証セッション実装（`ios/fandhe_ios_web_auth_session.m` の
 /// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -999,12 +989,6 @@ pub mod macos_system_sound;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_video_capture;
-/// Issue #785: macOS 向けシステム音量実装（`macos/fandhe_macos_volume_control.m` の Core Audio を呼ぶ
-/// C ABI ラッパー）。`device/volume_control.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
-/// テストできるよう cfg は `any(macos, test)`。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_volume_control;
 /// Issue #970: macOS 向け壁紙設定実装（`macos/fandhe_macos_wallpaper.m` を呼ぶ C ABI ラッパー）。
 /// `device/wallpaper.rs` の macOS 経路から呼ばれる。結果コードの写像をホストでテストするため test でもコンパイルする。
 #[cfg(any(target_os = "macos", test))]
@@ -1174,9 +1158,6 @@ pub mod video_capture;
 /// （macOS・iOS 実装、Android は #1017・Windows は #1015 が埋めるスタブ、
 /// Web は #1018、他 OS は `UnsupportedVideoTranscode` 固定）。
 pub mod video_transcode;
-/// Phase 11 の拡充ループ（親 #166、Issue #785）: システム音量の effect ドライバ
-/// （macOS・Windows 実装、iOS は #786・Android は #787 が埋めるスタブ、他 OS は `UnsupportedVolumeControl` 固定）。
-pub mod volume_control;
 /// Phase 11 の拡充ループ（親 #188、Issue #970）: 壁紙・ロック画面の設定の effect ドライバ
 /// （macOS・Windows 実装、Android は #971 が埋めるスタブ、iOS・他 OS は `UnsupportedWallpaper` 固定）。
 pub mod wallpaper;
@@ -1438,10 +1419,6 @@ pub mod windows_video_capture;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_video_transcode;
-/// Issue #785: Windows 向けシステム音量実装（`IAudioEndpointVolume`）。
-/// `device/volume_control.rs` の Windows 経路（ワーカー）から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_volume_control;
 /// Issue #970: Windows 向け壁紙設定実装（`SystemParametersInfoW(SPI_SETDESKWALLPAPER)`）。
 /// `device/wallpaper.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
