@@ -96,6 +96,10 @@ struct Registering(Arc<dyn VideoCapturer>);
 
 impl VideoCapturer for Registering {
     fn capture(&self, request_id: u64, max_duration_secs: u32) -> Result<(), VideoCaptureFailure> {
+        // JNI の long で負数になる id は Android の `RequestTracker.NONE`（-1）と衝突し結果が捨てられるため、登録前に断る。
+        if i64::try_from(request_id).is_err() {
+            return Err(VideoCaptureFailure::Internal);
+        }
         let b = bridge();
         if !b.try_begin_with(request_id) {
             return Err(VideoCaptureFailure::Internal);
@@ -686,6 +690,13 @@ mod tests {
             let (s, _) = run(mode);
             assert_eq!(s.result, Some(Err(CoreFailure::Internal)));
         }
+    }
+
+    #[test]
+    fn registering_rejects_ids_that_are_negative_as_jni_long() {
+        let imp: Arc<dyn VideoCapturer> = fake(Mode::Silent, new_bridge());
+        let r = Registering(imp);
+        assert_eq!(r.capture(u64::MAX, 30), Err(VideoCaptureFailure::Internal));
     }
 
     #[test]
