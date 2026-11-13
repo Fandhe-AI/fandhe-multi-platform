@@ -478,11 +478,6 @@ pub mod apple_scanner_devices;
 /// secure_credential.rs` の iOS/macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_secure_credential;
-/// Issue #897（macOS）/ #899（iOS 横展開）: iOS / macOS 向け共有シート実装
-/// （`apple/fandhe_apple_share.m` を呼ぶ C ABI ラッパー）。`device/share.rs` の
-/// macOS/iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_share;
 /// Issue #725 macOS: 環境音の分類実装（`apple/fandhe_apple_sound_classification.m` を呼ぶ C ABI ラッパー）。
 /// `device/sound_classification.rs` の macOS 経路と、b-ios が委譲する `ios_sound_classification` から呼ばれる。
 /// `build.rs` のコンパイル条件と同じ OS 集合（+ ホストテスト）に保つ。
@@ -1195,9 +1190,6 @@ pub mod screen_orientation;
 /// Phase 11 の拡充ループ（親 #921、Issue #922・#924）: 資格情報保存の effect
 /// ドライバ（macOS/iOS/Android 実装、Windows は #923）。
 pub mod secure_credential;
-/// Phase 11 の拡充ループ（親 #896、Issue #897/#898/#899）: 共有シートの effect ドライバ
-/// （macOS/iOS/Android/Windows 実装）。
-pub mod share;
 /// Phase 11 の拡充ループ（親 #167、Issue #810）: スリープ・ロックの通知の effect ドライバ
 /// （macOS・Windows 実装、Android は骨格のスタブで #811 が埋める。他 OS は `UnsupportedSleepLockEvents` 固定）。
 pub mod sleep_lock_events;
@@ -1481,10 +1473,6 @@ pub mod windows_scanner_devices;
 /// `device/secure_credential.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_secure_credential;
-/// Issue #898: Windows 向け共有シート実装（`IDataTransferManagerInterop` 経由の
-/// COM interop ラッパー）。`device/share.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_share;
 /// Issue #810: Windows 向けスリープ・ロックの通知実装（不可視ウィンドウ + `WTSRegisterSessionNotification` /
 /// `RegisterSuspendResumeNotification`）。`device/sleep_lock_events.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

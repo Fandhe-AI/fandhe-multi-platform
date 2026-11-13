@@ -20,7 +20,7 @@
 //!
 //! パッケージ無しの素の exe から `RequestAccessAsync` / `GetDefaultAsync` が届くかは
 //! 一次情報で未確認で、実機確認待ち。届かないと判明したら対応表の `done` を取り下げる
-//! （`windows_share.rs` の前例と同じ扱い）。ローカルに MSVC が無く、型検査は
+//! （`fandhe-cap-share-sheet/src/windows.rs` の前例と同じ扱い）。ローカルに MSVC が無く、型検査は
 //! `x86_64-pc-windows-gnu` のみ。`.get()` に期限は設けない。
 
 use crate::contract::Haptics;

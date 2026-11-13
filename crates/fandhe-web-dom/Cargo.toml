@@ -34,6 +34,8 @@ fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive" }
 fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs" }
 # dynamic-type の契約（`clamp_scale`）。Web 実装本体は本クレートに残る。
 fandhe-cap-dynamic-type = { path = "../fandhe-cap-dynamic-type" }
+# share-sheet の契約（`ShareRequest` の入力検証）。Web 実装本体は本クレートに残る。
+fandhe-cap-share-sheet = { path = "../fandhe-cap-share-sheet" }
 # Issue #1187: 電源状態の純関数（`percent_from_raw`）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の実装が cfg で外れる。
 fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast" }
 fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device" }

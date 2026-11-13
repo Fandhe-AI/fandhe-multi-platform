@@ -4,7 +4,7 @@
 //! <https://learn.microsoft.com/en-us/uwp/api/windows.ui.viewmanagement.uisettings.textscalefactor>）
 //! を読む。
 //!
-//! `windows_biometric.rs`/`windows_share.rs` と異なり `unsafe` は不要
+//! `windows_biometric.rs`/`fandhe-cap-share-sheet/src/windows.rs` と異なり `unsafe` は不要
 //! （`UISettings::new`/`TextScaleFactor` は `windows` クレート側で safe fn として
 //! ラップ済み。`IUserConsentVerifierInterop`/`IDataTransferManagerInterop` のような
 //! ウィンドウ束縛 interop も要らない値なので HWND も取らない）。よって `lib.rs` の
@@ -20,7 +20,7 @@
 //! 本実装では `RoInitialize` を呼ばない。失敗は `Result` でそのまま返る。
 //!
 //! `HRESULT` や設定値の生値をログへ出さず、固定ラベルの `DynamicTypeError::Internal` へ
-//! 畳む（`windows_share.rs`/`windows_biometric.rs` と同じ方針、security.md A09）。
+//! 畳む（`fandhe-cap-share-sheet/src/windows.rs`/`windows_biometric.rs` と同じ方針、security.md A09）。
 
 use crate::contract::TextScale;
 use crate::error::DynamicTypeError;

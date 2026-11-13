@@ -92,9 +92,6 @@ fn build() {
 
     compile_apple_location();
 
-    // `apple/fandhe_apple_share.m`（Issue #897 macOS + #899 iOS）も macOS 分岐と共用する。
-    compile_apple_share();
-
     // `apple/fandhe_apple_biometric.m`（Issue #906）も macOS 分岐と共用する。
     compile_apple_biometric();
     compile_apple_contact_picker();
@@ -244,12 +241,6 @@ fn build() {
 /// （iOS・macOS 双方の feature `device` 分岐から呼ばれる共通処理）。
 fn compile_apple_location() {
     compile_objc("apple/fandhe_apple_location.m", &["CoreLocation"]);
-}
-
-/// `apple/fandhe_apple_share.m` を `cc` でコンパイルする（Issue #897 macOS + #899 iOS）。
-/// UI は iOS が UIKit、macOS が AppKit（`ui_framework()`）。iOS・macOS 双方の分岐から呼ぶ。
-fn compile_apple_share() {
-    compile_objc("apple/fandhe_apple_share.m", &[ui_framework()]);
 }
 
 /// `apple/fandhe_apple_biometric.m` を `cc` でコンパイルし LocalAuthentication を
@@ -1109,12 +1100,12 @@ fn compile_ios_background_task() {
 }
 
 /// macOS ターゲット向けビルド（Issue #889・#897）。iOS と異なり macOS では位置情報
-/// （[`compile_apple_location`]）・共有シート（[`compile_apple_share`]）のみを対象と
+/// （[`compile_apple_location`]）のみを対象と
 /// する。既存の `ios/*.m` 群（文字入力・カメラ・傾き・クリップボード・読み上げ・
 /// ファイル選択）は iOS 専用のため対象外。
 ///
 /// feature `device`（既定 on）でのみ `fandhe-device` への依存自体が有効になり、
-/// 呼び出し元（`src/device/apple_location.rs`・`src/device/apple_share.rs`）が
+/// 呼び出し元（`src/device/apple_location.rs`）が
 /// ビルド対象になる（iOS 分岐と同じ判断）。無効時はコンパイルもリンクも行わない。
 fn build_macos() {
     if std::env::var("CARGO_FEATURE_DEVICE").is_err() {
@@ -1122,7 +1113,6 @@ fn build_macos() {
     }
 
     compile_apple_location();
-    compile_apple_share();
     compile_apple_biometric();
     compile_apple_contact_picker();
     compile_apple_secure_credential();

@@ -55,6 +55,7 @@ device = [
   "dep:fandhe-cap-screen-wake-lock",
   "dep:fandhe-cap-serial-port",
   "dep:fandhe-cap-share-receive",
+  "dep:fandhe-cap-share-sheet",
   "dep:fandhe-cap-spell-check",
   "dep:fandhe-cap-system-accent-color",
   "dep:fandhe-cap-system-tray",
@@ -150,6 +151,7 @@ fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture", optional = 
 fandhe-cap-screen-wake-lock = { path = "../fandhe-cap-screen-wake-lock", optional = true }
 fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port", optional = true }
 fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive", optional = true }
+fandhe-cap-share-sheet = { path = "../fandhe-cap-share-sheet", optional = true }
 fandhe-cap-spell-check = { path = "../fandhe-cap-spell-check", optional = true }
 fandhe-cap-system-accent-color = { path = "../fandhe-cap-system-accent-color", optional = true }
 fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }

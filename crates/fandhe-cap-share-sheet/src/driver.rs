@@ -2,10 +2,7 @@
 //! #898 Windows → #899 iOS/Android 横展開）の effect ドライバ。
 //! `fandhe_core::screens::share_text`（端末依存ゼロ）の要求を観測し、結果を
 //! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
-//! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
-//!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
+//! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`fandhe_runtime::EffectFn` 参照）。
 //!
 //! # macOS/iOS/Android/Windows: pull 型 `bridge`（OS の共有 UI はいずれもコールバック型）
 //!
@@ -18,7 +15,7 @@
 //! 結果を置くだけで、画面への反映は毎フレーム [`drive_callback`] が **その時点の**
 //! `sender`/`state` を使って行う（`RequestSlot`/`poll_and_finish` のモジュール doc
 //! 参照、Issue #943 で 3 機能の共通部品へ統合）。macOS/iOS/Android は [`present`] が
-//! OS ごとの提示処理（`apple_share::present`/`android::request_share`）へ振り分ける。
+//! OS ごとの提示処理（`apple::present`/`android::request_share`）へ振り分ける。
 //!
 //! Windows のみ、`DataTransferManager` に「共有 UI を閉じた」イベントが無いため
 //! （公知の制約）、`drive_callback` がフォーカス復帰ヒューリスティックでキャンセルを
@@ -26,7 +23,7 @@
 //!
 //! # 上記 4 OS 以外（Linux）: `Share` トレイト経由
 //!
-//! Linux は [`UnsupportedShare`]（`fandhe_device::share::UnsupportedShare`）を
+//! Linux は [`UnsupportedShare`]（`crate::contract::UnsupportedShare`）を
 //! `Share` トレイト経由で呼び、`Unsupported("share")` を画面へ「この環境では共有
 //! シートを使えません」として表示する。
 //!
@@ -39,38 +36,40 @@
 //! 反映されず捨てられる（固着はしない）。無検証の再開 API は追加しない
 //! （`file_pick` の `RestoreRequested` は本 Issue でも導入しない、実装計画 §2.6 参照）。
 
-use fandhe_core::screens::share_text::{
-    finish_share, mark_sharing, take_request, ShareOutcome as CoreShareOutcome, ShareTextState,
-};
 #[cfg(not(any(
     target_os = "macos",
     target_os = "ios",
     target_os = "android",
     target_os = "windows"
 )))]
-use fandhe_device::share::Share;
-use fandhe_device::share::{ShareOutcome as DeviceShareOutcome, ShareRequest};
-use fandhe_device::DeviceError;
+use crate::contract::Share;
+use crate::contract::{ShareOutcome as DeviceShareOutcome, ShareRequest};
+use crate::error::ShareSheetError;
+use fandhe_core::screens::share_text::{
+    ShareOutcome as CoreShareOutcome, ShareTextState, finish_share, mark_sharing, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// `Share`/`bridge::deliver` 未対応環境（Unsupported）で画面へ出す固定案内
-/// （`DeviceError` の内部構造は含めない、security.md A09）。
+/// （`ShareSheetError` の内部構造は含めない、security.md A09）。
 const UNAVAILABLE: &str = "この環境では共有シートを使えません";
 
-/// `DeviceError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
+/// `ShareSheetError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
 /// それ以外は `Display` の文言をそのまま転送する
 /// （`device/file_pick.rs::to_message` と同じ方針）。
-fn to_message(e: DeviceError) -> String {
+fn to_message(e: ShareSheetError) -> String {
     match e {
-        DeviceError::Unsupported(_) => UNAVAILABLE.to_string(),
+        ShareSheetError::Unsupported => UNAVAILABLE.to_string(),
         other => other.to_string(),
     }
 }
 
-/// `Result<DeviceShareOutcome, DeviceError>` を画面表示用の結果へ変換する
+/// `Result<DeviceShareOutcome, ShareSheetError>` を画面表示用の結果へ変換する
 /// （macOS/iOS/Android/Windows 経路・`Share` トレイト経路の共通部分）。
-fn to_outcome(result: Result<DeviceShareOutcome, DeviceError>) -> Result<CoreShareOutcome, String> {
+fn to_outcome(
+    result: Result<DeviceShareOutcome, ShareSheetError>,
+) -> Result<CoreShareOutcome, String> {
     result
         .map(|outcome| match outcome {
             DeviceShareOutcome::Shared => CoreShareOutcome::Shared,
@@ -82,11 +81,10 @@ fn to_outcome(result: Result<DeviceShareOutcome, DeviceError>) -> Result<CoreSha
 }
 
 /// OS 側の結果コード（iOS/macOS/Android の 3 経路で共通、Issue #899 §2.2 の表参照）を
-/// [`fandhe_device::share::ShareOutcome`] へ写す純関数。`cfg` 無しで全ターゲットから
-/// テストできる（`apple_share.rs::outcome_from_code`（#897）をここへ統合、iOS/Android を
-/// 同じ表に載せるため）。未知のコードは `Internal("share outcome")` として扱う
+/// [`crate::contract::ShareOutcome`] へ写す純関数。`cfg` 無しで全ターゲットから
+/// テストできる（iOS/Android を同じ表に載せるため #899 で統合）。未知のコードは `Internal("share outcome")` として扱う
 /// （偽の成功・偽のキャンセルを作らない）。Windows（#898）は
-/// `DataTransferManager`/`windows_share::present` 側で `Result` を直接返すため、
+/// `DataTransferManager`/`windows::present` 側で `Result` を直接返すため、
 /// このコード表には乗らない。
 ///
 /// | code | 意味 | iOS | macOS | Android |
@@ -97,19 +95,19 @@ fn to_outcome(result: Result<DeviceShareOutcome, DeviceError>) -> Result<CoreSha
 /// | 3 | `Err(Internal("share present"))` | VC 不在/error!=nil | window 不在等 | launch() 例外 |
 /// | 4 | `Ok(Unknown)` | （使わない） | （使わない） | chooser 終了・broadcast 未受信 |
 ///
-/// 呼び出し元（`apple_share.rs`/`android.rs`）が macOS/iOS/Android の 3 OS にのみ
+/// 呼び出し元（`apple.rs`/`android.rs`）が macOS/iOS/Android の 3 OS にのみ
 /// 存在する（`device.rs` の `mod` cfg 参照）ため、それ以外のターゲット（例:
 /// Linux CI runner 上の clippy）では本関数も未使用になり `dead_code` で
 /// `-D warnings` に落ちる。呼び出し元と同じ cfg を付けて対象を揃える。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
-pub(crate) fn outcome_from_code(code: i32) -> Result<DeviceShareOutcome, DeviceError> {
+pub(crate) fn outcome_from_code(code: i32) -> Result<DeviceShareOutcome, ShareSheetError> {
     match code {
         0 => Ok(DeviceShareOutcome::Shared),
         1 => Ok(DeviceShareOutcome::Cancelled),
         2 => Ok(DeviceShareOutcome::NoTarget),
-        3 => Err(DeviceError::Internal("share present")),
+        3 => Err(ShareSheetError::Internal),
         4 => Ok(DeviceShareOutcome::Unknown),
-        _ => Err(DeviceError::Internal("share outcome")),
+        _ => Err(ShareSheetError::Internal),
     }
 }
 
@@ -122,10 +120,10 @@ pub(crate) fn outcome_from_code(code: i32) -> Result<DeviceShareOutcome, DeviceE
     target_os = "windows"
 ))]
 pub(crate) mod bridge {
+    use crate::error::ShareSheetError;
     use fandhe_core::screens::share_text::ShareOutcome as CoreShareOutcome;
-    use fandhe_device::DeviceError;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     /// 画面へ反映する完了結果（`super::to_outcome` 後の形）。
     pub(crate) type Outcome = Result<CoreShareOutcome, String>;
@@ -137,13 +135,13 @@ pub(crate) mod bridge {
         SLOT.begin()
     }
 
-    /// OS からの結果（`fandhe_device::share::ShareOutcome` を経由した生の
+    /// OS からの結果（`crate::contract::ShareOutcome` を経由した生の
     /// `Result`）を `super::to_outcome` で画面用へ変換してから置く（任意スレッド。
-    /// 実際にはメインスレッドから届く契約、`apple_share.rs`/`android.rs` の doc
+    /// 実際にはメインスレッドから届く契約、`apple.rs`/`android.rs` の doc
     /// 参照）。`request_id` 不一致・未登録・既に結果ありは捨てて `false`。
     pub(crate) fn deliver(
         request_id: u64,
-        result: Result<fandhe_device::share::ShareOutcome, DeviceError>,
+        result: Result<crate::contract::ShareOutcome, ShareSheetError>,
     ) -> bool {
         SLOT.deliver(request_id, super::to_outcome(result))
     }
@@ -153,15 +151,15 @@ pub(crate) mod bridge {
 /// `android::request_share`）。戻り値は「提示依頼を受理できたか」（`false` は
 /// 呼び出し元が `Err(Internal("share present"))` として畳む）。Windows は戻り値の形が
 /// 異なる（`Result` で失敗理由まで返す）ため、この `present` には含めず
-/// [`drive_callback`] から `windows_share::present` を直接呼ぶ。
+/// [`drive_callback`] から `windows::present` を直接呼ぶ。
 #[cfg(target_os = "android")]
 fn present(request_id: u64, request: &ShareRequest) -> bool {
-    super::android::request_share(request_id, request)
+    crate::android::request_share(request_id, request)
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 fn present(request_id: u64, request: &ShareRequest) -> bool {
-    super::apple_share::present(request_id, request)
+    crate::apple::present(request_id, request)
 }
 
 /// Windows 限定: フォーカス喪失 → 復帰後にこの猶予を過ぎても結果未着ならキャンセル扱い
@@ -244,10 +242,10 @@ fn drive_callback(state: &ShareTextState, sender: &CompletionSender<ShareTextSta
                 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
                 if !present(request_id, &share_request) {
                     // 提示依頼自体が同期的に失敗した（コールバックは二度と来ない）。
-                    bridge::deliver(request_id, Err(DeviceError::Internal("share present")));
+                    bridge::deliver(request_id, Err(ShareSheetError::Internal));
                 }
                 #[cfg(target_os = "windows")]
-                if let Err(e) = super::windows_share::present(request_id, &share_request) {
+                if let Err(e) = crate::windows::present(request_id, &share_request) {
                     // 提示依頼自体が同期的に失敗した（`TargetApplicationChosen` は
                     // 二度と来ない）。
                     bridge::deliver(request_id, Err(e));
@@ -265,7 +263,7 @@ fn drive_callback(state: &ShareTextState, sender: &CompletionSender<ShareTextSta
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {
@@ -274,10 +272,7 @@ fn drive_callback(state: &ShareTextState, sender: &CompletionSender<ShareTextSta
             // （モジュール doc・`cancel_due` 参照）。
             #[cfg(target_os = "windows")]
             if windows_cancel_check(_request_id, sender.host_view().focused()) {
-                bridge::deliver(
-                    _request_id,
-                    Ok(fandhe_device::share::ShareOutcome::Cancelled),
-                );
+                bridge::deliver(_request_id, Ok(crate::contract::ShareOutcome::Cancelled));
             }
         },
         move |s: &mut ShareTextState, outcome| {
@@ -339,7 +334,7 @@ pub fn share_text_effect(state: &ShareTextState, sender: &CompletionSender<Share
     target_os = "windows"
 )))]
 pub fn share_text_effect(state: &ShareTextState, sender: &CompletionSender<ShareTextState>) {
-    drive(state, sender, &fandhe_device::share::UnsupportedShare);
+    drive(state, sender, &crate::contract::UnsupportedShare);
 }
 
 #[cfg(test)]
@@ -361,11 +356,33 @@ mod tests {
     )))]
     fn sender_with_channel() -> (
         CompletionSender<ShareTextState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<ShareTextState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<ShareTextState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
+    }
+
+    /// 起床を行わない起床口（テストは受信側で完了を直接読む）。
+    #[cfg(not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android",
+        target_os = "windows"
+    )))]
+    struct NoopWaker;
+
+    #[cfg(not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android",
+        target_os = "windows"
+    )))]
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _: std::time::Duration) {}
     }
 
     #[cfg(not(any(
@@ -376,7 +393,7 @@ mod tests {
     )))]
     fn apply_all(
         state: &mut ShareTextState,
-        rx: &std::sync::mpsc::Receiver<crate::app::Completion<ShareTextState>>,
+        rx: &std::sync::mpsc::Receiver<fandhe_runtime::Completion<ShareTextState>>,
     ) {
         while let Ok(apply) = rx.try_recv() {
             apply(state);
@@ -405,7 +422,7 @@ mod tests {
 
     #[test]
     fn to_outcome_maps_unsupported_to_fixed_message() {
-        let result = to_outcome(Err(DeviceError::Unsupported("share")));
+        let result = to_outcome(Err(ShareSheetError::Unsupported));
         assert_eq!(result, Err(UNAVAILABLE.to_string()));
     }
 
@@ -426,7 +443,7 @@ mod tests {
         ));
         assert!(matches!(
             outcome_from_code(3),
-            Err(DeviceError::Internal("share present"))
+            Err(ShareSheetError::Internal)
         ));
         assert!(matches!(
             outcome_from_code(4),
@@ -439,7 +456,7 @@ mod tests {
     fn outcome_from_code_treats_unknown_code_as_internal_error() {
         assert!(matches!(
             outcome_from_code(99),
-            Err(DeviceError::Internal("share outcome"))
+            Err(ShareSheetError::Internal)
         ));
     }
 
@@ -470,7 +487,7 @@ mod tests {
     fn drive_is_noop_without_pending_request() {
         let (sender, rx) = sender_with_channel();
         let state = ShareTextState::default();
-        drive(&state, &sender, &fandhe_device::share::UnsupportedShare);
+        drive(&state, &sender, &crate::contract::UnsupportedShare);
         assert!(rx.try_recv().is_err());
     }
 
@@ -487,7 +504,7 @@ mod tests {
         set_input(&mut state, "hello".to_string());
         share(&mut state);
 
-        drive(&state, &sender, &fandhe_device::share::UnsupportedShare);
+        drive(&state, &sender, &crate::contract::UnsupportedShare);
         apply_all(&mut state, &rx);
 
         assert!(state.error.contains(UNAVAILABLE), "{}", state.error);
@@ -508,7 +525,10 @@ mod tests {
     fn drive_reports_invalid_url_as_error() {
         struct AlwaysShared;
         impl Share for AlwaysShared {
-            fn share(&self, _request: &ShareRequest) -> Result<DeviceShareOutcome, DeviceError> {
+            fn share(
+                &self,
+                _request: &ShareRequest,
+            ) -> Result<DeviceShareOutcome, ShareSheetError> {
                 Ok(DeviceShareOutcome::Shared)
             }
         }
@@ -548,7 +568,7 @@ mod bridge_tests {
         let request_id = bridge::begin();
         assert!(bridge::deliver(
             request_id,
-            Ok(fandhe_device::share::ShareOutcome::Shared)
+            Ok(crate::contract::ShareOutcome::Shared)
         ));
         let (_, ready) = bridge::SLOT.snapshot().expect("begin 済みなので Some");
         assert_eq!(

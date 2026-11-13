@@ -7,8 +7,8 @@
 //! Web は `fandhe-device` の `Share` トレイトを通らない（`clipboard.rs`/`tts.rs` と同じ
 //! 理由。`fandhe-egui-proxy` の feature `device` は wasm32 に依存を持ち込まない設計、
 //! `crates/fandhe-egui-proxy/src/device.rs` 参照）。そのため本モジュールが DOM レンダラ側
-//! の対応実装にあたる。ただし入力検証だけは [`fandhe_device::share::ShareRequest::new`]
-//! を共有する（`crates/fandhe-egui-proxy/src/device/share.rs` と同じ検証の SSOT 方針）。
+//! の対応実装にあたる。ただし入力検証だけは [`fandhe_cap_share_sheet::ShareRequest::new`]
+//! を共有する（`crates/fandhe-cap-share-sheet/src/driver.rs` と同じ検証の SSOT 方針）。
 //!
 //! # ブラウザ側の制約（対応表 `docs/device/capabilities/share-sheet.json` の web 欄と対）
 //!
@@ -73,10 +73,10 @@ pub(crate) fn outcome_from_error_name(name: Option<&str>) -> Result<ShareOutcome
 
 #[cfg(target_arch = "wasm32")]
 mod web {
+    use fandhe_cap_share_sheet::ShareRequest;
     use fandhe_core::screens::share_text::{
         finish_share, mark_sharing, take_request, ShareTextState,
     };
-    use fandhe_device::share::ShareRequest;
     use js_sys::Reflect;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_futures::JsFuture;

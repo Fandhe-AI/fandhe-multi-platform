@@ -309,51 +309,6 @@ public class MainActivity extends GameActivity {
     // 根拠はない。頻度が問題になったら見直す）。
     private static final long LOCATION_UPDATE_INTERVAL_MS = 1000L;
 
-    // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
-    // （Issue #899、Phase 11 型サンプル「共有」の Android 経路）。`Share` trait は通らない
-    // （`device/share.rs` モジュール doc の「macOS/iOS/Android は pull 型 bridge」参照）。
-    // code: `device/share.rs::outcome_from_code` の表（iOS/macOS/Android 共通）参照。
-    // 0=共有した（選択 broadcast 受信）／3=内部エラー（`launch()` 例外等）／
-    // 4=結果不明（chooser は閉じたが選択 broadcast が届かなかった。§ requestShare 参照）。
-    // 1（キャンセル）・2（共有先なし）は Android では使わない。
-    private static native void nativeOnShareResult(long requestId, int code);
-
-    // コールバック時に requestId を思い出すためだけの唯一の static（`filePickRequest`
-    // と同じ理由。Activity 再生成を跨いで生存する必要がある、同 doc 参照）。id の
-    // 保持・照合そのものは `RequestTracker`（Issue #944）へ委譲する。
-    private static final RequestTracker shareRequest = new RequestTracker();
-
-    // 選択完了 broadcast（`shareChosenReceiver`）の受信を、chooser 終了コールバック
-    // （`shareChooser`）より先に検知できた場合に true にする（実装計画 §2.3）。
-    // broadcast は chooser の finish より先に送られるが非同期のため、`shareChooser`
-    // コールバックが先に走った場合は `SHARE_CHOSEN_GRACE_MS` だけ遅延させて broadcast の
-    // 遅延到着を待ってから「不明」を確定する（下記 `shareChooser` 参照）。UI スレッドの
-    // みで読み書きするため追加の同期は不要。
-    private static final long SHARE_CHOSEN_GRACE_MS = 500L;
-
-    // 選択完了 broadcast の action プレフィックス（自パッケージ限定、`setPackage` で
-    // 外部からの偽装を防ぐ。実装計画 §2.3・§6 A01/A05）。要求ごとに一意な action にする
-    // （reviewer P1 是正、PR #903）: 全要求で同一 action・requestCode を再利用すると、
-    // 要求 A の broadcast が遅延中に要求 B が開始した場合、A の遅延 broadcast が B の
-    // 受信器（`registerShareChosenReceiver` が要求ごとに新規登録する IntentFilter）へ
-    // 誤って配送され、B が未選択のまま Shared 扱いになってしまう（IntentFilter は
-    // action 文字列で照合されるため、要求ごとに action を変えれば別要求の broadcast は
-    // 届かない。`shareChosenAction` 参照）。
-    private static final String SHARE_CHOSEN_ACTION_PREFIX =
-            "com.fandhe.platform.SHARE_CHOSEN.";
-
-    // 要求 ID ごとの一意な action 文字列（上記 `SHARE_CHOSEN_ACTION_PREFIX` 参照）。
-    // `requestShare`（PendingIntent 生成）と `registerShareChosenReceiver`
-    // （IntentFilter 登録）の両方から同じ requestId で呼ぶことで対を一致させる。
-    private static String shareChosenAction(long requestId) {
-        return SHARE_CHOSEN_ACTION_PREFIX + requestId;
-    }
-
-    // `shareChosenReceiver` は Activity 再生成を跨いで生存させる必要があるため
-    // Application Context へ登録する static（`filePickRequest` と同じ理由:
-    // Activity 単位の receiver は再生成の `onDestroy` で消えてしまう）。
-    private static BroadcastReceiver shareChosenReceiver;
-
     // コールバック時に requestId を思い出すためだけの唯一の static（仕様書「決定事項」
     // 参照）。「進行中か」「中断されたか」を表すフラグ・ロックは持たない（単一飛行は
     // コアが「ファイルを選ぶ」ボタンを隠すことで保証済み）。static にする理由（reviewer
@@ -1653,31 +1608,6 @@ public class MainActivity extends GameActivity {
                 // ContentResolver の読み取りを UI スレッドでやらない。
                 new Thread(() -> deliverPickedContact(requestId, uri), "fandhe-contact-pick")
                         .start();
-            });
-
-    // Android の chooser（`Intent.createChooser`）は選択結果を返さない
-    // （`StartActivityForResult` の結果は常に `RESULT_CANCELED`）ため、この
-    // コールバックは「chooser が閉じた」ことしか意味しない（Issue #899、実装計画 §2.3）。
-    // 選択完了そのものは `shareChosenReceiver`（`IntentSender` broadcast）が別途届ける。
-    // broadcast は chooser の finish より先に送られるが非同期のため、ここでは即座に
-    // 「不明」を確定させず `SHARE_CHOSEN_GRACE_MS` だけ遅延させて broadcast の遅延到着を
-    // 待つ。`complete` が false なら broadcast 側が既に処理済みのため、遅延 Runnable は
-    // 空振りする（両方 UI スレッドなのでロック不要）。
-    private final ActivityResultLauncher<Intent> shareChooser =
-            getActivityResultRegistry().register("fandhe:MainActivity:7", this, new ActivityResultContracts.StartActivityForResult(), result -> {
-                long id = shareRequest.current();
-                if (id == RequestTracker.NONE) {
-                    // broadcast が先に届いて既に消費済み（`shareChosenReceiver` 参照）。
-                    return;
-                }
-                new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                    if (!shareRequest.complete(id)) {
-                        // broadcast が遅延到着で先に消費済み（空振り）。
-                        return;
-                    }
-                    unregisterShareChosenReceiver();
-                    nativeOnShareResult(id, 4);
-                }, SHARE_CHOSEN_GRACE_MS);
             });
 
     // 測位の開始・停止を UI スレッド上の resumed 状態と一致させるための可視性フラグ
@@ -3427,92 +3357,6 @@ public class MainActivity extends GameActivity {
                 out.delete();
             }
         }
-    }
-
-    // Rust 側 bridge モジュール（`device/share.rs`）の `present`（Android 分岐）から
-    // JNI 経由で呼ばれる（Issue #899）。`requestFilePick` と同じ「即時 return・結果は
-    // 非同期通知」の形だが、chooser 自体は結果を返さないため（上記 `shareChooser` doc
-    // 参照）、選択完了は `IntentSender` broadcast（`shareChosenReceiver`）で別途検出する
-    // （実装計画 §2.3）。`url` が無い場合（Rust 側 `ShareRequest::url()` が `None`）は
-    // `null` が渡ってくる契約。
-    //
-    // 共有テキスト・URL・例外メッセージをログへ出力しない（security.md A09）。
-    private void requestShare(long requestId, String text, String url) {
-        shareRequest.track(requestId);
-        runOnUiThread(() -> {
-            try {
-                registerShareChosenReceiver(requestId);
-
-                Intent send = new Intent(Intent.ACTION_SEND);
-                send.setType("text/plain");
-                send.putExtra(Intent.EXTRA_TEXT, url == null ? text : text + "\n" + url);
-
-                // `IntentSender`（API 22+、minSdk 24 で利用可）で選択完了 broadcast を
-                // 受け取る（実装計画 §2.3）。`setPackage(自パッケージ)` で自プロセス以外
-                // からの偽装 broadcast を受理しない（security.md A01/A05）。API 31+ は
-                // system が extras を書き込むため `FLAG_MUTABLE` が必須（API < 31 では
-                // 未知ビットとして無視される）。
-                Intent chosenIntent =
-                        new Intent(shareChosenAction(requestId)).setPackage(getPackageName());
-                int flags = PendingIntent.FLAG_UPDATE_CURRENT
-                        | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0);
-                PendingIntent pi = PendingIntent.getBroadcast(this, 0, chosenIntent, flags);
-
-                Intent chooser = Intent.createChooser(send, null, pi.getIntentSender());
-                shareChooser.launch(chooser);
-            } catch (RuntimeException e) {
-                // `launch()` 自体が例外を送出した場合（ドキュメントプロバイダ非対応の
-                // ケースと同型、`requestFilePick` 参照）。chooser は開かれておらず
-                // `shareChooser`/`shareChosenReceiver` コールバックも来ないため、
-                // ここで直接 code 3（内部エラー）を通知する。
-                shareRequest.take();
-                unregisterShareChosenReceiver();
-                nativeOnShareResult(requestId, 3);
-            }
-        });
-    }
-
-    // 選択完了 broadcast の受信器を Application Context へ登録する（`requestShare` から
-    // 要求ごとに呼ばれる）。Activity 単位ではなく Application Context に登録する理由は
-    // `shareChosenReceiver` doc 参照（Activity 再生成の `onDestroy` を跨いで生存させる
-    // ため）。`RECEIVER_NOT_EXPORTED`（API 33+ の必須引数、`ContextCompat` 経由で
-    // それ未満でも安全に動作する）で他アプリからの直接送信を遮断する。
-    private void registerShareChosenReceiver(long requestId) {
-        unregisterShareChosenReceiver();
-        shareChosenReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                // `requestId` はこの受信器を登録した時点の要求（クロージャで固定）。
-                // `shareRequest` static は他要求で書き換わり得るため、両者が一致する
-                // ときだけ処理する（reviewer P1 是正、PR #903: action を要求ごとに一意に
-                // したため通常はここへ他要求の broadcast は届かないが、念のための二重
-                // チェック）。不一致なら古い通知として破棄する。
-                if (!shareRequest.complete(requestId)) {
-                    return;
-                }
-                unregisterShareChosenReceiver();
-                nativeOnShareResult(requestId, 0);
-            }
-        };
-        ContextCompat.registerReceiver(
-                getApplicationContext(),
-                shareChosenReceiver,
-                new IntentFilter(shareChosenAction(requestId)),
-                ContextCompat.RECEIVER_NOT_EXPORTED);
-    }
-
-    // `requestShare`/`shareChooser`/`shareChosenReceiver` のいずれの決着経路からも呼ぶ
-    // 後始末（二重登録・リーク防止）。未登録（`null`）での呼び出しは no-op。
-    private void unregisterShareChosenReceiver() {
-        if (shareChosenReceiver == null) {
-            return;
-        }
-        try {
-            getApplicationContext().unregisterReceiver(shareChosenReceiver);
-        } catch (IllegalArgumentException e) {
-            // 未登録状態での unregister（二重呼び出し等）。無害なため握りつぶす。
-        }
-        shareChosenReceiver = null;
     }
 
     // Rust 側 bridge モジュール（`device/biometric_auth.rs`）の `present`（Android

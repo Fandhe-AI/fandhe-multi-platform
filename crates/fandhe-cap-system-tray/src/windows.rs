@@ -1,7 +1,7 @@
 //! Windows 向けシステムトレイ実装（Issue #1039）。`contract.rs::
 //! platform_tray` の Windows 分岐から呼ばれ、`Shell_NotifyIconW`（通知領域
 //! アイコン）+ 不可視のトップレベルウィンドウ + `TrackPopupMenu`（右クリック
-//! メニュー）で実装する。`windows_share.rs`/`windows_biometric.rs` と同じく
+//! メニュー）で実装する。`fandhe-cap-share-sheet/src/windows.rs`/`windows_biometric.rs` と同じく
 //! `unsafe` は Win32 呼び出しに限り `// SAFETY:` を各呼び出し直前に付与する
 //! （`lib.rs` の Windows `deny(unsafe_code)` 緩和・coding-rust.md の FFI
 //! 例外規定準拠）。
