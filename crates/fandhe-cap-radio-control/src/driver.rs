@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::radio_control_show`（端末依存ゼロ）の要求を観測し、`RadioControl` で
 //! 状態を 1 回読む / 切り替えを 1 回要求し、`CompletionSender` 経由で結果を返す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、
-//! `app::EffectFn` 参照）。契約の SSOT は `fandhe_device::radio_control`。
+//! `fandhe_runtime::EffectFn` 参照）。契約の SSOT は `crate::contract`。
 //!
 //! # スレッド
 //!
@@ -15,43 +15,42 @@
 //! # OS 別実装の差し込み口
 //!
 //! [`implementation`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを埋める
-//! （macOS: `macos_radio_control`（#972）、Windows: `windows_radio_control`（#973）、
-//! Android: `android_radio_control`（#974））。それ以外（iOS・Linux 等）は
+//! （macOS: `macos`（#972）、Windows: `windows`（#973）、
+//! Android: `android`（#974））。それ以外（iOS・Linux 等）は
 //! `UnsupportedRadioControl` 固定で、ダミーの成功実装へは倒さない。
 
-use std::sync::mpsc::Receiver;
 use std::sync::Arc;
+use std::sync::mpsc::Receiver;
 
-use fandhe_core::screens::radio_control_show::{
-    finish_read, finish_switch, mark_busy, take_request, Action, Failure, Kind,
-    RadioControlShowState, Reading, Switched,
-};
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
-use fandhe_device::radio_control::UnsupportedRadioControl;
-use fandhe_device::radio_control::{
-    RadioControl, RadioKind, RadioState, SwitchOutcome, DENIED_BY_SYSTEM,
+use crate::contract::UnsupportedRadioControl;
+use crate::contract::{DENIED_BY_SYSTEM, RadioControl, RadioKind, RadioState, SwitchOutcome};
+use crate::error::RadioControlError;
+use fandhe_core::screens::radio_control_show::{
+    Action, Failure, Kind, RadioControlShowState, Reading, Switched, finish_read, finish_switch,
+    mark_busy, take_request,
 };
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `RadioControl` 実装を返す（プロセスで 1 個）。
-fn implementation() -> Arc<dyn RadioControl> {
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_radio_control() -> Arc<dyn RadioControl> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn RadioControl>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "macos")]
             {
-                super::macos_radio_control::implementation()
+                crate::macos::implementation()
             }
             #[cfg(target_os = "windows")]
             {
-                super::windows_radio_control::implementation()
+                crate::windows::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_radio_control::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
             {
@@ -61,13 +60,13 @@ fn implementation() -> Arc<dyn RadioControl> {
         .clone()
 }
 
-/// `DeviceError` を画面の失敗種別へ写す（全呼び出し箇所でこの 1 関数を通す）。その他は `Failed` へ
+/// `RadioControlError` を画面の失敗種別へ写す（全呼び出し箇所でこの 1 関数を通す）。その他は `Failed` へ
 /// 畳み、OS 固有の値を画面へ漏らさない（security.md A09）。
-fn to_failure(e: DeviceError) -> Failure {
+fn to_failure(e: RadioControlError) -> Failure {
     match e {
-        DeviceError::Unsupported(_) => Failure::Unsupported,
-        DeviceError::PermissionDenied(_) => Failure::PermissionDenied,
-        DeviceError::Internal(DENIED_BY_SYSTEM) => Failure::DeniedBySystem,
+        RadioControlError::Unsupported(_) => Failure::Unsupported,
+        RadioControlError::PermissionDenied(_) => Failure::PermissionDenied,
+        RadioControlError::Internal(DENIED_BY_SYSTEM) => Failure::DeniedBySystem,
         _ => Failure::Failed,
     }
 }
@@ -100,13 +99,13 @@ fn to_radio_kind(k: Kind) -> RadioKind {
 }
 
 /// 切り替え前の許可要求の開始関数（UI スレッドで呼ぶ）。結果は戻り値のチャネルへ 1 回流れる。
-type AccessStarter = fn() -> Receiver<Result<(), DeviceError>>;
+type AccessStarter = fn() -> Receiver<Result<(), RadioControlError>>;
 
 /// 現在の OS が切り替え前に要する許可要求（Windows のみ）。注入した実装は OS の許可状態に依存しない。
 fn access_starter() -> Option<AccessStarter> {
     #[cfg(target_os = "windows")]
     {
-        Some(super::windows_radio_control::begin_access)
+        Some(crate::windows::begin_access)
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -148,9 +147,8 @@ fn drive(
                 }
                 Action::Set(on) => {
                     let granted = access.map_or(Ok(()), |rx| {
-                        rx.recv().unwrap_or(Err(DeviceError::Internal(
-                            fandhe_device::radio_control::FAILED,
-                        )))
+                        rx.recv()
+                            .unwrap_or(Err(RadioControlError::Internal(crate::contract::FAILED)))
                     });
                     let result = granted
                         .and_then(|()| radio.set(radio_kind, on))
@@ -188,41 +186,55 @@ fn finish_spawn_failed(s: &mut RadioControlShowState, generation: u64, kind: Kin
     }
 }
 
+/// Android: Activity 再生成直後に gallery の `android_main` から呼ぶ。保留中の切り替え要求を破棄し、
+/// 待機中のワーカーを失敗で戻す（復元しない）。
+#[cfg(target_os = "android")]
+pub fn reset_pending_tracking() {
+    crate::android::reset_pending_tracking();
+}
+
 /// `registry.rs` の `effect` 区画から `radio_control_show` 画面用に配線される effect ドライバ。
 pub fn radio_control_show_effect(
     state: &RadioControlShowState,
     sender: &CompletionSender<RadioControlShowState>,
 ) {
-    drive(state, sender, implementation(), access_starter());
+    drive(state, sender, platform_radio_control(), access_starter());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{FAILED, FEATURE};
     use fandhe_core::screens::radio_control_show::{
-        bluetooth_off, wifi_on, wifi_read, Phase, FAILED_DENIED_BY_SYSTEM, FAILED_PERMISSION,
-        FAILED_READ, FAILED_READ_UNSUPPORTED, FAILED_SWITCH, FAILED_SWITCH_UNSUPPORTED, STATE_OFF,
-        STATE_ON, STATE_PREFIX,
+        FAILED_DENIED_BY_SYSTEM, FAILED_PERMISSION, FAILED_READ, FAILED_READ_UNSUPPORTED,
+        FAILED_SWITCH, FAILED_SWITCH_UNSUPPORTED, Phase, STATE_OFF, STATE_ON, STATE_PREFIX,
+        bluetooth_off, wifi_on, wifi_read,
     };
-    use fandhe_device::radio_control::{FAILED, FEATURE};
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
-    type ErrFn = fn() -> DeviceError;
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
+    type ErrFn = fn() -> RadioControlError;
     type Reads = Mutex<Vec<Result<RadioState, ErrFn>>>;
 
     struct Fake {
         reads: Reads,
-        set: Result<SwitchOutcome, fn() -> DeviceError>,
+        set: Result<SwitchOutcome, fn() -> RadioControlError>,
         read_calls: AtomicUsize,
         set_calls: AtomicUsize,
     }
 
     impl Fake {
         fn new(
-            reads: Vec<Result<RadioState, fn() -> DeviceError>>,
-            set: Result<SwitchOutcome, fn() -> DeviceError>,
+            reads: Vec<Result<RadioState, fn() -> RadioControlError>>,
+            set: Result<SwitchOutcome, fn() -> RadioControlError>,
         ) -> Arc<Self> {
             Arc::new(Self {
                 reads: Mutex::new(reads),
@@ -234,13 +246,13 @@ mod tests {
     }
 
     impl RadioControl for Fake {
-        fn read(&self, _kind: RadioKind) -> Result<RadioState, DeviceError> {
+        fn read(&self, _kind: RadioKind) -> Result<RadioState, RadioControlError> {
             self.read_calls.fetch_add(1, Ordering::SeqCst);
             let mut q = self.reads.lock().unwrap();
             let next = if q.len() > 1 { q.remove(0) } else { q[0] };
             next.map_err(|f| f())
         }
-        fn set(&self, _kind: RadioKind, _on: bool) -> Result<SwitchOutcome, DeviceError> {
+        fn set(&self, _kind: RadioKind, _on: bool) -> Result<SwitchOutcome, RadioControlError> {
             self.set_calls.fetch_add(1, Ordering::SeqCst);
             self.set.map_err(|f| f())
         }
@@ -248,11 +260,10 @@ mod tests {
 
     fn sender_with_channel() -> (
         CompletionSender<RadioControlShowState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<RadioControlShowState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<RadioControlShowState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// 要求を立てて `drive` し、届いた完了（mark_busy と結果）をすべて適用した状態を返す。
@@ -303,10 +314,12 @@ mod tests {
         assert_eq!(fake.set_calls.load(Ordering::SeqCst), 1);
         assert_eq!(fake.read_calls.load(Ordering::SeqCst), 1);
         // 受け付けたが読み直しはオフのまま。「オンになった」とは出さない。
-        assert!(state
-            .wifi
-            .status
-            .ends_with(&format!("{STATE_PREFIX}{STATE_OFF}")));
+        assert!(
+            state
+                .wifi
+                .status
+                .ends_with(&format!("{STATE_PREFIX}{STATE_OFF}"))
+        );
         assert_eq!(state.wifi.error, "");
     }
 
@@ -329,7 +342,7 @@ mod tests {
     fn failed_set_still_rereads() {
         let fake = Fake::new(
             vec![Ok(RadioState::Off)],
-            Err(|| DeviceError::Internal(FAILED)),
+            Err(|| RadioControlError::Internal(FAILED)),
         );
         let state = run(fake.clone(), wifi_on);
         assert_eq!(fake.read_calls.load(Ordering::SeqCst), 1);
@@ -341,7 +354,7 @@ mod tests {
     fn unsupported_set_on_bluetooth_is_not_success() {
         let fake = Fake::new(
             vec![Ok(RadioState::On)],
-            Err(|| DeviceError::Unsupported(FEATURE)),
+            Err(|| RadioControlError::Unsupported(FEATURE)),
         );
         let state = run(fake, bluetooth_off);
         assert_eq!(state.bluetooth.error, FAILED_SWITCH_UNSUPPORTED);
@@ -350,18 +363,21 @@ mod tests {
     #[test]
     fn each_error_maps_to_distinct_failure() {
         let cases: [(ErrFn, &str); 5] = [
-            (|| DeviceError::PermissionDenied(FEATURE), FAILED_PERMISSION),
             (
-                || DeviceError::Internal(DENIED_BY_SYSTEM),
+                || RadioControlError::PermissionDenied(FEATURE),
+                FAILED_PERMISSION,
+            ),
+            (
+                || RadioControlError::Internal(DENIED_BY_SYSTEM),
                 FAILED_DENIED_BY_SYSTEM,
             ),
             (
-                || DeviceError::Unsupported(FEATURE),
+                || RadioControlError::Unsupported(FEATURE),
                 FAILED_READ_UNSUPPORTED,
             ),
-            (|| DeviceError::Internal(FAILED), FAILED_READ),
+            (|| RadioControlError::Internal(FAILED), FAILED_READ),
             // その他の種別は Failed に畳み、成功にしない。
-            (|| DeviceError::Io(std::io::Error::other("x")), FAILED_READ),
+            (|| RadioControlError::Internal("other"), FAILED_READ),
         ];
         for (f, expected) in cases {
             let fake = Fake::new(vec![Err(f)], Ok(SwitchOutcome::Applied));
@@ -408,10 +424,7 @@ mod tests {
 
     #[test]
     fn unsupported_implementation_never_yields_success() {
-        let state = run(
-            Arc::new(fandhe_device::radio_control::UnsupportedRadioControl),
-            wifi_on,
-        );
+        let state = run(Arc::new(crate::contract::UnsupportedRadioControl), wifi_on);
         assert_eq!(state.wifi.error, FAILED_SWITCH_UNSUPPORTED);
         assert_eq!(state.wifi.status, "");
     }
@@ -421,7 +434,7 @@ mod tests {
     fn unsupported_os_implementation_is_unsupported() {
         assert!(matches!(
             implementation().read(RadioKind::Wifi),
-            Err(DeviceError::Unsupported(_))
+            Err(RadioControlError::Unsupported(_))
         ));
     }
 }

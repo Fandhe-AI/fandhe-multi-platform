@@ -407,18 +407,6 @@ public class MainActivity extends GameActivity {
         wifiInfoHelper.cancel(requestId);
     }
 
-    // 無線の状態取得と切り替え（Issue #974）。実装は `RadioControlHelper`（ランチャーを STARTED 前に登録）。
-    // Rust の `android_radio_control.rs` が JNI で呼ぶ。
-    private final RadioControlHelper radioControlHelper = new RadioControlHelper(this);
-
-    int radioControlRead(int kind) {
-        return radioControlHelper.read(kind);
-    }
-
-    void requestRadioControlSet(long requestId, int kind, boolean on) {
-        radioControlHelper.set(requestId, kind, on);
-    }
-
     // 接続した機器からの取り込み（Issue #983）。実装は `ScannerDevicesHelper`。
     // Rust の `android_scanner_devices.rs` が JNI で呼ぶ。
     private final ScannerDevicesHelper scannerDevicesHelper = new ScannerDevicesHelper(this);
@@ -3958,7 +3946,6 @@ public class MainActivity extends GameActivity {
         blePeripheralHelper.onDestroy();
         musicLibraryHelper.onDestroy();
         wifiInfoHelper.onDestroy();
-        radioControlHelper.onDestroy();
         scannerDevicesHelper.onDestroy();
         nfcReadHelper.onDestroy();
         compassHelper.onDestroy();

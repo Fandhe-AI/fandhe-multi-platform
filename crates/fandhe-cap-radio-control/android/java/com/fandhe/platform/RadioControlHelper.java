@@ -2,6 +2,7 @@ package com.fandhe.platform;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.content.ActivityNotFoundException;
@@ -12,15 +13,20 @@ import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.provider.Settings;
 
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
+
 import androidx.activity.ComponentActivity;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.lifecycle.Lifecycle;
 
 // 無線（Wi-Fi・Bluetooth）の状態取得と切り替え（Issue #974、親 #189）の Android 実装ヘルパー。
-// MainActivity から生成・委譲される。Rust の `device/android_radio_control.rs` が
-// `MainActivity.radioControlRead`（同期）と `requestRadioControlSet`（非同期）を JNI で呼び、
-// 結果を `nativeOnRadioControlResult` で受けて契約（`fandhe_device::radio_control`）の結果へ写像する。
+// Rust の `src/android.rs` が static の `read(Activity, int)`（同期）と `set(Activity, long, int, boolean)`（非同期）を
+// JNI で呼び、結果を `nativeOnRadioControlResult` で受けて契約（`contract`）の結果へ写像する。
+// Activity ごとの helper は `HELPERS` に持ち、`RadioControlLifecycle`（`FeatureLifecycleProvider` 継承）が
+// `attach` / `detach` で知らせる。helper が無い（生成前・破棄後）`set` は SET_FAILED で確定し、結果が来ないまま待たせない。
 //
 // `WifiManager.setWifiEnabled` と `BluetoothAdapter.enable/disable` は targetSdk 35 では常に失敗する
 // ため使わない。Wi-Fi の切り替えと Bluetooth のオフは設定画面を開いて OPENED、Bluetooth のオンは
@@ -34,7 +40,7 @@ import androidx.lifecycle.Lifecycle;
 // 読み直し時点の切り替わり途中、ダイアログや設定画面の待ち時間。
 // id・結果コード・例外メッセージ・アダプター情報はログに出さない。
 final class RadioControlHelper {
-    // 種類。Rust 側 `android_radio_control.rs::kind_code` と対。
+    // 種類。Rust 側 `android.rs::kind_code` と対。
     static final int KIND_WIFI = 0;
     static final int KIND_BLUETOOTH = 1;
 
@@ -58,15 +64,18 @@ final class RadioControlHelper {
 
     private static native void nativeOnRadioControlResult(long requestId, int code);
 
+    // Activity ごとの helper。再生成後の新しい Activity は新しい helper を持ち、旧要求は持ち越さない。
+    private static final Map<Activity, RadioControlHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     private final ComponentActivity activity;
     private final RequestTracker request = new RequestTracker();
 
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity の
-    // フィールド初期化子から本クラスを生成してここで登録する。
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`attach`（`onHostCreated`）で生成してここで登録する。
     private final ActivityResultLauncher<String> permissionLauncher;
     private final ActivityResultLauncher<Intent> enableLauncher;
 
-    RadioControlHelper(ComponentActivity activity) {
+    private RadioControlHelper(ComponentActivity activity) {
         this.activity = activity;
         this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:RadioControlHelper:1", activity,
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
@@ -81,10 +90,23 @@ final class RadioControlHelper {
                 });
     }
 
-    // 任意スレッドから同期で呼ばれる。Activity の状態に依存しない。getState の許可不足は
+    // Activity の生成時（`RadioControlLifecycle` から、UI スレッド）。ランチャーを登録する。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new RadioControlHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。保留中の要求を INTERRUPTED で確定する。
+    static void detach(Activity activity) {
+        RadioControlHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // 任意スレッドから同期で呼ばれる。helper にも Activity の状態にも依存しない。getState の許可不足は
     // SecurityException を PERMISSION_DENIED へ写して扱う。
     @SuppressLint("MissingPermission")
-    int read(int kind) {
+    static int read(Activity activity, int kind) {
         Context ctx = activity.getApplicationContext();
         try {
             if (kind == KIND_WIFI) {
@@ -137,10 +159,15 @@ final class RadioControlHelper {
         return bm == null ? null : bm.getAdapter();
     }
 
-    // JNI スレッドから呼ばれる。
-    void set(long id, int kind, boolean on) {
-        request.track(id);
-        activity.runOnUiThread(() -> start(id, kind, on));
+    // JNI スレッドから呼ばれる入口。helper が無ければ結果を SET_FAILED で確定する。
+    static void set(Activity activity, long id, int kind, boolean on) {
+        RadioControlHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            nativeOnRadioControlResult(id, SET_FAILED);
+            return;
+        }
+        helper.request.track(id);
+        helper.activity.runOnUiThread(() -> helper.start(id, kind, on));
     }
 
     private boolean destroyed() {
@@ -231,8 +258,8 @@ final class RadioControlHelper {
         }
     }
 
-    // MainActivity.onDestroy から UI スレッドで呼ぶ。
-    void onDestroy() {
+    // `detach`（UI スレッド）から呼ぶ。
+    private void onDestroy() {
         long id = request.take();
         if (id != RequestTracker.NONE) {
             nativeOnRadioControlResult(id, SET_INTERRUPTED);

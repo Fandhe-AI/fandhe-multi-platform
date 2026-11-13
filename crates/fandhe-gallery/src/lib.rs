@@ -236,6 +236,9 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // ファイルプレビューの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_file_preview::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_file_preview::reset_pending_tracking();
+    // 無線の切り替えの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_radio_control::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_radio_control::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 

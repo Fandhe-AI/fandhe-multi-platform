@@ -488,6 +488,10 @@
             android:name="com.fandhe.platform.ScreenCaptureLifecycle"
             android:authorities="${applicationId}.fandhe.screen-capture"
             android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.RadioControlLifecycle"
+            android:authorities="${applicationId}.fandhe.radio-control"
+            android:exported="false" />
         <!-- Issue #1100: Health Connect の許可画面から開かれる権限の理由画面。実体は exported=false、
              alias は START_VIEW_PERMISSION_USAGE（システム専用）を要求するので起動できるのは
              システムだけ（security.md A05）。固定文言のみ表示し、Intent の extras は読まない。

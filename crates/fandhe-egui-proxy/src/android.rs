@@ -173,11 +173,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // 旧要求の遅延完了を id 不一致で無視させる（`device::photo_save::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::photo_save::reset_pending_tracking();
-    // Issue #974: `radio_control` の保留中の切り替え要求も同様に破棄する（Java 側 `onDestroy` が
-    // INTERRUPTED で確定し、ここで待機中のワーカーを失敗で戻す。`android_radio_control` の doc 参照）。
-    // Java 側に no-op スタブは置かない（`requestRadioControlSet` を経ないと native は呼ばれない）。
-    #[cfg(feature = "device")]
-    crate::device::android_radio_control::reset_pending_tracking();
     // Issue #1384: `compose_mail_sms::bridge::SLOT` も同様に破棄する（`device::compose_mail_sms::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::compose_mail_sms::reset_pending_tracking();

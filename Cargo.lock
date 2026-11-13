@@ -1698,6 +1698,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-radio-control"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-removable-storage"
 version = "0.2.0"
 dependencies = [
@@ -2079,6 +2093,7 @@ dependencies = [
  "fandhe-cap-pedometer",
  "fandhe-cap-per-app-language",
  "fandhe-cap-power-state",
+ "fandhe-cap-radio-control",
  "fandhe-cap-removable-storage",
  "fandhe-cap-screen-brightness",
  "fandhe-cap-screen-capture",

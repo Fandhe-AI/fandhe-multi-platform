@@ -1,7 +1,7 @@
 //! Windows 向け「無線の状態と切り替え」実装（Issue #973、親 #189）。
 //! `device/radio_control.rs` の dispatch（Windows 経路）からワーカースレッドで呼ばれ、
 //! WinRT `Windows.Devices.Radios.Radio` で Wi-Fi / Bluetooth を読み書きする。契約の SSOT は
-//! `fandhe_device::radio_control`（「OS ごとの写像」節）。
+//! `crate::contract`（「OS ごとの写像」節）。
 //!
 //! # 流れ
 //!
@@ -28,11 +28,9 @@
 //! - ローカルの型検査は `x86_64-pc-windows-gnu` のみ（MSVC は CI）
 
 #[cfg(any(target_os = "windows", test))]
-use fandhe_device::radio_control::{
-    RadioKind, RadioState, SwitchOutcome, DENIED_BY_SYSTEM, FAILED, FEATURE,
-};
+use crate::contract::{DENIED_BY_SYSTEM, FAILED, FEATURE, RadioKind, RadioState, SwitchOutcome};
 #[cfg(any(target_os = "windows", test))]
-use fandhe_device::DeviceError;
+use crate::error::RadioControlError;
 
 /// `E_ACCESSDENIED`。
 #[cfg(any(target_os = "windows", test))]
@@ -65,37 +63,37 @@ fn state_from_raw(found: Option<i32>) -> RadioState {
 
 /// `RadioAccessStatus`（生の値）を結果へ写す。`Allowed` 以外と列挙外は成功にしない。
 #[cfg(any(target_os = "windows", test))]
-fn access_result(raw: i32) -> Result<SwitchOutcome, DeviceError> {
+fn access_result(raw: i32) -> Result<SwitchOutcome, RadioControlError> {
     match raw {
         1 => Ok(SwitchOutcome::Accepted),
-        2 => Err(DeviceError::PermissionDenied(FEATURE)),
-        0 | 3 => Err(DeviceError::Internal(DENIED_BY_SYSTEM)),
-        _ => Err(DeviceError::Internal(FAILED)),
+        2 => Err(RadioControlError::PermissionDenied(FEATURE)),
+        0 | 3 => Err(RadioControlError::Internal(DENIED_BY_SYSTEM)),
+        _ => Err(RadioControlError::Internal(FAILED)),
     }
 }
 
 /// WinRT 呼び出し失敗の HRESULT を契約のエラーへ写す（全呼び出し箇所でここを通す）。
 #[cfg(any(target_os = "windows", test))]
-fn error_from_hresult(code: i32) -> DeviceError {
+fn error_from_hresult(code: i32) -> RadioControlError {
     match code {
-        E_ACCESSDENIED => DeviceError::PermissionDenied(FEATURE),
-        REGDB_E_CLASSNOTREG => DeviceError::Unsupported(FEATURE),
-        _ => DeviceError::Internal(FAILED),
+        E_ACCESSDENIED => RadioControlError::PermissionDenied(FEATURE),
+        REGDB_E_CLASSNOTREG => RadioControlError::Unsupported(FEATURE),
+        _ => RadioControlError::Internal(FAILED),
     }
 }
 
 #[cfg(target_os = "windows")]
 mod imp {
     use std::cell::RefCell;
-    use std::sync::mpsc::{channel, Receiver};
     use std::sync::Arc;
+    use std::sync::mpsc::{Receiver, channel};
 
     use windows::Devices::Radios as win;
     use windows_future::{AsyncOperationCompletedHandler, AsyncStatus, IAsyncOperation};
 
     use super::{access_result, error_from_hresult, kind_raw, state_from_raw};
-    use fandhe_device::radio_control::{RadioControl, RadioKind, RadioState, SwitchOutcome};
-    use fandhe_device::DeviceError;
+    use crate::contract::{RadioControl, RadioKind, RadioState, SwitchOutcome};
+    use crate::error::RadioControlError;
 
     struct WindowsRadioControl;
 
@@ -107,7 +105,7 @@ mod imp {
 
     /// 無線のアクセス許可要求を開始する。UI スレッドから呼ぶこと（`RequestAccessAsync` の要件）。
     /// 待たずに返り、結果（`Allowed` のみ `Ok`）は戻り値のチャネルへ 1 回だけ流れる。
-    pub(crate) fn begin_access() -> Receiver<Result<(), DeviceError>> {
+    pub(crate) fn begin_access() -> Receiver<Result<(), RadioControlError>> {
         let (tx, rx) = channel();
         let started = win::Radio::RequestAccessAsync()
             .map_err(err)
@@ -121,11 +119,11 @@ mod imp {
                             .and_then(|s: win::RadioAccessStatus| access_result(s.0))
                             .map(|_| ()),
                         // エラーは元の HRESULT を取り出して写像する（権限拒否・非対応を FAILED に潰さない）。
-                        (Ok(op), AsyncStatus::Error) => Err(op.GetResults().err().map_or(
-                            DeviceError::Internal(fandhe_device::radio_control::FAILED),
-                            err,
-                        )),
-                        _ => Err(DeviceError::Internal(fandhe_device::radio_control::FAILED)),
+                        (Ok(op), AsyncStatus::Error) => Err(op
+                            .GetResults()
+                            .err()
+                            .map_or(RadioControlError::Internal(crate::contract::FAILED), err)),
+                        _ => Err(RadioControlError::Internal(crate::contract::FAILED)),
                     };
                     let _ = tx.send(result);
                     Ok(())
@@ -144,12 +142,12 @@ mod imp {
         Arc::new(WindowsRadioControl)
     }
 
-    fn err(e: windows::core::Error) -> DeviceError {
+    fn err(e: windows::core::Error) -> RadioControlError {
         error_from_hresult(e.code().0)
     }
 
     /// Kind が一致する先頭の無線。`Kind()` の失敗は飛ばさずエラーにする（`NotPresent` への化け防止）。
-    fn find(kind: RadioKind) -> Result<Option<win::Radio>, DeviceError> {
+    fn find(kind: RadioKind) -> Result<Option<win::Radio>, RadioControlError> {
         let list = win::Radio::GetRadiosAsync()
             .map_err(err)?
             .get()
@@ -163,18 +161,16 @@ mod imp {
     }
 
     impl RadioControl for WindowsRadioControl {
-        fn read(&self, kind: RadioKind) -> Result<RadioState, DeviceError> {
+        fn read(&self, kind: RadioKind) -> Result<RadioState, RadioControlError> {
             match find(kind)? {
                 None => Ok(state_from_raw(None)),
                 Some(r) => Ok(state_from_raw(Some(r.State().map_err(err)?.0))),
             }
         }
 
-        fn set(&self, kind: RadioKind, on: bool) -> Result<SwitchOutcome, DeviceError> {
+        fn set(&self, kind: RadioKind, on: bool) -> Result<SwitchOutcome, RadioControlError> {
             let Some(r) = find(kind)? else {
-                return Err(DeviceError::Unsupported(
-                    fandhe_device::radio_control::FEATURE,
-                ));
+                return Err(RadioControlError::Unsupported(crate::contract::FEATURE));
             };
             let target = if on {
                 win::RadioState::On
@@ -212,19 +208,19 @@ mod tests {
         assert!(matches!(access_result(1), Ok(SwitchOutcome::Accepted)));
         assert!(matches!(
             access_result(2),
-            Err(DeviceError::PermissionDenied(FEATURE))
+            Err(RadioControlError::PermissionDenied(FEATURE))
         ));
         assert!(matches!(
             access_result(0),
-            Err(DeviceError::Internal(DENIED_BY_SYSTEM))
+            Err(RadioControlError::Internal(DENIED_BY_SYSTEM))
         ));
         assert!(matches!(
             access_result(3),
-            Err(DeviceError::Internal(DENIED_BY_SYSTEM))
+            Err(RadioControlError::Internal(DENIED_BY_SYSTEM))
         ));
         assert!(matches!(
             access_result(99),
-            Err(DeviceError::Internal(FAILED))
+            Err(RadioControlError::Internal(FAILED))
         ));
     }
 
@@ -232,19 +228,19 @@ mod tests {
     fn hresult_mapping() {
         assert!(matches!(
             error_from_hresult(E_ACCESSDENIED),
-            DeviceError::PermissionDenied(FEATURE)
+            RadioControlError::PermissionDenied(FEATURE)
         ));
         assert!(matches!(
             error_from_hresult(REGDB_E_CLASSNOTREG),
-            DeviceError::Unsupported(FEATURE)
+            RadioControlError::Unsupported(FEATURE)
         ));
         assert!(matches!(
             error_from_hresult(-1),
-            DeviceError::Internal(FAILED)
+            RadioControlError::Internal(FAILED)
         ));
         assert!(matches!(
             error_from_hresult(0),
-            DeviceError::Internal(FAILED)
+            RadioControlError::Internal(FAILED)
         ));
     }
 

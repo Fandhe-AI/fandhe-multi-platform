@@ -1,14 +1,14 @@
 //! 無線（Wi-Fi・Bluetooth）の状態取得と切り替え（状態を 1 回読む・オン/オフを 1 回要求する）の抽象
 //! （Phase 11 の拡充ループ、対応表 `docs/device/capabilities/radio-control.json`、親 #189、Issue #972）。
 //!
-//! `fandhe-egui-proxy` の `device/radio_control.rs` がワーカースレッドで [`RadioControl::read`] と
+//! `driver` がワーカースレッドで [`RadioControl::read`] と
 //! [`RadioControl::set`] を呼ぶ（ブロッキングの契約）。対象は macOS（#972）・Windows（#973）・
 //! Android（#974）。iOS・Web は対応表で `no`。`network-status`（接続の有無・種別）や `wifi-info`
 //! （SSID・スキャン）とは別で、本機能は無線そのものの on/off。
 //!
 //! # 契約
 //!
-//! - 読み取りの結果は [`RadioState`]、切り替えの結果は [`SwitchOutcome`]、失敗は [`DeviceError`]。
+//! - 読み取りの結果は [`RadioState`]、切り替えの結果は [`SwitchOutcome`]、失敗は [`RadioControlError`]。
 //!   失敗の写像は次のとおり
 //!
 //! | 失敗 | 意味 |
@@ -54,7 +54,7 @@
 //!   [`SwitchOutcome::Applied`]、`RESULT_CANCELED` は [`SwitchOutcome::NotChanged`]。[`RadioState::Disabled`] は返さない（相当する OS 値がない）。
 //!   読み取りの `SecurityException` は `PermissionDenied`
 
-use crate::DeviceError;
+use crate::error::RadioControlError;
 
 /// `Unsupported` / `PermissionDenied` の機能名。
 pub const FEATURE: &str = "radio_control";
@@ -105,21 +105,21 @@ pub enum SwitchOutcome {
 /// 無線の状態取得と切り替えの契約（モジュール doc の「契約」節）。
 pub trait RadioControl: Send + Sync {
     /// 状態を 1 回読む。呼び出し側がワーカースレッドで呼ぶブロッキング呼び出し。
-    fn read(&self, kind: RadioKind) -> Result<RadioState, DeviceError>;
+    fn read(&self, kind: RadioKind) -> Result<RadioState, RadioControlError>;
     /// オン（`true`）/オフ（`false`）を 1 回要求する。呼び出し側がワーカースレッドで呼ぶブロッキング呼び出し。
-    fn set(&self, kind: RadioKind, on: bool) -> Result<SwitchOutcome, DeviceError>;
+    fn set(&self, kind: RadioKind, on: bool) -> Result<SwitchOutcome, RadioControlError>;
 }
 
 /// 対象外 OS・初期化失敗時のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedRadioControl;
 
 impl RadioControl for UnsupportedRadioControl {
-    fn read(&self, _kind: RadioKind) -> Result<RadioState, DeviceError> {
-        Err(DeviceError::Unsupported(FEATURE))
+    fn read(&self, _kind: RadioKind) -> Result<RadioState, RadioControlError> {
+        Err(RadioControlError::Unsupported(FEATURE))
     }
 
-    fn set(&self, _kind: RadioKind, _on: bool) -> Result<SwitchOutcome, DeviceError> {
-        Err(DeviceError::Unsupported(FEATURE))
+    fn set(&self, _kind: RadioKind, _on: bool) -> Result<SwitchOutcome, RadioControlError> {
+        Err(RadioControlError::Unsupported(FEATURE))
     }
 }
 
@@ -132,12 +132,12 @@ mod tests {
         for kind in [RadioKind::Wifi, RadioKind::Bluetooth] {
             assert!(matches!(
                 UnsupportedRadioControl.read(kind),
-                Err(DeviceError::Unsupported(FEATURE))
+                Err(RadioControlError::Unsupported(FEATURE))
             ));
             for on in [true, false] {
                 assert!(matches!(
                     UnsupportedRadioControl.set(kind, on),
-                    Err(DeviceError::Unsupported(FEATURE))
+                    Err(RadioControlError::Unsupported(FEATURE))
                 ));
             }
         }

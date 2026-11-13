@@ -1,10 +1,10 @@
-//! Android 向け「無線の状態と切り替え」実装（Issue #974、親 #189）。`device/radio_control.rs` の
+//! Android 向け「無線の状態と切り替え」実装（Issue #974、親 #189）。`driver` の
 //! Android 経路から [`implementation`] が呼ばれ、Java 側 `RadioControlHelper` を JNI で橋渡しする。
-//! 契約の SSOT は `fandhe_device::radio_control`。
+//! 契約の SSOT は `crate::contract`。
 //!
 //! 流れ:
-//! - 読み取り: `MainActivity.radioControlRead(int) -> int` を同期で呼び、戻り値を [`decode_read`] で写す
-//! - 切り替え: `MainActivity.requestRadioControlSet(long, int, boolean)` で依頼し、Java が
+//! - 読み取り: `RadioControlHelper.read(Activity, int) -> int`（static）を同期で呼び、戻り値を [`decode_read`] で写す
+//! - 切り替え: `RadioControlHelper.set(Activity, long, int, boolean)`（static）で依頼し、Java が
 //!   `nativeOnRadioControlResult(id, code)` で返した値を [`decode_switch`] で写す。ワーカースレッドは
 //!   [`set_with`] で結果を待つ（trait の契約どおり期限は持たない）
 //!
@@ -20,13 +20,13 @@
 //! 失敗で戻す）。守らない範囲: 設定画面での利用者の操作、読み直し時点の切り替わり途中、ダイアログや
 //! 設定画面の待ち時間。id・コード・OS の例外はログに出さない。
 //!
-//! no-op スタブは置かない: Java の native は Rust の `requestRadioControlSet` を経た後でしか呼ばれず、
+//! no-op スタブは置かない: Java の native は Rust の `RadioControlHelper.set` を経た後でしか呼ばれず、
 //! feature `device` 無効ビルドではその経路に到達しない（wallpaper と同じ）。
 
-use fandhe_device::radio_control::{RadioKind, RadioState, SwitchOutcome, FAILED, FEATURE};
-use fandhe_device::DeviceError;
+use crate::contract::{FAILED, FEATURE, RadioKind, RadioState, SwitchOutcome};
+use crate::error::RadioControlError;
 
-use super::request_slot::{RequestSlot, POLL_INTERVAL};
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot};
 
 /// 種類コード（Java 側 `RadioControlHelper.KIND_*` と同値）。
 const KIND_WIFI: i32 = 0;
@@ -56,27 +56,27 @@ fn kind_code(kind: RadioKind) -> i32 {
 }
 
 /// 読み取りの戻り値を契約の状態へ写す。`READ_FAILED` と未知の値は `Internal`（`Off` に畳まない）。
-fn decode_read(code: i32) -> Result<RadioState, DeviceError> {
+fn decode_read(code: i32) -> Result<RadioState, RadioControlError> {
     match code {
         READ_ON => Ok(RadioState::On),
         READ_OFF => Ok(RadioState::Off),
         READ_TRANSITIONING => Ok(RadioState::Transitioning),
         READ_UNKNOWN => Ok(RadioState::Unknown),
         READ_NOT_PRESENT => Ok(RadioState::NotPresent),
-        READ_PERMISSION_DENIED => Err(DeviceError::PermissionDenied(FEATURE)),
-        _ => Err(DeviceError::Internal(FAILED)),
+        READ_PERMISSION_DENIED => Err(RadioControlError::PermissionDenied(FEATURE)),
+        _ => Err(RadioControlError::Internal(FAILED)),
     }
 }
 
 /// 切り替えの結果コードを契約の結果へ写す。中断・失敗・未知のコードは `Internal`（嘘の成功にしない）。
-fn decode_switch(code: i32) -> Result<SwitchOutcome, DeviceError> {
+fn decode_switch(code: i32) -> Result<SwitchOutcome, RadioControlError> {
     match code {
         SET_APPLIED => Ok(SwitchOutcome::Applied),
         SET_OPENED => Ok(SwitchOutcome::Opened),
         SET_NOT_CHANGED => Ok(SwitchOutcome::NotChanged),
-        SET_UNSUPPORTED => Err(DeviceError::Unsupported(FEATURE)),
-        SET_PERMISSION_DENIED => Err(DeviceError::PermissionDenied(FEATURE)),
-        _ => Err(DeviceError::Internal(FAILED)),
+        SET_UNSUPPORTED => Err(RadioControlError::Unsupported(FEATURE)),
+        SET_PERMISSION_DENIED => Err(RadioControlError::PermissionDenied(FEATURE)),
+        _ => Err(RadioControlError::Internal(FAILED)),
     }
 }
 
@@ -86,11 +86,11 @@ fn decode_switch(code: i32) -> Result<SwitchOutcome, DeviceError> {
 fn set_with(
     slot: &RequestSlot<i32>,
     start: impl FnOnce(u64) -> bool,
-) -> Result<SwitchOutcome, DeviceError> {
+) -> Result<SwitchOutcome, RadioControlError> {
     let id = slot.begin();
     if !start(id) {
         slot.clear(id);
-        return Err(DeviceError::Internal(FAILED));
+        return Err(RadioControlError::Internal(FAILED));
     }
     loop {
         match slot.snapshot() {
@@ -99,7 +99,7 @@ fn set_with(
                 return decode_switch(code);
             }
             Some((cur, None)) if cur == id => std::thread::sleep(POLL_INTERVAL),
-            _ => return Err(DeviceError::Internal(FAILED)),
+            _ => return Err(RadioControlError::Internal(FAILED)),
         }
     }
 }
@@ -107,7 +107,7 @@ fn set_with(
 #[cfg(target_os = "android")]
 static SLOT: RequestSlot<i32> = RequestSlot::new();
 
-/// Activity 再生成直後に `android::reset_pending_tracking` から呼ぶ。保留中の要求を捨て、
+/// Activity 再生成直後に gallery の `android_main` から（`driver::reset_pending_tracking` 経由で）呼ぶ。保留中の要求を捨て、
 /// 待機中のワーカーを失敗で戻し、旧要求の遅延完了を id 不一致で無視させる。
 #[cfg(target_os = "android")]
 pub(crate) fn reset_pending_tracking() {
@@ -119,42 +119,41 @@ pub(crate) fn reset_pending_tracking() {
 struct AndroidRadioControl;
 
 #[cfg(target_os = "android")]
-impl fandhe_device::radio_control::RadioControl for AndroidRadioControl {
-    fn read(&self, kind: RadioKind) -> Result<RadioState, DeviceError> {
-        let code = call_read(kind_code(kind)).ok_or(DeviceError::Internal(FAILED))?;
+impl crate::contract::RadioControl for AndroidRadioControl {
+    fn read(&self, kind: RadioKind) -> Result<RadioState, RadioControlError> {
+        let code = call_read(kind_code(kind)).ok_or(RadioControlError::Internal(FAILED))?;
         decode_read(code)
     }
 
-    fn set(&self, kind: RadioKind, on: bool) -> Result<SwitchOutcome, DeviceError> {
+    fn set(&self, kind: RadioKind, on: bool) -> Result<SwitchOutcome, RadioControlError> {
         set_with(&SLOT, |id| call_set(id, kind_code(kind), on))
     }
 }
 
-/// Android の実装を返す。`device/radio_control.rs` の dispatch は android の cfg 内でだけ呼ぶ。
+/// Android の実装を返す。`driver` の dispatch は android の cfg 内でだけ呼ぶ。
 #[cfg(target_os = "android")]
-pub(crate) fn implementation() -> std::sync::Arc<dyn fandhe_device::radio_control::RadioControl> {
+pub(crate) fn implementation() -> std::sync::Arc<dyn crate::contract::RadioControl> {
     std::sync::Arc::new(AndroidRadioControl)
 }
 
-/// `MainActivity.radioControlRead(int) -> int` を同期で呼ぶ。Activity 未確立・JNI 失敗は `None`。
-/// `unsafe` 2 箇所は `android_accessibility_prefs.rs::call_read` と同一の根拠。
+/// `RadioControlHelper.read(Activity, int) -> int`（static）を同期で呼ぶ。Activity 未確立・JNI 失敗は `None`。
+/// クラスは Activity の class loader で解決する（`fandhe_platform_android::with_activity_class`）。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_read(kind: i32) -> Option<i32> {
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(
-        |env: &mut jni::Env| -> Result<i32, super::android::JniCallFailed> {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-            let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-            let value = env.call_method(
-                &activity,
-                jni::jni_str!("radioControlRead"),
-                jni::jni_sig!((int) -> int),
-                &[jni::objects::JValue::Int(kind)],
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    let app = android_app()?;
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.RadioControlHelper"),
+        |env, activity, class| -> Result<i32, JniCallFailed> {
+            let value = env.call_static_method(
+                class,
+                jni::jni_str!("read"),
+                jni::jni_sig!((android.app.Activity, int) -> int),
+                &[
+                    jni::objects::JValue::Object(activity),
+                    jni::objects::JValue::Int(kind),
+                ],
             )?;
             Ok(value.i()?)
         },
@@ -162,26 +161,24 @@ fn call_read(kind: i32) -> Option<i32> {
     .ok()
 }
 
-/// `MainActivity.requestRadioControlSet(long, int, boolean)` を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `call_read` と同一の根拠。
+/// `RadioControlHelper.set(Activity, long, int, boolean)`（static）を JNI で呼ぶ。`false` は呼び出し失敗。
+/// Helper が無い（生成前・破棄後）場合は Java 側が結果を FAILED で確定する（結果が来ないまま待たせない）。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_set(id: u64, kind: i32, on: bool) -> bool {
-    let Some(app) = crate::android::android_app() else {
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    let Some(app) = android_app() else {
         return false;
     };
-    // SAFETY: `call_read` と同一の根拠。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(
-        |env: &mut jni::Env| -> Result<(), super::android::JniCallFailed> {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: `call_read` と同一の根拠。
-            let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-            env.call_method(
-                &activity,
-                jni::jni_str!("requestRadioControlSet"),
-                jni::jni_sig!((long, int, boolean) -> ()),
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.RadioControlHelper"),
+        |env, activity, class| -> Result<(), JniCallFailed> {
+            env.call_static_method(
+                class,
+                jni::jni_str!("set"),
+                jni::jni_sig!((android.app.Activity, long, int, boolean) -> ()),
                 &[
+                    jni::objects::JValue::Object(activity),
                     jni::objects::JValue::Long(id as jni::sys::jlong),
                     jni::objects::JValue::Int(kind),
                     jni::objects::JValue::Bool(on),
@@ -203,7 +200,7 @@ fn call_set(id: u64, kind: i32, on: bool) -> bool {
 /// ため他シンボルと衝突しない（既存の JNI エクスポートと同じ根拠）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_RadioControlHelper_nativeOnRadioControlResult<
     'caller,
 >(
@@ -219,8 +216,8 @@ extern "system" fn Java_com_fandhe_platform_RadioControlHelper_nativeOnRadioCont
 mod tests {
     use super::*;
 
-    fn is_failed<T>(r: &Result<T, DeviceError>) -> bool {
-        matches!(r, Err(DeviceError::Internal(m)) if *m == FAILED)
+    fn is_failed<T>(r: &Result<T, RadioControlError>) -> bool {
+        matches!(r, Err(RadioControlError::Internal(m)) if *m == FAILED)
     }
 
     #[test]
@@ -238,7 +235,7 @@ mod tests {
         assert!(matches!(decode_read(4), Ok(RadioState::NotPresent)));
         assert!(matches!(
             decode_read(5),
-            Err(DeviceError::PermissionDenied(_))
+            Err(RadioControlError::PermissionDenied(_))
         ));
         for code in [6, 7, 99, -1] {
             assert!(is_failed(&decode_read(code)), "code {code}");
@@ -251,10 +248,13 @@ mod tests {
         assert!(matches!(decode_switch(1), Ok(SwitchOutcome::Opened)));
         // RESULT_CANCELED は失敗にしない（三値）。
         assert!(matches!(decode_switch(2), Ok(SwitchOutcome::NotChanged)));
-        assert!(matches!(decode_switch(3), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(
+            decode_switch(3),
+            Err(RadioControlError::Unsupported(_))
+        ));
         assert!(matches!(
             decode_switch(4),
-            Err(DeviceError::PermissionDenied(_))
+            Err(RadioControlError::PermissionDenied(_))
         ));
         for code in [5, 6, 7, 99, -1] {
             assert!(is_failed(&decode_switch(code)), "code {code}");

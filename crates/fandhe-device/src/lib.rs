@@ -135,8 +135,6 @@ pub mod picture_in_picture;
 pub mod print;
 /// Phase 11（端末機能の拡充ループ、親 #139、Issue #719）: クイック設定タイル・コントロール（押された回数の読み出し）。
 pub mod quick_settings_tile;
-/// Phase 11 の拡充ループ（親 #189、Issue #972）: 無線（Wi-Fi・Bluetooth）の状態取得と切り替え。
-pub mod radio_control;
 /// Phase 11（端末機能の拡充ループ、親 #193、Issue #988）: OS の「最近使った項目」への登録と読み戻し。
 pub mod recent_documents;
 /// Phase 11（端末機能の拡充ループ、親 #105、Issue #444）: セーフエリア・ディスプレイ切り欠き。

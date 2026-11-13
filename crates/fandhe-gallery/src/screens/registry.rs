@@ -499,7 +499,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "radio_control_show" => fandhe_core::screens::radio_control_show::current_screen,
-    fandhe_egui_proxy::device::radio_control::radio_control_show_effect,
+    fandhe_cap_radio_control::radio_control_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ml_infer" => fandhe_core::screens::ml_infer::current_screen,

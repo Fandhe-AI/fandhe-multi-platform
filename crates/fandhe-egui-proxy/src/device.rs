@@ -208,11 +208,6 @@ pub mod android_print;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_quick_settings_tile;
-/// Issue #974（骨格は #972）: Android 向け「無線の状態と切り替え」実装（`RadioControlHelper` 経由の JNI）。
-/// `device/radio_control.rs` の Android 経路から呼ばれる。純関数をホストで試すため `any(android, test)`。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_radio_control;
 /// Issue #446: Android 向けセーフエリア実装（既存の insets リスナーの値を pull で読む）。
 /// `device/safe_area_insets.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -766,12 +761,6 @@ pub mod macos_pen_stylus;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_print;
-/// Issue #972: macOS 向け「無線の状態と切り替え」実装（`macos/fandhe_macos_radio_control.m` の CoreWLAN と
-/// IOBluetooth を呼ぶ C ABI ラッパー）。`device/radio_control.rs` の macOS 経路から呼ばれる。写像の純関数を
-/// ホストでテストするため test でも載せる。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_radio_control;
 /// Issue #988: macOS 向け「最近使った項目」実装（`macos/fandhe_macos_recent_documents.m` の
 /// `NSDocumentController` を呼ぶ C ABI ラッパー）。`device/recent_documents.rs` の macos 経路から呼ばれる。
 /// 結果コードの写像をホストテストするため test でもコンパイルする。
@@ -865,9 +854,6 @@ pub mod print;
 /// Phase 11 の拡充ループ（親 #139、Issue #719）: クイック設定タイル・コントロールの effect ドライバ
 /// （macOS は App Group の回数ファイル、Android は SharedPreferences の回数、他 OS は `UnsupportedQuickSettingsTile` 固定）。
 pub mod quick_settings_tile;
-/// Phase 11 の拡充ループ（親 #189、Issue #972）: 無線（Wi-Fi・Bluetooth）の状態取得と切り替えの effect ドライバ
-/// （macOS 実装、Windows は #973・Android は #974 が埋めるスタブ。他 OS は `UnsupportedRadioControl` 固定）。
-pub mod radio_control;
 /// Phase 11 の拡充ループ（親 #193、Issue #988）: 「最近使った項目」への登録と読み戻しの effect ドライバ
 /// （macOS・Windows 実装。他 OS は `UnsupportedRecentDocuments` 固定）。
 pub mod recent_documents;
@@ -1087,11 +1073,6 @@ pub mod windows_photo_library;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_print;
-/// Issue #973: Windows 向け「無線の状態と切り替え」の実装（`Windows.Devices.Radios`）。
-/// `device/radio_control.rs` の Windows 経路から呼ばれる。純関数の単体テストを host で回すため `any(windows, test)`。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_radio_control;
 /// Issue #989: Windows 向け「最近使った項目」の実装（骨格は #988）。
 /// `device/recent_documents.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
 #[cfg(any(target_os = "windows", test))]

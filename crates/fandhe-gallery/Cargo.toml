@@ -37,8 +37,8 @@ device = [
   "dep:fandhe-cap-drag-drop",
   "dep:fandhe-cap-dynamic-type",
   "dep:fandhe-cap-external-app-launch",
-  "dep:fandhe-cap-file-preview",
   "dep:fandhe-cap-eye-dropper",
+  "dep:fandhe-cap-file-preview",
   "dep:fandhe-cap-file-watch",
   "dep:fandhe-cap-focus-mode-status",
   "dep:fandhe-cap-gamepad",
@@ -67,6 +67,7 @@ device = [
   "dep:fandhe-cap-pedometer",
   "dep:fandhe-cap-per-app-language",
   "dep:fandhe-cap-power-state",
+  "dep:fandhe-cap-radio-control",
   "dep:fandhe-cap-removable-storage",
   "dep:fandhe-cap-screen-brightness",
   "dep:fandhe-cap-screen-capture",
@@ -84,8 +85,8 @@ device = [
   "dep:fandhe-cap-usb-device",
   "dep:fandhe-cap-user-idle",
   "dep:fandhe-cap-uwb-ranging",
-  "dep:fandhe-cap-wallpaper-set",
   "dep:fandhe-cap-volume-control",
+  "dep:fandhe-cap-wallpaper-set",
   "dep:fandhe-cap-wifi-connect",
   # END fandhe-cap
 ]
@@ -162,8 +163,8 @@ fandhe-cap-document-scan = { path = "../fandhe-cap-document-scan", optional = tr
 fandhe-cap-drag-drop = { path = "../fandhe-cap-drag-drop", optional = true }
 fandhe-cap-dynamic-type = { path = "../fandhe-cap-dynamic-type", optional = true }
 fandhe-cap-external-app-launch = { path = "../fandhe-cap-external-app-launch", optional = true }
-fandhe-cap-file-preview = { path = "../fandhe-cap-file-preview", optional = true }
 fandhe-cap-eye-dropper = { path = "../fandhe-cap-eye-dropper", optional = true }
+fandhe-cap-file-preview = { path = "../fandhe-cap-file-preview", optional = true }
 fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch", optional = true }
 fandhe-cap-focus-mode-status = { path = "../fandhe-cap-focus-mode-status", optional = true }
 fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad", optional = true }
@@ -192,6 +193,7 @@ fandhe-cap-pdf-viewer = { path = "../fandhe-cap-pdf-viewer", optional = true }
 fandhe-cap-pedometer = { path = "../fandhe-cap-pedometer", optional = true }
 fandhe-cap-per-app-language = { path = "../fandhe-cap-per-app-language", optional = true }
 fandhe-cap-power-state = { path = "../fandhe-cap-power-state", optional = true }
+fandhe-cap-radio-control = { path = "../fandhe-cap-radio-control", optional = true }
 fandhe-cap-removable-storage = { path = "../fandhe-cap-removable-storage", optional = true }
 fandhe-cap-screen-brightness = { path = "../fandhe-cap-screen-brightness", optional = true }
 fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture", optional = true }
@@ -209,8 +211,8 @@ fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }
 fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device", optional = true }
 fandhe-cap-user-idle = { path = "../fandhe-cap-user-idle", optional = true }
 fandhe-cap-uwb-ranging = { path = "../fandhe-cap-uwb-ranging", optional = true }
-fandhe-cap-wallpaper-set = { path = "../fandhe-cap-wallpaper-set", optional = true }
 fandhe-cap-volume-control = { path = "../fandhe-cap-volume-control", optional = true }
+fandhe-cap-wallpaper-set = { path = "../fandhe-cap-wallpaper-set", optional = true }
 fandhe-cap-wifi-connect = { path = "../fandhe-cap-wifi-connect", optional = true }
 # END fandhe-cap
 

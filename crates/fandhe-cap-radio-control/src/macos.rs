@@ -3,7 +3,7 @@
 //! IOBluetooth の `IOBluetoothHostController.powerState`。`build.rs` が macOS 分岐で feature `device`
 //! 有効時にコンパイルする）を `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ
 //! `// SAFETY:` で契約を明記する。`device/radio_control.rs` の macOS 経路からワーカースレッドで呼ばれ、
-//! 契約は `fandhe_device::radio_control`。
+//! 契約は `crate::contract`。
 //!
 //! Bluetooth の切り替えに公開 API はない（`IOBluetoothPreferenceSetControllerPowerState` は非公開のため
 //! 使わない）。`set(Bluetooth, _)` は FFI を呼ばず `Unsupported` を返す。
@@ -27,28 +27,28 @@
 #[cfg(target_os = "macos")]
 use std::sync::Arc;
 
+use crate::contract::{FAILED, FEATURE, RadioState, SwitchOutcome};
 #[cfg(target_os = "macos")]
-use fandhe_device::radio_control::{RadioControl, RadioKind};
-use fandhe_device::radio_control::{RadioState, SwitchOutcome, FAILED, FEATURE};
-use fandhe_device::DeviceError;
+use crate::contract::{RadioControl, RadioKind};
+use crate::error::RadioControlError;
 
 /// 状態読み取りの戻りコードを契約の結果へ写す。未知の値は `Internal`（`Off` へ畳まない）。
-fn decode_read(rc: i32) -> Result<RadioState, DeviceError> {
+fn decode_read(rc: i32) -> Result<RadioState, RadioControlError> {
     match rc {
         0 => Ok(RadioState::On),
         1 => Ok(RadioState::Off),
         2 => Ok(RadioState::NotPresent),
         3 => Ok(RadioState::Unknown),
-        _ => Err(DeviceError::Internal(FAILED)),
+        _ => Err(RadioControlError::Internal(FAILED)),
     }
 }
 
 /// Wi-Fi 切り替えの戻りコードを契約の結果へ写す。未知の値は `Internal`（成功へ畳まない）。
-fn decode_set(rc: i32) -> Result<SwitchOutcome, DeviceError> {
+fn decode_set(rc: i32) -> Result<SwitchOutcome, RadioControlError> {
     match rc {
         0 => Ok(SwitchOutcome::Applied),
-        1 => Err(DeviceError::Unsupported(FEATURE)),
-        _ => Err(DeviceError::Internal(FAILED)),
+        1 => Err(RadioControlError::Unsupported(FEATURE)),
+        _ => Err(RadioControlError::Internal(FAILED)),
     }
 }
 
@@ -57,7 +57,7 @@ mod ffi {
     // SAFETY: `macos/fandhe_macos_radio_control.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_radio_read(kind: i32) -> i32;
         fn fandhe_macos_radio_wifi_set(on: i32) -> i32;
     }
@@ -82,7 +82,7 @@ struct MacRadioControl;
 
 #[cfg(target_os = "macos")]
 impl RadioControl for MacRadioControl {
-    fn read(&self, kind: RadioKind) -> Result<RadioState, DeviceError> {
+    fn read(&self, kind: RadioKind) -> Result<RadioState, RadioControlError> {
         let kind = match kind {
             RadioKind::Wifi => 0,
             RadioKind::Bluetooth => 1,
@@ -90,11 +90,11 @@ impl RadioControl for MacRadioControl {
         decode_read(ffi::read(kind))
     }
 
-    fn set(&self, kind: RadioKind, on: bool) -> Result<SwitchOutcome, DeviceError> {
+    fn set(&self, kind: RadioKind, on: bool) -> Result<SwitchOutcome, RadioControlError> {
         match kind {
             RadioKind::Wifi => decode_set(ffi::wifi_set(on)),
             // 公開 API がないため OS を呼ばない。
-            RadioKind::Bluetooth => Err(DeviceError::Unsupported(FEATURE)),
+            RadioKind::Bluetooth => Err(RadioControlError::Unsupported(FEATURE)),
         }
     }
 }
@@ -118,7 +118,7 @@ mod tests {
         for rc in [-1, 4, 5, 6, 99, i32::MIN] {
             assert!(matches!(
                 decode_read(rc),
-                Err(DeviceError::Internal(FAILED))
+                Err(RadioControlError::Internal(FAILED))
             ));
         }
     }
@@ -126,10 +126,16 @@ mod tests {
     #[test]
     fn set_codes_map_and_unknown_is_internal() {
         assert!(matches!(decode_set(0), Ok(SwitchOutcome::Applied)));
-        assert!(matches!(decode_set(1), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(
+            decode_set(1),
+            Err(RadioControlError::Unsupported(_))
+        ));
         // 5 は管理者パスワードの取り消しを含む失敗。
         for rc in [-1, 2, 4, 5, 6, 99, i32::MIN] {
-            assert!(matches!(decode_set(rc), Err(DeviceError::Internal(FAILED))));
+            assert!(matches!(
+                decode_set(rc),
+                Err(RadioControlError::Internal(FAILED))
+            ));
         }
     }
 }
