@@ -122,8 +122,11 @@ measure_aab_download_size() {
     exit 1
   fi
 
-  local work sizes
-  work="$(mktemp -d)"
+  local sizes
+  # 中断・予期しない終了でも大きな .apks を残さない（EXIT trap で参照するためグローバル変数）
+  AAB_WORK="$(mktemp -d)"
+  trap 'rm -rf "${AAB_WORK}"' EXIT INT TERM
+  local work="${AAB_WORK}"
   if ! "${JAVA_HOME}/bin/java" -jar "${BUNDLETOOL_JAR}" build-apks \
     --bundle="${target}" --output="${work}/app.apks" >/dev/null; then
     rm -rf "${work}"
@@ -138,9 +141,9 @@ measure_aab_download_size() {
   fi
   rm -rf "${work}"
 
-  # 行形式: ABI,MIN,MAX。数字の行だけ受け取り、最大の MAX を返す。
+  # 行形式: "ABI","MIN","MAX"（二重引用符付き CSV）。数字の行だけ受け取り、最大の MAX を返す。
   local rows max
-  rows="$(printf '%s\n' "${sizes}" | awk -F, 'NF >= 3 && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ { print $1 "\t" $2 "\t" $3 }')"
+  rows="$(printf '%s\n' "${sizes}" | awk -F, '{ gsub(/"/, "") } NF >= 3 && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ { print $1 "\t" $2 "\t" $3 }')"
   if [ -z "${rows}" ]; then
     echo "エラー: get-size の結果から ABI ごとのサイズを読めませんでした: ${target}" >&2
     exit 1

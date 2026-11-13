@@ -48,15 +48,15 @@ head -c 100 /dev/zero >"${so}"
 run() { FANDHE_ANDROID_ROOT="${root}" bash "${target_script}" "$@" 2>&1; }
 
 # 20 MiB = 20971520
-out="$(FAKE_SIZES='ABI,MIN,MAX\narm64-v8a,1000,20971520\nx86_64,1000,2000\n' run "${aab}")"
+out="$(FAKE_SIZES='"ABI","MIN","MAX"\n"arm64-v8a","1000","20971520"\n"x86_64","1000","2000"\n' run "${aab}")"
 assert_contains "MAX が 20MiB ちょうどで判定 OK" "${out}" '判定 OK.*配信サイズ'
 assert_contains "CSV にファイルサイズが残る" "${out}" "^${aab},100,"
 
-out="$(FAKE_SIZES='ABI,MIN,MAX\narm64-v8a,1000,2000\nx86_64,1000,20971521\n' run "${aab}")"
+out="$(FAKE_SIZES='"ABI","MIN","MAX"\n"arm64-v8a","1000","2000"\n"x86_64","1000","20971521"\n' run "${aab}")"
 assert_contains "どれか 1 ABI が超過で判定 NG" "${out}" '判定 NG'
 
 rc=0
-out="$(FAKE_SIZES='ABI,MIN,MAX\n' run "${aab}")" || rc=$?
+out="$(FAKE_SIZES='"ABI","MIN","MAX"\n' run "${aab}")" || rc=$?
 if [ "${rc}" -ne 0 ]; then ok "get-size が空なら非 0"; else ng "get-size が空なのに成功"; fi
 assert_not_contains "空結果で判定を出さない" "${out}" '判定 (OK|NG)'
 
@@ -66,7 +66,7 @@ if [ "${rc}" -ne 0 ]; then ok "build-apks 失敗で非 0"; else ng "build-apks �
 
 rm "${root}/bundletool/${BUNDLETOOL_JAR_NAME}"
 rc=0
-out="$(FAKE_SIZES='ABI,MIN,MAX\na,1,2\n' run "${aab}")" || rc=$?
+out="$(FAKE_SIZES='"ABI","MIN","MAX"\n"a","1","2"\n' run "${aab}")" || rc=$?
 if [ "${rc}" -ne 0 ]; then ok "jar 欠落で非 0"; else ng "jar 欠落なのに成功"; fi
 assert_not_contains "jar 欠落でファイルサイズ判定へ倒れない" "${out}" '判定 (OK|NG)'
 
