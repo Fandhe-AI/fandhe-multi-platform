@@ -4,7 +4,7 @@
 //! effect として駆動する。呼び出し元は `demo.rs` のエントリポイントと、破棄時の解放を担う
 //! `mount::release_features`。`fandhe-device` の `AppLifecycle` trait は経由しない
 //! （`OnSignal` / `SubscriptionGuard` が `Send + Sync` を要し、`Closure` を持てないため。
-//! 他の Web モジュールと同じ扱い）。結果の契約は trait doc に従い、`fandhe_device::app_lifecycle` から
+//! 他の Web モジュールと同じ扱い）。結果の契約は trait doc に従い、`fandhe_cap_app_lifecycle` から
 //! 使い回すのは `EventLog` と `LifecycleEvent` だけ。
 //!
 //! # 方式
@@ -33,10 +33,10 @@
 //!
 //! 例外・ブラウザの値は console にも DOM にも出さない（security.md A09）。
 
+use fandhe_cap_app_lifecycle::LifecycleEvent;
 use fandhe_core::screens::app_lifecycle_show::{
     ActiveView, CurrentView, EventKind, SupportView, VisibleView,
 };
-use fandhe_device::app_lifecycle::LifecycleEvent;
 
 /// 出来事を取れる環境か（DOM の有無と freeze の有無）から対応表示を作る。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -126,11 +126,11 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_app_lifecycle::EventLog;
     use fandhe_core::screens::app_lifecycle_show::{
         apply_init, apply_snapshot, finish_start, status_text, take_init, take_start,
         AppLifecycleShowState, CurrentView, EventKind, Phase, StartFailure,
     };
-    use fandhe_device::app_lifecycle::EventLog;
     use js_sys::Reflect;
     use wasm_bindgen::prelude::*;
 
@@ -445,7 +445,7 @@ mod tests {
 
     #[test]
     fn kind_covers_all_events() {
-        for (i, e) in fandhe_device::app_lifecycle::ALL_EVENTS.iter().enumerate() {
+        for (i, e) in fandhe_cap_app_lifecycle::ALL_EVENTS.iter().enumerate() {
             assert_eq!(kind_from_device(*e).index(), i);
         }
     }

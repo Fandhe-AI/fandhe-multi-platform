@@ -173,9 +173,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // 旧要求の遅延完了を id 不一致で無視させる（`device::photo_save::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::photo_save::reset_pending_tracking();
-    // Issue #970: `wallpaper::bridge::SLOT` も同様に破棄する（#971 が触らずに済むよう本 PR で置く）。
-    #[cfg(feature = "device")]
-    crate::device::wallpaper::reset_pending_tracking();
     // Issue #974: `radio_control` の保留中の切り替え要求も同様に破棄する（Java 側 `onDestroy` が
     // INTERRUPTED で確定し、ここで待機中のワーカーを失敗で戻す。`android_radio_control` の doc 参照）。
     // Java 側に no-op スタブは置かない（`requestRadioControlSet` を経ないと native は呼ばれない）。
@@ -184,12 +181,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Issue #1384: `compose_mail_sms::bridge::SLOT` も同様に破棄する（`device::compose_mail_sms::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::compose_mail_sms::reset_pending_tracking();
-    // Issue #798: `open_system_settings::bridge::SLOT` も同様に破棄する（Activity 再生成で保留中の要求を復元しない）。
-    #[cfg(feature = "device")]
-    crate::device::open_system_settings::reset_pending_tracking();
-    // Issue #861: `external_app_launch::bridge::SLOT` も同様に破棄する（Activity 再生成で保留中の要求を復元しない）。
-    #[cfg(feature = "device")]
-    crate::device::external_app_launch::reset_pending_tracking();
     // Issue #534: `web_auth_session::bridge` の `ACTIVE`（デモサーバー）と `SLOT` も同様に破棄する。
     // 残ると次の要求が開けなくなる（`device::android_web_auth_session::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -205,10 +196,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // セッションを止めて `ACTIVE` を解放する（`device::camera_preview_stream::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::camera_preview_stream::reset_pending_tracking();
-    // Issue #840: 音声セッションも同様。画面状態が generation 0 に戻るため、処理済み世代を捨て、
-    // 握っているセッションを解放する（`device::audio_session::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::audio_session::reset_pending_tracking();
     // Issue #821: 動画の撮影も同様。画面状態が generation 0 に戻るため、保留中の要求を破棄し、
     // 旧要求の遅延完了を id 不一致で捨てさせる（`device::video_capture::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -255,10 +242,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device::video_transcode::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::video_transcode::reset_pending_tracking();
-    // Issue #917: ファイル・動画のプレビューとサムネイルの処理済み世代も破棄する（理由は ml_inference と同じ。
-    // `device::file_preview::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::file_preview::reset_pending_tracking();
     // Issue #1123: Android の BLE 周辺機器役の通知先も破棄する（`android_ble_peripheral` の doc 参照）。
     #[cfg(feature = "device")]
     crate::device::android_ble_peripheral::reset_pending_tracking();

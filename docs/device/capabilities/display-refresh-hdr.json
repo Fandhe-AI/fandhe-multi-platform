@@ -19,7 +19,7 @@
       "note": "実装済み（#871）。配備の下限 17.0 なら `potentialEDRHeadroom` は常に使える。今の Hz は `CADisplayLink` を回して毎フレーム観測しないと取れないため、推定せず「この OS では取れない」。`currentEDRHeadroom` は EDR を描いている間だけ 1 を超えるので HDR の判定に使わない。`displayGamut` が `.unspecified` のときは広色域も取れない。窓の画面は `window.windowScene.screen`。",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#868）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_display_refresh_hdr.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_display_refresh_hdr.m + crates/fandhe-egui-proxy/src/device/display_refresh_hdr.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #871"
+      "impl": "crates/fandhe-cap-display-refresh-hdr/src/ios.rs + crates/fandhe-cap-display-refresh-hdr/ios/fandhe_ios_display_refresh_hdr.m + crates/fandhe-cap-display-refresh-hdr/src/driver.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-cap-display-refresh-hdr/src/contract.rs、Issue #871"
     },
     "android": {
       "status": "done",
@@ -33,7 +33,7 @@
       "note": "実装済み（#872）。minSdk 24 のため API 24・25 の広色域は「この OS（版）では取れない」。`getHdrCapabilities()` は API 34 で非推奨だが動く。窓の画面は `getWindowManager().getDefaultDisplay()`（`Activity.getDisplay()` は API 30+ のため使わない）。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#868）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/DisplayRefreshHdrHelper.java + crates/fandhe-egui-proxy/src/device/android_display_refresh_hdr.rs + crates/fandhe-egui-proxy/src/device/display_refresh_hdr.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #872"
+      "impl": "crates/fandhe-cap-display-refresh-hdr/android/java/com/fandhe/platform/DisplayRefreshHdrHelper.java + crates/fandhe-cap-display-refresh-hdr/src/android.rs + crates/fandhe-cap-display-refresh-hdr/src/driver.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-cap-display-refresh-hdr/src/contract.rs、Issue #872"
     },
     "macos": {
       "status": "done",
@@ -48,7 +48,7 @@
       "note": "実装済み（#870）。`maximumFramesPerSecond` は 12.0+ で、実行体の下限 11.0 では取れない。`CGDisplayModeGetRefreshRate` は 0 を返す画面があり、0 は「取れない」。`maximumExtendedDynamicRangeColorComponentValue` は EDR を描いている間だけ 1 を超えるので使わない。`CGDirectDisplayID` は `screen.deviceDescription[@\"NSScreenNumber\"]`。",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#868）",
-      "impl": "crates/fandhe-egui-proxy/src/device/macos_display_refresh_hdr.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_display_refresh_hdr.m + crates/fandhe-egui-proxy/src/device/display_refresh_hdr.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #870"
+      "impl": "crates/fandhe-cap-display-refresh-hdr/src/macos.rs + crates/fandhe-cap-display-refresh-hdr/macos/fandhe_macos_display_refresh_hdr.m + crates/fandhe-cap-display-refresh-hdr/src/driver.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-cap-display-refresh-hdr/src/contract.rs、Issue #870"
     },
     "windows": {
       "status": "done",
@@ -62,7 +62,7 @@
       "note": "実装済み（#870）。HDR はオンのときだけ「対応」と分かる。オフと非対応は DXGI が区別できない（どちらも `G22_NONE_P709`）ため「取れない」。広色域も DXGI で区別できない（SDR の広色域も `G22` で返る）ため「取れない」。`DisplayInformation.GetAdvancedColorInfo` は CoreWindow の無いデスクトップアプリでは使えないので使わない。`dmDisplayFrequency` の 0・1 は「取れない」。窓の画面は `MonitorFromWindow` で決め、DXGI は毎回作り直した factory の全出力から `DXGI_OUTPUT_DESC1.Monitor` が一致するものを探す。windows クレートの features 追加なし。",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#868）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_display_refresh_hdr.rs + crates/fandhe-egui-proxy/src/device/display_refresh_hdr.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #870"
+      "impl": "crates/fandhe-cap-display-refresh-hdr/src/windows.rs + crates/fandhe-cap-display-refresh-hdr/src/driver.rs + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-cap-display-refresh-hdr/src/contract.rs、Issue #870"
     },
     "web": {
       "status": "done",
@@ -76,7 +76,7 @@
       "note": "実装済み（#873）。今の Hz・最大 Hz とも常に「この OS では取れない」（`requestAnimationFrame` の間隔からの推定は推測なのでやらない）。両クエリが偽・`not all` は「取れない」。`match_media` の例外は固定文言の失敗、`window` なしは非対応、HDR と広色域の両方が取れなければ失敗。守らない範囲: `change` の追従、ブラウザと出力機器の組による意味の差、複数タブ、wasm canvas 経路。",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#868）",
-      "impl": "crates/fandhe-web-dom/src/display_refresh_hdr.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-device/src/display_refresh_hdr.rs、Issue #873"
+      "impl": "crates/fandhe-web-dom/src/display_refresh_hdr.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/display_refresh_hdr_show.rs + crates/fandhe-cap-display-refresh-hdr/src/contract.rs、Issue #873"
     }
   },
   "note": "multi-display は画面ごとの寸法・枚数、これはアプリの窓がある画面 1 枚の表示能力（今と最大のリフレッシュレート・HDR・広色域）の取得。範囲は読むだけ: 画面で「画面の表示能力を読む」を押すたびに OS から 1 回読む（定期 pull・変化通知はしない）。リフレッシュレートの変更要求と HDR・広色域での描画（swap chain の色空間・EDR）は描画パイプラインに触るため範囲外。HDR は数値を出さず「はい・いいえ」のみ（OS ごとに単位と意味が違う）。結果の種別は、読めた（項目ごとに値か「取れない」。0・負・非有限の Hz と 1.0 以下の headroom は番兵として値にせず、Hz は「取れない」、HDR は「いいえ」。検証は丸めの前）・非対応（`Unsupported`）・失敗（`Internal`。OS 呼び出しの失敗・窓が無い・全項目が取れない）。OS を正にする方針で、毎回 OS から読み直し、前回値やアプリ内の記憶を出さない。読み取り中の再押下と古い世代の完了は捨てる。個体識別子（EDID・DeviceName のパス）は読まず出さない。守らない範囲: 読んだ後の変化の追従（窓の移動・設定変更・低電力モード・外部画面の着脱。押し直すまで反映しない）、窓が複数画面にまたがるときの画面の選び方（OS が返す主な画面のとおり）、可変リフレッシュレート（ProMotion・VRR）の瞬間値、OS 間で「HDR 対応」「広色域」の意味が揃うこと、複数タブ・複数プロセス。"

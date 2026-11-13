@@ -221,6 +221,21 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 住所の座標変換の保留中の要求も破棄する（画面状態は再生成で generation 0 に戻るため、残すと次の変換が飲み込まれる）（`fandhe_cap_geocoding_search::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_geocoding_search::reset_pending_tracking();
+    // 音声セッションの保持中の購読と処理済み世代も破棄する。画面状態は再生成で generation 0 に戻るため、残すと次の開始が飲み込まれる（`fandhe_cap_audio_session::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_audio_session::reset_pending_tracking();
+    // 他アプリ起動の保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_external_app_launch::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_external_app_launch::reset_pending_tracking();
+    // 設定画面を開く保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_open_system_settings::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_open_system_settings::reset_pending_tracking();
+    // 壁紙設定の保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_wallpaper_set::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_wallpaper_set::reset_pending_tracking();
+    // ファイルプレビューの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_file_preview::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_file_preview::reset_pending_tracking();
     fandhe_egui_proxy::android::run(app, build_app);
 }
 

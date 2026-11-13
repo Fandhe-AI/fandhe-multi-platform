@@ -4,7 +4,7 @@
 //! effect として駆動する。呼び出し元は `demo.rs` のエントリポイントと、破棄時の解放を担う
 //! `mount::release_features`。`fandhe-device` の `MemoryPressure` trait は経由しない
 //! （`OnSignal` / `SubscriptionGuard` が `Send + Sync` を要し、`Closure` を持てないため。
-//! 他の Web モジュールと同じ扱い）。`fandhe_device::memory_pressure` から使い回すのは
+//! 他の Web モジュールと同じ扱い）。`fandhe_cap_memory_pressure` から使い回すのは
 //! `PressureEvent` と `EventLog` だけ。
 //!
 //! # 方式
@@ -40,10 +40,10 @@
 //!
 //! 例外・記録の生値は console にも DOM にも出さない（security.md A09）。
 
+use fandhe_cap_memory_pressure::PressureEvent;
 use fandhe_core::screens::memory_pressure_show::{
     EventKind, StartFailure, SupportView, KIND_COUNT,
 };
-use fandhe_device::memory_pressure::PressureEvent;
 
 /// 対応表示を作る。CPU の 4 枠だけを、observer があり `knownSources` が `cpu` を含む（または
 /// 取得できない）ときに有効にする。メモリの枠と今の状態は常に「取れない」。
@@ -123,11 +123,11 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_memory_pressure::EventLog;
     use fandhe_core::screens::memory_pressure_show::{
         apply_init, apply_snapshot, finish_start, mark_left, status_text, take_init, take_start,
         CurrentView, EventKind, MemoryPressureShowState, Phase, StartFailure, KIND_COUNT,
     };
-    use fandhe_device::memory_pressure::EventLog;
     use js_sys::{Array, Function, Reflect};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::JsFuture;
@@ -488,10 +488,7 @@ mod tests {
 
     #[test]
     fn kind_covers_all_events() {
-        for (i, e) in fandhe_device::memory_pressure::ALL_EVENTS
-            .iter()
-            .enumerate()
-        {
+        for (i, e) in fandhe_cap_memory_pressure::ALL_EVENTS.iter().enumerate() {
             assert_eq!(kind_from_device(*e).index(), i);
         }
     }

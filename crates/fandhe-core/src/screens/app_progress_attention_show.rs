@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod app_progress_attention_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md` の制約どおり）。
-//! 範囲検証と OS 呼び出しは effect ドライバ（`device/app_progress_attention.rs`）が
+//! 範囲検証と OS 呼び出しは effect ドライバ（`crates/fandhe-cap-app-progress-attention/src/driver.rs`）が
 //! [`take_progress_request`] / [`take_attention_request`] で要求を観測して行い、
 //! [`finish_progress`] / [`finish_attention`] で結果を注入する。全 OS 分の文言は (a) で確定する。
 //!

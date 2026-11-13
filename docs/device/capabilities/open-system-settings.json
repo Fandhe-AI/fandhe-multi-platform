@@ -18,7 +18,7 @@
       "note": "実装済み（#799）。completion の `success` をそのまま画面に出す（`canOpenURL` は呼ばない・期限は設けない）。公式は「Settings アプリを起動し、自アプリの設定（通知設定）があればそれを表示する」と書く。開けるのは自アプリの頁だけで、Wi-Fi・Bluetooth など任意の設定頁を開く公開 URL は無い（`App-Prefs:` 等の非公開 URL は使わない）。completion の `success` は OS が URL を開けたかで、利用者が設定を変えたかは分からない。扱える app が無ければ `false`（公式）",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#795）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_open_system_settings.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_open_system_settings.m + crates/fandhe-egui-proxy/src/device/open_system_settings.rs + crates/fandhe-core/src/screens/open_system_settings_show.rs + crates/fandhe-device/src/open_system_settings.rs、Issue #799"
+      "impl": "crates/fandhe-cap-open-system-settings/src/ios.rs + crates/fandhe-cap-open-system-settings/ios/fandhe_ios_open_system_settings.m + crates/fandhe-cap-open-system-settings/src/driver.rs + crates/fandhe-core/src/screens/open_system_settings_show.rs + crates/fandhe-cap-open-system-settings/src/contract.rs、Issue #799"
     },
     "android": {
       "status": "done",
@@ -32,7 +32,7 @@
       "note": "実装済み（#800）。`startActivity` の結果をそのまま写し、前景（RESUMED）でなければ起動せず失敗を返す。API 24・25 の通知設定は「開けなかった」と出す。公式は設定の Intent について「対応する Activity が無い場合があるので備えること」と書く。通知設定の Intent は API 26 で追加され、minSdk 24 の端末（API 24・25）では Activity が無く `ActivityNotFoundException` になる見込みで、そのときは「開けなかった」と出す（別の頁へ置き換えない）。前景（RESUMED）でないときは OS に黙って抑止されうるため起動しない。`startActivity` が戻ったことは OS が Intent を受け付けたことまでで、利用者が設定を変えたかは分からない",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#795）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/SystemSettingsHelper.java + crates/fandhe-egui-proxy/src/device/android_open_system_settings.rs + crates/fandhe-egui-proxy/src/device/open_system_settings.rs + crates/fandhe-core/src/screens/open_system_settings_show.rs + crates/fandhe-device/src/open_system_settings.rs、Issue #800"
+      "impl": "crates/fandhe-cap-open-system-settings/android/java/com/fandhe/platform/SystemSettingsHelper.java + crates/fandhe-cap-open-system-settings/src/android.rs + crates/fandhe-cap-open-system-settings/src/driver.rs + crates/fandhe-core/src/screens/open_system_settings_show.rs + crates/fandhe-cap-open-system-settings/src/contract.rs、Issue #800"
     },
     "macos": {
       "status": "no",
@@ -55,7 +55,7 @@
       "note": "実装済み（#798）。通知は `ms-settings:notifications` を `ShellExecuteW` で開き、戻り値をそのまま画面に出す。自アプリの設定は OS を呼ばずに「この OS では開けない頁」と出す。期限は設けない。`ms-settings:` の URI は公式の一覧に載る（頁の有無は Windows の版・SKU で変わる、公式）。自アプリの頁（`ms-settings:appsfeatures-app?<PFN>`）はパッケージ ファミリー名が要り、パッケージ化していない本アプリには無いため、「自アプリの設定」は Windows では非対応と返す（別の頁へ置き換えない）。通知は OS 全体の通知の頁で、本アプリだけの頁ではない。公式は `Launcher.LaunchUriAsync`（WinRT）を例に挙げるが、同じ URI を `ShellExecuteW` で開き、WinRT の依存を足さない",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#795）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_open_system_settings.rs + crates/fandhe-egui-proxy/src/device/windows_compose_mail_sms.rs + crates/fandhe-egui-proxy/src/device/open_system_settings.rs + crates/fandhe-core/src/screens/open_system_settings_show.rs + crates/fandhe-device/src/open_system_settings.rs、Issue #798"
+      "impl": "crates/fandhe-cap-open-system-settings/src/windows.rs + crates/fandhe-egui-proxy/src/device/windows_compose_mail_sms.rs + crates/fandhe-cap-open-system-settings/src/driver.rs + crates/fandhe-core/src/screens/open_system_settings_show.rs + crates/fandhe-cap-open-system-settings/src/contract.rs、Issue #798"
     },
     "web": {
       "status": "no",

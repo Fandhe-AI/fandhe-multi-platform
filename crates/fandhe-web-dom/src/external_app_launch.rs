@@ -2,7 +2,7 @@
 //!
 //! `fandhe_core::screens::external_app_launch_show`（端末依存ゼロ）を [`super::mount::mount_with_effect`]
 //! の effect として観測し、`window.location.href` へ固定の `tel:` / `geo:` を代入して結果を
-//! `finish_launch` へ書き戻す。開く URI は `fandhe_device::external_app_launch` の固定定数
+//! `finish_launch` へ書き戻す。開く URI は `fandhe_cap_external_app_launch` の固定定数
 //! （`PHONE_URI` / `GEO_URI`）だけで、外部入力から URL を組み立てる経路は無い。
 //! `ExternalAppLaunch` トレイトは経由しない（`compose_mail_sms` の Web 経路と同じ構成）。
 //! `fandhe-device` の「Web: `HandedOff` しか返せない」は本モジュールの話で、
@@ -25,10 +25,10 @@
 //! 守らない: ハンドラの有無、ブラウザ差によるページ遷移扱い・無反応、PC ブラウザでの無反応、
 //! 複数タブ、wasm canvas 経路。
 
+use fandhe_cap_external_app_launch::{GEO_URI, PHONE_URI};
 use fandhe_core::screens::external_app_launch_show::{
     CoreOutcome, ExternalLaunchFailure, LaunchKind,
 };
-use fandhe_device::external_app_launch::{GEO_URI, PHONE_URI};
 
 /// 遷移拒否の固定文言（例外の内容は含めない）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]

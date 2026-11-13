@@ -51,7 +51,11 @@ use fandhe_device::DeviceError;
 
 use super::compose_attachment_file::Store;
 
-/// `SE_ERR_NOASSOC`（関連付けが無い）。
+/// `SE_ERR_NOASSOC`（関連付けが無い）。Windows では共通層の定義を使い、ホストのテストでも写像を検証できるよう
+/// それ以外の OS では同じ値（`ShellExecuteW` の公式の表）を置く。
+#[cfg(target_os = "windows")]
+pub(crate) use fandhe_platform_windows::SE_ERR_NOASSOC;
+#[cfg(not(target_os = "windows"))]
 pub(crate) const SE_ERR_NOASSOC: isize = 31;
 
 /// `ShellExecuteW` の戻り値 → 結果の写像（SSOT）。公式の表のとおり `> 32` が成功、
@@ -333,30 +337,9 @@ impl fandhe_device::compose_mail_sms::ComposeMailSms for WindowsComposeMailSms {
     }
 }
 
-/// `ShellExecuteW` を呼んで戻り値を返す。UI（STA）スレッドから呼ぶ。
-/// `windows_web_auth_session` も既定ブラウザを開くために使う。
+/// `ShellExecuteW` で URL を開く入口は Windows 共通層へ移した（`windows_web_auth_session` も既定ブラウザを開くために使う）。
 #[cfg(target_os = "windows")]
-#[allow(unsafe_code)]
-pub(crate) fn open_url(url: &str) -> isize {
-    use windows::core::{w, HSTRING, PCWSTR};
-    use windows::Win32::UI::Shell::ShellExecuteW;
-    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-
-    let url = HSTRING::from(url);
-    // SAFETY: `url` は NUL 終端の UTF-16 で、この呼び出しの間だけ生きる。`w!("open")` は
-    // 静的な NUL 終端文字列。`ShellExecuteW` は引数を保持せず、UI スレッドから同期に呼ぶ。
-    let result = unsafe {
-        ShellExecuteW(
-            None,
-            w!("open"),
-            &url,
-            PCWSTR::null(),
-            PCWSTR::null(),
-            SW_SHOWNORMAL,
-        )
-    };
-    result.0 as isize
-}
+pub(crate) use fandhe_platform_windows::open_url;
 
 /// Windows の `ComposeMailSms` 実装を返す（`device/compose_mail_sms.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "windows")]

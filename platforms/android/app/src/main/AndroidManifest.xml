@@ -314,7 +314,7 @@
 
         <!-- Issue #32: メール添付の content URI を渡す FileProvider。exported=false のまま、
              Intent 単位の一時読み取り許可（grantUriPermissions）だけで受け手に読ませる。公開する
-             パスは `cache/compose/` と動画の撮影の `cache/video_capture/`・ファイルのプレビュー（#920）の `cache/file_preview/` だけ（res/xml/compose_file_paths.xml）。新しい権限は足さない。
+             パスは `cache/compose/` と動画の撮影の `cache/video_capture/` だけ（res/xml/compose_file_paths.xml）。新しい権限は足さない。
              切り離し時に削除する。 -->
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -324,6 +324,20 @@
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/compose_file_paths" />
+        </provider>
+
+        <!-- ファイルのプレビュー（Issue #920）が content URI を渡す機能専用の FileProvider。共有の compose provider
+             から分けて、公開するパスを `cache/file_preview/` だけに狭める（res/xml/file_preview_file_paths.xml）。
+             exported=false のまま、Intent 単位の一時読み取り許可（grantUriPermissions）だけで受け手に読ませる。新しい権限は足さない。
+             宣言は `fandhe-cap-file-preview` の Cargo.toml と完全に一致させる。切り離し時は crate ごと削除する。 -->
+        <provider
+            android:name="com.fandhe.platform.FilePreviewFileProvider"
+            android:authorities="${applicationId}.fandhe.file-preview.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_preview_file_paths" />
         </provider>
 
         <!-- クラウド保存先として OS のファイル画面に出る DocumentsProvider（Issue #1020）。
@@ -385,6 +399,38 @@
         <provider
             android:name="com.fandhe.platform.ScreenWakeLockLifecycle"
             android:authorities="${applicationId}.fandhe.screen-wake-lock"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.SystemSoundLifecycle"
+            android:authorities="${applicationId}.fandhe.system-sound"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.RemovableStorageLifecycle"
+            android:authorities="${applicationId}.fandhe.removable-storage"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.MemoryPressureLifecycle"
+            android:authorities="${applicationId}.fandhe.memory-pressure"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.AudioSessionLifecycle"
+            android:authorities="${applicationId}.fandhe.audio-session"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.ExternalAppLaunchLifecycle"
+            android:authorities="${applicationId}.fandhe.external-app-launch"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.SystemSettingsLifecycle"
+            android:authorities="${applicationId}.fandhe.open-system-settings"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.FilePreviewLifecycle"
+            android:authorities="${applicationId}.fandhe.file-preview"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.AppLifecycleLifecycle"
+            android:authorities="${applicationId}.fandhe.app-lifecycle"
             android:exported="false" />
         <provider
             android:name="com.fandhe.platform.ScreenBrightnessLifecycle"

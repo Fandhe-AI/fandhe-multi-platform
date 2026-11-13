@@ -214,6 +214,14 @@ impl SlotOwner {
         Some(request_id)
     }
 
+    /// [`SlotOwner::begin`] に加え、自分の分以外（公開入口）の結果が届いて未取得のときも `None`（取り出す前に置き換えて落とさない）。
+    /// 自分の分の未取得の結果は置き換える。画面と公開入口が 1 つの slot を共有する pull 型の機能で、画面側の登録に使う。
+    pub fn begin_keeping_foreign<O>(&self, slot: &RequestSlot<O>) -> Option<u64> {
+        let request_id = slot.try_begin_unless(|id| id != self.current())?;
+        self.0.store(request_id, Ordering::Release);
+        Some(request_id)
+    }
+
     /// 既に登録済みの `request_id`（`slot.begin()` の戻り値等）を自分の分として覚える。
     /// 先行の要求を置き換える画面用の登録で使う。
     pub fn adopt(&self, request_id: u64) {

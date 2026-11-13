@@ -1100,6 +1100,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-app-lifecycle"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-app-progress-attention"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-ar"
 version = "0.2.0"
 dependencies = [
@@ -1123,6 +1149,18 @@ dependencies = [
  "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-audio-session"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -1162,6 +1200,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-color-picker"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-companion-device"
 version = "0.2.0"
 dependencies = [
@@ -1181,6 +1232,31 @@ dependencies = [
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-digital-credentials"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-runtime",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-display-refresh-hdr"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -1221,6 +1297,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-external-app-launch"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-eye-dropper"
 version = "0.2.0"
 dependencies = [
@@ -1228,6 +1317,21 @@ dependencies = [
  "fandhe-device",
  "fandhe-platform-apple",
  "fandhe-runtime",
+]
+
+[[package]]
+name = "fandhe-cap-file-preview"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "image",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -1335,6 +1439,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-human-presence"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-in-app-review"
 version = "0.2.0"
 dependencies = [
@@ -1373,6 +1488,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-managed-app-config"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-media-cast"
 version = "0.2.0"
 dependencies = [
@@ -1400,6 +1527,19 @@ dependencies = [
  "thiserror 2.0.20",
  "windows 0.61.3",
  "windows-future",
+]
+
+[[package]]
+name = "fandhe-cap-memory-pressure"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -1477,6 +1617,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-open-system-settings"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-passkey-signin"
 version = "0.2.0"
 dependencies = [
@@ -1536,6 +1689,20 @@ name = "fandhe-cap-power-state"
 version = "0.2.0"
 dependencies = [
  "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-removable-storage"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
  "fandhe-platform-android",
  "fandhe-platform-apple",
  "fandhe-runtime",
@@ -1683,6 +1850,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-system-sound"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-system-tray"
 version = "0.2.0"
 dependencies = [
@@ -1743,6 +1923,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-wallpaper-set"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "image",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-wifi-connect"
 version = "0.2.0"
 dependencies = [
@@ -1788,10 +1983,12 @@ dependencies = [
  "eframe",
  "egui",
  "egui_kittest",
+ "fandhe-cap-audio-session",
  "fandhe-cap-drag-drop",
  "fandhe-cap-gamepad",
  "fandhe-cap-global-hotkey",
  "fandhe-cap-media-cast",
+ "fandhe-cap-memory-pressure",
  "fandhe-cap-midi",
  "fandhe-cap-serial-port",
  "fandhe-cap-system-tray",
@@ -1835,17 +2032,25 @@ dependencies = [
  "fandhe-cap-accessibility-prefs",
  "fandhe-cap-app-attest",
  "fandhe-cap-app-badge",
+ "fandhe-cap-app-lifecycle",
+ "fandhe-cap-app-progress-attention",
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
+ "fandhe-cap-audio-session",
  "fandhe-cap-calendar",
  "fandhe-cap-call-ui",
  "fandhe-cap-camera-capture",
+ "fandhe-cap-color-picker",
  "fandhe-cap-companion-device",
  "fandhe-cap-device-identifier",
+ "fandhe-cap-digital-credentials",
+ "fandhe-cap-display-refresh-hdr",
  "fandhe-cap-document-scan",
  "fandhe-cap-drag-drop",
  "fandhe-cap-dynamic-type",
+ "fandhe-cap-external-app-launch",
  "fandhe-cap-eye-dropper",
+ "fandhe-cap-file-preview",
  "fandhe-cap-file-watch",
  "fandhe-cap-focus-mode-status",
  "fandhe-cap-gamepad",
@@ -1854,22 +2059,27 @@ dependencies = [
  "fandhe-cap-haptics",
  "fandhe-cap-home-widget",
  "fandhe-cap-http-get",
+ "fandhe-cap-human-presence",
  "fandhe-cap-in-app-review",
  "fandhe-cap-live-activity",
  "fandhe-cap-local-fonts",
+ "fandhe-cap-managed-app-config",
  "fandhe-cap-media-cast",
  "fandhe-cap-media-transcode",
+ "fandhe-cap-memory-pressure",
  "fandhe-cap-midi",
  "fandhe-cap-ml-inference",
  "fandhe-cap-multi-display",
  "fandhe-cap-nfc-card-emulation",
  "fandhe-cap-nlp",
  "fandhe-cap-on-device-llm",
+ "fandhe-cap-open-system-settings",
  "fandhe-cap-passkey-signin",
  "fandhe-cap-pdf-viewer",
  "fandhe-cap-pedometer",
  "fandhe-cap-per-app-language",
  "fandhe-cap-power-state",
+ "fandhe-cap-removable-storage",
  "fandhe-cap-screen-brightness",
  "fandhe-cap-screen-capture",
  "fandhe-cap-screen-wake-lock",
@@ -1881,11 +2091,13 @@ dependencies = [
  "fandhe-cap-sound-classification",
  "fandhe-cap-spell-check",
  "fandhe-cap-system-accent-color",
+ "fandhe-cap-system-sound",
  "fandhe-cap-system-tray",
  "fandhe-cap-usb-device",
  "fandhe-cap-user-idle",
  "fandhe-cap-uwb-ranging",
  "fandhe-cap-volume-control",
+ "fandhe-cap-wallpaper-set",
  "fandhe-cap-wifi-connect",
  "fandhe-core",
  "fandhe-egui-proxy",
@@ -1984,15 +2196,21 @@ dependencies = [
  "console_error_panic_hook",
  "fandhe-cap-accessibility-prefs",
  "fandhe-cap-app-badge",
+ "fandhe-cap-app-lifecycle",
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
+ "fandhe-cap-color-picker",
+ "fandhe-cap-digital-credentials",
+ "fandhe-cap-display-refresh-hdr",
  "fandhe-cap-dynamic-type",
+ "fandhe-cap-external-app-launch",
  "fandhe-cap-file-watch",
  "fandhe-cap-gamepad",
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",
  "fandhe-cap-media-cast",
  "fandhe-cap-media-transcode",
+ "fandhe-cap-memory-pressure",
  "fandhe-cap-midi",
  "fandhe-cap-multi-display",
  "fandhe-cap-nlp",

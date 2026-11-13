@@ -20,7 +20,7 @@
       "note": "実装済み（#919）。サムネイルは `.thumbnail` だけを頼み、期限 10 秒で `cancelRequest:` する（macOS と共用）。プレビューは `QLPreviewController` を全画面で提示し、閉じたことは `previewControllerDidDismiss:` で知って `Closed` にする。事前判定（`canPreviewItem:`）はしない。アイコンをサムネイルとして成功に混ぜない。サムネイルは iOS 13+（それ未満は `Unsupported`）。",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#890）",
-      "impl": "`crates/fandhe-egui-proxy/src/device/ios_file_preview.rs` + `crates/fandhe-egui-proxy/ios/fandhe_ios_file_preview.m` + `crates/fandhe-egui-proxy/src/device/apple_file_preview.rs` + `crates/fandhe-egui-proxy/apple/fandhe_apple_file_preview.m` + `crates/fandhe-egui-proxy/src/device/file_preview.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-device/src/file_preview.rs`、Issue #919"
+      "impl": "`crates/fandhe-cap-file-preview/src/ios.rs` + `crates/fandhe-cap-file-preview/ios/fandhe_ios_file_preview.m` + `crates/fandhe-cap-file-preview/src/apple.rs` + `crates/fandhe-cap-file-preview/apple/fandhe_apple_file_preview.m` + `crates/fandhe-cap-file-preview/src/driver.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-cap-file-preview/src/contract.rs`、Issue #919"
     },
     "android": {
       "status": "done",
@@ -28,7 +28,7 @@
       "perm": "不要（`<queries>` も不要。読み取りは Intent 単位の一時許可）",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#890）",
-      "impl": "`crates/fandhe-egui-proxy/src/device/android_file_preview.rs` + `platforms/android/app/src/main/java/com/fandhe/platform/FilePreviewHelper.java` + `crates/fandhe-egui-proxy/src/device/file_preview.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-device/src/file_preview.rs`、Issue #920",
+      "impl": "`crates/fandhe-cap-file-preview/src/android.rs` + `crates/fandhe-cap-file-preview/android/java/com/fandhe/platform/FilePreviewHelper.java` + `crates/fandhe-cap-file-preview/src/driver.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-cap-file-preview/src/contract.rs`、Issue #920",
       "url": [
         "https://developer.android.com/reference/android/media/ThumbnailUtils#createImageThumbnail(java.io.File,%20android.util.Size,%20android.os.CancellationSignal)",
         "https://developer.android.com/reference/androidx/core/content/FileProvider",
@@ -42,7 +42,7 @@
       "perm": "不要",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#890）",
-      "impl": "`crates/fandhe-egui-proxy/src/device/apple_file_preview.rs` + `crates/fandhe-egui-proxy/apple/fandhe_apple_file_preview.m` + `crates/fandhe-egui-proxy/src/device/macos_file_preview.rs` + `crates/fandhe-egui-proxy/macos/fandhe_macos_file_preview.m` + `crates/fandhe-egui-proxy/src/device/file_preview.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-device/src/file_preview.rs`、Issue #917",
+      "impl": "`crates/fandhe-cap-file-preview/src/apple.rs` + `crates/fandhe-cap-file-preview/apple/fandhe_apple_file_preview.m` + `crates/fandhe-cap-file-preview/src/macos.rs` + `crates/fandhe-cap-file-preview/macos/fandhe_macos_file_preview.m` + `crates/fandhe-cap-file-preview/src/driver.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-cap-file-preview/src/contract.rs`、Issue #917",
       "url": [
         "https://developer.apple.com/documentation/quicklookthumbnailing/qlthumbnailgenerator",
         "https://developer.apple.com/documentation/quicklookui/qlpreviewview",
@@ -63,7 +63,7 @@
       "note": "実装済み（#918）。サムネイルのみ。`SIIGBF_THUMBNAILONLY` でサムネイルが無いときは失敗し、アイコンへ倒れない。返る `HBITMAP` は呼び出し側が `DeleteObject` し、UI スレッドでは呼ばない。プレビュー表示は対象外（Preview Handler の埋め込みは子窓の管理が要るため採らない）。`IThumbnailProvider` は提供側の interface、`StorageFile.GetThumbnailAsync` は採らない。 COM は STA で初期化する。`GetImage` は取り消せないため、期限後の結果はドライバが捨てる。サムネイルが無いときの HRESULT（想定は `WTS_E_FAILEDEXTRACTION`）は実機で確認する。",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#890）",
-      "impl": "`crates/fandhe-egui-proxy/src/device/windows_file_preview.rs` + `crates/fandhe-egui-proxy/src/device/file_preview.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-device/src/file_preview.rs`、Issue #918"
+      "impl": "`crates/fandhe-cap-file-preview/src/windows.rs` + `crates/fandhe-cap-file-preview/src/driver.rs` + `crates/fandhe-core/src/screens/file_preview_show.rs` + `crates/fandhe-cap-file-preview/src/contract.rs`、Issue #918"
     },
     "web": {
       "status": "no",

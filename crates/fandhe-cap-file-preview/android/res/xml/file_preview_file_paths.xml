@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- file-preview 専用の FileProvider が公開するパス。ファイルのプレビュー（Issue #920）は `getCacheDir()/file_preview/` だけに限る。 -->
+<paths>
+    <cache-path name="file_preview" path="file_preview/" />
+</paths>

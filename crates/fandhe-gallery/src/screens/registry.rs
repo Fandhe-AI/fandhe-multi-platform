@@ -67,7 +67,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "color_picker" => fandhe_core::screens::color_picker_pick::current_screen,
-    fandhe_egui_proxy::device::color_picker::color_picker_pick_effect,
+    fandhe_cap_color_picker::color_picker_pick_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "location_show" => fandhe_core::screens::location_show::current_screen,
@@ -103,7 +103,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "app_progress_attention_show" => fandhe_core::screens::app_progress_attention_show::current_screen,
-    fandhe_egui_proxy::device::app_progress_attention::app_progress_attention_show_effect,
+    fandhe_cap_app_progress_attention::app_progress_attention_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "compose_mail_sms" => fandhe_core::screens::compose_mail_sms::current_screen,
@@ -111,11 +111,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "open_system_settings_show" => fandhe_core::screens::open_system_settings_show::current_screen,
-    fandhe_egui_proxy::device::open_system_settings::open_system_settings_show_effect,
+    fandhe_cap_open_system_settings::open_system_settings_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "external_app_launch_show" => fandhe_core::screens::external_app_launch_show::current_screen,
-    fandhe_egui_proxy::device::external_app_launch::external_app_launch_show_effect,
+    fandhe_cap_external_app_launch::external_app_launch_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ble_peripheral" => fandhe_core::screens::ble_peripheral::current_screen,
@@ -143,7 +143,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "digital_credentials" => fandhe_core::screens::digital_credentials::current_screen,
-    fandhe_egui_proxy::device::digital_credentials::digital_credentials_effect,
+    fandhe_cap_digital_credentials::digital_credentials_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "web_auth_session_demo" => fandhe_core::screens::web_auth_session_demo::current_screen,
@@ -159,7 +159,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "managed_app_config_show" => fandhe_core::screens::managed_app_config_show::current_screen,
-    fandhe_egui_proxy::device::managed_app_config::managed_app_config_show_effect,
+    fandhe_cap_managed_app_config::managed_app_config_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "map_view_show" => fandhe_core::screens::map_view_show::current_screen,
@@ -171,7 +171,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wallpaper_set" => fandhe_core::screens::wallpaper_set::current_screen,
-    fandhe_egui_proxy::device::wallpaper::wallpaper_set_effect,
+    fandhe_cap_wallpaper_set::wallpaper_set_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "text_scale_preview" => fandhe_core::screens::text_scale_preview::current_screen,
@@ -255,11 +255,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "system_sound_beep" => fandhe_core::screens::system_sound_beep::current_screen,
-    fandhe_egui_proxy::device::system_sound::system_sound_beep_effect,
+    fandhe_cap_system_sound::system_sound_beep_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "human_presence_read" => fandhe_core::screens::human_presence_read::current_screen,
-    fandhe_egui_proxy::device::human_presence::human_presence_read_effect,
+    fandhe_cap_human_presence::human_presence_read_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "health_steps_read" => fandhe_core::screens::health_steps_read::current_screen,
@@ -323,11 +323,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "app_lifecycle_show" => fandhe_core::screens::app_lifecycle_show::current_screen,
-    fandhe_egui_proxy::device::app_lifecycle::app_lifecycle_show_effect,
+    fandhe_cap_app_lifecycle::app_lifecycle_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "memory_pressure_show" => fandhe_core::screens::memory_pressure_show::current_screen,
-    fandhe_egui_proxy::device::memory_pressure::memory_pressure_show_effect,
+    fandhe_cap_memory_pressure::memory_pressure_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "sleep_lock_events_show" => fandhe_core::screens::sleep_lock_events_show::current_screen,
@@ -335,7 +335,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "removable_storage_show" => fandhe_core::screens::removable_storage_show::current_screen,
-    fandhe_egui_proxy::device::removable_storage::removable_storage_show_effect,
+    fandhe_cap_removable_storage::removable_storage_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "device_info_show" => fandhe_core::screens::device_info_show::current_screen,
@@ -347,7 +347,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "display_refresh_hdr_show" => fandhe_core::screens::display_refresh_hdr_show::current_screen,
-    fandhe_egui_proxy::device::display_refresh_hdr::display_refresh_hdr_show_effect,
+    fandhe_cap_display_refresh_hdr::display_refresh_hdr_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "multi_display_show" => fandhe_core::screens::multi_display_show::current_screen,
@@ -575,7 +575,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_preview" => fandhe_core::screens::file_preview_show::current_screen,
-    fandhe_egui_proxy::device::file_preview::file_preview_effect,
+    fandhe_cap_file_preview::file_preview_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_association_show" => fandhe_core::screens::file_association_show::current_screen,
@@ -591,5 +591,5 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "audio_session_show" => fandhe_core::screens::audio_session_show::current_screen,
-    fandhe_egui_proxy::device::audio_session::audio_session_show_effect,
+    fandhe_cap_audio_session::audio_session_show_effect,
 }

@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod file_preview_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は
-//! 本モジュール外（`fandhe-egui-proxy` の `device/file_preview.rs`）が [`take_request`] で要求を
+//! 本モジュール外（`fandhe-egui-proxy` の `crates/fandhe-cap-file-preview/src/driver.rs`）が [`take_request`] で要求を
 //! 観測し、[`mark_working`]・[`finish`] で状態を進める。全対象 OS で同じ UI・文言を使うため、
 //! OS 別の子 issue はこのファイルを触らない。
 //!

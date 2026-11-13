@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod human_presence_read;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは `fandhe-egui-proxy` の
-//! `device/human_presence.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する
+//! `crates/fandhe-cap-human-presence/src/driver.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する
 //! （`pedometer_read.rs` と同型の状態機械）。購読しないため登録・解除ボタンは無い。
 //!
 //! センサーの無い環境（macOS 等）に代替入力は置かない。値を偽装する入力は嘘の成功の入口になるため、
@@ -60,7 +60,7 @@ pub enum ReadPhase {
     Reading,
 }
 
-/// 読み取れた在席（`fandhe_device::human_presence::Presence` から写す責務は effect 側）。
+/// 読み取れた在席（`fandhe_cap_human_presence::Presence` から写す責務は effect 側）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PresenceView {
     /// 在席。

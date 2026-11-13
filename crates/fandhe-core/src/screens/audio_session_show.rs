@@ -5,9 +5,9 @@
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod audio_session_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは
-//! `fandhe-egui-proxy` の `device/audio_session.rs` が [`take_command`] で要求を観測し、
+//! `fandhe-egui-proxy` の `crates/fandhe-cap-audio-session/src/driver.rs` が [`take_command`] で要求を観測し、
 //! [`apply_update`] で通知を注入する（`midi_show.rs` と同型の状態機械 + 継続配信）。
-//! 種別・出来事・読み戻しの列挙は `fandhe_device::audio_session` と同順で複製している（依存方向のため）。
+//! 種別・出来事・読み戻しの列挙は `fandhe_cap_audio_session` と同順で複製している（依存方向のため）。
 //!
 //! 全対象 OS（iOS / Android。macOS・Windows・Web は非対応）の状態・文言をここで確定済みで、後続の
 //! OS 実装（#841・#842）は本画面を触らない。何を選べて何が読めるかは OS が宣言する [`SupportView`] で
@@ -76,7 +76,7 @@ pub const NO_EVENTS_STATUS: &str = "出来事はまだ届いていません";
 /// 読み戻しに失敗したときの案内。
 pub const CURRENT_FAILED_STATUS: &str = "今の状態を読めませんでした";
 
-/// 選べるセッション種別（`fandhe_device::audio_session::SessionKind` と同順）。
+/// 選べるセッション種別（`fandhe_cap_audio_session::SessionKind` と同順）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum KindChoice {
     /// 他の音を止める。
@@ -104,7 +104,7 @@ impl KindChoice {
     }
 }
 
-/// OS から読み戻した種別（`fandhe_device::audio_session::ReadKind` の写し）。
+/// OS から読み戻した種別（`fandhe_cap_audio_session::ReadKind` の写し）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadKindView {
     /// 他の音を止める。
@@ -117,7 +117,7 @@ pub enum ReadKindView {
     Other,
 }
 
-/// Android の音声モード（`fandhe_device::audio_session::AudioMode` の写し）。
+/// Android の音声モード（`fandhe_cap_audio_session::AudioMode` の写し）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudioModeView {
     /// 通常。
@@ -136,7 +136,7 @@ pub enum AudioModeView {
     Unknown,
 }
 
-/// 出来事の種類（`fandhe_device::audio_session::EventKind` と同順）。
+/// 出来事の種類（`fandhe_cap_audio_session::EventKind` と同順）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventKindView {
     /// iOS: 割り込みの開始。
@@ -194,7 +194,7 @@ pub struct EventRow {
     pub should_resume: Option<bool>,
 }
 
-/// OS が扱える範囲（`fandhe_device::audio_session::Support` の写し）。
+/// OS が扱える範囲（`fandhe_cap_audio_session::Support` の写し）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SupportView {
     /// 選べる種別（[`KindChoice::index`] の順）。

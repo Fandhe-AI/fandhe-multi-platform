@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の
-//! `device/display_refresh_hdr.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を
+//! `crates/fandhe-cap-display-refresh-hdr/src/driver.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を
 //! 注入する（`device_info_show.rs` と同型の状態機械）。
 //!
 //! 全対象 OS の文言・状態をここで確定済みで、後続の OS 実装（#871 / #872）と Web（#873）は
