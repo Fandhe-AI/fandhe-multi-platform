@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod video_capture_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しは
-//! 本モジュール外（`fandhe-egui-proxy` の `device/video_capture.rs`）が [`take_request`] で要求を
+//! 本モジュール外（`fandhe-cap-video-capture` の driver.rs）が [`take_request`] で要求を
 //! 観測し、[`mark_running`]・[`finish_capture`] で状態を進める。全対象 OS の分の状態・文言は
 //! ここで定義するため、OS 別の子 issue（#822・#823・#824）はこのファイルを触らない。
 //! Web はファイル入力経由で「撮った動画」か「既存の動画」かを区別できないため、
@@ -33,7 +33,7 @@ const STOP_BUTTON_ID: WidgetId = WidgetId::from_raw(3);
 const CANCEL_BUTTON_ID: WidgetId = WidgetId::from_raw(4);
 
 /// 長さの上限（秒、案内文言用）。`fandhe_cap_video_capture::MAX_DURATION_SECS` と一致させる
-/// （core は device を import しないため、一致は `fandhe-egui-proxy` のテストで縛る）。
+/// （core は device を import しないため、一致は `fandhe-cap-video-capture` の driver.rs のテストで縛る）。
 pub const MAX_DURATION_SECS: u32 = 30;
 
 /// タイトル。
