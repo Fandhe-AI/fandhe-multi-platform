@@ -1,0 +1,37 @@
+[package]
+name = "fandhe-cap-recent-documents"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の recent-documents の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+# 検査済みのパス型 `ShellPath`・サンプルの安全な作成 `prepare_sample_file_in`・Windows のパス正規化 `to_win32_path` を使う。
+# 複製せず機能 crate 同士で依存する（同じ束で移す）。
+fandhe-cap-open-in-shell = { path = "../fandhe-cap-open-in-shell" }
+
+# 最近使った書類への登録・読み戻し（`SHAddToRecentDocs`・`IApplicationDocumentLists`、windows.rs）と COM の初期化。
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }
+
+[build-dependencies]
+# iOS・macOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。権限・usage description・framework は手で足す（cargo fandhe check が検証する）。
+[package.metadata.fandhe]
+id = "recent-documents"
+
+[package.metadata.fandhe.macos]
+frameworks = ["AppKit"]
+
+[lints]
+workspace = true

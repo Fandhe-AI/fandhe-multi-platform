@@ -687,12 +687,6 @@ pub mod macos_launch_at_login;
 /// 呼ぶ C ABI ラッパー）。`device/music_library.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_music_library;
-/// Issue #749: macOS 向け「既定アプリで開く・Finder で表示」実装（`macos/fandhe_macos_open_in_shell.m` を
-/// 呼ぶ C ABI ラッパー）。`device/open_in_shell.rs` の macos 経路から呼ばれる。結果コードの写像を
-/// ホストテストするため test でもコンパイルする。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_open_in_shell;
 /// Issue #355: macOS 向けペン・筆圧入力実装（`macos/fandhe_macos_pen_stylus.m` の `NSEvent` local
 /// monitor を呼ぶ C ABI ラッパー）。`device/pen_stylus.rs` の macOS 経路から呼ばれる。写像の純関数を
 /// ホストでテストできるよう cfg は `any(macos, test)`。
@@ -705,12 +699,6 @@ pub mod macos_pen_stylus;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_print;
-/// Issue #988: macOS 向け「最近使った項目」実装（`macos/fandhe_macos_recent_documents.m` の
-/// `NSDocumentController` を呼ぶ C ABI ラッパー）。`device/recent_documents.rs` の macos 経路から呼ばれる。
-/// 結果コードの写像をホストテストするため test でもコンパイルする。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_recent_documents;
 /// Issue #444: macOS 向けセーフエリア実装（`macos/fandhe_macos_safe_area_insets.m` を呼ぶ
 /// C ABI ラッパー）。`device/safe_area_insets.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -764,9 +752,6 @@ pub mod notification;
 /// 他 OS は `UnsupportedNowPlaying` 固定。
 /// Web は #384 で `fandhe-web-dom`）。`media_playback` の `audio_play` 画面から呼ばれる。
 pub mod now_playing;
-/// Issue #749: 既定アプリで開く・ファイルマネージャーで選択表示の effect ドライバ（サンプルファイルの用意・
-/// `ShellPath` 検査・OS 実装の呼び出し）。`screens/registry.rs` の `effect` 区画から呼ばれる。
-pub mod open_in_shell;
 /// Phase 11 の拡充ループ（親 #114、Issue #541・#1130）: 決済シートの effect ドライバ（Android は
 /// pull 型 bridge、他のネイティブは `UnsupportedPaymentSheet` 固定の同期経路。dispatch は最終形。
 /// Web は `fandhe-web-dom`）。
@@ -795,9 +780,6 @@ pub mod print;
 /// Phase 11 の拡充ループ（親 #139、Issue #719）: クイック設定タイル・コントロールの effect ドライバ
 /// （macOS は App Group の回数ファイル、Android は SharedPreferences の回数、他 OS は `UnsupportedQuickSettingsTile` 固定）。
 pub mod quick_settings_tile;
-/// Phase 11 の拡充ループ（親 #193、Issue #988）: 「最近使った項目」への登録と読み戻しの effect ドライバ
-/// （macOS・Windows 実装。他 OS は `UnsupportedRecentDocuments` 固定）。
-pub mod recent_documents;
 /// request/response 型端末機能共通の要求追跡（Issue #943、親 #941）。share /
 /// biometric_auth / file_pick の `bridge` facade から使う。
 /// `RequestSlot` / `poll_and_finish` の実体は `fandhe-runtime`（Issue #1166）。呼び出し側のパスを保つ再公開。
@@ -987,11 +969,6 @@ pub mod windows_notification;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_now_playing;
-/// Issue #749: Windows 向け「既定アプリで開く・Explorer で表示」の骨格（実装は #750）。
-/// `device/open_in_shell.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_open_in_shell;
 /// Issue #359: Windows 向けペン・筆圧入力実装（`SetWindowSubclass` の観測専用サブクラスが
 /// `WM_POINTER*` から値を置く）。`device/pen_stylus.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
@@ -1006,11 +983,6 @@ pub mod windows_photo_library;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_print;
-/// Issue #989: Windows 向け「最近使った項目」の実装（骨格は #988）。
-/// `device/recent_documents.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_recent_documents;
 /// Issue #923: Windows 向け資格情報保存実装（WinRT `PasswordVault` ラッパー）。
 /// `device/secure_credential.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

@@ -1649,6 +1649,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-open-in-shell"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-open-system-settings"
 version = "0.2.0"
 dependencies = [
@@ -1741,6 +1752,18 @@ dependencies = [
  "thiserror 2.0.20",
  "windows 0.61.3",
  "windows-future",
+]
+
+[[package]]
+name = "fandhe-cap-recent-documents"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-open-in-shell",
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -2153,6 +2176,7 @@ dependencies = [
  "fandhe-cap-nfc-card-emulation",
  "fandhe-cap-nlp",
  "fandhe-cap-on-device-llm",
+ "fandhe-cap-open-in-shell",
  "fandhe-cap-open-system-settings",
  "fandhe-cap-passkey-signin",
  "fandhe-cap-pdf-viewer",
@@ -2160,6 +2184,7 @@ dependencies = [
  "fandhe-cap-per-app-language",
  "fandhe-cap-power-state",
  "fandhe-cap-radio-control",
+ "fandhe-cap-recent-documents",
  "fandhe-cap-removable-storage",
  "fandhe-cap-scanner-devices",
  "fandhe-cap-screen-brightness",

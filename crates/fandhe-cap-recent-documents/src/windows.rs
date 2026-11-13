@@ -1,11 +1,11 @@
 //! Windows 向け「最近使った項目」の実装（Issue #989、親 #193、骨格は #988）。
 //! `device/recent_documents.rs`（effect ドライバ）の windows 経路から UI スレッドで同期に呼ばれ、
-//! 契約は `fandhe_device::recent_documents`。
+//! 契約は `crate::contract`。
 //!
 //! # 方式
 //!
 //! - 登録: `SHAddToRecentDocs(SHARD_PATHW, パス)`。`pv` は必ず非 NULL（NULL は全アプリの履歴を消す）。
-//!   パスは `ShellPath` を `windows_open_in_shell::to_win32_path` で正規化したものだけ
+//!   パスは `ShellPath` を `fandhe_cap_open_in_shell::to_win32_path` で正規化したものだけ
 //! - 読み戻し: `IApplicationDocumentLists::GetList(ADLT_RECENT, 0)`（0 は全件）。返る集合は
 //!   `IShellItem` と `IShellLink` が混在しうるため両方を扱う。`GetList` の前に、
 //!   プロセスの明示 AUMID（通知・アラームが `SetCurrentProcessExplicitAppUserModelID` で設定する
@@ -32,9 +32,9 @@
 //! パス・HRESULT・一覧の他の項目（他アプリの履歴を含みうる）はログにもエラー文言にも出さない。
 
 #[cfg_attr(not(target_os = "windows"), allow(unused_imports))]
-use fandhe_device::recent_documents::RecentOutcome;
+use crate::contract::RecentOutcome;
 #[cfg_attr(not(target_os = "windows"), allow(unused_imports))]
-use fandhe_device::DeviceError;
+use crate::error::RecentDocumentsError;
 
 /// 比較用の正規化: `\\?\` を外し、大文字小文字を無視する。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -48,12 +48,12 @@ fn normalize(p: &str) -> String {
 fn outcome_from_entries(
     target: &str,
     entries: impl IntoIterator<Item = Option<String>>,
-) -> Result<RecentOutcome, DeviceError> {
+) -> Result<RecentOutcome, RecentDocumentsError> {
     let want = normalize(target);
     let mut found = false;
     for e in entries {
         let Some(p) = e else {
-            return Err(DeviceError::Internal("recent documents os"));
+            return Err(RecentDocumentsError::Internal("recent documents os"));
         };
         found |= normalize(&p) == want;
     }
@@ -66,7 +66,7 @@ fn outcome_from_entries(
 
 /// Windows の `RecentDocuments` 実装を返す（`device/recent_documents.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "windows")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::recent_documents::RecentDocuments> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::RecentDocuments> {
     Box::new(win::WinRecentDocuments)
 }
 
@@ -74,26 +74,26 @@ pub(crate) fn implementation() -> Box<dyn fandhe_device::recent_documents::Recen
 mod win {
     use std::ffi::c_void;
 
-    use fandhe_device::recent_documents::{RecentDocuments, ShellPath};
-    use windows::core::HSTRING;
+    use crate::contract::{RecentDocuments, ShellPath};
     use windows::Win32::System::Com::{
-        CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_INPROC_SERVER,
-        COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
+        CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoCreateInstance,
+        CoInitializeEx, CoTaskMemFree, CoUninitialize,
     };
     use windows::Win32::UI::Shell::Common::IObjectArray;
     use windows::Win32::UI::Shell::{
-        ApplicationDocumentLists, GetCurrentProcessExplicitAppUserModelID,
-        IApplicationDocumentLists, IShellItem, IShellLinkW, SHAddToRecentDocs, ADLT_RECENT,
-        SHARD_PATHW, SIGDN_FILESYSPATH,
+        ADLT_RECENT, ApplicationDocumentLists, GetCurrentProcessExplicitAppUserModelID,
+        IApplicationDocumentLists, IShellItem, IShellLinkW, SHARD_PATHW, SHAddToRecentDocs,
+        SIGDN_FILESYSPATH,
     };
+    use windows::core::HSTRING;
 
-    use super::super::windows_open_in_shell::to_win32_path;
     use super::*;
+    use fandhe_cap_open_in_shell::to_win32_path;
 
-    const ERR: DeviceError = DeviceError::Internal("recent documents os");
+    const ERR: RecentDocumentsError = RecentDocumentsError::Internal("recent documents os");
 
     /// COM（STA）初期化ガード。成功（`S_OK`/`S_FALSE`）時だけ Drop で解放する。
-    /// `windows_open_in_shell.rs` の `ComGuard` と同型。
+    /// `fandhe-cap-open-in-shell`（`src/windows.rs`）の `ComGuard` と同型。
     struct ComGuard(bool);
     impl ComGuard {
         #[allow(unsafe_code)]
@@ -141,7 +141,7 @@ mod win {
 
     /// OS の「最近」一覧の全要素のパス。取得そのものの失敗は `Internal`。
     #[allow(unsafe_code)]
-    fn read_entries() -> Result<Vec<Option<String>>, DeviceError> {
+    fn read_entries() -> Result<Vec<Option<String>>, RecentDocumentsError> {
         let _com = ComGuard::new();
         // SAFETY: COM 初期化済みスレッドでの生成。戻りの参照は Drop が解放する。
         let lists: IApplicationDocumentLists =
@@ -163,7 +163,7 @@ mod win {
         Ok((0..n).map(|i| entry_path(&arr, i)).collect())
     }
 
-    fn read_back(path: &ShellPath) -> Result<RecentOutcome, DeviceError> {
+    fn read_back(path: &ShellPath) -> Result<RecentOutcome, RecentDocumentsError> {
         let p = to_win32_path(path.as_str())?;
         outcome_from_entries(&p, read_entries()?)
     }
@@ -172,7 +172,7 @@ mod win {
 
     impl RecentDocuments for WinRecentDocuments {
         #[allow(unsafe_code)]
-        fn register(&self, path: &ShellPath) -> Result<RecentOutcome, DeviceError> {
+        fn register(&self, path: &ShellPath) -> Result<RecentOutcome, RecentDocumentsError> {
             let p = to_win32_path(path.as_str())?;
             let h = HSTRING::from(p.as_str());
             // SAFETY: `h` は呼び出しの間だけ生きる NUL 終端の UTF-16 で、`to_win32_path` が 3 文字以上を
@@ -181,7 +181,7 @@ mod win {
             read_back(path)
         }
 
-        fn check(&self, path: &ShellPath) -> Result<RecentOutcome, DeviceError> {
+        fn check(&self, path: &ShellPath) -> Result<RecentOutcome, RecentDocumentsError> {
             read_back(path)
         }
     }
@@ -228,7 +228,7 @@ mod tests {
         ] {
             assert!(matches!(
                 outcome_from_entries(r"C:\a.txt", entries),
-                Err(DeviceError::Internal("recent documents os"))
+                Err(RecentDocumentsError::Internal("recent documents os"))
             ));
         }
     }

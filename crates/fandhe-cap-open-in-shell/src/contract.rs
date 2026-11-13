@@ -3,7 +3,7 @@
 //!
 //! 範囲は「指定ファイルを既定アプリで開く」「ファイルマネージャーで選択表示する」の 2 操作だけ。
 //! ゴミ箱は破壊的なので範囲外。検査の SSOT は [`ShellPath::new`] と [`ShellPath::check_openable`]
-//! （これ以外では OS へ渡すパスを作れない）。`fandhe-egui-proxy` の effect ドライバが値を検査して
+//! （これ以外では OS へ渡すパスを作れない）。`driver`（effect ドライバ）が値を検査して
 //! から OS 実装（macOS は `NSWorkspace`、Windows は #750）を呼ぶ。
 //!
 //! # 結果の三値
@@ -39,7 +39,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::DeviceError;
+use crate::error::OpenInShellError;
 
 /// パスの長さの上限（バイト）。macOS の `PATH_MAX`。
 pub const MAX_PATH_BYTES: usize = 1024;
@@ -52,8 +52,8 @@ pub struct ShellPath {
 
 impl ShellPath {
     /// 絶対・NUL なし・UTF-8・長さ上限内・存在するパスだけを受け付け、正規化後を保持する。
-    pub fn new(path: &Path) -> Result<Self, DeviceError> {
-        let bad = || DeviceError::InvalidInput("shell path");
+    pub fn new(path: &Path) -> Result<Self, OpenInShellError> {
+        let bad = || OpenInShellError::InvalidInput("shell path");
         let Some(s) = path.to_str() else {
             return Err(bad());
         };
@@ -83,10 +83,10 @@ impl ShellPath {
     /// 「開く」の対象にしてよい型か確かめる。通常のファイルだけを通す。ディレクトリ
     /// （`.app` 等のバンドルを含む）と、unix で実行ビットが立つファイルは
     /// `InvalidInput("shell type")`。
-    pub fn check_openable(&self) -> Result<(), DeviceError> {
-        let rejected = || DeviceError::InvalidInput("shell type");
-        let meta =
-            std::fs::metadata(&self.path).map_err(|_| DeviceError::InvalidInput("shell path"))?;
+    pub fn check_openable(&self) -> Result<(), OpenInShellError> {
+        let rejected = || OpenInShellError::InvalidInput("shell type");
+        let meta = std::fs::metadata(&self.path)
+            .map_err(|_| OpenInShellError::InvalidInput("shell path"))?;
         if !meta.is_file() {
             return Err(rejected());
         }
@@ -112,25 +112,25 @@ pub enum ShellOutcome {
 
 /// 既定アプリで開く・ファイルマネージャーで選択表示する OS 機能。
 ///
-/// 呼び出し元は `fandhe-egui-proxy` の effect ドライバ（UI スレッドで同期に呼ぶ）。
+/// 呼び出し元は `driver` の effect ドライバ（UI スレッドで同期に呼ぶ）。
 /// 引数は [`ShellPath`] 検査済みで、「開く」は事前に [`ShellPath::check_openable`] 済みの前提。
 pub trait OpenInShell: Send + Sync {
     /// 既定のアプリでファイルを開く。契約は本モジュールの doc。
-    fn open(&self, path: &ShellPath) -> Result<ShellOutcome, DeviceError>;
+    fn open(&self, path: &ShellPath) -> Result<ShellOutcome, OpenInShellError>;
     /// ファイルマネージャー（Finder / Explorer）で選択表示する。`NoHandler` は返さない。
-    fn reveal(&self, path: &ShellPath) -> Result<ShellOutcome, DeviceError>;
+    fn reveal(&self, path: &ShellPath) -> Result<ShellOutcome, OpenInShellError>;
 }
 
 /// 非対応 OS 用。常に `Unsupported` を返し、成功を作らない。
 pub struct UnsupportedOpenInShell;
 
 impl OpenInShell for UnsupportedOpenInShell {
-    fn open(&self, _path: &ShellPath) -> Result<ShellOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("open in shell"))
+    fn open(&self, _path: &ShellPath) -> Result<ShellOutcome, OpenInShellError> {
+        Err(OpenInShellError::Unsupported("open in shell"))
     }
 
-    fn reveal(&self, _path: &ShellPath) -> Result<ShellOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("open in shell"))
+    fn reveal(&self, _path: &ShellPath) -> Result<ShellOutcome, OpenInShellError> {
+        Err(OpenInShellError::Unsupported("open in shell"))
     }
 }
 
@@ -150,7 +150,7 @@ mod tests {
             assert!(
                 matches!(
                     ShellPath::new(Path::new(p)),
-                    Err(DeviceError::InvalidInput("shell path"))
+                    Err(OpenInShellError::InvalidInput("shell path"))
                 ),
                 "{p}"
             );
@@ -199,7 +199,7 @@ mod tests {
         let sp = ShellPath::new(&d).unwrap();
         assert!(matches!(
             sp.check_openable(),
-            Err(DeviceError::InvalidInput("shell type"))
+            Err(OpenInShellError::InvalidInput("shell type"))
         ));
         let _ = std::fs::remove_dir_all(&d);
     }
@@ -215,7 +215,7 @@ mod tests {
         let sp = ShellPath::new(&f).unwrap();
         assert!(matches!(
             sp.check_openable(),
-            Err(DeviceError::InvalidInput("shell type"))
+            Err(OpenInShellError::InvalidInput("shell type"))
         ));
         let _ = std::fs::remove_dir_all(&d);
     }
@@ -228,11 +228,11 @@ mod tests {
         let sp = ShellPath::new(&f).unwrap();
         assert!(matches!(
             UnsupportedOpenInShell.open(&sp),
-            Err(DeviceError::Unsupported("open in shell"))
+            Err(OpenInShellError::Unsupported("open in shell"))
         ));
         assert!(matches!(
             UnsupportedOpenInShell.reveal(&sp),
-            Err(DeviceError::Unsupported("open in shell"))
+            Err(OpenInShellError::Unsupported("open in shell"))
         ));
         let _ = std::fs::remove_dir_all(&d);
     }

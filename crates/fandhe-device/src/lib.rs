@@ -111,8 +111,6 @@ pub mod network_status;
 pub mod notification;
 /// Phase 11（端末機能の拡充ループ、親 #98、Issue #381）: ロック画面・OS のメディア操作（再生中の表示と再生・一時停止の受け取り）。
 pub mod now_playing;
-/// Phase 11（端末機能の拡充ループ、親 #146、Issue #749）: 既定アプリで開く・ファイルマネージャーで選択表示。
-pub mod open_in_shell;
 /// Issue #1188: base64url の共有部品（パスキー本体は機能 crate `fandhe-cap-passkey-signin`）。
 pub mod passkey;
 /// Phase 11（端末機能の拡充ループ、親 #114、Issue #541）: 物・サービスの決済シート（Google Pay TEST 環境、課金なし）。
@@ -129,8 +127,6 @@ pub mod picture_in_picture;
 pub mod print;
 /// Phase 11（端末機能の拡充ループ、親 #139、Issue #719）: クイック設定タイル・コントロール（押された回数の読み出し）。
 pub mod quick_settings_tile;
-/// Phase 11（端末機能の拡充ループ、親 #193、Issue #988）: OS の「最近使った項目」への登録と読み戻し。
-pub mod recent_documents;
 /// Phase 11（端末機能の拡充ループ、親 #105、Issue #444）: セーフエリア・ディスプレイ切り欠き。
 pub mod safe_area_insets;
 /// Phase 11（端末機能の拡充ループ、親 #128、Issue #655）: 画面向きの取得・固定。

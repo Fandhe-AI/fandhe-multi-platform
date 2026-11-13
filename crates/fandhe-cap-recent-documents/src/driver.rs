@@ -1,8 +1,8 @@
 //! Phase 11（親 #193）型サンプル「最近使った項目への登録」（Issue #988）の effect ドライバ。
 //! `fandhe_core::screens::recent_documents_show`（端末依存ゼロ）の要求を観測し、一時フォルダーの
 //! サンプルファイルを用意して `ShellPath` で検査してから OS へ渡し、結果を `CompletionSender` 経由で
-//! 返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約、`device/open_in_shell.rs` と同型）。
-//! 契約と守る範囲は `fandhe_device::recent_documents` のモジュール doc を参照。
+//! 返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約、`fandhe-cap-open-in-shell` の driver と同型）。
+//! 契約と守る範囲は `crate::contract` のモジュール doc を参照。
 //!
 //! OS の呼び出しは同期で結果を返す軽い呼び出しなので UI スレッド（macOS は main thread）で同期に呼ぶ。
 //! dispatch はここで最終形。Windows は `windows_recent_documents.rs`（#989）、
@@ -10,27 +10,31 @@
 
 use std::path::Path;
 
-use fandhe_core::screens::recent_documents_show::{
-    finish_action, mark_in_flight, take_request, CoreOutcome, RecentAction, RecentDocumentsState,
-    RecentFailure, SAMPLE_CONTENT, SAMPLE_DIR, SAMPLE_FILE,
-};
 #[cfg(any(not(any(target_os = "macos", target_os = "windows")), test))]
-use fandhe_device::recent_documents::UnsupportedRecentDocuments;
-use fandhe_device::recent_documents::{RecentDocuments, RecentOutcome, ShellPath};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedRecentDocuments;
+use crate::contract::{RecentDocuments, RecentOutcome, ShellPath};
+use crate::error::RecentDocumentsError;
+use fandhe_core::screens::recent_documents_show::{
+    CoreOutcome, RecentAction, RecentDocumentsState, RecentFailure, SAMPLE_CONTENT, SAMPLE_DIR,
+    SAMPLE_FILE, finish_action, mark_in_flight, take_request,
+};
 
-use super::open_in_shell::prepare_sample_file_in;
-use crate::app::CompletionSender;
+use fandhe_cap_open_in_shell::prepare_sample_file_in;
+use fandhe_runtime::CompletionSender;
 
-/// `DeviceError` を画面用の結果へ写像する。内部構造・パスは出さず固定の種類だけにする
+/// `RecentDocumentsError` を画面用の結果へ写像する。内部構造・パスは出さず固定の種類だけにする
 /// （security.md A09）。
-fn to_outcome(result: Result<RecentOutcome, DeviceError>) -> Result<CoreOutcome, RecentFailure> {
+fn to_outcome(
+    result: Result<RecentOutcome, RecentDocumentsError>,
+) -> Result<CoreOutcome, RecentFailure> {
     match result {
         Ok(RecentOutcome::Listed) => Ok(CoreOutcome::Listed),
         Ok(RecentOutcome::NotListed) => Ok(CoreOutcome::NotListed),
-        Err(DeviceError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
-        Err(DeviceError::Internal("shell sample"))
-        | Err(DeviceError::InvalidInput("shell path")) => Err(RecentFailure::SampleUnavailable),
+        Err(RecentDocumentsError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
+        Err(RecentDocumentsError::Internal("shell sample"))
+        | Err(RecentDocumentsError::InvalidInput("shell path")) => {
+            Err(RecentFailure::SampleUnavailable)
+        }
         Err(_) => Err(RecentFailure::Failed),
     }
 }
@@ -40,7 +44,7 @@ fn run_action(
     base: &Path,
     action: RecentAction,
     imp: &dyn RecentDocuments,
-) -> Result<RecentOutcome, DeviceError> {
+) -> Result<RecentOutcome, RecentDocumentsError> {
     let file = prepare_sample_file_in(base, SAMPLE_DIR, SAMPLE_FILE, SAMPLE_CONTENT)?;
     let path = ShellPath::new(&file)?;
     match action {
@@ -69,11 +73,11 @@ fn drive(
 }
 
 /// 現在の OS の実装を返す（macOS / Windows / それ以外）。
-fn platform_recent_documents() -> Box<dyn RecentDocuments> {
+pub fn platform_recent_documents() -> Box<dyn RecentDocuments> {
     #[cfg(target_os = "macos")]
-    return super::macos_recent_documents::implementation();
+    return crate::macos::implementation();
     #[cfg(target_os = "windows")]
-    return super::windows_recent_documents::implementation();
+    return crate::windows::implementation();
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     return Box::new(UnsupportedRecentDocuments);
 }
@@ -99,26 +103,35 @@ mod tests {
     use super::*;
     use fandhe_core::screens::recent_documents_show as screen;
     use std::path::PathBuf;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicU32, Ordering};
+    use std::time::Duration;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
 
     /// 呼び出し回数を数え、決めた結果を返す偽実装。
     struct Fake {
         calls: AtomicU32,
-        result: fn() -> Result<RecentOutcome, DeviceError>,
+        result: fn() -> Result<RecentOutcome, RecentDocumentsError>,
     }
 
     impl RecentDocuments for Fake {
-        fn register(&self, _p: &ShellPath) -> Result<RecentOutcome, DeviceError> {
+        fn register(&self, _p: &ShellPath) -> Result<RecentOutcome, RecentDocumentsError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             (self.result)()
         }
-        fn check(&self, _p: &ShellPath) -> Result<RecentOutcome, DeviceError> {
+        fn check(&self, _p: &ShellPath) -> Result<RecentOutcome, RecentDocumentsError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             (self.result)()
         }
     }
 
-    fn fake(result: fn() -> Result<RecentOutcome, DeviceError>) -> Fake {
+    fn fake(result: fn() -> Result<RecentOutcome, RecentDocumentsError>) -> Fake {
         Fake {
             calls: AtomicU32::new(0),
             result,
@@ -139,7 +152,7 @@ mod tests {
             RecentAction::Check => screen::check_listed(&mut s),
         }
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = crate::app::egui_sender(tx, egui::Context::default());
+        let sender = CompletionSender::new(tx, Arc::new(NoopWaker));
         drive(&s, &sender, base, imp);
         while let Ok(apply) = rx.try_recv() {
             apply(&mut s);
@@ -158,19 +171,19 @@ mod tests {
             Ok(CoreOutcome::NotListed)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Unsupported("recent documents"))),
+            to_outcome(Err(RecentDocumentsError::Unsupported("recent documents"))),
             Ok(CoreOutcome::Unsupported)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Internal("shell sample"))),
+            to_outcome(Err(RecentDocumentsError::Internal("shell sample"))),
             Err(RecentFailure::SampleUnavailable)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::InvalidInput("shell path"))),
+            to_outcome(Err(RecentDocumentsError::InvalidInput("shell path"))),
             Err(RecentFailure::SampleUnavailable)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Internal("recent documents os"))),
+            to_outcome(Err(RecentDocumentsError::Internal("recent documents os"))),
             Err(RecentFailure::Failed)
         );
     }
@@ -181,7 +194,7 @@ mod tests {
         let base = temp_base("none");
         let s = RecentDocumentsState::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = crate::app::egui_sender(tx, egui::Context::default());
+        let sender = CompletionSender::new(tx, Arc::new(NoopWaker));
         drive(&s, &sender, &base, &f);
         assert!(rx.try_recv().is_err());
         assert_eq!(f.calls.load(Ordering::SeqCst), 0);
@@ -225,7 +238,7 @@ mod tests {
     #[test]
     fn internal_failure_uses_fixed_text_without_path() {
         let base = temp_base("int");
-        let f = fake(|| Err(DeviceError::Internal("recent documents os")));
+        let f = fake(|| Err(RecentDocumentsError::Internal("recent documents os")));
         let s = run(RecentAction::Check, &base, &f);
         assert_eq!(s.error, screen::CHECK_FAILED_ERROR);
         assert!(s.status.is_empty());

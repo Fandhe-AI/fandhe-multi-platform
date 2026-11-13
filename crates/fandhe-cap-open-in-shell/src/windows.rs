@@ -1,6 +1,6 @@
 //! Windows 向け「既定アプリで開く・Explorer で表示」の実装（Issue #750、親 #146）。
 //! `device/open_in_shell.rs`（effect ドライバ）の windows 経路から UI スレッドで同期に呼ばれ、
-//! 契約は `fandhe_device::open_in_shell`（`OpenInShell` / `ShellPath` / `ShellOutcome`）。
+//! 契約は `crate::contract`（`OpenInShell` / `ShellPath` / `ShellOutcome`）。
 //! ゴミ箱（`IFileOperation`）は破壊的なため親 #146 の判断で範囲外。
 //!
 //! # 方式
@@ -53,9 +53,9 @@
 //! モジュールは純関数をホストでテストできるよう `cfg(any(windows, test))` でコンパイルする（`device.rs`）。
 
 #[cfg(not(target_os = "windows"))]
-use fandhe_device::open_in_shell::UnsupportedOpenInShell;
-use fandhe_device::open_in_shell::{OpenInShell, ShellOutcome};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedOpenInShell;
+use crate::contract::{OpenInShell, ShellOutcome};
+use crate::error::OpenInShellError;
 
 /// `ShellExecuteExW` の `hInstApp` に入る `SE_ERR_NOASSOC`（関連付けが無い）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -143,9 +143,10 @@ const DENIED_EXTENSIONS: &[&str] = &[
 
 /// `ShellPath::as_str()`（`\\?\X:\...` または `X:\...`）を OS に渡す `X:\...` へ正規化する。
 /// 規則は本モジュール doc の「パスの正規化」。不適合は `InvalidInput("shell path")`。
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub(super) fn to_win32_path(canonical: &str) -> Result<String, DeviceError> {
-    const ERR: DeviceError = DeviceError::InvalidInput("shell path");
+/// recent-documents の Windows 実装も使うため crate ルートから公開する（検査は変えない。
+/// `ShellPath` の検査済みの値だけを渡す）。
+pub fn to_win32_path(canonical: &str) -> Result<String, OpenInShellError> {
+    const ERR: OpenInShellError = OpenInShellError::InvalidInput("shell path");
     let p = canonical.strip_prefix(r"\\?\").unwrap_or(canonical);
     let b = p.as_bytes();
     // `X:\` 形式のみ許可（UNC・デバイス・Volume{} はここで弾かれる）。
@@ -221,11 +222,14 @@ fn open_type_check(attrs: Option<u32>, ext: Option<&str>, dangerous: bool) -> Ty
 /// `ShellExecuteExW` 失敗時の写像。`last_error` は `GetLastError`、`inst_app` は `hInstApp` の数値。
 /// 関連付け無しだけ `NoHandler`、未知の失敗は `Internal`。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-fn exec_failure_outcome(last_error: u32, inst_app: isize) -> Result<ShellOutcome, DeviceError> {
+fn exec_failure_outcome(
+    last_error: u32,
+    inst_app: isize,
+) -> Result<ShellOutcome, OpenInShellError> {
     if last_error == ERROR_NO_ASSOCIATION || inst_app == SE_ERR_NOASSOC {
         Ok(ShellOutcome::NoHandler)
     } else {
-        Err(DeviceError::Internal("shell os"))
+        Err(OpenInShellError::Internal("shell os"))
     }
 }
 
@@ -242,27 +246,27 @@ enum RevealStep {
 
 /// 選択表示の結果。PIDL を作れない場合も HRESULT 失敗も `Internal`。`NoHandler` は返さない。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-fn reveal_outcome(step: RevealStep) -> Result<ShellOutcome, DeviceError> {
+fn reveal_outcome(step: RevealStep) -> Result<ShellOutcome, OpenInShellError> {
     match step {
         RevealStep::Done => Ok(ShellOutcome::HandedOff),
-        RevealStep::NoPidl | RevealStep::Failed => Err(DeviceError::Internal("shell os")),
+        RevealStep::NoPidl | RevealStep::Failed => Err(OpenInShellError::Internal("shell os")),
     }
 }
 
 #[cfg(target_os = "windows")]
 mod win {
     use super::*;
-    use windows::core::{w, HSTRING, PCWSTR};
     use windows::Win32::Storage::FileSystem::{GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
     use windows::Win32::System::Com::{
-        CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
+        COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
     };
     use windows::Win32::UI::Shell::Common::ITEMIDLIST;
     use windows::Win32::UI::Shell::{
-        AssocIsDangerous, ILCreateFromPathW, ILFree, SHOpenFolderAndSelectItems, ShellExecuteExW,
-        SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW,
+        AssocIsDangerous, ILCreateFromPathW, ILFree, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC,
+        SHELLEXECUTEINFOW, SHOpenFolderAndSelectItems, ShellExecuteExW,
     };
     use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    use windows::core::{HSTRING, PCWSTR, w};
 
     /// COM（STA）初期化ガード。成功（`S_OK`/`S_FALSE`）時だけ Drop で解放する。
     /// `windows_launch_at_login.rs` の `ComGuard` と同型。
@@ -308,7 +312,7 @@ mod win {
     }
 
     #[allow(unsafe_code)]
-    pub(super) fn open(canonical: &str) -> Result<ShellOutcome, DeviceError> {
+    pub(super) fn open(canonical: &str) -> Result<ShellOutcome, OpenInShellError> {
         let path = to_win32_path(canonical)?;
         let file = HSTRING::from(path.as_str());
         let attrs = file_attributes(&file);
@@ -323,7 +327,7 @@ mod win {
         };
         match open_type_check(attrs, ext.as_deref(), dangerous) {
             TypeCheck::Pass => {}
-            TypeCheck::Reject => return Err(DeviceError::InvalidInput("shell type")),
+            TypeCheck::Reject => return Err(OpenInShellError::InvalidInput("shell type")),
         }
         let _com = ComGuard::new();
         let mut info = SHELLEXECUTEINFOW {
@@ -350,7 +354,7 @@ mod win {
     }
 
     #[allow(unsafe_code)]
-    pub(super) fn reveal(canonical: &str) -> Result<ShellOutcome, DeviceError> {
+    pub(super) fn reveal(canonical: &str) -> Result<ShellOutcome, OpenInShellError> {
         let path = to_win32_path(canonical)?;
         let _com = ComGuard::new();
         let wide = HSTRING::from(path);
@@ -376,17 +380,11 @@ struct WindowsOpenInShell;
 
 #[cfg(target_os = "windows")]
 impl OpenInShell for WindowsOpenInShell {
-    fn open(
-        &self,
-        path: &fandhe_device::open_in_shell::ShellPath,
-    ) -> Result<ShellOutcome, DeviceError> {
+    fn open(&self, path: &crate::contract::ShellPath) -> Result<ShellOutcome, OpenInShellError> {
         win::open(path.as_str())
     }
 
-    fn reveal(
-        &self,
-        path: &fandhe_device::open_in_shell::ShellPath,
-    ) -> Result<ShellOutcome, DeviceError> {
+    fn reveal(&self, path: &crate::contract::ShellPath) -> Result<ShellOutcome, OpenInShellError> {
         win::reveal(path.as_str())
     }
 }
@@ -408,8 +406,8 @@ pub(crate) fn implementation() -> Box<dyn OpenInShell> {
 mod tests {
     use super::*;
 
-    fn is_path_err(r: Result<String, DeviceError>) -> bool {
-        matches!(r, Err(DeviceError::InvalidInput("shell path")))
+    fn is_path_err(r: Result<String, OpenInShellError>) -> bool {
+        matches!(r, Err(OpenInShellError::InvalidInput("shell path")))
     }
 
     #[test]
@@ -485,7 +483,7 @@ mod tests {
         for (e, i) in [(0, 0), (2, 2), (5, 5), (31, 0), (0, 32), (0, -1)] {
             assert!(matches!(
                 exec_failure_outcome(e, i),
-                Err(DeviceError::Internal("shell os"))
+                Err(OpenInShellError::Internal("shell os"))
             ));
         }
     }
@@ -499,7 +497,7 @@ mod tests {
         for s in [RevealStep::NoPidl, RevealStep::Failed] {
             assert!(matches!(
                 reveal_outcome(s),
-                Err(DeviceError::Internal("shell os"))
+                Err(OpenInShellError::Internal("shell os"))
             ));
         }
     }

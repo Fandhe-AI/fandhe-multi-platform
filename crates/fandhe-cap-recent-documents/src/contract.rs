@@ -3,7 +3,7 @@
 //!
 //! 登録 API は macOS・Windows とも成否を返さない。そのため登録の直後に OS の一覧を読み戻し、
 //! 載っていたかで結果を決める（登録 API の無戻り値を成功に畳まない）。OS へ渡せるパスは
-//! [`ShellPath`]（`open_in_shell` の検査済み型）だけ。`fandhe-egui-proxy` の effect ドライバが
+//! [`ShellPath`]（`fandhe-cap-open-in-shell` の検査済み型）だけ。`driver`（effect ドライバ）が
 //! サンプルファイルを用意して検査し、OS 実装（macOS は `NSDocumentController`、Windows は #989）を
 //! UI スレッドから同期に呼ぶ。
 //!
@@ -34,8 +34,8 @@
 //!
 //! 期限は設けない。OS の呼び出しは同期で結果を返し、待つ処理を持たないため（契約表 3）。
 
-use crate::DeviceError;
-pub use crate::open_in_shell::ShellPath;
+use crate::error::RecentDocumentsError;
+pub use fandhe_cap_open_in_shell::ShellPath;
 
 /// 読み戻した OS の一覧に対する結果。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,25 +48,25 @@ pub enum RecentOutcome {
 
 /// 「最近使った項目」へ登録・確認する OS 機能。
 ///
-/// 呼び出し元は `fandhe-egui-proxy` の effect ドライバ（UI スレッドで同期に呼ぶ）。
+/// 呼び出し元は `driver` の effect ドライバ（UI スレッドで同期に呼ぶ）。
 /// 引数は [`ShellPath`] 検査済み。
 pub trait RecentDocuments: Send + Sync {
     /// 登録して、直後に OS の一覧を読み戻した結果を返す。契約は本モジュールの doc。
-    fn register(&self, path: &ShellPath) -> Result<RecentOutcome, DeviceError>;
+    fn register(&self, path: &ShellPath) -> Result<RecentOutcome, RecentDocumentsError>;
     /// 登録せず、OS の一覧にパスがあるかだけを読み戻す。
-    fn check(&self, path: &ShellPath) -> Result<RecentOutcome, DeviceError>;
+    fn check(&self, path: &ShellPath) -> Result<RecentOutcome, RecentDocumentsError>;
 }
 
 /// 非対応 OS 用。常に `Unsupported` を返し、成功を作らない。
 pub struct UnsupportedRecentDocuments;
 
 impl RecentDocuments for UnsupportedRecentDocuments {
-    fn register(&self, _path: &ShellPath) -> Result<RecentOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("recent documents"))
+    fn register(&self, _path: &ShellPath) -> Result<RecentOutcome, RecentDocumentsError> {
+        Err(RecentDocumentsError::Unsupported("recent documents"))
     }
 
-    fn check(&self, _path: &ShellPath) -> Result<RecentOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("recent documents"))
+    fn check(&self, _path: &ShellPath) -> Result<RecentOutcome, RecentDocumentsError> {
+        Err(RecentDocumentsError::Unsupported("recent documents"))
     }
 }
 
@@ -79,11 +79,11 @@ mod tests {
         let p = ShellPath::new(&std::env::temp_dir()).unwrap();
         assert!(matches!(
             UnsupportedRecentDocuments.register(&p),
-            Err(DeviceError::Unsupported("recent documents"))
+            Err(RecentDocumentsError::Unsupported("recent documents"))
         ));
         assert!(matches!(
             UnsupportedRecentDocuments.check(&p),
-            Err(DeviceError::Unsupported("recent documents"))
+            Err(RecentDocumentsError::Unsupported("recent documents"))
         ));
     }
 }

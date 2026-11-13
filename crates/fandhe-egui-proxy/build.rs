@@ -546,18 +546,6 @@ fn compile_macos_compose_mail_sms() {
     compile_objc("macos/fandhe_macos_compose_mail_sms.m", &["AppKit"]);
 }
 
-/// `macos/fandhe_macos_recent_documents.m` を `cc` でコンパイルする（Issue #988）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_recent_documents.rs` が使う）。
-fn compile_macos_recent_documents() {
-    compile_objc("macos/fandhe_macos_recent_documents.m", &["AppKit"]);
-}
-
-/// `macos/fandhe_macos_open_in_shell.m` を `cc` でコンパイルする（Issue #749）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_open_in_shell.rs` が使う）。
-fn compile_macos_open_in_shell() {
-    compile_objc("macos/fandhe_macos_open_in_shell.m", &["AppKit"]);
-}
-
 /// `macos/fandhe_macos_video_capture.m` を `cc` でコンパイルし AVFoundation・CoreMedia・QuartzCore をリンクする
 /// （Issue #1071）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_video_capture.rs` が使う）。
 fn compile_macos_video_capture() {
@@ -828,10 +816,6 @@ fn build_macos() {
     compile_macos_launch_at_login();
     // `macos/fandhe_macos_compose_mail_sms.m`（Issue #1384）も macOS 専用。
     compile_macos_compose_mail_sms();
-    // `macos/fandhe_macos_open_in_shell.m`（Issue #749）も macOS 専用。
-    compile_macos_open_in_shell();
-    // `macos/fandhe_macos_recent_documents.m`（Issue #988）も macOS 専用。
-    compile_macos_recent_documents();
     // `macos/fandhe_macos_video_capture.m`（Issue #1071）も macOS 専用。AVFoundation 等をリンクする。
     compile_macos_video_capture();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。

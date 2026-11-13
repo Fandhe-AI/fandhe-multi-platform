@@ -127,11 +127,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "open_in_shell" => fandhe_core::screens::open_in_shell::current_screen,
-    fandhe_egui_proxy::device::open_in_shell::open_in_shell_effect,
+    fandhe_cap_open_in_shell::open_in_shell_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "recent_documents_show" => fandhe_core::screens::recent_documents_show::current_screen,
-    fandhe_egui_proxy::device::recent_documents::recent_documents_show_effect,
+    fandhe_cap_recent_documents::recent_documents_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "passkey_signin" => fandhe_core::screens::passkey_signin::current_screen,
