@@ -1,5 +1,5 @@
 //! Windows 向け「既定アプリで開く・Explorer で表示」の実装（Issue #750、親 #146）。
-//! `device/open_in_shell.rs`（effect ドライバ）の windows 経路から UI スレッドで同期に呼ばれ、
+//! `driver`（effect ドライバ）の windows 経路から UI スレッドで同期に呼ばれ、
 //! 契約は `crate::contract`（`OpenInShell` / `ShellPath` / `ShellOutcome`）。
 //! ゴミ箱（`IFileOperation`）は破壊的なため親 #146 の判断で範囲外。
 //!

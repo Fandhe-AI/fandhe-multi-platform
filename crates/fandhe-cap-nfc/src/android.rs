@@ -19,7 +19,7 @@
 //! 他アプリ・OS が先にタグを処理した場合。タグの中身・UID・id・コードはログに出さない。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `NfcReadHelper.start` を経た後でしか呼ばれず、
-//! feature `device` 無効ビルドではその経路に到達しない（`android_scanner_devices` と同じ）。
+//! feature `device` 無効ビルドではその経路に到達しない（scanner-devices と同じ）。
 
 use std::time::{Duration, Instant};
 

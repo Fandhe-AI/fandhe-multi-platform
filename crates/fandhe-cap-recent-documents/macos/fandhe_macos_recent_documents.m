@@ -2,7 +2,7 @@
 // `NSDocumentController` の `noteNewRecentDocumentURL:` で登録し、`recentDocumentURLs` で読み戻す。
 // 権限は不要。一覧の消去（`clearRecentDocuments:`）は呼ばない。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_recent_documents.rs` から C ABI 経由で呼ばれる。
+// `crate::macos` から C ABI 経由で呼ばれる。
 // `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
 //
 // 契約:

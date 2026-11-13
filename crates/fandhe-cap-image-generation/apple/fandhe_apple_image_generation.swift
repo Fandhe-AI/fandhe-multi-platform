@@ -2,7 +2,7 @@
 //
 // `ImagePlaygroundViewController` は Swift 専用の型を含むため、`build.rs` の
 // `compile_apple_image_generation` が swiftc で静的ライブラリ化し、Rust の
-// `device/apple_image_generation.rs` が `@_cdecl` の C ABI 1 関数だけを呼ぶ。結果は Rust が渡した
+// `crate::apple` が `@_cdecl` の C ABI 1 関数だけを呼ぶ。結果は Rust が渡した
 // 関数ポインタ 2 本（begin・done）で返す。OS の分岐は `TARGET_OS` ではなく `canImport` と
 // `#available` で行う。
 //
@@ -13,7 +13,7 @@
 //   - `done(request_id, code, ptr, len, w, h)`: 画面を閉じた後に 1 要求につき 1 回だけ main queue で呼ぶ。
 //     `ptr` は呼び出しの間だけ有効（RGBA8・行優先・`len == w*h*4`）。
 //
-// コード表（意味の SSOT は Rust の `fandhe_device::image_generation::outcome_from_apple_code`）:
+// コード表（意味の SSOT は Rust の `crate::contract::outcome_from_apple_code`）:
 //   0 生成 / 1 キャンセル / 2 非対応 / 3 表示先なし / 4 復号不可 / 5 大きすぎる / 6 前面でない（iOS のみ）/
 //   7 その他
 //

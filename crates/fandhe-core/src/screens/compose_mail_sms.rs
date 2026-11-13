@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
 //! 置き場」節の制約どおり）。入力の検査と OS 呼び出しは `fandhe-egui-proxy` の effect ドライバ
-//! （`device/compose_mail_sms.rs`）が [`take_request`] で要求を観測して行い、[`finish_compose`] で
+//! （`fandhe-cap-compose-mail-sms` の `driver`）が [`take_request`] で要求を観測して行い、[`finish_compose`] で
 //! 結果を注入する。本画面は二重押し防止と文言だけを持つ。
 //!
 //! # 結果を混同しない理由

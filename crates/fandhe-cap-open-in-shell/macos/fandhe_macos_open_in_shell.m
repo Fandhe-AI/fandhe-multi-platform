@@ -1,7 +1,7 @@
 // Phase 11 の拡充ループ（親 #146）型サンプル「既定アプリで開く・Finder で表示」: macOS 実装
 // （Issue #749）。`NSWorkspace` で既定アプリを開く / Finder で選択表示する。権限は不要。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_open_in_shell.rs` から C ABI 経由で呼ばれる。
+// `crate::macos` から C ABI 経由で呼ばれる。
 // `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
 //
 // 契約:

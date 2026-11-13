@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod radio_control_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの置き場」節）。
-//! OS 呼び出しは `fandhe-egui-proxy` の `device/radio_control.rs` が [`take_request`] で要求を観測し
+//! OS 呼び出しは `fandhe-cap-radio-control` の `driver` が [`take_request`] で要求を観測し
 //! [`finish_read`] / [`finish_switch`] で結果を注入する（`wifi_connect_show.rs` と同型）。
 //!
 //! 全対象 OS（macOS / Windows / Android）の状態・文言をここで確定済みで、後続の OS 実装は本画面を
@@ -109,7 +109,7 @@ pub enum Action {
     Set(bool),
 }
 
-/// 無線の状態（`fandhe_device::radio_control::RadioState` と同じ 6 値。写す責務は effect 側）。
+/// 無線の状態（`fandhe_cap_radio_control::RadioState` と同じ 6 値。写す責務は effect 側）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reading {
     /// オン。

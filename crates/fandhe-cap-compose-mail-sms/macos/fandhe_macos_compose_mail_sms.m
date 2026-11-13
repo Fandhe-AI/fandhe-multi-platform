@@ -3,7 +3,7 @@
 // 作成画面を出す。添付付きのメールは `NSSharingService`（composeEmail）で To・件名・本文・添付を渡す
 // （Issue #1042）。権限は不要。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_compose_mail_sms.rs` から C ABI 経由で呼ばれる。
+// `crate::macos` から C ABI 経由で呼ばれる。
 // `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
 //
 // 契約:

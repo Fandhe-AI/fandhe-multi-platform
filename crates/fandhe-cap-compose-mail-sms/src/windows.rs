@@ -1,5 +1,5 @@
 //! Windows 向けメール・SMS 作成画面の実装（Issue #1384・#31）。`ShellExecuteW` で `mailto:` /
-//! `sms:` URL を開き、既定のハンドラの作成画面を出す。`device/compose_mail_sms.rs` の Windows 経路から呼ばれ、
+//! `sms:` URL を開き、既定のハンドラの作成画面を出す。`driver` の Windows 経路から呼ばれ、
 //! 契約は `crate::contract`。渡すのは `ComposeRequest::to_url` が組み立てた
 //! `mailto:` / `sms:` URL の 2 種だけで、scheme は固定。任意の scheme・パス・引数を渡す経路は作らない。
 //! 添付付きの要求は URL で渡せないため、Simple MAPI（`MAPISendMailW`）を作業スレッドで呼ぶ
@@ -211,7 +211,7 @@ pub(crate) fn begin_attachment_with(
 #[cfg(target_os = "windows")]
 static IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
-/// 添付付きの要求を本番の static で開く（`device/compose_mail_sms.rs` の `drive` から呼ばれる）。
+/// 添付付きの要求を本番の static で開く（`driver` の `drive` から呼ばれる）。
 #[cfg(target_os = "windows")]
 pub(crate) fn begin_attachment(
     req: ComposeRequest,
@@ -341,7 +341,7 @@ impl crate::contract::ComposeMailSms for WindowsComposeMailSms {
 #[cfg(target_os = "windows")]
 pub(crate) use fandhe_platform_windows::open_url;
 
-/// Windows の `ComposeMailSms` 実装を返す（`device/compose_mail_sms.rs` の dispatch から呼ばれる）。
+/// Windows の `ComposeMailSms` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "windows")]
 pub(crate) fn implementation() -> Box<dyn crate::contract::ComposeMailSms> {
     Box::new(WindowsComposeMailSms)

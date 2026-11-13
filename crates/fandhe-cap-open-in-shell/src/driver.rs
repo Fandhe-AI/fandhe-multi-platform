@@ -2,12 +2,12 @@
 //! effect ドライバ。`fandhe_core::screens::open_in_shell`（端末依存ゼロ）の要求を観測し、一時
 //! フォルダーのサンプルファイルを用意して `crate::contract::ShellPath` で検査してから
 //! OS へ渡し、結果を `CompletionSender` 経由で返す（`screens/registry.rs` の `effect` 区画から
-//! 呼ばれる契約、`device/compose_mail_sms.rs` の同期経路と同型）。契約と守る範囲は
+//! 呼ばれる契約、`fandhe-cap-compose-mail-sms` の driver の同期経路と同型）。契約と守る範囲は
 //! `crate::contract` のモジュール doc を参照。
 //!
 //! OS の呼び出しは Bool を同期で返す軽い呼び出しなので UI スレッドで同期に呼ぶ。
 //! **dispatch はここで最終形にしてあり、後続 issue（Windows は #750）は OS 別モジュール
-//! （`windows_open_in_shell.rs`）だけを埋める**。macOS は `macos_open_in_shell.rs`、
+//! （`crate::windows`）だけを埋める**。macOS は `crate::macos`、
 //! それ以外は `UnsupportedOpenInShell` で「非対応」を表示する。
 
 use std::path::{Path, PathBuf};

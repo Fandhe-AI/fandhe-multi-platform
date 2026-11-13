@@ -1,7 +1,7 @@
 //! Windows 向けスキャナー取り込み（Issue #984。骨格は #981 (a)）。WinRT
 //! `Windows.Devices.Scanners.ImageScanner`（WIA ドライバーのスキャナーのみ。カメラ機器は範囲外）を呼ぶ。
 //!
-//! 呼び出し元: `device/scanner_devices.rs::platform` の Windows 経路が、ワーカースレッドから
+//! 呼び出し元: `driver::platform` の Windows 経路が、ワーカースレッドから
 //! `ScannerDevices::import_one` を同期に呼ぶ。世代・期限の判定と、表示前の復号（2 段検査の 2 段目）は
 //! 呼び出し側が担い、本ファイルは `ImportedImage` か `ScannerImportFailure` だけを返す。
 //! 契約（結果の種類・写像表・守る範囲）の SSOT は `crate::contract`。

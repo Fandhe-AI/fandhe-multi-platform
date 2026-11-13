@@ -25,10 +25,10 @@ import java.security.SecureRandom;
 
 // OS のファイル画面（Files アプリ・他アプリの保存先選択）にアプリ専用フォルダを出す
 // DocumentsProvider（Issue #1020、親 #194）。system（MANAGE_DOCUMENTS 保持者）だけが bind する。
-// Rust の `fandhe_device::file_provider::DirFileProvider`（`device/android_file_provider.rs`）と
+// Rust の `crate::contract::DirFileProvider`（`crate::android`）と
 // 同じフォルダ `getFilesDir()/file-provider` を、同じ配置 `<id>/<表示名>` と同じ規則で触る。
 //
-// 方式（契約は `fandhe_device::file_provider` のモジュール doc）:
+// 方式（契約は `crate::contract` のモジュール doc）:
 // - 1 書類 = 再利用しない書類 ID 1 つ。document ID は ID で、表示名は識別に使わない。
 // - 作成は mkdir（既にあれば失敗）で一意性を OS に確かめさせる。消した ID は二度と使わない。
 //   古い URI は解決できず、同じ表示名で作り直しても権限は新しい書類に及ばない。
@@ -41,7 +41,7 @@ import java.security.SecureRandom;
 // lstat と open の間の差し替え（私有フォルダに項目を作れるのは自プロセスだけ）。
 public final class FileProviderDocumentsProvider extends DocumentsProvider {
 
-    // Rust 側 `fandhe_device::file_provider` の FOLDER_NAME / MAX_NAME_BYTES / MAX_ID_LEN と一致させる。
+    // Rust 側 `crate::contract` の FOLDER_NAME / MAX_NAME_BYTES / MAX_ID_LEN と一致させる。
     static final String FOLDER_NAME = "file-provider";
     private static final int MAX_NAME_BYTES = 255;
     private static final int MAX_ID_LEN = 64;

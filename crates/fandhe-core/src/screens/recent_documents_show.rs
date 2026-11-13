@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
 //! 置き場」節の制約どおり）。サンプルの用意・パスの検査・OS 呼び出しは `fandhe-egui-proxy` の
-//! effect ドライバ（`device/recent_documents.rs`）が [`take_request`] で要求を観測して行い、
+//! effect ドライバ（`fandhe-cap-recent-documents` の `driver`）が [`take_request`] で要求を観測して行い、
 //! [`finish_action`] で結果を注入する。本画面は二重押し防止と文言だけを持つ。OS 別の表示差は無い。
 //!
 //! # 結果を混同しない理由

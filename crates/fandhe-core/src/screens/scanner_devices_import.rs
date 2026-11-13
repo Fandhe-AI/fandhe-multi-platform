@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod scanner_devices_import;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は
-//! 本モジュール外（`fandhe-egui-proxy` の `device/scanner_devices.rs`）が [`take_request`] で要求を
+//! 本モジュール外（`fandhe-cap-scanner-devices` の `driver`）が [`take_request`] で要求を
 //! 観測し、[`mark_running`]・[`finish_import`] で状態を進める。全対象 OS の分の状態・文言は
 //! ここで定義するため、OS 別の子 issue（#982〜#984）はこのファイルを触らない。
 //!
@@ -58,7 +58,7 @@ pub const CAMERA_LABEL: &str = "カメラ機器";
 /// 機器の種類のラベル（スキャナー）。
 pub const SCANNER_LABEL: &str = "スキャナー";
 
-/// 取り込み元の機器の種類（`fandhe_device::scanner_devices::DeviceKind` から写す責務は effect 側）。
+/// 取り込み元の機器の種類（`fandhe_cap_scanner_devices::DeviceKind` から写す責務は effect 側）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreKind {
     /// カメラ機器。
@@ -94,7 +94,7 @@ pub struct ShownImage {
     pub height: u32,
 }
 
-/// 取り込めなかった理由（`fandhe_device::scanner_devices::ScannerImportFailure` から写す責務は
+/// 取り込めなかった理由（`fandhe_cap_scanner_devices::ScannerImportFailure` から写す責務は
 /// effect 側）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreFailure {

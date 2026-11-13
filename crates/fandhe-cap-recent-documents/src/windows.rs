@@ -1,5 +1,5 @@
 //! Windows 向け「最近使った項目」の実装（Issue #989、親 #193、骨格は #988）。
-//! `device/recent_documents.rs`（effect ドライバ）の windows 経路から UI スレッドで同期に呼ばれ、
+//! `driver`（effect ドライバ）の windows 経路から UI スレッドで同期に呼ばれ、
 //! 契約は `crate::contract`。
 //!
 //! # 方式
@@ -64,7 +64,7 @@ fn outcome_from_entries(
     })
 }
 
-/// Windows の `RecentDocuments` 実装を返す（`device/recent_documents.rs` の dispatch から呼ばれる）。
+/// Windows の `RecentDocuments` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "windows")]
 pub(crate) fn implementation() -> Box<dyn crate::contract::RecentDocuments> {
     Box::new(win::WinRecentDocuments)

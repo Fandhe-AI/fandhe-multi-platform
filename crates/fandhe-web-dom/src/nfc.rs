@@ -161,7 +161,7 @@ pub(crate) fn is_late(started_ms: f64, now_ms: f64) -> bool {
     now_ms - started_ms >= READ_DEADLINE.as_secs_f64() * 1000.0
 }
 
-/// 契約の結果を画面の結果へ写す。`fandhe-egui-proxy/src/device/nfc.rs` の `to_core_record` /
+/// 契約の結果を画面の結果へ写す。`fandhe-cap-nfc`（`src/driver.rs`）の `to_core_record` /
 /// `to_core_failure` と同期する（同クレートに依存しないため同じ写像をここに置く）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 fn to_core(r: Result<NfcReadOutcome, NfcReadFailure>) -> Result<ShownTag, CoreFailure> {

@@ -1,5 +1,5 @@
 //! Windows 向け「無線の状態と切り替え」実装（Issue #973、親 #189）。
-//! `device/radio_control.rs` の dispatch（Windows 経路）からワーカースレッドで呼ばれ、
+//! `driver` の dispatch（Windows 経路）からワーカースレッドで呼ばれ、
 //! WinRT `Windows.Devices.Radios.Radio` で Wi-Fi / Bluetooth を読み書きする。契約の SSOT は
 //! `crate::contract`（「OS ごとの写像」節）。
 //!

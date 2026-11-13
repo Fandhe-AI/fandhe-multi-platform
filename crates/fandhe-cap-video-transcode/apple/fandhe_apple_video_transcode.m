@@ -2,7 +2,7 @@
 // iOS 実装（#1016）と共用できるよう `TARGET_OS` では分けない（AVFoundation・CoreMedia・CoreVideo・
 // Foundation だけを使い、UIKit / AppKit に触れない）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_video_transcode.rs` から C ABI 経由で呼ばれる。
+// `crate::apple` から C ABI 経由で呼ばれる。
 // `build.rs` が macOS・iOS ターゲットの feature `device` 有効時に `cc` コンパイルする
 // （Rust 側 cfg と同じ OS 集合に保つ）。
 //

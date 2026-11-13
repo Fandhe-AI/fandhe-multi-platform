@@ -173,7 +173,7 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | pen-stylus | Android が `MainActivity.dispatchTouchEvent` の上書きを要する。provider では置き換えられない | §12 の `Window.Callback` を包む型で移せる（`dispatchTouchEvent` の観測。共通層への引き上げはそのとき行う） |
 | picture-in-picture | Android が `onPictureInPictureModeChanged` の上書きと `<activity supportsPictureInPicture>` 属性を要する | 宣言の拡張が先 |
 | fullscreen-immersive | `FullscreenHelper.onInsets` が、`MainActivity` の唯一の decorView insets リスナー（safe-area と共用）から呼ばれる | insets を配る口を `fandhe-platform-android` に置く設計が先 |
-| compose-mail-sms | 未移行の `windows_web_auth_session.rs` が `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を呼ぶ | `open_url` は #1192 で `fandhe-platform-windows` へ上げた（`windows_compose_mail_sms` は再公開だけを持つ）。web-auth-session と同時に移すか、その再公開を共通層への参照に付け替えて移す |
+| compose-mail-sms | 未移行の `windows_web_auth_session.rs` が `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を呼ぶ | `open_url` は #1192 で `fandhe-platform-windows` へ上げた（`windows_compose_mail_sms` は再公開だけを持つ）。web-auth-session と同時に移すか、その再公開を共通層への参照に付け替えて移す （第 8 束 #1193 で移した） |
 | print・print-screen | `print_screen_page_effect` が egui 固有の読み書き口（`EguiSenderExt` の `request_screenshot`・`tagged_screenshot`）を使う | `fandhe-runtime` に egui 非依存の口を足す設計が先 |
 | in-app-purchase | 全 OS が未実装（`possible`）で `impl` が無い | 実装後 |
 
@@ -250,7 +250,7 @@ per-app-language・screen-brightness・spell-check・geocoding-search の 9 機�
 | bluetooth-classic | Android が `onResume` / `onPause` と許可ランチャーを持つ。共有ファイル `device/android.rs` の `read_ble_string` を使う | `read_ble_string` を共通層へ上げてから（bluetooth-le と同時が自然） |
 | window-management | driver と OS 実装が `egui::Context`・`ViewportCommand` を直接使う（§1 の egui 固有の口） | `fandhe-runtime` にウィンドウ操作の egui 非依存の口を設計してから |
 | screen-orientation | driver が `EguiSenderExt::viewport_size` を使う | 同上 |
-| launch-at-login | Windows 実装が未移行の `windows_compose_mail_sms::open_url` を使う（`open_url` は #1192 で `fandhe-platform-windows` へ上げた） | 再公開を共通層への参照に付け替えて移せる |
+| launch-at-login | Windows 実装が未移行の `windows_compose_mail_sms::open_url` を使う（`open_url` は #1192 で `fandhe-platform-windows` へ上げた） | 再公開を共通層への参照に付け替えて移せる （第 8 束 #1193 で障害が解消。次の周で移せる） |
 | autofill-otp | iOS の受け口 `fandhe_ios_text_input_set_one_time_code_hint` が、描画層の IME 橋渡し（`fandhe-egui-proxy/ios/fandhe_ios_text_input.m`）の入力欄 static に埋まっていて切り離せない | 入力欄のヒントを渡す口を描画層に設計してから |
 | game-center | 全 OS が `possible` で実装も `impl` も無く、移すものが無い | 実装時に最初から crate で作る |
 | app-intents | macOS の実装が url-scheme の受け口（`device/url_scheme.rs`・`FandheWidgetHost`）そのもので、独自のモジュールが無い | url-scheme と同時に扱う |
@@ -367,8 +367,46 @@ wifi-connect・volume-control・sleep-lock-events の 8 機能を移した。残
 | health-data | `HealthPermissionsRationaleActivity` を指す `<activity-alias>` を、宣言の `ComponentKind`（activity / service / receiver / provider）で表せない | 宣言に activity-alias を足してから |
 | car-display | `<application>` 直下の `meta-data` 2 件を宣言で表せない（payment-request と同じ） | 宣言に application の meta-data を足してから |
 | deep-link | Android の振り分けが `MainActivity.deliverUrlIntent`（url-scheme の受け口）に埋まっている。`url_scheme::UrlInbox` も使う | url-scheme と同時に移す（Intent を配る口の設計が先） |
-| open-in-shell | 未移行の recent-documents が driver の `open_in_shell::prepare_sample_file_in` と、Windows の `windows_open_in_shell::to_win32_path` を使う | recent-documents と同じ PR で移す |
+| open-in-shell | 未移行の recent-documents が driver の `open_in_shell::prepare_sample_file_in` と、Windows の `windows_open_in_shell::to_win32_path` を使う | recent-documents と同じ PR で移す （第 8 束 #1193 で recent-documents と同時に移した） |
 | camera-preview-stream | 未移行の video-capture の Windows 実装が `windows_camera_preview_stream::{spawn, spawn_action}` を使う | video-capture と同じ PR で移すか、`spawn` を共通層へ上げてから |
 
 wifi-info（§10 の後回し）は、wifi-connect の移行で `radio_off` が `fandhe-device::wifi_info` へ上がったため、
 参照の障害が解消した。次の周で移せる。
+
+## 15. 第 8 束（#1193）で出た型と後回しの機能
+
+第 8 束（19 機能）のうち、radio-control・image-generation・file-provider・video-transcode・nfc・scanner-devices・
+open-in-shell・recent-documents・compose-mail-sms（compose-mail-attachment を含む）・clipboard の 10 crate（11 機能）を移した。
+ar-camera-view は iOS の実装が `fandhe-cap-ar` にあるため新しい crate を作らず、対応表の `impl` を `fandhe-cap-ar` のパスへ直した。
+残りは下の表の理由で移していない。
+
+### 手作業で気づいた型
+
+| 型 | 扱い |
+|----|------|
+| 2 つの id を 1 つの crate にまとめる（compose-mail-sms・compose-mail-attachment） | 2 つの id が同じモジュール（`compose_mail_sms` と、macOS・Windows の `compose_attachment_file`）を共有するため、crate は 1 つにして宣言の `id` は compose-mail-sms にする。`scaffold` は片方の stem しか移さないので、もう一方（`compose_attachment_file.rs`・`ComposeHelper.java`）は `git mv` で手で移す。2 つの対応表の `impl` は同じ crate のパスを指す。`scaffold` が機械的に `super::` で書く OS 実装から driver への参照は、`crate::driver::` へ手で直す |
+| 再公開が無くなる（compose-mail-sms の `open_url`） | `windows_compose_mail_sms` が持っていた `open_url`・`SE_ERR_NOASSOC` の再公開は、web-auth-session・launch-at-login の参照を `fandhe_platform_windows` へ付け替える先行コミットで先に消した（Windows 以外のテストが `SE_ERR_NOASSOC` を要るときは、同じ値を cfg で置く）。§9 の compose-mail-sms の障害はこれで解消した |
+| 機能専用の FileProvider（compose-mail-sms） | file-preview と同じ形で `ComposeMailFileProvider`（`FileProvider` の空の派生）と `res/xml/compose_mail_file_paths.xml`（`cache/compose/` だけ）を機能 crate に持つ。lifecycle provider の authority（`${applicationId}.fandhe.compose-mail-sms`）と区別するため、FileProvider は `.files` を付ける。共有の `${applicationId}.compose` の公開パスから `compose` を消し、動画の撮影の `cache/video_capture/` だけを残した |
+| 契約を他の crate が使う機能の同時移行（open-in-shell・recent-documents） | recent-documents が open-in-shell の `ShellPath`・`prepare_sample_file_in`・Windows の `to_win32_path` を使い、契約の `fandhe-device` 側も互いに参照していたため、1 コミットで移した。recent-documents の crate が open-in-shell の crate に依存する。`prepare_sample_file_in`・`to_win32_path` は `pub` にして crate ルートから出す（検査は変えない）。`to_win32_path` は OS に触れない純関数のため、`windows` モジュールは全 OS で載せる。エラーは `From<OpenInShellError> for RecentDocumentsError` で識別子ごと 1:1 に写す。§14 の open-in-shell の障害はこれで解消した |
+| Windows の他機能が使う記号 | external-app-launch の Windows 実装のコメントが指していた `windows_open_in_shell.rs` の `ComGuard` は、新しいパス（`fandhe-cap-open-in-shell`）へ直した |
+| 他機能と共有する画像の復号の複製（scanner-devices） | 表示用の復号（`MAX_SIDE`・`MAX_ALLOC`・`DISPLAY_SIDE`・`image::Limits`）は未移行の photo-picker の `decode_for_display` が持っていた。scanner-devices は document-scan の前例に合わせて driver に同じ処理を持ち、`// ponytail:` で「photo-picker を移すときに共有の置き場を決める」と書いた。契約側の `PickedPhoto`・`validate_photo`・`MAX_PHOTO_BYTES` は `fandhe-device` に残して参照する（§7） |
+| Swift の薄層（image-generation） | `build.rs` を `fandhe-cap-on-device-llm` と同じ形（`compile_swift` + `export_link_args()`）で書き、`Cargo.toml` に `links` を置く。最終成果物（gallery）の `build.rs` が `import_link_args("fandhe_cap_image_generation")` を足す。`scaffold` は Swift の `build.rs` を作らない |
+| Android の static の入口と JNI の呼び先の変更（radio-control・nfc・scanner-devices・compose-mail-sms・video-transcode・file-provider） | §8・§9 の型（`HELPERS` + `<Name>Lifecycle`・Context を取る static）に合わせた。helper が無いとき、保留中の要求を持つ機能（radio-control の `set`・nfc の `start`・scanner-devices の `start`・compose の `compose`）は結果を失敗で確定する。nfc は `onHostPaused`（`Activity.onPause()` の `super.onPause()` の中で届く）で reader mode を解除する。`MainActivity` では `super` の後に呼んでいたため前後だけが違い、起動時の RESUMED の見直しと要求 id の照合で順序の入れ替わりは吸収される |
+| DocumentsProvider（file-provider） | `FileProviderDocumentsProvider` を機能 crate の `android/java` へ移し、宣言の `components`（`exported = true`・`permission = MANAGE_DOCUMENTS`・`DOCUMENTS_PROVIDER` の intent-filter）を `AndroidManifest.xml` と完全に一致させる。変更の通知は `MainActivity` を経由せず、static の `notifyChanged(Context)` を `with_activity_class` で呼ぶ。`unsafe` が残らないため全 OS で `forbid(unsafe_code)` にした |
+| 共有ファイルに埋まった古い型（clipboard） | `device/ios.rs` の `IosClipboard`・`device/android.rs` の `AndroidClipboard`・`MainActivity` の `clipboardRequest` / `nativeOnClipboardResult` を機能 crate へ切り出した。Android は `ClipboardHelper` の static の `request(Context, long, int, String)` にし、JNI のエクスポート名を `Java_com_fandhe_platform_MainActivity_nativeOnClipboardResult` から `Java_com_fandhe_platform_ClipboardHelper_nativeOnClipboardResult` へ変えた（Java の native 宣言・Rust の受け口・呼び出しの署名の 3 か所を照合）。待ちは `Mailbox` から `RequestSlot` へ置き換え、`egui-proxy` の `Mailbox` から使われなくなった `begin`・`next_id` を消した（TTS は `begin_at*` を使う）。`arboard` は `fandhe-device` から機能 crate のデスクトップ向け依存へ移した。他機能の SAFETY コメントが指していた `AndroidClipboard::request` は `fandhe-cap-camera-capture` の `AndroidCamera::capture` へ直した |
+| Web の参照の付け替え（video-transcode・nfc・compose-mail-sms） | 本体は `fandhe-web-dom` に残し、`fandhe_device::<stem>` の参照を機能 crate への依存に付け替えた。機能 crate のエラー型（`VideoTranscodeError`・`ComposeMailSmsError`）で写像するため、Web 側のエラー型の参照も付け替える。`cargo clippy -p fandhe-web-dom --target wasm32-unknown-unknown --all-features` で拾える |
+| `uses-feature` の宣言と突き合わせテスト（nfc） | `android.hardware.nfc` を nfc の宣言へ書いたため、`cargo-fandhe` の `tests/gen.rs` が「nfc の feature は宣言に無い」と仮定していた比較を、宣言側と現行 Manifest の完全一致へ直した |
+| `reset_pending_tracking` | nfc・scanner-devices・video-transcode・compose-mail-sms・clipboard・radio-control は機能 crate が `pub` で公開し、`fandhe-gallery` の `android_main` が呼ぶ。nfc と scanner-devices は driver 側と Android の橋渡し側の 2 つの追跡を 1 つの入口から捨てる。`fandhe-egui-proxy` の `android.rs` からは消した |
+| `windows` の feature | 移した実装が使う feature を機能 crate の target 依存へ書く（video-transcode は `Media_Core` ほか、scanner-devices は `Devices_Scanners`・`Devices_Enumeration`、open-in-shell は `Win32_System_Registry` も要る）。`cargo clippy -p <crate> --all-targets --target x86_64-pc-windows-gnu` で拾える |
+
+### 移さなかった機能
+
+| 機能 | 理由 | 解消の見込み |
+|------|------|--------------|
+| ar-camera-view | iOS の実装は `fandhe-cap-ar`（同じ `ARSession`）にあり、Web は `fandhe-web-dom/src/ar.rs` が `fandhe-cap-ar` の契約を使う。新しい crate は作らない | 対応表 iOS 欄の `impl` を `fandhe-cap-ar` のパスへ書いた（コードは変えていない） |
+| print-screen | driver が `EguiSenderExt` の `request_screenshot` / `tagged_screenshot`（egui 固有の口）を使い、`HostView` には画面の読み戻しの口が無い（§1・§9 の print と同じ止まり方） | print と一緒に、`HostView` へ画面の読み戻しの口を設計してから移す |
+| dark-mode・gpu-backend・keyboard-mouse・soft-keyboard-ime・tv-focus・ui-core-nodes | 端末機能ではない（group が「既存機能の棚卸し」）。§1 の表のとおり crate を作らない | 作らない |
+| music-recognition・watch-connectivity | 全 OS が `possible` / `n-a` / `no` で実装も `impl` も無く、移すものが無い（game-center・age-range と同じ扱い） | 実装するときに最初から crate で作る |
+
+compose-mail-sms（§9）・launch-at-login（§11）・open-in-shell（§14）は、この束で移した、または障害が解消した。
+launch-at-login は `windows_compose_mail_sms::open_url` の参照が `fandhe_platform_windows` へ付け替わったため、次の周で移せる。

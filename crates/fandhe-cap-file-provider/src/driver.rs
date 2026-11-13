@@ -7,7 +7,7 @@
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`platform`] の cfg 分岐が全対象 OS の最終形。Android は `android_file_provider::implementation()`
+//! [`platform_file_provider`] の cfg 分岐が全対象 OS の最終形。Android は `crate::android::implementation()`
 //! が実装する。iOS・macOS・Windows は対応表で保留（`DEFERRED`）のため
 //! `UnsupportedFileProvider` 固定で、画面に「保留中」と出る。それ以外は「非対応」。
 //! 後続はこのファイルの dispatch に触らない。

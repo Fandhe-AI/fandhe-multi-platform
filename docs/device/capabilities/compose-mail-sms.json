@@ -25,7 +25,7 @@
       "note": "実装済み（旧#1386）。To（複数）/ CC / BCC は `EXTRA_EMAIL` / `EXTRA_CC` / `EXTRA_BCC` の配列で渡す（Issue #33。一部のメールアプリは CC / BCC を無視しうるため実機で確認する）。結果は `HandedOff`（`startActivity` が戻った。送信したかは分からない）と `NoHandler`（`ActivityNotFoundException`）。非前景・破棄中は起動せず失敗。`<queries>` と `SEND_SMS` は宣言しない。Activity 再生成時は保留要求を破棄する。守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止。守らない範囲: 渡した後の送信可否。実機で確認する（#34）",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_compose_mail_sms.rs + crates/fandhe-cap-compose-mail-sms/android/java/com/fandhe/platform/ComposeHelper.java + crates/fandhe-cap-compose-mail-sms/src/driver.rs + crates/fandhe-cap-compose-mail-sms/src/contract.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs、Issue 旧#1386、Issue #33",
+      "impl": "crates/fandhe-cap-compose-mail-sms/src/android.rs + crates/fandhe-cap-compose-mail-sms/android/java/com/fandhe/platform/ComposeHelper.java + crates/fandhe-cap-compose-mail-sms/src/driver.rs + crates/fandhe-cap-compose-mail-sms/src/contract.rs + crates/fandhe-core/src/screens/compose_mail_sms.rs、Issue 旧#1386、Issue #33",
       "verified": true
     },
     "macos": {

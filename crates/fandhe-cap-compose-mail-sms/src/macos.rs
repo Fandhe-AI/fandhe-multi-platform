@@ -1,7 +1,7 @@
 //! macOS 向けメール・SMS 作成画面の実装（Issue #1384）。`macos/fandhe_macos_compose_mail_sms.m`
 //! （`NSWorkspace openURL:`、`build.rs` が macOS ターゲットの feature `device` 有効時にコンパイル
 //! する）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を
-//! 明記する。`device/compose_mail_sms.rs` の macOS 経路から呼ばれ、契約は
+//! 明記する。`driver` の macOS 経路から呼ばれ、契約は
 //! `crate::contract`。URL は `ComposeRequest::to_url`（scheme は `mailto:` /
 //! `sms:` 固定）で組み立て済みのものだけを渡す。
 //! 添付付きの要求（Issue #1042）は URL で渡せないため、`NSSharingService`（composeEmail）へ To・件名・
@@ -140,7 +140,7 @@ impl crate::contract::ComposeMailSms for MacComposeMailSms {
     }
 }
 
-/// macOS の `ComposeMailSms` 実装を返す（`device/compose_mail_sms.rs` の dispatch から呼ばれる）。
+/// macOS の `ComposeMailSms` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "macos")]
 pub(crate) fn implementation() -> Box<dyn crate::contract::ComposeMailSms> {
     Box::new(MacComposeMailSms)

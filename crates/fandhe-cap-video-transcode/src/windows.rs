@@ -1,7 +1,7 @@
 //! Windows 向け動画の変換（Issue #1015）。`Windows.Media.Transcoding.MediaTranscoder` で
 //! 実行時に作った元動画（1280×720・15 fps・30 フレーム）を小さい動画の MP4 へ 1 回変換する。
 //!
-//! 呼び出し元: `device/video_transcode.rs::platform` の Windows 経路がワーカースレッドから
+//! 呼び出し元: `driver::platform` の Windows 経路がワーカースレッドから
 //! `transcode` を同期に呼ぶ。期限・世代の照合、期限後に届いた結果の破棄、出力の読み直し
 //! （`check_mp4_video`）、画面向けの失敗の写像は呼び出し側が担い、本ファイルは MP4 のバイト列か
 //! `VideoTranscodeError` だけを返す。契約の SSOT は `crate::contract`。

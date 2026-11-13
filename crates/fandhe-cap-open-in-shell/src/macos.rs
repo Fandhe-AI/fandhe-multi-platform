@@ -1,7 +1,7 @@
 //! macOS 向け「既定アプリで開く・Finder で表示」の実装（Issue #749）。
 //! `macos/fandhe_macos_open_in_shell.m`（`NSWorkspace`、`build.rs` が macOS ターゲットの
 //! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの
-//! 呼び出しに閉じ `// SAFETY:` で契約を明記する。`device/open_in_shell.rs` の macOS 経路から
+//! 呼び出しに閉じ `// SAFETY:` で契約を明記する。`driver` の macOS 経路から
 //! 呼ばれ、契約は `crate::contract`。パスは `ShellPath`（検査・正規化済み）だけを渡す。
 //!
 //! 結果コードの写像 [`outcome_from_code`] はホストでもテストできるようモジュールは
@@ -72,7 +72,7 @@ impl crate::contract::OpenInShell for MacOpenInShell {
     }
 }
 
-/// macOS の `OpenInShell` 実装を返す（`device/open_in_shell.rs` の dispatch から呼ばれる）。
+/// macOS の `OpenInShell` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "macos")]
 pub(crate) fn implementation() -> Box<dyn crate::contract::OpenInShell> {
     Box::new(MacOpenInShell)

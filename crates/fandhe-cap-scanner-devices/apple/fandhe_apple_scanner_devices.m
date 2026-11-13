@@ -4,7 +4,7 @@
 // 取り込みの許可（`requestContentsAuthorization`）と背景遷移の検知のために UIKit の通知名と
 // `applicationState` を使う。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_scanner_devices.rs` から C ABI 経由で呼ばれる。
+// `crate::apple` から C ABI 経由で呼ばれる。
 // `build.rs` が macOS・iOS ターゲットの feature `device` 有効時に `cc` コンパイルする
 // （Rust 側 cfg と同じ OS 集合に保つ）。写像の SSOT は Rust 側の純関数 `failure_for` / `failure_for_os_code`。
 //
@@ -41,7 +41,7 @@
 #import <ImageIO/ImageIO.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
-// Rust 側 `apple_scanner_devices.rs` の `failure_for_os_code` が数値で写像しているため、SDK の列挙値との
+// Rust 側 `crate::apple` の `failure_for_os_code` が数値で写像しているため、SDK の列挙値との
 // 一致をここで固定する。値が変わればビルドが落ちる。
 _Static_assert(ICReturnConnectionDriverExited == -21350, "ICReturnConnectionDriverExited");
 _Static_assert(ICReturnConnectionClosedSessionSuddenly == -21349, "ICReturnConnectionClosedSessionSuddenly");

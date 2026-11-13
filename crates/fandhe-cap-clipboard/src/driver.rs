@@ -72,7 +72,7 @@ pub fn platform_clipboard() -> Result<&'static dyn Clipboard, &'static str> {
         }
         // `ArboardClipboard` はデスクトップ 3 OS でのみ存在する
         // （arboard が Android/iOS のバックエンドを持たない、
-        // `fandhe_device::clipboard` の doc 参照）。
+        // `crate::contract` の doc 参照）。
         #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
         {
             use crate::contract::ArboardClipboard;

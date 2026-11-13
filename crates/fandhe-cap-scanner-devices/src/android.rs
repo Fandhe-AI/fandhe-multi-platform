@@ -1,5 +1,5 @@
 //! Android 向け「接続したスキャナー・カメラ機器からの取り込み」実装（Issue #983、親 #192）。
-//! `device/scanner_devices.rs::platform` の Android 経路から [`implementation`] が呼ばれ、
+//! `driver::platform` の Android 経路から [`implementation`] が呼ばれ、
 //! Java 側 `ScannerDevicesHelper`（`UsbManager` + `MtpDevice`）を JNI で橋渡しする。
 //! 契約の SSOT は `crate::contract`。
 //!
@@ -150,7 +150,7 @@ impl crate::contract::ScannerDevices for AndroidScannerDevices {
     }
 }
 
-/// Android の実装を返す。`device/scanner_devices.rs` の dispatch は android の cfg 内でだけ呼ぶ。
+/// Android の実装を返す。`driver` の dispatch は android の cfg 内でだけ呼ぶ。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> std::sync::Arc<dyn crate::contract::ScannerDevices> {
     std::sync::Arc::new(AndroidScannerDevices)

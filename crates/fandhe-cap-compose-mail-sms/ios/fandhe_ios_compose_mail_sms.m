@@ -1,4 +1,4 @@
-// iOS 向けメール・SMS 作成画面（Issue #1385）。`src/device/ios_compose_mail_sms.rs` から
+// iOS 向けメール・SMS 作成画面（Issue #1385）。`crate::ios` から
 // 呼ばれ、MessageUI の作成画面を main queue で提示する。権限・Info.plist キーは不要。
 //
 // C ABI:
@@ -14,7 +14,7 @@
 //     1 = 受理できない（NULL・不正な UTF-8・未知の kind）。文字列・バイト列は return 前に
 //     NSString / NSData へコピーし、所有権は移らない。
 //   extern void fandhe_rust_compose_mail_sms_outcome(uint64_t request_id, int32_t code)
-//     code は `device/compose_mail_sms.rs::outcome_from_ios_code` の表と一致させる
+//     code は `driver::outcome_from_ios_code` の表と一致させる
 //     （0 Queued / 1 Saved / 2 Cancelled / 3 失敗 / 4 NoHandler / 5 提示失敗 / 99 未知）。
 //     各依頼につきちょうど 1 回だけ呼ぶ。
 //

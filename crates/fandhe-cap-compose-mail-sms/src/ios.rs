@@ -1,4 +1,4 @@
-//! iOS 向けメール・SMS 作成画面（Issue #1385）。`device/compose_mail_sms.rs` の iOS 経路
+//! iOS 向けメール・SMS 作成画面（Issue #1385）。`driver` の iOS 経路
 //! （`begin_compose`）から呼ばれ、MessageUI 実装（`ios/fandhe_ios_compose_mail_sms.m`）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しと結果コールバックに閉じる。
 //!

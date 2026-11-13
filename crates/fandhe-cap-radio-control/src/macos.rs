@@ -2,7 +2,7 @@
 //! `macos/fandhe_macos_radio_control.m`（CoreWLAN の `CWInterface.powerOn` / `setPower:error:` と
 //! IOBluetooth の `IOBluetoothHostController.powerState`。`build.rs` が macOS 分岐で feature `device`
 //! 有効時にコンパイルする）を `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ
-//! `// SAFETY:` で契約を明記する。`device/radio_control.rs` の macOS 経路からワーカースレッドで呼ばれ、
+//! `// SAFETY:` で契約を明記する。`driver` の macOS 経路からワーカースレッドで呼ばれ、
 //! 契約は `crate::contract`。
 //!
 //! Bluetooth の切り替えに公開 API はない（`IOBluetoothPreferenceSetControllerPowerState` は非公開のため
@@ -99,7 +99,7 @@ impl RadioControl for MacRadioControl {
     }
 }
 
-/// macOS の `RadioControl` 実装を返す（`device/radio_control.rs` の dispatch から呼ばれる）。
+/// macOS の `RadioControl` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "macos")]
 pub(crate) fn implementation() -> Arc<dyn RadioControl> {
     Arc::new(MacRadioControl)

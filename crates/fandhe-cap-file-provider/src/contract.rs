@@ -4,7 +4,7 @@
 //! フォルダを OS のファイル画面（Android の Files アプリ等）へ見せる provider 本体は OS 側
 //! （Android は `DocumentsProvider`）が担い、本モジュールはフォルダを引数に取る
 //! 共通実装 [`DirFileProvider`] と契約を持つ。呼び出し元は `fandhe-egui-proxy` の
-//! `device/file_provider.rs`（画面向け effect ドライバ）。対象 OS は Android だけで、
+//! `driver`（画面向け effect ドライバ）。対象 OS は Android だけで、
 //! iOS・macOS・Windows は保留、Web は対象外。
 //!
 //! # 書類 ID 方式（契約の中心）

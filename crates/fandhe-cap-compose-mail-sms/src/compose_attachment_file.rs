@@ -1,5 +1,5 @@
 //! メール作成画面へ渡す添付の一時ファイルの置き場（Issue #1042、親 #156）。
-//! `device/macos_compose_mail_sms.rs`（`NSSharingService`、渡した後も残す）と、#1043 の
+//! `crate::macos`（`NSSharingService`、渡した後も残す）と、#1043 の
 //! `windows`（`src/windows.rs`）（Simple MAPI、戻ったらすぐ消す）が共用する。契約は
 //! `crate::contract` のモジュール doc。
 //!

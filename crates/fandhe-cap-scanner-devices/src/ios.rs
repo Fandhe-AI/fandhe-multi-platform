@@ -1,6 +1,6 @@
 //! iOS 向けスキャナー・カメラ機器からの取り込み（骨格は #981 (a)、実装は #982）。
-//! `device/scanner_devices.rs::platform` の iOS 経路から呼ばれ、macOS と共用の
-//! `apple_scanner_devices::AppleScannerDevices`（`apple/fandhe_apple_scanner_devices.m`、
+//! `driver::platform` の iOS 経路から呼ばれ、macOS と共用の
+//! `crate::apple::AppleScannerDevices`（`apple/fandhe_apple_scanner_devices.m`、
 //! ImageCaptureCore）へ委譲する薄いラッパーを返す。iOS 固有の動き（取り込みの許可
 //! `requestContentsAuthorization`、背景遷移での `Interrupted`）は `.m` の `TARGET_OS_IOS` 区画が持つ。
 //!
