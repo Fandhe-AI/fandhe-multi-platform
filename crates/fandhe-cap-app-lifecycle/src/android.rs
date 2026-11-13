@@ -126,7 +126,7 @@ enum Call {
 
 /// `MainActivity.appLifecycleStart(long)`（戻り値は結果コード）/ `appLifecycleStop(long)` /
 /// `appLifecycleRead()`（戻り値は状態）を JNI で呼ぶ。`None` は呼び出し失敗。
-/// `unsafe` 2 箇所は `android_sleep_lock_events.rs::call_activity` と同一の根拠。
+/// `unsafe` 2 箇所は `fandhe_platform_android::with_activity` と同一の根拠。
 #[cfg(target_os = "android")]
 fn call_activity(call: Call) -> Option<i32> {
     use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};

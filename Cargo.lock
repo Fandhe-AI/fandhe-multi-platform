@@ -1213,6 +1213,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-companion-device"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-runtime",
+ "jni 0.22.4",
+]
+
+[[package]]
 name = "fandhe-cap-device-identifier"
 version = "0.2.0"
 dependencies = [
@@ -1300,6 +1310,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-eye-dropper"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+]
+
+[[package]]
 name = "fandhe-cap-file-preview"
 version = "0.2.0"
 dependencies = [
@@ -1362,6 +1382,17 @@ dependencies = [
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-global-hotkey"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -1759,6 +1790,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-sleep-lock-events"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-smart-home"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+]
+
+[[package]]
+name = "fandhe-cap-sound-classification"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+]
+
+[[package]]
 name = "fandhe-cap-spell-check"
 version = "0.2.0"
 dependencies = [
@@ -1846,6 +1909,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-volume-control"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-wallpaper-set"
 version = "0.2.0"
 dependencies = [
@@ -1855,6 +1932,20 @@ dependencies = [
  "fandhe-platform-apple",
  "fandhe-runtime",
  "image",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-wifi-connect"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
@@ -1895,6 +1986,7 @@ dependencies = [
  "fandhe-cap-audio-session",
  "fandhe-cap-drag-drop",
  "fandhe-cap-gamepad",
+ "fandhe-cap-global-hotkey",
  "fandhe-cap-media-cast",
  "fandhe-cap-memory-pressure",
  "fandhe-cap-midi",
@@ -1949,6 +2041,7 @@ dependencies = [
  "fandhe-cap-call-ui",
  "fandhe-cap-camera-capture",
  "fandhe-cap-color-picker",
+ "fandhe-cap-companion-device",
  "fandhe-cap-device-identifier",
  "fandhe-cap-digital-credentials",
  "fandhe-cap-display-refresh-hdr",
@@ -1956,11 +2049,13 @@ dependencies = [
  "fandhe-cap-drag-drop",
  "fandhe-cap-dynamic-type",
  "fandhe-cap-external-app-launch",
+ "fandhe-cap-eye-dropper",
  "fandhe-cap-file-preview",
  "fandhe-cap-file-watch",
  "fandhe-cap-focus-mode-status",
  "fandhe-cap-gamepad",
  "fandhe-cap-geocoding-search",
+ "fandhe-cap-global-hotkey",
  "fandhe-cap-haptics",
  "fandhe-cap-home-widget",
  "fandhe-cap-http-get",
@@ -1991,6 +2086,9 @@ dependencies = [
  "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
  "fandhe-cap-share-sheet",
+ "fandhe-cap-sleep-lock-events",
+ "fandhe-cap-smart-home",
+ "fandhe-cap-sound-classification",
  "fandhe-cap-spell-check",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-system-sound",
@@ -1998,7 +2096,9 @@ dependencies = [
  "fandhe-cap-usb-device",
  "fandhe-cap-user-idle",
  "fandhe-cap-uwb-ranging",
+ "fandhe-cap-volume-control",
  "fandhe-cap-wallpaper-set",
+ "fandhe-cap-wifi-connect",
  "fandhe-core",
  "fandhe-egui-proxy",
  "fandhe-platform-android",
@@ -2121,6 +2221,7 @@ dependencies = [
  "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
  "fandhe-cap-share-sheet",
+ "fandhe-cap-sleep-lock-events",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-usb-device",
  "fandhe-core",

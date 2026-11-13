@@ -1,7 +1,7 @@
 //! 画面のスポイト（色の取得）の契約（Phase 11 の拡充ループ、親 #148、Issue #762）。
 //!
 //! 利用者が画面上で選んだ 1 点の色を sRGB の `#rrggbb` で返す。呼び出し元は
-//! `fandhe-egui-proxy` の effect ドライバ（`device/eye_dropper.rs`、macOS）と、
+//! `fandhe-cap-eye-dropper` の effect ドライバ（`driver`、macOS）と、
 //! Web 子（#763）の `fandhe-web-dom`。既存 id の color-picker（色選択ダイアログ）とは別機能。
 //!
 //! # 結果の区別（嘘の成功を作らない）

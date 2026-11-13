@@ -332,3 +332,43 @@ wallpaper-set・file-preview・app-lifecycle の 15 機能を移した。device-
 | background-upload | 未移行の iOS AppDelegate（`ios/fandhe_ios_url_scheme.m` の `handleEventsForBackgroundURLSession`）が転送先として `fandhe_apple_background_upload.m` に結びついている（background-download と同じ止まり方） | AppDelegate のイベントを配る口を設計した後、または url-scheme・background-download と同時に移す |
 | motion-raw-sensors | Windows 実装が未移行の `windows_environment_sensors::ensure_minimize_watcher` を使い、ウォッチャー側も `windows_motion_raw_sensors::note_minimized` / `note_restored` を呼び返していて、双方向に結びついている | environment-sensors と同じ PR で移す。または最小化の通知を配る口を `fandhe-platform-windows` に置いてから |
 | video-capture | Windows 実装が `windows_camera_preview_stream::{spawn, spawn_action}` を使う。camera-preview-stream は並行して進む第 6 束（#1191）の対象。共有の FileProvider（`compose_file_paths.xml`）も使う | #1191 のマージ後に移す。そのときは WinRT 完了の積み込み（`spawn` / `spawn_action`）を `fandhe-platform-windows` へ上げ、FileProvider は file-preview と同じ機能専用の派生にする |
+## 14. 第 6 束（#1191）で出た型と後回しの機能
+
+第 6 束（20 機能）のうち、sound-classification・companion-device・smart-home・eye-dropper・global-hotkey・
+wifi-connect・volume-control・sleep-lock-events の 8 機能を移した。残りは下の表の理由で止まっている。
+理由が解消してから移す。
+
+### 手作業で気づいた型
+
+| 型 | 扱い |
+|----|------|
+| 他機能と共有する純関数の引き上げ（wifi-connect） | Windows の電源判定 `radio_off` と定数は wifi-info の Windows 実装も使う。複製せず `fandhe-device::wifi_info` へ `pub` で上げ、テストも一緒に移した（先行コミット）。wifi-info の移行を妨げない |
+| 契約を `fandhe-device` に残す機能（eye-dropper） | color-picker（未移行）と Web 実装（`fandhe-web-dom`）が `PickedColor` などを使うため、契約は動かさない。`scaffold` は契約も `git mv` するので使わず、driver・macOS 実装・`.m` だけ手で移す（§13 の drag-drop と同じ）。macOS の `NSColorSampler` は非同期で trait を通らないため、`platform_eye_dropper()` は常に `UnsupportedEyeDropper` を返し、doc に書いた |
+| driver が持つ `extern "C"` の受け口（sleep-lock-events） | `scaffold` は driver に `unsafe` があると止まる。受け口を OS 実装（macOS）のファイルへ移し、driver は `pub(crate)` の `fire` を呼ぶだけにしてから移す |
+| 状態を持たない Helper は Context を取る static に（volume-control） | 状態もライフサイクルも持たない同期呼び出しは provider を作らず、`read(Context)` / `adjust(Context, int)` にして `MainActivity` の 1 行ラッパーを消す（§9）。Android の `unsafe` が `with_activity_class` へ移って残らないため、`lib.rs` の Android を `forbid` へ戻した |
+| 購読・保留要求を持つ Helper（sleep-lock-events・wifi-connect） | `HELPERS`（`WeakHashMap`）と `<Name>Lifecycle` の組にする。Helper が無いとき、`start` は失敗コード、`connect` は `nativeOn…Result` へ FAILED を返して確定する。状態を読むだけの `read` は Helper を要さないので `Context` を取る static にする |
+| 結果ランチャーを持つ Helper（companion-device） | ランチャーは `onHostCreated`（STARTED より前）で登録する。`pick` は `boolean` を返し、Helper が無ければ false を返して Rust が `Internal` で確定する（結果の native を呼ばない）。`reset_pending_tracking` は機能 crate が `pub` で公開し、`fandhe-gallery` の `android_main` が呼ぶ |
+| 共有ファイルの JNI 補助（companion-device） | 機器名の読み取り `read_ble_string` は `fandhe_platform_android::read_bounded_string` に置き換える（§9） |
+| Windows の `windows` クレートの feature | 移した実装が使う feature を機能 crate の target 依存へ書く。ホストの検査では拾えないため、`cargo clippy -p <crate> --all-targets --target x86_64-pc-windows-gnu` で確かめる（global-hotkey は `Win32_System_Threading`、sleep-lock-events は `Win32_Graphics_Gdi`、wifi-connect は `Win32_NetworkManagement_Ndis` が要った） |
+| `Disabled` が識別子を持つ機能（wifi-connect） | `error.rs` に `Disabled(&'static str)` を手で足した。`Io` は driver のテストでしか使っていなかったため、`Internal("other")` のテストに置き換えた |
+| iOS・macOS の usage description | 説明文は `fandhe-gallery` の `[package.metadata.fandhe-app.*.usage-descriptions]` に置く。iOS は `cargo-fandhe` の `tests/gen.rs` が現在の `Info.plist` と一致を確かめるため、既存の文言と同じにする（マイクは「マイク録音」「音声認識」「動画の撮影」） |
+| Manifest の既存の権限行 | 機能 crate の `permissions`・`features` に宣言を足しても、`AndroidManifest.xml` の既存の `uses-permission` は消さない（他機能と共有する行があるため。app-badge の `POST_NOTIFICATIONS` と同じ） |
+| SAFETY コメントの指し先 | 移した関数（`android_sleep_lock_events.rs::call_activity`）を根拠にしていた他モジュールのコメントは、元の根拠 `fandhe_platform_android::with_activity` を指す形へ直した |
+
+### 後回しにした機能
+
+| 機能 | 理由 | 解消の見込み |
+|------|------|--------------|
+| wallet-pass・cloud-kv-sync・cloud-db-sync | 全 OS が `possible` で実装も `impl` も無く、移すものが無い | 実装時に最初から crate で作る |
+| quick-settings-tile | macOS 実装が未移行の `macos_device_info::implementation()` で OS の版を読む。device-info は §9 で「quick-settings-tile の後」とされており、互いに待っている | device-info と同じ PR で 2 機能を移す（または OS の版の読み取りを `fandhe-platform-apple` へ上げる） |
+| alarm | Windows 実装が未移行の `windows_notification::{ensure_app_aumid, setting_result_for, APP_AUMID}` を使う | notification と同時に移すか、AUMID の登録を `fandhe-platform-windows` へ上げてから |
+| foldable-posture | Android の Helper が `onStart` / `onStop` に参加する。`FeatureLifecycleProvider` に Started / Stopped の口が無い | flashlight・capture-protection と同じ共通層の変更の後 |
+| ble-peripheral | Android の Helper が `onStop` に参加する（同上）。`reset_pending_tracking` と `device::shutdown` もある | Started / Stopped の口の後 |
+| health-data | `HealthPermissionsRationaleActivity` を指す `<activity-alias>` を、宣言の `ComponentKind`（activity / service / receiver / provider）で表せない | 宣言に activity-alias を足してから |
+| car-display | `<application>` 直下の `meta-data` 2 件を宣言で表せない（payment-request と同じ） | 宣言に application の meta-data を足してから |
+| deep-link | Android の振り分けが `MainActivity.deliverUrlIntent`（url-scheme の受け口）に埋まっている。`url_scheme::UrlInbox` も使う | url-scheme と同時に移す（Intent を配る口の設計が先） |
+| open-in-shell | 未移行の recent-documents が driver の `open_in_shell::prepare_sample_file_in` と、Windows の `windows_open_in_shell::to_win32_path` を使う | recent-documents と同じ PR で移す |
+| camera-preview-stream | 未移行の video-capture の Windows 実装が `windows_camera_preview_stream::{spawn, spawn_action}` を使う | video-capture と同じ PR で移すか、`spawn` を共通層へ上げてから |
+
+wifi-info（§10 の後回し）は、wifi-connect の移行で `radio_off` が `fandhe-device::wifi_info` へ上がったため、
+参照の障害が解消した。次の周で移せる。

@@ -29,7 +29,7 @@
       "note": "実装済み（Issue #741）。API 33 以上で OS の機器選択画面（同意ダイアログ）を `onAssociationPending` の `IntentSender` で出し、BLE 機器を 1 台選ばせる。名前は `AssociationInfo.getDisplayName()`（API 33）で取り、`disassociate(int)` で関連付けを外し終えてから結果を返す（外せなければ失敗）。位置情報サービス・Bluetooth がオフなら失敗、API 32 以下・機能なしは非対応にする。API 26〜32 の旧経路（`onDeviceFound`・`EXTRA_DEVICE`・`disassociate(String)`）は使わない。フレームワーク API で追加の依存は無い。守らない範囲: API 32 以下、関連付けを残すこと、背景での起動、通信とボンディング、選択画面の表示中のプロセス死、複数プロセス。API 33 は見つからない場合もキャンセルとして出ることがある（結果コードで区別できる API 34 以上は NotFound にする）",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#734）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/CompanionDeviceHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_companion_device.rs + crates/fandhe-egui-proxy/src/device/companion_device.rs + crates/fandhe-core/src/screens/companion_device_show.rs + crates/fandhe-device/src/companion_device.rs、Issue #741"
+      "impl": "crates/fandhe-cap-companion-device/android/java/com/fandhe/platform/CompanionDeviceHelper.java + crates/fandhe-cap-companion-device/android/java/com/fandhe/platform/CompanionDeviceLifecycle.java + crates/fandhe-cap-companion-device/src/android.rs + crates/fandhe-cap-companion-device/src/driver.rs + crates/fandhe-core/src/screens/companion_device_show.rs + crates/fandhe-cap-companion-device/src/contract.rs、Issue #741"
     },
     "macos": {
       "status": "no",

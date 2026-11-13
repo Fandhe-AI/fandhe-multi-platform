@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
 //! 置き場」節の制約どおり）。登録・解除・押下の受け取りは `fandhe-egui-proxy` の effect ドライバ
-//! （`device/global_hotkey.rs`）が [`take_action`] で要求を観測して行い、[`finish_register`] /
+//! （`fandhe-cap-global-hotkey` の `driver.rs`）が [`take_action`] で要求を観測して行い、[`finish_register`] /
 //! [`finish_unregister`] / [`apply_presses`] で結果を注入する。本画面は二重押し防止・世代の照合・
 //! 文言と、OS 別のキー表記（[`Platform`]、ドライバが一度だけ注入）だけを持つ。
 //!

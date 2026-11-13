@@ -63,7 +63,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "eye_dropper" => fandhe_core::screens::eye_dropper_pick::current_screen,
-    fandhe_egui_proxy::device::eye_dropper::eye_dropper_pick_effect,
+    fandhe_cap_eye_dropper::eye_dropper_pick_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "color_picker" => fandhe_core::screens::color_picker_pick::current_screen,
@@ -123,7 +123,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "global_hotkey" => fandhe_core::screens::global_hotkey::current_screen,
-    fandhe_egui_proxy::device::global_hotkey::global_hotkey_effect,
+    fandhe_cap_global_hotkey::global_hotkey_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "open_in_shell" => fandhe_core::screens::open_in_shell::current_screen,
@@ -215,7 +215,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "sound_classification_show" => fandhe_core::screens::sound_classification_show::current_screen,
-    fandhe_egui_proxy::device::sound_classification::sound_classification_show_effect,
+    fandhe_cap_sound_classification::sound_classification_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "system_tray" => fandhe_core::screens::system_tray::current_screen,
@@ -331,7 +331,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "sleep_lock_events_show" => fandhe_core::screens::sleep_lock_events_show::current_screen,
-    fandhe_egui_proxy::device::sleep_lock_events::sleep_lock_events_show_effect,
+    fandhe_cap_sleep_lock_events::sleep_lock_events_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "removable_storage_show" => fandhe_core::screens::removable_storage_show::current_screen,
@@ -431,7 +431,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "volume_control_show" => fandhe_core::screens::volume_control_show::current_screen,
-    fandhe_egui_proxy::device::volume_control::volume_control_show_effect,
+    fandhe_cap_volume_control::volume_control_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "screen_orientation_show" => fandhe_core::screens::screen_orientation_show::current_screen,
@@ -487,7 +487,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "smart_home_list" => fandhe_core::screens::smart_home_list::current_screen,
-    fandhe_egui_proxy::device::smart_home::smart_home_list_effect,
+    fandhe_cap_smart_home::smart_home_list_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wifi_info_show" => fandhe_core::screens::wifi_info_show::current_screen,
@@ -495,7 +495,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wifi_connect_show" => fandhe_core::screens::wifi_connect_show::current_screen,
-    fandhe_egui_proxy::device::wifi_connect::wifi_connect_show_effect,
+    fandhe_cap_wifi_connect::wifi_connect_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "radio_control_show" => fandhe_core::screens::radio_control_show::current_screen,
@@ -515,7 +515,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "companion_device_show" => fandhe_core::screens::companion_device_show::current_screen,
-    fandhe_egui_proxy::device::companion_device::companion_device_show_effect,
+    fandhe_cap_companion_device::companion_device_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "document_scan_show" => fandhe_core::screens::document_scan_show::current_screen,
