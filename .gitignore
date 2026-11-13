@@ -9,6 +9,7 @@
 crates/fandhe-gallery/web/dist/
 # cargo fandhe gen（#1176）の生成物。選んだ機能の宣言から毎回作り直す。
 crates/fandhe-gallery/gen/
+crates/fandhe-web-dom/gen/
 
 # TASK-4.4-S4（REQ-4 / Issue #82）: scripts/web/build-wasm-dom.sh が組み立てる
 # fandhe-web-dom の wasm-bindgen 生成物。ソースからの再生成のみを正とし、

@@ -267,5 +267,10 @@ web-sys = { workspace = true, features = [
 # png_data_url の往復テスト用（native テストのみ。lockfile 済みの版で新規パッケージは増えない）。
 image = { workspace = true }
 
+# Web App Manifest の基礎（名前・アイコン・start_url 等）。`cargo fandhe gen --os web` が、
+# アプリが選んだ機能の `web.manifest`（share-receive の share_target 等）を足して gen/web/ へ出す（#1238）。
+[package.metadata.fandhe-app.web]
+manifest = "web/manifest.webmanifest"
+
 [lints]
 workspace = true

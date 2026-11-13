@@ -42,7 +42,11 @@ cp "${crate_dir}/web/background-task-sw.js" "${dist_dir}/background-task-sw.js"
 cp "${crate_dir}/web/background-download-sw.js" "${dist_dir}/background-download-sw.js"
 # Issue #419: PWA の manifest（file_handlers）とアイコン。インストール可能にしないと
 # ファイルの関連付け（?screen=file_association_show）は届かない。
-cp "${crate_dir}/web/manifest.webmanifest" "${dist_dir}/manifest.webmanifest"
+# Issue #1238: manifest は基礎（web/manifest.webmanifest）に、アプリが選んだ機能の宣言
+# （share-receive の share_target 等）を cargo fandhe gen が足して作る。選ばない機能のメンバーは入らない。
+cargo run --manifest-path "${repo_root}/Cargo.toml" -q -p cargo-fandhe -- \
+  fandhe gen --os web --manifest-path "${crate_dir}/Cargo.toml"
+cp "${crate_dir}/gen/web/manifest.webmanifest" "${dist_dir}/manifest.webmanifest"
 cp "${crate_dir}/web/icon-192.png" "${dist_dir}/icon-192.png"
 cp "${crate_dir}/web/icon-512.png" "${dist_dir}/icon-512.png"
 
