@@ -77,19 +77,33 @@ pub fn take_capture_result(
     bridge().slot.take_ready(request_id)
 }
 
+/// Windows の撮影パネルの状態（表示中の要求 `request_id` のときだけ `Some`）。
+/// `platform_video_capture()` を直接使うアプリが、自前のパネルへ状態を写すための口。
+pub fn capture_panel(request_id: u64) -> Option<PanelPhase> {
+    bridge()
+        .panel()
+        .filter(|(id, _)| *id == request_id)
+        .and_then(|(_, p)| p)
+}
+
+/// 撮影パネルの命令（録画の開始・停止・取り消し）を `request_id` の要求へ渡す。Windows 以外は何もしない。
+pub fn send_panel_command(request_id: u64, command: PanelCommand) {
+    forward_panel_command(request_id, command);
+}
+
 /// 外部アプリ向け。呼び出し側の id を bridge へ登録してから内側の実装へ渡す。
 struct Registering(Arc<dyn VideoCapturer>);
 
 impl VideoCapturer for Registering {
     fn capture(&self, request_id: u64, max_duration_secs: u32) -> Result<(), VideoCaptureFailure> {
         let b = bridge();
-        if b.has_pending() {
+        if !b.try_begin_with(request_id) {
             return Err(VideoCaptureFailure::Internal);
         }
-        b.begin_with(request_id);
         let r = self.0.capture(request_id, max_duration_secs);
-        if let Err(f) = r {
-            b.complete_from_os(request_id, Err(f));
+        if r.is_err() {
+            // 同期失敗は Err で返すので、失敗を結果として残さず登録ごと取り消す（再試行を塞がない）。
+            b.cancel(request_id);
         }
         r
     }
@@ -158,15 +172,29 @@ impl Bridge {
         self.lock().is_some() || self.slot.snapshot().is_some()
     }
 
-    /// 呼び出し側の id で要求を登録する（外部アプリの直接呼び出し用）。
-    fn begin_with(&self, request_id: u64) {
+    /// 空きの確認と登録を同じロックで行う（外部アプリの直接呼び出し用）。占有中なら `false`。
+    /// 呼び出し側の id は採番を追い越さない（`RequestSlot::begin_with` が進める）。
+    fn try_begin_with(&self, request_id: u64) -> bool {
         let mut active = self.lock();
+        if active.is_some() || self.slot.snapshot().is_some() {
+            return false;
+        }
         self.slot.begin_with(request_id);
         *active = Some(Active {
             request_id,
             presenting: false,
             panel: None,
         });
+        true
+    }
+
+    /// 同期失敗した要求の登録を、結果を残さず取り消す。
+    fn cancel(&self, request_id: u64) {
+        let mut active = self.lock();
+        if active.as_ref().is_some_and(|a| a.request_id == request_id) {
+            *active = None;
+        }
+        self.slot.clear(request_id);
     }
 
     /// 新しい要求を登録して id を返す。OS へ渡す前に呼び、即時の完了も照合できるようにする。
@@ -814,6 +842,17 @@ mod tests {
         request_capture(&mut fresh);
         drive(&fresh, &sender, &imp, bridge, no_forward);
         assert_eq!(f.calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn try_begin_with_is_exclusive_and_cancel_frees_it() {
+        let bridge = new_bridge();
+        assert!(bridge.try_begin_with(5));
+        assert!(!bridge.try_begin_with(6));
+        bridge.cancel(5);
+        assert!(!bridge.has_pending());
+        assert!(bridge.try_begin_with(7));
+        assert_eq!(bridge.slot.snapshot().map(|s| s.0), Some(7));
     }
 
     #[test]

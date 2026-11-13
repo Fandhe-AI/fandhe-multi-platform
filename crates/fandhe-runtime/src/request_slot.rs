@@ -65,8 +65,10 @@ impl<O> RequestSlot<O> {
     }
 
     /// 呼び出し側が決めた `request_id` で登録する（フレームワーク外のアプリが自分の id で OS 実装を直接呼ぶ入口用）。
-    /// 採番は進めない。
+    /// 採番は `request_id` の次まで進め、後の `begin` が同じ id を発行しないようにする。
     pub fn begin_with(&self, request_id: u64) {
+        self.next_request_id
+            .fetch_max(request_id.saturating_add(1), Ordering::Relaxed);
         *self.lock() = Some(Pending {
             request_id,
             ready: None,
@@ -288,6 +290,13 @@ pub fn poll_and_finish_owned<S: 'static, O: Clone + Send + 'static>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn begin_with_advances_generated_ids_past_caller_id() {
+        let slot: RequestSlot<u8> = RequestSlot::new();
+        slot.begin_with(7);
+        assert_eq!(slot.begin(), 8);
+    }
+
     #[test]
     fn begin_with_registers_caller_id() {
         let slot: RequestSlot<u8> = RequestSlot::new();
