@@ -187,6 +187,22 @@ cargo・cargo-ndk 側の詳細な原因は特定できていない。参照: PR 
 実行間でキャッシュとして機能するため、2 回目以降の実行では冪等性・実行速度とも
 損なわれない。
 
+### 4.7 配信サイズの計測と 20 MiB 判定（`measure-binary-size.sh`）
+
+`bash scripts/metrics/measure-binary-size.sh <成果物パス>...` は REQ-5 の 20 MiB 判定を
+**端末が受け取るサイズ**で行う（#1179 の決定、#1294）。
+
+- 物差し: `.aab` に対し bundletool の `get-size total --dimensions=ABI` を実行し、ABI ごとの
+  MAX のうち最大値を 20 MiB と比べる。判定は標準エラーに `判定 OK` / `判定 NG` で出る
+  （NG でも終了コードは `0`）
+- AAB ファイル自体のサイズは、CSV に参考値として残す。ファイルには配信されない
+  デバッグシンボル（`BUNDLE-METADATA`）と全 ABI 分が同梱されるため、配信サイズより大きく出る
+- `build-apks` は署名鍵なしで実行する。署名ブロック分の数 KB は物差しの誤差として扱う
+- `.apk`・`.so` 等は端末が受け取るサイズではないため判定対象外（参考値のみ）。iOS（IPA）は対象外
+- 前提: `scripts/android/setup-android-env.sh` で導入した bundletool と JDK。無いとき・bundletool が
+  失敗したときは、ファイルサイズへ切り替えず終了コード `1` で終わる
+- 自己チェック: `bash scripts/metrics/tests/measure-binary-size-test.sh`（偽の java を使い実機不要）
+
 ## 5. CI 統合について
 
 `.github/workflows/ci.yml` の `android-build` ジョブは、`cargo ndk build（fandhe-core）`
