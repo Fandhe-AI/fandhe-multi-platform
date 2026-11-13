@@ -13,6 +13,7 @@ import android.os.PowerManager;
 
 import androidx.activity.ComponentActivity;
 
+import java.lang.ref.WeakReference;
 import java.util.Collections;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -21,7 +22,7 @@ import java.util.WeakHashMap;
 // Rust の `src/android.rs` が static の `start(Activity, long)` / `stop(Activity, long)` / `read(Context)` を JNI で呼び、
 // 出来事を `nativeOnSleepLockEvent` で受ける。Activity の生成・破棄は `SleepLockEventsLifecycle`（非公開 ContentProvider、
 // `FeatureLifecycleProvider` 継承）が `attach` / `detach` で知らせる。Activity ごとの helper は `HELPERS` に持つ
-// （egui スレッドと UI スレッドの両方から触るので同期化し、Activity が GC されれば項目も消える）。
+// （egui スレッドと UI スレッドの両方から触るので同期化する。値の helper は Activity を弱参照で持つので、Activity が GC されれば項目も消える）。
 // helper が無い（生成前・破棄後）の start は失敗で確定し、結果が来ないまま待たせない。
 // 知らせる種類は ACTION_SCREEN_OFF / ON / USER_PRESENT（解除）だけ。システムのスリープ・復帰と
 // ロックした瞬間を知らせるブロードキャストは無い。
@@ -64,14 +65,14 @@ final class SleepLockEventsHelper {
     private static final Map<Activity, SleepLockEventsHelper> HELPERS =
             Collections.synchronizedMap(new WeakHashMap<>());
 
-    private final ComponentActivity activity;
+    private final WeakReference<ComponentActivity> activityRef;
     private final Object lock = new Object();
     private long current = NONE;
     private BroadcastReceiver receiver;
     private boolean destroyed;
 
     private SleepLockEventsHelper(ComponentActivity activity) {
-        this.activity = activity;
+        this.activityRef = new WeakReference<>(activity);
     }
 
     // Activity の生成時（`SleepLockEventsLifecycle` から、UI スレッド）。
@@ -143,6 +144,10 @@ final class SleepLockEventsHelper {
                     onBroadcast(this, intent);
                 }
             };
+            ComponentActivity activity = activityRef.get();
+            if (activity == null) {
+                return START_FAILED;
+            }
             try {
                 // システムのブロードキャストだけを受けるのでフラグは付けない。
                 activity.getApplicationContext()
@@ -207,7 +212,10 @@ final class SleepLockEventsHelper {
         current = NONE;
         if (r != null) {
             try {
-                activity.getApplicationContext().unregisterReceiver(r);
+                ComponentActivity activity = activityRef.get();
+                if (activity != null) {
+                    activity.getApplicationContext().unregisterReceiver(r);
+                }
             } catch (RuntimeException e) {
                 // 既に解除済み。
             }

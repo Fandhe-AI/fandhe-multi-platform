@@ -190,7 +190,11 @@ fn android_manifest_overlay_matches_current_manifest() {
         assert!(!g.is_empty(), "{kind} が生成されていない");
         for (_, a) in g {
             assert!(
-                cur.iter().any(|(k, m)| k == kind && m == a),
+                // 現行は他機能（ジオフェンス等）が要る分だけ広い。生成側の属性が現行に含まれ、
+                // `maxSdkVersion` は現行が無指定（上限なし）でもよい（上限なしは上限ありを含む）。
+                cur.iter().any(|(k, m)| k == kind
+                    && a.iter().all(|(an, av)| m.get(an) == Some(av)
+                        || (an == "maxSdkVersion" && m.get(an).is_none()))),
                 "{kind} {} が現行 Manifest と違う",
                 a[key]
             );

@@ -27,6 +27,7 @@ id = "smart-home"
 [package.metadata.fandhe.ios]
 frameworks = ["HomeKit"]
 usage-descriptions = ["NSHomeKitUsageDescription"]
+entitlements = { "com.apple.developer.homekit" = true }
 
 [lints]
 workspace = true

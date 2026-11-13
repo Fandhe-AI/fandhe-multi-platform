@@ -109,6 +109,7 @@ NSHomeKitUsageDescription = "型サンプル「スマートホーム操作」の
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」「音声認識」「動画の撮影」の動作確認に使います"
 
 [package.metadata.fandhe-app.macos.usage-descriptions]
+NSLocationUsageDescription = "型サンプル「Wi-Fi への接続」で、接続先の Wi-Fi 名を読むために使います"
 NSCalendarsWriteOnlyAccessUsageDescription = "型サンプル「予定の追加」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」の動作確認に使います"
 
