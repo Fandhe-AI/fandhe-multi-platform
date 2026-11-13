@@ -1261,6 +1261,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-global-hotkey"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-haptics"
 version = "0.2.0"
 dependencies = [
@@ -1718,6 +1729,7 @@ dependencies = [
  "egui_kittest",
  "fandhe-cap-drag-drop",
  "fandhe-cap-gamepad",
+ "fandhe-cap-global-hotkey",
  "fandhe-cap-media-cast",
  "fandhe-cap-midi",
  "fandhe-cap-serial-port",
@@ -1775,6 +1787,7 @@ dependencies = [
  "fandhe-cap-focus-mode-status",
  "fandhe-cap-gamepad",
  "fandhe-cap-geocoding-search",
+ "fandhe-cap-global-hotkey",
  "fandhe-cap-haptics",
  "fandhe-cap-home-widget",
  "fandhe-cap-http-get",

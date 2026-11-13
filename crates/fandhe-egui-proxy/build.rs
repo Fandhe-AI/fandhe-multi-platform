@@ -740,16 +740,6 @@ fn compile_macos_external_app_launch() {
     compile_objc("macos/fandhe_macos_external_app_launch.m", &["AppKit"]);
 }
 
-/// `macos/fandhe_macos_global_hotkey.m` を `cc` でコンパイルする（Issue #766）。**macOS 分岐のみ**
-/// から呼ばれる（`src/device/macos_global_hotkey.rs` が使う）。Carbon の `RegisterEventHotKey` を
-/// 使うため `Carbon.framework` をここでリンクする（許可・entitlement は不要）。
-fn compile_macos_global_hotkey() {
-    compile_objc(
-        "macos/fandhe_macos_global_hotkey.m",
-        &["Carbon", "Foundation"],
-    );
-}
-
 /// `macos/fandhe_macos_recent_documents.m` を `cc` でコンパイルする（Issue #988）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_recent_documents.rs` が使う）。
 fn compile_macos_recent_documents() {
@@ -1133,8 +1123,6 @@ fn build_macos() {
     compile_macos_compose_mail_sms();
     // `macos/fandhe_macos_external_app_launch.m`（Issue #861）も macOS 専用。
     compile_macos_external_app_launch();
-    // `macos/fandhe_macos_global_hotkey.m`（Issue #766）も macOS 専用。Carbon をリンクする。
-    compile_macos_global_hotkey();
     // `macos/fandhe_macos_open_in_shell.m`（Issue #749）も macOS 専用。
     compile_macos_open_in_shell();
     // `macos/fandhe_macos_recent_documents.m`（Issue #988）も macOS 専用。

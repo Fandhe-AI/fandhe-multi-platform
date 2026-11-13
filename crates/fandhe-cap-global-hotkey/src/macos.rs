@@ -2,7 +2,7 @@
 //! `macos/fandhe_macos_global_hotkey.m`（Carbon の `RegisterEventHotKey`、`build.rs` が macOS ターゲットの
 //! feature `device` 有効時にコンパイルする）を `extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに
 //! 閉じ `// SAFETY:` で契約を明記する。`device/global_hotkey.rs` の macOS 経路から呼ばれ、契約は
-//! `fandhe_device::global_hotkey`。Rust へは生ポインタを渡さず `token`（値）だけを渡す。
+//! `crate::contract`。Rust へは生ポインタを渡さず `token`（値）だけを渡す。
 //!
 //! 押下の受け口は `slot`（`token` と [`OnPress`] の組）。`.m` は押下のたびに main thread で
 //! [`fandhe_rust_global_hotkey_fire`] を呼び、`token` が現在の slot と一致したときだけ `OnPress` を
@@ -10,24 +10,24 @@
 //! （記録は `.m` の `EventHotKeyRef` 1 つだけ）。登録失敗・使用中では slot を元へ戻し、解除は
 //! 成功・未登録のときだけ slot を空にする（契約表 9）。
 //!
-//! 結果コードの写像は `fandhe_device::global_hotkey` の純関数（SSOT）。
+//! 結果コードの写像は `crate::contract` の純関数（SSOT）。
 
 #![cfg(target_os = "macos")]
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
-use fandhe_device::global_hotkey::{
-    register_outcome_from_macos, unregister_outcome_from_macos, GlobalHotkey, OnPress,
-    RegisterOutcome, UnregisterOutcome,
+use crate::contract::{
+    GlobalHotkey, OnPress, RegisterOutcome, UnregisterOutcome, register_outcome_from_macos,
+    unregister_outcome_from_macos,
 };
-use fandhe_device::DeviceError;
+use crate::error::GlobalHotkeyError;
 
 mod ffi {
     // SAFETY: `macos/fandhe_macos_global_hotkey.m`（`build.rs` が macOS ターゲットの feature `device`
     // 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_global_hotkey_register(token: u32) -> i32;
         fn fandhe_macos_global_hotkey_unregister() -> i32;
     }
@@ -72,7 +72,7 @@ fn next_token() -> u32 {
 /// `#[no_mangle]` はシンボル名を固定するだけで、この関数自体は `unsafe` 操作を含まない。シンボル名
 /// `fandhe_rust_global_hotkey_fire` は本クレート内で一意（`.m` の `extern` 宣言と対）。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn fandhe_rust_global_hotkey_fire(token: u32) {
     let on_press = {
         let slot = lock_slot();
@@ -89,7 +89,7 @@ pub extern "C" fn fandhe_rust_global_hotkey_fire(token: u32) {
 struct MacGlobalHotkey;
 
 impl GlobalHotkey for MacGlobalHotkey {
-    fn register(&self, on_press: OnPress) -> Result<RegisterOutcome, DeviceError> {
+    fn register(&self, on_press: OnPress) -> Result<RegisterOutcome, GlobalHotkeyError> {
         let token = next_token();
         let previous = lock_slot().replace((token, on_press));
         let result = register_outcome_from_macos(ffi::register(token));
@@ -100,7 +100,7 @@ impl GlobalHotkey for MacGlobalHotkey {
         result
     }
 
-    fn unregister(&self) -> Result<UnregisterOutcome, DeviceError> {
+    fn unregister(&self) -> Result<UnregisterOutcome, GlobalHotkeyError> {
         let result = unregister_outcome_from_macos(ffi::unregister());
         if result.is_ok() {
             *lock_slot() = None;
@@ -131,7 +131,7 @@ mod tests {
         let r = imp.register(Arc::new(|| {}));
         assert!(matches!(
             r,
-            Err(DeviceError::Internal("global_hotkey register"))
+            Err(GlobalHotkeyError::Internal("global_hotkey register"))
         ));
         assert!(lock_slot().is_none());
     }
@@ -142,7 +142,7 @@ mod tests {
         let imp = MacGlobalHotkey;
         assert!(matches!(
             imp.unregister(),
-            Err(DeviceError::Internal("global_hotkey unregister"))
+            Err(GlobalHotkeyError::Internal("global_hotkey unregister"))
         ));
     }
 

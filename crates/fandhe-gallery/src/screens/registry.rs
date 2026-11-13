@@ -123,7 +123,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "global_hotkey" => fandhe_core::screens::global_hotkey::current_screen,
-    fandhe_egui_proxy::device::global_hotkey::global_hotkey_effect,
+    fandhe_cap_global_hotkey::global_hotkey_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "open_in_shell" => fandhe_core::screens::open_in_shell::current_screen,

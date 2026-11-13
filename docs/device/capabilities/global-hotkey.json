@@ -32,7 +32,7 @@
       "note": "実装済み（#766）。`kEventHotKeyExclusive` 付きで登録し、`eventHotKeyExistsErr` を使用中へ写す。解除は OS が成功を返したときだけ記録（`EventHotKeyRef`）を手放し、失敗なら登録中のまま残す。イベントハンドラは一度導入したらプロセスの終了まで保持する（登録の記録には使わない）。`RegisterEventHotKey` の公式リファレンスのページは見当たらず、根拠は SDK のヘッダ（`HIToolbox/CarbonEvents.h`）: スレッド安全でない（main thread で呼ぶ）、同じ組み合わせを複数アプリが登録でき全員に通知される、`kEventHotKeyExclusive` を付けると他プロセスの排他登録と重なったとき `eventHotKeyExistsErr`（-9878）を返す、終了時は OS が解除する。非推奨の印は無い。`NSEvent` の global monitor はキー系イベントにアクセシビリティの信頼が要り（公式）、自アプリ宛てのイベントも届かないため採らない。macOS 15 で shift / option だけの修飾は登録できなくなり 15.2 で緩和された（Apple のフォーラム回答）。Apple の技術サポートは Carbon 由来のため推奨しないと回答しているが、代案の `CGEventTap` は入力監視の許可が要る",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#764）",
-      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_global_hotkey.m + crates/fandhe-egui-proxy/src/device/macos_global_hotkey.rs + crates/fandhe-egui-proxy/src/device/global_hotkey.rs + crates/fandhe-core/src/screens/global_hotkey.rs + crates/fandhe-device/src/global_hotkey.rs、Issue #766"
+      "impl": "crates/fandhe-cap-global-hotkey/macos/fandhe_macos_global_hotkey.m + crates/fandhe-cap-global-hotkey/src/macos.rs + crates/fandhe-cap-global-hotkey/src/driver.rs + crates/fandhe-core/src/screens/global_hotkey.rs + crates/fandhe-cap-global-hotkey/src/contract.rs、Issue #766"
     },
     "windows": {
       "status": "done",
@@ -47,7 +47,7 @@
       "note": "実装済み（#767）。登録ごとに専用スレッドを 1 本立て、`PeekMessageW` でキューを先に作ってから `RegisterHotKey` を呼ぶ（`hWnd` が NULL の登録は呼び出しスレッドに結び付き、解除も同じスレッドからしかできない）。解除は `PostThreadMessageW` で専用スレッドへ依頼し、OS が成功したときだけスレッドを終える。失敗なら登録中のまま残す。`ERROR_HOTKEY_ALREADY_REGISTERED`（1409）は使用中へ写す。Win キーの組み合わせは OS 予約、F12 はデバッガ予約。`MOD_NOREPEAT` で押しっぱなしの連続通知を止める（Windows 7 以降）。実機で確かめる項目: unpackaged で動くか、1409 が実際に返るか、`MOD_NOREPEAT` が効くか（#764）",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#764）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_global_hotkey.rs + crates/fandhe-egui-proxy/src/device/global_hotkey.rs + crates/fandhe-core/src/screens/global_hotkey.rs + crates/fandhe-device/src/global_hotkey.rs、Issue #767"
+      "impl": "crates/fandhe-cap-global-hotkey/src/windows.rs + crates/fandhe-cap-global-hotkey/src/driver.rs + crates/fandhe-core/src/screens/global_hotkey.rs + crates/fandhe-cap-global-hotkey/src/contract.rs、Issue #767"
     },
     "web": {
       "status": "no",

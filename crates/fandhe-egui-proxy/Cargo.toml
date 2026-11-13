@@ -29,7 +29,7 @@ default = ["device"]
 # optional 依存として置く（Windows 以外では `device` feature を有効にしても入らない）。
 # Issue #907: `windows-future`（`IAsyncOperation`/`AsyncOperationCompletedHandler` の
 # 型名）も同じ Windows target 分岐にのみ置く。
-device = ["dep:fandhe-device", "dep:fandhe-cap-drag-drop", "dep:fandhe-cap-system-tray", "dep:fandhe-cap-gamepad", "dep:fandhe-cap-media-cast", "dep:fandhe-cap-midi", "dep:fandhe-cap-serial-port", "dep:serde_json", "dep:jni", "dep:windows", "dep:fandhe-platform-windows", "dep:windows-future", "dep:windows-core"]
+device = ["dep:fandhe-device", "dep:fandhe-cap-drag-drop", "dep:fandhe-cap-system-tray", "dep:fandhe-cap-gamepad", "dep:fandhe-cap-media-cast", "dep:fandhe-cap-midi", "dep:fandhe-cap-serial-port", "dep:fandhe-cap-global-hotkey", "dep:serde_json", "dep:jni", "dep:windows", "dep:fandhe-platform-windows", "dep:windows-future", "dep:windows-core"]
 
 frame-metrics = []
 
@@ -136,6 +136,8 @@ fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad", optional = true }
 fandhe-cap-midi = { path = "../fandhe-cap-midi", optional = true }
 # 終了時の片付け（`device::shutdown` の `fandhe_cap_serial_port::shutdown`）。過渡期の依存（#1194 で消える）。
 fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port", optional = true }
+# 終了時の片付け（`device::shutdown` の `fandhe_cap_global_hotkey::shutdown`）。過渡期の依存（#1194 で消える）。
+fandhe-cap-global-hotkey = { path = "../fandhe-cap-global-hotkey", optional = true }
 # Android の起動で画面の表示状態と再生成時の破棄を渡す過渡期の依存（#1194 で消える）。
 fandhe-cap-drag-drop = { path = "../fandhe-cap-drag-drop", optional = true }
 # Issue #748: `fandhe-cap-http-get` が `Http` の応答（JSON 配列）を

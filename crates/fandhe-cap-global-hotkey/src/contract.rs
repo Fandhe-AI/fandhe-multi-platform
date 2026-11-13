@@ -3,7 +3,7 @@
 //!
 //! 範囲は固定の組み合わせ 1 つ（macOS は Control + Shift + Option + K、Windows は
 //! Ctrl + Shift + Alt + K）の登録・解除・押下通知だけ。組み合わせは利用者・ネットワークから
-//! 受け取らず、各 OS 実装が定数で持つ。`fandhe-egui-proxy` の effect ドライバが本 trait を呼び、
+//! 受け取らず、各 OS 実装が定数で持つ。本 crate の `driver`（effect ドライバ）が本 trait を呼び、
 //! 押下は [`OnPress`] 経由で画面の回数へ反映される。macOS は Carbon の `RegisterEventHotKey`
 //! （許可不要）、Windows は `RegisterHotKey`（#767）で実装する。
 //!
@@ -57,7 +57,7 @@
 
 use std::sync::Arc;
 
-use crate::DeviceError;
+use crate::error::GlobalHotkeyError;
 
 /// 押下の通知先。任意のスレッドから呼ばれうるため `Send + Sync`。
 pub type OnPress = Arc<dyn Fn() + Send + Sync>;
@@ -89,11 +89,12 @@ pub const MACOS_EVENT_HOTKEY_EXISTS: i32 = -9878;
 /// Windows の `ERROR_HOTKEY_ALREADY_REGISTERED`。
 pub const WINDOWS_HOTKEY_ALREADY_REGISTERED: u32 = 1409;
 
-const REGISTER_FAILED: DeviceError = DeviceError::Internal("global_hotkey register");
-const UNREGISTER_FAILED: DeviceError = DeviceError::Internal("global_hotkey unregister");
+const REGISTER_FAILED: GlobalHotkeyError = GlobalHotkeyError::Internal("global_hotkey register");
+const UNREGISTER_FAILED: GlobalHotkeyError =
+    GlobalHotkeyError::Internal("global_hotkey unregister");
 
 /// macOS の `RegisterEventHotKey` 相当の戻り値 → 結果（未知のコードは失敗に倒し成功を作らない）。
-pub fn register_outcome_from_macos(status: i32) -> Result<RegisterOutcome, DeviceError> {
+pub fn register_outcome_from_macos(status: i32) -> Result<RegisterOutcome, GlobalHotkeyError> {
     match status {
         0 => Ok(RegisterOutcome::Registered),
         MACOS_EVENT_HOTKEY_EXISTS => Ok(RegisterOutcome::InUse),
@@ -102,7 +103,7 @@ pub fn register_outcome_from_macos(status: i32) -> Result<RegisterOutcome, Devic
 }
 
 /// macOS の解除の戻り値 → 結果。
-pub fn unregister_outcome_from_macos(status: i32) -> Result<UnregisterOutcome, DeviceError> {
+pub fn unregister_outcome_from_macos(status: i32) -> Result<UnregisterOutcome, GlobalHotkeyError> {
     match status {
         0 => Ok(UnregisterOutcome::Unregistered),
         MACOS_NOT_REGISTERED => Ok(UnregisterOutcome::NotRegistered),
@@ -114,7 +115,7 @@ pub fn unregister_outcome_from_macos(status: i32) -> Result<UnregisterOutcome, D
 pub fn register_outcome_from_windows(
     succeeded: bool,
     last_error: u32,
-) -> Result<RegisterOutcome, DeviceError> {
+) -> Result<RegisterOutcome, GlobalHotkeyError> {
     if succeeded {
         Ok(RegisterOutcome::Registered)
     } else if last_error == WINDOWS_HOTKEY_ALREADY_REGISTERED {
@@ -128,10 +129,10 @@ pub fn register_outcome_from_windows(
 pub trait GlobalHotkey: Send + Sync {
     /// 固定の組み合わせを登録し、押されるたびに `on_press` を呼ぶ。登録中の再呼び出しは OS を
     /// 呼ばず `Ok(Registered)` を返し、`on_press` だけを差し替える。
-    fn register(&self, on_press: OnPress) -> Result<RegisterOutcome, DeviceError>;
+    fn register(&self, on_press: OnPress) -> Result<RegisterOutcome, GlobalHotkeyError>;
 
     /// 登録を外す。OS が成功を返したときだけ記録を手放し、失敗なら登録中のまま残す。
-    fn unregister(&self) -> Result<UnregisterOutcome, DeviceError>;
+    fn unregister(&self) -> Result<UnregisterOutcome, GlobalHotkeyError>;
 }
 
 /// 非対応 OS 用。登録は `Unsupported`、解除は後始末のため `NotRegistered`。
@@ -139,11 +140,11 @@ pub trait GlobalHotkey: Send + Sync {
 pub struct UnsupportedGlobalHotkey;
 
 impl GlobalHotkey for UnsupportedGlobalHotkey {
-    fn register(&self, _on_press: OnPress) -> Result<RegisterOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("global_hotkey"))
+    fn register(&self, _on_press: OnPress) -> Result<RegisterOutcome, GlobalHotkeyError> {
+        Err(GlobalHotkeyError::Unsupported)
     }
 
-    fn unregister(&self) -> Result<UnregisterOutcome, DeviceError> {
+    fn unregister(&self) -> Result<UnregisterOutcome, GlobalHotkeyError> {
         Ok(UnregisterOutcome::NotRegistered)
     }
 }
@@ -152,8 +153,11 @@ impl GlobalHotkey for UnsupportedGlobalHotkey {
 mod tests {
     use super::*;
 
-    fn is_register_failed(r: &Result<RegisterOutcome, DeviceError>) -> bool {
-        matches!(r, Err(DeviceError::Internal("global_hotkey register")))
+    fn is_register_failed(r: &Result<RegisterOutcome, GlobalHotkeyError>) -> bool {
+        matches!(
+            r,
+            Err(GlobalHotkeyError::Internal("global_hotkey register"))
+        )
     }
 
     #[test]
@@ -190,7 +194,7 @@ mod tests {
         for code in [MACOS_NOT_MAIN_THREAD, -9879, -50, i32::MIN] {
             assert!(matches!(
                 unregister_outcome_from_macos(code),
-                Err(DeviceError::Internal("global_hotkey unregister"))
+                Err(GlobalHotkeyError::Internal("global_hotkey unregister"))
             ));
         }
     }
@@ -218,7 +222,7 @@ mod tests {
         let imp = UnsupportedGlobalHotkey;
         assert!(matches!(
             imp.register(Arc::new(|| {})),
-            Err(DeviceError::Unsupported("global_hotkey"))
+            Err(GlobalHotkeyError::Unsupported)
         ));
         assert!(matches!(
             imp.unregister(),

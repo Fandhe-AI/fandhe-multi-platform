@@ -608,9 +608,6 @@ pub mod fullscreen_immersive;
 /// Phase 11 の拡充ループ（親 #1056、Issue #1057）: ジオフェンスの effect ドライバ
 /// （location の継続取得に乗せて `GeofenceTracker` で判定する）。
 pub mod geofence;
-/// Phase 11 の拡充ループ（親 #150、Issue #766）: グローバルホットキーの effect ドライバ
-/// （macOS 実装。Windows は骨格のスタブで #767 が埋める。他 OS は `UnsupportedGlobalHotkey` 固定）。
-pub mod global_hotkey;
 /// Phase 11 の拡充ループ（親 #149、Issue #1089）: ヘルスデータ（今日の歩数）の effect ドライバ
 /// （iOS・Android は OS 別モジュール。他 OS は `UnsupportedHealthData` 固定）。
 pub mod health_data;
@@ -930,10 +927,6 @@ pub mod macos_eye_dropper;
 /// C ABI ラッパーと窓が閉じた通知の受け口）。`device/file_preview.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_file_preview;
-/// Issue #766: macOS 向けグローバルホットキー実装（`macos/fandhe_macos_global_hotkey.m`（Carbon）を呼ぶ
-/// C ABI ラッパーと押下の受け口）。`device/global_hotkey.rs` の macos 経路から呼ばれる。
-#[cfg(target_os = "macos")]
-pub mod macos_global_hotkey;
 /// Issue #696: macOS 向けログイン時の自動起動実装（`macos/fandhe_macos_launch_at_login.m` の
 /// `SMAppService.mainApp` を呼ぶ C ABI ラッパー）。`device/launch_at_login.rs` の macOS 経路から呼ばれる。
 /// 写像の純関数をホストでテストできるよう cfg は `any(macos, test)`。
@@ -1313,11 +1306,6 @@ pub mod windows_file_preview;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_flashlight;
-/// Issue #766: Windows 向けグローバルホットキーの骨格（実装は #767）。
-/// `device/global_hotkey.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_global_hotkey;
 /// Issue #960: Windows 向け在席検知実装（WinRT `HumanPresenceSensor` ラッパー）。
 /// `device/human_presence.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -1505,7 +1493,7 @@ pub fn shutdown() {
     bluetooth_classic::stop_shared_discovery();
     lan_discovery::stop_shared_discovery();
     local_peer::stop_shared_exchange();
-    global_hotkey::shutdown();
+    fandhe_cap_global_hotkey::shutdown();
     fandhe_cap_midi::shutdown();
     media_playback::shutdown();
     now_playing::shutdown();

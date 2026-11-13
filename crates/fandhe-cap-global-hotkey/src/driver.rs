@@ -1,8 +1,8 @@
 //! Phase 11（親 #150）型サンプル「グローバルホットキー」（Issue #766）の effect ドライバ。
 //! `fandhe_core::screens::global_hotkey`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::global_hotkey::GlobalHotkey` で OS へ登録・解除し、結果と押下を
+//! `crate::contract::GlobalHotkey` で OS へ登録・解除し、結果と押下を
 //! `CompletionSender` 経由で返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約）。
-//! 契約と守る範囲は `fandhe_device::global_hotkey` のモジュール doc を参照。
+//! 契約と守る範囲は `crate::contract` のモジュール doc を参照。
 //!
 //! 登録・解除は OS が即時に結果を返す軽い呼び出しなので UI スレッドで同期に呼ぶ（macOS は
 //! main thread 必須で、eframe の UI スレッドは macOS では main thread）。待ち・期限・
@@ -17,16 +17,16 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 
-use fandhe_core::screens::global_hotkey::{
-    apply_platform, apply_presses, finish_register, finish_unregister, mark_in_flight, take_action,
-    GlobalHotkeyState, HotkeyAction, HotkeyFailure, Platform, RegisterResult, UnregisterResult,
-};
 #[cfg(any(not(any(target_os = "macos", target_os = "windows")), test))]
-use fandhe_device::global_hotkey::UnsupportedGlobalHotkey;
-use fandhe_device::global_hotkey::{GlobalHotkey, OnPress, RegisterOutcome, UnregisterOutcome};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedGlobalHotkey;
+use crate::contract::{GlobalHotkey, OnPress, RegisterOutcome, UnregisterOutcome};
+use crate::error::GlobalHotkeyError;
+use fandhe_core::screens::global_hotkey::{
+    GlobalHotkeyState, HotkeyAction, HotkeyFailure, Platform, RegisterResult, UnregisterResult,
+    apply_platform, apply_presses, finish_register, finish_unregister, mark_in_flight, take_action,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 画面へ注入する OS 区分。
 fn platform_kind() -> Platform {
@@ -41,19 +41,19 @@ fn platform_kind() -> Platform {
 
 /// 登録結果を画面用へ写像する。内部構造・OS のコードは出さない（security.md A09）。
 fn to_register_result(
-    result: Result<RegisterOutcome, DeviceError>,
+    result: Result<RegisterOutcome, GlobalHotkeyError>,
 ) -> Result<RegisterResult, HotkeyFailure> {
     match result {
         Ok(RegisterOutcome::Registered) => Ok(RegisterResult::Registered),
         Ok(RegisterOutcome::InUse) => Ok(RegisterResult::InUse),
-        Err(DeviceError::Unsupported(_)) => Ok(RegisterResult::Unsupported),
+        Err(GlobalHotkeyError::Unsupported) => Ok(RegisterResult::Unsupported),
         Err(_) => Err(HotkeyFailure),
     }
 }
 
 /// 解除結果を画面用へ写像する。
 fn to_unregister_result(
-    result: Result<UnregisterOutcome, DeviceError>,
+    result: Result<UnregisterOutcome, GlobalHotkeyError>,
 ) -> Result<UnregisterResult, HotkeyFailure> {
     match result {
         Ok(UnregisterOutcome::Unregistered) => Ok(UnregisterResult::Unregistered),
@@ -112,14 +112,20 @@ fn drive(
     }
 }
 
+/// 現在の OS の実装を返す。画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+/// 実体はプロセスに 1 つで、[`shutdown`] が登録と同じものに届く。
+pub fn platform_global_hotkey() -> Arc<dyn GlobalHotkey> {
+    shared_impl().clone()
+}
+
 /// プロセスに 1 つの実装（`shutdown` が登録と同じ実体に届くようにする）。
-fn platform_global_hotkey() -> &'static Arc<dyn GlobalHotkey> {
+fn shared_impl() -> &'static Arc<dyn GlobalHotkey> {
     static IMPL: OnceLock<Arc<dyn GlobalHotkey>> = OnceLock::new();
     IMPL.get_or_init(|| {
         #[cfg(target_os = "macos")]
-        return super::macos_global_hotkey::implementation();
+        return crate::macos::implementation();
         #[cfg(target_os = "windows")]
-        return super::windows_global_hotkey::implementation();
+        return crate::windows::implementation();
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         return Arc::new(UnsupportedGlobalHotkey);
     })
@@ -135,13 +141,13 @@ pub fn global_hotkey_effect(
     if take_action(state).is_none() && !needs_platform {
         return;
     }
-    drive(state, sender, platform_global_hotkey().as_ref());
+    drive(state, sender, shared_impl().as_ref());
 }
 
-/// アプリ終了時に登録を外す（`device::shutdown` から、eframe の `on_exit`（main thread）で呼ばれる）。
+/// アプリ終了時に登録を外す（`fandhe-egui-proxy` の `device::shutdown` から、eframe の `on_exit`（main thread）で呼ばれる。過渡期の依存で #1194 で消える）。
 /// 終了経路なので結果は見ない。
-pub(super) fn shutdown() {
-    let _ = platform_global_hotkey().unregister();
+pub fn shutdown() {
+    let _ = shared_impl().unregister();
 }
 
 #[cfg(test)]
@@ -155,13 +161,13 @@ mod tests {
     struct Fake {
         register_calls: Mutex<u32>,
         unregister_calls: Mutex<u32>,
-        register_result: fn() -> Result<RegisterOutcome, DeviceError>,
-        unregister_result: fn() -> Result<UnregisterOutcome, DeviceError>,
+        register_result: fn() -> Result<RegisterOutcome, GlobalHotkeyError>,
+        unregister_result: fn() -> Result<UnregisterOutcome, GlobalHotkeyError>,
         on_press: Mutex<Option<OnPress>>,
     }
 
     impl GlobalHotkey for Fake {
-        fn register(&self, on_press: OnPress) -> Result<RegisterOutcome, DeviceError> {
+        fn register(&self, on_press: OnPress) -> Result<RegisterOutcome, GlobalHotkeyError> {
             *self.register_calls.lock().unwrap() += 1;
             let r = (self.register_result)();
             if matches!(r, Ok(RegisterOutcome::Registered)) {
@@ -169,15 +175,15 @@ mod tests {
             }
             r
         }
-        fn unregister(&self) -> Result<UnregisterOutcome, DeviceError> {
+        fn unregister(&self) -> Result<UnregisterOutcome, GlobalHotkeyError> {
             *self.unregister_calls.lock().unwrap() += 1;
             (self.unregister_result)()
         }
     }
 
     fn fake(
-        register_result: fn() -> Result<RegisterOutcome, DeviceError>,
-        unregister_result: fn() -> Result<UnregisterOutcome, DeviceError>,
+        register_result: fn() -> Result<RegisterOutcome, GlobalHotkeyError>,
+        unregister_result: fn() -> Result<UnregisterOutcome, GlobalHotkeyError>,
     ) -> Fake {
         Fake {
             register_calls: Mutex::new(0),
@@ -188,19 +194,26 @@ mod tests {
         }
     }
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     fn channel() -> (
         CompletionSender<GlobalHotkeyState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<GlobalHotkeyState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<GlobalHotkeyState>>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// 1 回ドライバを回し、届いた完了をすべて適用する。
     fn step(
         s: &mut GlobalHotkeyState,
         sender: &CompletionSender<GlobalHotkeyState>,
-        rx: &std::sync::mpsc::Receiver<crate::app::Completion<GlobalHotkeyState>>,
+        rx: &std::sync::mpsc::Receiver<fandhe_runtime::Completion<GlobalHotkeyState>>,
         imp: &dyn GlobalHotkey,
     ) {
         drive(s, sender, imp);
@@ -246,7 +259,7 @@ mod tests {
     #[test]
     fn unsupported_and_failure_never_register() {
         let f = fake(
-            || Err(DeviceError::Unsupported("global_hotkey")),
+            || Err(GlobalHotkeyError::Unsupported),
             || Ok(UnregisterOutcome::NotRegistered),
         );
         let (sender, rx) = channel();
@@ -257,7 +270,7 @@ mod tests {
         assert_eq!(s.notice, screen::UNSUPPORTED_STATUS);
 
         let f = fake(
-            || Err(DeviceError::Internal("global_hotkey register")),
+            || Err(GlobalHotkeyError::Internal("global_hotkey register")),
             || Ok(UnregisterOutcome::NotRegistered),
         );
         let mut s = GlobalHotkeyState::default();
@@ -271,7 +284,7 @@ mod tests {
     fn unregister_failure_keeps_registered() {
         let f = fake(
             || Ok(RegisterOutcome::Registered),
-            || Err(DeviceError::Internal("global_hotkey unregister")),
+            || Err(GlobalHotkeyError::Internal("global_hotkey unregister")),
         );
         let (sender, rx) = channel();
         let mut s = GlobalHotkeyState::default();
@@ -349,10 +362,10 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn windows_impl_is_unsupported_on_non_windows_host() {
-        let imp = super::super::windows_global_hotkey::implementation();
+        let imp = crate::windows::implementation();
         assert!(matches!(
             imp.register(Arc::new(|| {})),
-            Err(DeviceError::Unsupported("global_hotkey"))
+            Err(GlobalHotkeyError::Unsupported)
         ));
     }
 

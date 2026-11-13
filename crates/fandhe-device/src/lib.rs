@@ -97,8 +97,6 @@ pub mod foldable_posture;
 pub mod fullscreen_immersive;
 /// Phase 11（端末機能の拡充ループ）: location に乗せた Rust 側のジオフェンス判定。
 pub mod geofence;
-/// Phase 11（端末機能の拡充ループ、親 #150、Issue #766）: グローバルホットキー（固定の組み合わせ 1 つ）。
-pub mod global_hotkey;
 /// Phase 11（端末機能の拡充ループ、親 #149、Issue #1089）: ヘルスデータ（今日の歩数を 1 回読む）。
 pub mod health_data;
 pub mod http;

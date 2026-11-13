@@ -2,7 +2,7 @@
 // Carbon の `RegisterEventHotKey` で Control + Shift + Option + K を排他登録する。アクセシビリティ・
 // 入力監視の許可は不要（`NSEvent` の global monitor は許可が要るため採らない）。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_global_hotkey.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-global-hotkey/src/macos.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルし、Carbon をリンクする。
 //
 // 契約:

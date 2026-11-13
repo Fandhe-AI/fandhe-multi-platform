@@ -1,6 +1,6 @@
-//! Windows 向けグローバルホットキーの実装（Issue #767、親 #150）。`device/global_hotkey.rs`
+//! Windows 向けグローバルホットキーの実装（Issue #767、親 #150）。`driver`
 //! （effect ドライバ）の windows 経路から UI スレッドで同期に呼ばれ、契約は
-//! `fandhe_device::global_hotkey`（`GlobalHotkey` / `OnPress` / 結果の 4 種）。
+//! `crate::contract`（`GlobalHotkey` / `OnPress` / 結果の 4 種）。
 //! 組み合わせは Ctrl + Shift + Alt + K の固定 1 つ。ホストテストのため test でもコンパイルする
 //! （Win32 を呼ぶ部分は Windows ビルドだけ）。
 //!
@@ -42,9 +42,9 @@
 use std::sync::Arc;
 
 #[cfg(not(target_os = "windows"))]
-use fandhe_device::global_hotkey::UnsupportedGlobalHotkey;
-use fandhe_device::global_hotkey::{GlobalHotkey, UnregisterOutcome};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedGlobalHotkey;
+use crate::contract::{GlobalHotkey, UnregisterOutcome};
+use crate::error::GlobalHotkeyError;
 
 /// アプリ用の範囲（0x0000〜0xBFFF）のホットキー ID。登録は 1 つだけ。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -89,11 +89,11 @@ fn win32_code_from_hresult(hresult: i32) -> u32 {
 
 /// `UnregisterHotKey` の成否 → 解除の結果。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-fn unregister_outcome(succeeded: bool) -> Result<UnregisterOutcome, DeviceError> {
+fn unregister_outcome(succeeded: bool) -> Result<UnregisterOutcome, GlobalHotkeyError> {
     if succeeded {
         Ok(UnregisterOutcome::Unregistered)
     } else {
-        Err(DeviceError::Internal("global_hotkey unregister"))
+        Err(GlobalHotkeyError::Internal("global_hotkey unregister"))
     }
 }
 
@@ -111,28 +111,28 @@ pub(crate) fn implementation() -> Arc<dyn GlobalHotkey> {
 
 #[cfg(target_os = "windows")]
 mod win {
-    use std::panic::{catch_unwind, AssertUnwindSafe};
-    use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+    use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
     use std::sync::{Arc, Mutex};
     use std::thread::JoinHandle;
 
-    use fandhe_device::global_hotkey::{
-        register_outcome_from_windows, GlobalHotkey, OnPress, RegisterOutcome, UnregisterOutcome,
+    use crate::contract::{
+        GlobalHotkey, OnPress, RegisterOutcome, UnregisterOutcome, register_outcome_from_windows,
     };
-    use fandhe_device::DeviceError;
+    use crate::error::GlobalHotkeyError;
     use windows::Win32::Foundation::{LPARAM, WPARAM};
     use windows::Win32::System::Threading::GetCurrentThreadId;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT,
-        MOD_SHIFT, VK_K,
+        HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT, RegisterHotKey,
+        UnregisterHotKey, VK_K,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetMessageW, PeekMessageW, PostThreadMessageW, MSG, PM_NOREMOVE, WM_APP, WM_HOTKEY,
+        GetMessageW, MSG, PM_NOREMOVE, PeekMessageW, PostThreadMessageW, WM_APP, WM_HOTKEY,
     };
 
     use super::{
-        unregister_outcome, win32_code_from_hresult, HOTKEY_ID, MODIFIERS, VK_K_CODE,
-        WM_APP_UNREGISTER,
+        HOTKEY_ID, MODIFIERS, VK_K_CODE, WM_APP_UNREGISTER, unregister_outcome,
+        win32_code_from_hresult,
     };
 
     // 自前の定数が windows クレートの値と一致していることをビルド時に確かめる。
@@ -157,7 +157,7 @@ mod win {
     pub(super) struct WindowsGlobalHotkey;
 
     impl GlobalHotkey for WindowsGlobalHotkey {
-        fn register(&self, on_press: OnPress) -> Result<RegisterOutcome, DeviceError> {
+        fn register(&self, on_press: OnPress) -> Result<RegisterOutcome, GlobalHotkeyError> {
             let mut guard = WORKER.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(worker) = guard.as_ref() {
                 if !worker.join.is_finished() {
@@ -178,7 +178,7 @@ mod win {
             let join = std::thread::Builder::new()
                 .name("fandhe-global-hotkey".into())
                 .spawn(move || worker_main(ready_tx, reply_tx, shared))
-                .map_err(|_| DeviceError::Internal("global_hotkey register"))?;
+                .map_err(|_| GlobalHotkeyError::Internal("global_hotkey register"))?;
 
             // 専用スレッドはローカルの Win32 呼び出しだけで即座に返事をするため期限は設けない。
             match ready_rx.recv() {
@@ -197,13 +197,13 @@ mod win {
                 }
                 Err(_) => {
                     let _ = join.join();
-                    Err(DeviceError::Internal("global_hotkey register"))
+                    Err(GlobalHotkeyError::Internal("global_hotkey register"))
                 }
             }
         }
 
         #[allow(unsafe_code)]
-        fn unregister(&self) -> Result<UnregisterOutcome, DeviceError> {
+        fn unregister(&self) -> Result<UnregisterOutcome, GlobalHotkeyError> {
             let mut guard = WORKER.lock().unwrap_or_else(|e| e.into_inner());
             let Some(worker) = guard.as_ref() else {
                 return Ok(UnregisterOutcome::NotRegistered);
@@ -309,7 +309,7 @@ mod win {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::global_hotkey::{register_outcome_from_windows, RegisterOutcome};
+    use crate::contract::{RegisterOutcome, register_outcome_from_windows};
 
     #[test]
     fn hresult_for_hotkey_already_registered_maps_to_in_use() {
@@ -327,7 +327,7 @@ mod tests {
         assert_eq!(code, 0x8000_4005);
         assert!(matches!(
             register_outcome_from_windows(false, code),
-            Err(DeviceError::Internal("global_hotkey register"))
+            Err(GlobalHotkeyError::Internal("global_hotkey register"))
         ));
     }
 
@@ -339,7 +339,7 @@ mod tests {
         ));
         assert!(matches!(
             unregister_outcome(false),
-            Err(DeviceError::Internal("global_hotkey unregister"))
+            Err(GlobalHotkeyError::Internal("global_hotkey unregister"))
         ));
     }
 
