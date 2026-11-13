@@ -49,25 +49,6 @@ pub(crate) fn active_screen_uses_tilt() -> bool {
     ACTIVE_SCREEN_USES_TILT.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-/// 現在表示中の画面が `drag_drop` かどうか（Issue #1016）。`ACTIVE_SCREEN_USES_TILT` と同じ理由・同じ契約: `MainActivity.java` の `dragListener` は
-/// `ACTION_DRAG_STARTED` のたびに [`Java_com_fandhe_platform_MainActivity_nativeDragDropIsActive`]
-/// で問い合わせ、`false` ならそのドラッグの以降のイベント（Hover/Begin/Wants/Item）を
-/// 一切送らない（表示していない画面が他画面宛てのドロップを受け取らないための
-/// ゲート、契約表 1）。
-static ACTIVE_SCREEN_USES_DRAG_DROP: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-
-/// [`ACTIVE_SCREEN_USES_DRAG_DROP`] を差し替える。`android_main` が起動画面を決定した
-/// 直後に呼ぶ。
-pub(crate) fn set_active_screen_uses_drag_drop(uses_drag_drop: bool) {
-    ACTIVE_SCREEN_USES_DRAG_DROP.store(uses_drag_drop, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// [`ACTIVE_SCREEN_USES_DRAG_DROP`] を読む。
-pub(crate) fn active_screen_uses_drag_drop() -> bool {
-    ACTIVE_SCREEN_USES_DRAG_DROP.load(std::sync::atomic::Ordering::Relaxed)
-}
-
 /// `android_main` が組み立てる `eframe::App` の `egui::Context` を `EguiWaker` として
 /// 起床口に登録する（Issue #831 codex-review 指摘 PRRT_kwDOTl73E86hCOSM）。`device/android.rs` の
 /// `nativeOnMotionChanged` は UI スレッド外（Java 側センサコールバック）から
@@ -177,16 +158,11 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // （`device::notification::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::notification::reset_pending_tracking();
-    // Issue #1016: `drop_session::SESSIONS` も同じ理由でプロセス static のため
-    // Activity 再生成をまたいで残る。進行中のセッション・未適用イベントをここで
-    // 捨て、旧 Activity 由来の読み取りスレッドが `wants` で打ち切られるようにする
-    // （`device::drop_session::reset` doc「Android 経路」参照）。`drop_session`
-    // 自体は `feature = "device"` に関わらずコンパイルされる（`device.rs` の
-    // モジュール doc 参照）が、Android での書き込み元（JNI 受け口）は
-    // `device/android.rs` 側にあり feature 有効時のみ存在するため、reset もそれと
-    // 揃えて feature 有効時のみ呼ぶ。
+    // Issue #1016: ドラッグ & ドロップの集約器もプロセス static のため Activity 再生成をまたいで残る。進行中の
+    // セッション・未適用イベントをここで捨て、旧 Activity 由来の読み取りスレッドが打ち切られるようにする
+    // （`fandhe_cap_drag_drop::reset_sessions` doc 参照。#1194 までの過渡期の依存）。
     #[cfg(feature = "device")]
-    crate::device::drop_session::reset();
+    fandhe_cap_drag_drop::reset_sessions();
     // Issue #1104: `photo_pick::bridge::SLOT` もプロセス static のため再生成をまたいで残る。
     // 写真選択の契約は「保留中の要求は復元せず破棄」（`fandhe_device::photo_picker` モジュール
     // doc）なので、新しい `Idle` の画面状態を作る前に捨て、旧要求の遅延完了を id 不一致で
@@ -321,8 +297,9 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     fandhe_cap_gamepad::set_screen_active(requested_name == "gamepad_show");
     // Issue #1016: drag_drop 以外の画面が他画面宛てのドロップを受け取らないよう、
     // 傾き・ゲームパッドと同じタイミングでゲートを設定する
-    // （`ACTIVE_SCREEN_USES_DRAG_DROP` doc 参照）。
-    set_active_screen_uses_drag_drop(requested_name == "drag_drop");
+    // （`fandhe_cap_drag_drop::set_screen_active` doc 参照。#1194 までの過渡期の依存）。
+    #[cfg(feature = "device")]
+    fandhe_cap_drag_drop::set_screen_active(requested_name == "drag_drop");
 
     // 解放処理を描画層へ登録する（`Activity` 再生成で再実行されても 2 回目以降は無視される）。
     crate::register_teardown_hooks();
@@ -715,38 +692,6 @@ extern "system" fn Java_com_fandhe_platform_EnvironmentSensorsHelper_nativeOnFor
 // `nativeOnLocationChanged`/`nativeOnLocationFailure` を呼ぶ経路を持たない。
 // よって feature 無効ビルドではこれらのシンボルへ到達しえず、
 // `UnsatisfiedLinkError` の心配がない（codex-review の同種再指摘の予防）。
-
-/// `MainActivity.java` の `dragListener`（`View.OnDragListener`）が
-/// `ACTION_DRAG_STARTED` のたびに呼ぶ同期 getter（Issue #1016 実装計画 §3-2）。
-/// 現在表示中の画面が `drag_drop` かどうかを返し、`false` ならこのドラッグの
-/// 以降のイベント（`ACTION_DRAG_ENTERED`/`_EXITED`/`_DROP`/`_ENDED`）を Java 側は
-/// Rust へ一切送らない（契約表 1「画面外イベントを破棄する」）。
-///
-/// 他の JNI 受け口（`nativeOnMotionChanged`）と異なり、`device`
-/// feature 無効ビルド向けの no-op スタブを別途置かない: 本関数を feature に関わらず
-/// ここへ 1 つだけ定義し、返す値に `cfg!(feature = "device")` を織り込むことで
-/// 二重定義を避ける（`device/android.rs` は `feature = "device"` のときのみ
-/// コンパイルされるため、同名シンボルをそちらに置くと feature 無効ビルドで
-/// `UnsatisfiedLinkError` になる。実装計画 §3-2「スタブを置かない理由」）。
-/// `false` を返すこの経路のおかげで、`nativeOnDragDropHover`/`Begin`/`Wants`/`Item`
-/// （`device/android.rs`、feature 有効時のみ存在）は feature 無効ビルドでは
-/// Java 側から一切呼ばれず、対になる no-op スタブが不要になる。
-///
-/// jni クレートの型を使わず生ポインタ/プリミティブで受ける（`nativeOnMotionChanged`
-/// no-op フォールバックと同じ理由: 本ファイルは `device` feature 無効時も常に
-/// コンパイルされるため、`jni` クレートへの依存を増やさない）。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
-/// シンボル名は JNI 命名規約上の固定名（`nativeOnMotionChanged` と同じ根拠）。
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeDragDropIsActive(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-) -> u8 {
-    u8::from(cfg!(feature = "device") && active_screen_uses_drag_drop())
-}
 
 /// `device` feature 無効ビルド向けの `nativeOnFullscreenChanged` no-op フォールバック
 /// （Issue #1314）。`FullscreenHelper` は insets リスナーから必ず呼ぶため、スタブが無いと

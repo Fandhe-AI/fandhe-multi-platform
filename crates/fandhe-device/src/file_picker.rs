@@ -651,3 +651,41 @@ mod tests {
         format!("'{}'", path.display())
     }
 }
+
+/// DISPLAY_NAME からパスを剥がして末尾要素のみを採用し、NUL・空文字を拒否する
+/// （`PickedFile.name` の不変条件「パスを含まない・NUL 無し」）。SAF のプロバイダが `/` を含む DISPLAY_NAME を返す
+/// 場合に備え、呼び出し元へパスの断片を渡さない（security.md A03: 検証できない入力を通さない）。
+/// Android のファイル選択（`fandhe-egui-proxy`）とドラッグ & ドロップ（`fandhe-cap-drag-drop`）が共有する
+/// 検証規則で、複製して手で合わせないよう本モジュールを正にする。
+pub fn sanitize_picked_name(raw: &str) -> Option<String> {
+    let name = raw.rsplit('/').next().unwrap_or(raw);
+    if name.is_empty() || name.contains('\0') {
+        return None;
+    }
+    Some(name.to_string())
+}
+
+#[cfg(test)]
+mod sanitize_picked_name_tests {
+    use super::sanitize_picked_name;
+
+    #[test]
+    fn sanitize_picked_name_strips_leading_path() {
+        assert_eq!(
+            sanitize_picked_name("a/b/名前.txt").as_deref(),
+            Some("名前.txt")
+        );
+    }
+
+    #[test]
+    fn sanitize_picked_name_rejects_nul_and_empty() {
+        assert_eq!(sanitize_picked_name(""), None);
+        assert_eq!(sanitize_picked_name("a/"), None);
+        assert_eq!(sanitize_picked_name("na\0me"), None);
+    }
+
+    #[test]
+    fn sanitize_picked_name_keeps_plain_name() {
+        assert_eq!(sanitize_picked_name("a.txt").as_deref(), Some("a.txt"));
+    }
+}

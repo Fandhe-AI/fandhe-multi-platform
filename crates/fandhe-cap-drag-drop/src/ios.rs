@@ -1,6 +1,6 @@
-//! iOS 向けドラッグ & ドロップ受け取り実装（Issue #1015、親 #1013）。`device/drag_drop.rs`
+//! iOS 向けドラッグ & ドロップ受け取り実装（Issue #1015、親 #1013）。`driver.rs`
 //! の `drag_drop_effect` iOS 分岐から呼ばれ、`UIDropInteraction`
-//! （`ios/fandhe_ios_drag_drop.m`、`build.rs` が feature `device` 有効時のみ
+//! （`ios/fandhe_ios_drag_drop.m`、`build.rs` が iOS のときだけ
 //! コンパイル・リンクする）を `unsafe extern "C"` 1 関数（[`ensure_installed`] が
 //! 呼ぶ [`fandhe_ios_drag_drop_install`]）で呼ぶ。`unsafe` はこの呼び出し 1 箇所に
 //! 閉じ `// SAFETY:` で契約を明記する（`ios_notification.rs::present` と同型、
@@ -11,9 +11,9 @@
 //! （[`fandhe_rust_drag_drop_hover`]・[`fandhe_rust_drag_drop_begin`]・
 //! [`fandhe_rust_drag_drop_item`]）経由で push する（pull 型ではない。
 //! `ios_notification.rs::fandhe_rust_notification_outcome` と同じ橋渡し方式）。
-//! 受けた内容は [`super::drop_session`]（ターゲット非依存の集約器）へそのまま渡し、
-//! 状態機械への反映は `device/drag_drop.rs::drive_events` が毎フレーム
-//! [`super::drop_session::take_events`] を drain して行う（本モジュールでは
+//! 受けた内容は [`crate::drop_session`]（ターゲット非依存の集約器）へそのまま渡し、
+//! 状態機械への反映は `driver::drive_events` が毎フレーム
+//! [`crate::drop_session::take_events`] を drain して行う（本モジュールでは
 //! `fandhe_core` の状態を直接書き換えない）。
 //!
 //! # 読み取りは completion スレッド上で同期に行う（一時ファイルの寿命）
@@ -28,7 +28,7 @@
 //! # 判定と更新は同じロックの内側（契約表 2）
 //!
 //! [`fandhe_rust_drag_drop_item`] は読み取り（I/O）をロックの外（本関数の中、
-//! `super::drop_session::item` 呼び出し前）で終えてから、集約器へ結果を渡す
+//! `crate::drop_session::item` 呼び出し前）で終えてから、集約器へ結果を渡す
 //! （`drop_session.rs` モジュール doc 参照。ロック保持中に I/O を行わない）。
 //!
 //! # 入力は信頼境界（A03、契約表 5「FFI 境界」）
@@ -39,14 +39,12 @@
 //! ファイル名・パス・エラー詳細をログへ出力しない（security.md A09）。
 
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
-use fandhe_core::screens::drag_drop::{DragDropState, DropItem};
-use fandhe_device::drag_drop::{read_dropped, DropError};
-
-use crate::app::CompletionSender;
+use crate::drop_session::DroppedItem;
+use fandhe_device::drag_drop::{DropError, read_dropped};
 
 /// プロセス起動時刻（単調時計の基準点、`Instant` は絶対値を持たないため）。
 /// [`now_ms`] からのみ参照する。
@@ -72,10 +70,6 @@ unsafe extern "C" {
 /// 「送信を省略する分岐でも次回のポーリングを予約する」）。
 static INSTALLED: AtomicBool = AtomicBool::new(false);
 
-/// インストール失敗時に一度だけ出す案内の接頭辞込み文言。同じ文言を毎フレーム
-/// 連打しない判定に使う（下記 `ensure_installed` 参照）。
-const INSTALL_FAILED_MESSAGE: &str = "失敗しました: ドロップの受け取りを準備できませんでした";
-
 /// インストール失敗時の再試行間隔（ミリ秒）。この間隔より短い間隔で
 /// [`ensure_installed`] が呼ばれても [`fandhe_ios_drag_drop_install`] を呼び直さず
 /// 早期 return する（codex 指摘 #1019: 失敗が続く間、毎フレーム
@@ -83,26 +77,38 @@ const INSTALL_FAILED_MESSAGE: &str = "失敗しました: ドロップの受け�
 /// 再描画が止まらない問題への対処、契約表 4）。
 const INSTALL_RETRY_INTERVAL_MS: u64 = 1000;
 
+/// 直近の取り付け試行が失敗で、まだ成功していないか。再試行待ちの間も失敗を返し続けるために保持する
+/// （待機中の [`ensure_installed`] は `None` を返すため、これが無いと独立入口で失敗が消えて見える）。
+static INSTALL_FAILED: AtomicBool = AtomicBool::new(false);
+
+/// 取り付けが未完了で、直近の試行が失敗だったか（成功で解除される）。
+pub(crate) fn install_failed() -> bool {
+    INSTALL_FAILED.load(Ordering::SeqCst)
+}
+
 /// 直近に [`fandhe_ios_drag_drop_install`] を試みた時刻（[`now_ms`] 基準）。0 は
 /// 「一度も試みていない」を表す番兵（[`LAST_ACTIVE_MS`] と同じ考え方）。この番兵と
 /// 実際の時刻 0 が衝突するのはプロセス起動直後の一瞬のみで実害は無い（同 doc 参照）。
 static LAST_INSTALL_ATTEMPT_MS: AtomicU64 = AtomicU64::new(0);
 
-/// `device/drag_drop.rs::drag_drop_effect` の iOS 分岐から毎フレーム呼ばれる。
+/// `driver::drag_drop_effect` の iOS 分岐から毎フレーム呼ばれる。
 /// [`INSTALLED`] が `false` の間だけ [`fandhe_ios_drag_drop_install`] を呼び、
 /// 冪等な `UIDropInteraction` の取り付けを試みる（`.m` 側も
 /// `objc_setAssociatedObject` 相当の static で二重付与を防ぐ二重の安全網、
 /// `.m` ファイル冒頭コメント参照）。
 ///
-/// 失敗時は画面へ「失敗しました: ...」を出す（契約表 6、黙ってダミー化しない）。
-/// `state.error` が既に同じ文言なら送らない（同じ文言を連打しない、契約表 4
-/// 「失敗状態のまま再描画し続けていないか」の逆: 再描画自体は続けるが completion
-/// 送信は止める）。成功したら、直前まで同じ失敗文言が出ていた場合のみ消す
-/// （利用者が既に読んだ他のエラーを上書きしない）。
+/// 取り付けを試みた結果。画面への反映（失敗文言の出し入れ）は `driver` が行う。
+pub(crate) enum InstallResult {
+    Installed,
+    Failed,
+}
+
+/// 取り付けを試みた場合だけ結果を返す（済み・再試行間隔内は `None`）。失敗を画面へ見せる（契約表 6、黙って
+/// ダミー化しない）判断と文言は画面の型を知る `driver` が持つ。
 #[allow(unsafe_code)]
-pub(super) fn ensure_installed(sender: &CompletionSender<DragDropState>) {
+pub(crate) fn ensure_installed() -> Option<InstallResult> {
     if INSTALLED.load(Ordering::SeqCst) {
-        return;
+        return None;
     }
 
     // last == 0 は「一度も試みていない」番兵（`LAST_INSTALL_ATTEMPT_MS` doc 参照）。
@@ -119,10 +125,10 @@ pub(super) fn ensure_installed(sender: &CompletionSender<DragDropState>) {
             // 再試行間隔ぶん明示的に repaint を予約し、送信を省略する分岐でも
             // 次回のポーリングを保証する（契約表 4、`location.rs::drive` と
             // 同じ考え方）。
-            sender.request_repaint_after(std::time::Duration::from_millis(
+            fandhe_runtime::request_repaint_after(std::time::Duration::from_millis(
                 INSTALL_RETRY_INTERVAL_MS - elapsed,
             ));
-            return;
+            return None;
         }
     }
     LAST_INSTALL_ATTEMPT_MS.store(now, Ordering::SeqCst);
@@ -134,19 +140,12 @@ pub(super) fn ensure_installed(sender: &CompletionSender<DragDropState>) {
     let code = unsafe { fandhe_ios_drag_drop_install() };
     if code == 0 {
         INSTALLED.store(true, Ordering::SeqCst);
-        let _ = sender.send(Box::new(|s: &mut DragDropState| {
-            if s.error == INSTALL_FAILED_MESSAGE {
-                s.error.clear();
-            }
-        }));
-        return;
+        INSTALL_FAILED.store(false, Ordering::SeqCst);
+        return Some(InstallResult::Installed);
     }
 
-    let _ = sender.send(Box::new(|s: &mut DragDropState| {
-        if s.error != INSTALL_FAILED_MESSAGE {
-            s.error = INSTALL_FAILED_MESSAGE.to_string();
-        }
-    }));
+    INSTALL_FAILED.store(true, Ordering::SeqCst);
+    Some(InstallResult::Failed)
 }
 
 /// 画面が現在有効（表示中）とみなす期間（ミリ秒）。[`mark_active`] の呼び出し間隔
@@ -168,7 +167,7 @@ const SCREEN_ACTIVE_POLL_INTERVAL_MS: u64 = SCREEN_ACTIVE_WINDOW_MS / 2;
 /// その間はまだ画面表示前のため実害は無い）。
 static LAST_ACTIVE_MS: AtomicU64 = AtomicU64::new(0);
 
-/// `device/drag_drop.rs::drag_drop_effect` の iOS 分岐から毎フレーム呼ばれる。
+/// `driver::drag_drop_effect` の iOS 分岐から毎フレーム呼ばれる。
 /// `UIDropInteraction` はウィンドウ全体へ一度取り付けたら本モジュールの
 /// `INSTALLED` が `true` の間ずっと delegate が動き続けるため（本ファイル冒頭
 /// コメント「ライフサイクル・登録トークン」参照）、この画面の effect が実際に
@@ -181,9 +180,9 @@ static LAST_ACTIVE_MS: AtomicU64 = AtomicU64::new(0);
 ///
 /// [`SCREEN_ACTIVE_POLL_INTERVAL_MS`] 後の repaint も併せて予約し、利用者操作の
 /// 有無に関わらずこの画面が表示され続ける限り有効期間を切らさない（doc 上記参照）。
-pub(super) fn mark_active(sender: &CompletionSender<DragDropState>) {
+pub(crate) fn mark_active() {
     LAST_ACTIVE_MS.store(now_ms(), Ordering::SeqCst);
-    sender.request_repaint_after(std::time::Duration::from_millis(
+    fandhe_runtime::request_repaint_after(std::time::Duration::from_millis(
         SCREEN_ACTIVE_POLL_INTERVAL_MS,
     ));
 }
@@ -192,10 +191,10 @@ pub(super) fn mark_active(sender: &CompletionSender<DragDropState>) {
 /// この画面が「直近 [`SCREEN_ACTIVE_WINDOW_MS`] 以内に [`mark_active`] された
 /// (= 表示中の)」かどうかを返す。非表示中は `.m` 側がセッションを受け付けず
 /// （`canHandleSession:` が `NO`）、ホバー/ドロップのどちらも Rust 側（延いては
-/// [`super::drop_session`] の集約キュー）へ積まれない（契約表 1「画面外イベントを
+/// [`crate::drop_session`] の集約キュー）へ積まれない（契約表 1「画面外イベントを
 /// 破棄する」）。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_drag_drop_is_active() -> i32 {
     let last = LAST_ACTIVE_MS.load(Ordering::SeqCst);
     i32::from(now_ms().saturating_sub(last) < SCREEN_ACTIVE_WINDOW_MS)
@@ -203,20 +202,20 @@ extern "C" fn fandhe_rust_drag_drop_is_active() -> i32 {
 
 /// `.m` 側 `sessionDidEnter:`/`sessionDidExit:`/`sessionDidEnd:` から呼ばれる
 /// `extern "C"` 関数。`entered != 0` を「領域内に入った」として
-/// [`super::drop_session::hover`] へ委譲する。
+/// [`crate::drop_session::hover`] へ委譲する。
 ///
 /// egui の描画ループとは非同期の経路（UIKit のジェスチャ処理スレッド）のため、
-/// [`crate::ios::request_repaint`] で次フレームを明示的に起こす
+/// [`fandhe_runtime::request_repaint`] で次フレームを明示的に起こす
 /// （`ios_notification.rs::fandhe_rust_notification_outcome` と同じ理由）。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_drag_drop_hover(entered: i32) {
-    super::drop_session::hover(entered != 0);
-    crate::ios::request_repaint();
+    crate::drop_session::hover(entered != 0);
+    fandhe_runtime::request_repaint();
 }
 
 /// `.m` 側 `performDrop:` の冒頭から呼ばれる `extern "C"` 関数。`total` 件のうち
-/// [`super::drop_session::begin`] が計算した `to_load` 件だけを `.m` 側に読み込ませる
+/// [`crate::drop_session::begin`] が計算した `to_load` 件だけを `.m` 側に読み込ませる
 /// （上限は `fandhe_device::drag_drop::MAX_DROP_FILES` が SSOT、`.m` 側に定数を
 /// 複製しない）。
 ///
@@ -229,7 +228,7 @@ extern "C" fn fandhe_rust_drag_drop_hover(entered: i32) {
 /// あること（`.m` 側の呼び出し規約）。本関数は指す先の型（`u64`/`usize`）として
 /// 1 回だけ書き込み、ポインタの所有権は受け取らない。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn fandhe_rust_drag_drop_begin(
     total: usize,
     out_session: *mut u64,
@@ -238,7 +237,7 @@ unsafe extern "C" fn fandhe_rust_drag_drop_begin(
     if out_session.is_null() || out_to_load.is_null() {
         return;
     }
-    let (session, to_load) = super::drop_session::begin(total);
+    let (session, to_load) = crate::drop_session::begin(total);
     // SAFETY: 呼び出し元契約（本関数 doc の `# Safety`）により、両ポインタは
     // この呼び出しの間だけ有効な書き込み可能な `u64`/`usize` を指す。上で
     // null チェック済み。
@@ -246,7 +245,7 @@ unsafe extern "C" fn fandhe_rust_drag_drop_begin(
         *out_session = session;
         *out_to_load = to_load;
     }
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 /// `.m` 側の `loadFileRepresentationForTypeIdentifier:completionHandler:` completion
@@ -270,7 +269,7 @@ unsafe extern "C" fn fandhe_rust_drag_drop_begin(
 /// 呼び出し規約）。`code != 0` のときはどちらも参照しない契約だが、本関数は
 /// 念のため常に null/長さを確認してから読む。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn fandhe_rust_drag_drop_item(
     session: u64,
     index: usize,
@@ -288,8 +287,8 @@ unsafe extern "C" fn fandhe_rust_drag_drop_item(
     let path = unsafe { bytes_to_str(path_ptr, path_len) };
 
     let item = build_item(code, path, suggested_name);
-    super::drop_session::item(session, index, item);
-    crate::ios::request_repaint();
+    crate::drop_session::item(session, index, item);
+    fandhe_runtime::request_repaint();
 }
 
 /// [`fandhe_rust_drag_drop_item`] 本体の、FFI・`unsafe` を含まない純粋な分岐部分
@@ -301,33 +300,33 @@ unsafe extern "C" fn fandhe_rust_drag_drop_item(
 /// `path` が UTF-8 変換に失敗していた（`None`）場合は `Unreadable` として扱う）。
 /// `code == 1` は [`DropError::Folder`]、それ以外（未知の `code` を含む）は
 /// [`DropError::Unreadable`] にする（契約表 6「嘘の成功」: 未知の値を成功へ丸めない）。
-fn build_item(code: i32, path: Option<&str>, suggested_name: &str) -> DropItem {
+fn build_item(code: i32, path: Option<&str>, suggested_name: &str) -> DroppedItem {
     match (code, path) {
         (0, Some(path_str)) => {
             let path = Path::new(path_str);
             match read_dropped(path) {
-                Ok(picked) => DropItem {
+                Ok(picked) => DroppedItem {
                     name: display_name(suggested_name, Some(picked.name.as_str())),
                     result: Ok(picked.bytes.len()),
                 },
                 Err(e) => {
                     let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned());
-                    DropItem {
+                    DroppedItem {
                         name: display_name(suggested_name, file_name.as_deref()),
                         result: Err(e.to_string()),
                     }
                 }
             }
         }
-        (0, None) => DropItem {
+        (0, None) => DroppedItem {
             name: display_name(suggested_name, None),
             result: Err(DropError::Unreadable.to_string()),
         },
-        (1, _) => DropItem {
+        (1, _) => DroppedItem {
             name: display_name(suggested_name, None),
             result: Err(DropError::Folder.to_string()),
         },
-        _ => DropItem {
+        _ => DroppedItem {
             name: display_name(suggested_name, None),
             result: Err(DropError::Unreadable.to_string()),
         },

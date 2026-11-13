@@ -1,7 +1,7 @@
 //! macOS / iOS 向け触覚フィードバック実装（Issue #1091・#1092）。`driver.rs` の
 //! Apple 経路から呼ばれ、`apple/fandhe_apple_haptics.m`（macOS は `NSHapticFeedbackManager`、
 //! iOS は `UIImpactFeedbackGenerator`。`build.rs` が feature `device` 有効時にコンパイル）を `unsafe extern "C"` 1 関数で
-//! 呼ぶ。`unsafe` はこの呼び出し 1 箇所に閉じる（`apple_share.rs` と同型、coding-rust.md の
+//! 呼ぶ。`unsafe` はこの呼び出し 1 箇所に閉じる（`fandhe-cap-share-sheet/src/apple.rs` と同型、coding-rust.md の
 //! FFI 例外規定準拠）。
 //!
 //! macOS は非搭載を判定できない（Force Touch トラックパッド以外では何も起きない）ため

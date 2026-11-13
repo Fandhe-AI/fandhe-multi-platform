@@ -93,8 +93,7 @@ pub fn app_progress_attention_show_effect(
     state: &AppProgressAttentionState,
     sender: &CompletionSender<AppProgressAttentionState>,
 ) {
-    use crate::app::EguiSenderExt as _;
-    let focused = sender.focused();
+    let focused = sender.host_view().focused();
     if take_progress_request(state).is_none() && take_attention_request(state, focused).is_none() {
         return;
     }

@@ -6,7 +6,7 @@
 //! 写像は `windows` クレートの型に依存しない純関数に切り出し、ホストの `cargo test` で
 //! 検査する（WinRT 呼び出しだけ内側の `cfg(target_os = "windows")` に閉じる。
 //! `windows_url_scheme.rs` と同じ方針）。`unsafe` と `RoInitialize` は使わない
-//! （`windows_text_scale.rs` と同じ前提）。HRESULT・インターフェース情報はログにも画面にも
+//! （`windows_system_sound.rs` と同じ前提）。HRESULT・インターフェース情報はログにも画面にも
 //! 出さず固定文言へ畳む（security.md A09）。
 //!
 //! - プロファイル無し: windows-core 0.61 は null を `Err(Error::empty())`（code = 0）で返す。

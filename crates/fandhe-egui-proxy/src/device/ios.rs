@@ -24,12 +24,6 @@
 //! 直接届く。ブロッキング待ちが無いため、`camera`/`tts` のようなワーカースレッド・
 //! mailbox は持たない。
 //!
-//! 文字サイズ追従実装（[`IosTextScale`]、Issue #914）は [`IosMotion`] と同型:
-//! `apple/fandhe_apple_text_scale.m`（`UIFont.preferredFontForTextStyle:`）を
-//! `unsafe extern "C"` 1 関数（out 引数 1 個の同期呼び出し）で呼び、
-//! `device/text_scale.rs` の effect ドライバから毎フレーム pull される。main
-//! スレッド専用の呼び出し契約も [`IosMotion`] と同じく [`is_main_thread`] で検査する。
-//!
 //! マイク録音（Issue #954 macOS + #956 iOS）は本モジュールを**通らない**:
 //! `apple/fandhe_apple_mic_record.m`（iOS/macOS 共用）を `device/apple_mic_record.rs`
 //! が呼び、`device/mic_record.rs` の iOS/macOS 経路が直接使う（ファイル選択と同じ
@@ -47,7 +41,6 @@ use std::sync::{Condvar, Mutex};
 use fandhe_device::clipboard::Clipboard;
 use fandhe_device::file_picker::{read_picked, MAX_FILE_BYTES};
 use fandhe_device::motion::Motion;
-use fandhe_device::text_scale::TextScale;
 use fandhe_device::tts::Tts;
 use fandhe_device::{DataDir, DeviceError};
 // main thread 判定は Apple 共通層（`fandhe-platform-apple`）が持つ。UIKit を触る呼び出し
@@ -631,47 +624,6 @@ pub(crate) fn present_photo_picker(request_id: u64) -> bool {
     // ことのみを意味し、結果は非同期に `fandhe_rust_photo_picker_outcome` へ届く。
     unsafe {
         fandhe_ios_photo_picker_pick(request_id) == 0
-    }
-}
-
-// SAFETY: `apple/fandhe_apple_text_scale.m` が定義する C ABI（`build.rs` が iOS
-// ターゲットのみ・feature `device` 有効時のみコンパイル・リンクする）。契約は
-// 下記 [`IosTextScale::scale_factor`] のコメントに集約する。
-#[allow(unsafe_code)]
-unsafe extern "C" {
-    fn fandhe_apple_text_scale_read(out_scale: *mut f32) -> i32;
-}
-
-/// iOS 実文字サイズ追従実装（`UIFont.preferredFontForTextStyle:`、Issue #914）。
-/// `device/text_scale.rs` の effect ドライバから毎フレーム pull される
-/// （push ではなく pull にする設計判断は `fandhe_device::text_scale` モジュール doc・
-/// `tilt.rs` 冒頭コメント参照）。
-pub struct IosTextScale;
-
-impl TextScale for IosTextScale {
-    #[allow(unsafe_code)]
-    fn scale_factor(&self) -> Result<f32, DeviceError> {
-        // `fandhe_apple_text_scale_read` は main スレッド専用（[`IosMotion::tilt`]
-        // と同じ `is_main_thread` ガード、`.m` ファイル冒頭コメント参照）。
-        if !is_main_thread() {
-            return Err(DeviceError::Internal("text_scale: called off main thread"));
-        }
-
-        let mut out_scale: f32 = 0.0;
-
-        // SAFETY: `fandhe_apple_text_scale_read` の契約（`.m` ファイル冒頭コメント）:
-        // out 引数はこの関数呼び出し中のみ有効なスタック上の `f32` へのポインタで、
-        // 所有権移転・malloc は無い（`IosMotion::tilt` と同じ形）。戻り値が 0 以外の
-        // とき out 引数は書き換えられない契約のため、呼び出し直前の初期値のまま扱う。
-        let code = unsafe { fandhe_apple_text_scale_read(&mut out_scale) };
-
-        match code {
-            0 => Ok(out_scale),
-            // 0 以外はすべて「読めない」（`.m` 側の異常系、`pointSize` が 0 以下等）。
-            // NaN/範囲外の丸めは `fandhe_device::text_scale::read_scale` に一本化する
-            // ため、ここでは FFI 直後の値をそのまま返す。
-            _ => Err(DeviceError::Unsupported("text_scale")),
-        }
     }
 }
 

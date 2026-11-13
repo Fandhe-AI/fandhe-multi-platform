@@ -14,7 +14,7 @@ TASK-21.4）。構成の根拠は `docs/architecture/consumer-app-structure.md`�
 |------|------|
 | 端末機能でない行（`ui-widget-catalog`・`checkbox-list`・`dark-mode`・`gpu-backend` など） | crate を作らない |
 | Windows・Web の実装がある機能 | `fandhe-platform-windows` / `-web`（#1184・#1185）は済み。Windows は `src/windows.rs`（scaffold が移す）、Web は `fandhe-web-dom/src/<stem>.rs` を `src/web.rs` へ `git mv` して手で移す（下の「Web の移し方」）。`inventory` の注意は読み流してよい |
-| driver が egui 固有の読み書き口（`fandhe_render_egui::EguiSenderExt`: `set_zoom_factor`・`focused`・`file_drag` など）を使う機能（dynamic-type・share-sheet の Windows 経路・drag-drop） | 機能 crate は egui 非依存のため、そのままは移せない。`fandhe-runtime` に egui 非依存の口を足す設計が先に要る。先行して移さない |
+| driver が egui 固有の読み書き口（`fandhe_render_egui::EguiSenderExt`）を使う機能 | 機能 crate は egui 非依存のため、そのままは移せない。拡大率・フォーカス・ファイルのドラッグ・ポインタ押下は `sender.host_view()`（`fandhe_runtime::HostView`、§13）で読み書きできる。`HostView` に無い口（`viewport_size`・`request_screenshot` / `tagged_screenshot`・`egui_context`・`canvas_*`）を使う機能は、その口を設計してから移す |
 | 実装が共有ファイル（`device/android.rs`・`device/ios.rs`・`MainActivity.java`）に埋まった古い型（tts・clipboard・http・storage など） | `scaffold` では動かせない。`inventory` の参照行を見て手で切り出す |
 | 対応表の id と stem が違う機能（`http-get` → `http`、`dynamic-type` → `text_scale` など） | `--module <stem>` で渡す |
 | stem が複数ある機能 | stem ごとに手で移す。`scaffold` は 1 stem だけ扱う |
@@ -269,3 +269,33 @@ Android のゲームパッド入力は利用者の `MainActivity` の `dispatchK
 | feature 無効時の no-op スタブ | 旧 JNI 名のスタブを egui-proxy から消し、`fandhe-gallery` に新しい名前で置く（share-receive と同じ。provider は feature を知らず native を呼ぶため、実体が無いと `UnsatisfiedLinkError` になる） |
 | 画面ゲート | `ACTIVE_SCREEN_USES_GAMEPAD` を機能 crate の static へ移し、`set_screen_active(bool)` で公開する。egui-proxy の `android_main` が過渡期の依存（feature `device`）で呼ぶ（#1194 で消える） |
 | Web | 実装本体は `fandhe-web-dom` に残し、契約と `GamepadError`（識別子つき）だけ機能 crate から使う。永続的な非対応と非標準配置の区別は識別子で保つ |
+
+## 13. 描画層の口 `HostView`（#1302）で出た型
+
+dynamic-type・share-sheet・drag-drop の 3 機能を移した。3 機能とも driver が egui 固有の読み書き口を使っていたため、
+先に `fandhe-runtime` へ描画層の口を足した。
+
+### 口の設計
+
+| 項目 | 内容 |
+|------|------|
+| 型 | `fandhe_runtime::HostView`。メソッドはすべて既定の実装を持つ（`focused` / `file_drag` / `pointer_primary_down` / `set_zoom_factor` / `applied_zoom_factor`） |
+| 既定値 | 描画層が観測できない場合は「観測していない」側へ倒す（`focused` は `true`、`file_drag` は空、`set_zoom_factor` は何もしない）。既定値だけで成功の表示や権限の行使を起こさない |
+| 届け方 | `RepaintWaker::host_view`（既定実装つき）を `CompletionSender::host_view` で effect へ渡す。`EffectFn` の型も、既存の `NoopWaker` も変えない |
+| `Renderer` との関係 | `Renderer` には載せない。`Renderer::render` は UI スレッドで画面を描く契約で、effect からは見えないため。`RepaintWaker` と同じく、レンダラ実装が提供する別の契約として扱う |
+| 呼んでよい時点 | `EffectFn` と同じ、描画ループのフレーム末尾（UI スレッド）だけ |
+| egui 実装 | `fandhe-render-egui` の `EguiWaker`。適用済みの拡大率は `egui::Context` 単位に持つ（プロセス全体の static にしない） |
+
+### 手作業で気づいた型
+
+| 型 | 扱い |
+|----|------|
+| driver のテスト | `egui_sender` の代わりに、`HostView` を実装した起床口（`Mutex<Option<f32>>` で拡大率を記録する等）で `CompletionSender::new` する。描画コンテキスト単位の分離（PR #920）は `fandhe-render-egui` のテストで固定する |
+| 契約を `fandhe-device` に残す機能（drag-drop） | `file-association` が `fandhe_device::drag_drop` を使うため、契約は動かさず機能 crate が `fandhe-device` に依存する（§7）。`scaffold` は契約も `git mv` するので使わず、手で移す |
+| 複数 stem の機能（drag-drop） | `drag_drop`・`drop_session`・`ios_drag_drop` を手で移す。集約器 `drop_session` は Android の JNI 受け口と iOS が共有する |
+| Android の画面の表示状態と再生成時の破棄（drag-drop） | `fandhe-egui-proxy` の `android::run` が画面名を決める。機能 crate が `set_screen_active` / `reset_sessions` を `pub` で公開し、`fandhe-egui-proxy` が feature `device` で optional 依存して呼ぶ（§7 の過渡期の依存、#1194 で消える）。JNI の `nativeDragDropIsActive` は機能 crate の Helper 側へ移した |
+| DecorView への取り付け（drag-drop） | `onHostCreated` で `getDecorView()` を呼ぶと、後続の `requestWindowFeature` が使えなくなるおそれがある。`onHostResumed` で取り付ける（同じリスナーの再設定は無害） |
+| Activity を跨いで生きる受信器（share-sheet） | Application Context へ登録する static の受信器と要求 id は、`MainActivity` のときと同じく static に置く。ランチャーだけ Activity ごとの Helper に持つ |
+| 複製していた検証規則（drag-drop） | SAF の表示名の検証 `sanitize_picked_name` はファイル選択と drag-drop が使うため、`fandhe-device::file_picker` へ上げて共有する |
+| `scaffold` が書く `build.rs` | 元の framework と照合する（dynamic-type は iOS だけ `UIKit`、share-sheet は `ui_framework()` だけ、drag-drop は iOS だけ `UIKit` + `UniformTypeIdentifiers`） |
+| 旧受け口の取りこぼし | `device/android.rs` のような共有ファイルに残った JNI 受け口は、`cargo ndk clippy -p fandhe-egui-proxy` で拾える（ホストの検査では拾えない） |

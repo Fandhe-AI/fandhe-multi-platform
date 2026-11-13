@@ -1,4 +1,4 @@
-//! Windows 向け共有シート実装（Issue #898）。`device/share.rs` の Windows 経路から
+//! Windows 向け共有シート実装（Issue #898）。`driver.rs` の Windows 経路から
 //! 呼ばれ、WinRT `DataTransferManager` を `IDataTransferManagerInterop`
 //! （`Win32_UI_Shell`）経由でウィンドウ束縛して呼ぶ。`tts`/`file_picker`/`location`
 //! の Windows 実装（PowerShell 子プロセス方式）は使わない: 子プロセスは自分の
@@ -12,34 +12,34 @@
 //! `windows` クレート側で safe fn としてラップ済みのため `unsafe` を要しない。
 //!
 //! 共有テキスト・URL をログへ出力しない（security.md A09）。HRESULT の失敗も
-//! `DeviceError::Internal("share ...")` の固定ラベルへ畳み、内部構造を漏らさない。
+//! `ShareSheetError::Internal` の固定ラベルへ畳み、内部構造を漏らさない。
 //!
 //! # ウィンドウの捕捉
 //!
 //! メインウィンドウの HWND は `fandhe-platform-windows` が保持する（`fandhe-gallery` の起動
 //! クロージャが `remember_window` で 1 度だけ控え、本モジュールは `window()` で読む）。
-//! effect ドライバ（`device/share.rs`）は `CreationContext` に触れられないため、この
+//! effect ドライバ（`driver.rs`）は `CreationContext` に触れられないため、この
 //! 共通層経由でしか HWND を得られない。
 //!
 //! # キャンセル検知の天井
 //!
 //! `DataTransferManager` には「共有 UI を閉じた」イベントが無い（公知の制約）。共有 UI は
-//! フォーカスを奪う別ウィンドウのため、`device/share.rs` 側が「フォーカス喪失 → 復帰後も
+//! フォーカスを奪う別ウィンドウのため、`driver.rs` 側が「フォーカス喪失 → 復帰後も
 //! `TargetApplicationChosen` 未着」をキャンセルとみなすヒューリスティックで補う
 //! （`share.rs` のポーリング処理を参照。本モジュールは `TargetApplicationChosen` の
 //! 到着だけを `bridge::deliver` へ伝える）。
 
 use std::cell::RefCell;
 
-use windows::core::{Ref, HSTRING};
 use windows::ApplicationModel::DataTransfer::{
     DataRequestedEventArgs, DataTransferManager, TargetApplicationChosenEventArgs,
 };
 use windows::Foundation::{TypedEventHandler, Uri};
 use windows::Win32::UI::Shell::IDataTransferManagerInterop;
+use windows::core::{HSTRING, Ref};
 
-use fandhe_device::share::ShareRequest;
-use fandhe_device::DeviceError;
+use crate::contract::ShareRequest;
+use crate::error::ShareSheetError;
 
 /// 直近の `present` が登録したハンドラ一式。次回 `present` 前に解除しないと、
 /// `DataTransferManager` は hwnd ごとに同一インスタンスが返るため登録が累積する。
@@ -50,7 +50,7 @@ struct Held {
 }
 
 // `DataTransferManager`（COM オブジェクト）は `Send`/`Sync` を実装しないため
-// `static Mutex` に置けない。`present` は `device/share.rs` の effect ドライバから
+// `static Mutex` に置けない。`present` は `driver.rs` の effect ドライバから
 // egui の update ループ（UI/メインスレッド）上でのみ呼ばれる契約（`GetForWindow` /
 // `ShowShareUIForWindow` も同じスレッドで呼ぶ必要がある WinRT の STA 前提）のため、
 // スレッドローカルで足りる（`Mutex` のような他スレッドとの排他は不要）。
@@ -58,22 +58,22 @@ thread_local! {
     static HELD: RefCell<Option<Held>> = const { RefCell::new(None) };
 }
 
-/// `device/share.rs` の Windows 経路から呼ばれる。`request_id` は
-/// `device/share::bridge::begin` が払い出したプロセス内一意な ID（`bridge::deliver` の
+/// `driver.rs` の Windows 経路から呼ばれる。`request_id` は
+/// `driver::bridge::begin` が払い出したプロセス内一意な ID（`bridge::deliver` の
 /// 照合キー）。同期的に失敗した場合は `Err` を返し、呼び出し元が `bridge::deliver` する
 /// （`TargetApplicationChosen` は二度と来ないため）。
 #[allow(unsafe_code)]
-pub(crate) fn present(request_id: u64, request: &ShareRequest) -> Result<(), DeviceError> {
+pub(crate) fn present(request_id: u64, request: &ShareRequest) -> Result<(), ShareSheetError> {
     if !matches!(DataTransferManager::IsSupported(), Ok(true)) {
-        return Err(DeviceError::Unsupported("share"));
+        return Err(ShareSheetError::Unsupported);
     }
     let Some(hwnd) = fandhe_platform_windows::window() else {
-        return Err(DeviceError::Internal("share window"));
+        return Err(ShareSheetError::Internal);
     };
 
     let interop: IDataTransferManagerInterop =
         windows::core::factory::<DataTransferManager, IDataTransferManagerInterop>()
-            .map_err(|_| DeviceError::Internal("share factory"))?;
+            .map_err(|_| ShareSheetError::Internal)?;
 
     // 前回の登録を解除する（累積防止。失敗しても提示自体は続行する: 前回のマネージャは
     // 今回取得するものと同一インスタンスのはずだが、万一取得できていなくても
@@ -89,8 +89,8 @@ pub(crate) fn present(request_id: u64, request: &ShareRequest) -> Result<(), Dev
     // 構築時、winit が生成したウィンドウ）から得た HWND で、`ProxyApp` の生存中は
     // ウィンドウも生存する（`update` から呼ばれる effect の実行中に閉じられない）。
     // `interop` は上で取得した有効な COM ポインタ。
-    let manager: DataTransferManager = unsafe { interop.GetForWindow(hwnd) }
-        .map_err(|_| DeviceError::Internal("share get manager"))?;
+    let manager: DataTransferManager =
+        unsafe { interop.GetForWindow(hwnd) }.map_err(|_| ShareSheetError::Internal)?;
 
     let text = request.text().to_string();
     let url = request.url().map(str::to_string);
@@ -125,22 +125,16 @@ pub(crate) fn present(request_id: u64, request: &ShareRequest) -> Result<(), Dev
                 if filled.is_err() {
                     let _ = request
                         .FailWithDisplayText(&HSTRING::from("共有データの準備に失敗しました"));
-                    super::share::bridge::deliver(
-                        request_id,
-                        Err(DeviceError::Internal("share data requested")),
-                    );
+                    crate::driver::bridge::deliver(request_id, Err(ShareSheetError::Internal));
                 }
                 Ok(())
             },
         ))
-        .map_err(|_| DeviceError::Internal("share data requested"))?;
+        .map_err(|_| ShareSheetError::Internal)?;
 
     let target_chosen = match manager.TargetApplicationChosen(&TypedEventHandler::new(
         move |_: Ref<'_, DataTransferManager>, _: Ref<'_, TargetApplicationChosenEventArgs>| {
-            super::share::bridge::deliver(
-                request_id,
-                Ok(fandhe_device::share::ShareOutcome::Shared),
-            );
+            crate::driver::bridge::deliver(request_id, Ok(crate::contract::ShareOutcome::Shared));
             Ok(())
         },
     )) {
@@ -150,7 +144,7 @@ pub(crate) fn present(request_id: u64, request: &ShareRequest) -> Result<(), Dev
             // しないと、次回 present で HELD に何も残らないまま古いハンドラが
             // DataTransferManager に残存し、次回の共有で二重発火する（P2 / Bugbot 指摘）。
             let _ = manager.RemoveDataRequested(data_requested);
-            return Err(DeviceError::Internal("share target chosen"));
+            return Err(ShareSheetError::Internal);
         }
     };
 
@@ -163,6 +157,5 @@ pub(crate) fn present(request_id: u64, request: &ShareRequest) -> Result<(), Dev
     });
 
     // SAFETY: `hwnd` の生存根拠は上と同じ。`interop` も同一の有効な COM ポインタ。
-    unsafe { interop.ShowShareUIForWindow(hwnd) }
-        .map_err(|_| DeviceError::Internal("share present"))
+    unsafe { interop.ShowShareUIForWindow(hwnd) }.map_err(|_| ShareSheetError::Internal)
 }

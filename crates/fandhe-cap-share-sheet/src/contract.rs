@@ -20,9 +20,9 @@
 //!   「モバイルは trait を通らない」と同じ判断。iOS/Android/Web は後続 Issue で
 //!   同型の橋渡しを足す）
 //! - 対応不可プラットフォーム（Linux・本 Issue 時点の Windows）は
-//!   `Err(DeviceError::Unsupported("share"))`
+//!   `Err(ShareSheetError::Unsupported)`
 
-use crate::DeviceError;
+use crate::error::ShareSheetError;
 
 /// 共有シートの結果。キャンセル・共有先なしは失敗ではない（モジュール doc の契約）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,13 +58,13 @@ impl ShareRequest {
     ///   （`file://` 等）・NUL 混入は `InvalidInput("share url")` にする。`file://` を
     ///   通すと `NSSharingService` がローカルファイルの内容を共有し得るため
     ///   （security.md A03、実装計画の設計判断 3 参照）
-    pub fn new(text: &str, url: Option<&str>) -> Result<Self, DeviceError> {
+    pub fn new(text: &str, url: Option<&str>) -> Result<Self, ShareSheetError> {
         let text = text.trim();
         if text.is_empty() {
-            return Err(DeviceError::InvalidInput("share text"));
+            return Err(ShareSheetError::InvalidInput);
         }
         if text.contains('\0') {
-            return Err(DeviceError::InvalidInput("share text"));
+            return Err(ShareSheetError::InvalidInput);
         }
 
         let url = match url.map(str::trim) {
@@ -74,7 +74,7 @@ impl ShareRequest {
                     scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")
                 });
                 if u.contains('\0') || !scheme_ok {
-                    return Err(DeviceError::InvalidInput("share url"));
+                    return Err(ShareSheetError::InvalidInput);
                 }
                 Some(u.to_string())
             }
@@ -100,7 +100,7 @@ impl ShareRequest {
 /// 共有シートの契約（モジュール doc の「契約」節を参照）。
 pub trait Share: Send + Sync {
     /// OS の共有 UI を 1 回出す。固定タイムアウトを掛けない。
-    fn share(&self, request: &ShareRequest) -> Result<ShareOutcome, DeviceError>;
+    fn share(&self, request: &ShareRequest) -> Result<ShareOutcome, ShareSheetError>;
 }
 
 /// 対応不可プラットフォーム用（Linux、本 Issue 時点の Windows）。常に
@@ -108,8 +108,8 @@ pub trait Share: Send + Sync {
 pub struct UnsupportedShare;
 
 impl Share for UnsupportedShare {
-    fn share(&self, _request: &ShareRequest) -> Result<ShareOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("share"))
+    fn share(&self, _request: &ShareRequest) -> Result<ShareOutcome, ShareSheetError> {
+        Err(ShareSheetError::Unsupported)
     }
 }
 
@@ -120,19 +120,19 @@ mod tests {
     #[test]
     fn new_rejects_empty_text() {
         let err = ShareRequest::new("", None).unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidInput("share text")));
+        assert!(matches!(err, ShareSheetError::InvalidInput));
     }
 
     #[test]
     fn new_rejects_blank_only_text() {
         let err = ShareRequest::new("   ", None).unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidInput("share text")));
+        assert!(matches!(err, ShareSheetError::InvalidInput));
     }
 
     #[test]
     fn new_rejects_text_with_embedded_nul() {
         let err = ShareRequest::new("a\0b", None).unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidInput("share text")));
+        assert!(matches!(err, ShareSheetError::InvalidInput));
     }
 
     #[test]
@@ -174,26 +174,26 @@ mod tests {
     #[test]
     fn new_rejects_file_scheme_url() {
         let err = ShareRequest::new("hello", Some("file:///etc/passwd")).unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidInput("share url")));
+        assert!(matches!(err, ShareSheetError::InvalidInput));
     }
 
     #[test]
     fn new_rejects_javascript_scheme_url() {
         let err = ShareRequest::new("hello", Some("javascript:alert(1)")).unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidInput("share url")));
+        assert!(matches!(err, ShareSheetError::InvalidInput));
     }
 
     #[test]
     fn new_rejects_url_with_embedded_nul() {
         let err = ShareRequest::new("hello", Some("https://example.com/\0")).unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidInput("share url")));
+        assert!(matches!(err, ShareSheetError::InvalidInput));
     }
 
     #[test]
     fn unsupported_share_returns_unsupported_error() {
         let request = ShareRequest::new("hello", None).unwrap();
         let err = UnsupportedShare.share(&request).unwrap_err();
-        assert!(matches!(err, DeviceError::Unsupported("share")));
+        assert!(matches!(err, ShareSheetError::Unsupported));
     }
 
     /// モック `Share`（`Cancelled` 固定）が `Shared` へ化けないことを固定する
@@ -202,7 +202,7 @@ mod tests {
     struct AlwaysCancelledShare;
 
     impl Share for AlwaysCancelledShare {
-        fn share(&self, _request: &ShareRequest) -> Result<ShareOutcome, DeviceError> {
+        fn share(&self, _request: &ShareRequest) -> Result<ShareOutcome, ShareSheetError> {
             Ok(ShareOutcome::Cancelled)
         }
     }
@@ -220,7 +220,7 @@ mod tests {
     struct AlwaysUnknownShare;
 
     impl Share for AlwaysUnknownShare {
-        fn share(&self, _request: &ShareRequest) -> Result<ShareOutcome, DeviceError> {
+        fn share(&self, _request: &ShareRequest) -> Result<ShareOutcome, ShareSheetError> {
             Ok(ShareOutcome::Unknown)
         }
     }

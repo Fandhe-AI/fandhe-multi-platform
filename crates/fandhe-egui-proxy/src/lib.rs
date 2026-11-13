@@ -33,19 +33,14 @@
 //! が CoreLocation 実装（`apple/fandhe_apple_location.m`）を呼ぶために
 //! `unsafe extern "C"` 宣言が必要（iOS と同一の C ABI・同一ファイルを共用する）。
 //! macOS はプラットフォーム統合レイヤ（platforms/apple/）を持たず、この `unsafe` が
-//! 唯一の FFI 境界であるため、Android/iOS と同型の緩和で足りる。Issue #897 で
-//! `device/apple_share.rs`（`apple/fandhe_apple_share.m` の共有シート実装を呼ぶ）が
-//! 同じ緩和へ相乗りした。Issue #906 で `device/apple_biometric.rs`
+//! 唯一の FFI 境界であるため、Android/iOS と同型の緩和で足りる。Issue #906 で `device/apple_biometric.rs`
 //! （`apple/fandhe_apple_biometric.m` の生体認証実装を呼ぶ）も同様に相乗りする。
 //! Issue #934 の `apple_gamepad`（`GCController` 実装）も同じ緩和へ相乗りしていたが、
 //! 機能 crate `fandhe-cap-gamepad` へ移した（Issue #1303）。
 //!
-//! Windows も Issue #898 で同じ理由により `deny` へ緩める: `device/windows_share.rs`
-//! が WinRT `IDataTransferManagerInterop::GetForWindow` / `ShowShareUIForWindow`
-//! （`windows` クレートの COM interop、2 呼び出しとも `unsafe fn`）を呼ぶために必要。
-//! `unsafe` はこの 2 呼び出しを含む `windows_share::present` 1 関数に閉じ、
-//! `// SAFETY:` で HWND の生存根拠を明記する（Android/iOS/macOS と同型の FFI 例外、
-//! coding-rust.md 準拠）。Issue #907 で `device/windows_biometric.rs`
+//! Windows も同じ理由により `deny` へ緩める（Issue #898 で共有シートが導入した緩和）。
+//! `unsafe` は呼び出し 1 関数に閉じ、`// SAFETY:` で HWND の生存根拠を明記する
+//! （Android/iOS/macOS と同型の FFI 例外、coding-rust.md 準拠）。Issue #907 で `device/windows_biometric.rs`
 //! （`IUserConsentVerifierInterop::RequestVerificationForWindowAsync` 1 呼び出し）も
 //! 同じ緩和へ相乗りした。Issue #1033 で `device/windows_notification.rs`
 //! （スタートメニューへ `.lnk` を作って AUMID を登録する `IShellLinkW`/

@@ -3,7 +3,7 @@
 //! WinRT `Windows.Security.Credentials.PasswordVault`（Credential Locker）で
 //! 実装する。macOS 実装（`apple_secure_credential.rs`、Keychain FFI）と異なり
 //! `windows` クレート側が safe fn としてラップ済みのため `unsafe` は不要
-//! （`windows_text_scale.rs` と同型。`lib.rs` の Windows `deny(unsafe_code)` に対する
+//! （`windows_system_sound.rs` と同型。`lib.rs` の Windows `deny(unsafe_code)` に対する
 //! `#[allow(unsafe_code)]` も付けない）。RoInitialize も呼ばない
 //! （`windows-core` が `CO_E_NOTINITIALIZED` 時に MTA へフォールバックする既定挙動、
 //! #898/#907/#913 と同じ前提）。
@@ -19,7 +19,7 @@
 //!
 //! HRESULT の生値・秘密値をログ・エラー文言へ出さず、固定ラベルの
 //! `DeviceError::Internal` へ畳む（`windows_share.rs`/`windows_biometric.rs`/
-//! `windows_text_scale.rs` と同じ方針、security.md A09）。
+//! `windows_system_sound.rs` と同じ方針、security.md A09）。
 //!
 //! # 既知の天井
 //!

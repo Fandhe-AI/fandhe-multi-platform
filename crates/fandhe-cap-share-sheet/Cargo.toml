@@ -1,0 +1,54 @@
+[package]
+name = "fandhe-cap-share-sheet"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の share-sheet の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+# `DataTransferManager`（`ApplicationModel_DataTransfer`）を `IDataTransferManagerInterop`（`Win32_UI_Shell`）で
+# ウィンドウ束縛して呼ぶ。`Foundation` は `TypedEventHandler` / `Uri`、`Win32_Foundation` は `HWND`。
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { workspace = true, features = ["ApplicationModel_DataTransfer", "Foundation", "Win32_Foundation", "Win32_UI_Shell"] }
+fandhe-platform-windows = { path = "../fandhe-platform-windows" }
+
+[build-dependencies]
+# iOS・macOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。権限・usage description・framework は手で足す（cargo fandhe check が検証する）。
+[package.metadata.fandhe]
+id = "share-sheet"
+
+[package.metadata.fandhe.ios]
+frameworks = ["UIKit"]
+
+[package.metadata.fandhe.macos]
+frameworks = ["AppKit"]
+
+[package.metadata.fandhe.android]
+java = ["android/java"]
+
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+# Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.ShareSheetLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.share-sheet" }
+
+[lints]
+workspace = true

@@ -86,7 +86,7 @@ mod jni_impl {
     #[allow(unsafe_code)]
     fn call(c: Call) -> Option<i64> {
         let app = crate::android::android_app()?;
-        // SAFETY: `AndroidTextScale::scale_factor` と同一の根拠。`vm_as_ptr()` は android-activity が
+        // SAFETY: `AndroidClipboard::request` と同一の根拠。`vm_as_ptr()` は android-activity が
         // 管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
         let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
         vm.attach_current_thread(|env: &mut jni::Env| -> Result<i64, JniCallFailed> {

@@ -367,6 +367,14 @@
             android:authorities="${applicationId}.fandhe.camera-capture"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.ShareSheetLifecycle"
+            android:authorities="${applicationId}.fandhe.share-sheet"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.DragDropLifecycle"
+            android:authorities="${applicationId}.fandhe.drag-drop"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.DocumentScanLifecycle"
             android:authorities="${applicationId}.fandhe.document-scan"
             android:exported="false" />

@@ -79,7 +79,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "share_text" => fandhe_core::screens::share_text::current_screen,
-    fandhe_egui_proxy::device::share::share_text_effect,
+    fandhe_cap_share_sheet::share_text_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "biometric_check" => fandhe_core::screens::biometric_check::current_screen,
@@ -175,7 +175,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "text_scale_preview" => fandhe_core::screens::text_scale_preview::current_screen,
-    fandhe_egui_proxy::device::text_scale::text_scale_effect,
+    fandhe_cap_dynamic_type::text_scale_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "credential_vault" => fandhe_core::screens::credential_vault::current_screen,
@@ -207,7 +207,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "drag_drop" => fandhe_core::screens::drag_drop::current_screen,
-    fandhe_egui_proxy::device::drag_drop::drag_drop_effect,
+    fandhe_cap_drag_drop::drag_drop_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "speech_recognize" => fandhe_core::screens::speech_recognize::current_screen,

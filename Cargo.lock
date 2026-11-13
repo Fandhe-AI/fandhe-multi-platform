@@ -1186,6 +1186,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-drag-drop"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+]
+
+[[package]]
+name = "fandhe-cap-dynamic-type"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-file-watch"
 version = "0.2.0"
 dependencies = [
@@ -1553,6 +1578,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-share-sheet"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-spell-check"
 version = "0.2.0"
 dependencies = [
@@ -1658,6 +1697,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_kittest",
+ "fandhe-cap-drag-drop",
  "fandhe-cap-gamepad",
  "fandhe-cap-media-cast",
  "fandhe-cap-midi",
@@ -1710,6 +1750,8 @@ dependencies = [
  "fandhe-cap-camera-capture",
  "fandhe-cap-device-identifier",
  "fandhe-cap-document-scan",
+ "fandhe-cap-drag-drop",
+ "fandhe-cap-dynamic-type",
  "fandhe-cap-file-watch",
  "fandhe-cap-focus-mode-status",
  "fandhe-cap-gamepad",
@@ -1738,6 +1780,7 @@ dependencies = [
  "fandhe-cap-screen-wake-lock",
  "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
+ "fandhe-cap-share-sheet",
  "fandhe-cap-spell-check",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-system-tray",
@@ -1843,6 +1886,7 @@ dependencies = [
  "fandhe-cap-app-badge",
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
+ "fandhe-cap-dynamic-type",
  "fandhe-cap-file-watch",
  "fandhe-cap-gamepad",
  "fandhe-cap-http-get",
@@ -1858,6 +1902,7 @@ dependencies = [
  "fandhe-cap-screen-capture",
  "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
+ "fandhe-cap-share-sheet",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-usb-device",
  "fandhe-core",

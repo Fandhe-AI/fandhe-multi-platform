@@ -27,6 +27,8 @@ device = [
   "dep:fandhe-cap-camera-capture",
   "dep:fandhe-cap-device-identifier",
   "dep:fandhe-cap-document-scan",
+  "dep:fandhe-cap-drag-drop",
+  "dep:fandhe-cap-dynamic-type",
   "dep:fandhe-cap-file-watch",
   "dep:fandhe-cap-focus-mode-status",
   "dep:fandhe-cap-gamepad",
@@ -55,6 +57,7 @@ device = [
   "dep:fandhe-cap-screen-wake-lock",
   "dep:fandhe-cap-serial-port",
   "dep:fandhe-cap-share-receive",
+  "dep:fandhe-cap-share-sheet",
   "dep:fandhe-cap-spell-check",
   "dep:fandhe-cap-system-accent-color",
   "dep:fandhe-cap-system-tray",
@@ -122,6 +125,8 @@ fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui", optional = true }
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
 fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier", optional = true }
 fandhe-cap-document-scan = { path = "../fandhe-cap-document-scan", optional = true }
+fandhe-cap-drag-drop = { path = "../fandhe-cap-drag-drop", optional = true }
+fandhe-cap-dynamic-type = { path = "../fandhe-cap-dynamic-type", optional = true }
 fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch", optional = true }
 fandhe-cap-focus-mode-status = { path = "../fandhe-cap-focus-mode-status", optional = true }
 fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad", optional = true }
@@ -150,6 +155,7 @@ fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture", optional = 
 fandhe-cap-screen-wake-lock = { path = "../fandhe-cap-screen-wake-lock", optional = true }
 fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port", optional = true }
 fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive", optional = true }
+fandhe-cap-share-sheet = { path = "../fandhe-cap-share-sheet", optional = true }
 fandhe-cap-spell-check = { path = "../fandhe-cap-spell-check", optional = true }
 fandhe-cap-system-accent-color = { path = "../fandhe-cap-system-accent-color", optional = true }
 fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }

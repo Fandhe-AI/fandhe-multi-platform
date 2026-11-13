@@ -1,7 +1,7 @@
 //! Windows 向け生体認証実装（Issue #907）。`device/biometric_auth.rs` の Windows 経路
 //! から呼ばれ、WinRT `UserConsentVerifier`（Windows Hello）を
 //! `IUserConsentVerifierInterop`（`Win32_System_WinRT`）経由でウィンドウ束縛して呼ぶ
-//! （`windows_share.rs` と同じ「子プロセス方式は自分のウィンドウを持てず使えないため、
+//! （`fandhe-cap-share-sheet/src/windows.rs` と同じ「子プロセス方式は自分のウィンドウを持てず使えないため、
 //! FFI・`unsafe` を持てる本クレート側から直接 `windows` クレートを叩く」判断、
 //! `lib.rs` の Windows `deny(unsafe_code)` 緩和・coding-rust.md の FFI 例外規定準拠）。
 //!
@@ -10,7 +10,7 @@
 //!
 //! 認証理由・`HRESULT`・`UserConsentVerificationResult` の生値をログへ出力しない
 //! （security.md A09）。`DeviceError::Internal` は固定ラベルのみを持つ
-//! （`windows_share.rs` と同じ方針）。
+//! （`fandhe-cap-share-sheet/src/windows.rs` と同じ方針）。
 //!
 //! # 完了の受け取り方（`IAsyncOperation`、コールバック型）
 //!
@@ -72,7 +72,7 @@ pub(crate) fn present(request_id: u64, reason: &str) -> Result<(), DeviceError> 
     // SAFETY: `hwnd` は `fandhe_platform_windows::window()`（`remember_window` が
     // `eframe::CreationContext` から得た HWND、`ProxyApp` の生存中はウィンドウも
     // 生存する）を経由した有効なハンドルで、`interop` は上で取得した有効な COM
-    // ポインタ（`windows_share::present` と同じ安全性根拠）。
+    // ポインタ（`fandhe-cap-share-sheet の windows::present` と同じ安全性根拠）。
     let op: IAsyncOperation<UserConsentVerificationResult> =
         unsafe { interop.RequestVerificationForWindowAsync(hwnd, &HSTRING::from(reason)) }
             .map_err(|_| DeviceError::Internal("biometric present"))?;

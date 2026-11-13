@@ -2,15 +2,15 @@
 // （Issue #1015、macOS/Windows 実装 #1014 の横展開）。受け取り側のみ（送り側は
 // 親 issue の方針でスコープ外、`fandhe-device` 側 doc 参照）。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_drag_drop.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-drag-drop/src/ios.rs` から C ABI 経由で呼ばれる。
 // `UIDropInteraction`/`NSItemProvider` は Rust バインディングを持たないため、この 1
 // ファイルの ObjC コードに実装を閉じ、`unsafe extern "C"` 宣言 1 点
 // （`fandhe_ios_drag_drop_install`）のみを Rust 側へ公開する（`lib.rs` の iOS
 // `deny(unsafe_code)` 緩和と対になる、coding-rust.md の FFI 例外規定）。
 //
-// `build.rs` が iOS ターゲット・feature `device` 有効時のみ `cc` でコンパイルする。
+// `build.rs` が iOS ターゲットのときだけ `cc` でコンパイルする。
 //
-// 契約（`ios_drag_drop.rs` のコメントと対）:
+// 契約（`ios.rs` のコメントと対）:
 //   int32_t fandhe_ios_drag_drop_install(void)
 //     -> 0 = winit の base view へ `UIDropInteraction` を取り付けられた
 //        （既に取り付け済みなら何もせず 0 を返す、冪等）。
@@ -52,27 +52,27 @@
 // 未規定）から Rust 側を呼ぶ本体は `@autoreleasepool` で囲む。UIKit の操作
 // （install・`sessionDidUpdate:` の proposal 決定・`progress cancel`）は
 // delegate が呼ばれるスレッド（UIKit が保証する main）でのみ行い、completion の
-// 中では UIKit に一切触れない（Rust 側の集約器へ積むだけ、`ios_drag_drop.rs`
+// 中では UIKit に一切触れない（Rust 側の集約器へ積むだけ、`ios.rs`
 // モジュール doc 参照）。
 //
 // # 一時ファイル・情報非保持
 //
 // 自前の一時ファイル・コピーは作らない（`loadFileRepresentation...` が渡す URL は
 // OS 管理の一時ファイルで、completion が return すると OS が削除する契約。
-// `ios_drag_drop.rs` モジュール doc 参照）。ファイル名・パス・`NSError` の詳細を
+// `ios.rs` モジュール doc 参照）。ファイル名・パス・`NSError` の詳細を
 // ログへ出力しない（security.md A09）。`NSLog` は使わない。
 
 #import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import "fandhe_ios_common.h"
 
-// Rust 側（`ios_drag_drop.rs`）が公開する `extern "C"` 関数群。
+// Rust 側（`ios.rs`）が公開する `extern "C"` 関数群。
 extern void fandhe_rust_drag_drop_hover(int32_t entered);
 extern void fandhe_rust_drag_drop_begin(size_t total, uint64_t *out_session, size_t *out_to_load);
 extern void fandhe_rust_drag_drop_item(uint64_t session, size_t index, int32_t code,
                                         const uint8_t *_Nullable path_ptr, size_t path_len,
                                         const uint8_t *_Nullable name_ptr, size_t name_len);
-// ドラッグ & ドロップ画面が現在表示中か（`ios_drag_drop.rs::mark_active`/
+// ドラッグ & ドロップ画面が現在表示中か（`ios.rs::mark_active`/
 // `fandhe_rust_drag_drop_is_active` doc 参照、codex 指摘 #1019）。`UIDropInteraction`
 // はウィンドウ全体へ一度取り付けたら取り外さないため、画面の有効期間はこの問い合わせで
 // 都度確認する（非表示中は 0）。
@@ -237,7 +237,7 @@ static void FandheReportDropItem(uint64_t sessionId, size_t index, NSURL *_Nulla
     const uint8_t *namePtr = nameData != nil ? nameData.bytes : NULL;
     size_t nameLen = nameData != nil ? nameData.length : 0;
 
-    // `read_dropped`（Rust 側、`ios_drag_drop.rs::build_item`）がこの呼び出しの
+    // `read_dropped`（Rust 側、`ios.rs::build_item`）がこの呼び出しの
     // 中で読み取り・8 MiB 判定まで同期に終える契約（本ファイル冒頭コメント参照）。
     fandhe_rust_drag_drop_item(sessionId, index, 0, (const uint8_t *)pathData.bytes, pathData.length,
                                 namePtr, nameLen);
