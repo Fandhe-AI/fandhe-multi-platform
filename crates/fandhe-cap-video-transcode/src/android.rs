@@ -1,6 +1,6 @@
 //! Android 向け動画の変換実装（Issue #1017、親 #340 の b-android）。
-//! `device/video_transcode.rs::platform` の Android 経路から、ドライバのワーカースレッドで呼ばれ、
-//! `MainActivity.videoTranscode` を同期 JNI で 1 回呼ぶ。Java 側は `VideoTranscodeHelper`
+//! `driver::platform_video_transcode` の Android 経路から、ドライバのワーカースレッドで呼ばれ、
+//! `VideoTranscodeHelper.transcode(Context, ...)`（static）を同期 JNI で 1 回呼ぶ。Java 側は `VideoTranscodeHelper`
 //! （`MediaCodec` で元動画を作り、復号・縮小・符号化し、`MediaMuxer` で MPEG-4）。
 //! 元動画の絵は Java が YUV で直接描く（巨大な BGRA を JNI で渡さないため）。
 //! Java から Rust への native コールバックは無いので、JNI 署名の照合先は Java のみ。
@@ -16,7 +16,7 @@
 //!
 //! 期限は呼び出しに渡す残り時間で、Java が単調時計で確かめて中断する（資源を解放してから 1 を返す）。
 //! 変換は短いため背景遷移では中断しない。Activity の作り直しでは Rust 側の保留記録を
-//! `device/video_transcode.rs::reset_pending_tracking` が捨てる（要求 id は単調に増え、古いワーカーの
+//! `driver::reset_pending_tracking` が捨てる（要求 id は単調に増え、古いワーカーの
 //! 結果は古いチャネルへ届くので、新しい要求の id を消費しない）。Java の実行中フラグは static なので、
 //! 古い呼び出しが走り切るまでの新しい要求は 4 で失敗にする。
 //!
@@ -25,9 +25,9 @@
 //! 映像・出力・OS の生エラー値はログに出さない。実機確認は #1006。
 
 #[cfg(any(target_os = "android", test))]
-use fandhe_device::video_transcode::{RELEASE_PENDING, TIMEOUT};
+use crate::contract::{RELEASE_PENDING, TIMEOUT};
 #[cfg(any(target_os = "android", test))]
-use fandhe_device::DeviceError;
+use crate::error::VideoTranscodeError;
 
 /// 受け取る mp4 の上限（Java 側と同じ。確保の前に長さを検査する）。
 #[cfg(any(target_os = "android", test))]
@@ -38,13 +38,13 @@ const FAILED: &str = "video_transcode android";
 
 /// Java の戻り（先頭 1 バイト = コード）を契約へ写す。成功以外はすべて `Err`。
 #[cfg(any(target_os = "android", test))]
-fn decode_reply(reply: &[u8]) -> Result<Vec<u8>, DeviceError> {
+fn decode_reply(reply: &[u8]) -> Result<Vec<u8>, VideoTranscodeError> {
     match reply.split_first() {
         Some((0, rest)) => Ok(rest.to_vec()),
-        Some((1, _)) => Err(DeviceError::Internal(TIMEOUT)),
-        Some((3, _)) => Err(DeviceError::Unsupported("video_transcode")),
-        Some((4, _)) => Err(DeviceError::Internal(RELEASE_PENDING)),
-        _ => Err(DeviceError::Internal(FAILED)),
+        Some((1, _)) => Err(VideoTranscodeError::Internal(TIMEOUT)),
+        Some((3, _)) => Err(VideoTranscodeError::Unsupported),
+        Some((4, _)) => Err(VideoTranscodeError::Internal(RELEASE_PENDING)),
+        _ => Err(VideoTranscodeError::Internal(FAILED)),
     }
 }
 
@@ -52,53 +52,55 @@ fn decode_reply(reply: &[u8]) -> Result<Vec<u8>, DeviceError> {
 mod imp {
     use std::time::Duration;
 
-    use fandhe_device::video_transcode::{
-        VideoTranscode, SOURCE_FPS, SOURCE_FRAMES, SOURCE_HEIGHT, SOURCE_WIDTH, TARGET_HEIGHT,
-        TARGET_WIDTH, TIMEOUT,
+    use crate::contract::{
+        SOURCE_FPS, SOURCE_FRAMES, SOURCE_HEIGHT, SOURCE_WIDTH, TARGET_HEIGHT, TARGET_WIDTH,
+        TIMEOUT, VideoTranscode,
     };
-    use fandhe_device::DeviceError;
+    use crate::error::VideoTranscodeError;
     use jni::objects::{JByteArray, JObject, JValue};
 
-    use super::{decode_reply, FAILED, MAX_MP4_BYTES};
+    use super::{FAILED, MAX_MP4_BYTES, decode_reply};
 
     pub(super) struct AndroidVideoTranscode;
 
-    /// `MainActivity` の同期メソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`（例外は消す）。
-    /// 2 箇所の `unsafe` は `android_compass.rs::call_activity` と同一の根拠。
-    #[allow(unsafe_code)]
-    fn call_activity<T>(
-        f: impl FnOnce(&mut jni::Env, &JObject) -> Result<T, crate::device::android::JniCallFailed>,
+    /// `VideoTranscodeHelper` の static メソッドを同期で呼ぶ。Activity 未確立・JNI 失敗は `None`（例外は消す）。
+    /// `unsafe` は共通層 `fandhe_platform_android::with_activity_class` に閉じている。
+    fn call_helper<T>(
+        f: impl FnOnce(
+            &mut jni::Env,
+            &JObject,
+            &jni::objects::JClass,
+        ) -> Result<T, fandhe_platform_android::JniCallFailed>,
     ) -> Option<T> {
-        let app = crate::android::android_app()?;
-        // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-        // `app` は本呼び出しの間生存する。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-        vm.attach_current_thread(|env: &mut jni::Env| {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-            let activity = unsafe { env.as_cast_raw::<JObject>(&raw_activity)? };
-            let r = f(env, &activity);
-            if r.is_err() && env.exception_check() {
-                env.exception_clear();
-            }
-            r
-        })
+        let app = fandhe_platform_android::android_app()?;
+        fandhe_platform_android::with_activity_class(
+            &app,
+            jni::jni_str!("com.fandhe.platform.VideoTranscodeHelper"),
+            |env, activity, class| {
+                let r = f(env, activity, class);
+                if r.is_err() && env.exception_check() {
+                    env.exception_clear();
+                }
+                r
+            },
+        )
         .ok()
     }
 
     impl VideoTranscode for AndroidVideoTranscode {
-        fn transcode(&self, remaining: Duration) -> Result<Vec<u8>, DeviceError> {
+        fn transcode(&self, remaining: Duration) -> Result<Vec<u8>, VideoTranscodeError> {
             let ms = i64::try_from(remaining.as_millis()).unwrap_or(i64::MAX);
             if ms == 0 {
-                return Err(DeviceError::Internal(TIMEOUT));
+                return Err(VideoTranscodeError::Internal(TIMEOUT));
             }
-            let reply = call_activity(|env, a| {
-                let ret = env.call_method(
-                    a,
-                    jni::jni_str!("videoTranscode"),
-                    jni::jni_sig!((int, int, int, int, int, int, long) -> byte[]),
+            let reply = call_helper(|env, activity, class| {
+                let ret = env.call_static_method(
+                    class,
+                    jni::jni_str!("transcode"),
+                    jni::jni_sig!((android.content.Context, int, int, int, int, int, int, long) -> byte[]),
                     &[
-                        // 寸法・fps・フレーム数は fandhe_device の定数が SSOT（Java へ複製しない）。
+                        JValue::Object(activity),
+                        // 寸法・fps・フレーム数は `contract` の定数が SSOT（Java へ複製しない）。
                         JValue::Int(SOURCE_WIDTH as i32),
                         JValue::Int(SOURCE_HEIGHT as i32),
                         JValue::Int(SOURCE_FPS as i32),
@@ -119,7 +121,7 @@ mod imp {
                 Ok(Some(env.convert_byte_array(&arr)?))
             })
             .flatten()
-            .ok_or(DeviceError::Internal(FAILED))?;
+            .ok_or(VideoTranscodeError::Internal(FAILED))?;
             decode_reply(&reply)
         }
     }
@@ -127,17 +129,15 @@ mod imp {
 
 /// Android の実装を返す。
 #[cfg(target_os = "android")]
-pub(crate) fn implementation() -> std::sync::Arc<dyn fandhe_device::video_transcode::VideoTranscode>
-{
+pub(crate) fn implementation() -> std::sync::Arc<dyn crate::contract::VideoTranscode> {
     std::sync::Arc::new(imp::AndroidVideoTranscode)
 }
 
 /// ホストのテストビルドにも載るための形。dispatch は Android でしか呼ばない。
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
-pub(crate) fn implementation() -> std::sync::Arc<dyn fandhe_device::video_transcode::VideoTranscode>
-{
-    std::sync::Arc::new(fandhe_device::video_transcode::UnsupportedVideoTranscode)
+pub(crate) fn implementation() -> std::sync::Arc<dyn crate::contract::VideoTranscode> {
+    std::sync::Arc::new(crate::contract::UnsupportedVideoTranscode)
 }
 
 #[cfg(test)]
@@ -151,20 +151,20 @@ mod tests {
         assert_eq!(decode_reply(&[0]).unwrap(), Vec::<u8>::new());
         assert!(matches!(
             decode_reply(&[1]),
-            Err(DeviceError::Internal(TIMEOUT))
+            Err(VideoTranscodeError::Internal(TIMEOUT))
         ));
         assert!(matches!(
             decode_reply(&[3]),
-            Err(DeviceError::Unsupported("video_transcode"))
+            Err(VideoTranscodeError::Unsupported)
         ));
         assert!(matches!(
             decode_reply(&[4]),
-            Err(DeviceError::Internal(RELEASE_PENDING))
+            Err(VideoTranscodeError::Internal(RELEASE_PENDING))
         ));
         for bad in [&[][..], &[2][..], &[99, 1][..]] {
             assert!(matches!(
                 decode_reply(bad),
-                Err(DeviceError::Internal(FAILED))
+                Err(VideoTranscodeError::Internal(FAILED))
             ));
         }
     }

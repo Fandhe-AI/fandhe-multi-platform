@@ -87,6 +87,7 @@ device = [
   "dep:fandhe-cap-usb-device",
   "dep:fandhe-cap-user-idle",
   "dep:fandhe-cap-uwb-ranging",
+  "dep:fandhe-cap-video-transcode",
   "dep:fandhe-cap-volume-control",
   "dep:fandhe-cap-wallpaper-set",
   "dep:fandhe-cap-wifi-connect",
@@ -215,6 +216,7 @@ fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }
 fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device", optional = true }
 fandhe-cap-user-idle = { path = "../fandhe-cap-user-idle", optional = true }
 fandhe-cap-uwb-ranging = { path = "../fandhe-cap-uwb-ranging", optional = true }
+fandhe-cap-video-transcode = { path = "../fandhe-cap-video-transcode", optional = true }
 fandhe-cap-volume-control = { path = "../fandhe-cap-volume-control", optional = true }
 fandhe-cap-wallpaper-set = { path = "../fandhe-cap-wallpaper-set", optional = true }
 fandhe-cap-wifi-connect = { path = "../fandhe-cap-wifi-connect", optional = true }

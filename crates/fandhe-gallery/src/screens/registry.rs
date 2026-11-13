@@ -471,7 +471,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "video_transcode" => fandhe_core::screens::video_transcode::current_screen,
-    fandhe_egui_proxy::device::video_transcode::video_transcode_effect,
+    fandhe_cap_video_transcode::video_transcode_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pdf_first_page" => fandhe_core::screens::pdf_first_page::current_screen,

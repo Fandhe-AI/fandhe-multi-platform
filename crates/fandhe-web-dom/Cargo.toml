@@ -50,6 +50,8 @@ fandhe-cap-app-lifecycle = { path = "../fandhe-cap-app-lifecycle" }
 fandhe-cap-display-refresh-hdr = { path = "../fandhe-cap-display-refresh-hdr" }
 # Issue #1187: 電源状態の純関数（`percent_from_raw`）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の実装が cfg で外れる。
 fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast" }
+# video-transcode の契約（寸法・定数・出力の検査）。Web 実装本体は本クレートに残る。
+fandhe-cap-video-transcode = { path = "../fandhe-cap-video-transcode" }
 fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device" }
 # Issue #1303: ゲームコントローラの契約（`Gamepad`・`GamepadSnapshot`・`normalize_axis` 等）の正本。Web 実装の本体は本クレートに残す。
 fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad" }

@@ -1,5 +1,6 @@
 package com.fandhe.platform;
 
+import android.content.Context;
 import android.media.Image;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
@@ -16,17 +17,17 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 // 動画の変換画面（Issue #1017、親 #340 の b-android）の Android 実装ヘルパー。
-// Rust の `device/android_video_transcode.rs` がドライバのワーカースレッドから
-// `MainActivity.videoTranscode` 経由で同期 JNI で呼ぶ。Java から Rust への native コールバックは無く、
+// Rust の `src/android.rs` がドライバのワーカースレッドから static の `transcode(Context, ...)` を
+// 同期 JNI で呼ぶ（`MainActivity` は経由しない）。Java から Rust への native コールバックは無く、
 // JNI 署名の照合先は Java の 1 か所だけ。
 // 扱う範囲は「実行時に作った H.264 を小さい解像度の mp4 へ 1 回変換する」ことだけ。寸法・fps・フレーム数は
-// Rust の `fandhe_device::video_transcode` の定数が SSOT で、JNI 引数で受け取る（ここに複製しない）
+// Rust の `fandhe_cap_video_transcode`（`contract`）の定数が SSOT で、JNI 引数で受け取る（ここに複製しない）
 // （保存・共有・進捗・取り消しは扱わない）。流れは、符号化器で元動画を作ってメモリに溜め
 // → 復号器で戻し → Java の YUV 間引きで縮小 → 符号化器 → MediaMuxer で mp4。
-// 元動画の絵は `fandhe_device::video_transcode::fill_source_frame_bgra` と同じ縦縞（幅 32 px・
+// 元動画の絵は `contract::fill_source_frame_bgra` と同じ縦縞（幅 32 px・
 // フレームごとに 16 px 移動）を YUV で直接描く（巨大な BGRA を JNI で渡さないため）。
 //
-// コード表の SSOT はここで、Rust 側 `android_video_transcode.rs` が同じ値で解釈する。
+// コード表の SSOT はここで、Rust 側 `android.rs` が同じ値で解釈する。
 //   戻り値 byte[] の先頭 1 バイト: 0=完了（残りが mp4 本体）/ 1=期限切れ / 2=失敗 / 3=非対応
 //   / 4=前回の解放を確認できない
 //   Java は成功を判定しない。mp4 の妥当性は Rust の `check_mp4_video` が決める。
@@ -86,8 +87,10 @@ final class VideoTranscodeHelper {
         this.th = th;
     }
 
-    static byte[] transcode(File cacheDir, int sw, int sh, int fps, int frames, int tw, int th,
+    // Context は Activity。先頭で Application Context からキャッシュ先を取る（保持しない）。
+    static byte[] transcode(Context activity, int sw, int sh, int fps, int frames, int tw, int th,
             long remainingMs) {
+        File cacheDir = activity == null ? null : activity.getApplicationContext().getCacheDir();
         if (remainingMs <= 0) {
             return code(TIMEOUT);
         }

@@ -240,11 +240,6 @@ pub mod android_url_scheme;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_video_capture;
-/// Issue #1017: Android 向け動画の変換実装（`MediaCodec` + `MediaMuxer`）。
-/// `device/video_transcode.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_video_transcode;
 /// Issue #534: Android 向け Web 認証セッション実装（Custom Tabs、Java 側 `WebAuthSessionHelper`）。
 /// `device/web_auth_session.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でもコンパイルする。
 #[cfg(any(target_os = "android", test))]
@@ -389,12 +384,6 @@ pub mod apple_translation;
 /// `main.rs`（登録）から使われる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_url_scheme;
-/// Issue #1014: macOS / iOS 向け動画の変換実装（`apple/fandhe_apple_video_transcode.m` の
-/// `AVAssetWriter` + `AVAssetExportSession` を呼ぶ C ABI ラッパー）。`device/video_transcode.rs` の macOS 経路から
-/// 呼ばれるほか、iOS では `ios_video_transcode`（#1016）から呼ばれる。
-/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_video_transcode;
 /// Phase 11 の拡充ループ（親 #121、Issue #585）: ワンタイムコード入力の effect ドライバ（iOS は
 /// `ios_autofill_otp.rs` で実装、Android・macOS は保留、Windows は非対応で `UnsupportedAutofillOtp` 固定。
 /// Web は `fandhe-web-dom` が担う）。
@@ -667,10 +656,6 @@ pub mod ios_translation;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_video_capture;
-/// Issue #1016: iOS 向け動画の変換実装（macOS と共用の `AppleVideoTranscode` を返す）。
-/// `device/video_transcode.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_video_transcode;
 /// Issue #532: iOS 向け Web 認証セッション実装（`ios/fandhe_ios_web_auth_session.m` の
 /// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -887,10 +872,6 @@ pub mod url_scheme;
 /// （iOS は #822・Android は #823・macOS は #1071・Windows は #1150、Web は `fandhe-web-dom`（#824）、
 /// Linux は `UnsupportedVideoCapturer` 固定）。
 pub mod video_capture;
-/// Phase 11 の拡充ループ（親 #340、Issue #1014）: 動画の変換の effect ドライバ
-/// （macOS・iOS 実装、Android は #1017・Windows は #1015 が埋めるスタブ、
-/// Web は #1018、他 OS は `UnsupportedVideoTranscode` 固定）。
-pub mod video_transcode;
 /// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS・Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
 pub mod web_auth_session;
@@ -1083,11 +1064,6 @@ pub mod windows_url_scheme;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_video_capture;
-/// Issue #1014 (a): Windows 向け動画の変換のスタブ（実装は #1015）。
-/// `device/video_transcode.rs` の Windows 経路から呼ばれる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_video_transcode;
 /// Issue #530: Windows 向け Web 認証セッション実装。`device/web_auth_session.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

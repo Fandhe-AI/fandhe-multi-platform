@@ -5,29 +5,29 @@
 //! 呼び出し・コールバックに閉じる（coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・
 //! `device.rs` の mod cfg と同じ OS 集合に保つ。
 //!
-//! 契約の SSOT は `fandhe_device::video_transcode`。出力の検証（`check_mp4_video`）はドライバが行う。
+//! 契約の SSOT は `crate::contract`。出力の検証（`check_mp4_video`）はドライバが行う。
 //! 一時ファイル（元動画・出力）は本モジュールが `video_transcode::temp_pair` で作り、全経路で消す。
 //! 消せなかったものは `LEFTOVERS` に記録し、次の要求の前に再削除する（契約表 9）。
 //! OS 操作が取り消しても終わらなかった場合（`.m` の戻りコード 6）は、完了を確認できるまで
 //! OS を呼ばない（`settled`）。呼び出しはブロックするため、呼び出し元はワーカーで呼ぶ。
 
-use std::ffi::{c_char, c_void, CString};
+use std::ffi::{CString, c_char, c_void};
 use std::path::Path;
 use std::sync::{Mutex, TryLockError};
 use std::time::Duration;
 
-use fandhe_device::video_transcode::{
-    fill_source_frame_bgra, VideoTranscode, RELEASE_PENDING, SOURCE_FPS, SOURCE_FRAMES,
-    SOURCE_HEIGHT, SOURCE_WIDTH, TIMEOUT, UNREADABLE,
+use crate::contract::{
+    RELEASE_PENDING, SOURCE_FPS, SOURCE_FRAMES, SOURCE_HEIGHT, SOURCE_WIDTH, TIMEOUT, UNREADABLE,
+    VideoTranscode, fill_source_frame_bgra,
 };
-use fandhe_device::DeviceError;
+use crate::error::VideoTranscodeError;
 
-use super::video_transcode::{temp_pair, LEFTOVERS};
+use crate::driver::{LEFTOVERS, temp_pair};
 
 type FillFrame = extern "C" fn(*mut c_void, u32, *mut u8, usize, usize) -> bool;
 
 // SAFETY: `apple/fandhe_apple_video_transcode.m` が定義する C ABI（`build.rs` が macOS / iOS
-// ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は `.m` 冒頭コメントに集約する。
+// ターゲットでコンパイル・リンクする）。契約は `.m` 冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_apple_video_transcode_settled() -> bool;
@@ -79,22 +79,24 @@ pub(crate) struct AppleVideoTranscode;
 
 impl VideoTranscode for AppleVideoTranscode {
     #[allow(unsafe_code)]
-    fn transcode(&self, remaining: Duration) -> Result<Vec<u8>, DeviceError> {
+    fn transcode(&self, remaining: Duration) -> Result<Vec<u8>, VideoTranscodeError> {
         let _guard = match CALL.try_lock() {
             Ok(g) => g,
             Err(TryLockError::Poisoned(p)) => p.into_inner(),
-            Err(TryLockError::WouldBlock) => return Err(DeviceError::Internal(RELEASE_PENDING)),
+            Err(TryLockError::WouldBlock) => {
+                return Err(VideoTranscodeError::Internal(RELEASE_PENDING));
+            }
         };
         // SAFETY: 引数なしの純粋な状態読み出し。
         if !unsafe { fandhe_apple_video_transcode_settled() } {
-            return Err(DeviceError::Internal(RELEASE_PENDING));
+            return Err(VideoTranscodeError::Internal(RELEASE_PENDING));
         }
         LEFTOVERS.ensure_released()?;
         let (src, out) = temp_pair();
         let to_c = |p: &Path| {
             p.to_str()
                 .and_then(|s| CString::new(s).ok())
-                .ok_or(DeviceError::Internal("video_transcode path"))
+                .ok_or(VideoTranscodeError::Internal("video_transcode path"))
         };
         let (c_src, c_out) = (to_c(&src)?, to_c(&out)?);
         let ctx = FillCtx {
@@ -118,14 +120,14 @@ impl VideoTranscode for AppleVideoTranscode {
             )
         };
         let result = match code {
-            0 => std::fs::read(&out).map_err(|_| DeviceError::Internal(UNREADABLE)),
-            1 => Err(DeviceError::InvalidInput("video_transcode input")),
-            2 => Err(DeviceError::Internal("video_transcode source")),
-            3 => Err(DeviceError::Internal("video_transcode export")),
-            4 => Err(DeviceError::Unsupported("video_transcode")),
-            5 | 6 => Err(DeviceError::Internal(TIMEOUT)),
-            7 => Err(DeviceError::Internal(RELEASE_PENDING)),
-            _ => Err(DeviceError::Internal("video_transcode")),
+            0 => std::fs::read(&out).map_err(|_| VideoTranscodeError::Internal(UNREADABLE)),
+            1 => Err(VideoTranscodeError::InvalidInput("video_transcode input")),
+            2 => Err(VideoTranscodeError::Internal("video_transcode source")),
+            3 => Err(VideoTranscodeError::Internal("video_transcode export")),
+            4 => Err(VideoTranscodeError::Unsupported),
+            5 | 6 => Err(VideoTranscodeError::Internal(TIMEOUT)),
+            7 => Err(VideoTranscodeError::Internal(RELEASE_PENDING)),
+            _ => Err(VideoTranscodeError::Internal("video_transcode")),
         };
         if code == 6 {
             // OS の操作が残っている可能性がある間は、消さずに未解放として記録する
@@ -142,7 +144,7 @@ impl VideoTranscode for AppleVideoTranscode {
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
-    use fandhe_device::video_transcode::{check_mp4_video, SOURCE_HEIGHT, SOURCE_WIDTH};
+    use crate::contract::{SOURCE_HEIGHT, SOURCE_WIDTH, check_mp4_video};
 
     fn leftovers() -> usize {
         std::fs::read_dir(std::env::temp_dir())
@@ -173,7 +175,7 @@ mod tests {
         // 極小の期限は TIMEOUT。OS の操作が残る場合は settled になるまで待つ。
         let r = AppleVideoTranscode.transcode(Duration::from_millis(1));
         assert!(
-            matches!(r, Err(DeviceError::Internal(TIMEOUT))),
+            matches!(r, Err(VideoTranscodeError::Internal(TIMEOUT))),
             "{:?}",
             r.map(|b| b.len())
         );

@@ -6,7 +6,7 @@
 //! 1 回書き出す」ことだけ。保存・共有・再生・進捗・取り消し・形式の選択・利用者の動画は扱わない。
 //! 対象は macOS / iOS（`AVAssetWriter` + `AVAssetExportSession`）、Windows（`MediaTranscoder`）、
 //! Android（`MediaCodec` + `MediaMuxer`）、Web（WebCodecs。コンテナなし）。
-//! 一発呼び出し型の同期 API で、呼び出し側（`fandhe-egui-proxy` の effect ドライバ）は
+//! 一発呼び出し型の同期 API で、呼び出し側（`driver` の effect ドライバ）は
 //! UI を止めないようワーカースレッドから呼ぶ。元動画のフレームの絵は [`fill_source_frame_bgra`] が
 //! 作り、Apple・Windows・Web が共用する。
 //!
@@ -16,7 +16,7 @@
 //!   幅と高さがともに 0 でなく元動画より小さい・サンプルが 1 以上で `mdat` に収まる・長さが元動画の
 //!   [`source_duration`] ±[`DURATION_TOLERANCE`] の中、をすべて満たす（契約表 6「嘘の成功」）。
 //!   符号形式（fourcc）は拒まず、そのまま表示する
-//! - **失敗の区別**: 非対応 → `Err(Unsupported("video_transcode"))`、期限切れ → `Internal(`[`TIMEOUT`]`)`、
+//! - **失敗の区別**: 非対応 → `Err(Unsupported)`、期限切れ → `Internal(`[`TIMEOUT`]`)`、
 //!   出力が 0 バイト → [`EMPTY`]、解析できない・映像が無い・寸法 0 → [`UNREADABLE`]、
 //!   幅か高さが元動画以上 → [`NOT_SMALLER`]、長さの不一致 → [`MISMATCH`]、
 //!   前回の解放を確認できない → [`RELEASE_PENDING`]、それ以外 → `Internal`（段階ごとの固定ラベル。OS の文言は出さない）
@@ -44,12 +44,12 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
-use crate::media_transcode::{
+use crate::error::VideoTranscodeError;
+use fandhe_device::media_transcode::{
     BoxEntry, be32, be64, boxes as shared_boxes, check_samples_fit, child,
 };
 
-pub use crate::media_transcode::DURATION_TOLERANCE;
+pub use fandhe_device::media_transcode::DURATION_TOLERANCE;
 
 /// 元動画の幅。
 pub const SOURCE_WIDTH: u32 = 1280;
@@ -88,15 +88,15 @@ pub const fn source_duration() -> Duration {
 pub trait VideoTranscode: Send + Sync {
     /// 実行時に元動画を作り、小さい解像度の MP4 へ変換して出力のバイト列を返す。
     /// `remaining` は期限までの残り時間。
-    fn transcode(&self, remaining: Duration) -> Result<Vec<u8>, DeviceError>;
+    fn transcode(&self, remaining: Duration) -> Result<Vec<u8>, VideoTranscodeError>;
 }
 
 /// 対象外 OS（Linux 等）・未実装 OS のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedVideoTranscode;
 
 impl VideoTranscode for UnsupportedVideoTranscode {
-    fn transcode(&self, _: Duration) -> Result<Vec<u8>, DeviceError> {
-        Err(DeviceError::Unsupported("video_transcode"))
+    fn transcode(&self, _: Duration) -> Result<Vec<u8>, VideoTranscodeError> {
+        Err(VideoTranscodeError::Unsupported)
     }
 }
 
@@ -163,16 +163,16 @@ impl Mp4VideoInfo {
     }
 }
 
-fn unreadable() -> DeviceError {
-    DeviceError::Internal(UNREADABLE)
+fn unreadable() -> VideoTranscodeError {
+    VideoTranscodeError::Internal(UNREADABLE)
 }
 
 /// 共有ヘルパーのエラーを本モジュールの識別子へ写す（他機能の識別子を漏らさない）。
-fn boxes(data: &[u8]) -> Result<Vec<BoxEntry<'_>>, DeviceError> {
+fn boxes(data: &[u8]) -> Result<Vec<BoxEntry<'_>>, VideoTranscodeError> {
     shared_boxes(data).map_err(|_| unreadable())
 }
 
-fn sub<'a>(data: &'a [u8], kind: &[u8; 4]) -> Result<&'a [u8], DeviceError> {
+fn sub<'a>(data: &'a [u8], kind: &[u8; 4]) -> Result<&'a [u8], VideoTranscodeError> {
     child(data, kind).map_err(|_| unreadable())
 }
 
@@ -180,7 +180,7 @@ fn sub<'a>(data: &'a [u8], kind: &[u8; 4]) -> Result<&'a [u8], DeviceError> {
 /// `moov` 配下の全 `trak` から `hdlr` が `vide` のものを選ぶ（音声が先でも映像を選ぶ）。
 /// 範囲外の読みで panic しない。映像トラックが無い・`timescale == 0`・サンプル 0・寸法 0・`mdat` に
 /// 収まらないものは `Internal(UNREADABLE)`。
-pub fn parse_mp4_video(bytes: &[u8]) -> Result<Mp4VideoInfo, DeviceError> {
+pub fn parse_mp4_video(bytes: &[u8]) -> Result<Mp4VideoInfo, VideoTranscodeError> {
     let top = boxes(bytes)?;
     if !top.iter().any(|(k, _)| k == b"ftyp") {
         return Err(unreadable());
@@ -242,23 +242,23 @@ pub fn parse_mp4_video(bytes: &[u8]) -> Result<Mp4VideoInfo, DeviceError> {
 
 /// 測った長さを元動画の長さと照合する。差が [`DURATION_TOLERANCE`] を超えたら `Internal(MISMATCH)`
 /// （境界は含む）。
-fn check_length(measured: Duration) -> Result<Duration, DeviceError> {
+fn check_length(measured: Duration) -> Result<Duration, VideoTranscodeError> {
     if measured.abs_diff(source_duration()) <= DURATION_TOLERANCE {
         Ok(measured)
     } else {
-        Err(DeviceError::Internal(MISMATCH))
+        Err(VideoTranscodeError::Internal(MISMATCH))
     }
 }
 
 /// 出力を読み直して成功の条件を確かめる。空 → `EMPTY`、解析できない・映像が無い・寸法 0 →
 /// `UNREADABLE`、幅か高さが元動画以上 → `NOT_SMALLER`、長さが外れている → `MISMATCH`。
-pub fn check_mp4_video(bytes: &[u8]) -> Result<Mp4VideoInfo, DeviceError> {
+pub fn check_mp4_video(bytes: &[u8]) -> Result<Mp4VideoInfo, VideoTranscodeError> {
     if bytes.is_empty() {
-        return Err(DeviceError::Internal(EMPTY));
+        return Err(VideoTranscodeError::Internal(EMPTY));
     }
     let info = parse_mp4_video(bytes)?;
     if info.width >= SOURCE_WIDTH || info.height >= SOURCE_HEIGHT {
-        return Err(DeviceError::Internal(NOT_SMALLER));
+        return Err(VideoTranscodeError::Internal(NOT_SMALLER));
     }
     check_length(info.length())?;
     Ok(info)
@@ -283,9 +283,9 @@ pub fn check_decoded(
     frames: &[DecodedFrame],
     expected_w: u32,
     expected_h: u32,
-) -> Result<Duration, DeviceError> {
+) -> Result<Duration, VideoTranscodeError> {
     if chunks == 0 {
-        return Err(DeviceError::Internal(EMPTY));
+        return Err(VideoTranscodeError::Internal(EMPTY));
     }
     if frames.is_empty() {
         return Err(unreadable());
@@ -294,7 +294,7 @@ pub fn check_decoded(
         .iter()
         .any(|f| f.width >= SOURCE_WIDTH || f.height >= SOURCE_HEIGHT)
     {
-        return Err(DeviceError::Internal(NOT_SMALLER));
+        return Err(VideoTranscodeError::Internal(NOT_SMALLER));
     }
     if frames
         .iter()
@@ -308,7 +308,7 @@ pub fn check_decoded(
     // 加算が u64 を超える時刻は復元不能な長さなので MISMATCH にする（折り返しで成功させない）
     let len = (max - min)
         .checked_add(frame_us)
-        .ok_or(DeviceError::Internal(MISMATCH))?;
+        .ok_or(VideoTranscodeError::Internal(MISMATCH))?;
     check_length(Duration::from_micros(len))
 }
 
@@ -324,7 +324,7 @@ pub fn minimal_mp4_video(
     samples: u32,
     with_audio_track_first: bool,
 ) -> Vec<u8> {
-    use crate::media_transcode::bx;
+    use fandhe_device::media_transcode::bx;
     let trak = |handler: &[u8; 4], entry: Vec<u8>, ts: u32, dur: u32, n: u32| {
         let mut hdlr = vec![0u8; 8];
         hdlr.extend_from_slice(handler);
@@ -374,7 +374,7 @@ mod tests {
         minimal_mp4_video(b"avc1", 640, 360, 15_000, 30_000, 30, false)
     }
 
-    fn at(ms: i64) -> Result<Mp4VideoInfo, DeviceError> {
+    fn at(ms: i64) -> Result<Mp4VideoInfo, VideoTranscodeError> {
         let d = (2000 + ms) as u32;
         check_mp4_video(&minimal_mp4_video(b"avc1", 640, 360, 1000, d, 30, false))
     }
@@ -440,7 +440,10 @@ mod tests {
         ];
         for c in cases {
             let r = parse_mp4_video(&c);
-            assert!(matches!(r, Err(DeviceError::Internal(UNREADABLE))), "{r:?}");
+            assert!(
+                matches!(r, Err(VideoTranscodeError::Internal(UNREADABLE))),
+                "{r:?}"
+            );
         }
     }
 
@@ -448,16 +451,19 @@ mod tests {
     fn check_mp4_video_failure_kinds() {
         assert!(matches!(
             check_mp4_video(&[]),
-            Err(DeviceError::Internal(EMPTY))
+            Err(VideoTranscodeError::Internal(EMPTY))
         ));
         assert!(matches!(
             check_mp4_video(b"garbage"),
-            Err(DeviceError::Internal(UNREADABLE))
+            Err(VideoTranscodeError::Internal(UNREADABLE))
         ));
         for (w, h) in [(1280, 360), (640, 720), (1280, 720), (2000, 2000)] {
             let m = minimal_mp4_video(b"avc1", w, h, 15_000, 30_000, 30, false);
             assert!(
-                matches!(check_mp4_video(&m), Err(DeviceError::Internal(NOT_SMALLER))),
+                matches!(
+                    check_mp4_video(&m),
+                    Err(VideoTranscodeError::Internal(NOT_SMALLER))
+                ),
                 "{w}x{h}"
             );
         }
@@ -473,8 +479,14 @@ mod tests {
     fn duration_boundary() {
         assert!(at(200).is_ok());
         assert!(at(-200).is_ok());
-        assert!(matches!(at(201), Err(DeviceError::Internal(MISMATCH))));
-        assert!(matches!(at(-201), Err(DeviceError::Internal(MISMATCH))));
+        assert!(matches!(
+            at(201),
+            Err(VideoTranscodeError::Internal(MISMATCH))
+        ));
+        assert!(matches!(
+            at(-201),
+            Err(VideoTranscodeError::Internal(MISMATCH))
+        ));
     }
 
     fn frames(n: u64, step_us: u64, w: u32, h: u32) -> Vec<DecodedFrame> {
@@ -493,24 +505,24 @@ mod tests {
         assert!(check_decoded(30, &ok, 640, 360).is_ok());
         assert!(matches!(
             check_decoded(0, &ok, 640, 360),
-            Err(DeviceError::Internal(EMPTY))
+            Err(VideoTranscodeError::Internal(EMPTY))
         ));
         assert!(matches!(
             check_decoded(30, &[], 640, 360),
-            Err(DeviceError::Internal(UNREADABLE))
+            Err(VideoTranscodeError::Internal(UNREADABLE))
         ));
         assert!(matches!(
             check_decoded(30, &frames(30, 66_667, 1280, 720), 640, 360),
-            Err(DeviceError::Internal(NOT_SMALLER))
+            Err(VideoTranscodeError::Internal(NOT_SMALLER))
         ));
         assert!(matches!(
             check_decoded(30, &ok, 320, 180),
-            Err(DeviceError::Internal(UNREADABLE))
+            Err(VideoTranscodeError::Internal(UNREADABLE))
         ));
         // 間引かれて短くなる
         assert!(matches!(
             check_decoded(30, &frames(15, 66_667, 640, 360), 640, 360),
-            Err(DeviceError::Internal(MISMATCH))
+            Err(VideoTranscodeError::Internal(MISMATCH))
         ));
     }
 
@@ -534,7 +546,7 @@ mod tests {
         f[1].timestamp_us = u64::MAX - 1_000;
         assert!(matches!(
             check_decoded(2, &f, 640, 360),
-            Err(DeviceError::Internal(MISMATCH))
+            Err(VideoTranscodeError::Internal(MISMATCH))
         ));
     }
 
@@ -563,7 +575,7 @@ mod tests {
     fn unsupported_never_succeeds() {
         assert!(matches!(
             UnsupportedVideoTranscode.transcode(Duration::ZERO),
-            Err(DeviceError::Unsupported(_))
+            Err(VideoTranscodeError::Unsupported)
         ));
     }
 }

@@ -4,7 +4,7 @@
 //! 呼び出し元: `device/video_transcode.rs::platform` の Windows 経路がワーカースレッドから
 //! `transcode` を同期に呼ぶ。期限・世代の照合、期限後に届いた結果の破棄、出力の読み直し
 //! （`check_mp4_video`）、画面向けの失敗の写像は呼び出し側が担い、本ファイルは MP4 のバイト列か
-//! `DeviceError` だけを返す。契約の SSOT は `fandhe_device::video_transcode`。
+//! `VideoTranscodeError` だけを返す。契約の SSOT は `crate::contract`。
 //!
 //! 2 段で行う:
 //! 1. `MediaStreamSource`（無圧縮 BGRA、絵は `fill_source_frame_bgra`）+
@@ -33,7 +33,7 @@
 
 use std::sync::Arc;
 
-use fandhe_device::video_transcode::{VideoTranscode, SOURCE_FPS, SOURCE_FRAMES};
+use crate::contract::{SOURCE_FPS, SOURCE_FRAMES, VideoTranscode};
 
 /// 100 ns 単位の 1 秒（`TimeSpan` の単位）。
 const TICKS_PER_SEC: i64 = 10_000_000;
@@ -61,25 +61,24 @@ pub(crate) fn implementation() -> Arc<dyn VideoTranscode> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        Arc::new(fandhe_device::video_transcode::UnsupportedVideoTranscode)
+        Arc::new(crate::contract::UnsupportedVideoTranscode)
     }
 }
 
 #[cfg(target_os = "windows")]
 mod imp {
     use std::path::Path;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc;
-    use std::sync::Arc;
     use std::sync::{Mutex, TryLockError};
     use std::time::{Duration, Instant};
 
-    use fandhe_device::video_transcode::{
-        fill_source_frame_bgra, VideoTranscode, RELEASE_PENDING, SOURCE_FPS, SOURCE_HEIGHT,
-        SOURCE_WIDTH, TIMEOUT,
+    use crate::contract::{
+        RELEASE_PENDING, SOURCE_FPS, SOURCE_HEIGHT, SOURCE_WIDTH, TIMEOUT, VideoTranscode,
+        fill_source_frame_bgra,
     };
-    use fandhe_device::DeviceError;
-    use windows::core::{AgileReference, HSTRING};
+    use crate::error::VideoTranscodeError;
     use windows::Foundation::{TimeSpan, TypedEventHandler};
     use windows::Media::Core::{
         MediaStreamSample, MediaStreamSource, MediaStreamSourceSampleRequestedEventArgs,
@@ -95,13 +94,14 @@ mod imp {
     use windows::Storage::FileAccessMode;
     use windows::Storage::Streams::{DataWriter, FileRandomAccessStream, IRandomAccessStream};
     use windows::Win32::Foundation::{E_NOINTERFACE, REGDB_E_CLASSNOTREG};
+    use windows::core::{AgileReference, HSTRING};
     use windows_future::{
         AsyncActionWithProgressCompletedHandler, AsyncOperationCompletedHandler, AsyncStatus,
         IAsyncOperation,
     };
 
     use super::{frame_duration, sample_time, source_duration_ticks};
-    use crate::device::video_transcode::{temp_pair, LEFTOVERS};
+    use crate::driver::{LEFTOVERS, temp_pair};
 
     /// 出力の上限。`u32` への切り詰めと過大な確保を防ぐ。
     const MAX_OUTPUT_BYTES: u64 = 16 * 1024 * 1024;
@@ -140,23 +140,23 @@ mod imp {
         }
     }
 
-    fn internal(label: &'static str) -> DeviceError {
-        DeviceError::Internal(label)
+    fn internal(label: &'static str) -> VideoTranscodeError {
+        VideoTranscodeError::Internal(label)
     }
 
     /// クラスなし・statics なしは非対応、それ以外は段階別ラベルの `Internal`。
-    fn map_err(e: &windows::core::Error, label: &'static str) -> DeviceError {
+    fn map_err(e: &windows::core::Error, label: &'static str) -> VideoTranscodeError {
         if e.code() == REGDB_E_CLASSNOTREG || e.code() == E_NOINTERFACE {
-            DeviceError::Unsupported("video_transcode")
+            VideoTranscodeError::Unsupported
         } else {
             internal(label)
         }
     }
 
     /// サンプル生成側（`SampleRequested`）で起きたエラーをワーカーへ渡す枠。最初の 1 件だけ残す。
-    type Fault = std::sync::Arc<Mutex<Option<DeviceError>>>;
+    type Fault = std::sync::Arc<Mutex<Option<VideoTranscodeError>>>;
 
-    fn take_fault(fault: &Fault) -> Option<DeviceError> {
+    fn take_fault(fault: &Fault) -> Option<VideoTranscodeError> {
         fault.lock().unwrap_or_else(|e| e.into_inner()).take()
     }
 
@@ -183,7 +183,7 @@ mod imp {
         register: impl FnOnce(Notify) -> windows::core::Result<()>,
         cancel: impl Fn(),
         status: impl Fn() -> windows::core::Result<AsyncStatus> + Send + 'static,
-    ) -> Result<AsyncStatus, DeviceError> {
+    ) -> Result<AsyncStatus, VideoTranscodeError> {
         let (tx, rx) = mpsc::channel();
         let done = Arc::new(AtomicBool::new(false));
         if register(Notify {
@@ -229,7 +229,7 @@ mod imp {
         st: AsyncStatus,
         result: windows::core::Result<T>,
         label: &'static str,
-    ) -> Result<T, DeviceError> {
+    ) -> Result<T, VideoTranscodeError> {
         match (st, result) {
             (AsyncStatus::Completed, Ok(v)) => Ok(v),
             (AsyncStatus::Completed | AsyncStatus::Error, Err(e)) => Err(map_err(&e, label)),
@@ -242,7 +242,7 @@ mod imp {
         deadline: Instant,
         label: &'static str,
         op: &IAsyncOperation<T>,
-    ) -> Result<T, DeviceError> {
+    ) -> Result<T, VideoTranscodeError> {
         let status_op = op.clone();
         let st = wait(
             deadline,
@@ -271,7 +271,7 @@ mod imp {
         mode: FileAccessMode,
         deadline: Instant,
         label: &'static str,
-    ) -> Result<IRandomAccessStream, DeviceError> {
+    ) -> Result<IRandomAccessStream, VideoTranscodeError> {
         let open = FileRandomAccessStream::OpenAsync(&HSTRING::from(path.as_os_str()), mode)
             .map_err(|e| map_err(&e, label))?;
         wait_op(deadline, label, &open).inspect_err(|_| {
@@ -286,13 +286,11 @@ mod imp {
         prep: IAsyncOperation<PrepareTranscodeResult>,
         deadline: Instant,
         label: &'static str,
-    ) -> Result<(), DeviceError> {
+    ) -> Result<(), VideoTranscodeError> {
         let prepared = wait_op(deadline, "video_transcode prepare", &prep)?;
         if !prepared.CanTranscode().unwrap_or(false) {
             return Err(match prepared.FailureReason() {
-                Ok(TranscodeFailureReason::CodecNotFound) => {
-                    DeviceError::Unsupported("video_transcode")
-                }
+                Ok(TranscodeFailureReason::CodecNotFound) => VideoTranscodeError::Unsupported,
                 _ => internal("video_transcode prepare"),
             });
         }
@@ -323,7 +321,7 @@ mod imp {
 
     /// 元動画のフレームを順に渡す `MediaStreamSource`。`SOURCE_FRAMES` 枚で EOS にする。
     /// 失敗は `fault` に残して EOS にし、呼び出し側が成功にしない。
-    fn build_source(fault: &Fault) -> Result<MediaStreamSource, DeviceError> {
+    fn build_source(fault: &Fault) -> Result<MediaStreamSource, VideoTranscodeError> {
         let err = |e: windows::core::Error| map_err(&e, "video_transcode source");
         let subtype = MediaEncodingSubtypes::Bgra8().map_err(err)?;
         let props =
@@ -357,10 +355,10 @@ mod imp {
                 MediaStreamSourceSampleRequestedEventArgs,
             >::new(move |_, args| {
                 let request = args.ok()?.Request()?;
-                if index >= fandhe_device::video_transcode::SOURCE_FRAMES {
+                if index >= crate::contract::SOURCE_FRAMES {
                     return Ok(()); // サンプル無し = EOS
                 }
-                let mut produce = || -> Result<(), DeviceError> {
+                let mut produce = || -> Result<(), VideoTranscodeError> {
                     let e = |e: windows::core::Error| map_err(&e, "video_transcode source");
                     if !fill_source_frame_bgra(index, SOURCE_WIDTH, SOURCE_HEIGHT, stride, &mut buf)
                     {
@@ -391,7 +389,7 @@ mod imp {
                             .lock()
                             .unwrap_or_else(|p| p.into_inner())
                             .get_or_insert(e);
-                        index = fandhe_device::video_transcode::SOURCE_FRAMES;
+                        index = crate::contract::SOURCE_FRAMES;
                     }
                 }
                 Ok(())
@@ -401,7 +399,7 @@ mod imp {
     }
 
     /// 1 段目: 元動画を `src` へ書く。
-    fn stage1(src: &Path, deadline: Instant) -> Result<(), DeviceError> {
+    fn stage1(src: &Path, deadline: Instant) -> Result<(), VideoTranscodeError> {
         let err = |e: windows::core::Error| map_err(&e, "video_transcode prepare");
         let fault: Fault = std::sync::Arc::new(Mutex::new(None));
         let source = build_source(&fault)?;
@@ -437,7 +435,7 @@ mod imp {
     }
 
     /// 2 段目: `src` を小さい動画にして `out` へ書く。寸法は指定せず OS に任せる。
-    fn stage2(src: &Path, out: &Path, deadline: Instant) -> Result<(), DeviceError> {
+    fn stage2(src: &Path, out: &Path, deadline: Instant) -> Result<(), VideoTranscodeError> {
         let err = |e: windows::core::Error| map_err(&e, "video_transcode prepare");
         let profile = MediaEncodingProfile::CreateMp4(VideoEncodingQuality::Vga).map_err(err)?;
         profile
@@ -472,7 +470,7 @@ mod imp {
     }
 
     /// `create_new` で空ファイルを作る（既存のファイルやリンクを上書きしない）。
-    fn create_new(path: &Path) -> Result<(), DeviceError> {
+    fn create_new(path: &Path) -> Result<(), VideoTranscodeError> {
         std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -481,7 +479,7 @@ mod imp {
             .map_err(|_| internal("video_transcode path"))
     }
 
-    fn read_output(out: &Path) -> Result<Vec<u8>, DeviceError> {
+    fn read_output(out: &Path) -> Result<Vec<u8>, VideoTranscodeError> {
         let len = std::fs::metadata(out)
             .map_err(|_| internal("video_transcode read"))?
             .len();
@@ -495,7 +493,7 @@ mod imp {
     pub(crate) struct WindowsVideoTranscode;
 
     impl VideoTranscode for WindowsVideoTranscode {
-        fn transcode(&self, remaining: Duration) -> Result<Vec<u8>, DeviceError> {
+        fn transcode(&self, remaining: Duration) -> Result<Vec<u8>, VideoTranscodeError> {
             let _call = match CALL.try_lock() {
                 Ok(g) => g,
                 Err(TryLockError::Poisoned(p)) => p.into_inner(),
@@ -545,7 +543,7 @@ mod tests {
         use std::time::Duration;
         assert!(matches!(
             implementation().transcode(Duration::from_secs(1)),
-            Err(fandhe_device::DeviceError::Unsupported(_))
+            Err(crate::error::VideoTranscodeError::Unsupported)
         ));
     }
 }
@@ -553,10 +551,10 @@ mod tests {
 #[cfg(all(test, target_os = "windows"))]
 mod windows_tests {
     use super::imp::WindowsVideoTranscode;
-    use fandhe_device::video_transcode::{
-        check_mp4_video, VideoTranscode, RELEASE_PENDING, SOURCE_HEIGHT, SOURCE_WIDTH, TIMEOUT,
+    use crate::contract::{
+        RELEASE_PENDING, SOURCE_HEIGHT, SOURCE_WIDTH, TIMEOUT, VideoTranscode, check_mp4_video,
     };
-    use fandhe_device::DeviceError;
+    use crate::error::VideoTranscodeError;
     use std::sync::Mutex;
     use std::time::{Duration, Instant};
 
@@ -576,11 +574,11 @@ mod windows_tests {
 
     /// 前回の解放待ち（`RELEASE_PENDING`）が解けるまで、次の要求として呼び直す（最大 10 秒）。
     /// 期限切れ直後は未解放のまま残りうる（遅延解放の契約）。解放は次の要求で確認される。
-    fn transcode_after_release(remaining: Duration) -> Result<Vec<u8>, DeviceError> {
+    fn transcode_after_release(remaining: Duration) -> Result<Vec<u8>, VideoTranscodeError> {
         let give_up = Instant::now() + Duration::from_secs(10);
         loop {
             match WindowsVideoTranscode.transcode(remaining) {
-                Err(DeviceError::Internal(RELEASE_PENDING)) if Instant::now() < give_up => {
+                Err(VideoTranscodeError::Internal(RELEASE_PENDING)) if Instant::now() < give_up => {
                     std::thread::sleep(Duration::from_millis(100));
                 }
                 r => return r,
@@ -597,7 +595,7 @@ mod windows_tests {
                 let info = check_mp4_video(&bytes).expect("mp4 検証");
                 assert!(info.width < SOURCE_WIDTH && info.height < SOURCE_HEIGHT);
             }
-            Err(DeviceError::Unsupported(_)) => {}
+            Err(VideoTranscodeError::Unsupported) => {}
             Err(e) => panic!("想定外の失敗: {e:?}"),
         }
         assert_eq!(leftovers(), 0, "一時ファイルが残っている");
@@ -611,7 +609,7 @@ mod windows_tests {
         let r = transcode_after_release(Duration::ZERO);
         assert!(matches!(
             r,
-            Err(DeviceError::Internal(TIMEOUT)) | Err(DeviceError::Unsupported(_))
+            Err(VideoTranscodeError::Internal(TIMEOUT)) | Err(VideoTranscodeError::Unsupported)
         ));
         // 次の要求（解放待ちが解けるまで）で再削除される。
         let _ = transcode_after_release(Duration::from_secs(30));

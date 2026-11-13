@@ -1,16 +1,16 @@
 //! Phase 11（端末機能の拡充ループ、親 #340）型サンプル「動画の変換」（Issue #1014）の effect ドライバ。
 //! `fandhe_core::screens::video_transcode`（端末依存ゼロ）の要求を観測し、ワーカースレッドで
-//! `fandhe_device::video_transcode::VideoTranscode` を呼んで `CompletionSender` 経由で結果を返す
+//! `crate::contract::VideoTranscode` を呼んで `CompletionSender` 経由で結果を返す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・解放の失敗・守る範囲）の SSOT は
-//! `fandhe_device::video_transcode`。
+//! `crate::contract`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。Web は対象外
 //! （`fandhe-web-dom` 側で扱う）。
 //!
 //! # OS 別の分担（dispatch は #1014 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
-//! - macOS: [`super::apple_video_transcode::AppleVideoTranscode`]（#1014）
+//! - macOS: [`crate::apple::AppleVideoTranscode`]（#1014）
 //! - iOS: `ios_video_transcode` 経由で `AppleVideoTranscode`（#1016 b-ios）
 //! - Windows: `windows_video_transcode`（#1015。いまはスタブ）
 //! - Android: `android_video_transcode`（#1017 b-android）
@@ -35,37 +35,38 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::contract::{
+    EMPTY, MISMATCH, NOT_SMALLER, RELEASE_PENDING, SOURCE_HEIGHT, SOURCE_WIDTH, TIMEOUT,
+    TRANSCODE_DEADLINE, UNREADABLE, VideoTranscode, check_mp4_video, source_duration,
+};
+use crate::error::VideoTranscodeError;
 use fandhe_core::screens::video_transcode::{
-    finish_transcode, mark_running, take_request, VideoContainer, VideoTranscodeFailure,
-    VideoTranscodeOutput, VideoTranscodePhase, VideoTranscodeState, GENERIC_FAILED_MESSAGE,
-    RELEASE_PENDING_MESSAGE,
+    GENERIC_FAILED_MESSAGE, RELEASE_PENDING_MESSAGE, VideoContainer, VideoTranscodeFailure,
+    VideoTranscodeOutput, VideoTranscodePhase, VideoTranscodeState, finish_transcode, mark_running,
+    take_request,
 };
-use fandhe_device::video_transcode::{
-    check_mp4_video, source_duration, VideoTranscode, EMPTY, MISMATCH, NOT_SMALLER,
-    RELEASE_PENDING, SOURCE_HEIGHT, SOURCE_WIDTH, TIMEOUT, TRANSCODE_DEADLINE, UNREADABLE,
-};
-use fandhe_device::DeviceError;
 
-use super::request_slot::RequestSlot;
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::RequestSlot;
 
 /// 現在のプラットフォームに応じた `VideoTranscode` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn VideoTranscode> {
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_video_transcode() -> Arc<dyn VideoTranscode> {
     #[cfg(target_os = "macos")]
     {
-        Arc::new(super::apple_video_transcode::AppleVideoTranscode)
+        Arc::new(crate::apple::AppleVideoTranscode)
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_video_transcode::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "windows")]
     {
-        super::windows_video_transcode::implementation()
+        crate::windows::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_video_transcode::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(
         target_os = "macos",
@@ -74,7 +75,7 @@ fn platform() -> Arc<dyn VideoTranscode> {
         target_os = "android"
     )))]
     {
-        Arc::new(fandhe_device::video_transcode::UnsupportedVideoTranscode)
+        Arc::new(crate::contract::UnsupportedVideoTranscode)
     }
 }
 
@@ -134,13 +135,13 @@ impl Leftovers {
     }
 
     /// 記録を消し直す。消せないものが残れば `Internal(RELEASE_PENDING)`。
-    pub(crate) fn ensure_released(&self) -> Result<(), DeviceError> {
+    pub(crate) fn ensure_released(&self) -> Result<(), VideoTranscodeError> {
         let mut g = self.lock();
         g.retain(|p| !remove_if_exists(p));
         if g.is_empty() {
             Ok(())
         } else {
-            Err(DeviceError::Internal(RELEASE_PENDING))
+            Err(VideoTranscodeError::Internal(RELEASE_PENDING))
         }
     }
 }
@@ -182,6 +183,7 @@ impl Session {
         }
     }
 
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     fn reset(&self) {
         self.slot.reset();
         *self.timing.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -200,24 +202,24 @@ static SESSION: std::sync::OnceLock<Arc<Session>> = std::sync::OnceLock::new();
 /// 画面状態は `default()`（世代 0）に戻るため、完了後も残る記録（世代 1）を残すと次の
 /// 「変換する」が発送されず飲み込まれる。古いワーカーの結果は古いアプリのチャネルへ届くので
 /// 新しい画面には適用されない。走っている OS 呼び出しは止めず走り切らせる。
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+#[cfg(target_os = "android")]
+pub fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
         s.reset();
     }
 }
 
-/// `DeviceError` を画面の失敗種別へ写す。内部識別子・OS コードは画面にもログにも出さず、
+/// `VideoTranscodeError` を画面の失敗種別へ写す。内部識別子・OS コードは画面にもログにも出さず、
 /// 上記以外は固定文言にする（security.md A09）。
-pub(crate) fn to_failure(e: DeviceError) -> VideoTranscodeFailure {
+pub(crate) fn to_failure(e: VideoTranscodeError) -> VideoTranscodeFailure {
     match e {
-        DeviceError::Unsupported(_) => VideoTranscodeFailure::Unsupported,
-        DeviceError::Internal(TIMEOUT) => VideoTranscodeFailure::Timeout,
-        DeviceError::Internal(EMPTY) => VideoTranscodeFailure::Empty,
-        DeviceError::Internal(UNREADABLE) => VideoTranscodeFailure::Unreadable,
-        DeviceError::Internal(NOT_SMALLER) => VideoTranscodeFailure::NotSmaller,
-        DeviceError::Internal(MISMATCH) => VideoTranscodeFailure::Mismatch,
-        DeviceError::Internal(RELEASE_PENDING) => {
+        VideoTranscodeError::Unsupported => VideoTranscodeFailure::Unsupported,
+        VideoTranscodeError::Internal(TIMEOUT) => VideoTranscodeFailure::Timeout,
+        VideoTranscodeError::Internal(EMPTY) => VideoTranscodeFailure::Empty,
+        VideoTranscodeError::Internal(UNREADABLE) => VideoTranscodeFailure::Unreadable,
+        VideoTranscodeError::Internal(NOT_SMALLER) => VideoTranscodeFailure::NotSmaller,
+        VideoTranscodeError::Internal(MISMATCH) => VideoTranscodeFailure::Mismatch,
+        VideoTranscodeError::Internal(RELEASE_PENDING) => {
             VideoTranscodeFailure::Failed(RELEASE_PENDING_MESSAGE.to_string())
         }
         _ => VideoTranscodeFailure::Failed(GENERIC_FAILED_MESSAGE.to_string()),
@@ -276,20 +278,19 @@ fn drive(
             }
             _ => {
                 // 期限判定: 処理中でセッションの世代が一致するときだけ。
-                if let (Some((request_id, gen, started)), VideoTranscodePhase::Running) =
+                if let (Some((request_id, r#gen, started)), VideoTranscodePhase::Running) =
                     (*g, &state.phase)
+                    && r#gen == state.generation
                 {
-                    if gen == state.generation {
-                        let elapsed = started.elapsed();
-                        if elapsed >= deadline {
-                            *g = None;
-                            session.slot.clear(request_id);
-                            let _ = sender.send(Box::new(move |s: &mut VideoTranscodeState| {
-                                finish_transcode(s, gen, Err(VideoTranscodeFailure::Timeout));
-                            }));
-                        } else {
-                            sender.request_repaint_after(deadline - elapsed);
-                        }
+                    let elapsed = started.elapsed();
+                    if elapsed >= deadline {
+                        *g = None;
+                        session.slot.clear(request_id);
+                        let _ = sender.send(Box::new(move |s: &mut VideoTranscodeState| {
+                            finish_transcode(s, r#gen, Err(VideoTranscodeFailure::Timeout));
+                        }));
+                    } else {
+                        sender.request_repaint_after(deadline - elapsed);
                     }
                 }
                 None
@@ -341,7 +342,7 @@ pub fn video_transcode_effect(
     sender: &CompletionSender<VideoTranscodeState>,
 ) {
     static IMPL: std::sync::OnceLock<Arc<dyn VideoTranscode>> = std::sync::OnceLock::new();
-    let imp = IMPL.get_or_init(platform);
+    let imp = IMPL.get_or_init(platform_video_transcode);
     drive(
         state,
         sender,
@@ -354,15 +355,22 @@ pub fn video_transcode_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{UnsupportedVideoTranscode, minimal_mp4_video};
     use fandhe_core::screens::video_transcode::{error_text, request_transcode};
-    use fandhe_device::video_transcode::{minimal_mp4_video, UnsupportedVideoTranscode};
     use std::sync::mpsc;
 
-    type Rx = mpsc::Receiver<crate::app::Completion<VideoTranscodeState>>;
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<VideoTranscodeState>>;
 
     fn channel() -> (CompletionSender<VideoTranscodeState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// 元動画の半分の寸法・同じ長さの最小の MP4。
@@ -372,17 +380,17 @@ mod tests {
 
     /// 指定の結果を返し、`sleep` だけ待つフェイク。
     struct Fake {
-        result: fn() -> Result<Vec<u8>, DeviceError>,
+        result: fn() -> Result<Vec<u8>, VideoTranscodeError>,
         sleep: Duration,
     }
     impl VideoTranscode for Fake {
-        fn transcode(&self, _: Duration) -> Result<Vec<u8>, DeviceError> {
+        fn transcode(&self, _: Duration) -> Result<Vec<u8>, VideoTranscodeError> {
             std::thread::sleep(self.sleep);
             (self.result)()
         }
     }
 
-    fn fake(result: fn() -> Result<Vec<u8>, DeviceError>) -> Arc<dyn VideoTranscode> {
+    fn fake(result: fn() -> Result<Vec<u8>, VideoTranscodeError>) -> Arc<dyn VideoTranscode> {
         Arc::new(Fake {
             result,
             sleep: Duration::ZERO,
@@ -453,7 +461,7 @@ mod tests {
         assert_eq!(r, Err(VideoTranscodeFailure::Empty));
         struct Once(Vec<u8>);
         impl VideoTranscode for Once {
-            fn transcode(&self, _: Duration) -> Result<Vec<u8>, DeviceError> {
+            fn transcode(&self, _: Duration) -> Result<Vec<u8>, VideoTranscodeError> {
                 Ok(self.0.clone())
             }
         }
@@ -483,13 +491,16 @@ mod tests {
         assert_eq!(failed(&s), &VideoTranscodeFailure::Mismatch);
         let s = run(Arc::new(UnsupportedVideoTranscode), 2);
         assert_eq!(failed(&s), &VideoTranscodeFailure::Unsupported);
-        let s = run(fake(|| Err(DeviceError::Internal(TIMEOUT))), 2);
+        let s = run(fake(|| Err(VideoTranscodeError::Internal(TIMEOUT))), 2);
         assert_eq!(failed(&s), &VideoTranscodeFailure::Timeout);
     }
 
     #[test]
     fn internal_ids_never_reach_screen_text() {
-        let s = run(fake(|| Err(DeviceError::Internal("secret os detail"))), 2);
+        let s = run(
+            fake(|| Err(VideoTranscodeError::Internal("secret os detail"))),
+            2,
+        );
         let text = error_text(&s);
         assert!(!text.contains("secret"), "{text}");
         assert!(matches!(failed(&s), VideoTranscodeFailure::Failed(_)));
@@ -497,7 +508,10 @@ mod tests {
 
     #[test]
     fn release_pending_is_a_fixed_message_failure() {
-        let s = run(fake(|| Err(DeviceError::Internal(RELEASE_PENDING))), 2);
+        let s = run(
+            fake(|| Err(VideoTranscodeError::Internal(RELEASE_PENDING))),
+            2,
+        );
         let text = error_text(&s);
         assert!(text.contains(RELEASE_PENDING_MESSAGE), "{text}");
         assert!(!text.contains("video_transcode"), "{text}");
@@ -625,8 +639,8 @@ mod tests {
             target_os = "android"
         )))]
         assert!(matches!(
-            platform().transcode(Duration::ZERO),
-            Err(DeviceError::Unsupported(_))
+            platform_video_transcode().transcode(Duration::ZERO),
+            Err(VideoTranscodeError::Unsupported)
         ));
     }
 
@@ -651,7 +665,7 @@ mod tests {
         l.release(&[&stuck]);
         assert!(matches!(
             l.ensure_released(),
-            Err(DeviceError::Internal(RELEASE_PENDING))
+            Err(VideoTranscodeError::Internal(RELEASE_PENDING))
         ));
         // 解消すれば通る
         std::fs::remove_dir_all(&stuck).unwrap();
