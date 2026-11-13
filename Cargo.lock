@@ -2139,6 +2139,7 @@ version = "0.2.0"
 dependencies = [
  "raw-window-handle",
  "windows 0.61.3",
+ "windows-future",
 ]
 
 [[package]]

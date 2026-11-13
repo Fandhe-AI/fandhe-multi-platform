@@ -5,6 +5,7 @@
 //! - COM 初期化（MTA）の RAII ガード [`ComInit`]: 機能ごとの作業スレッドで使う
 //! - 既定の関連付けで URL を開く [`open_url`] と、その戻り値 [`SE_ERR_NOASSOC`]: メール・SMS の作成、OS の設定画面、
 //!   Web 認証の既定ブラウザの起動が共用する。渡すのは各機能が組み立てた固定 scheme の URL だけで、任意の scheme・引数を受ける口ではない
+//! - WinRT 非同期操作の完了をキューへ積む [`winrt_async`]: 作業スレッドで完了を待たない機能が共用する
 //!
 //! egui・eframe・winit・`fandhe-device` には依存しない（機能 crate の依存グラフに入れないため）。
 //! Windows 以外ではクレート全体が空。`unsafe` は [`ComInit`] の COM 呼び出し 2 か所と [`open_url`] の `ShellExecuteW` 1 か所の計 3 か所だけで、
@@ -22,6 +23,8 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninit
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 use windows::core::{HSTRING, PCWSTR, w};
+
+pub mod winrt_async;
 
 /// [`remember_window`] が控える HWND（`isize` で持つのは `HWND` が `Sync` でないため）。
 static WINDOW: OnceLock<isize> = OnceLock::new();

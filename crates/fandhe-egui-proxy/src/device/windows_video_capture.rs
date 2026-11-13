@@ -182,8 +182,8 @@ mod imp {
     };
 
     use super::super::video_capture::{complete_from_os, set_panel, try_begin_present};
-    use super::super::windows_camera_preview_stream::{spawn, spawn_action};
     use super::{duration_ms_from_ticks, failure_from_hresult, retry_leftovers, TempClip};
+    use fandhe_platform_windows::winrt_async::{spawn, spawn_action};
 
     type Outcome = Result<VideoCaptureOutcome, VideoCaptureFailure>;
 

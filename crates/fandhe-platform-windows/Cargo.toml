@@ -2,7 +2,7 @@
 name = "fandhe-platform-windows"
 version = "0.2.0"
 edition = "2024"
-description = "fandhe-multi-platform の Windows 共通層（メインウィンドウの HWND の保持・COM 初期化ガード・URL を既定の関連付けで開く入口。レンダラ非依存）"
+description = "fandhe-multi-platform の Windows 共通層（メインウィンドウの HWND の保持・COM 初期化ガード・URL を既定の関連付けで開く入口・WinRT 完了をキューへ積む部品。レンダラ非依存）"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
 # 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
@@ -14,6 +14,8 @@ publish = false
 windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 # 起動コンテキスト（HasWindowHandle 実装）から HWND を取り出す。winit は経由しない。
 raw-window-handle = { workspace = true }
+# WinRT 非同期操作の型（`winrt_async`）。ルート Cargo.toml の `windows-future` コメント参照。
+windows-future = { workspace = true }
 
 [lints]
 workspace = true
