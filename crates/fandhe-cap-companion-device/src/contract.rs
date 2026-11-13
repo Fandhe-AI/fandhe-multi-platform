@@ -6,7 +6,7 @@
 //! 対象は Android 13（API 33）以上の `CompanionDeviceManager` のみ。iOS は
 //! `AccessorySetupKit` を宣言すると `bluetooth-le` と両立しないため保留（OS 別モジュールを置かず
 //! `Unsupported`。保留を解くときは dispatch の変更を別 issue で扱う）、macOS・Windows は
-//! `no`、Web は対象外。`fandhe-egui-proxy` の effect ドライバ（`device/companion_device.rs`）が
+//! `no`、Web は対象外。本 crate の effect ドライバ（`driver`）が
 //! 本モジュールの trait を呼び、OS 層（#741 Android）が実装する。
 //!
 //! # 契約
@@ -140,7 +140,7 @@ pub enum CompanionDeviceFailure {
 }
 
 /// 付属機器選択の OS 実装。`pick` は「受理」だけを同期で返し、結果は OS 層が
-/// `fandhe-egui-proxy` の bridge（`complete_from_os`）へ 1 回だけ非同期に届ける。
+/// `driver` の bridge（`complete_from_os`）へ 1 回だけ非同期に届ける。
 pub trait CompanionDevicePicker: Send + Sync {
     /// `request_id` の要求として機器選択画面の表示を OS へ依頼する。
     /// 表示の直前に bridge の `try_begin_present` を呼び、`false` なら表示しない。

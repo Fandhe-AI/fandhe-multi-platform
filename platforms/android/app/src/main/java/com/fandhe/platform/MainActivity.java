@@ -685,13 +685,6 @@ public class MainActivity extends GameActivity {
         return WebAuthSessionHelper.sha256(data);
     }
 
-    // 付属機器のペアリング（Issue #741）。実装は `CompanionDeviceHelper`（結果ランチャーを STARTED 前に登録）。
-    private final CompanionDeviceHelper companionDeviceHelper = new CompanionDeviceHelper(this);
-
-    void requestCompanionDevicePick(long requestId) {
-        companionDeviceHelper.pick(requestId);
-    }
-
     // 物・サービスの決済（Issue #1131）。実装は `PaymentRequestHelper`（結果ランチャーを STARTED 前に登録）。
     private final PaymentRequestHelper paymentRequestHelper = new PaymentRequestHelper(this);
 
@@ -1808,7 +1801,6 @@ public class MainActivity extends GameActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         backgroundUploadHelper.onCreate();
-        companionDeviceHelper.init();
         captureProtectionHelper.onCreate();
         installAccessibilityOffGuard();
         fullscreenHelper.register();
@@ -4085,7 +4077,6 @@ public class MainActivity extends GameActivity {
         nowPlayingHelper.onDestroy();
         super.onDestroy();
         inAppBrowserHelper.onDestroy();
-        companionDeviceHelper.onDestroy();
         paymentRequestHelper.onDestroy();
         healthDataHelper.onDestroy();
         translationHelper.onDestroy();

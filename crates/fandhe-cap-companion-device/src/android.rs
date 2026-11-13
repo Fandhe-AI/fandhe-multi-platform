@@ -1,14 +1,14 @@
 //! Android 向け付属機器のペアリング（`CompanionDeviceManager`、API 33 以上）の実装
-//! （親 #143、Issue #741。契約は Issue #740 の `fandhe_device::companion_device`）。
-//! `device/companion_device.rs` の Android 経路（dispatch）から呼ばれる。Java 側
+//! （親 #143、Issue #741。契約は Issue #740 の `crate::contract`）。
+//! `driver` の Android 経路（dispatch）から呼ばれる。Java 側
 //! `CompanionDeviceHelper` が OS の機器選択画面で BLE 機器を 1 台選ばせ、名前を取って関連付けを外す。
 //!
-//! 流れ: `pick` → JNI `MainActivity.requestCompanionDevicePick(id)` → Java が UI スレッドで
+//! 流れ: `pick` → JNI `CompanionDeviceHelper.pick(Activity, id)`（static） → Java が UI スレッドで
 //! 端末の条件（API・機能・位置情報サービス・Bluetooth）を検査し `associate` →
 //! `onAssociationPending` で `nativeTryBeginPresent`（本ファイルの export が
-//! `companion_device::try_begin_present` を呼ぶ）により期限切れ・差し替えと排他にしてから
+//! `driver::try_begin_present` を呼ぶ）により期限切れ・差し替えと排他にしてから
 //! 選択画面を起動 → 結果の受領後に `disassociate` を済ませて `nativeOnCompanionDeviceResult(id, kind, name)`
-//! → [`map_result`] が契約の結果へ写して `companion_device::complete_from_os` へ 1 回だけ渡す。
+//! → [`map_result`] が契約の結果へ写して `driver::complete_from_os` へ 1 回だけ渡す。
 //!
 //! 結果コードの写像（Java `CompanionDeviceHelper.KIND_*` と同じ値）: `KIND_SELECTED` は
 //! `Ok(Selected(名前))`（名前は必ず `DeviceName::from_os` を通す）、`KIND_CANCELLED` は
@@ -18,7 +18,7 @@
 //! `TimedOut` は bridge の期限だけが確定する。
 //!
 //! 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止・Activity 再生成時の旧要求の破棄
-//! （`android.rs` が `reset_pending_tracking` を呼ぶ）と、旧要求の関連付けを外して捨てること。
+//! （アプリの `android_main` が `reset_pending_tracking` を呼ぶ）と、旧要求の関連付けを外して捨てること。
 //! 再生成で helper が回収された後に届いた関連付けは、static コールバックが Application Context で外す。
 //! 守らない範囲: API 32 以下・関連付けを残すこと・背景での起動・機器との通信とボンディング・
 //! 選択画面の表示中のプロセス死・複数プロセス。
@@ -26,12 +26,12 @@
 //! （結果は `Internal` で返し、成功とは見せない）。機器名と OS のエラー文はログに出さない。
 //! 足したのは Manifest の `uses-feature`（`required=false`）だけで、権限・依存は足さない。
 //!
-//! no-op スタブは置かない: Java の native は Rust の `requestCompanionDevicePick` を経た後でしか
-//! 呼ばれない（`android_in_app_browser.rs` と同じ判断）。
+//! no-op スタブは置かない: Java の native は Rust の `pick` を経た後でしか
+//! 呼ばれない（他の Android 機能と同じ判断）。
 
 use std::sync::Arc;
 
-use fandhe_device::companion_device::{
+use crate::contract::{
     CompanionDeviceFailure, CompanionDeviceOutcome, CompanionDevicePicker, DeviceName,
 };
 
@@ -92,45 +92,41 @@ impl CompanionDevicePicker for AndroidCompanionDevicePicker {
 mod imp {
     use jni::objects::JValue;
 
-    use super::super::android::JniCallFailed;
     use super::CompanionDeviceFailure;
 
-    /// `MainActivity` のメソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`（呼び出しの例外は握る）。
-    #[allow(unsafe_code)]
-    fn call_activity<T>(
-        f: impl FnOnce(&mut jni::Env, &jni::objects::JObject) -> Result<T, JniCallFailed>,
-    ) -> Option<T> {
-        let app = crate::android::android_app()?;
-        // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-        // `app` は本呼び出しの間生存する。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-        vm.attach_current_thread(|env: &mut jni::Env| -> Result<T, JniCallFailed> {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-            let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-            f(env, &activity)
-        })
-        .ok()
-    }
-
+    /// `CompanionDeviceHelper.pick(Activity, long)`（static）を JNI で呼ぶ。Activity 未確立・JNI 失敗・
+    /// Helper が無い（生成前・破棄後。Java 側が false を返す）場合は失敗で確定する（結果が来ないまま待たせない）。
+    /// クラスは Activity の class loader で解決する（`fandhe_platform_android::with_activity_class`）。
     pub(super) fn pick(id: u64) -> Result<(), CompanionDeviceFailure> {
-        if crate::android::android_app().is_none() {
+        use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+        let Some(app) = android_app() else {
             return Err(CompanionDeviceFailure::NotForeground);
+        };
+        let accepted = with_activity_class(
+            &app,
+            jni::jni_str!("com.fandhe.platform.CompanionDeviceHelper"),
+            |env, activity, class| -> Result<bool, JniCallFailed> {
+                Ok(env
+                    .call_static_method(
+                        class,
+                        jni::jni_str!("pick"),
+                        jni::jni_sig!((android.app.Activity, long) -> boolean),
+                        &[
+                            JValue::Object(activity),
+                            JValue::Long(id as jni::sys::jlong),
+                        ],
+                    )?
+                    .z()?)
+            },
+        );
+        match accepted {
+            Ok(true) => Ok(()),
+            Ok(false) | Err(_) => Err(CompanionDeviceFailure::Internal),
         }
-        call_activity(|env, a| {
-            env.call_method(
-                a,
-                jni::jni_str!("requestCompanionDevicePick"),
-                jni::jni_sig!((long) -> ()),
-                &[JValue::Long(id as jni::sys::jlong)],
-            )?;
-            Ok(())
-        })
-        .ok_or(CompanionDeviceFailure::Internal)
     }
 }
 
-/// `device.rs` が Android 限定で載せるため、ホストでは使われない。呼ばれても成功へ倒さない。
+/// `lib.rs` が Android 限定で載せるため、ホストでは使われない。呼ばれても成功へ倒さない。
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 mod imp {
@@ -150,7 +146,7 @@ mod imp {
 /// （既存の JNI エクスポートと同じ根拠）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_CompanionDeviceHelper_nativeTryBeginPresent<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -158,9 +154,7 @@ extern "system" fn Java_com_fandhe_platform_CompanionDeviceHelper_nativeTryBegin
 ) -> jni::sys::jboolean {
     // JVM 境界を越えて panic させない（`with_env` が `catch_unwind` 済み）。
     let outcome = unowned_env.with_env(|_env| -> Result<bool, jni::errors::Error> {
-        Ok(super::companion_device::try_begin_present(
-            request_id as u64,
-        ))
+        Ok(crate::driver::try_begin_present(request_id as u64))
     });
     matches!(outcome.into_outcome(), jni::Outcome::Ok(true))
 }
@@ -174,7 +168,7 @@ extern "system" fn Java_com_fandhe_platform_CompanionDeviceHelper_nativeTryBegin
 /// 既存の JNI エクスポートと同じ根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_CompanionDeviceHelper_nativeOnCompanionDeviceResult<
     'caller,
 >(
@@ -185,13 +179,13 @@ extern "system" fn Java_com_fandhe_platform_CompanionDeviceHelper_nativeOnCompan
     name: jni::objects::JString<'caller>,
 ) {
     let outcome = unowned_env.with_env(|env| -> Result<(), jni::errors::Error> {
-        let name = super::android::read_ble_string(env, &name, NAME_MAX_UNITS);
-        super::companion_device::complete_from_os(request_id as u64, map_result(kind, name));
+        let name = fandhe_platform_android::read_bounded_string(env, &name, NAME_MAX_UNITS);
+        crate::driver::complete_from_os(request_id as u64, map_result(kind, name));
         Ok(())
     });
     let _ = outcome.into_outcome();
     // 入力が無いと egui が描画せず「処理中」で止まるため次フレームを起こす。
-    crate::android::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]

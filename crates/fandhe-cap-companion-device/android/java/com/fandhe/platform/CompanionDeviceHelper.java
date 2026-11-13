@@ -1,5 +1,6 @@
 package com.fandhe.platform;
 
+import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.companion.AssociationInfo;
@@ -26,12 +27,18 @@ import androidx.core.location.LocationManagerCompat;
 import androidx.lifecycle.Lifecycle;
 
 import java.lang.ref.WeakReference;
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 // 付属機器のペアリング（Issue #741、親 #143 の b-android）の Android 実装ヘルパー。範囲は Android 13
 // （API 33）以上で OS の機器選択画面を出し、BLE 機器を 1 台選ばせて名前を返すこと。名前を取ったら関連付けを
-// 外す（関連付けを残すこと・機器との通信・ボンディングは範囲外）。MainActivity から生成・委譲される。
-// Rust の `device/android_companion_device.rs` が `MainActivity.requestCompanionDevicePick` を JNI で呼び、
-// 結果を `nativeOnCompanionDeviceResult` で受けて `companion_device::complete_from_os` へ渡す。
+// 外す（関連付けを残すこと・機器との通信・ボンディングは範囲外）。利用者の `MainActivity` には何も書かせない。
+// Rust の `src/android.rs` が static の `pick(Activity, long)` を JNI で呼び、結果を `nativeOnCompanionDeviceResult` で受けて
+// `driver::complete_from_os` へ渡す。Activity の生成・破棄は `CompanionDeviceLifecycle`（非公開 ContentProvider、
+// `FeatureLifecycleProvider` 継承）が `attach` / `detach` で知らせる。Activity ごとの helper は `HELPERS` に持つ
+// （JNI スレッドと UI スレッドの両方から触るので同期化し、Activity が GC されれば項目も消える）。
+// helper が無い（生成前・破棄後）要求は `pick` が false を返し、Rust が失敗で確定する（結果が来ないまま待たせない）。
 // 選択画面を起動する直前に `nativeTryBeginPresent` で Rust 側の期限切れ・差し替えと排他にする。
 //
 // 流れ: pick（JNI スレッド）→ start（UI スレッド。API・機能・位置情報サービス・Bluetooth を検査）→
@@ -41,7 +48,7 @@ import java.lang.ref.WeakReference;
 // disassociate は Rust へ結果を送るより前に行う。外せなければ KIND_INTERNAL（成功にしない）。
 //
 // 結果コードの SSOT は Rust 側 `fandhe_device::companion_device` の契約で、KIND_* は
-// `android_companion_device.rs` の定数と同じ値。期限（表示開始まで）は Rust の単調時計だけが持ち、
+// `android.rs` の定数と同じ値。期限（表示開始まで）は Rust の単調時計だけが持ち、
 // ここには持たない。API 33 ではキャンセルと探索の期限切れを結果コードで区別できない場合があり、
 // 区別できない結果は KIND_CANCELLED に倒す（嘘の成功ではない）。
 //
@@ -77,14 +84,18 @@ final class CompanionDeviceHelper {
 
     private static native void nativeOnCompanionDeviceResult(long requestId, int kind, String name);
 
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, CompanionDeviceHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     // Activity は弱参照で持つ。OS（CompanionDeviceManager）へ渡すコールバックから旧 Activity へ到達させない
     // （GeocodingHelper #714 と同じ方針）。OS 呼び出しに要る Context は Application Context を使う。
     private final WeakReference<ComponentActivity> activityRef;
-    // Application Context は Activity.attach 前に取れない（NPE になる）ため、onCreate 以降の `init` または初回の
-    // `start` で取る。コンストラクタ（MainActivity のフィールド初期化子から呼ばれる）では触らない。
+    // Application Context は Activity.attach 前に取れない（NPE になる）ため、`attach`（onCreate 内）の `init` または初回の
+    // `start` で取る。コンストラクタでは触らない。
     private volatile Context appContext;
     private final RequestTracker request = new RequestTracker();
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`attach`（`onHostCreated`、onCreate 内）で生成する。
     private final ActivityResultLauncher<IntentSenderRequest> launcher;
 
     // 以下は this のロックで守る。
@@ -100,14 +111,40 @@ final class CompanionDeviceHelper {
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private Runnable graceTask;
 
-    CompanionDeviceHelper(ComponentActivity activity) {
+    private CompanionDeviceHelper(ComponentActivity activity) {
         this.activityRef = new WeakReference<>(activity);
         this.launcher = activity.getActivityResultRegistry().register("fandhe:CompanionDeviceHelper:1", activity,
                 new ActivityResultContracts.StartIntentSenderForResult(), this::onActivityResult);
     }
 
-    // MainActivity.onCreate から呼ぶ。Application Context を取る（取得済みなら何もしない）。
-    void init() {
+    // Activity の生成時（`CompanionDeviceLifecycle` から、UI スレッド）。ランチャーを登録し、取り残しを回収する。
+    static void attach(ComponentActivity activity) {
+        CompanionDeviceHelper helper = new CompanionDeviceHelper(activity);
+        HELPERS.put(activity, helper);
+        helper.init();
+    }
+
+    // Activity の破棄時（同上）。保留中の要求を KIND_INTERRUPTED で確定し、記録済みの関連付けを外す。
+    static void detach(Activity activity) {
+        CompanionDeviceHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // JNI スレッドから呼ばれる入口。helper が無い（生成前・破棄後）なら false を返し、Rust が失敗として返す
+    // （結果の native は呼ばれない）。
+    static boolean pick(Activity activity, long id) {
+        CompanionDeviceHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            return false;
+        }
+        helper.doPick(id);
+        return true;
+    }
+
+    // Application Context を取る（取得済みなら何もしない）。
+    private void init() {
         ensureAppContext(activity());
         synchronized (this) {
             sweep();
@@ -127,8 +164,7 @@ final class CompanionDeviceHelper {
         return activityRef.get();
     }
 
-    // JNI スレッドから呼ばれる。
-    void pick(long id) {
+    private void doPick(long id) {
         synchronized (this) {
             request.track(id);
             launchedId = RequestTracker.NONE;
@@ -549,7 +585,7 @@ final class CompanionDeviceHelper {
         }
     }
 
-    synchronized void onDestroy() {
+    private synchronized void onDestroy() {
         destroyed = true;
         long id = request.current();
         if (id != RequestTracker.NONE) {

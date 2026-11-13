@@ -1,9 +1,9 @@
 //! Phase 11 型サンプル「付属機器のペアリング」（親 #143、Issue #740）の effect ドライバ。
 //! `fandhe_core::screens::companion_device_show`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::companion_device::CompanionDevicePicker` に機器選択画面の表示を依頼して、
+//! `crate::contract::CompanionDevicePicker` に機器選択画面の表示を依頼して、
 //! OS 層から届く結果を `CompletionSender` 経由で画面へ返す（`fandhe-gallery` の `screens/registry.rs` の
 //! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約（結果の三値・期限・守る範囲）の SSOT は `fandhe_device::companion_device`。
+//! 契約（結果の三値・期限・守る範囲）の SSOT は 本 crate の `contract`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
 //!
@@ -20,7 +20,7 @@
 //! - [`try_begin_present`]: 選択画面を出す直前に呼ぶ。`false` なら出さない（期限切れ・古い要求・
 //!   中断済み）。`true` を返した要求だけが成功値（選んだ・キャンセル）を返せる
 //! - [`complete_from_os`]: 結果を 1 回だけ送る唯一の受け口。古い要求 id・重複は捨てられる。
-//!   関連付けの解除は呼ぶ前に済ませる（契約は `fandhe_device::companion_device`）
+//!   関連付けの解除は呼ぶ前に済ませる（契約は 本 crate の `contract`）
 //!
 //! # 期限（契約表 3）
 //!
@@ -42,30 +42,31 @@
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::companion_device_show::CompanionDeviceShowState;
-use fandhe_core::screens::companion_device_show::{
-    finish_pick, mark_running, take_request, CoreFailure, CoreOutcome, Phase,
-};
-use fandhe_device::companion_device::{
+use crate::contract::{
     CompanionDeviceFailure, CompanionDeviceOutcome, CompanionDevicePicker, PRESENT_DEADLINE,
 };
+use fandhe_core::screens::companion_device_show::CompanionDeviceShowState;
+use fandhe_core::screens::companion_device_show::{
+    CoreFailure, CoreOutcome, Phase, finish_pick, mark_running, take_request,
+};
 
-use super::request_slot::{poll_and_finish, RequestSlot, POLL_INTERVAL};
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
 
 /// OS 層から届く結果。
 type Outcome = Result<CompanionDeviceOutcome, CompanionDeviceFailure>;
 
 /// 現在のプラットフォームに応じた `CompanionDevicePicker` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn CompanionDevicePicker> {
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_companion_device() -> Arc<dyn CompanionDevicePicker> {
     #[cfg(target_os = "android")]
     {
-        super::android_companion_device::implementation()
+        crate::android::implementation()
     }
     // iOS は保留（モジュール doc 参照）のため、ここに含める。
     #[cfg(not(target_os = "android"))]
     {
-        Arc::new(fandhe_device::companion_device::UnsupportedCompanionDevicePicker)
+        Arc::new(crate::contract::UnsupportedCompanionDevicePicker)
     }
 }
 
@@ -158,11 +159,9 @@ impl Bridge {
         let due = active
             .as_ref()
             .is_some_and(|a| !a.presenting && a.started.elapsed() >= self.deadline);
-        if due {
-            if let Some(a) = active.take() {
-                self.slot
-                    .deliver(a.request_id, Err(CompanionDeviceFailure::TimedOut));
-            }
+        if due && let Some(a) = active.take() {
+            self.slot
+                .deliver(a.request_id, Err(CompanionDeviceFailure::TimedOut));
         }
     }
 
@@ -197,7 +196,7 @@ pub(crate) fn complete_from_os(request_id: u64, result: Outcome) {
 /// 画面状態は `default()`（世代 0）に戻るため、保留が残ると次の要求が発送されず飲み込まれる。
 /// 旧要求の遅延完了は id 不一致で捨てられる（関連付けの解除は OS 層の責務）。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     if let Some(b) = BRIDGE.get() {
         b.reset();
     }
@@ -274,22 +273,34 @@ pub fn companion_device_show_effect(
     sender: &CompletionSender<CompanionDeviceShowState>,
 ) {
     static IMPL: OnceLock<Arc<dyn CompanionDevicePicker>> = OnceLock::new();
-    drive(state, sender, IMPL.get_or_init(platform), bridge());
+    drive(
+        state,
+        sender,
+        IMPL.get_or_init(platform_companion_device),
+        bridge(),
+    );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{DeviceName, UnsupportedCompanionDevicePicker};
     use fandhe_core::screens::companion_device_show::{error_text, request_pick, status_text};
-    use fandhe_device::companion_device::{DeviceName, UnsupportedCompanionDevicePicker};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
 
-    type Rx = mpsc::Receiver<crate::app::Completion<CompanionDeviceShowState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<CompanionDeviceShowState>>;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
 
     fn channel() -> (CompletionSender<CompanionDeviceShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     fn new_bridge(deadline: Duration) -> &'static Bridge {
@@ -445,7 +456,10 @@ mod tests {
     #[test]
     fn fallback_platform_is_unsupported_off_android() {
         #[cfg(not(target_os = "android"))]
-        assert_eq!(platform().pick(1), Err(CompanionDeviceFailure::Unsupported));
+        assert_eq!(
+            platform_companion_device().pick(1),
+            Err(CompanionDeviceFailure::Unsupported)
+        );
     }
 
     #[test]

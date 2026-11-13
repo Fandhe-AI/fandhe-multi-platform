@@ -391,6 +391,10 @@
             android:authorities="${applicationId}.fandhe.screen-brightness"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.CompanionDeviceLifecycle"
+            android:authorities="${applicationId}.fandhe.companion-device"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.WifiConnectLifecycle"
             android:authorities="${applicationId}.fandhe.wifi-connect"
             android:exported="false" />
