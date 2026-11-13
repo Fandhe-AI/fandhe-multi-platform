@@ -1,6 +1,6 @@
 //! Windows 向けスリープ・ロックの通知実装（Issue #810、親 #167）。`device/sleep_lock_events.rs`
 //! （effect ドライバ）の windows 経路から UI スレッドで呼ばれ、契約は
-//! `fandhe_device::sleep_lock_events`。ホストでは写像（`fandhe_device` の純関数）だけをテストし、
+//! `crate::contract`。ホストでは写像（`fandhe_device` の純関数）だけをテストし、
 //! Win32 を呼ぶ部分は Windows ビルドだけ。
 //!
 //! # 方式
@@ -37,7 +37,7 @@
 
 use std::sync::Arc;
 
-use fandhe_device::sleep_lock_events::SleepLockEvents;
+use crate::contract::SleepLockEvents;
 
 /// Windows の `SleepLockEvents` 実装を返す（`device/sleep_lock_events.rs` の dispatch から呼ばれる）。
 pub(crate) fn implementation() -> Arc<dyn SleepLockEvents> {
@@ -46,64 +46,65 @@ pub(crate) fn implementation() -> Arc<dyn SleepLockEvents> {
 
 mod win {
     use std::cell::Cell;
-    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::panic::{AssertUnwindSafe, catch_unwind};
     use std::sync::mpsc::sync_channel;
     use std::thread::JoinHandle;
 
-    use fandhe_device::sleep_lock_events::{
-        event_from_windows, lock_state_from_session_flags, CurrentState, EventSupport, OnSignal,
-        Signal, SleepLockEvents, SubscriptionGuard,
+    use crate::contract::{
+        CurrentState, EventSupport, OnSignal, Signal, SleepLockEvents, SubscriptionGuard,
+        event_from_windows, lock_state_from_session_flags,
     };
-    use fandhe_device::DeviceError;
-    use windows::core::{w, PWSTR};
+    use crate::error::SleepLockEventsError;
     use windows::Win32::Foundation::{
-        GetLastError, ERROR_CLASS_ALREADY_EXISTS, HANDLE, HWND, LPARAM, LRESULT, WPARAM,
+        ERROR_CLASS_ALREADY_EXISTS, GetLastError, HANDLE, HWND, LPARAM, LRESULT, WPARAM,
     };
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::System::Power::{
-        RegisterSuspendResumeNotification, UnregisterSuspendResumeNotification, HPOWERNOTIFY,
+        HPOWERNOTIFY, RegisterSuspendResumeNotification, UnregisterSuspendResumeNotification,
     };
     use windows::Win32::System::RemoteDesktop::{
-        WTSFreeMemory, WTSQuerySessionInformationW, WTSRegisterSessionNotification,
-        WTSSessionInfoEx, WTSUnRegisterSessionNotification, NOTIFY_FOR_THIS_SESSION, WTSINFOEXW,
-        WTS_CURRENT_SESSION,
+        NOTIFY_FOR_THIS_SESSION, WTS_CURRENT_SESSION, WTSFreeMemory, WTSINFOEXW,
+        WTSQuerySessionInformationW, WTSRegisterSessionNotification, WTSSessionInfoEx,
+        WTSUnRegisterSessionNotification,
     };
     use windows::Win32::System::Threading::GetCurrentThreadId;
     use windows::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW,
-        PeekMessageW, PostThreadMessageW, RegisterClassW, TranslateMessage,
-        DEVICE_NOTIFY_WINDOW_HANDLE, MSG, PM_NOREMOVE, WM_APP, WM_POWERBROADCAST,
-        WM_WTSSESSION_CHANGE, WNDCLASSW, WS_EX_TOOLWINDOW, WS_OVERLAPPEDWINDOW,
+        CreateWindowExW, DEVICE_NOTIFY_WINDOW_HANDLE, DefWindowProcW, DestroyWindow,
+        DispatchMessageW, GetMessageW, MSG, PM_NOREMOVE, PeekMessageW, PostThreadMessageW,
+        RegisterClassW, TranslateMessage, WM_APP, WM_POWERBROADCAST, WM_WTSSESSION_CHANGE,
+        WNDCLASSW, WS_EX_TOOLWINDOW, WS_OVERLAPPEDWINDOW,
     };
+    use windows::core::{PWSTR, w};
 
-    use super::super::sleep_lock_events::{fire, register, unregister};
+    use crate::driver::{fire, register, unregister};
 
     /// `WM_APP + 1`。UI 側から専用スレッドへ停止を依頼するメッセージ。
     const WM_APP_STOP: u32 = WM_APP + 1;
 
     // 契約側の自前定数が windows クレートの値と一致していることをビルド時に確かめる。
-    const _: () =
-        assert!(WM_WTSSESSION_CHANGE == fandhe_device::sleep_lock_events::WM_WTSSESSION_CHANGE);
-    const _: () = assert!(WM_POWERBROADCAST == fandhe_device::sleep_lock_events::WM_POWERBROADCAST);
+    const _: () = assert!(WM_WTSSESSION_CHANGE == crate::contract::WM_WTSSESSION_CHANGE);
+    const _: () = assert!(WM_POWERBROADCAST == crate::contract::WM_POWERBROADCAST);
     const _: () = assert!(
         windows::Win32::UI::WindowsAndMessaging::WTS_SESSION_LOCK as usize
-            == fandhe_device::sleep_lock_events::WTS_SESSION_LOCK
+            == crate::contract::WTS_SESSION_LOCK
     );
     const _: () = assert!(
         windows::Win32::UI::WindowsAndMessaging::WTS_SESSION_UNLOCK as usize
-            == fandhe_device::sleep_lock_events::WTS_SESSION_UNLOCK
+            == crate::contract::WTS_SESSION_UNLOCK
     );
     const _: () = assert!(
         windows::Win32::UI::WindowsAndMessaging::PBT_APMSUSPEND as usize
-            == fandhe_device::sleep_lock_events::PBT_APMSUSPEND
+            == crate::contract::PBT_APMSUSPEND
     );
     const _: () = assert!(
         windows::Win32::UI::WindowsAndMessaging::PBT_APMRESUMEAUTOMATIC as usize
-            == fandhe_device::sleep_lock_events::PBT_APMRESUMEAUTOMATIC
+            == crate::contract::PBT_APMRESUMEAUTOMATIC
     );
 
-    const START_FAILED: DeviceError = DeviceError::Internal("sleep_lock_events start");
-    const READ_FAILED: DeviceError = DeviceError::Internal("sleep_lock_events read");
+    const START_FAILED: SleepLockEventsError =
+        SleepLockEventsError::Internal("sleep_lock_events start");
+    const READ_FAILED: SleepLockEventsError =
+        SleepLockEventsError::Internal("sleep_lock_events read");
 
     thread_local! {
         /// このスレッドの購読 id（ウィンドウプロシージャが `fire` の宛先に使う）。
@@ -123,7 +124,10 @@ mod win {
             }
         }
 
-        fn start(&self, on_signal: OnSignal) -> Result<Box<dyn SubscriptionGuard>, DeviceError> {
+        fn start(
+            &self,
+            on_signal: OnSignal,
+        ) -> Result<Box<dyn SubscriptionGuard>, SleepLockEventsError> {
             let id = register(on_signal);
             let (ready_tx, ready_rx) = sync_channel::<Result<u32, ()>>(1);
             let join = match std::thread::Builder::new()
@@ -152,7 +156,7 @@ mod win {
         }
 
         #[allow(unsafe_code)]
-        fn read_current(&self) -> Result<CurrentState, DeviceError> {
+        fn read_current(&self) -> Result<CurrentState, SleepLockEventsError> {
             let mut buf = PWSTR::null();
             let mut bytes = 0u32;
             // SAFETY: `buf` と `bytes` は有効なローカル変数への書き込み先。サーバーは NULL（ローカル）、

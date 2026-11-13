@@ -331,7 +331,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "sleep_lock_events_show" => fandhe_core::screens::sleep_lock_events_show::current_screen,
-    fandhe_egui_proxy::device::sleep_lock_events::sleep_lock_events_show_effect,
+    fandhe_cap_sleep_lock_events::sleep_lock_events_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "removable_storage_show" => fandhe_core::screens::removable_storage_show::current_screen,

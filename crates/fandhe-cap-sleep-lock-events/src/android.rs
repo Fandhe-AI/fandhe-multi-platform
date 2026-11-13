@@ -1,15 +1,15 @@
 //! Android 向けスリープ・ロックの通知実装（Issue #811、親 #167。共通コアと macOS / Windows は #810）。
-//! `device/sleep_lock_events.rs::platform_sleep_lock_events` の android 経路から UI スレッドで呼ばれ、
+//! `driver::platform_sleep_lock_events` の android 経路から UI スレッドで呼ばれ、
 //! 画面の消灯・点灯と解除を Java の `SleepLockEventsHelper`（`BroadcastReceiver`）経由で受け、
 //! 今の状態を `PowerManager.isInteractive` / `KeyguardManager.isKeyguardLocked` で読む。契約は
-//! `fandhe_device::sleep_lock_events`。
+//! `crate::contract`。
 //!
 //! # 結果コード（SSOT は Java 側 `SleepLockEventsHelper`）
 //!
-//! - `MainActivity.sleepLockEventsStart(long)` の戻り値: 0 = 受け付けた / 1 = 失敗。未知の値は失敗
+//! - `SleepLockEventsHelper.start(Activity, long)` の戻り値: 0 = 受け付けた / 1 = 失敗。未知の値は失敗
 //! - `nativeOnSleepLockEvent(id, code)` の code: 0 = `ACTION_SCREEN_OFF` / 1 = `ACTION_SCREEN_ON` /
 //!   2 = `ACTION_USER_PRESENT`。未知の値は捨てる（出来事を捏造せず、失敗にもしない）
-//! - `MainActivity.sleepLockEventsRead()` の戻り値: 負 = 失敗。bit 0-1 が画面（0 = 消灯 / 1 = 点灯 /
+//! - `SleepLockEventsHelper.read(Context)` の戻り値: 負 = 失敗。bit 0-1 が画面（0 = 消灯 / 1 = 点灯 /
 //!   2 = 不明）、bit 2-3 がロック（0 = 解除 / 1 = ロック中 / 2 = 不明）。規定外の値は失敗
 //!
 //! # OS を正にする範囲
@@ -42,24 +42,22 @@
 use std::sync::Arc;
 
 #[cfg(not(target_os = "android"))]
-use fandhe_device::sleep_lock_events::UnsupportedSleepLockEvents;
-use fandhe_device::sleep_lock_events::{
-    CurrentState, LockState, ScreenState, SleepLockEvent, SleepLockEvents,
-};
+use crate::contract::UnsupportedSleepLockEvents;
+use crate::contract::{CurrentState, LockState, ScreenState, SleepLockEvent, SleepLockEvents};
 #[cfg(target_os = "android")]
-use fandhe_device::sleep_lock_events::{EventSupport, OnSignal, Signal, SubscriptionGuard};
-use fandhe_device::DeviceError;
+use crate::contract::{EventSupport, OnSignal, Signal, SubscriptionGuard};
+use crate::error::SleepLockEventsError;
 
 /// `sleepLockEventsStart` の成功コード（SSOT は Java 側 `SleepLockEventsHelper.START_OK`）。
 const START_OK: i32 = 0;
 
 /// 開始の結果コードを写像する。未知の値は失敗で、成功へは倒さない。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
-fn decode_start(code: i32) -> Result<(), DeviceError> {
+fn decode_start(code: i32) -> Result<(), SleepLockEventsError> {
     if code == START_OK {
         Ok(())
     } else {
-        Err(DeviceError::Internal("sleep_lock_events start"))
+        Err(SleepLockEventsError::Internal("sleep_lock_events start"))
     }
 }
 
@@ -77,8 +75,8 @@ fn decode_event(code: i32) -> Option<SleepLockEvent> {
 
 /// `sleepLockEventsRead` の戻り値を今の状態へ写像する。負の値・規定外のフィールドは失敗。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
-fn decode_current(raw: i32) -> Result<CurrentState, DeviceError> {
-    let fail = DeviceError::Internal("sleep_lock_events read");
+fn decode_current(raw: i32) -> Result<CurrentState, SleepLockEventsError> {
+    let fail = SleepLockEventsError::Internal("sleep_lock_events read");
     if raw < 0 {
         return Err(fail);
     }
@@ -113,9 +111,9 @@ impl SubscriptionGuard for AndroidGuard {}
 impl Drop for AndroidGuard {
     fn drop(&mut self) {
         // 先に登録を外し、以後の遅れた通知を捨てさせてから Java のレシーバーを外す。
-        super::sleep_lock_events::unregister(self.id);
+        crate::driver::unregister(self.id);
         // Java の onDestroy が先に片付けている場合の失敗は無視してよい（冪等）。
-        let _ = call_activity(Call::Stop(self.id));
+        let _ = call_helper(Call::Stop(self.id));
     }
 }
 
@@ -133,24 +131,27 @@ impl SleepLockEvents for AndroidSleepLockEvents {
         }
     }
 
-    fn start(&self, on_signal: OnSignal) -> Result<Box<dyn SubscriptionGuard>, DeviceError> {
-        let id = super::sleep_lock_events::register(on_signal);
-        let result = match call_activity(Call::Start(id)) {
+    fn start(
+        &self,
+        on_signal: OnSignal,
+    ) -> Result<Box<dyn SubscriptionGuard>, SleepLockEventsError> {
+        let id = crate::driver::register(on_signal);
+        let result = match call_helper(Call::Start(id)) {
             Some(code) => decode_start(code),
-            None => Err(DeviceError::Internal("sleep_lock_events start")),
+            None => Err(SleepLockEventsError::Internal("sleep_lock_events start")),
         };
         if let Err(e) = result {
-            super::sleep_lock_events::unregister(id);
+            crate::driver::unregister(id);
             return Err(e);
         }
         Ok(Box::new(AndroidGuard { id }))
     }
 
-    fn read_current(&self) -> Result<CurrentState, DeviceError> {
+    fn read_current(&self) -> Result<CurrentState, SleepLockEventsError> {
         // 起動直後の一時状態を恒久的な「非対応」にしないため、Unsupported にはしない。
-        match call_activity(Call::Read) {
+        match call_helper(Call::Read) {
             Some(raw) => decode_current(raw),
-            None => Err(DeviceError::Internal("sleep_lock_events read")),
+            None => Err(SleepLockEventsError::Internal("sleep_lock_events read")),
         }
     }
 }
@@ -163,49 +164,53 @@ enum Call {
     Read,
 }
 
-/// `MainActivity.sleepLockEventsStart(long)`（戻り値は結果コード）/ `sleepLockEventsStop(long)` /
-/// `sleepLockEventsRead()`（戻り値は状態）を JNI で呼ぶ。`None` は呼び出し失敗。
-/// `unsafe` 2 箇所は `android_midi.rs::call_activity` と同一の根拠。
+/// `SleepLockEventsHelper` の static メソッド `start(Activity, long)`（戻り値は結果コード）/
+/// `stop(Activity, long)` / `read(Context)`（戻り値は状態）を JNI で呼ぶ。`None` は呼び出し失敗。
+/// クラスは Activity の class loader で解決する（`fandhe_platform_android::with_activity_class`）。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
-fn call_activity(call: Call) -> Option<i32> {
-    use super::android::JniCallFailed;
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<i32, JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        match call {
-            Call::Start(id) => Ok(env
-                .call_method(
-                    &activity,
-                    jni::jni_str!("sleepLockEventsStart"),
-                    jni::jni_sig!((long) -> int),
-                    &[jni::objects::JValue::Long(id as jni::sys::jlong)],
-                )?
-                .i()?),
-            Call::Stop(id) => {
-                env.call_method(
-                    &activity,
-                    jni::jni_str!("sleepLockEventsStop"),
-                    jni::jni_sig!((long) -> ()),
-                    &[jni::objects::JValue::Long(id as jni::sys::jlong)],
-                )?;
-                Ok(0)
+fn call_helper(call: Call) -> Option<i32> {
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    use jni::objects::JValue;
+    let app = android_app()?;
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.SleepLockEventsHelper"),
+        |env, activity, class| -> Result<i32, JniCallFailed> {
+            match call {
+                Call::Start(id) => Ok(env
+                    .call_static_method(
+                        class,
+                        jni::jni_str!("start"),
+                        jni::jni_sig!((android.app.Activity, long) -> int),
+                        &[
+                            JValue::Object(activity),
+                            JValue::Long(id as jni::sys::jlong),
+                        ],
+                    )?
+                    .i()?),
+                Call::Stop(id) => {
+                    env.call_static_method(
+                        class,
+                        jni::jni_str!("stop"),
+                        jni::jni_sig!((android.app.Activity, long) -> ()),
+                        &[
+                            JValue::Object(activity),
+                            JValue::Long(id as jni::sys::jlong),
+                        ],
+                    )?;
+                    Ok(0)
+                }
+                Call::Read => Ok(env
+                    .call_static_method(
+                        class,
+                        jni::jni_str!("read"),
+                        jni::jni_sig!((android.content.Context) -> int),
+                        &[JValue::Object(activity)],
+                    )?
+                    .i()?),
             }
-            Call::Read => Ok(env
-                .call_method(
-                    &activity,
-                    jni::jni_str!("sleepLockEventsRead"),
-                    jni::jni_sig!(() -> int),
-                    &[],
-                )?
-                .i()?),
-        }
-    })
+        },
+    )
     .ok()
 }
 
@@ -218,7 +223,7 @@ fn call_activity(call: Call) -> Option<i32> {
 /// 他シンボルと衝突しない（既存の JNI エクスポートと同じ根拠）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_SleepLockEventsHelper_nativeOnSleepLockEvent<
     'caller,
 >(
@@ -228,17 +233,17 @@ extern "system" fn Java_com_fandhe_platform_SleepLockEventsHelper_nativeOnSleepL
     code: jni::sys::jint,
 ) {
     if let Some(event) = decode_event(code) {
-        super::sleep_lock_events::fire(id as u64, Signal::Event(event));
+        crate::driver::fire(id as u64, Signal::Event(event));
     }
 }
 
-/// Android の `SleepLockEvents` 実装を返す（`device/sleep_lock_events.rs` の dispatch から呼ばれる）。
+/// Android の `SleepLockEvents` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn SleepLockEvents> {
     Arc::new(AndroidSleepLockEvents)
 }
 
-/// `device.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形。
+/// `lib.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形。
 /// dispatch は Android でしか呼ばない。非対応を返し、成功へは倒さない。
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
@@ -255,11 +260,11 @@ mod tests {
         let imp = implementation();
         assert!(matches!(
             imp.start(Arc::new(|_| {})),
-            Err(DeviceError::Unsupported("sleep_lock_events"))
+            Err(SleepLockEventsError::Unsupported("sleep_lock_events"))
         ));
         assert!(matches!(
             imp.read_current(),
-            Err(DeviceError::Unsupported("sleep_lock_events"))
+            Err(SleepLockEventsError::Unsupported("sleep_lock_events"))
         ));
     }
 
@@ -268,7 +273,7 @@ mod tests {
         assert!(decode_start(0).is_ok());
         assert!(matches!(
             decode_start(1),
-            Err(DeviceError::Internal("sleep_lock_events start"))
+            Err(SleepLockEventsError::Internal("sleep_lock_events start"))
         ));
         assert!(decode_start(-1).is_err());
         assert!(decode_start(99).is_err());

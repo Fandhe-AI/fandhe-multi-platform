@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #167、Issue #810）: スリープ・画面の消灯と点灯・ロックと解除の
-//! 出来事を OS の通知で受け取る契約。`fandhe-egui-proxy` の `device/sleep_lock_events.rs`
+//! 出来事を OS の通知で受け取る契約。本 crate の `driver`
 //! （effect ドライバ）が [`SleepLockEvents::start`] で購読を開始し、各 OS 実装（macOS・Windows: #810、
 //! Android: #811）が本トレイトを実装する。iOS は対応表で保留（`UnsupportedSleepLockEvents`）。Web は `fandhe-web-dom` の
 //! `sleep_lock_events` が本トレイトを通らずに同じ結果の種類で実装する（ブラウザの Promise・イベントは
@@ -51,7 +51,7 @@
 
 use std::sync::Arc;
 
-use crate::DeviceError;
+use crate::error::SleepLockEventsError;
 
 /// 受け取る出来事。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -172,10 +172,13 @@ pub trait SleepLockEvents: Send + Sync {
     fn support(&self) -> EventSupport;
 
     /// 購読を開始する。失敗時は OS 資源を残さない。
-    fn start(&self, on_signal: OnSignal) -> Result<Box<dyn SubscriptionGuard>, DeviceError>;
+    fn start(
+        &self,
+        on_signal: OnSignal,
+    ) -> Result<Box<dyn SubscriptionGuard>, SleepLockEventsError>;
 
     /// 今の状態を OS へ問う（UI スレッドから同期で呼ぶ）。アプリ内の記憶から作らない。
-    fn read_current(&self) -> Result<CurrentState, DeviceError>;
+    fn read_current(&self) -> Result<CurrentState, SleepLockEventsError>;
 }
 
 /// 非対応環境の実装。成功へ倒さない。
@@ -186,12 +189,15 @@ impl SleepLockEvents for UnsupportedSleepLockEvents {
         EventSupport::NONE
     }
 
-    fn start(&self, _on_signal: OnSignal) -> Result<Box<dyn SubscriptionGuard>, DeviceError> {
-        Err(DeviceError::Unsupported("sleep_lock_events"))
+    fn start(
+        &self,
+        _on_signal: OnSignal,
+    ) -> Result<Box<dyn SubscriptionGuard>, SleepLockEventsError> {
+        Err(SleepLockEventsError::Unsupported("sleep_lock_events"))
     }
 
-    fn read_current(&self) -> Result<CurrentState, DeviceError> {
-        Err(DeviceError::Unsupported("sleep_lock_events"))
+    fn read_current(&self) -> Result<CurrentState, SleepLockEventsError> {
+        Err(SleepLockEventsError::Unsupported("sleep_lock_events"))
     }
 }
 
@@ -417,11 +423,11 @@ mod tests {
         assert_eq!(u.support(), EventSupport::NONE);
         assert!(matches!(
             u.start(Arc::new(|_| {})),
-            Err(DeviceError::Unsupported("sleep_lock_events"))
+            Err(SleepLockEventsError::Unsupported("sleep_lock_events"))
         ));
         assert!(matches!(
             u.read_current(),
-            Err(DeviceError::Unsupported("sleep_lock_events"))
+            Err(SleepLockEventsError::Unsupported("sleep_lock_events"))
         ));
     }
 }

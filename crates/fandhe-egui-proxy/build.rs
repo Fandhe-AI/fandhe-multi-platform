@@ -595,15 +595,6 @@ fn compile_macos_memory_pressure() {
     compile_objc("macos/fandhe_macos_memory_pressure.m", &["Foundation"]);
 }
 
-/// `macos/fandhe_macos_sleep_lock_events.m` を `cc` でコンパイルする（Issue #810）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_sleep_lock_events.rs` が使う）。
-fn compile_macos_sleep_lock_events() {
-    compile_objc(
-        "macos/fandhe_macos_sleep_lock_events.m",
-        &["AppKit", "Foundation"],
-    );
-}
-
 /// `macos/fandhe_macos_removable_storage.m` を `cc` でコンパイルする（Issue #858）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_removable_storage.rs` が使う）。
 fn compile_macos_removable_storage() {
@@ -1120,8 +1111,6 @@ fn build_macos() {
     compile_apple_file_association();
     // `apple/fandhe_apple_now_playing.m`（Issue #381）。iOS 分岐と共用する。MediaPlayer を使う。
     compile_apple_now_playing();
-    // `macos/fandhe_macos_sleep_lock_events.m`（Issue #810）も macOS 専用。
-    compile_macos_sleep_lock_events();
     // `macos/fandhe_macos_app_lifecycle.m`（Issue #893）も macOS 専用。
     compile_macos_app_lifecycle();
     // `macos/fandhe_macos_memory_pressure.m`（Issue #911）も macOS 専用。

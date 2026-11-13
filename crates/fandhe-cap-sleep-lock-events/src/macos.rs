@@ -1,13 +1,13 @@
 //! macOS 向けスリープ・ロックの通知実装（Issue #810）。`macos/fandhe_macos_sleep_lock_events.m`
 //! （NSWorkspace の通知センター。`build.rs` が macOS 分岐で feature `device` 有効時にコンパイルする）を
 //! `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
-//! `device/sleep_lock_events.rs` の macOS 経路から UI スレッドで呼ばれ、契約は
-//! `fandhe_device::sleep_lock_events`。
+//! `driver` の macOS 経路から UI スレッドで呼ばれ、契約は
+//! `crate::contract`。
 //!
 //! # 方式
 //!
 //! OS 資源は `id` で `.m` が所有し、Rust へは生ポインタを渡さない。通知は `.m` が
-//! `fandhe_rust_sleep_lock_events_fire`（`device/sleep_lock_events.rs`）経由で `id` の登録表を引いて
+//! `fandhe_rust_sleep_lock_events_fire`（`driver`）経由で `id` の登録表を引いて
 //! 出来事にする。停止（[`MacGuard`] の drop）は「登録解除 → `.m` の observer 解除」の順。
 //!
 //! # OS を正にする範囲
@@ -23,18 +23,28 @@
 
 use std::sync::Arc;
 
-use fandhe_device::sleep_lock_events::{
-    CurrentState, EventSupport, OnSignal, SleepLockEvents, SubscriptionGuard,
-};
-use fandhe_device::DeviceError;
+use crate::contract::{CurrentState, EventSupport, OnSignal, SleepLockEvents, SubscriptionGuard};
+use crate::error::SleepLockEventsError;
 
-use super::sleep_lock_events::{register, unregister};
+use crate::contract::Signal;
+use crate::driver::{fire, register, unregister};
+
+/// `.m`（macOS）のコールバックから呼ばれる受け口。`code` は `event_from_apple_code` の値。
+/// 未知のコードは捨てる（出来事を捏造せず、失敗にもしない）。
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+extern "C" fn fandhe_rust_sleep_lock_events_fire(id: u64, code: i32) {
+    if let Some(event) = crate::contract::event_from_apple_code(code) {
+        fire(id, Signal::Event(event));
+    }
+}
 
 mod ffi {
     // SAFETY: `macos/fandhe_macos_sleep_lock_events.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_sleep_lock_events_start(id: u64) -> i32;
         fn fandhe_macos_sleep_lock_events_stop(id: u64);
     }
@@ -81,16 +91,19 @@ impl SleepLockEvents for MacSleepLockEvents {
         }
     }
 
-    fn start(&self, on_signal: OnSignal) -> Result<Box<dyn SubscriptionGuard>, DeviceError> {
+    fn start(
+        &self,
+        on_signal: OnSignal,
+    ) -> Result<Box<dyn SubscriptionGuard>, SleepLockEventsError> {
         let id = register(on_signal);
         if !ffi::start(id) {
             unregister(id);
-            return Err(DeviceError::Internal("sleep_lock_events start"));
+            return Err(SleepLockEventsError::Internal("sleep_lock_events start"));
         }
         Ok(Box::new(MacGuard { id }))
     }
 
-    fn read_current(&self) -> Result<CurrentState, DeviceError> {
+    fn read_current(&self) -> Result<CurrentState, SleepLockEventsError> {
         Ok(CurrentState {
             lock: None,
             screen: None,
@@ -98,7 +111,7 @@ impl SleepLockEvents for MacSleepLockEvents {
     }
 }
 
-/// macOS の `SleepLockEvents` 実装を返す（`device/sleep_lock_events.rs` の dispatch から呼ばれる）。
+/// macOS の `SleepLockEvents` 実装を返す（`driver` の dispatch から呼ばれる）。
 pub(crate) fn implementation() -> Arc<dyn SleepLockEvents> {
     Arc::new(MacSleepLockEvents)
 }

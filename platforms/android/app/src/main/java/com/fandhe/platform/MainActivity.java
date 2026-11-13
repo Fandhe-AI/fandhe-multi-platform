@@ -559,22 +559,6 @@ public class MainActivity extends GameActivity {
         return SpotlightIndexHelper.removeAll(getApplicationContext(), domain, remainingMs);
     }
 
-    // スリープ・画面ロック・解除の通知（Issue #811）。実装は `SleepLockEventsHelper`。
-    // Rust の `android_sleep_lock_events.rs` が JNI で呼ぶ。
-    private final SleepLockEventsHelper sleepLockEventsHelper = new SleepLockEventsHelper(this);
-
-    int sleepLockEventsStart(long id) {
-        return sleepLockEventsHelper.start(id);
-    }
-
-    void sleepLockEventsStop(long id) {
-        sleepLockEventsHelper.stop(id);
-    }
-
-    int sleepLockEventsRead() {
-        return sleepLockEventsHelper.read();
-    }
-
     // アプリの前面・背面の通知（Issue #895）。実装は `AppLifecycleHelper`。
     // Rust の `android_app_lifecycle.rs` が JNI で呼ぶ。
     private final AppLifecycleHelper appLifecycleHelper = new AppLifecycleHelper(this);
@@ -4129,7 +4113,6 @@ public class MainActivity extends GameActivity {
         motionRawSensorsHelper.onDestroy();
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
-        sleepLockEventsHelper.onDestroy();
         appLifecycleHelper.onDestroy();
         memoryPressureHelper.onDestroy();
         removableStorageHelper.onDestroy();

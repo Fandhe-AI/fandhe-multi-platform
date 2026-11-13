@@ -25,7 +25,7 @@
 #import <Foundation/Foundation.h>
 #include <stdint.h>
 
-// Rust 側の受け口（device/sleep_lock_events.rs）。
+// Rust 側の受け口（crates/fandhe-cap-sleep-lock-events/src/macos.rs）。
 extern void fandhe_rust_sleep_lock_events_fire(uint64_t sub_id, int32_t code);
 
 static NSMutableDictionary<NSNumber *, NSArray *> *g_observers;

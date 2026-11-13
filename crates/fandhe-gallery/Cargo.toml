@@ -60,6 +60,7 @@ device = [
   "dep:fandhe-cap-serial-port",
   "dep:fandhe-cap-share-receive",
   "dep:fandhe-cap-share-sheet",
+  "dep:fandhe-cap-sleep-lock-events",
   "dep:fandhe-cap-smart-home",
   "dep:fandhe-cap-sound-classification",
   "dep:fandhe-cap-spell-check",
@@ -103,11 +104,11 @@ NSMotionUsageDescription = "型サンプル「歩数」「気圧」「行動認�
 NSLocalNetworkUsageDescription = "型サンプル「LAN のサービス探索」「近くの端末との直接通信」「UWB による距離」の動作確認に使います"
 NSNearbyInteractionUsageDescription = "型サンプル「UWB による距離」で、近くの端末までの距離を測るために使います"
 NSHomeKitUsageDescription = "型サンプル「スマートホーム操作」の動作確認に使います"
-NSMicrophoneUsageDescription = "型サンプル「環境音の分類」の動作確認に使います"
+NSMicrophoneUsageDescription = "型サンプル「マイク録音」「音声認識」「動画の撮影」の動作確認に使います"
 
 [package.metadata.fandhe-app.macos.usage-descriptions]
 NSCalendarsWriteOnlyAccessUsageDescription = "型サンプル「予定の追加」の動作確認に使います"
-NSMicrophoneUsageDescription = "型サンプル「環境音の分類」の動作確認に使います"
+NSMicrophoneUsageDescription = "型サンプル「マイク録音」の動作確認に使います"
 
 [build-dependencies]
 # Apple のリンク指定（弱リンク・rpath・Info.plist 埋め込み）を `fandhe-egui-proxy` から受け取って出し直す。
@@ -166,6 +167,7 @@ fandhe-cap-screen-wake-lock = { path = "../fandhe-cap-screen-wake-lock", optiona
 fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port", optional = true }
 fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive", optional = true }
 fandhe-cap-share-sheet = { path = "../fandhe-cap-share-sheet", optional = true }
+fandhe-cap-sleep-lock-events = { path = "../fandhe-cap-sleep-lock-events", optional = true }
 fandhe-cap-smart-home = { path = "../fandhe-cap-smart-home", optional = true }
 fandhe-cap-sound-classification = { path = "../fandhe-cap-sound-classification", optional = true }
 fandhe-cap-spell-check = { path = "../fandhe-cap-spell-check", optional = true }

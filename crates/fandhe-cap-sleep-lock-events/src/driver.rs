@@ -1,8 +1,8 @@
 //! Phase 11 の拡充ループ（親 #167）型サンプル「スリープ・ロックの通知」（Issue #810）の effect ドライバ。
 //! `fandhe_core::screens::sleep_lock_events_show`（端末依存ゼロ）の要求を `take_init` / `take_start` で
-//! 観測し、`fandhe_device::sleep_lock_events::SleepLockEvents` を呼んで、結果を `CompletionSender` 経由で
+//! 観測し、`crate::contract::SleepLockEvents` を呼んで、結果を `CompletionSender` 経由で
 //! 注入する（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる
-//! 契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::sleep_lock_events`。
+//! 契約、`app::EffectFn` 参照）。契約の SSOT は本 crate の `contract`。
 //!
 //! # OS 別実装の差し込み口
 //!
@@ -27,35 +27,36 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use fandhe_core::screens::sleep_lock_events_show::{
-    apply_init, apply_snapshot, finish_start, mark_failed, take_init, take_start, CurrentView,
-    EventKind, LockView, Phase, ScreenView, SleepLockEventsShowState, StartFailure, SupportView,
-};
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "android")))]
-use fandhe_device::sleep_lock_events::UnsupportedSleepLockEvents;
-use fandhe_device::sleep_lock_events::{
+use crate::contract::UnsupportedSleepLockEvents;
+use crate::contract::{
     CurrentState, EventLog, EventSupport, LockState, OnSignal, ScreenState, Signal, SleepLockEvent,
     SleepLockEvents, SubscriptionGuard,
 };
-use fandhe_device::DeviceError;
+use crate::error::SleepLockEventsError;
+use fandhe_core::screens::sleep_lock_events_show::{
+    CurrentView, EventKind, LockView, Phase, ScreenView, SleepLockEventsShowState, StartFailure,
+    SupportView, apply_init, apply_snapshot, finish_start, mark_failed, take_init, take_start,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 type Sender = CompletionSender<SleepLockEventsShowState>;
 
 /// 現在のプラットフォームに応じた `SleepLockEvents` 実装を返す（状態を持たないため呼び出しごとに構築）。
-fn platform_sleep_lock_events() -> Arc<dyn SleepLockEvents> {
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_sleep_lock_events() -> Arc<dyn SleepLockEvents> {
     #[cfg(target_os = "windows")]
     {
-        super::windows_sleep_lock_events::implementation()
+        crate::windows::implementation()
     }
     #[cfg(target_os = "macos")]
     {
-        super::macos_sleep_lock_events::implementation()
+        crate::macos::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_sleep_lock_events::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "android")))]
     {
@@ -107,17 +108,6 @@ pub(crate) fn fire(id: u64, signal: Signal) {
     }
 }
 
-/// `.m`（macOS）のコールバックから呼ばれる受け口。`code` は `event_from_apple_code` の値。
-/// 未知のコードは捨てる（出来事を捏造せず、失敗にもしない）。
-#[cfg(target_os = "macos")]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "C" fn fandhe_rust_sleep_lock_events_fire(id: u64, code: i32) {
-    if let Some(event) = fandhe_device::sleep_lock_events::event_from_apple_code(code) {
-        fire(id, Signal::Event(event));
-    }
-}
-
 // ---- 写像 ----------------------------------------------------------------------------------
 
 fn kind_from_device(e: SleepLockEvent) -> EventKind {
@@ -141,7 +131,10 @@ fn support_view(s: EventSupport) -> SupportView {
 
 /// OS の読み出し結果を表示用へ写す。読めない OS は `NotAvailable`、読み取りの失敗は `ReadFailed`
 /// （「ロックされていない」へ畳まない）。
-fn current_view(support: EventSupport, result: Result<CurrentState, DeviceError>) -> CurrentView {
+fn current_view(
+    support: EventSupport,
+    result: Result<CurrentState, SleepLockEventsError>,
+) -> CurrentView {
     match result {
         Ok(c) => CurrentView {
             lock: match c.lock {
@@ -222,11 +215,7 @@ fn drive(
         let keep = g
             .as_ref()
             .is_some_and(|a| state.phase != Phase::Idle && state.generation == a.generation);
-        if keep {
-            None
-        } else {
-            g.take()
-        }
+        if keep { None } else { g.take() }
     };
     drop(stale); // 解除の待ちはロックの外。
 
@@ -241,10 +230,10 @@ fn drive(
     }
 
     // 3. 開始（完了が届くまでの再実行で二重に起こさない）。
-    if let Some(generation) = take_start(state) {
-        if lock(active).is_none() {
-            do_start(sender, active, imp, generation);
-        }
+    if let Some(generation) = take_start(state)
+        && lock(active).is_none()
+    {
+        do_start(sender, active, imp, generation);
     }
 
     // 4. 取り出し: 列を受信順に記録し、OS へ今の状態を問い直す。
@@ -321,7 +310,7 @@ fn do_start(
         }
         Err(e) => {
             let failure = match e {
-                DeviceError::Unsupported(_) => StartFailure::Unsupported,
+                SleepLockEventsError::Unsupported(_) => StartFailure::Unsupported,
                 _ => StartFailure::Failed,
             };
             let _ = sender.send(Box::new(move |s: &mut SleepLockEventsShowState| {
@@ -357,7 +346,7 @@ pub fn sleep_lock_events_show_effect(state: &SleepLockEventsShowState, sender: &
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::sleep_lock_events_show::{start, stop, Outcome, RUNTIME_FAILED_TEXT};
+    use fandhe_core::screens::sleep_lock_events_show::{Outcome, RUNTIME_FAILED_TEXT, start, stop};
     use std::sync::atomic::AtomicUsize;
     use std::sync::mpsc;
 
@@ -371,7 +360,7 @@ mod tests {
 
     struct Fake {
         support: EventSupport,
-        fail: Option<DeviceError>,
+        fail: Option<SleepLockEventsError>,
         read_fails: bool,
         cb: Mutex<Option<OnSignal>>,
         drops: Arc<AtomicUsize>,
@@ -401,20 +390,25 @@ mod tests {
         fn support(&self) -> EventSupport {
             self.support
         }
-        fn start(&self, on_signal: OnSignal) -> Result<Box<dyn SubscriptionGuard>, DeviceError> {
+        fn start(
+            &self,
+            on_signal: OnSignal,
+        ) -> Result<Box<dyn SubscriptionGuard>, SleepLockEventsError> {
             self.starts.fetch_add(1, Ordering::SeqCst);
             match &self.fail {
-                Some(DeviceError::Unsupported(n)) => Err(DeviceError::Unsupported(n)),
-                Some(_) => Err(DeviceError::Internal("sleep_lock_events start")),
+                Some(SleepLockEventsError::Unsupported(n)) => {
+                    Err(SleepLockEventsError::Unsupported(n))
+                }
+                Some(_) => Err(SleepLockEventsError::Internal("sleep_lock_events start")),
                 None => {
                     *lock(&self.cb) = Some(on_signal);
                     Ok(Box::new(FakeGuard(self.drops.clone())))
                 }
             }
         }
-        fn read_current(&self) -> Result<CurrentState, DeviceError> {
+        fn read_current(&self) -> Result<CurrentState, SleepLockEventsError> {
             if self.read_fails {
-                return Err(DeviceError::Internal("sleep_lock_events read"));
+                return Err(SleepLockEventsError::Internal("sleep_lock_events read"));
             }
             Ok(CurrentState {
                 lock: Some(LockState::Unlocked),
@@ -428,7 +422,13 @@ mod tests {
         fake: Fake,
         state: SleepLockEventsShowState,
         sender: Sender,
-        rx: mpsc::Receiver<crate::app::Completion<SleepLockEventsShowState>>,
+        rx: mpsc::Receiver<fandhe_runtime::Completion<SleepLockEventsShowState>>,
+    }
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
     }
     impl Env {
         fn new(fake: Fake) -> Self {
@@ -437,7 +437,7 @@ mod tests {
                 active: Mutex::new(None),
                 fake,
                 state: SleepLockEventsShowState::default(),
-                sender: crate::app::egui_sender(tx, egui::Context::default()),
+                sender: CompletionSender::new(tx, Arc::new(NoopWaker)),
                 rx,
             }
         }
@@ -472,7 +472,7 @@ mod tests {
     #[test]
     fn start_failure_leaves_nothing() {
         let mut fake = Fake::new();
-        fake.fail = Some(DeviceError::Internal("x"));
+        fake.fail = Some(SleepLockEventsError::Internal("x"));
         let mut e = Env::new(fake);
         start(&mut e.state);
         e.tick();
@@ -484,7 +484,7 @@ mod tests {
     #[test]
     fn unsupported_start_is_reported_as_unsupported() {
         let mut fake = Fake::new();
-        fake.fail = Some(DeviceError::Unsupported("sleep_lock_events"));
+        fake.fail = Some(SleepLockEventsError::Unsupported("sleep_lock_events"));
         let mut e = Env::new(fake);
         start(&mut e.state);
         e.tick();
