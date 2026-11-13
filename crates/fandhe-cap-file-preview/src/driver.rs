@@ -353,23 +353,22 @@ fn drive(
     let new_request = {
         let mut g = session.timing.lock().unwrap_or_else(|e| e.into_inner());
         match take_request(state) {
+            // 発送済みの世代は `mark_working` の適用まで再発送しない（先の結果も消さない）。
             // 公開入口の要求・結果が残っているうちは置き換えず、次のフレームで再試行する。
-            Some((generation, op)) => {
-                session
-                    .screen
-                    .begin_keeping_foreign(&session.slot)
-                    .map(|request_id| {
-                        let started = Instant::now();
-                        *g = Some(Timing {
-                            request_id,
-                            generation,
-                            started,
-                            has_deadline: op != FilePreviewOp::Preview,
-                        });
-                        (request_id, op, started)
-                    })
-            }
-            None => None,
+            Some((generation, op)) if g.is_none_or(|t| t.generation != generation) => session
+                .screen
+                .begin_keeping_foreign(&session.slot)
+                .map(|request_id| {
+                    let started = Instant::now();
+                    *g = Some(Timing {
+                        request_id,
+                        generation,
+                        started,
+                        has_deadline: op != FilePreviewOp::Preview,
+                    });
+                    (request_id, op, started)
+                }),
+            _ => None,
         }
     };
     if let Some(req) = new_request {
@@ -551,6 +550,42 @@ mod tests {
             );
         }
         panic!("結果が反映されない: {state:?}");
+    }
+
+    /// `mark_working` の適用前に `drive` が再び呼ばれても、同じ世代を再発送せず先の結果も消さない。
+    #[test]
+    fn same_generation_is_not_redispatched_before_mark_working() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static CALLS: AtomicUsize = AtomicUsize::new(0);
+        fn counting(
+            _: u64,
+            _: FileKind,
+            _: Vec<u8>,
+        ) -> Result<Option<PreviewResult>, FilePreviewError> {
+            CALLS.fetch_add(1, Ordering::SeqCst);
+            Ok(Some(PreviewResult::TargetUnavailable))
+        }
+        let (sender, rx) = channel();
+        let session = session();
+        let imp = fake(|| thumb(2, 3, 24));
+        let mut state = FilePreviewState::default();
+        request(&mut state, FilePreviewOp::Preview);
+        let d = Duration::from_secs(30);
+        drive(&state, &sender, session, &imp, counting, d);
+        drive(&state, &sender, session, &imp, counting, d);
+        assert_eq!(CALLS.load(Ordering::SeqCst), 1);
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        drive(&state, &sender, session, &imp, counting, d);
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        assert_eq!(
+            state.outcome,
+            Some(Ok(FilePreviewOutcome::TargetUnavailable))
+        );
+        assert_eq!(CALLS.load(Ordering::SeqCst), 1);
     }
 
     fn failure(s: &FilePreviewState) -> FilePreviewFailure {
