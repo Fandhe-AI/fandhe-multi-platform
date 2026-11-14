@@ -11,13 +11,13 @@
 //! Windows（#907、`UserConsentVerifier` の `IAsyncOperation` 完了ハンドラ）も同じ
 //! 判断で本トレイトを通らず直接書き戻す。Android（#908）も同様の非同期経路になる見込み。
 //! 対応不可プラットフォーム（Linux、本 Issue 時点の Android）は
-//! `Err(DeviceError::Unsupported("biometric_auth"))`。
+//! `Err(BiometricAuthError::Unsupported)`。
 //!
 //! 認証結果以外の情報（生体データ・テンプレート・端末識別子）は保持・ログ出力しない
 //! （security.md A09）。本トレイト・実装は端末ローカルの可否確認であり、サーバー側の
 //! 本人認証基盤の代替ではない。
 
-use crate::DeviceError;
+use crate::error::BiometricAuthError;
 
 /// 生体認証の結果。キャンセル・使えない・失敗は「認証した」ではない（モジュール doc の契約）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,10 +35,10 @@ pub enum AuthOutcome {
 /// 認証理由（OS ダイアログに表示する文言）を検証する。trim 後に空、または内部に
 /// NUL を含む場合は `InvalidInput("biometric reason")`（`CString` 化する呼び出し元
 /// での失敗を事前に防ぐ、`share::ShareRequest::new` と同じ SSOT 方針）。
-pub fn validate_reason(reason: &str) -> Result<&str, DeviceError> {
+pub fn validate_reason(reason: &str) -> Result<&str, BiometricAuthError> {
     let trimmed = reason.trim();
     if trimmed.is_empty() || trimmed.contains('\0') {
-        return Err(DeviceError::InvalidInput("biometric reason"));
+        return Err(BiometricAuthError::InvalidInput("biometric reason"));
     }
     Ok(trimmed)
 }
@@ -46,9 +46,9 @@ pub fn validate_reason(reason: &str) -> Result<&str, DeviceError> {
 /// 生体認証の契約。
 pub trait BiometricAuth: Send + Sync {
     /// この端末で生体認証を使えるか（未登録・非搭載を区別しない可否判定のみ）。
-    fn available(&self) -> Result<bool, DeviceError>;
+    fn available(&self) -> Result<bool, BiometricAuthError>;
     /// OS の認証 UI を 1 回出す。固定タイムアウトを掛けない。
-    fn authenticate(&self, reason: &str) -> Result<AuthOutcome, DeviceError>;
+    fn authenticate(&self, reason: &str) -> Result<AuthOutcome, BiometricAuthError>;
 }
 
 /// 対応不可プラットフォーム用（Linux、本 Issue 時点の Android）。常に
@@ -56,12 +56,12 @@ pub trait BiometricAuth: Send + Sync {
 pub struct UnsupportedBiometricAuth;
 
 impl BiometricAuth for UnsupportedBiometricAuth {
-    fn available(&self) -> Result<bool, DeviceError> {
-        Err(DeviceError::Unsupported("biometric_auth"))
+    fn available(&self) -> Result<bool, BiometricAuthError> {
+        Err(BiometricAuthError::Unsupported)
     }
 
-    fn authenticate(&self, _reason: &str) -> Result<AuthOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("biometric_auth"))
+    fn authenticate(&self, _reason: &str) -> Result<AuthOutcome, BiometricAuthError> {
+        Err(BiometricAuthError::Unsupported)
     }
 }
 
@@ -72,19 +72,28 @@ mod tests {
     #[test]
     fn validate_reason_rejects_empty() {
         let err = validate_reason("").unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidInput("biometric reason")));
+        assert!(matches!(
+            err,
+            BiometricAuthError::InvalidInput("biometric reason")
+        ));
     }
 
     #[test]
     fn validate_reason_rejects_blank_only() {
         let err = validate_reason("   ").unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidInput("biometric reason")));
+        assert!(matches!(
+            err,
+            BiometricAuthError::InvalidInput("biometric reason")
+        ));
     }
 
     #[test]
     fn validate_reason_rejects_embedded_nul() {
         let err = validate_reason("a\0b").unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidInput("biometric reason")));
+        assert!(matches!(
+            err,
+            BiometricAuthError::InvalidInput("biometric reason")
+        ));
     }
 
     #[test]
@@ -95,9 +104,9 @@ mod tests {
     #[test]
     fn unsupported_biometric_auth_returns_unsupported_error() {
         let err = UnsupportedBiometricAuth.available().unwrap_err();
-        assert!(matches!(err, DeviceError::Unsupported("biometric_auth")));
+        assert!(matches!(err, BiometricAuthError::Unsupported));
         let err = UnsupportedBiometricAuth.authenticate("test").unwrap_err();
-        assert!(matches!(err, DeviceError::Unsupported("biometric_auth")));
+        assert!(matches!(err, BiometricAuthError::Unsupported));
     }
 
     /// モック実装（`Cancelled` 固定）が `Authenticated` へ化けないことを固定する
@@ -105,10 +114,10 @@ mod tests {
     struct AlwaysCancelledAuth;
 
     impl BiometricAuth for AlwaysCancelledAuth {
-        fn available(&self) -> Result<bool, DeviceError> {
+        fn available(&self) -> Result<bool, BiometricAuthError> {
             Ok(true)
         }
-        fn authenticate(&self, _reason: &str) -> Result<AuthOutcome, DeviceError> {
+        fn authenticate(&self, _reason: &str) -> Result<AuthOutcome, BiometricAuthError> {
             Ok(AuthOutcome::Cancelled)
         }
     }
@@ -124,10 +133,10 @@ mod tests {
     struct AlwaysUnavailableAuth;
 
     impl BiometricAuth for AlwaysUnavailableAuth {
-        fn available(&self) -> Result<bool, DeviceError> {
+        fn available(&self) -> Result<bool, BiometricAuthError> {
             Ok(false)
         }
-        fn authenticate(&self, _reason: &str) -> Result<AuthOutcome, DeviceError> {
+        fn authenticate(&self, _reason: &str) -> Result<AuthOutcome, BiometricAuthError> {
             Ok(AuthOutcome::Unavailable)
         }
     }
@@ -143,10 +152,10 @@ mod tests {
     struct AlwaysFailedAuth;
 
     impl BiometricAuth for AlwaysFailedAuth {
-        fn available(&self) -> Result<bool, DeviceError> {
+        fn available(&self) -> Result<bool, BiometricAuthError> {
             Ok(true)
         }
-        fn authenticate(&self, _reason: &str) -> Result<AuthOutcome, DeviceError> {
+        fn authenticate(&self, _reason: &str) -> Result<AuthOutcome, BiometricAuthError> {
             Ok(AuthOutcome::Failed)
         }
     }

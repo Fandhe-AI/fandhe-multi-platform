@@ -1179,6 +1179,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-biometric-auth"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-core 0.61.2",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-calendar"
 version = "0.2.0"
 dependencies = [
@@ -2318,6 +2334,7 @@ dependencies = [
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
  "fandhe-cap-audio-session",
+ "fandhe-cap-biometric-auth",
  "fandhe-cap-calendar",
  "fandhe-cap-call-ui",
  "fandhe-cap-camera-capture",

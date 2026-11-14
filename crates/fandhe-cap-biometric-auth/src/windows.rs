@@ -9,7 +9,7 @@
 //! 閉じる（`// SAFETY:` を呼び出し直前に付与）。
 //!
 //! 認証理由・`HRESULT`・`UserConsentVerificationResult` の生値をログへ出力しない
-//! （security.md A09）。`DeviceError::Internal` は固定ラベルのみを持つ
+//! （security.md A09）。`BiometricAuthError::Internal` は固定ラベルのみを持つ
 //! （`fandhe-cap-share-sheet/src/windows.rs` と同じ方針）。
 //!
 //! # 完了の受け取り方（`IAsyncOperation`、コールバック型）
@@ -35,17 +35,17 @@
 
 use std::cell::RefCell;
 
-use windows::core::HSTRING;
 use windows::Security::Credentials::UI::{UserConsentVerificationResult, UserConsentVerifier};
 use windows::Win32::System::WinRT::IUserConsentVerifierInterop;
+use windows::core::HSTRING;
 // `windows` 0.61.3 は `IAsyncOperation`/`AsyncOperationCompletedHandler`/`AsyncStatus` を
 // `windows::Foundation` へ再エクスポートしていない（`windows-future` 側にのみ存在）ため、
 // ルート Cargo.toml の直接依存から取る（同モジュールのコメント参照）。
 use windows_future::{AsyncOperationCompletedHandler, AsyncStatus, IAsyncOperation};
 
-use fandhe_device::DeviceError;
+use crate::error::BiometricAuthError;
 
-use super::biometric_auth::{bridge, outcome_from_verification};
+use crate::driver::{bridge, outcome_from_verification};
 
 thread_local! {
     /// 直近の `present` が発行した `IAsyncOperation`（完了ハンドラが呼ばれる前に
@@ -62,12 +62,12 @@ thread_local! {
 /// （`bridge::deliver` の照合キー）。同期的に失敗した場合は `Err` を返し、
 /// 呼び出し元が `bridge::deliver` する（完了ハンドラは二度と呼ばれないため）。
 #[allow(unsafe_code)]
-pub(crate) fn present(request_id: u64, reason: &str) -> Result<(), DeviceError> {
-    let hwnd =
-        fandhe_platform_windows::window().ok_or(DeviceError::Internal("biometric window"))?;
+pub(crate) fn present(request_id: u64, reason: &str) -> Result<(), BiometricAuthError> {
+    let hwnd = fandhe_platform_windows::window()
+        .ok_or(BiometricAuthError::Internal("biometric window"))?;
     let interop: IUserConsentVerifierInterop =
         windows::core::factory::<UserConsentVerifier, IUserConsentVerifierInterop>()
-            .map_err(|_| DeviceError::Internal("biometric factory"))?;
+            .map_err(|_| BiometricAuthError::Internal("biometric factory"))?;
 
     // SAFETY: `hwnd` は `fandhe_platform_windows::window()`（`remember_window` が
     // `eframe::CreationContext` から得た HWND、`ProxyApp` の生存中はウィンドウも
@@ -75,22 +75,22 @@ pub(crate) fn present(request_id: u64, reason: &str) -> Result<(), DeviceError> 
     // ポインタ（`fandhe-cap-share-sheet の windows::present` と同じ安全性根拠）。
     let op: IAsyncOperation<UserConsentVerificationResult> =
         unsafe { interop.RequestVerificationForWindowAsync(hwnd, &HSTRING::from(reason)) }
-            .map_err(|_| DeviceError::Internal("biometric present"))?;
+            .map_err(|_| BiometricAuthError::Internal("biometric present"))?;
 
     op.SetCompleted(&AsyncOperationCompletedHandler::new(move |op, status| {
         let result = match (op.ok(), status) {
             (Ok(op), AsyncStatus::Completed) => op
                 .GetResults()
-                .map_err(|_| DeviceError::Internal("biometric outcome"))
+                .map_err(|_| BiometricAuthError::Internal("biometric outcome"))
                 .and_then(|r: UserConsentVerificationResult| outcome_from_verification(r.0)),
             // キャンセル・エラー・未知のステータスはすべて失敗側へ倒す
             // （偽の成功を作らない、モジュール doc 参照）。
-            _ => Err(DeviceError::Internal("biometric outcome")),
+            _ => Err(BiometricAuthError::Internal("biometric outcome")),
         };
         bridge::deliver(request_id, result);
         Ok(())
     }))
-    .map_err(|_| DeviceError::Internal("biometric completed"))?;
+    .map_err(|_| BiometricAuthError::Internal("biometric completed"))?;
 
     HELD.with_borrow_mut(|held| *held = Some(op));
     Ok(())

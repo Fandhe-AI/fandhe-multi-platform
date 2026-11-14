@@ -93,8 +93,6 @@ import android.view.accessibility.AccessibilityManager;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.biometric.BiometricManager;
-import androidx.biometric.BiometricPrompt;
 import androidx.core.app.NotificationChannelCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -260,32 +258,6 @@ public class MainActivity extends GameActivity {
     private static final long PHOTO_MAX_PIXELS = 64L * 1024 * 1024;
     // JPEG へ変換するときの長辺の目標（画素）。これ以下になるまで `inSampleSize` で縮める。
     private static final int PHOTO_CONVERT_SIDE = 4096;
-
-    // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
-    // （Issue #908、Phase 11 型サンプル「生体認証」の Android 経路）。`BiometricAuth`
-    // trait は通らない（`device/biometric_auth.rs` モジュール doc の
-    // 「macOS/iOS/Android は pull 型 bridge」参照）。code の意味（本ファイルが SSOT、
-    // Rust 側 `outcome_from_android_code` の doc と対）:
-    // 0=認証した／1=キャンセル／2=使えない（未登録・非対応等）／3=失敗（不一致・
-    // ロックアウト等）／4=内部エラー（提示依頼自体の失敗）。
-    private static native void nativeOnBiometricResult(long requestId, int code);
-
-    // 上記 code 定数（`biometricCallback`/`requestBiometric` からも参照するため）。
-    private static final int BIOMETRIC_RESULT_AUTHENTICATED = 0;
-    private static final int BIOMETRIC_RESULT_CANCELLED = 1;
-    private static final int BIOMETRIC_RESULT_UNAVAILABLE = 2;
-    private static final int BIOMETRIC_RESULT_FAILED = 3;
-    private static final int BIOMETRIC_RESULT_INTERNAL_ERROR = 4;
-
-    // コールバック時に requestId を思い出すためだけの唯一の static（`shareRequest`
-    // と同じ理由。Activity 再生成を跨いで生存する必要がある。`BiometricPrompt` は
-    // `onCreate` で新インスタンスごとに作り直すが（下記 `biometricPrompt` 参照）、
-    // 公式ガイダンス上、内部 Fragment 経由で旧インスタンスへの提示結果が新
-    // インスタンスの callback へ再接続される契約のため、static であれば正しく
-    // 反映される。プロセス死では `RequestTracker.NONE` に戻るため死後の再配送は
-    // 無視される（`filePickRequest` と同じ理屈）。UI スレッドのみで読み書きするため
-    // 追加の同期は不要。
-    private static final RequestTracker biometricRequest = new RequestTracker();
 
     // ローカル通知（Issue #1006、Phase 11 型サンプル「通知」の Android 経路）。Rust 側
     // `device/notification.rs::bridge` と pull 型で橋渡しする（`biometricRequest`/
@@ -1306,70 +1278,6 @@ public class MainActivity extends GameActivity {
     // volatile 不要）の先頭で検査して、破棄後の要求はエラーで完了させる。
     private boolean ttsActivityDestroyed;
 
-    // `BiometricPrompt` はインスタンスフィールド（内部で `FragmentActivity` の
-    // `FragmentManager` に紐づく Fragment を使うため、Activity 再生成のたびに
-    // `onCreate` で作り直す必要がある。作り直しても `biometricRequest`/
-    // `biometricCallback` の組で結果が再接続される、`biometricRequest` doc 参照）。
-    private BiometricPrompt biometricPrompt;
-
-    // `biometricPrompt` 生成時に渡す唯一のコールバックインスタンス。先頭で
-    // `biometricRequest` を読んで `RequestTracker.NONE` なら無視する（first-wins。
-    // 二重通知防止）。
-    // `onAuthenticationFailed`（不一致・プロンプト継続）は最終結果にしない
-    // （実装計画 §4 参照）。
-    private final BiometricPrompt.AuthenticationCallback biometricCallback =
-            new BiometricPrompt.AuthenticationCallback() {
-                @Override
-                public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
-                    long id = biometricRequest.take();
-                    if (id == RequestTracker.NONE) {
-                        return;
-                    }
-                    nativeOnBiometricResult(id, BIOMETRIC_RESULT_AUTHENTICATED);
-                }
-
-                @Override
-                public void onAuthenticationError(int errorCode, CharSequence errString) {
-                    long id = biometricRequest.take();
-                    if (id == RequestTracker.NONE) {
-                        return;
-                    }
-                    // errString はログへ出さない（画面へ渡す情報も結果コードのみに
-                    // 絞る、security.md A09）。
-                    nativeOnBiometricResult(id, biometricErrorToResultCode(errorCode));
-                }
-
-                @Override
-                public void onAuthenticationFailed() {
-                    // 不一致（プロンプト継続）。最終結果は Succeeded/Error 側で確定する
-                    // ため、ここでは何もしない（実装計画 §4 参照）。
-                }
-            };
-
-    // `BiometricPrompt.ERROR_*` → `nativeOnBiometricResult` の code への写像
-    // （本ファイルがこの表の SSOT、`device/biometric_auth.rs::outcome_from_android_code`
-    // の doc 参照）。未知のコード（TIMEOUT/UNABLE_TO_PROCESS/NO_SPACE/VENDOR 等）は
-    // 失敗側へ倒す（偽のキャンセル・偽の成功を作らない）。
-    private static int biometricErrorToResultCode(int errorCode) {
-        switch (errorCode) {
-            case BiometricPrompt.ERROR_USER_CANCELED:
-            case BiometricPrompt.ERROR_NEGATIVE_BUTTON:
-            case BiometricPrompt.ERROR_CANCELED:
-                return BIOMETRIC_RESULT_CANCELLED;
-            case BiometricPrompt.ERROR_LOCKOUT:
-            case BiometricPrompt.ERROR_LOCKOUT_PERMANENT:
-                return BIOMETRIC_RESULT_FAILED;
-            case BiometricPrompt.ERROR_NO_BIOMETRICS:
-            case BiometricPrompt.ERROR_HW_NOT_PRESENT:
-            case BiometricPrompt.ERROR_HW_UNAVAILABLE:
-            case BiometricPrompt.ERROR_SECURITY_UPDATE_REQUIRED:
-            case BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL:
-                return BIOMETRIC_RESULT_UNAVAILABLE;
-            default:
-                return BIOMETRIC_RESULT_FAILED;
-        }
-    }
-
     // カスタム URL scheme 受信（Issue #1218）。`onCreate` / `onNewIntent` から
     // `deliverUrlIntent` が呼ぶ。実体は `crates/fandhe-egui-proxy/src/device/
     // android_url_scheme.rs`（feature `device` 無効時の no-op は `android.rs`）。JNI 署名は
@@ -1452,23 +1360,6 @@ public class MainActivity extends GameActivity {
         if (savedInstanceState == null
                 && (getIntent().getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) {
             deliverUrlIntent(getIntent());
-        }
-
-        // `onCreate` のたびに作り直す（`biometricPrompt` doc 参照）。
-        biometricPrompt = new BiometricPrompt(this, ContextCompat.getMainExecutor(this), biometricCallback);
-
-        // Rust 側 `android_main` は `biometric_auth::bridge::reset()` で保留中の要求を
-        // 無条件に捨て、新しい画面状態（`BiometricCheckState::default()` = `Idle`）を
-        // 作り直す（codex-review 指摘、PR #917）。`biometricRequest` は static のため
-        // Activity 再生成をまたいで残り、`biometricPrompt` も `FragmentManager` 経由で
-        // 旧認証操作へ再接続され得るため、放置すると新しい `biometricPrompt` の上に
-        // 「宛先を失った」認証が動き続けてしまう。ここで明示的に打ち切り、対になる
-        // Rust 側の破棄と揃える。`cancelAuthentication()` は `onAuthenticationError`
-        // （`ERROR_CANCELED`）を呼ぶため `biometricRequest` は通常のコールバック経路で
-        // `RequestTracker.NONE` に戻る（結果は Rust 側が既に破棄済みのため無視される、
-        // no-op）。
-        if (biometricRequest.current() != RequestTracker.NONE) {
-            biometricPrompt.cancelAuthentication();
         }
 
         // ローカル通知（Issue #1006）: `notificationRequest` は static のため Activity
@@ -2440,56 +2331,6 @@ public class MainActivity extends GameActivity {
                 out.delete();
             }
         }
-    }
-
-    // Rust 側 bridge モジュール（`device/biometric_auth.rs`）の `present`（Android
-    // 分岐）から JNI 経由で呼ばれる（Issue #908）。`requestShare` と同じ「即時
-    // return・結果は非同期通知」の形。`reason` は Rust 側 `validate_reason`（空・NUL
-    // 拒否）を通した非空文字列の契約。表示にのみ使い、ログへ出さない
-    // （security.md A03/A09）。
-    private void requestBiometric(long requestId, String reason) {
-        biometricRequest.track(requestId);
-        runOnUiThread(() -> {
-            // `isFinishing()`/`isDestroyed()` は破棄処理中しか検出できず、
-            // `onSaveInstanceState` 済み（state-save 後）の resumed でない状態は
-            // すり抜ける（codex-review P1 指摘 / cursor Bugbot 指摘、PR #917）。
-            // state-save 後に `BiometricPrompt.authenticate` を呼ぶと
-            // `IllegalStateException` を送出せず例外・コールバックとも無しで
-            // 打ち切られるため、catch でも回収できず Rust 側は `Authenticating`
-            // のままポーリングし続けてしまう。`activityResumed` は `onPause`
-            // （`onSaveInstanceState` より必ず先に走る、API 28 以降の
-            // 「onStop 後に onSaveInstanceState」順でも同様）で false に落ちる
-            // ため、ここで見れば state-save 後の呼び出しを確実に弾ける
-            // （測位の resumed ゲートと同型、本ファイル `onPause`/`onResume` 参照）。
-            if (isFinishing() || isDestroyed() || !activityResumed) {
-                biometricRequest.take();
-                nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_INTERNAL_ERROR);
-                return;
-            }
-            if (BiometricManager.from(this).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                    != BiometricManager.BIOMETRIC_SUCCESS) {
-                // 未登録・非対応ハードウェア・OS 側要件未達等（可否判定の失敗を
-                // 「認証した」にしない）。
-                biometricRequest.take();
-                nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_UNAVAILABLE);
-                return;
-            }
-            try {
-                BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
-                        .setTitle(reason)
-                        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                        // `DEVICE_CREDENTIAL` を許可しないため negative button は必須
-                        // （OS 標準文字列を使い新規リソースは足さない）。
-                        .setNegativeButtonText(getString(android.R.string.cancel))
-                        .build();
-                biometricPrompt.authenticate(promptInfo);
-            } catch (RuntimeException e) {
-                // 提示依頼自体が例外を送出した場合（`requestShare` の `launch()` 例外と
-                // 同型）。コールバックは二度と来ないため、ここで直接内部エラーを通知する。
-                biometricRequest.take();
-                nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_INTERNAL_ERROR);
-            }
-        });
     }
 
     // Rust 側 bridge モジュール（`device/mic_record.rs`）の `present`（Android 分岐）から

@@ -181,6 +181,10 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 端末内翻訳の処理済み世代も破棄する（画面状態は世代 0 に戻るため。`fandhe_cap_translation::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_translation::reset_pending_tracking();
+    // 生体認証の保留中の要求も破棄する。画面状態は再生成で `Idle` に戻るため、残すと結果が画面へ反映されず失われる
+    // （`fandhe_cap_biometric_auth::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_biometric_auth::reset_pending_tracking();
     // 連絡先選択の保留中の要求も破棄する（契約は「復元せず破棄」。旧要求の遅延完了を id 不一致で無視させる。
     // `fandhe_cap_contacts::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

@@ -107,14 +107,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // geofence 画面の状態も再生成で未登録へ戻るため、static 側の登録もまとめて破棄する。
     #[cfg(feature = "device")]
     crate::device::geofence::reset_register_tracking();
-    // Issue #908 codex-review 指摘（PR #917）: `biometric_auth::bridge::PENDING` も
-    // プロセス static のため、上記 `location` と同じ理由で Activity 再生成をまたいで
-    // 残る。新しい画面 `BiometricCheckState::default()`（`Idle`）を構築する前に
-    // ここで捨て、再生成前に開始した認証が後から完了しても黙って失われず、以後
-    // 確実に「未接続」（次の操作からやり直し）として扱われるようにする
-    // （`device::biometric_auth::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::biometric_auth::reset_pending_tracking();
     // Issue #957: `mic_record::bridge::SLOT`/`STARTED_REQUEST_ID` も同じ理由で
     // プロセス static のため Activity 再生成をまたいで残る。新しい画面
     // `MicRecordState::default()`（`Idle`）を構築する前にここで捨て、再生成前に

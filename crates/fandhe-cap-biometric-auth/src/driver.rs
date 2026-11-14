@@ -18,47 +18,49 @@
 //! [`drive_callback`] が **その時点の** `sender`/`state` を使って行う
 //! （`RequestSlot`/`poll_and_finish` のモジュール doc 参照、Issue #943 で 3 機能の
 //! 共通部品へ統合）。[`present`] が Apple/Android 向けの提示処理へ振り分ける
-//! （Windows は `windows_biometric::present` を [`drive_callback`] から直接呼ぶ、後述）。
+//! （Windows は `crate::windows::present` を [`drive_callback`] から直接呼ぶ、後述）。
 //!
 //! # 上記 4 OS 以外（Linux）: `BiometricAuth` トレイト経由
 //!
-//! [`UnsupportedBiometricAuth`]（`fandhe_device::biometric_auth::UnsupportedBiometricAuth`）
+//! [`UnsupportedBiometricAuth`]（`crate::contract::UnsupportedBiometricAuth`）
 //! を `BiometricAuth` トレイト経由で呼び、`Unsupported("biometric_auth")` を画面へ
 //! 固定文言として表示する。
 
-use fandhe_core::screens::biometric_check::{
-    finish_auth, mark_authenticating, take_request, AuthOutcome as CoreAuthOutcome,
-    BiometricCheckState,
-};
 #[cfg(not(any(
     target_os = "macos",
     target_os = "ios",
     target_os = "android",
     target_os = "windows"
 )))]
-use fandhe_device::biometric_auth::BiometricAuth;
-use fandhe_device::biometric_auth::{validate_reason, AuthOutcome as DeviceAuthOutcome};
-use fandhe_device::DeviceError;
+use crate::contract::BiometricAuth;
+use crate::contract::{AuthOutcome as DeviceAuthOutcome, validate_reason};
+use crate::error::BiometricAuthError;
+use fandhe_core::screens::biometric_check::{
+    AuthOutcome as CoreAuthOutcome, BiometricCheckState, finish_auth, mark_authenticating,
+    take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// `BiometricAuth`/`bridge::deliver` 未対応環境（Unsupported）で画面へ出す固定案内
-/// （`DeviceError` の内部構造は含めない、security.md A09）。
+/// （`BiometricAuthError` の内部構造は含めない、security.md A09）。
 const UNAVAILABLE: &str = "この環境では生体認証を使えません";
 
-/// `DeviceError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
+/// `BiometricAuthError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
 /// それ以外は `Display` の文言をそのまま転送する
 /// （`device/share.rs::to_message` と同じ方針）。
-fn to_message(e: DeviceError) -> String {
+fn to_message(e: BiometricAuthError) -> String {
     match e {
-        DeviceError::Unsupported(_) => UNAVAILABLE.to_string(),
+        BiometricAuthError::Unsupported => UNAVAILABLE.to_string(),
         other => other.to_string(),
     }
 }
 
-/// `Result<DeviceAuthOutcome, DeviceError>` を画面表示用の結果へ変換する
+/// `Result<DeviceAuthOutcome, BiometricAuthError>` を画面表示用の結果へ変換する
 /// （macOS/iOS 経路・`BiometricAuth` トレイト経路の共通部分）。
-fn to_outcome(result: Result<DeviceAuthOutcome, DeviceError>) -> Result<CoreAuthOutcome, String> {
+fn to_outcome(
+    result: Result<DeviceAuthOutcome, BiometricAuthError>,
+) -> Result<CoreAuthOutcome, String> {
     result
         .map(|outcome| match outcome {
             DeviceAuthOutcome::Authenticated => CoreAuthOutcome::Authenticated,
@@ -91,26 +93,26 @@ fn to_outcome(result: Result<DeviceAuthOutcome, DeviceError>) -> Result<CoreAuth
 pub(crate) fn outcome_from_reply(
     success: bool,
     la_code: i64,
-) -> Result<DeviceAuthOutcome, DeviceError> {
+) -> Result<DeviceAuthOutcome, BiometricAuthError> {
     if success && la_code == 0 {
         return Ok(DeviceAuthOutcome::Authenticated);
     }
     if success {
         // `success == true` かつ `la_code != 0` は `LAContext` の契約上起きないが、
         // `success` を優先せず偽の成功を作らない方向へ倒す。
-        return Err(DeviceError::Internal("biometric outcome"));
+        return Err(BiometricAuthError::Internal("biometric outcome"));
     }
     match la_code {
         -2 | -3 | -4 | -9 => Ok(DeviceAuthOutcome::Cancelled),
         -7..=-5 => Ok(DeviceAuthOutcome::Unavailable),
         -1 | -8 => Ok(DeviceAuthOutcome::Failed),
-        _ => Err(DeviceError::Internal("biometric outcome")),
+        _ => Err(BiometricAuthError::Internal("biometric outcome")),
     }
 }
 
 /// `UserConsentVerificationResult`（Windows Hello、`windows_biometric.rs` の
 /// `IAsyncOperation` 完了ハンドラから渡される生コード）→ 結果の写像。`code` は
-/// `UserConsentVerificationResult` の内部 `i32`（`windows_biometric::present` の
+/// `UserConsentVerificationResult` の内部 `i32`（`crate::windows::present` の
 /// `r.0`）。完了ハンドラ側で `AsyncStatus != Completed`・`GetResults()` 失敗は
 /// 既に `Err(Internal)` へ畳まれているため、この関数へは `Completed` かつ
 /// `GetResults()` 成功時のみ到達する。
@@ -148,13 +150,15 @@ pub(crate) fn outcome_from_reply(
 /// `dead_code` を許容する（`device/share.rs::cancel_due` と同じ ponytail 方針:
 /// 全ターゲットでテストするためだけに `cfg` を割らない）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub(crate) fn outcome_from_verification(code: i32) -> Result<DeviceAuthOutcome, DeviceError> {
+pub(crate) fn outcome_from_verification(
+    code: i32,
+) -> Result<DeviceAuthOutcome, BiometricAuthError> {
     match code {
         0 => Ok(DeviceAuthOutcome::Authenticated),
         6 => Ok(DeviceAuthOutcome::Cancelled),
         1..=4 => Ok(DeviceAuthOutcome::Unavailable),
         5 => Ok(DeviceAuthOutcome::Failed),
-        _ => Err(DeviceError::Internal("biometric outcome")),
+        _ => Err(BiometricAuthError::Internal("biometric outcome")),
     }
 }
 
@@ -167,10 +171,10 @@ pub(crate) fn outcome_from_verification(code: i32) -> Result<DeviceAuthOutcome, 
     target_os = "windows"
 ))]
 pub(crate) mod bridge {
+    use crate::error::BiometricAuthError;
     use fandhe_core::screens::biometric_check::AuthOutcome as CoreAuthOutcome;
-    use fandhe_device::DeviceError;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     /// 画面へ反映する完了結果（`super::to_outcome` 後の形）。
     pub(crate) type Outcome = Result<CoreAuthOutcome, String>;
@@ -182,14 +186,14 @@ pub(crate) mod bridge {
         SLOT.begin()
     }
 
-    /// OS からの結果（`fandhe_device::biometric_auth::AuthOutcome` を経由した生の
+    /// OS からの結果（`crate::contract::AuthOutcome` を経由した生の
     /// `Result`）を `super::to_outcome` で画面用へ変換してから置く（任意スレッド。
     /// 実際には macOS/iOS はメインスレッド、Android は UI スレッドから届く契約、
     /// `apple_biometric.rs`/`android.rs` の doc 参照）。`request_id` 不一致・未登録・
     /// 既に結果ありは捨てて `false`。
     pub(crate) fn deliver(
         request_id: u64,
-        result: Result<fandhe_device::biometric_auth::AuthOutcome, DeviceError>,
+        result: Result<crate::contract::AuthOutcome, BiometricAuthError>,
     ) -> bool {
         SLOT.deliver(request_id, super::to_outcome(result))
     }
@@ -220,19 +224,19 @@ pub(crate) mod bridge {
     }
 }
 
-/// OS へ提示を依頼する（Apple 系は `apple_biometric::present`、Android は
+/// OS へ提示を依頼する（Apple 系は `crate::apple::present`、Android は
 /// `android::request_biometric`）。戻り値は「提示依頼を受理できたか」（`false` は
 /// 呼び出し元が `Err(Internal("biometric present"))` として畳む、`device/share.rs::present`
-/// と同型）。Windows は戻り値が `Result`（`windows_biometric::present`）のため本関数には
+/// と同型）。Windows は戻り値が `Result`（`crate::windows::present`）のため本関数には
 /// 含めず、[`drive_callback`] 内で別途 `cfg(target_os = "windows")` 分岐として呼ぶ。
 #[cfg(target_os = "android")]
 fn present(request_id: u64, reason: &str) -> bool {
-    super::android::request_biometric(request_id, reason)
+    crate::android::request_biometric(request_id, reason)
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 fn present(request_id: u64, reason: &str) -> bool {
-    super::apple_biometric::present(request_id, reason)
+    crate::apple::present(request_id, reason)
 }
 
 /// macOS/iOS/Android/Windows 経路の認証 effect ドライバ本体
@@ -255,10 +259,13 @@ fn drive_callback(state: &BiometricCheckState, sender: &CompletionSender<Biometr
                 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
                 if !present(request_id, reason) {
                     // 提示依頼自体が同期的に失敗した（コールバックは二度と来ない）。
-                    bridge::deliver(request_id, Err(DeviceError::Internal("biometric present")));
+                    bridge::deliver(
+                        request_id,
+                        Err(BiometricAuthError::Internal("biometric present")),
+                    );
                 }
                 #[cfg(target_os = "windows")]
-                if let Err(e) = super::windows_biometric::present(request_id, reason) {
+                if let Err(e) = crate::windows::present(request_id, reason) {
                     // 提示依頼自体が同期的に失敗した（完了ハンドラは二度と呼ばれない）。
                     bridge::deliver(request_id, Err(e));
                 }
@@ -275,7 +282,7 @@ fn drive_callback(state: &BiometricCheckState, sender: &CompletionSender<Biometr
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -320,6 +327,13 @@ fn drive(
     }));
 }
 
+/// 入口。`BiometricAuth` trait 経由の実装を返す。macOS・iOS・Android・Windows は OS の認証 UI がコールバック型のため
+/// trait を通らず（pull 型 `bridge`、モジュール doc 参照）、画面の effect ドライバ（[`biometric_check_effect`]）が直接扱う。
+/// ここは `Unsupported` 固定の実装を返し、成功へは倒さない。
+pub fn platform_biometric_auth() -> Box<dyn crate::contract::BiometricAuth> {
+    Box::new(crate::contract::UnsupportedBiometricAuth)
+}
+
 /// `registry.rs` の `effect` 区画から `biometric_check` 画面用に配線される effect
 /// ドライバ（macOS/iOS/Android/Windows 版、モジュール doc「pull 型」参照）。
 #[cfg(any(
@@ -347,24 +361,20 @@ pub fn biometric_check_effect(
     state: &BiometricCheckState,
     sender: &CompletionSender<BiometricCheckState>,
 ) {
-    drive(
-        state,
-        sender,
-        &fandhe_device::biometric_auth::UnsupportedBiometricAuth,
-    );
+    drive(state, sender, &crate::contract::UnsupportedBiometricAuth);
 }
 
 /// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照。
 /// `device::location::reset_retry_tracking` と同じ命名・位置づけ）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::reset();
 }
 
 /// Android 側 `MainActivity` の結果コード（`nativeOnBiometricResult`）→
-/// [`fandhe_device::biometric_auth::AuthOutcome`] の写像（Java 側の
+/// [`crate::contract::AuthOutcome`] の写像（Java 側 `BiometricAuthHelper` の
 /// `BIOMETRIC_RESULT_*` 定数・`biometricErrorToResultCode` が SSOT、
-/// `MainActivity.java` のコメント参照）。未知のコードは失敗側（`Internal`）に倒す
+/// `BiometricAuthHelper.java` のコメント参照）。未知のコードは失敗側（`Internal`）に倒す
 /// （偽の成功・偽のキャンセルを作らない、`outcome_from_reply` と同じ方針）。
 ///
 /// | code | 意味 |
@@ -377,20 +387,22 @@ pub(crate) fn reset_pending_tracking() {
 /// | それ以外 | 未知（`Err(Internal("biometric outcome"))`） |
 ///
 /// 呼び出し元（`android.rs::Java_..._nativeOnBiometricResult`）は Android にのみ
-/// 存在する（`device.rs` の `mod android` cfg 参照）ため、それ以外のターゲット（例:
+/// 存在する（`lib.rs` の `mod android` cfg 参照）ため、それ以外のターゲット（例:
 /// Linux CI runner 上の clippy）では本関数も未使用になり `dead_code` で
 /// `-D warnings` に落ちる。`device/share.rs::cancel_due` と同じ理由で
 /// `cfg_attr(allow(dead_code))` を付け、host（macOS/Windows/Linux）上でも
 /// `cargo test` で写像表を検証できるようにする。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn outcome_from_android_code(code: i32) -> Result<DeviceAuthOutcome, DeviceError> {
+pub(crate) fn outcome_from_android_code(
+    code: i32,
+) -> Result<DeviceAuthOutcome, BiometricAuthError> {
     match code {
         0 => Ok(DeviceAuthOutcome::Authenticated),
         1 => Ok(DeviceAuthOutcome::Cancelled),
         2 => Ok(DeviceAuthOutcome::Unavailable),
         3 => Ok(DeviceAuthOutcome::Failed),
-        4 => Err(DeviceError::Internal("biometric present")),
-        _ => Err(DeviceError::Internal("biometric outcome")),
+        4 => Err(BiometricAuthError::Internal("biometric present")),
+        _ => Err(BiometricAuthError::Internal("biometric outcome")),
     }
 }
 
@@ -413,11 +425,18 @@ mod tests {
     )))]
     fn sender_with_channel() -> (
         CompletionSender<BiometricCheckState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<BiometricCheckState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<BiometricCheckState>>,
     ) {
-        let ctx = egui::Context::default();
+        use fandhe_runtime::RepaintWaker;
+        use std::sync::Arc;
+        use std::time::Duration;
+        struct NoopWaker;
+        impl RepaintWaker for NoopWaker {
+            fn wake(&self) {}
+            fn wake_after(&self, _delay: Duration) {}
+        }
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     #[cfg(not(any(
@@ -428,7 +447,7 @@ mod tests {
     )))]
     fn apply_all(
         state: &mut BiometricCheckState,
-        rx: &std::sync::mpsc::Receiver<crate::app::Completion<BiometricCheckState>>,
+        rx: &std::sync::mpsc::Receiver<fandhe_runtime::Completion<BiometricCheckState>>,
     ) {
         while let Ok(apply) = rx.try_recv() {
             apply(state);
@@ -457,7 +476,7 @@ mod tests {
 
     #[test]
     fn to_outcome_maps_unsupported_to_fixed_message() {
-        let result = to_outcome(Err(DeviceError::Unsupported("biometric_auth")));
+        let result = to_outcome(Err(BiometricAuthError::Unsupported));
         assert_eq!(result, Err(UNAVAILABLE.to_string()));
     }
 
@@ -504,7 +523,7 @@ mod tests {
             assert!(
                 matches!(
                     outcome_from_verification(code),
-                    Err(DeviceError::Internal("biometric outcome"))
+                    Err(BiometricAuthError::Internal("biometric outcome"))
                 ),
                 "code={code}"
             );
@@ -539,7 +558,7 @@ mod tests {
         // 契約上起きないはずの組み合わせ。偽の成功を作らない。
         assert!(matches!(
             outcome_from_reply(true, -1),
-            Err(DeviceError::Internal("biometric outcome"))
+            Err(BiometricAuthError::Internal("biometric outcome"))
         ));
     }
 
@@ -592,7 +611,7 @@ mod tests {
             assert!(
                 matches!(
                     outcome_from_reply(false, code),
-                    Err(DeviceError::Internal("biometric outcome"))
+                    Err(BiometricAuthError::Internal("biometric outcome"))
                 ),
                 "code={code}"
             );
@@ -609,11 +628,7 @@ mod tests {
     fn drive_is_noop_without_pending_request() {
         let (sender, rx) = sender_with_channel();
         let state = BiometricCheckState::default();
-        drive(
-            &state,
-            &sender,
-            &fandhe_device::biometric_auth::UnsupportedBiometricAuth,
-        );
+        drive(&state, &sender, &crate::contract::UnsupportedBiometricAuth);
         assert!(rx.try_recv().is_err());
     }
 
@@ -629,11 +644,7 @@ mod tests {
         let mut state = BiometricCheckState::default();
         authenticate(&mut state);
 
-        drive(
-            &state,
-            &sender,
-            &fandhe_device::biometric_auth::UnsupportedBiometricAuth,
-        );
+        drive(&state, &sender, &crate::contract::UnsupportedBiometricAuth);
         apply_all(&mut state, &rx);
 
         assert!(state.error.contains(UNAVAILABLE), "{}", state.error);
@@ -664,13 +675,13 @@ mod tests {
         ));
         assert!(matches!(
             outcome_from_android_code(4),
-            Err(DeviceError::Internal("biometric present"))
+            Err(BiometricAuthError::Internal("biometric present"))
         ));
         for code in [5, -1] {
             assert!(
                 matches!(
                     outcome_from_android_code(code),
-                    Err(DeviceError::Internal("biometric outcome"))
+                    Err(BiometricAuthError::Internal("biometric outcome"))
                 ),
                 "code={code}"
             );
@@ -696,7 +707,7 @@ mod bridge_tests {
         let request_id = bridge::begin();
         assert!(bridge::deliver(
             request_id,
-            Ok(fandhe_device::biometric_auth::AuthOutcome::Authenticated)
+            Ok(crate::contract::AuthOutcome::Authenticated)
         ));
         let (_, ready) = bridge::SLOT.snapshot().expect("begin 済みなので Some");
         assert_eq!(

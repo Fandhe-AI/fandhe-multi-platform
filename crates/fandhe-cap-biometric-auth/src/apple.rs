@@ -33,7 +33,7 @@ unsafe extern "C" {
 /// `reason` の `CString` 化が失敗する（内部 NUL 混入）ことは通常起きない
 /// （`fandhe_device::biometric_auth::validate_reason` が事前に NUL を弾く契約のため）。
 /// 万一失敗した場合は提示自体を行わず `false` を返し、呼び出し元が
-/// `DeviceError::Internal` として `bridge::deliver` する。
+/// `BiometricAuthError::Internal` として `bridge::deliver` する。
 #[allow(unsafe_code)]
 pub(crate) fn present(request_id: u64, reason: &str) -> bool {
     let Ok(reason) = CString::new(reason) else {
@@ -52,20 +52,20 @@ pub(crate) fn present(request_id: u64, reason: &str) -> bool {
 /// `.m` 側 reply コールバックから届く結果（`success`/`la_code`）の解釈
 /// （`device/biometric_auth.rs::outcome_from_reply`、iOS/macOS 共通の表）へ委譲する。
 /// `.m` 側の `LAContext.evaluatePolicy` reply ブロックから呼ばれる `extern "C"` 関数。
-/// 結果を [`super::biometric_auth::bridge`] へ push する（pull 型、
+/// 結果を [`crate::driver::bridge`] へ push する（pull 型、
 /// `apple_share.rs::fandhe_rust_share_outcome` と同じ橋渡し方式）。
 ///
 /// iOS では reply コールバックが egui の `update` 外（`LAContext` の private queue）
-/// から届くため、[`super::ios::request_repaint`] で明示的に次フレームを起こす
+/// から届くため、[`fandhe_runtime::request_repaint`] で明示的に次フレームを起こす
 /// （`fandhe_rust_share_outcome` と同じ理由。macOS は event loop が別途 repaint を
 /// 要求する経路を持つためここでは呼ばない）。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_biometric_outcome(request_id: u64, success: i32, la_code: i64) {
-    super::biometric_auth::bridge::deliver(
+    crate::driver::bridge::deliver(
         request_id,
-        super::biometric_auth::outcome_from_reply(success != 0, la_code),
+        crate::driver::outcome_from_reply(success != 0, la_code),
     );
     #[cfg(target_os = "ios")]
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }

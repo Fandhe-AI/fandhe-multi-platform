@@ -208,10 +208,6 @@ pub mod apple_background_upload;
 /// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_barcode_scan;
-/// Issue #906: iOS / macOS 向け生体認証実装（`apple/fandhe_apple_biometric.m` を呼ぶ
-/// C ABI ラッパー）。`device/biometric_auth.rs` の macOS/iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_biometric;
 /// Issue #778 macOS・Issue #779 iOS: BLE の周辺機器役実装（`apple/fandhe_apple_ble_peripheral.m` を
 /// 呼ぶ C ABI ラッパー）。`device/ble_peripheral.rs` の macOS 経路と、委譲する
 /// `ios_ble_peripheral`（iOS）から呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
@@ -316,9 +312,6 @@ pub mod background_task;
 pub mod background_upload;
 /// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取りの effect ドライバ。
 pub mod barcode_scan;
-/// Phase 11 の拡充ループ（親 #905、Issue #906/#907/#908）: 生体認証の effect ドライバ
-/// （macOS/iOS/Android/Windows 実装）。
-pub mod biometric_auth;
 /// Phase 11 の拡充ループ（親 #164、Issue #778）: BLE の周辺機器役の effect ドライバ
 /// （macOS・iOS・Windows 実装。Android は骨格で #1123 が実装。他 OS は
 /// `UnsupportedBlePeripheral` 固定）。
@@ -684,10 +677,6 @@ pub mod windows_background_download;
 /// `dead_code` を許容する。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_background_task;
-/// Issue #907: Windows 向け生体認証実装（`IUserConsentVerifierInterop` 経由の
-/// Windows Hello ラッパー）。`device/biometric_auth.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_biometric;
 /// Issue #1101: Windows 向け BLE の周辺機器役（WinRT `GattServiceProvider`）。
 /// `device/ble_peripheral.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

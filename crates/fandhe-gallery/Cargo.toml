@@ -26,6 +26,7 @@ device = [
   "dep:fandhe-cap-ar",
   "dep:fandhe-cap-audio-devices",
   "dep:fandhe-cap-audio-session",
+  "dep:fandhe-cap-biometric-auth",
   "dep:fandhe-cap-calendar",
   "dep:fandhe-cap-call-ui",
   "dep:fandhe-cap-camera-capture",
@@ -144,6 +145,7 @@ NSLocalNetworkUsageDescription = "型サンプル「LAN のサービス探索」
 NSNearbyInteractionUsageDescription = "型サンプル「UWB による距離」で、近くの端末までの距離を測るために使います"
 NSHomeKitUsageDescription = "型サンプル「スマートホーム操作」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」「音声認識」「動画の撮影」の動作確認に使います"
+NSFaceIDUsageDescription = "型サンプル「生体認証」の動作確認に使います"
 
 [package.metadata.fandhe-app.macos.usage-descriptions]
 NSLocationUsageDescription = "型サンプル「Wi-Fi 情報」「Wi-Fi への接続」で、接続先の Wi-Fi 名を読むために使います"
@@ -175,6 +177,7 @@ fandhe-cap-app-progress-attention = { path = "../fandhe-cap-app-progress-attenti
 fandhe-cap-ar = { path = "../fandhe-cap-ar", optional = true }
 fandhe-cap-audio-devices = { path = "../fandhe-cap-audio-devices", optional = true }
 fandhe-cap-audio-session = { path = "../fandhe-cap-audio-session", optional = true }
+fandhe-cap-biometric-auth = { path = "../fandhe-cap-biometric-auth", optional = true }
 fandhe-cap-calendar = { path = "../fandhe-cap-calendar", optional = true }
 fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui", optional = true }
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
