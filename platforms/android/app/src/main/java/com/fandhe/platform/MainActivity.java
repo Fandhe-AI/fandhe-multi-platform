@@ -415,25 +415,6 @@ public class MainActivity extends GameActivity {
         motionRawSensorsHelper.stop(kind);
     }
 
-    // 音声再生（Issue #270）。実装は `MediaPlaybackHelper`。Rust の `android_media_playback.rs` が同期 JNI で呼ぶ。
-    private final MediaPlaybackHelper mediaPlaybackHelper = new MediaPlaybackHelper();
-
-    int mediaPlaybackLoad(long generation, byte[] wav) {
-        return mediaPlaybackHelper.load(generation, wav);
-    }
-
-    int mediaPlaybackControl(long generation, int op) {
-        return mediaPlaybackHelper.control(generation, op);
-    }
-
-    long[] mediaPlaybackSnapshot() {
-        return mediaPlaybackHelper.snapshot();
-    }
-
-    void mediaPlaybackShutdown() {
-        mediaPlaybackHelper.shutdown();
-    }
-
     // OS の検索への登録（Issue #562）。実装は `SpotlightIndexHelper`。Rust の `android_spotlight_index.rs` がワーカースレッドから同期 JNI で呼ぶ。
     int spotlightIndex(String domain, String id, String title, String text, long remainingMs) {
         return SpotlightIndexHelper.index(getApplicationContext(), domain, id, title, text, remainingMs);
@@ -1865,7 +1846,6 @@ public class MainActivity extends GameActivity {
         motionRawSensorsHelper.onResume();
         localPeerHelper.onResume();
         bluetoothClassicHelper.onResume();
-        mediaPlaybackHelper.onResume();
         nowPlayingHelper.onResume();
         if (sensorManager != null && motionSensor != null) {
             sensorManager.registerListener(
@@ -1955,7 +1935,6 @@ public class MainActivity extends GameActivity {
         compassHelper.onPause();
         environmentSensorsHelper.onPause();
         motionRawSensorsHelper.onPause();
-        mediaPlaybackHelper.onPause();
         nowPlayingHelper.onPause();
         if (sensorManager != null) {
             sensorManager.unregisterListener(motionListener);
@@ -3672,7 +3651,6 @@ public class MainActivity extends GameActivity {
         compassHelper.onDestroy();
         environmentSensorsHelper.onDestroy();
         motionRawSensorsHelper.onDestroy();
-        mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
         printHelper.onDestroy();
         screenOrientationHelper.onDestroy();

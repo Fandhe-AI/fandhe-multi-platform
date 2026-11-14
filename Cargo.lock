@@ -1671,6 +1671,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-media-playback"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-core 0.61.2",
+]
+
+[[package]]
 name = "fandhe-cap-media-transcode"
 version = "0.2.0"
 dependencies = [
@@ -1768,6 +1784,21 @@ dependencies = [
  "fandhe-core",
  "fandhe-platform-android",
  "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-now-playing-controls"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-media-playback",
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
@@ -2346,6 +2377,7 @@ dependencies = [
  "fandhe-cap-local-fonts",
  "fandhe-cap-managed-app-config",
  "fandhe-cap-media-cast",
+ "fandhe-cap-media-playback",
  "fandhe-cap-media-transcode",
  "fandhe-cap-memory-pressure",
  "fandhe-cap-midi",
@@ -2354,6 +2386,7 @@ dependencies = [
  "fandhe-cap-nfc",
  "fandhe-cap-nfc-card-emulation",
  "fandhe-cap-nlp",
+ "fandhe-cap-now-playing-controls",
  "fandhe-cap-on-device-llm",
  "fandhe-cap-open-in-shell",
  "fandhe-cap-open-system-settings",
@@ -2395,6 +2428,7 @@ dependencies = [
  "fandhe-platform-apple",
  "fandhe-platform-windows",
  "fandhe-render-egui",
+ "fandhe-runtime",
  "wasm-bindgen",
 ]
 
@@ -2504,12 +2538,14 @@ dependencies = [
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",
  "fandhe-cap-media-cast",
+ "fandhe-cap-media-playback",
  "fandhe-cap-media-transcode",
  "fandhe-cap-memory-pressure",
  "fandhe-cap-midi",
  "fandhe-cap-multi-display",
  "fandhe-cap-nfc",
  "fandhe-cap-nlp",
+ "fandhe-cap-now-playing-controls",
  "fandhe-cap-on-device-llm",
  "fandhe-cap-passkey-signin",
  "fandhe-cap-power-state",

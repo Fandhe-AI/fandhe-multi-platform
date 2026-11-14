@@ -16,6 +16,19 @@
 //! `generated_screens!` doc 参照、Issue #747）を使う。状態駆動 + 端末 I/O 起動を伴う
 //! 画面（HTTP 取得・カメラ撮影等）は `effect` 区画（同 doc 参照、Issue #748/#749）を使う。
 
+/// `audio_play` 画面の effect。再生（`fandhe-cap-media-playback`）の後で OS のメディア操作
+/// （`fandhe-cap-now-playing-controls`）へ曲名と状態を渡し、OS から来た操作を画面へ返す。
+/// 2 機能の crate は互いに依存させない（media-playback だけを選ぶアプリに通知・MediaSession を持ち込まないため）。
+/// 合成は最終成果物の責務で、ここに置く。
+#[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+fn audio_play_effect(
+    state: &fandhe_core::screens::audio_play::AudioPlayState,
+    sender: &fandhe_runtime::CompletionSender<fandhe_core::screens::audio_play::AudioPlayState>,
+) {
+    fandhe_cap_media_playback::audio_play_effect(state, sender);
+    fandhe_cap_now_playing_controls::sync_audio_play(state, sender);
+}
+
 generated_screens! {
     "schema_example" => fandhe_core::screens::schema_example_fixture::todo_screen,
     "form" => fandhe_core::screens::form::form_screen,
@@ -271,7 +284,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "audio_play" => fandhe_core::screens::audio_play::current_screen,
-    fandhe_egui_proxy::device::media_playback::audio_play_effect,
+    audio_play_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "background_download" => fandhe_core::screens::background_download::current_screen,

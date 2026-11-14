@@ -1,15 +1,14 @@
 //! Phase 11 の拡充ループ（親 #98、Issue #381）「ロック画面・OS のメディア操作」の effect ドライバ。
 //! `fandhe_core::screens::audio_play`（端末依存ゼロ）が `Playing` / `Paused` の間だけ、
-//! `fandhe_device::now_playing::NowPlaying` で曲名と再生状態を OS の「再生中」表示へ渡し、
-//! OS から来た再生・一時停止を画面の状態へ返す。`media_playback::audio_play_effect` の最後から
-//! [`sync_audio_play`] が毎フレーム同期に呼ばれる（registry は触らない）。契約の SSOT は
-//! `fandhe_device::now_playing`。
+//! `crate::contract::NowPlaying` で曲名と再生状態を OS の「再生中」表示へ渡し、
+//! OS から来た再生・一時停止を画面の状態へ返す。`fandhe-gallery` の `audio_play` の effect が
+//! `fandhe-cap-media-playback` の `audio_play_effect` の後で [`sync_audio_play`] を毎フレーム呼ぶ（2 機能の crate は互いに依存させない）。
+//! 契約の SSOT は `crate::contract`。
 //!
 //! # OS 別実装の差し込み口
 //!
 //! [`platform_now_playing`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
-//! モジュールだけを埋める（macOS: `apple_now_playing`、iOS: `ios_now_playing`（#382）、
-//! Android: `android_now_playing`（#383）、Windows: `windows_now_playing`（#385）。いずれも実装済み）。
+//! モジュールだけを埋める（macOS: `apple`、iOS: `ios`、Android: `android`、Windows: `windows`。いずれも実装済み）。
 //! それ以外は `UnsupportedNowPlaying` 固定で、ダミーの成功実装へは倒さない。
 //!
 //! # 並行性
@@ -22,21 +21,21 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
-use fandhe_core::screens::audio_play::{
-    apply_os_command, os_media_cleared, set_os_media_status, AudioPhase, AudioPlayState, OsCommand,
-    OsMediaStatus,
-};
 #[cfg(not(any(
     target_os = "macos",
     target_os = "ios",
     target_os = "android",
     target_os = "windows"
 )))]
-use fandhe_device::now_playing::UnsupportedNowPlaying;
-use fandhe_device::now_playing::{NowPlaying, NowPlayingInfo, OsMediaCommand, SharedOsCommand};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedNowPlaying;
+use crate::contract::{NowPlaying, NowPlayingInfo, OsMediaCommand, SharedOsCommand};
+use crate::error::NowPlayingControlsError;
+use fandhe_core::screens::audio_play::{
+    AudioPhase, AudioPlayState, OsCommand, OsMediaStatus, apply_os_command, os_media_cleared,
+    set_os_media_status,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// OS からの操作を拾う再描画の間隔（macOS・Windows。入力が無くても egui が止まらないようにする）。
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -47,19 +46,19 @@ fn platform_now_playing() -> &'static Arc<dyn NowPlaying> {
     INSTANCE.get_or_init(|| {
         #[cfg(target_os = "macos")]
         {
-            super::apple_now_playing::implementation()
+            crate::apple::implementation()
         }
         #[cfg(target_os = "ios")]
         {
-            super::ios_now_playing::implementation()
+            crate::ios::implementation()
         }
         #[cfg(target_os = "android")]
         {
-            super::android_now_playing::implementation()
+            crate::android::implementation()
         }
         #[cfg(target_os = "windows")]
         {
-            super::windows_now_playing::implementation()
+            crate::windows::implementation()
         }
         #[cfg(not(any(
             target_os = "macos",
@@ -71,6 +70,12 @@ fn platform_now_playing() -> &'static Arc<dyn NowPlaying> {
             Arc::new(UnsupportedNowPlaying)
         }
     })
+}
+
+/// プロセスに 1 つだけ持つ実装（`clear` / `shutdown` が `publish` と同じ実体に届くようにする）。
+/// フレームワークの外のアプリも、画面の状態型なしで OS の「再生中」表示を操作できる入口。
+pub fn platform_now_playing_controls() -> Arc<dyn NowPlaying> {
+    Arc::clone(platform_now_playing())
 }
 
 /// プロセスに 1 つの共有状態。各 OS の層は `push` だけを呼ぶ。
@@ -91,9 +96,9 @@ struct Session {
 
 static SESSION: OnceLock<Session> = OnceLock::new();
 
-fn to_status(e: &DeviceError) -> OsMediaStatus {
+fn to_status(e: &NowPlayingControlsError) -> OsMediaStatus {
     match e {
-        DeviceError::Unsupported(_) => OsMediaStatus::Unsupported,
+        NowPlayingControlsError::Unsupported => OsMediaStatus::Unsupported,
         // OS の生コードは画面へ出さない（security.md A09）。
         _ => OsMediaStatus::Failed,
     }
@@ -184,7 +189,7 @@ fn sync(
 }
 
 /// `media_playback::audio_play_effect` から毎フレーム呼ばれる。
-pub(super) fn sync_audio_play(state: &AudioPlayState, sender: &CompletionSender<AudioPlayState>) {
+pub fn sync_audio_play(state: &AudioPlayState, sender: &CompletionSender<AudioPlayState>) {
     sync(
         state,
         sender,
@@ -214,12 +219,12 @@ pub(crate) fn clear_os_failure() {
 /// Activity 再生成時に記録を捨てて表示を取り下げる（画面状態は `default()` に戻るため、残すと
 /// 次の再生で表示が出ない）。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     commands().disarm();
     platform_now_playing().clear();
     // Java 側の session id は新しい Activity で 1 から採番し直すため、失敗済み id の記録も捨てる。
     #[cfg(target_os = "android")]
-    super::android_now_playing::reset_session_state();
+    crate::android::reset_session_state();
     if let Some(s) = SESSION.get() {
         *s.shown.lock().unwrap_or_else(|p| p.into_inner()) = None;
         s.os_failed.store(false, Ordering::SeqCst);
@@ -227,7 +232,7 @@ pub(crate) fn reset_pending_tracking() {
 }
 
 /// アプリ終了時に表示を取り下げる（`device::shutdown` から呼ばれる）。
-pub(super) fn shutdown() {
+pub fn shutdown() {
     commands().disarm();
     platform_now_playing().shutdown();
 }
@@ -235,19 +240,26 @@ pub(super) fn shutdown() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::audio_play::{apply_update, play, stop, AudioUpdate, OsCommandSeen};
-    use std::sync::mpsc;
+    use fandhe_core::screens::audio_play::{AudioUpdate, OsCommandSeen, apply_update, play, stop};
     use std::sync::Mutex;
+    use std::sync::mpsc;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
 
     #[derive(Default)]
     struct Fake {
         publishes: Mutex<Vec<bool>>,
         clears: Mutex<usize>,
-        err: Mutex<Option<DeviceError>>,
+        err: Mutex<Option<NowPlayingControlsError>>,
     }
 
     impl NowPlaying for Fake {
-        fn publish(&self, info: NowPlayingInfo) -> Result<(), DeviceError> {
+        fn publish(&self, info: NowPlayingInfo) -> Result<(), NowPlayingControlsError> {
             self.publishes.lock().unwrap().push(info.playing);
             match self.err.lock().unwrap().take() {
                 Some(e) => Err(e),
@@ -265,7 +277,7 @@ mod tests {
         cmds: SharedOsCommand,
         session: Session,
         sender: CompletionSender<AudioPlayState>,
-        rx: mpsc::Receiver<crate::app::Completion<AudioPlayState>>,
+        rx: mpsc::Receiver<fandhe_runtime::Completion<AudioPlayState>>,
         state: AudioPlayState,
     }
 
@@ -288,7 +300,7 @@ mod tests {
                 fake: Fake::default(),
                 cmds: SharedOsCommand::new(),
                 session: Session::default(),
-                sender: crate::app::egui_sender(tx, egui::Context::default()),
+                sender: CompletionSender::new(tx, Arc::new(NoopWaker)),
                 rx,
                 state,
             }
@@ -433,9 +445,9 @@ mod tests {
     #[test]
     fn publish_failure_is_not_success_and_rejects_pushes() {
         for (err, want) in [
-            (DeviceError::Internal("now_playing"), OsMediaStatus::Failed),
+            (NowPlayingControlsError::Internal, OsMediaStatus::Failed),
             (
-                DeviceError::Unsupported("now_playing"),
+                NowPlayingControlsError::Unsupported,
                 OsMediaStatus::Unsupported,
             ),
         ] {
@@ -453,7 +465,7 @@ mod tests {
     #[test]
     fn unsupported_dispatch_never_succeeds() {
         let mut h = H::new();
-        let np = fandhe_device::now_playing::UnsupportedNowPlaying;
+        let np = crate::contract::UnsupportedNowPlaying;
         sync(&h.state, &h.sender, &np, &h.cmds, &h.session);
         while let Ok(c) = h.rx.try_recv() {
             c(&mut h.state);

@@ -29,7 +29,7 @@
 // DidEnterBackground / WillEnterForeground 通知で main が更新するアトミックフラグで判定する。
 // 背景のときだけ Rust を呼ばず CommandFailed を返す（背景で受けた操作に成功を返さない。
 // 前景へ戻ると media-playback が中断扱いにし、ドライバが取り下げるので溜まった操作では再開しない）。
-// 前景復帰直後で、ドライバがまだ中断を見て取り下げていない間の操作も、再生側（fandhe_apple_media_playback.m）の
+// 前景復帰直後で、ドライバがまだ中断を見て取り下げていない間の操作も、再生側（fandhe-cap-media-playback の fandhe_apple_media_playback.m）の
 // phase が Interrupted なら CommandFailed を返す（後で捨てる操作に成功を返さない）。
 // Inactive（コントロールセンター・通知センターを開いた間、着信など）は前景として扱い、そこからの操作は受け付ける
 // （「前景だけ」の決定は背景を拒否する意味。Inactive を拒否するとコントロールセンターの操作が全部失敗する）。
@@ -76,7 +76,8 @@ static void fandhe_set_enabled(MPRemoteCommand *cmd, BOOL enabled) {
 // main で更新したこのフラグを読む（Main Thread Checker 違反を避ける）。
 static _Atomic bool g_background = false;
 
-// fandhe_apple_media_playback.m の状態取得（同じ静的ライブラリ内）。phase 6 = Interrupted。
+// fandhe-cap-media-playback の fandhe_apple_media_playback.m の状態取得（別 crate の静的ライブラリ。
+// 本 crate が iOS・macOS で fandhe-cap-media-playback に依存するため、最終成果物のリンクで解決される）。phase 6 = Interrupted。
 extern void fandhe_apple_media_playback_snapshot(uint64_t *gen, int32_t *phase, double *pos, double *dur);
 static const int32_t kPlaybackPhaseInterrupted = 6;
 #endif

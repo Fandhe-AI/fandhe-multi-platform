@@ -33,11 +33,11 @@
 use std::sync::Arc;
 
 #[cfg(not(target_os = "windows"))]
-use fandhe_device::media_playback::UnsupportedMediaPlayback;
-use fandhe_device::media_playback::{
-    secs_to_ms, MediaPlayback, PlaybackFailure, PlaybackPhase, PlaybackSnapshot,
+use crate::contract::UnsupportedMediaPlayback;
+use crate::contract::{
+    MediaPlayback, PlaybackFailure, PlaybackPhase, PlaybackSnapshot, secs_to_ms,
 };
-use fandhe_device::DeviceError;
+use crate::error::MediaPlaybackError;
 
 /// `load` に渡せる WAV の上限（Apple 実装と同じ。異常に大きい入力を OS に渡さない）。
 #[cfg(target_os = "windows")]
@@ -115,48 +115,50 @@ impl Shared {
         self.next_gen
     }
 
-    fn check(&self, gen: u64) -> Result<(), DeviceError> {
-        if self.current == Some(gen) {
+    fn check(&self, r#gen: u64) -> Result<(), MediaPlaybackError> {
+        if self.current == Some(r#gen) {
             Ok(())
         } else {
-            Err(DeviceError::InvalidInput("media_playback generation"))
+            Err(MediaPlaybackError::InvalidInput(
+                "media_playback generation",
+            ))
         }
     }
 
     /// 読み込み中（エンジンが準備前）か。この間の停止は OS へ流さず、準備完了後に確定する。
-    fn is_loading(&self, gen: u64) -> bool {
-        self.check(gen).is_ok() && self.phase == PlaybackPhase::Loading
+    fn is_loading(&self, r#gen: u64) -> bool {
+        self.check(r#gen).is_ok() && self.phase == PlaybackPhase::Loading
     }
 
     /// 意図だけ記録する。`Playing` は `PLAYING` 通知で立てる。
-    fn on_play(&mut self, gen: u64) -> Result<(), DeviceError> {
-        self.check(gen)?;
+    fn on_play(&mut self, r#gen: u64) -> Result<(), MediaPlaybackError> {
+        self.check(r#gen)?;
         // 失敗確定後の再生要求は受け付けない（失敗を成功へ畳まない）。
         if matches!(self.phase, PlaybackPhase::Failed(_)) {
-            return Err(DeviceError::InvalidInput("media_playback failed"));
+            return Err(MediaPlaybackError::InvalidInput("media_playback failed"));
         }
         self.play_issued += 1;
         self.intent = Intent::Play;
         Ok(())
     }
 
-    fn on_pause(&mut self, gen: u64) -> Result<(), DeviceError> {
-        self.check(gen)?;
+    fn on_pause(&mut self, r#gen: u64) -> Result<(), MediaPlaybackError> {
+        self.check(r#gen)?;
         // 意図だけ記録する。`Paused` はワーカーの完了（`on_done`）で立て、完了前の失敗を見逃さない。
         self.intent = Intent::Pause;
         Ok(())
     }
 
-    fn on_stop(&mut self, gen: u64) -> Result<(), DeviceError> {
-        self.check(gen)?;
+    fn on_stop(&mut self, r#gen: u64) -> Result<(), MediaPlaybackError> {
+        self.check(r#gen)?;
         self.intent = Intent::Stop;
         Ok(())
     }
 
     /// ワーカーが一時停止・停止の MF 呼び出しに成功した時点で状態を確定する。
     /// 完了までは `Playing` のままなので、ドライバは失敗の監視を打ち切らない。
-    fn on_done(&mut self, gen: u64) {
-        if self.check(gen).is_err() {
+    fn on_done(&mut self, r#gen: u64) {
+        if self.check(r#gen).is_err() {
             return;
         }
         match self.intent {
@@ -177,8 +179,8 @@ impl Shared {
     }
 
     /// 世代の違う通知は捨てる（契約表 2）。
-    fn on_event(&mut self, gen: u64, ev: Ev) {
-        if self.check(gen).is_err() {
+    fn on_event(&mut self, r#gen: u64, ev: Ev) {
+        if self.check(r#gen).is_err() {
             return;
         }
         match ev {
@@ -208,9 +210,9 @@ impl Shared {
 
     /// ワーカーが `Play()` を処理した。`already_playing` は呼ぶ前にエンジンが再生中だった場合で、
     /// この時は `PLAYING` が再度届かないため実状態で確認済みにする。
-    fn on_play_applied(&mut self, gen: u64, already_playing: bool) {
+    fn on_play_applied(&mut self, r#gen: u64, already_playing: bool) {
         self.play_applied += 1;
-        if already_playing && self.check(gen).is_ok() && self.intent == Intent::Play {
+        if already_playing && self.check(r#gen).is_ok() && self.intent == Intent::Play {
             self.play_confirmed = self.play_applied;
             if !matches!(self.phase, PlaybackPhase::Failed(_)) {
                 self.phase = PlaybackPhase::Playing;
@@ -219,15 +221,15 @@ impl Shared {
     }
 
     /// OS の秒値を写す。NaN・無限大・負値は `None`（範囲検証は丸めより前）。
-    fn on_times(&mut self, gen: u64, pos_secs: f64, dur_secs: f64) {
-        if self.check(gen).is_ok() {
+    fn on_times(&mut self, r#gen: u64, pos_secs: f64, dur_secs: f64) {
+        if self.check(r#gen).is_ok() {
             self.position_ms = secs_to_ms(pos_secs);
             self.duration_ms = secs_to_ms(dur_secs);
         }
     }
 
-    fn fail(&mut self, gen: u64, f: PlaybackFailure) {
-        if self.check(gen).is_ok() {
+    fn fail(&mut self, r#gen: u64, f: PlaybackFailure) {
+        if self.check(r#gen).is_ok() {
             self.phase = PlaybackPhase::Failed(f);
         }
     }
@@ -252,8 +254,8 @@ impl Shared {
 }
 
 /// 保留中の停止が通知の世代と一致するときだけ取り出す（旧世代の通知では変更しない）。
-fn take_deferred_stop(slot: &mut Option<u64>, gen: u64) -> bool {
-    if *slot == Some(gen) {
+fn take_deferred_stop(slot: &mut Option<u64>, r#gen: u64) -> bool {
+    if *slot == Some(r#gen) {
         *slot = None;
         true
     } else {
@@ -276,25 +278,26 @@ pub(crate) fn implementation() -> Arc<dyn MediaPlayback> {
 #[cfg(target_os = "windows")]
 mod win {
     use std::ffi::c_void;
-    use std::sync::{mpsc, Mutex, OnceLock};
+    use std::sync::{Mutex, OnceLock, mpsc};
 
-    use windows::core::{implement, s, w, Interface, BSTR, HRESULT};
     use windows::Win32::Foundation::HANDLE;
     use windows::Win32::Media::MediaFoundation::{
         CLSID_MFMediaEngineClassFactory, IMFAttributes, IMFByteStream, IMFMediaEngineClassFactory,
-        IMFMediaEngineEx, IMFMediaEngineNotify, IMFMediaEngineNotify_Impl, MFSTARTUP_FULL,
+        IMFMediaEngineEx, IMFMediaEngineNotify, IMFMediaEngineNotify_Impl,
         MF_MEDIA_ENGINE_AUDIOONLY, MF_MEDIA_ENGINE_CALLBACK, MF_MEDIA_ENGINE_EVENT_CANPLAY,
         MF_MEDIA_ENGINE_EVENT_ENDED, MF_MEDIA_ENGINE_EVENT_ERROR, MF_MEDIA_ENGINE_EVENT_LOADEDDATA,
         MF_MEDIA_ENGINE_EVENT_NOTIFYSTABLESTATE, MF_MEDIA_ENGINE_EVENT_PLAYING, MF_VERSION,
+        MFSTARTUP_FULL,
     };
-    use windows::Win32::System::Com::{CoCreateInstance, IStream, CLSCTX_INPROC_SERVER};
+    use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, IStream};
     use windows::Win32::System::LibraryLoader::{
-        GetProcAddress, LoadLibraryExW, LOAD_LIBRARY_SEARCH_SYSTEM32,
+        GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
     };
     use windows::Win32::System::Threading::SetEvent;
     use windows::Win32::UI::Shell::SHCreateMemStream;
+    use windows::core::{BSTR, HRESULT, Interface, implement, s, w};
 
-    use fandhe_device::media_playback::POLL_INTERVAL;
+    use crate::contract::POLL_INTERVAL;
 
     use super::*;
     use fandhe_platform_windows::ComInit;
@@ -312,8 +315,8 @@ mod win {
     /// 状態更新とキュー送信を同じ排他区間で行う（並行呼び出しで意図と OS 操作の順が逆転しない、
     /// 契約表 2・11）。`mpsc::Sender::send` は待たないのでロック内で呼んでよい。
     fn with_shared_send(
-        f: impl FnOnce(&mut Shared) -> Result<Cmd, DeviceError>,
-    ) -> Result<(), DeviceError> {
+        f: impl FnOnce(&mut Shared) -> Result<Cmd, MediaPlaybackError>,
+    ) -> Result<(), MediaPlaybackError> {
         let mut s = SHARED.lock().unwrap_or_else(|e| e.into_inner());
         let cmd = f(&mut s)?;
         send(cmd)
@@ -345,43 +348,43 @@ mod win {
             .as_ref()
     }
 
-    fn send(cmd: Cmd) -> Result<(), DeviceError> {
+    fn send(cmd: Cmd) -> Result<(), MediaPlaybackError> {
         match queue() {
             Some(q) if q.send(cmd).is_ok() => Ok(()),
-            _ => Err(DeviceError::Internal("media_playback")),
+            _ => Err(MediaPlaybackError::Internal("media_playback")),
         }
     }
 
     pub(super) struct WindowsMediaPlayback;
 
     impl MediaPlayback for WindowsMediaPlayback {
-        fn load(&self, wav: Arc<[u8]>) -> Result<u64, DeviceError> {
+        fn load(&self, wav: Arc<[u8]>) -> Result<u64, MediaPlaybackError> {
             if wav.is_empty() || wav.len() > MAX_WAV_BYTES {
                 // 旧世代も無効化する（Apple 実装と同じ）。
                 self.shutdown();
-                return Err(DeviceError::InvalidInput("media_playback wav"));
+                return Err(MediaPlaybackError::InvalidInput("media_playback wav"));
             }
-            let mut gen = 0;
+            let mut r#gen = 0;
             let r = with_shared_send(|s| {
-                gen = s.begin_load();
-                Ok(Cmd::Load(gen, wav))
+                r#gen = s.begin_load();
+                Ok(Cmd::Load(r#gen, wav))
             });
             if let Err(e) = r {
-                with_shared(|s| s.fail(gen, PlaybackFailure::Internal));
+                with_shared(|s| s.fail(r#gen, PlaybackFailure::Internal));
                 return Err(e);
             }
-            Ok(gen)
+            Ok(r#gen)
         }
 
-        fn play(&self, generation: u64) -> Result<(), DeviceError> {
+        fn play(&self, generation: u64) -> Result<(), MediaPlaybackError> {
             with_shared_send(|s| s.on_play(generation).map(|_| Cmd::Play(generation)))
         }
 
-        fn pause(&self, generation: u64) -> Result<(), DeviceError> {
+        fn pause(&self, generation: u64) -> Result<(), MediaPlaybackError> {
             with_shared_send(|s| s.on_pause(generation).map(|_| Cmd::Pause(generation)))
         }
 
-        fn stop(&self, generation: u64) -> Result<(), DeviceError> {
+        fn stop(&self, generation: u64) -> Result<(), MediaPlaybackError> {
             with_shared_send(|s| s.on_stop(generation).map(|_| Cmd::Stop(generation)))
         }
 
@@ -412,7 +415,7 @@ mod win {
         /// Media Engine の通知をキューへ戻すだけの受け口。ロックもエンジン呼び出しもしない。
         #[implement(IMFMediaEngineNotify)]
         pub(super) struct Notify {
-            pub(super) gen: u64,
+            pub(super) r#gen: u64,
             pub(super) tx: mpsc::Sender<Cmd>,
         }
 
@@ -446,7 +449,7 @@ mod win {
                     None
                 };
                 if let Some(ev) = ev {
-                    let _ = self.tx.send(Cmd::Event(self.gen, ev));
+                    let _ = self.tx.send(Cmd::Event(self.r#gen, ev));
                 }
                 Ok(())
             }
@@ -520,7 +523,7 @@ mod win {
     #[allow(unsafe_code)]
     fn create_engine(
         mf: &Mf,
-        gen: u64,
+        r#gen: u64,
         tx: &mpsc::Sender<Cmd>,
         wav: &[u8],
     ) -> Result<IMFMediaEngineEx, PlaybackFailure> {
@@ -538,7 +541,7 @@ mod win {
         })?;
         let attrs = mf.attributes().ok_or(PlaybackFailure::Internal)?;
         let notify: IMFMediaEngineNotify = Notify {
-            gen,
+            r#gen,
             tx: tx.clone(),
         }
         .into();
@@ -598,11 +601,11 @@ mod win {
     }
 
     /// 対象世代のエンジンがあれば取り出して `Shutdown()` する。
-    fn release_failed(engine: &mut Option<(u64, IMFMediaEngineEx)>, gen: u64) {
-        if engine.as_ref().is_some_and(|(g, _)| *g == gen) {
-            if let Some((_, e)) = engine.take() {
-                shutdown_engine(&e);
-            }
+    fn release_failed(engine: &mut Option<(u64, IMFMediaEngineEx)>, r#gen: u64) {
+        if engine.as_ref().is_some_and(|(g, _)| *g == r#gen)
+            && let Some((_, e)) = engine.take()
+        {
+            shutdown_engine(&e);
         }
     }
 
@@ -662,8 +665,8 @@ mod win {
             };
             match cmd {
                 None => {}
-                Some(Cmd::Load(gen, wav)) => {
-                    if with_shared(|s| s.check(gen)).is_err() {
+                Some(Cmd::Load(r#gen, wav)) => {
+                    if with_shared(|s| s.check(r#gen)).is_err() {
                         continue;
                     }
                     if let Some((_, old)) = engine.take() {
@@ -673,29 +676,29 @@ mod win {
                         Err(PlaybackFailure::Internal)
                     } else {
                         match mf.get_or_insert_with(Mf::init) {
-                            Some(mf) => create_engine(mf, gen, &tx, &wav),
+                            Some(mf) => create_engine(mf, r#gen, &tx, &wav),
                             None => Err(PlaybackFailure::Unsupported),
                         }
                     };
                     match result {
-                        Ok(e) => engine = Some((gen, e)),
-                        Err(f) => with_shared(|s| s.fail(gen, f)),
+                        Ok(e) => engine = Some((r#gen, e)),
+                        Err(f) => with_shared(|s| s.fail(r#gen, f)),
                     }
                 }
-                Some(Cmd::Event(gen, ev)) => {
-                    with_shared(|s| s.on_event(gen, ev));
+                Some(Cmd::Event(r#gen, ev)) => {
+                    with_shared(|s| s.on_event(r#gen, ev));
                     // 読み込み中に受けた停止は、準備完了後に実行する。その間に Play へ変わっていれば何もしない。
                     // 旧世代の CANPLAY では新世代の保留停止を消費しない。
-                    if ev == Ev::CanPlay && take_deferred_stop(&mut deferred_stop, gen) {
+                    if ev == Ev::CanPlay && take_deferred_stop(&mut deferred_stop, r#gen) {
                         let still_stop =
-                            with_shared(|s| s.check(gen).is_ok() && s.intent == Intent::Stop);
+                            with_shared(|s| s.check(r#gen).is_ok() && s.intent == Intent::Stop);
                         if still_stop {
-                            apply(&mut engine, &Cmd::Stop(gen));
+                            apply(&mut engine, &Cmd::Stop(r#gen));
                         }
                     }
                     // ERROR 確定後は再生資源を残さない（契約表 9）。
                     if matches!(ev, Ev::Error(_)) {
-                        release_failed(&mut engine, gen);
+                        release_failed(&mut engine, r#gen);
                     }
                 }
                 Some(Cmd::Shutdown) => {

@@ -99,6 +99,10 @@ fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture" }
 fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port" }
 # 契約の型・純関数（EventLog・LockState・SleepLockEvent 等）。Web 実装の本体はこの crate に残る（OS 別の依存は target で外れ、wasm32 でも通る）。
 fandhe-cap-sleep-lock-events = { path = "../fandhe-cap-sleep-lock-events" }
+# media-playback の契約の型・定数・純関数（`secs_to_ms`・`START_DEADLINE`・`POLL_INTERVAL`）。Web 実装の本体は本クレートに残す。
+fandhe-cap-media-playback = { path = "../fandhe-cap-media-playback" }
+# now-playing-controls の契約の型（`OsMediaCommand`・`SharedOsCommand`・`DEMO_TITLE`）。Web 実装の本体は本クレートに残す。
+fandhe-cap-now-playing-controls = { path = "../fandhe-cap-now-playing-controls" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。
 fandhe-platform-web = { path = "../fandhe-platform-web" }
 

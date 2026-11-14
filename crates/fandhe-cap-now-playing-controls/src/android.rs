@@ -1,11 +1,11 @@
 //! Android 向けロック画面・OS のメディア操作実装（Issue #383、親 #98）。
-//! `device/now_playing.rs::platform_now_playing` の Android 経路から呼ばれ、契約は
-//! `fandhe_device::now_playing`。Java 側の SSOT は `NowPlayingHelper`（コード表・UI スレッドへの
-//! 橋渡し・`MediaSession` と通知）で、egui スレッドから `MainActivity.nowPlayingPublish` /
-//! `nowPlayingClear` を JNI で同期呼び出しする。
+//! 本 crate の `driver::platform_now_playing` の Android 経路から呼ばれ、契約は
+//! `crate::contract`。Java 側の SSOT は `NowPlayingHelper`（コード表・UI スレッドへの
+//! 橋渡し・`MediaSession` と通知）で、egui スレッドから static の `publish` /
+//! `clear`（第 1 引数は Activity）を JNI で同期呼び出しする。
 //!
 //! OS からの再生・一時停止は `NowPlayingHelper.nativeOnNowPlayingCommand` で届き、
-//! [`device::now_playing::commands`](super::now_playing::commands) へ `push` するだけにして、
+//! [`commands`](crate::commands) へ `push` するだけにして、
 //! 続けて `request_repaint` で次フレームを起こす（Android は 250ms ポーリングを使わない）。
 //! メディアキーのトグルは `MediaSession` の既定処理が Play / Pause に振り分けるため `Toggle` は来ない。
 //!
@@ -27,8 +27,8 @@
 
 use std::sync::Arc;
 
-use fandhe_device::now_playing::{NowPlaying, OsMediaCommand, SharedOsCommand};
-use fandhe_device::DeviceError;
+use crate::contract::{NowPlaying, OsMediaCommand, SharedOsCommand};
+use crate::error::NowPlayingControlsError;
 
 /// 操作コード（SSOT は Java 側 `NowPlayingHelper.CMD_*`）。
 const CMD_PLAY: i32 = 0;
@@ -104,7 +104,7 @@ fn state() -> std::sync::MutexGuard<'static, SessionState> {
     STATE.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-/// Activity 再生成（`device::now_playing::reset_pending_tracking`）で受付の記録を捨てる。
+/// Activity 再生成（`driver::reset_pending_tracking`）で受付の記録を捨てる。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) fn reset_session_state() {
     state().reset();
@@ -114,14 +114,14 @@ pub(crate) fn reset_session_state() {
 /// 0（id なし）は `Internal`、正は成功で受け入れる id を更新する。受理できたときは、この publish の間に
 /// 立った失敗の印（解放済みの古い session のもの）を新しい session に持ち越さない。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
-fn decode_result(code: i64) -> Result<(), DeviceError> {
+fn decode_result(code: i64) -> Result<(), NowPlayingControlsError> {
     let mut st = state();
-    if code > 0 && st.accept(code, super::now_playing::commands()) {
-        super::now_playing::clear_os_failure();
+    if code > 0 && st.accept(code, crate::commands()) {
+        crate::clear_os_failure();
         Ok(())
     } else {
         st.accepted = 0;
-        Err(DeviceError::Internal("now_playing"))
+        Err(NowPlayingControlsError::Internal)
     }
 }
 
@@ -145,62 +145,63 @@ fn to_jni_ms(v: Option<u64>) -> i64 {
 #[cfg(target_os = "android")]
 struct AndroidNowPlaying;
 
-/// `MainActivity.nowPlayingPublish(String, boolean, long, long)`（`Some`）または
-/// `nowPlayingClear()`（`None`）を JNI で呼ぶ。`publish` の戻りは session id（負は失敗）、`clear` は 0。
-/// `None` は呼び出し失敗。`unsafe` 2 箇所は `android_screen_wake_lock.rs::call_activity` と同一の根拠。
+/// `NowPlayingHelper.publish(Activity, String, boolean, long, long)`（`Some`）または
+/// `clear(Activity)`（`None`）を JNI の static 呼び出しで行う。`publish` の戻りは session id（負は失敗）、`clear` は 0。
+/// `None` は呼び出し失敗。`unsafe` は共通層 `fandhe_platform_android::with_activity_class` に閉じている。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_activity(publish: Option<(bool, i64, i64)>) -> Option<i64> {
-    use super::android::JniCallFailed;
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<i64, JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        match publish {
-            Some((playing, position, duration)) => {
-                let title = env.new_string(fandhe_device::now_playing::DEMO_TITLE)?;
-                Ok(env
-                    .call_method(
-                        &activity,
-                        jni::jni_str!("nowPlayingPublish"),
-                        jni::jni_sig!((java.lang.String, boolean, long, long) -> long),
-                        &[
-                            jni::objects::JValue::Object(&title),
-                            jni::objects::JValue::Bool(playing),
-                            jni::objects::JValue::Long(position),
-                            jni::objects::JValue::Long(duration),
-                        ],
-                    )?
-                    .j()?)
+    use fandhe_platform_android::JniCallFailed;
+    let app = fandhe_platform_android::android_app()?;
+    fandhe_platform_android::with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.NowPlayingHelper"),
+        |env, activity, class| -> Result<i64, JniCallFailed> {
+            match publish {
+                Some((playing, position, duration)) => {
+                    let title = env.new_string(crate::contract::DEMO_TITLE)?;
+                    Ok(env
+                        .call_static_method(
+                            class,
+                            jni::jni_str!("publish"),
+                            jni::jni_sig!((android.app.Activity, java.lang.String, boolean, long, long) -> long),
+                            &[
+                                jni::objects::JValue::Object(activity),
+                                jni::objects::JValue::Object(&title),
+                                jni::objects::JValue::Bool(playing),
+                                jni::objects::JValue::Long(position),
+                                jni::objects::JValue::Long(duration),
+                            ],
+                        )?
+                        .j()?)
+                }
+                None => {
+                    env.call_static_method(
+                        class,
+                        jni::jni_str!("clear"),
+                        jni::jni_sig!((android.app.Activity) -> ()),
+                        &[jni::objects::JValue::Object(activity)],
+                    )?;
+                    Ok(0)
+                }
             }
-            None => {
-                env.call_method(
-                    &activity,
-                    jni::jni_str!("nowPlayingClear"),
-                    jni::jni_sig!(() -> ()),
-                    &[],
-                )?;
-                Ok(0)
-            }
-        }
-    })
+        },
+    )
     .ok()
 }
 
 #[cfg(target_os = "android")]
 impl NowPlaying for AndroidNowPlaying {
-    fn publish(&self, info: fandhe_device::now_playing::NowPlayingInfo) -> Result<(), DeviceError> {
+    fn publish(
+        &self,
+        info: crate::contract::NowPlayingInfo,
+    ) -> Result<(), NowPlayingControlsError> {
         match call_activity(Some((
             info.playing,
             to_jni_ms(info.position_ms),
             to_jni_ms(info.duration_ms),
         ))) {
             Some(code) => decode_result(code),
-            None => Err(DeviceError::Internal("now_playing")),
+            None => Err(NowPlayingControlsError::Internal),
         }
     }
 
@@ -228,7 +229,7 @@ pub(crate) fn implementation() -> Arc<dyn NowPlaying> {
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn NowPlaying> {
-    Arc::new(fandhe_device::now_playing::UnsupportedNowPlaying)
+    Arc::new(crate::contract::UnsupportedNowPlaying)
 }
 
 /// `NowPlayingHelper.nativeOnNowPlayingCommand`（Java 側）から呼ばれる JNI エクスポート。
@@ -240,7 +241,7 @@ pub(crate) fn implementation() -> Arc<dyn NowPlaying> {
 /// ため他シンボルと衝突しない（既存の JNI エクスポートと同じ根拠）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_NowPlayingHelper_nativeOnNowPlayingCommand<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -251,10 +252,10 @@ extern "system" fn Java_com_fandhe_platform_NowPlayingHelper_nativeOnNowPlayingC
         return;
     };
     // 照合と投入は同じロックの内側（`SessionState::route`）。
-    let pushed = state().route(session_id, cmd, super::now_playing::commands());
+    let pushed = state().route(session_id, cmd, crate::commands());
     if pushed {
         // 入力が無いと egui が描画せず操作が画面へ届かないため次フレームを起こす。
-        crate::android::request_repaint();
+        fandhe_runtime::request_repaint();
     }
 }
 
@@ -266,7 +267,7 @@ extern "system" fn Java_com_fandhe_platform_NowPlayingHelper_nativeOnNowPlayingC
 /// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` の根拠は上と同じ。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_NowPlayingHelper_nativeOnNowPlayingFailed<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -275,9 +276,9 @@ extern "system" fn Java_com_fandhe_platform_NowPlayingHelper_nativeOnNowPlayingF
     // 判定と印は同じロックの内側（decode_result の受理と順序付ける）。
     let mut st = state();
     if st.fail(session_id) {
-        super::now_playing::mark_os_failure();
+        crate::mark_os_failure();
         drop(st);
-        crate::android::request_repaint();
+        fandhe_runtime::request_repaint();
     }
 }
 

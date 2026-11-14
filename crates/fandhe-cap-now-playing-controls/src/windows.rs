@@ -2,8 +2,8 @@
 //! `SystemMediaTransportControls`（SMTC）へ曲名と再生状態を渡し、メディアキー・SMTC フライアウトの
 //! 再生・一時停止を `device::now_playing::commands()` へ積む。
 //!
-//! - 呼び出し元: `device/now_playing.rs::platform_now_playing` の Windows 経路（effect ドライバが UI スレッドから
-//!   `publish` / `clear` を呼ぶ）。契約の SSOT は `fandhe_device::now_playing`。
+//! - 呼び出し元: 本 crate の `driver::platform_now_playing` の Windows 経路（effect ドライバが UI スレッドから
+//!   `publish` / `clear` を呼ぶ）。契約の SSOT は `crate::contract`。
 //! - スレッド: `ButtonPressed` は UI 以外のスレッドで届く。handler は `commands().push` だけを行い、
 //!   画面の状態や `held` のロックには触れない（契約表 11）。SMTC は `Send + Sync` なので Mutex 1 本で足りる。
 //! - `unsafe` は `GetForWindow` の 1 箇所に閉じる。HRESULT・曲名はログにも画面にも出さず、
@@ -16,7 +16,7 @@
 
 use std::sync::Arc;
 
-use fandhe_device::now_playing::{NowPlaying, OsMediaCommand};
+use crate::contract::{NowPlaying, OsMediaCommand};
 
 /// `SystemMediaTransportControlsButton` の列挙値を契約上の操作へ写す。
 /// 範囲外（Stop・Next 等）は `None` で捨て、成功として扱わない。
@@ -39,27 +39,27 @@ pub(crate) fn implementation() -> Arc<dyn NowPlaying> {
 #[cfg(not(target_os = "windows"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn NowPlaying> {
-    Arc::new(fandhe_device::now_playing::UnsupportedNowPlaying)
+    Arc::new(crate::contract::UnsupportedNowPlaying)
 }
 
 #[cfg(target_os = "windows")]
 mod imp {
     use std::sync::{Mutex, MutexGuard};
 
-    use windows::core::HSTRING;
     use windows::Foundation::TypedEventHandler;
     use windows::Media::{
         MediaPlaybackStatus, MediaPlaybackType, SystemMediaTransportControls,
         SystemMediaTransportControlsButtonPressedEventArgs,
     };
     use windows::Win32::System::WinRT::ISystemMediaTransportControlsInterop;
+    use windows::core::HSTRING;
 
-    use fandhe_device::now_playing::{NowPlaying, NowPlayingInfo, DEMO_TITLE};
-    use fandhe_device::DeviceError;
+    use crate::contract::{DEMO_TITLE, NowPlaying, NowPlayingInfo};
+    use crate::error::NowPlayingControlsError;
 
     use super::command_from_button;
 
-    const ERR: DeviceError = DeviceError::Internal("now_playing");
+    const ERR: NowPlayingControlsError = NowPlayingControlsError::Internal;
 
     /// 取得済みの SMTC と `ButtonPressed` の登録トークン。
     struct Held {
@@ -90,7 +90,7 @@ mod imp {
 
         /// SMTC を取得して handler と有効化を済ませる。途中で失敗したら確保済みの分を解放して返す。
         #[allow(unsafe_code)]
-        fn acquire() -> Result<Held, DeviceError> {
+        fn acquire() -> Result<Held, NowPlayingControlsError> {
             let hwnd = fandhe_platform_windows::window().ok_or(ERR)?;
             let interop = windows::core::factory::<
                 SystemMediaTransportControls,
@@ -112,7 +112,7 @@ mod imp {
                         .and_then(|a| a.Button().ok())
                         .and_then(|b| command_from_button(b.0))
                     {
-                        super::super::now_playing::commands().push(cmd);
+                        crate::commands().push(cmd);
                     }
                     Ok(())
                 }))
@@ -144,7 +144,7 @@ mod imp {
     }
 
     impl NowPlaying for WindowsNowPlaying {
-        fn publish(&self, info: NowPlayingInfo) -> Result<(), DeviceError> {
+        fn publish(&self, info: NowPlayingInfo) -> Result<(), NowPlayingControlsError> {
             let mut guard = self.lock();
             if guard.is_none() {
                 *guard = Some(Self::acquire()?);
@@ -190,9 +190,11 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn host_build_is_unsupported() {
-        use fandhe_device::now_playing::NowPlayingInfo;
-        assert!(implementation()
-            .publish(NowPlayingInfo::new(true, None, None))
-            .is_err());
+        use crate::contract::NowPlayingInfo;
+        assert!(
+            implementation()
+                .publish(NowPlayingInfo::new(true, None, None))
+                .is_err()
+        );
     }
 }

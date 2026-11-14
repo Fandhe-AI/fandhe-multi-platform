@@ -1,8 +1,8 @@
 //! Phase 11 の拡充ループ（親 #86）型サンプル「音声の再生」（Issue #267）の effect ドライバ。
 //! `fandhe_core::screens::audio_play`（端末依存ゼロ）の要求を `take_command` で観測し、
-//! `fandhe_device::media_playback::MediaPlayback` を操作して、状態を `CompletionSender` 経由で
+//! `crate::contract::MediaPlayback` を操作して、状態を `CompletionSender` 経由で
 //! 注入する（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約の SSOT は `fandhe_device::media_playback`。
+//! 契約の SSOT は `crate::contract`。
 //!
 //! # OS 別実装の差し込み口
 //!
@@ -20,47 +20,52 @@
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::audio_play::{
-    apply_update, expire, mark_command_taken, take_command, AudioCommand, AudioFailure, AudioPhase,
-    AudioPlayState, AudioUpdate,
-};
 #[cfg(not(any(
     target_os = "windows",
     target_os = "macos",
     target_os = "ios",
     target_os = "android"
 )))]
-use fandhe_device::media_playback::UnsupportedMediaPlayback;
-use fandhe_device::media_playback::{
-    demo_wav, MediaPlayback, PlaybackFailure, PlaybackPhase, POLL_INTERVAL, START_DEADLINE,
+use crate::contract::UnsupportedMediaPlayback;
+use crate::contract::{
+    MediaPlayback, POLL_INTERVAL, PlaybackFailure, PlaybackPhase, START_DEADLINE, demo_wav,
 };
-use fandhe_device::DeviceError;
+use crate::error::MediaPlaybackError;
+use fandhe_core::screens::audio_play::{
+    AudioCommand, AudioFailure, AudioPhase, AudioPlayState, AudioUpdate, apply_update, expire,
+    mark_command_taken, take_command,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// OS の生コードを含まない固定の失敗文言。
 const FAILED_PLAY: &str = "音声の再生";
 const FAILED_DECODE: &str = "音声を読み込めません";
 
 /// プロセスに 1 つだけ持つ実装（`stop` が `play` と同じ実体に届くようにする）。
+/// フレームワークの外のアプリも、画面の状態型なしで再生を操作できる入口。
+pub fn platform_media_playback() -> Arc<dyn MediaPlayback> {
+    Arc::clone(platform_playback())
+}
+
 fn platform_playback() -> &'static Arc<dyn MediaPlayback> {
     static PLAYBACK: OnceLock<Arc<dyn MediaPlayback>> = OnceLock::new();
     PLAYBACK.get_or_init(|| {
         #[cfg(target_os = "macos")]
         {
-            super::apple_media_playback::implementation()
+            crate::apple::implementation()
         }
         #[cfg(target_os = "ios")]
         {
-            super::ios_media_playback::implementation()
+            crate::ios::implementation()
         }
         #[cfg(target_os = "android")]
         {
-            super::android_media_playback::implementation()
+            crate::android::implementation()
         }
         #[cfg(target_os = "windows")]
         {
-            super::windows_media_playback::implementation()
+            crate::windows::implementation()
         }
         #[cfg(not(any(
             target_os = "windows",
@@ -109,8 +114,7 @@ static SESSION: OnceLock<Session> = OnceLock::new();
 
 /// Activity 再生成時（`android_main` の再実行）に、ドライバの記録を破棄して再生を止める。
 /// 画面状態は `default()` に戻るため、処理済み世代を残すと次の「再生」が飲み込まれる。
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
         let mut inner = s.inner.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(g) = inner.device_gen {
@@ -120,9 +124,9 @@ pub(crate) fn reset_pending_tracking() {
     }
 }
 
-fn to_failure(e: &DeviceError) -> AudioFailure {
+fn to_failure(e: &MediaPlaybackError) -> AudioFailure {
     match e {
-        DeviceError::Unsupported(_) => AudioFailure::Unsupported,
+        MediaPlaybackError::Unsupported => AudioFailure::Unsupported,
         // OS の生コードは画面へ出さない（security.md A09）。
         _ => AudioFailure::Failed(FAILED_PLAY.to_string()),
     }
@@ -155,16 +159,16 @@ fn drive(
     deadline: Duration,
 ) -> Option<Duration> {
     let mut inner = session.inner.lock().ok()?;
-    if let Some((command, generation)) = take_command(state) {
-        if inner.handled != generation {
-            inner.handled = generation;
-            let _ = sender.send(Box::new(move |s: &mut AudioPlayState| {
-                mark_command_taken(s, generation)
-            }));
-            inner.last_report = None;
-            inner.settle_origin = None;
-            handle_command(&mut inner, sender, pb, command, generation);
-        }
+    if let Some((command, generation)) = take_command(state)
+        && inner.handled != generation
+    {
+        inner.handled = generation;
+        let _ = sender.send(Box::new(move |s: &mut AudioPlayState| {
+            mark_command_taken(s, generation)
+        }));
+        inner.last_report = None;
+        inner.settle_origin = None;
+        handle_command(&mut inner, sender, pb, command, generation);
     }
 
     let active = matches!(state.phase, AudioPhase::Loading | AudioPhase::Playing);
@@ -254,7 +258,7 @@ fn handle_command(
     command: AudioCommand,
     generation: u64,
 ) {
-    let fail = |inner: &mut SessionInner, e: &DeviceError| {
+    let fail = |inner: &mut SessionInner, e: &MediaPlaybackError| {
         inner.pending = None;
         send_update(sender, generation, AudioUpdate::Failed(to_failure(e)));
     };
@@ -365,27 +369,25 @@ pub fn audio_play_effect(state: &AudioPlayState, sender: &CompletionSender<Audio
         SESSION.get_or_init(Session::default),
         START_DEADLINE,
     );
-    // OS のメディア操作（Issue #381）。再生・一時停止の間だけ曲名と状態を OS へ渡し、OS の操作を返す。
-    super::now_playing::sync_audio_play(state, sender);
 }
 
-/// アプリ終了時にプレーヤーを解放する（`device::shutdown` から呼ばれる）。
-pub(super) fn shutdown() {
+/// アプリ終了時にプレーヤーを解放する（`fandhe-gallery` の終了処理から呼ばれる）。
+pub fn shutdown() {
     platform_playback().shutdown();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::PlaybackSnapshot;
     use fandhe_core::screens::audio_play::{pause, play, stop};
-    use fandhe_device::media_playback::PlaybackSnapshot;
     use std::sync::mpsc;
 
     struct FakeSt {
-        gen: u64,
+        r#gen: u64,
         phase: PlaybackPhase,
-        load_err: Option<DeviceError>,
-        play_err: Option<DeviceError>,
+        load_err: Option<MediaPlaybackError>,
+        play_err: Option<MediaPlaybackError>,
         auto_play: bool,
         loads: usize,
         stops: usize,
@@ -396,7 +398,7 @@ mod tests {
     impl Fake {
         fn new(auto_play: bool) -> Arc<Self> {
             Arc::new(Self(Mutex::new(FakeSt {
-                gen: 0,
+                r#gen: 0,
                 phase: PlaybackPhase::Idle,
                 load_err: None,
                 play_err: None,
@@ -411,20 +413,22 @@ mod tests {
     }
 
     impl MediaPlayback for Fake {
-        fn load(&self, _wav: Arc<[u8]>) -> Result<u64, DeviceError> {
+        fn load(&self, _wav: Arc<[u8]>) -> Result<u64, MediaPlaybackError> {
             let mut s = self.0.lock().unwrap();
             if let Some(e) = s.load_err.take() {
                 return Err(e);
             }
-            s.gen += 1;
+            s.r#gen += 1;
             s.loads += 1;
             s.phase = PlaybackPhase::Ready;
-            Ok(s.gen)
+            Ok(s.r#gen)
         }
-        fn play(&self, g: u64) -> Result<(), DeviceError> {
+        fn play(&self, g: u64) -> Result<(), MediaPlaybackError> {
             let mut s = self.0.lock().unwrap();
-            if g != s.gen {
-                return Err(DeviceError::InvalidInput("media_playback generation"));
+            if g != s.r#gen {
+                return Err(MediaPlaybackError::InvalidInput(
+                    "media_playback generation",
+                ));
             }
             if let Some(e) = s.play_err.take() {
                 return Err(e);
@@ -434,11 +438,11 @@ mod tests {
             }
             Ok(())
         }
-        fn pause(&self, _g: u64) -> Result<(), DeviceError> {
+        fn pause(&self, _g: u64) -> Result<(), MediaPlaybackError> {
             self.0.lock().unwrap().phase = PlaybackPhase::Paused;
             Ok(())
         }
-        fn stop(&self, _g: u64) -> Result<(), DeviceError> {
+        fn stop(&self, _g: u64) -> Result<(), MediaPlaybackError> {
             let mut s = self.0.lock().unwrap();
             s.stops += 1;
             s.phase = PlaybackPhase::Ready;
@@ -447,7 +451,7 @@ mod tests {
         fn snapshot(&self) -> PlaybackSnapshot {
             let s = self.0.lock().unwrap();
             PlaybackSnapshot {
-                generation: s.gen,
+                generation: s.r#gen,
                 phase: s.phase,
                 position_ms: Some(1000),
                 duration_ms: Some(5000),
@@ -456,7 +460,14 @@ mod tests {
         fn shutdown(&self) {}
     }
 
-    type Rx = mpsc::Receiver<crate::app::Completion<AudioPlayState>>;
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<AudioPlayState>>;
 
     struct H {
         fake: Arc<Fake>,
@@ -473,7 +484,7 @@ mod tests {
             Self {
                 pb: fake.clone(),
                 fake,
-                sender: crate::app::egui_sender(tx, egui::Context::default()),
+                sender: CompletionSender::new(tx, Arc::new(NoopWaker)),
                 rx,
                 session: Session::default(),
                 state: AudioPlayState::default(),
@@ -520,17 +531,17 @@ mod tests {
     fn slow_start_counts_from_before_load() {
         struct Slow(Arc<Fake>);
         impl MediaPlayback for Slow {
-            fn load(&self, w: Arc<[u8]>) -> Result<u64, DeviceError> {
+            fn load(&self, w: Arc<[u8]>) -> Result<u64, MediaPlaybackError> {
                 std::thread::sleep(Duration::from_millis(40));
                 self.0.load(w)
             }
-            fn play(&self, g: u64) -> Result<(), DeviceError> {
+            fn play(&self, g: u64) -> Result<(), MediaPlaybackError> {
                 self.0.play(g)
             }
-            fn pause(&self, g: u64) -> Result<(), DeviceError> {
+            fn pause(&self, g: u64) -> Result<(), MediaPlaybackError> {
                 self.0.pause(g)
             }
-            fn stop(&self, g: u64) -> Result<(), DeviceError> {
+            fn stop(&self, g: u64) -> Result<(), MediaPlaybackError> {
                 self.0.stop(g)
             }
             fn snapshot(&self) -> PlaybackSnapshot {
@@ -549,9 +560,9 @@ mod tests {
     #[test]
     fn load_and_play_errors_are_never_success() {
         for (load_err, play_err, unsupported) in [
-            (Some(DeviceError::Unsupported("media_playback")), None, true),
-            (Some(DeviceError::Internal("x")), None, false),
-            (None, Some(DeviceError::Internal("x")), false),
+            (Some(MediaPlaybackError::Unsupported), None, true),
+            (Some(MediaPlaybackError::Internal("x")), None, false),
+            (None, Some(MediaPlaybackError::Internal("x")), false),
         ] {
             let fake = Fake::new(true);
             {
@@ -608,7 +619,7 @@ mod tests {
         let mut h = H::new(Fake::new(false));
         play(&mut h.state);
         h.drive(D);
-        h.fake.0.lock().unwrap().gen += 5; // 別世代のプレーヤーの Playing
+        h.fake.0.lock().unwrap().r#gen += 5; // 別世代のプレーヤーの Playing
         h.fake.set_phase(PlaybackPhase::Playing);
         h.drive(D);
         assert_eq!(h.state.phase, AudioPhase::Loading);
@@ -662,10 +673,10 @@ mod tests {
     /// pause の反映が遅い実装（Windows のワーカー）。反映までは snapshot が Playing のまま。
     struct LatePause(Arc<Fake>, Mutex<(u64, u64)>);
     impl MediaPlayback for LatePause {
-        fn load(&self, w: Arc<[u8]>) -> Result<u64, DeviceError> {
+        fn load(&self, w: Arc<[u8]>) -> Result<u64, MediaPlaybackError> {
             self.0.load(w)
         }
-        fn play(&self, g: u64) -> Result<(), DeviceError> {
+        fn play(&self, g: u64) -> Result<(), MediaPlaybackError> {
             let mut p = self.1.lock().unwrap();
             p.0 += 1;
             if p.0 == 1 {
@@ -676,10 +687,10 @@ mod tests {
         fn play_progress(&self) -> Option<(u64, u64)> {
             Some(*self.1.lock().unwrap())
         }
-        fn pause(&self, _g: u64) -> Result<(), DeviceError> {
+        fn pause(&self, _g: u64) -> Result<(), MediaPlaybackError> {
             Ok(())
         }
-        fn stop(&self, g: u64) -> Result<(), DeviceError> {
+        fn stop(&self, g: u64) -> Result<(), MediaPlaybackError> {
             self.0.stop(g)
         }
         fn snapshot(&self) -> PlaybackSnapshot {
@@ -697,7 +708,7 @@ mod tests {
         h.drive(D);
         assert_eq!(h.state.phase, AudioPhase::Playing);
         // 発行 1・実行 1（初回の再生は実行済み）。
-        lp.0 .0.lock().unwrap().auto_play = false;
+        lp.0.0.lock().unwrap().auto_play = false;
         pause(&mut h.state);
         h.drive(D); // pause は未反映（snapshot は Playing）
         play(&mut h.state);
@@ -762,7 +773,7 @@ mod tests {
     #[test]
     fn failed_does_not_poll() {
         let fake = Fake::new(true);
-        fake.0.lock().unwrap().load_err = Some(DeviceError::Internal("x"));
+        fake.0.lock().unwrap().load_err = Some(MediaPlaybackError::Internal("x"));
         let mut h = H::new(fake);
         play(&mut h.state);
         h.drive(D);
@@ -799,7 +810,7 @@ mod tests {
     fn unsupported_os_implementation_is_unsupported() {
         assert!(matches!(
             platform_playback().load(demo_wav()),
-            Err(DeviceError::Unsupported("media_playback"))
+            Err(MediaPlaybackError::Unsupported)
         ));
     }
 }

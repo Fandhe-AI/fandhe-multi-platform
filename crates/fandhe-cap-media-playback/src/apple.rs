@@ -1,12 +1,12 @@
-//! macOS / iOS 共用の音声再生実装（Issue #267。iOS は #269 が `ios_media_playback` から使う）。
-//! `device/media_playback.rs::platform_playback` の macOS・iOS 経路から呼ばれる。
+//! macOS / iOS 共用の音声再生実装（Issue #267。iOS は #269 が `ios` から使う）。
+//! 本 crate の `driver::platform_playback` の macOS・iOS 経路から呼ばれる。
 //! `apple/fandhe_apple_media_playback.m`（`AVAudioPlayer`、`build.rs` の macOS / iOS 分岐がコンパイル）を
 //! C ABI で呼ぶ薄いラッパーで、世代の採番だけを Rust 側で持つ。戻りコードを契約上のエラーへ写す
 //! 純関数は [`result_from_code`]。`unsafe` は extern 呼び出しに閉じ、再生内容はログに出さない。
 
 use std::sync::Arc;
 
-use fandhe_device::media_playback::MediaPlayback;
+use crate::contract::MediaPlayback;
 
 /// 現在の OS 向け実装を返す。
 pub(crate) fn implementation() -> Arc<dyn MediaPlayback> {
@@ -17,13 +17,13 @@ struct AppleMediaPlayback;
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod imp {
-    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
-    use fandhe_device::media_playback::{
-        secs_to_ms, MediaPlayback, PlaybackFailure, PlaybackPhase, PlaybackSnapshot,
+    use crate::contract::{
+        MediaPlayback, PlaybackFailure, PlaybackPhase, PlaybackSnapshot, secs_to_ms,
     };
-    use fandhe_device::DeviceError;
+    use crate::error::MediaPlaybackError;
 
     /// `load` に渡せる WAV の上限（異常に大きい入力を FFI に渡さない）。
     const MAX_WAV_BYTES: usize = 16 * 1024 * 1024;
@@ -49,12 +49,14 @@ mod imp {
     }
 
     /// `.m` の戻りコードを契約へ写す純関数。0 以外は OS の生値を見ずに固定の種別へ畳む。
-    pub(super) fn result_from_code(code: i32) -> Result<(), DeviceError> {
+    pub(super) fn result_from_code(code: i32) -> Result<(), MediaPlaybackError> {
         match code {
             0 => Ok(()),
-            2 => Err(DeviceError::InvalidInput("media_playback wav")),
-            3 => Err(DeviceError::InvalidInput("media_playback generation")),
-            _ => Err(DeviceError::Internal("media_playback")),
+            2 => Err(MediaPlaybackError::InvalidInput("media_playback wav")),
+            3 => Err(MediaPlaybackError::InvalidInput(
+                "media_playback generation",
+            )),
+            _ => Err(MediaPlaybackError::Internal("media_playback")),
         }
     }
 
@@ -75,11 +77,11 @@ mod imp {
 
     impl MediaPlayback for super::AppleMediaPlayback {
         #[allow(unsafe_code)]
-        fn load(&self, wav: Arc<[u8]>) -> Result<u64, DeviceError> {
+        fn load(&self, wav: Arc<[u8]>) -> Result<u64, MediaPlaybackError> {
             if wav.is_empty() || wav.len() > MAX_WAV_BYTES {
                 // load 契約（呼ぶたびに旧プレーヤーを解放し旧世代を無効化）を失敗経路でも守る。
                 self.shutdown();
-                return Err(DeviceError::InvalidInput("media_playback wav"));
+                return Err(MediaPlaybackError::InvalidInput("media_playback wav"));
             }
             let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
             // SAFETY: `wav` はこの呼び出しの間生きており、`.m` は同期で NSData へコピーして
@@ -90,19 +92,19 @@ mod imp {
         }
 
         #[allow(unsafe_code)]
-        fn play(&self, generation: u64) -> Result<(), DeviceError> {
+        fn play(&self, generation: u64) -> Result<(), MediaPlaybackError> {
             // SAFETY: 値渡しの引数のみ。`.m` は 1 本のミューテックスの内側で処理する。
             result_from_code(unsafe { fandhe_apple_media_playback_play(generation) })
         }
 
         #[allow(unsafe_code)]
-        fn pause(&self, generation: u64) -> Result<(), DeviceError> {
+        fn pause(&self, generation: u64) -> Result<(), MediaPlaybackError> {
             // SAFETY: 同上。
             result_from_code(unsafe { fandhe_apple_media_playback_pause(generation) })
         }
 
         #[allow(unsafe_code)]
-        fn stop(&self, generation: u64) -> Result<(), DeviceError> {
+        fn stop(&self, generation: u64) -> Result<(), MediaPlaybackError> {
             // SAFETY: 同上。
             result_from_code(unsafe { fandhe_apple_media_playback_stop(generation) })
         }
@@ -137,23 +139,28 @@ mod imp {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use fandhe_device::media_playback::demo_wav;
+        use crate::contract::demo_wav;
 
         #[test]
         fn codes_map_to_contract_errors() {
             assert!(result_from_code(0).is_ok());
             assert!(matches!(
                 result_from_code(2),
-                Err(DeviceError::InvalidInput("media_playback wav"))
+                Err(MediaPlaybackError::InvalidInput("media_playback wav"))
             ));
             assert!(matches!(
                 result_from_code(3),
-                Err(DeviceError::InvalidInput("media_playback generation"))
+                Err(MediaPlaybackError::InvalidInput(
+                    "media_playback generation"
+                ))
             ));
-            assert!(matches!(result_from_code(1), Err(DeviceError::Internal(_))));
+            assert!(matches!(
+                result_from_code(1),
+                Err(MediaPlaybackError::Internal(_))
+            ));
             assert!(matches!(
                 result_from_code(99),
-                Err(DeviceError::Internal(_))
+                Err(MediaPlaybackError::Internal(_))
             ));
             assert_eq!(
                 phase_from_code(5),
@@ -173,7 +180,7 @@ mod imp {
             let old = p.load(demo_wav()).expect("load");
             assert!(matches!(
                 p.load(Arc::from(Vec::<u8>::new())),
-                Err(DeviceError::InvalidInput("media_playback wav"))
+                Err(MediaPlaybackError::InvalidInput("media_playback wav"))
             ));
             assert!(p.play(old).is_err(), "入力不正の load でも旧世代は無効");
             // デコードできないバイト列は成功にならない。

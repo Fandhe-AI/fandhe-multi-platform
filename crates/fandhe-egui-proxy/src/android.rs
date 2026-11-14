@@ -186,14 +186,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // （`fandhe_device::contact_picker` モジュール doc）なので、旧要求の遅延完了を id 不一致で無視させる。
     #[cfg(feature = "device")]
     crate::device::contact_pick::reset_pending_tracking();
-    // Issue #267: 音声再生も同様。画面状態が generation 0 に戻るため、処理済み世代を捨て再生を止める
-    // （`device::media_playback::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::media_playback::reset_pending_tracking();
-    // Issue #381: ロック画面・OS のメディア操作も同様。受付を止めて表示を取り下げ、記録を捨てる
-    // （`device::now_playing::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::now_playing::reset_pending_tracking();
     // Issue #364: ピクチャ・イン・ピクチャも同様。処理済み世代を捨て、小窓を止める
     // （`device::picture_in_picture::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

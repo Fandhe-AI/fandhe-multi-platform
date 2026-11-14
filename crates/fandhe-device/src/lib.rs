@@ -95,8 +95,6 @@ pub mod music_library;
 pub mod network_status;
 /// Phase 11（端末機能の拡充ループ、親 #1003、Issue #1004）: ローカル通知。
 pub mod notification;
-/// Phase 11（端末機能の拡充ループ、親 #98、Issue #381）: ロック画面・OS のメディア操作（再生中の表示と再生・一時停止の受け取り）。
-pub mod now_playing;
 /// Issue #1188: base64url の共有部品（パスキー本体は機能 crate `fandhe-cap-passkey-signin`）。
 pub mod passkey;
 /// Phase 11（端末機能の拡充ループ、親 #114、Issue #541）: 物・サービスの決済シート（Google Pay TEST 環境、課金なし）。

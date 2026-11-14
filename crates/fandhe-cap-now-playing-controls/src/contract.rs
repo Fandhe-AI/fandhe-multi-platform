@@ -31,7 +31,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use crate::DeviceError;
+use crate::error::NowPlayingControlsError;
 
 /// OS の「再生中」に出す曲名（SSOT）。Apple には FFI の引数で渡す。
 pub const DEMO_TITLE: &str = "Fandhe のサンプル音声";
@@ -76,7 +76,7 @@ impl NowPlayingInfo {
 /// OS のメディア操作 UI への橋渡し（モジュール doc の「契約」節）。UI スレッドから同期で呼ばれ、すぐ戻ること。
 pub trait NowPlaying: Send + Sync {
     /// 曲名（[`DEMO_TITLE`]）と再生状態を OS へ渡し、OS 側の再生・一時停止の受け口を有効にする。
-    fn publish(&self, info: NowPlayingInfo) -> Result<(), DeviceError>;
+    fn publish(&self, info: NowPlayingInfo) -> Result<(), NowPlayingControlsError>;
     /// 表示を取り下げ、受け口を外す（冪等）。
     fn clear(&self);
     /// アプリ終了時の後片付け（冪等）。
@@ -88,8 +88,8 @@ pub trait NowPlaying: Send + Sync {
 pub struct UnsupportedNowPlaying;
 
 impl NowPlaying for UnsupportedNowPlaying {
-    fn publish(&self, _info: NowPlayingInfo) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("now_playing"))
+    fn publish(&self, _info: NowPlayingInfo) -> Result<(), NowPlayingControlsError> {
+        Err(NowPlayingControlsError::Unsupported)
     }
     fn clear(&self) {}
     fn shutdown(&self) {}
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn unsupported_publish_is_not_success() {
         let r = UnsupportedNowPlaying.publish(NowPlayingInfo::new(true, None, None));
-        assert!(matches!(r, Err(DeviceError::Unsupported("now_playing"))));
+        assert!(matches!(r, Err(NowPlayingControlsError::Unsupported)));
     }
 
     #[test]

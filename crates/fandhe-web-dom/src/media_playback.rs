@@ -27,8 +27,8 @@
 //! 守らない: 位置表示のポーリング間隔ぶんの遅れ、複数タブ・複数マウント間の一致、他タブの音声との混ざり、
 //! egui-proxy の wasm canvas 経路。OS のメディア操作への連携は `now_playing` が担う。例外の `message` は画面にも console にも出さない（security.md A09）。
 
+use fandhe_cap_media_playback::{secs_to_ms, START_DEADLINE};
 use fandhe_core::screens::audio_play::{AudioFailure, AudioPhase, AudioUpdate};
-use fandhe_device::media_playback::{secs_to_ms, START_DEADLINE};
 
 /// 再生失敗の固定文言（`fandhe-egui-proxy` のドライバと同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -86,11 +86,11 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_media_playback::{demo_wav, POLL_INTERVAL, START_DEADLINE};
     use fandhe_core::screens::audio_play::{
         apply_update, expire, mark_command_taken, take_command, AudioCommand, AudioFailure,
         AudioPhase, AudioPlayState, AudioUpdate,
     };
-    use fandhe_device::media_playback::{demo_wav, POLL_INTERVAL, START_DEADLINE};
     use js_sys::{Array, Reflect, Uint8Array};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::{spawn_local, JsFuture};

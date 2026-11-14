@@ -391,6 +391,14 @@
              実体は各機能 crate の android/java（FeatureLifecycleProvider 継承）。宣言は各 crate の Cargo.toml と
              完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。切り離し時に対応する crate ごと削除する。 -->
         <provider
+            android:name="com.fandhe.platform.MediaPlaybackLifecycle"
+            android:authorities="${applicationId}.fandhe.media-playback"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.NowPlayingLifecycle"
+            android:authorities="${applicationId}.fandhe.now-playing-controls"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.CameraCaptureLifecycle"
             android:authorities="${applicationId}.fandhe.camera-capture"
             android:exported="false" />

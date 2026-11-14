@@ -1,16 +1,21 @@
 package com.fandhe.platform;
 
+import android.app.Activity;
 import android.media.MediaDataSource;
 import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Looper;
 
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 
-// 音声再生画面（Issue #270、親 #86 の b-android）の Android 実装ヘルパー。MainActivity から
-// 生成・委譲される（Rust の `device/android_media_playback.rs` が egui スレッドから
-// `MainActivity.mediaPlaybackLoad` / `Control` / `Snapshot` / `Shutdown` を同期 JNI で呼ぶ）。
+// 音声再生画面（Issue #270、親 #86 の b-android）の Android 実装ヘルパー。Activity ごとに 1 つ、`MediaPlaybackLifecycle`
+// （`FeatureLifecycleProvider` 継承）が `attach` で生成して `HELPERS` に持つ（Rust の `fandhe-cap-media-playback/src/android.rs` が
+// egui スレッドから static の `load` / `control` / `snapshot` / `shutdown`（第 1 引数は Activity）を同期 JNI で呼ぶ）。
+// helper が無い（生成前・破棄後）要求は成功にも待ちにもせず失敗で確定する。
 // 素材は Rust が実行時に生成する WAV で、`MediaPlayer` + `MediaDataSource`（API 23）で鳴らす。
 // 動画・背景再生・シーク・ネットワーク再生は扱わない。
 //
@@ -26,7 +31,8 @@ import java.util.Set;
 // 状態はすべて `lock` 1 本の内側で読み書きし、post した Runnable・リスナーは実行時に
 // 「破棄されていない・世代が一致・player が同一」を照合してから動く。
 //
-// ライフサイクル: `onPause` で再生中なら一時停止して Interrupted にし、準備中の再生待ちは
+// ライフサイクル（`Activity.onResume()` / `onPause()` の中、つまり `super.onXxx()` の中で届く。従来の `MainActivity` は
+// `super` の後で helper を呼んでいたため、`super` に対する前後だけが違う）: `onPause` で再生中なら一時停止して Interrupted にし、準備中の再生待ちは
 // 取り消す（準備完了でも開始しない）。`onResume` は自動再開しない。`onDestroy`（再生成を含む）
 // は積み残しを除去して release する。新インスタンスは Idle・世代 0 から始まる。
 //
@@ -46,6 +52,10 @@ final class MediaPlaybackHelper {
     // Rust 側と同じ上限。FFI に過大な byte[] を渡さない。
     private static final int MAX_WAV_BYTES = 16 * 1024 * 1024;
 
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, MediaPlaybackHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Object lock = new Object();
     private MediaPlayer player;       // lock の内側。生成は main 上
@@ -61,6 +71,59 @@ final class MediaPlaybackHelper {
     // release 待ちの旧 player。onDestroy が post 済み Runnable を除去しても漏らさないため（契約表 9）。
     private final Set<MediaPlayer> pendingRelease = new HashSet<>();
     private long duration = -1;
+
+    private MediaPlaybackHelper() {}
+
+    // Activity の生成時（`MediaPlaybackLifecycle` から、UI スレッド）。
+    static void attach(Activity activity) {
+        HELPERS.put(activity, new MediaPlaybackHelper());
+    }
+
+    // Activity の破棄時（同上）。再生成を含む。積み残しを除去して release する。
+    static void detach(Activity activity) {
+        MediaPlaybackHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // `MediaPlaybackLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void resumed(Activity activity) {
+        MediaPlaybackHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onResume();
+        }
+    }
+
+    static void paused(Activity activity) {
+        MediaPlaybackHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onPause();
+        }
+    }
+
+    // Rust から呼ぶ入口（egui スレッド）。helper が無い要求は失敗で確定する。
+    static int load(Activity activity, long gen, byte[] wav) {
+        MediaPlaybackHelper helper = HELPERS.get(activity);
+        return helper == null ? FAILED : helper.load(gen, wav);
+    }
+
+    static int control(Activity activity, long gen, int op) {
+        MediaPlaybackHelper helper = HELPERS.get(activity);
+        return helper == null ? FAILED : helper.control(gen, op);
+    }
+
+    static long[] snapshot(Activity activity) {
+        MediaPlaybackHelper helper = HELPERS.get(activity);
+        return helper == null ? null : helper.snapshot();
+    }
+
+    static void shutdown(Activity activity) {
+        MediaPlaybackHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.shutdown();
+        }
+    }
 
     int load(long gen, byte[] wav) {
         synchronized (lock) {

@@ -261,6 +261,14 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // カメラのライブ映像も同様。画面状態が generation 0 に戻るため、動いたままのセッションを止めて `ACTIVE` を解放する（`fandhe_cap_camera_preview_stream::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_camera_preview_stream::reset_pending_tracking();
+    // 音声再生も同様。画面状態が generation 0 に戻るため、処理済み世代を捨て再生を止める
+    // （`fandhe_cap_media_playback::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_media_playback::reset_pending_tracking();
+    // ロック画面・OS のメディア操作も同様。受付を止めて表示を取り下げ、記録を捨てる
+    // （`fandhe_cap_now_playing_controls::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_now_playing_controls::reset_pending_tracking();
     // アプリ内ブラウザの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない。`fandhe_cap_in_app_browser::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_in_app_browser::reset_pending_tracking();
@@ -294,6 +302,9 @@ pub fn register_teardown_hooks() {
 #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
 fn shutdown() {
     fandhe_egui_proxy::device::shutdown();
+    // 再生（media-playback）→ OS のメディア操作（now-playing-controls）の順に止め、どちらも audio_session より前に置く。
+    fandhe_cap_media_playback::shutdown();
+    fandhe_cap_now_playing_controls::shutdown();
     fandhe_cap_system_tray::stop_shared_system_tray();
     fandhe_cap_global_hotkey::shutdown();
     fandhe_cap_midi::shutdown();

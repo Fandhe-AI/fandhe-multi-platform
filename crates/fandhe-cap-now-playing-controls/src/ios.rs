@@ -1,5 +1,5 @@
 //! iOS 向けロック画面・OS のメディア操作実装（Issue #382。親 #98 の b-ios）。
-//! `device/now_playing.rs::platform_now_playing` の iOS 経路から呼ばれ、macOS と共用の
+//! 本 crate の `driver::platform_now_playing` の iOS 経路から呼ばれ、macOS と共用の
 //! `apple_now_playing`（`apple/fandhe_apple_now_playing.m`、MediaPlayer）を返す。
 //! Linux ホストの `cargo test` では共用実装が存在しないため、関数と import は iOS 限定にしている。
 //!
@@ -14,7 +14,7 @@
 //!
 //! # 再描画（契約表 4）
 //!
-//! OS の操作を受けた直後に `apple_now_playing` の受け口が `crate::ios::request_repaint` を呼び、次フレームを起こす。
+//! OS の操作を受けた直後に `apple_now_playing` の受け口が `fandhe_runtime::request_repaint` を呼び、次フレームを起こす。
 //!
 //! # 守る範囲と守らない範囲（契約表 11）
 //!
@@ -25,10 +25,10 @@
 use std::sync::Arc;
 
 #[cfg(target_os = "ios")]
-use fandhe_device::now_playing::NowPlaying;
+use crate::contract::NowPlaying;
 
 /// iOS の実装を返す（macOS と共用）。
 #[cfg(target_os = "ios")]
 pub(crate) fn implementation() -> Arc<dyn NowPlaying> {
-    super::apple_now_playing::implementation()
+    crate::apple::implementation()
 }

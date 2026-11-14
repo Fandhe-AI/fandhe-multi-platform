@@ -103,11 +103,6 @@ pub mod android_lan_discovery;
 /// `device/local_peer.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_local_peer;
-/// Issue #267: Android 向け音声再生実装。`device/media_playback.rs` の
-/// Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_media_playback;
 /// Issue #898: Android 向けジャイロ・磁気・線形加速度の生値実装（骨格。実体は #901）。
 /// `device/motion_raw_sensors.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -123,11 +118,6 @@ pub mod android_music_library;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_network_status;
-/// Issue #383: Android 向けロック画面・OS のメディア操作実装（`MediaSession` + `Notification.MediaStyle` を JNI で操作）。
-/// `device/now_playing.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_now_playing;
 /// Issue #1131（親 #114）: Android 向け決済シート（Google Pay API、TEST 環境）の実装。
 /// `device/payment_request.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -251,10 +241,6 @@ pub mod apple_location;
 /// `device/map_view.rs` の macOS / iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_map_view;
-/// Issue #267: macOS 向け音声再生実装（`apple/fandhe_apple_media_playback.m` の `AVAudioPlayer` を呼ぶ
-/// C ABI ラッパー）。`device/media_playback.rs` の macOS 経路から呼ばれる。iOS は親 #86 の b-ios が使う。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_media_playback;
 /// Issue #954（macOS）/ #956（iOS）: iOS / macOS 向けマイク録音実装（`apple/
 /// fandhe_apple_mic_record.m` を呼ぶ C ABI ラッパー）。`device/mic_record.rs` の
 /// iOS/macOS 経路から呼ばれる。
@@ -265,12 +251,6 @@ pub mod apple_mic_record;
 /// 純関数をホストの `cargo test` で検査するため cfg に `test` を含める（FFI 部分は macOS 限定）。
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
 pub mod apple_network_status;
-/// Issue #381（macOS）・#382（iOS）: ロック画面・OS のメディア操作実装（`apple/fandhe_apple_now_playing.m` の
-/// MediaPlayer を呼ぶ C ABI ラッパー）。`device/now_playing.rs` の macOS 経路と、iOS 経路（`ios_now_playing` 経由）から呼ばれる。
-/// 写像の純関数をホストでテストできるよう `test` でもコンパイルする。
-#[cfg(any(target_os = "macos", target_os = "ios", test))]
-#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
-pub mod apple_now_playing;
 /// Issue #1254（macOS）/ #1255（iOS）: iOS / macOS 向け写真ライブラリ保存実装
 /// （`apple/fandhe_apple_photo_library.m` を呼ぶ C ABI ラッパー。iOS は実装済み）。
 /// `device/photo_save.rs` の iOS / macOS 経路から呼ばれる。
@@ -438,11 +418,6 @@ pub mod ios_lan_discovery;
 /// `device/local_peer.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_local_peer;
-/// Issue #267: iOS 向け音声再生実装。`device/media_playback.rs` の
-/// iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_media_playback;
 /// Issue #900: iOS 向けジャイロ・磁気・線形加速度の生値実装（`ios/fandhe_ios_motion_raw_sensors.m`、
 /// CoreMotion の `CMMotionManager`）。`device/motion_raw_sensors.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -461,11 +436,6 @@ pub mod ios_network_status;
 /// C ABI ラッパー）。`device/notification.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_notification;
-/// Issue #382: iOS 向けロック画面・OS のメディア操作実装（macOS と共用の `apple_now_playing` を返す）。
-/// `device/now_playing.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_now_playing;
 /// Issue #356: iOS 向けペン・筆圧入力実装（`ios/fandhe_ios_pen_stylus.m` の観測専用
 /// `UIGestureRecognizer` が値を置く C ABI ラッパー）。`device/pen_stylus.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -560,9 +530,6 @@ pub mod macos_window_management;
 /// Phase 11 の拡充ループ（親 #85、Issue #273）: 地図表示の effect ドライバ（macOS / iOS は
 /// pull 型 `bridge`、他 OS は `UnsupportedMapSnapshotter` 固定）。
 pub mod map_view;
-/// Phase 11 の拡充ループ（親 #86、Issue #267）: 音声再生の effect ドライバ（macOS・iOS・Android・Windows 実装、
-/// 他 OS は `UnsupportedMediaPlayback` 固定）。
-pub mod media_playback;
 /// Phase 11 の拡充ループ（親 #953、Issue #954・#955・#956・#957）: マイク録音の
 /// effect ドライバ（macOS/iOS/Windows/Android 実装、他 OS は `UnsupportedMicRecorder`
 /// 固定）。
@@ -581,10 +548,6 @@ pub mod network_status;
 /// Phase 11 の拡充ループ（親 #1003、Issue #1004/#1005）: ローカル通知の effect
 /// ドライバ（macOS/Windows/iOS 実装、Android は #1006）。
 pub mod notification;
-/// Phase 11 の拡充ループ（親 #98、Issue #381）: ロック画面・OS のメディア操作の effect ドライバ（macOS・iOS・Android・Windows 実装、
-/// 他 OS は `UnsupportedNowPlaying` 固定。
-/// Web は #384 で `fandhe-web-dom`）。`media_playback` の `audio_play` 画面から呼ばれる。
-pub mod now_playing;
 /// Phase 11 の拡充ループ（親 #114、Issue #541・#1130）: 決済シートの effect ドライバ（Android は
 /// pull 型 bridge、他のネイティブは `UnsupportedPaymentSheet` 固定の同期経路。dispatch は最終形。
 /// Web は `fandhe-web-dom`）。
@@ -727,11 +690,6 @@ pub mod windows_image_recognition;
 /// `device/lan_discovery.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_lan_discovery;
-/// Issue #267: Windows 向け音声再生実装。`device/media_playback.rs` の
-/// Windows 経路から呼ばれる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_media_playback;
 /// Issue #955: Windows 向けマイク録音実装（WinRT `MediaCapture` ラッパー）。
 /// `device/mic_record.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -756,11 +714,6 @@ pub mod windows_network_status;
 /// `device/notification.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_notification;
-/// Issue #381: Windows 向けロック画面・OS のメディア操作実装。
-/// `device/now_playing.rs` の Windows 経路から呼ばれる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_now_playing;
 /// Issue #359: Windows 向けペン・筆圧入力実装（`SetWindowSubclass` の観測専用サブクラスが
 /// `WM_POINTER*` から値を置く）。`device/pen_stylus.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
@@ -826,8 +779,6 @@ pub fn shutdown() {
     bluetooth_classic::stop_shared_discovery();
     lan_discovery::stop_shared_discovery();
     local_peer::stop_shared_exchange();
-    media_playback::shutdown();
-    now_playing::shutdown();
     picture_in_picture::shutdown();
     web_auth_session::shutdown();
 }

@@ -65,6 +65,7 @@ device = [
   "dep:fandhe-cap-local-fonts",
   "dep:fandhe-cap-managed-app-config",
   "dep:fandhe-cap-media-cast",
+  "dep:fandhe-cap-media-playback",
   "dep:fandhe-cap-media-transcode",
   "dep:fandhe-cap-memory-pressure",
   "dep:fandhe-cap-midi",
@@ -73,6 +74,7 @@ device = [
   "dep:fandhe-cap-nfc",
   "dep:fandhe-cap-nfc-card-emulation",
   "dep:fandhe-cap-nlp",
+  "dep:fandhe-cap-now-playing-controls",
   "dep:fandhe-cap-on-device-llm",
   "dep:fandhe-cap-open-in-shell",
   "dep:fandhe-cap-open-system-settings",
@@ -158,6 +160,8 @@ fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"
 fandhe-core = { path = "../fandhe-core" }
 fandhe-egui-proxy = { path = "../fandhe-egui-proxy", default-features = false }
 fandhe-render-egui = { path = "../fandhe-render-egui" }
+# `audio_play` の effect の合成（media-playback → now-playing-controls、registry.rs）が `CompletionSender` を受ける。
+fandhe-runtime = { path = "../fandhe-runtime" }
 egui = { workspace = true }
 
 # 機能 crate（1 機能 1 crate、docs/architecture/consumer-app-structure.md §5）。feature `device` のときだけ
@@ -212,6 +216,7 @@ fandhe-cap-live-activity = { path = "../fandhe-cap-live-activity", optional = tr
 fandhe-cap-local-fonts = { path = "../fandhe-cap-local-fonts", optional = true }
 fandhe-cap-managed-app-config = { path = "../fandhe-cap-managed-app-config", optional = true }
 fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast", optional = true }
+fandhe-cap-media-playback = { path = "../fandhe-cap-media-playback", optional = true }
 fandhe-cap-media-transcode = { path = "../fandhe-cap-media-transcode", optional = true }
 fandhe-cap-memory-pressure = { path = "../fandhe-cap-memory-pressure", optional = true }
 fandhe-cap-midi = { path = "../fandhe-cap-midi", optional = true }
@@ -220,6 +225,7 @@ fandhe-cap-multi-display = { path = "../fandhe-cap-multi-display", optional = tr
 fandhe-cap-nfc = { path = "../fandhe-cap-nfc", optional = true }
 fandhe-cap-nfc-card-emulation = { path = "../fandhe-cap-nfc-card-emulation", optional = true }
 fandhe-cap-nlp = { path = "../fandhe-cap-nlp", optional = true }
+fandhe-cap-now-playing-controls = { path = "../fandhe-cap-now-playing-controls", optional = true }
 fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm", optional = true }
 fandhe-cap-open-in-shell = { path = "../fandhe-cap-open-in-shell", optional = true }
 fandhe-cap-open-system-settings = { path = "../fandhe-cap-open-system-settings", optional = true }

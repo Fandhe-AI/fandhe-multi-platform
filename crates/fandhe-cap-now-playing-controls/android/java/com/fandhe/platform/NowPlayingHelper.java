@@ -11,13 +11,16 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// ロック画面・OS のメディア操作（Issue #383、親 #98）の Android 実装ヘルパー。MainActivity から
-// 生成・委譲される。Rust の `device/android_now_playing.rs` が egui スレッドから
-// `MainActivity.nowPlayingPublish` / `nowPlayingClear` を JNI で同期呼び出しし、OS からの
+// ロック画面・OS のメディア操作（Issue #383、親 #98）の Android 実装ヘルパー。Activity ごとに 1 つ、`NowPlayingLifecycle`
+// （`FeatureLifecycleProvider` 継承）が `attach` で生成して `HELPERS` に持つ。Rust の `fandhe-cap-now-playing-controls` の
+// `src/android.rs` が egui スレッドから static の `publish` / `clear`（第 1 引数は Activity）を JNI で同期呼び出しし、OS からの
 // 再生・一時停止は `nativeOnNowPlayingCommand` で Rust の `SharedOsCommand` へ返す。
 //
 // コード表（SSOT はここ。Rust 側 `decode_result` / `decode_command` が同じ値で写像する）:
@@ -110,7 +113,52 @@ final class NowPlayingHelper {
     private long nextSessionId;
     private long sessionId;
 
-    NowPlayingHelper(Activity activity) {
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, NowPlayingHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    // Activity の生成時（`NowPlayingLifecycle` から、UI スレッド）。
+    static void attach(Activity activity) {
+        HELPERS.put(activity, new NowPlayingHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。再生成を含む。session を解放し、旧要求・旧操作を止める。
+    static void detach(Activity activity) {
+        NowPlayingHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // `NowPlayingLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void resumed(Activity activity) {
+        NowPlayingHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onResume();
+        }
+    }
+
+    static void paused(Activity activity) {
+        NowPlayingHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onPause();
+        }
+    }
+
+    // Rust から呼ぶ入口（egui スレッド）。helper が無い要求は失敗で確定する（成功にも待ちにもしない）。
+    static long publish(Activity activity, String title, boolean playing, long positionMs, long durationMs) {
+        NowPlayingHelper helper = HELPERS.get(activity);
+        return helper == null ? RESULT_FAILED : helper.publish(title, playing, positionMs, durationMs);
+    }
+
+    static void clear(Activity activity) {
+        NowPlayingHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.clear();
+        }
+    }
+
+    private NowPlayingHelper(Activity activity) {
         this.activity = activity;
     }
 
@@ -327,7 +375,8 @@ final class NowPlayingHelper {
         }
     }
 
-    // `MainActivity.onPause`（UI スレッド）から呼ぶ。
+    // `NowPlayingLifecycle` の `onHostPaused`（`Activity.onPause()` の中、UI スレッド）から呼ぶ。従来の `MainActivity.onPause` は
+    // `super.onPause()` の後で呼んでいたため、`super` に対する前後だけが違う。
     void onPause() {
         long failedId = 0;
         synchronized (lock) {
@@ -348,7 +397,7 @@ final class NowPlayingHelper {
         }
     }
 
-    // `MainActivity.onResume`（UI スレッド）から呼ぶ。
+    // `NowPlayingLifecycle` の `onHostResumed`（`Activity.onResume()` の中、UI スレッド）から呼ぶ。`super` に対する前後だけが従来と違う。
     void onResume() {
         long failedId = 0;
         synchronized (lock) {
@@ -367,7 +416,7 @@ final class NowPlayingHelper {
         }
     }
 
-    // `MainActivity.onDestroy`（UI スレッド）から呼ぶ。以後に届く旧要求・旧操作は何もしない。
+    // `NowPlayingLifecycle` の `onHostDestroyed`（UI スレッド）から呼ぶ。以後に届く旧要求・旧操作は何もしない。
     void onDestroy() {
         synchronized (lock) {
             destroyed = true;

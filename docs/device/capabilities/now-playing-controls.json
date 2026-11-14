@@ -14,7 +14,7 @@
       "note": "実装済み（#382）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を iOS の「再生中」表示（コントロールセンター）へ渡し、OS 側の再生・一時停止を画面へ返すこと（次の曲・前の曲・シーク・アートワーク・ロック画面・背景再生は範囲外で、効かない操作は無効にして出さない）。アプリが背景にある間に届いた操作は画面へ渡さず拒否する（Inactive は前景扱いで、コントロールセンターを開いた間の操作は受け付ける）。OS からの操作を受けた直後に次フレームを起こす。Apple は表示の確定が返らないため「表示中」とは言わない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、登録の解放と remote command の enabled の復元（main thread からの取り下げ）。守らない範囲: main 以外から呼ばれた取り下げの完了待ち、ポーリング間隔ぶんの反映の遅れ、背景に回った間にコントロールセンターへ残る一時停止中の表示、PiP との `AVAudioSession` の取り合い（PiP の `mixWithOthers` と同時に使うと「再生中」に出ない可能性）、複数プロセス。既定の `soloAmbient` のまま「再生中」に出るかは #378 の実機で確かめる",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#378）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_now_playing.rs + crates/fandhe-egui-proxy/src/device/apple_now_playing.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_now_playing.m + crates/fandhe-egui-proxy/src/device/now_playing.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #382"
+      "impl": "crates/fandhe-cap-now-playing-controls/src/ios.rs + crates/fandhe-cap-now-playing-controls/src/apple.rs + crates/fandhe-cap-now-playing-controls/apple/fandhe_apple_now_playing.m + crates/fandhe-cap-now-playing-controls/src/driver.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-cap-now-playing-controls/src/contract.rs、Issue #382"
     },
     "android": {
       "status": "done",
@@ -27,7 +27,7 @@
       "note": "実装済み（#383）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を通知シェードのプレーヤーとヘッドセットのボタンへ渡し、OS 側の再生・一時停止を画面へ返すこと（前の曲・次の曲・シーク・アートワークは範囲外で、効かない操作は出さない）。前景だけで扱い、背景に回すと取り下げ、前面へ戻ると出し直す。ロック画面と背景再生（foreground service の mediaPlayback）は範囲外。結果の意味は「OS へ渡した」で、表示中とは言わない。OS からの一時停止は失敗ではなく一時停止中への遷移。停止・失敗で取り下げ、取り下げ後に届いた古い操作では再開しない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止（期限切れ・例外は失敗）、session と通知の解放。守らない範囲: 利用者が通知を消したあと次の切り替えまで出ないこと、アプリの通知を切っているとシェードに出ないこと（session は有効でヘッドセットは効く）、API 24〜32 では通知にボタンが無くヘッドセットだけになること、背景中の操作は捨てること、UI スレッドが 1 秒以上塞がっている間の取り下げの遅れ、PiP との取り合い、複数プロセス",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#378）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_now_playing.rs + platforms/android/app/src/main/java/com/fandhe/platform/NowPlayingHelper.java + crates/fandhe-egui-proxy/src/device/now_playing.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #383"
+      "impl": "crates/fandhe-cap-now-playing-controls/src/android.rs + crates/fandhe-cap-now-playing-controls/android/java/com/fandhe/platform/NowPlayingHelper.java + crates/fandhe-cap-now-playing-controls/android/java/com/fandhe/platform/NowPlayingLifecycle.java + crates/fandhe-cap-now-playing-controls/src/driver.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-cap-now-playing-controls/src/contract.rs、Issue #383"
     },
     "macos": {
       "status": "done",
@@ -37,7 +37,7 @@
       "note": "実装済み（#381）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を OS の「再生中」表示（コントロールセンター）へ渡し、メディアキー・OS 側の再生・一時停止を画面へ返すこと（次の曲・前の曲・シーク・アートワークは範囲外で、効かない操作は無効にして出さない）。macOS では audio session から再生状態を判定できないため、`playbackState` を毎回設定する（SDK ヘッダの注記）。結果は OS へ渡した／この環境では使えない／渡せなかったを分けて表示し、Apple は表示の確定が返らないため「表示中」とは言わない。OS からの一時停止は失敗ではなく一時停止中への遷移。停止・失敗で取り下げ、取り下げ後に届いた古い操作では再開しない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、登録の解放。守らない範囲: ポーリング間隔（約 250ms）ぶんの反映の遅れ、窓を最小化している間の遅れ、PiP との `AVAudioSession` の取り合い、複数プロセス。バンドルを持たない実行体で出る名前は #378 で確かめる",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#378）",
-      "impl": "crates/fandhe-egui-proxy/src/device/apple_now_playing.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_now_playing.m + crates/fandhe-egui-proxy/src/device/now_playing.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #381"
+      "impl": "crates/fandhe-cap-now-playing-controls/src/apple.rs + crates/fandhe-cap-now-playing-controls/apple/fandhe_apple_now_playing.m + crates/fandhe-cap-now-playing-controls/src/driver.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-cap-now-playing-controls/src/contract.rs、Issue #381"
     },
     "windows": {
       "status": "done",
@@ -50,7 +50,7 @@
       "note": "実装済み（#385）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を SMTC（フライアウト・メディアキー）へ渡し、OS 側の再生・一時停止を画面へ返すこと（Stop・前後の曲・シーク・アートワーク・タイムラインは範囲外で、再生・一時停止以外は有効にしない）。`ButtonPressed` は UI 以外のスレッドで届くため、handler は `push` するだけにして画面の状態には触れない。メディアキーは OS が `PlaybackStatus` から Play / Pause に振り分けて届けるので Toggle は来ない。取得・登録・更新のどこかで失敗したら登録を解放して `Failed` を返し、成功とは言わない。OS からの一時停止は失敗ではなく一時停止中への遷移。停止・失敗で取り下げ、取り下げ後に届いた古い操作では再開しない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、登録の解放。守らない範囲: ポーリング間隔（約 250ms）ぶんの反映の遅れ、窓を最小化している間の遅れ、複数プロセス・複数窓、unpackaged で出るアプリ名、ロック画面に出るか（#378 で確かめる）",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#378）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_now_playing.rs + crates/fandhe-egui-proxy/src/device/now_playing.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #385"
+      "impl": "crates/fandhe-cap-now-playing-controls/src/windows.rs + crates/fandhe-cap-now-playing-controls/src/driver.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-cap-now-playing-controls/src/contract.rs、Issue #385"
     },
     "web": {
       "status": "done",
@@ -61,7 +61,7 @@
       "note": "実装済み（#384）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を Media Session（`navigator.mediaSession`）へ渡し、ブラウザ・OS のメディアキーや通知からの再生・一時停止を画面へ返すこと（前後の曲・シーク・位置表示・アートワークは範囲外で、`play` / `pause` の 2 つだけ登録する）。web-sys の `MediaSession` は unstable API のため Reflect で呼ぶ。結果は OS へ渡した／この環境では使えない／渡せなかったを分け、Firefox Android のように操作 UI が無い環境でも「渡しました」までしか言わない。OS からの一時停止は失敗ではなく一時停止中への遷移。停止・失敗・背景遷移で曲名を取り下げるが、handler は取り下げでは null に戻さない（戻すとブラウザの既定動作が `<audio>` を直接動かし、画面は停止なのに鳴る食い違いが出るため）。受付は armed で止め、取り下げ後に届いた古い操作では再開しない。handler はマウント破棄で外す。守る範囲: 1 マウント内の操作順、嘘の成功の禁止、登録の解放。守らない範囲: 複数タブ・複数マウント、Chrome が短いメディア（素材は 5 秒）に通知を出さない場合があること、`Loading` に入る前の既定動作、egui-proxy の wasm canvas 経路。実ブラウザの確認は #378",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#378）",
-      "impl": "crates/fandhe-web-dom/src/now_playing.rs + crates/fandhe-web-dom/src/media_playback.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-device/src/now_playing.rs、Issue #384"
+      "impl": "crates/fandhe-web-dom/src/now_playing.rs + crates/fandhe-web-dom/src/media_playback.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/audio_play.rs + crates/fandhe-cap-now-playing-controls/src/contract.rs、Issue #384"
     }
   },
   "note": "iOS / macOS は MPNowPlayingInfoCenter、Android は framework の MediaSession、Windows は SMTC、Web は Media Session。media-playback（既存 id）は再生そのものを扱い、本機能は OS 側の操作画面（コントロールセンター・通知・メディアキー）との連携。今回の範囲: media-playback の画面で再生・一時停止している間だけ、曲名と再生中かどうかを OS へ渡し、OS からの再生・一時停止を画面に反映する。前景だけで扱い、iOS・Android のロック画面（背景再生）・アートワーク・前後の曲・シークは扱わない。守備範囲: 1 プロセス内の操作順・嘘の成功の禁止・登録の解放までを守り、反映の遅れ・PiP との取り合い・複数プロセスは守らない"
