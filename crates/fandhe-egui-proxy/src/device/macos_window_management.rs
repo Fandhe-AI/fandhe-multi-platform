@@ -12,9 +12,11 @@
 //! - 複数窓では main window（なければ key window）の値だけを見る。無ければ読めない（`None`）
 //! - 実機の目視確認（正常系・失敗系・複数画面）は #629
 
-use std::sync::Arc;
-
+use fandhe_core::screens::window_management_show::WindowManagementState;
 use fandhe_device::window_management::{frame_from_cocoa, WindowFrame, WindowManager};
+use fandhe_runtime::WindowState;
+
+use crate::app::CompletionSender;
 
 use super::window_management::{NativeReads, ViewportWindowManager};
 
@@ -41,7 +43,7 @@ impl NativeReads for MacosReads {
         (status == 0).then_some(out != 0)
     }
 
-    fn work_area(&self, ctx: &egui::Context) -> Option<WindowFrame> {
+    fn work_area(&self, window: &WindowState) -> Option<WindowFrame> {
         let mut raw = [0f64; 5];
         // SAFETY: `raw` は呼び出しの間生きている 5 要素の書き込み可能バッファで、上記 extern
         // 宣言の契約（成功時に 5 要素を書くのみ）に合う。
@@ -53,15 +55,17 @@ impl NativeReads for MacosReads {
         frame_from_cocoa(
             [raw[0], raw[1], raw[2], raw[3]],
             raw[4],
-            f64::from(ctx.zoom_factor()),
+            f64::from(window.zoom_factor?),
         )
     }
 }
 
 /// macOS の `WindowManager` を返す。`device/window_management.rs::implementation` から呼ばれる。
-pub(crate) fn implementation(ctx: egui::Context) -> Arc<dyn WindowManager> {
-    Arc::new(ViewportWindowManager {
-        ctx,
+pub(crate) fn implementation(
+    sender: &CompletionSender<WindowManagementState>,
+) -> Box<dyn WindowManager + '_> {
+    Box::new(ViewportWindowManager {
+        sender,
         reads: MacosReads,
     })
 }

@@ -10,6 +10,7 @@
 //! （`eframe::App`・`CreationContext`・`NativeOptions`・`Frame`・`eframe::Result`）。
 //! 端末機能（保存・カメラ・OS 連携）は持たない。端末機能の配線は旧構造の `fandhe-egui-proxy` が
 //! 担い、終了・破棄の解放処理だけは [`app::set_teardown_hooks`] で登録して呼ぶ。
+//! 入力欄のヒント（`HostView::set_text_input_hint`）の橋渡しは [`app::set_text_input_hint_hook`] で登録する。
 //!
 //! 全ターゲットで `#![forbid(unsafe_code)]` を維持する。`android_main` の `#[no_mangle]` や
 //! iOS・Windows の FFI は `fandhe-egui-proxy` 側に置く（coding-rust.md の FFI 例外規定）。

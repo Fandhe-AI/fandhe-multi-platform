@@ -14,7 +14,7 @@ TASK-21.4）。構成の根拠は `docs/architecture/consumer-app-structure.md`�
 |------|------|
 | 端末機能でない行（`ui-widget-catalog`・`checkbox-list`・`dark-mode`・`gpu-backend` など） | crate を作らない |
 | Windows・Web の実装がある機能 | `fandhe-platform-windows`（`open_url`・`SE_ERR_NOASSOC` を含む）/ `-web`（#1184・#1185）は済み。Windows は `src/windows.rs`（scaffold が移す）、Web は `fandhe-web-dom/src/<stem>.rs` を `src/web.rs` へ `git mv` して手で移す（下の「Web の移し方」）。`inventory` の注意は読み流してよい |
-| driver が egui 固有の読み書き口（`fandhe_render_egui::EguiSenderExt`）を使う機能 | 機能 crate は egui 非依存のため、そのままは移せない。拡大率・フォーカス・ファイルのドラッグ・ポインタ押下は `sender.host_view()`（`fandhe_runtime::HostView`、§13）で読み書きできる。`HostView` に無い口（`viewport_size`・`request_screenshot` / `tagged_screenshot`・`egui_context`・`canvas_*`）を使う機能は、その口を設計してから移す |
+| driver が egui 固有の読み書き口（`fandhe_render_egui::EguiSenderExt`）を使う機能 | 機能 crate は egui 非依存のため、そのままは移せない。拡大率・フォーカス・ファイルのドラッグ・ポインタ押下は `sender.host_view()`（`fandhe_runtime::HostView`、§13）で読み書きできる。画面の読み戻し・ウィンドウ操作・入力欄のヒントも `HostView` にある（§17）。`HostView` に無い口（`egui_context`・`canvas_*`）を使う機能は、その口を設計してから移す |
 | 実装が共有ファイル（`device/android.rs`・`device/ios.rs`・`MainActivity.java`）に埋まった古い型（tts・clipboard・http・storage など） | `scaffold` では動かせない。`inventory` の参照行を見て手で切り出す |
 | 対応表の id と stem が違う機能（`http-get` → `http`、`dynamic-type` → `text_scale` など） | `--module <stem>` で渡す |
 | stem が複数ある機能 | stem ごとに手で移す。`scaffold` は 1 stem だけ扱う |
@@ -174,7 +174,7 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | picture-in-picture | Android が `onPictureInPictureModeChanged` の上書きと `<activity supportsPictureInPicture>` 属性を要する | 宣言の拡張が先 |
 | fullscreen-immersive | `FullscreenHelper.onInsets` が、`MainActivity` の唯一の decorView insets リスナー（safe-area と共用）から呼ばれる | insets を配る口を `fandhe-platform-android` に置く設計が先 |
 | compose-mail-sms | 未移行の `windows_web_auth_session.rs` が `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を呼ぶ | `open_url` は #1192 で `fandhe-platform-windows` へ上げた（`windows_compose_mail_sms` は再公開だけを持つ）。web-auth-session と同時に移すか、その再公開を共通層への参照に付け替えて移す （第 8 束 #1193 で移した） |
-| print・print-screen | `print_screen_page_effect` が egui 固有の読み書き口（`EguiSenderExt` の `request_screenshot`・`tagged_screenshot`）を使う | `fandhe-runtime` に egui 非依存の口を足す設計が先 |
+| print・print-screen | `print_screen_page_effect` が egui 固有の読み書き口（`EguiSenderExt` の `request_screenshot`・`tagged_screenshot`）を使う | `fandhe-runtime` に egui 非依存の口を足す設計が先（口は #1326 で入った。§17） |
 | in-app-purchase | 全 OS が未実装（`possible`）で `impl` が無い | 実装後 |
 
 ## 10. 第 4 束（#1189）で出た型と後回しの機能
@@ -248,10 +248,10 @@ per-app-language・screen-brightness・spell-check・geocoding-search の 9 機�
 | capture-protection | Android の Helper が `onStart` / `onStop` に参加する。`FeatureLifecycleProvider` の Started / Stopped の口は #1192 で足した | 口が `main` に入った後に移せる |
 | activity-recognition | Android が `onStart` / `onStop` に参加し、`ActivityRecognitionReceiver` も持つ（口は #1192 で足した） | 口が `main` に入った後に移せる |
 | bluetooth-classic | Android が `onResume` / `onPause` と許可ランチャーを持つ。共有ファイル `device/android.rs` の `read_ble_string` を使う | `read_ble_string` を共通層へ上げてから（bluetooth-le と同時が自然） |
-| window-management | driver と OS 実装が `egui::Context`・`ViewportCommand` を直接使う（§1 の egui 固有の口） | `fandhe-runtime` にウィンドウ操作の egui 非依存の口を設計してから |
-| screen-orientation | driver が `EguiSenderExt::viewport_size` を使う | 同上 |
+| window-management | driver と OS 実装が `egui::Context`・`ViewportCommand` を直接使う（§1 の egui 固有の口） | `fandhe-runtime` にウィンドウ操作の egui 非依存の口を設計してから（口は #1326 で入った。§17） |
+| screen-orientation | driver が `EguiSenderExt::viewport_size` を使う | 同上（口は #1326 で入った。§17） |
 | launch-at-login | Windows 実装が未移行の `windows_compose_mail_sms::open_url` を使う（`open_url` は #1192 で `fandhe-platform-windows` へ上げた） | 再公開を共通層への参照に付け替えて移せる （第 8 束 #1193 で障害が解消。次の周で移せる） |
-| autofill-otp | iOS の受け口 `fandhe_ios_text_input_set_one_time_code_hint` が、描画層の IME 橋渡し（`fandhe-egui-proxy/ios/fandhe_ios_text_input.m`）の入力欄 static に埋まっていて切り離せない | 入力欄のヒントを渡す口を描画層に設計してから |
+| autofill-otp | iOS の受け口 `fandhe_ios_text_input_set_one_time_code_hint` が、描画層の IME 橋渡し（`fandhe-egui-proxy/ios/fandhe_ios_text_input.m`）の入力欄 static に埋まっていて切り離せない | 入力欄のヒントを渡す口を描画層に設計してから（口は #1326 で入った。§17） |
 | game-center | 全 OS が `possible` で実装も `impl` も無く、移すものが無い | 実装時に最初から crate で作る |
 | app-intents | macOS の実装が url-scheme の受け口（`device/url_scheme.rs`・`FandheWidgetHost`）そのもので、独自のモジュールが無い | url-scheme と同時に扱う |
 
@@ -405,9 +405,38 @@ ar-camera-view は iOS の実装が `fandhe-cap-ar` にあるため新しい cra
 | 機能 | 理由 | 解消の見込み |
 |------|------|--------------|
 | ar-camera-view | iOS の実装は `fandhe-cap-ar`（同じ `ARSession`）にあり、Web は `fandhe-web-dom/src/ar.rs` が `fandhe-cap-ar` の契約を使う。新しい crate は作らない | 対応表 iOS 欄の `impl` を `fandhe-cap-ar` のパスへ書いた（コードは変えていない） |
-| print-screen | driver が `EguiSenderExt` の `request_screenshot` / `tagged_screenshot`（egui 固有の口）を使い、`HostView` には画面の読み戻しの口が無い（§1・§9 の print と同じ止まり方） | print と一緒に、`HostView` へ画面の読み戻しの口を設計してから移す |
+| print-screen | driver が `EguiSenderExt` の `request_screenshot` / `tagged_screenshot`（egui 固有の口）を使い、`HostView` には画面の読み戻しの口が無い（§1・§9 の print と同じ止まり方） | print と一緒に、`HostView` へ画面の読み戻しの口を設計してから移す（口は #1326 で入った。§17） |
 | dark-mode・gpu-backend・keyboard-mouse・soft-keyboard-ime・tv-focus・ui-core-nodes | 端末機能ではない（group が「既存機能の棚卸し」）。§1 の表のとおり crate を作らない | 作らない |
 | music-recognition・watch-connectivity | 全 OS が `possible` / `n-a` / `no` で実装も `impl` も無く、移すものが無い（game-center・age-range と同じ扱い） | 実装するときに最初から crate で作る |
 
 compose-mail-sms（§9）・launch-at-login（§11）・open-in-shell（§14）は、この束で移した、または障害が解消した。
 launch-at-login は `windows_compose_mail_sms::open_url` の参照が `fandhe_platform_windows` へ付け替わったため、次の周で移せる。
+
+## 17. 画面の読み戻し・ウィンドウ操作・入力欄のヒントの口（#1326）
+
+print・print-screen・window-management・screen-orientation・autofill-otp の 5 機能が使う egui 固有の口を、
+`HostView`（§13）へ足した。機能の crate への移設は後続の束で行う。
+
+### 口の設計
+
+| 項目 | 内容 |
+|------|------|
+| 画面の読み戻し | `request_screenshot(tag)`・`tagged_screenshot(tag) -> Option<Screenshot>`。`Screenshot` は RGBA8・行優先の所有値（`width`・`height`・`rgba`）。`Debug` は寸法だけ出す |
+| ウィンドウ | `window_state() -> WindowState`（外側・内側の矩形、全画面、最小化、拡大率、画素密度。読めない項目は `None`）・`request_window(WindowCommand)`（位置・内側の大きさ・最前面）・`viewport_size() -> Option<(f32, f32)>` |
+| 入力欄のヒント | `set_text_input_hint(TextInputHint) -> Result<(), TextInputHintError>`。`TextInputHint` は `Default` / `OneTimeCode`、エラーは `Unsupported` / `Failed` の固定の種別だけ |
+| 既定値 | 読み戻しは届かず（期限で失敗）、`window_state` は全項目 `None`（全画面が読めず依頼を出さずに失敗）、ヒントは `Unsupported`。いずれも嘘の成功にならない |
+| 呼んでよい時点 | §13 と同じ（フレーム末尾の UI スレッド） |
+| egui 実装 | `fandhe-render-egui` の `EguiWaker`。読み戻しは `ViewportCommand::Screenshot`、ウィンドウは `ViewportCommand` と `ViewportInfo` |
+| ヒントの橋渡し | `fandhe-render-egui` は `forbid(unsafe_code)` で OS の入力欄を触れないため、`app::set_text_input_hint_hook` で橋渡しを持つ層が登録する（`set_teardown_hooks` と同じ形。2 回目以降は無視）。現状は `fandhe-egui-proxy` の `ios_text_input.rs`（置き場の移動は #1194） |
+| 採らなかった案 | `RgbaPixels` の流用（辺の上限 2048 で、Retina の読み戻しが通らなくなる）、`HostView: Send + Sync`（他の実装の fake を壊す）、`fandhe-render-egui` から C ABI を直接呼ぶ（`unsafe` の禁止に反する） |
+| 範囲外 | `egui_context`（fullscreen-immersive・safe-area-insets）と `canvas_*`（pen-stylus）は口を足さない |
+
+### 移すときの使い方
+
+| 型 | 扱い |
+|----|------|
+| 画面の読み戻し | 世代をタグにして `request_screenshot` し、届いたフレームの `tagged_screenshot` でだけ受け取る。期限は driver が単調時計で持つ。寸法・長さの検査は `PrintImage::new` |
+| ウィンドウ操作 | 値（有限・正）を検査してから `request_window` する。成功は依頼の戻りではなく `window_state` の読み戻しで判定する。最小化中の位置・大きさは読めない扱いにする |
+| `Send + Sync` を要求する trait（`WindowManager`・`AutofillOtp`） | `&dyn HostView` ではなく `&CompletionSender<S>` を持ち、使うたびに `host_view()` を呼ぶ |
+| driver のテスト | `HostView` を実装した fake の起床口で `CompletionSender::new` する |
+| 入力欄のヒント | 機能 crate に C ABI を持ち込まず、`set_text_input_hint` だけを呼ぶ。エラーは `Unsupported` → `DeviceError::Unsupported`、`Failed` → `DeviceError::Internal` へ写す |

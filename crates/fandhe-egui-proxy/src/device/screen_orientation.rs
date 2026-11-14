@@ -414,14 +414,13 @@ pub fn screen_orientation_show_effect(
     state: &ScreenOrientationShowState,
     sender: &CompletionSender<ScreenOrientationShowState>,
 ) {
-    use crate::app::EguiSenderExt as _;
     let mut driver = DRIVER.lock().unwrap_or_else(|p| p.into_inner());
     drive(
         state,
         sender,
         implementation().as_ref(),
         Instant::now(),
-        sender.viewport_size(),
+        sender.host_view().viewport_size().unwrap_or_default(),
         &mut driver,
     );
 }
