@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use crate::declaration::{ComponentKind, MetaData, MAIN_ACTIVITY_ATTRIBUTES};
+use crate::declaration::{main_activity_attribute_allows, ComponentKind, MetaData};
 use crate::merge::{merge, AndroidMerged, AppleMerged};
 use crate::reach::{lib_name, reachable};
 use crate::workspace::{collect, run_metadata, Found};
@@ -350,8 +350,12 @@ fn android_manifest(m: &AndroidMerged, lib: &str) -> Result<String, String> {
         // 許可リスト外のキーは殻の属性との二重出力や公開範囲の変更になるので、`merge` を直接呼ぶ経路でも拒否する。
         let mut extra = String::new();
         for (k, v) in &m.main_activity_attributes {
-            if !MAIN_ACTIVITY_ATTRIBUTES.contains(&k.as_str()) {
-                return Err(format!("MainActivity の属性 `{k}` は書けません"));
+            match main_activity_attribute_allows(k, v) {
+                None => return Err(format!("MainActivity の属性 `{k}` は書けません")),
+                Some(false) => {
+                    return Err(format!("MainActivity の属性 `{k}` の値 {v:?} は使えません"))
+                }
+                Some(true) => {}
             }
             extra.push_str(&xml_attr(k, v));
         }

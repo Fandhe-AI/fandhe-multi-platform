@@ -142,7 +142,7 @@ params = { text = "share_text", url = "share_url" }
 - `attributes` のキーは英字のみで、`name`・`exported`・`targetActivity` は置けません
 - `meta-data`（コンポーネントの中も `application-meta-data` も）は `resource`（`@` 始まり）か `value` のどちらか一方です。`application-meta-data` の `name` は宣言内で重複できません
 - `activity-alias` は `target-activity` が必須で、同じ宣言の `kind = "activity"` の `name` を指します。alias 以外に `target-activity` は書けません
-- `main-activity-attributes` のキーは許可リスト（`supportsPictureInPicture`）だけです。`flags` は `neverForLocation` のみです
+- `main-activity-attributes` のキーは許可リスト（`supportsPictureInPicture`）だけで、値は属性ごとの値域（`supportsPictureInPicture` は `"true"` / `"false"` の完全一致）を check で検査します。`flags` は `neverForLocation` のみです
 - パスは相対のみです（空・絶対・`..`・`\`・`:` は拒否）。実在と、symlink 解決後に crate 内に収まることも確かめます
 - 文字列と plist の値に制御文字は置けません
 - `web.manifest` のキーは許可リスト（`share_target`）だけで、値はオブジェクトです。`start_url`・`scope`・`name`・`icons` などアプリの同一性に関わる値を、依存 crate が書き換えられないようにするためです。別のメンバーを機能へ移すときは許可リストに足します

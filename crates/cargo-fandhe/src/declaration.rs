@@ -111,7 +111,19 @@ pub struct Android {
 /// MainActivity に機能の宣言が足せる属性。`exported`・`launchMode`・`taskAffinity`・`permission`・`enabled` など
 /// アプリ本体の入口の公開範囲や起動方式を、依存 crate が書き換えられないよう許可リストにする（security.md A05）。
 /// `WEB_MANIFEST_MEMBERS` と同じ形。要る機能が出たら足す。
-pub const MAIN_ACTIVITY_ATTRIBUTES: &[&str] = &["supportsPictureInPicture"];
+///
+/// 各要素は（属性名, 許す値の完全一致リスト）。値域は check（本 crate の検証）と gen（`native.rs`）が同じ定義を参照する。
+/// `supportsPictureInPicture` は Android の `boolean` 属性なので `"true"` / `"false"` だけ（大文字小文字も区別する）。
+pub const MAIN_ACTIVITY_ATTRIBUTES: &[(&str, &[&str])] =
+    &[("supportsPictureInPicture", &["true", "false"])];
+
+/// 許可リストの属性 `key` に対する値 `v` の可否。`key` が許可外なら `None`。
+pub fn main_activity_attribute_allows(key: &str, v: &str) -> Option<bool> {
+    MAIN_ACTIVITY_ATTRIBUTES
+        .iter()
+        .find(|(k, _)| *k == key)
+        .map(|(_, vals)| vals.contains(&v))
+}
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
@@ -588,12 +600,23 @@ fn validate_android(c: &mut Ctx, a: &Android) {
     );
     for (key, v) in &a.main_activity_attributes {
         let f = format!("android.main-activity-attributes.{key}");
-        c.check(
-            MAIN_ACTIVITY_ATTRIBUTES.contains(&key.as_str()),
-            &f,
-            format!("`{key}` は書けません（書けるのは {MAIN_ACTIVITY_ATTRIBUTES:?} だけ）"),
-        );
-        c.check(no_ctrl(v), &f, "制御文字は使えません");
+        match main_activity_attribute_allows(key, v) {
+            None => c.bad(
+                &f,
+                format!(
+                    "`{key}` は書けません（書けるのは {:?} だけ）",
+                    MAIN_ACTIVITY_ATTRIBUTES
+                        .iter()
+                        .map(|(k, _)| k)
+                        .collect::<Vec<_>>()
+                ),
+            ),
+            Some(false) => c.bad(
+                &f,
+                format!("`{v:?}` は使えません（書けるのは `\"true\"` / `\"false\"` だけ）"),
+            ),
+            Some(true) => {}
+        }
     }
     c.dup(
         "android.application-meta-data",

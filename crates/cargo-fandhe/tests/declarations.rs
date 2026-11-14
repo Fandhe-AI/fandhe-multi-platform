@@ -818,8 +818,15 @@ fn rejects_invalid_new_android_fields() {
     }
     assert_rejected(
         android(json!({"main-activity-attributes":{"supportsPictureInPicture":"a\nb"}})),
-        "制御文字",
+        "使えません",
     );
+    // 値域は属性ごと。真偽値の属性は "true" / "false" の完全一致だけを通す。
+    for bad in ["banana", "True", "FALSE", "", " true"] {
+        assert_rejected(
+            android(json!({"main-activity-attributes":{"supportsPictureInPicture":bad}})),
+            "main-activity-attributes.supportsPictureInPicture",
+        );
+    }
     let mut a = full_android();
     a["components"][1]
         .as_object_mut()
