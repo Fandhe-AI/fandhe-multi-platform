@@ -1,8 +1,8 @@
 //! iOS 向け端末・OS 情報実装（Issue #1305）。`ios/fandhe_ios_device_info.m`
 //! （`NSProcessInfo` + `sysctl` + `NSURL` のボリューム容量、`build.rs` が iOS ターゲットの
 //! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。#1304 の
-//! スタブを置き換えたもので、dispatch（`device/device_info.rs`）と共通コア画面は変えない。
-//! 契約は `fandhe_device::device_info`。
+//! スタブを置き換えたもので、dispatch（本 crate の `driver`）と共通コア画面は変えない。
+//! 契約は `crate::contract`。
 //!
 //! `.m` の生値（負値の番兵、固定長の機種バッファ）は [`from_raw`] で契約の値へ写す
 //! （ホストでテストできるようモジュールは `cfg(any(ios, test))`）。OS 名は機種が `iPad` で
@@ -10,7 +10,7 @@
 //!
 //! # 再描画
 //!
-//! OS コールバックを持たず結果を共有状態へ書く経路が無いため、`crate::ios::request_repaint` は
+//! OS コールバックを持たず結果を共有状態へ書く経路が無いため、`fandhe_runtime::request_repaint` は
 //! 呼ばない。再描画は `drive` の完了通知（`CompletionSender::send`）が起こす。
 //!
 //! # 守る範囲・守らない範囲
@@ -30,8 +30,8 @@
 use std::ffi::CStr;
 
 #[cfg(target_os = "ios")]
-use fandhe_device::device_info::require_any;
-use fandhe_device::device_info::{clean_text, DeviceInfoSnapshot};
+use crate::contract::require_any;
+use crate::contract::{DeviceInfoSnapshot, clean_text};
 
 /// `.m` の `FandheIosDeviceInfoRaw` と同じレイアウト。
 #[repr(C)]
@@ -76,7 +76,7 @@ mod ffi {
     // SAFETY: `ios/fandhe_ios_device_info.m`（`build.rs` が iOS ターゲットの feature `device`
     // 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_ios_device_info_read(out: *mut Raw) -> i32;
     }
 
@@ -92,8 +92,8 @@ mod ffi {
 struct IosDeviceInfo;
 
 #[cfg(target_os = "ios")]
-impl fandhe_device::device_info::DeviceInfo for IosDeviceInfo {
-    fn read(&self) -> Result<DeviceInfoSnapshot, fandhe_device::DeviceError> {
+impl crate::contract::DeviceInfo for IosDeviceInfo {
+    fn read(&self) -> Result<DeviceInfoSnapshot, crate::error::DeviceInfoError> {
         let mut raw = Raw {
             os_major: -1,
             os_minor: -1,
@@ -103,15 +103,15 @@ impl fandhe_device::device_info::DeviceInfo for IosDeviceInfo {
             model: [0; 64],
         };
         if ffi::read(&mut raw) != 0 {
-            return Err(fandhe_device::DeviceError::Internal("device_info read"));
+            return Err(crate::error::DeviceInfoError::Internal("device_info read"));
         }
         require_any(from_raw(raw))
     }
 }
 
-/// iOS の `DeviceInfo` 実装を返す（`device/device_info.rs` の dispatch から呼ばれる）。
+/// iOS の `DeviceInfo` 実装を返す（本 crate の `driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "ios")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::device_info::DeviceInfo> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::DeviceInfo> {
     Box::new(IosDeviceInfo)
 }
 

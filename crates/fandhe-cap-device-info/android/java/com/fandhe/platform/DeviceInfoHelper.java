@@ -6,8 +6,9 @@ import android.os.Build;
 import android.os.Environment;
 import android.os.StatFs;
 
-// 端末・OS 情報画面（Issue #1306、親 #1131）の Android 実装ヘルパー。MainActivity.deviceInfoRead()
-// から委譲される。Rust の `device/android_device_info.rs` が egui スレッドからボタン押下ごとに
+// 端末・OS 情報画面（Issue #1306、親 #1131）の Android 実装ヘルパー。Rust の `fandhe-cap-device-info` の
+// `src/android.rs` が JNI の static 呼び出し（`fandhe_platform_android::with_activity_class`、第 1 引数は Activity）で
+// 呼ぶ。Rust の `src/android.rs` が egui スレッドからボタン押下ごとに
 // JNI（`()Ljava/lang/String;`）で 1 回呼ぶ同期 getter で、Java -> Rust の native コールバックは
 // 無い（no-op スタブ不要）。
 //
@@ -29,8 +30,9 @@ final class DeviceInfoHelper {
 
     private DeviceInfoHelper() {}
 
-    static String read(Context context) {
+    static String read(Context activity) {
         try {
+            Context context = activity.getApplicationContext();
             String version = text(Build.VERSION.RELEASE);
             String maker = text(Build.MANUFACTURER);
             String model = text(Build.MODEL);

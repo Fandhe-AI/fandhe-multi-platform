@@ -1,14 +1,14 @@
 //! Issue #719（macOS）: クイック設定タイル・コントロールの Apple 向け実装。
-//! `fandhe_device::quick_settings_tile::QuickSettingsTile` を、App Group コンテナ内の回数ファイル
+//! `crate::contract::QuickSettingsTile` を、App Group コンテナ内の回数ファイル
 //! 1 つを**読むだけ**で満たす。書くのは WidgetKit 拡張（`platforms/apple/FandheTextWidget` の
-//! `FandheCountControl.swift`）の `AppIntent` で、別プロセス。`device/quick_settings_tile.rs` の
+//! `FandheCountControl.swift`）の `AppIntent` で、別プロセス。本 crate の `driver` の
 //! macOS 経路から呼ばれる。
 //!
 //! # 保存
 //!
 //! ファイル名は [`COUNT_FILE_NAME`]（key `COUNT_KEY` を `FsStorage` が符号化した名前）。Swift 側の
 //! 定数と 2 か所に書くため、テストで `FsStorage` の実際の名前と照合してずれを検出する。内容の
-//! 解釈は `fandhe_device::quick_settings_tile::parse_count`（ASCII 数字のみ、壊れていれば失敗）。
+//! 解釈は `crate::contract::parse_count`（ASCII 数字のみ、壊れていれば失敗）。
 //! ファイルが無いのは拡張が一度も走っていない場合で 0 回。権限拒否・ディレクトリ・壊れた内容は
 //! 0 にせず `Err(Internal)`（嘘の成功の禁止）。
 //!
@@ -20,8 +20,8 @@
 
 use std::path::PathBuf;
 
-use fandhe_device::quick_settings_tile::{parse_count, QuickSettingsTile, TileSnapshot};
-use fandhe_device::DeviceError;
+use crate::contract::{QuickSettingsTile, TileSnapshot, parse_count};
+use crate::error::QuickSettingsTileError;
 
 /// 回数ファイル名（key `quick_settings_count` の 16 進符号化）。Swift 側の定数と一致させる。
 pub const COUNT_FILE_NAME: &str = "717569636b5f73657474696e67735f636f756e74";
@@ -58,7 +58,7 @@ impl AppGroupQuickSettingsTile {
 }
 
 impl QuickSettingsTile for AppGroupQuickSettingsTile {
-    fn snapshot(&self) -> Result<TileSnapshot, DeviceError> {
+    fn snapshot(&self) -> Result<TileSnapshot, QuickSettingsTileError> {
         // パス・OS のエラー文は漏らさず種別だけにする（security.md A09）。
         match std::fs::read(self.dir.join(COUNT_FILE_NAME)) {
             Ok(bytes) => Ok(TileSnapshot {
@@ -67,7 +67,7 @@ impl QuickSettingsTile for AppGroupQuickSettingsTile {
             }),
             // 拡張が一度も走っていない（ディレクトリごと無い場合を含む）。
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(TileSnapshot::default()),
-            Err(_) => Err(DeviceError::Internal("quick_settings_tile")),
+            Err(_) => Err(QuickSettingsTileError::Internal),
         }
     }
 }
@@ -75,7 +75,7 @@ impl QuickSettingsTile for AppGroupQuickSettingsTile {
 /// macOS 既定の実装を作る。macOS 26 未満・判定不能・Team ID なしは `None`。
 #[cfg(target_os = "macos")]
 pub fn macos_default() -> Option<AppGroupQuickSettingsTile> {
-    let major = super::macos_device_info::implementation()
+    let major = fandhe_cap_device_info::platform_device_info()
         .read()
         .ok()
         .and_then(|s| s.os_version)
@@ -90,8 +90,8 @@ pub fn macos_default() -> Option<AppGroupQuickSettingsTile> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::storage::{FsStorage, Storage};
     use fandhe_device::DataDir;
+    use fandhe_device::storage::{FsStorage, Storage};
 
     fn temp_dir(tag: &str) -> PathBuf {
         let nanos = std::time::SystemTime::now()
@@ -148,10 +148,7 @@ mod tests {
             let dir = temp_dir(tag);
             put(&dir, bytes);
             let r = AppGroupQuickSettingsTile::new(dir.clone()).snapshot();
-            assert!(
-                matches!(r, Err(DeviceError::Internal("quick_settings_tile"))),
-                "{tag}"
-            );
+            assert!(matches!(r, Err(QuickSettingsTileError::Internal)), "{tag}");
             let _ = std::fs::remove_dir_all(dir);
         }
     }
@@ -161,10 +158,7 @@ mod tests {
         let dir = temp_dir("isdir");
         std::fs::create_dir_all(dir.join(COUNT_FILE_NAME)).expect("作成");
         let r = AppGroupQuickSettingsTile::new(dir.clone()).snapshot();
-        assert!(matches!(
-            r,
-            Err(DeviceError::Internal("quick_settings_tile"))
-        ));
+        assert!(matches!(r, Err(QuickSettingsTileError::Internal)));
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -182,10 +176,7 @@ mod tests {
             return;
         }
         let r = AppGroupQuickSettingsTile::new(dir.clone()).snapshot();
-        assert!(matches!(
-            r,
-            Err(DeviceError::Internal("quick_settings_tile"))
-        ));
+        assert!(matches!(r, Err(QuickSettingsTileError::Internal)));
         let _ = std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600));
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -194,7 +185,7 @@ mod tests {
     fn file_name_matches_fs_storage_encoding() {
         let dir = temp_dir("name");
         FsStorage::new(DataDir(dir.clone()))
-            .write(fandhe_device::quick_settings_tile::COUNT_KEY, b"7")
+            .write(crate::contract::COUNT_KEY, b"7")
             .expect("書ける");
         assert!(dir.join(COUNT_FILE_NAME).is_file());
         assert_eq!(

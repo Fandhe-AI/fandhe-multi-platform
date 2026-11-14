@@ -6,8 +6,8 @@ import android.content.SharedPreferences;
 import java.util.concurrent.atomic.AtomicLong;
 
 // クイック設定タイル（Issue #720、親 #139）の回数の保存先。`QuickSettingsTileService.onClick` が
-// `increment` を呼び、Rust の `device/android_quick_settings_tile.rs` が `MainActivity` 経由で
-// `readRaw` / `failedPresses` を JNI で読む。TileService と MainActivity は同じプロセスで動くため、
+// `increment` を呼び、Rust の `fandhe-cap-quick-settings-tile`（`src/android.rs`）が
+// `readRaw(Context)` / `failedPresses()` を JNI の static 呼び出しで読む。TileService と MainActivity は同じプロセスで動くため、
 // 排他の `LOCK` と失敗件数 `FAILED` は static で共有できる。
 //
 // 保存形式: SharedPreferences `fandhe_quick_settings_tile` の key `count` に ASCII 10 進数の String
@@ -72,9 +72,9 @@ final class QuickSettingsTileStore {
     }
 
     /** 保存内容をそのまま返す。未保存は null。解釈は Rust 側（`parse_count`）が行う。 */
-    static String readRaw(Context context) {
+    static String readRaw(Context activity) {
         synchronized (LOCK) {
-            return confirmed(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE));
+            return confirmed(activity.getApplicationContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE));
         }
     }
 

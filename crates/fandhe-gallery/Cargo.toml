@@ -36,6 +36,7 @@ device = [
   "dep:fandhe-cap-companion-device",
   "dep:fandhe-cap-compose-mail-sms",
   "dep:fandhe-cap-device-identifier",
+  "dep:fandhe-cap-device-info",
   "dep:fandhe-cap-digital-credentials",
   "dep:fandhe-cap-display-refresh-hdr",
   "dep:fandhe-cap-document-scan",
@@ -80,6 +81,7 @@ device = [
   "dep:fandhe-cap-pedometer",
   "dep:fandhe-cap-per-app-language",
   "dep:fandhe-cap-power-state",
+  "dep:fandhe-cap-quick-settings-tile",
   "dep:fandhe-cap-radio-control",
   "dep:fandhe-cap-recent-documents",
   "dep:fandhe-cap-removable-storage",
@@ -181,6 +183,7 @@ fandhe-cap-color-picker = { path = "../fandhe-cap-color-picker", optional = true
 fandhe-cap-companion-device = { path = "../fandhe-cap-companion-device", optional = true }
 fandhe-cap-compose-mail-sms = { path = "../fandhe-cap-compose-mail-sms", optional = true }
 fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier", optional = true }
+fandhe-cap-device-info = { path = "../fandhe-cap-device-info", optional = true }
 fandhe-cap-digital-credentials = { path = "../fandhe-cap-digital-credentials", optional = true }
 fandhe-cap-display-refresh-hdr = { path = "../fandhe-cap-display-refresh-hdr", optional = true }
 fandhe-cap-document-scan = { path = "../fandhe-cap-document-scan", optional = true }
@@ -225,6 +228,7 @@ fandhe-cap-pdf-viewer = { path = "../fandhe-cap-pdf-viewer", optional = true }
 fandhe-cap-pedometer = { path = "../fandhe-cap-pedometer", optional = true }
 fandhe-cap-per-app-language = { path = "../fandhe-cap-per-app-language", optional = true }
 fandhe-cap-power-state = { path = "../fandhe-cap-power-state", optional = true }
+fandhe-cap-quick-settings-tile = { path = "../fandhe-cap-quick-settings-tile", optional = true }
 fandhe-cap-radio-control = { path = "../fandhe-cap-radio-control", optional = true }
 fandhe-cap-recent-documents = { path = "../fandhe-cap-recent-documents", optional = true }
 fandhe-cap-removable-storage = { path = "../fandhe-cap-removable-storage", optional = true }

@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #139）型サンプル「クイック設定タイル・コントロール」（Issue #719）の
 //! effect ドライバ。`fandhe_core::screens::quick_settings_tile_show`（端末依存ゼロ）へ、
-//! `fandhe_device::quick_settings_tile::QuickSettingsTile` が読んだ回数と追加方法の案内を注入する
+//! `crate::contract::QuickSettingsTile` が読んだ回数と追加方法の案内を注入する
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`fandhe-cap-share-receive` の `drive` と同型）。
 //!
@@ -20,22 +20,22 @@
 //!
 //! # 実装のある OS
 //!
-//! macOS（[`apple_quick_settings_tile`](super::apple_quick_settings_tile)、Issue #719）と
-//! Android（[`android_quick_settings_tile`](super::android_quick_settings_tile)、Issue #720）。iOS は保留、Windows は
+//! macOS（[`apple`](crate::apple)、Issue #719）と
+//! Android（[`android`](crate::android)、Issue #720）。iOS は保留、Windows は
 //! 対象外で `UnsupportedQuickSettingsTile` 固定のため、画面には「未対応」と出る。
 
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::quick_settings_tile_show::{
-    apply_unsupported, finish_read, set_guide, QuickSettingsTileShowState, ReadOutcome, TileGuide,
-};
-use fandhe_device::quick_settings_tile::QuickSettingsTile;
+use crate::contract::QuickSettingsTile;
 #[cfg(not(target_os = "android"))]
-use fandhe_device::quick_settings_tile::UnsupportedQuickSettingsTile;
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedQuickSettingsTile;
+use crate::error::QuickSettingsTileError;
+use fandhe_core::screens::quick_settings_tile_show::{
+    QuickSettingsTileShowState, ReadOutcome, TileGuide, apply_unsupported, finish_read, set_guide,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 回数を読み直す間隔。表示の遅れはこの間隔ぶん許容する（trait doc の守らない範囲）。
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -73,20 +73,26 @@ fn platform_tile() -> &'static Arc<dyn QuickSettingsTile> {
     TILE.get_or_init(|| {
         #[cfg(target_os = "macos")]
         {
-            match super::apple_quick_settings_tile::macos_default() {
+            match crate::apple::macos_default() {
                 Some(t) => Arc::new(t),
                 None => Arc::new(UnsupportedQuickSettingsTile),
             }
         }
         #[cfg(target_os = "android")]
         {
-            super::android_quick_settings_tile::implementation()
+            crate::android::implementation()
         }
         #[cfg(not(any(target_os = "macos", target_os = "android")))]
         {
             Arc::new(UnsupportedQuickSettingsTile)
         }
     })
+}
+
+/// 現在の OS の `QuickSettingsTile` 実装（プロセスに 1 つ。画面の effect と同じ実体）。
+/// フレームワークの外のアプリも、画面の状態型なしで回数を読める。
+pub fn platform_quick_settings_tile() -> Arc<dyn QuickSettingsTile> {
+    Arc::clone(platform_tile())
 }
 
 /// 現在の OS の追加方法の案内（`platform_tile` と同じ cfg 集合）。
@@ -135,12 +141,12 @@ fn drive(
         if inner.in_flight {
             return;
         }
-        if let Some(due) = inner.next_due {
-            if now < due {
-                // 送信を省く分岐でも次回を予約する。
-                sender.request_repaint_after(due - now);
-                return;
-            }
+        if let Some(due) = inner.next_due
+            && now < due
+        {
+            // 送信を省く分岐でも次回を予約する。
+            sender.request_repaint_after(due - now);
+            return;
         }
         inner.generation += 1;
         inner.in_flight = true;
@@ -164,7 +170,7 @@ fn drive(
             poller,
             &tx,
             generation,
-            Err(DeviceError::Internal("quick_settings_tile")),
+            Err(QuickSettingsTileError::Internal),
         );
     }
 }
@@ -174,7 +180,7 @@ fn finish(
     poller: &Poller,
     sender: &CompletionSender<QuickSettingsTileShowState>,
     generation: u64,
-    result: Result<fandhe_device::quick_settings_tile::TileSnapshot, DeviceError>,
+    result: Result<crate::contract::TileSnapshot, QuickSettingsTileError>,
 ) {
     {
         let mut inner = match poller.inner.lock() {
@@ -196,7 +202,7 @@ fn finish(
             sender.request_repaint_after(POLL_INTERVAL);
         }
         // 非対応は結果が変わらないため 1 回だけ送る。再描画は予約しない。
-        Err(DeviceError::Unsupported(_)) => {
+        Err(QuickSettingsTileError::Unsupported) => {
             let _ = sender.send(Box::new(apply_unsupported));
         }
         // 理由（パス・OS の文言）は画面へ渡さない。次回も読み、復帰したら回数へ戻る。
@@ -228,19 +234,24 @@ pub fn quick_settings_tile_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::Completion;
+    use crate::contract::{TileSnapshot, UnsupportedQuickSettingsTile as Unsupported};
     use fandhe_core::screens::quick_settings_tile_show::status_text;
-    use fandhe_device::quick_settings_tile::{
-        TileSnapshot, UnsupportedQuickSettingsTile as Unsupported,
-    };
+    use fandhe_runtime::Completion;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::mpsc::{channel, Receiver, Sender};
+    use std::sync::mpsc::{Receiver, Sender, channel};
 
     type St = QuickSettingsTileShowState;
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
     fn sender_with_channel() -> (CompletionSender<St>, Receiver<Completion<St>>) {
         let (tx, rx) = channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// 既定の待ち時間内に届いた完了をすべて状態へ適用し、適用数を返す。
@@ -270,10 +281,10 @@ mod tests {
     /// 呼び出し回数を数え、毎回同じ結果を返す実装。
     struct Scripted {
         calls: Arc<AtomicUsize>,
-        results: Mutex<Vec<Result<TileSnapshot, DeviceError>>>,
+        results: Mutex<Vec<Result<TileSnapshot, QuickSettingsTileError>>>,
     }
     impl QuickSettingsTile for Scripted {
-        fn snapshot(&self) -> Result<TileSnapshot, DeviceError> {
+        fn snapshot(&self) -> Result<TileSnapshot, QuickSettingsTileError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             let mut r = self.results.lock().unwrap();
             if r.len() > 1 {
@@ -281,14 +292,14 @@ mod tests {
             } else {
                 match &r[0] {
                     Ok(s) => Ok(*s),
-                    Err(_) => Err(DeviceError::Internal("quick_settings_tile")),
+                    Err(_) => Err(QuickSettingsTileError::Internal),
                 }
             }
         }
     }
 
     fn scripted(
-        results: Vec<Result<TileSnapshot, DeviceError>>,
+        results: Vec<Result<TileSnapshot, QuickSettingsTileError>>,
     ) -> (Arc<dyn QuickSettingsTile>, Arc<AtomicUsize>) {
         let calls = Arc::new(AtomicUsize::new(0));
         (
@@ -304,15 +315,15 @@ mod tests {
         Box::leak(Box::new(Poller::new()))
     }
 
-    fn snap(count: u64) -> Result<TileSnapshot, DeviceError> {
+    fn snap(count: u64) -> Result<TileSnapshot, QuickSettingsTileError> {
         Ok(TileSnapshot {
             count,
             failed_presses: None,
         })
     }
 
-    fn fail() -> Result<TileSnapshot, DeviceError> {
-        Err(DeviceError::Internal("quick_settings_tile"))
+    fn fail() -> Result<TileSnapshot, QuickSettingsTileError> {
+        Err(QuickSettingsTileError::Internal)
     }
 
     #[test]
@@ -400,7 +411,7 @@ mod tests {
         gate: Mutex<Receiver<()>>,
     }
     impl QuickSettingsTile for Blocking {
-        fn snapshot(&self) -> Result<TileSnapshot, DeviceError> {
+        fn snapshot(&self) -> Result<TileSnapshot, QuickSettingsTileError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             let _ = self
                 .gate

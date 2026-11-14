@@ -470,16 +470,6 @@ public class MainActivity extends GameActivity {
         paymentRequestHelper.request(requestId, pay, isReadyToPayJson, paymentDataRequestJson);
     }
 
-    // クイック設定タイル（Issue #720）。実装は `QuickSettingsTileStore`。Rust の
-    // `android_quick_settings_tile.rs` が JNI（署名 `()Ljava/lang/String;` と `()J`）で呼ぶ。
-    String quickSettingsTileCountRaw() {
-        return QuickSettingsTileStore.readRaw(getApplicationContext());
-    }
-
-    long quickSettingsTileFailedPresses() {
-        return QuickSettingsTileStore.failedPresses();
-    }
-
     // 車載ディスプレイ（Issue #1117）。実装は `CarDisplayScreen`。Rust の
     // `android_car_display.rs` が JNI（署名 `(Ljava/lang/String;)V` と `()Z`）で呼ぶ。
     void carDisplaySetText(String text) {
@@ -3445,13 +3435,6 @@ public class MainActivity extends GameActivity {
         } catch (IOException | RuntimeException e) {
             nativeOnFilePickerResult(requestId, 2, null, -1);
         }
-    }
-
-    // Rust 側（`device/android_device_info.rs`、Issue #1306）から JNI 経由で egui スレッドが
-    // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
-    // `DeviceInfoHelper` 冒頭を参照。失敗は null。
-    private String deviceInfoRead() {
-        return DeviceInfoHelper.read(getApplicationContext());
     }
 
     // Rust 側（`device/android_alarm.rs`、Issue #1078）から JNI 経由でワーカースレッドが同期で呼ぶ

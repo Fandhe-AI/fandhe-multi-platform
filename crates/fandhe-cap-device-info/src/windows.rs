@@ -1,6 +1,6 @@
-//! Windows 向け端末・OS 情報実装（Issue #1304）。`device/device_info.rs` の Windows 経路から呼ばれ、
+//! Windows 向け端末・OS 情報実装（Issue #1304）。本 crate の `driver` の Windows 経路から呼ばれ、
 //! Win32 を UI スレッドから同期で 1 回ずつ呼ぶ（package identity・管理者権限は不要）。契約は
-//! `fandhe_device::device_info`。
+//! `crate::contract`。
 //!
 //! - OS の版: `RtlGetVersion`（`GetVersionEx` は manifest 次第で値をごまかすため使わない）
 //! - 機種: レジストリ `HKLM\HARDWARE\DESCRIPTION\System\BIOS` の `SystemManufacturer` /
@@ -19,7 +19,7 @@
 //! - BIOS が出す仮の文字列（`To Be Filled By O.E.M.` 等）は判定せずそのまま出す
 //! - 実機確認は #1301。ローカルに MSVC が無く、型検査は `x86_64-pc-windows-gnu` のみ
 
-use fandhe_device::device_info::clean_text;
+use crate::contract::clean_text;
 
 /// `RtlGetVersion` の版を `10.0.22631` の形にする。`major == 0` は取れなかったとみなして `None`。
 fn version_text(major: u32, minor: u32, build: u32) -> Option<String> {
@@ -53,15 +53,15 @@ fn drive_root(windows_dir: &str) -> Option<String> {
 #[allow(unsafe_code)]
 mod win {
     use super::{drive_root, model_text, version_text, wide_to_string};
-    use fandhe_device::device_info::{require_any, DeviceInfo, DeviceInfoSnapshot};
-    use fandhe_device::DeviceError;
-    use windows::core::{w, PCWSTR};
+    use crate::contract::{DeviceInfo, DeviceInfoSnapshot, require_any};
+    use crate::error::DeviceInfoError;
     use windows::Wdk::System::SystemServices::RtlGetVersion;
     use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
-    use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
+    use windows::Win32::System::Registry::{HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ, RegGetValueW};
     use windows::Win32::System::SystemInformation::{
         GetWindowsDirectoryW, GlobalMemoryStatusEx, MEMORYSTATUSEX, OSVERSIONINFOW,
     };
+    use windows::core::{PCWSTR, w};
 
     /// レジストリ文字列の読み取り上限（バイト）。超える値は不明として扱う。
     const MAX_REG_BYTES: u32 = 1024;
@@ -147,7 +147,7 @@ mod win {
     }
 
     impl DeviceInfo for WindowsDeviceInfo {
-        fn read(&self) -> Result<DeviceInfoSnapshot, DeviceError> {
+        fn read(&self) -> Result<DeviceInfoSnapshot, DeviceInfoError> {
             let manufacturer = bios_value(w!("SystemManufacturer"));
             let product = bios_value(w!("SystemProductName"));
             require_any(DeviceInfoSnapshot {
@@ -161,9 +161,9 @@ mod win {
     }
 }
 
-/// Windows の `DeviceInfo` 実装を返す（`device/device_info.rs` の dispatch から呼ばれる）。
+/// Windows の `DeviceInfo` 実装を返す（本 crate の `driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "windows")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::device_info::DeviceInfo> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::DeviceInfo> {
     Box::new(win::WindowsDeviceInfo)
 }
 

@@ -1,8 +1,7 @@
-//! Android 向け端末・OS 情報実装（Issue #1306）。`device/device_info.rs` の Android 経路から
-//! egui スレッドでボタン押下ごとに同期で 1 回呼ばれる。契約は `fandhe_device::device_info`。
+//! Android 向け端末・OS 情報実装（Issue #1306）。本 crate の `driver` の Android 経路から
+//! egui スレッドでボタン押下ごとに同期で 1 回呼ばれる。契約は `crate::contract`。
 //!
-//! Java 側 `MainActivity.deviceInfoRead()`（JNI シグネチャ `()Ljava/lang/String;`）が
-//! `DeviceInfoHelper.read` へ委譲し、OS 版・機種・メモリ総量・空き容量を U+001F 区切りの
+//! Java 側 `DeviceInfoHelper.read(Context)`（static、JNI シグネチャ `(Landroid/content/Context;)Ljava/lang/String;`）が、OS 版・機種・メモリ総量・空き容量を U+001F 区切りの
 //! 4 項目で返す。詰め方の SSOT は `DeviceInfoHelper.java` 冒頭。文字列から数値・契約の値への
 //! 写像は純関数 [`from_android`] に置き、ホストでもテストする。
 //!
@@ -22,7 +21,7 @@
 //! <https://developer.android.com/reference/android/app/ActivityManager.MemoryInfo>、
 //! <https://developer.android.com/reference/android/os/StatFs>
 
-use fandhe_device::device_info::{clean_text, DeviceInfoSnapshot};
+use crate::contract::{DeviceInfoSnapshot, clean_text};
 
 /// Java が項目をつなぐ区切り文字（U+001F）。
 const SEP: char = '\u{1F}';
@@ -46,38 +45,29 @@ fn from_android(raw: &str) -> Option<DeviceInfoSnapshot> {
 #[cfg(target_os = "android")]
 mod jni_impl {
     use super::from_android;
-    use crate::device::android::JniCallFailed;
-    use fandhe_device::device_info::{require_any, DeviceInfo, DeviceInfoSnapshot};
-    use fandhe_device::DeviceError;
+    use crate::contract::{DeviceInfo, DeviceInfoSnapshot, require_any};
+    use crate::error::DeviceInfoError;
+    use fandhe_platform_android::JniCallFailed;
 
-    /// Android の `DeviceInfo` 実装（`MainActivity.deviceInfoRead()` を JNI で呼ぶ）。
+    /// Android の `DeviceInfo` 実装（`DeviceInfoHelper.read(Context)` を JNI で呼ぶ）。
     pub(super) struct AndroidDeviceInfo;
 
     impl DeviceInfo for AndroidDeviceInfo {
-        /// 2 箇所の `unsafe` は `AndroidPowerState::read` と同じ根拠・同じ形。
-        #[allow(unsafe_code)]
-        fn read(&self) -> Result<DeviceInfoSnapshot, DeviceError> {
-            const FAILED: DeviceError = DeviceError::Internal("device_info read");
-            let Some(app) = crate::android::android_app() else {
+        /// `unsafe` は共通層 `fandhe_platform_android::with_activity_class` に閉じている。
+        fn read(&self) -> Result<DeviceInfoSnapshot, DeviceInfoError> {
+            const FAILED: DeviceInfoError = DeviceInfoError::Internal("device_info read");
+            let Some(app) = fandhe_platform_android::android_app() else {
                 return Err(FAILED);
             };
-
-            // SAFETY: `AndroidClipboard::request` と同一の根拠。`vm_as_ptr()` は
-            // android-activity が管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
-            let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-
-            let result = vm.attach_current_thread(
-                |env: &mut jni::Env| -> Result<Option<String>, JniCallFailed> {
-                    let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                    // SAFETY: `AndroidClipboard::request` と同一の根拠。未所有の JNI
-                    // グローバル参照を `Cast` で包むだけで delete は試みない。
-                    let activity =
-                        unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                    let ret = env.call_method(
-                        &activity,
-                        jni::jni_str!("deviceInfoRead"),
-                        jni::jni_sig!(() -> java.lang.String),
-                        &[],
+            let result = fandhe_platform_android::with_activity_class(
+                &app,
+                jni::jni_str!("com.fandhe.platform.DeviceInfoHelper"),
+                |env, activity, class| -> Result<Option<String>, JniCallFailed> {
+                    let ret = env.call_static_method(
+                        class,
+                        jni::jni_str!("read"),
+                        jni::jni_sig!((android.content.Context) -> java.lang.String),
+                        &[jni::objects::JValue::Object(activity)],
                     );
                     let ret = match ret {
                         Ok(v) => v,
@@ -106,14 +96,14 @@ mod jni_impl {
 
 /// Android の `DeviceInfo` 実装を返す。
 #[cfg(target_os = "android")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::device_info::DeviceInfo> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::DeviceInfo> {
     Box::new(jni_impl::AndroidDeviceInfo)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::device_info::require_any;
+    use crate::contract::require_any;
 
     fn join(p: [&str; 4]) -> String {
         p.join("\u{1F}")

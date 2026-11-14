@@ -1,9 +1,9 @@
 //! Phase 11 の拡充ループ（親 #1131）型サンプル「端末・OS 情報」（Issue #1304）の effect ドライバ。
 //! `fandhe_core::screens::device_info_show`（端末依存ゼロ）の要求を `take_request` で観測し、
-//! `fandhe_device::device_info::DeviceInfo` を UI スレッドから同期で 1 回だけ読んで、結果を
+//! `crate::contract::DeviceInfo` を UI スレッドから同期で 1 回だけ読んで、結果を
 //! `CompletionSender` 経由で注入する（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
-//! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は
-//! `fandhe_device::device_info`。
+//! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`fandhe_runtime::EffectFn` 参照）。契約の SSOT は
+//! `crate::contract`。
 //!
 //! # OS 別実装の差し込み口
 //!
@@ -17,38 +17,38 @@
 //! 読み取りは押下時の 1 回だけで、ワーカーも再描画予約も持たない。完了は `finish_read` が
 //! 世代を照合して反映する。
 
-use fandhe_core::screens::device_info_show::{
-    finish_read, take_request, DeviceInfoReading, DeviceInfoShowState, ReadFailure,
-};
 #[cfg(not(any(
     target_os = "windows",
     target_os = "macos",
     target_os = "ios",
     target_os = "android"
 )))]
-use fandhe_device::device_info::UnsupportedDeviceInfo;
-use fandhe_device::device_info::{DeviceInfo, DeviceInfoSnapshot};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedDeviceInfo;
+use crate::contract::{DeviceInfo, DeviceInfoSnapshot};
+use crate::error::DeviceInfoError;
+use fandhe_core::screens::device_info_show::{
+    DeviceInfoReading, DeviceInfoShowState, ReadFailure, finish_read, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `DeviceInfo` 実装を返す（状態を持たないため呼び出しごとに構築）。
-fn platform_device_info() -> Box<dyn DeviceInfo> {
+pub fn platform_device_info() -> Box<dyn DeviceInfo> {
     #[cfg(target_os = "windows")]
     {
-        super::windows_device_info::implementation()
+        crate::windows::implementation()
     }
     #[cfg(target_os = "macos")]
     {
-        super::macos_device_info::implementation()
+        crate::macos::implementation()
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_device_info::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_device_info::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(
         target_os = "windows",
@@ -84,7 +84,7 @@ fn drive(
     let generation = request.generation;
     let result = match info.read() {
         Ok(snapshot) => Ok(to_reading(snapshot)),
-        Err(DeviceError::Unsupported(_)) => Err(ReadFailure::Unsupported),
+        Err(DeviceInfoError::Unsupported) => Err(ReadFailure::Unsupported),
         // 画面へは固定文言のみ（OS の生コードは出さない、security.md A09）。
         Err(_) => Err(ReadFailure::Failed("端末情報の読み取り".to_string())),
     };
@@ -105,8 +105,9 @@ pub fn device_info_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::device_info_show::{read, ReadPhase, UNSUPPORTED_STATUS};
-    use fandhe_device::device_info::UnsupportedDeviceInfo as Unsupported;
+    use crate::contract::UnsupportedDeviceInfo as Unsupported;
+    use fandhe_core::screens::device_info_show::{ReadPhase, UNSUPPORTED_STATUS, read};
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     struct Fake {
@@ -124,20 +125,27 @@ mod tests {
     }
 
     impl DeviceInfo for Fake {
-        fn read(&self) -> Result<DeviceInfoSnapshot, DeviceError> {
+        fn read(&self) -> Result<DeviceInfoSnapshot, DeviceInfoError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             self.snapshot
                 .clone()
-                .ok_or(DeviceError::Internal("device_info read"))
+                .ok_or(DeviceInfoError::Internal("device_info read"))
         }
+    }
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
     }
 
     fn channel() -> (
         CompletionSender<DeviceInfoShowState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<DeviceInfoShowState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<DeviceInfoShowState>>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// 要求を立てて `drive` し、届いた完了をすべて適用した状態を返す。

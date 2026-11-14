@@ -1,8 +1,8 @@
 //! macOS 向け端末・OS 情報実装（Issue #1304）。`macos/fandhe_macos_device_info.m`
 //! （`NSProcessInfo` + `sysctl` + `NSURL` のボリューム容量、`build.rs` が macOS ターゲットの
 //! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` は
-//! この呼び出しに閉じ `// SAFETY:` で契約を明記する。`device/device_info.rs` の macOS 経路から
-//! 呼ばれ、契約は `fandhe_device::device_info`。
+//! この呼び出しに閉じ `// SAFETY:` で契約を明記する。本 crate の `driver` の macOS 経路から
+//! 呼ばれ、契約は `crate::contract`。
 //!
 //! `.m` が返す生値（負値の番兵、固定長の機種バッファ）は [`from_raw`] で契約の値へ写す。
 //! 写像はホストでもテストできるようモジュールは `cfg(any(macos, test))`。
@@ -17,8 +17,8 @@
 use std::ffi::CStr;
 
 #[cfg(target_os = "macos")]
-use fandhe_device::device_info::require_any;
-use fandhe_device::device_info::{clean_text, DeviceInfoSnapshot};
+use crate::contract::require_any;
+use crate::contract::{DeviceInfoSnapshot, clean_text};
 
 /// `.m` の `FandheDeviceInfoRaw` と同じレイアウト。
 #[repr(C)]
@@ -58,7 +58,7 @@ mod ffi {
     // SAFETY: `macos/fandhe_macos_device_info.m`（`build.rs` が macOS ターゲットの feature
     // `device` 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_device_info_read(out: *mut Raw) -> i32;
     }
 
@@ -74,8 +74,8 @@ mod ffi {
 struct MacDeviceInfo;
 
 #[cfg(target_os = "macos")]
-impl fandhe_device::device_info::DeviceInfo for MacDeviceInfo {
-    fn read(&self) -> Result<DeviceInfoSnapshot, fandhe_device::DeviceError> {
+impl crate::contract::DeviceInfo for MacDeviceInfo {
+    fn read(&self) -> Result<DeviceInfoSnapshot, crate::error::DeviceInfoError> {
         let mut raw = Raw {
             os_major: -1,
             os_minor: -1,
@@ -85,15 +85,15 @@ impl fandhe_device::device_info::DeviceInfo for MacDeviceInfo {
             model: [0; 64],
         };
         if ffi::read(&mut raw) != 0 {
-            return Err(fandhe_device::DeviceError::Internal("device_info read"));
+            return Err(crate::error::DeviceInfoError::Internal("device_info read"));
         }
         require_any(from_raw(raw))
     }
 }
 
-/// macOS の `DeviceInfo` 実装を返す（`device/device_info.rs` の dispatch から呼ばれる）。
+/// macOS の `DeviceInfo` 実装を返す（本 crate の `driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "macos")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::device_info::DeviceInfo> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::DeviceInfo> {
     Box::new(MacDeviceInfo)
 }
 

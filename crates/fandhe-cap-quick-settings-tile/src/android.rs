@@ -1,17 +1,17 @@
 //! Android 向けクイック設定タイル（`TileService`）の実装（親 #139、Issue #720）。
-//! `device/quick_settings_tile.rs` の Android 経路（dispatch）から呼ばれ、effect ドライバの
+//! 本 crate の `driver` の Android 経路（dispatch）から呼ばれ、effect ドライバの
 //! ワーカースレッドで [`QuickSettingsTile::snapshot`] として回数を読む。
 //!
 //! 流れ: ユーザーがクイック設定の編集から「Fandhe カウント」を追加して押す → OS が
 //! `QuickSettingsTileService.onClick` を呼ぶ → `QuickSettingsTileStore.increment` が
 //! `synchronized` の内側で読み・+1・`commit()` する（SharedPreferences `fandhe_quick_settings_tile`
 //! の `count`、ASCII 10 進数の String）。保存に失敗した押下は数えず、static の失敗件数を +1 する。
-//! 本ファイルは JNI で `MainActivity.quickSettingsTileCountRaw()`（`()Ljava/lang/String;`、未保存は
-//! null）と `MainActivity.quickSettingsTileFailedPresses()`（`()J`）を 1 回の attach の中で読み、
+//! 本ファイルは JNI で `QuickSettingsTileStore.readRaw(Context)`（`(Landroid/content/Context;)Ljava/lang/String;`、
+//! 未保存は null）と `QuickSettingsTileStore.failedPresses()`（`()J`）を static 呼び出しで 1 回の attach の中で読み、
 //! [`map_snapshot`] が契約の値へ写す。null は 0 回、壊れた内容・溢れ・負の失敗件数は `Internal`
 //! （0 に戻さない）。
 //!
-//! JNI の署名は Java 側（`MainActivity`）と本ファイルの 2 か所で一致させる。no-op スタブは置かない
+//! JNI の署名は Java 側（`QuickSettingsTileStore`）と本ファイルの 2 か所で一致させる。no-op スタブは置かない
 //! （Java に `native` 宣言は無く、呼び出しは Rust から Java への一方向だけ。`fandhe_platform_android::with_activity` 経由の機能 crate（home-widget 等）と同じ）。
 //!
 //! `android_app()` が `None`（Activity が未確立・破棄直後）のときは `Unsupported` ではなく
@@ -30,8 +30,8 @@
 
 use std::sync::Arc;
 
-use fandhe_device::quick_settings_tile::{parse_count, QuickSettingsTile, TileSnapshot};
-use fandhe_device::DeviceError;
+use crate::contract::{QuickSettingsTile, TileSnapshot, parse_count};
+use crate::error::QuickSettingsTileError;
 
 /// Android の `QuickSettingsTile` 実装を返す。
 pub(crate) fn implementation() -> Arc<dyn QuickSettingsTile> {
@@ -41,7 +41,7 @@ pub(crate) fn implementation() -> Arc<dyn QuickSettingsTile> {
 struct AndroidQuickSettingsTile;
 
 impl QuickSettingsTile for AndroidQuickSettingsTile {
-    fn snapshot(&self) -> Result<TileSnapshot, DeviceError> {
+    fn snapshot(&self) -> Result<TileSnapshot, QuickSettingsTileError> {
         let (raw, failed) = imp::read()?;
         map_snapshot(raw.as_deref(), failed)
     }
@@ -49,8 +49,8 @@ impl QuickSettingsTile for AndroidQuickSettingsTile {
 
 /// Java から読んだ保存内容と失敗件数を契約の値へ写す。未保存（`None`）は 0 回、壊れた内容と
 /// 負の失敗件数は `Internal`（成功へ倒さない）。
-fn map_snapshot(raw: Option<&str>, failed: i64) -> Result<TileSnapshot, DeviceError> {
-    let failed = u64::try_from(failed).map_err(|_| DeviceError::Internal("quick_settings_tile"))?;
+fn map_snapshot(raw: Option<&str>, failed: i64) -> Result<TileSnapshot, QuickSettingsTileError> {
+    let failed = u64::try_from(failed).map_err(|_| QuickSettingsTileError::Internal)?;
     let count = match raw {
         None => 0,
         Some(s) => parse_count(s.as_bytes())?,
@@ -63,33 +63,28 @@ fn map_snapshot(raw: Option<&str>, failed: i64) -> Result<TileSnapshot, DeviceEr
 
 #[cfg(target_os = "android")]
 mod imp {
-    use fandhe_device::DeviceError;
+    use crate::error::QuickSettingsTileError;
+    use fandhe_platform_android::JniCallFailed;
 
-    const INTERNAL: DeviceError = DeviceError::Internal("quick_settings_tile");
+    const INTERNAL: QuickSettingsTileError = QuickSettingsTileError::Internal;
 
     /// 保存内容（未保存は `None`）と失敗件数を 1 回の attach で読む。JNI 失敗・Java 例外は
-    /// 例外を clear して `Internal`（文言は読まない）。
-    #[allow(unsafe_code)]
-    pub(super) fn read() -> Result<(Option<String>, i64), DeviceError> {
-        let Some(app) = crate::android::android_app() else {
+    /// 例外を clear して `Internal`（文言は読まない）。`unsafe` は共通層
+    /// `fandhe_platform_android::with_activity_class` に閉じている。
+    pub(super) fn read() -> Result<(Option<String>, i64), QuickSettingsTileError> {
+        let Some(app) = fandhe_platform_android::android_app() else {
             return Err(INTERNAL);
         };
-        // SAFETY: `fandhe_platform_android::with_activity` と同一の根拠。`app.vm_as_ptr()` は
-        // android-activity が管理する有効な `JavaVM*` で、`app` は本呼び出しの間生存する。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-        vm.attach_current_thread(
-            |env: &mut jni::Env| -> Result<(Option<String>, i64), super::super::android::JniCallFailed> {
-                let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない
-                // （`app` の生存中有効）。
-                let activity =
-                    unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
+        fandhe_platform_android::with_activity_class(
+            &app,
+            jni::jni_str!("com.fandhe.platform.QuickSettingsTileStore"),
+            |env, activity, class| -> Result<(Option<String>, i64), JniCallFailed> {
                 let result = (|| {
-                    let ret = env.call_method(
-                        &activity,
-                        jni::jni_str!("quickSettingsTileCountRaw"),
-                        jni::jni_sig!(() -> java.lang.String),
-                        &[],
+                    let ret = env.call_static_method(
+                        class,
+                        jni::jni_str!("readRaw"),
+                        jni::jni_sig!((android.content.Context) -> java.lang.String),
+                        &[jni::objects::JValue::Object(activity)],
                     )?;
                     let jstring = env.cast_local::<jni::objects::JString>(ret.l()?)?;
                     let raw = if jstring.is_null() {
@@ -98,34 +93,34 @@ mod imp {
                         Some(jstring.try_to_string(env)?)
                     };
                     let failed = env
-                        .call_method(
-                            &activity,
-                            jni::jni_str!("quickSettingsTileFailedPresses"),
+                        .call_static_method(
+                            class,
+                            jni::jni_str!("failedPresses"),
                             jni::jni_sig!(() -> long),
                             &[],
                         )?
                         .j()?;
-                    Ok((raw, failed))
+                    Ok::<_, jni::errors::Error>((raw, failed))
                 })();
                 if result.is_err() && env.exception_check() {
                     // 例外は自動クリアされない（jni 0.22）。後続 JNI に影響させない。
                     env.exception_clear();
                 }
-                result
+                Ok(result?)
             },
         )
         .map_err(|_| INTERNAL)
     }
 }
 
-/// `device.rs` が Android 限定（とテスト）で載せるため、ホストの実行では使われない。
+/// `lib.rs` が Android 限定（とテスト）で載せるため、ホストの実行では使われない。
 /// 呼ばれても成功へ倒さない。
 #[cfg(not(target_os = "android"))]
 mod imp {
-    use fandhe_device::DeviceError;
+    use crate::error::QuickSettingsTileError;
 
-    pub(super) fn read() -> Result<(Option<String>, i64), DeviceError> {
-        Err(DeviceError::Unsupported("quick_settings_tile"))
+    pub(super) fn read() -> Result<(Option<String>, i64), QuickSettingsTileError> {
+        Err(QuickSettingsTileError::Unsupported)
     }
 }
 
@@ -133,11 +128,8 @@ mod imp {
 mod tests {
     use super::*;
 
-    fn internal<T: std::fmt::Debug>(r: Result<T, DeviceError>) {
-        assert!(
-            matches!(r, Err(DeviceError::Internal("quick_settings_tile"))),
-            "{r:?}"
-        );
+    fn internal<T: std::fmt::Debug>(r: Result<T, QuickSettingsTileError>) {
+        assert!(matches!(r, Err(QuickSettingsTileError::Internal)), "{r:?}");
     }
 
     #[test]
@@ -173,7 +165,7 @@ mod tests {
     fn host_implementation_never_succeeds() {
         assert!(matches!(
             implementation().snapshot(),
-            Err(DeviceError::Unsupported("quick_settings_tile"))
+            Err(QuickSettingsTileError::Unsupported)
         ));
     }
 }

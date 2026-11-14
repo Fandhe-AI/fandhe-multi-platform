@@ -339,7 +339,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "device_info_show" => fandhe_core::screens::device_info_show::current_screen,
-    fandhe_egui_proxy::device::device_info::device_info_show_effect,
+    fandhe_cap_device_info::device_info_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "device_identifier_show" => fandhe_core::screens::device_identifier_show::current_screen,
@@ -559,7 +559,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "quick_settings_tile_show" => fandhe_core::screens::quick_settings_tile_show::current_screen,
-    fandhe_egui_proxy::device::quick_settings_tile::quick_settings_tile_show_effect,
+    fandhe_cap_quick_settings_tile::quick_settings_tile_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "share_receive_show" => fandhe_core::screens::share_receive_show::current_screen,

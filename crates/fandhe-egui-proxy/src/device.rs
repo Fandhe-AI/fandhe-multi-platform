@@ -71,11 +71,6 @@ pub mod android_compass;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_deep_link;
-/// Issue #1304: Android 向け端末・OS 情報実装。`device/device_info.rs` の
-/// Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_device_info;
 /// Issue #609: Android 向け気圧・照度・近接センサー実装。
 /// `device/environment_sensors.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -157,11 +152,6 @@ pub mod android_picture_in_picture;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_print;
-/// Issue #720（親 #139）: Android 向けクイック設定タイル。Java の `TileService` が SharedPreferences に
-/// 数えた回数を JNI で読む実装。`device/quick_settings_tile.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_quick_settings_tile;
 /// Issue #446: Android 向けセーフエリア実装（既存の insets リスナーの値を pull で読む）。
 /// `device/safe_area_insets.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -290,11 +280,6 @@ pub mod apple_photo_library;
 /// 呼ぶ C ABI ラッパー）。`device/picture_in_picture.rs` の macOS・iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_picture_in_picture;
-/// Issue #719（macOS）: クイック設定コントロールの回数を App Group コンテナのファイルから読む実装。
-/// `device/quick_settings_tile.rs` の macOS 経路から呼ばれる。ホストの `cargo test` でも検証できるよう
-/// `cfg(test)` でも有効にする。
-#[cfg(any(target_os = "macos", test))]
-pub mod apple_quick_settings_tile;
 /// Issue #922・#924: iOS / macOS 向け資格情報保存実装（`apple/
 /// fandhe_apple_secure_credential.m` を呼ぶ C ABI ラッパー）。`device/
 /// secure_credential.rs` の iOS/macOS 経路から呼ばれる。
@@ -362,9 +347,6 @@ pub mod contact_pick;
 /// Phase 11 の拡充ループ（親 #153、Issue #1278）: ディープリンク受信の effect ドライバ
 /// （Android 分岐はスタブ、他 OS は `UnsupportedDeepLink` 固定）。
 pub mod deep_link;
-/// Phase 11 の拡充ループ（親 #1131、Issue #1304）: 端末・OS 情報の effect ドライバ（macOS / Windows
-/// ・iOS・Android 実装、他 OS は `UnsupportedDeviceInfo` 固定）。
-pub mod device_info;
 /// Phase 11（親 #123、Issue #609）: 気圧・照度・近接センサーの effect ドライバ（iOS・Android・Windows 実装、
 /// 他 OS は `UnsupportedEnvironmentSensors` 固定。Web は対応表で `no`）。
 pub mod environment_sensors;
@@ -425,11 +407,6 @@ pub mod ios_ble_peripheral;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_compass;
-/// Issue #1305: iOS 向け端末・OS 情報実装（`ios/fandhe_ios_device_info.m` を呼ぶ C ABI ラッパー。
-/// #1304 のスタブを置き換え）。`device/device_info.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_device_info;
 /// Issue #609: iOS 向け気圧・照度・近接センサー実装。
 /// `device/environment_sensors.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -550,12 +527,6 @@ pub mod macos_background_task;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_bluetooth_classic;
-/// Issue #1304: macOS 向け端末・OS 情報実装（`macos/fandhe_macos_device_info.m` を呼ぶ C ABI
-/// ラッパー）。`device/device_info.rs` の macOS 経路から呼ばれる。写像の純関数をホストで
-/// テストできるよう cfg は `any(macos, test)`。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_device_info;
 /// Issue #482: macOS 向け音楽ライブラリ実装（`macos/fandhe_macos_music_library.m` の `ITLibrary` を
 /// 呼ぶ C ABI ラッパー）。`device/music_library.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -639,9 +610,6 @@ pub mod picture_in_picture;
 /// Web は `fandhe-web-dom`）。画面の内容の印刷（print-screen、親 #341、Issue #1010）の取り込み段と
 /// effect ドライバも同居する（macOS / Windows 実装、iOS / Android はスタブ）。
 pub mod print;
-/// Phase 11 の拡充ループ（親 #139、Issue #719）: クイック設定タイル・コントロールの effect ドライバ
-/// （macOS は App Group の回数ファイル、Android は SharedPreferences の回数、他 OS は `UnsupportedQuickSettingsTile` 固定）。
-pub mod quick_settings_tile;
 /// request/response 型端末機能共通の要求追跡（Issue #943、親 #941）。share /
 /// biometric_auth / file_pick の `bridge` facade から使う。
 /// `RequestSlot` / `poll_and_finish` の実体は `fandhe-runtime`（Issue #1166）。呼び出し側のパスを保つ再公開。
@@ -741,12 +709,6 @@ pub mod windows_bluetooth_le;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_compass;
-/// Issue #1304: Windows 向け端末・OS 情報実装（`RtlGetVersion` / レジストリ / `GlobalMemoryStatusEx` /
-/// `GetDiskFreeSpaceExW`）。`device/device_info.rs` の Windows 経路から呼ばれる。写像の純関数を
-/// ホストでテストできるよう cfg は `any(windows, test)`。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_device_info;
 /// Issue #609: Windows 向け気圧・照度・近接センサー実装。
 /// `device/environment_sensors.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

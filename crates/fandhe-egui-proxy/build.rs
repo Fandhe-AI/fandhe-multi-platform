@@ -135,8 +135,6 @@ fn build() {
     compile_ios_screen_orientation();
     // `ios/fandhe_ios_print.m`（Issue #327）。iOS 分岐のみ。
     compile_ios_print();
-    // `ios/fandhe_ios_device_info.m`（Issue #1305）。iOS 分岐のみ。
-    compile_ios_device_info();
     // `ios/fandhe_ios_safe_area_insets.m`（Issue #445）。iOS 分岐のみ。
     compile_ios_safe_area_insets();
     // `ios/fandhe_ios_music_library.m`（Issue #484）。iOS 分岐のみ。
@@ -500,12 +498,6 @@ fn compile_macos_print() {
     compile_objc("macos/fandhe_macos_print.m", &["AppKit"]);
 }
 
-/// `macos/fandhe_macos_device_info.m` を `cc` でコンパイルする（Issue #1304）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_device_info.rs` が使う）。
-fn compile_macos_device_info() {
-    compile_objc("macos/fandhe_macos_device_info.m", &["Foundation"]);
-}
-
 /// `macos/fandhe_macos_window_management.m` を `cc` でコンパイルする（Issue #636）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_window_management.rs` が使う）。
 fn compile_macos_window_management() {
@@ -570,12 +562,6 @@ fn compile_ios_web_auth_session() {
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_print.rs` が使う）。
 fn compile_ios_print() {
     compile_objc("ios/fandhe_ios_print.m", &["UIKit"]);
-}
-
-/// `ios/fandhe_ios_device_info.m` を `cc` でコンパイルする（Issue #1305）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_device_info.rs` が使う）。
-fn compile_ios_device_info() {
-    compile_objc("ios/fandhe_ios_device_info.m", &["Foundation"]);
 }
 
 /// `ios/fandhe_ios_safe_area_insets.m` を `cc` でコンパイルする（Issue #445）。
@@ -677,8 +663,6 @@ fn build_macos() {
     compile_macos_url_scheme();
     // `macos/fandhe_macos_app_shortcuts.m`（Issue #424）も macOS 専用。
     compile_macos_app_shortcuts();
-    // `macos/fandhe_macos_device_info.m`（Issue #1304）も macOS 専用。
-    compile_macos_device_info();
     // `macos/fandhe_macos_safe_area_insets.m`（Issue #444）も macOS 専用。
     compile_macos_safe_area_insets();
     // `macos/fandhe_macos_window_management.m`（Issue #636）も macOS 専用。
