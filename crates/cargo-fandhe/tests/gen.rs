@@ -123,7 +123,7 @@ fn parse_filter(it: &mut std::slice::Iter<Tag>) -> IntentFilter {
 
 /// Manifest から宣言と同じ `kind`・`name` の要素を、宣言と同じ型で取り出す。
 fn manifest_component(t: &[Tag], c: &Component) -> Component {
-    let kind = format!("{:?}", c.kind).to_lowercase();
+    let kind = c.kind.tag().to_string();
     let start = t
         .iter()
         .position(|(n, a)| *n == kind && a.get("name") == Some(&c.name))
@@ -131,10 +131,12 @@ fn manifest_component(t: &[Tag], c: &Component) -> Component {
     let mut attrs = t[start].1.clone();
     let exported = attrs.remove("exported").expect("exported がない") == "true";
     attrs.remove("name");
+    let target_activity = attrs.remove("targetActivity");
     let mut out = Component {
         kind: c.kind.clone(),
         name: c.name.clone(),
         exported,
+        target_activity,
         attributes: attrs,
         intent_filters: vec![],
         meta_data: vec![],
@@ -259,7 +261,10 @@ fn android_manifest_overlay_matches_current_manifest() {
     for k in ["name", "exported", "launchMode", "configChanges"] {
         assert_eq!(ga.remove(k), ca.get(k).cloned(), "{k}");
     }
-    assert!(ga.is_empty(), "{ga:?}");
+    // 残りの属性（機能の宣言が足すもの）は現行 Manifest と同じ値。
+    for (k, v) in &ga {
+        assert_eq!(ca.get(k), Some(v), "{k}");
+    }
     assert_eq!(gm, cm);
     assert_eq!(gm["value"], "fandhe_gallery");
     assert!(
@@ -783,4 +788,68 @@ fn web_dom_demo_manifest_keeps_share_target() {
         }
     });
     assert_eq!(web_manifest(&m), want);
+}
+
+#[test]
+fn new_android_fields_reach_only_the_selecting_app() {
+    let cap = pkg(
+        "fandhe-cap-x",
+        "[package.metadata.fandhe]\nid = \"x\"\n\
+         [package.metadata.fandhe.android]\n\
+         permissions = [{ name = \"android.permission.NEARBY_WIFI_DEVICES\", flags = [\"neverForLocation\"] }]\n\
+         main-activity-attributes = { supportsPictureInPicture = \"true\" }\n\
+         application-meta-data = [{ name = \"com.example.flag\", value = \"a&b\" }]\n\
+         [[package.metadata.fandhe.android.components]]\n\
+         kind = \"activity-alias\"\nname = \"com.example.AAlias\"\nexported = true\n\
+         target-activity = \"com.example.Zed\"\n\
+         [[package.metadata.fandhe.android.components]]\n\
+         kind = \"activity\"\nname = \"com.example.Zed\"\nexported = false\n",
+    );
+    let sel = app_pkg("[dependencies]\nfandhe-cap-x = { path = \"../fandhe-cap-x\" }\n");
+    let m = make_ws(
+        "newfields",
+        "app",
+        &[("fandhe-cap-x", cap.clone()), ("app", sel)],
+    );
+    let x = generate(Some(&m)).unwrap().files["android/AndroidManifest.xml"].clone();
+    assert!(
+        x.contains("android:usesPermissionFlags=\"neverForLocation\""),
+        "{x}"
+    );
+    assert_eq!(x.matches("android:launchMode").count(), 1);
+    assert!(
+        x.contains("android:supportsPictureInPicture=\"true\""),
+        "{x}"
+    );
+    assert!(x.contains("android:value=\"a&amp;b\""), "{x}");
+    // alias は辞書順で前でも対象の後。
+    let (zed, alias) = (
+        x.find("com.example.Zed").unwrap(),
+        x.find("<activity-alias").unwrap(),
+    );
+    assert!(zed < alias, "{x}");
+    assert!(
+        x.contains("android:targetActivity=\"com.example.Zed\""),
+        "{x}"
+    );
+    // meta-data は alias の後（application 直下）。
+    assert!(x.find("com.example.flag").unwrap() > alias, "{x}");
+
+    // 選ばないアプリには 1 つも出ない。
+    let none = app_pkg("");
+    let m = make_ws(
+        "newfields-none",
+        "app",
+        &[("fandhe-cap-x", cap), ("app", none)],
+    );
+    let x = generate(Some(&m)).unwrap().files["android/AndroidManifest.xml"].clone();
+    for n in [
+        "NEARBY_WIFI",
+        "usesPermissionFlags",
+        "supportsPictureInPicture",
+        "com.example",
+        "activity-alias",
+    ] {
+        assert!(!x.contains(n), "{n}: {x}");
+    }
 }

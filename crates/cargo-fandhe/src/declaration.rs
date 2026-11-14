@@ -100,13 +100,43 @@ pub struct Android {
     pub main_activity_intent_filters: Vec<IntentFilter>,
     #[serde(default)]
     pub components: Vec<Component>,
+    /// MainActivity の追加属性（`android:` を除いた名前 → 値）。書けるキーは [`MAIN_ACTIVITY_ATTRIBUTES`] だけ。
+    #[serde(default)]
+    pub main_activity_attributes: std::collections::BTreeMap<String, String>,
+    /// `<application>` 直下の `<meta-data>`（`com.google.android.gms.wallet.api.enabled` 等）。
+    #[serde(default)]
+    pub application_meta_data: Vec<MetaData>,
 }
+
+/// MainActivity に機能の宣言が足せる属性。`exported`・`launchMode`・`taskAffinity`・`permission`・`enabled` など
+/// アプリ本体の入口の公開範囲や起動方式を、依存 crate が書き換えられないよう許可リストにする（security.md A05）。
+/// `WEB_MANIFEST_MEMBERS` と同じ形。要る機能が出たら足す。
+pub const MAIN_ACTIVITY_ATTRIBUTES: &[&str] = &["supportsPictureInPicture"];
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Permission {
     pub name: String,
     pub max_sdk: Option<u32>,
+    /// `android:usesPermissionFlags`。値は Android の原語。
+    #[serde(default)]
+    pub flags: BTreeSet<PermissionFlag>,
+}
+
+/// `usesPermissionFlags` の値。Android がフラグを足し、使う機能が出たらここへ足す。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+pub enum PermissionFlag {
+    #[serde(rename = "neverForLocation")]
+    NeverForLocation,
+}
+
+impl PermissionFlag {
+    /// Manifest へ出す Android の原語。
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::NeverForLocation => "neverForLocation",
+        }
+    }
 }
 
 /// `required` は省略不可（暗黙の既定値による端末の除外を防ぐ）。
@@ -121,9 +151,25 @@ pub struct Feature {
 #[serde(rename_all = "lowercase")]
 pub enum ComponentKind {
     Activity,
+    /// `<activity-alias>`。`target-activity` が必須。
+    #[serde(rename = "activity-alias")]
+    ActivityAlias,
     Service,
     Receiver,
     Provider,
+}
+
+impl ComponentKind {
+    /// Manifest の要素名。
+    pub fn tag(&self) -> &'static str {
+        match self {
+            Self::Activity => "activity",
+            Self::ActivityAlias => "activity-alias",
+            Self::Service => "service",
+            Self::Receiver => "receiver",
+            Self::Provider => "provider",
+        }
+    }
 }
 
 /// `exported` は省略不可（意図しない公開を防ぐ）。
@@ -133,6 +179,8 @@ pub struct Component {
     pub kind: ComponentKind,
     pub name: String,
     pub exported: bool,
+    /// `activity-alias` の対象。同じ宣言の `kind = "activity"` の `name`。
+    pub target_activity: Option<String>,
     /// 他の `android:*` 属性（`android:` を除いた名前）。
     #[serde(default)]
     pub attributes: std::collections::BTreeMap<String, String>,
@@ -317,6 +365,29 @@ impl Ctx {
                 &format!("{field}[{i}]"),
                 format!("`{n}` は英数字と `_` の識別子にしてください"),
             );
+        }
+    }
+    /// コンポーネントと `<application>` 直下で共通の `meta-data` の検証。
+    fn meta_data(&mut self, field: &str, list: &[MetaData]) {
+        for (j, m) in list.iter().enumerate() {
+            let mp = format!("{field}[{j}]");
+            self.check(
+                is_java_name(&m.name),
+                &format!("{mp}.name"),
+                format!("`{}` はドット区切りの識別子にしてください", m.name),
+            );
+            match (&m.resource, &m.value) {
+                (Some(r), None) => self.check(
+                    r.starts_with('@') && no_ctrl(r),
+                    &mp,
+                    "resource は `@xml/...` の形にしてください",
+                ),
+                (None, Some(v)) => self.check(no_ctrl(v), &mp, "制御文字は使えません"),
+                _ => self.bad(
+                    &mp,
+                    "`resource` と `value` はどちらか一方だけを書いてください",
+                ),
+            }
         }
     }
     /// Apple 本体と拡張の `usage-descriptions` 共通の検証。
@@ -515,6 +586,20 @@ fn validate_android(c: &mut Ctx, a: &Android) {
         "android.main-activity-intent-filters",
         &a.main_activity_intent_filters,
     );
+    for (key, v) in &a.main_activity_attributes {
+        let f = format!("android.main-activity-attributes.{key}");
+        c.check(
+            MAIN_ACTIVITY_ATTRIBUTES.contains(&key.as_str()),
+            &f,
+            format!("`{key}` は書けません（書けるのは {MAIN_ACTIVITY_ATTRIBUTES:?} だけ）"),
+        );
+        c.check(no_ctrl(v), &f, "制御文字は使えません");
+    }
+    c.dup(
+        "android.application-meta-data",
+        a.application_meta_data.iter().map(|m| m.name.as_str()),
+    );
+    c.meta_data("android.application-meta-data", &a.application_meta_data);
     c.dup(
         "android.components",
         a.components.iter().map(|k| k.name.as_str()),
@@ -531,9 +616,10 @@ fn validate_android(c: &mut Ctx, a: &Android) {
                 !key.is_empty()
                     && key.chars().all(|ch| ch.is_ascii_alphabetic())
                     && key != "name"
-                    && key != "exported",
+                    && key != "exported"
+                    && key != "targetActivity",
                 &format!("{p}.attributes.{key}"),
-                "属性名は英字のみで、`name`・`exported` は専用の欄に書いてください",
+                "属性名は英字のみで、`name`・`exported`・`targetActivity` は専用の欄に書いてください",
             );
             c.check(
                 no_ctrl(v),
@@ -542,25 +628,24 @@ fn validate_android(c: &mut Ctx, a: &Android) {
             );
         }
         c.intent_filters(&format!("{p}.intent-filters"), &k.intent_filters);
-        for (j, m) in k.meta_data.iter().enumerate() {
-            let mp = format!("{p}.meta-data[{j}]");
-            c.check(
-                is_java_name(&m.name),
-                &format!("{mp}.name"),
-                format!("`{}` はドット区切りの識別子にしてください", m.name),
-            );
-            match (&m.resource, &m.value) {
-                (Some(r), None) => c.check(
-                    r.starts_with('@') && no_ctrl(r),
-                    &mp,
-                    "resource は `@xml/...` の形にしてください",
-                ),
-                (None, Some(v)) => c.check(no_ctrl(v), &mp, "制御文字は使えません"),
-                _ => c.bad(
-                    &mp,
-                    "`resource` と `value` はどちらか一方だけを書いてください",
-                ),
-            }
+        c.meta_data(&format!("{p}.meta-data"), &k.meta_data);
+        match (&k.kind, &k.target_activity) {
+            (ComponentKind::ActivityAlias, Some(t)) => c.check(
+                a.components
+                    .iter()
+                    .any(|o| o.kind == ComponentKind::Activity && &o.name == t),
+                &format!("{p}.target-activity"),
+                format!("`{t}` は同じ宣言の `kind = \"activity\"` の `name` にしてください（別機能の Activity は指せません）"),
+            ),
+            (ComponentKind::ActivityAlias, None) => c.bad(
+                &format!("{p}.target-activity"),
+                "`activity-alias` には `target-activity` が必要です",
+            ),
+            (_, Some(_)) => c.bad(
+                &format!("{p}.target-activity"),
+                "`target-activity` は `activity-alias` だけに書けます",
+            ),
+            (_, None) => {}
         }
     }
 }

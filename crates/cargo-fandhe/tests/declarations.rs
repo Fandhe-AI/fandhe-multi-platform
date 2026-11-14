@@ -199,8 +199,14 @@ fn merge_dedups_permissions_and_resolves_flags() {
         "gradle":["g:a:1.0","g:a:2.0"]}}));
     let m = merge(&[("b", &b), ("a", &a)]).unwrap();
     assert_eq!(m.android.permissions.len(), 2);
-    assert_eq!(m.android.permissions["android.permission.X"], Some(30));
-    assert_eq!(m.android.permissions["android.permission.NFC"], None);
+    assert_eq!(
+        m.android.permissions["android.permission.X"].max_sdk,
+        Some(30)
+    );
+    assert_eq!(
+        m.android.permissions["android.permission.NFC"].max_sdk,
+        None
+    );
     assert!(m.android.features["f.x"]);
     assert_eq!(m.android.gradle.len(), 2);
 }
@@ -763,5 +769,128 @@ fn games_activity_version_matches_android_activity_in_lock() {
     assert!(
         after.starts_with("0.6."),
         "android-activity が 0.6 系でなくなった。games-activity の版（platform-android の宣言と versions.env）を合わせ直すこと"
+    );
+}
+
+// ---- #1328: activity-alias・application の meta-data・権限のフラグ・MainActivity の属性 ----
+
+fn full_android() -> Value {
+    json!({
+        "permissions":[{"name":"android.permission.NEARBY_WIFI_DEVICES","flags":["neverForLocation"]}],
+        "main-activity-attributes":{"supportsPictureInPicture":"true"},
+        "application-meta-data":[
+            {"name":"com.google.android.gms.wallet.api.enabled","value":"true"},
+            {"name":"com.google.android.gms.car.application","resource":"@xml/automotive_app_desc"}],
+        "components":[
+            {"kind":"activity","name":"com.example.Rationale","exported":false},
+            {"kind":"activity-alias","name":"com.example.Alias","exported":true,
+             "target-activity":"com.example.Rationale",
+             "attributes":{"permission":"android.permission.START_VIEW_PERMISSION_USAGE"},
+             "intent-filters":[{"actions":["android.intent.action.VIEW_PERMISSION_USAGE"]}]}]
+    })
+}
+
+fn with_component(extra: Value) -> Value {
+    let mut a = full_android();
+    a["components"][1]
+        .as_object_mut()
+        .unwrap()
+        .extend(extra.as_object().unwrap().clone());
+    android(a)
+}
+
+#[test]
+fn accepts_alias_meta_data_flags_and_main_activity_attributes() {
+    assert!(cargo_fandhe::validate(&decl(android(full_android()))).is_empty());
+}
+
+#[test]
+fn rejects_invalid_new_android_fields() {
+    assert_rejected(
+        android(json!({"permissions":[{"name":"a.B","flags":["bogus"]}]})),
+        "bogus",
+    );
+    for k in ["exported", "launchMode", "taskAffinity"] {
+        assert_rejected(
+            android(json!({"main-activity-attributes":{k:"x"}})),
+            &format!("main-activity-attributes.{k}"),
+        );
+    }
+    assert_rejected(
+        android(json!({"main-activity-attributes":{"supportsPictureInPicture":"a\nb"}})),
+        "制御文字",
+    );
+    let mut a = full_android();
+    a["components"][1]
+        .as_object_mut()
+        .unwrap()
+        .remove("target-activity");
+    assert_rejected(android(a), "target-activity");
+    assert_rejected(
+        with_component(json!({"target-activity":"com.example.Missing"})),
+        "target-activity",
+    );
+    // alias を指す・alias 以外へ書く
+    assert_rejected(
+        with_component(json!({"target-activity":"com.example.Alias"})),
+        "target-activity",
+    );
+    assert_rejected(comp(json!({"target-activity":"a.B"})), "activity-alias");
+    assert_rejected(
+        with_component(json!({"attributes":{"targetActivity":"x"}})),
+        "targetActivity",
+    );
+    let mut a = full_android();
+    a["application-meta-data"] = json!([
+        {"name":"a.b","value":"1","resource":"@xml/x"},
+        {"name":"c.d"},
+        {"name":"bad name","value":"1"},
+        {"name":"e.f","value":"1"},
+        {"name":"e.f","value":"2"}]);
+    let p = problems(android(a));
+    for n in [
+        "application-meta-data[0]",
+        "application-meta-data[1]",
+        "application-meta-data[2].name",
+        "e.f",
+    ] {
+        assert!(p.contains(n), "{n}: {p}");
+    }
+}
+
+#[test]
+fn merge_new_android_fields() {
+    let a = decl(json!({"id":"a","android":full_android()}));
+    let b = decl(json!({"id":"b","android":full_android()}));
+    let m = merge(&[("a", &a), ("b", &b)]).unwrap();
+    let p = &m.android.permissions["android.permission.NEARBY_WIFI_DEVICES"];
+    assert_eq!(p.flags.len(), 1);
+    assert_eq!(m.android.main_activity_attributes.len(), 1);
+    assert_eq!(m.android.application_meta_data.len(), 2);
+
+    // flags の食い違いは 2 機能を報告するエラー。
+    let c = decl(
+        json!({"id":"c","android":{"permissions":[{"name":"android.permission.NEARBY_WIFI_DEVICES"}]}}),
+    );
+    let e = merge(&[("a", &a), ("c", &c)]).unwrap_err();
+    assert_eq!(e.len(), 1);
+    assert_eq!((e[0].a.as_str(), e[0].b.as_str()), ("a", "c"));
+    assert!(e[0]
+        .field
+        .contains("android.permissions.android.permission.NEARBY_WIFI_DEVICES"));
+
+    // meta-data・属性の値の不一致。
+    let d = decl(json!({"id":"d","android":{
+        "main-activity-attributes":{"supportsPictureInPicture":"false"},
+        "application-meta-data":[{"name":"com.google.android.gms.wallet.api.enabled","value":"false"}]}}));
+    let e = merge(&[("a", &a), ("d", &d)]).unwrap_err();
+    let f: Vec<_> = e.iter().map(|x| x.field.as_str()).collect();
+    assert!(
+        f.contains(&"android.main-activity-attributes.supportsPictureInPicture"),
+        "{f:?}"
+    );
+    assert!(
+        f.contains(&"android.application-meta-data.com.google.android.gms.wallet.api.enabled"),
+        "{f:?}"
     );
 }

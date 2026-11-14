@@ -44,7 +44,10 @@ usage-descriptions = [\"NSCameraUsageDescription\"]
 const NFC: &str = "\
 [package.metadata.fandhe.android]
 permissions = [{ name = \"android.permission.NFC\" }]
-components = [{ kind = \"service\", name = \"com.example.NfcService\", exported = false }]
+components = [{ kind = \"service\", name = \"com.example.NfcService\", exported = false },
+  { kind = \"activity\", name = \"com.example.NfcActivity\", exported = false },
+  { kind = \"activity-alias\", name = \"com.example.NfcAlias\", exported = true, target-activity = \"com.example.NfcActivity\" }]
+application-meta-data = [{ name = \"com.example.nfc.enabled\", value = \"true\" }]
 gradle = [\"com.example:nfc-lib:2.0\"]
 [package.metadata.fandhe.ios]
 usage-descriptions = [\"NFCReaderUsageDescription\"]
@@ -124,7 +127,7 @@ fn clean_artifacts_pass() {
 #[test]
 fn leaked_declaration_fails_with_feature_kind_and_value() {
     let m = make_ws("leak", SELECT_CAM, &[]);
-    let cases: [(&str, &str, &str, &str); 7] = [
+    let cases: [(&str, &str, &str, &str); 9] = [
         (
             "android",
             "E: uses-permission (name=\"android.permission.NFC\")",
@@ -136,6 +139,18 @@ fn leaked_declaration_fails_with_feature_kind_and_value() {
             "E: service (name=\"com.example.NfcService\")",
             "コンポーネント",
             "com.example.NfcService",
+        ),
+        (
+            "android",
+            "E: activity-alias (name=\"com.example.NfcAlias\")",
+            "コンポーネント",
+            "com.example.NfcAlias",
+        ),
+        (
+            "android",
+            "E: meta-data (name=\"com.example.nfc.enabled\")",
+            "application の meta-data",
+            "com.example.nfc.enabled",
         ),
         (
             "android",
