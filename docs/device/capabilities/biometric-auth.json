@@ -18,7 +18,7 @@
         "生体認証（Face ID/Touch ID）"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_biometric.m + crates/fandhe-egui-proxy/src/device/apple_biometric.rs + src/device/biometric_auth.rs、Issue 旧#908"
+      "impl": "crates/fandhe-cap-biometric-auth/apple/fandhe_apple_biometric.m + crates/fandhe-cap-biometric-auth/src/apple.rs + crates/fandhe-cap-biometric-auth/src/driver.rs + crates/fandhe-cap-biometric-auth/src/contract.rs、Issue 旧#908"
     },
     "android": {
       "status": "done",
@@ -31,7 +31,7 @@
         "生体認証"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android.rs、Issue 旧#908"
+      "impl": "crates/fandhe-cap-biometric-auth/android/java/com/fandhe/platform/BiometricAuthHelper.java + crates/fandhe-cap-biometric-auth/android/java/com/fandhe/platform/BiometricAuthLifecycle.java + crates/fandhe-cap-biometric-auth/src/android.rs、Issue 旧#908"
     },
     "macos": {
       "status": "done",
@@ -44,7 +44,7 @@
         "生体認証"
       ],
       "implStatus": "実装済み（実機目視は人間確認待ち）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_biometric.m + crates/fandhe-egui-proxy/src/device/apple_biometric.rs + src/device/biometric_auth.rs、Issue 旧#906"
+      "impl": "crates/fandhe-cap-biometric-auth/apple/fandhe_apple_biometric.m + crates/fandhe-cap-biometric-auth/src/apple.rs + crates/fandhe-cap-biometric-auth/src/driver.rs + crates/fandhe-cap-biometric-auth/src/contract.rs、Issue 旧#906"
     },
     "windows": {
       "status": "done",
@@ -57,7 +57,7 @@
         "生体認証"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_biometric.rs + src/device/biometric_auth.rs、Issue 旧#907"
+      "impl": "crates/fandhe-cap-biometric-auth/src/windows.rs + crates/fandhe-cap-biometric-auth/src/driver.rs + crates/fandhe-cap-biometric-auth/src/contract.rs、Issue 旧#907"
     },
     "web": {
       "status": "done",

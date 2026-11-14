@@ -26,6 +26,7 @@ device = [
   "dep:fandhe-cap-ar",
   "dep:fandhe-cap-audio-devices",
   "dep:fandhe-cap-audio-session",
+  "dep:fandhe-cap-biometric-auth",
   "dep:fandhe-cap-calendar",
   "dep:fandhe-cap-call-ui",
   "dep:fandhe-cap-camera-capture",
@@ -35,6 +36,7 @@ device = [
   "dep:fandhe-cap-color-picker",
   "dep:fandhe-cap-companion-device",
   "dep:fandhe-cap-compose-mail-sms",
+  "dep:fandhe-cap-contacts",
   "dep:fandhe-cap-device-identifier",
   "dep:fandhe-cap-digital-credentials",
   "dep:fandhe-cap-display-refresh-hdr",
@@ -87,6 +89,7 @@ device = [
   "dep:fandhe-cap-screen-brightness",
   "dep:fandhe-cap-screen-capture",
   "dep:fandhe-cap-screen-wake-lock",
+  "dep:fandhe-cap-secure-credential",
   "dep:fandhe-cap-serial-port",
   "dep:fandhe-cap-share-receive",
   "dep:fandhe-cap-share-sheet",
@@ -97,6 +100,7 @@ device = [
   "dep:fandhe-cap-system-accent-color",
   "dep:fandhe-cap-system-sound",
   "dep:fandhe-cap-system-tray",
+  "dep:fandhe-cap-translation",
   "dep:fandhe-cap-usb-device",
   "dep:fandhe-cap-user-idle",
   "dep:fandhe-cap-uwb-ranging",
@@ -141,12 +145,14 @@ NSLocalNetworkUsageDescription = "型サンプル「LAN のサービス探索」
 NSNearbyInteractionUsageDescription = "型サンプル「UWB による距離」で、近くの端末までの距離を測るために使います"
 NSHomeKitUsageDescription = "型サンプル「スマートホーム操作」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」「音声認識」「動画の撮影」の動作確認に使います"
+NSFaceIDUsageDescription = "型サンプル「生体認証」の動作確認に使います"
 
 [package.metadata.fandhe-app.macos.usage-descriptions]
 NSLocationUsageDescription = "型サンプル「Wi-Fi 情報」「Wi-Fi への接続」で、接続先の Wi-Fi 名を読むために使います"
 NSCalendarsWriteOnlyAccessUsageDescription = "型サンプル「予定の追加」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」の動作確認に使います"
 NSCameraUsageDescription = "型サンプル「カメラのライブ映像」「動画の撮影」の動作確認に使います"
+NSContactsUsageDescription = "型サンプル「連絡先選択」の動作確認に使います"
 
 [build-dependencies]
 # Apple のリンク指定（弱リンク・rpath・Info.plist 埋め込み）を `fandhe-egui-proxy` から受け取って出し直す。
@@ -171,6 +177,7 @@ fandhe-cap-app-progress-attention = { path = "../fandhe-cap-app-progress-attenti
 fandhe-cap-ar = { path = "../fandhe-cap-ar", optional = true }
 fandhe-cap-audio-devices = { path = "../fandhe-cap-audio-devices", optional = true }
 fandhe-cap-audio-session = { path = "../fandhe-cap-audio-session", optional = true }
+fandhe-cap-biometric-auth = { path = "../fandhe-cap-biometric-auth", optional = true }
 fandhe-cap-calendar = { path = "../fandhe-cap-calendar", optional = true }
 fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui", optional = true }
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
@@ -180,6 +187,7 @@ fandhe-cap-clipboard = { path = "../fandhe-cap-clipboard", optional = true }
 fandhe-cap-color-picker = { path = "../fandhe-cap-color-picker", optional = true }
 fandhe-cap-companion-device = { path = "../fandhe-cap-companion-device", optional = true }
 fandhe-cap-compose-mail-sms = { path = "../fandhe-cap-compose-mail-sms", optional = true }
+fandhe-cap-contacts = { path = "../fandhe-cap-contacts", optional = true }
 fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier", optional = true }
 fandhe-cap-digital-credentials = { path = "../fandhe-cap-digital-credentials", optional = true }
 fandhe-cap-display-refresh-hdr = { path = "../fandhe-cap-display-refresh-hdr", optional = true }
@@ -232,6 +240,7 @@ fandhe-cap-scanner-devices = { path = "../fandhe-cap-scanner-devices", optional 
 fandhe-cap-screen-brightness = { path = "../fandhe-cap-screen-brightness", optional = true }
 fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture", optional = true }
 fandhe-cap-screen-wake-lock = { path = "../fandhe-cap-screen-wake-lock", optional = true }
+fandhe-cap-secure-credential = { path = "../fandhe-cap-secure-credential", optional = true }
 fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port", optional = true }
 fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive", optional = true }
 fandhe-cap-share-sheet = { path = "../fandhe-cap-share-sheet", optional = true }
@@ -242,6 +251,7 @@ fandhe-cap-spell-check = { path = "../fandhe-cap-spell-check", optional = true }
 fandhe-cap-system-accent-color = { path = "../fandhe-cap-system-accent-color", optional = true }
 fandhe-cap-system-sound = { path = "../fandhe-cap-system-sound", optional = true }
 fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }
+fandhe-cap-translation = { path = "../fandhe-cap-translation", optional = true }
 fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device", optional = true }
 fandhe-cap-user-idle = { path = "../fandhe-cap-user-idle", optional = true }
 fandhe-cap-uwb-ranging = { path = "../fandhe-cap-uwb-ranging", optional = true }

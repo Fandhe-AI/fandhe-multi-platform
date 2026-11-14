@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::contact_pick`（端末依存ゼロ）の要求を
 //! [`super::mount::mount_with_effect`] の effect として観測し、Contact Picker API の
 //! `navigator.contacts.select(['name'], { multiple: false })` で利用者に 1 件を選ばせ、
-//! 表示名だけを画面へ書き戻す。契約の SSOT は `fandhe_device::contact_picker` のモジュール doc。
+//! 表示名だけを画面へ書き戻す。契約の SSOT は `fandhe_cap_contacts` のモジュール doc。
 //! Web は `fandhe-device` の `ContactPicker` トレイトを通らない（`bluetooth_le.rs` と同じ理由）
 //! ため、本モジュールが DOM レンダラ側の対応実装にあたる。
 //!
@@ -35,8 +35,8 @@
 //!
 //! 名前・例外の `message` は `console` 出力・送信・永続化をしない（security.md A09、契約表 8）。
 
+use fandhe_cap_contacts::validate_contact_name;
 use fandhe_core::screens::contact_pick::ContactPickOutcome;
-use fandhe_device::contact_picker::validate_contact_name;
 
 /// `SecurityError`（user activation 無し・非 secure context）のときの案内。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]

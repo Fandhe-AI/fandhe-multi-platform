@@ -85,6 +85,10 @@ fandhe-cap-local-fonts = { path = "../fandhe-cap-local-fonts" }
 fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch" }
 # on-device-llm の契約（check_response・validate_prompt・EMPTY・RESPOND_DEADLINE）。Web 実装本体は本クレートに残る。
 fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm" }
+# contacts の契約（validate_contact_name）。Web 実装本体は本クレートに残る。
+fandhe-cap-contacts = { path = "../fandhe-cap-contacts" }
+# translation の契約（check_result・validate_request・EMPTY・TRANSLATE_DEADLINE）。Web 実装本体は本クレートに残る。
+fandhe-cap-translation = { path = "../fandhe-cap-translation" }
 # media-transcode の契約（SAMPLE_RATE・TRANSCODE_DEADLINE・検査）。Web 実装本体は本クレートに残る（video_transcode が pick_codec を共用するため）。
 fandhe-cap-media-transcode = { path = "../fandhe-cap-media-transcode" }
 # app-badge の契約（BadgeValue）。Web 実装本体は本クレートに残る。

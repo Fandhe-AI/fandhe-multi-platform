@@ -277,19 +277,27 @@ pub fn poll_and_finish_owned<S: 'static, O: Clone + Send + 'static>(
     if mine == 0 {
         return;
     }
+    // 所有者の照合と結果の取得は 1 回の snapshot で行う（別々に取ると、間に公開入口の別要求へ置き換わった結果を画面へ渡しうる）。
     // 完了の反映と同じフレームで観測し直しても、`on_lost` は世代照合で捨てられる（`finish_*` は完了済みの画面を変えない）。
-    if slot.snapshot().is_none_or(|(id, _)| id != mine) {
-        owner.release(mine);
-        let _ = sender.send(Box::new(on_lost));
+    let (request_id, ready) = match slot.snapshot() {
+        Some((id, ready)) if id == mine => (id, ready),
+        _ => {
+            owner.release(mine);
+            let _ = sender.send(Box::new(on_lost));
+            return;
+        }
+    };
+    let Some(outcome) = ready else {
+        on_waiting(request_id);
+        sender.request_repaint_after(POLL_INTERVAL);
         return;
-    }
-    poll_and_finish(slot, sender, on_waiting, move |s, outcome| {
-        let done = apply(s, outcome);
-        if done {
+    };
+    let _ = sender.send(Box::new(move |s: &mut S| {
+        if apply(s, outcome) {
+            slot.clear(request_id);
             owner.release(mine);
         }
-        done
-    });
+    }));
 }
 
 #[cfg(test)]

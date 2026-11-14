@@ -53,6 +53,13 @@ raw-window-handle = { workspace = true }
 # iOS: glow は非対応のため wgpu（Metal）。"metal" は eframe の "wgpu" feature だけでは有効にならないため
 # wgpu へ直接依存して feature を加算する。
 [target.'cfg(target_os = "ios")'.dependencies]
+# TASK-9.2（REQ-9 / M4、Issue #240）: 本分岐が "accesskit" feature を含めない理由は、TASK-6.2-S1 のメモリ削減方針だけでなく、
+# 含めても意味がないことを確認済みだからでもある。egui-winit が要求する accesskit_winit は 0.29.2 に解決され、同バージョンの
+# platform_impl/mod.rs は windows/macos/unix(feature 限定)/android(feature 限定) のみを実装し、iOS は null.rs（no-op アダプタ）へ
+# フォールバックする。iOS 向け基本アダプタは accesskit_winit 0.33.0 以降（2026-05-11、accesskit_ios 0.1.0 配線）に存在するが、
+# egui/eframe は最新リリース（0.35.0）でも accesskit_winit を 0.32.0 に固定しており、iOS 対応版へ未到達。
+# "accesskit" を有効化しても null アダプタのため挙動は不変。上流 bump 後に本コメントと合わせて再検討する
+# （対応表 `screen-reader.json` の iOS 欄の根拠。Issue #1330 で egui-proxy の同じ説明から移した）。
 # UIScene 化シム（`run_ios` が起動前に有効にする。Issue #1292）。
 fandhe-platform-apple = { path = "../fandhe-platform-apple" }
 wgpu = { workspace = true }

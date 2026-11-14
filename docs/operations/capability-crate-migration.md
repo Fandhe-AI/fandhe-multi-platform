@@ -15,7 +15,7 @@ TASK-21.4）。構成の根拠は `docs/architecture/consumer-app-structure.md`�
 | 端末機能でない行（`ui-widget-catalog`・`checkbox-list`・`dark-mode`・`gpu-backend` など） | crate を作らない |
 | Windows・Web の実装がある機能 | `fandhe-platform-windows`（`open_url`・`SE_ERR_NOASSOC` を含む）/ `-web`（#1184・#1185）は済み。Windows は `src/windows.rs`（scaffold が移す）、Web は `fandhe-web-dom/src/<stem>.rs` を `src/web.rs` へ `git mv` して手で移す（下の「Web の移し方」）。`inventory` の注意は読み流してよい |
 | driver が egui 固有の読み書き口（`fandhe_render_egui::EguiSenderExt`）を使う機能 | 機能 crate は egui 非依存のため、そのままは移せない。拡大率・フォーカス・ファイルのドラッグ・ポインタ押下は `sender.host_view()`（`fandhe_runtime::HostView`、§13）で読み書きできる。画面の読み戻し・ウィンドウ操作・入力欄のヒントも `HostView` にある（§17）。`HostView` に無い口（`egui_context`・`canvas_*`）を使う機能は、その口を設計してから移す |
-| 実装が共有ファイル（`device/android.rs`・`device/ios.rs`・`MainActivity.java`）に埋まった古い型（tts・clipboard・http・storage など） | `scaffold` では動かせない。`inventory` の参照行を見て手で切り出す |
+| 実装が共有ファイル（`device/android.rs`・`device/ios.rs`・`MainActivity.java`）に埋まった古い型（tts・file-picker・mic-record など） | `scaffold` では動かせない。`inventory` の参照行を見て手で切り出す |
 | 対応表の id と stem が違う機能（`http-get` → `http`、`dynamic-type` → `text_scale` など） | `--module <stem>` で渡す |
 | stem が複数ある機能 | stem ごとに手で移す。`scaffold` は 1 stem だけ扱う |
 
@@ -529,3 +529,30 @@ launch-at-login・camera-preview-stream）で、後回しにしていた障害�
 | iOS と macOS が同じ `.m` を共有する機能（camera-preview-stream） | `scaffold` の出力（`src/ios.rs`・`ios/*.m`）の名前のまま、mod の cfg は元の `any(target_os = "ios", target_os = "macos", test)`。`build.rs` は iOS と macOS で framework の組を分け、crate ルートの `deny(unsafe_code)` に macOS を足す。宣言は `ios` と `macos` の両方に書く |
 | `DeviceError` を使わない機能（in-app-browser・activity-recognition・camera-preview-stream） | `scaffold` が出した `error.rs` を消し、`lib.rs` の `mod error` と `pub use` も消す。使うバリアントが `Disabled` などだけ未写像になる機能（wifi-info）は、`error.rs` へ手で足して文言を固定するテストにも足す |
 | `scaffold` が出す edition 2024 の let チェーン警告 | `cargo clippy --fix --allow-dirty -p fandhe-cap-<id> --all-targets` が直す（Windows 実装は `--target x86_64-pc-windows-gnu` でも 1 度通す） |
+
+## 20. 第 10 束（#1330）で出た型と未了の機能
+
+第 10 束（tts・file-picker・tsv-parse・biometric-auth・secure-credential・mic-record・speech-recognition・screen-reader・contacts・translation）の
+うち、secure-credential・biometric-auth・contacts・translation を移し、screen-reader の根拠の置き場を直した。
+tts・file-picker・tsv-parse・mic-record・speech-recognition は、`MainActivity`・`device/android.rs`・`device/ios.rs` に埋まった実装の切り出しが大きいため未了（下の表）。
+
+| 型 | 扱い |
+|----|------|
+| 宣言で表せない Manifest 要素（`<queries>`） | 宣言の `android.queries`（`actions` だけ。`<package>`・`categories`・`data` は書けない）を足した（tts・speech-recognition が使う。`capability-declaration.md` §2.1）。`verify-scope` の範囲外（統合後の Manifest には他 library 由来の同じ action が正当に現れうる） |
+| `MainActivity` に埋まった Android 実装（secure-credential・biometric-auth・contacts） | 機能 crate に `android.rs` と `<Name>Helper.java` を新設する。状態を持たない同期呼び出し（secure-credential）は static の入口だけにし、provider は作らない（Context を渡して先頭で `getApplicationContext()` を取る）。要求 id・ランチャーを持つ機能は `<Name>Lifecycle`（`FeatureLifecycleProvider` 派生）+ `HELPERS`（`WeakHashMap`）で Activity ごとに引き、Helper が無い要求は失敗で確定する。JNI の受け口の名前は `Java_com_fandhe_platform_<Helper>_nativeOn…` に変わる。Java の native 宣言・Rust の受け口・呼び出しの署名の 3 か所を 1 件ずつ照合する |
+| `MainActivity.onCreate` にあった static の要求 id の破棄・再生成時の中断 | `attach`（`onHostCreated`）へ移す（contacts の `contactPickRequest.take()`、biometric-auth の保留中の `cancelAuthentication()`）。ランチャーのキーは従来の文字列（`fandhe:MainActivity:6`）のまま明示する |
+| `activityResumed` を見る要求（biometric-auth） | Helper の `resumed` フィールドへ写す（`onHostResumed` で true、`onHostPaused` で false）。`onHostResumed` は `Activity.onResume()` の中（`super` の内側）で届くため、従来の `super` の後の更新との前後だけが違う。提示は UI キュー上で `resumed` を見るので、state-save 後の提示を通さない判定は変わらない |
+| 契約が他の未移行機能と共有する検査（secure-credential の `storage::validate_key`） | `fandhe-device` 側を `pub` にして機能 crate が依存する（二重実装しない）。エラーは機能 crate の `error.rs` へ写す |
+| 契約の一部を他の機能 crate が使う（translation の `valid_lang_tag`・`MAX_LANG_TAG_BYTES`） | `fandhe-device::translation` に最小限だけ残し、機能 crate の `contract.rs` が `pub use` で再公開する（`fandhe-cap-spell-check` は `fandhe-device` を参照したまま） |
+| `DeviceError` の `Cancelled`・`PermissionDenied` を使う機能（contacts） | `scaffold` が写さないので `error.rs` へ手で足し、文言を固定するテストにも足す |
+| macOS だけが usage description を持つ機能（contacts） | 宣言の `macos.usage-descriptions` にキーを書き、文言は `fandhe-gallery` の `[package.metadata.fandhe-app.macos.usage-descriptions]` に置く（`crates/fandhe-egui-proxy/macos/Info.plist` と同じ文言） |
+| 機能ではない行（screen-reader） | crate を作らない。iOS 欄の根拠（`accesskit` を有効にしない理由）は `fandhe-render-egui/Cargo.toml` の iOS 分岐へ移し、対応表の `impl` をそこへ向けた |
+| `<application android:dataExtractionRules>`（secure-credential） | 宣言で表せないためアプリ側（`AndroidManifest.xml`・`res/xml/data_extraction_rules.xml`）に残し、crate doc に利用者の責務として書いた。旧構造の撤去（#1194）までに扱いを決める |
+
+### 未了の機能
+
+| 機能 | 残っている作業 |
+|------|----------------|
+| tts | `device/android.rs` の `Slot`・`Mailbox`・`AndroidTts`・JNI 受け口、`device/ios.rs` の `IosTts`、`MainActivity` の TTS 一式、`fandhe_ios_tts.m`。`stop_shared_tts` を `shutdown()` として gallery の終了フックから呼ぶ。`queries`（`android.intent.action.TTS_SERVICE`）を宣言する |
+| file-picker・tsv-parse | `FilePicker`・`RfdFilePicker` と `device/file_pick.rs`・`device/tsv_import.rs`・`device/android.rs`・`device/ios.rs` の切り出し。共有部分（`PickedFile`・`read_picked*`・`BusyGuard` など）は `fandhe-device::file_picker` に残す（photo-picker #1332 が使う）。tsv-parse は file-picker の crate に同居させる |
+| mic-record・speech-recognition | `MainActivity` の `micLock`・権限ランチャー・`SpeechRecognizer` の一式と `device/android.rs` の受け口。speech-recognition は `queries`（`android.speech.RecognitionService`）を宣言する。`measure_dt_ms` は `fandhe_runtime::tick` を直接使う |

@@ -5,7 +5,7 @@
   `allowBackup` の値に関係なく動作する
   （https://developer.android.com/identity/data/autobackup#EnablingAutoBackup）。
   移行先で `fandhe_secure_credential.xml`（EncryptedSharedPreferences の保存ファイル。
-  MainActivity.java の SECURE_CREDENTIAL_FILE と対応）だけが復元されると、Keystore の
+  fandhe-cap-secure-credential の SecureCredentialHelper.java の SECURE_CREDENTIAL_FILE と対応）だけが復元されると、Keystore の
   鍵が無いため EncryptedSharedPreferences の初期化自体が失敗し、STORE/LOAD/DELETE の
   全操作が失敗し続ける（新しい保存も削除もできない）。cloud-backup・device-transfer の
   両ドメインから当該ファイルを除外し、allowBackup=false と二重に防御する。

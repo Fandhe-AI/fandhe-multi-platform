@@ -32,9 +32,9 @@ pub trait Storage: Send + Sync {
 /// `key` を許可文字集合（英数字・`.`・`_`・`-`）のみに制限し、パストラバーサルを防ぐ。
 ///
 /// 空文字列・`.`/`..` そのもの・区切り文字（`/`・`\`）を含む値はすべて拒否する。
-/// `pub(crate)`: `secure_credential::validate_key` が同じ許可文字集合・トラバーサル
-/// 拒否ロジックを再利用する（Issue #922、二重実装を避ける）。
-pub(crate) fn validate_key(key: &str) -> Result<(), DeviceError> {
+/// `pub`: 機能 crate `fandhe-cap-secure-credential` の `validate_key` が同じ許可文字集合・トラバーサル
+/// 拒否ロジックを再利用する（Issue #922・#1330、二重実装を避ける）。
+pub fn validate_key(key: &str) -> Result<(), DeviceError> {
     let is_valid = !key.is_empty()
         && key != "."
         && key != ".."

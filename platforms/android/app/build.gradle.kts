@@ -102,6 +102,8 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-audio-session/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-biometric-auth/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-calendar/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-call-ui/android/java")
@@ -121,6 +123,8 @@ android {
             java.srcDirs("../../../crates/fandhe-cap-compose-mail-sms/android/java")
             @Suppress("DEPRECATION")
             res.srcDirs("../../../crates/fandhe-cap-compose-mail-sms/android/res")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-contacts/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-device-identifier/android/java")
             @Suppress("DEPRECATION")
@@ -206,6 +210,8 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-screen-wake-lock/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-secure-credential/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-share-receive/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-share-sheet/android/java")
@@ -217,6 +223,8 @@ android {
             java.srcDirs("../../../crates/fandhe-cap-system-accent-color/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-system-sound/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-translation/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-usb-device/android/java")
             @Suppress("DEPRECATION")
@@ -352,11 +360,11 @@ dependencies {
     // 直接 import するため明示依存にする（バージョン選定根拠は versions.env の
     // ANDROIDX_ACTIVITY_VERSION コメント参照）。
     implementation("androidx.activity:activity:${androidVersion("ANDROIDX_ACTIVITY_VERSION")}")
-    // MainActivity の生体認証中継（`BiometricPrompt`/`BiometricManager`、Phase 11、
+    // fandhe-cap-biometric-auth の BiometricAuthHelper（`BiometricPrompt`/`BiometricManager`、Phase 11、
     // Issue #908）が androidx.biometric を直接 import するため明示依存にする
     // （バージョン選定根拠は versions.env の BIOMETRIC_VERSION コメント参照）。
     implementation("androidx.biometric:biometric:${androidVersion("BIOMETRIC_VERSION")}")
-    // MainActivity の資格情報中継（`EncryptedSharedPreferences`/`MasterKey`、Phase 11、
+    // fandhe-cap-secure-credential の SecureCredentialHelper（`EncryptedSharedPreferences`/`MasterKey`、Phase 11、
     // Issue #924）が androidx.security.crypto を直接 import するため明示依存にする
     // （バージョン選定根拠は versions.env の SECURITY_CRYPTO_VERSION コメント参照）。
     implementation("androidx.security:security-crypto:${androidVersion("SECURITY_CRYPTO_VERSION")}")

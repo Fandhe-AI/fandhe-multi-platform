@@ -499,6 +499,18 @@
             android:authorities="${applicationId}.fandhe.gamepad"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.BiometricAuthLifecycle"
+            android:authorities="${applicationId}.fandhe.biometric-auth"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.ContactsLifecycle"
+            android:authorities="${applicationId}.fandhe.contacts"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.TranslationLifecycle"
+            android:authorities="${applicationId}.fandhe.translation"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.PasskeyLifecycle"
             android:authorities="${applicationId}.fandhe.passkey-signin"
             android:exported="false" />
