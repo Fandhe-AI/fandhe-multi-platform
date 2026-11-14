@@ -50,7 +50,7 @@ mod win {
         DestinationList, EnumerableObjectCollection, ICustomDestinationList, IShellLinkW, ShellLink,
     };
 
-    use super::super::windows_notification::lpwstr_variant;
+    use fandhe_platform_windows::lpwstr_variant;
     use fandhe_platform_windows::ComInit;
 
     const FAILED: DeviceError = DeviceError::Internal("app_shortcuts jump list");
@@ -92,7 +92,7 @@ mod win {
                     link.SetArguments(&HSTRING::from(super::task_arguments(SHORTCUT_URL)))?;
                     link.SetIconLocation(&exe_h, 0)?;
                     let store: IPropertyStore = link.cast()?;
-                    let title = lpwstr_variant(SHORTCUT_TITLE, "app_shortcuts jump list")
+                    let title = lpwstr_variant(SHORTCUT_TITLE)
                         .map_err(|_| windows::core::Error::from(E_FAIL))?;
                     store.SetValue(&PKEY_Title, &title)?;
                     store.Commit()?;

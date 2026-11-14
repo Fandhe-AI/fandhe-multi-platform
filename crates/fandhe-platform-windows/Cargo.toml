@@ -11,7 +11,7 @@ publish = false
 # Windows 以外では空のクレート（lib.rs の cfg）。依存も Windows に限る。
 # `windows` の feature は共通層が使う分だけ。機能 crate は自分が呼ぶ API の feature を自分で宣言する。
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 # 起動コンテキスト（HasWindowHandle 実装）から HWND を取り出す。winit は経由しない。
 raw-window-handle = { workspace = true }
 # WinRT 非同期操作の型（`winrt_async`）。ルート Cargo.toml の `windows-future` コメント参照。

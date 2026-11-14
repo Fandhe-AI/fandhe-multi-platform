@@ -5,10 +5,12 @@
 //! - COM 初期化（MTA）の RAII ガード [`ComInit`]: 機能ごとの作業スレッドで使う
 //! - 既定の関連付けで URL を開く [`open_url`] と、その戻り値 [`SE_ERR_NOASSOC`]: メール・SMS の作成、OS の設定画面、
 //!   Web 認証の既定ブラウザの起動が共用する。渡すのは各機能が組み立てた固定 scheme の URL だけで、任意の scheme・引数を受ける口ではない
+//! - `&str` を VT_LPWSTR の `PROPVARIANT` にする [`lpwstr_variant`]: スタートメニューのショートカットとジャンプリストの
+//!   プロパティ書き込み（通知の AUMID 登録・アプリのショートカット）が共用する
 //! - WinRT 非同期操作の完了をキューへ積む [`winrt_async`]: 作業スレッドで完了を待たない機能が共用する
 //!
 //! egui・eframe・winit・`fandhe-device` には依存しない（機能 crate の依存グラフに入れないため）。
-//! Windows 以外ではクレート全体が空。`unsafe` は [`ComInit`] の COM 呼び出し 2 か所と [`open_url`] の `ShellExecuteW` 1 か所の計 3 か所だけで、
+//! Windows 以外ではクレート全体が空。`unsafe` は [`ComInit`] の COM 呼び出し 2 か所と [`open_url`] の `ShellExecuteW` 1 か所と [`lpwstr_variant`] の `PropVariantChangeType` 1 か所の計 4 か所だけで、
 //! クレートルートは `deny(unsafe_code)`。
 
 #![cfg(target_os = "windows")]
@@ -19,7 +21,11 @@ use std::sync::OnceLock;
 
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use windows::Win32::Foundation::HWND;
+use windows::Win32::System::Com::StructuredStorage::{
+    PROPVAR_CHANGE_FLAGS, PROPVARIANT, PropVariantChangeType,
+};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
+use windows::Win32::System::Variant::VT_LPWSTR;
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 use windows::core::{HSTRING, PCWSTR, w};
@@ -44,6 +50,23 @@ pub fn remember_window(window: &impl HasWindowHandle) {
 /// [`remember_window`] が控えたメインウィンドウの HWND。未登録なら `None`。
 pub fn window() -> Option<HWND> {
     WINDOW.get().map(|&h| HWND(h as *mut std::ffi::c_void))
+}
+
+/// [`lpwstr_variant`] の失敗（型変換が失敗）。呼び出し元が自分の契約上のエラーへ写像する。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PropVariantFailed;
+
+/// `&str` を VT_LPWSTR の `PROPVARIANT` にする。`PROPVARIANT::from(&str)` は VT_BSTR になり、
+/// プロパティストアの正規型（`System.AppUserModel.ID`・`System.Title` は VT_LPWSTR）と合わないため変換する。
+#[allow(unsafe_code)]
+pub fn lpwstr_variant(value: &str) -> Result<PROPVARIANT, PropVariantFailed> {
+    let bstr_variant = PROPVARIANT::from(value);
+    let mut out = PROPVARIANT::default();
+    // SAFETY: `bstr_variant`/`out` はどちらも有効な PROPVARIANT
+    // （前者は `From<&str>`、後者は `Default` によるゼロ初期化）。
+    unsafe { PropVariantChangeType(&mut out, &bstr_variant, PROPVAR_CHANGE_FLAGS(0), VT_LPWSTR) }
+        .map_err(|_| PropVariantFailed)?;
+    Ok(out)
 }
 
 /// [`ComInit::new`] の失敗（`CoInitializeEx` が失敗）。呼び出し元が自分の契約上のエラーへ写像する
