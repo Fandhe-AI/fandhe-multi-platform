@@ -1508,6 +1508,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-launch-at-login"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-live-activity"
 version = "0.2.0"
 dependencies = [
@@ -2197,6 +2209,7 @@ dependencies = [
  "fandhe-cap-human-presence",
  "fandhe-cap-image-generation",
  "fandhe-cap-in-app-review",
+ "fandhe-cap-launch-at-login",
  "fandhe-cap-live-activity",
  "fandhe-cap-local-fonts",
  "fandhe-cap-managed-app-config",

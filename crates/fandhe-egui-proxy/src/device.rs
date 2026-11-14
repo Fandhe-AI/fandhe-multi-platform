@@ -614,9 +614,6 @@ pub mod ios_web_auth_session;
 /// Phase 11 の拡充ループ（親 #109、Issue #486）: LAN のサービス探索の effect ドライバ
 /// （macOS・iOS / Android 実装、Windows は `DnsServiceBrowse`、他 OS は `UnsupportedLanDiscovery` 固定。Web は対象外）。
 pub mod lan_discovery;
-/// Phase 11 の拡充ループ（親 #134、Issue #696）: ログイン時の自動起動の effect ドライバ
-/// （macOS 実装。Windows は HKCU の Run キーで Issue #697。他 OS は `UnsupportedLaunchAtLogin` 固定）。
-pub mod launch_at_login;
 /// Phase 11 の拡充ループ（親 #110、Issue #511）: 近くの端末との直接通信の effect ドライバ
 /// （macOS・iOS / Android 実装、他 OS は `UnsupportedLocalPeer` 固定）。
 pub mod local_peer;
@@ -645,12 +642,6 @@ pub mod macos_bluetooth_classic;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_device_info;
-/// Issue #696: macOS 向けログイン時の自動起動実装（`macos/fandhe_macos_launch_at_login.m` の
-/// `SMAppService.mainApp` を呼ぶ C ABI ラッパー）。`device/launch_at_login.rs` の macOS 経路から呼ばれる。
-/// 写像の純関数をホストでテストできるよう cfg は `any(macos, test)`。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_launch_at_login;
 /// Issue #482: macOS 向け音楽ライブラリ実装（`macos/fandhe_macos_music_library.m` の `ITLibrary` を
 /// 呼ぶ C ABI ラッパー）。`device/music_library.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -886,11 +877,6 @@ pub mod windows_image_recognition;
 /// `device/lan_discovery.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_lan_discovery;
-/// Issue #697: Windows 向けログイン時の自動起動（HKCU の Run キー。骨格は Issue #696）。
-/// `device/launch_at_login.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_launch_at_login;
 /// Issue #267: Windows 向け音声再生実装。`device/media_playback.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

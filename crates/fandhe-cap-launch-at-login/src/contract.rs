@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #134、Issue #696）: ログイン時の自動起動（launch-at-login）の契約。
-//! `fandhe-egui-proxy` の `device/launch_at_login.rs`（effect ドライバ）が、画面のボタン操作ごとに
+//! 本 crate の `driver`（effect ドライバ）が、画面のボタン操作ごとに
 //! [`LaunchAtLogin`] を別スレッドで呼ぶ。macOS（`SMAppService.mainApp`）が実装し、Windows
 //! （HKCU の Run キー、Issue #697）が実装する。
 //! iOS・Android・Web は対象外（対応表 `launch-at-login.json`）。
@@ -40,7 +40,7 @@
 //! 複数インストール・複数プロセスの同時操作、StartupApproved の非公開形式の変更、
 //! ログイン時の起動順・遅延、macOS で起動の由来を判別すること。
 
-use crate::DeviceError;
+use crate::error::LaunchAtLoginError;
 
 /// OS から読み戻した自動起動の状態。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,17 +69,17 @@ impl LoginItemStatus {
 /// ログイン時の自動起動を操作する。デスクトップのワーカースレッドから同期で呼ばれる。
 pub trait LaunchAtLogin: Send + Sync {
     /// 現在の状態を OS から読む。
-    fn status(&self) -> Result<LoginItemStatus, DeviceError>;
+    fn status(&self) -> Result<LoginItemStatus, LaunchAtLoginError>;
 
     /// 登録し、OS から読み戻した状態を返す。登録済みならべき等に読み戻す。
-    fn enable(&self) -> Result<LoginItemStatus, DeviceError>;
+    fn enable(&self) -> Result<LoginItemStatus, LaunchAtLoginError>;
 
     /// 解除し、OS から読み戻した状態を返す。未登録なら OS を呼ばず `Ok(NotRegistered)`。
     /// 別の場所の登録しかなければ消さずに `Ok(RegisteredElsewhere)`（Windows）。
-    fn disable(&self) -> Result<LoginItemStatus, DeviceError>;
+    fn disable(&self) -> Result<LoginItemStatus, LaunchAtLoginError>;
 
     /// OS の設定画面を開くよう依頼する。`Ok` は「依頼した」であり、開いたことは確かめられない。
-    fn open_settings(&self) -> Result<(), DeviceError>;
+    fn open_settings(&self) -> Result<(), LaunchAtLoginError>;
 }
 
 /// 非対応環境用。全メソッドが `Unsupported`（ダミーの成功を返さない）。
@@ -87,17 +87,17 @@ pub trait LaunchAtLogin: Send + Sync {
 pub struct UnsupportedLaunchAtLogin;
 
 impl LaunchAtLogin for UnsupportedLaunchAtLogin {
-    fn status(&self) -> Result<LoginItemStatus, DeviceError> {
-        Err(DeviceError::Unsupported("launch_at_login"))
+    fn status(&self) -> Result<LoginItemStatus, LaunchAtLoginError> {
+        Err(LaunchAtLoginError::Unsupported)
     }
-    fn enable(&self) -> Result<LoginItemStatus, DeviceError> {
-        Err(DeviceError::Unsupported("launch_at_login"))
+    fn enable(&self) -> Result<LoginItemStatus, LaunchAtLoginError> {
+        Err(LaunchAtLoginError::Unsupported)
     }
-    fn disable(&self) -> Result<LoginItemStatus, DeviceError> {
-        Err(DeviceError::Unsupported("launch_at_login"))
+    fn disable(&self) -> Result<LoginItemStatus, LaunchAtLoginError> {
+        Err(LaunchAtLoginError::Unsupported)
     }
-    fn open_settings(&self) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("launch_at_login"))
+    fn open_settings(&self) -> Result<(), LaunchAtLoginError> {
+        Err(LaunchAtLoginError::Unsupported)
     }
 }
 
@@ -123,21 +123,12 @@ mod tests {
     #[test]
     fn unsupported_never_succeeds() {
         let u = UnsupportedLaunchAtLogin;
-        assert!(matches!(
-            u.status(),
-            Err(DeviceError::Unsupported("launch_at_login"))
-        ));
-        assert!(matches!(
-            u.enable(),
-            Err(DeviceError::Unsupported("launch_at_login"))
-        ));
-        assert!(matches!(
-            u.disable(),
-            Err(DeviceError::Unsupported("launch_at_login"))
-        ));
+        assert!(matches!(u.status(), Err(LaunchAtLoginError::Unsupported)));
+        assert!(matches!(u.enable(), Err(LaunchAtLoginError::Unsupported)));
+        assert!(matches!(u.disable(), Err(LaunchAtLoginError::Unsupported)));
         assert!(matches!(
             u.open_settings(),
-            Err(DeviceError::Unsupported("launch_at_login"))
+            Err(LaunchAtLoginError::Unsupported)
         ));
     }
 }

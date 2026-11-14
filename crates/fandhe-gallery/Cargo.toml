@@ -53,6 +53,7 @@ device = [
   "dep:fandhe-cap-human-presence",
   "dep:fandhe-cap-image-generation",
   "dep:fandhe-cap-in-app-review",
+  "dep:fandhe-cap-launch-at-login",
   "dep:fandhe-cap-live-activity",
   "dep:fandhe-cap-local-fonts",
   "dep:fandhe-cap-managed-app-config",
@@ -190,6 +191,7 @@ fandhe-cap-http-get = { path = "../fandhe-cap-http-get", optional = true }
 fandhe-cap-human-presence = { path = "../fandhe-cap-human-presence", optional = true }
 fandhe-cap-image-generation = { path = "../fandhe-cap-image-generation", optional = true }
 fandhe-cap-in-app-review = { path = "../fandhe-cap-in-app-review", optional = true }
+fandhe-cap-launch-at-login = { path = "../fandhe-cap-launch-at-login", optional = true }
 fandhe-cap-live-activity = { path = "../fandhe-cap-live-activity", optional = true }
 fandhe-cap-local-fonts = { path = "../fandhe-cap-local-fonts", optional = true }
 fandhe-cap-managed-app-config = { path = "../fandhe-cap-managed-app-config", optional = true }

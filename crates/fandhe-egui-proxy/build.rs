@@ -477,16 +477,6 @@ fn compile_apple_now_playing() {
     );
 }
 
-/// `macos/fandhe_macos_launch_at_login.m` を `cc` でコンパイルする（Issue #696）。**macOS 分岐のみ**
-/// から呼ばれる（`src/device/macos_launch_at_login.rs` が使う）。ServiceManagement をリンクする
-/// （システムフレームワークで旧 OS にも存在するため強リンクでよい。API は `@available` で守る）。
-fn compile_macos_launch_at_login() {
-    compile_objc(
-        "macos/fandhe_macos_launch_at_login.m",
-        &["Foundation", "ServiceManagement"],
-    );
-}
-
 /// `ios/fandhe_ios_capture_protection.m` を `cc` でコンパイルする（Issue #583）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_capture_protection.rs` が使う）。
 fn compile_ios_capture_protection() {
@@ -769,8 +759,6 @@ fn build_macos() {
     compile_macos_safe_area_insets();
     // `macos/fandhe_macos_window_management.m`（Issue #636）も macOS 専用。
     compile_macos_window_management();
-    // `macos/fandhe_macos_launch_at_login.m`（Issue #696）も macOS 専用。ServiceManagement をリンクする。
-    compile_macos_launch_at_login();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。
     compile_macos_print();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。iOS 分岐と共用する。

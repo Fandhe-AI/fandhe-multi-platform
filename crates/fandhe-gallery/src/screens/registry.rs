@@ -95,7 +95,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "launch_at_login_show" => fandhe_core::screens::launch_at_login_show::current_screen,
-    fandhe_egui_proxy::device::launch_at_login::launch_at_login_show_effect,
+    fandhe_cap_launch_at_login::launch_at_login_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "app_badge_set" => fandhe_core::screens::app_badge_set::current_screen,

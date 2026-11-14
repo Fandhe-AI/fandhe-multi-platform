@@ -1,14 +1,14 @@
 //! Phase 11 の拡充ループ（親 #134）型サンプル「ログイン時の自動起動」（Issue #696）の effect
 //! ドライバ。`fandhe_core::screens::launch_at_login_show`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::launch_at_login::LaunchAtLogin` を別スレッドで呼んで結果を `CompletionSender`
+//! `crate::contract::LaunchAtLogin` を別スレッドで呼んで結果を `CompletionSender`
 //! 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、
-//! `device/url_scheme.rs::drive_registration` と同型）。契約と守る範囲は
-//! `fandhe_device::launch_at_login` のモジュール doc を参照。
+//! 登録の駆動を 1 つの effect にまとめる他機能のドライバと同型）。契約と守る範囲は
+//! `contract` のモジュール doc を参照。
 //!
 //! **dispatch はここで最終形にしてあり、後続 issue は OS 別モジュールだけを埋める**。
 //!
-//! - macOS: [`super::macos_launch_at_login`]（`SMAppService.mainApp`）
-//! - Windows: [`super::windows_launch_at_login`]（HKCU の Run キー。Issue #697）
+//! - macOS: [`crate::macos`]（`SMAppService.mainApp`）
+//! - Windows: [`crate::windows`]（HKCU の Run キー。Issue #697）
 //! - それ以外: `UnsupportedLaunchAtLogin` 固定で、画面には「未対応」と出る
 //!
 //! # 流れ
@@ -22,28 +22,28 @@
 
 use std::sync::OnceLock;
 
-use fandhe_core::screens::launch_at_login_show::{
-    apply_platform, finish_action, mark_in_flight, take_request, Action, ActionFailure,
-    ActionOutcome, LaunchAtLoginShowState, LoginItemState, Platform,
-};
 #[cfg(any(not(any(target_os = "macos", target_os = "windows")), test))]
-use fandhe_device::launch_at_login::UnsupportedLaunchAtLogin;
-use fandhe_device::launch_at_login::{LaunchAtLogin, LoginItemStatus};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedLaunchAtLogin;
+use crate::contract::{LaunchAtLogin, LoginItemStatus};
+use crate::error::LaunchAtLoginError;
+use fandhe_core::screens::launch_at_login_show::{
+    Action, ActionFailure, ActionOutcome, LaunchAtLoginShowState, LoginItemState, Platform,
+    apply_platform, finish_action, mark_in_flight, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在の OS の実装（macOS は `SMAppService`、Windows は HKCU の Run キー、他は `Unsupported` 固定）。
-fn platform_launch_at_login() -> &'static dyn LaunchAtLogin {
+pub fn platform_launch_at_login() -> &'static dyn LaunchAtLogin {
     static IMPL: OnceLock<Box<dyn LaunchAtLogin>> = OnceLock::new();
     IMPL.get_or_init(|| {
         #[cfg(target_os = "macos")]
         {
-            super::macos_launch_at_login::implementation()
+            crate::macos::implementation()
         }
         #[cfg(target_os = "windows")]
         {
-            super::windows_launch_at_login::implementation()
+            crate::windows::implementation()
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
@@ -76,12 +76,12 @@ fn to_state(status: LoginItemStatus) -> LoginItemState {
     }
 }
 
-/// `DeviceError` を画面用の失敗へ写像する。内部識別子だけを含み、パスや OS の文言は混ざらない
+/// `LaunchAtLoginError` を画面用の失敗へ写像する。内部識別子だけを含み、パスや OS の文言は混ざらない
 /// （契約表 8）。
-fn to_failure(e: DeviceError) -> ActionFailure {
+fn to_failure(e: LaunchAtLoginError) -> ActionFailure {
     match e {
-        DeviceError::Unsupported(_) => ActionFailure::Unsupported,
-        DeviceError::PermissionDenied(_) => ActionFailure::PermissionDenied,
+        LaunchAtLoginError::Unsupported => ActionFailure::Unsupported,
+        LaunchAtLoginError::PermissionDenied(_) => ActionFailure::PermissionDenied,
         other => ActionFailure::Failed(format!("失敗しました: {other}")),
     }
 }
@@ -138,22 +138,22 @@ mod tests {
     /// 呼び出し回数を数え、`enable` の結果を差し替えられる偽実装。
     struct Fake {
         calls: AtomicUsize,
-        enable_result: fn() -> Result<LoginItemStatus, DeviceError>,
+        enable_result: fn() -> Result<LoginItemStatus, LaunchAtLoginError>,
     }
     impl LaunchAtLogin for Fake {
-        fn status(&self) -> Result<LoginItemStatus, DeviceError> {
+        fn status(&self) -> Result<LoginItemStatus, LaunchAtLoginError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(LoginItemStatus::NotRegistered)
         }
-        fn enable(&self) -> Result<LoginItemStatus, DeviceError> {
+        fn enable(&self) -> Result<LoginItemStatus, LaunchAtLoginError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             (self.enable_result)()
         }
-        fn disable(&self) -> Result<LoginItemStatus, DeviceError> {
+        fn disable(&self) -> Result<LoginItemStatus, LaunchAtLoginError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(LoginItemStatus::NotRegistered)
         }
-        fn open_settings(&self) -> Result<(), DeviceError> {
+        fn open_settings(&self) -> Result<(), LaunchAtLoginError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
@@ -163,19 +163,29 @@ mod tests {
         Box::leak(Box::new(f))
     }
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     fn sender_with_channel() -> (
         CompletionSender<LaunchAtLoginShowState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<LaunchAtLoginShowState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<LaunchAtLoginShowState>>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     /// `drive` を 1 回呼び、届いた完了（OS 区分の注入・起動済みマーク・結果）をすべて適用する。
     fn run_drive(
         state: &mut LaunchAtLoginShowState,
         sender: &CompletionSender<LaunchAtLoginShowState>,
-        rx: &std::sync::mpsc::Receiver<crate::app::Completion<LaunchAtLoginShowState>>,
+        rx: &std::sync::mpsc::Receiver<fandhe_runtime::Completion<LaunchAtLoginShowState>>,
         imp: &'static dyn LaunchAtLogin,
     ) {
         let inject = platform_kind() != Platform::Unknown && state.platform() == Platform::Unknown;
@@ -217,7 +227,7 @@ mod tests {
     fn permission_denied_is_error_without_success_text() {
         let fake = leak(Fake {
             calls: AtomicUsize::new(0),
-            enable_result: || Err(DeviceError::PermissionDenied("launch_at_login")),
+            enable_result: || Err(LaunchAtLoginError::PermissionDenied("launch_at_login")),
         });
         let (sender, rx) = sender_with_channel();
         let mut state = LaunchAtLoginShowState::default();
@@ -306,7 +316,7 @@ mod tests {
             LoginItemState::DisabledByUser
         );
         assert!(matches!(
-            to_failure(DeviceError::Internal("x")),
+            to_failure(LaunchAtLoginError::Internal("x")),
             ActionFailure::Failed(_)
         ));
     }

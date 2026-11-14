@@ -2,8 +2,8 @@
 // `SMAppService.mainApp` でこのアプリ自身をログイン項目に登録・解除し、状態を読み戻す。
 // 権限・entitlement は不要（利用者がシステム設定のログイン項目で許可・無効化できる）。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_launch_at_login.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルし、ServiceManagement を
+// `crates/fandhe-cap-launch-at-login/src/macos.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が macOS ターゲットでコンパイルし、ServiceManagement を
 // リンクする。
 //
 // 契約:

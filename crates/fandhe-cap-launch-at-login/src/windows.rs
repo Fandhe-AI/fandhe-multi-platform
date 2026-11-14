@@ -1,8 +1,8 @@
 //! Windows 向けログイン時の自動起動（Issue #697。macOS は #696 の `SMAppService`）。
 //! HKCU の Run キーに値 `fandhe-egui-proxy` を書き、Explorer のログイン時起動に載せる。
-//! `device/launch_at_login.rs`（effect ドライバ）の windows 経路から、操作ごとの
+//! `driver`（effect ドライバ）の windows 経路から、操作ごとの
 //! ワーカースレッドで同期に呼ばれる。契約（結果の種類・守備範囲）は
-//! `fandhe_device::launch_at_login` が定義し、本ファイルはその Windows 実装に徹する。
+//! `crate::contract` が定義し、本ファイルはその Windows 実装に徹する。
 //!
 //! # 方針
 //!
@@ -15,24 +15,24 @@
 //! - 自分の登録が既にあれば有効化は書かずに読み戻す（べき等）。未登録の解除は OS を呼ばず
 //!   `Ok(NotRegistered)`
 //! - 設定画面は `ms-settings:startupapps`
-//! - 実行体のパスをログ・エラー文言に出さない（`DeviceError` は `&'static str` のみ）
+//! - 実行体のパスをログ・エラー文言に出さない（`LaunchAtLoginError` は `&'static str` のみ）
 //!
 //! # 既知の天井（`AGENTS.md`「端末機能の並行性は守備範囲で判定する」）
 //!
 //! StartupApproved は非公開形式で、値が無いときの起動有無は Windows 実機で確かめる（#694）。
 //! 実行体の移動への自動追従、判定から書き込みまでの間の他プロセスによる変更は守らない。
 //!
-//! モジュールはホストテストのため test でもコンパイルする（`device.rs`）。
+//! モジュールはホストテストのため test でもコンパイルする（`lib.rs`）。
 
-use fandhe_device::launch_at_login::{LaunchAtLogin, LoginItemStatus};
-use fandhe_device::DeviceError;
+use crate::contract::{LaunchAtLogin, LoginItemStatus};
+use crate::error::LaunchAtLoginError;
 
 /// Run キー（HKCU 配下）。
 const RUN_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 /// StartupApproved（HKCU 配下、読むだけ）。
 const APPROVED_KEY: &str =
     "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run";
-/// 値名。`windows_background_task` のタスク名・mutex 名と同じ接頭辞。
+/// 値名。既存の登録を壊さないよう、移行前から変えない（`fandhe-egui-proxy` 時代の名前）。
 const VALUE_NAME: &str = "fandhe-egui-proxy";
 /// 起動の目印となる引数。
 const LAUNCH_FLAG: &str = "--fandhe-launched-at-login";
@@ -44,13 +44,13 @@ const SETTINGS_URI: &str = "ms-settings:startupapps";
 const FEATURE: &str = "launch_at_login";
 
 /// 実行体パスから Run キーの値データを組み立てる。`"` を含む・上限超過は `InvalidInput`。
-fn run_command(exe: &str) -> Result<String, DeviceError> {
+fn run_command(exe: &str) -> Result<String, LaunchAtLoginError> {
     if exe.contains('"') {
-        return Err(DeviceError::InvalidInput(FEATURE));
+        return Err(LaunchAtLoginError::InvalidInput(FEATURE));
     }
     let command = format!("\"{exe}\" {LAUNCH_FLAG}");
     if command.encode_utf16().count() > MAX_COMMAND_CHARS {
-        return Err(DeviceError::InvalidInput(FEATURE));
+        return Err(LaunchAtLoginError::InvalidInput(FEATURE));
     }
     Ok(command)
 }
@@ -125,22 +125,22 @@ fn disable_plan(owner: Ownership) -> Plan {
 }
 
 /// Win32 エラーコードを契約上のエラー種別へ写す（全呼び出し共通。パスは含めない）。
-fn map_registry_error(code: u32) -> DeviceError {
+fn map_registry_error(code: u32) -> LaunchAtLoginError {
     const ERROR_ACCESS_DENIED: u32 = 5;
     if code == ERROR_ACCESS_DENIED {
-        DeviceError::PermissionDenied(FEATURE)
+        LaunchAtLoginError::PermissionDenied(FEATURE)
     } else {
-        DeviceError::Internal(FEATURE)
+        LaunchAtLoginError::Internal(FEATURE)
     }
 }
 
 /// `ShellExecuteW` の戻り値（32 より大きければ成功）を結果へ写す。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-fn settings_result(code: isize) -> Result<(), DeviceError> {
+fn settings_result(code: isize) -> Result<(), LaunchAtLoginError> {
     if code > 32 {
         Ok(())
     } else {
-        Err(DeviceError::Internal("launch_at_login settings"))
+        Err(LaunchAtLoginError::Internal("launch_at_login settings"))
     }
 }
 
@@ -157,15 +157,15 @@ fn decode_sz(bytes: &[u8]) -> String {
 #[allow(unsafe_code)]
 mod win {
     use super::*;
-    use windows::core::PCWSTR;
     use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_MORE_DATA, ERROR_SUCCESS};
     use windows::Win32::System::Com::{
-        CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
+        COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
     };
     use windows::Win32::System::Registry::{
-        RegDeleteKeyValueW, RegGetValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_BINARY, REG_SZ,
-        REG_VALUE_TYPE, RRF_NOEXPAND, RRF_RT_ANY,
+        HKEY_CURRENT_USER, REG_BINARY, REG_SZ, REG_VALUE_TYPE, RRF_NOEXPAND, RRF_RT_ANY,
+        RegDeleteKeyValueW, RegGetValueW, RegSetKeyValueW,
     };
+    use windows::core::PCWSTR;
 
     /// 読み取りの上限（バイト）。自分の登録は 260 文字 + NUL に収まるので、超える値は別物。
     const MAX_READ_BYTES: u32 = ((MAX_COMMAND_CHARS + 1) * 2) as u32;
@@ -181,7 +181,7 @@ mod win {
         TooLong,
     }
 
-    fn read_value(subkey: &str, name: &str) -> Result<Read, DeviceError> {
+    fn read_value(subkey: &str, name: &str) -> Result<Read, LaunchAtLoginError> {
         let sub = wide(subkey);
         let nm = wide(name);
         let mut ty = REG_VALUE_TYPE(0);
@@ -212,7 +212,7 @@ mod win {
         }
     }
 
-    fn run_value() -> Result<Option<RunValue>, DeviceError> {
+    fn run_value() -> Result<Option<RunValue>, LaunchAtLoginError> {
         Ok(match read_value(RUN_KEY, VALUE_NAME)? {
             Read::Missing => None,
             Read::TooLong => Some(RunValue::Other),
@@ -221,7 +221,7 @@ mod win {
         })
     }
 
-    fn approved() -> Result<LoginItemStatus, DeviceError> {
+    fn approved() -> Result<LoginItemStatus, LaunchAtLoginError> {
         Ok(match read_value(APPROVED_KEY, VALUE_NAME)? {
             Read::Missing => approved_status(None),
             Read::Found(ty, bytes) if ty == REG_BINARY => approved_status(Some(&bytes)),
@@ -230,11 +230,11 @@ mod win {
         })
     }
 
-    pub(super) fn current_owner(expected: &str) -> Result<Ownership, DeviceError> {
+    pub(super) fn current_owner(expected: &str) -> Result<Ownership, LaunchAtLoginError> {
         Ok(ownership(run_value()?, expected))
     }
 
-    pub(super) fn read_back(expected: &str) -> Result<LoginItemStatus, DeviceError> {
+    pub(super) fn read_back(expected: &str) -> Result<LoginItemStatus, LaunchAtLoginError> {
         let owner = current_owner(expected)?;
         let approved = if owner == Ownership::Ours {
             // StartupApproved が読めないだけなら Run キーの登録は済んでいるので、
@@ -246,7 +246,7 @@ mod win {
         Ok(status_of(owner, approved))
     }
 
-    pub(super) fn write_run(command: &str) -> Result<(), DeviceError> {
+    pub(super) fn write_run(command: &str) -> Result<(), LaunchAtLoginError> {
         let sub = wide(RUN_KEY);
         let nm = wide(VALUE_NAME);
         let data: Vec<u8> = wide(command).iter().flat_map(|u| u.to_le_bytes()).collect();
@@ -269,7 +269,7 @@ mod win {
         }
     }
 
-    pub(super) fn delete_run() -> Result<(), DeviceError> {
+    pub(super) fn delete_run() -> Result<(), LaunchAtLoginError> {
         let sub = wide(RUN_KEY);
         let nm = wide(VALUE_NAME);
         // SAFETY: `sub`/`nm` は NUL 終端で呼び出し中有効。
@@ -303,7 +303,7 @@ mod win {
         }
     }
 
-    pub(super) fn open_settings() -> Result<(), DeviceError> {
+    pub(super) fn open_settings() -> Result<(), LaunchAtLoginError> {
         let _com = ComGuard::new();
         settings_result(fandhe_platform_windows::open_url(SETTINGS_URI))
     }
@@ -311,9 +311,11 @@ mod win {
 
 /// 実行体から期待するコマンドを作る。
 #[cfg(target_os = "windows")]
-fn expected_command() -> Result<String, DeviceError> {
-    let exe = std::env::current_exe().map_err(|_| DeviceError::Internal(FEATURE))?;
-    let exe = exe.to_str().ok_or(DeviceError::InvalidInput(FEATURE))?;
+fn expected_command() -> Result<String, LaunchAtLoginError> {
+    let exe = std::env::current_exe().map_err(|_| LaunchAtLoginError::Internal(FEATURE))?;
+    let exe = exe
+        .to_str()
+        .ok_or(LaunchAtLoginError::InvalidInput(FEATURE))?;
     run_command(exe)
 }
 
@@ -322,11 +324,11 @@ struct WindowsLaunchAtLogin;
 
 #[cfg(target_os = "windows")]
 impl LaunchAtLogin for WindowsLaunchAtLogin {
-    fn status(&self) -> Result<LoginItemStatus, DeviceError> {
+    fn status(&self) -> Result<LoginItemStatus, LaunchAtLoginError> {
         win::read_back(&expected_command()?)
     }
 
-    fn enable(&self) -> Result<LoginItemStatus, DeviceError> {
+    fn enable(&self) -> Result<LoginItemStatus, LaunchAtLoginError> {
         let command = expected_command()?;
         match enable_plan(win::current_owner(&command)?) {
             Plan::Write => win::write_run(&command)?,
@@ -336,7 +338,7 @@ impl LaunchAtLogin for WindowsLaunchAtLogin {
         win::read_back(&command)
     }
 
-    fn disable(&self) -> Result<LoginItemStatus, DeviceError> {
+    fn disable(&self) -> Result<LoginItemStatus, LaunchAtLoginError> {
         let command = expected_command()?;
         match disable_plan(win::current_owner(&command)?) {
             Plan::Delete => win::delete_run()?,
@@ -346,7 +348,7 @@ impl LaunchAtLogin for WindowsLaunchAtLogin {
         win::read_back(&command)
     }
 
-    fn open_settings(&self) -> Result<(), DeviceError> {
+    fn open_settings(&self) -> Result<(), LaunchAtLoginError> {
         win::open_settings()
     }
 }
@@ -360,7 +362,7 @@ pub(crate) fn implementation() -> Box<dyn LaunchAtLogin> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        Box::new(fandhe_device::launch_at_login::UnsupportedLaunchAtLogin)
+        Box::new(crate::contract::UnsupportedLaunchAtLogin)
     }
 }
 
@@ -376,7 +378,7 @@ mod tests {
         assert_eq!(run_command("C:\\a\\app.exe").unwrap(), EXP);
         assert!(matches!(
             run_command("C:\\a\"b.exe"),
-            Err(DeviceError::InvalidInput(_))
+            Err(LaunchAtLoginError::InvalidInput(_))
         ));
         let fixed = format!("\"\" {LAUNCH_FLAG}").encode_utf16().count();
         assert!(run_command(&"x".repeat(MAX_COMMAND_CHARS - fixed)).is_ok());
@@ -454,9 +456,12 @@ mod tests {
     fn error_mapping_hides_paths() {
         assert!(matches!(
             map_registry_error(5),
-            DeviceError::PermissionDenied(_)
+            LaunchAtLoginError::PermissionDenied(_)
         ));
-        assert!(matches!(map_registry_error(1234), DeviceError::Internal(_)));
+        assert!(matches!(
+            map_registry_error(1234),
+            LaunchAtLoginError::Internal(_)
+        ));
         let text = format!("{}", map_registry_error(5));
         assert!(!text.contains('\\') && !text.contains(".exe"));
     }
