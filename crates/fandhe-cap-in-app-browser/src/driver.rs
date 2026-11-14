@@ -235,6 +235,11 @@ impl Bridge {
     /// 表示開始前に期限を過ぎていれば `TimedOut` を確定する。
     fn expire_if_due(&self) {
         let mut active = self.lock();
+        self.expire_locked(&mut active);
+    }
+
+    /// [`Bridge::expire_if_due`] の本体。`active` のロックを持つ側から呼ぶ（二重ロックを避ける）。
+    fn expire_locked(&self, active: &mut Option<Active>) {
         let due = active
             .as_ref()
             .is_some_and(|a| !a.presenting && a.started.elapsed() >= self.deadline);
@@ -351,8 +356,10 @@ fn poll_open(b: &Bridge, request_id: u64) -> Option<Outcome> {
     if request_id == 0 {
         return None;
     }
+    // 照合・期限の確定・取り出し・所有の手放しは 1 回のロックで行う。取り出しと `release` の間に
+    // `reset` が挟まると、取り出し済みの id に `lost_public` が残って以後ずっと `Busy` になる。
+    let mut active = b.lock();
     {
-        let _active = b.lock();
         let mut lost = b.lost();
         if lost.as_ref().is_some_and(|(id, _)| *id == request_id) {
             return lost.take().map(|(_, r)| r);
@@ -362,7 +369,7 @@ fn poll_open(b: &Bridge, request_id: u64) -> Option<Outcome> {
     if request_id != b.public.current() {
         return None;
     }
-    b.expire_if_due();
+    b.expire_locked(&mut active);
     let r = b.slot.take_ready(request_id);
     if r.is_some() {
         b.public.release(request_id);
@@ -846,6 +853,38 @@ mod tests {
         );
         assert_eq!(poll_open(b, 10), None);
         assert_next_requests_allowed(b);
+    }
+
+    #[test]
+    fn reset_right_after_poll_leaves_nothing_lost() {
+        let b = new_bridge(Duration::from_secs(30));
+        b.begin_with_id(b.public, 10).unwrap();
+        assert!(b.try_begin_present(10));
+        b.complete_from_os(10, Ok(InAppBrowserOutcome::Closed));
+        assert_eq!(poll_open(b, 10), Some(Ok(InAppBrowserOutcome::Closed)));
+        b.reset();
+        assert!(b.lost().is_none());
+        assert_eq!(poll_open(b, 10), None);
+        assert!(b.begin_with_id(b.public, 11).is_ok());
+        b.reset();
+        assert_eq!(
+            poll_open(b, 11),
+            Some(Err(InAppBrowserFailure::Interrupted))
+        );
+        assert!(b.begin(b.screen).is_some());
+    }
+
+    #[test]
+    fn double_reset_keeps_first_lost_result_and_delivers_once() {
+        let b = new_bridge(Duration::from_secs(30));
+        b.begin_with_id(b.public, 10).unwrap();
+        assert!(b.try_begin_present(10));
+        b.complete_from_os(10, Ok(InAppBrowserOutcome::Closed));
+        b.reset();
+        b.reset();
+        assert_eq!(poll_open(b, 10), Some(Ok(InAppBrowserOutcome::Closed)));
+        assert_eq!(poll_open(b, 10), None);
+        assert!(b.begin(b.public).is_some());
     }
 
     #[test]
